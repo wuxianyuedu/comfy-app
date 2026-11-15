@@ -25,15 +25,14 @@ function run(args: Array<string> = []) {
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const e: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
     return {
       code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      output: `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`,
     };
   }
 }
@@ -85,10 +84,10 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
   const steps = [
     { label: "分支守卫", argv: ["node", "scripts/check-branch-guard.cjs"] },
     {
-      /* 2026-11-05 薄化后 `CHANGELOG 碎片` 随静态判据搬到 GA，不再有 CNB stage 的
-       * `ifModify` ⇒ 它已从收窄登记表撤出，样本换成仍登记在表里的那一份
-       * （`API 文档生成与自检` 同日撤到每日档、也不在表里了）。 */
-      label: "生成态文档与源同步",
+      /* 收窄面由下面 `deps.faceFor` 的**夹具表**给：#3586 后真仓 INCREMENTAL_GATES
+       * 暂空，但 hit / skippable / noFace 三堆的分堆机制仍要各自有正/负控 ——
+       * 把机制用例绑在真表内容上，表一空这段判据就没人测了。 */
+      label: "样本收窄判据",
       argv: ["node", "scripts/render-doc-placeholders.cjs"],
     },
     { label: "类型检查", argv: ["pnpm", "exec", "tsc", "--noEmit"] },
@@ -96,6 +95,8 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
   const deps = {
     readSteps: () => steps,
     tierLabels: () => new Set(["分支守卫"]),
+    faceFor: (script: string) =>
+      script === "scripts/render-doc-placeholders.cjs" ? { globs: ["docs/**"] } : null,
   };
 
   test("碰到收窄面 ⇒ hit；没碰到 ⇒ skippable；没有登记 ⇒ noFace", () => {
@@ -103,20 +104,20 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
     expect(cls.localTier).toBe(1);
     expect(cls.totalSteps).toBe(3);
     expect(cls.heavy).toBe(2);
-    expect(cls.hit.map((x) => x.label)).toEqual(["生成态文档与源同步"]);
+    expect(cls.hit.map((x) => x.label)).toEqual(["样本收窄判据"]);
     expect(cls.skippable).toEqual([]);
     expect(cls.noFace.map((x) => x.label)).toEqual(["类型检查"]);
 
     const skipped = classifyHeavySteps(["src/lib/x.ts"], deps);
     expect(skipped.hit).toEqual([]);
-    expect(skipped.skippable.map((x) => x.label)).toEqual(["生成态文档与源同步"]);
+    expect(skipped.skippable.map((x) => x.label)).toEqual(["样本收窄判据"]);
   });
 
   test("空改动面 ⇒ 当成「不知道」照跑（不读成「没改」）", () => {
     /* 这条与 `faceTouched()` 的语义同源：把空清单读成「没改」会让整批收窄判据静默消失，
      * 而本入口的输出里「可跳过」是要被读成「不用跑」的。 */
     const cls = classifyHeavySteps([], deps);
-    expect(cls.hit.map((x) => x.label)).toEqual(["生成态文档与源同步"]);
+    expect(cls.hit.map((x) => x.label)).toEqual(["样本收窄判据"]);
     expect(cls.skippable).toEqual([]);
   });
 
@@ -133,15 +134,27 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
 /** 一次子进程读数的形状（只列 `affectedTests` 真正读的那几个字段）。 */
 type FakeResult = { status: number | null; stderr?: string; stdout?: string };
 
+/** 假 spawnSync 的收窄口径与 `ci-cp936-exit.test.ts` 同款：运行期确认可调用后再收窄
+ *  （B5 清账：不走 `as` 断言）。 */
+function isSpawnSyncLike(value: unknown): value is typeof spawnSync {
+  return typeof value === "function";
+}
+
+function spawnSyncPort(fake: unknown): typeof spawnSync {
+  if (!isSpawnSyncLike(fake)) {
+    throw new TypeError("假的 spawnSync 必须是可调用函数");
+  }
+  return fake;
+}
+
 /**
  * 造一个假的 `spawnSync`。`affectedTests` 的 JSDoc 是 `typeof spawnSync`，其重载与 `stdio` 联合类型
- * 套不进手写假件 —— 这里显式过一道 cast，并保证假件的参数形状与真实调用同形。
+ * 套不进手写假件 —— 这里经上面的收窄口过一道，并保证假件的参数形状与真实调用同形。
  */
 function fakeSpawn(impl: (args: Array<string>, opts: { input?: string }) => FakeResult) {
   const fn = (_cmd: string, args: Array<string>, opts: { input?: string }): FakeResult =>
     impl(args, opts);
-  /* SAFETY: 只用 affectedTests 实际读的字段（status/stdout/stderr），与 spawnSync 的重载等价于此形状 */
-  return fn as unknown as typeof spawnSync;
+  return spawnSyncPort(fn);
 }
 
 describe("gates:which —— 用例那一半不重算 import 图", () => {

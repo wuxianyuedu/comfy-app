@@ -67,15 +67,14 @@ function runCheck(args: Array<string>, root = fixture): { code: number; output: 
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const e: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
     return {
       code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      output: `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`,
     };
   }
 }
@@ -106,13 +105,67 @@ type Ledger = {
   total: number;
 };
 
+/** `check-scripts-typecheck.cjs` 无类型：出口形状的运行时守卫（B5 清账，不走 as 断言）。 */
+type TypecheckRatchetModule = {
+  configFace: (ts: unknown) => {
+    excludes?: Array<string>;
+    mjs?: Array<string>;
+    ok: boolean;
+    reason?: string;
+  };
+  diskFace: (
+    list: Array<string>,
+    excludes: Array<string>,
+  ) => { all: Array<string>; missed: Array<string> };
+  splitTrackedFace: (
+    mjs: Array<string>,
+    tracked: Set<string> | null,
+  ) => { face: Array<string>; filtered: boolean; untracked: Array<string> };
+  trackedMjs: (root: string) => Set<string> | null;
+  trackedMjsDetailed: (
+    root: string,
+  ) =>
+    | { files: Set<string>; kind: "ok" }
+    | { kind: "not-git-top" }
+    | { kind: "error"; reason: string };
+};
+
+function isTypecheckRatchetModule(value: unknown): value is TypecheckRatchetModule {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const keys = new Set(Object.keys(value));
+  return (
+    ["configFace", "diskFace", "splitTrackedFace", "trackedMjs", "trackedMjsDetailed"] as const
+  ).every((k) => keys.has(k));
+}
+
+function typecheckRatchetModule(): TypecheckRatchetModule {
+  const loaded: unknown = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs");
+  if (!isTypecheckRatchetModule(loaded)) {
+    throw new Error("check-scripts-typecheck.cjs 的出口形状不对");
+  }
+  return loaded;
+}
+
 /** 夹具里那份账本（判「`--update` 到底写没写」的唯一证据来源）。 */
 function baselinePath(): string {
   return join(fixture, "scripts", ".scripts-typecheck-baseline.json");
 }
+/** 夹具账本的形状守卫（B5 清账，不走 as 断言）。 */
+function isLedger(value: unknown): value is Ledger {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  return "files" in value && "total" in value;
+}
+
 function readFixtureBaseline(): Ledger {
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(readFileSync(baselinePath(), "utf8")) as Ledger;
+  const parsed: unknown = JSON.parse(readFileSync(baselinePath(), "utf8"));
+  if (!isLedger(parsed)) {
+    throw new Error("夹具账本形状不对（缺 files/total）");
+  }
+  return parsed;
 }
 
 beforeAll(() => {
@@ -324,8 +377,12 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
           .filter(Boolean),
       );
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      return `；git 清单取不到，定位不了是哪几份：${(error as Error).message}`;
+      /* message 用 `in` 守卫取值，不走 `as` 断言（B5 清账）。 */
+      const message: unknown =
+        typeof error === "object" && error !== null && "message" in error
+          ? error.message
+          : String(error);
+      return `；git 清单取不到，定位不了是哪几份：${String(message)}`;
     }
     const stray = face.map((p) => String(p).replaceAll("\\", "/")).filter((p) => !tracked.has(p));
     return `；面里有 ${stray.length} 份**不在 git 清单**（磁盘态、不入库）${
@@ -367,28 +424,10 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
      * 一天修了 8 次），改成判据自己对齐之后又变成「判定档写文件」，与「判定档只读」
      * 的那一半轮流红。现在的口径最简：份数每次现算（判据自己的 `trackedMjs()` +
      * `splitTrackedFace()`），账本里**不存在**这个数，于是不存在「两份口径」。 */
-    /* SAFETY: 类型断言已复核 */
-    const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {
-      configFace: (ts: unknown) => {
-        excludes?: Array<string>;
-        mjs?: Array<string>;
-        ok: boolean;
-        reason?: string;
-      };
-      diskFace: (
-        list: Array<string>,
-        excludes: Array<string>,
-      ) => { all: Array<string>; missed: Array<string> };
-      splitTrackedFace: (
-        mjs: Array<string>,
-        tracked: Set<string> | null,
-      ) => { face: Array<string>; filtered: boolean; untracked: Array<string> };
-      trackedMjs: (root: string) => Set<string> | null;
-    };
+    const judge = typecheckRatchetModule();
     /* `require("typescript")` 的返回是 `any` —— 这里只把它当**不透明句柄**交给判据
      * （判据那边只调 `readConfigFile` / `parseJsonConfigFileContent` 两件事），
      * 所以落成 `unknown`，不在用例这一侧再抄一份 TS 的类型面。 */
-    /* SAFETY: 类型断言已复核 */
     const ts = createRequire(import.meta.url)("typescript") as unknown;
     const cfg = judge.configFace(ts);
     expect(cfg.ok, "reason" in cfg ? cfg.reason : "").toBe(true);
@@ -418,10 +457,13 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       strays,
       `磁盘上有、git 清单里没有的这几份不该出现在真仓库的工作区里：${strays.join("、")}`,
     ).toEqual([]);
-    /* SAFETY: 类型断言已复核 */
-    const baseline = JSON.parse(
+    /* 账本用运行时守卫收窄（isLedger，B5 清账：不走 as 断言）。 */
+    const baseline: unknown = JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".scripts-typecheck-baseline.json"), "utf8"),
-    ) as { files: Record<string, Record<string, number>>; total: number };
+    );
+    if (!isLedger(baseline)) {
+      throw new Error("账本形状不对（缺 files/total）");
+    }
     expect(
       Object.keys(baseline).sort(),
       `账本多出了字段 —— 这一档只认「(文件, TS 码) 的处数」与总数两件事；` +
@@ -450,13 +492,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
  * **这份提交**里有多少脚本，所以求交在判据里做、判据自己点名，用例这一侧读**同一份实现**（`trackedMjs` +
  * `splitTrackedFace`），不抄第二遍。 */
 describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
-  const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {
-    splitTrackedFace: (
-      mjs: Array<string>,
-      tracked: Set<string> | null,
-    ) => { face: Array<string>; filtered: boolean; untracked: Array<string> };
-    trackedMjs: (root: string) => Set<string> | null;
-  };
+  const judge = typecheckRatchetModule();
 
   it("求交给出两侧；取不到 git 清单时明写「没筛」而不是「都不算」", () => {
     const list = ["scripts/a.mjs", "scripts/stray.mjs"];
@@ -520,16 +556,7 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
  * 「不是 git 顶层（真·夹具形态）」与「git 命令失败（真故障）」归成同一个 `null`，后者被静默折成「面 = 磁盘展开」。
  * 现在的口径：真故障退 2（没结论）并念出 stderr 首行，只有夹具形态才走「没按入库清单筛」那一档。 */
 describe("取不到 git 清单要分两种原因（ISSUE #2965）", () => {
-  /* SAFETY: 类型断言已复核 */
-  const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {
-    trackedMjs: (root: string) => Set<string> | null;
-    trackedMjsDetailed: (
-      root: string,
-    ) =>
-      | { files: Set<string>; kind: "ok" }
-      | { kind: "not-git-top" }
-      | { kind: "error"; reason: string };
-  };
+  const judge = typecheckRatchetModule();
 
   it("真仓库根 ⇒ ok；子目录 ⇒ not-git-top；不存在的目录 ⇒ error", () => {
     const ok = judge.trackedMjsDetailed(REPO_ROOT);

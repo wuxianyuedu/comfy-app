@@ -38,8 +38,7 @@ const SCRIPTS = [
 test("每个在进程内跑的判据脚本，它的每个导出都有人用（零消费导出当场红）", () => {
   const problems: Array<string> = [];
   for (const entry of SCRIPTS) {
-    /* SAFETY: 类型断言已复核 */
-    const mod = loadJudgeModule() as unknown as Record<string, unknown>;
+    const mod = loadJudgeModule();
     const exported = new Set(Object.keys(mod));
     const claimed = new Set(Object.keys(entry.surfaces));
     for (const key of exported) {
@@ -85,12 +84,8 @@ test("每个在进程内跑的判据脚本，它的每个导出都有人用（�
 });
 
 test("`VERIFIED_SURFACES` 覆盖全部导出面（两个清单不许各说各话）", () => {
-  /* SAFETY: 类型断言已复核 */
-  const mod = loadJudgeModule() as unknown as Record<string, unknown>;
-  /* SAFETY: 类型断言已复核 */
-  const { VERIFIED_SURFACES } = mod as {
-    VERIFIED_SURFACES: Record<string, string>;
-  };
+  const mod = loadJudgeModule();
+  const { VERIFIED_SURFACES } = mod;
   /* 模块那张表是「判据自己怎么看自己的导出面」（键必须可被判据本体调用），账本是「自测那一侧怎么看」
      （多一条 `VERIFIED_SURFACES` 自身 —— 自查元数据，不被本体调用）。两面须覆盖同一集合，否则会漂：
      账本 ∖ 模块 = 自测记错或那条面不该被调用；模块 ∖ 账本 = 判据认了一个没人对账的面。 */

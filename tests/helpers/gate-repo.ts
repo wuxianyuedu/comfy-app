@@ -351,16 +351,19 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
           env: gitSandboxEnv(),
         });
       } catch (error) {
-        /* SAFETY: 类型断言已复核 */
-        const e = error as {
-          status?: number;
-          stderr?: string;
-          stdout?: string;
-        };
+        /* 失败形状按字段读（B5 清账）：status / stderr / stdout 缺省当「没给」。 */
+        const e: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+          typeof error === "object" && error !== null ? error : {};
+        const status = typeof e.status === "number" ? e.status : "?";
+        const text =
+          (typeof e.stderr === "string"
+            ? e.stderr
+            : typeof e.stdout === "string"
+              ? e.stdout
+              : ""
+          ).trim() || "git 没有输出";
         throw new Error(
-          `夹具里 git ${args.join(" ")} 失败（cwd=${root}，退出码 ${e.status ?? "?"}）：${
-            (e.stderr ?? e.stdout ?? "").trim() || "git 没有输出"
-          }`,
+          `夹具里 git ${args.join(" ")} 失败（cwd=${root}，退出码 ${status}）：${text}`,
           { cause: error },
         );
       }

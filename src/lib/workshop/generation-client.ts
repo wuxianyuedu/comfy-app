@@ -20,6 +20,7 @@ import { clampPct } from "~/lib/progress";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
 import { isPlainRecord, isRecord } from "~/lib/is-record";
+import type { ApiCallDebugRow as ApiRelayDebugRow } from "./api-channel-core";
 import type { Character, StyleRef } from "./types";
 import {
   extractSavedOutputs,
@@ -567,7 +568,22 @@ type RelayResponse = Record<string, unknown> | null;
  *  到点 abort，调用方拿到一句可行动的中文报错。 */
 const RELAY_TIMEOUT_MS = 10 * 60 * 1000;
 
-async function postRelay(body: Record<string, unknown>): Promise<RelayResponse> {
+/** 请求读数回调（ISSUE #3791）：响应（成功或失败）里带了 debug 读数就逐批上抛。
+ *  类型从 api-channel-core 只引形状（type-only，不进运行时图）。 */
+export type RelayDebugSink = (rows: ApiRelayDebugRow[]) => void;
+
+function relayDebugRows(data: RelayResponse): ApiRelayDebugRow[] {
+  const raw = data?.debug;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((row): row is ApiRelayDebugRow => isRecord(row));
+}
+
+async function postRelay(
+  body: Record<string, unknown>,
+  onDebug?: RelayDebugSink,
+): Promise<RelayResponse> {
   let res: Response;
   try {
     res = await fetch("/api/workshop-api/generate", {
@@ -597,48 +613,75 @@ async function postRelay(body: Record<string, unknown>): Promise<RelayResponse> 
     data = undefined;
   }
   if (!res.ok) {
+    /* 失败响应里也可能带了已捕获的请求读数（上游 4xx/5xx）—— 先上抛再抛错，
+     * 测试页的错误态同样展示「发出去的是什么」。 */
+    if (onDebug !== undefined) {
+      onDebug(relayDebugRows(isRecord(data) ? data : null));
+    }
     throw new Error(relayErrorMessage(data, res.status));
   }
   // 「res.ok 但 body 不是对象」——以前是三个 caller 各自 `isRecord(data)` 前奏，
   // 现在这一层判据只写一次；null 交给 caller 决定抛错还是降级。
-  return isRecord(data) ? data : null;
+  const record = isRecord(data) ? data : null;
+  if (onDebug !== undefined) {
+    onDebug(relayDebugRows(record));
+  }
+  return record;
 }
 
 /* API 通道：一次性图片生成 → 返回可用的图片 URL。
  * 当 `model` 传的是设置页里的远端模型名（remoteModel 表）时，服务端按该条目的
  * 连接参数生图；不传则回落到工坊 API 通道设置（旧行为）。 */
-export async function apiGenerateImage(req: {
-  /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1.5"）/ 宽高对齐倍数 / 输入图。
-   *  三者合起来就是工坊的「比例 + 百万像素 + 倍数」尺寸表达 —— 选「分辨率」时
-   *  由调用方（`shotSizeToRelay`）换算后再传，不把 "1k" 这种档位名丢给远端。 */
-  aspectRatio?: string;
-  image?: string;
-  megapixels?: string;
-  /** 工坊模式码（T2I / I2I / …）：远端模型有该模式适配器时按它翻译字段 */
-  mode?: string;
-  /** 设置页配置的远端模型名（remoteModel 表按名取连接参数） */
-  model?: string;
-  multiple?: number;
-  negative?: string;
-  prompt: string;
-  size?: string;
-}): Promise<string> {
-  const data = await postRelay({
-    kind: "image",
-    prompt: req.prompt,
-    negative: req.negative,
-    size: req.size,
-    ...(req.model !== undefined && req.model !== "" ? { model: req.model } : {}),
-    ...(req.mode !== undefined && req.mode !== "" ? { mode: req.mode } : {}),
-    ...(req.aspectRatio !== undefined && req.aspectRatio !== ""
-      ? { aspectRatio: req.aspectRatio }
-      : {}),
-    ...(req.megapixels !== undefined && req.megapixels !== ""
-      ? { megapixels: req.megapixels }
-      : {}),
-    ...(req.multiple === undefined ? {} : { multiple: req.multiple }),
-    ...(req.image !== undefined && req.image !== "" ? { image: req.image } : {}),
-  });
+export async function apiGenerateImage(
+  req: {
+    /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1.5"）/ 分辨率档（"1k"）/
+     *  宽高对齐倍数 / 输入图。合起来就是工坊的尺寸表达 —— 百万像素由
+     *  `shotSizeToRelay` 换算下发；分辨率档位名（ISSUE #3622）原样带出，
+     *  适配器映射了「分辨率」口的远端接口直接拿到 "1k"/"2k"/"4k"。 */
+    aspectRatio?: string;
+    image?: string;
+    megapixels?: string;
+    /** 工坊模式码（T2I / I2I / …）：远端模型有该模式适配器时按它翻译字段 */
+    mode?: string;
+    /** 设置页配置的远端模型名（remoteModel 表按名取连接参数） */
+    model?: string;
+    multiple?: number;
+    negative?: string;
+    prompt: string;
+    /** 统一输入「分辨率」的取值（清晰度档位名，如 "1k"）。 */
+    resolution?: string;
+    seed?: number;
+    size?: string;
+  },
+  opts: { onDebug?: RelayDebugSink } = {},
+): Promise<string> {
+  const data = await postRelay(
+    {
+      kind: "image",
+      prompt: req.prompt,
+      negative: req.negative,
+      size: req.size,
+      ...(req.model !== undefined && req.model !== "" ? { model: req.model } : {}),
+      ...(req.mode !== undefined && req.mode !== "" ? { mode: req.mode } : {}),
+      ...(req.aspectRatio !== undefined && req.aspectRatio !== ""
+        ? { aspectRatio: req.aspectRatio }
+        : {}),
+      ...(req.megapixels !== undefined && req.megapixels !== ""
+        ? { megapixels: req.megapixels }
+        : {}),
+      ...(req.resolution !== undefined && req.resolution !== ""
+        ? { resolution: req.resolution }
+        : {}),
+      ...(req.multiple === undefined ? {} : { multiple: req.multiple }),
+      ...(req.image !== undefined && req.image !== "" ? { image: req.image } : {}),
+      /* 种子（ISSUE #3778）：此前请求体组装漏了这一键 —— 路由解析得到、
+       * 客户端从未发送，用户填的种子静默丢失。 */
+      ...(req.seed === undefined ? {} : { seed: req.seed }),
+      /* 请求读数（ISSUE #3791）：带了 onDebug 就向 relay 要 debug 读数。 */
+      ...(opts.onDebug === undefined ? {} : { debug: true }),
+    },
+    opts.onDebug,
+  );
   const url = data && typeof data.url === "string" && data.url ? data.url : null;
   if (url === null) {
     throw new Error("API 生图响应中未找到图片 URL");
@@ -654,22 +697,44 @@ export type ApiVideoSubmitResult = {
 };
 
 /* API 通道：提交一个（图生）视频任务。 */
-export async function apiSubmitVideo(req: {
-  fps?: number;
-  frames?: number;
-  /* 参考首帧（任何可解析的来源都行：/generated/… 、data URL、http）。 */
-  image?: string;
-  negative?: string;
-  prompt: string;
-}): Promise<ApiVideoSubmitResult> {
-  const data = await postRelay({
-    kind: "video",
-    prompt: req.prompt,
-    negative: req.negative,
-    image: req.image,
-    frames: req.frames,
-    fps: req.fps,
-  });
+export async function apiSubmitVideo(
+  req: {
+    /** 秒数（#3590 测试页；适配器 duration 输入的直接取值）。 */
+    duration?: number;
+    fps?: number;
+    frames?: number;
+    /* 参考首帧（任何可解析的来源都行：/generated/… 、data URL、http）。 */
+    image?: string;
+    /** 工坊模式码（T2V / I2V …，#3590）：远端模型按它选适配器。 */
+    mode?: string;
+    /** 设置页配置的远端模型名（#3590）：按 remoteModel 表条目直连。 */
+    model?: string;
+    negative?: string;
+    prompt: string;
+    /** 统一输入「种子」（ISSUE #3783）：非负整数；缺省 = 不带。 */
+    seed?: number;
+  },
+  opts: { onDebug?: RelayDebugSink } = {},
+): Promise<ApiVideoSubmitResult> {
+  const data = await postRelay(
+    {
+      kind: "video",
+      prompt: req.prompt,
+      negative: req.negative,
+      image: req.image,
+      frames: req.frames,
+      fps: req.fps,
+      /* 空串 / 缺省都省略 —— 服务端按「没带」回落，不按空串回落。 */
+      ...(req.model !== undefined && req.model !== "" ? { model: req.model } : {}),
+      ...(req.mode !== undefined && req.mode !== "" ? { mode: req.mode } : {}),
+      ...(req.duration === undefined ? {} : { duration: req.duration }),
+      /* 种子（ISSUE #3783）：与生图（#3778）同口径转发 —— 请求体组装漏了
+       * 这一键的话，路由解析得到、客户端却从未发送，用户填的种子静默丢失。 */
+      ...(req.seed === undefined ? {} : { seed: req.seed }),
+      ...(opts.onDebug === undefined ? {} : { debug: true }),
+    },
+    opts.onDebug,
+  );
   if (!data) {
     throw new Error("API 视频响应格式错误");
   }
@@ -682,11 +747,28 @@ export async function apiSubmitVideo(req: {
   return { url, remoteTaskId };
 }
 
-/* API 通道：对异步视频任务做一次轮询。 */
+/* API 通道：对异步视频任务做一次轮询。model/mode 跟着提交那一步走（#3590）：
+ * 远端模型的任务查询地址与密钥都挂在条目上。 */
 export async function apiPollVideo(
   remoteTaskId: string,
+  opts: {
+    /* 请求读数（ISSUE #3791）：与提交同一口径，逐候选轮询也上报。 */
+    debug?: boolean;
+    mode?: string;
+    model?: string;
+    onDebug?: RelayDebugSink;
+  } = {},
 ): Promise<{ pending: boolean; url?: string }> {
-  const data = await postRelay({ kind: "video", remoteTaskId });
+  const data = await postRelay(
+    {
+      kind: "video",
+      remoteTaskId,
+      ...(opts.model !== undefined && opts.model !== "" ? { model: opts.model } : {}),
+      ...(opts.mode !== undefined && opts.mode !== "" ? { mode: opts.mode } : {}),
+      ...(opts.debug === true ? { debug: true } : {}),
+    },
+    opts.onDebug,
+  );
   if (!data) {
     return { pending: true };
   }

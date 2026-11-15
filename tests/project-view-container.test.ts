@@ -26,7 +26,6 @@ const DOCUMENT_VIEWS = [
   // 这三屏是「浮层入口 → 视图」那一批改出来的，收口时漏登记，所以它们各自漏掉的
   // 约定（左右内边距）在这里第一次有了执行者。
   path.join("src", "components", "console", "ConsoleView.tsx"),
-  path.join("src", "components", "workshop", "ModelAdaptersView.tsx"),
 ];
 
 /** 已收口的工作区型视图。
@@ -41,6 +40,10 @@ const WORKSPACE_VIEWS = [
      必须带无变体 `px-`」对它**不再适用**（不是豁免）——它判的是居中列没封顶时留白归零，这屏没有居中列；留白下移到屏内，
      实测在 `ModeContractEditorView.tsx` 的页眉与两栏容器（`px-4 sm:px-8`），那层本身是判据看得见的调用点。 */
   path.join("src", "components", "workshop", "mode-contract", "ModeContractView.tsx"),
+  /* 「模型适配」同款迁移（ISSUE #3622）：模型清单收成左侧树形页签（图像 / 视频
+     分组）后，与模式契约同一布局决定 —— 左栏要有定高边界可依附，文档型的
+     整屏滚动条装不下这个形状。 */
+  path.join("src", "components", "workshop", "ModelAdaptersView.tsx"),
 ];
 
 /** 剥注释再判：说明文字里出现 `max-w-300` 不等于有人手写那一层。 */

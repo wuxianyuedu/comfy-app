@@ -44,8 +44,9 @@ describe("chatRequestUrl / chatHeaders", () => {
       "https://agnes/v1/chat/completions",
     );
     expect(chatRequestUrl("https://agnes", "anthropic-messages")).toBe("https://agnes/v1/messages");
-    expect(chatRequestUrl(" https://agnes/ ", "responses")).toBe("https://agnes/responses");
-    expect(chatRequestUrl("", "responses")).toBe("/responses");
+    /* #3656：Base 不带版本段补 /v1 再接格式路径；空 Base 给空串（不发半截地址） */
+    expect(chatRequestUrl(" https://agnes/ ", "responses")).toBe("https://agnes/v1/responses");
+    expect(chatRequestUrl("", "responses")).toBe("");
   });
 
   it("Anthropic 用 x-api-key + anthropic-version；其余用 Bearer；空密钥只留 Content-Type", () => {
@@ -72,7 +73,7 @@ describe("buildChatRequest —— chat-completions", () => {
     const req = buildChatRequest(
       baseInput({ apiKey: "sk-1", stream: true, maxTokens: 2048, temperature: 0.2 }),
     );
-    expect(req.url).toBe("https://platform.agnes-ai.com/chat/completions");
+    expect(req.url).toBe("https://platform.agnes-ai.com/v1/chat/completions");
     expect(req.headers.Authorization).toBe("Bearer sk-1");
     expect(req.body).toEqual({
       model: "claude-sonnet-4",
@@ -81,6 +82,35 @@ describe("buildChatRequest —— chat-completions", () => {
       max_tokens: 2048,
       stream: true,
     });
+  });
+
+  it("模型级透传字段（#3626）盖在请求体**最后**，覆盖同名默认字段", () => {
+    const req = buildChatRequest(
+      baseInput({
+        extraBody: {
+          extra_body: { response_format: { type: "json_object" } },
+          temperature: 0,
+          top_p: 1,
+        },
+      }),
+    );
+    expect(req.body).toMatchObject({
+      extra_body: { response_format: { type: "json_object" } },
+      temperature: 0,
+      top_p: 1,
+    });
+    expect(req.body).not.toHaveProperty("response_format");
+  });
+
+  it("模型级透传字段：未配置时请求体形状不变（不多不少）", () => {
+    const req = buildChatRequest(baseInput({ stream: true, maxTokens: 2048, temperature: 0.2 }));
+    expect(Object.keys(req.body)).toEqual([
+      "model",
+      "messages",
+      "temperature",
+      "max_tokens",
+      "stream",
+    ]);
   });
 
   it("多模态：远端走 content 数组（image_url 对象），本地 Ollama 走 images 字段", () => {
@@ -249,7 +279,7 @@ describe("buildChatRequest —— responses", () => {
         ],
       }),
     );
-    expect(req.url).toBe("https://platform.agnes-ai.com/responses");
+    expect(req.url).toBe("https://platform.agnes-ai.com/v1/responses");
     expect(req.headers.Authorization).toBe("Bearer sk-r");
     expect(req.body).toEqual({
       model: "claude-sonnet-4",

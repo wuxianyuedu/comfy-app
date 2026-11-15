@@ -12,7 +12,11 @@ import { episode, production, season, series, task } from "~/server/db/schema";
 import { workflowTemplateRepository, taskRepository } from "~/lib/core/repository";
 import { kickQueue } from "~/lib/comfyui/executor-continuation";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
+import { AsyncMutex } from "~/lib/async-mutex";
 import { isPlainRecord } from "~/lib/is-record";
+
+/** 整季批量提交的「读占用 → 入队」互斥（ISSUE #3833，见 mutation 内注释）。 */
+const batchGenerateMutex = new AsyncMutex();
 
 type Db = SqliteRemoteDatabase<typeof schema>;
 type Ctx = { db: Db; user: { id: string } };
@@ -154,65 +158,74 @@ export const seriesGenerationRouter = createTRPCRouter({
             .filter((p): p is string => typeof p === "string" && p.length > 0),
         ),
       ];
-      const existing = await ctx.db
-        .select({ projectId: task.projectId, shotId: task.shotId, status: task.status })
-        .from(task)
-        .where(inArray(task.projectId, projectIds));
-      const occupied = new Set<string>();
-      for (const t of existing) {
-        if (t.projectId === null || t.shotId === null) {
-          continue;
-        }
-        if (t.status === "SUCCEEDED" || t.status === "QUEUED" || t.status === "RUNNING") {
-          occupied.add(`${t.projectId}:${t.shotId}`);
-        }
-      }
-      const tpl = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.workflowId);
-      if (!tpl) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "工作流不存在" });
-      }
-      const executorClaim = resolveExecutorClaim();
-      let enqueued = 0;
-      let skipped = 0;
-      for (const ep of eps) {
-        if (ep.projectId === null) {
-          continue;
-        }
-        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        const prod = await ctx.db.query.production.findFirst({
-          where: eq(production.id, ep.projectId),
-        });
-        const rawShots: unknown = prod?.shots;
-        const shots = isShotIdList(rawShots) ? rawShots : [];
-        for (const s of shots) {
-          const sid = s.id;
-          if (sid === undefined || sid === "") {
+      /* 「读占用 → 逐镜入队」收进进程内互斥（ISSUE #3833）：本 mutation 自述按
+       * `(projectId, shotId)` 的 task 存在性幂等去重（断点续跑，不靠记忆），但
+       * 「先读全量 task 再逐个 insert」的窗口里，第二次调用（双击 / 重试）会读到
+       * 同一批「还没有」而给同一镜头排两个队 —— ComfyUI 重复出图。task 表没有
+       * (projectId, shotId) 唯一约束、createQueued 也不吃事务执行者，用进程内
+       * 互斥把这段串行化（任务的写入方都在本进程）。 */
+      const { enqueued, skipped } = await batchGenerateMutex.run(async () => {
+        const existing = await ctx.db
+          .select({ projectId: task.projectId, shotId: task.shotId, status: task.status })
+          .from(task)
+          .where(inArray(task.projectId, projectIds));
+        const occupied = new Set<string>();
+        for (const t of existing) {
+          if (t.projectId === null || t.shotId === null) {
             continue;
           }
-          const key = `${ep.projectId}:${sid}`;
-          if (occupied.has(key)) {
-            skipped++;
+          if (t.status === "SUCCEEDED" || t.status === "QUEUED" || t.status === "RUNNING") {
+            occupied.add(`${t.projectId}:${t.shotId}`);
+          }
+        }
+        const tpl = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.workflowId);
+        if (!tpl) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "工作流不存在" });
+        }
+        const executorClaim = resolveExecutorClaim();
+        let enqueued = 0;
+        let skipped = 0;
+        for (const ep of eps) {
+          if (ep.projectId === null) {
             continue;
           }
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-          await taskRepository.createQueued({
-            userId: ctx.user.id,
-            type: tpl.taskType,
-            prompt: "",
-            negativePrompt: null,
-            params: { workflow: input.workflowId, paramMap: {} },
-            workflowName: tpl.name,
-            projectId: ep.projectId,
-            shotId: sid,
-            referenceImages: undefined,
-            claimedBy: executorClaim,
-            execPayload: tpl.rawJson,
-            parentId: null,
+          const prod = await ctx.db.query.production.findFirst({
+            where: eq(production.id, ep.projectId),
           });
-          occupied.add(key);
-          enqueued++;
+          const rawShots: unknown = prod?.shots;
+          const shots = isShotIdList(rawShots) ? rawShots : [];
+          for (const s of shots) {
+            const sid = s.id;
+            if (sid === undefined || sid === "") {
+              continue;
+            }
+            const key = `${ep.projectId}:${sid}`;
+            if (occupied.has(key)) {
+              skipped++;
+              continue;
+            }
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+            await taskRepository.createQueued({
+              userId: ctx.user.id,
+              type: tpl.taskType,
+              prompt: "",
+              negativePrompt: null,
+              params: { workflow: input.workflowId, paramMap: {} },
+              workflowName: tpl.name,
+              projectId: ep.projectId,
+              shotId: sid,
+              referenceImages: undefined,
+              claimedBy: executorClaim,
+              execPayload: tpl.rawJson,
+              parentId: null,
+            });
+            occupied.add(key);
+            enqueued++;
+          }
         }
-      }
+        return { enqueued, skipped };
+      });
       if (enqueued > 0) {
         kickQueue();
       }

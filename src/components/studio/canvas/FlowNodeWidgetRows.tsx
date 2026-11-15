@@ -11,6 +11,7 @@ import { StringTextarea } from "../StringTextarea";
 import { PORT_ROW_TONES, portDotGlow, resolvePortRowTone } from "./flow-focus-endpoints";
 import { NODE_PORT_FOCUS_ACTIVE_KEY, readPortFocusRole } from "./hooks/use-related-edges-highlight";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
+import { Hint } from "~/components/ui/hint";
 
 type FlowNodeWidgetRowsProps = {
   data: WorkflowNodeData;
@@ -129,23 +130,24 @@ export function FlowNodeWidgetRows({
                     }}
                   />
                 )}
-                <span
-                  className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
-                  style={{
-                    /* 提亮档统一走表里的色；其余行沿用「连线行比普通行重一档」的
-                     * 既有口径（`ink-strong` / `ink-subtle`）。 */
-                    color:
-                      tone.background !== undefined && tone.background !== ""
-                        ? tone.labelColor
-                        : isConn
-                          ? "var(--color-ink-strong)"
-                          : "var(--color-ink-subtle)",
-                    fontWeight: tone.labelWeight,
-                  }}
-                  title={k}
-                >
-                  {friendlyLabel}
-                </span>
+                <Hint label={k}>
+                  <span
+                    className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
+                    style={{
+                      /* 提亮档统一走表里的色；其余行沿用「连线行比普通行重一档」的
+                       * 既有口径（`ink-strong` / `ink-subtle`）。 */
+                      color:
+                        tone.background !== undefined && tone.background !== ""
+                          ? tone.labelColor
+                          : isConn
+                            ? "var(--color-ink-strong)"
+                            : "var(--color-ink-subtle)",
+                      fontWeight: tone.labelWeight,
+                    }}
+                  >
+                    {friendlyLabel}
+                  </span>
+                </Hint>
               </div>
             ) : (
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -163,36 +165,38 @@ export function FlowNodeWidgetRows({
                     }}
                   />
                 )}
-                <span
-                  className="text-2xs min-w-0 shrink text-left wrap-break-word whitespace-normal"
-                  style={{
-                    flex: "0 1 auto",
-                    color:
-                      tone.background !== undefined && tone.background !== ""
-                        ? tone.labelColor
-                        : isConn
-                          ? "var(--color-ink-strong)"
-                          : "var(--color-ink-subtle)",
-                    fontWeight: tone.labelWeight,
-                  }}
-                  title={k}
-                >
-                  {friendlyLabel}
-                </span>
+                <Hint label={k}>
+                  <span
+                    className="text-2xs min-w-0 shrink text-left wrap-break-word whitespace-normal"
+                    style={{
+                      flex: "0 1 auto",
+                      color:
+                        tone.background !== undefined && tone.background !== ""
+                          ? tone.labelColor
+                          : isConn
+                            ? "var(--color-ink-strong)"
+                            : "var(--color-ink-subtle)",
+                      fontWeight: tone.labelWeight,
+                    }}
+                  >
+                    {friendlyLabel}
+                  </span>
+                </Hint>
 
                 {/* 同时带线的 widget 输入仍显示控件取值（ComfyUI 从不隐藏），只是调暗，
                      让人看出活值来自连线。版式对齐 ComfyUI：标签与取值之间不画分隔线，
                      值紧接标签左对齐。 */}
-                <span
-                  className="text-2xs min-w-0 truncate text-left tabular-nums"
-                  style={{
-                    flex: "1 1 0",
-                    color: valueCellColor(v, isConn),
-                  }}
-                  title={String(v)}
-                >
-                  {renderWidgetValue(v)}
-                </span>
+                <Hint label={String(v)}>
+                  <span
+                    className="text-2xs min-w-0 truncate text-left tabular-nums"
+                    style={{
+                      flex: "1 1 0",
+                      color: valueCellColor(v, isConn),
+                    }}
+                  >
+                    {renderWidgetValue(v)}
+                  </span>
+                </Hint>
               </div>
             )}
             {/* STRING widget 文本框 —— **堆叠**在 LABEL 行下方。
@@ -204,13 +208,14 @@ export function FlowNodeWidgetRows({
                 {stringText.length > 0 ? (
                   <StringTextarea hasSize={hasSize} value={stringText} />
                 ) : (
-                  <div
-                    className="border-border-strong bg-canvas-deep text-ink-fainter text-2xs rounded border px-2 py-1.5 leading-snug"
-                    style={{ minHeight: 28 }}
-                    title={stringText}
-                  >
-                    （空）
-                  </div>
+                  <Hint label={stringText}>
+                    <div
+                      className="border-border-strong bg-canvas-deep text-ink-fainter text-2xs rounded border px-2 py-1.5 leading-snug"
+                      style={{ minHeight: 28 }}
+                    >
+                      （空）
+                    </div>
+                  </Hint>
                 )}
               </div>
             )}

@@ -115,6 +115,18 @@ export function useDraggablePosition<T extends HTMLElement>({
     startY: number;
   } | null>(null);
 
+  /* 拖拽期挂到 window 的三个指针监听器的退订句柄（ISSUE #3834）：正常由
+   * `onUp` 摘除；组件在松手前被卸载（拖拽中切页签 / 条件渲染收起悬浮控件）
+   * 时由下面的卸载清理兜底，否则监听器泄漏到页面生命周期、闭包里的
+   * setState 打在已卸载组件上。 */
+  const dragListenersRef = useRef<{ off: () => void } | null>(null);
+  useEffect(() => {
+    return () => {
+      dragListenersRef.current?.off();
+      dragListenersRef.current = null;
+    };
+  }, []);
+
   /* 点击回调放 ref 同步：`onClick` 是调用处每次渲染新造的箭头函数，
    * 进依赖就会让 pointerdown 的监听每帧重挂。 */
   const onClickRef = useRef(onClick);
@@ -213,9 +225,8 @@ export function useDraggablePosition<T extends HTMLElement>({
       const onUp = (upEvent: PointerEvent) => {
         const drag = dragRef.current;
         dragRef.current = null;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        window.removeEventListener("pointercancel", onUp);
+        dragListenersRef.current?.off();
+        dragListenersRef.current = null;
         if (drag?.pointerId !== upEvent.pointerId) {
           return;
         }
@@ -238,6 +249,14 @@ export function useDraggablePosition<T extends HTMLElement>({
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
       window.addEventListener("pointercancel", onUp);
+      /* 退订句柄交给 ref：卸载清理（上面的 effect）与 onUp 走同一份。 */
+      dragListenersRef.current = {
+        off: () => {
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", onUp);
+          window.removeEventListener("pointercancel", onUp);
+        },
+      };
     },
     [element, offset, storageKey],
   );

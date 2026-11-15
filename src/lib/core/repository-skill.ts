@@ -7,7 +7,7 @@ import "server-only";
 import { db } from "~/lib/db";
 import { skill, type Skill } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
-import { eq, and, like, or, asc, desc, count } from "drizzle-orm";
+import { eq, and, like, or, asc, desc, count, inArray } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
 
 export type SkillSeed = {
@@ -30,29 +30,54 @@ export class SkillRepository extends DrizzleRepository<Skill> {
     super(skill, skill.id);
   }
 
+  /** 确保内置技能存在（应用首批请求时补种）。
+   *  补缺式 seed（ISSUE #3835）：按 slug 查出已存在的，只插缺的，再挂
+   *  `onConflictDoNothing`（`slug` 唯一索引）兜底。原先「count>0 就返回」有
+   *  两个洞：并发冷启动（不同筛选条件的 list 各自带起一次 seed）会同抢唯一
+   *  索引让后到者 500；insert 中途失败残留部分行后 count>0，缺的技能永不自愈。
+   *  现在每次调用都补缺、重复执行成功且无害。 */
   async ensureBuiltIns(seeds: Array<SkillSeed>): Promise<void> {
-    const [row] = await db.select({ v: count() }).from(skill).where(eq(skill.isBuiltIn, true));
-    if ((row?.v ?? 0) > 0) {
+    if (seeds.length === 0) {
       return;
     }
-    await db.insert(skill).values(
-      seeds.map((s) => ({
-        name: s.name,
-        slug: s.slug,
-        description: s.description,
-        icon: s.icon,
-        category: s.category,
-        promptTemplate: s.promptTemplate,
-        negativePrompt: s.negativePrompt,
-        defaultParams: s.defaultParams,
-        recommendedModel: s.recommendedModel,
-        coverUrl: s.coverUrl,
-        sortOrder: s.sortOrder,
-        isBuiltIn: true,
-        isActive: true,
-        tags: JSON.stringify(s.tags),
-      })),
-    );
+    const existing = await db
+      .select({ slug: skill.slug })
+      .from(skill)
+      .where(
+        and(
+          eq(skill.isBuiltIn, true),
+          inArray(
+            skill.slug,
+            seeds.map((s) => s.slug),
+          ),
+        ),
+      );
+    const known = new Set(existing.map((r) => r.slug));
+    const missing = seeds.filter((s) => !known.has(s.slug));
+    if (missing.length === 0) {
+      return;
+    }
+    await db
+      .insert(skill)
+      .values(
+        missing.map((s) => ({
+          name: s.name,
+          slug: s.slug,
+          description: s.description,
+          icon: s.icon,
+          category: s.category,
+          promptTemplate: s.promptTemplate,
+          negativePrompt: s.negativePrompt,
+          defaultParams: s.defaultParams,
+          recommendedModel: s.recommendedModel,
+          coverUrl: s.coverUrl,
+          sortOrder: s.sortOrder,
+          isBuiltIn: true,
+          isActive: true,
+          tags: JSON.stringify(s.tags),
+        })),
+      )
+      .onConflictDoNothing();
   }
 
   async list(opts: {

@@ -53,13 +53,14 @@ export function WorkflowNodeHeader({
         >
           W
         </span>
-        <span
-          className="text-ink-bright truncate text-sm font-bold"
-          style={{ fontFamily: "var(--font-sans)" }}
-          title={titleTitle ?? title}
-        >
-          {title}
-        </span>
+        <Hint label={titleTitle ?? title}>
+          <span
+            className="text-ink-bright truncate text-sm font-bold"
+            style={{ fontFamily: "var(--font-sans)" }}
+          >
+            {title}
+          </span>
+        </Hint>
       </div>
       {right}
     </div>
@@ -85,15 +86,16 @@ export function WorkflowNodePill({
   title?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "bg-node-accent flex h-5 shrink-0 items-center gap-1.25 rounded-[11px] px-2",
-        className,
-      )}
-      title={title}
-    >
-      {children}
-    </div>
+    <Hint label={title}>
+      <div
+        className={cn(
+          "bg-node-accent flex h-5 shrink-0 items-center gap-1.25 rounded-[11px] px-2",
+          className,
+        )}
+      >
+        {children}
+      </div>
+    </Hint>
   );
 }
 
@@ -109,12 +111,13 @@ export function WorkflowStaticChip({
   title?: string;
 }) {
   return (
-    <span
-      className={`border-primary/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 ${className}`}
-      title={title}
-    >
-      {children}
-    </span>
+    <Hint label={title}>
+      <span
+        className={`border-primary/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 ${className}`}
+      >
+        {children}
+      </span>
+    </Hint>
   );
 }
 
@@ -187,13 +190,14 @@ export function WorkflowNodeOutputsRow({
         ? renderHandle({ id: output.ioKey, dir: "out", type: oType })
         : null}
       <div className="flex h-5 items-center justify-end gap-1.5 px-3.5 pt-1.5">
-        <span
-          className="text-ink-bright min-w-0 truncate text-sm font-semibold"
-          style={{ fontFamily: "var(--font-sans)" }}
-          title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
-        >
-          {oLabel}
-        </span>
+        <Hint label={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}>
+          <span
+            className="text-ink-bright min-w-0 truncate text-sm font-semibold"
+            style={{ fontFamily: "var(--font-sans)" }}
+          >
+            {oLabel}
+          </span>
+        </Hint>
         <TypeChip size="md">{typeDisplay(oType)}</TypeChip>
       </div>
       <div className="pb-2" />

@@ -430,6 +430,12 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       }
       try {
         const serverDraft = await fetchServerDraft(activeId);
+        /* await 后复查（ISSUE #3905）：fetch 窗口内用户可能已开始输入（本地
+         * 草稿非空）—— 此时放弃回填，不让服务端旧镜像覆盖刚敲的内容
+         * （否则会被 600ms 防抖自动保存固化）。 */
+        if (!draftIsEmpty(latestDraftRef.current)) {
+          return;
+        }
         if (serverDraft && draftHasContent(serverDraft)) {
           const draft = dtoToDraft(serverDraft);
           writeDraft(activeId, draft);

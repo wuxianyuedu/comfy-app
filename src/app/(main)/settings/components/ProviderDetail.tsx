@@ -106,7 +106,9 @@ export function ProviderDetail({
 
   /** 详情页「测试连接」：带上当前草稿（尚未保存的 Base URL / 密钥也生效）；
    *  密钥留空时服务端按 `providerId` 取已保存值，浏览器始终拿不到明文。
-   *  接口格式由服务端按「该供应商下各模型用到的格式」逐个试（#3517）。 */
+   *  接口格式由服务端按「该供应商下各模型用到的格式」逐个试（#3517）。
+   *  成功后重取一次清单（#3577）：服务端已把探测到的模型目录补进名下
+   *  （缺的插成停用行），不重取的话新行要点别处才出现。 */
   async function testProvider() {
     setProbing(true);
     setProbeMsg(null);
@@ -118,6 +120,9 @@ export function ProviderDetail({
         ...(typedKey === "" ? {} : { apiKey: typedKey }),
       });
       setProbeMsg({ kind: out.ok ? "ok" : "err", text: out.detail });
+      if (out.ok) {
+        p.refetch();
+      }
     } finally {
       setProbing(false);
     }

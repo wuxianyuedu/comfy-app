@@ -5,6 +5,9 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 import { describe, expect } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
+
 import { defineGateRepo, type GateRepo } from "./helpers/gate-repo";
 
 /**
@@ -145,10 +148,18 @@ describe("test.todo 消费方门禁：该拦的形状（§11.24）", () => {
  * ⑧ 「列到名字、读时已没」这一支只能在进程内判：临时仓库 + 子进程造不出这个时刻（能造只能靠删文件的时机，那是概率窗口，判据不许长在上面）。
  * 现场与口径同 `tests/test-it-each-gate.test.ts` 的同名用例 —— `tests/global-setup-cleanup.test.ts` 会在 `tests/` 下临时造探针再删，两个 vitest 同跑时本扫描会撞上空档，于是 D 组带着一个 Node 栈崩掉。
  */
-/* SAFETY: 类型断言已复核 */
-const { readForScan } = createRequire(import.meta.url)("../scripts/check-test-todo.cjs") as {
-  readForScan: (abs: string) => string | null;
-};
+/** 判据模块的消费形状守卫（B5 清账）：只取 readForScan 一件。 */
+function isTodoGateModule(
+  value: unknown,
+): value is { readForScan: (abs: string) => string | null } {
+  return isRecord(value) && typeof value.readForScan === "function";
+}
+
+const todoGateModule: unknown = createRequire(import.meta.url)("../scripts/check-test-todo.cjs");
+if (!isTodoGateModule(todoGateModule)) {
+  throw new Error("check-test-todo.cjs 缺 readForScan —— 判据脚本形状变了");
+}
+const { readForScan } = todoGateModule;
 
 describe("扫描期间文件消失（并发探针）", () => {
   test("读不到的文件返回 null，而不是把整个 D 组带崩", () => {

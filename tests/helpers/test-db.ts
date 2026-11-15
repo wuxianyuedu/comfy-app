@@ -8,6 +8,8 @@ import { drizzle, type RemoteCallback, type SqliteRemoteDatabase } from "drizzle
 import * as schema from "~/server/db/schema";
 import { encryptLlmKey } from "~/lib/llm/secrets";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 export type Row = Record<string, unknown>;
 
 /** schema.ts 中声明为 `{ mode: "json" }` 的列（存为 JSON 字符串，读取需解析）。 */
@@ -39,6 +41,7 @@ const jsonColumns = new Set<string>([
   "styleTags",
   "portraits",
   "inputTypes",
+  "outputTypes",
   "capabilities",
   "reasoningLevels",
   "reasoningParamMapping",
@@ -164,8 +167,9 @@ CREATE TABLE IF NOT EXISTS auditLog (
 CREATE TABLE IF NOT EXISTS remoteModel (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, providerId TEXT, baseUrl TEXT, apiFormat TEXT, apiKey TEXT,
   kind TEXT NOT NULL DEFAULT 'chat', enabled INTEGER NOT NULL DEFAULT 1, contextWindow INTEGER,
-  maxOutputTokens INTEGER, inputTypes TEXT, capabilities TEXT, reasoningLevels TEXT,
+  maxOutputTokens INTEGER, inputTypes TEXT, outputTypes TEXT, capabilities TEXT, reasoningLevels TEXT,
   reasoningParamMapping TEXT, smartConfig INTEGER NOT NULL DEFAULT 1, workshopAdapters TEXT,
+  extraBody TEXT,
   createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS llmProvider (
@@ -224,12 +228,16 @@ CREATE TABLE IF NOT EXISTS episode_character (
 -- ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint）：
 CREATE UNIQUE INDEX IF NOT EXISTS umc_user_folder_uniq ON userModelConfig (userId, folder);
 CREATE UNIQUE INDEX IF NOT EXISTS model_file_folder_uniq ON model (fileName, folder);
-CREATE UNIQUE INDEX IF NOT EXISTS skill_slug_uniq ON skill (slug);
+CREATE UNIQUE INDEX IF NOT EXISTS fav_user_model_uniq ON favorite (userId, modelId);
 CREATE UNIQUE INDEX IF NOT EXISTS wmt_user_name_uniq ON workflowModelTag (userId, name);
 CREATE UNIQUE INDEX IF NOT EXISTS remoteModel_name_uniq ON remoteModel (name);
 CREATE UNIQUE INDEX IF NOT EXISTS llmProvider_name_uniq ON llmProvider (name);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_project_uniq ON episode (projectId);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_character_uniq ON episode_character (episodeId, characterId);
+CREATE UNIQUE INDEX IF NOT EXISTS wmtt_tag_wt_uniq ON workflowModelTag_workflowTemplate (workflowModelTag, workflowTemplate);
+CREATE UNIQUE INDEX IF NOT EXISTS character_series_name_uniq ON "character" (seriesId, name);
+CREATE UNIQUE INDEX IF NOT EXISTS season_series_number_uniq ON season (seriesId, seasonNumber);
+CREATE UNIQUE INDEX IF NOT EXISTS episode_season_number_uniq ON episode (seasonId, episodeNumber);
 `;
 
 export type TestTables = {
@@ -312,10 +320,9 @@ function allRows(table: string): Array<Row> {
   if (!currentSqlite) {
     throw new Error("test db 未初始化");
   }
-  /* SAFETY: 类型断言已复核 */
-  return (
-    currentSqlite.prepare(`SELECT * FROM "${table}"`).all() as Array<Record<string, unknown>>
-  ).map((r) => parseRow(table, r));
+  /* 行按 unknown 收窄（B5 清账）：better-sqlite3 的 .all() 返回 any[]。 */
+  const rows: unknown = currentSqlite.prepare(`SELECT * FROM "${table}"`).all();
+  return (isUnknownArray(rows) ? rows : []).map((r) => parseRow(table, isRecord(r) ? r : {}));
 }
 
 function insertInto(table: string, obj: Record<string, unknown>): void {
@@ -334,11 +341,8 @@ function getRow(table: string, id: string): Row {
   if (!currentSqlite) {
     throw new Error("test db 未初始化");
   }
-  /* SAFETY: 类型断言已复核 */
-  const raw = currentSqlite.prepare(`SELECT * FROM "${table}" WHERE id = ?`).get(id) as
-    | Record<string, unknown>
-    | undefined;
-  if (!raw) {
+  const raw: unknown = currentSqlite.prepare(`SELECT * FROM "${table}" WHERE id = ?`).get(id);
+  if (!isRecord(raw)) {
     throw new Error(`row not found: ${table} ${id}`);
   }
   return parseRow(table, raw);
@@ -419,25 +423,29 @@ export function createTestDb(): TestDb {
   /* 这一处双断言是**库的类型在说谎**，不是我们的宿主在将就：`AsyncRemoteCallback` 声明返回
    * `Promise<{ rows: any[] }>`，而 `mapGetResult` 把 `clientResult.rows` 整个当**一行**用（`const row = rows`）——
    * `get` 那一支返回的是单行对象。按声明写会把 `.get()` 恒读成 undefined（宿主形状错、报错却指不到宿主，正是
-   * #2586 这一族）。断言的目标类型取 `RemoteCallback`，让「哪里不对」只出现在这一行。 */
-  /* SAFETY: 类型断言已复核 */
+   * #2586 这一族）。断言的目标类型取 `RemoteCallback`，让「哪里不对」只出现在这一行。
+   * 库的类型说谎是**既定事实**，就地行级豁免并保留上面的因果（B5 清账：文件级豁免收到行级）。 */
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const db = drizzle(sqliteProxyHost(sqlite) as unknown as RemoteCallback, { schema });
 
   const workflowTemplatesWithTags = (): Array<Row> => {
     const rows = allRows("workflowTemplate");
-    /* SAFETY: 类型断言已复核 */
-    const tagRows = sqlite
+    /* 关联行按 unknown 收窄（B5 清账）：四列全是串才算数。 */
+    const tagRowsUnknown: unknown = sqlite
       .prepare(
         `SELECT wm.workflowModelTag AS tagId, wm.workflowTemplate AS wtId, t.name AS name, t.userId AS userId
          FROM workflowModelTag_workflowTemplate wm
          JOIN workflowModelTag t ON wm.workflowModelTag = t.id`,
       )
-      .all() as Array<{
-      name: string;
-      tagId: string;
-      userId: string;
-      wtId: string;
-    }>;
+      .all();
+    const tagRows = (isUnknownArray(tagRowsUnknown) ? tagRowsUnknown : []).filter(
+      (r): r is { name: string; tagId: string; userId: string; wtId: string } =>
+        isRecord(r) &&
+        typeof r.name === "string" &&
+        typeof r.tagId === "string" &&
+        typeof r.userId === "string" &&
+        typeof r.wtId === "string",
+    );
     const byWt = new Map<string, Array<{ id: string; name: string; userId: string }>>();
     for (const r of tagRows) {
       const arr = byWt.get(r.wtId) ?? [];
@@ -446,8 +454,7 @@ export function createTestDb(): TestDb {
     }
     return rows.map((row) => ({
       ...row,
-      /* SAFETY: 类型断言已复核 */
-      modelTags: byWt.get(row.id as string) ?? [],
+      modelTags: byWt.get(typeof row.id === "string" ? row.id : "") ?? [],
     }));
   };
 

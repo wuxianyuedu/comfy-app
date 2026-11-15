@@ -25,7 +25,10 @@ import {
   DRIZZLE_STUDIO_DEFAULT_PORT,
 } from "~/lib/drizzle-studio/lifecycle";
 import {
+  createAppDataBackup,
   createBackup,
+  importBackupFromDirectory,
+  listAppDataBackupSets,
   listBackupEntries,
   readRestoreRequest,
   requestRestore,
@@ -244,23 +247,47 @@ export const settingRouter = createTRPCRouter({
   backupList: authedProcedure.query(() => {
     return {
       backups: listBackupEntries(process.cwd()),
+      /* 本机应用数据的备份套（app-data-backup-<时刻>/，#3732）：与数据库快照
+       * 同刻成套，恢复时一起覆盖回 data/。 */
+      appDataBackups: listAppDataBackupSets(process.cwd()),
       pending: readRestoreRequest(process.cwd()),
     };
   }),
 
   /** 立即做一份备份（手动档）。失败**如实返回**原因而不是抛 —— 备份失败是
-   *  可预期的一档（磁盘满 / 库被独占），界面上要能看见「为什么没成」。 */
+   *  可预期的一档（磁盘满 / 库被独占），界面上要能看见「为什么没成」。
+   *  本机应用数据随同一刻备份（#3732）：数据库那份失败时应用数据照常备份
+   *  （两份独立），原因各自带回去。 */
   backupCreate: authedProcedure.mutation(() => {
-    return createBackup(process.cwd());
+    const db = createBackup(process.cwd());
+    const appData = createAppDataBackup(process.cwd());
+    return { ...db, appData };
   }),
 
   /** 请求从某一份备份恢复：**只写标记**，真正换文件在下次启动。
    *  守卫（「不是一份备份的名字」/「读不通」）在 `requestRestore` 里，返回形状
-   *  与备份那条同款，界面据 `ok` 分档。 */
+   *  与备份那条同款，界面据 `ok` 分档。`appDataDir` 是同刻的本机应用数据备份
+   *  套（#3732）—— 恢复时随数据库一起覆盖回 `data/`。 */
   backupRestore: authedProcedure
-    .input(z.object({ name: z.string().min(1).max(255) }))
+    .input(
+      z.object({
+        name: z.string().min(1).max(255),
+        appDataDir: z.string().min(1).max(255).optional(),
+      }),
+    )
     .mutation(({ input }) => {
-      return requestRestore(process.cwd(), input.name);
+      return requestRestore(process.cwd(), input.name, {
+        appDataDir: input.appDataDir ?? null,
+      });
+    }),
+
+  /** 从**用户指定的目录**导入备份件（ISSUE #3732）：另一台机器 / 移动盘上的
+   *  备份拷回 `data/backups/`，之后照常出现在清单里、可恢复。目录里认不出
+   *  备份件时如实说原因；同名不覆盖。 */
+  backupImportFromDir: authedProcedure
+    .input(z.object({ dir: z.string().min(1).max(4096) }))
+    .mutation(({ input }) => {
+      return importBackupFromDirectory(process.cwd(), input.dir);
     }),
 });
 

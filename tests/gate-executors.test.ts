@@ -8,6 +8,7 @@ import { copyFileSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { defineGateRepo, describe } from "./helpers/gate-repo";
+import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 const REPO_ROOT = process.cwd();
 const SCRIPT_NAME = "check-gate-executors.cjs";
@@ -67,10 +68,13 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
     });
     /* 条数从台账现算，不写死：写死一份计数就等于再造一条「加了条目忘了改数」的
      * 会漂的判据（同一族先例见 #2135 那次钩子步数被钉死）。 */
-    /* SAFETY: 类型断言已复核 */
-    const onDemand = JSON.parse(
+    /* 台账用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+    const onDemand: unknown = JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
-    ) as { onDemand: Record<string, unknown> };
+    );
+    if (!isRecord(onDemand) || !isRecord(onDemand.onDemand)) {
+      throw new Error("台账形状不对（缺 onDemand）");
+    }
     expect(output).toContain(`按需召唤 ${Object.keys(onDemand.onDemand).length}`);
     expect(output).toContain("报告型自称在跑 0");
   });
@@ -515,11 +519,20 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   test("本仓库的台账：登记的每一形都真验得过（不是把红留在下一跳）", () => {
     // 在真仓库根跑：临时区里没有 `.githooks/` / `.cnb.yml` / `package.json` 的**原样**，
     // 而那些正是入口那一层的执行者来源 —— 这里要证的是「此刻这份账对得上」。
-    /* SAFETY: 类型断言已复核 */
-    const ledger = JSON.parse(
+    /* 台账用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+    const ledger: unknown = JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
-    ) as { entrypoints?: Record<string, Array<{ flags?: Array<string> }>> };
-    const entrypoints = ledger.entrypoints ?? {};
+    );
+    if (!isRecord(ledger) || !isRecord(ledger.entrypoints)) {
+      throw new Error("台账形状不对（缺 entrypoints）");
+    }
+    const entrypoints: Record<string, Array<unknown>> = {};
+    for (const [key, value] of Object.entries(ledger.entrypoints)) {
+      if (!isUnknownArray(value)) {
+        throw new Error(`台账 entrypoints.${key} 不是数组`);
+      }
+      entrypoints[key] = value;
+    }
     const forms = Object.values(entrypoints).reduce((n, list) => n + list.length, 0);
     expect(forms, "入口这层一条都没登记，就是 #2530 没办").toBeGreaterThan(0);
     const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME)], {
@@ -546,11 +559,15 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     const { code, output } = repo.run(["--update"]);
     expect(output, output).toContain("台账已重写");
     expect(code).toBe(0);
-    /* SAFETY: 类型断言已复核 */
-    const after = JSON.parse(
+    /* 台账用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+    const after: unknown = JSON.parse(
       readFileSync(join(repo.dir, "scripts", ".gate-executor-ledger.json"), "utf8"),
-    ) as { entrypoints?: Record<string, Array<unknown>> };
-    expect(after.entrypoints?.[PROBE]?.length, "--update 之后入口条目必须原样还在").toBe(2);
+    );
+    if (!isRecord(after) || !isRecord(after.entrypoints)) {
+      throw new Error("台账形状不对（缺 entrypoints）");
+    }
+    const afterProbe = isUnknownArray(after.entrypoints[PROBE]) ? after.entrypoints[PROBE] : [];
+    expect(afterProbe.length, "--update 之后入口条目必须原样还在").toBe(2);
   });
 
   /**

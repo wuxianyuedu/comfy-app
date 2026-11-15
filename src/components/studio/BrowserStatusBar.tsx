@@ -171,9 +171,9 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
     );
   }
   return (
-    <span className={`shrink-0 truncate ${tone}`} title={notice.title}>
-      {notice.text}
-    </span>
+    <Hint label={notice.title}>
+      <span className={`shrink-0 truncate ${tone}`}>{notice.text}</span>
+    </Hint>
   );
 }
 
@@ -216,12 +216,9 @@ function DevServerExitItem({ notice }: { notice: AppServiceExitNotice | null }) 
     return null;
   }
   return (
-    <span
-      className="text-destructive/90 max-w-60 shrink-0 truncate"
-      title={`${notice.why}。${notice.detail}。${notice.action}`}
-    >
-      {notice.why}
-    </span>
+    <Hint label={`${notice.why}。${notice.detail}。${notice.action}`}>
+      <span className="text-destructive/90 max-w-60 shrink-0 truncate">{notice.why}</span>
+    </Hint>
   );
 }
 
@@ -285,9 +282,9 @@ export function BrowserStatusBar() {
       <div className="flex w-42.5 shrink-0 items-center gap-1.5">
         <Lock className="text-success-strong shrink-0" size={11} />
         <span className="text-ink-fainter shrink-0">安全</span>
-        <span className="text-ink-soft truncate" title={host ? `${host}${pathname}` : pathname}>
-          {host ? `${host}${pathname}` : pathname}
-        </span>
+        <Hint label={host ? `${host}${pathname}` : pathname}>
+          <span className="text-ink-soft truncate">{host ? `${host}${pathname}` : pathname}</span>
+        </Hint>
       </div>
 
       {/* ── 第 2 区：ComfyUI 排队/运行信息（弹性，左对齐） ── */}
@@ -300,47 +297,49 @@ export function BrowserStatusBar() {
       </div>
 
       {/* ── 第 3 区：显存 + 内存等资源指标（固定宽度） ── */}
-      <div
-        className={`flex w-125 shrink-0 items-center gap-2.5 transition-opacity ${
-          stale ? "opacity-50" : "opacity-100"
-        }`}
-        title={stale ? STALE_RESOURCE_NOTE : undefined}
-      >
-        {/* 三档资源的标签、口径 title 与「缺值整档隐藏」的判据都在
+      <Hint label={stale ? STALE_RESOURCE_NOTE : undefined}>
+        <div
+          className={`flex w-125 shrink-0 items-center gap-2.5 transition-opacity ${
+            stale ? "opacity-50" : "opacity-100"
+          }`}
+        >
+          {/* 三档资源的标签、口径 title 与「缺值整档隐藏」的判据都在
            `comfy-resource-metrics`（首页算力卡读同一份），这里只负责行内排版。 */}
-        {selectVisibleResourceMetrics({ cudaVram, smiVram, ram }).map(({ descriptor, bar }) => (
-          <UsageItem
-            key={descriptor.key}
-            label={descriptor.label}
-            pct={bar.pct}
-            title={descriptor.title}
-            total={bar.total}
-            used={bar.used}
-          />
-        ))}
+          {selectVisibleResourceMetrics({ cudaVram, smiVram, ram }).map(({ descriptor, bar }) => (
+            <UsageItem
+              key={descriptor.key}
+              label={descriptor.label}
+              pct={bar.pct}
+              title={descriptor.title}
+              total={bar.total}
+              used={bar.used}
+            />
+          ))}
 
-        {/* 降级提示 */}
-        {degradedNote !== null && degradedNote !== "" && (
-          <span
-            className="text-warning-strong/90 hidden items-center gap-1 sm:flex"
-            title={degradedNote}
-          >
-            {degradedNote}
-          </span>
-        )}
-      </div>
+          {/* 降级提示 */}
+          {degradedNote !== null && degradedNote !== "" && (
+            <Hint label={degradedNote}>
+              <span className="text-warning-strong/90 hidden items-center gap-1 sm:flex">
+                {degradedNote}
+              </span>
+            </Hint>
+          )}
+        </div>
+      </Hint>
 
       {/* ── 第 4 区：FPS + 消息中心 + 日志 + 应用服务状态（固定宽度，最右） ── */}
       <div className="flex w-78 shrink-0 items-center justify-end gap-2.5 whitespace-nowrap">
         {/* 实时帧率 */}
-        <span
-          className="hidden items-center gap-1 md:flex"
-          title="全应用实时帧率：≥50 流畅，30~49 轻微掉帧，<30 明显卡顿"
-        >
-          <span aria-hidden className={`inline-block size-1.5 rounded-full ${fpsDotColor[tone]}`} />
-          <span className={`tabular-nums ${fpsTextColor[tone]}`}>{displayValue(fps)}</span>
-          <span className="text-ink-soft">FPS</span>
-        </span>
+        <Hint label="全应用实时帧率：≥50 流畅，30~49 轻微掉帧，<30 明显卡顿">
+          <span className="hidden items-center gap-1 md:flex">
+            <span
+              aria-hidden
+              className={`inline-block size-1.5 rounded-full ${fpsDotColor[tone]}`}
+            />
+            <span className={`tabular-nums ${fpsTextColor[tone]}`}>{displayValue(fps)}</span>
+            <span className="text-ink-soft">FPS</span>
+          </span>
+        </Hint>
 
         <MessageCenterButton />
 
@@ -367,39 +366,44 @@ export function BrowserStatusBar() {
           </Button>
         </Hint>
 
-        <span
-          aria-label={devServer.label}
-          className={`flex items-center gap-1 ${
-            devServer.state === "online"
-              ? "text-success-strong"
-              : devServer.state === "starting"
-                ? "text-ink-soft"
-                : "text-destructive"
-          }`}
-          data-dev-server={devServer.state}
-          title={devServer.title}
-        >
-          <StatusDot
-            className={
+        <Hint label={devServer.title}>
+          <span
+            aria-label={devServer.label}
+            className={`flex items-center gap-1 ${
               devServer.state === "online"
-                ? "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_80%,transparent)]"
+                ? "text-success-strong"
                 : devServer.state === "starting"
-                  ? "bg-ink-fainter"
-                  : "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-danger)_80%,transparent)]"
-            }
-            pulse={devServer.state === "starting"}
-            sizeClass="size-1.5"
-            state={
-              devServer.state === "online" ? "up" : devServer.state === "starting" ? "busy" : "down"
-            }
-          />
-          <span className="hidden sm:inline">{devServer.label}</span>
-          {devServer.lastRestartAt !== null && devServer.state === "online" && (
-            <span className="text-ink-muted hidden lg:inline">
-              · {fmtClock(devServer.lastRestartAt)}
-            </span>
-          )}
-        </span>
+                  ? "text-ink-soft"
+                  : "text-destructive"
+            }`}
+            data-dev-server={devServer.state}
+          >
+            <StatusDot
+              className={
+                devServer.state === "online"
+                  ? "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_80%,transparent)]"
+                  : devServer.state === "starting"
+                    ? "bg-ink-fainter"
+                    : "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-danger)_80%,transparent)]"
+              }
+              pulse={devServer.state === "starting"}
+              sizeClass="size-1.5"
+              state={
+                devServer.state === "online"
+                  ? "up"
+                  : devServer.state === "starting"
+                    ? "busy"
+                    : "down"
+              }
+            />
+            <span className="hidden sm:inline">{devServer.label}</span>
+            {devServer.lastRestartAt !== null && devServer.state === "online" && (
+              <span className="text-ink-muted hidden lg:inline">
+                · {fmtClock(devServer.lastRestartAt)}
+              </span>
+            )}
+          </span>
+        </Hint>
       </div>
     </div>
   );

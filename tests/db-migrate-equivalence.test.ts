@@ -50,8 +50,21 @@ function readShape(file: string): Record<string, TableShape> {
   if (r.status !== 0 || !r.stdout.trim()) {
     throw new Error(`读库结构失败：${r.stderr}`);
   }
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(r.stdout) as Record<string, TableShape>;
+  const parsed: unknown = JSON.parse(r.stdout);
+  if (!isTableShapeMap(parsed)) {
+    throw new Error("读库结构的 JSON 形状不对（每张表要有 cols/idx）");
+  }
+  return parsed;
+}
+
+/** JSON.parse 的 any 用运行时守卫收窄（B5 清账，不走 as 断言）：每张表要有 cols/idx。 */
+function isTableShapeMap(value: unknown): value is Record<string, TableShape> {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  return Object.values(value).every(
+    (entry) => typeof entry === "object" && entry !== null && "cols" in entry && "idx" in entry,
+  );
 }
 
 /**

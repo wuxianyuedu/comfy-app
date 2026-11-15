@@ -61,8 +61,10 @@ describe("导入面板的文件入口", () => {
   });
 
   it("把文件拖到面板上同样能导入", async () => {
-    const { container } = render(<Harness />);
-    const panel = container.firstElementChild;
+    render(<Harness />);
+    /* 模态化后（ISSUE #3759），投放处理挂在弹窗内容卡上 —— 取 aria-label
+     * 那一层的第一个子元素来投放。 */
+    const panel = screen.getByLabelText("导入 ComfyUI 工作流").firstElementChild;
     expect(panel).not.toBeNull();
 
     fireEvent.drop(panel!, {

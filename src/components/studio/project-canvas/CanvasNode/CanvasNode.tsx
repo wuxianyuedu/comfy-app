@@ -13,6 +13,7 @@ import { type CanvasNodeType, NODE_META } from "~/lib/project-canvas/canvas-type
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { FilePicker } from "~/components/ui/file-picker";
 import { useWorkflowModes } from "./hooks/use-workflow-modes";
 import { DebugChainFooter } from "../../debug/DebugChainFooter";
 import { getProjectCanvasRenderChain } from "../canvas-render-chain";
@@ -55,9 +56,11 @@ export const CanvasNode = React.memo(function CanvasNode({
   const focusNode = () => fitView({ nodes: [{ id }], duration: 300, padding: 0.2, maxZoom: 1.2 });
 
   /* 文件上传管线：生成器图片输入、内容载体媒体选择器与
-   * 拖放用的选取 / 上传处理器。隐藏 input 由管线自己持有并渲染
-   * （`ImageInput` /`MediaInput`）。 */
-  const { ImageInput, pickFile, MediaInput, pickMedia, onUploadFile } = useFileUpload({ patch });
+   * 拖放用的选取 / 上传处理器。隐藏 input 的 props 由管线给出，
+   * 渲染成 `<FilePicker {...imageInputProps} />`（#3692）。 */
+  const { imageInputProps, pickFile, mediaInputProps, pickMedia, onUploadFile } = useFileUpload({
+    patch,
+  });
 
   /* 共享工作流列表 + 动态 IO 表 + 模式 / 来源筛选 + 播种。 */
   const {
@@ -365,9 +368,9 @@ export const CanvasNode = React.memo(function CanvasNode({
         workflowId={d.workflowId}
         workflowName={d.workflowName}
       />
-      <ImageInput />
+      <FilePicker {...imageInputProps} />
       {/* 内容载体上传输入 —— 同时接受图片与视频 */}
-      <MediaInput />
+      <FilePicker {...mediaInputProps} />
       {/* 主输出端口 + 类型标签 — 改为与 WorkflowNode.outputs
        * row 同款结构（label + typeChip + PortHandle）。image / video / script 通用。 */}
       {(d.kind === "image" || d.kind === "video" || d.kind === "script") && (

@@ -12,6 +12,7 @@ import { DrizzleRepository, type TaskWithCover } from "./repository-base";
 import { eq, and, inArray, desc, asc, sql, count } from "drizzle-orm";
 import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
+import { isTerminalTaskStatus } from "~/lib/task-state";
 
 /** 列表卡的行形状：`task.list` 的映射只需要十来个字段，而 `workflowSnapshot`
  *  （整份工作流 JSON）与 `logs`（全量日志）单行就能到数 MB —— take=60 的列表页
@@ -239,6 +240,12 @@ export class TaskRepository extends DrizzleRepository<Task> {
     if (!existing) {
       throw new NotFoundError(`任务不存在: ${id}`);
     }
+    /* 终态守卫（ISSUE #3912）：与执行链 writeGuard 同判据 —— 终态行
+     * （SUCCEEDED / FAILED / CANCELLED）不再被这一入口改写，堵住绕过
+     * repository-task-impl 守卫的旁路写点；对终态重复调用按幂等返回原行。 */
+    if (isTerminalTaskStatus(existing.status)) {
+      return existing;
+    }
     const data: Partial<Task> = { status };
     if (extra) {
       Object.assign(data, extra);
@@ -449,6 +456,9 @@ export class TaskRepository extends DrizzleRepository<Task> {
 
   finalizeSuccess: TaskRepoImpl["finalizeSuccess"] = (taskId, data) =>
     impl.finalizeSuccess(taskId, data);
+
+  finalizeSuccessWithImages: TaskRepoImpl["finalizeSuccessWithImages"] = (taskId, data, images) =>
+    impl.finalizeSuccessWithImages(taskId, data, images);
 
   finalizeFailure: TaskRepoImpl["finalizeFailure"] = (taskId, error, validationErrors) =>
     impl.finalizeFailure(taskId, error, validationErrors);

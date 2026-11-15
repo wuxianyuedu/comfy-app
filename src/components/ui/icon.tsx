@@ -4,6 +4,7 @@ import {
   Puzzle,
   Flame,
   FolderOpen,
+  FolderGit2,
   Lock,
   Sparkles,
   Image as ImageIcon,
@@ -60,6 +61,10 @@ import {
   LayoutGrid,
   Play,
   Film,
+  Database,
+  HardDrive,
+  Monitor,
+  Save,
   type LucideIcon,
   type LucideProps,
 } from "lucide-react";
@@ -135,6 +140,15 @@ const ICON_MAP: Record<string, LucideIcon> = {
   grid: LayoutGrid,
   play: Play,
   movie: Film,
+  /* 「数据存在哪儿」的存放位置类别（ISSUE #3625）：这几枚键是
+   * `~/lib/data-location/data-locations` 登记本体里引用的图标键 ——
+   * 键写错时 `Icon` 会**静默不渲染**（未知键返回 null），所以那一侧有用例
+   * 钉住「每个类别都真的画得出来」。 */
+  database: Database,
+  foldergit2: FolderGit2,
+  harddrive: HardDrive,
+  monitor: Monitor,
+  save: Save,
 };
 
 /** 本基元的**私有字段**（自己接管，不透传给底层图标组件）——

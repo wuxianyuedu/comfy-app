@@ -97,6 +97,8 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
     [ioApi],
   );
   const toast = useToast();
+  /* 顶栏 stats 行（节点数 / IO 数 / 注释 / 分组 / 子图层）—— 窄屏截断时展开提示取这一份全文。 */
+  const statsLabel = `${detail.nodes.filter((node) => !isNoteType(node.class_type)).length} 个节点 · ${Object.keys(workflowIO).length} 个暴露 IO · ${detail.notes?.length ?? 0} 个注释 · ${detail.groups?.length ?? 0} 个分组${subgraphStack.length > 0 ? ` · 子工作流 #${subgraphStack.at(-1)?.uid}` : ""}`;
 
   return (
     <header
@@ -119,7 +121,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               （首次顶层拉取时捕获，跨子图导航保留），下钻不会把首段改写成子图名；
               点根段回顶层，中间各层是可点按钮。**最后**一段（当前子图）是不可交互的
               span + 紫色选择框 —— 点它会重入同一子图、把另一层压进 `subgraphStack`。
-              `max-w` + `truncate` 截断，全名经 `title` 读到。 */}
+              `max-w` + `truncate` 截断，全名经悬停提示读到。 */}
           <div className="flex items-center gap-1.5 text-xs">
             <Hint
               label={
@@ -156,13 +158,14 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 return (
                   <React.Fragment key={crumb.uid + i}>
                     <span className="text-ink-fainter text-sm">/</span>
-                    <span
-                      className={`${baseCls} border-primary-500/40 bg-primary-500/15 text-primary-strong rounded-md border px-2 py-0.5`}
-                      style={{ cursor: "default" }}
-                      title={crumb.name}
-                    >
-                      {crumb.name}
-                    </span>
+                    <Hint label={crumb.name}>
+                      <span
+                        className={`${baseCls} border-primary-500/40 bg-primary-500/15 text-primary-strong rounded-md border px-2 py-0.5`}
+                        style={{ cursor: "default" }}
+                      >
+                        {crumb.name}
+                      </span>
+                    </Hint>
                   </React.Fragment>
                 );
               }
@@ -229,30 +232,32 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               </Button>
             </Hint>
           </div>
-          <p className="text-ink-soft text-2xs mt-0.5 truncate font-medium">
-            {detail.nodes.filter((node) => !isNoteType(node.class_type)).length} 个节点
-            <span className="text-ink-fainter mx-1.5">·</span>
-            {Object.keys(workflowIO).length} 个暴露 IO
-            <span className="text-ink-fainter mx-1.5">·</span>
-            {detail.notes?.length ?? 0} 个注释
-            <span className="text-ink-fainter mx-1.5">·</span>
-            {detail.groups?.length ?? 0} 个分组
-            {subgraphStack.length > 0 && (
-              <>
-                <span className="text-ink-fainter mx-1.5">·</span>
-                <span className="text-primary-strong">子工作流 #{subgraphStack.at(-1)?.uid}</span>
-              </>
-            )}
-          </p>
+          <Hint label={statsLabel}>
+            <p className="text-ink-soft text-2xs mt-0.5 truncate font-medium">
+              {detail.nodes.filter((node) => !isNoteType(node.class_type)).length} 个节点
+              <span className="text-ink-fainter mx-1.5">·</span>
+              {Object.keys(workflowIO).length} 个暴露 IO
+              <span className="text-ink-fainter mx-1.5">·</span>
+              {detail.notes?.length ?? 0} 个注释
+              <span className="text-ink-fainter mx-1.5">·</span>
+              {detail.groups?.length ?? 0} 个分组
+              {subgraphStack.length > 0 && (
+                <>
+                  <span className="text-ink-fainter mx-1.5">·</span>
+                  <span className="text-primary-strong">子工作流 #{subgraphStack.at(-1)?.uid}</span>
+                </>
+              )}
+            </p>
+          </Hint>
           {detail.sourcePath !== undefined &&
           detail.sourcePath !== null &&
           detail.sourcePath !== "" ? (
             detail.sourceMissing === true ? (
               <p className="border-destructive/30 bg-destructive/10 text-danger-strong text-2xs mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1">
                 <span className="font-semibold">本地文件已丢失：</span>
-                <span className="truncate font-mono" title={detail.sourcePath}>
-                  {lastSegments(detail.sourcePath, 3)}
-                </span>
+                <Hint label={detail.sourcePath}>
+                  <span className="truncate font-mono">{lastSegments(detail.sourcePath, 3)}</span>
+                </Hint>
                 <span className="text-danger-strong/80 ml-1 shrink-0">
                   · 修改保存后刷新将自动重连
                 </span>
@@ -261,20 +266,18 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               <p className="border-warning/30 bg-warning/10 text-warning-strong text-2xs mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1">
                 <span className="font-semibold">磁盘文件有更新</span>
                 <span className="opacity-80">· 回工作流库点「同步」拉取最新内容</span>
-                <span
-                  className="text-success-strong/80 truncate font-mono"
-                  title={detail.sourcePath}
-                >
-                  {lastSegments(detail.sourcePath, 3)}
-                </span>
+                <Hint label={detail.sourcePath}>
+                  <span className="text-success-strong/80 truncate font-mono">
+                    {lastSegments(detail.sourcePath, 3)}
+                  </span>
+                </Hint>
               </p>
             ) : (
-              <p
-                className="border-success/20 bg-success/5 text-success-strong/80 text-2xs mt-1 truncate rounded-md border px-2 py-1"
-                title={detail.sourcePath}
-              >
-                已连接本地文件 · 文件改动后刷新即可同步
-              </p>
+              <Hint label={detail.sourcePath}>
+                <p className="border-success/20 bg-success/5 text-success-strong/80 text-2xs mt-1 truncate rounded-md border px-2 py-1">
+                  已连接本地文件 · 文件改动后刷新即可同步
+                </p>
+              </Hint>
             )
           ) : null}
         </div>

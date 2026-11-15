@@ -5,7 +5,7 @@
 // IO 全走 `~/lib/production/run-client`（视图/hook 不直接碰 vanillaApi，§17）；
 // 初始取数用 beginStaleRun 作废守卫（卸载即不落地，规范 16 §16.2.4.34）；
 // 错误不外抛，以 `error` 字符串回给调用处就地展示。
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { useInterval } from "~/components/ui/use-interval";
@@ -87,13 +87,21 @@ export function useAgentRun(): AgentRunController {
   }, [projectId, apply]);
 
   const active = run.status === "running" || run.status === "awaiting_approval";
+  /* 轮次令牌（ISSUE #3906）：请求耗时超过轮询间隔时两发在途，先发后至者
+   * 不得把旧快照盖在新快照上（样板见 use-runtime-log-source 的 seqRef）。 */
+  const pollSeqRef = useRef(0);
   useInterval(
     () => {
       if (!projectId) {
         return;
       }
+      const seq = ++pollSeqRef.current;
       void fetchRunStatus(projectId)
-        .then(apply)
+        .then((snap) => {
+          if (seq === pollSeqRef.current) {
+            apply(snap);
+          }
+        })
         .catch(() => undefined);
     },
     { ms: active ? RUN_POLL_MS : null, immediate: false },

@@ -12,6 +12,7 @@ import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { useExpansionSet } from "~/components/ui/expansion-set";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { CONSOLE_PRESETS, type ConsolePreset } from "~/lib/console/console-catalog";
 
 export type ConsolePresetListProps = {
@@ -94,8 +95,10 @@ export function ConsolePresetList({ onFill, disabled }: ConsolePresetListProps) 
                     size={12}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate">{item.label}</span>
-                    <span className="text-ink-fainter text-3xs block truncate">{item.desc}</span>
+                    <TruncatedText className="block truncate">{item.label}</TruncatedText>
+                    <TruncatedText className="text-ink-fainter text-3xs block truncate">
+                      {item.desc}
+                    </TruncatedText>
                   </span>
                 </Button>
               </Hint>

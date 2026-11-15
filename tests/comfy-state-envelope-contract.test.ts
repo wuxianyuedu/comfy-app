@@ -18,6 +18,11 @@ import { noteComfyStateChange, resetComfyStateWatchForTest } from "~/lib/comfyui
  *  那一句会直接抛（然后被客户端的 catch 吞成「这一轮没有变化」，表现是永远收不到帧）。 */
 const BASE = "http://127.0.0.1:3000";
 
+/** 信封必须是对象：`res.json()` 的 `any` 用守卫收窄，不走 `as` 断言（B5 清账）。 */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 /** 把真路由的回答喂给客户端；`mutate` 用来造「线上漂了」那一格。 */
 function wireClientToRealRoute(
   mutate?: (frame: Record<string, unknown>) => Record<string, unknown>,
@@ -26,15 +31,17 @@ function wireClientToRealRoute(
     "fetch",
     vi.fn(async (url: string | URL) => {
       const href = new URL(String(url), BASE).href;
-      /* 只给 `url` 一个字段就够：路由读的就是它。
-       * 不构造 `Request` 是为了不让这一格依赖 jsdom 那侧有没有 fetch 家族的全局。 */
-      /* SAFETY: 类型断言已复核 */
-      const res = await GET({ url: href } as unknown as Request);
+      /* 路由只读 `request.url`：给一个真 Request（jsdom 环境下 vitest 保留 Node 的
+       * fetch 家族全局；这一格不再依赖「手写假对象 + 断言」）。 */
+      const res = await GET(new Request(href));
       if (res.status !== 200) {
         return res;
       }
-      /* SAFETY: 类型断言已复核 */
-      const frame = (await res.clone().json()) as Record<string, unknown>;
+      const payload: unknown = await res.clone().json();
+      if (!isRecord(payload)) {
+        throw new Error("comfy state 信封不是对象");
+      }
+      const frame = payload;
       return new Response(JSON.stringify(mutate ? mutate(frame) : frame), {
         status: 200,
         headers: { "content-type": "application/json" },

@@ -7,8 +7,8 @@
  * `use-provider-model-dialogs`（第②层），字段规则在 `~/lib/llm/provider-form`。
  * 编辑既有供应商走详情页的内联表单（字段失焦即保存）。
  *
- * 接口格式自 #3517 起挂在**模型**上：新建供应商时只填到版本段，路径由各模型的
- * 接口格式补全（添加模型时选择）。
+ * 接口格式自 #3517 起挂在**模型**上：新建供应商时填到域名/路径前缀（不带版本段，
+ * #3656），版本段与动作路径由应用按各模型的接口格式自动拼接（添加模型时选择）。
  */
 
 import { Button } from "~/components/ui/button";
@@ -75,7 +75,7 @@ export function ProviderDialog({ d, p }: { d: ProviderModelDialogs; p: SettingsP
           <FormField
             className="mb-3"
             error={d.providerErrors.baseUrl}
-            hint="填到版本段为止（如 https://api.example.com/v1）；路径段由各模型的接口格式补全"
+            hint="填到域名或路径前缀为止，不带 /v1（如 https://api.example.com）；版本段与动作路径由应用按接口格式自动拼接"
             id="provider-base-url"
             label="Base URL"
             required
@@ -87,7 +87,7 @@ export function ProviderDialog({ d, p }: { d: ProviderModelDialogs; p: SettingsP
                 onChange={textHandler((baseUrl) => {
                   d.setProviderForm((prev) => ({ ...prev, baseUrl }));
                 })}
-                placeholder="https://api.example.com/v1"
+                placeholder="https://api.example.com"
                 value={d.providerForm.baseUrl}
               />
             )}

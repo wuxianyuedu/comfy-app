@@ -8,13 +8,23 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import postcss, { type Declaration } from "postcss";
 
+import { isRecord } from "~/lib/is-record";
+
 const require = createRequire(import.meta.url);
-/* SAFETY: 类型断言已复核 */
-const twModule = require("@tailwindcss/postcss") as {
-  default?: () => postcss.AcceptedPlugin;
-};
-/* SAFETY: 类型断言已复核 */
-const tailwind = twModule.default ?? (twModule as unknown as () => postcss.AcceptedPlugin);
+const twModule: unknown = require("@tailwindcss/postcss");
+/** tailwind 插件的消费形状守卫（B5 清账）：可调用即为插件工厂。 */
+function isPostcssPluginFactory(value: unknown): value is () => postcss.AcceptedPlugin {
+  return typeof value === "function";
+}
+/* CJS / ESM 两种互操作形态都接：有 .default 用 default，否则模块本身就是工厂。 */
+const twRecord = isRecord(twModule) ? twModule : {};
+const tailwind: () => postcss.AcceptedPlugin = isPostcssPluginFactory(twRecord.default)
+  ? twRecord.default
+  : isPostcssPluginFactory(twModule)
+    ? twModule
+    : () => {
+        throw new Error("@tailwindcss/postcss 的导出形状变了：既无 default 也不是工厂");
+      };
 
 const GLOBALS_CSS = path.resolve(__dirname, "../../src/app/globals.css");
 

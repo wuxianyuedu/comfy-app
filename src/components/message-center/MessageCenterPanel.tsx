@@ -34,6 +34,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { useHotkey } from "~/components/ui/use-hotkey";
+import { Hint } from "~/components/ui/hint";
 
 /* 键收成 `MessageKind`（不是 `string`）：新增一档 kind 时编译器会在这里报缺项，
  * 于是「加了一档分档、忘了配图标与色调」不会拖到运行期才显形（此前这里是
@@ -97,12 +98,9 @@ function RunGroupHeader({ group }: { group: MessageRunGroup<MessageRecord> }) {
         {/* runId 与 `log/runs/<日期>_<时分秒>-<runId>` 同形：分组头带上它，
             用户想翻日志时不用再去猜是哪一包。 */}
         {group.runId !== null && (
-          <span
-            className="text-ink-fainter text-3xs font-mono"
-            title={`启动标识 ${group.runId}（与 log/runs/ 下的目录名尾段一致）`}
-          >
-            {group.runId}
-          </span>
+          <Hint label={`启动标识 ${group.runId}（与 log/runs/ 下的目录名尾段一致）`}>
+            <span className="text-ink-fainter text-3xs font-mono">{group.runId}</span>
+          </Hint>
         )}
       </span>
       <span className={`h-px flex-1 ${group.isCurrent ? "bg-primary/30" : "bg-border-subtle"}`} />

@@ -1480,6 +1480,16 @@ const BASE_CONFIG = defineConfig({
          * 成片监看的批量进度、执行宿主的领取 / 只读窥视 / 载荷读；再加「includeImages
          * 且只给 skip」那条分页 —— 它走的是「普通 select 取页 + 按 id 装载」，
          * 与此前只跑到「这一页是空的」相比，`attachImages` 的真实装载第一次被执行。 */
+        /* 「数据存放位置」的登记本体（ISSUE #3625）：纯数据模块，四条判据都有执行者 ——
+         * 逐条登记项的不变量（类别存在、文案非空、同一 kind 共名）、分组结果
+         * （不漏 / 不重 / 排序口径）与「每一类位置都真的画得出图标」都在用例里。
+         * 门槛按实测值设满档（纯数据模块没有 IO 分支可漏）。 */
+        "src/lib/data-location/**": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         "src/lib/core/**": {
           lines: 98,
           functions: 97,

@@ -21,9 +21,11 @@
  * ── 源与生成态镜像：行号不是同一个坐标系 ────────────────────────────────
  *
  * `docs/generated/**` 是 `doc:render` 的产物（占位符已被替换成原文），**行号与源不同**。
- * 默认读源；要看镜像（例如核对渲染结果）显式给 `--rendered`（或直接点名
- * `docs/generated/...`）—— 读数里会逐字写明「这里的行号属于哪一份」。这一格必须显式：
- * 两份文件同名、都在盘上，拿镜像的行号去 `Read` 源**不会报错**，只会读回另一个小节。
+ * #3586 起它**不再入库**：干净检出上没有这个目录，默认读源是唯一常态；要读镜像
+ * 得先自己跑 `pnpm doc:render`（或 `-- --only <源>` 只生成那几份），再显式给
+ * `--rendered`（或直接点名 `docs/generated/...`）—— 读数里会逐字写明
+ * 「这里的行号属于哪一份」。这一格必须显式：两份文件同名，拿镜像的行号去
+ * `Read` 源**不会报错**，只会读回另一个小节。
  *
  * ── 退出码 ──────────────────────────────────────────────────────────────
  *
@@ -47,7 +49,18 @@ import process from "node:process";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { ROOT, SCOPED_DOCS, GENERATED_DOCS_DIR, generatedPathFor } = require("./doc-facts.cjs");
+const {
+  ROOT: FACT_ROOT,
+  SCOPED_DOCS,
+  GENERATED_DOCS_DIR,
+  generatedPathFor,
+} = require("./doc-facts.cjs");
+/* 夹具注入（tests/doc-toc.test.ts）：#3586 起干净检出上没有 `docs/generated/**`，
+ * 要测 `--rendered` 就得自己先在一次性目录里造一份镜像。与
+ * `render-doc-placeholders.cjs` 的 `DOC_RENDER_ROOT` 同族：只换「读哪棵树」，
+ * 认文档仍用同一份 `SCOPED_DOCS`，不另立名单、也不写真实工作树（#2665）。
+ * 没设这个变量时行为逐字不变（读脚本所在的仓库根）。 */
+const ROOT = process.env.DOC_TOC_ROOT || FACT_ROOT;
 
 /**
  * 从 Markdown 正文里取标题行（跳过围栏代码块里的 `# 注释`）。

@@ -9,6 +9,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import {
   POSTINSTALL_FORBIDDEN,
   POSTINSTALL_SCRIPT,
@@ -17,11 +19,17 @@ import {
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 const ROOT = process.cwd();
-/* SAFETY: 类型断言已复核 */
-const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
-  scripts: Record<string, string>;
-};
-const postinstall = pkg.scripts.postinstall ?? "";
+/* package.json 的 scripts 段：JSON.parse 的 any 用运行时守卫收窄（B5 清账，不走 as）。 */
+const pkgRaw: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+const pkgScripts: Record<string, string> = {};
+if (isRecord(pkgRaw) && isRecord(pkgRaw.scripts)) {
+  for (const [key, value] of Object.entries(pkgRaw.scripts)) {
+    if (typeof value === "string") {
+      pkgScripts[key] = value;
+    }
+  }
+}
+const postinstall = pkgScripts.postinstall ?? "";
 
 const tmpDirs: Array<string> = [];
 afterEach(() => {

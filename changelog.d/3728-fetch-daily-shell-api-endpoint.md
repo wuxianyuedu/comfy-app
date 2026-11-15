@@ -1,0 +1,3 @@
+## Fixed
+
+- **每日纯壳获取的下载端点改回 CNB OpenAPI 地址（ISSUE #3728，`scripts/fetch-daily-shell.mjs`）**：`buildDownloadUrl` 此前硬编码网页站 `https://cnb.cool/<repo>/-/releases/download/...`，与回传侧 `ci-ga-desktop-relay.mjs` 打印给用户的取包地址（缺省 `https://api.cnb.cool`）不是同一个端点。实测网页端点匿名 404、带 Bearer 400 `Invalid argument`，API 端点匿名 401「未登录」、带令牌 403「缺 `repo-release:r`」—— 站内 `nightly` 的附件清单里确实有 `ComfyAPP-shell.exe`（16.2 MiB），双击失败是**打错主机 + 缺鉴权**，不是资产没产出。现在缺省走官方文档口径的 `https://api.cnb.cool`、支持 `CNB_API_ENDPOINT` 覆盖（私有化部署）；401/403 出口明确要求 `repo-release:r` 与 `CNB_RELEASE_TOKEN` / `CNB_TOKEN` / `CNB_ISSUE_TOKEN`，404 出口改回核对资产名 / `--tag` / `--repo`。判据补上端点形态、环境变量覆盖与 401 出口，防止再写回网页站。

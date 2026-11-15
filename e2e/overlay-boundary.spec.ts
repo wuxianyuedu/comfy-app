@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 /**
  * 锚定浮层不许被应用级标题行吃掉（ISSUE #1377）。桌面壳顶部自绘标题行（`TitleBarTabs`）按 `z-chrome`(2000) 立在最上，而气泡 `z-popup`(100) 低一个数量级：TopBar 按钮落 y≈46、气泡 `side="top"` 顶部 y≈14 仍在视口内，Base UI 的 `flip` 不翻转，于是上半截**被标题行盖掉**（画在它下面，不是被裁），实测四个入口全中招。
  * 这里只钉**结果**：每个入口悬停一遍，气泡几何整体落在标题行下沿之下、且命中测试真的打到气泡自己（不钉 `side`——翻转是定位引擎的输出，写死会锁实现）。
- * ⚠️ 壳态是打 `__TAURI_INTERNALS__` 全局标记（`isDesktopShell()` 读的那个键），`TitleBarTabs` / `data-shell` / 侧栏让位都真的生效；比手改 DOM 忠实（手改会在水合前动 DOM，React 报 #418 并丢客户端树）。
+ * ⚠️ 壳态是打 `__TAURI_INTERNALS__` 全局标记（`isDesktopShell()` 读的那个键），`TitleBarTabs` 与 `z-chrome` 层级都真的生效；比手改 DOM 忠实（手改会在水合前动 DOM，React 报 #418 并丢客户端树）。ISSUE #3807 后主窗口标题行在内容列顶部、侧栏不再下移，但气泡的让位对象仍是 `[data-slot="title-bar"]` 本身。
  */
 async function openInShell(page: Page) {
   await page.addInitScript(() => {
@@ -16,8 +16,8 @@ async function openInShell(page: Page) {
   await page.waitForSelector('[data-slot="sidebar-trigger"]');
   /* 标题行确实在（它是本用例的让位对象；不在就没得验）。 */
   await expect(page.locator('[data-slot="title-bar"]')).toBeVisible();
-  /* ⚠️ **还要等测点自己到位**：上面两枚锚点在**服务端 HTML 里就有**（`data-shell` 与 `title-bar` 由
-   * `useTitleBarTabsActive()` 的 SSR 首帧决定），而顶栏入口是水合后才挂上的；只等前两枚会把「导航回来了」
+  /* ⚠️ **还要等测点自己到位**：`title-bar` 是水合后由 `useTitleBarTabsActive()` 读到壳标记才挂上的，
+   * 而顶栏入口还要更晚；只等前一枚会把「导航回来了」
    * 读成「页面就绪」，并发高时读到半截水合（`header button[aria-label]` 数出 0，下面 `count > 0` 当场红，
    * 实测 8 并发 ~25%~40% 命中、平台 3 次重试全红；自愈只是水合慢）。这条等待是**测点的前提**而非判据：
    * 它不改任何断言取值，只把「还没渲染完」与「渲染出来是空的」分开 —— 后者才是本用例要拦的那件事。 */

@@ -79,12 +79,9 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
             <div>
               <h2 className="text-ink-bright flex items-center gap-2 text-sm font-semibold">
                 查看源文件 · {displayValue(data?.name)}
-                <span
-                  className={RAW_FORMAT_CHIP}
-                  title="ComfyUI 原始 JSON（nodes[] / links[] / widgets_values）"
-                >
-                  RAW 原件
-                </span>
+                <Hint label="ComfyUI 原始 JSON（nodes[] / links[] / widgets_values）">
+                  <span className={RAW_FORMAT_CHIP}>RAW 原件</span>
+                </Hint>
               </h2>
               <p className="text-ink-muted mt-0.5 text-xs">
                 {data?.isSubgraph === true

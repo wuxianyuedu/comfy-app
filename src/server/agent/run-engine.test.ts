@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { completeLLM, completeLLMStructured, getLLMConfig } = vi.hoisted(() => ({
-  completeLLM: vi.fn((_cfg: unknown, _msgs: unknown) => "# 生成的剧本"),
+  completeLLM: vi.fn((_cfg: unknown, _msgs: unknown): string | Promise<string> => "# 生成的剧本"),
   completeLLMStructured: vi.fn<
     (cfg: unknown, msgs: unknown, schema: unknown) => Promise<Array<unknown>>
   >(() => Promise.resolve([])),
@@ -20,7 +20,9 @@ vi.mock("~/lib/llm/server", () => ({
 vi.mock("~/lib/llm/prompts", () => ({
   buildScriptMarkdownMessages: () => [{ role: "user", content: "x" }],
 }));
-const synthesizeFirstFrame = vi.hoisted(() => vi.fn((_opts: unknown) => "/api/generated/shot.png"));
+const synthesizeFirstFrame = vi.hoisted(() =>
+  vi.fn((_opts: unknown): string | Promise<string> => "/api/generated/shot.png"),
+);
 vi.mock("~/lib/comfyui/firstframe", () => ({ synthesizeFirstFrame }));
 // 引擎经服务端成片编排起片（createFilmFromProject + startFilm），mock 掉避免真跑管线。
 vi.mock("~/server/film/orchestrator", () => ({
@@ -101,7 +103,7 @@ import {
   scriptDigestOf,
   type ProductionRun,
 } from "~/lib/production/run-types";
-import { advanceRunLoop } from "~/server/agent/run-engine";
+import { advanceRunLoop, resetRunLoopGuardsForTest } from "~/server/agent/run-engine";
 import { getTestDb, seedUser } from "../../../tests/helpers/test-db";
 
 const tdb = getTestDb();
@@ -151,6 +153,7 @@ const readRow = () => productionRepository.getForUser(USER, PROJ);
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
+  resetRunLoopGuardsForTest();
   seedUser(tdb, { id: USER, email: "a@test.dev" });
 });
 
@@ -181,6 +184,19 @@ describe("advanceRunLoop", () => {
       ok: true,
     });
     expect(steps[0]!.detail).toMatch(/^已生成剧本（\d+ 字）$/);
+  });
+
+  it("同一项目并发 kick 收敛为一条循环（#3829）：动作只执行一遍，不会并行推进两套", async () => {
+    await seed({}, { status: "running", approvalMode: "stage" });
+    // 第一拍还没落定就再 kick 一次（双击 / resume·approve 与上一轮重叠的形状）：
+    // per-project 在飞表应当把第二次调用并到同一条循环上。
+    const first = advanceRunLoop(USER, PROJ);
+    const second = advanceRunLoop(USER, PROJ);
+    await Promise.all([first, second]);
+    // 剧本生成是这条循环的第一个动作：被并发拉起两次的话，这里会记到 2。
+    expect(completeLLM).toHaveBeenCalledTimes(1);
+    const row = await readRow();
+    expect(normalizeProductionRun(row!.run)).toMatchObject({ status: "awaiting_approval" });
   });
 
   it("角色步：completeLLMStructured 产出写入 characters 后停在角色阶段等确认", async () => {
@@ -309,6 +325,29 @@ describe("advanceRunLoop", () => {
   it("无生产数据行 → 直接返回，不抛", async () => {
     await expect(advanceRunLoop(USER, "no_such")).resolves.toBeUndefined();
     expect(completeLLM).not.toHaveBeenCalled();
+  });
+
+  it("同一项目并发 kick 时推进循环不重入", async () => {
+    let resolveScript!: (value: string) => void;
+    completeLLM.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveScript = resolve;
+        }),
+    );
+    await seed({}, { status: "running", approvalMode: "stage" });
+    const first = advanceRunLoop(USER, PROJ);
+    const second = advanceRunLoop(USER, PROJ);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(completeLLM).toHaveBeenCalledTimes(1);
+    resolveScript("# 生成的剧本");
+    await Promise.all([first, second]);
+    const row = await readRow();
+    expect(row!.scriptMarkdown).toBe("# 生成的剧本");
+    expect(
+      normalizeProductionRun(row!.run).log.filter((s) => s.kind === "generate_script"),
+    ).toHaveLength(1);
   });
 });
 
@@ -544,5 +583,66 @@ describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () =
     expect(shots.some((item) => item.id === "old")).toBe(false); // 旧分镜被新剧本的分镜覆盖
     const run = normalizeProductionRun(row!.run);
     expect(run.storyboardScriptDigest).toBe(scriptDigestOf(revised));
+  });
+});
+
+describe("advanceRunLoop · 用户意图位不被引擎回写（#3893）", () => {
+  /** 模拟用户在动作在飞时点 run.pause / run.cancel（直接写 run 列，同路由的无条件写）。 */
+  const setUserStatus = (status: "paused" | "cancelled") => async () => {
+    const row = await productionRepository.getForUser(USER, PROJ);
+    const base = normalizeProductionRun(row?.run);
+    await productionRepository.updateRun(USER, PROJ, {
+      ...base,
+      status,
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  it("生图动作执行期间用户取消：引擎收口不把 cancelled 回退成 running/done", async () => {
+    synthesizeFirstFrame.mockImplementationOnce(async () => {
+      await setUserStatus("cancelled")();
+      return "/api/generated/shot.png";
+    });
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0 }],
+        rendered: true, // 生图后规划器本可判 done：旧实现会把 cancelled 一路覆盖成 done
+      },
+      { status: "running", approvalMode: "auto", imageWorkflowId: "wf-img" },
+    );
+    await advanceRunLoop(USER, PROJ);
+    expect(normalizeProductionRun((await readRow())!.run).status).toBe("cancelled");
+  });
+
+  it("生图动作执行期间用户暂停：引擎收口写被跳过，run 停在 paused", async () => {
+    synthesizeFirstFrame.mockImplementationOnce(async () => {
+      await setUserStatus("paused")();
+      return "/api/generated/shot.png";
+    });
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0 }],
+        rendered: true,
+      },
+      { status: "running", approvalMode: "auto", imageWorkflowId: "wf-img" },
+    );
+    await advanceRunLoop(USER, PROJ);
+    expect(normalizeProductionRun((await readRow())!.run).status).toBe("paused");
+  });
+
+  it("动作失败与取消相交：取消优先，不落 failed", async () => {
+    completeLLM.mockImplementationOnce(async () => {
+      await setUserStatus("cancelled")();
+      return ""; // 空返回 → 该步失败；旧实现会把 cancelled 覆盖成 failed
+    });
+    await seed({}, { status: "running", approvalMode: "stage" });
+    await advanceRunLoop(USER, PROJ);
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.status).toBe("cancelled");
+    expect(run.error ?? null).toBeNull();
   });
 });

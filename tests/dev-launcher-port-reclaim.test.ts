@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 const LAUNCHER = JSON.stringify(
   pathToFileURL(join(process.cwd(), "scripts", "dev-launcher.mjs")).href,
 );
@@ -50,11 +52,20 @@ function verdictFor(
     });
     process.stdout.write(JSON.stringify(result));
   `;
-  /* SAFETY: 类型断言已复核 */
-  return decidePort(script) as {
-    foreignPids: Array<number>;
-    ownership: string;
-    ownPids: Array<number>;
+  /* 读数按 unknown 收窄（B5 清账）：三件（ownership / ownPids / foreignPids）逐一对型。 */
+  const parsed: unknown = decidePort(script);
+  if (
+    !isRecord(parsed) ||
+    typeof parsed.ownership !== "string" ||
+    !isUnknownArray(parsed.ownPids) ||
+    !isUnknownArray(parsed.foreignPids)
+  ) {
+    throw new Error(`decidePort 的读数形状不对：${JSON.stringify(parsed)}`);
+  }
+  return {
+    foreignPids: parsed.foreignPids.filter((p): p is number => typeof p === "number"),
+    ownership: parsed.ownership,
+    ownPids: parsed.ownPids.filter((p): p is number => typeof p === "number"),
   };
 }
 
@@ -64,8 +75,8 @@ function isApp(cmdline: string): boolean {
     import { isAppDevServerCmdline } from ${LAUNCHER};
     process.stdout.write(JSON.stringify(isAppDevServerCmdline(${JSON.stringify(cmdline)}, ${JSON.stringify(ROOT)})));
   `;
-  /* SAFETY: 类型断言已复核 */
-  return decidePort(script) as boolean;
+  const parsed: unknown = decidePort(script);
+  return typeof parsed === "boolean" && parsed;
 }
 
 describe("端口残留回收：显式端口 + 应用服务自证（ISSUE #621）", () => {

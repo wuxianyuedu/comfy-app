@@ -191,14 +191,15 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   label={statusLabel}
                   status={status ?? "IDLE"}
                 />
-                <span
-                  className={`inline-block size-1.5 shrink-0 rounded-full ${
-                    connected
-                      ? "bg-success shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_70%,transparent)]"
-                      : "bg-gray-600"
-                  }`}
-                  title={connected ? "SSE 已连接" : "SSE 未连接"}
-                />
+                <Hint label={connected ? "SSE 已连接" : "SSE 未连接"}>
+                  <span
+                    className={`inline-block size-1.5 shrink-0 rounded-full ${
+                      connected
+                        ? "bg-success shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_70%,transparent)]"
+                        : "bg-gray-600"
+                    }`}
+                  />
+                </Hint>
               </div>
 
               <div className="flex shrink-0 items-center gap-2">

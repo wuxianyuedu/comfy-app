@@ -36,24 +36,24 @@ const root = path.resolve(import.meta.dirname, "..");
 const envPath = path.join(root, ".env");
 const examplePath = path.join(root, ".env.example");
 
-/** 按 KEY= 逐行覆盖（锚行首，兼容 example 未来新增注释/行）——与
+/** 只重写 `keys` 里点名的必填项（锚行首，兼容 example 未来新增注释/行）——与
  *  `scripts/prepare-local-run.ps1` 的 `(?m)^KEY=.*$` 口径一致。
  *
- * @param {string} content `.env.example` 或现有 `.env` 的全文
+ *  只填点名键（ISSUE #3855）：原先三条 `^KEY=.*$` 无条件命中，三项必填缺其一时
+ *  会把用户已填的另外两项也重写成随机值 / 占位符，违背「只补不覆盖」的契约。
+ *
+ * @param {string} content 现有 `.env` 的全文
+ * @param {string[]} keys 要补的必填键（调用方按 missingEnvKeys 的结果点名）
  * @returns {string}
  */
-function fill(content) {
+function fill(content, keys) {
   const secret = newAuthSecret();
-  return content
-    .replace(/^BETTER_AUTH_SECRET=.*$/m, `BETTER_AUTH_SECRET="${secret}"`)
-    .replace(
-      /^BETTER_AUTH_GITHUB_CLIENT_ID=.*$/m,
-      `BETTER_AUTH_GITHUB_CLIENT_ID="${OAUTH_PLACEHOLDER}"`,
-    )
-    .replace(
-      /^BETTER_AUTH_GITHUB_CLIENT_SECRET=.*$/m,
-      `BETTER_AUTH_GITHUB_CLIENT_SECRET="${OAUTH_PLACEHOLDER}"`,
-    );
+  let next = content;
+  for (const key of keys) {
+    const value = key === "BETTER_AUTH_SECRET" ? secret : OAUTH_PLACEHOLDER;
+    next = next.replace(new RegExp(`^${key}=.*$`, "m"), `${key}="${value}"`);
+  }
+  return next;
 }
 
 /** 三项必填值是否都拿到了非空内容（判据同 `src/env.js`：空串 == 未给）。
@@ -109,7 +109,7 @@ if (!fs.existsSync(examplePath)) {
 const exampleText = fs.readFileSync(examplePath, "utf8");
 
 if (!fs.existsSync(envPath)) {
-  const next = fill(exampleText);
+  const next = fill(exampleText, [...REQUIRED_ENV_KEYS]);
   if (!hasRequiredValues(next)) {
     // 自检：改写没命中行时立刻暴露，而不是留个仍然起不来的 .env。
     process.stderr.write(
@@ -133,8 +133,13 @@ if (!fs.existsSync(envPath)) {
 // 而 #2175 那格留痕全靠它）。现在改成「必填齐也照样补缺」，但「只补没有的键」这条
 // 承诺一字未改 —— 已有值不覆盖、不重排、不动注释。
 const current = fs.readFileSync(envPath, "utf8");
-const hadRequired = hasRequiredValues(current);
-const filled = hadRequired ? current : fill(current);
+// 只补「确实缺 / 空」的必填键（ISSUE #3855）：三项缺其一时，原先会把用户已填的
+// 另外两项也重写掉。判据与 hasRequiredValues 同一口径（空串 == 未给）逐键判——
+// missingEnvKeys 只答「整行缺席」，答不了「行在但值是空串」这一档。
+const requiredMissing = REQUIRED_ENV_KEYS.filter(
+  (key) => !new RegExp(`^${key}="?[^"\\r\\n]+"?\\s*$`, "m").test(current),
+);
+const filled = requiredMissing.length > 0 ? fill(current, requiredMissing) : current;
 const additions = missingLines({ example: exampleText, current: filled });
 const next =
   additions.length > 0 ? `${filled.replace(/\s*$/, "")}\n${additions.join("\n")}\n` : filled;
@@ -158,9 +163,9 @@ if (next === current) {
 fs.writeFileSync(envPath, next, "utf8");
 process.stdout.write(
   `${[
-    hadRequired
-      ? "[env:init] ✓ 已有 .env，必填项本来就齐 ⇒ 只补缺失的键（不覆盖你的任何配置）。"
-      : "[env:init] ✓ 已有 .env 但必填项为空，已就地补齐（其余配置保持不变）。",
+    requiredMissing.length > 0
+      ? `[env:init] ✓ 已有 .env，就地补齐缺失的必填项（${requiredMissing.join("、")}）；其余配置保持不变。`
+      : "[env:init] ✓ 已有 .env，必填项本来就齐 ⇒ 只补缺失的键（不覆盖你的任何配置）。",
     ...additions.map((line) => {
       const key = line.split("=", 1)[0] ?? line;
       // 必填三项的值是密钥/占位值：只说补了哪个键，不回显值（值不进日志）。

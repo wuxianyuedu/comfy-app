@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { LOG_DETAIL_MAX } from "~/lib/text-clamp";
-import { describeSqliteWriteError, isSqliteBusyError, sqliteAwareErrorText } from "./sqlite-error";
+import {
+  describeSqliteWriteError,
+  isSqliteBusyError,
+  isSqliteUniqueViolation,
+  sqliteAwareErrorText,
+  sqliteUniqueColumns,
+} from "./sqlite-error";
 
 /* 这两条判据的形状照 drizzle 的真实包法写：drizzle 把驱动错误放在 `cause` 上，
  * 自己的 message 只有 `Failed query: <sql>\nparams: <…>`。#1250 的现场就是日志里
@@ -174,5 +180,58 @@ describe("node:sqlite 的锁族字段", () => {
     });
     expect(isSqliteBusyError(err)).toBe(false);
     expect(describeSqliteWriteError(err, "f")).toContain("no such table: task");
+  });
+});
+
+/* #3866：先查后写的入口靠这个判据把裸约束冲突转成业务语义的冲突错误。
+ * 两种驱动的真实形状都在这里钉住：libsql 给 `SQLITE_CONSTRAINT_UNIQUE` 码，
+ * node:sqlite（#3171）字符串码恒为 `ERR_SQLITE_ERROR`、人话在 message 里。 */
+describe("isSqliteUniqueViolation", () => {
+  it("libsql 形状：code=SQLITE_CONSTRAINT_UNIQUE 判真", () => {
+    const err = drizzleWrapped({
+      code: "SQLITE_CONSTRAINT_UNIQUE",
+      message: "UNIQUE constraint failed: llmProvider.name",
+    });
+    expect(isSqliteUniqueViolation(err)).toBe(true);
+  });
+
+  it("node:sqlite 形状：ERR_SQLITE_ERROR + UNIQUE 短语判真", () => {
+    const err = drizzleWrapped({
+      code: "ERR_SQLITE_ERROR",
+      errcode: 19,
+      message: "UNIQUE constraint failed: user.email",
+    });
+    expect(isSqliteUniqueViolation(err)).toBe(true);
+  });
+
+  it("锁族与普通错误不误判", () => {
+    expect(
+      isSqliteUniqueViolation(
+        drizzleWrapped({ code: "SQLITE_BUSY", message: "database is locked" }),
+      ),
+    ).toBe(false);
+    expect(isSqliteUniqueViolation(new Error("boom"))).toBe(false);
+  });
+});
+
+describe("sqliteUniqueColumns", () => {
+  it("从复合索引的冲突消息里取全部列（table.column 全名、保序）", () => {
+    const err = drizzleWrapped({
+      code: "ERR_SQLITE_ERROR",
+      message: "UNIQUE constraint failed: season.seriesId, season.seasonNumber",
+    });
+    expect(sqliteUniqueColumns(err)).toEqual(["season.seriesId", "season.seasonNumber"]);
+  });
+
+  it("沿 cause 链取（drizzle 包装层自身的 message 不含 UNIQUE 字样）", () => {
+    const err = drizzleWrapped({ message: "UNIQUE constraint failed: character.name" });
+    expect(sqliteUniqueColumns(err)).toEqual(["character.name"]);
+  });
+
+  it("非唯一冲突给空数组（调用方按「不知道撞了哪条」兜底）", () => {
+    expect(sqliteUniqueColumns(new Error("boom"))).toEqual([]);
+    expect(
+      sqliteUniqueColumns(drizzleWrapped({ code: "SQLITE_BUSY", message: "database is locked" })),
+    ).toEqual([]);
   });
 });

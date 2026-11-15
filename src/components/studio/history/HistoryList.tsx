@@ -7,6 +7,7 @@ import { HistoryTaskCard } from "./HistoryTaskCard";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
 import { SelectChip } from "~/components/ui/select-chip";
@@ -215,6 +216,17 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
         modeContracts={c.modeContracts}
         onClose={c.closeDetail}
         workflowIO={c.workflowIO}
+      />
+      {/* 删除确认走非阻塞弹窗（ISSUE #3771）：原生 confirm() 在内嵌浏览器里
+          未被处置会以 0 CPU 卡死同源渲染进程（连 splash.html 都冻结）。 */}
+      <ConfirmDialog
+        confirmLabel="删除"
+        danger
+        description="已生成的文件不会从磁盘删除。"
+        onClose={c.cancelRemove}
+        onConfirm={c.confirmRemove}
+        open={c.removeTarget !== null}
+        title="删除任务记录"
       />
     </DocumentFrame>
   );

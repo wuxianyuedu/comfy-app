@@ -13,6 +13,7 @@ vi.mock("~/lib/project-canvas/canvas-api", () => ({
 
 import { isPlainRecord, isRecord } from "~/lib/is-record";
 import { uploadImageFile } from "~/lib/project-canvas/canvas-api";
+import { FilePicker } from "~/components/ui/file-picker";
 import type { WorkflowIOEntry, WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { DynamicWorkflowFormProps } from "../dynamic-workflow-form-config";
 import type { DynamicWorkflowFormController, RowDragHandlers } from "./use-dynamic-workflow-form";
@@ -28,18 +29,19 @@ function dragHandlersOf(handlers: DynamicWorkflowFormController["dragHandlers"])
   return handlers;
 }
 
-/** 驱动 controller 暴露的隐藏 `<input type=file>`。上传入口是 ui/file-picker，input 由 FileInput 渲染，
- *  测试必须真的渲染它（renderHook 不渲染返回的组件）：这里把 controller 与 FileInput 一起渲染，
- *  再从真实 DOM 派发 change，顺带覆盖「选完复位 value」。 */
+/** 驱动 controller 暴露的隐藏 `<input type=file>`。上传入口是 ui/file-picker，input 由
+ *  `fileInputProps` 渲染成 `<FilePicker>`，测试必须真的渲染它（renderHook 不渲染
+ *  返回的 props 对应的节点）：这里把 controller 与 FilePicker 一起渲染，再从真实
+ *  DOM 派发 change，顺带覆盖「选完复位 value」。 */
 function renderFormWithPicker(props: DynamicWorkflowFormProps) {
   /* 本文件是 `.ts`（无 JSX），用 createElement 手搭一个「渲染 controller +
-   * 它的 FileInput」的探针组件：`renderHook` 只挂 hook 不挂返回的节点，
+   * 它的 FilePicker」的探针组件：`renderHook` 只挂 hook 不挂隐藏 input，
    *  而上传入口现在是真实 DOM 里的 `<input type=file>`。 */
   let captured: DynamicWorkflowFormController | null = null;
   function Probe(p: DynamicWorkflowFormProps) {
     const controller = useDynamicWorkflowForm(p);
     captured = controller;
-    return createElement(controller.FileInput);
+    return createElement(FilePicker, controller.fileInputProps);
   }
   const rendered = render(createElement(Probe, props));
   return {

@@ -90,22 +90,15 @@ export async function listDraftsByUser(userId: string | null): Promise<Array<Dra
   }));
 }
 
-/** 新增或覆盖某项目的镜像（写穿式：前端每次自动保存都 upsert）。 */
+/** 新增或覆盖某项目的镜像（写穿式：前端每次自动保存都 upsert）。
+ *  单语句 `onConflictDoUpdate`（ISSUE #3835）：id 是前端 wsp_* 主键，自动保存
+ *  高频重复调用，「先查后插」在并发首存（双页签同时建项、保存与桥接赛跑）时
+ *  会同抢主键让后到者 500 —— upsert 语义应当让重复执行成功且无害。 */
 export async function upsertDraft(
   id: string,
   draft: WorkshopDraftDto,
   userId: string | null,
 ): Promise<void> {
-  const existing = await getDraft(id);
-  if (existing) {
-    // update 分支：只改内容列（id / 时间戳不动），Partial 即可。
-    const patch = draftToRow(draft);
-    if (userId !== null) {
-      patch.userId = userId;
-    }
-    await workshopDb.update(workshopDraft).set(patch).where(eq(workshopDraft.id, id));
-    return;
-  }
   // insert 分支：补齐必填列（createdAt/updatedAt 由 drizzle 默认函数生成）。
   const insertRow: WorkshopDraftInsert = {
     id,
@@ -119,7 +112,25 @@ export async function upsertDraft(
     characters: draft.characters,
     shots: draft.shots,
   };
-  await workshopDb.insert(workshopDraft).values(insertRow);
+  await workshopDb
+    .insert(workshopDraft)
+    .values(insertRow)
+    .onConflictDoUpdate({
+      target: workshopDraft.id,
+      // update 分支：只改内容列（id / createdAt 不动）。
+      set: {
+        userId: insertRow.userId,
+        title: insertRow.title,
+        type: insertRow.type,
+        tone: insertRow.tone,
+        logline: insertRow.logline,
+        scriptMarkdown: insertRow.scriptMarkdown,
+        scenes: insertRow.scenes,
+        characters: insertRow.characters,
+        shots: insertRow.shots,
+        updatedAt: new Date(),
+      },
+    });
 }
 
 /** 删除某项目的镜像（前端删除项目时同步清掉，避免残留孤行）。 */

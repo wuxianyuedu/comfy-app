@@ -4,6 +4,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { comfyImageUrl } from "~/lib/media/media-url";
 import { readNaturalSize, type NaturalSize } from "~/lib/media/natural-size";
 import type { RawInputMeta } from "./workflow-types";
+import { Hint } from "~/components/ui/hint";
 
 /** 节点在 paramMap 里可以分配到的角色 */
 export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
@@ -17,9 +18,9 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   if (!ref) {
     return (
       <div className="flex flex-col gap-1">
-        <div className="text-ink-soft text-2xs truncate" title={label}>
-          {label}
-        </div>
+        <Hint label={label}>
+          <div className="text-ink-soft text-2xs truncate">{label}</div>
+        </Hint>
         <div className="border-border-strong bg-canvas-deep text-ink-soft text-2xs flex h-27.5 items-center justify-center rounded-md border border-dashed">
           需要上传图片
         </div>
@@ -29,9 +30,9 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   const src = comfyImageUrl(ref);
   return (
     <div className="flex flex-col gap-1">
-      <div className="text-ink-soft text-2xs truncate" title={label}>
-        {label}
-      </div>
+      <Hint label={label}>
+        <div className="text-ink-soft text-2xs truncate">{label}</div>
+      </Hint>
       <div className="border-border-strong bg-canvas-deep overflow-hidden rounded-md border">
         {/* 失败兜底收在基元里（同一个「110px 高」盒子，不跳布局）。 */}
         <MediaThumbnail

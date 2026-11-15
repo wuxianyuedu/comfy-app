@@ -1,5 +1,5 @@
 /**
- * `setting.backupList` / `backupCreate` / `backupRestore` 的契约（D6 / ISSUE #1611）。三条都不是「调了函数就完事」：
+ * `setting.backupList` / `backupCreate` / `backupRestore` / `backupImportFromDir` 的契约（D6 / ISSUE #1611 / #3732）。都不是「调了函数就完事」：
  * ① `backupCreate` 失败**返回 `{ ok: false, reason }` 而不抛**（磁盘满/库被独占是可预期一档，界面要能看见为什么没成）；② `backupRestore` **只写待恢复标记、绝不就地换文件**（多进程持库，就地覆盖不可逆；同时断言库文件一字节没动）；
  * ③ 备份名是请求方给的字符串，必须过「本目录认得出的备份名」闸，否则恢复＝任意文件覆盖库；走真实现且 `process.cwd()` 指到临时目录（错法都在「真动了哪个文件」上）。
  */
@@ -130,6 +130,44 @@ describe("setting.backupRestore", () => {
     // 一次都不该留下标记
     const listed = await caller.backupList();
     expect(listed.pending).toBeNull();
+  });
+});
+
+describe("setting.backupImportFromDir", () => {
+  it("从指定目录导入：认得出的件进清单，恢复那一步复用同一份清单", async () => {
+    const caller = createCaller(makeCtx());
+    /* 来源目录里摆一份「别的机器的备份」：一份真库快照 + 一套应用数据目录 */
+    const from = path.join(root, "from-other-machine");
+    fs.mkdirSync(path.join(from, "app-data-backup-20261113-000000"), { recursive: true });
+    fs.writeFileSync(path.join(from, "app-data-backup-20261113-000000", "app-settings.json"), "{}");
+    const seeded = new DatabaseSync(path.join(from, "db-backup-20261113-000000.sqlite"));
+    try {
+      seeded.exec("CREATE TABLE t (id INTEGER PRIMARY KEY)");
+    } finally {
+      seeded.close();
+    }
+
+    const result = await caller.backupImportFromDir({ dir: from });
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.imported).toContain("db-backup-20261113-000000.sqlite");
+    expect(result.imported).toContain("app-data-backup-20261113-000000");
+
+    const listed = await caller.backupList();
+    expect(listed.backups.map((b) => b.name)).toContain("db-backup-20261113-000000.sqlite");
+    expect(listed.appDataBackups.map((s) => s.name)).toContain("app-data-backup-20261113-000000");
+  });
+
+  it("读不到的目录：返回失败原因，不抛", async () => {
+    const caller = createCaller(makeCtx());
+    const result = await caller.backupImportFromDir({ dir: path.join(root, "no-such-dir") });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.reason).toContain("读不到");
   });
 });
 

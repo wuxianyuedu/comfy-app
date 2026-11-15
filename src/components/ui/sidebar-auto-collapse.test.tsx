@@ -5,7 +5,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 
+import { NAV_AUTO_COLLAPSE_MAX_PX, NAV_EXPANDED_MIN_PX } from "~/lib/layout-budget";
+
 import { SidebarProvider, useSidebar } from "./sidebar";
+
+/* 窗宽夹具从唯一出处推导，不写字面量：阈值由各列宽算出（`layout-budget.ts`），
+   这里写死 1200 这类数字，列宽一改就会悄悄落到阈值的另一侧（ISSUE #3587 收窄
+   导航宽时当场红过 —— 1200 在旧阈值下是窄窗、新阈值下已是宽窗）。 */
+const WIDE_PX = NAV_EXPANDED_MIN_PX + 100;
+const NARROW_PX = NAV_AUTO_COLLAPSE_MAX_PX - 100;
 
 /* jsdom 没有 matchMedia（本仓库既有测试的桩形态）；这里让它跟着 innerWidth 走，
    否则「窄窗」在用例里永远不可能成立。 */
@@ -59,7 +67,7 @@ beforeEach(() => {
       return false;
     },
   });
-  setViewport(1440);
+  setViewport(WIDE_PX);
 });
 
 afterEach(cleanup);
@@ -99,14 +107,14 @@ describe("窄窗下左轨自动让位", () => {
     expect(state()).toBe("expanded");
     expect(isAuto()).toBe("false");
 
-    setViewport(1200);
+    setViewport(NARROW_PX);
     expect(state()).toBe("collapsed");
     expect(isAuto()).toBe("true");
   });
 
   it("窄窗里用户点开 → 听用户的；窗口再跨越阈值则回到纪律", () => {
     mount();
-    setViewport(1200);
+    setViewport(NARROW_PX);
     expect(state()).toBe("collapsed");
 
     act(() => {
@@ -117,10 +125,10 @@ describe("窄窗下左轨自动让位", () => {
     expect(isAuto()).toBe("false");
 
     /* 放大窗口：宽窗 + 无表态（上次那条是「窄窗档」的）→ 仍展开（默认偏好）。 */
-    setViewport(1500);
+    setViewport(WIDE_PX);
     expect(state()).toBe("expanded");
     /* 再缩回窄窗：那条豁免属于另一档窗宽，纪律重新接管。 */
-    setViewport(1200);
+    setViewport(NARROW_PX);
     expect(state()).toBe("collapsed");
     expect(isAuto()).toBe("true");
   });
@@ -137,7 +145,7 @@ describe("窄窗下左轨自动让位", () => {
     /* 窄窗（订阅建立之前就是），不派发 change。 */
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
-      value: 1100,
+      value: NARROW_PX,
       writable: true,
     });
 
@@ -157,7 +165,7 @@ describe("窄窗下左轨自动让位", () => {
     const writeSpy = vi.spyOn(document, "cookie", "set");
     mount();
     writeSpy.mockClear();
-    setViewport(1100);
+    setViewport(NARROW_PX);
     expect(state()).toBe("collapsed");
     expect(writeSpy).not.toHaveBeenCalled();
     /* 用户自己点才算表态，才写偏好。 */

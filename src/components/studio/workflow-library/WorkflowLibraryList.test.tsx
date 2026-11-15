@@ -2,9 +2,11 @@
 // 数据」与「真的没有工作流」长得一模一样——这里锁住两者不再可混淆。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { WorkflowLibraryList } from "./WorkflowLibraryList";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import type { PendingRow, WorkflowRow } from "./workflow-library-config";
 
 afterEach(cleanup);
@@ -20,14 +22,18 @@ function row(over: Partial<WorkflowRow> = {}): WorkflowRow {
 }
 
 function renderList(props: Partial<Parameters<typeof WorkflowLibraryList>[0]>) {
+  /* `Hint` 的浮层要 `TooltipProvider`（应用里挂在根布局上）；`delay={0}` 让
+   * 悬停断言不必干等。 */
   return render(
-    <WorkflowLibraryList
-      onSearchChange={() => undefined}
-      onSelect={() => undefined}
-      search=""
-      workflows={[]}
-      {...props}
-    />,
+    <TooltipProvider delay={0}>
+      <WorkflowLibraryList
+        onSearchChange={() => undefined}
+        onSelect={() => undefined}
+        search=""
+        workflows={[]}
+        {...props}
+      />
+    </TooltipProvider>,
   );
 }
 
@@ -138,14 +144,20 @@ describe("列表侧栏的拖入导入提示", () => {
 describe("列表项：名称限长 + 对外参数精简显示", () => {
   const longName = "22WorkflowsI2VSVI2_fastfidelityCAIoV88";
 
-  it("名称有显式最大宽度，不会把右侧徽标挤出侧栏", () => {
+  it("名称有显式最大宽度，不会把右侧徽标挤出侧栏", async () => {
+    const user = userEvent.setup();
     renderList({ workflows: [row({ name: longName })] });
 
     const name = screen.getByText(longName);
     expect(name.className).toContain("truncate");
     expect(name.className).toMatch(/\bmax-w-\d/);
-    /* 完整名称仍可从 title 读到（截断只发生在视觉上）。 */
-    expect(name.getAttribute("title")).toBe(longName);
+    /* 原生 title= 撤干净：完整名称走 <Hint>，悬停出完整名。 */
+    expect(name).not.toHaveAttribute("title");
+    await user.hover(name);
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toBe(longName);
   });
 
   it("对外参数收成一枚 1 字标记，完整说明在 title 里", () => {

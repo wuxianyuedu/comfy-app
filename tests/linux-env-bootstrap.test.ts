@@ -9,6 +9,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import {
   REQUIRED_ENV_KEYS,
   checkEnvFile,
@@ -112,11 +114,11 @@ function runEnvInitIn(files: Record<string, string>): {
 
 describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
   it("package.json 提供 env:init 入口（Windows 的 prepare-local-run.ps1 在 Linux 上不可用）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    expect(pkg.scripts["env:init"]).toBe("node scripts/env-init.mjs");
+    const pkgParsed: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const scripts: unknown = isRecord(pkgParsed) ? pkgParsed.scripts : undefined;
+    expect(
+      isRecord(scripts) && typeof scripts["env:init"] === "string" ? scripts["env:init"] : "",
+    ).toBe("node scripts/env-init.mjs");
   });
 
   it("从 .env.example 生成后，三个必填项都非空且能过预检", () => {
@@ -478,6 +480,9 @@ describe("dev/start 在起 Next 之前预检", () => {
       // `applyPendingRestoreAtBoot`，它静态 import 这份唯一实现 —— 少拷一份，
       // 红出来的就是 ERR_MODULE_NOT_FOUND 而不是预检结论（同下一条注释）。
       "db-backup-core.mjs",
+      // #3732：`db-backup-core.mjs` 静态 import 这份本机应用数据备份实现，
+      // 同理必须随最小检出副本一起拷，否则红的是模块找不到。
+      "app-data-backup.mjs",
       "standalone-private-inputs.mjs",
     ];
     for (const name of needed) {

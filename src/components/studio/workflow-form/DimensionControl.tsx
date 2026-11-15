@@ -322,12 +322,12 @@ function DimensionSizeControl({
       <div
         className={
           narrow === true
-            ? "border-accent/30 bg-accent/4 w-fit max-w-full rounded-lg border p-2"
-            : "border-accent/30 bg-accent/4 rounded-lg border p-2.5"
+            ? "border-primary/30 bg-primary/4 w-fit max-w-full rounded-lg border p-2"
+            : "border-primary/30 bg-primary/4 rounded-lg border p-2.5"
         }
       >
         <div className="flex items-center gap-2">
-          <span className="text-accent text-3xs shrink-0 font-semibold tracking-wider uppercase">
+          <span className="text-primary text-3xs shrink-0 font-semibold tracking-wider uppercase">
             比例 + 像素
           </span>
           <div className={narrow === true ? "w-28 min-w-0" : "min-w-0 flex-1"}>

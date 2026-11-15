@@ -12,6 +12,7 @@ import {
   sanitizeChannel,
   type ApiChannelStored,
   type WorkshopApiSettings,
+  type ApiCallDebugRow,
 } from "./api-channel-core";
 import { isRecord } from "~/lib/is-record";
 
@@ -330,5 +331,190 @@ describe("callVideoPoll", () => {
     await expect(callVideoPoll("t-1", { ...VIDEO, baseUrl: "" })).rejects.toThrow(
       "API 视频通道未配置",
     );
+  });
+});
+
+describe("callVideoSubmit：远端模型定向（#3590）", () => {
+  it("targetOverride 生效：端点 / 密钥 / 模型都来自远端模型条目", async () => {
+    const fetchMock = stubFetch(() => jsonResponse({ url: "https://v/out.mp4" }));
+    await expect(
+      callVideoSubmit({ prompt: "p", model: "agnes-video-2.5-flash", mode: "T2V" }, VIDEO, {
+        targetOverride: {
+          endpoint: "https://apihub.agnes-ai.com/v1/videos",
+          apiKey: "sk-ag",
+          model: "agnes-video-2.5-flash",
+        },
+      }),
+    ).resolves.toEqual({ url: "https://v/out.mp4" });
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://apihub.agnes-ai.com/v1/videos");
+    const init = fetchMock.mock.calls[0]![1] ?? {};
+    const headers = new Headers(init.headers);
+    expect(headers.get("Authorization")).toBe("Bearer sk-ag");
+    const body = bodyOf(fetchMock);
+    expect(body.model).toBe("agnes-video-2.5-flash");
+  });
+
+  it("bodyOverride 优先于默认 videoBody（适配器翻译的请求体原样发出）", async () => {
+    const fetchMock = stubFetch(() => jsonResponse({ url: "u" }));
+    await callVideoSubmit({ prompt: "p", duration: 5 }, VIDEO, {
+      targetOverride: { endpoint: "https://x/v1/videos", apiKey: "k", model: "m" },
+      bodyOverride: { model: "m", prompt: "p", mode: "text", size: "720P", seconds: "5" },
+    });
+    const body = bodyOf(fetchMock);
+    expect(body.mode).toBe("text");
+    expect(body.size).toBe("720P");
+    expect(body.seconds).toBe("5");
+    expect(body.image_url).toBeUndefined();
+  });
+
+  it("outputField 命中时优先于通用提取", async () => {
+    stubFetch(() => jsonResponse({ video: { url: "https://picked" }, url: "https://other" }));
+    await expect(
+      callVideoSubmit({ prompt: "p" }, VIDEO, {
+        outputField: "video.url",
+      }),
+    ).resolves.toEqual({ url: "https://picked" });
+  });
+});
+
+describe("callVideoPoll：候选地址模式（#3590）", () => {
+  it("给了 pollUrls 时逐个试：第一个失败换下一个，命中即返回", async () => {
+    const fetchMock = stubFetch((url) =>
+      String(url).includes("/agnesapi")
+        ? jsonResponse({ status: "completed", url: "https://agnes/done.mp4" })
+        : jsonResponse({ status: "running" }, false, 404),
+    );
+    await expect(
+      callVideoPoll("t-1", VIDEO, {
+        pollUrls: [
+          "https://api.example.com/v1/videos/t-1",
+          "https://api.example.com/agnesapi?video_id=t-1",
+        ],
+        targetOverride: {
+          endpoint: "https://api.example.com/v1/videos",
+          apiKey: "sk-ag",
+          model: "agnes",
+        },
+      }),
+    ).resolves.toEqual({ url: "https://agnes/done.mp4", pending: false });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const headers = new Headers(fetchMock.mock.calls[1]![1]?.headers);
+    expect(headers.get("Authorization")).toBe("Bearer sk-ag");
+  });
+
+  it("候选全落空 → pending=true（不抛错，轮询循环继续）", async () => {
+    stubFetch(() => jsonResponse({}, false, 404));
+    await expect(
+      callVideoPoll("t-1", VIDEO, {
+        pollUrls: ["https://x/1", "https://x/2"],
+      }),
+    ).resolves.toEqual({ pending: true });
+  });
+
+  it("未给 pollUrls 时保持既有语义：非 2xx 当场抛错", async () => {
+    stubFetch(() => jsonResponse({ message: "no" }, false, 401));
+    await expect(callVideoPoll("t-1", VIDEO)).rejects.toThrow("API 视频轮询失败");
+  });
+});
+
+/* ── 请求读数 debug（ISSUE #3791）────────────────────────────────────────
+ * 题目：call* 在 fetch 返回（或网络层失败）后回调 options.debug，读数里是
+ * 「实际发出的请求」—— 端点 / 截断后的请求体 / 状态 / 响应摘要。 */
+describe("call* 的请求读数（options.debug，ISSUE #3791）", () => {
+  function jsonResponse(payload: unknown, _ok = true, status = 200): Response {
+    return new Response(JSON.stringify(payload), { status });
+  }
+
+  it("生图：成功后上报一条 image 读数（端点 / 请求体 / 状态 / 响应摘要）", async () => {
+    const rows: ApiCallDebugRow[] = [];
+    stubFetch(() => jsonResponse({ url: "https://cdn/x.png" }));
+    const url = await callImageGeneration(
+      { prompt: "p" },
+      IMAGE,
+      () => ({
+        endpoint: "https://api.example.com/v1/images/generations",
+        apiKey: "k1",
+        model: "m1",
+      }),
+      { debug: (row) => rows.push(row) },
+    );
+    expect(url).toBe("https://cdn/x.png");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.phase).toBe("image");
+    expect(rows[0]?.ok).toBe(true);
+    expect(rows[0]?.status).toBe(200);
+    expect(rows[0]?.endpoint).toBe("https://api.example.com/v1/images/generations");
+    expect(rows[0]?.durationMs).toEqual(expect.any(Number));
+    expect(rows[0]?.body).toMatchObject({ prompt: "p" });
+    expect(rows[0]?.excerpt).toMatchObject({ url: "https://cdn/x.png" });
+  });
+
+  it("请求体长字符串截断（data URL 之类的值不整段进读数）", async () => {
+    const rows: ApiCallDebugRow[] = [];
+    stubFetch(() => jsonResponse({ url: "https://cdn/x.png" }));
+    /* 默认请求体不带 image 口（那是适配器映射的事）—— 截断用 bodyOverride 驱动。 */
+    const longImage = `data:image/png;base64,${"A".repeat(2000)}`;
+    await callImageGeneration(
+      { prompt: "p" },
+      IMAGE,
+      () => ({
+        endpoint: "https://api.example.com/v1/images/generations",
+        apiKey: "k1",
+        model: "m1",
+      }),
+      {
+        bodyOverride: { prompt: "p", image: longImage },
+        debug: (row) => rows.push(row),
+      },
+    );
+    const sent = JSON.stringify(rows[0]?.body) ?? "";
+    expect(sent.length).toBeLessThan(longImage.length);
+    expect(sent).toContain("截断，原长");
+  });
+
+  it("网络层失败也上报（status=null）且照常抛错", async () => {
+    const rows: ApiCallDebugRow[] = [];
+    stubFetch(() => {
+      throw new Error("boom");
+    });
+    await expect(
+      callImageGeneration(
+        { prompt: "p" },
+        IMAGE,
+        () => ({
+          endpoint: "https://api.example.com/v1/images/generations",
+          apiKey: "k1",
+          model: "m1",
+        }),
+        { debug: (row) => rows.push(row) },
+      ),
+    ).rejects.toThrow("API 生图请求失败");
+    expect(rows[0]?.status).toBeNull();
+    expect(rows[0]?.ok).toBe(false);
+    expect(rows[0]?.excerpt).toBeNull();
+  });
+
+  it("视频提交：phase=video-submit；轮询：逐候选上报（首个 404 也有一条）", async () => {
+    const submitRows: ApiCallDebugRow[] = [];
+    stubFetch(() => jsonResponse({ taskId: "t-9" }));
+    await callVideoSubmit({ prompt: "p" }, VIDEO, {
+      targetOverride: { endpoint: "https://api.example.com/v1/videos", apiKey: "k1", model: "v1" },
+      debug: (row) => submitRows.push(row),
+    });
+    expect(submitRows[0]?.phase).toBe("video-submit");
+    expect(submitRows[0]?.ok).toBe(true);
+
+    const pollRows: ApiCallDebugRow[] = [];
+    stubFetch((url) => (url.includes("agnes") ? jsonResponse({}) : jsonResponse({}, false, 404)));
+    const result = await callVideoPoll("t-9", VIDEO, {
+      pollUrls: ["https://api.example.com/v1/videos/404", "https://agnes.example.com/poll"],
+      targetOverride: { endpoint: "https://api.example.com/v1/videos", apiKey: "k1", model: "v1" },
+      debug: (row) => pollRows.push(row),
+    });
+    expect(result.pending).toBe(true);
+    expect(pollRows).toHaveLength(2);
+    expect(pollRows.every((r) => r.phase === "video-poll")).toBe(true);
+    expect(pollRows[0]?.status).toBe(404);
+    expect(pollRows[1]?.status).toBe(200);
   });
 });

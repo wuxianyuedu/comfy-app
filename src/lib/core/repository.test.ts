@@ -21,7 +21,8 @@ vi.mock("~/server/db", async () => {
 });
 import { DrizzleRepository } from "~/lib/core/repository-base";
 import { isRecord } from "~/lib/is-record";
-import type { RemoteModeAdapter } from "~/lib/workshop/model-mode-contract";
+import type { RemoteModelAdaptersDoc } from "~/lib/workshop/remote-model-adapter";
+
 /** `NotFoundError` 从**定义处**导入而不是 `repository-base`：基类只是 import 它
  *  （没有 re-export），`TaskWithCover` 也只经 `repository-task` 可用 —— 见本文件
  *  末尾「零消费导出」那一组断言。 */
@@ -39,10 +40,11 @@ import {
   llmProviderRepository,
   remoteModelRepository,
   saveLlmSettings,
-  parseAdaptersJson,
+  parseAdaptersDocJson,
 } from "~/lib/core/repository-user";
 import { decryptLlmKey } from "~/lib/llm/secrets";
 import type { DbExecutor } from "~/lib/core/repository-executor-types";
+import { db } from "~/lib/db";
 import { SETTINGS_DB_WRITE } from "~/lib/retry-policy";
 import { postRepository } from "~/lib/core/repository-post";
 import {
@@ -221,11 +223,17 @@ describe("SkillRepository", () => {
     sortOrder: 1,
   };
 
-  it("ensureBuiltIns 幂等：第二次调用不再重复插入", async () => {
+  it("ensureBuiltIns 幂等：同一种子重复调用不重复插入；缺的 slug 按次补齐（#3835）", async () => {
     await skillRepository.ensureBuiltIns([SEED]);
-    await skillRepository.ensureBuiltIns([{ ...SEED, slug: "other" }]);
+    await skillRepository.ensureBuiltIns([SEED]);
+    // 同一种子重复执行：slug 唯一索引 + onConflictDoNothing 兜底，仍是一行。
     expect(await skillRepository.findAll()).toHaveLength(1);
+    // 换新 slug 的种子 = 「缺的技能」：补缺语义下应当被补上（部分失败后自愈），
+    // 已有行原样保留。
+    await skillRepository.ensureBuiltIns([{ ...SEED, slug: "other" }]);
+    expect(await skillRepository.findAll()).toHaveLength(2);
     expect((await skillRepository.findBySlug("cinematic"))?.isBuiltIn).toBe(true);
+    expect((await skillRepository.findBySlug("other"))?.isBuiltIn).toBe(true);
     expect(await skillRepository.findBySlug("missing")).toBeNull();
   });
 
@@ -1054,6 +1062,16 @@ describe("FilmRepository / FilmShotRepository", () => {
     expect(f1.subtitleOn).toBe(true);
   });
 
+  it("成片+镜头创建在同一事务内：镜头插入失败时不残留孤儿成片（#3853/#3848）", async () => {
+    await expect(
+      db.transaction(async (tx) => {
+        await filmRepository.create(CREATE, tx);
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+    expect(await filmRepository.listByUser("u1")).toEqual([]);
+  });
+
   it("listByStatus 空集合直接返回空数组", async () => {
     /* 实测（变异复核 M6）：把 `statuses.length === 0` 那道早退摘掉，这条**照样绿** ——
      * drizzle 对空数组不生成语法错的 SQL，SQLite 数出零行。所以这一格钉的是
@@ -1086,8 +1104,8 @@ describe("FilmRepository / FilmShotRepository", () => {
     await filmRepository.update(first.id, {
       createdAt: new Date(second.createdAt.getTime() + 60_000),
     });
-    await filmRepository.markGenerating(first.id);
-    await filmRepository.markGenerating(second.id);
+    await filmRepository.claimGenerating(first.id);
+    await filmRepository.claimGenerating(second.id);
 
     const resumed = await filmRepository.listByStatus(["GENERATING"]);
     /* 跨 userId：`first` 属 u1、`second` 属 u2，两条都要被列出 —— 补上归属条件
@@ -1148,14 +1166,14 @@ describe("FilmRepository / FilmShotRepository", () => {
       { t: 2, level: "progress", msg: "50%" },
     ]);
 
-    await filmRepository.markGenerating(f.id);
+    await filmRepository.claimGenerating(f.id);
     expect(await filmRepository.findById(f.id)).toMatchObject({
       status: "GENERATING",
       progress: 0,
     });
     await filmRepository.updateProgress(f.id, 55);
     expect((await filmRepository.findById(f.id))?.progress).toBe(55);
-    await filmRepository.markComposing(f.id);
+    await filmRepository.claimComposing(f.id);
     expect(await filmRepository.findById(f.id)).toMatchObject({
       status: "COMPOSING",
       progress: 90,
@@ -1166,16 +1184,41 @@ describe("FilmRepository / FilmShotRepository", () => {
       progress: 100,
       finalVideo: "/tmp/final.mp4",
     });
+    /* 终态保护（ISSUE #3894）：DONE 之后 markFailed / markCancelled 都不再
+     * 改写终态（旧实现 DONE→FAILED→CANCELLED 一路被覆盖）。 */
     await filmRepository.markFailed(f.id, "合片失败");
     expect(await filmRepository.findById(f.id)).toMatchObject({
-      status: "FAILED",
-      error: "合片失败",
+      status: "DONE",
+      finalVideo: "/tmp/final.mp4",
     });
     await filmRepository.markCancelled(f.id);
+    expect(await filmRepository.findById(f.id)).toMatchObject({
+      status: "DONE",
+      error: null,
+    });
+  });
+
+  it("终态守卫：CANCELLED / FAILED 不再被改写，非终态照常流转（ISSUE #3894）", async () => {
+    const f = await filmRepository.create(CREATE);
+    await filmRepository.claimGenerating(f.id); // PARSING → GENERATING
+    await filmRepository.markCancelled(f.id); // GENERATING → CANCELLED（取消合法）
+    expect(await filmRepository.findById(f.id)).toMatchObject({ status: "CANCELLED" });
+    await filmRepository.markDone(f.id, "/tmp/x.mp4"); // CANCELLED 不被合成复活成 DONE
+    await filmRepository.markFailed(f.id, "迟到判死"); // CANCELLED 不被超时判死覆盖
     expect(await filmRepository.findById(f.id)).toMatchObject({
       status: "CANCELLED",
       error: "已取消",
     });
+
+    const g = await filmRepository.create(CREATE);
+    await filmRepository.claimComposing(g.id); // PARSING → COMPOSING
+    await filmRepository.markFailed(g.id, "合成失败");
+    expect(await filmRepository.findById(g.id)).toMatchObject({
+      status: "FAILED",
+      error: "合成失败",
+    });
+    await filmRepository.markDone(g.id, "/tmp/y.mp4"); // FAILED 不被改回 DONE
+    expect(await filmRepository.findById(g.id)).toMatchObject({ status: "FAILED" });
   });
 
   it("镜头状态流转与两类筛选：status / onlyWithVideo", async () => {
@@ -1402,35 +1445,41 @@ describe("RemoteModelRepository", () => {
     expect(await remoteModelRepository.replaceAll([])).toEqual([]);
   });
 
-  it("replaceAll 保留已有的工坊适配器（不被配置同步清掉）", async () => {
-    const adapters: Array<RemoteModeAdapter> = [
-      {
-        mode: "t2i",
-        inputs: [{ type: "prompt", field: "prompt" }],
-        outputField: "data.0.url",
-        endpointPath: "/v1/images/generations",
-      },
-    ];
+  it("replaceAll 保留已有的工坊适配器存档（不被配置同步清掉）", async () => {
+    const doc: RemoteModelAdaptersDoc = {
+      endpointPath: "/v1/images/generations",
+      adapters: [
+        {
+          mode: "t2i",
+          inputs: [{ type: "prompt", field: "prompt" }],
+          outputField: "data.0.url",
+        },
+      ],
+    };
     const created = await remoteModelRepository.replaceAll([{ name: "甲" }]);
-    await remoteModelRepository.saveWorkshopAdapters("甲", adapters);
-    expect(await remoteModelRepository.getWorkshopAdapters("甲")).toEqual([
-      {
-        mode: "T2I",
-        inputs: [{ type: "prompt", field: "prompt" }],
-        outputField: "data.0.url",
-        endpointPath: "/v1/images/generations",
-      },
-    ]);
+    await remoteModelRepository.saveWorkshopAdaptersDoc("甲", doc);
+    expect(await remoteModelRepository.getWorkshopAdaptersDoc("甲")).toEqual({
+      endpointPath: "/v1/images/generations",
+      adapters: [
+        {
+          mode: "T2I",
+          inputs: [{ type: "prompt", field: "prompt" }],
+          outputField: "data.0.url",
+        },
+      ],
+    });
 
     await remoteModelRepository.replaceAll([{ name: "甲", baseUrl: "https://new/v1" }]);
-    expect(await remoteModelRepository.getWorkshopAdapters("甲")).toEqual([
-      {
-        mode: "T2I",
-        inputs: [{ type: "prompt", field: "prompt" }],
-        outputField: "data.0.url",
-        endpointPath: "/v1/images/generations",
-      },
-    ]);
+    expect(await remoteModelRepository.getWorkshopAdaptersDoc("甲")).toEqual({
+      endpointPath: "/v1/images/generations",
+      adapters: [
+        {
+          mode: "T2I",
+          inputs: [{ type: "prompt", field: "prompt" }],
+          outputField: "data.0.url",
+        },
+      ],
+    });
     expect((await remoteModelRepository.list())[0]!.id).toBe(created[0]!.id);
   });
 
@@ -1542,22 +1591,39 @@ describe("RemoteModelRepository", () => {
     expect(rows.map((r) => r.name)).toEqual(["甲"]);
   });
 
-  it("findByName / 适配器读写 / 模型不存在时的空返回", async () => {
+  it("findByName / 适配器存档读写 / 模型不存在时的空档返回", async () => {
     expect(await remoteModelRepository.findByName("nope")).toBeNull();
-    expect(await remoteModelRepository.getWorkshopAdapters("nope")).toEqual([]);
-    expect(await remoteModelRepository.saveWorkshopAdapters("nope", [])).toEqual([]);
+    expect(await remoteModelRepository.getWorkshopAdaptersDoc("nope")).toEqual({
+      endpointPath: "",
+      adapters: [],
+    });
+    expect(
+      await remoteModelRepository.saveWorkshopAdaptersDoc("nope", {
+        endpointPath: "",
+        adapters: [],
+      }),
+    ).toEqual({ endpointPath: "", adapters: [] });
 
     await remoteModelRepository.replaceAll([{ name: "甲" }]);
     expect((await remoteModelRepository.findByName("甲"))?.name).toBe("甲");
-    expect(await remoteModelRepository.getWorkshopAdapters("甲")).toEqual([]);
+    expect(await remoteModelRepository.getWorkshopAdaptersDoc("甲")).toEqual({
+      endpointPath: "",
+      adapters: [],
+    });
   });
 
-  it("parseAdaptersJson 对坏数据（非 JSON / 非数组）给空数组而不是抛错", () => {
-    expect(parseAdaptersJson(null)).toEqual([]);
-    expect(parseAdaptersJson("")).toEqual([]);
-    expect(parseAdaptersJson("{")).toEqual([]);
-    expect(parseAdaptersJson("null")).toEqual([]);
-    expect(parseAdaptersJson('{"a":1}')).toEqual([]);
+  it("parseAdaptersDocJson 对坏数据（非 JSON / 非对象非数组）给空档而不是抛错", () => {
+    expect(parseAdaptersDocJson(null)).toEqual({ endpointPath: "", adapters: [] });
+    expect(parseAdaptersDocJson("")).toEqual({ endpointPath: "", adapters: [] });
+    expect(parseAdaptersDocJson("{")).toEqual({ endpointPath: "", adapters: [] });
+    expect(parseAdaptersDocJson("null")).toEqual({ endpointPath: "", adapters: [] });
+    /* 旧版裸数组形状兼容读取（#3622）：端点视为未配置 */
+    expect(
+      parseAdaptersDocJson('[{"mode":"T2I","inputs":[{"type":"prompt","field":"p"}]}]'),
+    ).toEqual({
+      endpointPath: "",
+      adapters: [{ mode: "T2I", inputs: [{ type: "prompt", field: "p" }], outputField: "" }],
+    });
   });
 
   it("seedRemoteModel 落库的是密文（测试基建与生产写入同形）", () => {
@@ -1687,7 +1753,9 @@ describe("LlmProviderRepository（#3501 供应商）", () => {
       .then(() => null)
       .catch(errorText);
     expect(failure, "重名必须失败得看得见").not.toBeNull();
-    expect(`${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`).toContain("UNIQUE");
+    /* #3866：约束冲突在仓储层转成可读的 409 冲突错误，失败形态不再是驱动原文，
+     * 但「重名当场拒绝」的语义不变。 */
+    expect(`${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`).toContain("已被使用");
   });
 
   it("delete 在同一事务里删掉名下模型，不留下「无主」条目", async () => {
@@ -1719,6 +1787,70 @@ describe("LlmProviderRepository（#3501 供应商）", () => {
     const names = (await remoteModelRepository.list()).map((m) => m.name).sort();
     expect(names).toEqual(["留的模型", "遗留"].sort());
     expect(await remoteModelRepository.findByName("甲的模型")).toBeNull();
+  });
+
+  it("syncProviderCatalog 只补缺：已有的一行不动，新名字插成停用行并按名推断用途（#3577）", async () => {
+    const provider = await llmProviderRepository.save({
+      name: "agnes",
+      baseUrl: "https://apihub.agnes-ai.com/v1",
+      apiFormat: "chat-completions",
+    });
+    /* 用户已启用并配置过的模型行 */
+    await remoteModelRepository.saveModel({
+      name: "agnes-3.0-flash",
+      providerId: provider.id,
+      enabled: true,
+      contextWindow: 524_288,
+    });
+
+    /* 第一轮：目录里 3 个名字 → 只有 2 个是新名字 */
+    const inserted = await remoteModelRepository.syncProviderCatalog(provider.id, [
+      "agnes-3.0-flash",
+      "agnes-video-2.5-flash",
+      " agnes-image-2.5-flash ",
+    ]);
+    expect(inserted.sort()).toEqual(["agnes-image-2.5-flash", "agnes-video-2.5-flash"]);
+
+    const rows = await remoteModelRepository.list();
+    const byName = new Map(rows.map((r) => [r.name, r]));
+    /* 已配置行原样保留：启停、窗口、用途都没被目录覆盖 */
+    const kept = byName.get("agnes-3.0-flash");
+    expect(kept?.enabled).toBe(true);
+    expect(kept?.contextWindow).toBe(524_288);
+    /* 新行默认停用，用途按名字推断 */
+    expect(byName.get("agnes-video-2.5-flash")?.enabled).toBe(false);
+    expect(byName.get("agnes-video-2.5-flash")?.kind).toBe("video");
+    expect(byName.get("agnes-image-2.5-flash")?.kind).toBe("image");
+
+    /* 第二轮同样的目录：零新增（幂等，反复点测试连接不重复插行） */
+    expect(
+      await remoteModelRepository.syncProviderCatalog(provider.id, [
+        "agnes-3.0-flash",
+        "agnes-video-2.5-flash",
+        "agnes-image-2.5-flash",
+      ]),
+    ).toEqual([]);
+
+    /* 同名行挂在别的供应商下也跳过（name 全局唯一） */
+    const other = await llmProviderRepository.save({
+      name: "另一家",
+      baseUrl: "https://other/v1",
+      apiFormat: "chat-completions",
+    });
+    expect(await remoteModelRepository.syncProviderCatalog(other.id, ["agnes-3.0-flash"])).toEqual(
+      [],
+    );
+  });
+
+  it("syncProviderCatalog：空清单 / 全空白清单不做任何写入", async () => {
+    const provider = await llmProviderRepository.save({
+      name: "空目录",
+      baseUrl: "https://x/v1",
+      apiFormat: "chat-completions",
+    });
+    expect(await remoteModelRepository.syncProviderCatalog(provider.id, [])).toEqual([]);
+    expect(await remoteModelRepository.syncProviderCatalog(provider.id, ["  ", ""])).toEqual([]);
+    expect(await remoteModelRepository.list()).toEqual([]);
   });
 
   it("ensureLegacyProvider：没有孤儿行时什么都不做", async () => {
@@ -1783,6 +1915,32 @@ describe("RemoteModelRepository.saveModel / deleteModel / setEnabled（#3501）"
       apiFormat: "anthropic-messages",
       apiKey: "sk-provider",
     });
+
+  it("saveModel 新建：extraBody（#3626）原文往返；空串 / 未给 → null", async () => {
+    const provider = await makeProvider();
+    const model = await remoteModelRepository.saveModel({
+      name: "agnes-image-2.5-flash",
+      providerId: provider.id,
+      kind: "image",
+      extraBody: '{\n  "extra_body": { "response_format": { "type": "json_object" } }\n}',
+    });
+    expect(model.extraBody).toBe(
+      '{\n  "extra_body": { "response_format": { "type": "json_object" } }\n}',
+    );
+
+    const empty = await remoteModelRepository.saveModel({
+      name: "空透传",
+      providerId: provider.id,
+      extraBody: "   ",
+    });
+    expect(empty.extraBody).toBeNull();
+
+    const missing = await remoteModelRepository.saveModel({
+      name: "不给透传",
+      providerId: provider.id,
+    });
+    expect(missing.extraBody).toBeNull();
+  });
 
   it("saveModel 新建：JSON 列原样往返、enabled 默认 true、密钥落库密文读侧明文", async () => {
     const provider = await makeProvider();

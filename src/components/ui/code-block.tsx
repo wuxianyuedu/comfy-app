@@ -86,6 +86,7 @@ function getHighlighter(): Promise<ShikiHighlighter> {
         "markdown",
         "yaml",
         "html",
+        "bash",
         "plaintext",
       ],
     });
@@ -160,6 +161,19 @@ export function CodeBlock({ code, language }: { code: string; language: string }
         return;
       }
 
+      /* 高亮失败是**非致命降级**：保持纯文本行号，所以这里不弹 toast。
+       * 失败文案走 `errorMessage`（同一枚口径，规范 16 §16.2.4.30）——
+       * 收口前这里是自己拼的 `err instanceof Error ? err.message : String(err)`，
+       * 抛出的值不是 Error 时会渲染成 `[object Object]`。
+       * 分片回调由 setTimeout 排在 try 块退出之后，异常不会自动冒泡回这里的
+       * catch；两处共用这一个出口，shiki 抛错才不会变成未捕获异常。 */
+      const failHighlight = (error_: unknown) => {
+        guard.commit(() => {
+          setTokens(null);
+          setError(errorMessage(error_, "代码高亮失败"));
+        });
+      };
+
       try {
         const hl = await getHighlighter();
         if (guard.isStale()) {
@@ -177,34 +191,31 @@ export function CodeBlock({ code, language }: { code: string; language: string }
           if (guard.isStale()) {
             return;
           }
-          const range = chunkRange(allLines.length, CHUNK_LINES, chunkIndex);
-          const slice = allLines.slice(range.start, range.end);
-          const chunkTokens = hl.codeToTokensBase(slice.join("\n"), {
-            lang: language,
-            theme: shikiTheme,
-          });
-          acc.push(...chunkTokens);
-          chunkIndex += 1;
-          if (chunkIndex < totalChunks) {
-            /* 让出主线程一帧，长文件高亮期间 UI 保持可点 */
-            setTimeout(processChunk, 0);
-          } else {
-            guard.commit(() => {
-              setTokens(acc);
+          try {
+            const range = chunkRange(allLines.length, CHUNK_LINES, chunkIndex);
+            const slice = allLines.slice(range.start, range.end);
+            const chunkTokens = hl.codeToTokensBase(slice.join("\n"), {
+              lang: language,
+              theme: shikiTheme,
             });
+            acc.push(...chunkTokens);
+            chunkIndex += 1;
+            if (chunkIndex < totalChunks) {
+              /* 让出主线程一帧，长文件高亮期间 UI 保持可点 */
+              setTimeout(processChunk, 0);
+            } else {
+              guard.commit(() => {
+                setTokens(acc);
+              });
+            }
+          } catch (error_: unknown) {
+            failHighlight(error_);
           }
         };
 
         setTimeout(processChunk, 0);
       } catch (error_: unknown) {
-        guard.commit(() => {
-          setTokens(null);
-          /* 失败文案走 `errorMessage`（同一枚口径，规范 16 §16.2.4.30）——
-           * 收口前这里是自己拼的 `err instanceof Error ? err.message : String(err)`，
-           * 抛出的值不是 Error 时会渲染成 `[object Object]`。
-           * 高亮失败是**非致命降级**：保持纯文本行号，所以这里不弹 toast。 */
-          setError(errorMessage(error_, "代码高亮失败"));
-        });
+        failHighlight(error_);
       }
     })();
     return () => {

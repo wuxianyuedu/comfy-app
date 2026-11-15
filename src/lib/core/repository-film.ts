@@ -7,9 +7,17 @@ import "server-only";
 import { db } from "~/lib/db";
 import { filmProject, filmShot, type FilmProject } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
+import type { DbExecutor } from "./repository-executor-types";
 import { tailWindow } from "~/lib/page-window";
-import { eq, and, desc, asc, inArray, isNotNull, count } from "drizzle-orm";
+import { KeyedAsyncMutex } from "~/lib/async-mutex";
+import { eq, and, desc, asc, inArray, isNotNull, notInArray, count } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
+
+/** 影片日志追加的按片互斥（ISSUE #3836）：`logs` 是 JSON 列，追加是
+ * 「读整列 → push → 写回」三条语句，`watchFilm`（每 4s 打进度）与
+ * `composeFilm`（合成起止各打一条）并发时互相覆盖丢日志行。SQLite 单写者
+ * 只保证单条语句原子，这里把整段追加以影片为粒度串行化（都在本进程内）。 */
+const filmLogMutexes = new KeyedAsyncMutex();
 
 /** 单个成片任务的日志行数上限：`logs` 是 JSON 列，每打一条日志都要把整个
  *  数组读出来、再整列写回去 —— 无上限时这条路的成本随日志条数线性变贵
@@ -82,23 +90,27 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
     return rows[0] ?? null;
   }
 
-  async create(input: {
-    bgmName?: string | null;
-    fps: number;
-    framesPerShot: number;
-    /** 关联的统一项目 id（proj_*）；纯文本自由建片时为空。 */
-    projectId?: string | null;
-    script: string;
-    /** 成片画幅的**尺寸表达** JSON（`lib/size-presets` 的 `SizeSpec`）。
-     *  老行里是 "1280x720" 字符串 —— 读的一律用 `toSizeSpec` 归一。 */
-    size: string;
-    styleSlug?: string | null;
-    subtitleOn: boolean;
-    title: string;
-    type: string;
-    userId: string;
-  }): Promise<FilmProject> {
-    const rows = await db
+  async create(
+    input: {
+      bgmName?: string | null;
+      fps: number;
+      framesPerShot: number;
+      /** 关联的统一项目 id（proj_*）；纯文本自由建片时为空。 */
+      projectId?: string | null;
+      script: string;
+      /** 成片画幅的**尺寸表达** JSON（`lib/size-presets` 的 `SizeSpec`）。
+       *  老行里是 "1280x720" 字符串 —— 读的一律用 `toSizeSpec` 归一。 */
+      size: string;
+      styleSlug?: string | null;
+      subtitleOn: boolean;
+      title: string;
+      type: string;
+      userId: string;
+    },
+    executor?: DbExecutor,
+  ): Promise<FilmProject> {
+    const exec = executor ?? db;
+    const rows = await exec
       .insert(filmProject)
       .values({
         userId: input.userId,
@@ -126,19 +138,21 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       t: number;
     },
   ): Promise<void> {
-    const film = await db
-      .select({ logs: filmProject.logs })
-      .from(filmProject)
-      .where(eq(filmProject.id, id))
-      .limit(1);
-    const logs = film[0]?.logs;
-    const arr: Array<unknown> = isUnknownArray(logs) ? logs : [];
-    arr.push(entry);
-    await db
-      .update(filmProject)
-      .set({ logs: tailWindow(arr, LOGS_MAX) })
-      .where(eq(filmProject.id, id))
-      .catch(() => undefined);
+    await filmLogMutexes.run(id, async () => {
+      const film = await db
+        .select({ logs: filmProject.logs })
+        .from(filmProject)
+        .where(eq(filmProject.id, id))
+        .limit(1);
+      const logs = film[0]?.logs;
+      const arr: Array<unknown> = isUnknownArray(logs) ? logs : [];
+      arr.push(entry);
+      await db
+        .update(filmProject)
+        .set({ logs: tailWindow(arr, LOGS_MAX) })
+        .where(eq(filmProject.id, id))
+        .catch(() => undefined);
+    });
   }
 
   /** 按状态列出影片（进程重启后的恢复扫描用），`createdAt` 升序 = 先起先续。
@@ -159,40 +173,89 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       .orderBy(asc(filmProject.createdAt));
   }
 
-  async markGenerating(id: string): Promise<void> {
-    await db
-      .update(filmProject)
-      .set({ status: "GENERATING", progress: 0, error: null })
-      .where(eq(filmProject.id, id));
-  }
-
   async updateProgress(id: string, pct: number): Promise<void> {
     await db.update(filmProject).set({ progress: pct }).where(eq(filmProject.id, id));
   }
 
+  /**
+   * 判失败（ISSUE #3894）：仅当当前状态**不是终态**时写入。终态之间此前可互相
+   * 覆写（「已取消又被判失败」「已完成又被判失败」）；失败原因取第一次落库的
+   * 那条，后续迟到判决不再改写。
+   */
   async markFailed(id: string, error: string): Promise<void> {
-    await db.update(filmProject).set({ status: "FAILED", error }).where(eq(filmProject.id, id));
-  }
-
-  async markComposing(id: string): Promise<void> {
     await db
       .update(filmProject)
-      .set({ status: "COMPOSING", progress: 90, error: null })
-      .where(eq(filmProject.id, id));
+      .set({ status: "FAILED", error })
+      .where(
+        and(
+          eq(filmProject.id, id),
+          notInArray(filmProject.status, ["DONE", "FAILED", "CANCELLED"]),
+        ),
+      );
   }
 
+  /**
+   * 条件置位 GENERATING（ISSUE #3836）：仅当影片不在 GENERATING/COMPOSING 时才写入，
+   * 返回是否抢到。startFilm 原先「先读 status → 判断 → 无条件 markGenerating」，
+   * 双击/并发会在窗口内双双通过，给每个镜头排两批视频任务 —— 把判断与置位收进
+   * 同一条 UPDATE（SQLite 单写者下原子），抢不到（0 行更新）即让位。
+   */
+  async claimGenerating(id: string): Promise<boolean> {
+    const rows = await db
+      .update(filmProject)
+      .set({ status: "GENERATING", progress: 0, error: null })
+      .where(
+        and(eq(filmProject.id, id), notInArray(filmProject.status, ["GENERATING", "COMPOSING"])),
+      )
+      .returning({ id: filmProject.id });
+    return rows.length > 0;
+  }
+
+  /** 同 {@link claimGenerating}，合成侧：仅当不在 COMPOSING/DONE/CANCELLED/FAILED 时写成 COMPOSING。
+   *  CANCELLED/FAILED 也在排除集（ISSUE #3867）：原先只排 COMPOSING/DONE，
+   *  「取消」与「合成抢跑」赛跑时会给已取消的影片跑完 ffmpeg 并标 DONE——
+   *  状态与产物互相矛盾。 */
+  async claimComposing(id: string): Promise<boolean> {
+    const rows = await db
+      .update(filmProject)
+      .set({ status: "COMPOSING", progress: 90, error: null })
+      .where(
+        and(
+          eq(filmProject.id, id),
+          notInArray(filmProject.status, ["COMPOSING", "DONE", "CANCELLED", "FAILED"]),
+        ),
+      )
+      .returning({ id: filmProject.id });
+    return rows.length > 0;
+  }
+
+  /** 合成完成（ISSUE #3867 / #3894）：仅当当前不是终态时写入 —— 取消是用户终态，
+   *  不得被合成收口改判 DONE；DONE / FAILED 之间也不再互相改写。 */
   async markDone(id: string, finalVideo: string): Promise<void> {
     await db
       .update(filmProject)
       .set({ status: "DONE", progress: 100, finalVideo, error: null })
-      .where(eq(filmProject.id, id));
+      .where(
+        and(
+          eq(filmProject.id, id),
+          notInArray(filmProject.status, ["DONE", "FAILED", "CANCELLED"]),
+        ),
+      );
   }
 
-  async markCancelled(id: string): Promise<void> {
-    await db
+  /** 取消（ISSUE #3894）：仅当当前不是终态时写入 —— DONE / FAILED / CANCELLED
+   *  的终态不再被「取消」改写（对终态重复取消按幂等处理）。 */
+  async markCancelled(id: string, executor?: DbExecutor): Promise<void> {
+    const exec = executor ?? db;
+    await exec
       .update(filmProject)
       .set({ status: "CANCELLED", error: "已取消" })
-      .where(eq(filmProject.id, id));
+      .where(
+        and(
+          eq(filmProject.id, id),
+          notInArray(filmProject.status, ["DONE", "FAILED", "CANCELLED"]),
+        ),
+      );
   }
 }
 
@@ -208,8 +271,10 @@ export class FilmShotRepository {
       /** 关联的统一镜头 id（Phase 5 回写用）；自由建片时为空。 */
       shotId?: string | null;
     }>,
+    executor?: DbExecutor,
   ): Promise<void> {
-    await db.insert(filmShot).values(
+    const exec = executor ?? db;
+    await exec.insert(filmShot).values(
       shots.map((shot) => ({
         filmId,
         shotId: shot.shotId ?? null,
@@ -297,8 +362,9 @@ export class FilmShotRepository {
       );
   }
 
-  async markAllActiveFailed(filmId: string): Promise<void> {
-    await db
+  async markAllActiveFailed(filmId: string, executor?: DbExecutor): Promise<void> {
+    const exec = executor ?? db;
+    await exec
       .update(filmShot)
       .set({ status: "FAILED" })
       .where(and(eq(filmShot.filmId, filmId), inArray(filmShot.status, ["QUEUED", "RUNNING"])));

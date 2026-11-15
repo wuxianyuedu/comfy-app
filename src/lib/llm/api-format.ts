@@ -21,12 +21,15 @@
  */
 
 import { asRecord } from "~/lib/is-record";
-import { LLM_API_FORMAT_PATHS, type LlmApiFormat } from "./provider-types";
+import { requestUrlForFormat, type LlmApiFormat } from "./provider-types";
 import type { LLMContentPart, LLMMessage, LLMTool } from "./types";
 
 export type ChatRequestInput = {
   apiKey?: string | null;
   baseUrl: string;
+  /** 模型级透传字段（#3626）：厂商特有 JSON 字段（如 `extra_body.response_format`），
+   *  落在请求 body **最后** —— 覆盖运行时的默认组装。已在写入侧校验为 JSON 对象。 */
+  extraBody?: Record<string, unknown>;
   /** 本次调用的接口格式（由命中的供应商决定）。 */
   format: LlmApiFormat;
   /** 本地 Ollama：只有 chat-completions 这一支有区别（图块进 `images` 字段）。 */
@@ -41,9 +44,10 @@ export type ChatRequestInput = {
   tools?: Array<LLMTool>;
 };
 
-/** 上游请求地址：Base URL 去尾斜杠 + 格式路径段。 */
+/** 上游请求地址：版本段与动作路径的拼装唯一出处是 `requestUrlForFormat`
+ *  （→ `joinApiUrl`，#3656 起版本段由应用统一补）。这里只转发，不再自己拼。 */
 export function chatRequestUrl(baseUrl: string, format: LlmApiFormat): string {
-  return `${baseUrl.trim().replace(/\/$/, "")}${LLM_API_FORMAT_PATHS[format]}`;
+  return requestUrlForFormat(baseUrl, format);
 }
 
 /** 鉴权头：Anthropic 用 `x-api-key` + `anthropic-version`；其余用 Bearer。 */
@@ -240,7 +244,9 @@ export function buildChatRequest(input: ChatRequestInput): {
     if (input.tools !== undefined && input.tools.length > 0) {
       body.tools = toolsForAnthropic(input.tools);
     }
-    return { url, headers, body };
+    /* 模型级透传字段（#3626）：用户写的厂商字段覆盖上面的默认组装 ——
+     * 他配 `extra_body.response_format` 就是为了这个。 */
+    return { url, headers, body: { ...body, ...input.extraBody } };
   }
   if (input.format === "responses") {
     const wire = responsesInput(input.messages);
@@ -260,7 +266,7 @@ export function buildChatRequest(input: ChatRequestInput): {
     if (input.tools !== undefined && input.tools.length > 0) {
       body.tools = toolsForResponses(input.tools);
     }
-    return { url, headers, body };
+    return { url, headers, body: { ...body, ...input.extraBody } };
   }
   const body: Record<string, unknown> = {
     model: input.model,
@@ -275,7 +281,7 @@ export function buildChatRequest(input: ChatRequestInput): {
   if (input.tools !== undefined && input.tools.length > 0) {
     body.tools = input.tools;
   }
-  return { url, headers, body };
+  return { url, headers, body: { ...body, ...input.extraBody } };
 }
 
 /* ── 响应解析 ───────────────────────────────────────────────────── */

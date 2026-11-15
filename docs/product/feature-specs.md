@@ -25,10 +25,11 @@
 
 - 状态：已上线
 - 需求：视图以页签打开，可同时开多个；切走再切回来保留编辑态；
-  设置 / 模型适配 / 模式契约是瞬时页签（切走即关）。
-- 行为与验收：同一份注册表里 `transient` 标记决定行为；不变式是
-  「最多只有当前页可以是 transient」（`withTransientPruned`）。
-  画布 / 工坊这类有编辑态、跑长任务的视图**不得**标 transient。
+  哪些界面切走即关由配置面逐项决定（见 FR-WS-10）。
+- 行为与验收：`isTransientView(view, config)` 只认**生效配置**（项目默认 + 本机覆盖），
+  注册表不再写 `transient` 标记（ISSUE #3798）；不变式是「最多只有当前页可以是
+  transient」（`withTransientPruned`）。画布 / 工坊这类有编辑态、跑长任务的视图
+  出厂**不得**设为共享标签页。
 - 落点：`src/lib/shell/shell-tabs-store.ts`、`src/components/studio/ShellTabs.tsx`、
   `workspace-tabs.ts`
 
@@ -92,9 +93,38 @@
   边框 / 品牌 / 状态五组）与七个基元分组，全部走语义 token 类名
   （`theme:check` 判 0 写死色值）；右上角开关切换的是应用全局主题
   （与设置页同源）；命令面板（⌘/Ctrl+K）「其他」组有「UI 控件总览」
-  入口；不进工作区 17 视图注册表。逐 prop 的形态矩阵归 Storybook。
+  入口；工作区里以 `uiKit` 视图页签打开（ISSUE #3726），默认独立标签页、
+  切走不关（ISSUE #3798）。根节点自带**独立滚动容器**：工作区页签形态撑满父级
+  高度（`fillHeight`），独立路由形态用视口档，两处都能用滚轮看到全部基元
+  （ISSUE #3798 —— 此前内容被外层 `overflow-hidden` 裁掉、看不全）。
+  逐 prop 的形态矩阵归 Storybook。
 - 落点：`src/app/(main)/ui-kit/page.tsx`、
-  `src/components/ui/ui-kit-gallery*.tsx`、`src/components/studio/CommandPalette.tsx`
+  `src/components/ui/ui-kit-gallery*.tsx`、`src/components/studio/CommandPalette.tsx`、
+  `src/components/studio/WorkspaceViewStack.tsx`
+
+#### FR-WS-10 界面页签行为（独立 / 共享标签页，按项配置）
+
+- 状态：已上线
+- 需求：工作区的每个全局视图，点开后是**独立标签页**（常驻，切走不关）还是
+  **共享标签页**（切走即关，不在页签条上留位置），按项配置；配置落在 JSON 里，
+  并可在设置中修改（ISSUE #3623 / #3798）。非侧栏的常驻界面（设置、UI 控件总览）
+  同样受这一份配置管 —— 入口在顶栏菜单 / 命令面板，不改变「行为该能配」这件事。
+- 行为与验收：配置面 = `configurableTabViews()`，即首页以外的**全部 11 个全局视图**
+  （首页是固定页签，不在配置面内）；判据 `isTransientView()` 只认配置面，项目默认
+  为每一屏都显式写了档位：`uiKit` 出厂 `independent`（切走不关）、`settings` 出厂
+  `shared`（读过即走）。注册表不再保留 `transient` 标记，避免「设置里配了、界面
+  却不认」。两档行为对每一项都可选，当前生效值在界面上看得出来；改动即时生效 ——
+  已经开着的页签按新规则在下次切换时生效。设置页给出两个保存出口：
+  「保存」只落本机（开发版与正式包都能用），「保存为项目默认（跟代码走）」写进
+  入库那份 JSON、只在开发检出出现；「还原默认」只在真有本机覆盖时出现。
+  项目默认那份 JSON 恰好覆盖配置面内的每一项（漏登记由用例拦下）。
+- 落点：`src/components/studio/NavItems.tsx`（配置面清单 + 判据）、
+  `src/components/studio/workspace-tabs.ts`（状态规则）、
+  `src/lib/shell/sidebar-tab-behavior.ts`（纯函数层）、
+  `src/lib/shell/sidebar-tab-defaults.json`（项目默认）、
+  `src/lib/shell/sidebar-tab-behavior.server.ts`（落盘）、
+  `src/server/api/routers/sidebar.ts`、
+  `src/app/(main)/settings/components/SidebarTabSection.tsx`
 
 ---
 
@@ -295,6 +325,10 @@
 - 需求：库列表 = 已入库工作流 + 本地磁盘扫到未入库的「待载入」占位行。
 - 行为与验收：待载入行的 id 由绝对路径 sha1 派生（`pendingId`），记住
   `sourcePath`；扫描根来自设置里的 ComfyUI 路径推导，不在库里另配一份。
+- 存放位置提示（#3625）：工作流有**两个**落点 —— 原件在用户自己配的磁盘目录
+  （`LOCAL_WORKFLOWS_PATH` / ComfyUI workflows 目录）、导入后的记录在
+  `workflowTemplate` 表；列表顶部挂两枚「存放位置」徽标说清这件事（换机器时两样
+  都要搬，只搬一样会变成「有记录没有原件」，见 FR-ST-05）。
 - 落点：`src/server/api/routers/workflow-list.ts`、
   `src/lib/workflow/localWorkflows.ts`
 
@@ -317,16 +351,34 @@
   不静默导入一份半成品。
 - 落点：`src/lib/workflow/`（RAW 识别）、`workflow-mutations.ts`
 
-#### FR-WF-04 详情四页签
+#### FR-WF-04 详情页签
 
 - 状态：已上线
-- 需求：打开一条工作流的详情有四个页签，顺序即渲染顺序：
-  **工坊封装**（默认）/ **编辑对外参数** / **实际使用** / **源文件**。
+- 需求：打开一条工作流的详情以页签组织，顺序即渲染顺序：
+  **工坊封装**（默认）/ **编辑对外参数** / **IO 预览** / **实际使用** / **源文件**
+  （页签集合以 `DETAIL_TABS` 为准）。
 - 行为与验收：默认落最轻的页签（工坊封装）——不牵画布引擎与 JSON 树；
   「编辑对外参数 / 实际使用」共用同一常驻实例，切页签只切视图模式，
   表单值与运行态不丢。
 - 落点：`src/components/studio/workflow-library/workflow-library-detail-config.ts`
   （`DETAIL_TABS` / `DEFAULT_DETAIL_TAB`）
+
+#### FR-WF-09 详情 IO 预览页签
+
+- 状态：已上线
+- 需求：工作流库主界面提供「IO 预览」页签，不打开工作流编辑器也能查看并调整
+  已暴露参数的显隐 / 默认值 / 必填 / 显示名 / seed 行为（ISSUE #3632）。
+- 行为与验收：显示源是 `workflow.detailFull` 富化后的 workflowIO，落库以模板
+  原始 DB 列为底稿（富化字段不写回）；每次编辑即时经 `workflow.update` 的
+  `workflowIO` 整列 PATCH 落库并失效 detail / detailFull 缓存；模式行与编辑器
+  IO 预览同一形式（ISSUE #3800）：读工作流**真实** modes（不做 `[taskType]`
+  兜底），页签右侧挂「选择模式」就地增删模式（落库走 `patchModes`），没配模式
+  时与编辑器同句提示、不渲染参数表单；与编辑器 IO 预览共用
+  `src/lib/workflow/workflow-io-edit.ts` 的变换规则。编辑器内「IO 编辑模式」
+  的提示条位于顶栏下方、不叠在画布上。
+- 落点：`src/components/studio/workflow-library/sections/WorkflowLibraryIoPanel.tsx`、
+  `src/lib/workflow/workflow-io-edit.ts`、
+  `src/components/studio/workflow-editor/WorkflowEditorCanvasOverlays.tsx`
 
 #### FR-WF-05 工作流参数与 IO 编辑
 
@@ -677,25 +729,54 @@
   远端配置以「供应商」为单位（#3501）——每个供应商一套 Base URL / API Key，
   模型挂在供应商下，不再共用全局密钥；接口格式挂在**模型**上（#3517），
   同一供应商下文本 / 图片 / 视频模型可以各用一套协议。
-- 行为与验收：provider 是收紧的 enum（不接受任意字符串）；接口格式三选一
-  （Chat Completions `/chat/completions` / Anthropic Messages `/v1/messages` /
-  Responses `/responses`），在「添加 / 编辑模型」弹窗里选择并显示拼出的最终
-  请求地址（Base URL 取所属供应商）；供应商详情**没有保存按钮**——名称 /
-  Base URL / API Key 失焦即落库（与库里无差异不写、字段不合法只报错不写）；
+- 行为与验收：provider 是收紧的 enum（不接受任意字符串）；Base URL 按 **#3656
+  新口径**填写——不带版本段（如 `https://api.example.com`），版本段由应用统一
+  拼（唯一出处 `joinApiUrl()`）：Base 已带版本段（历史行 / 本地 Ollama 默认地址
+  `…:11434/v1`）时不重复补，动作路径自带版本段（Anthropic `/v1/messages`）时
+  Base 的版本段让位；接口格式三选一（Chat Completions `/v1/chat/completions` /
+  Anthropic Messages `/v1/messages` / Responses `/v1/responses`），在
+  「添加 / 编辑模型」弹窗里选择并显示拼出的最终请求地址（Base URL 取所属供应商）；
+  「测试连接」固定探 `{版本段}/models`（Base 不带版本段时探 `/v1/models`，
+  #3656），Base URL 末段是资源段（`/images` 这类）时先归一再探；左侧供应商清单
+  卡片只显示必要内容
+  （#3618）：不显示 Base URL，第二行念「已启用 N/M」（没有模型念「暂无模型」）；
+  供应商详情**没有保存按钮**——名称 / Base URL / API Key 失焦即落库
+  （与库里无差异不写、字段不合法只报错不写）；
   供应商与模型的增删改走 `providersGet` / `providerSave` / `providerDelete` /
   `modelSave` / `modelDelete` / `modelToggle`；密钥脱敏——客户端只看到「有没有配」，
   不回明文，保存表单三态（留空不改 / 显式清除 / 写入新值），读侧解密后再交给
   运行时；连通性测试走 `/api/llm/test`（带 `providerId`，服务端取保存的地址与
   密钥发起）——供应商级测试按「该供应商下各模型用到的格式 → 供应商默认」逐个试
   （一条格式信息都没有时才试全三种），网络层失败立即终止、HTTP 非 2xx 才换下一种；
-  模型行的测试连接只用**供应商地址 + 该模型自己的格式**（不再拿模型行历史
-  `baseUrl` 覆盖供应商地址，#3517 的现场就是它把 `apihub` 换成了旧域名）；
+  模型行**没有单独的「测试连接」**（#3618：同一供应商下每个模型的探测都是同一条
+  `GET {base}/models`、同一份供应商密钥，逐模型按钮没有增量信息）——连通性与
+  模型目录同步由供应商级「测试连接」一并完成；模型行历史 `baseUrl` 覆盖不参与
+  任何探测（#3517 的现场就是它把 `apihub` 换成了旧域名）；
   探测失败给可读归因（#3517）——上游返回 HTML 页面时明说「这不是接口响应」并
   指向 Base URL（不再把整页 `<!DOCTYPE …>` 截一段灌进提示），401/403 与 404
-  各补一句归因，提示里点名实际探测的地址；Base URL 看不出接口版本段时**只提示、
-  不自动补**（各家版本段位置不同，替用户猜会造出看着对却 404 的地址）；
+  各补一句归因，提示里点名实际探测的地址；
+  #3612 起再加一层「已核实厂商的端点指路」：Base URL 落在已知厂商的官网 /
+  控制台域（清单在 `provider-types.ts` 的 `knownApiEndpointHint`，只收当面
+  验证过上游行为的条目）时，字段下面与失败归因之后各补一句「接口端点在
+  <API 端点>，请把 Base URL 改成 <推荐 Base>（不带 /v1）」——只提示、不改写，
+  清单外的域不开口；
   历史遗留 `remoteModel`（`providerId` 为空）在首次读供应商列表时迁入「默认供应商」，
   密钥与模型名不变。
+  图像 / 视频模型的弹窗按**用途**分叉（#3618 补充；#3656 改判）：「API 格式」
+  下拉换成按用途给词表的「接口端点」**下拉**（#3656：词表
+  `REMOTE_MEDIA_ENDPOINT_OPTIONS`——图像 `/v1/images/generations`、视频
+  `/v1/videos`，与文本协议三词表无关），选择落库在模型级适配器存档
+  （`workshopAdapters` envelope 的 `endpointPath` 一格，#3622/#3659 的同一份
+  存储，不另开列；按行用途白名单收窄），**没选 = 用途默认第一项**；下拉的
+  触发框与选项只念词表路径段本身（`/v1` 起那段，#3671），按 Base URL 拼出的
+  最终请求地址由字段下方「实际请求地址」提示承担（供应商还没 Base URL 时
+  提示先去填），同一信息不念两遍；「智能配置」「上下文窗口」「最大输出 Token」「高级配置」
+  全部不出现——图像 / 视频模型没有文本协议那些高级配置；工坊生图 / 生视频的
+  远端定向同一口径（#3622 的模型级端点 + #3656 的版本段拼装）：显式配置的
+  动作路径经 `joinApiUrl` 拼（Base 带版本段不重复补），缺省按类别惯例推导
+  （图像 `/v1/images/generations`、视频 `/v1/videos`，版本段缺则补 /v1）；
+  模型行摘要同批分叉：文本模型念「上下文 / 输出 / 接口格式」，图像 / 视频
+  模型念自己的端点路径（`图像端点 /v1/images/generations` 这类）。
 - 落点：`src/server/api/routers/llm.ts`、`src/lib/llm/provider-types.ts`、
   `src/lib/llm/provider-form.ts`、`src/lib/core/repository-user.ts`、
   `src/lib/llm/types.ts`、`src/app/api/llm/test/route.ts`
@@ -713,11 +794,24 @@
   新建模型的默认值，详情页不再编辑它。远端模型名全局唯一（运行时与工坊
   按名解析）；停用的模型保留配置但不进工坊下拉；整份清单保存只动历史遗留行
   （`providerId` 为空），不覆盖、不删除供应商名下的模型；模型配置含启用状态、
-  接口格式、上下文窗口、最大输出 Token、输入类型、能力、推理等级与参数映射，
-  「智能配置」按模型 id 预填窗口 / 输出上限 / 输入类型。
+  接口格式、上下文窗口、最大输出 Token、输入类型、输出类型、能力、推理等级
+  与参数映射（图像 / 视频行另有接口端点路径 `endpointPath`，#3656），
+  「智能配置」按模型 id 预填窗口 / 输出上限 / 输入类型 / 输出类型。
+  #3577 起新增两条：
+  ① **模型目录导入**——供应商「测试连接」成功后，服务端把探测到的模型清单
+  补进该供应商名下（`syncProviderCatalog`）：已有名字一行不动（不重置启停
+  与已配字段），缺的名字插成**停用**行、用途按模型名推断（video/image
+  关键词），反复探测幂等；验收 = 探测成功后模型列表出现全部服务端模型且
+  默认停用，启用 / 配置在列表项上完成。
+  ② **实际调用测试的密钥解析带供应商链兜底**——「测试生成」的连接解析顺序
+  为 弹窗填的 → 条目已保存的 → 所属供应商的（独立于全局配置直查一轮，规避
+  `getLLMConfig` 读库失败被吞后静默丢密钥）→ 全局配置；密钥全空且模型确属
+  某供应商（又未配密钥）时报「供应商未配置 API 密钥」而不是把无鉴权请求发往
+  上游。
 - 落点：`src/server/db/schema.ts`（`llmProvider` / `remoteModel`）、
   `src/lib/llm/types.ts`、`src/lib/llm/provider-form.ts`、
-  `src/lib/llm/provider-types.ts`
+  `src/lib/llm/provider-types.ts`、`src/lib/llm/usage-test.server.ts`
+  （`resolveUpstream`）、`src/lib/core/repository-user.ts`（`syncProviderCatalog`）
 
 #### FR-LM-03 按任务温度
 
@@ -735,43 +829,131 @@
 - 行为与验收：契约可读可写（`modeContractsGet` / `modeContractsSave`）；
   「模式契约」是全局瞬态视图（与当前项目无关）。保存分两种（#3396）：
   「保存模式契约」只落本机（`data/workshop-mode-contracts.json`，不入库，
-  正式包与开发检出都可用）；「保存为项目默认（跟代码走）」把与推导有差异的
-  契约写进入库的 `src/lib/workshop/mode-contract-defaults.json`（提交后每个
-  检出与桌包都是它），**只在开发检出可用**（正式包无源码可写，入口随之隐藏、
-  服务端大声拒绝）；生效顺序是 本机覆盖 → 项目默认 → 按模式推导。
-  两种保存都**只落与默认有差异的模式**（与默认相同的条目不进覆盖文件）；
-  「已改」徽标判的是内容（与本模式默认深比较），不是「覆盖文件里有没有」；
-  改过的模式可一键「还原默认」（从本机覆盖移除，生效值回落默认）。
+  正式包与开发检出都可用），**只落与成品配置有差异的模式**；「保存为项目
+  默认（跟代码走）」把编辑器现状**全量**写进入库的
+  `src/lib/workshop/mode-contract-defaults.json`（#3603：该文件是**完整基线**
+  —— 全部生成类模式的口清单 / 输出 / 必备口都显式在文件里，`required`
+  一并固化，读取侧不再有「代码推导」这一出处；推导只承担迁移生成源与
+  手改缺模时的兜底），**只在开发检出可用**（正式包无源码可写，入口随之
+  隐藏、服务端大声拒绝）；生效顺序是 本机覆盖 → 项目默认 JSON（完整）→
+  推导兜底，**逐模式**合并（本机覆盖存的是差集，拿它整份替换注册表会让其余
+  模式回落推导）。「已改」徽标判的是内容（与本模式成品配置深比较），不是
+  「覆盖文件里有没有」；改过的模式可一键「还原默认」（从本机覆盖移除，
+  生效值回落默认）。
+- 写入即生效（#3634）：项目默认由服务端**现读**磁盘上那份文件（开发检出），
+  「保存为项目默认」之后**不必重启进程**即读得到新口径；写出的文件**始终是
+  完整基线**（全部生成类模式都在，其余模式的内容不会被抹掉）。正式包载荷里
+  没有这份源码 ⇒ 回落编译进产物的那份基线。
+- 输入口**至少保留一个**（#3637）：服务端入参对 `inputs` 有 `min(1)`、归一化
+  侧也丢弃空条目 —— 空清单的契约存不下来。编辑器在源头拦住：删到最后一口时
+  移除按钮禁用并提示「至少保留一个输入口」，空清单根本发不出去；保存失败
+  （服务端打回 / 网络故障）必须有用户可见文案，不许只静默转圈。
+- 口 id 的悬停类型说明（#3762 引入；#3778 改排版）：**类型一行、描述另起
+  一行**，类型值用英文（`text` / `number` / `image` / `size` —— 与口 id
+  同一语言，不再中译一层「文本 / 数字」）。
 - 落点：`src/components/workshop/mode-contract/ModeContractView.tsx`、
+  `src/lib/workshop/mode-contract-defaults.json`（完整基线）、
+  `src/lib/workshop/mode-contract-registry.ts`（三层合并与差集）、
   `src/server/api/routers/llm.ts`
 
 #### FR-LM-05 模型适配器
 
 - 状态：已上线
 - 需求：每个远端模型 × 每个模式可配字段映射（统一输入 → 接口字段名）。
-- 行为与验收：适配器可读可写（`workshopAdaptersGet` / `Save`）；
-  「模型适配」是全局瞬态视图。
+- 行为与验收（#3622 改版后；#3631 收口）：适配器存档是**模型级 envelope** —— 一格
+  模型级端点路径（该模型所有模式共用；留空时请求侧按图片 / 视频惯例按
+  Base URL 形态推导，旧版裸数组存档兼容读取）+ 每模式一份字段映射
+  （`workshopAdaptersGet` / `Save`）。端点路径**不在「模型适配」页显示或编辑**
+  （#3631）：它由「设置 → 远程模型」的接口端点下拉配置（#3656，同一份存储），
+  本页保存入参省略这格，服务端按「省略 = 保住既有」处理（不会被适配页冲掉）。
+  模型清单是左侧分组树（图像 / 视频分组、
+  已配置的标「已配」）；同一时刻只显示一个模式的编辑卡（模式 chip 即切换
+  页签）；删除模式要过二次确认；输入映射含「分辨率」统一输入（1k/2k/4k
+  档位随请求下发，#3622）；保存成功后失效存档与概览查询（页签往返不丢
+  刚配的模式）。「模型适配」是全局瞬态视图。
+- 存放位置提示（#3625）：本页配置的适配器落在 `remoteModel` 表的
+  `workshopAdapters` 列，页头挂「存放位置」徽标（数据库），悬浮说明给出落点与
+  迁移办法（FR-ST-05）。
 - 落点：`src/components/workshop/ModelAdaptersView.tsx`、
+  `src/components/workshop/hooks/use-model-adapters.ts`、
+  `src/lib/workshop/remote-model-adapter.ts`（envelope 与统一输入词表）、
   `src/server/api/routers/llm.ts`
 
 #### FR-LM-06 远端生图 / 生视频接入
 
-- 状态：计划中（配置已在，运行时未接）
-- 需求：远端模型除 chat 外，还将承画图 / 视频生成。
-- 行为与验收：`REMOTE_MODEL_KINDS` 已含 `image` / `video`（先落配置）；
-  当前运行时只有 chat 参与；接入时以 FR-WP-04 的 relay 为落点，
-  不新开第三条通道。
-- 落点：`src/lib/llm/types.ts`（`REMOTE_MODEL_KINDS`）
+- 状态：已上线
+- 需求：远端模型除 chat 外，还承担画图 / 视频生成。
+- 行为与验收：统一走 FR-WP-04 的 relay（不另开通道）。生图：按请求里的
+  `model` 在 `remoteModel` 表按名直连，适配器把统一输入翻译成接口字段、
+  产物按 `outputField` 提取（`resolveTarget` + `bodyFromAdapter`）；端点按
+  模型级配置（FR-LM-05，#3622），未配置时按 Base URL 形态推导
+  images/generations 惯例。
+  视频（#3590 补齐）：`submitVideoViaApi` 同样按 `model` 定向
+  （`resolveVideoTarget`，无适配器回落 OpenAI 兼容惯例 `/videos`），
+  轮询按该条目 + 模型级提交端点的目录段构造候选（Agnes 系
+  `/agnesapi?video_id=…` 与 REST `/videos/{id}`，`buildVideoPollUrls`），
+  鉴权用条目自己的密钥；未带 `model` 的工坊镜头链路保持全局通道设置与
+  既有失败语义。
+- 落点：`src/lib/workshop/api-channel.server.ts`、
+  `src/lib/workshop/api-channel-core.ts`、`src/lib/llm/types.ts`
+
+#### FR-LM-07 测试模型能力
+
+- 状态：已上线
+- 需求（ISSUE #3590）：主界面左侧有入口，能简单测试已配置的模型 ——
+  所有配好工坊适配的远端模型都能用，输入与输出都是工坊同款。
+- 行为与验收：工作区侧栏全局项「测试模型」（瞬态页签，`navId=model-test`）。
+  用途分图片 / 视频（音频等通道接入后再加页签）；候选 = configGet 下发的
+  启用条目按用途过滤（baseUrl 为空的不进，那种条目按名解析会回落全局通道，
+  测试对象就不再是这个模型），**再按所选模式收窄**（#3778：只列配了该模式
+  适配器的模型 —— 不支持这个模式的不出现在下拉里，与模式页签徽标的
+  「N 模型」同一份读数；该模式一个模型都没有时给可读空态并指向
+  「模型适配」）。选中模型 → 选模式 → 输入行**来自该模式的模式契约**
+  （#3778 改口径：契约是「统一对外参数」的权威来源，行序 = 契约口序，
+  每行带**必填 / 可选**标识（随契约 `required` 的生效集）；必备且通道承接
+  得住的行空着会在本地拦下并逐行点名，不再等上游打回；适配器只负责把它们
+  翻译成接口字段 —— 通道承接得住但适配器没映射的行有明示「本次生成不会
+  带上它」并指向「模型适配」补映射，不静默丢；通道未承接的类型显式标
+  「未承接」并禁用，不静默丢弃）→ 生成走 `/api/workshop-api/generate`
+  （与 ShotStudio / VideoStudio 同一条链），生图 / 视频通道**承接 seed**
+  （#3778 / #3783：统一输入新增种子口端到端下发，无适配器时按通行字段名
+  `seed` 直带），视频任务制自动轮询（3s 一轮 / 10 分钟上限），产物用
+  `MediaThumbnail` 就地展示并给原链。尺寸选择器与工作流库**同一个** `ShotSizePicker`
+  （#3778：比例 / 像素（分辨率 · 百万像素）/ 倍数一段不缺；倍数段只在选中
+  百万像素档时出现 —— 分辨率档宽高由场景尺寸表给定，倍数没有意义）。
+  生成过程可见（#3791；#3799 改即时）：点「生成」**立即**显示「本地提交」行
+  （relay 端点 + 本次组装的统一输入请求体，长值截断），生成中该行走秒显示
+  已过时间；relay 把**实际发出的每一笔请求**（端点 / 请求体（长值截断）/
+  HTTP 状态 / 耗时 / 响应摘要；视频轮询逐候选上报）随响应带回 —— 成功与
+  失败都带（上游 4xx/5xx 时最需要看到发出了什么），追 加在本地提交行之后
+  在「请求详情」面板展示；响应摘要是**结构化截断**视图（与请求体同一套
+  截断），面板默认**格式化**显示、可切回原始单行；密钥在请求头、不进读数。
+  工坊链路不带 debug 旗标，relay 行为不变。产物：图片点开进**图片查看器**
+  （缩放 / 适应窗口，标题栏显示原始宽高，#3791）；「打开原始产物」统一走
+  服务端 `setting.openExternal` 交给系统浏览器（桌面壳内 `target=_blank`
+  会被壳的 shell ACL 拦下成 Runtime Error，#3791），结果有反馈位。
+  适配器新增「固定值」栏：每次请求原样带上的请求体键值
+  （如 Agnes 视频必填的 `mode:"text"` / `size:"720P"`），先常量后输入映射、
+  同名字段输入赢。
+- 按名解析的连接参数（#3778）：远端模型按名直连时，Base URL / 密钥按
+  「条目自己的 → 所属供应商的」折算（#3501 起两者以供应商为单位，模型行
+  两格为空是常态）—— 模型在但两处都没填地址时给**定向**报错（点名模型），
+  不再套「通道未配置」的通用文案。
+- 落点：`src/components/workshop/ModelTestView.tsx`、
+  `src/components/workshop/hooks/use-model-test.ts`、
+  `src/components/workshop/model-test-config.ts`、
+  `src/components/workshop/ModelAdaptersView.tsx`（固定值编辑器）、
+  `src/lib/workshop/model-mode-contract.ts`（constants）
 
 ---
 
 ## 13. 设置（FR-ST）
 
-#### FR-ST-01 九个设置分区
+#### FR-ST-01 十个设置分区
 
 - 状态：已上线
-- 需求：设置九分区：外观 / 应用更新 / 本地模型（Ollama）/ 远程模型 /
-  创作后端 / 数据库 / 备份与恢复 / 退出与后台服务 / 日志。
+- 需求：设置十分区：外观 / 应用更新 / 本地模型（Ollama）/ 远程模型 /
+  创作后端 / 数据库 / 备份与恢复 / 数据存放位置 / 退出与后台服务 / 日志。
 - 行为与验收：分区表唯一出处（`SETTINGS_SECTIONS`）；外壳三态
   （首帧 loading / 失败降级 / 就绪）；同一份实现挂两个点
   （工作区设置页签 + `/settings` 路由），只差视口高度。「远程模型」分区是
@@ -807,6 +989,24 @@
 - 需求：可从这里起停 Drizzle Studio、在浏览器打开。
 - 行为与验收：起停有状态回显（不假装「已起」）；端口不撞 dev 端口族。
 - 落点：`src/server/api/routers/setting.ts`（`dbStudio*` procedures）
+
+#### FR-ST-05 数据存放位置提示
+
+- 状态：已上线
+- 需求：每类数据都配一枚图标标明**存在哪儿**，并在该类数据被配置的地方显示
+  这枚图标；知道存在哪儿之后，迁移这一部分数据才知道怎么操作。
+- 行为与验收：① **落点登记是唯一出处**（`src/lib/data-location/data-locations.ts`：
+  数据种类 × 存放位置 → 类别 / 图标 / 落点 / 迁移办法），界面上的徽标与总表都
+  从这儿取，不存在第二份落点字面量；② **图标按「存放位置类别」配**（数据库 /
+  本机应用数据 / 项目代码库 / 本机磁盘 / 浏览器存储），同一落点上的数据用同一枚
+  图标 —— 用户问的是「存在哪儿」，不是「是哪类数据」；③ 徽标落在该类数据被配置的
+  地方（模型适配、模式契约编辑器、设置各分区、工作流库列表），悬浮说明里给出
+  具体落点与迁移办法；④ 设置页「数据存放位置」分区按数据种类铺一张总表
+  （每类数据一行，说清存在哪儿、迁移时怎么搬）；⑤ 本应用**不把数据托管到远端
+  服务**，所以登记表里没有「远端服务」这一类（不预置空转的位置）。
+- 落点：`src/lib/data-location/data-locations.ts`、
+  `src/components/data-location/`（徽标与总表）、
+  `src/app/(main)/settings/components/DataLocationSection.tsx`
 
 ---
 

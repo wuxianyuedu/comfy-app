@@ -68,15 +68,16 @@ export function DetailHeader({
         data-testid="detail-header-row"
       >
         <div className="min-w-45 flex-1" data-testid="detail-title-block">
-          <h2
-            className={[
-              "truncate text-lg font-semibold",
-              isTechnical ? "text-ink-strong font-mono" : "text-ink",
-            ].join(" ")}
-            title={workflow.name}
-          >
-            {workflow.name}
-          </h2>
+          <Hint label={workflow.name}>
+            <h2
+              className={[
+                "truncate text-lg font-semibold",
+                isTechnical ? "text-ink-strong font-mono" : "text-ink",
+              ].join(" ")}
+            >
+              {workflow.name}
+            </h2>
+          </Hint>
           {/* `leading-none`：这一行的三个胶囊各自继承不同祖先的 line-height
               —— 任务类型胶囊在 `Button` 里，继承的是 Button 的 `text-sm`
               （20px 行高），来源 / 模型标签继承的是父级（15px）—— 于是等宽的

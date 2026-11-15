@@ -6,6 +6,7 @@ import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { RawInputMeta, RawOutputMeta } from "../workflow-types";
+import { Hint } from "~/components/ui/hint";
 
 type SubgraphPinRowsProps = {
   connInputs: Array<{ inp: RawInputMeta; label: string }>;
@@ -92,27 +93,29 @@ export function SubgraphPinRows({
                       }}
                     />
                   )}
-                <span
-                  /* 去掉 `truncate`：让长的边界端口标签
-                   *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors
-                   *  | False = 🟣 GGUF` BOOLEAN widget）换成多行，
-                   *  而不是被裁掉。完整文本仍能从原生 `title` tooltip 看到。 */
-                  className="text-ink-bright text-2xs min-w-0 flex-1 text-left wrap-break-word whitespace-normal"
-                  title={`${inLabel} (${inType})`}
-                >
-                  {inLabel}
-                </span>
+                <Hint label={`${inLabel} (${inType})`}>
+                  <span
+                    /* 去掉 `truncate`：让长的边界端口标签
+                     *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors
+                     *  | False = 🟣 GGUF` BOOLEAN widget）换成多行，
+                     *  而不是被裁掉。完整文本仍能从原生 `title` tooltip 看到。 */
+                    className="text-ink-bright text-2xs min-w-0 flex-1 text-left wrap-break-word whitespace-normal"
+                  >
+                    {inLabel}
+                  </span>
+                </Hint>
               </>
             )}
             {outEntry && (
               <>
-                <span
-                  /* 与上面边界输入分支同款换行修正。 */
-                  className="text-ink-bright text-2xs min-w-0 flex-1 text-right wrap-break-word whitespace-normal"
-                  title={`${outDisplay} (${outType})`}
-                >
-                  {outDisplay}
-                </span>
+                <Hint label={`${outDisplay} (${outType})`}>
+                  <span
+                    /* 与上面边界输入分支同款换行修正。 */
+                    className="text-ink-bright text-2xs min-w-0 flex-1 text-right wrap-break-word whitespace-normal"
+                  >
+                    {outDisplay}
+                  </span>
+                </Hint>
                 {/* 每端口输出复选框已移除；
                  *  工作流输出按节点标识。按节点的输出
                  *  复选框现在住在子图节点的头部。 */}

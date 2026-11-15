@@ -1,34 +1,31 @@
-// ── 远端模型表单的字段规则（规范 16 §16.2.4.6 第二档的落地口径）──
+// ── 远端模型**条目**的线上契约形状（`configSave` 入参与写侧类型共用）──
 //
-// 为什么规则住在这里、而不是住在弹窗视图或 `ui/form` 的 RHF 里：
+// 这份形状的守护方式是 `tests/remote-model-entry-wire-contract.test.ts`：真草稿经
+// 真桥（`remoteModelEntryFromDraft`）产出条目，被真 router 的 zod 收下并原样回读 ——
+// 「草稿叫 model / 条目叫 name / 服务端 kind 枚举」三处名字由同一份派生钉住。
 //
-//   1. §16.2.1 规定 controller hook 是**唯一数据出入口**。`ui/form` 是 RHF 的
-//      `FormProvider`，用上它就等于同一个草稿有了两个持有者（hook 的 state
-//      与 RHF 的 store），提交前还得对账。所以 RHF 不进业务表单，见 §16.2.4.8。
-//   2. 字段级规则是**纯函数**（只依赖该字段自己的值），可以放这里单测；
-//      跨条目规则（重名查重）依赖 `extraModels` 列表 —— 那是**集合级**规则，
-//      留在 controller 里，与列表同生共死。
-//
-// 返回结构刻意是「字段 → 第一条错误文案」，与规范 16 §16.2.4.26 的
-// 表单校验同口径（视图只渲染文案，不参与判定）。
+// 字段级**表单校验规则**不在这里：供应商级重构（#3514）后它们住在
+// `~/lib/llm/provider-form`（`validateProviderForm` / `validateModelForm`），
+// 归属判据见 `tests/ui-primitives-coverage.test.ts` 与规范 16 §16.2.4.8（#3566）。
 
 import { z } from "zod";
 
 import { REMOTE_MODEL_KINDS, type RemoteModelKind } from "./types";
 
-/** 弹窗草稿的字段级 schema。`model` 是模型名（历史上也叫 name），
- *  `kind` 回落 `chat`（对话）—— 与「未选 = 对话」的既有行为一致。 */
-export const remoteModelFieldSchema = z.object({
-  model: z.string().trim().min(1, "请填写模型名称"),
-  /* 接口地址与 API Key 都是「可留空回落全局」，所以默认空串而不是必填 ——
-     把它们留成 `z.string()` 会让「只给 model」的调用方直接抛错，
-     那正是字段级规则与表单形态脱节的信号。 */
-  baseUrl: z.string().default(""),
-  apiKey: z.string().default(""),
-  kind: z.enum(REMOTE_MODEL_KINDS).default("chat"),
-});
-
-export type RemoteModelFieldValues = z.infer<typeof remoteModelFieldSchema>;
+/** 弹窗草稿的字段形状（`remoteModelEntryFromDraft` 的入参）。`model` 是模型名
+ *  （历史上也叫 name），`kind` 由调用方回落 `chat` —— 与「未选 = 对话」的既有
+ *  行为一致；`baseUrl` / `apiKey` 可留空（回落全局配置）。
+ *
+ *  只剩**类型**职责：字段级**校验规则**已随供应商级重构迁往 `~/lib/llm/provider-form`
+ *  （`validateProviderForm` / `validateModelForm`，#3514），本模块不再做运行期判定；
+ *  旧的 `remoteModelFieldSchema`（zod 对象）与 `validateRemoteModelFields` 随之摘除
+ *  —— 生产与测试都零消费，留在历史里即可考古（#3566）。 */
+export type RemoteModelDraft = {
+  apiKey: string;
+  baseUrl: string;
+  kind: RemoteModelKind;
+  model: string;
+};
 
 /**
  * 远端模型的**线上 / 存储条目**形状：`extraModels` 数组里那一枚对象。
@@ -80,7 +77,7 @@ export type RemoteModelDraftEntry = {
   name: string;
 };
 
-export function remoteModelEntryFromDraft(draft: RemoteModelFieldValues): RemoteModelDraftEntry {
+export function remoteModelEntryFromDraft(draft: RemoteModelDraft): RemoteModelDraftEntry {
   const baseUrl = draft.baseUrl.trim();
   const apiKey = draft.apiKey.trim();
   return {
@@ -89,47 +86,4 @@ export function remoteModelEntryFromDraft(draft: RemoteModelFieldValues): Remote
     apiKey: apiKey === "" ? undefined : apiKey,
     kind: draft.kind,
   };
-}
-
-/** zod 的 `issue.path[0]` 是任意键；只有字段 schema 里真有的键才写回错误表。 */
-function isRemoteModelFieldKey(key: string): key is keyof RemoteModelFieldValues {
-  return Object.hasOwn(remoteModelFieldSchema.shape, key);
-}
-
-/** 逐字段的第一条错误（键 = 字段名）。空对象 = 字段级全通过。
- *
- *  只做字段级判定：`model` 是否与既有条目重名、编辑态条目是否还存在 ——
- *  那两条要看列表，由 controller 的 `addRemoteModel` / `updateRemoteModel`
- *  负责（它们本来就在那里返回 `{ ok, error }`）。 */
-export function validateRemoteModelFields(
-  values: Partial<Record<keyof RemoteModelFieldValues, unknown>>,
-): Partial<Record<keyof RemoteModelFieldValues, string>> {
-  const parsed = remoteModelFieldSchema.safeParse({
-    model: typeof values.model === "string" ? values.model : "",
-    baseUrl: typeof values.baseUrl === "string" ? values.baseUrl : "",
-    apiKey: typeof values.apiKey === "string" ? values.apiKey : "",
-    kind: isKind(values.kind) ? values.kind : "chat",
-  });
-  if (parsed.success) {
-    return {};
-  }
-  const out: Partial<Record<keyof RemoteModelFieldValues, string>> = {};
-  for (const issue of parsed.error.issues) {
-    const key = issue.path[0];
-    if (typeof key !== "string" || !isRemoteModelFieldKey(key)) {
-      continue;
-    }
-    if (out[key] !== undefined) {
-      continue;
-    }
-    out[key] = issue.message;
-  }
-  return out;
-}
-
-function isKind(value: unknown): value is RemoteModelKind {
-  return (
-    /* SAFETY: 类型断言已复核 */
-    typeof value === "string" && (REMOTE_MODEL_KINDS as ReadonlyArray<string>).includes(value)
-  );
 }

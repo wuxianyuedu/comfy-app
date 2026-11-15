@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import {
   NO_STORY_REASON,
   collectStories,
@@ -19,11 +21,18 @@ const COMPONENTS = join(ROOT, "src", "components");
 const UI = join(COMPONENTS, "ui");
 const BASELINE_PATH = join(ROOT, "scripts", ".storybook-coverage-baseline.json");
 
-/* SAFETY: 类型断言已复核 */
-const BASELINE = JSON.parse(readFileSync(BASELINE_PATH, "utf8")) as {
-  covered: number;
-  uiSurfaces: number;
-};
+/** 基线形状守卫（B5 清账）：两个读数都必须是数，缺了就没法比棘轮。 */
+function isBaseline(value: unknown): value is { covered: number; uiSurfaces: number } {
+  return (
+    isRecord(value) && typeof value.covered === "number" && typeof value.uiSurfaces === "number"
+  );
+}
+
+const parsedBaseline: unknown = JSON.parse(readFileSync(BASELINE_PATH, "utf8"));
+if (!isBaseline(parsedBaseline)) {
+  throw new Error("覆盖率基线形状不对：covered / uiSurfaces 必须是数");
+}
+const BASELINE = parsedBaseline;
 
 const STAT = uiCoverage({ componentsRoot: COMPONENTS });
 

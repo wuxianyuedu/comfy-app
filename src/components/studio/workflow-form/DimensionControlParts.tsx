@@ -84,12 +84,11 @@ export function RequiredChips({
             data-dimension-pin={pin.ioKey}
             key={pin.ioKey}
           >
-            <span
-              className="text-ink-soft text-3xs max-w-20 truncate"
-              title={pin.label ?? pin.name}
-            >
-              {pin.label ?? pin.name}
-            </span>
+            <Hint label={pin.label ?? pin.name}>
+              <span className="text-ink-soft text-3xs max-w-20 truncate">
+                {pin.label ?? pin.name}
+              </span>
+            </Hint>
             {onRequiredChange && (
               <Hint label={required ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}>
                 <Button

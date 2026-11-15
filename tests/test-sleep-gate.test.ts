@@ -19,6 +19,9 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
+
 import { copyGateDeps } from "./helpers/gate-repo";
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
@@ -31,11 +34,21 @@ const DEP = path.join(SCRIPTS_DIR, "check-test-concurrency.cjs");
  * 读不到的路径返回什么，而临时仓库 + 子进程那条路造不出「列到名字、读时已没」
  * 这个时刻（造得出就只能靠删文件，那是一次概率窗口，不是判据）。
  */
-/* SAFETY: 类型断言已复核 */
-const { scanFile, walk } = createRequire(import.meta.url)(SCRIPT) as {
+/** 判据模块的消费形状守卫（B5 清账）：只取 scanFile / walk 两件。 */
+function isSleepGateModule(value: unknown): value is {
   scanFile: (abs: string) => Array<unknown> | null;
   walk: (dir: string, out?: Array<string>) => Array<string>;
-};
+} {
+  return (
+    isRecord(value) && typeof value.scanFile === "function" && typeof value.walk === "function"
+  );
+}
+
+const gateModule: unknown = createRequire(import.meta.url)(SCRIPT);
+if (!isSleepGateModule(gateModule)) {
+  throw new Error("check-test-sleep.cjs 缺 scanFile / walk —— 判据脚本形状变了");
+}
+const { scanFile, walk } = gateModule;
 
 /**
  * 在临时仓库里跑真脚本（cwd = 临时仓库根，只放被测文件 + 判据依赖）。翻硬闸后不再写基线：
@@ -68,9 +81,12 @@ function gate(
       }),
     };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as { stderr?: string; stdout?: string };
-    return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    /* 失败形状按字段读（B5 清账）：两股输出缺省当空串。 */
+    const e: { stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
+    const out = typeof e.stdout === "string" ? e.stdout : "";
+    const err = typeof e.stderr === "string" ? e.stderr : "";
+    return { ok: false, output: `${out}${err}` };
   }
 }
 

@@ -10,6 +10,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { stripComments } from "./helpers/strip-comments";
 import {
   binRelativePath,
@@ -19,6 +21,14 @@ import {
 import { findShellOptions, findShellOptionsIn } from "../scripts/spawn-shell-scan.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+
+/** 子进程失败输出取正文（B5 清账）：串直接用，Buffer 解 utf8，其余当空串。 */
+function asText(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  return Buffer.isBuffer(value) ? value.toString("utf8") : "";
+}
 
 describe("scripts/spawn-shell-scan.mjs", () => {
   it("scripts/** 里没有「起子进程开 shell」的形态（DEP0190 + 手工引号）", () => {
@@ -210,10 +220,12 @@ describe("scripts/spawn-shell-scan.mjs", () => {
           stdio: ["ignore", "ignore", "pipe"],
         });
       } catch (error) {
-        /* SAFETY: 类型断言已复核 */
-        const e = error as { status?: number; stderr?: string | Buffer };
-        code = e.status ?? 1;
-        stderr = String(e.stderr ?? "");
+        /* 失败形状按字段读（B5 清账）：status 缺省当 1（非零即「闸拦了」），
+           stderr 缺省当空串。 */
+        const e: { status?: unknown; stderr?: unknown } =
+          typeof error === "object" && error !== null ? error : {};
+        code = typeof e.status === "number" ? e.status : 1;
+        stderr = asText(e.stderr);
       }
       expect(code, "撞到违例却绿了 ⇒ 闸没在拦").not.toBe(0);
       expect(stderr, "没把违例点名出来").toContain("scripts/violation.mjs");
@@ -299,19 +311,33 @@ function withFixture(
  * 本仓两者不是同一个包。拿依赖名推会得 `null`，补「取 `bin` 第一个键」就拿到另一份编译器入口，且一声不吭。
  * ⚠️ 边界：下面两条「本仓事实」读当前 `node_modules`，钉「名字归谁」这条关系而非版本号；起得来由 `ci-run-tool` 端到端判。
  */
+/** `package.json` 的消费形状守卫（B5 清账）：name / version 是串，bin 是「名 → 相对路径」映射或缺省。 */
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((entry) => typeof entry === "string");
+}
+
+function isPkgJson(value: unknown): value is {
+  bin?: Record<string, string>;
+  name: string;
+  version: string;
+} {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    typeof value.version === "string" &&
+    (value.bin === undefined || isStringRecord(value.bin))
+  );
+}
+
 describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", () => {
   /** 从「包真身入口」回到那份包的 `package.json`（`<pkgDir>/bin/<名>` 那一层）。 */
   const pkgJsonOfEntry = (entry: string) => {
     const pkgDir = path.resolve(entry, "..", "..");
-    return {
-      pkgDir,
-      /* SAFETY: 类型断言已复核 */
-      pkg: JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8")) as {
-        bin?: Record<string, string>;
-        name: string;
-        version: string;
-      },
-    };
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"));
+    if (!isPkgJson(parsed)) {
+      throw new Error(`${pkgDir}/package.json 缺 name / version，或 bin 不是字符串映射`);
+    }
+    return { pkgDir, pkg: parsed };
   };
 
   it("本仓 `tsc` 与 `tsc6` 解析到**两份不同的包**，且各自 `bin` 里就是那个名字", () => {
@@ -357,11 +383,13 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
       byShimName,
       '`.bin/tsc` 与 `require.resolve("typescript")` 给了同一份包 —— 口径变了，重读 #2572',
     ).not.toBe(byDepName);
-    /* SAFETY: 类型断言已复核 */
-    const aliasPkg = JSON.parse(fs.readFileSync(path.join(byDepName, "package.json"), "utf8")) as {
-      bin?: Record<string, string>;
-      name: string;
-    };
+    const aliasParsed: unknown = JSON.parse(
+      fs.readFileSync(path.join(byDepName, "package.json"), "utf8"),
+    );
+    if (!isPkgJson(aliasParsed)) {
+      throw new Error("别名包 package.json 缺 name / version，或 bin 不是字符串映射");
+    }
+    const aliasPkg = aliasParsed;
     expect(resolvePackageBinEntry("typescript"), "按依赖名居然解析得到").toBeNull();
     expect(resolvePackageBinEntry("@typescript/native"), "按目录名居然解析得到").toBeNull();
     /* 「取第一个键」那条兜底会把 tsc 变成 tsc6 —— 判它，是因为它长得像正确答案。 */
@@ -472,16 +500,15 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
       });
       return { status: 0, stdout, stderr: "" };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as {
-        status?: number;
-        stderr?: string;
-        stdout?: string;
-      };
+      /* 失败形状按字段读（B5 清账）：status 缺省当 1，两股输出缺省当空串。 */
+      const e: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+        typeof error === "object" && error !== null ? error : {};
+      const out = asText(e.stdout);
+      const err = asText(e.stderr);
       return {
-        status: e.status ?? 1,
-        stdout: String(e.stdout ?? ""),
-        stderr: String(e.stderr ?? ""),
+        status: typeof e.status === "number" ? e.status : 1,
+        stdout: out,
+        stderr: err,
       };
     }
   };

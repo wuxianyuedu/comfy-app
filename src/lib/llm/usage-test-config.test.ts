@@ -3,6 +3,7 @@ import {
   USAGE_FIELD_PRESETS,
   makeUsageField,
   buildVideoPollUrls,
+  defaultUsageTestPath,
   defaultVideoFields,
   hasUsageFieldKey,
   usageFieldsToJson,
@@ -305,5 +306,29 @@ describe("buildVideoPollUrls", () => {
       "task_1",
     );
     expect(rest).toBe("https://api.example.com/v1/videos/task_1");
+  });
+});
+
+describe("defaultUsageTestPath（#3577 收口的端点路径预填）", () => {
+  it("通用预设：chat / image / video 各自的 OpenAI 风格端点", () => {
+    expect(defaultUsageTestPath("chat", "https://x/v1")).toBe("/chat/completions");
+    expect(defaultUsageTestPath("image", "https://x/v1")).toBe("/images/generations");
+    expect(defaultUsageTestPath("video", "https://x/v1")).toBe("/videos/generations");
+  });
+
+  it("base 已含资源子路径时只补动作段（image → /generations；video → 空 = 直接用 base）", () => {
+    expect(defaultUsageTestPath("image", "https://x/v1/images")).toBe("/generations");
+    expect(defaultUsageTestPath("video", "https://x/v1/videos")).toBe("");
+  });
+
+  it("Agnes 视频：host 命中 → /v1/videos（任务制端点，非 OpenAI 风格）", () => {
+    expect(defaultUsageTestPath("video", "https://apihub.agnes-ai.com/v1")).toBe("/videos");
+    /* 只动 video：同 base 的 image / chat 不受影响 */
+    expect(defaultUsageTestPath("image", "https://apihub.agnes-ai.com/v1")).toBe(
+      "/images/generations",
+    );
+    expect(defaultUsageTestPath("chat", "https://apihub.agnes-ai.com/v1")).toBe(
+      "/chat/completions",
+    );
   });
 });

@@ -284,7 +284,12 @@
     #     `ci-load.mjs` 收敛）；那一格连同 `固定结构用例` 现在也撤到了每日全量单测
     #     （增量面是全量子集）。**全量**仍归 `每日单元测试`，这一格停用的理由没变。
     # ⇒ 所以「全量单测在 PR 这一跳的执行者」不是平台，是**每日那一跑**（见上面那条）；
-    #   增量面（受影响用例）也没有 PR 级执行者了，由每日全量单测接住。
+    #   增量面（受影响用例）也没有 **CNB 侧**的 PR 级执行者了，由每日全量单测接住。
+    #   ⚠️ **但 GA 的 PR 侧仍跑这两格**（`.github/workflows/pr-gate.yml` 的
+    #   `affected-tests` / `fixed-structural-tests` 两个 job，每个 PR 都跑、且在判决的
+    #   `needs:` 里）—— 2026-11-02 那一撤只针对 CNB 的 stage 与本地那两个执行者，
+    #   撤档理由在 GA 的 4 核托管 runner 上**不成立**（逐条读数见规范 §13.5.41；
+    #   ISSUE #3662 出口 B）。账面上它们在门格总账的 **ga-pr 段**。
     #   这一格在 `.gates` 里以注释形态留着（可 grep 回原文）—— 判据把「停用」与「删除」分开判。
     # ⚠️ 这个键**保留而不删除**：它是「停用」这件事的执行者（判据见
     # `tests/no-platform-ci-config.test.ts` 的「停用登记」那两条）。
@@ -315,9 +320,19 @@
     # 的 `HEAVY_GATES` 条目 → 钩子步骤）。所以这两行照旧留在这里：这里的键是**入口路径**，
     # 不是「哪条流水线在跑它」；名字继续留在 `COMFYAPP_CI_GATES`，因为它们仍然在 PR 上
     # 被判，只是换了一台 runner（档位注释见 `GATE_TIER_LEDGER` 的同名条目）。
+    #
+    # `schema⇄迁移等价` 是**第四行**，形状与前两行**不同**：它的执行者**不在**复合格里，
+    # 而是 GA `pr-gate.yml` 的 `typecheck-db-format` job 里那一步
+    # （`node scripts/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts`）。
+    # ⇒ 判据 `scripts/check-gate-name-executors.mjs` 的**第四处执行面**（GA PR 门禁的
+    # `run:` 行）就是为它补的（ISSUE #3599）：另三面（复合档条目 / 固定清单用例 /
+    # 钩子步骤）一处都不在 GA，指向 GA step 的入口路径会被误判成「没有执行者」。
+    # 登记的**仍是入口路径**（那份用例文件），不是执行者自己的定义 —— 判据去执行面
+    # 核那个指针，不抄第二份（§12.12 / §12.18）。
     COMFYAPP_CI_GATES_ELSEWHERE: >-
       格式化提交分离=scripts/check-reformat-only.cjs,
-      零消费导出=scripts/check-dead-exports.cjs
+      零消费导出=scripts/check-dead-exports.cjs,
+      schema⇄迁移等价=tests/db-migrate-equivalence.test.ts
     # 恢复动作照旧三步：`.gates` 里取消注释 → 名字挪回 `GATES` → 从本清单删掉。
     # `ESLint 零警告` 现在的落点：它是台上唯一真的会挂满预算的静态判据
     # （起一堆子进程，并行 PR 下墙钟读数不可信，§13.5.21），执行者换成
@@ -345,8 +360,19 @@
     # 整个挪到平台池那条同名流水线（另一条出网路径），本档此后只剩
     # 「平台读数 + 站内回读判决」两类。自托管机一台都不碰 github.com；
     # 「后续流程走不通」由 `GA 回调结论回读` 的 fail-closed（没终态 / 超时 ⇒ 判红）兜住。
+    # `schema⇄迁移等价`（ISSUE #3599）：版本化迁移（`drizzle/`）与 `schema.ts` 必须是
+    # 同一份形状（表集合 / 逐表逐列 / 索引集合）。漂开了不报错，只在某处业务写入时炸；
+    # #3565 的现场是 migrate 侧少一张表 / 十列 / 一个索引，在 master 上活了两周，
+    # 暴露通道只剩次日 01:37 的全量单测（#3052 之后增量面也撤到了每日档）。
+    # ⇒ 这一类红是**确定性**的（结论只由这份树决定，与负载无关），三条门槛评过 ⇒ 进 PR 档
+    # （§13.5.30 的裁决与逐条读数见 `docs/standards/13-提交与-code-review.md` §13.5.40）。
+    # 执行者是 GA `pr-gate.yml` 的 `typecheck-db-format` job 里那一步（落在**已经装好
+    # 依赖**的那一格里，不新增一次 `pnpm install`，也不新增一个 job ⇒ PR 关键路径不变）。
+    # 判据本体是 `tests/db-migrate-equivalence.test.ts`（这件事的**唯一**判据）。
+    # 恢复动作：名字从这份清单摘掉 → 从 `COMFYAPP_CI_GATES_ELSEWHERE` 删掉那一行 →
+    # 删掉 GA 那一步 → 从 `GATE_TIER_LEDGER` 的 PR 段删掉同名条目。
     COMFYAPP_CI_GATES: >-
-      GA 回调结论回读, 格式化提交分离, 零消费导出
+      GA 回调结论回读, 格式化提交分离, 零消费导出, schema⇄迁移等价
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # 这一档是「树级校验档」：判的是**合并后的树**一致不一致、这次运行的事实是什么，
@@ -527,8 +553,21 @@
 #
 # 不与 `pr-$CNB_PULL_REQUEST_IID` 共用：api_trigger 事件上那个变量无值，
 # 落回字面 `pr-` 会把并行的 PR 主列一起掐掉（`pr-` 一把共用的同款死因）。
+#
+# 锁按**绑定的 sha** 分（ISSUE #3924）：key 原先是全局一把 `ga-verdict`——
+# 两条**不同 PR** 的回调撞在同一时刻时，后一条会把前一条 cancel 掉；被 cancel
+# 的 callback 不写终态，前一条 PR 的「GA 回调结论回读」就只能空等到 70m 预算
+# 判「没判过」（正是「GA 侧跑完了、CNB 侧读不到结果」的一种真实成因）。
+# `CNB_COMMIT` 在这条回调 build 上 = 绑定的预合并 sha（实测 stage 日志
+# `sha_check=match`），于是同一次派发天然同 key、不同 PR / 不同派发互不掐。
 .lock-ga-verdict: &lock_ga_verdict
-  key: ga-verdict
+  key: ga-verdict-$CNB_COMMIT
+  cancel-in-progress: true
+# ISSUE #3667：按需日志搬运那一口的锁。它既不是判决回调、也不是任一固定档 ——
+# 与 ga-verdict 共用会把「有人想看一眼绿跑日志」变成「把还在等结论的回调掐掉」。
+# 同一张 PR 连点两次只留最新一跑（GA 侧 pr-gate 的并发组是另半边）。
+.lock-ga-logs: &lock_ga_logs
+  key: ga-logs-on-demand
   cancel-in-progress: true
 .ga-dispatch: &ga_dispatch
   # 「GA 派发」触发口共用的平台池形态（runner / docker / imports），#3504 起。
@@ -942,6 +981,8 @@
   #   ⇒ **全量**单测归 `每日单元测试`；**增量**那一档（受影响用例）由本文件里的
   #   `受影响用例` 一格执行（跑增量面、不刷整档凭证），本地两个执行者同日撤销；
   #   增量那两格现在也撤到了每日全量单测（增量面是全量子集，覆盖不丢）。
+  #   ⚠️ **CNB 侧**的撤档 ≠ PR 档不再判增量面：GA 的 PR 侧仍跑这两格
+  #   （`pr-gate.yml` 的两个 job；读数与逐条理由见规范 §13.5.41、ISSUE #3662 出口 B）。
   #   恢复前提：平台能给这一格一条不与并行 PR 争抢的执行环境（那才是这条决定的边界，不是判据）。
   # - name: 单元测试
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/full-suite-run.mjs
@@ -1088,8 +1129,11 @@
     # 前者拆碎当场退 127，后者在 Linux 上是直通的多余一层（契约由
     # no-platform-ci-config 的质量门禁段钉住）。
     script: node scripts/ci-ga-verdict-readout.mjs
-    # 包住站内短轮询预算（脚本 DEFAULT_BUDGET_MS 45m）+ 进程开销；与最重格外框同级。
-    timeout: 60m
+    # 包住站内短轮询预算（脚本 DEFAULT_BUDGET_MS 70m = GA 最重 job 60m + 回调 5m +
+    # 余量，对齐见 #3593；不变式由 ci-ga-verdict-readout.test.ts 现算 pr-gate.yml 钉住）
+    # + 进程开销。旧 45m/60m 都会比 GA 的最坏路径先死 —— GA 正常跑满才回调时，
+    # 这里先判「没判过」，红的是「没等到」不是 GA 判了红。
+    timeout: 75m
 
   # ── 构建与产物：**这一格 不在 PR 上跑了**（口径见 §13.5.23）──
   #
@@ -1435,9 +1479,10 @@ master:
       stages:
         - name: GitHub 镜像同步
           script: node scripts/ci-github-mirror-push.mjs
-          # 10m 外框包住最坏账（推送 240s + 回读 + LFS 60s）与冷启动余量；
+          # 15m 外框包住最坏账（推送预算 480s + 回读 + LFS 60s，ISSUE #3914 起
+          # 预算翻倍——首刀挂满 240s 仍要留一次完整重试）与冷启动余量；
           # 与自托管主列那格同一份重试预算（常量在 `ci-mirror-retry-policy.mjs`）。
-          timeout: 10m
+          timeout: 15m
 
   # 合并后的 push：**不重跑全套**（全套是 PR 那条的事；「不引入新代码」的前提依旧 ——
   # 合并提交由平台按**已被门禁验过的源分支 SHA** 生成）。树级校验档已撤（文档链两格
@@ -1496,9 +1541,10 @@ master:
       stages:
         - name: GitHub master 镜像
           script: node scripts/ci-github-mirror-push.mjs --master
-          # 10m 外框包住最坏账（推送 240s + 回读 + LFS 60s）与冷启动余量；
-          # 与 PR 出口同一份重试预算（常量在 `ci-mirror-retry-policy.mjs`）。
-          timeout: 10m
+          # 15m 外框包住最坏账（推送预算 480s + 回读 + LFS 60s，ISSUE #3914 起
+          # 预算翻倍）与冷启动余量；与 PR 出口同一份重试预算
+          # （常量在 `ci-mirror-retry-policy.mjs`）。
+          timeout: 15m
 
   # ── 触发口：CNB 只作触发入口，构建执行全部在 GA（ISSUE #3504）──────────────
   #
@@ -1530,7 +1576,7 @@ master:
   # GA 侧的同名并发组挡「两跑同时压 runner」，两面互为对方的那一半。
   #
   # 随构建执行一并退役的还有三样，各自的承接写在退役处：
-  #   · `每日失败立案` —— GA daily.yml 自带「失败立案」step（CNB 单子，#3436 同通道），
+  #   · `每日失败立案` —— GA daily.yml 自带「失败立案」下游 job（CNB 单子，#3436 同通道），
   #     CNB 侧那份立案的对象（本机执行的每日跑）已不存在；派发口自己红会直接落在
   #     流水线列表上。
   #   · `每日镜像出勤立案` / `每日令牌权限读数` —— 二者要 `cnb` CLI（node_modules 里）
@@ -1590,6 +1636,11 @@ master:
   # 桌包那一档：成品落点随之换形 —— GA `package-desktop.yml` 产 artifact（14 天，
   # 按 run 取）+ 滚动 nightly Release（每天都指向最新一份），不再是本机常驻目录的
   # 「留 2 份」（runner 是即弃机，回写开发机既没有通道也不该有）。
+  # #3607 起收尾再把同一份成品回传到 CNB 站内滚动 nightly Release（推荐取包地）——
+  # 诉求在 CNB 侧提、包也该在 CNB 侧拿，GitHub 只是镜像仓；四类并列：安装版 / 免安装版 /
+  # 纯壳单文件 ComfyAPP-shell.exe（只编壳不打包、放进检出根连本地 dev server）/ 以及
+  # #3621 之后二进制 PUT 的分钟级墙钟与网络类重试。见 package-desktop.yml 收尾那格与
+  # scripts/ci-ga-desktop-relay.mjs 文件头（规范 §7.7 同批订正）。
   # `*package_fail_stage`（桌包失败立案）随本批退役：立案脚本的执行者与它的对象
   # （本机执行的桌包跑）一起消失；GA 桌包失败目前落在 GA run 页面（自动立案是后续账）。
   web_trigger_package:
@@ -1635,6 +1686,26 @@ master:
       stages:
         - name: GA 派发·单跑全量单测
           script: node scripts/ci-ga-dispatch.mjs --preset unit
+          timeout: 10m
+  # ── ISSUE #3667：判绿时「有需要」也要能经 GA→CNB→本地 拿到日志 ──────────
+  #
+  # #3437 的 relay 只在判红时搬日志（无失败 job ⇒ 不写 CNB 评论），判绿的 run 想
+  # 看日志就得让本地出站 api.github.com —— 而那正是 #3437 要绕开的一跳。这一口
+  # 是「按需发起」：平台池代发一次 GA `workflow_dispatch`（`relay_scope=all`），
+  # GA 收尾 relay 把**全部 job**（含判绿）的日志搬进 CNB 附件 + PR 评论，本地
+  # `pnpm ship --gh-logs pr:<n>` 站内读回。本地全程零 `api.github.com`。
+  #
+  # 与五个固定档刻意**不**共用 `--preset` 注册表：那五个是「跑哪套判据」，这一口
+  # 是「把某条已跑完的 run 的日志搬过来」，两件事的前提与去重面都不同。
+  # `GA_LOG_PR_NUMBER` 由触发者（`start-build --env`）注入；`GA_LOG_RUN_ID` 可选，
+  # 点名另一条已跑完的绿 run 时连判据都不必重跑。
+  api_trigger_ga_logs:
+    - <<: *ga_dispatch
+      name: GA 日志按需搬运（API 触发）
+      lock: *lock_ga_logs
+      stages:
+        - name: GA 派发·日志按需搬运
+          script: node scripts/ci-ga-logs-on-demand.mjs
           timeout: 10m
 
   # ── 这里曾有第四个 API 口：`api_trigger_formatfix`（已摘除）─────────

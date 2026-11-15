@@ -9,6 +9,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { launcherChainSource } from "./helpers/launcher-source";
 import { stripComments } from "./helpers/strip-comments";
 
@@ -522,11 +524,11 @@ describe("编排器与启动页的接线契约", () => {
   });
 
   it("自查入口是跨平台薄壳，且登记在 package.json 与 §9.5 对照表", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    expect(pkg.scripts["check:toolchain"]).toBe("node scripts/check-pnpm-available.mjs");
+    /* scripts 按字段读（B5 清账）：那一格缺了 / 不是串就给空串，让 toBe 自己红。 */
+    const pkg: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const scripts: unknown = isRecord(pkg) ? pkg.scripts : {};
+    const entry: unknown = isRecord(scripts) ? scripts["check:toolchain"] : undefined;
+    expect(typeof entry === "string" ? entry : "").toBe("node scripts/check-pnpm-available.mjs");
     const selfCheck = fs.readFileSync(
       path.join(ROOT, "scripts", "check-pnpm-available.mjs"),
       "utf8",

@@ -22,6 +22,11 @@ function ownerText(): string {
   }
 }
 
+/** 失败对象的 errno code 按字段读（B5 清账）：不在场返回 undefined。 */
+function errnoCode(error: unknown): unknown {
+  return typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+}
+
 /** owner 进程还活着吗？读不出 owner 时按「活着」处理（宁可等，不误夺别人的锁）。 */
 function ownerAlive(): boolean {
   const pid = Number.parseInt(ownerText(), 10);
@@ -32,8 +37,7 @@ function ownerAlive(): boolean {
     process.kill(pid, 0);
     return true;
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+    return errnoCode(error) !== "ESRCH";
   }
 }
 
@@ -56,8 +60,7 @@ export async function acquireRepoDrizzle(label: string): Promise<() => void> {
         rmSync(LOCK_DIR, { recursive: true, force: true });
       };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const code = (error as NodeJS.ErrnoException).code;
+      const code = errnoCode(error);
       if (code !== "EEXIST") {
         throw error;
       }

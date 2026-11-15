@@ -89,7 +89,7 @@ const ORIGIN_TEXT: Record<LogOriginFilter, string> = {
   app: "应用服务",
   dev: "启动",
   launcher: "启动器",
-  /** 壳侧编排链路（log/launcher/shell-launch.log）：双击启动最早的现场。 */
+  /** 壳侧编排链路（log/current/launcher/shell-launch.log）：双击启动最早的现场。 */
   "shell-launch": "壳侧编排",
   /** 壳自持日志（log/shell/shell.log）：壳自己的诊断与编排器转发。 */
   shell: "壳日志",

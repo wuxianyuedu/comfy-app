@@ -25,6 +25,11 @@ function assertEntryValue<T>(entry: unknown): asserts entry is Entry<T> {
 }
 
 type CacheStore = {
+  /** 失效代次：每次 `cacheDel` / `cacheDelPrefix` 自增。回填前比对——构建期间
+   *  被失效过的结果基于旧数据，不得写回缓存（否则 PATCH 后 TTL 内一直读旧值）。 */
+  gen: number;
+  /** per-key single-flight：同一 key 的并发未命中共享同一次构建，不重复跑。 */
+  inflight: Map<string, Promise<unknown>>;
   map: Map<string, Entry<unknown>>;
   max: number;
 };
@@ -38,13 +43,19 @@ declare global {
 function getStore(): CacheStore {
   return (globalThis.__comfyServerCache ??= {
     map: new Map(),
+    gen: 0,
+    inflight: new Map(),
     max: MAX_ENTRIES,
   });
 }
 
 /**
- * 值仍新鲜则返回缓存；否则调用 `build`（可以是异步的），
- * 存下结果并返回。
+ * 值仍新鲜则返回缓存；否则调用 `build`（可以是异步的），存下结果并返回。
+ *
+ * - **single-flight**：同一 key 的并发未命中只跑一次 `build`，其余共享同一 Promise；
+ * - **失效安全**：`build` 期间若发生 `cacheDel` / `cacheDelPrefix`（代次变化），
+ *   本次结果不再回填——它派生自失效前的旧数据；
+ * - `build` 抛错时不缓存任何东西，错误原样透传给所有等待者。
  */
 export async function cacheJson<T>(
   key: string,
@@ -62,25 +73,54 @@ export async function cacheJson<T>(
     return existing.value;
   }
 
-  const value = await build();
-  const entry: Entry<T> = { value, expiresAt: now + ttlMs };
-  store.map.delete(key);
-  store.map.set(key, entry);
-
-  // 超出容量就淘汰最旧的。
-  while (store.map.size > store.max) {
-    const oldest = store.map.keys().next().value;
-    if (oldest === undefined) {
-      break;
+  const pending = store.inflight.get(key);
+  if (pending) {
+    /* single-flight：同一 key 的并发未命中共享同一次构建。这里只借**时序**——
+     * 等那次构建落定，值改从缓存条目里取（与命中路径同一套运行时形状守卫，
+     * 不做 `unknown → T` 断言）。构建失败或结果在构建期间被失效 → 这一拍没有
+     * 可复用的条目，按未命中继续走下面的构建（不再嵌套 single-flight）。 */
+    await pending.catch(() => undefined);
+    const landed = store.map.get(key);
+    if (landed && landed.expiresAt > Date.now()) {
+      store.map.delete(key);
+      store.map.set(key, landed);
+      assertEntryValue<T>(landed);
+      return landed.value;
     }
-    store.map.delete(oldest);
+  }
+
+  const genAtStart = store.gen;
+  const task = (async () => build())();
+  store.inflight.set(key, task);
+  let value: T;
+  try {
+    value = await task;
+  } finally {
+    store.inflight.delete(key);
+  }
+
+  if (store.gen === genAtStart) {
+    const entry: Entry<T> = { value, expiresAt: now + ttlMs };
+    store.map.delete(key);
+    store.map.set(key, entry);
+
+    // 超出容量就淘汰最旧的。
+    while (store.map.size > store.max) {
+      const oldest = store.map.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      store.map.delete(oldest);
+    }
   }
   return value;
 }
 
 /* 删除单个缓存键。 */
 export function cacheDel(key: string): void {
-  getStore().map.delete(key);
+  const store = getStore();
+  store.gen += 1;
+  store.map.delete(key);
 }
 
 /**
@@ -104,9 +144,14 @@ export function cachePeek<T>(key: string): T | undefined {
 /* 删除所有以 `prefix` 开头的缓存键（例如 `wf:userId:`）。 */
 export function cacheDelPrefix(prefix: string): void {
   const store = getStore();
+  let removed = false;
   for (const k of store.map.keys()) {
     if (k.startsWith(prefix)) {
       store.map.delete(k);
+      removed = true;
     }
+  }
+  if (removed) {
+    store.gen += 1;
   }
 }

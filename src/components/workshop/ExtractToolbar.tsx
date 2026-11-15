@@ -5,12 +5,13 @@ import React from "react";
 import { ExtractModelSelect } from "~/components/workshop/ExtractModelSelect";
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
 import type { PersistableGenerationLog } from "~/lib/workshop/generation-log-client";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 
 /** 提取执行日志的展示样式（按日志类型区分色块，不随组件卸载清空）。
  *  状态色全走语义 token（§4.11.1 / P71）：init→primary（品牌）、
@@ -153,7 +154,7 @@ export function ExtractToolbar({
         >
           外部导入
         </Button>
-        <importPicker.Input />
+        <FilePicker {...importPicker.inputProps} />
       </div>
       {/* 实时流式输出（提取中单独展示，便于跟随 token 累积） */}
       {busy && progressText !== undefined && progressText !== "" && (
@@ -207,9 +208,9 @@ export function ExtractToolbar({
                       >
                         {logBadgeLabel(entry.kind)}
                       </span>
-                      <span className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
+                      <TruncatedText className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
                         {entry.summary}
-                      </span>
+                      </TruncatedText>
                       <span className="text-muted-foreground/60 text-3xs shrink-0">
                         {formatClock(entry.ts)}
                       </span>
@@ -252,9 +253,9 @@ export function ExtractToolbar({
                         <span className="bg-primary-soft text-primary text-3xs rounded px-1.5 py-0.5 font-medium">
                           {entry.kind}
                         </span>
-                        <span className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
+                        <TruncatedText className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
                           {entry.summary}
-                        </span>
+                        </TruncatedText>
                         <span className="text-muted-foreground/60 text-3xs shrink-0">
                           {formatClock(entry.ts)}
                         </span>

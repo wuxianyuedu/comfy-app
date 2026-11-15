@@ -37,11 +37,21 @@ export function openBrowser(ctx, url) {
   ctx.log(`已尝试打开浏览器：${url}`, "INFO");
 }
 
+/** 重入守卫（ISSUE #3836）：dev-launcher.mjs 信号处理器里的 `shuttingDown` 只覆盖
+ *  信号那一侧；正常收尾正在 `await reapAll()` 时再来一条信号，会从这里**第二次**
+ *  进入 —— 对同一批子进程重复派发回收命令、归档与 exit 竞争。按进程挡住：只跑
+ *  第一遍，后到的直接返回（process.exit 即将发生，无需等待）。 */
+let shutdownStarted = false;
+
 /** 优雅中断（Ctrl-C / SIGTERM / SIGHUP）：回收整棵进程树后退出。
  * @param {{ log: (m: string, l?: import("./log.mjs").LogLevel) => void,
  *           reapAll: () => Promise<void>, root: string }} ctx 注入上下文
  * @param {number} code */
 export async function shutdown(ctx, code) {
+  if (shutdownStarted) {
+    return;
+  }
+  shutdownStarted = true;
   ctx.log("正在回收整棵进程树…", "STEP");
   await ctx.reapAll();
   try {

@@ -82,7 +82,10 @@ describe("收的方式与边界", () => {
   });
 
   it("两条证据都齐 ⇒ 交出那个 PID 回收（**整棵树**走仓里唯一出口）", async () => {
-    const reap = vi.fn(() => Promise.resolve({ ok: true }));
+    /* 入参给 mock 标上类型：复核入参走类型化 calls，不走 `as` 断言（B5 清账）。 */
+    const reap = vi.fn((_call: { detached: boolean; force: boolean; pid: number }) =>
+      Promise.resolve({ ok: true }),
+    );
     const result = await reclaimOwnFakePort(18_188, {
       listeningPids: () => Promise.resolve([4242]),
       readCmdlines: (pids) => Promise.resolve(new Map(pids.map((p) => [p, OUR_CMDLINE]))),
@@ -94,15 +97,9 @@ describe("收的方式与边界", () => {
     /* 契约三条：按 PID 收整棵树、POSIX 上按进程组（`detached`）、强杀。
      * 这条同时钉住「不自己拼 taskkill / process.kill」——本档只调那个唯一出口。 */
     expect(reap).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    /* SAFETY: 类型断言已复核 */
-    const reaped = (reap.mock.calls as Array<Array<unknown>>)[0]?.[0] as {
-      detached: boolean;
-      force: boolean;
-      pid: number;
-    };
-    expect(reaped.pid).toBe(4242);
-    expect(reaped.force).toBe(true);
+    const reaped = vi.mocked(reap).mock.calls[0]?.[0];
+    expect(reaped?.pid).toBe(4242);
+    expect(reaped?.force).toBe(true);
   });
 
   it("认不出的占位者 ⇒ **一个都不收**，但如实报出来是哪几个", async () => {
@@ -288,7 +285,8 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
   });
 
   it("两条证据都齐 ⇒ 交出那个 PID 回收（整棵树走仓里唯一出口）", async () => {
-    const reap = vi.fn(() => Promise.resolve({ ok: true }));
+    /* 入参给 mock 标上类型：复核入参走类型化 calls，不走 `as` 断言（B5 清账）。 */
+    const reap = vi.fn((_call: { force: boolean; pid: number }) => Promise.resolve({ ok: true }));
     const result = await reclaimOwnAppPort(3311, ROOT, {
       listeningPids: () => Promise.resolve([4242]),
       readCmdlines: (pids) => Promise.resolve(new Map(pids.map((p) => [p, OUR_APP]))),
@@ -296,14 +294,9 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
       reap,
     });
     expect(result.reclaimed).toEqual([4242]);
-    /* SAFETY: 类型断言已复核 */
-    /* SAFETY: 类型断言已复核 */
-    const reaped = (reap.mock.calls as Array<Array<unknown>>)[0]?.[0] as {
-      force: boolean;
-      pid: number;
-    };
-    expect(reaped.pid).toBe(4242);
-    expect(reaped.force).toBe(true);
+    const reaped = vi.mocked(reap).mock.calls[0]?.[0];
+    expect(reaped?.pid).toBe(4242);
+    expect(reaped?.force).toBe(true);
   });
 
   it("认不出的占位者 ⇒ 一个都不收，但如实报出来是哪几个", async () => {

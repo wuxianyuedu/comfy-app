@@ -91,7 +91,9 @@ describe("jsdom 能力缺口的处置（精确白名单 + 计数 + 原样转发�
     expect(
       gate.consume({
         type: "not-implemented",
-        /* SAFETY: 类型断言已复核 */
+        /* 故意喂错型（message: 42）——判的就是「形状不对的输入不许炸处置器」。
+           类型层不让直说，就地豁免这一格（B5 清账：文件级豁免收到行级）。 */
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         message: 42 as unknown as string,
       }),
     ).toBe(false);

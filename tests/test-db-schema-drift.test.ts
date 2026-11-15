@@ -6,6 +6,8 @@
 import { Table, getTableColumns, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import * as schema from "~/server/db/schema";
 import { createTestDb, type TestDb } from "./helpers/test-db";
 
@@ -20,26 +22,35 @@ beforeAll(() => {
  *  要的正是「读一个运行时才存在的键」。（不另存一份 schema→表名的映射——那正是本
  *  用例要防的第二轮子。） */
 function tableNameOf(table: Table): string {
-  /* SAFETY: 类型断言已复核 */
-  return Reflect.get(table, Symbol.for("drizzle:Name")) as string;
+  const name: unknown = Reflect.get(table, Symbol.for("drizzle:Name"));
+  if (typeof name !== "string") {
+    throw new Error("drizzle 表名符号键读不出串 —— drizzle 版本变了？");
+  }
+  return name;
 }
 
-/** 读一张表的实际列名。`TestDb` 带 `[key: string]: unknown` 索引签名，`tdb.all` 类型是 unknown —— 这里一次性收窄。
+/** sqlite-proxy 宿主下测试库的消费形状守卫（B5 清账）：只取 all(query) 一件。 */
+function hasAll(value: unknown): value is {
+  all(query: ReturnType<typeof sql.raw>): Promise<unknown>;
+} {
+  return isRecord(value) && typeof value.all === "function";
+}
+
+/** 读一张表的实际列名。`TestDb` 带 `[key: string]: unknown` 索引签名，`tdb.all` 类型是 unknown —— 守卫收窄后直呼。
  *  两个形状来自换成 `sqlite-proxy` 宿主之后（ISSUE #2586）：**要 `await`** —— `resultKind` 是 async，`db.all()` 返回
  *  thenable 而非同步数组（`sqlite-core/db.cjs:281`）；**按下标取列** —— `mapResultRow` 用 `row[columnIndex]`
  *  （`utils.cjs:62`），而 `PRAGMA table_info` 列序是 `cid, name, type, notnull, dflt_value, pk` ⇒ 名字在 1。
  */
 async function columnsOf(name: string): Promise<Array<string> | null> {
-  /* SAFETY: 类型断言已复核 */
-  const session = tdb as unknown as {
-    all(query: ReturnType<typeof sql.raw>): Promise<unknown>;
-  };
   try {
-    /* SAFETY: 类型断言已复核 */
-    const rows = (await session.all(sql.raw(`PRAGMA table_info("${name}")`))) as Array<
-      Array<unknown>
-    >;
-    return rows.map((row) => String(row[1]));
+    if (!hasAll(tdb)) {
+      throw new Error("测试库宿主缺 all() —— sqlite-proxy 形状变了？");
+    }
+    const rowsUnknown: unknown = await tdb.all(sql.raw(`PRAGMA table_info("${name}")`));
+    if (!isUnknownArray(rowsUnknown)) {
+      throw new Error("PRAGMA table_info 返回的不是行数组");
+    }
+    return rowsUnknown.map((row) => String(isUnknownArray(row) ? row[1] : ""));
   } catch {
     return null;
   }
@@ -55,8 +66,7 @@ describe("测试库的表结构与 schema.ts 同步", () => {
         continue;
       }
       const name = tableNameOf(table);
-      /* SAFETY: 类型断言已复核 */
-      const columns = Object.keys(getTableColumns(table as never));
+      const columns = Object.keys(getTableColumns(table));
       // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const present = await columnsOf(name);
       if (present === null) {

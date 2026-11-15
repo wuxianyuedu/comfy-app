@@ -17,6 +17,7 @@ import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import { SourceTag } from "~/components/ui/source-tag";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { EmptyState } from "~/components/ui/empty-state";
 import { StatusDot } from "~/components/ui/status-dot";
 import { ListBadge } from "~/components/ui/list-badge";
@@ -103,6 +104,13 @@ export function WorkflowLibraryList({
             type="text"
             value={search}
           />
+        </div>
+        {/* 列表里的工作流有两个来源（ISSUE #3625）：原件在用户自己配的磁盘目录里、
+            导入后的记录在库里。徽标把两处落点说清 —— 换机器时两样都得搬，
+            只搬一样会变成「有记录没有原件」。 */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <DataLocationBadge id="workflow-library-disk" />
+          <DataLocationBadge id="workflow-library-db" />
         </div>
       </div>
 
@@ -193,9 +201,9 @@ export function WorkflowLibraryList({
                 return (
                   <li key={pending.id}>
                     <div className="border-border-subtle bg-subtle flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2">
-                      <span className="text-ink-strong text-2xs truncate" title={pending.name}>
-                        {pending.name}
-                      </span>
+                      <Hint label={pending.name}>
+                        <span className="text-ink-strong text-2xs truncate">{pending.name}</span>
+                      </Hint>
                       <Hint label={`载入「${pending.name}」`} wrap>
                         <Button
                           className="text-3xs h-auto shrink-0 gap-1 rounded-md px-2 py-1 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
@@ -265,16 +273,17 @@ function WorkflowListItem({
       >
         {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}
         <div className="flex min-w-0 items-center gap-1.5">
-          <span
-            className={[
-              NAME_MAX_WIDTH_CLASS,
-              "shrink truncate text-xs leading-tight font-medium",
-              isTech ? "text-ink-strong font-mono" : "text-ink-bright",
-            ].join("")}
-            title={workflow.name}
-          >
-            {workflow.name}
-          </span>
+          <Hint label={workflow.name}>
+            <span
+              className={[
+                NAME_MAX_WIDTH_CLASS,
+                "shrink truncate text-xs leading-tight font-medium",
+                isTech ? "text-ink-strong font-mono" : "text-ink-bright",
+              ].join("")}
+            >
+              {workflow.name}
+            </span>
+          </Hint>
           {!usable && (
             <ListBadge title="没有工作流(RAW)原件 —— 没有可执行内容" tone="danger">
               无可执行内容

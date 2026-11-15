@@ -218,12 +218,11 @@ export function HistoryDetailModal({
                       下载工作流
                     </Button>
                   </Hint>
-                  <span
-                    className="bg-subtle text-ink-muted text-3xs hidden rounded px-1.5 py-0.5 sm:inline"
-                    title={sourceLabel}
-                  >
-                    {sourceLabel}
-                  </span>
+                  <Hint label={sourceLabel}>
+                    <span className="bg-subtle text-ink-muted text-3xs hidden rounded px-1.5 py-0.5 sm:inline">
+                      {sourceLabel}
+                    </span>
+                  </Hint>
                 </div>
               )}
               <Button

@@ -10,7 +10,9 @@ import type { ZodRawShape } from "zod";
  * 这里替调用方断形状等于把判据的判断力交出去（它想断的正是「线上到底发成什么样」）。
  */
 export function throughJsonWire<T>(value: unknown): T {
-  /* SAFETY: 类型断言已复核 */
+  /* 这一处断言是**设计本身**（见上：形状判断力故意留给调用方），不是待清的存量 ——
+     就地行级豁免并写明理由（B5 清账：文件级豁免收到行级）。 */
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return JSON.parse(JSON.stringify(value)) as T;
 }
 

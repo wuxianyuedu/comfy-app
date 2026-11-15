@@ -364,10 +364,12 @@ function WorkflowEditorBody({
         viewHostNodeId={viewHostNodeId}
       />
 
+      {/* IO 编辑模式提示：顶栏下方的流内横条，不叠在画布上（ISSUE #3632）。 */}
+      {ioEditMode && <IoEditModeBanner />}
+
       {/* ── Canvas ── */}
       <div className="relative min-h-0 flex-1">
         {subgraphLoading && <SubgraphLoadingOverlay />}
-        {ioEditMode && <IoEditModeBanner />}
         {subgraphError && (
           <SubgraphErrorToast
             error={subgraphError}

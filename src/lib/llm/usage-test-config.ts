@@ -3,6 +3,7 @@
 // 每行一个字段名 key + 一个值 value，值可为文本 / 数字 / 图片。
 // 本文件只放可被单测的纯函数与常量，DOM / FileReader 等留在视图层。
 
+import { joinApiUrl } from "~/lib/llm/provider-types";
 import { withQuery } from "~/lib/query-string";
 import { nextId } from "~/lib/unique-id";
 
@@ -222,6 +223,31 @@ export function hasUsageFieldKey(fields: Array<UsageField>, key: string): boolea
 
 /* ── 弹窗草稿保留 + 产物本地落盘的文件名/扩展名推断（纯函数） ── */
 
+/** 「实际使用」测试弹窗打开时的默认端点路径（#3577 收口为纯函数）：
+ *  · image：base 已含资源子路径（…/images）时只补动作段；
+ *  · video：base 已含 …/videos 时直接用 base；Agnes 的视频端点是 /v1/videos
+ *    （任务制，不是 OpenAI 风格的 /videos/generations），按 host 命中给 /videos；
+ *  · 其余按 kind 给通用预设（路径在弹窗里仍可改）。 */
+export function defaultUsageTestPath(kind: "chat" | "image" | "video", base: string): string {
+  const presets: Record<"chat" | "image" | "video", string> = {
+    chat: "/chat/completions",
+    image: "/images/generations",
+    video: "/videos/generations",
+  };
+  if (kind === "image" && /\/images$/i.test(base)) {
+    return "/generations";
+  }
+  if (kind === "video") {
+    if (/\/videos$/i.test(base)) {
+      return "";
+    }
+    if (/agnes/i.test(base)) {
+      return "/videos";
+    }
+  }
+  return presets[kind];
+}
+
 /** 每个模型条目的测试弹窗草稿稳定键：kind + 条目名。
  * 用于「关闭弹窗后重新打开时恢复上次填写内容 / 状态 / 执行流程」。 */
 export function usageTestDraftKey(kind: string, name: string): string {
@@ -300,7 +326,9 @@ export function buildVideoPollUrls(
     agnes = null;
   }
   return {
-    rest: `${base}${dir}/${taskId.replace(/^\/+/, "")}`,
+    /* REST 候选走 `joinApiUrl`：Base 缺版本段时补 /v1（#3656），历史带版本段的
+     * Base 行为不变（join 原样接）。dir 为空串时 join 返回 base 本身（同旧行为）。 */
+    rest: `${joinApiUrl(base, dir)}/${taskId.replace(/^\/+/, "")}`,
     agnes,
   };
 }

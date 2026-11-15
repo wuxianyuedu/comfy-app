@@ -257,19 +257,20 @@ export function NodeJsonPopover({
                   #{request.nodeId}
                 </span>
               </div>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "var(--color-ink)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-                title={nodeClass}
-              >
-                {nodeClass}
-              </div>
+              <Hint label={nodeClass}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--color-ink)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {nodeClass}
+                </div>
+              </Hint>
             </div>
             <Hint label={copyFailed ? copyFailureText() : "复制 JSON 到剪贴板"}>
               <Button

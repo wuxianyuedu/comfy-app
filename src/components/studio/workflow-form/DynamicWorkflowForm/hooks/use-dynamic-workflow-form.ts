@@ -4,9 +4,10 @@
 // 值写入。视图层只消费这里返回的 controller，不持有任何业务规则。
 
 import { useFilePicker } from "~/components/ui/file-picker";
+import type { FilePicker } from "~/components/ui/file-picker";
 import { errorMessage } from "~/lib/error-message";
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { ComponentType, DragEvent } from "react";
+import type { ComponentProps, DragEvent } from "react";
 
 import { uploadImageFile } from "~/lib/project-canvas/canvas-api";
 import { readFileAsDataUrl } from "~/lib/file-io";
@@ -61,8 +62,8 @@ export type DynamicWorkflowFormController = {
    *  `position` 同源，指示线永远画在实际插入位置。 */
   dropPosition: WorkflowIODropPosition;
   endDrag: () => void;
-  /** 隐藏图片选择 input 的挂载点（`ui/file-picker`）。 */
-  FileInput: ComponentType;
+  /** 隐藏图片选择 input 的 props（渲染成 `<FilePicker {...fileInputProps} />`，#3692）。 */
+  fileInputProps: ComponentProps<typeof FilePicker>;
   groups: ReturnType<typeof inferGroups>;
   /** 全量输入（wire + widget），按 displayOrder 稳定排序。 */
   inputs: Array<EnrichedWidget>;
@@ -363,7 +364,7 @@ export function useDynamicWorkflowForm(
     isEmpty: inputs.length === 0 && shownOutputs.length === 0,
     uploading,
     uploadTarget,
-    FileInput: uploadPicker.Input,
+    fileInputProps: uploadPicker.inputProps,
     pickFile,
     localPreviewUrl,
     uploadError,

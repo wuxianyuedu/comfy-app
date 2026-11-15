@@ -103,9 +103,10 @@ describe("故事文件的枚举来源（ISSUE #1381）", () => {
         source.statements.flatMap((stmt) =>
           ts.isVariableStatement(stmt)
             ? stmt.declarationList.declarations
-                .filter((d) => ts.isIdentifier(d.name))
-                /* SAFETY: 类型断言已复核 */
-                .map((d) => (d.name as ts.Identifier).text)
+                /* 守卫在前、取值在后（B5 清账）：isIdentifier 收窄后直接取 .text，
+                   不再断言。非标识符名（解构等）不进集合。 */
+                .map((d) => (ts.isIdentifier(d.name) ? d.name.text : null))
+                .filter((name): name is string => name !== null)
             : [],
         ),
       );

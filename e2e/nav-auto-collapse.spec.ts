@@ -1,5 +1,7 @@
 import { expect, test, type Browser, type Locator } from "@playwright/test";
 
+import { NAV_WIDTH_COLLAPSED_PX, NAV_WIDTH_EXPANDED_PX } from "../src/lib/layout-budget";
+
 /**
  * 左轨让位在真浏览器里的形态（@critical）：单元层钉算式，这里钉**确实落到布局上** —— 收起真的让出宽度，只断言 `data-state` 会漏掉半截实现。
  * 两档跨阈值两侧（1280，算式在 `~/lib/layout-budget`）；状态用可重试断言（首帧由服务端快照决定、对账在提交之后），读早了会得到假的「没生效」。
@@ -26,9 +28,16 @@ async function expectNarrow(wrapper: Locator, narrow: boolean) {
 
 test.describe("左轨按窗宽自动让位 @critical", () => {
   test("宽窗展开、窄窗收起，且收起真的让出宽度", async ({ browser }) => {
+    /* 宽度判据按布局账推导（`~/lib/layout-budget`：展开 160 / 收起 48），不再写死
+       差值 —— 此前钉「差值 ≥150」，侧栏按 #3587 收窄到内容实需后差值只剩 112，
+       判据过期误报（ISSUE #3657）。容差 ±2 只盖测量取整，改预算必须连这里的
+       期望一起改，账与屏面不分叉。 */
     const wide = await openAtWidth(browser, 1500);
     await expectNarrow(wide.wrapper, false);
     await expect(wide.sidebar).toHaveAttribute("data-state", "expanded");
+    await expect
+      .poll(async () => (await wide.sidebar.boundingBox())?.width ?? 0)
+      .toBeGreaterThanOrEqual(NAV_WIDTH_EXPANDED_PX - 2);
     const wideWidth = (await wide.sidebar.boundingBox())?.width ?? 0;
     await wide.ctx.close();
 
@@ -36,14 +45,16 @@ test.describe("左轨按窗宽自动让位 @critical", () => {
     /* 先判客户端判据到位，再判生效态 —— 顺序即「两步」的语义，红了能定位到哪一步。 */
     await expectNarrow(narrow.wrapper, true);
     await expect(narrow.sidebar).toHaveAttribute("data-state", "collapsed");
-    /* 让位是真的换了宽度，不只是改了属性（收起档 3rem=48px，给余量取 <100）。 */
+    /* 让位是真的换了宽度，不只是改了属性：收起档必须落到图标轨宽。 */
     await expect
       .poll(async () => (await narrow.sidebar.boundingBox())?.width ?? 0)
-      .toBeLessThan(100);
+      .toBeLessThanOrEqual(NAV_WIDTH_COLLAPSED_PX + 2);
     const narrowWidth = (await narrow.sidebar.boundingBox())?.width ?? 0;
     await narrow.ctx.close();
 
-    expect(wideWidth - narrowWidth, "收起没有真的让出宽度").toBeGreaterThanOrEqual(150);
+    expect(wideWidth - narrowWidth, "收起没有真的让出宽度").toBeGreaterThanOrEqual(
+      NAV_WIDTH_EXPANDED_PX - NAV_WIDTH_COLLAPSED_PX - 4,
+    );
   });
 
   test("窄窗里用户点开导航就按他的选择展开，再点回收起", async ({ browser }) => {

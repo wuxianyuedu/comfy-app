@@ -33,10 +33,13 @@ function controller(
 ): ReadySettingsPageController {
   const stub: unknown = {
     backups: [],
+    appDataBackups: [],
     pendingRestore: null,
     backupListLoading: false,
     backupBusy: false,
     restoreBusy: false,
+    importBusy: false,
+    importFromDir: vi.fn(() => undefined),
     createBackupNow: vi.fn(() => undefined),
     restoreFrom: vi.fn(() => undefined),
     ...overrides,
@@ -82,7 +85,8 @@ describe("恢复是两步，界面必须说清", () => {
     expect(screen.getByText(/确认登记从/)).toBeTruthy();
 
     await userEvent.click(screen.getByRole("button", { name: "确认登记" }));
-    expect(restoreFrom).toHaveBeenCalledWith("db-backup-20261010-120000.sqlite");
+    /* 无配对的应用数据备份时，第二参（appDataDir）是 null。 */
+    expect(restoreFrom).toHaveBeenCalledWith("db-backup-20261010-120000.sqlite", null);
   });
 
   it("取消就真的不登记", async () => {
@@ -102,6 +106,7 @@ describe("恢复是两步，界面必须说清", () => {
           pendingRestore: {
             file: "db-backup-20261010-120000.sqlite",
             at: new Date().toISOString(),
+            appDataDir: null,
           },
         })}
       />,

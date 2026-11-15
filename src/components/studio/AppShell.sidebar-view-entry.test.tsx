@@ -107,13 +107,19 @@ describe("侧栏的模型适配 / 模式契约入口", () => {
   });
 });
 
-describe("设置不在侧栏（ISSUE #1784：入口收归顶栏应用菜单）", () => {
-  it("侧栏列表里没有「设置」这一项（它只在顶栏菜单里）", () => {
+describe("设置不在侧栏（ISSUE #1784：入口收归顶栏）", () => {
+  it("侧栏列表里没有「设置」这一项；顶栏有直达的设置图标（ISSUE #3789）", () => {
     renderShell();
     /* 侧栏那几项都是带文字的按钮；撤掉之后按名字查应该一个都查不到。
-       注意不能用 `onOpenSettings` 的回调次数代替 —— 那是顶栏菜单的路径，
+       注意不能用 `onOpenSettings` 的回调次数代替 —— 那是顶栏的路径，
        与侧栏无关（下面那条正是要把它分开判）。 */
-    expect(screen.queryByRole("button", { name: "设置" })).toBeNull();
+    const sidebarItems = screen
+      .getAllByRole("listitem")
+      .filter((item) => item.dataset.sidebar === "menu-item");
+    expect(sidebarItems.filter((item) => item.textContent?.includes("设置"))).toEqual([]);
+    /* 顶栏右上角现在有**直达**的「设置」图标按钮（ISSUE #3789：不必再点
+       应用菜单 → 设置 两次）；应用菜单里的「设置」项也仍在。 */
+    expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
   });
 
   it("侧栏底部那枚「设置」也不在了（三处入口收成一处）", () => {

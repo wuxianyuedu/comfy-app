@@ -322,7 +322,11 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
         }
         let end = lines.length;
         for (let j = i + 1; j < lines.length; j += 1) {
-          if (/^ {6}- name: /.test(lines[j] ?? "")) {
+          /* 块尾有两种：下一个 step 头，或**下一个 job 的边界**（2 空格缩进的非空行 ——
+           * job 键或挂在它头上的注释段）。少了后者，一个 job 的**最后一步**会把下一个
+           * job 的头整段吞进来，于是 `env:` 的收键层一路收到 `  <job>:` 那一行上，
+           * 报出「缩进 2，该在 8」这种指不到真因的红（daily.yml 自 #3563 起有两个 job）。 */
+          if (/^ {6}- name: /.test(lines[j] ?? "") || /^ {2}\S/.test(lines[j] ?? "")) {
             end = j;
             break;
           }

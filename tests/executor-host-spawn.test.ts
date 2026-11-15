@@ -14,6 +14,7 @@ import {
   EXECUTOR_HOST_SCRIPT,
   maybeSpawnExecutorHost,
   planExecutorHostSpawn,
+  SKIP_EXECUTOR_HOST_ENV,
 } from "../scripts/launcher-core/executor-host-spawn.mjs";
 import { resolveSpawnTarget } from "../scripts/launcher-core/shell.mjs";
 import { launcherChainSource } from "./helpers/launcher-source";
@@ -92,6 +93,24 @@ describe("planExecutorHostSpawn：哪些值会起宿主", () => {
       shouldSpawn: false,
     });
   });
+
+  it("编排器跳过标记（#3830）→ 即使 COMFY_EXECUTOR=host 也不起（判决照算，进程不拉）", () => {
+    // launcher 链路里 dev-launcher（6.5 步）已起过一份，downstream 把这个标记
+    // 传给 dev.mjs；没有它，host 模式下一次启动会确定性双宿主。
+    expect(
+      planExecutorHostSpawn({ env: { COMFY_EXECUTOR: "host", [SKIP_EXECUTOR_HOST_ENV]: "1" } }),
+    ).toEqual({ mode: "host", unknown: null, shouldSpawn: false });
+    // 标记缺省时行为不变。
+    expect(
+      planExecutorHostSpawn({ env: { COMFY_EXECUTOR: "host", [SKIP_EXECUTOR_HOST_ENV]: "" } }),
+    ).toEqual({ mode: "host", unknown: null, shouldSpawn: true });
+  });
+
+  it("downstream 的 dev server 子进程 env 里带上了跳过标记（接线回归）", () => {
+    const body = scriptBody(readScript("scripts/launcher-core/downstream.mjs"));
+    expect(body).toContain("[SKIP_SCHEMA_SYNC_ENV]");
+    expect(body).toContain("[SKIP_EXECUTOR_HOST_ENV]");
+  });
 });
 
 describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
@@ -154,10 +173,17 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
 
   it("host 模式下起进程：args 指宿主入口、env 显式回写归一化值、日志按次命名", async () => {
     const root = mkRoot();
-    /** 起进程的那一步换成假实现：本判据要的是**传了什么**，不该真拉一个宿主。 */
-    const spawnInGroup = vi.fn((_options: unknown): { pid: number } => ({
-      pid: 4242,
-    }));
+    /** 起进程的那一步换成假实现：本判据要的是**传了什么**，不该真拉一个宿主。
+     *  入参标上类型，复核走类型化 calls（B5 清账，不走 `as` 断言）。 */
+    const spawnInGroup = vi.fn(
+      (_options: {
+        args: Array<string>;
+        command: string;
+        cwd: string;
+        env: Record<string, string>;
+        platform: string;
+      }): { pid: number } => ({ pid: 4242 }),
+    );
     vi.resetModules();
     /* 只替换「拉起」这一步；入口判据（resolveSpawnTarget）用真实现，
      * 否则本用例验证的就不是接线后的形态（ISSUE #3327）。 */
@@ -172,14 +198,10 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
       });
 
       expect(spawnInGroup).toHaveBeenCalledTimes(1);
-      /* SAFETY: 类型断言已复核 */
-      const call = spawnInGroup.mock.calls[0]?.[0] as {
-        args: Array<string>;
-        command: string;
-        cwd: string;
-        env: Record<string, string>;
-        platform: string;
-      };
+      const call = spawnInGroup.mock.calls[0]?.[0];
+      if (call === undefined) {
+        throw new Error("spawnInGroup 没拿到调用入参");
+      }
       expect(call.command).toBe(process.execPath);
       /* 参数数组只放**写死的相对入口**，根在 cwd 里（ISSUE #3327：注入面收窄）。
        * 断言意图不变：拼起来仍必须正好是 root 下的宿主入口。 */

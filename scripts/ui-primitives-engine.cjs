@@ -475,6 +475,65 @@ function classifyTitleValue(prop) {
   return unquoted ? "static" : "empty";
 }
 
+/** 扫视图层每个 host 元素（小写原生标签）开标签，按「有没有原生 `title=`」判 P88 违规。
+ *
+ * 与 `countButtonTitle` 同一口径（先剥注释、再按开标签扫属性段、五档判定、
+ * `violations = static + dynamic`）：host 元素写原生 `title=` 出来的气泡**由浏览器画**，
+ * 样式 / 延迟 / 主题全部不归设计 token 管 —— 与 P82 盯 `<Button>` 是同一条治理线的
+ * 另一面（shadcn `composition.md`：icon-only 与悬浮说明走 Tooltip，不走原生 `title=`）。
+ *
+ * 分片锚点与 P82 的差异**只有一处**：匹配的标签
+ *   · P82  锚 `<Button`（字面开标签 + 后随 `[\s/>]`）；
+ *   · P88 锚**小写 host 标签**（`<[a-z][a-z0-9-]*` + 后随 `[\s/>]`）——
+ *     value 直接决定不计 capitalized 组件（`<EmptyState title=…>` 是组件 prop，
+ *     不是 native tooltip）、不计 `<title>` 子元素（SVG 里合法的无障碍落点）。
+ *   · 其余（multiline 属性段、spread、empty 不计、unknown 单列）逐字同 P82。
+ *
+ * 豁免：`iframe` / `object` / `embed` —— 这三个 host 元素的 `title` 属性是
+ * **无障碍强制项**（`react/jsx-a11y` 的 `iframe-has-title` 等规则强制要求），
+ * 不是浏览器画的 tooltip，换成 `<Hint>` 反而把无障碍名抹掉了。
+ */
+function countHostTitle(text) {
+  const t = stripCommentsCached(text);
+  const res = {
+    clean: 0,
+    empty: 0,
+    static: 0,
+    dynamic: 0,
+    unknown: 0,
+    violations: 0,
+    unknownHits: [],
+  };
+  const re = /<(?<tag>[a-z][a-z0-9-]*)(?=[\s/>])/g;
+  let m;
+  while ((m = re.exec(t)) !== null) {
+    const tag = m.groups?.tag;
+    if (tag === "title" || tag === "iframe" || tag === "object" || tag === "embed") {
+      continue;
+    }
+    const scanned = scanJsxAttrs(t, re.lastIndex);
+    if (!scanned) {
+      continue;
+    }
+    const props = parseJsxProps(scanned.attrs);
+    const titles = props.filter((p) => p.name === "title");
+    if (titles.length) {
+      /* 同名重复时取最后一个（JSX 后者覆盖前者）。 */
+      const tier = classifyTitleValue(titles.at(-1));
+      res[tier]++;
+      if (tier === "static" || tier === "dynamic") {
+        res.violations++;
+      }
+    } else if (props.some((p) => p.kind === "spread")) {
+      res.unknown++;
+      res.unknownHits.push(m.index);
+    } else {
+      res.clean++;
+    }
+  }
+  return res;
+}
+
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
 function isBusySlotName(name) {
   return /[Bb]usy/.test(name) || /^\w*[Rr]etry\w*Id$/.test(name);
@@ -593,6 +652,7 @@ module.exports = {
   parseJsxProps,
   classifyTitleValue,
   countButtonTitle,
+  countHostTitle,
   isBusySlotName,
   isP81IconName,
   P81_ICON_NAMES,

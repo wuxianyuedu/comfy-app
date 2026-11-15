@@ -23,6 +23,7 @@ import { isPlainRecord } from "~/lib/is-record";
 import { rectToAnchorRect } from "~/lib/dom-rect";
 import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
 import { patchWorkflowSilently } from "~/lib/workflow/workflow-mutations";
+import { clearModeOverrides, withIOLabel, withModeOverride } from "~/lib/workflow/workflow-io-edit";
 import { reportStaleStoreAction } from "~/lib/shell/stale-store-notify";
 
 /* ─── IOEdit store ─── 原先在 wf-editor-inner 用 useState + useCallback 声明、
@@ -122,21 +123,11 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     },
 
     setIOLabel: (key, label) => {
+      /* 规则收在 workflow-io-edit 的纯变换里：库端 IO 预览页签改显示名走同一份，
+       * 两处不再各写一遍「空串 = 撤销重命名」的口径。 */
       set((state) => {
-        const cur = state.workflowIO[key];
-        if (!cur) {
-          return {};
-        }
-        /* 清空 = 恢复默认（取消这条参数的重命名），显示名回到富化链。
-         * 写什么就存什么：不再有「这个名字像机器名，所以不让存」的判定 ——
-         * 作者的显式命名是唯一真相（ISSUE #349 的「改了也不行」不会再出现）。 */
-        const kept = label.trim() || undefined;
-        if (kept === cur.label) {
-          return {};
-        }
-        return {
-          workflowIO: { ...state.workflowIO, [key]: { ...cur, label: kept } },
-        };
+        const next = withIOLabel(state.workflowIO, key, label);
+        return next === state.workflowIO ? {} : { workflowIO: next };
       });
     },
 
@@ -163,65 +154,22 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
 
     setIOModeOverride: (key, mode, patch) => {
       set((state) => {
-        const cur = state.workflowIO[key];
-        if (!cur || !mode) {
-          return {};
-        }
-        const modes: Record<string, WorkflowIOModeOverride> = {
-          ...cur.modeOverrides,
-        };
-        if (patch === null) {
-          if (!(mode in modes)) {
-            return {};
-          }
-          delete modes[mode];
-        } else {
-          modes[mode] = { ...modes[mode], ...patch };
-        }
-        /* modes 全空时把字段摘掉，避免往服务端 JSON 里塞一个空对象。 */
-        const nextEntry: WorkflowIOParam =
-          Object.keys(modes).length > 0
-            ? { ...cur, modeOverrides: modes }
-            : { ...cur, modeOverrides: undefined };
-        return {
-          workflowIO: {
-            ...state.workflowIO,
-            [key]: nextEntry,
-          },
-        };
+        const next = withModeOverride(state.workflowIO, key, mode, patch);
+        return next === state.workflowIO ? {} : { workflowIO: next };
       });
     },
 
     purgeModeOverrides: (codes) => {
       let cleaned: Record<string, WorkflowIOParam> | null = null;
       set((state) => {
-        const hit = codes.filter((code) =>
-          Object.values(state.workflowIO).some(
-            (entry) =>
-              entry.modeOverrides !== null &&
-              entry.modeOverrides !== undefined &&
-              code in entry.modeOverrides,
-          ),
-        );
-        if (hit.length === 0) {
-          return {};
+        /* 逐个模式码走同一份纯变换（与库端「恢复默认」同源）。无任何命中时
+         * 变换原样返回整张表，据此跳过一次无意义的落库。 */
+        let next = state.workflowIO;
+        for (const code of codes) {
+          next = clearModeOverrides(next, code);
         }
-        const next: Record<string, WorkflowIOParam> = {};
-        for (const [key, entry] of Object.entries(state.workflowIO)) {
-          const modes = entry.modeOverrides;
-          if (!modes || !hit.some((code) => code in modes)) {
-            next[key] = entry;
-            continue;
-          }
-          const rest = { ...modes };
-          for (const code of hit) {
-            delete rest[code];
-          }
-          /* 与 setIOModeOverride 的落库形态一致：modes 全空时摘掉字段。 */
-          next[key] = {
-            ...entry,
-            modeOverrides: Object.keys(rest).length > 0 ? rest : undefined,
-          };
+        if (next === state.workflowIO) {
+          return {};
         }
         cleaned = next;
         return { workflowIO: next };

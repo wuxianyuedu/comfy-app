@@ -96,7 +96,7 @@
  * ── 能机械导出的就**不手抄**（ISSUE #1981 收尾）────────────────────────────
  *
  * 环境类的 globs 由上面的条件手写（「脚本里有 `SCAN_DIR`」正是它们的判据）；而
- * `生成态文档与源同步` 那一档的面由 `docs/**` 直接给出（源与产物都在它下面）。
+ * （#3586 前）`生成态文档与源同步` 那一档的面由 `docs/**` 直接给出（源与产物都在它下面）。
  *
  * ⚠️ **2026-11-05：`API 文档生成与自检` 已从 push 撤到每日档**（ISSUE #2537）——
  * 那一档在每日档**不带 `ifModify`**（每跑必判），所以它的触发面**不再进这张表**。
@@ -156,13 +156,9 @@ const ROOT = path.resolve(HERE, "..");
  *     `tests/docs-api-input-closure.test.ts` 双向对账（事实面罩不住 ⇒ 红；面被改窄 ⇒ 红）。
  *     **同日起这一档从 push 撤到每日档**（无 `ifModify`）⇒ 上面这份派生面不再写进本表，
  *     但仍保留在判据的 `--staged` 档与上面那条对账里。
- *   · `生成态文档与源同步` ⇒ `doc-facts.cjs` 的 `SCOPED_DOCS`（源）与 `docs/generated/**`
- *     （产物）；源与产物**都在 `docs/**` 下面**，故取上界 `docs/**`（逐条抄 32 个路径
- *     就是第二份会漂的副本 —— 抄一份的漂移形态是「新增一篇文档忘了加进收窄面」）。
+ *   · （`生成态文档与源同步` 曾在这一族（面 `docs/**`，源与产物都在它下面），
+ *     #3586 随 `docs/generated/**` 退出入库产物一并退役 —— 没有入库的产物可判。）
  */
-/** `生成态文档与源同步` 的面：源（`SCOPED_DOCS`）与产物（`docs/generated/**`）同在 `docs/**`。 */
-const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
-
 /**
  * stage 名 → 它的扫描面（`ifModify` glob 列表）。
  *
@@ -172,19 +168,7 @@ const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
  * 唯一权威），别在这儿复述成第二份会过期的定义。
  *
  * @type {ReadonlyArray<{name: string, globs: readonly string[], why: string, script: string}>}
- */ export const INCREMENTAL_GATES = [
-  {
-    name: "生成态文档与源同步",
-    globs: DOC_PLACEHOLDER_GLOBS,
-    script: "scripts/render-doc-placeholders.cjs",
-    why:
-      "它判的是「`docs/generated/**` 里的生成态镜像 ⇄ `doc-facts.cjs` 的 `SCOPED_DOCS` 那些源」" +
-      "同不同步 —— **源与产物两面都要看**，所以面是 `docs/**`（源与产物都在它下面；" +
-      "逐条抄 32 个 `SCOPED_DOCS` 路径就是第二份会漂的副本，漂的形态是「新增一篇文档忘了加进收窄面」）。" +
-      "⚠️ 代价写在明处：`SCOPED_DOCS` 与 `docs/**` 的包含关系由" +
-      "`tests/ci-incremental-gates.test.ts` 核（源与产物两面都必须在面内）。",
-  },
-];
+ */ export const INCREMENTAL_GATES = [];
 
 /** 表里登记的名字集合（判据与自测都用它，避免各处重算）。 */
 export const INCREMENTAL_GATE_NAMES = new Set(INCREMENTAL_GATES.map((g) => g.name));
@@ -363,9 +347,10 @@ export function checkIncrementalGates(text, workflowText = "") {
  * 逻辑只在 `checkIncrementalGates()` 一处，本函数不重写判据。
  */
 function main() {
-  /* ISSUE #3378 收尾：CNB push 主列撤掉后，登记表里的 `生成态文档与源同步`
-   * 由 GA `master-gate.yml` 的同名 step 承接。执行面从 `.cnb.yml` 扩到 GA workflow
-   * （同一份纯函数判），缺省仍只认 `.cnb.yml` —— 纯配置的自测样本不受影响。 */
+  /* 执行面从 `.cnb.yml` 扩到 GA workflow（同一份纯函数判），缺省仍只认
+   * `.cnb.yml` —— 纯配置的自测样本不受影响。#3586 后登记表暂空、那一条 GA step
+   * 也已退役，这个参数仍留着：将来若有新的单执行者一格要收窄，两侧同源的判法
+   * 不用重新发明。 */
   let gaWorkflow = "";
   try {
     gaWorkflow = fs.readFileSync(path.join(ROOT, ".github/workflows/master-gate.yml"), "utf8");

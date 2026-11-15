@@ -18,7 +18,7 @@
 | -------------------- | -------------------------------------------------------------------- | -------------------------------- |
 | 本文件               | 索引、与规范的分工、使用规则、变更控制、维护规则                     | 第一次进本目录                   |
 | [overview.md](overview.md) | 产品概述：定位 / 用户与场景 / 形态 / 信息架构 / 核心概念 / 数据与账号 / 非功能总览 | 建立全局认知                     |
-| [feature-catalog.md](feature-catalog.md) | 功能需求清单：17 个功能域、编号化需求总表、状态词表、已知缺口索引 | 查「有没有这个需求、什么状态」   |
+| [feature-catalog.md](feature-catalog.md) | 功能需求清单：17 个功能域 101 条编号化需求的总表、状态词表、已知缺口索引 | 查「有没有这个需求、什么状态」   |
 | [feature-specs.md](feature-specs.md)   | 功能需求详述：逐条需求 / 行为与验收 / 状态 / 代码落点            | 做某个功能前                     |
 | [pipeline-stages.md](pipeline-stages.md) | 创作流水线六阶段规格：剧本 → 角色 → 分镜 → 生图 → 生视频 → 合成，每阶段的目标 / 输入输出契约 / 人与 AI 的用法 / 质量验收 / 状态 / 缺口 | 做**六阶段中任一阶段**前（验收基准） |
 
@@ -54,9 +54,10 @@
    （catalog 加行或改状态、specs 补验收口径）；只改实现不改行为的不动本目录。
 4. **验收口径可核验**：每条需求的「行为与验收」写成能跑命令 / 能指路径的形态，
   不写「体验良好」这类不可判的词。
-5. **与规范同批维护**：本目录是 `SCOPED_DOCS` 纳管文档 —— 改了源要同批带
-   `docs/generated/` 镜像（`pnpm doc:render`），并由 `pnpm doc:check` 把关
-   （口径见 `docs/reference-facts.md` §3）。
+5. **与规范同批维护**：本目录是 `SCOPED_DOCS` 纳管文档 —— 改了源由 `pnpm doc:check`
+   把关引用与权威源一致（口径见 `docs/reference-facts.md` §3）。`docs/generated/`
+   镜像自 #3586 起不再入库，谁需要带真实值的原文谁本地 `pnpm doc:render` 自己生成，
+   **没有「同批带上」这一步**。
 
 ## 6. 维护规则
 
@@ -66,3 +67,8 @@
   「做什么、怎么算做完」。
 - 本目录的登记与校验范围见 `scripts/doc-facts.cjs`（`SCOPED_DOCS` /
   `SCOPED_DOC_DIRS`）与 `docs/README.md` §1 文档体系总览。
+- **两个计数（功能域数 / 编号化需求条数）在 `docs/README.md` 与本文件里各写一次**：
+  它们不是手抄的装饰，而是由 `pnpm doc:check` 按 `feature-catalog.md` 的总表
+  **现场核对**的事实（key：`product.domains.count` / `product.requirements.count`，
+  登记表见 `docs/reference-facts.md` §1.7）—— 改了总表却没改这两处，判据当场报错；
+  两处也从此不会再各说各的。

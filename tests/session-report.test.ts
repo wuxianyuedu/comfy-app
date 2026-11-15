@@ -101,7 +101,7 @@ describe("session-report —— 排版：五节在场、顺序稳定（他人照
     expect(at("## 二、验证读数（哪步执行 · 消耗多少时间）")).toBeGreaterThan(at("## 一、"));
     expect(at("## 三、开发总结")).toBeGreaterThan(at("## 二、"));
     expect(at("## 四、经验与可复用")).toBeGreaterThan(at("## 三、"));
-    expect(at("## 五、待处理（需要提单的）")).toBeGreaterThan(at("## 四、"));
+    expect(at("## 五、本轮发现与已立案")).toBeGreaterThan(at("## 四、"));
     /* 事实段：sha / PR 号 / 变更面都是机器填的。 */
     expect(md).toContain("`30500c64` chore(lint): 按预设开 171 条零命中规则 (#3164) —— PR #3164");
     expect(md).toContain("（37 份文件，+812 −340）");
@@ -112,6 +112,12 @@ describe("session-report —— 排版：五节在场、顺序稳定（他人照
     /* 判断段：三节是人填的骨架，不是机器代笔。 */
     expect(md).toContain("<!-- 人填：这一轮做了什么");
     expect(md).toContain("pnpm ship --new-issue");
+    /* 第五节是「发现即立案」，不是「要不要提单」的询问（ISSUE #3560）：
+     * 骨架要给出立案命令，并逐字写清「不在这里问要不要提单」，防止被改回待办清单。 */
+    expect(md).toContain("当场**立案");
+    expect(md).toContain("不在这里问");
+    expect(md).toContain("别留空，也别攒成没有号的建议清单");
+    expect(md).not.toContain("是否提单");
   });
 
   it("红的步骤 ⇒ 「红的步骤」节点名 + 输出末尾转述，总行不许写「全过」", () => {
@@ -245,6 +251,6 @@ describe("session-report —— CLI：边界与端到端", () => {
     expect(r.stdout).toContain("## 一、本次做了什么");
     expect(r.stdout).toContain("chore: 一次批次 (#3165) —— PR #3165");
     expect(r.stdout).toContain("| 1 | 必绿探针 |");
-    expect(r.stdout).toContain("## 五、待处理（需要提单的）");
+    expect(r.stdout).toContain("## 五、本轮发现与已立案");
   });
 });

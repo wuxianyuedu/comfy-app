@@ -19,14 +19,29 @@ type Report = {
   unguarded: Array<string>;
 };
 
+/** `JSON.parse` 的 `any` 不走不安全断言（B5 清账）：按 Report 的顶层键做浅守卫，
+ * 够本文件用（产出方是本仓自己的扫描脚本，键齐即可信）。 */
+function isReport(value: unknown): value is Report {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const keys = new Set(Object.keys(value));
+  return (["clientReachable", "counts", "libOnlyReachable", "unguarded"] as const).every((k) =>
+    keys.has(k),
+  );
+}
+
 /** 跑一次依赖图分析（实现收在扫描器里，本文件不复制一份 —— 见文件头的归属说明）。 */
 function scan(): Report {
   const out = execFileSync(process.execPath, ["scripts/lib-node-only-scan.mjs", "--json"], {
     cwd: REPO_ROOT,
     encoding: "utf8",
   });
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(out) as Report;
+  const parsed: unknown = JSON.parse(out);
+  if (!isReport(parsed)) {
+    throw new Error("lib-node-only-scan 的 JSON 输出形状不对");
+  }
+  return parsed;
 }
 
 /** 去掉注释，避免把注释里提到的 `node:fs` 误判成 import。 */
@@ -53,8 +68,11 @@ function runScanOnFixture(files: Record<string, string>): Report {
      * `--json` 那一档恒退 0，所以这一格退非 0 就是夹具或脚本坏了。 */
     expectGateRan(r);
     expect(r.code, r.output).toBe(0);
-    /* SAFETY: 类型断言已复核 */
-    return JSON.parse(r.output) as Report;
+    const parsed: unknown = JSON.parse(r.output);
+    if (!isReport(parsed)) {
+      throw new Error("lib-node-only-scan 的 JSON 输出形状不对");
+    }
+    return parsed;
   } finally {
     dispose();
   }

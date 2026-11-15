@@ -5,9 +5,12 @@
  * jsdom 里只断言两处的「有无」与文案，不断言像素。 */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import {
   buildParamEntries,
   sizeSubLabel,
@@ -17,6 +20,9 @@ import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 
 afterEach(cleanup);
+
+/* `Hint` 的浮层要 `TooltipProvider`（应用里挂在根布局上）。 */
+const wrap = (ui: ReactNode) => <TooltipProvider delay={0}>{ui}</TooltipProvider>;
 
 const io: WorkflowIOMap = {
   "9::widget::text": {
@@ -120,33 +126,48 @@ describe("WorkflowParamCardColumn", () => {
     expect(screen.queryByText("工作流里的端口名")).toBeNull();
   });
 
-  it("端口行只列端口本身，落点不再在行尾重复一遍（ISSUE #355 复审）", () => {
-    /* 用户圈出「红框内那段没用」：行尾的「→ 落点」与下面那行带类型的输出端口
-     * 说的是同一件事（那一行已经写出落点名，还贴着端点圆点）。单端口条目因此
-     * 不再在行尾重复标注 —— 只留端口自己的类型。 */
+  it("端口行只列端口本身，落点不再在行尾重复一遍（ISSUE #355 复审）", async () => {
+    const user = userEvent.setup();
     const { container } = render(
-      <WorkflowParamCardColumn entries={entries} io={io} resolved={wiredFor(entries)} />,
+      wrap(<WorkflowParamCardColumn entries={entries} io={io} resolved={wiredFor(entries)} />),
     );
     const promptCard = entries.find((entry) => entry.cls === "prompt")!;
     const card = container.querySelector(`[data-testid="param-node-${promptCard.id}"]`)!;
     expect(card.textContent).not.toContain("→ positive_prompt");
     /* 端口行只说「这个对外参数是什么、出去是什么类型」；**落到工作流的哪一行**
-     *  退到行的 title 提示里可查（`ioKey`）—— 行上不写工作流内部键。 */
+     *  退到行的 <Hint> 悬停说明里可查（`ioKey`）—— 行上不写工作流内部键。 */
     const row = screen.getByTestId(`param-node-out-${promptCard.id}-0`);
     expect(row.textContent).toContain("提示词");
     expect(row.textContent).toContain("STRING");
     expect(row.textContent).not.toContain("positive_prompt");
-    expect(row.getAttribute("title")).toContain("9::widget::text");
+    expect(row).not.toHaveAttribute("title");
+    await user.hover(row);
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "9::widget::text",
+    );
   });
 
-  it("端口行显示对外参数自己的名字，落点 pin 名只在 title 里可查", () => {
-    render(<WorkflowParamCardColumn entries={entries} io={io} resolved={wiredFor(entries)} />);
+  it("端口行显示对外参数自己的名字，落点 pin 名只在 <Hint> 里可查", async () => {
+    const user = userEvent.setup();
+    render(
+      wrap(<WorkflowParamCardColumn entries={entries} io={io} resolved={wiredFor(entries)} />),
+    );
     /* 尺寸合成一张卡：行 = 形态（「尺寸 · 高度」）；ComfyUI 内部的 pin 名
-     * （`height`）不落在行文字上，只作为「落到哪一行」的提示留在 title。 */
+     * （`height`）不落在行文字上，只作为「落到哪一行」的提示留在 <Hint> 里。 */
     const row = screen.getByTestId("param-node-out-size-1");
     expect(row.textContent).toContain("高度");
     expect(row.textContent).not.toContain("height");
-    expect(row.getAttribute("title")).toContain("height");
+    expect(row).not.toHaveAttribute("title");
+    await user.hover(row);
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "height",
+    );
   });
 
   it("卡片带**有类型**的输出端口（提示词 → STRING）—— ISSUE #355 复审", () => {

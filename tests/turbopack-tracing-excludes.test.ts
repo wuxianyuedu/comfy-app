@@ -8,6 +8,8 @@ import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 const CONFIG_PATH = join(process.cwd(), "next.config.js");
 const config = readFileSync(CONFIG_PATH, "utf8");
 
@@ -226,11 +228,10 @@ describe("useTypeScriptCli 与解析到的 TypeScript 版本必须配对", () =>
   /** 从仓库根解析 `typescript` 那份包（本仓的 `typescript` 是 pnpm 别名，指向谁由安装态决定）。 */
   function resolvedTsVersion(): string {
     const requireFromRoot = createRequire(join(process.cwd(), "noop.js"));
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(
+    const pkg: unknown = JSON.parse(
       readFileSync(requireFromRoot.resolve("typescript/package.json"), "utf8"),
-    ) as { version?: string };
-    return pkg.version ?? "";
+    );
+    return isRecord(pkg) && typeof pkg.version === "string" ? pkg.version : "";
   }
 
   it("配置里显式写了 useTypeScriptCli 的布尔字面量（缺值等于两侧都判不了）", () => {

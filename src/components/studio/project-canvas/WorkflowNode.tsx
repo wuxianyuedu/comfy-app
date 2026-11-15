@@ -29,6 +29,7 @@ import {
   WorkflowNodeActionButton,
   WorkflowNodePill,
 } from "~/components/studio/workflow-form/WorkflowNodeParts";
+import { Hint } from "~/components/ui/hint";
 
 /* 共享类型下沉到叶子模块（断环，规范 12.7/18）；按原样 re-export 保住既有导入路径。 */
 export type { WorkflowSourceFilter, WorkflowModesState } from "./workflow-node-types";
@@ -145,13 +146,14 @@ export function WorkflowNode({
           >
             W
           </span>
-          <span
-            className="text-ink-bright truncate text-sm font-bold"
-            style={{ fontFamily: "var(--font-sans)" }}
-            title={meta.label}
-          >
-            {meta.label}
-          </span>
+          <Hint label={meta.label}>
+            <span
+              className="text-ink-bright truncate text-sm font-bold"
+              style={{ fontFamily: "var(--font-sans)" }}
+            >
+              {meta.label}
+            </span>
+          </Hint>
         </div>
         <WorkflowNodePill className="bg-overlay-accent-surface" title={`项目画布节点 Id：${id}`}>
           <span
@@ -256,13 +258,16 @@ export function WorkflowNode({
                  *  `justify-end` 把整组贴紧 Card 右沿；端点 PortHandle 圆心锁
                  *  labelRow 中线（pt-1.5=6 + h-5/2=10=16px），与 typeChip 上下对齐。 */}
                 <div className="flex h-5 items-center justify-end gap-1.5 px-3.5 pt-1.5">
-                  <span
-                    className="text-ink-bright min-w-0 truncate text-sm font-semibold"
-                    style={{ fontFamily: "var(--font-sans)" }}
-                    title={`IO 输出 · ${oLabel}${oType !== undefined && oType !== "" ? ` · ${oType}` : ""}`}
+                  <Hint
+                    label={`IO 输出 · ${oLabel}${oType !== undefined && oType !== "" ? ` · ${oType}` : ""}`}
                   >
-                    {oLabel}
-                  </span>
+                    <span
+                      className="text-ink-bright min-w-0 truncate text-sm font-semibold"
+                      style={{ fontFamily: "var(--font-sans)" }}
+                    >
+                      {oLabel}
+                    </span>
+                  </Hint>
                   <TypeChip size="md">{typeDisplay(oType)}</TypeChip>
                 </div>
                 {/* 下沿留 pb-2 让节点呼吸——与 inputs controlRow 末端的 pb-1.5 保持视觉等距 */}

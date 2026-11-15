@@ -864,10 +864,11 @@ Write-Output ("|END")
 
 describe("启动链路「不抢前台」判据（唯一的入口是壳）", () => {
   /** ISSUE #359：启动要几十秒，用户常已切走，加载完顶窗即打断；判据只在壳里 ——
-   * `decide_front_when_self_launched()` 默认 false（双击不给前台，进任务栏+闪烁），仅显式注入的
+   * `decide_front_when_self_launched()` 默认 false（双击不给前台，窗口安静进任务栏），仅显式注入的
    * `COMFYAPP_FOREGROUND` 覆盖；唤起已有实例则经 `another_instance_running()` 发焦点事件、
    * `spawn_focus_waiter` 以 `request_focus=true` 显示（显式意图必须给前台）；断言源码因 Win32 前台在
-   * CI 取不到，而二者是编译期常量决策（python 启动器已随 #784 移除）。 */
+   * CI 取不到，而二者是编译期常量决策（python 启动器已随 #784 移除）。#359 当时的「闪烁提醒」
+   * 已在 #3562 移除，现行口径见 launch-and-build.md §1.3.1。 */
   const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "shell_launch.rs"), "utf8");
 
   it("双击启动默认**不**抢前台（判据是常量 false，不是查进程表）", () => {
@@ -889,8 +890,98 @@ describe("启动链路「不抢前台」判据（唯一的入口是壳）", () =
     const lib = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     expect(lib).toContain("shell_launch::read_foreground_env()");
     expect(lib).toContain("shell_launch::decide_front_when_self_launched");
-    // 启动期不给 → 交给窗口显示那一层执行（它负责「进任务栏 + 闪烁提醒」）
+    // 启动期不给 → 交给窗口显示那一层执行（它负责「不抢前台地进任务栏」）
     expect(lib).toContain("show_main_window_without_focus");
+  });
+});
+
+describe("窗口显示幂等与任务栏闪烁（ISSUE #3562）", () => {
+  /** 用户报的三个现象同源：① 点图标收起/显示发卡、② 后台莫名红色闪烁、
+   * ③ 切到别的应用几秒后窗口自己又弹回来。`show_main_window_without_focus`
+   * 无条件 show()（Windows 的 SW_SHOW 会激活并提到 Z 序最前），而页面导航
+   * Finished / 前端组件重挂 / 安全网都会重放它；任务栏闪烁又只请求、从不停止。
+   * Win32 前台在 CI 取不到，判据按源码形态钉住。 */
+  const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
+  const show = rust.slice(
+    rust.indexOf("fn show_main_window_without_focus"),
+    rust.indexOf("fn open_comfyui_window"),
+  );
+
+  it("自动显示路径只允许交接一次（页面导航重放不许再把窗口顶到前面）", () => {
+    expect(show).toContain("if already_shown && !request_focus {");
+  });
+
+  it("已可见的窗口不再重复发窗口动作（托盘唤起不卡、不盖住别的应用）", () => {
+    expect(show).toContain("} else if !visible {");
+  });
+
+  it("不再请求任务栏闪烁，改为窗口到前台时主动停止", () => {
+    // tao 0.37 Windows：Informational = FLASHW_TRAY 闪 4 次，None = FLASHW_STOP。
+    expect(show).not.toContain("UserAttentionType::Informational");
+    expect(show).toContain("request_user_attention(None)");
+    const splash = rust.slice(
+      rust.indexOf("fn bring_splash_to_front"),
+      rust.indexOf("/// 为什么 main 窗上必须调"),
+    );
+    expect(splash).not.toContain("UserAttentionType::Informational");
+  });
+
+  it("启动前台标记被前端一次性消费（组件重挂不再抢前台）", () => {
+    expect(rust).toContain("fn take_startup_activation(");
+    expect(rust).toContain("state.take_startup_activation()");
+  });
+
+  it("窗口交接完成后，页面再次导航不再重放交接", () => {
+    const handover = rust.slice(
+      rust.indexOf("fn on_main_page_finished"),
+      rust.indexOf("/// 启动页关闭 = 放弃本次启动"),
+    );
+    expect(handover).toContain('get_webview_window("splash").is_none()');
+  });
+});
+
+describe("窗口显示运行期诊断信号（ISSUE #3569）", () => {
+  /** #3562 的判据只钉住「源码形态」，看不出交接完成后有没有被重放。这一层补
+   * 可机器读的计数与日志信号：壳冒烟脚本将来靠它判「交接完成后计数还在不在涨」，
+   * 真实 Win32 前台 / Z 序那一层归 #3570。 */
+  const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
+  const show = rust.slice(
+    rust.indexOf("fn show_main_window_without_focus"),
+    rust.indexOf("fn open_comfyui_window"),
+  );
+
+  it("AppState 带三个计数位，且明确只做诊断不参与判决", () => {
+    expect(rust).toContain("show_attempts: AtomicU32");
+    expect(rust).toContain("auto_show_skipped: AtomicU32");
+    expect(rust).toContain("focus_granted: AtomicU32");
+    expect(rust).toContain("只做诊断，不参与前台判决");
+  });
+
+  it("每次进入显示链路都记一次，自动早退额外记 skipped", () => {
+    expect(show).toContain("note_show_attempt()");
+    expect(show).toContain("note_auto_show_skipped()");
+    expect(rust).toContain("reason=already_shown skipped={} attempts={}");
+  });
+
+  it("前台真正到手才记 focus_granted", () => {
+    expect(show).toContain("note_focus_granted()");
+    expect(show.indexOf("note_focus_granted()")).toBeGreaterThan(
+      show.indexOf("request_user_attention(None)"),
+    );
+  });
+
+  it("有只读诊断命令，并注册进 generate_handler", () => {
+    expect(rust).toContain("fn window_show_diagnostics(");
+    const handler = rust.slice(
+      rust.indexOf("tauri::generate_handler!["),
+      rust.indexOf(".setup(move |app|"),
+    );
+    expect(handler).toContain("window_show_diagnostics");
+  });
+
+  it("退出时把整段读数汇总进壳日志", () => {
+    expect(rust).toContain("window-show diagnostics at exit");
+    expect(rust).toContain("window_show_snapshot()");
   });
 });
 

@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { ReactFlowProvider } from "@xyflow/react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { WorkflowSubgraphNode } from "./WorkflowSubgraphNode";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import {
   WFStoresProvider,
   createIOEditStore,
@@ -29,9 +31,12 @@ function makeStores(): WFStores {
 
 function renderNode(ui: ReactNode, stores: WFStores = makeStores()) {
   return render(
-    <ReactFlowProvider>
-      <WFStoresProvider stores={stores}>{ui}</WFStoresProvider>
-    </ReactFlowProvider>,
+    /* `Hint` 的浮层要 `TooltipProvider`（应用里挂在根布局上）。 */
+    <TooltipProvider delay={0}>
+      <ReactFlowProvider>
+        <WFStoresProvider stores={stores}>{ui}</WFStoresProvider>
+      </ReactFlowProvider>
+    </TooltipProvider>,
   );
 }
 
@@ -45,17 +50,26 @@ const baseData = {
 };
 
 describe("WorkflowSubgraphNode", () => {
-  it("渲染子图标题与 #id 徽标", () => {
+  it("渲染子图标题与 #id 徽标", async () => {
+    const user = userEvent.setup();
     const { container } = renderNode(<WorkflowSubgraphNode data={baseData} />);
     expect(screen.getByText("我的子图")).toBeInTheDocument();
     expect(screen.getByText("#10")).toBeInTheDocument();
     expect(container.querySelector('[data-variant="subgraph"]')).toBeTruthy();
-    /* 按 §11.9 只断言用户能感知的四件事：① 头部 `S` 徽标 + title；② 折叠按钮有可访问名；
-     * ③ 标题 truncate 规则仍在；④ `#id` 徽标带 data-node-id-chip 且标明子图变体。 */
-    expect(container.querySelector('[title="子工作流"]')?.textContent).toBe("S");
+    /* 按 §11.9 只断言用户能感知的四件事：① 头部 `S` 徽标（悬停出「子工作流」，走 <Hint>）；
+     * ② 折叠按钮有可访问名；③ 标题 truncate 规则仍在；④ `#id` 徽标带 data-node-id-chip 且标明子图变体。 */
+    const sBadge = screen.getByText("S");
+    expect(sBadge).not.toHaveAttribute("title");
+    await user.hover(sBadge);
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "子工作流",
+    );
     expect(screen.getByLabelText("折叠子图")).toBeInTheDocument();
-    const title = container.querySelector('[title="我的子图"]');
-    expect(title?.className).toMatch(/(?:^|\s)truncate(?:\s|$)/);
+    const title = screen.getByText("我的子图");
+    expect(title.className).toMatch(/(?:^|\s)truncate(?:\s|$)/);
     const chip = container.querySelector('[data-node-id-chip="10"][data-variant="subgraph"]');
     expect(chip, "#id 徽标丢了子图变体标记").toBeTruthy();
   });

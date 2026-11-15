@@ -109,8 +109,13 @@ export function scriptOf(argv) {
  * 的登记判（`narrowingEntryForScript` + `faceTouched`）——与平台的 `ifModify` 和
  * 复合档的逐条收窄**同一份 glob**，不另立第二套。
  *
+ * 收窄面的反查可由 `deps.faceFor` 注入：机制用例拿假登记表做正/负控，不依赖真仓
+ * `INCREMENTAL_GATES` 此刻是否为空（#3586 后它暂空，但分堆机制仍要有覆盖）。
+ * 缺省仍是 `narrowingEntryForScript` —— 真仓读数只从既有登记表来，不另立判定。
+ *
  * @param {string[]} changed
- * @param {{readSteps?: typeof readHookSteps, tierLabels?: typeof localTierLabels}} [deps]
+ * @param {{readSteps?: typeof readHookSteps, tierLabels?: typeof localTierLabels,
+ *   faceFor?: (script: string) => { globs: readonly string[] } | null}} [deps]
  * @returns {{
  *   localTier: number,
  *   totalSteps: number,
@@ -123,6 +128,7 @@ export function scriptOf(argv) {
 export function classifyHeavySteps(changed, deps = {}) {
   const steps = (deps.readSteps ?? readHookSteps)();
   const local = (deps.tierLabels ?? localTierLabels)();
+  const faceFor = deps.faceFor ?? narrowingEntryForScript;
   const heavy = steps.filter((s) => !local.has(s.label));
   /** @type {Array<{label: string, script: string | null}>} */
   const hit = [];
@@ -132,7 +138,7 @@ export function classifyHeavySteps(changed, deps = {}) {
   const noFace = [];
   for (const step of heavy) {
     const script = scriptOf(step.argv);
-    const entry = script === null ? null : narrowingEntryForScript(script);
+    const entry = script === null ? null : faceFor(script);
     if (entry === null) {
       noFace.push({ label: step.label, script });
       continue;

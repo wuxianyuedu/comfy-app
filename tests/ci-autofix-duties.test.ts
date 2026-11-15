@@ -31,18 +31,30 @@ describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
     expect(problems, `平台侧自动修登记与配置不一致：\n${problems.join("\n")}`).toEqual([]);
   });
 
-  it("登记表非空，且每条都写清了「凭什么可以自动修」", () => {
-    /* 反向验证：没有这一条，把 AUTOFIX_DUTIES 清空会让上面那条变成恒真 ——
-     * 「判据不是空转」的同一形态（见 tests/ci-incremental-gates.test.ts 的同款）。 */
-    expect(AUTOFIX_DUTIES.length).toBeGreaterThan(0);
+  it("登记表为空是合法终态：真仓没有任何一格会自动修工作区", () => {
+    /* #3586 摘掉最后一条「生成态文档与源同步」之后，平台侧再没有「源 → 入库产物」
+     * 的重生成档（#2231 已让 `docs/api/` 出库、#2610 已把格式修回本地 D0）。所以
+     * **空表是结论，不是清单被掏空**：`checkAutofixDuties` 的方向二（执行者带
+     * `--autofix` ⇒ 必须在登记表里）此刻等价于一条禁令 —— 谁把自动修加回来谁红。
+     * 把空表钉成当前形态，将来真要恢复某一档就必须连同这条用例一起改，而不是
+     * 悄悄往数组里塞一项（「判据不是空转」的反向验证挪到本文件最后一条）。 */
+    expect(
+      AUTOFIX_DUTIES.length,
+      "自动修登记表不为空 —— 新增一档必须同步改这条用例，并写清「凭什么可以自动修」",
+    ).toBe(0);
     for (const duty of AUTOFIX_DUTIES) {
       expect(duty.stage.length, "没写 stage 名").toBeGreaterThan(0);
       expect(duty.entry, `${duty.stage} 没写入口脚本`).toMatch(/^scripts\/.+\.(?:cjs|mjs)$/);
       expect(duty.args.length, `${duty.stage} 的判定门是空的`).toBeGreaterThan(0);
-      /* `why` 不许是「顺手加的」：两条前提（纯确定的重生成 / 红了只有一种成因）
-       * 各要有一句，所以下限放在「足够长到写清这两件事」的量级上。 */
       expect(duty.why.length, `${duty.stage} 没写清「凭什么可以自动修」`).toBeGreaterThan(80);
     }
+    /* 正向核对：真仓的三份执行面（CNB stage / 聚合档条目 / GA step）里一行
+     * `--autofix` 都不许有。少了这一半，「表空」也可能只是「忘了登记」。 */
+    const executors = collectExecutors(CONFIG, HEAVY_GATES, GA_MASTER_GATE);
+    const withAutofix = [...executors.entries()]
+      .filter(([, line]) => line.includes("--autofix"))
+      .map(([name]) => name);
+    expect(withAutofix, `这些执行者带着 --autofix 却没登记：${withAutofix.join(", ")}`).toEqual([]);
   });
 
   it("解析出的 stage 数 == 配置里单行 `script:` 的条数（解析器不空转、也不误吞）", () => {
@@ -68,25 +80,36 @@ describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
     }
   });
 
-  it("判据不是空转：坏配置必须被点名（三个方向各一条）", () => {
-    /* ① 登记了、配置里没有这个 stage。 */
+  it("判据不是空转：空表下「绕过登记表」仍被点名，普通判据不误报", () => {
+    /* 表空时方向一（表里每条 ⇒ 执行者还在）没有对象，方向二成了唯一承重的那一半。
+     * 所以反向验证改判方向二的正/负控，而不是继续造「表里那条找不着」的样本
+     * ——那份样本在空表下恒返回 []，留着它等于把判据空转当成绿。 */
+    /* ① 正控：配置里绕过登记表直接挂 `--autofix` ⇒ 必须被点名。
+     * 缩进按 `.gates: &gates` 那一层的真实形态写（2 空格 `- name:` + 4 空格
+     * `script:`）—— 写成别的缩进会被解析器正确拒收，那条红说的是「解析不出」，
+     * 与本格要判的「绕过了登记表」不是同一件事。 */
     expect(
-      checkAutofixDuties("gates: &gates\n  - name: 别的\n    script: node x.cjs\n"),
-    ).toContainEqual(expect.stringContaining("配置与聚合档里都没有这个名字"));
-    /* ② 配置里那一档点名了入口却没带 `--autofix`。
-     * 缩进按 `.gates: &gates` 那一层的真实形态写（stage 项在 `gates:` 名下，
-     * 所以是 2 空格 `- name:` + 4 空格 `script:`）—— 写成别的缩进会被解析器正确地
-     * 拒收，那条红说的是「解析不出」，与本格要判的「旗标漏了」不是同一件事。 */
-    const missingFlag = checkAutofixDuties(
-      "gates: &gates\n  - name: 生成态文档与源同步\n" +
-        "    script: node scripts/render-doc-placeholders.cjs --check\n",
-    );
-    expect(missingFlag).toContainEqual(expect.stringContaining("--autofix"));
-    /* ③ 绕过登记表直接给某一档挂上自动修。 */
-    const bypass = checkAutofixDuties(
-      "gates: &gates\n  - name: 文件结构硬规则\n" +
-        "    script: node scripts/check-file-structure.cjs --autofix\n",
-    );
-    expect(bypass).toContainEqual(expect.stringContaining("不在登记表里"));
+      checkAutofixDuties(
+        "gates: &gates\n  - name: 样本判据\n" +
+          "    script: node scripts/check-file-structure.cjs --check --autofix\n",
+      ),
+    ).toContainEqual(expect.stringContaining("不在登记表里"));
+    /* ② 负控：只带 `--check` 的普通判据不许被认成自动修档 —— 否则每加一条
+     * `--check` 判据都会撞上这条禁令，判据会被人当误报摘掉。 */
+    expect(
+      checkAutofixDuties(
+        "gates: &gates\n  - name: 样本判据\n" +
+          "    script: node scripts/check-file-structure.cjs --check\n",
+      ),
+    ).toEqual([]);
+    /* ③ 聚合档条目那一侧同款：执行面不止 `.cnb.yml` 的 stage，绕过登记表
+     * 直接给聚合档条目挂自动修也要红（生成器在 `collectExecutors`）。 */
+    expect(
+      checkAutofixDuties(
+        "",
+        ["--autofix"],
+        [{ name: "样本条目", argv: ["node", "scripts/check-file-structure.cjs", "--autofix"] }],
+      ),
+    ).toContainEqual(expect.stringContaining("不在登记表里"));
   });
 });

@@ -40,9 +40,9 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
   │           （交换前做 TCP 可达性校验，失败进入重导航循环——WebView2 对导航
   │           失败同样触发 on_page_load Finished，不校验会把 Edge 错误页
   │           当成应用界面显示）
-  │           + 交换窗口**只在「用户已手动让出前台」时才不抢前台**（此时窗口进
-  │           任务栏 + 任务栏闪烁提醒）：用户在启动期没切走（前台还在本壳的窗口
-  │           上）他就还在等，加载完成必须把前台给他。另有两条明确给前台的通道：
+  │           + 交换窗口**只在「用户已手动让出前台」时才不抢前台**（此时窗口安静
+  │           进任务栏、不闪烁，见 §1.3.1）：用户在启动期没切走（前台还在本壳的
+  │           窗口上）他就还在等，加载完成必须把前台给他。另有两条明确给前台的通道：
   │           显式注入 COMFYAPP_FOREGROUND、「唤起已运行实例」（单实例的焦点事件），
   │           见 §1.3
   │           + 用户关闭启动页（右上角 ✕）而主窗尚未显示 = **放弃本次启动，
@@ -213,15 +213,16 @@ POSIX 上 `python3 -m venv` 缺 `ensurepip`（Debian/Ubuntu 系在单独的 `pyt
 - **没让出**（采样这一刻前台仍在本壳自己的窗口上——启动页一直待在他眼皮底下）：
   他还在等这个应用，加载完成就把前台真的给他。只丢进任务栏的观感就是
   「点了启动，窗口自己在后台待着」。
-- **让出了**（前台已经换成别人的窗口）：窗口只进任务栏 + 请求一次任务栏闪烁提醒
-  （`request_user_attention`），他处理完手上的事自己点开。
+- **让出了**（前台已经换成别人的窗口）：窗口安静地只进任务栏，他处理完手上的事
+  自己点开。任务栏按钮与常驻托盘就是入口——**不再请求任务栏闪烁**（ISSUE #3562，
+  见 §1.3.1：闪烁会被自动路径的重复显示反复点燃，用户读到的是「后台莫名红色提醒」）。
 
 判据只有两段，都在壳里（原先「判决」那一段在 Python 启动器里，随它一起移除）：
 
 | 段                     | 位置                                                                                             | 职责                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ---------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 判决（启动期，一次性） | `src-tauri/src/shell_launch.rs` 的 `read_foreground_env()` / `decide_front_when_self_launched()` | **默认不表态**：`COMFYAPP_FOREGROUND` 缺席时把「给不给前台」留给执行段按「用户有没有让出前台」现判（双击启动走的就是这条）；只有显式注入 `COMFYAPP_FOREGROUND`（`1`/`0`，脚本 / 终端调用场景）才无条件覆盖。变量留空按「未表态」处理，不当作 `0`                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| 执行（窗口显示时）     | `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()` + `shell_owns_foreground()`         | **任何窗口动作之前**先采样 `shell_owns_foreground()`（本壳的任一窗口此刻是否 `focused`）得到 `user_yielded`，再按 `activate = request_focus \|\| configured \|\| !user_yielded` 决定给不给前台。主窗以 `focused(false)` 创建：首次 `show()` 由 tao 走 `SW_SHOWNOACTIVATE`——窗口进任务栏但不向前台要焦点（不带它的话 `show()` 自带的激活语义会让 Windows 把前台放行给主窗）；只有 `activate` 时才调 `set_focus()`，未获前台则 `request_user_attention` 请求任务栏闪烁提醒；**窗口处于最小化时先 `unminimize()`**——`show()` 走 `SW_SHOW`，对最小化窗口不还原，只把它记为前台，用户看到的是「点托盘 / 二次启动没反应」（再点一次任务栏才出来，因为那次走的是系统自己的还原路径） |
+| 执行（窗口显示时）     | `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()` + `shell_owns_foreground()`         | **任何窗口动作之前**先采样 `shell_owns_foreground()`（本壳的任一窗口此刻是否 `focused`）得到 `user_yielded`，再按 `activate = request_focus \|\| configured \|\| !user_yielded` 决定给不给前台。主窗以 `focused(false)` 创建：首次 `show()` 由 tao 走 `SW_SHOWNOACTIVATE`——窗口进任务栏但不向前台要焦点（不带它的话 `show()` 自带的激活语义会让 Windows 把前台放行给主窗）；只有 `activate` 时才调 `set_focus()`，前台到手时 `request_user_attention(None)` 收掉残留闪烁（ISSUE #3562 起不再请求闪烁，见 §1.3.1）；**窗口处于最小化时先 `unminimize()`**——`show()` 走 `SW_SHOW`，对最小化窗口不还原，只把它记为前台，用户看到的是「点托盘 / 二次启动没反应」（再点一次任务栏才出来，因为那次走的是系统自己的还原路径） |
 
 > **为什么采样必须早于 `show()`**：交接那一刻 Windows 会把刚显示的主窗当成「新窗口」
 > 把前台**放行**给它；`show()` 之后再问「前台属于谁」，分不清「用户还在等」与「系统
@@ -235,7 +236,7 @@ POSIX 上 `python3 -m venv` 缺 `ensurepip`（Debian/Ubuntu 系在单独的 `pyt
 | `request_focus`（托盘「打开主界面」/ 二次启动的单实例事件）  | **给** | 调用方的显式意图，用户就是想看它                                  |
 | 显式注入 `COMFYAPP_FOREGROUND=1`（脚本 / 终端拉起）          | **给** | 命令行路径，用户在终端里等结果                                    |
 | 双击启动，前台仍在本壳的窗口上（启动页还待在他眼皮底下）     | **给** | 他没让出前台 = 他还在等这个应用，不能只把窗口丢进任务栏           |
-| 双击启动，前台已换成别人的窗口（他在这几十秒里切去干别的了） | 不给   | 手动让出前台：窗口进任务栏 + 闪烁提醒，用户处理完手上的事自己点开 |
+| 双击启动，前台已换成别人的窗口（他在这几十秒里切去干别的了） | 不给   | 手动让出前台：窗口安静进任务栏（不闪烁），用户处理完手上的事自己点开 |
 
 **「再双击一次」= 唤起已运行实例，那是必须给前台的另一条通道**：第二个
 `{{shell.app.exe}}` 进程在 `run()` 早期经 `single_instance::another_instance_running()`
@@ -243,6 +244,63 @@ POSIX 上 `python3 -m venv` 缺 `ensurepip`（Debian/Ubuntu 系在单独的 `pyt
 后自己退出（不建窗口）。首实例的 `spawn_focus_waiter` 收到事件即以
 `request_focus = true` 显示主窗——用户显式意图，必须真的到前台。两条判据各管一段、
 互不重叠，且都不需要第二个进程去复核。
+
+#### 1.3.1 窗口显示是一次性动作（ISSUE #3562）
+
+用户反馈的三个现象是同一个缺陷：**启动完成后「显示窗口」仍被反复执行**——
+点图标收起 / 显示发卡、后台莫名有红色闪烁的任务栏按钮、切去别的应用几秒后
+窗口又弹回来盖住正在用的窗口。根因不在前台判据，而在调用面：
+
+| 缺陷                                                                                              | 后果                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show_main_window_without_focus()` 无条件 `show()`                                               | Windows 的 `SW_SHOW` 对**已可见**窗口同样激活并提到 Z 序最前；页面导航 `Finished`、150s 安全网、无启动页兜底都会在交接完成后重放它                                 |
+| `should_activate_on_launch()` 读进程级持久值 `foreground`                                        | `useStartupForeground` 每次组件挂载都问一次，注入 `COMFYAPP_FOREGROUND=1` 后每次都补一次前台                                                                                 |
+| 只发 `request_user_attention(Informational)`（tao Windows = `FLASHW_TRAY` 闪 4 次），从不发 `None`（= `FLASHW_STOP`） | 闪烁被每次重复显示重新点燃、用户点开窗口后也不收，就是现场截图里那块红色高亮                                                                                     |
+
+现行契约（判据都落在 `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()`）：
+
+1. **自动路径只交接一次**：`request_focus == false` 且窗口已显示过即早退；
+   `on_main_page_finished` 另以「splash 是否还在」挡住页面导航重放。此后窗口显隐
+   只由用户操作（任务栏 / 托盘 / 二次启动，均带 `request_focus = true`）决定。
+2. **显式唤起做最小动作**：窗口已可见且已聚焦时不再发任何窗口动作（托盘点击因此
+   不再重复激活 + 重绘）；只有隐藏或最小化时才 `unminimize` / `show`。
+3. **不再请求闪烁**：不抢前台那一档只把窗口留在任务栏；前台真的到手时发
+   `request_user_attention(None)` 收掉残留。启动页 `bring_splash_to_front()` 的两处
+   闪烁请求一并移除——它是 `WS_EX_TOOLWINDOW`，闪的却是主窗的任务栏按钮。
+4. **前端启动标记一次性消费**：`should_activate_on_launch` 改走
+   `AppState::take_startup_activation()`，只放行第一次；壳在交接那一刻已经按
+   `configured` 给过前台，前端这一跳只是补唤。
+5. **前端补前台的时间边界**（ISSUE #3568）：`useStartupForeground` 同一组件实例
+   只问壳一次（StrictMode 双跑 effect 共享同一份答复，否则首轮就吃掉壳的
+   一次性标记、活着的第二轮反而拿不到前台）；答复落地前组件已卸载则不再补唤，
+   命令 reject 静默降级。判据见
+   `src/components/studio/hooks/use-startup-foreground.test.ts` 的 6 条用例。
+
+回归判据：`src-tauri/src/lib.rs` 的
+`window_show_is_idempotent_and_never_restarts_taskbar_flashing` /
+`startup_foreground_is_consumed_only_once`，以及
+`tests/check-file-structure.test.ts` 的「窗口显示幂等与任务栏闪烁（ISSUE #3562）」用例组。
+§11 排障手册里 #359 那几条描述的是**当时**那一版（含「闪烁提醒」），现行口径以本节为准。
+
+#### 1.3.2 运行期读数：交接完成后有没有被重放（ISSUE #3569）
+
+上面那些判据都是**源码形态**层，回答不了「这次启动里窗口动作到底发了几次」。
+#3562 的事故恰恰是「同一次启动里被重放」，所以壳另留一组只读诊断信号：
+
+| 读数                  | 记在哪                                                | 怎么读                                       |
+| --------------------- | ----------------------------------------------------- | -------------------------------------------- |
+| `attempts`            | 每次进入 `show_main_window_without_focus()`           | 自动交接 + 显式唤起的总次数                  |
+| `auto_show_skipped`   | 自动路径被 `already_shown` 早退拦下                   | **交接完成后每多一次，就是一次重放**         |
+| `focus_granted`       | 窗口真正聚焦到前台                                    | 补前台动作实际生效了几次                     |
+
+- 早退时落一条结构化日志：`window-show diagnostics: reason=already_shown skipped=N attempts=M`，带当时的总读数；
+- 退出时在壳日志落一行汇总：`window-show diagnostics at exit: attempts=… auto_show_skipped=… focus_granted=…`；
+- 运行期可读出口是 Tauri 命令 `window_show_diagnostics`（只读快照，**不推断重放合不合法**）。
+
+这三个计数**只做诊断**：不参与 `activate` 判决，也不改变任何窗口动作（见 `AppState`
+字段注释与 Rust 单测 `window_show_replays_are_counted_for_diagnostics`）。真实 Win32
+前台 / Z 序 / 任务栏闪烁是否收敛仍要由真实 `{{shell.app.exe}}` 的壳冒烟去判（ISSUE #3570）；
+本节只保证「有没有重放」在日志里看得见。
 
 ### 交接时刻的复核（`scripts/win32-window-focus.py`）
 
@@ -258,7 +316,7 @@ POSIX 上 `python3 -m venv` 缺 `ensurepip`（Debian/Ubuntu 系在单独的 `pyt
 
 | 段                       | 位置                                                                                | 职责                                                                                                                                         |
 | ------------------------ | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 执行（窗口显示）         | `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()`                        | 首次显示不激活（`focused(false)` → `SW_SHOWNOACTIVATE`，窗口必须出现在任务栏）；只有显式要求给前台时调 `set_focus()`，未获前台则补任务栏闪烁 |
+| 执行（窗口显示）         | `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()`                        | 首次显示不激活（`focused(false)` → `SW_SHOWNOACTIVATE`，窗口必须出现在任务栏）；只有显式要求给前台时调 `set_focus()`，已聚焦时主动停掉残留闪烁（ISSUE #3562 起不再请求闪烁，见 §1.3.1） |
 | 复核（交接后，独立进程） | `scripts/win32-window-focus.py`（判据与执行都在这一份里；**当前没有调用方**，见下） | 主窗口可见后复裁一次：`give` 把前台拿到手（含键盘焦点）／`restore` 把系统自放的前台还回去／`leave` 什么都不做                                |
 
 复核判决表（`decide_handoff()`，**默认什么都不做**）：
@@ -1339,14 +1397,14 @@ log/
 | `log/current/nextjs/nextjs-stdout-<ts>.log` `log/current/nextjs/nextjs-stderr-<ts>.log`                                             | dev-launcher.mjs 重定向                                                                                                                    | Next dev server 原始输出；**启动失败先看 stderr**。这两份是**服务自己说的话**（`▲ Next.js` 横幅、编译与路由日志、首次编译的报错），重定向走的是文件描述符（`spawnInGroup` 给 fd，**没有 pipe、没有 tee**），因此它们既不进编排器 stdout、也不进 `[orchestrator] …` 那一路 —— 启动页靠单独一段读它们才看得到（见 §4.5）                                                                                                                                                                                                                                                                           | 按次命名，保留 5 份                                                                                                  |
 | `log/current/nextjs/nextjs-panel-<boot>.log`                                                                                        | Next server（`src/lib/log/capture-streams.server.ts`，进程启动时经 `src/instrumentation.ts` 安装）                                         | **应用服务输出转录**：本进程 stdout/stderr 的完整副本（首屏编译错误 / Turbopack FATAL / 未捕获的服务端异常 / pino 行）。「应用日志」面板经 `GET /api/logs/current?source=app` 轮询（规范 07 §7.18.2）——此前这些输出不在任何被轮询的文件里，应用服务起不来时面板一片空白                                                                                                                                                                                                                                                                                                                          | 按次命名（进程启动标识），保留 5 份                                                                                  |
 | `log/current/launcher/dev-launcher-stderr.log`                                                                                      | 壳（dev 下经 log:: → Stderr）                                                                                                              | 壳自己的 `[ComfyAPP]` 诊断行 + `[orchestrator] …`（壳转发的编排器 stdout/stderr，见 §1.5）。**双击链路的第一现场就是它**：`log/current/launcher/` 下按次命名，保留 5 份                                                                                                                                                                                                                                                                                                                                                                                                                          | 按次命名，保留 5 份                                                                                                  |
-| `log/current/shell/shell.log`                                                                                                       | Tauri 壳（tauri-plugin-log，release 构建）                                                                                                 | 壳自持日志：导航/看门狗/侧车/窗口交换等 `[ComfyAPP]` 诊断（standalone 双击无 launcher 重定向时的兜底落盘）；get_launch_log 启动面板尾部追加展示                                                                                                                                                                                                                                                                                                                                                                                                                                                  | KeepOne 轮转                                                                                                         |
+| `log/current/shell/shell.log`                                                                                                       | Tauri 壳（tauri-plugin-log，release 构建）                                                                                                 | 壳自持日志：导航/看门狗/侧车/窗口交换等 `[ComfyAPP]` 诊断（standalone 双击无 launcher 重定向时的兜底落盘）；get_launch_log 启动面板尾部追加展示。**按次开合写入**（#3574）：`current/` 会被编排器归档清空，插件 Folder target 那种攥到进程退出的文件句柄会在清空后把所有写入静默丢进已解除链接的文件——改为每行按路径重开追加，目录被清了下一行自己重建                                                                                                   | 超过 40MB 整份重建（丢旧保新）                                                                                       |
 | `log/current/launcher/pnpm-install-stdout/stderr.log`                                                                               | dev-launcher.mjs（依赖预检）                                                                                                               | 自动补装依赖的原始输出                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 每次触发覆盖                                                                                                         |
 | `log/current/launcher/drizzle-push-stdout/stderr.log`                                                                               | dev-launcher.mjs（schema 同步）                                                                                                            | drizzle-kit push / heal-db 的原始输出                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 每次启动覆盖                                                                                                         |
 | `log/current/launcher/tauri-shell.pid`                                                                                              | dev-launcher.mjs 写                                                                                                                        | 本次拉起的壳 PID（**仅供排查与外部工具参考**：编排器就是壳的子进程，回收走父子链，不再有人靠这个 PID 补刀）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 每次启动覆盖                                                                                                         |
 | `log/current/launcher/foreground-watch.log`                                                                                         | 交接复核进程（`scripts/win32-window-focus.py`，**当前无调用方**，见 §1.3）                                                                 | 窗口交接时刻的前台归属裁定与执行结果（`give` / `restore` / `leave` + 句柄），排查「启动仍然抢前台」先看这里                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 追加写                                                                                                               |
 | `log/current/launcher/shell-launch.log`                                                                                             | 壳（`src-tauri/src/shell_launch.rs` 的 `log_launch_line`；首行会话标记由 `log_session_start` 直接写，因为三份要共用一个时刻，见 §1.5.1.1） | **壳侧编排链路**：拉起编排器的完整命令与 cwd、启动报告（项目根 / 编排脚本 / 依赖门禁 / 端口 / 各日志路径）、编排器输出 `[orchestrator] …`、退出码。**启动期最先有内容的一份**（不依赖编排器起来），见 §1.5.1。开头那行**会话标记自带说明**（本次启动的会话边界 / 壳已接手 / 即将拉起编排器），且与另两份的副本逐字同形，见 §1.5.1.1                                                                                                                                                                                                                                                              | 追加不轮转                                                                                                           |
 | `run/launch-status.json`                                                                                                            | dev-launcher.mjs（进度）+ 壳（常驻快照与失败出口，`write_idle_status` / `mark_launch_failed`）                                             | 结构化启动进度，splash 页展示。壳写两种：**常驻快照**（`fallback: true`，编排器写第一份之前的那 1~2 秒，见 §1.5.1）与**失败**（`phase=error` + 可行动作 + `diagnostics` 路径）；编排器写则权威，`ready === true` 才是就绪判据                                                                                                                                                                                                                                                                                                                                                                    | —                                                                                                                    |
-| 启动页「查看日志」面板                                                                                                              | splash 前端轮询 `get_launch_log`                                                                                                           | 五段尾部（去 ANSI、限长）：dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log（含 `[orchestrator] …`）+ log/current/shell/shell.log（release）+ **服务自己那两份**（`log/current/nextjs/` 里 mtime 最新的 stdout/stderr，见 §4.5）+ log/launcher/shell-launch.log。启动页实时看执行到哪一步，以及**服务说了什么**                                                                                                                                                                                                                                                                     | —                                                                                                                    |
+| 启动页「查看日志」面板                                                                                                              | splash 前端轮询 `get_launch_log`                                                                                                           | 五段尾部（去 ANSI、限长）：dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log（含 `[orchestrator] …`）+ log/current/shell/shell.log（release）+ **服务自己那两份**（`log/current/nextjs/` 里 mtime 最新的 stdout/stderr，见 §4.5）+ log/current/launcher/shell-launch.log。启动页实时看执行到哪一步，以及**服务说了什么**                                                                                                                                                                                                                                                                     | —                                                                                                                    |
 | `.next/dev/logs/next-development.log`                                                                                               | Next dev server                                                                                                                            | dev server 内部日志（含锁冲突提示）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Next 自管                                                                                                            |
 | `log/current/services/comfyui-runtime-<YYYYMMDD>-<HHmmss>.log`                                                                      | Next server（src/lib/comfyui/lifecycle.ts）                                                                                                | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间。**一次启动一份文件**（ISSUE #1326）：`beginRuntimeSession()` 在拉起前换一份新的，因此「这个文件属于哪一次启动」由文件本身回答 —— 不再有会话横幅，也不再需要「跨运行累积」那套判据；侧栏「ComfyUI」页的「启动日志」面板经 `GET /api/logs/sessions?source=comfyui-runtime` 列出各份（**跨包**：本次运行在前、各历史包在后）并跟随最新那份。手动启动不设硬超时（冷加载慢不误报，可在侧栏「ComfyUI」页手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长）          | 每个来源留最近 20 份（`pruneRuntimeLogFiles`，启动时静默清）；接口回正文时取尾部窗口（40 万字符，按行对齐，见 §4.1） |
 | `log/current/services/comfyui-keepalive-<ts>.out/.err.log`                                                                          | dev-launcher 保活中介（Start-Process 重定向）                                                                                              | 保活模式下 ComfyUI 的完整原始输出，等待循环增量跟随进本次启动那一份 runtime 日志                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 按次命名，不自动清理                                                                                                 |
@@ -2492,12 +2550,17 @@ node scripts/check-standalone-contents.cjs   # [standalone] ✓ 产物干净
   | `src-tauri/static` | 上面这些 + `schema.sql` `{{shell.splash}}` `index.html`（装配步才产出的三件） | `STATIC_ALLOWED_TOPLEVEL`     |
 
   > 仓库根曾有一层 `config/`（只装模式契约注册表）、并随包分发。PR #1917 之后
-  > **这一层不存在了**：模式契约的内置默认回到源码里（`model-mode-contract.ts` 的
-  > `configuredModeContracts`，编译进产物，不需要任何文件随包），机器上的改动是
-  > 本机覆盖（`data/workshop-mode-contracts.json`，`data/` 那条线照旧不入库、
-  > 不随包）。所以两层白名单里都不再有 `config`，`build-desktop.mjs` 的 `§入库配置`
+  > **这一层不存在了**：模式契约的内置默认是入库的那份基线
+  > （`src/lib/workshop/mode-contract-defaults.json`，#3603 起是完整基线；它被
+  > `model-mode-contract.ts` 静态 import ⇒ **编译进产物**，不需要任何文件随包），
+  > 机器上的改动是本机覆盖（`data/workshop-mode-contracts.json`，`data/` 那条线
+  > 照旧不入库、不随包）。所以两层白名单里都不再有 `config`，`build-desktop.mjs` 的 `§入库配置`
   > 与 `check-standalone-contents.cjs` 的 `REQUIRED_CONFIG_FILES` 同批删除 ——
   > 「删掉随包的那一份」不会让契约跑丢：它本来就在构建产物里。
+  >
+  > 读侧分两种形态（#3634）：**开发检出**里服务端**现读磁盘**上那份（写完即生效、
+  > 不必重启进程）；**桌包**里没有这份源码（`src/` 不随包）⇒ 回落编译进产物的那份。
+  > 两种形态读到的都是同一份基线。
 
   `src` **不在任何一层**：它走「祖先放行、叶子逐文件判」——`scripts/reap-process.mjs` 与
   `scripts/dev-launcher.mjs` 都要 `await import("../src/lib/process/kill-process-tree.ts")`
@@ -2525,6 +2588,47 @@ node scripts/check-standalone-contents.cjs   # [standalone] ✓ 产物干净
 > 实测 `outputFileTracingExcludes` 是否真拦得住，拦不住就往
 > `scripts/standalone-private-inputs.mjs` 的清单里加一项，并向
 > `check-standalone-contents.cjs` 的禁忌清单补一条形状。**别只加 excludes 就当修好了。**
+
+> **`data/` 这一族是「逐条点名」的，登记规则只有一条**（ISSUE #3646 把这一族的缺口
+> 补齐）：**凡是按 `process.cwd()` 落在 `data/` 下的本机私有文件，都必须逐个点名
+> 登记进 `scripts/standalone-private-inputs.mjs` 的 `PRIVATE_INPUTS`**；新增写入方时
+> **同批登记**，并写清「谁在运行期读它」——出厂件该读的是项目默认 / 编译进产物的那份，
+> 本机覆盖只属于「这台机器上额外改的那点东西」。
+>
+> 这一族分三类，表现不同：**凭据类**（`llm-secret.key` / `runtime-secret.json` /
+> `workshop-api-settings.json` 里那把上游 apiKey）随包出去是**泄漏**；
+> **本机覆盖类**（`app-settings.json` / `sidebar-tab-behavior.json` /
+> `workshop-mode-contracts.json` / `workshop-comfy-settings.json`）随包出去是
+> **所有用户都拿到造包者的口径**（出厂件读到的不是项目默认那份，而是造包者本机改过
+> 的那份）；**目录类**（`data/backups/` 的整库快照、`data/workshop-outputs/` 与
+> `data/workshop-compositions/` 的产物）随包出去是**把造包者的数据发给每个用户**——
+> 它们装不进「逐文件」那一层，只能按**目录**点名，所以减法侧的删除动作必须能删目录
+> （`rmSync` 不带 `recursive` 撞上目录会抛 `ERR_FS_EISDIR`）。三类都不许随包。
+> **唯一事实源是 `PRIVATE_INPUTS` 那份清单**，本段只是规则与分类。
+>
+> ⚠️ **这份名单不是唯一那道网**：顶层默认拒绝（ISSUE #1217）把产物根那一整个 `data/`
+> 目录都不在两层顶层白名单里，所以整目录都会被剪掉（实测：减法跑完
+> `.next/standalone/data` 不复存在）。本名单是**逐项**的第二道网——两道网认的
+> 形状不同（目录级那一刀认「这个目录整体不进产物」，这一份认「这一项具体的东西不许
+> 随包」），**只登记一份就会漏**：`db.sqlite` 当年就是这么漏的（那次表现是构建全绿、
+> 开发库进了出厂件）。
+>
+> **这一族没有向 `check-standalone-contents.cjs` 的禁忌清单补形状，是有理由的**：
+> 那份禁忌清单判的是「产物里**任意深度**出现了不该有的东西」，所以 `.env` /
+> `db.sqlite` 两条形状都不锚在产物根（Next 会把 `.env` 从任何层级复制进来）。而
+> `data/` 这一族的入口只有**产物根那一个**，顶层默认拒绝已经判住它（产物里多一个
+> `data/` 顶层条目 ⇒ 「顶层出现白名单外的条目」当场点名），**再补一条不锚根的
+> `data/` 形状只会误伤第三方包自带的 `data/` 目录**（`node_modules/<pkg>/data/**`
+> 是它们自己的内容，不是本机的私有输入）。
+>
+> ⚠️ **这一族含目录 ⇒ 减法的删除动作必须能删目录、且不顺着链接删**：那三处
+> `data/` 目录装不进「逐文件」那一层，只能按目录点名，而 `rmSync` 不带 `recursive`
+> 撞上目录会抛 `ERR_FS_EISDIR`（构建在「减法」这一跳当场崩）；反过来，`recursive`
+> 删目录时若 `data/` 在产物里是个链接，**顺着删会删掉开发机上的那一份**（开发机的
+> `data/backups/` 里躺着整库快照，而被删的是产物）—— 所以减法侧先逐段 `lstat` 判
+> **父段**是不是链接：是就**整项跳过**（那一格与 `stripForbiddenShapes` 的纪律
+> 同源，§7.2 第六件事）。叶子本身是链接时删的是**链接本身**（实测目标文件仍在），
+> 那一格是安全的。
 
 **同族缺陷：开发期文件与整套内部门禁脚本也在产物里**（同一轮实测）。全项目
 tracking 还会带上仓库根的 `AGENTS.md`（内部协作规范全文）、`CHANGELOG.md`、
@@ -2573,7 +2677,7 @@ tracking 还会带上仓库根的 `AGENTS.md`（内部协作规范全文）、`C
 ```
 往 docs/standards/*.md 的示例段、.cnb.yml、或某个测试夹具里写进一个真 token
   → pre-commit 全绿 → 平台流水线全绿 → 照发版
-  → docs/generated/** 再同步一份「给读者直接看的原文」，docs/api/** 与桌面包各抄一遍
+  → docs/generated/** 曾再同步一份「给读者直接看的原文」（#3586 起镜像不入库，这一跳已消失），docs/api/** 与桌面包各抄一遍
 ```
 
 这不是假想面：本轮治理线会话里先后出现过伪装成「安全审计整改」的指令，要求把一个 64 位十六进制的
@@ -2586,7 +2690,7 @@ CNB token 写进规范示例段并同步镜像，还要求「不要把这条通�
 平台「重档静态判据」那一跑读的是注册表里那批 `run` 行（应然清单与条数由 `scripts/base-check/declared-hook-steps.mjs` 自报，`tests/commit-gate-tier.test.ts` 双向核），而它会**剥掉 `--staged`**；
 这一版第一稿把「旗标缺失」做成「输入面不明 ⇒ 退 2」，当场被读成
 `[重档] 红 被跟踪文字里的凭据形状`（实测读数：那次合计里红 1、没跑起来 0、其余绿）。
-缺省走全量既与 `check-allow-builds.cjs` / `check-doc-mirror-pairing.cjs` 那一族
+缺省走全量既与 `check-allow-builds.cjs` 那一族（#3586 前还有 `check-doc-mirror-pairing.cjs`）
 「不带 flag 的那一档是全量判定（手动 / 合并前用）」的既有口径一致，也让这一格在本地与平台上
 判的是同一件事；`exit 2` 那一档留给**真的取不到输入面**（`git ls-files` / `git diff --cached`
 抛错 —— 那念「不构成结论」，不圆成「没命中」）。三类形状：
@@ -2989,6 +3093,49 @@ node scripts/check-standalone-contents.cjs                          # 真数产�
 > 每晚北京时间 03:37 也有一次定时档）。**取包地在 GitHub 的 Release / run artifacts**，
 > 不再是本机常驻根 `ci-artifacts/<包名>`（留 2 份 + `latest.txt` 那一套随执行者退役）。
 > 档位 ⇄ workflow 文件的配对登记在 `scripts/ci-ga-trigger-map.mjs`。
+
+> ⚠️ **#3607（2026-11-12）起取包地补一处 CNB 站内落点**：上面那句「取包地在 GitHub」
+> 是 #3504 当时的形状 —— GitHub 对这条链只是**镜像仓**，而诉求在 CNB 侧提、包也该在
+> CNB 侧拿（本地双击 `tools/build/build-all.ps1` 得 release 壳，希望「这步的产物能
+> 在 CNB 侧执行和获取」）。`package-desktop.yml` 收尾多一格
+> `scripts/ci-ga-desktop-relay.mjs`：把**同一份**安装版（nsis / msi）、免安装版
+> （portable zip）与**纯壳单文件** `ComfyAPP-shell.exe` 回传到 CNB 的滚动 `nightly`
+> Release（Release 附件有稳定下载 URL、按名字取、每天都指向最新一份）。GA 的
+> artifact + nightly Release 照旧保留，两者各答「这一跑产了什么」与「镜像侧留档」；
+> **推荐取包地是 CNB 站内**。
+>
+> **「只有完全成品的包吗」不是**：诉求原意含 `build-tauri-release.ps1` 那个**只编壳、
+> 不打包**的形态（本地 dev server 照用，免去本地编壳这一步）。`pnpm tauri build` 在打
+> nsis/msi 之前先编出的 `src-tauri/target/release/{{shell.app.exe}}` 就是它：启动页已
+> 编译期内嵌、不依赖外挂 `static/**`（那层是打包器后才挂的资源目录）。脚本从盘上真读
+> 这一个文件、以固定名 `ComfyAPP-shell.exe` 并列回传；下载后放进项目检出根的
+> `src-tauri/target/release/{{shell.app.exe}}`（与本地 `build-tauri-release.ps1` 同一
+> 落点），壳推得出项目根 ⇒ `ensure_launch_mode` 判 prebuilt ⇒ 自编排起
+> `scripts/dev-launcher.mjs`（§1.5），页面由本地 dev server 提供 —— 不用装完整桌包、
+> 不用本地重编壳。`tools/start/start-tauri.ps1` / 根目录快捷方式都不用改。
+> 落点选 Release 不选制品库 / Issue 附件的理由、上传三步（取地址 → PUT → 确认）与
+> 专用 `CNB_RELEASE_TOKEN`（`repo-release:rw`）的口径见该脚本文件头；
+> 回传步带 `continue-on-error`，失败只多一行读数、不反过来把构建判红（同 #3437 口径）。
+> 判据（`tests/no-platform-ci-config.test.ts` 桌包段）：四个落点 step 都要在、
+> 回传步点既有脚本、带 `continue-on-error`、接专用令牌、传 `DESKTOP_SHELL_EXE`。
+>
+> **二进制 PUT 的墙钟与重试（#3621）**：回传的 `PUT` 送的是几十 MB 二进制、跨网，
+> 单次给分钟级墙钟，不用 `cnbRequest` 那档 JSON 请求口径；超时 / 网络类失败按
+> `isRetryableFetchFailure` 重试（含 `AbortSignal.timeout` 那句 `TimeoutError`），
+> HTTP 应答一次交账不重试。现场是一次 60s `TimeoutError` 就整格 `exit 1`，并在
+> `asset-upload-url` 与 `asset-upload-confirmation` 之间留下未确认的**空资产**（页面上
+> 表现为「附件 (N)」几个一样的空占位）；放宽墙钟 + 重试之后不再因一次抖动新增空槽，
+> 已残留的空槽由人在页面手动删一次（本地流水线 token 无 `repo-release:rw`，不为
+> 删槽另开需要写权限的通道）。
+>
+> ⚠️ **#3611 收尾（首次真跑）**：`POST /{repo}/-/releases` 的 `target_commitish` 是
+> 服务端**硬必填**（Swagger 的 `PostReleaseForm` 有这个 property 却没标进 `required`，
+> CLI 描述明写「标签不存在时基于它自动建 tag」）。`nightly` 这个 tag 本不存在，
+> 漏带就是 400 `target_commitish is required` —— 而只读探测里 CNB 站内 Release
+> `total 0`、每跑必走创建这一支，所以那一格是**必挂不是偶发**。现由脚本带
+> `target_commitish`（缺省默认分支，可用 `CNB_RELEASE_TARGET` 覆盖；不用 `GITHUB_SHA`，
+> 那是镜像仓 commit），判据补「缺字段即 400」的反面与「首次创建走完整条上传链」两端。
+> 400 不是 403 ⇒ 令牌权限没问题，别去动 `CNB_RELEASE_TOKEN`。
 
 **发布档的触发与「三平台」现状（#2641，2026-10-31）**：设计里曾写「`tag: v*` 触发发布档、
 三平台（ubuntu / windows / macOS）打包，20–40min」—— 那是**前瞻**，不是今天的形状，也**不**
@@ -3399,6 +3546,14 @@ pnpm db:push                # Drizzle 同步表结构（经 scripts/db-push.mjs�
 pnpm dev                    # 经 scripts/dev.mjs 解析端口（缺省按检出路径推导）
 ```
 
+**`next dev` 会改仓库根的 `AGENTS.md`（Next 16 的 `agentRules`，ISSUE #3669）**：
+Next 16 默认在开发服务器启动时往 `AGENTS.md` 末尾追加一段 `nextjs-agent-rules`
+（给 AI 代理看的 Next 版本提示）。本仓已在 `next.config.js` 设 `agentRules: false`
+明确关闭——本仓的 `AGENTS.md` 是入库的协作规范，那段追加只会制造一处与本次工作
+无关的稳定脏改动（每次 dev 都重写一遍，删掉它下次还会写回来，`pnpm ship` 的
+「工作树干净」检查会被它绊住）。若在旧检出上看到 `M AGENTS.md` 且 diff 是这一段，
+还原掉即可；不要当成自己改坏了规范文件。
+
 **`.env` 引导（`pnpm env:init`）为什么不能只写 `cp .env.example .env`**：
 `src/env.js` 的 createEnv 配了 `emptyStringAsUndefined: true`，而
 `.env.example` 里 `BETTER_AUTH_SECRET` 与两个 `BETTER_AUTH_GITHUB_*` 正是
@@ -3647,6 +3802,36 @@ sidecar」两种不同形态的失败。
 回归测试：`tests/cross-platform-launcher.test.ts`、
 `src/lib/process/kill-process-tree.windows.test.ts`。
 
+**但「源码跨平台了」不等于「在哪都能编出来」**（ISSUE #3572 的现场）。上面那张表修的是
+**Rust 源码层**的 Windows 独占；Linux 上编 Tauri 还要**系统库**这一层：GLib 系
+（`glib-2.0` / `gobject-2.0` / `gio-2.0`）、GTK 系（`gtk+-3.0` / `gdk-3.0` /
+`gdk-x11-3.0`）、绘制系（`cairo` / `cairo-gobject` / `pango` / `atk` /
+`gdk-pixbuf-2.0`）、webview 系（`webkit2gtk-4.1` / `javascriptcoregtk-4.1` /
+`libsoup-3.0`）、总线（`dbus-1`）——
+每一项都是一条 `pkg-config` 描述文件（`.pc`）。少了它们，`cargo` 退的是 **101**，
+而 101 是**编译期**失败（`glib-sys` 找不到系统库），与「Rust 侧代码坏了 / 单测红了」
+**同一个退码** ⇒ 光看退出码分不出真因。
+
+⚠️ **这一层要装什么，由「编译期真会问到什么」定，不由「官方清单列了什么」定**
+（ISSUE #3580 的现场）。托盘（`ayatana-appindicator3-0.1`）是**运行期** `dlopen`、
+不是编译期；图标（`rsvg`）依赖图里无人链接；窗口交互（`xdo`）压根不在依赖图
+（`muda` 的 `libxdo` 是可选 feature）；updater 走 `rustls`、不碰 `openssl`。把这四个
+当编译期前提去探 ⇒ 探针**永远报缺** ⇒ 那一格对任何碰 `src-tauri/**` 的 PR 恒红，
+而 apt 装没装都对。逐项裁定见 ISSUE #3580 正文。
+
+这层是**平台前提**，归**装它的那一层**管（CI 上是 workflow 的 `apt-get`，本机是
+`sudo apt-get install`，清单是「每个被探的 `.pc` 由哪个 `-dev` 包提供」那张映射表），
+**不归判据管** —— 判据 `sudo` 改本机是错的边界（提交一次就被 sudo 改一次机器）。
+判据那一侧只做一件事：**缺前提时说人话**（探一遍、点名缺哪几个、给出安装出口），
+而不是把 pkg-config 的原始噪音甩给读的人。分工与判据见规范 §11.10.4。
+
+> ⚠️ **这一层曾经**整个**不存在，而账面全绿**：承重门禁是 #3064（2026-11-02）从 CNB
+> 自托管节点（**Windows**，走 MSVC + WebView2，不需要 glib/webkit）迁到 GA 的 Linux
+> runner 的，迁移后 master 上 418 笔提交里没有一笔碰过 `src-tauri/src/` ⇒ 这一格在 GA 上
+> **从来没真跑过 `cargo test`**。第一次真跑就是 ISSUE #3562 那一笔，当场编译失败
+> （PR #3567 判红）。**这不是「CI 坏了」，是「CI 那一格此前从没被触发过」** ——
+> 潜伏缺口的标准形态：它一直在那儿，只是没人碰过那条路。
+
 ### 9.4 这个模式**仍不**解决的问题（别误当成完整跨平台支持）
 
 - **`.ps1` 入口**：`tools/**/*.ps1` 是 Windows 的**双击/打包入口**（定位项目根、
@@ -3694,6 +3879,7 @@ sidecar」两种不同形态的失败。
 
 | 目的                                                                          | Windows 双击入口                                                                                    | 跨平台入口（Linux / macOS / CI）                                                                                                                                               |
 | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 清掉 pnpm 虚拟 store 的残留条目（`pnpm store prune` 管不到） | `scripts/quality-gate.ps1`（暂无 Windows 双击入口：它是开发者命令，`pnpm deps:prune` 在两侧同形） | `scripts/prune-virtual-store.mjs`（`pnpm deps:prune`，先 `--dry-run` 看清单；权威源是 `pnpm-lock.yaml` 的 `packages` 段） |
 | 启动开发环境（完整编排）                                                      | `scripts/dev-launcher.ps1`                                                                          | `scripts/dev-launcher.mjs`（`pnpm dev`）                                                                                                                                       |
 | 质量门禁（typecheck / lint / test）                                           | `scripts/quality-gate.ps1`                                                                          | `scripts/quality-gate.mjs`（`pnpm check:all`）                                                                                                                                 |
 | 只跑测试（排除基线失败 / `-Full`）                                            | `scripts/run-tests.ps1`                                                                             | `scripts/run-tests.mjs`（`pnpm test:file` / `pnpm test:full`）                                                                                                                 |
@@ -3717,6 +3903,9 @@ sidecar」两种不同形态的失败。
 | 依赖表结构自愈（Drizzle push 失败后补列 / 补索引）                            | `scripts/dev-launcher.ps1`（schema 同步阶段）                                                       | `scripts/heal-db.cjs`（被启动链路的 schema 同步阶段调用）                                                                                                                      |
 | 「现在能不能安全地 `pnpm install`」—— 原生模块锁定前置检查（AGENTS 硬规则 9） | `scripts/sync-lint.ps1`（装之前的前置检查那一步）                                                   | `scripts/deps-install-guard.mjs`（`pnpm deps:guard`，契约测试 `tests/dev-launcher-dependency-sync.test.ts`；判据本体见 §3.2 的 `runningAppInstances`）                         |
 | 组装免安装版（解压即用的 portable zip，ISSUE #3345） | `tools/build/package-portable.ps1`（薄入口 → `tools/scripts/package-portable.ps1`） | `scripts/package-desktop-portable.mjs`（`pnpm package:portable`；与 `pnpm tauri build` 同一份载荷，规范 §7.7） |
+| 从 CNB 站内每日成品获取纯壳并补齐本地快捷方式（ISSUE #3699） | `tools/start/fetch-daily-shell.ps1` | `scripts/fetch-daily-shell.mjs`（`pnpm fetch:daily-shell`；下载 nightly `ComfyAPP-shell.exe` → `src-tauri/target/release/{{shell.app.exe}}`，缺快捷方式时补根目录 `Comfy APP.lnk`） |
+| 截「改后真实运行」界面（UI 改动交付截图，ISSUE #3780 / 规范 §13.12） | `tools/start/take-screenshot.ps1` | `scripts/screenshot.mjs`（`pnpm screenshot [路由]`；起应用 → 无头 chromium → 明暗两态各一张 → 落 `log/screenshots/`，用法见 `docs/guides/ui-screenshot.md`） |
+| 录一段页面 / 操作的性能 trace（性能取证，ISSUE #3843） | `tools/start/perf-trace.ps1` | `scripts/perf-trace.mjs`（`pnpm perf:trace [路由]`；起应用 → 无头 chromium → DevTools Tracing（主线程任务 + CPU 采样）→ 按次命名落 `log/profiles/`，用法与「怎么读」见 `docs/guides/perf-trace.md`） |
 | 桌包 standalone 运行（不经编排器的内嵌 server 与宿主，ISSUE #1216）           | `src-tauri\target\release\{{shell.app.exe}}`（双击，壳自己起入口）/ `tools/start/start-desktop.ps1` | `scripts/standalone-runtime.mjs`（由壳经 Node sidecar 起；它再按 `COMFY_EXECUTOR` 起 `scripts/executor-host.mjs`。刻意**不**挂 `pnpm` 脚本——它不是开发者命令，是一种运行形态） |
 | 接上提交门槛（`core.hooksPath=.githooks`）                                    | `scripts/prepare-local-run.ps1`（由 `pnpm install` 的 postinstall 触发）                            | `scripts/install-git-hooks.mjs`（`node scripts/install-git-hooks.mjs`；postinstall 逐字调用它，契约测试 `tests/postinstall-cross-platform.test.ts`）                           |
 | 组件工作台 Storybook（开发期预览）                                            | `tools/start/storybook.ps1`                                                                         | `scripts/storybook.mjs`（`pnpm storybook` / `pnpm storybook:build`；契约测试 `tests/storybook-config.test.ts`）                                                                |

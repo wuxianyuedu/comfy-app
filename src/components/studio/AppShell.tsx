@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { LayoutGrid, Plus } from "lucide-react";
+import { LayoutGrid, Plus, X } from "lucide-react";
 
+import { Button } from "~/components/ui/button";
 import { useHotkey } from "~/components/ui/use-hotkey";
 import { Disclosure } from "~/components/ui/disclosure";
 import { cn } from "~/lib/utils";
@@ -19,12 +20,19 @@ import {
   SidebarRail,
 } from "~/components/ui/sidebar";
 
-import { sidebarNavItems, isProjectTab, PROJECTS_ENTRY, type WorkspaceView } from "./NavItems";
+import {
+  sidebarPinnedViewIds,
+  sidebarNavItems,
+  isProjectTab,
+  PROJECTS_ENTRY,
+  type WorkspaceView,
+} from "./NavItems";
 import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
 import { ViewTabStrip, type OpenableView } from "./ViewTabStrip";
 import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
-import type { ViewTab } from "./workspace-tabs";
+import { useTitleBarSlot } from "./TitleBarSlot";
+import { isTabClosable, type ViewTab } from "./workspace-tabs";
 import { ViewActionsProvider } from "./ViewActions";
 
 /** 侧栏底部「项目」分组里列出的一条项目（只需 id + 展示名）。 */
@@ -122,6 +130,8 @@ export function AppShell({
    * P20 唯一出口 useHotkey，面板本身由 CommandPalette 渲染。 */
   /* 桌面壳里这条栏由窗口标题行承载（与 `ShellTabs` 同一个判据）。 */
   const titleBarTabs = useTitleBarTabsActive();
+  /* 壳态标题行由 `ShellTabs` 组装后经插槽交下来，落在本壳的内容列顶部（ISSUE #3807）。 */
+  const titleBarSlot = useTitleBarSlot();
   const [commandOpen, setCommandOpen] = useState(false);
   useHotkey({ key: "k", mod: true }, () => {
     setCommandOpen(true);
@@ -130,6 +140,12 @@ export function AppShell({
   /* 侧栏列表 —— 与 `globalNavItems()` 的差别只有一处：设置不在侧栏列
      （它已经撤到顶栏右上角的菜单里，见 `sidebarNavItems` 的说明）。 */
   const navItems = sidebarNavItems();
+
+  /* 顶部页签条不渲染侧栏常驻项对应的页签（ISSUE #3740 后续反馈）：这些视图在侧栏里
+     恒在、可切可关，页签条再列一遍只贡献占宽。瞬时页签与项目类页签照常进页签条
+     （首页也属于常驻项，一并不进）。 */
+  const pinnedViewIds = sidebarPinnedViewIds();
+  const stripTabs = viewTabs?.filter((tab) => !pinnedViewIds.has(tab.view));
 
   /* 「用户此刻在这个项目里」判据是**视图位置**而非存储里的活跃 id：活跃 id 跨视图常驻
      （新建项目、从最近项目进来都会写），首页 / 模型 / 历史等全局视图上没有任何项目内容，
@@ -149,11 +165,23 @@ export function AppShell({
                 <SidebarMenu>
                   {navItems.map((item) => {
                     const enabled = item.enabled !== false;
+                    /* 这一项的视图当前开着哪一页（ISSUE #3740）：侧栏顶部列的是全局项，
+                       无项目维度，取第一张命中的页签即可。首页是固定页签（恒在、不可关），
+                       `isTabClosable` 判它为不可关 ⇒ 不会拿到打开态。 */
+                    const openTab = viewTabs?.find(
+                      (tab) => tab.view === item.id && isTabClosable(tab),
+                    );
                     return (
                       <SidebarMenuItem key={item.id}>
                         {/* 未上线的视图留在列表里但禁用：移除会让「以后有这个」这件事消失，
                           禁用则给出「即将推出」（`tooltip` 里写明）。 */}
                         <SidebarMenuButton
+                          className={
+                            /* 关闭按钮悬停时行背景也带上悬停色（ISSUE #3740 追加反馈）：
+                               按钮是兄弟控件、盖在行右缘，光标落在它上面时行自身的 :hover
+                               不触发；用组悬停变量把整行接成悬停态。 */
+                            "group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground"
+                          }
                           disabled={!enabled}
                           isActive={active === item.id}
                           onClick={() => {
@@ -163,9 +191,54 @@ export function AppShell({
                           }}
                           tooltip={enabled ? item.label : `${item.label}（即将推出）`}
                         >
-                          {item.icon}
+                          {openTab ? (
+                            /* 打开态（ISSUE #3740 追加反馈）：图标落进一枚品牌色浅底胶片
+                               （`primary-soft`，明暗两态自有值），读起来是「这一页在用」，
+                               不再像「有通知」的角点。与「当前在这页」的选中指示条
+                               （侧栏 `data-active`）是两个维度，互不替代。 */
+                            <span
+                              className="bg-primary-soft text-primary-strong inline-flex size-7 shrink-0 items-center justify-center rounded-md"
+                              data-open-state="true"
+                            >
+                              {item.icon}
+                            </span>
+                          ) : (
+                            item.icon
+                          )}
                           <span>{item.label}</span>
                         </SidebarMenuButton>
+                        {openTab ? (
+                          /* 关闭按钮（ISSUE #3740）：只在悬停 / 聚焦时浮现 —— 打开态
+                             已由图标胶片常驻表达，按钮不必一直占位。做成菜单按钮的
+                             **兄弟**而不是子元素（button 里不许再套 button）；挂
+                             `data-sidebar="menu-action"` 让按钮的
+                             `group-has-data-[sidebar=menu-action]:pr-8` 自动给文字让位。
+                             缩略成图标轨时不显示（那里没有放它的位置，关页签走展开态） */
+                          <Button
+                            aria-label={`关闭 ${item.label} 页签`}
+                            className={cn(
+                              "absolute top-1/2 right-2 -translate-y-1/2",
+                              "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                              "opacity-0 transition-opacity group-hover/menu-item:opacity-100",
+                              "group-focus-within/menu-item:opacity-100 focus-visible:opacity-100",
+                              "group-data-[collapsible=icon]:hidden",
+                            )}
+                            data-sidebar="menu-action"
+                            /* 关闭走 pointerdown 而不是 click（ISSUE #3789）：行级 tooltip
+                               在 pointerdown 时收起会引发一次重渲染，真实点击的 click
+                               事件会落到行 <li> 上、关不掉页签；pointerdown 阶段目标
+                               稳定是这枚按钮本身。 */
+                            onPointerDown={(event) => {
+                              event.stopPropagation();
+                              onCloseViewTab?.(openTab.key);
+                            }}
+                            size="icon-xs"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <X data-icon="inline-start" size={12} />
+                          </Button>
+                        ) : null}
                       </SidebarMenuItem>
                     );
                   })}
@@ -253,10 +326,16 @@ export function AppShell({
         </Sidebar>
 
         <SidebarInset className="bg-canvas text-ink min-w-0 overflow-hidden">
-          {/* 浏览器 / dev 形态的视图页签栏：放到内容列最顶端（TopBar 上方），
-            而不是 TopBar 下方。桌面壳里这条栏由窗口标题行承载，这里按同一个判据让位。
-            保留在 `SidebarInset` 内部是为了让 fixed 侧栏自然让位，避免被侧栏压住关闭按钮。 */}
-          {titleBarTabs ? null : (
+          {/* 顶部那一条：两形态**同位**（ISSUE #3807）。
+              浏览器 / dev 渲染 `ViewTabStrip`；桌面壳渲染 `ShellTabs` 经
+              `TitleBarSlotProvider` 交下来的 `TitleBarTabs`（页签 + 拖拽区 + 窗口按钮）。
+              都在内容列最顶端、TopBar 上方 —— 此前壳把标题行画成整窗第一行，侧栏与
+              内容一起被推下 36px，首页就不贴顶了。放内容列里还有一层好处：侧栏折叠
+              成图标轨时，这条栏的左边缘自动跟着收窄，不用再算偏移量。
+              `AppShell` 单独挂载（Storybook / 单测）时没有 slot，退回浏览器形态。 */}
+          {titleBarTabs && titleBarSlot ? (
+            titleBarSlot
+          ) : (
             <ViewTabStrip
               activeKey={activeViewKey ?? ""}
               onClose={(key) => onCloseViewTab?.(key)}
@@ -264,7 +343,7 @@ export function AppShell({
               onSelect={(key) => onSelectViewTab?.(key)}
               openableViews={openableViews}
               projectNameOf={projectNameOf}
-              tabs={viewTabs ?? []}
+              tabs={stripTabs ?? []}
             />
           )}
 

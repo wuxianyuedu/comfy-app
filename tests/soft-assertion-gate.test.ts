@@ -33,9 +33,13 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
       }),
     };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as { stderr?: string; stdout?: string };
-    return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    /* 失败形状按字段读（B5 清账口径）：不再断言收型。execFileSync 的失败把
+       两股输出都挂在错误对象上，取不到就当空串。 */
+    const e: { stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
+    const out = typeof e.stdout === "string" ? e.stdout : "";
+    const err = typeof e.stderr === "string" ? e.stderr : "";
+    return { ok: false, output: `${out}${err}` };
   }
 }
 

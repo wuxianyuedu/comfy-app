@@ -136,12 +136,11 @@ export function WorkflowRunLogModal({
               <FileText className="text-primary-strong shrink-0" size={16} />
               <span className="text-ink truncate text-[15px] font-semibold">执行日志</span>
               {run && (
-                <span
-                  className="text-ink-muted text-2xs max-w-55 truncate"
-                  title={run.workflowName}
-                >
-                  {run.workflowName}
-                </span>
+                <Hint label={run.workflowName}>
+                  <span className="text-ink-muted text-2xs max-w-55 truncate">
+                    {run.workflowName}
+                  </span>
+                </Hint>
               )}
               {run && (
                 <Badge size="pill-sm" tone="neutral">

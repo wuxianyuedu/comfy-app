@@ -43,6 +43,7 @@ import { errorText } from "~/lib/error-message";
 import { isRecord } from "~/lib/is-record";
 import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { fireAndForget } from "~/lib/async-action";
+import { AsyncMutex } from "~/lib/async-mutex";
 import { logger } from "~/lib/core/logger";
 import {
   MAX_CONCURRENCY,
@@ -150,7 +151,20 @@ async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
  * `skipReadyGate` **只**给 `executor-host.mjs --claim-once` 那个契约/排障钩子用：
  * 它要验的是「领取与载荷重建的机械步骤」，而那在不跑真 ComfyUI 的机器上永远
  * 过不了就绪门控。常驻循环与提交后的 kick 都不传它。 */
-export async function claimAndDispatchOnce(options?: {
+/** 槽位判据与记账之间隔着 `await claimNextQueued`（ISSUE #3873）：常驻 tick 与
+ *  收口后的 `kickQueue()` 并发进入时，双方都能通过 `pendingDispatch.size` 检查、
+ *  各领一行 → 在飞数突破 `MAX_CONCURRENCY`。整段「检查 + 领取 + 记账」用进程内
+ *  互斥串行化：真正的执行在 `executeViaComfyCli`（fire-and-forget）里，不占这把锁。
+ *  互斥对象是纯 TS 的 `AsyncMutex`（无 Node 内建依赖），不破坏本模块的纯宿主形态。 */
+const claimMutex = new AsyncMutex();
+
+export function claimAndDispatchOnce(options?: {
+  skipReadyGate?: boolean;
+}): Promise<string | null> {
+  return claimMutex.run(() => claimAndDispatchOnceInner(options));
+}
+
+async function claimAndDispatchOnceInner(options?: {
   skipReadyGate?: boolean;
 }): Promise<string | null> {
   const s = state();

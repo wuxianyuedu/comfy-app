@@ -48,6 +48,25 @@ function readText(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8");
 }
 
+/** package.json 的 scripts 段：`JSON.parse` 的 `any` 用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+function packageScripts(): Record<string, string> | undefined {
+  const parsed: unknown = JSON.parse(readText("package.json"));
+  if (typeof parsed !== "object" || parsed === null || !("scripts" in parsed)) {
+    return undefined;
+  }
+  const scripts: unknown = parsed.scripts;
+  if (typeof scripts !== "object" || scripts === null) {
+    return undefined;
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(scripts)) {
+    if (typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
 /** 一条写得全的记录（各条用例只改它要测的那一栏）。 */
 const GOOD = freshnessRecord({
   key: "full",
@@ -622,10 +641,7 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
     // 另拼一遍 = 两处各写一条产物链，漏掉「剥私有输入」那一步的表现是构建绿了、
     // 产物里那把刀却没跑（硬规则 17 判过的形态）。
     expect(artifactPlan().args).toEqual(["run", "build"]);
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(readText("package.json")) as {
-      scripts?: Record<string, string>;
-    };
+    const pkg = { scripts: packageScripts() };
     const build = pkg.scripts?.build ?? "";
     for (const step of [
       "next build",
@@ -766,10 +782,7 @@ describe("墙钟预算：**测量没发生**与「判据红」必须分得开（
 
 describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("`package.json` 的入口真的走这层通道（否则记账这一步没有执行者）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(readText("package.json")) as {
-      scripts?: Record<string, string>;
-    };
+    const pkg = { scripts: packageScripts() };
     // 按**入口**判而不是按命令长得像什么：裸 `vitest run --coverage` 也能跑出同样的用例，
     // 只有走这一层才会记账 —— 而「账上有没有日期」正是这一档存在的全部意义。
     expect(pkg.scripts?.["test:coverage:tracked"]).toContain("scripts/full-suite-run.mjs");

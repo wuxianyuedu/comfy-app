@@ -45,9 +45,9 @@ export async function createWorkflowRunTask(
   const modes = parseModesJson(tpl.modes);
   const mode = tpl.defaultMode ?? tpl.taskType ?? modes[0] ?? null;
   const io = parseWorkflowIOMap(tpl.workflowIO);
-  /* 该模式生效的契约口清单：作者改过的模式按注册表（含自定义口），没改过的
-   *  走内置默认（不传即回落）。读不到注册表时按空注册表处理 —— 回落内置契约，
-   *  不阻断生成。 */
+  /* 该模式生效的契约口清单：**生效注册表**（成品配置 + 本机覆盖逐模式合并，
+   * 含自定义口）里那一条 —— 没配过的模式也在表里（回落成品配置那份），
+   * 读不到注册表时按空注册表处理 —— 回落内置契约，不阻断生成。 */
   const contracts = await loadModeContracts();
   const contractIds = contracts.find((c) => c.mode === upperToken(mode))?.inputs;
   const { workflowInputs } = buildEncapsulatedInputs({

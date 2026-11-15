@@ -9,6 +9,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import { formatTimingSummary, recordTimingLedger } from "../scripts/premerge-timing.mjs";
 import { resolveGitDir } from "../scripts/git-dir.mjs";
 
@@ -51,15 +53,22 @@ describe("recordTimingLedger —— 追加写、best-effort", () => {
     const ledgerPath = path.join(resolveGitDir(root)!, "comfy-premerge-timing.jsonl");
     const lines = fs.readFileSync(ledgerPath, "utf8").trim().split("\n");
     expect(lines).toHaveLength(2);
-    /* SAFETY: 类型断言已复核 */
-    const first = JSON.parse(lines[0]!) as {
-      at: string;
-      entries: Array<{ label: string; ms: number }>;
-      ref: string;
+    /* 首行用运行时守卫收窄（B5 清账：不走 `as` 断言），字段断言在下面逐条兜。 */
+    const first: unknown = JSON.parse(lines[0] ?? "");
+    const ledgerEntries: unknown = isRecord(first) ? first.entries : undefined;
+    if (!isUnknownArray(ledgerEntries)) {
+      throw new Error("计时账首行形状不对");
+    }
+    const entryAt = (index: number): Record<string, unknown> => {
+      const entry = ledgerEntries[index];
+      if (!isRecord(entry)) {
+        throw new Error(`计时账第 ${index + 1} 条不是对象`);
+      }
+      return entry;
     };
-    expect(first.ref).toBe("origin/master");
-    expect(first.entries[0]!.ms).toBe(4200); // 取整
-    expect(first.entries[1]!.label).toContain("tsc");
+    expect(isRecord(first) && first.ref).toBe("origin/master");
+    expect(entryAt(0).ms).toBe(4200); // 取整
+    expect(String(entryAt(1).label)).toContain("tsc");
   });
 
   it("空读数不落盘（回 false，连文件都不建）", () => {

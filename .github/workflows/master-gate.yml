@@ -1,10 +1,12 @@
 # master-gate.yml —— 镜像仓 master 的树级文档链（§13.5.34 并行期转正，ISSUE #3378 收尾）
 #
-# 为什么单独一份：`生成态文档与源同步` / `文档引用与权威源一致` 是树级文本判据，
-# 与自托管节点的平台事实无关。§13.5.34 的并行期（两侧逐格比对结论一致）已收口，
-# 2026-11-09 起 **CNB push 主列整条撤掉**，本 workflow 是这两格唯一执行者
-# （同款入口 `render-doc-placeholders.cjs --check --autofix` /
+# 为什么单独一份：`文档引用与权威源一致` 是树级文本判据，与自托管节点的平台
+# 事实无关。§13.5.34 的并行期（两侧逐格比对结论一致）已收口，2026-11-09 起
+# **CNB push 主列整条撤掉**，本 workflow 是这一格唯一执行者（同款入口
 # `check-doc-references.cjs`、同款旗标，逐字一致）。
+# 「生成态文档与源同步」曾也在这份文件里（`render-doc-placeholders.cjs --check
+# --autofix`），#3586 随 `docs/generated/**` 退出入库产物一并退役 —— 没有入库
+# 的产物可判，「生成」成了读者本地的动作（`pnpm doc:render`）。
 # push 事件下的另一条流水线是 `GitHub master 镜像（平台池）`（推镜像 + LFS，
 # 与本 workflow 同由那次 master push 触发），它出口的 `endStages` 挂 `push 失败立案`。
 #
@@ -20,8 +22,10 @@
 # 失败可见性：不回传 CNB、不改 ship 判据（用户已定）。红只出现在镜像仓的 Actions
 # 列表 + GitHub 通知；要看现场日志用 `pnpm ship --gh-logs <run-id|pr号>`。
 #
-# `--autofix` 就地重渲染写的是本 workflow 自己的工作区，不回写 CNB；
-# `docs/generated/**` 镜像带不带由本地 D0「文档源 ⇄ 生成态镜像同批」判据守（§13.5.5）。
+# #3586 后这里没有 `--autofix`：判据只读当前树的文字，不就地重渲染、不写工作区，
+# 也不回写 CNB。`docs/generated/**` 退出入库产物后，「镜像带不带」这一格连同本地
+# D0「文档源 ⇄ 生成态镜像同批」一并退役；想看带真实值的原文，读者在自己机器上
+# 跑一次 `pnpm doc:render`，产物只在本机（沿革见 §13.5.5）。
 #
 # `uses:` 版本口径同 pr-gate.yml / daily.yml（有 v7 上 v7；pnpm/action-setup 最新只到 v6）。
 
@@ -66,9 +70,6 @@ jobs:
 
       - name: 安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）
         run: pnpm install --frozen-lockfile
-
-      - name: 生成态文档与源同步（CNB push 档同款判据、同款旗标）
-        run: node scripts/render-doc-placeholders.cjs --check --autofix
 
       - name: 文档引用与权威源一致（CNB push 档同款判据一字不改）
         run: node scripts/check-doc-references.cjs

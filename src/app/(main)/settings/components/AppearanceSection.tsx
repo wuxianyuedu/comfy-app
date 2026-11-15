@@ -10,17 +10,34 @@ import { useEffect, useState } from "react";
 
 import { Moon, Sun } from "lucide-react";
 
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { FieldLabel } from "~/components/ui/field";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
+import { Hint } from "~/components/ui/hint";
+import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import {
   DEFAULT_APPEARANCE,
+  DEFAULT_CODE_FONT,
+  DEFAULT_INTERFACE_FONT,
+  DEFAULT_TERMINAL_FONT,
   FONT_SCALE_STEPS,
   RADIUS_STEPS,
   readAppearance,
+  registerUserFont,
   saveAppearance,
   type AppearancePrefs,
   type AppearanceStep,
+  type FontTier,
 } from "~/lib/appearance";
+import {
+  describeFontPart,
+  fontGroupsOf,
+  normalizeFontStack,
+  slotInputValue,
+  stackWithSlotFont,
+} from "./appearance-font-helpers";
 
 import { SettingsCard } from "~/components/ui/settings-card";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
@@ -50,7 +67,6 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
   };
 
   return (
-    /* SAFETY: 类型断言已复核 */
     <SettingsCard>
       <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
         选择应用的主题外观：深色（Dark）或浅色（Light）。切换即时生效并自动保存，
@@ -90,17 +106,12 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
           ] as const
         ).map(({ value, label, Icon, hint }) => (
           <RadioGroupItem
-            /* 选中档改用**软品牌紫** + 品牌描边，不再是一整块实心紫（ISSUE #3547）：
-               基元的根元素带 `data-checked:bg-primary`（那是给 16px 的小单选圈准备的），
-               而这里它被 `render` 成了一张**卡片** ⇒ 整张卡被填成实心品牌紫；基元的类与
-               `render` 元素上的类合并时基元那份排在后面，所以覆盖要写在这里。
-               `dark:` 那一档也要跟：基元另有一条 `dark:data-checked:bg-primary`，它是
-               **另一个变体组**，tailwind-merge 不会把它一起收掉。 */
-            className="data-checked:bg-primary-soft dark:data-checked:bg-primary-soft data-checked:text-ink dark:data-checked:text-ink"
             key={value}
             /* 整卡可点选项：基元尺寸全部归还调用处 —— 基类是小圆点形态（`size-4`+`aspect-square`），
                必须连宽度与宽高比一起还（`size-auto!`/`aspect-auto!`），否则宽度仍 16px、卡片被压竖排。
-               基元的中心圆点指示器是小圆点形态用的；此处选中态已由边框+底色表达，圆点隐藏。 */
+               基元的中心圆点指示器是小圆点形态用的；此处选中态已由边框+底色表达，圆点隐藏
+               （选中实心底自 ISSUE #3553 起已下沉到 Indicator 层，卡片形态不再被基元根的
+               `data-checked:bg-primary` 填紫，调用方无需再写覆盖 hack）。 */
             nativeButton
             render={
               <Button
@@ -138,6 +149,49 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
         }}
         steps={FONT_SCALE_STEPS}
         value={prefs.fontScale}
+      />
+
+      {/* 字体三档按 #3784 的口径：**每档只配一种字体**（单行输入框），整条栈 =
+          这一种 + 固定回退尾（中文回退等不需要用户操心）。每档各带「恢复默认」：
+          把该档回落到 globals.css 的原值。 */}
+      <FontRow
+        defaultValue={DEFAULT_INTERFACE_FONT}
+        hint="自定义整个界面使用的字体。西文 / 中文两个部分各配一种；系统回退固定。"
+        label="界面字体"
+        onChange={(value) => {
+          update({ interfaceFont: value });
+        }}
+        onReset={() => {
+          update({ interfaceFont: DEFAULT_INTERFACE_FONT });
+        }}
+        tier="interface"
+        value={prefs.interfaceFont}
+      />
+      <FontRow
+        defaultValue={DEFAULT_CODE_FONT}
+        hint="自定义代码块使用的字体。等宽首选配一种；通用回退固定。"
+        label="代码字体"
+        onChange={(value) => {
+          update({ codeFont: value });
+        }}
+        onReset={() => {
+          update({ codeFont: DEFAULT_CODE_FONT });
+        }}
+        tier="code"
+        value={prefs.codeFont}
+      />
+      <FontRow
+        defaultValue={DEFAULT_TERMINAL_FONT}
+        hint="自定义终端使用的字体（等宽展示）。等宽首选 / 中文字体各配一种；通用回退固定。"
+        label="终端字体"
+        onChange={(value) => {
+          update({ terminalFont: value });
+        }}
+        onReset={() => {
+          update({ terminalFont: DEFAULT_TERMINAL_FONT });
+        }}
+        tier="terminal"
+        value={prefs.terminalFont}
       />
       {notPersisted && (
         <p className="text-warning mt-3 text-xs">
@@ -193,6 +247,177 @@ function StepRow({
           </RadioGroupItem>
         ))}
       </RadioGroup>
+    </div>
+  );
+}
+function FontRow({
+  label,
+  hint,
+  value,
+  defaultValue,
+  onChange,
+  onReset,
+  tier,
+}: {
+  defaultValue: string;
+  hint: string;
+  label: string;
+  onChange: (value: string) => void;
+  onReset: () => void;
+  tier: FontTier;
+  value: string;
+}) {
+  const isDefault = normalizeFontStack(value) === normalizeFontStack(defaultValue);
+  /* 按部分分组陈列 + 每部分一种字体的输入（ISSUE #3784 与补充意见）：
+     默认栈里有哪些字体、各排在第几位一眼可见；每个可配部分各填一种。 */
+  const groups = fontGroupsOf(value, tier);
+  return (
+    <div className="mt-5">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <FieldLabel className="text-ink text-sm font-semibold" htmlFor={`font-${label}`}>
+          {label}
+        </FieldLabel>
+        <Badge variant={isDefault ? "secondary" : "outline"}>
+          {isDefault ? "默认字体" : "自定义字体"}
+        </Badge>
+        <span className="text-muted-foreground text-xs">{hint}</span>
+      </div>
+      {/* 当前栈按部分陈列：默认字体是什么、各自排在第几位，一眼可见。 */}
+      <div className="border-border bg-surface-row mb-3 flex flex-col gap-1.5 rounded-lg border p-3 text-xs">
+        {groups
+          .filter((group) => group.items.length > 0)
+          .map((group) => (
+            <div className="flex flex-wrap items-start gap-1.5" key={group.slot}>
+              <span className="text-muted-foreground min-w-24 shrink-0">{group.label}</span>
+              <div className="flex flex-wrap gap-1">
+                {group.items.map((item, i) => (
+                  <Hint key={`${group.slot}-${item}-${i}`} label={item}>
+                    <span className="bg-surface-2 text-ink rounded px-1.5 py-0.5">
+                      {describeFontPart(item)}
+                    </span>
+                  </Hint>
+                ))}
+              </div>
+            </div>
+          ))}
+      </div>
+      {/* 每个可配部分一个单行输入：每部分一种字体，留空 = 该部分用默认。 */}
+      <div className="flex flex-col gap-2">
+        {groups
+          .filter((group) => group.editable)
+          .map((group) => (
+            <div className="flex items-center gap-2" key={`input-${group.slot}`}>
+              <FieldLabel
+                className="text-ink w-24 shrink-0 text-xs"
+                htmlFor={`font-${label}-${group.slot}`}
+              >
+                {group.label}
+              </FieldLabel>
+              <Input
+                aria-label={`${label} · ${group.label}`}
+                className="min-w-0 flex-1"
+                id={`font-${label}-${group.slot}`}
+                onChange={(e) => {
+                  const family = e.target.value.trim();
+                  onChange(
+                    stackWithSlotFont(value, tier, group.slot, family.length > 0 ? family : null),
+                  );
+                }}
+                placeholder="留空 = 默认"
+                value={slotInputValue(value, tier, group.slot)}
+              />
+            </div>
+          ))}
+      </div>
+      <div className="flex flex-col gap-2 md:flex-row md:items-start">
+        <Button
+          aria-label={`${label}恢复默认`}
+          className="shrink-0"
+          onClick={onReset}
+          size="sm"
+          variant="outline"
+        >
+          恢复默认
+        </Button>
+      </div>
+      <FontFileLoader
+        onLoaded={(family) => {
+          const firstEditable = fontGroupsOf(value, tier).find((group) => group.editable);
+          if (firstEditable) {
+            onChange(stackWithSlotFont(value, tier, firstEditable.slot, family));
+          }
+        }}
+        tier={tier}
+      />
+    </div>
+  );
+}
+
+function FontFileLoader({
+  onLoaded,
+  tier,
+}: {
+  onLoaded: (family: string) => void;
+  tier: FontTier;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const handleFile = async (file: File) => {
+    setError(null);
+    setBusy(true);
+    try {
+      onLoaded((await registerUserFont(file, tier)).family);
+    } catch {
+      setError("字体文件无法加载，请换一个 .ttf / .otf / .woff / .woff2 文件。");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const picker = useFilePicker({
+    accept: ".ttf,.otf,.woff,.woff2",
+    onPick: (file) => {
+      handleFile(file).catch(() => undefined);
+    },
+  });
+  return (
+    <div className="mt-2">
+      <div
+        className={
+          dragOver
+            ? "border-primary bg-primary-soft/40 flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs"
+            : "border-border flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs"
+        }
+        onDragLeave={() => {
+          setDragOver(false);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const file = e.dataTransfer.files[0];
+          if (file) {
+            handleFile(file).catch(() => undefined);
+          }
+        }}
+      >
+        <span className="text-muted-foreground">拖入字体文件，或</span>
+        <Button
+          disabled={busy}
+          onClick={() => {
+            picker.open();
+          }}
+          size="sm"
+          variant="outline"
+        >
+          {busy ? "加载中…" : "选择文件"}
+        </Button>
+        <FilePicker {...picker.inputProps} />
+      </div>
+      {error === null ? null : <p className="text-danger-strong mt-1 text-xs">{error}</p>}
     </div>
   );
 }

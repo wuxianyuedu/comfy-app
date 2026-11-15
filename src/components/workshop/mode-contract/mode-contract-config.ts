@@ -10,6 +10,7 @@ import {
   derivedModeContract,
   modeContractSignature,
   type ModeContract,
+  type ModeContractCustomInput,
   type ModeContractCustomKind,
   type ModeContractInputType,
 } from "~/lib/workshop/model-mode-contract";
@@ -52,21 +53,28 @@ export function contractModeLabel(mode: string): string {
   return ALL_WORKFLOW_TYPES.find((t) => t.code === mode.toUpperCase())?.label ?? mode;
 }
 
-/** 成品配置（推导 + 项目默认显式覆盖）按模式码的索引 —— 见
- *  `effectiveModeContract` 的回落分支。 */
-const CONFIGURED_BY_MODE: ReadonlyMap<string, ModeContract> = new Map(
-  configuredModeContracts().map((contract) => [contract.mode, contract]),
+/** 成品配置的**静态快照**（编译进包的那份）—— 服务端读数到达前的兜底。
+ *
+ *  服务端下发的是**现读**的项目默认基线（写完即生效的那份，#3634）；这份静态
+ *  快照只在「读数还没到」这一小段时间里顶一下，读数到了就以它为准。 */
+const STATIC_CONFIGURED: ReadonlyArray<ModeContract> = configuredModeContracts();
+const STATIC_BY_MODE: ReadonlyMap<string, ModeContract> = new Map(
+  STATIC_CONFIGURED.map((contract) => [contract.mode, contract]),
 );
 
-/** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置（推导 + 项目默认显式覆盖）。
+/** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置（项目默认显式覆盖）。
  *  「改过/没改过」的判据收在这一处（两个入口的徽标、编辑器初值、封装视图都读它）。
- *  `stored` 是**本机覆盖**（`useModeContracts` 的读取结果），不是成品配置。 */
+ *  `stored` 是**生效注册表**（服务端合好的：成品配置 + 本机覆盖），
+ *  `configured` 是**成品配置基准**（判「已改」用；缺省 = 静态快照）。 */
 export function effectiveModeContract(
   mode: string,
   stored: ReadonlyArray<ModeContract>,
+  configured?: ReadonlyArray<ModeContract>,
 ): { contract: ModeContract; customized: boolean } {
   const code = upperToken(mode);
-  const fallback = CONFIGURED_BY_MODE.get(code) ?? derivedModeContract(code);
+  const base = configured && configured.length > 0 ? configured : STATIC_CONFIGURED;
+  const fallback =
+    base.find((c) => c.mode === code) ?? STATIC_BY_MODE.get(code) ?? derivedModeContract(code);
   const found = stored.find((c) => c.mode === code);
   if (found && modeContractSignature(found) !== modeContractSignature(fallback)) {
     return { contract: found, customized: true };
@@ -82,8 +90,9 @@ export function effectiveModeContract(
 export function isModeContractCustomized(
   mode: string,
   stored: ReadonlyArray<ModeContract>,
+  configured?: ReadonlyArray<ModeContract>,
 ): boolean {
-  return effectiveModeContract(mode, stored).customized;
+  return effectiveModeContract(mode, stored, configured).customized;
 }
 
 /** 契约里还没有的固定口（供「＋ 添加口」按钮清单）。
@@ -113,6 +122,68 @@ export const CUSTOM_INPUT_KINDS: ReadonlyArray<{
 /** 自定义口类型 → 展示名。 */
 export function customInputKindLabel(kind: ModeContractCustomKind): string {
   return CUSTOM_INPUT_KINDS.find((item) => item.kind === kind)?.label ?? kind;
+}
+
+/** 契约口的**类型说明**（ISSUE #3762：变量名悬停可见类型；ISSUE #3778：
+ *  类型一行、描述另起一行，类型值用英文 —— 与口 id 同一语言，不再中译一层的
+ *  「文本 / 数字」）。
+ *
+ *  `size` 是复合口，描述里展开它的两类等价组成（与编辑器「口径说明」同源，
+ *  不另抄一份规则）；自定义口的类型就是作者选的简单类型（kind 本身是英文词），
+ *  描述取该类型的常驻说明。返回**结构**而不是拼好的一整句：分两行渲染由视图
+ *  负责，这里只管内容。 */
+export function contractInputTypeInfo(
+  id: string,
+  customInputs: ReadonlyArray<ModeContractCustomInput>,
+): { description: string; type: string } {
+  const custom = customInputs.find((def) => def.id === id);
+  if (custom) {
+    return {
+      description:
+        CUSTOM_INPUT_KINDS.find((item) => item.kind === custom.kind)?.hint ?? "自定义参数",
+      type: custom.kind,
+    };
+  }
+  switch (id) {
+    case "prompt": {
+      return { description: "生成内容的描述", type: "text" };
+    }
+    case "negative": {
+      return { description: "不想出现的内容，可留空", type: "text" };
+    }
+    case "size": {
+      return {
+        description:
+          "两类等价写法任选：比例 + 分辨率（1k/2k/4k），" +
+          "或 比例 + 百万像素（1M/2M/4M）+ 倍数（8/16/32/64）；选分辨率时按场景尺寸表换算",
+        type: "size",
+      };
+    }
+    case "seed": {
+      return { description: "抽卡种子，同一种子同一结果", type: "number" };
+    }
+    case "duration": {
+      return { description: "视频时长（秒）", type: "number" };
+    }
+    case "lora-name": {
+      return { description: "角色 LoRA 名称", type: "text" };
+    }
+    case "lora-strength": {
+      return { description: "LoRA 强度（0~1）", type: "number" };
+    }
+    case "reference-image": {
+      return { description: "参考图（可多个，按序号槽追加）", type: "image" };
+    }
+    case "first-frame": {
+      return { description: "视频首帧", type: "image" };
+    }
+    case "last-frame": {
+      return { description: "视频尾帧", type: "image" };
+    }
+    default: {
+      return { description: "统一输入口", type: "" };
+    }
+  }
 }
 
 /** **全部预制口** + 「本契约是否已经用了它」—— 「浏览全部参数」用。

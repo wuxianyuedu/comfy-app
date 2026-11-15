@@ -117,10 +117,16 @@ function makeDb(file: string, extraSql = ""): void {
 function columnsOf(file: string, table: string): Array<string> {
   const db = new DatabaseSync(file, { readOnly: true });
   try {
-    /* SAFETY: 类型断言已复核 */
-    return (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(
-      (row) => row.name,
-    );
+    /* 行形状用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+    return db
+      .prepare(`PRAGMA table_info(${table})`)
+      .all()
+      .map((row) => {
+        if (typeof row !== "object" || row === null || !("name" in row)) {
+          throw new Error(`PRAGMA table_info(${table}) 的行缺 name`);
+        }
+        return String(row.name);
+      });
   } finally {
     db.close();
   }
@@ -129,10 +135,11 @@ function columnsOf(file: string, table: string): Array<string> {
 function readUserVersion(file: string): number {
   const db = new DatabaseSync(file, { readOnly: true });
   try {
-    /* SAFETY: 类型断言已复核 */
-    return Number(
-      (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version,
-    );
+    const row: unknown = db.prepare("PRAGMA user_version").get();
+    if (typeof row !== "object" || row === null || !("user_version" in row)) {
+      throw new Error("PRAGMA user_version 读不到");
+    }
+    return Number(row.user_version);
   } finally {
     db.close();
   }

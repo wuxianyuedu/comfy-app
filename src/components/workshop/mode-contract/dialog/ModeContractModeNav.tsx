@@ -10,12 +10,14 @@ import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { useExpansionSet } from "~/components/ui/expansion-set";
 import { TreeChildren } from "~/components/ui/tree-rows";
+import { TruncatedText } from "~/components/ui/truncated-text";
 
 import { contractModeTree } from "../mode-contract-config";
 
 export function ModeContractModeNav({
   activeMode,
   storedCustomized,
+  unsavedMode = null,
   onSelect,
 }: {
   /** 当前选中的模式码（null = 未选）。 */
@@ -24,6 +26,8 @@ export function ModeContractModeNav({
   onSelect: (mode: string) => void;
   /** 注册表里已被用户改过的模式（标「已改」）。 */
   storedCustomized: (mode: string) => boolean;
+  /** 有未保存草稿的模式码（null = 没有；ISSUE #3762：左栏标「未保存」）。 */
+  unsavedMode?: string | null;
 }) {
   /* 类别 → 是否展开。**初始全部展开**（把每个类别先表一次态），收起是「先看别的
      类别」的临时动作，默认折着等于把当前模式藏起来。 */
@@ -41,7 +45,7 @@ export function ModeContractModeNav({
         const open = categoryExpansion.isExpanded(group.category);
         return (
           <Disclosure
-            className="hover:text-ink mb-3 gap-1 px-2 text-xs font-medium"
+            className="hover:text-ink mb-3 gap-1 px-2 text-sm font-semibold"
             key={group.category}
             marker="caret"
             onOpenChange={() => {
@@ -55,11 +59,10 @@ export function ModeContractModeNav({
                §16.2.4.39）；`data-category` 是给用例锚「哪一类」的记号。 */
             panelClassName="mb-3"
             trigger={
-              <span
-                className="text-ink-fainter min-w-0 flex-1 truncate"
-                data-category={group.category}
-              >
-                {group.label}
+              <span className="flex min-w-0 flex-1" data-category={group.category}>
+                <TruncatedText className="text-ink min-w-0 flex-1 truncate">
+                  {group.label}
+                </TruncatedText>
               </span>
             }
           >
@@ -67,6 +70,7 @@ export function ModeContractModeNav({
               {group.modes.map((t) => {
                 const active = activeMode === t.code;
                 const customized = storedCustomized(t.code);
+                const unsaved = unsavedMode === t.code;
                 return (
                   <Button
                     aria-checked={active}
@@ -86,7 +90,9 @@ export function ModeContractModeNav({
                     role="radio"
                     variant="ghost"
                   >
-                    <span className="min-w-0 flex-1 truncate text-left">{t.label}</span>
+                    <TruncatedText className="min-w-0 flex-1 truncate text-left">
+                      {t.label}
+                    </TruncatedText>
                     {customized && (
                       <span
                         className={cn(
@@ -96,6 +102,11 @@ export function ModeContractModeNav({
                       >
                         已改
                       </span>
+                    )}
+                    {/* 未保存（ISSUE #3762）：草稿相对生效值有改动、还没落盘。
+                        与「已改」（相对项目默认）是两件事，各自表达。 */}
+                    {unsaved && (
+                      <span className="text-warning-strong text-2xs shrink-0">未保存</span>
                     )}
                   </Button>
                 );

@@ -13,7 +13,7 @@ import process from "node:process";
 import path from "node:path";
 
 import { SKIP_SCHEMA_SYNC_ENV } from "../db-schema-state.mjs";
-import { maybeSpawnExecutorHost } from "./executor-host-spawn.mjs";
+import { maybeSpawnExecutorHost, SKIP_EXECUTOR_HOST_ENV } from "./executor-host-spawn.mjs";
 import {
   commandInvocation,
   pnpmInvocation,
@@ -200,6 +200,9 @@ export function spawnDevServer(ctx, opts) {
       /* 编排器已起过一份 schema 同步（本文件 950 行附近），通知 dev.mjs
        * 跳过它自己的那份 —— 否则一次启动两份 drizzle 并发写同一个库。 */
       [SKIP_SCHEMA_SYNC_ENV]: "1",
+      /* 同理（ISSUE #3830）：编排器 6.5 步已起过一份 executor host，通知
+       * dev.mjs 跳过它自己的那份 —— 否则 host 模式下一次启动确定性双宿主。 */
+      [SKIP_EXECUTOR_HOST_ENV]: "1",
       ...extraEnv,
     },
     stdoutFile: outFile,

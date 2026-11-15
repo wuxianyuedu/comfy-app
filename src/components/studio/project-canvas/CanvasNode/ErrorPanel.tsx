@@ -7,6 +7,7 @@
 import { useMemo, useState } from "react";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -146,31 +147,42 @@ export function ErrorPanel({
         <div className="min-w-0 flex-1">
           {/* 头部行：状态徽标 + 工作流名 + 动作 */}
           <div className="flex items-center justify-between gap-1.5">
-            <span className="text-danger-strong min-w-0 truncate font-medium">
-              {errorStatus === "TIMEOUT"
-                ? "轮询超时"
-                : errorStatus === "CANCELLED"
-                  ? "任务被取消"
-                  : errorStatus
-                    ? "生成失败"
-                    : "未捕获异常"}
-              <span className="text-danger-strong/60 ml-1">
-                · {errorStatus ? `task ${errorStatus}` : "client"}
+            <Hint
+              label={`${
+                errorStatus === "TIMEOUT"
+                  ? "轮询超时"
+                  : errorStatus === "CANCELLED"
+                    ? "任务被取消"
+                    : errorStatus
+                      ? "生成失败"
+                      : "未捕获异常"
+              } · ${errorStatus ? `task ${errorStatus}` : "client"}`}
+            >
+              <span className="text-danger-strong min-w-0 truncate font-medium">
+                {errorStatus === "TIMEOUT"
+                  ? "轮询超时"
+                  : errorStatus === "CANCELLED"
+                    ? "任务被取消"
+                    : errorStatus
+                      ? "生成失败"
+                      : "未捕获异常"}
+                <span className="text-danger-strong/60 ml-1">
+                  · {errorStatus ? `task ${errorStatus}` : "client"}
+                </span>
               </span>
-            </span>
+            </Hint>
             <div className="flex shrink-0 items-center gap-1">
               {kind === "workflow" && workflowName !== undefined && workflowName !== "" && (
-                <span
-                  className="border-destructive/15 bg-destructive/10 text-danger-strong/80 rounded border px-1.5 py-0.5 font-mono text-[9.5px]"
-                  title="执行的工作流"
-                >
-                  {/* 转型说明：CanvasNodeData 有 [key: string]: unknown
-                   * 索引签名，会在 JSX 读取时把 d.workflowName 放宽成
-                   * unknown。显式 String() 修好
-                   * ReactNode 兼容性，照顾少见的包裹联合。
-                   */}
-                  {String(workflowName)}
-                </span>
+                <Hint label="执行的工作流">
+                  <span className="border-destructive/15 bg-destructive/10 text-danger-strong/80 rounded border px-1.5 py-0.5 font-mono text-[9.5px]">
+                    {/* 转型说明：CanvasNodeData 有 [key: string]: unknown
+                     * 索引签名，会在 JSX 读取时把 d.workflowName 放宽成
+                     * unknown。显式 String() 修好
+                     * ReactNode 兼容性，照顾少见的包裹联合。
+                     */}
+                    {String(workflowName)}
+                  </span>
+                </Hint>
               )}
               {/* 用同一份参数重跑。仅当有 taskId（即任务真的跑过）且不是
                * 预检阶段的校验错误时才出现。用 Boolean() 包一层是为了让 TS
@@ -276,7 +288,8 @@ export function ErrorPanel({
                   {taskId !== undefined && taskId !== "" && (
                     <>
                       <span className="text-danger-strong/60">taskId</span>
-                      <Hint label="点击复制 taskId">
+                      {/* 悬停给纯文本 taskId 全文 + 点击复制的 affordance；点击仍走复制。 */}
+                      <Hint label={`${taskId}（点击复制）`}>
                         <Button
                           className="nodrag nopan text-danger-strong/90 hover:text-danger-strong h-auto min-w-0 truncate p-0 text-left font-mono font-normal hover:bg-transparent"
                           onClick={() => {
@@ -292,7 +305,7 @@ export function ErrorPanel({
                   {ts !== null && ts !== "" && (
                     <>
                       <span className="text-danger-strong/60">时间</span>
-                      <span className="text-danger-strong/80 truncate">{ts}</span>
+                      <TruncatedText className="text-danger-strong/80 truncate">{ts}</TruncatedText>
                     </>
                   )}
                 </div>

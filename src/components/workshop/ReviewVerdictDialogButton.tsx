@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { displayValue } from "~/lib/display-value";
 import { fixed } from "~/lib/number-format";
@@ -54,7 +55,9 @@ function ScoreBars({
           />
           <span className="text-ink-subtle w-8 shrink-0">{item.score} 分</span>
           {item.note && (
-            <span className="text-ink-faintest min-w-0 flex-1 truncate">{item.note}</span>
+            <TruncatedText className="text-ink-faintest min-w-0 flex-1 truncate">
+              {item.note}
+            </TruncatedText>
           )}
         </div>
       ))}

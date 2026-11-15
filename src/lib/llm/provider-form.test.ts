@@ -140,6 +140,8 @@ describe("emptyModelForm / modelFormFromView", () => {
       contextWindow: "",
       maxOutputTokens: "",
       inputTypes: ["text"],
+      /* 输出类型按用途给起点（#3577）：图像模型出图。 */
+      outputTypes: ["image"],
       capabilities: ["system-messages"],
       reasoningLevels: "",
       reasoningParam: "",
@@ -163,11 +165,14 @@ describe("emptyModelForm / modelFormFromView", () => {
         contextWindow: 200_000,
         maxOutputTokens: null,
         inputTypes: ["text", "image", "unknown"],
+        outputTypes: ["text", "unknown"],
         capabilities: ["structured-output"],
         reasoningLevels: ["low", " low ", "high"],
         reasoningParamMapping: { param: "reasoning_effort", values: { low: "low" } },
         baseUrl: "https://model-override/v1",
         enabled: false,
+        endpointPath: null,
+        extraBody: null,
       }),
     ).toEqual({
       name: "claude-sonnet-4",
@@ -177,13 +182,58 @@ describe("emptyModelForm / modelFormFromView", () => {
       contextWindow: "200000",
       maxOutputTokens: "",
       inputTypes: ["text", "image"],
+      outputTypes: ["text"],
       capabilities: ["structured-output"],
       reasoningLevels: "low, high",
       reasoningParam: "reasoning_effort",
       reasoningValues: { low: "low" },
       baseUrl: "https://model-override/v1",
       enabled: false,
+      endpointPath: "",
+      extraBody: "",
     });
+  });
+
+  it("库行回填：图像行的端点路径取下发生效值（#3656）", () => {
+    expect(
+      modelFormFromView({
+        name: "agnes-image-2.5-flash",
+        kind: "image",
+        apiFormat: "chat-completions",
+        smartConfig: true,
+        contextWindow: null,
+        maxOutputTokens: null,
+        inputTypes: null,
+        outputTypes: null,
+        capabilities: null,
+        reasoningLevels: null,
+        reasoningParamMapping: null,
+        baseUrl: null,
+        enabled: true,
+        endpointPath: "/v1/images/generations",
+        extraBody: null,
+      }).endpointPath,
+    ).toBe("/v1/images/generations");
+    /* 库坏值（不在该用途的词表里）回落用途默认第一项，不留空白 */
+    expect(
+      modelFormFromView({
+        name: "agnes-video-2.5",
+        kind: "video",
+        apiFormat: "chat-completions",
+        smartConfig: true,
+        contextWindow: null,
+        maxOutputTokens: null,
+        inputTypes: null,
+        outputTypes: null,
+        capabilities: null,
+        reasoningLevels: null,
+        reasoningParamMapping: null,
+        baseUrl: null,
+        enabled: true,
+        endpointPath: "/not/known",
+        extraBody: null,
+      }).endpointPath,
+    ).toBe("/v1/videos");
   });
 
   it("库行回填：合法的模型级格式原样保留", () => {
@@ -196,11 +246,14 @@ describe("emptyModelForm / modelFormFromView", () => {
         contextWindow: null,
         maxOutputTokens: null,
         inputTypes: null,
+        outputTypes: null,
         capabilities: null,
         reasoningLevels: null,
         reasoningParamMapping: null,
         baseUrl: null,
         enabled: true,
+        endpointPath: null,
+        extraBody: null,
       }).apiFormat,
     ).toBe("anthropic-messages");
   });
@@ -255,6 +308,26 @@ describe("validateModelForm", () => {
       validateModelForm(form({ name: "m", contextWindow: "8192", maxOutputTokens: "1024" })),
     ).toEqual({});
   });
+
+  it("额外请求体字段（#3626）：空 = 合法，非空必须是 JSON 对象，数组不许存", () => {
+    expect(validateModelForm(form({ name: "m", extraBody: "" }))).toEqual({});
+    expect(validateModelForm(form({ name: "m", extraBody: "   " }))).toEqual({});
+    expect(
+      validateModelForm(
+        form({ name: "m", extraBody: '{"response_format":{"type":"json_object"}}' }),
+      ),
+    ).toEqual({});
+    expect(validateModelForm(form({ name: "m", extraBody: '{"extra_body":{"a":1}}' }))).toEqual({});
+    expect(validateModelForm(form({ name: "m", extraBody: "[1]" })).extraBody).toBe(
+      '额外请求体字段必须是 JSON 对象（如 {"response_format":{"type":"json_object"}}）',
+    );
+    expect(validateModelForm(form({ name: "m", extraBody: "{" })).extraBody).toBe(
+      '额外请求体字段必须是 JSON 对象（如 {"response_format":{"type":"json_object"}}）',
+    );
+    expect(validateModelForm(form({ name: "m", extraBody: "42" })).extraBody).toBe(
+      '额外请求体字段必须是 JSON 对象（如 {"response_format":{"type":"json_object"}}）',
+    );
+  });
 });
 
 describe("splitReasoningLevels / cleanReasoningValues", () => {
@@ -293,9 +366,12 @@ describe("modelSaveDraft", () => {
       apiFormat: "chat-completions",
       enabled: true,
       baseUrl: null,
+      endpointPath: null,
+      extraBody: null,
       contextWindow: null,
       maxOutputTokens: null,
       inputTypes: ["text"],
+      outputTypes: ["text"],
       capabilities: ["system-messages"],
       reasoningLevels: [],
       reasoningParamMapping: null,
@@ -303,6 +379,15 @@ describe("modelSaveDraft", () => {
     });
     expect("id" in draft).toBe(false);
     expect("apiKey" in draft).toBe(false);
+  });
+
+  it("图像行保存带上生效的端点路径；文本行恒 null（#3656）", () => {
+    const imageDraft = modelSaveDraft(form({ name: "agnes-image-2.5-flash", kind: "image" }), {
+      providerId: "p1",
+    });
+    /* emptyModelForm("image")（默认 kind 是 chat，这里手动给图像行）没有端点时
+     * 由 modelSaveDraft 的回落兜成用途默认第一项 */
+    expect(imageDraft.endpointPath).toBe("/v1/images/generations");
   });
 
   it("编辑：保留模型级接口覆盖；数字字段空串 = null", () => {

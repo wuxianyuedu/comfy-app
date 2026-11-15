@@ -7,6 +7,8 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { createGateRepo, type GateRepo, type GateRepoOptions } from "./helpers/gate-repo";
 import { expectActionableRefusal, ACTIONABLE_REFUSAL } from "./helpers/ratchet-refusal";
 
@@ -443,10 +445,11 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
           /* 表里的 `baseline` 带目录前缀（用于 `discoveredBaselines` 对齐），
            * 而沙箱里脚本落点是 `scripts/`（`dir` 默认档），读回时要去掉前缀。 */
           const baselineRel = row!.baseline.split("/").pop() ?? row!.baseline;
-          /* SAFETY: 类型断言已复核 */
-          const written = JSON.parse(handle.repo.read(join("scripts", baselineRel))) as {
-            rules?: Record<string, unknown>;
-          };
+          const written: unknown = JSON.parse(handle.repo.read(join("scripts", baselineRel)));
+          /* 台账形状用运行时守卫收窄（B5 清账，不走 as 断言）。 */
+          if (!isRecord(written) || !isRecord(written.rules)) {
+            throw new Error("棘轮台账形状不对（缺 rules）");
+          }
           expect(
             Object.keys(written.rules ?? {}),
             `${row!.script} 的棘轮车道又有成员了（--update 写回了非空 rules）——` +

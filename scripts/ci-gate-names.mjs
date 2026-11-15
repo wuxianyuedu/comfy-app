@@ -20,23 +20,32 @@
  *
  * ── 这一族的三条口径 ────────────────────────────────────────────────────
  *
- *   ① **执行面有三处**（不是一处）：复合档 `重档静态判据` 的条目（执行面 = 钩子注册表，
+ *   ① **执行面有四处**（不是一处）：复合档 `重档静态判据` 的条目（执行面 = 钩子注册表，
  *      见 `scripts/ci-heavy-gates.mjs` 的头注）、「受影响用例」那一格的固定清单
- *      （`scripts/fixed-structural-tests.mjs`）、以及 `.githooks/pre-commit` 的步骤行。
- *      三处都是「谁真的会跑它」的地方 —— 判据只认这三处，不认注释。
+ *      （`scripts/fixed-structural-tests.mjs`）、`.githooks/pre-commit` 的步骤行，
+ *      以及 **GA PR 门禁 workflow 的 step 行**（`.github/workflows/pr-gate.yml`）。
+ *      四处都是「谁真的会跑它」的地方 —— 判据只认这四处，不认注释。
+ *      ⚠️ 第四处是 2026-11-13 补上的（ISSUE #3599）：PR 主列的代码判据全在 GA 侧
+ *      （`.cnb.yml` 的 PR 档自 #3378 起只剩「站内回读结论 + 红了立案」两件纯 API 动作），
+ *      而本文件的三处执行面**一处都不在 GA** ⇒ 「执行者在别处」那张表登记的入口路径
+ *      只要指向 GA 侧的 step，这一格就会被误判成「没有执行者」。补上的是**判据面**，
+ *      不是新判据（§12.18）。
  *   ② **「换了执行者」要机器可读**：登记在 `.cnb.yml` 的 `COMFYAPP_CI_GATES_ELSEWHERE`
  *      （键名与 `COMFYAPP_CI_DISABLED_GATES` 同一形态）。登记的值是**执行者的入口路径**
  *      （`scripts/xxx.cjs` 或 `tests/xxx.test.ts`），不是执行者自己的定义 ——
- *      判据去 ① 那三面核「这个路径真的会被跑」，**不抄第二份**（§12.12 / §12.18）。
+ *      判据去 ① 那四面核「这个路径真的会被跑」，**不抄第二份**（§12.12 / §12.18）。
  *   ③ **双向都判**：清单里的每个名字都要有执行者；登记的每个名字都要在清单里、
  *      每个入口路径都要真在执行面里、且不能与「活 stage」重复登记。
  *
  * 用法（一般不直接跑）：
  *   · `registeredGateOrder(text)` / `registeredDisabledGates(text)` —— 两份既有清单的解析
  *   · `registeredElsewhereGates(text)` —— 「执行者在别处」那份登记
+ *   · `gaWorkflowStepArgvs(text)` —— GA PR 门禁 workflow 的 step 命令行（第四处执行面）
  *   · `gateNameExecutorProblems(deps)` —— 判据本体（纯函数）
  */
 import path from "node:path";
+
+import { tokenize } from "./base-check/hook-steps.mjs";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
@@ -203,6 +212,32 @@ export function scriptPaths(text) {
 }
 
 /**
+ * GA PR 门禁 workflow 里各 step 的命令行 —— **第四处执行面**（ISSUE #3599）。
+ *
+ * 只认 `run:` 行、只认**单行**命令 —— 与钩子那一侧同一口径（钩子那侧见
+ * `scripts/base-check/hook-steps.mjs` 的 `readHookSteps`）：多行 `run: |` 块里是
+ * shell 脚本，不是「一条判据一条命令」的形状，取不出可核的入口路径。
+ *
+ * ⚠️ `run: |` 这一行本身没有命令（`| ` 之后换行），它会被分词成一个 `|` 词元 ——
+ * 那个词元里没有 `scripts/` / `tests/` 路径，核不出任何入口路径，无害。
+ *
+ * @param {string} text workflow 原文
+ * @returns {string[][]} 每条 step 一份 argv
+ */
+export function gaWorkflowStepArgvs(text) {
+  const out = [];
+  for (const line of String(text ?? "").split("\n")) {
+    const m = /^\s*run:\s*(?<command>.+?)\s*$/u.exec(line);
+    const command = m?.groups?.command;
+    if (command === undefined) {
+      continue;
+    }
+    out.push(tokenize(command));
+  }
+  return out;
+}
+
+/**
  * 判据本体：清单里的每个名字，执行者是谁。
  *
  * @param {{
@@ -211,11 +246,19 @@ export function scriptPaths(text) {
  *   heavyGates?: ReadonlyArray<{argv: readonly string[]}>,
  *   fixedTests?: readonly string[],
  *   hookSteps?: ReadonlyArray<{argv: readonly string[]}>,
+ *   gaSteps?: ReadonlyArray<{argv: readonly string[]}>,
  * }} deps
  * @returns {string[]} 逐条不一致（人读的话术）；空数组 = 通过
  */
 export function gateNameExecutorProblems(deps) {
-  const { cnbText, liveStages = [], heavyGates = [], fixedTests = [], hookSteps = [] } = deps;
+  const {
+    cnbText,
+    liveStages = [],
+    heavyGates = [],
+    fixedTests = [],
+    hookSteps = [],
+    gaSteps = [],
+  } = deps;
   /** @type {string[]} */
   const problems = [];
 
@@ -224,7 +267,7 @@ export function gateNameExecutorProblems(deps) {
   const elsewhere = registeredElsewhereGates(cnbText);
   const live = new Set(liveStages);
 
-  /* 执行面三处：复合档条目 / 固定清单用例 / 钩子步骤行。 */
+  /* 执行面四处：复合档条目 / 固定清单用例 / 钩子步骤行 / GA PR 门禁 step 行。 */
   const heavyPaths = new Set();
   for (const g of heavyGates) {
     for (const p of scriptPaths(g.argv.join(" "))) {
@@ -238,8 +281,14 @@ export function gateNameExecutorProblems(deps) {
       hookPaths.add(p);
     }
   }
+  const gaPaths = new Set();
+  for (const s of gaSteps) {
+    for (const p of scriptPaths(s.argv.join(" "))) {
+      gaPaths.add(p);
+    }
+  }
   /** @param {string} p */
-  const known = (p) => heavyPaths.has(p) || fixedSet.has(p) || hookPaths.has(p);
+  const known = (p) => heavyPaths.has(p) || fixedSet.has(p) || hookPaths.has(p) || gaPaths.has(p);
 
   /* ① 清单里的每个名字都要有执行者。 */
   for (const name of gates) {
@@ -257,8 +306,8 @@ export function gateNameExecutorProblems(deps) {
       const dead = paths.filter((p) => !known(p));
       if (dead.length > 0) {
         problems.push(
-          `「${name}」登记的执行者入口（${dead.join(" / ")}）在复合档条目 / 固定清单 / 钩子步骤` +
-            "三面里都找不到 —— 登记与执行面对不上（这一格现在没有执行者）",
+          `「${name}」登记的执行者入口（${dead.join(" / ")}）在复合档条目 / 固定清单 / 钩子步骤 / GA PR 门禁 step` +
+            "四面里都找不到 —— 登记与执行面对不上（这一格现在没有执行者）",
         );
       }
       continue;
@@ -288,7 +337,7 @@ export function gateNameExecutorProblems(deps) {
       if (!known(p)) {
         problems.push(
           `「${name}」登记的执行者入口「${p}」不在任何执行面里` +
-            "（复合档条目 / 固定清单用例 / 钩子步骤）—— 登记指向了一个没人跑的东西",
+            "（复合档条目 / 固定清单用例 / 钩子步骤 / GA PR 门禁 step）—— 登记指向了一个没人跑的东西",
         );
       }
     }

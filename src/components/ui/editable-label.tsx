@@ -5,6 +5,7 @@ import { textHandler } from "~/lib/form-props";
 
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
+import { Hint } from "~/components/ui/hint";
 
 export function EditableLabel({
   label,
@@ -41,37 +42,38 @@ export function EditableLabel({
        *  text-ink-bright + 'Inter' font-family，与 outputs 的 `text-xs font-semibold
        *  text-ink-bright font-Inter'` 视觉严格对齐，让 inputs 与 outputs 在同一节点内
        *  拥有相同字体权重的 label。 */
-      <span
-        className="group text-ink-bright flex min-w-0 flex-1 items-center gap-1 truncate text-xs font-semibold"
-        style={{ fontFamily: "var(--font-sans)" }}
-        title={title}
-      >
-        {editable ? (
-          /* 需求：直接点击变量名称即可进入改名，不再依赖 ✎ 小按钮。
-           * editable 时整个名称是可交互的文本按钮（点击进入编辑态）。 */
-          <Button
-            aria-label="点击重命名"
-            className="nodrag nopan text-ink-bright hover:text-ink-strong h-auto min-w-0 flex-1 cursor-text justify-start truncate rounded-none px-0 text-left text-xs font-semibold"
-            onClick={(event) => {
-              event.stopPropagation();
-              setDraft(label);
-              setEditing(true);
-            }}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-            }}
-            onMouseDown={(event) => {
-              event.stopPropagation();
-            }}
-            style={{ fontFamily: "var(--font-sans)" }}
-            variant="ghost"
-          >
-            {label}
-          </Button>
-        ) : (
-          <span className="min-w-0 flex-1 truncate">{label}</span>
-        )}
-      </span>
+      <Hint label={title}>
+        <span
+          className="group text-ink-bright flex min-w-0 flex-1 items-center gap-1 truncate text-xs font-semibold"
+          style={{ fontFamily: "var(--font-sans)" }}
+        >
+          {editable ? (
+            /* 需求：直接点击变量名称即可进入改名，不再依赖 ✎ 小按钮。
+             * editable 时整个名称是可交互的文本按钮（点击进入编辑态）。 */
+            <Button
+              aria-label="点击重命名"
+              className="nodrag nopan text-ink-bright hover:text-ink-strong h-auto min-w-0 flex-1 cursor-text justify-start truncate rounded-none px-0 text-left text-xs font-semibold"
+              onClick={(event) => {
+                event.stopPropagation();
+                setDraft(label);
+                setEditing(true);
+              }}
+              onDoubleClick={(event) => {
+                event.stopPropagation();
+              }}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
+              style={{ fontFamily: "var(--font-sans)" }}
+              variant="ghost"
+            >
+              {label}
+            </Button>
+          ) : (
+            <span className="min-w-0 flex-1 truncate">{label}</span>
+          )}
+        </span>
+      </Hint>
     );
   }
 
@@ -92,40 +94,41 @@ export function EditableLabel({
      * 已由 WidgetInputRow 放到独立右侧收缩区，不再依赖本输入框的宽度去让位。
      * 输入框自身仍为固定 w-32，编辑时只占标签行左侧。 */
     <span className="flex min-w-0 flex-1 items-center gap-1">
-      <input
-        onBlur={commit}
-        onChange={textHandler(setDraft)}
-        ref={inputRef}
-        type="text"
-        value={draft}
-        {...enterCommit({
-          onCommit: commit,
-          /* Esc 显式回退原值：编辑态与草稿一起复位，下次点开看到的是当前值
-           * 而不是上次输入一半的内容。 */
-          onCancel: () => {
-            setDraft(label);
-            setEditing(false);
-          },
-        })}
-        /* 与展示态字体一致 — text-xs font-semibold
-         *  text-ink-bright + 'Inter'，避免编辑切回展示态时出现字重跳变。
-         *  其余形态（`border-input` / `rounded-lg` / focus 换边不出 ring/阴影）照
-         *  `ui/input.tsx` 的缺省档：此前这里自己写了 `border-violet-400/40`
-         *  —— 既写死调色板、又不是全站其余输入框那一档（ISSUE #2031）；
-         *  focus 只换 border、不出 ring（docs/DESIGN.md「输入」行签字口径，#3496）。 */
-        className="nodrag nopan border-input text-ink-bright focus-visible:border-ring w-32 max-w-full min-w-0 shrink rounded-lg border bg-transparent px-2 py-px text-xs font-semibold outline-none"
-        onClick={(event) => {
-          event.stopPropagation();
-        }}
-        onDoubleClick={(event) => {
-          event.stopPropagation();
-        }}
-        onMouseDown={(event) => {
-          event.stopPropagation();
-        }}
-        style={{ fontFamily: "var(--font-sans)" }}
-        title={title}
-      />
+      <Hint label={title}>
+        <input
+          onBlur={commit}
+          onChange={textHandler(setDraft)}
+          ref={inputRef}
+          type="text"
+          value={draft}
+          {...enterCommit({
+            onCommit: commit,
+            /* Esc 显式回退原值：编辑态与草稿一起复位，下次点开看到的是当前值
+             * 而不是上次输入一半的内容。 */
+            onCancel: () => {
+              setDraft(label);
+              setEditing(false);
+            },
+          })}
+          /* 与展示态字体一致 — text-xs font-semibold
+           *  text-ink-bright + 'Inter'，避免编辑切回展示态时出现字重跳变。
+           *  其余形态（`border-input` / `rounded-lg` / focus 换边不出 ring/阴影）照
+           *  `ui/input.tsx` 的缺省档：此前这里自己写了 `border-violet-400/40`
+           *  —— 既写死调色板、又不是全站其余输入框那一档（ISSUE #2031）；
+           *  focus 只换 border、不出 ring（docs/DESIGN.md「输入」行签字口径，#3496）。 */
+          className="nodrag nopan border-input text-ink-bright focus-visible:border-ring w-32 max-w-full min-w-0 shrink rounded-lg border bg-transparent px-2 py-px text-xs font-semibold outline-none"
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+          onDoubleClick={(event) => {
+            event.stopPropagation();
+          }}
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
+          style={{ fontFamily: "var(--font-sans)" }}
+        />
+      </Hint>
     </span>
   );
 }

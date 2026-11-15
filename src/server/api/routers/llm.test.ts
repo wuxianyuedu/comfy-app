@@ -13,7 +13,11 @@ const { llmServer, contracts } = vi.hoisted(() => ({
     })),
   },
   contracts: {
-    loadModeContracts: vi.fn(() => [{ mode: "TXT2IMG" }]),
+    loadModeContractLayers: vi.fn(() => ({
+      configured: [{ mode: "TXT2IMG" }],
+      override: [],
+      contracts: [{ mode: "TXT2IMG" }],
+    })),
     saveModeContracts: vi.fn((c: unknown) => c),
     isDevCheckout: vi.fn(() => false),
     saveModeContractsAsProjectDefaults: vi.fn(() => ({
@@ -41,11 +45,15 @@ vi.mock("~/lib/llm/server", () => ({
   getConfigForClient: llmServer.getConfigForClient,
 }));
 vi.mock("~/lib/workshop/mode-contract.server", () => ({
-  loadModeContracts: contracts.loadModeContracts,
+  loadModeContractLayers: contracts.loadModeContractLayers,
   saveModeContracts: contracts.saveModeContracts,
-  isDevCheckout: contracts.isDevCheckout,
   saveModeContractsAsProjectDefaults: contracts.saveModeContractsAsProjectDefaults,
   resetModeContractOverride: contracts.resetModeContractOverride,
+}));
+/* 「是不是开发检出」这条判据已搬到 `~/lib/shell/dev-checkout.server`（ISSUE #3623
+   起两处配置面共用它）—— 桩跟着搬家，不搬的话这条真函数在仓库根跑会答 true。 */
+vi.mock("~/lib/shell/dev-checkout.server", () => ({
+  isDevCheckout: contracts.isDevCheckout,
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
@@ -310,6 +318,47 @@ describe("providers —— 供应商 / 模型的入参闸与全量回读（#3501
     expect((await caller().providersGet()).models).toEqual([]);
   });
 
+  it("图像行的接口端点：下拉值落模型级适配器存档、白名单外回落默认第一项（#3656）", async () => {
+    const providerId = (await saveProvider()).providers[0]!.id;
+
+    /* 图像行：显式带 endpointPath → 落 workshopAdapters envelope 的那一格，
+     * modelView 下发生效值 */
+    const saved = await caller().modelSave({
+      providerId,
+      name: "m-image",
+      kind: "image",
+      endpointPath: "/v1/images/generations",
+    });
+    expect(saved.models[0]?.endpointPath).toBe("/v1/images/generations");
+    /* workshopAdapters 列是 JSON 字符串（drizzle 侧 unknown）—— 解析成 doc 信封
+     * 再比对，不做不安全断言（零回潮判据 no-unsafe-type-assertion） */
+    const adaptersRaw: unknown = tdb.$tables.remoteModels[0]!.workshopAdapters;
+    expect(JSON.parse(String(adaptersRaw))).toMatchObject({
+      endpointPath: "/v1/images/generations",
+      adapters: [],
+    });
+
+    /* 白名单外的值折成空串 → 读侧回落用途默认第一项（=「没选用第一项」） */
+    const invalid = await caller().modelSave({
+      providerId,
+      id: saved.models[0]!.id,
+      name: "m-image",
+      kind: "image",
+      endpointPath: "/not/known",
+    });
+    expect(invalid.models[0]?.endpointPath).toBe("/v1/images/generations");
+
+    /* 文本行（或存 null）恒清空该格，视图下发 null */
+    const chat = await caller().modelSave({
+      providerId,
+      id: saved.models[0]!.id,
+      name: "m-image",
+      kind: "chat",
+      endpointPath: null,
+    });
+    expect(chat.models[0]?.endpointPath).toBeNull();
+  });
+
   it("模型级接口格式：显式值优先，省略 = 跟随供应商默认（#3517）", async () => {
     const providerId = (await saveProvider({ apiFormat: "anthropic-messages" })).providers[0]!.id;
 
@@ -445,6 +494,8 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
   it("读取走同一个出口（不在路由里再造一份默认契约）", async () => {
     const res = await caller().modeContractsGet();
     expect(res.contracts).toEqual([{ mode: "TXT2IMG" }]);
+    /* 下发两层：成品配置基准（判「已改」）+ 生效注册表（显示 / 编辑）。 */
+    expect(res.configured).toEqual([{ mode: "TXT2IMG" }]);
     /* 「保存为项目默认」入口的开关来自服务端判据（isDevCheckout），不是界面猜的
      *（ISSUE #3396）。 */
     expect(res.projectDefaultEditable).toBe(false);
@@ -469,31 +520,66 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
 describe("workshopAdapters —— 适配器形状与大写归一", () => {
   it("mode 归一成大写后再交给仓储（模式键的大小写只此一处决定）", async () => {
     const save = vi
-      .spyOn(remoteModelRepository, "saveWorkshopAdapters")
+      .spyOn(remoteModelRepository, "saveWorkshopAdaptersDoc")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue([]);
+      .mockResolvedValue({ endpointPath: "", adapters: [] });
     await caller().workshopAdaptersSave({
       name: "gpt-x",
       adapters: [
         {
           mode: "txt2img",
-          endpointPath: "/v1/images",
           inputs: [{ type: "prompt", field: "prompt" }],
         },
       ],
     });
-    const passed = save.mock.calls[0]?.[1] ?? [];
-    expect(passed[0]?.mode).toBe("TXT2IMG");
+    const passed = save.mock.calls[0]?.[1] ?? { endpointPath: "", adapters: [] };
+    expect(passed.adapters[0]?.mode).toBe("TXT2IMG");
     save.mockRestore();
   });
 
-  it("inputs 空数组 / 缺 endpointPath → BAD_REQUEST，不落库", async () => {
-    const save = vi.spyOn(remoteModelRepository, "saveWorkshopAdapters");
+  it("端点路径模型级共用（#3622）：入参带 endpointPath 一格，与模式无关", async () => {
+    const save = vi
+      .spyOn(remoteModelRepository, "saveWorkshopAdaptersDoc")
+      /* SAFETY: 类型断言已复核 */
+      .mockResolvedValue({ endpointPath: "", adapters: [] });
+    await caller().workshopAdaptersSave({
+      name: "gpt-x",
+      endpointPath: "/v1/images/generations",
+      adapters: [{ mode: "T2I", inputs: [{ type: "prompt", field: "prompt" }] }],
+    });
+    expect(save.mock.calls[0]?.[1]).toMatchObject({ endpointPath: "/v1/images/generations" });
+    save.mockRestore();
+  });
+
+  it("入参省略 endpointPath = 保住既有值（#3631）：适配页不再编辑这格", async () => {
+    /* 「模型适配」页的保存不再带端点路径 —— 服务端必须拿库里既有的那个
+     *（设置页「接口端点」下拉写的），不能把省略折成空串冲掉配置。 */
+    seedRemoteModel(tdb, {
+      name: "agnes-image",
+      workshopAdapters: {
+        endpointPath: "/v1/videos",
+        adapters: [],
+      },
+    });
+    const save = vi
+      .spyOn(remoteModelRepository, "saveWorkshopAdaptersDoc")
+      /* SAFETY: 类型断言已复核 */
+      .mockResolvedValue({ endpointPath: "/v1/videos", adapters: [] });
+    await caller().workshopAdaptersSave({
+      name: "agnes-image",
+      adapters: [{ mode: "t2v", inputs: [{ type: "prompt", field: "prompt" }] }],
+    });
+    expect(save.mock.calls[0]?.[1]).toMatchObject({ endpointPath: "/v1/videos" });
+    save.mockRestore();
+  });
+
+  it("inputs 空数组 → BAD_REQUEST，不落库", async () => {
+    const save = vi.spyOn(remoteModelRepository, "saveWorkshopAdaptersDoc");
     expect(
       await codeOf(
         caller().workshopAdaptersSave({
           name: "gpt-x",
-          adapters: [{ mode: "img2img", endpointPath: "/x", inputs: [] }],
+          adapters: [{ mode: "img2img", inputs: [] }],
         }),
       ),
     ).toBe("BAD_REQUEST");
@@ -501,11 +587,28 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
     save.mockRestore();
   });
 
-  it("读取按名字取，不隐式带上全部模型", async () => {
+  it("概览只收非空存档：每条给模型名与该模型已配的模式码清单", async () => {
+    /* 「模型适配」页左栏的「已配」标记读这一格 —— 没配过的模型不出现在清单里。 */
+    seedRemoteModel(tdb, {
+      name: "agnes-image",
+      workshopAdapters: {
+        endpointPath: "/v1/images/generations",
+        adapters: [
+          { mode: "T2I", inputs: [{ type: "prompt", field: "prompt" }], outputField: "url" },
+          { mode: "I2I", inputs: [{ type: "image", field: "image" }], outputField: "" },
+        ],
+      },
+    });
+    seedRemoteModel(tdb, { name: "bare-model" });
+    const res = await caller().workshopAdaptersSummary();
+    expect(res.models).toEqual([{ modes: ["T2I", "I2I"], name: "agnes-image" }]);
+  });
+
+  it("读取按名字取整份存档（模型级 envelope），不隐式带上全部模型", async () => {
     const get = vi
-      .spyOn(remoteModelRepository, "getWorkshopAdapters")
+      .spyOn(remoteModelRepository, "getWorkshopAdaptersDoc")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue([]);
+      .mockResolvedValue({ endpointPath: "", adapters: [] });
     await caller().workshopAdaptersGet({ name: "gpt-x" });
     expect(get).toHaveBeenCalledWith("gpt-x");
     get.mockRestore();
@@ -516,6 +619,6 @@ describe("configGet —— 脱敏出口", () => {
   it("走 getConfigForClient 取脱敏配置，不顺手加载模式契约", async () => {
     await caller().configGet();
     expect(llmServer.getConfigForClient).toHaveBeenCalledTimes(1);
-    expect(contracts.loadModeContracts).not.toHaveBeenCalled();
+    expect(contracts.loadModeContractLayers).not.toHaveBeenCalled();
   });
 });

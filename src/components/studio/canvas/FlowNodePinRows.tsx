@@ -16,6 +16,7 @@ import {
   type PortRowTone,
 } from "./flow-focus-endpoints";
 import { NODE_PORT_FOCUS_ACTIVE_KEY, readPortFocusRole } from "./hooks/use-related-edges-highlight";
+import { Hint } from "~/components/ui/hint";
 
 type FlowNodePinRowsProps = {
   data: WorkflowNodeData;
@@ -144,30 +145,32 @@ export function FlowNodePinRows({
                       }}
                     />
                   )}
-                <span
-                  className="text-2xs min-w-0 flex-1 truncate text-left"
-                  style={{
-                    color: tone.labelColor,
-                    fontWeight: tone.labelWeight,
-                  }}
-                  title={String(inName)}
-                >
-                  {inLabel}
-                </span>
+                <Hint label={String(inName)}>
+                  <span
+                    className="text-2xs min-w-0 flex-1 truncate text-left"
+                    style={{
+                      color: tone.labelColor,
+                      fontWeight: tone.labelWeight,
+                    }}
+                  >
+                    {inLabel}
+                  </span>
+                </Hint>
               </>
             )}
             {outEntry && (
               <>
-                <span
-                  className="text-2xs min-w-0 flex-1 truncate text-right"
-                  style={{
-                    color: tone.labelColor,
-                    fontWeight: tone.labelWeight,
-                  }}
-                  title={`${outName} (${outType})`}
-                >
-                  {outDisplay}
-                </span>
+                <Hint label={`${outName} (${outType})`}>
+                  <span
+                    className="text-2xs min-w-0 flex-1 truncate text-right"
+                    style={{
+                      color: tone.labelColor,
+                      fontWeight: tone.labelWeight,
+                    }}
+                  >
+                    {outDisplay}
+                  </span>
+                </Hint>
                 {/* Output source Handle 任何视图模式都必须挂载：它是下游 `out:<name>` 边的锚点，
                      React Flow 在 handleBounds 找不到引用的 handle id 时会丢弃整条边并打 error#008；
                      IO 编辑模式改为视觉降级（圆点近乎不可见）而非不渲染。 */}

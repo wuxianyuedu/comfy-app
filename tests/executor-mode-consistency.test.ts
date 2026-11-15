@@ -13,6 +13,8 @@ vi.mock("~/lib/core/logger", () => ({
   logger: { warn: warnMock, info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import {
   EXECUTOR_ENV_KEY,
   normalizeExecutorMode,
@@ -30,12 +32,23 @@ const LAUNCHER = path.join(ROOT, "scripts", "dev-launcher.mjs");
 const HOST = path.join(ROOT, "scripts", "executor-host.mjs");
 const TS_SIDE = path.join(ROOT, "src", "lib", "comfyui", "executor-mode.ts");
 
-/* SAFETY: 类型断言已复核 */
-const vectors = (
-  JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS_FILE), "utf8")) as {
-    vectors: Array<{ mode: string; raw: string; unknown: string | null }>;
+/** 共享向量文件的形状守卫（B5 清账，不走 as 断言）。 */
+function isVectorsFile(value: unknown): value is {
+  vectors: Array<{ mode: string; raw: string; unknown: string | null }>;
+} {
+  if (!isRecord(value) || !isUnknownArray(value.vectors)) {
+    return false;
   }
-).vectors;
+  return value.vectors.every(
+    (entry) => isRecord(entry) && typeof entry.mode === "string" && typeof entry.raw === "string",
+  );
+}
+
+const parsedVectors: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS_FILE), "utf8"));
+if (!isVectorsFile(parsedVectors)) {
+  throw new Error("executor-mode 共享向量文件形状不对");
+}
+const vectors = parsedVectors.vectors;
 
 const original = process.env[EXECUTOR_ENV_KEY];
 const tmpDirs: Array<string> = [];

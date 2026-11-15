@@ -16,6 +16,9 @@ const filmRepo = vi.hoisted(() => ({
   markDone: vi.fn((_id: string, _path: string) => undefined),
   updateProgress: vi.fn((_id: string, _progress: number) => undefined),
   markGenerating: vi.fn((_id: string) => undefined),
+  /* 条件抢占（#3836）：startFilm / composeFilm 改为「抢到才继续」，默认抢到。 */
+  claimGenerating: vi.fn((_id: string) => Promise.resolve(true)),
+  claimComposing: vi.fn((_id: string) => Promise.resolve(true)),
   create: vi.fn<(input: { size: string }) => Promise<{ id: string }>>(),
   appendLog: vi.fn((_id: string, _entry: { level: string; msg: string }) => undefined),
   /** 恢复扫描用的按状态查询（5-A）。默认「库里没有未收尾的影片」。 */
@@ -61,6 +64,10 @@ const prodRepo = vi.hoisted(() => ({
   upsertForUser: vi.fn<(userId: string, data: Record<string, unknown>) => Promise<unknown>>(() =>
     Promise.resolve(undefined),
   ),
+  /* 成片回写改走窄列 patch（#3832）：不再整行覆写。 */
+  patchShotsAndProgress: vi.fn<
+    (userId: string, id: string, patch: Record<string, unknown>) => Promise<boolean>
+  >(() => Promise.resolve(true)),
 }));
 
 /* 首帧图合成 / 视频任务创建：startFilm 测试要读它们的**入参**断言
@@ -88,6 +95,11 @@ vi.mock("~/lib/core/repository", () => ({
 }));
 vi.mock("~/lib/core/repository-production", () => ({
   productionRepository: prodRepo,
+}));
+vi.mock("~/lib/db", () => ({
+  db: {
+    transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn({}),
+  },
 }));
 vi.mock("~/lib/workshop/workflow-run.server", () => ({
   createWorkflowRunTask: createRunTaskMock,
@@ -185,8 +197,9 @@ describe("cancelFilm — 取消要撤到任务层，不能只改界面状态", (
 
     // 只撤真的带 taskId 的镜头（null 的没有任务可撤）
     expect(cancelTaskMock.mock.calls.map((c) => c[0])).toEqual(["t1", "t3"]);
-    expect(shotRepo.markAllActiveFailed).toHaveBeenCalledWith("f1");
-    expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1");
+    /* #3867：两步收进 immediate 事务，仓储收到的第二参是事务执行者。 */
+    expect(shotRepo.markAllActiveFailed).toHaveBeenCalledWith("f1", expect.anything());
+    expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1", expect.anything());
     expect(filmRepo.appendLog).toHaveBeenCalledWith(
       "f1",
       expect.objectContaining({ level: "warn", msg: "影片已取消" }),
@@ -204,19 +217,19 @@ describe("cancelFilm — 取消要撤到任务层，不能只改界面状态", (
     await cancelFilm("f1");
 
     expect(cancelTaskMock).toHaveBeenCalledTimes(2);
-    expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1");
+    expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1", expect.anything());
   });
 });
 
 describe("startFilm — 自主成片逐镜生成默认带随机种子（走「种子」对外参数）", () => {
   it("首帧图与视频两跳都各带一个有限数字 seed", async () => {
-    // status=CANCELLED 只为了让 startFilm 末尾的 `void watchFilm` 立刻早退，
-    // 不在测试里跑后台轮询循环（startFilm 本身只挡 GENERATING/COMPOSING）。
-    filmRepo.findById.mockResolvedValue({
-      id: "f1",
-      userId: "u1",
-      status: "CANCELLED",
-    });
+    /* #3867：startFilm 开头读一次影片，逐镜提交前每镜再重读一次。前两读给
+     * GENERATING 放行；之后给 CANCELLED——startFilm 末尾的 `void watchFilm`
+     * 起的监看在第一拍就早退，不在测试里跑后台轮询循环。 */
+    filmRepo.findById
+      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
+      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
+      .mockResolvedValue({ id: "f1", userId: "u1", status: "CANCELLED" });
     shotRepo.listByFilm.mockResolvedValue([
       {
         id: "s1",
@@ -248,11 +261,16 @@ describe("composeFilm — 合成前置条件不满足时必须落 FAILED 且文�
   it("影片不存在 / 已在合成或已完成：直接返回，不重复合成", async () => {
     filmRepo.findById.mockResolvedValue(null);
     await composeFilm("f-missing");
-    expect(filmRepo.markComposing).not.toHaveBeenCalled();
+    expect(filmRepo.claimComposing).not.toHaveBeenCalled();
+    expect(filmRepo.markFailed).not.toHaveBeenCalled();
 
+    /* 「已在合成或已完成」在新契约下 = 条件抢占抢不到（WHERE 排除 COMPOSING/DONE，
+     * 0 行更新）：composeFilm 拿到 false 直接让位，不碰 ffmpeg 也不落 FAILED。 */
     filmRepo.findById.mockResolvedValue({ id: "f1", status: "DONE" });
+    filmRepo.claimComposing.mockResolvedValueOnce(false);
     await composeFilm("f1");
-    expect(filmRepo.markComposing).not.toHaveBeenCalled();
+    expect(filmRepo.claimComposing).toHaveBeenCalledWith("f1");
+    expect(filmRepo.markFailed).not.toHaveBeenCalled();
   });
 
   it("没有可用镜头：落 FAILED，且不去调 ffmpeg", async () => {
@@ -462,12 +480,13 @@ describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写�
       { shotId: "s2", videoPath: null, status: "FAILED" }, // 无产物，clip 不写
     ]);
 
-    expect(prodRepo.upsertForUser).toHaveBeenCalledTimes(1);
-    const [userId, data] = prodRepo.upsertForUser.mock.calls[0]!;
+    expect(prodRepo.patchShotsAndProgress).toHaveBeenCalledTimes(1);
+    const [userId, projectId, patch] = prodRepo.patchShotsAndProgress.mock.calls[0]!;
     expect(userId).toBe("u1");
-    expect(data.progress).toEqual({ stage: "render", rendered: true });
+    expect(projectId).toBe("proj_1");
+    expect(patch.progress).toEqual({ stage: "render", rendered: true });
     // s1 命中且带 videoPath → 写 clipUrl + clipStatus done；prompt 等原字段保留
-    expect(data.shots).toEqual([
+    expect(patch.shots).toEqual([
       {
         id: "s1",
         index: 1,
@@ -478,9 +497,11 @@ describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写�
       // s2 无 videoPath → 原样，不被 clip 覆盖
       { id: "s2", index: 2, prompt: "p2" },
     ]);
-    // 非镜头字段整体回写、不丢失
-    expect(data.title).toBe("项目片");
-    expect(data.characters).toEqual([{ id: "c1" }]);
+    /* 非镜头字段**不回写**（#3832 的修复语义）：合成期间的剧本 / 角色编辑
+     * 不再被读取时刻的旧快照回滚 —— 那些列归各自的写入者。 */
+    expect(patch.title).toBeUndefined();
+    expect(patch.characters).toBeUndefined();
+    expect(patch.scriptMarkdown).toBeUndefined();
   });
 
   it("脏 progress（缺字段 / 非法 stage）也规范化后再回写", async () => {
@@ -497,15 +518,16 @@ describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写�
       progress: {},
     });
     await syncFilmToProject("u1", "proj_2", []);
-    const [, data] = prodRepo.upsertForUser.mock.calls[0]!;
-    expect(data.progress).toEqual({ stage: "render", rendered: true });
-    expect(data.shots).toEqual([]);
+    await syncFilmToProject("u1", "proj_2", []);
+    const [, , patch] = prodRepo.patchShotsAndProgress.mock.calls[0]!;
+    expect(patch.progress).toEqual({ stage: "render", rendered: true });
+    expect(patch.shots).toEqual([]);
   });
 
   it("无 production 行 → 不写（纯文本自由建片不受影响）", async () => {
     prodRepo.getForUser.mockResolvedValue(null);
     await syncFilmToProject("u1", "proj_missing", []);
-    expect(prodRepo.upsertForUser).not.toHaveBeenCalled();
+    expect(prodRepo.patchShotsAndProgress).not.toHaveBeenCalled();
   });
 });
 
@@ -610,10 +632,10 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
       })
       .toHaveBeenCalledWith("f-term", 100);
     /* 钉「循环走到了 `pending === 0` 那一支」：确实去调了合成，而合成给出的第一个
-     * 判决就是「没有可用的镜头视频」。 */
+     * 判决就是「没有可用的镜头视频」。合成入口现在是条件抢占（#3836），钉抢占调用。 */
     await expect
-      .poll(() => filmRepo.markComposing, {
-        message: "markComposing 的调用现场",
+      .poll(() => filmRepo.claimComposing, {
+        message: "claimComposing 的调用现场",
       })
       .toHaveBeenCalledWith("f-term");
     await expect

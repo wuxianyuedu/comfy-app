@@ -294,9 +294,9 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
   it("合成提交的两个父之间有分叉 ⇒ 不算「一处没改」，退 2", () => {
     /* 两半判据缺一不可：三点 diff 空、而「这个 PR 带进来的」那一段非空 ⇒ 这份检出
      * 拼不出「零个文件」那条等式（多半是浅克隆），不许拿它放行。
-     * 第二半读的是**两个父的对称差**（`parent1...parent2`），不是「第一父..HEAD」——
-     * 后者在第一父自带历史时读到的是别人落地的改动（PR #3023 的现场，见
-     * `changed-scope.test.ts` 里那条同源用例）。 */
+     * 第二半读的是**「第一父..HEAD」的两点树差**（#3644）—— 它就是「这个 PR 的净贡献」；
+     * `parent1...parent2` 的对称差在 squash 拓扑下会把分支自己**已落地**的提交误算成
+     * 分叉（merge-base 退回旧 fork point），不再是判据。 */
     const { spawn, seen } = fakeSpawn(0);
     const code = main({
       ...silent(),
@@ -306,10 +306,11 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
         if (args.includes("rev-list")) {
           return { ok: true, stdout: "head123 parent1 parent2\n" };
         }
-        /* 基线那一半（`abc123...HEAD`）空，两个父之间非空。 */
+        /* 基线那一半（`abc123...HEAD`）空；「第一父..HEAD」与「两父对称差」都非空
+         * —— 净贡献确实存在，两半判据的后者要接得住。 */
         return {
           ok: true,
-          stdout: String(args.at(-1)).startsWith("parent1...") ? "M\tsrc/a.ts\n" : "",
+          stdout: String(args.at(-1)).startsWith("parent1") ? "M\tsrc/a.ts\n" : "",
         };
       },
       spawn,

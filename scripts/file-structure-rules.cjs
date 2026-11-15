@@ -67,6 +67,12 @@ const DOMAINS = [
    * **面向用户的入口**（谁点了什么、输出给谁看、什么时候回收）。 */
   "console",
   "core",
+  /* 「数据存在哪儿」的登记（ISSUE #3625）：每种数据 × 它的存放位置 → 类别 /
+     图标 / 落点 / 迁移办法。它**不属于 `core`** —— `core` 是仓储层（SQL 出口），
+     本域是**跨域的元数据**（讲的是「谁存在哪」，不碰任何一张表）；也不属于
+     `app-settings`（那是设置本身的值，不是它的落点说明）。纯数据模块，
+     浏览器侧与服务端侧读同一份口径，界面上的徽标与「数据存放位置」清单都从这儿取。 */
+  "data-location",
   /* 数据库备份 / 恢复（D6，ISSUE #1611）：命名与轮转、`VACUUM INTO` 备份、
    * `integrity_check` 验证、待恢复标记与换文件。它**不属于 `core`** ——
    * `core` 是仓储层（SQL 出口），本域是「库文件本身的生死」；也不属于
@@ -389,6 +395,13 @@ const DOMAIN_EXEMPT = new Set([
    * 串行执行，串行提交会在「落定 → 再提交」之间空转。与 `with-timeout` 同款：
    * 异步编排原语，进任何子域都会让其余消费方反向依赖它。顶层单例。 */
   "src/lib/async-pool.ts",
+  /* 进程内异步互斥（ISSUE #3832/#3833/#3836 审计地基）：「先读 → 判断 → 写」
+   * 的多语句序列在并发下互相覆盖 / 重复落行，SQLite 单写者只保证单条语句原子。
+   * 消费方横跨 `server/api/routers`（series-generation 批量入队）、`lib/core`
+   * （repository-film 日志追加）、`lib/app-settings`（设置保存，即将接入）——
+   * 进任何子域都会让其余消费方反向依赖它。与 `async-pool` / `with-timeout`
+   * 同款：异步编排原语，顶层单例。 */
+  "src/lib/async-mutex.ts",
 ]);
 
 /* R2 豁免:src/ 根下的 Next 约定文件。proxy.ts(Next 16 起取代 middleware.ts)

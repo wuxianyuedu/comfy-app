@@ -5,6 +5,7 @@ import { ClipboardCheck } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import type { FilmStudioController } from "./hooks/use-film-studio";
 import { MODE_LABELS, STATUS_BADGE, type ShotListItem } from "./film-studio-config";
@@ -86,11 +87,11 @@ export function FilmStudioShotListPanel({
 
                 {/* Info */}
                 <div className="min-w-0 flex-1">
-                  <p
-                    className={`truncate text-xs font-medium ${isSelected ? "text-ink-field" : "text-ink-strong"}`}
+                  <TruncatedText
+                    className={`block truncate text-xs font-medium ${isSelected ? "text-ink-field" : "text-ink-strong"}`}
                   >
                     {shot.name}
-                  </p>
+                  </TruncatedText>
                   <div className="mt-1 flex items-center gap-2">
                     <span className="text-ink-faintest text-3xs">{shot.duration}</span>
                     <span className="text-ink-faintest text-3xs">·</span>

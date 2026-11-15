@@ -10,6 +10,14 @@ import type { Character, Scene, Shot } from "~/lib/workshop/types";
 import { production, project, user, type Production } from "~/server/db/schema";
 import { workshopDb } from "./db";
 
+/** 事务执行者：`workshopDb` 本体或 `workshopDb.transaction` 回调里的那条连接
+ *  （都从签名派生，不手写；与 `~/lib/core/repository-executor-types` 同一形状 ——
+ *  本文件服务 MCP 纯 Node 进程，不能引 `~/lib/core` 的运行时模块，故在此按
+ *  同口径派生一份）。 */
+type WorkshopExecutor =
+  | typeof workshopDb
+  | Parameters<Parameters<typeof workshopDb.transaction>[0]>[0];
+
 /** 会话里「属于界面真值」的内容面：绑定后由 production 承载。 */
 export type SessionContent = {
   characters: Array<Character>;
@@ -62,14 +70,18 @@ export async function resolveOwnerUserId(explicit: string | null): Promise<strin
 }
 
 /** 建 / 绑定项目：给 projectId 就校验存在与归属（缺失的 production 行补建）；
- *  不给就新建 proj_* 的 project + production 两行。返回最终 projectId。 */
+ *  不给就新建 proj_* 的 project + production 两行。返回最终 projectId。
+ *  `executor`：由事务入口（updateState 的 immediate 事务，ISSUE #3852）传入，
+ *  读写都走事务里的连接（§18.10.1 的同一条纪律）。 */
 export async function ensureProductionProject(
   projectId: string | null,
   ownerId: string,
   title: string,
+  executor?: WorkshopExecutor,
 ): Promise<string> {
+  const exec = executor ?? workshopDb;
   if (projectId !== null && projectId !== "") {
-    const rows = await workshopDb.select().from(project).where(eq(project.id, projectId)).limit(1);
+    const rows = await exec.select().from(project).where(eq(project.id, projectId)).limit(1);
     const proj = rows[0];
     if (!proj) {
       throw new Error(`项目不存在：${projectId}（projectId 须来自界面的项目列表，不能凭空写）`);
@@ -79,39 +91,41 @@ export async function ensureProductionProject(
         `项目 ${projectId} 归属用户 ${proj.userId}，与会话归属 ${ownerId} 冲突，拒绝绑定`,
       );
     }
-    await ensureProductionRow(projectId, ownerId, title);
+    await ensureProductionRow(projectId, ownerId, title, exec);
     return projectId;
   }
   const id = `proj_${createId()}`;
-  await workshopDb.insert(project).values({ id, userId: ownerId, name: title });
-  await workshopDb.insert(production).values({ id, userId: ownerId, title });
+  await exec.insert(project).values({ id, userId: ownerId, name: title });
+  await exec.insert(production).values({ id, userId: ownerId, title });
   return id;
 }
 
-/** production 行缺失时补一行（绑定 UI 侧「只建过画布、没进过工坊」的项目）。 */
+/** production 行缺失时补一行（绑定 UI 侧「只建过画布、没进过工坊」的项目）。
+ *  单语句 `onConflictDoNothing`（ISSUE #3835）：ensure 语义 = 重复执行成功且
+ *  无害；先查后插在并发首存（MCP 桥接与工坊保存赛跑）会同抢主键让后到者 500。 */
 async function ensureProductionRow(
   projectId: string,
   ownerId: string,
   title: string,
+  executor?: WorkshopExecutor,
 ): Promise<void> {
-  const rows = await workshopDb
-    .select({ id: production.id })
-    .from(production)
-    .where(eq(production.id, projectId))
-    .limit(1);
-  if (rows[0]) {
-    return;
-  }
-  await workshopDb.insert(production).values({ id: projectId, userId: ownerId, title });
+  const exec = executor ?? workshopDb;
+  await exec
+    .insert(production)
+    .values({ id: projectId, userId: ownerId, title })
+    .onConflictDoNothing({ target: production.id });
 }
 
 /** 把会话内容写进 production。**只写内容列**——进度 / run / 评审是另外的字段
- *  所有者（画布 / run 引擎 / 评审器），桥不碰；行缺失时整行新建（带归属）。 */
+ *  所有者（画布 / run 引擎 / 评审器），桥不碰；行缺失时整行新建（带归属）。
+ *  `executor` 供事务入口传入。 */
 export async function writeContentToProduction(
   projectId: string,
   fallbackOwnerId: string,
   content: SessionContent,
+  executor?: WorkshopExecutor,
 ): Promise<void> {
+  const exec = executor ?? workshopDb;
   const values = {
     id: projectId,
     userId: fallbackOwnerId,
@@ -124,7 +138,7 @@ export async function writeContentToProduction(
     characters: content.characters,
     shots: content.shots,
   };
-  await workshopDb
+  await exec
     .insert(production)
     .values(values)
     .onConflictDoUpdate({

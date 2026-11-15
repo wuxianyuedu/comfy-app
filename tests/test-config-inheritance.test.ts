@@ -8,9 +8,16 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createVitest, type Vitest } from "vitest/node";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
+import configDefault, { resolveTimeoutBudget } from "../vitest.config";
 import { resolveCiWorkers } from "../scripts/ci-load.mjs";
-import { resolveTimeoutBudget } from "../vitest.config";
 import { stripComments } from "./helpers/strip-comments";
+
+/** 解析后配置按 unknown 读（B5 清账）：字段形状由守卫 / typeof 现场答，不再整段断言。 */
+function configRecord(config: unknown): Record<string, unknown> {
+  return isRecord(config) ? config : {};
+}
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const CONFIG = path.join(ROOT, "vitest.config.ts");
@@ -94,12 +101,12 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
   it("**每一档**都拿到了共享项（失效形态是一档落后，所以逐档判）", async () => {
     const vitestRun = await resolvedVitest();
     for (const project of vitestRun.projects) {
-      /* SAFETY: 类型断言已复核 */
-      const cfg = project.config as unknown as Record<string, unknown>;
+      const cfg = configRecord(project.config);
       const prefix = `[${project.name}]`;
       // setupFiles 在解析后是**绝对路径**，所以比形状（落在仓库根之下、名字对）。
-      /* SAFETY: 类型断言已复核 */
-      const setupFiles = cfg.setupFiles as Array<string>;
+      const setupFiles = isUnknownArray(cfg.setupFiles)
+        ? cfg.setupFiles.filter((f): f is string => typeof f === "string")
+        : [];
       /* 比较前归一分隔符：`path.relative()` 在 win32 上给出 `tests\setup.ts`，而期望
          值按配置源码写成 POSIX 形式 —— 不归一的话这条判据在每台 Windows 上都红，
          且红的原因与它要判的事（共享项有没有落到每一档）毫无关系。 */
@@ -113,14 +120,13 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       expect(cfg.maxWorkers, prefix).toBe(SHARED_EXPECTATIONS.maxWorkers);
       /* vitest 解析后把 `reporters` 归一成 `[名字, 选项?]` 元组数组 —— 按名字归一后比，
        * 否则这条判据红在「配置写法」而不是「这一档拿没拿到」（同 setupFiles 的归一口径）。 */
-      /* SAFETY: 类型断言已复核 */
-      const reporterEntries = cfg.reporters as Array<unknown>;
+      const reporterEntries = isUnknownArray(cfg.reporters) ? cfg.reporters : [];
       const reporterNames = reporterEntries.map((entry) =>
         Array.isArray(entry) ? String(entry[0]) : String(entry),
       );
       expect(reporterNames, prefix).toEqual(SHARED_EXPECTATIONS.reporters);
-      /* SAFETY: 类型断言已复核 */
-      expect((cfg.expect as { poll?: unknown } | undefined)?.poll, prefix).toEqual(EXPECT_POLL);
+      const expectCfg: unknown = cfg.expect;
+      expect(isRecord(expectCfg) ? expectCfg.poll : undefined, prefix).toEqual(EXPECT_POLL);
     }
   });
 
@@ -146,21 +152,19 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
     const source = stripComments(await readFile(CONFIG, "utf8"));
     expect(source).not.toMatch(/extends\s*:\s*false/);
     for (const project of vitestRun.projects) {
-      /* SAFETY: 类型断言已复核 */
       expect(
-        (project.config as unknown as Record<string, unknown>).globals,
+        configRecord(project.config).globals,
         `[${project.name}] 共享项缺席 = 这一档把继承关掉了`,
       ).toBe(SHARED_EXPECTATIONS.globals);
     }
   });
 
-  it("根 `test` 上没有「只对某档有意义」的项，project 里不再重复声明共享项", async () => {
+  it("根 `test` 上没有「只对某档有意义」的项，project 里不再重复声明共享项", () => {
     // 这一条判**配置文本**（解析后看不出「它写在哪一层」），用 TS 模块直接读默认导出。
-    /* SAFETY: 类型断言已复核 */
-    const mod = (await import(path.join(ROOT, "vitest.config.ts"))) as {
-      default: { test: Record<string, unknown> };
-    };
-    const rootTest = mod.default.test;
+    // 静态 import（B5 清账）：test 面按 unknown 读、形状由守卫现场答，不再断言。
+    const rootTest: Record<string, unknown> = isRecord(configDefault.test)
+      ? configDefault.test
+      : {};
     const extra = Object.keys(rootTest).filter((k) => !ROOT_ALLOWED_KEYS.has(k));
     expect(extra, "新增根级项先回答「它是不是共享项」").toEqual([]);
 
@@ -174,17 +178,16 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       expect(declared, `共享项 \`${key}\` 该声明在根 \`test\` 上`).toContain(key);
     }
 
-    /* SAFETY: 类型断言已复核 */
-    const projects = rootTest.projects as Array<{
-      test: Record<string, unknown> & { name?: string };
-    }>;
-    for (const entry of projects) {
-      const duplicated = Object.keys(entry.test).filter((k) =>
+    const projects: unknown = rootTest.projects ?? [];
+    for (const entry of isUnknownArray(projects) ? projects : []) {
+      const entryTest: unknown = isRecord(entry) ? entry.test : undefined;
+      const duplicated = Object.keys(isRecord(entryTest) ? entryTest : {}).filter((k) =>
         Object.keys(SHARED_EXPECTATIONS).includes(k),
       );
-      expect(duplicated, `[${String(entry.test.name)}] 共享项该只在根 \`test\` 上定义一次`).toEqual(
-        [],
-      );
+      expect(
+        duplicated,
+        `[${String(isRecord(entryTest) ? entryTest.name : "")}] 共享项该只在根 \`test\` 上定义一次`,
+      ).toEqual([]);
     }
   });
 });
@@ -224,8 +227,7 @@ describe("判据预算的临时乘数（ISSUE #2959）", () => {
     const vitestRun = await resolvedVitest();
     const expected = resolveTimeoutBudget(process.env.COMFY_TEST_TIMEOUT_SCALE);
     for (const project of vitestRun.projects) {
-      /* SAFETY: 类型断言已复核 */
-      const cfg = project.config as unknown as Record<string, unknown>;
+      const cfg = configRecord(project.config);
       expect(cfg.testTimeout, `[${project.name}]`).toBe(expected.testTimeout);
       expect(cfg.hookTimeout, `[${project.name}]`).toBe(expected.hookTimeout);
     }

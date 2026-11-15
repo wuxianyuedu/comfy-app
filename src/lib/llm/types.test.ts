@@ -7,6 +7,8 @@ import {
   effectiveProviderType,
   extraModelName,
   foldRemoteToLocal,
+  inferOutputTypesFromName,
+  inferRemoteKindFromName,
   isLoopbackBaseUrl,
   isMisplacedLocalOllama,
   normalizeEntryApiKey,
@@ -270,5 +272,29 @@ describe("effectiveProviderType", () => {
   it("非回环地址尊重存储值；local 永远保持 local", () => {
     expect(effectiveProviderType("remote", "https://api.openai.com/v1", false)).toBe("remote");
     expect(effectiveProviderType("local", "http://192.168.1.8:11434/v1", false)).toBe("local");
+  });
+});
+
+describe("inferRemoteKindFromName / inferOutputTypesFromName（#3577 目录导入的按名推断）", () => {
+  it("名字带 video / image / img 关键词分别命中视频 / 图像，其余回落 chat", () => {
+    expect(inferRemoteKindFromName("agnes-video-2.5-flash")).toBe("video");
+    expect(inferRemoteKindFromName("veo-3")).toBe("chat"); // veo 无关键词，回落文本
+    expect(inferRemoteKindFromName("kling-v2-video")).toBe("video");
+    expect(inferRemoteKindFromName("agnes-image-2.5-flash")).toBe("image");
+    expect(inferRemoteKindFromName("gpt-image-1")).toBe("image");
+    expect(inferRemoteKindFromName("flux-img-dev")).toBe("image");
+    expect(inferRemoteKindFromName("agnes-3.0-flash")).toBe("chat");
+    expect(inferRemoteKindFromName("")).toBe("chat");
+  });
+
+  it("关键词必须按词命中：videoinside 这类连写不算（防 agnes-videosource 误判）", () => {
+    expect(inferRemoteKindFromName("videoinside-pro")).toBe("chat");
+    expect(inferRemoteKindFromName("imagefx")).toBe("chat");
+  });
+
+  it("输出类型与用途同规律：video 名字 → 视频，image 名字 → 图像，其余 → 文本", () => {
+    expect(inferOutputTypesFromName("agnes-video-2.5-flash")).toEqual(["video"]);
+    expect(inferOutputTypesFromName("agnes-image-2.5-flash")).toEqual(["image"]);
+    expect(inferOutputTypesFromName("agnes-3.0-flash")).toEqual(["text"]);
   });
 });

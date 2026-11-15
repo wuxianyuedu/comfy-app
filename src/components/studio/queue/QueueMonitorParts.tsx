@@ -5,6 +5,7 @@ import { Activity, Copy, FileText, FolderOpen, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { displayValue } from "~/lib/display-value";
 import { isTerminalTaskStatus, taskStatusLabel } from "~/lib/task-state";
 import { timeAgo } from "~/lib/time-format";
@@ -29,15 +30,15 @@ export function Field({ label, children }: { children: string; label: string }) 
   return (
     <div className="min-w-0">
       <dt className="text-ink-fainter text-2xs truncate">{label}</dt>
-      <dd className="text-ink-soft min-w-0 truncate tabular-nums">
+      <dd className="text-ink-soft min-w-0 tabular-nums">
         {/* 值变了闪一下（`value-tick`，规范 06 §6.7 第 ③ 档）：这一屏每 1s 被
             轮询刷一次，「已跑 12 秒」与「已跑 13 秒」在屏幕上长得一模一样 ——
             不动一下的话，用户分不出「它还在动」与「它卡住了」。
             `key` 换成当前值即触发重挂载：**值没变就不重播**，于是它天然是
             「变化提示」而不是第二条循环动画。 */}
-        <span className="value-tick inline-block" key={children}>
+        <TruncatedText className="value-tick inline-block min-w-0 truncate" key={children}>
           {displayValue(children)}
-        </span>
+        </TruncatedText>
       </dd>
     </div>
   );
@@ -72,15 +73,17 @@ export function QueueRowLine({
       <span className="text-ink-faint w-16 shrink-0 text-xs tabular-nums">
         {leading ?? displayValue(ago, { fallback: "时间未知" })}
       </span>
-      <span className="text-ink min-w-0 flex-1 basis-40 truncate text-sm">
+      <TruncatedText className="text-ink min-w-0 flex-1 basis-40 truncate text-sm">
         {displayValue(row.workflowName)}
-      </span>
-      <span className="text-ink-fainter min-w-0 basis-40 truncate text-xs sm:flex-1">
+      </TruncatedText>
+      <TruncatedText className="text-ink-fainter min-w-0 basis-40 truncate text-xs sm:flex-1">
         {displayValue(row.prompt)}
-      </span>
+      </TruncatedText>
       {terminal ? <StatusBadge label={taskStatusLabel(row.status)} status={row.status} /> : null}
       {row.error !== null && row.error !== "" ? (
-        <span className="text-danger-strong min-w-0 basis-full truncate text-xs">{row.error}</span>
+        <TruncatedText className="text-danger-strong min-w-0 basis-full truncate text-xs">
+          {row.error}
+        </TruncatedText>
       ) : null}
       <span className="flex shrink-0 items-center gap-1">
         <Button

@@ -10,7 +10,6 @@ const BUTTON_VARIANTS: Array<ButtonVariant> = [
   "default",
   "primary",
   "primary-solid",
-  "gradient",
   "secondary",
   "outline",
   "ghost",

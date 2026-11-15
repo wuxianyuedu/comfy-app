@@ -83,14 +83,23 @@ const SettingsView = lazyView("settings", () =>
   import("~/components/settings/SettingsView").then((m) => m.SettingsView),
 );
 
-/* 模型适配 / 模式契约：与设置同一族（项目无关的全局配置视图）。 */
+/* 模型适配 / 测试模型 / 模式契约：与设置同一族（项目无关的全局配置视图）。 */
 const ModelAdaptersView = lazyView("model-adapters", () =>
   import("~/components/workshop/ModelAdaptersView").then((mod) => mod.ModelAdaptersView),
+);
+const ModelTestView = lazyView("model-test", () =>
+  import("~/components/workshop/ModelTestView").then((mod) => mod.ModelTestView),
 );
 const ModeContractView = lazyView("mode-contract", () =>
   import("~/components/workshop/mode-contract/ModeContractView").then(
     (mod) => mod.ModeContractView,
   ),
+);
+
+/* UI 控件总览（ISSUE #3525/#3726）：开发者的基元对照页。与设置同族（项目无关的
+ * 全局视图），懒加载 —— 只在从命令面板 /「+」菜单点开时才拉那一块。 */
+const UIKitGalleryView = lazyView("uiKit", () =>
+  import("~/components/ui/ui-kit-gallery").then((mod) => mod.UIKitGallery),
 );
 
 /* 资源库：整页素材管理（分类 / 搜索 / 上传 / 删除），与画布那块抽屉同源取数。 */
@@ -255,8 +264,18 @@ export function WorkspaceViewStack({
         return <ModelAdaptersView />;
       }
 
+      case "model-test": {
+        return <ModelTestView />;
+      }
+
       case "mode-contract": {
         return <ModeContractView />;
+      }
+
+      case "uiKit": {
+        /* 与 settings 同形：页签里由本栈的 `h-full` 给出高度，控件总览自己那根
+         * 滚动条才滚得起来（ISSUE #3798）。独立路由 `/ui-kit` 不传，走视口档。 */
+        return <UIKitGalleryView fillHeight />;
       }
 
       case "canvas": {

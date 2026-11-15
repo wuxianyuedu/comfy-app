@@ -36,7 +36,8 @@ export const Default: Story = {
 };
 
 /** 三态并列：未选 / 选中 / 禁用（组级禁用也一并覆盖）——
- *  `data-checked` 走 `border-primary` + 内点，禁用是 `opacity-50`。 */
+ *  `data-checked` 走 `border-primary` + 实心紫底 + 内点（底色自 #3553 起在
+ *  Indicator 上，只随选中态渲染），禁用是 `opacity-50`。 */
 export const States: Story = {
   render: () => (
     <div className="flex flex-col gap-6">

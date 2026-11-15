@@ -11,7 +11,8 @@
 > **占位符约定**：本文中 `{{...}}` 形式的占位符代表文档引用的真实值，由
 > `pnpm doc:check` 运行时从源码/配置动态提取核对；语义见
 > [`docs/reference-facts.md`](../reference-facts.md)。改动上游源码后运行
-> `pnpm doc:gen` 同步 `docs/generated/`。
+> 改本文档由 `pnpm doc:check` 把关引用；`docs/generated/` 不入库（#3586），
+> 谁需要带真实值的原文谁本地 `pnpm doc:gen` 自己生成。
 
 ---
 
@@ -358,7 +359,7 @@ flowchart LR
 - [ ] 改草稿结构 → 服务端 DTO（`draft-sync-shared.ts`）与本文第 9 节同步
 - [ ] 改动任何 `src/lib/**` → 先读 [规范 18](../standards/18-lib层规范.md)（Node-only 三选一、
       分层 element、文件/函数长度棘轮）
-- [ ] 文档改动后跑 `pnpm doc:gen`（先 `doc:check` 后 `doc:render`）
+- [ ] 文档改动后跑 `pnpm doc:check`（镜像不入库，无需同批重渲染）
 
 ---
 

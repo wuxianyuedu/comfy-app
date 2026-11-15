@@ -147,6 +147,16 @@ const EXEMPT: Array<{ count: number; file: string; why: string }> = [
       "那一处是 `git ls-files --error-unmatch -- <路径>`：**只看退出码**（这个路径被跟踪吗），" +
       "不读输出 ⇒ 路径被不被转义与判断无关。",
   },
+  {
+    file: "scripts/ship-local.mjs",
+    count: 1,
+    why:
+      "那一处是 #3602 的 `git status --porcelain -- <单条 --add 路径>`：`addIsClean()` " +
+      "**只看输出空不空**（空 = 这条路径与 HEAD 一致），从不解析路径本身，也不拿它去和 " +
+      "`opt.adds` 逐字比对 —— 转义形态与结论无关。理由写在 `ship-local.mjs` 那段注释里；" +
+      "给这一处硬加 `-c core.quotePath=false` 只是让判据变绿，反而把「为什么它不需要守卫」" +
+      "藏起来了。登记在此，是为了让下一处**真要读路径**的 `status` 调用仍然当场红。",
+  },
 ];
 
 /** 一个数组字面量里是不是带了守卫（`-z` 或 `core.quotePath=false`）。 */

@@ -48,10 +48,11 @@ export async function shouldActivateWindowOnLaunch(): Promise<boolean> {
 }
 
 /**
- * 把已在任务栏的应用窗口唤到前台（清掉任务栏闪烁提醒）。
+ * 把已在任务栏的应用窗口唤到前台。
  *
  * 用在哪：应用启动时若判定「不抢前台」（用户在启动期手动让出了前台，见
- * `docs/standards/launch-and-build.md` §1.3），窗口只显示在任务栏并闪烁提示；
+ * `docs/standards/launch-and-build.md` §1.3），窗口安静地留在任务栏
+ * （ISSUE #3562 起不再请求闪烁提醒）；
  * 之后用户主动唤起本应用（再点一次启动器 / 双击图标）时，壳会把
  * `COMFYAPP_FOREGROUND=1` 注入已运行的实例，应用据此在首次挂载时把自己顶到
  * 前台——否则「再点一次还是没反应」。收件箱这类「用户点了就该看到」的入口

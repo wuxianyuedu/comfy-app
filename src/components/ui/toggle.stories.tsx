@@ -9,7 +9,7 @@ import { Toggle } from "~/components/ui/toggle";
 type ToggleVariant = NonNullable<React.ComponentProps<typeof Toggle>["variant"]>;
 type ToggleSize = NonNullable<React.ComponentProps<typeof Toggle>["size"]>;
 
-const VARIANTS: Array<ToggleVariant> = ["default", "outline"];
+const VARIANTS: Array<ToggleVariant> = ["default", "outline", "chip"];
 const SIZES: Array<ToggleSize> = ["default", "sm", "lg"];
 
 const meta = {
@@ -77,6 +77,21 @@ export const Toolbar: Story = {
       <Toggle aria-label="下划线" size="sm" variant="outline">
         <Underline />
       </Toggle>
+    </div>
+  ),
+};
+
+/** chip 多选（#3577）：选中态用品牌色描边 + 15% 品牌底 —— 暗色主题下与未选
+ *  拉开一档（default/outline 的选中态只是 bg-muted，同灰看不出按下没有）。
+ *  真实落点是模型弹窗的输入 / 输出类型与能力多选。 */
+export const Chips: Story = {
+  render: () => (
+    <div className="flex flex-wrap gap-1.5">
+      {(["文本", "图片", "视频"] as const).map((label, i) => (
+        <Toggle aria-label={label} key={label} pressed={i < 2} size="sm" variant="chip">
+          {label}
+        </Toggle>
+      ))}
     </div>
   ),
 };

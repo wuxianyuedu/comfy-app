@@ -67,10 +67,25 @@ type JudgeInput = {
 };
 
 /* 与 `tests/helpers/a11y-effective-config.ts` 同一形状：`.cjs` 判据用 `createRequire` 拿，
- * 加载失败**抛**出去不吞（吞了就是把「判据没跑起来」读成「没有陈旧豁免」）。 */
-const { judge, isGlobEntry, readFileLevelExemptions, scanViolations } = createRequire(__filename)(
-  SCRIPT,
-) as JudgeModule;
+ * 加载失败**抛**出去不吞（吞了就是把「判据没跑起来」读成「没有陈旧豁免」）。
+ * `.cjs` 无类型：出口形状在这里做运行时守卫，不走 `as` 断言（B5 清账）。 */
+function isJudgeModule(value: unknown): value is JudgeModule {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const keys = new Set(Object.keys(value));
+  return (["judge", "isGlobEntry", "readFileLevelExemptions", "scanViolations"] as const).every(
+    (k) => keys.has(k),
+  );
+}
+
+const loadedJudge: unknown = createRequire(__filename)(SCRIPT);
+if (!isJudgeModule(loadedJudge)) {
+  throw new Error(
+    "判据模块的出口形状不对（缺 judge/isGlobEntry/readFileLevelExemptions/scanViolations）",
+  );
+}
+const { judge, isGlobEntry, readFileLevelExemptions, scanViolations } = loadedJudge;
 
 const RULE = "no-control-regex";
 const CRITERION = "改用非正则方案就可以摘掉（夹具文案）";

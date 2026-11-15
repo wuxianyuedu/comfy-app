@@ -220,7 +220,8 @@ describe("workshop orchestrator 全流程", () => {
   });
 
   it("submitVideo comfyui 通道写入 clipUrl", async () => {
-    const id = await orchestrator.createSession({ idea: "x" });
+    // idea 与上一条错开：createSession 的重试去重（#3852）会按参数指纹合并。
+    const id = await orchestrator.createSession({ idea: "submit-video-y" });
     await orchestrator.setIdea(id, "x");
     await orchestrator.generateScript(id);
     await orchestrator.extractCharacters(id);
@@ -238,7 +239,8 @@ describe("workshop orchestrator 全流程", () => {
   });
 
   it("composeFinal 产出合成清单路径", async () => {
-    const id = await orchestrator.createSession({ idea: "x" });
+    // idea 与前几条错开：createSession 的重试去重（#3852）会按参数指纹合并。
+    const id = await orchestrator.createSession({ idea: "compose-z" });
     await orchestrator.setIdea(id, "x");
     await orchestrator.generateScript(id);
     await orchestrator.extractCharacters(id);

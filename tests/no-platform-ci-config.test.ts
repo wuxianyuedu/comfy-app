@@ -30,6 +30,7 @@ import {
 /* 预算这一格的判据要拿**脚本自己那份预算**当基准，而不是在测试里再抄一个常数：
  * 抄一份的话「改了脚本预算、忘了改配置」两种漂移里只会看见一种。 */
 import { FULL_SUITE_TIMEOUT_MS } from "../scripts/full-suite-run.mjs";
+import { DEFAULT_BUDGET_MS } from "../scripts/ci-ga-verdict-readout.mjs";
 import { DAILY_LANE_PIPELINES } from "../scripts/check-daily-attendance.mjs";
 import { FRESHNESS_TRACKS } from "../scripts/freshness-ledger.mjs";
 import { describe, expect, it } from "vitest";
@@ -250,14 +251,44 @@ export function registeredDisabledGates(text: string): Array<string> {
  * 每日档的执行面自 #3504 起全部在 GA：`.github/workflows/daily.yml` 是「每天跑什么」
  * 的唯一事实源。逻辑格名 ⇄ step 名的对照登记在 `scripts/ci-ga-trigger-map.mjs` 的
  * `DAILY_GATE_EXECUTORS`（判据 import 它，不在这里重抄）。
- * 顺序即执行序（GA 单 job 串行，与 CNB 每日档同一工作区语义对齐）：
- *   失败立案（`if: failure()`，只花在红的那一跑）在重格之后兜底；单元测试排最后
- *   （业主口径「最容易出问题的放最后」）—— 「必须最后」由下面判据钉住。
+ * 顺序即执行序（**重格链**单 job 串行，与 CNB 每日档同一工作区语义对齐）：
+ *   单元测试排最后（业主口径「最容易出问题的放最后」）—— 「必须最后」由下面判据钉住。
+ * ⚠️ 这份文件现在有**两个 job**：`daily`（重格链）与 `daily-failure-issue`（失败立案，
+ * `needs: daily`）。所以「有没有执行者」与「谁排在谁前面」是两个不同的问题，各用各的取法：
+ *   · 成员资格（总账 / 新鲜度 / 撤档对账）⇒ `gaDailySteps()`，**整份文件**的 step；
+ *   · 顺序（前提格 / 尾巴 / 最后一个会红的格）⇒ `gaDailyJobSteps()`，**只 `daily` 那个 job**。
+ * 混用会让顺序判据把另一个 job 的 step 也算进来 —— 那种红指不到真正的执行序。
  */
 const DAILY_YML = ".github/workflows/daily.yml" as const;
 
 /** GA workflow 的 steps 在 6 空格缩进层（`jobs.<id>.steps`）。 */
 const GA_STEP_RE = /^ {6}- name: (?<name>.+?)[ \t]*$/gm;
+
+/**
+ * GA workflow 里某个 job 的块原文（从 `  <id>:` 行起，到下一个 2 空格缩进的非空行为止 ——
+ * 那要么是下一个 job，要么是挂在它头上的注释段）；取不到给 null。
+ */
+function gaJobBlock(file: string, jobId: string): string | null {
+  const text = readFileAt(ROOT, file);
+  const marker = `  ${jobId}:`;
+  const at = text.indexOf(`\n${marker}\n`);
+  if (at === -1) {
+    return null;
+  }
+  const start = at + 1;
+  const after = start + marker.length;
+  const next = text.slice(after).search(/\n {2}\S/);
+  return next === -1 ? text.slice(start) : text.slice(start, after + next);
+}
+
+/**
+ * `daily` 那一个 job 的 step 名有序清单 —— **顺序判据专用**（见上面那段两个 job 的分工）。
+ * 取不到 job 块时给空数组，由调用方的「清单非空」前置断言接住（不静默恒放行）。
+ */
+function gaDailyJobSteps(): Array<string> {
+  const block = gaJobBlock(DAILY_YML, "daily") ?? "";
+  return [...block.matchAll(GA_STEP_RE)].map((m) => m.groups?.name ?? "");
+}
 
 /**
  * GA daily.yml 的 step 名有序清单（判据的匹配面就是这些**逐字**名字；
@@ -282,22 +313,84 @@ function gaStepBlock(file: string, name: string): string | null {
 /**
  * GA daily.yml 里**不进门格总账**的前提设施 step：检出是 checkout 动作、装 pnpm /
  * 装 Node 是工具链准备，环境证据是 `if: failure()` 的诊断读数（恒不判红）。
- * 它们不是门格 —— 总账 ⇄ step 名双向对账时把这四行豁免掉（豁免名单是显式的：
+ * 它们不是门格 —— 总账 ⇄ step 名双向对账时把这几行豁免掉（豁免名单是显式的：
  * 悄悄加一个「不判红也不立案」的 step 仍会被多出来的一格红）。
+ * 后两行属于 `daily-failure-issue` 那个 job（#3563 起立案是下游 job）：它不装依赖，
+ * 所以只有检出与装 Node 两件设施，没有「装 pnpm」。
  */
 const GA_DAILY_INFRA_STEPS: ReadonlyArray<string> = [
   "检出",
   "装 pnpm（按 package.json 的 packageManager 钉死版）",
   "装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）",
   "环境证据（失败时：dmesg 的 OOM 行 + 内存读数）",
+  "检出（立案脚本在仓库里）",
+  "装 Node（engines 下限 26.12.1；脚本只吃 node:*）",
 ];
+
+/**
+ * GA **PR 门禁** workflow（PR 主列的代码判据都在它里面）。
+ *
+ * 这一档是 2026-11-13 补的第四个面（ISSUE #3662）：此前总账只认三份清单
+ * （CNB 的 PR / push / GA daily.yml），**GA 的 PR job 一处都不在** ⇒
+ * 「记成 retired 却仍在 PR 上跑」这一形态对判据是隐形的。
+ */
+const PR_GATE_YML = ".github/workflows/pr-gate.yml" as const;
+
+/**
+ * GA pr-gate.yml 里**不进门格总账**的前提设施 step（与 `GA_DAILY_INFRA_STEPS` 同角色）。
+ *
+ * 逐条理由：
+ *   · 检出 / 装 pnpm / 装 Node / cargo 缓存 —— 工具链准备，恒不判红（daily 段同款）。
+ *   · `装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）` —— 前提铺装（#3572 /
+ *     #3580）：它装的是壳门禁的**编译期依赖**，判红的是它后面那一步。
+ *   · `安装依赖`（3 个 job）与 `安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）`
+ *     （1 个 job）—— **每个 job 自己装一次**的前提设施：装不上 ⇒ 那个 job 红，
+ *     读数已经在账上（daily 段那一条 `安装依赖（…）` 是**整跑一次**的安装 ⇒ 是门格）。
+ *   · `Storybook 开发期资源（postinstall 不重跑时现生成）` —— test-gates 的前提补齐（#3748）：
+ *     缓存命中时 pnpm 不重跑 postinstall ⇒ 这三张 svg 不存在；它补生成、恒不承重，
+ *     缺了由后面那两格用例自己红。
+ *   · `失败时上传诊断产物` —— `if: failure()` 的诊断动作，恒不判红。
+ *   · `把结论送回 CNB` / `把 GA 判红日志正文搬到 CNB` —— **判决的运输腿**
+ *     （`continue-on-error: true`，不承重；承重退码在 CNB 侧的 `GA 回调结论回读`，
+ *     那一条在 PR 段）。
+ */
+const GA_PR_INFRA_STEPS: ReadonlyArray<string> = [
+  "检出（按镜像 payload 的 sha）",
+  "检出（回调脚本在仓库里）",
+  "装 pnpm（按 package.json 的 packageManager 钉死版）",
+  "装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）",
+  "装 Node（engines 下限 26.12.1；脚本只吃 node:*）",
+  "装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）",
+  "cargo 缓存",
+  "恢复 node_modules 缓存（灰度）",
+  "安装依赖",
+  "安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）",
+  "Storybook 开发期资源（postinstall 不重跑时现生成）",
+  "失败时上传诊断产物",
+  "把结论送回 CNB",
+  "把 GA 判红日志正文搬到 CNB",
+];
+
+/**
+ * GA pr-gate.yml 里**判红的那几格**的 step 名（逐字）—— ga-pr 档的名单。
+ *
+ * 取法与 daily 段同一份：`GA_STEP_RE` 现读工作流文件（不抄第二份，§12.18），
+ * 再减掉前提设施豁免 ⇒ 「GA 的 PR 侧跑了什么」**从工作流文件本身读出来**。
+ *
+ * @returns {string[]} 逐字 step 名（重复的 job 同名 step 会在这里重复出现，判据侧用集合）
+ */
+function gaPrGateSteps(): Array<string> {
+  return [...readFileAt(ROOT, PR_GATE_YML).matchAll(GA_STEP_RE)]
+    .map((m) => m.groups?.name ?? "")
+    .filter((name) => !GA_PR_INFRA_STEPS.includes(name));
+}
 
 /** 读仓库内文件（相对路径），集中一处方便阅读。 */
 function readFileAt(root: string, rel: string): string {
   return readFileSync(path.join(root, rel), "utf8");
 }
 
-/** 桌包档的 GA workflow（artifact + nightly Release 落点，#3504 起不再回写常驻目录）。 */
+/** 桌包档的 GA workflow（GA artifact + nightly Release + #3607 CNB 站内回传，#3504 起不再回写常驻目录）。 */
 const PACKAGE_YML = ".github/workflows/package-desktop.yml" as const;
 
 /**
@@ -328,7 +421,7 @@ const PR_MOVED_TO_DAILY: Array<[string, string, string, string]> = [
  * 判据：① 三份清单（PR / push / 每日）各自 ⇄ 总账双向相等（清单多/少一格而总账没同批改 ⇒ 红）；② `retired` 的格不许再出现在任何清单里（降级≠删除）且必须带理由。
  * 三条门槛（确定性 / 快 / 本地可复现）仍只在规范 §13.5.30 由人判，本账不碰。
  */
-type GateTier = "PR" | "push" | "daily" | "retired";
+type GateTier = "PR" | "push" | "daily" | "ga-pr" | "retired";
 type LedgerEntry = {
   name: string;
   note?: string;
@@ -356,6 +449,13 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
    * 因为它们在 PR 上仍然被判，只是换了一台 runner。 */
   { name: "格式化提交分离", tier: "PR" },
   { name: "零消费导出", tier: "PR" },
+  /* `schema⇄迁移等价`（ISSUE #3599）：**L1** —— §13.5.30 的三条门槛（确定性 / 快 /
+   * 本地可复现）逐条评过，逐条读数与裁决见规范 §13.5.40。
+   * 形状与上面两条同形：**没有自己的 stage**（登记在 `COMFYAPP_CI_GATES_ELSEWHERE`，
+   * 入口路径 = `tests/db-migrate-equivalence.test.ts`），执行者是 GA `pr-gate.yml` 的
+   * `typecheck-db-format` job 里那一步 —— 判据 `scripts/check-gate-name-executors.mjs`
+   * 的**第四处执行面**（GA PR 门禁的 `run:` 行）就是为它补的：另三面一处都不在 GA。 */
+  { name: "schema⇄迁移等价", tier: "PR" },
   // ── push 档（COMFYAPP_CI_PUSH_GATES）──
   /* ISSUE #3378 收尾：push 主列整条撤掉。文档链两格由 GA `master-gate.yml` 同款逐字
    * 承接（§13.5.34 并行期已验），`安装依赖` 只被那两格吃、`合并形态复核` 是形态留痕
@@ -384,13 +484,67 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   },
   { name: "覆盖率报告（artifact；对位 CNB 的 `覆盖率上报` 格）", tier: "daily" },
   { name: "镜像漂移判据（CNB master vs GitHub master）", tier: "daily" },
+  // ── ga-pr 档（执行者 = GA `.github/workflows/pr-gate.yml` 的 step，名字逐字，#3662）──
+  /* 这一段是 **2026-11-13 补的第四个面**（ISSUE #3662）：PR 主列的代码判据全在 GA 侧
+   * （`.cnb.yml` 的 PR 档自 #3378 起只剩「站内回读结论 + 红了立案」两件纯 API 动作），
+   * 而在此之前总账只认三份清单（CNB 的 PR / push / GA daily.yml）—— **GA 的 PR job 不在
+   * 任何一个面里** ⇒ 「记成 retired 却仍在 PR 上跑」这一形态对判据是隐形的
+   * （`受影响用例` / `固定结构用例` 两格就是这样：账上写着「2026-11-02 撤到每日全量单测」，
+   * 而 `pr-gate.yml` 里两个 job 每个 PR 都跑、且在判决的 `needs:` 里）。
+   *
+   * **名字取 GA step 名（逐字），与 daily 段同一口径**（§13.5.30 的「哪一格属哪一级」
+   * 跟着执行者走）。本段的名字 = `pr-gate.yml` 的 step 名清单（减去前提设施豁免），
+   * 由 `gaPrGateSteps()` 现算 ⇒ 「GA 的 PR 侧跑了什么」从工作流文件本身读出来，
+   * 不靠人抄一份（§12.18）。
+   *
+   * ⚠️ **同一格在两个名字空间各有一条**：`PR` 段用 CNB 清单的名字（本仓自己起的短名），
+   * 本段用 GA step 的名字（逐字）—— 同一格的两条登记面，不是两格。
+   * 例：`schema⇄迁移等价`（PR 段，CNB 清单名）+ `schema⇄迁移等价（cnb 同款判据一字不改）`
+   * （本段，GA step 名）—— 一格，两个名字空间各一条。
+   */
+  { name: "分支守卫（cnb 同款判据一字不改）", tier: "ga-pr" },
+  { name: "提交声明核对（cnb 同款判据一字不改）", tier: "ga-pr" },
+  { name: "同步数据库表结构（cnb 同款判据一字不改）", tier: "ga-pr" },
+  { name: "类型检查（cnb 同款判据一字不改）", tier: "ga-pr" },
+  { name: "标题行让位", tier: "ga-pr" },
+  { name: "文件结构硬规则", tier: "ga-pr" },
+  { name: "跨平台动作对照", tier: "ga-pr" },
+  { name: "import 别名统一", tier: "ga-pr" },
+  { name: "ComfyUI 端口口径", tier: "ga-pr" },
+  { name: "内联样式注入", tier: "ga-pr" },
+  { name: "跨文件重复块", tier: "ga-pr" },
+  { name: "函数长度 TS", tier: "ga-pr" },
+  { name: "函数长度 Rust", tier: "ga-pr" },
+  { name: "模块循环依赖", tier: "ga-pr" },
+  { name: "端口推导跨语言一致性", tier: "ga-pr" },
+  { name: "CHANGELOG 碎片", tier: "ga-pr" },
+  { name: "主题色扫描", tier: "ga-pr" },
+  { name: "UI/逻辑分离", tier: "ga-pr" },
+  { name: "lib Node-only 声明（cnb 同款判据一字不改）", tier: "ga-pr" },
+  { name: "oxfmt 格式（cnb 同款判据一字不改；基线 = CNB_PULL_REQUEST_TARGET_SHA）", tier: "ga-pr" },
+  {
+    name: "oxfmt 格式（全量档：硬闸「未过 oxfmt 的文件一个都不许有」）",
+    tier: "ga-pr",
+  },
+  { name: "重档静态判据（cnb 同款判据一字不改）", tier: "ga-pr" },
+  {
+    name: "受影响用例（cnb 同款判据一字不改）",
+    tier: "ga-pr",
+    note: "ISSUE #3662 出口 B：**这一格在 GA 的 PR 侧仍在跑**（`pr-gate.yml` 的 `affected-tests` job，2026-11-12/13 实测墙钟 37~135s / 10 跑全绿），账上曾写「2026-11-02 撤到每日全量单测」—— 那句只对 **CNB 侧**成立。撤档理由在 GA 侧**不成立**（逐条读数见规范 §13.5.41）：45m 预算从未被接近，GA 侧那 4 次红全是**真红**（真断言红 ×3 / 真缺陷红 ×1），没有一例是 CNB 共享节点上的「墙钟掐断 → 未判定」或 AggregateError 那一族。",
+  },
+  {
+    name: "固定结构用例（cnb 同款判据一字不改）",
+    tier: "ga-pr",
+    note: "ISSUE #3662 出口 B：同上，**这一格在 GA 的 PR 侧仍在跑**（`pr-gate.yml` 的 `fixed-structural-tests` job，2026-11-12/13 实测墙钟 87~133s / 10 跑全绿）。撤档理由（45m 预算 / 冷节点 25m+ / AggregateError 假红）在 GA 侧不成立 —— 逐条读数与那 4 次红的形状见规范 §13.5.41。",
+  },
+  { name: "schema⇄迁移等价（cnb 同款判据一字不改）", tier: "ga-pr" },
   // ── retired（降级登记，必须带理由；§13.5.30）──
   /* ISSUE #3378 收尾（08:25 指令）：CNB 侧从承重平台退成「站内回读结论 + 平台池镜像出口」，
    * 只为过去 CNB 承重 / 自托管节点环境存在的格子整批摘掉。降级 ≠ 删除，逐条登记「现在谁跑」。 */
   /* ── #3504：每日档迁 GA，七格在 CNB 与 GA 两侧都没有了执行者 ── */
   {
     name: "每日失败立案",
-    note: "#3504：立案对象（本机执行的每日跑）不存在了。GA daily.yml 末尾的 `失败立案` step（CNB 单子，#3436 同通道）承接本档这一跑自己的立案；格名进 `DAILY_GATE_EXECUTORS`",
+    note: "#3504：立案对象（本机执行的每日跑）不存在了。GA daily.yml 的下游 job `daily-failure-issue`（`失败立案` step，CNB 单子，#3436 同通道）承接本档这一跑自己的立案；格名进 `DAILY_GATE_EXECUTORS`",
     tier: "retired",
   },
   {
@@ -449,11 +603,6 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
     note: "push 档形态留痕（check-branch-guard.cjs --merge-commit）。脚本头注自承「真正的防线是平台分支保护，本条是形态留痕、不是那条防线」；主列撤掉后无对象 ⇒ 摘。平台分支保护设置不动",
   },
   {
-    name: "安装依赖",
-    tier: "retired",
-    note: "push 档安装格，只被同档文档链两格吃 node_modules；两格挪 GA master-gate.yml（它自己 pnpm install）之后无消费者 ⇒ 摘。单跑单测·安装依赖 的逐字相同真身改向 每日安装依赖",
-  },
-  {
     name: "生成态文档与源同步",
     tier: "retired",
     note: "push 档文档链格（--check --autofix）⇒ 挪 GA .github/workflows/master-gate.yml 同名 step（同款入口、同款旗标，§13.5.34 并行期已跑过若干轮逐格比对）",
@@ -477,21 +626,6 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
     name: "GitHub 镜像同步",
     tier: "retired",
     note: "ISSUE #3418（#3378 后续指令）：自托管节点到 github.com 出网不稳、判断推送成功半天出不来，推送与派发整个挪到平台池那条同名流水线（另一条出网路径、退码生效）；自托管主列停用、原文按注释形态留在 .gates。「后续流程走不通」由 GA 回调结论回读的 fail-closed（没终态/超时判红）兜住，§13.6 承重锚不变",
-  },
-  {
-    name: "API 文档生成与自检",
-    tier: "retired",
-    note: "2026-11-05 从 push 撤到每日档「每日 API 文档生成与自检」（ISSUE #2537 / 事故 #2528）：新触发面 98% 触发率、CI 中位 40.9s、占 140.2s 串行流水线的 30.6%，PR 侧不再即时判；最晚次日 01:37 暴露，暴露窗口 ≤24h，失败走既有 daily 红 build / 每日失败立案通道",
-  },
-  {
-    name: "受影响用例",
-    tier: "retired",
-    note: "2026-11-02 从 PR 撤到每日全量单测：增量测试在共享节点读数不可信（fork worker 调度超时、超订变子进程），与 §13.5.21 全量单测只留每日档同口径；每日单元测试全量套件已含这一族用例，最晚 24h 发现",
-  },
-  {
-    name: "固定结构用例",
-    tier: "retired",
-    note: "同上，从 PR 撤到每日全量单测：FIXED_STRUCTURAL_TESTS 契约测试由每日单元测试全量套件覆盖；PR 上 45m 预算、冷节点易 25m+ 且偶发 AggregateError 假红，性价比低",
   },
   {
     name: "core 骨架单一事实源",
@@ -518,77 +652,45 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
     tier: "retired",
     note: "同上，撤到每日 Python 探针读数",
   },
-  {
-    name: "浏览器安装",
-    tier: "retired",
-    note: "同上，撤到每日浏览器安装：PR 上已无一步用浏览器（§13.5.23）",
-  },
-  {
-    name: "ESLint 零警告",
-    tier: "retired",
-    note: "起一堆子进程、并行 PR 下读数不可信，撤到每日 ESLint 零警告（§13.5.21）",
-  },
-  {
-    name: "新鲜度账",
-    tier: "retired",
-    note: "主体=master，判的是主干调度，撤到每日新鲜度账（ISSUE #2300）",
-  },
-  {
-    name: "生产构建",
-    tier: "retired",
-    note: "2026-10-18 撤到每日生产构建，PR 上一条都不剩（§13.5.23）",
-  },
-  {
-    name: "单元测试",
-    tier: "retired",
-    note: "撤到每日单元测试：全量单测只在 01:37 跑（§13.5.23）",
-  },
-  {
-    name: "E2E 关键流程",
-    tier: "retired",
-    note: "2026-10-19 撤成每日全量E2E：整档不带 --grep，@critical 是其子集",
-  },
+  // ── 2026-11-13（ISSUE #3662 出口 B）：下面这些 **CNB 时代的老名字**撤了 ──
+  /* 它们的格**仍在跑**，只是执行者换了地方、名字也换了：
+   *   · `浏览器安装` / `ESLint 零警告` / `新鲜度账` / `生产构建` / `单元测试` /
+   *     `E2E 关键流程` / `API 文档生成与自检` ⇒ 执行者是 GA `daily.yml` 的同名 step，
+   *     **已在 daily 段逐字登记**（daily 段是 GA step 名，账跟着执行者走）。
+   *   · `分支守卫` / `提交声明核对` / `同步数据库表结构` / `类型检查` / `标题行让位` /
+   *     `文件结构硬规则` / `跨平台动作对照` / `import 别名统一` / `ComfyUI 端口口径` /
+   *     `内联样式注入` / `跨文件重复块` / `函数长度 TS` / `函数长度 Rust` /
+   *     `模块循环依赖` / `端口推导跨语言一致性` / `CHANGELOG 碎片` / `主题色扫描` /
+   *     `UI/逻辑分离` / `lib Node-only 声明` / `oxfmt 格式` / `重档静态判据` /
+   *     `受影响用例` / `固定结构用例` ⇒ 执行者是 GA `pr-gate.yml` 的同名 step，
+   *     **已在 ga-pr 段逐字登记**。
+   * ⇒ 留着这些老名字当「retired」就是**账上写着不再跑、实际每个 PR 都跑**
+   * （ISSUE #3662 的现场：`受影响用例` / `固定结构用例` 两格）⇒ 撤。
+   * 「降级 ≠ 删除」那条规矩管的是**降级登记**（档位降了、名字要在册），
+   * 管不到「名字与执行者不同名空间」这一族 —— 那一族的登记面是**逐字名的那一段**。
+   */
   // ── 2026-11-05 薄化：GA `.github/workflows/pr-gate.yml` 承接（同一个 PR 事件、
   //    同一个镜像仓；PR 档只留平台读数 + 判决链，结论 2026-11-08 起由 `GA 回调结论回读` 承重读回）。
   //    逐项归属与「为什么不在这边跑」写在 `.cnb.yml` 的 `.gates` 顶部那段。──
+  /* 这一段原来的 CNB 时代老名字（`Install dependencies` / `分支守卫` / `提交声明核对` /
+   * `同步数据库表结构` / `类型检查` / `标题行让位` / `文件结构硬规则` / `跨平台动作对照` /
+   * `import 别名统一` / `ComfyUI 端口口径` / `内联样式注入` / `跨文件重复块` /
+   * `函数长度 TS` / `函数长度 Rust` / `模块循环依赖` / `端口推导跨语言一致性` /
+   * `CHANGELOG 碎片` / `主题色扫描` / `UI/逻辑分离` / `lib Node-only 声明` /
+   * `oxfmt 格式` / `重档静态判据`）**全部撤了**（ISSUE #3662）：它们的格在 GA 的 PR 侧
+   * 仍在跑，登记面换成 ga-pr 段的**逐字 step 名** ⇒ 同一格在两个名字空间各一条，
+   * 而不是「老名字记成 retired + 新名字记成在跑」那种两处各说各话。
+   *
+   * ⚠️ 唯一留在 retired 段的是 **push 档**那个安装格（名字加 `（push 档）` 后缀）——
+   * push 主列早已撤掉，它没有执行者；而 GA 的 PR 侧那几个 `安装依赖` step 是**前提设施**
+   * （每个 job 自己装一次），不是一格 ⇒ 不进 ga-pr 段（见 `GA_PR_INFRA_STEPS`）。
+   */
   {
-    name: "Install dependencies",
+    name: "安装依赖（push 档）",
     tier: "retired",
-    note: "GA 各 job 自己的 `安装依赖` step；PR 档此后没有吃 node_modules 的格",
+    note: "push 档安装格，只被同档文档链两格吃 node_modules；两格挪 GA master-gate.yml（它自己 pnpm install）之后无消费者 ⇒ 摘。单跑单测·安装依赖 的逐字相同真身改向 每日安装依赖。⚠️ 名字带 `（push 档）` 后缀是为了不与 ga-pr 段的 `安装依赖`（GA 各 job 自己的前提设施 step）撞名",
   },
-  {
-    name: "分支守卫",
-    tier: "retired",
-    note: "GA `分支守卫` job（`check-branch-guard.cjs --pr-check`）",
-  },
-  { name: "提交声明核对", tier: "retired", note: "GA `提交声明核对` job" },
-  {
-    name: "同步数据库表结构",
-    tier: "retired",
-    note: "GA `同步数据库表结构` job（每日档另有 `每日同步数据库表结构`）",
-  },
-  { name: "类型检查", tier: "retired", note: "GA `类型检查` job（`tsc --noEmit`）" },
-  { name: "标题行让位", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "文件结构硬规则", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "跨平台动作对照", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "import 别名统一", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "ComfyUI 端口口径", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "内联样式注入", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "跨文件重复块", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "函数长度 TS", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "函数长度 Rust", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "模块循环依赖", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "端口推导跨语言一致性", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "CHANGELOG 碎片", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "主题色扫描", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "UI/逻辑分离", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  { name: "lib Node-only 声明", tier: "retired", note: "GA `静态判据` job 的同名 step" },
-  {
-    name: "oxfmt 格式",
-    tier: "retired",
-    note: "GA `oxfmt 格式` step（`check-format.cjs --changed`，每次 PR 都跑、无 ifModify）",
-  },
-  { name: "重档静态判据", tier: "retired", note: "GA `重档静态判据` job（`ci-heavy-gates.mjs`）" },
+  //    `GA 回调结论回读`（§13.5.33）。原文按注释形态留在 `.gates`，恢复动作照旧。
   // ── 2026-11-08 转正（ISSUE #3378）：老轮询主列五格停用，执行者换成站内的
   //    `GA 回调结论回读`（§13.5.33）。原文按注释形态留在 `.gates`，恢复动作照旧。
   {
@@ -2013,11 +2115,18 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 内置 github.token 读本 run 的 job logs。 */
     expect(workflow).toContain("secrets.CNB_ISSUE_TOKEN");
     expect(workflow).toMatch(/GITHUB_TOKEN:\s*\$\{\{ github\.token \}\}/u);
-    /* step 级 continue-on-error：日志搬不到绝不改本 run 的 conclusion。
-     * 判决链 / commit-statuses / 流水线 name 一个字都不许动。 */
-    const relayBlock = workflow.slice(workflow.indexOf("把 GA 判红日志正文搬到 CNB"));
-    expect(relayBlock).toContain("continue-on-error: true");
-    expect(relayBlock).toContain("if: always()");
+    /* step 级 continue-on-error 已摘（ISSUE #3710）：前提不成立的失败（0s 退出）
+     * 此前被这枚旗标盖成绿色 ✓，与「跑过但没日志」在 run 列表里不可区分。
+     * job 级仍在：relay 失败绝不改本 run 的 conclusion，判决链 /
+     * commit-statuses / 流水线 name 一个字都不许动。 */
+    const relayStep = workflow.slice(
+      workflow.indexOf("把 GA 判红日志正文搬到 CNB"),
+      workflow.indexOf("run: node scripts/ci-ga-logs-relay.mjs"),
+    );
+    expect(relayStep).not.toContain("continue-on-error: true");
+    expect(relayStep).toContain("if: always()");
+    const jobBlock = workflow.slice(workflow.indexOf("ga-verdict-callback:"));
+    expect(jobBlock).toContain("continue-on-error: true");
     /* 流水线 name 在 `.cnb.yml`（commit-status context 含它），本格一个字不动。 */
     expect(readRegisteredConfig()).toContain("name: GA 判决回调（骨架·休眠）");
     /* 本地读者在场：ship 侧从 CNB 站内读回的模块。 */
@@ -2074,12 +2183,65 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(reader).toContain("pulls");
     expect(reader).toContain("list-comments");
     expect(reader).not.toContain("get-pull");
-    /* 承重一字不动：step 仍不承重，流水线 name 与三态退码不变。 */
-    const relayBlock = workflow.slice(workflow.indexOf("把 GA 判红日志正文搬到 CNB"));
-    expect(relayBlock).toContain("continue-on-error: true");
-    expect(relayBlock).toContain("if: always()");
+    /* 承重一字不动：step 失败可见（#3710），job 级 continue-on-error 仍在，
+     * 流水线 name 与三态退码不变。 */
+    const relayStep = workflow.slice(
+      workflow.indexOf("把 GA 判红日志正文搬到 CNB"),
+      workflow.indexOf("run: node scripts/ci-ga-logs-relay.mjs"),
+    );
+    expect(relayStep).not.toContain("continue-on-error: true");
+    expect(relayStep).toContain("if: always()");
+    const jobBlock = workflow.slice(workflow.indexOf("ga-verdict-callback:"));
+    expect(jobBlock).toContain("continue-on-error: true");
     expect(readRegisteredConfig()).toContain("name: GA 判决回调（骨架·休眠）");
     expect(relay).toContain("不碰承重");
+  });
+
+  it("ISSUE #3667：判绿按需档接线在场，且不碰承重（scope=all / CNB 触发口 / 本地读回）", () => {
+    /* 判红 relay 默认只搬失败 job（#3437）；本单让「有需要时」判绿也能经
+     * GA→CNB→本地 取到日志：GA 侧 scope=all 搬全部 job，CNB 侧一条平台池触发口
+     * 代发 workflow_dispatch，本地 --gh-logs 按 marker 的 scope 呈现。
+     * 这几条钉住「接线在场 + 不承重」：少一条就会静默退回出站链路。 */
+    const workflow = readFileSync(path.join(ROOT, ".github/workflows/pr-gate.yml"), "utf8");
+    const relay = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-relay.mjs"), "utf8");
+    const onDemand = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-on-demand.mjs"), "utf8");
+    const reader = readFileSync(path.join(ROOT, "scripts/ship-gh-logs.mjs"), "utf8");
+    /* GA 侧：workflow_dispatch 多三个按需 input，relay step 读 scope / run_id / PR 号。 */
+    expect(workflow).toMatch(/^ {6}pr_number:$/m);
+    expect(workflow).toMatch(/^ {6}relay_scope:$/m);
+    expect(workflow).toMatch(/^ {6}run_id:$/m);
+    expect(workflow).toContain("GA_LOG_SCOPE: ${{ github.event.inputs.relay_scope || '' }}");
+    expect(workflow).toContain("GA_LOG_RUN_ID: ${{ github.event.inputs.run_id || '' }}");
+    expect(workflow).toContain(
+      "github.event.inputs.pr_number || github.event.client_payload.pr_number",
+    );
+    /* relay 脚本：默认 failed、只认字面 all、marker 带 scope、判绿全量也走同一载体。 */
+    expect(relay).toContain("relayScopeFromEnv");
+    expect(relay).toContain("RELAY_SCOPE.ALL");
+    expect(relay).toContain("scope=${scope}");
+    expect(relay).toContain("按需全量");
+    /* CNB 侧：触发口在册、平台池形态、点的是专用脚本（不是 --preset）、有独占锁。 */
+    const cnb = readRegisteredConfig();
+    expect(cnb).toContain("api_trigger_ga_logs:");
+    expect(cnb).toContain("node scripts/ci-ga-logs-on-demand.mjs");
+    expect(cnb).toContain("*lock_ga_logs");
+    const lane = /^[ ]{2}api_trigger_ga_logs:[\s\S]*?(?=^[ ]{2}\S|^\S)/m.exec(cnb);
+    expect(lane?.[0]).not.toContain("--preset");
+    expect(onDemand).toContain("dispatchRequest");
+    /* 本地读者：旧评论（无 scope）回落 failed 逐字兼容，全量档不把判绿误报成失败。 */
+    expect(reader).toContain('meta.scope === "all"');
+    expect(reader).toContain("判绿 job 的正常形态");
+    /* 承重一字不动：relay step 失败可见（#3710），job 级 continue-on-error 仍在，
+     * 流水线 name 与三态退码不变。 */
+    const relayStep = workflow.slice(
+      workflow.indexOf("把 GA 判红日志正文搬到 CNB"),
+      workflow.indexOf("run: node scripts/ci-ga-logs-relay.mjs"),
+    );
+    expect(relayStep).not.toContain("continue-on-error: true");
+    expect(relayStep).toContain("if: always()");
+    const jobBlock = workflow.slice(workflow.indexOf("ga-verdict-callback:"));
+    expect(jobBlock).toContain("continue-on-error: true");
+    expect(cnb).toContain("name: GA 判决回调（骨架·休眠）");
   });
 
   it("Python 探测入口被登记在 env 里，且真的在盘上", () => {
@@ -2125,7 +2287,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
     /* 顺序约束落到 GA 每日档：浏览器缺件时整档只红在 launch 那一跳，而产物不在时
      * 红在 webServer 的 180s 超时上 —— 两者都指不到真正缺的那一格。 */
-    const steps = gaDailySteps();
+    const steps = gaDailyJobSteps();
     const e2eAt = steps.findIndex((n) => n.startsWith("全量E2E"));
     expect(
       e2eAt,
@@ -2223,7 +2385,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "退役理由的原文丢了 —— 「GitHub runner 的工具链由镜像与 setup-* 钉死」是那七格退役的根据",
     ).toContain("无需自证");
 
-    const steps = gaDailySteps();
+    const steps = gaDailyJobSteps();
     const testAt = steps.findIndex((n) => n.startsWith("单元测试"));
     /* 两个名字都必须取到：取不到就是**这一格被从清单里删了**，而顺序判据会退化成
      * 「-1 比 -1 小」那种永远成立的空判（解析失败伪装成结论）。 */
@@ -2242,9 +2404,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   it("`单元测试` 是 GA 每日档最后一个**会红的格**；其后只允许读数型尾巴", () => {
     /* 业主口径：「将每日单元测试放最后，最容易出问题的放最后」。这是**覆盖面**不是偏好：GA 的 steps 串行且失败即停，而这一格是唯一会因机器负载红的 ——
      * 实测 `cnb-b0l-1k59op66t` 775 份只 1 份红在 `Test timed out in 30000ms`（同时另有两份在跑全量 vitest/eslint），其后三格全 `skipped` ⇒ 它排中间时一次抖动决定那三格这一天跑不跑。
-     * #3504 起顺序判在 GA daily.yml：其后只允许 `if: failure()`（环境证据 / 失败立案，绿跑不付钱、红跑不吞结论 —— 立案那格还有 `continue-on-error`）与
-     * `if: always()`（覆盖率报告 warn / 镜像漂移）这些**读数型尾巴**，不能再有会红的重格。 */
-    const steps = gaDailySteps();
+     * #3504 起顺序判在 GA daily.yml：其后只允许 `if: failure()`（环境证据，绿跑不付钱、红跑不吞结论）与
+     * `if: always()`（覆盖率报告 warn / 镜像漂移）这些**读数型尾巴**，不能再有会红的重格。
+     * ⚠️ 顺序只在 `daily` 这一个 job 内有意义 —— `失败立案` 自 #3563 起是**下游 job**，
+     * 它不在这条尾巴里（它的 `if: failure()` / `continue-on-error` 由立案那条判据钉在 job 级）。 */
+    const steps = gaDailyJobSteps();
     const idx = steps.findIndex((n) => n.startsWith("单元测试"));
     expect(steps.length, "GA daily.yml 解析不出 steps —— 这条顺序判据没有对象了").toBeGreaterThan(
       0,
@@ -2252,27 +2416,28 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(idx, "GA 每日档必须有 `单元测试`").toBeGreaterThanOrEqual(0);
     expect(
       steps.slice(idx + 1),
-      "`单元测试` 之后只能跟读数型尾巴（环境证据 / 失败立案 / 覆盖率报告 / 镜像漂移判据），不能再有会红的格",
+      "`单元测试` 之后只能跟读数型尾巴（环境证据 / 覆盖率报告 / 镜像漂移判据），不能再有会红的格",
     ).toEqual([
       "环境证据（失败时：dmesg 的 OOM 行 + 内存读数）",
-      "失败立案（补洞：GA 每日档跑红 ⇒ CNB 单，按格名去重）",
       "覆盖率报告（artifact；对位 CNB 的 `覆盖率上报` 格）",
       "镜像漂移判据（CNB master vs GitHub master）",
     ]);
-    /* 「读数型」不是嘴上说说：尾巴四格各自带 `if:` 限形 —— 证据 / 立案只在失败那一跑、
+    /* 「读数型」不是嘴上说说：尾巴三格各自带 `if:` 限形 —— 证据只在失败那一跑、
      * 覆盖率与漂移不挡树级读数。谁把尾巴换成无条件会红的格，上面那条 toEqual 已经红；
-     * 这里再钉 `if:` 形状，把「尾巴必须是读数」这件事留在机器可读的面上。 */
-    const dailyYml = readFileAt(ROOT, DAILY_YML);
-    const unitAt = dailyYml.indexOf("      - name: 单元测试");
-    const tail = dailyYml.slice(unitAt);
+     * 这里再钉 `if:` 形状，把「尾巴必须是读数」这件事留在机器可读的面上。
+     * 取的是 **`daily` 那个 job 的块**而不是整份文件：整份搜会把下游 job 的 `if:` 也算进来，
+     * 于是「尾巴被换成无条件重格」这种红会被别处的字面量掩盖过去。 */
+    const dailyJob = gaJobBlock(DAILY_YML, "daily") ?? "";
+    const unitAt = dailyJob.indexOf("      - name: 单元测试");
+    expect(
+      unitAt,
+      "在 `daily` job 块里定位不到「单元测试」—— 这条尾巴判据没有对象了",
+    ).toBeGreaterThan(-1);
+    const tail = dailyJob.slice(unitAt);
     expect(
       (tail.match(/if: (?:failure|always)\(\)/g) ?? []).length,
       "单元测试之后的尾巴没有 `if: failure()` / `if: always()` 限形 —— 它们必须是读数型格子",
     ).toBeGreaterThanOrEqual(3);
-    expect(
-      tail,
-      "失败立案必须带 `continue-on-error: true` —— 立案发不出去不该给这一跑叠第二个红（#3436 的口径）",
-    ).toContain("continue-on-error: true");
   });
 
   it("`API 文档生成与自检` 只在每日档：push 侧不再即时判，GA 每日档排在单元测试之前（ISSUE #2537）", () => {
@@ -2290,7 +2455,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "「API 文档生成与自检」回到了 push 清单 —— 2026-11-05 起它只在每日档（ISSUE #2537：98% 触发率、40.9s 中位、占 30.6%）",
     ).not.toContain("API 文档生成与自检");
 
-    const steps = gaDailySteps();
+    const steps = gaDailyJobSteps();
     const at = steps.findIndex((n) => n.startsWith("API 文档生成与自检"));
     const lastRed = steps.findIndex((n) => n.startsWith("单元测试"));
     expect(
@@ -2393,11 +2558,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "ESLint 零警告",
       "单元测试",
       /* 2026-11-08 转正（ISSUE #3378）：`GitHub 判决回读` 随老轮询主列停用，换成
-       * `GA 回调结论回读` —— 它同样要活到 GA 出结论（站内短轮询 45m 预算），
+       * `GA 回调结论回读` —— 它同样要活到 GA 出结论（站内短轮询 70m 预算，
+       * #3593：≥ GA 最重 job 60m + 回调 5m + 余量），
        * 预算缺席时卡死要等满 2h 才有人知道，所以这一列不能空。 */
       "GA 回调结论回读",
-      // 2026-11-02 `受影响用例` / `固定结构用例` 从 PR 撤到每日全量单测（见 GATE_TIER_LEDGER
-      // 的 retired 段）：这两个 PR stage 不再存在，预算要求随之解除。
+      // 2026-11-02 `受影响用例` / `固定结构用例` 从 **CNB 侧**撤到每日全量单测：这两个
+      // **CNB PR stage** 不再存在，预算要求随之解除（GA 的 PR 侧仍有那两个 job ——
+      // 它们的预算是 workflow 里的 `timeout-minutes: 45`，不在本表；见规范 §13.5.41）。
     ].filter((name) => !disabled.includes(name));
     const missing = required.filter((name) => !timeouts.has(name));
     expect(
@@ -2417,15 +2584,24 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       const unit = m.groups?.unit;
       const minutes =
         Number(m.groups?.amount ?? 0) * (unit === "h" ? 60 : unit === "s" ? 1 / 60 : 1);
+      /* `GA 回调结论回读` 的本职是**等 GA 出结论**（#3593）：下限跟着脚本预算走
+       * （「脚本预算 ≥ GA 最坏路径」由 ci-ga-verdict-readout.test.ts 现算
+       * `pr-gate.yml` 钉住），这里只钉「stage 外框包得住脚本预算、且不贴平台
+       * 2h 上限」；其余 stage 仍是「卡死要早报」的 10~60m 量级窗。 */
+      const isGaReadout = name === "GA 回调结论回读";
+      const floorMin = isGaReadout ? Math.ceil(DEFAULT_BUDGET_MS / 60_000) : 10;
+      const ceilMin = isGaReadout ? Math.ceil(DEFAULT_BUDGET_MS / 60_000) + 15 : 60;
+      const overReason = isGaReadout
+        ? "外框要比脚本预算宽出进程开销，又不与平台默认的 2h 上限没有区别"
+        : "那与平台默认的 2h 上限没有区别，起不到「卡死要早报」的作用";
       expect(
         minutes,
-        `${name} 的 timeout=${raw} 是小时量级 —— 那与平台默认的 2h 上限没有区别，` +
-          "起不到「卡死要早报」的作用",
-      ).toBeLessThanOrEqual(60);
+        `${name} 的 timeout=${raw} 超出量级窗（上限 ${String(ceilMin)}m）—— ${overReason}`,
+      ).toBeLessThanOrEqual(ceilMin);
       expect(
         minutes,
-        `${name} 的 timeout=${raw} 太紧（真跑得完的形态会被误杀）`,
-      ).toBeGreaterThanOrEqual(10);
+        `${name} 的 timeout=${raw} 太紧（真跑得完的形态会被误杀；下限 ${String(floorMin)}m）`,
+      ).toBeGreaterThanOrEqual(floorMin);
     }
   });
 
@@ -2458,8 +2634,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       (m) => m.groups?.name ?? "",
     );
     const stray = used.filter(
-      /* SAFETY: 类型断言已复核 */
-      (name) => !LOCK_KEY_ALLOWED_VARS.includes(name as never),
+      /* 成员判断改 some + 等值（B5 清账）：不再为 includes 的参数型断言收窄。 */
+      (name) => !LOCK_KEY_ALLOWED_VARS.some((allowed) => allowed === name),
     );
     expect(
       stray,
@@ -2876,13 +3052,40 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
 
     /* 成品落点随执行面换形（#3504）：GA 产 artifact（按 run 取）+ 滚动 nightly Release，
      * 不再是本机常驻目录的「留 2 份」（hosted runner 是即弃机，回写开发机既没有通道也不该有）。
-     * 三个落点都要有 step：少一个，「跑成功了但产物去哪了」就没人回答。 */
-    for (const landing of ["上传安装版", "上传免安装版", "发布到滚动 Release"]) {
+     * 四个落点都要有 step：少一个，「跑成功了但产物去哪了」就没人回答。
+     * #3607 起补第四个：CNB 站内滚动 Release（用户在 CNB 侧提诉求、也该在 CNB 侧拿包，
+     * GitHub 只是镜像仓）。 */
+    for (const landing of ["上传安装版", "上传免安装版", "发布到滚动 Release", "回传成品到 CNB"]) {
       expect(
         steps.some((n) => n.startsWith(landing)),
         `package-desktop.yml 里没有「${landing}」step —— 成品落点少了一个`,
       ).toBe(true);
     }
+
+    /* #3607 接线判据：回传步必须点既有脚本、带 continue-on-error（回传失败不碰构建结论）、
+     * 且用专用 repo-release:rw 令牌。少一件，「CNB 侧能拿到包」这句话就没有执行者，
+     * 或反过来把「桌包打出来了」判红 —— 正是这一格最容易静默失效的两头。 */
+    const relayStep = gaStepBlock(PACKAGE_YML, "回传成品到 CNB（滚动 nightly Release）");
+    expect(relayStep, "回传 step 解析不出来").toBeTruthy();
+    expect(
+      relayStep,
+      "回传 step 没点既有入口 `ci-ga-desktop-relay.mjs`（别把上传链抄进 workflow 内联）",
+    ).toContain("node scripts/ci-ga-desktop-relay.mjs");
+    expect(relayStep, "回传 step 缺 continue-on-error —— 回传失败会反过来把构建结论判红").toContain(
+      "continue-on-error: true",
+    );
+    expect(relayStep, "回传 step 没接专用 CNB_RELEASE_TOKEN（repo-release:rw）").toContain(
+      "CNB_RELEASE_TOKEN",
+    );
+    /* #3607 诉求原意含「只要 build-tauri-release.ps1 那个纯壳、dev server 照用」：
+     * 回传步要把现成 app.exe 的落点传给脚本，否则脚本只回传完整成品，纯壳那一半
+     * 又随会话消失。判据钉的是接线形状（env 名 + 现成产物路径），不是脚本内部实现。 */
+    expect(relayStep, "回传 step 没把纯壳产物落点 DESKTOP_SHELL_EXE 传给脚本").toContain(
+      "DESKTOP_SHELL_EXE",
+    );
+    expect(relayStep, "纯壳落点不是 target/release/app.exe（别指向打包器后的别处）").toContain(
+      "src-tauri/target/release/app.exe",
+    );
 
     /* 锁：两个触发口同一把，且是桌包自己那把 —— 与每日档共用会互相掐停。
      * 两个触发口也要都在（ISSUE #3297：按钮要一双手，而 `#3302` 那格 NSIS 现场读数
@@ -3067,7 +3270,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("GA 每日档的前提格：安装、库表都必须排在单测之前", () => {
-    const steps = gaDailySteps();
+    const steps = gaDailyJobSteps();
     const suite = steps.findIndex((n) => n.startsWith("单元测试"));
     expect(suite, "「单元测试」不在 GA daily.yml 里").toBeGreaterThan(-1);
     /* 顺序不是风格：每次构建都是全新 runner（hosted runner 即弃机），没有
@@ -3283,17 +3486,23 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* §13.5.30 把「某格该属哪一级」判成工程判断，但「撤出后必须登记、且登记名不许还在跑」可以判；`GATE_TIER_LEDGER` 就是册子（档位手写登记）。
      * ① 各档清单 ⇄ 总账双向相等（清单多/少一格而总账没同批改、或总账漏登记都红 —— 这正是「两边一起被删」时仍绿的那个洞）；
      *    #3504 起每日档的实际格名 = GA daily.yml 的 step 名（检出 / 装 pnpm / 装 Node / 环境证据四行前提设施豁免）；
+     *    #3662 起多一面：**GA pr-gate.yml 的 step 名**（ga-pr 档）—— 此前 GA 的 PR job 不在任何一面里，
+     *    「记成 retired 却仍在 PR 上跑」对判据隐形（`受影响用例` / `固定结构用例` 两格）；
      * ② `retired` 的格不许再出现在任何清单里（降级≠删除），且必须带理由。 */
     const text = readRegisteredConfig();
     const prOrder = new Set(registeredGateOrder(text));
     const pushOrder = new Set(registeredPushGateOrder(text));
     const dailyOrder = new Set(gaDailySteps().filter((n) => !GA_DAILY_INFRA_STEPS.includes(n)));
-    const running = new Set([...prOrder, ...pushOrder, ...dailyOrder]);
+    /* #3662 起多一面：GA pr-gate.yml 的 step 名（ga-pr 档）—— 此前 GA 的 PR job
+     * 不在任何一面里，「记成 retired 却仍在 PR 上跑」对判据隐形。 */
+    const gaPrOrder = new Set(gaPrGateSteps());
+    const running = new Set([...prOrder, ...pushOrder, ...dailyOrder, ...gaPrOrder]);
 
     const tiers: Array<[GateTier, Set<string>, string]> = [
       ["PR", prOrder, "COMFYAPP_CI_GATES"],
       ["push", pushOrder, "COMFYAPP_CI_PUSH_GATES"],
       ["daily", dailyOrder, "GA daily.yml steps"],
+      ["ga-pr", gaPrOrder, "GA pr-gate.yml steps"],
     ];
     for (const [tier, actual, source] of tiers) {
       const booked = new Set(GATE_TIER_LEDGER.filter((e) => e.tier === tier).map((e) => e.name));
@@ -3326,14 +3535,93 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     }
   });
 
+  it("ga-pr 档：GA 的 PR 侧没有「跑了没人记」的格（ISSUE #3662）", () => {
+    /* 这一条是 #3662 的承重：**GA 的 PR 侧跑的每一格都要在总账里有一席**，
+     * 且豁免名单是显式的（`GA_PR_INFRA_STEPS`）—— 「悄悄加一个不判红也不立案的 step」
+     * 仍会被多出来的一格红（与 daily 段同一条口径）。
+     *
+     * 它治的是哪一类红：`.cnb.yml` 的 PR 档自 #3378 起只剩「站内回读结论 + 红了立案」
+     * 两件纯 API 动作 ⇒ PR 主列的代码判据全在 GA 侧；而总账此前只认三份清单
+     * （CNB 的 PR / push / GA daily.yml）⇒ GA 的 PR job 一处都不在 ⇒
+     * 「记成 retired 却仍在 PR 上跑」这一形态对判据隐形（`受影响用例` / `固定结构用例`
+     * 两格：账上写着「2026-11-02 撤到每日全量单测」，而 `pr-gate.yml` 里两个 job
+     * 每个 PR 都跑、且在判决的 `needs:` 里）。 */
+    const steps = gaPrGateSteps();
+    expect(
+      steps.length,
+      "GA pr-gate.yml 里解析不出 step 名 —— 这一条判据没有对象了（GA_STEP_RE 的取法变了？）",
+    ).toBeGreaterThan(0);
+    /* 前提设施豁免名单里的名字**必须真在文件里**：豁免名单写了一个已经不存在的
+     * step 名 ⇒ 它会静默变成「什么都豁免不掉」的隐形偏移。 */
+    const present = new Set(
+      [...readFileAt(ROOT, PR_GATE_YML).matchAll(GA_STEP_RE)].map((m) => m.groups?.name ?? ""),
+    );
+    for (const infra of GA_PR_INFRA_STEPS) {
+      expect(
+        present.has(infra),
+        `前提设施豁免名单里的「${infra}」在 pr-gate.yml 里已经不存在了 —— ` +
+          "豁免名单会静默失效（那几行要么改了名，要么那一步已经不在文件里）",
+      ).toBe(true);
+    }
+    /* 反向：GA 的 PR 侧跑的每一格都必须在总账的 ga-pr 段有一席（逐字名）。 */
+    const booked = new Set(GATE_TIER_LEDGER.filter((e) => e.tier === "ga-pr").map((e) => e.name));
+    for (const step of new Set(steps)) {
+      expect(
+        booked.has(step),
+        `GA 的 PR 侧跑的「${step}」在门格总账里没有登记 —— ` +
+          "「GA 的 PR job 跑了没人记」这一族对判据隐形（ISSUE #3662）。" +
+          "补一条 ga-pr 档条目（名字逐字），或在 GA_PR_INFRA_STEPS 里显式豁免并写明理由",
+      ).toBe(true);
+    }
+  });
+
   /**
    * 「每日档红 ⇒ 自动立案」这格不能只在登记上有个名字（ISSUE #2274 / #3436）：上一条管「撤下的格还在不在」，这条管**新加那格点的还是同一个入口**。
    * 名字还在、step 被换成别的命令，两边都绿而自动立案谁都不做 —— 那是这一族（判据在场、执行者不在场）唯一的失效形态。
-   * #3504 起执行者是 GA daily.yml 末尾的 `失败立案` step（CNB 单子，CNB_ISSUE_TOKEN 同通道）：
-   * 位置也钉 —— `if: failure()` + 排在环境证据之后，红的那一跑先出证据再立案。
+   * #3504 起执行者在 GA daily.yml（CNB 单子，CNB_ISSUE_TOKEN 同通道）。
+   *
+   * ⚠️ #3563 起它必须是**下游 job**（`needs: daily`），不是 `daily` 里的一个 step —— 这一条
+   * 与「点的还是同一个脚本」同等承重，所以两边都钉：脚本只认 jobs API 的 `steps[].conclusion`，
+   * 跑在 `daily` 内部时那个 job 自己还在飞，实测读回 0 个红格 ⇒ 零写入（run `42915112854`）。
+   * 那种失效**不会红**：`--no-block` 把退码 2 折成 0，屏幕上与「今天没红」逐字同形。
+   * 「先出环境证据、再立案」的顺序现在由 `needs: daily` 承担（整个上游 job 跑完才轮到它），
+   * 不再靠同一 job 内的 step 排位 —— 所以这里钉 `needs`，不钉跨 job 的下标大小。
    */
-  it("GA 每日档的失败立案点的是 `ci-ga-daily-failure-issue.mjs --no-block`，且带 if: failure()", () => {
-    const step = gaStepBlock(DAILY_YML, DAILY_GATE_EXECUTORS["每日失败立案"] ?? "");
+  it("GA 每日档的失败立案是 `needs: daily` 的下游 job，点 `ci-ga-daily-failure-issue.mjs --no-block`", () => {
+    const filingName = DAILY_GATE_EXECUTORS["每日失败立案"] ?? "";
+    expect(filingName, "`DAILY_GATE_EXECUTORS` 里没有「每日失败立案」的执行者登记").toBeTruthy();
+
+    /* ① 反面：`daily` 那个 job 里**不许**再有这一格。挪回去 = 回到 #3563 的静默零写入。 */
+    const dailyJob = gaJobBlock(DAILY_YML, "daily");
+    expect(dailyJob, "GA daily.yml 里解析不出 `daily` job —— 这条判据没有对象了").toBeTruthy();
+    expect(
+      gaDailyJobSteps(),
+      "「失败立案」回到了 `daily` job 内部 —— 那个 job 还在飞时 jobs API 读不到它自己的红格，" +
+        "立案会静默零写入（#3563 / run 42915112854 打印「红格 0 个」）",
+    ).not.toContain(filingName);
+
+    /* ② 正面：它在一个 `needs: daily` 的下游 job 里，且 job 级限形齐全。 */
+    const filingJob = gaJobBlock(DAILY_YML, "daily-failure-issue");
+    expect(
+      filingJob,
+      "GA daily.yml 里没有 `daily-failure-issue` job ⇒ 自动立案没有执行者了",
+    ).toBeTruthy();
+    const job = filingJob ?? "";
+    expect(
+      job,
+      "立案 job 必须 `needs: daily` —— 上游不先 completed，读到的 conclusion 就不是终值（#3563）",
+    ).toMatch(/^ {4}needs: daily$/m);
+    expect(
+      job,
+      "立案 job 不是 `if: failure()` —— 绿的那一跑也要付这笔钱（起 runner + 读 jobs API + 写单）",
+    ).toMatch(/^ {4}if: failure\(\)$/m);
+    expect(
+      job,
+      "立案 job 必须带 `continue-on-error: true` —— 立案发不出去不该给这一跑叠第二个红；但**不静默**，失败话术由脚本原样打印",
+    ).toMatch(/^ {4}continue-on-error: true$/m);
+
+    /* ③ 点的还是同一个入口 + 同一枚旗标（名字在、命令被换掉是这一族唯一的失效形态）。 */
+    const step = gaStepBlock(DAILY_YML, filingName);
     expect(step, "GA daily.yml 里没有「失败立案」step ⇒ 自动立案没有执行者了").toBeTruthy();
     const run =
       step
@@ -3342,21 +3630,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         ?.trim() ?? "";
     expect(run).toContain("scripts/ci-ga-daily-failure-issue.mjs");
     expect(run).toContain("--no-block");
+    /* 这一格必须真的落在下游 job 里，而不是「文件里某处有个同名 step」。 */
     expect(
-      step,
-      "「失败立案」不是 `if: failure()` —— 绿的那一跑也要付这笔钱（读 jobs API + 写单）",
-    ).toContain("if: failure()");
-    expect(
-      step,
-      "「失败立案」必须带 `continue-on-error: true` —— 立案发不出去不该给这一跑叠第二个红；但**不静默**，失败话术由脚本原样打印",
-    ).toContain("continue-on-error: true");
-    /* 排在环境证据之后：两者同挂 `if: failure()`，中间不夹 `always()` 的格，
-     * 日志里「先读环境证据、再立案」的顺序才是读得出来的（§13.5.4 只报事实、不代写因果）。 */
-    const steps = gaDailySteps();
-    expect(
-      steps.indexOf(DAILY_GATE_EXECUTORS["每日失败立案"] ?? ""),
-      "「失败立案」必须排在「环境证据」之后 —— 先出证据、再立案的顺序要读得出来",
-    ).toBeGreaterThan(steps.indexOf("环境证据（失败时：dmesg 的 OOM 行 + 内存读数）"));
+      job.includes(`      - name: ${filingName}`),
+      "「失败立案」step 不在 `daily-failure-issue` job 块里 —— 上面那三条 job 级限形钉的就不是它",
+    ).toBe(true);
   });
 
   /**

@@ -162,28 +162,45 @@ describe("useModelTags", () => {
     expect(result.current.busy).toBe(false);
   });
 
-  it("deleteTag：未绑定的标签直接删，不弹二次确认", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm");
+  it("deleteTag：未绑定的标签直接删，不挂待确认态", async () => {
     const { result } = renderHook(() => useModelTags({ initialTags: [] }));
     await act(async () => {
       await result.current.deleteTag("z-image", 0);
     });
-    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(result.current.pendingDelete).toBeNull();
     expect(vanilla.workflowModel.delete.mutate).toHaveBeenCalledWith({
       name: "z-image",
     });
-    confirmSpy.mockRestore();
   });
 
-  it("deleteTag：仍绑定工作流时先二次确认，取消即不发请求", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+  it("deleteTag：仍绑定工作流时先挂待确认态（不发请求），确认后才删（ISSUE #3771）", async () => {
     const { result } = renderHook(() => useModelTags({ initialTags: [] }));
     await act(async () => {
       await result.current.deleteTag("z-image", 3);
     });
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("已绑定 3 个工作流"));
+    // 同步 confirm() 已被非阻塞弹窗取代：先挂待确认态，不动任何请求 ——
+    // 未被处置的同步对话框会把内嵌浏览器的同源渲染进程以 0 CPU 卡死。
+    expect(result.current.pendingDelete).toEqual({ name: "z-image", count: 3 });
     expect(vanilla.workflowModel.delete.mutate).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
+    await act(async () => {
+      await result.current.confirmDeleteTag();
+    });
+    expect(vanilla.workflowModel.delete.mutate).toHaveBeenCalledWith({
+      name: "z-image",
+    });
+    expect(result.current.pendingDelete).toBeNull();
+  });
+
+  it("deleteTag：待确认态可取消，取消不发请求（ISSUE #3771）", async () => {
+    const { result } = renderHook(() => useModelTags({ initialTags: [] }));
+    await act(async () => {
+      await result.current.deleteTag("z-image", 3);
+    });
+    act(() => {
+      result.current.cancelDeleteTag();
+    });
+    expect(result.current.pendingDelete).toBeNull();
+    expect(vanilla.workflowModel.delete.mutate).not.toHaveBeenCalled();
   });
 
   it("renameTag：成功返回 true，并本地立即改名（不等父组件刷新）", async () => {

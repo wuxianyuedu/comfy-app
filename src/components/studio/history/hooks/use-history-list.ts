@@ -42,8 +42,12 @@ const EMPTY_WORKFLOW_IO: WorkflowIOMap = {};
 
 export type HistoryListController = {
   cancel: (id: string) => Promise<void>;
+  /** 取消删除（ConfirmDialog 的关闭侧，ISSUE #3771）。 */
+  cancelRemove: () => void;
   canLoadMore: boolean;
   closeDetail: () => void;
+  /** 确认删除待删目标（ConfirmDialog 的确认侧，ISSUE #3771）。 */
+  confirmRemove: () => Promise<void>;
   /** 各状态计数，key 为 FilterKey 或任务 status。 */
   counts: Record<string, number>;
   detail: TaskDetail | null;
@@ -64,7 +68,10 @@ export type HistoryListController = {
   /** 进行中任务的模拟进度 Map。 */
   progressMap: Record<string, number>;
   refresh: () => void;
-  remove: (id: string) => Promise<void>;
+  /** 打开删除确认弹窗（非阻塞，ISSUE #3771）。 */
+  remove: (id: string) => void;
+  /** 待删除的任务 id（ConfirmDialog 的 open 侧，ISSUE #3771）。 */
+  removeTarget: string | null;
   retry: (task: TaskItem) => Promise<void>;
   retryingId: string | null;
   setSort: (sort: SortKey) => void;
@@ -204,29 +211,39 @@ export function useHistoryList(): HistoryListController {
     [refresh, report],
   );
 
-  const remove = useCallback(
-    async (id: string) => {
-      if (!confirm("删除此任务记录？已生成的文件不会从磁盘删除。")) {
-        return;
-      }
-      await runAsyncAction(
-        async () => {
-          await deleteTask.mutateAsync({ id });
-          /* 乐观移除：直接改查询缓存，避免本地镜像 state */
-          queryClient.setQueryData(
-            trpc.task.list.queryKey(undefined),
-            /* 键自带 DataTag：`old` 的形状由查询结果推导，不再手写窄类型 */
-            (old) => (old ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) } : old),
-          );
-          if (detailId === id) {
-            setDetailId(null);
-          }
-        },
-        { report, failureText: "删除失败", successText: "已删除任务" },
-      );
-    },
-    [deleteTask, detailId, report, queryClient, trpc],
-  );
+  /* 删除走**非阻塞确认弹窗**（`ConfirmDialog`，ISSUE #3771）：原生 `confirm()`
+   * 是同步对话框 —— 在内嵌浏览器（IAB）里弹出后若无人处置，同源渲染进程的
+   * 主线程会以 0 CPU 整体卡死（连无应用 JS 的 splash.html 都冻结）。这里只
+   * 记下待删目标，由视图挂 ConfirmDialog 承接确认。 */
+  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+  const remove = useCallback((id: string) => {
+    setRemoveTarget(id);
+  }, []);
+  const cancelRemove = useCallback(() => {
+    setRemoveTarget(null);
+  }, []);
+  const confirmRemove = useCallback(async () => {
+    const id = removeTarget;
+    if (!id) {
+      return;
+    }
+    setRemoveTarget(null);
+    await runAsyncAction(
+      async () => {
+        await deleteTask.mutateAsync({ id });
+        /* 乐观移除：直接改查询缓存，避免本地镜像 state */
+        queryClient.setQueryData(
+          trpc.task.list.queryKey(undefined),
+          /* 键自带 DataTag：`old` 的形状由查询结果推导，不再手写窄类型 */
+          (old) => (old ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) } : old),
+        );
+        if (detailId === id) {
+          setDetailId(null);
+        }
+      },
+      { report, failureText: "删除失败", successText: "已删除任务" },
+    );
+  }, [deleteTask, detailId, removeTarget, report, queryClient, trpc]);
 
   /* 「重试」= `task.retry` 的**原样重跑**（#2481）：后端按原任务的 execPayload +
    * 参数 / 参考图重建一个 QUEUED 任务，返回新 taskId。成功文案带上新任务号
@@ -281,6 +298,9 @@ export function useHistoryList(): HistoryListController {
     closeDetail,
     cancel,
     remove,
+    removeTarget,
+    confirmRemove,
+    cancelRemove,
     retry,
   };
 }

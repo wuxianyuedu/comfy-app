@@ -136,9 +136,9 @@ function SettingsLoadError({ errorText, onRetry }: { errorText: string; onRetry:
     <div className="grid min-h-[60vh] place-items-center overflow-y-auto p-6">
       <div className="w-full max-w-xl text-center">
         <p className="text-danger-strong">加载设置失败，请刷新重试</p>
-        <p className="text-muted-foreground mt-2 truncate text-xs" title={errorText}>
-          {errorText}
-        </p>
+        <Hint label={errorText}>
+          <p className="text-muted-foreground mt-2 truncate text-xs">{errorText}</p>
+        </Hint>
         {/* 「完整错误」是一个 disclosure：用 `Disclosure` 而不是自绘 chevron +
             条件渲染（规范 16 §16.2.4.13；自绘那份没有 aria-expanded/aria-controls）。
             一排按钮里只有中间那个是折叠开关，其余两个走 `leading`/`trailing`——

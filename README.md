@@ -95,7 +95,7 @@ Comfy-APP-T3/
 | `CHANGELOG.md`                            | 变更日志（**不要直接改**：条目先进 `changelog.d/` 碎片，见 [规范 §13.10.5](docs/standards/13-提交与-code-review.md#13105-碎片化落地改-changelogd不改-changelogmd)） |
 | `CHANGELOG-archive.md`                    | 历史条目归档：`changelog.d/` 建成至 2026-10 的全部碎片原文（逐份收录、一字未改），供检索历史变更（**它入库给人读，但不进代码索引** —— 单份体量最大，检索走 `grep`/`git`，见下方 `.qoderignore` 那一行）                                                                 |
 | `changelog.d/`                            | 变更日志碎片：一件变更一个文件，避免并行分支在 `CHANGELOG.md` 上冲突；**只放尚未并入的条目**                                                                        |
-| `.qoderignore`                            | Qoder 代码索引的排除表（**不要手改**：由 `scripts/qoder-ignore.mjs` 渲染，`pnpm qoder:ignore` 写 / 刷新、`pnpm qoder:ignore:check` 比对；绝大多数条目本来也被 `.gitignore` 忽略，另有**入库但刻意只出索引**的那一组（`docs/generated/` 生成态镜像、`CHANGELOG-archive.md` 历史归档）—— 它们给人读、由配对门禁判同批，只是不该让每次文档检索都命中两份；改完要重启 Qoder CN 进程才生效，见 [规范 §12.20](docs/standards/12-代码组织与文件结构.md#1220-重复的手工流程收成有名字的入口能做成工具的就做成工具)）  |
+| `.qoderignore`                            | Qoder 代码索引的排除表（**不要手改**：由 `scripts/qoder-ignore.mjs` 渲染，`pnpm qoder:ignore` 写 / 刷新、`pnpm qoder:ignore:check` 比对；绝大多数条目本来也被 `.gitignore` 忽略，另有**入库但刻意只出索引**的 `CHANGELOG-archive.md` 历史归档 —— 它给人读，只是不该让每次文档检索都命中历史碎片；`docs/generated/` 生成态镜像自 #3586 起**不再入库**（谁需要谁本地 `pnpm doc:render`），这一条排除项保留是为了本地生成后仍不进索引；改完要重启 Qoder CN 进程才生效，见 [规范 §12.20](docs/standards/12-代码组织与文件结构.md#1220-重复的手工流程收成有名字的入口能做成工具的就做成工具)）  |
 
 > **双击入口都在 `tools/` 下**（启动类 `tools/start/`、构建类 `tools/build/`），
 > 根目录只保留工程配置与文档，见下方「双击入口速查」与 `tools/README.md`。
@@ -193,6 +193,8 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 建库                                    | `pnpm db:push`                                 | （双击启动链路会自动做）          |
 | 生成原文文档                            | `pnpm doc:gen`                                 | `tools/docs/generate-docs.ps1`    |
 | 起组件工作台                            | `pnpm storybook`                               | `tools/start/storybook.ps1`       |
+| 截「改后真实运行」界面（UI 改动交付截图） | `pnpm screenshot [路由]`                       | `tools/start/take-screenshot.ps1`  |
+| 录一段页面 / 操作的性能 trace（性能取证） | `pnpm perf:trace [路由]`                          | `tools/start/perf-trace.ps1`       |
 | 出一份节点镜像的操作计划（装机提速）    | `pnpm ci:image-plan`                           | （Windows 侧同一条命令）          |
 | 组装免安装版（portable zip）             | `pnpm package:portable`                        | `tools/build/package-portable.ps1` |
 | 探测开发盘红利并调优                    | `pnpm dev:drive`                               | `tools/start/tune-dev-drive.ps1`  |
@@ -409,12 +411,15 @@ pnpm dev          # 前端开发服务器
 pnpm build        # Next.js 生产构建（standalone）
 pnpm check        # eslint + tsc --noEmit
 pnpm ship         # 交出去：提交 → push → 开 PR → 等 CI（--mode auto 全托管 / --mode confirm 关键步确认 / 合并要显式）
+pnpm report:session --range A..B  # 开发汇报骨架（第五节：本轮发现**已立案的号**，不是「要不要提单」的待办；§13.10.9 / §13.10.14）
 pnpm test         # Vitest 单元测试
+pnpm shell:smoke  # 真实 Windows 会话的壳冒烟（前台 / Z 序 / 闪烁收口；需先重编 release 壳，见 §11.10.4）
 pnpm test:e2e     # Playwright e2e
 pnpm run docs     # 生成 API 文档到 docs/api（必须是 run docs：pnpm docs 是内建命令）
 pnpm storybook    # 起组件工作台（http://127.0.0.1:6006）
 pnpm db:push      # 同步 Drizzle schema 到 db.sqlite（非交互、复核建表结果）
 pnpm env:init     # 生成/补齐本地 .env（随机密钥 + 本地 OAuth 占位值）
+pnpm deps:prune   # 清掉 node_modules/.pnpm 里不在当前依赖图的残留条目（--dry-run 只看清单；pnpm store prune 管不到这一层）
 pnpm qoder:ignore # 写/刷新 .qoderignore（代码索引排除表；改完要重启 Qoder CN 才生效）
 ```
 

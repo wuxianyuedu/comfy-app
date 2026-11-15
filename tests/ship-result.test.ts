@@ -14,7 +14,12 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createShipResultSink, formatShipResult, readShipResult } from "../scripts/ship-result.mjs";
+import {
+  createShipResultSink,
+  formatShipResult,
+  readShipResult,
+  runResultQuery,
+} from "../scripts/ship-result.mjs";
 
 const ROOT = process.cwd();
 
@@ -185,5 +190,93 @@ describe("best-effort 与回读分档", () => {
     expect([0, 2]).toContain(r.status);
     expect(r.stdout).toContain('"found"');
     expect(r.stdout).toContain('"path"');
+  });
+});
+
+describe("状态与事件（ISSUE #3923）", () => {
+  it("阶段行拆成结构化事件：stage 名 + key=value facts，时刻取自注入的 now", () => {
+    let t = 0;
+    const sink = createShipResultSink({ root: ROOT, resolve, now: () => `T${(t += 1)}` });
+    sink.append("[ship] ▶ 新建 PR | pr=3923 | title=feat(ship): 状态与事件 | state=open");
+    const r = readShipResult(ROOT, resolve).result;
+    const stageEvents = r?.events.filter((e) => e.kind === "stage") ?? [];
+    expect(stageEvents).toHaveLength(1);
+    /* T1 是 startedAt、T2 是 start 事件，阶段事件是 T3。 */
+    expect(stageEvents[0]).toMatchObject({
+      at: "T3",
+      stage: "新建 PR",
+      facts: { pr: "3923", title: "feat(ship): 状态与事件", state: "open" },
+    });
+    expect(r?.stages).toEqual(["新建 PR | pr=3923 | title=feat(ship): 状态与事件 | state=open"]);
+  });
+
+  it("start / conclusion / finished 各有一条事件；finished 带退码与三态", () => {
+    const sink = createShipResultSink({ root: ROOT, resolve });
+    sink.append("[ship] 结论：exit 0 —— 全绿到终态");
+    sink.finish(0);
+    const r = readShipResult(ROOT, resolve).result;
+    expect(r?.events.map((e) => e.kind)).toEqual(["start", "conclusion", "finished"]);
+    expect(r?.events.at(-1)?.facts).toEqual({ exit: "0", status: "green" });
+  });
+
+  it("编排被打断 ⇒ interrupted 事件带上原因", () => {
+    const sink = createShipResultSink({ root: ROOT, resolve });
+    sink.fail(new Error("SIGTERM"));
+    const last = readShipResult(ROOT, resolve).result?.events.at(-1);
+    expect(last?.kind).toBe("interrupted");
+    expect(last?.text).toBe("SIGTERM");
+  });
+
+  it("事件超上限 ⇒ 保留最新 200 条并如实标记截断", () => {
+    const sink = createShipResultSink({ root: ROOT, resolve });
+    for (let i = 0; i < 250; i += 1) {
+      sink.append(`[ship] ▶ 阶段 ${i} | n=${i}`);
+    }
+    const r = readShipResult(ROOT, resolve).result;
+    expect(r?.events).toHaveLength(200);
+    expect(r?.eventsTruncated).toBe(true);
+    /* start + 250 条阶段 = 251 条，丢掉最旧 51 条 ⇒ 首条是「阶段 50」。 */
+    expect(r?.events[0]).toMatchObject({ kind: "stage", stage: "阶段 50" });
+    expect(r?.events.at(-1)).toMatchObject({ kind: "stage", stage: "阶段 249" });
+  });
+
+  it("原子落盘：写完不留临时文件，轮询方读到的总是完整 JSON", () => {
+    const sink = createShipResultSink({ root: ROOT, resolve });
+    sink.append("[ship] ▶ 预检通过 | branch=feat/x | sha=abc1234");
+    sink.finish(0);
+    expect(fs.readdirSync(fakeGitDir)).toEqual(["ship-result.json"]);
+    expect(() => {
+      JSON.parse(fs.readFileSync(resultFile(), "utf8"));
+    }).not.toThrow();
+  });
+
+  it("旧版 v1 文件没有 events 字段 ⇒ 按空清单读，格式化不炸", () => {
+    fs.writeFileSync(
+      resultFile(),
+      JSON.stringify({ version: 1, status: "running", startedAt: "T0", stages: [], lines: [] }),
+      "utf8",
+    );
+    const reading = readShipResult(ROOT, resolve);
+    expect(reading.found).toBe(true);
+    expect(formatShipResult(reading).join("\n")).toContain("事件（0）");
+  });
+
+  it("runResultQuery：human / json / 退码三分（没有上一次 = 合法读数 0）", () => {
+    const out: string[] = [];
+    expect(runResultQuery({ log: (s) => out.push(s), root: ROOT, resolve })).toBe(0);
+    expect(out.join("\n")).toContain("没有上一次 ship 的落盘读数");
+
+    const sink = createShipResultSink({ root: ROOT, resolve });
+    sink.append("[ship] ▶ 预检通过 | branch=feat/x | sha=abc1234");
+    sink.finish(0);
+    const json: string[] = [];
+    expect(runResultQuery({ log: (s) => json.push(s), root: ROOT, json: true, resolve })).toBe(0);
+    /* 字符串断言代替 JSON.parse：`parsed.found` 那一族 any 扩散是 lint 的硬红。 */
+    const jsonText = json.join("");
+    expect(jsonText).toContain('"found": true');
+    expect(jsonText).toContain('"kind": "finished"');
+
+    fs.writeFileSync(resultFile(), "{ 半截", "utf8");
+    expect(runResultQuery({ log: () => undefined, root: ROOT, resolve })).toBe(2);
   });
 });

@@ -275,6 +275,13 @@ export const task = sqliteTable(
     // 与 task_status_finished_idx 分开：那条服务孤儿判决（status, finishedAt），
     // 本条服务领取谓词（status, claimedBy），语义不同不合并。
     index("task_claimed_by_idx").on(t.status, t.claimedBy),
+    // ⚠️ 刻意**没有** (projectId, shotId) 的活动任务唯一索引（#3849）：同一镜头
+    // 同时至多一条 QUEUED/RUNNING 任务（重复扣款形态）的库级闸做不了 ——
+    // drizzle-kit 0.31 的 SQLite diff 对部分索引（WHERE）与表达式索引都会
+    // 永远 DROP+CREATE、两次 push 不收敛（#3849 实测，普通列索引无此问题），
+    // 建了会让 `pnpm db:push` 永久红。该约束由应用层承：单发生成的
+    // KeyedAsyncMutex 锁内查重（generate.ts）+ 整季批量入队的占用集合与互斥
+    // （series-generation.ts），口径见规范 §8.9 ②。
   ],
 );
 
@@ -369,6 +376,10 @@ export const workflowModelTagToWorkflowTemplate = sqliteTable(
     /* 反向索引：按标签找它绑定的模板（`templateHasTagIdsWhere` 的 IN 查询），
      * 没有这侧索引时连接表全扫。 */
     index("wmtt_tag_idx").on(t.workflowModelTag),
+    // 同一对 (标签, 模板) 只许一行（#3849）：setModelTags 的「删了再插」在并发
+    // 交错时曾落下重复关联行、计数虚高（#3835/#3870 的现场），此前只靠
+    // immediate 事务把交错串行化 —— 这里补上库级兜底。
+    uniqueIndex("wmtt_tag_wt_uniq").on(t.workflowModelTag, t.workflowTemplate),
   ],
 );
 
@@ -456,6 +467,8 @@ export const remoteModel = sqliteTable(
     maxOutputTokens: integer("maxOutputTokens"),
     /** 输入类型（JSON 数组：text / image / video / pdf） */
     inputTypes: text("inputTypes", { mode: "json" }),
+    /** 输出类型（JSON 数组：text / image / video，#3577）；NULL = 未标注 */
+    outputTypes: text("outputTypes", { mode: "json" }),
     /** 模型能力（JSON 数组：structured-output / native-web-search / system-messages） */
     capabilities: text("capabilities", { mode: "json" }),
     /** 推理等级（JSON 数组；各家叫法不同，只做去重不做白名单） */
@@ -465,8 +478,14 @@ export const remoteModel = sqliteTable(
     /** 「智能配置」：按模型名推断窗口 / 输出上限 / 输入类型（关掉 = 全部手填） */
     smartConfig: integer("smartConfig", { mode: "boolean" }).notNull().default(true),
     /** 工坊按模式的输入/输出适配器（JSON 数组字符串；RemoteModeAdapter[]）。
-     *  配置后工坊按该模型在对应模式下的字段映射发起请求，替代统一猜测。 */
+     *  配置后工坊按该模型在对应模式下的字段映射发起请求，替代统一猜测。
+     *  #3622/#3659 起是模型级 envelope（RemoteModelAdaptersDoc）：含模型级
+     *  端点路径 endpointPath（#3656 设置页下拉也落这一格）。 */
     workshopAdapters: text("workshopAdapters"),
+    /** 额外请求体字段（#3626）：raw JSON 对象文本，透传进请求 body 且覆盖运行时默认
+     *  组装（用途是把厂商特有的字段原样带上，如 `extra_body.response_format`）。
+     *  文本 / 图像 / 视频三种 kind 都生效；空串 / NULL = 未配置、不发送。 */
+    extraBody: text("extraBody"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),

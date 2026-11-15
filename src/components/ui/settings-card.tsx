@@ -26,6 +26,7 @@ export const SETTINGS_ROW_CLASS = "border-border bg-surface-row rounded-lg borde
  * `description` 是可选的一行副说明，落在标题之下、正文之上（对齐 `ui/page-header` 的口径：只写「答案在别处拿不到的那句话」，与标题同义反复就不传 —— 不传就不渲染那一行，卡片立刻矮下来）。 */
 export function SettingsCard({
   title,
+  titleExtra,
   description,
   children,
   className,
@@ -44,9 +45,16 @@ export function SettingsCard({
    * 「创建备份 / 恢复备份」）每张卡片仍各带自己的标题。
    */
   title?: string;
+  /**
+   * 标题行右侧的附加物（ISSUE #3625 reopen：数据存放位置徽标放在**标题处**，
+   * 不再坐在卡片正文里）—— 徽标、状态点这类「跟着这一格走的小标识」从这儿进，
+   * 与标题同行、右对齐；不挤正文。没有标题 / 副说明时它单独成行（仍算卡片头）。
+   */
+  titleExtra?: React.ReactNode;
 }) {
   const hasDescription = Boolean(description);
-  const hasHeader = title !== undefined || hasDescription;
+  const hasTitleExtra = titleExtra !== undefined && titleExtra !== null;
+  const hasHeader = title !== undefined || hasDescription || hasTitleExtra;
   return (
     <ShadcnCard
       className={cn(
@@ -62,8 +70,13 @@ export function SettingsCard({
           差距（16px vs 14px 的差距在同一屏里读不出来）。没有标题时整行不占位。 */}
       {hasHeader ? (
         <CardHeader className="border-border-subtle border-b py-3">
-          {title === undefined ? null : <CardTitle className="u-title">{title}</CardTitle>}
-          {hasDescription ? <p className="text-ink-muted text-xs">{description}</p> : null}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <div className="min-w-0">
+              {title === undefined ? null : <CardTitle className="u-title">{title}</CardTitle>}
+              {hasDescription ? <p className="text-ink-muted text-xs">{description}</p> : null}
+            </div>
+            {hasTitleExtra ? <div className="shrink-0">{titleExtra}</div> : null}
+          </div>
         </CardHeader>
       ) : null}
       <CardContent className="py-4">{children}</CardContent>

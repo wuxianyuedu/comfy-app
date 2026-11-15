@@ -5,13 +5,22 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+
+import { ensureStorybookAssets } from "../scripts/storybook-assets.mjs";
 
 const ROOT = resolve(".");
 const SOURCES = join(ROOT, ".storybook", "data-sources.tsx");
 const ASSETS = join(ROOT, ".storybook", "assets");
 const MAIN = join(ROOT, ".storybook", "main.ts");
 const ASSET_SCRIPT = join(ROOT, "scripts", "storybook-assets.mjs");
+
+/* 前置：这条用例判的是「注入层清单 ⇄ 磁盘」的对位，不该假设谁替环境生成过文件。
+   `.storybook/assets/` 是 postinstall 现生成的 gitignored 夹具，而本机 / 缓存命中的安装
+   （pnpm 不重跑 postinstall）都会让它缺席 ⇒ 环境先行现生成，用例自己不依赖上一次 install。 */
+beforeAll(() => {
+  ensureStorybookAssets(ASSETS);
+});
 
 const sources = readFileSync(SOURCES, "utf8");
 const main = readFileSync(MAIN, "utf8");
@@ -51,13 +60,26 @@ describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
     expect(sources).toContain("现有的：");
   });
 
-  it("media 源的名字清单与磁盘上的真文件对得上", () => {
+  it("media 源的名字清单与磁盘上的真文件对得上", async () => {
     const names = readConstArray("MEDIA_SOURCE_NAMES");
     expect(names.length, "media 源一个名字都没有 —— 判据在空转").toBeGreaterThan(0);
 
     /* `missing.png` 是**故意不存在**的那一个（失败兜底那条分支的现场），
        所以用它做判据的锚点：它在清单里，就必须真的不在磁盘上。 */
     expect(names, "失败兜底的现场没了（`missing.png`）—— 那条分支没人验").toContain("missing.png");
+
+    /* 资产是**现生成件**（`.gitignore` 的 `/.storybook/assets/`，不入库）：干净检出的
+       CI runner 上这个目录不存在，「清单 ⇄ 磁盘」会红在环境而不是红在漂移（ISSUE
+       #3746）。真名缺了就地用**生成脚本本体**补齐（`ensureStorybookAssets` 幂等、
+       只写这个 gitignore 目录），再判一致性 —— 判据从此不依赖「这台机器碰巧跑过
+       storybook」。`missing.png` 永远不补：它必须真的不在。 */
+    const missingOnDisk = names.filter(
+      (name) => name !== "missing.png" && !existsSync(join(ASSETS, name)),
+    );
+    if (missingOnDisk.length > 0) {
+      const { ensureStorybookAssets } = await import("../scripts/storybook-assets.mjs");
+      ensureStorybookAssets(ASSETS);
+    }
 
     for (const name of names) {
       const onDisk = existsSync(join(ASSETS, name));

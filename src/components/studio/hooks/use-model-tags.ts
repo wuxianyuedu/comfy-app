@@ -24,7 +24,11 @@ export type TagItem = {
 export type ModelTagsController = {
   addTag: () => Promise<void>;
   busy: boolean;
-  /** 删除：count>0 时先弹二次确认（删掉会一并解除工作流绑定）。 */
+  /** 取消待确认的删除（ConfirmDialog 的关闭侧，ISSUE #3771）。 */
+  cancelDeleteTag: () => void;
+  /** 确认删除待确认目标（ConfirmDialog 的确认侧，ISSUE #3771）。 */
+  confirmDeleteTag: () => Promise<void>;
+  /** 删除：count>0 时先挂待确认态（非阻塞弹窗，删掉会一并解除工作流绑定）。 */
   deleteTag: (name: string, count: number) => Promise<void>;
   /** 新增框草稿。 */
   draft: string;
@@ -34,6 +38,8 @@ export type ModelTagsController = {
    * `errors.get(id)` 决定这一行标不标红，`errors.get(null)` 承载整表级错误。
    */
   errors: ItemErrors;
+  /** 待确认的删除目标（ConfirmDialog 的 open 侧，ISSUE #3771）。 */
+  pendingDelete: { count: number; name: string } | null;
   /**
    * 重命名。成功后本地立即改名（不等父组件刷新，避免「旧名闪一下」），
    * 返回 true 表示成功——调用方据此关闭内联编辑器。
@@ -125,17 +131,13 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
     void result;
   }, [draft, refresh, onChanged, errors, addBusy]);
 
-  const deleteTag = useCallback(
-    async (name: string, count: number) => {
-      // 二次确认：标签若仍绑定到工作流，删除会一并解除所有绑定，避免误删。
-      if (count > 0) {
-        const ok = window.confirm(
-          `该标签「${name}」已绑定 ${count} 个工作流。\n删除后这些工作流将一并解除绑定，且不可撤销。\n\n确定要继续吗？`,
-        );
-        if (!ok) {
-          return;
-        }
-      }
+  /* 删除走**非阻塞确认弹窗**（`ConfirmDialog`，ISSUE #3771）：原生
+   * `window.confirm()` 是同步对话框 —— 内嵌浏览器（IAB）里未被处置时，
+   * 同源渲染进程的主线程会以 0 CPU 整体卡死。绑定数 > 0 时只记下待删目标，
+   * 由视图挂 ConfirmDialog 承接确认；无绑定的直接删。 */
+  const [pendingDelete, setPendingDelete] = useState<{ count: number; name: string } | null>(null);
+  const runTagDelete = useCallback(
+    async (name: string) => {
       await runAsyncAction(
         async () => {
           const d = await vanillaApi.workflowModel.delete.mutate({ name });
@@ -155,6 +157,28 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
     },
     [refresh, onChanged, errors],
   );
+  const deleteTag = useCallback(
+    async (name: string, count: number) => {
+      // 二次确认：标签若仍绑定到工作流，删除会一并解除所有绑定，避免误删。
+      if (count > 0) {
+        setPendingDelete({ name, count });
+        return;
+      }
+      await runTagDelete(name);
+    },
+    [runTagDelete],
+  );
+  const confirmDeleteTag = useCallback(async () => {
+    const target = pendingDelete;
+    if (!target) {
+      return;
+    }
+    setPendingDelete(null);
+    await runTagDelete(target.name);
+  }, [pendingDelete, runTagDelete]);
+  const cancelDeleteTag = useCallback(() => {
+    setPendingDelete(null);
+  }, []);
 
   const renameTag = useCallback(
     async (oldName: string, newName: string): Promise<boolean> => {
@@ -198,6 +222,9 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
     errors,
     addTag,
     deleteTag,
+    pendingDelete,
+    confirmDeleteTag,
+    cancelDeleteTag,
     renameTag,
   };
 }

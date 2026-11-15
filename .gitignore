@@ -69,6 +69,8 @@ build_log*.txt
 # generated & temp
 /generated/
 /public/generated/
+# 文档生成态镜像（#3586：谁需要谁本地生成 —— `pnpm doc:render`；不再进 git）
+/docs/generated/
 /temp/
 /temp/comfy-cli/
 # 全量单测分文件耗时读数的 junit 落点（ISSUE #2697）：仓库内、非链接、不入库。
@@ -167,3 +169,9 @@ _tmp_*/
 # 的 viaEmbed）——它是**这台机器**的产物，不是仓库内容：进了 git 就等于把「谁在哪台机上
 # 装过什么」当成事实分发出去。装了就不再下第二遍的判据读的是盘上有没有它，与 git 无关。
 /python-embeded/
+
+# 门禁自证的临时探针（tests/__tmp-*，跑完当场删；强杀残留不进库、不进收集面统计）
+/tests/__tmp-*/
+
+# 门禁自证的临时探针（tests/__tmp-*.test.ts，跑完当场删；强杀残留不进库）
+/tests/__tmp-*

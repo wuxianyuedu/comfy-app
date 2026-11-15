@@ -13,12 +13,13 @@ import { runAsyncAction } from "~/lib/async-action";
 
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { Textarea } from "~/components/ui/textarea";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { mediaPreviewUrl } from "~/lib/media/media-url";
 import { readFileAsDataUrl } from "~/lib/file-io";
 import { NumberField } from "~/components/ui/number-field";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import { DEFAULT_SHOT_SIZE, type ShotSizeState } from "~/components/workshop/shot-size-config";
 import type { SizeScene } from "~/lib/media/size-presets";
@@ -84,8 +85,7 @@ export function EncapsulationTestForm({
     setTexts((prev) => withExposedValue(prev, id, next));
   };
 
-  /* 图片口的选取：`entryId` 与`file` 一起给，回调身份稳定（`useFilePicker`
-   * 的 Input 靠 props 身份做 memo，回调每次都变会让隐藏 input 反复卸载重挂）。 */
+  /* 图片口的选取：`entryId` 与`file` 一起给。 */
   const pickImage = useCallback(
     (entryId: string, file: File) => {
       setError("");
@@ -287,9 +287,9 @@ function ImageField({
     <div className="flex-col gap-1">
       <FieldLabel label={entry.label} unwired={entry.targetIoKey === null} />
       <div className="border-border bg-surface flex items-center gap-2 rounded-lg border px-2 py-1.5">
-        <span className="text-muted-foreground/70 text-3xs min-w-0 flex-1 truncate font-mono">
+        <TruncatedText className="text-muted-foreground/70 text-3xs min-w-0 flex-1 truncate font-mono">
           {displayValue(value)}
-        </span>
+        </TruncatedText>
         <Button
           className="text-2xs h-auto rounded-md px-2 py-1"
           disabled={disabled || uploading}
@@ -297,7 +297,7 @@ function ImageField({
         >
           {uploading ? "上传中…" : "选择图片"}
         </Button>
-        <picker.Input />
+        <FilePicker {...picker.inputProps} />
       </div>
       {previewUrl !== null && previewUrl !== "" && (
         <MediaThumbnail

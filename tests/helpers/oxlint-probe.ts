@@ -11,7 +11,22 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 const ROOT = path.resolve(import.meta.dirname, "../..");
+
+/** oxlint JSON 报告的 diagnostics 守卫（B5 清账）：filename / message 都可选串。 */
+function isDiagnostics(value: unknown): value is Array<{ filename?: string; message?: string }> {
+  return (
+    isUnknownArray(value) &&
+    value.every(
+      (d) =>
+        isRecord(d) &&
+        (d.filename === undefined || typeof d.filename === "string") &&
+        (d.message === undefined || typeof d.message === "string"),
+    )
+  );
+}
 const OXLINT_BIN = path.join(ROOT, "node_modules", "oxlint", "bin", "oxlint");
 /** 探针配置必须住在仓库内：`jsPlugins` 的 specifier 按**配置所在目录**解析。 */
 const CACHE_DIR = path.join(ROOT, "node_modules", ".cache");
@@ -64,9 +79,12 @@ export function probeRules(
       throw new Error(`oxlint 探针没输出 JSON（exit ${String(r.status)}）：${r.stderr}`);
     }
 
-    const report = JSON.parse(r.stdout) as {
-      diagnostics?: Array<{ filename?: string; message?: string }>;
-    };
+    const reportParsed: unknown = JSON.parse(r.stdout);
+    const diagnostics: unknown = isRecord(reportParsed) ? reportParsed.diagnostics : [];
+    if (!isDiagnostics(diagnostics)) {
+      throw new Error(`oxlint 探针的 JSON 报告形状变了：${r.stdout.slice(0, 200)}`);
+    }
+    const report = { diagnostics };
     const map = new Map<string, Array<string>>();
     for (const diag of report.diagnostics ?? []) {
       const name = path.basename(diag.filename ?? "");

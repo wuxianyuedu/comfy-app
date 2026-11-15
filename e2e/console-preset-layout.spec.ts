@@ -8,15 +8,20 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function openConsole(page: Page): Promise<void> {
   await page.goto("/workspace");
-  await expect(page.getByRole("tablist", { name: "已打开的视图" })).toBeVisible();
-  await page.getByRole("button", { name: "控制台", exact: true }).first().click();
-  await expect(page.getByRole("tab", { name: /控制台/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tablist", { name: "已打开的视图" })).toBeVisible({
+    timeout: 30_000,
+  });
+  const consoleBtn = page.getByRole("button", { name: "控制台", exact: true }).first();
+  await expect(consoleBtn).toBeVisible();
+  await consoleBtn.click();
+  await expect(consoleBtn).toHaveAttribute("data-active", "true", { timeout: 20_000 });
+  await expect(page.locator('[data-view="console"]:not(.hidden)')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId("console-preset-list")).toBeVisible();
 }
 
-/** 可见那一屏里的预设列表（视图栈按下页签逐屏渲染，不活跃的带 `hidden`）。 */
+/** 可见那一屏里的预设列表（视图栈按当前页显隐，不活跃的带 `hidden`）。 */
 const presetList = (page: Page) =>
-  page.locator('[data-view]:not(.hidden) [data-testid="console-preset-list"]');
+  page.locator('[data-view="console"]:not(.hidden) [data-testid="console-preset-list"]');
 
 test.describe("控制台 · 常用命令分组头排布 @critical", () => {
   test("组头不被挤成竖线：宽度接近侧栏、高度在两行以内", async ({ page }) => {
@@ -24,7 +29,9 @@ test.describe("控制台 · 常用命令分组头排布 @critical", () => {
     const list = presetList(page);
     const listWidth = (await list.boundingBox())!.width;
 
-    const headers = page.locator('[data-view]:not(.hidden) [data-slot="disclosure-trigger"]');
+    const headers = page.locator(
+      '[data-view="console"]:not(.hidden) [data-slot="disclosure-trigger"]',
+    );
     const count = await headers.count();
     expect(count).toBeGreaterThan(3);
 
@@ -48,7 +55,9 @@ test.describe("控制台 · 常用命令分组头排布 @critical", () => {
 
   test("展开的那一组落回组头下方（向下展开，不是横着铺）", async ({ page }) => {
     await openConsole(page);
-    const first = page.locator('[data-view]:not(.hidden) [data-slot="disclosure"]').first();
+    const first = page
+      .locator('[data-view="console"]:not(.hidden) [data-slot="disclosure"]')
+      .first();
     const trigger = first.locator('[data-slot="disclosure-trigger"]');
     const panel = first.locator('[data-slot="disclosure-panel"]');
 

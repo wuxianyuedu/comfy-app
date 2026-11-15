@@ -602,6 +602,31 @@ export function inFlightStages(json) {
 }
 
 /**
+ * 「没跑成的格名」—— 真失败族 + 可见性面里状态是错的那几格（ISSUE #3341）。
+ *
+ * `--rerun-ci` 的前置读数用它把「上一跑红在哪」念出来：人靠格名认「这是节点形
+ * （Prepare / GitHub 镜像同步那一类 egress 断网、runner 掉线）还是内容形
+ * （lint / 用例）」，这正是「再推一笔会不会白烧」的判断依据。取的是
+ * `get-build-status -v` 里**已有**的字段，一次平台调用都不加。
+ * 被取消的格不在里面 —— 那一跑没有结论，读数走「被取消」那一支，不冒充红。
+ *
+ * @param {any} json `cnb build get-build-status -v` 的解析结果
+ * @returns {string[]} 格名列表（去重、保序；没有就空数组）
+ */
+export function failedStageNames(json) {
+  const outcome = classifyBuildOutcome(json);
+  /** @type {string[]} */
+  const names = [];
+  for (const ref of [...outcome.failed, ...outcome.endFailed]) {
+    const name = ref.name || ref.id;
+    if (name && !names.includes(name)) {
+      names.push(name);
+    }
+  }
+  return names;
+}
+
+/**
  * 毫秒 → 「2h24m」这种读法（只用于把工具的兜底超时念成人话）。
  *
  * @param {number | null} ms 毫秒（null / 非正数 ⇒ 空串，调用方据此少念一句）
@@ -629,6 +654,47 @@ function humanDuration(ms) {
 function numericOrNull(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * 「GA 回调结论回读」格的名字（`.cnb.yml` 里那格的本名）。
+ *
+ * 这一条流水线的形态：CNB 侧只有 Prepare + GA 回调结论回读 + 收尾几格，
+ * **门禁本体在 GA** —— 轮询 / 诊断的读数要靠它分辨「11 秒的绿是谁给的」
+ * （ISSUE #3620）。
+ */
+export const GA_READOUT_STAGE_NAME = "GA 回调结论回读";
+
+/**
+ * 这一跑里「GA 回调结论回读」那一格的读数（ISSUE #3620）。
+ *
+ * 有这一格 = 这一跑的门禁本体在 GA、CNB 侧只是回读 —— 它与「一条只有六格的
+ * 小流水线」在签名上同形，轮询只报构建级 success 时读者分不清绿是谁给的。
+ * 纯函数：从 `get-build-status -v` 的读数里按格名找，找到带出 status 与
+ * duration（毫秒；平台的 duration 字段是毫秒，ISSUE #2442 同一口径）。
+ *
+ * @param {any} json `cnb build get-build-status -v` 的解析结果
+ * @returns {{name: string, status: string, durationMs: number | null} | null}
+ *   没有这一格时 null（那就是普通的 CNB 侧流水线，不需要特别读数）。
+ */
+export function gaReadoutStage(json) {
+  const data = json && typeof json === "object" ? json.data : null;
+  const table =
+    data?.pipelinesStatus && typeof data.pipelinesStatus === "object" ? data.pipelinesStatus : {};
+  for (const key of Object.keys(table)) {
+    const p = table[key];
+    const stages = p && Array.isArray(p.stages) ? p.stages : [];
+    for (const s of stages) {
+      if (s && typeof s.name === "string" && s.name.includes(GA_READOUT_STAGE_NAME)) {
+        return {
+          name: s.name,
+          status: typeof s.status === "string" ? s.status : "",
+          durationMs: numericOrNull(s.duration),
+        };
+      }
+    }
+  }
+  return null;
 }
 
 /**

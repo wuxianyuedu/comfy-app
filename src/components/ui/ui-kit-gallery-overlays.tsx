@@ -230,10 +230,14 @@ export function OverlaysSection() {
               { value: "remote", label: "在线模型" },
             ]}
             onSelect={() => undefined}
+            /* 触发器只能是「内容」：PopoverTrigger 自身已是 <button>，
+             * 这里再塞 <Button> 会渲染出 button 套 button（无效 HTML，
+             * 水合直接失败）。真实用法（工作坊 chip）也是传 span。 */
             trigger={
-              <Button aria-label="选择模型" size="icon-sm" variant="outline">
-                <Settings2 aria-hidden />
-              </Button>
+              <span className="text-ink-soft inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs">
+                <Settings2 aria-hidden className="size-3.5" />
+                选择模型
+              </span>
             }
             value="local"
           />

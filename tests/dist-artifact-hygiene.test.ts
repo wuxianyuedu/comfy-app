@@ -4,12 +4,16 @@
  * 编译期内嵌进 exe —— secret 明文分发、开发库变成出厂数据；CI 不跑 `build-desktop`，只能靠「清单 + 产物层检查」两道守。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import { symlinkDir } from "./helpers/symlink-dir";
+
+import { collectLauncherScriptClosure } from "../scripts/launcher-closure.mjs";
 
 // 运行时真的调用白名单剔除（不是只读源码文本）：嵌套条目 / 未登记新文件的
 // 行为只有真删一次才看得出来。
@@ -30,14 +34,17 @@ const stripModule = readFileSync(
   join(process.cwd(), "scripts", "standalone-private-inputs.mjs"),
   "utf8",
 );
+const devArtifactsModule = readFileSync(
+  join(process.cwd(), "scripts", "standalone-dev-artifacts.mjs"),
+  "utf8",
+);
 const checker = readFileSync(
   join(process.cwd(), "scripts", "check-standalone-contents.cjs"),
   "utf8",
 );
-/* SAFETY: 类型断言已复核 */
-const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
-  scripts: Record<string, string>;
-};
+const pkgParsed: unknown = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8"));
+const pkgScripts: unknown = isRecord(pkgParsed) ? pkgParsed.scripts : undefined;
+const pkg = { scripts: isStringRecord(pkgScripts) ? pkgScripts : {} };
 
 /* ── 白名单判据的两个取样器（供下面的用例共用）────────────────────────── */
 
@@ -57,41 +64,13 @@ function allowedScriptsFromChecker(source: string): Array<string> {
  * 说明符出现即成立（ESM 加载期解析整张图）。行注释须先剥掉：JSDoc 的 `import("../lockfile/lock-diff.d.mts")` 是类型引用。
  */
 function collectRelativeClosure(entry: string): Array<string> {
+  // 闭包算法的唯一实现在 scripts/launcher-closure.mjs（affected-tests.mjs 的增量面
+  // 判据用同一份，ISSUE #3812）；这里保持本文件的旧口径：入参绝对路径、返回相对
+  // `scripts/` 的路径数组，断言文本与 RUNTIME_SCRIPTS 的条目形状都不用动。
   const scriptsRoot = join(process.cwd(), "scripts");
-  const seen = new Set<string>();
-  const walk = (file: string): void => {
-    const rel = relative(scriptsRoot, file).split("\\").join("/");
-    if (seen.has(rel)) {
-      return;
-    }
-    seen.add(rel);
-    const code = readFileSync(file, "utf8")
-      .split("\n")
-      // 只剥「整行是注释」的形态：这几份脚本的 import 都在行首，足够用且不会
-      // 误伤字符串里的 `//`（例如 URL）
-      .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
-      .join("\n");
-    for (const m of code.matchAll(
-      /from\s+"(?<fromSpec>\.[^"]+)"|import\(\s*"(?<importSpec>\.[^"]+)"\s*\)/g,
-    )) {
-      const spec = m.groups?.fromSpec ?? m.groups?.importSpec;
-      if (spec === undefined || spec === "") {
-        continue;
-      }
-      const target = resolve(dirname(file), spec);
-      // `../src/**` 由 Next 的编译产物提供（不在 scripts/ 的白名单管辖内），
-      // `.d.mts` 之类的类型声明也不参与运行期加载
-      if (!target.startsWith(scriptsRoot) || !target.endsWith(".mjs")) {
-        continue;
-      }
-      if (!existsSync(target)) {
-        continue;
-      }
-      walk(target);
-    }
-  };
-  walk(entry);
-  return [...seen];
+  return [...collectLauncherScriptClosure({ entry })]
+    .map((rel) => relative(scriptsRoot, join(process.cwd(), rel)).split("\\").join("/"))
+    .sort();
 }
 
 describe("开发机私有输入的剔除清单（单一实现，两处复用）", () => {
@@ -170,9 +149,11 @@ describe("桌包载荷里的第三方包文档：判它的删它，谁都不让�
   });
 });
 
-/* ── 开发期文件与内部门禁脚本：白名单剔除（ISSUE #489）─────────────────── */
-const stripDevArtifactsBody = stripModule.slice(
-  stripModule.indexOf("export function stripDevArtifacts"),
+/* ── 开发期文件与内部门禁脚本：白名单剔除（ISSUE #489）───────────────────
+ * 实现从 standalone-private-inputs.mjs 拆到 standalone-dev-artifacts.mjs（#3646 收尾拆分），
+ * 文本形状断言跟着落到实现所在文件；导出面与行为仍由 standalone-private-inputs.mjs 承载。 */
+const stripDevArtifactsBody = devArtifactsModule.slice(
+  devArtifactsModule.indexOf("export function stripDevArtifacts"),
 );
 
 describe("开发期文件与内部门禁脚本的白名单剔除", () => {
@@ -191,7 +172,7 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
       '"changelog.d"',
       '"docs"',
     ]) {
-      expect(stripModule, `剔除清单缺少 ${name}`).toContain(name);
+      expect(devArtifactsModule, `剔除清单缺少 ${name}`).toContain(name);
     }
   });
 
@@ -268,11 +249,47 @@ type CheckerExports = {
   STATIC_ALLOWED_TOPLEVEL: Array<string>;
 };
 
+/** 「名 → 串」映射守卫（B5 清账）。 */
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((entry) => typeof entry === "string");
+}
+
+/** CheckerExports 的消费形状守卫（B5 清账）：13 个导出逐个对型，不再整段断言。 */
+function isCheckerExports(value: unknown): value is CheckerExports {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const fns = [
+    "allowedTopLevelFor",
+    "checkDir",
+    "collectFiles",
+    "isAllowedSrcPath",
+    "missingRequiredRuntimeFiles",
+  ];
+  const lists = [
+    "ALLOWED_SRC_FILES",
+    "REQUIRED_HOST_FILES",
+    "REQUIRED_PAYLOAD_FILES",
+    "REQUIRED_RUNTIME_FILES",
+    "STANDALONE_ALLOWED_TOPLEVEL",
+    "STATIC_ALLOWED_TOPLEVEL",
+  ];
+  const fnsOk = fns.every((key) => typeof value[key] === "function");
+  const listsOk = lists.every((key) => isUnknownArray(value[key]));
+  const forbiddenOk =
+    isUnknownArray(value.FORBIDDEN) &&
+    value.FORBIDDEN.every(
+      (pair) => isUnknownArray(pair) && typeof pair[0] === "string" && pair[1] instanceof RegExp,
+    );
+  return fnsOk && listsOk && typeof value.RUNTIME_DIR === "string" && forbiddenOk;
+}
+
 function checkerExports(): CheckerExports {
-  /* SAFETY: 类型断言已复核 */
-  return createRequire(import.meta.url)(
-    "../scripts/check-standalone-contents.cjs",
-  ) as CheckerExports;
+  const mod: unknown = createRequire(import.meta.url)("../scripts/check-standalone-contents.cjs");
+  if (!isCheckerExports(mod)) {
+    throw new Error("check-standalone-contents.cjs 的导出面形状变了 —— 重读该脚本再改这份守卫");
+  }
+  return mod;
 }
 
 function checkerForbidden(): Array<[string, RegExp]> {

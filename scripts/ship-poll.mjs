@@ -31,11 +31,13 @@ import {
   classifyBuildOutcome,
   downstreamSkipped,
   enrichStageErrors,
+  gaReadoutStage,
   inFlightStages,
   progressReadout,
   stalledStages,
   stallReadout,
 } from "./ci-build-readout.mjs";
+import { formatDurationMs } from "../src/lib/time-format.ts";
 import {
   classifyPrMergeable,
   CODE,
@@ -204,6 +206,19 @@ export async function pollUntilTerminal(ctx) {
         }
       }
       if (v.state !== "running" && v.state !== "unknown") {
+        /* 「这一跑的绿是谁给的」要念出来（ISSUE #3620）：门禁本体在 GA 的那一跑，
+         * CNB 侧只有「GA 回调结论回读」一格，11 秒 success 的读数会让读者以为
+         * 「11 秒跑完了三十几格」或「CI 没真跑却报了绿」。读数不改退码、不改
+         * 断流判据 —— 只把「绿来自 GA 回读」这件事说出口。 */
+        const ga = gaReadoutStage(statusJson);
+        if (ga) {
+          const dur = ga.durationMs ? formatDurationMs(ga.durationMs) : "";
+          log(
+            `[ship]   这一跑的门禁本体在 GA（CNB 侧只有「${ga.name}」` +
+              `${ga.status ? `· ${ga.status}` : ""}${dur ? ` · 等了 ${dur}` : ""}）；` +
+              `要看 GA 侧逐格读数：pnpm ship --gh-logs ${number ? String(number) : "<run-id 或 PR 号>"}`,
+          );
+        }
         break;
       }
     } else {

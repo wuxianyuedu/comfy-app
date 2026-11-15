@@ -92,8 +92,8 @@ import {
   isWholeTrackRun,
   notWholeTrackNotice,
   pushFreshnessLedger,
-  writeFreshness,
 } from "./freshness-ledger.mjs";
+import { writeFreshness } from "./freshness-ledger-write.mjs";
 
 const ROOT = resolveRepoRoot();
 

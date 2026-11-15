@@ -8,6 +8,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import {
   linkFollowability,
   listLinks,
@@ -339,11 +341,17 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
 
 describe("接线在位", () => {
   it("这一步挂在 pnpm build 链上，且顺序是 修链接 → 数产物 → 冒烟", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "../package.json"), "utf8")) as {
-      scripts: { build: string };
-    };
-    const build = pkg.scripts.build;
+    const parsed: unknown = JSON.parse(
+      readFileSync(path.resolve(__dirname, "../package.json"), "utf8"),
+    );
+    if (
+      !isRecord(parsed) ||
+      !isRecord(parsed.scripts) ||
+      typeof parsed.scripts.build !== "string"
+    ) {
+      throw new Error("package.json 形状不对：scripts.build 缺失或不是字符串");
+    }
+    const build = parsed.scripts.build;
     const order = [
       "next build",
       "scripts/standalone-link-repair.mjs",

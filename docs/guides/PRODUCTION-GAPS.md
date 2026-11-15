@@ -977,8 +977,7 @@
       ② 客户端拿不到能分支的码，界面只能显示「出错了」（硬规则 4 的「用户可见出口」缺半句）；
       ③ 一次正常点击进 `trpc_error` 警告日志，把业务分支当故障报。
       **逐处判意图，没有机械替换**（19 处 / 7 个文件）：
-      | 分支 | 码 | 为什么 |
-      | --- | --- | --- |
+      | 分支 | 码 | 为什么 | | --- | --- | --- |
       | 那一行不存在 / 别人的行（`project` 3、`task` 2、`generate` 1、`workflow-model.rename` 1、`run` 写回 1） | `NOT_FOUND` | 越权与不存在同形，不给探测 id 用 |
       | 输入形状不合法（`material` 6：分类不在枚举 / 文件名清洗后为空 / 路径越界） | `BAD_REQUEST` | 是请求方的错，与服务端故障必须分开 |
       | 名字撞车（`skill` slug、`workflow-model` 重命名目标） | `CONFLICT` | 「与现存数据冲突」既不是不存在也不是故障 |
@@ -1099,7 +1098,7 @@
       原因读不出；改动面越大的提交越容易撞上，也就是治理线自己的批次最先撞。
       与本台账反复记的「绿 ≠ 跑过」是同一族的两面：**红也 ≠ 跑过**。
       修法与判据：启动那一步交给 `scripts/run-affected-tests.mjs`（`spawnSync(process.execPath,
-[vitest 的 ESM 入口, …])`，不经 cmd 层，上限回到 Win32 的 32767），按 24000 字符预算
+  [vitest 的 ESM 入口, …])`，不经 cmd 层，上限回到 Win32 的 32767），按 24000 字符预算
       **分块**且「宁可多起一次也不丢用例」；入口走 `require.resolve("vitest/package.json")` +
       `bin.vitest`，不写死 `node_modules/vitest/…`（pnpm 布局下顶层只是链接）。
       判据 `tests/hook-affected-launch.test.ts`（固定清单 19 → 20）钉四件：分块后**并集等于输入
@@ -1237,182 +1236,182 @@
       `src/components/studio/workflow-editor/hooks/use-workflow-detail-loader.ts`、
       `git show ab12a551^:src/app/api/images/route.ts`。
 - [~] **E3″ 端到端：81 条用例（`@critical` 覆盖 73 条）现在每日有一格真跑全档，欠的是真登录态**（E3 的 router 维度已收口；原记「3 spec / 31 用例」与「80 条 / 29 条 critical」两档体量都过时了）：
-      现状以 Playwright 自己的枚举为准（`pnpm exec playwright test --list` →
-      **81 tests in 21 files**；加 `--grep=@critical` → **73 tests in 19 files**，比"标了 `@critical`
-      的用例数"多，因为标记也挂在 `describe` 上、会带进整组子用例）：`e2e/*.spec.ts` 21 份
-      （像素那 5 份已随整档删除）。**执行者这一格不再是空的**：平台侧 `.cnb.yml` 的每日清单里
-      有 `每日全量E2E`，它跑的是**不带 `--grep` 的** `node scripts/e2e-run.mjs` ⇒ 81 条全档，
-      且 `每日生产构建` / `每日浏览器安装` 必须排在它之前（两道前提各有顺序判据）。
-      2026-10-21 那次每日跑实测到 `1 failed / 80 passed`、本格 100.0s（红在一条主题 token 断言，
-      三次 retry 同形 —— 见 `docs/audits/2026-10-21-timing-baseline-refs-volume.md` 的立案 5；
-      这一格此前**零执行记录**，是它前面的构建格一直红着把它挡住了）。
-      本地那一档仍然只有人敲的 `pnpm test:e2e`，pre-commit 只有一步读文本的
-      `freshness-gate.mjs`、不起 Playwright —— 这是刻意的分工（§13.5.21 那条「并发下的墙钟读数不可信」
-      同样适用于端到端）。
-      **本批把「每日自证」那一档的豁免通道修紧了**（`skippedReason` / `dirtyReason` 此前
-      从不比日期，一条理由替未来每一天作证 —— 本机那条 2026-10-08 的豁免让这一档天天报绿而
-      81 条一次没跑；口径与取舍见 §11.8），但那只解决「账面不许冒充」：
-      **剩下的一格是内容决定，不是机械活**：
-      ① 登录态 —— 现在**没有任何一条走完「登录 → 建项目 → 出图」的旅程**：
-      `critical-flows.spec.ts` 明写「不假装认证成功」，登录后视图全靠 `stubBackend` /
-      `stubTrpc` 与直接种 `localStorage`，没有 `storageState`、没有 setup project。
-      所以「壳起不来 / 会话过期 / 中间件改写」这类**只在真实 HTTP 栈上成立**的缺陷
-      依然没有执行者（A13 的产物口就是靠手工实测才发现的，见那条）。
-      另有一格是**判据时机错位**（已修）：`dirtySinceToday` 原先只问 `git log`，而
-      `pre-commit` 跑在提交之前 —— 一笔改了 `tests/` 的提交被判「今天没动过 `full` 这一档」
-      而放行，落地之后下一个提交才红，「改了就当天跑」执行成了「**改了由别人补跑**」。
-      取证面现在是「今天的提交 ∪ `git diff --cached`」，合成规则抽成纯函数 `combineEvidence`
-      （四种组合各有用例；`git` 问不出来时不新增结论）。口径见 §11.8。
+  现状以 Playwright 自己的枚举为准（`pnpm exec playwright test --list` →
+  **81 tests in 21 files**；加 `--grep=@critical` → **73 tests in 19 files**，比"标了 `@critical`
+  的用例数"多，因为标记也挂在 `describe` 上、会带进整组子用例）：`e2e/*.spec.ts` 21 份
+  （像素那 5 份已随整档删除）。**执行者这一格不再是空的**：平台侧 `.cnb.yml` 的每日清单里
+  有 `每日全量E2E`，它跑的是**不带 `--grep` 的** `node scripts/e2e-run.mjs` ⇒ 81 条全档，
+  且 `每日生产构建` / `每日浏览器安装` 必须排在它之前（两道前提各有顺序判据）。
+  2026-10-21 那次每日跑实测到 `1 failed / 80 passed`、本格 100.0s（红在一条主题 token 断言，
+  三次 retry 同形 —— 见 `docs/audits/2026-10-21-timing-baseline-refs-volume.md` 的立案 5；
+  这一格此前**零执行记录**，是它前面的构建格一直红着把它挡住了）。
+  本地那一档仍然只有人敲的 `pnpm test:e2e`，pre-commit 只有一步读文本的
+  `freshness-gate.mjs`、不起 Playwright —— 这是刻意的分工（§13.5.21 那条「并发下的墙钟读数不可信」
+  同样适用于端到端）。
+  **本批把「每日自证」那一档的豁免通道修紧了**（`skippedReason` / `dirtyReason` 此前
+  从不比日期，一条理由替未来每一天作证 —— 本机那条 2026-10-08 的豁免让这一档天天报绿而
+  81 条一次没跑；口径与取舍见 §11.8），但那只解决「账面不许冒充」：
+  **剩下的一格是内容决定，不是机械活**：
+  ① 登录态 —— 现在**没有任何一条走完「登录 → 建项目 → 出图」的旅程**：
+  `critical-flows.spec.ts` 明写「不假装认证成功」，登录后视图全靠 `stubBackend` /
+  `stubTrpc` 与直接种 `localStorage`，没有 `storageState`、没有 setup project。
+  所以「壳起不来 / 会话过期 / 中间件改写」这类**只在真实 HTTP 栈上成立**的缺陷
+  依然没有执行者（A13 的产物口就是靠手工实测才发现的，见那条）。
+  另有一格是**判据时机错位**（已修）：`dirtySinceToday` 原先只问 `git log`，而
+  `pre-commit` 跑在提交之前 —— 一笔改了 `tests/` 的提交被判「今天没动过 `full` 这一档」
+  而放行，落地之后下一个提交才红，「改了就当天跑」执行成了「**改了由别人补跑**」。
+  取证面现在是「今天的提交 ∪ `git diff --cached`」，合成规则抽成纯函数 `combineEvidence`
+  （四种组合各有用例；`git` 问不出来时不新增结论）。口径见 §11.8。
 - [~] **E4 msw 与 zod↔API 契约测试：契约那一半有了六格，msw 那一半是分工问题不是缺陷**（2026-10-22 复量）：
-      原记「msw 仅 7 文件使用」—— 这个数按今天的任一口径都不符，而**不同口径本来就给不同数**
-      （算「文件里出现过 msw 的 API」与算「直接 `import` msw 包」差一倍；复算分别是
-      `grep -rlE "from \"msw|from 'msw|setupServer" --include="*.ts" --include="*.tsx" src tests | wc -l`
-      与去掉 `setupServer` 那一项）。所以份数不抄进正文，只留这两条。
-      **并且「用得少」不是缺陷**：msw 与「替掉传输层」答的是两问 —— 前者测「客户端管线能把帧
-      装配成什么」，后者测「服务端真实发出的列集与前端镜像声明的列集是不是同一份」。
-      这条口径已写进 §11.3；同批把那里残留的 msw **v2 选项名**改掉（装的这份是 3.x，
-      键叫 `onUnhandledFrame`，`onUnhandledRequest` 已不在它的类型里 —— 照旧名写直接判类型红）。
-      · **已闭**：契约判据三格。第一格 `tests/task-list-wire-contract.test.ts`（`task.list` 的
-        `videoPath`，症状是「下载按钮一次没出现过」）；第二格
-        `tests/task-detail-images-wire-contract.test.ts`（`task.detail` 的 `images`）。
-        第二格的原状是 `src/lib/media/task-images-client.ts` 里一处 `as unknown as` 加一个手写
-        `type`：类型擦除之后**运行时没人知道客户端读了哪几列**，列被改名时的表现是相册永远空，
-        而 tsc / eslint / 那份只 mock 传输层返回固定对象的单测 / 覆盖率门槛全绿 —— 与第一格同形。
-        动手时把那份手写镜像换成 zod（这类判据需要一份**运行时可读**的形状），并抽出
-        `tests/helpers/wire-contract.ts`（JSON 传输 + `missingFromWire`）给两份共用 ——
-        第二份动手时照抄那四行就是 §12.12 意义上的孪生实现。变异两刀各打在一半上：
-        镜像多声明一列 → 正向那条红并点名线上缺的是哪列；镜像退化成逐字复制线上列 →
-        反向那条红（「镜像是收窄」不是装饰，少了这条正向能被一份「全抄」的实现无痛满足）。
-        第三格 `tests/comfy-state-envelope-contract.test.ts`（`/api/comfy/state` 那条长轮询的
-        **信封**）：这一格的形状与前两格不同 —— 不是「少一份运行时可读的镜像」，而是
-        **两边各自造了自己的帧**：客户端那份用例回答 `fetch` 的是它手写的 `change()` 夹具，
-        路由那份用 `toMatchObject({seq, kind})` 只点它关心的两列，两份都不引用对方的产物。
-        于是任何一侧改名或少发一列，`"use client"` 那份手写收窄就把每一帧判成坏帧丢掉
-        （`pollOnce` 把 `null` 当成「这一轮没有变化」），表现是「状态再也不即时更新」——
-        而这条通道存在的理由正是替掉那一拍 5s 轮询。判据不造新夹具帧：把**真路由**的回答
-        接进**真客户端**，用 `toEqual` 判整枚信封（这一条同时挡「少一列」与「多要求一列」
-        两个方向，而逐列断言正是 `toMatchObject` 漏掉那一维的原因），反向那一格要求漂移时
-        **一帧都不交**、而不是交出一个 `detail: undefined` 的半成品。变异两刀打在不同的半边：
-        消费侧不再要求 `detail` 是字符串 → **只有**反向那一格红（红话里带着那个半成品对象），
-        两边原有用例全绿 —— 客户端那 9 条喂的是自己手写的帧，线上少了什么它无从知道；
-        路由少发 `detail` → 本格三红，另加路由自己那条「200 + 那次变化的载荷」红
-        （`route.test.ts` 4 条里红 1 条，它那条断的是全形状）。
-        ⇒ 缺的从来不是「路由侧有没有读数」，而是**把两边接起来**那一格。
-      · **还留着**：其余具名导出的 schema 没有契约判据（复算
-        `grep -rnoE "^export const [A-Za-z0-9_]+ = z\." --include="*.ts" src | grep -v "\.test\."`）。
-        剩下的候选已按危害逐份定过性并立案：**ISSUE #2171**（`Character` / `Shot`
-        与 MCP 入参 schema 是两份互不引用的声明；`workflow-param-map` 的读边界与
-        写边界少一条「同读数」判据；`Subgraph*` 那两份**不适用** —— 它们自己就是那一侧的
-        运行时判据，对端是 ComfyUI 导出的 JSON，不是仓内另一份声明）。
-        **本轮收掉第二档（#2171）**：第七格 =
-        `tests/workflow-param-map-wire-contract.test.ts` —— `workflowParamMapInputSchema`（写边界）
-        与 `parseWorkflowParamMap`（读边界）此前**各有各的单测、谁都不判对方**，所以「一枚作者
-        画好的合法条目，过完两侧字段是否还是那一套」没有执行者。形状照第五格（#2160）：
-        同读数那一半 + **该不同的那一半**（库里存着一行脏值 → 写侧原样透传、读侧整列折 `null`）
-        各钉一格 —— 两侧并成一份的话，那两行里必有一行站不住。
-        **第一档当场量过改动面，本轮不做**（另立 **ISSUE #2499**，P2 —— 按 §13.10.9
-        「一条诉求一张单」在关 #2171 之前拆出，不随那张单一起关掉）：把 `Character` /
-        `CharacterPortrait` / `Shot`
-        三份接口换成 `z.output<typeof …>` 之后 `tsc` 报 **25 处错、散在 17 份文件**
-        （`TS2322` 13 / `TS2741` 7 / `TS2739` 3 / `TS2345` 2），而**根因不是字段清单不一致**，
-        是两侧对「谁可选」的编码不同：`characterInputSchema` 的外层 `.transform` 无条件写
-        `portraits: character.portraits?.map(…)` ⇒ 派生出来的那一侧把它读成「必带这个键
-        （值可为 `undefined`）」，而接口写的是 `portraits?:`；`TS2322` 那 13 处的原文全是
-        「某字段一边走 `?`、另一边必填」这一形（例：`Property 'motion' is optional in type …`）。
-        所以那一刀的正确顺序是**先对齐 schema 侧的可选性**（把 `createdAt` 的默认值下沉进
-        `characterPortraitInputSchema`、外层 transform 改条件展开），再换派生 ——
-        直接换派生等于用 17 份文件的签名变更，去换一条本来就该改的默认值语义。
-        同族还有一格不在 schema 面上：**ISSUE #2173** —— 这一族测试的 mock 边界样板
-        已在五份文件里各写一遍，而孪生判据的扫描根只有 `src`，`tests/**` 里的重复永远不红。
-      · **`normalizeExtraModels` 那一类手写逐字段判型收了（第六格）**。立案时说它是
-        「与入参 schema 两边各读各的」，动手时查实的形状更具体：**同一份归一在同一个文件里写了两遍** ——
-        `normalizeExtraModels`（读：DB / 载荷里那一列）与 `splitExtraModels`（写：设置页保存时
-        拆成本地候选 / 远端条目那两堆）各自的循环里都是那四步（名字 trim 后无名即丢、
-        接口空白折 `null`、密钥走 `normalizeEntryApiKey` 的三态、用途过白名单），
-        只差「按名字去重」那一条。加一列时改一处漏一处，而两处的失效形态还不一样
-        （读出来少一列 vs 保存时静默不落），所以谁都不会红。
-        现在那一处只有一个实现（`normalizeExtraModelItem`），两个出口各自只保留自己**多出来**的规则。
-        **刻意没有并成一份 schema**，这一条要说清理由：入参判据与读边界是两个角色 ——
-        前者判「这条请求能不能收下」（词表外的用途当场拒，那是客户端拼错了），
-        后者判「库里那一行读出来是什么」（词表外的用途落 `null`、整条留着 —— 历史上写坏一列
-        不该让一个模型从列表里消失）。把它们并成一份会把「拒」变成「静默降级」，或把「留着」变成
-        「保存不了」，两个方向都比现状坏。
-        于是新配的判据不判「是不是同一份代码」，判**同读数**：
-        `tests/remote-model-entry-wire-contract.test.ts` 里
-        「读边界与入参判据对同一枚合法条目给同样的字段」逐条把合法条目过 schema、再过两个出口，
-        三者必须 `toEqual`；另有一条「认不出的用途：入参拒收、读边界落 `null` 并留住整条」把
-        那条**该不同的**分界钉住。变异两刀各打一支：给 schema 加一列而读边界不认识它 →
-        同读数那条红（`expected …(3) to deeply equal …(4)`），只改写入分派那一支 →
-        同一条红而 router 那三格照绿。
-      · **远端模型的键名分叉与两份 `kind` 枚举已配上判据（第五格）**。立案时写的是
-        「两侧各写一份枚举」，动手时数出来的是**五份**同词表：路由入参那条行内
-        `z.enum(["chat","image","video"])`、工坊下拉里那条 `["chat","image","video"].includes(...)`
-        （它同时是 `normalizeExtraModels` 内层那段的重抄）、`UsageTestKind` 那一份、
-        `usage-field-editor` 的状态类型、以及 lib 里那份 `REMOTE_MODEL_KINDS`。
-        前两份是**这条通路上的**，本批收掉：路由入参改吃 `~/lib/llm/remote-model-schema`
-        导出的 `remoteModelEntrySchema`（`kind` 用 `z.enum(REMOTE_MODEL_KINDS)`），
-        工坊那处内联白名单改吃常量。后三份**刻意没动** —— 「实际使用测试能调哪几种用途」
-        与「一条远端模型可以标成哪几种用途」在今天的口径里是两个概念，
-        合并它们要先把概念对上，不是消重；这三份的账立在 **ISSUE #2170**（含三种口径的代价）。
-        键名那一半：`model`（弹窗草稿）↔ `name`（条目 / 库里那一列）的连接过去在
-        `submitDialog()` 里**写了两遍**（新增与编辑各一遍），而 `ModelDialogForm` 又是一份
-        与字段级 schema 同形、互不引用的 interface，controller 那侧还第三次抄了条目的参数形状。
-        现在桥只有一座（`remoteModelEntryFromDraft`，`RemoteModelDraftEntry` 是它唯一的输出形状，
-        弹窗状态与 controller 签名都从它派生），新增与编辑在「空白接口」上本来就同形
-        （写入侧都折成「跟随已保存的全局配置」），过去一边 `undefined` 一边 `null` 只是写法不同。
-        判据 `tests/remote-model-entry-wire-contract.test.ts`（5 条）走的是**真端到端**：
-        未判过的表单状态 → 真桥 → 真 `llmRouter.configSave` → 真仓储落库 → 真
-        `getConfigForClient` 脱敏回读，逐字段比。四格分别是：① 那一枚条目原样回读得到
-        （含三个收空 —— 桥收到的就是没判过的状态，所以收空是它的责任）；
-        ② `REMOTE_MODEL_KINDS` 里**每一个**用途都存得进去 —— 这就是「两份枚举」的语义判据，
-        比 grep 那条字面量强：抄的那一份换任何写法都能骗过 grep，骗不过一次真调用；
-        ③ 键名漂移那一形（写 `model`、不写 `name`）被拒**且库里零行**；
-        ④ `hasApiKey` 是只读视图字段，带着它回写不会凭空长出密钥。
-        变异两刀打在不同的半边：桥不再收 `model` 两侧的空 → 只有 ① 红
-        （`expected ' gpt-x ' to be 'gpt-x'`）；把服务端那一份词表抄窄成 `chat|image` →
-        ② 红并带着 zod 那句 `Invalid option`，而 ①③④ 照绿。
-      · **`generate.generate` 的入参通路已配上了（第四格）**。先订正一格我自己写错的判断
-        （立案时把「`RouterInputs` 派生」当成了手写镜像）：`RouterInputs["generate"]["generate"]`
-        那几处是**从 schema 反向派生的类型**，字段改名会当场编译红，所以它不是漂移面。
-        真正的洞在三条 cast 上（动手时数出来的是三条，不是立案时说的两条）：
-        `canvas-api.startGenerate(payload: Record<string, unknown>)` 传输前那句 `as`、
-        `use-generate.ts` 重试通路把**任务行 `params` 列里存的旧载荷**原样送回同一个 cast、
-        以及 `video-queue-client.submitGeneration` 把调用方给的 `params` 摊开之后 `as` 一次。
-        前两条的修法是**把判据搬到客户端读得到的地方**：入参 schema（原 `GenerateSchema`，
-        现 `generateInputSchema`）从 `src/server/api/routers/generate.ts` 搬进
-        `src/lib/workflow/workflow-generate-input.ts`
-        （与 `workflow-io-types.ts` 同一手法 —— 形状住 lib，服务端只是 `.input()` 它的消费方之一），
-        画布那段构造从 `runGenerate` 抽成纯函数 `buildCanvasGeneratePayload`（返回类型就是
-        `GenerateInput`，`startGenerate` 不再吃 `Record<string, unknown>` —— cast 存在的条件被拆掉），
-        重试走 `parseStoredGenerateInput`：同一个 schema，拒了就不发这次请求，
-        并把「缺哪一列、下一步做什么」拼成一句中文交给错误面板。
-        判据 `tests/generate-input-wire-contract.test.ts`（5 条）不造夹具载荷 —— 它把
-        **画布真构造出的那一份**接进**真 router**：① 收得下、且逐键等于落进 `params` 列的那一份
-        （含 `control_after_generate` 那条并数组的派生，与 random→randomize 的换算）；
-        ② 缺必填 `workflow` 时 router 与客户端预检**同拒**（拒的信号来自 schema，
-        不是来自画布那句界面 guard）；③ 从库里翻出来的载荷再过一次判据**仍然建得出任务**
-        （重试的幂等前提：写进去的是转换之后的形状）；④ 旧形状（`workflowInputs` 写成对象）
-        被拒时给的是**点名哪一列、并带着出路的一句中文**（内层仍嵌着 zod 那句英文原文，
-        没有冒充「全部本地化」——判据断的是那三样都在）；⑤ 三层 `paramMap`（`source.mode:<模式>`）在这一列上
-        仍是那份权威形状，没被 generate 这边又收窄一次。变异两刀打在不同的半边：
-        构造里漏掉 `referenceImages` 那一步 → **只有**①红（红话是「那一列 undefined」）；
-        把预检改成「不判、原样发」→ ②④红而①绿 —— 少了第二刀，①会被一份「客户端压根不判」
-        的实现无痛满足。
-        **第三条 cast 也收了（第三刀）**。它此前撞在一份有主的既有契约上 ——
-        `tests/task-list-wire-contract.test.ts` 显式判「`params` 缺省时照样把只有 `prompt`
-        的入参发出去」与「服务端拒绝时把拒绝原样交回调用方」；口径经业主点头改掉那份判据之后，
-        `submitGeneration` 现在先过同一个 `generateInputSchema`（`parseGenerateInput`，
-        函数从 `parseStoredGenerateInput` 改名 —— 它现在有两个生产者，名字不能只说重试那一半），
-        不合格就**不发**，红话点名那一列。顺带把视图那层的失败通道接上：草稿整批失败时
-        出口带的是**第一条真实原因**，不再是万金油一句「请检查参数或 ComfyUI 连接」——
-        这一条有判据（`src/components/studio/VideoQueueModal.test.tsx`），打它一刀的读数是
-        `Unable to find an element with the text: /缺少要执行的工作流/`。
-        · **照出另一格，且这一格不归我定**：`VideoQueueModal` 的草稿页签**没有工作流来源** ——
-          全仓唯一的挂载点（`src/app/workspace/page.tsx`）不传 `draftItems`，而页签内手动加的那一行
-          只有 `prompt`，`params` 恒为 `undefined`。也就是说这条提交通路**从来没有**产得出合法入参：
-          过去每条都在服务端撞墙、再被「逐条提交、跳过失败项」吞掉，所以没人看见。
-          现在它当场就说不成立，但**要真能用还得给草稿一个工作流选择器**（或把这一格显式关掉）
-          —— 那是产品决定，不在契约这一格里替他定；已立案 **ISSUE #2169**（带两条出路的代价与复算入口）。
+  原记「msw 仅 7 文件使用」—— 这个数按今天的任一口径都不符，而**不同口径本来就给不同数**
+  （算「文件里出现过 msw 的 API」与算「直接 `import` msw 包」差一倍；复算分别是
+  `grep -rlE "from \"msw|from 'msw|setupServer" --include="*.ts" --include="*.tsx" src tests | wc -l`
+  与去掉 `setupServer` 那一项）。所以份数不抄进正文，只留这两条。
+  **并且「用得少」不是缺陷**：msw 与「替掉传输层」答的是两问 —— 前者测「客户端管线能把帧
+  装配成什么」，后者测「服务端真实发出的列集与前端镜像声明的列集是不是同一份」。
+  这条口径已写进 §11.3；同批把那里残留的 msw **v2 选项名**改掉（装的这份是 3.x，
+  键叫 `onUnhandledFrame`，`onUnhandledRequest` 已不在它的类型里 —— 照旧名写直接判类型红）。
+  · **已闭**：契约判据三格。第一格 `tests/task-list-wire-contract.test.ts`（`task.list` 的
+  `videoPath`，症状是「下载按钮一次没出现过」）；第二格
+  `tests/task-detail-images-wire-contract.test.ts`（`task.detail` 的 `images`）。
+  第二格的原状是 `src/lib/media/task-images-client.ts` 里一处 `as unknown as` 加一个手写
+  `type`：类型擦除之后**运行时没人知道客户端读了哪几列**，列被改名时的表现是相册永远空，
+  而 tsc / eslint / 那份只 mock 传输层返回固定对象的单测 / 覆盖率门槛全绿 —— 与第一格同形。
+  动手时把那份手写镜像换成 zod（这类判据需要一份**运行时可读**的形状），并抽出
+  `tests/helpers/wire-contract.ts`（JSON 传输 + `missingFromWire`）给两份共用 ——
+  第二份动手时照抄那四行就是 §12.12 意义上的孪生实现。变异两刀各打在一半上：
+  镜像多声明一列 → 正向那条红并点名线上缺的是哪列；镜像退化成逐字复制线上列 →
+  反向那条红（「镜像是收窄」不是装饰，少了这条正向能被一份「全抄」的实现无痛满足）。
+  第三格 `tests/comfy-state-envelope-contract.test.ts`（`/api/comfy/state` 那条长轮询的
+  **信封**）：这一格的形状与前两格不同 —— 不是「少一份运行时可读的镜像」，而是
+  **两边各自造了自己的帧**：客户端那份用例回答 `fetch` 的是它手写的 `change()` 夹具，
+  路由那份用 `toMatchObject({seq, kind})` 只点它关心的两列，两份都不引用对方的产物。
+  于是任何一侧改名或少发一列，`"use client"` 那份手写收窄就把每一帧判成坏帧丢掉
+  （`pollOnce` 把 `null` 当成「这一轮没有变化」），表现是「状态再也不即时更新」——
+  而这条通道存在的理由正是替掉那一拍 5s 轮询。判据不造新夹具帧：把**真路由**的回答
+  接进**真客户端**，用 `toEqual` 判整枚信封（这一条同时挡「少一列」与「多要求一列」
+  两个方向，而逐列断言正是 `toMatchObject` 漏掉那一维的原因），反向那一格要求漂移时
+  **一帧都不交**、而不是交出一个 `detail: undefined` 的半成品。变异两刀打在不同的半边：
+  消费侧不再要求 `detail` 是字符串 → **只有**反向那一格红（红话里带着那个半成品对象），
+  两边原有用例全绿 —— 客户端那 9 条喂的是自己手写的帧，线上少了什么它无从知道；
+  路由少发 `detail` → 本格三红，另加路由自己那条「200 + 那次变化的载荷」红
+  （`route.test.ts` 4 条里红 1 条，它那条断的是全形状）。
+  ⇒ 缺的从来不是「路由侧有没有读数」，而是**把两边接起来**那一格。
+  · **还留着**：其余具名导出的 schema 没有契约判据（复算
+  `grep -rnoE "^export const [A-Za-z0-9_]+ = z\." --include="*.ts" src | grep -v "\.test\."`）。
+  剩下的候选已按危害逐份定过性并立案：**ISSUE #2171**（`Character` / `Shot`
+  与 MCP 入参 schema 是两份互不引用的声明；`workflow-param-map` 的读边界与
+  写边界少一条「同读数」判据；`Subgraph*` 那两份**不适用** —— 它们自己就是那一侧的
+  运行时判据，对端是 ComfyUI 导出的 JSON，不是仓内另一份声明）。
+  **本轮收掉第二档（#2171）**：第七格 =
+  `tests/workflow-param-map-wire-contract.test.ts` —— `workflowParamMapInputSchema`（写边界）
+  与 `parseWorkflowParamMap`（读边界）此前**各有各的单测、谁都不判对方**，所以「一枚作者
+  画好的合法条目，过完两侧字段是否还是那一套」没有执行者。形状照第五格（#2160）：
+  同读数那一半 + **该不同的那一半**（库里存着一行脏值 → 写侧原样透传、读侧整列折 `null`）
+  各钉一格 —— 两侧并成一份的话，那两行里必有一行站不住。
+  **第一档当场量过改动面，本轮不做**（另立 **ISSUE #2499**，P2 —— 按 §13.10.9
+  「一条诉求一张单」在关 #2171 之前拆出，不随那张单一起关掉）：把 `Character` /
+  `CharacterPortrait` / `Shot`
+  三份接口换成 `z.output<typeof …>` 之后 `tsc` 报 **25 处错、散在 17 份文件**
+  （`TS2322` 13 / `TS2741` 7 / `TS2739` 3 / `TS2345` 2），而**根因不是字段清单不一致**，
+  是两侧对「谁可选」的编码不同：`characterInputSchema` 的外层 `.transform` 无条件写
+  `portraits: character.portraits?.map(…)` ⇒ 派生出来的那一侧把它读成「必带这个键
+  （值可为 `undefined`）」，而接口写的是 `portraits?:`；`TS2322` 那 13 处的原文全是
+  「某字段一边走 `?`、另一边必填」这一形（例：`Property 'motion' is optional in type …`）。
+  所以那一刀的正确顺序是**先对齐 schema 侧的可选性**（把 `createdAt` 的默认值下沉进
+  `characterPortraitInputSchema`、外层 transform 改条件展开），再换派生 ——
+  直接换派生等于用 17 份文件的签名变更，去换一条本来就该改的默认值语义。
+  同族还有一格不在 schema 面上：**ISSUE #2173** —— 这一族测试的 mock 边界样板
+  已在五份文件里各写一遍，而孪生判据的扫描根只有 `src`，`tests/**` 里的重复永远不红。
+  · **`normalizeExtraModels` 那一类手写逐字段判型收了（第六格）**。立案时说它是
+  「与入参 schema 两边各读各的」，动手时查实的形状更具体：**同一份归一在同一个文件里写了两遍** ——
+  `normalizeExtraModels`（读：DB / 载荷里那一列）与 `splitExtraModels`（写：设置页保存时
+  拆成本地候选 / 远端条目那两堆）各自的循环里都是那四步（名字 trim 后无名即丢、
+  接口空白折 `null`、密钥走 `normalizeEntryApiKey` 的三态、用途过白名单），
+  只差「按名字去重」那一条。加一列时改一处漏一处，而两处的失效形态还不一样
+  （读出来少一列 vs 保存时静默不落），所以谁都不会红。
+  现在那一处只有一个实现（`normalizeExtraModelItem`），两个出口各自只保留自己**多出来**的规则。
+  **刻意没有并成一份 schema**，这一条要说清理由：入参判据与读边界是两个角色 ——
+  前者判「这条请求能不能收下」（词表外的用途当场拒，那是客户端拼错了），
+  后者判「库里那一行读出来是什么」（词表外的用途落 `null`、整条留着 —— 历史上写坏一列
+  不该让一个模型从列表里消失）。把它们并成一份会把「拒」变成「静默降级」，或把「留着」变成
+  「保存不了」，两个方向都比现状坏。
+  于是新配的判据不判「是不是同一份代码」，判**同读数**：
+  `tests/remote-model-entry-wire-contract.test.ts` 里
+  「读边界与入参判据对同一枚合法条目给同样的字段」逐条把合法条目过 schema、再过两个出口，
+  三者必须 `toEqual`；另有一条「认不出的用途：入参拒收、读边界落 `null` 并留住整条」把
+  那条**该不同的**分界钉住。变异两刀各打一支：给 schema 加一列而读边界不认识它 →
+  同读数那条红（`expected …(3) to deeply equal …(4)`），只改写入分派那一支 →
+  同一条红而 router 那三格照绿。
+  · **远端模型的键名分叉与两份 `kind` 枚举已配上判据（第五格）**。立案时写的是
+  「两侧各写一份枚举」，动手时数出来的是**五份**同词表：路由入参那条行内
+  `z.enum(["chat","image","video"])`、工坊下拉里那条 `["chat","image","video"].includes(...)`
+  （它同时是 `normalizeExtraModels` 内层那段的重抄）、`UsageTestKind` 那一份、
+  `usage-field-editor` 的状态类型、以及 lib 里那份 `REMOTE_MODEL_KINDS`。
+  前两份是**这条通路上的**，本批收掉：路由入参改吃 `~/lib/llm/remote-model-schema`
+  导出的 `remoteModelEntrySchema`（`kind` 用 `z.enum(REMOTE_MODEL_KINDS)`），
+  工坊那处内联白名单改吃常量。后三份**刻意没动** —— 「实际使用测试能调哪几种用途」
+  与「一条远端模型可以标成哪几种用途」在今天的口径里是两个概念，
+  合并它们要先把概念对上，不是消重；这三份的账立在 **ISSUE #2170**（含三种口径的代价）。
+  键名那一半：`model`（弹窗草稿）↔ `name`（条目 / 库里那一列）的连接过去在
+  `submitDialog()` 里**写了两遍**（新增与编辑各一遍），而 `ModelDialogForm` 又是一份
+  与字段级 schema 同形、互不引用的 interface，controller 那侧还第三次抄了条目的参数形状。
+  现在桥只有一座（`remoteModelEntryFromDraft`，`RemoteModelDraftEntry` 是它唯一的输出形状，
+  弹窗状态与 controller 签名都从它派生），新增与编辑在「空白接口」上本来就同形
+  （写入侧都折成「跟随已保存的全局配置」），过去一边 `undefined` 一边 `null` 只是写法不同。
+  判据 `tests/remote-model-entry-wire-contract.test.ts`（5 条）走的是**真端到端**：
+  未判过的表单状态 → 真桥 → 真 `llmRouter.configSave` → 真仓储落库 → 真
+  `getConfigForClient` 脱敏回读，逐字段比。四格分别是：① 那一枚条目原样回读得到
+  （含三个收空 —— 桥收到的就是没判过的状态，所以收空是它的责任）；
+  ② `REMOTE_MODEL_KINDS` 里**每一个**用途都存得进去 —— 这就是「两份枚举」的语义判据，
+  比 grep 那条字面量强：抄的那一份换任何写法都能骗过 grep，骗不过一次真调用；
+  ③ 键名漂移那一形（写 `model`、不写 `name`）被拒**且库里零行**；
+  ④ `hasApiKey` 是只读视图字段，带着它回写不会凭空长出密钥。
+  变异两刀打在不同的半边：桥不再收 `model` 两侧的空 → 只有 ① 红
+  （`expected ' gpt-x ' to be 'gpt-x'`）；把服务端那一份词表抄窄成 `chat|image` →
+  ② 红并带着 zod 那句 `Invalid option`，而 ①③④ 照绿。
+  · **`generate.generate` 的入参通路已配上了（第四格）**。先订正一格我自己写错的判断
+  （立案时把「`RouterInputs` 派生」当成了手写镜像）：`RouterInputs["generate"]["generate"]`
+  那几处是**从 schema 反向派生的类型**，字段改名会当场编译红，所以它不是漂移面。
+  真正的洞在三条 cast 上（动手时数出来的是三条，不是立案时说的两条）：
+  `canvas-api.startGenerate(payload: Record<string, unknown>)` 传输前那句 `as`、
+  `use-generate.ts` 重试通路把**任务行 `params` 列里存的旧载荷**原样送回同一个 cast、
+  以及 `video-queue-client.submitGeneration` 把调用方给的 `params` 摊开之后 `as` 一次。
+  前两条的修法是**把判据搬到客户端读得到的地方**：入参 schema（原 `GenerateSchema`，
+  现 `generateInputSchema`）从 `src/server/api/routers/generate.ts` 搬进
+  `src/lib/workflow/workflow-generate-input.ts`
+  （与 `workflow-io-types.ts` 同一手法 —— 形状住 lib，服务端只是 `.input()` 它的消费方之一），
+  画布那段构造从 `runGenerate` 抽成纯函数 `buildCanvasGeneratePayload`（返回类型就是
+  `GenerateInput`，`startGenerate` 不再吃 `Record<string, unknown>` —— cast 存在的条件被拆掉），
+  重试走 `parseStoredGenerateInput`：同一个 schema，拒了就不发这次请求，
+  并把「缺哪一列、下一步做什么」拼成一句中文交给错误面板。
+  判据 `tests/generate-input-wire-contract.test.ts`（5 条）不造夹具载荷 —— 它把
+  **画布真构造出的那一份**接进**真 router**：① 收得下、且逐键等于落进 `params` 列的那一份
+  （含 `control_after_generate` 那条并数组的派生，与 random→randomize 的换算）；
+  ② 缺必填 `workflow` 时 router 与客户端预检**同拒**（拒的信号来自 schema，
+  不是来自画布那句界面 guard）；③ 从库里翻出来的载荷再过一次判据**仍然建得出任务**
+  （重试的幂等前提：写进去的是转换之后的形状）；④ 旧形状（`workflowInputs` 写成对象）
+  被拒时给的是**点名哪一列、并带着出路的一句中文**（内层仍嵌着 zod 那句英文原文，
+  没有冒充「全部本地化」——判据断的是那三样都在）；⑤ 三层 `paramMap`（`source.mode:<模式>`）在这一列上
+  仍是那份权威形状，没被 generate 这边又收窄一次。变异两刀打在不同的半边：
+  构造里漏掉 `referenceImages` 那一步 → **只有**①红（红话是「那一列 undefined」）；
+  把预检改成「不判、原样发」→ ②④红而①绿 —— 少了第二刀，①会被一份「客户端压根不判」
+  的实现无痛满足。
+  **第三条 cast 也收了（第三刀）**。它此前撞在一份有主的既有契约上 ——
+  `tests/task-list-wire-contract.test.ts` 显式判「`params` 缺省时照样把只有 `prompt`
+  的入参发出去」与「服务端拒绝时把拒绝原样交回调用方」；口径经业主点头改掉那份判据之后，
+  `submitGeneration` 现在先过同一个 `generateInputSchema`（`parseGenerateInput`，
+  函数从 `parseStoredGenerateInput` 改名 —— 它现在有两个生产者，名字不能只说重试那一半），
+  不合格就**不发**，红话点名那一列。顺带把视图那层的失败通道接上：草稿整批失败时
+  出口带的是**第一条真实原因**，不再是万金油一句「请检查参数或 ComfyUI 连接」——
+  这一条有判据（`src/components/studio/VideoQueueModal.test.tsx`），打它一刀的读数是
+  `Unable to find an element with the text: /缺少要执行的工作流/`。
+  · **照出另一格，且这一格不归我定**：`VideoQueueModal` 的草稿页签**没有工作流来源** ——
+  全仓唯一的挂载点（`src/app/workspace/page.tsx`）不传 `draftItems`，而页签内手动加的那一行
+  只有 `prompt`，`params` 恒为 `undefined`。也就是说这条提交通路**从来没有**产得出合法入参：
+  过去每条都在服务端撞墙、再被「逐条提交、跳过失败项」吞掉，所以没人看见。
+  现在它当场就说不成立，但**要真能用还得给草稿一个工作流选择器**（或把这一格显式关掉）
+  —— 那是产品决定，不在契约这一格里替他定；已立案 **ISSUE #2169**（带两条出路的代价与复算入口）。
 - [x] **E5 棘轮的 `--update` 拒涨此前只有散文，现在有了横切行为判据（两格 PENDING 也已处置完）**：
       原记「棘轮 `--update` 无制衡，证据 `AGENTS.md:94,97`」——那句证据早就过时了：
       24 个「带 `--update` 且把一份基线写回去」的脚本里，17 个**确实写了**拒涨那一支。
@@ -1487,7 +1486,7 @@
       余下两格当时记在 **PENDING**（`.file-size-baseline.json` 与
       `.ui-primitives-baseline.json`），本轮都已处置：前者进了 `RATCHETS`（把 R1–R12 的
       输入喂绿），**随后在 ISSUE #1811 的 R5 项里随 R5 一起翻硬闸、退出本表**；后者进
-      `RETIRED_RATCHETS`（`HARD_GATE_RULES` 已覆盖全部 85 条，棘轮车道无成员）。
+      `RETIRED_RATCHETS`（`HARD_GATE_RULES` 已覆盖全部 87 条，棘轮车道无成员）。
       `.gate-executor-ledger.json` 登记为**非计数棘轮**：给它加条目是正常用法，硬要拒涨
       等于把登记流程堵死 —— 这类「`--update` 不拒涨是对的」以后也必须写明理由。
 - [~] **E6 无 bundle 体积门禁 / 变异测试 / a11y 自动化**。**a11y 自动化那一格已接上执行者**：
@@ -1534,7 +1533,7 @@
 - [ ] **F3 `next/image` 0 处且 lint 关闭**。证据：`eslint.config.js:185-192`。
 - [ ] **F4 无离线能力**（无 SW / `onLine` / 离线队列；58 文件手写 localStorage 无 persist）。
 - [ ] **F5 虚拟滚动仅 2 处**；`next/dynamic` 仅 2 处。
-- [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用**存量已清零**（ISSUE #1811 收尾：P 系列 85 条全在 `HARD_GATE_RULES` 里，基线 `scripts/.ui-primitives-baseline.json` 的 `total: 0` / `rules: {}`；此前记的「78 条违规」是历史读数、行号 `:18` 也已不存在）。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、那份基线文件的现值。剩余的一格是**页面级视觉回归** —— 这一档已经整档撤掉（规范 11 §11.8），
+- [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用**存量已清零**（ISSUE #1811 收尾：P 系列 87 条全在 `HARD_GATE_RULES` 里，基线 `scripts/.ui-primitives-baseline.json` 的 `total: 0` / `rules: {}`；此前记的「78 条违规」是历史读数、行号 `:18` 也已不存在）。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、那份基线文件的现值。剩余的一格是**页面级视觉回归** —— 这一档已经整档撤掉（规范 11 §11.8），
   现在**没有任何自动判据**，靠 review 看图；Storybook 本来也不替代它。
   **已加的两层判据**（同批）：故事文件的**枚举来源**由
   `tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`

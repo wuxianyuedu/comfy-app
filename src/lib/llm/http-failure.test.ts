@@ -53,4 +53,42 @@ describe("httpFailureDetail", () => {
     const detail = httpFailureDetail({ body: "z".repeat(500), status: 500 });
     expect(detail.length).toBeLessThanOrEqual("HTTP 500：".length + 240);
   });
+
+  it("Base URL 落在已核实的厂商官网域上：归因之后再补一句端点指路（#3612）", () => {
+    // #3612 的现场：官网域对任何密钥都答 401 Login expired —— 光说「密钥无效」
+    // 会把用户引去反复换密钥，指路句（真正的 API 端点在哪）必须一起出现。
+    const detail = httpFailureDetail({
+      body: '{"code":"000501","message":"Login expired"}',
+      status: 401,
+      url: "https://api.agnes-ai.com/api/v1/models",
+    });
+    expect(detail).toContain("（密钥无效，或该密钥没有这个接口的权限）");
+    expect(detail).toContain("「Agnes」的接口端点在 https://apihub.agnes-ai.com/v1");
+    expect(detail).toContain("api.agnes-ai.com 是官网侧的域");
+  });
+
+  it("HTML 分支同样补端点指路（官网域返回的登录页往往就是 HTML）", () => {
+    const detail = httpFailureDetail({
+      body: "<!DOCTYPE html><html><body>login</body></html>",
+      status: 401,
+      url: "https://www.agnes-ai.com/v1/models",
+    });
+    expect(detail).toContain("返回的是网页（HTML）而不是接口响应");
+    expect(detail).toContain("https://apihub.agnes-ai.com/v1");
+  });
+
+  it("url 缺省或域不在清单里：文案保持原样，不追加任何指路句", () => {
+    expect(httpFailureDetail({ body: '{"error":"bad key"}', status: 401 })).toBe(
+      'HTTP 401：{"error":"bad key"}（密钥无效，或该密钥没有这个接口的权限）',
+    );
+    expect(
+      httpFailureDetail({
+        body: '{"error":"bad key"}',
+        status: 401,
+        url: "https://api.example.com/v1/models",
+      }),
+    ).toBe(
+      'HTTP 401（https://api.example.com/v1/models）：{"error":"bad key"}（密钥无效，或该密钥没有这个接口的权限）',
+    );
+  });
 });

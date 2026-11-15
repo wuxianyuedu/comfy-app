@@ -20,7 +20,7 @@ import { Input } from "~/components/ui/input";
 import { PageHeader } from "~/components/ui/page-header";
 import { ViewActions } from "~/components/studio/ViewActions";
 import { Spinner } from "~/components/ui/spinner";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { MaterialLibraryContent } from "~/components/studio/project-canvas/MaterialLibraryContent";
 import type { MaterialScope } from "~/components/studio/project-canvas/hooks/use-material-library";
 import { textHandler } from "~/lib/form-props";
@@ -61,7 +61,7 @@ export function ResourceLibrary() {
       {/* 上传挂到顶栏（`ViewActions`）—— 见 `ViewActions` 里那段「屏名由页签
           给出之后，留在屏内那一行只剩右对齐的几颗控件」（ISSUE #1871）。 */}
       <ViewActions>
-        <uploadPicker.Input />
+        <FilePicker {...uploadPicker.inputProps} />
         <Hint label="上传素材" wrap>
           <Button
             className="h-auto gap-1.5 rounded-lg px-4 py-2"

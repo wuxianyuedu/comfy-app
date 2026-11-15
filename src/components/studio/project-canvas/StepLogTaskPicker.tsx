@@ -12,6 +12,7 @@ import { nodeSeqOf } from "./node-seq";
 import { loadStepLogPanelState } from "./stepLogCache";
 import { getNodeIdByTaskId } from "./activeTask";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { Hint } from "~/components/ui/hint";
 
 export const StepLogTaskPicker = memo(function StepLogTaskPicker({
   cachedIds,
@@ -55,9 +56,9 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
           const displayParts = [seqLabel, wn ?? `task ${id.slice(0, 8)}`, st].filter(Boolean);
           return [
             id,
-            <span key={id} title={titleParts.join(" ·")}>
-              {displayParts.join(" ·")}
-            </span>,
+            <Hint key={id} label={titleParts.join(" ·")}>
+              <span>{displayParts.join(" ·")}</span>
+            </Hint>,
           ];
         }),
       )}

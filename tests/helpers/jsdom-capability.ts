@@ -18,6 +18,11 @@ type VirtualConsoleLike = {
   removeAllListeners(event: string): unknown;
 };
 
+/** 监听器的消费形状守卫（B5 清账）：可调用即认（EventEmitter 的 listeners 在这个结构面上是 unknown[]）。 */
+function isJsdomErrorListener(value: unknown): value is (error: JsdomErrorLike) => void {
+  return typeof value === "function";
+}
+
 export type JsdomCapabilityGap = {
   /** 撤拦 ≠ 撤账：这一档的覆盖真正落在哪儿。 */
   coveredBy: string;
@@ -147,8 +152,10 @@ export function installJsdomCapabilityGate(
     detach: () => {
       console_.removeAllListeners("jsdomError");
       for (const listener of originals) {
-        /* SAFETY: 类型断言已复核 */
-        console_.on("jsdomError", listener as (error: JsdomErrorLike) => void);
+        /* 原样挂回（B5 清账）：谓词收窄后直挂，不再断言。 */
+        if (isJsdomErrorListener(listener)) {
+          console_.on("jsdomError", listener);
+        }
       }
       installed.delete(console_);
     },

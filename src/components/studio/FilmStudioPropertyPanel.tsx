@@ -5,6 +5,7 @@
 import { textHandler } from "~/lib/form-props";
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { Checkbox } from "~/components/ui/checkbox";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Separator } from "~/components/ui/separator";
@@ -227,7 +228,9 @@ export function FilmStudioPropertyPanel({
             type="file"
           />
           {c.bgmName !== null && c.bgmName !== "" && (
-            <p className="text-primary-strong text-2xs mt-1 truncate">已选：{c.bgmName}</p>
+            <Hint label={`已选：${c.bgmName}`}>
+              <p className="text-primary-strong text-2xs mt-1 truncate">已选：{c.bgmName}</p>
+            </Hint>
           )}
         </div>
 

@@ -57,7 +57,8 @@ export async function POST(req: NextRequest) {
   if (!parsedExtra.ok) {
     return NextResponse.json({ ok: false, detail: parsedExtra.detail });
   }
-  const { extra } = parsedExtra;
+  /* 模型级透传字段先落（#3626），弹窗里 ad-hoc「额外参数」后落 —— 临时覆盖同名键。 */
+  const extra = { ...prologue.modelExtra, ...parsedExtra.extra };
 
   const startedAt = Date.now();
   try {

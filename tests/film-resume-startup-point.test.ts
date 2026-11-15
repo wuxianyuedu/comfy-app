@@ -71,13 +71,15 @@ describe("恢复扫描的启动点：Next 侧一处，且只一处", () => {
 describe("去重与预算的同源性（漂开就静默失效的那两条）", () => {
   it("在飞表挂在**带版本号**的 globalThis 键上", () => {
     const src = code(ORCHESTRATOR);
-    /* 模块级 `const inFlight = new Set()` 是错的：dev 热重启后旧模块那条循环还在飞，
-     * 新模块的自己是一份新 Set，看不见它 ⇒ 同一部影片两条循环。而 `??=` 只认键名，
+    /* 模块级 `const inFlight = new Map()` 是错的：dev 热重启后旧模块那条循环还在飞，
+     * 新模块的自己是一份新 Map，看不见它 ⇒ 同一部影片两条循环。而 `??=` 只认键名，
      * 字段形状变了不升版本号 = 读到旧单例里没有这个字段（同 runner-state 的坑）。 */
-    expect(src).toMatch(/var filmWatchInFlight_v1: Set<string> \| undefined/);
-    expect(src).toMatch("globalThis.filmWatchInFlight_v1 ??= new Set<string>()");
-    expect(src).toMatch("inFlight.has(id)) return");
-    expect(src).toMatch("inFlight.delete(id)");
+    expect(src).toMatch(/var filmWatchInFlight_v1: Map<string, Promise<void>> \| undefined/);
+    expect(src).toMatch("globalThis.filmWatchInFlight_v1 ??= new Map<string, Promise<void>>()");
+    /* #3867：取消后立刻重启的交接语义——等旧循环退场、重读状态、仍 GENERATING
+     * 才起新循环；旧早退形状（`inFlight.has(id)) return`）会让新监看被吞。 */
+    expect(src).toMatch("const previous = inFlight.get(id)");
+    expect(src).toMatch("inFlightFilms().delete(id)");
   });
 
   it("监看预算的分钟数只有一处出处（文案与判据不许各写一份）", () => {

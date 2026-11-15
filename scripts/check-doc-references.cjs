@@ -13,6 +13,9 @@
  *   - kind 'verify'（端口/地址）：文档保留直观原样（如 localhost:3100，可读性最佳），
  *     脚本提取文档里出现的 `host:port` 形态，与权威源当前端口族比对；不一致 → 报错。
  *   - kind 'path'：文档保留路径原文，脚本核对路径指向的文件确实存在。
+ *   - kind 'count'（计数，如产品功能域数 / 需求条数）：文档保留直观数字，
+ *     脚本从权威源现场提取计数并核对（ISSUE #3649；适用文档按事实自己的
+ *     `onlyDocs` 单独遍历 —— 那几篇不在 SCOPED_DOCS 里）。
  *   - 台账命令口径：SCOPED_DOCS 里不得出现 npm run / npx 可执行命令
  *     （AGENTS 硬规则 1「只用 pnpm」；说明性引用需带纠正词，见 checkLedgerCommands）。
  *   - 门禁步骤引用口径：规范文档/索引里不得用「第 N 步」引用 pre-commit 或已删除的平台流水线，
@@ -380,6 +383,52 @@ function checkPaths() {
   }
 }
 
+/* ── 计数类事实（ISSUE #3649）────────────────────────────────────────────
+ * 口径：文档**保留直观数字**（「17 个功能域」这种最可读的形态），脚本从权威源
+ * 现场提取计数并核对 —— 与 `dev.port` 那族「直观值核对类」同一条思路。
+ *
+ * 为什么单独走一条路（不走 `checkDoc`）：这一族事实的适用文档**不在 SCOPED_DOCS 里**
+ * （`docs/README.md` 是文档体系总览，刻意不进校验面），而 `checkDoc` 会把**别的**
+ * 事实（端口族 / 路径存在性）也套到那篇文档上 —— 判据与事实的适用范围就此错位。
+ * 所以这里按事实自己声明的 `onlyDocs` 单独遍历。
+ *
+ * 判据答两个问题：
+ *   ① 文档写的数字 == 现场计数吗？（抄错了当场红）
+ *   ② 文档还写着这个数字吗？（事实还在册、文档却不再写了 ⇒ 对不上的状态，同样红）
+ */
+function checkCounts(docPath, f) {
+  if (!exists(docPath)) {
+    problems.push(`[${docPath}] 计数事实 ${f.key} 指向的文档不存在`);
+    return;
+  }
+  let live;
+  try {
+    live = Number(f.extract());
+  } catch (error) {
+    problems.push(`[${docPath}] 无法提取 ${f.key}（${error.message}）`);
+    return;
+  }
+  const found = [...readText(docPath).matchAll(f.pattern)].map((m) => Number(m.groups?.count));
+  if (!found.length) {
+    problems.push(
+      `[${docPath}] 找不到${f.label ?? f.key}的表述（现场是 ${live}）。` +
+        `要么把数字写进文档，要么把这条事实从 scripts/doc-facts.cjs 里撤下 —— ` +
+        `不允许「文档不再写、事实还在册」这种对不上的状态。`,
+    );
+    return;
+  }
+  for (const v of found) {
+    if (v === live) {
+      continue;
+    }
+    problems.push(
+      `[${docPath}] ${f.key}：文档写的 ${v} 与现场计数 ${live} 不一致` +
+        `（权威源：docs/product/feature-catalog.md 的分域需求总表）。` +
+        `请按现场数字改文档，或核对总表本身。`,
+    );
+  }
+}
+
 /* ── AGENTS.md ↔ standards 漂移守卫 ────────────────────────────────────
  * 目的：让「AGENTS.md 里复述的路径 / 文件 / 章节锚点与实际仓库状态脱钩」
  *      这件事变成硬错误。
@@ -692,6 +741,14 @@ function main() {
   checkAgentsMdDrift();
   for (const doc of SCOPED_DOCS) {
     checkDoc(doc);
+  }
+  for (const f of FACTS) {
+    if (f.kind !== "count") {
+      continue;
+    }
+    for (const docPath of f.onlyDocs ?? []) {
+      checkCounts(docPath, f);
+    }
   }
 
   if (problems.length > 0) {

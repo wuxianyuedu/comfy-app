@@ -59,7 +59,7 @@ export type LogStoreScene = {
 /* ── 真格式的日志原文 ──────────────────────────────────────────────────────
  *
  * 三段的格式各不相同，因为它们**在真机上就是不同的**：启动链路（
- * `launcher`）是 `log/launcher/dev-launcher.log` 的记录头、应用服务输出
+ * `launcher`）是 `log/current/launcher/dev-launcher.log` 的记录头、应用服务输出
  * （`app`）带 `[INFO]` 级别段、运行期业务动作（`app-runtime`）多一个毫秒与
  * 命名空间段。格式抄自 `log-analysis.ts` 的三个正则 —— 抄错的表现是画布里
  * 一行都不出现（解析器不认），而那正好是「story 是假的」的现场。

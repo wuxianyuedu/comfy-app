@@ -4,6 +4,7 @@
  * 故这里钉「这一格能红」：每条都拿夹具逼红 —— 只会绿的判据就是恒绿判据（判据在场、结论静默变成放行）。
  */
 import path from "node:path";
+import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
@@ -13,6 +14,7 @@ import { parseStageScripts, readCnbConfig } from "../scripts/ci-autofix-duties.m
 import {
   commentedStageNames,
   gateNameExecutorProblems,
+  gaWorkflowStepArgvs,
   registeredElsewhereGates,
   scriptPaths,
 } from "../scripts/ci-gate-names.mjs";
@@ -59,6 +61,9 @@ const SURFACE = {
   heavyGates: [{ argv: ["node", "scripts/check-reformat-only.cjs", "--staged"] }],
   fixedTests: ["tests/core-spine-single-source.test.ts"],
   hookSteps: [{ argv: ["node", "scripts/live.cjs"] }],
+  gaSteps: [
+    { argv: ["node", "scripts/ci-run-tool.mjs", "vitest", "run", "tests/ga-only.test.ts"] },
+  ],
 };
 
 describe("ci-gate-names —— 解析", () => {
@@ -82,6 +87,30 @@ describe("ci-gate-names —— 解析", () => {
     expect(
       scriptPaths("node scripts/a.cjs -- node_modules/.bin/vitest run tests/b.test.ts"),
     ).toEqual(["scripts/a.cjs", "tests/b.test.ts"]);
+  });
+
+  it("GA PR 门禁的 step 行是第四处执行面：命令逐字取出来（ISSUE #3599）", () => {
+    /* PR 主列的代码判据全在 GA 侧（`.cnb.yml` 的 PR 档自 #3378 起只剩「站内回读结论」+
+     * 「红了立案」两件纯 API 动作），而另三处执行面一处都不在 GA ⇒ 指向 GA step 的
+     * 入口路径会被误判成「没有执行者」。这一条取的就是那些 step 的命令行。 */
+    expect(
+      gaWorkflowStepArgvs(
+        [
+          "jobs:",
+          "  x:",
+          "    steps:",
+          "      - name: 一格",
+          "        run: node scripts/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts",
+          "      - name: 多行那一格",
+          "        run: |",
+          "          sudo apt-get update -qq",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      ["node", "scripts/ci-run-tool.mjs", "vitest", "run", "tests/db-migrate-equivalence.test.ts"],
+      /* `run: |` 那行没有命令 —— 它没有入口路径可指，核不出任何东西（无害）。 */
+      ["|"],
+    ]);
   });
 });
 
@@ -124,6 +153,30 @@ describe("ci-gate-names —— 判据能红", () => {
       ...SURFACE,
     });
     expect(problems.join("\n")).toContain("没人执行");
+  });
+
+  it("第四面：入口路径只在 GA PR 门禁的 step 里 ⇒ 算数有执行者（ISSUE #3599）", () => {
+    const problems = gateNameExecutorProblems({
+      cnbText: fakeCnb({
+        gates: ["活的", "只在 GA 跑的那一格"],
+        elsewhere: ["只在 GA 跑的那一格=tests/ga-only.test.ts"],
+      }),
+      ...SURFACE,
+    });
+    expect(problems).toEqual([]);
+  });
+
+  it("第四面：GA 那一步被删了 ⇒ 红（执行者没了，账面照旧说它在跑）", () => {
+    const problems = gateNameExecutorProblems({
+      cnbText: fakeCnb({
+        gates: ["活的", "只在 GA 跑的那一格"],
+        elsewhere: ["只在 GA 跑的那一格=tests/ga-only.test.ts"],
+      }),
+      ...SURFACE,
+      gaSteps: [], // ← GA 那一步消失了
+    });
+    expect(problems.join("\n")).toContain("只在 GA 跑的那一格");
+    expect(problems.join("\n")).toContain("ga-only.test.ts");
   });
 
   it("反向：登记的名字不在清单里 ⇒ 红", () => {
@@ -177,7 +230,7 @@ describe("ci-gate-names —— 判据能红", () => {
 
   it("真配置：仓库里这一格是绿的（正向读数，也是它能红的对照）", () => {
     /* 这一条读的是仓库里**真的**那份配置与**真的**执行面（钩子注册表 / 复合档条目 /
-     * 固定清单），不是夹具 —— 它回答的是「此刻这一格是不是绿的」。
+     * 固定清单 / GA PR 门禁的 step 行），不是夹具 —— 它回答的是「此刻这一格是不是绿的」。
      * 它不是「判据在场」的证据：上面那几条才是。 */
     const root = path.resolve(__dirname, "..");
     const cnbText = readCnbConfig(root);
@@ -187,6 +240,9 @@ describe("ci-gate-names —— 判据能红", () => {
       heavyGates: HEAVY_GATES,
       fixedTests: FIXED_STRUCTURAL_TESTS,
       hookSteps: readHookSteps(path.join(root, ".githooks", "pre-commit")),
+      gaSteps: gaWorkflowStepArgvs(
+        readFileSync(path.join(root, ".github", "workflows", "pr-gate.yml"), "utf8"),
+      ).map((argv) => ({ argv })),
     });
     expect(problems).toEqual([]);
   });

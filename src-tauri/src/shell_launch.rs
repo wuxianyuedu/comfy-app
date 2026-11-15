@@ -39,7 +39,7 @@
 //! 同路径、同形态；那边的单测锁住路径与行形态，这里保持逐项一致）：
 //!   1. 写**常驻进度快照**（`run/launch-status.json`，`fallback: true`）——
 //!      编排器一写自己的状态就把它顶掉，因此它只服务启动窗口期；
-//!   2. 落一份**壳自持的编排链路日志**（`log/launcher/shell-launch.log`）——
+//!   2. 落一份**壳自持的编排链路日志**（`log/current/launcher/shell-launch.log`）——
 //!      编排器输出（`[orchestrator] …`）与其启动报告都写它，release 也可靠；
 //!   3. 起不来时**先写状态再回一条可行动的出口**，别让日志面板指向空文件。
 
@@ -72,6 +72,11 @@ static ORCHESTRATOR: Mutex<Option<tauri_plugin_shell::process::CommandChild>> = 
 /// 回收），而 `reap` 之后又立刻复用会去杀它：保留标记 = 那些历史残留仍能被正确
 /// 认出来并回收，不会误伤别人的启动过程（认亲判据仍只认环境块，不按形态猜）。
 pub const OWNED_ENV: &str = "COMFYAPP_SHELL_OWNED";
+
+/// 编排器环境块里的检出身份（ISSUE #3851）：认亲判据除了「是不是某个壳起的」，
+/// 还要比对「是不是**本检出**的壳起的」——同一台机器多检出并行（§1.4）时，
+/// 只看前者会把别家正在跑的编排器当成自己的残留误杀整树。
+pub const PROJECT_ROOT_ENV: &str = "COMFYAPP_PROJECT_ROOT";
 
 /// 已由壳完成编排（= 本次启动的 dev server 由壳拉起）。
 pub fn is_owning() -> bool {
@@ -204,14 +209,21 @@ pub fn reap(project_root: &str) {
   let child = ORCHESTRATOR.lock().unwrap().take();
   let Some(child) = child else { return };
   let pid = child.pid();
-  match child.kill() {
-    Ok(()) => {
-      log::info!("[ComfyAPP] shell orchestrator stopped via shell plugin (pid {pid})");
-      clear_session_anchor(project_root);
-    }
-    Err(e) => log::warn!("[ComfyAPP] shell orchestrator stop via shell plugin failed: {e:?}"),
-  }
+  /* 先派发统一回收、后做插件 kill（ISSUE #3857）：taskkill 的目标在进程**还
+   * 活着**时不存在 PID 复用（复用前提是先终止），「kill 成功 → 丢句柄 →
+   * taskkill」那段窗口被整个消掉，而不是靠握句柄缓解。插件 kill 落在已被
+   * reaper 收掉的进程上是无害 no-op（报一条 warn）。 */
   spawn_reaper(project_root, pid);
+  match child.kill() {
+    Ok(()) => log::info!("[ComfyAPP] shell orchestrator stopped via shell plugin (pid {pid})"),
+    Err(e) => {
+      log::warn!("[ComfyAPP] shell orchestrator stop via shell plugin failed (tree already reaped): {e:?}")
+    }
+  }
+  /* 锚点清理放宽为「两道任一落地」：reaper 的 taskkill 或插件 kill 任一收掉
+   * 这棵树，锚点就该清 —— 原先只在插件 kill 成功时清，换序后 kill 多半落在
+   * 已死进程上，留着会让下次启动多报一条无害的「回收上一次遗留」。 */
+  clear_session_anchor(project_root);
 }
 
 /// 回收一个**已知进程号**的编排器（启动前清理上一次的残留，见调用点）。
@@ -359,7 +371,7 @@ pub fn mark_launch_failed(project_root: &str, message: &str) {
       return;
     }
   }
-  match std::fs::write(&path, payload.to_string()) {
+  match atomic_write(&path, &payload.to_string()) {
     Ok(()) => log::error!("[ComfyAPP] launch failed (reported on the splash): {message}"),
     Err(e) => log::warn!("[ComfyAPP] cannot write {}: {e:?}", path.display()),
   }
@@ -599,7 +611,7 @@ pub fn write_sidecar_exit_record(
   }
   // 无 BOM：走 `fs::write` 而不是带 BOM 分支的任何写法，与 launch-status.json 同口径。
   // 读取侧是 JSON.parse，BOM 会让它当场失败。
-  match std::fs::write(&path, body.as_bytes()) {
+  match atomic_write(&path, &body) {
     Ok(()) => {
       log::info!("[ComfyAPP] 已记录内嵌服务结束原因：{}", path.display());
       true
@@ -768,12 +780,71 @@ pub fn log_session_start(project_root: &str) {
 
 /// 追加一行（目录缺失时递归建）。返回 Err 而不是 panic —— 调用方一律只记 WARN。
 fn append_line(path: &std::path::Path, line: &str) -> std::io::Result<()> {
+  append_bytes(path, line.as_bytes())
+}
+
+/// 追加一段字节（目录缺失时递归建）。`append_line` 的字节形态，供按次开合的
+/// 日志写入器复用同一份「建目录 + 开-写-即关」的落盘语义。
+fn append_bytes(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
   use std::io::Write;
   if let Some(dir) = path.parent() {
     std::fs::create_dir_all(dir)?;
   }
   let mut file = std::fs::OpenOptions::new().create(true).append(true).open(path)?;
-  file.write_all(line.as_bytes())
+  file.write_all(bytes)
+}
+
+/// 壳自持日志的大小上限：超过即整份重建（丢旧保新，等效插件 Folder target 的
+/// KeepOne 轮转）。设防的是「壳长开数日 + 编排器转发日志把文件推到无界」，
+/// 不是常规路径——`current/` 每次运行结束会被归档清空，正常情况下远到不了这里。
+pub const SHELL_LOG_MAX_BYTES: u64 = 40 * 1024 * 1024;
+
+/// 壳自持日志（`log/current/shell/shell.log`）的**按次开合**写入器。
+///
+/// 为什么不沿用 tauri-plugin-log 的 Folder target（#3574）：它把文件句柄一直
+/// 攥到进程退出，而 `current/` 的生命周期里有多次「整目录清空」——启动时编排器
+/// 的崩溃补做（`recoverStaleCurrent`，把壳先写进来的会话头当成上一次的残留）、
+/// 退出时的收包归档（`archiveCurrent`）。任何一次清空都发生在壳还活着的时候：
+/// Windows 上删除对持句柄文件成功（Rust std 以含 FILE_SHARE_DELETE 打开），
+/// 目录项即刻消失，此后插件的所有写入都落进一个已解除链接的句柄——**静默丢失，
+/// 日志冻在清空发生前的那几行**。每次写入按路径重开 + 追加 + 即关，目录被清了
+/// 下一行自己重建（与 `append_line` 同一取向）；代价是每行一次 open/close，
+/// 桌面壳的日志频率下完全无感。
+pub struct ResilientShellLog {
+  path: std::path::PathBuf,
+  max_bytes: u64,
+}
+
+impl ResilientShellLog {
+  /// 按默认大小上限（[`SHELL_LOG_MAX_BYTES`]）建一个写入器。
+  pub fn new(path: std::path::PathBuf) -> Self {
+    Self {
+      path,
+      max_bytes: SHELL_LOG_MAX_BYTES,
+    }
+  }
+}
+
+impl std::io::Write for ResilientShellLog {
+  fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+    // fern 的 writer 输出每次给一整条格式化好的行，write_fmt 内部按 write_all
+    // 语义调用本函数；这里同步落盘，返回「全部写完」。
+    let oversized = std::fs::metadata(&self.path)
+      .map(|m| m.len() >= self.max_bytes)
+      .unwrap_or(false);
+    if oversized {
+      // 按次开合意味着没有谁长期攥着这份文件，删除是即时的；删失败（被瞬时
+      // 只读句柄占住）就先不轮转，下一行再试——丢上限与丢现场之间选后者。
+      let _ = std::fs::remove_file(&self.path);
+    }
+    append_bytes(&self.path, buf)?;
+    Ok(buf.len())
+  }
+
+  fn flush(&mut self) -> std::io::Result<()> {
+    // 落盘在 write() 里同步完成，没有缓冲可冲。
+    Ok(())
+  }
 }
 
 /// `YYYY-MM-DD HH:MM:SS.mmm` 时间戳（与 Node 侧 `formatLogLine` 的**形态**同形）。
@@ -801,6 +872,23 @@ fn local_timestamp() -> String {
 /// `report` 是壳接手那一刻的启动报告（`startup_report_json` 的产物），随快照
 /// 一起写进 `diagnostics`：编排器写自己的状态时会把这份快照整份顶掉，所以报告
 /// 必须在**它被顶掉之前**就已经落到磁盘上，启动期才有现场可查。
+/// 原子写小文件（ISSUE #3857）：先写同目录的 `.tmp-<pid>` 再 `rename` 到位。
+/// `launch-status.json` 是「壳 + 编排器两个写方、启动页 250ms 一个读方」的热
+/// 文件，`std::fs::write` 的 truncate+write 直写会让读方撞到空串 / 半截 JSON；
+/// 同目录 rename 在同一卷上是原子的。失败时收掉自己的临时文件。
+fn atomic_write(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
+  let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
+  let result = (|| -> std::io::Result<()> {
+    std::fs::write(&tmp, contents)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+  })();
+  if result.is_err() {
+    let _ = std::fs::remove_file(&tmp);
+  }
+  result
+}
+
 pub fn write_idle_status(
   project_root: &str,
   phase: &str,
@@ -834,7 +922,7 @@ pub fn write_idle_status(
       return;
     }
   }
-  if let Err(e) = std::fs::write(&path, payload.to_string()) {
+  if let Err(e) = atomic_write(&path, &payload.to_string()) {
     log::warn!("[ComfyAPP] 无法写 {}：{e:?}", path.display());
   }
 }
@@ -1008,7 +1096,7 @@ pub fn spawn_orchestrator(
     // 判定已由壳跑过），并且**不再起第二个壳**（§1.5：首壳就是应用宿主）。
     .env("COMFYAPP_SHELL_SELF_LAUNCH", "1")
     .env("COMFYAPP_PORT", port.to_string())
-    .env("COMFYAPP_PROJECT_ROOT", project_root)
+    .env(PROJECT_ROOT_ENV, project_root)
     .env("COMFYAPP_LAUNCH_MODE", "prebuilt")
     .current_dir(project_root)
     .spawn()?;
@@ -1151,7 +1239,7 @@ pub fn attach_kill_on_close_job() {}
 /// 返回 false —— 宁可多起一个编排器（会被端口与单实例判据挡住），也不能去杀
 /// 一个身份不明的进程。
 #[cfg(windows)]
-pub fn process_env_is_owned(pid: u32) -> bool {
+pub fn process_env_is_owned(pid: u32, project_root: &str) -> bool {
   use windows::Win32::Foundation::CloseHandle;
   use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -1160,7 +1248,7 @@ pub fn process_env_is_owned(pid: u32) -> bool {
     let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
       return false;
     };
-    let owned = read_owned_env_from_process(handle);
+    let owned = read_owned_env_from_process(handle, project_root);
     let _ = CloseHandle(handle);
     owned
   }
@@ -1177,13 +1265,14 @@ pub fn process_env_is_owned(pid: u32) -> bool {
 /// 正是这条链路的地基（§9.2）。
 #[cfg(not(windows))]
 #[allow(dead_code)]
-pub fn process_env_is_owned(_pid: u32) -> bool {
+pub fn process_env_is_owned(_pid: u32, _project_root: &str) -> bool {
   false
 }
 
 #[cfg(windows)]
 unsafe fn read_owned_env_from_process(
   handle: windows::Win32::Foundation::HANDLE,
+  project_root: &str,
 ) -> bool {
   use windows::Wdk::System::Threading::{
     NtQueryInformationProcess, ProcessBasicInformation,
@@ -1273,8 +1362,13 @@ unsafe fn read_owned_env_from_process(
     .map(|c| u16::from_le_bytes([c[0], c[1]]))
     .collect();
   let text = String::from_utf16_lossy(&units);
-  let needle = format!("{OWNED_ENV}=1");
-  text.split('\0').any(|entry| entry.trim() == needle)
+  /* 认亲双判据（ISSUE #3851）：「是某个壳起的」（OWNED_ENV）**且**「是本检出
+   * 的壳起的」（PROJECT_ROOT_ENV 与当前根一致）。多检出并行时，只看前者会把
+   * 别家正在跑的编排器当成自己的残留 —— 后果是误杀整树。 */
+  let owned_needle = format!("{OWNED_ENV}=1");
+  let root_needle = format!("{PROJECT_ROOT_ENV}={project_root}");
+  text.split('\0').any(|entry| entry.trim() == owned_needle)
+    && text.split('\0').any(|entry| entry.trim() == root_needle)
 }
 
 /// 找到「已经在跑、且是本模块亲手起的」编排器进程号（找不到 = None）。
@@ -1283,7 +1377,7 @@ unsafe fn read_owned_env_from_process(
 /// 环境块认亲。**命令行**这一层只用来做廉价预筛（省掉绝大多数 OpenProcess），
 /// 真正的判据是环境块（见 `is_own` 的注释）。
 #[cfg(windows)]
-pub fn find_owned_orchestrator() -> Option<u32> {
+pub fn find_owned_orchestrator(project_root: &str) -> Option<u32> {
   use windows::Win32::Foundation::CloseHandle;
   use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
@@ -1307,7 +1401,7 @@ pub fn find_owned_orchestrator() -> Option<u32> {
         if pid != 0
           && pid != self_pid
           && is_probable_node_process(&entry.szExeFile)
-          && process_env_is_owned(pid)
+          && process_env_is_owned(pid, project_root)
         {
           result = Some(pid);
           break;
@@ -1323,7 +1417,7 @@ pub fn find_owned_orchestrator() -> Option<u32> {
 }
 
 #[cfg(not(windows))]
-pub fn find_owned_orchestrator() -> Option<u32> {
+pub fn find_owned_orchestrator(_project_root: &str) -> Option<u32> {
   None
 }
 
@@ -1384,6 +1478,63 @@ mod tests {
     assert_eq!(
       nextjs_log_dir("/proj"),
       root.join("log").join("current").join("nextjs")
+    );
+  }
+
+  /// #3574 的回归判据：文件被清（编排器崩溃补做 / 退出归档的 `emptyDir`）之后，
+  /// 下一行写入必须自己把文件重建出来——而不是把内容写进已解除链接的旧句柄里。
+  #[test]
+  fn resilient_shell_log_survives_file_removal() {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-resilient-log-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+    ));
+    let path = dir.join("shell").join("shell.log");
+    let mut writer = ResilientShellLog::new(path.clone());
+    std::io::Write::write_all(&mut writer, b"first\n").unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "first\n");
+
+    // 模拟 current/ 被清：文件和目录整个删掉（此时「插件」手里还留着旧句柄——
+    // 本写入器没有长期句柄，这正是被测行为）。
+    std::fs::remove_dir_all(&dir).unwrap();
+
+    std::io::Write::write_all(&mut writer, b"second\n").unwrap();
+    assert_eq!(
+      std::fs::read_to_string(&path).unwrap(),
+      "second\n",
+      "清空后的写入必须重建文件；内容丢失 = 写进了已解除链接的句柄（#3574 的病根）"
+    );
+  }
+
+  /// 大小上限的等效 KeepOne：超过上限的下一行把文件整份重建（丢旧保新），
+  /// 别让长开会话把壳自持日志推到无界。
+  #[test]
+  fn resilient_shell_log_rebuilds_past_size_cap() {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-resilient-cap-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+    ));
+    let path = dir.join("shell").join("shell.log");
+    let mut writer = ResilientShellLog {
+      path: path.clone(),
+      max_bytes: 8,
+    };
+    std::io::Write::write_all(&mut writer, b"12345678\n").unwrap();
+    // 恰好达到上限：这一行还在。
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "12345678\n");
+    std::io::Write::write_all(&mut writer, b"9\n").unwrap();
+    assert_eq!(
+      std::fs::read_to_string(&path).unwrap(),
+      "9\n",
+      "越过上限的下一行必须重建文件，而不是无限追加"
     );
   }
 

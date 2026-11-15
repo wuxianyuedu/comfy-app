@@ -6,6 +6,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import { describe, defineGateRepo } from "./helpers/gate-repo";
 
 /* `test` 与 `expect` 都由夹具给出（`test` 带 `repo`；`expect` 是它转发的那一份，
@@ -139,10 +141,13 @@ function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
 }
 
 /** 真实仓库里的三份事实读数 —— 夹具的断言按它来，避免写死会漂的数字。 */
-/* SAFETY: 类型断言已复核 */
-const REAL = JSON.parse(
+const realParsed: unknown = JSON.parse(
   readFileSync(join(process.cwd(), "scripts", ".on-demand-duties.json"), "utf8"),
-) as { duties: Array<unknown> };
+);
+if (!isRecord(realParsed) || !isUnknownArray(realParsed.duties)) {
+  throw new Error("scripts/.on-demand-duties.json 形状不对：缺 duties 数组");
+}
+const REAL = { duties: realParsed.duties };
 
 describe("on-demand-duties —— 双向", () => {
   test("索引与实际机器事实一致 ⇒ 通过", ({ repo }) => {
@@ -244,13 +249,12 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
 
   test("行缺字段 ⇒ 红（id / name / fact.kind / executor 都要有）", ({ repo }) => {
     const led = ledgerDuties();
-    /* 造「缺字段」那一档 —— 用 `Partial` 表达「这一行故意缺了 executor」。 */
-    /* SAFETY: 类型断言已复核 */
+    /* 造「缺字段」那一档 —— 用 `Partial` 表达「这一行故意缺了 executor」。
+       落盘走 unknown 信封（B5 清账）：缺字段的行不再断言回 DutyRow。 */
     const broken = { ...led.duties[0] } as Partial<DutyRow>;
     delete broken.executor;
-    /* SAFETY: 类型断言已复核 */
-    led.duties = [broken as DutyRow, ...led.duties.slice(1)];
-    repo.write("scripts/.on-demand-duties.json", JSON.stringify(led, null, 2));
+    const brokenLedger: unknown = { ...led, duties: [broken, ...led.duties.slice(1)] };
+    repo.write("scripts/.on-demand-duties.json", JSON.stringify(brokenLedger, null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("缺字段");

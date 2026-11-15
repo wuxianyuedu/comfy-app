@@ -13,6 +13,7 @@ vi.mock("~/server/db", async () => {
 });
 
 import { productionRepository } from "~/lib/core/repository-production";
+import { normalizeProductionRun } from "~/lib/production/run-types";
 import { getTestDb, seedUser } from "../../../tests/helpers/test-db";
 
 const tdb = getTestDb();
@@ -65,6 +66,26 @@ describe("ProductionRepository", () => {
     expect(await productionRepository.getForUser("u1", "proj_1")).not.toBeNull();
   });
 
+  it("跨用户 upsert 不得覆盖他人生产数据", async () => {
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { id: "u2", email: "u2@test.dev" });
+    await productionRepository.upsertForUser("u1", {
+      id: "proj_1",
+      title: "u1 的",
+      shots: [{ id: "s1" }],
+    });
+    await expect(
+      productionRepository.upsertForUser("u2", {
+        id: "proj_1",
+        title: "u2 篡改",
+        shots: [{ id: "bad" }],
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const got = await productionRepository.getForUser("u1", "proj_1");
+    expect(got?.title).toBe("u1 的");
+    expect(got?.shots).toEqual([{ id: "s1" }]);
+  });
+
   it("patchContent 支持 scriptReview（FR-QA-07）：JSON 列序列化落库且还原为对象", async () => {
     seedUser(tdb, { id: "u1", email: "u1@test.dev" });
     await productionRepository.upsertForUser("u1", { id: "proj_1" });
@@ -79,5 +100,45 @@ describe("ProductionRepository", () => {
     ).toBe(true);
     const got = await productionRepository.getForUser("u1", "proj_1");
     expect(got?.scriptReview).toEqual(state);
+  });
+
+  it("clearFilmStart 仅清空 filmStartedAt，保留 run 的其他并发字段", async () => {
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    await productionRepository.upsertForUser("u1", { id: "proj_1" });
+    const claimed = await productionRepository.claimFilmStart(
+      "u1",
+      "proj_1",
+      "2026-01-01T00:00:00.000Z",
+    );
+    expect(claimed).toBe(true);
+    // 模拟认领后、补偿前的其他写者推进了 run 字段（pause/steps 等）。
+    expect(
+      await productionRepository.updateRun(
+        "u1",
+        "proj_1",
+        normalizeProductionRun({
+          status: "paused",
+          stage: "render",
+          log: [{ ts: "t", kind: "stage_start", ok: true, detail: "m" }],
+          filmStartedAt: "2026-01-01T00:00:00.000Z",
+        }),
+      ),
+    ).toBe(true);
+
+    await productionRepository.clearFilmStart("u1", "proj_1");
+
+    const got = await productionRepository.getForUser("u1", "proj_1");
+    const run = normalizeProductionRun(got?.run);
+    expect(run.filmStartedAt).toBe("");
+    expect(run.status).toBe("paused");
+    expect(run.stage).toBe("render");
+    expect(run.log).toHaveLength(1);
+  });
+
+  it("clearFilmStart 对缺失行或已清空状态无副作用", async () => {
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    await expect(productionRepository.clearFilmStart("u1", "missing")).resolves.toBeUndefined();
+    await productionRepository.upsertForUser("u1", { id: "proj_1" });
+    await expect(productionRepository.clearFilmStart("u1", "proj_1")).resolves.toBeUndefined();
   });
 });

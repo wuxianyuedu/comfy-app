@@ -10,6 +10,7 @@ import { mediaPreviewUrl } from "~/lib/media/media-url";
 import { renderSubgraphWidgetValue, valueCellColor } from "../workflow-utils";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { RawInputMeta } from "../workflow-types";
+import { Hint } from "~/components/ui/hint";
 
 type SubgraphWidgetRowProps = {
   hostNodeId?: string;
@@ -79,17 +80,18 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
             }}
           />
         )}
-        <span
-          /* 去掉 `truncate`：让长的封装 widget 标签换成多行
-           *  而不是被裁掉；完整文本仍可从原生 `title` 看到。 */
-          className="text-2xs min-w-0 text-left wrap-break-word whitespace-normal"
-          style={{
-            color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
-          }}
-          title={label}
-        >
-          {label}
-        </span>
+        <Hint label={label}>
+          <span
+            /* 去掉 `truncate`：让长的封装 widget 标签换成多行
+             *  而不是被裁掉；完整文本仍可从原生 `title` 看到。 */
+            className="text-2xs min-w-0 text-left wrap-break-word whitespace-normal"
+            style={{
+              color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
+            }}
+          >
+            {label}
+          </span>
+        </Hint>
       </div>
       {isImageType ? (
         /* 图片类 widget 在画布上直接渲染缩略图（否则只显示成文本值，
@@ -119,25 +121,26 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
           value={typeof v === "string" ? v : ""}
         />
       ) : (
-        <span
-          className="text-2xs min-w-0 truncate rounded-[5px] px-1.5 text-left tabular-nums"
-          style={{
-            /* 值框：ComfyUI widget 槽同款「凹陷井」—— 深底 +
-             *  细描边。宽度 = 第 2 列整格（最小 64px，随节点
-             *  余宽伸展），文本左对齐，超长省略（只缩略文字，
-             *  节点宽度仍由用户控制）。颜色按「有没有连线」
-             *  取两档（见 `valueCellColor`）。 */
-            display: "flex",
-            alignItems: "center",
-            minHeight: 18,
-            background: "var(--color-canvas-deep)",
-            border: "1px solid var(--color-border-subtle)",
-            color: valueCellColor(v, isConn),
-          }}
-          title={String(v)}
-        >
-          {renderSubgraphWidgetValue(v)}
-        </span>
+        <Hint label={String(v)}>
+          <span
+            className="text-2xs min-w-0 truncate rounded-[5px] px-1.5 text-left tabular-nums"
+            style={{
+              /* 值框：ComfyUI widget 槽同款「凹陷井」—— 深底 +
+               *  细描边。宽度 = 第 2 列整格（最小 64px，随节点
+               *  余宽伸展），文本左对齐，超长省略（只缩略文字，
+               *  节点宽度仍由用户控制）。颜色按「有没有连线」
+               *  取两档（见 `valueCellColor`）。 */
+              display: "flex",
+              alignItems: "center",
+              minHeight: 18,
+              background: "var(--color-canvas-deep)",
+              border: "1px solid var(--color-border-subtle)",
+              color: valueCellColor(v, isConn),
+            }}
+          >
+            {renderSubgraphWidgetValue(v)}
+          </span>
+        </Hint>
       )}
     </div>
   );

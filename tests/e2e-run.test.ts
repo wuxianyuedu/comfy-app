@@ -41,6 +41,7 @@ import {
   readFreshnessLedgerAt,
 } from "../scripts/freshness-ledger.mjs";
 import { runGate } from "../scripts/freshness-gate.mjs";
+import { isRecord } from "~/lib/is-record";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -611,15 +612,13 @@ describe("全量 e2e 的自证账（ISSUE #1282 立「每天首次」→ 钩子�
 
 describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("`pnpm test:e2e` 真的走这条通道（否则记账这一步没有执行者）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(readText("package.json")) as {
-      scripts?: Record<string, string>;
-    };
+    const parsed: unknown = JSON.parse(readText("package.json"));
+    const scripts = isRecord(parsed) && isRecord(parsed.scripts) ? parsed.scripts : undefined;
     /* 按**入口**判而不是按命令长得像什么：`playwright test` 与
      * `node scripts/e2e-run.mjs` 都能跑出同样的用例，只有后者会记账 ——
      * 而「账上有没有日期」正是这一档存在的全部意义。 */
-    expect(pkg.scripts?.["test:e2e"]).toContain("scripts/e2e-run.mjs");
-    expect(pkg.scripts?.["test:e2e:dry"]).toContain("--dry-run");
+    expect(scripts?.["test:e2e"]).toContain("scripts/e2e-run.mjs");
+    expect(scripts?.["test:e2e:dry"]).toContain("--dry-run");
   });
 
   it("钩子那一步真判了这条账（每次提交都看得见它的日期）", () => {
@@ -639,8 +638,9 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     const live = readFreshnessLedgerAt(ROOT, TRACK.ledger);
     expect(Object.keys(live)).toContain(TRACK.key);
     // 这份记录是**真跑**过的（本轮的 `node scripts/e2e-run.mjs`），不是手写的一行。
-    /* SAFETY: 类型断言已复核 */
-    const rec = live[TRACK.key] as Record<string, unknown> | undefined;
+    /* 索引值用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+    const entry: unknown = live[TRACK.key];
+    const rec: Record<string, unknown> | undefined = isRecord(entry) ? entry : undefined;
     expect(String(rec?.trackedBy)).toBe("e2e");
   });
 
@@ -778,11 +778,13 @@ describe("开跑前的三档前置（ISSUE #1948）", () => {
  * （本文件从不读），被 kill 时随进程消失（§13.5.3「第十二处」同形态）。本地跑看不见，故钉 `stdio` 形状 + 一条真跑。
  */
 describe("起 Playwright 的那一跳：不缓存输出（ISSUE #1998）", () => {
-  /* SAFETY: 类型断言已复核 */
-  const ENV = {
+  /* 空对象直接标注类型即可满足 ProcessEnv（本仓的 ProcessEnv 带 NODE_ENV 必填，
+     B5 清账：不走 `as` 断言）。 */
+  const ENV: NodeJS.ProcessEnv = {
+    NODE_ENV: "test",
     E2E_PREFLIGHT: "{}",
     E2E_PYTHON_PREFLIGHT: "{}",
-  } as unknown as NodeJS.ProcessEnv;
+  };
 
   it("形态：`spawn` 那一份里 `stdio` 是 inherit —— 缓存掉了就是零行日志", () => {
     const inv = resolvePlaywrightInvocation({
@@ -923,8 +925,7 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
   });
 
   it("Python 缺件 ⇒ 拦，且**结论已经写进 env**（`playwright.config.ts` 读它）", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const env = {} as NodeJS.ProcessEnv;
+    const env: NodeJS.ProcessEnv = { NODE_ENV: "test" };
     const collectors = makePreflightCollectors({
       env,
       cwd: ROOT,
@@ -944,9 +945,9 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
   });
 
   it("schema 判成 abort ⇒ 拦下，且逐条列出丢数据的语句", () => {
+    const env: NodeJS.ProcessEnv = { NODE_ENV: "test" };
     const collectors = makePreflightCollectors({
-      /* SAFETY: 类型断言已复核 */
-      env: {} as NodeJS.ProcessEnv,
+      env,
       cwd: ROOT,
       schema: () => ({
         /* SAFETY: 类型断言已复核 */
@@ -970,8 +971,7 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
       { verdict: "unknown" as const, detail: "探不动" },
     ]) {
       const collectors = makePreflightCollectors({
-        /* SAFETY: 类型断言已复核 */
-        env: {} as NodeJS.ProcessEnv,
+        env: { NODE_ENV: "test" } satisfies NodeJS.ProcessEnv,
         cwd: ROOT,
         browser: () => Promise.resolve(verdict),
       });

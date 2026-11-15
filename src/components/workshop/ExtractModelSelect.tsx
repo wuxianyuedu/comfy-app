@@ -2,6 +2,7 @@
 
 import React from "react";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { beginStaleRun } from "~/lib/stale-run";
 import { fetchLocalModels, fetchRemoteModels } from "~/lib/llm/model-catalog-client";
 import { useLLM } from "~/components/workshop/LLMContext";
@@ -11,7 +12,7 @@ import { parseChannelOption } from "~/lib/workshop/channel-options";
 function optionLabel(name: string, badge: string): React.ReactNode {
   return (
     <span className="flex w-full items-center">
-      <span className="min-w-0 flex-1 truncate">{name}</span>
+      <TruncatedText className="min-w-0 flex-1 truncate">{name}</TruncatedText>
       <span className="text-muted-foreground text-3xs ml-2 shrink-0">{badge}</span>
     </span>
   );

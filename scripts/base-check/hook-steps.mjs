@@ -232,9 +232,7 @@ export function groupSteps(hookPath = HOOK) {
  *
  * ⚠️ **这一族是「按参数形态识别」抓不到的那一半**（ISSUE #2265 的现场）：
  *   · `shell-gate` —— 钩子行里**连 `--staged` 都没有**，它自己读暂存区；
- *   · `check-doc-mirror-pairing.cjs` —— 带 `--staged`，但**剥掉那个旗标之后它判的
- *     仍是暂存集**（它自己的文件头写着「不带它判的也是暂存集」：镜像与源是否**同批**
- *     是提交的属性，不是仓库的属性）⇒ 剥旗标这一手对它**无效**；
+ *   · （`check-doc-mirror-pairing.cjs` 曾在这一族里，#3586 随镜像退役一并退出。）
  *   · `known-failed-selftest-gate.mjs` —— 同样**连旗标都没有**（钩子行是
  *     `node scripts/known-failed-selftest-gate.mjs`），它自己读暂存区。
  *
@@ -254,11 +252,7 @@ export function groupSteps(hookPath = HOOK) {
  * 也让合并前复算**不收**它们（`mayDecideOnCleanSnapshot`）—— 那条复算在干净快照上
  * 同样没有暂存区，收进去只会多一行恒绿。
  */
-export const CHANGED_SCOPED = [
-  "scripts/shell-gate.mjs",
-  "scripts/check-doc-mirror-pairing.cjs",
-  "scripts/known-failed-selftest-gate.mjs",
-];
+export const CHANGED_SCOPED = ["scripts/shell-gate.mjs", "scripts/known-failed-selftest-gate.mjs"];
 
 /**
  * 一条指令**能不能在干净的上游快照上判决** —— 判据是它的**参数形态**，不是名字。

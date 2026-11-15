@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { useHotkey } from "~/components/ui/use-hotkey";
+import { beginStaleRun } from "~/lib/stale-run";
 import { isRecord } from "~/lib/is-record";
 import { fetchFileLogSlice } from "~/lib/log/log-file-client";
 import { clampLogTime } from "~/lib/log/log-session-scope";
@@ -149,12 +150,17 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") {
       return;
     }
+    /* StrictMode 双挂载（ISSUE #3834）：第一次的 cleanup 跑在 `import()` 完成
+     * 之前 —— 手写 `cancelled` 标志那时还没置位，第一条监听器就此泄漏、壳日志
+     * 被处理两次。用 `beginStaleRun` 作废守卫（§16.2.4.34 的唯一出口）：清理
+     * 先于注册完成的那次订阅，到手后 `commit` 整段跳过。 */
+    const guard = beginStaleRun();
     let unlisten: (() => void) | undefined;
 
     const setup = async () => {
       try {
         const { listen } = await import("@tauri-apps/api/event");
-        unlisten = await listen<{ level: string; message: string }>("log:emit", (event) => {
+        const off = await listen<{ level: string; message: string }>("log:emit", (event) => {
           const lv = event.payload?.level ?? "info";
           const message = event.payload?.message ?? "";
           if (!message) {
@@ -163,6 +169,9 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
           const level: LogLevel =
             lv === "error" ? "error" : lv === "warn" ? "warn" : lv === "debug" ? "debug" : "info";
           addEntry({ level, message, source: "tauri" });
+        });
+        guard.commit(() => {
+          unlisten = off;
         });
       } catch (error) {
         /* 不在 Tauri 里运行是**正常形态**（浏览器 / 纯 web），静默即可。但「在壳里却监听失败」不是正常
@@ -180,7 +189,10 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     };
 
     void setup();
-    return () => unlisten?.();
+    return () => {
+      guard.dispose();
+      unlisten?.();
+    };
   }, [addEntry]);
 
   // ── 全局未捕获错误与未处理 rejection → 面板（来源："system"） ──
@@ -312,7 +324,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
             message:
               "日志面板暂时读不到日志：应用服务（Next dev server）当前不可达。" +
               "常见原因：还在首屏编译、进程已退出、或端口被别的实例占用。" +
-              "请先确认应用能正常打开；启动相关的日志见「启动器」来源与 log/launcher/。",
+              "请先确认应用能正常打开；启动相关的日志见「启动器」来源与 log/current/launcher/。",
             source: "system",
           });
         }

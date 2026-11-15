@@ -10,6 +10,7 @@ import { useState } from "react";
 
 import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { Button } from "~/components/ui/button";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { displayValue } from "~/lib/display-value";
 import { fmtBytes } from "~/lib/format-bytes";
 import { formatLocalStamp } from "~/lib/time-format";
@@ -24,22 +25,28 @@ function BackupRow({
   pending,
   disabled,
   onRestore,
+  hasAppData,
 }: {
   disabled: boolean;
   entry: BackupEntry;
+  /** 同刻有一套本机应用数据备份（#3732）：恢复时会随数据库一起覆盖回 data/。 */
+  hasAppData: boolean;
   onRestore: (name: string) => void;
   pending: boolean;
 }) {
   const size = fmtBytes(entry.size);
   return (
     <div className={`${SETTINGS_ROW_CLASS} flex items-center gap-3`}>
-      <span className="text-ink/80 min-w-0 flex-1 truncate font-mono text-xs">{entry.name}</span>
+      <TruncatedText className="text-ink/80 min-w-0 flex-1 truncate font-mono text-xs">
+        {entry.name}
+      </TruncatedText>
       <span className="text-muted-foreground shrink-0 text-xs">
         {/* 缺值占位符走 `~/lib/display-value`（规范 16 §16.2.3 的 P8）：
             名字形态认不出时刻时 `at` 是 null —— 那与「读到了 0 时刻」是两件事，
             这个出口已经把这条判据收在一处。 */}
         {entry.at === null ? displayValue(null) : formatLocalStamp(entry.at)}
         {size === null ? "" : ` · ${size}`}
+        {hasAppData ? " · 含应用数据" : ""}
       </span>
       <Button
         className="h-auto shrink-0 rounded px-2 py-0.5 text-xs"
@@ -56,10 +63,29 @@ function BackupRow({
   );
 }
 
+/** 数据库备份名里的时刻段（`YYYYMMDD-HHmmss`）—— 与本机应用数据备份的目录名
+ *  按同刻配对（#3732）。认不出（用户自己丢进来的文件）时 null。 */
+function stampOfDbBackup(name: string): string | null {
+  const m = /^db-backup-(?<stamp>\d{8}-\d{6})/.exec(name);
+  return m?.groups?.stamp ?? null;
+}
+
 export function BackupSection({ c }: { c: ReadySettingsPageController }) {
   /* 「接下来要不要重启」的本地确认态：换文件还没发生，按钮点下去之后要有一句
    * 明确的话让人知道**下一步做什么**，而不是弹个 toast 就完事。 */
-  const [confirming, setConfirming] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<{
+    appDataDir: string | null;
+    name: string;
+  } | null>(null);
+  /* 「从指定目录导入」的路径输入（#3732）。 */
+  const [importDir, setImportDir] = useState("");
+
+  /** 数据库备份名 → 同刻的本机应用数据备份套（#3732）。 */
+  const pairedAppDataDir = (dbName: string): string | null => {
+    const stamp = stampOfDbBackup(dbName);
+    if (stamp === null) return null;
+    return c.appDataBackups.find((set) => set.name.includes(stamp))?.name ?? null;
+  };
 
   return (
     <>
@@ -76,7 +102,8 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
           <code className="text-ink/80">-shm</code>。备份落在{" "}
           <code className="text-ink/80">&lt;应用根&gt;/data/backups/</code>
           ，只保留
-          <strong className="text-ink/80">最近 3 份</strong>。
+          <strong className="text-ink/80">最近 3 份</strong>
+          。本机应用数据（设置 / 模式契约 / 密钥等）随同一刻备份。
         </p>
         <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
           自动备份只在
@@ -88,7 +115,7 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
         </p>
         <div className="flex items-center gap-3">
           <StatusButton
-            disabled={c.backupBusy || c.restoreBusy}
+            disabled={c.backupBusy || c.restoreBusy || c.importBusy}
             onClick={() => {
               void c.createBackupNow();
             }}
@@ -113,12 +140,16 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
         <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
           换文件之前会
           <strong className="text-ink/80">自动给当前库再做一份备份</strong> ——
-          恢复本身也是一次不可逆操作，恢复错了得有退路。
+          恢复本身也是一次不可逆操作，恢复错了得有退路。标了
+          <strong className="text-ink/80">含应用数据</strong>
+          的那几份，恢复时会把本机应用数据（设置 / 模式契约 / 密钥等）一起覆盖回{" "}
+          <code className="text-ink/80">data/</code>。
         </p>
 
         {c.pendingRestore && (
           <div className="border-warning/30 bg-warning/10 text-warning-strong mb-3 rounded-lg border px-3 py-2 text-sm">
-            已登记从 <code>{c.pendingRestore.file}</code> 恢复 ——{" "}
+            已登记从 <code>{c.pendingRestore.file}</code> 恢复
+            {c.pendingRestore.appDataDir ? "（含本机应用数据）" : ""} ——{" "}
             <strong>关闭并重新启动应用后生效</strong>
             。重启前不打算恢复的话，选任意一份再登记一次即可覆盖这条登记。
           </div>
@@ -134,10 +165,13 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
           <div className="flex flex-col gap-2">
             {c.backups.map((entry) => (
               <BackupRow
-                disabled={c.restoreBusy || c.backupBusy}
+                disabled={c.restoreBusy || c.backupBusy || c.importBusy}
                 entry={entry}
+                hasAppData={pairedAppDataDir(entry.name) !== null || c.appDataBackups.length === 0}
                 key={entry.name}
-                onRestore={setConfirming}
+                onRestore={(name) => {
+                  setConfirming({ name, appDataDir: pairedAppDataDir(name) });
+                }}
                 pending={c.pendingRestore?.file === entry.name}
               />
             ))}
@@ -149,15 +183,16 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
         {confirming !== null && (
           <div className="border-destructive/30 bg-destructive/10 mt-3 rounded-lg border px-3 py-2 text-sm">
             <p className="text-danger-strong mb-2">
-              确认登记从 <code>{confirming}</code> 恢复？下次启动时它会覆盖当前数据库。
+              确认登记从 <code>{confirming.name}</code> 恢复
+              {confirming.appDataDir ? "（含本机应用数据）" : ""}？下次启动时它会覆盖当前数据库。
             </p>
             <div className="flex gap-2">
               <Button
                 className="h-auto rounded px-3 py-1 text-xs"
                 onClick={() => {
-                  const name = confirming;
+                  const target = confirming;
                   setConfirming(null);
-                  void c.restoreFrom(name);
+                  void c.restoreFrom(target.name, target.appDataDir);
                 }}
                 size="xs"
                 variant="destructive"
@@ -177,6 +212,35 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
             </div>
           </div>
         )}
+      </SettingsCard>
+
+      <SettingsCard title="从指定目录导入">
+        <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
+          把另一台机器 / 移动盘上的备份拷回来（#3732）：填一个目录路径，里面认得出
+          <code className="text-ink/80">db-backup-*.sqlite</code> 与{" "}
+          <code className="text-ink/80">app-data-backup-*/</code>
+          就会导入到备份清单；同名不覆盖。
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            aria-label="备份目录路径"
+            className="border-input bg-background text-ink placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-8 min-w-0 flex-1 rounded-lg border px-2.5 text-sm outline-none"
+            onChange={(event) => {
+              setImportDir(event.target.value);
+            }}
+            placeholder="例如 D:\comfy-backups 或 \\\\NAS\\backup\\comfy"
+            value={importDir}
+          />
+          <Button
+            disabled={c.importBusy || importDir.trim() === ""}
+            onClick={() => {
+              void c.importFromDir(importDir.trim());
+            }}
+            variant="primary-solid"
+          >
+            {c.importBusy ? "导入中…" : "导入"}
+          </Button>
+        </div>
       </SettingsCard>
     </>
   );

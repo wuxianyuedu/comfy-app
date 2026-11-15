@@ -40,6 +40,8 @@ function ShellHarness({
     extraNames: extraProjects,
   });
   const activeProject = projects[0];
+  /* 常驻侧栏项的页签刻意也放一张（queue）：顶部页签条只渲染项目类页签，
+     侧栏项的打开态由图标胶片表达（ISSUE #3740） */
   const tabs: Array<ViewTab> = [
     { key: tabKey("works", null), view: "works", projectId: null },
     {
@@ -47,6 +49,7 @@ function ShellHarness({
       view: "canvas",
       projectId: activeProject?.id ?? null,
     },
+    { key: tabKey("queue", null), view: "queue", projectId: null },
   ];
   const activeTab = tabs[0];
 

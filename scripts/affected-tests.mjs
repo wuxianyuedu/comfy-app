@@ -26,6 +26,10 @@
  *      只有整串匹配抓得住。改名时**旧路径也进改动面**（`--name-status -M` 的 R 行
  *      两侧都收），否则按旧路径读文件的用例会随改名整条漏跑（ISSUE #2226）。
  *      同族：改 `scripts/<name>.cjs|mjs|py` 时按名字配 `tests/<name>.test.ts`。
+ *   ⑤ **编排器闭包成员**：改动落在 `dev-launcher.mjs` 的相对 import 闭包内（或清单判据
+ *      直接读文本的两份本体）→ 跑 `tests/dist-artifact-hygiene.test.ts` —— 那份判据对
+ *      闭包成员的消费是运行时读文本解析，③ 追不到（ISSUE #3812）。实现见
+ *      `scripts/affected-launcher-hygiene.mjs`，闭包算法在 `scripts/launcher-closure.mjs`。
  *
  * ⚠️ 闭包只跟着**静态写出来的**说明符走，两类它抓不到：运行时拼出来的路径
  * （`import(base + name)`、`path.join(dir, …)`）、以及解析目录之外的消费方。
@@ -69,6 +73,7 @@ import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 import { selectFixedByFace } from "./fixed-gate-input-faces.mjs";
 import { changedPathsFromNameStatus, normalizeRel } from "./git-name-status.mjs";
 import { stripComments } from "./tw4-scan-core.mjs";
+import { launcherClosureIfNeeded, noteLauncherHygiene } from "./affected-launcher-hygiene.mjs";
 
 const HERE = import.meta.dirname;
 const SELF = import.meta.filename;
@@ -319,9 +324,11 @@ function reachFrom(roots, importedBy) {
  * 核心解析：改动清单 + 测试清单 +（注入的）读文件函数 → 该跑哪些测试。
  * 不碰 git、不碰真实磁盘，便于用例喂夹具。
  *
- * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[], graph?: {importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}, tracked?: string[] | null}} input
+ * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[], graph?: {importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}, tracked?: string[] | null, launcherClosure?: Set<string> | null}} input
  *   `tracked` 是当前树/索引里的全部路径（`git ls-files`）。给了它才对**已消失的旧路径**
  *   （改名旧侧、删除）做「旧路径片」匹配；不给则只认整串字面量（用例夹具的默认口径）。
+ *   `launcherClosure` 是编排器（`dev-launcher.mjs`）的相对 import 闭包成员（相对仓库根）；
+ *   给了才应用判据 ⑤（真实入口由 `main()` 经 `launcherClosureIfNeeded()` 按需算好传入）。
  * @returns {Resolution}
  */
 export function resolveAffectedTests({
@@ -332,6 +339,7 @@ export function resolveAffectedTests({
   knownFailed = [],
   graph,
   tracked = null,
+  launcherClosure = null,
 }) {
   /** @type {Record<string, string | undefined>} */
   const reasons = {};
@@ -441,6 +449,8 @@ export function resolveAffectedTests({
       add(`tests/${script.groups?.stem}.test.ts`, "脚本同名回归");
       add(`tests/${script.groups?.stem}.test.tsx`, "脚本同名回归");
     }
+    // 判据 ⑤：编排器闭包成员 / 清单判据的消费源 → dist-artifact-hygiene（ISSUE #3812）。
+    noteLauncherHygiene(rel, launcherClosure, add);
   }
 
   /* ── ③ 反向 import 闭包 ────────────────────────────────────────────────
@@ -829,6 +839,7 @@ function main() {
           readText,
           knownFailed: KNOWN_FAILED_FILES,
           tracked: inputs.tracked,
+          launcherClosure: launcherClosureIfNeeded(changed),
         });
 
   const extra = res.tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t));

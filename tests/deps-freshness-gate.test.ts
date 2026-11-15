@@ -3,6 +3,7 @@
  * 没同步」能否被看见，故在真 git 仓库跑（「远端」= `refs/remotes/<remote>/master` + reflog，名按引用现算，本仓
  * 实测 `cnb`，R12-01）。分界：① 版本变⇒红 ② 解析变⇒红 ③ 只动注释⇒不报 ④ 无取证⇒`[未校验]` ⑤ `--offline` 只判本地 ⑥ `MERGE_HEAD`⇒不判 ⑦ 解析不到⇒红（#1721）。
  */
+import { isRecord, isUnknownArray } from "~/lib/is-record";
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 
 /** 「远端」的依赖声明（= 工作区要同步到的目标）。 */
@@ -55,23 +56,29 @@ type FreshnessReport = {
  */
 function parseReport(output: string): FreshnessReport {
   const raw: unknown = JSON.parse(output);
-  if (typeof raw !== "object" || raw === null) {
-    throw new Error(`--json 输出不是一个对象：${output}`);
+  /* 运行时收窄（B5 清账：不走 `as` 断言）—— 形状改坏时这一行就红。 */
+  if (!isRecord(raw) || !isUnknownArray(raw.remoteDrifts)) {
+    throw new Error(`--json 输出形状不对（缺 remoteDrifts 数组）：${output}`);
   }
-  /* SAFETY: 类型断言已复核 */
-  const r = raw as Record<string, unknown>;
-  if (!Array.isArray(r.remoteDrifts)) {
-    throw new Error(`--json 输出缺少 remoteDrifts 数组：${output}`);
-  }
+  const remoteDrifts = raw.remoteDrifts.filter(
+    (entry): entry is { file: string; kind: string } =>
+      isRecord(entry) && typeof entry.file === "string" && typeof entry.kind === "string",
+  );
+  const installDrift = isRecord(raw.installDrift)
+    ? {
+        state: typeof raw.installDrift.state === "string" ? raw.installDrift.state : "",
+        unresolved: isUnknownArray(raw.installDrift.unresolved)
+          ? raw.installDrift.unresolved.filter((u): u is string => typeof u === "string")
+          : undefined,
+      }
+    : null;
   return {
-    code: typeof r.code === "number" ? r.code : -1,
-    remoteChecked: r.remoteChecked === true,
-    remoteAgeMs: typeof r.remoteAgeMs === "number" ? r.remoteAgeMs : null,
-    /* SAFETY: 类型断言已复核 */
-    remoteDrifts: r.remoteDrifts as FreshnessReport["remoteDrifts"],
-    /* SAFETY: 类型断言已复核 */
-    installDrift: (r.installDrift ?? null) as FreshnessReport["installDrift"],
-    envBroken: r.envBroken === true,
+    code: typeof raw.code === "number" ? raw.code : -1,
+    remoteChecked: raw.remoteChecked === true,
+    remoteAgeMs: typeof raw.remoteAgeMs === "number" ? raw.remoteAgeMs : null,
+    remoteDrifts,
+    installDrift,
+    envBroken: raw.envBroken === true,
   };
 }
 
@@ -311,22 +318,32 @@ describe("check-deps-freshness 契约", () => {
     // 权威定义（`scripts/doc-facts.cjs` 反向解析它），判据里的字面量必须与它逐项相等。
     // 这条用例同时挡住了「解析器失灵 ⇒ 读出空清单 ⇒ 一切照旧绿」那一档
     // （§12.16 的同款教训：一个永远返回空数组的解析器会让所有断言全绿）。
-    /* SAFETY: 类型断言已复核 */
-    const facts = (await import("../scripts/doc-facts.cjs")) as unknown as {
-      FACTS: Array<{ extract: () => unknown; key: string }>;
-    };
-    const probesFact = facts.FACTS.find((f) => f.key === "deps.resolveProbes");
-    expect(probesFact, "FACTS 里缺 deps.resolveProbes 登记项").toBeDefined();
-    const declared = probesFact?.extract();
+    /* 两个 .cjs/.mjs 模块都无类型：出口按键做运行时守卫（B5 清账，不走 as 断言）。 */
+    const facts: unknown = await import("../scripts/doc-facts.cjs");
+    if (!isRecord(facts) || !("FACTS" in facts)) {
+      throw new Error("doc-facts.cjs 缺 FACTS");
+    }
+    const probesFact = isUnknownArray(facts.FACTS)
+      ? facts.FACTS.find(
+          (entry): entry is { extract: () => unknown; key: string } =>
+            isRecord(entry) && entry.key === "deps.resolveProbes",
+        )
+      : undefined;
+    if (probesFact === undefined) {
+      throw new Error("FACTS 里缺 deps.resolveProbes 登记项");
+    }
+    const declared = probesFact.extract();
     expect(Array.isArray(declared)).toBe(true);
-    /* SAFETY: 类型断言已复核 */
-    const worktree = (await import("../scripts/launcher-core/worktree.mjs")) as unknown as {
-      RESOLVE_PROBES: Array<string>;
-    };
+    const worktree: unknown = await import("../scripts/launcher-core/worktree.mjs");
+    if (!isRecord(worktree) || !("RESOLVE_PROBES" in worktree)) {
+      throw new Error("worktree.mjs 缺 RESOLVE_PROBES");
+    }
     expect(worktree.RESOLVE_PROBES).toEqual(declared);
     // 清单非空也是判据的一部分：空的探针清单会让解析层**永远判绿**，
     // 而那正是它要拦的那件事。
-    expect(worktree.RESOLVE_PROBES.length).toBeGreaterThan(0);
+    expect(isUnknownArray(worktree.RESOLVE_PROBES) && worktree.RESOLVE_PROBES.length > 0).toBe(
+      true,
+    );
   });
 
   test("依赖树完好（三个探针都在）→ 解析层不误报", ({ repo }) => {

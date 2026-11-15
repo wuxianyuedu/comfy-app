@@ -180,6 +180,107 @@ describe("failedStepsFromJobs", () => {
   });
 });
 
+/**
+ * #3563 之后的真实拓扑：立案跑在**下游 job**（`daily-failure-issue`，`needs: daily`），
+ * 所以 jobs API 的应答里有**两个** job —— 上游 `daily` 已 `completed`（红格的 conclusion
+ * 是终值），立案 job 自己还在飞。上面的 `jobsJson` 只造一个 job，盖不到「红格在**别的**
+ * job 里」这一形，而那正是这次修法成立的前提。
+ *
+ * ⚠️ 这里造的是**拓扑**，不是某一次 API 应答的逐字快照：#3563 那一跑（run 42915112854）
+ * 的应答正文已经取不到了，能复核的只有脚本自己打印的「红格 0 个」。所以本组用例钉的是
+ * 「下游 job 形态下读得到上游的红」，不声称复现了当时 API 到底回了什么。
+ */
+function downstreamRun(redStep: string) {
+  return {
+    jobs: [
+      {
+        conclusion: "failure",
+        name: "daily",
+        status: "completed",
+        steps: [
+          { conclusion: "success", name: "检出", status: "completed" },
+          { conclusion: "failure", name: redStep, status: "completed" },
+          {
+            conclusion: "success",
+            name: "环境证据（失败时：dmesg 的 OOM 行 + 内存读数）",
+            status: "completed",
+          },
+        ],
+      },
+      {
+        conclusion: null,
+        name: "daily-failure-issue",
+        status: "in_progress",
+        steps: [
+          { conclusion: "success", name: "检出（立案脚本在仓库里）", status: "completed" },
+          {
+            conclusion: "success",
+            name: "装 Node（engines 下限 26.12.1；脚本只吃 node:*）",
+            status: "completed",
+          },
+          {
+            conclusion: null,
+            name: "失败立案（补洞：GA 每日档跑红 ⇒ CNB 单，按格名去重）",
+            status: "in_progress",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+describe("下游 job 拓扑（#3563）：红格在上游那个 job 里", () => {
+  it("跨 job 取到上游的红格；立案 job 自己那三步不算红", () => {
+    const red = "单元测试（排最后：唯一会因机器负载而红的一档，同 CNB 口径）";
+    expect(failedStepsFromJobs(downstreamRun(red))).toEqual([red]);
+  });
+
+  it("main 在这一形下真的建单（而不是「红格 0 个」零写入）", async () => {
+    const red = "全量E2E（cnb 同款判据一字不改）";
+    /** 建单 POST 的正文 —— 回读读的就是这份。 */
+    const seen: { posted?: Record<string, string | undefined> } = {};
+    const { calls, ghFetch, cnbFetch } = fakeFetch({
+      gh: () => res(200, downstreamRun(red)),
+      cnb: (method, path) => {
+        if (method === "GET" && path.startsWith(`/${SLUG}/-/labels`)) {
+          return res(200, [{ name: "提单人:ci-ga-daily" }]);
+        }
+        if (method === "GET" && path === `/${SLUG}/-/issues/3500`) {
+          return res(200, {
+            labels: [{ name: "提单人:ci-ga-daily" }],
+            number: 3500,
+            title: seen.posted?.title ?? "",
+          });
+        }
+        if (method === "GET" && path.startsWith(`/${SLUG}/-/issues`)) {
+          return res(200, []);
+        }
+        if (method === "POST" && path === `/${SLUG}/-/issues`) {
+          return res(201, { number: 3500 });
+        }
+        if (method === "POST" && path.endsWith("/labels")) {
+          return res(200, {});
+        }
+        return res(404, { message: `${method} ${path}` });
+      },
+    });
+    const wrapped: FetchLike = (url, init) => {
+      if ((init?.method ?? "").toUpperCase() === "POST" && url.endsWith("/issues")) {
+        seen.posted = readFields(init?.body, ["body", "priority", "title"]);
+      }
+      return cnbFetch(url, init);
+    };
+    const { lines, log } = logs();
+    const code = await main({ argv: [], env: env(), ghFetch, cnbFetch: wrapped, log });
+    expect(code).toBe(CODE.DONE);
+    expect(seen.posted?.title ?? "").toContain(titleKey(red));
+    /* 反面锚：#3563 的失效形态是「读得到 jobs 却零写入」。这里必须真发过建单那一跳，
+     * 且屏幕上不许出现那句「红格 0 个」—— 否则用例绿而事故重演。 */
+    expect(calls.some((c) => c === `CNB POST /${SLUG}/-/issues`)).toBe(true);
+    expect(lines.join("\n")).not.toContain("红格 0 个");
+  });
+});
+
 describe("titleKey / issueTitle", () => {
   it("去重键只有格名：run 号与 sha 进标题、不进键", () => {
     const a = issueTitle({ runId: "1", sha: "aaaaaaaa11", step: "全量E2E" });
@@ -333,7 +434,7 @@ describe("main：该写就写", () => {
     /** 只在建单那一次 POST 上截正文，其余原样转给假 CNB。 */
     const wrapped: FetchLike = (url, init) => {
       if ((init?.method ?? "").toUpperCase() === "POST" && url.endsWith("/issues")) {
-        seen.posted = readFields(init?.body, ["priority", "title"]);
+        seen.posted = readFields(init?.body, ["body", "priority", "title"]);
       }
       return cnbFetch(url, init);
     };
@@ -342,6 +443,105 @@ describe("main：该写就写", () => {
     expect(code).toBe(CODE.DONE);
     expect(seen.posted?.title ?? "").toContain(titleKey("全量E2E"));
     expect(seen.posted?.priority).toBe(AUTO_PRIORITY);
+  });
+
+  it("建单正文真的带上失败日志读数（#3584：立案时把红的那部分粘进单子）", async () => {
+    const seen: { posted?: Record<string, string | undefined> } = {};
+    const { ghFetch, cnbFetch } = fakeFetch({
+      gh: () => res(200, jobsJson([{ name: "全量E2E", conclusion: "failure" }])),
+      cnb: (method, path) => {
+        if (method === "GET" && path.startsWith(`/${SLUG}/-/labels`)) {
+          return res(200, [{ name: "提单人:ci-ga-daily" }]);
+        }
+        if (method === "GET" && path === `/${SLUG}/-/issues/3500`) {
+          return res(200, {
+            labels: [{ name: "提单人:ci-ga-daily" }],
+            number: 3500,
+            title: seen.posted?.title ?? "",
+          });
+        }
+        if (method === "GET" && path.startsWith(`/${SLUG}/-/issues`)) return res(200, []);
+        if (method === "POST" && path === `/${SLUG}/-/issues`) return res(201, { number: 3500 });
+        if (method === "POST" && path.endsWith("/labels")) return res(200, {});
+        return res(404, { message: `${method} ${path}` });
+      },
+    });
+    const wrapped: FetchLike = (url, init) => {
+      if ((init?.method ?? "").toUpperCase() === "POST" && url.endsWith("/issues")) {
+        seen.posted = readFields(init?.body, ["body", "title"]);
+      }
+      return cnbFetch(url, init);
+    };
+    const { log } = logs();
+    /* 日志读数由用例注入（与真跑共用同一个 `renderLogReadout` 产物）：这一条钉的是
+     * 「取到的读数有没有真的进 POST 正文」，不是再测一遍日志取数那一跳。 */
+    const code = await main({
+      argv: [],
+      env: env(),
+      ghFetch,
+      cnbFetch: wrapped,
+      log,
+      logReading: {
+        ghRepo: GH_REPO,
+        jobs: [{ conclusion: "failure", id: 9, name: "daily" }],
+        ok: true,
+        runId: RUN_ID,
+        text: "##[error]FAIL  tests/full-suite-run.test.ts\n##[endgroup]",
+      },
+    });
+    expect(code).toBe(CODE.DONE);
+    expect(seen.posted?.body ?? "").toContain("## 失败日志（平台原样摘录，已脱敏）");
+    expect(seen.posted?.body ?? "").toContain("##[error]FAIL  tests/full-suite-run.test.ts");
+    expect(seen.posted?.body ?? "").toContain("## 当场读数（出处）");
+  });
+
+  it("日志取不到也照建单，正文只多一节「取不到 + 出口」", async () => {
+    const seen: { posted?: Record<string, string | undefined> } = {};
+    const { ghFetch, cnbFetch } = fakeFetch({
+      gh: () => res(200, jobsJson([{ name: "全量E2E", conclusion: "failure" }])),
+      cnb: (method, path) => {
+        if (method === "GET" && path.startsWith(`/${SLUG}/-/labels`)) {
+          return res(200, [{ name: "提单人:ci-ga-daily" }]);
+        }
+        if (method === "GET" && path === `/${SLUG}/-/issues/3500`) {
+          return res(200, {
+            labels: [{ name: "提单人:ci-ga-daily" }],
+            number: 3500,
+            title: seen.posted?.title ?? "",
+          });
+        }
+        if (method === "GET" && path.startsWith(`/${SLUG}/-/issues`)) return res(200, []);
+        if (method === "POST" && path === `/${SLUG}/-/issues`) return res(201, { number: 3500 });
+        if (method === "POST" && path.endsWith("/labels")) return res(200, {});
+        return res(404, {});
+      },
+    });
+    const wrapped: FetchLike = (url, init) => {
+      if ((init?.method ?? "").toUpperCase() === "POST" && url.endsWith("/issues")) {
+        seen.posted = readFields(init?.body, ["body", "title"]);
+      }
+      return cnbFetch(url, init);
+    };
+    const { log } = logs();
+    const code = await main({
+      argv: [],
+      env: env(),
+      ghFetch,
+      cnbFetch: wrapped,
+      log,
+      logReading: {
+        ghRepo: GH_REPO,
+        jobs: [],
+        ok: false,
+        reason: "job 清单 HTTP 403（令牌缺 actions: read）",
+        runId: RUN_ID,
+        text: "",
+      },
+    });
+    expect(code).toBe(CODE.DONE);
+    expect(seen.posted?.body ?? "").toContain("取不到");
+    expect(seen.posted?.body ?? "").toContain("HTTP 403");
+    expect(seen.posted?.body ?? "").toContain("--log-failed");
   });
 
   it("有旧单 ⇒ 追加评论、不新建", async () => {

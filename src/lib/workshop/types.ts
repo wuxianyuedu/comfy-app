@@ -153,6 +153,30 @@ export type PipelineStageId =
   | "video_generation"
   | "final_edit";
 
+/** 流水线阶段的单调序（下标即推进度，越靠后越「完成」）。 */
+export const PIPELINE_STAGE_ORDER: ReadonlyArray<PipelineStageId> = [
+  "script",
+  "character",
+  "storyboard",
+  "shot_generation",
+  "video_generation",
+  "final_edit",
+];
+
+/**
+ * 阶段游标只进不退（ISSUE #3902）：set* / generate* 工具各想把 stage 拨到
+ * 自己那一格，但会话已推进到更后面时（如已 final_edit），补调前面的工具
+ * 不应把游标拉回去 —— 取两者中更靠后的那一格。
+ */
+export function advancePipelineStage(
+  current: PipelineStageId,
+  next: PipelineStageId,
+): PipelineStageId {
+  return PIPELINE_STAGE_ORDER.indexOf(next) > PIPELINE_STAGE_ORDER.indexOf(current)
+    ? next
+    : current;
+}
+
 export type StageStatus = "locked" | "pending" | "ready" | "done" | "stale";
 
 export type PipelineStage = {

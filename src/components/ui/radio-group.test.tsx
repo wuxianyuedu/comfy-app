@@ -36,4 +36,21 @@ describe("RadioGroupItem 的调用方内容", () => {
     expect(radio.querySelector('[data-slot="radio-group-indicator"]')).toBeTruthy();
     expect(radio.textContent).toContain("中 · 16px");
   });
+
+  it("选中实心底色在 Indicator 上、根元素不再带（#3553：卡片形态不被填紫）", () => {
+    render(
+      <RadioGroup aria-label="三态" defaultValue="on">
+        <RadioGroupItem value="on">开</RadioGroupItem>
+      </RadioGroup>,
+    );
+
+    const radio = screen.getByRole("radio", { name: "开" });
+    /* 根元素若还带 `data-checked:bg-*`，item 被 render 成卡片时整卡会被填实心
+     * 紫（base-ui 对 render 元素的 className 合并是纯拼接、不走 twMerge，
+     * 调用点无法可靠覆盖）。判据钉住「实心底只随选中态的 Indicator 渲染」。 */
+    expect(radio.className).not.toMatch(/data-checked:bg-/);
+    const indicator = radio.querySelector('[data-slot="radio-group-indicator"]');
+    expect(indicator).toBeTruthy();
+    expect(indicator?.className).toContain("bg-primary");
+  });
 });

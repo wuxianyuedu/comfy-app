@@ -14,6 +14,7 @@ import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
 import { textHandler } from "~/lib/form-props";
 import type { ProviderFormErrors, ProviderFormValues } from "~/lib/llm/provider-form";
+import { knownApiEndpointHint } from "~/lib/llm/provider-types";
 
 import type { ProviderView } from "../hooks/use-settings-providers";
 
@@ -54,10 +55,15 @@ export function ProviderConnectionFields({
   const inputClass =
     "border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-3 py-2 text-sm";
 
+  /* 已核实厂商的端点指路（#3612）：Base URL 落在官网域上时，在字段下面
+   * 当场指路 —— 不用等「测试连接」失败才看到（那条链的文案在 http-failure）。
+   * 纯派生：只读 form.baseUrl，不持有状态。 */
+  const endpointHint = knownApiEndpointHint(form.baseUrl);
+
   return (
     /* 这一块是**分组框**（供应商连接参数的外壳），不是「一行」：与卡片同底、
        只留一圈描边，靠内里的行（`bg-surface-row`）分层（ISSUE #3510 的口径）。 */
-    <div className="border-border mb-4 rounded-xl border p-3">
+    <div className="border-border dark:border-ink/40 mb-4 rounded-xl border p-3">
       <FormField
         className="mb-3"
         error={errors.name}
@@ -81,7 +87,7 @@ export function ProviderConnectionFields({
       <FormField
         className="mb-3"
         error={errors.baseUrl}
-        hint="填到版本段为止（如 https://api.example.com/v1）；路径段由各模型的接口格式补全"
+        hint="填到域名或路径前缀为止，不带 /v1（如 https://api.example.com）；版本段与动作路径由应用按接口格式自动拼接"
         id="provider-detail-base-url"
         label="Base URL"
         required
@@ -94,11 +100,15 @@ export function ProviderConnectionFields({
             onChange={textHandler((baseUrl) => {
               onChange({ baseUrl });
             })}
-            placeholder="https://api.example.com/v1"
+            placeholder="https://api.example.com"
             value={form.baseUrl}
           />
         )}
       </FormField>
+
+      {endpointHint !== null && (
+        <p className="text-2xs text-muted-foreground -mt-2 mb-3">{endpointHint}</p>
+      )}
 
       <FormField
         className="mb-2"

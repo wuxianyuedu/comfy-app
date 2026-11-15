@@ -43,7 +43,7 @@ export const COMMENT_PAGE_SIZE = 50;
  * 这一跳，这里只是把它暴露给「只想拿路径」的调用方 / 单测。
  *
  * @param {string} body 评论正文
- * @returns {{run:string,sha:string,pr:string,jobs:number,bytes:number,assetPath:string} | null}
+ * @returns {{run:string,sha:string,pr:string,jobs:number,bytes:number,assetPath:string,scope:string} | null}
  */
 export function readRelayMarker(body) {
   return parseRelayComment(body);
@@ -55,7 +55,7 @@ export function readRelayMarker(body) {
  * @param {(cmd:string,args:string[])=>import("./ship-exec.mjs").ExecResult} run 执行者
  * @param {string} slug 仓库路径
  * @param {number} number PR 号
- * @returns {{run:string,sha:string,pr:string,jobs:number,bytes:number,assetPath:string} | null}
+ * @returns {{run:string,sha:string,pr:string,jobs:number,bytes:number,assetPath:string,scope:string} | null}
  */
 export function findRelayComment(run, slug, number) {
   const res = cnbJson(run, [
@@ -121,7 +121,7 @@ export function decodeRelayPayload(b64, gunzip = gunzipSync) {
  * 一次完整读回：认 marker → 读附件 → 解码。
  *
  * @param {{run:(cmd:string,args:string[])=>import("./ship-exec.mjs").ExecResult, slug:string, number:number}} io
- * @returns {{meta:{run:string,sha:string,pr:string,jobs:number,bytes:number,assetPath:string}, text:string} | null}
+ * @returns {{meta:{run:string,sha:string,pr:string,jobs:number,bytes:number,assetPath:string,scope:string}, text:string} | null}
  *   读到正文时给它 + 身份读数；任一跳没读到回 null
  */
 export function readRelayLogs(io) {

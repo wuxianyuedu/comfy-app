@@ -16,6 +16,10 @@ import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
  *  ~28px、文案落到 12px（不是按钮文案档，规范 03 §3.10.1）。 */
 export const HEADER_ACTION_BTN = "shrink-0 gap-1.5 px-3";
 
+/** 页头动作按钮的统一外观（ISSUE #3759：导入工作流与右侧按钮同款）：
+ *  描边 + 弱底，不再用实心品牌色把导入按钮单独抬高。 */
+export const HEADER_ACTION_OUTLINE_BTN = `${HEADER_ACTION_BTN} border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright`;
+
 /** 服务端 list 返回的本地工作流根目录摘要（只取前端判据用得到的字段）。 */
 export type LocalWorkflowRoot = {
   absPath: string;

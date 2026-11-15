@@ -49,6 +49,11 @@ type SettingsShellProps = {
   /** 当前分区（导航高亮用）。 */
   section: Section;
   /**
+   * 各分区标题行右侧的附加物（ISSUE #3724）：按分区 id 给一枚「数据存放位置」
+   * 徽标等小标识。没有正文的分区节（`fallback` 态）不渲染，无需给全。
+   */
+  sectionTitleExtra?: SectionTitleExtra;
+  /**
    * 屏级可见标题 —— 走 `.u-title-page`。**页签（或顶栏）已经在说屏名时不传**
    * （ISSUE #1872）：那一次出现是重复的，不传时屏名以 `sr-only` 留在 DOM，
    * 这一行也不再占位（口径与 `ui/page-header` 的 `title` / `srTitle` 同一份）。
@@ -75,6 +80,10 @@ type SettingsShellProps = {
     }
 );
 
+/** 各分区标题行右侧的附加物（ISSUE #3724）：「这类数据存在哪儿」的徽标挂在大标题
+ * （`.u-title-stage` 那一行）右侧——卡片标题行没有别的可说时，徽标不再独占一行。 */
+export type SectionTitleExtra = Partial<Record<Section, ReactNode>>;
+
 export function SettingsShell({
   section,
   onSelect,
@@ -85,6 +94,7 @@ export function SettingsShell({
   onJumpApplied,
   fallback,
   sections,
+  sectionTitleExtra,
 }: SettingsShellProps) {
   /** 滚动容器：分区节挂在它里面，观察器也以它为 root。 */
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -127,7 +137,7 @@ export function SettingsShell({
       {/* 宽度取统一档位（`--container-medium` = 从前这里写的 max-w-275）：
           设置页是「标题 + 全宽内容」的文档型壳，不并入更宽的编辑器容器，
           但同一个数不该有两个家。 */}
-      <div className="max-w-medium mx-auto flex min-h-0 w-full flex-1 flex-col px-6 pt-6">
+      <div className="max-w-medium mx-auto flex min-h-0 w-full flex-1 flex-col px-6 pt-4">
         {/* 屏名：页签（或顶栏）已经在说时**不出现这一行**（`title` 不传），只把
             名字留在 `sr-only` —— 读屏仍能按标题跳转，视觉上不重复第二次
             （规范 03 §3.10 / 06）。`h1` 始终在位，一屏一个；那一行不占位，
@@ -142,7 +152,7 @@ export function SettingsShell({
 
         {/* 导航在左、内容在右：树需要的是**纵向**空间（父行 + 缩进子行），
             而横排那条带子只能靠分隔符暗示分组 —— 层级读不出来。 */}
-        <div className="flex min-h-0 flex-1 gap-8 pt-4">
+        <div className="flex min-h-0 flex-1 gap-8 pt-2">
           <SettingsSectionNav onSelect={handleSelect} section={section} />
 
           {/* 内容区：**全部**分区节，唯一一根滚动条。每个节自带 `id` 与
@@ -169,7 +179,7 @@ export function SettingsShell({
                     key={id}
                     ref={registerSection(id)}
                   >
-                    <SettingsSectionHeading section={id} />
+                    <SettingsSectionHeading section={id} titleExtra={sectionTitleExtra?.[id]} />
                     {/* 一节里可能有多张卡片（「备份与恢复」下的「创建备份 / 恢复备份」）：
                         卡片之间要有间距，否则两张卡贴在一起像一块（ISSUE #3547）。 */}
                     <div className="flex flex-col gap-4">{sections?.[id]}</div>
@@ -208,7 +218,14 @@ function sectionLabel(section: Section): string {
  *   `#c2c2c8`（实测），比同屏 14px 的行标题（`#ededf2`）还暗 —— 「标题比正文还暗」
  *   的观感就是这么来的（用户现场：「这里界面的字体是白色吗，怎么感觉有些暗」）。
  */
-function SettingsSectionHeading({ section }: { section: Section }) {
+function SettingsSectionHeading({
+  section,
+  titleExtra,
+}: {
+  section: Section;
+  /** 标题行右侧的徽标等附加物（`sectionTitleExtra` 按 id 给到这一节）。 */
+  titleExtra?: ReactNode;
+}) {
   return (
     <>
       {isGroupFirstSection(section) ? (
@@ -218,6 +235,11 @@ function SettingsSectionHeading({ section }: { section: Section }) {
       <h2 className="u-title-stage font-title border-border-subtle mb-3 flex items-baseline gap-2 border-b pb-2">
         {sectionLabel(section)}
         <span className="text-ink-muted text-xs font-normal">{sectionSummary(section)}</span>
+        {titleExtra === undefined ? null : (
+          <span className="ml-auto flex shrink-0 items-center gap-1.5 self-center">
+            {titleExtra}
+          </span>
+        )}
       </h2>
     </>
   );
@@ -242,8 +264,10 @@ function SettingsSectionNav({
         if (items.length === 0) {
           return null;
         }
+        /* 分组间距与行高取紧凑档（ISSUE #3495）：9 个分区 + 5 个分组名全靠
+            这一列的纵向空间，矮窗口下松一档就会把末尾几项裁出可视区。 */
         return (
-          <div className="mb-3 last:mb-0" key={group.label}>
+          <div className="mb-2 last:mb-0" key={group.label}>
             {/* 分组名是父行：弱一档、不可点 —— 它只回答「这几项属于一类」，
                 不是导航目标（点了也不会切到某个分区）。读屏不进可访问名，
                 分区自身由子行的 `aria-current` 表达。 */}
@@ -252,14 +276,16 @@ function SettingsSectionNav({
             </p>
             {/* 子行集合走 `TreeChildren`：缩进档 + 引导线一处给全（§16.2.4.39）。
                 `depth=1` 是「父行是分组头」这一档的标准形态。 */}
-            <TreeChildren className="flex flex-col gap-0.5" depth={1}>
+            <TreeChildren className="mt-0.5 flex flex-col gap-0.5 py-0.5" depth={1}>
               {items.map((item) => {
                 const active = section === item.id;
                 return (
                   <Button
                     aria-current={active ? "true" : undefined}
                     className={cn(
-                      "h-auto w-full justify-start rounded-lg px-3 py-1.5 text-sm font-medium",
+                      /* `h-6` 压过 `size="sm"` 的 `h-7`：这一列要的是行距紧凑的
+                          目录树，不是按钮尺寸档（矮窗口下整列才放得下，#3495）。 */
+                      "h-6 w-full justify-start rounded-lg px-3 text-sm font-medium",
                       active
                         ? "bg-primary-soft text-primary-strong hover:bg-primary-soft hover:text-primary-strong"
                         : "text-ink-muted hover:text-ink",
