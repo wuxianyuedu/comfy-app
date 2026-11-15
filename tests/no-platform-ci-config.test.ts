@@ -373,8 +373,7 @@ const GA_PR_INFRA_STEPS: ReadonlyArray<string> = [
   "失败时上传诊断产物",
   "把结论送回 CNB",
   "把 GA 判红日志正文搬到 CNB",
-  "记下 PR 标题（自动档）",
-  "按需档补 PR 标题",
+  "取 PR 标题（写进 GITHUB_ENV）",
 ];
 
 /**
