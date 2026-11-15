@@ -141,11 +141,15 @@ export function parseIssueNumberToken(token) {
  * **不 grep 运行日志**；`--result=json` 出原始 JSON。数据源与形状只有一份出处：
  * `ship-result.mjs` 文件头。
  *
+ * **`--fetch-issue <号>`**（ISSUE #3965）：把一张 issue 的正文 / 评论 / 图片
+ * 一次取到本机固定目录 `.workbuddy/issues/<号>/`（gitignored，重跑即更新）；
+ * 图片走 `issues get-imgs` 官方通道，不再手拼 URL 撞 404。只读平台、与显式动作互斥。
+ *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,fetchIssue:number|null,fetchIssueBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,fetchIssue:number|null,fetchIssueBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
   const out = {
     message: null,
     messageFile: null,
@@ -179,6 +183,8 @@ export function parseArgs(argv) {
     statusBad: [],
     result: false,
     resultJson: false,
+    fetchIssue: null,
+    fetchIssueBad: [],
     newIssue: null,
     newIssueBad: [],
     issueBodyFile: null,
@@ -250,6 +256,24 @@ export function parseArgs(argv) {
         out.resultJson = true;
       } else if (tok !== "") {
         out.unknown.push(a);
+      }
+    } else if (a === "--fetch-issue" || a.startsWith("--fetch-issue=")) {
+      /* 只读取一张 issue 的正文 / 评论 / 图片到本机固定目录（ISSUE #3965）。
+       * 收的是 issue 号（2 位以上数字，与 --claim 同一条「像不像号」判据）；
+       * 两种写法共用这一支，重复给值进 fetchIssueBad，一次也不静默收下。 */
+      const tok =
+        a === "--fetch-issue"
+          ? i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")
+            ? String(argv[++i] ?? "")
+            : ""
+          : a.slice("--fetch-issue=".length);
+      const n = parseIssueNumberToken(tok);
+      if (n === null) {
+        out.fetchIssueBad.push(tok || "(缺号)");
+      } else if (out.fetchIssue === null) {
+        out.fetchIssue = n;
+      } else {
+        out.fetchIssueBad.push(`重复的 --fetch-issue（前一个 #${out.fetchIssue}）`);
       }
     }
     /* `--diagnose` 的构建号是**可选**的：不给就按 HEAD 的 sha 归属（红灯现场最常用的
