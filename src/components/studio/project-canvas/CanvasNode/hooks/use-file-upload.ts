@@ -24,9 +24,13 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
     /* `.then` 而不是 `async`：`onPick` 的契约是「不返回值」，写成 async
      * 会得到一个没人接的 Promise（eslint 的 no-misused-promises 直接拦）。 */
     onPick: (f) => {
+      /* 发起时捕获写入槽（ISSUE #3900）：完成回调再读共享 ref 会拿到后一次
+       * pickFile 改写过的目标 —— 慢上传（ComfyUI 未就绪时要轮询重试）把
+       * 文件名写进错误输入槽并随节点持久化。 */
+      const target = uploadTo.current;
       void uploadImageFile(f)
         .then((name) => {
-          patch({ [uploadTo.current]: name, upstreamId: undefined });
+          patch({ [target]: name, upstreamId: undefined });
         })
         .catch((error: unknown) => {
           patch({ error: errorMessage(error, "上传失败"), status: "error" });

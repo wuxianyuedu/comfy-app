@@ -101,23 +101,27 @@ export function WorkflowRunRawCliModal({
       return;
     }
     let alive = true;
+    /* 轮次令牌（ISSUE #3906）：1.5s 轮询遇慢响应时两发在途，先发后至者
+     * 不得把旧内容盖在新内容上（行数回退一拍）。 */
+    let seq = 0;
     const doLoad = (background = false) => {
       if (!alive) {
         return;
       }
+      const mySeq = ++seq;
       if (!background) {
         setLoaded(false);
       }
       void fetchRawCli(taskId)
         .then((l) => {
           /* 逐字比对后才写 state：内容没变时保持旧数组，整棵列表一次都不重渲染。 */
-          if (alive) {
+          if (alive && mySeq === seq) {
             setLines((prev) => (sameRawCliLines(prev, l) ? prev : l));
           }
         })
         .catch(() => undefined)
         .finally(() => {
-          if (alive) {
+          if (alive && mySeq === seq) {
             setLoaded(true);
           }
         });

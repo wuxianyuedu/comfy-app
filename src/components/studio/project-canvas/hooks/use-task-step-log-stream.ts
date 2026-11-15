@@ -178,6 +178,10 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
       return;
     }
     const tid = taskId;
+    /* 本轮作废守卫（ISSUE #3899）：终态帧后的异步回查在 await 之后才写
+     * state —— 期间用户切到别的任务（本 effect 已清理）时，旧任务的结论
+     * 不得写进新任务的面板。 */
+    let disposed = false;
     lastActivityRef.current = Date.now();
 
     const es = new EventSource(`/api/tasks/${tid}/stream`);
@@ -255,6 +259,10 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
           void (async () => {
             /* 网络层收在 `~/lib/task-cancel-client`（视图零 IO，规范 17）。 */
             const snap = await fetchTaskStatus(tid);
+            if (disposed) {
+              /* 本轮已作废（切走了任务 / 卸载）：旧任务的结论不写进当前面板。 */
+              return;
+            }
             const finalStatus = snap.status;
             const finalError = snap.error;
             const st = finalStatus ?? fallback;
@@ -280,6 +288,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
     };
 
     return () => {
+      disposed = true;
       es.close();
       esRef.current = null;
     };

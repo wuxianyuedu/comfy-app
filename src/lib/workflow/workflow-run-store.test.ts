@@ -321,10 +321,10 @@ describe("workflow-run-store", () => {
     expect(getWorkflowRun("t1")?.logs).toHaveLength(1);
   });
 
-  it("判重窗口外的旧帧不再比对（O(上限) 收成 O(窗口)）", () => {
-    /* 旧的 `logs.some(...)` 扫满整个 300 条窗口 —— 每一行都付一遍。
-     * 现在只扫最后 64 条：**这是有意的语义收窄**，重复帧只会紧挨着原帧到达
-     *（SSE 回放 + 订阅双投递），一条 64 行之前的旧帧不构成「重复投递」。 */
+  it("全窗判重：重连回放的窗口外旧帧也被丢弃（ISSUE #3896）", () => {
+    /* 旧实现只扫尾部 64 条 —— SSE 重连会把**全量**历史从头回放，窗口外的
+     * 旧帧被当成新帧追加，时间线出现成片重复（重复历史排在最新日志之后）。
+     * 现在按 (t, msg) 全窗判重；窗口有上限（300），全扫成本可控。 */
     registerWorkflowRun({
       taskId: "t1",
       workflowId: "wf1",
@@ -336,9 +336,12 @@ describe("workflow-run-store", () => {
     for (let i = 0; i < 100; i += 1) {
       appendWorkflowRunLog("t1", { t: 100 + i, level: "info", msg: `行 ${i}` });
     }
-    /* 窗口外的同 (t, msg) 帧不再被当成重复（旧写法会丢）。 */
+    /* 重连回放把 101 条历史原样重发：全部判重，一条都不新增。 */
     appendWorkflowRunLog("t1", { t: 1, level: "info", msg: "很久以前" });
-    expect(getWorkflowRun("t1")?.logs).toHaveLength(102);
+    for (let i = 0; i < 100; i += 1) {
+      appendWorkflowRunLog("t1", { t: 100 + i, level: "info", msg: `行 ${i}` });
+    }
+    expect(getWorkflowRun("t1")?.logs).toHaveLength(101);
   });
 
   it("封顶后追加是原地搬移（复用同一数组，不新分配）", () => {

@@ -175,6 +175,31 @@ export function tailWindowAppend<T>(items: ReadonlyArray<T>, item: T, size: numb
   return next;
 }
 
+/**
+ * **尾部窗口的增量版（重复帧丢弃）**：`keyOf` 算出的键在现有窗口里**任何位置**
+ * 出现过就整条丢弃（原样返回入参），否则按 {@link tailWindowAppend} 追加。
+ *
+ * 为什么要扫**全窗**而不是只扫尾部若干条（ISSUE #3896）：`/api/tasks/[id]/stream`
+ * 每条新连接（含 EventSource 自动重连）都会把任务**全量**日志从头回放一遍，
+ * 回放长度远超「尾部几条」—— 只扫尾窗会把窗口外的旧帧当成新帧放进来，
+ * 时间线出现成片重复。窗口都有上限（200~2000），全扫是可控的成本。
+ */
+export function tailWindowAppendUnique<T>(
+  items: Array<T>,
+  item: T,
+  size: number,
+  keyOf: (item: T) => string,
+): Array<T> {
+  const key = keyOf(item);
+  for (const known of items) {
+    if (keyOf(known) === key) {
+      /* 重复帧：原样返回同一引用（setState updater 拿到同引用即不重渲染）。 */
+      return items;
+    }
+  }
+  return tailWindowAppend(items, item, size);
+}
+
 /** 分块遍历：第 `index` 块在原列表里的位置（左闭右开）。 */
 export type ChunkRange = {
   end: number;
