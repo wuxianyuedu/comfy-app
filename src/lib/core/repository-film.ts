@@ -10,7 +10,7 @@ import { DrizzleRepository } from "./repository-base";
 import type { DbExecutor } from "./repository-executor-types";
 import { tailWindow } from "~/lib/page-window";
 import { KeyedAsyncMutex } from "~/lib/async-mutex";
-import { eq, and, desc, asc, inArray, isNotNull, notInArray, ne, count } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, isNotNull, notInArray, count } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
 
 /** 影片日志追加的按片互斥（ISSUE #3836）：`logs` 是 JSON 列，追加是
@@ -173,26 +173,25 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       .orderBy(asc(filmProject.createdAt));
   }
 
-  async markGenerating(id: string): Promise<void> {
-    await db
-      .update(filmProject)
-      .set({ status: "GENERATING", progress: 0, error: null })
-      .where(eq(filmProject.id, id));
-  }
-
   async updateProgress(id: string, pct: number): Promise<void> {
     await db.update(filmProject).set({ progress: pct }).where(eq(filmProject.id, id));
   }
 
+  /**
+   * 判失败（ISSUE #3894）：仅当当前状态**不是终态**时写入。终态之间此前可互相
+   * 覆写（「已取消又被判失败」「已完成又被判失败」）；失败原因取第一次落库的
+   * 那条，后续迟到判决不再改写。
+   */
   async markFailed(id: string, error: string): Promise<void> {
-    await db.update(filmProject).set({ status: "FAILED", error }).where(eq(filmProject.id, id));
-  }
-
-  async markComposing(id: string): Promise<void> {
     await db
       .update(filmProject)
-      .set({ status: "COMPOSING", progress: 90, error: null })
-      .where(eq(filmProject.id, id));
+      .set({ status: "FAILED", error })
+      .where(
+        and(
+          eq(filmProject.id, id),
+          notInArray(filmProject.status, ["DONE", "FAILED", "CANCELLED"]),
+        ),
+      );
   }
 
   /**
@@ -230,20 +229,33 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
     return rows.length > 0;
   }
 
+  /** 合成完成（ISSUE #3867 / #3894）：仅当当前不是终态时写入 —— 取消是用户终态，
+   *  不得被合成收口改判 DONE；DONE / FAILED 之间也不再互相改写。 */
   async markDone(id: string, finalVideo: string): Promise<void> {
     await db
       .update(filmProject)
       .set({ status: "DONE", progress: 100, finalVideo, error: null })
-      /* 终态守卫（ISSUE #3867）：取消是用户终态，不得被合成收口改判 DONE。 */
-      .where(and(eq(filmProject.id, id), ne(filmProject.status, "CANCELLED")));
+      .where(
+        and(
+          eq(filmProject.id, id),
+          notInArray(filmProject.status, ["DONE", "FAILED", "CANCELLED"]),
+        ),
+      );
   }
 
+  /** 取消（ISSUE #3894）：仅当当前不是终态时写入 —— DONE / FAILED / CANCELLED
+   *  的终态不再被「取消」改写（对终态重复取消按幂等处理）。 */
   async markCancelled(id: string, executor?: DbExecutor): Promise<void> {
     const exec = executor ?? db;
     await exec
       .update(filmProject)
       .set({ status: "CANCELLED", error: "已取消" })
-      .where(eq(filmProject.id, id));
+      .where(
+        and(
+          eq(filmProject.id, id),
+          notInArray(filmProject.status, ["DONE", "FAILED", "CANCELLED"]),
+        ),
+      );
   }
 }
 
