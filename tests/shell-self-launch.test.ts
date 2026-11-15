@@ -129,7 +129,12 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
     // 判据是环境块标记（不是「有没有 dev server」），命中即回收：
     // 「别人已经在编排」这条路在双击形态下不存在（编排器只可能是壳自己起的），
     // 残留只可能是壳被强杀留下的孤儿 —— 留着它会占着端口，表现为双击没反应。
-    expect(branch).toContain("shell_launch::find_owned_orchestrator()");
+    // 认亲是双判据（#3851）：「是某个壳起的」+「是**本检出**的壳起的」——
+    // 多检出并行时只看前者会把别家正在跑的编排器当成残留误杀整树。
+    expect(branch).toContain("shell_launch::find_owned_orchestrator(&project_root)");
+    const shell = stripComments(read("src-tauri/src/shell_launch.rs"));
+    expect(shell).toContain("process_env_is_owned(pid, project_root)");
+    expect(shell).toContain("PROJECT_ROOT_ENV}={project_root}");
     expect(branch).toContain("shell_launch::reap_pid(project_root, pid)");
     expect(branch).toContain("start_own_orchestrator(app.handle(), project_root)");
     // 命中残留要说清「先回收再启动」，别让它看起来像一次正常启动。
@@ -327,8 +332,12 @@ describe("壳自编排：回收链", () => {
   it("壳收走编排器后清掉会话锚点（否则每次启动都刷「回收遗留进程树」）", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
     const reap = sliceBetween(rust, "pub fn reap(project_root: &str)", "pub fn reap_pid(");
-    // 只在 `kill()` 成功那一支清：失败说明编排器可能还活着，锚点必须留给下一次启动回收。
-    expect(reap).toMatch(/Ok\(\(\)\)[\s\S]{0,200}clear_session_anchor\(project_root\)/);
+    // 回收换序（#3857）：先派发 reaper（taskkill 目标在进程活着时不存在 PID
+    // 复用），插件 kill 多半落在已被收走的进程上（无害 no-op）。两道任一落地
+    // 都要清锚点 —— 它在 spawn_reaper 之后无条件执行。
+    expect(reap).toMatch(
+      /spawn_reaper\(project_root, pid\)[\s\S]{0,400}clear_session_anchor\(project_root\)/,
+    );
     expect(rust).toContain("pub fn clear_session_anchor(");
     // 路径与 Node 侧同源（唯一实现是 `scripts/dev-launcher-session.mjs`）：
     // 名字漂开 = 壳清了个不存在的文件，锚点照留、噪声照旧。
