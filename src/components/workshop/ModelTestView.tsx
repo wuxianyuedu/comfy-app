@@ -427,8 +427,8 @@ export function ModelTestView() {
    * 按当前模式 / 模型 / 输入现算）—— 切模式 / 换模型时 hook 已清空读数，
    * 不会残留上一份。 */
   const detailRows =
-    c.debugRows.length > 0 ? c.debugRows : c.previewRow === null ? [] : [c.previewRow];
-  const previewOnly = c.debugRows.length === 0 && c.previewRow !== null;
+    c.debugRows.length > 0 ? c.debugRows : c.previewRows.length > 0 ? c.previewRows : [];
+  const previewOnly = c.debugRows.length === 0 && c.previewRows.length > 0;
 
   return (
     <DocumentFrame

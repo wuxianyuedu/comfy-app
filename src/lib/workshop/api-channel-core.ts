@@ -210,8 +210,9 @@ function pickStringByPath(payload: unknown, fieldPath?: string): string | null {
 }
 
 /** 生图请求体（无适配器时的 OpenAI 兼容默认映射）。
- *  空串显式归一为 undefined（省略字段）——用 `??` 会把 "" 原样送进 payload。 */
-function defaultImageBody(req: ApiImageRequest, model: string): Record<string, unknown> {
+ *  空串显式归一为 undefined（省略字段）——用 `??` 会把 "" 原样送进 payload。
+ *  导出给「准备请求」预览用（#3949：预览要与真实发送同一套组装，不能各拼一套）。 */
+export function defaultImageBody(req: ApiImageRequest, model: string): Record<string, unknown> {
   return {
     model: model === "" ? undefined : model,
     prompt: req.prompt,
@@ -224,8 +225,9 @@ function defaultImageBody(req: ApiImageRequest, model: string): Record<string, u
   };
 }
 
-/** 视频提交请求体（同步 / 异步上游共用；image 双写兼容两种命名）。 */
-function videoBody(req: ApiVideoSubmitRequest, model: string): Record<string, unknown> {
+/** 视频提交请求体（同步 / 异步上游共用；image 双写兼容两种命名）。
+ *  导出给「准备请求」预览用（#3949，同 defaultImageBody 的理由）。 */
+export function videoBody(req: ApiVideoSubmitRequest, model: string): Record<string, unknown> {
   return {
     model: model === "" ? undefined : model,
     prompt: req.prompt,

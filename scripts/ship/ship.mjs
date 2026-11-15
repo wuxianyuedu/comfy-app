@@ -236,7 +236,7 @@
  *                                              #   （ISSUE #3923；--result=json 出原始 JSON）。后台跑 ship 时
  *                                              #   轮询它取「走到哪了 / 结论」，不 sleep + grep 运行日志
  *   pnpm ship --fetch-issue <号>               # 只读：把一张 issue 的正文 / 评论 / 图片一次取到
- *                                              #   .workbuddy/issues/<号>/（ISSUE #3965；gitignored，
+ *                                              #   .tmp/issues/<号>/（ISSUE #3965；gitignored，
  *                                              #   重跑即更新；图片走 get-imgs 官方通道，不手拼 URL 撞 404）
  *   pnpm ship --new-issue "fix(ship): …" --issue-body-file .git/issue.md --priority P1
  *                                              # 一步建单：create-issue（正文文件 + 开头署名）→

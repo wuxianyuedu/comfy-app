@@ -8,6 +8,8 @@ import { requireRequestUser } from "~/server/auth/request-user";
 import {
   generateImageViaApi,
   pollVideoViaApi,
+  previewImageRequestViaApi,
+  previewVideoSubmitViaApi,
   submitVideoViaApi,
 } from "~/lib/workshop/api-channel.server";
 import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
@@ -71,6 +73,52 @@ export async function POST(req: NextRequest) {
       }
     : undefined;
   const debugPayload = () => (debugRows.length > 0 ? { debug: debugRows } : {});
+  /* 「准备请求」预览（#3949 需求 8）：dryRun 走与真实发送**同一套**解析与组装
+   * （preview*ViaApi），但不真正调用上游 —— 返回的 debug 行就是「实际会发出去
+   * 的请求」（端点 + 适配器翻译后的请求体）。测试页点生成前显示的就是它。 */
+  if (body.dryRun === true) {
+    try {
+      if (kind === "image") {
+        const row = await previewImageRequestViaApi({
+          prompt,
+          negative,
+          size,
+          model,
+          mode,
+          aspectRatio,
+          megapixels,
+          ...(resolution === undefined ? {} : { resolution }),
+          ...(multiple === undefined ? {} : { multiple }),
+          ...(seed === undefined ? {} : { seed }),
+          image,
+          ...(images === undefined ? {} : { images }),
+        });
+        return NextResponse.json({ url: null, debug: [row] });
+      }
+      if (kind === "video") {
+        const imageDataUrl =
+          image !== undefined && image !== ""
+            ? await resolveMediaDataUrl(image, new URL(req.url).origin)
+            : undefined;
+        const row = await previewVideoSubmitViaApi({
+          prompt,
+          negative,
+          imageDataUrl,
+          frames,
+          fps,
+          model,
+          mode,
+          ...(duration === undefined ? {} : { duration }),
+          ...(seed === undefined ? {} : { seed }),
+        });
+        return NextResponse.json({ debug: [row] });
+      }
+      return NextResponse.json({ error: "kind 必须是 image 或 video" }, { status: 400 });
+    } catch (error) {
+      /* 预览失败（模型没地址 / 通道未配置等）把可读原因带回 —— 前端据此不显示。 */
+      return NextResponse.json({ ...apiErrorBody(error, "请求预览失败") }, { status: 502 });
+    }
+  }
 
   try {
     if (kind === "image") {
