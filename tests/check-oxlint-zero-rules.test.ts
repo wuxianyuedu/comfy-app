@@ -3,7 +3,7 @@
  * 正控：全仓档跑一遍，41 条规则 0 命中、退 0（并钉住退码只 0/1/2 三态：「没跑起来」退 2）。
  * 负控：仓外临时目录造回潮夹具（`x !== undefined ? x : 兜底`，#3016 判空三元反面），路径档须判红退 1、指回夹具与 `unicorn(no-negated-condition)`；只选语法级规则（路径档不挂 `--type-aware`，夹具无 tsconfig）。
  */
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -33,12 +33,31 @@ function isPackageJson(value: unknown): value is { scripts: Record<string, strin
   return Object.values(scripts).every((line) => typeof line === "string");
 }
 
+/**
+ * 跑一次全仓档，失败（非零退码）时**自动重试最多两次**（间隔 5s），返回末次结果。
+ *
+ * 为什么重试（ISSUE #3977）：全量单测里本文件与其余用例并发，仓库树在扫描窗口内
+ * 会被别的用例写入 / 删除（`gate-scan-read.cjs` 文件头讲的那个窗口），偶发把
+ * 「0 命中」的扫描打成非零退码（今天两轮全量各红一次、隔离复跑均绿）。真回潮
+ * 三次都在场（连续红，不会因重试变绿）—— 判据本体（末次退 0）不放宽。
+ */
+function spawnGateWithLoadRetry(): SpawnSyncReturns<string> {
+  let last = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
+  for (let attempt = 1; last.status !== 0 && attempt < 3; attempt += 1) {
+    /* 同步睡 5s：等并发用例的临时夹具离开扫描面（Atomics.wait 在 node 环境可用）。 */
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
+    last = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
+  }
+  return last;
+}
+
 describe("已清零 oxlint 规则集闸（#3016）", () => {
   it("正控：全仓档清单内规则 0 命中，退 0", { timeout: 300_000 }, () => {
-    const r = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
+    /* 负载窗口下最多三次取样，判据只认**末次**（真回潮三次都在场，#3977）。 */
+    const r = spawnGateWithLoadRetry();
     // 退 2 = 没跑起来（oxlint 起不来 / 输出不是 JSON / 一份文件都没扫到）：
     // 那时红与绿都不构成结论，所以这里把 stderr 一并带进断言消息，便于归因。
-    expect(r.status, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.status, `stderr: ${r.stderr ?? ""}`).toBe(0);
     expect(r.stdout).toContain("0 命中");
   });
 
@@ -139,8 +158,9 @@ describe("已清零 oxlint 规则集闸（#3016）", () => {
       // `plugins:` 行存在 ⇒ 缺省族被这一行**替换**（实测：只写 import/react 时
       // unicorn 从 --rules 的 Enabled 列消失，ISSUE #3340）。声明集合必须是
       // 清单涉及的内建族全集 —— 直接起探针（顺带刷新生成物）后钉**行为**。
-      const r = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
-      expect(r.status, `stderr: ${r.stderr}`).toBe(0);
+      /* 负载窗口下最多三次取样，判据只认**末次**（真回潮三次都在场，#3977）。 */
+      const r = spawnGateWithLoadRetry();
+      expect(r.status, `stderr: ${r.stderr ?? ""}`).toBe(0);
       const probe = readFileSync("node_modules/.cache/oxlint-zero-rules.config.mjs", "utf8");
       expect(probe).toContain('plugins: ["import", "react", "typescript", "unicorn"]');
       // jsPlugins 的名字不进 plugins 数组（写进去反而 Unknown plugin，实测）。
