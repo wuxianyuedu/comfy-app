@@ -10167,6 +10167,38 @@ fail-closed 把 error 送回主列，**所有 PR 的判决变红** —— 与代
 **边界**：首次真验看下一个 PR build 的 `GA 结论判定` 读数（平台池上跑一次）；
 fail-closed 语义与 5m 预算一字未动 —— 迁歪的表现是那格红，不是假绿。
 
+#### 13.5.39.1 回调 build 带上 PR 标题：从「都是 API custom event」到「认得出是哪张 PR」（ISSUE #3981）
+
+**改的是那一列的显示，不是三态退码。** CNB 构建历史里每条 `api_trigger_ga_verdict`
+的 build 此前一律显示平台缺省标题 `API custom event` —— 一排下来分不清哪条属于哪张 PR，
+只能点进去看。三处读数说明这是**一个漏填的请求字段**，不是「事件名/流水线名决定显示名」：
+
+| 读数 | 内容 |
+| --- | --- |
+| 请求体 | `ci-ga-verdict-callback.mjs` 的 `startBuildRequest()` 只送 `branch / env / event / sha / sync`，**没有 `title`** |
+| 平台契约 | `dto.StartBuildReq.title`（"构建标题。Build title."）是独立字段；`dto.LogInfo.title` 就是列表那一列 |
+| 旁证 | `GET /{repo}/-/build/logs?title=` 的说明是「构建标题关键字；**无标题的构建不会命中**」—— 本仓这一类 build 一直命中不了 |
+
+流水线 `name`（`GA 判决回调（骨架·休眠）`）与那一列**不是同一个源**，所以「改流水线名」
+这条路从一开始就走不通；§13.5.33.1 那句「`name` 不改名」也因此没有被这条动到。
+
+**落成三件**：
+
+| 面 | 动作 |
+| --- | --- |
+| `scripts/ci-ga-verdict-callback.mjs` | 新增 `buildTitle(title, pr)` → `<标题> (#<号>)`（空白折叠成单行、超长截断、号不是数字就不拼号）+ `resolveCallbackContext()` 读 `GA_PR_TITLE` / `--title`；**拼不出来就不写 `title` 键**（回落平台缺省，不发明「无标题」这一形态） |
+| `.github/workflows/pr-gate.yml` | 收尾 job 前加两步把标题写进 `GITHUB_ENV`：自动档（`repository_dispatch`）读 payload 的 `pull_request.title`；按需档（`workflow_dispatch`，#3667）**没有 payload** ⇒ 走 `scripts/ci-ga-verdict-title.mjs` 站内读 `GET /{repo}/-/pulls/{n}` |
+| 判据 | `tests/ci-ga-verdict-callback.test.ts`（拼装 / 不写键 / 号非数字）+ `tests/ci-ga-verdict-title.test.ts`（两条形态写**同一个键**、取不到一律退 2 且一个键都不写）；`tests/no-platform-ci-config.test.ts` 的 `GA_PR_INFRA_STEPS` 登记那两个新 step（它们是**判决的显示面**，一步也不判红） |
+
+**为什么走 `GITHUB_ENV` 而不是各步各读一遍**：两条触发形态的标题来源不同，
+但下游只认一个键 —— 否则「按需档的回调又变回无标题」是只修一半的那种形态
+（与 §13.5.33.1「两条触发形态都读」同一个教训）。
+
+**边界**：标题的成败**不进判决**。`按需档补 PR 标题` 带 `continue-on-error`，
+`main()` 取不到标题一律退 2 并说清是哪一件（没有 `GITHUB_ENV` / 号不是数字 / 没令牌 /
+平台非 200 / 请求抛异常 / 标题空白），而 `把结论送回 CNB` 那一步的退码口径一字未动 ——
+缺标题只让那条 build 回落平台缺省。
+
 ### 13.6 分支与合并策略
 
 - 功能分支：`feat/<short-desc>`；修复分支：`fix/<issue-id>-<desc>`。
