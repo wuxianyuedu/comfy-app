@@ -285,7 +285,7 @@ export async function reviewShotImage(
   }
 
   /* 打分是慢 IO，按 content-write-lock 的纪律留在锁外；落判定收进锁内重读最新
-   * shots 再叠加（#4019）：此前这里锁外拿 T0 快照整列写回，评审期间持锁写者
+   * shots 再叠加（#4019）：此前这里锁外拿旧快照整列写回，评审期间持锁写者
    * （自动保存 / 生图回写 / 成片回写）写入的内容会被旧快照静默回滚。 */
   const verdict = await scoreShotImage(row, rec, imageUrl);
   await withProductionContentLock(projectId, async () => {
