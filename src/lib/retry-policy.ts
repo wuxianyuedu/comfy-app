@@ -210,12 +210,17 @@ export const TERMINAL_DB_WRITE = {
  *
  * 形状仍是**有界**的：穷尽后如实抛出（不吞），因为「切 WAL 切不掉」也可能是只读挂载 /
  * 磁盘满一类真故障，那类必须让构建或启动失败得看得见。
+ *
+ * **抖动开着**（`equal`，ISSUE #3954）：这正是 §8.10 第③条点名的「一群进程同时撞
+ * 同一资源」——7 个 worker 的重试拍原本同步落下，实测 3/8 首轮即撞 `SQLITE_BUSY`；
+ * 抖动把各进程的重试拍错开，保留一半底噪（不抖出 0ms 立即重打）。
  */
 /* SAFETY: 类型断言已复核 */
 export const SQLITE_PRAGMA_BOOT = {
   shape: "exponential",
   baseMs: 25,
   maxMs: 200,
+  jitter: "equal",
   /** 含首次尝试的总次数（循环边界写在这里，退避算法仍在调用处）。 */
   maxAttempts: 5,
 } as const;

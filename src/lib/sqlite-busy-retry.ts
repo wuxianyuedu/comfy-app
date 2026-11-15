@@ -16,6 +16,7 @@
  *
  * @module sqlite-busy-retry — 撞锁重试的唯一循环体
  */
+import { logger } from "~/lib/core/logger";
 import { backoffDelayMs, type BackoffShapeOptions } from "~/lib/retry-policy";
 import { isSqliteBusyError } from "~/lib/sqlite-error";
 import { sleep } from "~/lib/with-timeout";
@@ -33,6 +34,10 @@ export type SqliteBusyRetryOptions = {
   /**
    * 每次「还要再试」之前回调一次（`attempt` 从 0 起）。
    * 只用来念一行给人看的话，**不参与判决**——所以回调的返回值被忽略。
+   *
+   * **不给也有默认告警**（ISSUE #3954）：撞锁重试在多数站点曾是静默的
+   * （排障无现场，硬规则 4），所以缺省落到标准 logger 的第一撞锁一行 warn；
+   * 要换落点（如任务级 trace）就显式传，传了即整体覆盖缺省。
    */
   onBusy?: (attempt: number, error: unknown) => void;
   /**
@@ -57,6 +62,15 @@ export async function runWithSqliteBusyRetry<T>(
   { policy, onBusy, onGiveUp }: SqliteBusyRetryOptions,
 ): Promise<T> {
   const { maxAttempts, ...backoff } = policy;
+  /* 缺省告警只在**第一次重试**落一行：撞锁是同一件事，逐次写会把日志刷成噪音
+   * （与 executor-write-retry 的自备 onBusy 同一口径）。 */
+  const reportBusy =
+    onBusy ??
+    ((attempt: number) => {
+      if (attempt === 0) {
+        logger.warn(`[sqlite-busy] 库写撞锁，按策略重试（最多 ${maxAttempts} 次）`);
+      }
+    });
   for (let attempt = 0; ; attempt++) {
     try {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
@@ -67,7 +81,7 @@ export async function runWithSqliteBusyRetry<T>(
         onGiveUp?.(error, attempt + 1);
         throw error;
       }
-      onBusy?.(attempt, error);
+      reportBusy(attempt, error);
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await sleep(backoffDelayMs({ ...backoff, attempt }));
     }
