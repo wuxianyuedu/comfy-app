@@ -25,6 +25,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
+import { AsyncMutex } from "~/lib/async-mutex";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 
 import {
@@ -77,6 +78,22 @@ export async function loadSidebarTabProjectDefaults(
   }
 }
 
+/** 覆盖文件的写方先进进程内互斥（ISSUE #3859）：「读基准 → 差集 → 整份写回」
+ *  并发交叠时，后写者会用旧基准顶掉先写者。 */
+const overrideFileMutex = new AsyncMutex();
+
+/** 覆盖文件的原子写（ISSUE #3859）：tmp + rename，读侧不会撞到半截 JSON。 */
+async function atomicWriteText(file: string, text: string): Promise<void> {
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    await fs.writeFile(tmp, text, "utf8");
+    await fs.rename(tmp, file);
+  } catch (error) {
+    await fs.rm(tmp, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
 /**
  * 保存本机覆盖（差集化后覆盖 `data/sidebar-tab-behavior.json`）。
  *
@@ -88,20 +105,22 @@ export async function saveSidebarTabConfig(
   config: SidebarTabConfig,
   root: string = process.cwd(),
 ): Promise<SidebarTabConfig> {
-  const project = await loadSidebarTabProjectDefaults(root);
-  const diff = diffSidebarTabConfig(parseSidebarTabConfig(config), project);
   const file = path.join(/*turbopackIgnore: true*/ root, SIDEBAR_TAB_LOCAL_REL_PATH);
-  try {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, `${JSON.stringify(diff, null, 2)}\n`, "utf8");
-  } catch (error) {
-    /* 失败必须说出来：「保存了但没落盘」是最坏的形态（用户以为配置生效、
-     * 实际下一次读取回到旧值），而它唯一的痕迹就是这里。文案走 `errorText`
-     * （动作前缀 + 详情的唯一出口，规范 16 §16.2.4.45），并把**文件路径**带上：
-     * 它是这条路唯一能定位的东西。 */
-    throw new Error(errorText(error, `侧栏页签行为写入失败（${file}）`), { cause: error });
-  }
-  return diff;
+  return overrideFileMutex.run(async () => {
+    const project = await loadSidebarTabProjectDefaults(root);
+    const diff = diffSidebarTabConfig(parseSidebarTabConfig(config), project);
+    try {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await atomicWriteText(file, `${JSON.stringify(diff, null, 2)}\n`);
+    } catch (error) {
+      /* 失败必须说出来：「保存了但没落盘」是最坏的形态（用户以为配置生效、
+       * 实际下一次读取回到旧值），而它唯一的痕迹就是这里。文案走 `errorText`
+       * （动作前缀 + 详情的唯一出口，规范 16 §16.2.4.45），并把**文件路径**带上：
+       * 它是这条路唯一能定位的东西。 */
+      throw new Error(errorText(error, `侧栏页签行为写入失败（${file}）`), { cause: error });
+    }
+    return diff;
+  });
 }
 
 /**

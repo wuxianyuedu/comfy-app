@@ -14,6 +14,7 @@ import { promises as fs, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { asRecord, isPlainRecord } from "~/lib/is-record";
+import { AsyncMutex } from "~/lib/async-mutex";
 import { DEFAULT_SIZE_SPEC, sizeSpecDims, type SizeSpec } from "~/lib/media/size-presets";
 
 const OUTPUT_DIR = path.join(process.cwd(), "data", "workshop-outputs");
@@ -72,9 +73,13 @@ export type SettingsFileIo = {
 const realSettingsFileIo: SettingsFileIo = {
   read: (file) => readFileSync(file, "utf8"),
   fingerprint: settingsFileFingerprint,
+  /* 原子写（ISSUE #3859）：tmp + rename，读侧（250ms 级的界面读取 / MCP）不会
+   * 撞到半截 JSON。 */
   write: async (file, content) => {
     await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, content, "utf8");
+    const tmp = `${file}.${process.pid}.tmp`;
+    await fs.writeFile(tmp, content, "utf8");
+    await fs.rename(tmp, file);
   },
 };
 
@@ -85,6 +90,9 @@ const realSettingsFileIo: SettingsFileIo = {
 export function createSettingsFileMemo(file: string, io: SettingsFileIo = realSettingsFileIo) {
   let cache: ComfySettings | null = null;
   let fingerprint: string | null = null;
+  /* 保存串行化（ISSUE #3859）：两个并发 save 各自从旧快照合并、整份覆盖，
+   * 先写者的 patch 被后写者顶掉。进程内互斥串行化（写入方都在本进程）。 */
+  const saveMutex = new AsyncMutex();
   return {
     load(): ComfySettings {
       const fp = io.fingerprint(file);
@@ -103,10 +111,12 @@ export function createSettingsFileMemo(file: string, io: SettingsFileIo = realSe
       return parsed;
     },
     save(patch: Partial<ComfySettings>): Promise<ComfySettings> {
-      const next = { ...this.load(), ...patch };
-      return io.write(file, JSON.stringify(next, null, 2)).then(() => {
-        cache = next;
-        fingerprint = io.fingerprint(file);
+      return saveMutex.run(async () => {
+        const next = { ...this.load(), ...patch };
+        await io.write(file, JSON.stringify(next, null, 2)).then(() => {
+          cache = next;
+          fingerprint = io.fingerprint(file);
+        });
         return next;
       });
     },
