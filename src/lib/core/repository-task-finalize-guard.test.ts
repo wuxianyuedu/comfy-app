@@ -82,3 +82,49 @@ describe("taskRepository.markRunning —— 只在非终态行生效", () => {
     },
   );
 });
+
+describe("taskRepository.createQueuedForShotIfNoActive —— 同镜头活动任务原子去重（#4001/#4002）", () => {
+  const base = {
+    userId: "u1",
+    projectId: "proj-1",
+    shotId: "shot-1",
+    type: "TXT2IMG",
+    prompt: "p",
+    params: {},
+    workflowName: "wf",
+    execPayload: { nodes: [] },
+  };
+
+  it("无活动任务时创建 QUEUED 行并返回", async () => {
+    const created = await taskRepository.createQueuedForShotIfNoActive(base);
+    expect(created).not.toBeNull();
+    expect(created?.status).toBe("QUEUED");
+    expect(created?.projectId).toBe("proj-1");
+    expect(created?.shotId).toBe("shot-1");
+  });
+
+  it.for(["QUEUED", "RUNNING"])("同镜头已有 %s 活动任务时返回 null 且不再建行", async (active) => {
+    seedTask(tdb, {
+      id: `t-${active}`,
+      userId: "u1",
+      projectId: "proj-1",
+      shotId: "shot-1",
+      status: active,
+    });
+    const before = tdb.$tables.tasks.length;
+    await expect(taskRepository.createQueuedForShotIfNoActive(base)).resolves.toBeNull();
+    expect(tdb.$tables.tasks.length).toBe(before);
+  });
+
+  it("同镜头仅终态历史任务时允许再次入队", async () => {
+    seedTask(tdb, {
+      id: "t-done",
+      userId: "u1",
+      projectId: "proj-1",
+      shotId: "shot-1",
+      status: "SUCCEEDED",
+    });
+    const created = await taskRepository.createQueuedForShotIfNoActive(base);
+    expect(created?.status).toBe("QUEUED");
+  });
+});
