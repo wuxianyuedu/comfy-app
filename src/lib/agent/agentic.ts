@@ -182,6 +182,10 @@ function readAgentContent(data: unknown): string {
   return typeof message.content === "string" ? message.content : "";
 }
 
+/** 单轮对话的浏览器侧预算：与服务端非流式上游预算同量级——
+ *  服务端挂起时前端先到点止损（catch 后走 offlineAgent 兜底），不永久转圈。 */
+const CHAT_AGENT_TIMEOUT_MS = 180_000;
+
 /**
  * 多轮智能体对话里的一轮。
  * @param history 截至目前完整对话（只含用户/助手消息；
@@ -198,6 +202,7 @@ export async function chatAgent(history: Array<ChatMessage>): Promise<AgentTurnR
         temperature: 0.7,
         maxTokens: 700,
       }),
+      signal: AbortSignal.timeout(CHAT_AGENT_TIMEOUT_MS),
     });
     if (!res.ok) {
       throw new Error("llm failed");
