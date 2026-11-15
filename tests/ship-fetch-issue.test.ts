@@ -11,8 +11,8 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { main } from "../scripts/ship.mjs";
-import { CODE } from "../scripts/ship-codes.mjs";
+import { main } from "../scripts/ship/ship.mjs";
+import { CODE } from "../scripts/ship/ship-codes.mjs";
 import {
   extractImageTails,
   imageLocalName,
@@ -20,7 +20,7 @@ import {
   renderIssueMd,
   rewriteImageLinks,
   runFetchIssue,
-} from "../scripts/ship-fetch-issue.mjs";
+} from "../scripts/ship/ship-fetch-issue.mjs";
 
 type FakeResult = { error: string | null; status: number; stderr: string; stdout: string };
 
