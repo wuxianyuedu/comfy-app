@@ -71,4 +71,33 @@ describe("KeyedAsyncMutex", () => {
     await Promise.all([a1, a2, b1]);
     expect(started).toEqual(["a1", "b1", "a2"]);
   });
+
+  it("key 空闲后自动回收，后续同 key 仍可正常串行", async () => {
+    const mutex = new KeyedAsyncMutex();
+    await mutex.run("k", () => Promise.resolve(1));
+    await Promise.resolve();
+    expect(mutex.keyCount).toBe(0);
+
+    const order: Array<string> = [];
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = mutex.run("k", async () => {
+      order.push("first");
+      await gate;
+    });
+    const second = mutex.run("k", () => {
+      order.push("second");
+      return Promise.resolve();
+    });
+    await Promise.resolve();
+    expect(order).toEqual(["first"]);
+    expect(mutex.keyCount).toBe(1);
+    release!();
+    await Promise.all([first, second]);
+    expect(order).toEqual(["first", "second"]);
+    await Promise.resolve();
+    expect(mutex.keyCount).toBe(0);
+  });
 });
