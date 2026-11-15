@@ -147,8 +147,16 @@ export async function createSession(input: repo.CreateSessionInput = {}): Promis
     input.idea ?? "",
   ]);
   const store = createFingerprintStore();
+  /* 机会性清理过期且未再命中的指纹（ISSUE #3953 / #3850）：避免多样化/自动化
+   * 创建流量下历史 key 永久驻留；只删已过 TTL 的条目，不影响窗口内复用语义。 */
+  const now = Date.now();
+  for (const [key, entry] of store.entries()) {
+    if (now - entry.at >= CREATE_DEDUP_TTL_MS) {
+      store.delete(key);
+    }
+  }
   const hit = store.get(dedupKey);
-  if (hit !== undefined && Date.now() - hit.at < CREATE_DEDUP_TTL_MS) {
+  if (hit !== undefined && now - hit.at < CREATE_DEDUP_TTL_MS) {
     /* 命中还要复核会话仍在：测试夹具会整库重置，生产侧也可能删会话；
      * 已消失的命中按未命中处理（重新创建）—— 去重不跨「会话已消失」。 */
     const id = await hit.session;
