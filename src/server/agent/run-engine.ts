@@ -196,8 +196,12 @@ async function execScript(
   if (!md) {
     return { ok: false, error: "模型未返回剧本内容" };
   }
-  await productionRepository.patchContent(userId, projectId, {
-    scriptMarkdown: md,
+  /* 慢 IO 在锁外；写回内容列在 per-project 锁内串行化（ISSUE #3850），避免与
+   * 其他写者（工坊保存/评审/人工裁决/生图回写等）并发覆盖整列。 */
+  await withProductionContentLock(projectId, async () => {
+    await productionRepository.patchContent(userId, projectId, {
+      scriptMarkdown: md,
+    });
   });
   return { ok: true, summary: `已生成剧本（${md.length} 字）` };
 }
@@ -248,8 +252,11 @@ async function execCharacters(
   if (created.length === 0) {
     return { ok: false, error: "未从剧本解析出角色" };
   }
-  await productionRepository.patchContent(userId, projectId, {
-    characters: created,
+  /* 慢 IO 在锁外；内容列写回在 per-project 锁内串行化（ISSUE #3850）。 */
+  await withProductionContentLock(projectId, async () => {
+    await productionRepository.patchContent(userId, projectId, {
+      characters: created,
+    });
   });
   return { ok: true, summary: `已提取 ${created.length} 个角色` };
 }
@@ -302,13 +309,18 @@ async function execStoryboard(
   if (shots.length === 0) {
     return { ok: false, error: "未解析出分镜镜头" };
   }
-  await productionRepository.patchContent(userId, projectId, { shots });
+  /* 慢 IO 在锁外；内容列写回在 per-project 锁内串行化（ISSUE #3850）。
+   * 指纹按本次规划所依据的剧本快照记录（与生成输入一致）。 */
+  const digest = scriptDigestOf(row.scriptMarkdown);
+  await withProductionContentLock(projectId, async () => {
+    await productionRepository.patchContent(userId, projectId, { shots });
+  });
   // 记下「这次分镜是按哪版剧本拆的」：之后剧本变（AI 改写定稿 / 人手改）→
   // 规划器按指纹差把分镜重新纳入（#2478 ④ 的分镜联动）。
   return {
     ok: true,
     summary: `已规划 ${shots.length} 个镜头`,
-    run: { ...run, storyboardScriptDigest: scriptDigestOf(row.scriptMarkdown) },
+    run: { ...run, storyboardScriptDigest: digest },
   };
 }
 
