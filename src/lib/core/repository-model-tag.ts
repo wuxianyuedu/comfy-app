@@ -12,6 +12,7 @@ import {
   type WorkflowModelTag,
 } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
+import type { DbExecutor } from "./repository-executor-types";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import { eq, and, asc, count, inArray, exists, sql, type SQL } from "drizzle-orm";
 
@@ -77,12 +78,17 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
    *  upsert（ISSUE #3835）：冲突目标 = `(userId, name)` 唯一索引，已存在的行
    *  no-op 回写换 returning，一次往返拿到全部 id，且并发重复调用不再撞唯一
    *  索引 500；按**输入顺序**返回 id（`setModelTags` 只吃 id）。 */
-  async upsertByNames(userId: string, names: Array<string>): Promise<Array<string>> {
+  async upsertByNames(
+    userId: string,
+    names: Array<string>,
+    executor?: DbExecutor,
+  ): Promise<Array<string>> {
     if (!names.length) {
       return [];
     }
     const wanted = [...new Set(names)];
-    const rows = await db
+    const exec = executor ?? db;
+    const rows = await exec
       .insert(workflowModelTag)
       .values(wanted.map((name) => ({ userId, name })))
       .onConflictDoUpdate({
