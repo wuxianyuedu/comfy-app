@@ -29,6 +29,13 @@
  * 需要登录态（`repo-release:r`），可用 `CNB_RELEASE_TOKEN` / `CNB_TOKEN` /
  * `CNB_ISSUE_TOKEN`、`--token`，或用户级令牌文件（见 `tokenConfigPaths()`）提供；
  * `CNB_API_ENDPOINT` 可覆盖端点（私有化部署）。
+ *
+ * ## 令牌文件「不存在」是正常态
+ *
+ * 用户级令牌文件是**你按需建**的一份凭据文件，缺省时这些路径一个都不会存在——
+ * 脚本会静默跳过、退回匿名下载，因此也需要人来建（`--config` 就是这件事的入口，
+ * 它把令牌写进候选路径里的第一个）。候选清单不写死在某一份文档里：`--help` 与
+ * `--dry-run` 都逐条打印，且标明每一条「已有 / 不存在」。
  */
 
 import fs from "node:fs";
@@ -50,7 +57,7 @@ export const SHORTCUT_NAME = "Comfy APP.lnk";
 
 /**
  * @param {string[]} argv
- * @returns {{dryRun: boolean, repo: string, tag: string, asset: string, out: string, token: string, forceShortcut: boolean, help: boolean}}
+ * @returns {{dryRun: boolean, repo: string, tag: string, asset: string, out: string, token: string, config: string | null, configOnly: boolean, forceShortcut: boolean, help: boolean}}
  */
 export function parseArgs(argv = process.argv.slice(2)) {
   /** @param {string} flag */
@@ -61,8 +68,15 @@ export function parseArgs(argv = process.argv.slice(2)) {
     }
     return (argv[i + 1] ?? "").trim();
   };
+  /* `--config` 的取值看着像旗标就不吃：`--config --token xxx` 是最自然的写法，
+   * 不判这一下会把「--token」当成目标路径，写出一个名叫 `--token` 的文件。 */
+  const rawConfig = get("--config");
   return {
     asset: get("--asset") || DEFAULT_ASSET,
+    config: argv.includes("--config") && !rawConfig.startsWith("-") ? rawConfig : null,
+    /* `--config --token <v>` 时 token 是给 --config 用的值，不再进下载链；否则传了
+     * --token 却因为少了下载分支而白跑一趟（这一族的现场就是「我明明贴了令牌」）。 */
+    configOnly: argv.includes("--config"),
     dryRun: argv.includes("--dry-run"),
     forceShortcut: argv.includes("--force-shortcut"),
     help: argv.includes("--help") || argv.includes("-h"),
@@ -83,6 +97,7 @@ export function usage() {
     "  --tag <tag>          Release tag（默认 nightly）",
     "  --asset <name>       资产文件名（默认 ComfyAPP-shell.exe）",
     "  --token <token>      下载鉴权 token（也可用环境变量或令牌文件）",
+    "  --config             把 --token 的值写进令牌文件（候选路径里的第一个，见下）",
     "  --force-shortcut     即使快捷方式已存在也重新生成",
     "  --dry-run            只打印计划，不下载、不写文件",
     "  -h, --help           显示帮助",
@@ -90,7 +105,13 @@ export function usage() {
     "鉴权（私有仓 Release 附件需 repo-release:r）：",
     "  环境变量：CNB_RELEASE_TOKEN / CNB_TOKEN / CNB_ISSUE_TOKEN",
     "  令牌文件：将 token 单独写入以下任一路径（按顺序读取首个非空文件，内容取首行/trim）：",
-    ...paths.map((p) => `    - ${p}`),
+    ...paths.map(
+      (p, i) => `    ${i === 0 ? "*" : " "} ${p}${i === 0 ? "   ← --config 默认写这里" : ""}`,
+    ),
+    "",
+    "  这些路径缺省都不存在（不存在 = 还没建，不是错误）：新建是",
+    "    node scripts/fetch-daily-shell.mjs --config --token <token>",
+    "  或自己建目录与文件；Windows 上建议顺手 icacls 收成仅当前用户可读。",
     "",
     "环境变量：CNB_API_ENDPOINT 覆盖下载端点（缺省 https://api.cnb.cool）。",
   ].join("\n");
@@ -104,7 +125,9 @@ export function usage() {
  * @returns {string[]}
  */
 export function tokenConfigPaths(env = process.env, platform = process.platform) {
-  const home = os.homedir();
+  /* homedir 先从传入的 env 里取（`HOME` / `USERPROFILE`）：候选路径是「用户级」的，
+   * 而 `os.homedir()` 读的是进程启动时的真实用户，注入 env 做验证时会指错人。 */
+  const home = (env.HOME ?? env.USERPROFILE ?? "").trim() || os.homedir();
   /** @type {string[]} */
   const paths = [];
   if (platform === "win32") {
@@ -145,6 +168,26 @@ export function readTokenFromConfigFiles(paths, io = {}) {
     }
   }
   return { token: "", from: "" };
+}
+
+/**
+ * 把令牌写进候选路径里的第一个（`--config` 的落地动作）。
+ *
+ * 为什么需要它：令牌文件是「按需建」的凭据文件，缺省时一个都不存在 —— 光在 401 出口
+ * 打印路径，人只会得到「我这儿没有这个路径」这句话，而脚本自己不提供建它的入口。
+ * 写入取 `0o600`（Windows 上靠 ACL 兜底），只写令牌本体 + 换行，不写注释/多余字段，
+ * 避免哪一行被 `readTokenFromConfigFiles` 的全表读法误取。
+ *
+ * @param {{token: string, target: string, mkdirSync?: typeof fs.mkdirSync, writeFileSync?: typeof fs.writeFileSync}} io
+ * @returns {string} 实际写入的规范路径
+ */
+export function writeTokenConfigFile(io) {
+  const target = path.normalize(io.target);
+  const mkdir = io.mkdirSync ?? fs.mkdirSync;
+  const write = io.writeFileSync ?? fs.writeFileSync;
+  mkdir(path.dirname(target), { recursive: true });
+  write(target, `${io.token.trim()}\n`, { encoding: "utf8", mode: 0o600 });
+  return target;
 }
 
 /**
@@ -337,7 +380,7 @@ export function ensureRootShortcut(opts) {
 }
 
 /**
- * @param {{argv?: string[], env?: NodeJS.ProcessEnv, cwd?: string, fetchImpl?: typeof fetch, platform?: NodeJS.Platform, spawn?: typeof spawnSync}} io
+ * @param {{argv?: string[], env?: NodeJS.ProcessEnv, cwd?: string, fetchImpl?: typeof fetch, platform?: NodeJS.Platform, spawn?: typeof spawnSync, configPaths?: string[]}} io
  */
 export async function main(io = {}) {
   const argv = io.argv ?? process.argv.slice(2);
@@ -356,11 +399,56 @@ export async function main(io = {}) {
     repo: args.repo,
     tag: args.tag,
   });
-  const { token, from } = resolveToken(env, args.token);
+  const configPaths = tokenConfigPaths(env, io.platform ?? process.platform);
+
+  /* `--config`：把 --token 的值落进令牌文件。目标路径可显式给，缺省是候选清单里的第一个
+   * （Windows 上就是 %APPDATA%\comfy-app\cnb-release-token）。这条路径存在的意义是
+   * 「这些文件缺省一个都不存在」—— 人需要一个入口去建它，而不是自己去猜目录。 */
+  if (args.configOnly) {
+    const target = args.config || configPaths[0] || "";
+    const written = (args.token ?? "").trim();
+    if (!written) {
+      process.stderr.write(
+        "[fetch-daily-shell] --config 需要一个令牌值：--config [路径] --token <token>。\n",
+      );
+      return 2;
+    }
+    if (!target) {
+      process.stderr.write(
+        "[fetch-daily-shell] --config 找不到可写的候选路径（APPDATA 与 homedir 都取不到），请显式给：--config <路径>。\n",
+      );
+      return 2;
+    }
+    const abs = path.isAbsolute(target) ? target : path.join(root, target);
+    const saved = writeTokenConfigFile({ token: written, target: abs });
+    process.stdout.write(`[fetch-daily-shell] ✓ 令牌已写入：${saved}\n`);
+    process.stdout.write(
+      "[fetch-daily-shell] 提示：该文件在项目检出之外，勿复制进仓库/`.env`；Windows 上建议 icacls 收成仅当前用户可读。\n",
+    );
+    return 0;
+  }
+
+  /* `io.configPaths` 是注入面：用例要证明「这些路径缺省都不存在」，就不能读到跑用例
+   * 那台机器上真实存在的令牌文件。生产路径不传，仍是 `tokenConfigPaths()` 的结果。 */
+  const { token, from } = resolveToken(env, args.token, {
+    configPaths: io.configPaths ?? configPaths,
+  });
 
   process.stdout.write(`[fetch-daily-shell] 来源：${url}\n`);
   process.stdout.write(`[fetch-daily-shell] 保存到：${outAbs}\n`);
   process.stdout.write(`[fetch-daily-shell] 鉴权：${from || "无（直连）"}\n`);
+  if (!from) {
+    /* 「本地没有这个路径」是这一族最常见的卡点：路径不存在本来就是正常态，问题在于
+     * 没人告诉你它在找哪儿、以及怎么建。所以无令牌时把候选清单连同存在状态一起念
+     * 出来（只念路径与有无，绝不回显令牌内容）。 */
+    const seen = configPaths.map((p) => `  · ${p}（${fs.existsSync(p) ? "已有" : "不存在"}）`);
+    process.stdout.write(
+      `[fetch-daily-shell] 令牌文件候选（缺省都不存在，按顺序取首个非空）：\n${seen.join("\n")}\n`,
+    );
+    process.stdout.write(
+      "[fetch-daily-shell] 要建它：node scripts/fetch-daily-shell.mjs --config --token <token>\n",
+    );
+  }
 
   if (args.dryRun) {
     const shortcut = path.join(root, SHORTCUT_NAME);
@@ -383,7 +471,7 @@ export async function main(io = {}) {
       process.stderr.write(`[fetch-daily-shell] 响应片段：${downloaded.detail}\n`);
     }
     if (downloaded.status === 401 || downloaded.status === 403) {
-      const cfg = tokenConfigPaths(env, io.platform ?? process.platform)[0] ?? "";
+      const cfg = configPaths[0] ?? "";
       process.stderr.write(
         "[fetch-daily-shell] 提示：该 Release 附件需要登录态与 repo-release:r 权限。\n",
       );
@@ -393,10 +481,18 @@ export async function main(io = {}) {
           `  · 令牌文件：将带 repo-release:r 权限的 token 写入 ${cfg || "用户级 comfy-app/cnb-release-token 文件"}（仅首个非空行生效）\n` +
           "  · 或本次传入：--token <token>\n",
       );
-      if (!token) {
+      /* 按「这一跑实际解析到的结果」判，不看 args.token：`token` 是所有来源的合成值，
+       * 用它判会让「文件没建成」的那一态悄悄少一句关键提示。 */
+      if (!from) {
         process.stderr.write(
           "[fetch-daily-shell] 当前未检测到可用令牌（环境变量与令牌文件均为空/缺失）。\n",
         );
+        if (cfg) {
+          /* 这一句就是「本地根本没有这个路径」的出口：路径本该不存在，要人去建它。 */
+          process.stderr.write(
+            `[fetch-daily-shell] 建令牌文件：node scripts/fetch-daily-shell.mjs --config --token <token>（目标 ${cfg}）\n`,
+          );
+        }
       }
     } else if (downloaded.status === 404) {
       /* 端点修对以后，404 才是真的「这个 tag / 资产名下没有这份附件」；与落点无关，
