@@ -1479,9 +1479,10 @@ master:
       stages:
         - name: GitHub 镜像同步
           script: node scripts/ci-github-mirror-push.mjs
-          # 10m 外框包住最坏账（推送 240s + 回读 + LFS 60s）与冷启动余量；
+          # 15m 外框包住最坏账（推送预算 480s + 回读 + LFS 60s，ISSUE #3914 起
+          # 预算翻倍——首刀挂满 240s 仍要留一次完整重试）与冷启动余量；
           # 与自托管主列那格同一份重试预算（常量在 `ci-mirror-retry-policy.mjs`）。
-          timeout: 10m
+          timeout: 15m
 
   # 合并后的 push：**不重跑全套**（全套是 PR 那条的事；「不引入新代码」的前提依旧 ——
   # 合并提交由平台按**已被门禁验过的源分支 SHA** 生成）。树级校验档已撤（文档链两格
@@ -1540,9 +1541,10 @@ master:
       stages:
         - name: GitHub master 镜像
           script: node scripts/ci-github-mirror-push.mjs --master
-          # 10m 外框包住最坏账（推送 240s + 回读 + LFS 60s）与冷启动余量；
-          # 与 PR 出口同一份重试预算（常量在 `ci-mirror-retry-policy.mjs`）。
-          timeout: 10m
+          # 15m 外框包住最坏账（推送预算 480s + 回读 + LFS 60s，ISSUE #3914 起
+          # 预算翻倍）与冷启动余量；与 PR 出口同一份重试预算
+          # （常量在 `ci-mirror-retry-policy.mjs`）。
+          timeout: 15m
 
   # ── 触发口：CNB 只作触发入口，构建执行全部在 GA（ISSUE #3504）──────────────
   #
