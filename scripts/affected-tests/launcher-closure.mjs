@@ -5,7 +5,7 @@
  *   · `tests/dist-artifact-hygiene.test.ts`：产物 `scripts/` 白名单的完备性判据 ——
  *     `RUNTIME_SCRIPTS` / `ALLOWED_SCRIPTS` 必须覆盖闭包内每个模块，漏登记的表现是
  *     桌包重编排即 `ERR_MODULE_NOT_FOUND`（用户只看得到「双击没反应」）；
- *   · `scripts/affected-tests.mjs`：受影响用例面 —— 改动落在闭包内时把上面的判据
+ *   · `scripts/affected-tests/affected-tests.mjs`：受影响用例面 —— 改动落在闭包内时把上面的判据
  *     用例带进增量面。那份判据对闭包成员的消费是**运行时读文本解析**，静态 import
  *     图追不到（它只静态 import `standalone-private-inputs.mjs`），不改这一格的话
  *     「新增内部分件漏登记」会以同一形态反复漏出去（ISSUE #3812）。
@@ -28,7 +28,7 @@ export const LAUNCHER_ENTRY = "scripts/dev-launcher.mjs";
  * @param {{ entry?: string, readText?: (abs: string) => string | null, exists?: (abs: string) => boolean }} [io]
  *   `entry` 相对仓库根（也接受绝对路径）；`readText` / `exists` 可注入（单测夹具），
  *   缺省走真实文件系统。读不到的文件按「没有相对 import」处理（与「文件不存在」同形）。
- * @returns {Set<string>} 闭包成员，**相对仓库根**的 POSIX 路径，如 `scripts/db-backup-core.mjs`。
+ * @returns {Set<string>} 闭包成员，**相对仓库根**的 POSIX 路径，如 `scripts/db/db-backup-core.mjs`。
  */
 export function collectLauncherScriptClosure(io = {}) {
   const root = process.cwd();

@@ -833,9 +833,9 @@ describe("affected-tests：编排器闭包成员带进产物清单判据（ISSUE
   function run(changed: Array<string>, closure: Array<string>) {
     const files: Record<string, string> = {
       [HYGIENE]: "it('x', () => {});",
-      "scripts/db-backup-core.mjs": "export {};",
-      "scripts/check-standalone-contents.cjs": "module.exports = {};",
-      "scripts/tw4-scan-core.mjs": "export {};",
+      "scripts/db/db-backup-core.mjs": "export {};",
+      "scripts/gates/check-standalone-contents.cjs": "module.exports = {};",
+      "scripts/tw4/tw4-scan-core.mjs": "export {};",
     };
     return resolveAffectedTests({
       changedPaths: changed,
@@ -848,28 +848,28 @@ describe("affected-tests：编排器闭包成员带进产物清单判据（ISSUE
 
   it("⑤ 改编排器闭包内的模块（db-backup-core.mjs）→ 产物清单判据进面", () => {
     const res = run(
-      ["scripts/db-backup-core.mjs"],
-      ["scripts/dev-launcher.mjs", "scripts/db-backup-core.mjs"],
+      ["scripts/db/db-backup-core.mjs"],
+      ["scripts/dev-launcher.mjs", "scripts/db/db-backup-core.mjs"],
     );
     expect(res.tests).toContain(HYGIENE);
     expect(res.reasons[HYGIENE] ?? "").toContain("编排器产物清单判据");
   });
 
   it("改判据直接读文本的检查侧本体（check-standalone-contents.cjs）→ 同样进面", () => {
-    const res = run(["scripts/check-standalone-contents.cjs"], []);
+    const res = run(["scripts/gates/check-standalone-contents.cjs"], []);
     expect(res.tests).toContain(HYGIENE);
   });
 
   it("不在闭包、也不是消费源的 scripts/*.mjs 不拉判据（面不许无限扩大）", () => {
-    const res = run(["scripts/tw4-scan-core.mjs"], ["scripts/dev-launcher.mjs"]);
+    const res = run(["scripts/tw4/tw4-scan-core.mjs"], ["scripts/dev-launcher.mjs"]);
     expect(res.tests).not.toContain(HYGIENE);
   });
 
   it("真仓库上 main 接线：改 db-backup-core.mjs 的面里带判据（真实闭包算过了）", () => {
-    const CLI = path.join(ROOT, "scripts", "affected-tests.mjs");
+    const CLI = path.join(ROOT, "scripts", "affected-tests", "affected-tests.mjs");
     // 用默认输出（空格分隔的测试清单）而不是 --json：解析 JSON 要再立一条类型守卫，
     // 这里只断言「清单里有这一份」，字符串包含就够。
-    const out = spawnSync(process.execPath, [CLI, "--changed", "scripts/db-backup-core.mjs"], {
+    const out = spawnSync(process.execPath, [CLI, "--changed", "scripts/db/db-backup-core.mjs"], {
       cwd: ROOT,
       encoding: "utf8",
       env: SPAWN_ENV,

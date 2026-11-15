@@ -38,7 +38,7 @@
  *   · **事件**：`events[]` —— 依次发生了什么（每步带关键身份与时刻）。
  *
  * 后台跑 ship 时**轮询这份文件**（`pnpm ship --result` / `--result=json`，或
- * `node scripts/ship-result.mjs`），**不要 `sleep + grep` 自己的运行日志** ——
+ * `node scripts/ship/ship-result.mjs`），**不要 `sleep + grep` 自己的运行日志** ——
  * 日志是那一块屏幕的过去，落盘读数是进程自己写下的现在。为此落盘改成**原子替换**
  * （先写同目录临时文件再 rename）：另一只轮询的眼睛要么读到上一份完整快照、
  * 要么读到这一份，不会读到半截 JSON。
@@ -169,7 +169,7 @@ export function createShipResultSink(io = {}) {
       return;
     }
     /* 原子替换（ISSUE #3923）：先写同目录临时文件再 rename，轮询方（`pnpm ship
-     * --result` / `node scripts/ship-result.mjs`）读到的要么是上一份完整快照、
+     * --result` / `node scripts/ship/ship-result.mjs`）读到的要么是上一份完整快照、
      * 要么是这一份 —— 不会是写了一半的 JSON。rename 失败（Windows 上目标被
      * 瞬时占用等）退回整文件重写：best-effort 口径不变。 */
     const tmp = `${filePath}.${process.pid}.tmp`;

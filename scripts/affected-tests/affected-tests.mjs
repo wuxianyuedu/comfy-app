@@ -29,7 +29,7 @@
  *   ⑤ **编排器闭包成员**：改动落在 `dev-launcher.mjs` 的相对 import 闭包内（或清单判据
  *      直接读文本的两份本体）→ 跑 `tests/dist-artifact-hygiene.test.ts` —— 那份判据对
  *      闭包成员的消费是运行时读文本解析，③ 追不到（ISSUE #3812）。实现见
- *      `scripts/affected-launcher-hygiene.mjs`，闭包算法在 `scripts/launcher-closure.mjs`。
+ *      `scripts/affected-tests/affected-launcher-hygiene.mjs`，闭包算法在 `scripts/affected-tests/launcher-closure.mjs`。
  *
  * ⚠️ 闭包只跟着**静态写出来的**说明符走，两类它抓不到：运行时拼出来的路径
  * （`import(base + name)`、`path.join(dir, …)`）、以及解析目录之外的消费方。

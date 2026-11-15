@@ -91,8 +91,8 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
    每格一句 `[ship] ▶ <阶段> | key=value`（唯一出处 `scripts/ship/ship-stage.mjs`）——
    进度说走到哪，退码说结果分类，两套信息互不替代，都不用翻日志。
    这套进度还 write-ahead 落在 `.git/ship-result.json`（状态快照 + 带时间戳的事件，
-   `scripts/ship-result.mjs` 是唯一出处，ISSUE #3923）：后台跑时用 `pnpm ship --result`
-   （或 `node scripts/ship-result.mjs`）轮询它取「走到哪了 / 结论」—— **不要
+   `scripts/ship/ship-result.mjs` 是唯一出处，ISSUE #3923）：后台跑时用 `pnpm ship --result`
+   （或 `node scripts/ship/ship-result.mjs`）轮询它取「走到哪了 / 结论」—— **不要
    `sleep + grep` 自己的运行日志**：日志是那一块屏幕的过去，落盘读数是进程自己写下的现在。
    **同一把尺在手工那一跳更松：`cnb` 认不出的子命令打印 usage 却退 `0`**（ISSUE #2436）。
    例：把评论敲成 `cnb issues create-comment` —— 仓里既有的正确形状是

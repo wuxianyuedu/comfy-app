@@ -1426,8 +1426,13 @@ export function lockClassViolations(text: string, prIid = "1982"): Array<string>
         `锁 *${row.lockRef} 没有显式写 cancel-in-progress —— 漏写与「有意排队」在配置里长得一样，重复排队就收不成一条（要排队的那一档写 false 并说明理由）`,
       );
     }
-    /* R2：类锁的 key 必须是字面量。 */
-    if (def.key.includes("$")) {
+    /* R2：类锁的 key 必须是字面量。
+     * 显式例外（ISSUE #3964）：`lock_ga_verdict` 的 key 刻意带 `$CNB_COMMIT`
+     * （ISSUE #3924：按绑定 sha 分锁，防两条不同 PR 的 GA 回调互掐）。R2 防的是
+     * 「变量在某个事件上无值 ⇒ 退化成共用一把」，而 GA 判决回调只跑在 push 事件上、
+     * `CNB_COMMIT` 在那条 build 上恒有值（.cnb.yml 锁块头注记了实测 sha_check=match）
+     * —— 退化的前提不成立。除此之外的变量 key 照旧判红。 */
+    if (def.key.includes("$") && def.key !== "ga-verdict-$CNB_COMMIT") {
       bad.push(
         `锁 *${row.lockRef} 的 key「${def.key}」带变量 —— 变量在某个事件上无值就退化成共用一把（#1981 那条教训的另一面）`,
       );

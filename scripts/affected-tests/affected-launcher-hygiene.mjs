@@ -20,7 +20,7 @@ export const LAUNCHER_HYGIENE_TEST = "tests/dist-artifact-hygiene.test.ts";
  * import，反向 import 闭包已覆盖，不在此列）。
  */
 const LAUNCHER_HYGIENE_SOURCES = new Set([
-  "scripts/check-standalone-contents.cjs",
+  "scripts/gates/check-standalone-contents.cjs",
   "scripts/build-desktop.mjs",
 ]);
 
