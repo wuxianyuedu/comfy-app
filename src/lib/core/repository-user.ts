@@ -14,6 +14,8 @@ import "server-only";
 
 import { db } from "~/lib/db";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
+import { AppError } from "./errors";
+import { isSqliteUniqueViolation } from "~/lib/sqlite-error";
 import { decryptLlmKey, encryptLlmKey } from "~/lib/llm/secrets";
 import {
   type RawExtraModel,
@@ -48,8 +50,23 @@ export class UserRepository {
   }
 
   async createUser(input: { email: string; name: string | null; password: string }): Promise<User> {
-    const rows = await db.insert(user).values(input).returning();
-    return firstRowRequired(rows, "用户插入");
+    /* 并发首访（ISSUE #3866）：冷启动/首次登录时页面会并发发出多条请求，各自
+     * 「findByEmail 得空 → insert」会撞 `user.email` 唯一索引，后到者裸 500。
+     * 改独占插入 + 冲突后按 email 复读：同一 email 幂等收敛到同一行。 */
+    const inserted = await db
+      .insert(user)
+      .values(input)
+      .onConflictDoNothing({ target: user.email })
+      .returning();
+    const row = inserted[0];
+    if (row) {
+      return row;
+    }
+    const existing = await this.findByEmail(input.email);
+    if (!existing) {
+      throw new AppError("用户写入失败（唯一冲突后复读仍不存在）", "conflict.user_email", 409);
+    }
+    return existing;
   }
 
   async updateEmail(id: string, email: string): Promise<User> {
@@ -426,21 +443,38 @@ export class RemoteModelRepository {
             ? null
             : encryptLlmKey(input.apiKey.trim());
       }
-      const rows = await db
-        .update(remoteModel)
-        .set(patch)
-        .where(eq(remoteModel.id, input.id))
-        .returning();
-      return decryptRemoteRow(firstRowOfExisting(rows, `模型不存在: ${input.id}`));
+      try {
+        const rows = await db
+          .update(remoteModel)
+          .set(patch)
+          .where(eq(remoteModel.id, input.id))
+          .returning();
+        return decryptRemoteRow(firstRowOfExisting(rows, `模型不存在: ${input.id}`));
+      } catch (error) {
+        /* 改名撞 `remoteModel_name_uniq`（ISSUE #3866）：转成可读的冲突错误。 */
+        if (isSqliteUniqueViolation(error)) {
+          throw new AppError(`模型名称已被使用：${name}`, "conflict.model_name", 409);
+        }
+        throw error;
+      }
     }
-    const rows = await db
-      .insert(remoteModel)
-      .values({
-        ...values,
-        apiKey: encryptLlmKey(input.apiKey?.trim() ? input.apiKey.trim() : null),
-      })
-      .returning();
-    return decryptRemoteRow(firstRowRequired(rows, "模型写入"));
+    /* 新建（ISSUE #3866）：并发/重名建同名模型时，捕获唯一冲突转成可读的 409
+     * 冲突错误，不再漏裸 500（「重名当场拒绝」语义不变，见 repository.test.ts）。 */
+    try {
+      const rows = await db
+        .insert(remoteModel)
+        .values({
+          ...values,
+          apiKey: encryptLlmKey(input.apiKey?.trim() ? input.apiKey.trim() : null),
+        })
+        .returning();
+      return decryptRemoteRow(firstRowRequired(rows, "模型写入"));
+    } catch (error) {
+      if (isSqliteUniqueViolation(error)) {
+        throw new AppError(`模型名称已被使用：${name}`, "conflict.model_name", 409);
+      }
+      throw error;
+    }
   }
 
   /** 删除一条模型（供应商页的行内删除）。 */
@@ -571,23 +605,43 @@ export class LlmProviderRepository {
             ? null
             : encryptLlmKey(input.apiKey.trim());
       }
-      const rows = await db
-        .update(llmProvider)
-        .set(patch)
-        .where(eq(llmProvider.id, input.id))
-        .returning();
-      return decryptProviderRow(firstRowOfExisting(rows, `供应商不存在: ${input.id}`));
+      try {
+        const rows = await db
+          .update(llmProvider)
+          .set(patch)
+          .where(eq(llmProvider.id, input.id))
+          .returning();
+        return decryptProviderRow(firstRowOfExisting(rows, `供应商不存在: ${input.id}`));
+      } catch (error) {
+        /* 改名撞 `llmProvider_name_uniq`（ISSUE #3866）：转成可读的冲突错误，
+         * 不把裸 SQLite 约束错误漏给前端。 */
+        if (isSqliteUniqueViolation(error)) {
+          throw new AppError(`供应商名称已被使用：${name}`, "conflict.provider_name", 409);
+        }
+        throw error;
+      }
     }
-    const rows = await db
-      .insert(llmProvider)
-      .values({
-        name,
-        baseUrl,
-        apiFormat,
-        apiKey: encryptLlmKey(input.apiKey?.trim() ? input.apiKey.trim() : null),
-      })
-      .returning();
-    return decryptProviderRow(firstRowRequired(rows, "供应商写入"));
+    /* 新建（ISSUE #3866）：并发/重名建同名供应商时，后到者原先拿到的是裸 SQLite
+     * 约束错误（500）。「重名当场拒绝、失败看得见」的既有语义不变（见
+     * repository.test.ts 同名用例），变的只是失败形态：捕获唯一冲突转成可读的
+     * 409 冲突错误，不再把驱动原文漏给前端。 */
+    try {
+      const rows = await db
+        .insert(llmProvider)
+        .values({
+          name,
+          baseUrl,
+          apiFormat,
+          apiKey: encryptLlmKey(input.apiKey?.trim() ? input.apiKey.trim() : null),
+        })
+        .returning();
+      return decryptProviderRow(firstRowRequired(rows, "供应商写入"));
+    } catch (error) {
+      if (isSqliteUniqueViolation(error)) {
+        throw new AppError(`供应商名称已被使用：${name}`, "conflict.provider_name", 409);
+      }
+      throw error;
+    }
   }
 
   /** 删除供应商及其名下模型（同一事务：留着孤儿模型会让列表出现「无主」条目）。 */

@@ -54,12 +54,14 @@ type ScannedFile = {
  * 返回同步到的模型文件数。
  */
 export async function syncModels(): Promise<number> {
-  // 第 1 步 —— 无条件退掉所有 LOCAL 行。
-  await modelRepository.disableAllLocal();
-
-  // 第 2 步 —— 目录清单同时充当可达性判据：拿不到目录就没有可回填的东西。
+  // 第 1 步 —— 先扫描、后落库（ISSUE #3869）：目录扫描是秒级 IO，可能失败/超时
+  //（ComfyUI 正在重启等）。原先「先无条件全量停用、再扫描、再回填」三段各自
+  // 提交，扫描失败会把模型库整表留在不可用状态直到下次成功同步。改成先算后写：
+  // 扫描抛错时库内现有数据一字不动。
   const folders = (await listModelFolders()).filter(isModelFolder);
   if (!folders.length) {
+    // 目录清单为空（视为连不上/确实无模型）：保持既有语义——全部 LOCAL 行不可用。
+    await modelRepository.disableAllLocal();
     return 0;
   }
 
@@ -92,9 +94,9 @@ export async function syncModels(): Promise<number> {
     }
   }
 
-  /* 一次性批量落库：模型目录常数百到数千文件，逐条 `await upsertScanned`
-   * 就是同数量的数据库往返，同步接口因此长时间挂起。 */
-  await modelRepository.upsertScannedMany(scanned);
+  // 第 2 步 —— 「全量停用 + 批量回填」收进同一事务原子提交（ISSUE #3869）：
+  // 回填分片逐片执行但同滚，中途失败不会留下「部分模型可见、部分不可见」的中间态。
+  await modelRepository.applyLocalSync(scanned);
 
   return scanned.length;
 }

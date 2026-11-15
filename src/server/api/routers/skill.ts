@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { skillRepository } from "~/lib/core/repository";
+import { isSqliteUniqueViolation } from "~/lib/sqlite-error";
 import { BUILTIN_SKILLS, CATEGORY_LABELS } from "~/lib/skills-seed";
 
 export const skillRouter = createTRPCRouter({
@@ -75,20 +76,34 @@ export const skillRouter = createTRPCRouter({
           message: "该 slug 已存在，换一个名字",
         });
       }
-      const skill = await skillRepository.createUserSkill({
-        name: input.name,
-        slug: input.slug,
-        description: input.description,
-        icon: input.icon,
-        category: input.category,
-        promptTemplate: input.promptTemplate,
-        negativePrompt: input.negativePrompt,
-        defaultParams: input.defaultParams,
-        recommendedModel: input.recommendedModel,
-        coverUrl: input.coverUrl,
-        sortOrder: input.sortOrder,
-        tags: input.tags,
-      });
+      /* 并发同 slug（ISSUE #3866）：上方查重与插入之间没有原子边界，两个请求
+       * 同时通过检查时后到者撞 `skill.slug` 唯一索引。捕获约束冲突转成既定的
+       * CONFLICT 语义，不漏裸 500。 */
+      let skill;
+      try {
+        skill = await skillRepository.createUserSkill({
+          name: input.name,
+          slug: input.slug,
+          description: input.description,
+          icon: input.icon,
+          category: input.category,
+          promptTemplate: input.promptTemplate,
+          negativePrompt: input.negativePrompt,
+          defaultParams: input.defaultParams,
+          recommendedModel: input.recommendedModel,
+          coverUrl: input.coverUrl,
+          sortOrder: input.sortOrder,
+          tags: input.tags,
+        });
+      } catch (error) {
+        if (isSqliteUniqueViolation(error)) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "该 slug 已存在，换一个名字",
+          });
+        }
+        throw error;
+      }
       return { skill };
     }),
 });
