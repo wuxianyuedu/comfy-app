@@ -25,6 +25,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
+import { atomicWriteText } from "./atomic-write.server";
 import { AsyncMutex } from "~/lib/async-mutex";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import { upperToken } from "~/lib/upper-token";
@@ -32,18 +33,6 @@ import { upperToken } from "~/lib/upper-token";
 /** 覆盖文件的多个写方（保存 / 按模式还原）先进进程内互斥（ISSUE #3859）：
  *  「读基准 → 差集 → 整份写回」并发交叠时，后写者会用旧基准顶掉先写者。 */
 const overrideFileMutex = new AsyncMutex();
-
-/** 覆盖文件的原子写（ISSUE #3859）：tmp + rename，读侧不会撞到半截 JSON。 */
-async function atomicWriteText(file: string, text: string): Promise<void> {
-  const tmp = `${file}.${process.pid}.tmp`;
-  try {
-    await fs.writeFile(tmp, text, "utf8");
-    await fs.rename(tmp, file);
-  } catch (error) {
-    await fs.rm(tmp, { force: true }).catch(() => undefined);
-    throw error;
-  }
-}
 
 import {
   MODE_CONTRACTS_REL_PATH,

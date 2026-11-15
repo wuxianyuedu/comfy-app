@@ -4,8 +4,9 @@
  * 透传，折成空数组 = 清空远端模型（ISSUE #2592）。mock：内存库/真 LLM/本机覆盖文件，spy 保真实现。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { RemoteModelAdaptersDoc } from "~/lib/workshop/remote-model-adapter";
 
-const { llmServer, contracts } = vi.hoisted(() => ({
+const { llmServer, contracts, defaults } = vi.hoisted(() => ({
   llmServer: {
     getConfigForClient: vi.fn(() => ({
       provider: "remote",
@@ -29,6 +30,15 @@ const { llmServer, contracts } = vi.hoisted(() => ({
       effective: { mode: "TXT2IMG", inputs: ["prompt"], output: "image" },
     })),
   },
+  defaults: {
+    /* 生效档缺省直通 DB 存档（合并逻辑的单元测试在 model-adapter-defaults.server.test.ts）。 */
+    effectiveModelAdaptersDoc: vi.fn((_name: string, dbDoc: RemoteModelAdaptersDoc) => dbDoc),
+    saveModelAdaptersAsDefaults: vi.fn((_name: string, doc: RemoteModelAdaptersDoc) => ({
+      doc,
+      file: "src/lib/workshop/model-adapter-defaults.json",
+      relPath: "src/lib/workshop/model-adapter-defaults.json",
+    })),
+  },
 }));
 
 vi.mock("~/server/db", async () => {
@@ -49,6 +59,10 @@ vi.mock("~/lib/workshop/mode-contract.server", () => ({
   saveModeContracts: contracts.saveModeContracts,
   saveModeContractsAsProjectDefaults: contracts.saveModeContractsAsProjectDefaults,
   resetModeContractOverride: contracts.resetModeContractOverride,
+}));
+vi.mock("~/lib/workshop/model-adapter-defaults.server", () => ({
+  effectiveModelAdaptersDoc: defaults.effectiveModelAdaptersDoc,
+  saveModelAdaptersAsDefaults: defaults.saveModelAdaptersAsDefaults,
 }));
 /* 「是不是开发检出」这条判据已搬到 `~/lib/shell/dev-checkout.server`（ISSUE #3623
    起两处配置面共用它）—— 桩跟着搬家，不搬的话这条真函数在仓库根跑会答 true。 */
@@ -585,6 +599,33 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
     ).toBe("BAD_REQUEST");
     expect(save).not.toHaveBeenCalled();
     save.mockRestore();
+  });
+
+  it("保存为项目默认（#3951）：mode 归一成大写后交给服务端写基线", async () => {
+    const res = await caller().workshopAdaptersSaveAsDefaults({
+      name: "gpt-x",
+      adapters: [{ mode: "txt2img", inputs: [{ type: "prompt", field: "prompt" }] }],
+    });
+    expect(defaults.saveModelAdaptersAsDefaults).toHaveBeenCalledTimes(1);
+    const passed = defaults.saveModelAdaptersAsDefaults.mock.calls[0]?.[1];
+    expect(passed?.adapters[0]?.mode).toBe("TXT2IMG");
+    expect(res.relPath).toBe("src/lib/workshop/model-adapter-defaults.json");
+  });
+
+  it("保存为项目默认：端点路径省略 = 取生效档现值（本页不编辑这格）", async () => {
+    seedRemoteModel(tdb, {
+      name: "agnes-image",
+      workshopAdapters: {
+        endpointPath: "/v1/videos",
+        adapters: [],
+      },
+    });
+    await caller().workshopAdaptersSaveAsDefaults({
+      name: "agnes-image",
+      adapters: [{ mode: "t2v", inputs: [{ type: "prompt", field: "prompt" }] }],
+    });
+    const passed = defaults.saveModelAdaptersAsDefaults.mock.calls.at(-1)?.[1];
+    expect(passed?.endpointPath).toBe("/v1/videos");
   });
 
   it("概览只收非空存档：每条给模型名与该模型已配的模式码清单", async () => {

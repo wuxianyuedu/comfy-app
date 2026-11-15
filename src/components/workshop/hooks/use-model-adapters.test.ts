@@ -38,6 +38,9 @@ vi.mock("~/trpc/react", () => ({
       workshopAdaptersSave: {
         mutationOptions: () => ({ mutationKey: ["llm", "workshopAdaptersSave"] }),
       },
+      workshopAdaptersSaveAsDefaults: {
+        mutationOptions: () => ({ mutationKey: ["llm", "workshopAdaptersSaveAsDefaults"] }),
+      },
       workshopAdaptersSummary: {
         queryOptions: () => ({ queryKey: ["llm", "workshopAdaptersSummary"] }),
         queryKey: () => ["llm", "workshopAdaptersSummary"],
