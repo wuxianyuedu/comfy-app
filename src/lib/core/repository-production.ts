@@ -95,19 +95,35 @@ export class ProductionRepository extends DrizzleRepository<Production> {
   }
 
   /**
-   * 起片失败的补偿（ISSUE #3868）：把 `filmStartedAt` 清回空串，下一拍规划器
-   * 可以重新发起 render_film。只在确实写着时间戳时才写（免一次无谓的覆盖）。
+   * 起片失败的补偿（ISSUE #3868 / #3939）：把 `filmStartedAt` 清回空串，下一拍规划器
+   * 可以重新发起 render_film。与 `claimFilmStart` 对称地在 immediate 事务内重读并
+   * 只清该字段后写回 —— 避免「先读整包 run → 再整列写回」跨语句窗口把并发写者
+   * （暂停/取消/引擎推进/路由控制等）对 run 的更新一并覆盖（TOCTOU / 丢失更新）。
+   * 行不存在或 `filmStartedAt` 已为空时无副作用（免一次无谓写入）。
    */
   async clearFilmStart(userId: string, id: string): Promise<void> {
-    const row = await this.getForUser(userId, id);
-    if (!row) {
-      return;
-    }
-    const run = normalizeProductionRun(row.run);
-    if (run.filmStartedAt === "") {
-      return;
-    }
-    await this.updateRun(userId, id, { ...run, filmStartedAt: "" });
+    await db.transaction(
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(production)
+          .where(and(eq(production.id, id), eq(production.userId, userId)))
+          .limit(1);
+        const row = rows[0];
+        if (!row) {
+          return;
+        }
+        const run = normalizeProductionRun(row.run);
+        if (run.filmStartedAt === "") {
+          return;
+        }
+        await tx
+          .update(production)
+          .set({ run: { ...run, filmStartedAt: "" }, updatedAt: new Date() })
+          .where(and(eq(production.id, id), eq(production.userId, userId)));
+      },
+      { behavior: "immediate" },
+    );
   }
 
   /**
