@@ -292,14 +292,20 @@ export { probeComfyAtPort };
 
 export async function probeComfyBase(): Promise<string | null> {
   const cached = _resolvedBase;
+  let afterResolve: string | null = cached;
   try {
     const base = await resolveComfyBase();
+    afterResolve = _resolvedBase;
     return await probeBaseOnce(base);
   } finally {
     /* 还原会话缓存：按次探测不得污染「本次会话连哪个地址」的粘性结论。
-     * 探测本身已经写入了 `_resolvedBase`（resolveComfyBase 的既有行为），
-     * 这里回滚成探测前的值。 */
-    _resolvedBase = cached;
+     * 只回滚**本次探测链写入**的值（_resolvedBase 仍是 resolveComfyBase
+     * 返回后的那个）：探测期间第三方（uploadImage / interrupt 的
+     * resolveComfyBase）刚写入的新发现不覆盖——原先的无条件回滚会把它
+     * 践踏掉，下一拍又得重新全量探测（ISSUE #3876）。 */
+    if (_resolvedBase === afterResolve) {
+      _resolvedBase = cached;
+    }
   }
 }
 

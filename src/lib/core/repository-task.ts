@@ -450,6 +450,9 @@ export class TaskRepository extends DrizzleRepository<Task> {
   finalizeSuccess: TaskRepoImpl["finalizeSuccess"] = (taskId, data) =>
     impl.finalizeSuccess(taskId, data);
 
+  finalizeSuccessWithImages: TaskRepoImpl["finalizeSuccessWithImages"] = (taskId, data, images) =>
+    impl.finalizeSuccessWithImages(taskId, data, images);
+
   finalizeFailure: TaskRepoImpl["finalizeFailure"] = (taskId, error, validationErrors) =>
     impl.finalizeFailure(taskId, error, validationErrors);
 

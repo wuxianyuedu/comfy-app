@@ -416,6 +416,7 @@ export async function runComfyWorkflow(
 
   const deadline = Date.now() + 10 * 60_000;
   let history: Record<string, unknown> = {};
+  let timedOut = true;
   while (Date.now() < deadline) {
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     history = await getComfyHistory(promptId).catch(() => ({}));
@@ -424,10 +425,25 @@ export async function runComfyWorkflow(
     const done = status?.completed === true || status?.status_str === "success";
     const failed = status?.status_str === "error";
     if (done || failed) {
+      timedOut = false;
       break;
     }
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(1500);
+  }
+
+  if (timedOut) {
+    /* 超时 ≠ 完成（ISSUE #3878）：原先把「10 分钟没等到」落进「完成但没有输出
+     * 文件」的失败分支，排障方向全错；且 ComfyUI 侧该 prompt 仍在消耗 GPU、
+     * 无人取消。这里单独报错，并尽力 /interrupt 停掉在跑的 prompt（尽力而为，
+     * 失败不掩盖主错误——interrupt 不区分 prompt，误伤面由「本应用单飞」兜住）。 */
+    void fetch(`${comfyBase()}/api/interrupt`, {
+      method: "POST",
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => undefined);
+    throw new Error(
+      `ComfyUI 任务 10 分钟仍未等到结果（已尽力中断 prompt ${promptId}）——请确认工作流规模 / 模型加载或 ComfyUI 负载后重试`,
+    );
   }
 
   const entry = asRecord(history[promptId]);
