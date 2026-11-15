@@ -305,6 +305,32 @@ describe("task.retry", () => {
     });
     expect(tdb.$tables.tasks.length).toBe(1);
   });
+
+  it("同镜头已有活动任务时拒绝原样重跑（#4002）", async () => {
+    seedTask(tdb, {
+      id: "task-old",
+      userId: "user-a",
+      type: "TXT2IMG",
+      status: "FAILED",
+      prompt: "一只猫",
+      params: { checkpoint: "sdxl.safetensors" },
+      workflowName: "sdxl-txt2img",
+      projectId: "proj-1",
+      shotId: "shot-1",
+      execPayload: { nodes: { "1": { class_type: "KSampler" } } },
+    });
+    seedTask(tdb, {
+      id: "task-active",
+      userId: "user-a",
+      projectId: "proj-1",
+      shotId: "shot-1",
+      status: "QUEUED",
+    });
+    await expect(createCaller(makeCtx()).retry({ id: "task-old" })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(tdb.$tables.tasks.map((t) => t.id).sort()).toEqual(["task-active", "task-old"]);
+  });
 });
 
 // ─────────────────────────────── workflow snapshot ───────────────────────────────

@@ -189,7 +189,7 @@ export const taskRouter = createTRPCRouter({
             "这一行没有执行载荷（execPayload 为空的历史遗留行），无法原样重跑：请到创作台重新生成",
         });
       }
-      const created = await taskRepository.createQueued({
+      const retryInput = {
         userId: ctx.user.id,
         type: original.type,
         prompt: original.prompt,
@@ -202,7 +202,23 @@ export const taskRouter = createTRPCRouter({
         workflowSnapshot: original.workflowSnapshot ?? undefined,
         claimedBy: resolveExecutorClaim(),
         execPayload: original.execPayload,
-      });
+      };
+      /* 原样重跑复用按镜活动任务原子守卫（#4002/#3892）：同一镜头已有 QUEUED/RUNNING
+       * 时拒绝重复入队，避免双击/并发重跑造成重复出图。 */
+      const created =
+        original.projectId !== null && original.shotId !== null
+          ? await taskRepository.createQueuedForShotIfNoActive({
+              ...retryInput,
+              projectId: original.projectId,
+              shotId: original.shotId,
+            })
+          : await taskRepository.createQueued(retryInput);
+      if (created === null) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "该镜头已有进行中的生成任务，等它完成或取消后再试",
+        });
+      }
       /* 与 generate 同一口径：只写行，kick 只是省掉等派发节拍（ADR §14 D1）。 */
       kickQueue();
       return { taskId: created.id };

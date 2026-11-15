@@ -111,6 +111,8 @@ function reapTree(pid) {
     // 入口是相对应用根的常量：Next 会 chdir，cwd 必须显式钉住（ISSUE #3327）。
     cwd: APP_ROOT,
     windowsHide: true,
+    /* 预算（#4006）：reap 正常秒回；这是关停路径上的同步等待，不许无界。 */
+    timeout: 10_000,
   });
   const out = `${run.stdout ?? ""}${run.stderr ?? ""}`.trim();
   if (run.status === 0) {

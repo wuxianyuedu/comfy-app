@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeSlashes } from "~/lib/path-display";
+import { createStreamChildGuard, safeSpawnArg, spawnCapture } from "./python-child";
 import {
   customNodesManifestPath,
   customNodesManifestStamp,
@@ -47,7 +48,6 @@ import {
 } from "./parse-guards";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { apiErrorDetail } from "~/lib/api-error";
-import { withTimeoutResult } from "~/lib/with-timeout";
 import { errorResponse, unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
@@ -239,53 +239,6 @@ function rememberDiscover(key: string, result: Array<DiscoveredSubpkg>): void {
   }
 }
 
-/** 单个 `discover` 进程的最长等待。解析器要扫完父目录再算一遍 hash，
- *  目录大时能到分钟级 —— 但再久也不能让请求挂到客户端超时，超时即放弃
- *  （resolve 成 null，调用方换下一个解释器 / 返回空列表）。 */
-const DISCOVER_TIMEOUT_MS = 60_000;
-
-/** 异步跑一次解析器并收集 stdout。
- *
- *  **不用 `spawnSync`**：它是同步的，会把整个 Node 事件循环连同所有并发请求
- *  一起堵住 —— 而这一步正是本路由最慢的一段。启动失败 / 非零退出 / 超时一律
- *  resolve 成 `null`，由调用方决定换解释器还是放弃。 */
-function spawnCapture(command: string, args: Array<string>): Promise<string | null> {
-  let killChild: (() => void) | undefined;
-
-  /* 起进程并收集 stdout：启动失败 / 非零退出 / 空输出都 resolve 成 null
-   *（调用方据此换下一个解释器）。 */
-  const collect = new Promise<string | null>((resolve) => {
-    let child: ReturnType<typeof spawn>;
-    try {
-      child = spawn(command, args, { cwd: process.cwd(), env: process.env });
-    } catch {
-      // 解释器根本不存在
-      resolve(null);
-      return;
-    }
-
-    /* 超时由 `withTimeoutResult` 判：它赢下赛跑后经 `onTimeout` 把进程杀掉 ——
-     * 否则放弃等待之后进程还在后台占着 CPU 扫目录。 */
-    killChild = () => child.kill();
-
-    let stdout = "";
-    child.stdout?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk: string) => {
-      stdout += chunk;
-    });
-    child.on("error", () => {
-      resolve(null);
-    });
-    child.on("close", (code) => {
-      resolve(code === 0 && stdout.length > 0 ? stdout : null);
-    });
-  });
-
-  return withTimeoutResult(collect, DISCOVER_TIMEOUT_MS, null, {
-    onTimeout: () => killChild?.(),
-  });
-}
-
 async function runDiscover(parentDirs: ReadonlyArray<string>): Promise<Array<unknown>> {
   const key = parentDirs.join("|");
   const cached = discoverCache.get(key);
@@ -336,6 +289,7 @@ const DISCOVER_PHASES: ReadonlyArray<DiscoverProgressFields["phase"]> = ["scan",
 function runDiscoverStreaming(
   parent: string,
   send: (ev: SettingsStreamEvent) => void,
+  signal?: AbortSignal,
 ): Promise<Array<unknown>> {
   const cached = discoverCache.get(parent);
   if (cached && Date.now() - cached.at < 5000) {
@@ -360,6 +314,21 @@ function runDiscoverStreaming(
     let finalJson = "";
     let resolved = false;
 
+    /* 看门狗 + 断开回收（#4004）：超时 / 客户端断开都杀整棵子进程树，本父目录按
+     * 「0 个包」降级，后续父目录照常扫——此前进程卡住时整条流永久挂着。 */
+    const guard = createStreamChildGuard({
+      label: `自定义节点探测（${parent}）`,
+      signal,
+      onGiveUp: (reason) => {
+        if (resolved) {
+          return;
+        }
+        resolved = true;
+        send({ type: "progress", parent, phase: "scan", msg: `⚠️ ${reason}` });
+        resolve([]);
+      },
+    });
+
     const tryRun = () => {
       /* `.at()` 越界即 `undefined`：取候选与「有没有候选」判据合成一处，
        * 不必先比 `i < length` 再靠 `!` 把 `undefined` 从类型里抹掉。 */
@@ -367,6 +336,7 @@ function runDiscoverStreaming(
       if (!attempt) {
         if (!resolved) {
           resolved = true;
+          guard.settle();
           send({
             type: "progress",
             parent,
@@ -385,6 +355,8 @@ function runDiscoverStreaming(
         cwd: process.cwd(),
         env: process.env,
       });
+      /* 句柄登记进看门狗：退避链换档时覆盖为当前子进程。 */
+      guard.track(cp);
 
       forEachOutputLine(cp.stdout, (line) => {
         if (line.startsWith("PROGRESS::")) {
@@ -460,6 +432,7 @@ function runDiscoverStreaming(
         }
         if (!resolved) {
           resolved = true;
+          guard.settle();
           send({
             type: "progress",
             parent,
@@ -482,6 +455,8 @@ function runDiscoverStreaming(
           tryRun();
           return;
         }
+        /* 走到这就是最终收尾（成功或失败二选一）：拆掉看门狗，别让定时器空挂到点。 */
+        guard.settle();
         try {
           const parsed: unknown = finalJson ? JSON.parse(finalJson) : { packages: [] };
           const pkgs = readDiscoveredPackages(parsed);
@@ -511,34 +486,41 @@ function runDiscoverStreaming(
   });
 }
 
-/* 校验外部进程参数：拒绝 flag 形态（前缀 -）、空/超长、含 shell/元字符，
- * 防客户端把 `--out=...` 之类伪装成包名注入到 spawn argv。 */
-function safeSpawnArg(token: unknown): string | null {
-  if (typeof token !== "string") {
-    return null;
-  }
-  if (token.length === 0 || token.length > 8192) {
-    return null;
-  }
-  if (token.startsWith("-")) {
-    return null;
-  }
-  if (/[\0'"$;`&|<>(){}=]/.test(token)) {
-    return null;
-  }
-  return token;
-}
-
 /* 构建流式响应：先把解析器的实时日志透出去，再给报告。
  * 传 `onlyPkgs`（具体子包路径）表示做子集 / 合并解析；
  * 否则 `paths` 就是完整的根目录列表。 */
-function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
+function streamParse(
+  paths: Array<string>,
+  onlyPkgs?: Array<string>,
+  signal?: AbortSignal,
+): Response {
   const encoder = new TextEncoder();
+  /* 收尾标志放函数级：看门狗的 onGiveUp 与 cancel 都要判它（先声明后引用）。 */
+  let closed = false;
+  /* 看门狗在 start 里装配（要拿 controller）；cancel 走这个引用兜底。 */
+  let guard: ReturnType<typeof createStreamChildGuard> | null = null;
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const send = (ev: ParseStreamEvent) => {
         controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
       };
+      guard = createStreamChildGuard({
+        label: "自定义节点解析",
+        signal,
+        onGiveUp: (reason) => {
+          if (closed) {
+            return;
+          }
+          closed = true;
+          try {
+            send({ type: "log", level: "error", msg: reason });
+            send({ type: "done", ok: false, report: null, stderr: reason, exitCode: null });
+            controller.close();
+          } catch {
+            /* 流已被取消 / 关闭：子进程回收本身已完成，帧发不出去就算了。 */
+          }
+        },
+      });
 
       const scriptArgs = [
         "-u",
@@ -557,13 +539,13 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
        * 于是 Windows 上从 `python3` 起、且命中 `py` 那一档不带 `-3`。 */
       const attempts = pythonAttempts(scriptArgs);
       let i = 0;
-      let closed = false;
 
       const tryRun = () => {
         /* 同 `runDiscoverStreaming`：`.at()` 越界即 `undefined`，
          * 取候选与「有没有候选」判据合成一处。 */
         const attempt = attempts.at(i);
         if (!attempt) {
+          guard?.settle();
           send({
             type: "log",
             level: "error",
@@ -586,6 +568,8 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
           cwd: process.cwd(),
           env: process.env,
         });
+        /* 句柄登记进看门狗：退避链换档时覆盖为当前子进程。 */
+        guard?.track(cp);
 
         cp.on("error", (e: NodeJS.ErrnoException) => {
           if (handedOff || closed) {
@@ -601,6 +585,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
             return;
           }
           closed = true;
+          guard?.settle();
           send({
             type: "log",
             level: "error",
@@ -646,6 +631,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
             return;
           }
           closed = true;
+          guard?.settle();
           let report: ParseReport | null = null;
           try {
             if (fs.existsSync(REPORT)) {
@@ -668,6 +654,11 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
 
       tryRun();
     },
+    cancel() {
+      /* 消费方中途弃流：把还挂着的解析子进程一并回收（#4004；客户端断开在 Next 里
+       * 主要走 req.signal abort，这里兜住其余取消路径）。 */
+      guard?.killNow("解析流被取消，回收解析子进程");
+    },
   });
 
   return new Response(stream, {
@@ -679,7 +670,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
   });
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
@@ -690,7 +681,7 @@ export async function GET() {
    * 前端会崩在「读取 undefined 的 paths 属性」这类报错上，
    * 真实原因反而看不到。现在错误以 { error } JSON 返回，前端可读展示。 */
   try {
-    return buildGetResponse();
+    return buildGetResponse(req.signal);
   } catch (error) {
     return errorResponse(
       new AppError(apiErrorDetail(error, "读取配置失败"), "custom_nodes.read_failed", 500),
@@ -698,7 +689,7 @@ export async function GET() {
   }
 }
 
-function buildGetResponse(): Response {
+function buildGetResponse(signal?: AbortSignal): Response {
   const paths = getPaths();
   const localWorkflowPaths = getLocalWorkflowPaths();
   const summary = readManifestSummary();
@@ -763,7 +754,7 @@ function buildGetResponse(): Response {
             msg: `📂 [${idx}/${paths.length}] ${parent}`,
           });
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-          discoveredByParent[parent] = await runDiscoverStreaming(parent, send);
+          discoveredByParent[parent] = await runDiscoverStreaming(parent, send, signal);
         }
         // 把伴随的 LOCAL_WORKFLOWS_PATH 列表沿同一条流送下去，
         // 让对话框在同一次注水时就能渲染本地工作流的扫描结果。
@@ -837,7 +828,7 @@ export async function POST(req: NextRequest) {
     }
     if (onlyPkgs !== undefined && onlyPkgs.length > 0) {
       // 子集解析 —— 不必先设置 CUSTOM_NODES_PATH
-      return streamParse(paths, onlyPkgs);
+      return streamParse(paths, onlyPkgs, req.signal);
     }
     if (paths.length === 0) {
       return NextResponse.json(
@@ -849,7 +840,7 @@ export async function POST(req: NextRequest) {
       );
     }
     // 先流式推实时进度日志，再推最终报告，整体用 NDJSON。
-    return streamParse(paths);
+    return streamParse(paths, undefined, req.signal);
   }
 
   if (action === "discover") {

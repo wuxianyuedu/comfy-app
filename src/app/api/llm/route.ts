@@ -150,13 +150,13 @@ export async function POST(req: NextRequest) {
     try {
       // 带 tools 参数时走工具调用链路，返回 tool_calls（Agent 场景）
       if (parsed.opts.tools !== undefined && parsed.opts.tools.length > 0) {
-        const result = await completeLLMTools(cfg, parsed.messages, parsed.opts.tools);
+        const result = await completeLLMTools(cfg, parsed.messages, parsed.opts.tools, req.signal);
         return NextResponse.json({
           content: result.content,
           tool_calls: result.toolCalls,
         });
       }
-      const content = await completeLLM(cfg, parsed.messages);
+      const content = await completeLLM(cfg, parsed.messages, req.signal);
       return NextResponse.json({ content });
     } catch (error) {
       return NextResponse.json(apiErrorBody(error, "LLM 调用失败"), {
@@ -170,9 +170,15 @@ export async function POST(req: NextRequest) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        await streamLLM(cfg, parsed.messages, (token) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
-        });
+        await streamLLM(
+          cfg,
+          parsed.messages,
+          (token) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
+          },
+          /* 客户端断开（req.signal abort）→ 连上游一起停，别让挂起的生成白烧预算。 */
+          req.signal,
+        );
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       } catch (error) {
         controller.enqueue(

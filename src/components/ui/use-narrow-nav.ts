@@ -12,6 +12,12 @@ const listeners = new Set<() => void>();
 /* 首帧对账的定时器句柄。模块级、**不受任何一次订阅的退订影响**。 */
 let initialSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
+/* 首帧对账的连续空转上限（#4008）：重排是给「开发态双挂载、订阅者暂缺」的瞬态兜底，
+ * 不是可以无限续的等待——没有上限时，退订先于定时器触发那一形会以 0ms 节奏
+ * 无限自旋（停止条件依赖外部巧合）。StrictMode 双挂载实测空两拍，3 次是余量。 */
+const INITIAL_SYNC_MAX_ATTEMPTS = 3;
+let initialSyncAttempts = 0;
+
 /**
  * 安排「进页面后补一次通知」—— 首帧对账的唯一触发者。
  * `useSyncExternalStore` 首帧读 `getServerSnapshot`（服务端按非窄窗渲染）；「进页面时已是窄窗」媒体查询不会再 change，不主动通知 `data-state` 就停在「展开」。
@@ -30,7 +36,13 @@ function scheduleInitialSync(): void {
     for (const listener of listeners) {
       listener();
     }
-    if (!delivered) {
+    if (delivered) {
+      initialSyncAttempts = 0;
+      return;
+    }
+    /* 通知不到人才重排，且次数有界（#4008）：超限停手，等下次 subscribe 重新起算。 */
+    initialSyncAttempts += 1;
+    if (initialSyncAttempts < INITIAL_SYNC_MAX_ATTEMPTS) {
       scheduleInitialSync();
     }
   }, 0);
@@ -46,6 +58,8 @@ function subscribe(onChange: () => void): () => void {
   };
   mql.addEventListener("change", handler);
   listeners.add(onChange);
+  /* 新订阅 = 新一轮对账机会：清掉上一轮可能已耗尽的重排计数。 */
+  initialSyncAttempts = 0;
   scheduleInitialSync();
   return () => {
     listeners.delete(onChange);

@@ -143,6 +143,69 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return firstRowRequired(rows, "任务插入");
   }
 
+  /**
+   * 按镜头原子入队（ISSUE #4001/#4002 / #3892）：在 immediate 事务内检查同一
+   * 用户+项目+镜头是否存在活动任务（`QUEUED/RUNNING`），无则插入 queued 行并返回；
+   * 已存在活动任务则不写入并返回 `null`。统一各入口的“查重 + 入队”边界，避免
+   * 跨入口/并发 check-then-insert 重复入队。
+   */
+  async createQueuedForShotIfNoActive(input: {
+    claimedBy?: "inline" | "host" | null;
+    execPayload?: unknown;
+    negativePrompt?: string | null;
+    params: unknown;
+    parentId?: string | null;
+    projectId: string;
+    prompt: string;
+    referenceImages?: unknown;
+    shotId: string;
+    type: string;
+    userId: string;
+    workflowName: string;
+    workflowSnapshot?: unknown;
+  }): Promise<Task | null> {
+    return db.transaction(
+      async (tx) => {
+        const occupied = await tx
+          .select({ id: task.id })
+          .from(task)
+          .where(
+            and(
+              eq(task.userId, input.userId),
+              eq(task.projectId, input.projectId),
+              eq(task.shotId, input.shotId),
+              inArray(task.status, ["QUEUED", "RUNNING"]),
+            ),
+          )
+          .limit(1);
+        if (occupied.length > 0) {
+          return null;
+        }
+        const rows = await tx
+          .insert(task)
+          .values({
+            userId: input.userId,
+            type: input.type,
+            prompt: input.prompt,
+            negativePrompt: input.negativePrompt ?? null,
+            params: input.params,
+            workflowName: input.workflowName,
+            projectId: input.projectId,
+            shotId: input.shotId,
+            referenceImages: input.referenceImages ?? undefined,
+            workflowSnapshot: input.workflowSnapshot ?? undefined,
+            claimedBy: input.claimedBy ?? null,
+            execPayload: input.execPayload ?? null,
+            parentId: input.parentId ?? null,
+            status: "QUEUED",
+          })
+          .returning();
+        return firstRowRequired(rows, "任务插入");
+      },
+      { behavior: "immediate" },
+    );
+  }
+
   async listByUser(
     userId: string,
     opts: {
