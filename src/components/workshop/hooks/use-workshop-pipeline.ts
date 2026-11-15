@@ -71,6 +71,7 @@ function dtoToDraft(dto: WorkshopDraftDto): WorkshopDraft {
     shots: dto.shots ?? [],
     workflowId: "",
     videoWorkflowId: "",
+    updatedAt: dto.updatedAt,
   };
 }
 
@@ -367,6 +368,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const latestDraftRef = React.useRef<WorkshopDraft>(currentDraft());
   const tabRef = React.useRef(tab);
   const renderedRef = React.useRef(rendered);
+  /* 服务端镜像对账是否已落定（#4023）：落定前不放行自动保存 / 卸载兜底的写穿，
+   * 否则挂载即 PUT 会把本机较旧的 localStorage 草稿盖到服务端较新镜像上。 */
+  const restoreSettledRef = React.useRef(false);
   React.useEffect(() => {
     activeProjectRef.current = activeProjectId;
     latestDraftRef.current = currentDraft();
@@ -381,13 +385,20 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
 
   /* 自动保存只写当前项目的键；因此这里不需要动 React state，也就不会自触发形成回环。 */
   React.useEffect(() => {
+    /* 对账未落定不放行（#4023）：先等服务端比完「谁新」，再开始写穿。 */
+    if (!restoreSettledRef.current) {
+      return;
+    }
     const timer = setTimeout(() => {
       const draft = currentDraft();
+      /* 盖版本戳（#4023）：本地与服务端镜像各留一份写入时刻，恢复时取较新一侧、
+       * 服务端 PUT 带 ifNewer 拒绝更旧的迟到写。 */
+      const stamped: WorkshopDraft = { ...draft, updatedAt: Date.now() };
       // localStorage 为即时缓存；同时写穿一份到本地 db.sqlite（防缓存被清丢失）。
-      writeDraft(activeProjectId, draft);
-      void pushServerDraft(activeProjectId, draft);
+      writeDraft(activeProjectId, stamped);
+      void pushServerDraft(activeProjectId, stamped);
       // Phase 3b-2：额外写穿一份「生产数据」到 production 表，供画布读取物化（3c）。
-      void pushProduction(activeProjectId, buildProductionPayload(draft, tab, rendered));
+      void pushProduction(activeProjectId, buildProductionPayload(stamped, tab, rendered));
     }, 600);
     return () => {
       clearTimeout(timer);
@@ -397,43 +408,55 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   /* 卸载兜底保存：只靠 600ms 防抖，编辑后立刻切页签时定时器被 clear 来不及落盘；
    * 且模块级草稿缓存只在首次挂载读一次，重挂载会读到旧缓存 —— 两处叠加正是
    *「切页签后剧本内容丢失」的根因。卸载时立即落盘 + 让缓存失效；cleanup 经 ref
-   * 取最新值，避免闭包捕获旧草稿。 */
+   * 取最新值，避免闭包捕获旧草稿。对账未落定就卸载时不写穿（#4023）：此时本地
+   * 尚未与服务端比过新旧，交回下次挂载的对账，避免本机旧值盖过服务端较新镜像。 */
   React.useEffect(() => {
     return () => {
+      if (!restoreSettledRef.current) {
+        invalidateDraftCache();
+        return;
+      }
       const draft = latestDraftRef.current;
-      writeDraft(activeProjectRef.current, draft);
-      void pushServerDraft(activeProjectRef.current, draft);
+      const stamped: WorkshopDraft = { ...draft, updatedAt: Date.now() };
+      writeDraft(activeProjectRef.current, stamped);
+      void pushServerDraft(activeProjectRef.current, stamped);
       void pushProduction(
         activeProjectRef.current,
-        buildProductionPayload(draft, tabRef.current, renderedRef.current),
+        buildProductionPayload(stamped, tabRef.current, renderedRef.current),
       );
       invalidateDraftCache();
     };
     // 仅在卸载时执行一次
   }, []);
 
-  /* 挂载回填：当前项目本地为空、但服务端 db.sqlite 有镜像（清缓存 / 换设备后）时，
-   * 用云端内容恢复当前项目，不覆盖进行中的编辑。同会话只执行一次
+  /* 挂载回填：当前项目本地为空、或服务端镜像比本地**新**（版本对账，#4023）时，
+   * 用服务端内容恢复 / 接管当前项目，不覆盖进行中的较新编辑。同会话只执行一次
    *（热重挂载由上面的卸载兜底保存保住了 localStorage）。 */
   React.useEffect(() => {
     void (async () => {
       const activeId = activeProjectRef.current;
       if (!activeId) {
+        restoreSettledRef.current = true;
         return;
       }
       if (serverRecoveredIds.has(activeId)) {
+        restoreSettledRef.current = true;
         return;
       }
       serverRecoveredIds.add(activeId);
-      if (!draftIsEmpty(latestDraftRef.current)) {
-        return;
-      }
       try {
         const serverDraft = await fetchServerDraft(activeId);
-        /* await 后复查（ISSUE #3905）：fetch 窗口内用户可能已开始输入（本地
-         * 草稿非空）—— 此时放弃回填，不让服务端旧镜像覆盖刚敲的内容
-         * （否则会被 600ms 防抖自动保存固化）。 */
-        if (!draftIsEmpty(latestDraftRef.current)) {
+        const local = latestDraftRef.current;
+        const localAt = typeof local.updatedAt === "number" ? local.updatedAt : null;
+        const serverAt = serverDraft?.updatedAt ?? null;
+        /* 版本对账（#4023）：两侧都带时刻时取**较新**的一侧（旧标签页 / 另一会话
+         * 的较新编辑不再被本机旧草稿覆盖）；任一侧缺时刻（旧数据）保持既有行为
+         * ——本地非空即本地优先（#3905 的保护不变），本地为空才采用服务端。 */
+        const serverNewer =
+          serverDraft !== null &&
+          typeof serverAt === "number" &&
+          (localAt === null || serverAt > localAt);
+        if (!draftIsEmpty(local) && !serverNewer) {
           return;
         }
         if (serverDraft && draftHasContent(serverDraft)) {
@@ -445,6 +468,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         }
       } catch {
         /* 服务不可用：保持纯本地 */
+      } finally {
+        /* 对账落定后才放行自动保存 / 卸载兜底的写穿（#4023）。 */
+        restoreSettledRef.current = true;
       }
     })();
     // 仅首挂载执行一次；闭包读取经 ref，避免陈旧 state

@@ -14,6 +14,10 @@ export type WorkshopDraftDto = {
   scenes: Array<Scene>;
   scriptMarkdown: string;
   shots: Array<Shot>;
+  /** 最近一次写入的时刻（epoch ms，#4023）：本地 ↔ 服务端双写的版本对账用。
+   *  服务端镜像由 `workshopDraft.updatedAt` 行列（drizzle `$onUpdate`）供给，
+   *  本地由自动保存写入时盖章。缺省（旧数据）= 不参与对账、保持既有本地优先。 */
+  updatedAt?: number;
 };
 
 /** 未知值 → 草稿线上结构：逐字段校验类型，损坏字段回退空值（不抛）。
@@ -40,6 +44,10 @@ export function parseDraftDto(raw: unknown): WorkshopDraftDto {
     scenes: isSceneList(obj.scenes) ? obj.scenes : [],
     characters: isCharacterList(obj.characters) ? obj.characters : [],
     shots: isShotList(obj.shots) ? obj.shots : [],
+    updatedAt:
+      typeof obj.updatedAt === "number" && Number.isFinite(obj.updatedAt)
+        ? obj.updatedAt
+        : undefined,
   };
 }
 

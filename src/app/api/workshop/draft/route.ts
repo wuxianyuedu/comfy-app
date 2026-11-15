@@ -69,6 +69,19 @@ export async function PUT(req: NextRequest) {
   }
   const draft = parseDraftDto(body.draft);
   try {
+    /* ifNewer（#4023）：两侧都带版本时刻时，更旧的 PUT 不覆盖较新的镜像——
+     * 旧标签页 / 旧窗口迟到的自动保存不再回滚别处的新编辑。缺时刻（旧数据）
+     * 保持原样落库，行为与此前一致。 */
+    const existing = await getDraft(project);
+    const incomingAt = draft.updatedAt;
+    const existingAt = existing?.updatedAt;
+    if (
+      typeof incomingAt === "number" &&
+      typeof existingAt === "number" &&
+      incomingAt < existingAt
+    ) {
+      return NextResponse.json({ ok: true, stale: true });
+    }
     await upsertDraft(project, draft, user.id);
     return NextResponse.json({ ok: true });
   } catch (error) {

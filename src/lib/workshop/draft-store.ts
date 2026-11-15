@@ -21,6 +21,9 @@ export type WorkshopDraft = {
   scenes: Array<Scene>;
   scriptMarkdown: string;
   shots: Array<Shot>;
+  /** 最近一次写入时刻（epoch ms，#4023）：与服务端镜像做版本对账
+   *  （恢复时取较新的一侧）。缺省 = 旧数据，不参与对账。 */
+  updatedAt?: number;
   /** 工坊「视频」阶段选定的「工作流库工作流」id。
    *  字段与生图分开 —— 两类工作流的对外参数口径不同（生图无首帧、视频有），
    *  共用一个 id 会互相串味。 */
@@ -86,6 +89,10 @@ function parseDraft(raw: string | null): WorkshopDraft {
       shots: isShotList(draft.shots) ? draft.shots : [],
       workflowId: typeof draft.workflowId === "string" ? draft.workflowId : "",
       videoWorkflowId: typeof draft.videoWorkflowId === "string" ? draft.videoWorkflowId : "",
+      updatedAt:
+        typeof draft.updatedAt === "number" && Number.isFinite(draft.updatedAt)
+          ? draft.updatedAt
+          : undefined,
     };
   } catch {
     return emptyWorkshopDraft();
