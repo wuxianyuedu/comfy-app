@@ -66,6 +66,17 @@ export async function createWorkflowRunTask(
   };
 
   const executorClaim = resolveExecutorClaim();
+  /* 执行载荷恒为 RAW 原件 —— comfy-cli 按节点类定义做权威 UI→API 转换 +
+   * 子图展开（判据收在 `hasExecutableWorkflow`，与 generate 路由同一份）。
+   * 没有内容时抛错，而不是静默提交一份空图（空图会在 ComfyUI 侧变成
+   * 「一个节点都没有」的报错，用户看不出是入库时就没内容）。
+   * **先校验、后建行**（#4022，与 generate 路由同序）：此前先 createQueued
+   * 再校验，空 rawJson 会先留下一条 QUEUED 行、调用方拿到 throw 却还没走到
+   * markQueued 挂镜头——orchestrator 的 cancelTask 补偿覆盖不到这一段，任务成
+   * 孤儿（仅 reaper 兜底），多耗一次派发。 */
+  if (!hasExecutableWorkflow(tpl)) {
+    throw new Error(`工作流没有可执行内容（rawJson 为空）：${tpl.name}`);
+  }
   const task = await taskRepository.createQueued({
     userId: input.userId,
     type: tpl.taskType,
@@ -77,14 +88,6 @@ export async function createWorkflowRunTask(
     claimedBy: executorClaim,
     execPayload: tpl.rawJson,
   });
-
-  /* 执行载荷恒为 RAW 原件 —— comfy-cli 按节点类定义做权威 UI→API 转换 +
-   * 子图展开（判据收在 `hasExecutableWorkflow`，与 generate 路由同一份）。
-   * 没有内容时抛错，而不是静默提交一份空图（空图会在 ComfyUI 侧变成
-   * 「一个节点都没有」的报错，用户看不出是入库时就没内容）。 */
-  if (!hasExecutableWorkflow(tpl)) {
-    throw new Error(`工作流没有可执行内容（rawJson 为空）：${tpl.name}`);
-  }
   /* 提交只写库里那一行（`claimedBy` 决定归谁领）——P3 §5 ADR §14 D1 第二刀：
    * 这里过去对 inline 片额外调 `enqueue()` 往进程内存队列推一份，于是「派发的
    * 真相」有两份（内存 vs 库），host 与 Next 各读各的。现在两宿主只走
