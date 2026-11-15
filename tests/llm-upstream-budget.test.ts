@@ -49,8 +49,8 @@ describe("composeUpstreamSignal", () => {
   it("预算到点自动中止（墙钟预算真的会响，不是摆设）", async () => {
     const signal = composeUpstreamSignal(undefined, 20);
     expect(signal.aborted).toBe(false);
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    expect(signal.aborted).toBe(true);
+    /* 等异步落定走 expect.poll（§11.14），不写裸 sleep。 */
+    await expect.poll(() => signal.aborted, { timeout: 5000, interval: 10 }).toBe(true);
     // 用类型守卫取名字，不写 `as DOMException`（lint 判据：先收窄再取值）。
     const reasonName = (reason: unknown): string =>
       reason instanceof DOMException ? reason.name : "";
