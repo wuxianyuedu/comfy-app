@@ -25,7 +25,6 @@ import { SelectChip } from "~/components/ui/select-chip";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
-import { fixed } from "~/lib/number-format";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
@@ -162,8 +161,9 @@ function SizeField({
   );
 }
 
-/** 生成中已过时间（ISSUE #3799）：本地 500ms 一跳，只重渲自己这格文本；
- *  生成结束后组件随行消失（行徽标换回「已发送」）。 */
+/** 生成中已过时间（ISSUE #3799；#3949 需求 3）：本地 500ms 一跳，只重渲自己
+ *  这格文本；生成结束后组件随行消失（行徽标换回「已发送」）。显示按**整秒**
+ *  走 —— 500ms 的节拍撑不起 0.1s 的精度，一位小数只会 1.4→1.9→2.4 地跳。 */
 function GeneratingElapsed({ since }: { since: number }) {
   const [now, setNow] = useState(() => Date.now());
   /* 走秒走 useInterval（P12：视图里不自写 setInterval）。 */
@@ -173,7 +173,7 @@ function GeneratingElapsed({ since }: { since: number }) {
     },
     { ms: 500 },
   );
-  return <>进行中 {fixed((now - since) / 1000, 1)}s</>;
+  return <>进行中 {Math.max(0, Math.floor((now - since) / 1000))}s</>;
 }
 
 /** 响应摘要的格式化显示（ISSUE #3799）：结构化摘要默认 JSON 缩进；
@@ -335,6 +335,77 @@ function InputRow({
   );
 }
 
+/** 参考图多选行（#3949 需求 6/7）：一个契约口（reference-image）收多张，
+ *  请求里以数组整体下发；清除按钮悬停时出现在缩略图右上角。 */
+function ReferenceImageField({
+  disabled,
+  hint,
+  id,
+  images,
+  label,
+  onAdd,
+  onRemove,
+  required,
+}: {
+  disabled?: boolean;
+  hint?: string;
+  id: string;
+  images: Array<string>;
+  label: string;
+  onAdd: (files: Array<File>) => void;
+  onRemove: (index: number) => void;
+  required: boolean;
+}) {
+  const labelNode = (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <TruncatedText className="truncate">{label}</TruncatedText>
+      <RequiredBadge required={required} />
+    </span>
+  );
+  return (
+    <FormField hint={hint} id={id} label={labelNode} labelClassName="mb-1.5">
+      {() => (
+        <div className="flex flex-wrap items-center gap-2">
+          {images.map((src, i) => (
+            <div className="group relative" key={`${String(i)}-${src.slice(0, 24)}`}>
+              <MediaThumbnail
+                alt={`参考图 ${i + 1}`}
+                as="image"
+                className="border-border h-16 w-16 rounded-lg border object-cover"
+                src={src}
+              />
+              {/* 清除按钮：悬停才出现在缩略图右上角（#3949 需求 7）。 */}
+              <button
+                aria-label={`移除第 ${i + 1} 张参考图`}
+                className="text-2xs absolute top-1 right-1 hidden rounded-full bg-black/60 px-1.5 py-0.5 leading-none text-white group-hover:block"
+                onClick={() => {
+                  onRemove(i);
+                }}
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <FilePickerButton
+            accept="image/*"
+            className="h-auto px-3 py-2 text-xs"
+            disabled={disabled}
+            multiple
+            onPick={(_file, files) => {
+              onAdd([...files]);
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {images.length > 0 ? "添加图片" : "上传参考图"}
+          </FilePickerButton>
+        </div>
+      )}
+    </FormField>
+  );
+}
+
 export function ModelTestView() {
   const c = useModelTest();
   /* 响应摘要的显示形态（#3799）：默认格式化，可切回原始单行。 */
@@ -351,6 +422,12 @@ export function ModelTestView() {
   const modeLabel = c.modeTabs.find((t) => t.mode === c.mode)?.label ?? c.mode;
   /* 回调里读 c.result 会丢掉 JSX 条件的收窄 —— 先取一次稳定引用。 */
   const resultUrl = c.result?.url ?? null;
+  /* 请求详情的行：生成后用真实读数；生成前显示「准备请求」（#3949 需求 8，
+   * 按当前模式 / 模型 / 输入现算）—— 切模式 / 换模型时 hook 已清空读数，
+   * 不会残留上一份。 */
+  const detailRows =
+    c.debugRows.length > 0 ? c.debugRows : c.previewRow === null ? [] : [c.previewRow];
+  const previewOnly = c.debugRows.length === 0 && c.previewRow !== null;
 
   return (
     <DocumentFrame
@@ -476,6 +553,25 @@ export function ModelTestView() {
                     : unmapped
                       ? "适配器没有映射这个输入 —— 本次生成不会带上它；要带上请到「模型适配」为它配字段映射"
                       : undefined;
+                  /* 参考图契约口（#3949 需求 6/7）：一行收多张、数组下发，
+                       缩略图悬停显示清除按钮。 */
+                  if (row.id === "reference-image" && control === "image") {
+                    return (
+                      <ReferenceImageField
+                        disabled={row.disabled}
+                        hint={hint}
+                        id={`${id}-${String(i)}`}
+                        images={c.referenceImages}
+                        key={`${row.id}-${String(i)}`}
+                        label={row.label}
+                        onAdd={(files) => {
+                          void c.addReferenceImages(files);
+                        }}
+                        onRemove={c.removeReferenceImage}
+                        required={row.required}
+                      />
+                    );
+                  }
                   return (
                     <InputRow
                       control={control}
@@ -508,7 +604,7 @@ export function ModelTestView() {
                 })}
               </section>
 
-              {/* 生成 */}
+              {/* 生成（#3949 需求 5：生成中可取消） */}
               <div className="flex items-center gap-3">
                 <Button
                   className="h-auto px-4 py-2"
@@ -520,6 +616,15 @@ export function ModelTestView() {
                 >
                   {c.generating ? "生成中…" : "生成"}
                 </Button>
+                {c.generating && (
+                  <Button
+                    className="h-auto px-3 py-2 text-xs"
+                    onClick={c.cancelGenerate}
+                    variant="outline"
+                  >
+                    取消生成
+                  </Button>
+                )}
                 <span className="text-muted-foreground text-2xs">
                   真实调用，按上游计费 —— 与工坊生成走同一条通道。
                 </span>
@@ -590,11 +695,12 @@ export function ModelTestView() {
               )}
 
               {/* 请求详情（ISSUE #3791；#3799：点生成即显示本地提交行 + 生成中
-                  走秒 + 响应摘要默认格式化、可切原始）。 */}
-              {c.debugRows.length > 0 && (
+                  走秒 + 响应摘要默认格式化、可切原始；#3949 需求 4/8：生成前
+                  显示「准备请求」、按模式 / 模型隔离、解释换算字段）。 */}
+              {detailRows.length > 0 && (
                 <section className="flex flex-col gap-2">
                   <SectionLabel hint="本次生成实际发出的请求（密钥在请求头，不在此显示；请求体里的长值已截断）">
-                    请求详情
+                    请求详情{previewOnly ? "（准备请求 · 未发送）" : ""}
                   </SectionLabel>
                   <div className="flex items-center gap-1.5">
                     <span className="text-muted-foreground text-2xs">响应摘要</span>
@@ -617,16 +723,19 @@ export function ModelTestView() {
                       原始
                     </SelectChip>
                   </div>
-                  {c.debugRows.map((row, i) => (
+                  {detailRows.map((row, i) => (
                     <div
                       className="border-border bg-bg overflow-hidden rounded-lg border"
                       key={`${row.phase}-${String(i)}`}
                     >
                       <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
                         {row.phase === "relay" ? (
-                          /* 本地提交行（#3799）：点生成即出现；生成中走秒。 */
+                          /* 本地提交行（#3799）：点生成即出现；生成中走秒。
+                              #3949 需求 8：生成前是「准备请求」（未发送）。 */
                           <span className="bg-primary/12 text-primary-strong text-2xs rounded-full px-2 py-0.5 tabular-nums">
-                            {c.generating && c.generatingSince !== null ? (
+                            {previewOnly ? (
+                              "准备请求"
+                            ) : c.generating && c.generatingSince !== null ? (
                               <GeneratingElapsed since={c.generatingSince} />
                             ) : (
                               "已发送"
@@ -646,7 +755,9 @@ export function ModelTestView() {
                         )}
                         <span className="text-muted-foreground text-2xs">
                           {row.phase === "relay"
-                            ? "本地提交"
+                            ? previewOnly
+                              ? "准备请求（未发送）"
+                              : "本地提交"
                             : row.phase === "image"
                               ? "生图"
                               : row.phase === "video-submit"
@@ -674,6 +785,15 @@ export function ModelTestView() {
                       )}
                     </div>
                   ))}
+                  {/* #3949 需求 4：megapixels / multiple 不是用户填的，是所选
+                      「比例 + 分辨率」按本机尺寸表换算出的等价写法（适配器映射了
+                      哪个就下发哪个）—— 在这里讲清楚，不让人猜。 */}
+                  {previewOnly && (
+                    <p className="text-muted-foreground text-2xs">
+                      megapixels / multiple 由所选「比例 + 分辨率」按本机尺寸表换算得出 （与
+                      resolution 同口的等价写法），随请求一并下发；适配器映射了哪个 就下发哪个。
+                    </p>
+                  )}
                 </section>
               )}
             </>

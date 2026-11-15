@@ -40,6 +40,14 @@ export async function POST(req: NextRequest) {
   const resolution = strField(body, "resolution");
   const multiple = intField(body, "multiple", 1, 512);
   const image = strField(body, "image");
+  /* 参考图组（#3949 需求 6/7）：数组形态，每项像 image 一样是可解析来源
+   * （data URL / /generated/… / http）。非字符串项丢弃，整组上限 8 张 ——
+   * 与单图同口径的宽松界，越界由上游按实际支持处理。 */
+  const images = Array.isArray(body.images)
+    ? body.images
+        .filter((item): item is string => typeof item === "string" && item.trim() !== "")
+        .slice(0, 8)
+    : undefined;
   const prompt = strField(body, "prompt") ?? "";
   const negative = strField(body, "negative");
   const size = strField(body, "size");
@@ -82,6 +90,7 @@ export async function POST(req: NextRequest) {
           ...(multiple === undefined ? {} : { multiple }),
           ...(seed === undefined ? {} : { seed }),
           image,
+          ...(images === undefined ? {} : { images }),
         },
         collect ? { debug: collect } : {},
       );

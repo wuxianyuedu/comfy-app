@@ -18,7 +18,6 @@ import {
 } from "../mode-contract-config";
 import type { ModeContractEditorController } from "../hooks/use-mode-contract-editor";
 import { Button } from "~/components/ui/button";
-import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Disclosure } from "~/components/ui/disclosure";
 import { FieldLabel } from "~/components/ui/field";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -95,53 +94,9 @@ export function ModeContractEditorView({
         </div>
       </div>
 
-      {/* 切换确认（ISSUE #3762）：有未保存草稿时点左栏其他模式，先问「要不要保存」。
-          三向出口：保存并切换 / 丢弃草稿直接切 / 留下继续编辑。 */}
-      <Dialog
-        onOpenChange={(next) => {
-          if (!next) controller.cancelSwitch();
-        }}
-        open={controller.pendingMode !== null}
-      >
-        <DialogContent
-          aria-label="未保存的修改"
-          className="bg-transparent p-0 ring-0"
-          popupClassName="max-w-md"
-          showCloseButton={false}
-        >
-          <div className="border-border-strong bg-panel w-full max-w-md rounded-2xl border p-5 shadow-2xl shadow-black/20 dark:shadow-black/50">
-            <h3 className="text-ink-bright text-base font-semibold">
-              「{contractModeLabel(controller.mode ?? "")}」有未保存的修改
-            </h3>
-            <p className="text-ink-soft mt-2 text-xs leading-relaxed">
-              切换到「{contractModeLabel(controller.pendingMode ?? "")}」前，要保存当前这份草稿吗？
-            </p>
-            <div className="mt-4 flex flex-col gap-2">
-              <Button
-                className="h-auto py-2"
-                disabled={controller.saving}
-                onClick={() => {
-                  void controller.confirmSwitch();
-                }}
-                variant="primary-solid"
-              >
-                {controller.saving ? "保存中…" : "保存并切换"}
-              </Button>
-              <Button
-                className="h-auto py-2"
-                disabled={controller.saving}
-                onClick={controller.discardSwitch}
-                variant="outline"
-              >
-                不保存，直接切换
-              </Button>
-              <Button className="h-auto py-2" onClick={controller.cancelSwitch} variant="ghost">
-                留在此模式
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* 修改即自动保存（#3949 需求 1）：草稿有改动就自动落本机覆盖，
+          不再有「保存模式契约」按钮与切换确认弹窗；「保存为项目默认（跟代码走）」
+          是仅存的显式保存动作。 */}
     </div>
   );
 }
@@ -157,7 +112,7 @@ function ModeContractDraftPanel({
   controller: ModeContractEditorController;
   draft: ModeContract;
 }) {
-  const { saving, saved, nextReferenceImageId } = controller;
+  const { nextReferenceImageId } = controller;
   /* 「还原默认」只对真改过的模式出现：判据与左栏「已改」徽标同源（内容比较）。 */
   const customized = isModeContractCustomized(draft.mode, controller.stored, controller.configured);
 
@@ -257,33 +212,29 @@ function ModeContractDraftPanel({
           缺任何口都不再提示。若你不是有意如此，给承载生成输入的那个口勾上。
         </p>
       )}
-      {saved && (
-        <p className="bg-success/10 text-success-strong rounded-lg px-3 py-2 text-xs">
-          已保存 —— 工坊与工作流库读的是同一份注册表，另一处刷新后即生效。
-          <span className="text-ink font-medium">
-            {controller.savedKind === "project"
-              ? "已写入项目默认（src/lib/workshop/mode-contract-defaults.json）：本进程立即生效，不必重启；提交后每个检出与桌包都是这一份。"
-              : "改动只落在这台机器上，不会跟着代码走。"}
-          </span>
-        </p>
-      )}
-      {/* 失败要有用户可见出口（#3637）：此前保存失败只静默转圈，改动不生效也不提示。 */}
+      {/* 修改即自动保存（#3949 需求 1）：本机覆盖不再要手动点保存；失败在此可见（#3637）。 */}
+      <p className="text-muted-foreground text-2xs">
+        修改即自动保存到本机应用数据（data/workshop-mode-contracts.json），无需手动保存；
+        要跟着代码走用「保存为项目默认」。{" "}
+        <span className="tabular-nums">
+          {controller.saving
+            ? "正在保存…"
+            : controller.saveError === null
+              ? controller.dirty
+                ? "有修改待自动保存。"
+                : controller.saved
+                  ? "已自动保存。"
+                  : ""
+              : ""}
+        </span>
+      </p>
       {controller.saveError !== null && (
         <p className="bg-danger/10 text-danger-strong rounded-lg px-3 py-2 text-xs">
-          保存失败：{controller.saveError}
+          自动保存失败：{controller.saveError}
         </p>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          disabled={saving}
-          onClick={() => {
-            void controller.save();
-          }}
-          variant="primary-solid"
-        >
-          {saving ? "保存中…" : "保存模式契约"}
-        </Button>
         {customized && (
           <Button
             disabled={controller.resetting}
