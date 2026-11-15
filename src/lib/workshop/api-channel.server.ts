@@ -30,11 +30,14 @@ import {
   callImageGeneration,
   callVideoPoll,
   callVideoSubmit,
+  debugBodyOf,
   defaultChannelsFromEnv,
+  defaultImageBody,
   endpointFor,
   maskChannels,
   normalizeSettings,
   sanitizeChannel,
+  videoBody,
   WORKSHOP_API_SETTINGS_FILE,
   type ApiImageRequest,
   type ApiUpstreamTarget,
@@ -333,6 +336,50 @@ export async function generateImageViaApi(
     extraBody: resolved.modelExtra ?? undefined,
     debug: opts.debug,
   });
+}
+
+/* ── 「准备请求」预览（#3949 需求 8）：与真实链路同一套解析与组装，但**不发** ──
+ *
+ * 测试页在点生成之前就要看到「实际会发出去的请求」—— 不是统一输入的回显，
+ * 而是经模型适配器翻译、拼好端点与请求体的那一份。两个预览与各自的 call*
+ * 共用 resolveTarget / bodyFromAdapter / 默认映射，保证「预览的 = 发送的」；
+ * 密钥不进返回值（它只在请求头里）。解析失败（模型没地址 / 通道未配置）抛
+ * 与真实链路相同的可读错误，由 relay 路由折成错误响应。 */
+
+export async function previewImageRequestViaApi(req: ApiImageRequest): Promise<ApiCallDebugRow> {
+  const resolved = await resolveTarget(req, getWorkshopApiSettingsSync().image);
+  const body = resolved.adapter
+    ? bodyFromAdapter(resolved.adapter, req, resolved.target.model)
+    : defaultImageBody(req, resolved.target.model);
+  const withExtra = resolved.modelExtra === null ? body : { ...body, ...resolved.modelExtra };
+  return {
+    body: debugBodyOf(withExtra),
+    durationMs: null,
+    endpoint: resolved.target.endpoint,
+    excerpt: null,
+    ok: true,
+    phase: "image",
+    status: null,
+  };
+}
+
+export async function previewVideoSubmitViaApi(
+  req: ApiVideoSubmitRequest,
+): Promise<ApiCallDebugRow> {
+  const resolved = await resolveVideoTarget(req, getWorkshopApiSettingsSync().video);
+  const body = resolved.adapter
+    ? bodyFromVideoAdapter(resolved.adapter, req, resolved.target.model)
+    : videoBody(req, resolved.target.model);
+  const withExtra = resolved.modelExtra === null ? body : { ...body, ...resolved.modelExtra };
+  return {
+    body: debugBodyOf(withExtra),
+    durationMs: null,
+    endpoint: resolved.target.endpoint,
+    excerpt: null,
+    ok: true,
+    phase: "video-submit",
+    status: null,
+  };
 }
 
 /* ── 视频的远端模型定向（#3590）──────────────────────────────────────────
