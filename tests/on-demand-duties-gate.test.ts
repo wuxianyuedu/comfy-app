@@ -96,7 +96,10 @@ function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
         id: "tw4-canonical-report",
         name: "CSS 等价改写汇总",
         notInHook: "要起 Tailwind 引擎",
-        fact: { kind: "on-demand-ledger", script: "tw4/tw4-canonical-report.mjs" },
+        /* 台账类事实按 **basename** 对键（`scripts/` 下文件名全仓唯一；判据的
+         * `onDemand.includes(fact.script)` 按台账里的裸名比，#3930 迁移也不例外）
+         * —— 写成域路径会对不上键，双向各红一条（#3997 那轮 GA 的实测）。 */
+        fact: { kind: "on-demand-ledger", script: "tw4-canonical-report.mjs" },
         executor: "按需召唤 + 棘轮",
       },
       {

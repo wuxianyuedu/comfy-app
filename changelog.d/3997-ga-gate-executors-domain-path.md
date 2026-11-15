@@ -7,4 +7,8 @@
   与扫描面对账均递归枚举 `scripts/**`（#3997）。
 - 同族：`tests/tw4-hardgate-behaviour.test.ts` 也按平铺名给夹具传 `tw4-*` 判据，
   改为域相对路径 `tw4/tw4-*.mjs`（#3997）。
+- 同族：`tests/on-demand-duties-gate.test.ts` 的台账类事实被误改成域路径
+  `tw4/tw4-canonical-report.mjs`，而判据按 **basename** 对键（`onDemand.includes`）⇒
+  双向各红一条；改回裸名 `tw4-canonical-report.mjs`（#3997）。
+
 
