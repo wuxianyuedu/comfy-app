@@ -27,20 +27,53 @@
  * 落点复用 `git-dir.mjs` 的 `gitScratchPath()`：与 `comfy-premerge-proof.json`
  * 同族 —— 描述的是**这台检出**的状态，不入库、不跨检出互证。
  *
+ * ── 状态与事件（ISSUE #3923）────────────────────────────────
+ *
+ * #3206 落的是**状态快照**；#3923 在同一份文件里补上**事件时间线**：ship 每走到
+ * 一个阶段（`▶ …`）、念出结论、收口或被打断，都追加一条带时间戳的事件
+ * （`start` / `stage` / `conclusion` / `finished` / `interrupted`），stage 事件把
+ * `key=value` 拆成结构化 `facts`。于是「ship 跑到哪了」有两个规范取法：
+ *
+ *   · **状态**：`status` / `stages` / `pr` / `exitCode` / `conclusion` —— 现在停在哪；
+ *   · **事件**：`events[]` —— 依次发生了什么（每步带关键身份与时刻）。
+ *
+ * 后台跑 ship 时**轮询这份文件**（`pnpm ship --result` / `--result=json`，或
+ * `node scripts/ship-result.mjs`），**不要 `sleep + grep` 自己的运行日志** ——
+ * 日志是那一块屏幕的过去，落盘读数是进程自己写下的现在。为此落盘改成**原子替换**
+ * （先写同目录临时文件再 rename）：另一只轮询的眼睛要么读到上一份完整快照、
+ * 要么读到这一份，不会读到半截 JSON。
+ *
  * 用法（只读回读口，一次也不改状态）：
- *   node scripts/ship-result.mjs            # 人类可读摘要
+ *   node scripts/ship-result.mjs            # 人类可读摘要（含事件时间线）
  *   node scripts/ship-result.mjs --json     # 原始读数（含 result / reason）
+ *   pnpm ship --result                      # 同 human 形态（走 ship 的旗标面，#3923）
+ *   pnpm ship --result=json                 # 同 --json 形态
  */
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
 import { gitScratchPath, resolveGitDir } from "./git-dir.mjs";
+import { CODE } from "./ship-codes.mjs";
 
 const SHIP_RESULT_FILE = "ship-result.json";
 /** 读数行上限：超了保留开头 20 行（身份）与末尾 480 行（停在何处）。 */
 const MAX_LINES = 500;
 const HEAD_LINES = 20;
+/** 事件条数上限：一次跑十几个阶段，200 条绰绰有余；超了丢最旧的并标记。 */
+const MAX_EVENTS = 200;
+
+/**
+ * 一条带时间戳的事件。`facts` 只收 `key=value` 的原文拆分 —— 拆不出结构的就不硬拆。
+ *
+ * @typedef {{
+ *   at: string,
+ *   kind: "start" | "stage" | "conclusion" | "finished" | "interrupted",
+ *   stage?: string,
+ *   facts?: Record<string, string>,
+ *   text?: string,
+ * }} ShipEvent
+ */
 
 /**
  * @typedef {{
@@ -62,6 +95,8 @@ const HEAD_LINES = 20;
  *   truncated: boolean,
  *   exitCode: number | null,
  *   conclusion: string | null,
+ *   events: ShipEvent[],
+ *   eventsTruncated: boolean,
  * }} ShipResult
  */
 
@@ -107,7 +142,7 @@ export function createShipResultSink(io = {}) {
   const filePath = shipResultPath(root, io.resolve ?? resolveGitDir);
   /** @type {ShipResult} */
   const result = {
-    version: 1,
+    version: 2,
     status: "running",
     startedAt: now(),
     finishedAt: null,
@@ -125,16 +160,59 @@ export function createShipResultSink(io = {}) {
     truncated: false,
     exitCode: null,
     conclusion: null,
+    events: [],
+    eventsTruncated: false,
   };
+  const serialize = () => `${JSON.stringify(result, null, 2)}\n`;
   const flush = () => {
     if (!filePath) {
       return;
     }
+    /* 原子替换（ISSUE #3923）：先写同目录临时文件再 rename，轮询方（`pnpm ship
+     * --result` / `node scripts/ship-result.mjs`）读到的要么是上一份完整快照、
+     * 要么是这一份 —— 不会是写了一半的 JSON。rename 失败（Windows 上目标被
+     * 瞬时占用等）退回整文件重写：best-effort 口径不变。 */
+    const tmp = `${filePath}.${process.pid}.tmp`;
     try {
-      fs.writeFileSync(filePath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+      fs.writeFileSync(tmp, serialize(), "utf8");
+      fs.renameSync(tmp, filePath);
+      return;
+    } catch {
+      try {
+        fs.unlinkSync(tmp);
+      } catch {
+        // 临时文件清不掉就清不掉：不改变这一格的 best-effort 语义。
+      }
+    }
+    try {
+      fs.writeFileSync(filePath, serialize(), "utf8");
     } catch {
       // 落盘结论是读数不是判据：写不出去绝不改 ship 的退码。
     }
+  };
+  /** 追加一条事件；超上限丢最旧的，并如实标记「截断过」。 */
+  const pushEvent = (/** @type {ShipEvent} */ event) => {
+    result.events.push(event);
+    if (result.events.length > MAX_EVENTS) {
+      result.events.splice(0, result.events.length - MAX_EVENTS);
+      result.eventsTruncated = true;
+    }
+  };
+  /** `▶ <阶段> | k=v | …` 的后半段拆成结构化 facts；没有 `|` 就只记阶段名。 */
+  const pushStageEvent = (/** @type {string} */ body) => {
+    const sep = body.indexOf(" | ");
+    const stage = sep === -1 ? body : body.slice(0, sep);
+    /** @type {Record<string, string>} */
+    const facts = {};
+    if (sep !== -1) {
+      for (const pair of body.slice(sep + 3).split(" | ")) {
+        const eq = pair.indexOf("=");
+        if (eq > 0) {
+          facts[pair.slice(0, eq)] = pair.slice(eq + 1);
+        }
+      }
+    }
+    pushEvent({ at: now(), kind: "stage", stage, facts });
   };
   let identitySeen = false;
   /** 一行一行收：relay 转述的子进程输出是整段文本，也要拆成单行读数。 */
@@ -159,6 +237,7 @@ export function createShipResultSink(io = {}) {
       }
       if (text.startsWith(STAGE_PREFIX)) {
         result.stages.push(text.slice(STAGE_PREFIX.length));
+        pushStageEvent(text.slice(STAGE_PREFIX.length));
       }
       const pr = PR_RE.exec(text)?.groups?.pr;
       if (pr) {
@@ -168,6 +247,7 @@ export function createShipResultSink(io = {}) {
        * 免得回读里留一句已经被屏幕下一行推翻的结论。 */
       if (text.startsWith(CONCLUSION_PREFIX) || text.startsWith(FINAL_CONCLUSION_PREFIX)) {
         result.conclusion = text;
+        pushEvent({ at: now(), kind: "conclusion", text });
       }
     }
     if (result.lines.length > MAX_LINES) {
@@ -179,6 +259,7 @@ export function createShipResultSink(io = {}) {
     }
     flush();
   };
+  pushEvent({ at: now(), kind: "start", text: result.argv.join(" ") });
   flush();
   return {
     path: filePath,
@@ -196,6 +277,7 @@ export function createShipResultSink(io = {}) {
       result.status = "interrupted";
       result.finishedAt = now();
       result.interruptedBy = error instanceof Error ? error.message : String(error);
+      pushEvent({ at: now(), kind: "interrupted", text: result.interruptedBy ?? undefined });
       flush();
     },
     /** 唯一出口收口。退码按三态分类，绝不在这里另立判定。 @param {number} code */
@@ -203,6 +285,11 @@ export function createShipResultSink(io = {}) {
       result.status = code === 0 ? "green" : code === 1 ? "red" : "not-run";
       result.exitCode = code;
       result.finishedAt = now();
+      pushEvent({
+        at: now(),
+        kind: "finished",
+        facts: { exit: String(code), status: result.status },
+      });
       flush();
     },
   };
@@ -301,6 +388,21 @@ export function formatShipResult(reading) {
   for (const stage of r.stages) {
     lines.push(`  ▶ ${stage}`);
   }
+  /* 事件时间线（ISSUE #3923）：旧版文件没有 events 字段，按空清单读，不报形状错。 */
+  const events = Array.isArray(r.events) ? r.events : [];
+  lines.push(
+    `[ship-result] 事件（${events.length}${r.eventsTruncated ? "+，更早的已截断" : ""}）：`,
+  );
+  for (const e of events) {
+    const facts = e.facts
+      ? Object.entries(e.facts)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(" ")
+      : "";
+    lines.push(
+      `  ${e.at} · ${e.kind}${e.stage ? ` · ${e.stage}` : ""}${facts ? ` · ${facts}` : ""}${e.text ? ` · ${e.text}` : ""}`,
+    );
+  }
   lines.push(`[ship-result] 结论：${r.conclusion ?? "这一跑没念结论行"}`);
   if (r.status === "running" || r.status === "interrupted") {
     lines.push(
@@ -315,15 +417,30 @@ export function formatShipResult(reading) {
   return lines;
 }
 
-if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
-  const reading = readShipResult();
-  if (process.argv.slice(2).includes("--json")) {
-    process.stdout.write(`${JSON.stringify(reading, null, 2)}\n`);
+/**
+ * `--result` 只读口的执行体：`pnpm ship --result`（`ship-standalone.mjs` 分派）
+ * 与本文件的 CLI 共用这一份，一次也不碰平台 —— 数据源只有落盘那份快照。
+ * 退码口径：读到了 / 「没有上一次」都是合法读数（0）；读不出来 / 取不到 git 目录
+ * 才是没跑起来（2）。
+ *
+ * @param {{log?: (s: string) => void, root?: string, json?: boolean,
+ *           resolve?: (cwd?: string) => string | null}} [io]
+ * @returns {number} `CODE.GREEN` | `CODE.NOT_RUN`
+ */
+export function runResultQuery(io = {}) {
+  const log = io.log ?? ((s) => process.stdout.write(`${s}\n`));
+  const reading = readShipResult(io.root ?? process.cwd(), io.resolve ?? resolveGitDir);
+  if (io.json) {
+    log(JSON.stringify(reading, null, 2));
   } else {
     for (const line of formatShipResult(reading)) {
-      process.stdout.write(`${line}\n`);
+      log(line);
     }
   }
-  /* 「没有上一次」是合法读数（0）；「读不出来 / 取不到 git 目录」才是没跑起来（2）。 */
-  process.exit(reading.found || reading.reason === "missing" ? 0 : 2);
+  return reading.found || reading.reason === "missing" ? CODE.GREEN : CODE.NOT_RUN;
+}
+
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
+  const json = process.argv.slice(2).includes("--json");
+  process.exit(runResultQuery({ json }));
 }
