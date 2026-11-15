@@ -408,17 +408,19 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   /* 卸载兜底保存：只靠 600ms 防抖，编辑后立刻切页签时定时器被 clear 来不及落盘；
    * 且模块级草稿缓存只在首次挂载读一次，重挂载会读到旧缓存 —— 两处叠加正是
    *「切页签后剧本内容丢失」的根因。卸载时立即落盘 + 让缓存失效；cleanup 经 ref
-   * 取最新值，避免闭包捕获旧草稿。对账未落定就卸载时不写穿（#4023）：此时本地
-   * 尚未与服务端比过新旧，交回下次挂载的对账，避免本机旧值盖过服务端较新镜像。 */
+   * 取最新值，避免闭包捕获旧草稿。服务端写穿（pushServerDraft / pushProduction）
+   * 在对账未落定时不发（#4023）：此时本地尚未与服务端比过新旧，迟到 PUT 会把
+   * 本机旧值盖过服务端较新镜像；本地 localStorage **照常落盘**（即时缓存，
+   * 内容未变时与存量相同，不会丢）。 */
   React.useEffect(() => {
     return () => {
+      const draft = latestDraftRef.current;
+      writeDraft(activeProjectRef.current, draft);
       if (!restoreSettledRef.current) {
         invalidateDraftCache();
         return;
       }
-      const draft = latestDraftRef.current;
       const stamped: WorkshopDraft = { ...draft, updatedAt: Date.now() };
-      writeDraft(activeProjectRef.current, stamped);
       void pushServerDraft(activeProjectRef.current, stamped);
       void pushProduction(
         activeProjectRef.current,
