@@ -12,6 +12,22 @@ const listeners = new Set<() => void>();
 let activeTaskId: string | null = null;
 const taskNodeMap = new Map<string, string>();
 
+/** 映射条目上限：桌面应用常驻数天，历史任务 id 只进不出会慢性吃内存（#4007）。
+ *  超限按「最久没写过」淘汰——Map 保插入序，重写先删再插即得 LRU 语义
+ * （与 `runner-state` 的 `touchAndEvict` 同一形态）。 */
+const TASK_NODE_MAP_MAX = 256;
+
+function rememberTaskNode(id: string, nodeId: string): void {
+  taskNodeMap.delete(id);
+  taskNodeMap.set(id, nodeId);
+  if (taskNodeMap.size > TASK_NODE_MAP_MAX) {
+    const oldest = taskNodeMap.keys().next().value;
+    if (oldest !== undefined) {
+      taskNodeMap.delete(oldest);
+    }
+  }
+}
+
 export function setActiveTaskId(id: string | null, nodeId?: string): void {
   if (
     activeTaskId === id &&
@@ -25,7 +41,7 @@ export function setActiveTaskId(id: string | null, nodeId?: string): void {
   }
   activeTaskId = id;
   if (id !== null && id !== "" && nodeId !== undefined && nodeId !== "") {
-    taskNodeMap.set(id, nodeId);
+    rememberTaskNode(id, nodeId);
   }
   for (const l of listeners) {
     l();
