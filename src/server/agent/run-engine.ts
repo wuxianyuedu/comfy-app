@@ -555,6 +555,15 @@ async function execFilm(
   }
   // 服务端直接调成片编排（引擎在服务器上跑，不能用浏览器端的 render-film-client）。
   // createFilmFromProject→start：服务端 watchFilm 逐镜视频 + composeFilm 合成 + syncFilmToProject 回写。
+  /* 起片权先认领（ISSUE #3868）：filmStartedAt 原先要到本拍 saveRun 才落库，
+   * 与起片之间隔着数分钟的逐镜生成——进程在窗口内崩溃（或 saveRun 失败），
+   * 重启后 filmStartedAt 仍为空，用户再点一次启动会建出第二条完整成片管线。
+   * 改成起片前先 CAS 认领：抢到才起片；起片失败立刻释放，下一拍可重试。 */
+  const startedAt = nowIso();
+  const claimed = await productionRepository.claimFilmStart(userId, projectId, startedAt);
+  if (!claimed) {
+    return { ok: true, skipLog: true, summary: "成片生成中（等待合成完成）" };
+  }
   try {
     const { createFilmFromProject, startFilm } = await import("~/server/film/orchestrator");
     const { id } = await createFilmFromProject({
@@ -565,12 +574,13 @@ async function execFilm(
     });
     await startFilm(id);
   } catch (error: unknown) {
+    await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
     return { ok: false, error: errorMessage(error, "启动成片失败") };
   }
   return {
     ok: true,
     summary: "已启动成片：服务端逐镜视频 + 合成中",
-    run: { ...run, filmStartedAt: nowIso() },
+    run: { ...run, filmStartedAt: startedAt },
   };
 }
 

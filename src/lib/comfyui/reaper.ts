@@ -25,6 +25,7 @@ import {
   log,
   persistLogs,
   claimFinalize,
+  forgetTaskClaimEntirely,
   releaseDispatchSlot,
   type RunnerState,
 } from "./runner-state";
@@ -341,24 +342,12 @@ export async function reapStaleQueuedTasks(): Promise<void> {
           );
           continue;
         }
-        /* 先抢终态：executor 若同时也在收口这个任务，谁先认领谁赢。
-         *  抢不到说明本进程（或上一次 tick）已经判过终态——直接跳过，
-         *  避免同一任务写出两个互相矛盾的失败原因。 */
-        if (!claimTerminal(t.id)) {
-          log(t.id, "warn", `reaper 跳过：任务终态已被本进程认领（已 ${ageSec}s）`);
-          continue;
-        }
-        /* 与 executor 共享「DB 终态一次写入」锁：executor 已经落库过就
-         *  不再写第二条原因，保证执行日志 / 应用日志 / DB 三者一致。 */
-        if (!claimFinalize(t.id)) {
-          log(t.id, "warn", `reaper 跳过：任务终态已落库（已 ${ageSec}s）`);
-          continue;
-        }
         /* 最后一道保险：进程内记忆全空不等于任务已死。raw 路径的 comfy-cli
          *  子进程是独立进程，dev server 重启后新进程看不到它，但 ComfyUI
          *  侧的工作流仍在跑。判死前先问 ComfyUI 要外部证据——有活动或探测
          *  失败都视为「证据不足」，本轮跳过，等下一 tick 再对账（见本函数
-         *  上方注释 ISSUE #378）。 */
+         *  上方注释 ISSUE #378）。取证放在抢锁**之前**（ISSUE #3865）：证据
+         *  不足时不占任何一次性锁，下一 tick 才有可能真的重试。 */
         if (comfyEvidence === undefined) {
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           comfyEvidence = await comfyHasActiveWorkflow(null);
@@ -374,18 +363,42 @@ export async function reapStaleQueuedTasks(): Promise<void> {
           );
           continue;
         }
+        /* 先抢终态：executor 若同时也在收口这个任务，谁先认领谁赢。
+         *  抢不到说明本进程（或上一次 tick）已经判过终态——直接跳过，
+         *  避免同一任务写出两个互相矛盾的失败原因。 */
+        if (!claimTerminal(t.id)) {
+          log(t.id, "warn", `reaper 跳过：任务终态已被本进程认领（已 ${ageSec}s）`);
+          continue;
+        }
+        /* 与 executor 共享「DB 终态一次写入」锁：executor 已经落库过就
+         *  不再写第二条原因，保证执行日志 / 应用日志 / DB 三者一致。 */
+        if (!claimFinalize(t.id)) {
+          log(t.id, "warn", `reaper 跳过：任务终态已落库（已 ${ageSec}s）`);
+          continue;
+        }
         const reason = `任务在队列里待了 ${ageSec}s 而没有任何执行宿主会领它（claimedBy=「${t.claimedBy}」不是合法归属值，合法值只有 inline / host）— 请核对 COMFY_EXECUTOR 配置后重新执行`;
         log(t.id, "error", reason);
         /*  上面那行 error 日志与下面的终态写入就是用户拿到的全部出口：SSE 自 ADR
          *  §13-3C 起只读库，进程内合成事件那条通道随 §14 D1 退役了。这里也**不**调
          *  kickQueue()——被回收的行已经落终态、不会再被领一次，我们也不希望把一个
          *  未知工作流重新入队。尾部的 persistLogs 把原因行与终态同批落库。 */
-        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        const outcome = await taskRepository.finalizeFailure(t.id, reason);
-        if (outcome !== "written") {
-          /* SELECT 与 UPDATE 之间被执行方自己收口了（或归属已变）：正常的窄竞态，
-           * 不是故障，但要留一行——没有它，「判了却没落库」在日志里是隐身的。 */
-          logger.warn(`[comfyui] reaper: 跳过收口 ${t.id}（${outcome}），终态已由执行方落定`);
+        try {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+          const outcome = await taskRepository.finalizeFailure(t.id, reason);
+          if (outcome !== "written") {
+            /* SELECT 与 UPDATE 之间被执行方自己收口了（或归属已变）：正常的窄竞态，
+             * 不是故障，但要留一行——没有它，「判了却没落库」在日志里是隐身的。 */
+            logger.warn(`[comfyui] reaper: 跳过收口 ${t.id}（${outcome}），终态已由执行方落定`);
+          }
+        } catch (error) {
+          /* 写库失败（如 SQLITE_BUSY 重试穷尽）：归还两把一次性锁，下一 tick 重来。
+           * 不归还的后果：settled/finalized 被空占，isTaskClaimedInProcess 恒真、
+           * claimTerminal 恒败——任务在本进程存活期内永久卡死（ISSUE #3865）。 */
+          forgetTaskClaimEntirely(t.id);
+          logger.warn(
+            `[comfyui] ${sqliteAwareErrorText(error, `reaper 收口 ${t.id} 失败（已归还认领，下一轮重试）`)}`,
+          );
+          continue;
         }
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await persistLogs(t.id);
@@ -458,10 +471,19 @@ export async function reapStaleRunningTasks(): Promise<void> {
             continue;
           }
           const reason = `任务被领取后 ${ageSec}s 仍未回传 prompt_id，且连续两轮都无人认领它（执行宿主可能已崩溃）— 请重新执行`;
-          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-          const outcome = await taskRepository.finalizeFailure(t.id, reason);
-          if (outcome !== "written") {
-            logger.warn(`[comfyui] reaper: 跳过无 promptId 行的收口 ${t.id}（${outcome}）`);
+          try {
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+            const outcome = await taskRepository.finalizeFailure(t.id, reason);
+            if (outcome !== "written") {
+              logger.warn(`[comfyui] reaper: 跳过无 promptId 行的收口 ${t.id}（${outcome}）`);
+            }
+          } catch (error) {
+            /* 写库失败：归还一次性锁，下一 tick 重来——否则任务永久卡 RUNNING（ISSUE #3865）。 */
+            forgetTaskClaimEntirely(t.id);
+            logger.warn(
+              `[comfyui] ${sqliteAwareErrorText(error, `reaper 收口 ${t.id} 失败（已归还认领，下一轮重试）`)}`,
+            );
+            continue;
           }
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           await persistLogs(t.id);
@@ -572,14 +594,23 @@ export async function reapStaleRunningTasks(): Promise<void> {
         }
         const finalStatus = verdict === "succeeded" ? "SUCCEEDED" : "FAILED";
         log(t.id, verdict === "succeeded" ? "success" : "error", reason);
-        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        const outcome = await taskRepository.finalizeFromReaper(
-          t.id,
-          finalStatus,
-          verdict === "failed" ? reason : null,
-        );
-        if (outcome !== "written") {
-          logger.warn(`[comfyui] reaper: 跳过对账收口 ${t.id}（${outcome}），终态已由执行方落定`);
+        try {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+          const outcome = await taskRepository.finalizeFromReaper(
+            t.id,
+            finalStatus,
+            verdict === "failed" ? reason : null,
+          );
+          if (outcome !== "written") {
+            logger.warn(`[comfyui] reaper: 跳过对账收口 ${t.id}（${outcome}），终态已由执行方落定`);
+          }
+        } catch (error) {
+          /* 写库失败：归还一次性锁，下一 tick 重来——否则任务永久卡死（ISSUE #3865）。 */
+          forgetTaskClaimEntirely(t.id);
+          logger.warn(
+            `[comfyui] ${sqliteAwareErrorText(error, `reaper 对账收口 ${t.id} 失败（已归还认领，下一轮重试）`)}`,
+          );
+          continue;
         }
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await persistLogs(t.id);
