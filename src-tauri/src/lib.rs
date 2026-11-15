@@ -1571,7 +1571,7 @@ fn reap_process_tree(project_root: &str, pid: u32) {
     use std::os::windows::process::CommandExt;
     command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
   }
-  match command.output() {
+  match shell_launch::run_with_budget(command, shell_launch::REAPER_BUDGET) {
     Ok(out) => log::info!(
       "[ComfyAPP] sidecar 进程树统一回收：{}",
       String::from_utf8_lossy(&out.stdout).trim()

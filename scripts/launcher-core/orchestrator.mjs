@@ -67,6 +67,12 @@ export function writeLaunchStatus(
   }
 }
 
+/** 单次探测的超时预算（#4006）：半死形态（端口在听、HTTP 不应答）下，无预算的
+ *  fetch 会挂到 undici 默认 300s 才返回——外层 180s deadline 只在两拍之间检查，
+ *  罩不住一次挂起的单跳。探活是轻请求，2.5s 与 comfy 探活同量级；到点 fetch
+ *  抛错、落 `not-up`，由上层按节拍重试。 */
+export const PROBE_TIMEOUT_MS = 2500;
+
 /**
  * `/api/health` 的 503 里，只有这几种 `db` 值才算「表还没建」。
  *
@@ -99,6 +105,9 @@ export async function classifyProbe({ port, host = "127.0.0.1", path: probePath 
   try {
     const res = await fetch(`http://${host}:${port}${probePath}`, {
       cache: "no-store",
+      /* 单跳预算（#4006）：到点抛错落 `not-up`，上层按节拍重试——
+       * 不许一次挂起的单跳击穿外层 deadline。 */
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
     if (res.ok) {
       return "ready";

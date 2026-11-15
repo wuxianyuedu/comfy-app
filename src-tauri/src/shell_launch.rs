@@ -1015,6 +1015,50 @@ fn iso_timestamp() -> String {
   format!("unix:{secs}")
 }
 
+/// 回收命令的等待预算（#4006）：平时秒回；这是退出路径上的同步等待，不许无界。
+pub(crate) const REAPER_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// 同步跑一条命令，但带墙钟预算（#4006）。
+///
+/// `Command::output()` 会无限等子进程退出——把它放在退出路径上，一旦 reap 脚本
+/// 链路变化（比如未来加了等待确认），壳就卡死在 Exit 事件里。这里改为
+/// `spawn` + `try_wait` 轮询：到点强杀并报错。子进程只吐几行日志，管道缓冲
+/// 足够容纳，不会因不读管道而写满卡死；退出后再把剩余输出收干净。
+pub(crate) fn run_with_budget(
+  mut command: std::process::Command,
+  budget: std::time::Duration,
+) -> std::io::Result<std::process::Output> {
+  use std::io::Read;
+  let mut child = command.spawn()?;
+  let deadline = std::time::Instant::now() + budget;
+  loop {
+    if let Some(status) = child.try_wait()? {
+      let mut stdout = Vec::new();
+      let mut stderr = Vec::new();
+      if let Some(mut s) = child.stdout.take() {
+        let _ = s.read_to_end(&mut stdout);
+      }
+      if let Some(mut s) = child.stderr.take() {
+        let _ = s.read_to_end(&mut stderr);
+      }
+      return Ok(std::process::Output {
+        status,
+        stdout,
+        stderr,
+      });
+    }
+    if std::time::Instant::now() >= deadline {
+      let _ = child.kill();
+      let _ = child.wait();
+      return Err(std::io::Error::new(
+        std::io::ErrorKind::TimedOut,
+        "回收命令超出预算，已强杀",
+      ));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(50));
+  }
+}
+
 /// 调 `scripts/reap-process.mjs`（非 TS 宿主的唯一命令行回收入口）。
 ///
 /// **不自己拼 `taskkill` / `kill`**：平台判据只允许有一份，在
@@ -1046,7 +1090,7 @@ fn spawn_reaper(project_root: &str, pid: u32) {
     use std::os::windows::process::CommandExt;
     command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
   }
-  match command.output() {
+  match run_with_budget(command, REAPER_BUDGET) {
     Ok(out) => log::info!(
       "[ComfyAPP] 编排器进程树统一回收：{}",
       String::from_utf8_lossy(&out.stdout).trim()
