@@ -44,8 +44,9 @@ try {
 if ($code -ne 0) {
     Write-Host ""
     Write-Host "[ERROR] 获取每日纯壳失败，退出码 $code 。" -ForegroundColor Red
-    Write-Host "[HINT] 私有仓 Release 附件需要带 repo-release:r 权限的令牌。可设置环境变量 CNB_RELEASE_TOKEN/CNB_TOKEN，" -ForegroundColor Yellow
-    Write-Host "[HINT] 或将 token 写入用户级令牌文件：%APPDATA%\comfy-app\cnb-release-token（仅首行/非空内容生效），再重新双击本脚本。" -ForegroundColor Yellow
+    Write-Host "[HINT] 若日志提示缺少令牌，先执行这一条把令牌落到用户级令牌文件：" -ForegroundColor Yellow
+    Write-Host "[HINT]   pnpm fetch:daily-shell --config --token <你的CNB_RELEASE_TOKEN>" -ForegroundColor Yellow
+    Write-Host "[HINT] 令牌需要 repo-release:r 权限；也可用环境变量 CNB_RELEASE_TOKEN/CNB_TOKEN/CNB_ISSUE_TOKEN。" -ForegroundColor Yellow
 }
 
 exit (Complete-Entry -ExitCode $code -SuccessMessage "每日纯壳已就位（src-tauri\target\release\app.exe），项目根快捷方式已检查/补齐。")
