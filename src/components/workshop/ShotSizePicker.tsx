@@ -6,7 +6,7 @@
  * 「倍数」段（必选项，宽高由总像素预算与对齐倍数共定）。弹层脚注给尺寸表入口。
  *  换算与摘要全在 shot-size-config.ts（纯函数），本组件只做 props → 弹层映射。 */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 
 import {
   ALIGN_MULTIPLE_OPTIONS,
@@ -18,9 +18,15 @@ import {
   megapixelLabel,
   megapixelTierOfLabel,
   normalizeAlignMultiple,
+  sizeSpecDims,
   sizeSpecMegapixels,
   type SizeScene,
 } from "~/lib/media/size-presets";
+import {
+  getSizePresetServerSnapshot,
+  getSizePresetTable,
+  subscribeSizePresetTable,
+} from "~/lib/media/size-preset-store";
 import {
   MultiSegmentPopover,
   RatioIcon,
@@ -54,6 +60,19 @@ export function ShotSizePicker({
   const currentMegapixels = useMemo(
     () => megapixelTierOfLabel(state.clarity) ?? sizeSpecMegapixels(state, scene),
     [state, scene],
+  );
+
+  /* 当前选择在本机尺寸配置（项目默认 + data/size-presets.json 覆盖，逐格合并）
+   * 下换算出的实际宽高（#3949 需求 2）：随选择实时显示在弹层里，不再让用户
+   * 自己查尺寸表。 */
+  const presetTable = useSyncExternalStore(
+    subscribeSizePresetTable,
+    getSizePresetTable,
+    getSizePresetServerSnapshot,
+  );
+  const actualDims = useMemo(
+    () => sizeSpecDims(state, scene, presetTable),
+    [state, scene, presetTable],
   );
 
   const sections = useMemo<Array<SegmentSection>>(() => {
@@ -136,6 +155,9 @@ export function ShotSizePicker({
             </Button>
             <span className="text-ink-faint text-3xs">
               {clarityKind === "megapixel" ? "总像素预算，宽高按倍数对齐" : "宽高按场景尺寸表取值"}
+            </span>
+            <span className="text-ink text-3xs tabular-nums">
+              本机实际尺寸：{actualDims.width}×{actualDims.height}
             </span>
           </div>
         }

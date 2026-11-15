@@ -38,6 +38,10 @@ export const WORKSHOP_INPUT_TYPES = [
   { type: "resolution", label: "分辨率" },
   { type: "multiple", label: "倍数（宽高对齐）" },
   { type: "image", label: "图片" },
+  /** 参考图组（#3949 需求 6/7）：多张参考图以数组整体下发。默认映射不产它 ——
+   *  支持多图的接口在「模型适配」里显式映射这一行才生效（单图接口照旧映射
+   *  `image`，拿首张）。 */
+  { type: "images", label: "图片组（多张参考图）" },
   { type: "first-frame", label: "首帧图片" },
   { type: "last-frame", label: "尾帧图片" },
   /** 视频：时长。远端按 field 映射成该接口的字段名（duration / seconds…）。 */
