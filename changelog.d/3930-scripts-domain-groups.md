@@ -21,4 +21,4 @@
   （ship-status / ship-fetch-issue → ship/、freshness-ledger-write → freshness/、
   db-unique-sweep → db/、affected-launcher-hygiene + launcher-closure → affected-tests/）。
   `src-tauri/src/single_instance.rs` 测试模块里的一行路径注释留待下次重编壳时顺带更新
- （为一行注释触发整壳重编不值当）。
+ （为一行注释触发整壳重编不值当；截图脚本双 BOM 同批由 #3974 在 master 修复，#3946 登记为重复）。
