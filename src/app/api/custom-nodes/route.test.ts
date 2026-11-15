@@ -161,6 +161,11 @@ vi.mock("node:fs", async (importOriginal) => {
 
 import { GET, POST } from "./route";
 
+/** GET 的入参：路由要读 `req.signal`（子进程看门狗 #4004），测试里逐次造一个真请求。 */
+function callGet(): ReturnType<typeof GET> {
+  return GET(new NextRequest("http://127.0.0.1:3000/api/custom-nodes"));
+}
+
 /** `unknown` → 对象视图；不是对象就当场失败（与旧断言后崩溃是同一个判定）。 */
 function recordOf(v: unknown, label: string): Record<string, unknown> {
   if (!isRecord(v)) {
@@ -631,7 +636,7 @@ async function getEvents(): Promise<Array<Record<string, unknown>>> {
   if (!armed) {
     coldRoot();
   }
-  const res = await GET();
+  const res = await callGet();
   expect(res.status).toBe(200);
   expect(res.headers.get("content-type")).toContain("ndjson");
   return eventsOf(res);
@@ -719,7 +724,7 @@ async function payloadOf(): Promise<Record<string, unknown>> {
   if (!armed) {
     coldRoot();
   }
-  const res = await GET();
+  const res = await callGet();
   expect(res.status).toBe(200);
   if ((res.headers.get("content-type") ?? "").includes("ndjson")) {
     return eventOf(await eventsOf(res), "summary");
@@ -743,7 +748,7 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
   it("未登录 → 401，一次盘都不读、一个进程都不起", async () => {
     putManifest(FULL_MANIFEST);
     userMock.mockResolvedValueOnce(null);
-    const res = await GET();
+    const res = await callGet();
     expect(res.status).toBe(401);
     expect(await res.json()).toMatchObject({
       error: { code: "auth.required", message: "未登录或会话已失效" },
@@ -757,7 +762,7 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
        此前它会把整个请求炸成 Next 的默认错误页，前端崩在
        「读取 undefined 的 paths 属性」上，真实原因反而看不见（硬规则 4）。 */
     fsState.files.set(MANIFEST, { text: "{}", existsFails: true });
-    const res = await GET();
+    const res = await callGet();
     expect(res.status).toBe(500);
     const body = await jsonRecord(res, "读盘失败响应体");
     const error = recordOf(body.error, "error 信封");
@@ -768,7 +773,7 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
 
   it("抛上来的东西没有可读详情 → 兜底成「读取配置失败」，而不是空文案或 undefined", async () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: "silent" });
-    const res = await GET();
+    const res = await callGet();
     expect(res.status).toBe(500);
     const body = await jsonRecord(res, "兜底错误响应体");
     const error = recordOf(body.error, "error 信封");
@@ -777,7 +782,7 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
 
   it("500 的信封里只有 error —— 消费方靠「没有 settings」判失败，形状不许偷偷加字段", async () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: true });
-    const res = await GET();
+    const res = await callGet();
     expect(Object.keys(await jsonRecord(res, "500 信封"))).toEqual(["error"]);
   });
 });
@@ -995,7 +1000,7 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
         packages: [{ name: "Foo", path: "/tmp/custom_nodes/foo" }],
       }),
     ]);
-    const res = await GET();
+    const res = await callGet();
     expect(res.headers.get("content-type")).toContain("application/x-ndjson");
     expect(res.headers.get("cache-control")).toBe("no-cache, no-transform");
     const text = await res.text();
@@ -1035,7 +1040,7 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     await getEvents();
     expect(spawnMock).toHaveBeenCalledTimes(1);
 
-    const res = await GET();
+    const res = await callGet();
     expect(res.headers.get("content-type")).toContain("application/json");
     const body = await jsonRecord(res, "热路径响应体");
     expect(spawnMock).toHaveBeenCalledTimes(1);
