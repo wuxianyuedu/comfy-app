@@ -225,3 +225,31 @@ export function isSqliteUniqueViolation(error: unknown): boolean {
   }
   return messages.some((m) => /UNIQUE constraint failed/i.test(m));
 }
+
+/**
+ * 撞唯一索引时，从 cause 链的消息里取涉及到的列（`table.column` 全名数组）。
+ *
+ * SQLite / libsql 的人话文案形如
+ * `UNIQUE constraint failed: season.seriesId, season.seasonNumber`（复合索引用
+ * 逗号列出全部列）。调用方按列名把裸约束翻成业务语义的冲突文案（哪条业务键
+ * 撞了给哪句 409），而不是一句笼统的「写入失败」。不是唯一冲突、或消息里取
+ * 不到列名 ⇒ 空数组（调用方按「不知道撞了哪条」兜底）。
+ */
+export function sqliteUniqueColumns(error: unknown): Array<string> {
+  if (!isSqliteUniqueViolation(error)) {
+    return [];
+  }
+  const { messages } = collect(error);
+  const marker = "UNIQUE constraint failed:";
+  for (const m of messages) {
+    const at = m.indexOf(marker);
+    if (at !== -1) {
+      return m
+        .slice(at + marker.length)
+        .split(",")
+        .map((c) => c.trim())
+        .filter((c) => c.length > 0);
+    }
+  }
+  return [];
+}
