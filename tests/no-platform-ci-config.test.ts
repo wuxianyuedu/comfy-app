@@ -1432,10 +1432,28 @@ export function lockClassViolations(text: string, prIid = "1982"): Array<string>
         `锁 *${row.lockRef} 没有显式写 cancel-in-progress —— 漏写与「有意排队」在配置里长得一样，重复排队就收不成一条（要排队的那一档写 false 并说明理由）`,
       );
     }
-    /* R2：类锁的 key 必须是字面量。 */
-    if (def.key.includes("$")) {
+    /* R2：类锁的 key 必须是字面量，或只带 `$CNB_COMMIT`（#3968 复核）。CNB_COMMIT
+     * 在 push / api_trigger / web_trigger 上都是这次 build 绑定的提交（回调 build
+     * 实测 `sha_check=match`，见 .cnb.yml 的锁注释）—— 按它分锁在任一事件上都不
+     * 会退化成共用一把。其余变量（$CNB_BRANCH、$CNB_PULL_REQUEST_IID…）在非 PR /
+     * 派发事件上无值 ⇒ 退化成共用一把（#1981 那条教训的另一面），照旧判红；
+     * 两个不同的 commit 必须解出不同的 key（防「写了变量名却忘了 $」的假分锁）。 */
+    const variables = def.key.match(/\$[A-Z_][A-Z0-9_]*/gu) ?? [];
+    const unbound = variables.filter((v) => v !== "$CNB_COMMIT");
+    const commitA = resolveLockKey(def.key, {
+      CNB_COMMIT: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    });
+    const commitB = resolveLockKey(def.key, {
+      CNB_COMMIT: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    });
+    if (unbound.length > 0) {
       bad.push(
-        `锁 *${row.lockRef} 的 key「${def.key}」带变量 —— 变量在某个事件上无值就退化成共用一把（#1981 那条教训的另一面）`,
+        `锁 *${row.lockRef} 的 key「${def.key}」带非提交维度的变量（${unbound.join("、")}）—— 变量在某个事件上无值就退化成共用一把（#1981 那条教训的另一面；按绑定提交分锁只认 $CNB_COMMIT）`,
+      );
+    } else if (variables.length > 0 && commitA === commitB) {
+      /* 写了 $CNB_COMMIT 却解不出差异 = 假分锁（比如漏了 $），与带别的变量同罪。 */
+      bad.push(
+        `锁 *${row.lockRef} 的 key「${def.key}」按不同提交解出同一个值 —— 假分锁（变量没生效）`,
       );
     }
     /* R4：不许等于退化形状，也不许等于 PR 那把的形状。 */
@@ -2807,12 +2825,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const pushWaitFalse = fixture.replace("  wait: true\n", "  wait: false\n");
     expect(lockClassViolations(pushWaitFalse).join("\n")).toContain("没有写 wait: true");
 
-    // ④ R2 的后半：key 里放进变量 ⇒ 换个事件它就无值，退化这件事又回来了。
+    // ④ R2 的后半：key 里放进非提交维度的变量 ⇒ 换个事件它就无值，退化这件事
+    // 又回来了（$CNB_COMMIT 例外，见 lockClassViolations 的 R2 注）。
     const templated = fixture.replace(
       "  key: daily\n  cancel-in-progress: true",
       "  key: daily-$CNB_BRANCH\n  cancel-in-progress: true",
     );
-    expect(lockClassViolations(templated).join("\n")).toContain("带变量");
+    expect(lockClassViolations(templated).join("\n")).toContain("带非提交维度的变量");
 
     // ⑤ R4 / R5：R4 —— 类锁写成那个退化形状本身；R5 —— PR 那把不再随编号变。
     const degenerate = fixture.replace(
