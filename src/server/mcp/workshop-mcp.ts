@@ -94,7 +94,9 @@ export function buildWorkshopMcpServer(): McpServer {
     "workshop_create_session",
     {
       title: "创建工坊会话",
-      description: "创建一个新的工坊创作会话，返回 sessionId。可附带标题、类型、基调、梗概与灵感。",
+      description:
+        "创建一个新的工坊创作会话，返回 sessionId。可附带标题、类型、基调、梗概与灵感。" +
+        "幂等边界：同参数重试在 5 分钟窗口内返回同一会话、不重复建（#3852）；要开新会话请换参数。",
       inputSchema: {
         title: z.string().optional().describe("项目标题"),
         type: z

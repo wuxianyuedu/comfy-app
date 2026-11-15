@@ -5,6 +5,9 @@
 //   · character (seriesId, name)
 //   · season (seriesId, seasonNumber)
 //   · episode (seasonId, episodeNumber)
+// 以及 #3934/#3937 收口的两组：
+//   · workflowTemplate (userId, name)
+//   · account (providerId, accountId, userId)
 // 存量库里若已有重复行，`drizzle-kit push` 的 `CREATE UNIQUE INDEX` 会直接失败，
 // 所以清洗必须排在 push **之前**（`db-push.mjs` 调用）。
 // task 的「同镜头活动任务唯一」**没有**对应的唯一索引（drizzle-kit 0.31 对
@@ -184,6 +187,43 @@ export function sweepDuplicateRowsForUniqueIndexes(
         forward(`[db:unique-sweep] ✓ 任务：取消 ${r.changes} 条同镜头的重复活动任务\n`);
       }
       summary.cancelled += Number(r.changes);
+    }
+
+    // ⑥ 同用户同名工作流模板（#3934）：保留最早一行，删后到的
+    //    （标签关联随外键级联清理）。
+    if (hasTable(db, "workflowTemplate")) {
+      const r = db
+        .prepare(
+          `DELETE FROM workflowTemplate
+           WHERE rowid > (
+             SELECT MIN(w2.rowid) FROM workflowTemplate AS w2
+             WHERE w2.userId = workflowTemplate.userId AND w2.name = workflowTemplate.name
+           )`,
+        )
+        .run();
+      if (r.changes > 0) {
+        forward(`[db:unique-sweep] ✓ 工作流模板：删 ${r.changes} 行同名重复（各保留最早一行）\n`);
+      }
+      summary.deleted += Number(r.changes);
+    }
+
+    // ⑦ account 同一 (provider, account, user)（#3937）：保留最早一行。
+    if (hasTable(db, "account")) {
+      const r = db
+        .prepare(
+          `DELETE FROM account
+           WHERE rowid > (
+             SELECT MIN(a2.rowid) FROM account AS a2
+             WHERE a2.providerId = account.providerId
+               AND a2.accountId = account.accountId
+               AND a2.userId = account.userId
+           )`,
+        )
+        .run();
+      if (r.changes > 0) {
+        forward(`[db:unique-sweep] ✓ account：删 ${r.changes} 行重复外部身份（各保留最早一行）\n`);
+      }
+      summary.deleted += Number(r.changes);
     }
 
     if (summary.deleted + summary.renumbered + summary.cancelled === 0) {
