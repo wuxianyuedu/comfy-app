@@ -268,7 +268,11 @@ export function main(deps = {}) {
    * `finally` 里、计数写在里面。 */
   const r = (() => {
     try {
-      return spawn(path.join(HERE, "run-affected-tests.mjs"), childEnv);
+      /* #3930 把 `run-affected-tests.mjs` 归进了 `scripts/affected-tests/`，
+       * 而本文件在 `scripts/ci/` —— 落点要跟着家族走，不能还拼 `HERE`
+       * （拼错的失效形态是 `MODULE_NOT_FOUND` 被子进程吞成退出码 1，
+       * 于是整格报红、日志里只有一句「找不到模块」）。 */
+      return spawn(path.join(HERE, "../affected-tests/run-affected-tests.mjs"), childEnv);
     } finally {
       if (ledgerDir) {
         junitCount = countJunitFiles(ledgerDir);

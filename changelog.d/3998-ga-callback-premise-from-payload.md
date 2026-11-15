@@ -16,3 +16,10 @@
   `tests/no-platform-ci-config.test.ts` 的 #3667 那一格从「钉 `inputs || client_payload`」
   改为钉「先分形态」的写法（原来钉的就是本条要拆掉的形状）。判决链、三态退码、`GA_VERDICT`
   折叠与 `质量门禁` 的承重锚一字未动。
+
+- 同批修 #3930 搬迁漏掉的一处落点（PR #3998 第三跑的现场）：`scripts/ci/ci-affected-tests.mjs`
+  起子进程时拼的是 `path.join(HERE, "run-affected-tests.mjs")`（HERE = `scripts/ci/`），
+  而那一份已归进 `scripts/affected-tests/` ⇒ 子进程 0s 报 `MODULE_NOT_FOUND`，平台把它读成
+  「固定结构用例 红」。判据 `tests/ci-affected-tests.test.ts` 只写
+  `toContain("run-affected-tests.mjs")`，路径拼错也全绿 —— 改为按 `basename` 比对**并
+  `existsSync` 断言落点真实存在**（拿旧代码跑这条新断言当场红，已对拍）。

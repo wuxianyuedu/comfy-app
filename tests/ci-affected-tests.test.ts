@@ -182,7 +182,12 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
     });
     expect(code).toBe(0);
     expect(seen).toHaveLength(1);
-    expect(seen[0]!.script).toContain("run-affected-tests.mjs");
+    /* 落点要**真实存在**，不是「路径里出现过这个名字」（#3930 的现场）：#3930 把
+     * `run-affected-tests.mjs` 归进 `scripts/affected-tests/`，而这里此前拼的是
+     * `path.join(HERE, ...)`（HERE = `scripts/ci/`）⇒ 子进程 0s 报 MODULE_NOT_FOUND、
+     * 被平台读成「固定结构用例 红」，而 `toContain("run-affected-tests.mjs")` 全绿。 */
+    expect(path.basename(seen[0]!.script)).toBe("run-affected-tests.mjs");
+    expect(existsSync(seen[0]!.script)).toBe(true);
     expect(seen[0]!.env.COMFY_AFFECTED_CHANGED).toBe("src/a.ts\nsrc/b.ts");
     /* 并发按 ci-load 的唯一出处收敛（COMFY_CI_MAX_WORKERS=2 ⇒ 2），不在这里另写数。 */
     expect(seen[0]!.env.COMFY_PRECOMMIT_MAX_WORKERS).toBe("2");
