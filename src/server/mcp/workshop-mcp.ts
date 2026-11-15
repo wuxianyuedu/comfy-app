@@ -211,10 +211,14 @@ export function buildWorkshopMcpServer(): McpServer {
     "workshop_generate_script",
     {
       title: "生成剧本",
-      description: "调用 LLM 把 idea 扩写为 Markdown 剧本，并解析出场景列表。",
-      inputSchema: { sessionId: z.string() },
+      description:
+        "调用 LLM 把 idea 扩写为 Markdown 剧本，并解析出场景列表。已有剧本时默认直接返回既有剧本，force=true 才重新生成。",
+      inputSchema: {
+        sessionId: z.string(),
+        force: z.boolean().optional().describe("已有剧本时是否强制重新生成，默认 false"),
+      },
     },
-    async (args) => json(await orchestrator.generateScript(args.sessionId)),
+    async (args) => json(await orchestrator.generateScript(args.sessionId, args.force ?? false)),
   );
 
   server.registerTool(
@@ -236,10 +240,14 @@ export function buildWorkshopMcpServer(): McpServer {
     "workshop_extract_characters",
     {
       title: "提取角色卡",
-      description: "调用 LLM 从剧本提取角色卡，重名跳过并自动重算提示词。",
-      inputSchema: { sessionId: z.string() },
+      description:
+        "调用 LLM 从剧本提取角色卡，重名跳过并自动重算提示词。已有角色卡时默认直接返回，force=true 才重新提取。",
+      inputSchema: {
+        sessionId: z.string(),
+        force: z.boolean().optional().describe("已有角色卡时是否强制重新提取，默认 false"),
+      },
     },
-    async (args) => json(await orchestrator.extractCharacters(args.sessionId)),
+    async (args) => json(await orchestrator.extractCharacters(args.sessionId, args.force ?? false)),
   );
 
   server.registerTool(
@@ -261,10 +269,14 @@ export function buildWorkshopMcpServer(): McpServer {
     "workshop_build_storyboard",
     {
       title: "拆分分镜",
-      description: "调用 LLM 把剧本拆为镜头序列，自动匹配场景与角色并重算提示词。",
-      inputSchema: { sessionId: z.string() },
+      description:
+        "调用 LLM 把剧本拆为镜头序列，自动匹配场景与角色并重算提示词。已有分镜时默认直接返回，force=true 才重新拆分。",
+      inputSchema: {
+        sessionId: z.string(),
+        force: z.boolean().optional().describe("已有分镜时是否强制重新拆分，默认 false"),
+      },
     },
-    async (args) => json(await orchestrator.buildStoryboard(args.sessionId)),
+    async (args) => json(await orchestrator.buildStoryboard(args.sessionId, args.force ?? false)),
   );
 
   server.registerTool(
@@ -293,6 +305,7 @@ export function buildWorkshopMcpServer(): McpServer {
         shotId: z.string().optional().describe("目标镜头 id（与 characterId 二选一）"),
         characterId: z.string().optional().describe("目标角色 id（与 shotId 二选一）"),
         channel: z.enum(["api", "comfyui"]).optional().describe("生图通道，默认 api"),
+        force: z.boolean().optional().describe("镜头已有图片时是否强制重新生成，默认 false"),
         ...sizeArgs,
       },
     },
@@ -303,6 +316,7 @@ export function buildWorkshopMcpServer(): McpServer {
           characterId: args.characterId,
           channel: args.channel,
           size: sizeSpecOf(args),
+          force: args.force,
         }),
       ),
   );
@@ -321,6 +335,10 @@ export function buildWorkshopMcpServer(): McpServer {
         frames: z.number().optional(),
         fps: z.number().optional(),
         useFirstFrame: z.boolean().optional().describe("是否用该镜头已生成的图片作为首帧"),
+        force: z
+          .boolean()
+          .optional()
+          .describe("镜头已有产物或在跑任务时是否强制重新提交，默认 false（重试安全）"),
       },
     },
     async (args) =>
@@ -333,6 +351,7 @@ export function buildWorkshopMcpServer(): McpServer {
           frames: args.frames,
           fps: args.fps,
           useFirstFrame: args.useFirstFrame,
+          force: args.force,
         }),
       ),
   );
