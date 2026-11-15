@@ -38,6 +38,8 @@ export type ModelAdaptersController = {
   addMode: (mode: string) => void;
   /** 可配置适配器的远端模型（kind=image / video）。 */
   candidates: Array<AdapterCandidate>;
+  /** 写项目默认的忙碌位（与 DB 保存各自独立）。 */
+  codebaseSaving: boolean;
   /** 当前选中模型的适配器草稿（选中变化时自动播种）。 */
   draft: Array<RemoteModeAdapter>;
   loading: boolean;
@@ -47,6 +49,9 @@ export type ModelAdaptersController = {
   /** 还原默认：丢弃本地草稿，回到服务端当前存档（ISSUE #3741）。 */
   reset: () => void;
   save: () => Promise<void>;
+  /** 保存为项目默认（跟代码走，ISSUE #3951）：把当前草稿写进入库的
+   *  `model-adapter-defaults.json`，成为应用自带的基线配置。 */
+  saveToCodebase: () => Promise<void>;
   saving: boolean;
   selectedModel: string;
   selectModel: (name: string) => void;
@@ -121,6 +126,12 @@ export function useModelAdapters(): ModelAdaptersController {
   }
 
   const saveMutation = useMutation(trpc.llm.workshopAdaptersSave.mutationOptions());
+  /* 保存为项目默认（跟代码走，ISSUE #3951）：写 `model-adapter-defaults.json`。
+   * 忙碌位与 DB 保存分开 —— 两颗按钮可以分别转圈。 */
+  const saveDefaultsMutation = useMutation(
+    trpc.llm.workshopAdaptersSaveAsDefaults.mutationOptions(),
+  );
+  const codebaseBusy = useBusyAction();
 
   const selectModel = useCallback((name: string) => {
     setSelectedModel(name);
@@ -189,6 +200,41 @@ export function useModelAdapters(): ModelAdaptersController {
     }
   }, [selectedModel, draft, saveMutation, saveBusy, queryClient, trpc]);
 
+  /* 保存为项目默认（ISSUE #3951）：当前草稿写进入库基线
+   * （`src/lib/workshop/model-adapter-defaults.json`），成为应用自带配置。
+   * 与 DB 保存互相独立 —— 要「本机生效」点保存适配器，要「跟代码走」点这颗
+   * （两颗都点也合法：先落库、再导出）。 */
+  const saveToCodebase = useCallback(async () => {
+    if (!selectedModel) {
+      return;
+    }
+    setMessage(null);
+    try {
+      const saved = await codebaseBusy.run(() =>
+        saveDefaultsMutation.mutateAsync({
+          name: selectedModel,
+          adapters: draft,
+        }),
+      );
+      /* 项目默认变了 ⇒ 生效档与概览（「已配」标记）跟着刷新。 */
+      await queryClient.invalidateQueries({
+        queryKey: trpc.llm.workshopAdaptersSummary.queryKey(),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: trpc.llm.workshopAdaptersGet.queryKey({ name: selectedModel }),
+      });
+      setMessage({
+        kind: "ok",
+        text: `已把 ${selectedModel} 的适配器存为项目默认（${saved.relPath}）· 记得随代码提交。`,
+      });
+    } catch (error) {
+      setMessage({
+        kind: "err",
+        text: errorMessage(error, "保存为项目默认失败"),
+      });
+    }
+  }, [selectedModel, draft, saveDefaultsMutation, codebaseBusy, queryClient, trpc]);
+
   /* 还原默认（ISSUE #3741）：回到服务端当前存档——没有存档就是空草稿。 */
   const reset = useCallback(() => {
     setDraft(parseRemoteModeAdapters(adaptersQ.data?.adapters ?? []));
@@ -207,6 +253,8 @@ export function useModelAdapters(): ModelAdaptersController {
     addMode,
     save,
     saving: saveBusy.busy,
+    saveToCodebase,
+    codebaseSaving: codebaseBusy.busy,
     message,
     summary: summaryQ.data?.models ?? [],
   };

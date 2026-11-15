@@ -29,6 +29,10 @@ import {
   saveModeContracts,
   saveModeContractsAsProjectDefaults,
 } from "~/lib/workshop/mode-contract.server";
+import {
+  effectiveModelAdaptersDoc,
+  saveModelAdaptersAsDefaults,
+} from "~/lib/workshop/model-adapter-defaults.server";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 
 /* workshopAdapters 文档的「读整份 → 合并 → 整份写回」按模型名串行化（ISSUE #3871）：
@@ -330,12 +334,16 @@ export const llmRouter = createTRPCRouter({
       return { contracts, effective };
     }),
 
-  /** 读取某条远端模型的工坊适配器存档（模型级：端点路径 + 各模式适配器） */
+  /** 读取某条远端模型的工坊适配器存档（模型级：端点路径 + 各模式适配器）。
+   *  返回的是**生效档**（ISSUE #3951）：项目默认（跟代码走的基线）与 DB 存档
+   *  逐模式合并 —— 编辑器播种看到「基线 + 本机已改」，改完可另存回项目默认。 */
   workshopAdaptersGet: authedProcedure
     .input(z.object({ name: z.string().min(1) }))
     .query(async ({ input }) => {
-      const doc = await remoteModelRepository.getWorkshopAdaptersDoc(input.name);
-      return doc;
+      return effectiveModelAdaptersDoc(
+        input.name,
+        await remoteModelRepository.getWorkshopAdaptersDoc(input.name),
+      );
     }),
 
   /** 保存某条远端模型的工坊适配器存档（整份覆盖；端点路径模型级共用）。
@@ -370,18 +378,56 @@ export const llmRouter = createTRPCRouter({
       });
     }),
 
+  /** 把当前编辑的适配器写进入库的**项目默认**
+   *  （`src/lib/workshop/model-adapter-defaults.json`，跟代码走；ISSUE #3951）。
+   *  与「模式契约」的保存为项目默认同一档：只有开发检出可写（正式包没有源码，
+   *  调用即错用，大声失败）；写完现读即生效，不必重启。端点路径与
+   *  workshopAdaptersSave 同口径：省略 = 取生效档现值（本页不编辑它）。 */
+  workshopAdaptersSaveAsDefaults: authedProcedure
+    .input(
+      z.object({
+        endpointPath: z.string().optional(),
+        name: z.string().min(1),
+        adapters: z.array(adapterSchema),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const adapters = parseRemoteModeAdapters(
+        input.adapters.map((a) => ({ ...a, mode: a.mode.toUpperCase() })),
+      );
+      return workshopAdaptersMutex.run(input.name, async () => {
+        const effective = await effectiveModelAdaptersDoc(
+          input.name,
+          await remoteModelRepository.getWorkshopAdaptersDoc(input.name),
+        );
+        return saveModelAdaptersAsDefaults(input.name, {
+          endpointPath:
+            input.endpointPath === undefined
+              ? effective.endpointPath
+              : (input.endpointPath.trim() ?? ""),
+          adapters,
+        });
+      });
+    }),
+
   /** 各模型的适配器概览（哪些模型配了、各配了几个模式）——「模型适配」页
-   *  的模型清单标「已配」用，免得逐模型拉全量存档。 */
+   *  的模型清单标「已配」用，免得逐模型拉全量存档。按**生效档**数（#3951）：
+   *  项目默认（跟代码走）里配了的模型同样标「已配」—— 生成链路真的会用到它。 */
   workshopAdaptersSummary: authedProcedure.query(async () => {
     const rows = await remoteModelRepository.list();
-    return {
-      models: rows.flatMap((row) => {
-        const doc = parseAdaptersDocJson(row.workshopAdapters);
-        return doc.adapters.length === 0
-          ? []
-          : [{ modes: doc.adapters.map((a) => a.mode), name: row.name }];
-      }),
-    };
+    const models: Array<{ modes: Array<string>; name: string }> = [];
+    for (const row of rows) {
+      /* 逐模型现读基线（小 JSON）；串行与生成链路同序，便于日志归因。 */
+      // oxlint-disable-next-line no-await-in-loop -- 逐模型读盘为独立小文件，串行保持读数可归因
+      const doc = await effectiveModelAdaptersDoc(
+        row.name,
+        parseAdaptersDocJson(row.workshopAdapters),
+      );
+      if (doc.adapters.length > 0) {
+        models.push({ modes: doc.adapters.map((a) => a.mode), name: row.name });
+      }
+    }
+    return { models };
   }),
 
   /* POST /api/llm/config —— 新建：update singleton config */

@@ -74,6 +74,43 @@ export const VERDICT_ENV_KEY = "GA_VERDICT";
 /** 回调 build 读的「本条 build 绑定到哪个 sha」环境变量名（与 `.cnb.yml` 内联日志同源）。 */
 export const SHA_ENV_KEY = "GA_CALLBACK_SHA";
 
+/**
+ * PR 标题进 `env` 的那枚键名（`pr-gate.yml` 送、本脚本读，只作请求体 `title` 的来源）。
+ *
+ * 为什么不直接读 `GITHUB_EVENT_PATH`：`pull_request.title` 只在 `pull_request` 事件上
+ * 存在，而按需档（`workflow_dispatch`，#3667）没有它 —— 两条触发形态共用一个取值口，
+ * 才不会有「按需档的回调又变回无标题」这种只修一半的形态。
+ */
+export const TITLE_ENV_KEY = "GA_PR_TITLE";
+
+/** 送进请求体 `title` 的长度上限（`dto.LogInfo.title` 没有说明长度，这里给个防呆值）。 */
+const TITLE_MAX_LEN = 200;
+
+/**
+ * 把 PR 标题拼成 build 标题：`<PR 标题> (#<PR号>)`。
+ *
+ * 为什么带上号：平台 `GET /{repo}/-/build/logs?title=` 只判**关键字命中**，而两张 PR
+ * 标题互为前缀是常事 —— 带上号之后「这张 PR 的几次回调」才筛得干净。
+ *
+ * 标题缺席 / 空白 ⇒ 回空串，调用方据此**不送** `title` 键（回落平台缺省，不发明
+ * 「无标题」这种新形态）；标题里的换行 / 制表折成单空格 —— 列表那一列是单行。
+ *
+ * @param {string} title PR 标题原值
+ * @param {string} pr PR 号
+ * @returns {string} 拼好的 build 标题；拼不出来时空串
+ */
+export function buildTitle(title, pr) {
+  const flat = String(title ?? "")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+  if (!flat) {
+    return "";
+  }
+  const head = flat.length > TITLE_MAX_LEN ? `${flat.slice(0, TITLE_MAX_LEN - 1)}…` : flat;
+  const tail = /^\d+$/.test(String(pr ?? "").trim()) ? ` (#${String(pr).trim()})` : "";
+  return `${head}${tail}`;
+}
+
 /** CNB OpenAPI 的缺省服务地址（平台侧可用 `CNB_API_ENDPOINT` 覆盖，同 `ci-token-scopes.mjs`）。 */
 export const DEFAULT_API_ENDPOINT = "https://api.cnb.cool";
 
@@ -143,7 +180,7 @@ export function verdictFromConclusion(raw) {
  * 收集这次回调的前提，缺哪件念哪件（fail-closed 的「读数」半边）。
  *
  * @param {{argv: string[], env: Record<string, string | undefined>}} io
- * @returns {{ok: true, sha: string, pr: string, repo: string, conclusion: string, verdict: string, token: string, endpoint: string, dryRun: boolean} | {ok: false, reasons: string[]}}
+ * @returns {{ok: true, sha: string, pr: string, repo: string, conclusion: string, verdict: string, token: string, endpoint: string, dryRun: boolean, title: string} | {ok: false, reasons: string[]}}
  */
 export function resolveCallbackContext({ argv, env }) {
   const reasons = [];
@@ -160,6 +197,9 @@ export function resolveCallbackContext({ argv, env }) {
     ""
   ).trim();
   const repo = (readOption(argv, "--repo") || env.CNB_REPO_SLUG || env.GA_REPO_SLUG || "").trim();
+  /* 标题是**可选**项：拼不出来就不送（不参与前提判定，也不进 reasons ——
+   * 缺标题只让这一列回落平台缺省，不该让一条本可送达的结论送不出去）。 */
+  const title = buildTitle(readOption(argv, "--title") || env[TITLE_ENV_KEY] || "", pr);
   const token = (env.CNB_TRIGGER_TOKEN ?? "").trim();
   const endpoint = (env.CNB_API_ENDPOINT || DEFAULT_API_ENDPOINT).replace(/\/+$/, "");
   const conclusion =
@@ -191,6 +231,7 @@ export function resolveCallbackContext({ argv, env }) {
     pr,
     repo,
     sha,
+    title,
     token,
     verdict: verdictFromConclusion(conclusion),
   };
@@ -204,10 +245,15 @@ export function resolveCallbackContext({ argv, env }) {
  * 后者让 CNB 侧回调 build 的日志能念出「这条 build 绑的是哪笔」；
  * `CNB_COMMIT` 在 `api_trigger*` 事件上平台没有明文取值保证，不拿它当唯一来源。
  *
- * @param {{sha: string, pr: string, verdict: string}} ctx
+ * `title`（`dto.StartBuildReq.title`）：不送的时候平台给的是缺省标题
+ * （历史现场一律 `API custom event`），而流水线 `name` 又是另一列 —— 所以
+ * 「这条回调属于哪张 PR」只能点进去看。标题拼得出来就送、拼不出来（PR 标题缺席）
+ * **一个 `title` 键都不多写**，回落平台缺省。
+ *
+ * @param {{pr: string, sha: string, verdict: string, title?: string}} ctx
  * @returns {{url: string, init: {method: string, headers: Record<string, string>, body: string}}}
  */
-export function startBuildRequest({ pr, sha, verdict }) {
+export function startBuildRequest({ pr, sha, verdict, title = "" }) {
   const body = {
     branch: "master",
     env: {
@@ -219,6 +265,7 @@ export function startBuildRequest({ pr, sha, verdict }) {
     event: CALLBACK_EVENT,
     sha,
     sync: "false",
+    ...(title ? { title } : {}),
   };
   return {
     init: {
@@ -240,7 +287,7 @@ export function startBuildRequest({ pr, sha, verdict }) {
  * 平台信封上的 HTTP 200 与「这一跑真起来了」毫无关系，`cnb` CLI 认不出的子命令
  * 也会退 0 打 usage（§13.6）。所以 sn 是唯一的在场证明：取不到 ⇒ 没发出去。
  *
- * @param {{ctx: {endpoint: string, repo: string, token: string, sha: string, pr: string, verdict: string}, fetchImpl?: FetchLike, log: (line: string) => void}} io
+ * @param {{ctx: {endpoint: string, repo: string, token: string, sha: string, pr: string, verdict: string, title?: string}, fetchImpl?: FetchLike, log: (line: string) => void}} io
  * @returns {Promise<string | null>} 构建号；没发出去时 null
  */
 export async function sendCallback({ ctx, fetchImpl = fetch, log }) {
