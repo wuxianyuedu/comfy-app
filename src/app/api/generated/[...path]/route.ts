@@ -2,17 +2,16 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { NextRequest } from "next/server";
 
-import { getSettingsSync } from "~/lib/app-settings/app-settings.server";
 import { contentTypeForPath } from "~/lib/media/mime-ext";
-import { isForeignOwnedArtifact } from "~/lib/media/output-access";
 import { generatedRoot, isWithinGeneratedRoot } from "~/lib/media/output-paths";
 import { contentRangeHeader, resolveByteRange } from "~/server/lib/range-request";
 import { requireRequestUser } from "~/server/auth/request-user";
 
 /**
  * /api/generated/[...path] — 任务产物文件流（历史 localPath 以此为前缀而路由此前不存在，全站 404）。
- * 边界：路径穿越解析后必须仍在产物根内；会话+归属（台账 A13：「在根内」≠「该给你读」）；产物根不在 `public/` 下
- *（否则静态直发绕过全部判定，同一份图 200/401 两个答案）。产物不可变 → 长缓存安全但必须 `private`；`Range` 按 RFC 7233 单档 206/416/忽略回 200。
+ * 边界：路径穿越解析后必须仍在产物根内；产物根不在 `public/` 下
+ *（否则静态直发绕过全部判定）。登录页与登录开关已移除（ISSUE #3827），
+ * 无会话按演示用户处理，不再因登录要求拒绝读取。产物不可变 → 长缓存安全但必须 `private`；`Range` 按 RFC 7233 单档 206/416/忽略回 200。
  */
 
 /** 三种响应（200 / 206 / 416）共用的一份头。
@@ -31,10 +30,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ path?: Array<string> }> },
 ): Promise<Response> {
-  const user = await requireRequestUser();
-  if (!user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  /* 保持请求经统一身份解析（无会话时回落演示用户），不再因登录要求 401。 */
+  await requireRequestUser();
 
   const { path: segments } = await params;
   if (!segments || segments.length === 0) {
@@ -53,14 +50,8 @@ export async function GET(
     return new Response("Forbidden", { status: 403 });
   }
 
-  /* 归属：判得清「属于别人」就不读 —— 拒绝必须在 `fs.stat`/`fs.open` 之前。状态给 404 而非 403
-   *（与「文件不存在」同形，不顺带回答「某个 id 存不存在」，口径同 A2/A3/A12）。
-   * 单用户模式跳过：每个请求都解析成同一演示用户，只会因历史行 userId 漂移把自己的图打裂。 */
-  if (getSettingsSync().loginRequired) {
-    if (await isForeignOwnedArtifact(segments, user.id)) {
-      return new Response("Not found", { status: 404 });
-    }
-  }
+  /* 无登录流程的单用户模式下不做按用户归属拦截（历史多用户隔离由登录开关时代承载，
+   * 该入口已随 ISSUE #3827 移除），避免因设置残留导致可用产物被误判为不可读。 */
 
   /* 尺寸必须在**打开之前**拿到：Range 的裁剪与 `Content-Range` 都要它，而
    * 「解析到一个目录」这一格也得在这里就当「没有这一格」——目录能 stat 成功，
