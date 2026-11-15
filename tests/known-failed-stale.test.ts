@@ -157,13 +157,12 @@ describe("登记项「还红着吗」的判决（真跑那一维）", () => {
 });
 
 describe("判据与仓库现状、提交链的接线", () => {
-  it("登记表只收「在干净 master 上复算过、确属别线红」的条目（#3978）", async () => {
+  it("当前登记表为空（这一条的常态，也是零耗时的前提）", async () => {
     const { KNOWN_FAILED_FILES } = await import("../scripts/quality-gate-shared.mjs");
-    // 登记纪律（§13.6.2 / §11.12）：每一条都必须先在干净基线上复算确证「别线的红」、
-    // 想清楚文件粒度的代价，再连理由一起登记。这里钉住当前在册的那一条与归属，
-    // 防止有人随手加一条而不去登记归属；修好后按纪律立刻删。
+    // 非空时本判据会真跑那几个文件 —— 那是设计如此，不是漂移。这里只钉住
+    // 「空是常态、且空时不该有任何条目」，避免有人随手加一条而不去登记归属。
     expect(Array.isArray(KNOWN_FAILED_FILES)).toBe(true);
-    expect(KNOWN_FAILED_FILES).toEqual(["tests/sqlite-pragma-sites.test.ts"]);
+    expect(KNOWN_FAILED_FILES).toEqual([]);
   });
 
   it("这一条真的接进了 pre-commit 的 D 组（否则判据没有执行者）", () => {
