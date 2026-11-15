@@ -321,59 +321,28 @@ function useRequestPreview(args: {
   return previewRows;
 }
 
-export function useModelTest(): ModelTestController {
-  const trpc = useTRPC();
+/** 候选 / 契约 / 适配器索引的取数与派生（§12.13 第二刀）：这一簇只读
+ *  configGet / modeContractsGet / workshopAdaptersGet 三份读数做派生，
+ *  主 hook（useModelTest）只留表单状态与动作。 */
+function useTestCatalog(args: {
+  kind: ModelTestKind;
+  mode: string;
+  selectedModel: string;
+  trpc: ReturnType<typeof useTRPC>;
+}): {
+  adapters: Array<RemoteModeAdapter>;
+  adaptersByModel: AdaptersByModel | undefined;
+  candidates: Array<TestCandidate>;
+  contract: Parameters<typeof contractTestRows>[0];
+  inputRows: Array<ModelTestInputRow>;
+  kindCandidateCount: number;
+  loading: boolean;
+  modeCandidates: Array<TestCandidate>;
+  modeTabs: Array<ModeTab>;
+} {
+  const { kind, mode, selectedModel, trpc } = args;
   const queryClient = useQueryClient();
   const configQ = useQuery(trpc.llm.configGet.queryOptions());
-  const [kind, setKindState] = useState<ModelTestKind>("image");
-  const [selectedModel, setSelectedModel] = useState("");
-  /* 模式由左栏页签直接选定（#3635）：初值与切用途时的重置都取该用途的
-   * 第一个生成类模式，不再从「选中模型的适配器」里播种 —— 模式是用户
-   * 先选的入口，模型是其后在下拉里挑的具体执行者。 */
-  const [mode, setModeState] = useState(() => defaultModeForKind("image"));
-  /* 尺寸带默认档（ISSUE #3742）：表单一打开就是最常用的 1:1 + 1K，触发器
-   * 常显摘要而不是「可选」占位。 */
-  const [values, setValues] = useState<ModelTestValues>(() =>
-    defaultSizeValues(defaultModeForKind("image")),
-  );
-  const [result, setResult] = useState<ModelTestResult>(null);
-  const [error, setError] = useState<string | null>(null);
-  /* 请求读数（ISSUE #3791）：由 onDebug 逐批追加，新一轮生成前清空。 */
-  const [debugRows, setDebugRows] = useState<Array<ApiCallDebugRow>>([]);
-  const [generatingSince, setGeneratingSince] = useState<number | null>(null);
-  /* 参考图组（#3949 需求 6/7）与取消句柄（#3949 需求 5）：各自拆到子 hook /
-   * 模块级函数（§12.13）。 */
-  const referenceGroup = useReferenceImageGroup((text) => {
-    setError(text);
-  });
-  const cancelRef = useRef<AbortController | null>(null);
-  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const busy = useBusyAction();
-
-  /* 产物原链交给系统浏览器（服务端 openExternal；免重编壳，#3791）。 */
-  const openExternalM = useMutation(trpc.setting.openExternal.mutationOptions());
-  const openExternalAction = useExternalAction({
-    target: "browser",
-    report: (kind, text) => {
-      setNotice({ kind, text });
-    },
-  });
-  const openResultInBrowser = useCallback(
-    async (url: string) => {
-      await openExternalAction.runWithTarget(url, (target) =>
-        openExternalM.mutateAsync({ url: target }),
-      );
-    },
-    [openExternalAction, openExternalM],
-  );
-
-  /* 请求读数的稳定追加器： RelayDebugSink 直接当 onDebug 用。 */
-  const appendDebug = useCallback<RelayDebugSink>((rows) => {
-    if (rows.length > 0) {
-      setDebugRows((prev) => [...prev, ...rows]);
-    }
-  }, []);
-
   const candidates = useMemo<Array<TestCandidate>>(() => {
     const raw: unknown = configQ.data?.config;
     if (!isRecord(raw) || !Array.isArray(raw.extraModels)) {
@@ -459,6 +428,81 @@ export function useModelTest(): ModelTestController {
     [adaptersQ.data],
   );
 
+  return {
+    adapters,
+    adaptersByModel: adaptersByModelQ.data,
+    candidates,
+    contract,
+    inputRows,
+    kindCandidateCount,
+    loading: configQ.isLoading,
+    modeCandidates,
+    modeTabs,
+  };
+}
+
+export function useModelTest(): ModelTestController {
+  const trpc = useTRPC();
+  const [kind, setKindState] = useState<ModelTestKind>("image");
+  const [selectedModel, setSelectedModel] = useState("");
+  /* 模式由左栏页签直接选定（#3635）：初值与切用途时的重置都取该用途的
+   * 第一个生成类模式，不再从「选中模型的适配器」里播种 —— 模式是用户
+   * 先选的入口，模型是其后在下拉里挑的具体执行者。 */
+  const [mode, setModeState] = useState(() => defaultModeForKind("image"));
+  /* 尺寸带默认档（ISSUE #3742）：表单一打开就是最常用的 1:1 + 1K，触发器
+   * 常显摘要而不是「可选」占位。 */
+  const [values, setValues] = useState<ModelTestValues>(() =>
+    defaultSizeValues(defaultModeForKind("image")),
+  );
+  const [result, setResult] = useState<ModelTestResult>(null);
+  const [error, setError] = useState<string | null>(null);
+  /* 请求读数（ISSUE #3791）：由 onDebug 逐批追加，新一轮生成前清空。 */
+  const [debugRows, setDebugRows] = useState<Array<ApiCallDebugRow>>([]);
+  const [generatingSince, setGeneratingSince] = useState<number | null>(null);
+  /* 参考图组（#3949 需求 6/7）与取消句柄（#3949 需求 5）：各自拆到子 hook /
+   * 模块级函数（§12.13）。 */
+  const referenceGroup = useReferenceImageGroup((text) => {
+    setError(text);
+  });
+  const cancelRef = useRef<AbortController | null>(null);
+  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const busy = useBusyAction();
+
+  /* 产物原链交给系统浏览器（服务端 openExternal；免重编壳，#3791）。 */
+  const openExternalM = useMutation(trpc.setting.openExternal.mutationOptions());
+  const openExternalAction = useExternalAction({
+    target: "browser",
+    report: (kind, text) => {
+      setNotice({ kind, text });
+    },
+  });
+  const openResultInBrowser = useCallback(
+    async (url: string) => {
+      await openExternalAction.runWithTarget(url, (target) =>
+        openExternalM.mutateAsync({ url: target }),
+      );
+    },
+    [openExternalAction, openExternalM],
+  );
+
+  /* 请求读数的稳定追加器： RelayDebugSink 直接当 onDebug 用。 */
+  const appendDebug = useCallback<RelayDebugSink>((rows) => {
+    if (rows.length > 0) {
+      setDebugRows((prev) => [...prev, ...rows]);
+    }
+  }, []);
+
+  /* 候选 / 契约 / 适配器索引：取数与派生收在 useTestCatalog（§12.13 第二刀）。 */
+  const {
+    adapters,
+    adaptersByModel,
+    inputRows,
+    kindCandidateCount,
+    loading,
+    modeCandidates,
+    modeTabs,
+  } = useTestCatalog({ kind, mode, selectedModel, trpc });
+
   const setKind = useCallback(
     (next: ModelTestKind) => {
       setKindState(next);
@@ -481,8 +525,7 @@ export function useModelTest(): ModelTestController {
       /* 模式收窄后，当前选中的模型可能没配新模式的适配器（不支持该模式）
        * → 清掉选择，让下拉回到占位态，而不是留着「测的不是这个模式」的选中。 */
       if (selectedModel !== "") {
-        const supports =
-          adaptersByModelQ.data?.[selectedModel]?.some((a) => a.mode === next) ?? false;
+        const supports = adaptersByModel?.[selectedModel]?.some((a) => a.mode === next) ?? false;
         if (!supports) {
           setSelectedModel("");
         }
@@ -493,7 +536,7 @@ export function useModelTest(): ModelTestController {
       setDebugRows([]);
       referenceGroup.reset();
     },
-    [adaptersByModelQ.data, referenceGroup, selectedModel],
+    [adaptersByModel, referenceGroup, selectedModel],
   );
 
   const selectModel = useCallback(
@@ -721,7 +764,7 @@ export function useModelTest(): ModelTestController {
     generate,
     openBusy: openExternalAction.busy,
     openResultInBrowser,
-    loading: configQ.isLoading,
+    loading,
     selectedModel,
     setInputFromFile,
     setKind,
