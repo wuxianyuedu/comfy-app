@@ -124,6 +124,148 @@ export type ModelTestController = {
   values: ModelTestValues;
 };
 
+/** 参考图组（#3949 需求 6/7）的子 hook：多张取值（data URL）+ 追加 / 移除 /
+ *  清空。从主 hook 拆出（规范 §12.13：useModelTest 越过函数长度硬闸前的第一刀）。 */
+function useReferenceImageGroup(onError: (text: string) => void): {
+  add: (files: Array<File>) => Promise<void>;
+  images: Array<string>;
+  remove: (index: number) => void;
+  reset: () => void;
+} {
+  const [images, setImages] = useState<Array<string>>([]);
+  const add = useCallback(
+    async (files: Array<File>) => {
+      await runAsyncAction(
+        async () => {
+          const urls: Array<string> = [];
+          for (const file of files) {
+            // oxlint-disable-next-line no-await-in-loop -- 顺序读文件，失败即停
+            urls.push(await readFileAsDataUrl(file));
+          }
+          /* 上限 8 张：与 relay 侧的宽松界一致。 */
+          setImages((prev) => [...prev, ...urls].slice(0, 8));
+          return { ok: true as const };
+        },
+        {
+          report: (k, text) => {
+            if (k === "err") {
+              onError(text);
+            }
+          },
+          failureText: "读取参考图失败",
+        },
+      );
+    },
+    [onError],
+  );
+  const remove = useCallback((index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+  const reset = useCallback(() => {
+    setImages([]);
+  }, []);
+  return { add, images, remove, reset };
+}
+
+/** 视频任务的轮询循环（#3949 需求 5 起带取消信号）：3s 一轮 / 10 分钟上限，
+ *  与 VideoStudio 同一节奏。用户 abort 后下一轮立即以「已取消生成」落定。 */
+async function pollVideoUntilDone(args: {
+  mode: string;
+  model: string;
+  onDebug: RelayDebugSink;
+  signal: AbortSignal;
+  taskId: string;
+}): Promise<{ kind: "video"; url: string }> {
+  const deadline = Date.now() + POLL_DEADLINE_MS;
+  while (Date.now() < deadline) {
+    if (args.signal.aborted) {
+      throw new Error("已取消生成");
+    }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一轮轮询用前一轮的结果
+    await sleep(POLL_INTERVAL_MS);
+    if (args.signal.aborted) {
+      throw new Error("已取消生成");
+    }
+    // oxlint-disable-next-line no-await-in-loop -- 同上
+    const round = await apiPollVideo(args.taskId, {
+      debug: true,
+      mode: args.mode,
+      model: args.model,
+      onDebug: args.onDebug,
+      signal: args.signal,
+    });
+    if (round.url !== undefined && round.url !== "") {
+      return { kind: "video", url: round.url };
+    }
+    if (!round.pending) {
+      throw new Error("API 视频任务已结束但未返回视频");
+    }
+  }
+  throw new Error("API 视频任务轮询超时（约 10 分钟）—— 可稍后重试");
+}
+
+/** 请求体组装的唯一入口（#3949 需求 8）：本地提交行、生成前预览、真实调用
+ *  三处共用同一份组装结果 —— 三处各拼一套必然漂移。 */
+function buildRequestBodies(input: {
+  kind: ModelTestKind;
+  mode: string;
+  model: string;
+  referenceImages: Array<string>;
+  values: ModelTestValues;
+}): {
+  imageBody: ReturnType<typeof assembleImageRequest> | null;
+  videoBody: ReturnType<typeof assembleVideoRequest> | null;
+} {
+  return {
+    imageBody:
+      input.kind === "image"
+        ? assembleImageRequest({
+            mode: input.mode,
+            model: input.model,
+            referenceImages: input.referenceImages,
+            values: input.values,
+          })
+        : null,
+    videoBody:
+      input.kind === "video"
+        ? assembleVideoRequest({ mode: input.mode, model: input.model, values: input.values })
+        : null,
+  };
+}
+
+/** 本地提交 / 生成前预览共用的那一行请求读数（端点固定为 relay）。
+ *  形状同 `ApiCallDebugRow`（ISSUE #3791 / #3949 需求 8）。 */
+function relayDebugRow(kind: ModelTestKind, body: Record<string, unknown>): ApiCallDebugRow {
+  return {
+    body: debugBodyOf({ kind, debug: true, ...body }),
+    durationMs: null,
+    endpoint: "/api/workshop-api/generate",
+    excerpt: null,
+    ok: true,
+    phase: "relay",
+    status: null,
+  };
+}
+
+/** 必备口缺漏清单（#3949 需求 6/7 起：参考图行按数组判空，其余按单值判空）。 */
+function missingRequiredLabels(
+  rows: ReadonlyArray<ModelTestInputRow>,
+  values: ModelTestValues,
+  referenceCount: number,
+): Array<string> {
+  return rows
+    .filter((row) => row.required && !row.disabled && row.valueKey !== null)
+    .filter((row) => {
+      if (row.id === "reference-image") {
+        /* 参考图行（#3949 需求 6/7）的值在数组里，不看 values.image。 */
+        return referenceCount === 0;
+      }
+      const key = row.valueKey;
+      return key !== null && (values[key]?.trim() ?? "") === "";
+    })
+    .map((row) => row.label);
+}
+
 export function useModelTest(): ModelTestController {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -144,10 +286,11 @@ export function useModelTest(): ModelTestController {
   /* 请求读数（ISSUE #3791）：由 onDebug 逐批追加，新一轮生成前清空。 */
   const [debugRows, setDebugRows] = useState<Array<ApiCallDebugRow>>([]);
   const [generatingSince, setGeneratingSince] = useState<number | null>(null);
-  /* 参考图组（#3949 需求 6/7）：契约口 reference-image 的多张取值。 */
-  const [referenceImages, setReferenceImages] = useState<Array<string>>([]);
-  /* 本轮生成的取消句柄（#3949 需求 5）：cancelGenerate 中止它，fetch 与
-   * 轮询随即中断。 */
+  /* 参考图组（#3949 需求 6/7）与取消句柄（#3949 需求 5）：各自拆到子 hook /
+   * 模块级函数（§12.13）。 */
+  const referenceGroup = useReferenceImageGroup((text) => {
+    setError(text);
+  });
   const cancelRef = useRef<AbortController | null>(null);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const busy = useBusyAction();
@@ -261,18 +404,21 @@ export function useModelTest(): ModelTestController {
     [adaptersQ.data],
   );
 
-  const setKind = useCallback((next: ModelTestKind) => {
-    setKindState(next);
-    setSelectedModel("");
-    const nextMode = defaultModeForKind(next);
-    setModeState(nextMode);
-    setValues(defaultSizeValues(nextMode));
-    setResult(null);
-    setError(null);
-    /* 请求详情按模式 / 模型隔离（#3949 需求 8）：切走后上一份读数是干扰信息。 */
-    setDebugRows([]);
-    setReferenceImages([]);
-  }, []);
+  const setKind = useCallback(
+    (next: ModelTestKind) => {
+      setKindState(next);
+      setSelectedModel("");
+      const nextMode = defaultModeForKind(next);
+      setModeState(nextMode);
+      setValues(defaultSizeValues(nextMode));
+      setResult(null);
+      setError(null);
+      /* 请求详情按模式 / 模型隔离（#3949 需求 8）：切走后上一份读数是干扰信息。 */
+      setDebugRows([]);
+      referenceGroup.reset();
+    },
+    [referenceGroup],
+  );
 
   const setMode = useCallback(
     (next: string) => {
@@ -290,9 +436,9 @@ export function useModelTest(): ModelTestController {
       setError(null);
       /* 请求详情按模式隔离（#3949 需求 8）：不残留上一个模式的读数。 */
       setDebugRows([]);
-      setReferenceImages([]);
+      referenceGroup.reset();
     },
-    [adaptersByModelQ.data, selectedModel],
+    [adaptersByModelQ.data, referenceGroup, selectedModel],
   );
 
   const selectModel = useCallback(
@@ -304,9 +450,9 @@ export function useModelTest(): ModelTestController {
       setError(null);
       /* 请求详情按模型隔离（#3949 需求 8）：不残留上一个模型的读数。 */
       setDebugRows([]);
-      setReferenceImages([]);
+      referenceGroup.reset();
     },
-    [mode],
+    [mode, referenceGroup],
   );
 
   const patchValue = useCallback((type: keyof ModelTestValues, value: string) => {
@@ -342,45 +488,30 @@ export function useModelTest(): ModelTestController {
     );
   }, []);
 
-  /** 追加参考图（#3949 需求 6/7）：逐张读成 data URL 落组，上限 8 张。 */
-  const addReferenceImages = useCallback(async (files: Array<File>) => {
-    await runAsyncAction(
-      async () => {
-        const urls: Array<string> = [];
-        for (const file of files) {
-          // oxlint-disable-next-line no-await-in-loop -- 顺序读文件，失败即停
-          urls.push(await readFileAsDataUrl(file));
-        }
-        setReferenceImages((prev) => [...prev, ...urls].slice(0, 8));
-        return { ok: true as const };
-      },
-      {
-        report: (k, text) => {
-          if (k === "err") {
-            setError(text);
-          }
-        },
-        failureText: "读取参考图失败",
-      },
-    );
-  }, []);
+  const addReferenceImages = useCallback(
+    (files: Array<File>) => referenceGroup.add(files),
+    [referenceGroup],
+  );
 
-  const removeReferenceImage = useCallback((index: number) => {
-    setReferenceImages((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  const removeReferenceImage = useCallback(
+    (index: number) => {
+      referenceGroup.remove(index);
+    },
+    [referenceGroup],
+  );
 
   /* 请求体组装的唯一入口：本地提交行、生成前预览、真实调用三处共用同一份
    * 组装结果（#3949 需求 8 —— 三处各拼一套必然漂移）。 */
   const buildBodies = useCallback(
-    () => ({
-      imageBody:
-        kind === "image"
-          ? assembleImageRequest({ model: selectedModel, mode, values, referenceImages })
-          : null,
-      videoBody:
-        kind === "video" ? assembleVideoRequest({ model: selectedModel, mode, values }) : null,
-    }),
-    [kind, mode, referenceImages, selectedModel, values],
+    () =>
+      buildRequestBodies({
+        kind,
+        mode,
+        model: selectedModel,
+        referenceImages: referenceGroup.images,
+        values,
+      }),
+    [kind, mode, referenceGroup.images, selectedModel, values],
   );
 
   const generate = useCallback(async () => {
@@ -395,17 +526,7 @@ export function useModelTest(): ModelTestController {
     /* 必备口校验（ISSUE #3778）：契约标了必备、通道又承接得住的行，空着就
      * 拦下 —— 与「必备 / 可选」标识同一份读数，别让用户点生成才被上游打回。
      * 参考图行（#3949 需求 6/7）按数组判空。 */
-    const missing = inputRows
-      .filter((row) => row.required && !row.disabled && row.valueKey !== null)
-      .filter((row) => {
-        if (row.id === "reference-image") {
-          /* 参考图行（#3949 需求 6/7）的值在数组里，不看 values.image。 */
-          return referenceImages.length === 0;
-        }
-        const key = row.valueKey;
-        return key !== null && (values[key]?.trim() ?? "") === "";
-      })
-      .map((row) => row.label);
+    const missing = missingRequiredLabels(inputRows, values, referenceGroup.images.length);
     if (missing.length > 0) {
       setError(`请填写必备输入：${missing.join("、")}`);
       return;
@@ -418,15 +539,7 @@ export function useModelTest(): ModelTestController {
      * 后面。 */
     const { imageBody, videoBody } = buildBodies();
     const relayBody = imageBody ?? videoBody ?? {};
-    const localRow: ApiCallDebugRow = {
-      body: debugBodyOf({ kind, debug: true, ...relayBody }),
-      durationMs: null,
-      endpoint: "/api/workshop-api/generate",
-      excerpt: null,
-      ok: true,
-      phase: "relay",
-      status: null,
-    };
+    const localRow = relayDebugRow(kind, relayBody);
     setDebugRows([localRow]);
     /* 取消句柄（#3949 需求 5）：生成期间可随时 cancelGenerate() 中止等待与轮询。 */
     const controller = new AbortController();
@@ -458,33 +571,15 @@ export function useModelTest(): ModelTestController {
               if (taskId === undefined || taskId === "") {
                 throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
               }
-              const deadline = Date.now() + POLL_DEADLINE_MS;
-              while (Date.now() < deadline) {
-                if (controller.signal.aborted) {
-                  throw new Error("已取消生成");
-                }
-                // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一轮轮询用前一轮的结果
-                await sleep(POLL_INTERVAL_MS);
-                if (controller.signal.aborted) {
-                  throw new Error("已取消生成");
-                }
-                // oxlint-disable-next-line no-await-in-loop -- 同上
-                const round = await apiPollVideo(taskId, {
-                  debug: true,
-                  mode,
-                  model: selectedModel,
-                  onDebug: appendDebug,
-                  signal: controller.signal,
-                });
-                if (round.url !== undefined && round.url !== "") {
-                  setResult({ kind: "video", url: round.url });
-                  return { ok: true as const };
-                }
-                if (!round.pending) {
-                  throw new Error("API 视频任务已结束但未返回视频");
-                }
-              }
-              throw new Error("API 视频任务轮询超时（约 10 分钟）—— 可稍后重试");
+              const finished = await pollVideoUntilDone({
+                mode,
+                model: selectedModel,
+                onDebug: appendDebug,
+                signal: controller.signal,
+                taskId,
+              });
+              setResult(finished);
+              return { ok: true as const };
             }
             throw new Error("未知的生成用途");
           } finally {
@@ -509,7 +604,7 @@ export function useModelTest(): ModelTestController {
     inputRows,
     kind,
     mode,
-    referenceImages,
+    referenceGroup.images,
     selectedModel,
     values,
   ]);
@@ -527,15 +622,7 @@ export function useModelTest(): ModelTestController {
     }
     const { imageBody, videoBody } = buildBodies();
     const relayBody = imageBody ?? videoBody ?? {};
-    return {
-      body: debugBodyOf({ kind, debug: true, ...relayBody }),
-      durationMs: null,
-      endpoint: "/api/workshop-api/generate",
-      excerpt: null,
-      ok: true,
-      phase: "relay",
-      status: null,
-    };
+    return relayDebugRow(kind, relayBody);
   }, [buildBodies, busy.busy, kind, selectedModel]);
 
   return {
@@ -548,7 +635,7 @@ export function useModelTest(): ModelTestController {
     generating: busy.busy,
     generatingSince,
     cancelGenerate,
-    referenceImages,
+    referenceImages: referenceGroup.images,
     addReferenceImages,
     removeReferenceImage,
     previewRow,
