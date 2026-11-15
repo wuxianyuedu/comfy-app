@@ -373,8 +373,7 @@ const GA_PR_INFRA_STEPS: ReadonlyArray<string> = [
   "失败时上传诊断产物",
   "把结论送回 CNB",
   "把 GA 判红日志正文搬到 CNB",
-  "记下 PR 标题（自动档）",
-  "按需档补 PR 标题",
+  "取 PR 标题（写进 GITHUB_ENV）",
 ];
 
 /**
@@ -1250,6 +1249,26 @@ export function pipelineLockKeyTemplate(text: string): string | null {
 const LOCK_KEY_ALLOWED_VARS = ["CNB_PULL_REQUEST_IID"] as const;
 
 /**
+ * `lockClassViolations` 的 R2 用它两组**必然不同**的取值各代一次 `lock.key`：
+ * 两代结果相同 = 那个变量根本没参与分锁（锁键退化成共用一把）。
+ *
+ * 白名单（`LOCK_KEY_ALLOWED_VARS`）管的是 `.common` 那条模板 —— 它的语义面是
+ * 「PR 之间不许互掐」，只认 `CNB_PULL_REQUEST_IID`。**类锁**是另一回事：它按
+ * 「同一件事」分（ISSUE #3924 的 `ga-verdict-$CNB_COMMIT` 按绑定的 sha 分）。
+ * 变量名不在这里点名，只要求「换一组取值、key 就换」—— 判的是形状，不是词表。
+ */
+const LOCK_KEY_PROBE_VARS: [Record<string, string>, Record<string, string>] = [
+  {
+    CNB_COMMIT: "1111111111111111111111111111111111111111",
+    CNB_PULL_REQUEST_IID: "1980",
+  },
+  {
+    CNB_COMMIT: "2222222222222222222222222222222222222222",
+    CNB_PULL_REQUEST_IID: "1982",
+  },
+];
+
+/**
  * 把 `lock.key` 原文按一次「事件 + 上下文」跑出**平台会算出来的那个 key**：只看原文判不出「两条 PR 会不会撞」，必须把变量代进去。
  * 与官方 `build/env.md` §变量替换同义：`$NAME` / `${NAME}` 都替换，无值换成空串；**查不到的变量按空串算**，于是平台不认识的变量会表现为「key 退化共用」，判据当场点名。
  * @param template `pipelineLockKeyTemplate()` 的返回值 @param vars 有值的变量（没列出的 = 无值）@returns 平台算出来的锁键
@@ -1432,15 +1451,18 @@ export function lockClassViolations(text: string, prIid = "1982"): Array<string>
         `锁 *${row.lockRef} 没有显式写 cancel-in-progress —— 漏写与「有意排队」在配置里长得一样，重复排队就收不成一条（要排队的那一档写 false 并说明理由）`,
       );
     }
-    /* R2：类锁的 key 必须是字面量。
-     * 显式例外（ISSUE #3964）：`lock_ga_verdict` 的 key 刻意带 `$CNB_COMMIT`
-     * （ISSUE #3924：按绑定 sha 分锁，防两条不同 PR 的 GA 回调互掐）。R2 防的是
-     * 「变量在某个事件上无值 ⇒ 退化成共用一把」，而 GA 判决回调只跑在 push 事件上、
-     * `CNB_COMMIT` 在那条 build 上恒有值（.cnb.yml 锁块头注记了实测 sha_check=match）
-     * —— 退化的前提不成立。除此之外的变量 key 照旧判红。 */
-    if (def.key.includes("$") && def.key !== "ga-verdict-$CNB_COMMIT") {
+    /* R2 的「key 不许带变量」这一半，判的是**退不退化**，不是「有没有 `$`」：
+     * 原样带 `$` 不等于退化（ISSUE #3924 的 `ga-verdict-$CNB_COMMIT` 是刻意的按 sha 分锁），
+     * 而「无值时会不会塌成共用一把」实测不出来 —— 要代一遍。用两组**必然不同**的取值
+     * 各代一次比结果：两代相同、且其中一代产出了字面量 key，就说明变量在缺值的那一侧
+     * 白留了一个 `$`，锁键跟着退化成共用（#1981 那条教训的另一面）。
+     * 原来的写法是 `def.key.includes("$")` 一刀切，把「按 sha / 按 PR 编号分锁」这一族
+     * 正确用法一起判红 —— 于是干净 master 上恒红（ISSUE #3982）。 */
+    const keyedA = resolveLockKey(def.key, LOCK_KEY_PROBE_VARS[0]);
+    const keyedB = resolveLockKey(def.key, LOCK_KEY_PROBE_VARS[1]);
+    if (keyedA === keyedB && (def.key.includes("$") || keyedA.includes("$"))) {
       bad.push(
-        `锁 *${row.lockRef} 的 key「${def.key}」带变量 —— 变量在某个事件上无值就退化成共用一把（#1981 那条教训的另一面）`,
+        `锁 *${row.lockRef} 的 key「${def.key}」带变量但代出来的结果与取值无关（两代都是「${keyedA}」）—— 变量在某个事件上无值就退化成共用一把（#1981 那条教训的另一面）`,
       );
     }
     /* R4：不许等于退化形状，也不许等于 PR 那把的形状。 */
@@ -2812,12 +2834,22 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const pushWaitFalse = fixture.replace("  wait: true\n", "  wait: false\n");
     expect(lockClassViolations(pushWaitFalse).join("\n")).toContain("没有写 wait: true");
 
-    // ④ R2 的后半：key 里放进变量 ⇒ 换个事件它就无值，退化这件事又回来了。
+    /* ④ R2 的后半：key 里放进的变量**不参与分锁** ⇒ 换一组取值 key 还是同一个，
+     * 退化这件事又回来了。判的是「两代是否相同」，不是「有没有 `$`」（ISSUE #3982）：
+     * 这里刻意用一个平台不认识的变量 —— 它在任何事件上都无值，两代必然相同。 */
     const templated = fixture.replace(
       "  key: daily\n  cancel-in-progress: true",
-      "  key: daily-$CNB_BRANCH\n  cancel-in-progress: true",
+      "  key: daily-$CNB_UNKNOWN_VAR\n  cancel-in-progress: true",
     );
-    expect(lockClassViolations(templated).join("\n")).toContain("带变量");
+    expect(lockClassViolations(templated).join("\n")).toContain("带变量但代出来的结果与取值无关");
+    /* ④′ 反向：变量**真的**参与分锁时不许判红 —— `$CNB_COMMIT` 不是
+     * `LOCK_KEY_ALLOWED_VARS` 里的名字，但按 sha 分锁正是 #3924 要的形状。
+     * 一刀切 `includes("$")` 会把这一族正确用法判红（干净 master 恒红的原地）。 */
+    const shaScoped = fixture.replace(
+      "  key: daily\n  cancel-in-progress: true",
+      "  key: daily-$CNB_COMMIT\n  cancel-in-progress: true",
+    );
+    expect(lockClassViolations(shaScoped)).toEqual([]);
 
     // ⑤ R4 / R5：R4 —— 类锁写成那个退化形状本身；R5 —— PR 那把不再随编号变。
     const degenerate = fixture.replace(

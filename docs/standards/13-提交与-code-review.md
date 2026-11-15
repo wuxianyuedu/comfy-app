@@ -10187,8 +10187,8 @@ fail-closed 语义与 5m 预算一字未动 —— 迁歪的表现是那格红�
 | 面 | 动作 |
 | --- | --- |
 | `scripts/ci/ci-ga-verdict-callback.mjs` | 新增 `buildTitle(title, pr)` → `<标题> (#<号>)`（空白折叠成单行、超长截断、号不是数字就不拼号）+ `resolveCallbackContext()` 读 `GA_PR_TITLE` / `--title`；**拼不出来就不写 `title` 键**（回落平台缺省，不发明「无标题」这一形态） |
-| `.github/workflows/pr-gate.yml` | 收尾 job 前加两步把标题写进 `GITHUB_ENV`：自动档（`repository_dispatch`）读 payload 的 `pull_request.title`；按需档（`workflow_dispatch`，#3667）**没有 payload** ⇒ 走 `scripts/ci-ga-verdict-title.mjs` 站内读 `GET /{repo}/-/pulls/{n}` |
-| 判据 | `tests/ci-ga-verdict-callback.test.ts`（拼装 / 不写键 / 号非数字）+ `tests/ci-ga-verdict-title.test.ts`（两条形态写**同一个键**、取不到一律退 2 且一个键都不写）；`tests/no-platform-ci-config.test.ts` 的 `GA_PR_INFRA_STEPS` 登记那两个新 step（它们是**判决的显示面**，一步也不判红） |
+| `.github/workflows/pr-gate.yml` | 收尾 job 前**一步**把标题写进 `GITHUB_ENV`（`取 PR 标题（写进 GITHUB_ENV）`，入口唯一：`scripts/ci/ci-ga-verdict-title.mjs`）。⚠️ 第一版写成「自动档读 `pull_request.title` / 按需档读 API」两步 —— 前者的判据根本不存在，#3980 已订正为「读 `client_payload.pr_title`」，见 §13.5.39.2 |
+| 判据 | `tests/ci-ga-verdict-callback.test.ts`（拼装 / 不写键 / 号非数字）+ `tests/ci-ga-verdict-title.test.ts`（三条路径写**同一个键**、`pull_request.title` **不在取值面**、取不到一律退 2 且一个键都不写）；`tests/no-platform-ci-config.test.ts` 的 `GA_PR_INFRA_STEPS` 登记那个 step（它是**判决的显示面**，一步也不判红） |
 
 **为什么走 `GITHUB_ENV` 而不是各步各读一遍**：两条触发形态的标题来源不同，
 但下游只认一个键 —— 否则「按需档的回调又变回无标题」是只修一半的那种形态
@@ -10198,6 +10198,38 @@ fail-closed 语义与 5m 预算一字未动 —— 迁歪的表现是那格红�
 `main()` 取不到标题一律退 2 并说清是哪一件（没有 `GITHUB_ENV` / 号不是数字 / 没令牌 /
 平台非 200 / 请求抛异常 / 标题空白），而 `把结论送回 CNB` 那一步的退码口径一字未动 ——
 缺标题只让那条 build 回落平台缺省。
+
+#### 13.5.39.2 「还是都叫 API custom event」：取了一个本 workflow 上不存在的上下文字段（ISSUE #3980）
+
+§13.5.39.1 合并后，构建历史里 100% 的 `api_trigger_ga_verdict` build 仍是
+`API custom event`（#3980 的现场读数：改动合并后 5 条回调 build 的 `title` 逐条都是缺省值）。
+根因不是「请求体没送 `title`」——那一半已经修好了——而是**标题根本没取到**：
+
+| 读数 | 内容 |
+| --- | --- |
+| 触发面 | `pr-gate.yml` 的 `on:` 只有 `repository_dispatch` / `workflow_dispatch`，**没有 `pull_request`** |
+| 后果 ① | 第一步 `记下 PR 标题（自动档）` 的 `if: github.event.pull_request.title` 恒假 ⇒ 这一步**从来没执行过** |
+| 后果 ② | 第二步 `if: !github.event.pull_request.title` 恒真，但 `CNB_PULL_REQUEST_IID` 表达式与它同一前提 —— 号取不到 ⇒ 站内读那一步也空转 |
+| 真正的标题在哪 | 镜像格的 `client_payload.pr_title`（`scripts/ci-mirror-payload.mjs` 的 `dispatchPayload`），`run-name` 用的就是它 |
+
+**判据缺失是病灶**：`tests/ci-ga-verdict-title.test.ts` 当时只钉「两个触发形态写同一个键 /
+取不到退 2」，一次也没问「自动档那一格的输入在这个 workflow 上存不存在」——
+所以一条**恒假的分支**照样是绿的。
+
+**修法（一条路一个入口）**：`scripts/ci-ga-verdict-title.mjs` 内部依次回落
+① `GA_PR_TITLE`（显式注入）→ ② `GITHUB_EVENT_PATH` 的 `client_payload.pr_title`
+→ ③ 站内 `GET /{repo}/-/pulls/{n}`；workflow 侧两步并成一步（`取 PR 标题（写进 GITHUB_ENV）`，
+`if: always()` + `continue-on-error`）。payload 里的 `pr_number` 顺带当站内读的号 ——
+不再依赖「表达式算得出 PR 号」这个同一前提。
+
+**回归判据**：`titleFromEvent` 只认 `client_payload.pr_title`，并有用例明写
+`{pull_request: {title: …}}` **取不到**（钉死「不再读那个字段」这一条）；
+`titleFromPull` 兼容 `pull_number` / `number` 两种信封。
+
+**边界**：仍是显示面 —— 取不到标题只让那一列回落缺省，判决退码与 `GA_VERDICT` 一字未动。
+
+**真验**：下一次 PR 的回调 build 的 `title` 应形如 `<PR 标题> (#<号>)`；
+构建历史的读数是 `cnb build get-build-logs --repo moon-read/comfy-app-t3 --event api_trigger_ga_verdict`。
 
 ### 13.6 分支与合并策略
 

@@ -564,6 +564,45 @@ async function execFilm(
   run: ProductionRun,
 ): Promise<ExecResult> {
   if (run.filmStartedAt) {
+    /* 认领后崩溃/窗口中断的恢复（ISSUE #3962）：`filmStartedAt` 已写但 film 可能
+     * 尚未进入可恢复生成态（未创建、或停在 PARSING/未启动）。无可恢复实体时
+     * 清理认领允许规划器重试；已在生成/合成/完成或已终态失败时按当前实体收口。 */
+    const { filmRepository } = await import("~/lib/core/repository");
+    const latest = await filmRepository.findLatestByProjectId(userId, projectId);
+    const cleared = { ...run, filmStartedAt: "" };
+    if (latest === null) {
+      await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
+      return {
+        ok: false,
+        error: "成片启动中断（未创建影片实体），已释放起片认领，请重试",
+        run: cleared,
+      };
+    }
+    if (latest.status === "PARSING") {
+      try {
+        await filmRepository.markFailed(latest.id, "成片启动中断（影片未进入可恢复生成态）");
+      } catch {
+        // 补偿尽力而为；仍需释放认领避免永久卡死。
+      }
+      await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
+      return {
+        ok: false,
+        error: "成片启动中断（影片未进入可恢复生成态），已释放起片认领，请重试",
+        run: cleared,
+      };
+    }
+    if (latest.status === "FAILED" || latest.status === "CANCELLED") {
+      await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
+      return {
+        ok: false,
+        error: "成片生成未完成（影片已终止），已释放起片认领，请重试",
+        run: cleared,
+      };
+    }
+    if (latest.status === "DONE") {
+      await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
+      return { ok: true, run: cleared, skipLog: true, summary: "成片已完成，等待状态同步" };
+    }
     return { ok: true, skipLog: true, summary: "成片生成中（等待合成完成）" };
   }
   // 服务端直接调成片编排（引擎在服务器上跑，不能用浏览器端的 render-film-client）。

@@ -646,3 +646,56 @@ describe("advanceRunLoop · 用户意图位不被引擎回写（#3893）", () =>
     expect(run.error ?? null).toBeNull();
   });
 });
+
+describe("advanceRunLoop · execFilm 起片恢复（#3962）", () => {
+  it("filmStartedAt 已认领但无影片实体：释放认领并失败可重试", async () => {
+    const { createFilmFromProject, startFilm } = await import("~/server/film/orchestrator");
+    vi.mocked(createFilmFromProject).mockClear();
+    vi.mocked(startFilm).mockClear();
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0, imageUrl: "/x.png" }],
+        rendered: false,
+      },
+      { status: "running", approvalMode: "auto", filmStartedAt: "2026-01-01T00:00:00.000Z" },
+    );
+    await advanceRunLoop(USER, PROJ);
+    expect(createFilmFromProject).not.toHaveBeenCalled();
+    expect(startFilm).not.toHaveBeenCalled();
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.filmStartedAt).toBe("");
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("未创建影片实体");
+  });
+
+  it("filmStartedAt 已认领但影片停在 PARSING：判失败并释放认领", async () => {
+    const { filmRepository } = await import("~/lib/core/repository");
+    await filmRepository.create({
+      userId: USER,
+      projectId: PROJ,
+      title: "片",
+      script: "",
+      type: "short_video",
+      size: "{}",
+      fps: 16,
+      framesPerShot: 49,
+      subtitleOn: true,
+    });
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0, imageUrl: "/x.png" }],
+        rendered: false,
+      },
+      { status: "running", approvalMode: "auto", filmStartedAt: "2026-01-01T00:00:00.000Z" },
+    );
+    await advanceRunLoop(USER, PROJ);
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.filmStartedAt).toBe("");
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("未进入可恢复生成态");
+  });
+});

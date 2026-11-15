@@ -60,6 +60,51 @@ export class ProductionRepository extends DrizzleRepository<Production> {
   }
 
   /**
+   * 控制路由的原子读-改-写（ISSUE #3960 / #3850）：在 immediate 事务内重读并归一
+   * 当前 `run`，交给 `mutate` 计算控制意图，再写回。
+   *
+   * - 行不存在 → `null`（调用方映射为既有错误语义）。
+   * - `mutate` 返回 `null` → 不写库，视为 no-op，回显事务内读到的当前 run。
+   * - `mutate` 返回 `{ next }` → 写回 `next`（调用方负责从 `current` 保留引擎
+   *   进度字段，仅变更控制字段），回显写入后的 run。
+   */
+  async mutateRun<TMeta>(
+    userId: string,
+    id: string,
+    mutate: (current: ProductionRun) => { meta: TMeta; next: ProductionRun } | null,
+  ): Promise<{
+    current: ProductionRun;
+    meta: TMeta | undefined;
+    next: ProductionRun;
+    wrote: boolean;
+  } | null> {
+    return db.transaction(
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(production)
+          .where(and(eq(production.id, id), eq(production.userId, userId)))
+          .limit(1);
+        const row = rows[0];
+        if (!row) {
+          return null;
+        }
+        const current = normalizeProductionRun(row.run);
+        const decided = mutate(current);
+        if (decided === null) {
+          return { current, meta: undefined, next: current, wrote: false };
+        }
+        await tx
+          .update(production)
+          .set({ run: decided.next, updatedAt: new Date() })
+          .where(and(eq(production.id, id), eq(production.userId, userId)));
+        return { current, meta: decided.meta, next: decided.next, wrote: true };
+      },
+      { behavior: "immediate" },
+    );
+  }
+
+  /**
    * 引擎回写 run 的原子落库（ISSUE #3960 / #3850）：在 immediate 事务内重读当前
    * `run` 并按控制态优先级合并后写回，收口 `saveRun` 原先「读 → 分支 → 整列写」
    * 的跨语句 TOCTOU。
