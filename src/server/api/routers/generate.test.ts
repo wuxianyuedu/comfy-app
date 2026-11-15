@@ -41,7 +41,12 @@ vi.mock("~/lib/comfyui/executor-continuation", async () => {
 import { createCallerFactory } from "~/server/api/trpc";
 import { asRecord } from "~/lib/is-record";
 import { generateRouter } from "~/server/api/routers/generate";
-import { getTestDb, seedUser, seedWorkflowTemplate } from "../../../../tests/helpers/test-db";
+import {
+  getTestDb,
+  seedTask,
+  seedUser,
+  seedWorkflowTemplate,
+} from "../../../../tests/helpers/test-db";
 import { errorEnvelope, makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(generateRouter);
@@ -126,6 +131,32 @@ describe("generate.generate（工作流库工作流）", () => {
     const rowB = tdb.$tables.tasks.find((t) => t.id === bare.taskId);
     expect(rowB?.projectId).toBeNull();
     expect(rowB?.shotId).toBeNull();
+  });
+
+  it("同镜头已有活动任务时拒绝重复生成（#4001）", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "wf-lib",
+      userId: "user-a",
+      name: "库生图",
+      taskType: "T2I",
+      rawJson: RAW_WF,
+    });
+    seedTask(tdb, {
+      id: "task-active",
+      userId: "user-a",
+      projectId: "proj_1",
+      shotId: "shot-3",
+      status: "RUNNING",
+    });
+    await expect(
+      createCaller(makeCtx()).generate({
+        workflow: "wf-lib",
+        prompt: "a cat",
+        projectId: "proj_1",
+        shotId: "shot-3",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(tdb.$tables.tasks).toHaveLength(1);
   });
 
   it("host 模式（COMFY_EXECUTOR=host）：建 host 归属行 + 落 execPayload，**不**进程内 enqueue", async () => {
