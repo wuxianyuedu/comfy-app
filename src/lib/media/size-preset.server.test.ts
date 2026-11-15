@@ -1,8 +1,9 @@
 /**
- * 尺寸配置表的服务端存储判据（ISSUE #3788）。
+ * 尺寸配置表的服务端存储判据（ISSUE #3788 / #3948）。
  *
- * 这一层的题目是**两层来源怎么合**：项目默认（编译进包的 DEFAULT_SIZE_PRESET_TABLE）
- * 与本机覆盖（`data/size-presets.json`）。各钉一件事——
+ * 这一层的题目是**两层来源怎么合**：项目默认（入库那份 JSON —— 编译进包的
+ * `DEFAULT_SIZE_PRESET_TABLE` 是它的快照，开发检出里现读磁盘）与本机覆盖
+ * （`data/size-presets.json`）。各钉一件事——
  *
  *   ① 没有覆盖文件时读到的是项目默认（「没配过」与「没有这张表」是两件事）；
  *   ② 覆盖存在时逐格压过默认（坏值 / 缺格仍回退默认，不是整份照收）；
@@ -11,21 +12,26 @@
  *   ④ 按场景还原：只去掉那个场景的覆盖，另一场景不动；两场景都不在覆盖里时
  *      文件一并删除（覆盖为空 = 全部回落默认）；
  *   ⑤ 写失败抛出带路径的错误（「保存了但没落盘」是最坏的形态，它唯一的痕迹
- *      就是这一句）。
+ *      就是这一句）；
+ *   ⑥ 「保存到项目代码库」写进入库那份 JSON、写完即生效（现读磁盘那份），
+ *      正式包（没有编排器）大声失败。
  *
  * 这里**真读写临时目录**（不 mock fs）：这一层的全部价值就是「读到了哪一份、
  * 落盘了什么」——桩掉 fs 之后这两件都判不出来。`root` 参数就是为它留的。
  */
-import { mkdtempSync, writeFileSync, promises as fsp } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync, promises as fsp } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  loadSizePresetProjectDefaults,
   loadSizePresetTable,
   resetSizePresetSceneOverride,
   saveSizePresetTable,
+  saveSizePresetTableAsProjectDefaults,
+  SIZE_PRESET_DEFAULTS_REL_PATH,
   SIZE_PRESETS_REL_PATH,
 } from "./size-preset.server";
 import {
@@ -125,5 +131,67 @@ describe("size-preset.server（ISSUE #3788）", () => {
     await expect(saveSizePresetTable(customizedTable(), notADir)).rejects.toThrow(
       /尺寸配置表写入失败/,
     );
+  });
+
+  /* ── 项目默认那份（ISSUE #3948）── */
+
+  it("读不到项目默认那份时回落编译进包的快照", async () => {
+    expect(await loadSizePresetProjectDefaults(root)).toEqual(DEFAULT_SIZE_PRESET_TABLE);
+    /* 坏 JSON 同样回落 —— 一份坏文件不该把整张表打成「没有默认」。 */
+    const file = path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, "{ 这不是 JSON", "utf8");
+    expect(await loadSizePresetProjectDefaults(root)).toEqual(DEFAULT_SIZE_PRESET_TABLE);
+  });
+
+  it("「保存到项目代码库」写进入库那份 JSON，写完即生效（不必重启进程）", async () => {
+    /* 开发检出的判据：检出里有启动编排器 */
+    mkdirSync(path.join(root, "scripts"), { recursive: true });
+    writeFileSync(path.join(root, "scripts", "dev-launcher.mjs"), "// dev", "utf8");
+
+    const { file, table } = await saveSizePresetTableAsProjectDefaults(customizedTable(), root);
+    expect(file).toBe(path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH));
+    expect(cell(table, "image", "16:9 横屏", "1k")).toEqual({ width: 1280, height: 720 });
+
+    /* 写进去的那份就是磁盘上那份（入库、跟代码走） */
+    const written: unknown = JSON.parse(
+      await fsp.readFile(path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH), "utf8"),
+    );
+    expect(written).toMatchObject({
+      image: { "16:9 横屏": { "1k": { width: 1280, height: 720 } } },
+    });
+
+    /* 写完即生效：读侧现读磁盘那份（没有本机覆盖时，生效表 = 新的项目默认） */
+    expect(cell(await loadSizePresetTable(root), "image", "16:9 横屏", "1k")).toEqual({
+      width: 1280,
+      height: 720,
+    });
+  });
+
+  it("正式包（检出里没有编排器）大声失败，不假装成功", async () => {
+    await expect(saveSizePresetTableAsProjectDefaults(customizedTable(), root)).rejects.toThrow(
+      /保存为项目默认只在开发检出可用/,
+    );
+    /* 没有写出去任何东西 */
+    await expect(fsp.access(path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH))).rejects.toThrow();
+  });
+
+  it("本机覆盖的合并基准是**当前项目默认**那份（项目默认改过之后，新写入的覆盖不再带旧值）", async () => {
+    mkdirSync(path.join(root, "scripts"), { recursive: true });
+    writeFileSync(path.join(root, "scripts", "dev-launcher.mjs"), "// dev", "utf8");
+    /* 项目默认改一格（image / 16:9 / 1k → 1280×720） */
+    const newDefaults = structuredClone(DEFAULT_SIZE_PRESET_TABLE);
+    cell(newDefaults, "image", "16:9 横屏", "1k").width = 1280;
+    cell(newDefaults, "image", "16:9 横屏", "1k").height = 720;
+    await saveSizePresetTableAsProjectDefaults(newDefaults, root);
+
+    /* 覆盖里只留「这台机器真改过的那一格」，其余跟着新项目默认走 */
+    await saveSizePresetTable(
+      { image: { "16:9 横屏": { "2k": { width: 1111, height: 222 } } } },
+      root,
+    );
+    const table = await loadSizePresetTable(root);
+    expect(cell(table, "image", "16:9 横屏", "1k")).toEqual({ width: 1280, height: 720 });
+    expect(cell(table, "image", "16:9 横屏", "2k")).toEqual({ width: 1111, height: 222 });
   });
 });

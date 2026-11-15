@@ -11,7 +11,8 @@
  *
  * 用户改过的「比例 × 分辨率」表按场景（图片 / 视频）落在本机应用数据
  * （`data/size-presets.json`，经 `/api/size-presets` 读写，ISSUE #3788），
- * 读取时与项目默认表（`size-presets.ts` 的 `DEFAULT_SIZE_PRESET_TABLE`，跟代码走）
+ * 读取时与项目默认表（入库那份 `src/lib/media/size-preset-defaults.json`，跟代码走；
+ * 编译进包的那份快照见 `size-presets.ts` 的 `DEFAULT_SIZE_PRESET_TABLE`，ISSUE #3948）
  * 逐格合并 —— 缺行、缺档、改坏的值一律回退默认，升级新增比例行不需要写迁移。
  *
  * 为什么不是普通 `getItem` + 组件本地 state：同一页面上常常同时挂着好几处
@@ -26,6 +27,7 @@
  * 本模块只做存取与合并，不含 React。 */
 
 import { fireAndForget } from "~/lib/async-action";
+import { isRecord } from "~/lib/is-record";
 import {
   DEFAULT_SIZE_PRESET_TABLE,
   mergeSizePresetTable,
@@ -41,10 +43,21 @@ export const SIZE_PRESET_LEGACY_STORAGE_KEY = "comfyapp:size-presets:v1";
 /** 本机覆盖在服务端的落点（应用数据文件，经 `/api/size-presets` 读写）。 */
 const SIZE_PRESETS_ENDPOINT = "/api/size-presets";
 
+/** 「保存到项目代码库」的落点（入库那份 JSON，经 `/api/size-presets/project-default` 写）。 */
+const SIZE_PRESET_PROJECT_DEFAULT_ENDPOINT = "/api/size-presets/project-default";
+
 export type Listener = () => void;
 
 /* ── 模块状态：快照 + 订阅者 + 水合进度 ── */
 let snapshot: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE;
+/** 项目默认那份（跟代码走的那份基线，水合后从服务端取）：「恢复默认」的基准。
+ *
+ *  为什么要单独存一份：项目默认能被「保存到项目代码库」改过（ISSUE #3948），而
+ *  编译进包的那份快照要等重新构建才更新 —— 拿它当还原基准，用户会看到「还原」把
+ *  表还原成**旧**的值。 */
+let defaultsSnapshot: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE;
+/** 这份检出能不能「保存到项目代码库」（正式包没有源码可写，入口随之隐藏）。 */
+let projectDefaultEditable = false;
 const listeners = new Set<Listener>();
 let hydrateStarted = false;
 let hydrated = false;
@@ -55,9 +68,24 @@ export function getSizePresetTable(): SizePresetTable {
   return snapshot;
 }
 
+/** 当前项目默认那份（还原基准；引用稳定）。 */
+export function getSizePresetDefaults(): SizePresetTable {
+  return defaultsSnapshot;
+}
+
 /** 服务端渲染快照：水合前一律给默认表。 */
 export function getSizePresetServerSnapshot(): SizePresetTable {
   return DEFAULT_SIZE_PRESET_TABLE;
+}
+
+/** 服务端渲染的项目默认快照：水合前一律给默认表。 */
+export function getSizePresetDefaultsServerSnapshot(): SizePresetTable {
+  return DEFAULT_SIZE_PRESET_TABLE;
+}
+
+/** 这份检出能不能「保存到项目代码库」。 */
+export function getSizePresetProjectDefaultEditable(): boolean {
+  return projectDefaultEditable;
 }
 
 export function subscribeSizePresetTable(listener: Listener): () => void {
@@ -102,6 +130,10 @@ async function persist(table: SizePresetTable): Promise<void> {
  * 启动时从服务端水合尺寸表（ISSUE #3788）：读应用数据里的本机覆盖，并把
  * 旧 localStorage 键里还留着的自定义表一次性迁移过来（旧键随后清除）。
  * 幂等：重复调用只水合一次。
+ *
+ * 服务端回的是**两层**（`{ defaults, table, projectDefaultEditable }`，ISSUE #3948）：
+ * 项目默认那份（还原基准）与生效表。本机覆盖是相对项目默认算的，所以合并也要
+ * 拿那份当基准 —— 拿编译进包的旧快照当基准会把项目默认刚改过的值顶掉。
  */
 export async function hydrateSizePresetsFromServer(): Promise<void> {
   if (typeof window === "undefined" || typeof fetch === "undefined" || hydrateStarted) {
@@ -109,10 +141,19 @@ export async function hydrateSizePresetsFromServer(): Promise<void> {
   }
   hydrateStarted = true;
   let serverTable: SizePresetTable | null = null;
+  let serverDefaults: SizePresetTable | null = null;
   try {
     const response = await fetch(SIZE_PRESETS_ENDPOINT);
     if (response.ok) {
-      serverTable = mergeSizePresetTable(await response.json());
+      const raw: unknown = await response.json();
+      const payload = isRecord(raw) ? raw : null;
+      const defaultsRaw = payload?.defaults;
+      const tableRaw = payload?.table;
+      /* 两份都用 `mergeSizePresetTable` 归一（它收 `unknown`、回合法表）：
+         服务端回的是**完整表**，归一后缺行缺档都回落到基准，不会带坏形状进来。 */
+      serverDefaults = defaultsRaw === undefined ? null : mergeSizePresetTable(defaultsRaw);
+      serverTable = tableRaw === undefined ? null : mergeSizePresetTable(tableRaw);
+      projectDefaultEditable = payload?.projectDefaultEditable === true;
     }
   } catch {
     /* 服务端读不到（应用服务未起等）：保持默认表，不影响生成。 */
@@ -122,16 +163,20 @@ export async function hydrateSizePresetsFromServer(): Promise<void> {
   try {
     const raw = window.localStorage.getItem(SIZE_PRESET_LEGACY_STORAGE_KEY);
     if (raw) {
-      legacyTable = mergeSizePresetTable(JSON.parse(raw));
+      legacyTable = mergeSizePresetTable(JSON.parse(raw), serverDefaults ?? undefined);
     }
   } catch {
     /* 旧键损坏按没有处理。 */
   }
-  const effective = legacyTable ?? serverTable ?? DEFAULT_SIZE_PRESET_TABLE;
+  const base = serverDefaults ?? DEFAULT_SIZE_PRESET_TABLE;
+  const effective =
+    legacyTable ?? (serverTable === null ? base : mergeSizePresetTable(serverTable, base));
   /* 水合前若已有本地改动（早于引导水合的极端窗口），以本检出的改动为准合并，
      免得那次改动被水合值悄悄冲掉。 */
   const pending = dirtyWhileHydrating ? snapshot : null;
-  const merged = pending === null ? effective : mergeSizePresetTable({ ...effective, ...pending });
+  const merged =
+    pending === null ? effective : mergeSizePresetTable({ ...effective, ...pending }, base);
+  defaultsSnapshot = base;
   hydrated = true;
   dirtyWhileHydrating = false;
   commit(merged);
@@ -165,10 +210,41 @@ export function setSizePresetDims(
   commit(scene === "image" ? { ...snapshot, image: nextScene } : { ...snapshot, video: nextScene });
 }
 
-/** 把某个场景整表恢复默认（另一个场景不受影响）。 */
+/** 把某个场景整表恢复默认（另一个场景不受影响）。
+ *
+ *  还原到**项目默认**那份（不是编译进包的旧快照）：项目默认能被「保存到项目代码库」
+ *  改过，还原的基准必须跟着那份走（ISSUE #3948）。
+ */
 export function resetSizePresetScene(scene: SizeScene): void {
-  const fresh = mergeSizePresetTable(null);
+  const fresh = mergeSizePresetTable(null, defaultsSnapshot);
   commit(
     scene === "image" ? { ...snapshot, image: fresh.image } : { ...snapshot, video: fresh.video },
   );
+}
+
+/**
+ * 「保存为项目默认（跟代码走）」：把当前这份表写进入库那份 JSON（ISSUE #3948）。
+ *
+ * 与本机覆盖是**两件事**：那一件写应用数据目录（改一格即存），这一件写代码库
+ * （提交后每个检出与每个桌包都是这一份）。只有开发检出有可写的目标文件，服务端
+ * 在正式包里会大声失败 —— 返回写盘的路径与落盘后的表。
+ */
+export async function saveSizePresetTableToProjectDefaults(
+  table: SizePresetTable,
+): Promise<{ file: string; table: SizePresetTable }> {
+  const response = await fetch(SIZE_PRESET_PROJECT_DEFAULT_ENDPOINT, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(table),
+  });
+  if (!response.ok) {
+    throw new Error(`尺寸配置表写入项目默认失败（HTTP ${response.status}）`);
+  }
+  const raw: unknown = await response.json();
+  const payload = isRecord(raw) ? raw : {};
+  const tableRaw = payload.table;
+  return {
+    file: typeof payload.file === "string" ? payload.file : "",
+    table: tableRaw === undefined ? table : mergeSizePresetTable(tableRaw),
+  };
 }

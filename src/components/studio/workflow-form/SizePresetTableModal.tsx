@@ -56,34 +56,40 @@ export function SizePresetTablePanel({ initialScene = "image" }: { initialScene?
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="border-border-strong bg-canvas-deep flex items-center gap-1 rounded-lg border p-0.5">
-        <ToggleGroup
-          aria-label="尺寸档位场景"
-          className="gap-1"
-          multiple={false}
-          onValueChange={(vals) => {
-            const next = vals[0];
-            if (next === "image" || next === "video") {
-              setScene(next);
-            }
-          }}
-          value={[scene]}
-        >
-          {SCENES.map((item) => (
-            <ToggleGroupItem
-              className="text-2xs h-auto rounded-md px-2.5 py-1"
-              key={item}
-              value={item}
-            >
-              {SIZE_SCENE_LABELS[item]}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+      {/* 场景切换、右侧说明与「恢复默认」是**三件各自独立的控件**（ISSUE #3948）：
+          此前三者裹在同一条深色底里（切换按钮与说明文字的背景连成一片，看着像
+          一整块控件），说明文字也因此被当成「切换按钮的一部分」。现在切换按钮
+          自带一块底，说明文字是普通正文，「恢复默认」回到默认按钮形态。 */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="border-border-strong bg-canvas-deep rounded-lg border p-0.5">
+          <ToggleGroup
+            aria-label="尺寸档位场景"
+            className="gap-1"
+            multiple={false}
+            onValueChange={(vals) => {
+              const next = vals[0];
+              if (next === "image" || next === "video") {
+                setScene(next);
+              }
+            }}
+            value={[scene]}
+          >
+            {SCENES.map((item) => (
+              <ToggleGroupItem
+                className="text-2xs h-auto rounded-md px-2.5 py-1"
+                key={item}
+                value={item}
+              >
+                {SIZE_SCENE_LABELS[item]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
         <span className="text-ink-muted text-2xs">
           1k / 2k / 4k 在该场景下的宽高（图片与视频两套口径）
         </span>
         <Button
-          className="text-2xs ml-auto h-auto px-2.5 py-1"
+          className="ml-auto"
           disabled={!modified}
           onClick={() => {
             resetScene(scene);
@@ -184,9 +190,8 @@ export function SizePresetTableModal({
       >
         <DialogHeader className="border-border-strong flex-row items-center gap-3 border-b px-4 py-3">
           <DialogTitle className="text-ink-bright text-sm font-semibold">{title}配置</DialogTitle>
-          <span className="text-ink-muted text-2xs">
-            1k / 2k / 4k 在该场景下的宽高（图片与视频两套口径）
-          </span>
+          {/* 说明文字只在面板里说一次（ISSUE #3948）：此前弹窗头与面板各写一份，
+              同一屏里同一句话出现两遍。 */}
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">

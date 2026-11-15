@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { mergeSizePresetTable, type SizePresetTable } from "./size-presets";
+import {
+  DEFAULT_SIZE_PRESET_TABLE,
+  mergeSizePresetTable,
+  type SizePresetTable,
+} from "./size-presets";
 import { SIZE_PRESET_LEGACY_STORAGE_KEY } from "./size-preset-store";
 
 /** 每个用例都重新加载模块：快照与水合进度在模块顶层各初始化一次。 */
@@ -24,7 +28,15 @@ function cell(
 function asTable(value: unknown): SizePresetTable {
   return mergeSizePresetTable(value);
 }
-function mockFetch(serverTable: unknown) {
+
+/** 服务端 GET 现在回**两层**（ISSUE #3948）：项目默认 + 生效表 + 那个开关。 */
+type ServerPayload = {
+  defaults?: SizePresetTable;
+  projectDefaultEditable?: boolean;
+  table?: SizePresetTable;
+} | null;
+
+function mockFetch(payload: ServerPayload) {
   const puts: Array<unknown> = [];
   const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
     const method = (init?.method ?? "GET").toUpperCase();
@@ -36,11 +48,20 @@ function mockFetch(serverTable: unknown) {
       return Promise.resolve(new Response(bodyText, { status: 200 }));
     }
     return Promise.resolve(
-      new Response(serverTable === null ? "null" : JSON.stringify(serverTable), { status: 200 }),
+      new Response(payload === null ? "null" : JSON.stringify(payload), { status: 200 }),
     );
   });
   vi.stubGlobal("fetch", fetchMock);
   return puts;
+}
+
+/** 造一份服务端回的两层（默认那份 + 生效表）。 */
+function serverPayload(table?: SizePresetTable, defaults?: SizePresetTable) {
+  return {
+    defaults: defaults ?? DEFAULT_SIZE_PRESET_TABLE,
+    projectDefaultEditable: false,
+    table: table ?? DEFAULT_SIZE_PRESET_TABLE,
+  };
 }
 
 describe("size-preset-store（ISSUE #3788：应用数据 + 项目默认两层）", () => {
@@ -62,7 +83,7 @@ describe("size-preset-store（ISSUE #3788：应用数据 + 项目默认两层）
     const custom = mergeSizePresetTable({
       image: { "16:9 横屏": { "1k": { width: 1280, height: 720 } } },
     });
-    const puts = mockFetch(custom);
+    const puts = mockFetch(serverPayload(custom));
     const store = await loadStore();
     await store.hydrateSizePresetsFromServer();
     expect(cell(store.getSizePresetTable(), "image", "16:9 横屏", "1k")).toEqual({
@@ -85,7 +106,7 @@ describe("size-preset-store（ISSUE #3788：应用数据 + 项目默认两层）
     const legacy = mergeSizePresetTable({
       video: { "16:9 横屏": { "1k": { width: 640, height: 360 } } },
     });
-    const puts = mockFetch(null);
+    const puts = mockFetch(serverPayload());
     window.localStorage.setItem(SIZE_PRESET_LEGACY_STORAGE_KEY, JSON.stringify(legacy));
     const store = await loadStore();
     await store.hydrateSizePresetsFromServer();
@@ -103,7 +124,7 @@ describe("size-preset-store（ISSUE #3788：应用数据 + 项目默认两层）
   });
 
   it("恢复默认只影响当前场景，且落盘", async () => {
-    const puts = mockFetch(null);
+    const puts = mockFetch(serverPayload());
     const store = await loadStore();
     await store.hydrateSizePresetsFromServer();
     store.setSizePresetDims("image", "1:1 正方", "2k", { width: 1024, height: 1024 });
@@ -126,7 +147,7 @@ describe("size-preset-store（ISSUE #3788：应用数据 + 项目默认两层）
   });
 
   it("水合前的改动在水合后补传（不丢）", async () => {
-    const puts = mockFetch(null);
+    const puts = mockFetch(serverPayload());
     const store = await loadStore();
     /* 水合还没跑就改一格（早于引导水合的极端窗口） */
     store.setSizePresetDims("image", "16:9 横屏", "1k", { width: 1280, height: 720 });
@@ -134,5 +155,31 @@ describe("size-preset-store（ISSUE #3788：应用数据 + 项目默认两层）
     expect(puts.length).toBeGreaterThan(0);
     const lastPut = asTable(puts.at(-1));
     expect(cell(lastPut, "image", "16:9 横屏", "1k")).toEqual({ width: 1280, height: 720 });
+  });
+
+  /* ISSUE #3948：项目默认能被「保存到项目代码库」改过 —— 还原的基准必须是**那份**
+   * （服务端下发的项目默认），而不是编译进包的旧快照。 */
+  it("还原到服务端下发的项目默认（不是编译进包的旧快照）", async () => {
+    const newDefaults = mergeSizePresetTable({
+      image: { "1:1 正方": { "2k": { width: 3000, height: 3000 } } },
+    });
+    mockFetch(serverPayload(DEFAULT_SIZE_PRESET_TABLE, newDefaults));
+    const store = await loadStore();
+    await store.hydrateSizePresetsFromServer();
+    store.setSizePresetDims("image", "1:1 正方", "2k", { width: 1024, height: 1024 });
+
+    store.resetSizePresetScene("image");
+
+    expect(cell(store.getSizePresetTable(), "image", "1:1 正方", "2k")).toEqual({
+      width: 3000,
+      height: 3000,
+    });
+  });
+
+  it("「保存到项目代码库」那个开关跟着服务端那份读数走", async () => {
+    mockFetch({ ...serverPayload(), projectDefaultEditable: true });
+    const store = await loadStore();
+    await store.hydrateSizePresetsFromServer();
+    expect(store.getSizePresetProjectDefaultEditable()).toBe(true);
   });
 });
