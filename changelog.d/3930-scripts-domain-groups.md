@@ -16,3 +16,9 @@
   `scripts/` 内隐藏台账的路径键；新增的 `gates/check-gate-executors.cjs` 改为递归枚举
   `scripts/**`（basename 全仓唯一）。
 - 判据的执行者登记不变：标签、档位、红绿语义全部照旧；本次只动路径，不改任何判据口径。
+- 两次合并 origin/master（并行落地的十余笔提交）：解 11 个文件的冲突（脚本路径按域布局
+  对齐、预算注释取 master 新值），并把合并带入的新脚本归入对应域子目录
+  （ship-status / ship-fetch-issue → ship/、freshness-ledger-write → freshness/、
+  db-unique-sweep → db/、affected-launcher-hygiene + launcher-closure → affected-tests/）。
+  `src-tauri/src/single_instance.rs` 测试模块里的一行路径注释留待下次重编壳时顺带更新
+ （为一行注释触发整壳重编不值当）。

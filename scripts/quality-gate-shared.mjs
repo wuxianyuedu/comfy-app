@@ -58,4 +58,14 @@
  * 解得出非空值），不再枚举拼法；「登记过期」本身也升成了判据，见
  * `scripts/gates/check-known-failed-stale.mjs`（pre-commit D 组）与规范 §11.12。
  */
-export const KNOWN_FAILED_FILES = [];
+export const KNOWN_FAILED_FILES = [
+  /* tests/sqlite-pragma-sites.test.ts（ISSUE #3978 归因，随 #3930 的合并带入）：
+   * 「applySqlitePragmas 在同样形状下全绿」一格在本机（Windows / 这块盘）**确定性红**：
+   * 它真起 N 个独立进程抢同一份新库的 WAL 独占锁，断言**零次**撞锁重试——而重试正是
+   * 该功能的工作方式；本机的盘/CPU 时序下 2 个进程会把 5 次重试预算耗尽。三次隔离
+   * 复跑全红，且在 origin/master（1fd51a06c）的干净 worktree 上**同样红** ——
+   * 是 #3954 自带的形状，不是 #3930 引入。GA 那台机器上它曾绿（该测试自认是
+   * 亚毫秒窗口上的概率事件），故登记；修法（让断言认「重试后成功」而非「零重试」）
+   * 归 #3978 那张单子讨论。 */
+  "tests/sqlite-pragma-sites.test.ts",
+];
