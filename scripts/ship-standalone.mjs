@@ -34,6 +34,7 @@ import { resolveGhRepo, resolveGhToken, runGhLogs } from "./ship-gh-logs.mjs";
 import { runGhPrs } from "./ship-gh-prs.mjs";
 import { runStageLog } from "./ship-stage-log.mjs";
 import { runRerunCiStage } from "./ship-local.mjs";
+import { runResultQuery } from "./ship-result.mjs";
 import { whoamiLines } from "./ship-ticket.mjs";
 
 /**
@@ -94,6 +95,7 @@ function namedActions(opt, self) {
     ["claims", opt.claims, "--claims"],
     ["branches", opt.branches, "--branches"],
     ["status", opt.status, "--status"],
+    ["result", opt.result, "--result"],
     [
       "newIssue",
       (opt.newIssue !== null && opt.newIssue !== undefined) || opt.newIssueBad.length > 0,
@@ -133,6 +135,7 @@ function namedActions(opt, self) {
  *   currentArgv?: string[],
  *   fetchImpl?: typeof fetch,
  *   sleep?: (ms: number) => void | Promise<void>,
+ *   resolveDir?: (cwd?: string) => string | null,
  * }} io 全部由装配层注入 —— 本模块不自己解析命令行、不自己拼退出码。
  * @returns {Promise<{handled: true, code: number} | {handled: false, cnbOk: boolean}>}
  *   `handled` 为真表示这一跳已经结束（`code` 是退出码）；为假表示继续走主流程，
@@ -159,6 +162,7 @@ export async function runStandaloneAction(io) {
     currentArgv,
     fetchImpl,
     sleep,
+    resolveDir,
   } = io;
   /* ── `--whoami`：只读自查口（ISSUE #2204）─────────────────────
    * 手工 `cnb pulls post-pull` / `cnb issues post-issue-comment` 不经过 ship，
@@ -169,6 +173,23 @@ export async function runStandaloneAction(io) {
       log(l);
     }
     return { handled: true, code: CODE.GREEN };
+  }
+
+  /* ── `--result`：本机落盘的「状态 + 事件」只读口（ISSUE #3923）────────
+   * 与 `--whoami` 同档：一次也不碰平台（连 cnb 都不 probe），数据源只有
+   * `.git/ship-result.json`。后台跑 ship 时轮询它取「走到哪了 / 结论」，
+   * 不 sleep + grep 运行日志。落盘点由装配层的 `resolveDir` 注入（测试指到
+   * 临时目录），读不到就是读不到，不冒充任何结论。 */
+  if (opt.result) {
+    const clashes = namedActions(opt, "result");
+    if (clashes.length > 0) {
+      log(`[ship] [ERROR] --result 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    return {
+      handled: true,
+      code: settle([runResultQuery({ log, root, json: opt.resultJson, resolve: resolveDir })]),
+    };
   }
   const cnbOk = probeCnb();
 

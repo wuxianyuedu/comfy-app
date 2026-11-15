@@ -232,6 +232,9 @@
  *                                              #   CI 终态与轮询同一份分类器，红不深挖（那是 --diagnose）；
  *                                              #   退码 0 绿/已合并 · 1 CI红或没提过PR · 2 没结论 ·
  *                                              #   3 冲突 · 4 CI 无终态。一次也不写平台，与显式动作同行退 2
+ *   pnpm ship --result                         # 只读：本机 .git/ship-result.json 的状态快照 + 事件时间线
+ *                                              #   （ISSUE #3923；--result=json 出原始 JSON）。后台跑 ship 时
+ *                                              #   轮询它取「走到哪了 / 结论」，不 sleep + grep 运行日志
  *   pnpm ship --new-issue "fix(ship): …" --issue-body-file .git/issue.md --priority P1
  *                                              # 一步建单：create-issue（正文文件 + 开头署名）→
  *                                              #   补 `提单人:` 标签 → 独立 get-issue 回读；
@@ -327,10 +330,27 @@ export async function main(deps = {}) {
    * ship」就成了假读数；`tests/ship.test.ts` 还有一条 `readdirSync(gitDir)` 必须
    * 为空的回收断言会当场红。只有 CLI 入口传真实 `resolveGitDir` 才写。 */
   const { shipResultResolve, ...flowDeps } = deps;
+  /* 只读单件动作**不落盘**（ISSUE #3923）：`--result` / `--status` 这些口读的就是
+   * `.git/ship-result.json` 这份文件；查询自己再写一份进去（write-ahead 一创建就写
+   * `running`），会把后台那一跑的活读数覆盖掉 —— 轮询的眼睛毁掉它正在看的东西。
+   * 所以这一族（result / status / whoami / branches / claims / diagnose /
+   * stage-log / gh-logs / gh-prs）即使处在 CLI 入口（给了 shipResultResolve）也不写。 */
+  const sinkArgs = deps.args ?? process.argv.slice(2);
+  const sinkOpt = parseArgs(sinkArgs);
+  const readOnlyQuery =
+    sinkOpt.result ||
+    sinkOpt.status ||
+    sinkOpt.whoami ||
+    sinkOpt.branches ||
+    sinkOpt.claims ||
+    sinkOpt.diagnose ||
+    sinkOpt.stageLog ||
+    sinkOpt.ghLogs ||
+    sinkOpt.ghPrs;
   const sink = createShipResultSink({
     root,
-    args: deps.args ?? process.argv.slice(2),
-    resolve: shipResultResolve ?? (() => null),
+    args: sinkArgs,
+    resolve: !readOnlyQuery && shipResultResolve ? shipResultResolve : () => null,
   });
   const log = sink.wrapLog(deps.log ?? ((s) => process.stdout.write(`${s}\n`)));
   try {
@@ -350,7 +370,7 @@ export async function main(deps = {}) {
   /* 收尾回收挂在**唯一出口**上，而不是某个阶段末尾：一轮可以从七八个出口结束
    * （门槛拦下、基线取不到、cnb 不在、轮询到顶…），挂在阶段里就总有「哪条路径忘了收」
    * 这种形态 —— 而那恰好是这一格要防的事。`--dry-run` 只进计划，不伸手。 */
-  const opt = parseArgs(deps.args ?? process.argv.slice(2));
+  const opt = sinkOpt;
   if (opt.reap && !opt.dryRun) {
     const run = deps.run ?? makeRunner(root);
     const before = code;
@@ -544,6 +564,7 @@ async function runFlow(deps, tmpFiles) {
     up,
     localBranch,
     root,
+    resolveDir,
     handle,
     whoSource: who.source,
     explicitHandle,

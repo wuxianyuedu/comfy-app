@@ -6,7 +6,7 @@
 import fs, { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it, TestRunner } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, TestRunner } from "vitest";
 
 import { isRecord } from "~/lib/is-record";
 
@@ -147,7 +147,7 @@ import { decideReap, instanceReading, reapCheckoutInstances } from "../scripts/s
 import { runPreflightStage } from "../scripts/ship-preflight.mjs";
 import { DIAGNOSE_STALL_MINUTES, runDiagnose, stallReadout } from "../scripts/ship-diagnose.mjs";
 import { main } from "../scripts/ship.mjs";
-import { readShipResult } from "../scripts/ship-result.mjs";
+import { createShipResultSink, readShipResult } from "../scripts/ship-result.mjs";
 import { parseStatusTarget, runStatus, statusExitCode } from "../scripts/ship-status.mjs";
 import { EMPTY_COMMIT_ENV } from "../scripts/intentional-empty-commit.mjs";
 
@@ -385,6 +385,16 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
   it("--no-wait 与 --only 各自独立", () => {
     expect(parseArgs(["--no-wait"]).wait).toBe(false);
     expect(parseArgs(["--only=poll"]).only).toBe("poll");
+  });
+
+  it("#3923：--result 两种写法都收；值只认 json，其它进 unknown", () => {
+    expect(parseArgs([]).result).toBe(false);
+    expect(parseArgs(["--result"]).result).toBe(true);
+    expect(parseArgs(["--result"]).resultJson).toBe(false);
+    expect(parseArgs(["--result=json"]).result).toBe(true);
+    expect(parseArgs(["--result=json"]).resultJson).toBe(true);
+    /* 值给错不当未知旗标静默收下：拼错的形态会被读成「没要那个动作」。 */
+    expect(parseArgs(["--result=xml"]).unknown).toEqual(["--result=xml"]);
   });
 
   it("#3597：--allow-staged 默认关，只认显式那一枚（不给就是不许，绝不静默放行）", () => {
@@ -10475,6 +10485,93 @@ describe("ISSUE #3206：main() 的落盘回读点挂载", () => {
   });
 });
 
+/* ── `pnpm ship --result`：本机「状态 + 事件」只读口（ISSUE #3923）──────────
+ * 数据源只有落盘那份快照，一次也不碰平台（连 cnb 都不 probe）。这里钉三件事：
+ * 读不到不冒充结论、human / json 两种形态、与显式动作互斥。 */
+describe("ship --result：状态 + 事件只读口（ISSUE #3923）", () => {
+  let gitDir: string;
+  beforeEach(() => {
+    gitDir = mkdtempSync(path.join(os.tmpdir(), "ship-result-flag-"));
+  });
+  afterEach(() => {
+    rmSync(gitDir, { recursive: true, force: true });
+  });
+  const run = (args: Array<string>, log: Array<string>) =>
+    main({
+      args,
+      log: (l: string) => log.push(l),
+      probeCnb: () => {
+        throw new Error("--result 不该 probe cnb（它在 probe 之前就分派完了）");
+      },
+      root: process.cwd(),
+      resolveGitDir: () => gitDir,
+    });
+
+  it("没有落盘读数 ⇒ 0 + 明说不构成结论（一次也不 probe cnb）", async () => {
+    const log: Array<string> = [];
+    const code = await run(["--result"], log);
+    const text = log.join("\n");
+    expect(code).toBe(CODE.GREEN);
+    expect(text).toContain("没有上一次 ship 的落盘读数");
+    expect(text).toContain("结论：exit 0");
+  });
+
+  it("有落盘读数 ⇒ 摘要 + 事件时间线；--result=json 出原始 JSON", async () => {
+    const sink = createShipResultSink({
+      root: process.cwd(),
+      resolve: () => gitDir,
+      args: ["--no-wait"],
+    });
+    sink.append("[ship] ▶ 新建 PR | pr=3923 | state=open");
+    sink.finish(0);
+    const log: Array<string> = [];
+    expect(await run(["--result"], log)).toBe(CODE.GREEN);
+    const text = log.join("\n");
+    expect(text).toContain("▶ 新建 PR | pr=3923 | state=open");
+    expect(text).toContain("· stage · 新建 PR · pr=3923 state=open");
+    expect(text).toContain("· finished · exit=0 status=green");
+
+    const jsonLog: Array<string> = [];
+    expect(await run(["--result=json"], jsonLog)).toBe(CODE.GREEN);
+    /* JSON 是一条 log（内含换行）；其后还有 finish() 的结论行，只看首条。
+     * 字符串断言代替 JSON.parse：`parsed.found` 那一族 any 扩散是 lint 的硬红。 */
+    const jsonText = jsonLog[0] ?? "";
+    expect(jsonText).toContain('"found": true');
+    expect(jsonText).toContain('"pr": 3923');
+    expect(jsonText).toContain('"kind": "finished"');
+  });
+
+  it("与显式动作同行 ⇒ 2（只读一次只做一件）", async () => {
+    const log: Array<string> = [];
+    const code = await run(["--result", "--merge"], log);
+    expect(code).toBe(CODE.NOT_RUN);
+    expect(log.join("\n")).toContain("--result 只读、一次只做一件：不与 --merge 同跑");
+  });
+
+  it("只读口不落盘：即使处在 CLI 入口，--result 也不改写那份文件（#3923）", async () => {
+    /* 后台那一跑的活读数在盘上；查询自己再写一份（write-ahead 一创建就写 running）
+     * 会把它覆盖掉 —— 轮询的眼睛毁掉它正在看的东西。 */
+    const sink = createShipResultSink({
+      root: process.cwd(),
+      resolve: () => gitDir,
+      args: ["--no-wait"],
+    });
+    sink.append("[ship] ▶ 等 CI | build=cnb-x | pr=3923");
+    const file = path.join(gitDir, "ship-result.json");
+    const before = readFileSync(file, "utf8");
+    const log: Array<string> = [];
+    await main({
+      args: ["--result"],
+      log: (l: string) => log.push(l),
+      probeCnb: () => true,
+      root: process.cwd(),
+      resolveGitDir: () => gitDir,
+      shipResultResolve: () => gitDir,
+    });
+    expect(readFileSync(file, "utf8")).toBe(before);
+  });
+});
+
 /* ── `pnpm ship --status`：每一格状态的只读统一查询口（ISSUE #3811）──────────
  * 判定本体全部复用既有执行者（classifyBuildOutcome / readPullVerdict / issues get），
  * 这一组用例钉三件事：退码映射只有一份、命令行形状只有一份、读面一次也不写平台。 */
@@ -10848,6 +10945,8 @@ describe("ship --status：只读状态口整链（ISSUE #3811，假执行者）"
           truncated: false,
           exitCode: 0,
           conclusion: "[ship] 结论：exit 0 —— 全绿到终态",
+          events: [],
+          eventsTruncated: false,
         },
       }),
     });
@@ -10855,6 +10954,55 @@ describe("ship --status：只读状态口整链（ISSUE #3811，假执行者）"
     expect(f2.log.join("\n")).toContain("来源：上一次跑的落盘读数");
     expect(f2.log.join("\n")).toContain("目标：PR #3804");
     expect(f2.log.join("\n")).toContain("exit 0 —— 全绿到终态");
+  });
+
+  it("#3923：本地上一次跑补「走到哪」一行；完整事件时间线归 --result，不在这里抄", () => {
+    const f = statusIo({ pull: OPEN_PULL, builds: [], buildStatus: GREEN_STATUS });
+    const code = runStatus({
+      run: f.run,
+      log: (l: string) => f.log.push(l),
+      slug: "moon-read/comfy-app-t3",
+      cnbOk: true,
+      target: "3810",
+      dryRun: false,
+      localBranch: "feat/3811",
+      trunkBranch: "master",
+      root: "/tmp/does-not-matter",
+      /* currentArgv 与夹具记录的 argv 不同 ⇒ 那份记录不会被当成「这一跑自己」跳过。 */
+      currentArgv: ["--status", "3810"],
+      readLastRun: () => ({
+        found: true,
+        path: "/tmp/ship-result.json",
+        reason: "ok",
+        result: {
+          version: 2,
+          status: "running",
+          startedAt: "2026-11-15T08:00:00.000Z",
+          finishedAt: null,
+          interruptedBy: null,
+          pid: 1,
+          cwd: "/tmp",
+          argv: ["--no-wait"],
+          branch: "feat/3811",
+          headSha: "d02ec96",
+          repo: "moon-read/comfy-app-t3",
+          pr: 3810,
+          stages: ["预检通过 | branch=feat/3811", "等 CI | build=cnb-g2 | pr=3810"],
+          lines: [],
+          lineCount: 2,
+          truncated: false,
+          exitCode: null,
+          conclusion: null,
+          events: [],
+          eventsTruncated: false,
+        },
+      }),
+    });
+    expect(code).toBe(CODE.CI_PENDING);
+    const text = f.log.join("\n");
+    expect(text).toContain("本地上一次跑：2026-11-15T08:00:00.000Z · status=running");
+    expect(text).toContain("本地上一次跑走到哪：▶ 等 CI | build=cnb-g2 | pr=3810");
+    expect(text).not.toContain("事件（");
   });
 
   it("--dry-run：只打印计划，一条 cnb 都不发", async () => {
@@ -10939,6 +11087,8 @@ describe("ship --status：本地上一次跑那格的自指面（#3206 write-ahe
           truncated: false,
           exitCode: null,
           conclusion: null,
+          events: [],
+          eventsTruncated: false,
         },
       }),
     });

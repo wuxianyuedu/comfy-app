@@ -136,11 +136,16 @@ export function parseIssueNumberToken(token) {
  * 当前分支（在主干上时回落「上一次跑的 PR」，来源念出来）；`#3804` / `3804` = PR 号；
  * 其余 = 分支名。重复给值进 `statusBad`，一次也不静默收下（与 `--gh-logs` 同档）。
  *
+ * **`--result[=json]`**（ISSUE #3923）：只读本机落盘的「状态 + 事件」
+ * （`.git/ship-result.json`）。后台跑 ship 时轮询它取「走到哪了 / 结论」，
+ * **不 grep 运行日志**；`--result=json` 出原始 JSON。数据源与形状只有一份出处：
+ * `ship-result.mjs` 文件头。
+ *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
   const out = {
     message: null,
     messageFile: null,
@@ -172,6 +177,8 @@ export function parseArgs(argv) {
     status: false,
     statusRef: null,
     statusBad: [],
+    result: false,
+    resultJson: false,
     newIssue: null,
     newIssueBad: [],
     issueBodyFile: null,
@@ -232,6 +239,17 @@ export function parseArgs(argv) {
         out.statusRef = tok.trim();
       } else {
         out.statusBad.push(`重复的 --status（前一个 ${out.statusRef}）`);
+      }
+    } else if (a === "--result" || a.startsWith("--result=")) {
+      /* 只读本机落盘的「状态 + 事件」（ISSUE #3923）。值只有 `json` 一种：
+       * `--result=json` 出原始 JSON。其它值不静默收下 —— 进 unknown 由
+       * flagConflicts 点名（拼错的旗标会被读成「没要那个动作」）。 */
+      out.result = true;
+      const tok = a.startsWith("--result=") ? a.slice("--result=".length) : "";
+      if (tok === "json") {
+        out.resultJson = true;
+      } else if (tok !== "") {
+        out.unknown.push(a);
       }
     }
     /* `--diagnose` 的构建号是**可选**的：不给就按 HEAD 的 sha 归属（红灯现场最常用的
