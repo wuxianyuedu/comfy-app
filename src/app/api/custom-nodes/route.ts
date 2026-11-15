@@ -330,8 +330,7 @@ function runDiscoverStreaming(
     });
 
     const tryRun = () => {
-      /* `.at()` 越界即 `undefined`：取候选与「有没有候选」判据合成一处，
-       * 不必先比 `i < length` 再靠 `!` 把 `undefined` 从类型里抹掉。 */
+      /* `.at()` 越界即 `undefined`：取候选与「有没有候选」判据合成一处。 */
       const attempt = attempts.at(i);
       if (!attempt) {
         if (!resolved) {
@@ -486,9 +485,7 @@ function runDiscoverStreaming(
   });
 }
 
-/* 构建流式响应：先把解析器的实时日志透出去，再给报告。
- * 传 `onlyPkgs`（具体子包路径）表示做子集 / 合并解析；
- * 否则 `paths` 就是完整的根目录列表。 */
+/* 构建流式响应：先透出实时日志再给报告；`onlyPkgs` 表示子集/合并解析。 */
 function streamParse(
   paths: Array<string>,
   onlyPkgs?: Array<string>,
@@ -501,8 +498,26 @@ function streamParse(
   let guard: ReturnType<typeof createStreamChildGuard> | null = null;
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
+      const safeClose = () => {
+        if (closed) {
+          return;
+        }
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          /* 已关闭/已取消 */
+        }
+      };
       const send = (ev: ParseStreamEvent) => {
-        controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
+        if (closed) {
+          return;
+        }
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
+        } catch {
+          closed = true;
+        }
       };
       guard = createStreamChildGuard({
         label: "自定义节点解析",
@@ -511,13 +526,22 @@ function streamParse(
           if (closed) {
             return;
           }
-          closed = true;
           try {
-            send({ type: "log", level: "error", msg: reason });
-            send({ type: "done", ok: false, report: null, stderr: reason, exitCode: null });
+            controller.enqueue(
+              encoder.encode(
+                `${JSON.stringify({ type: "log", level: "error", msg: reason } satisfies ParseStreamEvent)}\n`,
+              ),
+            );
+            controller.enqueue(
+              encoder.encode(
+                `${JSON.stringify({ type: "done", ok: false, report: null, stderr: reason, exitCode: null } satisfies ParseStreamEvent)}\n`,
+              ),
+            );
             controller.close();
           } catch {
             /* 流已被取消 / 关闭：子进程回收本身已完成，帧发不出去就算了。 */
+          } finally {
+            closed = true;
           }
         },
       });
@@ -558,7 +582,7 @@ function streamParse(
             stderr: "no python interpreter",
             exitCode: null,
           });
-          controller.close();
+          safeClose();
           return;
         }
         /* 见 `runDiscoverStreaming` 里那段同名的守卫：真机上缺解释器是 `error` 之后
@@ -584,7 +608,6 @@ function streamParse(
           if (closed) {
             return;
           }
-          closed = true;
           guard?.settle();
           send({
             type: "log",
@@ -598,20 +621,16 @@ function streamParse(
             stderr: e.message,
             exitCode: null,
           });
-          controller.close();
+          safeClose();
         });
 
-        /* 按行切分交给内核 —— 与探测口原本是一段孪生实现（两份 `indexOf("\n")` 循环，
-         * 一份在 `end` 时补发尾行、一份不补）。 */
+        /* 按行切分交给内核（与探测口同一份行切分语义）。 */
         const pipeLogs = (s: NodeJS.ReadableStream, defaultLevel: "info" | "error" = "info") => {
           forEachOutputLine(s, (line) => {
             send({ type: "log", level: defaultLevel, msg: line });
           });
         };
-        // 解析器的 stdout 是正常进度（绿色 info）。
-        // stderr 是错误（红色）—— 解析器把语法错误与一般异常经 log_stderr()
-        // 写到 stderr，让对话框里的实时控制台把它们渲染成红色，
-        // 而不是淹没在 300 多行成功记录里。
+        // stdout 为进度(info)，stderr 为错误(error)，便于界面区分渲染。
         pipeLogs(cp.stdout, "info");
         pipeLogs(cp.stderr, "error");
 
@@ -630,7 +649,6 @@ function streamParse(
             tryRun();
             return;
           }
-          closed = true;
           guard?.settle();
           let report: ParseReport | null = null;
           try {
@@ -648,7 +666,7 @@ function streamParse(
             stderr: "",
             exitCode: code,
           });
-          controller.close();
+          safeClose();
         });
       };
 
@@ -736,8 +754,16 @@ function buildGetResponse(signal?: AbortSignal): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let closed = false;
       const send = (ev: SettingsStreamEvent) => {
-        controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
+        if (closed) {
+          return;
+        }
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
+        } catch {
+          closed = true;
+        }
       };
       try {
         send({ type: "discover_start", parents: paths, total: paths.length });
@@ -769,7 +795,14 @@ function buildGetResponse(signal?: AbortSignal): Response {
       } catch (error) {
         send({ type: "error", message: apiErrorDetail(error, String(error)) });
       } finally {
-        controller.close();
+        if (!closed) {
+          closed = true;
+          try {
+            controller.close();
+          } catch {
+            /* 已关闭/已取消 */
+          }
+        }
       }
     },
   });
@@ -853,9 +886,7 @@ export async function POST(req: NextRequest) {
       }
       parents.push(s);
     }
-    /* 空批不去起解释器：`runDiscover([])` 原本照样按 python3 → python → py 轮一遍
-     * （每轮各带一次超时与进程启动），扫一个都不存在的目录还要花掉三轮子进程。
-     * 非数组的 `parents` 在上面已经收成空数组，所以这一条同时兜住畸形入参。 */
+    /* 空批不去起解释器：避免空目录/畸形入参白跑三轮 Python 退避。 */
     if (parents.length === 0) {
       return NextResponse.json({ ok: true, packages: [] });
     }
