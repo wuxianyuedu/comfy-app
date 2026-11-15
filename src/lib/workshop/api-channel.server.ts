@@ -143,6 +143,10 @@ function unifiedImageInputs(req: ApiImageRequest): Partial<Record<WorkshopInputT
     resolution: req.resolution ?? undefined,
     multiple: req.multiple ?? undefined,
     image: req.image ?? undefined,
+    /* 参考图组（#3949 需求 6/7）：数组整组透传 —— 适配器映射了「图片组」的
+     * 远端接口拿到整组；只映射了单 `image` 的照旧拿首张（unified 的 image
+     * 字段在 route 侧已由首张兜底）。 */
+    images: req.images ?? undefined,
     /* 种子（ISSUE #3778）：生图通道承接的通行字段，适配器映射了 `seed` 口
      * 就按映射下发（无适配器的默认映射经 defaultImageBody 直带）。 */
     seed: req.seed ?? undefined,

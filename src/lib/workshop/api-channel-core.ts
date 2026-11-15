@@ -50,6 +50,9 @@ export type ApiImageRequest = {
    *  就下发哪个（ISSUE #3622：接口原生认 1k/2k/4k 这类档位的直接映射）。 */
   aspectRatio?: string;
   image?: string;
+  /** 参考图组（#3949 需求 6/7）：多张以数组下发；首张另走 `image`（既有单图
+   *  适配器不受影响）。适配器映射了「图片组」口的远端接口拿到整组。 */
+  images?: Array<string>;
   megapixels?: string;
   /** 工坊模式码（T2I / I2I / …）：有适配器时按它取字段映射 */
   mode?: string;

@@ -114,6 +114,7 @@ export function controlForInputType(type: WorkshopInputType): ModelTestControl {
       return "duration";
     }
     case "image":
+    case "images":
     case "first-frame":
     case "last-frame":
     case "mask":
@@ -312,14 +313,18 @@ function seedValue(raw: string | undefined): number | undefined {
 }
 
 /** 组装生图请求（generation-client `apiGenerateImage` 的入参形状）。
- *  只收通道承接集合里的键；没填的键不带（服务端按「没带」回落）。 */
+ *  只收通道承接集合里的键；没填的键不带（服务端按「没带」回落）。
+ *  `referenceImages`（#3949 需求 6/7）：参考图契约口的多张取值——首张照旧走
+ *  `image`（既有单图适配器不受影响），整组以 `images` 数组随请求下发。 */
 export function assembleImageRequest(opts: {
   mode: string;
   model: string;
+  referenceImages?: Array<string>;
   values: ModelTestValues;
 }): {
   aspectRatio?: string;
   image?: string;
+  images?: Array<string>;
   megapixels?: string;
   mode: string;
   model: string;
@@ -332,6 +337,8 @@ export function assembleImageRequest(opts: {
   const v = opts.values;
   const multiple = numericValue(v.multiple);
   const seed = seedValue(v.seed);
+  const refs = (opts.referenceImages ?? []).map((s) => s.trim()).filter((s) => s !== "");
+  const firstRef = refs[0];
   return {
     model: opts.model,
     mode: opts.mode,
@@ -341,7 +348,14 @@ export function assembleImageRequest(opts: {
     ...(v.megapixels?.trim() ? { megapixels: v.megapixels.trim() } : {}),
     ...(v.resolution?.trim() ? { resolution: v.resolution.trim() } : {}),
     ...(multiple === undefined ? {} : { multiple }),
-    ...(v.image?.trim() ? { image: v.image.trim() } : {}),
+    /* 参考图组（#3949 需求 6/7）：首张照旧走 `image`（既有单图适配器不受
+     * 影响），整组以 `images` 数组随请求下发。 */
+    ...(firstRef === undefined
+      ? v.image?.trim()
+        ? { image: v.image.trim() }
+        : {}
+      : { image: firstRef }),
+    ...(refs.length > 0 ? { images: refs } : {}),
     ...(seed === undefined ? {} : { seed }),
   };
 }
