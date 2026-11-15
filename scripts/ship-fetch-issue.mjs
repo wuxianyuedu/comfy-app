@@ -8,7 +8,7 @@
  * 处理问题时经常要回头看单子里的截图与描述，但图片链接是平台签名/时效形态，
  * 直接抓 URL 常常 404；逐张手工 `cnb issues get-imgs` 又要人肉拼路径、想落点。
  * 这一格把「取文本 + 取图片」收成一个有名字的入口：**一次跑完，落进
- * `<检出>/.workbuddy/issues/<号>/`**（固定目录、按号分目录、`.workbuddy/`
+ * `<检出>/.tmp/issues/<号>/`**（固定目录、按号分目录、`.tmp/`
  * 已被 gitignore——机器本地的作业材料，不进版本库）。
  *
  * **重跑即更新**（issue 内容有改动时再跑一遍）：`issue.md` / `comments.md`
@@ -209,7 +209,7 @@ function fetchComments({ run, log, slug, number }) {
 }
 
 /**
- * 入口：取 issue → 落 `.workbuddy/issues/<号>/`。
+ * 入口：取 issue → 落 `.tmp/issues/<号>/`。
  *
  * @param {{run: (cmd: string, args: string[]) => import("./ship-exec.mjs").ExecResult,
  *          log: (s: string) => void, slug: string | null, number: number,
@@ -243,8 +243,8 @@ export function runFetchIssue(io) {
   const body = typeof data.body === "string" ? data.body : "";
   const comments = fetchComments({ run, log, slug, number });
 
-  /* 落点：.workbuddy/issues/<号>/（固定目录、按号分目录、gitignored）。 */
-  const dir = path.join(root, ".workbuddy", "issues", String(number));
+  /* 落点：.tmp/issues/<号>/（固定目录、按号分目录；`.tmp/` 已在 .gitignore 登记）。 */
+  const dir = path.join(root, ".tmp", "issues", String(number));
   const imgsDir = path.join(dir, "imgs");
   fs.mkdirSync(imgsDir, { recursive: true });
 
