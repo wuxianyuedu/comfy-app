@@ -30,6 +30,35 @@ function deriveKey(material: string): Buffer {
   return Buffer.from(hash("sha256", material), "hex");
 }
 
+/** 密钥文件内容的定长：`randomUUID()` 去连字符后 32 位 + 16 字节 hex 32 位。
+ *  自模块创建起写入格式未变过，可作完整性判据。 */
+const KEY_FILE_MATERIAL_LENGTH = 64;
+
+function readKeyFileMaterial(): string | null {
+  try {
+    const raw = readFileSync(KEY_FILE, "utf8").trim();
+    /* 完整性校验（ISSUE #3877）：`wx` 独占创建只保证「盘上只有一份」，不保证
+     * 对方进程 write→close 已完成；并发首启时可能读到半截内容。用残缺口令
+     * 派生的密钥会与对方分叉，且被 `cachedKey` 固化成进程级错误（表现为
+     * 「明明配了 key 却解不开」）。不定长的历史内容一律拒绝，交给调用方兜底。 */
+    if (raw.length !== KEY_FILE_MATERIAL_LENGTH || !/^[0-9a-f]+$/.test(raw)) {
+      return null;
+    }
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+/** 同步短眠：仅在「密钥文件存在但内容尚不完整」的窄窗口里退避重读用。 */
+function syncSleep(ms: number): void {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    /* 个别宿主不让在主线程 wait：退化为立即重试，不影响正确性。 */
+  }
+}
+
 function loadOrCreateKey(): Buffer {
   if (cachedKey !== undefined) {
     return cachedKey;
@@ -51,7 +80,22 @@ function loadOrCreateKey(): Buffer {
     } catch {
       /* EEXIST = 对方先建好了：不视为故障，落回下面的统一读取。 */
     }
-    cachedKey = deriveKey(readFileSync(KEY_FILE, "utf8").trim());
+    /* 回读带完整性校验 + 短退避重试（ISSUE #3877）：自己写入的文件当拍即完整；
+     * 只有「对方先建、对方仍在写」的窄窗口会读到残缺内容，重试几拍即可等到
+     * 完整口令。穷尽仍不完整就走下方 env/随机兜底（与读失败同路），绝不把
+     * 残缺内容固化进 `cachedKey`。 */
+    let material: string | null = null;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      material = readKeyFileMaterial();
+      if (material !== null) {
+        break;
+      }
+      syncSleep(25);
+    }
+    if (material === null) {
+      throw new Error("llm key file content incomplete");
+    }
+    cachedKey = deriveKey(material);
     return cachedKey;
   } catch {
     const envSecret = process.env[ENV_VAR] ?? process.env[ENV_VAR.toLowerCase()];
