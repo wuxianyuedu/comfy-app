@@ -196,6 +196,18 @@ export const runRouter = createTRPCRouter({
     .input(z.object({ projectId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const run = await loadRun(ctx.user.id, input.projectId);
+      /* 终态幂等（ISSUE #3901）：done / failed 已收尾，取消不改写终态、
+       * 原样回显（与 pause / resume / approve 一样先查当前状态再动笔）；
+       * 重复取消（已 cancelled）同样幂等返回。 */
+      if (run.status === "done" || run.status === "failed" || run.status === "cancelled") {
+        return {
+          run,
+          /* SAFETY: 类型断言已复核 */
+          action: {
+            kind: "idle",
+          } as RunAction,
+        };
+      }
       return persistAndPlan(ctx.user.id, input.projectId, {
         ...run,
         status: "cancelled",

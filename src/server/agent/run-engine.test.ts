@@ -583,3 +583,64 @@ describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () =
     expect(run.storyboardScriptDigest).toBe(scriptDigestOf(revised));
   });
 });
+
+describe("advanceRunLoop · 用户意图位不被引擎回写（#3893）", () => {
+  /** 模拟用户在动作在飞时点 run.pause / run.cancel（直接写 run 列，同路由的无条件写）。 */
+  const setUserStatus = (status: "paused" | "cancelled") => async () => {
+    const row = await productionRepository.getForUser(USER, PROJ);
+    const base = normalizeProductionRun(row?.run);
+    await productionRepository.updateRun(USER, PROJ, {
+      ...base,
+      status,
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  it("生图动作执行期间用户取消：引擎收口不把 cancelled 回退成 running/done", async () => {
+    synthesizeFirstFrame.mockImplementationOnce(async () => {
+      await setUserStatus("cancelled")();
+      return "/api/generated/shot.png";
+    });
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0 }],
+        rendered: true, // 生图后规划器本可判 done：旧实现会把 cancelled 一路覆盖成 done
+      },
+      { status: "running", approvalMode: "auto", imageWorkflowId: "wf-img" },
+    );
+    await advanceRunLoop(USER, PROJ);
+    expect(normalizeProductionRun((await readRow())!.run).status).toBe("cancelled");
+  });
+
+  it("生图动作执行期间用户暂停：引擎收口写被跳过，run 停在 paused", async () => {
+    synthesizeFirstFrame.mockImplementationOnce(async () => {
+      await setUserStatus("paused")();
+      return "/api/generated/shot.png";
+    });
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0 }],
+        rendered: true,
+      },
+      { status: "running", approvalMode: "auto", imageWorkflowId: "wf-img" },
+    );
+    await advanceRunLoop(USER, PROJ);
+    expect(normalizeProductionRun((await readRow())!.run).status).toBe("paused");
+  });
+
+  it("动作失败与取消相交：取消优先，不落 failed", async () => {
+    completeLLM.mockImplementationOnce(async () => {
+      await setUserStatus("cancelled")();
+      return ""; // 空返回 → 该步失败；旧实现会把 cancelled 覆盖成 failed
+    });
+    await seed({}, { status: "running", approvalMode: "stage" });
+    await advanceRunLoop(USER, PROJ);
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.status).toBe("cancelled");
+    expect(run.error ?? null).toBeNull();
+  });
+});

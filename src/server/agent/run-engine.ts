@@ -124,11 +124,18 @@ function gateStageFor(action: RunAction): ProductionStage | null {
   }
 }
 
-async function saveRun(userId: string, projectId: string, run: ProductionRun) {
-  await productionRepository.updateRun(userId, projectId, {
-    ...run,
-    updatedAt: nowIso(),
-  });
+/**
+ * 引擎收口写回（ISSUE #3893）：带用户意图位守卫 —— 库内 run 已被置 paused /
+ * cancelled（run.pause / run.cancel 的写入）时整笔跳过，不再拿「拍初旧快照」
+ * 把用户 mid-action 的暂停 / 取消回退成 running（旧实现一个 tick 内不复查，
+ * 分钟级窗口里取消被吞、引擎继续烧算力）。返回 false = 写被跳过，下一拍
+ * 重读 status 即让位。
+ */
+async function saveRun(userId: string, projectId: string, run: ProductionRun): Promise<boolean> {
+  return productionRepository.updateRunGuarded(userId, projectId, { ...run, updatedAt: nowIso() }, [
+    "paused",
+    "cancelled",
+  ]);
 }
 
 function projectMeta(row: Production) {

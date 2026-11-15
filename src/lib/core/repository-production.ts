@@ -9,7 +9,7 @@ import { db } from "~/lib/db";
 import { production, type Production } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import type { DbExecutor } from "./repository-executor-types";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { ProductionRun } from "~/lib/production/run-types";
 
 /** 写一条生产数据（按 proj_* upsert）的入参；JSON 列传对象，Drizzle 负责序列化。 */
@@ -55,6 +55,38 @@ export class ProductionRepository extends DrizzleRepository<Production> {
       .update(production)
       .set({ run, updatedAt: new Date() })
       .where(and(eq(production.id, id), eq(production.userId, userId)))
+      .returning({ id: production.id });
+    return rows.length > 0;
+  }
+
+  /**
+   * 带意图位守卫的 run 写回（ISSUE #3893）：仅当库内当前 run.status **不在**
+   * `blockedStatuses`（用户意图位：paused / cancelled）时才整列写回。判断收在
+   * 同一条 UPDATE 里（SQLite 单写者原子），执行引擎拿「拍初旧快照」收口时
+   * 不再把用户 mid-action 写入的暂停 / 取消回退成 running。run 列是 JSON
+   * 文本（mode:"json"）：缺 status 的 fresh 行（`{}`）按空串处理 = 不在
+   * 封禁名单、照常放行。返回是否真的写入（false = 已被用户介入，跳过）。
+   */
+  async updateRunGuarded(
+    userId: string,
+    id: string,
+    run: ProductionRun,
+    blockedStatuses: ReadonlyArray<string>,
+  ): Promise<boolean> {
+    const blocked = sql.join(
+      blockedStatuses.map((status) => sql`${status}`),
+      sql`, `,
+    );
+    const rows = await db
+      .update(production)
+      .set({ run, updatedAt: new Date() })
+      .where(
+        and(
+          eq(production.id, id),
+          eq(production.userId, userId),
+          sql`coalesce(json_extract(${production.run}, '$.status'), '') not in (${blocked})`,
+        ),
+      )
       .returning({ id: production.id });
     return rows.length > 0;
   }
