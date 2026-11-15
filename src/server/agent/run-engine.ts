@@ -577,16 +577,31 @@ async function execFilm(
   if (!claimed) {
     return { ok: true, skipLog: true, summary: "成片生成中（等待合成完成）" };
   }
+  let createdFilmId: string | undefined;
   try {
     const { createFilmFromProject, startFilm } = await import("~/server/film/orchestrator");
-    const { id } = await createFilmFromProject({
+    const created = await createFilmFromProject({
       userId,
       projectId,
       videoWorkflowId: run.videoWorkflowId || undefined,
       imageWorkflowId: run.imageWorkflowId || undefined,
     });
-    await startFilm(id);
+    createdFilmId = created.id;
+    await startFilm(created.id);
   } catch (error: unknown) {
+    /* film 已落库但 startFilm 失败（ISSUE #3962）：若只清 run 标记会遗留孤儿
+     * PARSING/IDLE 影片行。尽力将该 film 标记失败后再释放起片权，允许规划器重试。 */
+    if (createdFilmId !== undefined) {
+      try {
+        const { filmRepository } = await import("~/lib/core/repository");
+        await filmRepository.markFailed(
+          createdFilmId,
+          errorMessage(error, "启动成片失败（已补偿清理）"),
+        );
+      } catch {
+        // 补偿失败不掩盖原始错误；起片权仍需释放以免卡死重试。
+      }
+    }
     await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
     return { ok: false, error: errorMessage(error, "启动成片失败") };
   }
