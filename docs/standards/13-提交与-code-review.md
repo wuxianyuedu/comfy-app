@@ -10187,7 +10187,7 @@ fail-closed 语义与 5m 预算一字未动 —— 迁歪的表现是那格红�
 | 面 | 动作 |
 | --- | --- |
 | `scripts/ci/ci-ga-verdict-callback.mjs` | 新增 `buildTitle(title, pr)` → `<标题> (#<号>)`（空白折叠成单行、超长截断、号不是数字就不拼号）+ `resolveCallbackContext()` 读 `GA_PR_TITLE` / `--title`；**拼不出来就不写 `title` 键**（回落平台缺省，不发明「无标题」这一形态） |
-| `.github/workflows/pr-gate.yml` | 收尾 job 前**一步**把标题写进 `GITHUB_ENV`（`取 PR 标题（写进 GITHUB_ENV）`，入口唯一：`scripts/ci/ci-ga-verdict-title.mjs`）。⚠️ 第一版写成「自动档读 `pull_request.title` / 按需档读 API」两步 —— 前者的判据根本不存在，#3980 已订正为「读 `client_payload.pr_title`」，见 §13.5.39.2 |
+| `.github/workflows/pr-gate.yml` | 收尾 job 前**一步**把标题写进 `GITHUB_ENV`（`取 PR 标题（写进 GITHUB_ENV）`，入口唯一：`scripts/ci-ga-verdict-title.mjs`）。⚠️ 第一版写成「自动档读 `pull_request.title` / 按需档读 API」两步 —— 前者的判据根本不存在，#3980 已订正为「读 `client_payload.pr_title`」，见 §13.5.39.2 |
 | 判据 | `tests/ci-ga-verdict-callback.test.ts`（拼装 / 不写键 / 号非数字）+ `tests/ci-ga-verdict-title.test.ts`（三条路径写**同一个键**、`pull_request.title` **不在取值面**、取不到一律退 2 且一个键都不写）；`tests/no-platform-ci-config.test.ts` 的 `GA_PR_INFRA_STEPS` 登记那个 step（它是**判决的显示面**，一步也不判红） |
 
 **为什么走 `GITHUB_ENV` 而不是各步各读一遍**：两条触发形态的标题来源不同，
@@ -10210,7 +10210,7 @@ fail-closed 语义与 5m 预算一字未动 —— 迁歪的表现是那格红�
 | 触发面 | `pr-gate.yml` 的 `on:` 只有 `repository_dispatch` / `workflow_dispatch`，**没有 `pull_request`** |
 | 后果 ① | 第一步 `记下 PR 标题（自动档）` 的 `if: github.event.pull_request.title` 恒假 ⇒ 这一步**从来没执行过** |
 | 后果 ② | 第二步 `if: !github.event.pull_request.title` 恒真，但 `CNB_PULL_REQUEST_IID` 表达式与它同一前提 —— 号取不到 ⇒ 站内读那一步也空转 |
-| 真正的标题在哪 | 镜像格的 `client_payload.pr_title`（`scripts/ci-mirror-payload.mjs` 的 `dispatchPayload`），`run-name` 用的就是它 |
+| 真正的标题在哪 | 镜像格的 `client_payload.pr_title`（`scripts/ci/ci-mirror-payload.mjs` 的 `dispatchPayload`），`run-name` 用的就是它 |
 
 **判据缺失是病灶**：`tests/ci-ga-verdict-title.test.ts` 当时只钉「两个触发形态写同一个键 /
 取不到退 2」，一次也没问「自动档那一格的输入在这个 workflow 上存不存在」——
