@@ -48,7 +48,12 @@ export const season = sqliteTable(
       .$defaultFn(() => new Date())
       .$onUpdate(() => new Date()),
   },
-  (t) => [index("season_series_idx").on(t.seriesId)],
+  (t) => [
+    index("season_series_idx").on(t.seriesId),
+    // 同一系列下季号唯一（#3849）：服务端按「现有最大季号 +1」发号（UI 建季
+    // 不传号），唯一索引兜住并发与显式传号撞号的路径。
+    uniqueIndex("season_series_number_uniq").on(t.seriesId, t.seasonNumber),
+  ],
 );
 
 export const episode = sqliteTable(
@@ -79,6 +84,9 @@ export const episode = sqliteTable(
   },
   (t) => [
     index("episode_season_idx").on(t.seasonId),
+    // 同一季下集号唯一（#3849）：服务端按「现有最大集号 +1」发号（UI 建集
+    // 不传号），唯一索引兜住并发与显式传号撞号的路径。
+    uniqueIndex("episode_season_number_uniq").on(t.seasonId, t.episodeNumber),
     uniqueIndex("episode_project_uniq").on(t.projectId),
   ],
 );
@@ -112,7 +120,13 @@ export const character = sqliteTable(
       .$defaultFn(() => new Date())
       .$onUpdate(() => new Date()),
   },
-  (t) => [index("character_series_idx").on(t.seriesId)],
+  (t) => [
+    index("character_series_idx").on(t.seriesId),
+    // 同一系列下角色名唯一（#3849）：promoteFromProduction 按 name 合并 /
+    // 去重，同名两行会让合并只命中其一；服务端 create / 改名路径把撞名转成
+    // 业务冲突（409），这里补上库级兜底。
+    uniqueIndex("character_series_name_uniq").on(t.seriesId, t.name),
+  ],
 );
 
 /** 集 ↔ 角色 关联（FR-SR-03：引用而非拷贝）。 */

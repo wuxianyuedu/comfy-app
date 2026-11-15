@@ -30,6 +30,7 @@ import { runPnpmSync } from "./launcher-core/shell.mjs";
 import { pnpmCli } from "./ci-install-deps.mjs";
 import { rejectUnknownArgs } from "./cli-arg-contract.mjs";
 import { probeSchemaFresh, resolveSqlitePath } from "./db-schema-state.mjs";
+import { sweepDuplicateRowsForUniqueIndexes } from "./db-unique-sweep.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const dbPath = resolveSqlitePath(root);
@@ -180,6 +181,11 @@ process.stdout.write(
     beforeTables > 0 ? `（当前 ${beforeTables} 张用户表）` : "（库还不存在 / 是空的）"
   }\n`,
 );
+
+/* 唯一索引上线前的存量重复清洗（#3849）：0004 起的迁移含 CREATE UNIQUE INDEX，
+ * 库里已有重复行时它会在迁移中途失败、留下半套账。与 `db:push` 同一口径：
+ * 清洗排在应用迁移之前（能保内容不删行，见 db-unique-sweep.mjs 文件头）。 */
+sweepDuplicateRowsForUniqueIndexes(dbPath);
 
 /* ── ② 跑迁移 ────────────────────────────────────────────────────────────
  *

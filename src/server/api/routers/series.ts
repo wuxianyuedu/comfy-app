@@ -1,173 +1,23 @@
+/**
+ * `series.ts` — 系列 / 季 / 集 容器层路由（FR-SR-01/02）。角色库段（FR-SR-03）拆在
+ * `series-character.ts`、整季生成拆在 `series-generation.ts`（§12.6 文件行数上限的
+ * 同一刀法）；归属断言与角色卡映射等两边共用的判定在 `series-shared.ts`（无环：
+ * 主件与拆分件都只依赖那片叶子）。业务键唯一性口径见 §1.10 / #3849。
+ */
 import { z } from "zod";
-import { and, asc, desc, eq } from "drizzle-orm";
-import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createId } from "@paralleldrive/cuid2";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { isPlainRecord } from "~/lib/is-record";
-import type * as schema from "~/server/db/schema";
+import { uniqueConflict } from "./unique-conflict";
 import {
-  series,
-  season,
-  episode,
-  character,
-  episodeCharacter,
-  production,
-} from "~/server/db/schema";
-
-/** 生产数据里的角色卡（JSON 列，形状见 `src/lib/workshop/types.ts` 的 `Character`）。 */
-type ProductionCharacter = {
-  ageGender?: string;
-  appearance?: string;
-  costume?: string;
-  id?: string;
-  name?: string;
-  negativePrompt?: string;
-  params?: unknown;
-  personality?: string;
-  portraits?: Array<unknown>;
-  portraitUrl?: string | null;
-  positivePrompt?: string;
-  skillSlug?: string | null;
-  styleTags?: Array<unknown>;
-  temperament?: string;
-};
-
-/** `production.characters` 列的运行期判据：条目是对象（引擎写入端保证字段形状，
- *  消费侧字段读取全部 `?? ""` 兜底）；非对象条目跳过，不再对 any[] 盲断言。 */
-function isProductionCharacterRow(v: unknown): v is ProductionCharacter {
-  return isPlainRecord(v);
-}
-
-/** 把生产数据里的角色卡映射成系列角色库实体的可写字段（FR-SR-03：引用而非拷贝）。 */
-function productionCharacterToLibrary(pc: ProductionCharacter): {
-  ageGender: string;
-  appearance: string;
-  costume: string;
-  name: string;
-  negativePrompt: string;
-  params: unknown;
-  personality: string;
-  portraits: Array<unknown>;
-  portraitUrl: string | null;
-  positivePrompt: string;
-  skillSlug: string | null;
-  styleTags: Array<unknown>;
-  temperament: string;
-} {
-  return {
-    name: pc.name ?? "",
-    ageGender: pc.ageGender ?? "",
-    appearance: pc.appearance ?? "",
-    costume: pc.costume ?? "",
-    personality: pc.personality ?? "",
-    temperament: pc.temperament ?? "",
-    styleTags: pc.styleTags ?? [],
-    skillSlug: pc.skillSlug ?? null,
-    positivePrompt: pc.positivePrompt ?? "",
-    negativePrompt: pc.negativePrompt ?? "",
-    params: pc.params ?? {},
-    portraitUrl: pc.portraitUrl ?? null,
-    portraits: pc.portraits ?? [],
-  };
-}
-
-/** 系列角色库实体 → 生产数据角色卡（注入时落回 `production.characters`）。 */
-function libraryCharacterToProduction(c: {
-  ageGender: string;
-  appearance: string;
-  costume: string;
-  id: string;
-  name: string;
-  negativePrompt: string;
-  params: unknown;
-  personality: string;
-  portraits: unknown;
-  portraitUrl: string | null;
-  positivePrompt: string;
-  skillSlug: string | null;
-  styleTags: unknown;
-  temperament: string;
-}): Record<string, unknown> {
-  return {
-    id: c.id,
-    name: c.name,
-    ageGender: c.ageGender,
-    appearance: c.appearance,
-    costume: c.costume,
-    personality: c.personality,
-    temperament: c.temperament,
-    styleTags: c.styleTags,
-    skillSlug: c.skillSlug ?? undefined,
-    portraits: c.portraits,
-    portraitUrl: c.portraitUrl ?? undefined,
-    params: c.params ?? {},
-    positivePrompt: c.positivePrompt,
-    negativePrompt: c.negativePrompt,
-  };
-}
-
-/** 断言当前用户拥有该角色（沿 series 校验归属）。 */
-async function assertCharacterOwner(ctx: Ctx, id: string) {
-  const rows = await ctx.db.select().from(character).where(eq(character.id, id)).limit(1);
-  const row = rows[0];
-  if (!row) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "角色不存在" });
-  }
-  await assertSeriesOwner(ctx, row.seriesId);
-  return row;
-}
-
-/** 取某季归属的系列 id。 */
-async function seasonSeriesId(ctx: Ctx, seasonId: string): Promise<string | null> {
-  const rows = await ctx.db
-    .select({ seriesId: season.seriesId })
-    .from(season)
-    .where(eq(season.id, seasonId))
-    .limit(1);
-  return rows[0]?.seriesId ?? null;
-}
-
-/** tRPC ctx 的子集（仅取 router 需要的 db / user）。 */
-type Db = SqliteRemoteDatabase<typeof schema>;
-type Ctx = { db: Db; user: { id: string } };
-
-/** 载入系列；不存在返回 null。 */
-async function loadSeries(ctx: Ctx, id: string) {
-  const rows = await ctx.db.select().from(series).where(eq(series.id, id)).limit(1);
-  return rows[0] ?? null;
-}
-
-/** 断言当前用户拥有该系列，否则 FORBIDDEN。 */
-async function assertSeriesOwner(ctx: Ctx, id: string) {
-  const row = await loadSeries(ctx, id);
-  if (row?.userId !== ctx.user.id) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该系列" });
-  }
-  return row;
-}
-
-/** 断言当前用户拥有该季（沿 series 校验归属）。 */
-async function assertSeasonOwner(ctx: Ctx, id: string) {
-  const rows = await ctx.db.select().from(season).where(eq(season.id, id)).limit(1);
-  const row = rows[0];
-  if (!row) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "季不存在" });
-  }
-  await assertSeriesOwner(ctx, row.seriesId);
-  return row;
-}
-
-/** 断言当前用户拥有该集（沿 season → series 校验归属）。 */
-async function assertEpisodeOwner(ctx: Ctx, id: string) {
-  const rows = await ctx.db.select().from(episode).where(eq(episode.id, id)).limit(1);
-  const row = rows[0];
-  if (!row) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "集不存在" });
-  }
-  await assertSeasonOwner(ctx, row.seasonId);
-  return row;
-}
+  assertEpisodeOwner,
+  assertSeasonOwner,
+  assertSeriesOwner,
+  loadSeries,
+} from "./series-shared";
+import { seriesCharacterProcedures } from "./series-character";
+import { episode, season, series } from "~/server/db/schema";
 
 export const seriesRouter = createTRPCRouter({
   // ───────────────────────────── 系列 (FR-SR-01) ─────────────────────────────
@@ -263,16 +113,28 @@ export const seriesRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       await assertSeriesOwner(ctx, input.seriesId);
-      const [row] = await ctx.db
-        .insert(season)
-        .values({
-          id: createId(),
-          seriesId: input.seriesId,
-          seasonNumber: input.seasonNumber ?? 1,
-          title: input.title ?? "",
-        })
-        .returning();
-      return row;
+      /* UI 建季不传季号：按「现有最大季号 +1」发号。此前默认恒为 1 —— 建第二个
+       * 季与第一个同号（#3849 现场之一）；显式传号原样用，撞号由
+       * season_series_number_uniq 兜底成 409（下方 catch），不再落重复行。 */
+      const maxRow = await ctx.db
+        .select({ maxNum: sql<number | null>`max(${season.seasonNumber})` })
+        .from(season)
+        .where(eq(season.seriesId, input.seriesId));
+      const seasonNumber = input.seasonNumber ?? (maxRow[0]?.maxNum ?? 0) + 1;
+      try {
+        const [row] = await ctx.db
+          .insert(season)
+          .values({
+            id: createId(),
+            seriesId: input.seriesId,
+            seasonNumber,
+            title: input.title ?? "",
+          })
+          .returning();
+        return row;
+      } catch (error) {
+        throw uniqueConflict(error, [{ columns: ["seasonNumber"], message: "该季号已存在" }]);
+      }
     }),
 
   updateSeason: authedProcedure
@@ -292,7 +154,11 @@ export const seriesRouter = createTRPCRouter({
       if (input.title !== undefined) {
         patch.title = input.title;
       }
-      await ctx.db.update(season).set(patch).where(eq(season.id, input.id));
+      try {
+        await ctx.db.update(season).set(patch).where(eq(season.id, input.id));
+      } catch (error) {
+        throw uniqueConflict(error, [{ columns: ["seasonNumber"], message: "该季号已存在" }]);
+      }
       return (await ctx.db.select().from(season).where(eq(season.id, input.id)).limit(1))[0];
     }),
 
@@ -331,20 +197,34 @@ export const seriesRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       await assertSeasonOwner(ctx, input.seasonId);
-      const [row] = await ctx.db
-        .insert(episode)
-        .values({
-          id: createId(),
-          seasonId: input.seasonId,
-          projectId: input.projectId ?? null,
-          episodeNumber: input.episodeNumber ?? 1,
-          title: input.title ?? "",
-          synopsis: input.synopsis ?? "",
-          targetDurationSec: input.targetDurationSec ?? null,
-          status: input.status ?? "draft",
-        })
-        .returning();
-      return row;
+      /* UI 建集不传集号：按「本季现有最大集号 +1」发号（此前默认恒 1，#3849）。
+       * 显式传号原样用；集号 / 项目绑定撞唯一索引时按列给业务 409。 */
+      const maxRow = await ctx.db
+        .select({ maxNum: sql<number | null>`max(${episode.episodeNumber})` })
+        .from(episode)
+        .where(eq(episode.seasonId, input.seasonId));
+      const episodeNumber = input.episodeNumber ?? (maxRow[0]?.maxNum ?? 0) + 1;
+      try {
+        const [row] = await ctx.db
+          .insert(episode)
+          .values({
+            id: createId(),
+            seasonId: input.seasonId,
+            projectId: input.projectId ?? null,
+            episodeNumber,
+            title: input.title ?? "",
+            synopsis: input.synopsis ?? "",
+            targetDurationSec: input.targetDurationSec ?? null,
+            status: input.status ?? "draft",
+          })
+          .returning();
+        return row;
+      } catch (error) {
+        throw uniqueConflict(error, [
+          { columns: ["episode.projectId"], message: "该项目已绑定到其他集" },
+          { columns: ["episode.episodeNumber"], message: "该集号已存在" },
+        ]);
+      }
     }),
 
   updateEpisode: authedProcedure
@@ -380,7 +260,14 @@ export const seriesRouter = createTRPCRouter({
       if (input.status !== undefined) {
         patch.status = input.status;
       }
-      await ctx.db.update(episode).set(patch).where(eq(episode.id, input.id));
+      try {
+        await ctx.db.update(episode).set(patch).where(eq(episode.id, input.id));
+      } catch (error) {
+        throw uniqueConflict(error, [
+          { columns: ["episode.projectId"], message: "该项目已绑定到其他集" },
+          { columns: ["episode.episodeNumber"], message: "该集号已存在" },
+        ]);
+      }
       return (await ctx.db.select().from(episode).where(eq(episode.id, input.id)).limit(1))[0];
     }),
 
@@ -434,420 +321,20 @@ export const seriesRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "集不存在" });
       }
       await assertSeasonOwner(ctx, ep.seasonId);
-      const [row] = await ctx.db
-        .update(episode)
-        .set({ projectId: input.projectId })
-        .where(eq(episode.id, input.episodeId))
-        .returning();
-      return row;
+      try {
+        const [row] = await ctx.db
+          .update(episode)
+          .set({ projectId: input.projectId })
+          .where(eq(episode.id, input.episodeId))
+          .returning();
+        return row;
+      } catch (error) {
+        throw uniqueConflict(error, [
+          { columns: ["episode.projectId"], message: "该项目已绑定到其他集" },
+        ]);
+      }
     }),
 
-  // ───────────────────────────── 系列角色库 (FR-SR-03) ─────────────────────────────
-  /** 列出某系列下的全部角色库实体（引用而非拷贝，跨集复用）。 */
-  characters: authedProcedure
-    .input(z.object({ seriesId: z.string().min(1) }))
-    .query(async ({ ctx, input }) => {
-      await assertSeriesOwner(ctx, input.seriesId);
-      return ctx.db
-        .select()
-        .from(character)
-        .where(eq(character.seriesId, input.seriesId))
-        .orderBy(asc(character.name));
-    }),
-
-  createCharacter: authedProcedure
-    .input(
-      z.object({
-        seriesId: z.string().min(1),
-        name: z.string().min(1).max(120),
-        ageGender: z.string().max(200).optional(),
-        appearance: z.string().max(4000).optional(),
-        costume: z.string().max(4000).optional(),
-        personality: z.string().max(4000).optional(),
-        temperament: z.string().max(2000).optional(),
-        styleTags: z.array(z.string()).optional(),
-        skillSlug: z.string().optional(),
-        positivePrompt: z.string().max(8000).optional(),
-        negativePrompt: z.string().max(8000).optional(),
-        params: z.unknown().optional(),
-        portraitUrl: z.string().optional(),
-        portraits: z.unknown().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      await assertSeriesOwner(ctx, input.seriesId);
-      const [row] = await ctx.db
-        .insert(character)
-        .values({
-          id: createId(),
-          seriesId: input.seriesId,
-          name: input.name,
-          ageGender: input.ageGender ?? "",
-          appearance: input.appearance ?? "",
-          costume: input.costume ?? "",
-          personality: input.personality ?? "",
-          temperament: input.temperament ?? "",
-          styleTags: input.styleTags ?? [],
-          skillSlug: input.skillSlug ?? null,
-          positivePrompt: input.positivePrompt ?? "",
-          negativePrompt: input.negativePrompt ?? "",
-          params: input.params ?? {},
-          portraitUrl: input.portraitUrl ?? null,
-          portraits: input.portraits ?? [],
-        })
-        .returning();
-      return row;
-    }),
-
-  updateCharacter: authedProcedure
-    .input(
-      z.object({
-        id: z.string().min(1),
-        name: z.string().min(1).max(120).optional(),
-        ageGender: z.string().max(200).optional(),
-        appearance: z.string().max(4000).optional(),
-        costume: z.string().max(4000).optional(),
-        personality: z.string().max(4000).optional(),
-        temperament: z.string().max(2000).optional(),
-        styleTags: z.array(z.string()).optional(),
-        skillSlug: z.string().optional(),
-        positivePrompt: z.string().max(8000).optional(),
-        negativePrompt: z.string().max(8000).optional(),
-        params: z.unknown().optional(),
-        portraitUrl: z.string().optional(),
-        portraits: z.unknown().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      await assertCharacterOwner(ctx, input.id);
-      const patch: Partial<typeof character.$inferInsert> = {};
-      if (input.name !== undefined) {
-        patch.name = input.name;
-      }
-      if (input.ageGender !== undefined) {
-        patch.ageGender = input.ageGender;
-      }
-      if (input.appearance !== undefined) {
-        patch.appearance = input.appearance;
-      }
-      if (input.costume !== undefined) {
-        patch.costume = input.costume;
-      }
-      if (input.personality !== undefined) {
-        patch.personality = input.personality;
-      }
-      if (input.temperament !== undefined) {
-        patch.temperament = input.temperament;
-      }
-      if (input.styleTags !== undefined) {
-        patch.styleTags = input.styleTags;
-      }
-      if (input.skillSlug !== undefined) {
-        patch.skillSlug = input.skillSlug ?? null;
-      }
-      if (input.positivePrompt !== undefined) {
-        patch.positivePrompt = input.positivePrompt;
-      }
-      if (input.negativePrompt !== undefined) {
-        patch.negativePrompt = input.negativePrompt;
-      }
-      if (input.params !== undefined) {
-        patch.params = input.params;
-      }
-      if (input.portraitUrl !== undefined) {
-        patch.portraitUrl = input.portraitUrl ?? null;
-      }
-      if (input.portraits !== undefined) {
-        patch.portraits = input.portraits;
-      }
-      await ctx.db.update(character).set(patch).where(eq(character.id, input.id));
-      return (await ctx.db.select().from(character).where(eq(character.id, input.id)).limit(1))[0];
-    }),
-
-  deleteCharacter: authedProcedure
-    .input(z.object({ id: z.string().min(1) }))
-    .mutation(async ({ ctx, input }) => {
-      await assertCharacterOwner(ctx, input.id);
-      await ctx.db.delete(character).where(eq(character.id, input.id));
-      /* SAFETY: 类型断言已复核 */
-      return { ok: true as const };
-    }),
-
-  /** 列出某集已关联的角色（含在本集中的定位 role）。 */
-  episodeCharacters: authedProcedure
-    .input(z.object({ episodeId: z.string().min(1) }))
-    .query(async ({ ctx, input }) => {
-      await assertEpisodeOwner(ctx, input.episodeId);
-      return ctx.db
-        .select({ character, role: episodeCharacter.role })
-        .from(episodeCharacter)
-        .innerJoin(character, eq(episodeCharacter.characterId, character.id))
-        .where(eq(episodeCharacter.episodeId, input.episodeId))
-        .orderBy(asc(character.name));
-    }),
-
-  /**
-   * 反向查询：列出「这个角色被哪些集引用了」（FR-SR-03 ②）。
-   * 与 `episodeCharacters`（正向：某集关联了哪些角色）互为反向；调用方可取
-   * `.length` 作为「被 N 集引用」的计数（FR-SR-03 ① 的提示来源）。
-   */
-  characterEpisodes: authedProcedure
-    .input(z.object({ characterId: z.string().min(1) }))
-    .query(async ({ ctx, input }) => {
-      await assertCharacterOwner(ctx, input.characterId);
-      return ctx.db
-        .select({
-          episodeId: episode.id,
-          title: episode.title,
-          episodeNumber: episode.episodeNumber,
-          seasonId: season.id,
-          seasonNumber: season.seasonNumber,
-          seasonTitle: season.title,
-          role: episodeCharacter.role,
-        })
-        .from(episodeCharacter)
-        .innerJoin(episode, eq(episodeCharacter.episodeId, episode.id))
-        .innerJoin(season, eq(episode.seasonId, season.id))
-        .where(eq(episodeCharacter.characterId, input.characterId))
-        .orderBy(asc(season.seasonNumber), asc(episode.episodeNumber));
-    }),
-
-  /** 把系列角色库里的某角色关联到某集（同一系列才可；重复关联幂等）。 */
-  linkCharacter: authedProcedure
-    .input(
-      z.object({
-        episodeId: z.string().min(1),
-        characterId: z.string().min(1),
-        role: z.string().max(200).optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const ep = await assertEpisodeOwner(ctx, input.episodeId);
-      const ch = await assertCharacterOwner(ctx, input.characterId);
-      const epSeriesId = await seasonSeriesId(ctx, ep.seasonId);
-      if (ch.seriesId !== epSeriesId) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "该角色不属于本系列，无法关联到本集",
-        });
-      }
-      await ctx.db
-        .insert(episodeCharacter)
-        .values({
-          id: createId(),
-          episodeId: input.episodeId,
-          characterId: input.characterId,
-          role: input.role ?? "",
-        })
-        .onConflictDoNothing();
-      return (
-        await ctx.db
-          .select()
-          .from(episodeCharacter)
-          .where(
-            and(
-              eq(episodeCharacter.episodeId, input.episodeId),
-              eq(episodeCharacter.characterId, input.characterId),
-            ),
-          )
-          .limit(1)
-      )[0];
-    }),
-
-  /** 解除某集与某角色的关联。 */
-  unlinkCharacter: authedProcedure
-    .input(
-      z.object({
-        episodeId: z.string().min(1),
-        characterId: z.string().min(1),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      await assertEpisodeOwner(ctx, input.episodeId);
-      await assertCharacterOwner(ctx, input.characterId);
-      await ctx.db
-        .delete(episodeCharacter)
-        .where(
-          and(
-            eq(episodeCharacter.episodeId, input.episodeId),
-            eq(episodeCharacter.characterId, input.characterId),
-          ),
-        );
-      /* SAFETY: 类型断言已复核 */
-      return { ok: true as const };
-    }),
-
-  /**
-   * 提升（production → 系列角色库）：把某项目（`production.characters` 工作副本）
-   * 按 name 幂等合并进本集所属系列的角色库，并把结果关联到本集。
-   * 同名角色只更新不新建（重复跑安全）；新增的才建实体。
-   */
-  promoteFromProduction: authedProcedure
-    .input(z.object({ projectId: z.string().min(1) }))
-    .mutation(async ({ ctx, input }) => {
-      const [ep] = await ctx.db
-        .select()
-        .from(episode)
-        .where(eq(episode.projectId, input.projectId))
-        .limit(1);
-      if (!ep) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "项目尚未挂载到任何集" });
-      }
-      await assertEpisodeOwner(ctx, ep.id);
-      const [prod] = await ctx.db
-        .select()
-        .from(production)
-        .where(eq(production.id, input.projectId))
-        .limit(1);
-      if (!prod) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据不存在" });
-      }
-      if (prod.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该项目" });
-      }
-      const epSeriesId = await seasonSeriesId(ctx, ep.seasonId);
-      if (epSeriesId === null) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "季未归属任何系列" });
-      }
-      const prodChars = Array.isArray(prod.characters)
-        ? prod.characters.filter(isProductionCharacterRow)
-        : [];
-      let created = 0;
-      let updated = 0;
-      let linked = 0;
-      /* 查-改-插收进 immediate 事务（ISSUE #3833）：本方法注释承诺「同名角色
-       * 只更新不新建（重复跑安全）」，但 check-then-insert 在重试/并发交叠时会
-       * 插出同名重复角色（character 表没有 (seriesId, name) 唯一约束，注入侧
-       * 按 name 合并也只会命中其中一条）。SQLite 单写者 + immediate 拿锁把整段
-       * 串行化，让「重复跑安全」由机制兑现而不是靠时序运气。 */
-      await ctx.db.transaction(
-        async (tx) => {
-          const linkedIds = new Set<string>();
-          for (const pc of prodChars) {
-            const name = pc?.name ?? "";
-            if (!name) {
-              continue;
-            }
-            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-            const [existing] = await tx
-              .select()
-              .from(character)
-              .where(and(eq(character.seriesId, epSeriesId), eq(character.name, name)))
-              .limit(1);
-            let charId: string;
-            if (existing) {
-              // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-              await tx
-                .update(character)
-                .set(productionCharacterToLibrary(pc))
-                .where(eq(character.id, existing.id));
-              updated += 1;
-              charId = existing.id;
-            } else {
-              // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-              const [row] = await tx
-                .insert(character)
-                .values({
-                  id: createId(),
-                  seriesId: epSeriesId,
-                  ...productionCharacterToLibrary(pc),
-                })
-                .returning();
-              created += 1;
-              if (!row) {
-                throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "写入系列角色失败" });
-              }
-              charId = row.id;
-            }
-            if (!linkedIds.has(charId)) {
-              // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-              await tx
-                .insert(episodeCharacter)
-                .values({ id: createId(), episodeId: ep.id, characterId: charId, role: "" })
-                .onConflictDoNothing();
-              linkedIds.add(charId);
-              linked += 1;
-            }
-          }
-        },
-        { behavior: "immediate" },
-      );
-      return { created, updated, linked };
-    }),
-
-  /**
-   * 注入（系列角色库 → production）：把本集已关联的角色按 name 合并进项目的
-   * `production.characters` 工作副本（同名覆盖字段，不同名追加）。重复跑安全。
-   */
-  injectToProduction: authedProcedure
-    .input(z.object({ projectId: z.string().min(1) }))
-    .mutation(async ({ ctx, input }) => {
-      const [ep] = await ctx.db
-        .select()
-        .from(episode)
-        .where(eq(episode.projectId, input.projectId))
-        .limit(1);
-      if (!ep) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "项目尚未挂载到任何集" });
-      }
-      await assertEpisodeOwner(ctx, ep.id);
-      return ctx.db.transaction(
-        async (tx) => {
-          const [prod] = await tx
-            .select()
-            .from(production)
-            .where(eq(production.id, input.projectId))
-            .limit(1);
-          if (!prod) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "生产数据不存在" });
-          }
-          if (prod.userId !== ctx.user.id) {
-            throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该项目" });
-          }
-          const links = await tx
-            .select({ character })
-            .from(episodeCharacter)
-            .innerJoin(character, eq(episodeCharacter.characterId, character.id))
-            .where(eq(episodeCharacter.episodeId, ep.id));
-          const prodChars = Array.isArray(prod.characters)
-            ? prod.characters.filter(isProductionCharacterRow)
-            : [];
-          const byName = new Map<string, ProductionCharacter>();
-          for (const c of prodChars) {
-            const n = typeof c?.name === "string" ? c.name : "";
-            if (n) {
-              byName.set(n, c);
-            }
-          }
-          let injected = 0;
-          let merged = 0;
-          for (const link of links) {
-            const lc = link.character;
-            const mapped = libraryCharacterToProduction(lc);
-            const existing = byName.get(lc.name);
-            if (existing) {
-              Object.assign(existing, mapped);
-              merged += 1;
-            } else {
-              const next = mapped as ProductionCharacter;
-              prodChars.push(next);
-              if (lc.name) {
-                byName.set(lc.name, next);
-              }
-              injected += 1;
-            }
-          }
-          const updated = await tx
-            .update(production)
-            .set({ characters: prodChars })
-            .where(and(eq(production.id, input.projectId), eq(production.userId, ctx.user.id)))
-            .returning({ id: production.id });
-          if (!updated[0]) {
-            throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该项目" });
-          }
-          return { injected, merged, total: prodChars.length };
-        },
-        { behavior: "immediate" },
-      );
-    }),
+  // ────────────────── 系列角色库 (FR-SR-03，拆分件见 series-character.ts) ──────────────────
+  ...seriesCharacterProcedures,
 });
