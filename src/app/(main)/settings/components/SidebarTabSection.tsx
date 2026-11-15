@@ -9,7 +9,8 @@
  * 事 —— 否则那两屏永远由代码写死，「设置里配了、界面却不认」就是两处各说各话。
  *
  * 两种保存方式与「模式契约」同一套口径：
- *   · 「保存」 —— 落本机（`data/`），开发版与正式包都能用；
+ *   · 本机覆盖 —— **改一格即存**（落 `data/`，开发版与正式包都能用；ISSUE #3948
+ *     去掉了「保存」那一步：配好就落盘，改完没点就切走不该等于白改）；
  *   · 「保存为项目默认（跟代码走）」 —— 落项目默认那份入库 JSON，只有开发检出可用。
  *
  * 纯展示：只消费 `useSidebarTabSection` 那个控制器（逻辑层），自身不碰 tRPC。
@@ -85,16 +86,10 @@ export function SidebarTabSection() {
         </p>
       )}
 
+      {/* 本机覆盖是「改一格即存」（ISSUE #3948）：配好就落 `data/`，不再有
+          「保存」那一步（改完没点就切走 = 白改，与「尺寸配置表」那一族口径不一）。
+          只有「写项目默认」是显式动作 —— 那一份进代码库，不能顺手就改。 */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button
-          disabled={c.saving || c.draft === null}
-          onClick={() => {
-            void c.save();
-          }}
-          variant="primary-solid"
-        >
-          {c.saving ? "保存中…" : "保存"}
-        </Button>
         {c.customized && (
           <Button
             disabled={c.resetBusy}
