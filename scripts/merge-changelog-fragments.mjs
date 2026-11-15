@@ -280,6 +280,11 @@ function mergeInto(changelogText, fragments, version, anchorRev) {
     }
   }
   for (const f of fragments) {
+    /* 已并入防重（ISSUE #3856）：「写 CHANGELOG 成功、删碎片失败」的中断后重跑，
+     * 会把同一条目再贴一遍 —— 正文已经在账上就跳过，让重跑幂等。 */
+    if (changelogText.includes(f.body)) {
+      continue;
+    }
     listOf(f.section).push("", f.body);
   }
 
@@ -406,9 +411,14 @@ if (checkOnly) {
   }
   process.exit(0);
 }
-fs.writeFileSync(CHANGELOG, merged.text);
+/* CHANGELOG 先写临时文件再 rename（ISSUE #3856）：与 launcher 的 writeJson 同
+ * 口径 —— 直写被中断会留半截账本。碎片删除带 force：Windows 上被编辑器 / 索引器
+ * 占用时不再让整段收尾炸掉。 */
+const changelogTmp = `${CHANGELOG}.${process.pid}.tmp`;
+fs.writeFileSync(changelogTmp, merged.text);
+fs.renameSync(changelogTmp, CHANGELOG);
 for (const f of fragments) {
-  fs.rmSync(path.join(FRAGMENT_DIR, f.name));
+  fs.rmSync(path.join(FRAGMENT_DIR, f.name), { force: true });
 }
 console.log(
   `[merge-changelog] ✓ 已并入「## ${merged.target}」` +

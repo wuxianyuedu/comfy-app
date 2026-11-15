@@ -26,6 +26,7 @@ import { useState } from "react";
 
 import { ChevronDownIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FieldLegend, FieldSet } from "~/components/ui/field";
 import { FormField } from "~/components/ui/form-field";
@@ -34,6 +35,7 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { Toggle } from "~/components/ui/toggle";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { EMPTY_PLACEHOLDER } from "~/lib/display-value";
 import { textHandler } from "~/lib/form-props";
 import {
@@ -107,9 +109,11 @@ export function ProviderModelDialog({
             <div className="min-w-0">
               <h3 className="u-title">{dialog.mode === "edit" ? "编辑模型" : "添加模型"}</h3>
               {provider && (
-                <p className="text-muted-foreground text-2xs mt-0.5 truncate">
-                  所属供应商：{provider.name}
-                </p>
+                <Hint label={`所属供应商：${provider.name}`}>
+                  <p className="text-muted-foreground text-2xs mt-0.5 truncate">
+                    所属供应商：{provider.name}
+                  </p>
+                </Hint>
               )}
             </div>
             <Button
@@ -507,9 +511,9 @@ function ModelAdvancedFieldset({
             <div className="flex flex-col gap-1.5">
               {levels.map((level) => (
                 <div className="flex items-center gap-2" key={level}>
-                  <span className="text-muted-foreground w-20 shrink-0 truncate text-xs">
+                  <TruncatedText className="text-muted-foreground w-20 shrink-0 truncate text-xs">
                     {level}
-                  </span>
+                  </TruncatedText>
                   <Input
                     aria-label={`${level} 对应的取值`}
                     className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary h-auto rounded-lg px-2 py-1.5 text-sm"

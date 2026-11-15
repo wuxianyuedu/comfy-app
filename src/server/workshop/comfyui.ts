@@ -14,6 +14,7 @@ import { promises as fs, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { asRecord, isPlainRecord } from "~/lib/is-record";
+import { AsyncMutex } from "~/lib/async-mutex";
 import { DEFAULT_SIZE_SPEC, sizeSpecDims, type SizeSpec } from "~/lib/media/size-presets";
 
 const OUTPUT_DIR = path.join(process.cwd(), "data", "workshop-outputs");
@@ -72,9 +73,13 @@ export type SettingsFileIo = {
 const realSettingsFileIo: SettingsFileIo = {
   read: (file) => readFileSync(file, "utf8"),
   fingerprint: settingsFileFingerprint,
+  /* 原子写（ISSUE #3859）：tmp + rename，读侧（250ms 级的界面读取 / MCP）不会
+   * 撞到半截 JSON。 */
   write: async (file, content) => {
     await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, content, "utf8");
+    const tmp = `${file}.${process.pid}.tmp`;
+    await fs.writeFile(tmp, content, "utf8");
+    await fs.rename(tmp, file);
   },
 };
 
@@ -85,6 +90,9 @@ const realSettingsFileIo: SettingsFileIo = {
 export function createSettingsFileMemo(file: string, io: SettingsFileIo = realSettingsFileIo) {
   let cache: ComfySettings | null = null;
   let fingerprint: string | null = null;
+  /* 保存串行化（ISSUE #3859）：两个并发 save 各自从旧快照合并、整份覆盖，
+   * 先写者的 patch 被后写者顶掉。进程内互斥串行化（写入方都在本进程）。 */
+  const saveMutex = new AsyncMutex();
   return {
     load(): ComfySettings {
       const fp = io.fingerprint(file);
@@ -103,10 +111,12 @@ export function createSettingsFileMemo(file: string, io: SettingsFileIo = realSe
       return parsed;
     },
     save(patch: Partial<ComfySettings>): Promise<ComfySettings> {
-      const next = { ...this.load(), ...patch };
-      return io.write(file, JSON.stringify(next, null, 2)).then(() => {
-        cache = next;
-        fingerprint = io.fingerprint(file);
+      return saveMutex.run(async () => {
+        const next = { ...this.load(), ...patch };
+        await io.write(file, JSON.stringify(next, null, 2)).then(() => {
+          cache = next;
+          fingerprint = io.fingerprint(file);
+        });
         return next;
       });
     },
@@ -406,6 +416,7 @@ export async function runComfyWorkflow(
 
   const deadline = Date.now() + 10 * 60_000;
   let history: Record<string, unknown> = {};
+  let timedOut = true;
   while (Date.now() < deadline) {
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     history = await getComfyHistory(promptId).catch(() => ({}));
@@ -414,10 +425,25 @@ export async function runComfyWorkflow(
     const done = status?.completed === true || status?.status_str === "success";
     const failed = status?.status_str === "error";
     if (done || failed) {
+      timedOut = false;
       break;
     }
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(1500);
+  }
+
+  if (timedOut) {
+    /* 超时 ≠ 完成（ISSUE #3878）：原先把「10 分钟没等到」落进「完成但没有输出
+     * 文件」的失败分支，排障方向全错；且 ComfyUI 侧该 prompt 仍在消耗 GPU、
+     * 无人取消。这里单独报错，并尽力 /interrupt 停掉在跑的 prompt（尽力而为，
+     * 失败不掩盖主错误——interrupt 不区分 prompt，误伤面由「本应用单飞」兜住）。 */
+    void fetch(`${comfyBase()}/api/interrupt`, {
+      method: "POST",
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => undefined);
+    throw new Error(
+      `ComfyUI 任务 10 分钟仍未等到结果（已尽力中断 prompt ${promptId}）——请确认工作流规模 / 模型加载或 ComfyUI 负载后重试`,
+    );
   }
 
   const entry = asRecord(history[promptId]);

@@ -226,7 +226,7 @@ const RENAME_RETRY_MS = 2;
  * @param {string} file
  * @param {unknown} value
  */
-function writeJson(file, value) {
+export function writeJson(file, value) {
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   for (let attempt = 0; ; attempt += 1) {

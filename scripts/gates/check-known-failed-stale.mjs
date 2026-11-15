@@ -306,8 +306,12 @@ function main() {
     // 红侧照样绿 —— 而那时整个判据已经什么都不判了。红侧只能证明「判据会放行」，
     // 放行是它的默认动作；**能证明它还会拦的，只有一条它必须拦下来的输入**。
     // 两侧在同一次真跑里取（两个探针文件一起跑），代价不翻倍。
-    const red = "tests/known-failed-stale-probe.test.ts";
-    const green = "tests/known-failed-stale-probe-green.test.ts";
+    // 探针落点走 `tests/__tmp-*` 约定（ISSUE #3858）：这是「确需 vitest 能力的
+    // 临时探针」的既定落点（跑完当场删；.gitignore 已收）。原先落在普通的
+    // tests/ 文件名上且未忽略 —— 自证被强杀在删除之前，残留的必然失败探针
+    // 会让之后每一趟全量单测都多一条与本轮毫无关联的假红。
+    const red = "tests/__tmp-known-failed-stale-probe.test.ts";
+    const green = "tests/__tmp-known-failed-stale-probe-green.test.ts";
     fs.writeFileSync(
       path.join(ROOT, red),
       'import { expect, it } from "vitest";\nit("probe", () => expect(1).toBe(2));\n',

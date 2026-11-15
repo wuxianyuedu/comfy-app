@@ -18,6 +18,7 @@ import {
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 
 export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
@@ -119,7 +120,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                   >
                     {selected && "✓"}
                   </span>
-                  <span className="truncate">{name}</span>
+                  <TruncatedText className="truncate">{name}</TruncatedText>
                 </Button>
               );
             })}

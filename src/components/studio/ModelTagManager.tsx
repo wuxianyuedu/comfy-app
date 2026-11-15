@@ -5,6 +5,7 @@ import { textHandler } from "~/lib/form-props";
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
@@ -178,7 +179,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                        *  的反面：不是「点了没反应」，是根本进不来）。这里保留双击
                        *  作为快捷方式，同时补上焦点与 Enter/F2 —— F2 是各平台通用
                        *  的「重命名」键，Enter 是 `role="button"` 的默认激活键。 */
-                      <Hint label="双击（或 Enter / F2）重命名">
+                      <Hint label={`双击（或 Enter / F2）重命名「${tag.name}」`}>
                         <span
                           onDoubleClick={() => {
                             beginEdit(tag.id, tag.name);
@@ -226,6 +227,21 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
             })}
           </div>
         </div>
+        {/* 删除确认走非阻塞弹窗（ISSUE #3771）：原生 window.confirm() 在内嵌
+            浏览器里未被处置会以 0 CPU 卡死同源渲染进程。 */}
+        <ConfirmDialog
+          confirmLabel="删除"
+          danger
+          description={
+            c.pendingDelete
+              ? `该标签「${c.pendingDelete.name}」已绑定 ${c.pendingDelete.count} 个工作流。\n删除后这些工作流将一并解除绑定，且不可撤销。`
+              : undefined
+          }
+          onClose={c.cancelDeleteTag}
+          onConfirm={c.confirmDeleteTag}
+          open={c.pendingDelete !== null}
+          title={c.pendingDelete === null ? "删除标签" : `删除标签「${c.pendingDelete.name}」`}
+        />
       </DialogContent>
     </Dialog>
   );

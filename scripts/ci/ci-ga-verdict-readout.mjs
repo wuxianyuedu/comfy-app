@@ -71,8 +71,10 @@ export const DEFAULT_API_ENDPOINT = "https://api.cnb.cool";
  */
 export const DEFAULT_BUDGET_MS = 70 * 60 * 1000;
 
-/** 两眼之间的间隔。 */
-export const DEFAULT_POLL_MS = 20 * 1000;
+/** 两眼之间的间隔。10s：GA 结论落地后，这里最多再等一个间隔才把 PR 翻绿/翻红
+ *  ——「GA 侧已经绿了、CNB 侧迟迟不翻」的体感直接由这个间隔决定（ISSUE #3924）；
+ *  70m 预算下 10s 一眼的开销可忽略。 */
+export const DEFAULT_POLL_MS = 10 * 1000;
 
 /** 明确终态词：绿一档、红一档，其余都算「还没判完」。 */
 const GREEN_STATES = new Set(["success"]);
@@ -285,7 +287,14 @@ export async function main(io = {}) {
       }
       return code;
     }
-    log(`[ga-readout] ${STATUS_PREFIX}：state=${status.state || "(空)"}（未终态），继续等`);
+    /* state 为空的读数 = 回调 build 已建档（status 行已写）但还没跑到「GA 结论
+     * 判定」那一格——排队 / 启动中。这正是「GA 侧已经跑完、CNB 侧还没有结果」
+     * 体感的来源之一（ISSUE #3924）：把话说全，别让「(空)」被读成判据坏了。 */
+    const waiting =
+      status.state === ""
+        ? "回调 build 已建档、尚未跑到结论判定（排队/启动中）"
+        : `state=${status.state}`;
+    log(`[ga-readout] ${STATUS_PREFIX}：${waiting}（未终态），继续等`);
     // oxlint-disable-next-line no-await-in-loop -- 轮询本就是串行等待，并行没有意义
     await sleep(Math.min(pollMs, Math.max(0, deadline - now())));
   }

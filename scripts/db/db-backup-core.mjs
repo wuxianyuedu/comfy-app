@@ -258,7 +258,9 @@ export function createBackup(root, options = {}) {
       }
       ordinal += 1;
     }
-    tmp = `${target}.partial`;
+    /* 临时名带进程号（ISSUE #3858）：两个进程同秒备份时不再共用同一个
+     * `.partial`（原先一方 unlinkSync 会删掉另一方 VACUUM INTO 的半成品）。 */
+    tmp = `${target}.${process.pid}.partial`;
     if (fs.existsSync(/* turbopackIgnore: true */ tmp)) {
       fs.unlinkSync(tmp);
     }

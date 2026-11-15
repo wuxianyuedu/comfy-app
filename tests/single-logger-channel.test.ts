@@ -30,6 +30,9 @@ function stripComments(src: string): string {
 const CLIENT_ONLY = [
   "src/lib/workshop/generation-client.ts",
   "src/lib/project-canvas/sync-notice.ts",
+  // 尺寸预设表 store：浏览器侧存取（localStorage + /api/size-presets），保存
+  // 失败的诊断走 console（LogProvider 拦进应用日志面板）—— 与 sync-notice 同款。
+  "src/lib/media/size-preset-store.ts",
 ];
 
 function walk(dir: string, out: Array<string> = []): Array<string> {

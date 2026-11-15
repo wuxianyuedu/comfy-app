@@ -4,8 +4,8 @@ import { isRecord } from "../src/lib/is-record";
 import { isTerminalTaskStatus } from "../src/lib/task-state";
 
 /**
- * 主链路 E2E：**登录 → 建项目 → 出图**（ISSUE #1621 阶段二 2-2）。此前 `e2e/` 无一条用例走完这条链（登录用例明写「不假装认证成功」、登录后视图靠 `route.fulfill` 桩），于是「壳起不来 / 会话过期 / 中间件改写」这类只在真实 HTTP 栈上成立的缺陷没有执行者（台账 E3″）。
- * 真件：better-auth 真注册 + 真会话 cookie（本地 SQLite）、`project.upsert` 真写库（断言库里有这一行）、执行器真派出且收口到 `SUCCEEDED`、产物真由 `getView` 写到磁盘；**下游 ComfyUI + comfy-cli 是替身**。本应用任务只经 `executor-cli.ts` 起 `python -m comfy_cli run` 并读其 stdout 协议，收口回 `GET /history/{prompt_id}` 与 `GET /api/view` 都在服务端（`page.route` 拦不到），故最小假 ComfyUI 是唯一能真跑的形状（ISSUE #1621 §三）；替身只复刻外部协议，§12.12 判的是仓内两份同样实现。
+ * 主链路 E2E：**建项目 → 出图**（ISSUE #1621 阶段二 2-2，ISSUE #3827 去登录化）。此前链路含登录页注册/登录；登录页已移除且无需登录，现以演示用户语义走真 HTTP 栈。
+ * 真件：`project.upsert` 真写库（断言库里有这一行）、执行器真派出且收口到 `SUCCEEDED`、产物真由 `getView` 写到磁盘；**下游 ComfyUI + comfy-cli 是替身**。本应用任务只经 `executor-cli.ts` 起 `python -m comfy_cli run` 并读其 stdout 协议，收口回 `GET /history/{prompt_id}` 与 `GET /api/view` 都在服务端（`page.route` 拦不到），故最小假 ComfyUI 是唯一能真跑的形状（ISSUE #1621 §三）；替身只复刻外部协议，§12.12 判的是仓内两份同样实现。
  * 未覆盖的只有「ComfyUI 真采样 / torch 真在跑」（GPU 层，不该是 e2e 门槛）。第二条用例用假 comfy-cli 的哨兵触发（工作流出现某词 → 回放失败序列），断言失败被写成说得清的终态（`FAILED` + error 带假 CLI 原因）而非超时后报别的 —— ISSUE #1621 验收标准 3。
  */
 
@@ -149,36 +149,19 @@ function taskDetail(value: unknown): TaskDetail {
   };
 }
 
-/** 真注册一个账号并把会话 cookie 落进浏览器上下文。
- *
- *  密码 ≥ 12 字符：`auth-server` 的 `minPasswordLength: 12`，短密码会在提交那一刻
- *  被判破坏 —— 本用例要的是「真的登录成功」，不是「表单变灰」。 */
-async function signUp(page: Page, email: string, password: string): Promise<void> {
-  await page.goto("/login");
-  await /* 登录 / 创建账号是一排里选一个（`role="radio"`，规范 16 §16.2.4.75）——
-     不是按钮。改的是读法，不是用例锁的那件事。 */
-  page.getByRole("radio", { name: "创建账号" }).click();
-  /* 昵称那一格标着「（可选）」但**带着 required**（共用字段行 LoginFieldRow 给
-   * 每个 input 都加了它）——留空会被浏览器的原生校验拦在提交之前，表现是
-   * 「点了没反应、一个请求都不发」。填上它：本用例要测的是认证链路，
-   * 不是这条既有怪癖。 */
-  await page.getByPlaceholder("体验创作者").fill("E2E 旅人");
-  await page.getByPlaceholder("name@example.com").fill(email);
-  await page.locator('input[type="password"]').fill(password);
-  await page.locator('form button[type="submit"]').click();
-  /* 真的离开登录页才算登录成功（导航由登录页的 router.push 发起）。
-   * 只断言「按钮点过了」正是本用例要取代的旧口径。 */
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 20_000 });
+/** 无需登录（ISSUE #3827）：进入工作区建立浏览器上下文即可，后续请求按演示用户处理。 */
+async function openWorkspace(page: Page): Promise<void> {
+  await page.goto("/workspace");
+  await expect(page).toHaveURL(/\/workspace/);
 }
 
-test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
-  test("@critical 走完登录、建项目、出图，且断言的是链路产物", async ({ page }) => {
+test.describe("主链路：建项目 → 出图 @critical", () => {
+  test("@critical 走完建项目、出图，且断言的是链路产物", async ({ page }) => {
     test.slow();
 
-    /* ── ① 登录：真认证路径 ── */
+    /* ── ① 无需登录：进入工作区即可（ISSUE #3827） ── */
     const stamp = Date.now();
-    const email = `e2e-journey-${stamp}@example.com`;
-    await signUp(page, email, "e2e-journey-password");
+    await openWorkspace(page);
 
     /* ── ② 建项目：真写库 ── */
     const projectId = `proj_e2e_${stamp}`;
@@ -262,7 +245,7 @@ test.describe("主链路：登录 → 建项目 → 出图 @critical", () => {
     test.slow();
 
     const stamp = Date.now();
-    await signUp(page, `e2e-journey-fail-${stamp}@example.com`, "e2e-journey-password");
+    await openWorkspace(page);
 
     const workflow = await trpcMutation(page, "workflow.create", {
       name: `E2E 失败工作流 ${stamp}`,

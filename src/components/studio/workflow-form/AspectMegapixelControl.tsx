@@ -37,6 +37,7 @@ import {
 } from "~/components/ui/segment-popover";
 import { SizePresetTableModal } from "./SizePresetTableModal";
 import { TypeChip } from "~/components/studio/TypeChip";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { MegapixelStepper } from "./MegapixelStepper";
 import { useSizePresetTable } from "./hooks/use-size-preset-table";
 import { PortHandle } from "./WorkflowFormControls";
@@ -396,12 +397,9 @@ export function AspectMegapixelControl({
                       style={{ top: "50%", transform: "translateY(-50%)" }}
                       type={entry.type}
                     />
-                    <span
-                      className="text-ink-bright min-w-0 truncate text-xs font-medium"
-                      style={{ fontFamily: "var(--font-sans)" }}
-                    >
+                    <TruncatedText className="text-ink-bright min-w-0 truncate font-sans text-xs font-medium">
                       {entry.label ?? entry.name}
-                    </span>
+                    </TruncatedText>
                     <TypeChip size="xs">{typeDisplay(entry.type)}</TypeChip>
                   </div>
                 ))}

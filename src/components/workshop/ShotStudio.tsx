@@ -9,6 +9,7 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
 import { SelectChip } from "~/components/ui/select-chip";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { StatusBadge as StatusBadgePrimitive } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import type { Character, Scene, Shot, StyleRef } from "~/lib/workshop/types";
@@ -579,7 +580,9 @@ function ShotCardRow({
     <div className="border-border bg-surface rounded-xl border p-4" data-shot-index={shot.index}>
       <div className="mb-2 flex items-center gap-2">
         <IndexDot index={shot.index} />
-        <span className="text-muted-foreground truncate text-xs">{shot.sceneHeading}</span>
+        <TruncatedText className="text-muted-foreground truncate text-xs">
+          {shot.sceneHeading}
+        </TruncatedText>
         <StatusBadge status={shot.status} />
         {busyCount > 0 && shot.status === "running" && (
           <span className="text-muted-foreground text-3xs">
@@ -692,7 +695,9 @@ function ShotCardRow({
           </Button>
         )}
         {shot.taskId !== undefined && shot.taskId !== "" && (
-          <span className="text-faint text-3xs truncate">任务 {shot.taskId.slice(0, 12)}…</span>
+          <TruncatedText className="text-faint text-3xs truncate">
+            {`任务 ${shot.taskId.slice(0, 12)}…`}
+          </TruncatedText>
         )}
       </div>
 

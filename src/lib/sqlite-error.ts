@@ -9,11 +9,13 @@
  * 现场就只能猜「是没这张表，还是库被锁了」—— 而这两者的处置完全相反：前者要改代码，
  * 后者等一等就过。
  *
- * 只做三件事，且都不碰 IO / 不引驱动：
+ * 只做四件事，且都不碰 IO / 不引驱动：
  *   ①  {@link describeSqliteWriteError} 把 cause 链上的 code / message 拼回一句可读文本；
  *   ②  {@link isSqliteBusyError} 判「这类错误等一等就能过」，供调用处决定要不要重试；
  *   ③  {@link sqliteAwareErrorText} 给**所有**库写失败的捕获点取日志文案 —— 是库失败就
- *      带上驱动码，不是就交回 `~/lib/error-message` 的 `errorText`（ISSUE #1262 的前置）。
+ *      带上驱动码，不是就交回 `~/lib/error-message` 的 `errorText`（ISSUE #1262 的前置）；
+ *   ④  {@link isSqliteUniqueViolation} 判「撞了唯一索引」，供先查后写的入口把裸
+ *      SQLITE_CONSTRAINT 转成业务语义的冲突错误（ISSUE #3866）。
  *
  * 为什么不并进 `~/lib/error-message` 的 `errorText`：那条是「unknown → 可读」的通用兜底
  * （还要照顾网络错的翻译表），而这几条的判据是 **SQLite 的错误码族**，语义与生命周期都
@@ -204,4 +206,50 @@ export function isSqliteBusyError(error: unknown): boolean {
       TRANSIENT_LOCK_PHRASES.some((p) => m.toLowerCase().includes(p)) ||
       TRANSIENT_LOCK_CODES.some((c) => m.includes(c)),
   );
+}
+
+/**
+ * 这次失败是「撞了唯一索引」吗？（ISSUE #3866）
+ *
+ * 先查后写的入口在并发/重名时，后到者原先拿到的是裸 `SQLITE_CONSTRAINT`（500）；
+ * 有了这个判据，调用处可以把它转成业务语义的冲突错误（CONFLICT / 409），
+ * 或者按「冲突即复用既有行」的口径复读回落。libsql 与 node:sqlite 的人话文案
+ * 都含 `UNIQUE constraint failed`；libsql 另给 `SQLITE_CONSTRAINT_UNIQUE` 码，
+ * node:sqlite 的字符串码恒为 `ERR_SQLITE_ERROR`、真码在 `errcode=19`（约束族）——
+ * 消息短语是两种驱动都可靠给出的证据，错误码族作补充。
+ */
+export function isSqliteUniqueViolation(error: unknown): boolean {
+  const { codes, messages } = collect(error);
+  if (codes.some((c) => c.startsWith("SQLITE_CONSTRAINT"))) {
+    return true;
+  }
+  return messages.some((m) => /UNIQUE constraint failed/i.test(m));
+}
+
+/**
+ * 撞唯一索引时，从 cause 链的消息里取涉及到的列（`table.column` 全名数组）。
+ *
+ * SQLite / libsql 的人话文案形如
+ * `UNIQUE constraint failed: season.seriesId, season.seasonNumber`（复合索引用
+ * 逗号列出全部列）。调用方按列名把裸约束翻成业务语义的冲突文案（哪条业务键
+ * 撞了给哪句 409），而不是一句笼统的「写入失败」。不是唯一冲突、或消息里取
+ * 不到列名 ⇒ 空数组（调用方按「不知道撞了哪条」兜底）。
+ */
+export function sqliteUniqueColumns(error: unknown): Array<string> {
+  if (!isSqliteUniqueViolation(error)) {
+    return [];
+  }
+  const { messages } = collect(error);
+  const marker = "UNIQUE constraint failed:";
+  for (const m of messages) {
+    const at = m.indexOf(marker);
+    if (at !== -1) {
+      return m
+        .slice(at + marker.length)
+        .split(",")
+        .map((c) => c.trim())
+        .filter((c) => c.length > 0);
+    }
+  }
+  return [];
 }

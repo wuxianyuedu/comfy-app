@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   PROMPT_PRESETS,
+  RELAY_INPUT_TYPES,
   assembleImageRequest,
   assembleVideoRequest,
   contractTestRows,
@@ -94,6 +95,26 @@ describe("assembleImageRequest / assembleVideoRequest", () => {
       });
       expect("seed" in req).toBe(false);
     }
+  });
+
+  it("seed（ISSUE #3783）：视频组装同口径承接，且通道承接集合列为真实承接", () => {
+    expect(
+      assembleVideoRequest({ model: "m", mode: "T2V", values: { prompt: "p", seed: "42" } }),
+    ).toMatchObject({ seed: 42 });
+    expect(
+      assembleVideoRequest({ model: "m", mode: "T2V", values: { prompt: "p", seed: "0" } }),
+    ).toMatchObject({ seed: 0 });
+    for (const bad of ["", "abc", "-1", "1.5"]) {
+      const req = assembleVideoRequest({
+        model: "m",
+        mode: "T2V",
+        values: { prompt: "p", seed: bad },
+      });
+      expect("seed" in req).toBe(false);
+    }
+    /* 承接集合与 unifiedVideoInputs 互为镜像：seed 在集合里，测试页视频模式的
+     * 种子口才从「未承接」禁用态变为可用输入（#3783 的验收点）。 */
+    expect(RELAY_INPUT_TYPES.video).toContain("seed");
   });
 });
 

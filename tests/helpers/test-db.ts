@@ -228,12 +228,18 @@ CREATE TABLE IF NOT EXISTS episode_character (
 -- ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint）：
 CREATE UNIQUE INDEX IF NOT EXISTS umc_user_folder_uniq ON userModelConfig (userId, folder);
 CREATE UNIQUE INDEX IF NOT EXISTS model_file_folder_uniq ON model (fileName, folder);
-CREATE UNIQUE INDEX IF NOT EXISTS skill_slug_uniq ON skill (slug);
+CREATE UNIQUE INDEX IF NOT EXISTS fav_user_model_uniq ON favorite (userId, modelId);
 CREATE UNIQUE INDEX IF NOT EXISTS wmt_user_name_uniq ON workflowModelTag (userId, name);
 CREATE UNIQUE INDEX IF NOT EXISTS remoteModel_name_uniq ON remoteModel (name);
 CREATE UNIQUE INDEX IF NOT EXISTS llmProvider_name_uniq ON llmProvider (name);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_project_uniq ON episode (projectId);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_character_uniq ON episode_character (episodeId, characterId);
+CREATE UNIQUE INDEX IF NOT EXISTS wmtt_tag_wt_uniq ON workflowModelTag_workflowTemplate (workflowModelTag, workflowTemplate);
+CREATE UNIQUE INDEX IF NOT EXISTS character_series_name_uniq ON "character" (seriesId, name);
+CREATE UNIQUE INDEX IF NOT EXISTS season_series_number_uniq ON season (seriesId, seasonNumber);
+CREATE UNIQUE INDEX IF NOT EXISTS episode_season_number_uniq ON episode (seasonId, episodeNumber);
+CREATE UNIQUE INDEX IF NOT EXISTS wt_user_name_uniq ON workflowTemplate (userId, name);
+CREATE UNIQUE INDEX IF NOT EXISTS account_provider_account_user_uniq ON account (providerId, accountId, userId);
 `;
 
 export type TestTables = {
@@ -574,7 +580,9 @@ export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateIn
   insertInto("workflowTemplate", {
     id,
     userId: input.userId,
-    name: input.name ?? "seeded workflow",
+    /* 缺省名带独立自增：wt_user_name_uniq（#3934）下同一用户不能再种两行同名
+     * 模板，而过滤类用例常常一次种多条；显式传 name 的调用方自己负责唯一。 */
+    name: input.name ?? `seeded workflow ${++seedSeq}`,
     taskType: input.taskType ?? "T2I",
     /* 默认给一份最小的 RAW 原件 —— 库里的每一行通常都有可执行内容；
      * 传 `rawJson: null` 可显式造「没有可执行内容」的行。 */

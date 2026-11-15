@@ -3,6 +3,7 @@ import { useId, useRef, useState } from "react";
 import { textHandler } from "~/lib/form-props";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
@@ -200,7 +201,7 @@ export function AttributeMultiSelect({
                           >
                             {on && <Check size={10} />}
                           </span>
-                          <span className="min-w-0 flex-1 truncate">{opt}</span>
+                          <TruncatedText className="min-w-0 flex-1 truncate">{opt}</TruncatedText>
                         </div>
                       );
                     })}

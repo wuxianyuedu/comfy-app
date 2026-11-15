@@ -11,6 +11,7 @@ import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
 import type { PersistableGenerationLog } from "~/lib/workshop/generation-log-client";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 
 /** 提取执行日志的展示样式（按日志类型区分色块，不随组件卸载清空）。
  *  状态色全走语义 token（§4.11.1 / P71）：init→primary（品牌）、
@@ -207,9 +208,9 @@ export function ExtractToolbar({
                       >
                         {logBadgeLabel(entry.kind)}
                       </span>
-                      <span className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
+                      <TruncatedText className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
                         {entry.summary}
-                      </span>
+                      </TruncatedText>
                       <span className="text-muted-foreground/60 text-3xs shrink-0">
                         {formatClock(entry.ts)}
                       </span>
@@ -252,9 +253,9 @@ export function ExtractToolbar({
                         <span className="bg-primary-soft text-primary text-3xs rounded px-1.5 py-0.5 font-medium">
                           {entry.kind}
                         </span>
-                        <span className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
+                        <TruncatedText className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
                           {entry.summary}
-                        </span>
+                        </TruncatedText>
                         <span className="text-muted-foreground/60 text-3xs shrink-0">
                           {formatClock(entry.ts)}
                         </span>

@@ -22,6 +22,7 @@ import { ViewableImage } from "~/components/ui/image-viewer";
 import { PageHeader } from "~/components/ui/page-header";
 import { SectionLabel } from "~/components/ui/section-label";
 import { SelectChip } from "~/components/ui/select-chip";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { fixed } from "~/lib/number-format";
@@ -103,14 +104,14 @@ function ModeTabs({
             variant="ghost"
           >
             <span className="min-w-0 text-left leading-tight">
-              <span
+              <TruncatedText
                 className={cn(
                   "block truncate text-sm font-semibold",
                   selected ? "text-primary" : "text-ink",
                 )}
               >
                 {t.label}
-              </span>
+              </TruncatedText>
               <span className="text-muted-foreground text-2xs block">{t.mode}</span>
             </span>
             <span
@@ -228,7 +229,7 @@ function InputRow({
 }) {
   const labelNode = (
     <span className="flex min-w-0 items-center gap-1.5">
-      <span className="truncate">{label}</span>
+      <TruncatedText className="truncate">{label}</TruncatedText>
       <RequiredBadge required={required} />
     </span>
   );
@@ -442,9 +443,9 @@ export function ModelTestView() {
                         key={`${row.id}-${String(i)}`}
                         label={
                           <span className="flex min-w-0 items-center gap-1.5">
-                            <span className="truncate">
+                            <TruncatedText className="truncate">
                               {row.disabled ? `${row.label}（未承接）` : row.label}
-                            </span>
+                            </TruncatedText>
                             <RequiredBadge required={row.required} />
                           </span>
                         }
@@ -657,7 +658,9 @@ export function ModelTestView() {
                             {String(row.durationMs)}ms
                           </span>
                         )}
-                        <code className="min-w-0 flex-1 truncate font-mono">{row.endpoint}</code>
+                        <TruncatedText className="min-w-0 flex-1 truncate font-mono">
+                          {row.endpoint}
+                        </TruncatedText>
                       </div>
                       <pre className="border-border/60 text-2xs overflow-x-auto border-t px-3 py-2 font-mono break-all whitespace-pre-wrap">
                         {JSON.stringify(row.body, null, 2)}

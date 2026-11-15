@@ -28,6 +28,7 @@ import {
 } from "~/lib/production/run-types";
 import { applyShotRedo } from "~/lib/production/sync";
 import { reviewScoreMean } from "~/lib/production/review-types";
+import { withProductionContentLock } from "~/lib/production/content-write-lock";
 import { fixed } from "~/lib/number-format";
 import { displayValue } from "~/lib/display-value";
 import { reviewContent, reviewScript, reviewShotImage, reviseScript } from "~/server/agent/review";
@@ -41,6 +42,28 @@ import { sleep } from "~/lib/with-timeout";
 const MAX_TICKS = 240;
 const TICK_MS = 4000;
 const nowIso = () => new Date().toISOString();
+
+/**
+ * per-project 在飞互斥（ISSUE #3829/#3840）：同一 (user, project) 只允许一个推进循环并发运行，
+ * 后续 kick 复用同一条 promise 让位，避免重复执行动作与状态竞态。
+ *
+ * 挂 `globalThis`（ISSUE #3880）：dev 的 HMR 会重新求值本模块，模块级 Map 会换新、
+ * 旧循环的 promise 从新表里消失 → 同一项目被再起一条推进循环（重复执行动作）。
+ * film 侧监看表（orchestrator 的 `filmWatchInFlight_v1`）是同款问题同款修法；
+ * 键名带版本号是既定坑位写法（`??=` 只认键名，不给旧单例补字段）。
+ */
+declare global {
+  var runEngineActiveLoops_v1: Map<string, Promise<void>> | undefined;
+}
+
+function activeLoops(): Map<string, Promise<void>> {
+  return (globalThis.runEngineActiveLoops_v1 ??= new Map<string, Promise<void>>());
+}
+
+/** 仅测试用：清空推进循环互斥状态，避免跨用例/异常泄漏导致后续调用被误判为“已在运行”。 */
+export function resetRunLoopGuardsForTest(): void {
+  activeLoops().clear();
+}
 
 type ExecResult = {
   error?: string;
@@ -114,6 +137,29 @@ function gateStageFor(action: RunAction): ProductionStage | null {
 }
 
 async function saveRun(userId: string, projectId: string, run: ProductionRun) {
+  /* 回写前重读库中状态（ISSUE #3863）：动作执行可达数分钟，期间用户可能已
+   * pause/cancel。引擎手里的 run 是拍首旧快照，直接整包回写会把 paused /
+   * cancelled 复活成 running —— 用户的暂停/取消被静默回滚，引擎下一拍继续
+   * 烧 LLM/ComfyUI。 */
+  const row = await productionRepository.getForUser(userId, projectId);
+  if (!row) {
+    return;
+  }
+  const dbStatus = normalizeProductionRun(row.run).status;
+  if (dbStatus === "cancelled") {
+    // 取消是用户终态：引擎不再回写任何东西（含 failed/done），保持 cancelled。
+    return;
+  }
+  if (dbStatus === "paused" && run.status === "running") {
+    // 已暂停：只吸收引擎推进的 stage 与执行日志，status 保持 paused——
+    // resume 后规划器从新 stage 继续，不重做已完成的动作。
+    await productionRepository.updateRun(userId, projectId, {
+      ...run,
+      status: "paused",
+      updatedAt: nowIso(),
+    });
+    return;
+  }
   await productionRepository.updateRun(userId, projectId, {
     ...run,
     updatedAt: nowIso(),
@@ -150,8 +196,12 @@ async function execScript(
   if (!md) {
     return { ok: false, error: "模型未返回剧本内容" };
   }
-  await productionRepository.patchContent(userId, projectId, {
-    scriptMarkdown: md,
+  /* 慢 IO 在锁外；写回内容列在 per-project 锁内串行化（ISSUE #3850），避免与
+   * 其他写者（工坊保存/评审/人工裁决/生图回写等）并发覆盖整列。 */
+  await withProductionContentLock(projectId, async () => {
+    await productionRepository.patchContent(userId, projectId, {
+      scriptMarkdown: md,
+    });
   });
   return { ok: true, summary: `已生成剧本（${md.length} 字）` };
 }
@@ -202,8 +252,11 @@ async function execCharacters(
   if (created.length === 0) {
     return { ok: false, error: "未从剧本解析出角色" };
   }
-  await productionRepository.patchContent(userId, projectId, {
-    characters: created,
+  /* 慢 IO 在锁外；内容列写回在 per-project 锁内串行化（ISSUE #3850）。 */
+  await withProductionContentLock(projectId, async () => {
+    await productionRepository.patchContent(userId, projectId, {
+      characters: created,
+    });
   });
   return { ok: true, summary: `已提取 ${created.length} 个角色` };
 }
@@ -256,13 +309,18 @@ async function execStoryboard(
   if (shots.length === 0) {
     return { ok: false, error: "未解析出分镜镜头" };
   }
-  await productionRepository.patchContent(userId, projectId, { shots });
+  /* 慢 IO 在锁外；内容列写回在 per-project 锁内串行化（ISSUE #3850）。
+   * 指纹按本次规划所依据的剧本快照记录（与生成输入一致）。 */
+  const digest = scriptDigestOf(row.scriptMarkdown);
+  await withProductionContentLock(projectId, async () => {
+    await productionRepository.patchContent(userId, projectId, { shots });
+  });
   // 记下「这次分镜是按哪版剧本拆的」：之后剧本变（AI 改写定稿 / 人手改）→
   // 规划器按指纹差把分镜重新纳入（#2478 ④ 的分镜联动）。
   return {
     ok: true,
     summary: `已规划 ${shots.length} 个镜头`,
-    run: { ...run, storyboardScriptDigest: scriptDigestOf(row.scriptMarkdown) },
+    run: { ...run, storyboardScriptDigest: digest },
   };
 }
 
@@ -285,10 +343,11 @@ async function execImages(
    * 元素形状问题由 draft-integrity 在读侧判），不再对 any[] 做盲断言。 */
   const shots = isShotArray(row.shots) ? row.shots : [];
   const want = new Set(shotIds);
-  const next: Array<Shot> = [];
+  /* 先收集本轮产出、不落库（ISSUE #3864）：生图是分钟级慢 IO，必须留在
+   * 内容写锁外；锁内只做「重读最新 shots → 叠加本轮产出 → 写回」。 */
+  const produced = new Map<string, { imageUrl?: string; status: "done" | "failed" }>();
   for (const shot of shots) {
     if (!want.has(shot.id)) {
-      next.push(shot);
       continue;
     }
     // 「种子」算高级输入、默认随机：每次自主出图都带一个新的随机 seed（首刷与抽卡重出一样），
@@ -306,14 +365,32 @@ async function execImages(
         projectId,
         seed: randomSeed(),
       });
-      next.push({ ...shot, imageUrl: path, status: "done" });
+      produced.set(shot.id, { imageUrl: path, status: "done" });
     } catch {
       // 单镜失败：记为 failed，不阻断其它镜；已处理 rev 仍写，避免无限重试同一坏镜。
-      next.push({ ...shot, status: "failed" });
+      produced.set(shot.id, { status: "failed" });
     }
   }
-  await productionRepository.patchContent(userId, projectId, { shots: next });
-  const doneCount = next.filter((s) => want.has(s.id) && s.status === "done").length;
+  /* 回写收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新 shots，把本轮
+   * 产出只叠到本轮动过的镜头上——不再用拍首旧快照整列覆盖（生图期间用户改词 /
+   * 评分 / 自动保存的并发修改不再被打回）。 */
+  await withProductionContentLock(projectId, async () => {
+    const fresh = await productionRepository.getForUser(userId, projectId);
+    const freshShots = isShotArray(fresh?.shots) ? fresh.shots : [];
+    const merged = freshShots.map((shot) => {
+      const p = produced.get(shot.id);
+      if (p === undefined) {
+        return shot;
+      }
+      return {
+        ...shot,
+        ...(p.imageUrl === undefined ? {} : { imageUrl: p.imageUrl }),
+        status: p.status,
+      };
+    });
+    await productionRepository.patchContent(userId, projectId, { shots: merged });
+  });
+  const doneCount = [...produced.values()].filter((p) => p.status === "done").length;
   const failedCount = shotIds.length - doneCount;
   // 记录这些镜头「已按当前 rev 处理」——用户之后再改（rev 变大）会被重新纳入。
   return {
@@ -475,12 +552,16 @@ async function execReviewShots(
   }
 
   if (rerollIds.length > 0) {
-    const fresh = await productionRepository.getForUser(userId, projectId);
-    let shots: Array<unknown> = fresh && Array.isArray(fresh.shots) ? fresh.shots : [];
-    for (const id of rerollIds) {
-      shots = applyShotRedo(shots, id);
-    }
-    await productionRepository.patchContent(userId, projectId, { shots });
+    /* 抽卡重出收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新 shots
+     * 再叠 applyShotRedo，不与评审器 / 人工裁决 / 成片回写互相覆盖。 */
+    await withProductionContentLock(projectId, async () => {
+      const fresh = await productionRepository.getForUser(userId, projectId);
+      let shots: Array<unknown> = fresh && Array.isArray(fresh.shots) ? fresh.shots : [];
+      for (const id of rerollIds) {
+        shots = applyShotRedo(shots, id);
+      }
+      await productionRepository.patchContent(userId, projectId, { shots });
+    });
   }
 
   const parts = [`${passed} 通过`];
@@ -510,6 +591,15 @@ async function execFilm(
   }
   // 服务端直接调成片编排（引擎在服务器上跑，不能用浏览器端的 render-film-client）。
   // createFilmFromProject→start：服务端 watchFilm 逐镜视频 + composeFilm 合成 + syncFilmToProject 回写。
+  /* 起片权先认领（ISSUE #3868）：filmStartedAt 原先要到本拍 saveRun 才落库，
+   * 与起片之间隔着数分钟的逐镜生成——进程在窗口内崩溃（或 saveRun 失败），
+   * 重启后 filmStartedAt 仍为空，用户再点一次启动会建出第二条完整成片管线。
+   * 改成起片前先 CAS 认领：抢到才起片；起片失败立刻释放，下一拍可重试。 */
+  const startedAt = nowIso();
+  const claimed = await productionRepository.claimFilmStart(userId, projectId, startedAt);
+  if (!claimed) {
+    return { ok: true, skipLog: true, summary: "成片生成中（等待合成完成）" };
+  }
   try {
     const { createFilmFromProject, startFilm } = await import("~/server/film/orchestrator");
     const { id } = await createFilmFromProject({
@@ -520,20 +610,36 @@ async function execFilm(
     });
     await startFilm(id);
   } catch (error: unknown) {
+    await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
     return { ok: false, error: errorMessage(error, "启动成片失败") };
   }
   return {
     ok: true,
     summary: "已启动成片：服务端逐镜视频 + 合成中",
-    run: { ...run, filmStartedAt: nowIso() },
+    run: { ...run, filmStartedAt: startedAt },
   };
 }
 
 /**
  * 推进 run 到下一个停点（等点头 / 完成 / 失败 / 被暂停）。fire-and-forget 调用即可；
- * 内部对每步失败落 failed，不抛给调用方。
+ * 内部对每步失败落 failed，不抛给调用方。同一 (user, project) 已有循环在跑时复用同一 promise。
  */
-export async function advanceRunLoop(userId: string, projectId: string): Promise<void> {
+export function advanceRunLoop(userId: string, projectId: string): Promise<void> {
+  const key = `${userId}:${projectId}`;
+  const existing = activeLoops().get(key);
+  if (existing) {
+    return existing;
+  }
+  const loop = advanceRunLoopOnce(userId, projectId).finally(() => {
+    if (activeLoops().get(key) === loop) {
+      activeLoops().delete(key);
+    }
+  });
+  activeLoops().set(key, loop);
+  return loop;
+}
+
+async function advanceRunLoopOnce(userId: string, projectId: string): Promise<void> {
   try {
     for (let tick = 0; tick < MAX_TICKS; tick++) {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）

@@ -8,6 +8,7 @@
 
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { RunControlBar } from "~/components/agent-run/RunControlBar";
@@ -52,7 +53,9 @@ export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectH
     >
       {/* ── 项目标识 + 一句话进展 ─────────────────────────── */}
       <header className="flex flex-col gap-2">
-        <h1 className="u-title-page truncate">{projectName}</h1>
+        <Hint label={projectName}>
+          <h1 className="u-title-page truncate">{projectName}</h1>
+        </Hint>
         <p className="text-ink-muted text-sm">{loading ? "正在读取项目状态…" : headline}</p>
       </header>
 

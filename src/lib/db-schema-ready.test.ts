@@ -180,14 +180,14 @@ describe("isSchemaReady 缓存", () => {
     cwd.restore();
   });
 
-  it("同进程内只探一次：建表后缓存仍为 false（调用方每轮自行重探的语义由 sweep 决定）", async () => {
-    const { isSchemaReady, resetSchemaReadinessCache } = await import("./db-schema-ready");
+  it("负结果不缓存：建表后同一进程内再探翻真（#3875）", async () => {
+    const { isSchemaReady } = await import("./db-schema-ready");
     expect(isSchemaReady()).toBe(false);
     createSchema(dbFile);
-    // 缓存命中，不会因为库刚建好就翻牌
-    expect(isSchemaReady()).toBe(false);
-    // 显式重置后重新探测 → true
-    resetSchemaReadinessCache();
+    // 表从无到有（db:push 晚于服务启动是真实时序）：不重置缓存再探必须翻真。
+    // 负结果若被缓存，reaper 等库侧副作用会被静默禁用到进程退出（ISSUE #3875）。
+    expect(isSchemaReady()).toBe(true);
+    // 肯定结论是粘性的：再探命中缓存，不再开新连接。
     expect(isSchemaReady()).toBe(true);
   });
 });

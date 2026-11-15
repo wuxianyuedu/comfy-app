@@ -1,10 +1,9 @@
-/** auth/会话边界＋authedProcedure demo 兜底＋`loginRequired` 开关＋rateLimitedProcedure 限流契约（Issue #11）。
- * 钉 `loginRequired` 为 tRPC 与 REST 共用判决（此前 tRPC 面无条件兜底、开关形同虚设）；mock 只到 db /
- * better-auth / logger / app-settings，鉴权与限流中间件走真实实现；超窗用同模块 `checkRateLimit` 预填共享桶，
+/** auth/会话边界＋authedProcedure demo 兜底＋rateLimitedProcedure 限流契约（Issue #11 / ISSUE #3827）。
+ * 登录页与登录开关已移除：无会话一律回落演示用户，不再因 `loginRequired` 拒绝；mock 只到 db /
+ * better-auth / logger，鉴权与限流中间件走真实实现；超窗用同模块 `checkRateLimit` 预填共享桶，
  * 以最少真实调用确定性命中 TOO_MANY_REQUESTS。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type * as AppSettingsModule from "~/lib/app-settings/app-settings.server";
 
 const { getSessionMock } = vi.hoisted(() => ({
   getSessionMock: vi.fn<() => Promise<unknown>>(() => Promise.resolve(null)),
@@ -17,16 +16,6 @@ vi.mock("~/server/db", async () => {
 vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: getSessionMock } },
 }));
-/* loginRequired 开关可控（真实实现要读 data/app-settings.json），
- * 其余设置走真实导出。 */
-let loginRequired = false;
-vi.mock("~/lib/app-settings/app-settings.server", async (importOriginal) => {
-  const mod = await importOriginal<typeof AppSettingsModule>();
-  return {
-    ...mod,
-    getSettingsSync: () => ({ ...mod.getSettingsSync(), loginRequired }),
-  };
-});
 /* 静音服务端日志。
  *
  * 用 `importOriginal` 部分 mock：日志实现只有一份（`lib/core/logger`），
@@ -71,7 +60,6 @@ beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
   getSessionMock.mockResolvedValue(null);
-  loginRequired = false;
 });
 
 // ─────────────────────────── createTRPCContext 会话边界 ───────────────────────────
@@ -121,21 +109,10 @@ describe("authedProcedure demo-user 兜底", () => {
     expect(res.user.email).toBe("demo@comfy.app");
   });
 
-  it("loginRequired=true 且无会话 → UNAUTHORIZED（开关不再被 tRPC 面绕过）", async () => {
-    loginRequired = true;
+  it("无会话始终回落演示用户（无需登录，ISSUE #3827）", async () => {
     const caller = createCaller(makeCtx({ user: null }));
-    await expect(caller.authedWhoami()).rejects.toMatchObject({
-      code: "UNAUTHORIZED",
-    });
-    // 开关拦下时不得顺手建出演示用户（与 REST 面同一要求）
-    expect(tdb.$tables.users.find((u: Row) => u.email === "demo@comfy.app")).toBeUndefined();
-  });
-
-  it("loginRequired=true 但 ctx.user 已有真实用户 → 照常放行", async () => {
-    loginRequired = true;
-    const caller = createCaller(makeCtx());
     const res = await caller.authedWhoami();
-    expect(res.user.id).toBe("user-a");
+    expect(res.user.email).toBe("demo@comfy.app");
   });
 });
 

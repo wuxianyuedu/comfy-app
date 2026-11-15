@@ -14,6 +14,7 @@ import {
   EXECUTOR_HOST_SCRIPT,
   maybeSpawnExecutorHost,
   planExecutorHostSpawn,
+  SKIP_EXECUTOR_HOST_ENV,
 } from "../scripts/launcher-core/executor-host-spawn.mjs";
 import { resolveSpawnTarget } from "../scripts/launcher-core/shell.mjs";
 import { launcherChainSource } from "./helpers/launcher-source";
@@ -91,6 +92,24 @@ describe("planExecutorHostSpawn：哪些值会起宿主", () => {
       unknown: "deamon",
       shouldSpawn: false,
     });
+  });
+
+  it("编排器跳过标记（#3830）→ 即使 COMFY_EXECUTOR=host 也不起（判决照算，进程不拉）", () => {
+    // launcher 链路里 dev-launcher（6.5 步）已起过一份，downstream 把这个标记
+    // 传给 dev.mjs；没有它，host 模式下一次启动会确定性双宿主。
+    expect(
+      planExecutorHostSpawn({ env: { COMFY_EXECUTOR: "host", [SKIP_EXECUTOR_HOST_ENV]: "1" } }),
+    ).toEqual({ mode: "host", unknown: null, shouldSpawn: false });
+    // 标记缺省时行为不变。
+    expect(
+      planExecutorHostSpawn({ env: { COMFY_EXECUTOR: "host", [SKIP_EXECUTOR_HOST_ENV]: "" } }),
+    ).toEqual({ mode: "host", unknown: null, shouldSpawn: true });
+  });
+
+  it("downstream 的 dev server 子进程 env 里带上了跳过标记（接线回归）", () => {
+    const body = scriptBody(readScript("scripts/launcher-core/downstream.mjs"));
+    expect(body).toContain("[SKIP_SCHEMA_SYNC_ENV]");
+    expect(body).toContain("[SKIP_EXECUTOR_HOST_ENV]");
   });
 });
 

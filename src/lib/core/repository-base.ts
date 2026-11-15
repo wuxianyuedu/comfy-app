@@ -38,6 +38,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "~/lib/db";
 import type { AnySQLiteColumn, AnySQLiteTable } from "drizzle-orm/sqlite-core";
+import type { DbExecutor } from "./repository-executor-types";
 import { AppError, NotFoundError } from "./errors";
 import type { Task, TaskImage } from "~/server/db/schema";
 import { isRecord } from "~/lib/is-record";
@@ -136,12 +137,15 @@ export class DrizzleRepository<T extends Identifiable> implements Repository<T> 
     return row;
   }
 
-  async update(id: string, patch: Partial<T>): Promise<T> {
+  /** 部分更新（仅覆盖传入字段）。`executor`：由调用方的事务传入（ISSUE #3870），
+   *  让「模板行 + 关联表」这类多表序列落在同一事务；缺省 = 模块级连接。 */
+  async update(id: string, patch: Partial<T>, executor?: DbExecutor): Promise<T> {
+    const exec = executor ?? db;
     const existing = await this.findById(id);
     if (!existing) {
       throw new NotFoundError(`记录不存在: ${id}`);
     }
-    const rows = await db.update(this.table).set(patch).where(eq(this.id, id)).returning();
+    const rows = await exec.update(this.table).set(patch).where(eq(this.id, id)).returning();
     const row = rows[0];
     if (!isEntityOf<T>(row)) {
       throw new AppError("更新未返回记录");

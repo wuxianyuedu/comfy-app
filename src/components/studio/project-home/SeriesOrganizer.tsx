@@ -166,7 +166,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
             />
             <Button
               className="h-8"
-              disabled={c.seasons === undefined}
+              disabled={c.seasons === undefined || c.createSeasonPending}
               onClick={() => {
                 if (c.seriesId === null || c.seriesId === "") {
                   return;
@@ -250,7 +250,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
             />
             <Button
               className="h-8"
-              disabled={c.episodes === undefined}
+              disabled={c.episodes === undefined || c.createEpisodePending}
               onClick={() => {
                 if (c.seasonId === null || c.seasonId === "") {
                   return;

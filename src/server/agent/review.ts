@@ -38,6 +38,7 @@ import {
 } from "~/lib/production/review-types";
 import { renderRubricForPrompt, rubricFor } from "~/lib/production/review-rubrics";
 import { applyReprompt, applyShotRedo } from "~/lib/production/sync";
+import { withProductionContentLock } from "~/lib/production/content-write-lock";
 import type { Production } from "~/server/db/schema";
 
 /** 评审目标实体类型。文本评审当前覆盖镜头（分镜）与角色卡。 */
@@ -187,12 +188,18 @@ export async function reviewContent(
   if (!verdict) {
     throw new Error("模型评审返回缺 pass 判据（无法归一成判定）");
   }
-  const nextList = applyReview(list, targetId, verdict);
-  await productionRepository.patchContent(
-    userId,
-    projectId,
-    kind === "shot" ? { shots: nextList } : { characters: nextList },
-  );
+  /* 写回收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新列表，把判定落到
+   * 最新数据上——评审的模型调用（秒~分钟级）留在锁外，不占其它写者的路。 */
+  await withProductionContentLock(projectId, async () => {
+    const fresh = await loadRow(userId, projectId);
+    const freshList = listForKind(fresh, kind);
+    const nextList = applyReview(freshList, targetId, verdict);
+    await productionRepository.patchContent(
+      userId,
+      projectId,
+      kind === "shot" ? { shots: nextList } : { characters: nextList },
+    );
+  });
   return verdict;
 }
 
@@ -410,14 +417,20 @@ export async function reviewScript(
   if (!verdict) {
     throw new Error("模型评审返回缺 pass 判据（无法归一成判定）");
   }
-
-  const next = applyScriptReview(row.scriptReview, verdict);
-  await productionRepository.patchContent(userId, projectId, {
-    scriptReview: next,
+  /* 写回收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新剧本评审位，
+   * 叠加本轮判定——评审的模型调用（秒~分钟级）留在锁外。 */
+  let history: Array<ReviewVerdict> = [];
+  await withProductionContentLock(projectId, async () => {
+    const fresh = await loadRow(userId, projectId);
+    const next = applyScriptReview(fresh.scriptReview, verdict);
+    history = [...next.history, next.review ?? verdict];
+    await productionRepository.patchContent(userId, projectId, {
+      scriptReview: next,
+    });
   });
   return {
     verdict,
-    history: [...next.history, next.review ?? verdict],
+    history,
   };
 }
 
@@ -455,9 +468,14 @@ export async function reviseScript(userId: string, projectId: string): Promise<s
     throw new Error("模型未返回改写后的剧本（保留原剧本，可重试）");
   }
 
-  await productionRepository.patchContent(userId, projectId, {
-    scriptMarkdown: md,
-    scriptReview: recordScriptRevision(row.scriptReview, row.scriptMarkdown, nowIso()),
+  /* 写回收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新剧本与评审位，
+   * 旧版留档基于**当前**剧本（不是读行时的旧快照）；改写的模型调用留在锁外。 */
+  await withProductionContentLock(projectId, async () => {
+    const fresh = await loadRow(userId, projectId);
+    await productionRepository.patchContent(userId, projectId, {
+      scriptMarkdown: md,
+      scriptReview: recordScriptRevision(fresh.scriptReview, fresh.scriptMarkdown, nowIso()),
+    });
   });
   return md;
 }
@@ -481,21 +499,29 @@ export async function regenerateShot(
     throw new Error(`找不到要重生成的镜头（id=${shotId}）`);
   }
 
-  if (mode === "gacha") {
-    await productionRepository.patchContent(userId, projectId, {
-      shots: applyShotRedo(shots, shotId),
-    });
-    return;
-  }
-
-  // reprompt：优先用调用方给的提示词；否则让模型据评审意见改写。
+  // reprompt：优先用调用方给的提示词；否则让模型据评审意见改写（慢 IO，留在锁外）。
   const trimmedPrompt = newPrompt?.trim();
   const finalPrompt =
-    trimmedPrompt !== undefined && trimmedPrompt !== ""
-      ? trimmedPrompt
-      : await revisePrompt(row, rec);
-  await productionRepository.patchContent(userId, projectId, {
-    shots: applyReprompt(shots, shotId, finalPrompt),
+    mode === "gacha"
+      ? ""
+      : trimmedPrompt !== undefined && trimmedPrompt !== ""
+        ? trimmedPrompt
+        : await revisePrompt(row, rec);
+
+  /* 写回收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新 shots 再叠
+   * 重生成动作——评审器 / 引擎 / 人工裁决的并发修改不再被旧快照覆盖。 */
+  await withProductionContentLock(projectId, async () => {
+    const fresh = await loadRow(userId, projectId);
+    const freshShots = listForKind(fresh, "shot");
+    if (mode === "gacha") {
+      await productionRepository.patchContent(userId, projectId, {
+        shots: applyShotRedo(freshShots, shotId),
+      });
+      return;
+    }
+    await productionRepository.patchContent(userId, projectId, {
+      shots: applyReprompt(freshShots, shotId, finalPrompt),
+    });
   });
 }
 

@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { watchTask, type TaskLogEntry } from "~/lib/workshop/generation-client";
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
-import { tailWindowAppend } from "~/lib/page-window";
+import { tailWindowAppendUnique } from "~/lib/page-window";
 
 /** 弹窗内存里最多留多少条：与 `LOG_MODAL_MAX_ROWS` 的展示上限同源，
  * 累积侧先截，长任务（几千条 progress 行）也不会把 state 撑大。 */
@@ -62,7 +62,11 @@ export function useTaskLogStream(taskId: string | null): TaskLogStreamState {
         if (stoppedRef.current) {
           return;
         }
-        setLogs((prev) => tailWindowAppend(prev, entry, STREAM_MAX_LOGS));
+        /* 全窗去重（ISSUE #3896）：SSE 重连会把全量历史从头回放，不丢重复帧
+         * 的话弹窗时间线出现成片重复、尾窗被重复行占满。 */
+        setLogs((prev) =>
+          tailWindowAppendUnique(prev, entry, STREAM_MAX_LOGS, (e) => `${e.t}|${e.msg}`),
+        );
       },
       onProgress: () => {
         if (stoppedRef.current) {

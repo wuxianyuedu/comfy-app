@@ -6,7 +6,7 @@
 // 读服务端 production 行而非本地画布 store：工坊产出只落 production 表，拿 store 会永远显示「还没开始」。
 // 取数失败静默回落空态（主页只读，不该弹错），由刷新或切回重取。
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { useAgentRun, type AgentRunController } from "~/components/agent-run/use-agent-run";
@@ -50,12 +50,19 @@ export function useProjectHome(): ProjectHomeController {
   const [progress, setProgress] = useState(DEFAULT_PRODUCTION_PROGRESS);
   const [loading, setLoading] = useState(true);
 
+  /* 轮次令牌（ISSUE #3906）：轮询间隔内的两发在途时，先发后至者不得把旧
+   * 快照盖在新快照上（样板见 use-runtime-log-source 的 seqRef）。 */
+  const loadSeqRef = useRef(0);
   const load = useCallback(async (): Promise<void> => {
     if (!projectId) {
       setLoading(false);
       return;
     }
+    const seq = ++loadSeqRef.current;
     const production = await fetchProduction(projectId);
+    if (seq !== loadSeqRef.current) {
+      return;
+    }
     setRunView(toRunView(production));
     setProgress(normalizeProductionProgress(production?.progress));
     setLoading(false);

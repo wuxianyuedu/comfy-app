@@ -27,6 +27,7 @@ import WebSocket from "ws";
 // resolveComfyBase via ./client）都是第三类，静态引不再牵 server-only throw。
 import { errorText } from "~/lib/error-message";
 import { fireAndForget } from "~/lib/async-action";
+import { AsyncMutex } from "~/lib/async-mutex";
 import { toPct } from "~/lib/progress";
 import { logger } from "~/lib/core/logger";
 import { probeComfyBase, resolveComfyBase, resetComfyBase, toWsBase } from "./client";
@@ -50,6 +51,13 @@ export { fetchHistoryEntry, traceComfyQueue };
 export type { ComfyHistoryEntry };
 /* 同款兼容出口：`claimSettle` 曾在本模块定义，已下沉到 runner-state（状态叶子）。 */
 export { claimSettle };
+
+/* WS 帧处理按到达顺序串行化（ISSUE #3913）：handleMessage 是 async，经
+ * fireAndForget 并发跑时，progress 分支在首个 await（resolveTaskRepo 动态
+ * import）处让出，两帧交叠会让「后发帧的 UPDATE 先落库」，DB progress 以
+ * 旧值收尾一拍。AsyncMutex 的 FIFO 链保证处理序 = 到达序；帧处理都是毫秒级
+ * DB 写，串行化不引入可感延迟。 */
+const wsMessageMutex = new AsyncMutex();
 
 /* ── 依赖注入接缝（P3 §5 第 1 期·最后一步：让 executor-ws 也能被纯 Node host 加载） ── */
 
@@ -209,9 +217,12 @@ export async function connect(): Promise<void> {
     } else {
       text = Buffer.from(data).toString();
     }
-    fireAndForget(handleMessage(text), (e) => {
-      logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`);
-    });
+    fireAndForget(
+      wsMessageMutex.run(() => handleMessage(text)),
+      (e) => {
+        logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`);
+      },
+    );
   });
   // error / close 都交给 handleWsDrop 统一处理（幂等，双发只生效一次）。
   ws.on("close", () => {

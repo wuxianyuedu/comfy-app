@@ -73,6 +73,11 @@ static ORCHESTRATOR: Mutex<Option<tauri_plugin_shell::process::CommandChild>> = 
 /// 认出来并回收，不会误伤别人的启动过程（认亲判据仍只认环境块，不按形态猜）。
 pub const OWNED_ENV: &str = "COMFYAPP_SHELL_OWNED";
 
+/// 编排器环境块里的检出身份（ISSUE #3851）：认亲判据除了「是不是某个壳起的」，
+/// 还要比对「是不是**本检出**的壳起的」——同一台机器多检出并行（§1.4）时，
+/// 只看前者会把别家正在跑的编排器当成自己的残留误杀整树。
+pub const PROJECT_ROOT_ENV: &str = "COMFYAPP_PROJECT_ROOT";
+
 /// 已由壳完成编排（= 本次启动的 dev server 由壳拉起）。
 pub fn is_owning() -> bool {
   ORCHESTRATOR.lock().unwrap().is_some()
@@ -204,14 +209,21 @@ pub fn reap(project_root: &str) {
   let child = ORCHESTRATOR.lock().unwrap().take();
   let Some(child) = child else { return };
   let pid = child.pid();
-  match child.kill() {
-    Ok(()) => {
-      log::info!("[ComfyAPP] shell orchestrator stopped via shell plugin (pid {pid})");
-      clear_session_anchor(project_root);
-    }
-    Err(e) => log::warn!("[ComfyAPP] shell orchestrator stop via shell plugin failed: {e:?}"),
-  }
+  /* 先派发统一回收、后做插件 kill（ISSUE #3857）：taskkill 的目标在进程**还
+   * 活着**时不存在 PID 复用（复用前提是先终止），「kill 成功 → 丢句柄 →
+   * taskkill」那段窗口被整个消掉，而不是靠握句柄缓解。插件 kill 落在已被
+   * reaper 收掉的进程上是无害 no-op（报一条 warn）。 */
   spawn_reaper(project_root, pid);
+  match child.kill() {
+    Ok(()) => log::info!("[ComfyAPP] shell orchestrator stopped via shell plugin (pid {pid})"),
+    Err(e) => {
+      log::warn!("[ComfyAPP] shell orchestrator stop via shell plugin failed (tree already reaped): {e:?}")
+    }
+  }
+  /* 锚点清理放宽为「两道任一落地」：reaper 的 taskkill 或插件 kill 任一收掉
+   * 这棵树，锚点就该清 —— 原先只在插件 kill 成功时清，换序后 kill 多半落在
+   * 已死进程上，留着会让下次启动多报一条无害的「回收上一次遗留」。 */
+  clear_session_anchor(project_root);
 }
 
 /// 回收一个**已知进程号**的编排器（启动前清理上一次的残留，见调用点）。
@@ -359,7 +371,7 @@ pub fn mark_launch_failed(project_root: &str, message: &str) {
       return;
     }
   }
-  match std::fs::write(&path, payload.to_string()) {
+  match atomic_write(&path, &payload.to_string()) {
     Ok(()) => log::error!("[ComfyAPP] launch failed (reported on the splash): {message}"),
     Err(e) => log::warn!("[ComfyAPP] cannot write {}: {e:?}", path.display()),
   }
@@ -599,7 +611,7 @@ pub fn write_sidecar_exit_record(
   }
   // 无 BOM：走 `fs::write` 而不是带 BOM 分支的任何写法，与 launch-status.json 同口径。
   // 读取侧是 JSON.parse，BOM 会让它当场失败。
-  match std::fs::write(&path, body.as_bytes()) {
+  match atomic_write(&path, &body) {
     Ok(()) => {
       log::info!("[ComfyAPP] 已记录内嵌服务结束原因：{}", path.display());
       true
@@ -860,6 +872,23 @@ fn local_timestamp() -> String {
 /// `report` 是壳接手那一刻的启动报告（`startup_report_json` 的产物），随快照
 /// 一起写进 `diagnostics`：编排器写自己的状态时会把这份快照整份顶掉，所以报告
 /// 必须在**它被顶掉之前**就已经落到磁盘上，启动期才有现场可查。
+/// 原子写小文件（ISSUE #3857）：先写同目录的 `.tmp-<pid>` 再 `rename` 到位。
+/// `launch-status.json` 是「壳 + 编排器两个写方、启动页 250ms 一个读方」的热
+/// 文件，`std::fs::write` 的 truncate+write 直写会让读方撞到空串 / 半截 JSON；
+/// 同目录 rename 在同一卷上是原子的。失败时收掉自己的临时文件。
+fn atomic_write(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
+  let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
+  let result = (|| -> std::io::Result<()> {
+    std::fs::write(&tmp, contents)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+  })();
+  if result.is_err() {
+    let _ = std::fs::remove_file(&tmp);
+  }
+  result
+}
+
 pub fn write_idle_status(
   project_root: &str,
   phase: &str,
@@ -893,7 +922,7 @@ pub fn write_idle_status(
       return;
     }
   }
-  if let Err(e) = std::fs::write(&path, payload.to_string()) {
+  if let Err(e) = atomic_write(&path, &payload.to_string()) {
     log::warn!("[ComfyAPP] 无法写 {}：{e:?}", path.display());
   }
 }
@@ -1067,7 +1096,7 @@ pub fn spawn_orchestrator(
     // 判定已由壳跑过），并且**不再起第二个壳**（§1.5：首壳就是应用宿主）。
     .env("COMFYAPP_SHELL_SELF_LAUNCH", "1")
     .env("COMFYAPP_PORT", port.to_string())
-    .env("COMFYAPP_PROJECT_ROOT", project_root)
+    .env(PROJECT_ROOT_ENV, project_root)
     .env("COMFYAPP_LAUNCH_MODE", "prebuilt")
     .current_dir(project_root)
     .spawn()?;
@@ -1210,7 +1239,7 @@ pub fn attach_kill_on_close_job() {}
 /// 返回 false —— 宁可多起一个编排器（会被端口与单实例判据挡住），也不能去杀
 /// 一个身份不明的进程。
 #[cfg(windows)]
-pub fn process_env_is_owned(pid: u32) -> bool {
+pub fn process_env_is_owned(pid: u32, project_root: &str) -> bool {
   use windows::Win32::Foundation::CloseHandle;
   use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -1219,7 +1248,7 @@ pub fn process_env_is_owned(pid: u32) -> bool {
     let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
       return false;
     };
-    let owned = read_owned_env_from_process(handle);
+    let owned = read_owned_env_from_process(handle, project_root);
     let _ = CloseHandle(handle);
     owned
   }
@@ -1236,13 +1265,14 @@ pub fn process_env_is_owned(pid: u32) -> bool {
 /// 正是这条链路的地基（§9.2）。
 #[cfg(not(windows))]
 #[allow(dead_code)]
-pub fn process_env_is_owned(_pid: u32) -> bool {
+pub fn process_env_is_owned(_pid: u32, _project_root: &str) -> bool {
   false
 }
 
 #[cfg(windows)]
 unsafe fn read_owned_env_from_process(
   handle: windows::Win32::Foundation::HANDLE,
+  project_root: &str,
 ) -> bool {
   use windows::Wdk::System::Threading::{
     NtQueryInformationProcess, ProcessBasicInformation,
@@ -1332,8 +1362,13 @@ unsafe fn read_owned_env_from_process(
     .map(|c| u16::from_le_bytes([c[0], c[1]]))
     .collect();
   let text = String::from_utf16_lossy(&units);
-  let needle = format!("{OWNED_ENV}=1");
-  text.split('\0').any(|entry| entry.trim() == needle)
+  /* 认亲双判据（ISSUE #3851）：「是某个壳起的」（OWNED_ENV）**且**「是本检出
+   * 的壳起的」（PROJECT_ROOT_ENV 与当前根一致）。多检出并行时，只看前者会把
+   * 别家正在跑的编排器当成自己的残留 —— 后果是误杀整树。 */
+  let owned_needle = format!("{OWNED_ENV}=1");
+  let root_needle = format!("{PROJECT_ROOT_ENV}={project_root}");
+  text.split('\0').any(|entry| entry.trim() == owned_needle)
+    && text.split('\0').any(|entry| entry.trim() == root_needle)
 }
 
 /// 找到「已经在跑、且是本模块亲手起的」编排器进程号（找不到 = None）。
@@ -1342,7 +1377,7 @@ unsafe fn read_owned_env_from_process(
 /// 环境块认亲。**命令行**这一层只用来做廉价预筛（省掉绝大多数 OpenProcess），
 /// 真正的判据是环境块（见 `is_own` 的注释）。
 #[cfg(windows)]
-pub fn find_owned_orchestrator() -> Option<u32> {
+pub fn find_owned_orchestrator(project_root: &str) -> Option<u32> {
   use windows::Win32::Foundation::CloseHandle;
   use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
@@ -1366,7 +1401,7 @@ pub fn find_owned_orchestrator() -> Option<u32> {
         if pid != 0
           && pid != self_pid
           && is_probable_node_process(&entry.szExeFile)
-          && process_env_is_owned(pid)
+          && process_env_is_owned(pid, project_root)
         {
           result = Some(pid);
           break;
@@ -1382,7 +1417,7 @@ pub fn find_owned_orchestrator() -> Option<u32> {
 }
 
 #[cfg(not(windows))]
-pub fn find_owned_orchestrator() -> Option<u32> {
+pub fn find_owned_orchestrator(_project_root: &str) -> Option<u32> {
   None
 }
 

@@ -4,6 +4,7 @@
 // 由用户挑一张定为定妆照。这里只有纯函数与常量，可直接单测。
 
 import { isRecord } from "~/lib/is-record";
+import { tailWindowAppendUnique } from "~/lib/page-window";
 import type { Character, CharacterPortrait, PortraitSource } from "./types";
 
 /** 单角色保留的候选上限：超出丢最旧，避免草稿随每次生成无限膨胀
@@ -32,13 +33,12 @@ export function makePortraitLog(level: PortraitLogEntry["level"], text: string):
   return { ts: Date.now(), level, text };
 }
 
-/** 追加一条日志；超上限丢最旧的一条。 */
+/** 追加一条日志；重复帧（SSE 重连全量回放，ISSUE #3896）丢弃，超上限丢最旧。 */
 export function appendPortraitLog(
   list: Array<PortraitLogEntry>,
   entry: PortraitLogEntry,
 ): Array<PortraitLogEntry> {
-  const next = [...list, entry];
-  return next.length > MAX_PORTRAIT_LOG ? next.slice(next.length - MAX_PORTRAIT_LOG) : next;
+  return tailWindowAppendUnique(list, entry, MAX_PORTRAIT_LOG, (e) => `${e.ts}|${e.text}`);
 }
 
 function isPortraitSource(value: unknown): value is PortraitSource {

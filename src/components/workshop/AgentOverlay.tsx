@@ -15,6 +15,7 @@ import type { WorkshopAgentController, AgentToolRun } from "./hooks/use-workshop
 import { zClass } from "~/lib/shell/overlay-z";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { useViewportSize } from "~/components/ui/use-viewport-size";
 
 const GREETING =
@@ -181,9 +182,9 @@ export function AgentOverlay({
                       : undefined
                   }
                 />
-                <span className="text-muted-foreground text-2xs min-w-0 flex-1 truncate">
+                <TruncatedText className="text-muted-foreground text-2xs min-w-0 flex-1 truncate">
                   {run.summary}
-                </span>
+                </TruncatedText>
                 <span className="text-muted-foreground text-3xs shrink-0">
                   {TOOL_STATUS_LABEL[run.status]}
                 </span>

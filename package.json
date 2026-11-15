@@ -43,6 +43,7 @@
     "package:portable": "node scripts/package-desktop-portable.mjs",
     "fetch:daily-shell": "node scripts/fetch-daily-shell.mjs",
     "screenshot": "node scripts/screenshot.mjs",
+    "perf:trace": "node scripts/perf-trace.mjs",
     "build:tracked": "node scripts/artifact-run.mjs",
     "build:tracked:dry": "node scripts/artifact-run.mjs --dry-run",
     "docs": "node scripts/generate-api-docs.mjs",

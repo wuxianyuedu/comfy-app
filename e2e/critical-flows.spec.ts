@@ -46,45 +46,7 @@ async function gotoWorkspaceView(page: Page, label: string) {
   await nav.click();
 }
 
-test.describe("登录链路 @critical", () => {
-  test("@critical 登录页可切到注册模式并提交表单", async ({ page }) => {
-    // 认证接口（better-auth）在 CI 里没有真实后端，这里只锁「表单可用 +
-    // 提交动作真的发出去了」这一层——不假装认证成功（那要靠真后端，属
-    // 集成测试范围，不该塞进 @critical 的 E2E）。
-    await page.goto("/login");
-
-    // 切到注册模式：出现昵称字段、提交按钮变为「创建并登录」
-    await /* 登录 / 创建账号是一排里选一个（`role="radio"`，规范 16 §16.2.4.75）——
-     不是按钮。改的是读法，不是用例锁的那件事。 */
-    page.getByRole("radio", { name: "创建账号" }).click();
-    await expect(page.getByText("昵称（可选）")).toBeVisible();
-    await expect(page.locator('form button[type="submit"]')).toHaveText("创建并登录");
-
-    await page.getByPlaceholder("name@example.com").fill("e2e@example.com");
-    await page.locator('input[type="password"]').fill("e2e-password-123");
-
-    // 断言「提交动作真的发出去了」：表单没有接错线。authenticate 走
-    // better-auth 的 fetch（可能先经过 tRPC），这里放宽为「点击后页面状态
-    // 有推进」——即出现加载态或离开登录页，二者必有其一。
-    await page.locator('form button[type="submit"]').click();
-    await expect
-      .poll(
-        async () => {
-          const url = page.url();
-          if (!url.endsWith("/login")) {
-            return "navigated";
-          }
-          const body = await page.locator("body").innerText();
-          return /提交中|加载中|请稍候|创建并登录/.test(body) ? "submitted" : "idle";
-        },
-        {
-          timeout: 15_000,
-          message: "点击提交后页面没有任何推进（表单未接通）",
-        },
-      )
-      .not.toBe("idle");
-  });
-});
+/* 登录页已移除（ISSUE #3827），应用无需登录即可进入工作区。 */
 
 test.describe("工作区链路 @critical", () => {
   test("@critical 工作区首页渲染主干入口与最近项目", async ({ page }) => {

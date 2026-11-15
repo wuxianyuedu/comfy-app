@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { DocumentFrame } from "./ViewContainer";
 import { LocalComputeCard } from "./LocalComputeCard";
 import { HomeModelOverview } from "./HomeModelOverview";
@@ -140,13 +141,13 @@ function ResumeProjectCard({
           >
             {cfg.label}
           </span>
-          <span className="text-ink-bright group-hover:text-ink min-w-0 flex-1 truncate text-[15px] font-semibold transition-colors">
+          <TruncatedText className="text-ink-bright group-hover:text-ink min-w-0 flex-1 truncate text-[15px] font-semibold transition-colors">
             {proj.name}
-          </span>
+          </TruncatedText>
         </div>
         <div className="text-ink-fainter flex items-center gap-2 text-xs">
           {proj.subtitle !== undefined && proj.subtitle !== "" && (
-            <span className="min-w-0 truncate">{proj.subtitle}</span>
+            <TruncatedText className="min-w-0 truncate">{proj.subtitle}</TruncatedText>
           )}
           {/* 「最近动过」这个措辞是刻意的：`updatedAt` 由上层给成什么口径，
               这里不许再加工成一个更精确的假象。 */}
@@ -344,9 +345,9 @@ export function HomePage({
                     {/* Info */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-ink-bright group-hover:text-ink truncate text-sm font-medium transition-colors">
+                        <TruncatedText className="text-ink-bright group-hover:text-ink truncate text-sm font-medium transition-colors">
                           {proj.name}
-                        </span>
+                        </TruncatedText>
                         <span
                           className="text-3xs shrink-0 rounded-md px-1.5 py-0.5 font-medium ring-1 ring-inset"
                           style={{

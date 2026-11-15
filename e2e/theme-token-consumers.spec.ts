@@ -165,8 +165,10 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
     /* 不写 `waitUntil: "domcontentloaded"`：这一档的**前提**是脚本已到位 ——
      * provider 的 `applyTheme` 在挂载效果里跑，DCL 早于它，于是用例拨完 class 之后
      * 被它改回去（读数与因果见上面的 `setTheme`，立案在 ISSUE #2100）。
-     * 默认的 `load` 与同级 `:373` 那条「二次代入」同一口径。 */
-    await page.goto("/login");
+     * 默认的 `load` 与同级 `:373` 那条「二次代入」同一口径。登录页已移除（#3827），
+     * 改用首页（会重定向到工作区）作为主题探针页。 */
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/workspace/);
   });
 
   test("两态下 CONSUMED_TOKENS 全部解析得到具体颜色", async ({ page }) => {
@@ -326,7 +328,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
 
   /**
    * **二次代入**这条路径（上一批留下的缝）：React Flow 把 `<Background color=…>` 写成内联 `--xy-background-pattern-color-props`，样式表再 `stroke: var(--xy-background-pattern-color-props, var(--xy-background-pattern-color, 默认))` 取它 —— 一个 var() 嵌在自定义属性里、又被外层 var() 二次代入，内层还带 `color-mix()`；三段各有各的失效方式，只验两头等于没验中间。
-   * 必须走 `/workspace` 并**把画布那一屏开出来**（`/login` 上没有这三条规则）。⚠️ `f72a55ee`（PR #1786）把 `WorkspaceViewStack` 视图改成 `next/dynamic`：画布 CSS 不再随 `/workspace` 急加载，只 `goto` 会取到 0 条样式表（规则确实在 `.next/static/chunks/*.css`，只是进 DOM 的时机变了）。
+   * 必须走 `/workspace` 并**把画布那一屏开出来**。⚠️ `f72a55ee`（PR #1786）把 `WorkspaceViewStack` 视图改成 `next/dynamic`：画布 CSS 不再随 `/workspace` 急加载，只 `goto` 会取到 0 条样式表（规则确实在 `.next/static/chunks/*.css`，只是进 DOM 的时机变了）。
    */
   test("二次代入：经 --xy-background-pattern-color-props 取到的仍是同一个色", async ({ page }) => {
     /* ⚠️ 这里刻意**不写** `waitUntil: "domcontentloaded"`（原先有）。立案读数：全量必红、隔离单跑必绿，红在点「新建画布项目」后等不到 `[data-view="project"]`，失败瞬间的无障碍快照显示页签**只有「首页」**、卡还在原位 —— 点击根本没生效。
@@ -468,7 +470,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
         const rootStyle = getComputedStyle(document.documentElement);
         /* 标题档不靠「这一屏恰好有 h1」—— 挂一个用同一个工具类的探针元素，判的是
            真级联里 `font-title` 解得出什么。（字体族由 `font-title` 带，
-           `.u-title-*` 只管字号/字重/字距/颜色；/login 上没有 h1，实测取到空串。） */
+           `.u-title-*` 只管字号/字重/字距/颜色；首页/工作区未必有 h1，实测取到空串。） */
         const probe = document.createElement("h2");
         probe.className = "font-title";
         probe.textContent = "字体探针";

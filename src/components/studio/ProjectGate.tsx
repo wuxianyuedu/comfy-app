@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { textHandler } from "~/lib/form-props";
 import { createProject, listProjects, setActive } from "~/lib/project-canvas/canvas-store";
@@ -66,7 +67,9 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
                       }}
                       variant="ghost"
                     >
-                      <span className="truncate">{project.name || "未命名项目"}</span>
+                      <TruncatedText className="truncate">
+                        {project.name || "未命名项目"}
+                      </TruncatedText>
                       <span className="text-ink-fainter shrink-0 text-xs">
                         {nodeCount > 0 ? `${nodeCount} 节点` : "空"}
                       </span>

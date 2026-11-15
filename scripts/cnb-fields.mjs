@@ -50,6 +50,7 @@ function isArray(v) {
 /**
  * @typedef {{number?: number | string, mergeable_state?: string, blocked_on?: string,
  *   is_merged?: boolean, state?: string, title?: string,
+ *   head?: {ref?: string, sha?: string},
  *   base?: {ref?: string}}} CnbPullData
  *   PR 记录的结论包形状（`readPullVerdict` / `readPullCreateError` 共用的字段面）。
  */

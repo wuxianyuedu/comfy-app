@@ -29,6 +29,20 @@
       "when": 1794566834763,
       "tag": "0003_friendly_blob",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794734406396,
+      "tag": "0004_glamorous_the_santerians",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794736515336,
+      "tag": "0005_premium_thundra",
+      "breakpoints": true
     }
   ]
 }

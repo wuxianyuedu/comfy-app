@@ -264,6 +264,8 @@ export function WorkshopEncapsulationPanel({
                     </>
                   ),
                   value: displayValue(entry.targetIoKey),
+                  /* 悬停看全文：值是 IO 口标识符（`ckpt_name_2` / 中文 pin 名），窄列会截成省略号。 */
+                  title: displayValue(entry.targetIoKey),
                 },
               ]}
               key={entry.id}

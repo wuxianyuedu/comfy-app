@@ -52,7 +52,12 @@ vi.mock("fs", () => ({
     mkdir: (p: string) => {
       disk.mkdir.push(p);
     },
-    writeFile: (p: string) => {
+    writeFile: (p: string, _buf?: unknown, opts?: { flag?: string }) => {
+      /* 路由用 `wx` 独占创建落盘（#3836）：目标已在盘上 → EEXIST，路由据此
+       * 换下一个后缀重试 —— 这正是「重名不覆盖」的机制。 */
+      if (opts?.flag === "wx" && fileStats.has(p)) {
+        throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
+      }
       disk.writeFile.push(p);
     },
     unlink: (p: string) => {

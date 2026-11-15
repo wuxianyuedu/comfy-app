@@ -52,29 +52,37 @@ export const session = sqliteTable("session", {
     .references(() => user.id, { onDelete: "cascade" }),
 });
 
-export const account = sqliteTable("account", {
-  id: text("id").primaryKey(),
-  accountId: text("accountId").notNull(),
-  providerId: text("providerId").notNull(),
-  issuer: text("issuer"),
-  userId: text("userId")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  accessToken: text("accessToken"),
-  refreshToken: text("refreshToken"),
-  idToken: text("idToken"),
-  accessTokenExpiresAt: dateNull("accessTokenExpiresAt"),
-  refreshTokenExpiresAt: dateNull("refreshTokenExpiresAt"),
-  scope: text("scope"),
-  password: text("password"),
-  createdAt: dateNotNull("createdAt")
-    .notNull()
-    .$defaultFn(() => new Date()),
-  updatedAt: dateNotNull("updatedAt")
-    .notNull()
-    .$defaultFn(() => new Date())
-    .$onUpdate(() => new Date()),
-});
+export const account = sqliteTable(
+  "account",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("accountId").notNull(),
+    providerId: text("providerId").notNull(),
+    issuer: text("issuer"),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accessToken: text("accessToken"),
+    refreshToken: text("refreshToken"),
+    idToken: text("idToken"),
+    accessTokenExpiresAt: dateNull("accessTokenExpiresAt"),
+    refreshTokenExpiresAt: dateNull("refreshTokenExpiresAt"),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: dateNotNull("createdAt")
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: dateNotNull("updatedAt")
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    // 同一用户在同一外部身份（provider + account）至多一行（#3937，对齐
+    // better-auth 的 account 语义）；存量重复由 db-unique-sweep 清洗。
+    uniqueIndex("account_provider_account_user_uniq").on(t.providerId, t.accountId, t.userId),
+  ],
+);
 
 export const verification = sqliteTable("verification", {
   id: text("id").primaryKey(),
@@ -275,6 +283,13 @@ export const task = sqliteTable(
     // 与 task_status_finished_idx 分开：那条服务孤儿判决（status, finishedAt），
     // 本条服务领取谓词（status, claimedBy），语义不同不合并。
     index("task_claimed_by_idx").on(t.status, t.claimedBy),
+    // ⚠️ 刻意**没有** (projectId, shotId) 的活动任务唯一索引（#3849）：同一镜头
+    // 同时至多一条 QUEUED/RUNNING 任务（重复扣款形态）的库级闸做不了 ——
+    // drizzle-kit 0.31 的 SQLite diff 对部分索引（WHERE）与表达式索引都会
+    // 永远 DROP+CREATE、两次 push 不收敛（#3849 实测，普通列索引无此问题），
+    // 建了会让 `pnpm db:push` 永久红。该约束由应用层承：单发生成的
+    // KeyedAsyncMutex 锁内查重（generate.ts）+ 整季批量入队的占用集合与互斥
+    // （series-generation.ts），口径见规范 §8.9 ②。
   ],
 );
 
@@ -332,6 +347,9 @@ export const workflowTemplate = sqliteTable(
     // workflow.list 的 listForUser：按 userId 过滤 + createdAt desc 排序。仅有
     // userId 单列索引时仍需整段临时 B-tree 排序；复合索引让有序扫描走索引。
     index("wt_user_created_idx").on(t.userId, t.createdAt),
+    // 同一用户的模板名唯一（#3934）：本地导入 / 粘贴 JSON 双击不再落重复模板，
+    // 改名撞名转业务 409。存量重复由 db-unique-sweep 在建索引前清洗。
+    uniqueIndex("wt_user_name_uniq").on(t.userId, t.name),
   ],
 );
 
@@ -369,6 +387,10 @@ export const workflowModelTagToWorkflowTemplate = sqliteTable(
     /* 反向索引：按标签找它绑定的模板（`templateHasTagIdsWhere` 的 IN 查询），
      * 没有这侧索引时连接表全扫。 */
     index("wmtt_tag_idx").on(t.workflowModelTag),
+    // 同一对 (标签, 模板) 只许一行（#3849）：setModelTags 的「删了再插」在并发
+    // 交错时曾落下重复关联行、计数虚高（#3835/#3870 的现场），此前只靠
+    // immediate 事务把交错串行化 —— 这里补上库级兜底。
+    uniqueIndex("wmtt_tag_wt_uniq").on(t.workflowModelTag, t.workflowTemplate),
   ],
 );
 

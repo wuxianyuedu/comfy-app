@@ -1,38 +1,26 @@
 /**
- * `GET /api/generated/[...path]` —— 产物文件流（任意路径读取入口）的边界契约：未登录 401 且一次都不碰磁盘；
- * 穿越出根 403（`../` 与兄弟目录前缀碰撞分开验，`+ path.sep` 专为 `<root>-evil` 存在）；别人的产物 404 且在 `stat`/`open` 之前判；
- * `Range` 复用同一串判定且只读要的那一段；读不到 404（不抛 EISDIR/EACCES 原文）；`Content-Type` 走 `contentTypeForPath`，缓存 `private`+`immutable`；Range 三态 206/416/忽略回 200。
+ * `GET /api/generated/[...path]` —— 产物文件流（任意路径读取入口）的边界契约（ISSUE #3827）：
+ * 无登录流程，身份解析始终可用；穿越出根 403（`../` 与兄弟目录前缀碰撞分开验）；
+ * `Range` 只读要的那一段；读不到 404（不抛 EISDIR/EACCES 原文）；`Content-Type` 走 `contentTypeForPath`，缓存 `private`+`immutable`；Range 三态 206/416/忽略回 200。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const { stat, open, readCalls, disk, userMock, loginRequiredMock, foreignMock } = vi.hoisted(
-  () => ({
-    stat: vi.fn(),
-    open: vi.fn(),
-    /* SAFETY: type assertion reviewed */
-    readCalls: [] as Array<{
-      length: number;
-      position: number;
-    }>,
-    disk: { bytes: Buffer.from("") },
-    userMock: vi.fn<() => Promise<{ id: string } | null>>(),
-    loginRequiredMock: vi.fn<() => boolean>(() => false),
-    foreignMock: vi.fn<(segments: Array<string>, userId: string) => Promise<boolean>>(() =>
-      Promise.resolve(false),
-    ),
-  }),
-);
+const { stat, open, readCalls, disk, userMock } = vi.hoisted(() => ({
+  stat: vi.fn(),
+  open: vi.fn(),
+  /* SAFETY: type assertion reviewed */
+  readCalls: [] as Array<{
+    length: number;
+    position: number;
+  }>,
+  disk: { bytes: Buffer.from("") },
+  userMock: vi.fn<() => Promise<{ id: string } | null>>(),
+}));
 
 vi.mock("fs", () => ({ promises: { stat, open } }));
 vi.mock("~/server/auth/request-user", () => ({
   requireRequestUser: userMock,
-}));
-vi.mock("~/lib/app-settings/app-settings.server", () => ({
-  getSettingsSync: () => ({ loginRequired: loginRequiredMock() }),
-}));
-vi.mock("~/lib/media/output-access", () => ({
-  isForeignOwnedArtifact: foreignMock,
 }));
 
 import { generatedRoot as generatedRootOf } from "~/lib/media/output-paths";
@@ -89,8 +77,6 @@ beforeEach(() => {
   readCalls.length = 0;
   disk.bytes = Buffer.from("");
   userMock.mockReset();
-  loginRequiredMock.mockReset().mockReturnValue(false);
-  foreignMock.mockReset().mockResolvedValue(false);
   userMock.mockResolvedValue({ id: "user-a" });
   putFile("0123456789");
 });
@@ -107,14 +93,10 @@ describe("闸门顺序：每一种拒绝都发生在碰磁盘之前", () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  it("未登录（loginRequired 开着）→ 401，且不做归属判定、不碰磁盘", async () => {
-    loginRequiredMock.mockReturnValue(true);
+  it("无会话也可读取产物（无需登录，#3827）", async () => {
     userMock.mockResolvedValueOnce(null);
     const res = await get(["t1", "a.png"]);
-    expect(res.status).toBe(401);
-    expect(foreignMock).not.toHaveBeenCalled();
-    expect(stat).not.toHaveBeenCalled();
-    expect(open).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
   });
 
   it("穿越出产物根 → 403 且不碰磁盘", async () => {
@@ -130,43 +112,6 @@ describe("闸门顺序：每一种拒绝都发生在碰磁盘之前", () => {
     const res = await get(["..", "generated-evil", "secret.png"]);
     expect(res.status).toBe(403);
     expect(open).not.toHaveBeenCalled();
-  });
-
-  it("多用户模式：属于别人的产物 → 404（与「不存在」同形）且不去读那个文件", async () => {
-    loginRequiredMock.mockReturnValue(true);
-    foreignMock.mockResolvedValueOnce(true);
-    const res = await get(["projects", "proj-b", "t9", "a.png"]);
-    expect(res.status).toBe(404);
-    expect(await res.text()).toBe("Not found");
-    expect(open).not.toHaveBeenCalled();
-    // 判定拿的是解码后的路径片段 + 当前用户，不自己再解析一遍字符串
-    expect(foreignMock).toHaveBeenCalledWith(["projects", "proj-b", "t9", "a.png"], "user-a");
-  });
-
-  it.for(["bytes=0-3", "bytes=9999-", "seconds=1-2"])(
-    "带 Range 也不许绕过闸（%s）：无会话 401、别人的 404，两次都不打开文件",
-    async (range) => {
-      loginRequiredMock.mockReturnValue(true);
-      userMock.mockResolvedValueOnce(null);
-      expect((await get(["t1", "a.png"], range)).status).toBe(401);
-      expect(open).not.toHaveBeenCalled();
-
-      userMock.mockResolvedValue({ id: "user-a" });
-      foreignMock.mockResolvedValueOnce(true);
-      expect((await get(["t1", "a.png"], range)).status).toBe(404);
-      expect(open).not.toHaveBeenCalled();
-    },
-  );
-
-  it("多用户模式：不是别人的 → 正常读出字节", async () => {
-    loginRequiredMock.mockReturnValue(true);
-    expect((await get(["t1", "a.png"])).status).toBe(200);
-    expect(foreignMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("单用户模式（默认）跳过归属判定 —— 那时人人都是同一个演示用户，判了只会误伤", async () => {
-    expect((await get(["t1", "a.png"])).status).toBe(200);
-    expect(foreignMock).not.toHaveBeenCalled();
   });
 
   it("路径段解析回根目录本身时不去 open 目录（404，不是 500）", async () => {

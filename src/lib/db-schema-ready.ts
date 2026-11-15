@@ -26,9 +26,11 @@
  *
  * Design
  * ------
- * - The probe is **read-only** and **runs at most once** (cached): it queries
- *   `sqlite_master` for a sentinel table, which is negligible and has no write
- *   side effect (`drizzle-kit push` is the only thing that creates tables);
+ * - The probe is **read-only** and **cheap**: it queries `sqlite_master` for a
+ *   sentinel table, which is negligible and has no write side effect
+ *   (`drizzle-kit push` is the only thing that creates tables). A positive
+ *   result is cached; a negative one is re-probed on the next call (see
+ *   `isSchemaReady`);
  * - The result is three-state (`ready` / `missing` / `unknown`) so callers own
  *   the semantics instead of this module swallowing everything: "DB is broken"
  *   and "tables do not exist yet" are different problems and only the latter
@@ -61,9 +63,8 @@ import path from "node:path";
 /** Table readiness state. */
 export type SchemaReadiness = "ready" | "missing" | "unknown";
 
-/** Probe result cache: at most one probe per process. A schema cannot appear
- *  from nothing twice within a single process lifetime in a way we care about,
- *  and repeating the query on every sweep would be pure overhead. */
+/** Probe result cache: a positive ("ready") probe is cached for the process
+ *  lifetime; a negative one is never cached (see `isSchemaReady`). */
 let cached: SchemaReadiness | null = null;
 
 /** Sentinel table. `task` is the first table the reaper touches and the one
@@ -117,13 +118,27 @@ export function probeSchemaSync(databaseUrl?: string): SchemaReadiness {
 /**
  * Cached readiness check, meant for module-level side effects.
  *
+ * Only a **positive** result is sticky. A `missing`/`unknown` probe must not be
+ * cached for the process lifetime: tables can legitimately appear later
+ * (`pnpm db:push` after the server has started) and an `unknown` can be a
+ * transient `SQLITE_BUSY` while concurrent workers flip WAL. Caching a negative
+ * answer here would silently disable every DB-side side effect gated on this
+ * check (e.g. the reaper) until restart. The probe is a single read-only
+ * `sqlite_master` lookup, so re-probing while not ready is negligible.
+ *
  * @returns `true` when the tables exist and it is safe to read the DB.
  *   Otherwise the caller must **skip** this round; the next interval tick (or
  *   the next run after `pnpm install` / creating the tables) will pick it up.
  */
 export function isSchemaReady(databaseUrl?: string): boolean {
-  cached ??= probeSchemaSync(databaseUrl);
-  return cached === "ready";
+  if (cached === "ready") {
+    return true;
+  }
+  const next = probeSchemaSync(databaseUrl);
+  if (next === "ready") {
+    cached = next;
+  }
+  return next === "ready";
 }
 
 /** Clear the cache. Test-only helper so one vitest process can build both a

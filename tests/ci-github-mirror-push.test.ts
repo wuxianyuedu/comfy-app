@@ -436,11 +436,11 @@ describe("纯函数", () => {
      * 同日 19:47 同 runner 却通过 —— 15s 把「慢但活着」的抖动截成了「没通」。 */
     expect(REMOTE_READ_TIMEOUT_MS).toBe(30_000);
     /* ISSUE #3252：推送前不再有探活，推送第一刀就是这一格唯一的网络写入口；回读另领
-     * 60s 预算（VERIFY_RETRY_BUDGET_MS），不占推送那 240s。加上 LFS 首刀的单跳上限，
-     * 480s 仍落在 10m 外框内。 */
+     * 60s 预算（VERIFY_RETRY_BUDGET_MS），不占推送预算。加上 LFS 首刀的单跳上限，
+     * 480 + 240 = 720s 仍落在 15m 外框内（#3914：预算翻倍后外框同批 10m → 15m）。 */
     expect(VERIFY_MAX_ATTEMPTS).toBe(3);
     expect(VERIFY_RETRY_BUDGET_MS).toBe(60_000);
-    expect(PUSH_RETRY_BUDGET_MS + PUSH_TIMEOUT_MS).toBeLessThan(10 * 60_000);
+    expect(PUSH_RETRY_BUDGET_MS + PUSH_TIMEOUT_MS).toBeLessThan(15 * 60_000);
   });
 
   it("createWireBudget：一个起点、后续跳取剩余量，用尽后不为负（ISSUE #3234）", () => {
@@ -449,10 +449,10 @@ describe("纯函数", () => {
     /* 推送第一刀那一刻起算：满额。 */
     expect(budget()).toBe(PUSH_RETRY_BUDGET_MS);
     /* 首刀花掉的时间要在重试里被扣掉，而不是再领一份 240s。 */
-    t += 100_000;
-    expect(budget()).toBe(PUSH_RETRY_BUDGET_MS - 100_000);
+    t += 200_000;
+    expect(budget()).toBe(PUSH_RETRY_BUDGET_MS - 200_000);
     /* 超过窗口也不许给出负数（runGitWithRetry 按「低于一次尝试就不再发起」收口）。 */
-    t += 300_000;
+    t += 600_000;
     expect(budget()).toBe(0);
   });
 
@@ -498,7 +498,9 @@ describe("纯函数", () => {
       },
     );
     expect(result.code).toBe(128);
-    expect(result.attempts).toBe(2);
+    /* 预算 480s（#3914）：挂 200s 一刀 → 5s 退避 → 再挂 200s → 10s 退避 → 还剩
+     * 65s 够第三刀（同样被 200s 吃掉）⇒ 第 4 刀发起前预算见底，按最后一次交账。 */
+    expect(result.attempts).toBe(3);
     expect(heard.join("\n")).toContain("重试预算用尽");
     /* 整档墙钟不超过预算 —— 这是「预算」与「次数」之外真正承重的那一条。 */
     expect(t).toBeLessThanOrEqual(PUSH_RETRY_BUDGET_MS + 200_000);
@@ -1417,8 +1419,8 @@ describe("runMirror（git 与 fetch 全假件）", () => {
   });
 
   it("LFS 重试窗口：单独一份 60s 预算，比 wire 小一档、但不再是 6s 就交账", () => {
-    /* 2026-11-05 第二批：LFS 是同一格里的第二跳，探活与 wire 已共用掉 240s（ISSUE #3234
-     * 起从探活起算），再给 4 分钟会顶穿 10m 外框；但也不能退回「2 次 + 5s」那个
+    /* 2026-11-05 第二批：LFS 是同一格里的第二跳，wire 预算 #3914 起已抬到 480s，
+     * LFS 再领大预算会把 15m 外框顶穿；但也不能退回「2 次 + 5s」那个
      * 瞬时失败 6s 收工的形态。 */
     expect(LFS_PUSH_RETRY_BUDGET_MS).toBe(60_000);
     expect(LFS_PUSH_RETRY_BUDGET_MS).toBeLessThan(PUSH_RETRY_BUDGET_MS);
@@ -1808,10 +1810,14 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     /* 首刀不裁（照吃 240s 单跳上限），保护「慢但活着」的那一跳。 */
     expect(pushOpts[0]).toBeUndefined();
     /* 反向验证抓手：把推送那行 `budgetMs: wireBudget()` 摘掉，这里就该是 undefined。
-     * 只把次数抬到 10 而不给预算，重试仍会一路吃满 240s×9 —— 等于没给「3–5 分钟」。 */
-    expect(pushOpts[1]).toEqual({ timeout: PUSH_RETRY_BUDGET_MS - (RETRY_BACKOFF_MS[0] ?? 0) });
-    /* 最后一刀只剩「刚好够一次尝试」的余量 ⇒ 预算真的会咬，不是账面数字。 */
-    expect(pushOpts.at(-1)).toEqual({ timeout: RETRY_MIN_ATTEMPT_MS });
+     * 重试刀被裁到「剩余预算」与「单跳上限」的较小者——#3914 起预算抬到 480s，
+     * 首次退避后的剩余量（475s）已超过单跳上限，故重试刀照吃 240s。 */
+    expect(pushOpts[1]).toEqual({
+      timeout: Math.min(PUSH_TIMEOUT_MS, PUSH_RETRY_BUDGET_MS - (RETRY_BACKOFF_MS[0] ?? 0)),
+    });
+    /* 预算（480s）≥ 退避阶梯累计（230s）+ 一次完整尝试（240s）：10 刀全部跑得动，
+     * 收口靠 PUSH_MAX_ATTEMPTS，不再靠「最后一刀只剩最小余量」。 */
+    expect(pushOpts.at(-1)).toEqual({ timeout: PUSH_TIMEOUT_MS });
     /* 整档墙钟吃满退避阶梯（230s ≳ 3min），不再是旧口径「3 次 + 15s ≈ 16s」。 */
     expect(t).toBeGreaterThanOrEqual(3 * 60_000);
   });
@@ -1829,9 +1835,11 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       runGit: (args: Array<string>) => {
         if (args.includes("push")) {
           pushes += 1;
-          /* 首刀「慢但失败」：挂了 100s 才回话，之后每次都是 egress 失败。 */
+          /* 首刀「慢但失败」：吃满单跳上限 240s 才回话，之后每刀 60s（egress 失败）。 */
           if (pushes === 1) {
-            t += 100_000;
+            t += PUSH_TIMEOUT_MS;
+          } else {
+            t += 60_000;
           }
         }
         return base.io.runGit(args);
@@ -1843,8 +1851,9 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     };
     const code = await runMirror(io);
     expect(code).toBe(CODE.NO_FACT);
-    /* 推送只拿到约 135s 剩余预算 ⇒ 第 7 刀后就被收口；若另领一份 240s，
-     * 这里会跑满 PUSH_MAX_ATTEMPTS = 10 次（反向验证抓手）。 */
+    /* 首刀吃掉 240s 后，剩余预算只够 5 刀（240 + 5 + 60 + 10 + 60 + 15 + 60 + 20 + 60
+     * = 470s，第 6 刀发起前只剩 10s 余量）；若另领一份预算，这里会跑满
+     * PUSH_MAX_ATTEMPTS = 10 次（反向验证抓手）。 */
     expect(base.pushes.length).toBeLessThan(PUSH_MAX_ATTEMPTS);
     expect(base.heard.join("\n")).toContain("推送重试预算用尽");
   });
@@ -2713,11 +2722,14 @@ describe("runMasterMirror（推送 + 回读，没有派发那一跳）", () => {
     /* 推送没通 ⇒ master 这一档也不跑 LFS。 */
     expect(base.pushes).toHaveLength(PUSH_MAX_ATTEMPTS);
     expect(base.lfsPushes).toHaveLength(0);
-    /* 与 PR 档同一组读数：首刀不裁、第二刀裁到剩余量、最后一刀只剩一次尝试的余量。
+    /* 与 PR 档同一组读数：首刀不裁、重试刀裁到「剩余预算与单跳上限的较小者」
+     * （#3914 起预算 480s，首次退避后的剩余量 475s 已超单跳上限 ⇒ 照吃 240s）。
      * 把 master 档推送的 `budgetMs: wireBudget()` 摘掉，这几条就会红。 */
     expect(pushOpts[0]).toBeUndefined();
-    expect(pushOpts[1]).toEqual({ timeout: PUSH_RETRY_BUDGET_MS - (RETRY_BACKOFF_MS[0] ?? 0) });
-    expect(pushOpts.at(-1)).toEqual({ timeout: RETRY_MIN_ATTEMPT_MS });
+    expect(pushOpts[1]).toEqual({
+      timeout: Math.min(PUSH_TIMEOUT_MS, PUSH_RETRY_BUDGET_MS - (RETRY_BACKOFF_MS[0] ?? 0)),
+    });
+    expect(pushOpts.at(-1)).toEqual({ timeout: PUSH_TIMEOUT_MS });
     expect(base.heard.every((l) => l.startsWith("[mirror-master]"))).toBe(true);
   });
 });

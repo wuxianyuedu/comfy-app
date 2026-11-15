@@ -18,6 +18,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { writeJson } from "./launcher-core/run.mjs";
+
 /**
  * 启动会话的持久化形状（`run/launcher-session.json`）。
  * @typedef {object} LauncherSession
@@ -97,15 +99,17 @@ export function readSession(root) {
   }
 }
 
-/** 写本次会话（原子写：先写临时文件再 rename，避免读到半截 JSON）。
+/** 写本次会话（原子写 + rename 短暂重试，复用 `launcher-core/run.mjs` 的
+ *  `writeJson` —— ISSUE #3836）：原先这里只有「pid 后缀临时文件 + 一次性
+ *  rename」，Windows 上目标正被对方 rename 的瞬间会 EPERM / EBUSY，失败被
+ *  静默吞掉，会话锚点停留在旧内容，下次启动的孤儿回收据此漏收 / 误判。
+ *  两处本是同一件事（§12.12），不再各留一份会漂的实现。
  * @param {string} root @param {LauncherSession} session @returns {string} 写入路径 */
 export function writeSession(root, session) {
   ensureRunDir(root);
   const target = sessionFilePath(root);
-  const tmp = `${target}.${process.pid}.tmp`;
   try {
-    fs.writeFileSync(tmp, JSON.stringify(session, null, 2), "utf8");
-    fs.renameSync(tmp, target);
+    writeJson(target, session);
   } catch {
     /* 见 ensureRunDir 注释 */
   }

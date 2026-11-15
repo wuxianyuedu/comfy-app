@@ -25,8 +25,25 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
+import { AsyncMutex } from "~/lib/async-mutex";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import { upperToken } from "~/lib/upper-token";
+
+/** 覆盖文件的多个写方（保存 / 按模式还原）先进进程内互斥（ISSUE #3859）：
+ *  「读基准 → 差集 → 整份写回」并发交叠时，后写者会用旧基准顶掉先写者。 */
+const overrideFileMutex = new AsyncMutex();
+
+/** 覆盖文件的原子写（ISSUE #3859）：tmp + rename，读侧不会撞到半截 JSON。 */
+async function atomicWriteText(file: string, text: string): Promise<void> {
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    await fs.writeFile(tmp, text, "utf8");
+    await fs.rename(tmp, file);
+  } catch (error) {
+    await fs.rm(tmp, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
 
 import {
   MODE_CONTRACTS_REL_PATH,
@@ -115,22 +132,24 @@ export async function saveModeContracts(
   contracts: Array<ModeContract>,
   root: string = process.cwd(),
 ): Promise<Array<ModeContract>> {
-  const configured = await readConfiguredModeContracts(root);
-  const normalized = localOverrideDiff(parseModeContracts(contracts), configured);
   const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACTS_REL_PATH);
-  try {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
-  } catch (error) {
-    /* 失败必须说出来：「保存了但没落盘」是最坏的形态（用户以为配置生效、
-     * 实际下一次读取回到旧值），而它唯一的痕迹就是这里。文案走 `errorText`
-     * （动作前缀 + 详情的唯一出口，规范 16 §16.2.4.45），并把**文件路径**带上：
-     * 它是这条路唯一能定位的东西。 */
-    throw new Error(errorText(error, `模式契约写入失败（${file}）`), {
-      cause: error,
-    });
-  }
-  return normalized;
+  return overrideFileMutex.run(async () => {
+    const configured = await readConfiguredModeContracts(root);
+    const normalized = localOverrideDiff(parseModeContracts(contracts), configured);
+    try {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await atomicWriteText(file, `${JSON.stringify(normalized, null, 2)}\n`);
+    } catch (error) {
+      /* 失败必须说出来：「保存了但没落盘」是最坏的形态（用户以为配置生效、
+       * 实际下一次读取回到旧值），而它唯一的痕迹就是这里。文案走 `errorText`
+       * （动作前缀 + 详情的唯一出口，规范 16 §16.2.4.45），并把**文件路径**带上：
+       * 它是这条路唯一能定位的东西。 */
+      throw new Error(errorText(error, `模式契约写入失败（${file}）`), {
+        cause: error,
+      });
+    }
+    return normalized;
+  });
 }
 
 /** 还原一个模式到默认：把它从本机覆盖里移除（生效值回落成品配置）。
@@ -145,26 +164,28 @@ export async function resetModeContractOverride(
   root: string = process.cwd(),
 ): Promise<{ contracts: Array<ModeContract>; effective: ModeContract | null }> {
   const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACTS_REL_PATH);
-  const existing = await readOverrideFile(file);
-  if (existing.length === 0) {
-    return { contracts: [], effective: null };
-  }
-  const code = upperToken(mode);
-  /* 保留的部分也过一遍差集：把旧版「整份注册表落盘」留下的存量膨胀
-   * （与成品配置相同的条目）顺手清洗掉 —— 还原一次，文件就归位一次。 */
-  const configured = await readConfiguredModeContracts(root);
-  const contracts = localOverrideDiff(
-    existing.filter((c) => upperToken(c.mode) !== code),
-    configured,
-  );
-  try {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, `${JSON.stringify(contracts, null, 2)}\n`, "utf8");
-  } catch (error) {
-    throw new Error(errorText(error, `模式契约还原失败（${file}）`), { cause: error });
-  }
-  const effective = configured.find((c) => upperToken(c.mode) === code) ?? null;
-  return { contracts, effective };
+  return overrideFileMutex.run(async () => {
+    const existing = await readOverrideFile(file);
+    if (existing.length === 0) {
+      return { contracts: [], effective: null };
+    }
+    const code = upperToken(mode);
+    /* 保留的部分也过一遍差集：把旧版「整份注册表落盘」留下的存量膨胀
+     * （与成品配置相同的条目）顺手清洗掉 —— 还原一次，文件就归位一次。 */
+    const configured = await readConfiguredModeContracts(root);
+    const contracts = localOverrideDiff(
+      existing.filter((c) => upperToken(c.mode) !== code),
+      configured,
+    );
+    try {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await atomicWriteText(file, `${JSON.stringify(contracts, null, 2)}\n`);
+    } catch (error) {
+      throw new Error(errorText(error, `模式契约还原失败（${file}）`), { cause: error });
+    }
+    const effective = configured.find((c) => upperToken(c.mode) === code) ?? null;
+    return { contracts, effective };
+  });
 }
 
 /** 读本机覆盖（新落点 → 老落点，各一次；只读不搬）。
@@ -236,18 +257,23 @@ export async function saveModeContractsAsProjectDefaults(
         "正式包的契约改动请用「保存模式契约」（只落本机）。",
     );
   }
-  const configured = await readConfiguredModeContracts(root);
-  /* 全量落盘 + required 固化：读侧拿到的每一条都自描述。 */
-  const full = mergeModeContracts(configured, parseModeContracts(contracts)).map((c) => ({
-    ...c,
-    required: requiredInputsFor(c),
-  }));
-  const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACT_DEFAULTS_REL_PATH);
-  try {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, `${JSON.stringify(full, null, 2)}\n`, "utf8");
-  } catch (error) {
-    throw new Error(errorText(error, `项目默认写入失败（${file}）`), { cause: error });
-  }
-  return { contracts: full, file };
+  /* 与 saveModeContracts / resetModeContractOverride 同一把互斥 + 原子写
+   * （ISSUE #3911）：读基线 → 合并 → 整包写回这段跨 await 的读改写不再与
+   * 并发的保存 / 还原互相覆盖，崩溃也不再留半截 JSON。 */
+  return overrideFileMutex.run(async () => {
+    const configured = await readConfiguredModeContracts(root);
+    /* 全量落盘 + required 固化：读侧拿到的每一条都自描述。 */
+    const full = mergeModeContracts(configured, parseModeContracts(contracts)).map((c) => ({
+      ...c,
+      required: requiredInputsFor(c),
+    }));
+    const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACT_DEFAULTS_REL_PATH);
+    try {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await atomicWriteText(file, `${JSON.stringify(full, null, 2)}\n`);
+    } catch (error) {
+      throw new Error(errorText(error, `项目默认写入失败（${file}）`), { cause: error });
+    }
+    return { contracts: full, file };
+  });
 }

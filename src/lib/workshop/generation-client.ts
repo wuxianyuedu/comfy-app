@@ -711,6 +711,8 @@ export async function apiSubmitVideo(
     model?: string;
     negative?: string;
     prompt: string;
+    /** 统一输入「种子」（ISSUE #3783）：非负整数；缺省 = 不带。 */
+    seed?: number;
   },
   opts: { onDebug?: RelayDebugSink } = {},
 ): Promise<ApiVideoSubmitResult> {
@@ -726,6 +728,9 @@ export async function apiSubmitVideo(
       ...(req.model !== undefined && req.model !== "" ? { model: req.model } : {}),
       ...(req.mode !== undefined && req.mode !== "" ? { mode: req.mode } : {}),
       ...(req.duration === undefined ? {} : { duration: req.duration }),
+      /* 种子（ISSUE #3783）：与生图（#3778）同口径转发 —— 请求体组装漏了
+       * 这一键的话，路由解析得到、客户端却从未发送，用户填的种子静默丢失。 */
+      ...(req.seed === undefined ? {} : { seed: req.seed }),
       ...(opts.onDebug === undefined ? {} : { debug: true }),
     },
     opts.onDebug,

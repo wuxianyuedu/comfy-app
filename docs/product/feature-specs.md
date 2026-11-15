@@ -132,28 +132,25 @@
 
 #### FR-AU-01 邮箱注册 / 登录
 
-- 状态：已上线
-- 需求：邮箱 + 密码注册与登录；密码最少 12 位。
-- 行为与验收：注册 / 登录走 better-auth `emailAndPassword`；
-  失败有可见错误（不静默）；`/login` 是唯一登录入口路由。
-- 落点：`src/app/login/page.tsx`、`src/server/better-auth/config.ts`
+- 状态：已移除（ISSUE #3827）
+- 需求：登录页与邮箱注册 / 登录流程已删除，应用无需登录即可使用。
+- 行为与验收：不存在 `/login` 路由与登录表单；访问应用直接进入工作区，
+  不要求账号登录。
+- 落点：`src/app/workspace/page.tsx`、`src/lib/auth-server.ts`
 
 #### FR-AU-02 GitHub OAuth（桌包内不可用）
 
-- 状态：已上线（带边界）
-- 需求：支持 GitHub OAuth 登录；**桌包内明确不可用**（回环 origin +
-  运行期端口，GitHub 侧无法登记回调）。
-- 行为与验收：OAuth 配置在 `socialProviders.github`；桌包场景不展示
-  无效入口（边界写在配置注释里）；origin 策略动态 baseURL +
-  显式 trustedOrigins。
-- 落点：`src/server/better-auth/config.ts`、`src/server/better-auth/origin-policy.ts`
+- 状态：已移除（ISSUE #3827）
+- 需求：无登录页与登录流程，不再提供 GitHub OAuth 登录入口。
+- 行为与验收：应用内无 OAuth 登录入口；无需第三方登录即可使用。
+- 落点：`src/server/better-auth/config.ts`（历史配置保留，界面入口已移除）
 
-#### FR-AU-03 本机单用户回落（默认）
+#### FR-AU-03 本机单用户（无需登录）
 
-- 状态：已上线
-- 需求：默认本机单用户模式——不要求登录即可用，会话回落演示用户。
-- 行为与验收：开关是 `app-settings.json` 的 `loginRequired`（默认 false）；
-  判决只有一个单点（`src/lib/auth-server.ts`），tRPC 上下文不各自判。
+- 状态：已上线（ISSUE #3827 调整）
+- 需求：应用无需登录即可使用；无会话时统一回落演示用户。
+- 行为与验收：`src/lib/auth-server.ts` 为唯一判决点；无会话请求不返回 401，
+  tRPC / REST 按演示用户或已有会话用户处理。
 - 落点：`src/lib/auth-server.ts`、`src/server/api/trpc.ts`
 
 #### FR-AU-04 会话与端点限流
@@ -918,10 +915,10 @@
   翻译成接口字段 —— 通道承接得住但适配器没映射的行有明示「本次生成不会
   带上它」并指向「模型适配」补映射，不静默丢；通道未承接的类型显式标
   「未承接」并禁用，不静默丢弃）→ 生成走 `/api/workshop-api/generate`
-  （与 ShotStudio / VideoStudio 同一条链），生图通道**承接 seed**（#3778：
-  统一输入新增种子口端到端下发，无适配器时按通行字段名 `seed` 直带），
-  视频任务制自动轮询（3s 一轮 / 10 分钟上限），产物用 `MediaThumbnail`
-  就地展示并给原链。尺寸选择器与工作流库**同一个** `ShotSizePicker`
+  （与 ShotStudio / VideoStudio 同一条链），生图 / 视频通道**承接 seed**
+  （#3778 / #3783：统一输入新增种子口端到端下发，无适配器时按通行字段名
+  `seed` 直带），视频任务制自动轮询（3s 一轮 / 10 分钟上限），产物用
+  `MediaThumbnail` 就地展示并给原链。尺寸选择器与工作流库**同一个** `ShotSizePicker`
   （#3778：比例 / 像素（分辨率 · 百万像素）/ 倍数一段不缺；倍数段只在选中
   百万像素档时出现 —— 分辨率档宽高由场景尺寸表给定，倍数没有意义）。
   生成过程可见（#3791；#3799 改即时）：点「生成」**立即**显示「本地提交」行

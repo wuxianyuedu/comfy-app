@@ -150,7 +150,7 @@ export function LogPanelFooter(input: {
                 </Button>
               </Hint>
               {search.trim() && (
-                <Hint label="清空搜索">
+                <Hint label={`清空搜索「${search.trim()}」`}>
                   <Button
                     className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
                     onClick={() => {

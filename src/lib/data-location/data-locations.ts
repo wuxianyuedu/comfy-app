@@ -63,6 +63,7 @@ export type DataKind =
   | "project-canvas"
   | "remote-model"
   | "sidebar-tab"
+  | "size-presets"
   | "task-artifacts"
   | "update-check"
   | "user-account"
@@ -106,6 +107,8 @@ export type DataLocationId =
   | "remote-model"
   | "sidebar-tab-local"
   | "sidebar-tab-project"
+  | "size-presets-local"
+  | "size-presets-project"
   | "task-artifacts-db"
   | "task-artifacts-disk"
   | "update-check"
@@ -274,6 +277,22 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     kindLabel: "侧栏页签行为",
     migration: "项目默认入库、跟代码走：迁移就是把这个文件一起提交，别的检出与桌包都是这一份。",
     target: "src/lib/shell/sidebar-tab-defaults.json",
+  },
+  "size-presets-local": {
+    category: "app-data-file",
+    kind: "size-presets",
+    kindLabel: "尺寸配置表",
+    migration:
+      "本机覆盖只跟着这台机器走：迁移时把 data/size-presets.json 拷到新机器的同一路径，它会逐格盖掉项目默认那份。",
+    target: "data/size-presets.json",
+  },
+  "size-presets-project": {
+    category: "repo-file",
+    kind: "size-presets",
+    kindLabel: "尺寸配置表",
+    migration:
+      "项目默认跟代码走：src/lib/media/size-presets.ts 里的 DEFAULT_SIZE_PRESET_TABLE 就是这份基线，改默认值等于改代码。",
+    target: "src/lib/media/size-presets.ts（DEFAULT_SIZE_PRESET_TABLE）",
   },
   "task-artifacts-db": {
     category: "database",

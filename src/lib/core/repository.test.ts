@@ -44,6 +44,7 @@ import {
 } from "~/lib/core/repository-user";
 import { decryptLlmKey } from "~/lib/llm/secrets";
 import type { DbExecutor } from "~/lib/core/repository-executor-types";
+import { db } from "~/lib/db";
 import { SETTINGS_DB_WRITE } from "~/lib/retry-policy";
 import { postRepository } from "~/lib/core/repository-post";
 import {
@@ -222,11 +223,17 @@ describe("SkillRepository", () => {
     sortOrder: 1,
   };
 
-  it("ensureBuiltIns 幂等：第二次调用不再重复插入", async () => {
+  it("ensureBuiltIns 幂等：同一种子重复调用不重复插入；缺的 slug 按次补齐（#3835）", async () => {
     await skillRepository.ensureBuiltIns([SEED]);
-    await skillRepository.ensureBuiltIns([{ ...SEED, slug: "other" }]);
+    await skillRepository.ensureBuiltIns([SEED]);
+    // 同一种子重复执行：slug 唯一索引 + onConflictDoNothing 兜底，仍是一行。
     expect(await skillRepository.findAll()).toHaveLength(1);
+    // 换新 slug 的种子 = 「缺的技能」：补缺语义下应当被补上（部分失败后自愈），
+    // 已有行原样保留。
+    await skillRepository.ensureBuiltIns([{ ...SEED, slug: "other" }]);
+    expect(await skillRepository.findAll()).toHaveLength(2);
     expect((await skillRepository.findBySlug("cinematic"))?.isBuiltIn).toBe(true);
+    expect((await skillRepository.findBySlug("other"))?.isBuiltIn).toBe(true);
     expect(await skillRepository.findBySlug("missing")).toBeNull();
   });
 
@@ -1055,6 +1062,16 @@ describe("FilmRepository / FilmShotRepository", () => {
     expect(f1.subtitleOn).toBe(true);
   });
 
+  it("成片+镜头创建在同一事务内：镜头插入失败时不残留孤儿成片（#3853/#3848）", async () => {
+    await expect(
+      db.transaction(async (tx) => {
+        await filmRepository.create(CREATE, tx);
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+    expect(await filmRepository.listByUser("u1")).toEqual([]);
+  });
+
   it("listByStatus 空集合直接返回空数组", async () => {
     /* 实测（变异复核 M6）：把 `statuses.length === 0` 那道早退摘掉，这条**照样绿** ——
      * drizzle 对空数组不生成语法错的 SQL，SQLite 数出零行。所以这一格钉的是
@@ -1087,8 +1104,8 @@ describe("FilmRepository / FilmShotRepository", () => {
     await filmRepository.update(first.id, {
       createdAt: new Date(second.createdAt.getTime() + 60_000),
     });
-    await filmRepository.markGenerating(first.id);
-    await filmRepository.markGenerating(second.id);
+    await filmRepository.claimGenerating(first.id);
+    await filmRepository.claimGenerating(second.id);
 
     const resumed = await filmRepository.listByStatus(["GENERATING"]);
     /* 跨 userId：`first` 属 u1、`second` 属 u2，两条都要被列出 —— 补上归属条件
@@ -1149,14 +1166,14 @@ describe("FilmRepository / FilmShotRepository", () => {
       { t: 2, level: "progress", msg: "50%" },
     ]);
 
-    await filmRepository.markGenerating(f.id);
+    await filmRepository.claimGenerating(f.id);
     expect(await filmRepository.findById(f.id)).toMatchObject({
       status: "GENERATING",
       progress: 0,
     });
     await filmRepository.updateProgress(f.id, 55);
     expect((await filmRepository.findById(f.id))?.progress).toBe(55);
-    await filmRepository.markComposing(f.id);
+    await filmRepository.claimComposing(f.id);
     expect(await filmRepository.findById(f.id)).toMatchObject({
       status: "COMPOSING",
       progress: 90,
@@ -1167,16 +1184,41 @@ describe("FilmRepository / FilmShotRepository", () => {
       progress: 100,
       finalVideo: "/tmp/final.mp4",
     });
+    /* 终态保护（ISSUE #3894）：DONE 之后 markFailed / markCancelled 都不再
+     * 改写终态（旧实现 DONE→FAILED→CANCELLED 一路被覆盖）。 */
     await filmRepository.markFailed(f.id, "合片失败");
     expect(await filmRepository.findById(f.id)).toMatchObject({
-      status: "FAILED",
-      error: "合片失败",
+      status: "DONE",
+      finalVideo: "/tmp/final.mp4",
     });
     await filmRepository.markCancelled(f.id);
+    expect(await filmRepository.findById(f.id)).toMatchObject({
+      status: "DONE",
+      error: null,
+    });
+  });
+
+  it("终态守卫：CANCELLED / FAILED 不再被改写，非终态照常流转（ISSUE #3894）", async () => {
+    const f = await filmRepository.create(CREATE);
+    await filmRepository.claimGenerating(f.id); // PARSING → GENERATING
+    await filmRepository.markCancelled(f.id); // GENERATING → CANCELLED（取消合法）
+    expect(await filmRepository.findById(f.id)).toMatchObject({ status: "CANCELLED" });
+    await filmRepository.markDone(f.id, "/tmp/x.mp4"); // CANCELLED 不被合成复活成 DONE
+    await filmRepository.markFailed(f.id, "迟到判死"); // CANCELLED 不被超时判死覆盖
     expect(await filmRepository.findById(f.id)).toMatchObject({
       status: "CANCELLED",
       error: "已取消",
     });
+
+    const g = await filmRepository.create(CREATE);
+    await filmRepository.claimComposing(g.id); // PARSING → COMPOSING
+    await filmRepository.markFailed(g.id, "合成失败");
+    expect(await filmRepository.findById(g.id)).toMatchObject({
+      status: "FAILED",
+      error: "合成失败",
+    });
+    await filmRepository.markDone(g.id, "/tmp/y.mp4"); // FAILED 不被改回 DONE
+    expect(await filmRepository.findById(g.id)).toMatchObject({ status: "FAILED" });
   });
 
   it("镜头状态流转与两类筛选：status / onlyWithVideo", async () => {
@@ -1711,7 +1753,9 @@ describe("LlmProviderRepository（#3501 供应商）", () => {
       .then(() => null)
       .catch(errorText);
     expect(failure, "重名必须失败得看得见").not.toBeNull();
-    expect(`${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`).toContain("UNIQUE");
+    /* #3866：约束冲突在仓储层转成可读的 409 冲突错误，失败形态不再是驱动原文，
+     * 但「重名当场拒绝」的语义不变。 */
+    expect(`${failure?.message ?? ""} ${failure?.cause?.message ?? ""}`).toContain("已被使用");
   });
 
   it("delete 在同一事务里删掉名下模型，不留下「无主」条目", async () => {

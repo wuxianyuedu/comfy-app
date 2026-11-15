@@ -90,8 +90,8 @@ import {
   isWholeTrackRun,
   notWholeTrackNotice,
   pushFreshnessLedger,
-  writeFreshness,
 } from "./freshness/freshness-ledger.mjs";
+import { writeFreshness } from "./freshness/freshness-ledger-write.mjs";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
