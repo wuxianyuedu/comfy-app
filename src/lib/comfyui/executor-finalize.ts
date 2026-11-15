@@ -59,7 +59,7 @@ export async function loadRealTaskRepo() {
 }
 export type TaskRepoLike = Pick<
   Awaited<ReturnType<typeof loadRealTaskRepo>>,
-  "findExecutionMeta" | "finalizeSuccess" | "createImages" | "finalizeFailure"
+  "findExecutionMeta" | "finalizeSuccessWithImages" | "finalizeFailure"
 >;
 export type GetViewLike = (filename: string, subfolder: string, type: string) => Promise<Buffer>;
 export type RuntimeLoggerLike = {
@@ -427,12 +427,28 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     kickQueue();
     return;
   }
+  /* 成功收口与产物行同事务（ISSUE #3881）：原先 finalizeSuccess 提交后
+   * createImages 失败会留下「SUCCEEDED 但 0 行产物」的半态；两写同为同连接
+   * 纯 DB 写，收进一个 immediate 事务，失败整体回滚（任务保持 RUNNING，
+   * 回收器下一轮对账）。重试预算仍只罩这一整段（writeTerminal 的口径不变）。 */
   const outcome = await writeTerminal(taskId, "成功收口", () =>
-    taskRepository.finalizeSuccess(taskId, {
-      resultImages: saved,
-      params: taskParamsPatched,
-      ...(workflowSnapshot ? { workflowSnapshot } : {}),
-    }),
+    taskRepository.finalizeSuccessWithImages(
+      taskId,
+      {
+        resultImages: saved,
+        params: taskParamsPatched,
+        ...(workflowSnapshot ? { workflowSnapshot } : {}),
+      },
+      saved.map((s2, i) => ({
+        localPath: s2.localPath,
+        sortIndex: i,
+        isCover: i === 0,
+        mediaType: s2.mediaType,
+        seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
+        width: s2.mediaType === "image" ? (reqW ?? null) : null,
+        height: s2.mediaType === "image" ? (reqH ?? null) : null,
+      })),
+    ),
   );
   /* 只把「状态那一次写」纳入重试预算：下面的产物行与日志刷盘若失败，行已经是
    * SUCCEEDED（用户看得见终态），属于另一种坏法（少几行产物），不在 #1250 这条上。 */
@@ -449,18 +465,6 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     kickQueue();
     return;
   }
-  await taskRepository.createImages(
-    taskId,
-    saved.map((s2, i) => ({
-      localPath: s2.localPath,
-      sortIndex: i,
-      isCover: i === 0,
-      mediaType: s2.mediaType,
-      seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
-      width: s2.mediaType === "image" ? (reqW ?? null) : null,
-      height: s2.mediaType === "image" ? (reqH ?? null) : null,
-    })),
-  );
 
   // 项目级产出：写一份可复现的 manifest，便于「按项目归档 + 一键还原」。
   const referenceImagesRaw: unknown = taskRow?.referenceImages;

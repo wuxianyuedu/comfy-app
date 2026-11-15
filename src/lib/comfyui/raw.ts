@@ -364,13 +364,24 @@ let _objectInfoCache: { at: number; data: ObjectInfo } | null = null;
  *  导致打开工作流 / 展开子工作流在 ComfyUI 未启动时反复拖慢 20s。
  *  失败后 30s 内直接返回 null，让慢请求只发生一次。 */
 let _objectInfoFailedAt = 0;
-export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
+/** 在途去重（ISSUE #3876）：缓存过期瞬间的并发请求（tRPC 批处理正是这个
+ *  形态）共享同一次拉取，不再各自发起 20s 上限的 ~4.7MB 全量下载。 */
+let _objectInfoInflight: Promise<ObjectInfo | null> | null = null;
+
+export function fetchObjectInfo(): Promise<ObjectInfo | null> {
   if (_objectInfoCache && Date.now() - _objectInfoCache.at < 5 * 60_000) {
-    return _objectInfoCache.data;
+    return Promise.resolve(_objectInfoCache.data);
   }
   if (_objectInfoFailedAt && Date.now() - _objectInfoFailedAt < 30_000) {
-    return null;
+    return Promise.resolve(null);
   }
+  _objectInfoInflight ??= fetchObjectInfoOnce().finally(() => {
+    _objectInfoInflight = null;
+  });
+  return _objectInfoInflight;
+}
+
+async function fetchObjectInfoOnce(): Promise<ObjectInfo | null> {
   try {
     const res = await fetch(`${comfyBase()}/api/object_info`, {
       /* ComfyUI 序列化完整 object_info（~4.7MB）在
@@ -381,6 +392,9 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
       signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) {
+      /* 非 2xx 与网络失败同口径进负缓存（ISSUE #3876）：ComfyUI 启动窗口期
+       * 的 503 也会被 30s 防抖挡住，紧随的每个请求不再各自白等。 */
+      _objectInfoFailedAt = Date.now();
       return null;
     }
     const parsed = ObjectInfoEnvelopeSchema.safeParse(await res.json());

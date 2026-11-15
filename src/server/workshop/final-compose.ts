@@ -191,17 +191,24 @@ export async function renderComposition(
     "utf8",
   );
   const out = path.join(COMPOSE_DIR, `${outputName}.mp4`);
+  /* 成片先落在正式目录旁的 `.part` 临时名、成功后 rename 到位（ISSUE #3879）：
+   * 原先 concat 直接写 `<outputName>.mp4`，中途失败只清 tmpDir——半成品坏片
+   * 留在正式产物目录里，窗口期内被读到就是坏片。同目录 rename 原子且不跨盘，
+   * 正式目录里要么没有这个文件、要么是完整的。 */
+  const outTmp = path.join(COMPOSE_DIR, `.${outputName}.mp4.part`);
   try {
-    await execFileP(ff, ["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", out], {
+    await execFileP(ff, ["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", outTmp], {
       timeout: 300_000,
     });
   } catch (error) {
     await fs.rm(tmpDir, { recursive: true, force: true });
+    await fs.rm(outTmp, { force: true });
     return {
       ok: false,
       note: errorText(error, "ffmpeg 合成失败"),
     };
   }
+  await fs.rename(outTmp, out);
   await fs.rm(tmpDir, { recursive: true, force: true });
   return { ok: true, outputPath: out };
 }

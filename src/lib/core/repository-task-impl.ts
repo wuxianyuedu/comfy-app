@@ -493,6 +493,67 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
       return updated.length > 0 ? "written" : classifySkipped(taskId);
     },
 
+    /** 成功收口 + 产物行同事务（ISSUE #3881）：原先 finalizeSuccess 提交后
+     *  createImages 若失败（如 DB 忙超时），任务已是 SUCCEEDED 但 TaskImage
+     *  0 行——画廊里该任务无产物且无补写路径。两写同为同连接纯 DB 写，收进
+     *  一个 immediate 事务：任一失败整体回滚，任务保持 RUNNING，由回收器
+     *  下一轮对账（writeGuard 的归属/终态判据不变）。 */
+    async finalizeSuccessWithImages(
+      taskId: string,
+      data: {
+        params: unknown;
+        resultImages: unknown;
+        workflowSnapshot?: unknown;
+      },
+      images: Array<{
+        height?: number | null;
+        isCover: boolean;
+        localPath: string;
+        mediaType: string;
+        seed: string | null;
+        sortIndex: number;
+        width?: number | null;
+      }>,
+    ): Promise<TaskWriteOutcome> {
+      return db.transaction(
+        async (tx) => {
+          const updated = await tx
+            .update(task)
+            .set({
+              status: "SUCCEEDED",
+              progress: 100,
+              finishedAt: new Date(),
+              resultImages: data.resultImages,
+              params: data.params,
+              ...(data.workflowSnapshot === undefined
+                ? {}
+                : { workflowSnapshot: data.workflowSnapshot }),
+            })
+            .where(writeGuard(taskId))
+            .returning({ id: task.id });
+          if (updated.length === 0) {
+            return classifySkipped(taskId);
+          }
+          if (images.length > 0) {
+            await tx.insert(taskImage).values(
+              images.map((im) => ({
+                taskId,
+                localPath: im.localPath,
+                sortIndex: im.sortIndex,
+                isCover: im.isCover,
+                mediaType: im.mediaType,
+                seed: im.seed,
+                width: im.width ?? null,
+                height: im.height ?? null,
+              })),
+            );
+          }
+          return "written" as const;
+        },
+        { behavior: "immediate" },
+      );
+    },
+
     /** 失败收口：写 FAILED + error + finishedAt；`validationErrors` 空数组与
      *  undefined 都归一存 null，非空才 stringify。
      *
