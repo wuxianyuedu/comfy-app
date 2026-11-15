@@ -531,7 +531,7 @@ jobs:
 
       # ISSUE #3981 / #3980：标题走 `GITHUB_ENV` 传给收尾那一跳（它只认文件）。
       #
-      # 取值**只有一个入口**（`scripts/ci-ga-verdict-title.mjs` 内三条路依次回落）：
+      # 取值**只有一个入口**（`scripts/ci/ci-ga-verdict-title.mjs` 内三条路依次回落）：
       #   ① `GA_PR_TITLE`（显式注入，手跑复验用）
       #   ② `client_payload.pr_title`（镜像格送来的那枚，与 `run-name` 同源）
       #   ③ 站内 `GET /{repo}/-/pulls/{n}`（按需档 #3667 没有 payload）
@@ -552,7 +552,7 @@ jobs:
           CNB_TRIGGER_TOKEN: ${{ secrets.CNB_TRIGGER_TOKEN }}
           CNB_REPO_SLUG: moon-read/comfy-app-t3
           CNB_PULL_REQUEST_IID: ${{ github.event.inputs.pr_number || github.event.client_payload.pr_number || '' }}
-        run: node scripts/ci-ga-verdict-title.mjs
+        run: node scripts/ci/ci-ga-verdict-title.mjs
 
       - name: 把结论送回 CNB
         env:

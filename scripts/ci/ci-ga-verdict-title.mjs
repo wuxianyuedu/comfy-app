@@ -25,7 +25,7 @@
  * 本 workflow **没有** `pull_request` 触发（只有 `repository_dispatch` 与
  * `workflow_dispatch`），那个上下文字段在这里恒为空串 —— #3981 的自动档那一步
  * 于是从来没写进过任何东西。真正带标题的是镜像格送来的 `client_payload.pr_title`
- * （`scripts/ci-mirror-payload.mjs` 的 `dispatchPayload`），`run-name` 同一份。
+ * （`scripts/ci/ci-mirror-payload.mjs` 的 `dispatchPayload`），`run-name` 同一份。
  * 所以取值口就是那份 payload 文件，不再依赖不存在的上下文。
  *
  * ## 什么算成功
@@ -39,8 +39,8 @@
  * 用法（`pr-gate.yml` 的收尾 job，两条触发形态**同一个入口**）：
  *
  * ```text
- * GITHUB_EVENT_PATH=<payload.json> CNB_TRIGGER_TOKEN=… node scripts/ci-ga-verdict-title.mjs
- * GA_PR_TITLE="<显式标题>" node scripts/ci-ga-verdict-title.mjs
+ * GITHUB_EVENT_PATH=<payload.json> CNB_TRIGGER_TOKEN=… node scripts/ci/ci-ga-verdict-title.mjs
+ * GA_PR_TITLE="<显式标题>" node scripts/ci/ci-ga-verdict-title.mjs
  * ```
  */
 import { appendFileSync, readFileSync } from "node:fs";
@@ -73,7 +73,7 @@ const CODE = { OK: 0, NO_FACT: 2 };
 const trim = (value) => (typeof value === "string" ? value.trim() : "");
 
 /**
- * 从**派发 payload** 里取 PR 标题（`scripts/ci-mirror-payload.mjs` 的 `dispatchPayload`）。
+ * 从**派发 payload** 里取 PR 标题（`scripts/ci/ci-mirror-payload.mjs` 的 `dispatchPayload`）。
  *
  * 只认 `client_payload.pr_title`：那是镜像格读平台 `data.title` 之后塞进 payload 的
  * 那一份，与 `run-name` 的 `pr_title` 同一来源。缺键 / 非字符串 / 空白 ⇒ 空串，

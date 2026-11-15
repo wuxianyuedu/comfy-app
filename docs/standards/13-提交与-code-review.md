@@ -10216,7 +10216,7 @@ fail-closed 语义与 5m 预算一字未动 —— 迁歪的表现是那格红�
 取不到退 2」，一次也没问「自动档那一格的输入在这个 workflow 上存不存在」——
 所以一条**恒假的分支**照样是绿的。
 
-**修法（一条路一个入口）**：`scripts/ci-ga-verdict-title.mjs` 内部依次回落
+**修法（一条路一个入口）**：`scripts/ci/ci-ga-verdict-title.mjs` 内部依次回落
 ① `GA_PR_TITLE`（显式注入）→ ② `GITHUB_EVENT_PATH` 的 `client_payload.pr_title`
 → ③ 站内 `GET /{repo}/-/pulls/{n}`；workflow 侧两步并成一步（`取 PR 标题（写进 GITHUB_ENV）`，
 `if: always()` + `continue-on-error`）。payload 里的 `pr_number` 顺带当站内读的号 ——

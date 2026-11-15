@@ -11,7 +11,10 @@ import { defineGateRepo, describe } from "./helpers/gate-repo";
 import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 const REPO_ROOT = process.cwd();
-const SCRIPT_NAME = "check-gate-executors.cjs";
+/* 判据脚本在 `scripts/` 里的落点（带域子目录，ISSUE #3930）：本文件在多处以它拼绝对路径跑判据、
+ * 又以它过滤「名字族」那一半盘点面 —— 域布局之后只写 basename 会让每一处都 `${ROOT}/scripts/<名>`
+ * 拼出个不存在的路径，而读数长得像判据坏了。 */
+const SCRIPT_REL = "gates/check-gate-executors.cjs";
 
 /** 判据脚本的识别口径与脚本自身保持一致（前缀族）。 */
 const GATE_PREFIXES = [
@@ -32,6 +35,9 @@ function copyGateScripts(repo: { dir: string }): void {
   const dstScripts = join(repo.dir, "scripts");
   mkdirSync(dstScripts, { recursive: true });
   for (const entry of readdirSync(srcScripts)) {
+    /* 只捞顶层：判据按家族归入 `scripts/<域>/` 之后（#3930），这里要造的是「临时区里
+     * 一个判据脚本都没有」那一档，而顶层的夹具探针（`check-a.cjs` 一族）正是为它准备的。
+     * 子目录里的真判据不该进临时区 —— 它们一出现，「某个探针一个执行者都没有」当场变成别的东西。 */
     const isGate = /\.(?:cjs|mjs)$/.test(entry) && GATE_PREFIXES.some((p) => entry.startsWith(p));
     if (isGate) {
       copyFileSync(join(srcScripts, entry), join(dstScripts, entry));
@@ -40,7 +46,7 @@ function copyGateScripts(repo: { dir: string }): void {
 }
 
 const { test, expect } = defineGateRepo({
-  script: SCRIPT_NAME,
+  script: SCRIPT_REL,
   workdir: "gate-executors",
   setup: (repo) => {
     copyGateScripts(repo);
@@ -61,7 +67,7 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
     // 在真仓库根跑（不建临时区）：这条断言的对象是「本仓库当前的判据-执行者关系」，
     // 而临时区里没有 `.githooks/` / `package.json` / `tests/`，所有靠它们当执行者的
     // 脚本都会被判成无执行者 —— 那是用例环境的问题，不是仓库的问题。
-    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME)], {
+    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_REL)], {
       cwd: REPO_ROOT,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -250,7 +256,7 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
 describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", () => {
   /** 在**真仓库根**跑判据（不经临时区）。 */
   const runInRepo = (args: Array<string> = []): string =>
-    execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME), ...args], {
+    execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_REL), ...args], {
       cwd: REPO_ROOT,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -302,13 +308,17 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     const output = runInRepo(["--report"]);
     const total = Number(/判据脚本 (?<count>\d+) 份/.exec(output)?.groups?.count ?? "0");
     expect(total, "扫描面空转（退成 0 时下面每一条都照样报 OK）").toBeGreaterThan(40);
-    const listed = readdirSync(join(REPO_ROOT, "scripts"))
+    /* 名字族那一半按**域递归**枚举（#3930 之后判据可能落在 `scripts/<域>/` 里）：
+     * 与判据自己的盘点面同口径 —— 只看顶层会把整批子目录里的判据漏成「不在数里」。 */
+    const listed = readdirSync(join(REPO_ROOT, "scripts"), { recursive: true })
+      .map(String)
       .filter((n) => /\.(?:cjs|mjs)$/.test(n))
+      .map((n) => n.split(/[\\/]/).pop() ?? "")
       .filter((n) => chainScripts().includes(n) || GATE_PREFIXES.some((p) => n.startsWith(p)));
     expect(total, "份数 = 「门禁链事实 ∪ 名字族」自己数出来的份数（不写死数字）").toBe(
       listed.length,
     );
-    const gateSrc = readFileSync(join(REPO_ROOT, "scripts", SCRIPT_NAME), "utf8");
+    const gateSrc = readFileSync(join(REPO_ROOT, "scripts", SCRIPT_REL), "utf8");
     for (const name of [
       "x.cjs",
       "xxx.cjs",
@@ -535,7 +545,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     }
     const forms = Object.values(entrypoints).reduce((n, list) => n + list.length, 0);
     expect(forms, "入口这层一条都没登记，就是 #2530 没办").toBeGreaterThan(0);
-    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME)], {
+    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_REL)], {
       cwd: REPO_ROOT,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],

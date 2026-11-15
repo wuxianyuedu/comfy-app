@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-ga-verdict-title.mjs` 的判据（ISSUE #3981 / #3980）。
+ * `scripts/ci/ci-ga-verdict-title.mjs` 的判据（ISSUE #3981 / #3980）。
  *
  * 钉住五件最容易静默失效的事：
  *   ① 三条取值路径（env / 派发 payload / 站内 API）**写同一个键** `GA_PR_TITLE` ——
@@ -24,7 +24,7 @@ import {
   TITLE_ENV_KEY,
   titleFromEvent,
   titleFromPull,
-} from "../scripts/ci-ga-verdict-title.mjs";
+} from "../scripts/ci/ci-ga-verdict-title.mjs";
 
 /** 每个用例一份自己的 env 文件（写进系统临时目录，不碰仓库里的任何东西）。 */
 const envFiles: string[] = [];
