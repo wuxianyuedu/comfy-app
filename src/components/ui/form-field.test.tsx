@@ -73,7 +73,7 @@ describe("FormField", () => {
   /* 「小标题」形态：控件在别处（或多个控件，如按钮组），没有一个能被
    * `htmlFor` 指到。这一档下**不许**给 `htmlFor` —— 给了就是一个指向
    * DOM 里不存在的 id 的悬空箭头，比不给更坏（读屏器读出孤立标签文本）。
-   * 判据 `scripts/check-form-field-wiring.cjs` 把这一档记在基线里。 */
+   * 判据 `scripts/gates/check-form-field-wiring.cjs` 把这一档记在基线里。 */
   it("children 是普通节点时不给 htmlFor（箭头会悬空）", () => {
     render(
       <FormField id="k" label="用途">

@@ -1,7 +1,7 @@
 /**
  * 进程内事件通道已整体退役（P3 §5 ADR §14 D1 的第一刀）：执行链过去有进程内 `EventEmitter` 与 DB 行两套对外通道，SSE 自 §13-3C 起只读库，emitter 只剩写入没有读者（13 处 `emit` 空转）。
  * 空转的代码比缺代码更坏：它让后来人以为「取消会发事件」「成功有 done 帧」，新宿主照抄而它在跨进程下不成立（首帧那条就是事故面）。
- * 故钉三件：1) 执行链任何模块不再持有/投递 EventEmitter；2) 对外只有 DB 一条通道（首帧改读 `findExecutionProgress` 为证）；3) 客户端解析器无「另一种宿主收不到的帧类型」残留。别处执行者：`tests/reaper-side-effect.test.ts` 管回收器；`scripts/check-dead-exports.cjs` 管零消费导出（`subscribe` 因此被删）。
+ * 故钉三件：1) 执行链任何模块不再持有/投递 EventEmitter；2) 对外只有 DB 一条通道（首帧改读 `findExecutionProgress` 为证）；3) 客户端解析器无「另一种宿主收不到的帧类型」残留。别处执行者：`tests/reaper-side-effect.test.ts` 管回收器；`scripts/gates/check-dead-exports.cjs` 管零消费导出（`subscribe` 因此被删）。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";

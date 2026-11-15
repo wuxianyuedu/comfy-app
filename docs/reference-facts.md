@@ -4,7 +4,7 @@
 > 占位符表示，并声明它的**权威定义文件**与**提取规则**。
 >
 > **关键设计**：本登记表**不存值本身**——真实值由校验脚本
-> `scripts/check-doc-references.cjs` 在运行 `pnpm doc:check` 时**直接从权威源
+> `scripts/gates/check-doc-references.cjs` 在运行 `pnpm doc:check` 时**直接从权威源
 > 动态提取**。源码 / 配置才是唯一事实，本表只声明「某占位符代表哪一种值、去哪
 > 个文件读」，因此不存在「登记表抄错值」的第二事实问题。改源码 → 跑
 > `pnpm doc:check` → 文档里未同步的占位符会立刻报错。
@@ -78,7 +78,7 @@
 | --------------- | ------------------- | --------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `registry.port` | `{{registry.port}}` | shadcn 本地团队 Registry 服务端口 | `tools/scripts/start-shadcn-registry.ps1` 的 `$Port`         | 读 `$Port` 值（`3874`）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `mcp.http.port` | `{{mcp.http.port}}` | Workshop MCP HTTP 服务端口        | `tools/workshop-mcp-http.ts` 的 `MCP_HTTP_PORT ?? 4300`        | 读 `MCP_HTTP_PORT` 默认值（`4300`）；仅 `docs/workshop-mcp.md` 校验                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `app.version`   | `{{app.version}}`   | 产品版本号（D7）                  | `package.json` 的 `version`                           | 读 `package.json` 的 `version`；**另两处**（`src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml` 的 `[package]`）由 `scripts/check-app-version.cjs` 守着与它逐字相等（规范 launch-and-build §7.1.1）。本行管的是**第四种抄法**：在文档里再写一遍具体版本号 —— 那会在下一次升版本时静默过期。校验范围刻意只在「引用产品版本」的两篇（`PRODUCTION-GAPS.md` / 主规范），不放开全量：被扫描文档里允许出现**别的**版本号（依赖 / Node / Rust），判「提到 `0.1.0` 就红」会误报一片 |
+| `app.version`   | `{{app.version}}`   | 产品版本号（D7）                  | `package.json` 的 `version`                           | 读 `package.json` 的 `version`；**另两处**（`src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml` 的 `[package]`）由 `scripts/gates/check-app-version.cjs` 守着与它逐字相等（规范 launch-and-build §7.1.1）。本行管的是**第四种抄法**：在文档里再写一遍具体版本号 —— 那会在下一次升版本时静默过期。校验范围刻意只在「引用产品版本」的两篇（`PRODUCTION-GAPS.md` / 主规范），不放开全量：被扫描文档里允许出现**别的**版本号（依赖 / Node / Rust），判「提到 `0.1.0` 就红」会误报一片 |
 | `comfyui.port`  | `{{comfyui.port}}`  | ComfyUI 默认监听端口              | `src/lib/endpoints.ts` 的 `COMFYUI_DEFAULT_PORT` 常量 | 读常量的值（`8188`）；校验范围 = `onlyDocs`（`docs/workshop-mcp.md`）+ `otherDocs`（主规范「开发端口」行）。**权威源换过两次**：#536 P3 之前这个端口散落在 5 个文件里（`client.ts` 只是其中一处），先收敛成 `app-settings.ts` 的常量；#534 P1 再把**定义**搬到零依赖的 `endpoints.ts`（设置页视图也要读它，而 `app-settings.ts` 顶层 `import fs`，浏览器图一 import 就整页 500），`app-settings.ts` 只再导出同名。因此提取规则指向 `endpoints.ts` 的定义处（迁移原因与门禁见规范 launch-and-build §9.2 第 5 条） |
 
 ### 1.4.1 团队 shadcn Registry 的内容目录（非本仓库）
@@ -270,7 +270,7 @@
 
 > 代理自动加载的唯一导航文件 AGENTS.md 位于仓库根，历史上恰好落在 §3「校验范围
 > 守卫」的盲区（`SCOPED_DOCS` 只覆盖 `docs/**` 与 `docs/guides/**`）。补上的那部分由
-> `scripts/check-doc-references.cjs` 的 `checkAgentsMdDrift()` 承担，**只挡「找
+> `scripts/gates/check-doc-references.cjs` 的 `checkAgentsMdDrift()` 承担，**只挡「找
 > 不到 / 拼错」这类确定性缺陷**，不挡「章节存在但内容语义漂移」那种要靠 review 的问题。
 > **本节这张表只列 `checkAgentsMdDrift()` 里那几个调用所判的东西**（都与 AGENTS.md 直接有关；
 > 表跟着那个函数走，所以这里不写它现在有几族）：
@@ -281,7 +281,7 @@
 > | C2 章节锚点        | 3 行窗口内同一 bullet 同时出现 `docs/standards/NN-*.md` 与 `§NN.M`（且 `major == NN`）时，去目标文件里定位 `^#{1,6}\s+(§)?NN.M\b` 标题锚点                    | 单级 `§N`（如 `§17`）不校验，粒度太粗易混淆；`launch-and-build.md` 无 `NN-` 前缀不进入匹配面，避免与 `standards/NN-*` 里同号章节跨文件误配（本仓库 `§9.5` 在 `standards/09` 与 `launch-and-build` 各有一份）。                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 **本节不是「`pnpm doc:check` 管什么」的那份清单**（ISSUE #2389）。这里过去写死过一句
-「判据分三类」，而 `scripts/check-doc-references.cjs` 是**好几族判据共用同一个入口**：
+「判据分三类」，而 `scripts/gates/check-doc-references.cjs` 是**好几族判据共用同一个入口**：
 登记表 ⇄ `FACTS` 的键双向一致、§2 的路径类引用、§3.1 的范围守卫、§3.5 的编辑文档裸值、
 §3.7 的门禁步骤序号与裸计数、规范 §13.1 那份自查清单 ⇄ 钩子逐字一致，再加上面那张表里的几族。
 族的**唯一权威是 `main()` 里那几个 `check*()` 调用** —— 新增一族改的是 `main()`，本节永远
@@ -306,7 +306,7 @@
 
 > 引用 `.githooks/pre-commit` 或平台流水线里的某一步时，规范文档与索引**一律写日志里
 > 打印的标签**（`── check: <标签>`）或那一步跑的脚本名，不写「第 N 步」。
-> 判据 = `scripts/check-doc-references.cjs` 的 `checkGateStepIndexRefs()`。
+> 判据 = `scripts/gates/check-doc-references.cjs` 的 `checkGateStepIndexRefs()`。
 
 **为什么序号不能用**：钩子早已是「组 0 + D0 串行前置档 + A/B/C/D 四个并行组」，「第 N 步」在这份形状上
 **没有唯一解释**（同一批文档里混着「branch-guard 算第 1 步」与「判据从第 1 条起算」两种口径，
@@ -341,12 +341,12 @@
 
 ## 3.8 用户面文档不许教「运行时不存在的驱动」那一形命令（ISSUE #2580）
 
-> 判据 = `scripts/check-doc-references.cjs` 的 `checkRuntimeAbsentDriverCommands()`。
+> 判据 = `scripts/gates/check-doc-references.cjs` 的 `checkRuntimeAbsentDriverCommands()`。
 > 现场是 `docs/guide-database-backup.md`：它教 `require('better-sqlite3')` 的在线
 > `backup()` 与 `pragma('integrity_check')`，而**那包是 `devDependencies`**（只给测试基建），
 > 桌包用户与 standalone 运行期根本没有它 —— 照指南敲就是 `MODULE_NOT_FOUND`，
 > 而备份 / 恢复这条路径动的是**用户数据**。机制早已换成 `VACUUM INTO`
-> （`scripts/db-backup-core.mjs` 有一节标题就问这件事）、台账 D6 改了、核心改了、
+> （`scripts/db/db-backup-core.mjs` 有一节标题就问这件事）、台账 D6 改了、核心改了、
 > 「`src/lib/db-backup/backup.ts` 里不许出现那三个字样」的断言也钉了，
 > **唯一没跟上的是给用户看的那一页**。
 

@@ -16,8 +16,8 @@ import {
   DECLARED_STEPS,
   registryProblems,
 } from "../scripts/base-check/declared-hook-steps.mjs";
-import { DAILY_GATE_EXECUTORS } from "../scripts/ci-ga-trigger-map.mjs";
-import { fullTreeArgv, main as heavyMain } from "../scripts/ci-heavy-gates.mjs";
+import { DAILY_GATE_EXECUTORS } from "../scripts/ci/ci-ga-trigger-map.mjs";
+import { fullTreeArgv, main as heavyMain } from "../scripts/ci/ci-heavy-gates.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const HOOK = path.join(ROOT, ".githooks", "pre-commit");
@@ -80,13 +80,13 @@ describe("档位：跳过必须被说出来", () => {
      * （收尾缺）、跑了但结论不落账（skip 标记缺）。 */
     expect(hookText).toContain("COMFY_HEAVY_GATES");
     expect(hookText).toContain("$LOGD/$id.skip");
-    /* 收尾那句自 ISSUE #2154 起住在 `scripts/gate-tier-summary.cjs`（钩子只调它），
+    /* 收尾那句自 ISSUE #2154 起住在 `scripts/gates/gate-tier-summary.cjs`（钩子只调它），
      * 所以这里判的是**接线**而不是那句话的位置：钩子必须点名那个脚本，而那句话必须在
      * 那个脚本里 —— 少任何一半，「跳过被说出来」这条就当场没有执行者。
      * （原先这里直接在 `hookText` 上匹配那句话；把判据钉在行形状上，等于钉住一个
      *  随时该搬走的实现 —— 语义是「有人念」，不是「念的那行住在哪个文件」。） */
-    expect(hookText).toContain("scripts/gate-tier-summary.cjs");
-    expect(readFileSync(path.join(ROOT, "scripts/gate-tier-summary.cjs"), "utf8")).toMatch(
+    expect(hookText).toContain("scripts/gates/gate-tier-summary.cjs");
+    expect(readFileSync(path.join(ROOT, "scripts/gates/gate-tier-summary.cjs"), "utf8")).toMatch(
       /本次提交本地\*\*没跑\*\*：/,
     );
   });
@@ -109,7 +109,7 @@ describe("档位：跳过必须被说出来", () => {
     expect(src).toContain("localTierLabels");
     expect(src).toContain("--light");
 
-    const ci = readFileSync(path.join(ROOT, "scripts/ci-affected-tests.mjs"), "utf8");
+    const ci = readFileSync(path.join(ROOT, "scripts/ci/ci-affected-tests.mjs"), "utf8");
     // 同一条判决链：跑法脚本起的是 run-affected-tests.mjs，改动面经 env 递进去。
     expect(ci).toContain("run-affected-tests.mjs");
     expect(ci).toContain("COMFY_AFFECTED_CHANGED");
@@ -157,7 +157,7 @@ describe("档位：跳过必须被说出来", () => {
     const runLauncher = (changed: string) => {
       const r = spawnSync(
         process.execPath,
-        [path.join(ROOT, "scripts", "run-affected-tests.mjs"), "--dry-run"],
+        [path.join(ROOT, "scripts", "affected-tests/run-affected-tests.mjs"), "--dry-run"],
         {
           cwd: ROOT,
           encoding: "utf8",
@@ -186,7 +186,7 @@ describe("档位：跳过必须被说出来", () => {
 
 describe("CI 那一格：读同一份注册表，且三态分得开", () => {
   it("重档 runner 不抄清单（它 import 的就是钩子那份注册表）", () => {
-    const src = readFileSync(path.join(ROOT, "scripts/ci-heavy-gates.mjs"), "utf8");
+    const src = readFileSync(path.join(ROOT, "scripts/ci/ci-heavy-gates.mjs"), "utf8");
     expect(src).toContain("readHookSteps");
     expect(src).not.toMatch(/const GATES = \[/);
   });

@@ -1,5 +1,5 @@
 /**
- * 基础设施层文件长度**硬闸**自检：把 `scripts/check-infra-file-size.cjs` 当黑盒跑在临时工作区，验证它真能按 900 行认出超限文件、且翻闸后不再有任何登记通道（规范 §12.6 R5 姊妹档 / §12.13）。
+ * 基础设施层文件长度**硬闸**自检：把 `scripts/gates/check-infra-file-size.cjs` 当黑盒跑在临时工作区，验证它真能按 900 行认出超限文件、且翻闸后不再有任何登记通道（规范 §12.6 R5 姊妹档 / §12.13）。
  * 为什么硬闸：R5/函数长度/非空断言/孪生对的扫描根只有 `src`，判据自己（`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1）本在硬闸之外 —— 判据长到读不动时表现是「恒绿」而不是报错；存量已在 ISSUE #1811 第五刀清零，棘轮在 0 上只剩「手改 JSON 登记」一条通道。
  * 出口只有一个：拆。
  */
@@ -9,7 +9,7 @@ import { describe } from "vitest";
 import { defineGateRepo, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-infra-file-size.cjs",
+  script: "gates/check-infra-file-size.cjs",
   /* 扫描面是两层：`scripts/`（.cjs/.mjs）与 `tools/`（.ps1）。 */
   dirs: ["scripts", "tools"],
 });

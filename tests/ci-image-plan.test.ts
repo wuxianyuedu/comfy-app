@@ -1,5 +1,5 @@
 /**
- * 「节点镜像」计划与打包的判据（ISSUE #1993 续：用 docker 提速）。被测 `scripts/ci-image-plan.mjs`
+ * 「节点镜像」计划与打包的判据（ISSUE #1993 续：用 docker 提速）。被测 `scripts/ci/ci-image-plan.mjs`
  * 不碰 docker，只算命令与打包：版本现读、层序（写偏一层是这层唯一不报错的错误）、tarball 三种字节
  * 语义、四件清单只有一处出处；每条判据都配反向复算，把缺陷形态放回去让断言当场点名。
  */
@@ -33,7 +33,7 @@ import {
   selfCheckRunLines,
   tarballDigest,
   toolingVersionsFromLock,
-} from "../scripts/ci-image-plan.mjs";
+} from "../scripts/ci/ci-image-plan.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const TMP = mkdtempSync(path.join(tmpdir(), "ci-image-plan-"));
@@ -441,7 +441,7 @@ describe("`--dockerfile` 的正文里自带一条「落盘版是 --write」", ()
     const r = spawnSync(
       process.execPath,
       [
-        path.join(ROOT, "scripts", "ci-image-plan.mjs"),
+        path.join(ROOT, "scripts", "ci/ci-image-plan.mjs"),
         "--dockerfile",
         "--node-version",
         "v24.22.0",
@@ -458,7 +458,7 @@ describe("`--dockerfile` 的正文里自带一条「落盘版是 --write」", ()
 
 describe("接线：入口在盘上、被直接执行时退非零会传出去", () => {
   it("缺 node 版本时 CLI 退非零并说得出原因", () => {
-    const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "ci-image-plan.mjs")], {
+    const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "ci/ci-image-plan.mjs")], {
       encoding: "utf8",
       env: { ...process.env, NODE_ENV: "test" },
     });
@@ -477,7 +477,7 @@ describe("接线：入口在盘上、被直接执行时退非零会传出去", (
     const r = spawnSync(
       process.execPath,
       [
-        path.join(ROOT, "scripts", "ci-image-plan.mjs"),
+        path.join(ROOT, "scripts", "ci/ci-image-plan.mjs"),
         "--dockerfile",
         "--node-version",
         "v24.22.0",
@@ -491,7 +491,7 @@ describe("接线：入口在盘上、被直接执行时退非零会传出去", (
   });
 
   it("本文件不在 `src/**` 里，也不该 import 任何仓库内模块（构建期第一步要能跑）", () => {
-    const text = readFileSync(path.join(ROOT, "scripts", "ci-image-plan.mjs"), "utf8");
+    const text = readFileSync(path.join(ROOT, "scripts", "ci/ci-image-plan.mjs"), "utf8");
     const imports = [...text.matchAll(/^import .* from "(?<importPath>[^"]+)";$/gm)].map((m) =>
       String(m.groups?.importPath ?? ""),
     );

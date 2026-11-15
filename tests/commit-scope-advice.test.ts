@@ -11,11 +11,11 @@ import { describe, expect, it } from "vitest";
 /* 这一格的两半（归因 + 话术）住在 `affected-launch-scope-advice.mjs` —— 从启动器那一层
  * 搬出去是因为它贴住了 900 行硬闸（§12.6 R5），判据一个字没改。用例跟着走：**读者面是
  * 函数自己**，不是它碰巧常住的那个文件。 */
-import { scopeAdvice } from "../scripts/affected-launch-scope-advice.mjs";
+import { scopeAdvice } from "../scripts/affected-tests/affected-launch-scope-advice.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const LAUNCHER_PATH = path.join(ROOT, "scripts", "run-affected-tests.mjs");
-const ADVICE_PATH = path.join(ROOT, "scripts", "affected-launch-scope-advice.mjs");
+const LAUNCHER_PATH = path.join(ROOT, "scripts", "affected-tests/run-affected-tests.mjs");
+const ADVICE_PATH = path.join(ROOT, "scripts", "affected-tests/affected-launch-scope-advice.mjs");
 
 describe("受影响用例的启动器 —— 「大改动拆小」这条建议的执行者", () => {
   /* 两处都要读：建议的**话术**在 advice 那份里，而「该不该印」那条判定留在启动器的
@@ -137,7 +137,7 @@ describe("受影响用例的启动器 —— 「大改动拆小」这条建议�
     const fnStart = adviceSrc.indexOf("export function collectAttribute() {");
     expect(fnStart, "解不出 collectAttribute").toBeGreaterThan(-1);
     const fnBody = adviceSrc.slice(fnStart, adviceSrc.indexOf("\n}\n", fnStart));
-    expect(adviceSrc, "没接同一入口").toContain('from "./progress-heartbeat.mjs"');
+    expect(adviceSrc, "没接同一入口").toContain('from "../progress-heartbeat.mjs"');
     expect(fnBody, "必须是跨进程那条").toContain("startProgressSync(");
     expect(fnBody, "要报出当前段名").toContain("progress.step(");
     expect(fnBody, "失败分支也必须收尾").toContain("finally {");

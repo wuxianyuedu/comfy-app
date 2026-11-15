@@ -29,7 +29,7 @@
  *
  * ## 与平台侧那 13 条同一个机制，不是第二套
  *
- * `.cnb.yml` 的 stage 级 `ifModify` 早已是「触发面由判据自己导出」（`scripts/ci-incremental-gates.mjs`
+ * `.cnb.yml` 的 stage 级 `ifModify` 早已是「触发面由判据自己导出」（`scripts/ci/ci-incremental-gates.mjs`
  * 双向判，见规范 §13.5.20）—— 本文件只是把同一件事接到**钩子**这一层：钩子的测试层此前
  * 只有「固定清单」与「import 图可达」两档，没有「这条判据的输入面碰没碰」那一档。
  *
@@ -71,10 +71,10 @@ export const INPUT_FACES = [
   {
     test: "tests/tw4-hardgate-behaviour.test.ts",
     face: [
-      "scripts/tw4-canonical-report.mjs",
-      "scripts/tw4-spacing-canonical.mjs",
-      "scripts/tw4-scan-core.mjs",
-      "scripts/tw4-canonical-codemod.cjs",
+      "scripts/tw4/tw4-canonical-report.mjs",
+      "scripts/tw4/tw4-spacing-canonical.mjs",
+      "scripts/tw4/tw4-scan-core.mjs",
+      "scripts/tw4/tw4-canonical-codemod.cjs",
       "src/app/globals.css",
       "tests/tw4-hardgate-behaviour.test.ts",
       "tests/helpers/gate-repo.ts",
@@ -85,7 +85,7 @@ export const INPUT_FACES = [
   {
     test: "tests/check-bundle-budget.test.ts",
     face: [
-      "scripts/check-bundle-budget.cjs",
+      "scripts/gates/check-bundle-budget.cjs",
       "scripts/.bundle-budget-baseline.json",
       "tests/check-bundle-budget.test.ts",
       "tests/helpers/gate-repo.ts",
@@ -96,7 +96,7 @@ export const INPUT_FACES = [
   {
     test: "tests/a11y-rules-gate.test.ts",
     face: [
-      "scripts/check-a11y-rules.cjs",
+      "scripts/gates/check-a11y-rules.cjs",
       "scripts/.a11y-rule-ledger.json",
       "oxlint.parity.config.mjs",
       "src/lib/is-record.ts",
@@ -126,7 +126,7 @@ export const INPUT_FACES = [
   {
     test: "tests/check-commit-claims.test.ts",
     face: [
-      "scripts/check-commit-claims.mjs",
+      "scripts/gates/check-commit-claims.mjs",
       "tests/helpers/gate-repo.ts",
       "tests/check-commit-claims.test.ts",
     ],
@@ -161,7 +161,7 @@ export const INPUT_FACES = [
   {
     test: "tests/check-merge-parents.test.ts",
     face: [
-      "scripts/check-merge-parents.mjs",
+      "scripts/gates/check-merge-parents.mjs",
       "tests/helpers/gate-repo.ts",
       "tests/check-merge-parents.test.ts",
     ],
@@ -192,13 +192,13 @@ export const INPUT_FACES = [
     test: "tests/eslint-exemption-staleness.test.ts",
     face: [
       "oxlint.parity.config.mjs",
-      "scripts/check-eslint-exemptions.cjs",
-      "scripts/check-a11y-rules.cjs",
-      "scripts/check-docs-api.cjs",
-      "scripts/check-format.cjs",
-      "scripts/check-theme-colors.cjs",
-      "scripts/ci-build-readout.mjs",
-      "scripts/ci-toolchain-pnpm.mjs",
+      "scripts/gates/check-eslint-exemptions.cjs",
+      "scripts/gates/check-a11y-rules.cjs",
+      "scripts/gates/check-docs-api.cjs",
+      "scripts/gates/check-format.cjs",
+      "scripts/gates/check-theme-colors.cjs",
+      "scripts/ci/ci-build-readout.mjs",
+      "scripts/ci/ci-toolchain-pnpm.mjs",
       "scripts/file-structure-rules.cjs",
       "src/lib/llm/video-task-util.test.ts",
       "src/lib/llm/video-task-util.ts",
@@ -236,20 +236,20 @@ export const INPUT_FACES = [
     face: [
       ".cnb.yml",
       ".cnb/web_trigger.yml",
-      "scripts/ci-env-probe.mjs",
-      "scripts/ci-toolchain-browser.mjs",
-      "scripts/ci-toolchain-browser-reach.mjs",
-      "scripts/ci-toolchain-browser-fetch.mjs",
-      "scripts/ci-toolchain-browser-seed.mjs",
-      "scripts/ci-toolchain-browser-root.mjs",
-      "scripts/ci-console-encoding.mjs",
-      "scripts/ci-toolchain-python.mjs",
-      "scripts/ci-cp936-exit.mjs",
+      "scripts/ci/ci-env-probe.mjs",
+      "scripts/ci/ci-toolchain-browser.mjs",
+      "scripts/ci/ci-toolchain-browser-reach.mjs",
+      "scripts/ci/ci-toolchain-browser-fetch.mjs",
+      "scripts/ci/ci-toolchain-browser-seed.mjs",
+      "scripts/ci/ci-toolchain-browser-root.mjs",
+      "scripts/ci/ci-console-encoding.mjs",
+      "scripts/ci/ci-toolchain-python.mjs",
+      "scripts/ci/ci-cp936-exit.mjs",
       "scripts/setup-comfy-cli-venv.mjs",
       "scripts/setup-comfy-cli-venv.ps1",
-      "scripts/ci-ga-trigger-map.mjs",
+      "scripts/ci/ci-ga-trigger-map.mjs",
       "scripts/full-suite-run.mjs",
-      "scripts/freshness-ledger.mjs",
+      "scripts/freshness/freshness-ledger.mjs",
       "scripts/doc-facts.cjs",
       "tests/no-platform-ci-config.test.ts",
       "tests/ci-env-probe.test.ts",
@@ -259,7 +259,7 @@ export const INPUT_FACES = [
   {
     test: "tests/changelog-versions-gate.test.ts",
     face: [
-      "scripts/check-changelog-versions.cjs",
+      "scripts/gates/check-changelog-versions.cjs",
       "tests/helpers/gate-repo.ts",
       "tests/changelog-versions-gate.test.ts",
     ],

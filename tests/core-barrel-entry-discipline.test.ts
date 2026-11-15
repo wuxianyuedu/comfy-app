@@ -31,7 +31,7 @@ function isScanReader(value: unknown): value is ScanReader {
   );
 }
 
-const loadedReader: unknown = requireCjs("../scripts/gate-scan-read.cjs");
+const loadedReader: unknown = requireCjs("../scripts/gates/gate-scan-read.cjs");
 if (!isScanReader(loadedReader)) {
   throw new Error("gate-scan-read.cjs 的出口形状不对（缺 dirExists/readForScan/…）");
 }
@@ -118,7 +118,7 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
     // 这条不是「测代码」，而是把 `export *` 判据的**理由**钉成可执行事实：
     // 若 barrel 重新 `export * ./logger`，而 `lib/log-paths.ts` 又从这里取用，
     // 就会出现 index → logger → app-runtime-log → log-paths → index。
-    // 环检测（scripts/check-circular-deps.cjs）只认真实存在的边，抓不到这种
+    // 环检测（scripts/gates/check-circular-deps.cjs）只认真实存在的边，抓不到这种
     // 「一写就成环」的潜在组合 —— 所以这里用一个合成图复现它，锁住结论。
     const graph = new Map([
       ["src/lib/core/index.ts", ["src/lib/core/logger.ts"]],
@@ -139,7 +139,7 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
   });
 });
 
-/** 递归列出目录下的源码文件（文档与产物不参与）。遍历走 `scripts/gate-scan-read.cjs` 的地基（AGENTS 硬规则 24），
+/** 递归列出目录下的源码文件（文档与产物不参与）。遍历走 `scripts/gates/gate-scan-read.cjs` 的地基（AGENTS 硬规则 24），
  * 不再自己 `readdirSync` + `statSync`：后者在「列到名字 → 取类型」之间有消失窗口，CI 上崩的正是那一跳的读取
  * （枚举这一跳同形）；本仓已有唯一实现，留第二份削弱版只会让下一次竞态换个栈再崩。 */
 function walkAll(dir: string): Array<string> {

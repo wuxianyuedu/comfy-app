@@ -8,7 +8,7 @@ import path from "node:path";
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-app-version.cjs",
+  script: "gates/check-app-version.cjs",
   /* 三处都在仓库根之外的子目录里，脚本用 `__dirname/..` 定根 —— 落 `scripts/`。 */
   workdir: "app-version-gate",
 });
@@ -131,7 +131,7 @@ describe("产品版本号三处同步（D7）", () => {
     if (!isPackageJson(parsed)) {
       throw new Error("package.json 的 scripts 不是对象");
     }
-    expect(parsed.scripts["check:app-version"]).toBe("node scripts/check-app-version.cjs");
+    expect(parsed.scripts["check:app-version"]).toBe("node scripts/gates/check-app-version.cjs");
   });
 
   test("④ pre-commit 的 D 组真跑这一步（写在文件里没人跑 = 没有等价）", () => {
@@ -142,6 +142,6 @@ describe("产品版本号三处同步（D7）", () => {
     }));
     const hit = steps.find((s) => s.cmd.includes("check-app-version.cjs"));
     expect(hit, `D 组 ${steps.length} 步里没有版本号同步判据`).toBeDefined();
-    expect(hit?.cmd).toBe("node scripts/check-app-version.cjs");
+    expect(hit?.cmd).toBe("node scripts/gates/check-app-version.cjs");
   });
 });

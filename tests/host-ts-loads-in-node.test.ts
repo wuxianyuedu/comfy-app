@@ -1,6 +1,6 @@
 /**
  * 跨宿主地基层模块在**真 Node 进程**里必须加载得起来（ISSUE #1961 / #1959 第七跑）。与 `esm-cross-host-imports.test.ts` 的分工：它判不到
- * 「说明符指得着、模块自己加载不起来」（目标文件改名照样绿，`node scripts/e2e-run.mjs` 仍退 1）。本判据只判这一格：误标 server-only
+ * 「说明符指得着、模块自己加载不起来」（目标文件改名照样绿，`node scripts/e2e/e2e-run.mjs` 仍退 1）。本判据只判这一格：误标 server-only
  * （入口即 throw）、顶层副作用抛错、依赖缺失；故起子进程而非 vitest 内 `import()`（立案前提正是两者不同路），复现跑 e2e 那一跳。
  */
 import { spawnSync } from "node:child_process";
@@ -68,7 +68,9 @@ describe("跨宿主地基层模块在真 Node 里加载得起来", () => {
           .split("\n")
           .slice(0, 3)
           .map((l) => `      ${l}`)
-          .join("\n")}\n      ⇒ 它由 .mjs 宿主直接加载（平台侧 \`node scripts/e2e-run.mjs\`），` +
+          .join(
+            "\n",
+          )}\n      ⇒ 它由 .mjs 宿主直接加载（平台侧 \`node scripts/e2e/e2e-run.mjs\`），` +
           `这一跳崩在「E2E 关键流程」的加载期；\n` +
           `        常见成因：误加了 \`import "server-only"\`（入口就是一句 throw）、` +
           `顶层读库未过 \`isSchemaReady()\`、\n` +

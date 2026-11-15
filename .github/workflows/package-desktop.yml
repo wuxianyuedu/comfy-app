@@ -254,7 +254,7 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_SHA: ${{ github.sha }}
           DESKTOP_SHELL_EXE: src-tauri/target/release/app.exe
-        run: node scripts/ci-ga-desktop-relay.mjs
+        run: node scripts/ci/ci-ga-desktop-relay.mjs
 
   # 失败立案（#2874 的立案格：桌包档跑红 ⇒ CNB 单，按格名去重）。
   # 本档此前**没有**这一格 —— CNB 的 `桌包失败立案` 判的是 CNB 自己的上一跑
@@ -302,4 +302,4 @@ jobs:
           GA_FAILURE_ISSUE_WORKFLOW: Package desktop (mirror)
         # `--no-block`：脚本自己的出口话术按「平台那一跳」念（非零落 0 + 手工出口），
         # 与 job 侧的 continue-on-error 同向，两边口径一致（同 daily.yml 那一格）。
-        run: node scripts/ci-ga-daily-failure-issue.mjs --no-block
+        run: node scripts/ci/ci-ga-daily-failure-issue.mjs --no-block

@@ -1,7 +1,7 @@
 /**
  * e2e 的 Python 前置（ISSUE #1959 第四轮）。假 comfy-cli 是**一个 Python 包**，主链路那条 `@critical` 用例要由 `COMFY_CLI_PYTHON` 指向的解释器把它 import 起来；缺解释器时此前只有 worker stdout 里一行 `⚠ 假 comfy-cli 未注入`，而人看到的是**两条**「执行器收口失败」的功能红——一件事被报成两条，且报错不指向真因。
  * 判据分三头：① 可用时给出**绝对路径**（`fakeExecutorEnv()` 交的是裸名字 `python` / `py`，应用侧直接 `spawn`，Windows 上 Node 不认 PATHEXT ⇒ 裸名字必然 ENOENT，而这一档只在「生产构建 + start」上暴露）；② 缺件时判红并给出能直接跑的出口（「不阻断地提个醒」等价于让两条主链路去跑一个注定红的结果，并把真因埋掉）。
- * ③ 接线在位：`scripts/e2e-run.mjs` 在起 Playwright 之前判，结论经 `E2E_PYTHON_PREFLIGHT` 带进 `playwright.config.ts`，且**读不出时退回原来的行为**（手工 `pnpm exec playwright test` 那条路不该被弄崩）。
+ * ③ 接线在位：`scripts/e2e/e2e-run.mjs` 在起 Playwright 之前判，结论经 `E2E_PYTHON_PREFLIGHT` 带进 `playwright.config.ts`，且**读不出时退回原来的行为**（手工 `pnpm exec playwright test` 那条路不该被弄崩）。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -99,7 +99,7 @@ describe("e2e Python 前置：缺件时判红并给出出口", () => {
     const text = describePythonMissing({
       detail: checkPythonReady({ platform: "linux", resolve: () => null }).detail,
     });
-    expect(text).toContain("scripts/ci-toolchain-selfcheck.mjs");
+    expect(text).toContain("scripts/ci/ci-toolchain-selfcheck.mjs");
     expect(text).toContain("@critical");
   });
 });
@@ -135,7 +135,7 @@ describe("e2e Python 前置：结论怎么带下去", () => {
 
 describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("`pnpm test:e2e` 在起 Playwright 之前判这一格，且判红不放行", () => {
-    const text = readFileSync(path.join(ROOT, "scripts/e2e-run.mjs"), "utf8");
+    const text = readFileSync(path.join(ROOT, "scripts/e2e/e2e-run.mjs"), "utf8");
     /* 三处**判据本身**没搬（仍由 `checkPythonReady` / `encodePythonPreflight` /
      * `describePythonMissing` 各答一格），只是从 `main` 里三段就地 `await + return`
      * 收成了 `makePreflightCollectors().python()` 一步（ISSUE #1998：那三段此前
@@ -164,7 +164,7 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
      * 这里钉两件事：E2E 的执行者在 GA daily.yml 里；`.cnb.yml`（剥掉整行注释，历史注释里
      * 提到名字不算执行者）两个入口行都不许回来。 */
     const daily = readFileSync(path.join(ROOT, ".github", "workflows", "daily.yml"), "utf8");
-    const e2eAt = daily.indexOf("node scripts/e2e-run.mjs");
+    const e2eAt = daily.indexOf("node scripts/e2e/e2e-run.mjs");
     expect(
       e2eAt,
       "GA daily.yml 里没有 E2E 那一步了 —— 判据失去执行者，等于把这条接线删了",

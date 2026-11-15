@@ -12,13 +12,13 @@ import {
   resolveAffectedTests,
   specCandidates,
   wideFallbackNote,
-} from "../scripts/affected-tests.mjs";
+} from "../scripts/affected-tests/affected-tests.mjs";
 /* `--name-status` 的解析住在零依赖模块里（ISSUE #2830：说明符扫描器带上了
  * `typescript`，沙箱里那份 `changed-scope.mjs` 不能再连带它）。 */
 import { changedPathsFromNameStatus } from "../scripts/git-name-status.mjs";
 /* 清单那一跳的载体住在自己那份文件里 —— 用例按它真实的落点 import，
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
-import { describeListFailure } from "../scripts/affected-launch-changed-list.mjs";
+import { describeListFailure } from "../scripts/affected-tests/affected-launch-changed-list.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
 /* #2022：固定清单里开了输入面那几条在增量档会缺席，所以本文件凡是「比整表」的断言
  * 都改成比「该跑的那些」—— 用同一个选择函数，而不是在测试里再抄一遍那 4 个名字。 */
@@ -360,7 +360,7 @@ describe("affected-tests：兜底方向", () => {
   it("这段话说明确实由 CLI 打印（导出了却没人调用 = 第一条在守死代码）", () => {
     const r = spawnSync(
       process.execPath,
-      ["scripts/affected-tests.mjs", "--changed", "vitest.config.ts"],
+      ["scripts/affected-tests/affected-tests.mjs", "--changed", "vitest.config.ts"],
       { cwd: ROOT, encoding: "utf8" },
     );
     expect(r.status).toBe(0);
@@ -653,9 +653,9 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
  * 钉四件事：① 两载体同清单结果逐字相同 ② 超 Windows 命令行上限仍跑得起来 ③ 启动器不许再铺进 argv ④ 失败话术分得开并念条数。
  */
 describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2240）", () => {
-  const CLI = path.join(ROOT, "scripts", "affected-tests.mjs");
-  const LAUNCHER = path.join(ROOT, "scripts", "run-affected-tests.mjs");
-  const CARRIER = path.join(ROOT, "scripts", "affected-launch-changed-list.mjs");
+  const CLI = path.join(ROOT, "scripts", "affected-tests/affected-tests.mjs");
+  const LAUNCHER = path.join(ROOT, "scripts", "affected-tests/run-affected-tests.mjs");
+  const CARRIER = path.join(ROOT, "scripts", "affected-tests/affected-launch-changed-list.mjs");
 
   /** 一份「长到超过 Windows 命令行上限」的改动面（路径都不存在，判决只看形状与条数）。 */
   function hugeList(n = 900): Array<string> {
@@ -777,7 +777,7 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
  * **看着绿、这一份改动对应的用例一条没跑**。
  */
 describe("启动器消费 --changed-stdin，读不到就显式降级（ISSUE #2869）", () => {
-  const LAUNCHER = path.join(ROOT, "scripts", "run-affected-tests.mjs");
+  const LAUNCHER = path.join(ROOT, "scripts", "affected-tests/run-affected-tests.mjs");
   /** 一份自带映射的改动面（用例文件按路径命中自己）。 */
   const LIST = ["tests/ship.test.ts"];
 
@@ -833,9 +833,9 @@ describe("affected-tests：编排器闭包成员带进产物清单判据（ISSUE
   function run(changed: Array<string>, closure: Array<string>) {
     const files: Record<string, string> = {
       [HYGIENE]: "it('x', () => {});",
-      "scripts/db-backup-core.mjs": "export {};",
-      "scripts/check-standalone-contents.cjs": "module.exports = {};",
-      "scripts/tw4-scan-core.mjs": "export {};",
+      "scripts/db/db-backup-core.mjs": "export {};",
+      "scripts/gates/check-standalone-contents.cjs": "module.exports = {};",
+      "scripts/tw4/tw4-scan-core.mjs": "export {};",
     };
     return resolveAffectedTests({
       changedPaths: changed,
@@ -848,28 +848,28 @@ describe("affected-tests：编排器闭包成员带进产物清单判据（ISSUE
 
   it("⑤ 改编排器闭包内的模块（db-backup-core.mjs）→ 产物清单判据进面", () => {
     const res = run(
-      ["scripts/db-backup-core.mjs"],
-      ["scripts/dev-launcher.mjs", "scripts/db-backup-core.mjs"],
+      ["scripts/db/db-backup-core.mjs"],
+      ["scripts/dev-launcher.mjs", "scripts/db/db-backup-core.mjs"],
     );
     expect(res.tests).toContain(HYGIENE);
     expect(res.reasons[HYGIENE] ?? "").toContain("编排器产物清单判据");
   });
 
   it("改判据直接读文本的检查侧本体（check-standalone-contents.cjs）→ 同样进面", () => {
-    const res = run(["scripts/check-standalone-contents.cjs"], []);
+    const res = run(["scripts/gates/check-standalone-contents.cjs"], []);
     expect(res.tests).toContain(HYGIENE);
   });
 
   it("不在闭包、也不是消费源的 scripts/*.mjs 不拉判据（面不许无限扩大）", () => {
-    const res = run(["scripts/tw4-scan-core.mjs"], ["scripts/dev-launcher.mjs"]);
+    const res = run(["scripts/tw4/tw4-scan-core.mjs"], ["scripts/dev-launcher.mjs"]);
     expect(res.tests).not.toContain(HYGIENE);
   });
 
   it("真仓库上 main 接线：改 db-backup-core.mjs 的面里带判据（真实闭包算过了）", () => {
-    const CLI = path.join(ROOT, "scripts", "affected-tests.mjs");
+    const CLI = path.join(ROOT, "scripts", "affected-tests", "affected-tests.mjs");
     // 用默认输出（空格分隔的测试清单）而不是 --json：解析 JSON 要再立一条类型守卫，
     // 这里只断言「清单里有这一份」，字符串包含就够。
-    const out = spawnSync(process.execPath, [CLI, "--changed", "scripts/db-backup-core.mjs"], {
+    const out = spawnSync(process.execPath, [CLI, "--changed", "scripts/db/db-backup-core.mjs"], {
       cwd: ROOT,
       encoding: "utf8",
       env: SPAWN_ENV,

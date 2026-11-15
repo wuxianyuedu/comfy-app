@@ -12,7 +12,7 @@ import { loadJudgeModule, REAL_ROOT } from "./a11y-effective-config";
 /* SAFETY: 类型断言已复核 */
 const SCRIPTS = [
   {
-    script: "scripts/check-a11y-rules.cjs",
+    script: "scripts/gates/check-a11y-rules.cjs",
     /** 谁在用这份模块的导出（那一格里点名的用例文件都要真实存在）。 */
     usedBy: ["tests/a11y-rules-gate.test.ts", "tests/check-a11y-rules.test.ts"],
     /**
@@ -101,7 +101,7 @@ test("判据脚本的 bin 入口仍然是**真子进程**（CLI 那一支不许�
   /* 覆盖面判据的正面形态：`--ledger` 的 CLI 解析 + `process.exit` 的退出码，
    * 只有真子进程能判。这一条钉的是「那个入口还在，且还认自己的参数」——
    * 它不重复 a11y 那批的断言（那边判的是「缺值退 2」）。 */
-  const script = path.join(REAL_ROOT, "scripts", "check-a11y-rules.cjs");
+  const script = path.join(REAL_ROOT, "scripts", "gates/check-a11y-rules.cjs");
   const src = readFileSync(script, "utf8");
   expect(src).toContain("require.main === module");
   expect(src).toContain("process.exit(code)");

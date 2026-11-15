@@ -145,7 +145,7 @@ rule id 登记起点；任何「已有 rule id 上升」都直接拒绝，硬闸
 ```bash
 pnpm ui:primitives            # 检查（87 条硬闸须为 0；pre-commit D 组「UI 基元复用棘轮」）
 pnpm ui:primitives:report     # 只出清单（排批次用，不判失败）
-node scripts/check-ui-primitives.cjs --update   # 只给新引入的判据登记起点
+node scripts/gates/check-ui-primitives.cjs --update   # 只给新引入的判据登记起点
 ```
 
 ##### 16.2.3.1 分层：预计算层 + 判据分档（ISSUE #1747）
@@ -196,7 +196,7 @@ pnpm ui:primitives:report   # 按档分组出清单（CORE / SURFACE 两段）
 棘轮机制用例连坐）。**赌「源码里没有第二处相同行形状」的判据，会在第二处出现的
 那天静默改错地方** —— 所以顺带把 `demoteToRatchet()` 锚回 `HARD_GATE_RULES` 那一段。
 
-**判据**（`scripts/check-ui-primitives.cjs`，基线
+**判据**（`scripts/gates/check-ui-primitives.cjs`，基线
 `scripts/.ui-primitives-baseline.json`）：
 
 | ID          | 判据                                                                                                                                                                                                                                 | 应改用什么                                                                                                                                                                                                      |
@@ -436,7 +436,7 @@ pnpm ui:overlay-z            # 检查（Z1/Z2/Z3 三条硬闸，pre-commit D 组
 pnpm ui:overlay-z:report     # 只出清单（排批次用，不判失败；清零后的自证靠它）
 ```
 
-**范围与豁免**（`scripts/check-overlay-z.cjs` 的 `SCAN_DIRS` / `EXEMPT_DIRS`，
+**范围与豁免**（`scripts/gates/check-overlay-z.cjs` 的 `SCAN_DIRS` / `EXEMPT_DIRS`，
 与本节同源）：扫 `src/components/**` + `src/app/**`；豁免
 `src/components/ui/**`（shadcn **工具生成、尽量不手改**的目录，§16.1 ——
 基元内部的 `z-50` 改成项目档会在下一次 `shadcn add` 被改回去，而机械换算
@@ -1342,7 +1342,7 @@ story 不经 store 读）。
 
 **批次流水不在这里记账**：逐批「哪个目录清零了几处」的权威源是 git 历史与门禁当下的基线文件
 （`scripts/.ui-primitives-baseline.json` —— `total: 0`、`rules: {}`，即 P1/P2/P3 的存量已清零、
-三条都升成了硬闸；复算入口是 `node scripts/check-ui-primitives.cjs` 自己的结论行）。抄一份处数进文档
+三条都升成了硬闸；复算入口是 `node scripts/gates/check-ui-primitives.cjs` 自己的结论行）。抄一份处数进文档
 就是第二个会脱钩的事实来源。留在这里的只有转换本身评出来的口径。两批当时的手法一句话收着：图标钮走
 `size="icon-xs"`、Tab 项走 `variant="ghost"`、文字动作走 `variant="outline"` / `"ghost"`，
 实心主题色一律不手搓。
@@ -1891,7 +1891,7 @@ controller 转述的 errors。视图里出现调点或 zod import = 归属变了
 与 §16.2.4.1「缺语义变体时补变体，不是把颜色写进调用处」同源。
 
 **判据 P4（硬闸，不是棘轮）**：`src/**` 里不得再出现 `::-webkit-scrollbar`，
-由 `scripts/check-ui-primitives.cjs` 拦截 —— 接在既有 P1/P2/P3 之后，但**不进
+由 `scripts/gates/check-ui-primitives.cjs` 拦截 —— 接在既有 P1/P2/P3 之后，但**不进
 棘轮基线**：它的口径是「必须为 0」，`--update` 也不接受带违规的基线（这点单测
 钉住了）。`ui/scroll-area` 那套走 `ui/` 的目录豁免（工具生成物，口径见 §16.2.4.6
 第三档）。
@@ -2376,7 +2376,7 @@ ComfyUI 节点卡外观，与 disclosure 的「一行文字 + 折叠标记」不
 ```bash
 pnpm ui:primitives            # 检查（棘轮 + P4~P15 硬闸，pre-commit D 组「UI 基元复用棘轮」）
 pnpm ui:primitives:report     # 只出清单
-node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
+node scripts/gates/check-ui-primitives.cjs --update   # 治理后收紧基线
 ```
 
 #### 16.2.4.16 「可搜索列表过滤」有八份写法（P13 硬闸）
@@ -3004,7 +3004,7 @@ TS/TSX 视图，而 **`public/{{shell.splash}}`（启动页源，编译期内嵌
 但没接 `a11y`」。而且**没有任何东西会报** —— `jsx-a11y/control-has-associated-label`
 只认**同一 JSX 子树**里的可见文本，被 `<FormField>` 包一层再传进去的控件不在它的靶子里。
 
-判据 `scripts/check-form-field-wiring.cjs`（进 pre-commit 的 D 组）：**棘轮**，
+判据 `scripts/gates/check-form-field-wiring.cjs`（进 pre-commit 的 D 组）：**棘轮**，
 基线 `scripts/.form-field-wiring-baseline.json`（只许降，`--update` 拒绝上涨）。
 这一批收口前实测 **35 处** plain-children 站点，其中 **22 处是真控件**
 （收口后归零，基线只剩 3 处合法形态）。
@@ -5375,7 +5375,7 @@ createReentrancyLock(); // 跨组件实例 / 非 hook 场景（模块级、服�
 **名字所指的语义**与**「写一次 + 读两处」**这两个条件同时成立。
 
 出口自身的实现 `src/components/ui/use-reentrancy-lock.ts` 在 `EXEMPT_FILES.P66` 里显式登记
-（那张表在 `scripts/ui-primitives-exempt-files.cjs`，`re` 逐字写着这个路径；
+（那张表在 `scripts/ui-primitives/ui-primitives-exempt-files.cjs`，`re` 逐字写着这个路径；
 **不在 `src/lib/` 下** —— 旧写法把它放进了 lib，照那句话去 lib 里找会一无所获）。
 
 > ⚠️ **①（读 state 判）不在判据范围内** —— 「`if (busy) return;`」与
@@ -5660,7 +5660,7 @@ navigation-menu pagination radio-group scroll-area slider table
 的 `label` 从「流程」改成「工作流库」—— 主页那张功能卡一直写的是后者，导航这一项却
 写「流程」，同一件事两个名字，用户点进去还得再认一次。
 
-> ⚠️ **P83 为此开了 `sr-only` 这个形态的豁免**（`scripts/ui-primitives-rules-p67-p86.cjs`
+> ⚠️ **P83 为此开了 `sr-only` 这个形态的豁免**（`scripts/ui-primitives/ui-primitives-rules-p67-p86.cjs`
 > 的 P83）：P83 判「屏级 `h1` 必须带 `.u-title-page`」，而 `sr-only` 的 `h1` 是
 > **读屏锚点、不是可见屏级标题**，字阶档根本不该挂（挂了也不生效，还会让「屏级标题
 > 一定有档」这句话变假）。判据认 `sr-only` 这个**形态**，不是给某个文件开白名单 ——
@@ -5858,7 +5858,7 @@ navigation-menu pagination radio-group scroll-area slider table
 > `title="控制台"`（它与注册表那一项**正好同字**，所以是**同名不同源**：
 > 今天看不出来，注册表改名的那天才会漂）。它与本处同族、同属上面那条缺口，
 > 一并留在现场；两条判据的自查是
-> `node scripts/check-ui-primitives.cjs` 与
+> `node scripts/gates/check-ui-primitives.cjs` 与
 > `pnpm exec vitest run tests/page-name-single-source.test.ts`。
 
 #### 16.2.4.74 设置页「一页到底」：导航是**目录**，滚动跟随是判据（ISSUE #1722）
@@ -6177,7 +6177,7 @@ P82 只盯 `<Button title=` 一个锚点 —— #3672 清掉 `<Badge title=…>`
 
 落地三步（与 P82 引入-治理-升硬闸同款顺序，**反了就会把硬闸建在看不见的存量上**）：
 
-1. **让判据看见全部存量**：`countHostTitle()`（`scripts/ui-primitives-engine.cjs`）
+1. **让判据看见全部存量**：`countHostTitle()`（`scripts/ui-primitives/ui-primitives-engine.cjs`）
    与 `countButtonTitle` 同源——剥注释 → `scanJsxAttrs` 平衡扫描属性段 →
    `parseJsxProps` → 五档判定（clean/empty/static/dynamic/unknown，`violations =
    static + dynamic`）。差异只有一处：锚点从字面 `<Button` 换成**小写 host 标签**
@@ -6217,7 +6217,7 @@ pnpm dlx shadcn@latest add dialog form input select
 - 生成后校验：文件名 kebab；导入路径用 `~/components/ui/<name>`。
 - shadcn CLI 默认写 `@/` 别名（`components.json` 的 alias 是 `~/`，CLI 生成的
   组件仍可能带 `@/`）；本仓库用 `~`，生成后**顺手把 `@/` 改成 `~/`**，
-  保持 `~/components/ui/<name>` 一致。这条不再靠人记：`scripts/check-import-alias.cjs`（R13，见 [12 §12.8.0](12-代码组织与文件结构.md#1280-import-别名只有一种issue-640机器强制)）
+  保持 `~/components/ui/<name>` 一致。这条不再靠人记：`scripts/gates/check-import-alias.cjs`（R13，见 [12 §12.8.0](12-代码组织与文件结构.md#1280-import-别名只有一种issue-640机器强制)）
   会在提交阶段拦下 —— 而 `ui/` 是「工具生成、尽量不手改」的目录，正是漂移的高发区。
 - 不要从 radix 版 shadcn 仓库复制组件；遇到缺失原语用 `shadcn add` 生成 base-ui 版。
 
@@ -6419,7 +6419,7 @@ command` 会覆盖 `button` / `input` / `textarea` / `dialog` 四个文件 —�
 
 1. **与官方版有语义差异的文件**：文件头带一行标记
    `/* ui-customized: … */`（`"use client"` 文件放在指令行之后，其余放第一行），
-   并在下表登记。判据 `scripts/check-ui-customizations.cjs`（**标记 ⟺ 台账**，双向
+   并在下表登记。判据 `scripts/gates/check-ui-customizations.cjs`（**标记 ⟺ 台账**，双向
    一致，零网络，已挂 pre-commit）——只登记不标记、或只标记不登记，提交即卡。
 2. **只在 import 别名（`~/lib/utils` 那层 `cn` 间接）、class 串顺序、注释中文化上
    与官方不同的文件**：不登记、不带标记。覆盖它们不丢行为，可以当官方原版用

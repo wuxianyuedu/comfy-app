@@ -1,5 +1,5 @@
 /**
- * 提交门槛自检：把 scripts/check-dead-exports.cjs 当黑盒跑在临时工作区上，验证地基层（src/lib +
+ * 提交门槛自检：把 scripts/gates/check-dead-exports.cjs 当黑盒跑在临时工作区上，验证地基层（src/lib +
  * src/trpc）零消费值导出规范（§12.16 / ISSUE #573 第 9 项）真的会阻断提交。
  * 为什么用子进程：门禁由 pre-commit 以 `node scripts/xxx.cjs` 调用，内部以 `process.cwd()` 定位扫描根。
  */
@@ -11,10 +11,10 @@ import { defineGateRepo, describe } from "./helpers/gate-repo";
 /* 脚本用 `process.cwd()` 定位扫描根 —— 临时工作区与 `run` / `write` 由
  * `tests/helpers/gate-repo.ts` 提供，脚本落点选 `root`（用 cwd，落哪都一样）。
  * 末尾「真实仓库」那组不搭临时仓库，仍需要脚本的绝对路径。 */
-const SCRIPT = join(process.cwd(), "scripts", "check-dead-exports.cjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates/check-dead-exports.cjs");
 
 const { test, expect } = defineGateRepo({
-  script: "check-dead-exports.cjs",
+  script: "gates/check-dead-exports.cjs",
   dir: "root",
   dirs: ["src/lib", "src/trpc", "src/components", "scripts", "tests"],
 });

@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-ga-logs-relay.mjs` 的判据（ISSUE #3437 GA 侧搬运）。
+ * `scripts/ci/ci-ga-logs-relay.mjs` 的判据（ISSUE #3437 GA 侧搬运）。
  *
  * 钉住最容易静默失效的几件：
  *   ① marker 评论正文带 run / sha / pr / jobs / bytes 身份读数与附件链；
@@ -16,7 +16,7 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
-import { CODE } from "../scripts/ci-github-mirror-push.mjs";
+import { CODE } from "../scripts/ci/ci-github-mirror-push.mjs";
 import {
   collectFailedJobLogs,
   main,
@@ -33,7 +33,7 @@ import {
   renderVerdictReadout,
   resolveRelayContext,
   stripRelayDescription,
-} from "../scripts/ci-ga-logs-relay.mjs";
+} from "../scripts/ci/ci-ga-logs-relay.mjs";
 
 const SHA = "a".repeat(40);
 const BASE_ENV = {

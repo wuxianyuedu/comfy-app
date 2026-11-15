@@ -29,7 +29,7 @@ import process from "node:process";
  * @param {(root: string) => string | null} ctx.envInitHint 非阻断读数：`.env` 缺哪些 `env:init` 会补的键
  * @param {(root: string) => string | null} ctx.runToolchainGate 工具链门禁
  * @param {(root: string, deps: object) => Promise<string | null>} ctx.syncDependencies 依赖补装
- * @param {(root: string, opts: { write?: (line: string) => void }) => import("../db-backup-core.mjs").RestoreResult} ctx.applyPendingRestoreAtBoot 待恢复备份
+ * @param {(root: string, opts: { write?: (line: string) => void }) => import("../db/db-backup-core.mjs").RestoreResult} ctx.applyPendingRestoreAtBoot 待恢复备份
  * @param {(root: string) => number} ctx.resolveAppPort 端口单一事实源
  * @param {object} target
  * @param {number | null} target.portOrNull 显式端口（`--port` 且为正整数），否则 null

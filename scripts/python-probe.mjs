@@ -24,7 +24,7 @@
  * ## 它为什么不进任何 steps
  *
  * 它答的是 **HEAD 的事**（「这台机器上有什么」），与源码无关；而 `steps` 内联进
- * 工作区、被 checkout 时 `git checkout -f` 抹掉（`scripts/check-ps1-consistency.mjs`
+ * 工作区、被 checkout 时 `git checkout -f` 抹掉（`scripts/gates/check-ps1-consistency.mjs`
  * 已把这条钉住：`.cnb.yml` 点名的每个入口都必须在盘上）。所以它由
  * `.cnb.yml` 的 `env`（`COMFYAPP_PYTHON_PROBE`）点名，Python 缺件时由
  * `.githooks/pre-commit` 的 C 组调用。
@@ -33,7 +33,7 @@
  */
 import path from "node:path";
 
-import { findPython, pythonForensics } from "./ci-toolchain-python.mjs";
+import { findPython, pythonForensics } from "./ci/ci-toolchain-python.mjs";
 /* **第二条链的读数**（ISSUE #1961）。`findPython` 与 `resolvePython` 是「同一台机器上
  * 哪个解释器能跑」的两个不同实现：前者起**裸名字**（Windows 上交给 CreateProcess 按
  * PATH 解析），后者手工扫 PATH × PATHEXT 再对**绝对路径**起一次。两者在同一次构建里
@@ -113,7 +113,7 @@ export function probeLines({ run, resolve = resolvePython, find = findAcrossCand
     lines.push("一个可用解释器都没有，下面是取证：");
     lines.push(...pythonForensics());
     lines.push(
-      `装好后重跑本命令即可。需要自动安装时：node scripts/ci-toolchain-selfcheck.mjs --python-only`,
+      `装好后重跑本命令即可。需要自动安装时：node scripts/ci/ci-toolchain-selfcheck.mjs --python-only`,
     );
   }
   /* ── 第二条链：`resolvePython`（手工扫 PATH + 对绝对路径起一次）────────────────

@@ -66,11 +66,11 @@ describe("gates:which —— 参数解析", () => {
 
 describe("gates:which —— 认得出钩子步骤跑的是哪份脚本", () => {
   test("认 `scripts/*.mjs` / `scripts/*.cjs`（含 Windows 反斜杠）", () => {
-    expect(scriptOf(["node", "scripts/affected-tests.mjs", "--json"])).toBe(
-      "scripts/affected-tests.mjs",
+    expect(scriptOf(["node", "scripts/affected-tests/affected-tests.mjs", "--json"])).toBe(
+      "scripts/affected-tests/affected-tests.mjs",
     );
-    expect(scriptOf(["node", String.raw`G:\repo\scripts\check-format.cjs`, "--staged"])).toBe(
-      "scripts/check-format.cjs",
+    expect(scriptOf(["node", String.raw`G:\repo\scripts\gates\check-format.cjs`, "--staged"])).toBe(
+      "scripts/gates/check-format.cjs",
     );
   });
 
@@ -82,7 +82,7 @@ describe("gates:which —— 认得出钩子步骤跑的是哪份脚本", () => 
 
 describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登记）", () => {
   const steps = [
-    { label: "分支守卫", argv: ["node", "scripts/check-branch-guard.cjs"] },
+    { label: "分支守卫", argv: ["node", "scripts/gates/check-branch-guard.cjs"] },
     {
       /* 收窄面由下面 `deps.faceFor` 的**夹具表**给：#3586 后真仓 INCREMENTAL_GATES
        * 暂空，但 hit / skippable / noFace 三堆的分堆机制仍要各自有正/负控 ——
@@ -172,7 +172,11 @@ describe("gates:which —— 用例那一半不重算 import 图", () => {
         };
       }),
     });
-    expect(seenArgs).toEqual(["scripts/affected-tests.mjs", "--changed-stdin", "--json"]);
+    expect(seenArgs).toEqual([
+      "scripts/affected-tests/affected-tests.mjs",
+      "--changed-stdin",
+      "--json",
+    ]);
     expect(seenInput).toBe("a.ts\nb/c.ts");
     expect(got).toMatchObject({ ok: true, result: { mode: "narrow" } });
   });

@@ -12,7 +12,7 @@ import { defineGateRepo, type GateRepo } from "./helpers/gate-repo";
  * ⚠️ **每一格自己负责放台账** —— 真实仓库里它必须在场。旧夹具不带台账，判据零站点时先 return，于是「台账压根不存在」这条路径全绿通过。
  */
 const { test } = defineGateRepo({
-  script: "check-task-meta-consumer.cjs",
+  script: "gates/check-task-meta-consumer.cjs",
   dirs: ["src", "tests"],
 });
 

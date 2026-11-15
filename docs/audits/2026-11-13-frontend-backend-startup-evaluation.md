@@ -129,7 +129,7 @@
 - `scripts/dev.mjs`、`scripts/start.mjs`、`scripts/dev-launcher.mjs`、
   `scripts/launcher-core/executor-host-spawn.mjs`、`scripts/launcher-core/executor-mode.mjs`
   （执行者拆分与归一化口径）；
-- `scripts/db-schema-state.mjs`（schema 同步的指纹跳过与"正在同步"降级出口）；
+- `scripts/db/db-schema-state.mjs`（schema 同步的指纹跳过与"正在同步"降级出口）；
 - `src/lib/log/event-loop-watch.server.ts` + `src/instrumentation.ts`（ISSUE #3369）；
 - `src/lib/comfyui/lifecycle.ts`（ComfyUI 按需拉起、`autoStartFailed` /
   `manualStop` 语义）；

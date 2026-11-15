@@ -1,12 +1,12 @@
 /**
- * 提交门槛自检：把 scripts/check-ui-primitives.cjs 当黑盒跑在临时工作区上，验证「视图层自实现 UI 基元」棘轮（规范 §16.2.3，
+ * 提交门槛自检：把 scripts/gates/check-ui-primitives.cjs 当黑盒跑在临时工作区上，验证「视图层自实现 UI 基元」棘轮（规范 §16.2.3，
  * ISSUE #672）真会阻断提交。用子进程跑是因为门禁由 pre-commit 以 `node scripts/xxx.cjs` 调用、内部以 `__dirname/..` 定位扫描根。
  * 夹具**纯样例**路径一律写 `fixture-*`（ISSUE #2830）：写真路径会被「按路径引用」档算成那些业务文件的消费方；豁免表里的必须真实。
  */
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-ui-primitives.cjs",
+  script: "gates/check-ui-primitives.cjs",
   dirs: [
     "src/components/studio",
     "src/components/workshop",
@@ -91,7 +91,7 @@ function demoteToRatchet(repo: GateRepo, ...ids: Array<string>): void {
    * R5 超限文件）：主脚本现在只剩机制，按 id 登记的表全在那一份里。
    * `defineGateRepo` 的 `copyGateDeps` 会沿 require 递归把依赖拷进临时仓库，
    * 所以这里直接改副本即可。 */
-  const rel = "scripts/ui-primitives-scope.cjs";
+  const rel = "scripts/ui-primitives/ui-primitives-scope.cjs";
   const src = repo.read(rel);
   /* **在 `HARD_GATE_RULES` 这一段的范围内**改，而不是整份源码按行形状找。原先的实现全局按「换行 + 缩进 + 引号包住
    * 的 id + 逗号」这条行形状替换，正则并不锚定那一段，只赌「源码里再没有别处出现同一行形状」—— 脚本一加别的按 id
@@ -369,7 +369,8 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * 而改的人只会把数字对上、不会去想机制还在不在（ISSUE #1668 的 P86 就是
      * 「表里占了编号、脚本里没有实现」那一族的实例）。
      * 判据 = 输出的条数与脚本里 `HARD_GATE_RULES` 的规模自洽。 */
-    const declared = DECL_RE.exec(repo.read("scripts/ui-primitives-scope.cjs"))?.groups?.rules;
+    const declared = DECL_RE.exec(repo.read("scripts/ui-primitives/ui-primitives-scope.cjs"))
+      ?.groups?.rules;
     expect(declared, "读不到 HARD_GATE_RULES 的声明").toBeTruthy();
     const size = (declared ?? "").match(/"P\d+"/g)?.length ?? 0;
     expect(size, "HARD_GATE_RULES 里一条判据都没有").toBeGreaterThan(0);
@@ -4292,7 +4293,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P72「模态无可访问名」（硬闸）差分回归 ─────────────────────────
-   * 见 scripts/check-ui-primitives.cjs 里 P72 注释与规范 §16.2.3 /
+   * 见 scripts/gates/check-ui-primitives.cjs 里 P72 注释与规范 §16.2.3 /
    * shadcn composition.md「Dialog/Sheet always need a Title」。
    * 判据按标签块扫 `<DialogContent>` / `<SheetContent>`，块内既无
    * 对应 Title 组件又无 aria-label/aria-labelledby 即计 1。 */
@@ -4429,7 +4430,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P73「视图层自闭合 <div> + border-X 是手搓分隔线」（硬闸）差分回归 ──
-   * 见 scripts/check-ui-primitives.cjs 里 P73 注释：合规出口
+   * 见 scripts/gates/check-ui-primitives.cjs 里 P73 注释：合规出口
    * `~/components/ui/separator` 的 `<Separator>`；含子内容的卡片结构边框
    * 不算（那是容器的一部分）。 */
   test('P73 视图层自闭合 <div className="border-t"> → 阻断', ({ repo }) => {
@@ -4475,7 +4476,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P75「视图层手搓空态卡」（棘轮）差分回归 ─────────────────
-   * 见 scripts/check-ui-primitives.cjs 里 P75 注释：三重条件（非自闭合 +
+   * 见 scripts/gates/check-ui-primitives.cjs 里 P75 注释：三重条件（非自闭合 +
    * border-dashed + rounded-xl/2xl/3xl + 无 cursor-pointer + 无内部
    * onClick + 有子文本）· 合规出口 `<EmptyState>` / `<Empty>`。 */
   test("P75 手搓空态卡（border-dashed + rounded-xl + 内含文本）→ 阻断", ({ repo }) => {
@@ -4550,7 +4551,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P76「视图层裸写 <select>」（棘轮）差分回归 ────────────────
-   * 见 scripts/check-ui-primitives.cjs 里 P76 注释：P68 拦住了裸
+   * 见 scripts/gates/check-ui-primitives.cjs 里 P76 注释：P68 拦住了裸
    * `<input>` / `<textarea>`、P69 拦住了裸 checkbox/radio；`<select>` 是同族
    * 漏项。合规出口有两个（`ui/native-select` 的 `<NativeSelect>` 或
    * `ui/select-menu` 的 `<SelectMenu>`），本判据只按形态数、不管选哪个。 */
@@ -4602,7 +4603,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P78「视图层裸写 <label>」（棘轮）差分回归 ────────────────
-   * 见 scripts/check-ui-primitives.cjs 里 P78 注释：与 P23 是同一族账的两层
+   * 见 scripts/gates/check-ui-primitives.cjs 里 P78 注释：与 P23 是同一族账的两层
    * （P23 数表单行组合形态、已清零；P78 数任意 <label 起始标签、含无控件的
    * 孤立 label）。合规出口：FormField / FieldLabel / Base UI Checkbox 的
    * children。锚点 `<label[\s/>]`，不误伤 labelClassName / label= 同前缀。 */
@@ -4656,7 +4657,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── 判据引入顺带解锁的 --update 逻辑：判据引入 vs 已有规则上升 ─────
-   * 见 scripts/check-ui-primitives.cjs 里 `before && after > before` 的分支重构。测试锁：旧基线里从没出现过的
+   * 见 scripts/gates/check-ui-primitives.cjs 里 `before && after > before` 的分支重构。测试锁：旧基线里从没出现过的
    * rule id（新判据起点登记）→ `--update` 允许；旧基线里已有 rule id 上升 → 必须拒绝。步骤：造 P1 现场 →
    * `--update` 登记起点 → 再写第二个 P1 → 第二次必须拦下（从 1 涨到 2 是「已有 rule 上升」）。载体挑最朴素的
    * P1：P71/P78~P81 都在其他 PR 升硬闸、走不到「新判据起点登记」这条分支。 */
@@ -4736,7 +4737,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P79「视图层无 dark: 前缀的浅色原色板」（棘轮）差分回归 ──────
-   * 见 scripts/check-ui-primitives.cjs 里 P79 注释：与 P71 是同一族账的两
+   * 见 scripts/gates/check-ui-primitives.cjs 里 P79 注释：与 P71 是同一族账的两
    * 半（P71 数带 `dark:` 的、P79 数不带前缀的浅色版），例外块共用一份
    * `p71-allow`。锚点用 `(?!dark:)` 前瞻避免与 P71 双计。 */
   test("P79 视图层 bg-violet-500 无 dark: 前缀 → 计入棘轮", ({ repo }) => {
@@ -4852,7 +4853,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P80「视图层 w-N 与 h-N 同值应换 size-N」（棘轮）差分回归 ────
-   * 见 scripts/check-ui-primitives.cjs 里 P80 注释。合规出口是 tailwind 内建
+   * 见 scripts/gates/check-ui-primitives.cjs 里 P80 注释。合规出口是 tailwind 内建
    * 的 `size-N`（同一份 `w-N h-N` 的简写）。判据按 className 字符串解析、
    * 交集非空即计一处。 */
   test("P80 视图层同 className 里 w-8 + h-8 → 计入棘轮（阻断）", ({ repo }) => {
@@ -5371,7 +5372,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P84「视图层手搓面包屑」/ P85「视图层手写 <table>」（硬闸）──────────
-   * 判据见 scripts/check-ui-primitives.cjs 里两条的注释。两条都是本批
+   * 判据见 scripts/gates/check-ui-primitives.cjs 里两条的注释。两条都是本批
    * （§16.2.4.72「零引用基元按形态复查」）随出口一起进硬闸的 ——
    * 「先让判据看得见存量，再冻结为 0」的反面：存量本就只有 1~2 处，
    * 同批清零后直接是硬闸（见 HARD_GATE_RULES 里 P84/P85 那段）。 */
@@ -5613,7 +5614,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P87「整块容器自带 backdrop-blur」（硬闸，ISSUE #2031 · 规范 03 §3.13）──
-   * 判据见 scripts/ui-primitives-rules-p67-p86.cjs 里 P87 的注释。锚点是
+   * 判据见 scripts/ui-primitives/ui-primitives-rules-p67-p86.cjs 里 P87 的注释。锚点是
    * **一行里 `backdrop-blur` 与贴边定位是否同现** —— 所以正反两侧各一条，
    * 且反面要覆盖「贴边条放行」与「注释里的不算」两件事。
    */
@@ -5766,7 +5767,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      *
      * 挂在 `process.on("exit")` 上而不是串在 `main()` 末尾：判据命中时会走
      * `process.exit(1)`，串在末尾的打印永远到不了（第一版这么写，什么都没输出）。 */
-    const rel = "scripts/ui-primitives-engine.cjs";
+    const rel = "scripts/ui-primitives/ui-primitives-engine.cjs";
     const src = repo.read(rel);
     /* 探针源码里的 `stripComments` 字面量**拆开写**：本文件自己也落在
      * `tests/strip-comments-single-source.test.ts` 的扫描面里，原样写着的
@@ -5803,7 +5804,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * 漏的一步。漏了不会红、只是它不出现在任何分组里，所以必须由自检拦。
      * `RULE_TIER_IDS` 在 `ui-primitives-scope.cjs`，而 `RULES` 已按 P 区间切进四份
      * `ui-primitives-rules-p*.cjs`（ISSUE #1811）—— `P86` 住在 p67-p86 那一份。 */
-    const rel = "scripts/ui-primitives-rules-p67-p86.cjs";
+    const rel = "scripts/ui-primitives/ui-primitives-rules-p67-p86.cjs";
     let src = repo.read(rel);
     const next = src.replace(
       "  P86: {",
@@ -5827,7 +5828,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   test("分档自检：同一条判据登记两次时直接报错", ({ repo }) => {
     /* 重复登记的形态：一条 id 出现在两档里 —— 取哪一档都说不清，必须报错。 */
-    const rel = "scripts/ui-primitives-scope.cjs";
+    const rel = "scripts/ui-primitives/ui-primitives-scope.cjs";
     const src = repo.read(rel);
     const next = src.replace('    "P75",', '    "P75", "P80",');
     expect(next, "P75 的登记项没找到 —— 本用例的前提已变").not.toBe(src);
@@ -5857,7 +5858,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 describe("UI 基元复用棘轮 --staged 输入面跳过（ISSUE #1747）", () => {
   /* 这一组要真 git（`--staged` 读的是暂存区），所以单独搭一个带 `git init` 的工作区。 */
   const { test: gitTest, expect: gitExpect } = defineGateRepo({
-    script: "check-ui-primitives.cjs",
+    script: "gates/check-ui-primitives.cjs",
     dirs: ["src/components/studio", "src/app", "src/lib"],
     workdir: "ui-primitives-staged",
     setup: (repo) => {

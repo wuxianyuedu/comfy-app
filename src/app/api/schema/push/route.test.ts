@@ -12,7 +12,7 @@ const statusFile = path.join(process.cwd(), "log", "current", "tools", "schema-s
 
 const spawnSchemaSync = vi.hoisted(() => vi.fn());
 
-vi.mock("../../../../../scripts/db-schema-state.mjs", () => ({
+vi.mock("../../../../../scripts/db/db-schema-state.mjs", () => ({
   spawnSchemaSync,
 }));
 
@@ -95,7 +95,7 @@ describe("POST /api/schema/push", () => {
     stubStatusFile(statusJson("stale"));
     spawnSchemaSync.mockReturnValue({
       started: false,
-      reason: "找不到 scripts/db-sync.mjs",
+      reason: "找不到 scripts/db/db-sync.mjs",
     });
     const res = await post();
     expect(res.status).toBe(404);

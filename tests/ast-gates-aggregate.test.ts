@@ -18,12 +18,12 @@ const HOOK = join(REPO_ROOT, ".githooks", "pre-commit");
 
 /** 聚合档 / 单条脚本都需要的 6 条判据（**这张表与 `run-ast-gates.cjs` 的 GATES 同批**）。 */
 const GATES = [
-  "check-react-updater-purity.cjs",
-  "check-non-null-assertions.cjs",
-  "check-void-floats.cjs",
-  "check-ts-duplicate-keys.cjs",
-  "check-form-field-wiring.cjs",
-  "check-click-keyboard.cjs",
+  "gates/check-react-updater-purity.cjs",
+  "gates/check-non-null-assertions.cjs",
+  "gates/check-void-floats.cjs",
+  "gates/check-ts-duplicate-keys.cjs",
+  "gates/check-form-field-wiring.cjs",
+  "gates/check-click-keyboard.cjs",
 ];
 
 /** 跑一个脚本，归一成 `{code, output}`（stdout+stderr 合并）。 */
@@ -195,8 +195,11 @@ function probeRepo(): {
   run: (argv: Array<string>) => { code: number; output: string };
 } {
   const dir = mkdtempSync(join(tmpdir(), "ast-gates-probe-"));
+  /* 布局镜像真实仓库（#3930）：聚合档在 scripts/、6 条判据在 scripts/gates/ ——
+   * 聚合档按 join(__dirname, gate.script) 引判据、判据按 __dirname 上两级找扫描根，平铺会两头落空。 */
   const scriptsDir = join(dir, "scripts");
-  mkdirSync(scriptsDir, { recursive: true });
+  const gatesDir = join(scriptsDir, "gates");
+  mkdirSync(gatesDir, { recursive: true });
   for (const name of ["run-ast-gates.cjs", ...GATES]) {
     const dest = join(scriptsDir, name);
     copyFileSync(join(REPO_ROOT, "scripts", name), dest);

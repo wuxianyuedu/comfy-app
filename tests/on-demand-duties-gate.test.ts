@@ -13,7 +13,7 @@ import { describe, defineGateRepo } from "./helpers/gate-repo";
 /* `test` 与 `expect` 都由夹具给出（`test` 带 `repo`；`expect` 是它转发的那一份，
  * 这样断言的实现与夹具同源）；`describe` 不随 `extend` 变，从夹具模块取。 */
 const { test, expect } = defineGateRepo({
-  script: "check-on-demand-duties.cjs",
+  script: "gates/check-on-demand-duties.cjs",
   /* 判据靠 `__dirname/..` 定位仓库根，所以脚本必须落在 `scripts/` 下。 */
   dir: "scripts",
   workdir: "on-demand-duties",
@@ -22,8 +22,14 @@ const { test, expect } = defineGateRepo({
    * 否则 `import` 链半路 `ERR_MODULE_NOT_FOUND`、整组红。`quality-gate.mjs` —— `run: false` 的门禁项。**按需台账
    * 刻意不拷真件**：只需一条在场（要的是「台账里有东西」的形状，不是文件），拷真件再覆盖会让「夹具提供了什么」不可读。 */
   copy: [
-    { from: "scripts/freshness-ledger.mjs", to: "scripts/freshness-ledger.mjs" },
-    { from: "scripts/freshness-ledger-sync.mjs", to: "scripts/freshness-ledger-sync.mjs" },
+    {
+      from: "scripts/freshness/freshness-ledger.mjs",
+      to: "scripts/freshness/freshness-ledger.mjs",
+    },
+    {
+      from: "scripts/freshness/freshness-ledger-sync.mjs",
+      to: "scripts/freshness/freshness-ledger-sync.mjs",
+    },
     { from: "scripts/quality-gate.mjs", to: "scripts/quality-gate.mjs" },
   ],
   /* 台账与索引都按用例改写 —— 夹具给一份最小可用的。 */
@@ -90,6 +96,9 @@ function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
         id: "tw4-canonical-report",
         name: "CSS 等价改写汇总",
         notInHook: "要起 Tailwind 引擎",
+        /* 台账类事实按 **basename** 对键（`scripts/` 下文件名全仓唯一；判据的
+         * `onDemand.includes(fact.script)` 按台账里的裸名比，#3930 迁移也不例外）
+         * —— 写成域路径会对不上键，双向各红一条（#3997 那轮 GA 的实测）。 */
         fact: { kind: "on-demand-ledger", script: "tw4-canonical-report.mjs" },
         executor: "按需召唤 + 棘轮",
       },

@@ -34,7 +34,7 @@ describe("门禁夹具：同一条路径只写一次", () => {
    */
   it("整目录 copy 与依赖链重叠时，那个文件与源逐字一致", () => {
     const { repo: gate } = repo({
-      script: "check-deps-freshness.mjs",
+      script: "gates/check-deps-freshness.mjs",
       workdir: "gate-repo-single-write",
       // 与 `tests/deps-freshness-gate.test.ts` 同一形状：整目录拷 + 判据自己
       // 又 `import "./lockfile/lock-diff.mjs"`。
@@ -67,7 +67,7 @@ describe("门禁夹具：同一条路径只写一次", () => {
   it("依赖链与 copy 不相交时，同目录依赖仍被自动补齐", () => {
     // 只拷 `lockfile/` 目录，`dependency-face.mjs` / `git-dir.mjs` 得靠依赖链补。
     const { repo: gate } = repo({
-      script: "check-deps-freshness.mjs",
+      script: "gates/check-deps-freshness.mjs",
       workdir: "gate-repo-deps-still-copied",
       copy: [{ from: "scripts/lockfile", to: "scripts/lockfile" }],
     });
@@ -83,7 +83,7 @@ describe("门禁夹具：同一条路径只写一次", () => {
   it("用例自己写在 files 里的同名文件优先，不被依赖链覆盖", () => {
     // `files` 拥有它自己的路径：依赖链只补「还没有人写过」的那些。
     const { repo: gate } = repo({
-      script: "check-deps-freshness.mjs",
+      script: "gates/check-deps-freshness.mjs",
       workdir: "gate-repo-files-owned",
       files: { "scripts/lockfile/lock-diff.mjs": "// 用例自己的夹具\n" },
       copy: [{ from: "scripts/lockfile", to: "scripts/lockfile" }],

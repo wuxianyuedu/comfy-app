@@ -43,8 +43,8 @@
 | 数据库       | `pnpm db:generate` · `pnpm db:push` · `pnpm run db:migrate` · `pnpm run db:backup` · `pnpm db:studio`                                      | 改完 `src/server/db/schema.ts`   |
 | 启动与端口   | `pnpm run check:toolchain` · `pnpm run env:init` · `pnpm run check:deps-freshness` · `pnpm run check:app-version`                          | 起不来、环境对不上、开工前先跑   |
 | 版本库       | `git status -sb` · `git diff` · `git log --stat -3` · `git worktree list`                                                                  | 只读的历史与状态查询             |
-| 诊断         | `pnpm run check:base:batch` · `pnpm run ui:primitives` · `pnpm run theme:check` · `node scripts/check-standalone-contents.cjs` · `node -v` | 被判据拦下、产物可疑、报环境问题 |
-| 规范与文档   | `pnpm run doc:check` · `pnpm run docs:check` · `pnpm run ui:overlay-z` · `node scripts/check-file-structure.cjs`                           | 文档引用 / 设计契约的同步判据    |
+| 诊断         | `pnpm run check:base:batch` · `pnpm run ui:primitives` · `pnpm run theme:check` · `node scripts/gates/check-standalone-contents.cjs` · `node -v` | 被判据拦下、产物可疑、报环境问题 |
+| 规范与文档   | `pnpm run doc:check` · `pnpm run docs:check` · `pnpm run ui:overlay-z` · `node scripts/gates/check-file-structure.cjs`                           | 文档引用 / 设计契约的同步判据    |
 | 端到端与产物 | `pnpm run test:e2e:dry` · `pnpm run build:tracked:dry` · `pnpm run analyze`                                                                | 真浏览器那档与构建产物，按需跑   |
 
 预设表在 `src/lib/console/console-catalog.ts`，加一条只需要在那个数组里加一行。

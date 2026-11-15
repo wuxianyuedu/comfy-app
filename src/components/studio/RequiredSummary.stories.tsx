@@ -79,7 +79,7 @@ const REAL_IO: WorkflowIOMap = {
 };
 
 /**
- * 多模式：同一个条目在不同模式下的必填性不同（`modeOverrides` 的真形状）。基于 `STEPS_ENTRY` 这份**命名常量**扩展而不是 `REAL_IO["3:steps"]!` —— 后者要非空断言（`WorkflowIOMap` 是 `Record`，索引访问带 `undefined`），会撞 `scripts/check-non-null-assertions.cjs`（判据是对的：这里没有「我知道它一定在」的理由，换成命名常量就不需要断言）。
+ * 多模式：同一个条目在不同模式下的必填性不同（`modeOverrides` 的真形状）。基于 `STEPS_ENTRY` 这份**命名常量**扩展而不是 `REAL_IO["3:steps"]!` —— 后者要非空断言（`WorkflowIOMap` 是 `Record`，索引访问带 `undefined`），会撞 `scripts/gates/check-non-null-assertions.cjs`（判据是对的：这里没有「我知道它一定在」的理由，换成命名常量就不需要断言）。
  */
 const MODE_IO: WorkflowIOMap = {
   ...REAL_IO,

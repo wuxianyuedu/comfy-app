@@ -20,7 +20,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { copyGateDeps } from "./helpers/gate-repo";
 import { stripComments } from "./helpers/strip-comments";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-theme-colors.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-theme-colors.cjs");
 const tempDirs: Array<string> = [];
 
 /**
@@ -30,8 +30,8 @@ const tempDirs: Array<string> = [];
 function scanner(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), "theme-colors-"));
   tempDirs.push(root);
-  mkdirSync(path.join(root, "scripts"), { recursive: true });
-  const dest = path.join(root, "scripts", path.basename(SCRIPT));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  const dest = path.join(root, "scripts", "gates", path.basename(SCRIPT));
   copyFileSync(SCRIPT, dest);
   /* 脚本被拆成「主文件 + 声明层模块」后，只拷主文件跑起来是 `MODULE_NOT_FOUND`
    * —— 那条红长得像「判据坏了」，实际是夹具少带一个文件（§12.5.3 迁移五查）。
@@ -47,7 +47,7 @@ function scanner(files: Record<string, string>) {
   const run = (args: Array<string> = []): { ok: boolean; output: string } => {
     const res = spawnSync(
       process.execPath,
-      [path.join(root, "scripts", path.basename(SCRIPT)), ...args],
+      [path.join(root, "scripts", "gates", path.basename(SCRIPT)), ...args],
       { cwd: root, encoding: "utf8" },
     );
     return {
@@ -464,10 +464,10 @@ describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」
      * 这一条就是为「只覆盖了一半」那格补的：往副本脚本里注一条带主张的豁免，必须红。 */
     const root = mkdtempSync(path.join(tmpdir(), "theme-claim-reason-"));
     tempDirs.push(root);
-    mkdirSync(path.join(root, "scripts"), { recursive: true });
+    mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
     /* 注入点随声明层一起搬家：`EXEMPT_TABLES` 现在住在同目录的
      * theme-color-exemptions.cjs 里，往主脚本里替换字符串会一处都不命中。 */
-    const dest = path.join(root, "scripts", path.basename(SCRIPT));
+    const dest = path.join(root, "scripts", "gates", path.basename(SCRIPT));
     copyFileSync(SCRIPT, dest);
     copyGateDeps(dest);
     const exemptionsPath = path.join(root, "scripts", "theme-color-exemptions.cjs");

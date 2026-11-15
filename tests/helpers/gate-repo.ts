@@ -12,6 +12,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -52,27 +53,48 @@ export function copyGateDeps(
   const destDir = path.dirname(destScriptAbs);
   /** CJS 的 `require("./x.cjs")`（也认 `createRequire(…)("./x.cjs")`）、ESM 的 `import/export … from "./x.mjs"`，以及
    *  CJS 里 `require` 一个 ESM（Node 24 的 `require(esm)`，`check-doc-mirror-pairing.cjs` 要 `changed-scope.mjs`，ISSUE #2265）。
-   *  路径允许 `/`：`changed-scope.mjs` 依赖链伸进 `scripts/base-check/` 与 `launcher-core/`，只认平铺名会让沙箱 import 时炸。 */
+   *  路径允许 `/`：`changed-scope.mjs` 依赖链伸进 `scripts/base-check/` 与 `launcher-core/`，只认平铺名会让沙箱 import 时炸。
+   *  也认 `../` 开头：判据脚本归入 `scripts/<域>/` 子目录后（#3930），跨域依赖长成了 `../ci/ci-log.mjs` 这一族。 */
   const DEP_RES = [
-    /require\w*\(\s*"\.\/(?<dep>[\w./-]+\.cjs)"\s*\)/g,
-    /require\w*\(\s*"\.\/(?<dep>[\w./-]+\.mjs)"\s*\)/g,
-    /(?:^|\n)\s*(?:import|export)\s[^;\n]*?from\s+"\.\/(?<dep>[\w./-]+\.mjs)"/g,
-    /(?:^|\n)\s*import\s+"\.\/(?<dep>[\w./-]+\.mjs)"/g,
+    /require\w*\(\s*"(?<dep>\.{1,2}\/[\w./-]+\.(?:c|m)js)"\s*\)/g,
+    /(?:^|\n)\s*(?:import|export)\s[^;\n]*?from\s+"(?<dep>\.{1,2}\/[\w./-]+\.mjs)"/g,
+    /(?:^|\n)\s*import\s+"(?<dep>\.{1,2}\/[\w./-]+\.mjs)"/g,
   ];
-  const pending = [destScriptAbs];
+  /** 真仓库 `scripts/**` 的 basename → 绝对路径索引。判据归入域子目录后，依赖说明符相对
+   *  的「原目录」只有仓库自己知道；而 `scripts/` 下文件名全仓唯一（#3930 迁移时已核对），
+   *  按 basename 定位真源比拼 `scripts/<name>` 的旧平铺契约诚实——后者在子目录布局下
+   *  会把 `../ci/ci-log.mjs` 静默丢掉（existsSync 不中 → 依赖没进沙箱 → Cannot find module，
+   *  长得像门禁坏了）。夹具假路径（`./y` 这类解析不到真文件的）照旧跳过。 */
+  const sourceByBasename = new Map<string, string>();
+  const indexScripts = (dir: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) {
+        if (e.name === "__pycache__") continue;
+        indexScripts(path.join(dir, e.name));
+      } else if (/\.(?:c|m)js$/.test(e.name) && !sourceByBasename.has(e.name)) {
+        sourceByBasename.set(e.name, path.join(dir, e.name));
+      }
+    }
+  };
+  indexScripts(path.join(REPO_ROOT, "scripts"));
+  /* pending 带**各自所在目录**：spec 相对「当前被扫文件」解析，不是相对入口——
+   * 平铺布局下两者恒等价，#3930 的子目录布局下按入口解析会把
+   * `./ui-primitives-rules-p1-p37.cjs` 落错目录（探针实测：进 gates/ 而不是
+   * ui-primitives/），require 在加载阶段当场断。 */
+  const pending: Array<{ abs: string; dir: string }> = [{ abs: destScriptAbs, dir: destDir }];
   const seen = new Set<string>();
   while (pending.length > 0) {
-    const abs = pending.shift()!;
+    const { abs, dir: curDir } = pending.shift()!;
     if (seen.has(abs)) {
       continue;
     }
     seen.add(abs);
     const src = readFileSync(abs, "utf8");
-    const names = DEP_RES.flatMap((re) => [...src.matchAll(re)].map((m) => m.groups?.dep ?? ""));
-    for (const name of names) {
-      const source = path.join(REPO_ROOT, "scripts", name);
-      const dest = path.join(destDir, name);
-      if (!existsSync(source)) {
+    const specs = DEP_RES.flatMap((re) => [...src.matchAll(re)].map((m) => m.groups?.dep ?? ""));
+    for (const spec of specs) {
+      const source = sourceByBasename.get(path.basename(spec));
+      const dest = path.resolve(curDir, spec);
+      if (!source) {
         continue;
       }
       /* 已存在的目标**不覆盖**（用例自己写的夹具 / `DEP` 那份优先），但仍然要**走进去**
@@ -82,19 +104,19 @@ export function copyGateDeps(
        * `gate-scan-read` 谁都没带进去）。 */
       if (!existsSync(dest)) {
         if (place) {
-          /* 交出**绝对目标路径**而不是名字：`name` 是相对被引脚本所在目录的
+          /* 交出**绝对目标路径**而不是名字：`spec` 是相对被引脚本所在目录的
            * （`./lockfile/lock-diff.mjs`），由 `place` 自己换算成工作区相对路径 ——
            * 只有它知道工作区根在哪（`copy` 的 `to` 本来就是工作区相对路径，
            * 两条来路的坐标系不同，收口在一处才换算得对）。 */
           place(dest, source);
         } else {
-          /* 子目录（`./base-check/git-ref.mjs` 那一类）要先有目录，否则落盘就失败。 */
+          /* 子目录（`../ci/ci-log.mjs` 那一类）要先有目录，否则落盘就失败。 */
           mkdirSync(path.dirname(dest), { recursive: true });
           copyFileSync(source, dest);
           chmodSync(dest, 0o755);
         }
       }
-      pending.push(dest);
+      pending.push({ abs: dest, dir: path.dirname(dest) });
     }
   }
 }
@@ -264,7 +286,14 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
   const { script, dir = "scripts", dirs = [], workdir, env, files, copy, setup } = options;
   const scriptSource = path.join(REPO_ROOT, "scripts", script);
   const scriptRel = dir === "scripts" ? path.join("scripts", script) : script;
-  const prefix = workdir ?? script.replace(/^check-/, "").replace(/\.(?:c|m)?js$/, "");
+  /* 前缀取 basename：`script` 现在可以带域子目录（`gates/check-x.cjs`），带 `/` 的前缀
+   * 会让 `mkdtempSync` 去建不存在的父目录（#3930 迁移后实测撞上）。 */
+  const prefix =
+    workdir ??
+    path
+      .basename(script)
+      .replace(/^check-/, "")
+      .replace(/\.(?:c|m)?js$/, "");
 
   const root = mkdtempSync(path.join(tmpdir(), `${prefix}-gate-`));
   /* 边界标记先落（上面 `SANDBOX_PACKAGE_MARKER` 那段）：它必须在任何「解析向上走」的

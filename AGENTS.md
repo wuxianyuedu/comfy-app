@@ -39,14 +39,14 @@
   （§13.1 自查清单、§13.5 门禁、§13.6 分支与合并、§13.6.1 master 提交守卫）；
 - 走「分支 → 提交 → push → PR → 等 CI → 绿了合并」这条流程（或在改 `scripts/ship*.mjs`
   本身）→ 用 `pnpm ship`，**不要在外面手敲那串命令**。它的四条红线是硬规则 28，
-  用法全表只有一份出处（`scripts/ship.mjs` 文件头 + project Skill
+  用法全表只有一份出处（`scripts/ship/ship.mjs` 文件头 + project Skill
   [`.qoder/skills/ship/SKILL.md`](.qoder/skills/ship/SKILL.md)），本文件不抄旗标清单
   （抄一份旗标，下一个旗标加进来时这里就脱钩）。
 - 不确定读哪些 → 先读 `docs/standards/15-附录.md` §15.5「新成员 10 分钟速读路径」建立全局认知。
 - **不确定这次改动该跑哪几条门禁 / 哪份用例 / 读哪一节规范** → 跑 `pnpm gates:which`
   （默认按当前分支相对基线取改动面，`--changed <路径…>` 给显式名单）。它只转述既有执行者的
   登记：门禁分档取自钩子步骤行与 `ci-incremental-gates.mjs` 的收窄面、用例直接起
-  `scripts/affected-tests.mjs` 的判决链、规范读下方那张表的机器可读副本
+  `scripts/affected-tests/affected-tests.mjs` 的判决链、规范读下方那张表的机器可读副本
   `scripts/doc-reading-map.mjs`。**给的是「建议跑」不是「已跑」**（本地默认只有 D0）；
   用例是静态 import 图的增量面、不是全量凭证；改动面为空 / 取不到基线 ⇒ 退 2 = 没有结论，
   不是「什么都不用跑」。
@@ -84,7 +84,7 @@
 | UI/逻辑分离                                                           | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时                                                                                                                                                                                    | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)）                                                                                                                                                                                                                                  |
 | lib 层边界与门禁                                                      | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层）                                                                                                                                                                | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `oxlint.parity.config.mjs` / `oxlint.config.ts` 的 `boundaries` 强制，Node-only 声明由 `scripts/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts` 强制（§18.4），文件长度**硬闸** `check-file-structure.cjs`（超 900 行即阻断，无 flag） |
 | lib 子域归属                                                          | `src/lib/**`（新增模块、新建子域目录、搬目录）                                                                                                                                                                                  | §12.5.3 + §18.12；门禁 `check-file-structure.cjs` 的 R13′/R14                                                                                                                                                                                                                                   |
-| 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs`                                                                                                                                                                    | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/check-ps1-consistency.mjs`                                                                                                                                                       |
+| 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs`                                                                                                                                                                    | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/gates/check-ps1-consistency.mjs`                                                                                                                                                       |
 | 跨平台行为 / 端口与文档                                               | 新增按平台分叉的逻辑、改动 `src/lib/process/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1                                                                                                                                        |
 | 构建与打包                                                            | `scripts/build-desktop.mjs`、`tools/**`                                                                                                                                                                                         | §7、§8                                                                                                                                                                                                                                                                                          |
 | 复用/去重与常量收口                                                   | 抽共享模块、加/改默认地址与端口、写新的质量门禁、**动手前查有无现成实现 / 缺能力补地基**、**同一串手工命令被敲到第二次就收成入口**                                                                                            | §12.18（复用优先·写之前先查）、**§12.20（能做成工具的就做成工具）**、§12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口）                                                                                                                                                                |
@@ -145,7 +145,7 @@ React Compiler 族（`react/immutability`、`react/incompatible-library`、
 eslint.config.js 已删。以下插件包留着**不是**因为 eslint 还在跑，而是被 oxlint 的
 `jsPlugins` / `settings` 复用：`eslint-plugin-react`、`@next/eslint-plugin-next`、
 `oxlint-plugin-eslint`、`eslint-plugin-boundaries`、`eslint-plugin-unused-imports`、
-`eslint-import-resolver-oxc`；`eslint-plugin-jsx-a11y` 只服务 `scripts/check-a11y-rules.cjs`
+`eslint-import-resolver-oxc`；`eslint-plugin-jsx-a11y` 只服务 `scripts/gates/check-a11y-rules.cjs`
 读官方规则表。`eslint` 包本身也保留，但只作**运行时宿主**：`eslint-plugin-react` 加载时
 `require("eslint/package.json")`、`eslint-plugin-unused-imports` 要
 `eslint/use-at-your-own-risk` —— 删包会让 `oxlint.parity.config.mjs` 直接加载失败（#3157 实测）。
@@ -169,7 +169,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
 
 1. **包管理只用 pnpm**（`pnpm exec …`）。禁止 npx / npm run——npm 11.19 在本机
    解析 typescript 别名链会崩溃（`Class extends value undefined`）。
-   **这条有判据**：`scripts/check-doc-references.cjs`（= `pnpm doc:check`）把「台账文档与
+   **这条有判据**：`scripts/gates/check-doc-references.cjs`（= `pnpm doc:check`）把「台账文档与
    `AGENTS.md` 里出现 npm 形态的可执行命令」判成硬错误——这类写法一律改为 pnpm；
    覆盖面是**文档里的命令口径**，不含源码调用（那一路刻意不判——源码里没有对应的
    可执行形态可由 lint 看）。
@@ -193,15 +193,15 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
    `shellStaleWarning()` 把「没重编就提交」拦下，并在改了 `src-tauri/src/*.rs` 时跑
    `cargo test`（壳内全部 `#[test]` 唯一的执行者——条数随源码变动，别在这里写死，以
    `cargo test` 自己的输出为准）；触发面与 mtime 边界见规范 §11.10.4。
-6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492）：两层防线 = 平台**分支保护设置**（拦 push、放行 PR 合并）+ `.githooks/pre-commit` 开头的组 0「master 分支提交守卫」`scripts/check-branch-guard.cjs`（拦本地提交）。**判据是 HEAD 父提交数**：`master` 上 ≤ 1 = 直连主干阻断，> 1 = PR 合并放行（只查分支名会把合并一起拦掉）。`check-branch-guard.cjs` 的 `--pr-check` / `--merge-commit` 两个服务端形态由仓库根 `.cnb.yml` 调用（§13.5.3）——**它取自源分支、跑的是另一份清单**，不能替代本地这一层。**平台层禁用 `git create-branch-lock`**（锁整分支写入会把 PR 合并一起拦死）。误提交到本地 `master` 时：`git branch feat/<描述>` → `git reset --hard origin/master` → `git checkout feat/<描述>` → 推送开 PR。三种拓扑回归见 §13.6.1。**推送那一跳有机器执行者**：`.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑 `pnpm check:premerge`（证明写 `.git/comfy-premerge-proof.json` 不入库，同仓并行检出不许互相作证），口径与边界见 §13.6.2.1。**这一跳默认跑全套**（复算那一批的边界由 `localTierLabels()` 从钩子文本取，不另立名单）；要减到只跑本地形态档那几条用 `pnpm check:premerge --light`（它会打印跳过了几条重档——降档永远要被读出来），`--full` 是这套默认的显式写法。
+6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492）：两层防线 = 平台**分支保护设置**（拦 push、放行 PR 合并）+ `.githooks/pre-commit` 开头的组 0「master 分支提交守卫」`scripts/gates/check-branch-guard.cjs`（拦本地提交）。**判据是 HEAD 父提交数**：`master` 上 ≤ 1 = 直连主干阻断，> 1 = PR 合并放行（只查分支名会把合并一起拦掉）。`check-branch-guard.cjs` 的 `--pr-check` / `--merge-commit` 两个服务端形态由仓库根 `.cnb.yml` 调用（§13.5.3）——**它取自源分支、跑的是另一份清单**，不能替代本地这一层。**平台层禁用 `git create-branch-lock`**（锁整分支写入会把 PR 合并一起拦死）。误提交到本地 `master` 时：`git branch feat/<描述>` → `git reset --hard origin/master` → `git checkout feat/<描述>` → 推送开 PR。三种拓扑回归见 §13.6.1。**推送那一跳有机器执行者**：`.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑 `pnpm check:premerge`（证明写 `.git/comfy-premerge-proof.json` 不入库，同仓并行检出不许互相作证），口径与边界见 §13.6.2.1。**这一跳默认跑全套**（复算那一批的边界由 `localTierLabels()` 从钩子文本取，不另立名单）；要减到只跑本地形态档那几条用 `pnpm check:premerge --light`（它会打印跳过了几条重档——降档永远要被读出来），`--full` 是这套默认的显式写法。
 7. **提交必须通过 `.githooks/pre-commit`，而这一档现在是「形态档」**（分支守卫 + **形态前置档
    D0**：判「这次提交自身的形态」那几条，串行跑完再进其余档，见 §13.5.8.2.1）。
    **tsc / eslint / 其余静态判据默认不在每次提交上跑**（ISSUE #2022 / 规范
    §13.5.25）——它们仍**逐字留在 `.githooks/pre-commit` 里当注册表**，由 `COMFY_HEAVY_GATES`
-   这个档位开关决定谁执行。为什么不能把它们删去 CI：`scripts/check-gate-executors.cjs` 的解析面
+   这个档位开关决定谁执行。为什么不能把它们删去 CI：`scripts/gates/check-gate-executors.cjs` 的解析面
    **不含 `.cnb.yml`**（它只认钩子的 `run "<标签>" <命令>` 行与 `quality-gate` 那两张表）——
    删步骤 = 那批判据当场没有执行者，而账面一条红都不会出现。跳档时钩子会打印「本地**没跑**：
-   <降了的那几组，逐组点名>」并明说那不是「已通过」（这句由 `scripts/gate-tier-summary.cjs`
+   <降了的那几组，逐组点名>」并明说那不是「已通过」（这句由 `scripts/gates/gate-tier-summary.cjs`
    按**这一轮实际降了什么**念，标签取自钩子的 `run_group` 行；写死清单会在 `COMFY_HEAVY_GATES=1`
    那一跑里推翻自己的上一行，见 §13.5.25）。本地要全套：`COMFY_HEAVY_GATES=1 git commit …` 或 `pnpm check:all`。
    **「受影响用例」那一档例外，本地一律不跑**（2026-10-20）：它会起 vitest 子进程，共享机上
@@ -209,7 +209,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
    （实测拦下一次、隔离复跑 88 文件 1116 条全绿）⇒ 它的两个本地执行者（pre-commit 的 C 组、
    pre-push 的 `unitTests` 段）都撤了，先改成平台侧 PR 流水线的 `受影响用例` 一格；
    2026-11-02 那一格连同 `固定结构用例` 也随 ISSUE #3052 从 **CNB 侧**撤到每日全量单测
-   （增量面是全量子集，覆盖不丢；`scripts/ci-affected-tests.mjs` → `run-affected-tests.mjs`
+   （增量面是全量子集，覆盖不丢；`scripts/ci/ci-affected-tests.mjs` → `run-affected-tests.mjs`
    这条判决链脚本保留，仍可手动 / 复验时跑；C 组的 `run_group C` 行仍留在钩子里当登记，
    `COMFY_HEAVY_GATES=1` 也换不回来它）。
    ⚠️ **但 PR 档（作为事件）仍跑这两格**——执行者是 **GA 侧** `.github/workflows/pr-gate.yml`
@@ -263,7 +263,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
      `core.hooksPath=.githooks`）；未生效时手动 `git config core.hooksPath .githooks`。
 8. **新增含 postinstall 构建脚本的依赖**：同步更新 `pnpm-workspace.yaml`
    的 `allowBuilds`，否则非交互模式 `pnpm install` 会 exit 1。
-   **这条现在有判据**：`scripts/check-allow-builds.cjs`（挂在 `.githooks/pre-commit` 的 D 组）
+   **这条现在有判据**：`scripts/gates/check-allow-builds.cjs`（挂在 `.githooks/pre-commit` 的 D 组）
    拿 `node_modules/.pnpm` 里**已装出来的事实**与名单对账——每个带
    `preinstall` / `install` / `postinstall` 的包都必须有一条显式条目，`true`（批准）与
    `false`（显式拒绝）都算回答过，漏答才红；反向（名单里当前没有构建脚本的条目）**刻意不判**，
@@ -288,27 +288,27 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
     `mutationOptions()`；旧 classic 字样 `api.x.y.useQuery/useMutation` 同判）——逻辑要进
     `<feature>/hooks/`，网络层一律进 `src/lib/<domain>-client.ts`（守卫只豁免
     `hooks/` 目录，`components/<feature>/*-api.ts` 会被计为违规）。守卫脚本
-    `scripts/check-ui-logic-separation.cjs`（**硬闸：命中即阻断**，已接入 pre-commit；
+    `scripts/gates/check-ui-logic-separation.cjs`（**硬闸：命中即阻断**，已接入 pre-commit；
     S* 存量已清零、基线已删，没有 `--update` 这条路 —— ISSUE #1811 收尾翻闸）。
-11. **`src/lib` 是域化的：根目录只放顶层单例，模块一律进子域**（ISSUE #565 / §12.5.3 / §18.12）：新增子域必须**同批**登记 `scripts/check-file-structure.cjs` 的 `DOMAINS` 与 `DOMAIN_EXEMPT`（R14）**并**在 `vitest.config.ts` `thresholds` 里按**实测值**设门槛（§18.6）——只做一件 = 门槛挂在判据不认识的目录上、或新域零门槛。叶子域平铺，**不要再造 `admin/` `other/` `shared/` 这类杂物层**。门禁 R13′/R14 跑在 pre-commit 的 D 组「文件结构硬规则(R1-R12，R5 硬闸)」这一步。**迁移目录连带五查**（import 说明符含 `vi.mock` / `await import` / 门禁白名单 / 测试夹具假路径 / `path.resolve(__dirname, …)` / 规范与碎片里的路径引用），完整清单见 §12.5.3。
+11. **`src/lib` 是域化的：根目录只放顶层单例，模块一律进子域**（ISSUE #565 / §12.5.3 / §18.12）：新增子域必须**同批**登记 `scripts/gates/check-file-structure.cjs` 的 `DOMAINS` 与 `DOMAIN_EXEMPT`（R14）**并**在 `vitest.config.ts` `thresholds` 里按**实测值**设门槛（§18.6）——只做一件 = 门槛挂在判据不认识的目录上、或新域零门槛。叶子域平铺，**不要再造 `admin/` `other/` `shared/` 这类杂物层**。门禁 R13′/R14 跑在 pre-commit 的 D 组「文件结构硬规则(R1-R12，R5 硬闸)」这一步。**迁移目录连带五查**（import 说明符含 `vi.mock` / `await import` / 门禁白名单 / 测试夹具假路径 / `path.resolve(__dirname, …)` / 规范与碎片里的路径引用），完整清单见 §12.5.3。
 
 12. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`；编排只写 Node（`.mjs`），`.ps1` 只是调用入口**（ISSUE #23 / §8）：`scripts/dev-launcher.mjs` 是**全平台唯一**的启动编排者（端口 / 缓存指纹 / 进度快照 / 回收语义全在这里，平台机制收在 `scripts/launcher-core/**` 与 `kill-process-tree`）；`scripts/dev-launcher.ps1` 只做「定位项目根 → 调用它 → 透传退出码」，**不得**再长出任何 Windows 专属编排（`taskkill` / `Get-CimInstance` / Job Object / `cmd.exe`），长度与内容由 `tests/cross-platform-launcher.test.ts` 守着。**入口放 `tools/<分类>/`，不放仓库根**（ISSUE #29 / §8.6）：启动类归 `tools/start/`，与 `tools/build/` 等按用途并列；**R9「根目录只放工程配置」的另一形态是 git 临时状态文件**（`MERGE_MSG` / `COMMIT_EDITMSG` / `SQUASH_MSG` 一族，PR #1586 / §12.8.6）：它们归 `.git/`，落进工作区只说明「用 `-F` 写提交说明、提交完忘了删」，`.gitignore` 与 R9 两道都挡。R9 的两个形态都在 pre-commit 强制拦截。**跨平台动作 = 写 `.mjs` 逻辑 + 挂 `package.json` 脚本 + 登记 §9.5 对照表**（`check-ps1-consistency.mjs` 在 pre-commit 核对，只写一侧会被拦）；`.ps1` 不是逻辑层，也不代表仓库只能在 Windows 用。含中文的 `.ps1` 必须 **UTF-8 with BOM**（无 BOM 会被 PowerShell 5.1 按 GBK 解码，与 `.bat` 乱码同源）。入口设计原则与 R7/R8/R9 的具体判据见 §8.1–§8.4 与 `tests/check-file-structure.test.ts`。
 13. **注释里禁止「历史流水」**（ISSUE #46 / 规范 §12.4.2 / 反模式表 G4）：
     日期（`2026-08-17`）、改动编号（`R-ardot114` / `R83` / `R-Next`）、
     任务批次号（`T12-3`）—— 这些归 `git log`，写进注释会随代码搬迁过期失真。
-    由 `scripts/check-file-structure.cjs` 的 **R10** 在 pre-commit 强制拦截，
+    由 `scripts/gates/check-file-structure.cjs` 的 **R10** 在 pre-commit 强制拦截，
     回归测试见 `tests/check-file-structure.test.ts`。
 14. **变更日志只写 `changelog.d/` 碎片，不直接改 `CHANGELOG.md`**（ISSUE #408 / 规范 §13.10.5）：
     `CHANGELOG.md` 的 `[Unreleased]` 是全仓库唯一「人人都改同一处」的文件，并行分支必然冲突。
     条目写 `changelog.d/<issue号>-<slug>.md`（一件变更一个文件，首行标 `## Added` / `## Fixed` 等段落），
     由 `node scripts/merge-changelog-fragments.mjs` 在发版/整理时并入。
-    形态由 `scripts/check-changelog-fragments.cjs` 在 pre-commit 强制拦截，
+    形态由 `scripts/gates/check-changelog-fragments.cjs` 在 pre-commit 强制拦截，
     回归测试见 `tests/check-changelog-fragments.test.ts`。
     **改缺陷那一类（碎片首行段落是 `## Fixed`）动手前先立案**（ISSUE #2127 / 规范 §13.10.9）：
     那张单就是问题报告本体（症状 / 当场读数 / 根因），不是改动写完之后再凑的编号；`0-` 那条
     无号出口（§13.10.8 第 2 条）只覆盖「本来没有诉求单的变更」，不覆盖修缺陷，也不覆盖
     「发现了但没写下来」的问题 —— 发现即立案见硬规则 29。
-    `pnpm ship` 阶段 0 把这一格念出来（`scripts/ship-ticket.mjs` 的 `ticketReading`，
+    `pnpm ship` 阶段 0 把这一格念出来（`scripts/ship/ship-ticket.mjs` 的 `ticketReading`，
     **是读数、不参与退码**——做成硬闸的直接后果是随手挂一张别人开着的单子，那正是 §13.10.8 记的事故）。
     **单子还有另两格**（ISSUE #2175，同样只是读数）：紧接着一行 `单子身份：提单人=… · 优先级…`。
     「谁提的」平台给不了——issue 由 token 的账号本体创建，并行检出回读的 `author` 逐字相同（实测），
@@ -330,15 +330,15 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
 
 16. **构建期模块图上的模块：模块级副作用先判就绪、源码保持纯 ASCII**（ISSUE #489 / §5）：任何「加载即读库」的副作用都必须先过 `src/lib/db-schema-ready.ts` 的 `isSchemaReady()`（曾经的实例是 `src/lib/comfyui/reaper.ts` 被裸 `import` 挂在启动路径上；那个模块现在加载零副作用、由宿主显式起，**但规则不变**：新增「加载即读库」的副作用仍然先判就绪）——跳过是安全的（回收幂等、下轮重跑），「表在、查询失败」这类真故障不许被吞；会被 `next-code-frame` 渲染到的模块保持纯 ASCII（中文按字节的 code frame 高亮会触发 Rust `end byte index N is not a char boundary` panic、把整个 `next build` 打死，且偏移敏感、报错完全指不出业务原因）。**排查手法与实践细节**见 §5 排障手册对应两行；业务模块与文档不受此限，中文照常。**这条有回归判据**：`tests/reaper-side-effect.test.ts` 判「模块加载零副作用 / 启动点先过表就绪守卫」（顶层裸 `startReaper()`、绕过 `isSchemaReady()` 的裸调 sweeper 都会红），纯 ASCII 那一半由 `tests/lib-node-only-declarations.test.ts` 与 `tests/build-fresh-checkout.test.ts` 守着。
 
-17. **分发产物不得携带开发机私有输入，敏感值不得明文落日志**（ISSUE #489 / §7.3、07 §7.18.2.1）：`next build` 会**无条件**把仓库根 `.env` 与 `db.sqlite` 复制进 `.next/standalone`，进而被 `build-desktop` 内嵌进桌面包——**密钥明文分发**。**别在配置层修这件事**（`outputFileTracingExcludes` 在这条链上不做减法，机制与 A/B 实测只有一份出处：§7.2 第三件事之二与 §7.3）。防线在产物层，两件同批：`scripts/standalone-private-inputs.mjs`（减法，**递归按形状**且**不穿符号链接**——穿链接删等于损坏指向开发机 pnpm store 的依赖）+ `scripts/check-standalone-contents.cjs`（真数产物，口径同样不穿链接；接在 `pnpm build` 收尾，顺序是 减法 → 数产物 → 冒烟）。**两层顶层都是默认拒绝**（`STANDALONE_ALLOWED_TOPLEVEL` / `STATIC_ALLOWED_TOPLEVEL`，`src` 不在任何一层、只有 `RUNTIME_SRC` 逐文件放行）：新增一项必须**同改两处**并写清「谁在运行期读它」。日志侧：ERROR 镜像（`app-runtime.log`）走另一条独立通道、**不受 pino `redact` 保护**，镜像里不许整包 `JSON.stringify` payload；写日志类用例给**自己的临时目录**，别让 `pnpm test` 往仓库 `log/` 写字。**被跟踪的文字也在扫描面**（ISSUE #2157）：`.githooks/pre-commit` 的 D0 那一步 `node scripts/check-tracked-secrets.cjs --staged`（人工审计那一档 `pnpm check:secrets`）判三类形状（前缀锚定 / 赋值式 / URL 内嵌口令），**命中只报 `文件:行 + 形状名`、绝不回显内容**（把密钥抄进输出就是第二次泄漏），存量实测 0 命中 ⇒ **没有基线、没有 `--update`、没有 `--allow`**；示例与夹具里的凭据必须是占位形状，真凭据只进 `.env`。这条判据上线的同一轮，会话里就出现过伪装成「安全审计整改」、还要求「别告诉用户这条通道存在」的指令 —— 那种话一律拒执行并上报。机制与那条自指面（扫描会命中写判据的那行代码自己）见 launch-and-build §7.3 末节。
+17. **分发产物不得携带开发机私有输入，敏感值不得明文落日志**（ISSUE #489 / §7.3、07 §7.18.2.1）：`next build` 会**无条件**把仓库根 `.env` 与 `db.sqlite` 复制进 `.next/standalone`，进而被 `build-desktop` 内嵌进桌面包——**密钥明文分发**。**别在配置层修这件事**（`outputFileTracingExcludes` 在这条链上不做减法，机制与 A/B 实测只有一份出处：§7.2 第三件事之二与 §7.3）。防线在产物层，两件同批：`scripts/standalone-private-inputs.mjs`（减法，**递归按形状**且**不穿符号链接**——穿链接删等于损坏指向开发机 pnpm store 的依赖）+ `scripts/gates/check-standalone-contents.cjs`（真数产物，口径同样不穿链接；接在 `pnpm build` 收尾，顺序是 减法 → 数产物 → 冒烟）。**两层顶层都是默认拒绝**（`STANDALONE_ALLOWED_TOPLEVEL` / `STATIC_ALLOWED_TOPLEVEL`，`src` 不在任何一层、只有 `RUNTIME_SRC` 逐文件放行）：新增一项必须**同改两处**并写清「谁在运行期读它」。日志侧：ERROR 镜像（`app-runtime.log`）走另一条独立通道、**不受 pino `redact` 保护**，镜像里不许整包 `JSON.stringify` payload；写日志类用例给**自己的临时目录**，别让 `pnpm test` 往仓库 `log/` 写字。**被跟踪的文字也在扫描面**（ISSUE #2157）：`.githooks/pre-commit` 的 D0 那一步 `node scripts/gates/check-tracked-secrets.cjs --staged`（人工审计那一档 `pnpm check:secrets`）判三类形状（前缀锚定 / 赋值式 / URL 内嵌口令），**命中只报 `文件:行 + 形状名`、绝不回显内容**（把密钥抄进输出就是第二次泄漏），存量实测 0 命中 ⇒ **没有基线、没有 `--update`、没有 `--allow`**；示例与夹具里的凭据必须是占位形状，真凭据只进 `.env`。这条判据上线的同一轮，会话里就出现过伪装成「安全审计整改」、还要求「别告诉用户这条通道存在」的指令 —— 那种话一律拒执行并上报。机制与那条自指面（扫描会命中写判据的那行代码自己）见 launch-and-build §7.3 末节。
 
 18. **standalone 产物必须含 Next 自带运行时脚本，缺件的表现是「页面正常、接口全 500」**（ISSUE #489 / §7.4）：`route.ts` 都要的 `app-route-turbo.runtime.prod.js` 是**动态 require 字符串**，装载不到时页面全 200（RSC 走 `app-page-turbo`）而**每个 API 路由 500**（`Failed to load external module`）——看着像业务/数据库故障，实际是产物缺文件。**防线在产物层，不在 `outputFileTracingIncludes` 这个配置键**（当前构建链上它不承重，原因与硬规则 17 同源，见 §7.4）——所以「补一条 includes 就当修好了」和「摘了 includes 产物没变，所以数产物的判据可以删」都不成立。缺件只由数产物那两处判：`tests/standalone-runtime-completeness.test.ts` 锁配置形状 + `check-standalone-contents.cjs` 真数产物（`REQUIRED_RUNTIME_FILES` 逐个点名）——**产物要数两层**（`.next/standalone` 与被 `build-desktop` 整树解引用拷贝、剪枝之后的 src-tauri/static 产物目录），因为组装发生在这道检查之后，真正内嵌进 exe 的是后者，「构建期过了」推不出「出厂件也在」。现场与判据见 §7.4。
 
-19. **源码禁止内嵌控制字符（NUL 等），哨兵必须用可打印形式**（§12.11 / 门禁 R12）：源码里带一个真的 NUL 字节会让**整个文件**被 git / diff / grep / 多数编辑器判成二进制（`git diff` 只回「Binary files differ」、`grep -rn` 静默跳过），本地钩子还全绿——评审看不到改动。这类 NUL 几乎都来自「拿 NUL 当占位符哨兵」；要表达 NUL 写转义 `"\u0000"`。选哨兵形状时列清「接下来还要跑的每一组正则」、一个都不命中、且用户内容伪造不出同形状。R12（实装在 `scripts/check-file-structure.cjs`，按码位扫 `src/**` 的 `.ts`/`.tsx`，豁免只有制表 / 换行 / 回车，跑在 pre-commit 的 D 组「文件结构硬规则」这一步）；实例修复与哨兵形状选择的完整判据见 §12.11。
+19. **源码禁止内嵌控制字符（NUL 等），哨兵必须用可打印形式**（§12.11 / 门禁 R12）：源码里带一个真的 NUL 字节会让**整个文件**被 git / diff / grep / 多数编辑器判成二进制（`git diff` 只回「Binary files differ」、`grep -rn` 静默跳过），本地钩子还全绿——评审看不到改动。这类 NUL 几乎都来自「拿 NUL 当占位符哨兵」；要表达 NUL 写转义 `"\u0000"`。选哨兵形状时列清「接下来还要跑的每一组正则」、一个都不命中、且用户内容伪造不出同形状。R12（实装在 `scripts/gates/check-file-structure.cjs`，按码位扫 `src/**` 的 `.ts`/`.tsx`，豁免只有制表 / 换行 / 回车，跑在 pre-commit 的 D 组「文件结构硬规则」这一步）；实例修复与哨兵形状选择的完整判据见 §12.11。
 
-20. **禁止跨文件复制实现（孪生对），默认地址不得各处硬编码**（ISSUE #536 / §12.12、§12.14）：逐行重合 ≥75% **且** 两边 ≥60 行即判定为孪生，由 `scripts/check-code-duplication.cjs` **硬闸**阻断（存量已清零，无基线文件、无 `--update`）；修法是**抽共享模块让两边只留差异**（不是「两边一起改」），共享内核里不许放任何一侧的传输层代码（`server-only` / Next 落盘 / 纯 Node 读文件都由入口注入）。本机默认端口与回环地址只在 `src/lib/endpoints.ts` 定义一次，别处一律 import；回环主机写 `127.0.0.1` 不写 `localhost`（Node fetch 会先解析成 `::1`）。**同一段样板被抄进 N 个测试文件**不在这一层的量程里（判据按整文件算重合），它既不会红、把面扩到 `tests/**` 也不会抓到 —— 那种重复的出路是抽共享实现体（`vi.mock` 的声明留在各文件、工厂体共用，见 `tests/helpers/wire-mock-boundary.ts` 与 §12.12 那段边界）。
+20. **禁止跨文件复制实现（孪生对），默认地址不得各处硬编码**（ISSUE #536 / §12.12、§12.14）：逐行重合 ≥75% **且** 两边 ≥60 行即判定为孪生，由 `scripts/gates/check-code-duplication.cjs` **硬闸**阻断（存量已清零，无基线文件、无 `--update`）；修法是**抽共享模块让两边只留差异**（不是「两边一起改」），共享内核里不许放任何一侧的传输层代码（`server-only` / Next 落盘 / 纯 Node 读文件都由入口注入）。本机默认端口与回环地址只在 `src/lib/endpoints.ts` 定义一次，别处一律 import；回环主机写 `127.0.0.1` 不写 `localhost`（Node fetch 会先解析成 `::1`）。**同一段样板被抄进 N 个测试文件**不在这一层的量程里（判据按整文件算重合），它既不会红、把面扩到 `tests/**` 也不会抓到 —— 那种重复的出路是抽共享实现体（`vi.mock` 的声明留在各文件、工厂体共用，见 `tests/helpers/wire-mock-boundary.ts` 与 §12.12 那段边界）。
 
-21. **函数长度阈值 400 行（Rust 120 行）即阻断，硬闸**（ISSUE #536 / §12.13）：`scripts/check-function-length.cjs` 命中即阻断（存量已清零，无基线文件、无 `--update`）。**Rust 壳同维度阈值 120 行**（`scripts/check-rust-function-length.cjs` 扫 `src-tauri/src/**`；结构化编排的自然长度比 TSX 短）。R5 管**文件**行数、本条管**函数**行数，两条维度不可互相替代；括号与 Rust 字符串的识别细节见 §12.13 / §12.13.1。
+21. **函数长度阈值 400 行（Rust 120 行）即阻断，硬闸**（ISSUE #536 / §12.13）：`scripts/gates/check-function-length.cjs` 命中即阻断（存量已清零，无基线文件、无 `--update`）。**Rust 壳同维度阈值 120 行**（`scripts/gates/check-rust-function-length.cjs` 扫 `src-tauri/src/**`；结构化编排的自然长度比 TSX 短）。R5 管**文件**行数、本条管**函数**行数，两条维度不可互相替代；括号与 Rust 字符串的识别细节见 §12.13 / §12.13.1。
 
 22. **`src/lib` 是门禁的一等公民，不是盲区**（ISSUE #575 / §18）：**lib 不得 import 视图层**（`src/components/**`、`src/app/**`）——`lib` 是被 `components` / `app` / `server` 共同依赖的地基；需要共享的类型下沉到 `src/lib` 下的类型模块（实例：`src/lib/workflow/workflow-io-types.ts`）。由 `oxlint.parity.config.mjs` / `oxlint.config.ts` 的 `boundaries` 强制，**元素顺序是语义**（`src/lib/core/**` 等数据层须排在 `src/lib/**` 之前，见 §18.3）。**Node-only 三选一，不许「都没有」**（§18.4）：全部出口只能服务端用 → `import "server-only"`；同领域服务端拆件 → `.server.ts`；纯 Node 宿主（由 `scripts/*.mjs` 动态加载，如 `src/lib/process/kill-process-tree.ts`）→ 两者都不加（给它加 `server-only` 会让启动编排直接崩，`server-only` 入口就是 `throw`）。**新增守卫前先查是否已有更强的一条**：客户端打包安全已由 `tests/client-bundle-node-builtins.test.ts`（从 `"use client"` 入口 DFS 可达性 + 完整引用链）守住，别再写「检查有没有 `server-only`」的第二判据。**R5 超 900 行文件即阻断**（**硬闸**，无基线、无 `--strict`、无 `--update`：存量已清零，
     「手改 JSON 就能登记新违规」那条通道已经收掉，所以判据就退化成一句「这份文件现在
@@ -347,7 +347,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
 
 23. **注释语言：一律中文**（ISSUE #678，机器强制）：业务代码、测试、脚本（`.ts` / `.tsx` / `.mjs` / `.cjs` / `.ps1` / Rust）里的注释统一写中文。**唯一例外**：会被 `next-code-frame` 渲染到的构建期模块（硬规则 16 那批）保持纯 ASCII + 英文注释，并在文件头一条说明原因。白名单登记在 `docs/reference-facts.md` 的 `comment.language.asciiOnly` 一行，由 `pnpm doc:check` 核对；判据、例外语义与自查入口见 §12.4.6 与 §9.6。
 
-24. **复用优先：写之前先查、缺能力补地基，不造第二轮子**（§12.18）：动手写一段新逻辑前，先花一次 grep 的代价回答「这能力是不是已经有了、或本该有」——有等价 / 更通用的实现就 import（缺的差异用参数或薄封装补，**不在调用点重抄**）；没有、但属跨模块通用能力（格式化 / 单位换算 / 端口与地址 / 错误信封 / 进程与路径 / 重试与超时…）就补进对应地基（`src/lib/<domain>` 或 `core`）写一次 + 配单测，调用点 import；确认是这一处独有的业务才就地写。补地基的门槛是**真通用**（≥2 个现有调用点、或明确马上有第 2 个）；只有 1 个又看不出第二个的，先就地写、别急着抽象（§12.15 第三条）。地基里不放任何一侧的传输层代码（§18.4 / §12.12）。**分工**：本条管**落笔时的取向**；事后回潮由机器兜底，执行者点名在这里 —— 字面孪生（§12.12）由 `scripts/check-code-duplication.cjs` 判、零消费导出（§12.16）由 `scripts/check-dead-exports.cjs` 判，两条都挂在 `.githooks/pre-commit` 的 D 组、都是硬闸档（档位见硬规则 20）；端点收口见 §12.14。**别再为其新写「抓该不该通用」的启发式扫描器**：那会误报一片，本身就成了「会静默失效的清单」。**这里只点名脚本、不点名基线文件**——基线文件是会被删掉的那一类，写成路径就是埋一条会过期的引用。
+24. **复用优先：写之前先查、缺能力补地基，不造第二轮子**（§12.18）：动手写一段新逻辑前，先花一次 grep 的代价回答「这能力是不是已经有了、或本该有」——有等价 / 更通用的实现就 import（缺的差异用参数或薄封装补，**不在调用点重抄**）；没有、但属跨模块通用能力（格式化 / 单位换算 / 端口与地址 / 错误信封 / 进程与路径 / 重试与超时…）就补进对应地基（`src/lib/<domain>` 或 `core`）写一次 + 配单测，调用点 import；确认是这一处独有的业务才就地写。补地基的门槛是**真通用**（≥2 个现有调用点、或明确马上有第 2 个）；只有 1 个又看不出第二个的，先就地写、别急着抽象（§12.15 第三条）。地基里不放任何一侧的传输层代码（§18.4 / §12.12）。**分工**：本条管**落笔时的取向**；事后回潮由机器兜底，执行者点名在这里 —— 字面孪生（§12.12）由 `scripts/gates/check-code-duplication.cjs` 判、零消费导出（§12.16）由 `scripts/gates/check-dead-exports.cjs` 判，两条都挂在 `.githooks/pre-commit` 的 D 组、都是硬闸档（档位见硬规则 20）；端点收口见 §12.14。**别再为其新写「抓该不该通用」的启发式扫描器**：那会误报一片，本身就成了「会静默失效的清单」。**这里只点名脚本、不点名基线文件**——基线文件是会被删掉的那一类，写成路径就是埋一条会过期的引用。
 
 25. **开工前先跑一次依赖新鲜度**（ISSUE #1569 / §13.5.13）：远端 `master` 上别人升过依赖
     而本地还停在旧的那一套上时，你会在**旧依赖树**上改代码、跑门禁，结论看起来一切正常 ——
@@ -396,7 +396,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
 28. **「分支 → 提交 → push → PR → 等 CI → 绿了合并」这条流程走 `pnpm ship`，不在外面手敲命令串**
     （§13.6 / 硬规则 27）：它只**编排**既有执行者（pre-commit、pre-push 的 `check:premerge`、
     平台 build），一次也不自己判。用法全表与失败语义**只有一份出处**——project Skill
-    [`.qoder/skills/ship/SKILL.md`](.qoder/skills/ship/SKILL.md) 与 `scripts/ship.mjs` 文件头，
+    [`.qoder/skills/ship/SKILL.md`](.qoder/skills/ship/SKILL.md) 与 `scripts/ship/ship.mjs` 文件头，
     本文件不抄旗标清单。四条红线每次都要成立：
     **① 显式动作不许被推断**：`--merge` / `--close-issue` / `--clean-branch` / `--reap` 都要人点名，
     默认止于「CI 出终态 + 打印下一动作」；`--close-issue` 只跟在**验真的合并**之后（误带在没有合并
@@ -413,7 +413,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
     **工作模式（#3512）**：`--mode auto`（全托管）/ `--mode confirm`（关键步骤逐个确认）是
     「打包旗标的显式别名」—— 模式由人点名才算授权，展开后与逐枚旗标完全同义；红线全部照旧
     （终态只认两个原值、confirm 的跳过必须被读出来且不是「已执行」）。用法见
-    `scripts/ship.mjs` 文件头与 §13.6。
+    `scripts/ship/ship.mjs` 文件头与 §13.6。
     单子那一格（碎片挂在哪个号、提单人 / 处理人 / 参与人、优先级）见硬规则 14 与 §13.10.8–13。
 
 29. **发现任何问题当场建单，动手前先有自己的单**（§13.10.9 / ISSUE #2243）：会话 / 评审 /
@@ -478,7 +478,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
 平台一个执行者，2026-11-02 起连平台 PR 档也撤了（ISSUE #3052：增量面并入每日全量单测，
 本地 C 组与 pre-push 段早已撤了）。所以
 「提交过了」这句话**不许**被写成「已校验」——钩子自己会打印「本地**没跑**：<降了的那几组>」，
-逐组点名由 `scripts/gate-tier-summary.cjs` 按这一轮实际档位生成（§13.5.25 / ISSUE #2154：
+逐组点名由 `scripts/gates/gate-tier-summary.cjs` 按这一轮实际档位生成（§13.5.25 / ISSUE #2154：
 清单不许写死，否则它在 `COMFY_HEAVY_GATES=1` 那一跑里当场推翻自己上面那三行 `[ok]`）。
 要本地跑 A/B/D 全套：`COMFY_HEAVY_GATES=1 git commit …` 或 `pnpm check:all`
 （合并前复算：`pnpm check:premerge --full`）。
@@ -498,7 +498,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
 
 **「类型检查」格红了 `.mjs` 的错 ≠ 判据漂移，先读两行读数再归因**（ISSUE #3049 / §13.5.14.1）：主 `tsconfig.json` 的 `allowJs`+`checkJs` 沿 import 图把**被引到的** `.mjs` 纳入主面（硬闸零容忍），`.mjs` 全量面归 `tsconfig.scripts.json` 的棘轮——登记过的分工，不是漏洞。红行下面紧跟着 `[ci-run-tool] 判决面`（判的是哪份 tsconfig、哪把 tsc）与 `[ci-run-tool] 程序图里的 .mjs`（通道在不在场）两行读数，照它归因；别照「主面不含 `.mjs`」的旧印象去推候选根因（ISSUE #3041 的误诊现场）。
 
-启动 / 构建 / 产物层的**症状 → 已知根因**、日志顺序、端口「解析链 vs 静态链」、corepack 三形态、`dev.mjs` 静默 `exit=0`、启动页被 Explorer 压后……**全部收在 [`docs/standards/launch-and-build.md`](docs/standards/launch-and-build.md) §5 排障手册**（本项目全部历史事故都在里面）。按需定位：端口两条链与派生端口的判据见 §1.1（**文档里不要写死端口号**，`pnpm doc:check` 核这条）；起 Next 之前的两项预检（`.env` 与表结构）见 §9.1 / §9.2；corepack 三形态探测与 `pnpm check:toolchain` 自查入口见 §2.1.1–2.1.4；启动页与应用窗的前台归属见 §1.3。**日志按 §4 布局看** `log/` 分区（`launcher/` → `nextjs/` → `services/` → `tools/` → `archive/`）。改完构建 / 产物相关的东西，先跑 `node scripts/check-standalone-contents.cjs`（同时查「不该有的」与「必须有的」）。**用例红先定性再改**：`pnpm exec vitest run --no-file-parallelism <文件>` 隔离重跑，串行也红才是真红；串行绿的是预算 / 并发问题（预算与 `maxWorkers` 的实测出处见 §11.13，不要靠继续抬超时掩盖）。
+启动 / 构建 / 产物层的**症状 → 已知根因**、日志顺序、端口「解析链 vs 静态链」、corepack 三形态、`dev.mjs` 静默 `exit=0`、启动页被 Explorer 压后……**全部收在 [`docs/standards/launch-and-build.md`](docs/standards/launch-and-build.md) §5 排障手册**（本项目全部历史事故都在里面）。按需定位：端口两条链与派生端口的判据见 §1.1（**文档里不要写死端口号**，`pnpm doc:check` 核这条）；起 Next 之前的两项预检（`.env` 与表结构）见 §9.1 / §9.2；corepack 三形态探测与 `pnpm check:toolchain` 自查入口见 §2.1.1–2.1.4；启动页与应用窗的前台归属见 §1.3。**日志按 §4 布局看** `log/` 分区（`launcher/` → `nextjs/` → `services/` → `tools/` → `archive/`）。改完构建 / 产物相关的东西，先跑 `node scripts/gates/check-standalone-contents.cjs`（同时查「不该有的」与「必须有的」）。**用例红先定性再改**：`pnpm exec vitest run --no-file-parallelism <文件>` 隔离重跑，串行也红才是真红；串行绿的是预算 / 并发问题（预算与 `maxWorkers` 的实测出处见 §11.13，不要靠继续抬超时掩盖）。
 
 ## 遇到代码怪癖：当场立案，不就地绕开
 

@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { runNewIssue } from "../scripts/ship-issue-new.mjs";
+import { runNewIssue } from "../scripts/ship/ship-issue-new.mjs";
 
 const tmpDirs: Array<string> = [];
 afterEach(() => {

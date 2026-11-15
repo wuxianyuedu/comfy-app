@@ -27,13 +27,13 @@
 
 #### G-1：vitest maxWorkers / pool 配置
 
-- **现状（CNB 口径）**：自托管 16 核节点，`scripts/ci-load.mjs` 按现场核数折算 maxWorkers，动态值；人的覆盖出口是 `COMFY_CI_MAX_WORKERS`（≥1 整数，非法值按默认办并提示）
+- **现状（CNB 口径）**：自托管 16 核节点，`scripts/ci/ci-load.mjs` 按现场核数折算 maxWorkers，动态值；人的覆盖出口是 `COMFY_CI_MAX_WORKERS`（≥1 整数，非法值按默认办并提示）
 - **GA 实测读数**：
   - 核数：**11-06 起是 4 核**（镜像仓转 public 后托管 runner 规格变了）：GA 日志原文 `[ci-affected] 改动面：…；并发 --maxWorkers=1（4 核，os）`（run 42202918718 › affected-tests）；早前 `（2 核，os）` 的读数已过期
   - 改造前的推导：`ceil(4/8) = 1` ⇒ `--maxWorkers=1`。那个 8 是**共享宿主机**的档（依据见下），照抄到 GA 就是「4 核里 3 核空转」
   - 全量单测墙钟基线（run 41616389372，2026-11-03 10:11:51 → 10:22:20 UTC）：`Test Files 873 passed (873)`，`pnpm run test:coverage --maxWorkers=1`，约 629 秒（≈10.5 分钟）。**注意**：那跑是 **2 核机器**，只能作量级基线；**4 核 + 1 worker 的全量基线目前还没有**
 - **依据（为什么 GA 要换档）**：8 核/worker 的原文理由只有一条 ——「单条流水线别把整台机占满，只承诺峰值占用减半」（#2317，代价叙述由 #2320 订正），前提是同机并着别人的流水线、且仓库控不住一台机接几个 runner。GA 每个 job **独享一台 4 核 VM**，没有邻居要保护；按原意「留一半」，4 核应对应 **2 worker**（`ceil(cores/2)`）。原始理由里**没有**内存/磁盘约束，不是 OOM 经验
-- **建议改法（已落地）**：`scripts/ci-load.mjs:resolveCiWorkers()` 按 `GITHUB_ACTIONS === "true"` 分档 —— GA 走 `GA_CORES_PER_WORKER=2`（4 核 ⇒ 2），其余（CNB 自托管 / 本地）仍走 `CORES_PER_WORKER=8`，CNB 的 16⇒2 / 8⇒1 / 12⇒2 **逐字不变**（`tests/ci-load.test.ts` 两套断言同时钉住）；`COMFY_CI_MAX_WORKERS` 覆盖出口优先级与口径不变。规范 §13.5.21 同批补了这段
+- **建议改法（已落地）**：`scripts/ci/ci-load.mjs:resolveCiWorkers()` 按 `GITHUB_ACTIONS === "true"` 分档 —— GA 走 `GA_CORES_PER_WORKER=2`（4 核 ⇒ 2），其余（CNB 自托管 / 本地）仍走 `CORES_PER_WORKER=8`，CNB 的 16⇒2 / 8⇒1 / 12⇒2 **逐字不变**（`tests/ci-load.test.ts` 两套断言同时钉住）；`COMFY_CI_MAX_WORKERS` 覆盖出口优先级与口径不变。规范 §13.5.21 同批补了这段
 - **待定项（未验证，4 不升默认的理由）**：4 worker = 把 4 核打满，**内存上限没有读数**（「4 vCPU / 16GB」只是口径，本仓未实测）。所以默认停在 2；4 只有在下面三臂读数出来、且没有 OOM / worker 启动失败时才考虑升
 - **取数计划（同一台 4 核 GA 机器上 1 / 2 / 4 三臂）**：
 

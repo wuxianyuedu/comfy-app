@@ -1,7 +1,7 @@
 /**
  * CP936 字形归一化的行为契约：平台抓 stage 输出读 **CP936**，字表外字符被 .NET 写成单字节 `0x3F` 问号，
  * 与原文里本来有的问号逐字同形；被吃掉的往往是判决（vitest 绿色 `✓` 正在这一列，红色 `×` 有字形）。
- * 实现是 `scripts/ci-cp936-glyphs.mjs`；本文件判它的行为契约。
+ * 实现是 `scripts/ci/ci-cp936-glyphs.mjs`；本文件判它的行为契约。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -15,7 +15,7 @@ import {
   GLYPH_REPLACEMENTS,
   isCp936Encodable,
   normalizeCp936Glyphs,
-} from "../scripts/ci-cp936-glyphs.mjs";
+} from "../scripts/ci/ci-cp936-glyphs.mjs";
 
 import { normalizeControlFlow } from "./helpers/source-shape";
 
@@ -201,7 +201,7 @@ describe("转码外壳：接上了归一化", () => {
   it("`ci-cp936-exit.mjs` 在转码**之前**做了归一化", () => {
     /* 形状判据：归一化必须发生在交给转码之前 —— 放在之后已经晚了
      * （.NET 那一步在编码时就把字符写成问号了）。 */
-    const source = read("scripts/ci-cp936-exit.mjs");
+    const source = read("scripts/ci/ci-cp936-exit.mjs");
     expect(source).toContain("normalizeCp936Glyphs");
     const normalizeAt = source.indexOf("normalizeCp936Glyphs(text)");
     const writeAt = source.indexOf("write(normalized.text");
@@ -216,7 +216,7 @@ describe("转码外壳：接上了归一化", () => {
      * 而「空串不发」是 ISSUE #2326 那一刀的落点：判据在 `describeGlyphReplacements` 里，
      * **两处调用点都得尊重它** —— 只改一处会出现「逐块安静、收尾照吵」，
      * 那种半静默比原来更糟（读者以为它不报了）。 */
-    const source = read("scripts/ci-cp936-exit.mjs");
+    const source = read("scripts/ci/ci-cp936-exit.mjs");
     expect(source).toContain("describeGlyphReplacements");
     const guards = source.match(/if \(said !== ""\)/g) ?? [];
     expect(guards.length, "两处调用点各要有一个「空串就不发」").toBe(2);

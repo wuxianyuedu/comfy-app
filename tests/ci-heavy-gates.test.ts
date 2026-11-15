@@ -1,5 +1,5 @@
 /**
- * 平台侧「重档静态判据」那一格（`scripts/ci-heavy-gates.mjs`）。治 ISSUE #2224：平台那一格跑在干净快照上
+ * 平台侧「重档静态判据」那一格（`scripts/ci/ci-heavy-gates.mjs`）。治 ISSUE #2224：平台那一格跑在干净快照上
  * （索引里没有本次改动），`shell-gate` 读空清单 ⇒ `touchesShell` 恒假 ⇒ 硬规则 5 两条在平台侧无人执行。
  * 钉三件事：① `--staged` 照旧剥掉；② 只在改动面上的那一步换 `--base` 真判；③ 换不了 ⇒ 退 2，不计入绿。
  */
@@ -18,16 +18,16 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CHANGED_SCOPED } from "../scripts/base-check/hook-steps.mjs";
-import { COLORS } from "../scripts/ci-log.mjs";
+import { COLORS } from "../scripts/ci/ci-log.mjs";
 import {
   heavyGateArgv,
   judgmentScriptOf,
   main,
   narrowingDecision,
-} from "../scripts/ci-heavy-gates.mjs";
-import { syntheticMergeRange } from "../scripts/reformat-preview-range.mjs";
+} from "../scripts/ci/ci-heavy-gates.mjs";
+import { syntheticMergeRange } from "../scripts/reformat/reformat-preview-range.mjs";
 import { createGateRepo, type GateRepo } from "./helpers/gate-repo";
-import { faceTouched, narrowingEntryForScript } from "../scripts/ci-incremental-gates.mjs";
+import { faceTouched, narrowingEntryForScript } from "../scripts/ci/ci-incremental-gates.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -61,56 +61,56 @@ function dirWithHook(): string {
 
 describe("复合档 —— 判决面只在「本次改动」上的那一步（ISSUE #2224）", () => {
   it("带 `--staged` 的步骤照旧剥掉：判全量档，判决面还在", () => {
-    const got = heavyGateArgv(["node", "scripts/check-dead-exports.cjs", "--staged"]);
+    const got = heavyGateArgv(["node", "scripts/gates/check-dead-exports.cjs", "--staged"]);
     expect(got.ok).toBe(true);
     if (!got.ok) {
       return;
     }
-    expect(got.argv).toEqual(["node", "scripts/check-dead-exports.cjs"]);
+    expect(got.argv).toEqual(["node", "scripts/gates/check-dead-exports.cjs"]);
     expect(got.notRunCodes).toEqual([]);
   });
 
   it("check-format --staged ⇒ 换发 --changed（printWidth 迁移期全库档恒红，ISSUE #2729）", () => {
-    const got = heavyGateArgv(["node", "scripts/check-format.cjs", "--staged"]);
+    const got = heavyGateArgv(["node", "scripts/gates/check-format.cjs", "--staged"]);
     expect(got.ok).toBe(true);
     if (!got.ok) {
       return;
     }
-    expect(got.argv).toEqual(["node", "scripts/check-format.cjs", "--changed"]);
+    expect(got.argv).toEqual(["node", "scripts/gates/check-format.cjs", "--changed"]);
     expect(got.via).toContain("改动面");
     expect(got.notRunCodes).toEqual([]);
     /* 对照：别的步骤不沾这个换发 —— 剥旗标进全库照旧。 */
-    const other = heavyGateArgv(["node", "scripts/check-dead-exports.cjs", "--staged"]);
+    const other = heavyGateArgv(["node", "scripts/gates/check-dead-exports.cjs", "--staged"]);
     expect(other.ok).toBe(true);
     if (!other.ok) {
       return;
     }
-    expect(other.argv).toEqual(["node", "scripts/check-dead-exports.cjs"]);
+    expect(other.argv).toEqual(["node", "scripts/gates/check-dead-exports.cjs"]);
   });
 
   it("check-deps-freshness --staged ⇒ 换发 --offline（合成 merge 态只判 ③，§13.5.13）", () => {
-    const got = heavyGateArgv(["node", "scripts/check-deps-freshness.mjs", "--staged"]);
+    const got = heavyGateArgv(["node", "scripts/gates/check-deps-freshness.mjs", "--staged"]);
     expect(got.ok).toBe(true);
     if (!got.ok) {
       return;
     }
-    expect(got.argv).toEqual(["node", "scripts/check-deps-freshness.mjs", "--offline"]);
+    expect(got.argv).toEqual(["node", "scripts/gates/check-deps-freshness.mjs", "--offline"]);
     expect(got.via).toContain("③");
     expect(got.notRunCodes).toEqual([]);
     /* 反向对照：不带 --staged 的调用不是钩子那一档，别误伤成换发。 */
-    const plain = heavyGateArgv(["node", "scripts/check-deps-freshness.mjs"]);
+    const plain = heavyGateArgv(["node", "scripts/gates/check-deps-freshness.mjs"]);
     expect(plain.ok).toBe(true);
     if (!plain.ok) {
       return;
     }
-    expect(plain.argv).toEqual(["node", "scripts/check-deps-freshness.mjs"]);
+    expect(plain.argv).toEqual(["node", "scripts/gates/check-deps-freshness.mjs"]);
     /* 别的 --staged 步骤照旧剥旗标进全量，不沾这个换发。 */
-    const other = heavyGateArgv(["node", "scripts/check-dead-exports.cjs", "--staged"]);
+    const other = heavyGateArgv(["node", "scripts/gates/check-dead-exports.cjs", "--staged"]);
     expect(other.ok).toBe(true);
     if (!other.ok) {
       return;
     }
-    expect(other.argv).toEqual(["node", "scripts/check-dead-exports.cjs"]);
+    expect(other.argv).toEqual(["node", "scripts/gates/check-dead-exports.cjs"]);
   });
 
   it("拿得到基线 ⇒ 换成 `--base` 形态（真判，不再恒绿无声）", () => {
@@ -219,7 +219,7 @@ describe("重档 —— 「没有结论」不许走成「全绿」（ISSUE #2367
     const all = lines.join("\n");
     expect(all, "头几行被省掉了").toContain("1");
     expect(all, "结论被省掉了").toContain("这一条红了");
-    /* 省略必须被读出来（ISSUE #2506：判决行走 `scripts/ci-log.mjs` 之后那句话是
+    /* 省略必须被读出来（ISSUE #2506：判决行走 `scripts/ci/ci-log.mjs` 之后那句话是
      * 「上面是头 5 行 + 尾 15 行，中间省略 N 行」）—— 判的是**有那一句**，不是逐字。 */
     expect(all, "省略了多少行要说出来").toMatch(/中间省略 \d+ 行/);
   });
@@ -277,13 +277,13 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
   it("不在登记表里的判据 ⇒ 查不到 ⇒ 不许收窄", () => {
     /* 反查口径（#3586 后登记表暂空，任何脚本都查不到）：查不到就是不许收窄 ——
        收窄只能来自登记表，不能手抄第二份面。 */
-    expect(narrowingEntryForScript("scripts/check-gate-executors.cjs")).toBeNull();
+    expect(narrowingEntryForScript("scripts/gates/check-gate-executors.cjs")).toBeNull();
     expect(narrowingEntryForScript("scripts/render-doc-placeholders.cjs")).toBeNull();
   });
 
   it("收窄判据按**判据脚本**查（不看标签名）", () => {
-    expect(judgmentScriptOf(["node", "scripts/check-theme-colors.cjs"])).toBe(
-      "scripts/check-theme-colors.cjs",
+    expect(judgmentScriptOf(["node", "scripts/gates/check-theme-colors.cjs"])).toBe(
+      "scripts/gates/check-theme-colors.cjs",
     );
     /* 参数里的路径不算判据本身 —— 取第一个才是。 */
     expect(judgmentScriptOf(["node", "scripts/check-a.cjs", "scripts/check-b.cjs"])).toBe(
@@ -335,7 +335,7 @@ describe("复合档 —— 绿步的读数也要有出口（ISSUE #2256）", () 
      * 「红步的输出不许只念尾部」真跑一遍。两边各钉一头：
      *   · 只取最后一行 ⇒ 判决面（「改动面来自 …」）看不见，与「只转述一行」同病；
      *   · 只取尾部 12 行 ⇒ ISSUE #2367 的现场，红的那条连名字都没出现。 */
-    const src = readFileSync(path.join(ROOT, "scripts", "ci-heavy-gates.mjs"), "utf8");
+    const src = readFileSync(path.join(ROOT, "scripts", "ci/ci-heavy-gates.mjs"), "utf8");
     expect(src).toContain("HEAD_LINES");
     expect(src).toContain("TAIL_LINES");
     expect(src).toContain(".slice(-TAIL_LINES)");
@@ -394,7 +394,7 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
    * 自己最后一笔（`cnb-o9p-1k6d5ohhj`：170 里 118 纯格式化）。⇒ 走 `syntheticMergeRange()`，终点取 tip 不取合成提交，认不出 ⇒ 没判。
    */
   it("`check-reformat-only.cjs` 换发成合并预览的两个父，认不出就不许跑（#3048）", () => {
-    expect(CHANGED_SCOPED).not.toContain("scripts/check-reformat-only.cjs");
+    expect(CHANGED_SCOPED).not.toContain("scripts/gates/check-reformat-only.cjs");
     /* 三条形态各判一次，一条都不许落回「剥旗标 ⇒ 判 HEAD~1..HEAD」：
      *   ① 认得出合成提交 ⇒ `--range <另一父>..<CNB_COMMIT>`（终点是 tip，不是 HEAD）
      *   ② 没有 CNB_COMMIT / HEAD 不是合并提交 ⇒ `ok: false`（没判，不是绿） */
@@ -403,7 +403,7 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
       env: { CNB_COMMIT: "1111111111111111111111111111111111111111" },
     });
     expect(mergeRange.ok).toBe(false);
-    const got = heavyGateArgv(["node", "scripts/check-reformat-only.cjs", "--staged"], {
+    const got = heavyGateArgv(["node", "scripts/gates/check-reformat-only.cjs", "--staged"], {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
     });
     expect(got.ok).toBe(false);
@@ -422,7 +422,7 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
    */
   it("PR 头检出（HEAD 就是源分支 tip）也递得出判决面（#3038）", () => {
     const { repo } = createGateRepo({
-      script: "check-reformat-only.cjs",
+      script: "gates/check-reformat-only.cjs",
       workdir: "head-face",
       setup: initSandboxRepo,
     });
@@ -464,7 +464,7 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
 
   it("认不出形态时仍然记成「没判」，不退回 HEAD~1..HEAD（#3038）", () => {
     const { repo } = createGateRepo({
-      script: "check-reformat-only.cjs",
+      script: "gates/check-reformat-only.cjs",
       workdir: "head-face-bad",
       setup: initSandboxRepo,
     });
@@ -542,7 +542,7 @@ describe("复合档 —— 三态前缀带颜色区分（ISSUE #2748）", () => 
      * `cnb-fvg-1k6botkg5` 里这条就是这么红成 `Test timed out in 60000ms` 的）。 */
     return spawnSync(
       process.execPath,
-      ["scripts/ci-heavy-gates.mjs", "--only=判据自身", ...extraArgs],
+      ["scripts/ci/ci-heavy-gates.mjs", "--only=判据自身", ...extraArgs],
       { cwd: ROOT, encoding: "utf8", env, timeout: 120_000, maxBuffer: 64 << 20 },
     );
   }

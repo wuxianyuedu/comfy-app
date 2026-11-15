@@ -29,7 +29,7 @@ import {
   usableCommand,
   whichCommand,
 } from "../scripts/launcher-core/shell.mjs";
-import { pnpmCli } from "../scripts/ci-install-deps.mjs";
+import { pnpmCli } from "../scripts/ci/ci-install-deps.mjs";
 import {
   buildTip,
   clearPnpmProbeCache,
@@ -528,9 +528,11 @@ describe("编排器与启动页的接线契约", () => {
     const pkg: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
     const scripts: unknown = isRecord(pkg) ? pkg.scripts : {};
     const entry: unknown = isRecord(scripts) ? scripts["check:toolchain"] : undefined;
-    expect(typeof entry === "string" ? entry : "").toBe("node scripts/check-pnpm-available.mjs");
+    expect(typeof entry === "string" ? entry : "").toBe(
+      "node scripts/gates/check-pnpm-available.mjs",
+    );
     const selfCheck = fs.readFileSync(
-      path.join(ROOT, "scripts", "check-pnpm-available.mjs"),
+      path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs"),
       "utf8",
     );
     // 薄壳：判据只能来自 corepack.mjs，不重写一遍探测。
@@ -568,7 +570,7 @@ describe("pnpm check:toolchain 真跑", () => {
   runIfPnpm("当前环境（pnpm 可用）退出 0 并报告版本", () => {
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       {
         encoding: "utf8",
         env: env ?? process.env,
@@ -581,7 +583,7 @@ describe("pnpm check:toolchain 真跑", () => {
   runIfPnpm("依赖已装时，结论里点名 tsc / eslint / vitest 都能跑（不是只报「已装」）", () => {
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       { encoding: "utf8", env: env ?? process.env },
     );
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
@@ -600,7 +602,7 @@ describe("pnpm check:toolchain 真跑", () => {
     fs.mkdirSync(emptyRoot, { recursive: true });
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "--deps-root", emptyRoot],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs"), "--deps-root", emptyRoot],
       { encoding: "utf8", env: env ?? process.env },
     );
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
@@ -618,7 +620,10 @@ describe("pnpm check:toolchain 真跑", () => {
   });
 
   it("依赖判据与启动器同一个实现（不在自检里留一份弱化副本）", () => {
-    const src = fs.readFileSync(path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "utf8");
+    const src = fs.readFileSync(
+      path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs"),
+      "utf8",
+    );
     // 两份口径并存时「自检说已装、启动器说残缺」是必然的，且会各自漂移：
     // 旧版这里只查 `.modules.yaml` 一项，而启动器查 .bin/next + 关键依赖目录。
     expect(src).toContain("checkNodeModules");
@@ -630,7 +635,7 @@ describe("pnpm check:toolchain 真跑", () => {
   it("pnpm 不可用时非零退出，并给出含版本号的修复命令", () => {
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       {
         encoding: "utf8",
         env: { ...process.env, PATH: tmp, PATHEXT: "" },
@@ -650,7 +655,7 @@ describe("pnpm check:toolchain 真跑", () => {
     fs.mkdirSync(badPath, { recursive: true });
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       {
         encoding: "utf8",
         env: { ...process.env, PATH: badPath, PATHEXT: "" },
@@ -708,7 +713,7 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
   function runSelfCheck(bin: string) {
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       { encoding: "utf8", env: { ...process.env, PATH: bin, PATHEXT: "" } },
     );
     return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
@@ -778,7 +783,7 @@ describe("pnpm check:toolchain：打印探测身份，版本漂移可自解释",
   (envWithPnpm() ? it : it.skip)("自检打印「选中的 pnpm」一行（版本漂移的先查对象）", () => {
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       {
         encoding: "utf8",
         env: envWithPnpm() ?? process.env,
@@ -891,7 +896,7 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
       const raw = fs.readFileSync(abs, "utf8");
       // 注释里会**引用**旧写法作反面说明，判据只看代码（与 dev.mjs 那条同口径）。
       // **块注释也要剥**：`/** … */` 里的举例会被逐行扫成「真写了这句」
-      // （`scripts/ci-cp936-exit.mjs` 头注里就有 `spawn("pnpm")` 这种反面举例，
+      // （`scripts/ci/ci-cp936-exit.mjs` 头注里就有 `spawn("pnpm")` 这种反面举例，
       // 只剥 `//` 会让本判据把它判成违规）。先剥 `/* … */` 再剥行注释。
       const code = stripComments(raw, { trailing: true });
 
@@ -1191,7 +1196,7 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
     () => {
       const r = spawnSync(
         process.execPath,
-        [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+        [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
         {
           encoding: "utf8",
           env: { ...(envWithPnpm() ?? process.env), COMFYAPP_NODE_VERSION: "v20.9.0" },
@@ -1225,7 +1230,7 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
       );
       const r = spawnSync(
         process.execPath,
-        [path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "--deps-root", tmp],
+        [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs"), "--deps-root", tmp],
         { encoding: "utf8", env: envWithPnpm() ?? process.env },
       );
       expect(r.status, `stdout=${r.stdout ?? ""} stderr=${r.stderr ?? ""}`).toBe(0);
@@ -1246,7 +1251,7 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
     delete env.COMFYAPP_NODE_VERSION;
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       { encoding: "utf8", env },
     );
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);

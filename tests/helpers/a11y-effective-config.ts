@@ -8,13 +8,13 @@ import path from "node:path";
 
 import { isRecord } from "~/lib/is-record";
 
-/** 判据脚本本体（`scripts/check-a11y-rules.cjs`）。 */
-export const SCRIPT = path.resolve(__dirname, "../../scripts/check-a11y-rules.cjs");
+/** 判据脚本本体（`scripts/gates/check-a11y-rules.cjs`）。 */
+export const SCRIPT = path.resolve(__dirname, "../../scripts/gates/check-a11y-rules.cjs");
 
 /** 真仓库根 —— 判据要读的 `oxlint.parity.config.mjs` 只有真根上有（临时仓库里没有 node_modules）。 */
 export const REAL_ROOT = path.resolve(__dirname, "../..");
 
-/** 判据的导出面（`scripts/check-a11y-rules.cjs` 的 `module.exports`）。 */
+/** 判据的导出面（`scripts/gates/check-a11y-rules.cjs` 的 `module.exports`）。 */
 /** 判据归一的台账形状（`readLedger` 的产物，也是 `judge` 的入参）。 */
 export type Ledger = {
   dialect: Array<{ decision: string; keeper: string; rule: string; why: string }>;

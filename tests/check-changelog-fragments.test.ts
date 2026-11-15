@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { copyGateDeps } from "./helpers/gate-repo";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-changelog-fragments.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-changelog-fragments.cjs");
 const tempDirs: Array<string> = [];
 
 /**
@@ -22,11 +22,12 @@ function scanner(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), "changelog-"));
   tempDirs.push(root);
   mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   /* 判据的结论行走 `require("./ci-log.mjs")` 的共用出口（ISSUE #2506）——
    * 临时仓库只放被测那一份时跑起来是 `Cannot find module './ci-log.mjs'`，
    * 那条红长得像「判据坏了」，实际是夹具少带一个文件。 */
-  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
+  copyGateDeps(path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
@@ -43,7 +44,7 @@ function scanner(files: Record<string, string>) {
         ok: true,
         output: execFileSync(
           process.execPath,
-          [path.join(root, "scripts", path.basename(SCRIPT))],
+          [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
           { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
         ),
       };

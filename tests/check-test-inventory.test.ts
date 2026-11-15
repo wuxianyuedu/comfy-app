@@ -1,11 +1,11 @@
 /**
- * `scripts/check-test-inventory.cjs` 的判据自证（2026-10-21 立档）：拦「在盘上但永远不会被收集」的测试文件 —— 失效是静默
+ * `scripts/gates/check-test-inventory.cjs` 的判据自证（2026-10-21 立档）：拦「在盘上但永远不会被收集」的测试文件 —— 失效是静默
  * 的（照样被 lint/tsc 扫、照样进 diff，只是没人跑），当天对差 794/794 才发现此前无人看。四组探针：绿侧退 0、红侧漏收退 1
  * 并报文件、重叠退 1、fail-closed 退 1。判据不跑 `vitest list`（约 60s，超钩子 D 组预算），只离线读 `include`/`exclude`，夹具用自写精简配置。
  */
 import { describe, expect, it } from "vitest";
 
-import { judgeCoverage } from "../scripts/check-test-inventory.cjs";
+import { judgeCoverage } from "../scripts/gates/check-test-inventory.cjs";
 import { defineGateRepo } from "./helpers/gate-repo";
 
 /**
@@ -51,7 +51,7 @@ describe("夹具用例", () => {
 `;
 
 const { test } = defineGateRepo({
-  script: "check-test-inventory.cjs",
+  script: "gates/check-test-inventory.cjs",
   dirs: ["src", "tests"],
   workdir: "test-inventory-gate",
   files: { "vitest.config.ts": FIXTURE_CONFIG },

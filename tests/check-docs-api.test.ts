@@ -1,5 +1,5 @@
 /**
- * `scripts/check-docs-api.cjs` 的判据（ISSUE #1329 收尾 → **ISSUE #2231 改判据对象**）。上一版拦「`docs/api/**` 生成物静默过期」——它进 git 且被承诺随构建链更新，构建链却不调 `pnpm docs`。
+ * `scripts/gates/check-docs-api.cjs` 的判据（ISSUE #1329 收尾 → **ISSUE #2231 改判据对象**）。上一版拦「`docs/api/**` 生成物静默过期」——它进 git 且被承诺随构建链更新，构建链却不调 `pnpm docs`。
  * #2231 把产物**从 git 搬走**（`.gitignore` 的 `docs/api/`）后该问题没了对象，改判三件事：① 触发面 = typedoc 的**解析面**
  * （TS 程序：`tsconfig.json` 展开的根 ∪ 沿 import 走到的文件，ISSUE #2537 —— 旧面按 `entryPoints` 算，系统性偏窄）；
  * ② 骨架齐全且可移植（缺主题文件=打开即坏、烤进本机绝对路径=换机器不成立）；③ `--autofix` 不再接受（「自动修+再判」正是让陈旧在 CI 隐形那格）。夹具用一次性目录，不碰仓库 `docs/api`。
@@ -17,7 +17,7 @@ import {
   judgeTypedocTail,
   matchedInputs,
   walk,
-} from "../scripts/check-docs-api.cjs";
+} from "../scripts/gates/check-docs-api.cjs";
 
 /**
  * 外来值（`execFileSync` 抛出的对象）先落 `unknown`，过这道守卫后逐字段 `typeof` 收窄才使用。
@@ -100,7 +100,7 @@ describe("触发面 = typedoc 的解析面（TS 程序，不是 entryPoints 那�
   it("判据自身与它共用的跑法也算输入面（ISSUE #1981）", () => {
     /* 此前改这份脚本**不触发它自己** —— 于是「改了判据 → 推上去 → 它没跑」是这类
      * 改动的默认形状，而这恰恰是「产物与源同不同步」这件事被改动的那一刻。 */
-    for (const f of ["scripts/check-docs-api.cjs", "scripts/typedoc-run.mjs"]) {
+    for (const f of ["scripts/gates/check-docs-api.cjs", "scripts/typedoc-run.mjs"]) {
       expect(matchedInputs([f]), `${f} 应触发`).toEqual([f]);
     }
   });
@@ -209,7 +209,7 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
     /* 静默忽略一个旗标正是本仓最恨的那族（脚自称与实际不一致）：产物不进 git ⇒
      * 没有「自动修完再提交」的对象，而「自动修 + 再判」这个形状正是让「产物陈旧」
      * 在 CI 上隐形的那一格（#2231 的现场：master 上差 9 处而平台报绿）。 */
-    const script = path.resolve(__dirname, "..", "scripts", "check-docs-api.cjs");
+    const script = path.resolve(__dirname, "..", "scripts", "gates/check-docs-api.cjs");
     let code = 0;
     let out;
     try {

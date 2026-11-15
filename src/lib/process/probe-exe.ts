@@ -8,7 +8,7 @@
 //     `spawnSync(candidate, ["-NoProfile", …])` 起得来却解释不了参数 ⇒ 守卫脚本的
 //      `HITS=` 一个都不出现 ⇒ `toContain` 等满 20s 才抛 `Test timed out` —— 一条
 //     「这一格在这台机器上判不了」变成了「这一格红了」，而报错行指向「超时」。
-//   · `scripts/check-app-port-vectors.cjs` 的 `python3 --version` 探针：形态不对的命令
+//   · `scripts/gates/check-app-port-vectors.cjs` 的 `python3 --version` 探针：形态不对的命令
 //     被归进「这台机器没有 Python」，而那句话是假的 —— 下一动作（去装）也是错的。
 //
 // 所以这里给**一次探测**三个出口，调用方按语义挑一个用（不许糊成一个布尔）：

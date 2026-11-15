@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { cnbCall, formatReadingRow, readBuild } from "../scripts/ci-probe-lock-readout.mjs";
+import { cnbCall, formatReadingRow, readBuild } from "../scripts/ci/ci-probe-lock-readout.mjs";
 
 /** `ExecResult` 形态（`makeRunner` 的返回）。 */
 type Spawned = {

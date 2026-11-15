@@ -4,7 +4,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { formatReadingRow, report } from "../scripts/ci-probe-lock-readout.mjs";
+import { formatReadingRow, report } from "../scripts/ci/ci-probe-lock-readout.mjs";
 
 /** 成功那一路的形状（`readBuild` 命中时给的就是这一形：note 是空串）。 */
 const OK = {

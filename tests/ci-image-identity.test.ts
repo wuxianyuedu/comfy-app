@@ -17,7 +17,7 @@ import {
   platformImageStages,
   readImageDeclarations,
   ROOT,
-} from "../scripts/ci-image-identity.mjs";
+} from "../scripts/ci/ci-image-identity.mjs";
 import { registeredGateOrder } from "./no-platform-ci-config.test";
 
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
@@ -196,7 +196,7 @@ describe("镜像身份：已随 CNB 主列瘦身退役（ISSUE #3378）", () => 
       order.indexOf("GA 回调结论回读"),
       "承重回读格不在清单里 —— §13.6 的锚不能丢",
     ).toBeGreaterThan(-1);
-    expect(read("scripts/ci-image-identity.mjs").length, "脚本留盘").toBeGreaterThan(0);
+    expect(read("scripts/ci/ci-image-identity.mjs").length, "脚本留盘").toBeGreaterThan(0);
   });
 
   it("两个变量名在**给人读的那一面**确实被点名（规范与下一步的操作说明）", () => {
@@ -210,7 +210,7 @@ describe("镜像身份：已随 CNB 主列瘦身退役（ISSUE #3378）", () => 
       "规范里没有这两个变量的口径 —— 那一步给出下一动作时指的是一片空白",
     ).toBe(true);
     /* 反向：字面量不许在 `scripts/**` 里再写第二份（常量才是唯一出处）。 */
-    expect(read("scripts/ci-image-identity.mjs")).toContain(`"${IMAGE_ENV}"`);
+    expect(read("scripts/ci/ci-image-identity.mjs")).toContain(`"${IMAGE_ENV}"`);
   });
 });
 
@@ -281,7 +281,7 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
       "      jobs:",
       "        - name: 浏览器安装",
       "          image: mcr.microsoft.com/playwright:v1.63.0-noble",
-      "          script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+      "          script: node scripts/ci/ci-toolchain-selfcheck.mjs --playwright-only",
       "",
     ].join("\n");
     const names = platformImageStages(withImage).map((s) => s.name);

@@ -1,8 +1,8 @@
-/** `scripts/ci-mirror-drift.mjs` 的判据与回读解析：两边一致 / 漂移 / 缺边，以及 ref 名必须逐字相同。 */
+/** `scripts/ci/ci-mirror-drift.mjs` 的判据与回读解析：两边一致 / 漂移 / 缺边，以及 ref 名必须逐字相同。 */
 import { describe, expect, it } from "vitest";
 
-import { judgeMirrorDrift } from "../scripts/ci-mirror-drift.mjs";
-import { parseRemoteRefSha } from "../scripts/ci-mirror-push-verify.mjs";
+import { judgeMirrorDrift } from "../scripts/ci/ci-mirror-drift.mjs";
+import { parseRemoteRefSha } from "../scripts/ci/ci-mirror-push-verify.mjs";
 
 const CNB = "a".repeat(40);
 const GITHUB = "b".repeat(40);

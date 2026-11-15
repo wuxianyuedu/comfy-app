@@ -9,10 +9,10 @@ import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const REPO_ROOT = process.cwd();
-const SCRIPT = join(REPO_ROOT, "scripts", "check-comment-language.cjs");
+const SCRIPT = join(REPO_ROOT, "scripts", "gates/check-comment-language.cjs");
 
 const { test, expect } = defineGateRepo({
-  script: "check-comment-language.cjs",
+  script: "gates/check-comment-language.cjs",
   dirs: ["src/lib"],
   /* 脚本 `await import("./doc-facts.cjs")` 去读文档事实 —— 同级动态导入只能
    * 把那份模块也拷到工作区（真实布局就是 scripts/ 下这两份并排）。 */

@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-ga-verdict-readout.mjs` 的判据（ISSUE #3378 转正）。
+ * `scripts/ci/ci-ga-verdict-readout.mjs` 的判据（ISSUE #3378 转正）。
  *
  * 钉住四件最容易静默失效的事：
  *   ① 只认 `cnb/api_trigger_ga_verdict/*` 这一条 context 的终态，多条并存取
@@ -19,8 +19,8 @@ import {
   readCallbackStatus,
   STATUS_PREFIX,
   verdictFromStatus,
-} from "../scripts/ci-ga-verdict-readout.mjs";
-import { relayCommentBody } from "../scripts/ci-ga-logs-relay.mjs";
+} from "../scripts/ci/ci-ga-verdict-readout.mjs";
+import { relayCommentBody } from "../scripts/ci/ci-ga-logs-relay.mjs";
 
 const CTX = `${STATUS_PREFIX}/pipeline-1(GA 判决回调)`;
 const OWN = "cnb/pull_request/pipeline-1(质量门禁)";

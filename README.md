@@ -87,7 +87,7 @@ Comfy-APP-T3/
 | `scripts/standalone-private-inputs.mjs`   | 从产物里剥掉开发机私有输入（`.env` / `db.sqlite*`），由 `pnpm build` 与 `build-desktop.mjs` 共用                                                                    |
 | `tsconfig.json`                           | TypeScript 配置                                                                                                                                                     |
 | `oxlint.parity.config.mjs` `oxlint.config.ts` | 通用 lint 的判决配置（oxlint；`lint:oxlint` **384 条**，含 2 条 jsPlugin、171 条预设 0 命中免费档与 5 条 T1 语义规则——后者存量按文件挂账、分批次清，见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`）。最终架构与已退役的 eslint 侧清单见 [AGENTS.md](AGENTS.md) |
-| `.oxfmtrc.json`                           | 格式化配置（格式化器是 **oxfmt**，prettier 已随 #2541 退役；`format:*` 脚本与格式门禁 `scripts/check-format.cjs` 共用这一份）                                       |
+| `.oxfmtrc.json`                           | 格式化配置（格式化器是 **oxfmt**，prettier 已随 #2541 退役；`format:*` 脚本与格式门禁 `scripts/gates/check-format.cjs` 共用这一份）                                       |
 | `postcss.config.js`                       | Tailwind CSS v4 接入                                                                                                                                                |
 | `vitest.config.ts` `playwright.config.ts` | 测试配置                                                                                                                                                            |
 | `typedoc.json`                            | API 文档生成配置                                                                                                                                                    |
@@ -104,7 +104,7 @@ Comfy-APP-T3/
 > `db.sqlite` 复制进 `.next/standalone`，进而被内嵌进桌面包（密钥明文分发 +
 > 开发者本机数据库变成出厂库）。现在 `pnpm build` 会自动剥离这两类文件
 > （`scripts/standalone-private-inputs.mjs`），并有产物层护栏
-> `node scripts/check-standalone-contents.cjs` 兜底；**不要**为了省事把 `.env`
+> `node scripts/gates/check-standalone-contents.cjs` 兜底；**不要**为了省事把 `.env`
 > 写进 `outputFileTracingExcludes` 就以为解决了——实测对 `.env` 无效，见
 > [规范 §7.3](docs/standards/launch-and-build.md)。
 
@@ -199,7 +199,7 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 组装免安装版（portable zip）             | `pnpm package:portable`                        | `tools/build/package-portable.ps1` |
 | 探测开发盘红利并调优                    | `pnpm dev:drive`                               | `tools/start/tune-dev-drive.ps1`  |
 
-> 这两张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 挂在 `.githooks/pre-commit`，
+> 这两张表不是「文档承诺」：`scripts/gates/check-ps1-consistency.mjs` 挂在 `.githooks/pre-commit`，
 > 平台侧也有同名那一格在跑（在场哪几格以 `.cnb.yml` 自己列的为准；口径见 `docs/standards/13-提交与-code-review.md` §13.5）——
 > 它核对它们与磁盘 / `package.json` 三向对齐 —— 表里的路径与 `pnpm` 命令都真实存在、
 > `tools/**` 下的双击入口至少出现在**这里或 `tools/README.md`**（后者是完整清单，
@@ -254,7 +254,7 @@ pnpm env:init
 #    而校验把空串当「没给」，会直接报 Invalid environment variables。
 
 # 3. 初始化数据库（Drizzle，按 drizzle.config.ts）
-#    经 scripts/db-push.mjs：以 --force 非交互运行，并**复核库里真的建出表**——
+#    经 scripts/db/db-push.mjs：以 --force 非交互运行，并**复核库里真的建出表**——
 #    drizzle-kit push 在无 TTY 环境（CI / 脚本 / 容器）会「报错 + exit 0 + 留 0 字节库」，
 #    此时首页与 /api/health 都 200，只有真实业务页面 500（见规范 §9.1）
 pnpm db:push
@@ -437,7 +437,7 @@ pnpm qoder:ignore # 写/刷新 .qoderignore（代码索引排除表；改完要�
 > PR 标题与 squash 那一行取的是**这条分支相对主干的第一笔非常规提交**（不是顶端那一笔，
 > 觉得那笔写小了可以 `--title "…"` 覆盖）；④ **它说「提交段全过」不等于 tsc / eslint /
 > 用例过了** —— `pre-commit` 默认只跑形态档，本地要全套加 `COMFY_HEAVY_GATES=1`（规范 §13.5.25）。
-> 全部旗标与阶段见 `scripts/ship.mjs` 文件头；判据在 `tests/ship.test.ts`。
+> 全部旗标与阶段见 `scripts/ship/ship.mjs` 文件头；判据在 `tests/ship.test.ts`。
 
 ---
 

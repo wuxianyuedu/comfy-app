@@ -12,7 +12,7 @@ import { defineGateRepo, describe } from "./helpers/gate-repo";
  * ⚠️ 锚必须解析成**本仓库历史里真实存在的提交** —— 用例拿 `git rev-parse HEAD`
  * 现算（不写死哈希：写死一个短哈希会在某个历史被 gc 掉之后变成假红）。 */
 const { test, expect } = defineGateRepo({
-  script: "check-changelog-versions.cjs",
+  script: "gates/check-changelog-versions.cjs",
   dir: "scripts",
   workdir: "changelog-versions",
   setup: (repo) => {

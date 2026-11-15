@@ -88,7 +88,7 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
   });
 
   it("① Python 侧真跑共享向量（可用时）", () => {
-    const script = "scripts/check-app-port-vectors.py";
+    const script = "scripts/gates/check-app-port-vectors.py";
     expect(fs.existsSync(path.join(ROOT, script))).toBe(true);
     const python = ["python3", "python"].find((c) => hasCommand(c, ["--version"]));
     if (python === undefined || python === "") {
@@ -132,7 +132,7 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     expect(ps).not.toBeNull();
     expect(ps!).toContain("Get-NormalizedRootForPort");
     expect(ps!).toContain("Get-Fnv1a32");
-    const checker = readIfExists("scripts/check-app-port-vectors.ps1");
+    const checker = readIfExists("scripts/gates/check-app-port-vectors.ps1");
     expect(checker).not.toBeNull();
     expect(checker!).toContain("app-port-vectors.json");
     // `envVectors` 也必须真跑：此前 PowerShell 侧只跑 `vectors`，「四侧读同一份
@@ -152,7 +152,7 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     // 内联进「顶层就打 ctypes.windll」的 Windows-only 宿主（历史上是
     // scripts/start_tauri_launcher.py，已随 ISSUE #784 移除）就跑不了。
     // 现在 Python 侧只剩这一个纯逻辑模块 + 它的自检脚本，两侧都不碰 Win32。
-    expect(fs.existsSync(path.join(ROOT, "scripts", "check-app-port-vectors.py"))).toBe(true);
+    expect(fs.existsSync(path.join(ROOT, "scripts", "gates/check-app-port-vectors.py"))).toBe(true);
   });
 
   it("①′ `.env` 单值解析：Node 侧对共享 envVectors 逐条一致", async () => {
@@ -173,7 +173,10 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
   });
 
   it("①′ 另三侧也读同一份 envVectors（不能真跑时锁引用）", () => {
-    for (const rel of ["scripts/check-app-port-vectors.py", "scripts/check-app-port-vectors.cjs"]) {
+    for (const rel of [
+      "scripts/gates/check-app-port-vectors.py",
+      "scripts/gates/check-app-port-vectors.cjs",
+    ]) {
       const src = readIfExists(rel);
       expect(src, `${rel} 必须存在`).not.toBeNull();
       expect(src, `${rel} 必须读 envVectors`).toContain("envVectors");

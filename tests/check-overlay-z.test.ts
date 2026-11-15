@@ -1,12 +1,12 @@
 /**
- * 提交门槛自检：把 scripts/check-overlay-z.cjs 当黑盒跑在临时工作区上，验证「浮层层级刻度」这条**硬闸**（规范 16 §16.2.5，ISSUE #672 / #1811）真的阻断提交。
+ * 提交门槛自检：把 scripts/gates/check-overlay-z.cjs 当黑盒跑在临时工作区上，验证「浮层层级刻度」这条**硬闸**（规范 16 §16.2.5，ISSUE #672 / #1811）真的阻断提交。
  * #1811 收尾时它从棘轮翻成硬闸（Z3 存量清零、棘轮车道无成员），故无 `seedBaseline`、`--update` 已不存在，用例改判「命中即退 1」与「`--update` 是断头的」。
  * 用子进程跑：门禁由 pre-commit 以 `node scripts/xxx.cjs` 调用、内部以 `__dirname/..` 定位扫描根，复用同方式才等价；临时工作区与 `run`/`write` 由 `tests/helpers/gate-repo.ts` 提供。
  */
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-overlay-z.cjs",
+  script: "gates/check-overlay-z.cjs",
   dirs: ["src/components/studio", "src/components/ui", "src/app"],
 });
 

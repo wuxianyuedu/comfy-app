@@ -355,7 +355,7 @@ CHANGELOG 写**对外差异**。完整细则见
 
 - 单测聚焦纯函数与可单元化的业务逻辑（见 `docs/guides/TESTING.md`）；API 文档由 `pnpm run docs`（typedoc）生成。
 - 提交门槛最低要求：`typecheck` + 相关单测通过。
-- **格式化与行为改动必须分成两次提交**：一次提交里「过一遍格式化器（现役 oxfmt）就变成另一种写法」的文件 ≥ 10 个即阻断（`scripts/check-reformat-only.cjs`），避免 `git blame` 被全文件重排冲掉。见文档集 13 §13.5.2。
+- **格式化与行为改动必须分成两次提交**：一次提交里「过一遍格式化器（现役 oxfmt）就变成另一种写法」的文件 ≥ 10 个即阻断（`scripts/gates/check-reformat-only.cjs`），避免 `git blame` 被全文件重排冲掉。见文档集 13 §13.5.2。
 
 ---
 
@@ -454,7 +454,7 @@ pnpm build && pnpm start   # 生产预览
 - **`ERR_PNPM_IGNORED_BUILDS`** —— 依赖里有带 `preinstall` / `install` / `postinstall`
   构建脚本的包，而 `pnpm-workspace.yaml` 的 `allowBuilds` 没给出答案（非交互模式 exit 1）。
   修法是**加条目**：`true`（批准）与 `false`（显式拒绝）都算回答过，漏答才红
-  （判据 = `scripts/check-allow-builds.cjs`，口径见规范 §13.5.15）。
+  （判据 = `scripts/gates/check-allow-builds.cjs`，口径见规范 §13.5.15）。
   ⚠️ 这一族**不要**去装编译工具链：v13 起的 `better-sqlite3` 随包附带八个平台的
   `prebuilds/*.node`，install 阶段没有可跑的构建脚本。本节旧写法把它当成
   「Drizzle 的 sqlite 驱动 + node-gyp rebuild + 缺 make/gcc 就失败」，那两句话的前提

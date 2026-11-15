@@ -62,17 +62,17 @@ jobs:
 
       - name: 同步数据库表结构（cnb 同款判据一字不改）
         timeout-minutes: 30
-        run: node scripts/db-push.mjs
+        run: node scripts/db/db-push.mjs
 
       - name: 浏览器安装（cnb 同款入口；npmmirror 镜像源同 CNB）
         timeout-minutes: 20
         env:
           PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
           PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
-        run: node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+        run: node scripts/ci/ci-toolchain-selfcheck.mjs --playwright-only
 
       - name: 全量E2E（cnb 同款判据一字不改）
         timeout-minutes: 45
         env:
           COMFY_E2E_SERVER: "start"
-        run: node scripts/e2e-run.mjs
+        run: node scripts/e2e/e2e-run.mjs

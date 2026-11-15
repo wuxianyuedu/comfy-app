@@ -4,7 +4,7 @@ tune-dev-drive.ps1 — 开发盘（ReFS / Dev Drive）红利探测与调优（�
 
 ===============================================================================
 给「仓库搬到开发盘之后，怎么把这块盘的红利吃满」这件事一个**可复跑的入口**：
-双击本脚本即调 `node scripts/dev-drive-tune.mjs`（= `pnpm dev:drive`），由后者
+双击本脚本即调 `node scripts/dev-drive/dev-drive-tune.mjs`（= `pnpm dev:drive`），由后者
 实测这块卷的能力（硬链接 / 块克隆 / 稀疏文件），再给出一张动作矩阵。
 
 为什么要有这个入口（而不是把结论写进文档就完事）：
@@ -14,7 +14,7 @@ tune-dev-drive.ps1 — 开发盘（ReFS / Dev Drive）红利探测与调优（�
   · 开发盘上的落点（依赖缓存、临时目录、Defender 排除项）会随机器配置漂移，
     写死的结论一漂就变成误导。
 
-逻辑不在本文件：跨平台实现是 `scripts/dev-drive-tune.mjs`（规范 §9.5），
+逻辑不在本文件：跨平台实现是 `scripts/dev-drive/dev-drive-tune.mjs`（规范 §9.5），
 本入口只做「定位项目根 → 调它 → 透传退出码」。
 
 入口**不会**替你做需要管理员权限或会动数据的动作（Defender 排除项、

@@ -27,7 +27,7 @@ better-auth 1.7、Tauri 2）。这些大版本之间的 API 变动不少，而�
 两句话记住：
 
 1. **它治的是「库的 API 漂移」，不是「依赖的版本漂移」。** 后者本仓已有三层判据
-   （`scripts/check-deps-freshness.mjs` ①②③ + 解析层探针，ISSUE #1569 / #1721，
+   （`scripts/gates/check-deps-freshness.mjs` ①②③ + 解析层探针，ISSUE #1569 / #1721，
    口径见 `docs/standards/13-提交与-code-review.md` §13.5.13）。不要拿它替代那些判据。
 2. **它给的永远是「库的官方文档」，不是「本仓的约定」。** 本仓对新版本库有自己的
    钉死项与适配（例：`next.config.js` 的 `experimental.useTypeScriptCli: false`、

@@ -1,5 +1,5 @@
 /**
- * `scripts/ci-daily-failure-issue.mjs` 的契约（ISSUE #2274）：每日那一跑红了 ⇒ 自动变成一张单。
+ * `scripts/ci/ci-daily-failure-issue.mjs` 的契约（ISSUE #2274）：每日那一跑红了 ⇒ 自动变成一张单。
  * 两种危险失效各有一组用例：① 把没结论写成红（被取消/取不到读数/认不出哪格 ⇒ 不该写一个字）；② 把红
  * 写成静默（`--no-block` 只许改退码，不许改「那句话有没有被打出来」）。判决不在这重写：`details` 是平台形状。
  */
@@ -19,7 +19,7 @@ import {
   main,
   pickPreviousDaily,
   titleKey,
-} from "../scripts/ci-daily-failure-issue.mjs";
+} from "../scripts/ci/ci-daily-failure-issue.mjs";
 import {
   BUNDLE_BASELINE_STALE_COMMITS,
   BUNDLE_GATE_MARKERS,
@@ -29,10 +29,10 @@ import {
   fetchBundleRedStreak,
   judgeBundleEscalation,
   readBundleAccount,
-} from "../scripts/ci-daily-bundle-escalation.mjs";
+} from "../scripts/ci/ci-daily-bundle-escalation.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
-const ENTRY = path.join(ROOT, "scripts", "ci-daily-failure-issue.mjs");
+const ENTRY = path.join(ROOT, "scripts", "ci/ci-daily-failure-issue.mjs");
 
 /** 构建列表那一项（这一层只用得到四个字段）。 */
 type ListBuild = { createTime: string; event: string; sn: string; status: string };
@@ -842,7 +842,10 @@ describe("正文里的升级段：两种归因都要念成人话", () => {
 
 describe("判决行与判据那一侧对账（改词要两边一起改）", () => {
   it("BUNDLE_GATE_MARKERS 的两句都能在 check-bundle-budget.cjs 的源码里找到", () => {
-    const src = fs.readFileSync(path.join(ROOT, "scripts", "check-bundle-budget.cjs"), "utf8");
+    const src = fs.readFileSync(
+      path.join(ROOT, "scripts", "gates/check-bundle-budget.cjs"),
+      "utf8",
+    );
     for (const marker of Object.values(BUNDLE_GATE_MARKERS)) {
       expect(src, `判据那侧没有这句判决行：${marker}`).toContain(marker);
     }

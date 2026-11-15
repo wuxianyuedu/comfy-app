@@ -25,9 +25,9 @@ import { isRecord } from "~/lib/is-record";
 import { copyGateDeps } from "./helpers/gate-repo";
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
-const SCRIPT = path.join(SCRIPTS_DIR, "check-test-sleep.cjs");
+const SCRIPT = path.join(SCRIPTS_DIR, "gates/check-test-sleep.cjs");
 /** 判据复用 `check-test-concurrency.cjs` 导出的 `maskNonCode`，临时仓库要一起带上。 */
-const DEP = path.join(SCRIPTS_DIR, "check-test-concurrency.cjs");
+const DEP = path.join(SCRIPTS_DIR, "gates/check-test-concurrency.cjs");
 
 /**
  * 「文件在扫描期间消失」那一支只能在**进程内**判：它要的是 `scanFile` 对一份
@@ -62,15 +62,16 @@ function gate(
   const root = mkdtempSync(path.join(tmpdir(), "test-sleep-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   for (const src of [SCRIPT, DEP]) {
-    copyFileSync(src, path.join(root, "scripts", path.basename(src)));
-    copyGateDeps(path.join(root, "scripts", path.basename(src)));
+    mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+    copyFileSync(src, path.join(root, "scripts", "gates", path.basename(src)));
+    copyGateDeps(path.join(root, "scripts", "gates", path.basename(src)));
   }
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
     writeFileSync(abs, content);
   }
-  const entry = path.join(root, "scripts", "check-test-sleep.cjs");
+  const entry = path.join(root, "scripts", "gates/check-test-sleep.cjs");
   try {
     return {
       ok: true,

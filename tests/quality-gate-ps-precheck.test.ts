@@ -232,7 +232,7 @@ describe.skipIf(!hasPs)("依赖预检真跑（Windows / 有 PowerShell 时）", 
  */
 const NOEXEC_MUTATION = {
   /* 路径用 `/`（#3095）：ps1 的 `Args` 全部改成跨平台分隔符，这条变异锚点跟着同形。 */
-  from: String.raw`Cmd = "node"; Args = @("scripts/check-dependency-audit.mjs")`,
+  from: String.raw`Cmd = "node"; Args = @("scripts/gates/check-dependency-audit.mjs")`,
   to: 'Cmd = "node-absent-on-this-machine"; Args = @("--version")',
 };
 

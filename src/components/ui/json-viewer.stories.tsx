@@ -12,7 +12,7 @@ import {
  * 所以载荷不在 story 里现编：走注入层的 `json` 值源（真报文形状），`sourceName` 那条下拉可以现场换一份；为什么不 mock 见 `.storybook/data-sources.tsx` 的模块头 —— 假形态的截图会被当成真证据。 */
 
 /** Args 的形状 = 可调的那几个（面板上真会出现的东西）。逐个列而不是 `Omit<JsonViewerProps, "data">`：`data` 由注入层给，不该出现在 story 的 Args 里；而「哪几个是可调的」本来就是这一组 story 要回答的问题，逐行写出来是它的答案。
- * 另外 `Omit<React.ComponentProps<…>, "…">` 这个形状恰好撞上 `scripts/check-ui-primitives.cjs` 的 P57（「自写剔掉私有 prop 再透传的剔除表」）—— 那条判据锚的形态是对的（那种表真该收进 `~/lib/dom-props`），这里只是长得像；不用豁免去绕，改成逐项列，两边都清楚。 */
+ * 另外 `Omit<React.ComponentProps<…>, "…">` 这个形状恰好撞上 `scripts/gates/check-ui-primitives.cjs` 的 P57（「自写剔掉私有 prop 再透传的剔除表」）—— 那条判据锚的形态是对的（那种表真该收进 `~/lib/dom-props`），这里只是长得像；不用豁免去绕，改成逐项列，两边都清楚。 */
 type StoryArgs = {
   /** 首屏折叠档位：0 = 全展开；>=1 时项数超过 `30 + N*40` 的容器折成 `…`。 */
   initialCollapsedDepth?: number;

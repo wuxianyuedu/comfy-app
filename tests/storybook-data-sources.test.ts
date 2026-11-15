@@ -112,7 +112,7 @@ describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
     expect(
       main,
       "资源落在了 `public/` 下 —— 它会随 next build 进 standalone 产物、" +
-        "再被 build-desktop 内嵌进桌包（scripts/check-standalone-contents.cjs 守着这一层）",
+        "再被 build-desktop 内嵌进桌包（scripts/gates/check-standalone-contents.cjs 守着这一层）",
     ).not.toMatch(/staticDirs:\s*\[[^\]]*"\.\.\/public\/storybook/);
   });
 

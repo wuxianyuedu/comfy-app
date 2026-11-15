@@ -18,9 +18,9 @@ import {
   collectBlocked,
   diffAgainstBaseline,
   runAudit,
-} from "../scripts/check-dependency-audit.mjs";
+} from "../scripts/gates/check-dependency-audit.mjs";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-dependency-audit.mjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-dependency-audit.mjs");
 const tempDirs: Array<string> = [];
 
 afterEach(() => {
@@ -35,12 +35,13 @@ afterEach(() => {
 function mkRepo(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "dep-audit-"));
   tempDirs.push(dir);
+  mkdirSync(path.join(dir, "scripts", "gates"), { recursive: true });
   mkdirSync(path.join(dir, "scripts", "launcher-core"), { recursive: true });
   mkdirSync(path.join(dir, "src", "lib", "process"), { recursive: true });
   // 真脚本 + 它的整条 import 链都得在场。漏了 `launcher-core/shell.mjs` 的话，子进程
   // 在**加载阶段**就 ERR_MODULE_NOT_FOUND，用例读到的是「脚本崩了」而不是判据结论 ——
   // 那种红会长得像业务失败，最难归因（同一坑见 tests/dev-launcher-toolchain-gate.test.ts）。
-  copyFileSync(SCRIPT, path.join(dir, "scripts", "check-dependency-audit.mjs"));
+  copyFileSync(SCRIPT, path.join(dir, "scripts", "gates/check-dependency-audit.mjs"));
   for (const rel of [
     "scripts/launcher-core/shell.mjs",
     "scripts/launcher-core/command-echo.mjs",
@@ -227,7 +228,7 @@ describe("真脚本：--update 只许降（验收点名要求的形态）", () =
     try {
       const out = execFileSync(
         process.execPath,
-        [path.join(dir, "scripts", "check-dependency-audit.mjs"), ...full],
+        [path.join(dir, "scripts", "gates/check-dependency-audit.mjs"), ...full],
         { cwd: dir, env: process.env, encoding: "utf8" },
       );
       return { code: 0, out };

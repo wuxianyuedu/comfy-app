@@ -22,12 +22,12 @@ function lineOf(source: string, needle: string): number {
 
 describe("db-sync.mjs：--force 之前必须备份", () => {
   it("createBackup 出现在 ensureSchemaCurrent **之前**", () => {
-    const src = read("scripts/db-sync.mjs");
+    const src = read("scripts/db/db-sync.mjs");
     expect(lineOf(src, "createBackup(")).toBeLessThan(lineOf(src, "ensureSchemaCurrent("));
   });
 
   it("备份挂在 `force` 这一支下（非 --force 的自动同步不备份）", () => {
-    const src = read("scripts/db-sync.mjs");
+    const src = read("scripts/db/db-sync.mjs");
     /* 判据是「`if (force)` 与 `createBackup(` 之间除了条件那行没有别的控制流」：
      * 抄一份实现会漂，这里只要证明那一步在 force 的射程内。 */
     const backupLine = lineOf(src, "createBackup(");
@@ -42,7 +42,7 @@ describe("db-sync.mjs：--force 之前必须备份", () => {
   });
 
   it("备份结果必落一句提示（成功说了哪一份、失败说了为什么）", () => {
-    const src = read("scripts/db-sync.mjs");
+    const src = read("scripts/db/db-sync.mjs");
     /* 走 `backupNotice` 这个唯一出口 —— 直接写文案的话，成功 / 失败会各写一半，
      * 而失败那一半恰恰是「这次变更万一丢了数据、没有退路」那句话的落点。 */
     expect(src).toContain("backupNotice(");
@@ -141,7 +141,7 @@ describe("路径收口：应用根只有一处锚点", () => {
 
   it("服务端取用面只 import 那一份 .mjs 实现（不自己再造一份）", () => {
     const src = read("src/lib/db-backup/backup.ts");
-    expect(src).toContain("scripts/db-backup-core.mjs");
+    expect(src).toContain("scripts/db/db-backup-core.mjs");
     /* 不许直接引驱动去自己写一份备份 —— 那是第二个轮子（§12.12）。 */
     expect(src).not.toContain("@libsql/client");
     expect(src).not.toContain("VACUUM INTO");

@@ -135,7 +135,7 @@ describe("计数判据的正控（判据存在 ≠ 判据会红）", () => {
     // 探针要改入库文档 ⇒ 落进一次性克隆，真实工作树一次不被写（ISSUE #2665）。
     const probe = createProbeTree(ROOT);
     try {
-      const check = join(probe.dir, "scripts", "check-doc-references.cjs");
+      const check = join(probe.dir, "scripts", "gates/check-doc-references.cjs");
       const docAbs = join(probe.dir, "docs", "README.md");
       const original = readFileSync(docAbs, "utf8");
 

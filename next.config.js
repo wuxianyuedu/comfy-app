@@ -25,7 +25,7 @@ const SCRIPT_SRC = IS_DEV
   : "script-src 'self' 'unsafe-inline'";
 
 /**
- * 依赖缓存槽的根目录（与 `scripts/ci-cache-slot.mjs` 的 `resolveCacheRoot` 同源）：
+ * 依赖缓存槽的根目录（与 `scripts/ci/ci-cache-slot.mjs` 的 `resolveCacheRoot` 同源）：
  * `<store 卷>/ci-cache/<包名小写>`。Turbopack 需要它作为附加根，是因为接槽后作业的
  * `node_modules` 是**指向该根之下某个指纹键目录的 junction**（出项目根），不登记
  * Turbopack 会硬拒 `next build`（见 changelog.d/2081-* 与 issue #2521）。
@@ -168,7 +168,7 @@ const config = {
   // 一条都没减掉（`./changelog.d/**`、`./src/**/*.test.ts`、`./src-tauri/**` 都写在
   // 下面，产物里对应的那些真文件一个没少）。把文件真正拿掉的是产物层显式删除
   // （`scripts/standalone-private-inputs.mjs`），判据是数产物的
-  // `scripts/check-standalone-contents.cjs` —— 别在这里补一条就当修好了，
+  // `scripts/gates/check-standalone-contents.cjs` —— 别在这里补一条就当修好了，
   // 下面 `.env` 那条注释记的是同一个坑。规范 §7.2。
   outputFileTracingExcludes: {
     "/**": [
@@ -181,7 +181,7 @@ const config = {
       // 注意 `.env` 这一项只是尽力而为：Next standalone 的环境加载是**无条件
       // 复制**的（实测写 `./.env` / `./**/.env` 都删不掉），所以真正的兜底是
       // `scripts/build-desktop.mjs` 的「分发卫生」显式删除 +
-      // `scripts/check-standalone-contents.cjs` 的产物层检查。
+      // `scripts/gates/check-standalone-contents.cjs` 的产物层检查。
       "./db.sqlite",
       "./db.sqlite-wal",
       "./db.sqlite-shm",
@@ -227,7 +227,7 @@ const config = {
   // `collect-build-traces`。真实原因是**重叠**：每路由清单已经自带整份目录（连这颗
   // glob 给不出的 `*.runtime.prod.js.map` 都在），所以它要补的东西原生追踪都补过了。
   //
-  // ⇒ 承重的是**产物层那两处**：`scripts/check-standalone-contents.cjs` 的
+  // ⇒ 承重的是**产物层那两处**：`scripts/gates/check-standalone-contents.cjs` 的
   // `REQUIRED_RUNTIME_FILES` 反向数产物，与 `tests/standalone-runtime-completeness.test.ts`
   // 的产物探针。别把「往这里补一条」当成修好了缺件，也别因为「摘掉它产物没变」就判
   // 那份数产物的检查失效 —— 承重的从来是数产物。定位手法见规范 launch-and-build.md §7.4。

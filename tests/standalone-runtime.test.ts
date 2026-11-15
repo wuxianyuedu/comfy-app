@@ -264,7 +264,7 @@ describe("本机覆盖：data/ 下的配置不许随包（ISSUE #3646）", () =>
     // `WORKSHOP_API_SETTINGS_FILE`）、以及 `src/server/workshop/comfyui.ts` 的
     // `SETTINGS_FILE`。前者含上游 apiKey —— 随包出去 = 造包者的 key 落到每个用户手里。
     const files = ["data/workshop-api-settings.json", "data/workshop-comfy-settings.json"];
-    // 目录的写入方：`scripts/db-backup-core.mjs`（**这台机器的整库快照**）、
+    // 目录的写入方：`scripts/db/db-backup-core.mjs`（**这台机器的整库快照**）、
     // `src/server/workshop/comfyui.ts`（通道产物）、`src/server/workshop/final-compose.ts`
     // （合成产物）。它们装不进「逐文件」那一层，只能按目录点名 ⇒ 减法的删除动作
     // 必须能删目录（否则 `rmSync` 撞上目录会抛 `ERR_FS_EISDIR`，构建当场崩）。
@@ -674,7 +674,7 @@ describe("装配、打包配置与产物判据三者同形", () => {
   });
 
   it("产物层检查认识桌包载荷必备件（standalone 层没有它们才是常态，所以只查 static）", () => {
-    const checker = read("scripts/check-standalone-contents.cjs");
+    const checker = read("scripts/gates/check-standalone-contents.cjs");
     for (const needle of [
       "REQUIRED_PAYLOAD_FILES",
       '"schema.sql"',
@@ -688,7 +688,7 @@ describe("装配、打包配置与产物判据三者同形", () => {
   it("入口与其环境模块登记进两侧白名单（漏一侧 = 被剪掉，或检查瞎掉）", () => {
     for (const name of ["standalone-runtime.mjs", "launcher-core/standalone-runtime-env.mjs"]) {
       expect(registry.RUNTIME_SCRIPTS, name).toContain(name);
-      expect(read("scripts/check-standalone-contents.cjs"), name).toContain(name);
+      expect(read("scripts/gates/check-standalone-contents.cjs"), name).toContain(name);
     }
   });
 

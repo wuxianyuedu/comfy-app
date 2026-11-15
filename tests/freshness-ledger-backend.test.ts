@@ -12,8 +12,8 @@ import {
   FRESHNESS_TRACKS,
   pushFreshnessLedger,
   readBranchLedger,
-} from "../scripts/freshness-ledger.mjs";
-import { readFreshnessLedger } from "../scripts/freshness-gate.mjs";
+} from "../scripts/freshness/freshness-ledger.mjs";
+import { readFreshnessLedger } from "../scripts/freshness/freshness-gate.mjs";
 import { restoreToSnapshot, snapshotPaths } from "./helpers/probe-restore.ts";
 
 const HERE = import.meta.dirname;

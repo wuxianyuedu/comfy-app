@@ -1,7 +1,7 @@
 /**
  * `schemaSyncNotice` 的判据 —— 状态栏那一格说什么、什么时候什么都不说。
  * 四相位：`ready` / `unknown` 不打扰用户；`missing` / `stale` 必须说且给出口。
- * `canPush` 决定出口：本机给「立即同步」（需确认弹窗）；桌包不带 `scripts/db-sync.mjs` 则回落纯命令提示。
+ * `canPush` 决定出口：本机给「立即同步」（需确认弹窗）；桌包不带 `scripts/db/db-sync.mjs` 则回落纯命令提示。
  */
 import { describe, expect, it } from "vitest";
 

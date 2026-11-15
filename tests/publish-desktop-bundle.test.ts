@@ -17,7 +17,7 @@ import {
   resolveArtifactRoot,
   resolveBuildCacheRoot,
   resolveToolRoot,
-} from "../scripts/ci-cache-slot.mjs";
+} from "../scripts/ci/ci-cache-slot.mjs";
 import {
   DEFAULT_KEEP,
   LATEST_POINTER_FILE,

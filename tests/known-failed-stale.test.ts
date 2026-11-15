@@ -1,4 +1,4 @@
-/** 「已知基线失败登记过期」判据（`scripts/check-known-failed-stale.mjs`）：补 `KNOWN_FAILED_FILES` 的纪律空档
+/** 「已知基线失败登记过期」判据（`scripts/gates/check-known-failed-stale.mjs`）：补 `KNOWN_FAILED_FILES` 的纪律空档
  * —— 注释写着「修好立刻删」却没人判过期（规范 §11.12 第 3、4 条）。现场：该表把 theme-dark-token-cascade
  * 登记后真因没人修，另外 17 条已绿断言一并被摘出增量面（粒度是文件）—— 静默跳过比红更糟。两头都判：
  * 三层（不存在/没跑起来/全绿）真跑纯入口（#1356 源码正则、#1345 自打 label 都不算执行记录）；
@@ -7,7 +7,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { checkRegistrations, judgeStillFailing } from "../scripts/check-known-failed-stale.mjs";
+import {
+  checkRegistrations,
+  judgeStillFailing,
+} from "../scripts/gates/check-known-failed-stale.mjs";
 import {
   main,
   resolveFace,
@@ -17,7 +20,7 @@ import {
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const HOOK = ".githooks/pre-commit";
-const GATE_SCRIPT = "scripts/check-known-failed-stale.mjs";
+const GATE_SCRIPT = "scripts/gates/check-known-failed-stale.mjs";
 
 function read(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8");
@@ -168,7 +171,7 @@ describe("判据与仓库现状、提交链的接线", () => {
     // `cmd` 逐字相等而不是 `toContain`：把这一行注掉后 `dGroupSteps` 的行首锚定
     // 已经不认它（`hit` 会是 undefined）——「把这一步静音」正是这一族要拦的动作
     // （同 §13.5.8「在场判据要解析、不要 toContain」）。
-    expect(hit?.cmd).toBe("node scripts/check-known-failed-stale.mjs");
+    expect(hit?.cmd).toBe("node scripts/gates/check-known-failed-stale.mjs");
   });
 });
 
@@ -181,7 +184,7 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
   const SELFTEST_GATE = "scripts/known-failed-selftest-gate.mjs";
   const MECHANISM_INPUTS = [
     "scripts/quality-gate-shared.mjs",
-    "scripts/check-known-failed-stale.mjs",
+    "scripts/gates/check-known-failed-stale.mjs",
     ".githooks/pre-commit",
   ];
 
@@ -216,7 +219,7 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
     // **判据现场的最贵一问**：自证红了说明「真跑那一档」坏了，而它判的是
     // **下一次别线登记**能不能被正确判过期 —— 只打一句「自证失败」等于把人挡在证据外。
     const res = runGate({
-      staged: ["scripts/check-known-failed-stale.mjs"],
+      staged: ["scripts/gates/check-known-failed-stale.mjs"],
       selfTest: {
         status: 1,
         stdout: "✗ 自证失败：量具坏了",
@@ -245,7 +248,7 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
   it("触发面只认这三处输入 —— 别的 `scripts/*.mjs` 不算碰机制", () => {
     // 窄触发面是这一步的全部代价担保：宽一档就给无关提交加了 ~0.9s。
     expect(touchesMechanism(["scripts/run-tests.mjs"])).toBe(false);
-    expect(touchesMechanism(["scripts/affected-tests.mjs"])).toBe(false);
+    expect(touchesMechanism(["scripts/affected-tests/affected-tests.mjs"])).toBe(false);
     expect(touchesMechanism(["docs/standards/11-测试与可观测性.md"])).toBe(false);
     for (const f of MECHANISM_INPUTS) {
       expect(touchesMechanism([f]), `${f} 应当算命中`).toBe(true);
@@ -259,7 +262,7 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
     // 顺序：先判「登记过期」，再判「判据自己还活着」—— 后者的读数解释前者为什么可信。
     const order = steps.map((s) => s.cmd);
     expect(order.indexOf(`node ${SELFTEST_GATE}`)).toBeGreaterThan(
-      order.indexOf("node scripts/check-known-failed-stale.mjs"),
+      order.indexOf("node scripts/gates/check-known-failed-stale.mjs"),
     );
   });
 
@@ -267,7 +270,7 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
     // 源码文本断言在这里是**够的**：它判的不是「自证跑起来了吗」（那由下面那条真跑的
     // 用例判），而是「自证的设计里有没有两只探针」这个结构事实 —— 少了一只时，
     // judgeStillFailing 恒放行也照样绿（实测过）。真跑的判决归下面那条。
-    const src = read("scripts/check-known-failed-stale.mjs");
+    const src = read("scripts/gates/check-known-failed-stale.mjs");
     expect(src).toContain("known-failed-stale-probe.test.ts");
     expect(src).toContain("known-failed-stale-probe-green.test.ts");
     expect(src).toContain("期望「已过期」");

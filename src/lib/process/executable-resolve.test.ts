@@ -200,7 +200,7 @@ describe("resolveCommandInvocation：控制台起进程前的那一问", () => {
      * 喂的参数此前正是本函数的第二入参 —— 于是「调用方要跑什么」与「探针喂什么」
      * 被合成了一件东西，**探针把真命令整条跑了一遍**：
      *
-     *   `resolveCommandInvocation("node", ["scripts/e2e-run.mjs", "--grep=@critical"])`
+     *   `resolveCommandInvocation("node", ["scripts/e2e/e2e-run.mjs", "--grep=@critical"])`
      *   ⇒ 探针真的起了一次 e2e-run（拉 Playwright 的 webServer、假 ComfyUI），
      *   而 `spawnSync` 超时**只收直接子进程** —— 孙子进程留在端口上接着跑。
      *   `.cnb.yml` 里每条 `node scripts/…` / `pnpm run build` 因此都被执行两遍。

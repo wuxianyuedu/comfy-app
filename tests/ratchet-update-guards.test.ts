@@ -40,7 +40,7 @@ const AST_ENV = { NODE_PATH: join(process.cwd(), "node_modules") };
 
 const RATCHETS: Array<Ratchet> = [
   {
-    script: "check-void-floats.cjs",
+    script: "gates/check-void-floats.cjs",
     baseline: "scripts/.void-floats-baseline.json",
     fixture: { dirs: ["src/lib"], env: AST_ENV },
     violate: (repo, n) => {
@@ -160,10 +160,21 @@ function discoveredBaselines(): Array<{ baseline: string; script: string }> {
   const push = (script: string, baseline: string) =>
     found.set(`${script}:${baseline}`, { script, baseline });
 
-  for (const script of readdirSync(dir)) {
-    if (!/\.(?:cjs|mjs)$/.test(script)) {
-      continue;
+  /* #3930 起判据归入域子目录：递归枚举 `scripts/**`（返回相对 `scripts/` 的路径）。 */
+  const scripts: Array<string> = [];
+  const walk = (d: string, rel = ""): void => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const relPath = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) {
+        if (e.name === "__pycache__") continue;
+        walk(join(d, e.name), relPath);
+      } else if (/\.(?:cjs|mjs)$/.test(e.name)) {
+        scripts.push(relPath);
+      }
     }
+  };
+  walk(dir);
+  for (const script of scripts) {
     const src = readFileSync(join(dir, script), "utf8");
     if (!src.includes("--update")) {
       continue;
@@ -179,7 +190,9 @@ function discoveredBaselines(): Array<{ baseline: string; script: string }> {
       /(?:const|let|var)\s+(?<name>[A-Za-z0-9_$]+)\s*=\s*path\.join\((?<args>[^;]{0,300}?)\)/g,
     )) {
       const name = m.groups?.name;
-      const baseline = /"(?<baseline>\.[^"]+\.json)"/.exec(m.groups?.args ?? "")?.groups?.baseline;
+      /* #3930：锚定合成后声明形如 "../.x.json" —— 取末段对齐表键（.x.json）。 */
+      const rawBaseline = /"(?<baseline>[^"]+\.json)"/.exec(m.groups?.args ?? "")?.groups?.baseline;
+      const baseline = rawBaseline ? rawBaseline.split("/").pop() : undefined;
       if (name !== undefined && name !== "" && baseline !== undefined && baseline !== "") {
         declared.set(name, baseline);
       }
@@ -201,9 +214,9 @@ function discoveredBaselines(): Array<{ baseline: string; script: string }> {
     }
     /** 直接把路径拼在写入调用里的写法（不走变量）也算，别给静默漏登记留第二形状。 */
     for (const m of src.matchAll(
-      /(?:fs\.)?write(?:File|FileSync)\(\s*path\.join\([^;]{0,300}?"(?<baseline>\.[^"]+\.json)"/g,
+      /(?:fs\.)?write(?:File|FileSync)\(\s*path\.join\([^;]{0,300}?"(?<baseline>[^"]+\.json)"/g,
     )) {
-      const baseline = m.groups?.baseline;
+      const baseline = m.groups?.baseline ? m.groups.baseline.split("/").pop() : undefined;
       if (baseline !== undefined && baseline !== "") {
         push(script, baseline);
       }
@@ -360,7 +373,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
        * 给显式旗标），每次扩都可能放过这句，故钉成**否定式**：第四分支带 `--(?!update)`，认另一个
        * 认账旗标而不认把人推回 `--update`。断的是指令形状（一句能抄进终端的话），非具体措辞。 */
       const deadEnd =
-        "出口：再跑 `node scripts/check-tsc-diagnostic-executors.cjs --update`" +
+        "出口：再跑 `node scripts/gates/check-tsc-diagnostic-executors.cjs --update`" +
         "（= 把基线收紧到 60）";
       expect(deadEnd).not.toMatch(ACTIONABLE_REFUSAL);
     });
@@ -505,8 +518,16 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
        * 有把 `.json` 写回去的调用**（「有人把 `--update` 加回来」的唯一机器痕迹）。
        */
       const dir = join(import.meta.dirname, "..", "scripts");
+      /* #3930 起判据分散在域子目录（gates/ tw4/ …）：表键是裸名，按落点探测解析。 */
+      const resolveScript = (name: string): string => {
+        for (const rel of ["gates", "tw4", "ci", "."]) {
+          const candidate = join(dir, rel === "." ? name : rel, name);
+          if (existsSync(candidate)) return candidate;
+        }
+        return join(dir, name);
+      };
       for (const [script, spec] of Object.entries(HARD_GATE_FLIPS)) {
-        const src = readFileSync(join(dir, script), "utf8");
+        const src = readFileSync(resolveScript(script), "utf8");
         /* 认「写一份 `.json`」本身而非变量名 —— 换拼法也躲不过；只认写入调用里的 `.json` 字面量
          * （读回来比对不算）。引号**三种都要认**：此前只认双引号（`"\.[^"]+\.json"`），一处写成
          * 单引号（`writeFileSync(path.join(ROOT,'scripts','.x.json'),'{}')`）的「把基线加回来」实测
@@ -534,10 +555,30 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
     });
 
     it("表里每一行的脚本与基线都对得上真仓库（脚本改名/搬基线要同步改表）", () => {
+      /* #3930 起判据分散在 scripts/ 的域子目录里（gates/ tw4/ …）：按 basename 在
+       * `scripts/**` 里解析落点。锚定合成后落盘字面量形如 `"../.x.json"`，
+       * 基线名认「被引号包住的字面量」而不认逐字引号对。 */
+      const byBasename = new Map<string, string>();
+      const indexScripts = (dir: string): void => {
+        for (const e of readdirSync(dir, { withFileTypes: true })) {
+          if (e.isDirectory()) {
+            if (e.name === "__pycache__") continue;
+            indexScripts(join(dir, e.name));
+          } else if (/\.(?:c|m)js$/.test(e.name) && !byBasename.has(e.name)) {
+            byBasename.set(e.name, join(dir, e.name));
+          }
+        }
+      };
+      indexScripts(join(import.meta.dirname, "..", "scripts"));
       for (const r of RATCHETS) {
-        const src = readFileSync(join(import.meta.dirname, "..", "scripts", r.script), "utf8");
+        const src = readFileSync(
+          byBasename.get(r.script) ?? join(import.meta.dirname, "..", "scripts", r.script),
+          "utf8",
+        );
         const name = r.baseline.split("/").pop() ?? r.baseline;
-        expect(src, `${r.script} 不再落盘 ${name}`).toContain(`"${name}"`);
+        expect(src, `${r.script} 不再落盘 ${name}`).toMatch(
+          new RegExp(String.raw`["'][^"']*${name.split(".").join(String.raw`\.`)}["']`),
+        );
       }
     });
   });

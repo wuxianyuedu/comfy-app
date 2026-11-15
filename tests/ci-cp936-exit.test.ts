@@ -23,7 +23,7 @@ import {
   TRANSCODE_TIMEOUT_MS,
   UNKNOWN_TERMINATION_EXIT,
   writeCp936,
-} from "../scripts/ci-cp936-exit.mjs";
+} from "../scripts/ci/ci-cp936-exit.mjs";
 
 /* `spawnProc` / `spawnImpl` 两个注入端口的类型是 Node 内建的重载函数（`typeof spawn` /
  * `typeof spawnSync`）：单形返回值的假件没法字面构造出来（`strictFunctionTypes` 下参数

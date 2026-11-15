@@ -1,5 +1,5 @@
 /**
- * 共用读取器 `scripts/gate-scan-read.cjs` 的用例 + 防回潮判据（§11.14 / §13.5.12）：`null` 只在 ENOENT、
+ * 共用读取器 `scripts/gates/gate-scan-read.cjs` 的用例 + 防回潮判据（§11.14 / §13.5.12）：`null` 只在 ENOENT、
  * 非 ENOENT 照冒、目录级降级、点开头文件不算隐藏项、计数行形状。A 枚举 `tests/` 的 `check-*.cjs` 必须引用它；
  * B 吞 ENOENT 只许在共用件；C 从仓库根递归者（`walkScripts(".")`，`_tmp_*` 现场）也须走它。三者带负控制；不判「漏读整面」。
  */
@@ -25,7 +25,7 @@ import { copyGateDeps } from "./helpers/gate-repo";
 
 const requireCjs = createRequire(import.meta.url);
 
-const READER_PATH = fileURLToPath(new URL("../scripts/gate-scan-read.cjs", import.meta.url));
+const READER_PATH = fileURLToPath(new URL("../scripts/gates/gate-scan-read.cjs", import.meta.url));
 const SCRIPTS_DIR = fileURLToPath(new URL("../scripts", import.meta.url));
 
 type ScanReader = {
@@ -191,11 +191,12 @@ describe("vanishedNote —— 消失数必须进结论", () => {
 
 /* ── 回潮判据 ────────────────────────────────────────────────────────── */
 
-/** 全仓 `scripts/check-*.cjs`（不含共用件本身）。 */
+/** 全仓 `scripts/check-*.cjs`（不含共用件本身；#3930 起判据都归 `scripts/gates/`）。 */
 function gateScripts(): Array<string> {
-  return readdirSync(SCRIPTS_DIR)
+  const gatesDir = path.join(SCRIPTS_DIR, "gates");
+  return readdirSync(gatesDir)
     .filter((n) => /^check-.*\.cjs$/.test(n))
-    .map((n) => path.join(SCRIPTS_DIR, n));
+    .map((n) => path.join(gatesDir, n));
 }
 
 /**
@@ -248,19 +249,20 @@ describe("立案现场回归 —— 从仓库根递归的判据撞上并发删�
    */
   it("目录被并发删除时：不崩、结论照给、消失数进结论行", () => {
     const root = tempDir("fs-walk-enoent-");
-    mkdirSync(path.join(root, "scripts"));
+    /* 沙箱布局镜像真实仓库（#3930）：判据在 `scripts/gates/`，它的 `../` 依赖落在 `scripts/`。 */
+    mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
     mkdirSync(path.join(root, "src"));
     /* 判据自己**与它 require 的每一份**都要在位 —— 用共享件按 `require("./x.cjs")`
      * 递归补齐，不手抄清单：`check-file-structure.cjs` 按 R5 拆过一刀后多了
      * `file-structure-rules.cjs`，手抄的那一版立刻把本用例变成
      * 「Cannot find module」（报错还指不到夹具，看着像门禁坏了）。 */
-    const gateAbs = path.join(root, "scripts", "check-file-structure.cjs");
-    copyFileSync(path.join(SCRIPTS_DIR, "check-file-structure.cjs"), gateAbs);
+    const gateAbs = path.join(root, "scripts", "gates/check-file-structure.cjs");
+    copyFileSync(path.join(SCRIPTS_DIR, "gates/check-file-structure.cjs"), gateAbs);
     /* 它自己那份共用读取器不在 `require("./…")` 闭包里（走的是条件注入），
      * 所以显式带上。 */
     copyFileSync(
-      path.join(SCRIPTS_DIR, "gate-scan-read.cjs"),
-      path.join(root, "scripts", "gate-scan-read.cjs"),
+      path.join(SCRIPTS_DIR, "gates/gate-scan-read.cjs"),
+      path.join(root, "scripts", "gates/gate-scan-read.cjs"),
     );
     copyGateDeps(gateAbs);
     /* 刻意**不**建 `src/proxy.ts`：R11 会因此报一条真实违规 —— 它就是这一条要验的
@@ -301,7 +303,7 @@ describe("立案现场回归 —— 从仓库根递归的判据撞上并发删�
         /* 不带 `--strict`：这一条要的是「遍历不崩 + 结论照给」，而 `--strict` 下
          * R5 棘轮会因为临时仓库没有基线文件先报一条、把后面的话挡住。
          * 立案现场那次崩在遍历阶段，与哪一档无关 —— 遍历本身与档位无关。 */
-        ["--require", shim, path.join(root, "scripts", "check-file-structure.cjs")],
+        ["--require", shim, path.join(root, "scripts", "gates/check-file-structure.cjs")],
         {
           cwd: root,
           encoding: "utf8",

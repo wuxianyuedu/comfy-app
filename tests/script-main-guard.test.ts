@@ -167,9 +167,9 @@ describe("「是不是被直接执行」的守卫：不许拼 file://（ISSUE #1
      * `import.meta.dirname` / `import.meta.filename` 的规范化比较（由
      * `fileURLToPath(import.meta.url)` 迁移而来）。少了它 = 又变回拼串那一形态。 */
     for (const rel of [
-      "scripts/ci-toolchain-selfcheck.mjs",
+      "scripts/ci/ci-toolchain-selfcheck.mjs",
       "scripts/python-probe.mjs",
-      "scripts/db-legacy-sweep.mjs",
+      "scripts/db/db-legacy-sweep.mjs",
     ]) {
       const src = readFileSync(path.join(ROOT, rel), "utf8");
       expect(

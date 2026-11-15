@@ -81,7 +81,7 @@ env:
   BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
   CI: "true"
   COMFYAPP_QUIET_COVERAGE: "1"
-  # vitest 并发：默认由 `scripts/ci-load.mjs:resolveCiWorkers()` 按平台分档推导 ——
+  # vitest 并发：默认由 `scripts/ci/ci-load.mjs:resolveCiWorkers()` 按平台分档推导 ——
   # GA 托管 runner（`GITHUB_ACTIONS=true`，每个 job 独享 4 核 VM）走 `ceil(cores/2)` ⇒ 2；
   # CNB 自托管（共享宿主机）仍走 `ceil(cores/8)` ⇒ 16 核上 2，行为逐字不变。
   # 这里只接「人的覆盖出口」，**不写数**：仓库变量没设 ⇒ 展开成空串 ⇒ 走上面的默认；
@@ -134,17 +134,17 @@ jobs:
 
       - name: 同步数据库表结构（cnb 同款判据一字不改）
         timeout-minutes: 30 # CNB `每日同步数据库表结构` 走平台默认 30m
-        run: node scripts/db-push.mjs
+        run: node scripts/db/db-push.mjs
 
       - name: 新鲜度账（cnb 同款判据一字不改）
         timeout-minutes: 5 # 对位 CNB `每日新鲜度账` 5m
-        run: node scripts/freshness-gate.mjs
+        run: node scripts/freshness/freshness-gate.mjs
 
       - name: 生产构建（cnb 同款判据一字不改）
         timeout-minutes: 30 # 对位 CNB `每日生产构建` 30m
         env:
           COMFY_CI_BUILD_CACHE: "1"
-        run: node scripts/ci-daily-build.mjs
+        run: node scripts/ci/ci-daily-build.mjs
 
       - name: ESLint 零警告（cnb 同款判据一字不改：pnpm run lint，不是 eslint .）
         env:
@@ -163,20 +163,20 @@ jobs:
           # **套接字**超时被掐断 —— 那不是「CDN 不通」的结论，是「这一次没量完」，
           # 处置相反（换镜像 vs 放宽）。键缺失不会在解析期报错，只会在下一次下载时同形再红。
           PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
-        run: node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+        run: node scripts/ci/ci-toolchain-selfcheck.mjs --playwright-only
 
       - name: 全量E2E（cnb 同款判据一字不改）
         timeout-minutes: 45 # 对位 CNB `每日全量E2E` 45m
         env:
           COMFY_E2E_SERVER: "start"
-        run: node scripts/e2e-run.mjs
+        run: node scripts/e2e/e2e-run.mjs
 
       - name: API 文档生成与自检（cnb 同款判据一字不改）
         # 2026-11-05 从 CNB push 档撤到每日档（ISSUE #2537）：PR 侧不再即时判，
         # 最晚次日 01:00 在这一跑暴露（窗口 ≤24h）。位置与 CNB 每日档同一处 ——
         # 全量E2E 之后、单元测试之前（后者必须是最后一个会红的格）。
         timeout-minutes: 30 # CNB `每日 API 文档生成与自检` 走平台默认 30m
-        run: node scripts/check-docs-api.cjs
+        run: node scripts/gates/check-docs-api.cjs
 
       - name: 单元测试（排最后：唯一会因机器负载而红的一档，同 CNB 口径）
         timeout-minutes: 45 # 对位 CNB `每日单元测试` 45m（内部墙钟预算 30m）
@@ -223,7 +223,7 @@ jobs:
       - name: 镜像漂移判据（CNB master vs GitHub master）
         timeout-minutes: 5
         if: always()
-        run: node scripts/ci-mirror-drift.mjs --file-issue --allow-no-fact
+        run: node scripts/ci/ci-mirror-drift.mjs --file-issue --allow-no-fact
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -273,4 +273,4 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         # `--no-block`：脚本自己的出口话术按「平台那一跳」念（非零落 0 + 手工出口），
         # 与 job 侧的 continue-on-error 同向，两边口径一致（同 .cnb.yml 那一格）。
-        run: node scripts/ci-ga-daily-failure-issue.mjs --no-block
+        run: node scripts/ci/ci-ga-daily-failure-issue.mjs --no-block

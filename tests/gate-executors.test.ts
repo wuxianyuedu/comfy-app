@@ -12,6 +12,8 @@ import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 const REPO_ROOT = process.cwd();
 const SCRIPT_NAME = "check-gate-executors.cjs";
+/* #3930 起判据归入 `scripts/gates/`：夹具与直跑一律按域相对路径定位（basename 全仓唯一）。 */
+const SCRIPT_REL = `gates/${SCRIPT_NAME}`;
 
 /** 判据脚本的识别口径与脚本自身保持一致（前缀族）。 */
 const GATE_PREFIXES = [
@@ -28,19 +30,31 @@ const GATE_PREFIXES = [
  * `package.json` 同族）；它们一出现，「某个探针一个执行者都没有」这一档就被喂成「有执行者」，用例测的东西
  * 当场变成别的东西 —— 所以这里的过滤是**判据语义的一部分**，不是图省事。 */
 function copyGateScripts(repo: { dir: string }): void {
-  const srcScripts = join(REPO_ROOT, "scripts");
   const dstScripts = join(repo.dir, "scripts");
   mkdirSync(dstScripts, { recursive: true });
-  for (const entry of readdirSync(srcScripts)) {
-    const isGate = /\.(?:cjs|mjs)$/.test(entry) && GATE_PREFIXES.some((p) => entry.startsWith(p));
-    if (isGate) {
-      copyFileSync(join(srcScripts, entry), join(dstScripts, entry));
+  /* #3930 起判据归入 `scripts/<域>/` 子目录：与判据自身的扫描面同口径，递归枚举
+   * `scripts/**`（跳过 `__pycache__`），拷进沙箱时压平成 `scripts/<basename>` ——
+   * 沙箱里的探针与被判据都按 cwd 下的 `scripts/` 找人，平铺即可互见。 */
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (entry.name !== "__pycache__") {
+          walk(join(dir, entry.name));
+        }
+        continue;
+      }
+      const isGate =
+        /\.(?:cjs|mjs)$/.test(entry.name) && GATE_PREFIXES.some((p) => entry.name.startsWith(p));
+      if (isGate) {
+        copyFileSync(join(dir, entry.name), join(dstScripts, entry.name));
+      }
     }
-  }
+  };
+  walk(join(REPO_ROOT, "scripts"));
 }
 
 const { test, expect } = defineGateRepo({
-  script: SCRIPT_NAME,
+  script: SCRIPT_REL,
   workdir: "gate-executors",
   setup: (repo) => {
     copyGateScripts(repo);
@@ -61,7 +75,7 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
     // 在真仓库根跑（不建临时区）：这条断言的对象是「本仓库当前的判据-执行者关系」，
     // 而临时区里没有 `.githooks/` / `package.json` / `tests/`，所有靠它们当执行者的
     // 脚本都会被判成无执行者 —— 那是用例环境的问题，不是仓库的问题。
-    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME)], {
+    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_REL)], {
       cwd: REPO_ROOT,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -197,9 +211,9 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
     }));
 
   test("「判据执行者台账」这一步真在 D 组里（被注掉的行不算在场）", () => {
-    expect(steps().find((s) => s.cmd.includes("scripts/check-gate-executors.cjs"))).toEqual({
+    expect(steps().find((s) => s.cmd.includes("scripts/gates/check-gate-executors.cjs"))).toEqual({
       label: "判据执行者台账",
-      cmd: "node scripts/check-gate-executors.cjs",
+      cmd: "node scripts/gates/check-gate-executors.cjs",
     });
   });
 
@@ -250,7 +264,7 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
 describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", () => {
   /** 在**真仓库根**跑判据（不经临时区）。 */
   const runInRepo = (args: Array<string> = []): string =>
-    execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME), ...args], {
+    execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_REL), ...args], {
       cwd: REPO_ROOT,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -302,13 +316,32 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     const output = runInRepo(["--report"]);
     const total = Number(/判据脚本 (?<count>\d+) 份/.exec(output)?.groups?.count ?? "0");
     expect(total, "扫描面空转（退成 0 时下面每一条都照样报 OK）").toBeGreaterThan(40);
-    const listed = readdirSync(join(REPO_ROOT, "scripts"))
-      .filter((n) => /\.(?:cjs|mjs)$/.test(n))
-      .filter((n) => chainScripts().includes(n) || GATE_PREFIXES.some((p) => n.startsWith(p)));
+    /* #3930 起判据归入域子目录：与判据自身的扫描面同口径，递归枚举 `scripts/**`
+     * （跳过 `__pycache__`）后按「门禁链事实 ∪ 名字族」过滤。过渡期垫片与真身
+     * 同名各一份，判据按名字计数（`names.length`），这里同样按名字递归计数才对得上。 */
+    const listed: Array<string> = [];
+    const walkScripts = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          if (entry.name !== "__pycache__") {
+            walkScripts(join(dir, entry.name));
+          }
+          continue;
+        }
+        if (
+          /\.(?:cjs|mjs)$/.test(entry.name) &&
+          (chainScripts().includes(entry.name) ||
+            GATE_PREFIXES.some((p) => entry.name.startsWith(p)))
+        ) {
+          listed.push(entry.name);
+        }
+      }
+    };
+    walkScripts(join(REPO_ROOT, "scripts"));
     expect(total, "份数 = 「门禁链事实 ∪ 名字族」自己数出来的份数（不写死数字）").toBe(
       listed.length,
     );
-    const gateSrc = readFileSync(join(REPO_ROOT, "scripts", SCRIPT_NAME), "utf8");
+    const gateSrc = readFileSync(join(REPO_ROOT, "scripts", SCRIPT_REL), "utf8");
     for (const name of [
       "x.cjs",
       "xxx.cjs",
@@ -535,7 +568,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     }
     const forms = Object.values(entrypoints).reduce((n, list) => n + list.length, 0);
     expect(forms, "入口这层一条都没登记，就是 #2530 没办").toBeGreaterThan(0);
-    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME)], {
+    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_REL)], {
       cwd: REPO_ROOT,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],

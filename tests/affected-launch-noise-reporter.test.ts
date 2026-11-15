@@ -8,14 +8,17 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { filterSpawnOutput, spawnVitest } from "../scripts/affected-launch-spawn.mjs";
+import {
+  filterSpawnOutput,
+  spawnVitest,
+} from "../scripts/affected-tests/affected-launch-spawn.mjs";
 import {
   FIXTURE_NOISE_PATTERN,
   NOISE_PATTERN,
   filterNoiseText,
   isNoiseLine,
   resolveNoiseFilter,
-} from "../scripts/affected-launch-noise-reporter.mjs";
+} from "../scripts/affected-tests/affected-launch-noise-reporter.mjs";
 
 /** 用户 2026-10-31 报上来的、来自受影响用例门的真实噪音行（逐字取自 CI 日志）。 */
 const BENIGN = [

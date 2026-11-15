@@ -26,7 +26,7 @@
  *   状态   run/comfy-cli-setup.json   （{ phase, message, done, error, updated_at }）
  *   节流   run/comfy-cli-upgrade-check.json （{ last_check_at, installed, latest }）
  *
- * 解释器版本下限**只有一处定义**：`scripts/ci-env-probe.mjs` 的
+ * 解释器版本下限**只有一处定义**：`scripts/ci/ci-env-probe.mjs` 的
  * `PYTHON_MIN_VERSION`（环境前提探针与升级指引都引用它，别另抄数字）。
  */
 import { spawnSync } from "node:child_process";
@@ -34,7 +34,7 @@ import { existsSync, mkdirSync, appendFileSync, writeFileSync, readFileSync } fr
 import path from "node:path";
 import process from "node:process";
 
-import { PYTHON_MIN_VERSION } from "./ci-env-probe.mjs";
+import { PYTHON_MIN_VERSION } from "./ci/ci-env-probe.mjs";
 import { whichCommand } from "./launcher-core/shell.mjs";
 
 const HERE = import.meta.dirname;
@@ -355,7 +355,7 @@ function main() {
       writeStatus("error", `未找到 Python，请先安装 Python ${PYTHON_MIN_TEXT}+`, { failed: true });
       process.stderr.write(
         `[setup-comfy-cli-venv] 未找到 Python —— 本仓下限 Python ${PYTHON_MIN_TEXT}` +
-          `（唯一定义：scripts/ci-env-probe.mjs 的 PYTHON_MIN_VERSION）。\n`,
+          `（唯一定义：scripts/ci/ci-env-probe.mjs 的 PYTHON_MIN_VERSION）。\n`,
       );
       return 1;
     }
@@ -433,7 +433,7 @@ function pythonMeetsFloor(pythonPath) {
   if (!ok) {
     writeLog(
       "ERROR",
-      `基础 Python ${m.groups?.major}.${m.groups?.minor} 低于本仓下限 ${PYTHON_MIN_TEXT}（唯一定义：scripts/ci-env-probe.mjs）`,
+      `基础 Python ${m.groups?.major}.${m.groups?.minor} 低于本仓下限 ${PYTHON_MIN_TEXT}（唯一定义：scripts/ci/ci-env-probe.mjs）`,
     );
   }
   return ok;

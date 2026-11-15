@@ -1,7 +1,7 @@
 /**
  * 配对注册表的单元面 + GA workflow 的**结构真解析**（ISSUE #3504）。
  *
- * `scripts/ci-ga-trigger-map.mjs` 是「CNB 触发口 ⇄ GA workflow」的唯一登记处：
+ * `scripts/ci/ci-ga-trigger-map.mjs` 是「CNB 触发口 ⇄ GA workflow」的唯一登记处：
  * 「哪条口派发到哪个文件」是决定不是推导，所以它存在表里。这份判据答三件事：
  *
  *  1. **表完整性** —— 每行的两个事件键 / 两条流水线名 / workflow 文件 / 并发组
@@ -12,7 +12,7 @@
  *     解析每个 workflow 的 `on:` / `concurrency:` / `jobs:` 顶层块接住同一层
  *     （语义校验仍归 GA runner 自身）。
  *
- * 派发 stage 的脚本逐字等式（`node scripts/ci-ga-dispatch.mjs --preset …`）与按钮
+ * 派发 stage 的脚本逐字等式（`node scripts/ci/ci-ga-dispatch.mjs --preset …`）与按钮
  * 绑定由 `tests/no-platform-ci-config.test.ts` 的触发口对账钉着 —— 这里**不重复**，
  * 这里只答「注册表 ↔ 磁盘上的 workflow 文件」这半边闭环。
  */
@@ -26,7 +26,7 @@ import {
   dailyGateExecutor,
   dispatchStageName,
   findTriggerTarget,
-} from "../scripts/ci-ga-trigger-map.mjs";
+} from "../scripts/ci/ci-ga-trigger-map.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
@@ -247,14 +247,14 @@ describe("与 .cnb.yml 的闭环：触发口双向登记（#3504）", () => {
   it("ISSUE #3667：按需日志口跑的是专用脚本，不是任一 preset（豁免登记有对象）", () => {
     const block = /^[ ]{2}api_trigger_ga_logs:[\s\S]*?(?=^[ ]{2}\S|^\S)/m.exec(CNB);
     expect(block?.[0], ".cnb.yml 里解析不出 api_trigger_ga_logs 那一段").toBeTruthy();
-    expect(block?.[0]).toContain("node scripts/ci-ga-logs-on-demand.mjs");
+    expect(block?.[0]).toContain("node scripts/ci/ci-ga-logs-on-demand.mjs");
     /* 刻意不带 --preset：这一口搬的是「已跑完的 run 的日志」，不是「跑哪套判据」。 */
     expect(block?.[0]).not.toContain("--preset");
     /* GA 侧 relay 认这个 scope，按需档才真的会把判绿 job 也搬进 CNB。 */
-    const relay = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-relay.mjs"), "utf8");
+    const relay = readFileSync(path.join(ROOT, "scripts/ci/ci-ga-logs-relay.mjs"), "utf8");
     expect(relay).toContain("relayScopeFromEnv");
     expect(relay).toContain("RELAY_SCOPE.ALL");
-    const onDemand = readFileSync(path.join(ROOT, "scripts/ci-ga-logs-on-demand.mjs"), "utf8");
+    const onDemand = readFileSync(path.join(ROOT, "scripts/ci/ci-ga-logs-on-demand.mjs"), "utf8");
     expect(onDemand).toContain('ON_DEMAND_SCOPE = "all"');
     expect(onDemand).toContain("dispatchRequest");
   });

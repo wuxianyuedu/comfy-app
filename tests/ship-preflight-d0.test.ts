@@ -17,10 +17,10 @@ import {
   parseD0RunLines,
   preRunD0Steps,
   selectPreRunSteps,
-} from "../scripts/ship-preflight-d0.mjs";
-import { parseArgs } from "../scripts/ship-args.mjs";
-import { runPreflightStage } from "../scripts/ship-preflight.mjs";
-import { CODE } from "../scripts/ship-core.mjs";
+} from "../scripts/ship/ship-preflight-d0.mjs";
+import { parseArgs } from "../scripts/ship/ship-args.mjs";
+import { runPreflightStage } from "../scripts/ship/ship-preflight.mjs";
+import { CODE } from "../scripts/ship/ship-core.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -61,9 +61,9 @@ describe("parseD0RunLines：清单的单一出处是真钩子（漂移钉，ISSU
     expect(steps.length).toBeGreaterThan(0);
     /* 按命令认，不按标签认（标签是给人读的，会改写）。这三类是 #3200 正文点名的最小面。 */
     const scripts = steps.map((s) => s.argv[1]);
-    expect(scripts).toContain("scripts/check-format.cjs");
-    expect(scripts).toContain("scripts/check-infra-file-size.cjs");
-    expect(scripts).toContain("scripts/check-changelog-fragments.cjs");
+    expect(scripts).toContain("scripts/gates/check-format.cjs");
+    expect(scripts).toContain("scripts/gates/check-infra-file-size.cjs");
+    expect(scripts).toContain("scripts/gates/check-changelog-fragments.cjs");
     /* 按空白拆的前提：每一步都是 `node scripts/<名> [旗标…]`，没有带引号的参数。 */
     for (const s of steps) {
       expect(s.argv[0]).toBe("node");
@@ -136,7 +136,7 @@ describe("selectPreRunSteps / decideD0PreRun：跳过规则是纯函数", () => 
     }
     const steps = [
       { label: "a", argv: ["node", "scripts/a.cjs"] },
-      { label: "跳过", argv: ["node", "scripts/check-deps-freshness.mjs", "--staged"] },
+      { label: "跳过", argv: ["node", "scripts/gates/check-deps-freshness.mjs", "--staged"] },
       { label: "b", argv: ["node", "scripts/b.cjs", "--staged"] },
     ];
     expect(selectPreRunSteps(steps).map((s) => s.label)).toEqual(["a", "b"]);
@@ -318,9 +318,9 @@ describe("阶段 0 接线：预跑红 ⇒ 落 1 停手，与提交钩子同权�
   /* 合成钩子里刻意放着依赖新鲜度那一步：接线必须把它跳过（阶段 0 刚跑过 --json 形态）。 */
   const HOOK = [
     'run_group D0 "形态前置档" sh -c \'',
-    'run "格式" node scripts/check-format.cjs --staged',
-    'run "新鲜度" node scripts/check-deps-freshness.mjs --staged',
-    'run "文件长度" node scripts/check-infra-file-size.cjs --staged',
+    'run "格式" node scripts/gates/check-format.cjs --staged',
+    'run "新鲜度" node scripts/gates/check-deps-freshness.mjs --staged',
+    'run "文件长度" node scripts/gates/check-infra-file-size.cjs --staged',
     "'",
   ].join("\n");
 
@@ -411,9 +411,11 @@ describe("阶段 0 接线：预跑红 ⇒ 落 1 停手，与提交钩子同权�
     expect(res.action).toBe("continue");
     expect(res.codes).toContain(CODE.GREEN);
     expect(text).toContain("D0 预跑：2 步全绿");
-    expect(calls.filter((c) => c === "node scripts/check-format.cjs --staged").length).toBe(1);
+    expect(calls.filter((c) => c === "node scripts/gates/check-format.cjs --staged").length).toBe(
+      1,
+    );
     expect(
-      calls.filter((c) => c === "node scripts/check-infra-file-size.cjs --staged").length,
+      calls.filter((c) => c === "node scripts/gates/check-infra-file-size.cjs --staged").length,
     ).toBe(1);
     expect(calls.some((c) => c.includes("check-deps-freshness.mjs --staged"))).toBe(false);
     expect(calls.some((c) => /git add|git commit|oxfmt|pnpm install/.test(c))).toBe(false);
@@ -424,13 +426,13 @@ describe("阶段 0 接线：预跑红 ⇒ 落 1 停手，与提交钩子同权�
       return;
     }
     const { res, text, calls, relayed } = await stage({
-      stepStatus: { "scripts/check-format.cjs": 1 },
+      stepStatus: { "scripts/gates/check-format.cjs": 1 },
     });
     expect(res.action).toBe("finish");
     expect(res.codes).toContain(CODE.RED);
     expect(text).toContain("1/2 步红");
-    expect(relayed.join("\n")).toContain("scripts/check-format.cjs 的红读数");
-    expect(calls).toContain("node scripts/check-infra-file-size.cjs --staged");
+    expect(relayed.join("\n")).toContain("scripts/gates/check-format.cjs 的红读数");
+    expect(calls).toContain("node scripts/gates/check-infra-file-size.cjs --staged");
   });
 
   it("两处红 ⇒ 一次报齐（2/2），两条原话都转发", async () => {
@@ -438,7 +440,10 @@ describe("阶段 0 接线：预跑红 ⇒ 落 1 停手，与提交钩子同权�
       return;
     }
     const { res, text, relayed } = await stage({
-      stepStatus: { "scripts/check-format.cjs": 1, "scripts/check-infra-file-size.cjs": 1 },
+      stepStatus: {
+        "scripts/gates/check-format.cjs": 1,
+        "scripts/gates/check-infra-file-size.cjs": 1,
+      },
     });
     expect(res.action).toBe("finish");
     expect(res.codes).toContain(CODE.RED);
@@ -450,7 +455,7 @@ describe("阶段 0 接线：预跑红 ⇒ 落 1 停手，与提交钩子同权�
     if (!ranThisCase()) {
       return;
     }
-    const { res } = await stage({ stepStatus: { "scripts/check-format.cjs": -1 } });
+    const { res } = await stage({ stepStatus: { "scripts/gates/check-format.cjs": -1 } });
     expect(res.action).toBe("finish");
     expect(res.codes).toContain(CODE.NOT_RUN);
     expect(res.codes).not.toContain(CODE.RED);

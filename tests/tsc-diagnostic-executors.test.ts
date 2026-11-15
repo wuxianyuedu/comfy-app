@@ -1,5 +1,5 @@
 /**
- * 「类型层声明 ⇄ 执行者」判据的门禁自测（规范 §13.5.14 / ISSUE #1591）。判据 `scripts/check-tsc-diagnostic-executors.cjs`
+ * 「类型层声明 ⇄ 执行者」判据的门禁自测（规范 §13.5.14 / ISSUE #1591）。判据 `scripts/gates/check-tsc-diagnostic-executors.cjs`
  * 的三向口径：① 执行者在场（读者存在 + 与姊妹索引 `scripts/.declaration-readers.json` 逐行同源）；② 未登记声明零增量；③ 登记项脱钩即红。
  * 走共享夹具 `tests/helpers/gate-repo.ts`（§11.16.1）。⚠️ 输入面只有两份台账 + 被扫目录，import 图追不到，所以每档都只能在这里钉住，也必须进 C 组固定清单（`affected-tests.mjs`）。
  */
@@ -115,7 +115,7 @@ if (!isReaders(realReadersParsed)) {
 const REAL_READERS = realReadersParsed;
 
 const { test, expect } = defineGateRepo({
-  script: "check-tsc-diagnostic-executors.cjs",
+  script: "gates/check-tsc-diagnostic-executors.cjs",
   dirs: ["src", "scripts", "tests"],
   copy: [
     /* 两份台账都要搬进来 —— 判据会与姊妹索引逐行同源核对，缺了那一份会走
@@ -160,14 +160,14 @@ const REAL_SAMPLE = REAL_LEDGER.entries.find((e) => e.id === "a11y-rule-switch")
 /* ── 基线：真台账在真文件上应该是绿的 ──────────────────────── */
 
 test("真台账在真落点上判绿（当前状态自查）", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19)); // 57 行声明
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(19)); // 57 行声明
   const ledger: Ledger = {
     entries: [
       {
         ...SAMPLE,
-        paths: ["scripts/check-type-assertion-executor.cjs"],
+        paths: ["scripts/gates/check-type-assertion-executor.cjs"],
         markers: [MARKER],
-        baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+        baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
       },
     ],
   };
@@ -180,14 +180,14 @@ test("真台账在真落点上判绿（当前状态自查）", ({ repo }) => {
 /* ── ② 零增量：未登记的声明不许新增 ────────────────────────── */
 
 test("② 声明行数涨上去 → 阻断，且出口必须是**人写得下的动作**", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(20)); // 60 行
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(20)); // 60 行
   writeBoth(repo, {
     entries: [
       {
         ...SAMPLE,
-        paths: ["scripts/check-type-assertion-executor.cjs"],
+        paths: ["scripts/gates/check-type-assertion-executor.cjs"],
         markers: [MARKER],
-        baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+        baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
       },
     ],
   });
@@ -215,14 +215,14 @@ test("② 声明行数涨上去 → 阻断，且出口必须是**人写得下的
 });
 
 test("② 声明行数降下去 → 不阻断，但提示收紧基线", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(10)); // 30 行
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(10)); // 30 行
   writeBoth(repo, {
     entries: [
       {
         ...SAMPLE,
-        paths: ["scripts/check-type-assertion-executor.cjs"],
+        paths: ["scripts/gates/check-type-assertion-executor.cjs"],
         markers: [MARKER],
-        baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+        baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
       },
     ],
   });
@@ -235,14 +235,14 @@ test("② 声明行数降下去 → 不阻断，但提示收紧基线", ({ repo 
 /* ── ③ 台账与事实脱钩 ──────────────────────────────────────── */
 
 test("③ 落点文件上扫不到任何声明行 → 阻断（台账是负债不是赦免名单）", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", "// 只有注释，没有声明\n");
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", "// 只有注释，没有声明\n");
   writeBoth(repo, {
     entries: [
       {
         ...SAMPLE,
-        paths: ["scripts/check-type-assertion-executor.cjs"],
+        paths: ["scripts/gates/check-type-assertion-executor.cjs"],
         markers: [],
-        baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+        baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
       },
     ],
   });
@@ -252,14 +252,14 @@ test("③ 落点文件上扫不到任何声明行 → 阻断（台账是负债�
 });
 
 test("③ 登记的关键词已经找不到了 → 阻断", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(19));
   writeBoth(repo, {
     entries: [
       {
         ...SAMPLE,
-        paths: ["scripts/check-type-assertion-executor.cjs"],
+        paths: ["scripts/gates/check-type-assertion-executor.cjs"],
         markers: ["这个关键词早就不在了"],
-        baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+        baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
       },
     ],
   });
@@ -275,16 +275,16 @@ const READER_SRC =
   "function judge() {}\nfunction normalize() {}\nmodule.exports = { judge, normalize };\n";
 
 test("①′ 声称核过的面在读者脚本里找不到 → 阻断（台账那句话与事实脱钩）", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(19));
   repo.write(REAL_SAMPLE.reader, READER_SRC);
   writeBoth(repo, {
     entries: [
       {
         ...SAMPLE,
         reader: REAL_SAMPLE.reader,
-        paths: ["scripts/check-type-assertion-executor.cjs"],
+        paths: ["scripts/gates/check-type-assertion-executor.cjs"],
         markers: [MARKER],
-        baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+        baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
         verifiedSurfaces: ["judge", "normalize", "这个面根本不存在"],
       },
     ],
@@ -296,7 +296,7 @@ test("①′ 声称核过的面在读者脚本里找不到 → 阻断（台账�
 });
 
 test("①′ 声称核过的面都在读者脚本里 → 放过（正面清单不是摆设）", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(19));
   repo.write(REAL_SAMPLE.reader, READER_SRC);
   /* 姊妹索引也要认这条 reader —— 不然先在同源核对上红掉，
    * 就看不见本用例真正要测的那一格（造变异时的常规顺序）。 */
@@ -307,9 +307,9 @@ test("①′ 声称核过的面都在读者脚本里 → 放过（正面清单�
         {
           ...SAMPLE,
           reader: REAL_SAMPLE.reader,
-          paths: ["scripts/check-type-assertion-executor.cjs"],
+          paths: ["scripts/gates/check-type-assertion-executor.cjs"],
           markers: [MARKER],
-          baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+          baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
           verifiedSurfaces: ["judge", "normalize"],
         },
       ],
@@ -321,14 +321,14 @@ test("①′ 声称核过的面都在读者脚本里 → 放过（正面清单�
 });
 
 test("①′ 空数组 / 重复名字 → 阻断（写了就要核，重复是两份清单开始分叉）", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(19));
   repo.write(REAL_SAMPLE.reader, READER_SRC);
   const base = {
     ...SAMPLE,
     reader: REAL_SAMPLE.reader,
-    paths: ["scripts/check-type-assertion-executor.cjs"],
+    paths: ["scripts/gates/check-type-assertion-executor.cjs"],
     markers: [MARKER],
-    baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+    baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
   };
   const empty = repo.run();
   void empty;
@@ -346,21 +346,21 @@ test("①′ 空数组 / 重复名字 → 阻断（写了就要核，重复是�
 /* ── ① 与姊妹索引逐行同源 ──────────────────────────────────── */
 
 test("① 姊妹索引里缺同 id 的条目 → 阻断", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(19));
   writeBoth(
     repo,
     {
       entries: [
         {
           ...SAMPLE,
-          paths: ["scripts/check-type-assertion-executor.cjs"],
+          paths: ["scripts/gates/check-type-assertion-executor.cjs"],
           markers: [MARKER],
-          baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+          baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
         },
       ],
     },
     {
-      carriers: [{ id: "别的条目", reader: "scripts/check-type-assertion-executor.cjs" }],
+      carriers: [{ id: "别的条目", reader: "scripts/gates/check-type-assertion-executor.cjs" }],
     },
   );
   const { code, output } = repo.run();
@@ -369,16 +369,16 @@ test("① 姊妹索引里缺同 id 的条目 → 阻断", ({ repo }) => {
 });
 
 test("① 两处的 reader 写成不同脚本 → 阻断（同源核对拦的就是这一处漂移）", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(19));
   writeBoth(
     repo,
     {
       entries: [
         {
           ...SAMPLE,
-          paths: ["scripts/check-type-assertion-executor.cjs"],
+          paths: ["scripts/gates/check-type-assertion-executor.cjs"],
           markers: [MARKER],
-          baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+          baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
         },
       ],
     },
@@ -394,11 +394,11 @@ test("① 两处的 reader 写成不同脚本 → 阻断（同源核对拦的就
 /* ── 字段完整性 ────────────────────────────────────────────── */
 
 test("条目字段不全（缺 reader） → 阻断并点名", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(19));
   const broken = {
     ...SAMPLE,
     reader: "",
-    paths: ["scripts/check-type-assertion-executor.cjs"],
+    paths: ["scripts/gates/check-type-assertion-executor.cjs"],
   };
   writeBoth(repo, { entries: [broken] });
   const { code, output } = repo.run();
@@ -407,12 +407,12 @@ test("条目字段不全（缺 reader） → 阻断并点名", ({ repo }) => {
 });
 
 test("缺 baseline → 阻断（没有基线时零增量那一档会静默失效）", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(19));
   writeBoth(repo, {
     entries: [
       {
         ...SAMPLE,
-        paths: ["scripts/check-type-assertion-executor.cjs"],
+        paths: ["scripts/gates/check-type-assertion-executor.cjs"],
         markers: [],
         baseline: {},
       },
@@ -425,12 +425,12 @@ test("缺 baseline → 阻断（没有基线时零增量那一档会静默失效
 });
 
 test("id 重复 → 阻断", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(19));
   const one = {
     ...SAMPLE,
-    paths: ["scripts/check-type-assertion-executor.cjs"],
+    paths: ["scripts/gates/check-type-assertion-executor.cjs"],
     markers: [MARKER],
-    baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+    baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
   };
   writeBoth(repo, { entries: [one, { ...one }] });
   const { code, output } = repo.run();
@@ -469,15 +469,15 @@ test("空表 → 判失败（空表是最像全绿的那种失效）", ({ repo }
 });
 
 test("姊妹索引读不到 → 判失败，而不是跳过同源核对", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(19));
   repo.remove("scripts/.declaration-readers.json");
   writeBoth(repo, {
     entries: [
       {
         ...SAMPLE,
-        paths: ["scripts/check-type-assertion-executor.cjs"],
+        paths: ["scripts/gates/check-type-assertion-executor.cjs"],
         markers: [MARKER],
-        baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+        baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
       },
     ],
   });
@@ -493,7 +493,7 @@ test("声明行只认 JSDoc 类型位与 TS 声明头，字符串里的不算站
   /* 夹具字符串里的 `@param {string}` 若是被算成站点，计数就会随文案变化 ——
    * 而「声明落后于实现」这条判据里，文案与实现是两件事（§11.18.3.1 同款取舍）。 */
   repo.write(
-    "scripts/check-type-assertion-executor.cjs",
+    "scripts/gates/check-type-assertion-executor.cjs",
     `const fixture = "@param {string} nope";\n/** 不是类型位的一行 */\n` +
       `// export function commented() {}\n` +
       `// @param {number} 注释里的类型位\n${
@@ -506,9 +506,9 @@ test("声明行只认 JSDoc 类型位与 TS 声明头，字符串里的不算站
     entries: [
       {
         ...SAMPLE,
-        paths: ["scripts/check-type-assertion-executor.cjs"],
+        paths: ["scripts/gates/check-type-assertion-executor.cjs"],
         markers: [MARKER],
-        baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+        baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
       },
     ],
   });
@@ -519,32 +519,32 @@ test("声明行只认 JSDoc 类型位与 TS 声明头，字符串里的不算站
 /* ── `--update` 只许降不许升 ───────────────────────────────── */
 
 test("--update 收紧变短的基线 → 退 0 且真的写回台账", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(10)); // 30 行
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(10)); // 30 行
   writeBoth(repo, {
     entries: [
       {
         ...SAMPLE,
-        paths: ["scripts/check-type-assertion-executor.cjs"],
+        paths: ["scripts/gates/check-type-assertion-executor.cjs"],
         markers: [MARKER],
-        baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+        baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
       },
     ],
   });
   const { code } = repo.run(["--update"]);
   expect(code).toBe(0);
   const written = readWrittenLedger(repo);
-  expect(written.entries[0]!.baseline["scripts/check-type-assertion-executor.cjs"]).toBe(30);
+  expect(written.entries[0]!.baseline["scripts/gates/check-type-assertion-executor.cjs"]).toBe(30);
 });
 
 test("--update 遇到基线**上涨**时拒绝写入并退 2", ({ repo }) => {
-  repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(20)); // 60 行
+  repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(20)); // 60 行
   writeBoth(repo, {
     entries: [
       {
         ...SAMPLE,
-        paths: ["scripts/check-type-assertion-executor.cjs"],
+        paths: ["scripts/gates/check-type-assertion-executor.cjs"],
         markers: [MARKER],
-        baseline: { "scripts/check-type-assertion-executor.cjs": 57 },
+        baseline: { "scripts/gates/check-type-assertion-executor.cjs": 57 },
       },
     ],
   });
@@ -553,7 +553,7 @@ test("--update 遇到基线**上涨**时拒绝写入并退 2", ({ repo }) => {
   expect(output).toContain("只许降不许升");
   /* 台账必须原样不动 —— 「顺手把上涨记进基线」正是零增量那一档的失效形态。 */
   const written = readWrittenLedger(repo);
-  expect(written.entries[0]!.baseline["scripts/check-type-assertion-executor.cjs"]).toBe(57);
+  expect(written.entries[0]!.baseline["scripts/gates/check-type-assertion-executor.cjs"]).toBe(57);
 });
 
 /* ── 真仓库自查：盘面够不够、仓库现状是否绿 ────────────────── */
@@ -565,7 +565,7 @@ test("真台账非空、且真仓库判绿", async () => {
   const { execFileSync } = await import("node:child_process");
   const out = execFileSync(
     process.execPath,
-    [path.join(REAL_ROOT, "scripts", "check-tsc-diagnostic-executors.cjs")],
+    [path.join(REAL_ROOT, "scripts", "gates/check-tsc-diagnostic-executors.cjs")],
     { cwd: REAL_ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   );
   expect(out).toContain("执行者都在场");

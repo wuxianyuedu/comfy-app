@@ -398,7 +398,7 @@ function familyHits(fam: { marks: Array<RegExp>; scope?: "file" | "line" }, text
 
 /** 光晕（halo）里的裸色。`0_0_` 前缀本身就是判据：光晕在几何上没有偏移也没有扩散，
  *  投影一定有 —— 所以这条**不收投影**。投影值位里的裸色由另一侧收：
- *  `scripts/check-theme-colors.cjs` 认「源码里写了字面色值」，含写进候选名值位的那些
+ *  `scripts/gates/check-theme-colors.cjs` 认「源码里写了字面色值」，含写进候选名值位的那些
  *  （口径与它的 `\b` 教训见规范 03 §3.6.2；这里不写全候选名，理由见该节那条「被扫正文
  *  写全一条候选名 = 产物里多一条死规则」）。 */
 const HALO_RAW = /shadow-\[0_0_[0-9.]+px_rgba\(/;

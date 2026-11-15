@@ -1,10 +1,10 @@
 /**
- * 提交门槛自检（规范 13.6 / ISSUE #492）：把 `scripts/check-branch-guard.cjs` 当黑盒跑在临时仓库上，验证「不在 master
+ * 提交门槛自检（规范 13.6 / ISSUE #492）：把 `scripts/gates/check-branch-guard.cjs` 当黑盒跑在临时仓库上，验证「不在 master
  * 上直接提交」真会阻断。必须用真仓库而非 mock：判据依赖分支名 / HEAD 父提交数 / 工作树定位，mock 等于重写规则；
  * 覆盖三类提交场景。`--pr-check` 另有三种拓扑，且不能复用分支名（CNB 在 PR 上 checkout 预合并提交，`symbolic-ref HEAD` 恒等目标分支，PR #633 即因此全红）。
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
@@ -15,10 +15,10 @@ import { vi } from "vitest";
  * 不够（实测单条 7~16s）—— 文件级放宽到 30s，只影响本文件。 */
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
-const SCRIPT = join(process.cwd(), "scripts", "check-branch-guard.cjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates/check-branch-guard.cjs");
 
 const { test, expect } = defineGateRepo({
-  script: "check-branch-guard.cjs",
+  script: "gates/check-branch-guard.cjs",
   /* 脚本用 `process.cwd()` 定位扫描根 —— 落哪都一样，选 root。 */
   dir: "root",
   /* 夹具就绪后 `git init` 一个「master 上已有一个提交」的仓库：本判据的
@@ -74,11 +74,16 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
      * 会 init 一个仓库）—— 自己造一个裸目录，与「这条要验的形态」一一对应。 */
     const bare = mkdtempSync(join(tmpdir(), "branch-guard-nogit-"));
     try {
-      copyFileSync(SCRIPT, join(bare, "check-branch-guard.cjs"));
-      const output = execFileSync(process.execPath, [join(bare, "check-branch-guard.cjs")], {
-        cwd: bare,
-        encoding: "utf8",
-      });
+      mkdirSync(join(bare, "scripts", "gates"), { recursive: true });
+      copyFileSync(SCRIPT, join(bare, "scripts", "gates", "check-branch-guard.cjs"));
+      const output = execFileSync(
+        process.execPath,
+        [join(bare, "scripts", "gates", "check-branch-guard.cjs")],
+        {
+          cwd: bare,
+          encoding: "utf8",
+        },
+      );
       // 取不到分支名(空) ≠ master,判据无从命中,放行而非报错
       expect(output).toContain("[branch-guard] OK");
     } finally {

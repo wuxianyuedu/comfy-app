@@ -8,10 +8,10 @@ import path from "node:path";
 import { describe, expect, test as vitestTest } from "vitest";
 
 import { defineGateRepo, type GateRepo } from "./helpers/gate-repo";
-import { extractClaims } from "../scripts/check-commit-claims.mjs";
+import { extractClaims } from "../scripts/gates/check-commit-claims.mjs";
 
 const { test, expect: repoExpect } = defineGateRepo({
-  script: "check-commit-claims.mjs",
+  script: "gates/check-commit-claims.mjs",
   dirs: ["docs/standards", "src"],
   workdir: "commit-claims",
   /* 夹具就绪后 `git init` 一个空仓库：本判据的被测输入就是**提交对象**
@@ -360,7 +360,7 @@ describe("extractClaims 的句式口径", () => {
 describe("真历史（本仓库）", () => {
   /** 本仓库根（`tests/` 的上一级）—— 只读，不写。 */
   const REPO_ROOT = path.resolve(import.meta.dirname, "..");
-  const SCRIPT = path.join(REPO_ROOT, "scripts", "check-commit-claims.mjs");
+  const SCRIPT = path.join(REPO_ROOT, "scripts", "gates/check-commit-claims.mjs");
 
   /** 某个提交在本仓库里存在且可达（浅克隆 / 别的检出里跳过）。 */
   function hasCommit(rev: string): boolean {

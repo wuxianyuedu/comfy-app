@@ -35,7 +35,7 @@
  *     `availableParallelism` / `cpus` / `setInterval` **零命中**，没有任何要在事件循环上
  *     活着的东西 ⇒ 同步拷贝在这里不冻结任何东西。症状是「静默」，对症的是**读数**。
  *   · **不加 `BUILD_MAX_PARALLELISM` 夹取**：`build-desktop` 根本不用 `availableParallelism()`；
- *     用它的是 `scripts/ci-load.mjs`，而那里的 `resolveCores()` **优先读平台给的 `CNB_CPUS`**
+ *     用它的是 `scripts/ci/ci-load.mjs`，而那里的 `resolveCores()` **优先读平台给的 `CNB_CPUS`**
  *     （比按宿主机报数的 `availableParallelism` 更贴近「这一趟分到多少」），已经比夹取更贴事实；
  *     且本仓 CI 是 Windows runner、不是 cgroup 容器，「Node <22.5 在 cgroup v2 会回退到
  *     宿主机核数」在这一条链路上不适用。
@@ -69,7 +69,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
 
-// 时长格式化的唯一一份（先例：`scripts/ci-build-readout.mjs:96` 这样从脚本侧引 `.ts`）。
+// 时长格式化的唯一一份（先例：`scripts/ci/ci-build-readout.mjs:96` 这样从脚本侧引 `.ts`）。
 // 单位是这条读数的全部意义 —— 平台与 Node 给的时长字段都是**毫秒**，而读的人按秒读：
 // `--diagnose` 曾把一次 15m30s 的格子念成 `930916s`（≈10.7 天，ISSUE #2442）。
 // 所以这里不在脚本里再写一份格式化（AGENTS 硬规则 24 / §12.18）。
@@ -82,7 +82,7 @@ import { formatDurationMs } from "../src/lib/time-format.ts";
 import { startProgressSync } from "./progress-heartbeat.mjs";
 
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
-import { pnpmCli } from "./ci-install-deps.mjs";
+import { pnpmCli } from "./ci/ci-install-deps.mjs";
 // 启动页副本（`splash.html` + `index.html`）的清单与同步：与 dev-launcher 共用
 // 同一份实现，避免「少写一个副本名」这类静默失误在两处各自发生。
 import { syncSplashAssets } from "./launcher-core/splash-assets.mjs";
@@ -634,7 +634,7 @@ progress.step("2.6 出厂计数");
     const spawnError = /** @type {NodeJS.ErrnoException} */ (check.error);
     fail(
       `起 check-standalone-contents 失败（${spawnError.code ?? "UNKNOWN"}）：` +
-        `${spawnError.message}；实际命令：node scripts/check-standalone-contents.cjs`,
+        `${spawnError.message}；实际命令：node scripts/gates/check-standalone-contents.cjs`,
     );
   }
   if (check.status !== 0) {

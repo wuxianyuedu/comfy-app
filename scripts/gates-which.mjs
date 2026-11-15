@@ -14,7 +14,7 @@
  *     （钩子文本是唯一出处）；「这次碰没碰某条判据的收窄面」取自
  *     `ci-incremental-gates.mjs` 的登记 + `faceTouched()`（平台 `ifModify` 与复合档
  *     逐条收窄用的是同一份 glob）；一键门禁的档名取自 `quality-gate.mjs` 导出的 `GATES`。
- *   · **用例**：直接起 `scripts/affected-tests.mjs --changed-stdin --json` 那条判决链，
+ *   · **用例**：直接起 `scripts/affected-tests/affected-tests.mjs --changed-stdin --json` 那条判决链，
  *     本文件不重算 import 图、不另写筛法。
  *   · **规范**：读 `scripts/doc-reading-map.mjs`（`AGENTS.md` 那张表的机器可读副本，
  *     两边由 `tests/gates-which.test.ts` 双向核对）。
@@ -44,7 +44,7 @@ import {
   INCREMENTAL_GATES,
   faceTouched,
   narrowingEntryForScript,
-} from "./ci-incremental-gates.mjs";
+} from "./ci/ci-incremental-gates.mjs";
 import { resolveChangedFiles } from "./changed-scope.mjs";
 import { matchDocReading } from "./doc-reading-map.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
@@ -93,7 +93,8 @@ export function parseArgs(argv) {
 export function scriptOf(argv) {
   for (const raw of argv) {
     const token = String(raw ?? "").replaceAll("\\", "/");
-    const m = /(?:^|\/)scripts\/(?<script>[^/]+\.(?:mjs|cjs))$/.exec(token);
+    /* #3930 起脚本可以带域子目录（`scripts/ship/ship.mjs`）：捕获段允许 `/`。 */
+    const m = /(?:^|\/)scripts\/(?<script>[A-Za-z0-9._/-]+\.(?:mjs|cjs))$/.exec(token);
     const script = m?.groups?.script;
     if (script) {
       return `scripts/${script}`;
@@ -171,12 +172,16 @@ export function classifyHeavySteps(changed, deps = {}) {
  */
 export function affectedTests(changed, deps = {}) {
   const spawn = deps.spawn ?? spawnSync;
-  const res = spawn(process.execPath, ["scripts/affected-tests.mjs", "--changed-stdin", "--json"], {
-    cwd: ROOT,
-    encoding: "utf8",
-    input: changed.join("\n"),
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+  const res = spawn(
+    process.execPath,
+    ["scripts/affected-tests/affected-tests.mjs", "--changed-stdin", "--json"],
+    {
+      cwd: ROOT,
+      encoding: "utf8",
+      input: changed.join("\n"),
+      stdio: ["pipe", "pipe", "pipe"],
+    },
+  );
   const stdout = String(res.stdout ?? "");
   const stderr = String(res.stderr ?? "");
   if (res.status !== 0 || stdout.trim() === "") {
@@ -270,7 +275,7 @@ function testsSection(changed) {
   const got = affectedTests(changed);
   if (!got.ok) {
     const lines = [
-      `${TAG} 用例（来自 scripts/affected-tests.mjs 的判决链）：⚠ 没取到读数（${got.reason}）—— 这不是「不用跑」`,
+      `${TAG} 用例（来自 scripts/affected-tests/affected-tests.mjs 的判决链）：⚠ 没取到读数（${got.reason}）—— 这不是「不用跑」`,
     ];
     for (const line of `${got.stdout}${got.stderr}`.trim().split("\n").filter(Boolean)) {
       lines.push(`  │ ${line}`);
@@ -280,7 +285,7 @@ function testsSection(changed) {
   const { mode, tests, reasons } = got.result;
   const extra = tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t)).length;
   const lines = [
-    `${TAG} 用例（来自 scripts/affected-tests.mjs 的判决链）`,
+    `${TAG} 用例（来自 scripts/affected-tests/affected-tests.mjs 的判决链）`,
     `  · 模式 ${mode}${mode === "all" ? "（放弃收窄：固定清单全跑 + 本次变更命中，不是全量）" : "（增量面）"}` +
       ` · 共 ${tests.length} 份（固定清单 ${tests.length - extra} + 受影响 ${extra}）`,
   ];

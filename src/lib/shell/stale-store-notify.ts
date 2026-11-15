@@ -37,7 +37,7 @@ let codeUpdatedSinceLoad = false;
  *
  *  命名刻意用 `register*` 而非 `set*`：它不是 React/zustand 的 state setter，
  *  而 `set[A-Z]*` 的命名会撞上「函数式 updater 纯净性」守卫的判定口径（见
- *  `scripts/check-react-updater-purity.cjs`）——注册回调是立即生效的副作用，
+ *  `scripts/gates/check-react-updater-purity.cjs`）——注册回调是立即生效的副作用，
  *  不该看起来像个 state setter。 */
 export function registerStaleStoreDeliver(next: StaleStoreDeliver | null): void {
   deliver = next;

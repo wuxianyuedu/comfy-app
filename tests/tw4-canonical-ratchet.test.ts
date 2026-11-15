@@ -14,10 +14,10 @@ import { stripComments } from "./helpers/strip-comments";
 const REPO_ROOT = resolve(".");
 const CANON_BASELINE = join(REPO_ROOT, "scripts", ".tw4-canonical-baseline.json");
 const SPACING_BASELINE = join(REPO_ROOT, "scripts", ".tw4-spacing-baseline.json");
-const CANON_SCRIPT = join(REPO_ROOT, "scripts", "tw4-canonical-report.mjs");
-const SPACING_SCRIPT = join(REPO_ROOT, "scripts", "tw4-spacing-canonical.mjs");
+const CANON_SCRIPT = join(REPO_ROOT, "scripts", "tw4/tw4-canonical-report.mjs");
+const SPACING_SCRIPT = join(REPO_ROOT, "scripts", "tw4/tw4-spacing-canonical.mjs");
 /** 两份脚本共享的扫描内核：注释剥离就住在这里（`!row` 那条误报的修法）。 */
-const SCAN_CORE = join(REPO_ROOT, "scripts", "tw4-scan-core.mjs");
+const SCAN_CORE = join(REPO_ROOT, "scripts", "tw4/tw4-scan-core.mjs");
 
 /* SAFETY: 类型断言已复核 */
 describe.for([

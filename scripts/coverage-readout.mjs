@@ -37,7 +37,7 @@ import { pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { globToRegExp } = require("../scripts/check-format.cjs");
+const { globToRegExp } = require("./gates/check-format.cjs");
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");

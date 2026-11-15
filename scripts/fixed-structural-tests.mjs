@@ -1,7 +1,7 @@
 /**
  * 固定结构守护清单：与本次改动无关、每次提交都要跑的那批用例的**唯一出处**。
  *
- * 为什么单独成一份、而不是留在 scripts/affected-tests.mjs 里：那份是判据代码，而这一张表
+ * 为什么单独成一份、而不是留在 scripts/affected-tests/affected-tests.mjs 里：那份是判据代码，而这一张表
  * 每登记一条就顺带写下「为什么必须进固定清单」的几行说明 —— 于是「登记一条守卫」的表现
  * 变成「判据文件又长了几百行」，最后被自己的长度棘轮挡住（check-infra-file-size.cjs 是全层
  * 扫描，affected-tests.mjs 一度 957 行 / 基线登记 952）。清单与它的理由是**数据**，判据的
@@ -9,8 +9,8 @@
  * 读得动的尺寸。搬过来的文字与语义逐字保留，只换了一个位置。
  *
  * 谁在读这张表（改动时同批核对）：
- *   · scripts/affected-tests.mjs —— 编排时并入清单（唯一使用方）；
- *   · scripts/check-declaration-readers.cjs —— **解析**这份清单来核对「声明 ⇄ 读者」台账；
+ *   · scripts/affected-tests/affected-tests.mjs —— 编排时并入清单（唯一使用方）；
+ *   · scripts/gates/check-declaration-readers.cjs —— **解析**这份清单来核对「声明 ⇄ 读者」台账；
  *   · tests/affected-tests.test.ts / tests/declaration-readers-gate.test.ts —— 钉住清单与台账。
  */
 export const FIXED_STRUCTURAL_TESTS = [
@@ -27,8 +27,8 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 存在就会被读成「有 CI 兜底」——绿灯可信度的地基不能靠人记得住。
   "tests/no-platform-ci-config.test.ts",
   // 「PR 上跑什么」那份清单里的每个名字，**执行者是谁** —— 这条判据
-  // （`scripts/check-gate-name-executors.mjs`）的**自证**：它证明那个判据能红。
-  // 不进固定清单的话，它只在 `scripts/ci-gate-names.mjs` 改动时才跑 ——
+  // （`scripts/gates/check-gate-name-executors.mjs`）的**自证**：它证明那个判据能红。
+  // 不进固定清单的话，它只在 `scripts/ci/ci-gate-names.mjs` 改动时才跑 ——
   // 而「有人把它的某条用例删掉或改软」恰好**不在**改动面上，表现不是红而是
   // 「判据恒绿而没人验过它能红」：与 `doc-check-hook-wiring` 同因进固定清单。
   "tests/ci-gate-names.test.ts",
@@ -39,7 +39,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 脚本改动时才跑 —— 而「有人把算法改软」恰好不在改动面上。
   "tests/ci-heavy-gates.test.ts",
   "tests/changed-scope.test.ts",
-  // 那条判据的姊妹件：「环境前提」那一步（`scripts/ci-env-probe.mjs`）在**任何依赖
+  // 那条判据的姊妹件：「环境前提」那一步（`scripts/ci/ci-env-probe.mjs`）在**任何依赖
   // 安装之前**回答「在的那几件版本够不够」与「`.cnb.yml` 配错了没有」。它的回潮形态
   // 恰好**不在改动面上**：`ps7OnlySyntaxIn` 那两份副本住在 `scripts/` 与 `tests/` 两边，
   // 改任意一侧都不会把另一侧拉进受影响清单（一份是 `.mjs`、一份是 `.ts`，import 图
@@ -49,7 +49,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 「`.mjs` 入口经 Node ESM 直接加载 `src/**`」这条路的说明符形态（ISSUE #1959 第七跑）：
   // `e2e/support/preflight-python.mjs` 静态 import 两个 `.ts`，而它们内部的相对 import
   // 缺了 `.ts` 后缀 —— `tsc` / eslint / **vitest** 三处走打包器解析、全都放过，于是
-  // 「用例全绿、`node scripts/e2e-run.mjs` 一跑就退 1」，红在 `E2E 关键流程` 那个
+  // 「用例全绿、`node scripts/e2e/e2e-run.mjs` 一跑就退 1」，红在 `E2E 关键流程` 那个
   // 只有平台侧才会到的 stage 上（实测 897ms 崩在加载期）。这条判据按 **Node 的口径**
   // 走一遍解析链，与既有三条不是同一条解析链 —— 列进固定清单是因为它守的是
   // 「别的判据看不见的那条路」，只在受影响时才跑等于让它随下一次新增 `.mjs` 消费方过去。
@@ -151,7 +151,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 每一条都得有人钉住，都是「下一次有人写参数化用例」时才走得进的路径，
   // 所以必须进固定清单（与本次改动无关也照跑）。
   "tests/test-it-each-gate.test.ts",
-  // 门禁扫描面的**共用读取器**（`scripts/gate-scan-read.cjs`）：15 份判据都在枚举
+  // 门禁扫描面的**共用读取器**（`scripts/gates/gate-scan-read.cjs`）：15 份判据都在枚举
   // `tests/`，而并发用例会在里面写自删探针 —— 收之前有 5 份各写了一份私有容错、
   // 10 份要么裸读要么把任何错误一起静默吞掉，撞上空档就是整个 D 组带着 Node 栈崩掉，
   // 报错指向一个谁都没碰过的路径。它同时是**回潮判据**（私有副本 / 不走共用件都报红），
@@ -373,9 +373,9 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 同因：改 `.githooks/**` 会让本层放弃收窄、只跑固定清单。
   "tests/test-environment-gate.test.ts",
   // 「全量 e2e 也有主」（ISSUE #1545 / #1547）：`pnpm test:e2e` 此前是「人记得就跑」——
-  // 实测的形态是没人在跑。现在它走 `scripts/e2e-run.mjs`，跑绿即记一条账；这条判据钉的是
+  // 实测的形态是没人在跑。现在它走 `scripts/e2e/e2e-run.mjs`，跑绿即记一条账；这条判据钉的是
   // 记账语义、几条账不接错、以及钩子那一步真判了它。
-  // 它读的是 `scripts/e2e-run.mjs` / `scripts/freshness-ledger.mjs` 与两处接线文本，
+  // 它读的是 `scripts/e2e/e2e-run.mjs` / `scripts/freshness/freshness-ledger.mjs` 与两处接线文本，
   // import 图追不到，故进固定清单（与本次暂存改动无关也必须响）。
   "tests/e2e-run.test.ts",
   // 「每天首次自证」从一档扩到三档（ISSUE #1282 的续）：平台流水线删掉（ISSUE #623）之后，
@@ -575,7 +575,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 只有在下一次真并的时候才暴露（那时已经落盘了）。
   "tests/merge-changelog-anchor.test.ts",
   // 「client chunk 体积预算」这条棘轮（ISSUE #1781 / 规范 §13.5.4）：它的判据住在
-  // `scripts/check-bundle-budget.cjs`、对象是 `pnpm build` 的产物，而**回潮的形态**
+  // `scripts/gates/check-bundle-budget.cjs`、对象是 `pnpm build` 的产物，而**回潮的形态**
   // 正是「往入口加一个大依赖」—— 那种改动住在各处的组件 / 布局文件里，判据自己住在
   // `scripts/`，不会被改动的 import 图带进受影响集。同时它是自己的门禁自测 ——
   // 该拦的（产物缺失跳过 / 测量面退化 / 基线缺失 / 掏空基线 / 文件数上升 / --update 拒涨）
@@ -621,7 +621,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 回潮形态住在 `src/lib/process/**` 与宿主文件上，改动的 import 图追不到，故进固定清单。
   "tests/host-ts-loads-in-node.test.ts",
   // 「是不是被直接执行」的守卫形态（ISSUE #1961 的最后一格：CI 红在 E2E，真因在第一步）。
-  // `scripts/ci-toolchain-selfcheck.mjs` 与 `scripts/python-probe.mjs` 曾用
+  // `scripts/ci/ci-toolchain-selfcheck.mjs` 与 `scripts/python-probe.mjs` 曾用
   // `import.meta.url === \`file://${path.resolve(process.argv[1])}\`` 判「自己有没有被
   // 直接执行」—— 拼出来的是 `file://F:\…\x.mjs`（两斜杠 + 反斜杠），而 `import.meta.url`
   // 是 `file:///F:/…/x.mjs`（三斜杠 + 正斜杠），**在 Windows 上恒不相等**：`main()`
@@ -649,7 +649,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 改配置在静态 import 图里追不到任何用例，故进固定清单。
   "tests/ci-autofix-duties.test.ts",
   // 平台侧「装依赖那一跳什么时候可以跳过」（ISSUE #1981 收尾，规范 §13.5.20）。
-  // 这一步的逻辑住在 `.cnb.yml` 之外的 `scripts/ci-install-deps.mjs` 里，可它的
+  // 这一步的逻辑住在 `.cnb.yml` 之外的 `scripts/ci/ci-install-deps.mjs` 里，可它的
   // **判定输入**（本次变更清单、`node_modules` 在不在）只有平台上才真实 —— 判反一边
   // 的代价都不对等：判宽了少省几秒，判窄了是拿一个陈旧的 `node_modules` 去跑后面
   // 三十步门禁（红法全在别处）。触发面是那个脚本与 `.cnb.yml`，静态 import 图里
@@ -675,7 +675,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   "tests/spawn-shell-scan.test.ts",
   // 「`docs/api/**` 的产物到底由哪些文件决定」（ISSUE #2223）：收窄面原先只有三根
   // （`src/lib` / `src/server` / `src/trpc`），而 typedoc 沿 import 走 —— 三根之外的
-  // 文件也会进产物（`BackupResult` 定义在 `scripts/db-backup-core.mjs`，它出现在
+  // 文件也会进产物（`BackupResult` 定义在 `scripts/db/db-backup-core.mjs`，它出现在
   // `docs/api/**` 里）⇒ 改那份文件**不会被判到**，而漏判是静默的（`ifModify` 跳过的
   // 形态与「判过且通过」在读数上无差别）。这条守的是「**面 ⇄ 事实**」：闭包由
   // `scripts/docs-api-input-closure.mjs` 从 `typedoc.json` 算出，收窄面罩不住它就红。

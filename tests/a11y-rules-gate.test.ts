@@ -1,5 +1,5 @@
 /**
- * 「jsx-a11y 规则开关 ⇄ 判据」门禁自测（规范 06 §6.12）。`scripts/check-a11y-rules.cjs` 五向：官方 recommended 全开且 options 逐字一致、
+ * 「jsx-a11y 规则开关 ⇄ 判据」门禁自测（规范 06 §6.12）。`scripts/gates/check-a11y-rules.cjs` 五向：官方 recommended 全开且 options 逐字一致、
  * 方言双向、被关掉的须登记、就地豁免写全理由与 keeper、两份官方配置未提及的非废弃规则须有裁决。判据配置（`oxlint.parity.config.mjs`）
  * 每进程只求值一次，故共进程一次真加载；除「CLI 绿」「`--report` 恒 0」外不起子进程；夹具与真台账解耦。
  */

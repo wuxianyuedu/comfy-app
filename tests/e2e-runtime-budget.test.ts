@@ -175,7 +175,7 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
 
 /**
  * 现场编译档的并发（ISSUE #1834）—— **它改的是负载，不是任何判据的预算**。立案现场：
- * `node scripts/e2e-run.mjs` 在 win32 检出报 43 failed / 35 passed，33 条卡在 `Test timeout of
+ * `node scripts/e2e/e2e-run.mjs` 在 win32 检出报 43 failed / 35 passed，33 条卡在 `Test timeout of
  * 60000ms`（dev 按需编译 + 8 worker，首帧导航吃满自测向预算）。取向是**降并发**而不是抬 `timeout`
  * （抬预算 = 拿预算换绿，§11.13），所以钉住的是：判据一个字没动，动的只有负载。 */
 describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 / #1998）", () => {
@@ -246,7 +246,7 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
      * 读不出是哪种负载）—— 两边**刻意不互相 import**（`playwright.config.ts` 是
      * Playwright 的入口文件，拿它当纯函数库引进来会让跑法脚本依赖整个配置图的求值），
      * 所以这一条钉的是「同一个 webServer 档 + 两侧都报得出 worker 数」。 */
-    const e2eRun: unknown = await import("../scripts/e2e-run.mjs");
+    const e2eRun: unknown = await import("../scripts/e2e/e2e-run.mjs");
     if (!hasServerModeReader(e2eRun)) {
       throw new Error("e2e-run.mjs 缺 resolveServerMode");
     }
@@ -274,7 +274,7 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
      * 三份判据各有失效形态：①两份实现同答案（否则日志说 dev、跑的其实是 start，比没有更坏，§11.23）；
      * ②显式压过 `CI`；③认不出的值抛而不是回落（回落 = 拼错字母悄悄换档，两档负载形态完全不同）。 */
     const { resolveWebServerCommand, E2E_SERVER_COMMANDS } = await import("../playwright.config");
-    const e2eRun: unknown = await import("../scripts/e2e-run.mjs");
+    const e2eRun: unknown = await import("../scripts/e2e/e2e-run.mjs");
     if (!hasServerModeReader(e2eRun)) {
       throw new Error("e2e-run.mjs 缺 resolveServerMode");
     }

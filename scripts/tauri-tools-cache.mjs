@@ -56,8 +56,8 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { extractZipTo } from "./ci-toolchain-browser-fetch.mjs";
-import { TOOLS_ROOT_ENV, resolveToolRoot } from "./ci-cache-slot.mjs";
+import { extractZipTo } from "./ci/ci-toolchain-browser-fetch.mjs";
+import { TOOLS_ROOT_ENV, resolveToolRoot } from "./ci/ci-cache-slot.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 
 const HERE = import.meta.dirname;

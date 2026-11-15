@@ -35,7 +35,7 @@ function isArtifactHintModule(v: unknown): v is {
 // 判据脚本是 CJS（与 scripts/check-*.cjs 同族，`@ts-nocheck` 后经 require 进来是 any），
 // 按仓库惯例给 mod 显式标注返回形状 —— 标注靠上面的类型守卫逐个导出核对，不靠断言。
 // oxlint-disable-next-line typescript/no-require-imports
-const required: unknown = require("../scripts/check-tsc-artifact-hint.cjs");
+const required: unknown = require("../scripts/gates/check-tsc-artifact-hint.cjs");
 
 if (!isArtifactHintModule(required)) {
   throw new Error("check-tsc-artifact-hint.cjs 的导出面不对");
@@ -165,7 +165,7 @@ describe("tsc 生成物报错的点破（#1182）", () => {
   it("CLI 读到不可读的日志时安静退出（附属信息不该制造第二种失败）", () => {
     const r = spawnSync(
       process.execPath,
-      ["scripts/check-tsc-artifact-hint.cjs", "--file", "does-not-exist.log"],
+      ["scripts/gates/check-tsc-artifact-hint.cjs", "--file", "does-not-exist.log"],
       { encoding: "utf8" },
     );
     expect(r.status).toBe(0);

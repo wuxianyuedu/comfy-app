@@ -20,7 +20,7 @@ import { cleanGitEnv, git, HOOK, resolveMergeBaseRef, ROOT } from "./git-ref.mjs
  * 接受三种写法（都在 §13.6.2 的现场出现过）：
  *   · 钩子标签：`check-ui-primitives`（唯一命中 `.githooks/pre-commit` 的
  *     `run "<标签>" <命令>` 那一行，命令从钩子里取，不抄第二份）；
- *   · 裸脚本名：`scripts/check-ui-primitives.cjs`（补 `node` 前缀）；
+ *   · 裸脚本名：`scripts/gates/check-ui-primitives.cjs`（补 `node` 前缀）；
  *   · 完整命令：`node scripts/x.cjs --strict` / `pnpm exec vitest run …`（原样）。
  *
  * 标签匹配**必须唯一** —— 命中 0 条或多条都判失败并列出候选，别猜。
@@ -156,7 +156,7 @@ export function resolveMergeBatch(input = [], hookPath = HOOK) {
  *
  * 为什么这一族不能由 `readHookSteps` 收上来：它们**天然进不了钩子**，而理由与
  * 「代价高」无关 —— 是**本地看不到那个形态**。首发成员是
- * `scripts/check-commit-claims.mjs`（「提交信息里的声明 ⇄ 那次提交的事实」）：
+ * `scripts/gates/check-commit-claims.mjs`（「提交信息里的声明 ⇄ 那次提交的事实」）：
  *
  *   · 声明说的是**某一次提交**的树（「§x.y 照旧保留」），核对必须手上有那次提交的
  *     事实；而丢失发生在**平台侧 squash** 那一刻，本地钩子跑的时候那次提交还没诞生
@@ -227,7 +227,7 @@ export function groupSteps(hookPath = HOOK) {
  *
  * ⇒ 名单在此导出，因为**两处都要用同一个问法**：「这一步的判决面是不是只存在于
  * 「本次改动」上」—— 合并前复算据此**不收**它（`mayDecideOnCleanSnapshot`），
- * 平台复合档据此**换判决面**或**单列成没判**（`scripts/ci-heavy-gates.mjs`）。
+ * 平台复合档据此**换判决面**或**单列成没判**（`scripts/ci/ci-heavy-gates.mjs`）。
  * 两处各写一份名单就会漂开，而漂开的形态是「一处判了、另一处没判」。
  *
  * ⚠️ **这一族是「按参数形态识别」抓不到的那一半**（ISSUE #2265 的现场）：

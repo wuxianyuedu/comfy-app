@@ -60,7 +60,7 @@ export function checkPythonReady(options = {}) {
 }
 
 /**
- * 「缺件」时给人看的那段话（`e2e-run.mjs` 直接打印它）。与判决同源（§12.12）；出口写成一条能直接跑的命令 —— `scripts/ci-toolchain-selfcheck.mjs` 按平台挑安装器（Windows 是 `winget`）。
+ * 「缺件」时给人看的那段话（`e2e-run.mjs` 直接打印它）。与判决同源（§12.12）；出口写成一条能直接跑的命令 —— `scripts/ci/ci-toolchain-selfcheck.mjs` 按平台挑安装器（Windows 是 `winget`）。
  * @param {{detail: string, evidence?: string[]}} preflight
  * @returns {string}
  */
@@ -70,7 +70,7 @@ export function describePythonMissing(preflight) {
     /* 判决同源的**论据**（`checkPythonReady` 算好的）排在最前面：缺件时这一行通常是
      * 排障的全部线索，而「真没有」与「扫的那一侧漏了」在断言里同形。 */
     ...(preflight.evidence ?? []),
-    "[e2e]   补它：node scripts/ci-toolchain-selfcheck.mjs   （缺 Python 的机器上跑一次，缺什么它自己装）",
+    "[e2e]   补它：node scripts/ci/ci-toolchain-selfcheck.mjs   （缺 Python 的机器上跑一次，缺什么它自己装）",
     "[e2e]   全量读数：node scripts/python-probe.mjs   （两条链逐候选并列；本行判的是",
     "[e2e]         `resolvePython` 手工扫 PATH 那条，而「工具链自证 / Python 可用性」走的是",
     "[e2e]         起裸名字那条）",

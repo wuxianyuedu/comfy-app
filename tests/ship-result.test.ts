@@ -19,7 +19,7 @@ import {
   formatShipResult,
   readShipResult,
   runResultQuery,
-} from "../scripts/ship-result.mjs";
+} from "../scripts/ship/ship-result.mjs";
 
 const ROOT = process.cwd();
 
@@ -183,7 +183,7 @@ describe("best-effort 与回读分档", () => {
   });
 
   it("CLI 回读口跑得起来，且只吐读数", () => {
-    const r = spawnSync(process.execPath, ["scripts/ship-result.mjs", "--json"], {
+    const r = spawnSync(process.execPath, ["scripts/ship/ship-result.mjs", "--json"], {
       cwd: ROOT,
       encoding: "utf8",
     });

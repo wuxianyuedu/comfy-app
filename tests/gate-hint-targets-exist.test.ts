@@ -13,10 +13,10 @@ const SCRIPTS_DIR = path.join(ROOT, "scripts");
 
 /** 锚点：只用于「自动发现没漏」与增量层的显式绑定，不作为扫描面的来源。 */
 const ANCHOR_SCRIPTS = [
-  "scripts/check-theme-colors.cjs",
-  "scripts/check-ui-primitives.cjs",
-  "scripts/check-dead-exports.cjs",
-  "scripts/check-file-structure.cjs",
+  "scripts/gates/check-theme-colors.cjs",
+  "scripts/gates/check-ui-primitives.cjs",
+  "scripts/gates/check-dead-exports.cjs",
+  "scripts/gates/check-file-structure.cjs",
 ];
 
 const PATH_RE =
@@ -50,18 +50,24 @@ export function quotedRepoPaths(text: string): Array<string> {
  * 只扫主文件时实测路径字面量从 111 条掉到 40 条，掉的 71 条**没有红**，覆盖面静默缩六成半。
  */
 function gateScripts(): Array<string> {
-  const roots = readdirSync(SCRIPTS_DIR)
+  /* #3930 起判据归入 `scripts/gates/`：从那一层起扫。 */
+  const roots = readdirSync(path.join(SCRIPTS_DIR, "gates"))
     .filter((f) => /^check-.*\.cjs$/.test(f))
-    .map((f) => `scripts/${f}`);
+    .map((f) => `scripts/gates/${f}`);
   const seen = new Set(roots);
   const queue = [...roots];
   while (queue.length > 0) {
     const rel = queue.shift()!;
     const src = sourceOf(rel);
-    /* 只认同目录相对形态：仓里判据之间的引用全是这一种（口径同
-     * `tests/helpers/gate-repo.ts` 的 `copyGateDeps`）。 */
-    for (const m of src.matchAll(/require\(\s*"\.\/(?<name>[\w.-]+\.cjs)"\s*\)/g)) {
-      const dep = `scripts/${m.groups?.name ?? ""}`;
+    /* 只认相对说明符：`./x.cjs`（同目录）与 `../域/x.mjs`（跨域依赖，#3930 起）。
+     * 按引用方所在目录解析，与 `tests/helpers/gate-repo.ts` 的 `copyGateDeps` 同口径。 */
+    for (const m of src.matchAll(/require\(\s*"(?<spec>\.{1,2}\/[\w./-]+\.cjs)"\s*\)/g)) {
+      const spec = m.groups?.spec ?? "";
+      if (!spec) continue;
+      const dep = path
+        .normalize(path.join(path.dirname(rel), spec))
+        .split(path.sep)
+        .join("/");
       if (seen.has(dep) || !existsSync(path.join(ROOT, dep))) {
         continue;
       }
@@ -86,12 +92,12 @@ const PRODUCT_ROOT_LITERALS: Array<{
   script: string;
 }> = [
   {
-    script: "scripts/check-standalone-contents.cjs",
+    script: "scripts/gates/check-standalone-contents.cjs",
     path: "scripts/executor-host.runtime.mjs",
     generatedBy: "scripts/build-executor-host.mjs",
   },
   {
-    script: "scripts/check-standalone-contents.cjs",
+    script: "scripts/gates/check-standalone-contents.cjs",
     path: "scripts/executor-host.build.json",
     generatedBy: "scripts/build-executor-host.mjs",
   },
@@ -267,14 +273,14 @@ describe("门禁脚本里的路径字面量必须存在", () => {
     /* ① 登记方脚本里必须有那个字面量 —— 反过来用一份不存在的路径，
        与上面的 `toContain` 同口径（不同路径不同脚本）。 */
     expect(
-      quotedRepoPaths(sourceOf("scripts/check-annotate-consumer.cjs")),
+      quotedRepoPaths(sourceOf("scripts/gates/check-annotate-consumer.cjs")),
       "登记方脚本里认不出台账字面量了：招牌由这句『路径必须被真读』撑着",
     ).toContain("scripts/.annotate-consumers.json");
 
     /* ② 判定②问的是「脚本对『路径不存在』站得下吗」。本仓库现在站得下 ——
        用的是真脚本、真仓库（同上面那几个 `exitCodeOfGate` 调用）。 */
     expect(
-      exitCodeOfGate("scripts/check-annotate-consumer.cjs"),
+      exitCodeOfGate("scripts/gates/check-annotate-consumer.cjs"),
       "零站点那条快路径坏了：台账在、脚本仍须退 0（条件路径的登记理由已不成立）",
     ).toBe(0);
 
@@ -283,7 +289,7 @@ describe("门禁脚本里的路径字面量必须存在", () => {
        （台账落库那次，这一问就是这样红的 —— 那两条例外当时没被同批删掉）。 */
     const wouldPassAsConditional = (p: string) => !existsSync(path.join(ROOT, p));
     expect(
-      wouldPassAsConditional("scripts/check-annotate-consumer.cjs"),
+      wouldPassAsConditional("scripts/gates/check-annotate-consumer.cjs"),
       "真存在的路径被判成『条件路径』了：这一问再也不会拦住过期例外",
     ).toBe(false);
     expect(
@@ -294,13 +300,13 @@ describe("门禁脚本里的路径字面量必须存在", () => {
 
   it("假路径判为不存在、真路径判为存在（上面那条不是空转）", () => {
     const src = [
-      'const ok = "scripts/check-ui-primitives.cjs";',
+      'const ok = "scripts/gates/check-ui-primitives.cjs";',
       'const gone = "src/components/studio/canvas/DefinitelyNotThere.tsx";',
       "// 注释里的历史路径不算：src/lib/app-settings.ts",
       'const url = "https://example.com/src/not/a/path.ts";',
     ].join("\n");
     const found = quotedRepoPaths(src);
-    expect(found).toContain("scripts/check-ui-primitives.cjs");
+    expect(found).toContain("scripts/gates/check-ui-primitives.cjs");
     expect(found).toContain("src/components/studio/canvas/DefinitelyNotThere.tsx");
     expect(found, "注释里的旧路径不该进判据面（那多半是在叙述历史）").not.toContain(
       "src/lib/app-settings.ts",

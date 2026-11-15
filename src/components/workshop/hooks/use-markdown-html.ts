@@ -3,7 +3,7 @@
 /**
  * `useMarkdownHtml` —— markdown → HTML 的**按需**渲染。`~/lib/markdown` 顶层依赖 `marked` + `dompurify`（全库最重的两个客户端依赖），静态 import 会把它们带进
  * 任何静态可达组件的图，故这里改成 `import()`：第一次拿到非空 markdown 才下载，首帧返回空串。stale 守卫必要（规范 16 §16.2.4.34）：下载期间 `text` 变了时旧一轮
- * 结果不许落地。判据 `scripts/check-barrel-heavy-deps.cjs` 拒绝静态 import 回它。
+ * 结果不许落地。判据 `scripts/gates/check-barrel-heavy-deps.cjs` 拒绝静态 import 回它。
  */
 import { useEffect, useState } from "react";
 

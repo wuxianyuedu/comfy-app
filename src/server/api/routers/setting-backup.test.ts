@@ -23,7 +23,7 @@ vi.mock("~/server/better-auth", () => ({
 import { createCallerFactory } from "~/server/api/trpc";
 import { settingRouter } from "~/server/api/routers/setting";
 import { makeCtx } from "../../../../tests/helpers/trpc";
-import { BACKUP_DIR } from "../../../../scripts/db-backup-core.mjs";
+import { BACKUP_DIR } from "../../../../scripts/db/db-backup-core.mjs";
 
 const createCaller = createCallerFactory(settingRouter);
 
