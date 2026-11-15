@@ -10,7 +10,7 @@ import { DrizzleRepository } from "./repository-base";
 import type { DbExecutor } from "./repository-executor-types";
 import { tailWindow } from "~/lib/page-window";
 import { KeyedAsyncMutex } from "~/lib/async-mutex";
-import { eq, and, desc, asc, inArray, isNotNull, notInArray, count } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, isNotNull, notInArray, ne, count } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
 
 /** 影片日志追加的按片互斥（ISSUE #3836）：`logs` 是 JSON 列，追加是
@@ -212,12 +212,20 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
     return rows.length > 0;
   }
 
-  /** 同 {@link claimGenerating}，合成侧：仅当不在 COMPOSING/DONE 时写成 COMPOSING。 */
+  /** 同 {@link claimGenerating}，合成侧：仅当不在 COMPOSING/DONE/CANCELLED/FAILED 时写成 COMPOSING。
+   *  CANCELLED/FAILED 也在排除集（ISSUE #3867）：原先只排 COMPOSING/DONE，
+   *  「取消」与「合成抢跑」赛跑时会给已取消的影片跑完 ffmpeg 并标 DONE——
+   *  状态与产物互相矛盾。 */
   async claimComposing(id: string): Promise<boolean> {
     const rows = await db
       .update(filmProject)
       .set({ status: "COMPOSING", progress: 90, error: null })
-      .where(and(eq(filmProject.id, id), notInArray(filmProject.status, ["COMPOSING", "DONE"])))
+      .where(
+        and(
+          eq(filmProject.id, id),
+          notInArray(filmProject.status, ["COMPOSING", "DONE", "CANCELLED", "FAILED"]),
+        ),
+      )
       .returning({ id: filmProject.id });
     return rows.length > 0;
   }
@@ -226,11 +234,13 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
     await db
       .update(filmProject)
       .set({ status: "DONE", progress: 100, finalVideo, error: null })
-      .where(eq(filmProject.id, id));
+      /* 终态守卫（ISSUE #3867）：取消是用户终态，不得被合成收口改判 DONE。 */
+      .where(and(eq(filmProject.id, id), ne(filmProject.status, "CANCELLED")));
   }
 
-  async markCancelled(id: string): Promise<void> {
-    await db
+  async markCancelled(id: string, executor?: DbExecutor): Promise<void> {
+    const exec = executor ?? db;
+    await exec
       .update(filmProject)
       .set({ status: "CANCELLED", error: "已取消" })
       .where(eq(filmProject.id, id));
@@ -340,8 +350,9 @@ export class FilmShotRepository {
       );
   }
 
-  async markAllActiveFailed(filmId: string): Promise<void> {
-    await db
+  async markAllActiveFailed(filmId: string, executor?: DbExecutor): Promise<void> {
+    const exec = executor ?? db;
+    await exec
       .update(filmShot)
       .set({ status: "FAILED" })
       .where(and(eq(filmShot.filmId, filmId), inArray(filmShot.status, ["QUEUED", "RUNNING"])));

@@ -10,7 +10,7 @@ import { production, type Production } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import type { DbExecutor } from "./repository-executor-types";
 import { and, eq } from "drizzle-orm";
-import type { ProductionRun } from "~/lib/production/run-types";
+import { normalizeProductionRun, type ProductionRun } from "~/lib/production/run-types";
 
 /** 写一条生产数据（按 proj_* upsert）的入参；JSON 列传对象，Drizzle 负责序列化。 */
 export type ProductionInput = {
@@ -57,6 +57,57 @@ export class ProductionRepository extends DrizzleRepository<Production> {
       .where(and(eq(production.id, id), eq(production.userId, userId)))
       .returning({ id: production.id });
     return rows.length > 0;
+  }
+
+  /**
+   * 起片权的 CAS 认领（ISSUE #3868）：仅当 `run.filmStartedAt` 还是空串时写入
+   * 时间戳，返回是否抢到。原先「createFilmFromProject → startFilm（数分钟）→
+   * saveRun 才落 filmStartedAt」，起片成功到落库之间隔着整个逐镜生成窗口——
+   * 进程在窗口内崩溃（或 saveRun 失败），重启后 filmStartedAt 仍为空，用户再点
+   * 一次「启动」会建出第二条完整成片管线（双倍算力与产物）。改成起片**前**先在
+   * immediate 事务里认领：抢到才有资格起片，崩溃窗口不再产生第二套管线。
+   * 行不存在 → false（无生产数据可认领）。
+   */
+  async claimFilmStart(userId: string, id: string, ts: string): Promise<boolean> {
+    return db.transaction(
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(production)
+          .where(and(eq(production.id, id), eq(production.userId, userId)))
+          .limit(1);
+        const row = rows[0];
+        if (!row) {
+          return false;
+        }
+        const run = normalizeProductionRun(row.run);
+        if (run.filmStartedAt !== "") {
+          return false;
+        }
+        await tx
+          .update(production)
+          .set({ run: { ...run, filmStartedAt: ts }, updatedAt: new Date() })
+          .where(and(eq(production.id, id), eq(production.userId, userId)));
+        return true;
+      },
+      { behavior: "immediate" },
+    );
+  }
+
+  /**
+   * 起片失败的补偿（ISSUE #3868）：把 `filmStartedAt` 清回空串，下一拍规划器
+   * 可以重新发起 render_film。只在确实写着时间戳时才写（免一次无谓的覆盖）。
+   */
+  async clearFilmStart(userId: string, id: string): Promise<void> {
+    const row = await this.getForUser(userId, id);
+    if (!row) {
+      return;
+    }
+    const run = normalizeProductionRun(row.run);
+    if (run.filmStartedAt === "") {
+      return;
+    }
+    await this.updateRun(userId, id, { ...run, filmStartedAt: "" });
   }
 
   /**

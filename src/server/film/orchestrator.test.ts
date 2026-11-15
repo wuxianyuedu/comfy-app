@@ -197,8 +197,9 @@ describe("cancelFilm — 取消要撤到任务层，不能只改界面状态", (
 
     // 只撤真的带 taskId 的镜头（null 的没有任务可撤）
     expect(cancelTaskMock.mock.calls.map((c) => c[0])).toEqual(["t1", "t3"]);
-    expect(shotRepo.markAllActiveFailed).toHaveBeenCalledWith("f1");
-    expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1");
+    /* #3867：两步收进 immediate 事务，仓储收到的第二参是事务执行者。 */
+    expect(shotRepo.markAllActiveFailed).toHaveBeenCalledWith("f1", expect.anything());
+    expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1", expect.anything());
     expect(filmRepo.appendLog).toHaveBeenCalledWith(
       "f1",
       expect.objectContaining({ level: "warn", msg: "影片已取消" }),
@@ -216,19 +217,19 @@ describe("cancelFilm — 取消要撤到任务层，不能只改界面状态", (
     await cancelFilm("f1");
 
     expect(cancelTaskMock).toHaveBeenCalledTimes(2);
-    expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1");
+    expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1", expect.anything());
   });
 });
 
 describe("startFilm — 自主成片逐镜生成默认带随机种子（走「种子」对外参数）", () => {
   it("首帧图与视频两跳都各带一个有限数字 seed", async () => {
-    // status=CANCELLED 只为了让 startFilm 末尾的 `void watchFilm` 立刻早退，
-    // 不在测试里跑后台轮询循环（startFilm 本身只挡 GENERATING/COMPOSING）。
-    filmRepo.findById.mockResolvedValue({
-      id: "f1",
-      userId: "u1",
-      status: "CANCELLED",
-    });
+    /* #3867：startFilm 开头读一次影片，逐镜提交前每镜再重读一次。前两读给
+     * GENERATING 放行；之后给 CANCELLED——startFilm 末尾的 `void watchFilm`
+     * 起的监看在第一拍就早退，不在测试里跑后台轮询循环。 */
+    filmRepo.findById
+      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
+      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
+      .mockResolvedValue({ id: "f1", userId: "u1", status: "CANCELLED" });
     shotRepo.listByFilm.mockResolvedValue([
       {
         id: "s1",
