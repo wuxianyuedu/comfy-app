@@ -170,20 +170,60 @@ function callerLoc(): string {
  *  - `LOGS_MAX_LINES`：单个任务的行数，超出丢最旧的（保留最新一段）；
  *  - `LOGS_MAX_TASKS`：同时驻留的任务数，超出按「最久没写过」淘汰。
  * 只限行数，Map 的键仍随执行过的任务数单调增长；只限任务数，一个失控任务
- * 照样能把内存撑爆。淘汰不丢数据：日志已由 `persistLogs` 落库，SSE 回放
- * 读不到内存时会回落 DB 列（见 stream route 的 `replaySrc`）。 */
+ * 照样能把内存撑爆。淘汰不丢数据：**还有 pending 落库定时器的任务不淘汰**
+ * （见下方 `touchAndEvict` 的 `skip`，#4021），日志必然先落库再退出驻留；
+ * SSE 回放读不到内存时会回落 DB 列（见 stream route 的 `replaySrc`）。 */
 export const LOGS_MAX_LINES = 5000;
 
 export const LOGS_MAX_TASKS = 64;
 
+// 每个 taskId 一个防抖落库器。一个任务最多只有一次待写；
+
+// 防抖窗口内后续的 `log()` 调用会重置计时器。
+
+// 「最长延迟」看门狗保证持续输出（例如按节点 ▶/✔ 的突发）
+
+// 仍能在约 1.5s 内落库，SSE 重放因此能及时拿到。
+
+// （每条都写会把数据库写爆，所以必须合并。）
+
+const PERSIST_DEBOUNCE_MS = 200;
+
+const PERSIST_MAX_DELAY_MS = 1500;
+
+const persistTimers = new Map<
+  string,
+  {
+    debounce: ReturnType<typeof setTimeout>;
+    maxDelay: ReturnType<typeof setTimeout>;
+  }
+>();
+
 /** 写入并把该任务标记为「最近使用」，再淘汰超出 `maxTasks` 的最久未用项。
  *  Map 的迭代序是插入序、对已存在的键 `set` 不改变位置 —— 所以标记最近
- *  使用要 delete 后再 set，淘汰时取迭代器的第一个键即得最旧项。 */
-function touchAndEvict<V>(map: Map<string, V>, taskId: string, value: V, maxTasks: number): void {
+ *  使用要 delete 后再 set，淘汰时取迭代器的第一个键即得最旧项。
+ *
+ *  `skip`：命中即**跳过本轮淘汰**（#4021）。日志 Map 传「还有 pending 落库
+ *  定时器」——被淘汰任务的 pending `persistLogs` 会以空数组 `replaceLogs`
+ *  抹掉 DB 里已落库的日志；「日志已落库才可淘汰」这条不变式靠它守住。
+ *  全部键都被 skip 时允许暂时超限（ bounded：最迟 1.5s 的兜底 flush 后回落）。 */
+function touchAndEvict<V>(
+  map: Map<string, V>,
+  taskId: string,
+  value: V,
+  maxTasks: number,
+  skip?: (taskId: string) => boolean,
+): void {
   map.delete(taskId);
   map.set(taskId, value);
   while (map.size > maxTasks) {
-    const oldest = map.keys().next().value;
+    let oldest: string | undefined;
+    for (const key of map.keys()) {
+      if (skip?.(key) !== true) {
+        oldest = key;
+        break;
+      }
+    }
     if (oldest === undefined) {
       break;
     }
@@ -204,7 +244,8 @@ export function log(taskId: string, level: LogEntry["level"], msg: string): LogE
     arr.splice(0, arr.length - LOGS_MAX_LINES);
   }
 
-  touchAndEvict(store.logs, taskId, arr, LOGS_MAX_TASKS);
+  /* 淘汰跳过「还有 pending 落库」的任务（#4021）：先落库、再淘汰，顺序不能反。 */
+  touchAndEvict(store.logs, taskId, arr, LOGS_MAX_TASKS, (id) => persistTimers.has(id));
 
   schedulePersistLogs(taskId);
 
@@ -247,28 +288,6 @@ export function takeQueuedEntries(taskId: string): Array<LogEntry> {
   store.queuedEntries.delete(taskId);
   return kept;
 }
-
-// 每个 taskId 一个防抖落库器。一个任务最多只有一次待写；
-
-// 防抖窗口内后续的 `log()` 调用会重置计时器。
-
-// 「最长延迟」看门狗保证持续输出（例如按节点 ▶/✔ 的突发）
-
-// 仍能在约 1.5s 内落库，SSE 重放因此能及时拿到。
-
-// （每条都写会把数据库写爆，所以必须合并。）
-
-const PERSIST_DEBOUNCE_MS = 200;
-
-const PERSIST_MAX_DELAY_MS = 1500;
-
-const persistTimers = new Map<
-  string,
-  {
-    debounce: ReturnType<typeof setTimeout>;
-    maxDelay: ReturnType<typeof setTimeout>;
-  }
->();
 
 /** 取消某个任务的「日志落库」防抖定时器（若存在）。
  *
