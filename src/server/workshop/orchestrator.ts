@@ -105,8 +105,47 @@ async function load(id: string): Promise<WorkshopSessionState> {
 
 // ── 阶段 0：会话与元信息 ───────────────────────────────────────
 
-export async function createSession(input: repo.CreateSessionInput = {}) {
-  return repo.createSession(input);
+/** 会话创建的去重窗口与指纹账（ISSUE #3852，见 createSession 内注释）。 */
+const CREATE_DEDUP_TTL_MS = 5 * 60_000;
+type CreateFingerprintEntry = { at: number; sessionId: string };
+
+function createFingerprintStore(): Map<string, CreateFingerprintEntry> {
+  const g = globalThis as typeof globalThis & {
+    __workshopCreateDedup_v1?: Map<string, CreateFingerprintEntry>;
+  };
+  g.__workshopCreateDedup_v1 ??= new Map();
+  return g.__workshopCreateDedup_v1;
+}
+
+export async function createSession(input: repo.CreateSessionInput = {}): Promise<string> {
+  /* 重试去重（ISSUE #3852）：MCP 工具超时重试 / 模型对同一指令二次调用时，
+   * 参数逐字相同——按参数指纹在短窗口内返回既有会话，不再重复建
+   * 「会话 + 项目 + production」三件套。显式绑 projectId 的调用同样参与：
+   * 重试重复绑定无害，返回同一会话。进程内 Map 即可（MCP 服务端单进程），
+   * 挂 globalThis 与仓内其它单例同口径。 */
+  const dedupKey = JSON.stringify([
+    input.userId ?? null,
+    input.projectId ?? null,
+    input.title ?? "",
+    input.type ?? "",
+    input.tone ?? "",
+    input.logline ?? "",
+    input.idea ?? "",
+  ]);
+  const store = createFingerprintStore();
+  const hit = store.get(dedupKey);
+  if (hit !== undefined && Date.now() - hit.at < CREATE_DEDUP_TTL_MS) {
+    /* 命中还要复核会话仍在：测试夹具会整库重置，生产侧也可能删会话；
+     * 已消失的命中按未命中处理（重新创建）—— 去重不跨「会话已消失」。 */
+    const existing = await repo.getSession(hit.sessionId);
+    if (existing) {
+      return hit.sessionId;
+    }
+    store.delete(dedupKey);
+  }
+  const id = await repo.createSession(input);
+  store.set(dedupKey, { sessionId: id, at: Date.now() });
+  return id;
 }
 
 export async function listSessions() {
@@ -140,10 +179,24 @@ export async function setIdea(id: string, idea: string) {
 
 // ── 阶段 1：脚本 ───────────────────────────────────────────────
 
-export async function generateScript(id: string) {
+export async function generateScript(id: string, force = false) {
   const state = await load(id);
   if (!state.idea.trim()) {
     throw new Error("请先设置 idea（灵感 / 梗概）再生成脚本");
+  }
+  /* 幂等闸（ISSUE #3852）：已有剧本时，重试 / 二次指令不再重跑 LLM（重复
+   * token 消耗 + 整幅覆盖）；显式 force 才重新生成。 */
+  if (
+    !force &&
+    state.meta.scriptMarkdown !== undefined &&
+    state.meta.scriptMarkdown.trim() !== ""
+  ) {
+    return {
+      script: state.meta.scriptMarkdown,
+      sceneCount: state.scenes.length,
+      scenes: state.scenes,
+      skipped: true,
+    };
   }
   const cfg = await getWorkshopLLMConfig();
   const script = await completeWorkshopLLM(cfg, buildScriptMessages(state.idea, state.meta));
@@ -182,10 +235,20 @@ export async function setScript(id: string, markdown: string, parse = true) {
 
 // ── 阶段 2：角色卡 ─────────────────────────────────────────────
 
-export async function extractCharacters(id: string) {
+export async function extractCharacters(id: string, force = false) {
   const state = await load(id);
   if (state.meta.scriptMarkdown === undefined || state.meta.scriptMarkdown.trim() === "") {
     throw new Error("请先生成 / 设置脚本再提取角色");
+  }
+  /* 幂等闸（ISSUE #3852）：已有角色卡时重复调用不再重跑 LLM 提取（合并本身
+   * 按 name 幂等，但外部调用是重复消耗）；显式 force 才重跑。 */
+  if (!force && state.characters.length > 0) {
+    return {
+      added: 0,
+      skipped: state.characters.length,
+      total: state.characters.length,
+      characters: state.characters,
+    };
   }
   const cfg = await getWorkshopLLMConfig();
   const text = await completeWorkshopLLM(
@@ -210,10 +273,14 @@ export async function setCharacters(id: string, characters: Array<Character>) {
 
 // ── 阶段 3：分镜 ───────────────────────────────────────────────
 
-export async function buildStoryboard(id: string) {
+export async function buildStoryboard(id: string, force = false) {
   const state = await load(id);
   if (state.meta.scriptMarkdown === undefined || state.meta.scriptMarkdown.trim() === "") {
     throw new Error("请先生成 / 设置脚本再拆分分镜");
+  }
+  /* 幂等闸（ISSUE #3852）：已有分镜时重复调用不再重跑 LLM；显式 force 才重拆。 */
+  if (!force && state.shots.length > 0) {
+    return { shotCount: state.shots.length, shots: state.shots, skipped: true };
   }
   const names = state.characters.map((c) => c.name);
   const cfg = await getWorkshopLLMConfig();
@@ -246,6 +313,9 @@ export async function setStoryboard(id: string, shots: Array<Shot>) {
 export type GenerateImageInput = {
   channel?: "api" | "comfyui";
   characterId?: string;
+  /** 显式重跑（ISSUE #3852）：镜头已有产物时，缺省直接返回既有图片，
+   *  不重复执行外部生图调用。 */
+  force?: boolean;
   shotId?: string;
   /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见 `lib/size-presets`）。
    *  缺省各通道按自己的默认档走。调用方（MCP）若仍按老口径给 "1024x1024"，
@@ -264,6 +334,12 @@ export async function generateImage(id: string, input: GenerateImageInput) {
     input.characterId === undefined
       ? undefined
       : state.characters.find((c) => c.id === input.characterId);
+  /* 幂等闸（ISSUE #3852）：镜头已有产物时，重试 / 二次指令不再重复执行外部
+   * 生图调用（重复费用 / GPU），也不再用新结果覆盖旧产物引用。角色卡不落
+   * 产物字段，无此闸。 */
+  if (input.force !== true && shot && shot.imageUrl !== undefined && shot.imageUrl !== "") {
+    return { url: shot.imageUrl, channel };
+  }
   if (shot) {
     prompt = shot.prompt || shot.description;
     negative = shot.negativePrompt || undefined;
@@ -309,6 +385,9 @@ export async function generateImage(id: string, input: GenerateImageInput) {
 
 export type SubmitVideoInput = {
   channel?: "api" | "comfyui";
+  /** 显式重跑（ISSUE #3852）：镜头已有产物或在跑的异步任务时，缺省直接返回
+   *  既有引用，不重复提交外部计费调用。 */
+  force?: boolean;
   fps?: number;
   frames?: number;
   negative?: string;
@@ -322,6 +401,12 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
   const shot = state.shots.find((s) => s.id === input.shotId);
   if (!shot) {
     throw new Error(`镜头不存在：${input.shotId}`);
+  }
+  /* 幂等闸（ISSUE #3852）：镜头已有产物（done 的 url）或在跑的异步任务
+   * （`task:` 前缀）时，重试 / 二次指令不再重新提交外部计费调用，也不再用
+   * 新任务句柄覆盖旧的（旧的将无法轮询取回）。显式 force 才重跑。 */
+  if (input.force !== true && shot.clipUrl !== undefined && shot.clipUrl !== "") {
+    return { url: shot.clipUrl, channel: input.channel ?? "api", skipped: true };
   }
   if (input.channel === "comfyui") {
     let imageDataUrl: string | undefined;
