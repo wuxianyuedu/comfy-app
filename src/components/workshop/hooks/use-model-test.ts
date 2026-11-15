@@ -276,11 +276,13 @@ function useRequestPreview(args: {
   buildBodies: () => ReturnType<typeof buildRequestBodies>;
   busy: boolean;
   debugRowCount: number;
+  /** 预览也要按 kind 分流（ISSUE #3985）：中转缺 kind 会 400。 */
+  kind: ModelTestKind;
   /** 预览失败的出口（如「模型没有可用接口地址」）——与生成失败同一反馈位。 */
   onError: (text: string) => void;
   selectedModel: string;
 }): Array<ApiCallDebugRow> {
-  const { busy, buildBodies, debugRowCount, onError, selectedModel } = args;
+  const { busy, buildBodies, debugRowCount, kind, onError, selectedModel } = args;
   const [previewRows, setPreviewRows] = useState<Array<ApiCallDebugRow>>([]);
   const seqRef = useRef(0);
   useEffect(() => {
@@ -294,7 +296,7 @@ function useRequestPreview(args: {
       const relayBody = imageBody ?? videoBody ?? {};
       void runAsyncAction(
         async () => {
-          const rows = await apiPreviewRequest(relayBody);
+          const rows = await apiPreviewRequest(relayBody, kind);
           if (seqRef.current === seq) {
             setPreviewRows(rows);
           }
@@ -313,7 +315,7 @@ function useRequestPreview(args: {
     return () => {
       clearTimeout(timer);
     };
-  }, [busy, buildBodies, debugRowCount, onError, selectedModel]);
+  }, [busy, buildBodies, debugRowCount, onError, selectedModel, kind]);
   return previewRows;
 }
 
@@ -675,6 +677,7 @@ export function useModelTest(): ModelTestController {
     buildBodies,
     busy: busy.busy,
     debugRowCount: debugRows.length,
+    kind,
     onError: showPreviewError,
     selectedModel,
   });
