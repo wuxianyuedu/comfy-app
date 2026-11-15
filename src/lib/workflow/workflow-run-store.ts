@@ -169,6 +169,33 @@ function notify() {
  *（后者在部分浏览器/移动端不触发），且这里只需要「尽力写一次」的语义。 */
 if (typeof window !== "undefined") {
   window.addEventListener("pagehide", flushPersist);
+  /* 别的同源窗口写了这份存储 → 把它**新增**的运行登记并进本窗口内存（#4026）。
+   * 此后本窗口的整表落盘就包含对方的条目，两个窗口不再互相抹掉对方的登记。
+   * 刻意**只并入、不删除**：对方窗口的删除 / 清空要传播过来需要删除墓碑，
+   * 那超出本条的范围——本窗口的 clear 仍只作用于本窗口。 */
+  window.addEventListener("storage", (event) => {
+    if (event.key !== STORAGE_KEY || event.newValue === null) {
+      return;
+    }
+    try {
+      const parsed: unknown = JSON.parse(event.newValue);
+      if (!Array.isArray(parsed)) {
+        return;
+      }
+      let added = false;
+      for (const item of parsed) {
+        if (isWorkflowRunMeta(item) && !runs.has(item.taskId)) {
+          runs.set(item.taskId, item);
+          added = true;
+        }
+      }
+      if (added) {
+        notify();
+      }
+    } catch {
+      /* 损坏的存储内容：忽略 */
+    }
+  });
 }
 
 function touch(meta: WorkflowRunMeta) {
