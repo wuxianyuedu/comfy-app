@@ -52,29 +52,37 @@ export const session = sqliteTable("session", {
     .references(() => user.id, { onDelete: "cascade" }),
 });
 
-export const account = sqliteTable("account", {
-  id: text("id").primaryKey(),
-  accountId: text("accountId").notNull(),
-  providerId: text("providerId").notNull(),
-  issuer: text("issuer"),
-  userId: text("userId")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  accessToken: text("accessToken"),
-  refreshToken: text("refreshToken"),
-  idToken: text("idToken"),
-  accessTokenExpiresAt: dateNull("accessTokenExpiresAt"),
-  refreshTokenExpiresAt: dateNull("refreshTokenExpiresAt"),
-  scope: text("scope"),
-  password: text("password"),
-  createdAt: dateNotNull("createdAt")
-    .notNull()
-    .$defaultFn(() => new Date()),
-  updatedAt: dateNotNull("updatedAt")
-    .notNull()
-    .$defaultFn(() => new Date())
-    .$onUpdate(() => new Date()),
-});
+export const account = sqliteTable(
+  "account",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("accountId").notNull(),
+    providerId: text("providerId").notNull(),
+    issuer: text("issuer"),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accessToken: text("accessToken"),
+    refreshToken: text("refreshToken"),
+    idToken: text("idToken"),
+    accessTokenExpiresAt: dateNull("accessTokenExpiresAt"),
+    refreshTokenExpiresAt: dateNull("refreshTokenExpiresAt"),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: dateNotNull("createdAt")
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: dateNotNull("updatedAt")
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    // 同一用户在同一外部身份（provider + account）至多一行（#3937，对齐
+    // better-auth 的 account 语义）；存量重复由 db-unique-sweep 清洗。
+    uniqueIndex("account_provider_account_user_uniq").on(t.providerId, t.accountId, t.userId),
+  ],
+);
 
 export const verification = sqliteTable("verification", {
   id: text("id").primaryKey(),
@@ -339,6 +347,9 @@ export const workflowTemplate = sqliteTable(
     // workflow.list 的 listForUser：按 userId 过滤 + createdAt desc 排序。仅有
     // userId 单列索引时仍需整段临时 B-tree 排序；复合索引让有序扫描走索引。
     index("wt_user_created_idx").on(t.userId, t.createdAt),
+    // 同一用户的模板名唯一（#3934）：本地导入 / 粘贴 JSON 双击不再落重复模板，
+    // 改名撞名转业务 409。存量重复由 db-unique-sweep 在建索引前清洗。
+    uniqueIndex("wt_user_name_uniq").on(t.userId, t.name),
   ],
 );
 

@@ -29,12 +29,27 @@ import { isPlainRecord, isUnknownArray } from "~/lib/is-record";
 import path from "node:path";
 
 import { isWithinAllowedLocalWorkflowRoot } from "./workflow-local-roots";
+import { uniqueConflict } from "./unique-conflict";
 
 /* 保存同一工作流的并发写按模板 id 串行化（ISSUE #3870）：positions / rawJson
  * （groups / notes）的合并都基于「本次读到的 existing」，两个页签 / 自动保存
  * 并发提交时后写者会把先写者的坐标 / 分组 / 便签覆盖回旧值。写入方全在本进程，
  * 进程内按模板 id 互斥即可闭合；合并是纯内存计算，锁内不做慢 IO。 */
 const workflowUpdateMutex = new KeyedAsyncMutex();
+
+/** 建模板：撞 `(userId, name)` 唯一索引（wt_user_name_uniq，#3934）时把裸约束
+ *  错误翻译成业务 409，本地导入与粘贴 JSON 两条路径共用这一个出口。 */
+async function createImportedOrConflict(
+  input: Parameters<typeof workflowTemplateRepository.createImported>[0],
+) {
+  try {
+    return await workflowTemplateRepository.createImported(input);
+  } catch (error) {
+    throw uniqueConflict(error, [
+      { columns: ["workflowTemplate.name"], message: "同名工作流已存在" },
+    ]);
+  }
+}
 
 /** 坐标覆盖表形状：`Record<string, [number, number]>`（positions 的库内 JSON blob）。
  * 形状不符时调用点按「没有覆盖」处理 —— 合法输入结果与旧断言一致，非法形状不再
@@ -104,7 +119,7 @@ export const workflowMutationProcedures = {
         const modes = Array.isArray(body.modes) && body.modes.length > 0 ? body.modes : undefined;
         const defaultMode =
           typeof body.defaultMode === "string" && body.defaultMode ? body.defaultMode : modes?.[0];
-        const tpl = await workflowTemplateRepository.createImported({
+        const tpl = await createImportedOrConflict({
           userId: ctx.user.id,
           name,
           taskType: defaultMode ?? imported.taskType,
@@ -165,7 +180,7 @@ export const workflowMutationProcedures = {
         logger.info(`[workflow] Unknown taskType "${taskType}", allowing as custom type`);
       }
 
-      const tpl = await workflowTemplateRepository.createImported({
+      const tpl = await createImportedOrConflict({
         userId: ctx.user.id,
         name,
         taskType,
@@ -354,27 +369,35 @@ export const workflowMutationProcedures = {
         // 行更新、直接进入下方标签关联写入（此前「更新模型标签失败」的根因）。
         const hasColumnPatch = Object.values(patch).some((v) => v !== undefined);
         /* 三段写收进同一 immediate 事务（ISSUE #3870）：模板列、标签 upsert、
-         * 标签关联重挂原先各自提交，后段失败会留下「模板已改、标签仍旧」的半态。 */
-        const template = await db.transaction(
-          async (tx) => {
-            const updated = hasColumnPatch
-              ? await workflowTemplateRepository.update(id, patch, tx)
-              : existing;
-            // modelTags：把用户级的全局标签库转成关联集合
-            if (modelTags !== undefined) {
-              // 批量 upsert：逐个 `upsertByName` 是每个标签 2~3 次往返，
-              // 标签一多保存工作流就明显变慢（见仓储层的 `upsertByNames`）。
-              const tagIds = await workflowModelTagRepository.upsertByNames(
-                ctx.user.id,
-                modelTags,
-                tx,
-              );
-              await workflowTemplateRepository.setModelTags(id, tagIds, tx);
-            }
-            return updated;
-          },
-          { behavior: "immediate" },
-        );
+         * 标签关联重挂原先各自提交，后段失败会留下「模板已改、标签仍旧」的半态。
+         * 改名撞 `wt_user_name_uniq`（#3934）在这里转成业务 409，不裸 500。 */
+        let template;
+        try {
+          template = await db.transaction(
+            async (tx) => {
+              const updated = hasColumnPatch
+                ? await workflowTemplateRepository.update(id, patch, tx)
+                : existing;
+              // modelTags：把用户级的全局标签库转成关联集合
+              if (modelTags !== undefined) {
+                // 批量 upsert：逐个 `upsertByName` 是每个标签 2~3 次往返，
+                // 标签一多保存工作流就明显变慢（见仓储层的 `upsertByNames`）。
+                const tagIds = await workflowModelTagRepository.upsertByNames(
+                  ctx.user.id,
+                  modelTags,
+                  tx,
+                );
+                await workflowTemplateRepository.setModelTags(id, tagIds, tx);
+              }
+              return updated;
+            },
+            { behavior: "immediate" },
+          );
+        } catch (error) {
+          throw uniqueConflict(error, [
+            { columns: ["workflowTemplate.name"], message: "同名工作流已存在" },
+          ]);
+        }
 
         /* 服务端详情缓存必须在返回前清掉：它缓存的是富化后的 workflowIO，
          * TTL 30s。不清的话工作流库即使重新拉 detailFull 也会拿回旧默认值，
