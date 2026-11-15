@@ -31,11 +31,26 @@ const { test, expect } = defineGateRepo({
       to: "scripts/freshness/freshness-ledger-sync.mjs",
     },
     { from: "scripts/quality-gate.mjs", to: "scripts/quality-gate.mjs" },
+    {
+      /* `base-check-chained` 那一类事实也从既有出处现算（`CHAINED_STEPS`）——
+       * 判据按 `__dirname/../base-check/chained-steps.mjs` 读它，少拷这一份，
+       * 夹具自己在读事实那一步就 ENOENT（看着像判据坏了，实为夹具缺口）。 */
+      from: "scripts/base-check/chained-steps.mjs",
+      to: "scripts/base-check/chained-steps.mjs",
+    },
   ],
-  /* 台账与索引都按用例改写 —— 夹具给一份最小可用的。 */
+  /* 台账与索引都按用例改写 —— 夹具给一份最小可用的。
+   * ⚠️ 台账是**两行**：真索引里 `on-demand-ledger` 类事实有 `tw4-canonical-report.mjs`
+   * 与 `tw4-spacing-canonical.mjs` 两条（#3930 之后它们仍按 basename 登记），少一条
+   * 就会让「双向核对」的方向①把真索引里那一行判成过期承诺。 */
   files: {
     "scripts/.gate-executor-ledger.json": JSON.stringify(
-      { onDemand: { "tw4-canonical-report.mjs": { why: "起 Tailwind 引擎", who: "按需" } } },
+      {
+        onDemand: {
+          "tw4-canonical-report.mjs": { why: "起 Tailwind 引擎", who: "按需" },
+          "tw4-spacing-canonical.mjs": { why: "起 Tailwind 引擎", who: "按需" },
+        },
+      },
       null,
       2,
     ),
@@ -96,7 +111,19 @@ function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
         id: "tw4-canonical-report",
         name: "CSS 等价改写汇总",
         notInHook: "要起 Tailwind 引擎",
-        fact: { kind: "on-demand-ledger", script: "tw4/tw4-canonical-report.mjs" },
+        /* 台账（`.gate-executor-ledger.json`）按 **basename** 登记，判据用同一个键对账；
+         * 这里写成 `tw4/<f>` 会让方向①（点名的事实不存在）与方向②（事实没被登记）
+         * 同时报红 —— 两边的取值口径只有一份。 */
+        fact: { kind: "on-demand-ledger", script: "tw4-canonical-report.mjs" },
+        executor: "按需召唤 + 棘轮",
+      },
+      {
+        /* 第二份 tw4 工具也是同一种事实（台账里那第二条），夹具要跟着台账长：
+         * 少这一行，方向② 就把「有一条事实没人登记」念成红。 */
+        id: "tw4-spacing-canonical",
+        name: "px ↔ spacing 倍数等价改写",
+        notInHook: "要起 Tailwind 引擎",
+        fact: { kind: "on-demand-ledger", script: "tw4-spacing-canonical.mjs" },
         executor: "按需召唤 + 棘轮",
       },
       {

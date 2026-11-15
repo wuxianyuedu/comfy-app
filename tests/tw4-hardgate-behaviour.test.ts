@@ -51,8 +51,10 @@ function baselinesIn(root: string): Array<string> {
 
 /* `defineGateRepo` 返回的是「扩展过 repo fixture 的 test」+ vitest 本来的 expect ——
  * 两份工具各要一套夹具，所以各起一个 test；expect 从 vitest 直接来（同一份）。 */
-const { test: canonicalTest } = defineGateRepo(tw4Fixture("tw4-canonical-report.mjs"));
-const { test: spacingTest } = defineGateRepo(tw4Fixture("tw4-spacing-canonical.mjs"));
+/* #3930：两份工具的落点跟着真布局 —— 它们住在 `scripts/tw4/` 下，夹具的 `script` 收的是
+ * 「相对于 `scripts/` 的子路径」，工作区里也就落成 `scripts/tw4/…`。 */
+const { test: canonicalTest } = defineGateRepo(tw4Fixture("tw4/tw4-canonical-report.mjs"));
+const { test: spacingTest } = defineGateRepo(tw4Fixture("tw4/tw4-spacing-canonical.mjs"));
 
 describe("tw4-canonical-report 硬闸", () => {
   canonicalTest(

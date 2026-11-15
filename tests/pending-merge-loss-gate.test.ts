@@ -4,9 +4,9 @@
  * （`ad81a912` / `bdabd26f` 形态全对的合并）一个都拦不住 —— 故 8 条验收各配真 git 样本（阻断 / 放行 / 非合并零输出 / `--amend` / 生成物 / 非 git 目录 / 混合），另判钩子接线。
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 import { vi } from "vitest";
 
@@ -14,7 +14,13 @@ import { vi } from "vitest";
  * 默认超时经常不够 —— 文件级放宽到 30s，只影响本文件。 */
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
-const SCRIPT = "check-pending-merge-loss.mjs";
+/* #3930：`scripts/` 按家族归入域子目录后，这个判据住在 `gates/` 下、它那两个兄弟件住在
+ * `base-check/` 下。`defineGateRepo` 的 `script` 按「相对于 `scripts/` 的子路径」收，
+ * 工作区里也照原样落成 `scripts/gates/…` —— 判据靠 `../base-check/merged-side-loss-core.mjs`
+ * 拉内核，两边的落点都必须与真布局一致（依赖链按 basename 定源、按说明符定落点）。 */
+const SCRIPT = "gates/check-pending-merge-loss.mjs";
+/** 兄弟件在真仓库里的目录（#3930 之后它们归 `base-check/`）：`copy` 的 `from` 从这里取。 */
+const SIBLING_SRC_DIR = "scripts/base-check";
 /** 这个脚本的**同级依赖**。清单只在这里出现一次：共享夹具与 ⑦ 那个「故意不带 git」的
  *  裸目录都要把它们带上，抄成两份的后果是「加第三份依赖时只有其中一处跟着改」，
  *  而表现是子进程 `MODULE_NOT_FOUND` —— 看着像判据坏了，不像漏拷。 */
@@ -22,9 +28,10 @@ const SIBLINGS = ["merged-side-loss-core.mjs", "merged-side-loss-git.mjs"];
 
 const { test, expect } = defineGateRepo({
   script: SCRIPT,
-  /* 判据用 `import "./merged-side-loss-core.mjs"` 拉内核、用 `merged-side-loss-git.mjs`
-   * 取证 —— 同级导入只能靠夹具的 `copy` 带进来。 */
-  copy: SIBLINGS.map((f) => ({ from: `scripts/${f}`, to: `scripts/${f}` })),
+  /* 判据用 `import "../base-check/merged-side-loss-core.mjs"` 拉内核、用
+   * `merged-side-loss-git.mjs` 取证 —— 说明符不按目录扫，只能由 `copy` 带进来，
+   * 落点必须**照着说明符**：`scripts/gates/../base-check/<f>`。 */
+  copy: SIBLINGS.map((f) => ({ from: `${SIBLING_SRC_DIR}/${f}`, to: `${SIBLING_SRC_DIR}/${f}` })),
   setup: (repo: GateRepo) => {
     repo.git("init", "-q", "-b", "main", ".");
     repo.git("config", "user.email", "gate@example.com");
@@ -176,8 +183,15 @@ describe("check-pending-merge-loss —— 提交前档（整份取非 HEAD 侧�
      * 自己造一个裸目录：判据取不到 git 事实时应放行，而不是抛错。 */
     const bare = mkdtempSync(join(tmpdir(), "pending-merge-loss-nogit-"));
     try {
-      for (const f of [SCRIPT, ...SIBLINGS]) {
-        copyFileSync(join(process.cwd(), "scripts", f), join(bare, f));
+      /* 裸目录里照**原布局**铺开：判据按 `../base-check/<f>` 解析兄弟件，相对的是它自己
+       * 所在目录 —— 所以 `scripts/` 那一层可以不带，但 `gates/` ⇄ `base-check/` 这对
+       * 兄弟目录必须原样保留，否则判据一 import 就 `ERR_MODULE_NOT_FOUND`。 */
+      for (const [src, dest] of [
+        [`scripts/${SCRIPT}`, SCRIPT] as [string, string],
+        ...SIBLINGS.map((x): [string, string] => [`${SIBLING_SRC_DIR}/${x}`, `base-check/${x}`]),
+      ]) {
+        mkdirSync(dirname(join(bare, dest)), { recursive: true });
+        copyFileSync(join(process.cwd(), src), join(bare, dest));
       }
       const output = execFileSync(process.execPath, [join(bare, SCRIPT)], {
         cwd: bare,
@@ -279,7 +293,9 @@ describe("check-pending-merge-loss —— 钩子接线", () => {
       join(process.cwd(), "scripts", "gates/check-pending-merge-loss.mjs"),
       "utf8",
     );
-    expect(gate).toContain("./merged-side-loss-core.mjs");
+    /* #3930 之后内核住 `scripts/base-check/`，说明符跟着变成 `../base-check/…` ——
+     * 这一格判的是「执行者没有自己再实现一份检测」，不是那个相对路径的写法。 */
+    expect(gate).toContain("merged-side-loss-core.mjs");
     /* 检测核心只在核心里有；执行者里不许再出现「自己 walk 历史比 blob」的第二份。 */
     expect(gate).toContain("findEarlierVersion");
   });
