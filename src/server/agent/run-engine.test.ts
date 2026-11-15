@@ -20,7 +20,9 @@ vi.mock("~/lib/llm/server", () => ({
 vi.mock("~/lib/llm/prompts", () => ({
   buildScriptMarkdownMessages: () => [{ role: "user", content: "x" }],
 }));
-const synthesizeFirstFrame = vi.hoisted(() => vi.fn((_opts: unknown) => "/api/generated/shot.png"));
+const synthesizeFirstFrame = vi.hoisted(() =>
+  vi.fn((_opts: unknown): string | Promise<string> => "/api/generated/shot.png"),
+);
 vi.mock("~/lib/comfyui/firstframe", () => ({ synthesizeFirstFrame }));
 // 引擎经服务端成片编排起片（createFilmFromProject + startFilm），mock 掉避免真跑管线。
 vi.mock("~/server/film/orchestrator", () => ({
