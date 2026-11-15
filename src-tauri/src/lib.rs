@@ -1,7 +1,7 @@
 use std::net::TcpStream;
 #[cfg(not(debug_assertions))]
 use std::net::TcpListener;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -76,6 +76,10 @@ struct AppState {
   /// `get_launch_status` 原先把空根一律当成「环境问题」来报（要用户回检出启动 /
   /// 去跑构建脚本），一次健康启动的启动页上因此满是指出错方向的段落。
   standalone: Mutex<bool>,
+  /// 「应用窗口已经导航到应用页面」的一次性标记（ISSUE #3857）：启动页的
+  /// 探测 tick 在失败 3 秒后重试，`navigate_to_app` 可能被反复 invoke；每次
+  /// 都重新导航 + 新起两个看护线程。防重入口在壳侧，前端节流只是第二道。
+  navigated: AtomicBool,
 }
 
 impl AppState {
@@ -97,6 +101,7 @@ impl AppState {
       focus_granted: AtomicU32::new(0),
       abandoned: Mutex::new(false),
       standalone: Mutex::new(standalone),
+      navigated: AtomicBool::new(false),
     }
   }
 
@@ -316,18 +321,33 @@ fn no_status_payload(root: &str, reason: &str) -> String {
 /// 这比前端直接 window.location 更可靠，可跨越 tauri:// 与 http:// 协议边界。
 #[tauri::command]
 fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
+  /* 一次性防重入（ISSUE #3857）：启动页的探测 tick 失败 3 秒后重试，本命令可能
+   * 被反复 invoke；每次都重新导航（= 已加载页面整页重载）并新起两个看护线程。
+   * 壳侧先抢标记：抢到才执行；导航失败把标记还回去，前端的重试闸照常生效。 */
+  if state.navigated.swap(true, Ordering::SeqCst) {
+    log::info!("[ComfyAPP] navigate_to_app: 已导航过，跳过重复 invoke");
+    return Ok(());
+  }
   let url = state.app_url();
   log::info!("[ComfyAPP] navigate_to_app called with url: {}", url);
   // 导航一发起，主窗画面就离开启动页；在应用画好首帧之前由探测持续注入加载占位，
   // 避免这段时间露出 WebView2 空白 / 内嵌错误页（见 watch_main_first_paint）。
   watch_main_first_paint(app_handle.clone(), true);
-  let parsed: tauri::Url = url.parse().map_err(|e| format!("非法 URL {}: {}", url, e))?;
+  let parsed: tauri::Url = match url.parse() {
+    Ok(parsed) => parsed,
+    Err(e) => {
+      state.navigated.store(false, Ordering::SeqCst);
+      return Err(format!("非法 URL {}: {e}", url));
+    }
+  };
   if let Some(win) = app_handle.get_webview_window("main") {
-    win
-      .navigate(parsed)
-      .map_err(|e| format!("导航失败: {:?}", e))?;
+    if let Err(e) = win.navigate(parsed) {
+      state.navigated.store(false, Ordering::SeqCst);
+      return Err(format!("导航失败: {e:?}"));
+    }
     log::info!("[ComfyAPP] navigate_to_app: navigation dispatched");
   } else {
+    state.navigated.store(false, Ordering::SeqCst);
     return Err("找不到应用窗口 main".to_string());
   }
 
@@ -1236,6 +1256,15 @@ fn spawn_sidecar(
     ResolvedPayload::FellBackToDevUrl => return Ok(()),
     ResolvedPayload::Ready(p) => p,
   };
+  /* 防御性守卫（ISSUE #3857）：SIDECAR 槽位已有句柄时再 spawn 会把旧 child
+   * 覆盖成孤儿（kill_sidecar 只收得到最后一个）。现行唯一调用点在 setup 阶段
+   * 执行一次；真重复到这里说明别处出了错，拒绝覆盖而不是静默顶掉。 */
+  {
+    let slot = SIDECAR.lock().unwrap();
+    if slot.is_some() {
+      return Err("sidecar 已在运行，拒绝重复拉起".into());
+    }
+  }
 
   // 参数用**相对载荷根**的形态（根因见 `resolve_standalone_payload` 里那段 verbatim
   // 路径的实测说明），`cwd` 给到载荷根，二者指向同一个文件。
@@ -2185,7 +2214,7 @@ fn start_self_orchestration(app: &mut tauri::App, project_root: &str) {
     Some(shell_launch::startup_report_json(project_root, PHASE_NOTE)),
   );
   shell_launch::log_startup_report(project_root, PHASE_NOTE);
-  if let Some(pid) = shell_launch::find_owned_orchestrator() {
+  if let Some(pid) = shell_launch::find_owned_orchestrator(&project_root) {
     log::warn!(
       "[ComfyAPP] 上一次运行遗留的编排器仍在跑（pid {pid}），先回收它再启动本次编排"
     );
