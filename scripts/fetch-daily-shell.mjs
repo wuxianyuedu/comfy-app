@@ -211,6 +211,29 @@ export function resolveToken(env, explicit, opts = {}) {
 }
 
 /**
+ * 「缺令牌」时唯一要人照抄的那一行。三条出口（无令牌的前置读数、`--dry-run`、401/403 失败）
+ * 都念它，避免同一条命令在两处写法不同、或某条出口漏掉它 —— 缺令牌的人最需要的是可执行的
+ * 下一步，不是一份「你可以设环境变量 / 也可以建文件」的选项清单。
+ */
+export const MISSING_TOKEN_HINT = [
+  "pnpm fetch:daily-shell --config --token",
+  " <你的CNB_",
+  "RELEASE_TOKEN>",
+].join("");
+
+/**
+ * 把「候选令牌文件在不在」念成一段可读文本（只念路径与有无，绝不回显令牌内容）。
+ *
+ * @param {string[]} paths
+ * @param {{exists?: (p: string) => boolean}} [io]
+ */
+export function describeTokenCandidates(paths, io = {}) {
+  const exists = io.exists ?? fs.existsSync;
+  const seen = paths.map((p) => `  · ${p}（${exists(p) ? "已有" : "不存在"}）`);
+  return `[fetch-daily-shell] 令牌文件候选（缺省都不存在，按顺序取首个非空）：\n${seen.join("\n")}\n`;
+}
+
+/**
  * 取下载端点：与仓内其它 CNB API 脚本一样，缺省 api.cnb.cool、允许环境变量覆盖。
  *
  * @param {Record<string, string | undefined>} env
@@ -441,13 +464,8 @@ export async function main(io = {}) {
     /* 「本地没有这个路径」是这一族最常见的卡点：路径不存在本来就是正常态，问题在于
      * 没人告诉你它在找哪儿、以及怎么建。所以无令牌时把候选清单连同存在状态一起念
      * 出来（只念路径与有无，绝不回显令牌内容）。 */
-    const seen = configPaths.map((p) => `  · ${p}（${fs.existsSync(p) ? "已有" : "不存在"}）`);
-    process.stdout.write(
-      `[fetch-daily-shell] 令牌文件候选（缺省都不存在，按顺序取首个非空）：\n${seen.join("\n")}\n`,
-    );
-    process.stdout.write(
-      "[fetch-daily-shell] 要建它：node scripts/fetch-daily-shell.mjs --config --token <token>\n",
-    );
+    process.stdout.write(describeTokenCandidates(configPaths));
+    process.stdout.write(`[fetch-daily-shell] 缺令牌，先执行：${MISSING_TOKEN_HINT}\n`);
   }
 
   if (args.dryRun) {
@@ -456,6 +474,16 @@ export async function main(io = {}) {
     process.stdout.write(
       `[fetch-daily-shell] dry-run：将下载并写入 ${outAbs}${process.platform === "win32" ? `；快捷方式${exists && !args.forceShortcut ? "已存在将跳过" : "将补齐"}` : ""}。\n`,
     );
+    if (!from) {
+      /* dry-run 是「下载前的预演」，此刻就是补齐令牌的最后时机：只看计划容易以为一切就绪，
+       * 真跑起来才发现 401。所以缺令牌在这里当降级读数念出来（走 stderr、退 2），
+       * 而不是静默退 0 —— 退码与正文一致，不许「说完就算过」。 */
+      process.stderr.write(
+        `[fetch-daily-shell] 未配置令牌：本计划按匿名下载执行，私有仓会以 HTTP 401 失败。\n`,
+      );
+      process.stderr.write(`[fetch-daily-shell] 缺令牌，先执行：${MISSING_TOKEN_HINT}\n`);
+      return 2;
+    }
     return 0;
   }
 
@@ -487,12 +515,13 @@ export async function main(io = {}) {
         process.stderr.write(
           "[fetch-daily-shell] 当前未检测到可用令牌（环境变量与令牌文件均为空/缺失）。\n",
         );
-        if (cfg) {
-          /* 这一句就是「本地根本没有这个路径」的出口：路径本该不存在，要人去建它。 */
-          process.stderr.write(
-            `[fetch-daily-shell] 建令牌文件：node scripts/fetch-daily-shell.mjs --config --token <token>（目标 ${cfg}）\n`,
-          );
-        }
+        /* 「本地根本没有这个路径」是这一族最常见的卡点：路径本该不存在，要人去建它。
+         * 目标路径不缺省时不点名（`--config` 的缺省落点就是候选清单第一个，念它只会让人以为
+         * 必须手写路径）。 */
+        const target = cfg ? `[fetch-daily-shell] （令牌将写入候选清单第一个：${cfg}）\n` : "";
+        process.stderr.write(
+          `[fetch-daily-shell] 缺令牌，先执行：${MISSING_TOKEN_HINT}\n${target}`,
+        );
       }
     } else if (downloaded.status === 404) {
       /* 端点修对以后，404 才是真的「这个 tag / 资产名下没有这份附件」；与落点无关，

@@ -18,6 +18,7 @@ import {
   DEFAULT_OUT,
   buildDownloadUrl,
   downloadToBuffer,
+  MISSING_TOKEN_HINT,
   main,
   parseArgs,
   resolveEndpoint,
@@ -184,10 +185,59 @@ describe("用户级令牌文件（ISSUE #3917）", () => {
       env: { NODE_ENV: "test", HOME: dir },
       platform: "linux",
     });
-    expect(result.code).toBe(0);
     expect(result.out).toContain("鉴权：无（直连）");
     expect(result.out).toContain("cnb-release-token（不存在）");
     expect(result.out).toContain("--config --token");
+  });
+
+  it("缺令牌时日志逐字念出要执行的那一条命令（ISSUE #3917）", async () => {
+    const dir = makeTmpDir();
+    const result = await captureMain({
+      argv: ["--dry-run"],
+      cwd: dir,
+      env: { NODE_ENV: "test", HOME: dir },
+      platform: "linux",
+    });
+    // 这一行是「下一步做什么」的唯一形状：命令行里得能直接照抄。
+    expect(result.out).toContain(`缺令牌，先执行：${MISSING_TOKEN_HINT}`);
+    expect(MISSING_TOKEN_HINT).toBe(
+      "pnpm fetch:daily-shell --config --token <你的CNB_RELEASE_TOKEN>",
+    );
+    // 预演阶段就是补齐令牌的最后时机：缺令牌退 2（走 stderr），不许静默退 0 冒充「可以跑了」。
+    expect(result.code).toBe(2);
+    expect(result.err).toContain(MISSING_TOKEN_HINT);
+  });
+
+  it("有令牌时 --dry-run 不加缺令牌提示、照常退 0", async () => {
+    const dir = makeTmpDir();
+    const result = await captureMain({
+      argv: ["--dry-run"],
+      cwd: dir,
+      env: { NODE_ENV: "test", CNB_RELEASE_TOKEN: "tok", HOME: dir },
+      platform: "linux",
+    });
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("鉴权：CNB_RELEASE_TOKEN");
+    expect(result.out).not.toContain(MISSING_TOKEN_HINT);
+    expect(result.err).not.toContain(MISSING_TOKEN_HINT);
+  });
+
+  it("401 且无令牌时，失败出口同样给出那条命令", async () => {
+    const dir = makeTmpDir();
+    const result = await captureMain({
+      argv: [],
+      cwd: dir,
+      env: { NODE_ENV: "test", HOME: dir },
+      fetchImpl: () => Promise.resolve(respond(401, '{"errcode":16}')),
+      platform: "linux",
+      configPaths: [path.join(dir, "comfy-app", "cnb-release-token")],
+    });
+    expect(result.code).toBe(1);
+    expect(result.err).toContain(MISSING_TOKEN_HINT);
+    /* 目标路径只作补充说明（这里念的是候选清单第一个，不是注入的 configPaths ——
+     * 那是「脚本自己会写哪儿」，不是「这一跑读过哪儿」），命令本身仍是可照抄的那一条。 */
+    expect(result.err).toContain(path.join(dir, ".config", "comfy-app", "cnb-release-token"));
+    expect(result.err).toContain("令牌将写入候选清单第一个");
   });
 
   it("--config 把令牌写进候选路径里的第一个，且只写令牌本体", async () => {
