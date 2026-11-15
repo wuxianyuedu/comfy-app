@@ -10186,7 +10186,7 @@ fail-closed 语义与 5m 预算一字未动 —— 迁歪的表现是那格红�
 
 | 面 | 动作 |
 | --- | --- |
-| `scripts/ci-ga-verdict-callback.mjs` | 新增 `buildTitle(title, pr)` → `<标题> (#<号>)`（空白折叠成单行、超长截断、号不是数字就不拼号）+ `resolveCallbackContext()` 读 `GA_PR_TITLE` / `--title`；**拼不出来就不写 `title` 键**（回落平台缺省，不发明「无标题」这一形态） |
+| `scripts/ci/ci-ga-verdict-callback.mjs` | 新增 `buildTitle(title, pr)` → `<标题> (#<号>)`（空白折叠成单行、超长截断、号不是数字就不拼号）+ `resolveCallbackContext()` 读 `GA_PR_TITLE` / `--title`；**拼不出来就不写 `title` 键**（回落平台缺省，不发明「无标题」这一形态） |
 | `.github/workflows/pr-gate.yml` | 收尾 job 前加两步把标题写进 `GITHUB_ENV`：自动档（`repository_dispatch`）读 payload 的 `pull_request.title`；按需档（`workflow_dispatch`，#3667）**没有 payload** ⇒ 走 `scripts/ci-ga-verdict-title.mjs` 站内读 `GET /{repo}/-/pulls/{n}` |
 | 判据 | `tests/ci-ga-verdict-callback.test.ts`（拼装 / 不写键 / 号非数字）+ `tests/ci-ga-verdict-title.test.ts`（两条形态写**同一个键**、取不到一律退 2 且一个键都不写）；`tests/no-platform-ci-config.test.ts` 的 `GA_PR_INFRA_STEPS` 登记那两个新 step（它们是**判决的显示面**，一步也不判红） |
 
