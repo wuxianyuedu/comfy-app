@@ -679,3 +679,276 @@ describe("入口自证", () => {
     expect(src).toMatch(/if \(process\.argv\[1\]/);
   });
 });
+
+/** 陈旧度触发器（ISSUE #2639 GA 落点）专用：当前跑的失败日志正文。 */
+const ENFORCED_LOG = [
+  "[bundle-budget] 违规（阻断）：",
+  "  gzip 总量 +17.4 KB",
+  "  基线修订号：dd8d4647（其后本检出上有 35 次提交）——",
+].join("\n");
+
+const SUSPENDED_LOG = "[bundle-budget] 读数（不参与判定）：\n  gzip 总量 +17.4 KB";
+
+const PREV_ID = 1_234_567_111;
+
+/** 上一跑的 GA 应答（runs 列表 → 上一跑的 jobs → 上一跑的 job 日志）。 */
+function ghWithHistory({ prevLogs = ENFORCED_LOG, prevConclusion = "failure" } = {}) {
+  return (path: string) => {
+    if (path.endsWith("/actions/workflows/daily.yml/runs")) {
+      return res(200, {
+        workflow_runs: [
+          { conclusion: "failure", id: Number(RUN_ID), status: "completed" },
+          { conclusion: prevConclusion, id: PREV_ID, status: "completed" },
+        ],
+      });
+    }
+    if (/\/actions\/runs\/\d+\/jobs$/.test(path)) {
+      return res(200, {
+        jobs: [
+          {
+            conclusion: "failure",
+            id: 9,
+            name: "daily",
+            steps: [
+              {
+                conclusion: "failure",
+                name: "生产构建（cnb 同款判据一字不改）",
+                status: "completed",
+              },
+            ],
+          },
+        ],
+      });
+    }
+    if (path.endsWith("/actions/jobs/9/logs")) {
+      return res(200, prevLogs);
+    }
+    return res(500, { message: `no gh handler: ${path}` });
+  };
+}
+
+/** 建单回读要能认出「这一跑真发出去的标题」——假 CNB 也得给出真发布过的正文。 */
+function cnbWithReadback(seen: { posted?: Record<string, string | undefined> }) {
+  return (method: string, path: string): ResponseLike => {
+    if (method === "GET" && path.startsWith(`/${SLUG}/-/labels`)) {
+      return res(200, [{ name: "提单人:ci-ga-daily" }]);
+    }
+    /* 单条回读必须排在开着的单列表之前：它们同以 `/-/issues` 开头。 */
+    if (method === "GET" && path.startsWith(`/${SLUG}/-/issues/`)) {
+      return res(200, {
+        labels: [{ name: "提单人:ci-ga-daily" }],
+        number: 3500,
+        title: seen.posted?.title ?? "",
+      });
+    }
+    if (method === "GET" && path.startsWith(`/${SLUG}/-/issues`)) {
+      return res(200, []);
+    }
+    if (method === "POST" && path === `/${SLUG}/-/issues`) {
+      return res(201, { number: 3500 });
+    }
+    if (method === "POST" && path.endsWith("/labels")) {
+      return res(200, {});
+    }
+    return res(404, { message: `${method} ${path}` });
+  };
+}
+
+describe("main：预算账陈旧度触发器（#2639 GA 落点）", () => {
+  /** 触发器那一档的公共夹具：GA 侧全记调用，CNB 侧按真发布的正文回读。 */
+  function harness() {
+    const ghCalls: string[] = [];
+    const seen: { posted?: Record<string, string | undefined> } = {};
+    const { cnbFetch } = fakeFetch({ cnb: cnbWithReadback(seen) });
+    const wrapped: FetchLike = (url, init) => {
+      if ((init?.method ?? "").toUpperCase() === "POST" && url.endsWith("/issues")) {
+        seen.posted = readFields(init?.body, ["body", "title"]);
+      }
+      return cnbFetch(url, init);
+    };
+    return { ghCalls, seen, wrapped };
+  }
+
+  it("预算闸判红 + 基线其后 35 次提交 + 昨天也红 ⇒ 正文带「该有人出面了」节", async () => {
+    const { ghCalls, seen, wrapped } = harness();
+    const { lines, log } = logs();
+    const ghFetch: FetchLike = (input) => {
+      const url = String(input);
+      const path = new URL(url).pathname;
+      ghCalls.push(path);
+      if (path.endsWith("/actions/workflows/daily.yml/runs")) {
+        return Promise.resolve(
+          res(200, {
+            workflow_runs: [
+              { conclusion: "failure", id: Number(RUN_ID), status: "completed" },
+              { conclusion: "failure", id: PREV_ID, status: "completed" },
+            ],
+          }),
+        );
+      }
+      return Promise.resolve(ghWithHistory()(path));
+    };
+    const code = await main({
+      argv: [],
+      env: env(),
+      ghFetch,
+      cnbFetch: wrapped,
+      log,
+      logReading: {
+        ghRepo: GH_REPO,
+        jobs: [{ conclusion: "failure", id: 1, name: "daily" }],
+        ok: true,
+        runId: RUN_ID,
+        text: ENFORCED_LOG,
+      },
+    });
+    expect(code).toBe(CODE.DONE);
+    expect(seen.posted?.body ?? "").toContain("该有人出面了（预算账读数触发器");
+    expect(seen.posted?.body ?? "").toContain("35 次提交");
+    expect(seen.posted?.body ?? "").toContain("连续红");
+    expect(ghCalls.some((c) => c.includes("/actions/workflows/daily.yml/runs"))).toBe(true);
+    expect(lines.join("\n")).toContain("预算账触发器：升");
+  });
+
+  it("陈旧度 3 次 + 昨天没红 ⇒ 不升，正文不带升级节（门限没到）", async () => {
+    const stale3 = ENFORCED_LOG.replace("35 次提交", "3 次提交");
+    const { ghCalls, seen, wrapped } = harness();
+    const { log } = logs();
+    const ghFetch: FetchLike = (input) => {
+      const url = String(input);
+      const path = new URL(url).pathname;
+      ghCalls.push(path);
+      if (path.endsWith("/actions/workflows/daily.yml/runs")) {
+        return Promise.resolve(
+          res(200, {
+            workflow_runs: [
+              { conclusion: "failure", id: Number(RUN_ID), status: "completed" },
+              { conclusion: "success", id: PREV_ID, status: "completed" },
+            ],
+          }),
+        );
+      }
+      return Promise.resolve(ghWithHistory({ prevConclusion: "success" })(path));
+    };
+    const code = await main({
+      argv: [],
+      env: env(),
+      ghFetch,
+      cnbFetch: wrapped,
+      log,
+      logReading: {
+        ghRepo: GH_REPO,
+        jobs: [{ conclusion: "failure", id: 1, name: "daily" }],
+        ok: true,
+        runId: RUN_ID,
+        text: stale3,
+      },
+    });
+    expect(code).toBe(CODE.DONE);
+    expect(ghCalls.some((c) => c.includes("/actions/workflows/daily.yml/runs"))).toBe(true);
+    expect(seen.posted?.body ?? "").not.toContain("该有人出面了");
+  });
+
+  it("预算闸暂撤（读数、不参与判定）⇒ 正文不带升级节，且不发 runs-list 请求", async () => {
+    const ghCalls: string[] = [];
+    const { seen, wrapped } = harness();
+    const { log, lines } = logs();
+    const ghFetch: FetchLike = (input) => {
+      const path = new URL(String(input)).pathname;
+      ghCalls.push(path);
+      /* 立案那一跳必须能读到 jobs（红格），但不许再发历史请求。 */
+      if (path.includes("/actions/runs/") && !path.includes("daily.yml")) {
+        return Promise.resolve(
+          res(200, jobsJson([{ name: "生产构建（cnb 同款判据一字不改）", conclusion: "failure" }])),
+        );
+      }
+      throw new Error(`暂撤那一跑不许发历史请求：${path}`);
+    };
+    const code = await main({
+      argv: [],
+      env: env(),
+      ghFetch,
+      cnbFetch: wrapped,
+      log,
+      logReading: {
+        ghRepo: GH_REPO,
+        jobs: [{ conclusion: "failure", id: 1, name: "daily" }],
+        ok: true,
+        runId: RUN_ID,
+        text: SUSPENDED_LOG,
+      },
+    });
+    expect(code).toBe(CODE.DONE);
+    expect(seen.posted?.body ?? "").not.toContain("该有人出面了");
+    expect(ghCalls.some((c) => c.includes("/actions/workflows/daily.yml/runs"))).toBe(false);
+    expect(lines.join("\n")).toContain("预算账触发器：不升");
+  });
+
+  it("日志取不到 ⇒ 触发器没结论，不发 runs-list 请求", async () => {
+    const ghCalls: string[] = [];
+    const { seen, wrapped } = harness();
+    const { log } = logs();
+    const ghFetch: FetchLike = (input) => {
+      const path = new URL(String(input)).pathname;
+      ghCalls.push(path);
+      if (path.includes("/actions/runs/") && !path.includes("daily.yml")) {
+        return Promise.resolve(
+          res(200, jobsJson([{ name: "生产构建（cnb 同款判据一字不改）", conclusion: "failure" }])),
+        );
+      }
+      throw new Error(`日志取不到时不许发历史请求：${path}`);
+    };
+    const code = await main({
+      argv: [],
+      env: env(),
+      ghFetch,
+      cnbFetch: wrapped,
+      log,
+      logReading: {
+        ghRepo: GH_REPO,
+        jobs: [],
+        ok: false,
+        reason: "job 清单 HTTP 403（令牌缺 actions: read）",
+        runId: RUN_ID,
+        text: "",
+      },
+    });
+    expect(code).toBe(CODE.DONE);
+    expect(seen.posted?.body ?? "").not.toContain("该有人出面了");
+    expect(ghCalls.some((c) => c.includes("/actions/workflows/daily.yml/runs"))).toBe(false);
+  });
+
+  it("--dry-run ⇒ 念出触发器判定，但不发历史请求、一条都不写", async () => {
+    const { ghCalls, seen, wrapped } = harness();
+    const { lines, log } = logs();
+    const ghFetch: FetchLike = (input) => {
+      const path = new URL(String(input)).pathname;
+      ghCalls.push(path);
+      /* 只许立案那一跳读 jobs；历史请求一律炸。 */
+      if (path.includes("daily.yml")) {
+        throw new Error(`--dry-run 不许发历史请求：${path}`);
+      }
+      return Promise.resolve(
+        res(200, jobsJson([{ name: "生产构建（cnb 同款判据一字不改）", conclusion: "failure" }])),
+      );
+    };
+    const code = await main({
+      argv: ["--dry-run"],
+      env: env(),
+      ghFetch,
+      cnbFetch: wrapped,
+      log,
+      logReading: {
+        ghRepo: GH_REPO,
+        jobs: [{ conclusion: "failure", id: 1, name: "daily" }],
+        ok: true,
+        runId: RUN_ID,
+        text: ENFORCED_LOG,
+      },
+    });
+    expect(code).toBe(CODE.DONE);
+    expect(lines.join("\n")).toContain("预算账触发器：升");
+    expect(ghCalls.some((c) => c.includes("/actions/workflows/daily.yml/runs"))).toBe(false);
+    expect(seen.posted).toBeUndefined();
+  });
+});
