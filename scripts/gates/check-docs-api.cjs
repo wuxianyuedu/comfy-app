@@ -33,7 +33,7 @@
  *   · 「改了什么会让产物变」= **输入面** ⇒ `INPUT_RES` / `INPUT_GLOBS` 仍供判据自己的
  *     `--staged` 档与元测试使用。但输入面**不再按 `entryPoints` 算**（ISSUE #2537）：typedoc
  *     真正解析的是 TS 程序（`tsconfig.json` 展开的根 ∪ 沿 import 走到的文件），
- *     `entryPoints` 只决定渲染哪几页。面由 `scripts/docs-api-input-closure.mjs` 的
+ *     `entryPoints` 只决定渲染哪几页。面由 `scripts/docs/docs-api-input-closure.mjs` 的
  *     `docsApiTriggerGlobs()` 从那份根派生，`tests/docs-api-input-closure.test.ts` 双向对账。
  *     ⚠️ 2026-11-05 起它**不再喂 PR/合并侧的 `ifModify`**：那一格已降到每日档、每跑必判
  *     （ISSUE #2537，见下面「执行者在哪」）。
@@ -73,9 +73,9 @@ const ROOT = path.resolve(__dirname, "../..");
  * 实际展开算 typedoc 的解析根。本文件只取它派生出的 glob / 正则，不手抄第二份面。
  * 该模块是 ESM，本文件是 CJS —— 用 Node 的同步 `require(esm)`（同仓
  * `check-allow-builds.cjs` 亦如此）。 */
-const { docsApiTriggerGlobs } = require("../docs-api-input-closure.mjs");
+const { docsApiTriggerGlobs } = require("../docs/docs-api-input-closure.mjs");
 /** glob → 正则**复用** `vitest-projects.cjs` 已导出的那一份（与平台侧同口径）。 */
-const { globToRe } = require("../vitest-projects.cjs");
+const { globToRe } = require("../affected-tests/vitest-projects.cjs");
 
 const OUT_REL = "docs/api";
 const OUT_ABS = path.join(ROOT, OUT_REL);
@@ -98,11 +98,11 @@ const info = (text) => {
  * 那个口径**系统性偏窄**：typedoc 渲染哪几页由 `entryPoints` 决定，但它**解析**的是
  * TS 程序 —— 程序根是 `tsconfig.json` 展开出的 `rootNames`，再沿 import 走到的一切
  * 文件（含 `.test.ts` 与 `.mjs`）都进程序。事故 #2528 就是这类：新增的
- * `scripts/publish-desktop-bundle.mjs` 不在三根、也不是 entryPoint，却被
+ * `scripts/build/publish-desktop-bundle.mjs` 不在三根、也不是 entryPoint，却被
  * `tests/publish-desktop-bundle.test.ts` import ⇒ 在程序里 ⇒ 它的 JSDoc 坏掉，运行
  * typedoc 那一格就红；而旧触发面里没有它 ⇒ **那一格根本没跑**（静默跳格）。
  *
- * 现在的面**从解析根派生**（`scripts/docs-api-input-closure.mjs` 的
+ * 现在的面**从解析根派生**（`scripts/docs/docs-api-input-closure.mjs` 的
  * `docsApiTriggerGlobs()`：tsconfig 展开 ∩ git 跟踪文件 → `dir/**` + 根级 `*.<ext>`，
  * 再加大类配置 `pnpm-lock.yaml`）。改 tsconfig / typedoc.json 的输入面，面自动跟；
  * 面被手工改窄 ⇒ 元测试红（`tests/docs-api-input-closure.test.ts`）。
@@ -149,7 +149,7 @@ function matchedInputs(files) {
 
 /** 读暂存区文件清单。 */
 function stagedFiles() {
-  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/lib/changed-scope.mjs`
    * 的文件头「口径 ④」）。 */
   const out = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
     cwd: ROOT,
@@ -196,7 +196,7 @@ function walk(dir) {
 /**
  * 生成一份 API 文档到 `docs/api/`。
  *
- * 实现住在 `scripts/typedoc-run.mjs`（与 `pnpm run docs` 同一份）：那里验的是产物
+ * 实现住在 `scripts/docs/typedoc-run.mjs`（与 `pnpm run docs` 同一份）：那里验的是产物
  * （`index.html` 的 mtime 是不是这一轮写的）、失败会重试、全失败才给 `ok:false`。
  * 本判据不再自己 `spawn` typedoc —— 自己起一份就等于把「退出码不可信」这个坑
  * 再挖一遍（见过「退出 0 + 日志写 html generated + 产物一个没更新」）。
@@ -211,18 +211,18 @@ function walk(dir) {
 async function generate() {
   // CJS 里取 ESM 只能动态 import：跨平台逻辑一律 ESM（规范 §9.5），而本文件是被
   // `require` 的 .cjs（钩子与 `tests/check-docs-api.test.ts` 都按 CJS 引它）。
-  const { runTypedoc } = await import("../typedoc-run.mjs");
+  const { runTypedoc } = await import("../docs/typedoc-run.mjs");
   return runTypedoc({ root: ROOT, outDir: OUT_ABS });
 }
 
 /**
- * 读 `typedoc.json`（**唯一出处**：`scripts/docs-api-input-closure.mjs` 的
+ * 读 `typedoc.json`（**唯一出处**：`scripts/docs/docs-api-input-closure.mjs` 的
  * `typedocConfig()` —— 那份模块是「typedoc 的配置」的单一出处，它读、别的模块也读它）。
  *
  * @returns {Promise<Record<string, unknown>>} 解析不出时是空对象（不抛）
  */
 async function loadTypedocConfig() {
-  const { typedocConfig } = await import("../docs-api-input-closure.mjs");
+  const { typedocConfig } = await import("../docs/docs-api-input-closure.mjs");
   return typedocConfig(ROOT);
 }
 
@@ -348,7 +348,8 @@ function reportTypedocFailure(reason, log) {
   gateFail("API 文档生成与自检", [reason], {
     subject: "docs/api/**",
     detail: "typedoc 生成失败（拿不到可用的产物）",
-    hint: "先 node scripts/generate-api-docs.mjs 单独跑一遍看真因" + "（占用类失败等一等就过）。",
+    hint:
+      "先 node scripts/docs/generate-api-docs.mjs 单独跑一遍看真因" + "（占用类失败等一等就过）。",
   });
 }
 

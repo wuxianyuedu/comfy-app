@@ -79,7 +79,7 @@ import { formatDurationMs } from "../src/lib/time-format.ts";
 // drizzle-kit / 产物检查，`cpSync` 搬整树），进程内的定时器在那些时段整段不跳，
 // 所以进度心跳只能来自另一个进程 —— `startProgressSync` 把「当前段 + 已跑」交给
 // 一个只读状态文件的子进程去写 stderr。完成读数仍走上面的 `formatDurationMs`。
-import { startProgressSync } from "./progress-heartbeat.mjs";
+import { startProgressSync } from "./gates/progress-heartbeat.mjs";
 
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { pnpmCli } from "./ci/ci-install-deps.mjs";
@@ -251,7 +251,7 @@ progress.step("2.1 启动脚本同步");
 // 清单与白名单同源：scripts/standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS。
 const launcherDestDir = join(staticDir, "scripts");
 for (const launcherFile of RUNTIME_SCRIPTS.filter((name) => name.endsWith(".mjs"))) {
-  // BUILT_RUNTIME_SCRIPTS 是构建期由 scripts/build-executor-host.mjs 直接写进
+  // BUILT_RUNTIME_SCRIPTS 是构建期由 scripts/build/build-executor-host.mjs 直接写进
   // .next/standalone 的产物（宿主的预编译运行时图，3-E1 / ISSUE #1169）——仓库里
   // 没有同名源文件，按「清单漂移」失败会把人引向错误方向。它们随下面的整树拷贝
   // 进 static，并由其后的「桌包里的宿主件在不在」断言兜住。

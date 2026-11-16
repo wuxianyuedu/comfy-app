@@ -131,7 +131,7 @@ describe("worktree 落点契约（#2935 / 硬规则 30）", () => {
    * 正则失效），全仓那格照样绿。点名到文件，「扫不到任何东西」本身就红。
    */
   it.for([
-    ["scripts/base-check.mjs", "合并前复算的临时快照"],
+    ["scripts/gates/base-check.mjs", "合并前复算的临时快照"],
     ["tests/helpers/probe-worktree.ts", "探针隔离的一次性克隆"],
   ] as const)("%s 的 worktree 调用点在场且过契约（%s）", ([rel, what]) => {
     const sites = collectCallSites().filter((site) => site.rel === rel);

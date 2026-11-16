@@ -57,7 +57,7 @@ allowBuilds:
 #   · core-utils>esbuild —— 安全修复，见上；
 #   · drizzle-kit>esbuild —— 它自己声明 `^0.25.4`，range 不含 0.28，不顶就会与
 #     顶层那份**分裂成两个实例**（node_modules 里同时存在 0.25.12 与 0.28.2）。
-# 收敛到一个实例的理由不是省体积：`scripts/build-executor-host.mjs` 直接 require 顶层
+# 收敛到一个实例的理由不是省体积：`scripts/build/build-executor-host.mjs` 直接 require 顶层
 # 那份做打包，而 drizzle-kit 用的是自己的那份 —— 两个版本并存时，「构建期转译行为」
 # 就取决于调用方是谁，出问题无法归因。esbuild JS API（transform/transformSync）跨
 # 0.25→0.28 保持稳定，实测 `pnpm exec tsc --noEmit` + `pnpm build` 全链通过。

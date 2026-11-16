@@ -51,13 +51,13 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
-import { confirmEmptyChangeFace, resolveChangedFiles } from "../changed-scope.mjs";
+import { confirmEmptyChangeFace, resolveChangedFiles } from "../lib/changed-scope.mjs";
 import { resolveCiWorkers } from "./ci-load.mjs";
 import { describeWorktreeDeps, worktreeDepsProblem } from "./ci-worktree-deps.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 
-/* 「改动面怎么算」那一跳已经搬进 `scripts/changed-scope.mjs` —— 桌面壳门禁
- * （`scripts/shell-gate.mjs` 的 `--base` 形态）也要问同一个问题，两边各算一次
+/* 「改动面怎么算」那一跳已经搬进 `scripts/lib/changed-scope.mjs` —— 桌面壳门禁
+ * （`scripts/gates/shell-gate.mjs` 的 `--base` 形态）也要问同一个问题，两边各算一次
  * 就会在某一次改动里漂开（改名的旧路径算不算？三点 diff 还是两点？）。
  * 这里是**转出**，不是复制一份实现（§12.12 / §12.18）。 */
 export { resolveChangedFiles };
@@ -112,7 +112,7 @@ function countJunitFiles(dir) {
 /**
  * 这一次要判的改动面（仓库相对路径清单）。
  *
- * 实现搬进 `scripts/changed-scope.mjs`（桌面壳门禁共用同一份口径）；这里保留
+ * 实现搬进 `scripts/lib/changed-scope.mjs`（桌面壳门禁共用同一份口径）；这里保留
  * 它的转出，调用方的形状与行为一字未变。
  *
  * @param {{env?: Record<string, string | undefined>, cwd?: string, runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}, fallbackRef?: string | null}} [deps]

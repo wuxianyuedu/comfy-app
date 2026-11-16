@@ -151,7 +151,7 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
 
   it("comfyapp:// 的 PowerShell 允许根与 TS 的产物根同形（跨语言成对判据）", () => {
     const scriptsDir = path.join(process.cwd(), "scripts");
-    const ps1 = readFileSync(path.join(scriptsDir, "comfyapp-open-folder.ps1"), "utf8");
+    const ps1 = readFileSync(path.join(scriptsDir, "devtools", "comfyapp-open-folder.ps1"), "utf8");
     /* 抠的是 `Join-Path` 的**各段**，不是一条拼好的相对路径（ISSUE #1348）。
      * 上一版是 `Join-Path $PSScriptRoot "..\generated"`（带 `\` 的字面量），判据须先解析成绝对路径才能比；
      * 而 `path.resolve` 只在 Windows 认 `\`，POSIX 上整串成了文件名 `<repo>/scripts/..\generated` 与
@@ -171,7 +171,7 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
     }
     /* 比的是**解析后的绝对路径**，不是「段数」：写成 `.. / .. / generated`
      * 那种偏移一位的错法，段数一样，只有按 $PSScriptRoot 真解析一次才露出来。 */
-    const resolved = path.resolve(scriptsDir, ...segments!);
+    const resolved = path.resolve(scriptsDir, "devtools", ...segments!);
     expect(resolved).toBe(generatedRoot(path.resolve(scriptsDir, "..")));
   });
 

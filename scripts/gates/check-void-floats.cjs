@@ -17,7 +17,7 @@
  *   · 判据走 TypeScript AST —— 只认「ExpressionStatement 的 expression 是
  *     UnaryExpression(operator=`void`, argument=`CallExpression`)」这一形状;
  *   · 扫描范围 src/lib 下的 .ts/.tsx 非测试文件;
- *   · 每文件当前计数落进 `scripts/.void-floats-baseline.json`,只挡**新增**、
+ *   · 每文件当前计数落进 `scripts/gates/.void-floats-baseline.json`,只挡**新增**、
  *     允许下降(--update 需伴随下降)。
  *
  * 与 `check-non-null-assertions.cjs`(PR-17/18)、`check-function-length.cjs`
@@ -44,7 +44,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "../..");
-const BASELINE = path.join(__dirname, "../.void-floats-baseline.json");
+const BASELINE = path.join(__dirname, ".void-floats-baseline.json");
 const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const REPORT_ONLY = ARGS.has("--report");

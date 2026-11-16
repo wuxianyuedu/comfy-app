@@ -269,7 +269,7 @@ AIGC:
 | `node scripts/gates/check-file-structure.cjs`            | 结构/命名/注释流水硬规则（R1-R12 + R14，钩子标签见上），在 pre-commit 强制                                                                                                                                                                                                    | **默认档不跑**：它在 D 组，注册表在场而执行时机由 `COMFY_HEAVY_GATES` 决定（13 §13.5.25）；本地要全套用 `pnpm check:all` |
 | `pnpm check`                                       | `pnpm run lint`（零警告，范围与规则面见 `oxlint.parity.config.mjs`）+ `tsc --noEmit`                                                                                                                                                                                          | **默认档不跑**：tsc / lint 在 A、B 两组，同上；平台侧在场哪几格以 `.cnb.yml` 的两份清单为准 |
 
-> `doc:check` 的校验范围与豁免名单定义在 `scripts/doc-facts.cjs`
+> `doc:check` 的校验范围与豁免名单定义在 `scripts/docs/doc-facts.cjs`
 > （`SCOPED_DOCS` / `SCOPED_DOC_DIRS` / `SCOPED_DOC_EXEMPTIONS`），
 > 人类可读映射见 [reference-facts.md](reference-facts.md)。
 

@@ -87,7 +87,7 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 > 判定档还在、放宽通道没被加回来、扫描走共享内核）与
 > `tests/tw4-hardgate-behaviour.test.ts`（**行为** —— 真候选即退 1、注释里的示例
 > 不算候选、`--update` 这个出口已经不存在；形状守卫读文本，判不出「判定档真的会
-> 退 1」）。执行者与「为什么不进钩子」登记在 `scripts/.gate-executor-ledger.json`。
+> 退 1」）。执行者与「为什么不进钩子」登记在 `scripts/gates/.gate-executor-ledger.json`。
 >
 > **翻闸时撞出来的两件事值得记在这**（tw4 这一项不只是删基线）：
 >
@@ -216,14 +216,7 @@ const panelVariants = cva("rounded-2xl border transition-colors", {
 
 ```tsx
 // ❌ 错误：内联 SVG 导致视觉噪音、风格不一致（strokeWidth 有的是 1.8 有的是 2）
-<svg
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  strokeWidth="1.8"
->
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
   <path d="..." />
 </svg>;
 
@@ -369,6 +362,13 @@ import "@/styles/json-viewer.css";
 > `#1E1A2E` / `#331A28`）是「一块承载类型色的表面」，浅色下不能还是近黑，
 > 必须 token 化（`--color-chip-type-image-bg` / `--color-chip-type-video-bg`）。
 > 判据按「这一层画的是什么」逐层过，而不是按「这个文件里是不是类型色」整块放行。
+
+**原生菜单拟态例外（ISSUE #4132）**：应用内右键菜单
+（`src/components/AppContextMenu.tsx`）按用户决策**整份拟态 WebView2 默认菜单**
+—— 浅色实底（`#f3f3f3`）、系统字体栈、`#3c4043` 文字、`#e8eaed` 悬停、
+`#dadce0` 分隔，刻意**不随应用主题**（本壳的原生菜单恒为浅色）。它不是类型色、
+也不是固定暗色，是第三类「**按用户决策不随主题的拟态表面**」；整份文件登记进
+`EXEMPT_TABLES`（理由见豁免清单），要改它的样式请先回 #4132 那张单。
 
 **维护**：
 
@@ -830,10 +830,7 @@ utility 在两态里各有一态取错值」——`bg-card` 编出来是
 
 ```tsx
 // ✅ 装饰背景/光晕：pointer-events-none + aria-hidden
-<div
-  aria-hidden
-  className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
->
+<div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
   <div
     className="absolute rounded-full mix-blend-screen ..."
     style={{ background: "radial-gradient(...)" }}
@@ -1192,7 +1189,7 @@ className="
 | 档                 | 判据                                                         | 处置                                                                                                      |
 | ------------------ | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | 分层阴影           | 浮层真的浮在内容之上（模态 / 弹窗 / 下拉 / 画布浮件）        | **留**。那不是装饰，是叠放语义；撤掉之后浮层与背景只差一条描边，读不出层次（`docs/DESIGN.md` §Elevation） |
-| 装饰发光           | 按钮上那圈彩色 `shadow-*`（不带偏移的 `0_0_Npx`）            | **撤**。分层靠描边、字号与实心档，不靠按钮发光（PR #2027 那一批撤了四处，ISSUE #2031 又补一处）        |
+| 装饰发光           | 按钮上那圈彩色 `shadow-*`（不带偏移的 `0_0_Npx`）            | **撤**。分层靠描边、字号与实心档，不靠按钮发光（PR #2027 那一批撤了四处，ISSUE #2031 又补一处）           |
 | 背景模糊（贴边条） | 顶栏 / 页脚 / 状态栏这类**两条对边贴齐**容器的一窄条         | **留模糊，且不再叠半透**（见下）                                                                          |
 | 背景模糊（整块）   | 卡片 / 弹窗 / 浮层 / 抽屉 / 提示条 —— 下面是一层遮罩或静止页 | **撤**，并把 `bg-*/85~95` 还原成不透明（模糊没有活内容可盖，半透就只剩「内容透出来干扰阅读」这一半）      |
 

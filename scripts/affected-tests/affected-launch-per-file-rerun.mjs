@@ -11,7 +11,7 @@
  * 行数 —— 这一段与「起第 2 遍 / 收尾话术」变化方向不同：它只回答「哪几份还没被定性、
  * 买不买得起再跑」。搬走之后判决链、退出码与话术一个字没改（`runChunk` 只换调用点）。
  *
- * 上限 `PER_FILE_RERUN_MAX` 跟着搬过来：它只属于这一格（`scripts/.gate-thresholds.json`
+ * 上限 `PER_FILE_RERUN_MAX` 跟着搬过来：它只属于这一格（`scripts/gates/.gate-thresholds.json`
  * 里 `file` 一栏同步改到本文件，数值与 `kind` 不变）。
  *
  * @module scripts/affected-tests/affected-launch-per-file-rerun.mjs — 机制层（逐文件补跑）
@@ -33,7 +33,7 @@ import { mergePerFileReads } from "./affected-launch-retry-verdict.mjs";
  * 超过上限就停在这一档并把名单点出来（退 2），**不**冒充「整块只是超时形态」。
  *
  * 8 = 实测「一次改一个 feature」时组 C 失败文件数的常见上界再留一倍余量。
- * 这一条与 `affected-launch-scope-advice.mjs` 那份 `SCOPE_ADVICE_MIN` 都在 `scripts/.gate-thresholds.json` 里按 `report`
+ * 这一条与 `affected-launch-scope-advice.mjs` 那份 `SCOPE_ADVICE_MIN` 都在 `scripts/gates/.gate-thresholds.json` 里按 `report`
  * 入账（不是松紧量：调它只改变「要不要多花那几十秒」，不改变任何一条断言的判定）。
  */
 const PER_FILE_RERUN_MAX = 8;

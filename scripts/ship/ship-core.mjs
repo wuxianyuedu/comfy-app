@@ -29,10 +29,10 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { resolveGitDir } from "../git-dir.mjs";
+import { resolveGitDir } from "../lib/git-dir.mjs";
 import { prBodyPlanLines } from "./ship-pull-body.mjs";
 import { CODE } from "./ship-codes.mjs";
-import { cnbData, cnbRecords } from "../cnb-fields.mjs";
+import { cnbData, cnbRecords } from "../platform/cnb-fields.mjs";
 
 /* 退出码表的**唯一出处**是 `ship-codes.mjs`（ISSUE #3083：三态扩成 0–7 的分型表，
  * 「没跑起来」细分为冲突 / 排队 / 读数缺失 / 守卫 / 预检五类，2 的压栈语义不变）。
@@ -470,7 +470,8 @@ export function classifyIsMerged(v) {
 export function readPullVerdict(json) {
   /* 信封解包走单一出处（ISSUE #3060）：「data 缺了」与「拆错层」在这里分型。 */
   /* 信封解包走单一出处（ISSUE #3060）；返回值按 JSDoc 的既有形状收窄。 */
-  const d = /** @type {import("../cnb-fields.mjs").CnbPullData | null} */ (cnbData(json)) ?? {};
+  const d =
+    /** @type {import("../platform/cnb-fields.mjs").CnbPullData | null} */ (cnbData(json)) ?? {};
   const tri = classifyIsMerged(d.is_merged);
   return {
     number: d.number === undefined ? null : Number(d.number),
@@ -857,7 +858,7 @@ export function planCommands(st) {
  * @returns {{headSha?:string,upstreamSha?:string,verifiedAt?:string,baselineRed?:string[]} | null} 取不到回 null
  */
 export function readProof(root, resolve = resolveGitDir) {
-  /* git 目录的解析不在这里重做 —— 唯一实现见 `scripts/git-dir.mjs`。
+  /* git 目录的解析不在这里重做 —— 唯一实现见 `scripts/lib/git-dir.mjs`。
    * 这里此前自己判「`.git` 是文件就当指针读」，只覆盖 worktree 那一种，
    * `GIT_DIR` 与裸仓库一个都不认；手写一份弱化的同一件事，比不写更难被发现。
    *

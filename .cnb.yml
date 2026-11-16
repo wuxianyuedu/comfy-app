@@ -246,7 +246,7 @@
     COMFYAPP_QUIET_COVERAGE: "1"
     # 本题解析器要用 `steps` 里**没有**的那几个东西（`steps` 会内联进工作区、
     # 被 checkout 抹掉，而 `env` 是 HEAD 的事）。判据按本键解析 `.cnb.yml`：
-    #   · `PYTHON_PROBE` —— `scripts/python-probe.mjs`：逐个候选打印「这个命令起不起
+    #   · `PYTHON_PROBE` —— `scripts/lib/python-probe.mjs`：逐个候选打印「这个命令起不起
     #     得来」。缺件时那几条用例走 `env` 档跳过（不会红），跳过的是哪几条只有它答得出。
     #   · `GATES` —— 本档的 stage 名有序清单。两条被判的约束都是实测出来的：
     #     ① `单元测试` 必须排在 `Python 可用性` 之后 —— 实测它跑到 **2h24m** 被 8640s
@@ -268,7 +268,7 @@
     #     里以**注释形态**留着（可 grep 回原文），否则「加回来」就没有原文可依。
     # 恢复动作：`.gates` 里取消注释 → 把名字挪回 `GATES` → 从本清单删掉。
     # 判据见 `tests/no-platform-ci-config.test.ts` 的「停用登记」那两条。
-    COMFYAPP_CI_PYTHON_PROBE: scripts/python-probe.mjs
+    COMFYAPP_CI_PYTHON_PROBE: scripts/lib/python-probe.mjs
     # 这一项**留在停用清单里，但理由换了**（与每日档那条决定同批核对过）：
     #   · 当初停 `单元测试` 的理由是「宿主侧够不着 Python」—— 那条**已不成立**
     #     （同一台节点的 `每日单元测试` 长期跑绿，`Python 可用性` / `Python 探针读数` 有读数），
@@ -906,7 +906,7 @@
   # （见 `GATE_TIER_LEDGER`）。原文留在这里有两个用处：
   #   ① 恢复动作（真要拆回独立 stage：取消注释 → 从复合格条目表删同名条目 → 名字挪回
   #      `COMFYAPP_CI_GATES` 并从 retired 段删）；
-  #   ② `scripts/.gate-executor-ledger.json` 里 `check-dead-exports.cjs` 的
+  #   ② `scripts/gates/.gate-executor-ledger.json` 里 `check-dead-exports.cjs` 的
   #      「(无旗标)」那一形，认的就是这一行命令的形状 —— 删掉它，台账会报「这一形
   #      没人跑」，而真正的原因是**证明形状的那份原文被删了**。
   # - name: 格式化提交分离
@@ -965,14 +965,14 @@
   #   判据见 `tests/ci-load.test.ts`；人还能用
   #   `COMFY_CI_MAX_WORKERS=1` 再压一档）。
   #
-  #   ⚠️ **恢复时入口写 `scripts/full-suite-run.mjs`，不是裸 vitest**：
+  #   ⚠️ **恢复时入口写 `scripts/affected-tests/full-suite-run.mjs`，不是裸 vitest**：
   #   它内部是 `pnpm run test:coverage`（= `vitest run --coverage`，见 `planRun()`），
-  #   而外面多出来的那一跳是**记账** —— 跑绿即刷新 `scripts/.full-suite-freshness.json`。
+  #   而外面多出来的那一跳是**记账** —— 跑绿即刷新 `scripts/freshness/.full-suite-freshness.json`。
   #   裸写 vitest 时这一步的绿只落在日志里、账面上一个字不变，本地「改了就当天跑」
   #   那条判据照旧拦人（判据与账是两件事，两个执行者要读到同一份事实）。
   #   本档在平台侧**必须整档跑**（不带 `--grep` / 不指单个文件）：`isWholeTrackRun`
   #   会把「透传了参数的绿」判成**不构成整档凭证**、当场不记账。
-  #   用法与边界见 scripts/full-suite-run.mjs 头注与规范 §13.5.4。
+  #   用法与边界见 scripts/affected-tests/full-suite-run.mjs 头注与规范 §13.5.4。
   #
   # ⚠️ 这一格**留在注释形态 = 停用**（名字在 `COMFYAPP_CI_DISABLED_GATES` 里，两处同批才成立）。
   #   本批一度把它取消注释当「重档挪到 CI」的承接者，随后撞上并行会话那条决定：会自己起
@@ -985,7 +985,7 @@
   #   （`pr-gate.yml` 的两个 job；读数与逐条理由见规范 §13.5.41、ISSUE #3662 出口 B）。
   #   恢复前提：平台能给这一格一条不与并行 PR 争抢的执行环境（那才是这条决定的边界，不是判据）。
   # - name: 单元测试
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/full-suite-run.mjs
+  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci/ci-cp936-exit.mjs -- node scripts/affected-tests/full-suite-run.mjs
   # 实测 827s（安静机器，755 文件全量绿）；本机 `--maxWorkers=4` 实测
   # 198s。而满载机器上它挂到 **8640s**（2h24m）才被掐掉，留下的
   # 只有 `timeout of 8640000ms exceeded` —— 一条失败原因都读不到。

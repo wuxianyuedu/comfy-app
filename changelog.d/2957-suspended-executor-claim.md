@@ -6,9 +6,9 @@
   当场读数（三处复述 + 一件机器事实）：
 
   ```
-  $ grep -n 'localExecutor' scripts/suspended-gate-tests.mjs
+  $ grep -n 'localExecutor' scripts/affected-tests/suspended-gate-tests.mjs
   52:    localExecutor: "本地钩子组 C（`affected-tests.mjs` 的固定清单，不经本台账过滤）",
-  61:    localExecutor: "本地钩子组 C；绕过门槛时人自己跑 `node scripts/base-check.mjs`（判据本体仍在）",
+  61:    localExecutor: "本地钩子组 C；绕过门槛时人自己跑 `node scripts/gates/base-check.mjs`（判据本体仍在）",
   70:    localExecutor: "本地钩子组 C；产物层另有 `pnpm build` 收尾那一次真跑判据",
 
   $ grep -n "组 C 在这里" .githooks/pre-commit
@@ -23,7 +23,7 @@
   ```
 
   加上 `suspendedReading()` 打进 CI 日志的那一句「本地钩子照跑」与
-  `scripts/full-suite-run.mjs` 的同款注释 —— **四处**都在说同一件不存在的事。
+  `scripts/affected-tests/full-suite-run.mjs` 的同款注释 —— **四处**都在说同一件不存在的事。
   后果不是文字不准：固定清单的本地执行者一直是组 C，而平台这档又把它剔了，
   所以「这三条用例文件此刻还有兜底」是被那句自述**造出来的**。
   而判据 `tests/suspended-gate-tests.test.ts` 原先只核 `localExecutor.length > 10` ——
@@ -43,7 +43,7 @@
     这件事实（读不到就红，并写清"要么执行者回来了就去核对 `executorsNow`、要么我的量具形状变了"），
     再禁止任何一条把「组 C / 本地钩子」写成执行者。没有新写一份"谁在执行"的全局扫描器
     （#2660 期望 3 那条边界在这里同样有效）——只把台账这一句与钩子那一处对上。
-  - `scripts/full-suite-run.mjs` 那段注释订正成同一份事实，并指回 `executorsNow` 与这条判据。
+  - `scripts/affected-tests/full-suite-run.mjs` 那段注释订正成同一份事实，并指回 `executorsNow` 与这条判据。
 
   **变异证明**（把台账那一条改回原来的话）：
 

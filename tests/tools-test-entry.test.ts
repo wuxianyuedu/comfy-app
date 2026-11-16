@@ -1,15 +1,15 @@
 /**
  * `tools/start/run-tests.ps1` 回归护栏：机器化「tools 里有没有能单独跑 vitest 的入口」（此前只跑测试的路径不存在，
  * `verify-quality.ps1` 只能三项串联整档跑）。规范 `docs/standards/11-测试与可观测性.md` §11.12、`launch-and-build.md` §8：
- * 入口只做定位项目根 → 调逻辑脚本 → 收尾（逻辑在 `scripts/`）；参数透传 vitest；基线失败清单唯一来源 `scripts/quality-gate.ps1`。无 pwsh 的 CI 只做文本/结构断言。
+ * 入口只做定位项目根 → 调逻辑脚本 → 收尾（逻辑在 `scripts/`）；参数透传 vitest；基线失败清单唯一来源 `scripts/gates/quality-gate.ps1`。无 pwsh 的 CI 只做文本/结构断言。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ENTRY = join(process.cwd(), "tools", "start", "run-tests.ps1");
-const LOGIC = join(process.cwd(), "scripts", "run-tests.ps1");
-const GATE = join(process.cwd(), "scripts", "quality-gate.ps1");
+const LOGIC = join(process.cwd(), "scripts", "affected-tests", "run-tests.ps1");
+const GATE = join(process.cwd(), "scripts", "gates", "quality-gate.ps1");
 const entry = readFileSync(ENTRY, "utf8");
 const logic = readFileSync(LOGIC, "utf8");
 const gate = readFileSync(GATE, "utf8");
@@ -18,7 +18,7 @@ describe("tools 里的 vitest 单跑入口", () => {
   it("入口与逻辑分层齐全（入口归 tools/start/，逻辑归 scripts/）", () => {
     // 规范 §8.2：双击入口在 tools/<分类>/，业务逻辑下沉到 scripts/
     expect(entry).toContain(String.raw`scripts\entry-common.ps1`);
-    expect(entry).toContain(String.raw`"scripts\run-tests.ps1"`);
+    expect(entry).toContain(String.raw`"scripts\affected-tests\run-tests.ps1"`);
     expect(logic).toContain('@("exec", "vitest", "run")');
   });
 

@@ -234,11 +234,11 @@ function toPosix(p) {
 
 /**
  * 「纯 ASCII 模块」白名单 —— 名单的**权威定义**在 docs/reference-facts.md 的
- * `comment.language.asciiOnly` 一行,由 scripts/doc-facts.cjs 解析。
+ * `comment.language.asciiOnly` 一行,由 scripts/docs/doc-facts.cjs 解析。
  * 这里不另写一份:两份清单必然各自漂移,表现是「文档说允许、判据说违规」。
  */
 async function asciiOnlyModules() {
-  const { extractAsciiOnlyModules } = await import("../doc-facts.cjs");
+  const { extractAsciiOnlyModules } = await import("../docs/doc-facts.cjs");
   return new Set(extractAsciiOnlyModules());
 }
 

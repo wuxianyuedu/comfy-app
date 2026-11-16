@@ -40,7 +40,7 @@ function gate(
   symlinkDir(path.resolve(__dirname, "../node_modules"), path.join(root, "node_modules"));
   if (baseline) {
     writeFileSync(
-      path.join(root, "scripts", ".form-field-wiring-baseline.json"),
+      path.join(root, "scripts", "gates", ".form-field-wiring-baseline.json"),
       JSON.stringify(baseline),
     );
   }

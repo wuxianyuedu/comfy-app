@@ -38,7 +38,7 @@ import {
   createAppDataBackup as createAppDataBackupCore,
   importBackupFromDir as importBackupFromDirCore,
   listAppDataBackups as listAppDataBackupSetsCore,
-} from "../../../scripts/app-data-backup.mjs";
+} from "../../../scripts/db/app-data-backup.mjs";
 
 export { BACKUP_KEEP, backupDir, createBackup, listBackups, pruneBackups };
 export { readRestoreRequest, requestRestore, verifyBackupFile };

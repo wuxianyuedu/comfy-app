@@ -12,7 +12,7 @@ import { spawnSync } from "node:child_process";
 import { APP_PORT_ENV_KEY, resolveAppPortWithSource, resolveRepoRoot } from "./app-port.mjs";
 import { applyPendingRestoreAtBoot } from "./db/db-backup-core.mjs";
 import { spawnSchemaSync } from "./db/db-schema-state.mjs";
-import { exitIfEnvNotReady } from "./env-preflight.mjs";
+import { exitIfEnvNotReady } from "./devtools/env-preflight.mjs";
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { maybeSpawnExecutorHost } from "./launcher-core/executor-host-spawn.mjs";
 import { runStamp } from "./launcher-core/log.mjs";

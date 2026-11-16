@@ -74,7 +74,7 @@ describe("门禁夹具：同一条路径只写一次", () => {
 
     for (const name of ["dependency-face.mjs", "git-dir.mjs"]) {
       expect(
-        gate.exists(path.join("scripts", name)),
+        gate.exists(path.join("scripts", "lib", name)),
         `${name} 没被带进工作区 —— 判据跑起来会是 ERR_MODULE_NOT_FOUND`,
       ).toBe(true);
     }

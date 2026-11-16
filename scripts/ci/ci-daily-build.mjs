@@ -30,7 +30,7 @@
  *
  * 「构建能不能过」的判据**一个字都不该在这里重写**：`pnpm run build` 那串链
  * （`next build` → 剥私有输入 → 数产物 → 冒烟）是 AGENTS 硬规则 17/18 的产物级防线，
- * 记账走 `artifact-run.mjs`（跑绿即刷 `scripts/.artifact-freshness.json`）。
+ * 记账走 `artifact-run.mjs`（跑绿即刷 `scripts/freshness/.artifact-freshness.json`）。
  * 本文件多出来的只有三件**跑这一次才有意义**的事：
  *
  *   ① 把「这一跑是**定时那一跑**」写出来（日志里那是我唯一的身份线索：
@@ -60,7 +60,7 @@ import path from "node:path";
 import process from "node:process";
 
 import { imageIdentity } from "./ci-image-identity.mjs";
-import { main as artifactMain } from "../artifact-run.mjs";
+import { main as artifactMain } from "../build/artifact-run.mjs";
 
 /**
  * 这一次是不是「定时那一跑」—— 只看平台给的事件变量（官方 `build-in-env.md`）。

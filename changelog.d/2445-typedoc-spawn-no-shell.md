@@ -1,6 +1,6 @@
 ## Fixed
 
-- `scripts/typedoc-run.mjs`：typedoc 不再经 shell 层起 `node_modules/.bin/typedoc.cmd`
+- `scripts/docs/typedoc-run.mjs`：typedoc 不再经 shell 层起 `node_modules/.bin/typedoc.cmd`
   垫片（ISSUE #2445）—— 平台「API 文档生成与自检」格日志开头的
   `[DEP0190] DeprecationWarning`（Node 26 弃用「args 数组 + 开 shell」）清零。
   `resolveTypedocBin`（垫片路径）→ `resolveTypedocEntry`：走

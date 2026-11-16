@@ -35,7 +35,7 @@ import { APP_ORIGIN_ENV_KEYS, parseOverride } from "./app-origin-reader.ts";
  * 自身的辅助件（providers 装饰器不是 Story）。
  */
 /**
- * 本检出的解析链端口（`pnpm storybook` 启动时由 `scripts/storybook-assets.mjs`
+ * 本检出的解析链端口（`pnpm storybook` 启动时由 `scripts/devtools/storybook-assets.mjs`
  * 现算，落一份不入库的 JSON）。
  *
  * **读文件这一步必须在 `main.ts`**：它由 Storybook 在 **Node** 里加载，而

@@ -265,8 +265,8 @@ export type ApiCallDebugRow = {
   /** HTTP 层是否 2xx。 */
   ok: boolean;
   /** 哪一步发的：本地提交（客户端即时行）/ 生图 / 视频提交 / 视频轮询
-   * （轮询逐候选上报）。 */
-  phase: "image" | "relay" | "video-poll" | "video-submit";
+   * （轮询逐候选上报）/ 本地任务（#4080 评论 4：工作流候选的 ComfyUI 任务行）。 */
+  phase: "image" | "local-task" | "relay" | "video-poll" | "video-submit";
   /** HTTP 状态码；网络层失败（fetch 抛错）时为 null。 */
   status: number | null;
 };

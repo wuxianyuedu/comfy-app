@@ -332,14 +332,14 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
     expect(Object.keys(FRESHNESS_TRACKS)).toContain("e2e");
     const { ledger, key, label, run } = freshnessTrack("e2e");
     expect({ ledger, key, label, run }).toEqual({
-      ledger: "scripts/.e2e-freshness.json",
+      ledger: "scripts/freshness/.e2e-freshness.json",
       key: "e2e",
       label: "全量 e2e",
       run: "pnpm test:e2e",
     });
     // 另两档各有一份自己的账与键（不是同一个文件里的两个键）。
-    expect(freshnessTrack("full").ledger).toBe("scripts/.full-suite-freshness.json");
-    expect(freshnessTrack("artifact").ledger).toBe("scripts/.artifact-freshness.json");
+    expect(freshnessTrack("full").ledger).toBe("scripts/freshness/.full-suite-freshness.json");
+    expect(freshnessTrack("artifact").ledger).toBe("scripts/freshness/.artifact-freshness.json");
   });
 
   it("各份账的差异都在数据里（`daily` / `skipHow` / 输入面），不是分支", () => {

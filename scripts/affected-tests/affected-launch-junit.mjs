@@ -29,7 +29,7 @@ import { writeFileSync } from "node:fs";
 /* 组 C 分文件读数的**落盘布局**由账本那一侧拥有（读的一侧是格式的权威）。
  * import 而不是各抄一份文件名：抄两份的漂移形态是静默的 —— 改名那侧照常跑、
  * 这侧读不到，而「读不到」在这一格长得和「这次没有读数」一模一样。 */
-import { C_MANIFEST_NAME, cFileXmlName } from "../precommit-timing.mjs";
+import { C_MANIFEST_NAME, cFileXmlName } from "../gates/precommit-timing.mjs";
 
 /**
  * 追加给 vitest 的分文件耗时参数。

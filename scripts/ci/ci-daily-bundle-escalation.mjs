@@ -4,7 +4,7 @@
  * 为什么单独成模块：这段只做「读判决行 → 判门限 → 拼一节正文」，与立案那侧的取数 / 去重 /
  * 写单没有共享状态；留在 `ci-daily-failure-issue.mjs` 里会把那份文件推过 900 行硬闸，
  * 而这里的分界是天然的。**它不改判据的判定**（棘轮只许降不许升照旧）：只读
- * `check-bundle-budget.cjs` 自己打的那两句判决行，门限见 `scripts/.gate-thresholds.json`。
+ * `check-bundle-budget.cjs` 自己打的那两句判决行，门限见 `scripts/gates/.gate-thresholds.json`。
  *
  * 纯判定层（判决行解析 / 门限 / 正文拼装）抽在 `ci-bundle-escalation-core.mjs`，
  * 供本模块与 GA 那一侧（`ci-ga-daily-bundle-escalation.mjs`）共用；

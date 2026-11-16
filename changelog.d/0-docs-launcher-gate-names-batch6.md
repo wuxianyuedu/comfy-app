@@ -18,9 +18,9 @@
   （每次运行覆盖）与 `dev-launcher-stderr.log`，而 install 的输出尾部与复核结论走 `ctx.log`
   落进前者（`scripts/launcher-core/downstream.mjs:117`）。改成指真实落点，并明写「没有
   `pnpm-install-stderr.log` 这个文件，别去找」。
-- **一条负结果（差点按旧账改错）**：`scripts/setup-comfy-cli-venv.ps1` 在我手上的旧清单里被记成
+- **一条负结果（差点按旧账改错）**：`scripts/devtools/setup-comfy-cli-venv.ps1` 在我手上的旧清单里被记成
   「文档说它自动、其实不自动」。实测三件事把它推翻：文件**在树上**；
-  `scripts/prepare-local-run.ps1` 在本地运行准备里调它（幂等、失败不阻断启动）；而它写明 Python
+  `scripts/devtools/prepare-local-run.ps1` 在本地运行准备里调它（幂等、失败不阻断启动）；而它写明 Python
   版本下限、被 `tests/ci-env-probe.test.ts` 当**权威源**读（漂了就红）。所以 §5 那句「启动时后台
   自动完成」站得住，没动。**口径**：手上那份「已知待办清单」也要逐条复算 —— 它本身就是旧的，
   按记忆执行等于把一条过期结论再抄一遍。

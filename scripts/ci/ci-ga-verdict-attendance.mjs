@@ -19,7 +19,7 @@
  *   是「这一侧没收到」，不是「GA 判了红」**。
  * - **不判**该不该把回调接成承重：那要单独一次决定，本入口不碰 `质量门禁` 的判决链。
  * - **不是判据、不是档**：不进 `quality-gate.mjs` 的 GATES，也不进
- *   `scripts/.on-demand-duties.json`（§12.20 第三标本：读账面工具收进两本账等于
+ *   `scripts/gates/.on-demand-duties.json`（§12.20 第三标本：读账面工具收进两本账等于
  *   谎称它有人执行）。发现面在这一段注释与 `pnpm ga-verdict:attendance` 动词本身。
  * - 取数只调 `check-daily-attendance.mjs` 的 `fetchBuildsCoveringWindow` 那一份，
  *   不写第二份分页/覆盖自证（§12.12）；结论只念平台回的 `event` / `status` 原值，

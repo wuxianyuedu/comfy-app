@@ -18,7 +18,7 @@ import {
   exitIfEnvNotReady,
   missingEnvKeys,
   parseEnvFile,
-} from "../scripts/env-preflight.mjs";
+} from "../scripts/devtools/env-preflight.mjs";
 import { runStartupGates } from "../scripts/launcher-core/startup-gates.mjs";
 
 const ROOT = process.cwd();
@@ -88,7 +88,7 @@ function copyScriptWithRelativeClosure(entryRel: string): string {
   return path.join(tmp, "scripts", entryRel);
 }
 
-/** 真跑 `scripts/env-init.mjs`（把项目根换成临时目录的等价形态不成立——
+/** 真跑 `scripts/devtools/env-init.mjs`（把项目根换成临时目录的等价形态不成立——
  *  脚本按自身位置定位项目根，所以这里用一个同名的最小检出副本）。 */
 function runEnvInitIn(files: Record<string, string>): {
   scriptPath: string;
@@ -96,7 +96,7 @@ function runEnvInitIn(files: Record<string, string>): {
   stderr: string;
   stdout: string;
 } {
-  const scriptPath = copyScriptWithRelativeClosure("env-init.mjs");
+  const scriptPath = copyScriptWithRelativeClosure("devtools/env-init.mjs");
   for (const [rel, content] of Object.entries(files)) {
     fs.writeFileSync(path.join(tmp, rel), content, "utf8");
   }
@@ -118,7 +118,7 @@ describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
     const scripts: unknown = isRecord(pkgParsed) ? pkgParsed.scripts : undefined;
     expect(
       isRecord(scripts) && typeof scripts["env:init"] === "string" ? scripts["env:init"] : "",
-    ).toBe("node scripts/env-init.mjs");
+    ).toBe("node scripts/devtools/env-init.mjs");
   });
 
   it("从 .env.example 生成后，三个必填项都非空且能过预检", () => {
@@ -452,7 +452,7 @@ describe("dev/start 在起 Next 之前预检", () => {
 
   it.for(entries)("%s 调用 exitIfEnvNotReady 且发生在 spawn 之前", (rel) => {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
-    expect(src).toContain('import { exitIfEnvNotReady } from "./env-preflight.mjs"');
+    expect(src).toContain('import { exitIfEnvNotReady } from "./devtools/env-preflight.mjs"');
     const gate = src.indexOf("exitIfEnvNotReady(root)");
     const spawn = src.search(/spawnSync\(/);
     expect(gate, "必须调用预检").toBeGreaterThan(-1);
@@ -472,7 +472,7 @@ describe("dev/start 在起 Next 之前预检", () => {
     // 断言曾经抓不住的东西（输出里只有 ERR_MODULE_NOT_FOUND 的调用栈）。
     const needed = [
       "dev.mjs",
-      "env-preflight.mjs",
+      "devtools/env-preflight.mjs",
       "app-port.mjs",
       // db 三件 #3930 起在 scripts/db/（路径保持 scripts/ 相对，落点随名字保持同形）。
       "db/db-schema-state.mjs",
@@ -483,7 +483,7 @@ describe("dev/start 在起 Next 之前预检", () => {
       "db/db-backup-core.mjs",
       // #3732：`db-backup-core.mjs` 静态 import 这份本机应用数据备份实现，
       // 同理必须随最小检出副本一起拷，否则红的是模块找不到。
-      "app-data-backup.mjs",
+      "db/app-data-backup.mjs",
       "standalone-private-inputs.mjs",
     ];
     for (const name of needed) {

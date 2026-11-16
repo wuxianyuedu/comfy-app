@@ -59,7 +59,7 @@ function readBaseline(repo: GateRepo): Record<string, unknown> & {
   total: number;
 } {
   const parsed: unknown = JSON.parse(
-    readFileSync(join(repo.dir, "scripts", ".void-floats-baseline.json"), "utf8"),
+    readFileSync(join(repo.dir, "scripts", "gates", ".void-floats-baseline.json"), "utf8"),
   );
   if (!isVoidFloatsBaseline(parsed)) {
     throw new Error("void-floats 基线的形状不对");
@@ -186,7 +186,7 @@ void a();`,
 void a();`,
     );
     repo.run(["--update"]);
-    const p = join(repo.dir, "scripts", ".void-floats-baseline.json");
+    const p = join(repo.dir, "scripts", "gates", ".void-floats-baseline.json");
     /* 改判据版本：**整份基线原样写回**（这里只改 ruleVersion 一个字段，
        其余字段必须留着 —— 少了任何一个，判据下一句读到的就是「基线文件损坏」）。 */
     const parsed: unknown = JSON.parse(readFileSync(p, "utf8"));

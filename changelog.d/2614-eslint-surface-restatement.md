@@ -16,7 +16,7 @@
     `@typescript-eslint/no-unused-vars: 'neverRead' is assigned a value but never used.`
     探针同批删除，`git status` 复查零残留。⇒ 单子里那句「同一份样本放两个目录、前者 0 命中」没复现。
   - 调用点确实只有一处口径：`.githooks/pre-commit:461` 的 B 组是 `sh -c 'pnpm run lint'`
-    （标签自己写着「范围见 package.json lint」）、`scripts/quality-gate.mjs:108` 是 `args: ["run", "lint"]`。
+    （标签自己写着「范围见 package.json lint」）、`scripts/gates/quality-gate.mjs:108` 是 `args: ["run", "lint"]`。
     没有任何一处另拼目录清单 ⇒ 「扩面」这一步**没有可扩的**。
   - 另一处复述 `docs/standards/13-提交与-code-review.md:4453` **本来就带着** `.storybook`
     ⇒ 本批之后两处复述一致，唯一的旧的那份是新改的这一行。

@@ -1,0 +1,3 @@
+## Changed
+
+- **scripts/ 目录整理收尾（#4111）**：删除 #3930 遗留的 38 份兼容垫片（顶层 `check-*` / `ci-*` / `db-push` / `e2e-run` / `freshness-gate`，真实判据早已在 `scripts/gates/` 与 `scripts/ci/`）；其余约 110 份散放脚本按域归入子目录——文档工具入 `scripts/docs/`、打包产物入 `scripts/build/`、开发者工具入 `scripts/devtools/`、CNB 平台协作入 `scripts/platform/`、跨脚本共享件入 `scripts/lib/`，门禁台账 `.json` 随消费方落 `gates/` / `freshness/` / `affected-tests/`。顶层只留壳运行期契约与单件入口（`dev-launcher.*` / `standalone-runtime.mjs` / `reap-process.mjs` / `app-port.*` / `build-desktop.mjs` 等，路径被 `src-tauri` 或运行期代码引用，不可移动）。全部引用（package.json / 钩子 / CI / 工具 / 文档 / 测试）同批改写，`check-ps1-consistency` / `check-gate-executors` / `check-gate-thresholds` / `doc:check` 等门禁现跑全绿。完整导航见 `scripts/README.md`。

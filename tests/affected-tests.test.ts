@@ -15,15 +15,15 @@ import {
 } from "../scripts/affected-tests/affected-tests.mjs";
 /* `--name-status` 的解析住在零依赖模块里（ISSUE #2830：说明符扫描器带上了
  * `typescript`，沙箱里那份 `changed-scope.mjs` 不能再连带它）。 */
-import { changedPathsFromNameStatus } from "../scripts/git-name-status.mjs";
+import { changedPathsFromNameStatus } from "../scripts/lib/git-name-status.mjs";
 /* 清单那一跳的载体住在自己那份文件里 —— 用例按它真实的落点 import，
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
 import { describeListFailure } from "../scripts/affected-tests/affected-launch-changed-list.mjs";
-import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "../scripts/affected-tests/fixed-structural-tests.mjs";
 /* #2022：固定清单里开了输入面那几条在增量档会缺席，所以本文件凡是「比整表」的断言
  * 都改成比「该跑的那些」—— 用同一个选择函数，而不是在测试里再抄一遍那 4 个名字。 */
-import { selectFixedByFace } from "../scripts/fixed-gate-input-faces.mjs";
-import { KNOWN_FAILED_FILES } from "../scripts/quality-gate-shared.mjs";
+import { selectFixedByFace } from "../scripts/gates/fixed-gate-input-faces.mjs";
+import { KNOWN_FAILED_FILES } from "../scripts/gates/quality-gate-shared.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 

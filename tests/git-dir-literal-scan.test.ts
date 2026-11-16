@@ -2,19 +2,19 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { scanSource } from "../scripts/git-dir-literal-scan.mjs";
+import { scanSource } from "../scripts/lib/git-dir-literal-scan.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-describe("scripts/git-dir-literal-scan.mjs", () => {
+describe("scripts/lib/git-dir-literal-scan.mjs", () => {
   it('scripts/** 除 git-dir.mjs 外没有硬编码的 ".git" 路径拼接', () => {
-    // 这条判据是 #2072 的护栏：「检出目录在哪」只许 scripts/git-dir.mjs 一处知道。
+    // 这条判据是 #2072 的护栏：「检出目录在哪」只许 scripts/lib/git-dir.mjs 一处知道。
     // 其它脚本若顺手 `path.join(root, ".git", …)`，在链接工作树里 `.git` 是文件，
     // MERGE_HEAD / HEAD / FETCH_HEAD 永远查不到——而改那些脚本不会把这条带进受影响集，
-    // 所以必须进固定清单（scripts/fixed-structural-tests.mjs），每次提交都跑。
+    // 所以必须进固定清单（scripts/affected-tests/fixed-structural-tests.mjs），每次提交都跑。
     let stdout = "";
     expect(() => {
-      stdout = execFileSync(process.execPath, ["scripts/git-dir-literal-scan.mjs"], {
+      stdout = execFileSync(process.execPath, ["scripts/lib/git-dir-literal-scan.mjs"], {
         cwd: ROOT,
         encoding: "utf8",
       });

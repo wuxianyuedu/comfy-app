@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // ── 「测试模型能力」**视图**（规范 §17.2 第③层：只渲染 + 上抛）─────────────
 // 用工坊同款通道直接试已配置的远端模型（#3590）：左栏「用途 → 所有模式」
@@ -16,7 +16,6 @@ import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { FilePickerButton } from "~/components/ui/file-picker";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
-import { useInterval } from "~/components/ui/use-interval";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { PageHeader } from "~/components/ui/page-header";
@@ -30,10 +29,12 @@ import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
 import { cn } from "~/lib/utils";
-import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import {
   MODEL_TEST_KINDS,
   MODEL_TEST_KIND_LABELS,
+  candidateLabel,
+  candidateValue,
   sizeSpecToValues,
   sizeValuesToSpec,
   type ModelTestControl,
@@ -41,6 +42,7 @@ import {
   type ModelTestValues,
   type ModeTab,
 } from "./model-test-config";
+import { RequestDetailSection } from "./ModelTestRequestDetail";
 import { useModelTest } from "./hooks/use-model-test";
 
 /** 用途页签（图片 / 视频）：SelectChip 的 pill 单选组，与「模型适配」的
@@ -160,30 +162,6 @@ function SizeField({
       />
     </div>
   );
-}
-
-/** 生成中已过时间（ISSUE #3799；#3949 需求 3）：本地 500ms 一跳，只重渲自己
- *  这格文本；生成结束后组件随行消失（行徽标换回「已发送」）。显示按**整秒**
- *  走 —— 500ms 的节拍撑不起 0.1s 的精度，一位小数只会 1.4→1.9→2.4 地跳。 */
-function GeneratingElapsed({ since }: { since: number }) {
-  const [now, setNow] = useState(() => Date.now());
-  /* 走秒走 useInterval（P12：视图里不自写 setInterval）。 */
-  useInterval(
-    () => {
-      setNow(Date.now());
-    },
-    { ms: 500 },
-  );
-  return <>进行中 {Math.max(0, Math.floor((now - since) / 1000))}s</>;
-}
-
-/** 响应摘要的格式化显示（ISSUE #3799）：结构化摘要默认 JSON 缩进；
- *  万一是字符串（历史读数）原样给出。 */
-function prettyOrRaw(excerpt: unknown): string {
-  if (typeof excerpt === "string") {
-    return excerpt;
-  }
-  return JSON.stringify(excerpt, null, 2) ?? "";
 }
 
 /** 必备 / 可选标识（ISSUE #3778 问题 2）：来自模式契约的 required 生效集。 */
@@ -408,127 +386,48 @@ function ReferenceImageField({
   );
 }
 
-/** 请求详情面板（ISSUE #3791；#3799：点生成即显示本地提交行 + 生成中走秒 +
- *  响应摘要默认格式化、可切原始；#3949 需求 4/8：生成前显示「准备请求」、
- *  按模式 / 模型隔离、解释换算字段；#3995：生成前同时可见「本地提交 +
- *  实际请求」两行预览）。从 ModelTestView 拆出（§12.13：函数长度硬闸的
- *  第二刀）—— 只渲染，读数与开关都由 props 给。 */
-function RequestDetailSection(props: {
-  excerptPretty: boolean;
-  generating: boolean;
-  generatingSince: number | null;
-  onExcerptPretty: (pretty: boolean) => void;
-  previewOnly: boolean;
-  rows: Array<ApiCallDebugRow>;
-}) {
-  const { excerptPretty, generating, generatingSince, onExcerptPretty, previewOnly, rows } = props;
+/** 本地工作流任务的执行日志（#4080 评论 8）：与工作流库「就地运行」同一份
+ *  SSE log 流。新日志到达时自动滚到底部 —— 任务一直没动静或卡住时，最后几行
+ *  直接指到它停在哪个节点。 */
+function TaskLogSection({ logs }: { logs: Array<TaskLogEntry> }) {
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight });
+  }, [logs]);
   return (
     <section className="flex flex-col gap-2">
-      <SectionLabel
-        hint={
-          previewOnly
-            ? "生成前预览：「本地提交」= 前端发给中继的统一输入；「实际请求」= 经模型适配器翻译后真正发往上游的请求（密钥在请求头，不在此显示；请求体里的长值已截断）"
-            : "本次生成实际发出的请求（密钥在请求头，不在此显示；请求体里的长值已截断）"
-        }
-      >
-        请求详情{previewOnly ? "（准备请求 · 未发送）" : ""}
+      <SectionLabel hint="本地任务的执行日志（SSE log 帧）：一直没动静或卡住时，看最后几行就能定位到哪个节点">
+        执行日志
       </SectionLabel>
-      <div className="flex items-center gap-1.5">
-        <span className="text-muted-foreground text-2xs">响应摘要</span>
-        <SelectChip
-          onClick={() => {
-            onExcerptPretty(true);
-          }}
-          selected={excerptPretty}
-          shape="pill"
-        >
-          格式化
-        </SelectChip>
-        <SelectChip
-          onClick={() => {
-            onExcerptPretty(false);
-          }}
-          selected={!excerptPretty}
-          shape="pill"
-        >
-          原始
-        </SelectChip>
-      </div>
-      {rows.map((row, i) => (
-        <div
-          className="border-border bg-bg overflow-hidden rounded-lg border"
-          key={`${row.phase}-${String(i)}`}
-        >
-          <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
-            {row.phase === "relay" ? (
-              /* 本地提交行（#3799）：点生成即出现；生成中走秒。
-                  #3949 需求 8 / #3995：生成前是「准备请求」（未发送）。 */
-              <span className="bg-primary/12 text-primary-strong text-2xs rounded-full px-2 py-0.5 tabular-nums">
-                {previewOnly ? (
-                  "准备请求"
-                ) : generating && generatingSince !== null ? (
-                  <GeneratingElapsed since={generatingSince} />
-                ) : (
-                  "已发送"
-                )}
-              </span>
-            ) : previewOnly ? (
-              /* 预览行（ISSUE #3995）：还没发出去，不冒充真实读数 ——
-                  status=null 的既有读法是给已发送行准备的「网络失败」。 */
-              <span className="bg-elevated text-muted-foreground text-2xs rounded-full px-2 py-0.5 tabular-nums">
-                未发送
-              </span>
-            ) : (
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-2xs tabular-nums",
-                  row.ok
-                    ? "bg-elevated text-muted-foreground"
-                    : "bg-destructive/10 text-destructive",
-                )}
-              >
-                {row.status === null ? "网络失败" : `HTTP ${String(row.status)}`}
-              </span>
-            )}
-            <span className="text-muted-foreground text-2xs">
-              {row.phase === "relay"
-                ? "本地提交"
-                : previewOnly
-                  ? "实际请求"
-                  : row.phase === "image"
-                    ? "生图"
-                    : row.phase === "video-submit"
-                      ? "视频提交"
-                      : "视频轮询"}
+      <div className="border-border bg-bg max-h-80 overflow-y-auto rounded-lg border" ref={boxRef}>
+        {logs.map((entry, i) => (
+          <div
+            className="text-2xs flex items-start gap-2 px-3 py-1 font-mono"
+            key={`${String(entry.t)}-${String(i)}`}
+          >
+            <span className="text-muted-foreground shrink-0 tabular-nums">
+              {new Date(entry.t).toLocaleTimeString()}
             </span>
-            {row.durationMs !== null && (
-              <span className="text-muted-foreground text-2xs tabular-nums">
-                {String(row.durationMs)}ms
-              </span>
-            )}
-            <TruncatedText className="min-w-0 flex-1 truncate font-mono">
-              {row.endpoint}
-            </TruncatedText>
+            <span
+              className={cn(
+                "shrink-0",
+                entry.level === "error"
+                  ? "text-destructive"
+                  : entry.level === "warn"
+                    ? "text-warning-strong"
+                    : entry.level === "success"
+                      ? "text-success-strong"
+                      : "text-muted-foreground",
+              )}
+            >
+              {entry.level}
+            </span>
+            <span className="text-ink min-w-0 flex-1 break-all whitespace-pre-wrap">
+              {entry.msg}
+            </span>
           </div>
-          <pre className="border-border/60 text-2xs overflow-x-auto border-t px-3 py-2 font-mono break-all whitespace-pre-wrap">
-            {JSON.stringify(row.body, null, 2)}
-          </pre>
-          {row.excerpt !== null && row.excerpt !== undefined && (
-            <pre className="text-muted-foreground border-border/60 text-2xs overflow-x-auto border-t px-3 py-2 font-mono break-all whitespace-pre-wrap">
-              {excerptPretty ? prettyOrRaw(row.excerpt) : (JSON.stringify(row.excerpt) ?? "")}
-            </pre>
-          )}
-        </div>
-      ))}
-      {/* #3949 需求 4：megapixels / multiple 不是用户填的，是所选
-          「比例 + 分辨率」按本机尺寸表换算出的等价写法（适配器映射了
-          哪个就下发哪个）—— 在这里讲清楚，不让人猜。 */}
-      {previewOnly && (
-        <p className="text-muted-foreground text-2xs">
-          megapixels / multiple 由所选「比例 + 分辨率」按本机尺寸表换算得出 （与 resolution
-          同口的等价写法），随请求一并下发；适配器映射了哪个 就下发哪个。
-        </p>
-      )}
+        ))}
+      </div>
     </section>
   );
 }
@@ -539,6 +438,8 @@ export function ModelTestView() {
   const [excerptPretty, setExcerptPretty] = useState(true);
 
   const selectedAdapter = c.adapters.find((a) => a.mode === c.mode) ?? null;
+  /* 选中的工作流候选（#4080 评论 4）：提示与门禁都按「本地工作流」走。 */
+  const selectedWorkflow = c.selectedWorkflow;
   /* 适配器映射了的统一输入类型集合：契约行通道承接得住、但适配器没映射时，
    * 生成不会带上那个值 —— 行上明说，不静默丢（映射关系只在有适配器时存在）。 */
   const mappedTypes = new Set<WorkshopInputType>(
@@ -550,12 +451,8 @@ export function ModelTestView() {
   /* 回调里读 c.result 会丢掉 JSX 条件的收窄 —— 先取一次稳定引用。
      对话测试（#4080）的产物是文本，没有可外链的 URL。 */
   const resultUrl = c.result !== null && c.result.kind !== "chat" ? c.result.url : null;
-  /* 请求详情的行：生成后用真实读数；生成前显示「准备请求」（#3949 需求 8，
-   * 按当前模式 / 模型 / 输入现算）—— 切模式 / 换模型时 hook 已清空读数，
-   * 不会残留上一份。 */
-  const detailRows =
-    c.debugRows.length > 0 ? c.debugRows : c.previewRows.length > 0 ? c.previewRows : [];
-  const previewOnly = c.debugRows.length === 0 && c.previewRows.length > 0;
+  /* 请求与响应分区显示（#4080 评论 13）：请求行（本地提交 + 实际请求）生成后
+   * 保留、仅徽标翻转；响应读数单独一部分。 */
 
   return (
     <DocumentFrame
@@ -570,7 +467,7 @@ export function ModelTestView() {
             页签超出视口时在栏内自己滚。 */}
         <aside className="flex shrink-0 flex-col gap-5 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-120px)] lg:w-60 lg:overflow-y-auto">
           <section>
-            <SectionLabel hint="同一模型的图片 / 视频 / 对话分栏测试（#4080 起支持本地 Ollama 与远端对话模型）">
+            <SectionLabel hint="同一模型的图片 / 视频 / 对话分栏测试（#4080：本地模型含 Ollama 对话模型与工作流提供的图片/视频模型）">
               用途
             </SectionLabel>
             <KindTabs kind={c.kind} onChange={c.setKind} />
@@ -592,7 +489,7 @@ export function ModelTestView() {
               hint={
                 c.kind === "chat"
                   ? "本地模型来自「设置 → 本地模型」（Ollama 候选）；远端模型来自「设置 → 远程模型」里用途为 对话 的条目"
-                  : "「设置 → 远程模型」里启用的条目；按用途与所选模式过滤 —— 只列配了该模式适配器的模型"
+                  : "本地模型来自工作流库的生图 / 视频工作流（与工坊「生成资源」同一份配置）；远端模型来自「设置 → 远程模型」里启用的条目；按用途与所选模式过滤"
               }
             >
               模型
@@ -604,15 +501,18 @@ export function ModelTestView() {
                 <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
                   {c.kind === "chat"
                     ? "还没有可测的对话模型 —— 本地模型到「设置 → 本地模型」添加 Ollama 候选；远端模型到「设置 → 远程模型」添加用途为 对话 的条目。"
-                    : `还没有可测的${MODEL_TEST_KIND_LABELS[c.kind]}模型 —— 到「设置 → 远程模型」添加并启用用途为 ${
+                    : `还没有可测的${MODEL_TEST_KIND_LABELS[c.kind]}模型 —— 本地模型到工作流库导入${
+                        c.kind === "image" ? "生图" : "视频"
+                      }工作流（工坊封装就绪后出现在这里）；远端模型到「设置 → 远程模型」添加并启用用途为 ${
                         c.kind === "image" ? "图像" : "视频"
                       } 的条目。`}
                 </p>
               ) : (
                 <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
-                  还没有模型配置「{modeLabel}
-                  」模式的适配器（页签徽标的数字就是它的候选数）——
-                  不支持这个模式的模型不会出现在下拉里；先到「模型适配」给模型添加该模式的适配器。
+                  当前「{modeLabel}
+                  」模式下没有可用模型（页签徽标的数字就是它的候选数）——
+                  远端模型需要先在「模型适配」配置该模式的适配器；本地工作流需要支持该模式（工作流库
+                  → 模式）。
                 </p>
               )
             ) : (
@@ -621,24 +521,26 @@ export function ModelTestView() {
                 autoFitFromOptions={false}
                 className="text-sm"
                 fullWidth={false}
-                groups={
-                  c.kind === "chat"
-                    ? (
-                        [
-                          {
-                            label: "本地模型",
-                            options: c.candidates.filter((m) => m.local).map((m) => m.name),
-                          },
-                          {
-                            label: "远端模型",
-                            options: c.candidates.filter((m) => !m.local).map((m) => m.name),
-                          },
-                        ] as const
-                      ).filter((group) => group.options.length > 0)
-                    : undefined
-                }
+                /* 本地 / 远端分组（#4080；评论 4 起图片 / 视频同样分组）：
+                 * 对话的本地 = Ollama 候选；图片 / 视频的本地 = 工作流库工作流
+                 * （工坊「生成资源」同源），远端 = 设置页配置的远端模型。 */
+                groups={(
+                  [
+                    {
+                      label: "本地模型",
+                      options: c.candidates.filter((m) => m.local).map(candidateValue),
+                    },
+                    {
+                      label: "远端模型",
+                      options: c.candidates.filter((m) => !m.local).map((m) => m.name),
+                    },
+                  ] as const
+                ).filter((group) => group.options.length > 0)}
+                labels={Object.fromEntries(
+                  c.candidates.map((m) => [candidateValue(m), candidateLabel(m)] as const),
+                )}
                 onChange={c.selectModel}
-                options={c.candidates.map((m) => m.name)}
+                options={c.candidates.map(candidateValue)}
                 placeholder="选择要测试的模型…"
                 popoverMinWidth={240}
                 value={c.selectedModel}
@@ -648,11 +550,21 @@ export function ModelTestView() {
 
           {c.selectedModel !== "" && (
             <>
-              {selectedAdapter === null && c.kind !== "chat" && (
+              {selectedWorkflow === null ? (
+                selectedAdapter === null &&
+                c.kind !== "chat" && (
+                  <p className="text-muted-foreground text-xs">
+                    该模型没有「{modeLabel}
+                    」模式的适配器 —— 将按 OpenAI 兼容默认映射直连（生图 /images/generations、视频
+                    /videos）。要按接口字段精确适配，先到「模型适配」配置。
+                  </p>
+                )
+              ) : (
                 <p className="text-muted-foreground text-xs">
-                  该模型没有「{modeLabel}
-                  」模式的适配器 —— 将按 OpenAI 兼容默认映射直连（生图 /images/generations、视频
-                  /videos）。要按接口字段精确适配，先到「模型适配」配置。
+                  本地工作流模型：经工坊本地通道（ComfyUI）执行 ——
+                  {selectedWorkflow.encapsulationReady
+                    ? "输入按模式契约落到工作流连线的端口上，未连线的口沿用工作流图内默认值。"
+                    : "该工作流还没有完成工坊封装（提示词口未连线），生成前先到工作流库「工坊封装」补线。"}
                 </p>
               )}
 
@@ -781,7 +693,9 @@ export function ModelTestView() {
                 {c.generating && (
                   <Button
                     className="h-auto px-3 py-2 text-xs"
-                    onClick={c.cancelGenerate}
+                    onClick={() => {
+                      c.cancelGenerate();
+                    }}
                     variant="outline"
                   >
                     {c.kind === "chat" ? "取消发送" : "取消生成"}
@@ -790,9 +704,22 @@ export function ModelTestView() {
                 <span className="text-muted-foreground text-2xs">
                   {c.kind === "chat"
                     ? "真实调用被测模型 —— 本地模型走设置里配置的本地服务，远端模型按名直连。"
-                    : "真实调用，按上游计费 —— 与工坊生成走同一条通道。"}
+                    : selectedWorkflow === null
+                      ? "真实调用，按上游计费 —— 与工坊生成走同一条通道。"
+                      : "真实运行本地工作流 —— 与工坊生成走同一条本地通道（ComfyUI）。"}
                 </span>
               </div>
+
+              {/* 本地工作流任务的实时进度（#4080 评论 4）：SSE state 帧，
+                  整百分比变化才更新（hook 侧节流）。 */}
+              {c.generating && c.workflowProgress !== null && (
+                <p className="text-muted-foreground text-xs" role="status">
+                  进度 {Math.floor(c.workflowProgress.pct)}%
+                  {c.workflowProgress.label !== undefined && c.workflowProgress.label !== ""
+                    ? `（${c.workflowProgress.label}）`
+                    : ""}
+                </p>
+              )}
 
               {c.error !== null && (
                 <p className="bg-destructive/10 text-destructive rounded-lg px-3 py-2 text-xs">
@@ -866,19 +793,35 @@ export function ModelTestView() {
                 </section>
               )}
 
-              {/* 请求详情（ISSUE #3791；#3799：点生成即显示本地提交行 + 生成中
-                  走秒 + 响应摘要默认格式化、可切原始；#3949 需求 4/8：生成前
-                  显示「准备请求」、按模式 / 模型隔离、解释换算字段；#3995：
-                  生成前同时可见「本地提交 + 实际请求」两行预览）。渲染收在
-                  RequestDetailSection（§12.13 第二刀）。 */}
-              {detailRows.length > 0 && (
+              {/* 本地工作流任务的执行日志（#4080 评论 8）：与工作流库「就地
+                  运行」同一份 SSE log 流，生成中实时滚动 —— 卡住时最后几行
+                  直接指到任务停在哪个节点。 */}
+              {c.taskLogs.length > 0 && <TaskLogSection logs={c.taskLogs} />}
+
+              {/* 请求（本地提交 + 实际请求）：生成后保留，仅徽标从
+                  「准备请求 / 未发送」翻成「已请求 / 已发送」（#4080 评论 13）。
+                  渲染收在 RequestDetailSection（§12.13 第二刀）。 */}
+              {c.requestRows.length > 0 && (
                 <RequestDetailSection
                   excerptPretty={excerptPretty}
                   generating={c.generating}
                   generatingSince={c.generatingSince}
                   onExcerptPretty={setExcerptPretty}
-                  previewOnly={previewOnly}
-                  rows={detailRows}
+                  rows={c.requestRows}
+                  sent={c.generating || c.responseRows.length > 0}
+                  variant="request"
+                />
+              )}
+
+              {/* 响应：真实调用回来了什么，单独一部分显示（#4080 评论 13）。 */}
+              {c.responseRows.length > 0 && (
+                <RequestDetailSection
+                  excerptPretty={excerptPretty}
+                  generating={c.generating}
+                  generatingSince={c.generatingSince}
+                  onExcerptPretty={setExcerptPretty}
+                  rows={c.responseRows}
+                  variant="response"
                 />
               )}
             </>

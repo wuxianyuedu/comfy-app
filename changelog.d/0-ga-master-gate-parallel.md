@@ -7,7 +7,7 @@ ci: 新增 GA push 档 `.github/workflows/master-gate.yml`（任务 3 并行期�
 - 触发：`on: push: branches: [master]`；并发 `push-master` + `cancel-in-progress: false`
   （对位 push 锁语义：每一笔都要有自己的读数，后一笔不掐前一笔）。
 - 命令与 CNB push 档**逐字一致**（同一入口、同一旗标）：
-  `node scripts/render-doc-placeholders.cjs --check --autofix`、
+  `node scripts/docs/render-doc-placeholders.cjs --check --autofix`、
   `node scripts/check-doc-references.cjs`。
 - 检出面：`fetch-depth: 0` + `lfs: true`；保留 `pnpm install --frozen-lockfile`。
   不复刻 CNB 的 `ifModify: docs/**`：两条命令都是秒级文本读，按路径过滤会在「代码改动

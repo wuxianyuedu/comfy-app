@@ -5,7 +5,7 @@
  * `await import("../src/lib/**.ts")` —— 那是**源码态**图，只有装了 `tsx` 的 dev 检出
  * 能加载，standalone/桌包产物里既没有 TS 源也没有 devDependency。把「宿主需要哪些
  * 模块」从入口里抽出来集中成一份静态图，构建期就能由打包器算出闭包并预编译成一个
- * 文件（见 `scripts/build-executor-host.mjs`），入口侧只留一次「用哪份图」的选择。
+ * 文件（见 `scripts/build/build-executor-host.mjs`），入口侧只留一次「用哪份图」的选择。
  *
  * 这里**不**放任何进程外壳职责（env 解析、日志通道、心跳、argv 钩子、领取节拍都留在
  * 入口），理由与 §18.4 一致：这份模块要能被两种加载形态复用（dev=tsx 载 TS 源，

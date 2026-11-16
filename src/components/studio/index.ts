@@ -1,6 +1,3 @@
-export { CanvasArea } from "./canvas/CanvasArea";
-export type { CanvasAreaProps, ContextMenuItem } from "./canvas/CanvasArea";
-
 export { VideoQueueModal } from "./VideoQueueModal";
 export type { VideoQueueModalProps } from "./VideoQueueModal";
 

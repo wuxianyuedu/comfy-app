@@ -11,7 +11,7 @@
     `FR-AG` AI 操作者（双操作者同一能力面 / 自主编排含独立视频阶段与审批停点 /
     skill 驱动 / MCP 覆盖与一键跑完 / 机器面可观测与干预）。除 `FR-AG-05`（灰度）外一律
     `计划中`，每条「行为与验收」写成能跑命令 / 能指路径的形态。
-  - 新文档登记进 `scripts/doc-facts.cjs` 的 `SCOPED_DOCS`（`docs/product` 默认全量纳入
+  - 新文档登记进 `scripts/docs/doc-facts.cjs` 的 `SCOPED_DOCS`（`docs/product` 默认全量纳入
     `doc:check`，未登记会被守卫判红），`docs/generated/` 镜像同批带上。
 
 ## Changed

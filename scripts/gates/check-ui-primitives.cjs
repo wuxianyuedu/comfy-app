@@ -24,7 +24,7 @@
  *      `ui/status-dot`）
  *   —— P1~P3 起初走的是**棘轮**（按文件记账、只许降不许升，与
  *      `check-ui-logic-separation.cjs` / `check-theme-colors.cjs` 同一口径，基线
- *      `scripts/.ui-primitives-baseline.json`）。存量清零后它们与其余判据一样进了
+ *      `scripts/gates/.ui-primitives-baseline.json`）。存量清零后它们与其余判据一样进了
  *      `HARD_GATE_RULES`：**现在 85 条全部须为 0**。棘轮这条路径留着，是给
  *      **新引入的判据**起步用的（先冻结存量 → 清零 → 升硬闸，顺序不能反，
  *      见 P82 那条的教训）。
@@ -328,7 +328,7 @@ const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
 const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
-const BASELINE = path.join(__dirname, "../.ui-primitives-baseline.json");
+const BASELINE = path.join(__dirname, ".ui-primitives-baseline.json");
 
 /* 文本引擎（剥注释 / JSX 平衡扫描 / 属性解析）单独立一份 —— 见那条文件头的
  * 「分层」说明。判据（85 条 rule）按 ISSUE #1811 拆在 ui-primitives-rules-*.cjs

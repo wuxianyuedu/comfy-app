@@ -3,7 +3,7 @@
  *
  * 三件事：**工具链门禁**（node / pnpm / node_modules 三样在弹壳之前必须先过）、
  * **pnpm 版本一致性**、**旧版桌面壳提醒**（`shellStaleWarning` 同时被提交门禁
- * `scripts/shell-gate.mjs` 复用，见规范 §11.10.4）。外加把提醒补录进
+ * `scripts/gates/shell-gate.mjs` 复用，见规范 §11.10.4）。外加把提醒补录进
  * app-runtime 通道的 `appendRuntimeWarning`。
  *
  * **依赖靠注入**：`ctx.log`（日志出口）、`ctx.stamp`（本次启动的 runtime 日志
@@ -97,7 +97,7 @@ export function reconcilePnpmVersion(ctx, root = process.cwd()) {
   };
 }
 
-/** 旧版桌面壳提醒（比时间戳）。同一判据被提交门禁 `scripts/shell-gate.mjs` 复用：
+/** 旧版桌面壳提醒（比时间戳）。同一判据被提交门禁 `scripts/gates/shell-gate.mjs` 复用：
  *  暂存改动命中壳输入时，它从「启动时 WARN」升成「阻断未重编的提交」，见规范 §11.10.4。 */
 /** @param {string} shellExe @param {string} [root] @returns {string | null} */
 export function shellStaleWarning(shellExe, root = process.cwd()) {

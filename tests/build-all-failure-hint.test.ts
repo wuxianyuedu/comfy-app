@@ -47,14 +47,14 @@ describe("build-all.ps1 构建失败出口（ISSUE #3468）", () => {
   it("发布顺序没被改：失败仍 exit 1，发布那一格排在构建绿之后", () => {
     expect(SRC).toMatch(/发布那一格\*\*没有执行\*\*/);
     const failAt = SRC.indexOf("if ($buildErr -ne 0)");
-    const publishAt = SRC.indexOf("node scripts/publish-desktop-bundle.mjs");
+    const publishAt = SRC.indexOf("node scripts/build/publish-desktop-bundle.mjs");
     expect(failAt).toBeGreaterThan(-1);
     expect(publishAt).toBeGreaterThan(failAt);
   });
 
   it("发布落点是项目内 dist 目录（ISSUE #3546：本地包不写常驻目录）", () => {
     expect(SRC).toContain(String.raw`$publishRoot = Join-Path $PROJECT_ROOT "dist\desktop"`);
-    expect(SRC).toContain("node scripts/publish-desktop-bundle.mjs --root");
+    expect(SRC).toContain("node scripts/build/publish-desktop-bundle.mjs --root");
   });
 
   it("含中文的 .ps1 保持 UTF-8 with BOM（§8.4）", () => {

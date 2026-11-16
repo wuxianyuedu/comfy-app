@@ -1,6 +1,6 @@
 ## Fixed
 
-- **脚本档清账批 19：`scripts/generate-api-docs.mjs` 6 格清零，账从 20 处 / 5 份降到 13 处 / 3 份
+- **脚本档清账批 19：`scripts/docs/generate-api-docs.mjs` 6 格清零，账从 20 处 / 5 份降到 13 处 / 3 份
   （ISSUE #2589 / 规范 §13.5.14.1；同批把批 18 留给 #2724 的那格证人按实测收紧）**：
   这一份是 `pnpm run docs`（生成 API 文档到 `docs/api/`）的入口。
 

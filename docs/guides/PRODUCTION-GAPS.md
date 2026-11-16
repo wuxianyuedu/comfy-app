@@ -15,7 +15,7 @@
 > 七维审计台账，原 2026-08-30 台账条目均已闭环或流程化保留）。
 > **触发式复核 2026-10-13（ISSUE #1811 收尾复审，§8.2 第三条：脚本被删/改名时当次同步）**：
 > ISSUE #1811 逐条翻硬闸之后，F6 那条记的「UI 复用棘轮 78 条存量违规」与它点的
-> `scripts/.ui-primitives-baseline.json:18` 双双过期（现读数 `total: 0` / `rules: {}`，
+> `scripts/gates/.ui-primitives-baseline.json:18` 双双过期（现读数 `total: 0` / `rules: {}`，
 > 行号早已不存在），F6 已就地改写成现值；E5 那一段记的「余两格按名登记」也已随之处置完
 > （一格随 R5 翻闸、一格进 `RETIRED_RATCHETS`），E5 正文当时已写明，未改。
 
@@ -337,7 +337,7 @@
       `film/compose-film.ts` 四处 join 外加自己写一遍 `/api/generated/films/…`、
       `film/compose-steps.ts` 的 `clipPathOf`、`api/film/bgm/route.ts`、
       `comfyui/firstframe.ts`，第七份**在全部 TS 检索面之外**：
-      `scripts/comfyapp-open-folder.ps1` 把 `comfyapp://open` 的允许根写死成
+      `scripts/devtools/comfyapp-open-folder.ps1` 把 `comfyapp://open` 的允许根写死成
       `..\public\generated`。其中两处的结论**互相相反** —— `firstframe.ts` 剥了 `api/` 段
       （所以首帧一直是好的），`clipPathOf` 只剥前导斜杠，于是库里 `filmShot.videoPath`
       （= `TaskImage.localPath` = `taskOutputUrl()` 写的 `/api/generated/…`）被解析成
@@ -527,7 +527,7 @@
       `src-tauri/src/lib.rs:1051` 那段「运行期目录都按 `process.cwd()` 解析」的清单里
       还写着 `public/generated/`，应为 `generated/`。不在本批改的理由是实的：
       暂存里出现 `src-tauri/src/*.rs` 就会付 `cargo test`（本机冷 430s）并触发
-      「改了壳必须重编 release」那道时效判据（`scripts/shell-gate.mjs`），
+      「改了壳必须重编 release」那道时效判据（`scripts/gates/shell-gate.mjs`），
       为一条注释让整个 PR 背上一次完整壳编译不值 —— 但**这条不是「以后再说」**：
       下一次任何动到壳的 PR，把这一行捎上一起改。
       ~~搬家之外还欠一件：静态口原本支持 `Range`，折进 route 之后 `Range` 被忽略~~
@@ -762,24 +762,24 @@
 - [ ] **E1 提交时只跑一小撮用例**：原记「pre-commit 仅跑 7 测试文件（1.6%）」的形态已
       变过一次——现在是**固定清单 + 沿静态 import 图解析出的受影响用例**（固定清单那份的
       **份数不写在本文里** —— 它随每次加判据变动、且没有任何判据会因它漂开而红；要现值就跑
-      `pnpm exec node -e "import('./scripts/fixed-structural-tests.mjs').then((m) => console.log(m.FIXED_STRUCTURAL_TESTS.length))"`，
+      `pnpm exec node -e "import('./scripts/affected-tests/fixed-structural-tests.mjs').then((m) => console.log(m.FIXED_STRUCTURAL_TESTS.length))"`，
       口径见规范 §13.5.8）
       （`scripts/affected-tests/affected-tests.mjs`，规范 §13.5.8），改到哪测到哪这条已落地；**2026-10-20
       起这一层的执行者换成平台侧 PR 流水线的 `受影响用例` 一格**（本地两个执行者撤销的
       原因：共享机上的失效形态是 forks worker 调度超时而不是用例红，见 §13.5.25）。仍未解决
       的两点：① 靠运行时 `readdir` 自扫扫描面的判据不会被「改了某份 check 脚本」拉进
       这一层（实测撞到过一次：那条红在 master 静置到全量复跑才看见）；② `check:all` 只有
-      4 项、不含棘轮/E2E/覆盖率。证据：`.githooks/pre-commit:63-70`；`scripts/quality-gate.mjs:39-65`。
+      4 项、不含棘轮/E2E/覆盖率。证据：`.githooks/pre-commit:63-70`；`scripts/gates/quality-gate.mjs:39-65`。
 - [x] **E2 覆盖率门槛是死配置**：根因比「test 门无 `--coverage`」还深一层 —— 即使加上，
       v8 在任何用例红时默认**清数据、不产出报告**，门槛照样一条都不判（实测全量 464 文件 /
       2 败 → `coverage/` 是空的，终端只看得见那两条红）。两处一起修：两侧门禁
-      （`scripts/quality-gate.mjs` 的 `GATES.test` 与 `scripts/quality-gate.ps1` 的 `$Blocks`）
+      （`scripts/gates/quality-gate.mjs` 的 `GATES.test` 与 `scripts/gates/quality-gate.ps1` 的 `$Blocks`）
       的 test 门带 `--coverage`；`vitest.config.ts` 补 `coverage.reportOnFailure`。
       两条约束记在规范 §11.7：覆盖率只在**全量**这一档判（单文件跑 `--coverage` 会把其余
       路径按 0% 汇总、`thresholds` 每条都刷红），别挪进钩子的增量层。§11.13 补了
       「带 coverage」这个预算维度（`LogPanel.test.tsx` 45s → 120s，单跑实测 25.0s / 34.4s）。
       开门那一次抓到的 21 条真回退已按实测重基线，**欠的课转 E7**。
-      证据：`scripts/quality-gate.mjs`、`scripts/quality-gate.ps1`、`vitest.config.ts`。
+      证据：`scripts/gates/quality-gate.mjs`、`scripts/gates/quality-gate.ps1`、`vitest.config.ts`。
 - [x] **E7 覆盖率棘轮开门即抓到的真回退（补用例清单，本批清零）**：E2 把门打开的那一次全量跑
       （465 文件全绿）当场报出 21 条不达标，已按 §18.6 逐条降到「实测向下取整到 5 的倍数」
       （**那一批当时用的口径；这条取整规则后来已撤销，现值一律看 `vitest.config.ts`，
@@ -1495,7 +1495,7 @@
   `src/components/ui/*.stories.tsx` 的**每个故事**在 jsdom 里逐个渲染后跑 `axe-core` ——
   补的是既有那道判据（`scripts/gates/check-a11y-rules.cjs`，规范 06 §6.12）回答不了的一半：
   那边判「规则开关 ⇄ 台账」，规则开着、代码照样能渲染出一枚没有名字的按钮。
-  违规与「这一档拿不到状态的故事」都登记在 `scripts/.a11y-axe-known.json`，
+  违规与「这一档拿不到状态的故事」都登记在 `scripts/gates/.a11y-axe-known.json`，
   **双向不陈旧**（新违规 ⇒ 红；修好了登记还在 ⇒ 也红），**没有 `--update`** ——
   判红时打印逐字可粘的候选清单，并把同一份候选写到系统临时目录，但判据自己不写回登记表
   （不许有「跑一下就绿」的出口）。实测（按 Storybook 语义渲染之后重数）：**8 条
@@ -1533,10 +1533,10 @@
 - [ ] **F3 `next/image` 0 处且 lint 关闭**。证据：`eslint.config.js:185-192`。
 - [ ] **F4 无离线能力**（无 SW / `onLine` / 离线队列；58 文件手写 localStorage 无 persist）。
 - [ ] **F5 虚拟滚动仅 2 处**；`next/dynamic` 仅 2 处。
-- [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用**存量已清零**（ISSUE #1811 收尾：P 系列 87 条全在 `HARD_GATE_RULES` 里，基线 `scripts/.ui-primitives-baseline.json` 的 `total: 0` / `rules: {}`；此前记的「78 条违规」是历史读数、行号 `:18` 也已不存在）。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、那份基线文件的现值。剩余的一格是**页面级视觉回归** —— 这一档已经整档撤掉（规范 11 §11.8），
+- [~] **F6 Storybook 已接入（ISSUE #1381），可视回归仍未接**；UI 复用**存量已清零**（ISSUE #1811 收尾：P 系列 87 条全在 `HARD_GATE_RULES` 里，基线 `scripts/gates/.ui-primitives-baseline.json` 的 `total: 0` / `rules: {}`；此前记的「78 条违规」是历史读数、行号 `:18` 也已不存在）。证据：`.storybook/`、`package.json` 的 `storybook` / `storybook:build`、那份基线文件的现值。剩余的一格是**页面级视觉回归** —— 这一档已经整档撤掉（规范 11 §11.8），
   现在**没有任何自动判据**，靠 review 看图；Storybook 本来也不替代它。
   **已加的两层判据**（同批）：故事文件的**枚举来源**由
-  `tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`
+  `tests/storybook-cva-variant-source.test.ts` + `node scripts/devtools/storybook-check.mjs`
   守着（`cva()` 返回的是函数、运行期没有 `.variants`；以及手写清单漏档）。
   判据上线时当场抓到 `button.stories.tsx` 漏列 `icon-sm` / `icon-lg` 两档
   —— 而这两档全库有 46 处在用，口径见规范 16 §16.2.3.4。
@@ -1545,7 +1545,7 @@
   `scripts/storybook-checks/coverage-ledger.mjs`）：分子只许升不许降，分母
   （`ui/` 的可预览文件数）变了要同批回答「新增的那个为什么没有 story」。
   这一格因此**不再是文档里的数字** —— 口径见规范 16 §16.2.3.5。
-  当前覆盖 `scripts/.storybook-coverage-baseline.json` 里的实测值；没有 story 的
+  当前覆盖 `scripts/gates/.storybook-coverage-baseline.json` 里的实测值；没有 story 的
   组件逐条理由（hook / 只有出错时才渲染的边界件 / 被别的基元 import 的部件…）
   也写在那份台账里，不是一张赦免名单。
   **「有数据依赖」那一批已收口**（同批）：先搭了「Args → 数据源」的注入层

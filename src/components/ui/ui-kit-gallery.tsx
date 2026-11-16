@@ -9,7 +9,9 @@ import { ActionsSection } from "~/components/ui/ui-kit-gallery-actions";
 import { DataSection } from "~/components/ui/ui-kit-gallery-data";
 import { FormsSection } from "~/components/ui/ui-kit-gallery-forms";
 import { NavigationSection } from "~/components/ui/ui-kit-gallery-navigation";
+import { UiKitCategoryNav } from "~/components/ui/ui-kit-gallery-nav";
 import { OverlaysSection } from "~/components/ui/ui-kit-gallery-overlays";
+import { PrimitivesOverviewSection } from "~/components/ui/ui-kit-gallery-primitives";
 import { StatusSection } from "~/components/ui/ui-kit-gallery-status";
 import { TokenWall } from "~/components/ui/ui-kit-gallery-tokens";
 import { cn } from "~/lib/utils";
@@ -18,6 +20,9 @@ import { cn } from "~/lib/utils";
  * UI 控件总览（`/ui-kit`，ISSUE #3525）—— 把项目里全部可视化基元摆到同一屏。
  *
  * 目的只有一个：让「控件颜色 / 背景色错档」在明暗两态下都一眼可见。
+ * 版式（ISSUE #4110 / #4125）：左侧 sticky 大类导航（八个分区锚点）+ 右侧内容列
+ * （token 墙 → 「基元 UI 速览」→ 六个功能分区）。速览与明细是同一批基元的两档视图，
+ * 不是重复冗余。页头标题走 srTitle（顶栏已显示屏名，可见 h1 会重复一遍）。
  * 主题开关走 `next-themes`（与设置页同一出口），切的是**应用全局**主题 ——
  * 这正是本页要的：同一屏在真实主题链路下翻面，而不是复制品。
  * 逐 prop 的形态矩阵不在这页（Storybook 的量程）；基元的取值事实以
@@ -65,24 +70,34 @@ export function UIKitGallery({ fillHeight }: { fillHeight?: boolean }) {
   return (
     <div
       className={cn(
-        "custom-scrollbar mx-auto flex w-full max-w-6xl flex-col gap-10 overflow-y-auto px-6 py-8",
+        "custom-scrollbar mx-auto flex w-full max-w-6xl flex-col gap-6 overflow-y-auto px-6 py-6",
         fillHeight === true ? "h-full" : "h-[calc(100vh-var(--toolbar-height,48px))]",
       )}
       data-slot="ui-kit-scroll"
     >
+      {/* ISSUE #4125：大标题去掉 —— 顶栏（工作区页签 / 独立路由面包屑）已经在说
+          「UI 控件总览」，页头再摆一个可见 h1 就是同一屏名两遍。改为 srTitle：
+          h1 以 sr-only 留在 DOM（读屏跳转与屏名判据的前提），视觉上不占行。 */}
       <PageHeader
         actions={<ThemeToggle />}
-        description="全部基元在一屏上对照明暗两态，控件颜色 / 背景色错档在这里一眼可见。"
         help="右上角开关切的是应用全局主题（与设置页同源、会记住选择）。逐 prop 的形态矩阵看 Storybook（pnpm storybook）。"
-        title="UI 控件总览"
+        srTitle="UI 控件总览"
       />
-      <TokenWall />
-      <ActionsSection />
-      <FormsSection />
-      <OverlaysSection />
-      <NavigationSection />
-      <StatusSection />
-      <DataSection />
+      <div className="flex min-h-0 flex-1 gap-8">
+        <aside className="sticky top-0 hidden self-start md:block">
+          <UiKitCategoryNav />
+        </aside>
+        <div className="flex min-w-0 flex-1 flex-col gap-10">
+          <TokenWall />
+          <PrimitivesOverviewSection />
+          <ActionsSection />
+          <FormsSection />
+          <OverlaysSection />
+          <NavigationSection />
+          <StatusSection />
+          <DataSection />
+        </div>
+      </div>
     </div>
   );
 }

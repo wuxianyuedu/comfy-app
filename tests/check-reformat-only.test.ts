@@ -150,14 +150,14 @@ const { test, expect } = defineGateRepo({
      * `changed-scope.mjs`（`shell-gate --base` 同一个函数）。`.cjs` 只能动态
      * `import()`，缺了它脚本以 exit 2 结束 —— 而那条链上的每一份都要在
      * （`git-name-status` 又静态 import `launcher-core/sync-attribution.mjs`）。 */
-    { from: "scripts/changed-scope.mjs", to: "scripts/changed-scope.mjs" },
+    { from: "scripts/lib/changed-scope.mjs", to: "scripts/lib/changed-scope.mjs" },
     /* 区间两侧的判定收在机制层（`reformat-preview-range.mjs`，`.cjs` 动态 import 它）——
      * 拆出去的是「与平台拓扑打交道」那一段，判据本体不动。 */
     {
       from: "scripts/reformat/reformat-preview-range.mjs",
       to: "scripts/reformat/reformat-preview-range.mjs",
     },
-    { from: "scripts/git-name-status.mjs", to: "scripts/git-name-status.mjs" },
+    { from: "scripts/lib/git-name-status.mjs", to: "scripts/lib/git-name-status.mjs" },
     { from: "scripts/base-check/git-ref.mjs", to: "scripts/base-check/git-ref.mjs" },
     {
       from: "scripts/launcher-core/sync-attribution.mjs",

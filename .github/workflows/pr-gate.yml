@@ -157,7 +157,7 @@ jobs:
         run: node scripts/ci/ci-step-verdict.mjs --label "分支守卫" --inconclusive-marker "[branch-guard] 结论：不判" -- node scripts/gates/check-branch-guard.cjs --pr-check --target master ${{ github.event_name == 'workflow_dispatch' && '--manual-dispatch' || '' }}
 
       - name: 提交声明核对（cnb 同款判据一字不改）
-        run: node scripts/premerge-check.mjs --only=claims
+        run: node scripts/gates/premerge-check.mjs --only=claims
 
       - name: 标题行让位
         run: node scripts/gates/check-title-bar-clearance.cjs
@@ -428,7 +428,7 @@ jobs:
       # 官方清单写探针，`rsvg-2.0` / `xdo` / `ayatana-appindicator3-0.1` / `openssl` 这四个
       # 模块**注定永远报缺** —— 名字错 / 不在依赖图 / 运行期 dlopen / 不参与编译 ⇒ GA
       # runner 上 apt 明明装成功了、探针仍报缺 ⇒ 那一格对任何碰 `src-tauri/**` 的 PR 恒红）。
-      # 下面这份清单与 `scripts/shell-gate.mjs` 的 `TAURI_LINUX_PC_PACKAGES` **一一对应**：
+      # 下面这份清单与 `scripts/gates/shell-gate.mjs` 的 `TAURI_LINUX_PC_PACKAGES` **一一对应**：
       # 每个被探的 `.pc` 模块由哪个 `-dev` 包提供，写在同一个地方，两边脱钩由用例挡。
       #
       #   libglib2.0-dev               → glib-2.0 / gobject-2.0 / gio-2.0

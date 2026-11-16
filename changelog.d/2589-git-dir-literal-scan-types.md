@@ -1,8 +1,8 @@
 ## Fixed
 
-- **脚本档清账批 22（收尾）：`scripts/git-dir-literal-scan.mjs` 4 格清零，账从 4 处 / 1 份降到
+- **脚本档清账批 22（收尾）：`scripts/lib/git-dir-literal-scan.mjs` 4 格清零，账从 4 处 / 1 份降到
   0 处 / 0 份 —— ISSUE #2589 那条「320 处按文件逐条清」的账见底**（规范 §13.5.14.1）：
-  这一份守的是「检出目录在哪只有 `scripts/git-dir.mjs` 一处知道」（ISSUE #2072：链接工作树里
+  这一份守的是「检出目录在哪只有 `scripts/lib/git-dir.mjs` 一处知道」（ISSUE #2072：链接工作树里
   `.git` 是个**文件**，硬拼指向它 ⇒ `MERGE_HEAD` / `HEAD` 永远查不到）。
 
   两格是 `collect(dir, out = [])` 的形参。**`out` 那一格值得说一句**：默认值 `[]` 在类型上是
@@ -13,7 +13,7 @@
   `相对路径:行号: 原文`）与它的消费点 `forEach((o) => …)` 跟着掉的那格。
 
 - **同批改掉账本里那句会变成假话的散文**：`scripts/check-scripts-typecheck.cjs` 每次 `--update`
-  都会把一段 `note` 写进 `scripts/.scripts-typecheck-baseline.json`，而那段话的最后一句是
+  都会把一段 `note` 写进 `scripts/gates/.scripts-typecheck-baseline.json`，而那段话的最后一句是
   **「为什么剩下的不清零：约一半是 `TS7006`…另一半是要在启动链与构建链加守卫的真改动」** ——
   账清到 0 之后这句话还在被重写，读的人据此以为还欠着 300 处。
   现在改成如实的**空账声明**：`files` 是 `{}`、`total` 是 0，本档不再登记任何「已知欠账」，
@@ -27,12 +27,12 @@
   `doc:render -- --only` 那一份一起带上（38 份里只写这一份，不代改别人留在 HEAD 上的镜像）。
 
   凭据（四条，含一条专门证「空账 ≠ 判据空转」的变异）：
-  ① **空账之后仍然会红**：往一份与本批无关的 `scripts/git-dir.mjs` 末尾追加一个无形参类型的
+  ① **空账之后仍然会红**：往一份与本批无关的 `scripts/lib/git-dir.mjs` 末尾追加一个无形参类型的
   函数（`export function probeMutation2589(a) { return a + 1; }`）⇒ 默认档 **EXIT=1** 并逐格点名
-  `scripts/git-dir.mjs TS7006: 基线 0 → 当前 1（新增 1 处）`，随后 `git restore` 撤销、
+  `scripts/lib/git-dir.mjs TS7006: 基线 0 → 当前 1（新增 1 处）`，随后 `git restore` 撤销、
   `git status` 自证零残留。⇒ 账到 0 不是把判据关掉了，是把额度关掉了。
   ② 本份脚本的**两种输出形态逐字未变**（它是有出口形态之分的判据）：人读档打
-  `[git-dir-literal-scan] OK：检出子目录字面量只存在于 scripts/git-dir.mjs` 退 0；
+  `[git-dir-literal-scan] OK：检出子目录字面量只存在于 scripts/lib/git-dir.mjs` 退 0；
   `--json` 打 `{"ok":true,"offenders":[]}` 退 0 —— 改动前后各跑一次、两份 `diff` 都为空。
   ③ `tests/git-dir-literal-scan.test.ts` + `tests/spawn-shell-scan.test.ts` 串行 **28 条全绿**，
   `tests/scripts-typecheck-ratchet.test.ts` **11 条全绿**（含「账本的 `face`/`total` 与配置展开同数」

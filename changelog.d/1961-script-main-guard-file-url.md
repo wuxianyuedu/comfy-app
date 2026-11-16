@@ -14,7 +14,7 @@
   E2E 关键流程  ❌ PATH 上没有可用的 Python
   ```
 
-  `scripts/ci-toolchain-selfcheck.mjs` 与 `scripts/python-probe.mjs` 用
+  `scripts/ci-toolchain-selfcheck.mjs` 与 `scripts/lib/python-probe.mjs` 用
   ``import.meta.url === `file://${path.resolve(process.argv[1])}` `` 判「自己有没有
   被直接执行」。`import.meta.url` 在 Windows 上是 `file:///F:/…/x.mjs`（三斜杠 +
   正斜杠 + 盘符），而拼出来的是 `file://F:\…\x.mjs`（两斜杠 + 反斜杠）——
@@ -34,7 +34,7 @@
   `tools/**`（剥注释与字符串里的同形文本 —— 本仓另三处的反面教材注释正当地写着这个
   形状），命中「拿拼接的 `file://` 串与 `import.meta.url` 比」即红；并反向钉住三个
   改过的入口确实带着规范化比较。反向复算：把守卫改回拼串，判据当场点名
-  （实测 2 failed）。已登记进 `scripts/fixed-structural-tests.mjs` 的固定清单 ——
+  （实测 2 failed）。已登记进 `scripts/affected-tests/fixed-structural-tests.mjs` 的固定清单 ——
   新脚本是「新增文件」，静态 import 图追不到它，而那正是这条要守的场景。
 
   本仓另三处（`check-merge-parents.mjs` / `check-merged-side-loss.mjs` /
@@ -42,6 +42,6 @@
   **靠注释传的约定，下一次新增脚本时必然再犯一次**（这一次就是）。
 
   **同批的 `Python 探针读数` 那一步（`7045db70` 新增）也因此才真的出得来**：
-  它跑的正是 `scripts/python-probe.mjs` —— 同一形态的守卫，同一份静默
+  它跑的正是 `scripts/lib/python-probe.mjs` —— 同一形态的守卫，同一份静默
   （Windows 上退 0、零输出）。也就是说那一笔"把两条链的结论并列打出来"的意图，
   在它自己想排查的那台机器上**一个字都没打**。

@@ -13,10 +13,10 @@ import {
   probeZvec,
   renderProbe,
   runTool,
-} from "../scripts/agent-index.mjs";
+} from "../scripts/platform/agent-index.mjs";
 import { isPlainRecord } from "../src/lib/is-record";
 
-const SCRIPT = join(process.cwd(), "scripts", "agent-index.mjs");
+const SCRIPT = join(process.cwd(), "scripts", "platform", "agent-index.mjs");
 
 /** execFileSync 抛出的错误对象：字段可选，按宽松对象声明后再逐字段读。 */
 type ExecErrorFields = { status?: number; stderr?: string; stdout?: string };

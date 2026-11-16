@@ -4,7 +4,7 @@
  * ## 为什么要有这个文件（ISSUE #1409）
  *
  * 那个值**必须**是当前检出算出来的：应用端口按检出路径推导（3200~3999），
- * 写死一个值在别人的 checkout 上必然错。所以它由 `scripts/storybook-assets.mjs`
+ * 写死一个值在别人的 checkout 上必然错。所以它由 `scripts/devtools/storybook-assets.mjs`
  * 在 `pnpm storybook` 启动时调权威实现 `scripts/app-port.mjs` 现算，
  * 写成一份**不入库**的 `.storybook/generated/app-origin.json`。
  *

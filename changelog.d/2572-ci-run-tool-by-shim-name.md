@@ -52,7 +52,7 @@
   `.ps1` 回退仍是 corepack / 启动编排那几处的现役形态（`src/lib/process/executable-resolve.ts`
   的头注就此写明：那是「起不起得来」的手段，不是「该不该这么起」的推荐形态）。
 - **连带记两笔与本平台跑有关的账**（都是这一格在平台上红出来的）：
-  · 脚本档账本 `scripts/.scripts-typecheck-baseline.json` 的 `face` 由 210 记成 211 ——
+  · 脚本档账本 `scripts/gates/.scripts-typecheck-baseline.json` 的 `face` 由 210 记成 211 ——
     新增一份 `scripts/*.mjs` 就会让「面 ⇄ 账」那一格红。走的是判据自己那唯一的写入口
     （`check-scripts-typecheck.cjs --update`），**事后逐字对过 diff**：只动了 `face` 这一行，
     `total`（206）与逐文件格子表一个字节没改 —— 这不是「把新增登记成已知」（那才是被禁止的形态），

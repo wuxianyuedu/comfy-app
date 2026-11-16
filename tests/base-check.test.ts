@@ -1,5 +1,5 @@
 /**
- * 「被门禁拦下先复算 master 基线」（§13.6.2 第 1 步）的契约测试：`scripts/base-check.mjs` 在干净上游复算，给
+ * 「被门禁拦下先复算 master 基线」（§13.6.2 第 1 步）的契约测试：`scripts/gates/base-check.mjs` 在干净上游复算，给
  * `baseline-red` / `yours` / `current-green` / `inconclusive` 四态，不决定挡路、不登记、不改判据。必须在
  * **真 git 仓库**上跑（依赖 HEAD 是检出、上游可解析、`worktree` 出干净快照；假装 = 把复算重实现一遍）。
  */
@@ -31,7 +31,7 @@ import {
   runState,
   summarizeRows,
   tokenize,
-} from "../scripts/base-check.mjs";
+} from "../scripts/gates/base-check.mjs";
 
 /* 每条用例都真起 git 进程（init / commit / worktree add / 跑一次被判判据），实测单条最慢约 4.9s
  * （load ≈65 下），故 hook 预算收到 30s（全局 hookTimeout 45s 是给 `theme` 真编 CSS 的 beforeAll 留的）。
@@ -39,7 +39,7 @@ import {
 vi.setConfig({ hookTimeout: 30_000 });
 
 const REPO_ROOT = process.cwd();
-const SCRIPT = join(REPO_ROOT, "scripts", "base-check.mjs");
+const SCRIPT = join(REPO_ROOT, "scripts", "gates", "base-check.mjs");
 
 /** execFileSync 抛出的失败对象：只认对象这一层，字段缺省由 `??` 兜底。 */
 function isExecFailure(v: unknown): v is Record<string, unknown> {
@@ -607,7 +607,7 @@ describe("base-check —— 命令解析", () => {
   });
 
   test("整条命令当一个参数给进来 ⇒ 按空白切成 argv（不许把整串当路径）", () => {
-    /* 现场：`node scripts/base-check.mjs "node scripts/x.cjs"` 与
+    /* 现场：`node scripts/gates/base-check.mjs "node scripts/x.cjs"` 与
      * `--base "…"` 两种走法都只有**一个**数组元素。此前那条「裸脚本名」分支会把它
      * 当成文件名 → `["node", "node scripts/x.cjs"]` → `commandTargetState` 拼出
      * `<cwd>/node scripts/x.cjs` → 恒「不存在」→ 每条判据都读成 127（没跑起来），
@@ -671,7 +671,7 @@ describe("base-check —— 目标存在性（127 那条边界）", () => {
   });
 
   test("存在的脚本 ⇒ ok", () => {
-    const state = commandTargetState(["node", "scripts/base-check.mjs"], REPO_ROOT);
+    const state = commandTargetState(["node", "scripts/gates/base-check.mjs"], REPO_ROOT);
     expect(state.kind).toBe("ok");
   });
 
@@ -1120,11 +1120,11 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
     expect(
       mayDecideOnCleanSnapshot(["node", "scripts/gates/check-deps-freshness.mjs", "--staged"]),
     ).toBe(false);
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/storybook-check.mjs", "--changed"])).toBe(
-      false,
-    );
+    expect(
+      mayDecideOnCleanSnapshot(["node", "scripts/devtools/storybook-check.mjs", "--changed"]),
+    ).toBe(false);
     /* 它的判决**依赖暂存改动**：干净快照里它立刻返回 0，那行绿是假绿。 */
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/shell-gate.mjs"])).toBe(false);
+    expect(mayDecideOnCleanSnapshot(["node", "scripts/gates/shell-gate.mjs"])).toBe(false);
     /* `check-reformat-only.cjs` 带 `--staged` 时不进这一批（按参数形态认得出）。⚠️ **不带旗标那一形态现在会进来**
      * （ISSUE #3038，此前因在 `CHANGED_SCOPED` 里被排除）：它落到「判 `HEAD` 这次提交」支，区间由合成提交的父关系
      * 现算 ⇒ 干净快照上读到 `HEAD~1..HEAD`，与「只对本次改动作答」的定位对不上；但它确实算得出结论，故不算假绿。 */
@@ -1133,7 +1133,7 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
     ).toBe(false);
     expect(mayDecideOnCleanSnapshot(["node", "scripts/gates/check-reformat-only.cjs"])).toBe(true);
     /* 复算里再复算会递归。 */
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/base-check.mjs", "x"])).toBe(false);
+    expect(mayDecideOnCleanSnapshot(["node", "scripts/gates/base-check.mjs", "x"])).toBe(false);
     /* 全仓判据留下。 */
     expect(
       mayDecideOnCleanSnapshot(["node", "scripts/gates/check-file-structure.cjs", "--strict"]),

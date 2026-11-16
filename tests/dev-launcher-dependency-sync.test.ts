@@ -86,10 +86,21 @@ function fakeInstall(dir: string, installedLock: string, { healthy = true } = {}
   const bin = path.join(nm, ".bin");
   fs.mkdirSync(bin, { recursive: true });
   fs.writeFileSync(path.join(bin, "next"), "", "utf8");
+  // KEY_DEPS（目录非空即可）+ RESOLVE_PROBES（必须能从仓库根 resolve 到 package.json）。
+  // #4105 把 probe 解析纳入 checkNodeModules/verifyInstall 后，合成的「健康安装」也要满足探针。
   for (const rel of ["typescript", "@typescript/native", "next"]) {
     const p = path.join(nm, rel);
     fs.mkdirSync(p, { recursive: true });
     fs.writeFileSync(path.join(p, "index.js"), "// stub\n", "utf8");
+  }
+  for (const name of ["typescript", "next", "axe-core", "pino"]) {
+    const p = path.join(nm, name);
+    fs.mkdirSync(p, { recursive: true });
+    fs.writeFileSync(
+      path.join(p, "package.json"),
+      `{"name":"${name}","version":"1.0.0"}\n`,
+      "utf8",
+    );
   }
 }
 
@@ -248,9 +259,12 @@ describe("syncDependencies：本检出实例在跑时先拦下来（AGENTS 硬�
   });
 
   it("命令行出口复用同一个判据（不在 .ps1 里再写一份端口探测）", () => {
-    const cli = fs.readFileSync(path.join(ROOT, "scripts", "deps-install-guard.mjs"), "utf8");
+    const cli = fs.readFileSync(
+      path.join(ROOT, "scripts", "devtools", "deps-install-guard.mjs"),
+      "utf8",
+    );
     expect(cli).toContain("runningAppInstances");
-    const ps1 = fs.readFileSync(path.join(ROOT, "scripts", "sync-lint.ps1"), "utf8");
+    const ps1 = fs.readFileSync(path.join(ROOT, "scripts", "devtools", "sync-lint.ps1"), "utf8");
     expect(ps1).toContain("deps-install-guard.mjs");
     expect(ps1, "又回到 .ps1 自己探端口那一族").not.toMatch(/Get-NetTCPConnection/);
   });

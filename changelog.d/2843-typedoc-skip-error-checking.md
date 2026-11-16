@@ -6,7 +6,7 @@
 
   改动：
 
-  1. `scripts/typedoc-run.mjs` 起 typedoc 的那一处固定带 `--skipErrorChecking`；
+  1. `scripts/docs/typedoc-run.mjs` 起 typedoc 的那一处固定带 `--skipErrorChecking`；
   2. 参数面收进导出的 `typedocArgs()`（此前只活在 `spawn` 那一行、用例够不到）；
   3. `tests/typedoc-run.test.ts` 新增两条断言：argv 含 `--skipErrorChecking`、
      且参数里没有任何关掉 warning 的旗标（`--logLevel` / `--treatWarningsAsErrors`）。

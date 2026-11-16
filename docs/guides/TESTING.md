@@ -155,12 +155,12 @@ procedure 有没有执行者**与**消费方（这两条已由 `tests/trpc-surfa
 这一层与像素无关，继续用（口径与边界见规范 §11.8）：全量 e2e / 全量单测 + 覆盖率 /
 产物级护栏此前各自只有一句「按需手动跑」，而那句话没有任何东西在守。
 
-- **全量 e2e**（`scripts/.e2e-freshness.json`）按本地日历日判「**当天的第一次提交**
+- **全量 e2e**（`scripts/freshness/.e2e-freshness.json`）按本地日历日判「**当天的第一次提交**
   带没带一次自证」：跑 `pnpm test:e2e` 跑绿即记，或
   `node scripts/e2e/e2e-run.mjs --skip "<理由>"` 记一条豁免（占位理由被拦）。
-- **全量单测 + 覆盖率**（`scripts/.full-suite-freshness.json`，`pnpm run test:coverage`
-  走 `scripts/full-suite-run.mjs`）与**产物级护栏**（`scripts/.artifact-freshness.json`，
-  `pnpm run build` 走 `scripts/artifact-run.mjs`）判的是「**改了就当天跑**」：
+- **全量单测 + 覆盖率**（`scripts/freshness/.full-suite-freshness.json`，`pnpm run test:coverage`
+  走 `scripts/affected-tests/full-suite-run.mjs`）与**产物级护栏**（`scripts/freshness/.artifact-freshness.json`，
+  `pnpm run build` 走 `scripts/build/artifact-run.mjs`）判的是「**改了就当天跑**」：
   当天提交动过它们的输入面（`src/`+`tests/` / 产物链那几个文件）就必须今天自证，
   没动过以 7 天为宽限 —— 十分钟量级的两档没必要每天都跑。
   出路三条：跑一次（跑绿即记）/ `--skip "<理由>"` / `--dirty "<理由>"`（这次改动不吃这一档）。
@@ -252,7 +252,7 @@ platformTest("同步入口在 Windows 上是 /PID …", ({ asPlatform }) => {
       只保证「一天至少有人跑过一次」，不等于每次提交都跑。
 - [ ] **页面级视觉回归完全没有执行者**：这一档已整档撤掉（上面 §「视觉回归」那一节），
       所以「界面有没有变形」现在只由 review 看图负责 —— 不要再把它读成「有那一层兜着」。
-- [ ] **Rust 壳的 `#[test]` 只在「改了 `.rs`」时被跑**：`scripts/shell-gate.mjs`（pre-commit D 组）
+- [ ] **Rust 壳的 `#[test]` 只在「改了 `.rs`」时被跑**：`scripts/gates/shell-gate.mjs`（pre-commit D 组）
       在暂存改动命中壳输入时跑 `cargo test`、并把硬规则 5「改了壳必须重编」变成判据 ——
       但它**不是全量执行者**：不动壳的提交永远不跑壳里那些 `#[test]`，全量仍要靠
       `cd src-tauri && cargo test` 的手上（`check:all` 里也没有这一路）。
@@ -301,6 +301,6 @@ platformTest("同步入口在 Windows 上是 /PID …", ({ asPlatform }) => {
 - [x] Tauri 壳冒烟自动化落地（ISSUE #3570）：真实 Windows 会话里跑 release 版
       `{{shell.app.exe}}`，观察 Win32 前台归属 / Z 序 / 任务栏闪烁收口与「交接后不重放」
       （运行期计数信号 #3569 + 壳日志交叉印证）。入口 `pnpm shell:smoke`
-      （`scripts/shell-smoke.mjs` → `scripts/win32-shell-smoke.py`，只吃标准库）；
+      （`scripts/devtools/shell-smoke.mjs` → `scripts/devtools/win32-shell-smoke.py`，只吃标准库）；
       五个场景、读数口径与退出码见规范 §11.10.4 末段。改动 src-tauri 仍需
       `cargo build --release --features custom-protocol` 重编后跑。

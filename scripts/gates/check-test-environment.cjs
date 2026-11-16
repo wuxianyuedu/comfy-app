@@ -44,7 +44,7 @@
  */
 const path = require("node:path");
 const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
-const { loadProjects, matchesAny } = require("../vitest-projects.cjs");
+const { loadProjects, matchesAny } = require("../affected-tests/vitest-projects.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");

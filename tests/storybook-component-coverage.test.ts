@@ -19,7 +19,7 @@ import {
 const ROOT = resolve(".");
 const COMPONENTS = join(ROOT, "src", "components");
 const UI = join(COMPONENTS, "ui");
-const BASELINE_PATH = join(ROOT, "scripts", ".storybook-coverage-baseline.json");
+const BASELINE_PATH = join(ROOT, "scripts", "gates", ".storybook-coverage-baseline.json");
 
 /** 基线形状守卫（B5 清账）：两个读数都必须是数，缺了就没法比棘轮。 */
 function isBaseline(value: unknown): value is { covered: number; uiSurfaces: number } {

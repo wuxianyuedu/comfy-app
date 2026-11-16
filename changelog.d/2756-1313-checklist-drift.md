@@ -11,7 +11,7 @@
   没有改任何判据：`doc:check` 一个字都没动，它本来就是对的。
 
 - **脚本档 tsc 棘轮的账本「面」落后一格：215 → 216**（同一张单 #2756）：#2751 新加了
-  `scripts/affected-launch-file-timing-report.mjs`，而 `scripts/.scripts-typecheck-baseline.json`
+  `scripts/affected-launch-file-timing-report.mjs`，而 `scripts/gates/.scripts-typecheck-baseline.json`
   的 `face` 还停在 215 —— `tests/scripts-typecheck-ratchet.test.ts` 的「面 ⇄ 账同数」当场红，
   并且**红得指不出是谁**（它只给「展开 216 / 账上 215」两个数，而当时的 `driftReading()`
   是去问 `git ls-files` 的：差异只在**未提交**时才是「不在 git 清单」，所以这份读数只对

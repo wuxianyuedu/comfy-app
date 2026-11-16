@@ -31,7 +31,7 @@
   2. 新增 `tests/mjs-node-esm-resolution.test.ts`：从 `scripts/**` / `e2e/**` /
      `tools/**` 下的 `.mjs` / `.cjs` 入口出发做静态闭包，凡「由 `.mjs` 这条链加载到的」
      模块，其相对说明符都必须显式带 `.ts` —— 按 **Node 的口径**复算，不引 `import()`
-     （那会执行入口的主流程）。已登记进 `scripts/fixed-structural-tests.mjs` 的固定清单
+     （那会执行入口的主流程）。已登记进 `scripts/affected-tests/fixed-structural-tests.mjs` 的固定清单
      （它守的是别的判据看不见的那条路）。
 
   **反向复算过（两个方向都做了）**：把三条后缀 `sed` 摘掉回原样 ⇒ 判据当场点名

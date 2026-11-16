@@ -1619,7 +1619,7 @@ const BASE_CONFIG = defineConfig({
          * ⚠️ 剩下那点分支不是漏网，是平台绑定或走不到的兜底：`taskkill` 以 0 退出时 via 里
          *      那半句（Linux 的假 taskkill 造得出、Windows 上 `.cmd` 起不来）、`ps` 输出解析里
          *      那个不可达的兜底，以及 `executable-resolve.ts` 自己的 74.54% 分支。
-         *   5) **函数这一维现在实测 84/86 = 97.67%**（`node scripts/full-suite-run.mjs` 全量
+         *   5) **函数这一维现在实测 84/86 = 97.67%**（`node scripts/affected-tests/full-suite-run.mjs` 全量
          *      `--coverage`，与 `每日单元测试` 同一份执行者；那一条跑里 `ERROR: Coverage` 出现 0 次）。
          *      补之前是 **82/86 = 95.35%** —— 与节点那句 `95.34%` 逐字对上，所以两边同尺。
          *      起因：登记后目录一直在长，而「登记值按当时的整目录实测」这件事没人回头核，
@@ -2302,7 +2302,7 @@ const BASE_CONFIG = defineConfig({
  *   · 传给 vitest 的那一份才由开关决定。默认**不判**：覆盖率照跑、报告照出
  *     （`text` / `json-summary` / `lcov` 三种 reporter 一个都没动），只是不拿它决定退码；
  *     `COMFY_COVERAGE_ENFORCE=1` 才按门槛判红（本地与 `pnpm check:all` 那一档用它，
- *     见 `scripts/quality-gate.mjs` 的 `test` 条目与 `scripts/full-suite-run.mjs` 的
+ *     见 `scripts/gates/quality-gate.mjs` 的 `test` 条目与 `scripts/affected-tests/full-suite-run.mjs` 的
  *     `--enforce-coverage`）。
  * ⚠️ **不许**在这里开 vitest 自带的 `coverage.thresholds.autoUpdate`：它会在跑的过程中
  *   改写本文件（业主点名「只能在专门 job 或本地跑，别在正常 gated run 里开」），

@@ -261,13 +261,13 @@ describe("漂移分支接线（防细节被删掉回潮）", () => {
   const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
   it("prepare-local-run.ps1 在漂移分支调用差异渲染", () => {
-    const s = read("scripts/prepare-local-run.ps1");
+    const s = read("scripts/devtools/prepare-local-run.ps1");
     expect(s).toContain(String.raw`lockfile\diff-cli.mjs`);
     expect(s).toContain("$drifted");
   });
 
   it("quality-gate.ps1 的依赖预检同样输出明细，且判决只用那份语义比较器", () => {
-    const s = read("scripts/quality-gate.ps1");
+    const s = read("scripts/gates/quality-gate.ps1");
     expect(s).toContain(String.raw`lockfile\diff-cli.mjs`);
     // 断言打在**行为形状**上而不是函数名上：旧实现靠 `Write-DepDriftDetail` 再调一次
     // diff-cli，而那次调用的结论与判决阶段的结论可以不一致（ISSUE #1338 实测到的正是

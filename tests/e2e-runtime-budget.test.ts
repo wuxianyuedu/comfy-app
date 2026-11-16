@@ -114,7 +114,7 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
     return typeof value.metric === "object" && value.metric !== null;
   }
   const baselineFile: unknown = JSON.parse(
-    readFileSync(join(REPO_ROOT, "scripts/.runtime-budget-baseline.json"), "utf8"),
+    readFileSync(join(REPO_ROOT, "e2e/.runtime-budget-baseline.json"), "utf8"),
   );
   if (!isBaselineFile(baselineFile)) {
     throw new Error("运行时预算基线文件形状不对");

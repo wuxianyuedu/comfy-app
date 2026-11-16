@@ -9,7 +9,7 @@
     `.ts/.js` 面；少掉 `--cache` ⇒ 每个文件都按类型感知规则**从头算**一遍；
   - 同一跑里 `类型检查` 77.3s、`重档静态判据`（本地串行实测 50 条约 125s）都不超 2 分钟，
     而 20m 全程**零输出** ⇒ 不是「规则报错」，是这一步始终没跑完。
-    两处同名却不同口径，本身就是那个已经在 `scripts/quality-gate.mjs` / `.githooks/pre-commit`
+    两处同名却不同口径，本身就是那个已经在 `scripts/gates/quality-gate.mjs` / `.githooks/pre-commit`
     里写明「不在这里再抄一遍目录清单」的漂移 —— 平台侧漏了同一个约定。
     修法是把那一格收回 `pnpm run lint`（判据一字未动：`--max-warnings 0` 仍在脚本里），
     于是四个调用点共用同一份命令。`eslint.config.js` 顶部那节同步补上这两个调用点。

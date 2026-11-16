@@ -15,7 +15,7 @@ import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { groupShBody, stepsInGroup } from "./helpers/hook-groups";
 
 const REPO_ROOT = resolve(".");
-const SCRIPT = join(REPO_ROOT, "scripts", "precommit-timing.mjs");
+const SCRIPT = join(REPO_ROOT, "scripts", "gates", "precommit-timing.mjs");
 const HOOK = join(REPO_ROOT, ".githooks", "pre-commit");
 const TIMING_SH = join(REPO_ROOT, ".githooks", "timing.sh");
 

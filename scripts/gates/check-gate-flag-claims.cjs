@@ -70,7 +70,7 @@
  * ④ **翻闸台账点名的脚本必须有执行者**（`HARD_GATE_FLIPS` 的键 ⇄ 门禁链 / 按需台账）：
  *    `HARD_GATE_FLIPS` 的值是自测文件，而**自测不是执行者** —— 它证明「这条判据的形态
  *    是对的」，不证明「有人会跑它」。18 条翻闸里有两条（`tw4-*`）起 Tailwind 引擎、
- *    单次约 6s，因此**不进钩子**（登记在 `scripts/.gate-executor-ledger.json` 的按需
+ *    单次约 6s，因此**不进钩子**（登记在 `scripts/gates/.gate-executor-ledger.json` 的按需
  *    召唤台账里，这正是它们该有的形态）。
  *
  *    缺这一格的后果是**「已翻硬闸」这句话只兑现了一半**：翻闸的语义是「命中即退 1」，
@@ -81,7 +81,7 @@
  *
  *    判据面是「两条正当落点**至少占一条**」：门禁链（`.githooks/pre-commit` /
  *    `quality-gate.mjs` / `quality-gate.ps1` 的步骤行）**或**按需召唤台账
- *    （`scripts/.gate-executor-ledger.json`）。两条都没有 ⇒ 红。
+ *    （`scripts/gates/.gate-executor-ledger.json`）。两条都没有 ⇒ 红。
  *
  *    ⚠️ **为什么不复用 `check-gate-executors.cjs` 的口径直接判「无执行者」**：
  *    那一条已经在跑（实测它在 `--report` 里点名了 `tw4-*` 两条），而它判的是
@@ -140,7 +140,7 @@ const COMMAND_LISTS = [".githooks/pre-commit", "docs/standards/13-提交与-code
  *     `quality-gate.ps1` 的 `$Blocks` 表项 —— 口径与 `check-gate-executors.cjs` 的
  *     `gateChainScripts()` **刻意同源**（那里只读「门禁步骤位置」、不读全文，理由见它
  *     的注释：读全文会把散文里的占位符举例与被 import 的执行器一起收进来）。
- *   · **按需召唤台账**：`scripts/.gate-executor-ledger.json` 的 `onDemand` 键
+ *   · **按需召唤台账**：`scripts/gates/.gate-executor-ledger.json` 的 `onDemand` 键
  *     —— `check-gate-executors.cjs` 已判过「登记了就说明它确实无执行者」，所以
  *     这里只认它的在场，不重复判它的理由写得对不对。
  *
@@ -149,8 +149,8 @@ const COMMAND_LISTS = [".githooks/pre-commit", "docs/standards/13-提交与-code
  */
 const GATE_CHAIN_FILES = [
   ".githooks/pre-commit",
-  "scripts/quality-gate.mjs",
-  "scripts/quality-gate.ps1",
+  "scripts/gates/quality-gate.mjs",
+  "scripts/gates/quality-gate.ps1",
 ];
 
 /**
@@ -164,9 +164,9 @@ const GATE_CHAIN_FILES = [
  * 否则 ④ 会把「经聚合档真在跑」的两条判成无落点（实测：`check-non-null-assertions`
  * 与 `check-click-keyboard` 正是这样被误报的 —— 误报的判据活不过一次评审，§11.18.4）。
  */
-const GATE_AGGREGATORS = ["scripts/run-ast-gates.cjs"];
+const GATE_AGGREGATORS = ["scripts/gates/run-ast-gates.cjs"];
 
-const GATE_EXECUTOR_LEDGER = path.join("scripts", ".gate-executor-ledger.json");
+const GATE_EXECUTOR_LEDGER = path.join("scripts", "gates", ".gate-executor-ledger.json");
 
 /**
  * 门禁链里被按名字调起的脚本 basename 集合 —— 与 `check-gate-executors.cjs` 的

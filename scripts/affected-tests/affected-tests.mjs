@@ -68,10 +68,10 @@ import process from "node:process";
 
 import ts from "typescript";
 
-import { KNOWN_FAILED_FILES } from "../quality-gate-shared.mjs";
-import { FIXED_STRUCTURAL_TESTS } from "../fixed-structural-tests.mjs";
-import { selectFixedByFace } from "../fixed-gate-input-faces.mjs";
-import { changedPathsFromNameStatus, normalizeRel } from "../git-name-status.mjs";
+import { KNOWN_FAILED_FILES } from "../gates/quality-gate-shared.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
+import { selectFixedByFace } from "../gates/fixed-gate-input-faces.mjs";
+import { changedPathsFromNameStatus, normalizeRel } from "../lib/git-name-status.mjs";
 import { stripComments } from "../tw4/tw4-scan-core.mjs";
 import { launcherClosureIfNeeded, noteLauncherHygiene } from "./affected-launcher-hygiene.mjs";
 
@@ -193,7 +193,7 @@ const TYPE_IMPORT_RE = /\bimport\s*\(\s*["'](?<specifier>[^"'\n]+)["']\s*\)/g;
  * 依赖（扫描器管不到它们，剥注释也只剥真的注释）—— 偏「多跑几份」而不是「少跑」，
  * 全仓实测只出现在自测夹具里。
  *
- * **导出的理由**：`scripts/docs-api-input-closure.mjs` 要算 typedoc 输入面的
+ * **导出的理由**：`scripts/docs/docs-api-input-closure.mjs` 要算 typedoc 输入面的
  * 传递闭包，而它需要的正是这同一份说明符解析 —— 抄第二份正则就会漂（§12.12 / §12.18），
  * 而漂的形态恰好是「闭包算少了 ⇒ 收窄面判窄 ⇒ 静默漏判」。
  *
@@ -359,7 +359,7 @@ export function resolveAffectedTests({
   /**
    * 固定清单并入 —— 空集是最危险的形态：`vitest run` 不带位置参数就是跑全量。
    *
-   * ⚠️ **只有增量档（`subset`）按输入面筛**（`scripts/fixed-gate-input-faces.mjs`）：
+   * ⚠️ **只有增量档（`subset`）按输入面筛**（`scripts/gates/fixed-gate-input-faces.mjs`）：
    * `all` 那一档是「放弃收窄」的兜底 —— 改了全局测试配置、或命中了不可达的公共地基，
    * 那一刻的前提正是「这次没法信筛出来的结果」，所以固定清单**一条都不跳**。
    * 但 `all` 档也**照样并入 `extra`**（本次变更路径命中的用例）：兜底是**扩大范围、
@@ -624,7 +624,7 @@ function git(args) {
  * @returns {{paths: string[], renamedFrom: string[]} | null}
  */
 function stagedChanges() {
-  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/lib/changed-scope.mjs`
    * 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，而本仓有 38 份文件名带非
    * ASCII 的文件，全在 `docs/` 下）。 */
   const out = git([
@@ -731,7 +731,7 @@ export function isSourcePath(rel) {
  * @returns {string[] | null}
  */
 function trackedPaths() {
-  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/lib/changed-scope.mjs`
    * 的文件头「口径 ④」）。转义过的路径在图里认不出来 ⇒ 按路径消费的用例会漏跑。 */
   const out = git(["-c", "core.quotePath=false", "ls-files"]);
   if (out === null) {
@@ -873,14 +873,14 @@ function main() {
     const skipped = res.reasons.__faceSkipped.split(" ").filter(Boolean);
     process.stderr.write(
       `[affected] 固定清单按**输入面**跳过 ${skipped.length} 条（${skipped.join(" ")}）` +
-        "—— 名单与每条的面在 scripts/fixed-gate-input-faces.mjs，" +
+        "—— 名单与每条的面在 scripts/gates/fixed-gate-input-faces.mjs，" +
         "「改到被测工具却没跑」是不允许的形态，所以这里逐条点名而不是静默少跑\n",
     );
   }
   if (res.reasons.__skipped) {
     process.stderr.write(
       `[affected] 跳过已知基线红 ${res.reasons.__skipped.split(" ").length} 个` +
-        `（${res.reasons.__skipped}）—— 清单在 scripts/quality-gate-shared.mjs，` +
+        `（${res.reasons.__skipped}）—— 清单在 scripts/gates/quality-gate-shared.mjs，` +
         "修好后立刻删，别让它长期静默\n",
     );
   }

@@ -1,6 +1,6 @@
 ## Fixed
 
-- **耗时台账的量纲**（`scripts/.test-file-timing.json`，ISSUE #3030）：junit 的 `time` 是
+- **耗时台账的量纲**（`scripts/affected-tests/.test-file-timing.json`，ISSUE #3030）：junit 的 `time` 是
   「那份文件在那一次并行运行里的墙钟」，而它被原样当成「单份成本」写进了入库台账 ——
   台账于是记的是**平台某一次的负载状态**，而它的唯一消费者是「重块排前」的排序，
   于是排序判据反了，且失效形态静默（没有任何判据会说「这份排错了」）。实测同一批文件：

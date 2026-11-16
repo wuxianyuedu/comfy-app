@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { changedFilesForBaseRef } from "../scripts/changed-scope.mjs";
+import { changedFilesForBaseRef } from "../scripts/lib/changed-scope.mjs";
 import { readStagedPaths } from "../scripts/gates/gate-scan-read.cjs";
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { stripComments } from "./helpers/strip-comments";

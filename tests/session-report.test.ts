@@ -14,9 +14,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
-import { collectCommits, formatReport, runSteps } from "../scripts/session-report.mjs";
+import { collectCommits, formatReport, runSteps } from "../scripts/platform/session-report.mjs";
 
-const SCRIPT = join(process.cwd(), "scripts", "session-report.mjs");
+const SCRIPT = join(process.cwd(), "scripts", "platform", "session-report.mjs");
 const tmpDirs: Array<string> = [];
 afterEach(() => {
   for (const dir of tmpDirs.splice(0)) {

@@ -13,7 +13,7 @@
  * 违反「PR 正文只填它量到的」（`check-commit-claims.mjs` 复核的是推断句）。
  *
  * 承重数值入账：`PULL_BODY_LIMIT` / `DIFFSTAT_SAMPLE_MAX` / `FRAGMENT_BODY_BUDGET`
- * 登记在 `scripts/.gate-thresholds.json`（口径见规范 §13.5.26）。
+ * 登记在 `scripts/gates/.gate-thresholds.json`（口径见规范 §13.5.26）。
  */
 import { fragmentBody, fragmentHead, withCommentHeader } from "./ship-ticket.mjs";
 

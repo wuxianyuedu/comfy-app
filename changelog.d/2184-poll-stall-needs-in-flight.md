@@ -22,7 +22,7 @@
   仍然分不开。话术跟着改两处：断流那句现在说「连续 N 次读数没变、**且此刻没有一格在飞**」，
   而靠格数续命时每轮只念一次「签名没变（…），但有 1 格在飞：受影响用例 ⇒ 还在跑，继续轮」
   —— 反复复述「还在跑」与复述「没变化」是同一类噪音。
-  另把 `POLL_STALL_MAX` 本人账进 `scripts/.gate-thresholds.json`（`kind: "report"`：它是耐心预算
+  另把 `POLL_STALL_MAX` 本人账进 `scripts/gates/.gate-thresholds.json`（`kind: "report"`：它是耐心预算
   而不是松紧量 —— 把它登记成阈值会让人以为改它就是改判据）。
   回归四条（`tests/ci-build-readout.test.ts` 的 `inFlightStages` 一组 + `tests/ship.test.ts`
   的 `pollUntilTerminal` 两条新增）：① 13 眼签名冻住而 32/33 有一格在飞 ⇒ 不断流、轮满 14 眼、

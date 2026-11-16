@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "../scripts/affected-tests/fixed-structural-tests.mjs";
 import {
   planSeparatedLaunches,
   resolveAffectedSegment,
@@ -106,9 +106,9 @@ describe("耗时台账排序（ISSUE #2863 的 ③：重块排前）", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "timing-"));
     try {
       expect(mergeTimingLedger(dir, []).written).toBe(false); // 空读数不落盘
-      fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+      fs.mkdirSync(path.join(dir, "scripts", "affected-tests"), { recursive: true });
       fs.writeFileSync(
-        path.join(dir, "scripts", ".test-file-timing.json"),
+        path.join(dir, "scripts", "affected-tests", ".test-file-timing.json"),
         JSON.stringify({
           generatedAt: "old",
           /* 老形状（裸数字）⇒ 回读成 `batch`；两种形状混在一份台账里要能各读各的。 */
@@ -123,7 +123,10 @@ describe("耗时台账排序（ISSUE #2863 的 ③：重块排前）", () => {
         ]).written,
       ).toBe(true);
       const parsed: unknown = JSON.parse(
-        fs.readFileSync(path.join(dir, "scripts", ".test-file-timing.json"), "utf8"),
+        fs.readFileSync(
+          path.join(dir, "scripts", "affected-tests", ".test-file-timing.json"),
+          "utf8",
+        ),
       );
       if (!isTimingFile(parsed)) {
         throw new Error("耗时台账形状不对");
@@ -204,9 +207,9 @@ describe("耗时台账的量纲：批跑墙钟当不了单份成本（ISSUE #303
   it("老形状（裸数字）按 `batch` 读 —— 它是 junit 抄来的，量纲就是批跑墙钟", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "timing-legacy-"));
     try {
-      fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+      fs.mkdirSync(path.join(dir, "scripts", "affected-tests"), { recursive: true });
       fs.writeFileSync(
-        path.join(dir, "scripts", ".test-file-timing.json"),
+        path.join(dir, "scripts", "affected-tests", ".test-file-timing.json"),
         JSON.stringify({ generatedAt: "old", files: { "tests/a.test.ts": 169_100 } }),
       );
       expect(readTimingLedger(dir).get("tests/a.test.ts")).toEqual({
@@ -221,9 +224,9 @@ describe("耗时台账的量纲：批跑墙钟当不了单份成本（ISSUE #303
   it("一笔 batch 读数不许覆盖已有的 isolated 记录（且那一次要被点名）", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "timing-mix-"));
     try {
-      fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+      fs.mkdirSync(path.join(dir, "scripts", "affected-tests"), { recursive: true });
       fs.writeFileSync(
-        path.join(dir, "scripts", ".test-file-timing.json"),
+        path.join(dir, "scripts", "affected-tests", ".test-file-timing.json"),
         JSON.stringify({
           generatedAt: "old",
           files: { "tests/a.test.ts": { ms: 1800, source: "isolated" } },

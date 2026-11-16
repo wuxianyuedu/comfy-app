@@ -53,7 +53,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { gitScratchPath, resolveGitDir } from "../git-dir.mjs";
+import { gitScratchPath, resolveGitDir } from "../lib/git-dir.mjs";
 import { CODE } from "./ship-codes.mjs";
 
 const SHIP_RESULT_FILE = "ship-result.json";

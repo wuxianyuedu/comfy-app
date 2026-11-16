@@ -18,4 +18,4 @@
 
   这笔体积换来的是阶段⑥不再谎称「成片产物完成」、并给出「去成片合成 MP4」的真出口，
   属想要的用户可见修复，故按 §13.5.4 例外流程带 `--allow-increase` 重记基线
-  （`scripts/.bundle-budget-baseline.json`，锚点取主干可达的 `8b235623`）。
+  （`scripts/gates/.bundle-budget-baseline.json`，锚点取主干可达的 `8b235623`）。

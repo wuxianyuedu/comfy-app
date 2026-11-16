@@ -16,7 +16,7 @@ const { test, expect } = defineGateRepo({
   dirs: ["src/lib"],
   /* 脚本 `await import("./doc-facts.cjs")` 去读文档事实 —— 同级动态导入只能
    * 把那份模块也拷到工作区（真实布局就是 scripts/ 下这两份并排）。 */
-  copy: [{ from: "scripts/doc-facts.cjs", to: "scripts/doc-facts.cjs" }],
+  copy: [{ from: "scripts/docs/doc-facts.cjs", to: "scripts/docs/doc-facts.cjs" }],
   /* `docs/reference-facts.md` 里那一行是白名单的唯一来源；隔离环境里也得在，
    * 否则脚本读不到名单。默认给一个**空名单**的版本（等价于此前 `beforeEach`
    * 里那句 `seedFactsDoc([])`）；要造白名单档的用例再覆盖它。 */
@@ -59,7 +59,7 @@ function runInRepo(args: Array<string> = []): { code: number; output: string } {
 
 /**
  * 白名单的权威定义在 `docs/reference-facts.md` 的那一行，脚本用
- * `scripts/doc-facts.cjs` 反向解析它。临时工作区里没有那篇文档，因此这里放一份
+ * `scripts/docs/doc-facts.cjs` 反向解析它。临时工作区里没有那篇文档，因此这里放一份
  * 最小替身（只含被解析的那一行），把「脚本从哪里读名单」这件事在隔离环境里钉住。
  */
 function seedFactsDoc(repo: GateRepo, modules: Array<string>): void {
@@ -499,7 +499,7 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
     extractAsciiOnlyModules: () => Array<string>;
     FACTS: Array<{ key: string; kind: string }>;
   }> {
-    const mod: unknown = await import("../scripts/doc-facts.cjs");
+    const mod: unknown = await import("../scripts/docs/doc-facts.cjs");
     if (!isDocFactsModule(mod)) {
       throw new Error("doc-facts.cjs 的出口形状不对（缺 extractAsciiOnlyModules / FACTS）");
     }

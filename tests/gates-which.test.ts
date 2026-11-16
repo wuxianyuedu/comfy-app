@@ -1,17 +1,22 @@
 /**
  * `pnpm gates:which` —— 按改动面回答「该跑哪几条门禁 / 哪份用例 / 该读哪一节规范」（ISSUE #2765）。它治的是「不知道该跑哪条 ⇒ 推上去让平台告诉我红了哪格」，故判据全钉在**读数从哪来**：分档只认钩子文本
  * （`readHookSteps` / `localTierLabels`）与 `ci-incremental-gates` 的收窄登记；用例那半直起 `affected-tests.mjs` 的判决链，取不到读数时**原样带回落差**，不折成空清单（空清单在下游是「什么都不用跑」）。
- * 空改动面 / 取不到基线 / 不认识的旗标 ⇒ 退 2（= 没有结论），不是「没有问题」；`AGENTS.md` 那张人读表与 `scripts/doc-reading-map.mjs` 双向对账，改一边忘另一边当场红。
+ * 空改动面 / 取不到基线 / 不认识的旗标 ⇒ 退 2（= 没有结论），不是「没有问题」；`AGENTS.md` 那张人读表与 `scripts/docs/doc-reading-map.mjs` 双向对账，改一边忘另一边当场红。
  */
 import { execFileSync, type spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-import { DOC_READING_MAP, matchDocReading } from "../scripts/doc-reading-map.mjs";
-import { affectedTests, classifyHeavySteps, parseArgs, scriptOf } from "../scripts/gates-which.mjs";
+import { DOC_READING_MAP, matchDocReading } from "../scripts/docs/doc-reading-map.mjs";
+import {
+  affectedTests,
+  classifyHeavySteps,
+  parseArgs,
+  scriptOf,
+} from "../scripts/gates/gates-which.mjs";
 
-const SCRIPT = join(process.cwd(), "scripts", "gates-which.mjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates", "gates-which.mjs");
 const AGENTS = join(process.cwd(), "AGENTS.md");
 
 /** 一次 CLI 的读数形状。 */
@@ -88,7 +93,7 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
        * 暂空，但 hit / skippable / noFace 三堆的分堆机制仍要各自有正/负控 ——
        * 把机制用例绑在真表内容上，表一空这段判据就没人测了。 */
       label: "样本收窄判据",
-      argv: ["node", "scripts/render-doc-placeholders.cjs"],
+      argv: ["node", "scripts/docs/render-doc-placeholders.cjs"],
     },
     { label: "类型检查", argv: ["pnpm", "exec", "tsc", "--noEmit"] },
   ];
@@ -96,7 +101,7 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
     readSteps: () => steps,
     tierLabels: () => new Set(["分支守卫"]),
     faceFor: (script: string) =>
-      script === "scripts/render-doc-placeholders.cjs" ? { globs: ["docs/**"] } : null,
+      script === "scripts/docs/render-doc-placeholders.cjs" ? { globs: ["docs/**"] } : null,
   };
 
   test("碰到收窄面 ⇒ hit；没碰到 ⇒ skippable；没有登记 ⇒ noFace", () => {

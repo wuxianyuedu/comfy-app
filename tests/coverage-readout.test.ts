@@ -10,7 +10,7 @@ import {
   aggregateForGlob,
   buildCoverageReadout,
   readRegisteredThresholds,
-} from "../scripts/coverage-readout.mjs";
+} from "../scripts/affected-tests/coverage-readout.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 

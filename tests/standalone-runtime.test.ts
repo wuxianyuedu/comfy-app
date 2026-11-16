@@ -393,7 +393,7 @@ describe("入口的运行期环境装配（分发产物不含 .env）", () => {
   it("OAuth 占位值只有一份定义（两份字面量迟早分叉，且两侧都能起来 = 没人报红）", async () => {
     const { OAUTH_PLACEHOLDER } = await loadEnv();
     expect(OAUTH_PLACEHOLDER.length).toBeGreaterThan(0);
-    const init = read("scripts/env-init.mjs");
+    const init = read("scripts/devtools/env-init.mjs");
     expect(init).toContain("standalone-runtime-env.mjs");
     expect(init).toContain("OAUTH_PLACEHOLDER");
     expect(init).not.toMatch(/const OAUTH_PLACEHOLDER\s*=/);

@@ -9,8 +9,8 @@
 
   | 位置 | 改动 |
   | --- | --- |
-  | `.cnb.yml` 的「生产构建」 | 入口从裸 `pnpm run build` 换成 `node scripts/artifact-run.mjs`（它内部就是那条命令，外面多出来的一跳是**记账**） |
-  | `.cnb.yml` 的「单元测试」 | **停用中**，但注释块里的恢复形态已改成 `node scripts/full-suite-run.mjs`（恢复时入口写它，不是裸 vitest）—— 裸跑等于「跑了不记账」 |
+  | `.cnb.yml` 的「生产构建」 | 入口从裸 `pnpm run build` 换成 `node scripts/build/artifact-run.mjs`（它内部就是那条命令，外面多出来的一跳是**记账**） |
+  | `.cnb.yml` 的「单元测试」 | **停用中**，但注释块里的恢复形态已改成 `node scripts/affected-tests/full-suite-run.mjs`（恢复时入口写它，不是裸 vitest）—— 裸跑等于「跑了不记账」 |
   | `.cnb.yml` 的新 stage「新鲜度账」 | 跑 `scripts/freshness-gate.mjs`（与钩子 D 组**同一份**脚本、同一个档）；**必须排在「生产构建」之前** —— 跑法脚本跑绿会刷新账，同一分支的 stage 共享工作区，排在后面时它读到的是「刚被本次构建证过的账」，恒放行 |
   | `scripts/freshness-ledger.mjs` | `gitUser()` 现在按 `GIT_AUTHOR_NAME` → **`CNB_BUILD_USER_NICKNAME` / `CNB_BUILD_USER` / `CNB_COMMITTER`** → `git config user.name` → 兜底的顺序取第一个非空者。平台侧是只读检出，`git config user.name` 要么空、要么是检出器的占位，而 `who` 是这条账存在的意义 |
 

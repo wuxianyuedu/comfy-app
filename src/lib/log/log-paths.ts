@@ -36,7 +36,7 @@ import path from "node:path";
  * `log-paths`；只要它带 server-only，纯 Node 里 `await import("~/lib/core/logger")`
  * 的 promise 就会因这一层的 throw 而 reject、上层 comfyui 的 lazy 兜底接不进去。
  * 「浏览器图别引我」这条约束**不由 server-only 兜**——scanner 的 clientReachable
- * 判据（`scripts/lib-node-only-scan.mjs`）盯着「有 `"use client"` 静态引到时
+ * 判据（`scripts/gates/lib-node-only-scan.mjs`）盯着「有 `"use client"` 静态引到时
  * 顶层是否有 Node 内建」，path 命中即红。
  */
 

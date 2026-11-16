@@ -1,5 +1,5 @@
 /**
- * 「这次改动面」的**唯一出处**（`scripts/changed-scope.mjs`）。两个消费点——「受影响用例」（`ci-affected-tests.mjs`）与桌面壳门禁（`shell-gate.mjs --base`）——各算一次就会漂：改名的旧路径算不算？三点 diff 还是两点？基线取 PR 目标 sha 还是 merge-base？
+ * 「这次改动面」的**唯一出处**（`scripts/lib/changed-scope.mjs`）。两个消费点——「受影响用例」（`ci-affected-tests.mjs`）与桌面壳门禁（`shell-gate.mjs --base`）——各算一次就会漂：改名的旧路径算不算？三点 diff 还是两点？基线取 PR 目标 sha 还是 merge-base？
  * 这里钉**基线怎么选**与 **diff 形态**：前者决定「这个 PR 改了什么」，后者决定「改名那一行的两侧是不是都在面里」（ISSUE #2226）。
  */
 import { execFileSync } from "node:child_process";
@@ -16,7 +16,7 @@ import {
   reconcileSyntheticMergeFace,
   resolveBaseRef,
   resolveChangedFiles,
-} from "../scripts/changed-scope.mjs";
+} from "../scripts/lib/changed-scope.mjs";
 
 /** 假 git：按调用顺序回放预置结果。 */
 function fakeGit(handlers: Record<string, { ok: boolean; stdout: string }>) {

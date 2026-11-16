@@ -7,7 +7,7 @@
 //     也要能 import 它，一旦加上就把 §18.4 三选一里第三类（纯 Node 宿主）的口子
 //     关死了；
 //   · **不 import 任何 Node 内建值** —— `ws` 一律 `import type` 引入。
-//     扫描器 `scripts/lib-node-only-scan.mjs`（规范 §18.4）的 `parseImports`
+//     扫描器 `scripts/gates/lib-node-only-scan.mjs`（规范 §18.4）的 `parseImports`
 //     对 `type` 前缀的 clause 是**跳过**的，因此本模块既不会落进 `unguarded`
 //     （没声明却引 Node 内建），也不会被 `clientReachable` 抓到（浏览器图引
 //     Node-only 会整页 500）。这是「拆层不影响 import-graph 判定」的关键。

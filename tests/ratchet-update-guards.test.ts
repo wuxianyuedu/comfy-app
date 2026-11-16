@@ -41,7 +41,7 @@ const AST_ENV = { NODE_PATH: join(process.cwd(), "node_modules") };
 const RATCHETS: Array<Ratchet> = [
   {
     script: "gates/check-void-floats.cjs",
-    baseline: "scripts/.void-floats-baseline.json",
+    baseline: "scripts/gates/.void-floats-baseline.json",
     fixture: { dirs: ["src/lib"], env: AST_ENV },
     violate: (repo, n) => {
       repo.write(
@@ -404,7 +404,8 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
         ...Object.keys(NOT_A_RATCHET),
       ];
       const dir = join(import.meta.dirname, "..", "scripts");
-      const present = new Set(readdirSync(dir));
+      /* #3930 起基线台账在 scripts/gates/：两层都要算「在场」。 */
+      const present = new Set([...readdirSync(dir), ...readdirSync(join(dir, "gates"))]);
       const stale = listed.filter((name) => !present.has(name));
       expect(stale, `这些登记项在 scripts/ 下已不存在：\n${stale.join("\n")}`).toEqual([]);
       /* 反向：现算出的每一个都要真在 found 里（防止表里写了个不存在的脚本名）。 */
@@ -458,7 +459,9 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
           /* 表里的 `baseline` 带目录前缀（用于 `discoveredBaselines` 对齐），
            * 而沙箱里脚本落点是 `scripts/`（`dir` 默认档），读回时要去掉前缀。 */
           const baselineRel = row!.baseline.split("/").pop() ?? row!.baseline;
-          const written: unknown = JSON.parse(handle.repo.read(join("scripts", baselineRel)));
+          const written: unknown = JSON.parse(
+            handle.repo.read(join("scripts", "gates", baselineRel)),
+          );
           /* 台账形状用运行时守卫收窄（B5 清账，不走 as 断言）。 */
           if (!isRecord(written) || !isRecord(written.rules)) {
             throw new Error("棘轮台账形状不对（缺 rules）");
@@ -500,7 +503,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
        *    它会把那份基线写回去）。出口没了 = 它其实是翻闸，该搬去 HARD_GATE_FLIPS。 */
       for (const name of Object.keys(RETIRED_RATCHETS)) {
         expect(
-          existsSync(join(dir, name)),
+          existsSync(join(dir, name)) || existsSync(join(dir, "gates", name)),
           `${name} 的基线文件已经不在了 —— 那它不是「车道空置、出口还在」，` +
             `而是已经翻硬闸：这一条该从 RETIRED_RATCHETS 搬去 HARD_GATE_FLIPS`,
         ).toBe(true);

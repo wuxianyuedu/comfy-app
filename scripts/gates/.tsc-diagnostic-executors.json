@@ -1,0 +1,198 @@
+{
+  "why": "类型层「声明 ⇄ 执行者」的索引（规范 §13.5.14 / ISSUE #1591）。立案现场：19 条 tsc 错落进 master，共同根因只有一个是「声明（JSDoc / 类型注解）落后于实现」—— 代码长出新形状，写形状的那句话没跟着长。判据是现成的（tsc --noEmit），缺的是「什么时候被敲」。本索引登记的就是「哪些声明仍然由 tsc 判、交给谁执行」，并由 scripts/gates/check-tsc-diagnostic-executors.cjs 在 pre-commit D 组双核：每条的落点仍存在且仍有声明行、reader 是真会被执行到的读者、**声明总数零增量**（新写一处就红，直到你回答「它谁在执行」）。id 必须与 scripts/gates/.declaration-readers.json 逐行同源（两处各记一份必然分叉）。",
+  "baselineWhy": "baseline[路径] 是「当前实测的声明行数」，由本判据自己数出来（判据 --report 会打印当前读数）。它只许降不许升：涨了就是新写了一处没人回答过「谁在敲」的声明。收紧走 `node scripts/gates/check-tsc-diagnostic-executors.cjs --update`。",
+  "entries": [
+    {
+      "id": "expect-type-of",
+      "name": "类型层断言（expectTypeOf / assertType）的唯一执行者是 tsc",
+      "paths": [
+        "scripts/gates/check-type-assertion-executor.cjs"
+      ],
+      "markers": [
+        "expectTypeOf",
+        "tsconfig"
+      ],
+      "reader": "scripts/gates/check-type-assertion-executor.cjs",
+      "executor": {
+        "kind": "fixed-test",
+        "test": "scripts/gates/check-type-assertion-executor.cjs（D 组「类型层断言的执行者（expectTypeOf）」）"
+      },
+      "baseline": {
+        "scripts/gates/check-type-assertion-executor.cjs": 41
+      },
+      "section": "11.20"
+    },
+    {
+      "id": "visual-baseline-freshness",
+      "name": "新鲜度账的声明形状（FRESHNESS_TRACKS 的七栏 + 两种「不跑」的理由）",
+      "paths": [
+        "scripts/freshness/freshness-ledger.mjs"
+      ],
+      "markers": [
+        "FRESHNESS_TRACKS",
+        "freshnessRecord",
+        "trackedBy"
+      ],
+      "reader": "scripts/freshness/freshness-gate.mjs",
+      "executor": {
+        "kind": "fixed-test",
+        "test": "tests/daily-tracks.test.ts（C 组固定清单）"
+      },
+      "baseline": {
+        "scripts/freshness/freshness-ledger.mjs": 88
+      },
+      "section": "11.8"
+    },
+    {
+      "id": "on-demand-duties",
+      "name": "按需档 ⇄ 执行者索引的字段形状（机器事实从既有出处现算）",
+      "paths": [
+        "scripts/gates/check-on-demand-duties.cjs"
+      ],
+      "markers": [
+        "FRESHNESS_TRACKS",
+        "gate-executor-ledger"
+      ],
+      "reader": "scripts/gates/check-on-demand-duties.cjs",
+      "executor": {
+        "kind": "fixed-test",
+        "test": "tests/on-demand-duties-gate.test.ts（C 组固定清单）"
+      },
+      "baseline": {
+        "scripts/gates/check-on-demand-duties.cjs": 31
+      },
+      "section": "13.5.4"
+    },
+    {
+      "id": "a11y-rule-switch",
+      "name": "jsx-a11y 台账的形状（官方 recommended ⇄ 本仓方言 ⇄ 就地豁免）",
+      "paths": [
+        "scripts/gates/check-a11y-rules.cjs"
+      ],
+      "markers": [
+        "recommended",
+        "dialect"
+      ],
+      "reader": "scripts/gates/check-a11y-rules.cjs",
+      "executor": {
+        "kind": "fixed-test",
+        "test": "tests/a11y-rules-gate.test.ts（C 组固定清单，共进程判十来份台账）＋ tests/check-a11y-rules.test.ts（加载 / 入口 / 失败路径）＋ tests/helpers/a11y-effective-config.coverage.test.ts（导出面 ⇄ 账本）"
+      },
+      "baseline": {
+        "scripts/gates/check-a11y-rules.cjs": 130
+      },
+      "section": "6.12",
+      "verifiedSurfaces": [
+        "judge",
+        "normalize",
+        "loadOxlintConfig",
+        "effectiveRules",
+        "officialRecommended",
+        "officialRuleMap",
+        "rulesInNeitherConfig",
+        "VERIFIED_SURFACES"
+      ]
+    },
+    {
+      "id": "gate-repo-boilerplate",
+      "name": "门禁自测临时仓库样板（共享件在场）的扫描形状",
+      "paths": [
+        "scripts/gates/check-gate-repo-boilerplate.cjs"
+      ],
+      "markers": [
+        "gate-repo",
+        "workdir"
+      ],
+      "reader": "scripts/gates/check-gate-repo-boilerplate.cjs",
+      "executor": {
+        "kind": "fixed-test",
+        "test": "tests/gate-repo-boilerplate-gate.test.ts（C 组固定清单）"
+      },
+      "baseline": {
+        "scripts/gates/check-gate-repo-boilerplate.cjs": 31
+      },
+      "section": "11.16.1"
+    },
+    {
+      "id": "tsc-diagnostic-shape",
+      "name": "本判据自己（类型层声明 ⇄ 执行者）的台账形状与地板",
+      "paths": [
+        "scripts/gates/check-tsc-diagnostic-executors.cjs"
+      ],
+      "markers": [
+        "MIN_ENTRIES",
+        "declaration-readers",
+        "verifiedSurfaces"
+      ],
+      "reader": "tests/tsc-diagnostic-executors.test.ts",
+      "executor": {
+        "kind": "fixed-test",
+        "test": "tests/tsc-diagnostic-executors.test.ts（C 组固定清单）"
+      },
+      "baseline": {
+        "scripts/gates/check-tsc-diagnostic-executors.cjs": 44
+      },
+      "section": "13.5.14"
+    },
+    {
+      "id": "base-check-recompute",
+      "name": "「被门禁拦下先复算 master 基线」的复算口径（五态归属 + 干净快照）",
+      "paths": [
+        "scripts/gates/base-check.mjs"
+      ],
+      "markers": [
+        "baseline-red",
+        "inconclusive",
+        "load-flake"
+      ],
+      "reader": "tests/base-check.test.ts",
+      "executor": {
+        "kind": "fixed-test",
+        "test": "tests/base-check.test.ts（C 组固定清单）"
+      },
+      "baseline": {
+        "scripts/gates/base-check.mjs": 107
+      },
+      "section": "13.6.2"
+    },
+    {
+      "id": "base-check-recompute-verdict",
+      "name": "「被门禁拦下先复算 master 基线」的**判决层**（runState 的 did-not-run 一档）",
+      "paths": [
+        "scripts/base-check/verdict.mjs"
+      ],
+      "markers": [
+        "did-not-run"
+      ],
+      "reader": "tests/base-check.test.ts",
+      "executor": {
+        "kind": "fixed-test",
+        "test": "tests/base-check.test.ts（C 组固定清单）"
+      },
+      "baseline": {
+        "scripts/base-check/verdict.mjs": 18
+      },
+      "section": "13.6.2"
+    },
+    {
+      "id": "gate-executor-claim",
+      "name": "判据自称在跑 / 按需召唤台账的形状",
+      "paths": [
+        "scripts/gates/check-gate-executors.cjs"
+      ],
+      "markers": [
+        "EXECUTOR_SOURCES",
+        "onDemand"
+      ],
+      "reader": "scripts/gates/check-gate-executors.cjs",
+      "executor": {
+        "kind": "hook-step",
+        "label": "判据执行者台账"
+      },
+      "baseline": {
+        "scripts/gates/check-gate-executors.cjs": 71
+      },
+      "section": "13.5.12"
+    }
+  ]
+}

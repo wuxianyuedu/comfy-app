@@ -99,7 +99,7 @@ type LedgerEntry = {
 };
 type LedgerFile = { entries: Array<LedgerEntry>; ruleVersion: number };
 
-const LEDGER_REL = path.join("scripts", ".dependency-audit-baseline.json");
+const LEDGER_REL = path.join("scripts", "gates", ".dependency-audit-baseline.json");
 
 /** 台账形状的运行时守卫（B5 清账，不走 as 断言）：entries 必须是数组。 */
 function isLedgerFile(value: unknown): value is LedgerFile {
@@ -365,8 +365,8 @@ describe("拿不到 registry 的三种形态（这条判据不许静默变绿）
 });
 
 describe("接线（两处同步 + 刻意不进 pre-commit）", () => {
-  const gate = readFileSync(path.resolve(__dirname, "../scripts/quality-gate.mjs"), "utf8");
-  const ps1 = readFileSync(path.resolve(__dirname, "../scripts/quality-gate.ps1"), "utf8");
+  const gate = readFileSync(path.resolve(__dirname, "../scripts/gates/quality-gate.mjs"), "utf8");
+  const ps1 = readFileSync(path.resolve(__dirname, "../scripts/gates/quality-gate.ps1"), "utf8");
   const hook = readFileSync(path.resolve(__dirname, "../.githooks/pre-commit"), "utf8");
 
   it("Node 侧 GATES 与 PowerShell 侧 $Blocks 都登记了同名的这一条", () => {

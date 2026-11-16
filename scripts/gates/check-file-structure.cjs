@@ -116,9 +116,9 @@ const {
   CONVENTION_EXEMPT,
   SCAN_EXCLUDED,
   GIT_TRANSIENT_ROOT_FILES,
-} = require("../file-structure-rules.cjs");
+} = require("./file-structure-rules.cjs");
 const { gateFail, gatePass } = require("../ci/ci-log.mjs");
-const { renderProximityLines } = require("../file-size-proximity.cjs");
+const { renderProximityLines } = require("./file-size-proximity.cjs");
 
 /* 无 `--update` / `--strict`:R5 已是硬闸(ISSUE #1811 收掉那两条通道),
  * 而它们是这份脚本里唯一读 ARGS 的地方 —— 旗标整个删掉,不留「传了也没用」的
