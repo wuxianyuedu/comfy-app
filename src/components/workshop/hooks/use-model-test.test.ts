@@ -29,6 +29,8 @@ const apiPreviewRequestMock =
     (body: Record<string, unknown>, kind: "image" | "video") => Promise<Array<ApiCallDebugRow>>
   >();
 const apiGenerateImageMock = vi.fn<(req: unknown) => Promise<string>>();
+/** tRPC mutation 的统一替身：对话测试（#4080）与外链打开都走它，按需给返回值。 */
+const mutateAsyncSpy = vi.fn<(input: unknown) => Promise<unknown>>();
 
 vi.mock("~/trpc/react", () => ({
   useTRPC: () => ({
@@ -40,6 +42,7 @@ vi.mock("~/trpc/react", () => ({
           queryKey: ["llm", "workshopAdaptersGet", input.name],
         }),
       },
+      chatTest: { mutationOptions: () => ({ mutationKey: ["llm", "chatTest"] }) },
     },
     setting: {
       openExternal: { mutationOptions: () => ({ mutationKey: ["setting", "openExternal"] }) },
@@ -92,7 +95,7 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
       }
       return { data: undefined, isLoading: false };
     },
-    useMutation: () => ({ mutateAsync: vi.fn() }),
+    useMutation: () => ({ mutateAsync: mutateAsyncSpy }),
   };
 });
 
@@ -132,6 +135,7 @@ beforeEach(() => {
   upstreamPreview = [];
   apiPreviewRequestMock.mockReset();
   apiGenerateImageMock.mockReset();
+  mutateAsyncSpy.mockReset();
 });
 
 afterEach(() => {
@@ -217,5 +221,64 @@ describe("useModelTest：生成前的请求预览（ISSUE #3995）", () => {
     expect(localRow?.phase).toBe("relay");
     expect(localRow?.endpoint).toBe("/api/workshop-api/generate");
     expect(localRow?.body).toMatchObject({ kind: "image", prompt: "测试提示词" });
+  });
+});
+
+describe("useModelTest：本地模型与对话测试（ISSUE #4080）", () => {
+  it("本地 Ollama 候选（extraModels 字符串条目）按 local 解析，只在对话用途出现", () => {
+    configData = {
+      config: {
+        extraModels: ["qwen3-8b", { baseUrl: "https://a/v1", kind: "image", name: "agnes-image" }],
+      },
+    };
+    const { result } = renderModelTest();
+    /* 图片用途：本地候选不出现（Ollama 不做生图），远端按 kind 命中。 */
+    expect(result.current.candidates.map((c) => c.name)).toEqual(["agnes-image"]);
+
+    act(() => {
+      result.current.setKind("chat");
+    });
+    /* 对话用途：本地候选进来（无模式维度、不做收窄），带 local 标记。 */
+    expect(result.current.candidates).toEqual([
+      { name: "qwen3-8b", kind: "chat", baseUrl: null, local: true },
+    ]);
+  });
+
+  it("对话测试：点发送走 llm.chatTest，产物是回复文本，请求详情带端点与耗时", async () => {
+    configData = { config: { extraModels: ["qwen3-8b"] } };
+    mutateAsyncSpy.mockResolvedValue({
+      reply: "pong",
+      durationMs: 1234,
+      endpoint: "http://127.0.0.1:11434/v1/chat/completions",
+      model: "qwen3-8b",
+    });
+    const { result } = renderModelTest();
+
+    act(() => {
+      result.current.setKind("chat");
+    });
+    act(() => {
+      result.current.selectModel("qwen3-8b");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "ping");
+    });
+    await act(async () => {
+      await result.current.generate();
+    });
+
+    expect(mutateAsyncSpy).toHaveBeenCalledWith({
+      name: "qwen3-8b",
+      local: true,
+      prompt: "ping",
+    });
+    expect(result.current.result).toEqual({ kind: "chat", text: "pong" });
+    expect(result.current.generating).toBe(false);
+    expect(result.current.debugRows).toHaveLength(1);
+    const chatRow = result.current.debugRows[0];
+    expect(chatRow?.endpoint).toBe("http://127.0.0.1:11434/v1/chat/completions");
+    expect(chatRow?.durationMs).toBe(1234);
+    expect(chatRow?.excerpt).toBe("pong");
+    expect(chatRow?.body).toMatchObject({ kind: "chat", model: "qwen3-8b", prompt: "ping" });
   });
 });
