@@ -10,6 +10,7 @@ import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { isPlainRecord } from "~/lib/is-record";
 import { productionRepository } from "~/lib/core/repository-production";
 import {
+  APPROVAL_MODES,
   normalizeProductionRun,
   planNextRunAction,
   scriptDigestOf,
@@ -33,7 +34,7 @@ import {
   reviseScript,
 } from "~/server/agent/review";
 
-const approvalModeEnum = z.enum(["auto", "stage", "shot"]);
+const approvalModeEnum = z.enum(APPROVAL_MODES);
 const reviewModeEnum = z.enum(["gacha", "reprompt"]);
 
 /** fire-and-forget 拉起执行引擎推进 run（动态 import 解耦；引擎自带异常兜底，不外抛）。 */
