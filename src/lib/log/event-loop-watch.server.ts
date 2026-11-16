@@ -52,16 +52,43 @@ export type EventLoopBlock = {
   startedAt: number;
 };
 
-let timer: ReturnType<typeof setInterval> | null = null;
-let lastBeatAt: number | null = null;
-const blocks: EventLoopBlock[] = [];
+/** 观测的全部可变状态收成一份，便于整体挂到跨模块实例的存载体上。 */
+type EventLoopWatchState = {
+  blocks: EventLoopBlock[];
+  lastBeatAt: number | null;
+  timer: ReturnType<typeof setInterval> | null;
+};
+
+/* 状态为什么挂 `globalThis` 而不是模块级变量（ISSUE #4140 的现场读数）：dev 下
+ * Turbopack 热重载会把 `event-loop-watch.server.ts` 这个模块**重新实例化**，而
+ * `instrumentation.register()` 每个进程只跑一次 —— 模块级 `timer` / `blocks` 随旧
+ * 实例一起变成孤儿，新实例里 `timer === null`、`blocks === []`。结果是一次普通的
+ * 运行期源码写入（如侧栏偏好落盘改了 `src/lib/shell/sidebar-tab-defaults.json`）
+ * 之后，`GET /api/dev/loop-blocks` 永远回 `running:false, blocks:[]`，「应用服务已
+ * 恢复」那条消息读不到阻塞事实，只能又写「多半是短暂无响应」—— 观测在 dev 里
+ * 静默失效。挂到 `globalThis` 后新旧模块实例共享同一份状态：旧实例的定时器继续
+ * 往同一份 `blocks` 里记，新实例的端点也读得到。 */
+/** 取（或建）这份跨模块实例存活的观测状态。 */
+function watchState(): EventLoopWatchState {
+  const store = globalThis as typeof globalThis & {
+    __comfyAppEventLoopWatch?: EventLoopWatchState;
+  };
+  const existing = store.__comfyAppEventLoopWatch;
+  if (existing !== undefined) {
+    return existing;
+  }
+  const fresh: EventLoopWatchState = { timer: null, lastBeatAt: null, blocks: [] };
+  store.__comfyAppEventLoopWatch = fresh;
+  return fresh;
+}
 
 /** 单拍心跳：算漂移、超阈值则记一条。导出仅为测试可直调（不依赖定时器）。 */
 export function eventLoopBeat(now: number): EventLoopBlock | null {
-  const previous = lastBeatAt;
+  const state = watchState();
+  const previous = state.lastBeatAt;
   /* 基准先推进再判：记了阻塞的这一拍也是「已经过去的一拍」，不推进的话下一拍的
    * 漂移会从更早的基准起算、把同一次阻塞记成两条。 */
-  lastBeatAt = now;
+  state.lastBeatAt = now;
   if (previous !== null) {
     const drift = now - previous - EVENT_LOOP_WATCH_INTERVAL_MS;
     if (drift >= EVENT_LOOP_BLOCK_REPORT_MS) {
@@ -70,9 +97,9 @@ export function eventLoopBeat(now: number): EventLoopBlock | null {
         startedAt: previous + EVENT_LOOP_WATCH_INTERVAL_MS,
         endedAt: now,
       };
-      blocks.push(block);
-      if (blocks.length > EVENT_LOOP_BLOCKS_MAX) {
-        blocks.shift();
+      state.blocks.push(block);
+      if (state.blocks.length > EVENT_LOOP_BLOCKS_MAX) {
+        state.blocks.shift();
       }
       logger.warn(
         {
@@ -90,15 +117,16 @@ export function eventLoopBeat(now: number): EventLoopBlock | null {
 
 /** 启动心跳（幂等：instrumentation 可能与 route 各触发一次，也防热重载重复挂）。 */
 export function startEventLoopWatch(): void {
-  if (timer !== null) {
+  const state = watchState();
+  if (state.timer !== null) {
     return;
   }
-  lastBeatAt = Date.now();
-  timer = setInterval(() => {
+  state.lastBeatAt = Date.now();
+  state.timer = setInterval(() => {
     eventLoopBeat(Date.now());
   }, EVENT_LOOP_WATCH_INTERVAL_MS);
   /* 不持有事件循环：观测器自己不该阻止进程退出（回收路径不因它多等一拍）。 */
-  timer.unref?.();
+  state.timer.unref?.();
   logger.info(
     `[event-loop] 阻塞观测已启动（间隔 ${EVENT_LOOP_WATCH_INTERVAL_MS}ms，阈值 ${EVENT_LOOP_BLOCK_REPORT_MS}ms）`,
   );
@@ -106,20 +134,21 @@ export function startEventLoopWatch(): void {
 
 /** 最近几次阻塞记录（时间序副本；端点与测试用）。 */
 export function latestEventLoopBlocks(): EventLoopBlock[] {
-  return [...blocks];
+  return [...watchState().blocks];
 }
 
 /** 观测是否在跑（route 的「没启动」档：dev 懒编译窗口里 instrumentation 还没跑）。 */
 export function eventLoopWatchRunning(): boolean {
-  return timer !== null;
+  return watchState().timer !== null;
 }
 
 /** 测试隔离：清掉定时器与全部状态。生产代码不得调用。 */
 export function resetEventLoopWatchForTests(): void {
-  if (timer !== null) {
-    clearInterval(timer);
-    timer = null;
+  const state = watchState();
+  if (state.timer !== null) {
+    clearInterval(state.timer);
+    state.timer = null;
   }
-  lastBeatAt = null;
-  blocks.length = 0;
+  state.lastBeatAt = null;
+  state.blocks.length = 0;
 }
