@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { isPlainRecord } from "~/lib/is-record";
@@ -105,12 +106,27 @@ describe("IO 预览页签与编辑器同形（ISSUE #3800）", () => {
     expect(screen.getByRole("button", { name: "选择模式" })).toBeInTheDocument();
   });
 
-  it("多模式时每个模式页签带移除按钮，点它经 onModesChange 落库剩余模式", () => {
+  it("多模式时每个模式页签带移除按钮：先出确认框，确认后才经 onModesChange 落库（ISSUE #4073）", async () => {
+    const user = userEvent.setup();
     const { onModesChange } = setup();
-    /* 移除按钮带可读名称（与编辑器 IO 面板同款）。两个模式各有一枚。 */
-    const removeBtns = screen.getAllByRole("button", { name: /从工作流模式中移除/ });
+    /* 移除按钮带可读名称。两个模式各有一枚。 */
+    const removeBtns = screen.getAllByRole("button", { name: /移除模式/ });
     expect(removeBtns).toHaveLength(2);
-    fireEvent.click(removeBtns[0]!);
+    /* Tooltip 接管的按钮要用 userEvent（完整指针序列）才触发得到。 */
+    await user.click(removeBtns[0]!);
+    /* 先弹确认框（Portal 挂载是异步落定的，用 waitFor 等它）；点「取消」不落库、
+     * 弹窗随手关闭。 */
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "取消" }));
+    expect(onModesChange).not.toHaveBeenCalled();
+    /* 再点一次移除 → 点「确认」才落库剩余模式。 */
+    await user.click(screen.getAllByRole("button", { name: /移除模式/ })[0]!);
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "确认" }));
     expect(onModesChange).toHaveBeenCalledTimes(1);
     expect(onModesChange).toHaveBeenCalledWith(["i2v"], "i2v");
   });
