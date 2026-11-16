@@ -129,11 +129,12 @@ export function WorkflowLibraryList({
         {empty && loading ? (
           /* 首次载入的加载态收在**骨架行**（ISSUE #4073 第 1 条）：不再用
            * 带转圈的整块加载界面占住列表列——「加载中」的转圈交给右侧详情区
-           * （见 WorkflowLibrary 的右栏），列表保持自身形态。 */
+           * （见 WorkflowLibrary 的右栏）。骨架不做动画（P3：视图里不许
+           * 手写 animate-pulse / animate-spin）。 */
           <ul aria-label="正在加载工作流" className="flex flex-col gap-1">
             {[1, 2, 3, 4, 5, 6, 7].map((row) => (
               <li
-                className="border-border-subtle bg-subtle animate-pulse rounded-lg border px-2 py-2"
+                className="border-border-subtle bg-subtle rounded-lg border px-2 py-2"
                 key={`skeleton-${row}`}
               >
                 <div className="bg-border-strong h-3 w-2/3 rounded" />
