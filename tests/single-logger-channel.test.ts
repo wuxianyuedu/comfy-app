@@ -33,9 +33,6 @@ const CLIENT_ONLY = [
   // 尺寸预设表 store：浏览器侧存取（localStorage + /api/size-presets），保存
   // 失败的诊断走 console（LogProvider 拦进应用日志面板）—— 与 sync-notice 同款。
   "src/lib/media/size-preset-store.ts",
-  // 智能体多轮引导（#4094）：浏览器侧调 /api/llm，LLM 失败降级为离线回复前
-  // 用 console.warn 记告警（LogProvider 拦进日志面板）—— 与 sync-notice 同款。
-  "src/lib/agent/agentic.ts",
 ];
 
 function walk(dir: string, out: Array<string> = []): Array<string> {
