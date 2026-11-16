@@ -103,7 +103,7 @@ function MenuButton({
 }) {
   return (
     <Button
-      className="h-auto! w-full! justify-start! rounded-[6px]! border-0! px-2.5! py-1.5! text-[13px]! font-normal! text-[#3c4043]! hover:bg-[#e8eaed]! hover:text-[#3c4043]! dark:hover:bg-[#e8eaed]!"
+      className="h-auto! w-full! justify-start! rounded-md! border-0! px-2.5! py-1.5! text-sm! font-normal! text-[#3c4043]! hover:bg-[#e8eaed]! hover:text-[#3c4043]! dark:hover:bg-[#e8eaed]!"
       onClick={onClick}
       role="menuitem"
       variant="ghost"
