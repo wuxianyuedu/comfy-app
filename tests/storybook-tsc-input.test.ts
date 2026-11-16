@@ -14,7 +14,7 @@ import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 import { readAppOrigin } from "../.storybook/app-origin-reader";
 import { APP_ORIGIN_DEFAULTS } from "../.storybook/app-origin-defaults";
-import { writeStorybookAppOrigin } from "../scripts/storybook-assets.mjs";
+import { writeStorybookAppOrigin } from "../scripts/devtools/storybook-assets.mjs";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = process.cwd();
@@ -507,7 +507,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     expect(String(pkg.scripts?.postinstall)).toBe("node scripts/install-git-hooks.mjs");
     const entry = stripComments(read(ENTRY_REL));
     // 动态 import 的那条说明符（prettier 会按行宽折行，所以按形状判而不是整行字面量）
-    expect(entry).toMatch(/await import\(\s*["']\.\/storybook-assets\.mjs["']\s*\)/);
+    expect(entry).toMatch(/await import\(\s*["'].\/devtools\/storybook-assets\.mjs["']\s*\)/);
     expect(entry).toMatch(/\bwriteStorybookAppOrigin\s*\(/);
     // 同一族的第二格：media 值源要指向磁盘上的真图，那份目录也是现生成且不入库的。
     expect(entry).toMatch(/\bensureStorybookAssets\s*\(/);

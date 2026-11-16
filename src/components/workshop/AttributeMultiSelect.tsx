@@ -181,7 +181,7 @@ export function AttributeMultiSelect({
                           /* 行可聚焦 + Enter/Space 切换：此前只有 `onClick`、连
                            * `tabIndex` 都没有，键盘用户完全进不来。键判据走 §16.2.4.57
                            * 的唯一出口（`simpleKeyHandler` 是属性展开，a11y 规则按字面量
-                           * 找不到 `onKeyDown`，豁免登记在 `scripts/.a11y-rule-ledger.json`）。 */
+                           * 找不到 `onKeyDown`，豁免登记在 `scripts/gates/.a11y-rule-ledger.json`）。 */
                           tabIndex={0}
                           /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`：行里
                            * 还有「点 label 选、点默认星切默认」两个动作，合成 button 会吞掉

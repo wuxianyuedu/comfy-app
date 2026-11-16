@@ -1,6 +1,6 @@
 ## Fixed
 
-- **脚本档清账批 10：`scripts/merge-changelog-fragments.mjs` 19 格清零，账从 131 处 / 13 份降到
+- **脚本档清账批 10：`scripts/docs/merge-changelog-fragments.mjs` 19 格清零，账从 131 处 / 13 份降到
   112 处 / 12 份（ISSUE #2589 / 规范 §13.5.14.1）**：这一份是硬规则 14「碎片写
   `changelog.d/`、不直接改 `CHANGELOG.md`」的执行体。19 格里最值得留档的是三条**口径**，
   都不是「补个注解」那么轻：
@@ -30,7 +30,7 @@
   行为恒等的凭据（三条都跑了）：
   ① 两份用例串行复跑 = **16 条全绿**：`tests/merge-changelog-anchor.test.ts`（锚决定落点）
   与 `tests/check-changelog-fragments.test.ts`（碎片形态判据）；
-  ② 真机 `node scripts/merge-changelog-fragments.mjs --check` 走完整条改动面
+  ② 真机 `node scripts/docs/merge-changelog-fragments.mjs --check` 走完整条改动面
   （读碎片 → `bySection` 聚合 → 定 `target` → 重建段落）→
   `将并入「## [Unreleased]」、锚 → 73ca83b4(变了);未改动任何文件。` 且 `EXIT=0`；
   `--check --json` 那一路的 `summary` 也照旧出（`target` / `anchor` / `refreshed` / 碎片名单）；

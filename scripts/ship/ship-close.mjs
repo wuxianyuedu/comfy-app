@@ -37,7 +37,7 @@ import { cnbJson, short } from "./ship-exec.mjs";
 import { finishIssueWork } from "./ship-release.mjs";
 import { reportStage } from "./ship-stage.mjs";
 import { issueItemShapes } from "./ship-ticket.mjs";
-import { cnbData } from "../cnb-fields.mjs";
+import { cnbData } from "../platform/cnb-fields.mjs";
 
 /**
  * 一行文字里点名的 issue 号：裸 `#2070`、半角 `(#2070)`、全角 `（#2070）` 都算

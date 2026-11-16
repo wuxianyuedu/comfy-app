@@ -8,7 +8,7 @@
   与平台那一格的 `ifModify` **同一份 glob**（`checkIncrementalGates()` 已在核
   「表 ⇄ `.cnb.yml`」的双向一致）⇒ 两处收窄口径逐字相同，不手抄第二份。
   新增两个出口：`narrowingEntryForScript()`（按**判据脚本**查，不按标签名查）、
-  `faceTouched()`（面有没有被碰到，glob→正则**复用** `scripts/vitest-projects.cjs`
+  `faceTouched()`（面有没有被碰到，glob→正则**复用** `scripts/affected-tests/vitest-projects.cjs`
   的 `globToRe`，不另写一份 `**` 语义）。
 - **收窄的两条边界**：
   - **改动面取不到 ⇒ 一条都不跳**（「不知道」≠「没改」；空清单同样不算「没改」）；

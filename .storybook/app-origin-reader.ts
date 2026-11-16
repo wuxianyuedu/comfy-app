@@ -3,7 +3,7 @@
  *
  * ## 为什么要绕这一下（ISSUE #1409）
  *
- * 那个值由 `scripts/storybook-assets.mjs` 在 `pnpm storybook` 启动时调权威实现
+ * 那个值由 `scripts/devtools/storybook-assets.mjs` 在 `pnpm storybook` 启动时调权威实现
  * `scripts/app-port.mjs` 现算，落 `.storybook/generated/app-origin.json` ——
  * **不入库**（端口按检出路径推导，3200~3999，不同 checkout 不同，写死必然错）。
  *

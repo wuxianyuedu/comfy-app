@@ -2,7 +2,7 @@
 
 - **`pnpm check:daily-attendance` —— 「每日那一跑到底有没有执行」现在是一条可失败的判据**
   （ISSUE #2114 出路 1；口径与边界见规范 §13.5.23 末节，登记在 `quality-gate.mjs` 的
-  `GATES.dailyAttendance`（`run: false`）+ `scripts/.on-demand-duties.json`，
+  `GATES.dailyAttendance`（`run: false`）+ `scripts/gates/.on-demand-duties.json`，
   **不在** `.gate-executor-ledger.json` 的 `onDemand` 里 —— 那个位置留给「一个执行者都没有」
   的那一档，而 `check-gate-executors.cjs` 会当场指出这种不符）。
   它补的缝很具体：三档重档 + `ESLint 零警告` 的**唯一执行者**是平台上的每日那一跑（§13.5.21），

@@ -1,6 +1,6 @@
 /**
  * 「类型层声明 ⇄ 执行者」判据的门禁自测（规范 §13.5.14 / ISSUE #1591）。判据 `scripts/gates/check-tsc-diagnostic-executors.cjs`
- * 的三向口径：① 执行者在场（读者存在 + 与姊妹索引 `scripts/.declaration-readers.json` 逐行同源）；② 未登记声明零增量；③ 登记项脱钩即红。
+ * 的三向口径：① 执行者在场（读者存在 + 与姊妹索引 `scripts/gates/.declaration-readers.json` 逐行同源）；② 未登记声明零增量；③ 登记项脱钩即红。
  * 走共享夹具 `tests/helpers/gate-repo.ts`（§11.16.1）。⚠️ 输入面只有两份台账 + 被扫目录，import 图追不到，所以每档都只能在这里钉住，也必须进 C 组固定清单（`affected-tests.mjs`）。
  */
 import { defineGateRepo } from "./helpers/gate-repo";
@@ -12,8 +12,8 @@ import path from "node:path";
 import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 const REAL_ROOT = process.cwd();
-const LEDGER = path.join(REAL_ROOT, "scripts", ".tsc-diagnostic-executors.json");
-const READERS = path.join(REAL_ROOT, "scripts", ".declaration-readers.json");
+const LEDGER = path.join(REAL_ROOT, "scripts", "gates", ".tsc-diagnostic-executors.json");
+const READERS = path.join(REAL_ROOT, "scripts", "gates", ".declaration-readers.json");
 
 type Entry = {
   baseline: Record<string, number>;
@@ -82,7 +82,7 @@ function isBaselineLedger(value: unknown): value is {
 function readWrittenLedger(repo: GateRepo): {
   entries: Array<{ baseline: Record<string, number> }>;
 } {
-  const parsed: unknown = JSON.parse(repo.read("scripts/.tsc-diagnostic-executors.json"));
+  const parsed: unknown = JSON.parse(repo.read("scripts/gates/.tsc-diagnostic-executors.json"));
   if (!isBaselineLedger(parsed)) {
     throw new Error("落盘的 .tsc-diagnostic-executors.json 形状变了 —— 重读脚本再改这份守卫");
   }
@@ -121,12 +121,12 @@ const { test, expect } = defineGateRepo({
     /* 两份台账都要搬进来 —— 判据会与姊妹索引逐行同源核对，缺了那一份会走
      * 「读不到对侧 ⇒ 判失败」那一档，于是每条用例红的都是同一件事。 */
     {
-      from: "scripts/.tsc-diagnostic-executors.json",
-      to: "scripts/.tsc-diagnostic-executors.json",
+      from: "scripts/gates/.tsc-diagnostic-executors.json",
+      to: "scripts/gates/.tsc-diagnostic-executors.json",
     },
     {
-      from: "scripts/.declaration-readers.json",
-      to: "scripts/.declaration-readers.json",
+      from: "scripts/gates/.declaration-readers.json",
+      to: "scripts/gates/.declaration-readers.json",
     },
   ],
 });
@@ -140,8 +140,8 @@ const MARKER = "__MARKER__";
 const DECL = `export const ${MARKER} = 1;\nexport function f() {}\nexport const x = 1;\n`;
 
 function writeBoth(repo: GateRepo, ledger: Ledger, readers = REAL_READERS) {
-  repo.write("scripts/.tsc-diagnostic-executors.json", JSON.stringify(ledger, null, 2));
-  repo.write("scripts/.declaration-readers.json", JSON.stringify(readers, null, 2));
+  repo.write("scripts/gates/.tsc-diagnostic-executors.json", JSON.stringify(ledger, null, 2));
+  repo.write("scripts/gates/.declaration-readers.json", JSON.stringify(readers, null, 2));
 }
 
 /**
@@ -441,28 +441,28 @@ test("id 重复 → 阻断", ({ repo }) => {
 /* ── 判据自己不许静默降级（§11.23.3 同款） ──────────────────── */
 
 test("台账不存在 → 判失败，不按「没有声明要查」放过", ({ repo }) => {
-  repo.remove("scripts/.tsc-diagnostic-executors.json");
+  repo.remove("scripts/gates/.tsc-diagnostic-executors.json");
   const { code, output } = repo.run();
   expect(code).toBe(1);
   expect(output).toContain("不可读");
 });
 
 test("台账不是合法 JSON → 判失败", ({ repo }) => {
-  repo.write("scripts/.tsc-diagnostic-executors.json", "{ 这不是 json");
+  repo.write("scripts/gates/.tsc-diagnostic-executors.json", "{ 这不是 json");
   const { code, output } = repo.run();
   expect(code).toBe(1);
   expect(output).toContain("不可读");
 });
 
 test("entries 不是数组 → 判失败", ({ repo }) => {
-  repo.write("scripts/.tsc-diagnostic-executors.json", JSON.stringify({ entries: {} }));
+  repo.write("scripts/gates/.tsc-diagnostic-executors.json", JSON.stringify({ entries: {} }));
   const { code, output } = repo.run();
   expect(code).toBe(1);
   expect(output).toContain("不是数组");
 });
 
 test("空表 → 判失败（空表是最像全绿的那种失效）", ({ repo }) => {
-  repo.write("scripts/.tsc-diagnostic-executors.json", JSON.stringify({ entries: [] }));
+  repo.write("scripts/gates/.tsc-diagnostic-executors.json", JSON.stringify({ entries: [] }));
   const { code, output } = repo.run();
   expect(code).toBe(1);
   expect(output).toContain("台账是空的");
@@ -470,7 +470,7 @@ test("空表 → 判失败（空表是最像全绿的那种失效）", ({ repo }
 
 test("姊妹索引读不到 → 判失败，而不是跳过同源核对", ({ repo }) => {
   repo.write("scripts/gates/check-type-assertion-executor.cjs", DECL.repeat(19));
-  repo.remove("scripts/.declaration-readers.json");
+  repo.remove("scripts/gates/.declaration-readers.json");
   writeBoth(repo, {
     entries: [
       {
@@ -481,7 +481,7 @@ test("姊妹索引读不到 → 判失败，而不是跳过同源核对", ({ rep
       },
     ],
   });
-  repo.remove("scripts/.declaration-readers.json");
+  repo.remove("scripts/gates/.declaration-readers.json");
   const { code, output } = repo.run();
   expect(code).toBe(1);
   expect(output).toContain("姊妹索引不存在");

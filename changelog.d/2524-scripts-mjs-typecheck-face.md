@@ -30,7 +30,7 @@
   改动跑挂了会被读成「扩面这件事不该做」。清账另开 **#2589**（按文件的读数由
   `pnpm check:scripts-types -- --report` 现算，不抄进文档）。
 
-  扩面立刻读到**两例真故障**，各开一张：**#2588** —— `scripts/quality-gate.mjs` 有四条
+  扩面立刻读到**两例真故障**，各开一张：**#2588** —— `scripts/gates/quality-gate.mjs` 有四条
   `fail(...)` 调用而那个名字在本文件既没定义也没 import（`TS2304`），那四条失败路径运行期抛的是
   `ReferenceError`，不是它想打的那句中文；**#2609** —— 合并 #2585 那批时读出来的：`value()`
   的形参被删、两处调用点没改（`TS2554` ×2，而 JS 里多传实参**没有运行期症状**）。
@@ -44,4 +44,4 @@
   同批：§13.1 清单补一格、`§13.5.14` 那句「扫描面含 `.mjs`」订正为「只对**被 import 到的** `.mjs`
   成立」、`tsconfig.scripts.json` 进 `affected-tests.mjs` 的放弃收窄触发面、自测
   `tests/scripts-typecheck-ratchet.test.ts`（9 条，全在临时夹具里跑真 tsc，一次也不写回仓库基线）
-  进固定结构守护清单。`scripts/.gate-thresholds.json` 里给 `RULE_VERSION` 入账一条 `report`。
+  进固定结构守护清单。`scripts/gates/.gate-thresholds.json` 里给 `RULE_VERSION` 入账一条 `report`。

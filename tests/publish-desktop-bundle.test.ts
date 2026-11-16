@@ -27,7 +27,7 @@ import {
   listReleases,
   main,
   planRotation,
-} from "../scripts/publish-desktop-bundle.mjs";
+} from "../scripts/build/publish-desktop-bundle.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const made: Array<string> = [];

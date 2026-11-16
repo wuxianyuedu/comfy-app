@@ -288,7 +288,7 @@ git -c core.autocrlf=false -c filter.lfs.process= -c filter.lfs.clean= -c filter
 - **不该记**：内部重构、类型 / lint 清理、注释与文档修订、测试补充 —— 这些归 `git log`。
 - **时机**：PR 合入前随代码一起改；**禁止发版前集中补写**（必然漏项失真）。
 - **载体（避免冲突）**：条目写进 `changelog.d/<issue号>-<slug>.md` 碎片（一件变更一个文件），
-  发版/整理时由 `node scripts/merge-changelog-fragments.mjs` 并入 `CHANGELOG.md`。
+  发版/整理时由 `node scripts/docs/merge-changelog-fragments.mjs` 并入 `CHANGELOG.md`。
   **不要直接改 `CHANGELOG.md`** —— 它是全仓库唯一人人都改同一处的地方，
   并行分支必然冲突（ISSUE #408）。
 

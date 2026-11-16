@@ -30,7 +30,7 @@
 形状）。规范 §13.5.8.3「第九笔账」补一节。
 
 同批记账：新增两份 `.mjs` 让 `tsconfig.scripts.json` 的判决面从 211 涨到 **213**，而账本
-（`scripts/.scripts-typecheck-baseline.json` 的 `face`）是拿配置原值对账的棘轮 ⇒ 不跟着记，
+（`scripts/gates/.scripts-typecheck-baseline.json` 的 `face`）是拿配置原值对账的棘轮 ⇒ 不跟着记，
 平台 `受影响用例` 那一格会红在「面与账不许两份口径」上（PR #2688 的现场：`配置展开 213 份，
 账上写 211`）。走它自己的写入口 `node scripts/check-scripts-typecheck.cjs --update` 重写，
 `face` 记 213、`total` 保持实测的 206 处 / 17 份 —— 两份新脚本实测 0 处红，不是把新增登记成已知。
@@ -49,5 +49,5 @@
 - `@ts-nocheck` 随代码搬：那批函数原本住在一份带它的脚本里（「提交门槛脚本、无类型消费方」），
   丢掉会让一整套 `TS7006` 当场变成「新增脚本的存量红」（棘轮对新增零容忍）。
 
-同批记账：`scripts/.scripts-typecheck-baseline.json` 的 `face` 按实测走它自己的写入口
+同批记账：`scripts/gates/.scripts-typecheck-baseline.json` 的 `face` 按实测走它自己的写入口
 （新增一份 `.mjs`），存量取实测的 170 处 / 15 份 —— 新文件零红，不是把新增登记成已知。

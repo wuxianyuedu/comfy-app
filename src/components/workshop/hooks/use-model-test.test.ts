@@ -14,6 +14,9 @@ import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import type { TaskWatchHandlers, WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
+
+import { MODEL_TEST_DEFAULT_RESOLUTION, modeTabsForKind } from "../model-test-config";
 
 import { useModelTest } from "./use-model-test";
 
@@ -31,6 +34,23 @@ const apiPreviewRequestMock =
 const apiGenerateImageMock = vi.fn<(req: unknown) => Promise<string>>();
 /** tRPC mutation 的统一替身：对话测试（#4080）与外链打开都走它，按需给返回值。 */
 const mutateAsyncSpy = vi.fn<(input: unknown) => Promise<unknown>>();
+
+/* 工作流候选（#4080 评论 4）的测试态：fetchWorkshopWorkflows 的读数走 useQuery
+ * 替身的 workshop 分支；本地通道的四个执行者各自给替身。 */
+let workflowsData: Array<Record<string, unknown>>;
+const buildLibraryWorkflowInputMock =
+  vi.fn<
+    (
+      workflowId: string,
+      values: unknown,
+      mode?: string | null,
+      contractIds?: ReadonlyArray<string>,
+    ) => Promise<unknown>
+  >();
+const startLocalGenerateMock = vi.fn<(input: unknown) => Promise<string>>();
+const watchTaskMock = vi.fn<(taskId: string, handlers: TaskWatchHandlers) => () => void>();
+const cancelLocalTaskMock = vi.fn<(taskId: string) => Promise<void>>();
+const prepareLocalInputImageMock = vi.fn<(image: string) => Promise<string>>();
 
 vi.mock("~/trpc/react", () => ({
   useTRPC: () => ({
@@ -56,6 +76,21 @@ vi.mock("~/lib/workshop/generation-client", () => ({
   apiPreviewRequest: (body: Record<string, unknown>, kind: "image" | "video") =>
     apiPreviewRequestMock(body, kind),
   apiSubmitVideo: vi.fn(),
+  fetchWorkshopWorkflows: () => Promise.resolve(workflowsData),
+  pollVideoUntilDone: vi.fn(),
+  buildLibraryWorkflowInput: (
+    workflowId: string,
+    values: unknown,
+    mode?: string | null,
+    contractIds?: ReadonlyArray<string>,
+  ) => buildLibraryWorkflowInputMock(workflowId, values, mode, contractIds),
+  startLocalGenerate: (input: unknown) => startLocalGenerateMock(input),
+  watchTask: (taskId: string, handlers: TaskWatchHandlers) => watchTaskMock(taskId, handlers),
+  cancelLocalTask: (taskId: string) => cancelLocalTaskMock(taskId),
+  prepareLocalInputImage: (image: string) => prepareLocalInputImageMock(image),
+  /* workflow-model-test（真实实现）会读这个常量配超时安全阀。 */
+  LOCAL_TASK_TIMEOUT_MS: 30 * 60 * 1000,
+  WORKSHOP_BATCH_CONCURRENCY: 2,
 }));
 
 vi.mock("~/components/ui/use-busy-action", () => ({
@@ -80,6 +115,9 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
       const [ns, ep, name] = options.queryKey;
       if (ns === "llm" && ep === "configGet") {
         return { data: configData, isLoading: false };
+      }
+      if (ns === "workshop" && ep === "workflows") {
+        return { data: workflowsData, isLoading: false };
       }
       if (ns === "llm" && ep === "modeContractsGet") {
         return { data: contractsData, isLoading: false };
@@ -129,6 +167,7 @@ beforeEach(() => {
   };
   contractsData = { contracts: [] };
   adaptersByName = {};
+  workflowsData = [];
   /* 适配器索引给上该模型的 T2I 条目：索引已加载且模型支持默认模式，
    * 候选不会被「按模式收窄」滤空。 */
   adaptersAll = { "agnes-image": [{ mode: "T2I" }] };
@@ -136,6 +175,11 @@ beforeEach(() => {
   apiPreviewRequestMock.mockReset();
   apiGenerateImageMock.mockReset();
   mutateAsyncSpy.mockReset();
+  buildLibraryWorkflowInputMock.mockReset();
+  startLocalGenerateMock.mockReset();
+  watchTaskMock.mockReset();
+  cancelLocalTaskMock.mockReset();
+  prepareLocalInputImageMock.mockReset();
 });
 
 afterEach(() => {
@@ -280,5 +324,169 @@ describe("useModelTest：本地模型与对话测试（ISSUE #4080）", () => {
     expect(chatRow?.durationMs).toBe(1234);
     expect(chatRow?.excerpt).toBe("pong");
     expect(chatRow?.body).toMatchObject({ kind: "chat", model: "qwen3-8b", prompt: "ping" });
+  });
+});
+
+/* 工作流提供的图片/视频模型（ISSUE #4080 评论 4）：工作流库条目作为「本地模型」
+ * 的第二种形态进测试页，走工坊本地 ComfyUI 通道测试。 */
+describe("useModelTest：工作流提供的图片/视频模型（ISSUE #4080 评论 4）", () => {
+  const WF_IMAGE: WorkshopWorkflowOption = {
+    id: "wf-1",
+    name: "工作流·生图A",
+    category: "image",
+    modes: ["T2I"],
+    taskType: "T2I",
+    modelTags: [],
+    encapsulationReady: true,
+  };
+
+  it("工作流候选作为本地候选进入图片/视频用途，对话用途不出现", () => {
+    workflowsData = [
+      WF_IMAGE,
+      {
+        ...WF_IMAGE,
+        id: "wf-2",
+        name: "工作流·视频B",
+        category: "video",
+        modes: ["T2V"],
+        taskType: "T2V",
+      },
+    ];
+    configData = {
+      config: {
+        extraModels: ["qwen3-8b", { baseUrl: "https://a/v1", kind: "image", name: "agnes-image" }],
+      },
+    };
+    const { result } = renderModelTest();
+    /* 图片用途：远端按 kind 命中 + 工作流候选（本地）。 */
+    expect(result.current.candidates.map((c) => c.name)).toEqual(["agnes-image", "工作流·生图A"]);
+    const wf = result.current.candidates[1];
+    expect(wf?.local).toBe(true);
+    expect(wf?.workflow?.id).toBe("wf-1");
+    /* 对话用途：只有 Ollama 候选，工作流不进来（工作流不做对话）。 */
+    act(() => {
+      result.current.setKind("chat");
+    });
+    expect(result.current.candidates.map((c) => c.name)).toEqual(["qwen3-8b"]);
+    /* 视频用途：只有视频类工作流（远端 image 条目被 kind 过滤掉）。 */
+    act(() => {
+      result.current.setKind("video");
+    });
+    expect(result.current.candidates.map((c) => c.name)).toEqual(["工作流·视频B"]);
+  });
+
+  it("工作流候选按 modes 声明做模式收窄，选中后切到不支持的模式会清空选择", () => {
+    workflowsData = [WF_IMAGE];
+    const { result } = renderModelTest();
+    expect(result.current.candidates).toHaveLength(2);
+    act(() => {
+      result.current.setMode("I2I");
+    });
+    /* agnes-image 没配 I2I 适配器、工作流只声明了 T2I —— 都被收窄掉。 */
+    expect(result.current.candidates).toHaveLength(0);
+    act(() => {
+      result.current.selectModel("wf::wf-1");
+    });
+    act(() => {
+      result.current.setMode("I2I");
+    });
+    /* 选中工作流后切到不支持的模式：按 modes 判支持并清掉选择。 */
+    expect(result.current.selectedModel).toBe("");
+  });
+
+  it("modeTabsForKind 的页签徽标计入工作流候选", () => {
+    const tabs = modeTabsForKind("image", {}, [WF_IMAGE]);
+    expect(tabs.find((t) => t.mode === "T2I")?.modelCount).toBe(1);
+    expect(tabs.find((t) => t.mode === "I2I")?.modelCount).toBe(0);
+  });
+
+  it("未封装的工作流点生成被拦下，不发起本地任务", async () => {
+    workflowsData = [{ ...WF_IMAGE, encapsulationReady: false }];
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("wf::wf-1");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "测试提示词");
+    });
+    await act(async () => {
+      await result.current.generate();
+    });
+    expect(result.current.error).toContain("工坊封装");
+    expect(startLocalGenerateMock).not.toHaveBeenCalled();
+  });
+
+  it("点生成走本地 ComfyUI 通道：封装 → 入队 → 观察，产物落位", async () => {
+    workflowsData = [WF_IMAGE];
+    buildLibraryWorkflowInputMock.mockResolvedValue({
+      input: {
+        workflow: "wf-1",
+        prompt: "测试提示词",
+        /* 尺寸等落进端口的输入随提交体逐条可见（#4080 评论 8）。 */
+        workflowInputs: [{ name: "width", nodeId: "5", value: 832 }],
+      },
+      unmatched: [],
+      mode: "T2I",
+      modes: ["T2I"],
+      usesFirstFrame: false,
+      usesLastFrame: false,
+    });
+    startLocalGenerateMock.mockResolvedValue("task-abcd1234");
+    watchTaskMock.mockImplementation((_taskId: string, handlers: TaskWatchHandlers) => {
+      handlers.onLog?.({ t: Date.now(), level: "info", msg: "[watchTask] 已订阅 SSE" });
+      handlers.onOutput?.({ kind: "image", url: "http://local/preview.png" });
+      handlers.onSettled?.({ ok: true });
+      return () => undefined;
+    });
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("wf::wf-1");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "测试提示词");
+    });
+    await act(async () => {
+      await result.current.generate();
+    });
+
+    expect(buildLibraryWorkflowInputMock).toHaveBeenCalledWith(
+      "wf-1",
+      expect.objectContaining({ prompt: "测试提示词" }),
+      "T2I",
+      undefined,
+    );
+    expect(startLocalGenerateMock).toHaveBeenCalledTimes(1);
+    expect(result.current.result).toEqual({ kind: "image", url: "http://local/preview.png" });
+    expect(result.current.generating).toBe(false);
+    /* 请求详情：本地提交行 + 本地任务行（phase local-task）。 */
+    expect(result.current.debugRows).toHaveLength(2);
+    expect(result.current.debugRows[0]?.phase).toBe("relay");
+    expect(result.current.debugRows[0]?.endpoint).toBe("generate.generate（本地 ComfyUI）");
+    /* 提交体带完整的落点清单（口 → 节点 → 值），尺寸等不再只见条数（#4080 评论 8）。 */
+    expect(result.current.debugRows[0]?.body).toMatchObject({
+      workflowInputs: [{ name: "width", nodeId: "5", value: 832 }],
+    });
+    expect(result.current.debugRows[1]?.phase).toBe("local-task");
+    expect(result.current.debugRows[1]?.excerpt).toBe("http://local/preview.png");
+    /* 执行日志随 SSE log 帧进 taskLogs（#4080 评论 8）。 */
+    expect(result.current.taskLogs.length).toBeGreaterThan(0);
+    expect(result.current.taskLogs[0]?.msg).toContain("已订阅 SSE");
+  });
+
+  it("生成前的本地提交预览行带尺寸等非空表单值（#4080 评论 8）", () => {
+    workflowsData = [WF_IMAGE];
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("wf::wf-1");
+    });
+    /* selectModel 已按最常用档预置尺寸（1:1 + 1k）—— 预览行里原样可见。 */
+    expect(result.current.previewRows).toHaveLength(1);
+    expect(result.current.previewRows[0]?.endpoint).toBe("generate.generate（本地 ComfyUI）");
+    expect(result.current.previewRows[0]?.body).toMatchObject({
+      workflow: "工作流·生图A",
+      mode: "T2I",
+      "aspect-ratio": "1:1",
+      resolution: MODEL_TEST_DEFAULT_RESOLUTION,
+    });
   });
 });

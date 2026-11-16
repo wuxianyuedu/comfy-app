@@ -216,7 +216,7 @@ export function stripPrivateInputs(dir, onRemoved) {
  */
 export const RUNTIME_SCRIPTS = [
   // src/app/api/helper/{install,status}/route.ts 直接把这份脚本当下载内容返回
-  "install-comfyapp-helper.ps1",
+  "devtools/install-comfyapp-helper.ps1",
   // 启动编排的唯一实现（跨平台）：项目根判据也靠它
   "dev-launcher.mjs",
   // Windows 侧的调用入口（双击 / 启动器 exe 转交），本身不含编排逻辑
@@ -232,7 +232,7 @@ export const RUNTIME_SCRIPTS = [
   "app-service-exit.mjs",
   // 起 Next 之前的两道预检（`.env` 三项非空、schema 待应用）与执行件：
   // 都在 dev-launcher.mjs 的顶层静态 import 里（见规范 §9.1 / §9.2）。
-  "env-preflight.mjs",
+  "devtools/env-preflight.mjs",
   "db/db-schema-state.mjs",
   "db/db-push-core.mjs",
   // 备份 / 恢复的唯一实现（D6，ISSUE #1611）：`dev-launcher.mjs` 顶层静态
@@ -247,7 +247,7 @@ export const RUNTIME_SCRIPTS = [
   // 加进了编排器闭包，却没同批补这两份清单 ⇒ 主干上的
   // `tests/dist-artifact-hygiene.test.ts`（清单覆盖编排器的相对 import 闭包）长期红着
   // （2026-11-14 由 #3780 那次 PR 的 CI 撞见并就地补上）。
-  "app-data-backup.mjs",
+  "db/app-data-backup.mjs",
   // 统一的进程树回收入口：编排器收尾、Python 启动器的兜底补刀、Rust 壳的
   // `kill_sidecar` 补刀都调它（平台判据只此一份，见 AGENTS 硬规则 3），
   // 连同它 import 的 kill-process-tree 一起缺不了。
@@ -261,7 +261,7 @@ export const RUNTIME_SCRIPTS = [
   // 里的 ALLOWED_SCRIPTS 同源（tests/dist-artifact-hygiene.test.ts 核对）。
   "executor-host.mjs",
   // 宿主的预编译运行时图与它的构建清单（3-E1，ISSUE #1169）：这两件**不是仓库源码**，
-  // 而是构建期由 scripts/build-executor-host.mjs 写进产物的（桌包里没有 tsx，也不该
+  // 而是构建期由 scripts/build/build-executor-host.mjs 写进产物的（桌包里没有 tsx，也不该
   // 依赖 src/lib/** 的 TS 源）。登记进白名单是因为它们落在 scripts/ 下——不登记就会被
   // 下面的剪枝删掉，表现是「产物里设 host 起不来」。
   "executor-host.runtime.mjs",
@@ -334,7 +334,7 @@ export const RUNTIME_SCRIPTS = [
   // `ERR_MODULE_NOT_FOUND`，桌包脱离仓库重新编排一次的表现只是「双击没反应」，
   // 而本地源码树齐全、看不出任何异常。登记漏在 #2072 那一批（改了代码没改清单），
   // 由 `tests/dist-artifact-hygiene.test.ts` 的「清单覆盖编排器的相对 import 闭包」照出来。
-  "git-dir.mjs",
+  "lib/git-dir.mjs",
   // 桌包 standalone 形态的运行入口与它的环境装配（ISSUE #1216）：壳把
   // `node server.js` 换成 `node scripts/standalone-runtime.mjs`，缺这份就是
   // standalone 桌包回到「起不来且没人知道为什么」。
@@ -629,8 +629,8 @@ export {
   FORBIDDEN_SHAPES,
   PRIVATE_SHAPES,
   stripForbiddenShapes,
-} from "./standalone-dev-artifacts.mjs";
-import { stripDevArtifacts as stripDevArtifactsImpl } from "./standalone-dev-artifacts.mjs";
+} from "./build/standalone-dev-artifacts.mjs";
+import { stripDevArtifacts as stripDevArtifactsImpl } from "./build/standalone-dev-artifacts.mjs";
 
 /**
  * 剔除开发期文件与内部门禁脚本（白名单保留 RUNTIME_SCRIPTS）。

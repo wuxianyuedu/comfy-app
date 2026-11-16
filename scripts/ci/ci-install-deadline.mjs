@@ -44,7 +44,7 @@
 import { spawn } from "node:child_process";
 import process from "node:process";
 
-import { startProgress } from "../progress-heartbeat.mjs";
+import { startProgress } from "../gates/progress-heartbeat.mjs";
 
 /** 默认预算：平台硬上限的 1/12（见文件头「预算取多少」）。 */
 export const DEFAULT_INSTALL_BUDGET_MS = 12 * 60 * 1000;

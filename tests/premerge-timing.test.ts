@@ -11,8 +11,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { isRecord, isUnknownArray } from "~/lib/is-record";
 
-import { formatTimingSummary, recordTimingLedger } from "../scripts/premerge-timing.mjs";
-import { resolveGitDir } from "../scripts/git-dir.mjs";
+import { formatTimingSummary, recordTimingLedger } from "../scripts/gates/premerge-timing.mjs";
+import { resolveGitDir } from "../scripts/lib/git-dir.mjs";
 
 let root: string;
 

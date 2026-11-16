@@ -69,7 +69,7 @@ function parseBaseline(text: string): { rules: Record<string, string>; total: nu
 
 /** 读基线文件并收窄成「规则说明表 + 计数」。 */
 function readBaseline(repo: GateRepo): { rules: Record<string, string>; total: number } {
-  return parseBaseline(repo.read("scripts/.ui-primitives-baseline.json"));
+  return parseBaseline(repo.read("scripts/gates/.ui-primitives-baseline.json"));
 }
 
 /** 基线是首次 `--update` 写出的（门禁自身的常规用法）。 */
@@ -328,7 +328,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
    * 都写着「硬闸」而判据其实是棘轮 —— 那 5 处名实不符由本批消掉。 */
   test("升硬闸的 12 条不进基线，且有存量时 --update 直接拒绝、不写盘", ({ repo }) => {
     seedBaseline(repo);
-    const baselinePath = "scripts/.ui-primitives-baseline.json";
+    const baselinePath = "scripts/gates/.ui-primitives-baseline.json";
     const before = repo.read(baselinePath);
     const rules = parseBaseline(before).rules;
     for (const id of [

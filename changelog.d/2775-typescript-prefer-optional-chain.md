@@ -9,7 +9,7 @@ oxlint `typescript/prefer-optional-chain` 全仓清零（#2775）：77 处 / 40 
 
 13 处里 12 处是短路守卫改写（`!reason || !reason.trim()` → `!reason?.trim()`），
 语义等价：原先 `reason` 为假值时 `reason.trim()` 根本不会被求值，`?.` 只是把这一跳
-显式写出来。**唯一一处属语义边界**：`scripts/premerge-proof.mjs` 的
+显式写出来。**唯一一处属语义边界**：`scripts/gates/premerge-proof.mjs` 的
 `upstreamSha: (upstreamRef && run(["rev-parse","--verify","--quiet", upstreamRef])) || null`
 ——「没有上游引用」时它是 `null`、`upstreamRef` 为空串时它也是 `null`，两次「空」是
 同一件事，所以保留 `|| null` 那半句、只把前半句收成 `upstreamRef?.includes("/")` 与

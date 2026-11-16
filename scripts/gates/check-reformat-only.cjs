@@ -100,11 +100,11 @@ async function loadChangedScope() {
     return;
   }
   try {
-    ({ resolveBaseRef, reconcileSyntheticMergeFace } = await import("../changed-scope.mjs"));
+    ({ resolveBaseRef, reconcileSyntheticMergeFace } = await import("../lib/changed-scope.mjs"));
     ({ previewRangeEnds, landedTipOf } = await import("../reformat/reformat-preview-range.mjs"));
   } catch (error) {
     console.error(
-      `[reformat] 无法加载改动面判据模块（scripts/changed-scope.mjs）：${error.message}`,
+      `[reformat] 无法加载改动面判据模块（scripts/lib/changed-scope.mjs）：${error.message}`,
     );
     process.exit(2);
   }
@@ -499,7 +499,7 @@ async function main() {
    * ⚠️ 取法必须走 `git-dir.mjs` 的 `hasInProgressMerge`，**不许**硬拼 `<根>/.git/MERGE_HEAD`：
    *  链接工作树里 `.git` 是个文件而不是目录，拼出来的路径永远读不到 —— 于是这一档豁免
    *  在那种检出里**永不点火**（ISSUE #2785；同一形状在 `check-format.cjs` 里已经收口过一次）。 */
-  const { hasInProgressMerge } = require("../git-dir.mjs");
+  const { hasInProgressMerge } = require("../lib/git-dir.mjs");
   const mergeHeadPresent = hasInProgressMerge(ROOT);
   if (faceArgs.range === null && mergeHeadPresent) {
     gateSkip("格式化提交分离", "合并提交（MERGE_HEAD 存在），「格式化与行为改动分离」不适用");

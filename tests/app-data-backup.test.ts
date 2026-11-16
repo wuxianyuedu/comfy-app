@@ -1,5 +1,5 @@
 /**
- * `scripts/app-data-backup.mjs`（本机应用数据的备份 / 恢复 / 导入，ISSUE #3732）的判据。
+ * `scripts/db/app-data-backup.mjs`（本机应用数据的备份 / 恢复 / 导入，ISSUE #3732）的判据。
  * 全部对着「真动了哪个文件」：备份把 `data/` 顶层文件拷进
  * `data/backups/app-data-backup-<时刻>/`；恢复把它们拷回 `data/` 且先存退路；
  * 导入从指定目录认 `db-backup-*.sqlite` 与 `app-data-backup-` 目录，坏的跳过、
@@ -18,7 +18,7 @@ import {
   listAppDataFiles,
   pruneAppDataBackups,
   restoreAppDataBackup,
-} from "../scripts/app-data-backup.mjs";
+} from "../scripts/db/app-data-backup.mjs";
 import { verifyBackupFile } from "../scripts/db/db-backup-core.mjs";
 
 let root: string;

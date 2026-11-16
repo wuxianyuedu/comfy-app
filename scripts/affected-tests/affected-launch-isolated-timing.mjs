@@ -3,7 +3,7 @@
 /**
  * affected-launch-isolated-timing.mjs — 「逐份单跑取台账读数」那一档（ISSUE #3030）。
  *
- * 干什么：台账（`scripts/.test-file-timing.json`）要的是「**这一份自己要多久**」，而 junit 里
+ * 干什么：台账（`scripts/affected-tests/.test-file-timing.json`）要的是「**这一份自己要多久**」，而 junit 里
  * 只有批跑墙钟（`--maxWorkers=N` 时几份同时在跑，读数随同块里还有谁一起漂）。所以
  * `--update-timing --isolated` 这一档真的逐份跑一遍，把各自的墙钟当读数记进台账。
  *
@@ -92,7 +92,7 @@ export function recordBatchTiming({ readings, cwd, merge }) {
     (readings ?? []).map((r) => ({ ...r, source: "batch" })),
   );
   const head = written
-    ? "[affected-launch] 逐份用时已并进入库台账（scripts/.test-file-timing.json）—— 提交它，下次排块就按这次的实测耗时来\n"
+    ? "[affected-launch] 逐份用时已并进入库台账（scripts/affected-tests/.test-file-timing.json）—— 提交它，下次排块就按这次的实测耗时来\n"
     : "[affected-launch] 台账没落盘（无读数或写失败）—— 排序退化为原序，不阻断\n";
   return (
     head +

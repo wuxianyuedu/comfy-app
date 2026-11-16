@@ -27,7 +27,7 @@ import {
   missingRequired,
   resolveTauriCacheRoot,
   seed,
-} from "../scripts/tauri-tools-cache.mjs";
+} from "../scripts/build/tauri-tools-cache.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const made: Array<string> = [];

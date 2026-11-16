@@ -19,7 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { gitScratchPath, resolveGitDir } from "../git-dir.mjs";
+import { gitScratchPath, resolveGitDir } from "../lib/git-dir.mjs";
 import { pnpmInvocation } from "../launcher-core/shell.mjs";
 
 /**

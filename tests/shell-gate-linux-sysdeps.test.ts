@@ -37,7 +37,7 @@ import {
   runCargoTest,
   runGate,
   tauriLinuxAptPackages,
-} from "../scripts/shell-gate.mjs";
+} from "../scripts/gates/shell-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const PR_GATE = ".github/workflows/pr-gate.yml";
@@ -155,7 +155,7 @@ describe("Tauri 的 Linux 系统库探针（ISSUE #3572）", () => {
 
   it("探针用的是 pkg-config 本身 —— 与编译期同一把尺（探得过就是编得过）", () => {
     // 判据本体：探针必须问 pkg-config（不是去翻某个目录、也不是查 dpkg）。
-    const src = read("scripts/shell-gate.mjs");
+    const src = read("scripts/gates/shell-gate.mjs");
     const fn = src.slice(src.indexOf("function defaultPkgConfigProbe"));
     const body = fn.slice(0, fn.indexOf("\n}\n"));
     expect(body).toContain("pkg-config");

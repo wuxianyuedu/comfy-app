@@ -20,7 +20,7 @@ export const GIT_INHERITED_ENV_KEYS = [
  * 平台那一跑的 `CNB_*` 里**会被判据当成「改动面基线」读**的那几个（ISSUE #2787，机制见文件头第三类）。为什么不
  * 一律剥 `CNB_*`：本仓有用例**故意**读平台变量造形态（`CNB_PULL_REQUEST_IID`、`CNB_PULL_REQUEST` 那族判「这是
  * 不是 PR 事件」），一刀切会抽掉那些输入，且下次新增变量又要回来改清单。这里只点「会指向某个具体 sha / 提交」的
- * 那几个：临时仓库里必然不存在，判据只会 fail-closed 或更糟（拿别人的历史判自己）。⚠️ 新增消费者时两处同批：`scripts/changed-scope.mjs` 的 `resolveBaseRef()` / `reconcileSyntheticMergeFace()` 读了哪个键，这里就得有一条。 */
+ * 那几个：临时仓库里必然不存在，判据只会 fail-closed 或更糟（拿别人的历史判自己）。⚠️ 新增消费者时两处同批：`scripts/lib/changed-scope.mjs` 的 `resolveBaseRef()` / `reconcileSyntheticMergeFace()` 读了哪个键，这里就得有一条。 */
 /* SAFETY: 类型断言已复核 */
 export const PLATFORM_RUN_ENV_KEYS = [
   "CNB_PULL_REQUEST_TARGET_SHA",

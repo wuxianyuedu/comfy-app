@@ -20,7 +20,7 @@ function selfRow(): Record<string, unknown> {
   return {
     id: "declaration-index-itself",
     name: "本索引自己（声明 ⇄ 读者）在位",
-    declaredAt: "scripts/.declaration-readers.json",
+    declaredAt: "scripts/gates/.declaration-readers.json",
     reader: "scripts/reader.cjs",
     executor: { kind: "hook-step", label: "声明 ⇄ 读者索引" },
     section: "11.23",
@@ -71,17 +71,18 @@ function gate(fx: Fixture): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "decl-readers-"));
   /* 沙箱布局镜像真实仓库（#3930）：判据在 scripts/gates/，它的 `../` 台账与 `../../` 钩子锚才指得回。 */
   mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  mkdirSync(path.join(root, "scripts", "affected-tests"), { recursive: true });
   mkdirSync(path.join(root, ".githooks"), { recursive: true });
   mkdirSync(path.join(root, "tests"), { recursive: true });
   copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
 
   if (fx.ledger !== undefined) {
     const body = typeof fx.ledger === "string" ? fx.ledger : JSON.stringify(fx.ledger);
-    writeFileSync(path.join(root, "scripts", ".declaration-readers.json"), body);
+    writeFileSync(path.join(root, "scripts", "gates", ".declaration-readers.json"), body);
   }
   writeFileSync(path.join(root, ".githooks", "pre-commit"), fx.hook ?? DEFAULT_HOOK);
   writeFileSync(
-    path.join(root, "scripts", "fixed-structural-tests.mjs"),
+    path.join(root, "scripts", "affected-tests", "fixed-structural-tests.mjs"),
     fx.fixedList ?? DEFAULT_FIXED_LIST,
   );
   writeFileSync(path.join(root, "package.json"), fx.pkg ?? DEFAULT_PKG);

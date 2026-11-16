@@ -7,7 +7,7 @@
     状态 / 时长、**失败行（带完整日志行号）**与末尾若干行（最多展开 3 格）、完整日志链接。
   - 退出码与 `ci-build-readout.mjs` 同一口径：绿 `0` / 真红 `1` / 被取消、还在跑、取不到 `2`（`2` 不是通过）。
     不给 `sn` 时按 HEAD 的 sha 在 `pull_request` 构建里逐字归属，找不到 ⇒ `2`（不拿最新那条顶上）；
-    **不归因**（「红是我的还是主干的」仍归 `node scripts/base-check.mjs`）。
+    **不归因**（「红是我的还是主干的」仍归 `node scripts/gates/base-check.mjs`）。
   - 两个不报错、只给空读数的形状坑（`pipelinesStatus` 是按 id 索引的对象、格日志 `content` 是带 ANSI
     的行数组）收进 `ci-build-readout.mjs` 的唯一实现，独立 CLI 与 `--diagnose` 共用。
 - **`pnpm ship --new-issue "<标题>" --issue-body-file <正文> --priority <P0..P3>`：一步建单（ISSUE #2217）**：

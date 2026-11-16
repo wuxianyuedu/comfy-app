@@ -13,7 +13,7 @@
   ```
   根因里还有一句写错的话：那两步的注释都写着「`git commit` 不许空提交 ⇒ 本地这一跳的暂存集永远非空」——
   `--allow-empty` 存在，而 `ship` 正是用它。今天这条把它兑现成一次能走的动作。
-- **不靠猜索引，只靠说出来的意图**：新增唯一口径 `scripts/intentional-empty-commit.mjs`
+- **不靠猜索引，只靠说出来的意图**：新增唯一口径 `scripts/platform/intentional-empty-commit.mjs`
   （`COMFY_INTENTIONAL_EMPTY_COMMIT`，**唯一生产者**是 `ship --rerun-ci` 那一格）。三条形状：
   旗标 + 空索引 ⇒ 两条判据的问题没有对象，按 `0` 收，判据自己把理由说出口；而**钩子成功时只留一行**，
   所以那句由发起方转述：`ship` 的回执多打一行「这一跳带了这枚旗标、两步按『没有对象』收」；

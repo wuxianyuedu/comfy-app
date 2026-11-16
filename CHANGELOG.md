@@ -5,7 +5,7 @@
 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
 > **本文件不要直接手改**：新条目先进 `changelog.d/<issue号>-<slug>.md` 碎片
-> （一件变更一个文件），由 `node scripts/merge-changelog-fragments.mjs` 并入这里。
+> （一件变更一个文件），由 `node scripts/docs/merge-changelog-fragments.mjs` 并入这里。
 > 这样并行分支不会在同一份文本上撞车，见
 > [前端工程规范 §13.10.5](docs/standards/13-提交与-code-review.md#13105-碎片化落地改-changelogd不改-changelogmd)。
 >
@@ -167,8 +167,8 @@
   （原 `run-desktop.bat`）/ `start-tauri.ps1`（原 `start-tauri.vbs`）/
   `register-comfyapp-protocol.ps1` 及 `tools/**` 下 9 个入口；新增
   `scripts/entry-common.ps1` 收敛「定位项目根 / 解析 pwsh / 透传退出码 / 双击暂停」，
-  新增 `scripts/enable-ps1-double-click.ps1` 做一次性双击关联（用户级 HKCU，免管理员）。
-  **升级注意**：首次双击 `.ps1` 前需右键 `scripts/enable-ps1-double-click.ps1`
+  新增 `scripts/devtools/enable-ps1-double-click.ps1` 做一次性双击关联（用户级 HKCU，免管理员）。
+  **升级注意**：首次双击 `.ps1` 前需右键 `scripts/devtools/enable-ps1-double-click.ps1`
   →「使用 PowerShell 运行」，否则 Windows 默认用记事本打开脚本。
 - **双击入口归位 `tools/`，根目录只留工程配置**（ISSUE #29）：6 个启动类入口由仓库根
   迁入 `tools/start/`（`start-web` / `start-tauri` / `start-desktop` / `run-local` /

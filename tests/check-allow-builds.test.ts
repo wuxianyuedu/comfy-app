@@ -24,8 +24,8 @@ const { test, expect } = defineGateRepo({
   copy: [
     { from: "scripts/gates/gate-scan-read.cjs", to: "scripts/gates/gate-scan-read.cjs" },
     {
-      from: "scripts/dependency-face.mjs",
-      to: "scripts/dependency-face.mjs",
+      from: "scripts/lib/dependency-face.mjs",
+      to: "scripts/lib/dependency-face.mjs",
     },
   ],
   // `--staged` 那三档的被测输入是**暂存区本身**，所以临时工作区必须是真 git 仓库；

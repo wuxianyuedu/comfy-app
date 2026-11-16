@@ -10,7 +10,7 @@
   **会改产物**，却**不在**触发面内 ⇒ 那一类改动永远不会被判到，而漏判是静默的
   （被 `ifModify` 跳过的形态与「判过且通过」在读数上无差别）。
   - **面** = 三根 ∪ **闭包叶子集**（实测 11 个根外文件，其中 10 个原先不在面内）。
-    叶子集**不是手抄的**：新增 `scripts/docs-api-input-closure.mjs`，从 `typedoc.json`
+    叶子集**不是手抄的**：新增 `scripts/docs/docs-api-input-closure.mjs`，从 `typedoc.json`
     的 `entryPoints` 导出根、沿静态 import 走出传递闭包（typedoc 的 `exclude` 与
     entryPoint 里的 `!(*.test)` 都生效 ⇒ 测试文件不是入口点）。
   - **声明侧**在 `scripts/check-docs-api.cjs` 的 `CLOSURE_LEAVES`，**事实侧**在闭包
@@ -29,9 +29,9 @@
 
 ## Added
 
-- **`scripts/docs-api-input-closure.mjs`**：`docs/api/**` 输入面的传递闭包（事实面）。
+- **`scripts/docs/docs-api-input-closure.mjs`**：`docs/api/**` 输入面的传递闭包（事实面）。
   说明符解析复用 `scripts/affected-tests.mjs` 的 `specifiersOf`、glob 匹配复用
-  `scripts/vitest-projects.cjs` 的 `globToRe` —— 不造第二套 import 解析与 glob 引擎。
+  `scripts/affected-tests/vitest-projects.cjs` 的 `globToRe` —— 不造第二套 import 解析与 glob 引擎。
   直接执行会打印根与叶子清单。
 - **`tests/docs-api-input-closure.test.ts`**（进固定清单）：判「面 ⇄ 事实」。它必须在
   每次提交里跑 —— 触发它的改动是「某个 `src/lib` 下的模块新 import 了一个根外的文件」，

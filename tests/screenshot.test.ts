@@ -11,10 +11,10 @@ import {
   slugForRoute,
   themeList,
   usage,
-} from "../scripts/screenshot.mjs";
+} from "../scripts/devtools/screenshot.mjs";
 
 /**
- * `scripts/screenshot.mjs` 的判据（ISSUE #3780）：截图这件事此前**没有入口** ——
+ * `scripts/devtools/screenshot.mjs` 的判据（ISSUE #3780）：截图这件事此前**没有入口** ——
  * 本仓的截图能力其实早就有（`@playwright/test` + chromium + e2e 那 20 多份 spec），
  * 缺的只是「把某一屏拍下来」这一格，于是每次 UI 改动都以「当前无可用的图形化运行与
  * 截图环境」收场。这条用例钉住入口的**形状**：参数怎么读、图落哪、主题怎么取。

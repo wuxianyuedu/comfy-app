@@ -12,7 +12,7 @@ start-tauri-dev.ps1 — 无控制台窗口启动 Tauri 桌面壳（dev / tauri d
     **入口与 dev-launcher.ps1 都不拼平台命令**，见 launch-and-build.md §3。
 
 前置（一次性）：Windows 默认双击 .ps1 是「用记事本打开」，需先右键
-  scripts\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
+  scripts\devtools\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
 
 用法：
   双击 <项目根>\tools\start\start-tauri-dev.ps1

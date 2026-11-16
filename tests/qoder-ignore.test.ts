@@ -1,5 +1,5 @@
 /**
- * `scripts/qoder-ignore.mjs`（`.qoderignore` 唯一写出者）判据（#2712）：索引器不吃 `.gitignore`、只吃 `.qoderignore`，工具固化「哪些树贵」的发现。
+ * `scripts/docs/qoder-ignore.mjs`（`.qoderignore` 唯一写出者）判据（#2712）：索引器不吃 `.gitignore`、只吃 `.qoderignore`，工具固化「哪些树贵」的发现。
  * 判的是两份文本（入库 `.qoderignore` ⇄ 工具渲染）；它不被任何 import，漂了不是红而是「装了等于没装」——别人跑一次只会得到更窄的表（同 #2574、#2599 进固定清单）。
  * 逐行相等只保证一致、不保证够宽（删一半 `IGNORE_SECTIONS` 仍然绿），故另立 `MUST_COVER` 钉「哪些树必须排除」（最重的几棵 + 私有输入），不钉行形状。
  */
@@ -12,7 +12,7 @@ import { isRecord } from "~/lib/is-record";
 
 import { stripComments } from "./helpers/strip-comments";
 import { defineGateRepo, expectGateRan } from "./helpers/gate-repo";
-import { IGNORE_SECTIONS, diffIgnore, renderIgnore } from "../scripts/qoder-ignore.mjs";
+import { IGNORE_SECTIONS, diffIgnore, renderIgnore } from "../scripts/docs/qoder-ignore.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -45,7 +45,7 @@ function diskIgnore(): string {
 }
 
 function scriptSource(): string {
-  return readFileSync(path.join(ROOT, "scripts", "qoder-ignore.mjs"), "utf8");
+  return readFileSync(path.join(ROOT, "scripts", "docs", "qoder-ignore.mjs"), "utf8");
 }
 
 describe("渲染出的形状：每条排除都带着它的理由", () => {
@@ -168,8 +168,8 @@ describe("入库那份 ⇄ 工具会写的那份", () => {
         }
       }
     }
-    expect(scripts["qoder:ignore"]).toBe("node scripts/qoder-ignore.mjs");
-    expect(scripts["qoder:ignore:check"]).toBe("node scripts/qoder-ignore.mjs --check");
+    expect(scripts["qoder:ignore"]).toBe("node scripts/docs/qoder-ignore.mjs");
+    expect(scripts["qoder:ignore:check"]).toBe("node scripts/docs/qoder-ignore.mjs --check");
   });
 });
 
@@ -191,7 +191,7 @@ describe("它只写仓库根那一份，不碰别人的本地 git 状态", () =>
 /* ── 三态退出码：0 绿 / 1 不一致 / 2 没跑成 ──────────────────────────────── */
 
 const { test } = defineGateRepo({
-  script: "qoder-ignore.mjs",
+  script: "docs/qoder-ignore.mjs",
   workdir: "2712-qoder-ignore",
 });
 

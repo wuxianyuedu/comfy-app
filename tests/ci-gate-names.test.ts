@@ -18,7 +18,7 @@ import {
   registeredElsewhereGates,
   scriptPaths,
 } from "../scripts/ci/ci-gate-names.mjs";
-import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "../scripts/affected-tests/fixed-structural-tests.mjs";
 
 /** 造一份配置夹具（形状与 `.cnb.yml` 的 env 段同款）。 */
 function fakeCnb(opts: {

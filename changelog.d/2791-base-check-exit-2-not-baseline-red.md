@@ -7,7 +7,7 @@
   当场现场（本检出，一条真命令）：
 
   ```
-  $ node scripts/base-check.mjs "node scripts/ci-affected-tests.mjs"
+  $ node scripts/gates/base-check.mjs "node scripts/ci-affected-tests.mjs"
   [base-check] 结论：baseline-red（本检出 2，origin/master @ 224a5a3d 2）
   [base-check] 基线那次输出的末尾：… ※ 这一档**不算绿也不算红** …
   ```
@@ -33,7 +33,7 @@
   - 报告话术同批：`没跑起来：…` → **`没跑出结论：…`**（顶层与逐条那两行都改）。
     旧标签在第三形上是错的 —— 命令**跑起来了**。
 
-  复述点一次订正（改了判据不许留旧话）：`scripts/base-check.mjs` 文件头那三处
+  复述点一次订正（改了判据不许留旧话）：`scripts/gates/base-check.mjs` 文件头那三处
   （五态表 / 优先级那句 / 整批结论那句）、规范 §13.6.2 的三处（五态表那一行、
   「它有两条入口」那张表 + 新增第三行与现场段、整批优先级那句）。
   查过**不动**的两处：`hook-steps.mjs:487` 与 `chained-steps.mjs:30` 那两句主语就是 127

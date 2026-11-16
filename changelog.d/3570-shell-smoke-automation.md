@@ -1,7 +1,7 @@
 ## Added
 
 - **真实 Tauri 壳冒烟自动化落地**（ISSUE #3570）：新增 `pnpm shell:smoke`
-  （`scripts/shell-smoke.mjs` 入口编排 + `scripts/win32-shell-smoke.py` 观察脚本，
+  （`scripts/devtools/shell-smoke.mjs` 入口编排 + `scripts/devtools/win32-shell-smoke.py` 观察脚本，
   只吃 Python 标准库，与 `win32-window-focus.py` 同族），在真实 Windows 会话里
   跑 release 版 `app.exe`（双击等价的完整用户路径），用 Win32 读数
   （`GetForegroundWindow` 前台归属、`IsWindowVisible` / `IsIconic`、Z 序链）与

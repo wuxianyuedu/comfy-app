@@ -10,7 +10,7 @@ Timeout waiting for worker to respond` —— 实测 pre-push 的那一档被这
   pre-push，活了不到一天。）
 - 撤的两个执行者：`.githooks/pre-commit` 的 C 组（`run_group C` 行**逐字留在钩子里当登记**，
   `tests/hook-affected-launch.test.ts` 钉的就是那个入口形状；`COMFY_HEAVY_GATES=1` 也换不回
-  来它，钩子收尾会单独念一句「组 C 本地不再执行」），与 `scripts/premerge-check.mjs` 的
+  来它，钩子收尾会单独念一句「组 C 本地不再执行」），与 `scripts/gates/premerge-check.mjs` 的
   `unitTests` 段（连 `pushBatchFiles` 一并删——唯一消费方就是它）。**撤段而不是留一段恒跳过**：
   恒跳过的段会让 `--json` 的读数里永远有一格「没跑起来」，而那一格不构成证据（§13.6.2）。
 - 新执行者：新增 `scripts/ci-affected-tests.mjs`（跑法脚本，只做三件事——按

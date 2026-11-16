@@ -10,7 +10,7 @@
  *   [3] 解析结果   packages / snapshots 的条目增删
  *
  * 只依赖 Node 内置能力（无 yaml 依赖，standalone 产物里也不带第三方解析器）。
- * 命令行入口（tools/start/run-local.ps1 与 scripts/quality-gate.ps1 都经它输出）：
+ * 命令行入口（tools/start/run-local.ps1 与 scripts/gates/quality-gate.ps1 都经它输出）：
  *
  * 用法示例：node scripts/lockfile/lock-diff.mjs --installed <路径> --root <路径>
  */

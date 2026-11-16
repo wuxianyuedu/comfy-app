@@ -7,7 +7,7 @@
   现场是 `.cnb.yml` 的 endStage「GitHub 镜像同步」：目标仓库与令牌都通了
   （`[mirror] 推送前这一读：通`），红在钩子那一句
   「取不到上次fetch看到的上游引用」，与镜像逻辑无关。
-- 修法：`pre-push` 那份（`scripts/premerge-proof.mjs`）新增 `isForeignRemotePush()` ——
+- 修法：`pre-push` 那份（`scripts/gates/premerge-proof.mjs`）新增 `isForeignRemotePush()` ——
   git 传给钩子的 `$2` 与本仓 `git remote get-url --all` 给出的 URL 逐个比对，对不上
   就按 `skip` 放行并念出目的地。钩子侧把 `"$1" "$2"` 传下去（`.githooks/pre-push`）。
 - 边界刻意不对称：**取不到 remote 清单 / 拿不到 push URL ⇒ 判「不是外来」、照旧复算**。

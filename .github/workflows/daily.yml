@@ -180,7 +180,7 @@ jobs:
 
       - name: 单元测试（排最后：唯一会因机器负载而红的一档，同 CNB 口径）
         timeout-minutes: 45 # 对位 CNB `每日单元测试` 45m（内部墙钟预算 30m）
-        run: node scripts/full-suite-run.mjs
+        run: node scripts/affected-tests/full-suite-run.mjs
 
       # 环境证据（ISSUE #3333）：重格红成「子进程被信号打死 / 没有读数」时，OOM 定性
       # 此前只能停在「最大嫌疑」——内核的 OOM 行不会自己进 step 日志，而 ubuntu-24.04

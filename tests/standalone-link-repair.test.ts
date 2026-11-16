@@ -16,7 +16,7 @@ import {
   repairUnfollowableLinks,
   runLinkRepair,
   siblingVariantInstalled,
-} from "../scripts/standalone-link-repair.mjs";
+} from "../scripts/build/standalone-link-repair.mjs";
 import { symlinkDir } from "./helpers/symlink-dir";
 
 /** 夹具根：每条用例一份，`afterEach` 整棵删掉。 */
@@ -354,9 +354,9 @@ describe("接线在位", () => {
     const build = parsed.scripts.build;
     const order = [
       "next build",
-      "scripts/standalone-link-repair.mjs",
+      "scripts/build/standalone-link-repair.mjs",
       "scripts/gates/check-standalone-contents.cjs",
-      "scripts/smoke-executor-host-standalone.mjs",
+      "scripts/devtools/smoke-executor-host-standalone.mjs",
     ].map((s) => build.indexOf(s));
     for (const idx of order) {
       expect(idx).toBeGreaterThanOrEqual(0);
@@ -366,7 +366,7 @@ describe("接线在位", () => {
 
   it("退出码只由「还有真缺件」决定（不许把违规吞成日志，也别让死链把整条链掐断）", () => {
     const source = readFileSync(
-      path.resolve(__dirname, "../scripts/standalone-link-repair.mjs"),
+      path.resolve(__dirname, "../scripts/build/standalone-link-repair.mjs"),
       "utf8",
     );
     /* `blocking` = 扣掉「非本平台变体死链」之后的那一档（那类死链不阻断，见文件头）。 */

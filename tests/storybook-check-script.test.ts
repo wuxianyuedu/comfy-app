@@ -1,5 +1,5 @@
 /**
- * 故事枚举来源门禁（`scripts/storybook-check.mjs`）的自测契约：价值全在判定口径上，两种错法都不报错 ——
+ * 故事枚举来源门禁（`scripts/devtools/storybook-check.mjs`）的自测契约：价值全在判定口径上，两种错法都不报错 ——
  * 太松（只认 `const X = cva(…)`）漏掉 import 变体表再点 `.variants`（首轮踩坑的原形态）；太紧把讲规则的注释也当违规（`button.stories.tsx`），成员会删掉门禁。
  * 用「临时仓库 + 只放被测文件」跑真脚本（同 `check-import-alias.test.ts`），四个方向都断言：该拦的拦、该放的放、空转报错。规范 §16.2.3.2、§9.5。
  */
@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { symlinkDir } from "./helpers/symlink-dir";
 
 const ROOT = path.resolve(__dirname, "..");
-const SCRIPT_REL = "scripts/storybook-check.mjs";
+const SCRIPT_REL = "scripts/devtools/storybook-check.mjs";
 const CHECK_DIR_REL = "scripts/storybook-checks";
 const tempDirs: Array<string> = [];
 
@@ -51,8 +51,9 @@ function makeRepo() {
      临时仓库里自己造一份，值按 `scanner()` 会写下的那份「组件 + 故事」算
      （分母 1、已覆盖 1）。不这么做的话，**每一条故事枚举用例都会顺带红在
      「理由表里的文件在这不存在」上**，那就不再是「枚举来源」的判据了。 */
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
   writeFileSync(
-    path.join(root, "scripts", ".storybook-coverage-baseline.json"),
+    path.join(root, "scripts", "gates", ".storybook-coverage-baseline.json"),
     JSON.stringify({ uiSurfaces: 1, covered: 1 }),
   );
   /* 占位理由指向的文件要**真的存在**，否则「理由表与磁盘对得上」那条会红 ——
@@ -230,7 +231,7 @@ describe("storybook-check（故事枚举来源门禁）", () => {
     writeFileSync(path.join(uiDir, "thing.tsx"), COMPONENT);
     writeFileSync(path.join(uiDir, "thing.stories.tsx"), GOOD_STORY);
     writeFileSync(
-      path.join(root, "scripts", ".storybook-coverage-baseline.json"),
+      path.join(root, "scripts", "gates", ".storybook-coverage-baseline.json"),
       JSON.stringify({ uiSurfaces: 2, covered: 1 }),
     );
     const { ok, output } = runIn(root);

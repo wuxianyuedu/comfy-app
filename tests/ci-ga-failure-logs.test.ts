@@ -30,8 +30,8 @@ const JOB = { conclusion: "failure", id: 130_501_000_674, name: "daily" };
 /** 一份贴 GA 真实形状的日志：group / error 注解 / 尾部。 */
 function gaLog(extra: string[] = []) {
   return [
-    "2026-11-11T11:00:00.000Z ##[group]Run node scripts/full-suite-run.mjs",
-    "node scripts/full-suite-run.mjs",
+    "2026-11-11T11:00:00.000Z ##[group]Run node scripts/affected-tests/full-suite-run.mjs",
+    "node scripts/affected-tests/full-suite-run.mjs",
     "Test Files  1 failed | 99 passed (100)",
     "##[error]FAIL  tests/full-suite-run.test.ts > 全量单测预算",
     "##[error]AssertionError: expected 1 to be 0",
@@ -84,7 +84,7 @@ describe("红色失败窗口（至少贴红的那部分）", () => {
     const body = readout();
     expect(body).toContain("##[error]FAIL  tests/full-suite-run.test.ts");
     expect(body).toContain("AssertionError: expected 1 to be 0");
-    expect(body).toContain("Run node scripts/full-suite-run.mjs");
+    expect(body).toContain("Run node scripts/affected-tests/full-suite-run.mjs");
     expect(body).toContain("红的那部分");
   });
 

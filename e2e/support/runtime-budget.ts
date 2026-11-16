@@ -1,7 +1,7 @@
 /**
  * 页面级运行时读数的唯一落点（§11.8 / §13.5.4，ISSUE #1781）：判「下载完之后跑得多快」——bundle 没变而主线程打满时只有这里看得见。
  * 口径：每轮 `newPage()` + `close()`（同一 page 反复 goto 时 FCP 结构性缺失，实测 12/12 补齐），弃前 4 轮取稳态 `min`；只抓主线程 / 浏览器侧。
- * 阈值与实测初值在 `scripts/.runtime-budget-baseline.json`：口径是代码事实、阈值是数字（随例外流程变）。
+ * 阈值与实测初值在 `e2e/.runtime-budget-baseline.json`：口径是代码事实、阈值是数字（随例外流程变）。
  */
 import type { BrowserContext, Page } from "@playwright/test";
 

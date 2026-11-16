@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { linkDependencies, unlinkDependencies } from "../scripts/base-check.mjs";
+import { linkDependencies, unlinkDependencies } from "../scripts/gates/base-check.mjs";
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 /** 本文件造出来的夹具目录；用例失败也一律收尾。 */
@@ -164,7 +164,7 @@ describe("复算快照的依赖链接：谁在链上、收尾谁先走", () => {
     /* 上面两向判的是机制，这一条判的是**编排**：`finally` 里若有人把
      * `git worktree remove` 挪回 `unlinkDependencies` 之前，机制那条会红，
      * 但红在「谁先跑」这种读起来像实现细节的地方 —— 这一条把顺序本身说出口。 */
-    const src = readFileSync("scripts/base-check.mjs", "utf8");
+    const src = readFileSync("scripts/gates/base-check.mjs", "utf8");
     const unlinkAt = src.indexOf("unlinkDependencies(dependencyLink)");
     const removeAt = src.indexOf('git(["worktree", "remove", "--force"');
     expect(unlinkAt, "finally 里不再调用 unlinkDependencies —— 链接会被穿删").toBeGreaterThan(-1);

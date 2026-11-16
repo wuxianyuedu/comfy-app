@@ -71,7 +71,7 @@
 
 // 豁免声明层拆在同目录的 theme-color-exemptions.cjs(ISSUE #1811):
 // EXEMPT_TABLES 一张表就 232 行,与判定逻辑混在一份 901 行的文件里。
-const { EXEMPT_TABLES, EXEMPT_FIXED_DARK } = require("../theme-color-exemptions.cjs");
+const { EXEMPT_TABLES, EXEMPT_FIXED_DARK } = require("./theme-color-exemptions.cjs");
 
 const fs = require("node:fs");
 const path = require("node:path");

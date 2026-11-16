@@ -39,7 +39,7 @@ import { readHookSteps } from "../base-check/hook-steps.mjs";
 import { HEAVY_GATES } from "../ci/ci-heavy-gates.mjs";
 import { gateNameExecutorProblems, gaWorkflowStepArgvs } from "../ci/ci-gate-names.mjs";
 import { parseStageScripts, readCnbConfig } from "../ci/ci-autofix-duties.mjs";
-import { FIXED_STRUCTURAL_TESTS } from "../fixed-structural-tests.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "../affected-tests/fixed-structural-tests.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 

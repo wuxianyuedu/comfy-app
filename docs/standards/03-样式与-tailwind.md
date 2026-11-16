@@ -87,7 +87,7 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 > 判定档还在、放宽通道没被加回来、扫描走共享内核）与
 > `tests/tw4-hardgate-behaviour.test.ts`（**行为** —— 真候选即退 1、注释里的示例
 > 不算候选、`--update` 这个出口已经不存在；形状守卫读文本，判不出「判定档真的会
-> 退 1」）。执行者与「为什么不进钩子」登记在 `scripts/.gate-executor-ledger.json`。
+> 退 1」）。执行者与「为什么不进钩子」登记在 `scripts/gates/.gate-executor-ledger.json`。
 >
 > **翻闸时撞出来的两件事值得记在这**（tw4 这一项不只是删基线）：
 >

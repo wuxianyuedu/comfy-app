@@ -58,7 +58,7 @@
   在**真仓库**上跑 `--only=claims` 的用例（筛段 / `--json` / `--full`）此前让 `run()` 继承调用方环境：
   本机有 `origin/master` ⇒ `resolveForkBaseline()` 取到基线 ⇒ 0；平台节点**只 fetch 协商后的单 ref**
   （`.cnb.yml` 里那句注释说得很清楚）⇒ 取不到 ⇒ 退 2 ⇒ `expected 2 to be 0`。同一份检出里直接
-  `node scripts/premerge-check.mjs --only=claims` 退 0，因为 shell 里 env 在 —— 差别是**谁把 env 传下去**。
+  `node scripts/gates/premerge-check.mjs --only=claims` 退 0，因为 shell 里 env 在 —— 差别是**谁把 env 传下去**。
 
   修法：`run()` 显式把基线传成 `HEAD` 的 sha（分叉点 == HEAD ⇒ 待审那一批为空 ⇒ 「无可审，不是判过」
   并退 0）。于是这几条判的是**编排**（筛段 / JSON / 旗标），不掺任何宿主状态。

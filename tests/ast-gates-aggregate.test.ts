@@ -1,5 +1,5 @@
 /**
- * AST 判据聚合档（`scripts/run-ast-gates.cjs`）的**接线判据**——规范 §13.5.8.2「第四笔账」。聚合把 6 条判据从 6 个独立进程收成 1 个进程、一次解析（省 ≈1.9s），而省错了不会有任何判据看见：少跑一条、把某条判定换成「永远绿」、让 `--staged` 短路面变宽/变窄，跑起来都只是「快了一点」、退出码照样 0。所以钉的都是**静默失效点**：
+ * AST 判据聚合档（`scripts/gates/run-ast-gates.cjs`）的**接线判据**——规范 §13.5.8.2「第四笔账」。聚合把 6 条判据从 6 个独立进程收成 1 个进程、一次解析（省 ≈1.9s），而省错了不会有任何判据看见：少跑一条、把某条判定换成「永远绿」、让 `--staged` 短路面变宽/变窄，跑起来都只是「快了一点」、退出码照样 0。所以钉的都是**静默失效点**：
  * 6 条逐条点名真跑（不是数个数）；输出与 6 条单跑**逐字节相同**（判定是复用不是重写）；任一条红 ⇒ rc 1 且继续跑完其余；`--staged` 按条判；`--report`/`--update` 等人为动作被拒（基线按单条记账）；钩子 D 组里只有聚合档这一行。
  * 全部在**真仓库**里起子进程，不搭临时夹具：临时仓库的 `src/` 是空的，6 条会全部报「0 处」，那种绿判不出任何东西。
  */
@@ -13,7 +13,7 @@ import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { copyGateDeps } from "./helpers/gate-repo";
 
 const REPO_ROOT = resolve(".");
-const AGG = join(REPO_ROOT, "scripts", "run-ast-gates.cjs");
+const AGG = join(REPO_ROOT, "scripts", "gates", "run-ast-gates.cjs");
 const HOOK = join(REPO_ROOT, ".githooks", "pre-commit");
 
 /** 聚合档 / 单条脚本都需要的 6 条判据（**这张表与 `run-ast-gates.cjs` 的 GATES 同批**）。 */
@@ -49,7 +49,7 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
       .split("\n")
       .filter(Boolean)
       .map((l) => l.split(" ")[1]);
-    expect(listed).toEqual(GATES);
+    expect(listed).toEqual(GATES.map((g) => g.split("/").pop()));
   });
 
   it("聚合档的输出与 6 条单跑各自输出**逐字节相同**（判定是复用不是重写）", () => {
@@ -59,7 +59,7 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
      * 等式本身（同一份输入 ⇒ 两边逐字节相同）没有改变，改变的是**喂什么输入**；判据的扫描根由脚本自己的 `__dirname/..` 决定，所以把脚本与探针
      * 一起放进临时仓库就够（与 `tests/form-field-wiring-gate.test.ts` 同一个样板）。 */
     const repo = probeRepo();
-    const agg = repo.run(["scripts/run-ast-gates.cjs"]);
+    const agg = repo.run(["scripts/gates/run-ast-gates.cjs"]);
     const fromAgg = gateLines(agg.output);
 
     const fromSingles: Array<string> = [];
@@ -151,7 +151,7 @@ describe("run-ast-gates.cjs（AST 判据聚合档，ISSUE #1747 续）", () => {
   it("钩子 D 组里 6 条单条脚本不再各占一行，只留聚合档这一行（否则等于跑两遍）", () => {
     const hook = readFileSync(HOOK, "utf8");
     const runLines = hook.split("\n").filter((l) => l.startsWith("  run "));
-    const aggLines = runLines.filter((l) => l.includes("scripts/run-ast-gates.cjs"));
+    const aggLines = runLines.filter((l) => l.includes("scripts/gates/run-ast-gates.cjs"));
     expect(aggLines.length, "钩子里聚合档那一行不见了").toBe(1);
     for (const g of GATES) {
       const dup = runLines.filter((l) => l.includes(`scripts/${g}`));
@@ -200,7 +200,7 @@ function probeRepo(): {
   const scriptsDir = join(dir, "scripts");
   const gatesDir = join(scriptsDir, "gates");
   mkdirSync(gatesDir, { recursive: true });
-  for (const name of ["run-ast-gates.cjs", ...GATES]) {
+  for (const name of ["gates/run-ast-gates.cjs", ...GATES]) {
     const dest = join(scriptsDir, name);
     copyFileSync(join(REPO_ROOT, "scripts", name), dest);
     /* 递归带上 `./gate-scan-read.cjs` / `./gate-ast-read.cjs` 这类同目录依赖 ——

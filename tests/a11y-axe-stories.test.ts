@@ -2,13 +2,13 @@
 /**
  * a11y 自动化的**执行者**（台账 E6 第三格）：把 `src/components/ui/*.stories.tsx` 每个故事按 Storybook 语义渲染、在 jsdom 跑 axe-core，
  * 补齐 `check-a11y-rules.cjs`（只判规则开关 ⇄ 台账）答不了的「界面真的违规吗」。五条实测口径：逐故事隔离（否则重复计数）、页面级规则显式关掉、
- * 渲不出来登记 `unrenderable`（双向）、按 `story.render ?? meta.render` + args 浅合并、`PAINT_SCOPE_RULES_OFF`（jsdom 无绘制事实 ⇒ 假通过）。台账 `scripts/.a11y-axe-known.json` 无 `--update`，增删皆红。
+ * 渲不出来登记 `unrenderable`（双向）、按 `story.render ?? meta.render` + args 浅合并、`PAINT_SCOPE_RULES_OFF`（jsdom 无绘制事实 ⇒ 假通过）。台账 `scripts/gates/.a11y-axe-known.json` 无 `--update`，增删皆红。
  */
 import { cleanup, render } from "@testing-library/react";
 import { createElement, type ComponentType, type ReactNode } from "react";
 import axe from "axe-core";
 import { describe, expect, it } from "vitest";
-import KNOWN from "../scripts/.a11y-axe-known.json";
+import KNOWN from "../scripts/gates/.a11y-axe-known.json";
 
 import { isPlainRecord, isUnknownArray } from "../src/lib/is-record";
 import { installJsdomCapabilityGate } from "./helpers/jsdom-capability";

@@ -1,6 +1,6 @@
 ## Fixed
 
-- **`pnpm run docs`（= `node scripts/generate-api-docs.mjs`）不再把坏输入折成一个合法默认值
+- **`pnpm run docs`（= `node scripts/docs/generate-api-docs.mjs`）不再把坏输入折成一个合法默认值
   然后照常往下跑（ISSUE #2740）**：
   原来 `--out` 后面没有值时，`value()` 写的是 `argv[++i] ?? ""` ⇒ `out` 成了**空串**，
   而 `path.resolve(ROOT, "")` **就是仓库根本身** ⇒ 下一步 typedoc 会以
@@ -29,7 +29,7 @@
   `main()` 原来挂在模块顶层，于是 `export` 出去的 `parseArgs` **一旦被 import 就付一次
   真 typedoc 全量生成** —— 这不是推测：本会话为了量旗标行为 import 了一次，
   屏幕上多出 `[OK] html generated: 2844 files`。代价劝退 ⇒ 那一格至今没有执行者，
-  这正是它没人判的真因。现在照 `scripts/agent-film.mjs` 的现成写法
+  这正是它没人判的真因。现在照 `scripts/platform/agent-film.mjs` 的现成写法
   （`process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href`；
   `process.argv[1] &&` 那一格不是装饰 —— `node --input-type=module -e` 那种宿主里它是
   undefined，`pathToFileURL(undefined)` 当场抛），并守住

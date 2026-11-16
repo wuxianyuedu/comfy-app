@@ -36,7 +36,7 @@
  * ISSUE #1975 又把它**从钩子挪到平台侧**：判据一字未改，改的是「值不值得占提交那一刻」——
  * 它判的是文档面的引用一致性，漂了的最坏后果是「有人照着一份错的文档去做」，
  * 挡不住任何一次代码回归；而平台侧（ISSUE #1959 起）已经能承接它。口径见规范 §13.5.17。
- * 人类可读映射见 docs/reference-facts.md；FACTS 与提取逻辑见 scripts/doc-facts.cjs
+ * 人类可读映射见 docs/reference-facts.md；FACTS 与提取逻辑见 scripts/docs/doc-facts.cjs
  * （本脚本与 doc:render 共用，避免第二事实）。
  */
 const fs = require("node:fs");
@@ -51,7 +51,7 @@ const {
   exists,
   extractDevHostPort,
   extractFallbackPorts,
-} = require("../doc-facts.cjs");
+} = require("../docs/doc-facts.cjs");
 /* 「文档怎么引用门禁」那三条判据（不写第 N 步 / 不写步数 / §13.1 清单与钩子 D 组一致）
  * 搬去了同目录的 check-doc-gate-refs.cjs：它们与上面这一半判的不是一件事，
  * 而两半合住一份文件时越过了 §12.6 R5 的 900 行。 */
@@ -121,7 +121,7 @@ function checkScopeCoverage() {
         }
         problems.push(
           `校验范围守卫：${rel} 既未登记进 SCOPED_DOCS、也不在豁免名单里——` +
-            `新增规范文档必须二选一（登记则参与校验；豁免则须在 scripts/doc-facts.cjs 的 ` +
+            `新增规范文档必须二选一（登记则参与校验；豁免则须在 scripts/docs/doc-facts.cjs 的 ` +
             `SCOPED_DOC_EXEMPTIONS 里写明理由），不允许静默跳过。见 docs/reference-facts.md §3。`,
         );
       }
@@ -412,7 +412,7 @@ function checkCounts(docPath, f) {
   if (!found.length) {
     problems.push(
       `[${docPath}] 找不到${f.label ?? f.key}的表述（现场是 ${live}）。` +
-        `要么把数字写进文档，要么把这条事实从 scripts/doc-facts.cjs 里撤下 —— ` +
+        `要么把数字写进文档，要么把这条事实从 scripts/docs/doc-facts.cjs 里撤下 —— ` +
         `不允许「文档不再写、事实还在册」这种对不上的状态。`,
     );
     return;

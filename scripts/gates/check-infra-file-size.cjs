@@ -38,7 +38,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { skipUnlessStagedTouches, readStagedPaths } = require("./gate-scan-read.cjs");
-const { renderProximityLines } = require("../file-size-proximity.cjs");
+const { renderProximityLines } = require("./file-size-proximity.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
 const ARGS = new Set(process.argv.slice(2));

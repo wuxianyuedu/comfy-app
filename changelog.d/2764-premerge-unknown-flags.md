@@ -1,7 +1,7 @@
 ## Fixed
 
 - **`pnpm check:premerge` 不再静默吞掉拼错的旗标**（ISSUE #2764）：`AGENTS.md` 与 ship Skill
-  三处把 `pnpm check:premerge --full` 写成「全套那一档」，而 `scripts/premerge-check.mjs`
+  三处把 `pnpm check:premerge --full` 写成「全套那一档」，而 `scripts/gates/premerge-check.mjs`
   的 `parseArgs` 没有 else 分支——那一枚旗标既不生效也不报错，于是「我跑的是全套」这句话
   没有任何依据（同一档恰恰是被当作「本地全套凭证」用的）。现在：① 认不出的旗标**退 2 并点名**
   （与 `quality-gate.mjs` 的「未知门禁」同形，2 = 这一跳没有结论，不是「跑过了且绿」）；

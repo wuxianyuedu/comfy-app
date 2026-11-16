@@ -24,7 +24,7 @@ const CATALOG = "docs/product/feature-catalog.md";
 /** 两份索引文档：两个计数各写一次，判据逐处核对。 */
 const INDEX_DOCS = ["docs/README.md", "docs/product/README.md"];
 
-/** 文档里那句计数表述的形态（数字 + 量词）；与 `scripts/doc-facts.cjs` 的事实同形。 */
+/** 文档里那句计数表述的形态（数字 + 量词）；与 `scripts/docs/doc-facts.cjs` 的事实同形。 */
 const DOMAINS_PATTERN = /(?<count>\d+)\s*个功能域/g;
 const REQUIREMENTS_PATTERN = /(?<count>\d+)\s*条编号化需求/g;
 

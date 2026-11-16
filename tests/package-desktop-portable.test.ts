@@ -16,7 +16,7 @@ import {
   missingParts,
   nodeNameInPackage,
   resolvePlan,
-} from "../scripts/package-desktop-portable.mjs";
+} from "../scripts/build/package-desktop-portable.mjs";
 
 const made: string[] = [];
 

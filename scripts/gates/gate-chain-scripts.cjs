@@ -14,8 +14,8 @@
  * `quality-gate.mjs`（编排器）、`quality-gate-shared.mjs`（共享常量）全被当成判据。
  * 下面三个位置才是「判据被当判据用」的事实：
  *   · `.githooks/pre-commit` 的 `run "<标签>" node scripts/<x>` 步骤行；
- *   · `scripts/quality-gate.mjs` 的 `args: ["../scripts/<x>"]` gate 表项；
- *   · `scripts/quality-gate.ps1` 的 `$Blocks` 表项（`Args` 栏）。
+ *   · `scripts/gates/quality-gate.mjs` 的 `args: ["../scripts/<x>"]` gate 表项；
+ *   · `scripts/gates/quality-gate.ps1` 的 `$Blocks` 表项（`Args` 栏）。
  * 比对 basename 而不是整条命令：三种写法（`scripts/x`、`../scripts/x`、
  * `scripts\x`）落点相同，而整条命令一比就会随引号 / 反斜杠 / 参数顺序漂移。
  *
@@ -38,8 +38,10 @@ function gateChainScripts() {
    * @param {string} text
    */
   const collect = (text) => {
-    for (const m of text.matchAll(/scripts[\\/]+(?<script>[A-Za-z0-9_.-]+\.(?:cjs|mjs))/g)) {
-      out.add(m.groups?.script);
+    // 判据在 scripts/gates/（#3930）：命令里的路径可带域子目录，归一到 basename 再入集合。
+    for (const m of text.matchAll(/scripts[\\/]+(?<script>[A-Za-z0-9_./-]+\.(?:cjs|mjs))/g)) {
+      const base = (m.groups?.script ?? "").split(/[\\/]/).pop();
+      if (base) out.add(base);
     }
   };
 
@@ -52,7 +54,7 @@ function gateChainScripts() {
   }
 
   // ② `quality-gate.mjs` 的 gate 表项。
-  const qm = path.join(ROOT, "scripts/quality-gate.mjs");
+  const qm = path.join(ROOT, "scripts/gates/quality-gate.mjs");
   if (fs.existsSync(qm)) {
     for (const m of fs.readFileSync(qm, "utf8").matchAll(/args:\s*\[(?<args>[^\]]*)\]/g)) {
       collect(m.groups?.args ?? "");
@@ -60,7 +62,7 @@ function gateChainScripts() {
   }
 
   // ③ `quality-gate.ps1` 的 `$Blocks` 表项（`Cmd = "node"; Args = @("scripts\x.cjs")`）。
-  const qp = path.join(ROOT, "scripts/quality-gate.ps1");
+  const qp = path.join(ROOT, "scripts/gates/quality-gate.ps1");
   if (fs.existsSync(qp)) {
     for (const m of fs.readFileSync(qp, "utf8").matchAll(/Args\s*=\s*@\((?<args>[^)]*)\)/g)) {
       collect(m.groups?.args ?? "");
@@ -70,4 +72,38 @@ function gateChainScripts() {
   return out;
 }
 
-module.exports = { gateChainScripts };
+/**
+ * @returns {string[]} 链上脚本的**仓库相对路径**（`scripts/gates/shell-gate.mjs` 这一形状）。
+ * 判据归入域子目录（#3930）之后，basename 拼回 `scripts/` 的平铺假设不再成立 ——
+ * 消费方要拿真盘位置时走这里；只要 basename 的消费方仍用 `gateChainScripts()`。
+ */
+function gateChainPaths() {
+  /** @type {Map<string, string[]>} */
+  const candidates = new Map();
+  /** @param {string} dir */
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        walk(abs);
+        continue;
+      }
+      if (/\.(?:cjs|mjs)$/.test(e.name)) {
+        const rel = path.relative(ROOT, abs).split(path.sep).join("/");
+        const prev = candidates.get(e.name) ?? [];
+        candidates.set(e.name, [...prev, rel]);
+      }
+    }
+  };
+  walk(path.join(ROOT, "scripts"));
+  /* 同名多份（#4111 过渡垫片落在平铺位、真身在域子目录）时取更深的那份 = 真身。 */
+  const index = new Map(
+    [...candidates].map(([name, rels]) => [
+      name,
+      rels.reduce((best, rel) => (rel.split("/").length > best.split("/").length ? rel : best)),
+    ]),
+  );
+  return [...gateChainScripts()].map((name) => index.get(name) ?? `scripts/${name}`);
+}
+
+module.exports = { gateChainScripts, gateChainPaths };

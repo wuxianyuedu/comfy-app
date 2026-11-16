@@ -43,10 +43,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 
-const { gateChainScripts } = require("./gate-chain-scripts.cjs");
+const { gateChainPaths } = require("./gate-chain-scripts.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
-const LEDGER_REL = "scripts/.gate-thresholds.json";
+const LEDGER_REL = "scripts/gates/.gate-thresholds.json";
 /** 自证的下限：账少于这个条数就是提取或账本身坏了，而不是「大家都对齐了」。 */
 const MIN_ENTRIES = 15;
 
@@ -332,17 +332,20 @@ function realReadSource(file) {
  * @returns {string[]} 相对仓库根的路径
  */
 function scanJudgeFiles() {
-  const chain = [...gateChainScripts()].map((name) => `scripts/${name}`);
-  const checkFamily = fs
-    .readdirSync(path.join(ROOT, "scripts"), { withFileTypes: true })
-    .filter((e) => e.isFile() && /^check-.*\.cjs$/.test(e.name))
-    .map((e) => `scripts/${e.name}`);
+  const chain = gateChainPaths();
+  /* 判据在 scripts/gates/（#3930）；根目录那一层保留同扫，防将来有判据落回平铺位。 */
+  const checkFamily = [path.join(ROOT, "scripts"), path.join(ROOT, "scripts", "gates")].flatMap(
+    (dir) =>
+      fs
+        .readdirSync(dir, { withFileTypes: true })
+        .filter((e) => e.isFile() && /^check-.*\.cjs$/.test(e.name))
+        .map((e) => path.relative(ROOT, path.join(dir, e.name)).split(path.sep).join("/")),
+  );
   return [...new Set([...chain, ...checkFamily])];
 }
 
 function readLedger() {
-  return JSON.parse(fs.readFileSync(path.join(__dirname, "../.gate-thresholds.json"), "utf8"))
-    .entries;
+  return JSON.parse(fs.readFileSync(path.join(__dirname, ".gate-thresholds.json"), "utf8")).entries;
 }
 
 /**
@@ -376,7 +379,7 @@ function main(argv = process.argv.slice(2)) {
   const args = new Set(argv);
   const REPORT_ONLY = args.has("--report");
   const AS_JSON = args.has("--json");
-  if (!fs.existsSync(path.join(__dirname, "../.gate-thresholds.json"))) {
+  if (!fs.existsSync(path.join(__dirname, ".gate-thresholds.json"))) {
     process.stdout.write(
       `[gate-thresholds] 读不到账 ${LEDGER_REL} ⇒ 这一格没有结论（不是「一致」）\n`,
     );

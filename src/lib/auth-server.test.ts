@@ -81,7 +81,7 @@ describe("getServerUser：已登录取真实用户，未登录回落演示用户
    *
    * 曾经的实现把**解析结果**记在模块级变量里，于是缓存一旦填上，后续调用
    * 完全绕过 `findByEmail`。而 `user` 表会被重建（`drizzle-kit push` 的
-   * `__new_X` 重建流程，见 `scripts/heal-db.cjs`），那时缓存里的 id 在库里
+   * `__new_X` 重建流程，见 `scripts/db/heal-db.cjs`），那时缓存里的 id 在库里
    * 已经不存在 —— 返回它会让下游每一处按 userId 的写入失败或留下孤儿行，
    * 报错还指向写入语句而不是「用户是虚构的」。
    *

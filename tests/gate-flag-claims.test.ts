@@ -213,7 +213,7 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
        * 夹具就要把无关的那几格都配平，同 `ratchet-update-guards` 的「第 ② 步
        * 先配出基线=现状」那条口径）。 */
       writeFileSync(
-        join(ws.dir, "scripts", ".gate-executor-ledger.json"),
+        join(ws.dir, "scripts", "gates", ".gate-executor-ledger.json"),
         JSON.stringify({ onDemand: {} }),
       );
       writeFileSync(
@@ -238,7 +238,7 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
       writeTables(ws.dir, { flips: '  "check-fake.cjs": "tests/check-fake.test.ts",' });
       /* 门禁链三处 + 聚合档都没有它、按需台账也没登记 ⇒ 谁都不会跑它。 */
       writeFileSync(
-        join(ws.dir, "scripts", ".gate-executor-ledger.json"),
+        join(ws.dir, "scripts", "gates", ".gate-executor-ledger.json"),
         JSON.stringify({ onDemand: {} }),
       );
       const { code, output } = run(ws.dir);
@@ -268,7 +268,7 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
         "聚合档表项（裸 script: 形态，无 scripts/ 前缀）",
         (dir) => {
           writeFileSync(
-            join(dir, "scripts", "run-ast-gates.cjs"),
+            join(dir, "scripts", "gates", "run-ast-gates.cjs"),
             'const GATES = [\n  { script: "check-fake.cjs", tag: "[x]" },\n];\n',
           );
         },
@@ -277,7 +277,7 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
         "按需召唤台账",
         (dir) => {
           writeFileSync(
-            join(dir, "scripts", ".gate-executor-ledger.json"),
+            join(dir, "scripts", "gates", ".gate-executor-ledger.json"),
             JSON.stringify({ onDemand: { "check-fake.cjs": { why: "w", who: "h" } } }),
           );
         },
@@ -308,7 +308,7 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
       writeScript(ws.dir, "check-fake.cjs", " * 用法：\n *   node scripts/check-fake.cjs");
       writeTables(ws.dir, { flips: '  "check-fake.cjs": "tests/check-fake.test.ts",' });
       writeFileSync(
-        join(ws.dir, "scripts", ".gate-executor-ledger.json"),
+        join(ws.dir, "scripts", "gates", ".gate-executor-ledger.json"),
         JSON.stringify({ onDemand: {} }),
       );
       expect(run(ws.dir).code).toBe(1);

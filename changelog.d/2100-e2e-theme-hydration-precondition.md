@@ -19,7 +19,7 @@
     红从「色相取错」变成 `解析不出颜色：none` —— 画布没了，不是 token 落空。
   - 读数：最小复现（`theme-toggle` + 本文件两格同跑）由 `1 failed / 7 passed` 变 **`8 passed`**（13.9s）；
     整档 `COMFY_E2E_SERVER=start node scripts/e2e-run.mjs` ⇒ **`81 passed`（1.5m）**，
-    随本增量一起登记 `scripts/.e2e-freshness.json`（那一档「上次跑绿在什么时候」的唯一事实）。
+    随本增量一起登记 `scripts/freshness/.e2e-freshness.json`（那一档「上次跑绿在什么时候」的唯一事实）。
     旧整档读数：CI `每日全量E2E` 100.0s `1 failed / 80 passed`、本地同档 `1.3m` 同形 —— 见账页 表 D。
   - 同形隐患**未在本刀内改**：`e2e/view-tabs.spec.ts:147-151` 是同一句手写 `classList` 且不验状态。
     它现在是绿的，把一条 lucky-green 改成会红不属于本增量（§11.13 ②「不由本刀顺手改它的构造」），

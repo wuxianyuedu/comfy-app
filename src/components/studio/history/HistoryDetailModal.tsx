@@ -164,7 +164,7 @@ export function HistoryDetailModal({
                       未检测到 ComfyApp 助手，浏览器没有弹出「打开外部应用」确认框。
                       请双击运行项目内
                       <code className="text-warning-strong">
-                        scripts\install-comfyapp-helper.ps1
+                        scripts\devtools\install-comfyapp-helper.ps1
                       </code>
                       注册
                       <code className="text-warning-strong">comfyapp://</code>

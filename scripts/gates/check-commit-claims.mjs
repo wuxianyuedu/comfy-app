@@ -63,7 +63,7 @@
  * （ISSUE #2070）：假声明长在批次里较早那笔上时，推送那一刻审的是最新一笔 ⇒ 漏过；
  * 合并之后 HEAD 前进 ⇒ 再没有第二个执行者回头重放。所以**执行者一律交一段区间**：
  * `premerge-check.mjs` 的 `claims` 段交 `<分叉点>..HEAD`（= 本次带进来的那一批），
- * 平台侧 PR 那一格跑的是同一个入口（`node scripts/premerge-check.mjs --only=claims`）。
+ * 平台侧 PR 那一格跑的是同一个入口（`node scripts/gates/premerge-check.mjs --only=claims`）。
  * 区间里没有提交（`base == HEAD`）时打一句「无可审，不是判过」并退 **0** ——
  * 那与「spec 写错 / 不是 git 检出」的 **2** 是两件事，别混（§13.6.2）。
  *
@@ -195,7 +195,7 @@ const COUNT_ZERO_RE =
  */
 function commitFiles(commit) {
   /* `-c core.quotePath=false`：路径要原样（同本文件 `sectionInTree()` 那条，机制见
-   * `scripts/changed-scope.mjs` 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，
+   * `scripts/lib/changed-scope.mjs` 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，
    * 本仓有 38 份文件名带非 ASCII 的文件，全在 `docs/` 下）。 */
   const out = git(["-c", "core.quotePath=false", "show", "--name-only", "--format=", commit]);
   if (out === null) {
