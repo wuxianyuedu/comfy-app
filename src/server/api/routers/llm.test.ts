@@ -12,8 +12,9 @@ const { llmServer, contracts, defaults, workshopLlm } = vi.hoisted(() => ({
       provider: "remote",
       hasApiKey: true,
     })),
-    /* 对话测试（#4080）的按名解析：只认远端演示名，其余回 null（路由据此判 NOT_FOUND）。 */
-    resolveRemoteModelConnection: vi.fn(async (name: string) => {
+    /* 对话测试（#4080）的按名解析：只认远端演示名，其余回 null（路由据此判 NOT_FOUND）。
+     * 同步实现直接返回值即可（路由侧会 await）。 */
+    resolveRemoteModelConnection: vi.fn((name: string) => {
       if (name === "remote-model") {
         return { name, baseUrl: "https://remote.example/v1", apiKey: "remote-key" };
       }
@@ -21,14 +22,14 @@ const { llmServer, contracts, defaults, workshopLlm } = vi.hoisted(() => ({
     }),
   },
   workshopLlm: {
-    getWorkshopLLMConfig: vi.fn(async () => ({
+    getWorkshopLLMConfig: vi.fn(() => ({
       apiKey: "local-key",
       baseUrl: "http://127.0.0.1:11434",
       maxTokens: 2048,
       model: "configured-default",
       temperature: 0.7,
     })),
-    completeWorkshopLLM: vi.fn(async () => "pong"),
+    completeWorkshopLLM: vi.fn(() => "pong"),
   },
   contracts: {
     loadModeContractLayers: vi.fn(() => ({
