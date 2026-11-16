@@ -17,6 +17,7 @@ import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
 import { parseWorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
 import { buildEncapsulatedInputs, type WorkshopExposedValues } from "./workflow-encapsulation";
 import { loadModeContracts } from "./mode-contract.server";
 
@@ -50,12 +51,16 @@ export async function createWorkflowRunTask(
    * 读不到注册表时按空注册表处理 —— 回落内置契约，不阻断生成。 */
   const contracts = await loadModeContracts();
   const contractIds = contracts.find((c) => c.mode === upperToken(mode))?.inputs;
+  /* 尺寸换算用**生效的那份**表（ISSUE #3972）：项目默认 + 本机覆盖现读磁盘，
+   * 与 /api/size-presets、设置页同源 —— 设置里改过的表在服务端编排真的生效。 */
+  const sizeTable = await loadSizePresetTable();
   const { workflowInputs } = buildEncapsulatedInputs({
     io,
     paramMap: tpl.paramMap,
     mode,
     values: input.values,
     contractIds,
+    table: sizeTable,
   });
 
   const params = {

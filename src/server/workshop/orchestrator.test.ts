@@ -9,6 +9,19 @@ import type { WorkshopLLMConfig } from "./llm";
 import { isProjectType, type Character, type Shot } from "~/lib/workshop/types";
 import { asRecord } from "~/lib/is-record";
 import type { CreateSessionInput } from "./repository";
+import { generateImageViaApi } from "./api-channel";
+
+/* 生效表换桩（ISSUE #3972）：把 image 场景 16:9 / 1k 改成 1280×720（项目默认
+ * 1024×576），验证 api 通道的 WxH 折算读的是现读的生效表。 */
+vi.mock("~/lib/media/size-preset-fs.server", async () => {
+  const { mergeSizePresetTable } = await import("~/lib/media/size-presets");
+  return {
+    loadSizePresetTable: () =>
+      Promise.resolve(
+        mergeSizePresetTable({ image: { "16:9 横屏": { "1k": { width: 1280, height: 720 } } } }),
+      ),
+  };
+});
 
 const { store } = vi.hoisted(() => ({
   store: new Map<string, WorkshopSessionState>(),
@@ -248,5 +261,27 @@ describe("workshop orchestrator 全流程", () => {
     const r = await orchestrator.composeFinal(id, { render: true });
     expect(r.planPath).toBe("/data/workshop-compositions/x.json");
     expect(r.renderNote).toBe("no ffmpeg");
+  });
+});
+
+/* ── 尺寸换算按生效表（ISSUE #3972）────────────────────────────── */
+
+describe("generateImage 按生效表折算宽高（ISSUE #3972）", () => {
+  it("api 通道：WxH 按现读的生效表算，不再用编译进包的默认", async () => {
+    // idea 用独立值：createSession 的重试去重（#3852）会按参数指纹合并。
+    const id = await orchestrator.createSession({ idea: "size-table-3972" });
+    await orchestrator.setIdea(id, "x");
+    await orchestrator.generateScript(id);
+    await orchestrator.extractCharacters(id);
+    const board = await orchestrator.buildStoryboard(id);
+    const shot = board.shots[0]!;
+    await orchestrator.generateImage(id, {
+      shotId: shot.id,
+      size: { ratio: "16:9 横屏", clarity: "1k", multiple: 64 },
+    });
+    const payload = vi.mocked(generateImageViaApi).mock.calls.at(-1)?.[0];
+    /* 桩里的生效表把 16:9 / 1k 改成了 1280×720 —— 上游收到的必须是它，
+     * 而不是默认表的 1024×576。 */
+    expect(payload?.size).toBe("1280x720");
   });
 });
