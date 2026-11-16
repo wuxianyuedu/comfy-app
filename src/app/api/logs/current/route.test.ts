@@ -48,6 +48,16 @@ vi.mock("~/lib/shell/launch-diagnostics", async () => {
   };
 });
 
+/* 鉴权在单机模式下会回落演示用户（要读库），这里直接放行：本用例断言的是
+ * 增量读取契约，不是鉴权（与 export / diagnostics 两份同口径）。 */
+vi.mock("~/server/auth/request-user", () => ({
+  requireRequestUser: () => ({
+    id: "u1",
+    email: "t@example.com",
+    name: null,
+  }),
+}));
+
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {

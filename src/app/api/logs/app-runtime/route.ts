@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
 import { isRecord } from "~/lib/is-record";
 import { RUNTIME_LOG_MESSAGE_MAX, clampText } from "~/lib/text-clamp";
+import { requireRequestUser } from "~/server/auth/request-user";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 
 /**
  * 应用运行日志写入端点（客户端 → 服务端）：`app-runtime-log` 是 Node-only 模块，客户端必须经此端点转交写入，
@@ -26,6 +28,11 @@ function isAllowedLevel(v: unknown): v is "info" | "warn" | "error" {
 const MAX_MSG_LEN = RUNTIME_LOG_MESSAGE_MAX;
 
 export async function POST(request: Request) {
+  /* 鉴权与 /api/logs/list 同一口径（#4041）：运行日志的写入端点不对外开放。 */
+  const user = await requireRequestUser();
+  if (!user) {
+    return unauthorizedResponse();
+  }
   try {
     const rawBody: unknown = await request.json();
     const body: Record<string, unknown> = isRecord(rawBody) ? rawBody : {};

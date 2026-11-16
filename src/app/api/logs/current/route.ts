@@ -15,6 +15,8 @@ import {
 } from "~/lib/log/log-paths";
 import { RUNTIME_LOG_SOURCES, type RuntimeLogSource } from "~/lib/log/runtime-log-file";
 import { latestRuntimeLogFile } from "~/lib/log/runtime-log-pack.server";
+import { requireRequestUser } from "~/server/auth/request-user";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 
 const LAUNCHER_LOG_FILE = LAUNCHER_SHELL_LOG;
 const SENTINEL_FILE = DEV_LAUNCHER_CURRENT_SENTINEL;
@@ -226,6 +228,11 @@ async function resolveSourceFile(
 }
 
 export async function GET(request: Request) {
+  /* 鉴权与 /api/logs/list 同一口径（#4041）：日志正文不对外开放。 */
+  const user = await requireRequestUser();
+  if (!user) {
+    return unauthorizedResponse();
+  }
   const { searchParams } = new URL(request.url);
   const source = searchParams.get("source") ?? "dev-launcher";
   const requestedOffset = Number(searchParams.get("offset") ?? "0");
