@@ -55,8 +55,8 @@ const { test, expect } = defineGateRepo({
      * 里，读起来像「台账判据坏了」，实际是夹具少一个文件。它由夹具的 `copyGateDeps` 自动补齐（沿脚本的
      * `require("./x.cjs")` 递归），所以这里不必再抄一遍。 */
     copyFileSync(
-      join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"),
-      join(repo.dir, "scripts", ".gate-executor-ledger.json"),
+      join(REPO_ROOT, "scripts", "gates", ".gate-executor-ledger.json"),
+      join(repo.dir, "scripts", "gates", ".gate-executor-ledger.json"),
     );
     /* 空执行者来源：`.githooks/`、`package.json`、`tests/` 都不建 ——
      * 那正是「无执行者」这一档成立的前提。 */
@@ -76,7 +76,7 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
      * 会漂的判据（同一族先例见 #2135 那次钩子步数被钉死）。 */
     /* 台账用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
     const onDemand: unknown = JSON.parse(
-      readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
+      readFileSync(join(REPO_ROOT, "scripts", "gates", ".gate-executor-ledger.json"), "utf8"),
     );
     if (!isRecord(onDemand) || !isRecord(onDemand.onDemand)) {
       throw new Error("台账形状不对（缺 onDemand）");
@@ -123,7 +123,7 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
     );
     // 把它加进台账（读原台账、补一条）。
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       JSON.stringify({
         onDemand: {
           "check-probe-orphan.cjs": { why: "探针", who: "探针" },
@@ -170,7 +170,7 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
 
   test("台账里的孤儿条目（脚本已不存在）⇒ 红", ({ repo }) => {
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       JSON.stringify({
         onDemand: {
           "check-already-deleted.cjs": { why: "探针", who: "探针" },
@@ -215,11 +215,11 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
      * `run-ast-gates.cjs` —— 6 条共享一次解析。判据的**执行者**因此从
      * 「这 6 行」变成「这 1 行」，本用例跟着改靶子（钉的还是同一件事：
      * 这一步的 flag 层面不许漂）。 */
-    expect(steps().find((s) => s.cmd.includes("scripts/run-ast-gates.cjs"))).toEqual({
+    expect(steps().find((s) => s.cmd.includes("scripts/gates/run-ast-gates.cjs"))).toEqual({
       label: "AST 判据聚合（6 条共享一次解析）",
       // `--staged` = 输入面跳过（按条透传，口径见 §13.5.8.2）。逐字相等的口径
       // 保留（这一族的价值就是「flag 层面也不许漂」）。
-      cmd: "node scripts/run-ast-gates.cjs --staged",
+      cmd: "node scripts/gates/run-ast-gates.cjs --staged",
     });
   });
 
@@ -277,10 +277,14 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     for (const m of read(".githooks/pre-commit").matchAll(/^ {2}run "[^"]+" (?<cmd>.+)$/gm)) {
       collect(m.groups?.cmd ?? "");
     }
-    for (const m of read("scripts/quality-gate.mjs").matchAll(/args:\s*\[(?<body>[^\]]*)\]/g)) {
+    for (const m of read("scripts/gates/quality-gate.mjs").matchAll(
+      /args:\s*\[(?<body>[^\]]*)\]/g,
+    )) {
       collect(m.groups?.body ?? "");
     }
-    for (const m of read("scripts/quality-gate.ps1").matchAll(/Args\s*=\s*@\((?<body>[^)]*)\)/g)) {
+    for (const m of read("scripts/gates/quality-gate.ps1").matchAll(
+      /Args\s*=\s*@\((?<body>[^)]*)\)/g,
+    )) {
       collect(m.groups?.body ?? "");
     }
     return [...out];
@@ -366,7 +370,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     repo.write(".githooks/pre-commit", `  run "窄档" node scripts/${PROBE} --staged\n`);
     repo.write("package.json", JSON.stringify({ scripts: { wide: `node scripts/${PROBE}` } }));
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -395,7 +399,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     repo.write(".githooks/pre-commit", `  run "窄档" node scripts/${PROBE} --staged\n`);
     repo.write("package.json", JSON.stringify({ scripts: { wide: `node scripts/${PROBE}` } }));
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -422,7 +426,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     // 唯一的一行调用带着 --staged：窄档确实有人跑，宽档（无旗标）没有。
     repo.write(".githooks/pre-commit", `  run "窄档" node scripts/${PROBE} --staged\n`);
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -452,7 +456,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
      * 而登记 `--json` 那一形必须认不到。 */
     repo.write(".cnb.yml", `      转述=node scripts/${PROBE} -- node scripts/inner.cjs --json\n`);
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -478,7 +482,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write("package.json", JSON.stringify({ scripts: { a: "x" } }));
     repo.write(
-      `scripts/.gate-executor-ledger.json`,
+      `scripts/gates/.gate-executor-ledger.json`,
       ledgerWith({
         [PROBE]: [
           { flags: [], judges: "", executors: ["package.json"] },
@@ -501,7 +505,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write("package.json", JSON.stringify({ scripts: { a: `node scripts/${PROBE}` } }));
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [{ flags: [], judges: "只有一形", executors: ["package.json"] }],
       }),
@@ -513,7 +517,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
 
   test("登记了脚本已不在的入口 ⇒ 红（与 onDemand 同一条反向判据）", ({ repo }) => {
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         "check-already-renamed.cjs": [
           { flags: [], judges: "x", executors: ["package.json"] },
@@ -531,7 +535,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     // 而那些正是入口那一层的执行者来源 —— 这里要证的是「此刻这份账对得上」。
     /* 台账用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
     const ledger: unknown = JSON.parse(
-      readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
+      readFileSync(join(REPO_ROOT, "scripts", "gates", ".gate-executor-ledger.json"), "utf8"),
     );
     if (!isRecord(ledger) || !isRecord(ledger.entrypoints)) {
       throw new Error("台账形状不对（缺 entrypoints）");
@@ -557,7 +561,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   test("--update 不许把入口那一半抹掉", ({ repo }) => {
     withProbe(repo);
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           { flags: [], judges: "整档", executors: ["package.json"] },
@@ -571,7 +575,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     expect(code).toBe(0);
     /* 台账用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
     const after: unknown = JSON.parse(
-      readFileSync(join(repo.dir, "scripts", ".gate-executor-ledger.json"), "utf8"),
+      readFileSync(join(repo.dir, "scripts", "gates", ".gate-executor-ledger.json"), "utf8"),
     );
     if (!isRecord(after) || !isRecord(after.entrypoints)) {
       throw new Error("台账形状不对（缺 entrypoints）");
@@ -594,7 +598,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write(".githooks/pre-commit", hookBody);
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -649,7 +653,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
         `  run "整档" node scripts/${PROBE}\n`,
     );
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           { flags: [], judges: "整档全判", executors: [".githooks/pre-commit"] },
@@ -680,7 +684,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
         `  run "b" node scripts/${PROBE} --staged --json\n`,
     );
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -700,7 +704,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
 
     /* 相等那一档改成包含那一档（`--staged` 是 `--staged --json` 的子集），报的是另一句话。 */
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -738,7 +742,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
           `  run "报告出 JSON" node scripts/${reportProbe} --json\n`,
       );
       repo.write(
-        "scripts/.gate-executor-ledger.json",
+        "scripts/gates/.gate-executor-ledger.json",
         JSON.stringify({
           onDemand: {},
           entrypoints: {

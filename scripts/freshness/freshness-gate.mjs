@@ -267,7 +267,7 @@ export function combineEvidence(committed, stagedHit, now) {
  *   `committedSinceMidnight` 同一口径：拿不到答案时不许让这一档白放行，也不许凭空加结论）
  */
 function stagedTouchesTrack(track) {
-  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/lib/changed-scope.mjs`
    * 的文件头「口径 ④」）。 */
   const res = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
     cwd: ROOT,

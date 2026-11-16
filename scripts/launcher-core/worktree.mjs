@@ -51,7 +51,7 @@ const KEY_DEPS = ["typescript", "@typescript/native", "next"];
  * 都要解析到的包，多解析一次不产生新的工作。
  *
  * 清单**只定义一次**：权威定义在 `docs/reference-facts.md` 的 `deps.resolveProbes`
- * 那一行（`scripts/doc-facts.cjs` 反向解析它），这里的字面量由
+ * 那一行（`scripts/docs/doc-facts.cjs` 反向解析它），这里的字面量由
  * `tests/deps-freshness-gate.test.ts` 逐项核对 —— 两处各记一份必然分叉，而分叉之后
  * 「哪一份是真的」没有判据能回答（同 §18「白名单只定义一次」那条口径）。
  */

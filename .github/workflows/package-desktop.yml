@@ -17,7 +17,7 @@
 #     GitHub 对这条链只是镜像仓，用户在 CNB 侧提诉求、也该在 CNB 侧拿包。
 #   · **两类成品分开下载（ISSUE #3345）**：安装版（nsis / msi）与免安装版（解压即用的
 #     portable zip）是两种分发形态，不再混进同一个 artifact。`pnpm tauri build` 只产
-#     安装包；紧接着那一格用 `scripts/package-desktop-portable.mjs` 把同一份载荷按
+#     安装包；紧接着那一格用 `scripts/build/package-desktop-portable.mjs` 把同一份载荷按
 #     打包器同布局（`app.exe` + `node.exe` + `static/**`，见规范 §7.6）收成单个 zip。
 #     两个 artifact 各传一类、Release 资产也按名字分开 —— 拿包的人不用再从一堆 exe 里挑。
 #   · CNB 的 `ci-cp936-exit.mjs` 包裹是给 CP936 控制台的转码层；GitHub Windows runner
@@ -144,7 +144,7 @@ jobs:
           Write-Host "[package-desktop] pnpm 真身目录已补进 PATH：$found"
 
       # NSIS 工具镜像做成跨跑缓存：key 锁死 NSIS_PLAN 的版本（3.13），版本升上去 = 同批改
-      # 这里与 scripts/tauri-tools-cache.mjs 的 NSIS_PLAN。path 即 mirrorDir 的落点
+      # 这里与 scripts/build/tauri-tools-cache.mjs 的 NSIS_PLAN。path 即 mirrorDir 的落点
       # （<COMFY_CI_TOOLS_ROOT>/nsis/3.13），与预置步 COMFY_CI_TOOLS_ROOT 同源。命中 ⇒ 预置步的
       # ensure 直接补齐 bundler 缓存；miss ⇒ 预置步先 --download 建镜像（付一次下载），
       # 本步在跑尾把镜像存进缓存。
@@ -165,7 +165,7 @@ jobs:
         # （Unrecognized named-value: 'runner'）。工具根与上方 cache 的 path 同源。
         env:
           COMFY_CI_TOOLS_ROOT: ${{ runner.temp }}\ci-tools
-        run: node scripts/tauri-tools-cache.mjs || (node scripts/tauri-tools-cache.mjs --download && node scripts/tauri-tools-cache.mjs)
+        run: node scripts/build/tauri-tools-cache.mjs || (node scripts/build/tauri-tools-cache.mjs --download && node scripts/build/tauri-tools-cache.mjs)
 
       - name: 桌面成品构建（cnb 同款判据一字不改）
         run: pnpm tauri build
@@ -174,7 +174,7 @@ jobs:
       # 会被下面「安装版」artifact 一起收走，两类成品又混回一处。
       # 组装步只读三件现成产物（壳 / sidecar / static），缺件即红，不重跑任何构建。
       - name: 组装免安装版（portable zip；与安装包同一次构建、同一份载荷）
-        run: node scripts/package-desktop-portable.mjs --out portable/ComfyAPP-portable.zip --stage portable-stage
+        run: node scripts/build/package-desktop-portable.mjs --out portable/ComfyAPP-portable.zip --stage portable-stage
 
       # upload-artifact v4 → v7（2026-11-02 核过 tag）：v5 起 node24 运行时，v6 起要求
       # runner ≥ 2.327.1（托管 runner 恒满足），v7 新增 `archive` 输入（缺省 true ⇒

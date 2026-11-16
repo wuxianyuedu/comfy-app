@@ -21,5 +21,5 @@
   `happy-dom` `20.14.6` → **`21.0.4`**（两条 advisory 的交集最小可行版，跨大版本；只在
   `environment: "happy-dom"` 的测试环境里，不进运行时不进产物），`overrides` 的
   `undici@7` `7.29.1` → `7.30.1`、`markdown-it@14` `14.3.1` → `14.3.3`（都是**抬高已存在的键**，
-  不是新加规则）。台账 `scripts/.dependency-audit-baseline.json` 随之由 `--update` 收紧到 0 条。
+  不是新加规则）。台账 `scripts/gates/.dependency-audit-baseline.json` 随之由 `--update` 收紧到 0 条。
   实跑验证：`src/components/studio/**` 与 `src/app/api/logs/**` 共 31 份 / 257 条 DOM 用例全绿。

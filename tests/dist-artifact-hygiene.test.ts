@@ -35,7 +35,7 @@ const stripModule = readFileSync(
   "utf8",
 );
 const devArtifactsModule = readFileSync(
-  join(process.cwd(), "scripts", "standalone-dev-artifacts.mjs"),
+  join(process.cwd(), "scripts", "build", "standalone-dev-artifacts.mjs"),
   "utf8",
 );
 const checker = readFileSync(
@@ -181,7 +181,7 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
     // 而漏掉是静默的）。这里锁「白名单存在且条目被逐个点名」——
     // 把白名单换成黑名单、或改成目录级放行，都会让下面这条失败。
     expect(stripModule).toContain("export const RUNTIME_SCRIPTS = [");
-    expect(stripModule).toContain('"install-comfyapp-helper.ps1"');
+    expect(stripModule).toContain('"devtools/install-comfyapp-helper.ps1"');
     expect(stripModule).toContain('"dev-launcher.mjs"');
     // 嵌套条目也要逐项登记（`launcher-core/*` 是编排器的运行期依赖，
     // 目录级放行会让以后新增的脚本自动进产物）
@@ -311,7 +311,7 @@ function forbiddenSourcesFor(tag: string): Array<string> {
 
 describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () => {
   it("产物层检查持有与剔除清单一致的 scripts 白名单", () => {
-    expect(checker).toContain('"install-comfyapp-helper.ps1"');
+    expect(checker).toContain('"devtools/install-comfyapp-helper.ps1"');
     expect(checker).toContain('"dev-launcher.mjs"');
     expect(checker).toContain('"launcher-core/orchestrator.mjs"');
     expect(checker).toContain("ALLOWED_SCRIPTS");

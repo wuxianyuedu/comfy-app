@@ -1,5 +1,5 @@
 /**
- * 桌面壳提交门禁（`scripts/shell-gate.mjs`）的判据。触发面比实现更易错：窄了 = 改了壳没人管（`#[test]` 从不跑、
+ * 桌面壳提交门禁（`scripts/gates/shell-gate.mjs`）的判据。触发面比实现更易错：窄了 = 改了壳没人管（`#[test]` 从不跑、
  * 硬规则 5 靠人记）；宽了 = 每个前端提交付一次 Rust 编译（冷 430s）⇒ 人直接 `--no-verify`，判据归零。
  * 另半（ISSUE #1356）是**判决本身**：`runGate` 四条出口与「判出问题 ⇒ 非零退出」过去只有抠源码断言，现由夹具组真跑。
  */
@@ -33,13 +33,13 @@ import {
   materializeCargoTestInputs,
   runGate,
   rustupCargoHomeValue,
-} from "../scripts/shell-gate.mjs";
+} from "../scripts/gates/shell-gate.mjs";
 import { sidecarFileName } from "../scripts/sidecar-name.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const GATE_SCRIPT = "scripts/shell-gate.mjs";
+const GATE_SCRIPT = "scripts/gates/shell-gate.mjs";
 /** cargo 的寻址判据（PATH 优先 / 安装位兜底 / 取证）—— 从主文件拆出来的那一段。 */
-const CARGO_MODULE = "scripts/shell-gate-cargo.mjs";
+const CARGO_MODULE = "scripts/gates/shell-gate-cargo.mjs";
 /* `shellStaleWarning` 的实现随编排器拆分搬到 `launcher-core/preflight.mjs`
  * （ISSUE #1811 拆 R5 超限文件）—— 这个常量只用来读它盯的 targets，直接指实现那份。 */
 const LAUNCHER = "scripts/launcher-core/preflight.mjs";
@@ -153,7 +153,7 @@ describe("桌面壳提交门禁的触发面（§11.10.4 / 硬规则 5）", () =>
     // 同一族（那一族里 `shell-gate` 这一格见该文件 `ISSUE #1597` 那组）。
     const steps = dGroupSteps(read(HOOK));
     expect(
-      steps.some((s) => s.cmd.includes("scripts/shell-gate.mjs")),
+      steps.some((s) => s.cmd.includes("scripts/gates/shell-gate.mjs")),
       `D 组 ${steps.length} 步里没有这一步（被注释掉的行不算在场）`,
     ).toBe(true);
   });
@@ -873,7 +873,7 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
     const inProcess = runGate({ staged });
     const cli = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "shell-gate.mjs"), "--staged", ...staged],
+      [path.join(ROOT, "scripts", "gates", "shell-gate.mjs"), "--staged", ...staged],
       { cwd: ROOT, encoding: "utf8" },
     );
     expect(cli.status).toBe(inProcess.exitCode);
@@ -904,7 +904,7 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
   it("没碰壳 ⇒ 退 0，且 CLI 念出「本次没有壳改动」（不许返回 0 且无输出）", () => {
     const cli = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "shell-gate.mjs"), "--base", "HEAD"],
+      [path.join(ROOT, "scripts", "gates", "shell-gate.mjs"), "--base", "HEAD"],
       { cwd: ROOT, encoding: "utf8" },
     );
     expect(cli.status).toBe(0);
@@ -914,7 +914,7 @@ describe("shell-gate —— `--base` 形态（平台侧以 PR diff 为判决面�
   it("基线取不到 ⇒ 退 2（没跑起来），且说清是「没跑起来」而不是「判红」", () => {
     const cli = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "shell-gate.mjs"), "--base", "no-such-ref-xyz"],
+      [path.join(ROOT, "scripts", "gates", "shell-gate.mjs"), "--base", "no-such-ref-xyz"],
       { cwd: ROOT, encoding: "utf8" },
     );
     expect(cli.status).toBe(2);
@@ -1024,11 +1024,11 @@ describe("shell-gate —— 平台合成的 merge 提交不许把别人的壳改
     return { dir, base, source };
   }
 
-  /** 在这个检出里起一次真 CLI（`scripts/shell-gate.mjs --base <基线>`）。 */
+  /** 在这个检出里起一次真 CLI（`scripts/gates/shell-gate.mjs --base <基线>`）。 */
   function runCli(cwd: string, baseRef: string, env = process.env) {
     return spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "shell-gate.mjs"), "--base", baseRef],
+      [path.join(ROOT, "scripts", "gates", "shell-gate.mjs"), "--base", baseRef],
       { cwd, encoding: "utf8", env },
     );
   }

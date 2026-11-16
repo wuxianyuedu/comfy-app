@@ -8,7 +8,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { analyze, isLooser, num } from "../scripts/gates/check-gate-thresholds.cjs";
-import { gateChainScripts } from "../scripts/gates/gate-chain-scripts.cjs";
+import { gateChainPaths, gateChainScripts } from "../scripts/gates/gate-chain-scripts.cjs";
 
 /** 账里一条的形状（`group` / `movedFrom` / `movedIssue` 都是可选位）。 */
 type Entry = {
@@ -282,7 +282,7 @@ describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）
   it("自指面在扫描根里，且真仓在这张面上今天全绿", () => {
     const root = path.resolve(__dirname, "..");
     const ledger: unknown = JSON.parse(
-      readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
+      readFileSync(path.join(root, "scripts/gates/.gate-thresholds.json"), "utf8"),
     );
     if (!isLedger(ledger)) {
       throw new Error(".gate-thresholds.json 里没有 entries");
@@ -359,7 +359,7 @@ describe("真仓自证：这本账现在必须与源码一致", () => {
   it("账里每条都能在源码里定位到，且数值相等", () => {
     const root = path.resolve(__dirname, "..");
     const ledger: unknown = JSON.parse(
-      readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
+      readFileSync(path.join(root, "scripts/gates/.gate-thresholds.json"), "utf8"),
     );
     if (!isLedger(ledger)) {
       throw new Error(".gate-thresholds.json 里没有 entries");
@@ -403,13 +403,13 @@ describe("扫描根：门禁链按名字调起的判定脚本也要进面（ISSU
     /* 链上的每份脚本都应被 scanJudgeFiles 收进 —— 用真仓的判定脚本入口跑一遍，
      * 断的是「扩面之后链外没有藏带顶层数值的判据」这一格由共享实现保证。 */
     const filesToScan = new Set([
-      ...[...chain].map((n) => `scripts/${n}`),
+      ...gateChainPaths(),
       /* #3930 起判据在 scripts/gates/：扫描根要把那一层也数进去。 */
       ...readdirSync(path.join(root, "scripts", "gates"))
         .filter((f) => /^check-.*\.cjs$/.test(f))
         .map((f) => `scripts/gates/${f}`),
     ]);
-    expect(filesToScan.has("scripts/shell-gate.mjs")).toBe(true);
+    expect(filesToScan.has("scripts/gates/shell-gate.mjs")).toBe(true);
     expect(filesToScan.has("scripts/gates/check-file-structure.cjs")).toBe(true);
   });
 });

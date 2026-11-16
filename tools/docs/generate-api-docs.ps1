@@ -4,20 +4,20 @@ generate-api-docs.ps1 — 一键重生成 API 文档（docs\api，双击用）
 
 ===============================================================================
 给「改了 src/lib|server|trpc 要同步 docs/api」的场景：双击本脚本即调
-`node scripts/generate-api-docs.mjs`（= `pnpm run docs`），由后者调 typedoc 重生成
+`node scripts/docs/generate-api-docs.mjs`（= `pnpm run docs`），由后者调 typedoc 重生成
 docs\api\**，并且**验产物真的被这一轮重写了**才收尾。
 
 为什么不再直接跑 typedoc：它写出失败时照样退 0、日志照样收在
 `[info] html generated at …` 上 —— 现场是「退出码 0 + 说生成了 + 产物一个没更新」，
 下一次有人发现已经是「翻 docs\api 看到它过期」。现在那层会验（`index.html` 是不是
 这一轮写的）、会重试（Windows 上目录被占用多半是瞬时失败），全失败才退非零。
-判据与完整背景见 scripts\typedoc-run.mjs 的文件头。
+判据与完整背景见 scripts\docs\typedoc-run.mjs 的文件头。
 
-逻辑不在本文件：跨平台实现是 scripts\generate-api-docs.mjs（规范 §9.5），
+逻辑不在本文件：跨平台实现是 scripts\docs\generate-api-docs.mjs（规范 §9.5），
 本入口只做「定位项目根 → 调它 → 透传退出码」。
 
 前置（一次性）：Windows 默认双击 .ps1 是「用记事本打开」，需先右键
-scripts\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
+scripts\devtools\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
 
 用法：
   双击 <项目根>\tools\docs\generate-api-docs.ps1
@@ -36,9 +36,9 @@ $ErrorActionPreference = "Stop"
 $root = Get-ProjectRoot -StartDir $PSScriptRoot
 Set-Location $root
 
-$script = Join-Path $root "scripts\generate-api-docs.mjs"
+$script = Join-Path $root "scripts\docs\generate-api-docs.mjs"
 if (-not (Test-Path -LiteralPath $script)) {
-    Write-Host "[ERROR] 未找到生成脚本：scripts\generate-api-docs.mjs" -ForegroundColor Red
+    Write-Host "[ERROR] 未找到生成脚本：scripts\docs\generate-api-docs.mjs" -ForegroundColor Red
     exit 1
 }
 

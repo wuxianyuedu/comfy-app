@@ -19,7 +19,7 @@ import {
   readProof,
   readRevisions,
   writeProof,
-} from "../scripts/premerge-proof.mjs";
+} from "../scripts/gates/premerge-proof.mjs";
 
 const HEAD = "a".repeat(40);
 const UPSTREAM = "b".repeat(40);
@@ -303,14 +303,14 @@ describe("接线在位（判据要有人跑，也要有人守那条线）", () =
     // 锚定行首：把那一行前面加 `# ` 注掉之后，`toContain` 仍然命中，只有这里会红。
     // `"$1" "$2"` 是目的地那一问的输入（ISSUE #3025）：少了它们，推向镜像仓库的 push
     // 会拿到「取不到上游引用」的读数而被拦死。
-    expect(hook).toMatch(/^node scripts\/premerge-proof\.mjs "\$1" "\$2" <"\$refs_in"/m);
+    expect(hook).toMatch(/^node scripts\/gates\/premerge-proof\.mjs "\$1" "\$2" <"\$refs_in"/m);
   });
 
   it("stdin 只读一次、再分喂两处 —— 少一处就会有一方拿到空输入且不报错", () => {
     expect(hook).toMatch(/^cat >"\$refs_in" \|\| exit 1$/m);
     expect(hook).toMatch(/^git lfs pre-push "\$@" <"\$refs_in" \|\| exit \$\?$/m);
     expect(hook).toMatch(
-      /^node scripts\/premerge-proof\.mjs "\$1" "\$2" <"\$refs_in" \|\| exit \$\?$/m,
+      /^node scripts\/gates\/premerge-proof\.mjs "\$1" "\$2" <"\$refs_in" \|\| exit \$\?$/m,
     );
   });
 

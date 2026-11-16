@@ -18,7 +18,7 @@ import {
   explicitDevHandle,
   isExplicitSource,
   resolveDevHandle,
-} from "../dev-handle.mjs";
+} from "../platform/dev-handle.mjs";
 
 /** 提单人这一格读的键名（`.env` 与进程环境同一名）—— 定义在 `dev-handle.mjs`，
  * 这里再导出一次只为了让既有调用点（`ship-platform.mjs` 等）的 import 路径不变。 */

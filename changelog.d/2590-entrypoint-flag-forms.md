@@ -45,7 +45,7 @@
   判据本体、确认这条声明真会被收进判决面且真被台账敲到，然后**手工**改账」——
   确认过程：这 6 处都在 `checkEntrypoints` 内，它由台账 `main()` 调用、并被本次新增的
   5 条用例打到（`tests/gate-executors.test.ts` 28 条全绿）。之后手工把
-  `scripts/.tsc-diagnostic-executors.json` 的 `gate-executor-claim.baseline` 从 57 改成 63
+  `scripts/gates/.tsc-diagnostic-executors.json` 的 `gate-executor-claim.baseline` 从 57 改成 63
   （结论行回到「9 条声明的执行者都在场（零增量）」）。**这不是放宽**：那条问题被回答了，
   而账上留的是回答之后的数。
 

@@ -8,7 +8,7 @@
   | `tests/eslint-gate-canary.test.ts` | **147s**（默认档 80s + 两条 sabotage 33s / 30s） | **89~94s**（默认档 **28s**） | 三条用例各起一个 eslint 子进程；开销大头是**每次调用的 project service 冷启动**（单次约 30s） |
   | `tests/base-check.test.ts` | **69s**（67 条用例，最重一条 9s） | 未改 | 11 条真 git 夹具用例 × 3~9s，**没有单点** |
 
-  改的那一刀：`scripts/eslint-gate-canary.mjs` 原来默认档跑**两次** `eslint`（TS 面一次、
+  改的那一刀：`scripts/gates/eslint-gate-canary.mjs` 原来默认档跑**两次** `eslint`（TS 面一次、
   scripts 面一次），两批文件的判定结果只是并进同一张 `byFile` 表 —— 也就是**付了两次冷启动
   换一次判定**。合成一次调用（`clean.ts` 照旧跟着 TS 面进、`node-global.mjs` 照旧只在
   scripts 面非空时进，sabotage 的最小集语义逐字保持）⇒ 默认档 **80s → 28s**，

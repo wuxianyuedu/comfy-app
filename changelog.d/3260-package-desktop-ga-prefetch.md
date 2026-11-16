@@ -5,7 +5,7 @@
   schedule #1~#4 均 `failure`、失败步只活 3-4s、退码 `exit code 2`，`pnpm tauri build`
   与后面三格整片 `skipped` ⇒ 一次都没出过 `.msi` / `-setup.exe`。
   根因不是资产失效（zip / dll 的 URL、`sha256`、字节、zip 顶层 `nsis-3.13/` 与
-  `NSIS_PLAN.required` 六件逐件实测为真），而是 `scripts/tauri-tools-cache.mjs` 的
+  `NSIS_PLAN.required` 六件逐件实测为真），而是 `scripts/build/tauri-tools-cache.mjs` 的
   `--download` 用 `tar -xf` 解 zip：本步 `shell: bash` 是 Git Bash，里面的 `tar` 是
   **GNU tar、不读 zip**（本机可复现：`tar: This does not look like a tar archive`，退 2），
   于是下载刚完就 `bail(2)`。`ci-toolchain-browser-fetch.mjs` 早就记过这条平台假设的坑。

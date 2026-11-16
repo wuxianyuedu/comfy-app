@@ -149,7 +149,7 @@ export function pnpmInvocation(
  *
  * 落点两种形状都接：`<落点>/node_modules/pnpm/` 与落点**自己**就是那个包
  * （corepack 的 `…/v1/pnpm/<ver>/`）。入口**从包自己的 `bin` 字段读**、不猜文件名
- * （猜文件名等于替包做决定，`scripts/package-bin-entry.mjs` 那一层早就这么写了）；
+ * （猜文件名等于替包做决定，`scripts/lib/package-bin-entry.mjs` 那一层早就这么写了）；
  * `bin` 指向原生二进制时（pnpm 11+ 是 `{ "pnpm": "pnpm" }`，那个文件是 MZ / ELF）
  * 兜一层 Corepack 对 pnpm ≥ 11 写死的 `bin/pnpm.mjs`。
  *

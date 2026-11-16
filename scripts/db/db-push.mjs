@@ -41,7 +41,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { describeSpawnFailure, pushSchema } from "./db-push-core.mjs";
 import { pnpmCli, spawnSettled } from "../ci/ci-install-deps.mjs";
-import { rejectUnknownArgs } from "../cli-arg-contract.mjs";
+import { rejectUnknownArgs } from "../lib/cli-arg-contract.mjs";
 import { sweepLegacyTimestamps } from "./db-legacy-sweep.mjs";
 import { sweepDuplicateRowsForUniqueIndexes } from "./db-unique-sweep.mjs";
 import {

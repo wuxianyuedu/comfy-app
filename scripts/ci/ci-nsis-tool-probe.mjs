@@ -43,7 +43,7 @@
  *
  * ## 与兄弟脚本的边界（§12.18 复用优先）
  *
- *   · `scripts/tauri-tools-cache.mjs` —— 判「必需件齐不齐」并补缓存（有退码、会改盘）。
+ *   · `scripts/build/tauri-tools-cache.mjs` —— 判「必需件齐不齐」并补缓存（有退码、会改盘）。
  *     本文件复用它的 `resolveTauriCacheRoot` 与 `NSIS_PLAN.cacheRel` 算**同一口径**的
  *     `ensure` 落点，不另抄一份路径推导；但**不**调 `missingRequired()`，因为那正是
  *     本单要独立复核的那一格结论。
@@ -54,7 +54,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
-import { NSIS_PLAN, resolveTauriCacheRoot } from "../tauri-tools-cache.mjs";
+import { NSIS_PLAN, resolveTauriCacheRoot } from "../build/tauri-tools-cache.mjs";
 
 /**
  * 一次 PowerShell 把全部现场读数取回（**单个子进程**，不为每一问各起一次）。

@@ -248,9 +248,12 @@ describe("syncDependencies：本检出实例在跑时先拦下来（AGENTS 硬�
   });
 
   it("命令行出口复用同一个判据（不在 .ps1 里再写一份端口探测）", () => {
-    const cli = fs.readFileSync(path.join(ROOT, "scripts", "deps-install-guard.mjs"), "utf8");
+    const cli = fs.readFileSync(
+      path.join(ROOT, "scripts", "devtools", "deps-install-guard.mjs"),
+      "utf8",
+    );
     expect(cli).toContain("runningAppInstances");
-    const ps1 = fs.readFileSync(path.join(ROOT, "scripts", "sync-lint.ps1"), "utf8");
+    const ps1 = fs.readFileSync(path.join(ROOT, "scripts", "devtools", "sync-lint.ps1"), "utf8");
     expect(ps1).toContain("deps-install-guard.mjs");
     expect(ps1, "又回到 .ps1 自己探端口那一族").not.toMatch(/Get-NetTCPConnection/);
   });

@@ -1,7 +1,7 @@
 /**
  * 平台侧「红了就自己补上再验」的登记表 ⇄ `.cnb.yml` 双向同源（ISSUE #1981）。判的不是「哪几档该自动修」，而是「自动修名单只有一处出处」（口径与边界见 §13.5.19）。
  * ① 登记表每条 ⇒ 配置同名 stage 的 `script` 点名其入口且 `--autofix` / `--check` 逐字都在；② 带自动修旗标的 stage ⇒ 必须在登记表里。少任一半就退化成「看着在自动修、修了什么没人知道」（与 §13.5.18 的 `ifModify` 判据同源）。
- * 进固定清单（`scripts/fixed-structural-tests.mjs`）因触发面恰是 `.cnb.yml`：只改配置在静态 import 图里追不到用例，「只在受影响时跑」会随下次配置改动错过。
+ * 进固定清单（`scripts/affected-tests/fixed-structural-tests.mjs`）因触发面恰是 `.cnb.yml`：只改配置在静态 import 图里追不到用例，「只在受影响时跑」会随下次配置改动错过。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";

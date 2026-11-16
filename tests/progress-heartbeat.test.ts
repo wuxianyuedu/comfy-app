@@ -16,9 +16,9 @@ import {
   formatElapsed,
   progressMode,
   startProgress,
-} from "../scripts/progress-heartbeat.mjs";
+} from "../scripts/gates/progress-heartbeat.mjs";
 
-const SCRIPT = fileURLToPath(new URL("../scripts/progress-heartbeat.mjs", import.meta.url));
+const SCRIPT = fileURLToPath(new URL("../scripts/gates/progress-heartbeat.mjs", import.meta.url));
 
 function capture() {
   const chunks: string[] = [];

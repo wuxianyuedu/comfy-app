@@ -264,7 +264,7 @@ export function MultiModeSelect({
               return (
                 /* 键出口是 `{...simpleKeyHandler(…)}` 的**属性展开**，而
                  * `jsx-a11y/click-events-have-key-events` 只读字面量 `onKeyDown`
-                 * —— 规则认不出展开。豁免已在 `scripts/.a11y-rule-ledger.json`
+                 * —— 规则认不出展开。豁免已在 `scripts/gates/.a11y-rule-ledger.json`
                  * 的 `inlineExemptions` 登记（守它的是 `check-click-keyboard.cjs`）。 */
                 /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events -- 键出口是 simpleKeyHandler 的属性展开，规则读不到 */
                 <div

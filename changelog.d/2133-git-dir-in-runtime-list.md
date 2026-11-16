@@ -1,6 +1,6 @@
 ## Fixed
 
-- **`scripts/git-dir.mjs` 补登进两份运行期白名单（ISSUE #2133）**：#2072 那一批把
+- **`scripts/lib/git-dir.mjs` 补登进两份运行期白名单（ISSUE #2133）**：#2072 那一批把
   「本检出 `.git` 在哪」收口到 `git-dir.mjs` 并让 `launcher-core/run.mjs` 顶层静态 import 它，
   却只改了代码、没改清单 —— 于是 standalone 减法（`standalone-private-inputs.mjs` 的
   `RUNTIME_SCRIPTS`）把这份**编排器加载期必需**的模块从产物里剔了出去。表现是桌包脱离仓库

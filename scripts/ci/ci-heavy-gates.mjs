@@ -96,7 +96,7 @@ import path from "node:path";
 import process from "node:process";
 
 import { CHANGED_SCOPED, readHookSteps, runGate } from "../base-check/hook-steps.mjs";
-import { resolveBaseRef, resolveChangedFiles } from "../changed-scope.mjs";
+import { resolveBaseRef, resolveChangedFiles } from "../lib/changed-scope.mjs";
 import { syntheticMergeRange } from "../reformat/reformat-preview-range.mjs";
 import { faceTouched, narrowingEntryForScript } from "./ci-incremental-gates.mjs";
 import {

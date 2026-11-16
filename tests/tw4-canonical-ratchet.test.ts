@@ -64,7 +64,7 @@ describe.for([
 
   it("执行者与「为什么不进钩子」登记在台账里（不进钩子 ≠ 没人管）", () => {
     const ledger: unknown = JSON.parse(
-      readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
+      readFileSync(join(REPO_ROOT, "scripts", "gates", ".gate-executor-ledger.json"), "utf8"),
     );
     /* 台账按 unknown 读（B5 清账）：onDemand 缺席当空映射。 */
     const onDemand: Record<string, unknown> =

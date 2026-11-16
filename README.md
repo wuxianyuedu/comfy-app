@@ -42,13 +42,14 @@ Comfy-APP-T3/
 │  ├─ Cargo.toml            # Rust 依赖
 │  ├─ icons/                # 应用图标
 │  └─ binaries/             # Node 运行时 sidecar（Windows: node-<triple>.exe；其它: node-<triple>）
-├─ scripts/                 # 启动与构建脚本（被壳/工具调用）
+├─ scripts/                 # 启动与构建脚本（被壳/工具调用；完整导航见 scripts/README.md）
 │  ├─ dev-launcher.mjs      # 启动编排（全平台同一份：预检 / 端口 / 拉起 / 回收）
 │  ├─ dev-launcher.ps1      # Windows 调用入口（只负责转交给上面那份）
 │  ├─ launcher-core/        # 编排的平台机制层（进程与端口探测 / 进程组 / 日志）
+│  ├─ gates/                # 质量门禁判据与对账台账（pre-commit / CI 每一条的执行者）
+│  ├─ ci/                   # CI 流水线机制（派发 / 镜像 / GA 回调 / 逐格判决）
 │  ├─ entry-common.ps1      # 双击入口公共库（定位项目根 / 解析 pwsh / 透传退出码）
-│  ├─ build-desktop.mjs     # 组装 src-tauri/static（standalone + splash + sidecar）
-│  └─ install-comfyapp-helper.ps1  # 注册 comfyapp:// 协议
+│  └─ build-desktop.mjs     # 组装 src-tauri/static（standalone + splash + sidecar）
 ├─ tools/                   # 双击入口与构建编排（Windows .ps1，按用途分目录）
 │  ├─ start/                # 启动与初始化入口（双击用）
 │  │  ├─ start-web.ps1            # 控制台模式启动 Web 开发（可见日志）
@@ -95,7 +96,7 @@ Comfy-APP-T3/
 | `CHANGELOG.md`                            | 变更日志（**不要直接改**：条目先进 `changelog.d/` 碎片，见 [规范 §13.10.5](docs/standards/13-提交与-code-review.md#13105-碎片化落地改-changelogd不改-changelogmd)） |
 | `CHANGELOG-archive.md`                    | 历史条目归档：`changelog.d/` 建成至 2026-10 的全部碎片原文（逐份收录、一字未改），供检索历史变更（**它入库给人读，但不进代码索引** —— 单份体量最大，检索走 `grep`/`git`，见下方 `.qoderignore` 那一行）                                                                 |
 | `changelog.d/`                            | 变更日志碎片：一件变更一个文件，避免并行分支在 `CHANGELOG.md` 上冲突；**只放尚未并入的条目**                                                                        |
-| `.qoderignore`                            | Qoder 代码索引的排除表（**不要手改**：由 `scripts/qoder-ignore.mjs` 渲染，`pnpm qoder:ignore` 写 / 刷新、`pnpm qoder:ignore:check` 比对；绝大多数条目本来也被 `.gitignore` 忽略，另有**入库但刻意只出索引**的 `CHANGELOG-archive.md` 历史归档 —— 它给人读，只是不该让每次文档检索都命中历史碎片；`docs/generated/` 生成态镜像自 #3586 起**不再入库**（谁需要谁本地 `pnpm doc:render`），这一条排除项保留是为了本地生成后仍不进索引；改完要重启 Qoder CN 进程才生效，见 [规范 §12.20](docs/standards/12-代码组织与文件结构.md#1220-重复的手工流程收成有名字的入口能做成工具的就做成工具)）  |
+| `.qoderignore`                            | Qoder 代码索引的排除表（**不要手改**：由 `scripts/docs/qoder-ignore.mjs` 渲染，`pnpm qoder:ignore` 写 / 刷新、`pnpm qoder:ignore:check` 比对；绝大多数条目本来也被 `.gitignore` 忽略，另有**入库但刻意只出索引**的 `CHANGELOG-archive.md` 历史归档 —— 它给人读，只是不该让每次文档检索都命中历史碎片；`docs/generated/` 生成态镜像自 #3586 起**不再入库**（谁需要谁本地 `pnpm doc:render`），这一条排除项保留是为了本地生成后仍不进索引；改完要重启 Qoder CN 进程才生效，见 [规范 §12.20](docs/standards/12-代码组织与文件结构.md#1220-重复的手工流程收成有名字的入口能做成工具的就做成工具)）  |
 
 > **双击入口都在 `tools/` 下**（启动类 `tools/start/`、构建类 `tools/build/`），
 > 根目录只保留工程配置与文档，见下方「双击入口速查」与 `tools/README.md`。
@@ -131,7 +132,7 @@ Comfy-APP-T3/
 - **WebView2 运行时**：Windows 10/11 通常已内置；Linux 用系统 WebKitGTK
   （Debian/Ubuntu：`libwebkit2gtk-4.1-dev` / `libgtk-3-dev` / `pkg-config`，
   Fedora：`webkit2gtk4.1-devel`），macOS 用系统 WKWebView
-- （可选）**Python**：仅 comfy-cli venv（`scripts/setup-comfy-cli-venv.ps1`）用到
+- （可选）**Python**：仅 comfy-cli venv（`scripts/devtools/setup-comfy-cli-venv.ps1`）用到
   （Windows Job Object 已由壳内联 Rust 实现，不再依赖 Python）
 
 启动编排**只有一份实现**：`scripts/dev-launcher.mjs`（Windows 也走它）。
@@ -160,7 +161,7 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 ## 双击入口速查（Windows）
 
 所有双击入口都在 `tools/` 下按用途分目录，根目录只放工程配置。首次双击 `.ps1` 前需
-右键 `scripts/enable-ps1-double-click.ps1` →「使用 PowerShell 运行」完成一次性关联
+右键 `scripts/devtools/enable-ps1-double-click.ps1` →「使用 PowerShell 运行」完成一次性关联
 （Windows 默认双击 `.ps1` 是用记事本打开），详见 `docs/standards/launch-and-build.md` §8.3。
 
 | 我想…                                             | 双击                                                                           |
@@ -393,7 +394,7 @@ tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .nex
 | 仅 release 壳（不含安装包）           | `tools\build\build-tauri-release.ps1`                     |
 | 独立模式资源（standalone）        | `tools\build\build-standalone.ps1`                        |
 | 完整安装包（不发布）              | `pnpm tauri build`                                        |
-| 把打好的安装包发布到指定目录      | `node scripts/publish-desktop-bundle.mjs --root <dir>`     |
+| 把打好的安装包发布到指定目录      | `node scripts/build/publish-desktop-bundle.mjs --root <dir>`     |
 | 组装免安装版（解压即用 zip）      | `pnpm package:portable`                                   |
 | 清理重建前端资源                  | `tools\build\rebuild-static.ps1`                          |
 

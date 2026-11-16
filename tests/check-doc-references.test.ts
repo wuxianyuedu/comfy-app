@@ -67,7 +67,7 @@ function isDocFactsModule(v: unknown): v is DocFactsModule {
 
 /** 动态 import 的结果先落 `unknown`，过守卫再当模块用（不用双重断言）。 */
 async function loadDocFacts(): Promise<DocFactsModule> {
-  const mod: unknown = await import("../scripts/doc-facts.cjs");
+  const mod: unknown = await import("../scripts/docs/doc-facts.cjs");
   if (!isDocFactsModule(mod)) {
     throw new Error("doc-facts.cjs 的导出面不对");
   }
@@ -125,16 +125,20 @@ function renderLocalMirror(sources: Array<string>): {
     writeFileSync(abs, docText(rel), "utf8");
   }
   try {
-    execFileSync(process.execPath, [join(REPO_ROOT, "scripts", "render-doc-placeholders.cjs")], {
-      cwd: REPO_ROOT,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        DOC_RENDER_ROOT: root,
-        DOC_RENDER_SCOPED: sources.join(","),
+    execFileSync(
+      process.execPath,
+      [join(REPO_ROOT, "scripts", "docs", "render-doc-placeholders.cjs")],
+      {
+        cwd: REPO_ROOT,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          DOC_RENDER_ROOT: root,
+          DOC_RENDER_SCOPED: sources.join(","),
+        },
       },
-    });
+    );
   } catch (error) {
     /* 重抛要带上原始错误：eslint(preserve-caught-error) 认的是 `cause`，把子进程
      * 的现场只塞进话术里会丢掉堆栈，下一次排障就只剩一句转述。 */
@@ -819,7 +823,7 @@ describe("文档不许用「第 N 步」引用门禁步骤（ISSUE #1374）", ()
   it("有主人的过程序号不被误伤（同一行没有 pre-commit / .githooks / CI）", () => {
     const { code, output } = withProbe(
       "docs/guides/DEV-QUERIES.md",
-      "按 §2.2 第 5 步做依赖预检；`scripts/prepare-local-run.ps1` 第 3 步补齐 `.env`。",
+      "按 §2.2 第 5 步做依赖预检；`scripts/devtools/prepare-local-run.ps1` 第 3 步补齐 `.env`。",
     );
     expect(code).toBe(0);
     expect(output).toContain("[doc:check] ✓");
@@ -1096,7 +1100,7 @@ describe("门禁的步数也不许写进文档（ISSUE #1407，签字口径 (a)�
  * （不是「写入模式退 0 就算通过」）；③ 修不好必须红（产物多余时重渲染不删它）。现场是临时目录夹具仓库（#2415），不写真仓库入库文件。
  */
 describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () => {
-  const RENDER = join(REPO_ROOT, "scripts", "render-doc-placeholders.cjs");
+  const RENDER = join(REPO_ROOT, "scripts", "docs", "render-doc-placeholders.cjs");
   const EDIT = "docs/guides/DEV-QUERIES.md";
 
   let fixtureRoot = "";
@@ -1206,7 +1210,7 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
  * 规范带出另一份镜像 126 行整表重排）。`--only` 答「我这批该写哪几份」，`--check` 答「全量漂了谁」。
  */
 describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
-  const RENDER = join(REPO_ROOT, "scripts", "render-doc-placeholders.cjs");
+  const RENDER = join(REPO_ROOT, "scripts", "docs", "render-doc-placeholders.cjs");
   const MINE = "docs/guides/DEV-QUERIES.md";
   const OTHERS = "docs/guides/TESTING.md";
 

@@ -71,7 +71,7 @@ export function describePythonMissing(preflight) {
      * 排障的全部线索，而「真没有」与「扫的那一侧漏了」在断言里同形。 */
     ...(preflight.evidence ?? []),
     "[e2e]   补它：node scripts/ci/ci-toolchain-selfcheck.mjs   （缺 Python 的机器上跑一次，缺什么它自己装）",
-    "[e2e]   全量读数：node scripts/python-probe.mjs   （两条链逐候选并列；本行判的是",
+    "[e2e]   全量读数：node scripts/lib/python-probe.mjs   （两条链逐候选并列；本行判的是",
     "[e2e]         `resolvePython` 手工扫 PATH 那条，而「工具链自证 / Python 可用性」走的是",
     "[e2e]         起裸名字那条）",
     "[e2e]   跑下去的下场：两条 @critical 主链路用例各报一遍「执行器收口失败」，",

@@ -9,7 +9,7 @@
  * `capped` 只表示清单被页界截断，**不表示**「确实没有更多」。
  */
 import { asArray } from "./ship-build.mjs";
-import { cnbRecords } from "../cnb-fields.mjs";
+import { cnbRecords } from "../platform/cnb-fields.mjs";
 import { LIST_MAX_PAGES, LIST_PAGE_SIZE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 

@@ -12,12 +12,12 @@ import { isRecord } from "~/lib/is-record";
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
-const buildScript = read("scripts/build-executor-host.mjs");
-const smokeScript = read("scripts/smoke-executor-host-standalone.mjs");
+const buildScript = read("scripts/build/build-executor-host.mjs");
+const smokeScript = read("scripts/devtools/smoke-executor-host-standalone.mjs");
 const hostEntry = read("scripts/executor-host.mjs");
 const runtimeGraph = read("src/lib/comfyui/host-runtime.ts");
 const privateInputs = read("scripts/standalone-private-inputs.mjs");
-const devArtifacts = read("scripts/standalone-dev-artifacts.mjs");
+const devArtifacts = read("scripts/build/standalone-dev-artifacts.mjs");
 const buildDesktop = read("scripts/build-desktop.mjs");
 /* package.json 的相关段：JSON.parse 的 any 用运行时守卫收窄（B5 清账，不走 as）。 */
 function isPackageJson(value: unknown): value is {
@@ -164,7 +164,7 @@ describe("冒烟判据本身有效", () => {
    *  这条不需要真产物，所以它总是跑。 */
   it("目录里没有 server.js 时报错，而不是当成通过", async () => {
     const { smokeExecutorHostArtifact } =
-      await import("../scripts/smoke-executor-host-standalone.mjs");
+      await import("../scripts/devtools/smoke-executor-host-standalone.mjs");
     const empty = join((await import("node:os")).tmpdir(), `comfyapp-empty-${Date.now()}`);
     const result = smokeExecutorHostArtifact(empty);
     expect(result.ok).toBe(false);
@@ -189,7 +189,7 @@ describe("产物里真的起得来宿主", () => {
     "在 .next/standalone 内跑 executor-host --once：exit 0 且注入链完成",
     async () => {
       const { smokeExecutorHostArtifact } =
-        await import("../scripts/smoke-executor-host-standalone.mjs");
+        await import("../scripts/devtools/smoke-executor-host-standalone.mjs");
       const result = smokeExecutorHostArtifact(ARTIFACT);
       expect(
         result,

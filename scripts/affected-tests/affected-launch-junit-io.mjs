@@ -12,7 +12,11 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { C_MANIFEST_NAME, cFileXmlName, failingSuiteTextsFromJunit } from "../precommit-timing.mjs";
+import {
+  C_MANIFEST_NAME,
+  cFileXmlName,
+  failingSuiteTextsFromJunit,
+} from "../gates/precommit-timing.mjs";
 
 /**
  * 组 C 的**分文件耗时**读数出口（vitest 的 junit reporter）。

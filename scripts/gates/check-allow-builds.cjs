@@ -143,7 +143,7 @@ const {
    `check-deps-freshness.mjs`：那份判据的模块图带着 `lockfile/lock-diff.mjs`、
    `launcher-core/worktree.mjs` 一串下游，为一个常量拖进整条链，代价落在门禁自测的
    临时工作区上（少拷一个就是 `ERR_MODULE_NOT_FOUND`，读起来像被测判据坏了）。 */
-const { DEPENDENCY_FILES } = require("../dependency-face.mjs");
+const { DEPENDENCY_FILES } = require("../lib/dependency-face.mjs");
 /* 锁文件解析器：`scripts/lockfile/lock-diff.mjs` —— **本仓已有的那一份**，不是新写一个。
  * 为什么复用它（§12.18「写之前先查」）：① 它已经把 pnpm 12 的「两份 YAML 文档」形态处理好了
  * （仓库里的 `pnpm-lock.yaml` 头一份文档描述 pnpm 自身的二进制，`stripBundledSection()`

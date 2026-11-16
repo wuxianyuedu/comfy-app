@@ -16,7 +16,7 @@ import {
   resolveFace,
   runGate,
   touchesMechanism,
-} from "../scripts/known-failed-selftest-gate.mjs";
+} from "../scripts/gates/known-failed-selftest-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const HOOK = ".githooks/pre-commit";
@@ -158,7 +158,7 @@ describe("登记项「还红着吗」的判决（真跑那一维）", () => {
 
 describe("判据与仓库现状、提交链的接线", () => {
   it("当前登记表为空（这一条的常态，也是零耗时的前提）", async () => {
-    const { KNOWN_FAILED_FILES } = await import("../scripts/quality-gate-shared.mjs");
+    const { KNOWN_FAILED_FILES } = await import("../scripts/gates/quality-gate-shared.mjs");
     // 非空时本判据会真跑那几个文件 —— 那是设计如此，不是漂移。这里只钉住
     // 「空是常态、且空时不该有任何条目」，避免有人随手加一条而不去登记归属。
     expect(Array.isArray(KNOWN_FAILED_FILES)).toBe(true);
@@ -176,14 +176,14 @@ describe("判据与仓库现状、提交链的接线", () => {
 });
 
 /**
- * 自证档的**执行者**（`scripts/known-failed-selftest-gate.mjs`，ISSUE #1282 第二刀）：上一条接线用例钉
+ * 自证档的**执行者**（`scripts/gates/known-failed-selftest-gate.mjs`，ISSUE #1282 第二刀）：上一条接线用例钉
  * 「判据本体接进 D 组」，本组钉更细的一层 —— **「真跑那一档」在空表常态下从没被执行过，自证入口原先
  * 一个执行者都没有**。故既判「门禁真在钩子里」，也判它的判决真会拦（#1356：源码文本断言不是执行记录）。
  */
 describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
-  const SELFTEST_GATE = "scripts/known-failed-selftest-gate.mjs";
+  const SELFTEST_GATE = "scripts/gates/known-failed-selftest-gate.mjs";
   const MECHANISM_INPUTS = [
-    "scripts/quality-gate-shared.mjs",
+    "scripts/gates/quality-gate-shared.mjs",
     "scripts/gates/check-known-failed-stale.mjs",
     ".githooks/pre-commit",
   ];
@@ -199,7 +199,7 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
 
   it("碰了机制但没拿到自证读数 ⇒ 阻断（判不了的形状按不放行）", () => {
     const res = runGate({
-      staged: ["scripts/quality-gate-shared.mjs"],
+      staged: ["scripts/gates/quality-gate-shared.mjs"],
       selfTest: null,
     });
     expect(res.exitCode).toBe(1);
@@ -234,7 +234,7 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
 
   it("起不来（status 为 null 但拿到了读数对象）⇒ 同样阻断", () => {
     const res = runGate({
-      staged: ["scripts/quality-gate-shared.mjs"],
+      staged: ["scripts/gates/quality-gate-shared.mjs"],
       selfTest: {
         status: null,
         stdout: "",
@@ -247,7 +247,7 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
 
   it("触发面只认这三处输入 —— 别的 `scripts/*.mjs` 不算碰机制", () => {
     // 窄触发面是这一步的全部代价担保：宽一档就给无关提交加了 ~0.9s。
-    expect(touchesMechanism(["scripts/run-tests.mjs"])).toBe(false);
+    expect(touchesMechanism(["scripts/affected-tests/run-tests.mjs"])).toBe(false);
     expect(touchesMechanism(["scripts/affected-tests/affected-tests.mjs"])).toBe(false);
     expect(touchesMechanism(["docs/standards/11-测试与可观测性.md"])).toBe(false);
     for (const f of MECHANISM_INPUTS) {
@@ -332,7 +332,10 @@ describe("自证档的判决面（ISSUE #2265）", () => {
    * 下一个人把它改回 `resolveFace([])` 时没有任何东西会红。
    */
   it("清单可由调用方交进来 ⇒ 「索引被上一格弄脏」这个现场在进程内就造得出", () => {
-    const dirty = ["scripts/.artifact-freshness.json", "scripts/.e2e-freshness.json"];
+    const dirty = [
+      "scripts/freshness/.artifact-freshness.json",
+      "scripts/freshness/.e2e-freshness.json",
+    ];
     const dirtyFace = resolveFace([], { readStaged: () => dirty });
     expect(dirtyFace, JSON.stringify(dirtyFace)).toEqual({
       ok: true,
@@ -348,7 +351,7 @@ describe("自证档的判决面（ISSUE #2265）", () => {
   /* 上面那条的**另一半**（ISSUE #2354）：空索引有两种来路（忘了 stage / 刻意要一笔空提交），
    * 而这条判据不猜 —— 只认说出来的意图。唯一生产者是 `pnpm ship --rerun-ci`，它要靠空提交
    * 重新派生一条流水线（平台侧没有 PR 重跑入口）。读不读这枚旗标的口径只有一处：
-   * `scripts/intentional-empty-commit.mjs`，两个消费者共用它。 */
+   * `scripts/platform/intentional-empty-commit.mjs`，两个消费者共用它。 */
   it("空索引 + 说出来的意图 ⇒ 走「没碰到机制」那一档（这是答案，不是豁免）", () => {
     const saved = process.env.COMFY_INTENTIONAL_EMPTY_COMMIT;
     process.env.COMFY_INTENTIONAL_EMPTY_COMMIT = "1";

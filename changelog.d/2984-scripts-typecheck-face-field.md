@@ -1,7 +1,7 @@
 ## Fixed
 
 - **脚本档类型检查账本的 `face` 字段整条删掉 —— 面改成就地现算**（ISSUE #2984）。
-  `scripts/.scripts-typecheck-baseline.json` 里那一格记的是「`tsconfig.scripts.json`
+  `scripts/gates/.scripts-typecheck-baseline.json` 里那一格记的是「`tsconfig.scripts.json`
   展开出多少份 `.mjs`」，本质是一份**手写副本**，而它是这一档唯一会漂的数：
   2026-11-01 一天里同一处被不同人修了 8 次（#2939 / #2940 / #2945 / #2947 / #2952 / #2955，
   清一色只改 `face` 一行）。

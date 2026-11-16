@@ -56,7 +56,7 @@ export function readGitHead(root) {
  */
 export function readNameStatusDiff(root, base) {
   try {
-    /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+    /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/lib/changed-scope.mjs`
      * 的文件头「口径 ④」）。 */
     const r = spawnSync(
       "git",

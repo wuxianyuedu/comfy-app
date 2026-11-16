@@ -71,7 +71,7 @@ describe("触发面 = typedoc 的解析面（TS 程序，不是 entryPoints 那�
       "src/app/page.tsx",
       /* ISSUE #2537 / 事故 #2528：被 tests 静态 import 进 TS 程序、旧面漏掉的那一类。 */
       "tests/publish-desktop-bundle.test.ts",
-      "scripts/publish-desktop-bundle.mjs",
+      "scripts/build/publish-desktop-bundle.mjs",
     ]) {
       expect(matchedInputs([f]), `${f} 应触发`).toEqual([f]);
     }
@@ -100,7 +100,7 @@ describe("触发面 = typedoc 的解析面（TS 程序，不是 entryPoints 那�
   it("判据自身与它共用的跑法也算输入面（ISSUE #1981）", () => {
     /* 此前改这份脚本**不触发它自己** —— 于是「改了判据 → 推上去 → 它没跑」是这类
      * 改动的默认形状，而这恰恰是「产物与源同不同步」这件事被改动的那一刻。 */
-    for (const f of ["scripts/gates/check-docs-api.cjs", "scripts/typedoc-run.mjs"]) {
+    for (const f of ["scripts/gates/check-docs-api.cjs", "scripts/docs/typedoc-run.mjs"]) {
       expect(matchedInputs([f]), `${f} 应触发`).toEqual([f]);
     }
   });

@@ -145,7 +145,7 @@ export function historyByFile(run, { ref, files }) {
     return map;
   }
 
-  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/lib/changed-scope.mjs`
    * 的文件头「口径 ④」）—— 转义过的路径在下面 `set.has(line)` 那一步对不上。 */
   const raw = run([
     "-c",

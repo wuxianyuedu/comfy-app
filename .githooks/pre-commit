@@ -79,7 +79,7 @@
 set -u
 
 # ── 计时：每一次提交的墙钟留在本机（规范 §13.5.8.3）──────────────────────
-# 记账收在 `scripts/precommit-timing.mjs`（落 `.git/`、不入库），这里只负责**测**。
+# 记账收在 `scripts/gates/precommit-timing.mjs`（落 `.git/`、不入库），这里只负责**测**。
 # 口径三条：
 #   · **只记账、不阻断**：记账自己失败（没 git、盘满、文件被锁）只是少一行账，
 #     绝不影响提交的退出码 —— 一条记账线路变成提交的必经之路，迟早有人为它 --no-verify。
@@ -109,7 +109,7 @@ export LOGD
 # 总计时起点。记在 `$LOGD` 外面只有一处用途：**记账**（见 record_timing）。
 set_now_ms _T0_MS
 
-# 记账：把本次的墙钟交给 `scripts/precommit-timing.mjs`（它只写 `.git/`、不入库）。
+# 记账：把本次的墙钟交给 `scripts/gates/precommit-timing.mjs`（它只写 `.git/`、不入库）。
 # 放在 trap 里而不是收尾那一行 —— **被拦下的那次提交恰恰是最该被记的**
 # （「为什么这次要我重跑」的答案就在时长里），而拦下走的是 `exit 1`，收尾那一行到不了。
 # 幂等：收尾已经记过就置空，避免两条记录。
@@ -134,7 +134,7 @@ record_timing() {
   # 做：shell 里解析 XML 就是第二份实现，而两份的漂移形态是静默的（同 `timing.sh`
   # 那份时钟只留一处的同一条理由）。这一格只补读数，判定一个字没动。
   [ -d "$LOGD" ] && set -- "$@" --junit-dir "$LOGD"
-  node scripts/precommit-timing.mjs record "$@" || true
+  node scripts/gates/precommit-timing.mjs record "$@" || true
 }
 
 trap 'rc=$?; record_timing; rm -rf "$LOGD"' EXIT INT TERM
@@ -230,7 +230,7 @@ run_group D0 "形态前置档（这次提交自身的形态）" sh -c '
   # 「判据自身的数值」也要有账（ISSUE #2156）。`scripts/check-*.cjs` 那几十份判据把
   # 「什么算违规」钉在源码里的数值上，而**把这些数值调松没有任何一格会红** —— 一条只改
   # 阈值的 PR 可以本地全绿、CI 全绿，落进 master 之后那道闸对所有人事后失效。
-  # 这一条不判代码，判「源码 ⇄ scripts/.gate-thresholds.json」：
+  # 这一条不判代码，判「源码 ⇄ scripts/gates/.gate-thresholds.json」：
   # 漂移即红（并说出是变松还是变严、方向逐条记 —— A 档阈值越大越松、B 档地板越小越危险），
   # 同组两把尺子必须同数，未入账的顶层数值也红。为什么在 D0：纯读文本、零网络，
   # 实测整步 0.28~0.31s（Node 起动与 `git show origin/master:` 占大头；「读文件 + 正则」
@@ -320,7 +320,7 @@ run_group D0 "形态前置档（这次提交自身的形态）" sh -c '
   # 第四件「必填 props 没给 args」只判 `--changed`（本次暂存的故事文件）—— 存量里
   # 有一批正当形态（值在 render 里给 / 受控开关由 story 持有 / 注入层的 sourceName
   # 就是它的 args），逐条白名单会变成第二份赦免名单，所以口径是「只挡新增」。
-  run "故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）" node scripts/storybook-check.mjs --changed
+  run "故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）" node scripts/devtools/storybook-check.mjs --changed
   # 产品版本号三处同步（ISSUE #1611 阶段三 D7）。同一个版本号手抄在 package.json /
   # src-tauri/tauri.conf.json / src-tauri/Cargo.toml 三处，而这**不是**「改名麻烦」——
   # tauri.conf.json 的版本在**编译期**内嵌进壳，也是 tauri-plugin-updater 判「更新新旧」
@@ -484,7 +484,7 @@ run_group C "结构守护测试（固定清单 + 受影响用例）" sh -c '
   # 只能靠人自己拼。**只打印、不阻断**（判据那一份只有
   # `scripts/ci/ci-toolchain-selfcheck.mjs --python-only` 一个 —— 本钩子不该因为开发机上
   # 没装 Python 而拦住提交，那会把环境缺口变成提交门槛）。
-  node scripts/python-probe.mjs || true
+  node scripts/lib/python-probe.mjs || true
   node scripts/affected-tests/run-affected-tests.mjs'
 
 # ── D：其余静态判据（互不依赖；组内串行以控内存，但整体与 A/B/C 并行）──────
@@ -524,7 +524,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 覆盖，只认 `simpleKeyHandler(...)` 这个出口（§16.2.4.57）；结构性站点在
   # `EXEMPT_SITES` 里逐条写理由，`--report` 会把它们打出来（豁免是「认下这一档」，
   # 不是「这一档不存在」）。
-  run "AST 判据聚合（6 条共享一次解析）" node scripts/run-ast-gates.cjs --staged
+  run "AST 判据聚合（6 条共享一次解析）" node scripts/gates/run-ast-gates.cjs --staged
   # 脚本档的类型层（规范 §13.5.14 / ISSUE #2524）：主 `tsconfig.json` 的 include 里
   # 有 `**/*.cjs` / `**/*.js` 却**没有 `**/*.mjs`** —— 于是一份从未被 import 的脚本
   # 整个不在判决面上（实测 210 份非点目录 `.mjs` 里只有 169 份在场），它的类型错误与
@@ -565,7 +565,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 时才做事 —— ① 有 .rs 改动就跑 `cargo test`（壳里 37 条 #[test] 此前唯一的执行者，
   # 全仓没有任何一步跑过它）；② 复用 dev-launcher 的 `shellStaleWarning` 把「改了壳必须
   # 重编」从启动时告警升成本次提交阻断。没碰壳时这一步立刻返回 0，不给普通前端提交加时间。
-  run "桌面壳（改了 src-tauri 才跑）" node scripts/shell-gate.mjs
+  run "桌面壳（改了 src-tauri 才跑）" node scripts/gates/shell-gate.mjs
   # 模块循环依赖（规范 12.7）：环的症状是「import 顺序变了就 undefined is not a
   # function」，排查成本极高，因此把「无环」做成**硬闸**（存量已清零）。
   run "模块循环依赖(硬闸)" node scripts/gates/check-circular-deps.cjs --staged
@@ -582,7 +582,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # diff（§13.7，评审一眼可见、改回来也只是再跑一次格式化）。而它留在**每一次提交**里
   # 的成本是实测的：冷缓存 ~21s、热缓存 ~4.5s（`--staged` 只在「没碰到扫描面」时跳过，
   # 而 `src/**` 是最高频的提交类别，命中即扫全库）。
-  # 本地出口照旧在：`pnpm check:all`（`scripts/quality-gate.mjs` 的 `format` 项，全量档）。
+  # 本地出口照旧在：`pnpm check:all`（`scripts/gates/quality-gate.mjs` 的 `format` 项，全量档）。
   # ⚠️ 紧邻的这一步（`check-reformat-only.cjs`）**必须留着**，两件事别混：那条判的是
   # 「这次提交有没有把真实改动埋进几百个文件的重排里」，后果不可逆（blame 永久失真、
   # squash 合并后本地再没有拆分的机会），而 prettier 那一条判的只是「文件现在干不干净」。
@@ -753,7 +753,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 判据只做一件事：有站点就必须登记消费方。
   run "未完成用例声明（test.todo）" node scripts/gates/check-test-todo.cjs
   # 判据 ⇄ 执行者的双向判据（规范 §13.5.12 / ISSUE #1451 要求 2）：判定型脚本
-  # （有 process.exit）无执行者即红 —— 除非登记在 scripts/.gate-executor-ledger.json
+  # （有 process.exit）无执行者即红 —— 除非登记在 scripts/gates/.gate-executor-ledger.json
   # 的「按需召唤」台账里（含「为什么不能进钩子」+「谁按需跑」）；报告型（0 处
   # process.exit）自称「供 .githooks/pre-commit 调用」即红（那句承诺必然是假的）。
   # 立案现场就是 check-comment-language.cjs：头部自称供钩子调用、§12.4.6 也写着
@@ -772,7 +772,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # （判据自称在跑 / 条件性 skip / 已知基线失败登记 / 环境归属 / 并发隔离 /
   # 类型断言执行者 / 软断言语义 / 像素档……），每种都自带台账与判据，而**没有任何一处
   # 说得出「本仓库一共有哪些声明、各自的读者是谁」** —— 于是第 5 个人加一种新机制时
-  # 无处可查「我该登记什么」。这一步把 scripts/.declaration-readers.json 当成索引核：
+  # 无处可查「我该登记什么」。这一步把 scripts/gates/.declaration-readers.json 当成索引核：
   #   ① 每一行点名的读者存在（脚本 / 用例丢了即红）；
   #   ② 每一行的执行者真在门禁链里（钩子步骤被摘掉、用例离开 C 组固定清单，都红）；
   #   ③ 索引自己不许静默降级（解析不出 / carriers 为空 / 行数低于地板即判失败）。
@@ -807,7 +807,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 改登记表 / 改判据本体 / 改钩子接线时才跑一次自证（实测 ~0.9s，一次真 vitest 冷启）。
   # 两个实测的洞都只有它接得住：reporter 改名（用例喂夹具、看不到真命令）与
   # judgeStillFailing 恒放行（旧版自证只有红侧、判据恒放行时它照样绿）。详见脚本文件头。
-  run "已知基线失败登记·自证（碰了这套机制才跑）" node scripts/known-failed-selftest-gate.mjs
+  run "已知基线失败登记·自证（碰了这套机制才跑）" node scripts/gates/known-failed-selftest-gate.mjs
   # 测试层裸 sleep 硬闸（规范 §11.14）。§11.14 早就把
   # `await new Promise(r => setTimeout(r, N))` 定为第一层反模式，执行者写的是
   # 「新增时由 review 拦下」，而实测这句话两头都落空：上一轮清掉的 6 个文件是**抽样**、
@@ -874,7 +874,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 被 `<FormField>` 包一层的控件不在它的靶子里）。
   # 实测收口前 35 处 plain-children 站点、其中 22 处是真控件，而
   # `form-field.test.tsx` 的 4 条用例**清一色**用 render-prop —— 这条路径连判据都没有。
-  # 判的是**净数不许涨**（棘轮，`scripts/.form-field-wiring-baseline.json`）；
+  # 判的是**净数不许涨**（棘轮，`scripts/gates/.form-field-wiring-baseline.json`）；
   # 3 处「标签行只作小标题」的合法形态（只读展示行 / 按钮组）记在基线里，
   # `FormField` 自己也兜住（只在 `children` 是函数时才给 `htmlFor`）。
   # 走 TypeScript AST（JSX 结构用正则判不准），与 check-non-null-assertions 同档。
@@ -885,7 +885,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # #3157 起 eslint 退役，开启面只剩 `oxlint.parity.config.mjs`。
   # 本步三向核：① 官方 recommended 集合全开（从**插件自己的那份数据**算出来，
   # 不在这里抄规则表）；② 本仓与官方默认的每一处不同都在
-  # `scripts/.a11y-rule-ledger.json` 登记（关掉一条 / 就地豁免一个文件，都要
+  # `scripts/gates/.a11y-rule-ledger.json` 登记（关掉一条 / 就地豁免一个文件，都要
   # 答出「为什么」+「谁在守它」）；③ 台账双向拦（登记了却没关 = 假声明、
   # 登记了不存在的规则 = 孤儿条目）。
   # 成本实测：读判决配置与插件对象 ~1s，零网络、零子进程 —— 照 §13.5.4 的成本判据该进钩子。
@@ -905,7 +905,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 声明写得对、没有人读）。
   # **本步不跑第二遍 tsc**（§12.18 明令避免的第二轮子；合并前那一跳由 §13.6.2 的
   # `pnpm check:base:batch` 负责），它判的是**那条判据自己的执行者**：
-  #   ① 每条登记项的执行者在场，且与姊妹索引 `scripts/.declaration-readers.json`**逐行同源**；
+  #   ① 每条登记项的执行者在场，且与姊妹索引 `scripts/gates/.declaration-readers.json`**逐行同源**；
   #   ② **未登记的声明不许新增**（声明行计数零增量）—— 新写一处就红，直到你回答「它谁在执行」；
   #   ③ 登记项与事实脱钩即红（落点没了 / 关键词找不到了）。
   # 判据自己不许静默降级（台账读不出 / 空表 / 对侧读不到 ⇒ 判失败，不是「没有站点要查」）。
@@ -916,7 +916,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 位置，效果是同一件事：那份文件从此不在任何 project 的收集面上，而它**不会让任何东西变红**
   # （照样被 eslint / tsc 扫、照样进 PR diff，只是再也没人跑它）。
   # 成本实测：不起 vite，只读一份配置 + 枚举文件名，< 1s、零网络、零子进程。
-  # 与姊妹判据 `check-test-environment.cjs` 共用同一份解析（`scripts/vitest-projects.cjs`）：
+  # 与姊妹判据 `check-test-environment.cjs` 共用同一份解析（`scripts/affected-tests/vitest-projects.cjs`）：
   # 那一份**刻意不判**「漏收 / 重叠」（它判的是文件头与目录档有没有打架），这一份专判。
   # 已知边界：判不出「收了但零条用例」（整份 skip / 只剩类型导出）—— 那一层归
   # `conditional-skip-registry` 与 `check-test-todo.cjs`。

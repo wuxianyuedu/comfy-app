@@ -5,4 +5,4 @@
 - 同一屏那句下一动作也不再一律归到「拆小」：清单只有百来份却掐断，多半是共享节点把 `--maxWorkers` 压到 1~2（`ci-load.mjs` 按 `CNB_CPUS` 折算），拆开改动买不到任何东西——实测同一份 155 份清单在本机 3.5 分钟跑完。两档都点明不许用 `COMFY_AFFECTED_WALL_CLOCK_MS` 调大界来「换绿」。
 - 判据：`tests/hook-affected-launch.test.ts` 新增四条钉住「上界 = 剩余 − 余量 / `null` 不落成 0 / 下界 1 / 读数写法」。
 
-  > 本 PR（#2987）那一格的红就是**装不下 + 机器被占**，不是代码回归：155 份 / `--maxWorkers=2` 在节点上跑不完 25 分钟预算，同一份清单在本机 8 核 `--maxWorkers=8` 是 3m28s，7 条失败全是 Windows 盘符断言（`isSameVolume("G:\\a","C:\\b")` 一类）在 Linux 上的平台形态，`node scripts/base-check.mjs` 在 `origin/master` 上同样命中。
+  > 本 PR（#2987）那一格的红就是**装不下 + 机器被占**，不是代码回归：155 份 / `--maxWorkers=2` 在节点上跑不完 25 分钟预算，同一份清单在本机 8 核 `--maxWorkers=8` 是 3m28s，7 条失败全是 Windows 盘符断言（`isSameVolume("G:\\a","C:\\b")` 一类）在 Linux 上的平台形态，`node scripts/gates/base-check.mjs` 在 `origin/master` 上同样命中。

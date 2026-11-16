@@ -36,7 +36,7 @@ async function runGuard() {
     lines.push(args.map(String).join(" "));
   });
   try {
-    await import("../scripts/deps-install-guard.mjs");
+    await import("../scripts/devtools/deps-install-guard.mjs");
   } finally {
     Reflect.set(process, "exit", originalExit);
   }

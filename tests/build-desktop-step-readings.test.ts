@@ -1,7 +1,7 @@
 /**
  * `scripts/build-desktop.mjs` 的步骤读数：装配整树几百 MB 一跳期间一个耗时都不念，CI 上长得像卡死
  * （为此误判过一次，E2E 那格 36 分钟被 stage 超时 kill；平台 duration 是毫秒 —— #2442）。ISSUE #2574。
- * 断言读磁盘文本、不在任何 import 图里，故登记进 `scripts/fixed-structural-tests.mjs` 固定跑；钉语义不钉行形状。
+ * 断言读磁盘文本、不在任何 import 图里，故登记进 `scripts/affected-tests/fixed-structural-tests.mjs` 固定跑；钉语义不钉行形状。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -60,7 +60,7 @@ describe("build-desktop 念得出每一步多久（ISSUE #2574）", () => {
    * 产物检查，`cpSync` 搬整树），进程内定时器在那些时段整段不跳 —— 所以必须用跨进程
    * 那条（`startProgressSync`），而且每个长耗时阶段都要有打点，不能只打首尾两行。 */
   it("每个长耗时阶段都进同一条跨进程进度线（不是只打首尾两行）", () => {
-    expect(src).toContain('from "./progress-heartbeat.mjs"');
+    expect(src).toContain('from "./gates/progress-heartbeat.mjs"');
     expect(src).toMatch(/startProgressSync\(\{ label: "build-desktop"/);
     for (const stage of [
       "1/4 pnpm build",

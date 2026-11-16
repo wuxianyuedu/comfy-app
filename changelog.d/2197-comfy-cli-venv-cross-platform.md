@@ -2,7 +2,7 @@
 
 comfy-cli 的 Python venv 入口跨平台化（ISSUE #2197，§9.5 登记的那条缺口）：
 「建 venv → 升 pip → 装 comfy-cli → 节流升级」的全部逻辑从 `setup-comfy-cli-venv.ps1`
-（Windows 单侧）搬进 **`scripts/setup-comfy-cli-venv.mjs`**（跨平台唯一实现，
+（Windows 单侧）搬进 **`scripts/devtools/setup-comfy-cli-venv.mjs`**（跨平台唯一实现，
 `pnpm setup:comfy-cli-venv`）；`.ps1` 收成薄壳入口（定位项目根 → 调用 .mjs，硬规则 12
 形状），§9.5 对照表补上这一对。读侧（`comfy-cli-python.ts`）本就按平台认
 `Scripts|bin` 布局，缺的只是「建」这一格。

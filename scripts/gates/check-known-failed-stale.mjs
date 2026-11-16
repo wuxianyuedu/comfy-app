@@ -16,7 +16,7 @@
  *
  *   ① **登记项必须在磁盘上、且是 git 跟踪的文件**（免费、必判）。
  *      文件被删/改名/搬目录之后，登记就成了一个**永远不匹配任何东西**的字符串 ——
- *      排除项静默失效，而表面上一切正常。历史现场同族：`scripts/run-tests.ps1`
+ *      排除项静默失效，而表面上一切正常。历史现场同族：`scripts/affected-tests/run-tests.ps1`
  *      从 `.ps1` 源码里正则解析这份清单，改一次写法就让排除项静默变成空数组
  *      （见 `quality-gate-shared.mjs` 文件头）。文本级登记表必须有这一问。
  *
@@ -48,7 +48,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { KNOWN_FAILED_FILES } from "../quality-gate-shared.mjs";
+import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "../..");
@@ -165,7 +165,7 @@ export function judgeStillFailing(registered, runResult, commandLine, evidence) 
         "        把整个文件从增量面摘掉这一个效果（静默跳过比红更糟：红会挡住提交）。\n" +
         "        规范 §11.12 第 3 条：既有失败被修复后，把该文件从 KNOWN_FAILED_FILES 删除，\n" +
         "        让它回到门禁里被强制拦截，避免悄悄退化。\n" +
-        "        修法：编辑 scripts/quality-gate-shared.mjs，删掉已修好的条目；\n" +
+        "        修法：编辑 scripts/gates/quality-gate-shared.mjs，删掉已修好的条目；\n" +
         "        若列表清空，`KNOWN_FAILED_FILES` 应为空数组。",
     );
     return { exitCode: 1, problems, failedFiles: [] };

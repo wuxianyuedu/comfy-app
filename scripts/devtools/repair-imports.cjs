@@ -1,0 +1,195 @@
+// @ts-nocheck -- 一次性修复脚本:按 tsc TS2307 输出自动探测断链 import 的正确深度
+/**
+ * 用法:node scripts/devtools/repair-imports.cjs [--apply]
+ * 每轮:跑 tsc --noEmit → 解析 TS2307(file, line, module)→ 对每个断链 spec
+ * 尝试候选(原样 / 减一层 ../ / 加一层 ../ / 减两层)→ 取磁盘上真实存在的那个
+ * → 重写。最多 4 轮或全部收敛。另含两类畸形字面量修复(studio/undefined、@//)。
+ */
+const fs = require("node:fs");
+const path = require("node:path");
+// pnpm 可执行形态的唯一判据（scripts/launcher-core/shell.mjs 的 runPnpmSync）。
+// 这里曾是 `execSync("pnpm exec tsc --noEmit")`：走 shell 起 pnpm，Windows 上选中
+// 批处理形态时同样起不来（只有 cmd.exe 解释它），而 shell 语义把「命令没起来」
+// 与「tsc 报错退出」搅在一起 —— 本脚本靠解析 tsc 的 stdout 工作，起不来时会静默
+// 得到空结果（ISSUE #638）。判据模块是 ESM，.cjs 用动态 import() 拿。
+let runPnpmSync = null;
+async function loadShell() {
+  if (runPnpmSync) {
+    return runPnpmSync;
+  }
+  ({ runPnpmSync } = await import("../launcher-core/shell.mjs"));
+  return runPnpmSync;
+}
+
+const apply = process.argv.includes("--apply");
+const exts = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"];
+const exists = (abs) => exts.some((e) => fs.existsSync(abs + e));
+
+const SYMBOL_MAP = {
+  FilmStudio: "FilmStudio",
+  ProjectCanvas: "ProjectCanvas",
+  useToast: "ToastProvider",
+  SourceModal: "SourceModal",
+  ModelTagManager: "ModelTagManager",
+};
+
+function fixLiteralForms() {
+  const files = [];
+  (function walk(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name).replaceAll("\\", "/");
+      if (e.isDirectory()) {
+        walk(p);
+      } else if (/\.(?:tsx?|mjs|cjs|js)$/.test(e.name)) {
+        files.push(p);
+      }
+    }
+  })("src");
+  let n = 0;
+  for (const f of files) {
+    const file = f.replaceAll("\\", "/");
+    if (!fs.existsSync(file)) {
+      continue;
+    }
+    const src = fs.readFileSync(file, "utf8");
+    let out = src;
+    // studio/undefined → 按导入符号映射
+    out = out.replaceAll(
+      /import \{ (?<sym>[^}]+) \} from "@\/components\/studio\/undefined";/g,
+      (m, sym) => {
+        const target = SYMBOL_MAP[sym.trim()];
+        if (!target) {
+          return m;
+        }
+        const rel = path.posix.relative(
+          path.posix.dirname(file),
+          `src/components/studio/${target}`,
+        );
+        return `import { ${sym} } from "${rel.startsWith(".") ? rel : `./${rel}`}";`;
+      },
+    );
+    // @// 畸形 → @/components/studio/
+    out = out.split('"@//').join('"@/components/studio/');
+    if (out !== src) {
+      if (apply) {
+        fs.writeFileSync(file, out);
+      }
+      n++;
+    }
+  }
+  return n;
+}
+
+function fixDynamicUndefined() {
+  // workspace/page 的动态 import:按 mod.X 推断
+  const f = "src/app/workspace/page.tsx";
+  if (!fs.existsSync(f)) {
+    return 0;
+  }
+  const src = fs.readFileSync(f, "utf8");
+  const out = src.replaceAll(
+    /import\("@\/components\/studio\/undefined"\)\.then\(\(mod\) => mod\.(?<sym>\w+)\)/g,
+    (m, sym) => `import("@/components/studio/${sym}").then((mod) => mod.${sym})`,
+  );
+  if (out !== src) {
+    if (apply) {
+      fs.writeFileSync(f, out);
+    }
+    return 1;
+  }
+  return 0;
+}
+
+function parseAndFixDepth() {
+  let out;
+  try {
+    const res = runPnpmSync(["exec", "tsc", "--noEmit"], {
+      cwd: `${__dirname}/..`,
+      timeoutMs: 900_000,
+    });
+    // 「命令没起来」不再塌成空 stdout：本脚本靠 tsc 的输出定位断链，
+    // 空输出会被读成「没有断链」，于是整轮修复静默地什么都没做。
+    if (res.error) {
+      throw new Error(`起 pnpm 失败（${res.error.code ?? "UNKNOWN"}）：${res.error.message}`);
+    }
+    out = res.stdout;
+  } catch (error) {
+    // 这里刻意保留 ||：输出是字符串，空 stdout 也要有个值。
+    out = String(error.stdout || "");
+  }
+  const errs = [
+    ...out.matchAll(
+      /^(?<file>.+?)\((?<line>\d+),\d+\): error TS2307: Cannot find module '(?<mod>[^']+)'/gm,
+    ),
+  ];
+  if (!errs.length) {
+    return { broken: 0, fixed: 0 };
+  }
+  // 按 file+spec 去重;记录行号以定位该行文本
+  const byFile = new Map();
+  for (const [, file, line, mod] of errs) {
+    const k = file;
+    if (!byFile.has(k)) {
+      byFile.set(k, []);
+    }
+    byFile.get(k).push({ line: Number(line), mod });
+  }
+  let fixed = 0;
+  for (const [file, list] of byFile) {
+    if (!fs.existsSync(file)) {
+      continue;
+    }
+    const lines = fs.readFileSync(file, "utf8").split("\n");
+    let touched = false;
+    for (const { line, mod } of list) {
+      const idx = line - 1;
+      if (!lines[idx] || !lines[idx].includes(mod)) {
+        continue;
+      }
+      // 沿该行找 spec 出现位置,尝试候选深度
+      const depth = mod.startsWith("../") ? mod.match(/\.\.\//g).length : 0;
+      const tail = mod.replace(/^(?:\.\.\/)+/, "");
+      const candidates = [];
+      for (const d of [depth, depth - 1, depth - 2, depth + 1]) {
+        if (d < 0) {
+          continue;
+        }
+        candidates.push("../".repeat(d) + tail);
+      }
+      if (mod.startsWith("@/")) {
+        // 别名残缺(如 @//x 或 @/components/studio/undefined)已由字面量步骤处理
+        candidates.push(mod.replace(/^@\//, "@/components/"));
+      }
+      const curDir = path.posix.dirname(file);
+      for (const cand of candidates) {
+        const abs = cand.startsWith("@/")
+          ? path.posix.normalize(cand.replace(/^@\//, "src/"))
+          : path.posix.normalize(path.posix.join(curDir, cand));
+        if (exists(abs)) {
+          if (cand !== mod) {
+            lines[idx] = lines[idx].split(`"${mod}"`).join(`"${cand}"`);
+            touched = true;
+          }
+          break;
+        }
+      }
+    }
+    if (touched && apply) {
+      fs.writeFileSync(file, lines.join("\n"));
+    }
+    if (touched) {
+      fixed++;
+    }
+  }
+  return { broken: errs.length, fixed };
+}
+
+async function main() {
+  await loadShell();
+  const a = fixLiteralForms();
+  const b = fixDynamicUndefined();
+  const r = parseAndFixDepth();
+  console.log("字面量修复:", a + b, "文件;断链:", r.broken, "→ 深度修复文件:", r.fixed);
+}
+
+main();

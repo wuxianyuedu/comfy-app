@@ -17,7 +17,7 @@
   vitest 文件内串行）；要挡的是**别的用例文件**同时读同一份文档。
   两条边界写进件里：建不出来**抛**，不许静默退回真实树（退回=把这一档关掉而账面全绿）；
   不建 `node_modules` 的 junction（判据只要 `node:` 内建 + 本地 `.cjs`，实测裸工作树跑得起来），
-  将来若要接，先读 `scripts/base-check.mjs` 那段「必须先摘 junction 再删 worktree」。
+  将来若要接，先读 `scripts/gates/base-check.mjs` 那段「必须先摘 junction 再删 worktree」。
 
   **那道收尾网的语义跟着换了**：`tests/check-doc-references.test.ts` 的 `afterEach`
   原来「把名单里那几份还原成快照」，现在**断言它们逐字未变** —— 红的意思从「探针留脏了」

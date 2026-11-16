@@ -87,7 +87,7 @@ import {
 /* 分文件读数的**两侧**要判的是同一个布局，所以判据同时 import 读的那一侧：只测写的
  * 一侧（"它传了某个文件名"）挡不住读的一侧改了前缀 —— 而那正会退化成「永远读不到，
  * 且看起来像这次没有读数」。 */
-import { cFileXmlName, failingSuiteTextsFromJunit } from "../scripts/precommit-timing.mjs";
+import { cFileXmlName, failingSuiteTextsFromJunit } from "../scripts/gates/precommit-timing.mjs";
 /* 复跑面那一层同理：按它真实的落点 import（机制层拆出去之后不再转一层假出口）。 */
 import { retryScope } from "../scripts/affected-tests/affected-launch-retry-scope.mjs";
 /* 判决粒度那一层（第 2 遍的红按文件分开）—— #2225 之后它不再住在 runChunk 的那一句
@@ -1120,7 +1120,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
   });
 
   it("`--full` **不是**全量那一档（它不带覆盖率门槛，也不记那份账）", async () => {
-    /* 判「两条全量通道不许读成一件事」：让 `--full` 去写 `scripts/.full-suite-freshness.json`（或替掉
+    /* 判「两条全量通道不许读成一件事」：让 `--full` 去写 `scripts/freshness/.full-suite-freshness.json`（或替掉
      * `full-suite-run.mjs`），那条账就变成「没跑过覆盖率门槛」的一次。差异是实的：`pnpm run test:coverage`
      * （= `full-suite-run.mjs`）= 全量 + `--coverage` thresholds（§11.7 门槛只在这档判）；`--full` = `runChunk([], …)`
      * → `vitest run`，**没有** `--coverage`。所以两侧都判：入口不记账 + 记账通道只挂 `test:coverage`。 */
@@ -1131,7 +1131,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
     /* 判**语义**不判行形状：拿 `planRun()` 真跑一次读它给出的参数，而不是在源码文本里
      * 找一句 `"run", "test:coverage"` —— 那个字面量会被 prettier 折行顶掉（本仓踩过第二次），
      * 而折行不改任何行为，红出来的是一条假红。 */
-    const { planRun } = await import("../scripts/full-suite-run.mjs");
+    const { planRun } = await import("../scripts/affected-tests/full-suite-run.mjs");
     const plan = planRun();
     expect(
       plan.args.slice(0, 2),

@@ -41,7 +41,7 @@
   而它前面是 5m 的 `timeout` 声明 —— 代价与这条链上别的格（`每日安装依赖` 189.5s）同量级。
 - 离线档（`--from`）不假装证明覆盖：它念的是「离线档不证明覆盖 —— 这份列表谁取的谁负责」。
   在线档每次多打一行 `取数覆盖自证：N 页 / M 条 · 最早 <ISO 时刻>`，`--json` 里同名键。
-- **顺带修掉一本账里的假读数**：`scripts/.gate-thresholds.json` 里 `STAGE_WALL_CLOCK_MS` 那条
+- **顺带修掉一本账里的假读数**：`scripts/gates/.gate-thresholds.json` 里 `STAGE_WALL_CLOCK_MS` 那条
   （`report` 档）记的是换算后的 `1500000`，而判据按**源码字面**取值（源码写 `25 * 60 * 1000`
   ⇒ 取到 `25`），于是每次跑都念一条假的「源码 ≠ 账」。改成按字面入账并把单位写明
   （同 `PROBE_TIMEOUT_MS` 那条的既有写法）。同时把 `check-daily-attendance.mjs` 这份文件

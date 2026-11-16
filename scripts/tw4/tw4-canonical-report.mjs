@@ -35,7 +35,7 @@
  * `AppShell.tsx`）棘轮的两个动作都无事可做，留下的却是一条「手改那份 JSON 就能把新
  * 候选登记成已知存量」的通道 —— 那正是硬闸类本来没有的中间态（§13.6.2 的两类对照）。
  * 判据口径与扫描面一字未动，只把「有存量、逐批治理」那一层皮收掉。
- * 执行者与「为什么不进钩子」登记在 `scripts/.gate-executor-ledger.json`。
+ * 执行者与「为什么不进钩子」登记在 `scripts/gates/.gate-executor-ledger.json`。
  *
  * 快照只统计不写入：类名一改，`prettier-plugin-tailwindcss` 的排序位置会跟着变，
  * 字符串替换同步不了，必须由 `vitest -u` 重生成。

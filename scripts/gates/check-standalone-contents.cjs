@@ -79,14 +79,14 @@ const FORBIDDEN = [
  * 要留下必须显式登记并写清理由。
  */
 const ALLOWED_SCRIPTS = new Set([
-  "install-comfyapp-helper.ps1",
+  "devtools/install-comfyapp-helper.ps1",
   "dev-launcher.mjs",
   "dev-launcher.ps1",
   "dev-launcher-session.mjs",
   "app-port.mjs",
   // 「应用服务为什么结束」的落盘侧（ISSUE #1692），与 RUNTIME_SCRIPTS 同源。
   "app-service-exit.mjs",
-  "env-preflight.mjs",
+  "devtools/env-preflight.mjs",
   "db/db-schema-state.mjs",
   "db/db-push-core.mjs",
   // 备份 / 恢复的唯一实现（D6，ISSUE #1611）：dev-launcher.mjs 顶层静态 import
@@ -95,7 +95,7 @@ const ALLOWED_SCRIPTS = new Set([
   // 本机应用数据备份 / 恢复的实现（ISSUE #3732）：`db-backup-core.mjs` 顶层静态
   // import 它的 `restoreAppDataBackup`，缺一份即红（与 `RUNTIME_SCRIPTS` 同源，
   // 漏登记的那次见 `scripts/standalone-private-inputs.mjs` 里同一条的说明）。
-  "app-data-backup.mjs",
+  "db/app-data-backup.mjs",
   "reap-process.mjs",
   // ComfyUI 执行器独立宿主（P3 §5 第 2 期 · Phase 2-C）：由 dev-launcher.mjs
   // 的 spawnExecutorHost 在 COMFY_EXECUTOR=host 灰度下起；桌面包里也要能起来。
@@ -151,7 +151,7 @@ const ALLOWED_SCRIPTS = new Set([
   // 「本检出 `.git` 在哪」的唯一实现（ISSUE #2043 / #2072）：`launcher-core/run.mjs`
   // 顶层静态 import 它 —— 缺这份就是编排器加载期 ERR_MODULE_NOT_FOUND（表同上）。
   // 与 `RUNTIME_SCRIPTS` 同源，缺一份即红。
-  "git-dir.mjs",
+  "lib/git-dir.mjs",
   // 桌包 standalone 的运行入口与它的环境装配（ISSUE #1216）：壳把 `node server.js`
   // 换成 `node scripts/standalone-runtime.mjs`，缺这份 = 载荷只能退回直接起 server，
   // 首启建表与运行期 env 装配（分发产物按硬规则 17 不含 .env）一起失效。
@@ -257,7 +257,7 @@ const REQUIRED_RUNTIME_FILES = [
  *
  * 与 REQUIRED_RUNTIME_FILES 同一类判据：缺件不在构建期报错，只在运行期表现为
  * 「设了 host 起不来」。本脚本查「有没有」，「起不起得来」由
- * scripts/smoke-executor-host-standalone.mjs 在 pnpm build 收尾真起一次进程验。
+ * scripts/devtools/smoke-executor-host-standalone.mjs 在 pnpm build 收尾真起一次进程验。
  * 两道都要，因为冒烟只跑 .next/standalone，而桌包组装（整树拷贝 + 剪枝）发生在
  * 冒烟之后，static 层没人再看第二眼。
  */
@@ -449,7 +449,7 @@ function checkDir(dir, label) {
         "\n  ",
       )}\n  后果：桌包/standalone 里设 COMFY_EXECUTOR=host 时宿主 boot 大声失败` +
         `（exit 1）——任务不会误跑，但也不会跑。\n  修法：先跑 pnpm build（收尾含 ` +
-        `node scripts/build-executor-host.mjs），再确认没被剪枝误删（白名单在 ` +
+        `node scripts/build/build-executor-host.mjs），再确认没被剪枝误删（白名单在 ` +
         `standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS）。`,
     );
   }

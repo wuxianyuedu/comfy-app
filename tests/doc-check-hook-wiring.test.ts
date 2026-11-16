@@ -345,21 +345,21 @@ describe("API 文档生成与自检（#1329 收尾 → #1975 挪执行者 → #2
  * 只有 `toContain`（注释行同样命中），而「钩子 ⇄ §13.1 清单」互核把两份同时抹掉（顺手改小 `D(N)` 计数）也会全绿
  * ⇒「摘回手动档」静默通过。它值一条判据：这一步是 AGENTS 硬规则 5（改壳必须重编）与 `src-tauri` 那批 `#[test]` 的唯一执行者。
  */
-const SHELL_GATE = join(REPO_ROOT, "scripts", "shell-gate.mjs");
+const SHELL_GATE = join(REPO_ROOT, "scripts", "gates", "shell-gate.mjs");
 
 describe("桌面壳门禁接进 pre-commit（ISSUE #1597）", () => {
   const hook = readFileSync(HOOK, "utf8");
   const steps = hookGateSteps(hook);
 
   it("钩子 D 组真的执行这一步，且调的就是本脚本（被注释掉的行不算在场）", () => {
-    const hit = steps.find((s) => s.cmd.includes("scripts/shell-gate.mjs"));
+    const hit = steps.find((s) => s.cmd.includes("scripts/gates/shell-gate.mjs"));
     expect(
       hit,
       `门禁链 ${steps.length} 步里没有桌面壳门禁 —— AGENTS 硬规则 5「改了壳必须重编」` +
         "与壳里那批 #[test] 都没有别的执行者",
     ).toEqual({
       label: "桌面壳（改了 src-tauri 才跑）",
-      cmd: "node scripts/shell-gate.mjs",
+      cmd: "node scripts/gates/shell-gate.mjs",
     });
   });
 
@@ -368,7 +368,7 @@ describe("桌面壳门禁接进 pre-commit（ISSUE #1597）", () => {
     // 掉就一致了（这正是 check-doc-references.cjs 那条双向对账的边界）。
     const checklist = readChecklistCommands();
     expect(
-      checklist.has("node scripts/shell-gate.mjs"),
+      checklist.has("node scripts/gates/shell-gate.mjs"),
       "§13.1「本地提交前必须通过」清单里没有桌面壳门禁 —— 照清单手跑的人会以为它不存在",
     ).toBe(true);
   });
@@ -593,14 +593,14 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
   });
 
   it("本地出口还在（`pnpm check:all` 的 format 项）—— 挪执行者不等于删能力", () => {
-    const gate = readFileSync(join(REPO_ROOT, "scripts", "quality-gate.mjs"), "utf8");
+    const gate = readFileSync(join(REPO_ROOT, "scripts", "gates", "quality-gate.mjs"), "utf8");
     expect(
       gate,
       "`pnpm check:all` 里没有 prettier 这一档了 —— 挪走执行者之后它成了" +
         "「只有平台侧跑」的一条，而本仓承诺的是「完整验证这一档照旧能本地跑一遍」",
       /* #3930：quality-gate 的 args 相对 scripts/ 自身写（"./gates/…"），hook/yml
-       * 写的是全路径 —— 两种拼法都认「gates/check-format.cjs」这一段。 */
-    ).toContain("gates/check-format.cjs");
+       * 写的是全路径 —— 两种拼法都认「./check-format.cjs」这一段。 */
+    ).toContain("./check-format.cjs");
   });
 
   it("脚本头把**平台侧两格**都写明白（自称 ⇄ 实际，别让两份承诺一起过期）", () => {
@@ -758,7 +758,7 @@ const SECOND_TIER: ReadonlyArray<readonly [string, string, string]> = [
 
 /**
  * **被聚合档接管的 6 条 AST 判据**（#1747 续，「第四笔账」）：此前各自在钩子里占一行、各自全量解析 `src/`，现在
- * 只剩 `node scripts/run-ast-gates.cjs --staged` 一行。两件的失效都是静默的：① 每条仍须实现 `--staged` 且短路在
+ * 只剩 `node scripts/gates/run-ast-gates.cjs --staged` 一行。两件的失效都是静默的：① 每条仍须实现 `--staged` 且短路在
  * `require("typescript")` 之前（聚合档 `loadGate()` 按此口径 require）；② 钩子里不许再各占一行（否则与聚合档跑两遍）。
  */
 const AGGREGATED_AST_GATES: ReadonlyArray<string> = [
@@ -830,12 +830,12 @@ describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔�
   const steps = hookGateSteps(hook);
 
   it("聚合档那一行在钩子里带 --staged 条件触发", () => {
-    const hit = steps.find((s) => s.cmd.includes("scripts/run-ast-gates.cjs"));
+    const hit = steps.find((s) => s.cmd.includes("scripts/gates/run-ast-gates.cjs"));
     expect(
       hit,
       `门禁链 ${steps.length} 步里没有 AST 判据聚合档 —— 6 条判据一个执行者都没有了`,
     ).toBeDefined();
-    expect(hit?.cmd).toBe("node scripts/run-ast-gates.cjs --staged");
+    expect(hit?.cmd).toBe("node scripts/gates/run-ast-gates.cjs --staged");
   });
 
   it.for(AGGREGATED_AST_GATES)("%s 不再单独占钩子一行（否则与聚合档跑两遍）", (script) => {
@@ -965,7 +965,7 @@ const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
    * 既没有可配对的产物、也没有「同批带上」这个动作。摘除时同步改这里，是因为
    * 名单与钩子步骤逐字对账 —— 留一行等于给一个已不存在的判据挂空账。 */
   /* 「把判据自己的阈值调松」此前没有任何一格会红（ISSUE #2156）：它不读代码、只把
-   * 源码里的具名常量与 scripts/.gate-thresholds.json 对账，毫秒级，而它必须落在
+   * 源码里的具名常量与 scripts/gates/.gate-thresholds.json 对账，毫秒级，而它必须落在
    * 「改阈值那一笔」上 —— 挪去平台侧等于把红推给下一个动判据的人（同上一条的理由）。 */
   ["判据自身的数值 ⇄ 账同批", "node scripts/gates/check-gate-thresholds.cjs"],
   /* 「把凭据写进被跟踪的文字」这一格此前没有执行者（ISSUE #2157）：硬规则 17 那两层防线
@@ -980,7 +980,7 @@ const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
   ["地基层零消费导出(硬闸)", "node scripts/gates/check-dead-exports.cjs --staged"],
   [
     "故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）",
-    "node scripts/storybook-check.mjs --changed",
+    "node scripts/devtools/storybook-check.mjs --changed",
   ],
   ["产品版本号三处同步(D7)", "node scripts/gates/check-app-version.cjs"],
   ["ui/ 定制标记与台账（§16.8）", "node scripts/gates/check-ui-customizations.cjs"],

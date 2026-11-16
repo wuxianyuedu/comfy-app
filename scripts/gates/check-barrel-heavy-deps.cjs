@@ -39,7 +39,7 @@
  *    A 是「有没有真依赖」，B 是「这一条特定边上是不是还剩静态路径」。两条一起，
  *    「把 `dynamic()` 换成静态 import」与「barrel 里新增重依赖转出」都拦得住。
  *
- * ## 登记方式（`scripts/.barrel-heavy-deps.json`，与判据同目录）
+ * ## 登记方式（`scripts/gates/.barrel-heavy-deps.json`，与判据同目录）
  *
  * 清单**不是**「已知违规的白名单」，是**入口 × 重依赖 × 必须懒加载的模块**这三样
  * 的显式登记：新增一条 = 承认「这个入口不该静态拿到它」；判红时的修法是
@@ -62,7 +62,7 @@ const SRC = path.join(ROOT, "src");
  * （那里没有 `scripts/` 层级、`__dirname` 是工作区根），这一档要能读到工作区里
  * 那份夹具配置。两条路径都找不到就**明确报错**，不许静默按空清单放行。 */
 const CONFIG_PATH = [
-  path.join(__dirname, "../.barrel-heavy-deps.json"),
+  path.join(__dirname, ".barrel-heavy-deps.json"),
   path.join(process.cwd(), "scripts", ".barrel-heavy-deps.json"),
 ].find((p) => fs.existsSync(p));
 const ARGS = new Set(process.argv.slice(2));

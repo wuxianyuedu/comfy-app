@@ -63,7 +63,7 @@
 >
 > **MCP 端口约束**：MCP HTTP 服务与 dev server 分属不同用途，端口号必须**避开 dev 回落族**
 > （`[COMFYAPP_PORT, +1, +2]`；端口缺省时由检出路径推导，故「默认族」不是固定的 `3100/3101/3102`
-> ——那只是兜底），否则脚本（如 `scripts/sync-lint.ps1` 的
+> ——那只是兜底），否则脚本（如 `scripts/devtools/sync-lint.ps1` 的
 > 端口监听检测、doc:check 的 dev 端口族核对）会把 MCP 监听误判成 dev server 实例。因此 MCP
 > 默认端口刻意取在 dev 回落族之外，具体值由 `tools/workshop-mcp-http.ts` 单一权威定义，可通过环境变量
 > `MCP_HTTP_PORT` 覆盖（默认 `4300`）。
@@ -102,7 +102,7 @@
 > 与业务无关的错误带走（规范 launch-and-build §5）。因此那几个文件必须保持纯 ASCII，
 > 注释写英文，并在文件头注明原因。
 >
-> **这一行的「模块清单」就是权威定义本身**（没有第二个事实源）：`scripts/doc-facts.cjs`
+> **这一行的「模块清单」就是权威定义本身**（没有第二个事实源）：`scripts/docs/doc-facts.cjs`
 > 反向解析本行登记的反引号路径，喂给规范 12 §12.4.6 的 ASCII 比例棘轮。
 > 名单越短越好 —— 新增一个必须能说出「它为什么会被 code frame 渲染到」。
 
@@ -118,7 +118,7 @@
 > 判据口径与出口见规范 [13.5.13](standards/13-提交与-code-review.md#13513-依赖新鲜度远端改过库的版本本地还在旧的上面干活node-scriptscheck-deps-freshnessmjsissue-1569)、
 > 用户侧现场见 [guides/sync-after-pull.md](guides/sync-after-pull.md#31-更安静的一种锁文件对得上而新加的包解析不到issue-1721)。
 >
-> **这一行的「探针清单」就是权威定义本身**（没有第二个事实源）：`scripts/doc-facts.cjs`
+> **这一行的「探针清单」就是权威定义本身**（没有第二个事实源）：`scripts/docs/doc-facts.cjs`
 > 反向解析本行登记的反引号包名，喂给同一个判据 —— 与 §1.5 的 ASCII 白名单同一种手法，
 > 避免「文档写一套、脚本读另一套」的两份清单各自漂移。
 >
@@ -183,7 +183,7 @@
 > `pnpm doc:check` 校验纳入 `SCOPED_DOCS` 的文档集合，现已**全量纳入** `docs/standards/`
 > 的规范正文（01~18 章）、`docs/guides/` 的规范指南与 `docs/product/` 的产品需求文档。
 > **篇数不在这里记账**：
-> `scripts/doc-facts.cjs` 的 `SCOPED_DOCS` 就是那份清单，多一篇少一篇都以它为准
+> `scripts/docs/doc-facts.cjs` 的 `SCOPED_DOCS` 就是那份清单，多一篇少一篇都以它为准
 > （「全量」由 §3.1 的校验范围守卫机器判定：新增规范文档未登记即报错，不再靠人记得）：
 >
 > - **启动链路类**：`docs/standards/launch-and-build.md`、`docs/startup-hotreload.md`、
@@ -238,7 +238,7 @@
 | 情形                                                                     | 结果                                             |
 | ------------------------------------------------------------------------ | ------------------------------------------------ |
 | 在 `SCOPED_DOCS` 里                                                      | 正常参与校验（防裸值 / 核对端口 / 核对路径存在） |
-| 在 `SCOPED_DOC_EXEMPTIONS` 里（`scripts/doc-facts.cjs`，**必须附理由**） | 跳过校验                                         |
+| 在 `SCOPED_DOC_EXEMPTIONS` 里（`scripts/docs/doc-facts.cjs`，**必须附理由**） | 跳过校验                                         |
 | 两者都不在                                                               | **报错**，点名文件并提示登记或豁免               |
 
 豁免名单本身也受校验：理由为空、或指向的文件已不存在 → 同样报错，防止名单
@@ -255,7 +255,7 @@
 > | **编辑文档** | 上表 SCOPED_DOCS 对应的源文件（如 "docs/standards/launch-and-build.md"） | 用语义化占位符 {{shell.app.exe}} 作单一事实        | 人写，配合 pnpm doc:check 防裸值回潮             |
 > | **生成文档** | 运行 pnpm doc:render 输出到本机 docs/generated/（**不进 git**）         | 占位符已替换成从源码提取的**真实值**（如 app.exe） | 脚本自动生成，**不手改、不提交**；谁需要原文谁本地生成 |
 >
-> - **单一事实**：两态共用同一份 FACTS（scripts/doc-facts.cjs），真实值只从
+> - **单一事实**：两态共用同一份 FACTS（scripts/docs/doc-facts.cjs），真实值只从
 >   源码/配置动态提取，不存在第二事实。改源码 → 谁需要原文谁跑一次
 >   pnpm doc:render → 本机那份随之更新（它不进 git，没有「同步到仓库」这一跳）。
 > - **生成文档不参与 doc:check**：它含真实裸值，不属于校验范围；校验只针对编辑文档
@@ -264,7 +264,7 @@
 >   docs/generated/。**它不随源码提交**（#3586，`.gitignore` 的 `/docs/generated/`），
 >   仓库里只维护编辑态那一态，也没有「同批带上」的配对门禁。
 > - **可执行工具**：`tools/docs/generate-docs.ps1` 是傻瓜式入口（双击即跑
->   `doc:check` + `doc:render`，产物只在本机），逻辑在 `scripts/generate-docs.ps1`。
+>   `doc:check` + `doc:render`，产物只在本机），逻辑在 `scripts/docs/generate-docs.ps1`。
 
 ## 3.6 AGENTS.md ↔ standards 漂移守卫
 

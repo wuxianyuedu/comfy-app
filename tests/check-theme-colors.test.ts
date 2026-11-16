@@ -408,7 +408,7 @@ describe("主题色豁免台账", () => {
     /* 台账随声明层一起搬到了 theme-color-exemptions.cjs（ISSUE #1811 拆表）：
      * 主脚本只剩「读表 + 判定」，表体不再住在那里。 */
     const exemptions = readFileSync(
-      path.resolve(__dirname, "../scripts/theme-color-exemptions.cjs"),
+      path.resolve(__dirname, "../scripts/gates/theme-color-exemptions.cjs"),
       "utf8",
     );
     /* 取到 `module.exports` 为止 —— 那一份里 `EXEMPT_TABLES` 就是表体本身，
@@ -470,7 +470,7 @@ describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」
     const dest = path.join(root, "scripts", "gates", path.basename(SCRIPT));
     copyFileSync(SCRIPT, dest);
     copyGateDeps(dest);
-    const exemptionsPath = path.join(root, "scripts", "theme-color-exemptions.cjs");
+    const exemptionsPath = path.join(root, "scripts", "gates", "theme-color-exemptions.cjs");
     const exemptions = readFileSync(exemptionsPath, "utf8").replace(
       "const EXEMPT_TABLES = [",
       "const EXEMPT_TABLES = [\n" +

@@ -1,7 +1,7 @@
 /**
  * 平台侧自动触发的流水线配置：要么没有，要么必须是「自托管 + 已登记」的那一份（决策反转见 ISSUE #623 → #1229 → #1959，判据职责不变；本文件在每次提交都跑的固定清单里）。
  * 守三类形态：#1229 的 `分支: { 事件: [流水线] }`；`runner.namespace: group` + 非空 `tags`（漏掉 = 静默回落到计费平台池）；`pull_request` 与 `push` 两事件。
- * 反向注销：`scripts/doc-facts.cjs` 必须登记 `.cnb.yml`、规范留「为什么能回来」锚点；旧口径「本仓没有 CI」必须已改写（与 #1229 同形、方向相反）。
+ * 反向注销：`scripts/docs/doc-facts.cjs` 必须登记 `.cnb.yml`、规范留「为什么能回来」锚点；旧口径「本仓没有 CI」必须已改写（与 #1229 同形、方向相反）。
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -29,7 +29,7 @@ import {
 } from "../scripts/ci/ci-ga-trigger-map.mjs";
 /* 预算这一格的判据要拿**脚本自己那份预算**当基准，而不是在测试里再抄一个常数：
  * 抄一份的话「改了脚本预算、忘了改配置」两种漂移里只会看见一种。 */
-import { FULL_SUITE_TIMEOUT_MS } from "../scripts/full-suite-run.mjs";
+import { FULL_SUITE_TIMEOUT_MS } from "../scripts/affected-tests/full-suite-run.mjs";
 import { DEFAULT_BUDGET_MS } from "../scripts/ci/ci-ga-verdict-readout.mjs";
 import { DAILY_LANE_PIPELINES } from "../scripts/gates/check-daily-attendance.mjs";
 import { FRESHNESS_TRACKS } from "../scripts/freshness/freshness-ledger.mjs";
@@ -635,12 +635,12 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   {
     name: "core 骨架单一事实源",
     tier: "retired",
-    note: "执行者即固定结构用例的固定清单（scripts/fixed-structural-tests.mjs）；固定结构用例 2026-11-02 撤档后这一格随之退休，由每日单元测试全量套件覆盖",
+    note: "执行者即固定结构用例的固定清单（scripts/affected-tests/fixed-structural-tests.mjs）；固定结构用例 2026-11-02 撤档后这一格随之退休，由每日单元测试全量套件覆盖",
   },
   {
     name: "core 出口纪律与基类纯度",
     tier: "retired",
-    note: "执行者即固定结构用例的固定清单（scripts/fixed-structural-tests.mjs）；固定结构用例 2026-11-02 撤档后这一格随之退休，由每日单元测试全量套件覆盖",
+    note: "执行者即固定结构用例的固定清单（scripts/affected-tests/fixed-structural-tests.mjs）；固定结构用例 2026-11-02 撤档后这一格随之退休，由每日单元测试全量套件覆盖",
   },
   {
     name: "工具链自证",
@@ -2031,7 +2031,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("doc-facts **必须**把 .cnb.yml 登记成 path 类事实（它真的存在了）", () => {
-    const facts = readFileSync(path.join(ROOT, "scripts/doc-facts.cjs"), "utf8");
+    const facts = readFileSync(path.join(ROOT, "scripts/docs/doc-facts.cjs"), "utf8");
     /* `source:` 在文件里有两种排版（独占一行 / 跟在 `kind` 后面同一行），
      * 所以扫的是「含 `source:` 的行」而不是「以 `source:` 开头的行」。 */
     const sourceLines = facts
@@ -2039,12 +2039,12 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       .filter((line) => /(?:^|[{,]\s*)source:\s*["']/.test(line));
     // 先确认扫描面没跑偏（事实表里一定有 `source:` 行，否则下面的断言是空转）。
     expect(sourceLines.length).toBeGreaterThan(0);
-    expect(facts, "scripts/doc-facts.cjs 里连事实表都没读出来，扫描面指错了地方").toContain(
+    expect(facts, "scripts/docs/doc-facts.cjs 里连事实表都没读出来，扫描面指错了地方").toContain(
       "kind:",
     );
     // path 类事实的语义是「文档指向的文件必须存在」——文件回来了，就该有登记。
     const registered = sourceLines.some((line) => /source:\s*["']\.cnb\.yml["']/.test(line));
-    expect(registered, "scripts/doc-facts.cjs 没有把 .cnb.yml 登记成 path 类事实").toBe(true);
+    expect(registered, "scripts/docs/doc-facts.cjs 没有把 .cnb.yml 登记成 path 类事实").toBe(true);
     // 反向：别的 CI 形态不许被登记（登记一个刻意不存在的文件会让 doc:check 恒红）。
     const offenders = sourceLines.filter((line) =>
       CI_CONFIG_FILES.filter((n) => n !== ".cnb.yml").some((n) => line.includes(n)),
@@ -2288,7 +2288,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(
       declared,
       "`.cnb.yml` 的 env 里没有 COMFYAPP_CI_PYTHON_PROBE —— 缺 Python 时「跳过的是哪几条」" +
-        "又变成只能靠人自己拼（`scripts/python-probe.mjs` 因此没有调用方）",
+        "又变成只能靠人自己拼（`scripts/lib/python-probe.mjs` 因此没有调用方）",
     ).toBeTruthy();
     if (declared === undefined || declared === "") {
       throw new Error("解析不出探测入口");
@@ -3157,7 +3157,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("每日单元测试：整档 + 跑法脚本 + 预算大于脚本自己的墙钟预算（GA daily.yml）", () => {
-    const entry = "scripts/full-suite-run.mjs";
+    const entry = "scripts/affected-tests/full-suite-run.mjs";
     /* 只扫 `run` 那一串，不扫整块：这一档的注释正当地要写出「不许带 `--grep`」这句话，
      * 把说明判成违规等于逼人删注释（与 PS 5.1 那条形制判据「注释里同形文本放过」同一条口径）。 */
     const step = gaStepBlock(DAILY_YML, DAILY_GATE_EXECUTORS["每日单元测试"] ?? "");
@@ -3170,7 +3170,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(
       run,
       "「单元测试」跑的应是**跑法脚本** —— 裸 vitest 的绿只落在日志里，" +
-        "`scripts/.full-suite-freshness.json` 一个字不变，本地「当天跑过」那条判据照旧拦人",
+        "`scripts/freshness/.full-suite-freshness.json` 一个字不变，本地「当天跑过」那条判据照旧拦人",
     ).toContain(entry);
     expect(
       existsSync(path.join(ROOT, entry)),
@@ -3179,8 +3179,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     /* 整档：`isWholeTrackRun` 把「透传了参数」判成不构成凭证、当场不记账。
      * 所以这里判的不是风格 —— 加了 `--grep` 的那一跑会**绿着不记账**，
      * 而账面看起来与真跑过一模一样。 */
+    const runArgv = run.replace(/node scripts\/\S+\.mjs/, "node <script>");
     for (const forbidden of ["--grep", "--coverage=false", "tests/"]) {
-      expect(run, `「单元测试」带了 ${forbidden} —— 那不是整档，跑绿也不记账`).not.toContain(
+      expect(runArgv, `「单元测试」带了 ${forbidden} —— 那不是整档，跑绿也不记账`).not.toContain(
         forbidden,
       );
     }

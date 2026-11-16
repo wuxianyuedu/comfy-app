@@ -1,7 +1,7 @@
 ## Fixed
 
 - **判据数值账的扫描面改成从磁盘现算 —— 整份没进账的新判据现在会当场红**（ISSUE #2188，
-  `scripts/check-gate-thresholds.cjs` 的第 3 判；账 = `scripts/.gate-thresholds.json`）。
+  `scripts/check-gate-thresholds.cjs` 的第 3 判；账 = `scripts/gates/.gate-thresholds.json`）。
   症状那一格不是「某个数没登记」，而是**这种漏的表现为绿**：旧写法的循环面是
   `[...new Set(entries.map((e) => e.file))]` —— 账里没点名那份文件 ⇒ 那份文件**根本不进循环**，
   它那几个顶层数值一个字都不被判；同一份文件也不受「账 ⇄ 源码相等」与「每条定位得到」那两判约束，

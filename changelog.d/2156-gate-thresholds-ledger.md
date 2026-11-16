@@ -1,6 +1,6 @@
 ## Added
 
-- **判据自身的数值也有账了：`node scripts/check-gate-thresholds.cjs` + `scripts/.gate-thresholds.json`
+- **判据自身的数值也有账了：`node scripts/check-gate-thresholds.cjs` + `scripts/gates/.gate-thresholds.json`
   （ISSUE #2156，规范 §13.5.26）**：`scripts/check-*.cjs` 那几十份判据把「什么算违规」钉在源码里的数值上
   （R5 的 900、函数长度 400、孪生 0.75 / 60、注释语言的 3…），而**把这些数值调松此前没有任何一格会红**
   —— `check-file-structure.cjs` 判的是「这份文件超没超 900」，不是「这条判据里的 900 还是不是 900」。

@@ -81,7 +81,7 @@ const VARIANTS: ButtonVariant[] = ["default", "outline" /* … */];
 [16 §16.2.3.8](standards/16-shadcn-ui与表单校验.md)。
 
 **手写清单必须覆盖每一档，别只列「常用的那几档」**：这条有机器判据兜着
-（`tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`），
+（`tests/storybook-cva-variant-source.test.ts` + `node scripts/devtools/storybook-check.mjs`），
 `cva` 里加一档而故事没跟上、或整条轴被漏掉，提交时就会被点出来。判据上线时当场
 抓到一处真漏档：`button.stories.tsx` 的 `SIZES` 少列了 `icon-sm` / `icon-lg`，
 而这两档全库有 **46 处**在用 —— 「枚举手写一份」的代价是必然的，判据的作用是把
@@ -328,10 +328,10 @@ const meta = {
 「有多少组件被看过」此前写在**这一节**里（「当前只有 3 个 `ui/` 示例」）——
 文档里的数字会过期，而过期时没有任何东西会红。现在它由
 `scripts/storybook-checks/coverage-ledger.mjs` **现算**，与
-`scripts/.storybook-coverage-baseline.json` 比：
+`scripts/gates/.storybook-coverage-baseline.json` 比：
 
 ```bash
-node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命令出结论
+node scripts/devtools/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命令出结论
 ```
 
 三段判据（`tests/storybook-component-coverage.test.ts` 与门禁脚本共用同一份纯函数）：
@@ -407,10 +407,10 @@ hook（没有 DOM 形态，判据是用例）、只有出错时才渲染的边�
   「这份故事到底有没有把那个组件摆出来看」：`title` 缺了会按路径自动分组、
   真组件没接上就是摆了别的东西、必填 props 没 `args` 会在画布上抛、
   同目录两套分组前缀则让「按分组浏览」名存实亡。四种错法**构建全绿、画布也画得出
-  东西**，所以只能靠判据。门禁在 `node scripts/storybook-check.mjs --changed`
+  东西**，所以只能靠判据。门禁在 `node scripts/devtools/storybook-check.mjs --changed`
   （pre-commit D 组就是这么调它的）。
 - 枚举来源的判据：`tests/storybook-cva-variant-source.test.ts` 与
-  `scripts/storybook-check.mjs`（共用 `scripts/storybook-checks/cva-variant-source.mjs`
+  `scripts/devtools/storybook-check.mjs`（共用 `scripts/storybook-checks/cva-variant-source.mjs`
   的纯函数，AST 判；详细口径见规范 [16 §16.2.3.4](standards/16-shadcn-ui与表单校验.md#16234-故事里的枚举清单从-props-派生不要从-cva-的返回值上取)）。
   它与下面那条配置契约**守的不是同一件事**：这条管「故事文件自己怎么写」。
 - 配置契约的判据：`tests/storybook-config.test.ts`（进 `FIXED_STRUCTURAL_TESTS`）
@@ -423,7 +423,7 @@ hook（没有 DOM 形态，判据是用例）、只有出错时才渲染的边�
   硬错误。那条判据直接调 Storybook 自己的 `addExtensionsToRelativeImports`
   （`storybook/internal/bin/loader`）点一遍 `.storybook/**` —— 它「要改写源码」就等价
   于「启动会打那条 deprecation」，规则随 Storybook 变，不另抄一份正则。
-- 为什么启动要经 `scripts/storybook.mjs`：`SKIP_ENV_VALIDATION=1` 是那条链上
+- 为什么启动要经 `scripts/devtools/storybook.mjs`：`SKIP_ENV_VALIDATION=1` 是那条链上
   注入的（历史原因：webpack 版的 `@storybook/nextjs` 会加载仓库根的
   `next.config.js`，而它第一行就是 `import "./src/env.js"` —— 缺 `.env` 时抛
   `MissingEnvFileError`，「只是想看一眼按钮长什么样」会被应用启动期的环境校验

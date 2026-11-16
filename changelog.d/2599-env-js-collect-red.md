@@ -22,7 +22,7 @@
   一个 `import.meta.dirname` / `filename` 都不许有；同时钉「`scripts/**` 那一侧仍在正当
   使用、判据不许扩过去」—— 那 141 处是纯 Node 宿主，`import.meta.dirname` 在那里真有值，
   改成全仓禁用会连带撤掉 `#2556` 那批的正当写法。这条读的是磁盘文本、不在 import 图里
-  ⇒ 登记进 `scripts/fixed-structural-tests.mjs` 的固定清单，**每次提交都跑**：否则它的
+  ⇒ 登记进 `scripts/affected-tests/fixed-structural-tests.mjs` 的固定清单，**每次提交都跑**：否则它的
   唯一执行者只剩每天那一跑，从落地到被看见要隔一次派发（这正是本单的成因）。
   变异验证：把那一位放回代码行 ⇒ 判据当场红并报 `src/env.js:30 · import.meta.dirname`。
 - 规范同步：`launch-and-build.md` §9.2 第 6 条补这一族的两条口径（打包面只有 `url` 是活的

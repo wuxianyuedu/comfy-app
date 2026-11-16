@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const GATE = path.resolve(__dirname, "../scripts/quality-gate.mjs");
+const GATE = path.resolve(__dirname, "../scripts/gates/quality-gate.mjs");
 
 describe("quality-gate 失败路径（ISSUE #2588）", () => {
   it("未知门禁（--mode）⇒ 红话点名可选值并退 2，不是 ReferenceError", () => {

@@ -47,7 +47,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 /** 台账的落点（入库；与 ratchet baseline 同目录同形态）。 */
-export const TIMING_LEDGER_REL = "scripts/.test-file-timing.json";
+export const TIMING_LEDGER_REL = "scripts/affected-tests/.test-file-timing.json";
 
 /**
  * 台账读数的两种来源（ISSUE #3030，量纲见文件头）。

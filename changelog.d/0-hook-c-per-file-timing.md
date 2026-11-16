@@ -1,6 +1,6 @@
 ## Added
 
-- **pre-commit 的组 C 现在有分文件耗时读数了（`scripts/precommit-timing.mjs` +
+- **pre-commit 的组 C 现在有分文件耗时读数了（`scripts/gates/precommit-timing.mjs` +
   `scripts/run-affected-tests.mjs`），把「哪几条门禁非必要、该挪去平台侧」这个问题从印象
   变成有账**（无 ISSUE，承接 §13.5.8.3 第八笔账那条「只有时长没有面就是半条账」）：本机
   13 次提交的账本读数是**总时长中位 1110s / 组 C 中位 1108s** —— 整条钩子的钱几乎全在

@@ -24,7 +24,7 @@
 > `docs/standards/launch-and-build.md` §8。
 >
 > **一次性前置**：Windows 默认双击 `.ps1` 是「用记事本打开」而非执行。首次使用前需右键
-> `scripts/enable-ps1-double-click.ps1` →「使用 PowerShell 运行」完成关联（用户级，免管理员）。
+> `scripts/devtools/enable-ps1-double-click.ps1` →「使用 PowerShell 运行」完成关联（用户级，免管理员）。
 >
 > **`.ps1` 不是逻辑层，也不等于「这个仓库只能在 Windows 用」**：本目录下的入口只解决
 > 「Windows 上怎么被双击 / 被 exe 拉起」。同一件事在 Linux / macOS / CI 上的入口是等价
@@ -68,9 +68,9 @@
 | `build/build-standalone.ps1` | build/ | 壳（standalone 用） | 完整生产构建独立壳：`pnpm tauri build --no-bundle`，产出不连 dev server 的可分发壳 |
 | `build/build-all.ps1` | build/ | 一键编排 | `pnpm tauri build`（app.exe + nsis/msi 安装包）→ 在仓库根生成 `Comfy APP.lnk` 双击入口 → 发布到项目内 `dist\desktop` 留 2 份（规范 §7.7） |
 | `build/rebuild-static.ps1` | build/ | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
-| `build/package-portable.ps1` | build/ | 免安装版 | 组装解压即用的 portable zip（逻辑 `scripts/package-desktop-portable.mjs`，跨平台 `pnpm package:portable`，规范 §7.7 / ISSUE #3345） |
-| `docs/generate-docs.ps1` | docs/ | 文档 | 一键生成原文文档：`pnpm doc:check` 校验一致性 + `pnpm doc:render` 生成本机 `docs/generated/`（**不入库**，#3586；跨平台等价：`pnpm doc:gen`；逻辑在 `scripts/generate-docs.ps1` / `scripts/generate-docs.mjs`） |
-| `docs/generate-api-docs.ps1` | docs/ | 文档 | 一键重生成 API 文档 `docs/api/**`（跨平台等价：`pnpm run docs`；逻辑在 `scripts/generate-api-docs.mjs`，跑 + 验 + 重试在 `scripts/typedoc-run.mjs`） |
+| `build/package-portable.ps1` | build/ | 免安装版 | 组装解压即用的 portable zip（逻辑 `scripts/build/package-desktop-portable.mjs`，跨平台 `pnpm package:portable`，规范 §7.7 / ISSUE #3345） |
+| `docs/generate-docs.ps1` | docs/ | 文档 | 一键生成原文文档：`pnpm doc:check` 校验一致性 + `pnpm doc:render` 生成本机 `docs/generated/`（**不入库**，#3586；跨平台等价：`pnpm doc:gen`；逻辑在 `scripts/docs/generate-docs.ps1` / `scripts/docs/generate-docs.mjs`） |
+| `docs/generate-api-docs.ps1` | docs/ | 文档 | 一键重生成 API 文档 `docs/api/**`（跨平台等价：`pnpm run docs`；逻辑在 `scripts/docs/generate-api-docs.mjs`，跑 + 验 + 重试在 `scripts/docs/typedoc-run.mjs`） |
 | `shadcn-registry/start-shadcn-registry.ps1` | shadcn-registry/ | 团队 shadcn Registry | 启动本地 shadcn Registry HTTP 服务（`D:/dev/Comfy-APP-T3/registry`，供 `shadcn add @comfy-app-t3/*`） |
 | `README.md` | (根) | 文档 | 本文件 |
 | `database-studio/start-database-studio.ps1` | database-studio/ | 数据库 | 启动 Drizzle Studio（逻辑在 `database-studio/start-database-studio.logic.ps1`） |
@@ -78,7 +78,7 @@
 | `scripts/Log-Common.ps1` | scripts/ | 公共库 | 构建脚本的统一日志输出（`Log` / `Invoke-Logged` / `Open-Log`，落 `log/tools/*.log`） |
 | `scripts/Build-Guard.ps1` | scripts/ | 公共库 | 构建前置守卫：编译前检测 `target\{release,debug}\app.exe` 是否仍在运行（被占用的壳会让 cargo 覆盖产物时报 `os error 5`，且要等整轮编译走完才失败）。**陈旧壳**（exe 路径指不到本仓库）与双击构建下的占用一律自动 `taskkill /T /F` 回收后继续；只有「用户可能正开着应用」才中止。另含「目录删不掉时到底是谁占着」的通用出口（`Get-ProductDirHolder` / `Write-ProductDirLockHint`） |
 | `../scripts/entry-common.ps1` | (根 scripts) | 公共库 | 入口通用能力：定位项目根 / 解析 pwsh 宿主 / 透传退出码 / 双击场景暂停 |
-| `../scripts/enable-ps1-double-click.ps1` | (根 scripts) | 一次性配置 | 关联「双击 .ps1 = 运行」（用户级 HKCU，免管理员） |
+| `../scripts/devtools/enable-ps1-double-click.ps1` | (根 scripts) | 一次性配置 | 关联「双击 .ps1 = 运行」（用户级 HKCU，免管理员） |
 
 ## 入口 / 逻辑对照
 
@@ -96,15 +96,15 @@
 | `start/start-web.ps1` | `scripts/dev-launcher.ps1` |
 | `start/start-tauri.ps1` | 直接启动 `src-tauri\target\release\app.exe`（编排由壳自己承担，见 `src-tauri/src/shell_launch.rs`） |
 | `start/start-tauri-dev.ps1` | `scripts/dev-launcher.ps1 -Tauri` |
-| `start/run-local.ps1` | `scripts/prepare-local-run.ps1` |
-| `start/verify-quality.ps1` | `scripts/quality-gate.ps1` |
-| `start/run-tests.ps1` | `scripts/run-tests.ps1` |
-| `start/sync-lint.ps1` | `scripts/sync-lint.ps1` |
+| `start/run-local.ps1` | `scripts/devtools/prepare-local-run.ps1` |
+| `start/verify-quality.ps1` | `scripts/gates/quality-gate.ps1` |
+| `start/run-tests.ps1` | `scripts/affected-tests/run-tests.ps1` |
+| `start/sync-lint.ps1` | `scripts/devtools/sync-lint.ps1` |
 | `start/tune-dev-drive.ps1` | `scripts/dev-drive/dev-drive-tune.mjs`（跨平台逻辑，入口直调 node —— 这类没有 `.ps1` 逻辑层，见 `scripts/entry-common.ps1` 的说明） |
-| `docs/generate-docs.ps1` | `scripts/generate-docs.ps1` |
-| `docs/generate-api-docs.ps1` | `scripts/generate-api-docs.mjs`（跨平台逻辑，入口直调 node —— 这类没有 `.ps1` 逻辑层，见 `scripts/entry-common.ps1` 的说明） |
-| `start/register-comfyapp-protocol.ps1` | `scripts/install-comfyapp-helper.ps1` |
-| `start/fetch-daily-shell.ps1` | `scripts/fetch-daily-shell.mjs`（跨平台逻辑，入口直调 node —— 无 `tools/scripts/*.ps1` 逻辑层） |
+| `docs/generate-docs.ps1` | `scripts/docs/generate-docs.ps1` |
+| `docs/generate-api-docs.ps1` | `scripts/docs/generate-api-docs.mjs`（跨平台逻辑，入口直调 node —— 这类没有 `.ps1` 逻辑层，见 `scripts/entry-common.ps1` 的说明） |
+| `start/register-comfyapp-protocol.ps1` | `scripts/devtools/install-comfyapp-helper.ps1` |
+| `start/fetch-daily-shell.ps1` | `scripts/devtools/fetch-daily-shell.mjs`（跨平台逻辑，入口直调 node —— 无 `tools/scripts/*.ps1` 逻辑层） |
 | `start/start-desktop.ps1` | —（自检逻辑内联在入口里，不另起逻辑脚本） |
 
 > **启动类入口原先平铺在仓库根**（`start-web.ps1` / `run-local.ps1` …），2026-09-04
@@ -160,7 +160,7 @@ comfy-cli 做 UI→API 转换，它固定使用：
 
 该路径缺失时提交任务会直接 `spawn ... ENOENT`，用户无从下手；版本过旧时子图
 wrapper 的覆盖不生效（提示词/种子整段失效，1.20 才修）。按需执行
-`scripts/setup-comfy-cli-venv.ps1`（原先由 Python 启动器每次启动后台触发，
+`scripts/devtools/setup-comfy-cli-venv.ps1`（原先由 Python 启动器每次启动后台触发，
 启动器已移除），由脚本统一决定做什么：
 
 - **venv 缺失 / `comfy_cli` 不可导入** → 安装：
@@ -298,7 +298,7 @@ cargo build --release --features custom-protocol
 
 1. `pnpm tauri build` —— 整条桌包链：`build-desktop.mjs`（`pnpm build` → 装配 `static`
    → Node sidecar）→ cargo 编译 → bundle，产出 **nsis / msi 安装包**；
-2. `node scripts/publish-desktop-bundle.mjs --root dist\desktop` —— 把安装包发布到**项目内**
+2. `node scripts/build/publish-desktop-bundle.mjs --root dist\desktop` —— 把安装包发布到**项目内**
    `dist\desktop`（本机自己打的包不再写常驻目录，ISSUE #3546）：一份一个目录
    + `manifest.json`，`latest.txt` 是指针文件，轮转留最近 2 份；
 3. 产物仍是唯一入口 `src-tauri\target\release\app.exe`（安装包只是它的分发形态，

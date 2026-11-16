@@ -92,7 +92,7 @@ import {
 import { collectFailureLogReading, renderLogReadout } from "./ci-ga-failure-logs.mjs";
 import { judgeBundleEscalation, readBundleAccount } from "./ci-bundle-escalation-core.mjs";
 import { fetchGaBundleRedStreak, stripAnsi } from "./ci-ga-daily-bundle-escalation.mjs";
-import { machineHandle } from "../dev-handle.mjs";
+import { machineHandle } from "../platform/dev-handle.mjs";
 import { commentHeader } from "../ship/ship-ticket.mjs";
 
 /** @typedef {import("./ci-code-scanning-triage-model.mjs").IssueRow} IssueRow */
@@ -232,7 +232,7 @@ export function composeBody({
     "这一格只把「GA 每日档红了」变成一张单，不替任何人判「是谁的错、为什么红」。定性走既有出口：",
     "",
     `- \`gh run view ${runId || "<runId>"} --repo ${ghRepo} --log-failed\` —— 取失败格的日志正文`,
-    "- `node scripts/base-check.mjs <那条门禁>` —— 分清「红是我的还是主干的」（§13.6.2）",
+    "- `node scripts/gates/base-check.mjs <那条门禁>` —— 分清「红是我的还是主干的」（§13.6.2）",
     "- 拿不到的测量按**没有结论**处理：`2` 不算绿，也不算红",
     "",
     "> 本单由 `scripts/ci/ci-ga-daily-failure-issue.mjs` 建（GA 侧 `if: failure()`）。",

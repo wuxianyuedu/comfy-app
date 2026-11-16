@@ -30,7 +30,7 @@ const { test, expect } = defineGateRepo({
       from: "scripts/freshness/freshness-ledger-sync.mjs",
       to: "scripts/freshness/freshness-ledger-sync.mjs",
     },
-    { from: "scripts/quality-gate.mjs", to: "scripts/quality-gate.mjs" },
+    { from: "scripts/gates/quality-gate.mjs", to: "scripts/gates/quality-gate.mjs" },
     {
       /* `base-check-chained` 那一类事实也从既有出处现算（`CHAINED_STEPS`）——
        * 判据按 `__dirname/../base-check/chained-steps.mjs` 读它，少拷这一份，
@@ -44,7 +44,7 @@ const { test, expect } = defineGateRepo({
    * 与 `tw4-spacing-canonical.mjs` 两条（#3930 之后它们仍按 basename 登记），少一条
    * 就会让「双向核对」的方向①把真索引里那一行判成过期承诺。 */
   files: {
-    "scripts/.gate-executor-ledger.json": JSON.stringify(
+    "scripts/gates/.gate-executor-ledger.json": JSON.stringify(
       {
         onDemand: {
           "tw4-canonical-report.mjs": { why: "起 Tailwind 引擎", who: "按需" },
@@ -175,10 +175,10 @@ function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
 
 /** 真实仓库里的三份事实读数 —— 夹具的断言按它来，避免写死会漂的数字。 */
 const realParsed: unknown = JSON.parse(
-  readFileSync(join(process.cwd(), "scripts", ".on-demand-duties.json"), "utf8"),
+  readFileSync(join(process.cwd(), "scripts", "gates", ".on-demand-duties.json"), "utf8"),
 );
 if (!isRecord(realParsed) || !isUnknownArray(realParsed.duties)) {
-  throw new Error("scripts/.on-demand-duties.json 形状不对：缺 duties 数组");
+  throw new Error("scripts/gates/.on-demand-duties.json 形状不对：缺 duties 数组");
 }
 const REAL = { duties: realParsed.duties };
 
@@ -188,7 +188,7 @@ describe("on-demand-duties —— 双向", () => {
      * 夹具里只有 FRESHNESS_TRACKS 的三档 + quality-gate 的 premerge。
      * 真实索引还登记了 dependencyAudit / tw4 等条目（需要真实 quality-gate 与台账），
      * 所以这里不直接用真索引，而是用最小的那份。 */
-    repo.write("scripts/.on-demand-duties.json", JSON.stringify(ledgerDuties(), null, 2));
+    repo.write("scripts/gates/.on-demand-duties.json", JSON.stringify(ledgerDuties(), null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(0);
     expect(output).toContain("双向核对通过");
@@ -196,7 +196,7 @@ describe("on-demand-duties —— 双向", () => {
 
   test("方向①：点名一个不存在的档 ⇒ 红（过期承诺）", ({ repo }) => {
     repo.write(
-      "scripts/.on-demand-duties.json",
+      "scripts/gates/.on-demand-duties.json",
       JSON.stringify(
         ledgerDuties({
           extra: [
@@ -222,7 +222,7 @@ describe("on-demand-duties —— 双向", () => {
     /* 抹掉 e2e 那一行 —— 事实还在，登记没了。 */
     const led = ledgerDuties();
     led.duties = led.duties.filter((d: DutyRow) => d.id !== "e2e");
-    repo.write("scripts/.on-demand-duties.json", JSON.stringify(led, null, 2));
+    repo.write("scripts/gates/.on-demand-duties.json", JSON.stringify(led, null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("freshness-track:e2e");
@@ -230,9 +230,9 @@ describe("on-demand-duties —— 双向", () => {
   });
 
   test("方向②：新增的按需台账条目没登记 ⇒ 红", ({ repo }) => {
-    repo.write("scripts/.on-demand-duties.json", JSON.stringify(ledgerDuties(), null, 2));
+    repo.write("scripts/gates/.on-demand-duties.json", JSON.stringify(ledgerDuties(), null, 2));
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       JSON.stringify(
         { onDemand: { "some-new-report.mjs": { why: "起引擎", who: "按需" } } },
         null,
@@ -253,14 +253,17 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
   });
 
   test("索引不是合法 JSON ⇒ 红", ({ repo }) => {
-    repo.write("scripts/.on-demand-duties.json", "{ 这不是 json");
+    repo.write("scripts/gates/.on-demand-duties.json", "{ 这不是 json");
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("不是合法 JSON");
   });
 
   test("duties 为空数组 ⇒ 红（空索引 = 把门禁关掉）", ({ repo }) => {
-    repo.write("scripts/.on-demand-duties.json", JSON.stringify({ why: "", duties: [] }, null, 2));
+    repo.write(
+      "scripts/gates/.on-demand-duties.json",
+      JSON.stringify({ why: "", duties: [] }, null, 2),
+    );
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("duties");
@@ -268,7 +271,7 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
 
   test("行数塌到下限以下 ⇒ 红（解析规则坏了）」", ({ repo }) => {
     repo.write(
-      "scripts/.on-demand-duties.json",
+      "scripts/gates/.on-demand-duties.json",
       JSON.stringify(
         { why: "", duties: [{ id: "a", name: "a", fact: { kind: "x" }, executor: "e" }] },
         null,
@@ -287,7 +290,7 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
     const broken = { ...led.duties[0] } as Partial<DutyRow>;
     delete broken.executor;
     const brokenLedger: unknown = { ...led, duties: [broken, ...led.duties.slice(1)] };
-    repo.write("scripts/.on-demand-duties.json", JSON.stringify(brokenLedger, null, 2));
+    repo.write("scripts/gates/.on-demand-duties.json", JSON.stringify(brokenLedger, null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("缺字段");

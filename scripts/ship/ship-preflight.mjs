@@ -39,11 +39,11 @@ import {
   preRunD0Steps,
   selectPreRunSteps,
 } from "./ship-preflight-d0.mjs";
-import { HANDLE_SOURCES } from "../dev-handle.mjs";
+import { HANDLE_SOURCES } from "../platform/dev-handle.mjs";
 import { DEV_HANDLE_ENV_KEY, issueAuthoring, ticketReading } from "./ship-ticket.mjs";
 import { logInstanceReading } from "./ship-reap.mjs";
 import { parsePorcelain } from "./ship-local.mjs";
-import { envInitHint } from "../env-preflight.mjs";
+import { envInitHint } from "../devtools/env-preflight.mjs";
 
 /**
  * 本检出应用实例的归属读数（形状由 `port-reap.mjs` 的 `runningAppInstances()` 给）。

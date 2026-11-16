@@ -7,8 +7,8 @@
   `expected true to be false`，而**同一份树在本地隔离复跑全绿**。当场读数：那两条写的是
   `resolveFace([])` —— 它读的是「**此刻这个仓库的索引**」，于是用例判的其实是
   「这台机器现在有没有人 stage 过东西」。平台上那份索引被上一格 `每日新鲜度账`
-  回写失败留下的两份**入库账本**（`scripts/.artifact-freshness.json`、
-  `scripts/.e2e-freshness.json`）填着 ⇒ 前提被别人的事故决定。
+  回写失败留下的两份**入库账本**（`scripts/freshness/.artifact-freshness.json`、
+  `scripts/freshness/.e2e-freshness.json`）填着 ⇒ 前提被别人的事故决定。
 - **用例侧**：这一族改成**显式交清单**（`--staged` 后面不带名字 = 空清单）或经
   `resolveFace(argv, { readStaged })` 注入 —— 与 `runGate({ staged, selfTest })` 同一个取舍：
   判决面的输入必须可由调用方交进来，不然「造得出那个现场」就只能在真仓库里污染一台机器。
@@ -21,7 +21,7 @@
   提交已落地、索引是干净的，再撤就是把成功的改动重新 stage 成待提交。
 - **一句被实测推翻的话，连同它的三处复述一起订正**：「空索引那一档只出现在平台上，
   **而平台上没有暂存区**」是错的 —— 平台上有索引，而且它可以非空。
-  `scripts/known-failed-selftest-gate.mjs`、`scripts/check-doc-mirror-pairing.cjs`（reason 原文）
+  `scripts/gates/known-failed-selftest-gate.mjs`、`scripts/check-doc-mirror-pairing.cjs`（reason 原文）
   与 `scripts/ci-heavy-gates.mjs` / `tests/ci-heavy-gates.test.ts` 的叙述同批改写；
   「平台拿不到本次改动面」这句仍然成立（那正是 `--base` 的理由），它推不出「索引永远空」。
 - 规范：§13.5.4 补「回写失败要做两件事」那一格，§13.5.5 补「同一句里还有半句也是错的」那一格；

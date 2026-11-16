@@ -207,7 +207,7 @@ const JSON_SOURCES: Readonly<Record<string, unknown>> = {
  * `media` —— 一张**真图**。
  *
  * 文件住在 `.storybook/assets/`（由 `.storybook/main.ts` 的 `staticDirs` 挂在站点
- * 根的 `/storybook-assets/` 下），由 `scripts/storybook-assets.mjs` 在
+ * 根的 `/storybook-assets/` 下），由 `scripts/devtools/storybook-assets.mjs` 在
  * `pnpm storybook` 启动时现生成、**不入库** —— 理由同 `STORYBOOK_ASSET_BASE` 的
  * 注释（不该跟着出厂），也免得二进制进 git。
  *
@@ -314,7 +314,7 @@ export function sourceNameArgType(kind: ValueSourceKind) {
  *
  * 这是**刻意不绕**的：让应用为组件工作台开一个 CORS 口子，等于为了一个开发工具
  * 去改生产端的安全面（`next.config.js` 的 headers / `src/proxy.ts`），
- * 而 `next.config.js` 那侧本仓有过明确口径 —— 见 `scripts/storybook.mjs` 顶部
+ * 而 `next.config.js` 那侧本仓有过明确口径 —— 见 `scripts/devtools/storybook.mjs` 顶部
  * 「不改 `next.config.js`」那段。
  *
  * 于是这里留在画布上的是**真实发生的事**（三条路，按可用性排序）：
@@ -338,7 +338,7 @@ export function sourceNameArgType(kind: ValueSourceKind) {
  * ## 值从哪来
  *
  * 应用端口按**检出路径**推导（3200~3999），不同 checkout 不同 —— 写死一个值在
- * 别人的机器上必然错。所以它由 `scripts/storybook-assets.mjs` 在 `pnpm storybook`
+ * 别人的机器上必然错。所以它由 `scripts/devtools/storybook-assets.mjs` 在 `pnpm storybook`
  * 启动时调权威实现 `scripts/app-port.mjs` 的 `resolveAppPort()` **现算**。
  * 为什么不在这里读环境变量：Storybook 的 webpack 把 `process.env` 替换成一个
  * **白名单对象**（实测编出来的 bundle 里只有 `NODE_ENV` / `NODE_PATH` /

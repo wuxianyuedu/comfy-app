@@ -24,7 +24,7 @@
  * 判定档（ISSUE #1451 要求 2，与 `tw4-canonical-report.mjs` 同构）：本工具起 Tailwind
  * 引擎、不进 pre-commit（判的是「CSS 等价改写」而非正确性），但 03 章那句「按需跑一次」
  * 此前没有任何东西在守。出路 = 按需跑 + **硬闸**：`--check` 命中即退 1，候选须为 0。
- * 执行者与「为什么不进钩子」登记在 `scripts/.gate-executor-ledger.json`。
+ * 执行者与「为什么不进钩子」登记在 `scripts/gates/.gate-executor-ledger.json`。
  *
  * **为什么是硬闸而不是棘轮**：本判据此前带一份基线（`scripts/.tw4-spacing-baseline.json`），
  * `--check` 只判「不超过基线」、`--update` 收紧。存量清零后（ISSUE #1811 的 tw4 项）

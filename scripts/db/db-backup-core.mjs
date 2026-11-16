@@ -30,7 +30,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import { resolveSqlitePath } from "./db-schema-state.mjs";
-import { restoreAppDataBackup } from "../app-data-backup.mjs";
+import { restoreAppDataBackup } from "./app-data-backup.mjs";
 
 /** 备份落点（相对应用根）：`<应用根>/data/backups/`。
  *

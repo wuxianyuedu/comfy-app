@@ -16,7 +16,7 @@
    - 规范章节体量大、别整篇读：`pnpm doc:toc <章节> [关键词]` 打出「标题 → 行号」目录
      （可选过滤），并给出可直接照抄的 `Read(offset, limit)` 区间；默认读源（**唯一权威**），
      `--rendered` 才读 `docs/generated/**` 镜像（行号不同）—— 该镜像自 #3586 起**不再入库**，
-     用它之前要自己跑一次 `pnpm doc:render` 把它生到本机。单一出处：`scripts/doc-toc.mjs` 文件头。
+     用它之前要自己跑一次 `pnpm doc:render` 把它生到本机。单一出处：`scripts/docs/doc-toc.mjs` 文件头。
 3. 本文件（`AGENTS.md`）全文——尤其下方「硬规则」与「强制先读规范文档的改动范围」表。
 
 按改动范围快速定位规范章节：
@@ -40,7 +40,7 @@
 - 改 `src/lib/**` → `docs/standards/18-lib层规范.md`（**它曾是四类门禁的盲区**：
   分层 element / Node-only 声明规则 / 文件与函数长度棘轮 / 覆盖率门槛；§18.4 那条
   「`.server.ts` / `server-only` / 纯 Node 宿主」三选一是唯一口径，自查
-  `node scripts/lib-node-only-scan.mjs`；新增模块先答「它属于哪个子域」，见 §18.12 / §12.5.3
+  `node scripts/gates/lib-node-only-scan.mjs`；新增模块先答「它属于哪个子域」，见 §18.12 / §12.5.3
   与下方那张表的 lib 两行）；
 - 提交 / PR / 自查清单 / 分支策略 → `docs/standards/13-提交与-code-review.md`
   （§13.1 自查清单、§13.5 门禁、§13.6 分支与合并、§13.6.1 master 提交守卫）；
@@ -54,7 +54,7 @@
   （默认按当前分支相对基线取改动面，`--changed <路径…>` 给显式名单）。它只转述既有执行者的
   登记：门禁分档取自钩子步骤行与 `ci-incremental-gates.mjs` 的收窄面、用例直接起
   `scripts/affected-tests/affected-tests.mjs` 的判决链、规范读下方那张表的机器可读副本
-  `scripts/doc-reading-map.mjs`。**给的是「建议跑」不是「已跑」**（本地默认只有 D0）；
+  `scripts/docs/doc-reading-map.mjs`。**给的是「建议跑」不是「已跑」**（本地默认只有 D0）；
   用例是静态 import 图的增量面、不是全量凭证；改动面为空 / 取不到基线 ⇒ 退 2 = 没有结论，
   不是「什么都不用跑」。
 - **依赖版本可能落后于远端**（别人升过库、你还在旧的上面干活）→ 先跑
@@ -97,7 +97,7 @@
 > 判断标准：改动被「强制先读规范文档的改动范围」表或本清单覆盖但未先读就动手 = 违规，
 > 提交会被拒或要求回滚。
 
-> 下面这张表有机器可读副本 `scripts/doc-reading-map.mjs`（`pnpm gates:which` 按改动面匹配它），
+> 下面这张表有机器可读副本 `scripts/docs/doc-reading-map.mjs`（`pnpm gates:which` 按改动面匹配它），
 > 两边由 `tests/gates-which.test.ts` 双向核对：改了表不加登记、或登记了不改表，都会当场红。
 
 ## 强制先读规范文档的改动范围
@@ -110,7 +110,7 @@
 | ComfyUI 生命周期                                                      | `src/lib/comfyui/**`（lifecycle / executor-* / reaper）                                                                                                                                                                         | §3、§5                                                                                                                                                                                                                                                                                          |
 | 工坊管线                                                              | `src/components/workshop/**`、`src/lib/workshop/**`                                                                                                                                                                             | §5                                                                                                                                                                                                                                                                                              |
 | UI/逻辑分离                                                           | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时                                                                                                                                                                                    | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)）                                                                                                                                                                                                                                  |
-| lib 层边界与门禁                                                      | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层）                                                                                                                                                                | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `oxlint.parity.config.mjs` / `oxlint.config.ts` 的 `boundaries` 强制，Node-only 声明由 `scripts/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts` 强制（§18.4），文件长度**硬闸** `check-file-structure.cjs`（超 900 行即阻断，无 flag） |
+| lib 层边界与门禁                                                      | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层）                                                                                                                                                                | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `oxlint.parity.config.mjs` / `oxlint.config.ts` 的 `boundaries` 强制，Node-only 声明由 `scripts/gates/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts` 强制（§18.4），文件长度**硬闸** `check-file-structure.cjs`（超 900 行即阻断，无 flag） |
 | lib 子域归属                                                          | `src/lib/**`（新增模块、新建子域目录、搬目录）                                                                                                                                                                                  | §12.5.3 + §18.12；门禁 `check-file-structure.cjs` 的 R13′/R14                                                                                                                                                                                                                                   |
 | 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs`                                                                                                                                                                    | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/gates/check-ps1-consistency.mjs`                                                                                                                                                       |
 | 跨平台行为 / 端口与文档                                               | 新增按平台分叉的逻辑、改动 `src/lib/process/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1                                                                                                                                        |
@@ -217,7 +217,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
    `build.devUrl` 且资源不内嵌——冷启动必现 Edge「无法访问此页面」错误页，
    详见规范 §5）——窗口配置与启动页是编译期内嵌的，只改源码不重编 =
    跑旧二进制（历史黑屏事故来源）。**这条现在有判据**：`.githooks/pre-commit` 的
-   `scripts/shell-gate.mjs` 在暂存改动命中壳输入时，复用 `dev-launcher.mjs` 的
+   `scripts/gates/shell-gate.mjs` 在暂存改动命中壳输入时，复用 `dev-launcher.mjs` 的
    `shellStaleWarning()` 把「没重编就提交」拦下，并在改了 `src-tauri/src/*.rs` 时跑
    `cargo test`（壳内全部 `#[test]` 唯一的执行者——条数随源码变动，别在这里写死，以
    `cargo test` 自己的输出为准）；触发面与 mtime 边界见规范 §11.10.4。
@@ -329,7 +329,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
 14. **变更日志只写 `changelog.d/` 碎片，不直接改 `CHANGELOG.md`**（ISSUE #408 / 规范 §13.10.5）：
     `CHANGELOG.md` 的 `[Unreleased]` 是全仓库唯一「人人都改同一处」的文件，并行分支必然冲突。
     条目写 `changelog.d/<issue号>-<slug>.md`（一件变更一个文件，首行标 `## Added` / `## Fixed` 等段落），
-    由 `node scripts/merge-changelog-fragments.mjs` 在发版/整理时并入。
+    由 `node scripts/docs/merge-changelog-fragments.mjs` 在发版/整理时并入。
     形态由 `scripts/gates/check-changelog-fragments.cjs` 在 pre-commit 强制拦截，
     回归测试见 `tests/check-changelog-fragments.test.ts`。
     **改缺陷那一类（碎片首行段落是 `## Fixed`）动手前先立案**（ISSUE #2127 / 规范 §13.10.9）：
@@ -415,7 +415,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
     **四条不许**：入口里不另立第二套判定（结论必须来自既有执行者的原值）、不藏 `--no-verify`
     那类绕过通道、降档/跳过不许被读成「全套过了」、效应不许只转述自己的 stdout（丢 stderr 是
     这一族最重的事故）。**登记面早有执行者**：不进 `check:all` 的档 ⇒ `quality-gate.mjs` 的 `GATES`
-    或 `scripts/.on-demand-duties.json`（`check-on-demand-duties.cjs` 双向核对）；是判据的 ⇒
+    或 `scripts/gates/.on-demand-duties.json`（`check-on-demand-duties.cjs` 双向核对）；是判据的 ⇒
     `check-gate-executors.cjs`（无执行者当场红）；`.ps1` 入口 ⇒ `check-ps1-consistency.mjs`。
     **不新写**「文档里的 `pnpm <名>` 必须存在于 `scripts`」那条对账判据：实测扫 48 份文档得
     52 处命中，几乎全是误报（`pnpm tauri` 那类 `node_modules/.bin` 二进制名、散文里提到 pnpm
@@ -437,7 +437,7 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
     `--allow-staged`，见 §13.6）、不 `--no-verify`、不 `--force`、不改历史、不代写提交信息（提交信息是判断，不是排版）。
     **④ 「PR 跑绿才合并」是纪律**（硬规则 7）：本地默认档只跑形态档，所以主干那一句「平台拦 push、
     放行 PR 合并」比过去更承重；CI 红了先 `pnpm ship --diagnose` 取失败格，归因归
-    `scripts/base-check.mjs`。
+    `scripts/gates/base-check.mjs`。
     **工作模式（#3512）**：`--mode auto`（全托管）/ `--mode confirm`（关键步骤逐个确认）是
     「打包旗标的显式别名」—— 模式由人点名才算授权，展开后与逐枚旗标完全同义；红线全部照旧
     （终态只认两个原值、confirm 的跳过必须被读出来且不是「已执行」）。用法见
@@ -468,12 +468,12 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
     里替人决定。总结里只放「本次已立案的号 + 一句话」与「未立案时的显式说明（确实没有发现）」，
     不堆「待办清单」。这条的执行者是代理自己，不新写自动扫描建单的启发式工具（硬规则 24 /
     §12.20），编排层一次也不代写标题与正文（§13.10.12）。汇报骨架的第五节形状见
-    `scripts/session-report.mjs`，口径见 §13.10.9 末段与 §13.10.14。
+    `scripts/platform/session-report.mjs`，口径见 §13.10.9 末段与 §13.10.14。
 
 30. **并行 worktree 的落点：仓内 `.worktrees/` 或系统临时目录，唯独不许 `.git/` 下**
     （ISSUE #2935 / §13.6.2）：`git worktree add` 的目标路径只有两种合法落点 ——
     仓库根的 `.worktrees/`（已入 `.gitignore`，检出内容不进库）或系统临时目录
-    （`mkdtempSync(join(tmpdir(), …))`，`scripts/base-check.mjs` 与
+    （`mkdtempSync(join(tmpdir(), …))`，`scripts/gates/base-check.mjs` 与
     `tests/helpers/probe-worktree.ts` 的既有做法）。**禁止落在 `.git/` 下**：Vite/vitest
     的 `server.fs.deny` 默认含 `**/.git/**`，落在那下面的检出里 DOM 档用例在模块加载期
     就被 deny，报错是 "Cannot find module" 族、指不到真实原因；且 `.git/` 是 git 自己的
@@ -524,9 +524,9 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
 当今天的因果读数是错的。逐格新读数见
 `docs/audits/2026-10-21-timing-baseline-refs-volume.md`。
 
-**改了 `src/lib` / `src/server` / `src/trpc` 就会触发平台侧的「API 文档生成与自检」那一格**（它由**平台侧流水线**跑，ISSUE #1975 起不再进 pre-commit，见 §13.5.17）：它**自己生成一份** `docs/api/` 并判这份可不可用（① 跑得通 ② 骨架齐全 ③ 可移植）。**产物不再进 git**（ISSUE #2231，`.gitignore` 的 `docs/api/`）—— 此前它进 git，而「进库就得有人守它」那道守门（平台那一格带 `--autofix`：「先就地重生成、再判」）恰好让漂移在 CI 上隐形（#2231 的现场：master 上差 9 处而平台报绿）；产物出库之后，「提交进 git 的那份与源同不同步」这个问题**没有对象**了。**不要手改生成物**，也不要指望本地跑一次能替 CI 交差 —— 本地跑出来的那份只在本机（`docs/api/` 已被忽略），平台侧各跑各的。⚠️ **别写 `pnpm docs`**：那是 pnpm 的**内建命令**（`pnpm docs <PACKAGE>` 打开某包的文档），会抢在脚本前面、typedoc 根本不跑（实测报 `the following required arguments were not provided: <PACKAGE>`）—— 带脚本名的动词要用 `pnpm run <脚本>`。`pnpm run docs` 现在**按产物判成败**：typedoc 写出失败时照样退 0、日志照样收在 `[info] html generated at …` 上（「退出码 0 + 说生成了 + 产物一个没更新」三件套），所以那一层验的是 `index.html` 是不是这一轮写的、失败会重试，全失败才退非零（唯一实现 `scripts/typedoc-run.mjs`，`docs:check` 用的是同一份）。
+**改了 `src/lib` / `src/server` / `src/trpc` 就会触发平台侧的「API 文档生成与自检」那一格**（它由**平台侧流水线**跑，ISSUE #1975 起不再进 pre-commit，见 §13.5.17）：它**自己生成一份** `docs/api/` 并判这份可不可用（① 跑得通 ② 骨架齐全 ③ 可移植）。**产物不再进 git**（ISSUE #2231，`.gitignore` 的 `docs/api/`）—— 此前它进 git，而「进库就得有人守它」那道守门（平台那一格带 `--autofix`：「先就地重生成、再判」）恰好让漂移在 CI 上隐形（#2231 的现场：master 上差 9 处而平台报绿）；产物出库之后，「提交进 git 的那份与源同不同步」这个问题**没有对象**了。**不要手改生成物**，也不要指望本地跑一次能替 CI 交差 —— 本地跑出来的那份只在本机（`docs/api/` 已被忽略），平台侧各跑各的。⚠️ **别写 `pnpm docs`**：那是 pnpm 的**内建命令**（`pnpm docs <PACKAGE>` 打开某包的文档），会抢在脚本前面、typedoc 根本不跑（实测报 `the following required arguments were not provided: <PACKAGE>`）—— 带脚本名的动词要用 `pnpm run <脚本>`。`pnpm run docs` 现在**按产物判成败**：typedoc 写出失败时照样退 0、日志照样收在 `[info] html generated at …` 上（「退出码 0 + 说生成了 + 产物一个没更新」三件套），所以那一层验的是 `index.html` 是不是这一轮写的、失败会重试，全失败才退非零（唯一实现 `scripts/docs/typedoc-run.mjs`，`docs:check` 用的是同一份）。
 
-**报错指向的文件你根本没碰过 → 先复算 master 基线再怀疑自己**：PR 在平台侧是 squash 合并、不跑本地钩子，而平台侧那条流水线（#1959 起）取自源分支、跑的是另一份清单，所以硬闸违规仍可能落进 `master` 成为所有人的基线（棘轮类有数字可记账，**硬闸类须为 0、没有「带病通行」的中间态** → 一旦落地就拦住从它分出的每一个提交）。**复算的执行者是 `node scripts/base-check.mjs <拦住你的那条>`**（整条命令 / 钩子标签 / 裸脚本名都认；`--fetch` 先拉、`--json` 给机器可读）——它把那条门禁在干净的上游提交上重跑一遍，给五态之一：`baseline-red`（别线的红，就地修或登记）/ `yours`（你自己的）/ `current-green` / `inconclusive`（**没跑起来，不构成证据**：最典型是那条判据只存在你未提交的改动里）/ `load-flake`（两侧都红且两侧输出都是超时形态 ⇒ 疑似负载假红，先隔离复跑，**不许**照 `baseline-red` 登记、**不许**抬 `testTimeout`）。`--merge-state` 那一档多一态：`merge-red`（本检出绿、**合并态红** ⇒ 红来自「分支 ⊕ 目标」的组合，本地复现这棵树修自己的分支；#3043 —— 平台建的是合并态，「本地绿 + 平台红」那一形 `current-green` 的「无需复算」不构成证据）。五态的下一动作与**不许**为它放宽判据的口径见 §13.6.2；时间型判据在 CPU 高负载下的完整处置（含「拿不到测量 ≠ 测量结果是红的」那一档，以及「分不出哪份是超时」不等于「整块都只是超时」）见 §13.6.4 / §13.6.4.1。
+**报错指向的文件你根本没碰过 → 先复算 master 基线再怀疑自己**：PR 在平台侧是 squash 合并、不跑本地钩子，而平台侧那条流水线（#1959 起）取自源分支、跑的是另一份清单，所以硬闸违规仍可能落进 `master` 成为所有人的基线（棘轮类有数字可记账，**硬闸类须为 0、没有「带病通行」的中间态** → 一旦落地就拦住从它分出的每一个提交）。**复算的执行者是 `node scripts/gates/base-check.mjs <拦住你的那条>`**（整条命令 / 钩子标签 / 裸脚本名都认；`--fetch` 先拉、`--json` 给机器可读）——它把那条门禁在干净的上游提交上重跑一遍，给五态之一：`baseline-red`（别线的红，就地修或登记）/ `yours`（你自己的）/ `current-green` / `inconclusive`（**没跑起来，不构成证据**：最典型是那条判据只存在你未提交的改动里）/ `load-flake`（两侧都红且两侧输出都是超时形态 ⇒ 疑似负载假红，先隔离复跑，**不许**照 `baseline-red` 登记、**不许**抬 `testTimeout`）。`--merge-state` 那一档多一态：`merge-red`（本检出绿、**合并态红** ⇒ 红来自「分支 ⊕ 目标」的组合，本地复现这棵树修自己的分支；#3043 —— 平台建的是合并态，「本地绿 + 平台红」那一形 `current-green` 的「无需复算」不构成证据）。五态的下一动作与**不许**为它放宽判据的口径见 §13.6.2；时间型判据在 CPU 高负载下的完整处置（含「拿不到测量 ≠ 测量结果是红的」那一档，以及「分不出哪份是超时」不等于「整块都只是超时」）见 §13.6.4 / §13.6.4.1。
 
 **「类型检查」格红了 `.mjs` 的错 ≠ 判据漂移，先读两行读数再归因**（ISSUE #3049 / §13.5.14.1）：主 `tsconfig.json` 的 `allowJs`+`checkJs` 沿 import 图把**被引到的** `.mjs` 纳入主面（硬闸零容忍），`.mjs` 全量面归 `tsconfig.scripts.json` 的棘轮——登记过的分工，不是漏洞。红行下面紧跟着 `[ci-run-tool] 判决面`（判的是哪份 tsconfig、哪把 tsc）与 `[ci-run-tool] 程序图里的 .mjs`（通道在不在场）两行读数，照它归因；别照「主面不含 `.mjs`」的旧印象去推候选根因（ISSUE #3041 的误诊现场）。
 

@@ -1,6 +1,6 @@
 ## Fixed
 
-- **脚本档清账批 14：`scripts/quality-gate.mjs` 11 格清零，账从 66 处 / 9 份降到 55 处 / 8 份
+- **脚本档清账批 14：`scripts/gates/quality-gate.mjs` 11 格清零，账从 66 处 / 9 份降到 55 处 / 8 份
   （ISSUE #2589 / 规范 §13.5.14.1）**：这一份是门禁档位的调度器（`pnpm check:all` 的执行者）。
   4 格 `TS7053` 全指向同一件事：`GATES` 是十个条目的字面量，而取它用的是一个
   **来自 argv 的 string** —— 在字面量类型上按 string 索引，取到的类型是 `any`，

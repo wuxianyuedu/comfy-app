@@ -113,7 +113,7 @@ import {
   resolveRepoSlug,
 } from "./ci-build-readout.mjs";
 import { BUNDLE_GATE_STAGE, judgeBundleStageReading } from "./ci-daily-bundle-escalation.mjs";
-import { machineHandle } from "../dev-handle.mjs";
+import { machineHandle } from "../platform/dev-handle.mjs";
 import {
   DEFAULT_WINDOW_HOURS,
   fetchBuildsCoveringWindow,
@@ -371,7 +371,7 @@ export function composeBody({ slug, build, sn, stage, skipped, readout, handle, 
     "这一格只把「红了」变成一张单，不替任何人判「是谁的错、为什么红」。定性走既有出口：",
     "",
     `- \`pnpm ship --diagnose ${sn}\` —— 只读取回失败格与失败行（本正文的读数就来自同一条链）`,
-    "- `node scripts/base-check.mjs <那条门禁>` —— 分清「红是我的还是主干的」（§13.6.2）",
+    "- `node scripts/gates/base-check.mjs <那条门禁>` —— 分清「红是我的还是主干的」（§13.6.2）",
     "- 拿不到的测量按**没有结论**处理：`2` 不算绿，也不算红（#1747 那条口径）",
     "",
     `日志出处：https://cnb.cool/${slug}/-/build/logs/${sn}`,

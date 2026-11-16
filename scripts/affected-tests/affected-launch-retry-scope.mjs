@@ -22,7 +22,7 @@
  * 都没有）。方向刻意只往「多跑」偏：漏跑一份真失败的文件，比多跑一百份绿的文件贵得多。
  * 判据强度、旗标、预算、结论档位都由调用点（`runChunk`）决定，这一层只回答「跑哪几份」。
  */
-import { cFileXmlName, failingSuitesFromJunit } from "../precommit-timing.mjs";
+import { cFileXmlName, failingSuitesFromJunit } from "../gates/precommit-timing.mjs";
 import { readFileSync } from "node:fs";
 
 /**

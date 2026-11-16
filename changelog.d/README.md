@@ -39,9 +39,9 @@
 ## 发版/整理时怎么并入
 
 ```bash
-node scripts/merge-changelog-fragments.mjs            # 并入 [Unreleased] 后删除碎片
-node scripts/merge-changelog-fragments.mjs --check     # 只预览,不落盘
-node scripts/merge-changelog-fragments.mjs --release 0.2.0   # 顺带把 [Unreleased] 定版
+node scripts/docs/merge-changelog-fragments.mjs            # 并入 [Unreleased] 后删除碎片
+node scripts/docs/merge-changelog-fragments.mjs --check     # 只预览,不落盘
+node scripts/docs/merge-changelog-fragments.mjs --release 0.2.0   # 顺带把 [Unreleased] 定版
 ```
 
 哪条变更该进 CHANGELOG、哪条不该进，判据见

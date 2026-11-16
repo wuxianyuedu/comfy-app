@@ -1,6 +1,6 @@
 ## Added
 
-- **`scripts/full-suite-run.mjs`（`每日单元测试` 那一格的执行者）现在自带超时指纹的隔离复跑**。
+- **`scripts/affected-tests/full-suite-run.mjs`（`每日单元测试` 那一格的执行者）现在自带超时指纹的隔离复跑**。
   这一档此前只有组 C 有（§13.6.4.1），每日那一跑没有 —— 于是「一份文件排不上调度」在每日链上
   长得和「代码回归了」一模一样。触发事实 `cnb-b0l-1k59op66t`：`tests/deps-freshness-gate.test.ts:166`
   一条 `Test timed out in 30000ms`、**没有任何断言报错**，就把后面的
@@ -43,6 +43,6 @@
 - 复算：`pnpm exec tsc --noEmit` 退 0（改的过程中它先拦下三条：一个 import 没用、
   `main` 的参数在异步化后失去推断、reduce 初值与累加器类型不一致 —— 都是当场修的，
   没留给平台）；`pnpm exec eslint` 两份文件退 0；`vitest run tests/daily-tracks.test.ts`
-  64 条全绿（新增 8 条）；`node scripts/full-suite-run.mjs --dry-run` 结论一字未变
+  64 条全绿（新增 8 条）；`node scripts/affected-tests/full-suite-run.mjs --dry-run` 结论一字未变
   （证明这一改动没有动第一跑的命令行）；`check-infra-file-size` 243 份文件超 900 行 0 个
   （本文件 705 行）；`pnpm doc:check` 退 0，改过那一行按竖线数复量仍是 3 列。

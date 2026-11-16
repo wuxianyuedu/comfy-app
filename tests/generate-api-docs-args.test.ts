@@ -1,5 +1,5 @@
 /**
- * `scripts/generate-api-docs.mjs` 的旗标契约（ISSUE #2740）。危险不在跑挂，而在「接了用不了的值仍照常往下跑」：
+ * `scripts/docs/generate-api-docs.mjs` 的旗标契约（ISSUE #2740）。危险不在跑挂，而在「接了用不了的值仍照常往下跑」：
  * `--out` 后没人时 `out` 为空串，`path.resolve(ROOT, "")` 就是仓库根，typedoc 会把整站产物（实测 2844 份）
  * 写进根上且不被 `.gitignore` 忽略（名单只有 `docs/api/`）。重心是「坏输入当场被拒且产物没动」；本文件能 import 靠 #2740 第 2 案的守卫，它由哨兵用例钉住。
  */
@@ -7,10 +7,10 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { expect, test } from "vitest";
 
-import { parseArgs } from "../scripts/generate-api-docs.mjs";
+import { parseArgs } from "../scripts/docs/generate-api-docs.mjs";
 
 const REAL_ROOT = path.resolve(__dirname, "..");
-const SCRIPT = path.join(REAL_ROOT, "scripts", "generate-api-docs.mjs");
+const SCRIPT = path.join(REAL_ROOT, "scripts", "docs", "generate-api-docs.mjs");
 
 /** `execFileSync` 非零退出时抛的那件（node 的类型里没有具名导出的形状，就地声明）。 */
 type SpawnedFailure = {
