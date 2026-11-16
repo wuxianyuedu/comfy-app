@@ -8,7 +8,9 @@
  * 每日桌包档会把同一份纯壳 `ComfyAPP-shell.exe`（`src-tauri/target/release/app.exe`，
  * 预编译壳、可连本地 dev server，见 `scripts/ci/ci-ga-desktop-relay.mjs`）回传到 CNB 的
  * 滚动 `nightly` Release。这个脚本把它下载下来，保存为本地可用的壳文件，并在项目根
- * 缺少 `Comfy APP.lnk` 时补一个指向该壳的快捷方式。
+ * 缺少 `Comfy APP.lnk` 时补一个指向该壳的快捷方式。取壳时同址取回该壳的**构建信息**
+ * 附件（`ComfyAPP-shell-build-info.json`，构建时间 / commit / run / 大小 / sha256，
+ * ISSUE #4056）并展示、对账 —— 不再是「拉下来不知道什么时候构建的」。
  *
  * ## 默认落点（与 ISSUE #3699 同口径）
  *
@@ -39,6 +41,7 @@
  */
 
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -54,6 +57,13 @@ export const DEFAULT_TAG = "nightly";
 export const DEFAULT_ASSET = "ComfyAPP-shell.exe";
 export const DEFAULT_OUT = path.join("src-tauri", "target", "release", "app.exe");
 export const SHORTCUT_NAME = "Comfy APP.lnk";
+
+/**
+ * 纯壳的**构建信息**附件（ISSUE #4056，与回传侧 `ci-ga-desktop-relay.mjs` 同名同义）：
+ * 取壳时按同一 tag 一并取回并展示 —— 构建时间 / commit / run，并对到手字节做
+ * sha256 与大小对账。附件缺席（旧包）时降级指到 Release 页，不影响壳本体。
+ */
+export const BUILD_INFO_ASSET = "ComfyAPP-shell-build-info.json";
 
 /**
  * @param {string[]} argv
@@ -255,6 +265,96 @@ export function buildDownloadUrl(ctx) {
   const asset = encodeURIComponent(ctx.asset);
   const endpoint = (ctx.endpoint || DEFAULT_API_ENDPOINT).replace(/\/+$/u, "");
   return `${endpoint}/${repo}/-/releases/download/${tag}/${asset}`;
+}
+
+/**
+ * 是能按字段取值的普通对象（type predicate，避开 JSON.parse 的 any 断言；
+ * 与 `ci-ga-desktop-relay.mjs` 的同名判据同形 —— 本脚本是 node 直跑的独立件，
+ * 不 import `src/lib/is-record`）。
+ *
+ * @param {unknown} v 任意值
+ * @returns {v is Record<string, unknown>} true ⇒ 可按键取值
+ */
+function isPlainObject(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * 把构建信息附件整理成给人看的两段话（ISSUE #4056）：`info` 进 stdout（构建时间 /
+ * commit / run + 对账结果），校验不一致的 `warn` 进 stderr。字段缺席就少念；
+ * sha256 / 大小与到手字节对不上要明说（nightly 滚动覆盖时「exe 与清单不同批」
+ * 是最常见的来源），但不下架已到手的壳 —— 壳本身能用，要紧的是让人知道拿到的
+ * 不是清单里那一份。附件不是合法 JSON 同样降级，不抛。
+ *
+ * @param {Buffer} infoBytes 构建信息附件的原始字节
+ * @param {{exeBytes: number, exeSha256: string}} actual 到手 exe 的实测值
+ * @returns {{info: string, warn: string}}
+ */
+export function describeBuildInfo(infoBytes, actual) {
+  let parsed;
+  try {
+    parsed = JSON.parse(infoBytes.toString("utf8"));
+  } catch {
+    return {
+      info: "[fetch-daily-shell] 构建信息附件不是合法 JSON —— 构建时间与来源以 Release 页为准。\n",
+      warn: "",
+    };
+  }
+  const rec = isPlainObject(parsed) ? parsed : {};
+  /**
+   * 取字符串字段并去首尾空白；缺席 / 非字符串一律空串（不抛、不断言）。
+   *
+   * @param {Record<string, unknown>} source
+   * @param {string} key
+   * @returns {string}
+   */
+  const text = (source, key) => {
+    const value = source[key];
+    return typeof value === "string" ? value.trim() : "";
+  };
+  const parts = [];
+  const builtAt = text(rec, "built_at");
+  if (builtAt) parts.push(`构建时间 ${builtAt}`);
+  const commit = text(rec, "commit");
+  if (commit) parts.push(`commit ${commit.slice(0, 12)}`);
+  const runId = text(rec, "run_id");
+  if (runId) parts.push(`run ${runId}`);
+  const head =
+    parts.length > 0
+      ? `[fetch-daily-shell] 构建信息：${parts.join(" · ")}\n`
+      : "[fetch-daily-shell] 构建信息附件在场但没有可读字段 —— 构建时间与来源以 Release 页为准。\n";
+  /** @type {string[]} */
+  const checks = [];
+  /** @type {string[]} */
+  const mismatches = [];
+  const manifestSha = text(rec, "sha256");
+  if (manifestSha) {
+    if (manifestSha.toLowerCase() === actual.exeSha256.toLowerCase()) {
+      checks.push("sha256 一致");
+    } else {
+      mismatches.push(
+        `sha256 与构建信息不一致（清单 ${manifestSha.slice(0, 12)}… / 实测 ${actual.exeSha256.slice(0, 12)}…）` +
+          "—— 多半是 nightly 滚动覆盖时 exe 与清单不同批",
+      );
+    }
+  }
+  const manifestSize = typeof rec.size === "number" ? rec.size : -1;
+  if (manifestSize >= 0) {
+    if (manifestSize === actual.exeBytes) {
+      checks.push(`大小一致（${String(manifestSize)} 字节）`);
+    } else {
+      mismatches.push(
+        `大小与构建信息不一致（清单 ${String(manifestSize)} / 实测 ${String(actual.exeBytes)}）`,
+      );
+    }
+  }
+  const info =
+    checks.length > 0 ? `${head}[fetch-daily-shell] 校验：${checks.join(" · ")}\n` : head;
+  const warn =
+    mismatches.length > 0
+      ? `[fetch-daily-shell] ⚠ ${mismatches.join("；")} —— 壳本体已到手，但与清单对不上，别拿它当清单里那一份排查问题。\n`
+      : "";
+  return { info, warn };
 }
 
 /**
@@ -540,6 +640,39 @@ export async function main(io = {}) {
   process.stdout.write(
     `[fetch-daily-shell] ✓ 已下载 ${downloaded.bytes.length} 字节 -> ${outAbs}${downloaded.auth ? "（已鉴权）" : ""}\n`,
   );
+
+  /* 构建信息（ISSUE #4056）：取壳的人要能答出「这是什么时候、哪一笔构建」。
+   * 附件按同一 tag 同址取回；缺席（旧包）/ 读不到都不影响壳本体 —— 降级念一句
+   * 去向，不装作读过。 */
+  const exeSha256 = createHash("sha256").update(downloaded.bytes).digest("hex");
+  const infoUrl = buildDownloadUrl({
+    asset: BUILD_INFO_ASSET,
+    endpoint: resolveEndpoint(env),
+    repo: args.repo,
+    tag: args.tag,
+  });
+  const info = await downloadToBuffer(infoUrl, {
+    fetchImpl: io.fetchImpl ?? fetch,
+    token,
+  });
+  if (info.ok && "bytes" in info && info.bytes) {
+    const shown = describeBuildInfo(info.bytes, {
+      exeBytes: downloaded.bytes.length,
+      exeSha256,
+    });
+    process.stdout.write(shown.info);
+    if (shown.warn) {
+      process.stderr.write(shown.warn);
+    }
+  } else if (info.status === 404) {
+    process.stdout.write(
+      `[fetch-daily-shell] 该 nightly 没带构建信息附件（${BUILD_INFO_ASSET}，功能上线前的旧包）—— 构建时间与来源以 Release 页为准。\n`,
+    );
+  } else {
+    process.stdout.write(
+      `[fetch-daily-shell] 构建信息读不到（HTTP ${String(info.status)}）—— 不影响已下载的壳；构建时间与来源以 Release 页为准。\n`,
+    );
+  }
 
   const shortcutResult = ensureRootShortcut({
     dryRun: false,
