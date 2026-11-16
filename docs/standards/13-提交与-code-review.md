@@ -8801,9 +8801,14 @@ E2E 互不依赖。⚠️ 定时那一跑**稍晚**于名义时刻暴露（平�
    连续天数回看不到（含某一天那格 `skipped`）都念「读不出 ⇒ 不构成结论」，不许落成 0；
    **它不改判据的判定**，只把「拖了多久」与 §13.5.4 的两条出口（认账：在造成这批字节的 PR 里贴
    before/after 并同批带 `--allow-increase` 重跑 `check-bundle-budget.cjs --update`；压回：开一条
-   把字节降回去的 PR）念出来。连续天数与主取数共用 `fetchBuildsCoveringWindow()`（窗口按门限
-   天数算，`covered` 自证照旧），不另起一套取数；离线档（`--from`）只从 `stageLogs[sn]` 读正文、
-   连续天数一律「读不出」—— 离线档不联网是这一档的规矩，不是这一格的例外。
+   把字节降回去的 PR）念出来。判定层（判决行解析 / 门限 / 升级那一节）抽在
+   `scripts/ci/ci-bundle-escalation-core.mjs`（纯判定、零本仓依赖 —— GA 那条链运行在不装
+   `node_modules` 的 job 里），CNB 与 GA 两侧的取数链各留一半。连续天数：CNB 侧与主取数共用
+   `fetchBuildsCoveringWindow()`（窗口按门限天数算，`covered` 自证照旧），离线档（`--from`）只从
+   `stageLogs[sn]` 读正文、连续天数一律「读不出」；GA 侧（#3504 起每日档整体迁 GA）按
+   `Daily (mirror)` 的 completed runs 回看（`schedule` 与 `workflow_dispatch` 都算每日那一跑），
+   当前跑复用立案那一跳已取到的正文，顶层 `success` 即「连续在这里断」、其余结论即「读不出」，
+   与 CNB 侧同一口径。只挂 `Daily (mirror)` 那一档（桌包档复用本脚本时不挂）。
 
 去重为什么用标题而不是标签：动态标签词表要先在平台侧存在才落得下来，而「按标签筛单」这件事需要
 一个读者 —— 本档自己用标题就能查，加一枚没人筛的标签就是 §11.23 点名的「写了没有读者」。
@@ -8818,7 +8823,12 @@ E2E 互不依赖。⚠️ 定时那一跑**稍晚**于名义时刻暴露（平�
 离线档三种读数各念一句），加
 `tests/no-platform-ci-config.test.ts` 里新增那条 —— 每日链必须有一格点的是
 `scripts/ci/ci-daily-failure-issue.mjs --no-block` 且排在最前（**名字还在、块被换成别的命令，
-那种绿本档不认**，与上面「撤档 ≠ 撤账」是同一族）。条数随用例变，这里不写死它（同 `cargo test`
+那种绿本档不认**，与上面「撤档 ≠ 撤账」是同一族）。GA 那一侧的同一条判据在
+`tests/ci-ga-daily-bundle-escalation.test.ts`（runs 列表取不到 / 上一跑不在 completed runs 里 /
+顶层结论 cancelled / `success` 即断 / in_progress 过滤 / 历史跑没判红）与
+`tests/ci-ga-daily-failure-issue.test.ts` 的「main：预算账陈旧度触发器」一组里（真红 + 昨天也红
+⇒ 正文多一节 / 暂撤不升、不发历史请求 / 门限没到不升 / 日志取不到不升、不发历史请求 /
+`--dry-run` 念出判定但不发历史请求、不写平台）。条数随用例变，这里不写死它（同 `cargo test`
 那条口径）。
 
 ⚠️ 一处**未核**的外部前提：节点上那个执行身份有没有建单权限（`repo-issue:rw`）。本地用开发者
