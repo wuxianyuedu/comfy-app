@@ -260,6 +260,92 @@ function labelNames(labels) {
     .filter(Boolean);
 }
 
+/** 建单 → 标签路由就绪之间的最终一致窗口有多长，平台没承诺过；短退避一次够 #4003 那一形。 */
+const LABEL_404_RETRY_DELAY_MS = 1500;
+
+/** 同步小睡（重试退避用）：ship 全链是 spawnSync 的同步世界，不为此引入异步。
+ *
+ * @param {number} ms 毫秒
+ */
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * 这一次 cnb 应答是不是「404 / not found」形态（ISSUE #4018：建单后紧随的
+ * `post-issue-labels` 偶发 404）。平台信封的报错码可能落在顶层 `status` /
+ * `errcode` 或 `data.errcode`，几处都看一眼；**结构化字段为准**，不拿原文正则猜。
+ * `cnbJson` 交回 null（cnb 不在 / 解析失败）不算 404 —— 那是「没跑起来」，
+ * 交给调用方原有的回读判据，不在这里冒充。
+ *
+ * @param {{json:any,code:number,raw:string,stderr:string} | null} res `cnbJson` 的结果
+ * @returns {boolean}
+ */
+function isNotFoundReply(res) {
+  const j = res?.json;
+  if (!j || typeof j !== "object") {
+    return false;
+  }
+  const data = typeof j.data === "object" && j.data !== null ? j.data : {};
+  const codes = [j.status, j.errcode, data.errcode, data.status];
+  return codes.some((c) => Number(c) === 404);
+}
+
+/**
+ * 建单后补「提单人:」标签，带 404 处置（ISSUE #4018）：
+ * 首次 404 ⇒ 短退避后**重试一次**；仍 404 ⇒ **降级**改用同语义的
+ * `put-issue-labels`（#4003 的手工出口收进来）。成没成不由这里判 ——
+ * 调用方随后的 `get-issue` 回读才是结论；这里只把试了哪几步念出来。
+ *
+ * @param {{run:any, log:(s:string)=>void, slug:string, number:number, label:string, delayMs?:number}} input
+ * @returns {{json:any,code:number,raw:string,stderr:string} | null} 最后一次 cnb 应答
+ */
+export function postAuthorLabel({
+  run,
+  log,
+  slug,
+  number,
+  label,
+  delayMs = LABEL_404_RETRY_DELAY_MS,
+}) {
+  const post = [
+    "issues",
+    "post-issue-labels",
+    "--repo",
+    slug,
+    "--number",
+    String(number),
+    "--labels",
+    label,
+    "-v",
+  ];
+  const put = [
+    "issues",
+    "put-issue-labels",
+    "--repo",
+    slug,
+    "--number",
+    String(number),
+    "--labels",
+    label,
+    "-v",
+  ];
+  let res = cnbJson(run, post);
+  if (isNotFoundReply(res)) {
+    log(
+      `[ship] #${number} 补标签返回 404（建单 → 标签路由的最终一致窗口，#4018）：` +
+        `退避 ${delayMs}ms 后重试一次。`,
+    );
+    sleepSync(delayMs);
+    res = cnbJson(run, post);
+  }
+  if (res && isNotFoundReply(res)) {
+    log("[ship] 重试仍 404 ⇒ 降级改用 put-issue-labels（同语义端点，#4003 的手工出口）。");
+    res = cnbJson(run, put);
+  }
+  return res;
+}
+
 /**
  * `--new-issue` 的入口。
  *
@@ -366,17 +452,8 @@ export function runNewIssue({
   }
   log(`[ship] 平台回执里的单号是 #${number}（回执不算结论，下面是独立回读）。`);
   if (label) {
-    cnbJson(run, [
-      "issues",
-      "post-issue-labels",
-      "--repo",
-      slug,
-      "--number",
-      String(number),
-      "--labels",
-      label,
-      "-v",
-    ]);
+    /* 404 偶发 ⇒ 这里带重试与降级（#4018）；成没成仍由下面的回读判。 */
+    postAuthorLabel({ run, log, slug, number, label });
   }
   const back = readIssue({ run, slug, number });
   if (!back) {

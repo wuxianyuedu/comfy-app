@@ -132,6 +132,7 @@ import {
   stallReadout as stallReadoutLines,
 } from "../scripts/ci/ci-build-readout.mjs";
 import {
+  postAuthorLabel,
   readIssueBody,
   runAppendIssueComment,
   runIssueComment,
@@ -7241,9 +7242,16 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
  * 回读里标签不在 ⇒ 2；标题对不上 ⇒ 1（公开状态不是请求的那件事）。
  */
 describe("--new-issue：一步建单并回读", () => {
-  function newIssueIo(opts: { created?: unknown; labelsOk?: boolean; readback?: unknown }) {
+  function newIssueIo(opts: {
+    created?: unknown;
+    /** 按次序弹出的「补标签」应答（post / put 共用一条队；弹完后的默认应答 `{}`）。 */
+    labelReplies?: Array<unknown>;
+    labelsOk?: boolean;
+    readback?: unknown;
+  }) {
     const calls: Array<string> = [];
     const log: Array<string> = [];
+    const labelQueue = [...(opts.labelReplies ?? [])];
     const ok = (stdout: string): FakeResult => ({
       status: 0,
       stdout,
@@ -7277,8 +7285,13 @@ describe("--new-issue：一步建单并回读", () => {
       if (cmd === "cnb" && args[0] === "issues" && args[1] === "create-issue") {
         return ok(JSON.stringify(opts.created ?? { data: { number: 2222 } }));
       }
-      if (cmd === "cnb" && args[0] === "issues" && args[1] === "post-issue-labels") {
-        return ok(opts.labelsOk === false ? "{}" : "{}");
+      if (
+        cmd === "cnb" &&
+        args[0] === "issues" &&
+        (args[1] === "post-issue-labels" || args[1] === "put-issue-labels")
+      ) {
+        const reply = labelQueue.shift();
+        return ok(JSON.stringify(reply ?? {}));
       }
       if (cmd === "cnb" && args[0] === "issues" && args[1] === "get-issue") {
         return ok(
@@ -7374,6 +7387,112 @@ describe("--new-issue：一步建单并回读", () => {
       expect(text).toContain("pnpm ship --claim 2222");
       // 不跑主流程任何一段（建单独立于提交 / 合并）。
       expect(f.calls.some((c) => c.includes("status --porcelain"))).toBe(false);
+    } finally {
+      rmSync(tmp.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("postAuthorLabel 状态机：非 404 不重试；404→重试一次；再 404→降级 put（#4018）", () => {
+    const notFound = { status: 404, errcode: 404, errmsg: "not found" };
+    const log: Array<string> = [];
+    const mk = (replies: Array<unknown>) => {
+      const calls: Array<string> = [];
+      const run = (_cmd: string, args: Array<string>): FakeResult => {
+        calls.push(String(args[1] ?? ""));
+        return {
+          status: 0,
+          stdout: JSON.stringify(replies.shift() ?? {}),
+          stderr: "",
+          error: null,
+        };
+      };
+      return { run, calls };
+    };
+    const base = {
+      slug: "o/r",
+      number: 7,
+      label: "提单人:t",
+      delayMs: 0,
+      log: (s: string) => log.push(s),
+    };
+
+    /* 首发就不是 404 ⇒ 一次调用，不重试也不降级。 */
+    const clean = mk([{}]);
+    postAuthorLabel({ ...base, run: clean.run });
+    expect(clean.calls).toEqual(["post-issue-labels"]);
+
+    /* 404 ⇒ 原端点重试一次，仍不含 put。 */
+    const retry = mk([notFound, {}]);
+    postAuthorLabel({ ...base, run: retry.run });
+    expect(retry.calls).toEqual(["post-issue-labels", "post-issue-labels"]);
+
+    /* 404 → 404 ⇒ 降级 put-issue-labels（#4003 的手工出口）。 */
+    const fallback = mk([notFound, notFound, {}]);
+    postAuthorLabel({ ...base, run: fallback.run });
+    expect(fallback.calls).toEqual(["post-issue-labels", "post-issue-labels", "put-issue-labels"]);
+
+    /* 全程 404 ⇒ 试满三条命令即止，成没成交给回读（这里只念过程）。 */
+    log.length = 0;
+    const giveUp = mk([notFound, notFound, notFound]);
+    postAuthorLabel({ ...base, run: giveUp.run });
+    expect(giveUp.calls).toEqual(["post-issue-labels", "post-issue-labels", "put-issue-labels"]);
+    expect(log.join("\n")).toContain("404");
+
+    /* cnb 不在（cnbJson ⇒ null）不是 404 ⇒ 不触发重试，按「没跑起来」交回读判。 */
+    const enoent = { calls: [] as Array<string> };
+    postAuthorLabel({
+      ...base,
+      run: (_cmd: string, args: Array<string>) => {
+        enoent.calls.push(String(args[1] ?? ""));
+        return { status: null, stdout: "", stderr: "", error: "ENOENT" };
+      },
+    });
+    expect(enoent.calls).toEqual(["post-issue-labels"]);
+  });
+
+  it("建单后补标签偶发 404 ⇒ 重试一次后落地，整单仍绿（#4018）", async () => {
+    const tmp = withBody("## 症状\n\n…\n");
+    const f = newIssueIo({
+      labelReplies: [{ status: 404, errcode: 404, errmsg: "not found" }],
+    });
+    try {
+      const code = await runMain(
+        f,
+        ["--new-issue", "fix(ship): 一步建单", "--issue-body-file", tmp.file],
+        tmp,
+      );
+      const text = f.log.join("\n");
+      expect(code).toBe(CODE.GREEN);
+      expect(f.calls.filter((c) => c.includes("post-issue-labels"))).toHaveLength(2);
+      expect(f.calls.some((c) => c.includes("put-issue-labels"))).toBe(false);
+      expect(text).toContain("404");
+      expect(text).toContain("重试一次");
+      expect(text).toContain("✓ #2222 已回读");
+    } finally {
+      rmSync(tmp.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("补标签重试仍 404 ⇒ 降级 put-issue-labels，回读在场照常绿（#4018）", async () => {
+    const tmp = withBody("## 症状\n\n…\n");
+    const f = newIssueIo({
+      labelReplies: [
+        { status: 404, errcode: 404, errmsg: "not found" },
+        { status: 404, errcode: 404, errmsg: "not found" },
+      ],
+    });
+    try {
+      const code = await runMain(
+        f,
+        ["--new-issue", "fix(ship): 一步建单", "--issue-body-file", tmp.file],
+        tmp,
+      );
+      const text = f.log.join("\n");
+      expect(code).toBe(CODE.GREEN);
+      expect(f.calls.filter((c) => c.includes("post-issue-labels"))).toHaveLength(2);
+      expect(f.calls.filter((c) => c.includes("put-issue-labels"))).toHaveLength(1);
+      expect(text).toContain("降级改用 put-issue-labels");
+      expect(text).toContain("labels=[提单人:yuedu-win]");
     } finally {
       rmSync(tmp.dir, { recursive: true, force: true });
     }
