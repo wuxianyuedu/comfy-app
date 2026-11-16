@@ -226,9 +226,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   return new NextResponse(stream, {
     headers: {
-      "Content-Type": "text/event-stream",
+      "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      /* 与公共 SSE 边缘（sse-stream.ts 的 SSE_HEADERS）同一形状（#4047）：
+       * 反代按它关缓冲，否则帧会攒到连接关闭才到客户端。 */
+      "X-Accel-Buffering": "no",
     },
   });
 }
