@@ -493,8 +493,11 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
       const len = stat.size - kaOffsets[key];
       const buf = Buffer.alloc(len);
       const fd = fs.openSync(file, "r");
-      fs.readSync(fd, buf, 0, len, kaOffsets[key]);
-      fs.closeSync(fd);
+      try {
+        fs.readSync(fd, buf, 0, len, kaOffsets[key]);
+      } finally {
+        fs.closeSync(fd);
+      }
       kaOffsets[key] = stat.size;
       /* 拼回上一轮的残余再解：切在多字节字符中间时，那个字符整个留到下一轮
        * （见文件头）。**先取新残余再切片** —— 改回 `buf.toString("utf-8")`
@@ -871,28 +874,26 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
 }
 
 /**
- * bound 模式的一次就绪探测：用已知子进程 PID 查它实际监听的端口——不依赖
- * 端口探测猜哪个 ComfyUI 是我们的实例（别的实例可能占着配置端口导致自动
- * +1）。用「特定 PID 的监听端口 + /system_stats 响应」双重确认，避免把同
- * 网段上另一个 ComfyUI 实例误认作刚启动的配置实例。
+ * bound 模式的一次就绪探测：用子进程 PID 查实际监听端口（不靠端口猜测），
+ * 再以 `/system_stats` 确认，避免误认同机其他 ComfyUI 实例。
  */
 export async function probeChildReady(child: ReturnType<typeof spawn>): Promise<string | null> {
   const childPid = child.pid;
-  const listenPort =
-    childPid === null || childPid === undefined ? null : await findPidListeningPort(childPid);
+  if (childPid === null || childPid === undefined) {
+    return null;
+  }
+  const listenPort = await findPidListeningPort(childPid);
   if (listenPort === null) {
     return null;
   }
   const base = comfyUiBaseUrl(listenPort);
   try {
-    const r = await fetch(`${base}/system_stats`, {
-      signal: AbortSignal.timeout(2000),
-    });
+    const r = await fetch(`${base}/system_stats`, { signal: AbortSignal.timeout(2000) });
     if (r.ok) {
       return base;
     }
   } catch {
-    /* HTTP 探测失败——进程在但 /system_stats 还没响应，继续等 */
+    /* HTTP 探测失败：进程在但 /system_stats 还没响应，继续等 */
   }
   return null;
 }

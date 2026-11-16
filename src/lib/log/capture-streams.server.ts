@@ -187,10 +187,14 @@ function bufferedAppend(filePath: string, text: string): void {
     flushBuffer(filePath);
     return;
   }
-  flushTimer ??= setTimeout(() => {
-    flushTimer = null;
-    flushBuffer(filePath);
-  }, FLUSH_INTERVAL_MS);
+  if (flushTimer === null) {
+    flushTimer = setTimeout(() => {
+      flushTimer = null;
+      flushBuffer(filePath);
+    }, FLUSH_INTERVAL_MS);
+    /* 转录定时器是后台刷盘，不该单独把进程吊住；退出时尽力刷一次。 */
+    flushTimer.unref?.();
+  }
 }
 
 let installed = false;
@@ -222,6 +226,11 @@ export function installStreamCapture(): void {
   } catch {
     /* 目录建不出来就不再转录（退化为原行为，不影响应用） */
   }
+
+  /* 退出时尽力刷掉未满缓冲：只能做同步写，避免把关闭路径变成异步竞态。 */
+  process.once("exit", () => {
+    flushBuffer(filePath);
+  });
 
   type WriteFn = NodeJS.WriteStream["write"];
 
