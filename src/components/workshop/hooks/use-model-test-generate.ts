@@ -334,7 +334,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
     } finally {
       lock.exit();
     }
-  }, [lock, runGenerate]);
+  }, [lock, runGenerate, selectedModel]);
 
   /** 取消本轮生成（#3949 需求 5）：中止等待与轮询，错误条落「已取消生成」。 */
   const cancelGenerate = useCallback(() => {
