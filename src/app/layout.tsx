@@ -15,6 +15,7 @@ import { BrowserStatusBar } from "~/components/studio/BrowserStatusBar";
 import { UpdateCheckProvider } from "~/components/update-check/UpdateCheckProvider";
 import { CodeUpdateWatcher } from "~/components/code-update/CodeUpdateWatcher";
 import { AppearanceBootstrap } from "~/components/AppearanceBootstrap";
+import { AppContextMenu } from "~/components/AppContextMenu";
 import { MessageCenterPanel } from "~/components/message-center/MessageCenterPanel";
 
 /**
@@ -51,6 +52,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   {/* 启动期占位的收尾：壳在应用首帧之前注入它（浏览器空白页 / Edge
                       错误页都不能露给用户），应用挂载时连同它的重贴定时器一起收掉 */}
                   <LaunchLoadingStubCleaner />
+                  {/* 右键菜单兜底：画布之外的界面右键不再露出 WebView2 默认的
+                      浅色系统菜单（ISSUE #4126），统一为应用主题的小菜单 */}
+                  <AppContextMenu />
                   {children}
                   <LogPanel />
                   <BrowserStatusBar />
