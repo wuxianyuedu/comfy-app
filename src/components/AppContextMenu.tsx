@@ -16,6 +16,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, RotateCw } from "lucide-react";
 
+import { Button } from "~/components/ui/button";
 import { zClass } from "~/lib/shell/overlay-z";
 
 type MenuPosition = { x: number; y: number };
@@ -101,14 +102,14 @@ function MenuButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      className="text-ink-strong hover:bg-subtle flex h-auto w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-left text-xs font-normal"
+    <Button
+      className="text-ink-strong hover:bg-subtle flex h-auto w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-normal"
       onClick={onClick}
       role="menuitem"
-      type="button"
+      variant="ghost"
     >
       <span className="text-ink-fainter shrink-0">{icon}</span>
       {label}
-    </button>
+    </Button>
   );
 }
