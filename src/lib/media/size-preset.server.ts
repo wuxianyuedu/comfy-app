@@ -29,8 +29,8 @@ import path from "node:path";
 import { errorText } from "~/lib/error-message";
 import { AsyncMutex } from "~/lib/async-mutex";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
+import { diffSizePresetTable } from "~/lib/media/size-presets-diff";
 import {
-  diffSizePresetTable,
   mergeSizePresetTable,
   parseSizePresetDefaults,
   type SizePresetTable,
