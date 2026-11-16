@@ -462,6 +462,7 @@ const ROOT_SCRIPT_GLOBS = ["*.ps1", "*.bat", "*.cmd", "*.vbs", "*.ts", "*.tsx"];
 const TRIGGER_GLOBS = [...ROOT_SCRIPT_GLOBS, ...SCAN_ROOTS.map((dir) => `${dir}/**`)];
 const SCAN_EXCLUDED = [
   "node_modules/",
+  ".worktrees/",
   ".git/",
   ".next/",
   "coverage/",
