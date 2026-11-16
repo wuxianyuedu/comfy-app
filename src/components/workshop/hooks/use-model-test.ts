@@ -18,6 +18,7 @@ import {
   apiPreviewRequest,
   fetchWorkshopWorkflows,
   type RelayDebugSink,
+  type TaskLogEntry,
   type WorkshopWorkflowOption,
 } from "~/lib/workshop/generation-client";
 import { debugBodyOf } from "~/lib/workshop/api-channel-core";
@@ -40,6 +41,7 @@ import {
   randomPromptFor,
   relayDebugRow,
   testCandidatesForKind,
+  workflowPreviewBody,
   workflowSupportsMode,
   type AdaptersByModel,
   type ModelTestInputRow,
@@ -124,6 +126,9 @@ export type ModelTestController = {
   /** 切换用途页签（候选 / 选中 / 表单随之重置）。 */
   setKind: (kind: ModelTestKind) => void;
   setMode: (mode: string) => void;
+  /** 本地工作流任务的执行日志（SSE log 帧，#4080 评论 8）：卡住时看最后几行
+   *  就能定位任务停在哪个节点；仅在测试工作流候选时累积。 */
+  taskLogs: Array<TaskLogEntry>;
   values: ModelTestValues;
   /** 本地工作流任务的进度（SSE state 帧；仅工作流候选生成中非空）。 */
   workflowProgress: { label?: string; pct: number } | null;
@@ -386,6 +391,9 @@ export function useModelTest(): ModelTestController {
     label?: string;
     pct: number;
   } | null>(null);
+  /* 本地工作流任务的执行日志（#4080 评论 8）：SSE log 帧逐条追加，
+   * 生成中/生成后都能看 —— 卡住时最后几行直接指到任务停在哪个节点。 */
+  const [taskLogs, setTaskLogs] = useState<Array<TaskLogEntry>>([]);
   /* 参考图组（#3949 需求 6/7）与取消句柄（#3949 需求 5）：各自拆到子 hook /
    * 模块级函数（§12.13）。 */
   const referenceGroup = useReferenceImageGroup((text) => {
@@ -446,6 +454,7 @@ export function useModelTest(): ModelTestController {
       /* 请求详情按模式 / 模型隔离（#3949 需求 8）：切走后上一份读数是干扰信息。 */
       setDebugRows([]);
       setWorkflowProgress(null);
+      setTaskLogs([]);
       referenceGroup.reset();
     },
     [referenceGroup],
@@ -472,6 +481,7 @@ export function useModelTest(): ModelTestController {
       /* 请求详情按模式隔离（#3949 需求 8）：不残留上一个模式的读数。 */
       setDebugRows([]);
       setWorkflowProgress(null);
+      setTaskLogs([]);
       referenceGroup.reset();
     },
     [adaptersByModel, referenceGroup, selectedCandidate, selectedModel],
@@ -487,6 +497,7 @@ export function useModelTest(): ModelTestController {
       /* 请求详情按模型隔离（#3949 需求 8）：不残留上一个模型的读数。 */
       setDebugRows([]);
       setWorkflowProgress(null);
+      setTaskLogs([]);
       referenceGroup.reset();
     },
     [mode, referenceGroup],
@@ -571,6 +582,7 @@ export function useModelTest(): ModelTestController {
     setGeneratingSince,
     setNotice,
     setResult,
+    setTaskLogs,
     setWorkflowProgress,
     values,
   });
@@ -601,7 +613,7 @@ export function useModelTest(): ModelTestController {
       return null;
     }
     /* 工作流候选（#4080 评论 4）：本地提交行描述的是本地任务（工作流 + 模式
-     * + 提示词），没有 relay 请求体可组装。 */
+     * + 统一输入的非空值 —— 尺寸等在生成前就可见，#4080 评论 8）。 */
     const workflow = selectedCandidate?.workflow;
     if (workflow !== undefined) {
       return {
@@ -610,7 +622,7 @@ export function useModelTest(): ModelTestController {
           debug: true,
           workflow: workflow.name,
           mode,
-          prompt: values.prompt?.trim() ?? "",
+          ...workflowPreviewBody(values),
         }),
         durationMs: null,
         endpoint: "generate.generate（本地 ComfyUI）",
@@ -622,7 +634,7 @@ export function useModelTest(): ModelTestController {
     }
     const { imageBody, videoBody } = buildBodies();
     return relayDebugRow(kind, imageBody ?? videoBody ?? {});
-  }, [buildBodies, kind, mode, selectedCandidate, selectedModel, values.prompt]);
+  }, [buildBodies, kind, mode, selectedCandidate, selectedModel, values]);
   const previewRows = useMemo(
     () =>
       localPreviewRow === null ? upstreamPreviewRows : [localPreviewRow, ...upstreamPreviewRows],
@@ -653,6 +665,7 @@ export function useModelTest(): ModelTestController {
     loading,
     selectedModel,
     selectedWorkflow: selectedCandidate?.workflow ?? null,
+    taskLogs,
     workflowProgress,
     setInputFromFile,
     setKind,

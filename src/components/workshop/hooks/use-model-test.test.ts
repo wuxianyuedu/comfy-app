@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
 import type { TaskWatchHandlers, WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 
-import { modeTabsForKind } from "../model-test-config";
+import { MODEL_TEST_DEFAULT_RESOLUTION, modeTabsForKind } from "../model-test-config";
 
 import { useModelTest } from "./use-model-test";
 
@@ -419,7 +419,12 @@ describe("useModelTest：工作流提供的图片/视频模型（ISSUE #4080 评
   it("点生成走本地 ComfyUI 通道：封装 → 入队 → 观察，产物落位", async () => {
     workflowsData = [WF_IMAGE];
     buildLibraryWorkflowInputMock.mockResolvedValue({
-      input: { workflow: "wf-1", prompt: "测试提示词" },
+      input: {
+        workflow: "wf-1",
+        prompt: "测试提示词",
+        /* 尺寸等落进端口的输入随提交体逐条可见（#4080 评论 8）。 */
+        workflowInputs: [{ name: "width", nodeId: "5", value: 832 }],
+      },
       unmatched: [],
       mode: "T2I",
       modes: ["T2I"],
@@ -428,6 +433,7 @@ describe("useModelTest：工作流提供的图片/视频模型（ISSUE #4080 评
     });
     startLocalGenerateMock.mockResolvedValue("task-abcd1234");
     watchTaskMock.mockImplementation((_taskId: string, handlers: TaskWatchHandlers) => {
+      handlers.onLog?.({ t: Date.now(), level: "info", msg: "[watchTask] 已订阅 SSE" });
       handlers.onOutput?.({ kind: "image", url: "http://local/preview.png" });
       handlers.onSettled?.({ ok: true });
       return () => undefined;
@@ -456,7 +462,31 @@ describe("useModelTest：工作流提供的图片/视频模型（ISSUE #4080 评
     expect(result.current.debugRows).toHaveLength(2);
     expect(result.current.debugRows[0]?.phase).toBe("relay");
     expect(result.current.debugRows[0]?.endpoint).toBe("generate.generate（本地 ComfyUI）");
+    /* 提交体带完整的落点清单（口 → 节点 → 值），尺寸等不再只见条数（#4080 评论 8）。 */
+    expect(result.current.debugRows[0]?.body).toMatchObject({
+      workflowInputs: [{ name: "width", nodeId: "5", value: 832 }],
+    });
     expect(result.current.debugRows[1]?.phase).toBe("local-task");
     expect(result.current.debugRows[1]?.excerpt).toBe("http://local/preview.png");
+    /* 执行日志随 SSE log 帧进 taskLogs（#4080 评论 8）。 */
+    expect(result.current.taskLogs.length).toBeGreaterThan(0);
+    expect(result.current.taskLogs[0]?.msg).toContain("已订阅 SSE");
+  });
+
+  it("生成前的本地提交预览行带尺寸等非空表单值（#4080 评论 8）", () => {
+    workflowsData = [WF_IMAGE];
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("wf::wf-1");
+    });
+    /* selectModel 已按最常用档预置尺寸（1:1 + 1k）—— 预览行里原样可见。 */
+    expect(result.current.previewRows).toHaveLength(1);
+    expect(result.current.previewRows[0]?.endpoint).toBe("generate.generate（本地 ComfyUI）");
+    expect(result.current.previewRows[0]?.body).toMatchObject({
+      workflow: "工作流·生图A",
+      mode: "T2I",
+      "aspect-ratio": "1:1",
+      resolution: MODEL_TEST_DEFAULT_RESOLUTION,
+    });
   });
 });

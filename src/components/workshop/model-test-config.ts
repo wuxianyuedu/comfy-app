@@ -541,6 +541,20 @@ export function defaultSizeValues(mode: string): ModelTestValues {
   };
 }
 
+/** 工作流候选的「本地提交」预览体（#4080 评论 8）：统一输入表单里**非空**的
+ *  键原样列出（提示词 / 负向 / 尺寸四键 / 种子 / 时长 / 首帧…）—— 生成前就
+ *  能看到尺寸这类值进了提交参数；data URL 长值由 debugBodyOf 截断。 */
+export function workflowPreviewBody(values: ModelTestValues): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(values)) {
+    const text = value?.trim() ?? "";
+    if (text !== "") {
+      out[key] = text;
+    }
+  }
+  return out;
+}
+
 /* ── 请求读数行的组装（测试页三处共用：ISSUE #3799 / #3949 需求 8 / #3995）─ */
 
 /** 请求体组装的唯一入口（#3949 需求 8）：本地提交行、生成前预览、真实调用

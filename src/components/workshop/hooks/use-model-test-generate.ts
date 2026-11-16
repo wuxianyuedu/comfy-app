@@ -16,6 +16,7 @@ import {
   apiSubmitVideo,
   pollVideoUntilDone,
   type RelayDebugSink,
+  type TaskLogEntry,
 } from "~/lib/workshop/generation-client";
 
 import { runWorkflowModelTest } from "./workflow-model-test";
@@ -84,6 +85,7 @@ export type ModelTestGenerateArgs = {
   setGeneratingSince: (value: number | null) => void;
   setNotice: (value: { kind: "ok" | "err"; text: string } | null) => void;
   setResult: (value: ModelTestResult) => void;
+  setTaskLogs: Dispatch<SetStateAction<Array<TaskLogEntry>>>;
   setWorkflowProgress: Dispatch<SetStateAction<{ label?: string; pct: number } | null>>;
   values: ModelTestValues;
 };
@@ -110,6 +112,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
     setGeneratingSince,
     setNotice,
     setResult,
+    setTaskLogs,
     setWorkflowProgress,
     values,
   } = args;
@@ -146,6 +149,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
       const firstFrameRaw = values["first-frame"]?.trim();
       setDebugRows([]);
       setWorkflowProgress(null);
+      setTaskLogs([]);
       const controller = new AbortController();
       cancelRef.current = controller;
       setGeneratingSince(Date.now());
@@ -159,6 +163,10 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
                 kind,
                 mode,
                 onDebug: appendDebug,
+                onLog: (entry) => {
+                  /* 执行日志逐条进测试页的「执行日志」区块（#4080 评论 8）。 */
+                  setTaskLogs((prev) => [...prev, entry]);
+                },
                 onNotice: (text) => {
                   setNotice({ kind: "err", text });
                 },
@@ -316,6 +324,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
     setGeneratingSince,
     setNotice,
     setResult,
+    setTaskLogs,
     setWorkflowProgress,
     values,
   ]);
