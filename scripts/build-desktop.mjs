@@ -627,7 +627,7 @@ progress.step("2.6 出厂计数");
 {
   const check = spawnSync(
     process.execPath,
-    [join(root, "scripts", "check-standalone-contents.cjs")],
+    [join(root, "scripts", "gates", "check-standalone-contents.cjs")],
     { stdio: "inherit", cwd: root, windowsHide: true },
   );
   if (check.error) {
