@@ -1429,7 +1429,9 @@ master:
         - name: PR 失败立案
           script: node scripts/ci/ci-pr-failure-issue.mjs --no-block
           # 5m：三次读命令（列表 / 逐格详情 / 逐格日志，后者最多三格）+ 一次写 + 一次回读。
-          # 取不到读数时它**不重试也不写**，退 2 由话术说出来（形态理由见上方立案叙述块）。
+          # 取不到读数（连身份都认不出）时它**不重试也不写**，退 2 由话术说出来；
+          # 构建列表被权限挡（`cnb_cli` 缺 `repo-cnb-history:r`，#3491）则回落环境变量
+          # 认身份继续判，不在此收工 —— 口径见脚本头注与 `tests/ci-pr-failure-issue.test.ts`。
           timeout: 5m
 
     # ── GitHub 镜像同步（平台池 · 正式出口）──────────
