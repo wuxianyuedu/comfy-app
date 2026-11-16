@@ -109,6 +109,61 @@ export function resetProbeMissLog(): void {
   probeLog.lastAt = undefined;
 }
 
+/** 「实例在启动中」进度行的聚合窗口：同一启动场次首条照发，其后每 30s 追一条
+ *  带已等待时长的进度行（ISSUE #4149：70s 窗口 230 条同文 INFO 把其它行顶出
+ *  可视窗口——逐拍「还没就绪」语义上是进度不是事件）。 */
+export const COMFY_STARTING_PROGRESS_MS = 30_000;
+
+/** 上一条「启动中」日志的场次状态：pid 定场次、since 定起点、lastAt 定上次写入。 */
+type StartingProgressGlobal = { lastAt?: number; pid?: number | null; since?: number };
+
+declare global {
+  var __comfyStartingLogV1: StartingProgressGlobal | undefined;
+}
+
+const startingLog: StartingProgressGlobal = (globalThis.__comfyStartingLogV1 ??= {});
+
+/** 本拍该写哪种「启动中」日志。
+ *
+ *  与 `shouldLogProbeMiss` 同族（防刷屏写入开关，不参与任何判定）：同一 pid 的
+ *  连续「进程在、端口未绑定」拍里，首条照发（文本不变，既有 grep / 面板口径不动），
+ *  其后按 {@link COMFY_STARTING_PROGRESS_MS} 聚成一条进度行；pid 变了（换实例）
+ *  视为新场次、重新从首条开始。`now` 可注入供回归测试逐拍推进时钟。
+ *
+ *  @param {number | null} pid 实例进程 PID（查询不到时 null：null 与 null 仍算同一场次）
+ *  @param {number} [now] 当前时刻（ms）
+ *  @returns {{ kind: "first", elapsedMs: 0 } | { kind: "progress", elapsedMs: number } | { kind: "silent" }}
+ */
+export function startingLogAction(
+  pid: number | null,
+  now: number = Date.now(),
+): { elapsedMs: 0; kind: "first" } | { elapsedMs: number; kind: "progress" } | { kind: "silent" } {
+  /* 解构成局部常量再判：可选字段的窄化只在局部值上成立（globalThis 上的
+   * 读写面太宽，TS 不会沿字段收窄）。 */
+  const { pid: priorPid, since: priorSince, lastAt: priorLastAt } = startingLog;
+  const isContinuation =
+    priorPid !== undefined && priorSince !== undefined && priorLastAt !== undefined;
+  if (!isContinuation || priorPid !== pid) {
+    startingLog.pid = pid;
+    startingLog.since = now;
+    startingLog.lastAt = now;
+    return { kind: "first", elapsedMs: 0 };
+  }
+  const elapsedMs = now - priorSince;
+  if (now - priorLastAt >= COMFY_STARTING_PROGRESS_MS) {
+    startingLog.lastAt = now;
+    return { kind: "progress", elapsedMs };
+  }
+  return { kind: "silent" };
+}
+
+/** 测试注入点：清掉「启动中」聚合状态（用例之间互不污染）。 */
+export function resetStartingLog(): void {
+  startingLog.pid = undefined;
+  startingLog.since = undefined;
+  startingLog.lastAt = undefined;
+}
+
 /**
  * Node 的 undici `fetch` 会把主机名 `localhost` 优先解析成 IPv6 的 `::1`。
  * ComfyUI 默认只监听 IPv4（0.0.0.0），在 `::1` 上从不应答，于是服务端每次请求
@@ -192,6 +247,8 @@ export async function resolveComfyBase(): Promise<string> {
     const portBase = baseForLocalPort(found.port);
     if (found.port !== null && found.port !== undefined && portBase !== null) {
       _resolvedBase = portBase;
+      /* 终态：端口已绑定，「启动中」场次随之结束——下一次启动重新从首条开始。 */
+      resetStartingLog();
       logger.info(
         `[comfyui] Connected to configured instance on :${found.port} (pid=${found.pid}, via=${found.via})`,
       );
@@ -201,10 +258,23 @@ export async function resolveComfyBase(): Promise<string> {
       /* 进程在但端口未绑定（仍在加载）——先按配置地址返回给调用方试一次；
        * 不要把这次「还在启动」的结论缓存住，否则 ComfyUI 稍后绑定端口 / 落在
        * 偏移端口上时，本进程会一直沿用这个连不上的地址（见 probeComfyUi 的
-       * 按次探测口径）。 */
-      logger.info(
-        `[comfyui] Configured instance (pid=${found.pid}, via=${found.via}) starting, port not bound yet`,
-      );
+       * 按次探测口径）。
+       *
+       * 日志按场次聚合（ISSUE #4149）：状态轮询每拍都会重进本分支，逐拍一条
+       * INFO 是进度不是事件 —— 同场次首条照发（文本不变），其后每 30s 一条
+       * 带已等待时长的进度行；终态由下方的「Connected …」承担（端口绑定后
+       * 本分支不再被走到），场次随之清零。 */
+      const action = startingLogAction(found.pid);
+      if (action.kind === "first") {
+        logger.info(
+          `[comfyui] Configured instance (pid=${found.pid}, via=${found.via}) starting, port not bound yet`,
+        );
+      } else if (action.kind === "progress") {
+        logger.info(
+          `[comfyui] 已等待 ${Math.round(action.elapsedMs / 1000)}s，仍未绑定端口` +
+            `（pid=${found.pid}, via=${found.via}）`,
+        );
+      }
       return comfyUiBaseUrl(configuredPort);
     }
     /* 没命中的两种含义必须分清（都是「不抛错」的老结论，见 ISSUE #344）：
@@ -227,6 +297,8 @@ export async function resolveComfyBase(): Promise<string> {
   if (await probePort(host, configuredPort)) {
     _resolvedBase =
       host === LOOPBACK_HOST ? comfyUiBaseUrl(configuredPort) : `http://${host}:${configuredPort}`;
+    /* 终态：同上，端口应答即场次结束。 */
+    resetStartingLog();
     logger.info(`[comfyui] Connected on configured port :${configuredPort}`);
     return _resolvedBase;
   }
@@ -241,6 +313,8 @@ export async function resolveComfyBase(): Promise<string> {
       continue;
     }
     _resolvedBase = target.url;
+    /* 终态：偏移端口 / 窗口地址应答同样是「连上了」——场次结束。 */
+    resetStartingLog();
     if (target.port === COMFY_WINDOW_PORT) {
       logger.warn(
         `[comfyui] Configured port :${configuredPort} unreachable, falling back to the ComfyUI window at :${COMFY_WINDOW_PORT}`,
