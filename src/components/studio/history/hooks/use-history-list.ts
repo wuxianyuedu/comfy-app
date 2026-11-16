@@ -5,7 +5,7 @@
 // HistoryList 视图只消费本 hook 返回的 controller，不再自己发请求。
 
 import { useCallback, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 /* 取消走集中出口（`task-cancel-client`）：这里此前自己挂了一份
@@ -78,7 +78,7 @@ export type HistoryListController = {
   sort: SortKey;
   switchFilter: (filter: FilterKey) => void;
   tasks: Array<TaskItem>;
-  /** 当前可见的日期分组（已按 displayCount 裁剪）。 */
+  /** 当前可见的日期分组（已拉取各页的并集；翻页走服务端 skip，#4044）。 */
   visibleGroups: Array<{ items: Array<TaskItem>; key: string }>;
   visibleTotal: number;
   /** 本任务所用工作流的 IO 定义（参数可读名从它的 `label` 查）。
@@ -97,33 +97,46 @@ export function useHistoryList(): HistoryListController {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<FilterKey>("ALL");
   const [sort, setSort] = useState<SortKey>("newest");
-  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [detailId, setDetailId] = useState<string | null>(null);
   /* 「哪一条在重试」收在 `useItemAction`（规范 16 §16.2.4.40）：
    * 此前是本文件自持的 `useState<string | null>`，与工坊两处（AI 润色）、
    * 工作流库的下载与同步各写一份 —— 而「同一条能不能重复点」四处都没防。 */
   const retryAction = useItemAction();
+  /* 真分页（#4044）：无限查询按页拉取（skip = 已拉取行数，由 getNextPageParam
+   * 累计）；hasMore 由服务端响应给出（media 过滤的截断也因此对调用方可见）。 */
+  const tasksQ = useInfiniteQuery(
+    trpc.task.list.infiniteQueryOptions(
+      { take: PAGE_SIZE },
+      {
+        getNextPageParam: (lastPage, allPages) => {
+          if (!lastPage.hasMore) {
+            return undefined;
+          }
+          const fetched = allPages.reduce((sum, p) => sum + p.tasks.length, 0);
+          return fetched;
+        },
+      },
+    ),
+  );
+  const hasMore = tasksQ.data?.pages.at(-1)?.hasMore ?? false;
 
-  const tasksQ = useQuery(
-    trpc.task.list.queryOptions(undefined, {
-      /* 保持旧数据：refetch / 删除后回源不闪空列表 */
-      placeholderData: (prev) => prev,
-    }),
-  );
-  const tasks = useMemo<Array<TaskItem>>(
-    () =>
-      (tasksQ.data?.tasks ?? []).map((task) => ({
-        ...task,
-        createdAt: String(task.createdAt),
-      })),
-    [tasksQ.data?.tasks],
-  );
+  /* 各页并集（按 id 去重、保持「新到旧」的页序）：渲染期从查询结果派生，
+   * 不在 effect 里 setState（规范 8.6 / 2.4）。 */
+  const tasks = useMemo<Array<TaskItem>>(() => {
+    const byId = new Map<string, TaskItem>();
+    for (const page of tasksQ.data?.pages ?? []) {
+      for (const task of page.tasks) {
+        byId.set(task.id, { ...task, createdAt: String(task.createdAt) });
+      }
+    }
+    return [...byId.values()];
+  }, [tasksQ.data]);
   const loading = tasksQ.isLoading;
   const progressMap = useSimulatedProgress(tasks);
 
   const refresh = useCallback(() => {
-    void tasksQ.refetch();
-  }, [tasksQ]);
+    void queryClient.invalidateQueries({ queryKey: trpc.task.list.queryKey() });
+  }, [queryClient, trpc]);
 
   const openDetail = useCallback((id: string) => {
     setDetailId(id);
@@ -172,10 +185,13 @@ export function useHistoryList(): HistoryListController {
     [tasks, filter, sort],
   );
   const counts = useMemo(() => countByStatus(tasks), [tasks]);
-  const { visibleGroups, visibleTotal, canLoadMore } = useMemo(
-    () => paginateGroups(groupByDate(filtered), displayCount),
-    [filtered, displayCount],
+  /* 已拉取的行全部可见（分页走服务端 cursor，#4044）；「还有没有下一页」由
+   * 服务端的 hasMore 回答——media 过滤的 400 行截断也因此对调用方可见。 */
+  const { visibleGroups, visibleTotal } = useMemo(
+    () => paginateGroups(groupByDate(filtered), tasks.length),
+    [filtered, tasks],
   );
+  const canLoadMore = hasMore;
   const empty = useMemo(() => {
     const label = FILTERS.find((f) => f.key === filter)?.label ?? "";
     return emptyStateText(filter, label);
@@ -183,11 +199,13 @@ export function useHistoryList(): HistoryListController {
 
   const switchFilter = useCallback((filterKey: FilterKey) => {
     setFilter(filterKey);
-    setDisplayCount(PAGE_SIZE);
   }, []);
   const loadMore = useCallback(() => {
-    setDisplayCount((count) => count + PAGE_SIZE);
-  }, []);
+    if (!hasMore) {
+      return;
+    }
+    void tasksQ.fetchNextPage();
+  }, [hasMore, tasksQ]);
 
   const deleteTask = useMutation(trpc.task.delete.mutationOptions());
 
@@ -231,11 +249,22 @@ export function useHistoryList(): HistoryListController {
     await runAsyncAction(
       async () => {
         await deleteTask.mutateAsync({ id });
-        /* 乐观移除：直接改查询缓存，避免本地镜像 state */
+        /* 乐观移除：直接改无限查询缓存里的各页（避免本地镜像 state，#4044） */
         queryClient.setQueryData(
-          trpc.task.list.queryKey(undefined),
+          trpc.task.list.infiniteQueryKey({ take: PAGE_SIZE }),
           /* 键自带 DataTag：`old` 的形状由查询结果推导，不再手写窄类型 */
-          (old) => (old ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) } : old),
+          (old) => {
+            if (!old) {
+              return old;
+            }
+            return {
+              ...old,
+              pages: old.pages.map((page) => ({
+                ...page,
+                tasks: page.tasks.filter((task) => task.id !== id),
+              })),
+            };
+          },
         );
         if (detailId === id) {
           setDetailId(null);

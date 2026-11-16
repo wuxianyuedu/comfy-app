@@ -256,13 +256,14 @@ export class TaskRepository extends DrizzleRepository<Task> {
       // 两条路都产出「同一页 + 同一份 images」，顺序由外层 orderBy 保证。
       if (opts.skip !== undefined && opts.take === undefined) {
         const page = await limitAll(
-          db.select().from(task).where(where).orderBy(desc(task.createdAt)),
+          /* 排序带 id tiebreaker（#4044）：同毫秒批量入队的行序稳定，skip 翻页不重不漏。 */
+          db.select().from(task).where(where).orderBy(desc(task.createdAt), desc(task.id)),
         ).offset(opts.skip);
         return withImages(page);
       }
       const rows = await db.query.task.findMany({
         where,
-        orderBy: [desc(task.createdAt)],
+        orderBy: [desc(task.createdAt), desc(task.id)],
         ...(opts.take === undefined ? {} : { limit: opts.take }),
         /* 列表卡只要十来个字段：`workflowSnapshot` 与 `logs` 单行可达数 MB，
          * take=60 时是几十 MB 的白拉白反序列化（router 只映射卡片字段）。
@@ -276,7 +277,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
       });
       return rows;
     }
-    const q = db.select().from(task).where(where).orderBy(desc(task.createdAt));
+    const q = db.select().from(task).where(where).orderBy(desc(task.createdAt), desc(task.id));
     if (opts?.skip === undefined) {
       return opts?.take === undefined ? q : q.limit(opts.take);
     }
