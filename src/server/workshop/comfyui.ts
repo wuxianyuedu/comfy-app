@@ -290,6 +290,48 @@ export function outputDirForSession(sessionId?: string): string {
   return OUTPUT_DIR;
 }
 
+/** 远程媒体下载上限：只挡异常大体积，不改变正常参考图/首帧流程。 */
+const MAX_REMOTE_MEDIA_BYTES = 24 * 1024 * 1024;
+
+async function readResponseBufferCapped(res: Response, maxBytes: number): Promise<Buffer> {
+  const len = res.headers.get("content-length");
+  if (len !== null) {
+    const n = Number(len);
+    if (Number.isFinite(n) && n > maxBytes) {
+      throw new Error(`媒体超过 ${Math.floor(maxBytes / 1024 / 1024)}MB 上限`);
+    }
+  }
+  if (!res.body) {
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.byteLength > maxBytes) {
+      throw new Error(`媒体超过 ${Math.floor(maxBytes / 1024 / 1024)}MB 上限`);
+    }
+    return buf;
+  }
+  const reader = res.body.getReader();
+  const chunks: Array<Uint8Array> = [];
+  let total = 0;
+  try {
+    for (;;) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- 流式读取必须逐块等待，无法并行
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (value) {
+        total += value.byteLength;
+        if (total > maxBytes) {
+          throw new Error(`媒体超过 ${Math.floor(maxBytes / 1024 / 1024)}MB 上限`);
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, total);
+}
+
 /** 把远程 URL / data URL 归一为可上传的 Buffer。 */
 export async function fetchToBuffer(ref: string): Promise<Buffer> {
   if (isInlineMedia(ref)) {
@@ -302,13 +344,17 @@ export async function fetchToBuffer(ref: string): Promise<Buffer> {
     if (base64 === null) {
       throw new Error("参考图 data URL 格式无效");
     }
-    return Buffer.from(base64, "base64");
+    const buf = Buffer.from(base64, "base64");
+    if (buf.byteLength > MAX_REMOTE_MEDIA_BYTES) {
+      throw new Error(`媒体超过 ${Math.floor(MAX_REMOTE_MEDIA_BYTES / 1024 / 1024)}MB 上限`);
+    }
+    return buf;
   }
   const res = await fetch(ref, { signal: AbortSignal.timeout(30_000) });
   if (!res.ok) {
     throw new Error(`获取参考图失败 (${res.status})`);
   }
-  return Buffer.from(await res.arrayBuffer());
+  return readResponseBufferCapped(res, MAX_REMOTE_MEDIA_BYTES);
 }
 
 /** 持久化 ComfyUI 通道配置（checkpoint / 自定义图模板）。 */

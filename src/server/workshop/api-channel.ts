@@ -73,6 +73,47 @@ export async function pollVideoViaApi(
   return callVideoPoll(remoteTaskId, getWorkshopApiSettingsSync().video);
 }
 
+const MAX_REMOTE_MEDIA_BYTES = 24 * 1024 * 1024;
+
+async function readResponseBufferCapped(res: Response, maxBytes: number): Promise<Buffer> {
+  const len = res.headers.get("content-length");
+  if (len !== null) {
+    const n = Number(len);
+    if (Number.isFinite(n) && n > maxBytes) {
+      throw new Error(`媒体超过 ${Math.floor(maxBytes / 1024 / 1024)}MB 上限`);
+    }
+  }
+  if (!res.body) {
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.byteLength > maxBytes) {
+      throw new Error(`媒体超过 ${Math.floor(maxBytes / 1024 / 1024)}MB 上限`);
+    }
+    return buf;
+  }
+  const reader = res.body.getReader();
+  const chunks: Array<Uint8Array> = [];
+  let total = 0;
+  try {
+    for (;;) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- 流式读取必须逐块等待，无法并行
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (value) {
+        total += value.byteLength;
+        if (total > maxBytes) {
+          throw new Error(`媒体超过 ${Math.floor(maxBytes / 1024 / 1024)}MB 上限`);
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, total);
+}
+
 /** 把任意图片引用（远程 URL 或 data URL）解析为内联 data URL（送视频上游首帧）。 */
 export async function resolveMediaDataUrl(ref: string): Promise<string> {
   /* 「已经是内联 media 吗」与「怎么拼 data URL」各只有一处定义
@@ -84,7 +125,7 @@ export async function resolveMediaDataUrl(ref: string): Promise<string> {
   if (!res.ok) {
     throw new Error(`解析媒体失败 (${res.status})`);
   }
-  const buf = Buffer.from(await res.arrayBuffer());
+  const buf = await readResponseBufferCapped(res, MAX_REMOTE_MEDIA_BYTES);
   const mime = res.headers.get("content-type") ?? "image/png";
   return toDataUrl(buf, mime);
 }

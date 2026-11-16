@@ -346,7 +346,9 @@ export async function getCustomNodesManifest(
   base = "",
 ): Promise<{ nodes: Record<string, ManifestNodeRaw> } | null> {
   try {
-    const res = await fetch(`${base}/api/custom-nodes/manifest`);
+    const res = await fetch(`${base}/api/custom-nodes/manifest`, {
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!res.ok) {
       const failure = classifyManifestFailure(res.status);
       /* 只有「取不到」这一档值得写日志：「还没解析过」是首屏的正常态，
@@ -376,7 +378,9 @@ export async function getCustomNodesManifest(
 export async function refreshCustomNodes(base = ""): Promise<number> {
   let res: Response;
   try {
-    res = await fetch(`${base}/api/custom-nodes/manifest`);
+    res = await fetch(`${base}/api/custom-nodes/manifest`, {
+      signal: AbortSignal.timeout(10_000),
+    });
   } catch (error) {
     /* 请求压根没出去（离线 / dev server 刚重启 / 端口被回收）。 */
     const detail = `连不上清单端点（${errorText(error, "读取节点清单")}）`;
