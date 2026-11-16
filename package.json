@@ -21,6 +21,7 @@
     "db:studio": "drizzle-kit studio",
     "dev": "node scripts/dev.mjs",
     "deps:guard": "node scripts/deps-install-guard.mjs",
+    "deps:sync": "node scripts/deps-install-guard.mjs && pnpm install --frozen-lockfile && node scripts/next-types-clean.mjs",
     "deps:prune": "node scripts/prune-virtual-store.mjs",
     "format:check": "node scripts/gates/check-format.cjs --changed",
     "format:report": "node scripts/gates/check-format.cjs --report",

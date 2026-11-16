@@ -6563,7 +6563,7 @@ describe("freshnessDriftAdvice：drift 按判据原值分形态给下一动作�
   });
   const joined = (r: { lines: Array<string> }): string => r.lines.join("\n");
 
-  it("② 干净 / ③ 漂移（切换分支现场）：出口是 deps:guard && install 与指南，不提 git pull", () => {
+  it("② 干净 / ③ 漂移（切换分支现场）：出口是 deps:sync 与指南，不提 git pull", () => {
     const r = freshnessDriftAdvice(
       json({
         code: 1,
@@ -6577,6 +6577,8 @@ describe("freshnessDriftAdvice：drift 按判据原值分形态给下一动作�
     const text = joined(r);
     expect(text).toContain("pnpm install");
     expect(text).toContain("pnpm deps:guard");
+    /* ISSUE #4109：两句话术合成一条 deps:sync，连带清掉陈旧 .next/types。 */
+    expect(text).toContain("pnpm deps:sync");
     expect(text).toContain("docs/guides/sync-after-pull.md");
     expect(text).not.toContain("git pull");
   });
