@@ -11,33 +11,36 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { readFileAsDataUrl } from "~/lib/file-io";
 import { runAsyncAction } from "~/lib/async-action";
-import { sleep } from "~/lib/with-timeout";
 import { isRecord } from "~/lib/is-record";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { useExternalAction } from "~/components/ui/use-external-action";
 import {
-  apiGenerateImage,
-  apiPollVideo,
   apiPreviewRequest,
-  apiSubmitVideo,
+  fetchWorkshopWorkflows,
   type RelayDebugSink,
+  type WorkshopWorkflowOption,
 } from "~/lib/workshop/generation-client";
 import { debugBodyOf } from "~/lib/workshop/api-channel-core";
 import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
 import { parseRemoteModeAdapters } from "~/lib/workshop/remote-model-adapter";
 import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
 
+import { useModelTestGenerate, type ModelTestResult } from "./use-model-test-generate";
+import { useReferenceImageGroup } from "./use-reference-image-group";
+
 import { useTRPC } from "~/trpc/react";
 
 import {
-  assembleImageRequest,
-  assembleVideoRequest,
+  buildRequestBodies,
+  candidateValue,
   contractTestRows,
   defaultModeForKind,
   defaultSizeValues,
   modeTabsForKind,
   randomPromptFor,
+  relayDebugRow,
   testCandidatesForKind,
+  workflowSupportsMode,
   type AdaptersByModel,
   type ModelTestInputRow,
   type ModelTestKind,
@@ -46,19 +49,12 @@ import {
   type TestCandidate,
 } from "../model-test-config";
 
-/** 视频任务轮询：与 VideoStudio 同一节奏（3s 一轮 / 10 分钟上限）。 */
-const POLL_INTERVAL_MS = 3000;
-const POLL_DEADLINE_MS = 600_000;
-
 /** 空适配器索引的稳定引用：查询数据未到时兜底，让 useMemo 依赖不逐渲染变化。 */
 const EMPTY_ADAPTERS_BY_MODEL: AdaptersByModel = {};
 
-/** 一次测试的结果（工坊同款输出：图片 URL / 视频 URL / 对话回复文本）。 */
-export type ModelTestResult =
-  | { kind: "image"; url: string }
-  | { kind: "video"; url: string }
-  | { kind: "chat"; text: string }
-  | null;
+/** 一次测试的结果（工坊同款输出：图片 URL / 视频 URL / 对话回复文本）。
+ *  定义住在 use-model-test-generate（生成动作的产物类型），这里再导出。 */
+export type { ModelTestResult };
 
 export type ModelTestController = {
   /** 选中模型的适配器草稿（workshopAdaptersGet 的解析结果）。 */
@@ -67,8 +63,8 @@ export type ModelTestController = {
   addReferenceImages: (files: Array<File>) => Promise<void>;
   /** 取消本轮生成（#3949 需求 5）：中断等待与轮询，界面落「已取消生成」。 */
   cancelGenerate: () => void;
-  /** 候选模型（当前 kind 下启用的远端条目，再按当前模式收窄：
-   *  只列配了该模式适配器的模型 —— 不支持这个模式的不出现在下拉里）。 */
+  /** 候选模型（当前 kind 下的候选，再按当前模式收窄：远端只列配了该模式
+   *  适配器的模型；工作流候选（#4080 评论 4）按 modes 声明判支持）。 */
   candidates: Array<TestCandidate>;
   /** 最近一次生成的请求读数（ISSUE #3791）：端点 / 请求体 / 状态 / 耗时 /
    *  响应摘要，成功与失败都收集；新一轮生成前清空。 */
@@ -120,6 +116,8 @@ export type ModelTestController = {
   /** 最近一次成功产物。 */
   result: ModelTestResult;
   selectedModel: string;
+  /** 选中的工作流候选（#4080 评论 4）；null = 选中的是远端 / Ollama 模型或未选。 */
+  selectedWorkflow: WorkshopWorkflowOption | null;
   selectModel: (name: string) => void;
   /** 图片输入行选完文件后由视图调用：读成 data URL 存进表单值。 */
   setInputFromFile: (type: "first-frame" | "image", file: File) => Promise<void>;
@@ -127,149 +125,9 @@ export type ModelTestController = {
   setKind: (kind: ModelTestKind) => void;
   setMode: (mode: string) => void;
   values: ModelTestValues;
+  /** 本地工作流任务的进度（SSE state 帧；仅工作流候选生成中非空）。 */
+  workflowProgress: { label?: string; pct: number } | null;
 };
-
-/** 参考图组（#3949 需求 6/7）的子 hook：多张取值（data URL）+ 追加 / 移除 /
- *  清空。从主 hook 拆出（规范 §12.13：useModelTest 越过函数长度硬闸前的第一刀）。 */
-function useReferenceImageGroup(onError: (text: string) => void): {
-  add: (files: Array<File>) => Promise<void>;
-  images: Array<string>;
-  remove: (index: number) => void;
-  reset: () => void;
-} {
-  const [images, setImages] = useState<Array<string>>([]);
-  const add = useCallback(
-    async (files: Array<File>) => {
-      await runAsyncAction(
-        async () => {
-          const urls: Array<string> = [];
-          for (const file of files) {
-            // oxlint-disable-next-line no-await-in-loop -- 顺序读文件，失败即停
-            urls.push(await readFileAsDataUrl(file));
-          }
-          /* 上限 8 张：与 relay 侧的宽松界一致。 */
-          setImages((prev) => [...prev, ...urls].slice(0, 8));
-          return { ok: true as const };
-        },
-        {
-          report: (k, text) => {
-            if (k === "err") {
-              onError(text);
-            }
-          },
-          failureText: "读取参考图失败",
-        },
-      );
-    },
-    [onError],
-  );
-  const remove = useCallback((index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
-  }, []);
-  const reset = useCallback(() => {
-    setImages([]);
-  }, []);
-  return { add, images, remove, reset };
-}
-
-/** 视频任务的轮询循环（#3949 需求 5 起带取消信号）：3s 一轮 / 10 分钟上限，
- *  与 VideoStudio 同一节奏。用户 abort 后下一轮立即以「已取消生成」落定。 */
-async function pollVideoUntilDone(args: {
-  mode: string;
-  model: string;
-  onDebug: RelayDebugSink;
-  signal: AbortSignal;
-  taskId: string;
-}): Promise<{ kind: "video"; url: string }> {
-  const deadline = Date.now() + POLL_DEADLINE_MS;
-  while (Date.now() < deadline) {
-    if (args.signal.aborted) {
-      throw new Error("已取消生成");
-    }
-    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一轮轮询用前一轮的结果
-    await sleep(POLL_INTERVAL_MS);
-    if (args.signal.aborted) {
-      throw new Error("已取消生成");
-    }
-    // oxlint-disable-next-line no-await-in-loop -- 同上
-    const round = await apiPollVideo(args.taskId, {
-      debug: true,
-      mode: args.mode,
-      model: args.model,
-      onDebug: args.onDebug,
-      signal: args.signal,
-    });
-    if (round.url !== undefined && round.url !== "") {
-      return { kind: "video", url: round.url };
-    }
-    if (!round.pending) {
-      throw new Error("API 视频任务已结束但未返回视频");
-    }
-  }
-  throw new Error("API 视频任务轮询超时（约 10 分钟）—— 可稍后重试");
-}
-
-/** 请求体组装的唯一入口（#3949 需求 8）：本地提交行、生成前预览、真实调用
- *  三处共用同一份组装结果 —— 三处各拼一套必然漂移。 */
-function buildRequestBodies(input: {
-  kind: ModelTestKind;
-  mode: string;
-  model: string;
-  referenceImages: Array<string>;
-  values: ModelTestValues;
-}): {
-  imageBody: ReturnType<typeof assembleImageRequest> | null;
-  videoBody: ReturnType<typeof assembleVideoRequest> | null;
-} {
-  return {
-    imageBody:
-      input.kind === "image"
-        ? assembleImageRequest({
-            mode: input.mode,
-            model: input.model,
-            referenceImages: input.referenceImages,
-            values: input.values,
-          })
-        : null,
-    videoBody:
-      input.kind === "video"
-        ? assembleVideoRequest({ mode: input.mode, model: input.model, values: input.values })
-        : null,
-  };
-}
-
-/** 本地提交 / 生成前预览共用的那一行请求读数（端点固定为 relay）。
- *  形状同 `ApiCallDebugRow`（ISSUE #3791 / #3949 需求 8）。 */
-function relayDebugRow(kind: ModelTestKind, body: Record<string, unknown>): ApiCallDebugRow {
-  return {
-    body: debugBodyOf({ kind, debug: true, ...body }),
-    durationMs: null,
-    endpoint: "/api/workshop-api/generate",
-    excerpt: null,
-    ok: true,
-    phase: "relay",
-    status: null,
-  };
-}
-
-/** 必备口缺漏清单（#3949 需求 6/7 起：参考图行按数组判空，其余按单值判空）。 */
-function missingRequiredLabels(
-  rows: ReadonlyArray<ModelTestInputRow>,
-  values: ModelTestValues,
-  referenceCount: number,
-): Array<string> {
-  return rows
-    .filter((row) => row.required && !row.disabled && row.valueKey !== null)
-    .filter((row) => {
-      if (row.id === "reference-image") {
-        /* 参考图行（#3949 需求 6/7）的值在数组里，不看 values.image。 */
-        return referenceCount === 0;
-      }
-      const key = row.valueKey;
-      return key !== null && (values[key]?.trim() ?? "") === "";
-    })
-    .map((row) => row.label);
-}
 
 /** 生成前的「准备请求」读数子 hook（#3949 需求 8）：按当前 模式 / 模型 / 输入
  *  走服务端 dry-run 现算**实际上游请求**（端点 + 适配器翻译后的请求体），
@@ -284,13 +142,16 @@ function useRequestPreview(args: {
   /** 预览失败的出口（如「模型没有可用接口地址」）——与生成失败同一反馈位。 */
   onError: (text: string) => void;
   selectedModel: string;
+  /** 选中工作流候选（#4080 评论 4）时跳过：dry-run 是 API 中继的预演，
+   *  本地通道没有这一步（提交行已由 localPreviewRow 给出）。 */
+  skip: boolean;
 }): Array<ApiCallDebugRow> {
-  const { busy, buildBodies, debugRowCount, kind, onError, selectedModel } = args;
+  const { busy, buildBodies, debugRowCount, kind, onError, selectedModel, skip } = args;
   const [previewRows, setPreviewRows] = useState<Array<ApiCallDebugRow>>([]);
   const seqRef = useRef(0);
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (busy || kind === "chat" || selectedModel === "" || debugRowCount > 0) {
+      if (busy || kind === "chat" || skip || selectedModel === "" || debugRowCount > 0) {
         setPreviewRows([]);
         return;
       }
@@ -318,13 +179,13 @@ function useRequestPreview(args: {
     return () => {
       clearTimeout(timer);
     };
-  }, [busy, buildBodies, debugRowCount, onError, selectedModel, kind]);
+  }, [busy, buildBodies, debugRowCount, onError, selectedModel, kind, skip]);
   return previewRows;
 }
 
 /** 候选 / 契约 / 适配器索引的取数与派生（§12.13 第二刀）：这一簇只读
- *  configGet / modeContractsGet / workshopAdaptersGet 三份读数做派生，
- *  主 hook（useModelTest）只留表单状态与动作。 */
+ *  configGet / modeContractsGet / workshopAdaptersGet 与工作流列表四份读数做
+ *  派生，主 hook（useModelTest）只留表单状态与动作。 */
 function useTestCatalog(args: {
   kind: ModelTestKind;
   mode: string;
@@ -340,11 +201,13 @@ function useTestCatalog(args: {
   loading: boolean;
   modeCandidates: Array<TestCandidate>;
   modeTabs: Array<ModeTab>;
+  selectedCandidate: TestCandidate | null;
 } {
   const { kind, mode, selectedModel, trpc } = args;
   const queryClient = useQueryClient();
   const configQ = useQuery(trpc.llm.configGet.queryOptions());
-  const candidates = useMemo<Array<TestCandidate>>(() => {
+  /* 设置页配置的候选（extraModels：字符串 = 本地 Ollama，对象 = 远端模型）。 */
+  const configuredCandidates = useMemo<Array<TestCandidate>>(() => {
     const raw: unknown = configQ.data?.config;
     if (!isRecord(raw) || !Array.isArray(raw.extraModels)) {
       return [];
@@ -367,8 +230,35 @@ function useTestCatalog(args: {
         local: false,
       });
     }
-    return testCandidatesForKind(kind, out);
-  }, [configQ.data, kind]);
+    return out;
+  }, [configQ.data]);
+
+  /* 工作流提供的图片 / 视频模型（#4080 评论 4）：工作流库条目是「本地模型」
+   * 的第二种形态。与工坊「生成资源」下拉同一份来源（fetchWorkshopWorkflows）
+   * —— 工坊里配置了哪些工作流，测试页就能测哪些，两处不会各说各话。 */
+  const workflowsQ = useQuery({
+    queryKey: ["workshop", "workflows", "model-test"],
+    queryFn: fetchWorkshopWorkflows,
+  });
+  const workflowCandidates = useMemo<Array<TestCandidate>>(() => {
+    if (kind === "chat") {
+      return [];
+    }
+    return (workflowsQ.data ?? [])
+      .filter((w) => w.category === kind)
+      .map((w) => ({ baseUrl: null, kind, local: true, name: w.name, workflow: w }));
+  }, [workflowsQ.data, kind]);
+
+  const candidates = useMemo(
+    () => testCandidatesForKind(kind, [...configuredCandidates, ...workflowCandidates]),
+    [configuredCandidates, workflowCandidates, kind],
+  );
+
+  /* 选中的候选：下拉的取值空间是「模型名 / wf::<工作流id>」（candidateValue）。 */
+  const selectedCandidate = useMemo<TestCandidate | null>(
+    () => candidates.find((c) => candidateValue(c) === selectedModel) ?? null,
+    [candidates, selectedModel],
+  );
 
   /* 模式契约（ISSUE #3778：统一输入行来自这里，不再来自适配器映射）。
    * 注册表是服务端合好的生效值（成品配置 + 本机覆盖），按模式取当前那份。 */
@@ -382,18 +272,24 @@ function useTestCatalog(args: {
   }, [contractsQ.data, mode]);
 
   /* 统一输入行：顺序 = 契约口的顺序；必备标记来自契约；承接状态来自通道
-   * 集合。契约读数未到时退兜底行（通道默认集合），表单不至于闪空。 */
+   * 集合。工作流候选（#4080 评论 4）按本地 ComfyUI 通道的承接集合判「未承接」，
+   * 远端候选按 API 中继的集合。契约读数未到时退兜底行，表单不至于闪空。 */
   const inputRows = useMemo<Array<ModelTestInputRow>>(
-    () => contractTestRows(contract, kind),
-    [contract, kind],
+    () =>
+      contractTestRows(contract, kind, selectedCandidate?.workflow === undefined ? "api" : "local"),
+    [contract, kind, selectedCandidate],
   );
 
   const kindCandidateCount = candidates.length;
 
-  const candidateNames = useMemo(() => candidates.map((c) => c.name), [candidates]);
+  const candidateNames = useMemo(
+    () => candidates.filter((c) => c.workflow === undefined).map((c) => c.name),
+    [candidates],
+  );
 
   /* 全部候选的适配器（#3635：左栏每个模式页签要显示「配了几个可用模型」）。
-   * 候选是设置页配置的少量条目，并行逐个取已配适配器即可，不为此新增批量端点。 */
+   * 候选是设置页配置的少量条目，并行逐个取已配适配器即可，不为此新增批量端点。
+   * 工作流候选没有适配器，不参与这批查询（它的模式支持看 modes 声明）。 */
   const adaptersByModelQ = useQuery({
     queryKey: ["llm", "workshopAdaptersAll", candidateNames],
     queryFn: async (): Promise<AdaptersByModel> => {
@@ -410,29 +306,42 @@ function useTestCatalog(args: {
     enabled: candidateNames.length > 0,
   });
   const modeTabs = useMemo<Array<ModeTab>>(
-    () => modeTabsForKind(kind, adaptersByModelQ.data ?? EMPTY_ADAPTERS_BY_MODEL),
-    [kind, adaptersByModelQ.data],
+    () =>
+      modeTabsForKind(
+        kind,
+        adaptersByModelQ.data ?? EMPTY_ADAPTERS_BY_MODEL,
+        workflowCandidates.flatMap((c) => (c.workflow === undefined ? [] : [c.workflow])),
+      ),
+    [kind, adaptersByModelQ.data, workflowCandidates],
   );
 
-  /* 模式收窄（ISSUE #3778 问题 3）：只保留配了当前模式适配器的候选 —— 左栏
-   * 页签徽标的「N 模型」与下拉是同一份读数，页签说 0 模型时下拉不再出现
-   * 不支持该模式的模型。适配器索引未到时不收窄（避免下拉先空后跳）。
+  /* 模式收窄（ISSUE #3778 问题 3）：远端候选只保留配了当前模式适配器的 ——
+   * 左栏页签徽标的「N 模型」与下拉是同一份读数，页签说 0 模型时下拉不再出现
+   * 不支持该模式的模型。适配器索引未到时远端候选先不收窄（避免下拉先空后跳）。
+   * 工作流候选（#4080 评论 4）按 modes / taskType 的**声明**判模式支持 ——
+   * 模式码是工坊与库之间唯一的生成模式判据，不从内容类别反推。
    * 对话没有「模式」维度（#4080）：本地 / 远端候选都不做收窄。 */
   const modeCandidates = useMemo<Array<TestCandidate>>(() => {
     if (kind === "chat") {
       return candidates;
     }
     const byModel = adaptersByModelQ.data;
-    if (byModel === undefined) {
-      return candidates;
-    }
-    return candidates.filter((c) => (byModel[c.name] ?? []).some((a) => a.mode === mode));
+    return candidates.filter((c) => {
+      if (c.workflow !== undefined) {
+        return workflowSupportsMode(c.workflow, mode);
+      }
+      if (byModel === undefined) {
+        return true;
+      }
+      return (byModel[c.name] ?? []).some((a) => a.mode === mode);
+    });
   }, [candidates, adaptersByModelQ.data, mode, kind]);
 
   const adaptersQ = useQuery(
     trpc.llm.workshopAdaptersGet.queryOptions(
       { name: selectedModel },
-      { enabled: selectedModel !== "" },
+      /* 工作流候选没有适配器（#4080 评论 4）：不去按「模型名」查适配器。 */
+      { enabled: selectedModel !== "" && selectedCandidate?.workflow === undefined },
     ),
   );
   const adapters = useMemo(
@@ -447,9 +356,10 @@ function useTestCatalog(args: {
     contract,
     inputRows,
     kindCandidateCount,
-    loading: configQ.isLoading,
+    loading: configQ.isLoading || workflowsQ.isLoading,
     modeCandidates,
     modeTabs,
+    selectedCandidate,
   };
 }
 
@@ -471,6 +381,11 @@ export function useModelTest(): ModelTestController {
   /* 请求读数（ISSUE #3791）：由 onDebug 逐批追加，新一轮生成前清空。 */
   const [debugRows, setDebugRows] = useState<Array<ApiCallDebugRow>>([]);
   const [generatingSince, setGeneratingSince] = useState<number | null>(null);
+  /* 本地工作流任务的进度（#4080 评论 4）：SSE state 帧，整百分比变化才更新。 */
+  const [workflowProgress, setWorkflowProgress] = useState<{
+    label?: string;
+    pct: number;
+  } | null>(null);
   /* 参考图组（#3949 需求 6/7）与取消句柄（#3949 需求 5）：各自拆到子 hook /
    * 模块级函数（§12.13）。 */
   const referenceGroup = useReferenceImageGroup((text) => {
@@ -510,15 +425,14 @@ export function useModelTest(): ModelTestController {
   const {
     adapters,
     adaptersByModel,
+    contract,
     inputRows,
     kindCandidateCount,
     loading,
     modeCandidates,
     modeTabs,
+    selectedCandidate,
   } = useTestCatalog({ kind, mode, selectedModel, trpc });
-
-  /* 被测候选的来源（#4080）：本地 Ollama 走设置里配置的本地服务；远端按名解析。 */
-  const selectedLocal = modeCandidates.find((c) => c.name === selectedModel)?.local ?? false;
 
   const setKind = useCallback(
     (next: ModelTestKind) => {
@@ -531,6 +445,7 @@ export function useModelTest(): ModelTestController {
       setError(null);
       /* 请求详情按模式 / 模型隔离（#3949 需求 8）：切走后上一份读数是干扰信息。 */
       setDebugRows([]);
+      setWorkflowProgress(null);
       referenceGroup.reset();
     },
     [referenceGroup],
@@ -539,9 +454,14 @@ export function useModelTest(): ModelTestController {
   const setMode = useCallback(
     (next: string) => {
       setModeState(next);
-      /* 模式收窄后，当前选中的模型可能没配新模式的适配器（不支持该模式）
-       * → 清掉选择，让下拉回到占位态，而不是留着「测的不是这个模式」的选中。 */
-      if (selectedModel !== "") {
+      /* 模式收窄后，当前选中的模型可能不支持新模式 → 清掉选择，让下拉回到
+       * 占位态，而不是留着「测的不是这个模式」的选中。工作流候选（#4080
+       * 评论 4）按 modes 声明判支持；远端候选按适配器判。 */
+      if (selectedCandidate?.workflow !== undefined) {
+        if (!workflowSupportsMode(selectedCandidate.workflow, next)) {
+          setSelectedModel("");
+        }
+      } else if (selectedModel !== "") {
         const supports = adaptersByModel?.[selectedModel]?.some((a) => a.mode === next) ?? false;
         if (!supports) {
           setSelectedModel("");
@@ -551,9 +471,10 @@ export function useModelTest(): ModelTestController {
       setError(null);
       /* 请求详情按模式隔离（#3949 需求 8）：不残留上一个模式的读数。 */
       setDebugRows([]);
+      setWorkflowProgress(null);
       referenceGroup.reset();
     },
-    [adaptersByModel, referenceGroup, selectedModel],
+    [adaptersByModel, referenceGroup, selectedCandidate, selectedModel],
   );
 
   const selectModel = useCallback(
@@ -565,6 +486,7 @@ export function useModelTest(): ModelTestController {
       setError(null);
       /* 请求详情按模型隔离（#3949 需求 8）：不残留上一个模型的读数。 */
       setDebugRows([]);
+      setWorkflowProgress(null);
       referenceGroup.reset();
     },
     [mode, referenceGroup],
@@ -629,147 +551,38 @@ export function useModelTest(): ModelTestController {
     [kind, mode, referenceGroup.images, selectedModel, values],
   );
 
-  const generate = useCallback(async () => {
-    if (busy.busy || selectedModel === "") {
-      return;
-    }
-    const prompt = values.prompt?.trim() ?? "";
-    if (prompt === "") {
-      setError("请填写提示词");
-      return;
-    }
-    /* 必备口校验（ISSUE #3778）：契约标了必备、通道又承接得住的行，空着就
-     * 拦下 —— 与「必备 / 可选」标识同一份读数，别让用户点生成才被上游打回。
-     * 参考图行（#3949 需求 6/7）按数组判空。 */
-    const missing = missingRequiredLabels(inputRows, values, referenceGroup.images.length);
-    if (missing.length > 0) {
-      setError(`请填写必备输入：${missing.join("、")}`);
-      return;
-    }
-    setError(null);
-    setResult(null);
-    setNotice(null);
-    /* 本地提交行（ISSUE #3799）：点生成立即显示本次要发的请求（relay 端点 +
-     * 组装好的统一输入体，长值截断），不等生成结束；上游读数回来后追加在它
-     * 后面。 */
-    const { imageBody, videoBody } = buildBodies();
-    const relayBody = imageBody ?? videoBody ?? {};
-    /* 对话测试（#4080）：请求走 LLM 补全而不是图片/视频中继，端点在服务端
-     * 按所选模型解析 —— 先给一行已知信息（模型 + 提示词），完成后换成全量读数。 */
-    const localRow =
-      kind === "chat"
-        ? {
-            body: debugBodyOf({ kind: "chat", model: selectedModel, prompt }),
-            durationMs: null,
-            endpoint: "chat/completions",
-            excerpt: null,
-            ok: true,
-            phase: "relay" as const,
-            status: null,
-          }
-        : relayDebugRow(kind, relayBody);
-    setDebugRows([localRow]);
-    /* 取消句柄（#3949 需求 5）：生成期间可随时 cancelGenerate() 中止等待与轮询。 */
-    const controller = new AbortController();
-    cancelRef.current = controller;
-    setGeneratingSince(Date.now());
-    /* 失败反馈走 runAsyncAction（P27）；成功不另报 —— 产物本身已经是反馈。 */
-    await busy.run(() =>
-      runAsyncAction(
-        async () => {
-          try {
-            if (kind === "chat") {
-              const res = await chatTestM.mutateAsync({
-                name: selectedModel,
-                local: selectedLocal,
-                prompt,
-              });
-              setDebugRows([
-                {
-                  body: debugBodyOf({ kind: "chat", model: res.model, prompt }),
-                  durationMs: res.durationMs,
-                  endpoint: res.endpoint,
-                  excerpt: res.reply,
-                  ok: true,
-                  phase: "relay" as const,
-                  status: 200,
-                },
-              ]);
-              setResult({ kind: "chat", text: res.reply });
-              return { ok: true as const };
-            }
-            if (imageBody !== null) {
-              const url = await apiGenerateImage(imageBody, {
-                onDebug: appendDebug,
-                signal: controller.signal,
-              });
-              setResult({ kind: "image", url });
-              return { ok: true as const };
-            }
-            if (videoBody !== null) {
-              const submitted = await apiSubmitVideo(videoBody, {
-                onDebug: appendDebug,
-                signal: controller.signal,
-              });
-              if (submitted.url !== undefined && submitted.url !== "") {
-                setResult({ kind: "video", url: submitted.url });
-                return { ok: true as const };
-              }
-              const taskId = submitted.remoteTaskId;
-              if (taskId === undefined || taskId === "") {
-                throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
-              }
-              const finished = await pollVideoUntilDone({
-                mode,
-                model: selectedModel,
-                onDebug: appendDebug,
-                signal: controller.signal,
-                taskId,
-              });
-              setResult(finished);
-              return { ok: true as const };
-            }
-            throw new Error("未知的生成用途");
-          } finally {
-            cancelRef.current = null;
-          }
-        },
-        {
-          report: (k, text) => {
-            if (k === "err") {
-              setError(text);
-            }
-          },
-          failureText: "生成失败",
-        },
-      ),
-    );
-    setGeneratingSince(null);
-  }, [
+  /* 生成 / 取消动作（对话 #4080 / 本地工作流 #4080 评论 4 / 图片视频中继三
+   * 条通道的编排）收在 useModelTestGenerate（§12.13 拆分），只编排不另判。 */
+  const { cancelGenerate, generate } = useModelTestGenerate({
     appendDebug,
     buildBodies,
     busy,
+    cancelRef,
     chatTestM,
+    contract,
     inputRows,
     kind,
     mode,
-    referenceGroup.images,
-    selectedLocal,
+    referenceGroup,
+    selectedCandidate,
     selectedModel,
+    setDebugRows,
+    setError,
+    setGeneratingSince,
+    setNotice,
+    setResult,
+    setWorkflowProgress,
     values,
-  ]);
-
-  /** 取消本轮生成（#3949 需求 5）：中止等待与轮询，错误条落「已取消生成」。 */
-  const cancelGenerate = useCallback(() => {
-    cancelRef.current?.abort();
-  }, []);
+  });
 
   /** 预览失败的出口（与生成失败同一反馈位；#3637 失败必须可见）。 */
   const showPreviewError = useCallback((text: string) => {
     setNotice({ kind: "err", text });
   }, []);
   /* 生成前的「准备请求」读数（#3949 需求 8）：子 hook 里走服务端 dry-run，
-   * 按当前 模式 / 模型 / 输入 现算**实际上游请求**；点生成后由真实读数接棒。 */
+   * 按当前 模式 / 模型 / 输入 现算**实际上游请求**；点生成后由真实读数接棒。
+   * 工作流候选（#4080 评论 4）跳过 —— dry-run 是 API 中继的预演，本地通道
+   * 没有这一步。 */
   const upstreamPreviewRows = useRequestPreview({
     buildBodies,
     busy: busy.busy,
@@ -777,6 +590,7 @@ export function useModelTest(): ModelTestController {
     kind,
     onError: showPreviewError,
     selectedModel,
+    skip: selectedCandidate?.workflow !== undefined,
   });
   /* 生成前的「本地提交」行（ISSUE #3995）：与点生成那一步同一份组装
    * （buildBodies + relayDebugRow，两处各拼一套必然漂移），未点生成也先给
@@ -786,9 +600,29 @@ export function useModelTest(): ModelTestController {
     if (selectedModel === "") {
       return null;
     }
+    /* 工作流候选（#4080 评论 4）：本地提交行描述的是本地任务（工作流 + 模式
+     * + 提示词），没有 relay 请求体可组装。 */
+    const workflow = selectedCandidate?.workflow;
+    if (workflow !== undefined) {
+      return {
+        body: debugBodyOf({
+          kind,
+          debug: true,
+          workflow: workflow.name,
+          mode,
+          prompt: values.prompt?.trim() ?? "",
+        }),
+        durationMs: null,
+        endpoint: "generate.generate（本地 ComfyUI）",
+        excerpt: null,
+        ok: true,
+        phase: "relay" as const,
+        status: null,
+      };
+    }
     const { imageBody, videoBody } = buildBodies();
     return relayDebugRow(kind, imageBody ?? videoBody ?? {});
-  }, [buildBodies, kind, selectedModel]);
+  }, [buildBodies, kind, mode, selectedCandidate, selectedModel, values.prompt]);
   const previewRows = useMemo(
     () =>
       localPreviewRow === null ? upstreamPreviewRows : [localPreviewRow, ...upstreamPreviewRows],
@@ -818,6 +652,8 @@ export function useModelTest(): ModelTestController {
     openResultInBrowser,
     loading,
     selectedModel,
+    selectedWorkflow: selectedCandidate?.workflow ?? null,
+    workflowProgress,
     setInputFromFile,
     setKind,
     setMode,

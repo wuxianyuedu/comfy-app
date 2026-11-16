@@ -4,6 +4,7 @@
 // 工坊那一条链 —— 本文件只放它的纯函数与常量，DOM / 网络分居视图与 hook。
 
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
+import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
 import {
   expandContractInputs,
   modeContractInputIdLabel,
@@ -11,6 +12,7 @@ import {
 } from "~/lib/workshop/model-mode-contract";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 import { workshopInputLabel } from "~/lib/workshop/remote-model-adapter";
+import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 
 import {
   RESOLUTION_TIERS,
@@ -78,6 +80,25 @@ export const RELAY_INPUT_TYPES: Record<ModelTestKind, ReadonlyArray<WorkshopInpu
   /* 对话测试（#4080）：只有一条提示词，走 LLM 补全而不是图片/视频中继。 */
   chat: ["prompt"],
 };
+
+/** 本地（ComfyUI）通道承接的统一输入集合（#4080 评论 4：工作流提供的图片 /
+ *  视频模型也进测试页）。与 RELAY_INPUT_TYPES 的分工：远端候选按 relay 集判
+ *  「通道未承接」，工作流候选按这份集判 —— 集合是工坊封装层真实承接的对外口
+ *  （prompt / negative / 尺寸族 / 参考图 / 首尾帧 / 时长 / 种子，见
+ *  workflow-encapsulation 的 toContractValues）。 */
+export const LOCAL_INPUT_TYPES: ReadonlyArray<WorkshopInputType> = [
+  "prompt",
+  "negative",
+  "aspect-ratio",
+  "megapixels",
+  "resolution",
+  "multiple",
+  "image",
+  "first-frame",
+  "last-frame",
+  "duration",
+  "seed",
+];
 
 /** 统一输入类型 → 本页的控件形态（与 mode-contract 的 contractControlFor 同族：
  *  那份吃契约口 id，这份吃适配器行的输入类型）。 */
@@ -169,6 +190,15 @@ export type ModelTestInputRow = {
   valueKey: WorkshopInputType | null;
 };
 
+/** 当前候选走的那条通道真实承接的统一输入集合：远端候选按 API 中继的集合，
+ *  工作流候选（#4080 评论 4）按本地 ComfyUI 通道的集合。 */
+export function carriedInputTypes(
+  kind: ModelTestKind,
+  channel: "api" | "local",
+): ReadonlyArray<WorkshopInputType> {
+  return channel === "local" ? LOCAL_INPUT_TYPES : RELAY_INPUT_TYPES[kind];
+}
+
 /** 契约 → 统一输入行清单（顺序 = 契约口的顺序，用户在「模式契约」里排的）。
  *
  *  预制口按 `expandContractInputs` 展开（seed 映射到 `seed`、参考图映射到
@@ -181,10 +211,12 @@ export function contractTestRows(
     required?: ReadonlyArray<string>;
   } | null,
   kind: ModelTestKind,
+  /** 候选走的通道（#4080 评论 4）：决定「未承接」按哪个集合判。 */
+  channel: "api" | "local" = "api",
 ): Array<ModelTestInputRow> {
-  const relay = new Set<string>(RELAY_INPUT_TYPES[kind]);
+  const relay = new Set<string>(carriedInputTypes(kind, channel));
   if (contract === null) {
-    return fallbackTestRows(kind);
+    return fallbackTestRows(kind, channel);
   }
   return expandContractInputs(contract).map((entry) => {
     const label = modeContractInputIdLabel(entry.id, contract.customInputs);
@@ -215,10 +247,13 @@ export function contractTestRows(
 
 /** 契约读数未到时的兜底行：该用途通道承接集合（OpenAI 兼容默认映射的形状）。
  *  尺寸族类型聚成一行，其余逐行；必备只认提示词（契约缺省的内置默认）。 */
-export function fallbackTestRows(kind: ModelTestKind): Array<ModelTestInputRow> {
+export function fallbackTestRows(
+  kind: ModelTestKind,
+  channel: "api" | "local" = "api",
+): Array<ModelTestInputRow> {
   const rows: Array<ModelTestInputRow> = [];
   let sizePending = false;
-  for (const type of RELAY_INPUT_TYPES[kind]) {
+  for (const type of carriedInputTypes(kind, channel)) {
     if (SIZE_INPUT_TYPES.includes(type)) {
       if (!sizePending) {
         sizePending = true;
@@ -279,16 +314,56 @@ export function sizeSpecToValues(spec: SizeSpec, scene: SizeScene): ModelTestVal
 }
 
 /** configGet 下发的脱敏条目里本页关心的最小形状。
- *  `local` = 本地模型（Ollama 候选，#4080）：extraModels 里的字符串条目，
- *  只能做对话测试；远端条目按 kind 过滤。 */
+ *  `local` = 本地模型（#4080）：两种来源 —— extraModels 里的**字符串**条目
+ *  （Ollama 文本候选，只能做对话测试）与**工作流提供的图片/视频模型**（#4080
+ *  评论 4：工作流库条目，带 `workflow`，走工坊本地 ComfyUI 通道测试）；远端条目
+ *  按 kind 过滤。 */
 export type TestCandidate = {
   baseUrl: string | null;
   kind: string;
   local: boolean;
   name: string;
+  /** 工作流提供的本地候选：工作流库条目（id / 模式 / 封装就绪都在上面）。 */
+  workflow?: WorkshopWorkflowOption;
 };
 
-/** 候选过滤：本地候选（Ollama，#4080）只能做对话测试；远端条目按 kind 对上
+/** 工作流候选在下拉里的取值前缀：与远端模型名共用一个取值空间，前缀避免撞名
+ *（模型名和工作流名都可能叫「z-Image」）。 */
+export const WORKFLOW_CANDIDATE_PREFIX = "wf::";
+
+/** 候选在下拉里的选项值：工作流候选用 `wf::<id>`，其余用模型名。 */
+export function candidateValue(candidate: TestCandidate): string {
+  return candidate.workflow
+    ? `${WORKFLOW_CANDIDATE_PREFIX}${candidate.workflow.id}`
+    : candidate.name;
+}
+
+/** 候选的显示文案：工作流候选带工作流名；未完成工坊封装的明说（封装页签补线
+ *  后才能被统一输入驱动）。 */
+export function candidateLabel(candidate: TestCandidate): string {
+  if (candidate.workflow === undefined) {
+    return candidate.name;
+  }
+  return candidate.workflow.encapsulationReady
+    ? candidate.workflow.name
+    : `${candidate.workflow.name}（未封装）`;
+}
+
+/** 工作流是否支持某个生成模式：模式码是工坊与库之间唯一的生成模式判据
+ *  （workflow-library-flow §7 红线）—— 只认 modes / taskType 声明，不从内容
+ *  类别反推。modes 缺失的老条目退 taskType。 */
+export function workflowSupportsMode(
+  workflow: Pick<WorkshopWorkflowOption, "modes" | "taskType">,
+  mode: string,
+): boolean {
+  if (workflow.modes.includes(mode)) {
+    return true;
+  }
+  return workflow.taskType !== undefined && workflow.taskType === mode;
+}
+
+/** 候选过滤：本地候选两种来源（#4080 评论 4）—— 工作流候选按 kind 对上
+ *  （image / video），Ollama 字符串候选只能做对话测试；远端条目按 kind 对上
  *  （chat 不参与生图 / 生视频）。远端条目还要求 baseUrl 非空 —— 按名解析对
  *  空址条目会回落到全局通道设置，那样「测的就不是一个具体模型」了。 */
 export function testCandidatesForKind(
@@ -296,18 +371,19 @@ export function testCandidatesForKind(
   entries: ReadonlyArray<TestCandidate>,
 ): Array<TestCandidate> {
   return entries.filter((e) => {
-    if (e.name === "") {
+    if (e.name === "" && e.workflow === undefined) {
       return false;
     }
     if (e.local) {
-      return kind === "chat";
+      return e.workflow === undefined ? kind === "chat" : e.kind === kind;
     }
     return e.kind === kind && (e.baseUrl ?? "").trim() !== "";
   });
 }
 
-/** 数字统一输入的组装：空白 = 不带；非数字文本 = 不带（由必填项校验兜底）。 */
-function numericValue(raw: string | undefined): number | undefined {
+/** 数字统一输入的组装：空白 = 不带；非数字文本 = 不带（由必填项校验兜底）。
+ *  本地（工作流）通道的时长组装同用这一份（workflow-model-test）。 */
+export function numericValue(raw: string | undefined): number | undefined {
   const trimmed = raw?.trim() ?? "";
   if (trimmed === "") {
     return undefined;
@@ -316,8 +392,9 @@ function numericValue(raw: string | undefined): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-/** 种子统一输入的组装：空白 = 不带；非负整数才带（0 也是合法种子）。 */
-function seedValue(raw: string | undefined): number | undefined {
+/** 种子统一输入的组装：空白 = 不带；非负整数才带（0 也是合法种子）。
+ *  本地（工作流）通道的组装同用这一份（workflow-model-test）。 */
+export function seedValue(raw: string | undefined): number | undefined {
   const trimmed = raw?.trim() ?? "";
   if (trimmed === "") {
     return undefined;
@@ -424,13 +501,16 @@ export type AdaptersByModel = Record<string, ReadonlyArray<{ mode: string }>>;
 export function modeTabsForKind(
   kind: ModelTestKind,
   adaptersByModel: AdaptersByModel,
+  /** 工作流候选（#4080 评论 4）：按 modes 声明计入页签徽标 —— 本地模型也
+   *  要在「N 模型」里可见，否则只有工作流候选的页签会显示 0 模型。 */
+  workflowCandidates: ReadonlyArray<WorkshopWorkflowOption> = [],
 ): Array<ModeTab> {
   return ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative && t.category === kind).map((t) => ({
     mode: t.code,
     label: t.label,
-    modelCount: Object.values(adaptersByModel).filter((adapters) =>
-      adapters.some((a) => a.mode === t.code),
-    ).length,
+    modelCount:
+      Object.values(adaptersByModel).filter((adapters) => adapters.some((a) => a.mode === t.code))
+        .length + workflowCandidates.filter((w) => workflowSupportsMode(w, t.code)).length,
   }));
 }
 
@@ -458,5 +538,51 @@ export function defaultSizeValues(mode: string): ModelTestValues {
     megapixels: String(megapixelsOf(dims)),
     multiple: String(alignMultipleOf(dims)),
     resolution: MODEL_TEST_DEFAULT_RESOLUTION,
+  };
+}
+
+/* ── 请求读数行的组装（测试页三处共用：ISSUE #3799 / #3949 需求 8 / #3995）─ */
+
+/** 请求体组装的唯一入口（#3949 需求 8）：本地提交行、生成前预览、真实调用
+ *  三处共用同一份组装结果 —— 三处各拼一套必然漂移。从 use-model-test 拆来
+ *  （§12.13：宿主文件越过行数硬闸）。 */
+export function buildRequestBodies(input: {
+  kind: ModelTestKind;
+  mode: string;
+  model: string;
+  referenceImages: Array<string>;
+  values: ModelTestValues;
+}): {
+  imageBody: ReturnType<typeof assembleImageRequest> | null;
+  videoBody: ReturnType<typeof assembleVideoRequest> | null;
+} {
+  return {
+    imageBody:
+      input.kind === "image"
+        ? assembleImageRequest({
+            mode: input.mode,
+            model: input.model,
+            referenceImages: input.referenceImages,
+            values: input.values,
+          })
+        : null,
+    videoBody:
+      input.kind === "video"
+        ? assembleVideoRequest({ mode: input.mode, model: input.model, values: input.values })
+        : null,
+  };
+}
+
+/** 本地提交 / 生成前预览共用的那一行请求读数（端点固定为 relay）。
+ *  形状同 `ApiCallDebugRow`（ISSUE #3791 / #3949 需求 8）。 */
+export function relayDebugRow(kind: ModelTestKind, body: Record<string, unknown>): ApiCallDebugRow {
+  return {
+    body: debugBodyOf({ kind, debug: true, ...body }),
+    durationMs: null,
+    endpoint: "/api/workshop-api/generate",
+    excerpt: null,
+    ok: true,
+    phase: "relay",
+    status: null,
   };
 }
