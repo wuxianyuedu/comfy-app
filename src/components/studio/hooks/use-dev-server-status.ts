@@ -43,6 +43,7 @@ export function useDevServerStatus(): DevServerStatusViewModel {
     lastExitAt,
     reachable,
     routeTableStale,
+    processAlive,
     everOnline,
     currentRunId,
     unprobedMs,
@@ -56,6 +57,10 @@ export function useDevServerStatus(): DevServerStatusViewModel {
     restarted: restarting,
     lastRestartAt,
     lastExit,
+    /* 进程外信号（ISSUE #4146）：探活失败时区分「进程没了（真断开）」与
+     * 「进程在、一时答不上（软状态 unresponsive）」；null = 没有这条通道，
+     * 退回纯 HTTP 判据。 */
+    processAlive,
   });
   return {
     ...derived,
