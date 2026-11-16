@@ -31,7 +31,7 @@ export const BLOCK_THRESHOLD_SECONDS = 60;
 export function sleepSecondsIn(command) {
   const text = String(command ?? "");
   let total = 0;
-  const unit = (v, u) => {
+  const unit = (/** @type {string | undefined} */ v, /** @type {string} */ u) => {
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0) {
       return 0;
@@ -68,6 +68,7 @@ export function sleepSecondsIn(command) {
  * PreToolUse 入口：读 stdin 的钩子入参，判 Bash 命令里的 sleep。**退出码即判决**
  * （0 放行 / 2 拦下），理由走 stderr —— 不产 JSON，避开严格输出 schema 的额外键。
  *
+ * @param {{readStdin?: () => Promise<string>, log?: (s: string) => void}} [io]
  * @returns {Promise<number>} 0 放行 / 2 拦下
  */
 export async function main(io = {}) {
