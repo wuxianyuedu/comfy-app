@@ -86,6 +86,7 @@ export async function submitFeedback(draft: FeedbackDraft): Promise<FeedbackExpo
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(draft),
+      signal: AbortSignal.timeout(60_000),
     });
     const data: unknown = await res.json();
     if (!res.ok) {
@@ -149,7 +150,10 @@ function toPublishResult(value: unknown): FeedbackPublishResult | null {
 /** 探测运行环境里的 cnb cli 是否可用（弹窗打开时调一次，只读）。 */
 export async function getFeedbackCliStatus(): Promise<FeedbackCliStatus> {
   try {
-    const res = await fetch("/api/feedback/publish", { method: "GET" });
+    const res = await fetch("/api/feedback/publish", {
+      method: "GET",
+      signal: AbortSignal.timeout(15_000),
+    });
     if (!res.ok) {
       return { available: false, reason: `环境探测失败（HTTP ${res.status}）` };
     }
@@ -169,6 +173,7 @@ export async function publishFeedback(packageName: string): Promise<FeedbackPubl
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ packageName }),
+      signal: AbortSignal.timeout(60_000),
     });
     const data: unknown = await res.json();
     if (!res.ok) {

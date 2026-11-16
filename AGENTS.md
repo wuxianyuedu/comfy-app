@@ -102,29 +102,29 @@
 
 ## 强制先读规范文档的改动范围
 
-| 范围                                                                  | 路径                                                                                                                                                                                                                            | 规范章节                                                                                                                                                                                                                                                                                        |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 启动链路                                                              | `scripts/dev-launcher.mjs` + `scripts/launcher-core/**`（**全平台唯一编排**）、`scripts/dev-launcher.ps1`（仅入口）、`src-tauri/src/shell_launch.rs`（壳自编排）                                                                | §1–§3（编排 §3.3 / 入口 §3.2）                                                                                                                                                                                                                                                                  |
-| Windows 双击入口                                                      | `tools/<分类>/*.ps1`（启动类 `tools/start/`）、`scripts/entry-common.ps1`                                                                                                                                                       | §8                                                                                                                                                                                                                                                                                              |
-| Tauri 壳                                                              | `src-tauri/**`（conf.json / src / splash-assets）                                                                                                                                                                               | §2、§7                                                                                                                                                                                                                                                                                          |
-| ComfyUI 生命周期                                                      | `src/lib/comfyui/**`（lifecycle / executor-* / reaper）                                                                                                                                                                         | §3、§5                                                                                                                                                                                                                                                                                          |
-| 工坊管线                                                              | `src/components/workshop/**`、`src/lib/workshop/**`                                                                                                                                                                             | §5                                                                                                                                                                                                                                                                                              |
-| UI/逻辑分离                                                           | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时                                                                                                                                                                                    | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)）                                                                                                                                                                                                                                  |
+| 范围                                                                  | 路径                                                                                                                                                                                                                            | 规范章节                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 启动链路                                                              | `scripts/dev-launcher.mjs` + `scripts/launcher-core/**`（**全平台唯一编排**）、`scripts/dev-launcher.ps1`（仅入口）、`src-tauri/src/shell_launch.rs`（壳自编排）                                                                | §1–§3（编排 §3.3 / 入口 §3.2）                                                                                                                                                                                                                                                                                               |
+| Windows 双击入口                                                      | `tools/<分类>/*.ps1`（启动类 `tools/start/`）、`scripts/entry-common.ps1`                                                                                                                                                       | §8                                                                                                                                                                                                                                                                                                                           |
+| Tauri 壳                                                              | `src-tauri/**`（conf.json / src / splash-assets）                                                                                                                                                                               | §2、§7                                                                                                                                                                                                                                                                                                                       |
+| ComfyUI 生命周期                                                      | `src/lib/comfyui/**`（lifecycle / executor-* / reaper）                                                                                                                                                                         | §3、§5                                                                                                                                                                                                                                                                                                                       |
+| 工坊管线                                                              | `src/components/workshop/**`、`src/lib/workshop/**`                                                                                                                                                                             | §5                                                                                                                                                                                                                                                                                                                           |
+| UI/逻辑分离                                                           | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时                                                                                                                                                                                    | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)）                                                                                                                                                                                                                                                               |
 | lib 层边界与门禁                                                      | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层）                                                                                                                                                                | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `oxlint.parity.config.mjs` / `oxlint.config.ts` 的 `boundaries` 强制，Node-only 声明由 `scripts/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts` 强制（§18.4），文件长度**硬闸** `check-file-structure.cjs`（超 900 行即阻断，无 flag） |
-| lib 子域归属                                                          | `src/lib/**`（新增模块、新建子域目录、搬目录）                                                                                                                                                                                  | §12.5.3 + §18.12；门禁 `check-file-structure.cjs` 的 R13′/R14                                                                                                                                                                                                                                   |
-| 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs`                                                                                                                                                                    | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/gates/check-ps1-consistency.mjs`                                                                                                                                                       |
-| 跨平台行为 / 端口与文档                                               | 新增按平台分叉的逻辑、改动 `src/lib/process/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1                                                                                                                                        |
-| 构建与打包                                                            | `scripts/build-desktop.mjs`、`tools/**`                                                                                                                                                                                         | §7、§8                                                                                                                                                                                                                                                                                          |
-| 复用/去重与常量收口                                                   | 抽共享模块、加/改默认地址与端口、写新的质量门禁、**动手前查有无现成实现 / 缺能力补地基**、**同一串手工命令被敲到第二次就收成入口**                                                                                            | §12.18（复用优先·写之前先查）、**§12.20（能做成工具的就做成工具）**、§12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口）                                                                                                                                                                |
-| 提交 / PR / 合并这条流程本身                                          | `scripts/ship*.mjs`、`.cnb.yml`（PR 与 push 两跑的清单）、`.github/workflows/`（每日 / 桌包定时档与 PR 镜像档，定时执行者已迁 GA）、`.qoder/skills/ship/SKILL.md`                                                                                                                                       | §13.6（`pnpm ship` 那四条红线）、§13.5.25（本地跑哪几条）、§13.10（碎片与单子）、§13.6.5（**删分支前**：落地与否只认 PR 的 `is_merged`，三点 diff 不是判据）                                                                                                                                                                                                                   |
+| lib 子域归属                                                          | `src/lib/**`（新增模块、新建子域目录、搬目录）                                                                                                                                                                                  | §12.5.3 + §18.12；门禁 `check-file-structure.cjs` 的 R13′/R14                                                                                                                                                                                                                                                                |
+| 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs`                                                                                                                                                                    | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/gates/check-ps1-consistency.mjs`                                                                                                                                                                              |
+| 跨平台行为 / 端口与文档                                               | 新增按平台分叉的逻辑、改动 `src/lib/process/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1                                                                                                                                                                     |
+| 构建与打包                                                            | `scripts/build-desktop.mjs`、`tools/**`                                                                                                                                                                                         | §7、§8                                                                                                                                                                                                                                                                                                                       |
+| 复用/去重与常量收口                                                   | 抽共享模块、加/改默认地址与端口、写新的质量门禁、**动手前查有无现成实现 / 缺能力补地基**、**同一串手工命令被敲到第二次就收成入口**                                                                                              | §12.18（复用优先·写之前先查）、**§12.20（能做成工具的就做成工具）**、§12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口）                                                                                                                                                                                            |
+| 提交 / PR / 合并这条流程本身                                          | `scripts/ship*.mjs`、`.cnb.yml`（PR 与 push 两跑的清单）、`.github/workflows/`（每日 / 桌包定时档与 PR 镜像档，定时执行者已迁 GA）、`.qoder/skills/ship/SKILL.md`                                                               | §13.6（`pnpm ship` 那四条红线）、§13.5.25（本地跑哪几条）、§13.10（碎片与单子）、§13.6.5（**删分支前**：落地与否只认 PR 的 `is_merged`，三点 diff 不是判据）                                                                                                                                                                 |
 
 ## lint 判据：oxlint 唯一判决（#2777 收尾后的最终架构）
 
 `pnpm run lint` 是唯一判决口，实现是**一档** `lint:oxlint`（`check:premerge` 继承 `lint`，
 所以 pre-push 与平台那一跑都跟着走）：
 
-| 档 | 命令 | 配置 | 管什么 |
-| --- | --- | --- | --- |
+| 档        | 命令                   | 配置                                                                       | 管什么                                                                                                                                                                                                                                                |
+| --------- | ---------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 通用 lint | `pnpm run lint:oxlint` | `oxlint.parity.config.mjs`（判决配置；`oxlint.config.ts` 是同源的 IDE 面） | **384 条规则**的全量面：`src` / `tests` / `scripts` / `e2e` / `tools` / `.storybook` / 根配置文件（208 条 eslint 口径 + 171 条预设 0 命中免费档 + 5 条 T1 语义规则，后者存量按文件挂账、分批次清，见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`） |
 
 零警告语义由 oxlint `--deny-warnings` 承担。**#3438 起死 disable 指令也有执行者**：
@@ -162,11 +162,11 @@ React Compiler 族（`react/immutability`、`react/incompatible-library`、
 原先也住在这里的三条策略守卫已迁到 oxlint jsPlugin（#2777），条目与作用面都在
 `oxlint.parity.config.mjs`，行为对拍在 `tests/oxlint-policy-rules.test.ts`：
 
-| 已迁规则（oxlint 侧名） | 判什么 | 原 eslint 规则 |
-| --- | --- | --- |
-| `eslint-js/no-restricted-syntax` | store selector 里现拼对象 / 现造新数组（ISSUE #1780） | `no-restricted-syntax`（两条 selector） |
-| `eslint-js/no-restricted-syntax` | router 只许抛 `TRPCError`（台账 E8） | `no-restricted-syntax`（router 档） |
-| `eslint-js/no-restricted-imports` | `src/components` 与 features 视图层禁直连 Drizzle orm | `no-restricted-imports` |
+| 已迁规则（oxlint 侧名）           | 判什么                                                | 原 eslint 规则                          |
+| --------------------------------- | ----------------------------------------------------- | --------------------------------------- |
+| `eslint-js/no-restricted-syntax`  | store selector 里现拼对象 / 现造新数组（ISSUE #1780） | `no-restricted-syntax`（两条 selector） |
+| `eslint-js/no-restricted-syntax`  | router 只许抛 `TRPCError`（台账 E8）                  | `no-restricted-syntax`（router 档）     |
+| `eslint-js/no-restricted-imports` | `src/components` 与 features 视图层禁直连 Drizzle orm | `no-restricted-imports`                 |
 
 ### 依赖最小集
 
@@ -249,46 +249,46 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
    PR 上跑」对判据隐形）。
    **兜底分两层**：`pnpm check:premerge` 在推送那一跳复算 `base` 段（干净快照上的全仓判据），
    平台是第二层。**PR 上在场哪几格以 `.cnb.yml` 的
-     `COMFYAPP_CI_GATES` 为准，每日那一跑以 `COMFYAPP_CI_DAILY_GATES` 为准——本文不抄格名**
-     （抄一份格名就会第二次脱钩：`ESLint 零警告` 已在 2026-10-19 从 PR 撤到每日档，
-     判据一字未改，改的只是执行者）。
-     **全量单测不在 PR 档**（§13.5.21）：节点上并行 PR 会把带超时的读数变成不可信的红，且它跑绿
-     要刷「整档凭证」——拿并发下的绿刷那张账比不刷更坏。所以全量单测的执行者仍是每天 01:00 那一跑
-     （`每日单元测试`）；**全量**那一面不在 PR 档 —— 增量面仍在（GA 侧那两格，见上面那段）。
-     **在册 ≠ 出勤**：「执行者在平台」这句话过去只被「格名在每日清单里」守着，而 2026-10-18→10-22
-     五派发零跑完期间账面全绿（ISSUE #2114）。现在有了反面判据：
-     `pnpm check:daily-attendance`（0 出勤 / 1 缺勤 / 2 没结论或取不到读数，退 2 **不算绿**），
-     任何一次拿「平台那一档在跑」当本地豁免理由的争论现场都可以跑一次。
-     想只推形态档那几条再交给平台判：`pnpm check:premerge --light`（它会打印跳过了几条重档 ——
-     降档永远要被读出来，不许冒充「全套过了」）。§13.6.1 那句「平台拦 push、放行 PR 合并」
-     由此比过去更承重，「PR 跑绿才合并」是纪律不是习惯。
-     全部走 `pnpm exec`。
-**两份生成物：一份本地读者自取，一份平台自检**（`docs/generated/**` 见 §13.5.5、
-     `docs/api/**` 见 §13.5.5.1）：
-     **`docs/generated/**` 自 #3586 起退出入库产物**（`.gitignore` 的 `/docs/generated/`，
-     与 #2231 对 `docs/api/` 的处置同族）—— 只维护编辑态文档源，谁需要原文谁本地
-     `pnpm doc:render` 自己生成自己看，产物只在本机。**同批退役三格**：平台侧
-     「生成态文档与源同步」（`render-doc-placeholders.cjs --check --autofix`、
-     GA `master-gate.yml` 的 step、`ci-autofix-duties` / `ci-incremental-gates` 两条登记）
-     与本地 D0 的「文档源 ⇄ 生成态镜像同批」（`check-doc-mirror-pairing.cjs`）——
-     **没有入库的镜像，既没有内容可比、也没有「同批带上」这个动作**；配对判据与它的
-     自测一并删掉，不留空壳。仍在场的只有 `pnpm doc:check`（判编辑态文档里的引用与
-     权威源一致，GA `master-gate.yml` 每笔 master push 都跑）与本地 `pnpm doc:render`
-     （纯生成入口，不进任何门禁）。本地想生成几份就用
-     `pnpm run doc:render -- --only <点名的源>`，`--check` 只判不写；口径见 §13.5.5。
-     **`docs/api/**` 那一格在 2026-10-23 改了判据对象**（ISSUE #2231）：产物**不再进 git**
-     （`.gitignore` 的 `docs/api/`），那一格从「与源同不同步」改成「**生成一份 + 自检**」
-     （跑得通 / 骨架齐全 / 可移植），**也不再带 `--autofix`** —— 「自动修 + 再判」这个形状
-     正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场：master 上差 9 处而平台报绿）。
-     所以**改完代码不要在本地跑 `pnpm run docs`** —— 那两千多份生成物既不是任何一次提交的
-     必经产物、也不再进 git；本地想看就自己跑一次（只在本机），平台侧各跑各的。
-     口径与逐条实测见 §13.5.17。
-     测试那一层是「改到哪、测到哪」的增量层（固定清单 + 改动面沿**静态 import 图**
-     追溯到的用例，判据与**已知边界**见 §13.5.8）——运行时拼出来的路径抓不到、也不是
-     全量，全量仍由 `pnpm test` / `pnpm check:all` 负责。钩子失败先修代码，
-     禁止 `--no-verify` 绕过进历史。钩子由 `pnpm install` 自动接上
-     （`package.json` postinstall → `scripts/install-git-hooks.mjs` 写
-     `core.hooksPath=.githooks`）；未生效时手动 `git config core.hooksPath .githooks`。
+   `COMFYAPP_CI_GATES` 为准，每日那一跑以 `COMFYAPP_CI_DAILY_GATES` 为准——本文不抄格名**
+   （抄一份格名就会第二次脱钩：`ESLint 零警告` 已在 2026-10-19 从 PR 撤到每日档，
+   判据一字未改，改的只是执行者）。
+   **全量单测不在 PR 档**（§13.5.21）：节点上并行 PR 会把带超时的读数变成不可信的红，且它跑绿
+   要刷「整档凭证」——拿并发下的绿刷那张账比不刷更坏。所以全量单测的执行者仍是每天 01:00 那一跑
+   （`每日单元测试`）；**全量**那一面不在 PR 档 —— 增量面仍在（GA 侧那两格，见上面那段）。
+   **在册 ≠ 出勤**：「执行者在平台」这句话过去只被「格名在每日清单里」守着，而 2026-10-18→10-22
+   五派发零跑完期间账面全绿（ISSUE #2114）。现在有了反面判据：
+   `pnpm check:daily-attendance`（0 出勤 / 1 缺勤 / 2 没结论或取不到读数，退 2 **不算绿**），
+   任何一次拿「平台那一档在跑」当本地豁免理由的争论现场都可以跑一次。
+   想只推形态档那几条再交给平台判：`pnpm check:premerge --light`（它会打印跳过了几条重档 ——
+   降档永远要被读出来，不许冒充「全套过了」）。§13.6.1 那句「平台拦 push、放行 PR 合并」
+   由此比过去更承重，「PR 跑绿才合并」是纪律不是习惯。
+   全部走 `pnpm exec`。
+   **两份生成物：一份本地读者自取，一份平台自检**（`docs/generated/**` 见 §13.5.5、
+   `docs/api/**` 见 §13.5.5.1）：
+   **`docs/generated/**` 自 #3586 起退出入库产物**（`.gitignore` 的 `/docs/generated/`，
+   与 #2231 对 `docs/api/` 的处置同族）—— 只维护编辑态文档源，谁需要原文谁本地
+   `pnpm doc:render` 自己生成自己看，产物只在本机。**同批退役三格**：平台侧
+   「生成态文档与源同步」（`render-doc-placeholders.cjs --check --autofix`、
+   GA `master-gate.yml` 的 step、`ci-autofix-duties` / `ci-incremental-gates` 两条登记）
+   与本地 D0 的「文档源 ⇄ 生成态镜像同批」（`check-doc-mirror-pairing.cjs`）——
+   **没有入库的镜像，既没有内容可比、也没有「同批带上」这个动作**；配对判据与它的
+   自测一并删掉，不留空壳。仍在场的只有 `pnpm doc:check`（判编辑态文档里的引用与
+   权威源一致，GA `master-gate.yml` 每笔 master push 都跑）与本地 `pnpm doc:render`
+   （纯生成入口，不进任何门禁）。本地想生成几份就用
+   `pnpm run doc:render -- --only <点名的源>`，`--check` 只判不写；口径见 §13.5.5。
+   **`docs/api/**` 那一格在 2026-10-23 改了判据对象**（ISSUE #2231）：产物**不再进 git**
+   （`.gitignore` 的 `docs/api/`），那一格从「与源同不同步」改成「**生成一份 + 自检**」
+   （跑得通 / 骨架齐全 / 可移植），**也不再带 `--autofix`** —— 「自动修 + 再判」这个形状
+   正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场：master 上差 9 处而平台报绿）。
+   所以**改完代码不要在本地跑 `pnpm run docs`** —— 那两千多份生成物既不是任何一次提交的
+   必经产物、也不再进 git；本地想看就自己跑一次（只在本机），平台侧各跑各的。
+   口径与逐条实测见 §13.5.17。
+   测试那一层是「改到哪、测到哪」的增量层（固定清单 + 改动面沿**静态 import 图**
+   追溯到的用例，判据与**已知边界**见 §13.5.8）——运行时拼出来的路径抓不到、也不是
+   全量，全量仍由 `pnpm test` / `pnpm check:all` 负责。钩子失败先修代码，
+   禁止 `--no-verify` 绕过进历史。钩子由 `pnpm install` 自动接上
+   （`package.json` postinstall → `scripts/install-git-hooks.mjs` 写
+   `core.hooksPath=.githooks`）；未生效时手动 `git config core.hooksPath .githooks`。
 8. **新增含 postinstall 构建脚本的依赖**：同步更新 `pnpm-workspace.yaml`
    的 `allowBuilds`，否则非交互模式 `pnpm install` 会 exit 1。
    **这条现在有判据**：`scripts/gates/check-allow-builds.cjs`（挂在 `.githooks/pre-commit` 的 D 组）
@@ -410,16 +410,16 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
     **抽的门槛**：≥2 次真实发生过的手工执行，或明确马上有第 2 次；只做了一次、看不出重复的，先把
     那一次的正确走法写进文档，别急着写脚本（一次性脚本正是第二轮子的主要来源）。
     **方法型教训同一条管**（同一会话里「换了一种判断方式才得到结论」）：当场把正确口径写进规范那一节
-    + 可复做的判断收成只读入口（标本：§13.6.5 的「删分支只认 PR 的 `is_merged`」）——
-    **代理自己的私有笔记不算登记面**，仓库里没有 = 下一个人一定重犯。
-    **四条不许**：入口里不另立第二套判定（结论必须来自既有执行者的原值）、不藏 `--no-verify`
-    那类绕过通道、降档/跳过不许被读成「全套过了」、效应不许只转述自己的 stdout（丢 stderr 是
-    这一族最重的事故）。**登记面早有执行者**：不进 `check:all` 的档 ⇒ `quality-gate.mjs` 的 `GATES`
-    或 `scripts/.on-demand-duties.json`（`check-on-demand-duties.cjs` 双向核对）；是判据的 ⇒
-    `check-gate-executors.cjs`（无执行者当场红）；`.ps1` 入口 ⇒ `check-ps1-consistency.mjs`。
-    **不新写**「文档里的 `pnpm <名>` 必须存在于 `scripts`」那条对账判据：实测扫 48 份文档得
-    52 处命中，几乎全是误报（`pnpm tauri` 那类 `node_modules/.bin` 二进制名、散文里提到 pnpm
-    这个词、以及「某入口已被撤销」的历史叙述）—— 名字空间是三层，判据只比得到一层。
+    - 可复做的判断收成只读入口（标本：§13.6.5 的「删分支只认 PR 的 `is_merged`」）——
+      **代理自己的私有笔记不算登记面**，仓库里没有 = 下一个人一定重犯。
+      **四条不许**：入口里不另立第二套判定（结论必须来自既有执行者的原值）、不藏 `--no-verify`
+      那类绕过通道、降档/跳过不许被读成「全套过了」、效应不许只转述自己的 stdout（丢 stderr 是
+      这一族最重的事故）。**登记面早有执行者**：不进 `check:all` 的档 ⇒ `quality-gate.mjs` 的 `GATES`
+      或 `scripts/.on-demand-duties.json`（`check-on-demand-duties.cjs` 双向核对）；是判据的 ⇒
+      `check-gate-executors.cjs`（无执行者当场红）；`.ps1` 入口 ⇒ `check-ps1-consistency.mjs`。
+      **不新写**「文档里的 `pnpm <名>` 必须存在于 `scripts`」那条对账判据：实测扫 48 份文档得
+      52 处命中，几乎全是误报（`pnpm tauri` 那类 `node_modules/.bin` 二进制名、散文里提到 pnpm
+      这个词、以及「某入口已被撤销」的历史叙述）—— 名字空间是三层，判据只比得到一层。
 
 28. **「分支 → 提交 → push → PR → 等 CI → 绿了合并」这条流程走 `pnpm ship`，不在外面手敲命令串**
     （§13.6 / 硬规则 27）：它只**编排**既有执行者（pre-commit、pre-push 的 `check:premerge`、
@@ -498,6 +498,17 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
     UI 改动、图对不对」是判断，且「回帖到 Issue」是平台侧动作、本地提交这一跳根本看不见
     ——做成闸只会收获一串为了闭嘴而补的假图（同 §13.10.9「先立案」那一格是读数不是闸）。
     承重处在「看得见」：交付总结里点出截图贴在哪张单、哪一两层核对过，没贴就是没交付完。
+
+32. **等待要确定性：能立即执行就直接执行，禁止在命令之间插无意义 sleep**（ISSUE #4118）：
+    判「上一步完没完」优先**直接执行只读回读口**——如 `pnpm ship --result`（不阻塞、
+    立即返回当前事实；结构化读数用 `pnpm ship --result=json`，**按字段判定**，不按输出
+    行号截取——`sed -n '2,13p'` 那类截法在 CI 多打一行 banner 时就截错）。确实要等异步
+    终态（如后台 `pnpm ship` 出结论）⇒ 用**确定性等待组件** `pnpm ship:wait`
+    （`scripts/ship/wait-for-ship.mjs`：短间隔 + 明确终止条件 + 总上限；坏消息立即返回，
+    **不许只等成功、不等失败**），**不许**即兴编 `sleep 330 && grep 日志` 这类等待。
+    机器执行者：PreToolUse 钩子（`scripts/agent-hooks/sleep-guard.mjs`）拦下单条 ≥60s
+    的 sleep 命令并指向正确出口；钩子挂在本检出工作区 `.zcode/config.json` 的
+    `hooks` 块（该目录不入库，换检出按同形重配，脚本在库内）。
 
 ## 快速排障
 

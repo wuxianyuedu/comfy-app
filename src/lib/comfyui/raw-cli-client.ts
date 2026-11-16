@@ -14,6 +14,7 @@ export async function fetchRawCli(taskId: string): Promise<Array<string>> {
   try {
     const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}/raw-cli`, {
       cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) {
       return [];

@@ -129,7 +129,7 @@
 
 | key                        | 探针（权威定义）                                                        | meaning（可读语义）                              | source（权威定义文件）                              | extract                                              |
 | -------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------- | ---------------------------------------------------- |
-| `deps.resolveProbes`       | `typescript`、`next`、`axe-core`                                        | 必须能从仓库根解析到的声明依赖（解析层判据的探针） | 本行（清单本身即权威定义）；执行者：`scripts/launcher-core/worktree.mjs` 的 `unresolvableDeclaredDeps()` | 解析本行反引号包名；判据的 `RESOLVE_PROBES` 与它逐项同源（由回归测试核对，两处不一致即红） |
+| `deps.resolveProbes`       | `typescript`、`next`、`axe-core`、`pino`                                 | 必须能从仓库根解析到的声明依赖（解析层判据的探针） | 本行（清单本身即权威定义）；执行者：`scripts/launcher-core/worktree.mjs` 的 `unresolvableDeclaredDeps()` | 解析本行反引号包名；判据的 `RESOLVE_PROBES` 与它逐项同源（由回归测试核对，两处不一致即红） |
 
 ### 1.7 产品需求总表的两个计数（直观值核对类）
 

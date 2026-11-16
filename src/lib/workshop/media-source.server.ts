@@ -75,9 +75,42 @@ export async function resolveMediaBytes(src: string, _origin: string): Promise<R
     if (!res.ok) {
       throw new Error(`拉取参考图失败 (${res.status})`);
     }
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.byteLength > MAX_BYTES) {
-      throw new Error("图片超过 24MB 上限");
+    const len = res.headers.get("content-length");
+    if (len !== null) {
+      const n = Number(len);
+      if (Number.isFinite(n) && n > MAX_BYTES) {
+        throw new Error("图片超过 24MB 上限");
+      }
+    }
+    let buffer: Buffer;
+    if (res.body) {
+      const reader = res.body.getReader();
+      const chunks: Array<Uint8Array> = [];
+      let total = 0;
+      try {
+        for (;;) {
+          // oxlint-disable-next-line eslint/no-await-in-loop -- 流式读取必须逐块等待，无法并行
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+          if (value) {
+            total += value.byteLength;
+            if (total > MAX_BYTES) {
+              throw new Error("图片超过 24MB 上限");
+            }
+            chunks.push(value);
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      buffer = Buffer.concat(chunks, total);
+    } else {
+      buffer = Buffer.from(await res.arrayBuffer());
+      if (buffer.byteLength > MAX_BYTES) {
+        throw new Error("图片超过 24MB 上限");
+      }
     }
     const mime = res.headers.get("content-type")?.split(";")[0] ?? undefined;
     return {

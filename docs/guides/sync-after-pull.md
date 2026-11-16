@@ -161,7 +161,7 @@ node scripts/lockfile/diff-cli.mjs --installed node_modules\.pnpm\lock.yaml --ro
 | 层     | 判什么                                                    | 判据在哪                                                             |
 | ------ | --------------------------------------------------------- | -------------------------------------------------------------------- |
 | 文本层 | 两份 lockfile 的**实质**差异（上一节那种）                | `node_modules/.pnpm/lock.yaml` ⇄ 仓库 `pnpm-lock.yaml`               |
-| 解析层 | `typescript` / `next` / `axe-core` 这几个包**解析得到吗** | `scripts/launcher-core/worktree.mjs` 的 `unresolvableDeclaredDeps()` |
+| 解析层 | `typescript` / `next` / `axe-core` / `pino` 这几个包**解析得到吗** | `scripts/launcher-core/worktree.mjs` 的 `unresolvableDeclaredDeps()` |
 
 解析层红了会**单独**说一句话，别把它读成上一节那种「装错了版本」：
 
@@ -178,13 +178,13 @@ node scripts/lockfile/diff-cli.mjs --installed node_modules\.pnpm\lock.yaml --ro
 **本次提交动了依赖面**时才判。整条的判据口径见规范
 [13.5.13](../standards/13-提交与-code-review.md#13513-依赖新鲜度远端改过库的版本本地还在旧的上面干活node-scriptscheck-deps-freshnessmjsissue-1569)。
 
-> **为什么解析层只点名三个包，而不是扫全部 `package.json`**：判据的代价要付得起。
-> 这三条是跑门禁时**无论如何都会解析到**的包（`tsc` 编译需要 `typescript`、测试 / 构建
-> 需要 `next`、a11y 用例需要 `axe-core`）—— 多解析一次不产生新的工作，而「把所有直接依赖
+> **为什么解析层只点名四个包，而不是扫全部 `package.json`**：判据的代价要付得起。
+> 这四条是跑门禁/运行时**无论如何都会解析到**的包（`tsc` 编译需要 `typescript`、测试 / 构建
+> 需要 `next`、a11y 用例需要 `axe-core`、运行时日志需要 `pino`）—— 多解析一次不产生新的工作，而「把所有直接依赖
 > 都解析一遍」会让判据跟着依赖表一起长。**新加依赖时顺手把这条清单补一格**，位置就在
 > `RESOLVE_PROBES`。
 
-> **依赖从来没装过时不报这一条**（`no-install`）：对着一棵不存在的树说「这三个包解析不到」
+> **依赖从来没装过时不报这一条**（`no-install`）：对着一棵不存在的树说「这几个探针包解析不到」
 > 是准确的噪声，动作一样是重装、结论却读起来完全不同（「没装」vs「装错了」）。
 
 ---
