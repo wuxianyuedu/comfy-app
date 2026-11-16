@@ -1,15 +1,16 @@
 /**
  * `task.list` 线上契约 ↔ 前端镜像（住 tests/ 因要 import 真实 router，而 `src/lib/**` 不得依赖 `src/server/**`）。坏过的形状：
  * 镜像声明线上从不发的列（交叉类型 `RouterOutputs[...] & { images?: … }` 只**加**列）⇒ 产物路径恒 undefined、`video` 恒 `null`，
- * 表现只是占位图标/下载按钮从不出现而各静态门槛全绿。故钉：① 镜像每列都在真实行里；② `video` 经真 router+JSON 成立；③ 少发一列整行判掉。mock 只换传输层/db/会话/logger。
+ * 表现只是占位图标/下载按钮从不出现而各静态门槛全绿。故钉：① 镜像每列都在真实行里；② `video` 经真 router+superjson 往返成立；③ 少发一列整行判掉。mock 只换传输层/db/会话/logger。
  */
 import type * as LoggerModule from "~/lib/core/logger";
+import SuperJSON from "superjson";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { historyTaskRowSchema } from "~/lib/project-canvas/history-panel-client";
 import { createCallerFactory } from "~/server/api/trpc";
 import { taskRouter } from "~/server/api/routers/task";
-import { missingFromWire, throughJsonWire } from "./helpers/wire-contract";
+import { missingFromWire } from "./helpers/wire-contract";
 import { getTestDb, seedTask, seedUser, type Row } from "./helpers/test-db";
 import { makeCtx } from "./helpers/trpc";
 import {
@@ -68,14 +69,19 @@ const COVER = (id: string, localPath: string, mediaType = "image"): Row => ({
   sortIndex: 0,
 });
 
-/** 走一次 JSON 序列化 —— 浏览器拿到的就是这个（Date 变字符串、undefined 键消失）。
- *  少了这一步，测的是「进程内传对象」，而线上是「传文本」。实现住在
- *  `./helpers/wire-contract`（第二份契约判据动手时抽的，不在调用点重抄）。 */
+/** 走一次 **superjson 往返** —— 这才是线上传输的真实形状（`src/trpc/link.ts` 的
+ *  transformer）：drizzle 的 `createdAt` 是 Date，superjson 保真复原成 Date 实例，
+ *  **不会**变成字符串（#4039：镜像按「Date 变字符串」建模时整表判失败、历史面板
+ *  恒空）。undefined 键的处理同样以这一层为准。实现住在 `./helpers/wire-contract`
+ *  的 `throughJsonWire` 仍被无 Date 的契约测试使用；本文件的真实传输形状由
+ *  superjson 说了算。 */
 async function wireRows(
   input: { take?: number } = { take: 200 },
 ): Promise<Array<Record<string, unknown>>> {
   const rows = await createCaller(makeCtx()).list(input);
-  const viaWire = throughJsonWire<{ tasks: Array<Record<string, unknown>> }>(rows);
+  const viaWire = SuperJSON.deserialize<{ tasks: Array<Record<string, unknown>> }>(
+    SuperJSON.serialize(rows),
+  );
   return viaWire.tasks;
 }
 
@@ -132,6 +138,35 @@ describe("task.list 的列名 ↔ 两份前端镜像", () => {
     const unmirrored = Object.keys(rows[0]!).filter((key) => !mirrored.has(key));
     expect(unmirrored).toContain("cover");
     expect(unmirrored).toContain("mediaType");
+  });
+});
+
+describe("createdAt 经 superjson 仍是 Date → 历史面板镜像照常收行（#4039）", () => {
+  it("Date 形态的 createdAt 被归一成 ISO 字符串，行不再被整行丢弃", async () => {
+    const rows = await wireRows();
+    expect(rows.length).toBeGreaterThan(0);
+    /* 线上形状自证：superjson 往返后 createdAt 真的是 Date（不是字符串）。 */
+    expect(rows[0]!.createdAt).toBeInstanceOf(Date);
+    for (const row of rows) {
+      const parsed = historyTaskRowSchema.safeParse(row);
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data.createdAt).not.toBe("");
+      }
+    }
+    /* 首行（视频任务，createdAt=new Date(2000)）归一成 ISO 字符串。 */
+    expect(historyTaskRowSchema.parse(rows[0]).createdAt).toBe(new Date(2000).toISOString());
+  });
+
+  it("字符串形态的 createdAt（老快照 / 其他消费方）也照常收行", () => {
+    const parsed = historyTaskRowSchema.safeParse({
+      id: "t1",
+      createdAt: "2000-01-01T00:00:00.000Z",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.createdAt).toBe("2000-01-01T00:00:00.000Z");
+    }
   });
 });
 
