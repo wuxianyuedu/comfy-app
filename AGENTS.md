@@ -65,6 +65,12 @@
   查官方文档，**别凭记忆写**。用法与那条边界（它治 API 漂移、不治依赖版本漂移，也不回答
   本仓判据是什么）**只有一份出处**：project Skill
   [`.qoder/skills/version-docs/SKILL.md`](.qoder/skills/version-docs/SKILL.md)。
+- **要取 Issue / PR 的正文、评论、图片**（排障、认领、写交付总结时）→ 用
+  `pnpm ship --fetch-issue <号>` 一步取全（#3965：正文 + 评论 + 图片按号落到
+  `.tmp/issues/<号>/`，图片走 `get-imgs` 官方通道，不手拼 URL；PR 侧构建日志另有
+  `pnpm ship --gh-logs pr:<号>`），**别手敲 `cnb issues get` / `get-imgs` 再手拼图片
+  地址** —— 那条路撞过 404、也拿不到评论（#3996）。用法全表只有一份出处：project Skill
+  [`.qoder/skills/ship/SKILL.md`](.qoder/skills/ship/SKILL.md)。
 
 > 判断标准：改动被「强制先读规范文档的改动范围」表或本清单覆盖但未先读就动手 = 违规，
 > 提交会被拒或要求回滚。
