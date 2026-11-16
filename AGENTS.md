@@ -71,6 +71,21 @@
   `pnpm ship --gh-logs pr:<号>`），**别手敲 `cnb issues get` / `get-imgs` 再手拼图片
   地址** —— 那条路撞过 404、也拿不到评论（#3996）。用法全表只有一份出处：project Skill
   [`.qoder/skills/ship/SKILL.md`](.qoder/skills/ship/SKILL.md)。
+- **ship 的其余入口速查**（上一条之外、用法表里还有的名字；这里只给「名字 + 一句话」，
+  逐条语义与红线**只有一份出处**：project Skill
+  [`.qoder/skills/ship/SKILL.md`](.qoder/skills/ship/SKILL.md) 与 `scripts/ship/ship.mjs`
+  文件头）。只读自查：`--status`（PR / CI 绿红 / 合并 / 关单摆到一张屏）、`--result`
+  （后台跑 ship 时的进度与结论快照，别 sleep + grep 运行日志）、`--diagnose [sn]`
+  （CI 红了取失败格 + 失败行）、`--stage-log <格名>`（绿跑里某一格的日志正文）、
+  `--branches`（本地分支落地了没有，判据只有 PR 的 `is_merged`）、`--claims`（自己
+  领取中的单子）、`--whoami`（本检出留痕身份自查）、`--gh-prs`（GitHub 镜像仓侧的
+  PR 清单）。写动作：`--new-issue`（一步建单）、`--comment <号> --body-file <文件>`
+  （往单子补读数，正文只从文件来）、`--claim` / `--release`（领取 / 结束释放；
+  `--release --misclaim` 是误领恢复）。流程助攻：`--dry-run`（只念计划不执行）、
+  `--branch <名>`（代建分支，名字人给）、`--no-commit`（这一笔已自己提交过 ⇒ 跳过
+  提交段）、`--no-preflight-d0`（关阶段 0 的 D0 预跑）、`--rerun-ci`（CI 红 / 未判定
+  时推空提交重派流水线）。合并 / 关单 / 清分支 / `--mode` / `--add` / `--reap` 那几枚
+  是**显式动作**，红线见硬规则 28。
 
 > 判断标准：改动被「强制先读规范文档的改动范围」表或本清单覆盖但未先读就动手 = 违规，
 > 提交会被拒或要求回滚。
