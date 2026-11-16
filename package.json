@@ -71,6 +71,7 @@
     "qoder:ignore": "node scripts/qoder-ignore.mjs",
     "qoder:ignore:check": "node scripts/qoder-ignore.mjs --check",
     "ship": "node scripts/ship/ship.mjs",
+    "ship:wait": "node scripts/ship/wait-for-ship.mjs",
     "test:coverage": "vitest run --coverage",
     "worktree:remove": "node scripts/worktree-remove.mjs",
     "coverage:readout": "node scripts/coverage-readout.mjs",
