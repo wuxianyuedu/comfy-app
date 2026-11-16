@@ -14,7 +14,8 @@ async function openConsole(page: Page): Promise<void> {
   const consoleBtn = page.getByRole("button", { name: "控制台", exact: true }).first();
   await expect(consoleBtn).toBeVisible();
   await consoleBtn.click();
-  await expect(consoleBtn).toHaveAttribute("data-active", "true", { timeout: 20_000 });
+  /* Base UI 迁移后（ISSUE #4034）：激活态是 `data-active` 属性在场（值为空串）。 */
+  await expect(consoleBtn).toHaveAttribute("data-active", { timeout: 20_000 });
   await expect(page.locator('[data-view="console"]:not(.hidden)')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId("console-preset-list")).toBeVisible();
 }
