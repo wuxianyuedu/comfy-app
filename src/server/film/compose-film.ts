@@ -16,6 +16,7 @@ import { withProductionContentLock } from "~/lib/production/content-write-lock";
 import type { Shot } from "~/lib/workshop/types";
 import { isFilmShotStatus, type ShotStatus } from "~/lib/film/film-status";
 import { sizeSpecDims, toSizeSpec } from "~/lib/media/size-presets";
+import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
 import { artifactUrl, filmBgmRoot, filmsRoot } from "~/lib/media/output-paths";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { withTimeoutResult } from "~/lib/with-timeout";
@@ -170,8 +171,10 @@ export async function composeFilm(id: string) {
 
   const cwd = process.cwd();
   /* 成片画幅：列里存的是尺寸表达（老行是 "1280x720" 字符串，`toSizeSpec` 兼容），
-   * ffmpeg 要的是像素 —— 在这里折算。 */
-  const { width: W, height: H } = sizeSpecDims(toSizeSpec(film.size), "video");
+   * ffmpeg 要的是像素 —— 在这里按**生效的**尺寸表折算（ISSUE #3972：设置里改过
+   * 视频场景的表，合成画幅跟着变，不再用编译进包的默认快照）。 */
+  const sizeTable = await loadSizePresetTable();
+  const { width: W, height: H } = sizeSpecDims(toSizeSpec(film.size), "video", sizeTable);
   const fps = film.fps;
   const tmpDir = path.join(filmsRoot(), `_tmp_${id}`);
   await fs.mkdir(tmpDir, { recursive: true });

@@ -24,7 +24,13 @@
  * 无 React、无 IO（规范 §17.2 第②层），因此可直接单测。
  */
 
-import { normalizeSizeSpec, sceneFromMode, sizeSpecToWxH } from "~/lib/media/size-presets";
+import {
+  DEFAULT_SIZE_PRESET_TABLE,
+  normalizeSizeSpec,
+  sceneFromMode,
+  sizeSpecToWxH,
+  type SizePresetTable,
+} from "~/lib/media/size-presets";
 import {
   applyParamMapping,
   buildParamEntries,
@@ -195,9 +201,11 @@ function toContractValues(args: {
   io: WorkflowIOMap;
   mode: string | null;
   resolved: Record<string, string | null>;
+  /** 生效的尺寸表（ISSUE #3972）：宽高按它查，不再用编译进包的默认快照。 */
+  table: SizePresetTable;
   values: WorkshopExposedValues;
 }): Record<string, unknown> {
-  const { io, mode, values, resolved, entries } = args;
+  const { io, mode, values, resolved, entries, table } = args;
   const out: Record<string, unknown> = {};
 
   if (values.prompt !== undefined) {
@@ -209,9 +217,11 @@ function toContractValues(args: {
 
   /* 尺寸：工坊给的是「比例 + 档位（+ 倍数）」，映射层按**落点子口身份**派成各自
    *  认的形状（宽 / 高 / 比例标签 / 像素量 / 分辨率档 / 倍数）—— 换算只此一处，
-   *  写成 "WxH" 是为了让两边的口径完全一致（映射层只吃这一种尺寸串）。 */
+   *  写成 "WxH" 是为了让两边的口径完全一致（映射层只吃这一种尺寸串）。
+   *  查表用**生效的那份**（ISSUE #3972）：客户端传水合后的 store 表，服务端传
+   *  `loadSizePresetTable()` 现读的那份 —— 设置里改过的表在出图链路真的生效。 */
   if (values.size !== undefined) {
-    out.size = sizeSpecToWxH(normalizeSizeSpec(values.size), sceneFromMode(mode));
+    out.size = sizeSpecToWxH(normalizeSizeSpec(values.size), sceneFromMode(mode), table);
   }
 
   /* 图片：契约口 `first-frame` / `last-frame` / `reference-image(-n)` 各自落哪一行
@@ -443,6 +453,9 @@ export function pruneEmptyExposedValues(values: WorkshopExposedValues): Workshop
  *    · `paramMap` 作者的连线表（`paramMap` 原始形状，内部走 `parseParamMapping`）；
  *    · `mode` 当前模式码；连线按模式分开存放，未开启模式传 null；
  *    · `values` 工坊这次要落下去的对外参数；
+ *    · `table` 生效的尺寸表（ISSUE #3972）：宽高换算按它查。缺省 = 编译进包的
+ *      项目默认快照 —— 调用方应传自己那一侧的生效表（客户端 `getSizePresetTable()`、
+ *      服务端 `loadSizePresetTable()`），否则设置里改过的表不生效；
  *    · `contractIds` 该模式**生效的契约口清单**（含作者自定义的口）。不传 =
  *      内置默认契约：自定义口不在其中，作者给它的值就落不下去（会如实进
  *      `unmatched`，不会静默丢）。有契约注册表的调用方必须传。
@@ -452,9 +465,11 @@ export function buildEncapsulatedInputs(args: {
   io: WorkflowIOMap | null | undefined;
   mode: string | null | undefined;
   paramMap: unknown;
+  /** 生效的尺寸表（ISSUE #3972）：宽高换算按它查。缺省 = 编译进包的默认快照。 */
+  table?: SizePresetTable;
   values: WorkshopExposedValues;
 }): EncapsulatedInputs {
-  const { io, paramMap, mode, values, contractIds } = args;
+  const { io, paramMap, mode, values, contractIds, table = DEFAULT_SIZE_PRESET_TABLE } = args;
   if (!io || typeof io !== "object") {
     return { workflowInputs: [], unmatched: [] };
   }
@@ -475,6 +490,7 @@ export function buildEncapsulatedInputs(args: {
       values,
       resolved,
       entries,
+      table,
     }),
     mode: effectiveMode,
   });

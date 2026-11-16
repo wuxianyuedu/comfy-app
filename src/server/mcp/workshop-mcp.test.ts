@@ -61,6 +61,13 @@ const saveComfySettings = vi.hoisted(() => vi.fn(() => ({ saved: true })));
 vi.mock("~/server/workshop/orchestrator", () => orchestrator);
 vi.mock("~/server/workshop/comfyui", () => ({ saveComfySettings }));
 
+/* 生效表换桩（ISSUE #3972）：老口径 "1024x1024" 反解像素档要查生效表 ——
+ * 钉在项目默认那份上，判据不随本机 `data/size-presets.json` 的覆盖漂移。 */
+vi.mock("~/lib/media/size-preset-fs.server", async () => {
+  const { DEFAULT_SIZE_PRESET_TABLE } = await import("~/lib/media/size-presets");
+  return { loadSizePresetTable: () => Promise.resolve(DEFAULT_SIZE_PRESET_TABLE) };
+});
+
 const SESSION = { sessionId: "sess_1" };
 
 /**

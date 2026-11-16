@@ -21,6 +21,7 @@ import {
   buildShotPrompt,
 } from "~/lib/workshop/prompt-builder";
 import { sizeSpecToWxH, type SizeSpec } from "~/lib/media/size-presets";
+import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
 import { KeyedAsyncMutex } from "~/lib/async-mutex";
 import {
   generateImageViaApi,
@@ -433,11 +434,14 @@ async function generateImageImpl(id: string, input: GenerateImageInput) {
     await repo.updateState(id, state);
     return { url, channel: "comfyui" };
   }
+  /* 尺寸换算用**生效的那份**表（ISSUE #3972）：现读项目默认 + 本机覆盖，
+   * 与设置页 / 界面控件同源 —— 设置里改过的表在出图链路真的生效。 */
+  const sizeTable = await loadSizePresetTable();
   const url = await generateImageViaApi({
     prompt,
     negative,
     /* 上游 images/generations 只认 "WxH" —— 尺寸表达在**外部 wire** 边界折算。 */
-    ...(input.size ? { size: sizeSpecToWxH(input.size, "image") } : {}),
+    ...(input.size ? { size: sizeSpecToWxH(input.size, "image", sizeTable) } : {}),
   });
   if (shot) {
     shot.imageUrl = url;

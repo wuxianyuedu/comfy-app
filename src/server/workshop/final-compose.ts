@@ -11,6 +11,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import { DEFAULT_SIZE_SPEC, sizeSpecToWxH, type SizeSpec } from "~/lib/media/size-presets";
+import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
 import type { Shot } from "~/lib/workshop/types";
 
 const COMPOSE_DIR = path.join(process.cwd(), "data", "workshop-compositions");
@@ -19,10 +20,9 @@ const execFileP = promisify(execFile);
 /** 成片画幅：视频场景的 16:9 1k（= 1280×720）。
  *
  *  尺寸只在 `lib/size-presets` 里定义，这里不写像素字面量 —— 用户在「尺寸表配置」
- *  里改过视频场景的 16:9 1k，合成出来的片子跟着改。 */
+ *  里改过视频场景的 16:9 1k，合成出来的片子跟着改（ISSUE #3972：换算时现读
+ *  生效表，不再用编译进包的默认快照 —— 那样这句话只是 nominally 成立）。 */
 const COMPOSE_SIZE: SizeSpec = { ...DEFAULT_SIZE_SPEC, ratio: "16:9 横屏" };
-/** ffmpeg 的 `scale` 过滤器用 `W:H` 写法（不是 WxH）。 */
-const COMPOSE_SCALE = sizeSpecToWxH(COMPOSE_SIZE, "video").replace("x", ":");
 
 export type CompositionSegment = {
   clipUrl: string | null;
@@ -123,6 +123,12 @@ export async function renderComposition(
   const tmpDir = path.join(COMPOSE_DIR, `.tmp-${outputName}`);
   await fs.mkdir(tmpDir, { recursive: true });
 
+  /* 生效的尺寸表现读磁盘（ISSUE #3972）：设置里改过视频场景的 16:9 1k，
+   * 合成画幅跟着变 —— 不再用模块加载时算死的那份默认快照。 */
+  const sizeTable = await loadSizePresetTable();
+  /** ffmpeg 的 `scale` 过滤器用 `W:H` 写法（不是 WxH）。 */
+  const composeScale = sizeSpecToWxH(COMPOSE_SIZE, "video", sizeTable).replace("x", ":");
+
   const segs: Array<string> = [];
   for (const s of plan.segments) {
     const clip = localPathOf(s.clipUrl);
@@ -132,7 +138,7 @@ export async function renderComposition(
       continue;
     }
     const tmp = path.join(tmpDir, `seg-${s.order}.mp4`);
-    const scale = `scale=${COMPOSE_SCALE}`;
+    const scale = `scale=${composeScale}`;
     const args =
       clip === null
         ? [
