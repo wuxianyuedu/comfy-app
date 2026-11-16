@@ -374,7 +374,9 @@ export function BrowserStatusBar() {
                 ? "text-success-strong"
                 : devServer.state === "starting"
                   ? "text-ink-soft"
-                  : "text-destructive"
+                  : devServer.state === "unresponsive"
+                    ? "text-warning-strong"
+                    : "text-destructive"
             }`}
             data-dev-server={devServer.state}
           >
@@ -384,14 +386,16 @@ export function BrowserStatusBar() {
                   ? "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_80%,transparent)]"
                   : devServer.state === "starting"
                     ? "bg-ink-fainter"
-                    : "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-danger)_80%,transparent)]"
+                    : devServer.state === "unresponsive"
+                      ? "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-warning)_80%,transparent)]"
+                      : "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-danger)_80%,transparent)]"
               }
               pulse={devServer.state === "starting"}
               sizeClass="size-1.5"
               state={
                 devServer.state === "online"
                   ? "up"
-                  : devServer.state === "starting"
+                  : devServer.state === "starting" || devServer.state === "unresponsive"
                     ? "busy"
                     : "down"
               }

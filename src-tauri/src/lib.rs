@@ -1042,6 +1042,20 @@ fn get_app_service_exit(state: tauri::State<'_, AppState>) -> Result<Option<Stri
   Ok(shell_launch::read_app_service_exit(&state.project_root()))
 }
 
+/// 读回「本检出的应用服务进程还活着吗」——**不经过应用服务自己**的进程外信号
+/// （ISSUE #4146）。判据与三态语义见 `shell_launch::read_app_service_liveness`。
+///
+/// 为什么探活失败时还需要这一问：dev server 是单事件循环，同步重活会把它停走数秒，
+/// 期间 HTTP 探活必然连续超时，而进程活得好好的。前端拿这个答案区分「真断开」
+/// （进程没了）与「暂时无响应」（进程在、忙）——后者不再把界面翻红。
+///
+/// 回 `Ok(None)`：会话文件读不到（手工 `pnpm dev`）等「不知道」档，前端按原行为
+/// 退化；旧壳没有本命令时前端 invoke 报错，catch 后同样退化。
+#[tauri::command]
+fn get_app_service_liveness(state: tauri::State<'_, AppState>) -> Result<Option<bool>, String> {
+  Ok(shell_launch::read_app_service_liveness(&state.project_root()))
+}
+
 /// 关闭窗口（默认启动页）。
 ///
 /// 与最小化一组：启动页窗口关了原生装饰（`decorations: false`），窗口按钮是
@@ -2134,6 +2148,7 @@ pub fn run() {
       get_app_url,
       get_launch_log,
       get_app_service_exit,
+      get_app_service_liveness,
       set_splash_compact,
       win_close,
       win_minimize,
@@ -3124,7 +3139,6 @@ mod window_startup_tests {
   /// **之前**；③ 那一支里没有再塞一颗裸 `sleep`（半吊子回潮的形状）。
   #[test]
   fn first_paint_watch_never_spins_without_sleeping() {
-    let src = include_str!("lib.rs");
     let watch = fn_body("fn watch_main_first_paint");
     let tick = watch
       .find("clock.tick();")
