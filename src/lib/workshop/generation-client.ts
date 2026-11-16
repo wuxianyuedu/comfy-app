@@ -21,6 +21,7 @@ import { clampPct } from "~/lib/progress";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
 import { isPlainRecord, isRecord } from "~/lib/is-record";
+import { getSizePresetTable } from "~/lib/media/size-preset-store";
 import type { StyleRef } from "./types";
 import { extractSavedOutputs, type SavedOutput } from "./api-channel-shared";
 import {
@@ -304,6 +305,10 @@ export async function buildLibraryWorkflowInput(
     mode,
     values,
     contractIds,
+    /* 宽高按**本机生效的那份**尺寸表算（ISSUE #3972）：设置里改过的表要真的
+     * 改变下发给 ComfyUI 的宽高，而不是只改界面显示。水合前的快照是默认表，
+     * 与旧行为一致（不劣化）。 */
+    table: getSizePresetTable(),
   });
   /* 尺寸**不**再带 `size`（"WxH"）兼容字段：尺寸只以「比例 + 分辨率」或
    *  「比例 + 百万像素 + 倍数」表达，逐端口落进 `workflowInputs`；

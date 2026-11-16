@@ -1035,10 +1035,15 @@
   编译进包的快照（写完即生效，不必重启进程）；② 本机覆盖落
   `data/size-presets.json`，读取侧逐格合并（缺行 / 缺档 / 坏值一律回退基准）；
   ③ 「保存为项目默认（跟代码走）」只在开发检出出现（正式包没有源码可写，服务端大声失败）；
-  ④ 还原默认的基准是**当前项目默认**那份，不是编译进包的旧快照。
+  ④ 还原默认的基准是**当前项目默认**那份，不是编译进包的旧快照；
+  ⑤ 出图链路的宽高换算读**同一份生效表**（ISSUE #3972）：工作流库封装
+  （客户端传水合表 / 服务端现读）、工坊 api・comfyui 通道、定妆照远端通道、
+  成片合成画幅与 ffmpeg scale、MCP 生图的老口径尺寸反解 —— 设置里改的表
+  改的是出图行为，不只是界面显示。
 - 落点：`src/lib/media/size-presets.ts`（纯函数层 + 项目默认解析）、
   `src/lib/media/size-preset-defaults.json`（项目默认）、
-  `src/lib/media/size-preset.server.ts`（落盘）、
+  `src/lib/media/size-preset-fs.server.ts`（读侧：生效表，双宿主安全）、
+  `src/lib/media/size-preset.server.ts`（写侧落盘）、
   `src/app/api/size-presets/route.ts`、
   `src/app/api/size-presets/project-default/route.ts`、
   `src/app/(main)/settings/components/SizePresetSection.tsx`
