@@ -10,6 +10,7 @@ import { DataSection } from "~/components/ui/ui-kit-gallery-data";
 import { FormsSection } from "~/components/ui/ui-kit-gallery-forms";
 import { NavigationSection } from "~/components/ui/ui-kit-gallery-navigation";
 import { OverlaysSection } from "~/components/ui/ui-kit-gallery-overlays";
+import { PrimitivesOverviewSection } from "~/components/ui/ui-kit-gallery-primitives";
 import { StatusSection } from "~/components/ui/ui-kit-gallery-status";
 import { TokenWall } from "~/components/ui/ui-kit-gallery-tokens";
 import { cn } from "~/lib/utils";
@@ -18,6 +19,8 @@ import { cn } from "~/lib/utils";
  * UI 控件总览（`/ui-kit`，ISSUE #3525）—— 把项目里全部可视化基元摆到同一屏。
  *
  * 目的只有一个：让「控件颜色 / 背景色错档」在明暗两态下都一眼可见。
+ * 版式（ISSUE #4110）：token 墙 → 「基元 UI 速览」（核心基元各一态的紧凑总览）→
+ * 六个功能分区（全 variant 明细）。速览与明细是同一批基元的两档视图，不是重复冗余。
  * 主题开关走 `next-themes`（与设置页同一出口），切的是**应用全局**主题 ——
  * 这正是本页要的：同一屏在真实主题链路下翻面，而不是复制品。
  * 逐 prop 的形态矩阵不在这页（Storybook 的量程）；基元的取值事实以
@@ -77,6 +80,7 @@ export function UIKitGallery({ fillHeight }: { fillHeight?: boolean }) {
         title="UI 控件总览"
       />
       <TokenWall />
+      <PrimitivesOverviewSection />
       <ActionsSection />
       <FormsSection />
       <OverlaysSection />

@@ -17,6 +17,7 @@ describe("UIKitGallery", () => {
     render(<UIKitGallery />);
     for (const title of [
       "语义 token 墙",
+      "基元 UI 速览",
       "按钮、徽标与状态件",
       "输入与选择",
       "浮层与对话框",
@@ -25,6 +26,43 @@ describe("UIKitGallery", () => {
       "数据展示与杂项",
     ]) {
       expect(screen.getByText(title)).toBeInTheDocument();
+    }
+  });
+
+  /**
+   * ISSUE #4110：基元 UI 单独成区 —— 速览区必须在 token 墙之后、第一个功能分区
+   * 之前，且每枚核心基元都带可访问名称 / 标签（速览区是给明暗两态「一眼扫」的，
+   * 控件没有可访问名就既不可读也不可测）。钉住顺序与内容，避免它被挪到末尾或被删。
+   */
+  it("基元 UI 速览区在 token 墙之后、功能分区之前，核心基元带可访问名", () => {
+    const { container } = render(<UIKitGallery />);
+    const sections = [...container.querySelectorAll("section")];
+    const sectionOf = (title: string) =>
+      sections.findIndex((section) => section.textContent?.includes(title));
+    const tokenAt = sectionOf("语义 token 墙");
+    const overviewAt = sectionOf("基元 UI 速览");
+    const firstDetailAt = sectionOf("按钮、徽标与状态件");
+    expect(tokenAt).toBeGreaterThanOrEqual(0);
+    expect(overviewAt).toBeGreaterThan(tokenAt);
+    expect(firstDetailAt).toBeGreaterThan(overviewAt);
+
+    /* 可访问名：按 aria-label 精确捞，捞不到即红（不会误中功能分区里的同类控件）。 */
+    expect(screen.getByRole("button", { name: "速览收藏" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "速览输入框" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "速览开关" })).toBeInTheDocument();
+    /* 内容锚：核心基元的记号标签在速览区那一节里各出现一次（限定在该 section 内）。 */
+    /* overviewAt 上面已断言 >= 0；索引取值兜一个空 section，缺失时下面的内容锚必失败。 */
+    const overviewSection = sections[overviewAt] ?? document.createElement("section");
+    for (const label of [
+      "Button",
+      "Toggle",
+      "Input / Textarea",
+      "Checkbox / Switch",
+      "Badge / StatusBadge",
+    ]) {
+      expect(
+        [...overviewSection.querySelectorAll("span")].some((s) => s.textContent === label),
+      ).toBe(true);
     }
   });
 
