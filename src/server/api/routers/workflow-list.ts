@@ -170,34 +170,51 @@ export const workflowListProcedures = {
             });
           }
         }
-        for (const w of list) {
+        const relinkCandidates = list.flatMap((w) => {
           if (w.sourcePath === null || w.sourceChecksum === null) {
-            continue;
+            return [];
           }
           if (diskMtimeByPath.has(pathKey(w.sourcePath))) {
-            continue;
+            return [];
           }
           const hit = checksumIndex.get(w.sourceChecksum);
           if (!hit) {
-            continue;
+            return [];
           }
-          /* 末段取文件名进「改名对账」展示文本——出口走 path-display 的
-           * lastSegments（P56），空段语义由出口统一。 */
-          const oldName = lastSegments(w.sourcePath, 1) || w.sourcePath;
-          const newName = lastSegments(hit.absPath, 1) || hit.absPath;
-          try {
-            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-            await workflowTemplateRepository.relinkSourcePath(w.id, {
-              sourcePath: hit.absPath,
-              sourceMtime: Math.floor(hit.mtimeMs / 1000),
-            });
-            w.sourcePath = hit.absPath;
-            w.sourceMtime = Math.floor(hit.mtimeMs / 1000);
-            diskMtimeByPath.set(pathKey(hit.absPath), hit.mtimeMs);
-            renamedFromTo.set(w.id, `${oldName} → ${newName}`);
-          } catch (error: unknown) {
-            const msg = errorMessage(error, String(error));
-            logger.warn(`[workflow.list] relink failed for ${w.id}: ${msg}`);
+          return [{ w, hit }];
+        });
+        if (relinkCandidates.length > 0) {
+          const relinkResults = await Promise.allSettled(
+            relinkCandidates.map(async ({ w, hit }) => {
+              await workflowTemplateRepository.relinkSourcePath(w.id, {
+                sourcePath: hit.absPath,
+                sourceMtime: Math.floor(hit.mtimeMs / 1000),
+              });
+              return { w, hit };
+            }),
+          );
+          for (let i = 0; i < relinkResults.length; i++) {
+            const res = relinkResults[i];
+            const candidate = relinkCandidates[i];
+            if (!res || !candidate) {
+              continue;
+            }
+            if (res.status === "fulfilled") {
+              const { w, hit } = res.value;
+              /* 末段取文件名进「改名对账」展示文本——出口走 path-display 的
+               * lastSegments（P56），空段语义由出口统一。 */
+              const oldSeg = lastSegments(candidate.w.sourcePath ?? "", 1);
+              const oldName = oldSeg === "" ? (candidate.w.sourcePath ?? "") : oldSeg;
+              const newSeg = lastSegments(hit.absPath, 1);
+              const newName = newSeg === "" ? hit.absPath : newSeg;
+              w.sourcePath = hit.absPath;
+              w.sourceMtime = Math.floor(hit.mtimeMs / 1000);
+              diskMtimeByPath.set(pathKey(hit.absPath), hit.mtimeMs);
+              renamedFromTo.set(w.id, `${oldName} → ${newName}`);
+            } else {
+              const msg = errorMessage(res.reason, String(res.reason));
+              logger.warn(`[workflow.list] relink failed for ${candidate.w.id}: ${msg}`);
+            }
           }
         }
       }
