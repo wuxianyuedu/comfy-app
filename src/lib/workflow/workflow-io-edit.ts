@@ -81,3 +81,46 @@ export function withIOLabel<T extends WorkflowIOEntry>(
   }
   return { ...io, [key]: { ...cur, label: kept } };
 }
+
+/** 把 `fromKey` 那一项移到 `targetKey` 的前 / 后（`targetKey` 为空 = 移到末尾）。
+ *  纯变换：返回新对象，**键顺序即 IO 预览的展示顺序**。编辑器侧的同名能力
+ *  （`WorkflowStores.reorderIO`）按 `displayOrder` 落库；工作流库的 IO 预览
+ *  直接编辑原始列，键序即序。`fromKey` 不在表内、或与 `targetKey` 相同时
+ *  原样返回同一引用。 */
+export function withIOReordered<T extends WorkflowIOEntry>(
+  io: Record<string, T>,
+  fromKey: string,
+  targetKey: string | null,
+  position: "before" | "after",
+): Record<string, T> {
+  if (fromKey === targetKey) {
+    return io;
+  }
+  const fromEntry = io[fromKey];
+  if (fromEntry === undefined) {
+    return io;
+  }
+  const from: [string, T] = [fromKey, fromEntry];
+  const rest = Object.entries(io).filter(([key]) => key !== fromKey);
+  const out: Array<[string, T]> = [];
+  let inserted = false;
+  for (const entry of rest) {
+    if (!inserted && entry[0] === targetKey) {
+      if (position === "before") {
+        out.push(from);
+      }
+      out.push(entry);
+      if (position === "after") {
+        out.push(from);
+      }
+      inserted = true;
+      continue;
+    }
+    out.push(entry);
+  }
+  if (!inserted) {
+    /* targetKey 不在表内（含 null / 空串）：挪到末尾。 */
+    out.push(from);
+  }
+  return Object.fromEntries(out);
+}

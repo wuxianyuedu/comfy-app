@@ -189,7 +189,7 @@ export function MultiModeSelect({
       <PopoverContent
         align="start"
         aria-label="工作流模式编辑器"
-        className="border-border-strong bg-card w-[min(92vw,320px)] gap-0 overflow-hidden rounded-xl p-0 shadow-2xl shadow-black/5 dark:shadow-black/40"
+        className="border-border-strong bg-card flex max-h-[80vh] w-[min(92vw,320px)] flex-col gap-0 overflow-hidden rounded-xl p-0 shadow-2xl shadow-black/5 dark:shadow-black/40"
         role="dialog"
         sideOffset={4}
       >
@@ -238,8 +238,10 @@ export function MultiModeSelect({
           })}
         </div>
 
-        {/* 列表 —— 只列当前页签分类下的项 */}
-        <div className="overflow-y-auto py-1" style={{ maxHeight: POPOVER_MAX_H }}>
+        {/* 列表 —— 只列当前页签分类下的项。`min-h-0 flex-1` 让它在浮层空间
+         *  不足时收缩（ISSUE #4073：触发点靠下时底部按钮曾被裁掉），
+         *  `maxHeight` 只是上限。 */}
+        <div className="min-h-0 flex-1 overflow-y-auto py-1" style={{ maxHeight: POPOVER_MAX_H }}>
           {items.length === 0 ? (
             <div className="text-ink-muted px-3 py-4 text-center text-xs">
               {query.trim() ? "没有匹配的模式" : `${CATEGORY_LABEL[activeTab]}暂无模式`}
