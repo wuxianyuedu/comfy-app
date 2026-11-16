@@ -13,7 +13,6 @@ import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
-import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { ALL_WORKFLOW_TYPES, type WorkflowCategory } from "~/lib/workflow/workflow-types";
 
@@ -53,7 +52,13 @@ type MultiModeSelectProps = {
   onChange: (modes: Array<string>, defaultMode: string) => void;
 };
 
-const POPOVER_MAX_H = 360;
+/* 候选列表**内容**上限（不是浮层高度上限）：内容少时不撑满，内容多时靠它进入
+ * 自身滚动。浮层高度上限交给 base-ui 的 `--available-height`（ISSUE #4073 复审第 1 条）：
+ * 它是定位器按触发点算出的「到视口边缘的实际可用空间」，`max-h-(--available-height)`
+ * 让整块浮层——而不是某个写死的视口百分比——不越界，底部「取消 / 保存」才不会被裁。
+ * 此前用 `max-h-[85vh]`：85vh 是相对整屏的固定比例，触发点靠下时浮层照样溢出，
+ * 底下的按钮被切在视口外（`overflow-hidden` 又让整块浮层无法滚动救回来）。 */
+const LIST_CONTENT_MAX_H = 360;
 
 export function MultiModeSelect({
   modes,
@@ -190,12 +195,15 @@ export function MultiModeSelect({
       <PopoverContent
         align="start"
         aria-label="工作流模式编辑器"
-        className={`border-border-strong bg-card flex ${OVERLAY_MAX_HEIGHT} w-[min(92vw,320px)] flex-col gap-0 overflow-hidden rounded-xl p-0 shadow-2xl shadow-black/5 dark:shadow-black/40`}
+        /* max-h-(--available-height)：浮层不超过定位器给出的真实可用空间（见
+         * LIST_CONTENT_MAX_H 注释）；列表 `min-h-0 flex-1` 在空间收紧时让位，
+         * 搜索框 / 页签 / 底栏 shrink-0 保持原高，保存按钮始终在视口内。 */
+        className="border-border-strong bg-card flex max-h-(--available-height) w-[min(92vw,320px)] flex-col gap-0 overflow-hidden rounded-xl p-0 shadow-2xl shadow-black/5 dark:shadow-black/40"
         role="dialog"
         sideOffset={4}
       >
-        {/* search */}
-        <div className="border-border-subtle border-b p-2">
+        {/* search —— 固定高度，不参与列表空间收缩 */}
+        <div className="border-border-subtle shrink-0 border-b p-2">
           <input
             autoFocus
             onChange={textHandler(setQuery)}
@@ -207,8 +215,8 @@ export function MultiModeSelect({
           />
         </div>
 
-        {/* tabs — switchable 图像 / 视频 / 音频 */}
-        <div className="border-border-subtle flex items-center gap-1 border-b px-2 pt-2">
+        {/* tabs — switchable 图像 / 视频 / 音频（固定高度，不参与收缩） */}
+        <div className="border-border-subtle flex shrink-0 items-center gap-1 border-b px-2 pt-2">
           {(["image", "video", "audio"] as Array<WorkflowCategory>).map((cat) => {
             const selCount = (grouped[cat] ?? []).filter((type) => draft.has(type.code)).length;
             const isActive = activeTab === cat;
@@ -239,10 +247,12 @@ export function MultiModeSelect({
           })}
         </div>
 
-        {/* 列表 —— 只列当前页签分类下的项。`min-h-0 flex-1` 让它在浮层空间
-         *  不足时收缩（ISSUE #4073：触发点靠下时底部按钮曾被裁掉），
-         *  `maxHeight` 只是上限。 */}
-        <div className="min-h-0 flex-1 overflow-y-auto py-1" style={{ maxHeight: POPOVER_MAX_H }}>
+        {/* 列表 —— 只列当前页签分类下的项。`min-h-0 flex-1` 让它在浮层被
+         *  `--available-height` 收紧时优先收缩，把固定高度让给底栏按钮。 */}
+        <div
+          className="min-h-0 flex-1 overflow-y-auto py-1"
+          style={{ maxHeight: LIST_CONTENT_MAX_H }}
+        >
           {items.length === 0 ? (
             <div className="text-ink-muted px-3 py-4 text-center text-xs">
               {query.trim() ? "没有匹配的模式" : `${CATEGORY_LABEL[activeTab]}暂无模式`}
@@ -327,8 +337,8 @@ export function MultiModeSelect({
           )}
         </div>
 
-        {/* footer */}
-        <div className="border-border-subtle flex items-center gap-2 border-t p-2">
+        {/* footer —— shrink-0：列表收缩到底时这排按钮仍完整可见可点（ISSUE #4073） */}
+        <div className="border-border-subtle flex shrink-0 items-center gap-2 border-t p-2">
           <Button
             className="h-auto flex-1 rounded-md px-3 py-1.5 text-sm"
             onClick={() => {

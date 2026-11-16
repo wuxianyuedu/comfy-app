@@ -82,45 +82,138 @@ export function withIOLabel<T extends WorkflowIOEntry>(
   return { ...io, [key]: { ...cur, label: kept } };
 }
 
-/** 把 `fromKey` 那一项移到 `targetKey` 的前 / 后（`targetKey` 为空 = 移到末尾）。
- *  纯变换：返回新对象，**键顺序即 IO 预览的展示顺序**。编辑器侧的同名能力
- *  （`WorkflowStores.reorderIO`）按 `displayOrder` 落库；工作流库的 IO 预览
- *  直接编辑原始列，键序即序。`fromKey` 不在表内、或与 `targetKey` 相同时
+/** IO 预览项的展示分组：与 `splitWorkflowIO` / 编辑器 `reorderIO` 同一判据 ——
+ *  output 一组、widget 输入一组、wire 输入一组；用户只在组内调序，三组在
+ *  视图里本就分段渲染（输入在上、输出在下），跨组挪动没有视觉意义。 */
+function ioOrderGroup(entry: WorkflowIOEntry): "wire" | "widget" | "output" {
+  if (entry.direction === "output") {
+    return "output";
+  }
+  return entry.kind === "widget" ? "widget" : "wire";
+}
+
+/** 按 `displayOrder` 排序（缺失按 +∞，稳定保序）——与 `splitWorkflowIO` 的
+ *  `byDisplayOrder` 同一口径；这里是纯数组排序，键序作稳定次序兜底。 */
+function byDisplayOrder<T extends WorkflowIOEntry>(a: [string, T], b: [string, T]): number {
+  const ao = a[1].displayOrder;
+  const bo = b[1].displayOrder;
+  if (ao === bo) {
+    return 0;
+  }
+  if (ao === undefined) {
+    return 1;
+  }
+  if (bo === undefined) {
+    return -1;
+  }
+  return ao - bo;
+}
+
+/** 把重排后的同组序列写回原表：重编 `displayOrder`（1..N），也在对象键序上
+ *  铺成新序（展示层以 displayOrder 为准，键序一致便于核对）。原 `io` 的组间
+ *  相对位置不动 —— 在被移动组第一项的原位置一次性铺入新序列。 */
+function writeReorderedGroup<T extends WorkflowIOEntry>(
+  io: Record<string, T>,
+  group: "wire" | "widget" | "output",
+  nextGroup: Array<[string, T]>,
+): Record<string, T> {
+  const newGroupEntries: Array<[string, T]> = nextGroup.map(([key, entry], i) => [
+    key,
+    { ...entry, displayOrder: i + 1 },
+  ]);
+  const allEntries = Object.entries(io);
+  const groupFirstIdx = allEntries.findIndex(([, entry]) => ioOrderGroup(entry) === group);
+  const out: Array<[string, T]> = [];
+  for (const [i, [key, entry]] of allEntries.entries()) {
+    if (i === groupFirstIdx) {
+      out.push(...newGroupEntries);
+    }
+    if (ioOrderGroup(entry) === group) {
+      continue;
+    }
+    out.push([key, entry]);
+  }
+  return Object.fromEntries(out);
+}
+
+/** 同组条目按当前 `displayOrder` 排好，作为一次调序的「视觉序列」。 */
+function orderedGroup<T extends WorkflowIOEntry>(
+  io: Record<string, T>,
+  group: "wire" | "widget" | "output",
+): Array<[string, T]> {
+  return Object.entries(io)
+    .filter(([, entry]) => ioOrderGroup(entry) === group)
+    .sort(byDisplayOrder);
+}
+
+/** 把 `keys` 这一组条目当作**一个整体**移到 `targetKey` 的前 / 后
+ *  （`targetKey` 为空 = 移到该组末尾）。尺寸 / 视频等组合参数由多个 ioKey
+ *  构成，在表单里只渲染成一块；拖动整块时这些 key 必须一起移动并保持块内
+ *  顺序，否则「拖了组合块 → 只有代表键换了位、块又弹回原处」（ISSUE #4073
+ *  复审第 5 条）。
+ *
+ *  约束：所有 key 必须同属一组（与 `withIOReordered` 同口径，不跨 wire/widget/output），
+ *  且 `targetKey` 不能落在被搬的块里（拖到自己身上是无意义的自移动）。不满足时
  *  原样返回同一引用。 */
+export function withIOGroupReordered<T extends WorkflowIOEntry>(
+  io: Record<string, T>,
+  keys: Array<string>,
+  targetKey: string | null,
+  position: "before" | "after",
+): Record<string, T> {
+  const movingEntries: Array<[string, T]> = [];
+  for (const key of new Set(keys)) {
+    const entry = io[key];
+    if (entry !== undefined) {
+      movingEntries.push([key, entry]);
+    }
+  }
+  const [first] = movingEntries;
+  if (!first) {
+    return io;
+  }
+  const group = ioOrderGroup(first[1]);
+  if (movingEntries.some(([, entry]) => ioOrderGroup(entry) !== group)) {
+    return io;
+  }
+  const movingKeys = movingEntries.map(([key]) => key);
+  if (targetKey !== null && movingKeys.includes(targetKey)) {
+    return io;
+  }
+
+  const moving = new Set(movingKeys);
+  /* 块内顺序以调用方给出的 keys 为准（视图层按当前 displayOrder 传入），
+   * 不从 ordered 里再排一遍 —— 否则同一个块在不同调用点会换内部顺序。 */
+  const block = movingEntries;
+  const ordered = orderedGroup(io, group);
+  const without = ordered.filter(([key]) => !moving.has(key));
+  let targetIdx = without.length;
+  if (targetKey !== null && targetKey !== "") {
+    const found = without.findIndex(([key]) => key === targetKey);
+    if (found !== -1) {
+      targetIdx = position === "after" ? found + 1 : found;
+    }
+  }
+  without.splice(targetIdx, 0, ...block);
+  return writeReorderedGroup(io, group, without);
+}
+
+/** 把 `fromKey` 那一项移到 `targetKey` 的前 / 后（`targetKey` 为空 = 移到该组末尾）。
+ *  纯变换：与编辑器侧 `WorkflowStores.reorderIO` **同一口径** —— 只在被移动项
+ *  所属组内重排，并重编该组的 `displayOrder`（1..N）；其余组原样保留。
+ *
+ *  为什么必须重编 `displayOrder` 而不只是改对象键序：IO 预览的展示经
+ *  `splitWorkflowIO` 按 `displayOrder` 排序，只要条目带着旧的 order 数字，
+ *  光改键序会被那道排序盖掉 —— 表现就是「能拖、松手又弹回原位」（ISSUE #4073
+ *  复审第 4 条）。项都没有 `displayOrder` 时（既有工作流的常见形态）稳定排序
+ *  保住键序，结果仍是纯插入序，与旧行为一致。
+ *
+ *  `fromKey` 不在表内、或与 `targetKey` 相同时原样返回同一引用。 */
 export function withIOReordered<T extends WorkflowIOEntry>(
   io: Record<string, T>,
   fromKey: string,
   targetKey: string | null,
   position: "before" | "after",
 ): Record<string, T> {
-  if (fromKey === targetKey) {
-    return io;
-  }
-  const fromEntry = io[fromKey];
-  if (fromEntry === undefined) {
-    return io;
-  }
-  const from: [string, T] = [fromKey, fromEntry];
-  const rest = Object.entries(io).filter(([key]) => key !== fromKey);
-  const out: Array<[string, T]> = [];
-  let inserted = false;
-  for (const entry of rest) {
-    if (!inserted && entry[0] === targetKey) {
-      if (position === "before") {
-        out.push(from);
-      }
-      out.push(entry);
-      if (position === "after") {
-        out.push(from);
-      }
-      inserted = true;
-      continue;
-    }
-    out.push(entry);
-  }
-  if (!inserted) {
-    /* targetKey 不在表内（含 null / 空串）：挪到末尾。 */
-    out.push(from);
-  }
-  return Object.fromEntries(out);
+  return withIOGroupReordered(io, [fromKey], targetKey, position);
 }

@@ -23,7 +23,13 @@ import { isPlainRecord } from "~/lib/is-record";
 import { rectToAnchorRect } from "~/lib/dom-rect";
 import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
 import { patchWorkflowSilently } from "~/lib/workflow/workflow-mutations";
-import { clearModeOverrides, withIOLabel, withModeOverride } from "~/lib/workflow/workflow-io-edit";
+import {
+  clearModeOverrides,
+  withIOGroupReordered,
+  withIOReordered,
+  withIOLabel,
+  withModeOverride,
+} from "~/lib/workflow/workflow-io-edit";
 import { reportStaleStoreAction } from "~/lib/shell/stale-store-notify";
 
 /* ─── IOEdit store ─── 原先在 wf-editor-inner 用 useState + useCallback 声明、
@@ -46,7 +52,13 @@ export type IOEditActions = {
    *  返回清理后的 workflowIO 映射；没有任何覆盖命中时返回 null，调用方
    *  据此决定是否需要把清理结果落库。 */
   purgeModeOverrides: (codes: Array<string>) => Record<string, WorkflowIOParam> | null;
-  reorderIO: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
+  reorderIO: (
+    fromKey: string,
+    targetKey: string | null,
+    position: WorkflowIODropPosition,
+    /** 组合参数块整块拖动时带上块内全部 ioKey（尺寸 / 视频），走组变换。 */
+    fromKeys?: Array<string>,
+  ) => void;
   /** 开关 IO 编辑模式。关闭时**一并关掉 IO 预览**（见下一条的耦合说明）；
    *  打开时不动预览。 */
   setIoEditMode: (on: boolean) => void;
@@ -199,52 +211,20 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
      *  鼠标所在那行**（`null` = 移到末尾）；插到它前还是后由 `position` **显式**给出
      *  （指针在目标行上半区 = before、下半区 = after，与指示线同源）。旧版按拖动方向
      *  猜插入点、指示线却永远画在行顶，两者打架时用户看到「拖了但顺序没变」。 */
-    reorderIO: (fromKey, targetKey, position) => {
+    reorderIO: (fromKey, targetKey, position, fromKeys) => {
       if (fromKey === targetKey) {
         return;
       }
       set((state) => {
         const prev = state.workflowIO;
-        const fromEntry = prev[fromKey];
-        if (!fromEntry) {
+        /* 与库端 IO 预览共用同一份纯变换：单键 / 组合块整块两种口径都在
+         * `workflow-io-edit.ts`，不让两处排序规则各写一份（ISSUE #4073 复审）。 */
+        const renumbered =
+          fromKeys !== undefined && fromKeys.length > 1
+            ? withIOGroupReordered(prev, fromKeys, targetKey, position)
+            : withIOReordered(prev, fromKey, targetKey, position);
+        if (renumbered === prev) {
           return {};
-        }
-        const groupOf = (e: WorkflowIOParam): "wire" | "widget" | "output" => {
-          if (e.direction === "output") {
-            return "output";
-          }
-          return e.kind === "widget" ? "widget" : "wire";
-        };
-        const movingGroup = groupOf(fromEntry);
-        const ordered = Object.entries(prev)
-          .map(([entryKey, entry]) => ({ entryKey, entry }))
-          .filter(({ entry }) => Boolean(entry) && groupOf(entry) === movingGroup)
-          .sort((itemA, itemB) => {
-            const ao = itemA.entry.displayOrder;
-            const bo = itemB.entry.displayOrder;
-            if (ao === bo) {
-              return 0;
-            }
-            if (ao === undefined) {
-              return 1;
-            }
-            if (bo === undefined) {
-              return -1;
-            }
-            return ao - bo;
-          });
-        const without = ordered.filter(({ entryKey }) => entryKey !== fromKey);
-        let targetIdx = without.length;
-        if (targetKey !== null && targetKey !== "") {
-          const i = without.findIndex(({ entryKey }) => entryKey === targetKey);
-          if (i !== -1) {
-            targetIdx = position === "after" ? i + 1 : i;
-          }
-        }
-        without.splice(targetIdx, 0, { entryKey: fromKey, entry: fromEntry });
-        const renumbered: Record<string, WorkflowIOParam> = { ...prev };
-        for (const [i, { entryKey, entry }] of without.entries()) {
-          renumbered[entryKey] = { ...entry, displayOrder: i + 1 };
         }
         /* 发往服务端（调用形状与之前一致）；失败把本地顺序回滚到拖拽前（#4024），
          * 不让内存顺序与落库值在会话内分歧。 */
