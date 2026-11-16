@@ -86,10 +86,21 @@ function fakeInstall(dir: string, installedLock: string, { healthy = true } = {}
   const bin = path.join(nm, ".bin");
   fs.mkdirSync(bin, { recursive: true });
   fs.writeFileSync(path.join(bin, "next"), "", "utf8");
+  // KEY_DEPS（目录非空即可）+ RESOLVE_PROBES（必须能从仓库根 resolve 到 package.json）。
+  // #4105 把 probe 解析纳入 checkNodeModules/verifyInstall 后，合成的「健康安装」也要满足探针。
   for (const rel of ["typescript", "@typescript/native", "next"]) {
     const p = path.join(nm, rel);
     fs.mkdirSync(p, { recursive: true });
     fs.writeFileSync(path.join(p, "index.js"), "// stub\n", "utf8");
+  }
+  for (const name of ["typescript", "next", "axe-core", "pino"]) {
+    const p = path.join(nm, name);
+    fs.mkdirSync(p, { recursive: true });
+    fs.writeFileSync(
+      path.join(p, "package.json"),
+      `{"name":"${name}","version":"1.0.0"}\n`,
+      "utf8",
+    );
   }
 }
 
