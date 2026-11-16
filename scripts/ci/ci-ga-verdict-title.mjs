@@ -39,8 +39,8 @@
  * 用法（`pr-gate.yml` 的收尾 job，两条触发形态**同一个入口**）：
  *
  * ```text
- * GITHUB_EVENT_PATH=<payload.json> CNB_TRIGGER_TOKEN=… node scripts/ci-ga-verdict-title.mjs
- * GA_PR_TITLE="<显式标题>" node scripts/ci-ga-verdict-title.mjs
+ * GITHUB_EVENT_PATH=<payload.json> CNB_TRIGGER_TOKEN=… node scripts/ci/ci-ga-verdict-title.mjs
+ * GA_PR_TITLE="<显式标题>" node scripts/ci/ci-ga-verdict-title.mjs
  * ```
  */
 import { appendFileSync, readFileSync } from "node:fs";

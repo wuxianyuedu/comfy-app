@@ -27,6 +27,16 @@
  * 1. **sha 必须是 PR 预合并 sha**：`client_payload.cnb_merge_sha`（镜像格从
  *    `CNB_PULL_REQUEST_MERGE_SHA` 带过来）。它不是 `head_sha`（本跑的合成 merge
  *    HEAD），也不是 base —— 绑错 sha 时状态落不到 PR 那张 statuses 集合里。
+ *
+ *    ⚠️ 这一枚**从 payload 里取，不走 workflow 的 `env`**（#3998 现场）：`pr-gate.yml`
+ *    只给自动档写了 `github.event.client_payload.*`，按需档（`workflow_dispatch`）
+ *    那一路展开成空串；而 GitHub 的 `||` 在**表达式语法**里短路、不是 shell 语义
+ *    （${{ a || b }} 里 a 存在但为空串时**不会**回落到 b），于是「两条触发形态都读」
+ *    这句话在自动档上是空转 —— 镜像格那一刻 `CNB_PULL_REQUEST_MERGE_SHA` 为空时，
+ *    回调直接 premises 不成立、三态退 2，CNB 侧读到的是 status 缺席（那跑白等 70m）。
+ *    所以 `GITHUB_EVENT_PATH` 那份 payload 是**唯一取值口**：`--sha` / `--pr` 仍是
+ *    显式覆盖（手跑复验），环境变量保留给「payload 里没有这个键」的老形态。
+ *    文件头第 3 条（payload 形状）与 `ci-mirror-payload.mjs` 的 `dispatchPayload` 同源。
  * 2. **回调与占位共用同一事件名** ⇒ 同一条 commit-status context，后写覆盖前写
  *    （探针 `cnb-edc-1k6subhok` 一族）。不同事件名 = 两条 context，占位的红会
  *    一直拉住聚合，回调的绿救不回来。
@@ -62,6 +72,8 @@
  */
 import path from "node:path";
 import process from "node:process";
+
+import { readFileSync } from "node:fs";
 
 import { CODE } from "./ci-github-mirror-push.mjs";
 
@@ -177,21 +189,89 @@ export function verdictFromConclusion(raw) {
 }
 
 /**
+ * 是能按键取值的普通对象吗（不做类型断言）。
+ *
+ * @param {unknown} v 任意值
+ * @returns {v is Record<string, unknown>} true ⇒ 可按键取值
+ */
+function isRecord(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * 把环境变量值归一成去掉首尾空白的字符串（缺席 ⇒ 空串）。
+ *
+ * @param {unknown} v 原值
+ * @returns {string} 归一后的字符串
+ */
+function trimEnv(v) {
+  return typeof v === "string" ? v.trim() : "";
+}
+
+/**
+ * 读 `GITHUB_EVENT_PATH` 那份 payload；读不到 / 不是 JSON ⇒ `null`（不抛）。
+ *
+ * 这一步失败只是让这次回调少一条来源，不该让本可送达的判决送不出去 ——
+ * 缺前提时下面的 `reasons` 会逐条念出来，比抛栈更能说明白。
+ *
+ * @param {string} eventPath payload 文件路径
+ * @returns {unknown} 解析后的 payload；取不到时 `null`
+ */
+function readEventPayload(eventPath) {
+  if (!eventPath) {
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(eventPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 从派发 payload 的 `client_payload` 里取一个字符串字段。
+ *
+ * 形状由 `scripts/ci/ci-mirror-payload.mjs` 的 `dispatchPayload()` 定义，
+ * `pr-gate.yml` 的 `client_payload.*` 表达式读的是同一份 —— 这里只多一个取值口，
+ * 不另立第二套字段名。
+ *
+ * @param {unknown} payload `GITHUB_EVENT_PATH` 解析结果
+ * @param {string} key 字段名（`cnb_merge_sha` / `pr_number` 等）
+ * @returns {string} 命中时的字符串值；没有这个键 / 不是字符串时为空串
+ */
+export function payloadField(payload, key) {
+  const body = isRecord(payload) ? payload.client_payload : undefined;
+  if (!isRecord(body)) {
+    return "";
+  }
+  const raw = body[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
+/**
  * 收集这次回调的前提，缺哪件念哪件（fail-closed 的「读数」半边）。
  *
- * @param {{argv: string[], env: Record<string, string | undefined>}} io
+ * `readPayload` 是注入面（同本文件其余 `fetchImpl` 的做法）：只吃 payload 文件路径、
+ * 回解析结果；默认真读 `GITHUB_EVENT_PATH`。
+ *
+ * @param {{argv: string[], env: Record<string, string | undefined>, readPayload?: (eventPath: string) => unknown}} io
  * @returns {{ok: true, sha: string, pr: string, repo: string, conclusion: string, verdict: string, token: string, endpoint: string, dryRun: boolean, title: string} | {ok: false, reasons: string[]}}
  */
-export function resolveCallbackContext({ argv, env }) {
+export function resolveCallbackContext({ argv, env, readPayload = readEventPayload }) {
   const reasons = [];
+  /* 取值顺序：显式旗标（手跑复验）→ 派发 payload（自动档的唯一可信来源，
+   * 理由见文件头「承重的前提」第 1 条）→ 环境变量（老形态 / 按需档兜底）。 */
+  const payload = readPayload(trimEnv(env.GITHUB_EVENT_PATH));
   const sha = (
     readOption(argv, "--sha") ||
+    payloadField(payload, "cnb_merge_sha") ||
     env.CNB_PULL_REQUEST_MERGE_SHA ||
     env.GA_MERGE_SHA ||
     ""
   ).trim();
   const pr = (
     readOption(argv, "--pr") ||
+    payloadField(payload, "pr_number") ||
     env.CNB_PULL_REQUEST_IID ||
     env.GA_PR_NUMBER ||
     ""
