@@ -186,10 +186,15 @@ function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption 
 /** 拉取工作流列表，供工坊选择「用哪个工作流库工作流生成」。 */
 export async function fetchWorkshopWorkflows(): Promise<Array<WorkshopWorkflowOption>> {
   const res = await vanillaApi.workflow.list.query({});
-  const rows: unknown = res;
-  if (!Array.isArray(rows)) {
-    return [];
-  }
+  /* `workflow.list` 的返回形状演进过（ISSUE #4119）：早期是裸数组，现在是
+   * `{ workflows, localPending, localRoots }`（带本地工作流根目录跟踪字段）。
+   * 两种都认、取 `workflows` 数组 —— 客户端只用得到列表本身；都不是 ⇒ 空列表
+   * （调用点把空当「没有工作流」渲染空态，不抛）。 */
+  const rows: unknown[] = Array.isArray(res)
+    ? res
+    : isRecord(res) && Array.isArray(res.workflows)
+      ? res.workflows
+      : [];
   const out: Array<WorkshopWorkflowOption> = [];
   for (const row of rows) {
     if (!isRecord(row)) {
