@@ -144,22 +144,30 @@ export type ModelTestController = {
 /** 生成前的「准备请求」读数子 hook（#3949 需求 8）：按当前 模式 / 模型 / 输入
  *  走服务端 dry-run 现算**实际上游请求**（端点 + 适配器翻译后的请求体）。
  *  工作流候选（#4080 评论 4）跳过 —— dry-run 是 API 中继的预演，本地通道
- *  没有这一步。600ms 去抖 + 序号守卫：慢响应不覆盖新一轮的读数。 */
+ *  没有这一步。600ms 去抖 + 序号守卫：慢响应不覆盖新一轮的读数。
+ *  实际请求行落在**当前格**的会话里；生成中不清空、不重算 —— 该格的
+ *  「实际请求」在请求中与生成后都保持可见（#4080 评论 20）。 */
 function useRequestPreview(args: {
   buildBodies: () => ReturnType<typeof buildRequestBodies>;
   busy: boolean;
   kind: ModelTestKind;
   onError: (text: string) => void;
+  patchSession: (key: string, patch: Partial<ModelTestSession>) => void;
   selectedModel: string;
+  sessionKey: string;
   skip: boolean;
-}): Array<ApiCallDebugRow> {
-  const { busy, buildBodies, kind, onError, selectedModel, skip } = args;
-  const [previewRows, setPreviewRows] = useState<Array<ApiCallDebugRow>>([]);
+}): void {
+  const { busy, buildBodies, kind, onError, patchSession, selectedModel, sessionKey, skip } = args;
   const seqRef = useRef(0);
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (busy || kind === "chat" || skip || selectedModel === "") {
-        setPreviewRows([]);
+      if (kind === "chat" || skip || selectedModel === "") {
+        patchSession(sessionKey, { previewRows: [] });
+        return;
+      }
+      if (busy) {
+        /* 生成中保留该格已算出的「实际请求」行：不清空、不重算 —— 此时的
+         * 表单改动属于下一次测试（#4080 评论 20）。 */
         return;
       }
       const seq = ++seqRef.current;
@@ -168,8 +176,11 @@ function useRequestPreview(args: {
       void runAsyncAction(
         async () => {
           const rows = await apiPreviewRequest(relayBody, kind);
+          if (!Array.isArray(rows)) {
+            return { ok: true as const };
+          }
           if (seqRef.current === seq) {
-            setPreviewRows(rows);
+            patchSession(sessionKey, { previewRows: rows });
           }
           return { ok: true as const };
         },
@@ -186,8 +197,7 @@ function useRequestPreview(args: {
     return () => {
       clearTimeout(timer);
     };
-  }, [busy, buildBodies, onError, selectedModel, kind, skip]);
-  return previewRows;
+  }, [busy, buildBodies, onError, selectedModel, kind, skip, sessionKey, patchSession]);
 }
 
 /** 候选 / 契约 / 适配器索引的取数与派生（§12.13 第二刀）：这一簇只读
@@ -378,13 +388,9 @@ export function useModelTest(): ModelTestController {
    * 第一个生成类模式，不再从「选中模型的适配器」里播种 —— 模式是用户
    * 先选的入口，模型是其后在下拉里挑的具体执行者。 */
   const [mode, setModeState] = useState(() => defaultModeForKind("image"));
-  /* 尺寸带默认档（ISSUE #3742）：表单一打开就是最常用的 1:1 + 1K，触发器
-   * 常显摘要而不是「可选」占位。 */
-  const [values, setValues] = useState<ModelTestValues>(() =>
-    defaultSizeValues(defaultModeForKind("image")),
-  );
   /* 运行态按「用途 + 模式 + 模型」一格一份（#4080 评论 12）：状态 / 请求
-   * 读数 / 执行日志 / 产物互相隔离，切走再切回各看各的，不同模型可同时测试。 */
+   * 读数 / 执行日志 / 产物 / **表单值**互相隔离，切走再切回各看各的，不同
+   * 模型可同时测试。 */
   const [sessions, setSessions] = useState<Record<string, ModelTestSession>>({});
 
   /* 当前格的键：用途 + 模式 + 模型（候选取值空间 = 模型名 / wf::<id>）。 */
@@ -395,6 +401,13 @@ export function useModelTest(): ModelTestController {
     activeKeyRef.current = activeKey;
   });
   const activeSession = sessions[activeKey] ?? emptyModelTestSession();
+  /* 表单值随格走（#4080 评论 19：测试界面不关闭时，切模型不丢已填参数）。
+   * 没填过的格回落到该用途/模式的最常用档。 */
+  const values = useMemo(
+    () =>
+      Object.keys(activeSession.values).length > 0 ? activeSession.values : defaultSizeValues(mode),
+    [activeSession.values, mode],
+  );
 
   const patchSession = useCallback((key: string, patch: Partial<ModelTestSession>) => {
     setSessions((prev) => {
@@ -484,10 +497,10 @@ export function useModelTest(): ModelTestController {
       setSelectedModel("");
       const nextMode = defaultModeForKind(next);
       setModeState(nextMode);
-      setValues(defaultSizeValues(nextMode));
       referenceGroup.reset();
       /* 运行态按格隔离（#4080 评论 12）：切用途不删别的格的状态，
-       * 当前格显示它自己的（没有就是空态）。 */
+       * 当前格显示它自己的（没有就是空态）。表单值随格走（评论 19）：
+       * 新格由播种效应以该模式的最常用档初始化。 */
     },
     [referenceGroup],
   );
@@ -517,27 +530,32 @@ export function useModelTest(): ModelTestController {
   const selectModel = useCallback(
     (name: string) => {
       setSelectedModel(name);
-      /* 换模型重填输入，但尺寸保留默认档（ISSUE #3742）：表单一次成立。
-       * 运行态按格隔离（#4080 评论 12）：切模型不删别的格的状态。 */
-      setValues(defaultSizeValues(mode));
+      /* 表单值随格走（#4080 评论 19）：切模型不丢已填参数，也不清掉别的格；
+       * 新格的默认档由播种效应初始化。 */
       referenceGroup.reset();
     },
-    [mode, referenceGroup],
+    [referenceGroup],
   );
 
-  const patchValue = useCallback((type: keyof ModelTestValues, value: string) => {
-    setValues((prev) => ({ ...prev, [type]: value }));
-  }, []);
+  const patchValue = useCallback(
+    (type: keyof ModelTestValues, value: string) => {
+      patchSession(activeKeyRef.current, { values: { ...values, [type]: value } });
+    },
+    [patchSession, values],
+  );
 
   /* 批量更新（尺寸下拉一次写回比例 / 百万像素 / 分辨率 / 倍数四个键）。 */
-  const patchValues = useCallback((patch: Partial<ModelTestValues>) => {
-    setValues((prev) => ({ ...prev, ...patch }));
-  }, []);
+  const patchValues = useCallback(
+    (patch: Partial<ModelTestValues>) => {
+      patchSession(activeKeyRef.current, { values: { ...values, ...patch } });
+    },
+    [patchSession, values],
+  );
 
   /* 提示词随机按钮（ISSUE #3742）：从常用样本里随机填一条。 */
   const randomizePrompt = useCallback(() => {
-    setValues((prev) => ({ ...prev, prompt: randomPromptFor() }));
-  }, []);
+    patchSession(activeKeyRef.current, { values: { ...values, prompt: randomPromptFor() } });
+  }, [patchSession, values]);
 
   const setInputFromFile = useCallback(
     async (type: "first-frame" | "image", file: File) => {
@@ -545,7 +563,7 @@ export function useModelTest(): ModelTestController {
       await runAsyncAction(
         async () => {
           const dataUrl = await readFileAsDataUrl(file);
-          setValues((prev) => ({ ...prev, [type]: dataUrl }));
+          patchSession(activeKeyRef.current, { values: { ...values, [type]: dataUrl } });
           return { ok: true as const };
         },
         {
@@ -558,7 +576,7 @@ export function useModelTest(): ModelTestController {
         },
       );
     },
-    [patchSession],
+    [patchSession, values],
   );
 
   const addReferenceImages = useCallback(
@@ -623,14 +641,18 @@ export function useModelTest(): ModelTestController {
     [patchSession],
   );
   /* 生成前的「准备请求」读数（#3949 需求 8）：子 hook 里走服务端 dry-run，
-   * 按当前 模式 / 模型 / 输入 现算**实际上游请求**；工作流候选（#4080 评论 4）
-   * 跳过 —— dry-run 是 API 中继的预演，本地通道没有这一步。 */
-  const upstreamPreviewRows = useRequestPreview({
+   * 按当前 模式 / 模型 / 输入 现算**实际上游请求**，落在当前格的会话里；
+   * 生成中不清空、不重算 —— 实际请求在请求中与生成后都保持可见
+   * （#4080 评论 20）。工作流候选（#4080 评论 4）跳过 —— dry-run 是 API
+   * 中继的预演，本地通道没有这一步。 */
+  useRequestPreview({
     buildBodies,
     busy: activeSession.generating,
     kind,
     onError: showPreviewError,
     selectedModel,
+    sessionKey: activeKey,
+    patchSession,
     skip: selectedCandidate?.workflow === undefined ? false : true,
   });
   /* 生成前的「本地提交」行（ISSUE #3995）：与点生成那一步同一份组装
@@ -677,11 +699,14 @@ export function useModelTest(): ModelTestController {
     const { imageBody, videoBody } = buildBodies();
     return relayDebugRow(kind, imageBody ?? videoBody ?? {});
   }, [buildBodies, kind, mode, selectedCandidate, selectedModel, values]);
-  /* 请求行 = 本地提交 + 实际请求（#4080 评论 13：生成后保留，仅徽标翻转）。 */
+  /* 当前格的请求行 = 本地提交 + 实际请求（#4080 评论 13：生成后保留，仅徽标
+   * 翻转；实际请求来自该格会话的 dry-run 读数）。 */
   const requestRows = useMemo(() => {
     const submission = activeSession.submissionRow ?? localPreviewRow;
-    return submission === null ? [...upstreamPreviewRows] : [submission, ...upstreamPreviewRows];
-  }, [activeSession.submissionRow, localPreviewRow, upstreamPreviewRows]);
+    return submission === null
+      ? [...activeSession.previewRows]
+      : [submission, ...activeSession.previewRows];
+  }, [activeSession.previewRows, activeSession.submissionRow, localPreviewRow]);
 
   return {
     candidates: modeCandidates,
