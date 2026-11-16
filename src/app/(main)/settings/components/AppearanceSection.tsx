@@ -34,6 +34,7 @@ import {
 import {
   describeFontPart,
   fontGroupsOf,
+  fontRoleNote,
   normalizeFontStack,
   slotInputValue,
   stackWithSlotFont,
@@ -282,7 +283,8 @@ function FontRow({
         </Badge>
         <span className="text-muted-foreground text-xs">{hint}</span>
       </div>
-      {/* 当前栈按部分陈列：默认字体是什么、各自排在第几位，一眼可见。 */}
+      {/* 当前栈按部分陈列：每一项都带「什么时候在用」的说明（ISSUE #4059 补充意见）——
+          首项优先使用，其余是各平台缺字时的回退；系统回退为什么有多种也在此说清。 */}
       <div className="border-border bg-surface-row mb-3 flex flex-col gap-1.5 rounded-lg border p-3 text-xs">
         {groups
           .filter((group) => group.items.length > 0)
@@ -292,8 +294,9 @@ function FontRow({
               <div className="flex flex-wrap gap-1">
                 {group.items.map((item, i) => (
                   <Hint key={`${group.slot}-${item}-${i}`} label={item}>
-                    <span className="bg-surface-2 text-ink rounded px-1.5 py-0.5">
+                    <span className="bg-surface-2 text-ink inline-flex items-center gap-1.5 rounded px-1.5 py-0.5">
                       {describeFontPart(item)}
+                      <span className="text-muted-foreground">{fontRoleNote(item, i === 0)}</span>
                     </span>
                   </Hint>
                 ))}
@@ -301,33 +304,43 @@ function FontRow({
             </div>
           ))}
       </div>
-      {/* 每个可配部分一个单行输入：每部分一种字体，留空 = 该部分用默认。 */}
+      {/* 每个可配部分一个单行输入：每部分一种字体，留空 = 该部分用默认（默认是哪一种
+          就写在占位符里，ISSUE #4059 补充意见）。 */}
       <div className="flex flex-col gap-2">
         {groups
           .filter((group) => group.editable)
-          .map((group) => (
-            <div className="flex items-center gap-2" key={`input-${group.slot}`}>
-              <FieldLabel
-                className="text-ink w-24 shrink-0 text-xs"
-                htmlFor={`font-${label}-${group.slot}`}
-              >
-                {group.label}
-              </FieldLabel>
-              <Input
-                aria-label={`${label} · ${group.label}`}
-                className="min-w-0 flex-1"
-                id={`font-${label}-${group.slot}`}
-                onChange={(e) => {
-                  const family = e.target.value.trim();
-                  onChange(
-                    stackWithSlotFont(value, tier, group.slot, family.length > 0 ? family : null),
-                  );
-                }}
-                placeholder="留空 = 默认"
-                value={slotInputValue(value, tier, group.slot)}
-              />
-            </div>
-          ))}
+          .map((group) => {
+            const defaultFirst =
+              fontGroupsOf(defaultValue, tier)
+                .find((g) => g.slot === group.slot)
+                ?.items.find((item) => !item.startsWith("var(")) ?? "";
+            const defaultNote = defaultFirst.replaceAll(/^['"]|['"]$/gu, "");
+            return (
+              <div className="flex items-center gap-2" key={`input-${group.slot}`}>
+                <FieldLabel
+                  className="text-ink w-24 shrink-0 text-xs"
+                  htmlFor={`font-${label}-${group.slot}`}
+                >
+                  {group.label}
+                </FieldLabel>
+                <Input
+                  aria-label={`${label} · ${group.label}`}
+                  className="min-w-0 flex-1"
+                  id={`font-${label}-${group.slot}`}
+                  onChange={(e) => {
+                    const family = e.target.value.trim();
+                    onChange(
+                      stackWithSlotFont(value, tier, group.slot, family.length > 0 ? family : null),
+                    );
+                  }}
+                  placeholder={
+                    defaultNote.length > 0 ? `留空 = 默认（${defaultNote}）` : "留空 = 默认"
+                  }
+                  value={slotInputValue(value, tier, group.slot)}
+                />
+              </div>
+            );
+          })}
       </div>
       <div className="flex flex-col gap-2 md:flex-row md:items-start">
         <Button

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   describeFontPart,
   fontGroupsOf,
+  fontRoleNote,
   slotInputValue,
   stackWithSlotFont,
 } from "./appearance-font-helpers";
@@ -80,5 +81,25 @@ describe("describeFontPart", () => {
 
   it("自定义字体名原样保留", () => {
     expect(describeFontPart('"IBM Plex Mono"')).toBe("IBM Plex Mono");
+  });
+});
+
+describe("fontRoleNote（ISSUE #4059：每一项什么时候在用，界面上要看得见）", () => {
+  it("随包自带的字体作首项 = 优先使用", () => {
+    expect(fontRoleNote("var(--font-geist-sans)", true)).toBe("内置西文（随包自带），优先使用");
+    expect(fontRoleNote('"Sarasa UI SC"', true)).toBe("内置中文（随包自带），优先使用");
+  });
+
+  it("各平台回退按平台点名（中文为什么有多种：各留各的系统字体）", () => {
+    expect(fontRoleNote('"PingFang SC"', false)).toBe("macOS 自带中文，缺字时回退");
+    expect(fontRoleNote('"Microsoft YaHei"', false)).toBe("Windows 自带中文，缺字时回退");
+    expect(fontRoleNote('"Noto Sans SC"', false)).toBe("Android / Linux 自带中文，缺字时回退");
+    expect(fontRoleNote("system-ui", false)).toBe("跟随系统界面字体（兜底）");
+    expect(fontRoleNote("sans-serif", false)).toBe("无衬线最终兜底");
+  });
+
+  it("未知项按是否首项给通用说明（自定义字体）", () => {
+    expect(fontRoleNote("Inter", true)).toBe("优先使用");
+    expect(fontRoleNote("Inter", false)).toBe("缺字时回退");
   });
 });
