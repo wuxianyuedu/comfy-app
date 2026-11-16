@@ -226,7 +226,11 @@ export async function chatAgent(history: Array<ChatMessage>): Promise<AgentTurnR
       return { reply: content, ready: false };
     }
     return { reply: content || "（无回复）", ready: false };
-  } catch {
+  } catch (error) {
+    // 降级必须可见（AGENTS 硬规则 4）：断网 / 超时 / 非 2xx / 响应不可解析
+    // 都压成离线回复，但压之前先在日志面板记一条告警（客户端 console 走
+    // 面板，规范 07 §7.6）——否则用户只能靠「回复变笨了」主观察觉 LLM 通道已挂。
+    console.warn("[agent] LLM 调用失败，已降级为离线回复", error);
     return offlineAgent(history);
   }
 }
