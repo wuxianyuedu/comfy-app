@@ -191,7 +191,7 @@ describe("它只写仓库根那一份，不碰别人的本地 git 状态", () =>
 /* ── 三态退出码：0 绿 / 1 不一致 / 2 没跑成 ──────────────────────────────── */
 
 const { test } = defineGateRepo({
-  script: "qoder-ignore.mjs",
+  script: "docs/qoder-ignore.mjs",
   workdir: "2712-qoder-ignore",
 });
 
