@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // ── 「测试模型能力」**视图**（规范 §17.2 第③层：只渲染 + 上抛）─────────────
 // 用工坊同款通道直接试已配置的远端模型（#3590）：左栏「用途 → 所有模式」
@@ -29,6 +29,7 @@ import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
 import { cn } from "~/lib/utils";
+import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import {
   MODEL_TEST_KINDS,
   MODEL_TEST_KIND_LABELS,
@@ -382,6 +383,52 @@ function ReferenceImageField({
         </div>
       )}
     </FormField>
+  );
+}
+
+/** 本地工作流任务的执行日志（#4080 评论 8）：与工作流库「就地运行」同一份
+ *  SSE log 流。新日志到达时自动滚到底部 —— 任务一直没动静或卡住时，最后几行
+ *  直接指到它停在哪个节点。 */
+function TaskLogSection({ logs }: { logs: Array<TaskLogEntry> }) {
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight });
+  }, [logs]);
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionLabel hint="本地任务的执行日志（SSE log 帧）：一直没动静或卡住时，看最后几行就能定位到哪个节点">
+        执行日志
+      </SectionLabel>
+      <div className="border-border bg-bg max-h-80 overflow-y-auto rounded-lg border" ref={boxRef}>
+        {logs.map((entry, i) => (
+          <div
+            className="text-2xs flex items-start gap-2 px-3 py-1 font-mono"
+            key={`${String(entry.t)}-${String(i)}`}
+          >
+            <span className="text-muted-foreground shrink-0 tabular-nums">
+              {new Date(entry.t).toLocaleTimeString()}
+            </span>
+            <span
+              className={cn(
+                "shrink-0",
+                entry.level === "error"
+                  ? "text-destructive"
+                  : entry.level === "warn"
+                    ? "text-warning-strong"
+                    : entry.level === "success"
+                      ? "text-success-strong"
+                      : "text-muted-foreground",
+              )}
+            >
+              {entry.level}
+            </span>
+            <span className="text-ink min-w-0 flex-1 break-all whitespace-pre-wrap">
+              {entry.msg}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -747,6 +794,11 @@ export function ModelTestView() {
                   )}
                 </section>
               )}
+
+              {/* 本地工作流任务的执行日志（#4080 评论 8）：与工作流库「就地
+                  运行」同一份 SSE log 流，生成中实时滚动 —— 卡住时最后几行
+                  直接指到任务停在哪个节点。 */}
+              {c.taskLogs.length > 0 && <TaskLogSection logs={c.taskLogs} />}
 
               {/* 请求详情（ISSUE #3791；#3799：点生成即显示本地提交行 + 生成中
                   走秒 + 响应摘要默认格式化、可切原始；#3949 需求 4/8：生成前

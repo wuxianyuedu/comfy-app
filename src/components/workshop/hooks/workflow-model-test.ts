@@ -15,6 +15,7 @@ import {
   startLocalGenerate,
   watchTask,
   type RelayDebugSink,
+  type TaskLogEntry,
   type WorkshopWorkflowOption,
 } from "~/lib/workshop/generation-client";
 import { debugBodyOf } from "~/lib/workshop/api-channel-core";
@@ -75,6 +76,8 @@ export async function runWorkflowModelTest(args: {
   kind: "image" | "video";
   mode: string;
   onDebug: RelayDebugSink;
+  /** 本地任务的执行日志（SSE log 帧）：测试页的「执行日志」区块消费。 */
+  onLog?: (entry: TaskLogEntry) => void;
   /** 「给了值却没落进端口」这类提示（unmatched 翻译）与上传失败计数的出口。 */
   onNotice?: (text: string) => void;
   /** 任务进度（SSE state 帧；整百分比变化才上报，避免逐帧重渲）。 */
@@ -146,7 +149,10 @@ export async function runWorkflowModelTest(args: {
         workflow: workflow.name,
         mode,
         prompt: exposed.prompt ?? "",
-        workflowInputs: built.input.workflowInputs?.length ?? 0,
+        /* 完整的落点清单（口 → 节点 → 值）：尺寸等输入有没有真的进提交参数，
+         * 在这里逐条可见；没落进端口的口在 unmatched 里如实列出。 */
+        workflowInputs: built.input.workflowInputs ?? [],
+        ...(built.unmatched.length > 0 ? { unmatched: built.unmatched } : {}),
         ...(uploadedRefs.files.length > 0 ? { referenceImages: uploadedRefs.files } : {}),
         ...(uploadedFirstFrame.files[0] === undefined
           ? {}
@@ -174,6 +180,11 @@ export async function runWorkflowModelTest(args: {
         }
       };
       closer = watchTask(taskId, {
+        /* 执行日志逐条上抛（SSE log 帧）：测试页的「执行日志」区块展示，
+         * 卡住时能直接看到任务停在哪个节点。 */
+        onLog: (entry) => {
+          args.onLog?.(entry);
+        },
         onProgress: (pct, node) => {
           const whole = Math.floor(pct);
           if (whole === lastPct) {
