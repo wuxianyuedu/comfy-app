@@ -20,6 +20,7 @@ import {
   COMFY_STOP_PROBE,
   DRIZZLE_STOP_PROBE,
   HISTORY_READ,
+  KEY_FILE_READ,
   OLLAMA_READY,
   OLLAMA_STOP_PROBE,
   TERMINAL_DB_WRITE,
@@ -135,5 +136,22 @@ describe("具名策略（本条账的核心：策略不同、且各有理由）"
     expect(backoffDelayMs({ ...TERMINAL_DB_WRITE, attempt: 30 })).toBeLessThanOrEqual(
       TERMINAL_DB_WRITE.maxMs,
     );
+  });
+});
+
+describe("KEY_FILE_READ：密钥文件并发首启的重读（ISSUE #3956）", () => {
+  it("固定间隔小预算：5 × 25ms = 125ms —— 它阻塞的是事件循环，预算必须小", () => {
+    /* #3956：这个策略刻意保持同步形态（调用处 Atomics.wait 短眠），因为它发生在
+     * encrypt/decrypt 的同步签名里；窗口是「对方先建、仍在写」的首启竞态，
+     * 每进程至多一次（cachedKey 之后恒命中）。 */
+    expect(KEY_FILE_READ.shape).toBe("fixed");
+    expect(KEY_FILE_READ.baseMs).toBe(25);
+    expect(KEY_FILE_READ.maxAttempts).toBe(5);
+    expect(KEY_FILE_READ.baseMs * KEY_FILE_READ.maxAttempts).toBe(125);
+  });
+
+  it("经 backoffDelayMs 取值：fixed 档逐拍恒 25ms（与调用处的同步短眠同源）", () => {
+    const waits = [0, 1, 2, 3].map((attempt) => backoffDelayMs({ ...KEY_FILE_READ, attempt }));
+    expect(waits).toEqual([25, 25, 25, 25]);
   });
 });
