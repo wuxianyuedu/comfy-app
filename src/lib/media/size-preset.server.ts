@@ -9,7 +9,9 @@
 //   ② 本机覆盖（`data/size-presets.json`）—— 在而不空才生效，逐格压过 ①。
 //
 // 读取侧逐格合并（`mergeSizePresetTable`）：缺行、缺档、改坏的值一律回退基准，
-// 因此升级新增比例行不需要写迁移。写侧整表落盘（表很小，自描述）。
+// 因此升级新增比例行不需要写迁移。写侧**差集落盘**（ISSUE #3973）：只留与项目
+// 默认不同的格子（`diffSizePresetTable`），与侧栏页签行为 / 模式契约同一口径 ——
+// 项目默认后续改动能穿透到存过覆盖的机器，「改回默认」= 该格从覆盖里消失。
 //
 // 「保存到项目代码库」写的是 ① 那份 JSON（ISSUE #3948）：提交后每个检出与每个
 // 桌包都是这一份 —— 只有开发检出有可写的目标文件。
@@ -28,6 +30,7 @@ import { errorText } from "~/lib/error-message";
 import { AsyncMutex } from "~/lib/async-mutex";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import {
+  diffSizePresetTable,
   mergeSizePresetTable,
   parseSizePresetDefaults,
   type SizePresetTable,
@@ -67,22 +70,28 @@ async function atomicWriteText(file: string, text: string): Promise<void> {
   }
 }
 
-/** 保存整份尺寸配置表（逐格校验合并后覆盖 `data/size-presets.json`）。
+/** 保存尺寸配置表的本机覆盖（**差集**落盘到 `data/size-presets.json`，ISSUE #3973）。
  *
- *  传入**任意形状**都安全：先逐格校验合并成合法表再落盘，坏值回退默认。
- *  合并的基准是**现读**的项目默认（`loadSizePresetProjectDefaults`）—— 项目默认
- *  刚被「保存到项目代码库」改过时，拿旧基准算会把已经与基线相同的格子留在覆盖里。
- *  返回落盘（合并后）的那份表 —— 调用方（hook → refetch / store）拿它刷新界面。 */
+ *  传入**任意形状**都安全：先逐格校验合并成合法表（坏值回退默认），再对**现读的
+ *  项目默认**取差集 —— 覆盖文件里只留「这台机器上真的改过的那几格」。于是项目默认
+ *  后续改动（别的检出「保存到项目代码库」、拉到新代码）能穿透到这台机器；把某格
+ *  改回默认再保存 = 该格从覆盖里消失。合并的基准是**现读**的项目默认
+ *  （`loadSizePresetProjectDefaults`）—— 项目默认刚被改过时，拿旧基准算会把已经
+ *  与基线相同的格子留在覆盖里。
+ *  返回**合并后的完整表**（与落盘的差集不同）—— 调用方（hook → refetch / store）
+ *  拿它刷新界面。 */
 export async function saveSizePresetTable(
   raw: unknown,
   root: string = process.cwd(),
 ): Promise<SizePresetTable> {
   const file = path.join(/*turbopackIgnore: true*/ root, SIZE_PRESETS_REL_PATH);
   return overrideFileMutex.run(async () => {
-    const merged = mergeSizePresetTable(raw, await loadSizePresetProjectDefaults(root));
+    const defaults = await loadSizePresetProjectDefaults(root);
+    const merged = mergeSizePresetTable(raw, defaults);
+    const diff = diffSizePresetTable(merged, defaults);
     try {
       await fs.mkdir(path.dirname(file), { recursive: true });
-      await atomicWriteText(file, `${JSON.stringify(merged, null, 2)}\n`);
+      await atomicWriteText(file, `${JSON.stringify(diff, null, 2)}\n`);
     } catch (error) {
       throw new Error(errorText(error, `尺寸配置表写入失败（${file}）`), { cause: error });
     }
