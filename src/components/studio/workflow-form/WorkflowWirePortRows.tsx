@@ -307,7 +307,7 @@ export function WirePortRows({
                 )}
                 {wireInput.control === "image" && (
                   <Button
-                    className="nodrag nopan bg-canvas-deep hover:bg-canvas-deep text-ink-soft hover:text-ink-bright h-full gap-1.5 rounded-md px-2.5 py-1.5 text-sm"
+                    className="nodrag nopan bg-canvas-deep hover:bg-surface-2 text-ink-soft hover:text-ink-bright h-full gap-1.5 rounded-md px-2.5 py-1.5 text-sm"
                     disabled={uploading}
                     onClick={() => {
                       pickFile(wireInput.ioKey);

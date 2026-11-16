@@ -125,7 +125,7 @@ components:
     height: 32px
     padding: "0px 10px"
   button-default-hover:
-    backgroundColor: "rgba(133, 87, 222, 0.8)"
+    backgroundColor: "#7445c6"
     textColor: "{colors.on-primary}"
     typography: "{typography.button-md}"
     rounded: "{rounded.lg}"

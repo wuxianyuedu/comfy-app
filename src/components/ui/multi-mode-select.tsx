@@ -216,7 +216,7 @@ export function MultiModeSelect({
               <Button
                 className={`relative h-auto flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold ${
                   isActive
-                    ? `${CATEGORY_TEXT[cat]} bg-surface-2 hover:bg-surface-2`
+                    ? `${CATEGORY_TEXT[cat]} bg-surface-2 dark:hover:bg-ink/15 hover:bg-[color-mix(in_oklch,var(--color-surface-2),black_8%)]`
                     : "text-ink-muted hover:text-ink-strong"
                 }`}
                 key={cat}
