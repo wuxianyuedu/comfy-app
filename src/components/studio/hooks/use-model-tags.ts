@@ -10,16 +10,14 @@ import { useCallback, useState } from "react";
 import { useItemErrors, type ItemErrors } from "~/components/ui/use-item-errors";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction } from "~/lib/async-action";
+import type { ModelTagSummary } from "~/lib/workflow/workflow-list-types";
 import { vanillaApi } from "~/trpc/vanilla";
 
 /** 快照去重 key 的分隔符：标签名不含 \u0000，用它拼不会撞车。 */
 const SNAPSHOT_KEY_SEP = "\u0000";
 
-export type TagItem = {
-  count: number;
-  id: string;
-  name: string;
-};
+/** 标签库一行：`workflowModel.list` 的 tag 形状（含模式占用明细，ISSUE #4102）。 */
+export type TagItem = ModelTagSummary;
 
 export type ModelTagsController = {
   addTag: () => Promise<void>;

@@ -13,6 +13,7 @@ import { Badge } from "~/components/ui/badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { Hint } from "~/components/ui/hint";
 import {
   deriveEncapsulationStatus,
   type EncapsulationEntryStatus,
@@ -199,9 +200,19 @@ export function WorkshopEncapsulationPanel({
             value={mode ?? modes.at(0) ?? ""}
           />
         )}
-        <span className="text-muted-foreground text-2xs">
-          {status.resolvedCount}/{status.entries.length} 个对外口已落到端口
-        </span>
+        {/* 计数写明「数的是什么」（ISSUE #4102）：分母 = 该模式契约口总数
+         *（含可选与自定义口），分子 = 已连到工作流端口的口数。 */}
+        <Hint
+          label={
+            `该模式共 ${status.entries.length} 个契约口（含可选口与自定义口），` +
+            `其中 ${status.resolvedCount} 个已连到工作流端口。可选口未连不阻碍工坊运行；` +
+            `必备口未连会标红并阻止流程测试。`
+          }
+        >
+          <span className="text-muted-foreground text-2xs">
+            已落点 {status.resolvedCount}/{status.entries.length} 个契约口
+          </span>
+        </Hint>
       </div>
       {!status.ready && (
         <p className="bg-warning/10 text-warning-strong text-2xs rounded-lg px-3 py-2">

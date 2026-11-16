@@ -139,9 +139,11 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     [setWorkflows, updateMut, report, load],
   );
 
-  /** 模型标签绑定持久化。乐观更新本地列表，失败回滚。 */
+  /** 模型标签绑定持久化。乐观更新本地列表，失败回滚。
+   *  返回 `null` = 成功；否则回传失败文案（绑定唯一性的冲突原因，ISSUE #4102），
+   *  供绑定弹窗就地展示 —— 全局 report 照常走动作错误通道。 */
   const patchModelTags = useCallback(
-    async (id: string, names: Array<string>) => {
+    async (id: string, names: Array<string>): Promise<string | null> => {
       setWorkflows((prev) =>
         prev.map((workflow) => (workflow.id === id ? { ...workflow, modelTags: names } : workflow)),
       );
@@ -151,7 +153,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       });
       if (!result.ok) {
         void load();
+        return result.detail;
       }
+      return null;
     },
     [setWorkflows, updateMut, report, load],
   );
