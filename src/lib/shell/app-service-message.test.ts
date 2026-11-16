@@ -19,6 +19,7 @@ import {
   initialAppServiceCursor,
   type AppServiceEventCursor,
 } from "./app-service-message";
+import type { DevServerState } from "./dev-server-status";
 
 const T0 = Date.parse("2026-10-12T14:00:00");
 const T1 = T0 + 125_000;
@@ -36,7 +37,8 @@ function step(
   cursor: AppServiceEventCursor,
   facts: {
     processIsNew: boolean;
-    state: "starting" | "online" | "offline";
+    /** 五态都用这一份类型（stale / unresponsive 的边沿各有专组用例）。 */
+    state: DevServerState;
     /** 这一拍之前没人在探测的毫秒数；省缺 = 0。 */
     unprobedMs?: number;
   },
@@ -188,6 +190,42 @@ describe("路由表不完整（stale）的边沿与文案", () => {
     expect(body).toContain("404");
     expect(body).toContain("重新启动");
     expect(body).toContain(".next");
+  });
+});
+
+describe("暂时无响应（unresponsive）的边沿（ISSUE #4146 双信号）", () => {
+  /* 进程外信号说「进程还在」的那一档：服务一时答不上，不是断开。消息中心进出
+   * 都静默——状态栏自己会显示软状态，每次重载窗口都写一条「无响应/恢复」是噪声。 */
+  const UNRESPONSIVE = { state: "unresponsive", processIsNew: false } as const;
+
+  it("online → unresponsive：不记任何消息，游标也不写下断开时刻", () => {
+    const first = step(initialAppServiceCursor(), RUNNING_NEW, T0);
+    const stalled = step(first.cursor, UNRESPONSIVE, T1);
+    expect(stalled.event).toBeNull();
+    expect(stalled.cursor.offlineAt).toBeNull();
+  });
+
+  it("unresponsive 持续期间逐拍静默", () => {
+    const first = step(initialAppServiceCursor(), RUNNING_NEW, T0);
+    const stalled = step(first.cursor, UNRESPONSIVE, T1);
+    const again = step(stalled.cursor, UNRESPONSIVE, T1 + 2000);
+    expect(again.event).toBeNull();
+  });
+
+  it("unresponsive → online：静默恢复，不报「已恢复」", () => {
+    const first = step(initialAppServiceCursor(), RUNNING_NEW, T0);
+    const stalled = step(first.cursor, UNRESPONSIVE, T1);
+    const back = step(stalled.cursor, { state: "online", processIsNew: false }, T1 + 3000);
+    expect(back.event).toBeNull();
+    expect(back.cursor.offlineAt).toBeNull();
+  });
+
+  it("unresponsive → offline（停走期间进程真没了）：仍记断开", () => {
+    const first = step(initialAppServiceCursor(), RUNNING_NEW, T0);
+    const stalled = step(first.cursor, UNRESPONSIVE, T1);
+    const dead = step(stalled.cursor, { state: "offline", processIsNew: false }, T1 + 5000);
+    expect(dead.event).toEqual({ type: "disconnect", at: T1 + 5000 });
+    expect(dead.cursor.offlineAt).toBe(T1 + 5000);
   });
 });
 

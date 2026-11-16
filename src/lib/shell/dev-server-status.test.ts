@@ -58,7 +58,7 @@ describe("deriveDevServerStatus", () => {
     expect(s.title).toContain("需要重新执行");
   });
 
-  it("四态文案互不相同且非空（状态必须一眼可辨）", () => {
+  it("五态文案互不相同且非空（状态必须一眼可辨）", () => {
     const labels = [
       deriveDevServerStatus({ ...base, everOnline: false, reachable: false }).label,
       deriveDevServerStatus(base).label,
@@ -69,11 +69,56 @@ describe("deriveDevServerStatus", () => {
         reachable: false,
         routeTableStale: true,
       }).label,
+      deriveDevServerStatus({ ...base, reachable: false, processAlive: true }).label,
     ];
-    expect(new Set(labels).size).toBe(4);
+    expect(new Set(labels).size).toBe(5);
     labels.forEach((label) => {
       expect(label.length).toBeGreaterThan(0);
     });
+  });
+
+  it("探不通但进程外信号说进程还在 → unresponsive 软状态：不是断开（ISSUE #4146）", () => {
+    const s = deriveDevServerStatus({
+      ...base,
+      reachable: false,
+      processAlive: true,
+      lastExit: exitNotice,
+    });
+    expect(s.state).toBe("unresponsive");
+    expect(s.label).toBe("应用服务无响应");
+    /* 文案三件事：为什么（进程在、一时答不上）、影响（操作可能失败）、
+     * 出路（通常自行恢复）。 */
+    expect(s.title).toContain("进程还在");
+    expect(s.title).toContain("可能失败");
+    expect(s.title).toContain("自行恢复");
+    /* 进程还活着，不把「上一次进程为什么结束」的旧结论贴出来误导。 */
+    expect(s.exitNotice).toBeNull();
+  });
+
+  it("探不通且进程没了 → 仍是 offline（软状态不吃掉真断开）", () => {
+    const s = deriveDevServerStatus({ ...base, reachable: false, processAlive: false });
+    expect(s.state).toBe("offline");
+    expect(s.label).toBe("应用服务已断开");
+  });
+
+  it("探不通且没有进程外信号（浏览器 / 旧壳）→ 退回原判据 offline，不编答案", () => {
+    const s = deriveDevServerStatus({ ...base, reachable: false, processAlive: null });
+    expect(s.state).toBe("offline");
+  });
+
+  it("进程还活着但探活可达 → 照常 online（软状态只在不可达的窗口里存在）", () => {
+    const s = deriveDevServerStatus({ ...base, processAlive: true });
+    expect(s.state).toBe("online");
+  });
+
+  it("stale 优先于 unresponsive：拿到了 404 应答比「进程在」更具体", () => {
+    const s = deriveDevServerStatus({
+      ...base,
+      reachable: false,
+      routeTableStale: true,
+      processAlive: true,
+    });
+    expect(s.state).toBe("stale");
   });
 
   it("探活端点答 404 → stale：不冒充「连接中」，并给出重启应用这个出口", () => {

@@ -5,12 +5,15 @@
 // 现改用 bootId 作权威：进程每次冷启动重新生成，没重启则恒定；新 bootId ≠ 上次即真重启。
 // 断开侧抗抖动：连续失败到 OFFLINE_CONFIRM_FAILURES 拍才算（单拍超时可能只是冷编译 / Turbopack 抢锁）。
 // sessionStorage 保留上次 bootId 与重启时间：真重启会整页刷新、内存基准丢失，刷新后靠它识别。
+// 双信号（ISSUE #4146）：探活失败时再问壳一句「进程还在吗」（进程外信号，见
+// readAppServiceProcessAlive）——进程在 = 暂时无响应（软状态），进程没了 = 真断开。
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { SERVER_ID_ENDPOINT } from "~/lib/log/panel-self-poll";
 import { isPlainRecord } from "~/lib/is-record";
+import { readAppServiceProcessAlive } from "~/lib/shell/desktop-shell-client";
 import {
   describeAppServiceExit,
   fetchAppServiceExit,
@@ -69,6 +72,16 @@ export type DevServerLiveness = {
   lastRestartAt: number | null;
   /** 最近一次探测成功（进程可达）。首帧（尚未探过）为 false。 */
   probeOk: boolean;
+  /**
+   * **进程外信号**：应用服务的进程还活着吗（ISSUE #4146，判据在壳侧
+   * `shell_launch::read_app_service_liveness`）。探活失败的那几拍由壳读编排器的
+   * 进程树名单逐个查 PID 得出，不经过被测进程——HTTP 探活永远带着它的忙闲，
+   * 「死没死」要问旁证人。三态：`true` = 进程在（一时答不上 → 软状态
+   * `unresponsive`）；`false` = 进程没了（真断开）；`null` = 没有进程外信号
+   * （浏览器 / 旧壳 / 手工 `pnpm dev`）→ 判据退回纯 HTTP 行为。探活成功即清回
+   * `null`：答案只在失败窗口里有意义，旧读数不该在下一轮判断里冒充现在的事实。
+   */
+  processAlive: boolean | null;
   /**
    * **这一份进程对本次页面会话来说是新的**（冷启动或真重启）。与 `restarting` 的差别：
    * 那个 10 秒后自行复位，这个不会。「进程换了一个」不能看探活失败（显示器关闭 / 后台节流 /
@@ -190,6 +203,9 @@ export function useDevServerLiveness(): DevServerLiveness {
   /* 「探活端点本身 404」这一档。与连通性分开存：它描述的不是「服务在不在」，
    * 而是「服务答的这条路通不通」，两者可以同时为假、也可以各自单独为真。 */
   const [routeTableStale, setRouteTableStale] = useState(false);
+  /* 进程外信号（见 DevServerLiveness.processAlive）。初值 null = 还没问过 /
+   * 没有这条通道；探活成功即清回 null。 */
+  const [processAlive, setProcessAlive] = useState<boolean | null>(null);
   const [everOnline, setEverOnline] = useState(false);
   /* 「这份进程对本次页面会话来说是新的」（见 `DevServerLiveness.processIsNew`）。
    * 初值 false：首帧还没探过，谈不上新旧。 */
@@ -225,6 +241,36 @@ export function useDevServerLiveness(): DevServerLiveness {
    * （规范 16 §16.2.4.15）。 */
   const stoppedRef = useRef(false);
   const probe = useCallback(async () => {
+    /* 问壳「进程还在吗」（ISSUE #4146，判据在壳侧读编排器的进程树名单）。
+     * 每个失败拍都问：IPC 是读一份小文件 + 查几个 PID，毫秒级；而失败窗口正是
+     * 进程状态可能变化（死 / 被重启）的时段，不去重。答案只在本拍之后、恢复
+     * 之前被消费。套 2.5s 超时：壳自己被卡住时这一问不能把探活链路拖死；
+     * 拿不到（浏览器 / 旧壳 / 无会话文件）回 null，判据按「没有进程外信号」
+     * 退回原行为。 */
+    const askShellWhetherProcessAlive = async (): Promise<void> => {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      try {
+        const answer = await Promise.race([
+          readAppServiceProcessAlive(),
+          new Promise<null>((resolve) => {
+            timer = setTimeout(() => {
+              resolve(null);
+            }, 2500);
+          }),
+        ]);
+        if (!stoppedRef.current) {
+          setProcessAlive(answer);
+        }
+      } catch {
+        if (!stoppedRef.current) {
+          setProcessAlive(null);
+        }
+      } finally {
+        if (timer !== null) {
+          clearTimeout(timer);
+        }
+      }
+    };
     /* 首次探测前补读持久化的上次 bootId，作为真正重启的对比基准。
      * （hydrate 阶段 sessionStorage 读不到，此处手动恢复。） */
     lastBootIdRef.current ??= readSessionString(LAST_BOOT_ID_KEY);
@@ -245,6 +291,13 @@ export function useDevServerLiveness(): DevServerLiveness {
     setConsecutiveFailures(result.ok ? 0 : (n) => n + 1);
     if (result.ok) {
       setEverOnline(true);
+    }
+    /* 进程外信号：失败才需要旁证人（成功那一拍进程必然活着，把旧答案清掉，
+     * 免得它在之后的判断里冒充现在的事实）。 */
+    if (result.ok) {
+      setProcessAlive(null);
+    } else {
+      void askShellWhetherProcessAlive();
     }
     /* 启动标识只认成功那一拍：与 `setProbeOk` 同一批落，于是「服务刚恢复」的
      * 下一个渲染里拿到的已经是**新一次启动**的 runId —— 恢复那条消息因此盖在
@@ -337,6 +390,7 @@ export function useDevServerLiveness(): DevServerLiveness {
     lastExitAt,
     probeOk,
     routeTableStale,
+    processAlive,
     /* 抗抖动后的可达性：还没到门槛的失败仍算可达（单拍抖动不是断开）。
      * `consecutiveFailures` 达门槛那一刻这一项翻 false，状态栏与消息中心
      * 随之各记一条（断开 / 恢复），而抖动期间它们什么都不记。 */

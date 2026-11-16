@@ -30,6 +30,7 @@
  * | `online → offline`                  | 断开        | 用户在状态栏真的会看到「应用服务已断开」 |
  * | `processIsNew` 由假转真             | 启动 / 恢复 | 这一份进程此前不在（或已被换掉）       |
  * | `offline → online`（进程没换）      | 恢复        | 断了又通，用户在界面上看着它变了        |
+ * | 进 / 出 `unresponsive`              | （不记）    | 软状态：进程外信号说进程还在，只是一时答不上（#4146）。状态栏自己会显示它，消息中心进出都**静默**——每次重载窗口都写一条「无响应/恢复」是噪声。`unresponsive → offline`（进程真没了）仍走第一行记断开 |
  *
  * **刷新不产生「启动」**：整页刷新后判据仍是「这份进程不是新的」（`processIsNew`
  * 在刷新前就是真），于是边沿不成立 —— 否则用户每按一次 Ctrl+R 消息中心就多一条
@@ -65,7 +66,7 @@ export type AppServiceEventCursor = {
   offlineAt: number | null;
   /** 上一次看到的「这份进程是新的吗」。 */
   processIsNew: boolean;
-  /** 上一次看到的四态。 */
+  /** 上一次看到的五态。 */
   state: DevServerState;
 };
 
@@ -87,7 +88,7 @@ export type AppServiceEvent =
 export type AppServiceFacts = {
   /** 本次看到的「这份进程对本次页面会话来说是新的吗」。 */
   processIsNew: boolean;
-  /** 本次看到的四态。 */
+  /** 本次看到的五态。 */
   state: DevServerState;
   /**
    * 这一拍之前有多少毫秒**没人在探测**（0 = 紧接上一拍）。
