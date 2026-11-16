@@ -103,6 +103,27 @@ function entryFromRemoteRow(
   };
 }
 
+/** 按名取一个远端模型条目的连接参数（apiKey 已在仓库读侧解密；找不到回 null）。
+ *  测试页的对话测试（ISSUE #4080）用它按名拼 chat 请求，不重读整份候选。 */
+export async function resolveRemoteModelConnection(
+  name: string,
+): Promise<{ apiKey: string | null; baseUrl: string | null; name: string } | null> {
+  const [remoteRows, providerRows] = await Promise.all([
+    remoteModelRepository.list(),
+    llmProviderRepository.list(),
+  ]);
+  const hit = remoteRows.find((r) => r.name === name);
+  if (!hit) {
+    return null;
+  }
+  const entry = entryFromRemoteRow(hit, providerRows);
+  return {
+    apiKey: entry.apiKey ?? null,
+    baseUrl: entry.baseUrl ?? null,
+    name: entry.name,
+  };
+}
+
 /* 按层叠加出最终生效的 LLM 配置：
  *   1. process.env（作为默认值）
  *   2. 数据库里的单例行（用户在设置界面里的覆盖）

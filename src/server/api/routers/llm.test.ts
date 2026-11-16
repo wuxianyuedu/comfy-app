@@ -6,12 +6,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemoteModelAdaptersDoc } from "~/lib/workshop/remote-model-adapter";
 
-const { llmServer, contracts, defaults } = vi.hoisted(() => ({
+const { llmServer, contracts, defaults, workshopLlm } = vi.hoisted(() => ({
   llmServer: {
     getConfigForClient: vi.fn(() => ({
       provider: "remote",
       hasApiKey: true,
     })),
+    /* 对话测试（#4080）的按名解析：只认远端演示名，其余回 null（路由据此判 NOT_FOUND）。
+     * 同步实现直接返回值即可（路由侧会 await）。 */
+    resolveRemoteModelConnection: vi.fn((name: string) => {
+      if (name === "remote-model") {
+        return { name, baseUrl: "https://remote.example/v1", apiKey: "remote-key" };
+      }
+      return null;
+    }),
+  },
+  workshopLlm: {
+    getWorkshopLLMConfig: vi.fn(() => ({
+      apiKey: "local-key",
+      baseUrl: "http://127.0.0.1:11434",
+      maxTokens: 2048,
+      model: "configured-default",
+      temperature: 0.7,
+    })),
+    completeWorkshopLLM: vi.fn(() => "pong"),
   },
   contracts: {
     loadModeContractLayers: vi.fn(() => ({
@@ -53,6 +71,11 @@ vi.mock("~/lib/core/logger", () => ({
 }));
 vi.mock("~/lib/llm/server", () => ({
   getConfigForClient: llmServer.getConfigForClient,
+  resolveRemoteModelConnection: llmServer.resolveRemoteModelConnection,
+}));
+vi.mock("~/server/workshop/llm", () => ({
+  getWorkshopLLMConfig: workshopLlm.getWorkshopLLMConfig,
+  completeWorkshopLLM: workshopLlm.completeWorkshopLLM,
 }));
 vi.mock("~/lib/workshop/mode-contract.server", () => ({
   loadModeContractLayers: contracts.loadModeContractLayers,
@@ -661,5 +684,44 @@ describe("configGet —— 脱敏出口", () => {
     await caller().configGet();
     expect(llmServer.getConfigForClient).toHaveBeenCalledTimes(1);
     expect(contracts.loadModeContractLayers).not.toHaveBeenCalled();
+  });
+});
+
+describe("chatTest —— 对话测试（ISSUE #4080）", () => {
+  it("本地模型：连接参数取生效 LLM 配置，模型名换成被测的那个", async () => {
+    const res = await caller().chatTest({ name: "qwen3-8b", local: true, prompt: "ping" });
+    expect(workshopLlm.completeWorkshopLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: "http://127.0.0.1:11434",
+        apiKey: "local-key",
+        model: "qwen3-8b",
+      }),
+      [{ role: "user", content: "ping" }],
+    );
+    expect(res).toMatchObject({
+      reply: "pong",
+      model: "qwen3-8b",
+      endpoint: "http://127.0.0.1:11434/chat/completions",
+    });
+    expect(res.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("远端模型：按名解析连接参数（模型自己或其供应商的）", async () => {
+    const res = await caller().chatTest({ name: "remote-model", local: false, prompt: "ping" });
+    expect(workshopLlm.completeWorkshopLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: "https://remote.example/v1",
+        apiKey: "remote-key",
+        model: "remote-model",
+      }),
+      [{ role: "user", content: "ping" }],
+    );
+    expect(res.reply).toBe("pong");
+  });
+
+  it("远端模型取不到或没有地址 → NOT_FOUND", async () => {
+    expect(await codeOf(caller().chatTest({ name: "nope", local: false, prompt: "ping" }))).toBe(
+      "NOT_FOUND",
+    );
   });
 });

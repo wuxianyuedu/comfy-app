@@ -547,8 +547,9 @@ export function ModelTestView() {
   /* 统一输入行来自模式契约（ISSUE #3778），行序 = 契约口序（ISSUE #3785）：
    * 复合尺寸口也在它契约里的位置上渲染，不整体前移。 */
   const modeLabel = c.modeTabs.find((t) => t.mode === c.mode)?.label ?? c.mode;
-  /* 回调里读 c.result 会丢掉 JSX 条件的收窄 —— 先取一次稳定引用。 */
-  const resultUrl = c.result?.url ?? null;
+  /* 回调里读 c.result 会丢掉 JSX 条件的收窄 —— 先取一次稳定引用。
+     对话测试（#4080）的产物是文本，没有可外链的 URL。 */
+  const resultUrl = c.result !== null && c.result.kind !== "chat" ? c.result.url : null;
   /* 请求详情的行：生成后用真实读数；生成前显示「准备请求」（#3949 需求 8，
    * 按当前模式 / 模型 / 输入现算）—— 切模式 / 换模型时 hook 已清空读数，
    * 不会残留上一份。 */
@@ -569,21 +570,31 @@ export function ModelTestView() {
             页签超出视口时在栏内自己滚。 */}
         <aside className="flex shrink-0 flex-col gap-5 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-120px)] lg:w-60 lg:overflow-y-auto">
           <section>
-            <SectionLabel hint="同一模型的图片 / 视频分栏测试">用途</SectionLabel>
+            <SectionLabel hint="同一模型的图片 / 视频 / 对话分栏测试（#4080 起支持本地 Ollama 与远端对话模型）">
+              用途
+            </SectionLabel>
             <KindTabs kind={c.kind} onChange={c.setKind} />
           </section>
-          <section>
-            <SectionLabel hint="工坊全部生成类模式；徽标 = 配了该模式适配器的候选模型数">
-              模式
-            </SectionLabel>
-            <ModeTabs mode={c.mode} onSelect={c.setMode} tabs={c.modeTabs} />
-          </section>
+          {c.modeTabs.length > 0 && (
+            <section>
+              <SectionLabel hint="工坊全部生成类模式；徽标 = 配了该模式适配器的候选模型数">
+                模式
+              </SectionLabel>
+              <ModeTabs mode={c.mode} onSelect={c.setMode} tabs={c.modeTabs} />
+            </section>
+          )}
         </aside>
 
         {/* 右栏：模型下拉 → 统一输入 → 生成 → 产物 */}
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           <section>
-            <SectionLabel hint="「设置 → 远程模型」里启用的条目；按用途与所选模式过滤 —— 只列配了该模式适配器的模型">
+            <SectionLabel
+              hint={
+                c.kind === "chat"
+                  ? "本地模型来自「设置 → 本地模型」（Ollama 候选）；远端模型来自「设置 → 远程模型」里用途为 对话 的条目"
+                  : "「设置 → 远程模型」里启用的条目；按用途与所选模式过滤 —— 只列配了该模式适配器的模型"
+              }
+            >
               模型
             </SectionLabel>
             {c.loading ? (
@@ -591,9 +602,11 @@ export function ModelTestView() {
             ) : c.candidates.length === 0 ? (
               c.kindCandidateCount === 0 ? (
                 <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
-                  还没有可测的{MODEL_TEST_KIND_LABELS[c.kind]}
-                  模型 —— 到「设置 → 远程模型」添加并启用用途为{" "}
-                  {c.kind === "image" ? "图像" : "视频"} 的条目。
+                  {c.kind === "chat"
+                    ? "还没有可测的对话模型 —— 本地模型到「设置 → 本地模型」添加 Ollama 候选；远端模型到「设置 → 远程模型」添加用途为 对话 的条目。"
+                    : `还没有可测的${MODEL_TEST_KIND_LABELS[c.kind]}模型 —— 到「设置 → 远程模型」添加并启用用途为 ${
+                        c.kind === "image" ? "图像" : "视频"
+                      } 的条目。`}
                 </p>
               ) : (
                 <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
@@ -608,6 +621,22 @@ export function ModelTestView() {
                 autoFitFromOptions={false}
                 className="text-sm"
                 fullWidth={false}
+                groups={
+                  c.kind === "chat"
+                    ? (
+                        [
+                          {
+                            label: "本地模型",
+                            options: c.candidates.filter((m) => m.local).map((m) => m.name),
+                          },
+                          {
+                            label: "远端模型",
+                            options: c.candidates.filter((m) => !m.local).map((m) => m.name),
+                          },
+                        ] as const
+                      ).filter((group) => group.options.length > 0)
+                    : undefined
+                }
                 onChange={c.selectModel}
                 options={c.candidates.map((m) => m.name)}
                 placeholder="选择要测试的模型…"
@@ -619,7 +648,7 @@ export function ModelTestView() {
 
           {c.selectedModel !== "" && (
             <>
-              {selectedAdapter === null && (
+              {selectedAdapter === null && c.kind !== "chat" && (
                 <p className="text-muted-foreground text-xs">
                   该模型没有「{modeLabel}
                   」模式的适配器 —— 将按 OpenAI 兼容默认映射直连（生图 /images/generations、视频
@@ -731,7 +760,7 @@ export function ModelTestView() {
                 })}
               </section>
 
-              {/* 生成（#3949 需求 5：生成中可取消） */}
+              {/* 生成（#3949 需求 5：生成中可取消；#4080：对话用途是「发送」） */}
               <div className="flex items-center gap-3">
                 <Button
                   className="h-auto px-4 py-2"
@@ -741,7 +770,13 @@ export function ModelTestView() {
                   }}
                   variant="primary-solid"
                 >
-                  {c.generating ? "生成中…" : "生成"}
+                  {c.generating
+                    ? c.kind === "chat"
+                      ? "发送中…"
+                      : "生成中…"
+                    : c.kind === "chat"
+                      ? "发送"
+                      : "生成"}
                 </Button>
                 {c.generating && (
                   <Button
@@ -749,11 +784,13 @@ export function ModelTestView() {
                     onClick={c.cancelGenerate}
                     variant="outline"
                   >
-                    取消生成
+                    {c.kind === "chat" ? "取消发送" : "取消生成"}
                   </Button>
                 )}
                 <span className="text-muted-foreground text-2xs">
-                  真实调用，按上游计费 —— 与工坊生成走同一条通道。
+                  {c.kind === "chat"
+                    ? "真实调用被测模型 —— 本地模型走设置里配置的本地服务，远端模型按名直连。"
+                    : "真实调用，按上游计费 —— 与工坊生成走同一条通道。"}
                 </span>
               </div>
 
@@ -791,7 +828,7 @@ export function ModelTestView() {
                         label="生成结果"
                         src={c.result.url}
                       />
-                    ) : (
+                    ) : c.result.kind === "video" ? (
                       <MediaThumbnail
                         alt="生成结果"
                         as="video"
@@ -799,25 +836,33 @@ export function ModelTestView() {
                         controls
                         src={c.result.url}
                       />
+                    ) : (
+                      /* 对话测试（#4080）：产物是模型的文本回复。 */
+                      <pre className="text-ink text-2xs max-h-[28rem] overflow-auto p-4 font-mono whitespace-pre-wrap">
+                        {c.result.text}
+                      </pre>
                     )}
                   </div>
                   {/* 外链统一走服务端 openExternal（ISSUE #3791）：桌面壳内
-                      target=_blank 会被壳的 shell ACL 拦下（Runtime Error）。 */}
-                  <div>
-                    <Button
-                      className="text-primary h-auto px-0 text-xs"
-                      disabled={c.openBusy}
-                      onClick={() => {
-                        if (resultUrl !== null) {
-                          void c.openResultInBrowser(resultUrl);
-                        }
-                      }}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      打开原始产物（系统浏览器）
-                    </Button>
-                  </div>
+                      target=_blank 会被壳的 shell ACL 拦下（Runtime Error）。
+                      对话测试（#4080）的产物是文本，没有「原链」可开。 */}
+                  {c.result.kind !== "chat" && (
+                    <div>
+                      <Button
+                        className="text-primary h-auto px-0 text-xs"
+                        disabled={c.openBusy}
+                        onClick={() => {
+                          if (resultUrl !== null) {
+                            void c.openResultInBrowser(resultUrl);
+                          }
+                        }}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        打开原始产物（系统浏览器）
+                      </Button>
+                    </div>
+                  )}
                 </section>
               )}
 
