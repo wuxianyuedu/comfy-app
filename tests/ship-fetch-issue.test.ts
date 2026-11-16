@@ -46,6 +46,16 @@ describe("extractImageTails / rewriteImageLinks / imageLocalName（纯函数）"
     expect(rewriteImageLinks(text, mapping)).toBe(`见 imgs/a.png 与 ${T2}`);
   });
 
+  it("rewriteImageLinks：带站点前缀的完整链接整条换成本地路径（#4057）", () => {
+    const url = `https://cnb.cool/x/y/-/${T1}`;
+    const mapping = new Map([[url, "imgs/a.png"]]);
+    const text = `<img src="${url}" class="cnb-md-image__upload" />`;
+    const out = rewriteImageLinks(text, mapping);
+    expect(out).toBe(`<img src="imgs/a.png" class="cnb-md-image__upload" />`);
+    /* 只换尾段的话，站点前缀会留下来拼出 404 地址 —— 那正是 #4057 的现场。 */
+    expect(out).not.toContain("https://cnb.cool");
+  });
+
   it("imageLocalName：保留原文件名；撞名加序号；非法字符换 _", () => {
     const used = new Set<string>();
     expect(imageLocalName(`imgs/issues/1/k/shot.png`, used)).toBe("shot.png");
@@ -173,6 +183,9 @@ describe("runFetchIssue：假执行者全链（#3965）", () => {
     /* 图片链接换成了本地相对路径，原始尾段不再出现。 */
     expect(issueMd).toContain("imgs/4dacf6b6-81cc-4259-a7be-c7ab528ff862.png");
     expect(issueMd).not.toContain(T1);
+    /* #4057：整条 URL（含站点前缀）都要换掉 —— 只换尾段会拼出 404 地址。 */
+    expect(issueMd).not.toContain("https://cnb.cool");
+    expect(commentsMd).not.toContain("https://cnb.cool");
     expect(commentsMd).toContain("imgs/f3c0b348-2862-43d5-a776-95da8a0fa44d.png");
     expect(commentsMd).toContain("### 评论 2 · 月读 · C2");
     /* 图片真被复制（内容对得上）。 */
