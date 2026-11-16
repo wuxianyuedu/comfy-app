@@ -153,7 +153,7 @@ node scripts/lockfile/diff-cli.mjs --installed node_modules\.pnpm\lock.yaml --ro
 | 层       | 判什么                                                   | 判据在哪                                                |
 | -------- | -------------------------------------------------------- | ------------------------------------------------------- |
 | 文本层   | 两份 lockfile 的**实质**差异（上一节那种）               | `node_modules/.pnpm/lock.yaml` ⇄ 仓库 `pnpm-lock.yaml`  |
-| 解析层   | `typescript` / `next` / `axe-core` 这几个包**解析得到吗** | `scripts/launcher-core/worktree.mjs` 的 `unresolvableDeclaredDeps()` |
+| 解析层   | `typescript` / `next` / `axe-core` / `pino` 这几个包**解析得到吗** | `scripts/launcher-core/worktree.mjs` 的 `unresolvableDeclaredDeps()` |
 
 解析层红了会**单独**说一句话，别把它读成上一节那种「装错了版本」：
 
