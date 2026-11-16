@@ -25,9 +25,9 @@ export const WithHint: Story = {
   },
 };
 
-/** 只有标题：`输出类别` 那种不需要补充口径的段头。`args` 逐条写一遍而不是只挂 `meta.args`，让一条故事
+/** 只有标题：`参数库` 那种不需要补充口径的段头。`args` 逐条写一遍而不是只挂 `meta.args`，让一条故事
  *  自己站住（Args 面板可见初值）；`tests/a11y-axe-stories.test.ts` 取 `meta.args` 与 `story.args` 的浅
  *  合并，两种写法都读得到，漏 `children` 才会被 `empty-heading` 命中。 */
 export const TitleOnly: Story = {
-  args: { children: "输出类别" },
+  args: { children: "参数库" },
 };

@@ -100,7 +100,6 @@ describe("契约 → 适配器的默认映射", () => {
     const rows = adapterInputsFromContract({
       mode: "T2I",
       inputs: ["prompt", "custom-text-1", "custom-number-2"],
-      output: "image",
       customInputs: [
         { id: "custom-text-1", label: "水彩风格", kind: "text" },
         { id: "custom-number-2", label: "强度", kind: "number" },

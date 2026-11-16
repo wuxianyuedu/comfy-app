@@ -2,7 +2,6 @@
   {
     "mode": "T2I",
     "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
-    "output": "image",
     "required": ["prompt"]
   },
   {
@@ -17,13 +16,11 @@
       "lora-name",
       "lora-strength"
     ],
-    "output": "image",
     "required": ["prompt"]
   },
   {
     "mode": "TI2I",
     "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
-    "output": "image",
     "required": ["prompt"]
   },
   {
@@ -38,7 +35,6 @@
       "lora-name",
       "lora-strength"
     ],
-    "output": "image",
     "required": ["prompt"]
   },
   {
@@ -53,7 +49,6 @@
       "lora-name",
       "lora-strength"
     ],
-    "output": "image",
     "required": ["prompt"]
   },
   {
@@ -68,7 +63,6 @@
       "lora-name",
       "lora-strength"
     ],
-    "output": "image",
     "required": ["prompt"]
   },
   {
@@ -83,25 +77,21 @@
       "lora-name",
       "lora-strength"
     ],
-    "output": "image",
     "required": ["prompt"]
   },
   {
     "mode": "S2I",
     "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
-    "output": "image",
     "required": ["prompt"]
   },
   {
     "mode": "M2I",
     "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
-    "output": "image",
     "required": ["prompt"]
   },
   {
     "mode": "T2V",
     "inputs": ["prompt", "negative", "size", "duration", "seed", "lora-name", "lora-strength"],
-    "output": "video",
     "required": ["prompt"]
   },
   {
@@ -116,7 +106,6 @@
       "lora-name",
       "lora-strength"
     ],
-    "output": "video",
     "required": ["prompt"]
   },
   {
@@ -131,7 +120,6 @@
       "lora-name",
       "lora-strength"
     ],
-    "output": "video",
     "required": ["prompt"]
   },
   {
@@ -147,7 +135,6 @@
       "lora-name",
       "lora-strength"
     ],
-    "output": "video",
     "required": ["prompt"]
   },
   {
@@ -163,7 +150,6 @@
       "lora-name",
       "lora-strength"
     ],
-    "output": "video",
     "required": ["prompt"]
   },
   {
@@ -178,7 +164,6 @@
       "lora-name",
       "lora-strength"
     ],
-    "output": "video",
     "required": ["prompt"]
   },
   {
@@ -193,7 +178,6 @@
       "lora-name",
       "lora-strength"
     ],
-    "output": "video",
     "required": ["prompt"]
   },
   {
@@ -208,31 +192,26 @@
       "lora-name",
       "lora-strength"
     ],
-    "output": "video",
     "required": ["prompt"]
   },
   {
     "mode": "A2V",
     "inputs": ["prompt", "negative", "size", "duration", "seed", "lora-name", "lora-strength"],
-    "output": "video",
     "required": ["prompt"]
   },
   {
     "mode": "T2A",
     "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
-    "output": "audio",
     "required": ["prompt"]
   },
   {
     "mode": "T2M",
     "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
-    "output": "audio",
     "required": ["prompt"]
   },
   {
     "mode": "T2S",
     "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
-    "output": "audio",
     "required": ["prompt"]
   }
 ]

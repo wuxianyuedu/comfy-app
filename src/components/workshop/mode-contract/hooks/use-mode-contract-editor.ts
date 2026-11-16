@@ -1,7 +1,7 @@
 "use client";
 
 // ── 「模式契约」编辑器：逻辑层（规范 17 §17.2 第②层）────────────────────
-// 选模式 → 编辑该模式的统一输入 / 输出 → 保存注册表。
+// 选模式 → 编辑该模式的统一输入 → 保存注册表。
 //
 // 两个入口（工坊 / 工作流库）共用这一份逻辑：它们编辑的是同一份注册表，
 // 状态机也完全一样，只有「弹窗从哪打开」不同。
@@ -71,7 +71,6 @@ export type ModeContractEditorController = {
    *  修改即自动保存（#3949）：切走前先把挂起的修改落盘，不需要确认弹窗。 */
   selectMode: (mode: string) => void;
   setDraft: (draft: ModeContract) => void;
-  setOutput: (output: ModeContract["output"]) => void;
   /** 生效注册表（成品配置 + 本机覆盖，逐模式合并）。 */
   stored: Array<ModeContract>;
   /** 切换某个口的「必备」状态。 */
@@ -245,10 +244,6 @@ export function useModeContractEditor(): ModeContractEditorController {
     });
   }, []);
 
-  const setOutput = useCallback((output: ModeContract["output"]) => {
-    setDraft((prev) => (prev ? { ...prev, output } : prev));
-  }, []);
-
   /** 整份注册表 = 其余模式（生效值）+ 当前草稿。两种保存共用这一步：
    *  服务端都是「整份收下、各自归一」，这里不重复归一。
    *
@@ -367,7 +362,6 @@ export function useModeContractEditor(): ModeContractEditorController {
     addCustomInput,
     renameCustomInput,
     nextReferenceImageId: draft ? nextReferenceImageId(draft.inputs) : null,
-    setOutput,
     save,
     saveAsProjectDefault,
     saveError,

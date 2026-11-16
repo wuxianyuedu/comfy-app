@@ -24,7 +24,7 @@ describe("mergeModeContracts：成品配置 + 本机覆盖 = 生效注册表", (
 
   it("覆盖逐模式压过成品配置（其余模式不受影响）", () => {
     const merged = mergeModeContracts(configured, [
-      { mode: "T2I", inputs: ["prompt"], output: "image", required: ["prompt"] },
+      { mode: "T2I", inputs: ["prompt"], required: ["prompt"] },
     ]);
     expect(merged.find((c) => c.mode === "T2I")?.inputs).toEqual(["prompt"]);
     expect(merged.find((c) => c.mode === "I2I")).toEqual(configured.find((c) => c.mode === "I2I"));
@@ -37,16 +37,12 @@ describe("mergeModeContracts：成品配置 + 本机覆盖 = 生效注册表", (
   });
 
   it("覆盖里有、成品配置里没有的模式不丢（追加在后面）", () => {
-    const merged = mergeModeContracts(configured, [
-      { mode: "XXX", inputs: ["prompt"], output: "image" },
-    ]);
+    const merged = mergeModeContracts(configured, [{ mode: "XXX", inputs: ["prompt"] }]);
     expect(merged.map((c) => c.mode)).toEqual(["T2I", "I2I", "XXX"]);
   });
 
   it("模式码大小写不敏感（注册表按大写存）", () => {
-    const merged = mergeModeContracts(configured, [
-      { mode: "t2i", inputs: ["prompt"], output: "image" },
-    ]);
+    const merged = mergeModeContracts(configured, [{ mode: "t2i", inputs: ["prompt"] }]);
     expect(merged.find((c) => c.mode === "T2I")?.inputs).toEqual(["prompt"]);
   });
 });
@@ -55,14 +51,14 @@ describe("localOverrideDiff：本机覆盖只落真改过的模式", () => {
   it("与成品配置相同的模式不落盘，其余落盘", () => {
     const configured = configuredModeContracts(["T2I", "I2I"]);
     const diff = localOverrideDiff(
-      [configured[0]!, { ...configured[1]!, output: "video" }],
+      [configured[0]!, { ...configured[1]!, required: ["prompt", "size"] }],
       configured,
     );
     expect(diff.map((c) => c.mode)).toEqual(["I2I"]);
   });
 
   it("基准可注入（服务端传的是现读的项目默认基线，不是编译快照）", () => {
-    const live: Array<ModeContract> = [{ mode: "T2I", inputs: ["prompt"], output: "video" }];
+    const live: Array<ModeContract> = [{ mode: "T2I", inputs: ["prompt"] }];
     // 与「现读基线」相同 ⇒ 不落盘；与「编译快照」不同 ⇒ 落盘。
     expect(localOverrideDiff(live, live)).toEqual([]);
     expect(localOverrideDiff(live, configuredModeContracts(["T2I"])).map((c) => c.mode)).toEqual([
@@ -79,10 +75,9 @@ describe("localOverrideDiff：本机覆盖只落真改过的模式", () => {
 
 describe("modeContractSignature：比较键与来源无关（#3634）", () => {
   it("键序不同不算「改过」（落盘那份与编辑器草稿那份字段顺序可能不同）", () => {
-    const a: ModeContract = { mode: "T2I", inputs: ["prompt"], output: "image" };
+    const a: ModeContract = { mode: "T2I", inputs: ["prompt"] };
     // 同一份契约的另一种写法：字段顺序换了、required 显式写了出来。
     const b: ModeContract = {
-      output: "image",
       required: ["prompt"],
       mode: "T2I",
       inputs: ["prompt"],
@@ -94,21 +89,19 @@ describe("modeContractSignature：比较键与来源无关（#3634）", () => {
     const a: ModeContract = {
       mode: "T2I",
       inputs: ["prompt", "custom-text-1"],
-      output: "image",
       customInputs: [{ id: "custom-text-1", label: "画风", kind: "text" }],
     };
     const b: ModeContract = {
       mode: "T2I",
       inputs: ["prompt", "custom-text-1"],
-      output: "image",
       customInputs: [{ kind: "text", id: "custom-text-1", label: "画风" }],
     };
     expect(modeContractSignature(a)).toBe(modeContractSignature(b));
   });
 
   it("内容不同才算改过（口清单少一条就不同）", () => {
-    const a = parseModeContracts([{ mode: "T2I", inputs: ["prompt"], output: "image" }]);
-    const b = parseModeContracts([{ mode: "T2I", inputs: ["prompt", "size"], output: "image" }]);
+    const a = parseModeContracts([{ mode: "T2I", inputs: ["prompt"] }]);
+    const b = parseModeContracts([{ mode: "T2I", inputs: ["prompt", "size"] }]);
     expect(modeContractSignature(a[0]!)).not.toBe(modeContractSignature(b[0]!));
   });
 });

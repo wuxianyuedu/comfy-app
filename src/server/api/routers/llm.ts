@@ -185,7 +185,11 @@ async function readProviderState() {
 
 /** 一条模式契约的入参形状（本机保存与「保存为项目默认」共用同一份，ISSUE #3396）。
  *  口 id 由 isModeContractInputId 做类型守卫（zod 随之把入参窄化成契约口）；
- *  写入侧各自的归一化（`parseModeContracts`）再做一次。 */
+ *  写入侧各自的归一化（`parseModeContracts`）再做一次。
+ *
+ *  **没有「输出类别」这一格**（ISSUE #4072）：模式已按类别区分，再让用户挑一次
+ *  是重复选择。zod 默认剥掉未声明的键 ⇒ 存量客户端仍带着 `output` 提交也不会
+ *  被打回，落盘时那一格也不再进契约（归一化侧同口径）。 */
 const modeContractsInputSchema = z.object({
   contracts: z.array(
     z.object({
@@ -201,7 +205,6 @@ const modeContractsInputSchema = z.object({
           }),
         )
         .min(1),
-      output: z.enum(["image", "video", "audio"]),
       /* 该模式的必备口（缺了它这条流在工坊里驱动不起来）。缺省 =
        * 没配过 → 由 requiredInputsFor 回落内置默认（提示词）。 */
       required: z.array(z.string().refine(isModeContractInputId)).optional(),
@@ -334,7 +337,7 @@ export const llmRouter = createTRPCRouter({
       return readProviderState();
     }),
 
-  /** 模式契约注册表：每种模式的统一输入 / 输出。
+  /** 模式契约注册表：每种模式的统一输入。
    *
    *  下发**两层**：`configured` = 成品配置（项目默认基线，开发检出里现读磁盘，
    *  写完即生效不必重启）；`contracts` = 生效注册表（成品配置逐模式压上本机

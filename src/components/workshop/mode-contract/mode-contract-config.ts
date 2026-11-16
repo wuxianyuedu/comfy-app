@@ -19,7 +19,10 @@ import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 /** 可参与契约编辑的模式（生成类；与工坊的驱动口径一致）。 */
 export const CONTRACT_MODES = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative);
 
-/** 模式按输出类别分组 —— 模式清单有二十多个，不分组找不到。 */
+/** 模式按类别分组 —— 模式清单有二十多个，不分组找不到。
+ *
+ *  类别取自**工作流类型表**（模式本身带的那一格），不是契约里的一格：输出类别
+ *  早已不是可配项（ISSUE #4072），类别由模式码唯一决定。 */
 export const CONTRACT_MODE_GROUPS: Array<{
   category: "image" | "video" | "audio";
   label: string;
@@ -30,7 +33,7 @@ export const CONTRACT_MODE_GROUPS: Array<{
 ];
 
 /**
- * 导航树的**一棵树**：父行（输出类别）+ 挂在它下面的模式项。模式的顺序与内容一律从 `CONTRACT_MODES` 派生，不在这里重抄（§12.18）；空组顺手丢掉。
+ * 导航树的**一棵树**：父行（模式类别）+ 挂在它下面的模式项。模式的顺序与内容一律从 `CONTRACT_MODES` 派生，不在这里重抄（§12.18）；空组顺手丢掉。
  * 每一组**必须非空**、并集恰好等于 `CONTRACT_MODES` —— 由 `mode-contract-config.test.ts` 双向比对守住（漏项是这张表的失效模式：某个模式从导航上静默消失）。
  */
 export type ContractModeTreeGroup = {

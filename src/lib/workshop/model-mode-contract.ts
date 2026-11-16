@@ -1,10 +1,15 @@
-// ── 模式契约注册表：每种模式的统一输入 / 输出（纯函数层）────────────────
+// ── 模式契约注册表：每种模式的统一输入（纯函数层）──────────────────────
 // 工坊对外只说「统一输入」，契约是**模式的**统一口径（工坊对用户：每种模式
-// 对外暴露哪些口、输出什么类别）；远端模型按接口请求体细分的那一侧（适配器）
+// 对外暴露哪些口、哪些口必备）；远端模型按接口请求体细分的那一侧（适配器）
 // 在同子域的 `remote-model-adapter.ts`，两边的桥接在本文件的
 // `adapterInputsFromContract`（契约口 → 适配器默认行）。可配置的契约注册表
-// 只存**用户改过的模式**；未改过的模式回落内置默认（exposedParamsForMode +
-// outputKindForMode），保证升级零破坏。
+// 只存**用户改过的模式**；未改过的模式回落内置默认（exposedParamsForMode），
+// 保证升级零破坏。
+//
+// **输出类别不再是契约的一部分**（ISSUE #4072）：模式本身已按类别区分
+// （工作流类型表里的 `category`，契约编辑器的左栏就按它分组），再让用户
+// 为每个模式挑一次「输出类别」是重复选择且会与模式本身矛盾。产物的类别
+// 由**模式码**唯一决定（`workflow-types` 的 `category`），不进契约。
 
 import { isRecord } from "~/lib/is-record";
 import { compareText } from "~/lib/ordered-set";
@@ -16,7 +21,7 @@ import {
   exposedParamsForMode,
   type ExposedCustomKind,
 } from "~/lib/workflow/workflow-exposed-params";
-import { outputKindForMode, type WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
+import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
 /* 项目默认（#3603 起即**完整基线**）：界面「保存为项目默认」写出来的那份，
  * 入库、跟代码走。静态 import（不走 fs）——编译进产物后读到的就是这份快照，
@@ -33,7 +38,7 @@ import { outputKindForMode, type WorkshopInputType } from "~/lib/workshop/remote
  * 静默消失 —— 完整性由 `model-mode-contract.test.ts` 的基线判据守着）。 */
 import defaultsJson from "./mode-contract-defaults.json";
 
-/* ── 模式契约注册表：每种模式的统一输入 / 输出（可配置，工坊全局生效）──
+/* ── 模式契约注册表：每种模式的统一输入（可配置，工坊全局生效）──
  *
  * 上一版把「某种模式对外暴露什么」写死在代码里（exposedParamsForMode），
  * 用户没有地方调整。现在契约本身成为可配置实体：
@@ -42,7 +47,7 @@ import defaultsJson from "./mode-contract-defaults.json";
  *   · 远端模型按契约建适配器（统一输入 → 请求体字段；尺寸口在适配器层
  *     细分为宽高比 + 百万像素两个字段）。
  * 注册表只存**用户改过的模式**；未改过的模式回落内置默认
- * （exposedParamsForMode + outputKindForMode），保证升级零破坏。
+ * （exposedParamsForMode），保证升级零破坏。
  */
 
 /** 模式契约的输入口类型（与画布落点编辑器的契约口同一套 id）。
@@ -229,8 +234,6 @@ export function nextReferenceImageId(
   return max === 0 ? "reference-image" : `reference-image-${max + 1}`;
 }
 
-export type ModeContractOutput = "image" | "video" | "audio";
-
 /** 一个契约口在**这一模式下**是否必备。
  *
  *  必备 = 工坊/运行环节少不得它：缺了它这条工作流在工坊里驱动不起来（也是
@@ -244,7 +247,12 @@ export type ModeContractOutput = "image" | "video" | "audio";
  *  没勾任何口 = 这条模式没有必备口（工坊不因缺某个口而判它不可用）。 */
 export type ModeContractRequired = Array<ModeContractInputId>;
 
-/** 一种模式的统一输入 / 输出契约（工坊对外口径）。 */
+/** 一种模式的统一输入契约（工坊对外口径）。
+ *
+ *  **没有「输出类别」这一格**（ISSUE #4072）：模式本身已按类别区分
+ *  （`workflow-types` 的 `category`，契约编辑器的左栏就按它分组），再让
+ *  用户为每个模式挑一次是重复选择，且会与模式本身矛盾（把文生图挑成
+ *  「视频」）。产物的类别由模式码唯一决定，不进可配置契约。 */
 export type ModeContract = {
   /** 自定义口的定义（id → 作者填的展示名 + 简单类型）。
    *
@@ -255,8 +263,6 @@ export type ModeContract = {
   inputs: Array<ModeContractInputId>;
   /** 工作流库定义的模式码（T2I / I2I / D2I … T2V / I2V …）。 */
   mode: string;
-  /** 统一输出类别。 */
-  output: ModeContractOutput;
   /** 必备口（有序子集；缺省 = 内置默认，见 `requiredInputsFor`）。
    *
    *  用 `undefined` 而不是空数组表达「没配过」：内置默认（提示词）与「用户
@@ -308,7 +314,6 @@ export function derivedModeContract(mode: string): ModeContract {
   return {
     mode: upperToken(mode),
     inputs,
-    output: outputKindForMode(mode),
     required: builtInRequiredInputs(inputs),
   };
 }
@@ -322,8 +327,8 @@ export function derivedModeContract(mode: string): ModeContract {
  *
  *  这里写死而不是直接 import 类型表：`model-mode-contract` 是纯函数层，被契约
  *  编辑器、封装视图、适配器多处读，引整张工作流类型表会把「口清单」这件事
- *  与「工作流有哪些类型」耦合在一起（后者已经由 `outputKindForMode` 用到一次，
- *  那处是**按模式查**、不是**摊平全集**）。 */
+ *  与「工作流有哪些类型」耦合在一起（模式**类别**由类型表按模式查得到，
+ *  那是**按模式查**、不是**摊平全集**）。 */
 export const ALL_CONTRACT_MODES: ReadonlyArray<string> = [
   "T2I",
   "I2I",
@@ -393,7 +398,6 @@ export function modeContractSignature(contract: ModeContract): string {
   return JSON.stringify({
     mode: contract.mode,
     inputs: contract.inputs,
-    output: contract.output,
     required: requiredInputsFor(contract),
     /* 自定义口定义是**查表**（真正的顺序由 `inputs` 决定），按 id 排一遍再比：
      * 两份来源的书写顺序不同不算「改过」。排序走 `ordered-set` 的 `compareText`
@@ -407,7 +411,11 @@ export function modeContractSignature(contract: ModeContract): string {
  *
  *  口的合法性用 isModeContractInputId —— 与 modeContractsSave 的入参校验同源。
  *  历史教训：这里用 isModeContractInputType（基础 6 口）时，内置默认契约里带序号的
- *  参考图口会被**静默丢掉**，用户存完再读回来就少一口。 */
+ *  参考图口会被**静默丢掉**，用户存完再读回来就少一口。
+ *
+ *  **旧数据里的 `output`（输出类别）被丢弃**（ISSUE #4072）：输出类别不再是
+ *  契约的一部分 —— 类别由模式码唯一决定。存量文件里那一格照读不误，但归一化
+ *  后不再进契约（读出来就没有这一格，与新写入的形状一致）。 */
 export function parseModeContracts(raw: unknown): Array<ModeContract> {
   if (!Array.isArray(raw)) {
     return [];
@@ -442,9 +450,6 @@ export function parseModeContracts(raw: unknown): Array<ModeContract> {
           (i): i is ModeContractInputId => isModeContractInputId(i) && inputs.includes(i),
         )
       : undefined;
-    const rawOutput = typeof rec.output === "string" ? rec.output : "";
-    const output: ModeContractOutput =
-      rawOutput === "video" || rawOutput === "audio" ? rawOutput : outputKindForMode(mode);
     /* 只留本契约真的用到的自定义口定义：`inputs` 里已删掉的口，定义跟着消失
      *  （否则注册表会随每次「加一个又删一个」永久膨胀）。 */
     const usedCustomInputs = customInputs.filter((def) => inputs.includes(def.id));
@@ -452,7 +457,6 @@ export function parseModeContracts(raw: unknown): Array<ModeContract> {
     out.push({
       mode,
       inputs,
-      output,
       ...(required === undefined ? {} : { required }),
       ...(usedCustomInputs.length > 0 ? { customInputs: usedCustomInputs } : {}),
     });
