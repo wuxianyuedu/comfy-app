@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowIOEntry } from "./workflow-io-types";
-import { clearModeOverrides, withIOLabel, withModeOverride } from "./workflow-io-edit";
+import {
+  clearModeOverrides,
+  withIOReordered,
+  withIOLabel,
+  withModeOverride,
+} from "./workflow-io-edit";
 
 function entry(overrides: Partial<WorkflowIOEntry> = {}): WorkflowIOEntry {
   return {
@@ -78,5 +83,29 @@ describe("withIOLabel", () => {
     const io = { [KEY]: entry({ label: "提示词" }) };
     expect(withIOLabel(io, "missing", "新名")).toBe(io);
     expect(withIOLabel(io, KEY, "提示词")).toBe(io);
+  });
+});
+
+describe("withIOReordered（ISSUE #4073：IO 预览的参数顺序可调）", () => {
+  const A = "1::widget::a";
+  const B = "2::widget::b";
+  const C = "3::widget::c";
+  const io = { [A]: entry({ name: "a" }), [B]: entry({ name: "b" }), [C]: entry({ name: "c" }) };
+
+  it("移到目标项之前 / 之后，其余键的原序不变", () => {
+    const before = withIOReordered(io, C, A, "before");
+    expect(Object.keys(before)).toEqual([C, A, B]);
+    const after = withIOReordered(io, A, C, "after");
+    expect(Object.keys(after)).toEqual([B, C, A]);
+  });
+
+  it("targetKey 为空 = 移到末尾；目标不存在也落到末尾", () => {
+    expect(Object.keys(withIOReordered(io, A, null, "before"))).toEqual([B, C, A]);
+    expect(Object.keys(withIOReordered(io, A, "missing", "before"))).toEqual([B, C, A]);
+  });
+
+  it("fromKey 不在表内 / 与目标相同：原样返回同一引用", () => {
+    expect(withIOReordered(io, "missing", B, "before")).toBe(io);
+    expect(withIOReordered(io, A, A, "before")).toBe(io);
   });
 });
