@@ -46,7 +46,12 @@ const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition =>
 export type RowDragHandlers = {
   onDragEnd: () => void;
   onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
-  onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
+  /** `fromKeys` 只在拖动组合参数块时给出（尺寸 / 视频块压着多个 ioKey），
+   *  普通行不传。落点键仍是渲染那一层的锚点 ioKey。 */
+  onDragStart: (
+    ioKey: string,
+    fromKeys?: Array<string>,
+  ) => (event: DragEvent<HTMLDivElement>) => void;
   onDrop: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
 };
 
@@ -64,6 +69,11 @@ export type DynamicWorkflowFormController = {
   endDrag: () => void;
   /** 隐藏图片选择 input 的 props（渲染成 `<FilePicker {...fileInputProps} />`，#3692）。 */
   fileInputProps: ComponentProps<typeof FilePicker>;
+  /** `groupedDragKeys` 的第一项：组合块参与拖拽 / 接收落点时用的锚点 ioKey。 */
+  groupAnchorKey: string | null;
+  /** 组合参数（尺寸 / 视频）在视觉上只是一块，底下压着多个 ioKey。拖动这块时
+   *  把它们当作一个整体搬移，顺序 = 当前 displayOrder（`widgetInputs` 已排好）。 */
+  groupedDragKeys: Array<string>;
   groups: ReturnType<typeof inferGroups>;
   /** 全量输入（wire + widget），按 displayOrder 稳定排序。 */
   inputs: Array<EnrichedWidget>;
@@ -145,6 +155,15 @@ export function useDynamicWorkflowForm(
   const groups = useMemo(() => inferGroups(shownWidgetInputs), [shownWidgetInputs]);
   const { groupedKeys } = groups;
 
+  /* 组合块的整体拖拽键：以当前展示序（shownWidgetInputs 已按 displayOrder 排好）
+   *  为准，锚点取第一项。视图层用它给 GroupedControls 包 draggable + ⋮⋮，
+   *  并把整组 key 随 onReorder 上抛 —— 不能只挪一个代表键。 */
+  const groupedDragKeys = useMemo(
+    () => shownWidgetInputs.filter((widget) => groupedKeys.has(widget.ioKey)).map((w) => w.ioKey),
+    [shownWidgetInputs, groupedKeys],
+  );
+  const groupAnchorKey = groupedDragKeys[0] ?? null;
+
   /* 端口行 = 连线输入 + 数值 widget（seed/steps/cfg），共用可连接的单行布局；
    *  已分组的针脚排除在外，避免与 GroupedControls 重复渲染。
    *  IO 编辑作者态下数值 widget 改由 widgetSectionEntries 渲染成完整参数行，否则必填 / 👁 无从编辑。 */
@@ -172,18 +191,23 @@ export function useDynamicWorkflowForm(
    *  起手键同时记在 ref：原生拖拽横跨多个 task，drop 闭包可能来自另一次渲染，
    *  ref 于 dragstart 现场写入、drop 一律以它为准（ISSUE #349）。state 保留用于重渲指示线，drop / dragend 清空。 */
   const dragFromRef = useRef<string | null>(null);
+  /* 组合块拖动时整组的 key 也记在 ref：原生拖拽横跨多个 task，drop 闭包可能
+   *  来自另一次渲染，与 fromKey 一样必须在起手现场记下。 */
+  const dragFromKeysRef = useRef<Array<string> | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [dropPosition, setDropPosition] = useState<WorkflowIODropPosition>("before");
 
-  const beginDrag = useCallback((ioKey: string) => {
+  const beginDrag = useCallback((ioKey: string, fromKeys?: Array<string>) => {
     dragFromRef.current = ioKey;
+    dragFromKeysRef.current = fromKeys ?? null;
     setDraggingKey(ioKey);
     setDragOverKey(ioKey);
   }, []);
 
   const endDrag = useCallback(() => {
     dragFromRef.current = null;
+    dragFromKeysRef.current = null;
     setDraggingKey(null);
     setDragOverKey(null);
     setDropPosition("before");
@@ -205,28 +229,29 @@ export function useDynamicWorkflowForm(
       return null;
     }
     return {
-      onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
-        /* 输入框 / 下拉 / 按钮上起手不拖（用户口径：只能从不可编辑区域拖动）
-         *  —— preventDefault 直接取消这次拖拽。 */
-        const target = event.target instanceof HTMLElement ? event.target : null;
-        if (target?.closest(DRAG_CANCEL_SELECTOR)) {
-          event.preventDefault();
-          return;
-        }
-        /* 起手行以**事件目标所在的那一行**为准：行级 draggable 下目标通常是
-         *  行内子元素（标签按钮），bind 进来的 ioKey 是渲染时那一次的闭包值，
-         *  可能与用户实际抓住的行不一致。取不到才退回 bind 值。 */
-        beginDrag(rowKeyOf(event.target) ?? ioKey);
-        /* Firefox 不调 dataTransfer.setData 就拒绝开始拖拽。
-         * Payload 只给原生拖拽一个「有内容」的凭据 —— 真正的来源键
-         * 以上面的 ref 为准（见 dragFromRef 注释）。 */
-        try {
-          event.dataTransfer.setData("text/plain", ioKey);
-          event.dataTransfer.effectAllowed = "move";
-        } catch {
-          /* 有些浏览器在用户手势之外调 setData 会抛异常；忽略即可。 */
-        }
-      },
+      onDragStart:
+        (ioKey: string, fromKeys?: Array<string>) => (event: DragEvent<HTMLDivElement>) => {
+          /* 输入框 / 下拉 / 按钮上起手不拖（用户口径：只能从不可编辑区域拖动）
+           *  —— preventDefault 直接取消这次拖拽。 */
+          const target = event.target instanceof HTMLElement ? event.target : null;
+          if (target?.closest(DRAG_CANCEL_SELECTOR)) {
+            event.preventDefault();
+            return;
+          }
+          /* 起手行以**事件目标所在的那一行**为准：行级 draggable 下目标通常是
+           *  行内子元素（标签按钮），bind 进来的 ioKey 是渲染时那一次的闭包值，
+           *  可能与用户实际抓住的行不一致。取不到才退回 bind 值。 */
+          beginDrag(rowKeyOf(event.target) ?? ioKey, fromKeys);
+          /* Firefox 不调 dataTransfer.setData 就拒绝开始拖拽。
+           * Payload 只给原生拖拽一个「有内容」的凭据 —— 真正的来源键
+           * 以上面的 ref 为准（见 dragFromRef 注释）。 */
+          try {
+            event.dataTransfer.setData("text/plain", ioKey);
+            event.dataTransfer.effectAllowed = "move";
+          } catch {
+            /* 有些浏览器在用户手势之外调 setData 会抛异常；忽略即可。 */
+          }
+        },
       onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         const fromKey = dragFromRef.current;
         if (fromKey === null || fromKey === "" || fromKey === ioKey) {
@@ -248,13 +273,20 @@ export function useDynamicWorkflowForm(
          *  两者相同即「拖回原地」，不动数据。插入点以松手时指针所在的
          *  半区为准，与指示线一致。 */
         const fromKey = dragFromRef.current;
+        const fromKeys = dragFromKeysRef.current;
         const toKey = rowKeyOf(event.target) ?? ioKey;
         const pos = positionOf(event);
         endDrag();
         if (fromKey === null || fromKey === "" || fromKey === toKey) {
           return;
         }
-        onReorder(fromKey, toKey, pos);
+        /* 普通行保持三参调用形状（不塞一个 undefined 第四参），避免让既有
+         * 只签三参的回调/判据误以为发生了组合块拖动；整组拖动才带第 4 参。 */
+        if (fromKeys === null) {
+          onReorder(fromKey, toKey, pos);
+        } else {
+          onReorder(fromKey, toKey, pos, fromKeys);
+        }
       },
       onDragEnd: endDrag,
     };
@@ -374,6 +406,8 @@ export function useDynamicWorkflowForm(
     draggingKey,
     dragOverKey,
     dropPosition,
+    groupedDragKeys,
+    groupAnchorKey,
     beginPortDrag,
     endDrag,
   };

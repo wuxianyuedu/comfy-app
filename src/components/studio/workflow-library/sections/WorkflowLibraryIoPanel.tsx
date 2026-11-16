@@ -20,11 +20,11 @@ import {
 } from "~/components/studio/workflow-io";
 import { RequiredSummary } from "~/components/studio/RequiredSummary";
 import { Button } from "~/components/ui/button";
-import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Hint } from "~/components/ui/hint";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 import {
   clearModeOverrides,
+  withIOGroupReordered,
   withIOReordered,
   withIOLabel,
   withModeOverride,
@@ -92,9 +92,6 @@ export function WorkflowLibraryIoPanel({
    * 落库。detailFull 的富化链会把草稿里作者写过的 modeOverrides / label /
    * required 原样透传回来，重拉后草稿与服务端一致。 */
   const [draft, setDraft] = useState<WorkflowIOMap>(() => asIOMap(storedIO));
-
-  /* 待确认移除的模式码（ISSUE #4073 第 3 条：删除要有确认框）。 */
-  const [pendingRemoveMode, setPendingRemoveMode] = useState<string | null>(null);
 
   /* 生效模式：当前模式必须是工作流模式之一，否则回退到第一个（与编辑器
    * IO 预览、画布节点同一口径）。没有模式时表单禁用。 */
@@ -251,41 +248,25 @@ export function WorkflowLibraryIoPanel({
         )}
       </div>
 
-      {/* 模式行：与编辑器 IO 面板同一形式（ISSUE #3800）—— 模式页签（>1 个时
-       *  带移除按钮）＋右侧「选择模式」就地管理，不再把用户指去不存在的「类型」
-       *  页签。切到哪个模式就编哪个模式的覆盖层。 */}
+      {/* 模式行：模式页签只负责「切到哪个模式就编哪个模式的覆盖层」。增删模式
+       *  一律走右侧「选择模式」下拉（ISSUE #4073 复审）：面板内不再给每个页签挂
+       *  × 删除按钮——它和下拉里的取消勾选是同一件事，两处入口会让用户拿不准
+       *  哪个才作数；下拉本身就是带「保存」的事务式编辑，取消勾选即撤掉模式，
+       *  无需在页签上再做一次二次确认。 */}
       <div className="border-border-strong flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-1.5">
         {modes.map((code) => (
-          <span className="flex shrink-0 items-center gap-0.5" key={code}>
-            <Hint label={code}>
-              <Button
-                className={`${tabClass(effectiveMode === code)} h-auto`}
-                onClick={() => {
-                  onActiveModeChange(code);
-                }}
-                size="xs"
-                variant="ghost"
-              >
-                {modeLabel(code)}
-              </Button>
-            </Hint>
-            {modes.length > 1 && (
-              <Hint accessibleName label={`移除模式「${modeLabel(code)}」（需确认）`}>
-                <Button
-                  className="text-ink-muted hover:text-danger-strong text-3xs rounded"
-                  onClick={() => {
-                    /* 移除前先确认（ISSUE #4073 第 3 条）：这一步会连同该模式的
-                     * 参数配置一起从页签里撤掉，误触的代价是整块配置要重配。 */
-                    setPendingRemoveMode(code);
-                  }}
-                  size="icon-xs"
-                  variant="ghost"
-                >
-                  ×
-                </Button>
-              </Hint>
-            )}
-          </span>
+          <Hint key={code} label={code}>
+            <Button
+              className={`${tabClass(effectiveMode === code)} h-auto`}
+              onClick={() => {
+                onActiveModeChange(code);
+              }}
+              size="xs"
+              variant="ghost"
+            >
+              {modeLabel(code)}
+            </Button>
+          </Hint>
         ))}
         <span className="ml-auto shrink-0">
           <MultiModeSelect
@@ -317,10 +298,16 @@ export function WorkflowLibraryIoPanel({
             mode={effectiveMode}
             onChange={handleFormChange}
             onLabelChange={handleLabelChange}
-            /* 参数顺序可调（ISSUE #4073 第 4 条，与编辑器内查看同能力）：拖到
-             * 某一行的前 / 后即改原始列的键序，即时落库。 */
-            onReorder={(fromKey, targetKey, position) => {
-              commit(withIOReordered(draft, fromKey, targetKey, position));
+            /* 参数顺序可调（ISSUE #4073 第 4 / 5 条，与编辑器内查看同能力）：
+             * 拖到某一行的前 / 后即改原始列并重编 displayOrder，即时落库。
+             * 组合参数块（尺寸 / 视频）压着多个 ioKey，第 4 参带整组 key，
+             * 走组变换整体搬移；只搬代表键会表现为「拖完又弹回原处」。 */
+            onReorder={(fromKey, targetKey, position, fromKeys) => {
+              commit(
+                fromKeys !== undefined && fromKeys.length > 1
+                  ? withIOGroupReordered(draft, fromKeys, targetKey, position)
+                  : withIOReordered(draft, fromKey, targetKey, position),
+              );
             }}
             onRequiredChange={handleRequiredChange}
             onSeedModeChange={handleSeedModeChange}
@@ -340,24 +327,6 @@ export function WorkflowLibraryIoPanel({
         </span>
         <RequiredSummary io={previewIO} mode={effectiveMode} />
       </div>
-
-      {/* 移除模式的确认框（ISSUE #4073 第 3 条）。 */}
-      {pendingRemoveMode !== null && (
-        <ConfirmDialog
-          danger
-          description={`移除后「${modeLabel(pendingRemoveMode)}」不再出现在模式列表里；该工作流可随时重新添加模式。`}
-          onClose={() => {
-            setPendingRemoveMode(null);
-          }}
-          onConfirm={() => {
-            const next = modes.filter((mode) => mode !== pendingRemoveMode);
-            onModesChange(next, next[0] ?? "");
-            setPendingRemoveMode(null);
-          }}
-          open
-          title={`移除模式「${modeLabel(pendingRemoveMode)}」？`}
-        />
-      )}
     </div>
   );
 }
