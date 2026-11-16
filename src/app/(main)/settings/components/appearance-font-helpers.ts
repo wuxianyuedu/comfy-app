@@ -66,6 +66,48 @@ export function fontCategoryForTier(part: string): string {
 }
 
 /**
+ * 栈里一项的「什么时候在用」说明（ISSUE #4059 补充意见：光陈列名字，用户看不出
+ * 每一种什么时候用、为什么系统回退也有多种）。CSS 字体栈按「缺字才回退」逐个尝试：
+ * 排在前面的先生效，后面的只在前面字体缺这个字时接替；不同系统自带的中文 / 等宽
+ * 字体不同，所以栈里给各平台各留一个。
+ *
+ * @param part 栈里的原始项（可带引号 / var()）
+ * @param isFirstInGroup 是否是该部分的第一项（优先使用的那一个）
+ * @returns 一句可读说明，直接陈列在设置页的字体名旁边
+ */
+export function fontRoleNote(part: string, isFirstInGroup: boolean): string {
+  const normalized = part.replaceAll(/^['"]|['"]$/gu, "").trim();
+  const notes: Record<string, string> = {
+    "var(--font-geist-sans)": "内置西文（随包自带）",
+    "Sarasa UI SC": "内置中文（随包自带）",
+    "Sarasa Mono SC": "内置中文等宽（随包自带）",
+    "PingFang SC": "macOS 自带中文",
+    "Microsoft YaHei": "Windows 自带中文",
+    "Noto Sans SC": "Android / Linux 自带中文",
+    "SF Mono": "macOS 自带等宽",
+    Menlo: "macOS 等宽回退",
+    "Cascadia Code": "Windows 等宽回退",
+    "Cascadia Mono": "Windows 等宽回退",
+    Consolas: "Windows 等宽回退",
+    "ui-monospace": "系统等宽兜底",
+    "SFMono-Regular": "系统等宽兜底",
+    "system-ui": "跟随系统界面字体（兜底）",
+    "-apple-system": "Apple 平台兜底",
+    "sans-serif": "无衬线最终兜底",
+    monospace: "等宽最终兜底",
+  };
+  const note = notes[normalized];
+  if (note === undefined) {
+    return isFirstInGroup ? "优先使用" : "缺字时回退";
+  }
+  if (isFirstInGroup) {
+    return `${note}，优先使用`;
+  }
+  /* 兜底类的说明本身已经答了「什么时候用」，不再叠一句「缺字时回退」。 */
+  return note.includes("兜底") ? note : `${note}，缺字时回退`;
+}
+
+/**
  * 每一档的「部分」槽位（ISSUE #3784 补充）：一类字体一个槽位，配置时**每槽一种
  * 字体**；「系统回退」是固定档（不提供输入）——任何字体缺字时都得有地方落地。
  */
