@@ -1,6 +1,12 @@
+"use client";
+
 // 智能体式创作助手 —— 用多轮自然语言引导，把模糊的想法变成结构化的生成描述。
 // 配了本地/远程 LLM 时就用它；没配则回落到一个脚本化的离线状态机，
 // 保证多轮流程始终可用。
+//
+// "use client"：本模块跑在浏览器侧（fetch 相对地址 /api/llm），降级告警走
+// console（LogProvider 拦进日志面板，规范 07 §7.6）—— 因此列入
+// tests/single-logger-channel.test.ts 的 CLIENT_ONLY 豁免清单。
 
 import { isRecord } from "~/lib/is-record";
 
