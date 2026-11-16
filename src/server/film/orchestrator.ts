@@ -3,6 +3,7 @@
 //  → ffmpeg 拼接（+ 字幕 / BGM）→ 一部成片。
 // 每个镜头走与手动「视频」页签同一条库工作流链（工作流库 id + 封装），所以不需要任何内置模板。
 
+import { TRPCError } from "@trpc/server";
 import { clamp } from "~/lib/clamp";
 import { sleep } from "~/lib/with-timeout";
 import "server-only";
@@ -320,7 +321,10 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
   const rawShots = row && isShotArray(row.shots) ? row.shots : [];
   const shots = [...rawShots].sort((a, b) => a.index - b.index);
   if (!shots.length) {
-    throw new Error("该项目还没有镜头，请先在工坊产出镜头再成片");
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "该项目还没有镜头，请先在工坊产出镜头再成片",
+    });
   }
 
   const sizeSpec = toSizeSpec(input.size ?? FILM_COMPOSE_SIZE);
@@ -369,7 +373,10 @@ async function generateVideoShot(
 
   const videoWorkflowId = typeof params.videoWorkflowId === "string" ? params.videoWorkflowId : "";
   if (!videoWorkflowId) {
-    throw new Error("镜头缺少「工作流库视频工作流 id」，无法本地生成");
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "镜头缺少「工作流库视频工作流 id」，无法本地生成",
+    });
   }
 
   const size = toSizeSpec(params.size ?? NATIVE_SHOT_VIDEO_SIZE);
@@ -383,7 +390,10 @@ async function generateVideoShot(
     const imageWorkflowId =
       typeof params.imageWorkflowId === "string" ? params.imageWorkflowId : "";
     if (!imageWorkflowId) {
-      throw new Error("镜头缺少首帧，且没有配置「工作流库图类工作流 id」可用于合成首帧");
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "镜头缺少首帧，且没有配置「工作流库图类工作流 id」可用于合成首帧",
+      });
     }
     inputImage = await synthesizeFirstFrame({
       userId,
@@ -415,12 +425,15 @@ async function generateVideoShot(
 export async function startFilm(id: string) {
   const film = await filmRepository.findById(id);
   if (!film) {
-    throw new Error("影片不存在");
+    throw new TRPCError({ code: "NOT_FOUND", message: "影片不存在" });
   }
 
   const shots = await filmShotRepository.listByFilm(id, { status: "IDLE" });
   if (!shots.length) {
-    throw new Error("没有可生成的镜头，请重新创建");
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "没有可生成的镜头，请重新创建",
+    });
   }
 
   /* 条件抢占（ISSUE #3836）：原先「读 status → 判断 → 无条件 markGenerating」

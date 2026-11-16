@@ -5,6 +5,7 @@
  */
 import "server-only";
 
+import { TRPCError } from "@trpc/server";
 import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -183,16 +184,20 @@ export async function composeFilm(id: string) {
         // 镜头未出片（videoPath 为空）是真实故障，不是可静默跳过的分支：
         // 抛明确文案，交给外层 catch 落 markFailed + 面板日志（硬规则 4），
         // 不再用 `shot.videoPath!` 让脏数据在 path.join 里崩成栈噪声。
-        throw new Error(`镜头 ${i + 1} 缺少视频文件，无法合成`);
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `镜头 ${i + 1} 缺少视频文件，无法合成`,
+        });
       }
       const clip = clipPathOf(cwd, videoPath);
       if (clip === null) {
         // 地址解不出落在产物根内的文件 = 这一条镜头不可能合成成功：
         // 在起 ffmpeg 之前就说清是哪一条、存的是哪个地址，别让它变成一句
         // 「No such file or directory」的 stderr 片段（硬规则 4）。
-        throw new Error(
-          `镜头 ${i + 1} 的视频地址不在产物目录内：${clampText(videoPath, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
-        );
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `镜头 ${i + 1} 的视频地址不在产物目录内：${clampText(videoPath, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
+        });
       }
       const segOut = path.join(tmpDir, `seg_${i}.mp4`);
       const dur = shot.duration ?? film.framesPerShot / fps;
