@@ -31,41 +31,36 @@ function activeView(page: Page, view: string): Locator {
 }
 
 async function expectSidebarViewActive(page: Page, label: string, view: string): Promise<void> {
-  await expect(sidebarItem(page, label)).toHaveAttribute("data-active", "true", {
+  /* Base UI 迁移后（ISSUE #4034）：激活态是 `data-active` 属性**在场**（值为空串），
+     未激活时属性缺席 —— 断言在场即可，别按旧 Radix 的 "true" 值等。 */
+  await expect(sidebarItem(page, label)).toHaveAttribute("data-active", {
     timeout: 20_000,
   });
   await expect(activeView(page, view)).toBeVisible({ timeout: 20_000 });
 }
 
-async function expectViewRendered(
-  page: Page,
-  entryLabel: string,
-  view: string,
-  contentAnchors: Array<string>,
-) {
+async function expectViewRendered(page: Page, entryLabel: string, view: string) {
   await openFromSidebar(page, entryLabel);
   await expectSidebarViewActive(page, entryLabel, view);
-  for (const text of contentAnchors) {
-    // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行断言，并行会让失败归因与截图错位
-    await expect(activeView(page, view).getByText(text).first()).toBeVisible({ timeout: 20_000 });
-  }
+  /* 内容锚用该屏的 H1（PageHeader 恒渲染）：CI 的库是空的，模型适配/模式契约
+   * 在空库下渲染的是「还没有远端模型」空态而不是编辑器 —— 按编辑器文本锚会
+   * 永远红（ISSUE #4034）。 */
+  await expect(page.getByRole("heading", { level: 1, name: entryLabel, exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(page.getByRole("dialog")).toHaveCount(0);
 }
 
 test.describe("模型适配 / 模式契约作为视图 @critical", () => {
   test("开「模型适配」切到该视图并渲染内容，且不在对话框里", async ({ page }) => {
     await page.goto("/workspace");
-    await expectViewRendered(page, "模型适配", "model-adapters", ["模型适配器", "新建适配器"]);
+    await expectViewRendered(page, "模型适配", "model-adapters");
     await expect(stripOf(page).getByRole("tab", { name: /模型适配/ })).toHaveCount(0);
   });
 
   test("开「模式契约」切到该视图并渲染内容，且不在对话框里", async ({ page }) => {
     await page.goto("/workspace");
-    await expectViewRendered(page, "模式契约", "mode-contract", [
-      "模式契约",
-      "选择模型类型",
-      "模式契约注册表",
-    ]);
+    await expectViewRendered(page, "模式契约", "mode-contract");
     await expect(stripOf(page).getByRole("tab", { name: /模式契约/ })).toHaveCount(0);
   });
 
@@ -74,18 +69,14 @@ test.describe("模型适配 / 模式契约作为视图 @critical", () => {
     await openFromSidebar(page, "模型适配");
     await expectSidebarViewActive(page, "模型适配", "model-adapters");
     await expect(
-      activeView(page, "model-adapters").getByText("模型适配器", { exact: true }),
-    ).toBeVisible({
-      timeout: 20_000,
-    });
+      page.getByRole("heading", { level: 1, name: "模型适配", exact: true }),
+    ).toBeVisible({ timeout: 20_000 });
 
     await openFromSidebar(page, "模式契约");
     await expectSidebarViewActive(page, "模式契约", "mode-contract");
     await expect(
-      activeView(page, "mode-contract").getByText("选择模型类型", { exact: true }),
-    ).toBeVisible({
-      timeout: 20_000,
-    });
+      page.getByRole("heading", { level: 1, name: "模式契约", exact: true }),
+    ).toBeVisible({ timeout: 20_000 });
 
     await openFromSidebar(page, "首页");
     await expect(page.locator('[data-view="mode-contract"]')).toHaveCount(0, { timeout: 5000 });
@@ -99,18 +90,16 @@ test.describe("模型适配 / 模式契约作为视图 @critical", () => {
     await expect(strip).toBeVisible({ timeout: 30_000 });
 
     await page.getByRole("button", { name: "工作流库", exact: true }).first().click();
-    await expect(strip.getByRole("tab").filter({ hasText: "工作流库" })).toHaveCount(1);
+    /* #3740：工作流库是侧栏常驻项，不进页签条 —— 选中态在侧栏 data-active 上。 */
+    await expect(sidebarItem(page, "工作流库")).toHaveAttribute("data-active", {
+      timeout: 20_000,
+    });
 
     const headerBtn = page.getByRole("button", { name: /模式契约/ }).first();
     await expect(headerBtn).toBeVisible({ timeout: 20_000 });
     await headerBtn.click();
 
     await expectSidebarViewActive(page, "模式契约", "mode-contract");
-    await expect(
-      activeView(page, "mode-contract").getByText("选择模型类型", { exact: true }),
-    ).toBeVisible({
-      timeout: 20_000,
-    });
     await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 });

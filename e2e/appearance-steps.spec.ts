@@ -33,15 +33,19 @@ test.describe("外观两档 @critical", () => {
   test("圆角改档会真的传导到卡片与按钮，且刷新后仍在", async ({ page }) => {
     await openAppearance(page);
 
-    /* 卡片吃的是 `rounded-xl`（≈ 16px，token 是 1rem），选「尖锐」后应显著变小；
-       按钮吃的是 `rounded-md`，也应一起缩。只卡片变、按钮不变 = 只改了一半。 */
-    const card = page.locator(".rounded-xl").first();
-    const button = radiusGroup(page).getByRole("radio").first();
+    /* 传导锚：设置页上的 `.rounded-lg` / `.rounded-md` 元素（圆角随 --radius
+       一起变：中·16px 时 16px/12px，小·12px 时 12px/9px）。别用圆角组自己的
+       选项圈（那是 rounded-full 的圆点，不随 --radius 变），也别用页面里第一颗
+       `.rounded-xl`（那可能是别的分区的面板，#4034）。 */
+    const card = page.locator(".rounded-lg").first();
+    const button = page.locator(".rounded-md").first();
     const cardBefore = await card.evaluate((el) => getComputedStyle(el).borderTopLeftRadius);
     const buttonBefore = await button.evaluate((el) => getComputedStyle(el).borderTopLeftRadius);
     expect(Number.parseFloat(cardBefore)).toBeGreaterThan(10);
 
-    await radiusGroup(page).getByRole("radio", { name: /尖锐/ }).click();
+    await radiusGroup(page)
+      .getByRole("radio", { name: /小 · 12px/ })
+      .click();
     await expect
       .poll(() => card.evaluate((el) => getComputedStyle(el).borderTopLeftRadius))
       .not.toBe(cardBefore);
@@ -58,7 +62,9 @@ test.describe("外观两档 @critical", () => {
     await page.reload();
     await expect
       .poll(() =>
-        radiusGroup(page).getByRole("radio", { name: /尖锐/ }).getAttribute("aria-checked"),
+        radiusGroup(page)
+          .getByRole("radio", { name: /小 · 12px/ })
+          .getAttribute("aria-checked"),
       )
       .toBe("true");
   });
