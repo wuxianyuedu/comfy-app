@@ -534,12 +534,28 @@ function collectUnformatted(entry) {
  * （约 10K 字符）给足余量。fail-closed 规则**逐批**生效：任何一批被信号杀 /
  * 退出码越界 / 退出 1 却不交清单，整条门当场 exit 2，不许把「后半批没跑」
  * 读成「全干净」。
+ *
+ * 删除不进判面（ISSUE #4145）：改动面（`git diff` 的两档都一样）会把**删除**的
+ * 路径一并列进来，而 oxfmt 按路径读**工作区** —— 删除项已无字节可判，靶子全剩
+ * 不下时它以「Expected at least one target file」退出 2，纯删除的提交就被误拦
+ * （#4142 删 14 份垫片当场被拦）。那不是「有差异」也不是「没跑成」，是「这一批
+ * 没有账可算」，与全量档对不存在扫描根的跳过同一立论；剔掉几份必须念出来。
  */
 function collectUnformattedFiles(entry, files) {
+  const existing = files.filter((f) => fs.existsSync(path.join(ROOT, f)));
+  if (existing.length !== files.length) {
+    console.log(
+      `[format] ${files.length - existing.length} 份是删除（工作区已无该文件），不进格式判面；` +
+        `余 ${existing.length} 份照判。`,
+    );
+  }
+  if (!existing.length) {
+    return [];
+  }
   const found = new Set();
   const CHUNK = 200;
-  for (let i = 0; i < files.length; i += CHUNK) {
-    const batch = files.slice(i, i + CHUNK);
+  for (let i = 0; i < existing.length; i += CHUNK) {
+    const batch = existing.slice(i, i + CHUNK);
     const subject = `点名 ${batch.length} 份（第 ${Math.floor(i / CHUNK) + 1} 批）`;
     for (const f of oxfmtCheckTargets(entry, batch, subject)) {
       /* 点名档的面 = `GLOBS` 减**空**（不过 `IGNORE_GLOBS`，ISSUE #2979）：
