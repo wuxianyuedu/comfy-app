@@ -19,6 +19,33 @@ import { isFieldType } from "~/lib/comfyui/field-types";
 import { errorText } from "~/lib/error-message";
 import { emitAppEvent } from "~/lib/app-events";
 import { isRecord } from "~/lib/is-record";
+import { sleep } from "~/lib/with-timeout";
+
+async function fetchManifestWithRetry(
+  base: string,
+  opts: { attempts: number; timeoutMs: number },
+): Promise<Response> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= opts.attempts; attempt++) {
+    try {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- 重试必须顺序执行
+      const res = await fetch(`${base}/api/custom-nodes/manifest`, {
+        signal: AbortSignal.timeout(opts.timeoutMs),
+      });
+      if (res.ok || res.status < 500) {
+        return res;
+      }
+      lastError = new Error(`manifest status ${res.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < opts.attempts) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- 重试退避必须顺序等待
+      await sleep(200 * attempt);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
 
 /* 把 ComfyUI 的原始分类字符串映射到强调色。对外导出，
  * 好让界面给节点预览卡渲染同一个分类配色，而不必先构建完整的 NodeTypeConfig。 */
@@ -346,7 +373,7 @@ export async function getCustomNodesManifest(
   base = "",
 ): Promise<{ nodes: Record<string, ManifestNodeRaw> } | null> {
   try {
-    const res = await fetch(`${base}/api/custom-nodes/manifest`);
+    const res = await fetchManifestWithRetry(base, { attempts: 3, timeoutMs: 10_000 });
     if (!res.ok) {
       const failure = classifyManifestFailure(res.status);
       /* 只有「取不到」这一档值得写日志：「还没解析过」是首屏的正常态，
@@ -376,7 +403,7 @@ export async function getCustomNodesManifest(
 export async function refreshCustomNodes(base = ""): Promise<number> {
   let res: Response;
   try {
-    res = await fetch(`${base}/api/custom-nodes/manifest`);
+    res = await fetchManifestWithRetry(base, { attempts: 3, timeoutMs: 10_000 });
   } catch (error) {
     /* 请求压根没出去（离线 / dev server 刚重启 / 端口被回收）。 */
     const detail = `连不上清单端点（${errorText(error, "读取节点清单")}）`;
