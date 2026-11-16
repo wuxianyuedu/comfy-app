@@ -11,6 +11,7 @@ import type * as schema from "~/server/db/schema";
 import { episode, production, season, series, task } from "~/server/db/schema";
 import { workflowTemplateRepository, taskRepository } from "~/lib/core/repository";
 import { kickQueue } from "~/lib/comfyui/executor-continuation";
+import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 import { isPlainRecord } from "~/lib/is-record";
 
@@ -177,9 +178,19 @@ export const seriesGenerationRouter = createTRPCRouter({
       if (!tpl) {
         throw new TRPCError({ code: "NOT_FOUND", message: "工作流不存在" });
       }
+      /* 与单发生成同一份预检（#4043）：空 rawJson 的工作流整季收下后会在执行侧
+       * 逐个失败——在入队前整批拒绝并提示重新导入。 */
+      if (!hasExecutableWorkflow(tpl)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "工作流没有可执行内容（rawJson 为空）：请重新导入该工作流",
+        });
+      }
       const executorClaim = resolveExecutorClaim();
       let enqueued = 0;
-      let skipped = 0;
+      let skippedSucceeded = 0;
+      let skippedActive = 0;
+      let invalid = 0;
       for (const ep of eps) {
         if (ep.projectId === null) {
           continue;
@@ -193,11 +204,13 @@ export const seriesGenerationRouter = createTRPCRouter({
         for (const s of shots) {
           const sid = s.id;
           if (sid === undefined || sid === "") {
+            /* 坏镜头计入 invalid，不再静默不计账（#4043）：调用方对得上镜头总数。 */
+            invalid++;
             continue;
           }
           const key = `${ep.projectId}:${sid}`;
           if (succeeded.has(key)) {
-            skipped++;
+            skippedSucceeded++;
             continue;
           }
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
@@ -216,7 +229,7 @@ export const seriesGenerationRouter = createTRPCRouter({
             parentId: null,
           });
           if (created === null) {
-            skipped++;
+            skippedActive++;
             continue;
           }
           enqueued++;
@@ -225,6 +238,6 @@ export const seriesGenerationRouter = createTRPCRouter({
       if (enqueued > 0) {
         kickQueue();
       }
-      return { enqueued, skipped };
+      return { enqueued, skippedSucceeded, skippedActive, invalid };
     }),
 });

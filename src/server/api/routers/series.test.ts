@@ -446,13 +446,14 @@ describe("FR-SR-04 整季生成进度与批量提交", () => {
       userId: "user-a",
       name: "默认工作流",
       taskType: "IMG",
-      rawJson: { nodes: [] },
+      /* 可执行预检（#4043）要求 rawJson 带非空 nodes。 */
+      rawJson: { nodes: [{ id: "n1" }] },
     });
     const res = await genCaller().batchGenerateSeason({
       seasonId: se.id,
       workflowId: "wt-frsr04",
     });
-    expect(res).toEqual({ enqueued: 1, skipped: 1 });
+    expect(res).toEqual({ enqueued: 1, skippedSucceeded: 1, skippedActive: 0, invalid: 0 });
     const tasks = await tdbDb.select().from(schema.task).where(eq(schema.task.projectId, pid));
     expect(tasks.length).toBe(2);
   });
