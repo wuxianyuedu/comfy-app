@@ -51,6 +51,7 @@ import {
   resolutionTierOf,
   resolutionTierOfLabel,
   sceneFromMode,
+  type SizePresetTable,
   type SizeScene,
 } from "~/lib/media/size-presets";
 import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
@@ -577,9 +578,16 @@ function sizeValueForPin(
   entry: ParamEntry,
   ioKey: string,
   supplied: unknown,
-  /** 场景（图片 / 视频）：`1k` 在两种场景下不是同一组宽高，反解档位要按场景查表。 */
-  scene: SizeScene,
+  opts: {
+    /** 场景（图片 / 视频）：`1k` 在两种场景下不是同一组宽高，反解档位要按场景查表。 */
+    scene: SizeScene;
+    /** 生效的尺寸表（ISSUE #4099）：`size-resolution` 反解档位按它比对 —— 与正向
+     *  换算（`sizeSpecToWxH`）同一份表，设置里改过的表才不会在端口上偏档。
+     *  缺省 = 编译进包的项目默认快照（与旧行为一致）。 */
+    table?: SizePresetTable;
+  },
 ): unknown {
+  const { scene, table } = opts;
   if (!isSizeClass(entry.cls)) {
     return supplied;
   }
@@ -607,7 +615,7 @@ function sizeValueForPin(
       return label ?? undefined;
     }
     case "size-resolution": {
-      const tier = resolutionTierOf(scene, width, height);
+      const tier = resolutionTierOf(scene, width, height, table);
       if (!tier) {
         return undefined;
       }
@@ -651,9 +659,12 @@ export function applyParamMapping(args: {
   io: WorkflowIOMap | null | undefined;
   mapping: ParamMapping | null | undefined;
   mode?: string | null;
+  /** 生效的尺寸表（ISSUE #4099）：`size-resolution` 反解档位按它比对，与正向
+   *  换算同源。缺省 = 编译进包的项目默认快照。 */
+  table?: SizePresetTable;
   values: Record<string, unknown>;
 }): { inputs: Array<MappedInput>; unmatched: Array<string> } {
-  const { io, entries, mapping, values, mode } = args;
+  const { io, entries, mapping, values, mode, table } = args;
   const resolved = resolveMapping(entries, io, mapping, mode);
   const inputs: Array<MappedInput> = [];
   const unmatched: Array<string> = [];
@@ -706,7 +717,10 @@ export function applyParamMapping(args: {
       if (!io?.[target.ioKey]) {
         continue;
       }
-      const perPort = sizeValueForPin(io, entry, target.ioKey, supplied, sceneFromMode(mode));
+      const perPort = sizeValueForPin(io, entry, target.ioKey, supplied, {
+        scene: sceneFromMode(mode),
+        table,
+      });
       if (perPort === undefined) {
         continue;
       }

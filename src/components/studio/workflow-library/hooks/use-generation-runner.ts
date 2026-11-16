@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 import { errorMessage } from "~/lib/error-message";
+import { getSizePresetTable } from "~/lib/media/size-preset-store";
 import { startLocalGenerate, type TaskProgressNode } from "~/lib/workshop/generation-client";
 import {
   applyParamMapping,
@@ -88,8 +89,10 @@ async function executeRun(
             mode: effectiveMode,
           }),
           mapping: parseParamMapping(effectiveParamMap),
-          values,
           mode: effectiveMode,
+          /* 档位反解与正向换算同源：同一份本机生效表（ISSUE #4099）。 */
+          table: getSizePresetTable(),
+          values,
         })
       : null;
     const workflowInputs =
