@@ -484,6 +484,9 @@ export function buildEncapsulatedInputs(args: {
     io,
     entries,
     mapping,
+    mode: effectiveMode,
+    /* 档位反解与正向换算同源：同一份生效表（ISSUE #4099）。 */
+    table,
     values: toContractValues({
       io,
       mode: effectiveMode,
@@ -492,7 +495,6 @@ export function buildEncapsulatedInputs(args: {
       entries,
       table,
     }),
-    mode: effectiveMode,
   });
   /* 「这个模式压根不暴露这个口」映射层看不见（它只遍历契约条目）：工坊给了图片 /
    *  时长这类值、而契约里没有对应口时在这里补报 —— 否则用户会以为值已经下发下去
