@@ -24,7 +24,9 @@
  * 是同一种东西。所以本格额外回传一个**单文件** `ComfyAPP-shell.exe`（从盘上真读
  * `target/release/app.exe`，不重编、不打包、不改名 tauri 生成的名字），
  * 与三类完整成品并列；下载后放进 `src-tauri/target/release/app.exe` 即可用
- * `tools/start/start-tauri.ps1` / 根目录快捷方式启动。
+ * `tools/start/start-tauri.ps1` / 根目录快捷方式启动。随纯壳同发一份
+ * `ComfyAPP-shell-build-info.json`（构建时间 / commit / run / 大小 / sha256，
+ * ISSUE #4056）：取壳侧 `fetch-daily-shell.mjs` 同址取回并展示、对账。
  *
  * ## 为什么用 CNB Release（不是制品库 / Issue 附件）
  *
@@ -82,6 +84,8 @@
  * `CNB_RELEASE_TARGET`（缺省默认分支 `master`；建 `nightly` tag 时的 `target_commitish`）。
  */
 import fs from "node:fs";
+import { createHash } from "node:crypto";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
@@ -102,14 +106,22 @@ export const PUT_MAX_ATTEMPTS = 3;
 /** 纯壳单文件附件的固定名（与完整成品分列，方便按名字取）。 */
 export const SHELL_ASSET_NAME = "ComfyAPP-shell.exe";
 
+/**
+ * 纯壳的**构建信息**附件（ISSUE #4056）：与纯壳同一份 nightly 同发。取壳的人按
+ * 同一个下载地址取它，就能答出「这份 exe 是什么时候、哪一笔（commit/run）构建的」，
+ * 并对到手字节做 sha256 / 大小对账 —— 不再是「拉下来不知道什么时候构建的」。
+ */
+export const SHELL_BUILD_INFO_ASSET = "ComfyAPP-shell-build-info.json";
+
 /** 安装包扩展名（`pnpm tauri build` 的 bundle 主形，Windows）。 */
 const INSTALLER_EXTENSIONS = new Set([".exe", ".msi"]);
 
 /**
  * 收集的单个成品：`assetName` 是上传时的附件名（带形态前缀，避免 nsis/msi 同名撞车），
- * `absPath` / `bytes` 供 PUT 与 `size` 用。
+ * `absPath` / `bytes` 供 PUT 与 `size` 用。`kind: "shell-meta"` 是纯壳的构建信息附件
+ * （JSON 小文件，随纯壳同发，见 {@link SHELL_BUILD_INFO_ASSET}）。
  *
- * @typedef {{assetName: string, absPath: string, bytes: number, kind: "installer" | "portable" | "shell"}} BundleFile
+ * @typedef {{assetName: string, absPath: string, bytes: number, kind: "installer" | "portable" | "shell" | "shell-meta"}} BundleFile
  */
 
 /**
@@ -227,6 +239,29 @@ export function collectBundles({ bundleDir, portable, shellExe }, cwd = process.
     }
   }
   return files.sort((a, b) => a.assetName.localeCompare(b.assetName));
+}
+
+/**
+ * 造纯壳的**构建信息**附件内容（ISSUE #4056）：`built_at` 是回传时刻（与构建同一跳，
+ * 差以分钟计），`commit` / `run_id` 来自本跑 env，`sha256` / `size` 从盘上那份 exe
+ * **现算** —— 下载侧拿它对账，就知道到手的 exe 是不是清单里那一份。
+ *
+ * @param {{absPath: string, bytes: number}} shell 盘上的纯壳（collectBundles 的 shell 项）
+ * @param {{runId: string, sha: string}} meta 本跑的 run / commit 读数
+ * @returns {{json: string, sha256: string}} 附件正文与 exe 的 sha256（测试对账用）
+ */
+export function buildShellInfo(shell, meta) {
+  const sha256 = createHash("sha256").update(fs.readFileSync(shell.absPath)).digest("hex");
+  const payload = {
+    asset: SHELL_ASSET_NAME,
+    built_at: new Date().toISOString(),
+    commit: meta.sha,
+    run_id: meta.runId,
+    sha256,
+    size: shell.bytes,
+    tag: RELEASE_TAG,
+  };
+  return { json: `${JSON.stringify(payload, null, 2)}\n`, sha256 };
 }
 
 /**
@@ -532,6 +567,29 @@ export async function main(io = {}) {
     if (!done.ok) {
       log(`[ga-desktop-relay] 回传失败：${done.detail}`);
       return CODE.FAIL;
+    }
+  }
+  /* 纯壳的构建信息附件（ISSUE #4056）：随纯壳同发。它失败也按失败交账（本 step
+   * continue-on-error，不会拦构建结论），不许「说了要给构建信息却悄悄没给」。 */
+  const shellFile = files.find((f) => f.kind === "shell");
+  if (shellFile) {
+    const info = buildShellInfo(shellFile, { runId: ctx.runId, sha: ctx.sha });
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ga-desktop-shell-info-"));
+    try {
+      const infoPath = path.join(tmpDir, SHELL_BUILD_INFO_ASSET);
+      fs.writeFileSync(infoPath, info.json);
+      const done = await uploadAsset(wiring, release.id, {
+        absPath: infoPath,
+        assetName: SHELL_BUILD_INFO_ASSET,
+        bytes: Buffer.byteLength(info.json, "utf8"),
+        kind: "shell-meta",
+      });
+      if (!done.ok) {
+        log(`[ga-desktop-relay] 回传失败：构建信息附件（${SHELL_BUILD_INFO_ASSET}）${done.detail}`);
+        return CODE.FAIL;
+      }
+    } finally {
+      fs.rmSync(tmpDir, { force: true, recursive: true });
     }
   }
   log(
