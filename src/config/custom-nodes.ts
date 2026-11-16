@@ -26,6 +26,7 @@ async function fetchManifestWithRetry(
   opts: { attempts: number; timeoutMs: number },
 ): Promise<Response> {
   let lastError: unknown = null;
+  let lastResponse: Response | null = null;
   for (let attempt = 1; attempt <= opts.attempts; attempt++) {
     try {
       // oxlint-disable-next-line eslint/no-await-in-loop -- 重试必须顺序执行
@@ -35,6 +36,7 @@ async function fetchManifestWithRetry(
       if (res.ok || res.status < 500) {
         return res;
       }
+      lastResponse = res;
       lastError = new Error(`manifest status ${res.status}`);
     } catch (error) {
       lastError = error;
@@ -43,6 +45,9 @@ async function fetchManifestWithRetry(
       // oxlint-disable-next-line eslint/no-await-in-loop -- 重试退避必须顺序等待
       await sleep(200 * attempt);
     }
+  }
+  if (lastResponse !== null) {
+    return lastResponse;
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
