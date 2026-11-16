@@ -10,17 +10,12 @@
  * `ctx.shutdown`（收尾入口，住在主文件）。
  */
 import process from "node:process";
+import fs from "node:fs";
 import path from "node:path";
 
 import { SKIP_SCHEMA_SYNC_ENV } from "../db/db-schema-state.mjs";
 import { maybeSpawnExecutorHost, SKIP_EXECUTOR_HOST_ENV } from "./executor-host-spawn.mjs";
-import {
-  commandInvocation,
-  pnpmInvocation,
-  runSync,
-  spawnInGroup,
-  whichCommand,
-} from "./shell.mjs";
+import { pnpmInvocation, runSync, spawnInGroup } from "./shell.mjs";
 import { lockfileDrift, verifyInstall } from "./worktree.mjs";
 import { runningAppInstances } from "./port-reap.mjs";
 import { writeLaunchStatus } from "./orchestrator.mjs";
@@ -168,7 +163,7 @@ export async function syncDependencies(ctx, root, deps = {}) {
   return null;
 }
 
-/** 起 dev server：`pnpm dev -p <port> -H <host>`（端口由 app-port.mjs 解析后显式传入，
+/** 起 dev server：`node scripts/dev.mjs -p <port> -H <host>`（端口由 app-port.mjs 解析后显式传入，
  *  不靠环境变量兜底 —— 裸 `next dev` 会落 Next 默认 3000，与 .env / 壳 / e2e 对不上）。 */
 /**
  * 起子进程并把它接到日志文件。
@@ -179,19 +174,20 @@ export async function syncDependencies(ctx, root, deps = {}) {
  */
 export function spawnDevServer(ctx, opts) {
   const { port, host, outFile, errFile, extraEnv = {} } = opts;
-  // 起服务用的是**门禁验过的那个命令形态**（`commandInvocation`）：
-  // `pnpm` 在 Windows 上常常只有 shebang shim 而 shim 起不来，此时真正能用的是
-  // 同目录的 `pnpm.ps1`（经 PowerShell 宿主）。门禁选出来的形态必须在起服务这一
-  // 步复用同一个实现，否则「探测过了、起服务却用另一种方式又失败一次」。
-  // 判据只在 shell.mjs 一处（规范 §9.5），这里不自己拼可执行名。
-  const candidate = whichCommand("pnpm");
-  if (!candidate) {
-    throw new Error("pnpm 不在 PATH 上，无法启动 dev server");
+  // 直启 dev.mjs（ISSUE #4155）：`pnpm dev` 只是把「node scripts/dev.mjs」包进一层
+  // Windows pnpm shim（实测 1~1.5s 冷启），而 `tauri.conf.json` 的 beforeDevCommand
+  // 本来就是 `node scripts/dev.mjs` —— 编排器统一成同一形态，也把「shim 形态坏了
+  // 服务起不来」（ISSUE #576 家族）这个失败类从 server 链摘掉。pnpm 形态判据
+  // （shell.mjs）继续管**真正用 pnpm 的地方**（install / db-push / 探测）。
+  // 进程归属不受影响：命令行含检出根 + scripts/dev.mjs，isAppDevServerCmdline 的
+  // 第一种形状照常命中（§1.4「只回收自己的」判据不变）。
+  const devEntry = path.join(ctx.root, "scripts", "dev.mjs");
+  if (!fs.existsSync(devEntry)) {
+    throw new Error("找不到 scripts/dev.mjs，无法启动 dev server（检出不完整？）");
   }
-  const invocation = commandInvocation(candidate, ["-v"]);
   const child = spawnInGroup({
-    command: invocation.command,
-    args: [...invocation.prefixArgs, "dev", "-p", String(port), "-H", host],
+    command: process.execPath,
+    args: [devEntry, "-p", String(port), "-H", host],
     cwd: ctx.root,
     env: {
       ...process.env,
