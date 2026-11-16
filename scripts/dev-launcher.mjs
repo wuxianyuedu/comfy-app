@@ -425,6 +425,8 @@ export async function run(argv = process.argv.slice(2)) {
     },
     { portOrNull, mode: args.mode },
   );
+  /** 预检桥段结束的时刻（耗时分解行的第一段终点）。 */
+  const gatesDoneAt = Date.now();
   if (!gated.ok) {
     log(gated.error.message, "ERROR");
     status("error", 1, gated.error.statusMessage, {
@@ -539,6 +541,8 @@ export async function run(argv = process.argv.slice(2)) {
   const nextOut = booted.nextOut;
   const nextErr = booted.nextErr;
   staleShell = booted.staleShell;
+  /** dev server 已拉起的时刻（耗时分解行的第二段终点；此后是 Next 自己的启动时间）。 */
+  const devSpawnedAt = Date.now();
   const heartbeat = setInterval(() => {
     touchHeartbeat(ROOT);
   }, HEARTBEAT_INTERVAL_MS);
@@ -671,6 +675,19 @@ export async function run(argv = process.argv.slice(2)) {
     await shutdown(1);
   }
   log(`服务已就绪：http://${args.host}:${port}`, "OK");
+  /* 启动耗时分解（ISSUE #4137）：三段各管一件事 —— 预检（工具链/依赖/备份），
+   * 端口与缓存（netstat/指纹/壳），Next 启动与就绪探测（pnpm 链 + 编译 + instrumentation）。
+   * 「哪一段变慢了」要在每一次启动的日志里直接可读，而不是让排查的人对着
+   * 行首时间戳手工做减法；秒数带出处，后续优化才有可比的基线。 */
+  /**
+   * @param {number} from 起点（毫秒）
+   * @param {number} to 终点（毫秒）
+   */
+  const secBetween = (from, to) => `${((to - from) / 1000).toFixed(1)}s`;
+  log(
+    `启动耗时分解：预检 ${secBetween(startedAt, gatesDoneAt)} · 端口与缓存 ${secBetween(gatesDoneAt, devSpawnedAt)} · Next 启动与就绪 ${secBetween(devSpawnedAt, Date.now())}`,
+    "INFO",
+  );
   status("dev-server-ready", 0.9, "本地服务已就绪", {
     ready: true,
     staleShell,

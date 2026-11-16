@@ -543,3 +543,51 @@ describe("schemaNotice —— 只在该说话时说话", () => {
     expect(text, "建表是启动链路自己试过的，别把责任推给用户").toContain("自动建表");
   });
 });
+
+describe("spawnSchemaSync —— 脚本路径必须跟 db-sync.mjs 的实际落点对齐（ISSUE #4144）", () => {
+  /** #3958 把 db-sync.mjs 归进 scripts/db/ 域目录，#4111 删掉了顶层的兼容垫片；
+   *  spawnSchemaSync 的查找路径没跟上时表现为「每次启动 WARN 找不到脚本、后台同步
+   *  静默 no-op」。这两条用例在临时工作区里钉住解析行为，不依赖本检出的真实落点。 */
+  /** Windows 上 spawnSchemaSync 起的子进程以 tmpSpawn 为 cwd，进程退出前目录句柄
+   *  未释放，紧跟的 rmSync 会撞 EPERM —— 有界重试（每 150ms 一试，最多 10 次），
+   *  仍失败只留给临时目录（os.tmpdir() 下，不影响仓库）。 */
+  const rmTempWithRetry = (dir: string): void => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+        return;
+      } catch {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
+      }
+    }
+  };
+
+  it("域目录形态（scripts/db/db-sync.mjs）找得到并起得起来", async () => {
+    const tmpSpawn = fs.mkdtempSync(path.join(os.tmpdir(), "schema-spawn-"));
+    try {
+      fs.mkdirSync(path.join(tmpSpawn, "scripts", "db"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpSpawn, "scripts", "db", "db-sync.mjs"),
+        "process.exit(0);\n",
+        "utf8",
+      );
+      const { spawnSchemaSync } = await import("../scripts/db/db-schema-state.mjs");
+      const result = spawnSchemaSync(tmpSpawn);
+      expect(result.started, `应在 scripts/db/ 找到脚本：${JSON.stringify(result)}`).toBe(true);
+    } finally {
+      rmTempWithRetry(tmpSpawn);
+    }
+  });
+
+  it("没有脚本时如实返回 started:false（生产产物不含 db-sync 的那一档）", async () => {
+    const tmpSpawn = fs.mkdtempSync(path.join(os.tmpdir(), "schema-spawn-"));
+    try {
+      const { spawnSchemaSync } = await import("../scripts/db/db-schema-state.mjs");
+      const result = spawnSchemaSync(tmpSpawn);
+      expect(result.started).toBe(false);
+      expect(result.reason ?? "").toContain("db-sync.mjs");
+    } finally {
+      rmTempWithRetry(tmpSpawn);
+    }
+  });
+});
