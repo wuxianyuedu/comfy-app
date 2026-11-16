@@ -5,6 +5,7 @@
 // 视觉评审（镜头图/成片）依赖多模态地基，留待 P8-2。
 import "server-only";
 
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { taskRepository } from "~/lib/core/repository";
@@ -140,7 +141,10 @@ function findRecord(list: Array<unknown>, id: string): Record<string, unknown> |
 async function loadRow(userId: string, projectId: string): Promise<Production> {
   const row = await productionRepository.getForUser(userId, projectId);
   if (!row) {
-    throw new Error("该项目还没有生产数据（先在工坊产出内容再评审）");
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "该项目还没有生产数据（先在工坊产出内容再评审）",
+    });
   }
   return row;
 }
@@ -159,7 +163,10 @@ export async function reviewContent(
   const list = listForKind(row, kind);
   const rec = findRecord(list, targetId);
   if (!rec) {
-    throw new Error(`找不到要评审的${KIND_LABEL[kind]}（id=${targetId}）`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `找不到要评审的${KIND_LABEL[kind]}（id=${targetId}）`,
+    });
   }
 
   const cfg = await getLLMConfig({ taskType: "review" });
@@ -186,7 +193,10 @@ export async function reviewContent(
     ...(rubric ? { rubricVersion: rubric.version } : {}),
   });
   if (!verdict) {
-    throw new Error("模型评审返回缺 pass 判据（无法归一成判定）");
+    throw new TRPCError({
+      code: "UNPROCESSABLE_CONTENT",
+      message: "模型评审返回缺 pass 判据（无法归一成判定）",
+    });
   }
   /* 写回收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新列表，把判定落到
    * 最新数据上——评审的模型调用（秒~分钟级）留在锁外，不占其它写者的路。 */
@@ -263,7 +273,10 @@ async function scoreShotImage(
     ...(rubric ? { rubricVersion: rubric.version } : {}),
   });
   if (!verdict) {
-    throw new Error("模型视觉评审返回缺 pass 判据（无法归一成判定）");
+    throw new TRPCError({
+      code: "UNPROCESSABLE_CONTENT",
+      message: "模型视觉评审返回缺 pass 判据（无法归一成判定）",
+    });
   }
   return verdict;
 }
@@ -277,11 +290,17 @@ export async function reviewShotImage(
   const shots = listForKind(row, "shot");
   const rec = findRecord(shots, shotId);
   if (!rec) {
-    throw new Error(`找不到要评审的镜头（id=${shotId}）`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `找不到要评审的镜头（id=${shotId}）`,
+    });
   }
   const imageUrl = str(rec, "imageUrl");
   if (!imageUrl.trim()) {
-    throw new Error("该镜头还没有生成图（先在工坊生图，再视觉评审）");
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "该镜头还没有生成图（先在工坊生图，再视觉评审）",
+    });
   }
 
   /* 打分是慢 IO，按 content-write-lock 的纪律留在锁外；落判定收进锁内重读最新
@@ -291,7 +310,10 @@ export async function reviewShotImage(
   await withProductionContentLock(projectId, async () => {
     const fresh = listForKind(await loadRow(userId, projectId), "shot");
     if (!findRecord(fresh, shotId)) {
-      throw new Error(`要评审的镜头已不存在（id=${shotId}）`);
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `要评审的镜头已不存在（id=${shotId}）`,
+      });
     }
     await productionRepository.patchContent(userId, projectId, {
       shots: applyImageReview(fresh, shotId, verdict),
@@ -328,13 +350,19 @@ export async function autoselectShotImage(
   taskIds: Array<string>,
 ): Promise<AutoselectResult> {
   if (taskIds.length < 2 || taskIds.length > 4) {
-    throw new Error("抽卡候选数量须在 2~4 张");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "抽卡候选数量须在 2~4 张",
+    });
   }
   const row = await loadRow(userId, projectId);
   const shots = listForKind(row, "shot");
   const rec = findRecord(shots, shotId);
   if (!rec) {
-    throw new Error(`找不到要优选的镜头（id=${shotId}）`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `找不到要优选的镜头（id=${shotId}）`,
+    });
   }
 
   const seen = new Set<string>();
@@ -349,7 +377,10 @@ export async function autoselectShotImage(
     /* 等价形态：`userId` 是必填 string，不存在「task 为 null 而 userId 也是
      * undefined」那一支（`prefer-optional-chain` 要的就是这一句）。 */
     if (task?.userId !== userId) {
-      throw new Error(`候选任务不存在或不属于当前用户：${taskId}`);
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `候选任务不存在或不属于当前用户：${taskId}`,
+      });
     }
     const image = task.images.find((i) => i.isCover) ?? task.images[0];
     if (!image) {
@@ -370,7 +401,10 @@ export async function autoselectShotImage(
     } => c.verdict !== null && c.imageUrl !== null,
   );
   if (scored.length === 0) {
-    throw new Error("所有候选都没有产物可评审（先生成，再优选）");
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "所有候选都没有产物可评审（先生成，再优选）",
+    });
   }
   const winner = scored.reduce((best, c) =>
     (reviewScoreMean(c.verdict) ?? 0) > (reviewScoreMean(best.verdict) ?? 0) ? c : best,
@@ -381,7 +415,10 @@ export async function autoselectShotImage(
   await withProductionContentLock(projectId, async () => {
     const fresh = listForKind(await loadRow(userId, projectId), "shot");
     if (!findRecord(fresh, shotId)) {
-      throw new Error(`要优选的镜头已不存在（id=${shotId}）`);
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `要优选的镜头已不存在（id=${shotId}）`,
+      });
     }
     const nextShots = applyImageReview(fresh, shotId, winner.verdict);
     await productionRepository.patchContent(userId, projectId, {
@@ -407,7 +444,10 @@ export async function reviewScript(
 ): Promise<ScriptReviewOutcome> {
   const row = await loadRow(userId, projectId);
   if (!row.scriptMarkdown.trim()) {
-    throw new Error("该项目还没有剧本（先在工坊产出剧本再评审）");
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "该项目还没有剧本（先在工坊产出剧本再评审）",
+    });
   }
 
   const cfg = await getLLMConfig({ taskType: "review" });
@@ -431,7 +471,10 @@ export async function reviewScript(
     ...(rubric ? { rubricVersion: rubric.version } : {}),
   });
   if (!verdict) {
-    throw new Error("模型评审返回缺 pass 判据（无法归一成判定）");
+    throw new TRPCError({
+      code: "UNPROCESSABLE_CONTENT",
+      message: "模型评审返回缺 pass 判据（无法归一成判定）",
+    });
   }
   /* 写回收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新剧本评审位，
    * 叠加本轮判定——评审的模型调用（秒~分钟级）留在锁外。 */
@@ -458,11 +501,17 @@ export async function reviewScript(
 export async function reviseScript(userId: string, projectId: string): Promise<string> {
   const row = await loadRow(userId, projectId);
   if (!row.scriptMarkdown.trim()) {
-    throw new Error("该项目还没有剧本（先在工坊产出剧本再改写）");
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "该项目还没有剧本（先在工坊产出剧本再改写）",
+    });
   }
   const state = normalizeScriptReviewState(row.scriptReview);
   if (!state.review) {
-    throw new Error("这份剧本还没有评审判定（先评审、拿到低分维度再定向改写）");
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "这份剧本还没有评审判定（先评审、拿到低分维度再定向改写）",
+    });
   }
 
   const cfg = await getLLMConfig({ taskType: "review" });
@@ -481,7 +530,10 @@ export async function reviseScript(userId: string, projectId: string): Promise<s
     )
   ).trim();
   if (!md) {
-    throw new Error("模型未返回改写后的剧本（保留原剧本，可重试）");
+    throw new TRPCError({
+      code: "UNPROCESSABLE_CONTENT",
+      message: "模型未返回改写后的剧本（保留原剧本，可重试）",
+    });
   }
 
   /* 写回收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新剧本与评审位，
@@ -512,7 +564,10 @@ export async function regenerateShot(
   const shots = listForKind(row, "shot");
   const rec = findRecord(shots, shotId);
   if (!rec) {
-    throw new Error(`找不到要重生成的镜头（id=${shotId}）`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `找不到要重生成的镜头（id=${shotId}）`,
+    });
   }
 
   // reprompt：优先用调用方给的提示词；否则让模型据评审意见改写（慢 IO，留在锁外）。
