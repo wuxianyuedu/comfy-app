@@ -5,6 +5,7 @@
  */
 import { toWorkflowInputsPayload, type WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { GenerateInput } from "~/lib/workflow/workflow-generate-input";
+import { getSizePresetTable } from "~/lib/media/size-preset-store";
 import {
   applyParamMapping,
   buildParamEntries,
@@ -49,8 +50,10 @@ export function buildCanvasGeneratePayload({
         io: wfIO,
         entries: buildParamEntries(wfIO, undefined, { mode }),
         mapping: parseParamMapping(wfParamMap ?? d.paramMap),
-        values: d.workflowInputs ?? {},
         mode,
+        /* 档位反解与正向换算同源：同一份本机生效表（ISSUE #4099）。 */
+        table: getSizePresetTable(),
+        values: d.workflowInputs ?? {},
       })
     : null;
   const baseInputs =

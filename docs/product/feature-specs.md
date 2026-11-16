@@ -1048,7 +1048,8 @@
   ⑤ 出图链路的宽高换算读**同一份生效表**（ISSUE #3972）：工作流库封装
   （客户端传水合表 / 服务端现读）、工坊 api・comfyui 通道、定妆照远端通道、
   成片合成画幅与 ffmpeg scale、MCP 生图的老口径尺寸反解 —— 设置里改的表
-  改的是出图行为，不只是界面显示。
+  改的是出图行为，不只是界面显示；「尺寸 · 分辨率档」端口的**档位反解**
+  也按同一份生效表比对（ISSUE #4099），不与正向换算用两份表。
 - 落点：`src/lib/media/size-presets.ts`（纯函数层 + 项目默认解析）、
   `src/lib/media/size-preset-defaults.json`（项目默认）、
   `src/lib/media/size-preset-fs.server.ts`（读侧：生效表，双宿主安全）、

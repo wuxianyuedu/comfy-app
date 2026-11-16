@@ -912,4 +912,32 @@ describe("尺寸换算按生效表：设置里改过的表在封装层真的生�
     expect(valueOf(res.workflowInputs, "width")).toBe(1024);
     expect(valueOf(res.workflowInputs, "height")).toBe(576);
   });
+
+  it("分辨率档端口：档位按生效表反解，不传表会偏档（ISSUE #4099）", () => {
+    const io: WorkflowIOMap = {
+      res: {
+        direction: "input",
+        kind: "widget",
+        nodeId: "12",
+        name: "resolution",
+        type: "COMBO",
+        defaultValue: "1k",
+        options: ["1k", "2k", "4k"],
+      },
+    };
+    const args = {
+      io,
+      paramMap: wire("T2I", { "size-resolution": "res" }),
+      mode: "T2I",
+      values: { size: size16x9 },
+    };
+    /* 生效表把 16:9 / 1k 改成 1920×1080：正向算出 "1920x1080"，按**同一份表**
+     * 反解仍是 1k。修复前（#4099）反解固定用默认表，这里会拿到 "2k"（1920×1080
+     * 离默认 2k = 2048×1152 更近）—— 正是偏档形。 */
+    const withTable = buildEncapsulatedInputs({ ...args, table: effectiveTable() });
+    expect(valueOf(withTable.workflowInputs, "resolution")).toBe("1k");
+    /* 不传表：正向与反解都回落默认表，自洽地得 1k（参数缺失不劣化）。 */
+    const withDefault = buildEncapsulatedInputs(args);
+    expect(valueOf(withDefault.workflowInputs, "resolution")).toBe("1k");
+  });
 });
