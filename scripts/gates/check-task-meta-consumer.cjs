@@ -34,7 +34,7 @@
  *
  * ── 判据 ──────────────────────────────────────────────────────────────
  *
- * 只做一件事：**有站点就必须登记消费方**（`scripts/.task-meta-consumers.json`），
+ * 只做一件事：**有站点就必须登记消费方**（`scripts/gates/.task-meta-consumers.json`），
  * 且消费方那一条要写明「哪个脚本、怎么读」（读的前提是按 §11.22.2 带
  * `--reporter=json --outputFile`）。
  *
@@ -63,7 +63,7 @@ const SCAN_DIRS = ["src", "tests"];
 const TEST_FILE_RE = /\.test\.tsx?$/;
 
 /** 台账：谁在读 JSON 报告里的 `meta`。 */
-const LEDGER = "scripts/.task-meta-consumers.json";
+const LEDGER = "scripts/gates/.task-meta-consumers.json";
 
 /**
  * `task.meta` 的**写**站点。三种形态都要认：

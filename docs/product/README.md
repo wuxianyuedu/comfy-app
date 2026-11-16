@@ -65,7 +65,7 @@
 - 文档里的路径 / 命令以仓库现状为准；发现漂移按 §4 第三条处理。
 - 本目录**不写实现细节**（代码示例、分层规则、门禁口径归规范），只写
   「做什么、怎么算做完」。
-- 本目录的登记与校验范围见 `scripts/doc-facts.cjs`（`SCOPED_DOCS` /
+- 本目录的登记与校验范围见 `scripts/docs/doc-facts.cjs`（`SCOPED_DOCS` /
   `SCOPED_DOC_DIRS`）与 `docs/README.md` §1 文档体系总览。
 - **两个计数（功能域数 / 编号化需求条数）在 `docs/README.md` 与本文件里各写一次**：
   它们不是手抄的装饰，而是由 `pnpm doc:check` 按 `feature-catalog.md` 的总表

@@ -36,7 +36,7 @@
  * 所以本判据只做一件事：**有站点就必须登记消费方**。
  *
  *   · 零站点（本仓库当前状态）→ 通过，本判据是纯闸门；
- *   · 有站点 → `scripts/.test-todo-consumers.json` 里必须有一条说明
+ *   · 有站点 → `scripts/gates/.test-todo-consumers.json` 里必须有一条说明
  *     「谁读它、怎么读」，否则阻断。
  *
  * **刻意不判**「该不该用 `test.todo`」：那是收益判断（要实测），不是文本判据。
@@ -62,7 +62,7 @@ const SCAN_DIRS = ["src", "tests"];
 const TEST_FILE_RE = /\.test\.tsx?$/;
 
 /** 台账：谁在读 `test.todo` 写下的那些「还没做」的声明。 */
-const LEDGER = "scripts/.test-todo-consumers.json";
+const LEDGER = "scripts/gates/.test-todo-consumers.json";
 
 /**
  * 站点。`test.todo` / `it.todo`（含 `describe.todo`）都在面上 —— vitest 三者

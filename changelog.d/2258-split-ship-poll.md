@@ -18,7 +18,7 @@
   的模块列表都点名了新落点；
 - `ship-close.mjs` / `ship-local.mjs` 文件头里「平台侧四段」的复述、`ci-build-readout.mjs`
   里列举调用点的那一句，一起改成新形状；
-- `scripts/.gate-thresholds.json` 里 `POLL_STALL_MAX` 那条账的 `file` 跟着搬（判据按
+- `scripts/gates/.gate-thresholds.json` 里 `POLL_STALL_MAX` 那条账的 `file` 跟着搬（判据按
   「文件 + 常量名」定位，不跟着搬它当场红）；
 - 规范 §13.5.26 里「账可以点名 `ship-*.mjs`」举的例子从 `ship-platform.mjs` 换成
   `ship-poll.mjs`（被点名的那条数已经不在原文件里了）。

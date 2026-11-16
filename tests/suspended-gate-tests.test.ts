@@ -7,13 +7,13 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "../scripts/affected-tests/fixed-structural-tests.mjs";
 import {
   SUSPENDED_GATE_TESTS,
   suspendedNames,
   suspendedReading,
   withoutSuspended,
-} from "../scripts/suspended-gate-tests.mjs";
+} from "../scripts/affected-tests/suspended-gate-tests.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 

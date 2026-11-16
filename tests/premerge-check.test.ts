@@ -18,9 +18,9 @@ import {
   lastSummary,
   SEGMENTS,
   scriptsInCommands,
-} from "../scripts/premerge-check.mjs";
+} from "../scripts/gates/premerge-check.mjs";
 
-const SCRIPT = join(process.cwd(), "scripts", "premerge-check.mjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates", "premerge-check.mjs");
 
 /**
  * 本检出 `HEAD` 的 sha —— 当**显式**的改动面基线（ISSUE #2799）。`run()` 已用 `gitSandboxEnv()` 剥过平台那一族，剥完后「哪一条是基线」只剩「宿主有没有 `master` 引用」—— 那是这台机器的事实，不是被测行为；平台节点只 fetch 协商后的单 ref（`.cnb.yml` 注释），于是本机绿、平台整组红成 `expected 2 to be 0`（PR #2784 现场）。
@@ -230,8 +230,8 @@ describe("premerge-check —— 不发明第二套实现（面的来源）", () 
       ],
       { encoding: "utf8" },
     );
-    expect(source).toContain('script: "gates/check-commit-claims.mjs"');
-    expect(source).toContain('script: "gates/check-merged-side-loss.mjs"');
+    expect(source).toContain('script: "check-commit-claims.mjs"');
+    expect(source).toContain('script: "check-merged-side-loss.mjs"');
   });
 });
 
@@ -349,7 +349,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       const tip = g("rev-parse", "master");
       g("checkout", "-q", "work");
 
-      const { resolveForkBaseline } = await import("../scripts/premerge-check.mjs");
+      const { resolveForkBaseline } = await import("../scripts/gates/premerge-check.mjs");
       const got = resolveForkBaseline(repo);
       expect(got.ok).toBe(true);
       if (!got.ok) {
@@ -389,7 +389,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       g("add", "-A");
       g("commit", "-qm", "mine");
 
-      const { resolveForkBaseline } = await import("../scripts/premerge-check.mjs");
+      const { resolveForkBaseline } = await import("../scripts/gates/premerge-check.mjs");
 
       /* ① 没有 env：这条路在平台上就是取不到，必须**照实说取不到**（不是编一个基线）。 */
       const without = resolveForkBaseline(repo, {});
@@ -447,7 +447,8 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       g("add", "-A");
       g("commit", "-qm", "c1");
       /* 没有 `origin/master`、也没有本地 `master` ⇒ `resolveMergeBaseRef` 给 null。 */
-      const { anchorMissed, resolveForkBaseline } = await import("../scripts/premerge-check.mjs");
+      const { anchorMissed, resolveForkBaseline } =
+        await import("../scripts/gates/premerge-check.mjs");
       const got = resolveForkBaseline(repo);
       expect(got.ok).toBe(false);
       if (got.ok) throw new Error("unreachable：ok=false 已由上一行断言");
@@ -497,7 +498,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       const env = { ...gitSandboxEnv(), CNB_PULL_REQUEST_TARGET_SHA: target };
       execFileSync(
         process.execPath,
-        [join(process.cwd(), "scripts", "premerge-check.mjs"), "--only=claims"],
+        [join(process.cwd(), "scripts", "gates", "premerge-check.mjs"), "--only=claims"],
         {
           cwd: repo,
           encoding: "utf8",

@@ -19,7 +19,7 @@ import {
   explicitDevHandle,
   machineHandle,
   resolveDevHandle,
-} from "../scripts/dev-handle.mjs";
+} from "../scripts/platform/dev-handle.mjs";
 import { readDevHandleWithSource } from "../scripts/ship/ship-ticket.mjs";
 
 let root: string;

@@ -1,5 +1,5 @@
 /**
- * `scripts/python-probe.mjs` 的判据（ISSUE #1961）。缺 Python 时用例走 `env` 档跳过并登记（`hasPython()`），不让门禁变红，缺件在日志里隐身。
+ * `scripts/lib/python-probe.mjs` 的判据（ISSUE #1961）。缺 Python 时用例走 `env` 档跳过并登记（`hasPython()`），不让门禁变红，缺件在日志里隐身。
  * `--python-only` 只答门禁解释器在不在，判不了另几个命令在哪：`python` 起不来而 `py` 起得来（`py -3 --version`）＝有；全起不来但盘上有安装根＝装了、PATH 无；全起不来且零命中＝真没装。
  * 前两种报错逐字同形（`CommandNotFoundException`）、处置相反（改 PATH vs 去装）。判据只钉结构：走 `ci-toolchain-python.mjs` 的 `findPython`，不许自探候选（#1959）。
  */
@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { probeLines } from "../scripts/python-probe.mjs";
+import { probeLines } from "../scripts/lib/python-probe.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -96,8 +96,8 @@ describe("python-probe：逐个候选答「起不起得来」", () => {
   });
 
   it("它不许自己再写一份候选表 —— 候选与探测都取自 `ci-toolchain-python.mjs`", () => {
-    const src = readFileSync(path.join(ROOT, "scripts", "python-probe.mjs"), "utf8");
-    expect(src).toContain('from "./ci/ci-toolchain-python.mjs"');
+    const src = readFileSync(path.join(ROOT, "scripts", "lib", "python-probe.mjs"), "utf8");
+    expect(src).toContain('from "../ci/ci-toolchain-python.mjs"');
     expect(src).toContain("findPython");
     /* 反向：它自己**不许**起子进程（那等于绕过 `findPython`，在同一台机器上问出
      * 第二次答案）。`spawnSync` / `execFileSync` 出现在这里就是回潮形态。 */

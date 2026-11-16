@@ -858,7 +858,7 @@ export function findPython({
   run: runCmd = run,
   notes = /** @type {string[]} */ ([]),
   /* 探哪几个候选、每个带什么参数 —— 两个注入面，默认就是本模块那份唯一口径。
-   * 存在的理由有一个具体调用方：`scripts/python-probe.mjs` 要**逐个**候选问
+   * 存在的理由有一个具体调用方：`scripts/lib/python-probe.mjs` 要**逐个**候选问
    * 「这个命令起不起得来」，而 `findPython` 的语义是「挑第一个能用的就停」。
    * 与其在那边再写一份 spawnSync 包装（＝同一个问题两张候选表，正是 #1959
    * 第二轮红过的形态），不如把「探谁、怎么探」提成入参，两点共用同一份实现。 */

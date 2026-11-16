@@ -31,7 +31,7 @@
   **这条不是本次批次引入的**：「优先跑包真身 JS 入口」那一条由 `231ac84f`（ISSUE #2565）
   今天才落主干，而它挑中占位文件的前提是「corepack 缓存里只有占位、`install.js` 没跑过」——
   本机今天下午一次 `pnpm install --frozen-lockfile` 之后那个目录才出现。复算证据：
-  `node scripts/base-check.mjs "pnpm exec tsc --noEmit"` 两侧同为 1 且输出即上面那屏。
+  `node scripts/gates/base-check.mjs "pnpm exec tsc --noEmit"` 两侧同为 1 且输出即上面那屏。
 
   同批补两份回归（此前这两形**一条都没有**：只覆盖了「`bin` 指向 MZ 二进制 ⇒ 回退」和
   「`bin` 指向真脚本 ⇒ 直接用」）：`src/lib/process/executable-resolve.test.ts` 与

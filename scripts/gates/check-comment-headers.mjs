@@ -26,7 +26,7 @@
  * 成本：一次列表 + **每张 open 对象一次 `get-*`**（单子 `get-issue`、PR `get-pull`；
  *       默认只扫第 1 页 open 单，`--pages` 可调）。PR 那一侧**不能**省成列表带回来的
  *       `body` —— 列表形态里那个键是空串，见 `collectShapes` 里那段（ISSUE #2788）。
- *       走网络 ⇒ **不进钩子**，登记在 `scripts/.gate-executor-ledger.json` 的按需台账。
+ *       走网络 ⇒ **不进钩子**，登记在 `scripts/gates/.gate-executor-ledger.json` 的按需台账。
  *
  * 用法：
  *   pnpm check:comment-headers                 # 人读清单

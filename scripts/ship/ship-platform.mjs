@@ -453,7 +453,7 @@ export function reportVerdict(ctx) {
     );
     log(`[ship] 失败格与失败行：pnpm ship --diagnose ${buildSn}（只读，不用再手抄 stage 日志）。`);
     log(
-      "[ship] 归因交给既有执行者：`node scripts/base-check.mjs <拦住你的那条>` —— 本脚本不自己判「是我的还是主干的」。",
+      "[ship] 归因交给既有执行者：`node scripts/gates/base-check.mjs <拦住你的那条>` —— 本脚本不自己判「是我的还是主干的」。",
     );
     return CODE.RED;
   }

@@ -226,7 +226,7 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
    可优化点 / 漏洞当场建单，**不必马上处理**；动手前若这次改动没有对应的单，先建单再改。
    **单子的另两格（提单人 / 优先级）同样是读数。** 阶段 0 紧接着一行
    `单子身份：提单人=<短名>（标签 提单人:<短名>） · 优先级走平台原生 --priority（P0|P1|P2|P3，本脚本不代填）`。
-   留痕的来源是一条**取值链**（`scripts/dev-handle.mjs`）：`.env` 的 `COMFYAPP_DEV_HANDLE`
+   留痕的来源是一条**取值链**（`scripts/platform/dev-handle.mjs`）：`.env` 的 `COMFYAPP_DEV_HANDLE`
    （进程环境同名优先）→ `CNB_NPC_NAME` / `CNB_TOKEN_USER_NAME` → `git config user.name`
    → 兜底 `cnb`。**没配也有名字**（ISSUE #2355）：「取的」会在身份那一行之后另念一句
    （换台机器会变），`pnpm ship --whoami` 也念；`pnpm env:init` 会把取到的值写进 `.env`
@@ -390,7 +390,7 @@ pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上�
 | 这次提交的形态红（预报）      | 阶段 0 的 D0 预跑（ISSUE #3200）：清单从 `.githooks/pre-commit` 的 D0 组解析（单一出处，不抄第二份），每步按原样命令起、红不短路 ⇒ 所有红一次报齐落 `1` 停手（与提交钩子同权）；清单取不到 ⇒ 跳过不冒充结论；跳过条件各念一行（`--add` / dry-run / 依赖没就绪 / 旗标关），暂存面为空静默；双付明说（`--no-preflight-d0` 关）   |
 | 这一笔会带进哪些文件（#3597） | 提交段自己读一次 `git diff --cached --name-only -z` 并比对 `--add` 点名集合（`ship-local.mjs` 的 `classifyStagedSurface`）：点名之外还有已暂存文件 ⇒ 退 `2` 并逐个点名；`--allow-staged` 才放行。没给 `--add` 时不判（暂存面本来就由调用方负责）                                                                               |
 | 合并前固定动作三段            | `.githooks/pre-push` → `premerge-proof.mjs`，落一份机器本地证明                                                                                                                                                                                                                                                                |
-| 「这条红是我的还是主干的」    | `scripts/base-check.mjs`（CI 红时它会点名这个入口，不自己归因）                                                                                                                                                                                                                                                                |
+| 「这条红是我的还是主干的」    | `scripts/gates/base-check.mjs`（CI 红时它会点名这个入口，不自己归因）                                                                                                                                                                                                                                                                |
 | 流水线终态                    | 平台 build 的 `data.status`                                                                                                                                                                                                                                                                                                    |
 | CI 红在哪一格、失败行是什么   | `pnpm ship --diagnose [sn]`（只读取回；取数/归一只有 `ci-build-readout.mjs` 一份实现，归因仍归 `base-check.mjs`）                                                                                                                                                                                                              |
 | 绿跑里某一格念了什么          | `pnpm ship --stage-log [<sn>] <格名\|格 id>`（只读；按格名逐字反查，认不出/命中多格退 2 且列出候选，不替你挑一格；与 `--diagnose` 共用同一份取数与「按 sha 归属」）                                                                                                                                                            |

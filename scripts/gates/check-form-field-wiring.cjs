@@ -31,7 +31,7 @@
  *
  * ── 它判什么、不判什么 ────────────────────────────────────────────────
  *
- * 判**棘轮**：plain-children 站点数不许超过 `scripts/.form-field-wiring-baseline.json`
+ * 判**棘轮**：plain-children 站点数不许超过 `scripts/gates/.form-field-wiring-baseline.json`
  * （`--update` 收紧，且**拒绝把数字往上涨**）。
  *
  * **不判**（明写在案，别当成漏报）：
@@ -63,7 +63,7 @@ const REPORT_ONLY = ARGS.has("--report");
 const SHOULD_UPDATE = ARGS.has("--update");
 const STAGED = ARGS.has("--staged");
 
-const BASELINE = path.join(__dirname, "../.form-field-wiring-baseline.json");
+const BASELINE = path.join(__dirname, ".form-field-wiring-baseline.json");
 
 /** 扫描范围：视图层与用例（stories 也是调用点，一起判）。
  *  **必须在 `--staged` 短路之前**，所以提到 `require("typescript")` 上面。 */

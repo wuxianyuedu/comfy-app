@@ -19,8 +19,8 @@ import {
 import { HEAVY_GATES } from "../scripts/ci/ci-heavy-gates.mjs";
 import { DAILY_GATE_EXECUTORS } from "../scripts/ci/ci-ga-trigger-map.mjs";
 import { INPUT_GLOBS, INPUT_RES, matchedInputs } from "../scripts/gates/check-docs-api.cjs";
-import { SCAN_ROOTS, TRIGGER_GLOBS } from "../scripts/file-structure-rules.cjs";
-import { globToRe } from "../scripts/vitest-projects.cjs";
+import { SCAN_ROOTS, TRIGGER_GLOBS } from "../scripts/gates/file-structure-rules.cjs";
+import { globToRe } from "../scripts/affected-tests/vitest-projects.cjs";
 
 const CONFIG = readCnbConfig();
 /* ISSUE #3378 收尾：`生成态文档与源同步` 的收窄面由 GA `master-gate.yml` 的同名 step
@@ -226,13 +226,13 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       /* ISSUE #2537：这些文件也在 typedoc 的解析面里，旧面漏判的就是它们。 */
       "src/app/page.tsx",
       "tests/publish-desktop-bundle.test.ts",
-      "scripts/publish-desktop-bundle.mjs",
+      "scripts/build/publish-desktop-bundle.mjs",
       "e2e/a.ts",
       "typedoc.json",
       "package.json",
       "pnpm-lock.yaml",
       "scripts/gates/check-docs-api.cjs",
-      "scripts/typedoc-run.mjs",
+      "scripts/docs/typedoc-run.mjs",
     ]) {
       expect(matchedInputs([f]), `判据不认 ${f}，这条用例的样本已经过期`).toEqual([f]);
     }

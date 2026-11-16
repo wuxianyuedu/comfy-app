@@ -64,7 +64,7 @@ const standaloneDir = join(process.cwd(), ".next", "standalone");
 /**
  * 产物根在，且 `node_modules/next` 够得着 —— 守卫须判两件事：standalone 的 `node_modules` 是指向 pnpm store 的
  * 符号链接（硬规则 17），一次 `pnpm install` 换掉哈希段就让旧产物悬空（根在、`RUNTIME_DIR` 数出 0 份）。只判根在
- * 会把「没重新构建」说成「产物有缺陷」；有无产物由 `scripts/.artifact-freshness.json` 档自证（§11.8 / §13.5.4）。
+ * 会把「没重新构建」说成「产物有缺陷」；有无产物由 `scripts/freshness/.artifact-freshness.json` 档自证（§11.8 / §13.5.4）。
  */
 const nextReachable = existsSync(join(standaloneDir, "node_modules", "next", "package.json"));
 const artifactUsable = existsSync(standaloneDir) && nextReachable;

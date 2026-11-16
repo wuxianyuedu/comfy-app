@@ -8,7 +8,7 @@
   新增 `scripts/ci-load.mjs` 作为这件事的**唯一出处**：`CNB_CPUS` → `os.availableParallelism()`
   → 兜底读核数，按「一个 worker 至少吃 4 核」折算（16 核 ⇒ 4，与 §13.5.3.8 的实测一致），
   人还能用 `COMFY_CI_MAX_WORKERS=1` 再压一档（只调并发、不动任何判据）。
-  `scripts/full-suite-run.mjs` 的 `planRun()` 接上它 —— **并发不进 `extra`**，
+  `scripts/affected-tests/full-suite-run.mjs` 的 `planRun()` 接上它 —— **并发不进 `extra`**，
   因为进了 `isWholeTrackRun()` 会把每一次跑都判成「不是整档」，记账通道会整个失效。
   `生产构建` 刻意**没有**旋钮：`next build` 的 worker 数由构建器自己定，
   `NODE_OPTIONS` 改的是内存上限不是并发，拿它冒充降载就是换一个东西。

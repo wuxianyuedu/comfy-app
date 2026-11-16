@@ -1,5 +1,5 @@
 /**
- * `scripts/typedoc-run.mjs`：typedoc「跑 + 验 + 重试」的唯一实现。钉无声失败：退出 0 + `html generated at …`，但 `docs/api/**` 零文件更新。
+ * `scripts/docs/typedoc-run.mjs`：typedoc「跑 + 验 + 重试」的唯一实现。钉无声失败：退出 0 + `html generated at …`，但 `docs/api/**` 零文件更新。
  * 目录堆着上轮产物，「文件数 > 0」会被蒙过去，判据落在「探针是不是这一轮写的」。① 验产物不验退出码：退 0 但探针 mtime 早于本次开始 = 失败。
  * ② 失败要重试（冷跑数十秒，用 `spawnImpl` 注入「起了但没写」，验到用完次数）；③ 第二次写出判成功且报第 2 次（记成失败等于白重试）。夹具用一次性目录。
  */
@@ -15,7 +15,7 @@ import {
   runTypedoc,
   snapshotOutput,
   typedocArgs,
-} from "../scripts/typedoc-run.mjs";
+} from "../scripts/docs/typedoc-run.mjs";
 
 const temps: Array<string> = [];
 
@@ -215,7 +215,10 @@ describe("typedocArgs：参数面钉在这里（ISSUE #2843）", () => {
 
 describe("spawnTypedoc 不经 shell 层（ISSUE #2445）", () => {
   it("模块源码里不再有 shell 选项与手工括引号（DEP0190 的形状判据）", () => {
-    const source = readFileSync(path.resolve(process.cwd(), "scripts/typedoc-run.mjs"), "utf8");
+    const source = readFileSync(
+      path.resolve(process.cwd(), "scripts/docs/typedoc-run.mjs"),
+      "utf8",
+    );
     /* spawn 的 args 数组 + shell:true 是 Node 26 的 DEP0190 弃用形态；且 shell 一开
      * Node 就不转义参数，引号要自己括。两个形状都不许回来 —— 用例层测不到真 spawn
      * 的选项面，源码形状是那层覆盖的唯一口径（#2444 同款）。 */

@@ -1,7 +1,7 @@
 /** `docs/api/**` 的输入面（ISSUE #2537，事故 #2528）：面判窄了就是**静默漏判** —— 被 `ifModify`
  * 跳过与「判过且通过」读数上无差别。旧面按 `typedoc.json` 的 `entryPoints` 算，但 typedoc **解析**的是
  * TS 程序（`tsconfig.json` 展开的根 ∪ 沿 import 走到的文件），`entryPoints` 只决定渲染哪几页 —— 于是
- * `scripts/publish-desktop-bundle.mjs`（被 `tests/**` import 进程序、不在三根、也不是入口点）漏在面外。
+ * `scripts/build/publish-desktop-bundle.mjs`（被 `tests/**` import 进程序、不在三根、也不是入口点）漏在面外。
  * 本用例判「面 ⇄ 事实」两向 + 派生纯函数：事实面里每个文件都被面罩住；把面改窄 ⇒ 有文件罩不住 ⇒ 红；
  * 新增一个解析根里的新路径 ⇒ 派生面自动覆盖它。进固定清单：触发它的改动不在本用例的静态 import 图里。 */
 import fs from "node:fs";
@@ -17,12 +17,12 @@ import {
   typedocProgramFiles,
   typedocProgramRoots,
   typedocTsconfigPath,
-} from "../scripts/docs-api-input-closure.mjs";
-import { globToRe } from "../scripts/vitest-projects.cjs";
+} from "../scripts/docs/docs-api-input-closure.mjs";
+import { globToRe } from "../scripts/affected-tests/vitest-projects.cjs";
 
 const ROOT = process.cwd();
 
-/** 一个路径是否被某条 glob 罩住。glob → 正则复用 `scripts/vitest-projects.cjs` 已导出的那一份
+/** 一个路径是否被某条 glob 罩住。glob → 正则复用 `scripts/affected-tests/vitest-projects.cjs` 已导出的那一份
  * （同一套 `**` / `*` / `{a,b}` 口径、带锚点）—— 不写第二套：抄一份就会漂，漂的形态是
  * 「面罩不住事实」＝静默漏判（§12.12 / §12.18）。
  * @param rel 仓库相对路径 / @param globs glob 清单 / @returns 是否被某一条罩住
@@ -42,7 +42,7 @@ function programFiles(): ReadonlyArray<string> {
 }
 
 /** 现场那个文件：`#2528` 新增、`tests/**` import 进程序、旧面里没有它。 */
-const INCIDENT_FILE = "scripts/publish-desktop-bundle.mjs";
+const INCIDENT_FILE = "scripts/build/publish-desktop-bundle.mjs";
 
 /**
  * 那份产物（`BackupResult` 在产物里的落点）在盘上吗？产物**不再进 git**（ISSUE #2231），只有跑过

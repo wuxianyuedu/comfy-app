@@ -11,7 +11,7 @@ import {
   parseArgs,
   parseSuperjsonEnvelope,
   validateArgs,
-} from "../scripts/agent-film.mjs";
+} from "../scripts/platform/agent-film.mjs";
 
 const noopSleep = () => Promise.resolve(undefined);
 

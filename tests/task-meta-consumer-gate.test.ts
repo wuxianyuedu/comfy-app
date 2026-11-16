@@ -50,7 +50,7 @@ const EMPTY_LEDGER = `${JSON.stringify({ consumers: [] }, null, 2)}\n`;
  */
 /** 放台账（真实仓库里它必须在场）。 */
 function putLedger(repo: GateRepo, content = EMPTY_LEDGER): void {
-  repo.write("scripts/.task-meta-consumers.json", content);
+  repo.write("scripts/gates/.task-meta-consumers.json", content);
 }
 
 describe("task.meta 消费方门禁：该放的形状（§11.22）", () => {

@@ -1,5 +1,5 @@
 /**
- * `quality-gate` 两份实现（`scripts/quality-gate.mjs` / `.ps1`）门禁表的唯一解析器（§12.18）：
+ * `quality-gate` 两份实现（`scripts/gates/quality-gate.mjs` / `.ps1`）门禁表的唯一解析器（§12.18）：
  * 不能 import（`.mjs` 末尾 `process.exit(main())`，等于真跑一遍门禁），只能读源码形状；消费方
  * `tests/ps1-consistency.test.ts` 比对两侧集合；判据按入口脚本认档而非名字（改名即可绕过）。
  */
@@ -28,7 +28,7 @@ function stripForParsing(src: string): string {
 /**
  * 从 `.ps1` 源码取门禁块：按块（`@{ … }`）切分，不按行或前瞻 —— 注释独占行、块可跨行，
  * 前瞻正则会在换行/注释/块尾静默取错（实测第一版把 `typecheck` 当成按需档）；名字取不到的不返回。
- * @param src `scripts/quality-gate.ps1` 全文  @returns 每块一条（形状不认识的跳过）
+ * @param src `scripts/gates/quality-gate.ps1` 全文  @returns 每块一条（形状不认识的跳过）
  */
 export function parsePs1Gates(src: string): Array<GateEntry> {
   // **只在 `$Blocks` 数组里找**（与 `.mjs` 侧只在 `GATES` 里找同一条纪律）。
@@ -58,7 +58,7 @@ export function parsePs1Gates(src: string): Array<GateEntry> {
 /**
  * 从 `.mjs` 的 `GATES` 块取门禁项：每项从 `  key: {` 到下一个 `  key: {`（或收尾 `};`）为止，
  * 与 `ps1-consistency` 的口径逐字一致。
- * @param src `scripts/quality-gate.mjs` 全文  @returns 每项一条
+ * @param src `scripts/gates/quality-gate.mjs` 全文  @returns 每项一条
  */
 export function parseMjsGates(src: string): Array<GateEntry> {
   const start = src.indexOf("const GATES = {");

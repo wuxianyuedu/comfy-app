@@ -1,7 +1,7 @@
 /**
  * `import.meta` 边界（ISSUE #2599）：`src/env.js` 预检要算自身父目录；`chore #2556` 换成 `import.meta.dirname`（`scripts/**` 141 处对，`src/**` 会被打包器重写）。Turbopack 产物里 `import.meta` 只有 `url` ⇒ `join(import.meta.dirname, ...)` 抛 `ERR_INVALID_ARG_TYPE`，`pnpm build` 在 collect page data 全红。
  * 判据不靠产物读数（缺读数 ≠ 通过），判四件事：`src/**` 无此属性、`scripts/**` 边界照旧、预检在安全侧、`SKIP_ENV_VALIDATION` 短路最先。
- * 读磁盘文本不在 import 图 ⇒ 登记 `scripts/fixed-structural-tests.mjs` 固定清单；不许扩到全仓（会撤掉 141 处正当写法）。
+ * 读磁盘文本不在 import 图 ⇒ 登记 `scripts/affected-tests/fixed-structural-tests.mjs` 固定清单；不许扩到全仓（会撤掉 141 处正当写法）。
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";

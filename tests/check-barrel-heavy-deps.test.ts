@@ -17,13 +17,15 @@ const { test, expect } = defineGateRepo({
   script: "gates/check-barrel-heavy-deps.cjs",
   dir: "root",
   dirs: ["src/app", "src/components"],
-  copy: [{ from: "scripts/.barrel-heavy-deps.json", to: "scripts/.barrel-heavy-deps.json" }],
+  copy: [
+    { from: "scripts/gates/.barrel-heavy-deps.json", to: "scripts/gates/.barrel-heavy-deps.json" },
+  ],
 });
 
 /** 把登记清单换成「一个入口 + 一条重依赖 + 一条必须懒加载的模块」。 */
 function seedConfig(repo: { write: (rel: string, s: string) => void }) {
   repo.write(
-    "scripts/.barrel-heavy-deps.json",
+    "scripts/gates/.barrel-heavy-deps.json",
     JSON.stringify({
       entries: ["src/app/entry.tsx"],
       heavyDeps: ["@xyflow/react"],
@@ -124,7 +126,7 @@ describe("check-barrel-heavy-deps.cjs（提交门槛）", () => {
     seedConfig(repo);
     seedCheapChain(repo);
     repo.write(
-      "scripts/.barrel-heavy-deps.json",
+      "scripts/gates/.barrel-heavy-deps.json",
       JSON.stringify({
         entries: ["src/app/entry.tsx"],
         heavyDeps: [],

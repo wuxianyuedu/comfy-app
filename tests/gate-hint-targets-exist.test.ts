@@ -94,12 +94,12 @@ const PRODUCT_ROOT_LITERALS: Array<{
   {
     script: "scripts/gates/check-standalone-contents.cjs",
     path: "scripts/executor-host.runtime.mjs",
-    generatedBy: "scripts/build-executor-host.mjs",
+    generatedBy: "scripts/build/build-executor-host.mjs",
   },
   {
     script: "scripts/gates/check-standalone-contents.cjs",
     path: "scripts/executor-host.build.json",
-    generatedBy: "scripts/build-executor-host.mjs",
+    generatedBy: "scripts/build/build-executor-host.mjs",
   },
 ];
 
@@ -275,7 +275,7 @@ describe("门禁脚本里的路径字面量必须存在", () => {
     expect(
       quotedRepoPaths(sourceOf("scripts/gates/check-annotate-consumer.cjs")),
       "登记方脚本里认不出台账字面量了：招牌由这句『路径必须被真读』撑着",
-    ).toContain("scripts/.annotate-consumers.json");
+    ).toContain("scripts/gates/.annotate-consumers.json");
 
     /* ② 判定②问的是「脚本对『路径不存在』站得下吗」。本仓库现在站得下 ——
        用的是真脚本、真仓库（同上面那几个 `exitCodeOfGate` 调用）。 */

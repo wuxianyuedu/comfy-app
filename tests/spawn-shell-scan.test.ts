@@ -17,8 +17,8 @@ import {
   binRelativePath,
   resolveBinEntryByName,
   resolvePackageBinEntry,
-} from "../scripts/package-bin-entry.mjs";
-import { findShellOptions, findShellOptionsIn } from "../scripts/spawn-shell-scan.mjs";
+} from "../scripts/lib/package-bin-entry.mjs";
+import { findShellOptions, findShellOptionsIn } from "../scripts/gates/spawn-shell-scan.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -30,13 +30,13 @@ function asText(value: unknown): string {
   return Buffer.isBuffer(value) ? value.toString("utf8") : "";
 }
 
-describe("scripts/spawn-shell-scan.mjs", () => {
+describe("scripts/gates/spawn-shell-scan.mjs", () => {
   it("scripts/** 里没有「起子进程开 shell」的形态（DEP0190 + 手工引号）", () => {
     // 这一条是 #2453 的护栏：#2445 修掉 typedoc 那一处之后，第二处（storybook）
     // 是肉眼找到的。不进固定清单就等于「发现第三处靠运气」。
     let stdout = "";
     expect(() => {
-      stdout = execFileSync(process.execPath, ["scripts/spawn-shell-scan.mjs"], {
+      stdout = execFileSync(process.execPath, ["scripts/gates/spawn-shell-scan.mjs"], {
         cwd: ROOT,
         encoding: "utf8",
       });
@@ -197,7 +197,7 @@ describe("scripts/spawn-shell-scan.mjs", () => {
     }
   });
 
-  it("#2562 缺口 1（阳性对照 / canary）：`node scripts/spawn-shell-scan.mjs` 撞到已知违例必须非零退出", () => {
+  it("#2562 缺口 1（阳性对照 / canary）：`node scripts/gates/spawn-shell-scan.mjs` 撞到已知违例必须非零退出", () => {
     // 「0 命中」只证明此刻没有违规，不能证明闸能拦违规。这一条造一个已知坏文件，
     // 直接跑扫描器二进制（不是调库函数），确认它 exit != 0 且把违例点名出来。
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "spawn-shell-canary-"));
@@ -214,7 +214,7 @@ describe("scripts/spawn-shell-scan.mjs", () => {
       let stderr = "";
       let code = 0;
       try {
-        execFileSync(process.execPath, ["scripts/spawn-shell-scan.mjs", "--root", root], {
+        execFileSync(process.execPath, ["scripts/gates/spawn-shell-scan.mjs", "--root", root], {
           cwd: ROOT,
           encoding: "utf8",
           stdio: ["ignore", "ignore", "pipe"],
@@ -252,7 +252,7 @@ describe("scripts/spawn-shell-scan.mjs", () => {
   });
 });
 
-describe("scripts/package-bin-entry.mjs", () => {
+describe("scripts/lib/package-bin-entry.mjs", () => {
   it("本仓三个 CLI 都解析得到包真身（不在 .bin 垫片下）", () => {
     for (const pkg of ["typedoc", "vitest", "storybook"]) {
       const entry = resolvePackageBinEntry(pkg);
@@ -329,7 +329,7 @@ function isPkgJson(value: unknown): value is {
   );
 }
 
-describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", () => {
+describe("scripts/lib/package-bin-entry.mjs — 按垫片名字解析（#2572）", () => {
   /** 从「包真身入口」回到那份包的 `package.json`（`<pkgDir>/bin/<名>` 那一层）。 */
   const pkgJsonOfEntry = (entry: string) => {
     const pkgDir = path.resolve(entry, "..", "..");
@@ -725,7 +725,7 @@ describe("scripts/ci/ci-run-tool.mjs — 按名字直起包真身（#2572）", (
 
   it("`.cnb.yml` 不再直接起 `.bin` 垫片，那两格在 GA 走本入口", () => {
     /* 这一条读磁盘文本，而 `.cnb.yml` **不被任何测试 import** ⇒ 它已经在固定清单里
-     * （`scripts/fixed-structural-tests.mjs`，本文件那条理由登记在那儿）：改清单不会
+     * （`scripts/affected-tests/fixed-structural-tests.mjs`，本文件那条理由登记在那儿）：改清单不会
      * 把这些用例带进增量面，不固定跑的表现不是红，是下一次又长出 `.bin/tsc`。 */
     const stripComments = (text: string) =>
       text

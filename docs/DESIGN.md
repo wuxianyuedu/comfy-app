@@ -567,7 +567,7 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 ## Components
 
-组件出口只有一个：**`src/components/ui/`**。**这里不抄份数**：这个目录每一轮都在长（新增件、新增 story、新增单测），抄进来的数下一轮就是错的 —— 要规模就现跑 `git ls-files src/components/ui | wc -l`（故事 / 单测各一档：`git ls-files 'src/components/ui/*.stories.tsx' | wc -l`、`…*.test.tsx`）。而「组件」这个数在故事面判据里的口径**不等于**文件数（故事面按导出计数，见 Known Gaps 那条），复算入口是 `node scripts/storybook-check.mjs` 打出的 `组件覆盖率 x/y`。`src/app/shadcn/tailwind.css` 是 shadcn CLI 的 `@import` 占位（4 行注释、零条规则），**不是**组件出口，也**不是**演示页。
+组件出口只有一个：**`src/components/ui/`**。**这里不抄份数**：这个目录每一轮都在长（新增件、新增 story、新增单测），抄进来的数下一轮就是错的 —— 要规模就现跑 `git ls-files src/components/ui | wc -l`（故事 / 单测各一档：`git ls-files 'src/components/ui/*.stories.tsx' | wc -l`、`…*.test.tsx`）。而「组件」这个数在故事面判据里的口径**不等于**文件数（故事面按导出计数，见 Known Gaps 那条），复算入口是 `node scripts/devtools/storybook-check.mjs` 打出的 `组件覆盖率 x/y`。`src/app/shadcn/tailwind.css` 是 shadcn CLI 的 `@import` 占位（4 行注释、零条规则），**不是**组件出口，也**不是**演示页。
 
 ### Button（`src/components/ui/button.tsx`，15 variant × 8 size）
 
@@ -815,7 +815,7 @@ git grep -l "<PageHeader" -- src/components src/app | grep -v test    # 全部�
 > - 顺带收掉的两处：同一栏里 `fpsDotColor` 三档原先是基准色 α=1（隔壁 devServer 那点已经是浅彩）—— 同尺寸、同语义的两个点两套配方，现在都是 80% 走同一族；`canvas/CanvasSettingsButton.tsx` 那颗品牌点与 4 处连线光晕的裸值（`rgba(167,139,250,0.7)` / `rgba(124,92,252,0.6)`）也并进这一族，连线直接用 `var(--color-primary)`（收口那一刻 `#7c5cfc` 逐字节就是那个值 ⇒ 零像素；品牌深化后这颗跟着 token 变成 `#8557de` —— **是「跟手」的证据，不是漂移**）。判据从「禁某两个裸值」升级成**按形状归零**：`shadow-[ 0_0_…rgba(…) ]` 与任何 `shadow-[ …#hex ]` 都判红，并用反向样本钉住两条边界 —— 投影必有偏移或扩散（`0_0_` 不判投影，投影走下面这条），同一档浅彩在别处是合法的角色色（`#34D399` 当类别色）。
 > - **带偏移的投影里那批裸 `rgba()` 曾一度对两层判据都不存在**（`0_0_` 那条按形状不收它，而 `theme:check` 因为正则里的 `\b` 也收不到它 —— Tailwind 候选名用 `_` 代替空格，`px_rgba(` 前面是单词字符、当场匹配不到；口径见规范 03 §3.6.2 末段「认的是源码里写了字面色值」）。修好判据后那批 6 处逐处定性：**5 处入 token**（画布节点与模型卡 hover 引 `var(--color-shadow-strong)`、两枚生成按钮的投影与库卡选中内描边改 `color-mix(… var(--color-primary*))` ⇒ 品牌一改就跟手），**1 处登记为固定暗色豁免**（`ui/water-fill-progress` 百分比白字压着预览内容的那道 `drop-shadow`，与它同文件已登记的「极小面积叠层」同判据）。其余裸值的权威清单不在本文抄条数，由 `pnpm theme:check` 逐文件打印「处数 + 为什么可以留」。
 
-- **故事面已经全覆盖，缺口挪到了单元层**（订正：本文件此前写「Storybook 覆盖 29/83、核心交互件里 input/dialog/select/card/… 无 story」—— 那组读数被 `331b38c2` → `b9cbd762` → `82480021` 三连补覆盖否掉了，`82480021` 那次就把理由表清成了 0 条）。现在 `node scripts/storybook-check.mjs` 报的是**覆盖率与它自己的基线同值、理由表 0 条**（缺 title 0 / 未接真组件 0 / 分组偏离 0）⇒ 「明暗两态长什么样」这一层契约在**每一个**组件上都可以在故事面被核验。**这里只留形状不留数字**：`x/y` 的分母随新增件变、故事份数随新增 story 变（上一批写下 89/89 与 122 份，同一轮落地后 3 小时就被 `ed881689` 推成 90/90 与 123 份），要读数就现跑那条命令 —— 有基线顶着的是「覆盖率 = 基线」这件事，不是某个具体数。
+- **故事面已经全覆盖，缺口挪到了单元层**（订正：本文件此前写「Storybook 覆盖 29/83、核心交互件里 input/dialog/select/card/… 无 story」—— 那组读数被 `331b38c2` → `b9cbd762` → `82480021` 三连补覆盖否掉了，`82480021` 那次就把理由表清成了 0 条）。现在 `node scripts/devtools/storybook-check.mjs` 报的是**覆盖率与它自己的基线同值、理由表 0 条**（缺 title 0 / 未接真组件 0 / 分组偏离 0）⇒ 「明暗两态长什么样」这一层契约在**每一个**组件上都可以在故事面被核验。**这里只留形状不留数字**：`x/y` 的分母随新增件变、故事份数随新增 story 变（上一批写下 89/89 与 122 份，同一轮落地后 3 小时就被 `ed881689` 推成 90/90 与 123 份），要读数就现跑那条命令 —— 有基线顶着的是「覆盖率 = 基线」这件事，不是某个具体数。
   剩下的洞不是「没 story」而是**没单测**。复算（列出还缺同名单测的组件）：
   ```bash
   git ls-files src/components/ui | grep '\.tsx$' | grep -v '\.stories\.\|\.test\.' | while read f; do

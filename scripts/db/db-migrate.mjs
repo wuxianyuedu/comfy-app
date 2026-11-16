@@ -28,7 +28,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { runPnpmSync } from "../launcher-core/shell.mjs";
 import { pnpmCli } from "../ci/ci-install-deps.mjs";
-import { rejectUnknownArgs } from "../cli-arg-contract.mjs";
+import { rejectUnknownArgs } from "../lib/cli-arg-contract.mjs";
 import { probeSchemaFresh, resolveSqlitePath } from "./db-schema-state.mjs";
 import { sweepDuplicateRowsForUniqueIndexes } from "./db-unique-sweep.mjs";
 

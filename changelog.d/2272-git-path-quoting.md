@@ -19,7 +19,7 @@
 
   1. 仓库里凡是读 git 路径的调用，一律带 `-c core.quotePath=false`（或 `-z` 那一族：
      NUL 分隔，git 不加引号）—— 共 14 处，含**改动面的唯一出处**
-     （`scripts/changed-scope.mjs`）、**暂存面的唯一出处**
+     （`scripts/lib/changed-scope.mjs`）、**暂存面的唯一出处**
      （`scripts/gate-scan-read.cjs` 的 `readStagedPaths()`）、`affected-tests.mjs` 的
      暂存档与索引清单、`check-format.cjs` / `check-deps-freshness.mjs` /
      `check-docs-api.cjs` / `shell-gate.mjs` / `known-failed-selftest-gate.mjs` /

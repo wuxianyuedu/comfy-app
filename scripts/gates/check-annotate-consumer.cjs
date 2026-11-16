@@ -47,7 +47,7 @@
  *
  * 所以本判据只做一件事：**有站点就必须登记消费方**。
  *   · 零站点（本仓库当前状态）→ 通过，本判据是纯闸门；
- *   · 有站点 → `scripts/.annotate-consumers.json` 里必须有一条说明
+ *   · 有站点 → `scripts/gates/.annotate-consumers.json` 里必须有一条说明
  *     「谁读它、怎么读」，否则阻断。
  *
  * **刻意不判**「该不该用 annotate」：那是收益判断（要实测），不是文本判据。
@@ -72,7 +72,7 @@ const SCAN_DIRS = ["src", "tests"];
 const TEST_FILE_RE = /\.test\.tsx?$/;
 
 /** 台账：谁在读 `ctx.annotate` 写的那些注释。 */
-const LEDGER = "scripts/.annotate-consumers.json";
+const LEDGER = "scripts/gates/.annotate-consumers.json";
 
 /**
  * `annotate` 站点。两种调用形态都要认：

@@ -44,7 +44,7 @@ function toPosix(p) {
  *
  * 认的是两个**目录段**，不是任何以它们开头的名字（`.nextify/` 不算）：
  *  · `.next/` —— Next 的生成物（ISSUE #1182 的现场）；
- *  · `.storybook/generated/` —— 组件工作台的生成件，由 `scripts/storybook-assets.mjs`
+ *  · `.storybook/generated/` —— 组件工作台的生成件，由 `scripts/devtools/storybook-assets.mjs`
  *    在 `pnpm storybook` 启动时现算、整目录 gitignore（ISSUE #1409 提到的同族）。
  *    它今天已不再被任何源码静态 import（那条修法见 ISSUE #1409 的 PR），但
  *    「生成物里的报错」这一类形态仍然会以组 A 出现，认得出来就能少一轮怀疑自己。
@@ -107,7 +107,7 @@ function buildHint(v) {
     ...(hasStorybook
       ? [
           "  成因（ISSUE #1409 同族）：`.storybook/generated/` 是组件工作台的生成件，由",
-          "  `scripts/storybook-assets.mjs` 在 `pnpm storybook` 启动时现算、整目录 gitignore。",
+          "  `scripts/devtools/storybook-assets.mjs` 在 `pnpm storybook` 启动时现算、整目录 gitignore。",
           "  它**不该**被源码静态 import（那会让没跑过工作台的检出 tsc 必红），所以现在还能",
           "  在这里报错，多半是有人重新 `import` 了它，或者半截生成件被写坏了。",
         ]

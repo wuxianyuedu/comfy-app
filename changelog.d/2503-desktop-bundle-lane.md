@@ -6,7 +6,7 @@
   「装依赖 → 壳工具链自证 → `pnpm tauri build` → 发布」，判据一个字都不在这里重写
   （产物级两道防线仍在 `pnpm build` 那条链上，发布只能排在它绿之后）。
 
-  新增 `scripts/publish-desktop-bundle.mjs` —— 打桌包只补**发布**那一格，不抄第二份打包脚本：
+  新增 `scripts/build/publish-desktop-bundle.mjs` —— 打桌包只补**发布**那一格，不抄第二份打包脚本：
   常驻根由 `resolveArtifactRoot` 推导（问 `pnpm store path` 拿卷，拼 `ci-artifacts/<包名>`，
   **不写盘符**，且刻意是两份缓存槽的**第三个兄弟目录** —— 槽根的淘汰器把每个目录都当成一个键），
   一份一个目录 + `manifest.json`（sha / 构建号 / 事件键 / 时刻 / 体积 / 文件清单），

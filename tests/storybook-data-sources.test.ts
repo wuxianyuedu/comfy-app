@@ -7,13 +7,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { ensureStorybookAssets } from "../scripts/storybook-assets.mjs";
+import { ensureStorybookAssets } from "../scripts/devtools/storybook-assets.mjs";
 
 const ROOT = resolve(".");
 const SOURCES = join(ROOT, ".storybook", "data-sources.tsx");
 const ASSETS = join(ROOT, ".storybook", "assets");
 const MAIN = join(ROOT, ".storybook", "main.ts");
-const ASSET_SCRIPT = join(ROOT, "scripts", "storybook-assets.mjs");
+const ASSET_SCRIPT = join(ROOT, "scripts", "devtools", "storybook-assets.mjs");
 
 /* 前置：这条用例判的是「注入层清单 ⇄ 磁盘」的对位，不该假设谁替环境生成过文件。
    `.storybook/assets/` 是 postinstall 现生成的 gitignored 夹具，而本机 / 缓存命中的安装
@@ -77,7 +77,7 @@ describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
       (name) => name !== "missing.png" && !existsSync(join(ASSETS, name)),
     );
     if (missingOnDisk.length > 0) {
-      const { ensureStorybookAssets } = await import("../scripts/storybook-assets.mjs");
+      const { ensureStorybookAssets } = await import("../scripts/devtools/storybook-assets.mjs");
       ensureStorybookAssets(ASSETS);
     }
 
@@ -101,7 +101,9 @@ describe("Storybook 数据源注入层的契约（ISSUE #1381）", () => {
       if (name === "missing.png") {
         continue;
       }
-      expect(script, `${name} 不在 scripts/storybook-assets.mjs 的产出表里`).toContain(name);
+      expect(script, `${name} 不在 scripts/devtools/storybook-assets.mjs 的产出表里`).toContain(
+        name,
+      );
     }
   });
 

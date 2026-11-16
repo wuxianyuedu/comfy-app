@@ -9,9 +9,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-import { parseHeadings, resolveDoc, sectionRange } from "../scripts/doc-toc.mjs";
+import { parseHeadings, resolveDoc, sectionRange } from "../scripts/docs/doc-toc.mjs";
 
-const SCRIPT = join(process.cwd(), "scripts", "doc-toc.mjs");
+const SCRIPT = join(process.cwd(), "scripts", "docs", "doc-toc.mjs");
 
 function run(args: Array<string> = [], env: Record<string, string> = {}) {
   try {

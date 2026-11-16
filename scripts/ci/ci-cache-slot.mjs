@@ -92,7 +92,7 @@ export function resolveBuildCacheRoot(io) {
 }
 
 /**
- * **成品目录**的根（`scripts/publish-desktop-bundle.mjs` 用它，ISSUE #2503）。
+ * **成品目录**的根（`scripts/build/publish-desktop-bundle.mjs` 用它，ISSUE #2503）。
  *
  * 与构建缓存槽同卷、第二个目录（`ci-artifacts/<包名>`）。它是**第三个**目录而不是复用
  * 构建缓存的根的历史理由是「各自的键域互不相扰」；退役后这条边界继续成立 ——
@@ -120,7 +120,7 @@ export function resolveArtifactRoot(io) {
 }
 
 /**
- * **第三方构建工具镜像**的根（`scripts/tauri-tools-cache.mjs` / `ci-actionlint.mjs` 用它，
+ * **第三方构建工具镜像**的根（`scripts/build/tauri-tools-cache.mjs` / `ci-actionlint.mjs` 用它，
  * ISSUE #2525）。它**不是缓存**：缓存删了只是下一次慢，这一份删了那条流水线今天就打不出包。
  *
  * 显式出口 `COMFY_CI_TOOLS_ROOT` 优先（一个变量只管自己那一套根）。

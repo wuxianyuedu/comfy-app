@@ -4,7 +4,7 @@
 import { appendComment, readCommentBodies } from "./ship-comment.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
-import { cnbData } from "../cnb-fields.mjs";
+import { cnbData } from "../platform/cnb-fields.mjs";
 import { handlerLabel, ISSUE_LABEL_ROLES, labelValues, participantLabel } from "./ship-ticket.mjs";
 import {
   claimComment,

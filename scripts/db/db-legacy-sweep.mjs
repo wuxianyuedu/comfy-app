@@ -153,7 +153,7 @@ export function sweepLegacyTimestamps(
  * `file://${argv[1]}`：`import.meta.url` 在 Windows 上是 `file:///F:/…/x.mjs`
  * （三斜杠 + 正斜杠），拼出来的那份是 `file://F:\…\x.mjs` —— **恒不相等**，
  * 于是这段一次都不跑、**退出码恒 0 且一行输出都没有**（`node scripts/ci/ci-toolchain-selfcheck.mjs`
- * 与 `scripts/python-probe.mjs` 在自托管节点上就栽在这上面：`工具链自证` /
+ * 与 `scripts/lib/python-probe.mjs` 在自托管节点上就栽在这上面：`工具链自证` /
  * `Python 可用性` 两步双双空转，缺 Python 一路滑到 18 分钟后的 E2E 才暴露）。
  * 本仓另三处（`check-merge-parents.mjs` / `check-merged-side-loss.mjs` /
  * `check-pending-merge-loss.mjs`）为此写了同一条注释，`tests/script-main-guard.test.ts`

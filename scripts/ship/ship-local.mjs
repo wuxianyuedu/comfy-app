@@ -38,7 +38,7 @@ import { safeRead, short } from "./ship-exec.mjs";
 import { reportStage } from "./ship-stage.mjs";
 /* 「这一笔是刻意的空提交」不靠猜索引 —— 由被触发的两条 D0 判据认这个说出来的旗标
  * （唯一生产者就是下面这一格，口径在 `intentional-empty-commit.mjs`，ISSUE #2354）。 */
-import { EMPTY_COMMIT_ENV } from "../intentional-empty-commit.mjs";
+import { EMPTY_COMMIT_ENV } from "../platform/intentional-empty-commit.mjs";
 
 /**
  * 把 `git status --porcelain` 的输出**按列**分成「已暂存 / 未暂存（已修改）/ 未跟踪」三档。
@@ -538,7 +538,7 @@ export function runRerunCiStage(ctx) {
    * 只有单独跑它、或它判红时才看得见 —— 所以「谁改的口径」这件事写在这里，不留在注释里。 */
   log(
     `[ship]   那一跳带 ${EMPTY_COMMIT_ENV}=1：D0 里读暂存区的两步按「空提交没有可判的对象」收` +
-      "（口径 scripts/intentional-empty-commit.mjs，规范 §13.5.5 末段）。",
+      "（口径 scripts/platform/intentional-empty-commit.mjs，规范 §13.5.5 末段）。",
   );
   log("[ship]   稍后用 pnpm ship --diagnose 看这一跑的结果。");
   return CODE.GREEN;

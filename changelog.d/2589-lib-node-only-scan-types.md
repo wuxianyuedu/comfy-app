@@ -1,6 +1,6 @@
 ## Fixed
 
-- **脚本档清账批 2：`scripts/lib-node-only-scan.mjs` 21 格一次清完，账从 294 处 / 21 份降到
+- **脚本档清账批 2：`scripts/gates/lib-node-only-scan.mjs` 21 格一次清完，账从 294 处 / 21 份降到
   273 处 / 20 份（ISSUE #2589 / 规范 §13.5.14.1）**：这一份是 §18.4「Node-only 三选一」
   那条判据的扫描器（`tests/lib-node-only-declarations.test.ts` 用它），此前它自己从没被
   类型检查过 —— 19 格 `TS7006` 是各函数的形参没写 JSDoc 类型。

@@ -1,5 +1,5 @@
 /**
- * `scripts/git-dir.mjs` 的判据：判的是「写错地方」，不是「写不进去」。硬拼 `<root>/.git` 在 **worktree** 上拿到的是那个**指针文件**的路径（往里写东西会当场失败或写到不该在的地方）；设了 `GIT_DIR` 时，真正的 git 目录与仓库根可以毫无关系；两种都**不报错**。本仓恰好靠 worktree 跑事后复算（`base-check.mjs` 建临时快照检出），而 `.git/comfy-precommit-timing.jsonl` 与 `.git/comfy-premerge-proof.json` 都落在那个目录里——写错的那侧不会喊，读的那侧只是「永远读不到」，「这次没留下证据」看起来就像「这次没有证据要留」。
+ * `scripts/lib/git-dir.mjs` 的判据：判的是「写错地方」，不是「写不进去」。硬拼 `<root>/.git` 在 **worktree** 上拿到的是那个**指针文件**的路径（往里写东西会当场失败或写到不该在的地方）；设了 `GIT_DIR` 时，真正的 git 目录与仓库根可以毫无关系；两种都**不报错**。本仓恰好靠 worktree 跑事后复算（`base-check.mjs` 建临时快照检出），而 `.git/comfy-precommit-timing.jsonl` 与 `.git/comfy-premerge-proof.json` 都落在那个目录里——写错的那侧不会喊，读的那侧只是「永远读不到」，「这次没留下证据」看起来就像「这次没有证据要留」。
  * 所以建真 repo / 真 worktree 而不是造假形状：造一个「`.git` 是文件、内容写着 `gitdir: …`」的假目录，测的是**我自己猜的那份格式**，会在 git 换格式时继续绿（那正是本模块要避免的失效）。
  */
 import { spawnSync } from "node:child_process";
@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { gitScratchPath, resolveGitDir } from "../scripts/git-dir.mjs";
+import { gitScratchPath, resolveGitDir } from "../scripts/lib/git-dir.mjs";
 
 /** 跑一次 git（静默，失败时把 stderr 带进断言消息）。 */
 function git(args: Array<string>, cwd: string): string {
@@ -29,7 +29,7 @@ function mustGitDir(cwd: string): string {
 /**
  * 比较前先归一分隔符不是和稀泥：git 回的是**它自己的正斜杠形式**（`C:/Users/…/repo/.git`），Windows 上 `path.join` 给反斜杠；拼落点没问题（Win32 两种都收），但做字符串比较就会错——反向断言（`not.toContain`）在两种拼法下**恒真**，「落错了地方」也测不出来（该差异早存在于 `precommit-timing` 实现里）。
  * ⚠️ **win32 上还要连大小写一起归一**（ISSUE #2087）：左值来自 git、右值来自 `os.tmpdir()`，Runner 常以 LocalSystem 跑，`%TEMP%` 是全大写 `C:\WINDOWS\TEMP`，而文件系统给 `C:/Windows/Temp` ⇒ 这一格在**开发身份恒绿、节点身份恒红**，且报 `AssertionError` 看着完全像回归；Windows 路径大小写不敏感，拼法从来不是被测对象。
- * **posix 那一侧不许跟着做**：那里大小写有意义，归一会把「取到了另一个目录」判成正确（与 `scripts/.runtime-budget-baseline.json` 的 `byPlatform` 同一条口径 —— 判据要在它跑得到的宿主上自证）。
+ * **posix 那一侧不许跟着做**：那里大小写有意义，归一会把「取到了另一个目录」判成正确（与 `e2e/.runtime-budget-baseline.json` 的 `byPlatform` 同一条口径 —— 判据要在它跑得到的宿主上自证）。
  */
 function norm(p: string | null): string {
   const slashed = String(p ?? "").replaceAll("\\", "/");

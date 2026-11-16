@@ -25,7 +25,7 @@
  * ## 它判什么：什么都不判
  *
  * 覆盖率门槛在 `vitest.config.ts` 的 `thresholds` 里，由 `单元测试` 那一档判
- * （`scripts/full-suite-run.mjs` → `vitest run --coverage`）。本文件只把那份产物
+ * （`scripts/affected-tests/full-suite-run.mjs` → `vitest run --coverage`）。本文件只把那份产物
  * 报出去，**不设任何阈值** —— 平台阈值是绝对百分比，与本仓「按目录记门槛 + 棘轮」
  * 的口径冲突：填低了形同虚设，填高了把正常 PR 拦死。
  *

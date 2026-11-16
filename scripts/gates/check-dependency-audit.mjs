@@ -26,8 +26,8 @@
  *
  * 为什么**不**接进 `.githooks/pre-commit`：这是**网络请求**（依赖 registry 可达性）。
  * 塞进每次提交会把「离线 / registry 抖动」变成提交失败，与仓库一贯的「按需召唤」分层
- * （§13.5.4）不一致；所以它住在 `check:all`（`scripts/quality-gate.mjs` 的 `GATES`
- * 与 `scripts/quality-gate.ps1` 的 `$Blocks`，两处同步）。
+ * （§13.5.4）不一致；所以它住在 `check:all`（`scripts/gates/quality-gate.mjs` 的 `GATES`
+ * 与 `scripts/gates/quality-gate.ps1` 的 `$Blocks`，两处同步）。
  *
  * 与之配套的一条口径：**拿不到 registry 时判「未扫描」并以 0 退出，但话术里不许出现
  * 「干净」**。这条不是「让离线也能过」的便利 —— 而是把「没扫」与「扫了且没有」在输出
@@ -47,7 +47,7 @@ import { runPnpmSync } from "../launcher-core/shell.mjs";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "../..");
-const BASELINE_PATH = path.join(HERE, "../.dependency-audit-baseline.json");
+const BASELINE_PATH = path.join(HERE, ".dependency-audit-baseline.json");
 
 /**
  * 判据版本号。改了「拦哪些严重级」这类判据口径必须同步 +1，否则旧基线里的条目
@@ -287,7 +287,7 @@ function printAdded(added) {
   console.error(
     "  出路：① 能修的先修（`pnpm-workspace.yaml` 的 overrides 或直接升级，写清为什么）；\n" +
       "        ② 确实修不了的，先 `pnpm audit --json` 看清形状，再在\n" +
-      "           `scripts/.dependency-audit-baseline.json` 里**逐条补 key + reason**\n" +
+      "           `scripts/gates/.dependency-audit-baseline.json` 里**逐条补 key + reason**\n" +
       "           （`--update` 拒绝把新增写进基线 —— 那是棘轮的后门，不是收口）。\n" +
       "        ③ 别把 RULE_VERSION 改了当「新判据」绕过这几条。",
   );
@@ -329,7 +329,7 @@ function main() {
       );
       console.error(
         `  本轮命中 ${blocked.length} 条；首次记账会把它们全写进\n` +
-          "  `scripts/.dependency-audit-baseline.json`，**写完必须逐条补 reason**（缺 reason 判红）。",
+          "  `scripts/gates/.dependency-audit-baseline.json`，**写完必须逐条补 reason**（缺 reason 判红）。",
       );
       return 1;
     }

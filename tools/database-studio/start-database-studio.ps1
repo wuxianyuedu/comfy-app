@@ -6,7 +6,7 @@ start-database-studio.ps1 — 启动 Drizzle Studio（原 tools\studio\start-stu
 "Connecting to the Drizzle Kit on localhost:4983"。
 
 前置（一次性）：Windows 默认双击 .ps1 是「用记事本打开」，需先右键
-  scripts\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
+  scripts\devtools\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
 
 用法：
   双击 <项目根>\tools\database-studio\start-database-studio.ps1

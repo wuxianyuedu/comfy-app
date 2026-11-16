@@ -152,7 +152,7 @@ function typecheckRatchetModule(): TypecheckRatchetModule {
 
 /** 夹具里那份账本（判「`--update` 到底写没写」的唯一证据来源）。 */
 function baselinePath(): string {
-  return join(fixture, "scripts", ".scripts-typecheck-baseline.json");
+  return join(fixture, "scripts", "gates", ".scripts-typecheck-baseline.json");
 }
 /** 夹具账本的形状守卫（B5 清账，不走 as 断言）。 */
 function isLedger(value: unknown): value is Ledger {
@@ -174,7 +174,7 @@ beforeAll(() => {
   fixture = mkdtempSync(join(tmpdir(), "2524-fixture-"));
   rmSync(fixture, { recursive: true, force: true });
   created.push(fixture);
-  mkdirSync(join(fixture, "scripts"), { recursive: true });
+  mkdirSync(join(fixture, "scripts", "gates"), { recursive: true });
   writeFileSync(
     join(fixture, "tsconfig.scripts.json"),
     JSON.stringify(FIXTURE_CONFIG, null, 2),
@@ -395,12 +395,12 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
   }
 
   /**
-   * `scripts/eslint-gate-canary.mjs` 落临时样本用的目录前缀 —— **从它的源码里对账取回来**。eslint@10 的 project
+   * `scripts/gates/eslint-gate-canary.mjs` 落临时样本用的目录前缀 —— **从它的源码里对账取回来**。eslint@10 的 project
    * service 要求样本**落在 tsconfig 项目里**（`--stdin --stdin-filename` 会报 not found），故 canary 只能在
    * `scripts/` 下落 `eslint-canary-<pid>-<时间戳>/` 的真目录、`finally` 删；而「受影响用例」**并发**跑（`--maxWorkers=2`），
    * 「盘上没有未入库的 `.mjs`」会撞上同一次运行里另一份用例的样本（PR #2783 实测）。前缀不写死（与对账`check-bundle-budget.cjs` 同口径，写两遍必漂）：取不到就判「没判」，不是「没有残留」。 */
   function canaryScratchPrefix(): string | null {
-    const src = readFileSync(join(REPO_ROOT, "scripts", "eslint-gate-canary.mjs"), "utf8");
+    const src = readFileSync(join(REPO_ROOT, "scripts", "gates", "eslint-gate-canary.mjs"), "utf8");
     return /(?<prefix>[A-Za-z0-9_-]*canary-)/.exec(src)?.groups?.prefix ?? null;
   }
 
@@ -461,7 +461,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     ).toEqual([]);
     /* 账本用运行时守卫收窄（isLedger，B5 清账：不走 as 断言）。 */
     const baseline: unknown = JSON.parse(
-      readFileSync(join(REPO_ROOT, "scripts", ".scripts-typecheck-baseline.json"), "utf8"),
+      readFileSync(join(REPO_ROOT, "scripts", "gates", ".scripts-typecheck-baseline.json"), "utf8"),
     );
     if (!isLedger(baseline)) {
       throw new Error("账本形状不对（缺 files/total）");
@@ -519,7 +519,7 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
       JSON.stringify(FIXTURE_CONFIG, null, 2),
       "utf8",
     );
-    mkdirSync(join(repo, "scripts"), { recursive: true });
+    mkdirSync(join(repo, "scripts", "gates"), { recursive: true });
     writeFileSync(join(repo, "scripts", "clean.mjs"), "export const a = 1;\n", "utf8");
     git(["init", "-q"], repo);
     git(["add", "-A"], repo);
@@ -589,7 +589,7 @@ describe("取不到 git 清单要分两种原因（ISSUE #2965）", () => {
       JSON.stringify(FIXTURE_CONFIG, null, 2),
       "utf8",
     );
-    mkdirSync(join(repo, "scripts"), { recursive: true });
+    mkdirSync(join(repo, "scripts", "gates"), { recursive: true });
     writeFileSync(join(repo, "scripts", "clean.mjs"), "export const a = 1;\n", "utf8");
     git(["init", "-q"], repo);
     git(["add", "-A"], repo);

@@ -64,7 +64,7 @@ host 模式下任务状态全部经 SQLite 交换（进度 / 日志 / 终态由�
 3-E1（ISSUE #1169 的第一半）已经解决「产物里跑不起来」：`pnpm build` 收尾会把宿主的
 运行时图**预编译**成 `scripts/executor-host.runtime.mjs`（连一份构建清单
 `executor-host.build.json`，记 inputs/externals 供门禁复算）落进产物，然后
-**真起一次宿主进程**做冒烟（`scripts/smoke-executor-host-standalone.mjs`，它是
+**真起一次宿主进程**做冒烟（`scripts/devtools/smoke-executor-host-standalone.mjs`，它是
 `pnpm build` 的收尾一步；桌包构建的 1/4 步就是 `pnpm build`，所以组装 static 之前
 一定已经冒过烟）。宿主入口按**内容**决定加载
 哪份图：预编译件在 → 用它；不在（dev 检出）→ 装 tsx 的 ESM 钩子加载 `src/lib/**` 的

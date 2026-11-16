@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// @ts-nocheck -- 纯函数台账（与 scripts/storybook-check.mjs 同款：本仓的门禁脚本
+// @ts-nocheck -- 纯函数台账（与 scripts/devtools/storybook-check.mjs 同款：本仓的门禁脚本
 // 不走 tsc 的类型检查，判据由各自的契约测试守着）
 // 「哪些组件有故事」的台账（供 tests/storybook-component-coverage.test.ts 与
-// 门禁 scripts/storybook-check.mjs 共用）。
+// 门禁 scripts/devtools/storybook-check.mjs 共用）。
 //
 // 为什么要它：`docs/guide-storybook.md` 的「它不做什么」写着「当前只有 3 个
 // `ui/` 示例」—— 那是一个**会过期的事实**，而它过期时没有任何东西会红。

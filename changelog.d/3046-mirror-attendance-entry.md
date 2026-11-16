@@ -17,8 +17,8 @@
   （#2392 那条口径）；逐格判定与取数全部复用 `ci-build-readout.mjs` 那一份，不写第二份。
 - 登记四处（按需档的既有形态）：`package.json` 的 `check:mirror-attendance`、
   `quality-gate.mjs` 的 `GATES.mirrorAttendance`（`run: false`）、
-  `scripts/.on-demand-duties.json` 的 `mirror-attendance` 行、
-  `scripts/.gate-thresholds.json` 的两笔承重量（`DEFAULT_WINDOW_HOURS` = 24 小时 /
+  `scripts/gates/.on-demand-duties.json` 的 `mirror-attendance` 行、
+  `scripts/gates/.gate-thresholds.json` 的两笔承重量（`DEFAULT_WINDOW_HOURS` = 24 小时 /
   `DEFAULT_DETAIL_LIMIT` = 8 跑 —— 「判据自身的数值 ⇄ 账同批」那条 D0 判据会把没入账的数值拦下）；
   同批补 §13.5.4 的按需档表格行与「在册 ≠ 出勤」同族那一节，并带上 `docs/generated` 镜像。
 - 第一次真读数**当场抓出自己的一条假缺勤**（这条比入口本身更值得记）：默认 `--limit 3` 那一跑念

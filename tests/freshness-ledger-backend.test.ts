@@ -18,7 +18,7 @@ import { restoreToSnapshot, snapshotPaths } from "./helpers/probe-restore.ts";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
-const E2E_REL = "scripts/.e2e-freshness.json";
+const E2E_REL = "scripts/freshness/.e2e-freshness.json";
 const BRANCH = "ci/freshness-ledger-test";
 
 /**
@@ -76,7 +76,7 @@ beforeAll(() => {
   const { failed } = restoreToSnapshot(PRISTINE);
   expect(
     failed.map((f) => `${f.abs} → ${f.why}`),
-    "探针没能把 `scripts/.e2e-freshness.json` 还原成进用例前那一版",
+    "探针没能把 `scripts/freshness/.e2e-freshness.json` 还原成进用例前那一版",
   ).toEqual([]);
   git(`reset -q HEAD -- ${E2E_REL}`);
   process.env.FRESHNESS_LEDGER_BRANCH = BRANCH;

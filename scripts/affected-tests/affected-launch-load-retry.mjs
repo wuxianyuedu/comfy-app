@@ -21,7 +21,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 /**
  * 一次「红」的输出是不是**超时形态**。
  *
- * 逐条与 `scripts/base-check.mjs` 的 `TIMEOUT_SIGNATURES` **同源** —— 两份清单是
+ * 逐条与 `scripts/gates/base-check.mjs` 的 `TIMEOUT_SIGNATURES` **同源** —— 两份清单是
  * 同一件事（「这个红首先是一个负载读数」）在两个执行者上的落地：`base-check` 用它
  * 把复算结果归到第五态 `load-flake`，本文件用它决定要不要隔离复跑。
  * 改一处必须改另一处：`tests/hook-affected-launch.test.ts` 逐条核对两份清单不漂移。

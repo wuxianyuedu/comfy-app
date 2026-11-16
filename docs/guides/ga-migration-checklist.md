@@ -281,7 +281,7 @@
     AssertionError: expected 0 to be greater than 0
     Tests  1 failed | 265 passed (266)
     ```
-  - 根因：`scripts/fixed-structural-tests.mjs:600` 把 `tests/audits-doc-references.test.ts` 列进固定清单；该用例用 `git log --all --diff-filter=D -- scripts/` 现算「已删的棘轮基线」，浅克隆下退化成空集（脚本注释里本就写着「浅检出时退化成空集，有专门用例判红」）。
+  - 根因：`scripts/affected-tests/fixed-structural-tests.mjs:600` 把 `tests/audits-doc-references.test.ts` 列进固定清单；该用例用 `git log --all --diff-filter=D -- scripts/` 现算「已删的棘轮基线」，浅克隆下退化成空集（脚本注释里本就写着「浅检出时退化成空集，有专门用例判红」）。
   - 处置：`fixed-structural-tests` 回到 `0`；`affected-tests` 保持 `2`（`COMFY_AFFECTED_SEGMENT=affected` 不含固定清单）；`daily` 从 `1` 回到 `0`（全量单测含同一份用例）。
   - 时间差值得记：PR #3236 自己那跑是绿的 —— `repository_dispatch` 取的是**默认分支**的 workflow，所以检出面收窄的后果只在它合并之后的下一跑才暴露。
 

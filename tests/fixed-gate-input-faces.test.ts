@@ -10,13 +10,13 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import { resolveAffectedTests, wideReasonFor } from "../scripts/affected-tests/affected-tests.mjs";
-import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "../scripts/affected-tests/fixed-structural-tests.mjs";
 import {
   INPUT_FACES,
   faceHits,
   faceMatches,
   selectFixedByFace,
-} from "../scripts/fixed-gate-input-faces.mjs";
+} from "../scripts/gates/fixed-gate-input-faces.mjs";
 
 /** 被跟踪路径的全集 —— ② 那一条的事实来源（本地 `git ls-files`，不走网络）。 */
 function trackedPaths(): Array<string> {
@@ -223,7 +223,7 @@ describe("切分与接线", () => {
   });
 
   it("改了被测工具 ⇒ 那一条回到清单里", () => {
-    const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, ["scripts/base-check.mjs"]);
+    const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, ["scripts/gates/base-check.mjs"]);
     expect(got.keep).toContain("tests/base-check.test.ts");
     expect(got.skipped.map((s) => s.test)).not.toContain("tests/base-check.test.ts");
     /* 其余三条不该被它带起来：面是各判各的。 */
@@ -234,7 +234,7 @@ describe("切分与接线", () => {
     const cases: Array<[string, string]> = [
       ["oxlint.parity.config.mjs", "tests/eslint-gate-canary.test.ts"],
       ["scripts/gates/check-commit-claims.mjs", "tests/check-commit-claims.test.ts"],
-      ["scripts/changed-scope.mjs", "tests/changed-scope.test.ts"],
+      ["scripts/lib/changed-scope.mjs", "tests/changed-scope.test.ts"],
       ["src/components/ui/button.tsx", "tests/a11y-axe-stories.test.ts"],
     ];
     for (const [changed, test] of cases) {
@@ -254,13 +254,13 @@ describe("切分与接线", () => {
   it("这一批九条各按自己的触发面回来，且不把四条业务自检带进来（#2798）", () => {
     const cases: Array<[string, string]> = [
       ["scripts/base-check/verdict.mjs", "tests/base-check.test.ts"],
-      ["scripts/quality-gate.mjs", "tests/gate-executors.test.ts"],
+      ["scripts/gates/quality-gate.mjs", "tests/gate-executors.test.ts"],
       ["scripts/gates/check-merge-parents.mjs", "tests/check-merge-parents.test.ts"],
-      ["scripts/merge-changelog-fragments.mjs", "tests/merge-changelog-anchor.test.ts"],
+      ["scripts/docs/merge-changelog-fragments.mjs", "tests/merge-changelog-anchor.test.ts"],
       [".storybook/preview.tsx", "tests/storybook-tsc-input.test.ts"],
       ["scripts/gates/check-eslint-exemptions.cjs", "tests/eslint-exemption-staleness.test.ts"],
       ["scripts/gates/check-scripts-typecheck.cjs", "tests/scripts-typecheck-ratchet.test.ts"],
-      ["scripts/precommit-timing.mjs", "tests/precommit-timing.test.ts"],
+      ["scripts/gates/precommit-timing.mjs", "tests/precommit-timing.test.ts"],
       [".cnb.yml", "tests/ci-env-probe.test.ts"],
       ["scripts/gates/check-changelog-versions.cjs", "tests/changelog-versions-gate.test.ts"],
     ];

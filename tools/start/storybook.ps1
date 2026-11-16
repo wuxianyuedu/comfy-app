@@ -5,18 +5,18 @@ storybook.ps1 — 起组件工作台 Storybook（Windows 双击入口）
 给「改完 ui/ 组件想单独看一眼」的场景：双击即在本机起 Storybook，
 浏览器打开 http://127.0.0.1:6006（组件按 UI/* 分组，可切 dark / light、看 a11y 报告）。
 
-实际逻辑在 scripts\storybook.mjs（跨平台唯一实现，见
+实际逻辑在 scripts\devtools\storybook.mjs（跨平台唯一实现，见
 docs/standards/launch-and-build.md §9.5），本入口只负责「定位项目根 → 转交 → 透传退出码」。
 
 前置（一次性）：Windows 默认双击 .ps1 是「用记事本打开」，需先右键
-  scripts\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
+  scripts\devtools\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
 
 用法：
   双击 <项目根>\tools\start\storybook.ps1
   或在终端执行：pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\start\storybook.ps1
 
 依赖：本机需先装好 Node + pnpm，并已在项目根执行过 pnpm install。
-不需要 .env —— 启动器注入了 SKIP_ENV_VALIDATION（理由见 scripts\storybook.mjs 头部）。
+不需要 .env —— 启动器注入了 SKIP_ENV_VALIDATION（理由见 scripts\devtools\storybook.mjs 头部）。
 #>
 [CmdletBinding()]
 param()
@@ -29,9 +29,9 @@ $ErrorActionPreference = "Stop"
 $root = Get-ProjectRoot -StartDir $PSScriptRoot
 Set-Location $root
 
-$launcher = Join-Path $root "scripts\storybook.mjs"
+$launcher = Join-Path $root "scripts\devtools\storybook.mjs"
 if (-not (Test-Path -LiteralPath $launcher)) {
-  Write-Host "[ERROR] 未找到 scripts\storybook.mjs（Storybook 的跨平台启动器）。" -ForegroundColor Red
+  Write-Host "[ERROR] 未找到 scripts\devtools\storybook.mjs（Storybook 的跨平台启动器）。" -ForegroundColor Red
   exit 1
 }
 
@@ -43,7 +43,7 @@ if (-not $node) {
 }
 
 Write-Host "[INFO] 启动组件工作台 Storybook（http://127.0.0.1:6006）..." -ForegroundColor Cyan
-Write-Host "[INFO] 底层脚本：scripts\storybook.mjs" -ForegroundColor Cyan
+Write-Host "[INFO] 底层脚本：scripts\devtools\storybook.mjs" -ForegroundColor Cyan
 Write-Host "[INFO] 停止：在本窗口按 Ctrl+C。" -ForegroundColor Cyan
 Write-Host ""
 

@@ -38,7 +38,7 @@
  */
 const path = require("node:path");
 const { dirExists, walkForScan } = require("./gate-scan-read.cjs");
-const { loadProjects, matchesAny } = require("../vitest-projects.cjs");
+const { loadProjects, matchesAny } = require("../affected-tests/vitest-projects.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
 const TAG = "[test-inventory]";

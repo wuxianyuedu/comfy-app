@@ -43,7 +43,7 @@ const EMPTY_LEDGER = `${JSON.stringify({ consumers: [] }, null, 2)}\n`;
  */
 /** 放台账（真实仓库里它必须在场）。 */
 function putLedger(repo: GateRepo, content = EMPTY_LEDGER): void {
-  repo.write("scripts/.annotate-consumers.json", content);
+  repo.write("scripts/gates/.annotate-consumers.json", content);
 }
 
 describe("annotate 消费方门禁：该放的形状（§11.21）", () => {

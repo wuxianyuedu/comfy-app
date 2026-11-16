@@ -34,7 +34,10 @@ import path from "node:path";
 import { orchestratePnpm, preparePnpm, probePnpm } from "../launcher-core/corepack.mjs";
 import { pnpmInvocation, powershellHost } from "../launcher-core/shell.mjs";
 import { checkNodeModules } from "../launcher-core/worktree.mjs";
-import { collectDependencyFloors, describeNodeAgainstFloor } from "../node-engines.mjs";
+import {
+  collectDependencyFloors,
+  describeNodeAgainstFloor,
+} from "../launcher-core/node-engines.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 

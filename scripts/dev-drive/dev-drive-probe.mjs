@@ -17,7 +17,7 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 
 import { pnpmInvocation } from "../launcher-core/shell.mjs";
-import { resolveGitDir } from "../git-dir.mjs";
+import { resolveGitDir } from "../lib/git-dir.mjs";
 
 export const ROOT = path.resolve(import.meta.dirname, "../..");
 
@@ -544,7 +544,7 @@ export function probeCacheLocations(platform) {
 /**
  * 构建与依赖目录的真实落点。
  *
- * 检出目录（git 目录）**不在这里硬拼** —— 「检出位置只有 `scripts/git-dir.mjs` 知道」
+ * 检出目录（git 目录）**不在这里硬拼** —— 「检出位置只有 `scripts/lib/git-dir.mjs` 知道」
  * 是本仓的一条硬规则（ISSUE #2072 的字面量扫描闸：`scripts/**` 里不许再出现引号包住的
  * 检出子目录字面量；链接工作树里 `<root>/.git` 还是一个**指向别处的文件**、不是目录，
  * 硬拼连它都指不到）。落点一律问 `resolveGitDir()`，条目名用显式的 `git-dir`，

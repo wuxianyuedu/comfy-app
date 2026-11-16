@@ -35,7 +35,7 @@
  *       那份 options**：少了它规则退回默认档、结论不同（实测
  *       `control-has-associated-label` 的官方 options 里 `includeRoles` 有
  *       `dialog` / `alert`，默认档没有）。
- * 2. **本仓与官方默认的每一处不同都必须登记**（`scripts/.a11y-rule-ledger.json`
+ * 2. **本仓与官方默认的每一处不同都必须登记**（`scripts/gates/.a11y-rule-ledger.json`
  *   的 `dialect`）：关掉一条、改一条的选项档，都要答出「为什么」+「谁在守它」。
  *   没登记 = 有人偷偷关掉一条真判据，且没有任何东西会响。
  * 3. **台账双向拦**：登记了「关掉」而它其实开着 ⇒ 红（台账是负债，不是赦免
@@ -75,7 +75,7 @@
  *   node scripts/gates/check-a11y-rules.cjs --ledger <path>    # 换一份台账来判（自测用）
  *
  * `--ledger <path>` 是**纯增量口子**：默认行为一个字不变（不传就是仓库里那份
- * `scripts/.a11y-rule-ledger.json`），传了就拿它当台账读。它存在的原因只有一个 ——
+ * `scripts/gates/.a11y-rule-ledger.json`），传了就拿它当台账读。它存在的原因只有一个 ——
  * 门禁自测（`tests/a11y-rules-gate.test.ts`）要拿**十来份不同的台账**各判一次，
  * 而没有这个口子时用例只能「备份真台账 → 覆盖 → 跑 → 还原」：那是**共享可变状态**，
  * 于是那些用例既不能并发（互相踩），也无法在失败时保证还原（§11.19.2 那一族）。
@@ -140,7 +140,7 @@ function loadA11yPlugin() {
  * 静默退回真台账是最坏的结果：用例以为在判自己的夹具，其实在判真库（绿得毫无意义）。
  */
 function parseArgs(argv) {
-  let ledger = path.join(__dirname, "../.a11y-rule-ledger.json");
+  let ledger = path.join(__dirname, ".a11y-rule-ledger.json");
   let report = false;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--report") {
@@ -467,7 +467,7 @@ async function judge(ledger) {
     }
     problems.push(
       `${name} 属官方 recommended 却被关掉了，而台账里没有登记。\n` +
-        "    → 要么把它开回来，要么在 scripts/.a11y-rule-ledger.json 的 dialect 里\n" +
+        "    → 要么把它开回来，要么在 scripts/gates/.a11y-rule-ledger.json 的 dialect 里\n" +
         "      写明「为什么本仓这一档不同」与「谁在守它」。",
     );
   }
@@ -495,7 +495,7 @@ async function judge(ledger) {
       `${name} 既不在官方 recommended、也不在官方 strict（而它**没有**被标记废弃）——` +
         "本仓对它的裁决没有任何痕迹。\n" +
         "    → 要么在 oxlint.parity.config.mjs 里明确开出这一档，要么在\n" +
-        "      scripts/.a11y-rule-ledger.json 的 dialect 里写明「为什么不开」与「谁在守它」。\n" +
+        "      scripts/gates/.a11y-rule-ledger.json 的 dialect 里写明「为什么不开」与「谁在守它」。\n" +
         "      （新建规则时插件常先不加进两份配置 —— 正是「没人决定过」的高发处。）",
     );
   }

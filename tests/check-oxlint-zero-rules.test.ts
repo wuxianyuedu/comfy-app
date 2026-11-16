@@ -196,7 +196,7 @@ describe("门槛接线", () => {
   });
 
   it("quality-gate.mjs 的 GATES 登记了这个门禁", () => {
-    const gate = readFileSync("scripts/quality-gate.mjs", "utf8");
+    const gate = readFileSync("scripts/gates/quality-gate.mjs", "utf8");
     expect(gate).toContain("check-oxlint-zero-rules.mjs");
   });
 

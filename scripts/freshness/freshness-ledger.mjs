@@ -113,7 +113,7 @@ export function gitUser(fallback) {
  */
 export const FRESHNESS_TRACKS = {
   e2e: {
-    ledger: "scripts/.e2e-freshness.json",
+    ledger: "scripts/freshness/.e2e-freshness.json",
     key: "e2e",
     label: "全量 e2e",
     run: "pnpm test:e2e",
@@ -143,35 +143,35 @@ export const FRESHNESS_TRACKS = {
     subject: "master",
   },
   full: {
-    ledger: "scripts/.full-suite-freshness.json",
+    ledger: "scripts/freshness/.full-suite-freshness.json",
     key: "full",
     label: "全量单测 + 覆盖率门槛",
     run: "pnpm run test:coverage",
     daily: true,
-    skipHow: 'node scripts/full-suite-run.mjs --skip "<理由>"',
+    skipHow: 'node scripts/affected-tests/full-suite-run.mjs --skip "<理由>"',
     dirty: ["src/", "tests/"],
-    dirtyHow: 'node scripts/full-suite-run.mjs --dirty "<理由>"',
+    dirtyHow: 'node scripts/affected-tests/full-suite-run.mjs --dirty "<理由>"',
     graceMs: 7 * 86_400_000,
     ciStage: "每日单元测试",
     /* 主体=master：同 e2e 那一档 —— 权威账在机器分支，是主干的账。 */
     subject: "master",
   },
   artifact: {
-    ledger: "scripts/.artifact-freshness.json",
+    ledger: "scripts/freshness/.artifact-freshness.json",
     key: "artifact",
     label: "产物级护栏（build + 数产物）",
     run: "pnpm run build",
     daily: true,
-    skipHow: 'node scripts/artifact-run.mjs --skip "<理由>"',
+    skipHow: 'node scripts/build/artifact-run.mjs --skip "<理由>"',
     dirty: [
       "next.config.js",
       "src-tauri/",
       "scripts/build-desktop.mjs",
       "scripts/standalone-private-inputs.mjs",
       "scripts/standalone-runtime.mjs",
-      "scripts/build-executor-host.mjs",
+      "scripts/build/build-executor-host.mjs",
     ],
-    dirtyHow: 'node scripts/artifact-run.mjs --dirty "<理由>"',
+    dirtyHow: 'node scripts/build/artifact-run.mjs --dirty "<理由>"',
     graceMs: 7 * 86_400_000,
     ciStage: "每日生产构建",
     /* 主体=master：同 e2e 那一档 —— 权威账在机器分支，是主干的账。 */
@@ -585,7 +585,7 @@ export function checkFreshnessLedger(
        * 「这一档三个月没跑」与「这三个月每次都说不跑」长得一模一样。
        * 此前判据在这一支**从不比这个日期** —— 一条理由一旦写下就替未来每一天作证，
        * 于是「每日自证」这一档在有人懒得跑的日子里其实一直是绿的，而台面上看不出来。
-       * 本机实测：`scripts/.e2e-freshness.json` 挂着一条 2026-10-08 的豁免，
+       * 本机实测：`scripts/freshness/.e2e-freshness.json` 挂着一条 2026-10-08 的豁免，
        * 此后 e2e 那 80 条 spec（29 条 `@critical`）没有一次被自动跑过。
        *
        * 过期之后**不另判一种红**，而是把这一档交回它自己的口径：`freshnessVerdict`
@@ -604,7 +604,7 @@ export function checkFreshnessLedger(
         /* 「这次改动不吃这一档」是一句**能被当天的事实驳倒**的话。
          *
          * `dirtySince` 就是这一档输入面今天的第一个提交 —— 两者同时成立时那句不成立。
-         * 存量现场：`scripts/.full-suite-freshness.json` 里有一条写着
+         * 存量现场：`scripts/freshness/.full-suite-freshness.json` 里有一条写着
          * 「本 PR 只接三档每日自证的机制（scripts/ + tests/ + docs），未动 src/」，
          * 而这一档的输入面正是 ["src/", "tests/"]：那句话与写下它的那次提交相反。
          * 旧判据从不拿 `dirtySince` 去核这句，于是整档当天免跑，而账面上完全正常

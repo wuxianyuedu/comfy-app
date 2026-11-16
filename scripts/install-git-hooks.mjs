@@ -87,7 +87,8 @@ if (!git(["rev-parse", "--is-inside-work-tree"]).ok) {
 // 的形态。失败语义也与上面两步一致：**只提示，绝不让 `pnpm install` 挂掉** ——
 // 这一步缺了只是 tsc 少一份输入，依赖没装坏。
 try {
-  const { ensureStorybookAssets, writeStorybookAppOrigin } = await import("./storybook-assets.mjs");
+  const { ensureStorybookAssets, writeStorybookAppOrigin } =
+    await import("./devtools/storybook-assets.mjs");
   ensureStorybookAssets(path.join(root, ".storybook", "assets"));
   const { origin, source } = writeStorybookAppOrigin(
     root,

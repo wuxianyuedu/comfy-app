@@ -1,7 +1,7 @@
 /**
  * 客户端 bundle 不得含 Node-only 模块（ISSUE #317 的 P0 回归）：`log-session-scope.ts` 顶层 `import fs`，被只想用
  * `clampLogTime` 的 `LogProvider.tsx`（"use client"）拖进浏览器 chunk，`/login`、`/workspace` 整页 500（同 #282 / §7.12）。
- * 判据只有一份实现（`scripts/lib-node-only-scan.mjs`，#569 / §18.4）；本文件改为消费其 JSON，并钉住「客户端图能穿过 `"use client"` 边界」的反向验证。
+ * 判据只有一份实现（`scripts/gates/lib-node-only-scan.mjs`，#569 / §18.4）；本文件改为消费其 JSON，并钉住「客户端图能穿过 `"use client"` 边界」的反向验证。
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -33,7 +33,7 @@ function isReport(value: unknown): value is Report {
 
 /** 跑一次依赖图分析（实现收在扫描器里，本文件不复制一份 —— 见文件头的归属说明）。 */
 function scan(): Report {
-  const out = execFileSync(process.execPath, ["scripts/lib-node-only-scan.mjs", "--json"], {
+  const out = execFileSync(process.execPath, ["scripts/gates/lib-node-only-scan.mjs", "--json"], {
     cwd: REPO_ROOT,
     encoding: "utf8",
   });
@@ -56,7 +56,7 @@ function stripComments(src: string): string {
  * `shell-tabs-store.ts`，不改内容重跑即绿）。独占/串行只调窄窗口；夹具树里写与读不是同一棵。 */
 function runScanOnFixture(files: Record<string, string>): Report {
   const { repo, dispose } = createGateRepo({
-    script: "lib-node-only-scan.mjs",
+    script: "gates/lib-node-only-scan.mjs",
     dirs: ["src"],
   });
   try {

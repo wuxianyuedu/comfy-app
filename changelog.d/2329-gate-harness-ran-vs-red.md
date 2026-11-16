@@ -9,7 +9,7 @@
 - `gate()` 现在交出**五件原值**：`ran / status / code / signal / output`，`output` 一律是
   两条流拼一起（#2287 的口径）。分类按事实，不按退出码：
   **node 报 `Cannot find module` 退的也是 1**，与「判据判出越界」逐字同码 ⇒
-  只看 `status` 必然误判（这句 `scripts/base-check.mjs` 早就写过，本文件这次把它钉成用例）。
+  只看 `status` 必然误判（这句 `scripts/gates/base-check.mjs` 早就写过，本文件这次把它钉成用例）。
 - 新增 `expectRan(r)`：`ran === false` 时**先**判掉，消息里带 `status` / `code` / `signal`
   与两条流原话，并明写「这一格不构成判决，不是判据红」—— 口径同 §13.6.4
   「拿不到测量 ≠ 测量结果是红的」。

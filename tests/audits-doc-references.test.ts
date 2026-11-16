@@ -1,7 +1,7 @@
 /**
  * `docs/audits/**` 的引用漂移判据（ISSUE #1811 遗留项）：台账不在 `doc:check` 的 SCOPED_DOC_DIRS 面内，点名已删基线不会变红。
  * 只判能证明的一半：台账写了一份已删的 `scripts/.*-baseline.json` 且同行未明写历史快照。
- * 已删名单是**仓内显式台账** `scripts/retired-baselines.json`（ISSUE #3245 起），不再用
+ * 已删名单是**仓内显式台账** `scripts/affected-tests/retired-baselines.json`（ISSUE #3245 起），不再用
  * `git log --all --diff-filter=D` 从全历史现算 —— 判据与检出深度解耦：浅克隆 / 无 git
  * 历史的沙箱里那段历史根本不在，全历史扫描会退化成空集、上面那条恒绿；仓内台账在哪种检出都读得到。
  * 不判路径存在（会假红：`src-tauri/static` 构建产物、`docs/standards/12` 章节号、沿革叙述）；
@@ -25,7 +25,7 @@ function auditFiles(): Array<string> {
 }
 
 /** 仓内台账：退役一份基线时显式往这里加一条 basename，判据不再问 git 历史。 */
-const RETIRED_LEDGER = path.join("scripts", "retired-baselines.json");
+const RETIRED_LEDGER = path.join("scripts", "affected-tests", "retired-baselines.json");
 /** 与 `citedBaselineNames()` 同一把尺子：带前导点的 basename。 */
 const RETIRED_NAME_RE = /^\.[^/]*baseline[^/]*\.json$/;
 
@@ -207,7 +207,7 @@ describe("docs/audits/** 的台账引用不许漂到已删的棘轮基线上", (
       [
         {
           rel: "docs/audits/x.md",
-          text: "它的基线是 `scripts/.void-floats-baseline.json`",
+          text: "它的基线是 `scripts/gates/.void-floats-baseline.json`",
         },
       ],
       new Set([".gone-baseline.json"]),

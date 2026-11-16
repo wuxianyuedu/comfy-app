@@ -1,6 +1,6 @@
 ## Fixed
 
-**eslint 档位补阳性对照：`scripts/eslint-gate-canary.mjs`（ISSUE #2541 收尾）**。
+**eslint 档位补阳性对照：`scripts/gates/eslint-gate-canary.mjs`（ISSUE #2541 收尾）**。
 
 ### 症状（为什么要补这一条）
 
@@ -34,7 +34,7 @@
 
 `tests/eslint-gate-canary.test.ts` 三条用例钉住：默认退 0 且样本数达标 /
 `--sabotage` 在守的规则必须退 1 / `--sabotage` 不相干的规则仍退 0（闸门不误伤）。
-登记进 `scripts/fixed-structural-tests.mjs` 固定清单：触发面是「有人动
+登记进 `scripts/affected-tests/fixed-structural-tests.mjs` 固定清单：触发面是「有人动
 `eslint.config.js`」，而配置住在仓库根、判据住在 tests/，import 图追不到；且那种
 改动**往往正是为了关掉某条规则**，此时「只在受影响时才跑」恰好把自己排除在外。
 

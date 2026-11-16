@@ -58,7 +58,7 @@ import path from "node:path";
 
 import awesomeness from "oxlint-config-awesomeness";
 
-import { resolveBinEntryByName } from "../package-bin-entry.mjs";
+import { resolveBinEntryByName } from "../lib/package-bin-entry.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 
@@ -358,7 +358,7 @@ function main() {
   const entry = resolveBinEntryByName("oxlint", { root: ROOT });
   if (entry === null) {
     console.error(
-      "[没跑起来] 解析不到 oxlint 的包真身入口 —— 要么没装（先 `pnpm install`），要么 pnpm 换了垫片写法。自查：`node scripts/package-bin-entry.mjs --by-name oxlint`",
+      "[没跑起来] 解析不到 oxlint 的包真身入口 —— 要么没装（先 `pnpm install`），要么 pnpm 换了垫片写法。自查：`node scripts/lib/package-bin-entry.mjs --by-name oxlint`",
     );
     process.exit(2);
   }

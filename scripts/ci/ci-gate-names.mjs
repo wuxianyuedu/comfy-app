@@ -22,7 +22,7 @@
  *
  *   ① **执行面有四处**（不是一处）：复合档 `重档静态判据` 的条目（执行面 = 钩子注册表，
  *      见 `scripts/ci/ci-heavy-gates.mjs` 的头注）、「受影响用例」那一格的固定清单
- *      （`scripts/fixed-structural-tests.mjs`）、`.githooks/pre-commit` 的步骤行，
+ *      （`scripts/affected-tests/fixed-structural-tests.mjs`）、`.githooks/pre-commit` 的步骤行，
  *      以及 **GA PR 门禁 workflow 的 step 行**（`.github/workflows/pr-gate.yml`）。
  *      四处都是「谁真的会跑它」的地方 —— 判据只认这四处，不认注释。
  *      ⚠️ 第四处是 2026-11-13 补上的（ISSUE #3599）：PR 主列的代码判据全在 GA 侧

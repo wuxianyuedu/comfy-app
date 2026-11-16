@@ -1,5 +1,5 @@
 // 故事「面」的判据（供 tests/storybook-story-surface.test.ts 与门禁
-// `scripts/storybook-check.mjs` 共用）。
+// `scripts/devtools/storybook-check.mjs` 共用）。
 //
 // ## 它补的是哪一格
 //

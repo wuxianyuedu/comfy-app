@@ -14,7 +14,7 @@
   红话指着那个人根本没碰过的文件）。漏做的那个人本地全绿、平台也全绿 ——
   这是「判据写了、执行者不在改它的那个人身上」那一族，不是「下次记得」能收掉的。
   内容一致性仍归平台那格判（那边才有可写的产物）。
-- 「源 → 镜像」那条映射收成一处：`scripts/doc-facts.cjs` 新增 `generatedPathFor()`，
+- 「源 → 镜像」那条映射收成一处：`scripts/docs/doc-facts.cjs` 新增 `generatedPathFor()`，
   渲染器与这条判据都取它。两边各写一遍 `path.join(产物目录, basename)` 早晚会在
   「两份源映射到同一个产物名」那类形状上分叉，而那正是这条判据的对象。
 - 自测 `tests/check-doc-mirror-pairing.test.ts`（8 条）：六个方向（漏带 ⇒ 拦且点名那一对、

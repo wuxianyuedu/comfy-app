@@ -24,7 +24,7 @@
  *      · `freshness-track`  ⇒ `FRESHNESS_TRACKS` 里有没有这个键（`freshness-ledger.mjs`）；
  *      · `gate-not-in-all`  ⇒ `quality-gate.mjs` 的 `GATES` 里这一项是不是 `run: false`；
  *      · `gate-in-all`      ⇒ 同一张表里有没有这一项（它确实在跑）；
- *      · `on-demand-ledger` ⇒ `scripts/.gate-executor-ledger.json` 的 `onDemand` 里有没有它。
+ *      · `on-demand-ledger` ⇒ `scripts/gates/.gate-executor-ledger.json` 的 `onDemand` 里有没有它。
  *      **事实从既有出处现算，不在这里抄第二份清单**（§12.14 / §12.18）。
  *   ② **每一个机器事实都被本索引登记** —— 新增一档却忘了登记就当场红。
  *      覆盖面 = `FRESHNESS_TRACKS` 的键 ∪ `quality-gate` 的 `run:false` 项
@@ -54,9 +54,9 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "../..");
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
-const LEDGER = path.join(__dirname, "../.on-demand-duties.json");
-const GATE_EXECUTOR_LEDGER = path.join(__dirname, "../.gate-executor-ledger.json");
-const QUALITY_GATE = path.join(__dirname, "../quality-gate.mjs");
+const LEDGER = path.join(__dirname, ".on-demand-duties.json");
+const GATE_EXECUTOR_LEDGER = path.join(__dirname, ".gate-executor-ledger.json");
+const QUALITY_GATE = path.join(__dirname, "quality-gate.mjs");
 
 /** 索引行数的下限 —— 静默降级的地板（解析失灵时最容易退化成「0 行、全绿」）。 */
 const MIN_DUTIES = 5;
@@ -138,7 +138,7 @@ function qualityGateModes() {
   return { notInAll, all };
 }
 
-/** 判据执行者台账的「按需召唤」条目（`scripts/.gate-executor-ledger.json`）。 */
+/** 判据执行者台账的「按需召唤」条目（`scripts/gates/.gate-executor-ledger.json`）。 */
 function onDemandLedgerKeys() {
   if (!fs.existsSync(GATE_EXECUTOR_LEDGER)) {
     return [];
@@ -178,7 +178,7 @@ async function main() {
          * （成员写成 `{ script: "…" }`）—— 不在这里抄第二份清单（同 `qualityGateModes`）。 */
         return [
           ...fs
-            .readFileSync(path.join(__dirname, "../base-check/chained-steps.mjs"), "utf8")
+            .readFileSync(path.join(__dirname, "..", "base-check", "chained-steps.mjs"), "utf8")
             .matchAll(/\{ script: "(?<script>[^"]+)" \}/g),
         ]
           .map((m) => m.groups?.script)
@@ -215,7 +215,7 @@ async function main() {
       problems.push(
         `机器事实「${key}」没有被本索引登记 —— 它是一条「不进钩子」的档，` +
           `而 §13.5.4 的缝就是「代价判据不回答『谁在什么时候跑它』」（同 §13.5.12）：` +
-          `在 scripts/.on-demand-duties.json 加一行，答出执行者`,
+          `在 scripts/gates/.on-demand-duties.json 加一行，答出执行者`,
       );
     }
   }

@@ -1,5 +1,5 @@
 /**
- * `scripts/fetch-daily-shell.mjs` 的判据（ISSUE #3722 / #3728）：规范落点、
+ * `scripts/devtools/fetch-daily-shell.mjs` 的判据（ISSUE #3722 / #3728）：规范落点、
  * 下载端点、401/404 失败出口、鉴权重试与成功落盘。该工具自上线起一直没有判据，
  * 落点与端点各改过一次都没有用例钉住，所以「目录还是旧的」「资产没产出」
  * 这两类误读要在这里被挡住。
@@ -28,7 +28,7 @@ import {
   resolveToken,
   usage,
   writeTokenConfigFile,
-} from "../scripts/fetch-daily-shell.mjs";
+} from "../scripts/devtools/fetch-daily-shell.mjs";
 
 const tmpDirs: Array<string> = [];
 

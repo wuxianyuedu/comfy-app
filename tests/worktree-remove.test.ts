@@ -1,5 +1,5 @@
 /**
- * `scripts/worktree-remove.mjs` —— 收掉 linked worktree 时**先摘 `node_modules` 链接、确认链接本体没了，再让 git 注销登记**（ISSUE #2997）。
+ * `scripts/devtools/worktree-remove.mjs` —— 收掉 linked worktree 时**先摘 `node_modules` 链接、确认链接本体没了，再让 git 注销登记**（ISSUE #2997）。
  * 链接可能是 junction 或 symlink（MSYS `ln -s`）：同一条 `cmd /c rmdir` 摘得掉 junction，对 MSYS symlink 退 145 且链接仍在（收尾脚本常丢退出码），留下的链接被 `git worktree remove --force` 走进主检出删空依赖树；本入口用 Node 原语走同一路径，两形结果须一致。
  * 每条都在 `mkdtempSync` 夹具（自带 repo + worktree）里做，不拿运行它的检出做实验；主树 `node_modules/.bin/next` 是哨兵，收尾后须逐字还在。
  */
@@ -19,7 +19,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
-const SCRIPT = resolve("scripts/worktree-remove.mjs");
+const SCRIPT = resolve("scripts/devtools/worktree-remove.mjs");
 
 /** 本文件造出来的夹具目录；用例失败也一律收尾。 */
 const dirs: Array<string> = [];

@@ -2,7 +2,7 @@
 
 - **文档里那三处「固定清单现在有几份」的现值读数不再写了（ISSUE #2694）**：
   `docs/standards/13-提交与-code-review.md` 的表格行「清单谁念」写着 **103 份**、同节末尾的正文写着
-  **当下 103 份**，而 `scripts/fixed-structural-tests.mjs` 的 `FIXED_STRUCTURAL_TESTS.length`
+  **当下 103 份**，而 `scripts/affected-tests/fixed-structural-tests.mjs` 的 `FIXED_STRUCTURAL_TESTS.length`
   本回合实测是 **106** —— 漂了 3 份而账面全绿。同一族还有 `docs/guides/PRODUCTION-GAPS.md`
   那条「现在是**固定 9 份结构守护**」：它把当年那次形态变更时的份数当**现值**在讲，
   与实测差 **11.8 倍**，是这一族里漂得最远的一处。

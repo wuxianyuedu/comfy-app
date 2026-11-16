@@ -88,8 +88,8 @@ import { spawnSync } from "node:child_process";
 import { diffLockfiles, isEmptyDiff } from "../lockfile/lock-diff.mjs";
 import { renderLockDiff } from "../lockfile/render-lock-diff.mjs";
 import { lockfileDrift, unresolvableDeclaredDeps } from "../launcher-core/worktree.mjs";
-import { DEPENDENCY_FILES } from "../dependency-face.mjs";
-import { resolveGitDir, hasInProgressMerge } from "../git-dir.mjs";
+import { DEPENDENCY_FILES } from "../lib/dependency-face.mjs";
+import { resolveGitDir, hasInProgressMerge } from "../lib/git-dir.mjs";
 
 /**
  * 「远端引用还算新鲜」的宽限期（毫秒）。
@@ -153,7 +153,7 @@ export function matchedDependencyFiles(files) {
  * @param {string} root
  * @returns {string[] | null} */
 function stagedFiles(root) {
-  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+  /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/lib/changed-scope.mjs`
    * 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，而机器之间还不一样）。 */
   const r = git(["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], root);
   if (!r.ok) {
@@ -170,7 +170,7 @@ export const DEFAULT_REMOTE_REV = "origin/master";
  *
  * 本仓的远端实测叫 `cnb`，而此前这一格写死 `origin/master`：在本检出上恒「没有可用的远端
  * 引用」⇒ AGENTS 硬规则 25 的执行者在这份检出里**恒不判**（它降级得很诚实，报 `[未校验]`
- * 也不阻断，但承诺的能力为空）。同一族的正确答案在 `scripts/base-check.mjs` 里早就有
+ * 也不阻断，但承诺的能力为空）。同一族的正确答案在 `scripts/gates/base-check.mjs` 里早就有
  * （「remote 名随克隆方式变」），但那一份回答的是「要并进哪条 master」；这里问的是
  * 「上次 fetch 看到的是哪条」，所以按引用本身现算而不是拿它的函数：
  *
@@ -237,7 +237,7 @@ function git(args, cwd) {
 }
 
 /**
- * 本地检出的 gitdir 解析统一收口到 `scripts/git-dir.mjs`（ISSUE #2072）：那里认
+ * 本地检出的 gitdir 解析统一收口到 `scripts/lib/git-dir.mjs`（ISSUE #2072）：那里认
  * worktree 里 `.git` 是个文件、并直接给 `git rev-parse --absolute-git-dir` 的真身。
  * 本文件不再持第二份实现（旧实现还退回 `<root>/.git` 字面量，在 worktree 上指向
  * 那个文件，远端引用永远查不到）。
