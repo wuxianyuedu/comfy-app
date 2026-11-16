@@ -4,34 +4,19 @@
  */
 import { z } from "zod";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import type * as schema from "~/server/db/schema";
-import { episode, production, season, series, task } from "~/server/db/schema";
+import { episode, production, task } from "~/server/db/schema";
 import { workflowTemplateRepository, taskRepository } from "~/lib/core/repository";
 import { kickQueue } from "~/lib/comfyui/executor-continuation";
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
+import { assertSeasonOwner as sharedAssertSeasonOwner } from "./series-shared";
 import { isPlainRecord } from "~/lib/is-record";
 
-type Db = SqliteRemoteDatabase<typeof schema>;
-type Ctx = { db: Db; user: { id: string } };
-
-/** 断言当前用户拥有该季（沿 series 校验归属）。 */
-async function assertSeasonOwner(ctx: Ctx, id: string) {
-  const rows = await ctx.db.select().from(season).where(eq(season.id, id)).limit(1);
-  const row = rows[0];
-  if (!row) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "季不存在" });
-  }
-  const sr = await ctx.db.select().from(series).where(eq(series.id, row.seriesId)).limit(1);
-  const owner = sr[0];
-  if (owner?.userId !== ctx.user.id) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该季" });
-  }
-  return row;
-}
+/* 断言当前用户拥有该季——用 series-shared 的共享版（#4048：此前这里自带一份，
+ * 文案已与共享版分叉；series.ts 头注称归属断言两边共用）。 */
+const assertSeasonOwner = sharedAssertSeasonOwner;
 
 /** task 状态优先级：SUCCEEDED > RUNNING > QUEUED > FAILED > 未生成。聚合每镜「最佳状态」用。 */
 const TASK_STATUS_RANK: Record<string, number> = { SUCCEEDED: 4, RUNNING: 3, QUEUED: 2, FAILED: 1 };

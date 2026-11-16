@@ -116,10 +116,15 @@ export async function loadSeries(ctx: Ctx, id: string) {
   return rows[0] ?? null;
 }
 
-/** 断言当前用户拥有该系列，否则 FORBIDDEN。 */
+/** 断言当前用户拥有该系列：不存在 → NOT_FOUND，存在但不归你 → FORBIDDEN
+ *  （#4048：与 season / episode / character 的断言同一边界，客户端可统一按
+ *  404 处理 stale UI 的操作）。 */
 export async function assertSeriesOwner(ctx: Ctx, id: string) {
   const row = await loadSeries(ctx, id);
-  if (row?.userId !== ctx.user.id) {
+  if (!row) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "系列不存在" });
+  }
+  if (row.userId !== ctx.user.id) {
     throw new TRPCError({ code: "FORBIDDEN", message: "无权操作该系列" });
   }
   return row;

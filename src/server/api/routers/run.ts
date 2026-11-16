@@ -339,7 +339,7 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
       if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+        throw missingProductionError();
       }
       const rawList = input.kind === "shot" ? row.shots : row.characters;
       const list: Array<unknown> = Array.isArray(rawList) ? rawList : [];
@@ -355,7 +355,7 @@ export const runRouter = createTRPCRouter({
       const humanVerdict = await withProductionContentLock(input.projectId, async () => {
         const fresh = await productionRepository.getForUser(ctx.user.id, input.projectId);
         if (!fresh) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+          throw missingProductionError();
         }
         const freshRaw = input.kind === "shot" ? fresh.shots : fresh.characters;
         const freshList: Array<unknown> = Array.isArray(freshRaw) ? freshRaw : [];
@@ -397,14 +397,14 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
       if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+        throw missingProductionError();
       }
       /* 写回收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新 shots 再叠加
        * 评分，不与引擎/评审器的并发修改互覆。 */
       await withProductionContentLock(input.projectId, async () => {
         const fresh = await productionRepository.getForUser(ctx.user.id, input.projectId);
         if (!fresh) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+          throw missingProductionError();
         }
         const shots: Array<unknown> = Array.isArray(fresh.shots) ? fresh.shots : [];
         const nextShots = applyHumanRating(shots, input.shotId, input.rating);
@@ -433,7 +433,7 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
       if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+        throw missingProductionError();
       }
       const script = typeof row.scriptMarkdown === "string" ? row.scriptMarkdown : "";
       const verdict = {
@@ -447,7 +447,7 @@ export const runRouter = createTRPCRouter({
       await withProductionContentLock(input.projectId, async () => {
         const fresh = await productionRepository.getForUser(ctx.user.id, input.projectId);
         if (!fresh) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+          throw missingProductionError();
         }
         const next = applyScriptHumanVerdict(fresh.scriptReview, verdict);
         await productionRepository.patchContent(ctx.user.id, input.projectId, {

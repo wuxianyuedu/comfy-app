@@ -270,7 +270,9 @@ export const taskRouter = createTRPCRouter({
         exists = false;
       }
       if (!exists) {
-        return { opened: false, error: "directory missing", absolutePath: dir };
+        /* 未打开的原因放 `reason`（#4048）：`error` 是全库约定的失败文案键，
+         * 成功（200）载荷不该挂它；文案直接给中文，不再走英文短码。 */
+        return { opened: false, reason: "该任务尚未生成文件目录", absolutePath: dir };
       }
       return {
         opened: true,
