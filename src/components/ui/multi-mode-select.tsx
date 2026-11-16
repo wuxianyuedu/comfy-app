@@ -13,6 +13,7 @@ import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { ALL_WORKFLOW_TYPES, type WorkflowCategory } from "~/lib/workflow/workflow-types";
 
@@ -189,7 +190,7 @@ export function MultiModeSelect({
       <PopoverContent
         align="start"
         aria-label="工作流模式编辑器"
-        className="border-border-strong bg-card flex max-h-[80vh] w-[min(92vw,320px)] flex-col gap-0 overflow-hidden rounded-xl p-0 shadow-2xl shadow-black/5 dark:shadow-black/40"
+        className={`border-border-strong bg-card flex ${OVERLAY_MAX_HEIGHT} w-[min(92vw,320px)] flex-col gap-0 overflow-hidden rounded-xl p-0 shadow-2xl shadow-black/5 dark:shadow-black/40`}
         role="dialog"
         sideOffset={4}
       >
