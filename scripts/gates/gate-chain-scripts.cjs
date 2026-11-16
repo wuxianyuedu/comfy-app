@@ -78,7 +78,8 @@ function gateChainScripts() {
  * 消费方要拿真盘位置时走这里；只要 basename 的消费方仍用 `gateChainScripts()`。
  */
 function gateChainPaths() {
-  const index = new Map();
+  /** @type {Map<string, string[]>} */
+  const candidates = new Map();
   /** @param {string} dir */
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -88,11 +89,20 @@ function gateChainPaths() {
         continue;
       }
       if (/\.(?:cjs|mjs)$/.test(e.name)) {
-        index.set(e.name, path.relative(ROOT, abs).split(path.sep).join("/"));
+        const rel = path.relative(ROOT, abs).split(path.sep).join("/");
+        const prev = candidates.get(e.name) ?? [];
+        candidates.set(e.name, [...prev, rel]);
       }
     }
   };
   walk(path.join(ROOT, "scripts"));
+  /* 同名多份（#4111 过渡垫片落在平铺位、真身在域子目录）时取更深的那份 = 真身。 */
+  const index = new Map(
+    [...candidates].map(([name, rels]) => [
+      name,
+      rels.reduce((best, rel) => (rel.split("/").length > best.split("/").length ? rel : best)),
+    ]),
+  );
   return [...gateChainScripts()].map((name) => index.get(name) ?? `scripts/${name}`);
 }
 

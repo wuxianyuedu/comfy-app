@@ -188,7 +188,7 @@ Tauri 窗口出现后退出也不会中断安装。
 手动触发一次（不必等启动，加 `-Force` 跳过 24h 节流立即检查）：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-comfy-cli-venv.ps1 -Force
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\devtools\setup-comfy-cli-venv.ps1 -Force
 ```
 
 想跳过自动准备、改用已有环境，设置环境变量 `COMFY_CLI_PYTHON` 指向你的 Python 解释器。

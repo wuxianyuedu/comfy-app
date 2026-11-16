@@ -3474,7 +3474,7 @@ Windows 对 `.ps1` 的默认双击动作是**用记事本打开**（安全默认
 
 ```powershell
 # 资源管理器里右键本文件 →「使用 PowerShell 运行」，或在终端执行：
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\enable-ps1-double-click.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\devtools\enable-ps1-double-click.ps1
 ```
 
 它写入 `HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\command`，

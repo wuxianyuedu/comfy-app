@@ -269,8 +269,9 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
   const chainScripts = (): Array<string> => {
     const out = new Set<string>();
     const collect = (text: string): void => {
-      for (const mm of text.matchAll(/scripts[\\/]+(?<name>[A-Za-z0-9_.-]+\.(?:cjs|mjs))/g)) {
-        out.add(mm.groups?.name ?? "");
+      // 判据在 scripts/gates/（#3930）：命令里的路径可带域子目录，归一到 basename 再入集合。
+      for (const mm of text.matchAll(/scripts[\\/]+(?<name>[A-Za-z0-9_./-]+\.(?:cjs|mjs))/g)) {
+        out.add((mm.groups?.name ?? "").split(/[\\/]/).pop() ?? "");
       }
     };
     const read = (rel: string): string => readFileSync(join(REPO_ROOT, rel), "utf8");

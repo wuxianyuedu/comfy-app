@@ -63,7 +63,7 @@ const SRC = path.join(ROOT, "src");
  * 那份夹具配置。两条路径都找不到就**明确报错**，不许静默按空清单放行。 */
 const CONFIG_PATH = [
   path.join(__dirname, ".barrel-heavy-deps.json"),
-  path.join(process.cwd(), "scripts", ".barrel-heavy-deps.json"),
+  path.join(process.cwd(), "scripts", "gates", ".barrel-heavy-deps.json"),
 ].find((p) => fs.existsSync(p));
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
