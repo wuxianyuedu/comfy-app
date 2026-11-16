@@ -64,6 +64,16 @@ function isPositionMap(value: unknown): value is Record<string, [number, number]
   );
 }
 
+/**
+ * 两个导入分支共用的 name 归一（#4049）：trim、空串回落 fallback、上限与
+ * 入参 schema 的 200 对齐——此前本地导入分支不截断、粘贴 JSON 分支静默截 80
+ * 且放行空串，同一工作流走不同入口落库名不一致。
+ */
+function resolveWorkflowName(raw: unknown, fallback: string): string {
+  const name = typeof raw === "string" ? raw.trim() : "";
+  return (name || fallback).slice(0, 200);
+}
+
 export const workflowMutationProcedures = {
   /* POST /api/workflows —— 新建：create/import (API graph, RAW UI json, or local file) */
   create: authedProcedure
@@ -114,8 +124,7 @@ export const workflowMutationProcedures = {
             .pop()
             ?.replace(/\.(?:json|workflow)$/i, "")
             .trim() ?? "未命名工作流";
-        const name =
-          typeof body.name === "string" && body.name.trim() ? body.name.trim() : fallbackName;
+        const name = resolveWorkflowName(body.name, fallbackName);
         const modes = Array.isArray(body.modes) && body.modes.length > 0 ? body.modes : undefined;
         const defaultMode =
           typeof body.defaultMode === "string" && body.defaultMode ? body.defaultMode : modes?.[0];
@@ -167,7 +176,7 @@ export const workflowMutationProcedures = {
       const positions = parsed.positions;
       const warnings = [...parsed.warnings];
 
-      const name = String(body.name ?? "未命名工作流").slice(0, 80);
+      const name = resolveWorkflowName(body.name, "未命名工作流");
       const modes = Array.isArray(body.modes) && body.modes.length > 0 ? body.modes : undefined;
       const explicitDefaultMode =
         typeof body.defaultMode === "string" && body.defaultMode ? body.defaultMode : undefined;

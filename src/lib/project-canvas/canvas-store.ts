@@ -118,7 +118,7 @@ function persistProjectToServer(p: CanvasProject): void {
   fireAndForget(
     vanillaApi.project.upsert
       .mutate({
-        id: p.id,
+        projectId: p.id,
         name: p.name,
         nodes: p.nodes ?? [],
         edges: p.edges ?? [],
