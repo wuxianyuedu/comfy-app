@@ -35,7 +35,7 @@ const meta: MetaEditorController = {
   allModelTags: [],
   busy: false,
   patchModes: () => Promise.resolve(),
-  patchModelTags: () => Promise.resolve(),
+  patchModelTags: () => Promise.resolve(null),
   patchSeedMode: () => Promise.resolve(),
   patchParamMap: () => Promise.resolve(),
 };

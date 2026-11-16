@@ -419,8 +419,16 @@
   并可按标签筛选。
 - 行为与验收：模式与标签落在 `workflowTemplate` 行与
   `workflowModelTag`（显式 m2m）；标签库是用户级全局（`workflowModel` router）。
+  绑定唯一性（ISSUE #4102）：一条工作流只绑**一个**模型标签；同一
+  「标签 × 模式」只能被一条工作流占用 —— 服务端 CONFLICT 拦截，报错点名
+  已占用的工作流；同标签、模式不相交的多条工作流各绑各的，不冲突。
+  标签库按「配置了几个模式」计数（不再显示「几个工作流」），悬停模式
+  胶囊显示占用它的工作流名与本地/在线来源；工作流库「工坊封装」页签的
+  契约口计数写明「已落点 X/Y 个契约口」并附悬停说明。
 - 落点：`src/server/api/routers/workflow-mutations.ts`、
-  `src/server/api/routers/workflow-model.ts`
+  `src/server/api/routers/workflow-model.ts`、
+  `src/components/studio/ModelTagManager.tsx`、
+  `src/components/studio/workflow-library/sections/MetaEditor.tsx`
 
 ---
 

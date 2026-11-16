@@ -43,6 +43,28 @@ export type ExecutionFlags = {
   usable: boolean;
 };
 
+/** 模型标签在某模式上被哪条工作流占用（同一「标签 × 模式」只归一条工作流，
+ *  ISSUE #4102）。 */
+export type ModelTagModeBinding = {
+  /** true = 本地工作流（跟踪磁盘文件）；false = 在线（粘贴导入）。 */
+  local: boolean;
+  mode: string;
+  /** 占用这个模式的工作流名。 */
+  workflowName: string;
+};
+
+/** 模型标签库的一行（`workflowModel.list` 的 tag 形状）。
+ *
+ *  `count` 是**工作流**绑定数（删除标签时的连带面，确认弹窗用）；
+ *  `modeBindings` 是「模式 → 占用工作流」明细 —— 标签库界面按**模式数**计数
+ *  并逐模式悬停显示占用者（ISSUE #4102，不再显示「几个工作流」）。 */
+export type ModelTagSummary = {
+  count: number;
+  id: string;
+  modeBindings: Array<ModelTagModeBinding>;
+  name: string;
+};
+
 /** 列表里的一条工作流（已导入、落库的那些）。
  *
  *  「本地待导入」占位行的形状刻意与它同构（`WorkflowListPendingRow`），
