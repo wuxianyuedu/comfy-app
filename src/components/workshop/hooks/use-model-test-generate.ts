@@ -5,10 +5,12 @@
 // 必备口校验、三条通道（对话 #4080 / 本地工作流 #4080 评论 4 / 图片视频中继）、
 // 取消语义与拆分前一致。状态更新器仍归主 hook 持有，这里只编排。
 
-import { useCallback, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useRef, type Dispatch, type SetStateAction } from "react";
 
 import { runAsyncAction } from "~/lib/async-action";
 import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
+import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 import {
   apiGenerateImage,
   apiSubmitVideo,
@@ -113,11 +115,13 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
   } = args;
   /* 被测候选的来源（#4080）：本地 Ollama 走设置里配置的本地服务；远端按名解析。 */
   const selectedLocal = selectedCandidate?.local ?? false;
+  /* 同一时刻只跑一件的同步闸门（P64）。 */
+  const lock = useReentrancyLock();
+  /* 本地工作流任务的进度闸门（P64 / §16.2.4.68）：SSE 每帧一次的高频回调
+   * 节流后再落 state，不逐帧重渲。 */
+  const progressGate = useRef(createThrottleGate());
 
-  const generate = useCallback(async () => {
-    if (busy.busy || selectedModel === "") {
-      return;
-    }
+  const runGenerate = useCallback(async () => {
     const prompt = values.prompt?.trim() ?? "";
     if (prompt === "") {
       setError("请填写提示词");
@@ -159,6 +163,10 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
                   setNotice({ kind: "err", text });
                 },
                 onProgress: (progress) => {
+                  /* 高频 SSE 进度按闸门节流后再落 state（P64 / §16.2.4.68）。 */
+                  if (!progressGate.current.allow("model-test")) {
+                    return;
+                  }
                   setWorkflowProgress(progress);
                 },
                 /* 参考图组优先；只填了单图行时并成一组的兜底（与 relay 组装
@@ -311,6 +319,22 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
     setWorkflowProgress,
     values,
   ]);
+
+  /* 生成入口（P64「同一时刻只跑一件」）：同步闸门 —— 忙碌位是 useState，同一
+   * 事件循环里读不到刚写入的值，双击会跑两遍；界面忙碌态仍归 busy 管。 */
+  const generate = useCallback(async () => {
+    if (selectedModel === "") {
+      return;
+    }
+    if (!lock.tryEnter()) {
+      return;
+    }
+    try {
+      await runGenerate();
+    } finally {
+      lock.exit();
+    }
+  }, [lock, runGenerate]);
 
   /** 取消本轮生成（#3949 需求 5）：中止等待与轮询，错误条落「已取消生成」。 */
   const cancelGenerate = useCallback(() => {
