@@ -735,3 +735,144 @@ describe("平台配置：这一格是 Pipeline 级 `endStages`，不是 `stages`
     expect(block).not.toContain("run:");
   });
 });
+
+/**
+ * ISSUE #3491 的回归面：平台把流水线里的 `cnb_cli` 应用形态挡在 `repo-cnb-history:r`
+ * 之外（现场原话 `errcode 10025 / High-risk operation…`），`get-build-logs` 在 PR 档
+ * **恒取不到**。旧实现在这一步直接退 2（平台那跳 `--no-block` 折 0）⇒ 立案格绿着空转、
+ * 「PR 红了没人知道」这个它本该治的形状以「绿着不写」留在账上。
+ * 修法：列表只负责认「这一跑是谁 / 事件是什么」，身份改认平台无条件注入的环境变量
+ * （`CNB_BUILD_ID` / `CNB_PULL_REQUEST_IID` / `CNB_BUILD_EVENT`），判红仍走
+ * `get-build-status` 的逐格读数（ISSUE #3298 那条链）—— 列表挂了也要走完。
+ */
+describe("ISSUE #3491：构建列表取不到 ⇒ 回落环境变量认身份，判红照走逐格读数", () => {
+  /** 平台现场的那句拒绝：信封顶层 200，`data` 里才是 401 语义（`asArray` 认不出 ⇒ null）。 */
+  const denied = {
+    status: 0,
+    stdout: JSON.stringify({
+      status: 200,
+      data: {
+        code: 401,
+        message:
+          'High-risk operation, only supported by the user in person. Application "cnb_cli" is missing required scopes: repo-cnb-history:r',
+      },
+    }),
+    stderr: "",
+    error: null,
+  };
+
+  it("PR 档：列表被权限挡 ⇒ 认 env 里的 PR 号继续判，dry-run 念出评论落点，一个写命令不发", () => {
+    const calls: Array<string> = [];
+    const heard: Array<string> = [];
+    const code = main({
+      argv: ["--dry-run"],
+      slug: "moon-read/comfy-app-t3",
+      env: { CNB_BUILD_ID: "sn-live", CNB_PULL_REQUEST_IID: "2323" },
+      log: (s: string) => heard.push(s),
+      run: (cmd: string, args: Array<string>) => {
+        const key = args.join(" ");
+        calls.push(`${cmd} ${key}`);
+        const json = (data: unknown) => ({
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data }),
+          stderr: "",
+          error: null,
+        });
+        if (key.includes("get-build-logs")) {
+          return denied;
+        }
+        if (key.includes("get-build-status")) {
+          return json(detail("failed").data);
+        }
+        return json({});
+      },
+    });
+    const out = heard.join("\n");
+    expect(code, out).toBe(CODE.DONE);
+    expect(out).toContain("身份改认平台注入的环境变量");
+    /* 读链真的继续走了：判红来自逐格读数，不是靠「列表挂了就当没看见」。 */
+    expect(out).toContain("判定 failed");
+    expect(out).toContain("--dry-run：「类型检查」→ 评论在 PR #2323 下");
+    expect(calls.some((c) => c.includes("get-build-status"))).toBe(true);
+    expect(
+      calls.some((c) => c.includes("post-pull-comment") || c.includes("create-issue")),
+      `dry-run 却发了写命令：${calls.join(" / ")}`,
+    ).toBe(false);
+  });
+
+  it("push 档：列表被权限挡 ⇒ `--lane push` 显式声明接住，按格名走建单落点（dry-run 只念不写）", () => {
+    const calls: Array<string> = [];
+    const heard: Array<string> = [];
+    const code = main({
+      argv: ["--dry-run", "--lane", "push"],
+      slug: "moon-read/comfy-app-t3",
+      env: { CNB_BUILD_ID: "sn-push", CNB_PULL_REQUEST_IID: "" },
+      log: (s: string) => heard.push(s),
+      run: (cmd: string, args: Array<string>) => {
+        const key = args.join(" ");
+        calls.push(`${cmd} ${key}`);
+        const json = (data: unknown) => ({
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data }),
+          stderr: "",
+          error: null,
+        });
+        if (key.includes("get-build-logs")) {
+          return denied;
+        }
+        if (key.includes("get-build-status")) {
+          return json(detail("failed").data);
+        }
+        if (key.includes("list-issues")) {
+          /* 查得到「开着的单」、且确实一张都没有 ⇒ 走新建（不是「查不到 ⇒ 不写」）。 */
+          return json([]);
+        }
+        return json({});
+      },
+    });
+    const out = heard.join("\n");
+    expect(code, out).toBe(CODE.DONE);
+    expect(out).toContain("身份改认平台注入的环境变量");
+    expect(out).toContain("判定 failed");
+    expect(out).toContain("新建一张：ci(push): push 档红在「类型检查」");
+    expect(calls.some((c) => c.includes("get-build-status"))).toBe(true);
+    expect(
+      calls.some((c) => c.includes("create-issue") || c.includes("post-pull-comment")),
+      `dry-run 却发了写命令：${calls.join(" / ")}`,
+    ).toBe(false);
+  });
+
+  it("负控：列表挂、env 又认不出 PR 号 / 事件、也没给 --lane ⇒ 照旧「不归本格管」，不写", () => {
+    const calls: Array<string> = [];
+    const heard: Array<string> = [];
+    const code = main({
+      argv: ["--dry-run"],
+      slug: "moon-read/comfy-app-t3",
+      /* `CNB_PULL_REQUEST_IID: ""` 清掉用例进程自己带的 PR 号（与上面离线档同一条理由）。 */
+      env: { CNB_BUILD_ID: "sn-x", CNB_PULL_REQUEST_IID: "" },
+      log: (s: string) => heard.push(s),
+      run: (cmd: string, args: Array<string>) => {
+        const key = args.join(" ");
+        calls.push(`${cmd} ${key}`);
+        const json = (data: unknown) => ({
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data }),
+          stderr: "",
+          error: null,
+        });
+        if (key.includes("get-build-logs")) {
+          return denied;
+        }
+        return json({});
+      },
+    });
+    const out = heard.join("\n");
+    /* 回落发生了，但身份仍认不出 ⇒ `resolveTarget()` 的既有判决接住：不归本格管 ⇒ 不写。
+     * 这是「不写」而非「没结论」—— push / 定时那几跑本来就与 PR 无关。 */
+    expect(code, out).toBe(CODE.DONE);
+    expect(out).toContain("身份改认平台注入的环境变量");
+    expect(out).toContain("不是 pull_request");
+    /* 身份在详情之前就被拦下 ⇒ 不该再往下发读命令。 */
+    expect(calls.some((c) => c.includes("get-build-status"))).toBe(false);
+  });
+});
