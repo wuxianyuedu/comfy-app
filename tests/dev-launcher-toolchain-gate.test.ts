@@ -510,13 +510,21 @@ describe("编排器与启动页的接线契约", () => {
     expect(launcher).toContain("gated.error.staleShell");
   });
 
-  it("起 dev server 用同一个命令形态（commandInvocation），不自己拼可执行名", () => {
-    expect(launcher).toContain("commandInvocation(candidate");
+  it("起 dev server 直启 dev.mjs（与 beforeDevCommand 同形），不经 pnpm 包装（ISSUE #4155）", () => {
+    /* 链拼接源里 `spawnDevServer` 有两处：dev-launcher.mjs 的同名薄包装（先出现）与
+     * downstream.mjs 的真实现 —— 判据只看真实现那一段，从**最后一次**出现切起。 */
     const spawnDev = launcher.slice(
-      launcher.indexOf("export function spawnDevServer"),
+      launcher.lastIndexOf("export function spawnDevServer"),
       launcher.indexOf("async function concludeDownstreamExit"),
     );
-    expect(spawnDev).toContain("...invocation.prefixArgs");
+    // 编排器与 `tauri.conf.json` 的 beforeDevCommand 统一成同一形态：
+    // `node scripts/dev.mjs`（process.execPath 直启），server 链不付 pnpm shim 冷启。
+    expect(spawnDev, "以 process.execPath 直启").toContain("process.execPath");
+    expect(spawnDev, "入口必须是 scripts/dev.mjs").toContain('"scripts", "dev.mjs"');
+    // pnpm shim 不在 server 链上：旧的那套形态选择（whichCommand → commandInvocation）不应再出现
+    expect(spawnDev, "server 链不得再经 commandInvocation 起 pnpm").not.toContain(
+      "commandInvocation",
+    );
   });
 
   it("启动页横幅按换行原样渲染（修复动作不能被压成一行）", () => {
@@ -851,13 +859,19 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     expect(inv!.command).toBe(path.join(dir, "pnpm"));
   });
 
-  it("dev.mjs / start.mjs 不再各自拼 pnpm 可执行名", () => {
+  it("dev.mjs / start.mjs 的 server 链不经 pnpm：直启 next bin（ISSUE #4155）", () => {
     for (const rel of ["scripts/dev.mjs", "scripts/start.mjs"]) {
-      const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
-      expect(src, `${rel}: 必须复用 pnpmInvocation`).toContain("pnpmInvocation");
+      const code = stripComments(fs.readFileSync(path.join(ROOT, rel), "utf8"), { trailing: true });
+      // server 链的 bin 入口必须经共用件解析（不写死 pnpm-layout 落点、不自己拼路径），
+      // 并以 process.execPath 直启 —— pnpm shim 从 server 链上摘掉（#4155 的读数与因果）。
+      expect(code, `${rel}: next bin 必须经 resolveNextBin 共用件解析`).toContain("resolveNextBin");
+      expect(code, `${rel}: 以 process.execPath 直启 next bin`).toContain("process.execPath");
+      expect(code, `${rel}: server 链不得再经 pnpmInvocation 起 pnpm`).not.toContain(
+        "pnpmInvocation",
+      );
       // 写死平台后缀的旧写法必须消失（它是这条缺陷的形态本身）
-      expect(src, `${rel}: 不得再写死 pnpm.cmd`).not.toContain('"pnpm.cmd"');
-      expect(src, `${rel}: 不得再按平台三元表达式拼可执行名`).not.toMatch(/win32"\s*\?\s*"pnpm/);
+      expect(code, `${rel}: 不得再写死 pnpm.cmd`).not.toContain('"pnpm.cmd"');
+      expect(code, `${rel}: 不得再按平台三元表达式拼可执行名`).not.toMatch(/win32"\s*\?\s*"pnpm/);
     }
   });
 

@@ -50,7 +50,8 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
   │           看不见窗口的壳进程（任务栏残留、dev server 继续被拉起、稍后还会
   │           自己把主窗弹出来）；壳退出即回收编排器（它是壳的子进程），
   │           编排器再回收它那棵树（正常交接时主窗已显示，不触发这条退出路径）
-  └─▶ pnpm dev → node next dev（127.0.0.1:<解析端口>，见 §1.1；
+  └─▶ node scripts/dev.mjs（与 beforeDevCommand 同形；#4155 起 server 链不经
+        pnpm）→ node …/next/dist/bin/next dev（127.0.0.1:<解析端口>，见 §1.1；
         本检出缺省 = 路径推导值，静态兜底才是 3100）
         就绪后 splash 调 navigate_to_app → main 加载 /workspace → 交换窗口
 ```
@@ -93,11 +94,11 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
 
 | 层                        | 读取方式                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| dev-launcher.mjs          | `scripts/app-port.mjs` 的 `resolveAppPort`，用于 `pnpm dev -p`、健康检查、端口占用回收、`COMFYAPP_DEV_URL`（`.ps1` 只是入口，出口径同一处）                                                                                                                                                                                                                                      |
+| dev-launcher.mjs          | `scripts/app-port.mjs` 的 `resolveAppPort`，用于 dev server 的显式端口（编排器以 `node scripts/dev.mjs -p` 直启，#4155）、健康检查、端口占用回收、`COMFYAPP_DEV_URL`（`.ps1` 只是入口，出口径同一处）                                                                                                                                                                                                                                      |
 | shell_launch.rs（自编排） | `app_port_for_root()`（= `single_instance::resolve_app_port_for_root()`，**唯一出口**）解析端口并注入 `COMFYAPP_PORT` 给编排器；`COMFYAPP_DEV_URL` 由编排器按同一端口拼。启动报告与编排日志一并给出**端口来源**（环境变量 / `.env` / 路径推导）                                                                                                                                  |
 | Rust 壳（lib.rs）         | `default_dev_url()` 经同一出口 `single_instance::resolve_app_port()` 解析（**不再自己读环境变量** —— 那会漏掉 `.env`）；`spawn_sidecar` 用的是 `pick_free_port()`（standalone 内嵌 server 由壳自持，与 dev 端口无关）                                                                                                                                                            |
 | tauri.conf.json           | `beforeDevCommand: node scripts/dev.mjs`，经 `scripts/app-port.mjs` 解析端口后启动 next dev                                                                                                                                                                                                                                                                                      |
-| `pnpm dev` / `pnpm start` | 统一经 `scripts/dev.mjs` / `scripts/start.mjs` → `scripts/app-port.mjs` 解析端口，再显式传 `-p` 给 next。**`dev` 与 `start` 都必须经脚本**：裸 `next dev` 会落 Next 默认的 3000，与 .env / 路径推导 / Playwright / 启动器找的端口对不上（2026-09-14 修 `dev` 一侧，`start` 此前已修）。`dev.mjs` 的 `-p` / `-H` 供 Windows 启动器显式覆盖，Linux / CI 直接 `pnpm dev` 即走解析值 |
+| `pnpm dev` / `pnpm start` | 统一经 `scripts/dev.mjs` / `scripts/start.mjs` → `scripts/app-port.mjs` 解析端口，再显式传 `-p` 给 next。**`dev` 与 `start` 都必须经脚本**：裸 `next dev` 会落 Next 默认的 3000，与 .env / 路径推导 / Playwright / 启动器找的端口对不上（2026-09-14 修 `dev` 一侧，`start` 此前已修）。两份脚本起 next 均为**直启 bin**（`process.execPath + resolveNextBin`，#4155：server 链不经 pnpm，`pnpm exec` 那一跳的 shim 冷启从链上摘掉；bin 落点由 next 自己的 `bin` 字段回答）。`dev.mjs` 的 `-p` / `-H` 供 Windows 启动器显式覆盖，Linux / CI 直接 `pnpm dev` 即走解析值 |
 | Playwright                | `playwright.config.ts` 经 `scripts/app-port.mjs` 解析，与 webServer/baseURL 同源                                                                                                                                                                                                                                                                                                 |
 | 前端 tRPC                 | `process.env.COMFYAPP_PORT ?? process.env.PORT ?? 3100`（服务端运行时 env 由启动链路注入）                                                                                                                                                                                                                                                                                       |
 
@@ -1269,8 +1270,9 @@ Job Object 兜底）时锚点仍会留下，由上面这条探活接住。
 在旧判据下无法区分，而这两种情形的正确动作完全相反。第 ② 层加的是**形状判据**，
 不依赖任何状态文件（`run/`、`log/` 里的锚点会就地重建或提前清掉，见上文会话锚点）。
 
-**为什么第 ② 层只在「显式端口」上成立**：编排器一律用 `pnpm dev -p <port>` 拉起
-dev server（Next 不认 `COMFYAPP_PORT`，必须显式传），所以**端口上服务只可能是编排器
+**为什么第 ② 层只在「显式端口」上成立**：编排器一律用 `node scripts/dev.mjs -p <port>`
+拉起 dev server（Next 不认 `COMFYAPP_PORT`，必须显式传；#4155 起为直启形态，
+此前是 `pnpm dev -p <port>`），所以**端口上服务只可能是编排器
 起的、或用户/别的检出手工起的**；而缺省解析链上这两者**无法区分**——
 另一份检出的 `.env` 恰好解析到同一个号码时，双方都会判定「端口是我该用的」。
 因此 `usesExplicitPort()` 是第 ② 层的开关：缺省端口（`null` / 非正整数）一律退回
