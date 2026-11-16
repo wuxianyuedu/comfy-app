@@ -24,6 +24,7 @@ import {
   type WorkflowRow,
 } from "../workflow-library-config";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
+import type { ModelTagSummary } from "~/lib/workflow/workflow-list-types";
 import { isPlainRecord } from "~/lib/is-record";
 
 export type WorkflowLibraryDetailActions = {
@@ -36,15 +37,17 @@ export type WorkflowLibraryDetailActions = {
 
 /** 类型 / 模型编辑器的派生数据与动作（规范 17 §17.2 第②层）。 */
 export type MetaEditorController = {
-  /** 全部可选模型标签。 */
-  allModelTags: Array<{ count: number; id: string; name: string }>;
+  /** 全部可选模型标签（含模式占用明细，ISSUE #4102）。 */
+  allModelTags: Array<ModelTagSummary>;
   busy: boolean;
   defaultMode: string;
-  /** 已绑定的模型标签名。 */
+  /** 已绑定的模型标签名（至多一个；历史数据可能残留多个，展示侧收敛为首项）。 */
   modelTags: Array<string>;
   /** 当前生效的 mode 集合（缺省回退 [taskType]，兼容旧行）。 */
   modes: Array<string>;
-  patchModelTags: (names: Array<string>) => Promise<void>;
+  /** 绑定模型标签。返回 `null` = 成功；否则为失败文案（唯一性冲突原因，
+   *  ISSUE #4102），弹窗就地展示。 */
+  patchModelTags: (names: Array<string>) => Promise<string | null>;
   patchModes: (modes: Array<string>, defaultMode: string) => Promise<void>;
   /** 持久化对外参数落点（预览面板拖圆点改落点 / 断开 / 恢复默认）。
    *  整列写回 `paramMap.source.mode:<模式>`，与编辑器画布同一份形状。 */
@@ -326,9 +329,9 @@ export function useWorkflowLibraryDetail(
       },
       patchModelTags: async (names) => {
         if (!workflow || !onPatchModelTags) {
-          return;
+          return null;
         }
-        await onPatchModelTags(workflow.id, names);
+        return onPatchModelTags(workflow.id, names);
       },
       patchParamMap: async (next) => {
         if (!workflow || !onPatchParamMap) {

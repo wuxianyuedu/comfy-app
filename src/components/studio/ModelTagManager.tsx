@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { textHandler } from "~/lib/form-props";
+import { getWorkflowType } from "~/lib/workflow/workflow-types";
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -195,10 +196,30 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                         </span>
                       </Hint>
                     )}
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="bg-surface-2 text-ink-soft text-2xs rounded-full px-2 py-0.5 tabular-nums">
-                        {tag.count} 个工作流
-                      </span>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                      {/* 按模式计数（ISSUE #4102）：不再显示「几个工作流」——
+                          同一 (标签 × 模式) 只归一条工作流，模式数才是适配容量。
+                          每个模式一枚胶囊，悬停显示占用它的工作流名与本地/在线。 */}
+                      {tag.modeBindings.length === 0 ? (
+                        <span className="text-ink-muted text-2xs">未绑定</span>
+                      ) : (
+                        <>
+                          <span className="bg-surface-2 text-ink-soft text-2xs rounded-full px-2 py-0.5 tabular-nums">
+                            {tag.modeBindings.length} 个模式
+                          </span>
+                          {tag.modeBindings.map((binding) => (
+                            <Hint
+                              key={binding.mode}
+                              label={`「${binding.workflowName}」· ${binding.local ? "本地工作流" : "在线工作流"}`}
+                              wrap
+                            >
+                              <span className="bg-surface-2 text-ink-soft hover:text-ink-bright text-2xs cursor-default rounded-full px-2 py-0.5">
+                                {getWorkflowType(binding.mode)?.label ?? binding.mode}
+                              </span>
+                            </Hint>
+                          ))}
+                        </>
+                      )}
                       <Hint
                         label={
                           tag.count > 0
