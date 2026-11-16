@@ -1752,6 +1752,21 @@ zustand 队列，而不是再加一个模块级单例。
 | 落点     | 过滤在**取事实那一层**（`reachable`），判据层（`deriveDevServerStatus`）只收这个事实。恢复侧不需要门槛：抖动期间离线边沿根本没成立 |
 | 回归判据 | `use-dev-server-liveness.test.ts`「单拍抖动不算断开」一组（含归零）与「单拍探活超时」一组（钉 `PROBE_TIMEOUT_MS`）                |
 
+#### 4.5.2.1 双信号：「断开」的判定以进程外事实为准（ISSUE #4146）
+
+抗抖动只滤掉了**单拍**抖动；连续约 7 秒的无应答仍会翻「已断开」，而那一刻进程可能
+还活着（同步重活把单事件循环停走十几秒的现场实测存在，见 #3369）。根因是结构性的：
+**「还能不能应答」只能问服务本身，这条信号永远带着被测进程的忙闲**。所以离线判定
+补了第二个信号——**进程外**的「进程还在吗」：
+
+| 环节     | 判据                                                                                                                                                       |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 进程外信号 | 壳命令 `get_app_service_liveness`（`shell_launch::read_app_service_liveness`）：读编排器落下的 `run/launcher-session.json`（`launcher_pid` + `child_pids`），逐个查 PID 存活。**不经过 dev server 的任何线程**，不受它忙闲影响。三态：任一活着 / 全部不在 / 读不到（手工 `pnpm dev` 没有会话文件 → `None`） |
+| 前端判据 | 探活失败的每一拍问一次壳（`readAppServiceProcessAlive`，2.5s 超时防壳自身卡死）。`deriveDevServerStatus` 收 `processAlive`：不可达 + 进程在 → **`unresponsive` 软状态**（琥珀色「应用服务无响应」，不写消息中心的断开消息）；不可达 + 进程没了 / 没有信号（`null`，浏览器 / 旧壳）→ `offline`（原行为，**不编一个答案出来**） |
+| 边沿     | 进 / 出 `unresponsive` 消息中心**都静默**（状态栏自己显示；每次重载窗口写一条「无响应/恢复」是噪声）；`unresponsive → offline`（停走期间进程真没了）仍记断开 |
+| 语义     | 「已断开」从「一时答不上」收紧为「**进程没了**」；CPU 阻塞最多产生一个软提示，翻不了红                                                                                     |
+| 回归判据 | `dev-server-status.test.ts`（unresponsive / processAlive=false / null 退回 / stale 优先）、`use-dev-server-liveness.test.ts`「双信号」一组、`app-service-message.test.ts`「unresponsive 的边沿」一组、壳侧 `shell_launch` 的会话解析与三态归并用例 |
+
 #### 4.5.3 结束记录要**两个写点**，读不到时也不许编成因
 
 「应用服务为什么断了」只能由**活下来的那一方**在它死的那一刻写下

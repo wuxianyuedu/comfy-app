@@ -656,6 +656,117 @@ pub fn read_app_service_exit(project_root: &str) -> Option<String> {
   Some(trimmed.to_string())
 }
 
+/// 读回「本检出的应用服务进程还活着吗」——**双信号判据的进程外那一半**（ISSUE #4146）。
+///
+/// ## 为什么这条判据必须在壳里
+///
+/// 探活（`GET /api/dev/server-id`）由应用服务自己应答，而 dev server 是**单事件循环**：
+/// 同步重活（进程探针 `spawnSync`、Turbopack 编译锁、大型同步压缩）会把事件循环停走
+/// 数秒，期间**所有**请求（含探活）都排不上队——进程活得好好的，HTTP 探活却连续超时
+/// （ISSUE #4140 的现场）。「还能不能应答」只能问服务本身，所以这条信号永远带着被测
+/// 进程的忙闲；要让**离线判定**不被它牵着走，必须有一个不经过该进程的信号。壳正是
+/// 那个旁证人：编排器（launcher）是壳的子进程，它把本次启动的进程树（`launcher_pid`
+/// + `child_pids`）写进 `run/launcher-session.json`，壳读这份文件、逐个查 PID 存活，
+/// 完全不经过 dev server 的任何线程。
+///
+/// ## 返回语义（三态，`None` 不是错误）
+///
+/// · `None`：会话文件读不到 / 解析不了 / 没有可查的 PID——**不知道**（典型：手工
+///   `pnpm dev` 没走编排器）。前端按「没有进程外信号」处理，退回纯 HTTP 判据（原行为）。
+/// · `Some(true)`：名单里**任一**进程还活着——服务没死（正在忙 / 正在被编排器重启）。
+/// · `Some(false)`：名单全部不在了——进程确实没了，配合探活失败即是真断开。
+///
+/// PID 复用的说明：Windows 的 PID 理论上会被复用，但那是「编号耗尽回绕」之后的事，
+/// 而这里的名单一分钟前刚由编排器写下；把「名单里任一还活着」当「服务没死」在这个
+/// 时间尺度上是稳的，不值得为它再查进程身份。
+pub fn read_app_service_liveness(project_root: &str) -> Option<bool> {
+  if project_root.is_empty() {
+    return None;
+  }
+  let raw = std::fs::read_to_string(launcher_session_path(project_root)).ok()?;
+  let pids = parse_launcher_session_pids(&raw)?;
+  liveness_from_pids(&pids, pid_alive)
+}
+
+/// 会话文件名，与 `scripts/launcher-core/` 的落盘名逐字相同。
+const LAUNCHER_SESSION_FILE: &str = "launcher-session.json";
+
+fn launcher_session_path(project_root: &str) -> std::path::PathBuf {
+  std::path::Path::new(project_root)
+    .join("run")
+    .join(LAUNCHER_SESSION_FILE)
+}
+
+/// 从会话文件原文里取要查活的 PID 名单（`launcher_pid` + `child_pids`）。
+///
+/// 解析不出 / 一个 PID 都没有 → `None`（调用方按「不知道」处理）。字段缺失、
+/// 类型不对、混进非法值（0 / 负数 / 超出 u32）都逐项跳过而不是整份作废：
+/// 名单里多一个坏项不该把其余好项的读数也丢掉。
+pub fn parse_launcher_session_pids(raw: &str) -> Option<Vec<u32>> {
+  let value: serde_json::Value = serde_json::from_str(raw).ok()?;
+  let mut pids: Vec<u32> = Vec::new();
+  let mut push = |pid: u64| {
+    if pid > 0 && pid <= u32::MAX as u64 {
+      pids.push(pid as u32);
+    }
+  };
+  if let Some(pid) = value.get("launcher_pid").and_then(|v| v.as_u64()) {
+    push(pid);
+  }
+  if let Some(children) = value.get("child_pids").and_then(|v| v.as_array()) {
+    for child in children {
+      if let Some(pid) = child.as_u64() {
+        push(pid);
+      }
+    }
+  }
+  if pids.is_empty() {
+    None
+  } else {
+    Some(pids)
+  }
+}
+
+/// 名单 → 三态结论：空名单 `None`；任一活着 `Some(true)`；全部不在 `Some(false)`。
+/// 探活函数注入：判据纯函数化，测试不必真起进程。
+fn liveness_from_pids(pids: &[u32], probe: impl Fn(u32) -> bool) -> Option<bool> {
+  if pids.is_empty() {
+    return None;
+  }
+  Some(pids.iter().any(|pid| probe(*pid)))
+}
+
+/// PID 还在吗（只查存在性，不关心它此刻忙不忙——忙正是软信号要容忍的那一档）。
+#[cfg(windows)]
+fn pid_alive(pid: u32) -> bool {
+  use windows::Win32::Foundation::CloseHandle;
+  use windows::Win32::System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+  // STILL_ACTIVE 的值（Win32 常量 259）；windows 0.62 的 Threading 模块没有导出这个名字，
+  // 只能写字面量——含义与 SDK 的 `NT_SUCCESS(Status) == FALSE && Status == STATUS_PENDING` 档一致。
+  const STILL_ACTIVE: u32 = 259;
+  unsafe {
+    // 打开失败 = 进程不在。
+    let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+      return false;
+    };
+    let mut exit_code: u32 = 0;
+    // 打开成功但退出码不是 STILL_ACTIVE = 已经退出：句柄被别人握着时 OpenProcess
+    // 仍会成功，退出码才是裁决。
+    let alive = GetExitCodeProcess(handle, &mut exit_code).is_ok() && exit_code == STILL_ACTIVE;
+    let _ = CloseHandle(handle);
+    alive
+  }
+}
+
+/// POSIX：`kill(pid, 0)` 只探测存在性。0 = 在；EPERM = 在但没权限（也算在）；
+/// ESRCH = 不在。
+#[cfg(not(windows))]
+fn pid_alive(pid: u32) -> bool {
+  // SAFETY: kill(2) 是无状态系统调用，只有 errno 需要读。
+  let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
+  rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
 /// 把 sidecar 的终止事实翻译成给用户看的一句话（记录里的 `reason`）。
 ///
 /// 与 Node 侧 `describeDownstreamExit` 同一个取向：**只陈述这一次具体是什么结束的**，
@@ -2022,5 +2133,62 @@ mod tests {
     assert!(without.contains("未拿到退出码"), "{without}");
     // 「拿不到」与「正常退出」必须是两句不同的话。
     assert_ne!(without, sidecar_exit_reason(Some(0)));
+  }
+
+  #[test]
+  fn launcher_session_pids_parses_launcher_and_children() {
+    // 与 scripts/launcher-core 落盘的真实形状同形（本机 run/ 里的活样本）。
+    let raw = r#"{"launcher_pid":134816,"child_pids":[129684],"app_port":3797,"mode":"prebuilt","started_at":"2026-11-16T16:02:50.131Z"}"#;
+    assert_eq!(
+      parse_launcher_session_pids(raw),
+      Some(vec![134816, 129684])
+    );
+  }
+
+  #[test]
+  fn launcher_session_pids_skips_bad_items_and_is_none_when_empty() {
+    // 非法项（0 / 负数 / 非数字 / null）逐项跳过，不整份作废；1 与 3 都是合法 PID，
+    // 必须保留；一个都剩不下 → None。
+    assert_eq!(
+      parse_launcher_session_pids(r#"{"launcher_pid":0,"child_pids":[1,-2,"x",null,3]}"#),
+      Some(vec![1, 3])
+    );
+    assert_eq!(parse_launcher_session_pids("{}"), None);
+    assert_eq!(parse_launcher_session_pids("不是 JSON"), None);
+    assert_eq!(parse_launcher_session_pids(""), None);
+  }
+
+  #[test]
+  fn liveness_from_pids_is_three_state() {
+    // 空名单 = 不知道；任一活着 = 没死；全部不在 = 真没了。
+    assert_eq!(liveness_from_pids(&[], |_| true), None);
+    assert_eq!(liveness_from_pids(&[1, 2], |pid| pid == 2), Some(true));
+    assert_eq!(liveness_from_pids(&[1, 2], |_| false), Some(false));
+  }
+
+  #[test]
+  fn read_app_service_liveness_reads_session_file_or_none() {
+    // 文件不在 → None（手工 pnpm dev / 没走编排器的检出）；
+    // 文件在 → 按名单判活。真 PID 的存活判据不在这里测（要起真进程），
+    // 三态归并已由上面的纯函数用例钉住。
+    let dir = exit_record_fixture("liveness");
+    let root = dir.to_str().unwrap();
+    assert!(
+      read_app_service_liveness(root).is_none(),
+      "会话文件不存在必须是 None"
+    );
+    let run = dir.join("run");
+    std::fs::create_dir_all(&run).unwrap();
+    // 名单用几乎不可能被分配的高位 PID（Linux pid_max 上限 4194304、Windows 同量级；
+    // PID 1 在 POSIX 上是 init/launchd，真的活着，不能拿来当「不在」的反例）。
+    std::fs::write(
+      run.join("launcher-session.json"),
+      r#"{"launcher_pid":4193810,"child_pids":[4193814]}"#,
+    )
+    .unwrap();
+    // 两个 PID 都不存在 → Some(false)：说明「读到了名单并真的查了」。
+    assert_eq!(read_app_service_liveness(root), Some(false));
+    assert!(read_app_service_liveness("").is_none(), "项目根为空回 None");
+    let _ = std::fs::remove_dir_all(&dir);
   }
 }

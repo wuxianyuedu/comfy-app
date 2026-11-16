@@ -187,3 +187,37 @@ export async function readAppServiceExitRecord(): Promise<string | null> {
     return null;
   }
 }
+
+/**
+ * 探活失败时补问壳：应用服务的**进程**还活着吗？——双信号判据的进程外那一半
+ * （ISSUE #4146）。
+ *
+ * ## 为什么探活之外还要这一问
+ *
+ * HTTP 探活（`GET /api/dev/server-id`）由应用服务自己应答，而它是**单事件循环**：
+ * 同步重活（进程探针 `spawnSync`、Turbopack 编译锁、大型同步压缩）会把事件循环
+ * 停走数秒，期间所有请求（含探活）都排不上队——进程活得好好的，探活却连续超时
+ * （#4140 的「莫名断开」）。壳是旁证人：它读编排器落下的
+ * `run/launcher-session.json`（进程树名单）并逐个查 PID 存活，完全不经过
+ * dev server 的任何线程，所以这个答案**不受被测进程忙闲影响**。
+ *
+ * ## 返回三态
+ *
+ * · `true` / `false`：名单里任一进程活着 / 全部不在（判据在壳侧
+ *   `shell_launch::read_app_service_liveness`）。
+ * · `null`：不知道——非壳环境（浏览器）、旧壳没有本命令（invoke 报错）、
+ *   会话文件读不到（手工 `pnpm dev`）。调用方按「没有进程外信号」处理，
+ *   **退回纯 HTTP 判据（原行为）**，不编一个答案出来。
+ */
+export async function readAppServiceProcessAlive(): Promise<boolean | null> {
+  if (!isDesktopShell()) {
+    return null;
+  }
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const answer = await invoke<boolean | null>("get_app_service_liveness");
+    return typeof answer === "boolean" ? answer : null;
+  } catch {
+    return null;
+  }
+}
