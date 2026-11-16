@@ -86,6 +86,9 @@ export async function startOllama(): Promise<void> {
 export async function stopOllama(): Promise<void> {
   const res = await fetch("/api/llm/ollama-stop", { method: "POST" });
   if (!res.ok) {
-    throw new Error("关闭 Ollama 失败，请手动结束 ollama 进程");
+    /* 错误信封的读法与 startOllama 同一处（#4046）：服务端区分的
+     * 「未在运行」「进程仍在响应」等可行动文案原样透给用户。 */
+    const body = await readJsonBody(res);
+    throw new Error(readApiError(body) ?? "关闭 Ollama 失败，请手动结束 ollama 进程");
   }
 }
