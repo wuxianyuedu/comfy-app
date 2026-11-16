@@ -338,15 +338,25 @@ export function candidateValue(candidate: TestCandidate): string {
     : candidate.name;
 }
 
-/** 候选的显示文案：工作流候选带工作流名；未完成工坊封装的明说（封装页签补线
- *  后才能被统一输入驱动）。 */
-export function candidateLabel(candidate: TestCandidate): string {
+/** 工作流候选的模型显示名（#4080 评论 17）：用户认知里的「模型名」是工作流库
+ *  「管理模型」挂的模型标签（如 z-image），不是工作流文件名 —— 优先取第一个
+ *  非空标签；没挂标签的工作流退回工作流名。 */
+export function candidateModelName(candidate: TestCandidate): string {
   if (candidate.workflow === undefined) {
     return candidate.name;
   }
-  return candidate.workflow.encapsulationReady
-    ? candidate.workflow.name
-    : `${candidate.workflow.name}（未封装）`;
+  const tag = candidate.workflow.modelTags.find((t) => t.trim() !== "");
+  return tag === undefined ? candidate.workflow.name : tag.trim();
+}
+
+/** 候选的显示文案：工作流候选显示**模型名**（#4080 评论 17）；未完成工坊封装
+ *  的明说（封装页签补线后才能被统一输入驱动）。 */
+export function candidateLabel(candidate: TestCandidate): string {
+  const base = candidateModelName(candidate);
+  if (candidate.workflow === undefined) {
+    return base;
+  }
+  return candidate.workflow.encapsulationReady ? base : `${base}（未封装）`;
 }
 
 /** 工作流是否支持某个生成模式：模式码是工坊与库之间唯一的生成模式判据

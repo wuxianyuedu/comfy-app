@@ -33,7 +33,6 @@ import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import {
   MODEL_TEST_KINDS,
   MODEL_TEST_KIND_LABELS,
-  candidateLabel,
   candidateValue,
   sizeSpecToValues,
   sizeValuesToSpec,
@@ -536,9 +535,7 @@ export function ModelTestView() {
                     },
                   ] as const
                 ).filter((group) => group.options.length > 0)}
-                labels={Object.fromEntries(
-                  c.candidates.map((m) => [candidateValue(m), candidateLabel(m)] as const),
-                )}
+                labels={c.candidateLabels}
                 onChange={c.selectModel}
                 options={c.candidates.map(candidateValue)}
                 placeholder="选择要测试的模型…"

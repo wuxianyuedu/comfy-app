@@ -38,6 +38,7 @@ import { useTRPC } from "~/trpc/react";
 
 import {
   buildRequestBodies,
+  candidateLabel,
   candidateValue,
   contractTestRows,
   defaultModeForKind,
@@ -71,6 +72,9 @@ export type ModelTestController = {
   /** 取消当前格（用途 + 模式 + 模型）的生成（#3949 需求 5 / #4080 评论 12）：
    *  中断等待与轮询，界面落「已取消生成」。 */
   cancelGenerate: (key?: string) => void;
+  /** 下拉选项值 → 显示名（#4080 评论 17：工作流候选显示**模型名**——工作流上
+   *  挂的模型标签；同一模型挂在多个工作流上时用工作流名消歧）。 */
+  candidateLabels: Record<string, string>;
   /** 当前格的候选模型（按当前模式收窄：远端只列配了该模式适配器的；
    *  工作流候选按 modes 声明判支持）。 */
   candidates: Array<TestCandidate>;
@@ -459,6 +463,21 @@ export function useModelTest(): ModelTestController {
     selectedCandidate,
   } = useTestCatalog({ kind, mode, selectedModel, trpc });
 
+  /* 下拉显示名（#4080 评论 17）：工作流候选显示**模型名**（工作流上挂的模型
+   * 标签，如 z-image），不是工作流文件名；同一模型挂在多个工作流上时，后
+   * 出现的用工作流名消歧；没挂标签的退工作流名。 */
+  const candidateLabels = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    const seen = new Map<string, number>();
+    for (const c of modeCandidates) {
+      const base = candidateLabel(c);
+      const n = seen.get(base) ?? 0;
+      seen.set(base, n + 1);
+      out[candidateValue(c)] = n === 0 ? base : `${base} · ${c.workflow?.name ?? c.name}`;
+    }
+    return out;
+  }, [modeCandidates]);
+
   const setKind = useCallback(
     (next: ModelTestKind) => {
       setKindState(next);
@@ -666,6 +685,7 @@ export function useModelTest(): ModelTestController {
 
   return {
     candidates: modeCandidates,
+    candidateLabels,
     responseRows: activeSession.responseRows,
     requestRows,
     kindCandidateCount,
