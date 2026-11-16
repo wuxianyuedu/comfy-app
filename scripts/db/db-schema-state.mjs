@@ -587,9 +587,13 @@ export const SKIP_SCHEMA_SYNC_ENV = "COMFYAPP_SKIP_SCHEMA_SYNC";
  */
 export function spawnSchemaSync(root, options = {}) {
   const { force = false } = options;
-  const script = path.join(root, "scripts", "db-sync.mjs");
+  /* 脚本的实际落点在 `scripts/db/` 域目录（#3958 归家）。这里必须拼**新路径**：
+   * 归家靠 `#3930 兼容垫片` 维持旧路径可用，#4111 删垫片时这里没跟上，
+   * 后台同步静默 no-op（ISSUE #4144）。 */
+  const script = path.join(root, "scripts", "db", "db-sync.mjs");
   if (!fs.existsSync(script)) {
-    /* 生产产物里 `scripts/` 只保留运行时会读的那几个（见 build-desktop 白名单），
+    /* 生产产物里 `scripts/` 只保留运行时会读的那几个（见 build-desktop 白名单，
+     * db-sync 刻意不在其中：standalone 由 standalone-runtime 首启建表），
      * 那时这里没有可跑的东西 —— 如实返回，调用方据此不提示而不是报错。 */
     return { started: false, reason: "找不到 scripts/db/db-sync.mjs" };
   }
