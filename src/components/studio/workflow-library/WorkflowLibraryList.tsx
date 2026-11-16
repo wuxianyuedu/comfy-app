@@ -14,7 +14,7 @@ import { Hint } from "~/components/ui/hint";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
+import { useWorkflowEncapsulation } from "./hooks/use-workflow-encapsulation";
 import { SourceTag } from "~/components/ui/source-tag";
 import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -260,8 +260,10 @@ function WorkflowListItem({
   const { usable } = deriveFormatFlags(workflow);
   const { missing, canResync } = deriveSyncFlags(workflow);
   const isTech = isTechnicalName(workflow.name);
-  /* 对外参数封装状态（与生成链路同口径）：提示词口已有落点 = 工坊可直接驱动。 */
-  const encapsulation = deriveEncapsulationStatus({
+  /* 对外参数封装状态（与生成链路同口径）：提示词口已有落点 = 工坊可直接驱动。
+   * 契约口与必备口读生效注册表（本机覆盖优先）—— 与详情「工坊封装」页签
+   * 同一份口径（ISSUE #4113：此前列表行回落内置默认，用户改过的契约不生效）。 */
+  const { status: encapsulation } = useWorkflowEncapsulation({
     io: workflow.workflowIO ?? null,
     paramMap: workflow.paramMap ?? null,
     mode: workflow.defaultMode ?? workflow.taskType ?? null,
