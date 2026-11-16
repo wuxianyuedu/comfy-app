@@ -16,7 +16,7 @@ import { exitIfEnvNotReady } from "./devtools/env-preflight.mjs";
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { maybeSpawnExecutorHost } from "./launcher-core/executor-host-spawn.mjs";
 import { runStamp } from "./launcher-core/log.mjs";
-import { pnpmInvocation } from "./launcher-core/shell.mjs";
+import { resolveNextBin } from "./launcher-core/next-bin.mjs";
 
 const root = resolveRepoRoot();
 
@@ -77,14 +77,18 @@ if (!schema.started) {
  * 所以「谁在起这份产物」这件事在**仓库检出**里只有 `next start` 一个正确取值；
  * standalone 入口是**桌包链**的事（`standalone-runtime.mjs`，那边有完整载荷、
  * 静态资源与数据锚点都由它自己给）。 */
-const invocation = pnpmInvocation(["exec", "next", "start", "-p", String(port)]);
-if (!invocation) {
+// next bin 直启（ISSUE #4155，与 dev.mjs 同一口径）：server 链不经 pnpm ——
+// `pnpm exec` 那一跳是 Windows shim 冷启，且会把「shim 形态坏了」这个失败类带进
+// 服务链。bin 路径经 next-bin.mjs 一处解析，不写死 pnpm-layout 里的落点。
+const nextBin = resolveNextBin(root);
+if (!nextBin) {
   process.stderr.write(
-    "[start.mjs] ✗ PATH 上找不到可用的 pnpm，无法启动 Next.js server。\n" +
-      "[start.mjs]   先跑 `pnpm check:toolchain` 看选中的命令与探测结果。\n",
+    "[start.mjs] ✗ 解析不到 next 的可执行入口（依赖没装好、被清空或损坏）。\n" +
+      "[start.mjs]   先跑 `pnpm install` 补齐依赖再启动；解析判据见 scripts/launcher-core/next-bin.mjs。\n",
   );
   process.exit(1);
 }
+const nextArgs = ["start", "-p", String(port)];
 
 /* 执行器宿主（P3 §5：`COMFY_EXECUTOR=host` 时**必须**有人起它）。
  *
@@ -109,16 +113,16 @@ maybeSpawnExecutorHost({
 });
 
 // 与 dev.mjs 同一口径：起服务前先回显真正要跑的那条命令行。
-echoCommandLine(invocation.command, invocation.args);
-const result = spawnSync(invocation.command, invocation.args, {
+echoCommandLine(process.execPath, [nextBin, ...nextArgs]);
+const result = spawnSync(process.execPath, [nextBin, ...nextArgs], {
   stdio: "inherit",
   env: { ...process.env, PORT: String(port) },
 });
 if (result.error) {
   const spawnError = /** @type {NodeJS.ErrnoException} */ (result.error);
   process.stderr.write(
-    `[start.mjs] ✗ 起 pnpm 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}\n` +
-      `[start.mjs]   实际命令：${formatCommandLine(invocation.command, invocation.args)}\n`,
+    `[start.mjs] ✗ 起 next 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}\n` +
+      `[start.mjs]   实际命令：${formatCommandLine(process.execPath, [nextBin, ...nextArgs])}\n`,
   );
   process.exit(1);
 }

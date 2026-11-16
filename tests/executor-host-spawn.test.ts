@@ -241,8 +241,9 @@ describe("四个启动入口都接线（回归到「没人起宿主」的那道�
     const callAt = topLevelCallAt(body, "maybeSpawnExecutorHost");
     /* 锚在**起 Next 的那一次 spawnSync** 上（与 start.mjs 同口径）：`nextArgs`
      * 的参数里也有 "next"/"dev" 字面量，用它当锚会把手上的位置判反。锚点与 `callAt`
-     * 必须取自**同一份**剥后文本，否则比的是两个下标空间。 */
-    const nextAt = body.indexOf("spawnSync(invocation.command, invocation.args");
+     * 必须取自**同一份**剥后文本，否则比的是两个下标空间。#4155 起 server 链
+     * 直启 next bin，spawn 的第一参是 process.execPath。 */
+    const nextAt = body.indexOf("spawnSync(process.execPath, [nextBin");
     expect(callAt).toBeGreaterThan(-1);
     expect(nextAt).toBeGreaterThan(-1);
     expect(callAt).toBeLessThan(nextAt);
@@ -255,10 +256,11 @@ describe("四个启动入口都接线（回归到「没人起宿主」的那道�
     const source = readScript("scripts/start.mjs");
     const body = scriptBody(source);
     const callAt = topLevelCallAt(body, "maybeSpawnExecutorHost");
-    /* 锚在**起 Next 的那一次 spawnSync** 上：`pnpmInvocation([...])` 的参数里
-     * 也有 "next"/"start" 两个字面量，用它当锚会把手上的位置判反。锚点与 `callAt`
-     * 同样取自那份剥后文本（现在由 `body` 显式给出）。 */
-    const nextAt = body.indexOf("spawnSync(invocation.command, invocation.args");
+    /* 锚在**起 Next 的那一次 spawnSync** 上：`nextArgs` 的参数里也有
+     * "next"/"start" 两个字面量，用它当锚会把手上的位置判反。锚点与 `callAt`
+     * 同样取自那份剥后文本（现在由 `body` 显式给出）。#4155 起 server 链
+     * 直启 next bin，spawn 的第一参是 process.execPath。 */
+    const nextAt = body.indexOf("spawnSync(process.execPath, [nextBin");
     expect(callAt).toBeGreaterThan(-1);
     expect(nextAt).toBeGreaterThan(-1);
     expect(callAt).toBeLessThan(nextAt);

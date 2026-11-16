@@ -81,12 +81,13 @@ describe("启动链：换文件必须排在起服务之前", () => {
     for (const file of ["scripts/dev.mjs", "scripts/start.mjs"]) {
       const src = read(file);
       const restore = lineOf(src, "applyPendingRestoreAtBoot(");
-      /* 同步会打开数据库 → 换文件必须在它之前；起 Next 同理。 */
+      /* 同步会打开数据库 → 换文件必须在它之前；起 Next 同理。
+       * #4155 起 server 链直启 next bin，起服务的锚随之换成 spawnSync 那一行。 */
       expect(restore, `${file}: 换文件必须在 schema 同步之前`).toBeLessThan(
         lineOf(src, "spawnSchemaSync("),
       );
       expect(restore, `${file}: 换文件必须在起 Next 之前`).toBeLessThan(
-        lineOf(src, "pnpmInvocation("),
+        lineOf(src, "spawnSync(process.execPath, [nextBin"),
       );
     }
   });
