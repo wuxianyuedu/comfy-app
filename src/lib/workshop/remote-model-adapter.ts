@@ -21,7 +21,6 @@
 import { isRecord } from "~/lib/is-record";
 import { upperToken } from "~/lib/upper-token";
 import { isVideoMode } from "~/lib/workflow/workflow-exposed-params";
-import { getWorkflowType } from "~/lib/workflow/workflow-types";
 
 /** 可作为输入的统一类型（供适配器配置选用）。
  *
@@ -181,21 +180,6 @@ export function defaultInputsForMode(mode: string): Array<{
  *  配置已移除，端点一律模型级）。 */
 export function defaultEndpointPathForKind(kind: "image" | "video" | "audio"): string {
   return kind === "video" ? "/videos/generations" : "/images/generations";
-}
-
-/** 模式的产物类别。 */
-export function outputKindForMode(mode: string): "image" | "video" | "audio" {
-  const def = getWorkflowType(mode);
-  if (def?.category === "video") {
-    return "video";
-  }
-  if (def?.category === "audio") {
-    return "audio";
-  }
-  if (isVideoMode(mode)) {
-    return "video";
-  }
-  return "image";
 }
 
 /** 归一化适配器数组（丢弃非法项：无模式 / 无字段映射）。 */

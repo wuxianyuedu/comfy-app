@@ -18,6 +18,7 @@ import {
   type EncapsulationEntryStatus,
 } from "~/lib/workshop/workshop-encapsulation-status";
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
+import { ContractRequiredBadge } from "~/components/workshop/mode-contract/ContractRequiredBadge";
 import { modeContractEntries, requiredInputsFor } from "~/lib/workshop/model-mode-contract";
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
 import { modeLabel } from "../workflow-library-config";
@@ -236,16 +237,10 @@ export function WorkshopEncapsulationPanel({
                   key: (
                     <>
                       {/* 必备 / 可选由**模式契约**判定（`ModeContract.required`），
- 不是写死的口名 —— 与「能不能跑」的判据同一份事实。 */}
-                      <span
-                        className={`text-3xs shrink-0 rounded px-1.5 py-0.5 font-medium ${
-                          entry.required
-                            ? "bg-destructive/15 text-destructive"
-                            : "bg-subtle text-muted-foreground/80 border-border-strong border"
-                        }`}
-                      >
-                        {entry.required ? "必填" : "可选"}
-                      </span>
+                          不是写死的口名 —— 与「能不能跑」的判据同一份事实。形态与
+                          「模式契约」编辑器里那一枚同源（共用
+                          `ContractRequiredBadge`，ISSUE #4072）。 */}
+                      <ContractRequiredBadge required={entry.required} />
                       {badge && (
                         <span
                           className={`text-3xs shrink-0 rounded px-1.5 py-0.5 font-medium ${badge.className}`}

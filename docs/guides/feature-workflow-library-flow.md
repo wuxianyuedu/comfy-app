@@ -51,7 +51,7 @@ flowchart TD
   end
 
   NAV --> LIST
-  OVERLAY --> CONTRACT_ENTRY["全局注册表：模式契约（每种模式的口 / 输出）<br/>模型适配（远端模型 × 模式的字段映射）"]
+  OVERLAY --> CONTRACT_ENTRY["全局注册表：模式契约（每种模式的口）<br/>模型适配（远端模型 × 模式的字段映射）"]
   FILES --> PEND
   LIST --> DETAIL
   PEND -->|"⤓ 载入"| DB

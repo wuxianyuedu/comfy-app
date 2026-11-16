@@ -86,7 +86,6 @@ describe("模式契约口 id 值域", () => {
     const entries = contractToStatusEntries({
       mode: "I2I",
       inputs: ["prompt", "size", "reference-image", "reference-image-2"],
-      output: "image",
     });
     expect(entries.map((e) => e.control)).toEqual(["text", "size", "image", "image"]);
     expect(entries[3]?.label).toBe("参考图 2");
@@ -111,7 +110,6 @@ describe("模式契约的「尺寸」口与统一尺寸口径一致", () => {
     const rows = adapterInputsFromContract({
       mode: "T2I",
       inputs: ["prompt", "size"],
-      output: "image",
     });
     expect(rows).toEqual([
       { type: "prompt", field: "prompt" },
@@ -150,16 +148,14 @@ describe("modeContractEntries：两个页签共读的那一份契约口清单", 
   });
 
   it("用户改过的模式按注册表列口，但展示名仍取统一那一份", () => {
-    const stored = parseModeContracts([
-      { mode: "T2I", inputs: ["prompt", "reference-image-2"], output: "image" },
-    ]);
+    const stored = parseModeContracts([{ mode: "T2I", inputs: ["prompt", "reference-image-2"] }]);
     const entries = modeContractEntries("t2i", stored);
     expect(entries.map((e) => e.id)).toEqual(["prompt", "reference-image-2"]);
     expect(entries[1]?.label).toBe(exposedParamDisplayLabel("reference-image-2"));
   });
 
   it("模式大小写不敏感（注册表按大写存）", () => {
-    const stored = parseModeContracts([{ mode: "T2I", inputs: ["prompt"], output: "image" }]);
+    const stored = parseModeContracts([{ mode: "T2I", inputs: ["prompt"] }]);
     expect(modeContractEntries("t2i", stored).map((e) => e.id)).toEqual(["prompt"]);
   });
 });
@@ -190,8 +186,6 @@ describe("自定义口：往返与归一化", () => {
     mode: "T2I",
     /* SAFETY: 类型断言已复核 */
     inputs: ["prompt", "custom-text-1", "size"] as Array<ModeContractInputId>,
-    /* SAFETY: 类型断言已复核 */
-    output: "image" as const,
     customInputs: [
       {
         /* SAFETY: 类型断言已复核 */
@@ -209,9 +203,7 @@ describe("自定义口：往返与归一化", () => {
   });
 
   it("没有定义的自定义口被丢弃（下游读不出名字与类型）", () => {
-    const round = parseModeContracts([
-      { mode: "T2I", inputs: ["prompt", "custom-text-9"], output: "image" },
-    ]);
+    const round = parseModeContracts([{ mode: "T2I", inputs: ["prompt", "custom-text-9"] }]);
     expect(round.map((c) => c.inputs)).toEqual([["prompt"]]);
   });
 
@@ -220,7 +212,6 @@ describe("自定义口：往返与归一化", () => {
       {
         mode: "T2I",
         inputs: ["prompt", "custom-text-1"],
-        output: "image",
         customInputs: [{ id: "custom-text-1", label: "  ", kind: "text" }],
       },
     ]);
@@ -233,7 +224,6 @@ describe("自定义口：往返与归一化", () => {
       {
         mode: "T2I",
         inputs: ["custom-image-1"],
-        output: "image",
         customInputs: [{ id: "custom-image-1", label: "风格图", kind: "text" }],
       },
     ]);
@@ -251,7 +241,6 @@ describe("自定义口：往返与归一化", () => {
       contractToStatusEntries({
         mode: "T2I",
         inputs: ["custom-image-1", "custom-number-2"],
-        output: "image",
         customInputs: [
           { id: "custom-image-1", label: "风格图", kind: "image" },
           { id: "custom-number-2", label: "强度", kind: "number" },
@@ -308,7 +297,6 @@ describe("成品配置覆盖全部生成类模式", () => {
     const override: ModeContract = {
       mode: "T2I",
       inputs: ["prompt", "custom-text-1"],
-      output: "image",
       required: ["prompt"],
       customInputs: [{ id: "custom-text-1", label: "画风", kind: "text" }],
     };
@@ -351,9 +339,27 @@ describe("mode-contract-defaults.json：完整基线（#3603）", () => {
     expect(t2i).toEqual({
       mode: "T2I",
       inputs: ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
-      output: "image",
       required: ["prompt"],
     });
+  });
+
+  it("契约里没有「输出类别」这一格（ISSUE #4072：类别由模式码唯一决定）", () => {
+    /* 回归：输出类别曾经是契约的一格（可配），于是同一个模式能被挑成与它
+     * 本身矛盾类别（把文生图挑成「视频」）。现在它既不在类型里、也不在基线
+     * 文件里 —— 读出来的契约只有「口清单 + 必备口 + 自定义口」。 */
+    for (const contract of configuredModeContracts()) {
+      expect("output" in contract, contract.mode).toBe(false);
+    }
+    expect("output" in derivedModeContract("T2I")).toBe(false);
+  });
+
+  it("旧数据里的「输出类别」被丢弃，不进归一化结果（ISSUE #4072）", () => {
+    /* 存量文件（`data/workshop-mode-contracts.json` / 旧版基线）里那一格照读
+     * 不误，但归一化后不再进契约 —— 与新写入的形状一致。 */
+    const round = parseModeContracts([
+      { mode: "T2I", inputs: ["prompt"], output: "video", required: ["prompt"] },
+    ]);
+    expect(round).toEqual([{ mode: "T2I", inputs: ["prompt"], required: ["prompt"] }]);
   });
 });
 

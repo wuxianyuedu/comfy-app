@@ -149,9 +149,7 @@ describe("deriveWorkshopParams", () => {
   });
 
   it("用户改过的模式契约优先于内置默认", () => {
-    const contracts: Array<ModeContract> = [
-      { mode: "T2I", inputs: ["prompt", "size"], output: "image" },
-    ];
+    const contracts: Array<ModeContract> = [{ mode: "T2I", inputs: ["prompt", "size"] }];
     const rows = deriveWorkshopParams(makeDetail({ prompt: "x" }), "T2I", contracts, null);
     expect(rows.map((r) => r.id)).toEqual(["prompt", "size"]);
   });

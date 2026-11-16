@@ -45,7 +45,7 @@ const { llmServer, contracts, defaults, workshopLlm } = vi.hoisted(() => ({
     })),
     resetModeContractOverride: vi.fn(() => ({
       contracts: [],
-      effective: { mode: "TXT2IMG", inputs: ["prompt"], output: "image" },
+      effective: { mode: "TXT2IMG", inputs: ["prompt"] },
     })),
   },
   defaults: {
@@ -480,8 +480,6 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
       {
         mode: "TXT2IMG",
         inputs,
-        /* SAFETY: 类型断言已复核 */
-        output: "image" as const,
       },
     ],
   });
@@ -506,8 +504,6 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
             {
               mode: "TXT2IMG",
               inputs: ["prompt"],
-              /* SAFETY: 类型断言已复核 */
-              output: "image" as const,
               customInputs: [
                 {
                   id,
@@ -550,7 +546,21 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
   it("还原默认：模式码交给服务端移除覆盖（台账 E3 执行者）", async () => {
     const res = await caller().modeContractReset({ mode: "txt2img" });
     expect(contracts.resetModeContractOverride).toHaveBeenCalledWith("txt2img");
-    expect(res.effective).toEqual({ mode: "TXT2IMG", inputs: ["prompt"], output: "image" });
+    expect(res.effective).toEqual({ mode: "TXT2IMG", inputs: ["prompt"] });
+  });
+
+  it("入参不再有「输出类别」那一格：带它提交也不打回，落盘时那一格消失（#4072）", async () => {
+    /* 类别由模式码唯一决定，不再是可配项：zod 剥掉未声明的键 ⇒ 存量客户端
+     * 带着 `output` 提交不会被拒，交给存储层的那一份里那一格已经没有了。 */
+    const legacyContract = {
+      mode: "TXT2IMG",
+      inputs: ["prompt"],
+      output: "video",
+    };
+    await caller().modeContractsSave({ contracts: [legacyContract] });
+    expect(contracts.saveModeContracts).toHaveBeenCalledWith([
+      { mode: "TXT2IMG", inputs: ["prompt"] },
+    ]);
   });
 });
 

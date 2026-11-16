@@ -44,7 +44,7 @@ export type ModelAdaptersController = {
   draft: Array<RemoteModeAdapter>;
   loading: boolean;
   message: { kind: "ok" | "err"; text: string } | null;
-  /** 模式契约注册表（每种模式的统一输入 / 输出）。 */
+  /** 模式契约注册表（每种模式的统一输入）。 */
   modeContracts: ReturnType<typeof useModeContracts>;
   /** 还原默认：丢弃本地草稿，回到服务端当前存档（ISSUE #3741）。 */
   reset: () => void;

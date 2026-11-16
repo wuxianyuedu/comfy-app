@@ -2,7 +2,7 @@
  * `ModeContractEditorView` 的**布局判据**（ISSUE #1870）：形态改坏不会让功能断言变红，故判据落在结构事实上 —— ① 两栏都在（左栏 `role="radiogroup"` 导航、
  * 右栏编辑区，各自独立滚动）；② 右栏跟着选中走，未选给空态文案。不锁样式类。折叠的判据在 `ModeContractModeNav.test.tsx`，这一层不感知它，不重复记两处的账。
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { derivedModeContract, type ModeContract } from "~/lib/workshop/model-mode-contract";
@@ -43,7 +43,6 @@ function stubController(
     /* 自动保存（#3949）：布局用例里恒为「不脏」。 */
     dirty: false,
     nextReferenceImageId: draft !== null && draft.inputs.length > 0 ? null : "reference-image",
-    setOutput: vi.fn(),
     save: vi.fn(() => Promise.resolve()),
     saveAsProjectDefault: vi.fn(() => Promise.resolve(null)),
     resetToDefault: vi.fn(() => Promise.resolve()),
@@ -105,6 +104,39 @@ describe("模式契约编辑器的两栏布局（ISSUE #1870）", () => {
     render(<ModeContractEditorView controller={stubController("T2I")} />);
     for (const button of screen.getAllByRole("button", { name: /^移除 / })) {
       expect(button).toBeEnabled();
+    }
+  });
+});
+
+describe("模式契约编辑器：输出类别那一格已撤掉（ISSUE #4072）", () => {
+  it("编辑区不再有「输出类别」的可选入口（模式本身已按类别区分）", () => {
+    render(<ModeContractEditorView controller={stubController("T2I")} />);
+    expect(screen.queryByText("输出类别")).toBeNull();
+    expect(screen.queryByLabelText("该模式的输出类别")).toBeNull();
+  });
+
+  it("必填 / 可选用徽标标出来，且徽标就是开关（点一下改这一口必不必备）", () => {
+    const toggleRequired = vi.fn();
+    render(
+      <ModeContractEditorView
+        controller={stubController("T2I", {
+          isRequired: (id) => id === "prompt",
+          toggleRequired,
+        })}
+      />,
+    );
+    /* 此前那一格是「勾选框 + 一句固定的『必备』」—— 勾上写「必备」、没勾也
+     * 写「必备」，读的人看不出「没勾 = 可选」。现在两种状态都写在脸上。 */
+    const required = screen.getByRole("button", { name: /必填/ });
+    expect(required.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(required);
+    expect(toggleRequired).toHaveBeenCalledWith("prompt");
+
+    /* 其余口标成「可选」（T2I 共 6 个口：1 必填 + 5 可选）。 */
+    const optional = screen.getAllByRole("button", { name: /可选/ });
+    expect(optional.length).toBe(5);
+    for (const button of optional) {
+      expect(button.getAttribute("aria-pressed")).toBe("false");
     }
   });
 });
