@@ -252,7 +252,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   {onUse && cover !== null && cover !== "" && (
                     <Hint accessibleName label="加入画布">
                       <Button
-                        className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/70 group-hover:flex hover:bg-black/60 hover:text-white"
+                        className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/70 group-hover:flex hover:bg-black/80 hover:text-white"
                         onClick={() => {
                           onUse({
                             id: task.id,
