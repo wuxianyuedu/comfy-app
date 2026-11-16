@@ -84,7 +84,13 @@ export function freshnessDriftAdvice(res) {
     json?.installDrift !== null &&
     json?.installDrift !== undefined &&
     json.installDrift.state !== "no-install";
-  const guard = "`pnpm deps:guard && pnpm install`";
+  /* 一条命令收口（ISSUE #4109）：现场里人照两句话术做完 install，仍被陈旧的
+   * `.next/types/validator.ts` 卡在 tsc —— 那是生成物比源码旧，不是依赖问题，
+   * 但发作时机紧跟着重装。deps:sync 把守卫、按锁文件重装与生成物清理串成一步，
+   * 不让它再退化成「修完还要再想一步」的口头知识。 */
+  const guard =
+    "`pnpm deps:sync`（一条命令依次跑 `pnpm deps:guard` → `pnpm install --frozen-lockfile` → " +
+    "清掉陈旧的 `.next/types`）";
   const guardWhy =
     "（`deps:guard` 先判本检出的应用实例在不在跑 —— 硬规则 9：在跑时原生模块被锁，" +
     "直接 install 会 EPERM 连锁失败）";

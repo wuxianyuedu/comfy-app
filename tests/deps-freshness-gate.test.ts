@@ -260,11 +260,12 @@ describe("check-deps-freshness 契约", () => {
     expect(report.installDrift?.state).toBe("no-install");
   });
 
-  /* ── ③ 的第二维：声明了、却解析不到（ISSUE #1721）—— 立案现场：本地依赖树停在「装 axe-core 之前」，
+  /* ── ③ 的第二维：声明了、却解析不到（ISSUE #1721 / #4105）—— 立案现场之一：本地依赖树停在「装 axe-core 之前」，
    * 它只以传递依赖的旧版本被 `@storybook/addon-a11y` 拖进来、落在**包自己的私有层**，顶层既没提升出来
-   * 的那份、也没有可解析路径。而 ③ 原来是两份 lockfile 的**文本 diff**，那一格在这种情况下是绿的
-   * （`node_modules/.pnpm/lock.yaml` 与仓库逐字相同）。夹具按真实布局摆三层：顶层 `node_modules/`（解析层）、
-   * `.pnpm/lock.yaml`（③ 文本层）、`.modules.yaml`（「装过」证据与解析层表态开关）；探针包三条要造「少一个」。 */
+   * 的那份、也没有可解析路径；另一现场：已装好的 `pino` 包目录被外部清空（`package.json` 消失，见 #4105）。
+   * 而 ③ 原来是两份 lockfile 的**文本 diff**，那一格在这两种情况下都可能是绿的（`node_modules/.pnpm/lock.yaml`
+   * 与仓库逐字相同 / 损坏发生在安装之后）。夹具按真实布局摆三层：顶层 `node_modules/`（解析层）、
+   * `.pnpm/lock.yaml`（③ 文本层）、`.modules.yaml`（「装过」证据与解析层表态开关）；探针包按清单造「少一个」。 */
 
   /**
    * 让工作区看起来「装过」，且**两份 lockfile 逐字一致**（③ 的文本层判 fresh）。一致性是这组用例的前提，
@@ -284,11 +285,14 @@ describe("check-deps-freshness 契约", () => {
     // 有实质差异，于是 `installDrift.state` 只可能来自解析层，判据不会与文本层混淆。
     repo.write("package.json", PKG_STALE);
     markInstalled(repo);
-    // 只把 `typescript` 与 `next` 放到位：`axe-core` 缺失 = 解析不到。
+    // 只把 `typescript` / `next` / `pino` 放到位：`axe-core` 缺失 = 解析不到（探针清单
+    // 见 `docs/reference-facts.md` 的 `deps.resolveProbes`；`pino` 补在 #4105，用来钉
+    // 「包目录被外部清空」这一类损坏，缺它会让本用例测到两条缺失而不是一条）。
     // `installDep` 而不是 `mkdir`：见夹具里那条注释（临时目录的祖先里可能有别人的
     // `node_modules`，Node 会一路向上找，`mkdir` 顶替会让这条用例测到环境噪声）。
     repo.installDep("typescript");
     repo.installDep("next");
+    repo.installDep("pino");
     const { code, output } = repo.run(["--offline"]);
     expect(code).toBe(1);
     const report = parseReport(repo.run(["--offline", "--json"]).output);
@@ -346,12 +350,13 @@ describe("check-deps-freshness 契约", () => {
     );
   });
 
-  test("依赖树完好（三个探针都在）→ 解析层不误报", ({ repo }) => {
-    // 反向对照：把三条探针都放到位 ⇒ 解析层静默。少了这条，「探针永远返回缺失」
-    // 这种失灵（§12.16 的同款教训：一个永远报红的判据会被学会绕开）测不出来。
+  test("依赖树完好（全部探针都在）→ 解析层不误报", ({ repo }) => {
+    // 反向对照：把探针清单（`docs/reference-facts.md` 的 `deps.resolveProbes`）都放到位 ⇒
+    // 解析层静默。少了这条，「探针永远返回缺失」这种失灵（§12.16 的同款教训：一个永远报红
+    // 的判据会被学会绕开）测不出来。
     repo.write("package.json", PKG_STALE);
     markInstalled(repo);
-    for (const name of ["typescript", "next", "axe-core"]) {
+    for (const name of ["typescript", "next", "axe-core", "pino"]) {
       repo.installDep(name);
     }
     const report = parseReport(repo.run(["--offline", "--json"]).output);

@@ -246,3 +246,24 @@ export const SETTINGS_DB_WRITE = {
   /** 含首次尝试的总次数（循环边界写在这里，退避算法仍在调用处）。 */
   maxAttempts: 3,
 } as const;
+
+/**
+ * LLM 密钥文件的并发首启重读：5 次 × 固定 25ms（共 125ms）。
+ *
+ * 场景（ISSUE #3877 立的完整性校验 / #3956 收口取值）：Next server 与 Workshop MCP
+ * 两进程同时首启时，`wx` 独占创建保证盘上只有一份密钥文件，但**后到者**可能在对方
+ * write→close 的窄窗口里读到半截内容。与 `HISTORY_READ` 同为「对端一定就绪、只是
+ * 慢一拍」的固定间隔族 —— 总共只等 125ms，指数退避只会更晚拿到完整口令。
+ *
+ * **刻意保持同步形态**（调用处用 `Atomics.wait` 短眠，不是异步 sleep）：取值发生在
+ * `encryptLlmKey` / `decryptLlmKey` 的**同步签名**里，调用方（`repository-user` 的
+ * 行映射、Workshop MCP 的 `workshop/llm`）是同步上下文，async 化会把整条加解密链
+ * 传染成 Promise。窄窗口最坏阻塞 125ms、且每进程至多发生一次（`cachedKey` 之后恒
+ * 命中）—— 用同步短眠换接口形状稳定是划算的，理由就地记录在 `llm/secrets.ts` 的
+ * 循环处。
+ */
+export const KEY_FILE_READ = {
+  shape: "fixed",
+  baseMs: 25,
+  maxAttempts: 5,
+} as const;

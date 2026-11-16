@@ -14,6 +14,8 @@ import { createCipheriv, createDecipheriv, hash, randomBytes, randomUUID } from 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { backoffDelayMs, KEY_FILE_READ } from "~/lib/retry-policy";
+
 const ALGO = "aes-256-gcm";
 const PREFIX = "enc:v1:";
 const KEY_FILE = join(process.cwd(), "data", "llm-secret.key");
@@ -50,7 +52,9 @@ function readKeyFileMaterial(): string | null {
   }
 }
 
-/** 同步短眠：仅在「密钥文件存在但内容尚不完整」的窄窗口里退避重读用。 */
+/** 同步短眠：仅在「密钥文件存在但内容尚不完整」的窄窗口里退避重读用。
+ *  等待参数来自 retry-policy 的 `KEY_FILE_READ`；为什么保持同步见 loadOrCreateKey
+ *  的循环注释（ISSUE #3956）。 */
 function syncSleep(ms: number): void {
   try {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -85,12 +89,18 @@ function loadOrCreateKey(): Buffer {
      * 完整口令。穷尽仍不完整就走下方 env/随机兜底（与读失败同路），绝不把
      * 残缺内容固化进 `cachedKey`。 */
     let material: string | null = null;
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    /* 重试参数收口在 retry-policy 的 `KEY_FILE_READ`（5 × 25ms，ISSUE #3956）。
+     * **刻意保持同步**（syncSleep = Atomics.wait，不是 async sleep）：本函数在
+     * `encryptLlmKey` / `decryptLlmKey` 的同步签名里，调用方（`repository-user` 的
+     * 行映射、Workshop MCP 的 `workshop/llm`）是同步上下文，async 化会把整条加解密
+     * 链传染成 Promise。窗口极窄（仅「对方先建、对方仍在写」的首启竞态），最坏
+     * 125ms 且每进程至多一次（`cachedKey` 之后恒命中）—— 同步短眠是权衡后的保留。 */
+    for (let attempt = 0; attempt < KEY_FILE_READ.maxAttempts; attempt += 1) {
       material = readKeyFileMaterial();
       if (material !== null) {
         break;
       }
-      syncSleep(25);
+      syncSleep(backoffDelayMs({ ...KEY_FILE_READ, attempt }));
     }
     if (material === null) {
       throw new Error("llm key file content incomplete");

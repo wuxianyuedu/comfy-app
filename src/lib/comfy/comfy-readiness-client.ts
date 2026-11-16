@@ -53,7 +53,10 @@ export function readComfyErrorMessage(body: unknown, fallback: string): string {
 async function ensureOnce(): Promise<ComfyReadyResult> {
   let res: Response;
   try {
-    res = await fetch("/api/comfy/ensure", { method: "POST" });
+    res = await fetch("/api/comfy/ensure", {
+      method: "POST",
+      signal: AbortSignal.timeout(30_000),
+    });
   } catch (error) {
     return {
       ok: false,

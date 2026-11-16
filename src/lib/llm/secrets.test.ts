@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -188,5 +188,52 @@ describe("密钥来源", () => {
     const enc = encryptLlmKey("demo-readonly");
     expect(enc).not.toBeNull();
     expect(decryptLlmKey(enc)).toBe("demo-readonly");
+  });
+});
+
+describe("密钥文件并发首启的重试（ISSUE #3956 / retry-policy KEY_FILE_READ）", () => {
+  it("对方先建、仍在写的窄窗口 ⇒ 按 KEY_FILE_READ 重试读到完整口令", async () => {
+    const spy = vi.spyOn(Atomics, "wait");
+    mkdirSync(join(sandbox, "data"), { recursive: true });
+    const keyFile = join(sandbox, "data", "llm-secret.key");
+    /* 对方进程先建了半截文件（write→close 未完成的形状）。 */
+    writeFileSync(keyFile, "abc", { flag: "wx" });
+    /* 40ms 后「对方写完」：补成完整口令（64 位 hex），让重试拍读到它。 */
+    const complete = randomUUID().replaceAll("-", "") + randomBytes(16).toString("hex");
+    const timer = setTimeout(() => {
+      writeFileSync(keyFile, complete);
+    }, 40);
+    try {
+      const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+      const enc = encryptLlmKey("demo-race")!;
+      expect(decryptLlmKey(enc)).toBe("demo-race");
+      /* 重试真的发生了：同步短眠按策略间隔（25ms）至少走过一拍。 */
+      expect(spy.mock.calls.length).toBeGreaterThan(0);
+      expect(spy.mock.calls[0]?.[3]).toBe(25);
+    } finally {
+      clearTimeout(timer);
+      spy.mockRestore();
+    }
+  });
+
+  it("穷尽重试仍残缺 ⇒ 走 env 兜底（与读失败同路），残缺口令绝不固化进 cachedKey", async () => {
+    mkdirSync(join(sandbox, "data"), { recursive: true });
+    writeFileSync(join(sandbox, "data", "llm-secret.key"), "abc", { flag: "wx" });
+    process.env.LLM_SECRET = "exhausted-fallback-value";
+    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const enc = encryptLlmKey("demo-exhausted")!;
+    expect(decryptLlmKey(enc)).toBe("demo-exhausted");
+
+    /* 换个 cwd 再载入（等价换密钥来源）后，同一 env 值仍能解开 —— 证明密钥来自 env
+     * 而不是那份残缺文件。 */
+    const other = mkdtempSync(join(tmpdir(), "llm-secrets-exhausted-"));
+    try {
+      mkdirSync(join(other, "data", "llm-secret.key"), { recursive: true });
+      process.cwd = () => other;
+      const second = await loadSecrets();
+      expect(second.decryptLlmKey(enc)).toBe("demo-exhausted");
+    } finally {
+      rmSync(other, { recursive: true, force: true });
+    }
   });
 });
