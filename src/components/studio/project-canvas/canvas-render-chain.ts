@@ -70,13 +70,10 @@ const KIND_CHAIN: Record<NodeKind, Array<RenderChainModule>> = {
       label: "canvas-helpers",
     },
   ],
-  agent: [
-    { file: "src/lib/agent/agentic.ts", label: "agentic" },
-    {
-      file: "src/lib/project-canvas/canvas-helpers.ts",
-      label: "canvas-helpers",
-    },
-  ],
+  /* agent 节点当前无专属渲染链模块：原 agentic 链路已随 #4100 退役（零生产
+   * 消费方，Agent 对话改走 /api/agent/chat 的 server.ts 链路），这里留空 =
+   * 只显示公共链路。kind 本身保留（ResultCard 仍防御性处理 agent 分支）。 */
+  agent: [],
   text: [
     {
       file: "src/components/studio/project-canvas/ContentAssetNode.tsx",

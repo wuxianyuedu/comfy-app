@@ -25,15 +25,16 @@ import {
   type SizeSpec,
 } from "~/lib/media/size-presets";
 
-/** 本页可测的用途。工坊 API 通道目前只有 image / video 两条（contract 的
- *  output 词表虽有 audio，通道未接入 —— 出现死页签不如不出现，接入后再加）。 */
+/** 本页可测的用途。工坊 API 通道目前有 image / video 两条；chat（#4080）走
+ *  LLM 补全（本地 Ollama 与远端 chat 模型都可测）。 */
 /* SAFETY: 类型断言已复核 */
-export const MODEL_TEST_KINDS = ["image", "video"] as const;
+export const MODEL_TEST_KINDS = ["image", "video", "chat"] as const;
 export type ModelTestKind = (typeof MODEL_TEST_KINDS)[number];
 
 export const MODEL_TEST_KIND_LABELS: Record<ModelTestKind, string> = {
   image: "图片",
   video: "视频",
+  chat: "对话",
 };
 
 /** 提示词的常用随机样本（ISSUE #3742：随机按钮从这里取）。 */
@@ -74,6 +75,8 @@ export const RELAY_INPUT_TYPES: Record<ModelTestKind, ReadonlyArray<WorkshopInpu
     "seed",
   ],
   video: ["prompt", "negative", "first-frame", "duration", "seed"],
+  /* 对话测试（#4080）：只有一条提示词，走 LLM 补全而不是图片/视频中继。 */
+  chat: ["prompt"],
 };
 
 /** 统一输入类型 → 本页的控件形态（与 mode-contract 的 contractControlFor 同族：
@@ -275,21 +278,32 @@ export function sizeSpecToValues(spec: SizeSpec, scene: SizeScene): ModelTestVal
   };
 }
 
-/** configGet 下发的脱敏条目里本页关心的最小形状。 */
+/** configGet 下发的脱敏条目里本页关心的最小形状。
+ *  `local` = 本地模型（Ollama 候选，#4080）：extraModels 里的字符串条目，
+ *  只能做对话测试；远端条目按 kind 过滤。 */
 export type TestCandidate = {
   baseUrl: string | null;
   kind: string;
+  local: boolean;
   name: string;
 };
 
-/** 候选过滤：kind 对得上的条目（chat 不参与生图 / 生视频）。
- *  baseUrl 为空的条目也不进 —— 按名解析对空址条目会回落到全局通道设置，
- *  那样「测的就不是一个具体模型」了；想测它先到设置页补供应商 Base URL。 */
+/** 候选过滤：本地候选（Ollama，#4080）只能做对话测试；远端条目按 kind 对上
+ *  （chat 不参与生图 / 生视频）。远端条目还要求 baseUrl 非空 —— 按名解析对
+ *  空址条目会回落到全局通道设置，那样「测的就不是一个具体模型」了。 */
 export function testCandidatesForKind(
   kind: ModelTestKind,
   entries: ReadonlyArray<TestCandidate>,
 ): Array<TestCandidate> {
-  return entries.filter((e) => e.name !== "" && e.kind === kind && (e.baseUrl ?? "").trim() !== "");
+  return entries.filter((e) => {
+    if (e.name === "") {
+      return false;
+    }
+    if (e.local) {
+      return kind === "chat";
+    }
+    return e.kind === kind && (e.baseUrl ?? "").trim() !== "";
+  });
 }
 
 /** 数字统一输入的组装：空白 = 不带；非数字文本 = 不带（由必填项校验兜底）。 */

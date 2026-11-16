@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { getConfigForClient } from "~/lib/llm/server";
+import { getConfigForClient, resolveRemoteModelConnection } from "~/lib/llm/server";
+import { completeWorkshopLLM, getWorkshopLLMConfig } from "~/server/workshop/llm";
+import type { WorkshopLLMConfig } from "~/server/workshop/llm";
 import { remoteModelEntrySchema } from "~/lib/llm/remote-model-schema";
 import {
   LLM_API_FORMATS,
@@ -88,7 +91,9 @@ const providerInputSchema = z.object({
 const modelInputSchema = z.object({
   apiFormat: z.enum(LLM_API_FORMATS).nullish(),
   apiKey: z.string().nullish(),
-  baseUrl: z.string().nullish(),
+  /* 与供应商级 / configSave 级同一校验（#4049）：模型行的坏 baseUrl 会在运行期
+   * 按「模型级 → 供应商级」覆盖好值。空值放行（nullish = 未配置 / 清空）。 */
+  baseUrl: z.string().refine(isHttpUrl, { message: "Base URL 必须为 http/https" }).nullish(),
   capabilities: z.array(z.enum(MODEL_CAPABILITIES)).nullish(),
   contextWindow: z.number().int().positive().nullish(),
   /** 图像 / 视频模型的接口端点动作路径（#3656）：写侧按行用途白名单收窄。 */
@@ -182,7 +187,11 @@ async function readProviderState() {
 
 /** 一条模式契约的入参形状（本机保存与「保存为项目默认」共用同一份，ISSUE #3396）。
  *  口 id 由 isModeContractInputId 做类型守卫（zod 随之把入参窄化成契约口）；
- *  写入侧各自的归一化（`parseModeContracts`）再做一次。 */
+ *  写入侧各自的归一化（`parseModeContracts`）再做一次。
+ *
+ *  **没有「输出类别」这一格**（ISSUE #4072）：模式已按类别区分，再让用户挑一次
+ *  是重复选择。zod 默认剥掉未声明的键 ⇒ 存量客户端仍带着 `output` 提交也不会
+ *  被打回，落盘时那一格也不再进契约（归一化侧同口径）。 */
 const modeContractsInputSchema = z.object({
   contracts: z.array(
     z.object({
@@ -198,7 +207,6 @@ const modeContractsInputSchema = z.object({
           }),
         )
         .min(1),
-      output: z.enum(["image", "video", "audio"]),
       /* 该模式的必备口（缺了它这条流在工坊里驱动不起来）。缺省 =
        * 没配过 → 由 requiredInputsFor 回落内置默认（提示词）。 */
       required: z.array(z.string().refine(isModeContractInputId)).optional(),
@@ -226,6 +234,49 @@ export const llmRouter = createTRPCRouter({
     const cfg = await getConfigForClient();
     return { config: cfg };
   }),
+
+  /** 对话测试（ISSUE #4080）：向被测模型发一条短提示词，返回补全与耗时。
+   *  本地模型（Ollama，extraModels 里的字符串候选）走设置里配置的本地服务
+   *  （连接参数 = 生效 LLM 配置，模型名换成被测的那个）；远端模型按名解析
+   *  连接参数（baseUrl / apiKey 走模型自己或其供应商的）。 */
+  chatTest: authedProcedure
+    .input(
+      z.object({
+        name: z.string().min(1),
+        local: z.boolean(),
+        prompt: z.string().min(1).max(4000),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const started = Date.now();
+      let cfg: WorkshopLLMConfig;
+      if (input.local) {
+        const base = await getWorkshopLLMConfig();
+        cfg = { ...base, model: input.name };
+      } else {
+        const entry = await resolveRemoteModelConnection(input.name);
+        if (!entry?.baseUrl) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `模型「${input.name}」不存在或没有可用的接口地址`,
+          });
+        }
+        cfg = {
+          baseUrl: entry.baseUrl,
+          apiKey: entry.apiKey,
+          model: entry.name,
+          temperature: 0.7,
+          maxTokens: 2048,
+        };
+      }
+      const reply = await completeWorkshopLLM(cfg, [{ role: "user", content: input.prompt }]);
+      return {
+        reply,
+        durationMs: Date.now() - started,
+        endpoint: `${cfg.baseUrl}/chat/completions`,
+        model: cfg.model,
+      };
+    }),
 
   /** 供应商 + 模型全量清单（#3501「远程模型」页的数据源）。 */
   providersGet: authedProcedure.query(async () => readProviderState()),
@@ -288,7 +339,7 @@ export const llmRouter = createTRPCRouter({
       return readProviderState();
     }),
 
-  /** 模式契约注册表：每种模式的统一输入 / 输出。
+  /** 模式契约注册表：每种模式的统一输入。
    *
    *  下发**两层**：`configured` = 成品配置（项目默认基线，开发检出里现读磁盘，
    *  写完即生效不必重启）；`contracts` = 生效注册表（成品配置逐模式压上本机

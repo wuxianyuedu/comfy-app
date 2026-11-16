@@ -35,7 +35,7 @@ const meta: MetaEditorController = {
   allModelTags: [],
   busy: false,
   patchModes: () => Promise.resolve(),
-  patchModelTags: () => Promise.resolve(),
+  patchModelTags: () => Promise.resolve(null),
   patchSeedMode: () => Promise.resolve(),
   patchParamMap: () => Promise.resolve(),
 };
@@ -218,7 +218,9 @@ describe("工坊封装页签：模式可切换 / 必填可分 / 不再有手动�
 
   it("第 2 条：每个口标出必填 / 可选，且说明「可选口不必连到工作流」", () => {
     const panel = read("sections/WorkshopEncapsulationPanel.tsx");
-    expect(panel).toContain('entry.required ? "必填" : "可选"');
+    /* 必填 / 可选徽标走共享组件（ISSUE #4072）：两处（模式契约编辑器 / 工坊封装）
+       共用 `ContractRequiredBadge`，不各写一份胶囊类名。 */
+    expect(panel).toContain("<ContractRequiredBadge required={entry.required} />");
     expect(panel).toContain("不必连到工作流");
     expect(panel).toContain("必填口 ");
   });

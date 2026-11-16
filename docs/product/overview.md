@@ -107,7 +107,7 @@ Next 路由只有登录与三个历史挂载点（§4.3）。
 | `workflows`    | 工作流库 | 工作流导入 / 管理 / 就地运行                 | FR-WF    |
 | `model-adapters` | 模型适配 | 远端模型 × 模式的字段映射注册表            | FR-LM    |
 | `model-test`   | 测试模型 | 按用途实测模型能力（配置面的试验侧）         | FR-LM    |
-| `mode-contract` | 模式契约 | 每种模式的统一输入 / 输出契约               | FR-LM    |
+| `mode-contract` | 模式契约 | 每种模式的统一输入契约（产物类别由模式决定） | FR-LM    |
 | `console`      | 控制台   | 仓库级预设命令的执行台（不是 shell）         | FR-CS    |
 | `settings`     | 设置     | 应用级配置分区（默认共享标签页，可配）       | FR-ST    |
 | `uiKit`        | UI 控件总览 | 基元对照页（默认独立标签页，切走不关）  | FR-WS    |

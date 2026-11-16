@@ -101,8 +101,10 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
   }
   try {
-    await deleteDraft(project);
-    return NextResponse.json({ ok: true });
+    const deleted = await deleteDraft(project);
+    /* 幂等应答带 alreadyGone（#4048）：与 materials 的 DELETE 同一判据——
+     * 「删了不存在的东西」对调用方可见，而不是无差别 ok。 */
+    return NextResponse.json({ ok: true, alreadyGone: !deleted });
   } catch (error) {
     return NextResponse.json(apiErrorBody(error, "删除服务端草稿失败"), {
       status: 500,

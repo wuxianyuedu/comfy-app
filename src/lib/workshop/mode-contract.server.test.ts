@@ -100,13 +100,12 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
   });
 
   it("覆盖存在且非空时**逐模式**压过成品配置（其余模式仍读成品配置那份）", async () => {
-    const only = [{ mode: "T2I", inputs: ["prompt", "size"], output: "image" }];
+    const only = [{ mode: "T2I", inputs: ["prompt", "size"] }];
     await saveModeContracts(
       [
         {
           mode: "t2i",
           inputs: ["prompt", "size"],
-          output: "image",
           required: ["prompt"],
         },
       ],
@@ -141,12 +140,13 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
   });
 
   it("保存走差集：与成品配置相同的模式不落盘（ISSUE #3396 反馈 1）", async () => {
-    // 整份注册表里只有一条真改过（I2I 输出类别），其余原样 —— 落盘的只有那一条。
+    // 整份注册表里只有一条真改过（I2I 多勾了一个必备口），其余原样 ——
+    // 落盘的只有那一条。
     const [t2i, i2i] = configuredModeContracts(["T2I", "I2I"]);
     if (!t2i || !i2i) {
       throw new Error("成品配置里没有 T2I / I2I");
     }
-    const saved = await saveModeContracts([t2i, { ...i2i, output: "video" }], root);
+    const saved = await saveModeContracts([t2i, { ...i2i, required: ["prompt", "size"] }], root);
     expect(saved.map((c) => c.mode)).toEqual(["I2I"]);
     expect(JSON.parse((await readRaw()) ?? "{}")).toEqual(saved);
   });
@@ -158,8 +158,8 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
     }
     await saveModeContracts(
       [
-        { ...t2i, output: "video" },
-        { ...i2i, output: "video" },
+        { ...t2i, required: ["prompt", "size"] },
+        { ...i2i, required: ["prompt", "size"] },
       ],
       root,
     );
@@ -170,7 +170,7 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
     // 生效注册表：T2I 回落成品配置，I2I 仍是本机覆盖那份
     const loaded = await loadModeContracts(root);
     expect(loaded.find((c) => c.mode === "T2I")).toEqual(t2i);
-    expect(loaded.find((c) => c.mode === "I2I")).toEqual({ ...i2i, output: "video" });
+    expect(loaded.find((c) => c.mode === "I2I")).toEqual({ ...i2i, required: ["prompt", "size"] });
 
     // 覆盖不在时：无事可做、不建文件（读路径无副作用的同一纪律）
     await fs.rm(path.join(root, "data"), { recursive: true, force: true });
@@ -181,15 +181,12 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
   });
 
   it("老检出（曾落在 config/）升级后不丢配置，且读路径只读不搬", async () => {
-    const legacy = await writeLegacy([
-      { mode: "I2I", inputs: ["prompt", "first-frame"], output: "image" },
-    ]);
+    const legacy = await writeLegacy([{ mode: "I2I", inputs: ["prompt", "first-frame"] }]);
 
     const loaded = await loadModeContracts(root);
     expect(loaded.find((c) => c.mode === "I2I")).toEqual({
       mode: "I2I",
       inputs: ["prompt", "first-frame"],
-      output: "image",
     });
     // 其余模式仍在（老覆盖只压它自己那一条）
     expect(loaded.length).toBe(configuredModeContracts().length);
@@ -215,15 +212,15 @@ describe("模式契约：成品配置 + 本机覆盖", () => {
     // 让 data 那一段是个**文件**：mkdir / 写都必然失败，模拟只读 / 被占用的目录
     await fs.writeFile(path.join(root, "data"), "占位", "utf8");
 
-    await expect(
-      saveModeContracts([{ mode: "T2I", inputs: ["prompt"], output: "image" }], root),
-    ).rejects.toThrow(/模式契约写入失败.*workshop-mode-contracts\.json/s);
+    await expect(saveModeContracts([{ mode: "T2I", inputs: ["prompt"] }], root)).rejects.toThrow(
+      /模式契约写入失败.*workshop-mode-contracts\.json/s,
+    );
   });
 });
 
 describe("项目默认：现读磁盘，不必重启（ISSUE #3634）", () => {
   it("磁盘上那份就是成品配置（写完立刻生效，不需要重启进程）", async () => {
-    const tweaked = { ...derivedModeContract("T2I"), output: "video" as const };
+    const tweaked = { ...derivedModeContract("T2I"), required: ["prompt", "size"] };
     await writeProjectDefaults([tweaked]);
 
     const configured = await readConfiguredModeContracts(root);
@@ -243,14 +240,17 @@ describe("项目默认：现读磁盘，不必重启（ISSUE #3634）", () => {
   });
 
   it("三层一次读完：成品配置 / 本机覆盖 / 生效注册表", async () => {
-    const tweaked = { ...derivedModeContract("T2I"), output: "video" as const };
+    const tweaked = { ...derivedModeContract("T2I"), required: ["prompt", "size"] };
     await writeProjectDefaults([tweaked]);
-    await saveModeContracts([{ ...derivedModeContract("I2I"), output: "audio" as const }], root);
+    await saveModeContracts(
+      [{ ...derivedModeContract("I2I"), required: ["prompt", "size"] }],
+      root,
+    );
     const layers = await loadModeContractLayers(root);
     expect(layers.configured.find((c) => c.mode === "T2I")).toEqual(tweaked);
     expect(layers.override.map((c) => c.mode)).toEqual(["I2I"]);
     expect(layers.contracts.find((c) => c.mode === "T2I")).toEqual(tweaked);
-    expect(layers.contracts.find((c) => c.mode === "I2I")?.output).toBe("audio");
+    expect(layers.contracts.find((c) => c.mode === "I2I")?.required).toEqual(["prompt", "size"]);
   });
 });
 
@@ -270,10 +270,7 @@ describe("保存为项目默认：开发检出的写回入口（ISSUE #3396 / #3
 
   it("非开发检出大声拒绝（正式包没有源码可写，这条调用就是错用）", async () => {
     await expect(
-      saveModeContractsAsProjectDefaults(
-        [{ mode: "T2I", inputs: ["prompt"], output: "image" }],
-        root,
-      ),
+      saveModeContractsAsProjectDefaults([{ mode: "T2I", inputs: ["prompt"] }], root),
     ).rejects.toThrow(/只在开发检出可用/);
     // 拒绝的同时什么都没写
     await expect(
@@ -286,7 +283,7 @@ describe("保存为项目默认：开发检出的写回入口（ISSUE #3396 / #3
     const derivedT2I = derivedModeContract("T2I");
     const tweaked: typeof derivedT2I = {
       ...derivedModeContract("I2I"),
-      output: "video",
+      required: ["prompt", "size"],
     };
     const res = await saveModeContractsAsProjectDefaults(
       [derivedT2I, tweaked, derivedModeContract("T2A")],
@@ -312,7 +309,10 @@ describe("保存为项目默认：开发检出的写回入口（ISSUE #3396 / #3
     await asDevCheckout();
     /* 先在本机覆盖里改一条（模拟「这台机器上改过」）—— 此前正是这条覆盖让
      * 「保存为项目默认」只写得出被改过的那一项，其余模式的内容全被抹掉。 */
-    await saveModeContracts([{ ...derivedModeContract("T2I"), output: "video" }], root);
+    await saveModeContracts(
+      [{ ...derivedModeContract("T2I"), required: ["prompt", "size"] }],
+      root,
+    );
     const effective = await loadModeContracts(root);
     await saveModeContractsAsProjectDefaults(effective, root);
 
@@ -325,6 +325,6 @@ describe("保存为项目默认：开发检出的写回入口（ISSUE #3396 / #3
     }
     // 写完之后读取侧现读磁盘：生效值立刻是新基线，不必重启。
     const reloaded = await loadModeContracts(root);
-    expect(reloaded.find((c) => c.mode === "T2I")?.output).toBe("video");
+    expect(reloaded.find((c) => c.mode === "T2I")?.required).toEqual(["prompt", "size"]);
   });
 });

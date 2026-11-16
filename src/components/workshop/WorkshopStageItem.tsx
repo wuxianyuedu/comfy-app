@@ -40,8 +40,8 @@ export function WorkshopStageItem({
       className={cn(
         "flex h-auto items-center gap-3 rounded-xl px-4 py-3 font-normal",
         isCurrent
-          ? "bg-primary/12 ring-primary/25 hover:bg-primary/12 ring-1"
-          : "bg-surface hover:bg-surface",
+          ? "bg-primary/12 ring-primary/25 hover:bg-primary/20 ring-1"
+          : "bg-surface hover:bg-subtle",
         className,
       )}
       onClick={onSelect}

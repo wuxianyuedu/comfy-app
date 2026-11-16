@@ -14,12 +14,28 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { asRecord } from "~/lib/is-record";
+import { mergeSizePresetTable } from "~/lib/media/size-presets";
 import {
+  buildTxt2ImgWorkflow,
   createSettingsFileMemo,
+  generateImageViaComfyUI,
   postComfyPrompt,
   resetWorkshopComfyBase,
   resolveComfyBase,
+  sizeDimsForImage,
 } from "./comfyui";
+
+/* 生效表换桩（ISSUE #3972）：把 image 场景 16:9 / 1k 改成 1280×720（项目默认
+ * 1024×576）。出图链路的宽高换算必须读这份现读的生效表，而不是编译进包的
+ * 默认快照 —— 本文件里凡走到换算的用例都经这份桩拿表。 */
+vi.mock("~/lib/media/size-preset-fs.server", async () => {
+  const { mergeSizePresetTable: merge } = await import("~/lib/media/size-presets");
+  return {
+    loadSizePresetTable: () =>
+      Promise.resolve(merge({ image: { "16:9 横屏": { "1k": { width: 1280, height: 720 } } } })),
+  };
+});
 
 const tmpDirs: Array<string> = [];
 afterEach(() => {
@@ -183,5 +199,62 @@ describe("base 缓存的失效语义（网络失败复位 / HTTP 失败不复位
     expect(probesAfterFirst).toBeGreaterThanOrEqual(6); // 配置端口起连扫 6 个偏移
     await resolveComfyBase();
     expect(counts.probe).toBeGreaterThanOrEqual(probesAfterFirst + 6);
+  });
+});
+
+/* ── 尺寸换算按生效表（ISSUE #3972）────────────────────────────── */
+
+describe("尺寸换算按生效表（ISSUE #3972）", () => {
+  const size169 = { ratio: "16:9 横屏", clarity: "1k", multiple: 64 } as const;
+  /** 与顶部桩同源的生效表（image 16:9 / 1k = 1280×720）。 */
+  const effectiveTable = () =>
+    mergeSizePresetTable({ image: { "16:9 横屏": { "1k": { width: 1280, height: 720 } } } });
+
+  it("sizeDimsForImage：显式传表按表算；缺省回落编译进包的项目默认", () => {
+    expect(sizeDimsForImage(size169, effectiveTable())).toEqual({ width: 1280, height: 720 });
+    expect(sizeDimsForImage(size169)).toEqual({ width: 1024, height: 576 });
+  });
+
+  it("buildTxt2ImgWorkflow：EmptyLatentImage 的宽高按生效表算", () => {
+    const wf = asRecord(
+      buildTxt2ImgWorkflow({ prompt: "x", size: size169, table: effectiveTable() }),
+    );
+    const latent = Object.values(wf ?? {}).find(
+      (node) => asRecord(node)?.class_type === "EmptyLatentImage",
+    );
+    expect(asRecord(asRecord(latent)?.inputs)?.width).toBe(1280);
+    expect(asRecord(asRecord(latent)?.inputs)?.height).toBe(720);
+  });
+
+  it("generateImageViaComfyUI：先现读生效表，再按它算宽高", async () => {
+    resetWorkshopComfyBase();
+    let posted: unknown = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        );
+        if (url.pathname === "/system_stats") {
+          return new Response("{}", { status: 200 });
+        }
+        if (url.pathname === "/api/prompt") {
+          /* 捕获提交的工作流；应答不带 prompt_id ⇒ 链路在校验处止步，不写任何输出文件。 */
+          posted = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+          return new Response("{}", { status: 200 });
+        }
+        return new Response("not found", { status: 404 });
+      }),
+    );
+    await expect(generateImageViaComfyUI({ prompt: "x", size: size169 })).rejects.toThrow(
+      /prompt_id/,
+    );
+    const workflow = asRecord(asRecord(posted)?.prompt);
+    const latent = Object.values(workflow ?? {}).find(
+      (node) => asRecord(node)?.class_type === "EmptyLatentImage",
+    );
+    /* 桩里的生效表把 16:9 / 1k 改成了 1280×720 —— 下发给 ComfyUI 的必须是它。 */
+    expect(asRecord(asRecord(latent)?.inputs)?.width).toBe(1280);
+    expect(asRecord(asRecord(latent)?.inputs)?.height).toBe(720);
   });
 });

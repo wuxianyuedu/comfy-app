@@ -47,8 +47,13 @@ const {
   playwrightReachability,
 } = await import("../scripts/ci/ci-toolchain-browser.mjs");
 /** 自取那一层（分片 + 续传 + 自己读 zip），见 `ci-toolchain-browser-fetch.mjs`。 */
-const { browserDirName, extractZipTo, fetchRangeToFile, fetchUrlResumable } =
-  await import("../scripts/ci/ci-toolchain-browser-fetch.mjs");
+const {
+  browserDirName,
+  extractZipTo,
+  fetchRangeToFile,
+  fetchUrlResumable,
+  FETCH_CHUNK_BACKOFF_MS,
+} = await import("../scripts/ci/ci-toolchain-browser-fetch.mjs");
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -2399,6 +2404,44 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
       }
     },
   );
+
+  it("片级重试之间有退避：按基数×attempt 等，成功与最后一轮不再等（ISSUE #3955）", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "cnb-fetch-backoff-"));
+    const dest = path.join(dir, "x.bin");
+    try {
+      /** @type {number[]} */
+      const waits: Array<number> = [];
+      let dataCalls = 0;
+      const res = fetchUrlResumable("https://nope.invalid/x.zip", dest, {
+        /* 注入面：一点网都不出、也一毫秒都不真等，只把退避时长记下来。 */
+        fetchChunk: (
+          /** @type {string} */ _url,
+          /** @type {string} */ _d,
+          /** @type {{offset: number; size: number; timeoutMs: number; probeOnly?: boolean}} */ opts,
+        ) => {
+          if (opts.probeOnly) {
+            return { bytes: 0, total: 1024, out: "OK 0 1024" };
+          }
+          dataCalls += 1;
+          /* 前两片失败、第三片才成：正好量到「两次失败各等了一次、成功前不再多等」。 */
+          return dataCalls <= 2
+            ? { bytes: -1, total: 1024, out: "ERR 端点抖动" }
+            : { bytes: 1024, total: 1024, out: "OK 1024 1024" };
+        },
+        sleep: (/** @type {number} */ ms) => {
+          waits.push(ms);
+        },
+      });
+      expect(res.ok, "注入的第三片应当成功").toBe(true);
+      expect(dataCalls, "重试轮数不对").toBe(3);
+      expect(
+        waits,
+        "片级重试之间没有按 基数×attempt 退避 —— 失败后仍在连打下载端点（ISSUE #3955）",
+      ).toEqual([FETCH_CHUNK_BACKOFF_MS, FETCH_CHUNK_BACKOFF_MS * 2]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   it("取不到总长时如实说「交给老路」，且一个字节都不落盘", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "cnb-fetch-nolen-"));

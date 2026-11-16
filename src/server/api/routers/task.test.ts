@@ -412,11 +412,11 @@ describe("task.openFolder", () => {
     });
   });
 
-  it("目录不存在 → { opened: false, error: 'directory missing' }", async () => {
+  it("目录不存在 → { opened: false, reason: '该任务尚未生成文件目录' }", async () => {
     seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "proj-1" });
     const res = await createCaller(makeCtx()).openFolder({ id: "task-1" });
     expect(res.opened).toBe(false);
-    expect(res.error).toBe("directory missing");
+    expect(res.reason).toBe("该任务尚未生成文件目录");
     expect(res.absolutePath).toContain("projects");
   });
 

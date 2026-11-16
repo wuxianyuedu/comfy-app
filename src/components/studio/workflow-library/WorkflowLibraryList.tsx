@@ -14,8 +14,7 @@ import { Hint } from "~/components/ui/hint";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
-import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
+import { useWorkflowEncapsulation } from "./hooks/use-workflow-encapsulation";
 import { SourceTag } from "~/components/ui/source-tag";
 import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -128,12 +127,21 @@ export function WorkflowLibraryList({
       {/* 列表：已载入工作流排在前 */}
       <div className="flex-1 overflow-y-auto px-1.5 py-1.5">
         {empty && loading ? (
-          <EmptyState
-            description="本地目录会一起扫描，文件多时首次载入需要几秒。"
-            icon={<Spinner className="size-6" />}
-            minHeightClass="min-h-40"
-            title="正在加载工作流…"
-          />
+          /* 首次载入的加载态收在**骨架行**（ISSUE #4073 第 1 条）：不再用
+           * 带转圈的整块加载界面占住列表列——「加载中」的转圈交给右侧详情区
+           * （见 WorkflowLibrary 的右栏）。骨架不做动画（P3：视图里不许
+           * 手写 animate-pulse / animate-spin）。 */
+          <ul aria-label="正在加载工作流" className="flex flex-col gap-1">
+            {[1, 2, 3, 4, 5, 6, 7].map((row) => (
+              <li
+                className="border-border-subtle bg-subtle rounded-lg border px-2 py-2"
+                key={`skeleton-${row}`}
+              >
+                <div className="bg-border-strong h-3 w-2/3 rounded" />
+                <div className="bg-border mt-1.5 h-2.5 w-1/3 rounded" />
+              </li>
+            ))}
+          </ul>
         ) : empty && stalled ? (
           <EmptyState
             action={
@@ -252,8 +260,10 @@ function WorkflowListItem({
   const { usable } = deriveFormatFlags(workflow);
   const { missing, canResync } = deriveSyncFlags(workflow);
   const isTech = isTechnicalName(workflow.name);
-  /* 对外参数封装状态（与生成链路同口径）：提示词口已有落点 = 工坊可直接驱动。 */
-  const encapsulation = deriveEncapsulationStatus({
+  /* 对外参数封装状态（与生成链路同口径）：提示词口已有落点 = 工坊可直接驱动。
+   * 契约口与必备口读生效注册表（本机覆盖优先）—— 与详情「工坊封装」页签
+   * 同一份口径（ISSUE #4113：此前列表行回落内置默认，用户改过的契约不生效）。 */
+  const { status: encapsulation } = useWorkflowEncapsulation({
     io: workflow.workflowIO ?? null,
     paramMap: workflow.paramMap ?? null,
     mode: workflow.defaultMode ?? workflow.taskType ?? null,

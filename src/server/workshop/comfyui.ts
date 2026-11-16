@@ -15,7 +15,13 @@ import path from "node:path";
 
 import { asRecord, isPlainRecord } from "~/lib/is-record";
 import { AsyncMutex } from "~/lib/async-mutex";
-import { DEFAULT_SIZE_SPEC, sizeSpecDims, type SizeSpec } from "~/lib/media/size-presets";
+import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
+import {
+  DEFAULT_SIZE_SPEC,
+  sizeSpecDims,
+  type SizePresetTable,
+  type SizeSpec,
+} from "~/lib/media/size-presets";
 
 const OUTPUT_DIR = path.join(process.cwd(), "data", "workshop-outputs");
 const SETTINGS_FILE = path.join(process.cwd(), "data", "workshop-comfy-settings.json");
@@ -365,12 +371,18 @@ export async function saveComfySettings(patch: Partial<ComfySettings>): Promise<
 /** 尺寸表达 → 内置 SDXL 图的宽高。
  *
  *  服务端也吃同一套尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见
- *  `lib/size-presets`）：缺省按图片场景的默认档（3:4 1k），不写像素字面量。 */
-export function sizeDimsForImage(spec?: SizeSpec): {
+ *  `lib/size-presets`）：缺省按图片场景的默认档（3:4 1k），不写像素字面量。
+ *  查表用**生效的那份**（ISSUE #3972）：`table` 缺省才是编译进包的默认快照，
+ *  调用方（`generateImageViaComfyUI`）先 `loadSizePresetTable()` 现读 ——
+ *  设置里改过的表在 comfyui 通道真的生效。 */
+export function sizeDimsForImage(
+  spec?: SizeSpec,
+  table?: SizePresetTable,
+): {
   height: number;
   width: number;
 } {
-  return sizeSpecDims(spec ?? DEFAULT_SIZE_SPEC, "image");
+  return sizeSpecDims(spec ?? DEFAULT_SIZE_SPEC, "image", table);
 }
 
 /** 模型无关的默认 SDXL txt2img 图（SaveImage 输出，供 /api/view 取回）。 */
@@ -380,13 +392,15 @@ export function buildTxt2ImgWorkflow(input: {
   prompt: string;
   seed?: number;
   size?: SizeSpec;
+  /** 生效的尺寸表（ISSUE #3972）：宽高按它查，不再用编译进包的默认快照。 */
+  table?: SizePresetTable;
 }): unknown {
   const ckpt =
     input.checkpoint ??
     loadSettings().checkpoint ??
     process.env.WORKSHOP_COMFYUI_CHECKPOINT ??
     "sd_xl_base_1.0.safetensors";
-  const { width, height } = sizeDimsForImage(input.size);
+  const { width, height } = sizeDimsForImage(input.size, input.table);
   return {
     "3": {
       class_type: "KSampler",
@@ -528,6 +542,9 @@ export async function generateImageViaComfyUI(input: {
   size?: SizeSpec;
 }): Promise<string> {
   const settings = loadSettings();
+  /* 生效的尺寸表现读磁盘（ISSUE #3972）：设置里改过的表、被「保存到项目代码库」
+   * 改过的项目默认，都在这份里 —— 宽高换算与界面同源。 */
+  const sizeTable = await loadSizePresetTable();
   const workflow =
     settings.imageWorkflow !== undefined && settings.imageWorkflow !== null
       ? substitutePlaceholders(settings.imageWorkflow, {
@@ -538,6 +555,7 @@ export async function generateImageViaComfyUI(input: {
           prompt: input.prompt,
           negative: input.negative,
           size: input.size,
+          table: sizeTable,
         });
   const { files } = await runComfyWorkflow(workflow, {
     sessionId: input.sessionId,

@@ -317,6 +317,57 @@ describe("WorkflowModelTagRepository", () => {
     expect(rows.every((r) => typeof r.id === "string" && r.id !== "")).toBe(true);
   });
 
+  it("listByUser 带每标签的模式占用明细：按模式去重、标出工作流名与本地/在线（ISSUE #4102）", async () => {
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    const tag = await workflowModelTagRepository.upsertByName("u1", "z-image");
+    /* 本地工作流（有 sourcePath）占文生图 + 图生图两个模式。 */
+    seedWorkflowTemplate(tdb, {
+      id: "wt-local",
+      userId: "u1",
+      name: "local-wf",
+      modes: '["T2I","I2I"]',
+      sourcePath: "G:/workflows/local.json",
+    });
+    /* 在线工作流（无 sourcePath）占文生视频。 */
+    seedWorkflowTemplate(tdb, {
+      id: "wt-online",
+      userId: "u1",
+      name: "online-wf",
+      modes: '["T2V"]',
+    });
+    await workflowTemplateRepository.setModelTags("wt-local", [tag.id]);
+    await workflowTemplateRepository.setModelTags("wt-online", [tag.id]);
+
+    const rows = await workflowModelTagRepository.listByUser("u1");
+    const row = rows.find((r) => r.name === "z-image")!;
+    expect(row.modeBindings).toEqual([
+      { mode: "T2I", workflowName: "local-wf", local: true },
+      { mode: "I2I", workflowName: "local-wf", local: true },
+      { mode: "T2V", workflowName: "online-wf", local: false },
+    ]);
+    /* count 仍是工作流绑定数（删除标签的连带面，确认弹窗用）。 */
+    expect(row.count).toBe(2);
+  });
+
+  it("listBindingsByTagName 查别的模板对某标签的占用，排除自身（ISSUE #4102 冲突校验用）", async () => {
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    const tag = await workflowModelTagRepository.upsertByName("u1", "z-image");
+    seedWorkflowTemplate(tdb, { id: "wt-a", userId: "u1", name: "wf-a", modes: '["T2I","I2I"]' });
+    seedWorkflowTemplate(tdb, { id: "wt-b", userId: "u1", name: "wf-b", modes: '["T2V"]' });
+    await workflowTemplateRepository.setModelTags("wt-a", [tag.id]);
+    await workflowTemplateRepository.setModelTags("wt-b", [tag.id]);
+
+    const others = await workflowModelTagRepository.listBindingsByTagName("u1", "z-image", "wt-a");
+    expect(others).toEqual([{ templateId: "wt-b", workflowName: "wf-b", modes: ["T2V"] }]);
+    /* 排除自己也成立：查 wt-b 时只回 wt-a。 */
+    const fromB = await workflowModelTagRepository.listBindingsByTagName("u1", "z-image", "wt-b");
+    expect(fromB.map((r) => r.templateId)).toEqual(["wt-a"]);
+    /* 别人的标签查不到。 */
+    expect(await workflowModelTagRepository.listBindingsByTagName("u2", "z-image", "wt-a")).toEqual(
+      [],
+    );
+  });
+
   it("upsertByNames 批量补齐缺失标签并按输入顺序返回 id；重复名收敛为同一个", async () => {
     seedUser(tdb, { id: "u1", email: "u1@test.dev" });
     const first = await workflowModelTagRepository.upsertByNames("u1", ["风景", "赛博", "风景"]);
@@ -560,9 +611,12 @@ describe("ModelRepository", () => {
     });
     await modelRepository.setAvailabilityByFolder("loras", false);
 
-    expect((await modelRepository.list()).map((m) => m.name)).toEqual(["DreamShaper"]);
-    expect(await modelRepository.list({ type: "LORA" })).toEqual([]);
-    expect((await modelRepository.list({ q: "dream" })).map((m) => m.name)).toEqual([
+    const listed = await modelRepository.list();
+    expect(listed.rows.map((m) => m.name)).toEqual(["DreamShaper"]);
+    /* total 是同条件下的可用模型总数（#4049）：rows 封顶 300，超限时可表达「还有更多」。 */
+    expect(listed.total).toBe(1);
+    expect((await modelRepository.list({ type: "LORA" })).rows).toEqual([]);
+    expect((await modelRepository.list({ q: "dream" })).rows.map((m) => m.name)).toEqual([
       "DreamShaper",
     ]);
   });

@@ -4,6 +4,7 @@
 import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { isPlainRecord } from "~/lib/is-record";
+import type { ModelTagSummary } from "~/lib/workflow/workflow-list-types";
 import type { WorkflowRow } from "./workflow-library-config";
 
 /** 详情面板的页签 —— 数组顺序即渲染顺序，**第一项也是默认页签**。
@@ -29,7 +30,7 @@ export const DEFAULT_DETAIL_TAB: DetailTab = DETAIL_TABS[0].key;
 
 export type WorkflowLibraryDetailProps = {
   /** 用户级全局模型标签库（用于类型/模型编辑器）。 */
-  allModelTags?: Array<{ count: number; id: string; name: string }>;
+  allModelTags?: Array<ModelTagSummary>;
   /** 「这一条在下载 / 在同步吗」的判据（由父级的 `useItemAction` 给，
    *  规范 16 §16.2.4.40）—— 详情面板不再自己拿 id 去比。 */
   isBundleBusy: (id: string) => boolean;
@@ -37,8 +38,9 @@ export type WorkflowLibraryDetailProps = {
   onDelete: (id: string, name: string) => void;
   onDownload: (id: string, name: string) => void;
   onEdit: (id: string) => void;
-  /** 持久化模型标签绑定。 */
-  onPatchModelTags?: (id: string, names: Array<string>) => Promise<void>;
+  /** 持久化模型标签绑定。返回 `null` = 成功；否则为失败文案（唯一性冲突原因，
+   *  ISSUE #4102），绑定弹窗就地展示。 */
+  onPatchModelTags?: (id: string, names: Array<string>) => Promise<string | null>;
   /** 持久化类型（modes + defaultMode）。 */
   onPatchModes?: (id: string, modes: Array<string>, defaultMode: string) => Promise<void>;
   /** 整体落库 paramMap（预览面板拖圆点改对外参数落点）。 */

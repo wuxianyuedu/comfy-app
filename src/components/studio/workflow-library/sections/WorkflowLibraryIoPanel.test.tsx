@@ -105,14 +105,15 @@ describe("IO 预览页签与编辑器同形（ISSUE #3800）", () => {
     expect(screen.getByRole("button", { name: "选择模式" })).toBeInTheDocument();
   });
 
-  it("多模式时每个模式页签带移除按钮，点它经 onModesChange 落库剩余模式", () => {
-    const { onModesChange } = setup();
-    /* 移除按钮带可读名称（与编辑器 IO 面板同款）。两个模式各有一枚。 */
-    const removeBtns = screen.getAllByRole("button", { name: /从工作流模式中移除/ });
-    expect(removeBtns).toHaveLength(2);
-    fireEvent.click(removeBtns[0]!);
-    expect(onModesChange).toHaveBeenCalledTimes(1);
-    expect(onModesChange).toHaveBeenCalledWith(["i2v"], "i2v");
+  it("模式页签不挂删除按钮：增删统一走「选择模式」下拉（ISSUE #4073 复审）", () => {
+    setup();
+    /* 删除 × 与下拉取消勾选本是同一件事；面板内不再留第二入口，也不再弹
+     * 二次确认框。两个模式页签各自只剩一个切换按钮。 */
+    expect(screen.queryByRole("button", { name: /移除模式/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    /* 模式管理入口（选择模式下拉）仍在，参数表单照常渲染。 */
+    expect(screen.getByRole("button", { name: "选择模式" })).toBeInTheDocument();
+    expect(screen.getByText("步数")).toBeInTheDocument();
   });
 
   it("没有真实模式时：表单不渲染，给编辑器同款提示，且仍可就地选模式", () => {

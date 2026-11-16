@@ -53,10 +53,11 @@ const POLL_DEADLINE_MS = 600_000;
 /** 空适配器索引的稳定引用：查询数据未到时兜底，让 useMemo 依赖不逐渲染变化。 */
 const EMPTY_ADAPTERS_BY_MODEL: AdaptersByModel = {};
 
-/** 一次测试的结果（工坊同款输出：图片 URL / 视频 URL）。 */
+/** 一次测试的结果（工坊同款输出：图片 URL / 视频 URL / 对话回复文本）。 */
 export type ModelTestResult =
   | { kind: "image"; url: string }
   | { kind: "video"; url: string }
+  | { kind: "chat"; text: string }
   | null;
 
 export type ModelTestController = {
@@ -278,7 +279,7 @@ function useRequestPreview(args: {
   buildBodies: () => ReturnType<typeof buildRequestBodies>;
   busy: boolean;
   debugRowCount: number;
-  /** 预览也要按 kind 分流（ISSUE #3985）：中转缺 kind 会 400。 */
+  /** 预览也要按用途分流（#4080）：对话测试不走图片/视频的 dry-run 预览。 */
   kind: ModelTestKind;
   /** 预览失败的出口（如「模型没有可用接口地址」）——与生成失败同一反馈位。 */
   onError: (text: string) => void;
@@ -289,7 +290,7 @@ function useRequestPreview(args: {
   const seqRef = useRef(0);
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (busy || selectedModel === "" || debugRowCount > 0) {
+      if (busy || kind === "chat" || selectedModel === "" || debugRowCount > 0) {
         setPreviewRows([]);
         return;
       }
@@ -350,6 +351,12 @@ function useTestCatalog(args: {
     }
     const out: Array<TestCandidate> = [];
     for (const item of raw.extraModels) {
+      /* 字符串条目 = 本地 Ollama 候选（#4080）：没有 baseUrl / kind，只能做
+       * 对话测试 —— 按 local 候选进入下拉的「本地模型」分组。 */
+      if (typeof item === "string") {
+        out.push({ name: item, kind: "chat", baseUrl: null, local: true });
+        continue;
+      }
       if (!isRecord(item)) {
         continue;
       }
@@ -357,6 +364,7 @@ function useTestCatalog(args: {
         name: typeof item.name === "string" ? item.name : "",
         kind: typeof item.kind === "string" ? item.kind : "",
         baseUrl: typeof item.baseUrl === "string" ? item.baseUrl : null,
+        local: false,
       });
     }
     return testCandidatesForKind(kind, out);
@@ -408,14 +416,18 @@ function useTestCatalog(args: {
 
   /* 模式收窄（ISSUE #3778 问题 3）：只保留配了当前模式适配器的候选 —— 左栏
    * 页签徽标的「N 模型」与下拉是同一份读数，页签说 0 模型时下拉不再出现
-   * 不支持该模式的模型。适配器索引未到时不收窄（避免下拉先空后跳）。 */
+   * 不支持该模式的模型。适配器索引未到时不收窄（避免下拉先空后跳）。
+   * 对话没有「模式」维度（#4080）：本地 / 远端候选都不做收窄。 */
   const modeCandidates = useMemo<Array<TestCandidate>>(() => {
+    if (kind === "chat") {
+      return candidates;
+    }
     const byModel = adaptersByModelQ.data;
     if (byModel === undefined) {
       return candidates;
     }
     return candidates.filter((c) => (byModel[c.name] ?? []).some((a) => a.mode === mode));
-  }, [candidates, adaptersByModelQ.data, mode]);
+  }, [candidates, adaptersByModelQ.data, mode, kind]);
 
   const adaptersQ = useQuery(
     trpc.llm.workshopAdaptersGet.queryOptions(
@@ -470,6 +482,8 @@ export function useModelTest(): ModelTestController {
 
   /* 产物原链交给系统浏览器（服务端 openExternal；免重编壳，#3791）。 */
   const openExternalM = useMutation(trpc.setting.openExternal.mutationOptions());
+  /* 对话测试（#4080）：向本地 / 远端被测模型发一条提示词，返回补全与耗时。 */
+  const chatTestM = useMutation(trpc.llm.chatTest.mutationOptions());
   const openExternalAction = useExternalAction({
     target: "browser",
     report: (kind, text) => {
@@ -502,6 +516,9 @@ export function useModelTest(): ModelTestController {
     modeCandidates,
     modeTabs,
   } = useTestCatalog({ kind, mode, selectedModel, trpc });
+
+  /* 被测候选的来源（#4080）：本地 Ollama 走设置里配置的本地服务；远端按名解析。 */
+  const selectedLocal = modeCandidates.find((c) => c.name === selectedModel)?.local ?? false;
 
   const setKind = useCallback(
     (next: ModelTestKind) => {
@@ -637,7 +654,20 @@ export function useModelTest(): ModelTestController {
      * 后面。 */
     const { imageBody, videoBody } = buildBodies();
     const relayBody = imageBody ?? videoBody ?? {};
-    const localRow = relayDebugRow(kind, relayBody);
+    /* 对话测试（#4080）：请求走 LLM 补全而不是图片/视频中继，端点在服务端
+     * 按所选模型解析 —— 先给一行已知信息（模型 + 提示词），完成后换成全量读数。 */
+    const localRow =
+      kind === "chat"
+        ? {
+            body: debugBodyOf({ kind: "chat", model: selectedModel, prompt }),
+            durationMs: null,
+            endpoint: "chat/completions",
+            excerpt: null,
+            ok: true,
+            phase: "relay" as const,
+            status: null,
+          }
+        : relayDebugRow(kind, relayBody);
     setDebugRows([localRow]);
     /* 取消句柄（#3949 需求 5）：生成期间可随时 cancelGenerate() 中止等待与轮询。 */
     const controller = new AbortController();
@@ -648,6 +678,26 @@ export function useModelTest(): ModelTestController {
       runAsyncAction(
         async () => {
           try {
+            if (kind === "chat") {
+              const res = await chatTestM.mutateAsync({
+                name: selectedModel,
+                local: selectedLocal,
+                prompt,
+              });
+              setDebugRows([
+                {
+                  body: debugBodyOf({ kind: "chat", model: res.model, prompt }),
+                  durationMs: res.durationMs,
+                  endpoint: res.endpoint,
+                  excerpt: res.reply,
+                  ok: true,
+                  phase: "relay" as const,
+                  status: 200,
+                },
+              ]);
+              setResult({ kind: "chat", text: res.reply });
+              return { ok: true as const };
+            }
             if (imageBody !== null) {
               const url = await apiGenerateImage(imageBody, {
                 onDebug: appendDebug,
@@ -699,10 +749,12 @@ export function useModelTest(): ModelTestController {
     appendDebug,
     buildBodies,
     busy,
+    chatTestM,
     inputRows,
     kind,
     mode,
     referenceGroup.images,
+    selectedLocal,
     selectedModel,
     values,
   ]);

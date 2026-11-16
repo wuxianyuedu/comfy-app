@@ -17,7 +17,8 @@ export const projectRouter = createTRPCRouter({
   upsert: authedProcedure
     .input(
       z.object({
-        id: z.string().min(1),
+        /* 键名与其余端点统一为 projectId（#4049）；值仍是客户端生成的 proj_* id。 */
+        projectId: z.string().min(1),
         name: z.string().min(1),
         // React Flow 节点/边 JSON,形状由前端持有;仓储层入参即 unknown,收口校验由调用方保证。
         nodes: z.unknown().optional(),
@@ -25,14 +26,14 @@ export const projectRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      /* 归属判定（台账 A3 同族，此前漏网）：`id` 由客户端生成、随自动保存一起送上来，而仓储 update 只按 `id`
+      /* 归属判定（台账 A3 同族，此前漏网）：`projectId` 由客户端生成、随自动保存一起送上来，而仓储 update 只按 `id`
        * 定位行 —— 别人把项目 id 抄进请求就能覆盖对方的 `name/nodes/edges`。与 `get`/`patch` 同口径：
        * 不存在→建（落我名下）、归我→覆盖、不归我→FORBIDDEN 一行不改。前端只是「尽力而为的镜像」
        * （localStorage 才是事实源），被拒后本地不受影响，所以必须留一行日志（硬规则 4）。 */
-      const existing = await projectRepository.findById(input.id);
+      const existing = await projectRepository.findById(input.projectId);
       if (existing && existing.userId !== ctx.user.id) {
         logger.warn(
-          `[project.upsert] 拒绝覆盖他人项目：projectId=${input.id} 归属=${existing.userId} 请求方=${ctx.user.id}`,
+          `[project.upsert] 拒绝覆盖他人项目：projectId=${input.projectId} 归属=${existing.userId} 请求方=${ctx.user.id}`,
         );
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -40,7 +41,7 @@ export const projectRouter = createTRPCRouter({
         });
       }
       return projectRepository.upsertForUser(ctx.user.id, {
-        id: input.id,
+        id: input.projectId,
         name: input.name,
         nodes: input.nodes,
         edges: input.edges,
@@ -61,7 +62,8 @@ export const projectRouter = createTRPCRouter({
     .input(
       z.object({
         projectId: z.string(),
-        name: z.string().optional(),
+        /* 与 upsert 的 name 同一松紧（#4049）：不允许把名字改成空串。 */
+        name: z.string().min(1).optional(),
         nodes: z.unknown().optional(),
         edges: z.unknown().optional(),
       }),

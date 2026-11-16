@@ -43,7 +43,7 @@ const vanilla = {
 };
 
 function tag(name: string, count = 0): TagItem {
-  return { id: `id-${name}`, name, count };
+  return { id: `id-${name}`, name, count, modeBindings: [] };
 }
 
 const SERVER_TAGS = [tag("z-image", 2), tag("wan2.2", 1)];

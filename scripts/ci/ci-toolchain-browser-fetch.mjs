@@ -90,6 +90,17 @@ export const FETCH_CHUNK_TIMEOUT_MS = 30_000;
 export const FETCH_CHUNK_RETRIES = 3;
 
 /**
+ * 片级重试之间的退避基数（毫秒）：第 `n` 次失败后等 `FETCH_CHUNK_BACKOFF_MS × n` 再试。
+ *
+ * 依据 §8.10（重试与轮询纪律）②：下载端点**抖动 / 限流**时立即连打只会更难成功。
+ * 取**线性**而不是 fixed：端点不是「一定就绪、只是慢一拍」，连续快打没有意义；
+ * 也不是 exponential：这里次数有界（`FETCH_CHUNK_RETRIES = 3`），单片总退避上限
+ * 500 + 1000 = 1.5s，指数与否对整包墙钟几乎没有差别，线性已够给对端喘息。
+ * 单客户端对公共 CDN 的重试没有多进程竞争，**不开抖动**（§8.10 ③）。
+ */
+export const FETCH_CHUNK_BACKOFF_MS = 500;
+
+/**
  * 片长退到多小就不再退了（字节）。
  *
  * 16 KiB 是「再小就不值得起一个进程」与「小到一条只稳定吐十几 KB 的链路也接得住」
@@ -105,6 +116,23 @@ export const FETCH_MIN_CHUNK_BYTES = 16 * 1024;
  * 所以上限取 16k 时**留有退到下限仍能走完**的余量（1 GiB 的包也够）。
  */
 export const FETCH_MAX_CHUNKS = 16_384;
+
+/**
+ * 同步等 `ms` 毫秒（`Atomics.wait` 的超时形态）。
+ *
+ * 本层活在**同步**的退出码路径里（文件头「分片为什么走子进程」那一节），退避不能
+ * 写成 `await` —— 那要把整条链改成 async。`Atomics.wait` 阻塞当前线程到超时为止，
+ * 对这个一次性 CI 工具正好够用；测试里经 `fetchUrlResumable` 的 `sleep` 注入面
+ * 换成记录桩，不真等。
+ *
+ * @param {number} ms
+ */
+function sleepSync(ms) {
+  if (ms <= 0) {
+    return;
+  }
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
 
 /**
  * 把 `url` **分片**拉到 `dest`，已存在且长度对得上就直接算完成（可重入）。
@@ -127,8 +155,10 @@ export const FETCH_MAX_CHUNKS = 16_384;
  *   retries?: number, maxChunks?: number,
  *   onChunk?: (done: number, total: number) => void,
  *   fetchChunk?: (url: string, dest: string, opts: {offset: number, size: number, timeoutMs: number, probeOnly?: boolean}) => {bytes: number, total: number | null, out: string},
+ *   sleep?: (ms: number) => void,
  * }} [options]
  *   `fetchChunk` 是注入面（默认 {@link fetchRangeToFile}）：判据里换掉它就不出网。
+ *   `sleep` 同为注入面（默认 {@link sleepSync}）：判据里换掉它就不真等，只记录退避时长。
  *   `onChunk` 是进度读数（本步无进度条，交给调用方打一行）。
  * @returns {{ok: boolean, out: string, bytes: number, total: number | null, chunks: number, chunkBytes: number}}
  */
@@ -143,6 +173,7 @@ export function fetchUrlResumable(
     maxChunks = FETCH_MAX_CHUNKS,
     onChunk = undefined,
     fetchChunk = fetchRangeToFile,
+    sleep = sleepSync,
   } = {},
 ) {
   mkdirSync(path.dirname(dest), { recursive: true });
@@ -215,6 +246,11 @@ export function fetchUrlResumable(
        * 边读边往 `dest` 里写会让「写到一半超时」在文件里留下一截半成品，而下一次从
        * `written` 重试会和它**重叠** —— 实测那样写出来的 1 MiB 包会涨到 3.6 MiB。 */
       lastOut = r.out;
+      /* 片级重试之间退避（§8.10 ②，基数见 `FETCH_CHUNK_BACKOFF_MS`）—— 失败后立即
+       * 连打只会加重对端压力；最后一次失败后面没有下一轮了，不再白等。 */
+      if (attempt < retries) {
+        sleep(FETCH_CHUNK_BACKOFF_MS * attempt);
+      }
     }
     if (got <= 0) {
       /* 片长退一档再试 —— **已落盘的字节一个都不动**（这正是 Playwright 那条路做不到的）。 */

@@ -14,6 +14,8 @@ import {
   type PackLogFile,
 } from "~/lib/log/log-run-packs";
 import { scanRunPacks } from "~/lib/log/log-run-packs.server";
+import { requireRequestUser } from "~/server/auth/request-user";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 import {
   RUNTIME_LOG_SOURCES,
   parseRuntimeLogFileName,
@@ -129,6 +131,11 @@ function resolveArchivedFile(sessionId: string, root: string): string | null {
 }
 
 export async function GET(request: Request) {
+  /* 鉴权与 /api/logs/list 同一口径（#4041）：日志正文不对外开放。 */
+  const user = await requireRequestUser();
+  if (!user) {
+    return unauthorizedResponse();
+  }
   const { searchParams } = new URL(request.url);
   const source = searchParams.get("source") ?? "";
   const requested = searchParams.get("session");

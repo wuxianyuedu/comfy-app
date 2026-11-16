@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { errorMessage, errorText } from "~/lib/error-message";
+import type { ModelTagSummary } from "~/lib/workflow/workflow-list-types";
 import { useTRPC } from "~/trpc/react";
 import { useItemAction } from "~/components/ui/use-item-action";
 
@@ -72,10 +73,10 @@ export type WorkflowLibraryController = {
    * 于是空态只能说「还没有工作流」——用户看到的是「工作流全没了」。 */
   localRootsHint: string | null;
   modelFilter: string;
-  /** 模型标签（用于模型筛选页签）。 */
-  modelTags: Array<{ count: number; id: string; name: string }>;
-  /** 持久化模型标签绑定。 */
-  patchModelTags: (id: string, names: Array<string>) => Promise<void>;
+  /** 模型标签（用于模型筛选页签；含模式占用明细，ISSUE #4102）。 */
+  modelTags: Array<ModelTagSummary>;
+  /** 持久化模型标签绑定。返回 `null` = 成功，否则为失败文案（弹窗就地展示）。 */
+  patchModelTags: (id: string, names: Array<string>) => Promise<string | null>;
   /** 持久化工作流类型（modes + defaultMode，defaultMode 回写 taskType）。 */
   patchModes: (id: string, modes: Array<string>, defaultMode: string) => Promise<void>;
   /** 整体落库 paramMap（详情预览拖线改对外参数落点）。 */
@@ -258,16 +259,7 @@ export function useWorkflowLibrary(
     [listQ.data],
   );
 
-  const modelTags = useMemo(
-    /* SAFETY: 类型断言已复核 */
-    () =>
-      (tagsQ.data?.tags ?? []) as Array<{
-        count: number;
-        id: string;
-        name: string;
-      }>,
-    [tagsQ.data],
-  );
+  const modelTags = useMemo(() => (tagsQ.data?.tags ?? []) as Array<ModelTagSummary>, [tagsQ.data]);
 
   const filteredWorkflows = useMemo(
     () =>
@@ -324,6 +316,20 @@ export function useWorkflowLibrary(
   });
 
   const importState = useWorkflowImport({ createMut, load });
+
+  /* 绑定保存后同批刷新标签库清单（ISSUE #4102）：绑定 / 解绑会改变标签的
+   * 模式占用明细与计数，标签库弹窗与「全部模型」筛选读的是同一条
+   * `workflowModel.list` —— 不刷新的话刚绑完再看标签库还是旧账
+   * （实测：绑定成功后弹窗里仍显示「未绑定」）。失败也刷新：列表已回滚，
+   * 刷一次把计数对回真值。 */
+  const patchModelTagsAndRefreshTags = useCallback(
+    async (id: string, names: Array<string>): Promise<string | null> => {
+      const failure = await actions.patchModelTags(id, names);
+      void tagsQ.refetch();
+      return failure;
+    },
+    [actions, tagsQ],
+  );
 
   /** 重试：由发起动作的一方清 actionError（§17.5.4）。 */
   const refresh = useCallback(() => {
@@ -426,7 +432,7 @@ export function useWorkflowLibrary(
     handleEdit,
     handleEditorClose,
     patchModes: actions.patchModes,
-    patchModelTags: actions.patchModelTags,
+    patchModelTags: patchModelTagsAndRefreshTags,
     patchWorkflowIO: actions.patchWorkflowIO,
     patchParamMap: actions.patchParamMap,
   };

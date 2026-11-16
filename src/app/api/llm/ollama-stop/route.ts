@@ -95,7 +95,9 @@ export async function POST(_req: NextRequest) {
   if (!killed.ok) {
     const msg = `关闭 Ollama 失败：${killed.via}`;
     await appendOllamaLog(`[err] ${msg}`);
-    return NextResponse.json({ ok: false, detail: msg }, { status: 500 });
+    /* 失败体与 ollama-start 同一形状（{error}，#4046）：客户端用同一枚
+     * readApiError 读。 */
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
   // 等端口真正释放，给界面状态行一个确定的结果 —— 次数与间隔走
   // `~/lib/retry-policy` 的 OLLAMA_STOP_PROBE（10 次 × 500ms = 5s，见 §16.2.4.49）。
@@ -113,5 +115,6 @@ export async function POST(_req: NextRequest) {
   }
   const msg = "关闭命令已发送，但 Ollama 仍在响应，请手动确认进程已退出";
   await appendOllamaLog(`[err] ${msg}`);
-  return NextResponse.json({ ok: false, detail: msg }, { status: 500 });
+  /* 失败体与 ollama-start 同一形状（{error}，#4046）。 */
+  return NextResponse.json({ ok: false, error: msg }, { status: 500 });
 }

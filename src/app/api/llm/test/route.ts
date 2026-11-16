@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { isRecord } from "~/lib/is-record";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { getLLMConfig } from "~/lib/llm/server";
 import { apiErrorDetail } from "~/lib/api-error";
 import { chatHeaders } from "~/lib/llm/api-format";
@@ -170,7 +171,12 @@ export async function POST(req: NextRequest) {
     return unauthorizedResponse();
   }
 
-  const body: unknown = await req.json().catch(() => ({}));
+  /* 畸形 JSON 是客户端错误 → 400（#4045）：不再 `.catch(() => ({}))` 把它
+   * 伪装成「配置为空」的业务状态。 */
+  const body = await readJsonRecord(req);
+  if (isErrorResponse(body)) {
+    return body;
+  }
   const rec = isRecord(body) ? body : {};
   const cfg = await getLLMConfig();
 

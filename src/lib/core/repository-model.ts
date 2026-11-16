@@ -20,14 +20,24 @@ export class ModelRepository extends DrizzleRepository<Model> {
     super(model, model.id);
   }
 
-  async list(opts?: { q?: string; type?: string }): Promise<Array<Model>> {
+  /** 模型清单（可用行，新到旧）。**契约（#4049）**：`rows` 目前封顶 300 条，
+   *  `total` 是同条件下的可用模型总数——超限时的「还有更多」由调用方据这两个数
+   *  自行表达，不再无声截断。 */
+  async list(opts?: { q?: string; type?: string }): Promise<{ rows: Array<Model>; total: number }> {
     const where = and(
       eq(model.isAvailable, true),
       /* 过滤值空串与缺省同义 = 不加该条件（查询参数可能出现空串） */
       opts?.type !== undefined && opts.type !== "" ? eq(model.type, opts.type) : undefined,
       opts?.q !== undefined && opts.q !== "" ? like(model.name, `%${opts.q}%`) : undefined,
     );
-    return db.select().from(model).where(where).orderBy(desc(model.createdAt)).limit(300);
+    const rows = await db
+      .select()
+      .from(model)
+      .where(where)
+      .orderBy(desc(model.createdAt))
+      .limit(300);
+    const counted = await db.select({ n: count() }).from(model).where(where);
+    return { rows, total: counted[0]?.n ?? 0 };
   }
 
   async setAvailabilityByFolder(folder: string, isAvailable: boolean): Promise<void> {

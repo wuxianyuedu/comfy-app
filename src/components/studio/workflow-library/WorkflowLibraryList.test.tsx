@@ -1,15 +1,27 @@
 // 左侧列表的三态区分（规范 11.2 行为测试）：用户反馈的核心是「加载没拿到
 // 数据」与「真的没有工作流」长得一模一样——这里锁住两者不再可混淆。
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { WorkflowLibraryList } from "./WorkflowLibraryList";
 import { TooltipProvider } from "~/components/ui/tooltip";
+import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 import type { PendingRow, WorkflowRow } from "./workflow-library-config";
 
+/* 列表行的封装状态读「模式契约生效注册表」（本机覆盖优先，ISSUE #4113）。
+ * 这里用可变桩代替真查询，逐格写入要模拟的覆盖。 */
+const modeContractsStub = vi.hoisted(() => ({ contracts: [] as Array<ModeContract> }));
+vi.mock("~/components/workshop/mode-contract/hooks/use-mode-contracts", () => ({
+  useModeContracts: () => modeContractsStub,
+}));
+
 afterEach(cleanup);
+
+beforeEach(() => {
+  modeContractsStub.contracts = [];
+});
 
 function row(over: Partial<WorkflowRow> = {}): WorkflowRow {
   return {
@@ -38,10 +50,12 @@ function renderList(props: Partial<Parameters<typeof WorkflowLibraryList>[0]>) {
 }
 
 describe("WorkflowLibraryList 三态区分", () => {
-  it("仍在加载：显示加载进度，不冒充「未找到匹配的工作流」", () => {
+  it("仍在加载：列表呈骨架行，不冒充「未找到匹配的工作流」（ISSUE #4073：转圈交给右侧详情区）", () => {
     renderList({ loading: true });
 
-    expect(screen.getByText("正在加载工作流…")).toBeInTheDocument();
+    /* 加载态收成骨架行（aria 标签仍念「正在加载工作流」），不再用带转圈的
+     * 整块加载界面占住列表列。 */
+    expect(screen.getByLabelText("正在加载工作流")).toBeInTheDocument();
     expect(screen.queryByText("未找到匹配的工作流")).toBeNull();
     expect(screen.queryByText("还没有工作流")).toBeNull();
   });
@@ -231,6 +245,26 @@ describe("列表项：名称限长 + 对外参数精简显示", () => {
 
     const mark = screen.getByTitle(/对外参数未配置/);
     expect(mark.textContent).toBe("！");
+  });
+
+  it("列表行徽标按本机契约覆盖列缺口，不回落内置 6 口（ISSUE #4113）", () => {
+    /* 用户把文生图契约改成 4 口（必备 = 提示词 + 尺寸）后，列表行的缺口
+     * 清单必须跟着这份覆盖走——不再列出未加入契约的角色 LoRA / LoRA 强度。 */
+    modeContractsStub.contracts = [
+      {
+        mode: "T2I",
+        inputs: ["prompt", "negative", "size", "seed"],
+        required: ["prompt", "size"],
+      },
+    ];
+    renderList({
+      workflows: [row({ name: "image_z_image_int8_t2i", taskType: "T2I", defaultMode: "T2I" })],
+    });
+
+    const mark = screen.getByTitle(/对外参数未配置/);
+    expect(mark.getAttribute("title")).toContain("种子");
+    expect(mark.getAttribute("title")).not.toContain("角色 LoRA");
+    expect(mark.getAttribute("title")).not.toContain("LoRA 强度");
   });
 
   it("不可执行的工作流仍显示「无可执行内容」（这条是闸门，不是元信息）", () => {

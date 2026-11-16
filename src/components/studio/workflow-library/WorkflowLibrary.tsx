@@ -142,25 +142,33 @@ export function WorkflowLibrary({
             超过窗口、右半部分连同头部按钮一起被根容器的 `overflow-hidden` 裁掉
             ——用户在小屏上「看不到最右侧的内容」就是这个成因。 */}
           <div className="h-full min-w-0 overflow-hidden">
-            <WorkflowLibraryDetail
-              allModelTags={c.modelTags}
-              isBundleBusy={c.isBundleBusy}
-              isResyncBusy={c.isResyncBusy}
-              onDelete={c.handleDeleteClick}
-              onDownload={(id, name) => {
-                void c.handleDownload(id, name);
-              }}
-              onEdit={c.handleEdit}
-              onPatchModelTags={c.patchModelTags}
-              onPatchModes={c.patchModes}
-              onPatchParamMap={c.patchParamMap}
-              onPatchWorkflowIO={c.patchWorkflowIO}
-              onResync={(id, name) => {
-                void c.handleResync(id, name);
-              }}
-              onUse={c.handleUse}
-              workflow={c.selectedRow}
-            />
+            {/* 首次载入的加载态只落在**右侧详情区**（ISSUE #4073 第 1 条）：
+                列表列保持骨架形态，不再整屏转圈。 */}
+            {c.loading && c.workflows.length === 0 && c.pendingRows.length === 0 ? (
+              <div className="flex h-full items-center justify-center">
+                <PageLoading label="正在加载工作流…" />
+              </div>
+            ) : (
+              <WorkflowLibraryDetail
+                allModelTags={c.modelTags}
+                isBundleBusy={c.isBundleBusy}
+                isResyncBusy={c.isResyncBusy}
+                onDelete={c.handleDeleteClick}
+                onDownload={(id, name) => {
+                  void c.handleDownload(id, name);
+                }}
+                onEdit={c.handleEdit}
+                onPatchModelTags={c.patchModelTags}
+                onPatchModes={c.patchModes}
+                onPatchParamMap={c.patchParamMap}
+                onPatchWorkflowIO={c.patchWorkflowIO}
+                onResync={(id, name) => {
+                  void c.handleResync(id, name);
+                }}
+                onUse={c.handleUse}
+                workflow={c.selectedRow}
+              />
+            )}
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

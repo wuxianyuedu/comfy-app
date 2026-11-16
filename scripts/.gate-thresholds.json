@@ -391,7 +391,7 @@
       "why": "远端引用陈旧的宽限窗：超过它才打 [未校验] 而不是判红（#2383 扩扫描根后入账，入账动作本身就是那次判断）。"
     },
     {
-      "file": "scripts/ci/ci-daily-bundle-escalation.mjs",
+      "file": "scripts/ci/ci-bundle-escalation-core.mjs",
       "const": "BUNDLE_BASELINE_STALE_COMMITS",
       "value": 15,
       "unit": "次提交",
@@ -400,7 +400,7 @@
       "why": "预算账陈旧度门限（ISSUE #2639）：基线之后又过去这么多次提交、还没人认账或压回 ⇒ 每日失败立案在正文里点名「该有人出面」。放宽（调大）= 账挂更久才催；收紧 = 更容易催。业主改这一条即可。"
     },
     {
-      "file": "scripts/ci/ci-daily-bundle-escalation.mjs",
+      "file": "scripts/ci/ci-bundle-escalation-core.mjs",
       "const": "BUNDLE_GATE_RED_STREAK_DAYS",
       "value": 2,
       "unit": "天",

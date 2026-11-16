@@ -19,7 +19,9 @@ import {
 import { invalidateWorkflowDetailCache } from "~/lib/comfyui/workflow-detail";
 import { persistEnrichedWorkflowIO } from "~/lib/comfyui/workflow-detail-io";
 import {
+  getWorkflowType,
   normalizeTaskType,
+  parseModesJson,
   serializeModesJson,
   VALID_TASK_TYPE_CODES,
 } from "~/lib/workflow/workflow-types";
@@ -62,6 +64,16 @@ function isPositionMap(value: unknown): value is Record<string, [number, number]
     (v) =>
       Array.isArray(v) && v.length === 2 && typeof v[0] === "number" && typeof v[1] === "number",
   );
+}
+
+/**
+ * 两个导入分支共用的 name 归一（#4049）：trim、空串回落 fallback、上限与
+ * 入参 schema 的 200 对齐——此前本地导入分支不截断、粘贴 JSON 分支静默截 80
+ * 且放行空串，同一工作流走不同入口落库名不一致。
+ */
+function resolveWorkflowName(raw: unknown, fallback: string): string {
+  const name = typeof raw === "string" ? raw.trim() : "";
+  return (name || fallback).slice(0, 200);
 }
 
 export const workflowMutationProcedures = {
@@ -114,8 +126,7 @@ export const workflowMutationProcedures = {
             .pop()
             ?.replace(/\.(?:json|workflow)$/i, "")
             .trim() ?? "未命名工作流";
-        const name =
-          typeof body.name === "string" && body.name.trim() ? body.name.trim() : fallbackName;
+        const name = resolveWorkflowName(body.name, fallbackName);
         const modes = Array.isArray(body.modes) && body.modes.length > 0 ? body.modes : undefined;
         const defaultMode =
           typeof body.defaultMode === "string" && body.defaultMode ? body.defaultMode : modes?.[0];
@@ -167,7 +178,7 @@ export const workflowMutationProcedures = {
       const positions = parsed.positions;
       const warnings = [...parsed.warnings];
 
-      const name = String(body.name ?? "未命名工作流").slice(0, 80);
+      const name = resolveWorkflowName(body.name, "未命名工作流");
       const modes = Array.isArray(body.modes) && body.modes.length > 0 ? body.modes : undefined;
       const explicitDefaultMode =
         typeof body.defaultMode === "string" && body.defaultMode ? body.defaultMode : undefined;
@@ -235,6 +246,45 @@ export const workflowMutationProcedures = {
             code: "NOT_FOUND",
             message: "Workflow not found",
           });
+        }
+
+        /* 模型标签绑定唯一性（ISSUE #4102）：① 一条工作流只绑**一个**模型标签；
+         * ② 同一「标签 × 模式」只能被一条工作流占用 —— 例：A 工作流（文生图 + 图生图）
+         * 已绑 z-image，则 B 工作流（文生图）再绑 z-image 会撞 A 已占用的文生图，
+         * 拒绝并点名占用的工作流。模式取本次要改成的那份（同批改 modes 时按新值判），
+         * 没改 modes 就用库里现值；两者都空（未配模式）时无模式可撞，放行。 */
+        if (input.modelTags !== undefined) {
+          const wanted = [
+            ...new Set(input.modelTags.map((name) => name.trim()).filter((name) => name !== "")),
+          ];
+          if (wanted.length > 1) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "一个工作流只能绑定一个模型标签",
+            });
+          }
+          const tagName = wanted[0];
+          if (tagName !== undefined) {
+            const modes = input.modes ?? parseModesJson(existing.modes);
+            const effectiveModes =
+              modes.length > 0 ? modes : existing.taskType ? [existing.taskType] : [];
+            const occupied = await workflowModelTagRepository.listBindingsByTagName(
+              ctx.user.id,
+              tagName,
+              input.id,
+            );
+            for (const other of occupied) {
+              const clash = other.modes.find((code) => effectiveModes.includes(code));
+              if (clash !== undefined) {
+                throw new TRPCError({
+                  code: "CONFLICT",
+                  message:
+                    `模型标签「${tagName}」的「${getWorkflowType(clash)?.label ?? clash}」模式` +
+                    `已被工作流「${other.workflowName}」占用 —— 同一模型的同一模式只能由一条工作流绑定`,
+                });
+              }
+            }
+          }
         }
 
         // patch 为显式字段构造（不含 ...rest 展开），故 mergePositions / groups /

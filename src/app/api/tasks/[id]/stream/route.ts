@@ -23,27 +23,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   const stream = new ReadableStream({
     start(controller) {
-      const send = (obj: unknown) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
-      };
-
-      /* 下面「初始回放」与「数据库轮询」两处共用同一组游标。
-       * `lastSent`：已发出的状态快照（相同则不重发 state 帧）。
-       * `sentLogCount`：已发出的日志条数——日志是**追加数组**，轮询按它做
-       * 增量 diff 发 log 帧（P3 §5 ADR §13-3C：SSE 单源化，log/state 都以
-       * DB 为准；初始回放读内存是为了接住 persistLogs 200ms 防抖窗口）。 */
-      const lastSent: { nodeKey: string; progress: number; status: string } = {
-        status: "",
-        progress: 0,
-        nodeKey: "",
-      };
-      let sentLogCount = 0;
-
-      /* 两条退出路径 —— 轮询读到终态、客户端 abort —— 必须收进同一个
-       * cleanup：只清一条，剩下的那条会让 3s 的 DB 轮询在流关闭之后继续跑
-       * （3-C 前还有 emitter 终态这条，订阅通道已随单源化退役）。
-       * 句柄收在一个可变对象里：cleanup 既被定时器回调调用、也被 `send`
-       * 抛错路径调用，`const` 各自声明会踩 TDZ（历史注释保留原委）。 */
+      /* 两条退出路径 —— 轮询读到终态、客户端 abort —— 必须收进同一个 cleanup。 */
       const handles: {
         heartbeat?: ReturnType<typeof setInterval>;
         poll?: ReturnType<typeof setInterval>;
@@ -66,6 +46,29 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
           /* 流已经关了 —— 忽略 */
         }
       };
+      const send = (obj: unknown) => {
+        if (closed) {
+          return;
+        }
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+        } catch {
+          /* 流已关/客户端已断开：统一走 cleanup，避免轮询与心跳残留。 */
+          cleanup();
+        }
+      };
+
+      /* 下面「初始回放」与「数据库轮询」两处共用同一组游标。
+       * `lastSent`：已发出的状态快照（相同则不重发 state 帧）。
+       * `sentLogCount`：已发出的日志条数——日志是**追加数组**，轮询按它做
+       * 增量 diff 发 log 帧（P3 §5 ADR §13-3C：SSE 单源化，log/state 都以
+       * DB 为准；初始回放读内存是为了接住 persistLogs 200ms 防抖窗口）。 */
+      const lastSent: { nodeKey: string; progress: number; status: string } = {
+        status: "",
+        progress: 0,
+        nodeKey: "",
+      };
+      let sentLogCount = 0;
 
       /* 数据库轮询 = SSE 的唯一事件源（P3 §5 ADR §13-3C，D2 定 3s）。
        * 进程内 emitter 只覆盖 inline 一半流量（host 执行到不了），两模式契约曾分裂；
@@ -152,7 +155,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       taskRepository
         .findById(id)
         .then((task) => {
-          if (task) {
+          if (!task || closed) {
+            return;
+          }
+          try {
             // logs 是任务表的 JSON 列(运行时为 LogEntry[];send 收 unknown,无需断言)。
             const existing: Array<unknown> = Array.isArray(task.logs) ? task.logs : [];
             // 优先回放 runner 内存日志（getLogs），恒为 DB 日志超集：提交与领取在 EventSource
@@ -168,6 +174,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
             replaySrc.forEach((entry) => {
               send({ type: "log", entry });
             });
+            if (closed) {
+              return;
+            }
             sentLogCount = replaySrc.length;
             // 把结构化校验错误透出去，好让消费方（CreatePanel）
             // 渲染出精确到字段的列表，而不是 `error` 里那句英文摘要。
@@ -187,6 +196,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
                * 那条进程内通道已随 §14 D1 退役，inline 与 host 因此同形。 */
               images: task.resultImages,
             });
+            if (closed) {
+              return;
+            }
             lastSent.status = task.status;
             lastSent.progress = task.progress;
             lastSent.nodeKey = JSON.stringify(task.progressNode ?? null);
@@ -197,24 +209,32 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
             if (isTerminalTaskStatus(task.status)) {
               cleanup();
             }
+          } catch {
+            /* 回放中途流已断开：收口避免轮询/心跳残留。 */
+            cleanup();
           }
         })
         .catch(() => {
           /* 初始回放失败可忽略 — 订阅与轮询随后仍会推送状态 */
         })
-        .finally(startPolling);
+        .finally(() => {
+          if (!closed) {
+            startPolling();
+          }
+        });
 
       /* SSE 心跳：空闲 30–60s 后 OS/代理会悄悄掐掉 socket，EventSource 自动重连会刷屏。
        * 注释行 `: hb\n\n` 对 onmessage 不可见但能刷新 TCP 空闲计时器；
        * 15s 远小于多数代理空闲超时。abort 时清除。 */
       handles.heartbeat = setInterval(() => {
+        if (closed) {
+          return;
+        }
         try {
           controller.enqueue(encoder.encode(`: hb ${Date.now()}\n\n`));
         } catch {
-          /* controller 已关闭 —— 清掉定时器并退出 */
-          if (handles.heartbeat !== undefined) {
-            clearInterval(handles.heartbeat);
-          }
+          /* controller 已关闭：走完整 cleanup，避免轮询残留。 */
+          cleanup();
         }
       }, 15_000);
 
@@ -226,9 +246,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   return new NextResponse(stream, {
     headers: {
-      "Content-Type": "text/event-stream",
+      "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      /* 与公共 SSE 边缘（sse-stream.ts 的 SSE_HEADERS）同一形状（#4047）：
+       * 反代按它关缓冲，否则帧会攒到连接关闭才到客户端。 */
+      "X-Accel-Buffering": "no",
     },
   });
 }
