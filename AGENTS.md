@@ -470,7 +470,11 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
     `tests/helpers/probe-worktree.ts` 的既有做法）。**禁止落在 `.git/` 下**：Vite/vitest
     的 `server.fs.deny` 默认含 `**/.git/**`，落在那下面的检出里 DOM 档用例在模块加载期
     就被 deny，报错是 "Cannot find module" 族、指不到真实原因；且 `.git/` 是 git 自己的
-    簿记目录，不是放工作树的地方。**这条有契约判据**：`tests/worktree-location.test.ts`
+    簿记目录，不是放工作树的地方。**worktree 里也不许放指向主检出的 junction / symlink**
+    （尤其 `node_modules`，ISSUE #4058 现场）：`git worktree remove` 的删除会沿链接递归
+    进目标，把主检出的依赖整棵删空（实测 `ls node_modules` = 0 项、三条门禁命令全部
+    `Command not found`，只能 `pnpm install --frozen-lockfile` 重装）；共享依赖每树自装，
+    删 worktree 前先拆链。**这条有契约判据**：`tests/worktree-location.test.ts`
     扫全仓 `worktree add` 调用点，落点表达式带 `.git` 路径分量（或 git 目录解析器）即红，
     正/负控在场，并钉住在册调用点不许消失。
 
