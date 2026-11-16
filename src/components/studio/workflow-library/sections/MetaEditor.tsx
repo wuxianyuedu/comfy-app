@@ -104,7 +104,6 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
               const selected = draft === name;
               return (
                 <Button
-                  aria-pressed={selected}
                   className={`flex h-auto items-center gap-2 rounded-md px-2 py-1.5 text-left ${
                     selected
                       ? "bg-primary/15 text-primary-strong hover:bg-primary/20"
