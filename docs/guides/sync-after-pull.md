@@ -10,12 +10,12 @@
 从 2026-09 起，本仓库把 pnpm 的项目级配置迁移到了 `pnpm-workspace.yaml`
 （详见 `docs/standards/launch-and-build.md` §6「工具链钉死项」），关键配置包括：
 
-| 配置 | 作用 |
-|---|---|
-| `minimumReleaseAge: 0` | 关闭 pnpm 默认的「新包 24h 拒装」供应链门槛 |
-| `verifyDepsBeforeRun: false` | 关闭 pnpm 命令前的隐式自动 `pnpm install` |
-| `allowBuilds` | 逐条回答含 postinstall 构建脚本的依赖：`true` 批准（如 esbuild、msw）、`false` **显式拒绝**（如 `better-sqlite3` —— v13 起随包附带 `prebuilds/`，install 阶段没有可跑的构建脚本，见规范 §6.1） |
-| `package.json` → `packageManager: pnpm@12.4.1` | 钉死 pnpm 版本（由 corepack 管理） |
+| 配置                                           | 作用                                                                                                                                                                                           |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `minimumReleaseAge: 0`                         | 关闭 pnpm 默认的「新包 24h 拒装」供应链门槛                                                                                                                                                    |
+| `verifyDepsBeforeRun: false`                   | 关闭 pnpm 命令前的隐式自动 `pnpm install`                                                                                                                                                      |
+| `allowBuilds`                                  | 逐条回答含 postinstall 构建脚本的依赖：`true` 批准（如 esbuild、msw）、`false` **显式拒绝**（如 `better-sqlite3` —— v13 起随包附带 `prebuilds/`，install 阶段没有可跑的构建脚本，见规范 §6.1） |
+| `package.json` → `packageManager: pnpm@12.4.1` | 钉死 pnpm 版本（由 corepack 管理）                                                                                                                                                             |
 
 这些配置**只影响新执行的 `pnpm install`**，不会自动作用到已装好的 `node_modules`。
 所以本地拉取到这类提交后，需要按下面的步骤让依赖环境与仓库配置对齐。
@@ -28,15 +28,23 @@
 # 1) 拉取最新代码
 git pull
 
-# 2) 在项目根目录重新安装依赖（会读取最新的 pnpm-workspace.yaml 与 lockfile）
-#    动手前先问一句「本检出的应用服务在不在跑」——在跑时原生模块被进程锁住，
-#    install 会以 EPERM 连锁失败并拖垮后续每一条 pnpm 命令（AGENTS 硬规则 9）。
-#    这一问已经有执行者，不用靠人记：pnpm deps:guard 判到即停。
-pnpm deps:guard && pnpm install
+# 2) 在项目根目录重新安装依赖（一条命令收口，ISSUE #4109）：
+#    ① pnpm deps:guard 判本检出的应用服务在不在跑（在跑时原生模块被锁住，
+#       install 会 EPERM 连锁失败并拖垮后续每条 pnpm 命令，AGENTS 硬规则 9）；
+#    ② pnpm install --frozen-lockfile 按当前 lockfile 重装；
+#    ③ 清掉陈旧的 .next/types（生成物比源码旧时 tsc 会报已删路由的 TS2307）。
+pnpm deps:sync
 
 # 3) 验证
 pnpm exec tsc --noEmit   # 或直接 pnpm dev 跑起来看是否正常
 ```
+
+> `pnpm deps:sync` 就是上面三步的**唯一出口**：`pnpm deps:guard` →
+> `pnpm install --frozen-lockfile` → `node scripts/next-types-clean.mjs`。想分步排查时仍可
+> 逐条执行；但**别只做到 install 就走** —— `.next/types` 是 Next 按当时的路由表生成的，
+> 源码删掉某个页面（实测 `src/app/login/page.tsx`）而 `pnpm install` 没动 `.next` 时，
+> `tsc --noEmit` 会拿旧的 `validator.ts` 报 TS2307 / TS2344，读起来像源码坏了。
+> 清理只删这一层生成物，编译缓存照旧保留（实现 `scripts/next-types-clean.mjs`）。
 
 ### 什么时候需要更彻底的重装？
 
@@ -150,10 +158,10 @@ node scripts/lockfile/diff-cli.mjs --installed node_modules\.pnpm\lock.yaml --ro
 
 这条判据的第二层（③）现在有两块：
 
-| 层       | 判什么                                                   | 判据在哪                                                |
-| -------- | -------------------------------------------------------- | ------------------------------------------------------- |
-| 文本层   | 两份 lockfile 的**实质**差异（上一节那种）               | `node_modules/.pnpm/lock.yaml` ⇄ 仓库 `pnpm-lock.yaml`  |
-| 解析层   | `typescript` / `next` / `axe-core` / `pino` 这几个包**解析得到吗** | `scripts/launcher-core/worktree.mjs` 的 `unresolvableDeclaredDeps()` |
+| 层     | 判什么                                                    | 判据在哪                                                             |
+| ------ | --------------------------------------------------------- | -------------------------------------------------------------------- |
+| 文本层 | 两份 lockfile 的**实质**差异（上一节那种）                | `node_modules/.pnpm/lock.yaml` ⇄ 仓库 `pnpm-lock.yaml`               |
+| 解析层 | `typescript` / `next` / `axe-core` / `pino` 这几个包**解析得到吗** | `scripts/launcher-core/worktree.mjs` 的 `unresolvableDeclaredDeps()` |
 
 解析层红了会**单独**说一句话，别把它读成上一节那种「装错了版本」：
 
@@ -162,7 +170,7 @@ node scripts/lockfile/diff-cli.mjs --installed node_modules\.pnpm\lock.yaml --ro
 它们可能只以**别的版本**存在（被某个包当传递依赖拖进来、落在包自己的私有层），
 而顶层既没有提升出来的那一份、也没有任何可解析路径 —— 表现是 tsc / eslint 报
 `Cannot find module`（TS2307），而两份 lockfile 其实是对得上的。
-出口：在项目根执行 pnpm install（动手前先 `pnpm deps:guard` —— 本检出的应用服务在跑时它会拦下：原生模块被进程锁住会让安装 EPERM 连锁失败，AGENTS 硬规则 9）。
+出口：在项目根执行 `pnpm deps:sync`（内含 `pnpm deps:guard` —— 本检出的应用服务在跑时它会拦下：原生模块被进程锁住会让安装 EPERM 连锁失败，AGENTS 硬规则 9）。
 ```
 
 判据的入口与触发时机：`pnpm check:deps-freshness`（**开工前 / 评审前**，AI 与人都该先跑
@@ -170,26 +178,27 @@ node scripts/lockfile/diff-cli.mjs --installed node_modules\.pnpm\lock.yaml --ro
 **本次提交动了依赖面**时才判。整条的判据口径见规范
 [13.5.13](../standards/13-提交与-code-review.md#13513-依赖新鲜度远端改过库的版本本地还在旧的上面干活node-scriptscheck-deps-freshnessmjsissue-1569)。
 
-> **为什么解析层只点名三个包，而不是扫全部 `package.json`**：判据的代价要付得起。
-> 这三条是跑门禁时**无论如何都会解析到**的包（`tsc` 编译需要 `typescript`、测试 / 构建
-> 需要 `next`、a11y 用例需要 `axe-core`）—— 多解析一次不产生新的工作，而「把所有直接依赖
+> **为什么解析层只点名四个包，而不是扫全部 `package.json`**：判据的代价要付得起。
+> 这四条是跑门禁/运行时**无论如何都会解析到**的包（`tsc` 编译需要 `typescript`、测试 / 构建
+> 需要 `next`、a11y 用例需要 `axe-core`、运行时日志需要 `pino`）—— 多解析一次不产生新的工作，而「把所有直接依赖
 > 都解析一遍」会让判据跟着依赖表一起长。**新加依赖时顺手把这条清单补一格**，位置就在
 > `RESOLVE_PROBES`。
 
-> **依赖从来没装过时不报这一条**（`no-install`）：对着一棵不存在的树说「这三个包解析不到」
+> **依赖从来没装过时不报这一条**（`no-install`）：对着一棵不存在的树说「这几个探针包解析不到」
 > 是准确的噪声，动作一样是重装、结论却读起来完全不同（「没装」vs「装错了」）。
 
 ---
 
 ## 4. 快速对照表
 
-| 你的情况 | 要做的事 |
-|---|---|
-| 只是普通拉取（没改依赖/配置） | 无需操作，直接启动 |
-| 拉取后 `pnpm-workspace.yaml` / `pnpm-lock.yaml` 有变更 | `pnpm deps:guard` 通过后 `pnpm install` |
-| `tsc` / `eslint` 报 `Cannot find module '某包'`，而两份 lockfile 看起来一致 | `pnpm deps:guard` 通过后 `pnpm install`（见 §3.1：新加的依赖没提升出来，旧版本被别的包扣在自己私有层里） |
-| install 报 `ERR_PNPM_IGNORED_BUILDS` / 年龄门槛错误 | 删除 `node_modules` 后重新 `pnpm install` |
-| pnpm 版本与仓库要求（12.4.1）不一致 | `corepack enable` + `corepack prepare pnpm@12.4.1 --activate` |
-| 双击脚本用户，拉取后启动报依赖错误 | 删 `node_modules`，重双击 `run-local.ps1` |
-| dev server 正在运行 | 不用自己判断、也不用手工关窗口：`pnpm deps:guard` 按归属认出本检出的应用在跑并拦下（判到即停，附 PID）。关掉那个窗口再装即可；判据本体见规范 §3.2 |
-| 不想关窗口，只想让界面用上刚拉到的新代码 | 重载一次页面（`Ctrl+R`）即可；「应用一直开着导致界面比代码旧」的成因与处置见 [`../guide-stale-code.md`](../guide-stale-code.md) |
+| 你的情况                                                                                        | 要做的事                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 只是普通拉取（没改依赖/配置）                                                                   | 无需操作，直接启动                                                                                                                                |
+| 拉取后 `pnpm-workspace.yaml` / `pnpm-lock.yaml` 有变更、或本机装的是旧那套导致 ship 阶段 0 拦下 | `pnpm deps:sync`（守卫 + 按锁文件重装 + 清陈旧 `.next/types`）                                                                                    |
+| `tsc` / `eslint` 报 `Cannot find module '某包'`，而两份 lockfile 看起来一致                     | `pnpm deps:sync`（见 §3.1：新加的依赖没提升出来，旧版本被别的包扣在自己私有层里）                                                                 |
+| `tsc` 报已删路由的 TS2307 / TS2344，来源指向 `.next/types/validator.ts`                         | `pnpm deps:sync`（只清类型生成物，不必全清 `.next`）                                                                                              |
+| install 报 `ERR_PNPM_IGNORED_BUILDS` / 年龄门槛错误                                             | 删除 `node_modules` 后重新 `pnpm install`                                                                                                         |
+| pnpm 版本与仓库要求（12.4.1）不一致                                                             | `corepack enable` + `corepack prepare pnpm@12.4.1 --activate`                                                                                     |
+| 双击脚本用户，拉取后启动报依赖错误                                                              | 删 `node_modules`，重双击 `run-local.ps1`                                                                                                         |
+| dev server 正在运行                                                                             | 不用自己判断、也不用手工关窗口：`pnpm deps:guard` 按归属认出本检出的应用在跑并拦下（判到即停，附 PID）。关掉那个窗口再装即可；判据本体见规范 §3.2 |
+| 不想关窗口，只想让界面用上刚拉到的新代码                                                        | 重载一次页面（`Ctrl+R`）即可；「应用一直开着导致界面比代码旧」的成因与处置见 [`../guide-stale-code.md`](../guide-stale-code.md)                   |

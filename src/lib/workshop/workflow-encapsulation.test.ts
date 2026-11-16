@@ -21,7 +21,8 @@ import {
   modeUsesLastFrame,
 } from "~/lib/workflow/workflow-exposed-params";
 import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
-import type { SizeSpec } from "~/lib/media/size-presets";
+import type { SizePresetTable, SizeSpec } from "~/lib/media/size-presets";
+import { DEFAULT_SIZE_PRESET_TABLE } from "~/lib/media/size-presets";
 
 /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）—— 工坊下发的唯一尺寸口径。 */
 const sizeSpec = (over: Partial<SizeSpec> = {}): SizeSpec => ({
@@ -872,5 +873,71 @@ describe("unmatched 的用户口径：describeUnmatchedInputs", () => {
 
   it("自定义口没有内置名：原样展示 id，不冒充预制口", () => {
     expect(describeUnmatchedInputs(["custom-text-1"])).toContain("自定义口 custom-text-1");
+  });
+});
+
+/* ── 尺寸换算按生效表（ISSUE #3972）────────────────────────── */
+
+describe("尺寸换算按生效表：设置里改过的表在封装层真的生效", () => {
+  /** 把 image 场景 16:9 / 1k 改成 1280×720 的生效表（项目默认是 1024×576）。 */
+  const effectiveTable = (): SizePresetTable => {
+    const table = structuredClone(DEFAULT_SIZE_PRESET_TABLE);
+    const row = table.image["16:9 横屏"]!;
+    row["1k"] = { width: 1280, height: 720 };
+    return table;
+  };
+  const size16x9 = sizeSpec({ ratio: "16:9 横屏", clarity: "1k" });
+  const wireWidthHeight = wire("T2I", { "size-width": "width", "size-height": "height" });
+
+  it("传入生效表：宽高按表算（1280×720）——服务端 / 客户端都喂同一份生效表", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wireWidthHeight,
+      mode: "T2I",
+      values: { size: size16x9 },
+      table: effectiveTable(),
+    });
+    expect(valueOf(res.workflowInputs, "width")).toBe(1280);
+    expect(valueOf(res.workflowInputs, "height")).toBe(720);
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("不传表：回落编译进包的项目默认（1024×576）——参数缺失不劣化", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wireWidthHeight,
+      mode: "T2I",
+      values: { size: size16x9 },
+    });
+    expect(valueOf(res.workflowInputs, "width")).toBe(1024);
+    expect(valueOf(res.workflowInputs, "height")).toBe(576);
+  });
+
+  it("分辨率档端口：档位按生效表反解，不传表会偏档（ISSUE #4099）", () => {
+    const io: WorkflowIOMap = {
+      res: {
+        direction: "input",
+        kind: "widget",
+        nodeId: "12",
+        name: "resolution",
+        type: "COMBO",
+        defaultValue: "1k",
+        options: ["1k", "2k", "4k"],
+      },
+    };
+    const args = {
+      io,
+      paramMap: wire("T2I", { "size-resolution": "res" }),
+      mode: "T2I",
+      values: { size: size16x9 },
+    };
+    /* 生效表把 16:9 / 1k 改成 1920×1080：正向算出 "1920x1080"，按**同一份表**
+     * 反解仍是 1k。修复前（#4099）反解固定用默认表，这里会拿到 "2k"（1920×1080
+     * 离默认 2k = 2048×1152 更近）—— 正是偏档形。 */
+    const withTable = buildEncapsulatedInputs({ ...args, table: effectiveTable() });
+    expect(valueOf(withTable.workflowInputs, "resolution")).toBe("1k");
+    /* 不传表：正向与反解都回落默认表，自洽地得 1k（参数缺失不劣化）。 */
+    const withDefault = buildEncapsulatedInputs(args);
+    expect(valueOf(withDefault.workflowInputs, "resolution")).toBe("1k");
   });
 });

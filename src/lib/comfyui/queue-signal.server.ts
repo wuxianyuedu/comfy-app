@@ -83,6 +83,8 @@ function ensureTimer(): void {
     // 这里 fireAndForget 的 onError 实际不触发；用收口形态取代散落的 `void tick()`。
     fireAndForget(tick(), () => undefined);
   }, QUEUE_EVENTS_POLL_MS);
+  /* 后台共享循环不该把事件循环吊住（与 reaper / executor-dispatch 同口径）。 */
+  st.timer.unref?.();
 }
 
 function stopTimer(): void {

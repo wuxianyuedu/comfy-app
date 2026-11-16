@@ -133,8 +133,13 @@ export function WorkflowIoPreviewPanel({
     [effectiveMode, ioApi],
   );
   const reorderIO = useCallback(
-    (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => {
-      ioApi.getState().reorderIO(fromKey, targetKey, position);
+    (
+      fromKey: string,
+      targetKey: string | null,
+      position: WorkflowIODropPosition,
+      fromKeys?: Array<string>,
+    ) => {
+      ioApi.getState().reorderIO(fromKey, targetKey, position, fromKeys);
     },
     [ioApi],
   );

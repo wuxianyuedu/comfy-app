@@ -57,6 +57,14 @@
  * 绝不写成「日志里没有失败行」。署名走
  * `machineHandle("ci-ga-daily")`（`ci-ga-daily` 打头，**不取**平台账号昵称 —— 那是人的名字）。
  *
+ * ## 预算账陈旧度触发器（ISSUE #2639 GA 落点）
+ *
+ * 预算闸那一格红（`[bundle-budget] 违规（阻断）` 出现在失败日志里）⇒ 正文多一节
+ * 「该有人出面了」：陈旧度 / 连续红天数念数值账里那两条门限，出口指向 §13.5.4 例外流程。
+ * 判定层共用 `ci-bundle-escalation-core.mjs`，历史跑回看在 `ci-ga-daily-bundle-escalation.mjs`；
+ * 只挂 `Daily (mirror)` 那一档（桌包档复用本脚本时不挂），判定的不变量与 CNB 侧一字不差
+ * （吊销/暂撤不升级、读不出 ≠ 没到门限、不改判据的判定）。
+ *
  * ## 用法
  *
  * ```text
@@ -82,6 +90,8 @@ import {
   listOpenIssues,
 } from "./ci-code-scanning-triage-platform.mjs";
 import { collectFailureLogReading, renderLogReadout } from "./ci-ga-failure-logs.mjs";
+import { judgeBundleEscalation, readBundleAccount } from "./ci-bundle-escalation-core.mjs";
+import { fetchGaBundleRedStreak, stripAnsi } from "./ci-ga-daily-bundle-escalation.mjs";
 import { machineHandle } from "../dev-handle.mjs";
 import { commentHeader } from "../ship/ship-ticket.mjs";
 
@@ -188,7 +198,7 @@ export function decideAction({ existing, failedSteps }) {
 /**
  * 拼正文：只有事实与出口。
  *
- * @param {{ghRepo: string, handle: string, logReadout?: string, runId: string, sha: string, step: string, workflowName?: string}} input
+ * @param {{ghRepo: string, handle: string, logReadout?: string, runId: string, sha: string, step: string, workflowName?: string, escalation?: string}} input
  * @returns {string}
  */
 export function composeBody({
@@ -199,6 +209,7 @@ export function composeBody({
   sha,
   step,
   workflowName = "Daily (mirror)",
+  escalation = "",
 }) {
   const runUrl = `https://github.com/${ghRepo}/actions/runs/${runId}`;
   return [
@@ -214,6 +225,7 @@ export function composeBody({
     "",
     ...(logReadout ? [logReadout, ""] : []),
     `- 完整日志与失败行的出处：${runUrl}`,
+    ...(escalation ? ["", escalation] : []),
     "",
     "## 根因：**未判定**",
     "",
@@ -246,7 +258,8 @@ export function composeBody({
  *   prefix?: string,
  *   workflowName?: string,
  *   handle?: string,
- *   }} writeCtx 连接 + 这一跳的共用读数
+ *   escalation?: string,
+ * }} writeCtx 连接 + 这一跳的共用读数
  * @param {Array<{number?: number, step: string}>} stages 计划
  * @param {number} index 当前下标
  * @param {{failures: string[], wrote: number}} ledger 计数账（写回调用方）
@@ -269,6 +282,7 @@ async function writeStages(writeCtx, stages, index, ledger) {
     prefix = TITLE_PREFIX,
     workflowName = "Daily (mirror)",
     handle = "ci-ga-daily",
+    escalation = "",
   } = writeCtx;
   const body = composeBody({
     ghRepo,
@@ -278,6 +292,7 @@ async function writeStages(writeCtx, stages, index, ledger) {
     sha,
     step: stage.step,
     workflowName,
+    escalation,
   });
   if (stage.number) {
     const said = await appendComment(cnbCtx, stage.number, body, runId);
@@ -458,6 +473,40 @@ export async function main(io = {}) {
     log(`[ga-daily-failure] 日志正文没取到 ⇒ 正文只多一节「取不到 + 出口」，立案照写。`);
   }
 
+  /* 预算账陈旧度触发器（ISSUE #2639 GA 落点）：失败日志里认出预算闸判红
+   * （`[bundle-budget] 违规（阻断）`）⇒ 这一跑红的就是预算账那一格
+   * （`daily` job 失败即停，红格唯一）⇒ 正文多一节「该有人出面了」。
+   * 吊销/暂撤不升级（#2634）；读不出 ≠ 没到门限；触发器只念读数与 §13.5.4 的两条出口，
+   * 不改判据的判定，也不替谁判该不该认。
+   * 只挂每日档（`Daily (mirror)`）：桌包档复用本脚本时连续红的语义指向 daily.yml 档，
+   * 不混进桌包那一跑；其余 GA 档既无该判据链、也无对应 runs 列表。 */
+  let escalation = "";
+  let escalationReason = "日志没取到 ⇒ 预算账触发器没结论";
+  if (workflowName === "Daily (mirror)" && reading?.ok === true) {
+    const account = readBundleAccount(stripAnsi(reading.text));
+    if (account.marker === "enforced") {
+      /** @type {{days:number|"unknown", note:string}} */
+      const streak = dryRun
+        ? { days: "unknown", note: "--dry-run 不再拉历史跑（连续天数取不到）" }
+        : await fetchGaBundleRedStreak({
+            ghRepo,
+            ghToken,
+            runId,
+            known: { runId, text: reading.text },
+            fetchImpl: logFetch,
+            log,
+          });
+      const judged = judgeBundleEscalation({ account, streak });
+      escalation = judged.section ?? "";
+      escalationReason = judged.reason;
+    } else {
+      escalationReason = account.note;
+    }
+  }
+  log(
+    `[ga-daily-failure] 预算账触发器：${escalation ? `升 —— ${escalationReason}` : `不升 —— ${escalationReason}`}`,
+  );
+
   if (dryRun) {
     for (const stage of decision.stages) {
       const plan = stage.number ? `追加到 #${stage.number}` : "新建";
@@ -483,7 +532,19 @@ export async function main(io = {}) {
 
   const ledger = { failures: /** @type {string[]} */ ([]), wrote: 0 };
   await writeStages(
-    { authorLabel, cnbCtx, ghRepo, log, logReadout, runId, sha, prefix, workflowName, handle },
+    {
+      authorLabel,
+      cnbCtx,
+      ghRepo,
+      log,
+      logReadout,
+      runId,
+      sha,
+      prefix,
+      workflowName,
+      handle,
+      escalation,
+    },
     decision.stages,
     0,
     ledger,

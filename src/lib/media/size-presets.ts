@@ -879,3 +879,8 @@ export function mergeSizePresetTable(
     video: mergeSceneTable(base.video, record.video),
   };
 }
+
+/* ── 差集覆盖（ISSUE #3973）──
+ * 本机覆盖只记「这台机器上真的改过的那几格」，与侧栏页签行为 / 模式契约同一口径。
+ * 实现拆在 `size-presets-diff.ts`（本文件超出 900 行的文件长度硬闸拆出；纯函数，
+ * 依赖本模块的常量与类型，单向不回环）。 */

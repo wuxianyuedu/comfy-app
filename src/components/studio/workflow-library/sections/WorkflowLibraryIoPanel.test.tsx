@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { isPlainRecord } from "~/lib/is-record";
@@ -106,29 +105,15 @@ describe("IO 预览页签与编辑器同形（ISSUE #3800）", () => {
     expect(screen.getByRole("button", { name: "选择模式" })).toBeInTheDocument();
   });
 
-  it("多模式时每个模式页签带移除按钮：先出确认框，确认后才经 onModesChange 落库（ISSUE #4073）", async () => {
-    const user = userEvent.setup();
-    const { onModesChange } = setup();
-    /* 移除按钮带可读名称。两个模式各有一枚。 */
-    const removeBtns = screen.getAllByRole("button", { name: /移除模式/ });
-    expect(removeBtns).toHaveLength(2);
-    /* Tooltip 接管的按钮要用 userEvent（完整指针序列）才触发得到。 */
-    await user.click(removeBtns[0]!);
-    /* 先弹确认框（Portal 挂载是异步落定的，用 waitFor 等它）；点「取消」不落库、
-     * 弹窗随手关闭。 */
-    await waitFor(() => {
-      expect(screen.getByRole("dialog")).toBeInTheDocument();
-    });
-    await user.click(screen.getByRole("button", { name: "取消" }));
-    expect(onModesChange).not.toHaveBeenCalled();
-    /* 再点一次移除 → 点「确认」才落库剩余模式。 */
-    await user.click(screen.getAllByRole("button", { name: /移除模式/ })[0]!);
-    await waitFor(() => {
-      expect(screen.getByRole("dialog")).toBeInTheDocument();
-    });
-    await user.click(screen.getByRole("button", { name: "确认" }));
-    expect(onModesChange).toHaveBeenCalledTimes(1);
-    expect(onModesChange).toHaveBeenCalledWith(["i2v"], "i2v");
+  it("模式页签不挂删除按钮：增删统一走「选择模式」下拉（ISSUE #4073 复审）", () => {
+    setup();
+    /* 删除 × 与下拉取消勾选本是同一件事；面板内不再留第二入口，也不再弹
+     * 二次确认框。两个模式页签各自只剩一个切换按钮。 */
+    expect(screen.queryByRole("button", { name: /移除模式/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    /* 模式管理入口（选择模式下拉）仍在，参数表单照常渲染。 */
+    expect(screen.getByRole("button", { name: "选择模式" })).toBeInTheDocument();
+    expect(screen.getByText("步数")).toBeInTheDocument();
   });
 
   it("没有真实模式时：表单不渲染，给编辑器同款提示，且仍可就地选模式", () => {

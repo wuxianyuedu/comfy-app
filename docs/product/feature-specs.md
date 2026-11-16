@@ -419,8 +419,16 @@
   并可按标签筛选。
 - 行为与验收：模式与标签落在 `workflowTemplate` 行与
   `workflowModelTag`（显式 m2m）；标签库是用户级全局（`workflowModel` router）。
+  绑定唯一性（ISSUE #4102）：一条工作流只绑**一个**模型标签；同一
+  「标签 × 模式」只能被一条工作流占用 —— 服务端 CONFLICT 拦截，报错点名
+  已占用的工作流；同标签、模式不相交的多条工作流各绑各的，不冲突。
+  标签库按「配置了几个模式」计数（不再显示「几个工作流」），悬停模式
+  胶囊显示占用它的工作流名与本地/在线来源；工作流库「工坊封装」页签的
+  契约口计数写明「已落点 X/Y 个契约口」并附悬停说明。
 - 落点：`src/server/api/routers/workflow-mutations.ts`、
-  `src/server/api/routers/workflow-model.ts`
+  `src/server/api/routers/workflow-model.ts`、
+  `src/components/studio/ModelTagManager.tsx`、
+  `src/components/studio/workflow-library/sections/MetaEditor.tsx`
 
 ---
 
@@ -1044,10 +1052,20 @@
   编译进包的快照（写完即生效，不必重启进程）；② 本机覆盖落
   `data/size-presets.json`，读取侧逐格合并（缺行 / 缺档 / 坏值一律回退基准）；
   ③ 「保存为项目默认（跟代码走）」只在开发检出出现（正式包没有源码可写，服务端大声失败）；
-  ④ 还原默认的基准是**当前项目默认**那份，不是编译进包的旧快照。
+  ④ 还原默认的基准是**当前项目默认**那份，不是编译进包的旧快照；
+  ⑤ 本机覆盖**差集落盘**（ISSUE #3973）：覆盖文件只留与项目默认不同的格子
+  （写侧对现读项目默认取差集）—— 项目默认后续改动能穿透到存过覆盖的机器，
+  「改回默认」= 该格从覆盖里消失；读取侧逐格合并不变（缺行 / 缺档 / 坏值
+  一律回退基准）；
+  ⑥ 出图链路的宽高换算读**同一份生效表**（ISSUE #3972）：工作流库封装
+  （客户端传水合表 / 服务端现读）、工坊 api・comfyui 通道、定妆照远端通道、
+  成片合成画幅与 ffmpeg scale、MCP 生图的老口径尺寸反解 —— 设置里改的表
+  改的是出图行为，不只是界面显示；「尺寸 · 分辨率档」端口的**档位反解**
+  也按同一份生效表比对（ISSUE #4099），不与正向换算用两份表。
 - 落点：`src/lib/media/size-presets.ts`（纯函数层 + 项目默认解析）、
   `src/lib/media/size-preset-defaults.json`（项目默认）、
-  `src/lib/media/size-preset.server.ts`（落盘）、
+  `src/lib/media/size-preset-fs.server.ts`（读侧：生效表，双宿主安全）、
+  `src/lib/media/size-preset.server.ts`（写侧落盘）、
   `src/app/api/size-presets/route.ts`、
   `src/app/api/size-presets/project-default/route.ts`、
   `src/app/(main)/settings/components/SizePresetSection.tsx`

@@ -6,24 +6,20 @@
 // 显式：必填/可选随模式契约（`ModeContract.required`，能不能跑只认必填口）；
 // 模式可切换（只改「看/测哪个模式」，不动默认模式）；流程测试按封装口径真实跑一次。
 
-import { upperToken } from "~/lib/upper-token";
 import React, { useMemo, useState } from "react";
 
 import { Badge } from "~/components/ui/badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { SelectMenu } from "~/components/ui/select-menu";
-import {
-  deriveEncapsulationStatus,
-  type EncapsulationEntryStatus,
-} from "~/lib/workshop/workshop-encapsulation-status";
-import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
+import { Hint } from "~/components/ui/hint";
+import type { EncapsulationEntryStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import { ContractRequiredBadge } from "~/components/workshop/mode-contract/ContractRequiredBadge";
-import { modeContractEntries, requiredInputsFor } from "~/lib/workshop/model-mode-contract";
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
 import { modeLabel } from "../workflow-library-config";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import { useWorkflowEncapsulation } from "../hooks/use-workflow-encapsulation";
 import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
 import { WorkflowRunLogButton } from "../WorkflowRunLogButton";
 import { latestRunForWorkflow } from "~/lib/workflow/workflow-run-store";
@@ -91,43 +87,14 @@ export function WorkshopEncapsulationPanel({
   modes,
   onModeChange,
 }: WorkshopEncapsulationPanelProps) {
-  /* 模式契约注册表：用户改过的模式用自定义口径，未改过的用内置默认 ——
-   * 封装视图与远端适配器、实际生成链路同说一套话。清单本身经
-   *`modeContractEntries` 取，与「画布节点」页签的卡片列**同一份**
-   * （ISSUE #596：两个页签各读各的，口径就对不上了）。 */
-  const { contracts: storedContracts } = useModeContracts();
-  /* 该模式生效的契约口清单（含作者自定义的口）。下方三处**同一份**：必备口判据、
-   * 封装状态派生、流程测试组载荷 —— 各取一份会让「界面列出的口」与「测试能填的
-   * 口」走散。 */
-  const contractEntries = React.useMemo(
-    () => modeContractEntries(mode, storedContracts),
-    [mode, storedContracts],
-  );
-  const contractIds = React.useMemo(
-    () => contractEntries.map((entry) => entry.id),
-    [contractEntries],
-  );
-  /* 必备口来自模式契约（可配置，「模式契约」编辑器里勾选的那个勾）——本页的
-   * 「能不能用」判据读它，不再写死「提示词」。 */
-  const requiredInputs = React.useMemo(
-    () =>
-      requiredInputsFor({
-        inputs: contractIds,
-        required: storedContracts.find((c) => c.mode === upperToken(mode))?.required,
-      }),
-    [contractIds, mode, storedContracts],
-  );
-  const status = React.useMemo(
-    () =>
-      deriveEncapsulationStatus({
-        io: workflowIO,
-        paramMap,
-        mode: mode ?? null,
-        contractEntries,
-        requiredInputs,
-      }),
-    [workflowIO, paramMap, mode, contractEntries, requiredInputs],
-  );
+  /* 模式契约注册表：契约口清单、必备口与封装状态都经 `useWorkflowEncapsulation`
+   * 取生效注册表（本机覆盖逐模式压过项目默认）—— 与模式契约编辑器、列表行徽标、
+   * 远端适配器、实际生成链路同说一套话（ISSUE #596 / #4113）。 */
+  const { contractIds, status } = useWorkflowEncapsulation({
+    mode,
+    io: workflowIO,
+    paramMap,
+  });
 
   /* 流程测试的运行编排（规范 §17.2 第②层）：与画布节点那次运行共用同一份
    * 运行登记表与日志弹窗，只是带自己的来源标记。视图这里只消费 controller。 */
@@ -199,9 +166,19 @@ export function WorkshopEncapsulationPanel({
             value={mode ?? modes.at(0) ?? ""}
           />
         )}
-        <span className="text-muted-foreground text-2xs">
-          {status.resolvedCount}/{status.entries.length} 个对外口已落到端口
-        </span>
+        {/* 计数写明「数的是什么」（ISSUE #4102）：分母 = 该模式契约口总数
+         *（含可选与自定义口），分子 = 已连到工作流端口的口数。 */}
+        <Hint
+          label={
+            `该模式共 ${status.entries.length} 个契约口（含可选口与自定义口），` +
+            `其中 ${status.resolvedCount} 个已连到工作流端口。可选口未连不阻碍工坊运行；` +
+            `必备口未连会标红并阻止流程测试。`
+          }
+        >
+          <span className="text-muted-foreground text-2xs">
+            已落点 {status.resolvedCount}/{status.entries.length} 个契约口
+          </span>
+        </Hint>
       </div>
       {!status.ready && (
         <p className="bg-warning/10 text-warning-strong text-2xs rounded-lg px-3 py-2">

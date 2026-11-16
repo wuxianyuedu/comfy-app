@@ -7,7 +7,13 @@ import { z } from "zod";
 
 import { APP_VERSION } from "~/lib/app-version";
 
-import { sizeSpecFromText, toSizeSpec, type SizeSpec } from "~/lib/media/size-presets";
+import {
+  sizeSpecFromText,
+  toSizeSpec,
+  type SizePresetTable,
+  type SizeSpec,
+} from "~/lib/media/size-presets";
+import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
 import { characterListInputSchema, isProjectType, shotListInputSchema } from "~/lib/workshop/types";
 import { saveComfySettings } from "~/server/workshop/comfyui";
 import * as orchestrator from "~/server/workshop/orchestrator";
@@ -33,13 +39,19 @@ const sizeArgs = {
     .describe('老口径尺寸「宽x高」，如 "1024x1024"（能用 ratio + clarity 就别用它）'),
 };
 
-/** 工具入参 → 尺寸表达；一个都没给时返回 undefined（各通道走自己的默认档）。 */
-function sizeSpecOf(args: {
-  clarity?: string;
-  multiple?: number;
-  ratio?: string;
-  size?: string;
-}): SizeSpec | undefined {
+/** 工具入参 → 尺寸表达；一个都没给时返回 undefined（各通道走自己的默认档）。
+ *
+ *  `table` 传**生效的**尺寸表（ISSUE #3972）：老口径 "WxH" 反解像素档时按它
+ *  就近落档 —— 与后续「表达 → 宽高」的正向换算同一份表，来回去不会漂。 */
+function sizeSpecOf(
+  args: {
+    clarity?: string;
+    multiple?: number;
+    ratio?: string;
+    size?: string;
+  },
+  table?: SizePresetTable,
+): SizeSpec | undefined {
   if (
     (args.ratio !== undefined && args.ratio !== "") ||
     (args.clarity !== undefined && args.clarity !== "") ||
@@ -52,7 +64,7 @@ function sizeSpecOf(args: {
     });
   }
   if (args.size !== undefined && args.size !== "") {
-    return sizeSpecFromText(args.size);
+    return sizeSpecFromText(args.size, "image", table);
   }
   return undefined;
 }
@@ -317,7 +329,7 @@ export function buildWorkshopMcpServer(): McpServer {
           shotId: args.shotId,
           characterId: args.characterId,
           channel: args.channel,
-          size: sizeSpecOf(args),
+          size: sizeSpecOf(args, await loadSizePresetTable()),
           force: args.force,
         }),
       ),

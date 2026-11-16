@@ -5,9 +5,14 @@
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { getSessionMock } = vi.hoisted(() => ({
-  getSessionMock: vi.fn<() => Promise<unknown>>(() => Promise.resolve(null)),
-}));
+const { getSessionMock, loggerMocks } = vi.hoisted(() => {
+  /* 带签名的 mock：mock.calls 的元素是 [fields, msg]，测试里解构不落 any。 */
+  const logFn = () => vi.fn<(fields: Record<string, unknown>, msg: string) => void>();
+  return {
+    getSessionMock: vi.fn<() => Promise<unknown>>(() => Promise.resolve(null)),
+    loggerMocks: { debug: logFn(), info: logFn(), warn: logFn(), error: logFn() },
+  };
+});
 
 vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../tests/helpers/test-db");
@@ -25,7 +30,7 @@ vi.mock("~/lib/core/logger", async (importOriginal) => {
   const actual: Record<string, unknown> = await importOriginal();
   return {
     ...actual,
-    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    logger: loggerMocks,
   };
 });
 
@@ -38,7 +43,9 @@ import {
   rateLimitedProcedure,
   recordSlowQuery,
   resetSlowQueryBuckets,
+  logTrpcError,
 } from "~/server/api/trpc";
+import { TRPCError } from "@trpc/server";
 import { checkRateLimit } from "~/server/api/middleware/rate-limit";
 import { getTestDb, seedUser, type Row } from "../../../tests/helpers/test-db";
 import { makeCtx } from "../../../tests/helpers/trpc";
@@ -172,5 +179,43 @@ describe("recordSlowQuery：同一路径在一个窗口内只写首条 + 一条�
     expect(recordSlowQuery("a.b", 2000, "query", 1000)).not.toBeNull();
     expect(recordSlowQuery("a.c", 2000, "query", 1000)).not.toBeNull();
     expect(recordSlowQuery("a.b", 2000, "mutation", 1000)).not.toBeNull();
+  });
+});
+
+// ─────────────────────────── tRPC 错误日志分级（#4093）───────────────────────────
+
+describe("logTrpcError：服务端故障升 error 带堆栈，客户端错误维持 warn", () => {
+  beforeEach(() => {
+    loggerMocks.warn.mockClear();
+    loggerMocks.error.mockClear();
+  });
+
+  it("INTERNAL_SERVER_ERROR → logger.error 并带 stack（真 5xx 不淹在 warn 里、不丢现场）", () => {
+    logTrpcError(new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "db down" }), "task.list");
+    expect(loggerMocks.error).toHaveBeenCalledTimes(1);
+    const [fields, msg] = loggerMocks.error.mock.calls[0] ?? [];
+    expect(msg).toBe("trpc_error_server_fault");
+    expect(fields).toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      path: "task.list",
+      message: "db down",
+    });
+    expect(typeof fields?.stack).toBe("string");
+    expect(loggerMocks.warn).not.toHaveBeenCalled();
+  });
+
+  it("BAD_REQUEST → logger.warn（客户端错误不进告警面）", () => {
+    logTrpcError(new TRPCError({ code: "BAD_REQUEST", message: "参数坏了" }), "task.create");
+    expect(loggerMocks.warn).toHaveBeenCalledTimes(1);
+    const [, msg] = loggerMocks.warn.mock.calls[0] ?? [];
+    expect(msg).toBe("trpc_error");
+    expect(loggerMocks.error).not.toHaveBeenCalled();
+  });
+
+  it("UNAUTHORIZED / FORBIDDEN → 预期内的鉴权拒绝，一条都不记", () => {
+    logTrpcError(new TRPCError({ code: "UNAUTHORIZED" }));
+    logTrpcError(new TRPCError({ code: "FORBIDDEN" }));
+    expect(loggerMocks.warn).not.toHaveBeenCalled();
+    expect(loggerMocks.error).not.toHaveBeenCalled();
   });
 });
