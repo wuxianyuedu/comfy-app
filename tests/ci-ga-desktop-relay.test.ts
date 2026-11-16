@@ -15,6 +15,7 @@
  *      与完整成品分列；#3621 PUT 墙钟是分钟级、超时 / 网络类失败按既有判据重试、
  *      HTTP 应答一次交账不重试。
  */
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -33,6 +34,7 @@ import {
   RELEASE_TAG,
   resolveDesktopRelayContext,
   SHELL_ASSET_NAME,
+  SHELL_BUILD_INFO_ASSET,
   uploadAsset,
 } from "../scripts/ci/ci-ga-desktop-relay.mjs";
 
@@ -232,6 +234,8 @@ function cnbFetch(
   opts: {
     badVerify?: boolean;
     fail?: "get" | "create" | "url" | "put" | "confirm";
+    /** 只让「构建信息附件」那一步取地址失败（exe 本体照常，#4056 的失败分档）。 */
+    failMetaUrl?: boolean;
     missingTargetCommitish?: boolean;
     releaseExists?: boolean;
   } = {},
@@ -279,6 +283,12 @@ function cnbFetch(
     }
     if (method === "POST" && url.endsWith("/asset-upload-url")) {
       if (opts.fail === "url") return json({ errcode: 500 }, 500);
+      const raw = typeof body === "string" ? body : "{}";
+      const parsed: unknown = JSON.parse(raw);
+      const form = isRecord(parsed) ? parsed : {};
+      if (opts.failMetaUrl && form.asset_name === SHELL_BUILD_INFO_ASSET) {
+        return json({ errcode: 500 }, 500);
+      }
       return json(
         {
           data: {
@@ -608,8 +618,9 @@ describe("⑧ 端到端：出口话术给 CNB 站内取包地", () => {
     expect(calls.length).toBe(10);
   });
 
-  /* #3607 纯壳那一半：连单文件壳一起回传，出口话术给出「放进检出根、dev server 照用」。 */
-  it("带纯壳的端到端：4 份全绿，出口念出纯壳落点与 dev server 用法", async () => {
+  /* #3607 纯壳那一半：连单文件壳一起回传，出口话术给出「放进检出根、dev server 照用」。
+   * #4056：随纯壳再同发一份构建信息附件（构建时间 / commit / run / 大小 / sha256）。 */
+  it("带纯壳的端到端：4 份 + 构建信息全绿，出口念出纯壳落点与 dev server 用法", async () => {
     const root = makeBundles();
     tempRoots.push(root);
     const shellRel = makeShell();
@@ -628,12 +639,53 @@ describe("⑧ 端到端：出口话术给 CNB 站内取包地", () => {
       log,
     });
     expect(code).toBe(CODE.OK);
-    /* 4 份成品：每份 3 步 = 12，加 1 次读 tag = 13。 */
-    expect(calls.length).toBe(13);
+    /* 4 份成品 + 1 份构建信息：每份 3 步 = 15，加 1 次读 tag = 16。 */
+    expect(calls.length).toBe(16);
     const text = out.join("\n");
     expect(text).toContain(SHELL_ASSET_NAME);
+    expect(text).toContain(SHELL_BUILD_INFO_ASSET);
     expect(text).toContain("src-tauri/target/release/app.exe");
     expect(text).toContain("dev server");
+    /* 构建信息附件的正文可对账：sha256 / 大小是盘上那份 exe 的实测，commit / run
+     * 来自本跑 env —— 下载侧拿它就能答出「什么时候、哪一笔构建」。 */
+    const metaPut = calls.filter((c) => c.method === "PUT").at(-1);
+    const metaBody = metaPut?.body instanceof Buffer ? metaPut.body.toString("utf8") : "{}";
+    const meta: unknown = JSON.parse(metaBody);
+    expect(isRecord(meta) && meta.asset).toBe(SHELL_ASSET_NAME);
+    expect(isRecord(meta) && meta.sha256).toBe(createHash("sha256").update("SHELL").digest("hex"));
+    expect(isRecord(meta) && meta.size).toBe(5);
+    expect(isRecord(meta) && meta.commit).toBe("a".repeat(40));
+    expect(isRecord(meta) && meta.run_id).toBe("4242");
+    expect(isRecord(meta) && meta.tag).toBe(RELEASE_TAG);
+    expect(isRecord(meta) && typeof meta.built_at === "string" && meta.built_at.length > 0).toBe(
+      true,
+    );
+  });
+
+  /* #4056 的失败分档：构建信息附件取地址失败 ⇒ 本格红（exe 本体虽已送达，
+   * 「说了要给构建信息却没给」不许读成绿；本 step continue-on-error，不拦构建结论）。 */
+  it("构建信息附件回传失败 ⇒ 本格红并点名附件，不冒充送达", async () => {
+    const root = makeBundles();
+    tempRoots.push(root);
+    const shellRel = makeShell();
+    const { fetchImpl } = cnbFetch({ failMetaUrl: true });
+    const { out, log } = lines();
+    const code = await main({
+      argv: [],
+      cwd: root,
+      env: {
+        ...BASE_ENV,
+        DESKTOP_BUNDLE_DIR: root,
+        DESKTOP_PORTABLE: path.join(root, "portable/ComfyAPP-portable.zip"),
+        DESKTOP_SHELL_EXE: shellRel,
+      },
+      fetchImpl,
+      log,
+    });
+    expect(code).toBe(CODE.FAIL);
+    const text = out.join("\n");
+    expect(text).toContain(SHELL_BUILD_INFO_ASSET);
+    expect(text).toContain("回传失败：构建信息附件");
   });
 
   /* #3611 补的盲区：真实跑里 create 一挂，其后的「取地址 → PUT → 确认」三步从没

@@ -7,16 +7,19 @@
  * 下载端点必须是 CNB OpenAPI 的 api.cnb.cool（官方文档、与回传侧同源），不是网页站
  * cnb.cool：后者匿名 404、带令牌 400，曾把一次「打错主机」误读成「上游没产出」。
  */
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  BUILD_INFO_ASSET,
   DEFAULT_API_ENDPOINT,
   DEFAULT_ASSET,
   DEFAULT_OUT,
   buildDownloadUrl,
+  describeBuildInfo,
   downloadToBuffer,
   MISSING_TOKEN_HINT,
   main,
@@ -336,5 +339,107 @@ describe("下载与落盘", () => {
     expect(fs.readFileSync(path.join(dir, DEFAULT_OUT), "utf8")).toBe(payload);
     expect(result.out).toContain("已下载");
     expect(result.out).toContain("非 Windows 平台");
+  });
+});
+
+/**
+ * 构建信息附件（ISSUE #4056）：取壳的人要能答出「这份 exe 是什么时候、哪一笔构建的」。
+ * 假 fetch 按 URL 分流：exe 与构建信息附件各回各的正文。
+ */
+describe("构建信息：取壳时同取、展示并对账（ISSUE #4056）", () => {
+  const EXE = "shell-bytes";
+  const EXE_SHA = createHash("sha256").update(EXE).digest("hex");
+
+  /** 按资产名分流的假 fetch。 */
+  function routeFetch(info: { body: string; status?: number }): typeof fetch {
+    return (url: string | URL | Request) => {
+      const target = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+      if (target.endsWith(`/${BUILD_INFO_ASSET}`)) {
+        return Promise.resolve(respond(info.status ?? 200, info.body));
+      }
+      return Promise.resolve(respond(200, EXE));
+    };
+  }
+
+  function infoBody(overrides: Record<string, unknown> = {}): string {
+    return JSON.stringify({
+      asset: DEFAULT_ASSET,
+      built_at: "2026-11-16T02:41:12Z",
+      commit: "a".repeat(40),
+      run_id: "4242",
+      sha256: EXE_SHA,
+      size: EXE.length,
+      tag: "nightly",
+      ...overrides,
+    });
+  }
+
+  it("附件在场：展示构建时间 / commit / run，且 sha256 与大小对账一致", async () => {
+    const dir = makeTmpDir();
+    const result = await captureMain({
+      argv: [],
+      cwd: dir,
+      env: { NODE_ENV: "test" },
+      fetchImpl: routeFetch({ body: infoBody() }),
+      platform: "linux",
+    });
+    expect(result.code).toBe(0);
+    expect(fs.readFileSync(path.join(dir, DEFAULT_OUT), "utf8")).toBe(EXE);
+    expect(result.out).toContain("构建信息：构建时间 2026-11-16T02:41:12Z");
+    expect(result.out).toContain(`commit ${"a".repeat(12)}`);
+    expect(result.out).toContain("run 4242");
+    expect(result.out).toContain("校验：sha256 一致 · 大小一致（11 字节）");
+  });
+
+  it("sha256 / 大小与清单对不上 ⇒ stderr 明说（nightly 滚动覆盖不同批），壳照常到手", async () => {
+    const dir = makeTmpDir();
+    const result = await captureMain({
+      argv: [],
+      cwd: dir,
+      env: { NODE_ENV: "test" },
+      fetchImpl: routeFetch({ body: infoBody({ sha256: "0".repeat(64), size: 1 }) }),
+      platform: "linux",
+    });
+    expect(result.code).toBe(0);
+    expect(fs.readFileSync(path.join(dir, DEFAULT_OUT), "utf8")).toBe(EXE);
+    expect(result.err).toContain("sha256 与构建信息不一致");
+    expect(result.err).toContain("大小与构建信息不一致");
+  });
+
+  it("附件 404（功能上线前的旧包）⇒ 降级指到 Release 页，不影响取壳", async () => {
+    const dir = makeTmpDir();
+    const result = await captureMain({
+      argv: [],
+      cwd: dir,
+      env: { NODE_ENV: "test" },
+      fetchImpl: routeFetch({ body: "", status: 404 }),
+      platform: "linux",
+    });
+    expect(result.code).toBe(0);
+    expect(fs.readFileSync(path.join(dir, DEFAULT_OUT), "utf8")).toBe(EXE);
+    expect(result.out).toContain("没带构建信息附件");
+    expect(result.out).toContain("Release 页为准");
+  });
+
+  it("附件读不到（非 404）⇒ 同样降级，不装作读过", async () => {
+    const dir = makeTmpDir();
+    const result = await captureMain({
+      argv: [],
+      cwd: dir,
+      env: { NODE_ENV: "test" },
+      fetchImpl: routeFetch({ body: "boom", status: 500 }),
+      platform: "linux",
+    });
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("构建信息读不到（HTTP 500）");
+  });
+
+  it("describeBuildInfo：非 JSON / 空对象都降级，不抛", () => {
+    const actual = { exeBytes: EXE.length, exeSha256: EXE_SHA };
+    const bad = describeBuildInfo(Buffer.from("not-json"), actual);
+    expect(bad.info).toContain("不是合法 JSON");
+    expect(bad.warn).toBe("");
+    const empty = describeBuildInfo(Buffer.from("{}"), actual);
+    expect(empty.info).toContain("没有可读字段");
   });
 });
