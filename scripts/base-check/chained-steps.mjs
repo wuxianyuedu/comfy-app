@@ -17,7 +17,7 @@
  *   · 硬塞进钩子只会让人学会绕开它（§13.6.2 的边界原话）。
  *
  * 它单独成模块、而不是长在 `base-check.mjs` 里，有一条**具体的**理由：
- * `scripts/.tsc-diagnostic-executors.json` 把 `base-check.mjs` 的**声明行数**当
+ * `scripts/gates/.tsc-diagnostic-executors.json` 把 `base-check.mjs` 的**声明行数**当
  * 零增量棘轮管（§13.5.14）—— 在那份文件里新写一处 JSDoc / 类型注解，就得回答
  * 「它由谁执行、谁来敲」，而这一族的答案在**别处**（`--base` 那条链）。写在同目录
  * 的这份模块里，棘轮的**对象与答案才落在同一个地方**（同 §12.5.3 对目录归属的口径）。
@@ -35,7 +35,7 @@
  *
  * ── 事实从哪来 ────────────────────────────────────────────────────────
  *
- * 从下面 `CHAINED_STEPS` 那一份清单现算（`scripts/.on-demand-duties.json` 里对应行的
+ * 从下面 `CHAINED_STEPS` 那一份清单现算（`scripts/gates/.on-demand-duties.json` 里对应行的
  * `fact.kind` 是 `base-check-chained`，由 `check-on-demand-duties.cjs` 双向核对 ——
  * **它读的就是这个文件里的 `const script = "…"`**，不另抄第二份）。
  */

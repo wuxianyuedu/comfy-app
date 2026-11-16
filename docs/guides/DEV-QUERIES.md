@@ -121,11 +121,11 @@ grep -n "\"check\"\|typecheck\|\"test\"" package.json
 node -e "require('dns').lookup('registry.npmmirror.com', {all:true}, (e,a)=>console.log(e||a))"
 
 # 解法:preload 补丁强制 IPv4,只对本次命令生效,不改系统配置
-NODE_OPTIONS="--require ./scripts/force-ipv4-dns.cjs" pnpm install
-NODE_OPTIONS="--require ./scripts/force-ipv4-dns.cjs" pnpm add -D <包名>
+NODE_OPTIONS="--require ./scripts/devtools/force-ipv4-dns.cjs" pnpm install
+NODE_OPTIONS="--require ./scripts/devtools/force-ipv4-dns.cjs" pnpm add -D <包名>
 ```
 
-补丁实现见 `scripts/force-ipv4-dns.cjs`(tsconfig checkJs 会检查它,改动需保持 JSDoc 注解)。
+补丁实现见 `scripts/devtools/force-ipv4-dns.cjs`(tsconfig checkJs 会检查它,改动需保持 JSDoc 注解)。
 
 ## 8. 验证改动后的标准收尾流程
 

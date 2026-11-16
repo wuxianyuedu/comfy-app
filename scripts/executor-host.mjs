@@ -52,7 +52,7 @@ import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-import { parseEnvFile } from "./env-preflight.mjs";
+import { parseEnvFile } from "./devtools/env-preflight.mjs";
 import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -258,7 +258,7 @@ async function reconcileCancelled(runtime) {
  *     （devDependency）也不指望 `src/lib/**` 的 TS 源，所以这条分支必须存在。
  *     反向的缺件形态不会静默：产物少了预编译件就退回 dev 分支、以
  *     `Cannot find package 'tsx'` 大声 exit 1，而「产物里到底起不起得来」由
- *     `pnpm build` 收尾的冒烟拦下（scripts/smoke-executor-host-standalone.mjs）。
+ *     `pnpm build` 收尾的冒烟拦下（scripts/devtools/smoke-executor-host-standalone.mjs）。
  *
  * 图本体在 `src/lib/comfyui/host-runtime.ts`——只管「宿主需要哪些模块」；进程外壳
  * 职责（env 解析 / 日志通道 / 心跳 / argv 钩子 / 领取节拍）全留在本文件，两种形态共用。 */

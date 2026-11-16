@@ -70,7 +70,7 @@ function run(): { code: number; output: string } {
 /** 「这台机器上有没有某个解释器」的判据收在 `src/lib/process/probe-exe.ts`：要「起得来**且**解释得了参数」——
  * 旧写法只认 spawn 抛没抛错，盘上一个同名的别的可执行文件 spawn 得起来却把 `-NoProfile` 当自己的参数退 2，
  * 被判成在场 ⇒ 用例照跑、断言等满 20s 以超时红，一句「这台机器判不了」记成了「判据红了」（ISSUE #2316）。
- * 搬到地基层是复用不是搬屋：`scripts/python-probe.mjs` 与 `python-resolve.ts` 同用一条判据，
+ * 搬到地基层是复用不是搬屋：`scripts/lib/python-probe.mjs` 与 `python-resolve.ts` 同用一条判据，
  * `tests/skip-probe-readings-gate` 守「探不到时打逐候选读数」；本文件两处调用点走同一入口。 */
 
 /** 带参数的调用（R5 的翻闸断头用例要传 `--update` 正面证明它不存在，规范 §12.6）。 */
@@ -991,12 +991,12 @@ describe("窗口交接时刻的前台归属复核（独立进程，ISSUE #359 �
   /** ISSUE #359 回归：启动期判决只管「双击后是否立刻走开」，用户一走几分钟即失真。真正要紧的是交接
    * 时刻 —— 启动页带 WS_EX_TOOLWINDOW，关掉它主窗任务栏按钮重建，Windows 会把前台**自动放行**给主窗，
    * 壳里任何 set_focus() 都「成功」，策略当场被架空（用户回报的「构建后启动仍抢前台」）。故交接再裁定
-   * 一次：`scripts/win32-window-focus.py` 的 `decide_handoff` 只有启动期允许才 give、系统自动放行要
+   * 一次：`scripts/devtools/win32-window-focus.py` 的 `decide_handoff` 只有启动期允许才 give、系统自动放行要
    * restore、前台本是别的应用则 leave；此处抽出源码打桩断言判决表（Win32 在 Linux CI 跑不到）。 */
   /* 与上面 `psExe` 同一形态（ISSUE #2316 的「同形同批」）：这里是 `python` 那一处。
    * 判据要的是「起得来**且**解释得了 `-c`」，所以探测用的就是真跑那一条
    * `["-c", "import sys; sys.exit(0)"]` —— 冒牌同名文件在这里退非零，如实判「不在场」。 */
-  const FOCUS_SCRIPT = join(process.cwd(), "scripts", "win32-window-focus.py");
+  const FOCUS_SCRIPT = join(process.cwd(), "scripts", "devtools", "win32-window-focus.py");
   const python = firstRunnableOrEmpty({
     candidates: PYTHON_CANDIDATES,
     probeArgs: () => PYTHON_PROBE_ARGS,

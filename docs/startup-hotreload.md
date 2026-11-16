@@ -75,7 +75,7 @@
 
 原痛点：`--tauri-dev` 带参数在「双击 / 发给他人」场景不便；dev 入口原本只有 `.vbs`
 （2026-09-04 起该入口改为 `tools/start/start-tauri-dev.ps1`，双击关联见
-`scripts\enable-ps1-double-click.ps1`）。
+`scripts\devtools\enable-ps1-double-click.ps1`）。
 
 **曾经**的形态是「一份 Python launcher 源码打包出三个独立 exe」（prebuilt / dev /
 standalone），双击即用、无需记参数。**现在这三个 exe 都已删除** —— 它们带来的是

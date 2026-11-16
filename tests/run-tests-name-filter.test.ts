@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { hasNameFilter, junitExecutedCount } from "../scripts/run-tests.mjs";
+import { hasNameFilter, junitExecutedCount } from "../scripts/affected-tests/run-tests.mjs";
 
 describe("hasNameFilter：识别透传参数里的名称过滤", () => {
   it("四种形状都认：-t <pat> / -t=<pat> / --testNamePattern <pat> / --testNamePattern=pat", () => {

@@ -15,4 +15,4 @@
   不是同一条路」—— 用它自己那套机制去判它判不到的那一格等于把前提写反。
   反向自证一并落地（不存在的路径必须红、真模块必须绿，两个方向都钉）。
   边界清单住在 `src/lib/process/**` 上、判据住在 `tests/`，改动的 import 图追不到，
-  故登记进 `scripts/fixed-structural-tests.mjs` 固定清单。
+  故登记进 `scripts/affected-tests/fixed-structural-tests.mjs` 固定清单。

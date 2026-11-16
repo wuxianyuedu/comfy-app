@@ -70,7 +70,7 @@ import {
 import { CODE } from "../gates/check-daily-attendance.mjs";
 import { openDailyIssues } from "./ci-daily-failure-issue.mjs";
 import { resolveRepoSlug } from "./ci-build-readout.mjs";
-import { machineHandle } from "../dev-handle.mjs";
+import { machineHandle } from "../platform/dev-handle.mjs";
 import { makeRunner, writeScratch } from "../ship/ship-exec.mjs";
 import { runAppendIssueComment, runNewIssue } from "../ship/ship-issue-new.mjs";
 import { commentHeader } from "../ship/ship-ticket.mjs";

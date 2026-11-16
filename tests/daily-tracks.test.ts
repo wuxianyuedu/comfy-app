@@ -9,11 +9,11 @@ import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { parseLedgerFlag } from "../scripts/daily-run.mjs";
+import { parseLedgerFlag } from "../scripts/affected-tests/daily-run.mjs";
 import {
   shouldRecord as artifactRecords,
   planRun as artifactPlan,
-} from "../scripts/artifact-run.mjs";
+} from "../scripts/build/artifact-run.mjs";
 import {
   FULL_SUITE_TIMEOUT_MS,
   RERUN_TIMEOUT_MS,
@@ -29,7 +29,7 @@ import {
   suiteRanking,
   suitePhaseTax,
   toTransportSafePath,
-} from "../scripts/full-suite-run.mjs";
+} from "../scripts/affected-tests/full-suite-run.mjs";
 import { abortedAdvice, classifyOutcome, hostUnsafeArgs } from "../scripts/launcher-core/shell.mjs";
 import {
   FRESHNESS_TRACKS,
@@ -555,7 +555,7 @@ describe("两条出路：豁免与非输入面（§11.8 豁免不是绕过）", 
     ).toBe(0);
   });
   it("**昨天的豁免不再为今天作证**（豁免是一条关于某一天的话）", () => {
-    /* 立案现场：`scripts/.e2e-freshness.json` 挂着一条 2026-10-08 的 `skippedReason`，
+    /* 立案现场：`scripts/freshness/.e2e-freshness.json` 挂着一条 2026-10-08 的 `skippedReason`，
      * 而判据在这一支从不比 `verifiedAt` —— 一条理由一旦写下就替未来每一天作证，
      * 「每日自证」在没人跑的日子里一直是绿的。写入侧本来就是把 `verifiedAt` 戳成
      * 「此刻」（`writeSkipRecord`），`--skip` 的用法原文也写着「**今天**不跑」。 */
@@ -634,7 +634,7 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
     expect(suiteRecords({ exitCode: 0, dryRun: false, extra: [] })).toBe(true);
     expect(SUITE_TRACK.run).toBe("pnpm run test:coverage");
     // 红的定性那句必须给出「跑过 ≠ 跑绿过」—— 记账语义靠它有据可依。
-    expect(readText("scripts/full-suite-run.mjs")).toContain("不记账");
+    expect(readText("scripts/affected-tests/full-suite-run.mjs")).toContain("不记账");
   });
 
   it("产物级护栏那一档走的是 `build` 那一行（两步都在里面，不另拼一遍）", () => {
@@ -683,8 +683,8 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
      * 且那条分支要显式判「退出码 0」（否则红的形态会误用话术、把真红说成没跑整档）。 */
     for (const rel of [
       "scripts/e2e/e2e-run.mjs",
-      "scripts/full-suite-run.mjs",
-      "scripts/artifact-run.mjs",
+      "scripts/affected-tests/full-suite-run.mjs",
+      "scripts/build/artifact-run.mjs",
     ]) {
       const text = readText(rel);
       expect(text, `${rel} 没接上三档共用的话术`).toContain("notWholeTrackNotice");
@@ -713,12 +713,14 @@ describe("墙钟预算：**测量没发生**与「判据红」必须分得开（
   it("本档显式给了预算，且大于「实测 10 分钟量级」的并发余量", () => {
     expect(FULL_SUITE_TIMEOUT_MS).toBeGreaterThan(600_000);
     // 读的是**实际传给子进程**的那个数（不是只在常量上写一遍）。
-    expect(readText("scripts/full-suite-run.mjs")).toContain("timeoutMs: FULL_SUITE_TIMEOUT_MS");
+    expect(readText("scripts/affected-tests/full-suite-run.mjs")).toContain(
+      "timeoutMs: FULL_SUITE_TIMEOUT_MS",
+    );
   });
 
   it("产物档走同一条分流（同源同病：缺省 600_000）", () => {
-    expect(readText("scripts/artifact-run.mjs")).toContain("timeoutMs: ARTIFACT_TIMEOUT_MS");
-    expect(readText("scripts/artifact-run.mjs")).toContain("classifyOutcome");
+    expect(readText("scripts/build/artifact-run.mjs")).toContain("timeoutMs: ARTIFACT_TIMEOUT_MS");
+    expect(readText("scripts/build/artifact-run.mjs")).toContain("classifyOutcome");
   });
 
   it("两档的红话术**不一样**：被砍时不许说「未通过 … 不记账」那一套", () => {
@@ -772,7 +774,10 @@ describe("墙钟预算：**测量没发生**与「判据红」必须分得开（
     /* `runPnpmSync` 丢弃 `result.signal` 是 #3332 定性的直接障碍：读数只剩一个
      * 「信号」字样，分不出 SIGTERM（预算砍）与 SIGKILL（外击）。 */
     expect(readText("scripts/launcher-core/shell.mjs")).toContain("signal: result.signal ?? null");
-    for (const rel of ["scripts/full-suite-run.mjs", "scripts/artifact-run.mjs"]) {
+    for (const rel of [
+      "scripts/affected-tests/full-suite-run.mjs",
+      "scripts/build/artifact-run.mjs",
+    ]) {
       const text = readText(rel);
       expect(text, rel).toContain("signal: res.signal ?? null");
       expect(text, rel).toContain("errorCode: res.error?.code ?? null");
@@ -785,8 +790,10 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     const pkg = { scripts: packageScripts() };
     // 按**入口**判而不是按命令长得像什么：裸 `vitest run --coverage` 也能跑出同样的用例，
     // 只有走这一层才会记账 —— 而「账上有没有日期」正是这一档存在的全部意义。
-    expect(pkg.scripts?.["test:coverage:tracked"]).toContain("scripts/full-suite-run.mjs");
-    expect(pkg.scripts?.["build:tracked"]).toContain("scripts/artifact-run.mjs");
+    expect(pkg.scripts?.["test:coverage:tracked"]).toContain(
+      "scripts/affected-tests/full-suite-run.mjs",
+    );
+    expect(pkg.scripts?.["build:tracked"]).toContain("scripts/build/artifact-run.mjs");
     expect(pkg.scripts?.["test:coverage:dry"]).toContain("--dry-run");
     expect(pkg.scripts?.["build:tracked:dry"]).toContain("--dry-run");
   });
@@ -807,21 +814,24 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     // 而漂了不会红（账面上仍是合法的日期 + 人名 + 命令）。
     for (const rel of [
       "scripts/e2e/e2e-run.mjs",
-      "scripts/full-suite-run.mjs",
-      "scripts/artifact-run.mjs",
+      "scripts/affected-tests/full-suite-run.mjs",
+      "scripts/build/artifact-run.mjs",
     ]) {
       expect(readText(rel), rel).toContain("daily-run.mjs");
     }
-    expect(readText("scripts/daily-run.mjs")).toContain("writeSkipRecord");
+    expect(readText("scripts/affected-tests/daily-run.mjs")).toContain("writeSkipRecord");
     // `--dirty` 这条出路也必须走共用内核，不是各写一份。
-    expect(readText("scripts/daily-run.mjs")).toContain("--dirty");
+    expect(readText("scripts/affected-tests/daily-run.mjs")).toContain("--dirty");
   });
 
   it("记账要用的人名推导只有一份（`gitUser`，各档共用）", () => {
     // 各写一套时会出现「这一档记的是环境变量、那一档记的是 git config」，
     // 于是同一个人的几条记录名字不一样。
     expect(typeof gitUser("full")).toBe("string");
-    for (const rel of ["scripts/full-suite-run.mjs", "scripts/artifact-run.mjs"]) {
+    for (const rel of [
+      "scripts/affected-tests/full-suite-run.mjs",
+      "scripts/build/artifact-run.mjs",
+    ]) {
       expect(readText(rel), rel).toContain("gitUser");
     }
   });
@@ -1252,8 +1262,8 @@ describe("每日全量档的超时指纹复跑（档位表与组 C 同一条判�
   });
 
   it("这一档不重写指纹清单：脚本里不许出现第二份超时正则", () => {
-    const src = readFileSync(path.join(ROOT, "scripts/full-suite-run.mjs"), "utf8");
-    expect(src).toContain('from "./affected-tests/affected-launch-load-retry.mjs"');
+    const src = readFileSync(path.join(ROOT, "scripts/affected-tests/full-suite-run.mjs"), "utf8");
+    expect(src).toContain('from "./affected-launch-load-retry.mjs"');
     /* 「Test timed out」在本仓只能是**被引用**的话术，不该在这里被重新定义成一份正则。
        两份清单漂移的代价由 `tests/hook-affected-launch.test.ts` 钉在组 C 那一侧。 */
     expect(/\/Test timed out in[^/]*\/i/.test(src)).toBe(false);
@@ -1301,7 +1311,7 @@ describe("覆盖率门槛的档位与接线（ISSUE #2669）", () => {
        比读源码里的 filter 一行更硬：拼错、漏摘、被 `planRun` 二次注入都当场红。 */
     const out = execFileSync(
       process.execPath,
-      ["scripts/full-suite-run.mjs", "--dry-run", "--enforce-coverage"],
+      ["scripts/affected-tests/full-suite-run.mjs", "--dry-run", "--enforce-coverage"],
       { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
     expect(out).toContain("覆盖率门槛：**判**");
@@ -1316,11 +1326,11 @@ describe("覆盖率门槛的档位与接线（ISSUE #2669）", () => {
        `quality-gate.mjs` 的 `test` 条目（`pnpm check:all`，本地按需完整验证档）。
        两处都只**引用**那一个判点（`coverageGate` / 同一个环境变量名），
        不在调用点重抄一份判定（§12.18）。 */
-    const suite = readFileSync(join(ROOT, "scripts/full-suite-run.mjs"), "utf8");
+    const suite = readFileSync(join(ROOT, "scripts/affected-tests/full-suite-run.mjs"), "utf8");
     expect(suite).toContain('env.COMFY_COVERAGE_ENFORCE === "1"');
     expect(suite).toContain('COMFY_COVERAGE_ENFORCE: "1"');
     expect(suite).toContain("env: gate.enforce");
-    const gate = readFileSync(join(ROOT, "scripts/quality-gate.mjs"), "utf8");
+    const gate = readFileSync(join(ROOT, "scripts/gates/quality-gate.mjs"), "utf8");
     expect(gate).toMatch(/key === "test"[\s\S]{0,120}COMFY_COVERAGE_ENFORCE: "1"/);
     /* 反向：CI 的清单里**不许**有人顺手把硬档写进 `.cnb.yml` —— 那会把本单修掉的
        那个红灯原样装回去。 */

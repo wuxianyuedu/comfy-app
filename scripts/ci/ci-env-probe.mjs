@@ -151,7 +151,7 @@ export function ps7OnlySyntaxIn(text) {
 
 /**
  * 本仓写明的解释器下限 —— **Python 3.10**（ISSUE #2197 起唯一定义就是这里的
- * `PYTHON_MIN_VERSION`；`scripts/setup-comfy-cli-venv.mjs` 引用它，别处不许另抄）。
+ * `PYTHON_MIN_VERSION`；`scripts/devtools/setup-comfy-cli-venv.mjs` 引用它，别处不许另抄）。
  *
  * 为什么这条下限要在流水线上判：版本不够时**没有任何一步会红** ——
  * `check-app-port-vectors.cjs` 探到解释器就把它拉进四侧比对（3.9 上那些纯函数语法

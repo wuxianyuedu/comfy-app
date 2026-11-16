@@ -282,7 +282,7 @@ import fs from "node:fs";
 import process from "node:process";
 import path from "node:path";
 
-import { resolveGitDir } from "../git-dir.mjs";
+import { resolveGitDir } from "../lib/git-dir.mjs";
 /* 旗标解析在 `ship-args.mjs`：它跟着「命令行长什么样」动，而 `ship-core` 跟着「外部执行者的
  * 读数形状」动（ISSUE #2491 把这一层拆出去的那条理由写在文件头）。 */
 import { flagConflicts, parseArgs } from "./ship-args.mjs";
@@ -295,7 +295,7 @@ import { handleFromProcessEnv, readDevHandleWithSource } from "./ship-ticket.mjs
 import { reapCheckoutInstances, readAppInstances } from "./ship-reap.mjs";
 import { createOrReusePull, reportVerdict } from "./ship-platform.mjs";
 import { pollUntilTerminal } from "./ship-poll.mjs";
-import { startProgress } from "../progress-heartbeat.mjs";
+import { startProgress } from "../gates/progress-heartbeat.mjs";
 import { runCommitStage, runPushStage } from "./ship-local.mjs";
 import { runPreflightStage } from "./ship-preflight.mjs";
 import { runGhLogsOnRed } from "./ship-gh-logs.mjs";

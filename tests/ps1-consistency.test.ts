@@ -65,9 +65,9 @@ function runGuard(overrides: Record<string, string | null>): string {
   // 真实文件先整体拷过去，再按 overrides 覆盖 / 删除。
   const files = [
     SPEC,
-    path.join("scripts", "quality-gate-shared.mjs"),
-    path.join("scripts", "quality-gate.ps1"),
-    path.join("scripts", "run-tests.ps1"),
+    path.join("scripts", "gates", "quality-gate-shared.mjs"),
+    path.join("scripts", "gates", "quality-gate.ps1"),
+    path.join("scripts", "affected-tests", "run-tests.ps1"),
   ];
   for (const rel of files) {
     const src = path.join(process.cwd(), rel);
@@ -97,16 +97,16 @@ function runGuard(overrides: Record<string, string | null>): string {
   for (const rel of [
     "scripts/dev-launcher.ps1",
     "scripts/dev-launcher.mjs",
-    "scripts/quality-gate.ps1",
-    "scripts/quality-gate.mjs",
-    "scripts/run-tests.ps1",
-    "scripts/run-tests.mjs",
-    "scripts/generate-docs.ps1",
-    "scripts/generate-docs.mjs",
+    "scripts/gates/quality-gate.ps1",
+    "scripts/gates/quality-gate.mjs",
+    "scripts/affected-tests/run-tests.ps1",
+    "scripts/affected-tests/run-tests.mjs",
+    "scripts/docs/generate-docs.ps1",
+    "scripts/docs/generate-docs.mjs",
     "scripts/gates/check-app-port-vectors.ps1",
     "scripts/gates/check-app-port-vectors.cjs",
-    "scripts/prepare-local-run.ps1",
-    "scripts/env-init.mjs",
+    "scripts/devtools/prepare-local-run.ps1",
+    "scripts/devtools/env-init.mjs",
     "scripts/db/db-push.mjs",
   ]) {
     const dst = path.join(dir, rel);
@@ -155,7 +155,7 @@ describe("跨平台动作对照表（规范 §9.5）", () => {
 
   it("对照表里登记不存在的脚本 → 失败（登记漂移会被发现）", () => {
     const spec = fs.readFileSync(path.join(process.cwd(), SPEC), "utf8");
-    const broken = spec.replace("scripts/generate-docs.mjs", "scripts/does-not-exist.mjs");
+    const broken = spec.replace("scripts/docs/generate-docs.mjs", "scripts/does-not-exist.mjs");
     expect(broken).not.toBe(spec);
     const out = runGuard({ [SPEC]: broken });
     expect(out).toContain("CODE=1");
@@ -192,14 +192,14 @@ describe("跨平台动作对照表（规范 §9.5）", () => {
 describe("KNOWN_FAILED_FILES 的单点定义（规范 §9.5）", () => {
   it("共享模块导出该常量（单点定义存在）", () => {
     const shared = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "quality-gate-shared.mjs"),
+      path.join(process.cwd(), "scripts", "gates", "quality-gate-shared.mjs"),
       "utf8",
     );
     expect(shared).toMatch(/export\s+const\s+KNOWN_FAILED_FILES\s*=/);
   });
 
   it("两侧的门禁脚本只是**读取**它，不各自再定义一份", () => {
-    for (const rel of ["scripts/quality-gate.ps1", "scripts/run-tests.ps1"]) {
+    for (const rel of ["scripts/gates/quality-gate.ps1", "scripts/affected-tests/run-tests.ps1"]) {
       const text = fs.readFileSync(path.join(process.cwd(), rel), "utf8");
       // 读取形态：从共享模块解析（不写死清单字面量）
       expect(text).toContain("quality-gate-shared.mjs");
@@ -209,29 +209,38 @@ describe("KNOWN_FAILED_FILES 的单点定义（规范 §9.5）", () => {
   });
 
   it("在 .ps1 里再定义一份字面量清单 → 失败（漏改一处就红/绿不可归因）", () => {
-    const gate = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.ps1"), "utf8");
+    const gate = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "gates", "quality-gate.ps1"),
+      "utf8",
+    );
     const broken = `${gate}\n$KNOWN_FAILED_FILES = @("src/lib/media.test.ts")\n`;
     const out = runGuard({
-      [path.join("scripts", "quality-gate.ps1")]: broken,
+      [path.join("scripts", "gates", "quality-gate.ps1")]: broken,
     });
     expect(out).toContain("CODE=1");
     expect(out).toContain("又定义了一份 KNOWN_FAILED_FILES");
   });
 
   it("Node 侧门禁与共享模块读同一份清单（不许各写一套排除项）", () => {
-    const mjs = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.mjs"), "utf8");
+    const mjs = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "gates", "quality-gate.mjs"),
+      "utf8",
+    );
     expect(mjs).toContain('from "./quality-gate-shared.mjs"');
-    const runner = fs.readFileSync(path.join(process.cwd(), "scripts", "run-tests.mjs"), "utf8");
-    expect(runner).toContain('from "./quality-gate-shared.mjs"');
+    const runner = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "affected-tests", "run-tests.mjs"),
+      "utf8",
+    );
+    expect(runner).toContain('from "../gates/quality-gate-shared.mjs"');
   });
 });
 
 describe("跨平台动作的实现契约", () => {
   it("Node 侧门禁只用 Node 内建与本仓库模块（不引第三方依赖）", () => {
     for (const rel of [
-      "scripts/quality-gate.mjs",
-      "scripts/run-tests.mjs",
-      "scripts/generate-docs.mjs",
+      "scripts/gates/quality-gate.mjs",
+      "scripts/affected-tests/run-tests.mjs",
+      "scripts/docs/generate-docs.mjs",
     ]) {
       const text = fs.readFileSync(path.join(process.cwd(), rel), "utf8");
       // 只允许 node: 内建与相对路径（本仓库模块）—— 门禁要在「装好依赖之前」
@@ -247,8 +256,14 @@ describe("跨平台动作的实现契约", () => {
   });
 
   it("质量门禁的三项与 .ps1 侧同命令（两侧不许各写一套门禁清单）", () => {
-    const ps1 = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.ps1"), "utf8");
-    const mjs = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.mjs"), "utf8");
+    const ps1 = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "gates", "quality-gate.ps1"),
+      "utf8",
+    );
+    const mjs = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "gates", "quality-gate.mjs"),
+      "utf8",
+    );
     const squash = (t: string) => t.replaceAll(/\s+/g, " ");
     // 注意：lint 的扫描范围与 `--max-warnings 0` 等参数已按防漂移原则收进
     // package.json 的 `lint` 脚本，两侧门禁脚本只是 `pnpm run lint` 的委托方，
@@ -293,8 +308,14 @@ describe("跨平台动作的实现契约", () => {
     // Linux 上 `pnpm check:all` 悄悄多跑了一档、Windows 上双击入口按同样的名字报
     // 「参数不在可选集合内」，而两侧谁都没有任何东西会红。
     // 这里按两侧各自的结构取出**全量**名字再比 —— 不写死清单，增减门禁自然被跟上。
-    const ps1 = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.ps1"), "utf8");
-    const mjs = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.mjs"), "utf8");
+    const ps1 = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "gates", "quality-gate.ps1"),
+      "utf8",
+    );
+    const mjs = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "gates", "quality-gate.mjs"),
+      "utf8",
+    );
     // 解析器是共享件（`tests/helpers/quality-gate-gates`）：同一条 `$Blocks` / `GATES`
     // 形状在本文件与 `tests/daily-tracks.test.ts` 等处都要读，各写一份会在
     // 「换行 / 注释 / 块尾形态」上漂成两个口径（§12.18）。

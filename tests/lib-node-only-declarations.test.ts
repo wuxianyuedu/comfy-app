@@ -127,7 +127,7 @@ const PURE_NODE_HOSTS = [
   "src/lib/process/pnpm-resolve.ts",
   // `process/probe-exe.ts`（ISSUE #2316）：只依赖 `node:child_process` 的叶子 —— 一次 `spawnSync` 回答
   // 「这个候选真起得来吗、还是只是退非零 / 没量到」。消费方横跨测试侧（`tests/check-file-structure.test.ts`
-  // 两处「这台机器有没有 PowerShell/Python」）、脚本侧（`scripts/python-probe.mjs`）与 `python-resolve.ts` 的失败
+  // 两处「这台机器有没有 PowerShell/Python」）、脚本侧（`scripts/lib/python-probe.mjs`）与 `python-resolve.ts` 的失败
   // 形态类型；加 `server-only` 会让那两处起进程直接 throw，`.server.ts` 同样碍事，故按第三类登记。
   "src/lib/process/probe-exe.ts",
 ];
@@ -164,9 +164,9 @@ function isReport(value: unknown): value is Report {
   );
 }
 
-/** 跑一次可达性分析（实现收在 `scripts/lib-node-only-scan.mjs`，本用例不复制一份）。 */
+/** 跑一次可达性分析（实现收在 `scripts/gates/lib-node-only-scan.mjs`，本用例不复制一份）。 */
 function scan(): Report {
-  const out = execFileSync(process.execPath, ["scripts/lib-node-only-scan.mjs", "--json"], {
+  const out = execFileSync(process.execPath, ["scripts/gates/lib-node-only-scan.mjs", "--json"], {
     cwd: REPO_ROOT,
     encoding: "utf8",
   });

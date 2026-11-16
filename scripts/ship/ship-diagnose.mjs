@@ -31,7 +31,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { gitScratchPath } from "../git-dir.mjs";
+import { gitScratchPath } from "../lib/git-dir.mjs";
 import {
   classifyPrMergeable,
   CODE,
@@ -376,7 +376,7 @@ export function runDiagnose({
       prefix: "[ship]",
     });
     log(
-      "[ship] 归因不在这一格（「红是我的还是主干的」）：node scripts/base-check.mjs <拦住你的那条门禁>",
+      "[ship] 归因不在这一格（「红是我的还是主干的」）：node scripts/gates/base-check.mjs <拦住你的那条门禁>",
     );
     return CODE.RED;
   }

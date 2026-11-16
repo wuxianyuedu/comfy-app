@@ -21,14 +21,14 @@
  * 正文、注释与导出面逐字照搬；调用点按**真实落点** import（机制层不转假出口）。
  */
 /* 命令行长预算留在启动器那一层：它是「整条链怎么分批」的那个数，与分块函数同域，
- * 但账（`scripts/.gate-thresholds.json`）与用例都按它的老落点记 —— 这里只 import。 */
+ * 但账（`scripts/gates/.gate-thresholds.json`）与用例都按它的老落点记 —— 这里只 import。 */
 import { SAFE_ARGV_BUDGET } from "./run-affected-tests.mjs";
 
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 
 /* vitest 的入口解析与 typedoc / storybook 共用一份实现（ISSUE #2453）。 */
-import { resolvePackageBinEntry } from "../package-bin-entry.mjs";
+import { resolvePackageBinEntry } from "../lib/package-bin-entry.mjs";
 
 /**
  * 从环境变量取一个**显式的**并发覆盖（`COMFY_PRECOMMIT_MAX_WORKERS`）。
@@ -238,7 +238,7 @@ export function planLaunches(files, budget = SAFE_ARGV_BUDGET) {
 /**
  * 解析 vitest 的 ESM 入口。
  *
- * 实现**只有一份**：`scripts/package-bin-entry.mjs` 的 `resolvePackageBinEntry`
+ * 实现**只有一份**：`scripts/lib/package-bin-entry.mjs` 的 `resolvePackageBinEntry`
  * （ISSUE #2453）。三条理由（pnpm 布局里真身在 `.pnpm/…` 下、顶层那个是链接；
  * 入口名由包的 `bin` 字段定义；`require.resolve` 顺带把「装没装」问出来）写在那个模块的
  * 文件头 —— 这里只保留**抛错**那一层语义：本模块的调用方是门禁链路，解析不到要**当场停**

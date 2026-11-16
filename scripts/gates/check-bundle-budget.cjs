@@ -74,7 +74,7 @@
  * 2. **抖动怎么判**：**不用判** —— 实测同环境三次构建（热 / 热 / 冷，含 `rm -rf .next`）
  *    逐字节一致（含文件名）。基线是**实测初值**，不是估的；它不抖，所以不需要抖动缓冲。
  * 3. **放哪个基准**：与 `scripts/.file-size-baseline.json` 那批棘轮同构 —— 独立一份
- *    `scripts/.bundle-budget-baseline.json`，**只存 raw / gzip / 文件数三个结构量**
+ *    `scripts/gates/.bundle-budget-baseline.json`，**只存 raw / gzip / 文件数三个结构量**
  *    （逐文件内容指纹不进基线：那会让基线体积随 chunk 数线性膨胀，而判定并不读它）。
  * 4. **新依赖怎么算**：预算是**棘轮**（只许降不许升）。加一个大依赖会当场红，这是想要的
  *    （正是防劣化）；例外流程是**在 PR 里贴 before/after 两档读数 + 说明为什么值这个体积**，
@@ -113,7 +113,7 @@ const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
 const UPDATE = ARGS.has("--update");
 const ALLOW_INCREASE = ARGS.has("--allow-increase");
-const BASELINE = path.join(__dirname, "../.bundle-budget-baseline.json");
+const BASELINE = path.join(__dirname, ".bundle-budget-baseline.json");
 
 /**
  * 两条总量判据（gzip / chunk 文件数）当前**是否参与判定**。

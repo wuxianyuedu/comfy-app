@@ -75,7 +75,7 @@ const LEDGER: Array<string> = [
    *  而「剥注释」是拆得最干净的那一块（不回答「算不算违规」）。
    *  它仍是纯 Node 门禁层，不能 import TS 那份 helper。 */
   "scripts/ui-primitives/ui-primitives-engine.cjs",
-  "scripts/lib-node-only-scan.mjs",
+  "scripts/gates/lib-node-only-scan.mjs",
   // —— 视图层守卫用例里的那一型（就是 NAIVE 台账点名的缺陷形状）——
   "src/components/studio/workflow-editor/fit-viewport-source-guard.test.ts",
   "src/components/studio/workflow-editor/workflow-canvas-io-isolation-guard.test.ts",

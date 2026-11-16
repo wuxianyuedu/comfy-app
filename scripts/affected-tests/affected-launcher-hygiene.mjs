@@ -10,7 +10,7 @@
  * （§12.6 R5 姊妹档），出口只有一个：按职责拆。
  */
 import { collectLauncherScriptClosure } from "./launcher-closure.mjs";
-import { normalizeRel } from "../git-name-status.mjs";
+import { normalizeRel } from "../lib/git-name-status.mjs";
 
 /** 判据用例在增量面里的落点。 */
 export const LAUNCHER_HYGIENE_TEST = "tests/dist-artifact-hygiene.test.ts";

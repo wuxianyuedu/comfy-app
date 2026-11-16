@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
-const SCRIPT = path.resolve(import.meta.dirname, "../scripts/merge-changelog-fragments.mjs");
+const SCRIPT = path.resolve(import.meta.dirname, "../scripts/docs/merge-changelog-fragments.mjs");
 const tempDirs: Array<string> = [];
 
 /** 造一个临时「仓库」：脚本 + CHANGELOG.md + 若干碎片，并 `git init` 出一次提交。 */
@@ -27,9 +27,9 @@ function fixture(
 } {
   const root = mkdtempSync(path.join(tmpdir(), "merge-changelog-"));
   tempDirs.push(root);
-  mkdirSync(path.join(root, "scripts"), { recursive: true });
+  mkdirSync(path.join(root, "scripts", "docs"), { recursive: true });
   mkdirSync(path.join(root, "changelog.d"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  copyFileSync(SCRIPT, path.join(root, "scripts", "docs", path.basename(SCRIPT)));
   writeFileSync(path.join(root, "CHANGELOG.md"), changelog);
   for (const [name, body] of Object.entries(fragments)) {
     writeFileSync(path.join(root, "changelog.d", name), body);
@@ -63,7 +63,7 @@ function fixture(
           ok: true,
           output: execFileSync(
             process.execPath,
-            [path.join(root, "scripts", path.basename(SCRIPT)), ...args],
+            [path.join(root, "scripts", "docs", path.basename(SCRIPT)), ...args],
             { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
           ),
         };

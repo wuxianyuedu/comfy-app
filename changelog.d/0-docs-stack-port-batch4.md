@@ -22,7 +22,7 @@
     写清「这一行钉在哪条用例、`pnpm dev` 真正听的是推导口」。**口径**：AGENTS 的通则与
     一条钉死具体写法的用例同时存在时，改文前先跑那条用例，别按通则去删它钉的内容。
 - ⚠️ **改的过程中撤掉一处我自己写错的修法**：先把静态链那句写成占位符 `{{dev.port}}`
-  （看着最合规），但 `scripts/doc-facts.cjs` 的 FACTS 有**两种 kind**：
+  （看着最合规），但 `scripts/docs/doc-facts.cjs` 的 FACTS 有**两种 kind**：
   `placeholder` 的会被 `render-doc-placeholders` 替换（`comfyui.port` 就是，生成态里
   它变成了 `:8188`），而 `dev.port` 的 kind 是 **`verify`** —— **只用来验裸值、不参与替换**，
   所以那个 `{{dev.port}}` 原样留在**读者看的那份产物**里。更阴的是这件事**没有判据会红**：

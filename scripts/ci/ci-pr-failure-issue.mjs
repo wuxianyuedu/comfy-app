@@ -82,7 +82,7 @@ import { fetchBuildDetails } from "../gates/check-daily-attendance.mjs";
 import { commentHeader } from "../ship/ship-ticket.mjs";
 import { cnbJson, makeRunner, writeScratch } from "../ship/ship-exec.mjs";
 import { runAppendIssueComment, runNewIssue } from "../ship/ship-issue-new.mjs";
-import { machineHandle } from "../dev-handle.mjs";
+import { machineHandle } from "../platform/dev-handle.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 
@@ -289,7 +289,7 @@ export function composeBody({ slug, target, stage, skipped, readout, handle }) {
     "这一段只把「红了」变成看得见的东西，不替任何人判「是谁的错、为什么红」。定性走既有出口：",
     "",
     `- \`pnpm ship --diagnose ${target.sn}\` —— 只读取回失败格与失败行（本正文的读数就来自同一条链）`,
-    "- `node scripts/base-check.mjs <那条门禁>` —— 分清「红是我的还是主干的」（§13.6.2）",
+    "- `node scripts/gates/base-check.mjs <那条门禁>` —— 分清「红是我的还是主干的」（§13.6.2）",
     "- 拿不到的测量按**没有结论**处理：`2` 不算绿，也不算红",
     "",
     `日志出处：https://cnb.cool/${slug}/-/build/logs/${target.sn}`,

@@ -14,7 +14,7 @@
  */
 
 import { planLaunches } from "./affected-launch-spawn.mjs";
-import { FIXED_STRUCTURAL_TESTS } from "../fixed-structural-tests.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 
 /**
  * 固定段单块的最大份数（ISSUE #2863）。

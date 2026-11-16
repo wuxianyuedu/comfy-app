@@ -325,7 +325,7 @@ function isChangedFaceFile(rel) {
  * `require(esm)` 与下面 `--changed` 那一档同形（Node 24 认得了），而 `git-dir.mjs`
  * 只依赖 node 内置 —— 沙箱夹具那份依赖抄得动。 */
 function mergeInProgress() {
-  const { hasInProgressMerge } = require("../git-dir.mjs");
+  const { hasInProgressMerge } = require("../lib/git-dir.mjs");
   return hasInProgressMerge(ROOT);
 }
 
@@ -337,7 +337,7 @@ function mergeInProgress() {
  * `check-doc-mirror-pairing.cjs` 同形，`copyGateDeps` 按这一形态补沙箱依赖。
  */
 function changedFaceOrExit() {
-  const { resolveChangedFiles } = require("../changed-scope.mjs");
+  const { resolveChangedFiles } = require("../lib/changed-scope.mjs");
   const changed = resolveChangedFiles({ cwd: ROOT });
   if (!changed.ok) {
     console.error(
@@ -351,7 +351,7 @@ function changedFaceOrExit() {
 
 /** 暂存改动清单(仓库根相对 POSIX 路径)。git 拿不到时返回 null —— 由调用方 fail-closed。 */
 function stagedFiles() {
-  /* `-c core.quotePath=false`:路径要原样(ISSUE #2272,机制见 scripts/changed-scope.mjs 的
+  /* `-c core.quotePath=false`:路径要原样(ISSUE #2272,机制见 scripts/lib/changed-scope.mjs 的
    * 文件头「口径 ④」)。git 默认把含非 ASCII 字符的路径转义加引号,而本仓有 38 份文件名
    * 带非 ASCII 的文件(全在 docs/ 下)⇒ 转义过的路径认不出来,那些文件会**不进 oxfmt**。 */
   const res = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {

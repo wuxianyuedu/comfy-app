@@ -10,5 +10,5 @@
   一并说清「多个 NPC / Agent 共用一个平台账号」的边界：能区分的在平台账号的子地址
   （`<任意串>+<账号>@noreply.cnb.cool`），不在 git 配置里；改身份去区分人会让平台上的
   提交归属散掉，留痕应走分支名与 commit scope（规范 §13.2 / §13.6）。
-  文档已登记进 `docs/guides/` 的校验范围（`scripts/doc-facts.cjs` 的 `SCOPED_DOCS`）
+  文档已登记进 `docs/guides/` 的校验范围（`scripts/docs/doc-facts.cjs` 的 `SCOPED_DOCS`）
   与文档中心索引（`docs/README.md`）。

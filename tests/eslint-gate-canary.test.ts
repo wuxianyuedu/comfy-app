@@ -8,7 +8,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const CANARY = "scripts/eslint-gate-canary.mjs";
+const CANARY = "scripts/gates/eslint-gate-canary.mjs";
 
 /* 120s 的依据（实测，不是拍的）：判据起 **oxlint 子进程**，判决配置与 jsPlugin 加载是大头；⚠️ 并发在场时
  * 这些数不可引用（同文件在「受影响用例」格被挤着跑会显著变慢），只能判「谁在最前」。
@@ -28,7 +28,7 @@ function oxlintCalls(text: string): number {
   return Number(/oxlint 调用 (?<count>\d+) 次/.exec(text)?.groups?.count ?? "-1");
 }
 
-describe("scripts/eslint-gate-canary.mjs", () => {
+describe("scripts/gates/eslint-gate-canary.mjs", () => {
   it(
     "本仓开着的那几条规则真的会拦下违例（全仓 0 警 ≠ 闸在工作）",
     () => {

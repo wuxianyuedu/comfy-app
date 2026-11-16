@@ -81,7 +81,7 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
         id: "check-all",
         label: "一键质量门禁",
         command: "pnpm check:all",
-        desc: "scripts/quality-gate.mjs：本地跑一遍完整门禁",
+        desc: "scripts/gates/quality-gate.mjs：本地跑一遍完整门禁",
       },
       {
         id: "check",
@@ -271,7 +271,7 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
         id: "base-batch",
         label: "门禁基线复算",
         command: "pnpm run check:base:batch",
-        desc: "被判据拦下又确信「不是我改的」时先跑它；单条用 node scripts/base-check.mjs <门禁名>",
+        desc: "被判据拦下又确信「不是我改的」时先跑它；单条用 node scripts/gates/base-check.mjs <门禁名>",
       },
       {
         id: "standalone-contents",

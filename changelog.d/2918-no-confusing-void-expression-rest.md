@@ -14,7 +14,7 @@
 
   验证：单规则复扫上述目录 0 命中；`tsc`（两份 tsconfig）/ `eslint` / `oxfmt` 通过；
   改动面受影响用例 166 份绿 —— 另有 3 份（`ci-slot-apply` / `dev-handle` / `tauri-tools-cache`）
-  在干净基线上**同样命中**，`node scripts/base-check.mjs` 的结论是 `baseline-red`，与本次改动无关。
+  在干净基线上**同样命中**，`node scripts/gates/base-check.mjs` 的结论是 `baseline-red`，与本次改动无关。
 
 - oxlint `typescript/no-confusing-void-expression` 第 4 批（收尾批）：`src/components/**`
   清零（1127 处 / 301 份，ISSUE #2918；姊妹规则 `eslint/no-void` 见 #2776/#2923，

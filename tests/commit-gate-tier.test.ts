@@ -102,7 +102,7 @@ describe("档位：跳过必须被说出来", () => {
      * 失效形态是 forks worker 调度超时而非用例红；2026-11-02 起连同「core 骨架单一事实源」等从 PR 撤到
      * 每日全量单测（§13.5.21）。这里钉两件：①premerge 段表**没有** `unitTests`（恒跳过的一格不构成证据，
      * §13.6.2）；②`受影响用例`/`固定结构用例` 在 `.cnb.yml` 不再有独立 stage。 */
-    const src = readFileSync(path.join(ROOT, "scripts/premerge-check.mjs"), "utf8");
+    const src = readFileSync(path.join(ROOT, "scripts/gates/premerge-check.mjs"), "utf8");
     expect(src).not.toContain("unitTests:");
     expect(src).not.toContain('kind: "changed"');
     // `base` 段仍读钩子注册表（localTierLabels），`--light` 那一档的跳过条数照旧要说出来。

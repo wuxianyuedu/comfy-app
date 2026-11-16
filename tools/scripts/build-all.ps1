@@ -100,14 +100,14 @@ if (Test-Path $shortcutScript) {
 Log ""
 
 Log "[4/4] 发布到项目内 dist\desktop（一份一个目录 + manifest，latest.txt 是指针，轮转留 2 份）..."
-# 发布那一格只有这一个入口（scripts/publish-desktop-bundle.mjs）——平台侧自 #3504 起走 GA
+# 发布那一格只有这一个入口（scripts/build/publish-desktop-bundle.mjs）——平台侧自 #3504 起走 GA
 # 的 artifact + 滚动 Release，不跑它；本地这里不另写一套发布逻辑。
 # `--root` 指到项目内（ISSUE #3546）：本机自己打的包不写进常驻目录，也不占别的卷；
 # 不传它时该入口仍按 `pnpm store path` 推导常驻根（平台侧形态）。
 # 退出码三态：0 发布完成 / 1 没有成品 / 2 没有结论（问不出发布根或盘不够）—— 后两档
 # 都不许被读成「今天没有新包」。
 $publishRoot = Join-Path $PROJECT_ROOT "dist\desktop"
-Invoke-Logged "node scripts/publish-desktop-bundle.mjs --root `"$publishRoot`""
+Invoke-Logged "node scripts/build/publish-desktop-bundle.mjs --root `"$publishRoot`""
 $publishErr = $script:LAST_INVOKE_CODE
 if ($publishErr -ne 0) {
     Log ""

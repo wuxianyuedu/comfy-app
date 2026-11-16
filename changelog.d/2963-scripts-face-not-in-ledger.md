@@ -1,6 +1,6 @@
 ## Fixed
 
-- 脚本档类型检查的**判决面份数不再进账**（`scripts/.scripts-typecheck-baseline.json` 的
+- 脚本档类型检查的**判决面份数不再进账**（`scripts/gates/.scripts-typecheck-baseline.json` 的
   `face` 一格删掉）：它记的是「判了多少份」这个**构成**量，而本档是空账（`total: 0`），
   新增一份干净脚本时一个格子都不涨 ⇒ 唯一的满足路径是人再跑一次 `--update` 记账。
   结果是每落一次提交就红一次**无关的人**：2026-11-01 一天里同一行被 8 个人各改一次

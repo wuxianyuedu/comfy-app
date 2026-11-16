@@ -11,7 +11,7 @@ import { expectHomeReady } from "./support/home-anchors";
 /* SAFETY: 类型断言已复核 */
 const RUNTIME_BUDGET = {
   /**
-   * 基线读数（毫秒）—— **实测初值，不是估的**，唯一出处是 `scripts/.runtime-budget-baseline.json` 的
+   * 基线读数（毫秒）—— **实测初值，不是估的**，唯一出处是 `e2e/.runtime-budget-baseline.json` 的
    * `metric.byPlatform`（与 `check-bundle-budget` 同构：数字住在基线文件，spec 只读口径）。两平台必须
    * 同源有判据（`tests/e2e-runtime-budget.test.ts` 核逐字一致）—— 各写一份就会漂，而漂了不会红。
    */

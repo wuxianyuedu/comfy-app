@@ -149,9 +149,9 @@ const ROOT = path.resolve(HERE, "../..");
  *     在读数上无差别）。
  * ⚠️ **2026-11-05 再订正（ISSUE #2537 / 事故 #2528）**：只按 `entryPoints` 走的闭包
  *     仍然偏窄 —— typedoc **解析**的是 TS 程序（`tsconfig.json` 展开的根 ∪ 沿 import
- *     走到的文件），`entryPoints` 只决定渲染哪几页。`scripts/publish-desktop-bundle.mjs`
+ *     走到的文件），`entryPoints` 只决定渲染哪几页。`scripts/build/publish-desktop-bundle.mjs`
  *     正是被 `tests/**` import 进程序、却不在旧面里的那类 ⇒ 那一格静默跳格。
- *     现在面由 `scripts/docs-api-input-closure.mjs` 的 `docsApiTriggerGlobs()` **从解析根
+ *     现在面由 `scripts/docs/docs-api-input-closure.mjs` 的 `docsApiTriggerGlobs()` **从解析根
  *     派生**（tsconfig 展开 ∩ git 跟踪文件 → `dir/**` + 根级 `*.<ext>`），由
  *     `tests/docs-api-input-closure.test.ts` 双向对账（事实面罩不住 ⇒ 红；面被改窄 ⇒ 红）。
  *     **同日起这一档从 push 撤到每日档**（无 `ifModify`）⇒ 上面这份派生面不再写进本表，
@@ -382,10 +382,10 @@ function main() {
  * （`checkIncrementalGates()` 已经在核「表 ⇄ `.cnb.yml`」的双向一致）。
  */
 
-/** glob → 正则：**复用**别处那份（`scripts/vitest-projects.cjs` 导出的 `globToRe` /
+/** glob → 正则：**复用**别处那份（`scripts/affected-tests/vitest-projects.cjs` 导出的 `globToRe` /
  * `matchesAny`）—— 另写一份就会与 vitest 收集面那套 `**` 语义漂开（那份的头注记着
  * 一次真实事故：「双星号 + 斜杠」翻错会让整条面匹配不到任何路径）。 */
-const { matchesAny } = createRequire(import.meta.url)("../vitest-projects.cjs");
+const { matchesAny } = createRequire(import.meta.url)("../affected-tests/vitest-projects.cjs");
 
 /**
  * 按**判据脚本**找它的那条收窄登记。

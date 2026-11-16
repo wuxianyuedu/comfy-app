@@ -1,5 +1,5 @@
 /**
- * `scripts/prune-virtual-store.mjs` 的自测（ISSUE #3545）：把「清虚拟 store 残留」从
+ * `scripts/devtools/prune-virtual-store.mjs` 的自测（ISSUE #3545）：把「清虚拟 store 残留」从
  * 手工删目录收成 `pnpm deps:prune` 之后，最容易坏的不是「删不掉」，而是**删错**：
  * 把还在依赖图里的条目、`.pnpm/node_modules` 或身份判不准的目录一起收走。所以这里
  * 每一条都同时判退出码、正文与**盘上的事实**（§13.6.4：效应不许只转述自己的 stdout）。
@@ -17,7 +17,7 @@ import {
   type GateRepoHandle,
 } from "./helpers/gate-repo";
 
-const SCRIPT = "prune-virtual-store.mjs";
+const SCRIPT = "devtools/prune-virtual-store.mjs";
 /** pnpm 的 hoisted 虚拟目录，必须原样留着（造一个文件让「在不在」判得到）。 */
 const HOISTED_MARKER = "node_modules/.pnpm/node_modules/.keep";
 

@@ -14,7 +14,7 @@
  * `HOOK_PATH` / `GATE_CHECKLIST_DOC` / `NON_D_GROUP_COMMANDS`）跟着判据一起搬：
  * 留在原处会变成「两处各说各话」。
  */
-const { SCOPED_DOCS, readText, exists } = require("../doc-facts.cjs");
+const { SCOPED_DOCS, readText, exists } = require("../docs/doc-facts.cjs");
 
 /** 代理自动加载的唯一导航文件。与 `check-doc-references.cjs` 里的同名常量是同一个判据面：
  *  `AGENTS.md` 与两份索引都写「哪条判据在哪跑」，而它们不在 SCOPED_DOCS 里。 */

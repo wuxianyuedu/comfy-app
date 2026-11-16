@@ -125,9 +125,9 @@ import {
   orderByKnownDuration,
   readTimingLedger,
 } from "./affected-launch-duration-order.mjs";
-import { applySuspension, excludeArgs } from "../suspended-gate-tests.mjs"; // #2948
+import { applySuspension, excludeArgs } from "./suspended-gate-tests.mjs"; // #2948
 import { patchCoverageArgs } from "./affected-patch-coverage.mjs";
-import { FIXED_STRUCTURAL_TESTS } from "../fixed-structural-tests.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 /* 「受影响用例」门在 CI 里的良性 stderr 噪音屏蔽（按行判定，见文件头）：本文件只负责
  * 在起 vitest 前解析开关、在两遍 spawn 都把 `isNoiseLine` 透传下去。 */
 import { isNoiseLine, resolveNoiseFilter } from "./affected-launch-noise-reporter.mjs";
@@ -146,7 +146,7 @@ import {
   readRetrySuiteFailures,
   writeFilesManifest,
 } from "./affected-launch-junit-io.mjs";
-import { collectFileTimings } from "../precommit-timing.mjs";
+import { collectFileTimings } from "../gates/precommit-timing.mjs";
 
 export { junitReportArgs, writeFilesManifest };
 /* 逐份用时的**取数**也归账本那一侧（`collectFileTimings` 是布局的唯一读者，
@@ -840,7 +840,7 @@ export async function runChunk(chunk, deps) {
     `[affected-launch] **第 2 遍**里有文件的失败**不是**调度形态 ⇒ 这不是负载假红，按真红处置。\n` +
       `  同块里确实还有超时的那 ${verdict.timedOut.length} 份，它们不替这几份挡：\n${verdict.hardFail
         .map((f) => `    · ${f}\n`)
-        .join("")}  用 \`node scripts/base-check.mjs <这条>\` 复算归属（你的 / 别线的），\n` +
+        .join("")}  用 \`node scripts/gates/base-check.mjs <这条>\` 复算归属（你的 / 别线的），\n` +
       `  再决定修代码还是登记 —— 不要抬 testTimeout。\n`,
   );
   report({

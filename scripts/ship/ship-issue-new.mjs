@@ -29,7 +29,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { isExplicitSource } from "../dev-handle.mjs";
+import { isExplicitSource } from "../platform/dev-handle.mjs";
 import { appendComment, sameCommentBody, stripTrailingNewline } from "./ship-comment.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
@@ -41,7 +41,7 @@ import {
   withCommentHeader,
 } from "./ship-ticket.mjs";
 import { readIssue } from "./ship-claim.mjs";
-import { cnbData } from "../cnb-fields.mjs";
+import { cnbData } from "../platform/cnb-fields.mjs";
 
 /** `--priority` 的词表（平台原生字段；不认别的写法）。 */
 const PRIORITY_WORDS = ISSUE_PRIORITIES.split("|");

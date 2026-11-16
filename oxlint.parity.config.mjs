@@ -876,7 +876,7 @@ export default defineConfig({
         "scripts/gates/check-theme-colors.cjs",
         "scripts/ci/ci-build-readout.mjs",
         "scripts/ci/ci-toolchain-pnpm.mjs",
-        "scripts/file-structure-rules.cjs",
+        "scripts/gates/file-structure-rules.cjs",
         "src/lib/llm/video-task-util.test.ts",
         "src/lib/llm/video-task-util.ts",
         "src/lib/log/log-ansi.ts",

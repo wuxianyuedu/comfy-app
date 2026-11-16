@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { cnbData, cnbRecords, readCnbField } from "../scripts/cnb-fields.mjs";
+import { cnbData, cnbRecords, readCnbField } from "../scripts/platform/cnb-fields.mjs";
 
 describe("cnb-fields —— 信封解包（结论只认 data 里的键）", () => {
   it("正常信封：读 data 里的键", () => {

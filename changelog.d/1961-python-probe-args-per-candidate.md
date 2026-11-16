@@ -12,7 +12,7 @@
   只看一边的日志**分不出是哪一边错**，而 E2E 那一步要等十几分钟（前面有 728s 的
   `单元测试` 与 69s 的 `生产构建`）才轮得到。所以：
 
-  - `scripts/python-probe.mjs` 新增「`resolvePython`（手工扫 PATH × PATHEXT）」一节，
+  - `scripts/lib/python-probe.mjs` 新增「`resolvePython`（手工扫 PATH × PATHEXT）」一节，
     把第二条链的结论与第一条并列打（`resolve` 做成可注入，判据才不会被宿主环境左右）；
   - `.cnb.yml` 新增 `Python 探针读数` 这一步（紧跟 `Python 可用性`，退出码恒为 0、
     **只打印不阻断**），`COMFYAPP_CI_GATES` 同批登记它；

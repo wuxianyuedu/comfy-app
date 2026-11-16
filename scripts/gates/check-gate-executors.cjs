@@ -12,7 +12,7 @@
  * 本脚本把「有没有执行者」这件事机器化，覆盖两向：
  *
  *   ① **判定型脚本无执行者** ⇒ 红，除非显式登记在「按需召唤」台账
- *      （`scripts/.gate-executor-ledger.json`，每条含「为什么不能进钩子」+「谁按需跑」）。
+ *      （`scripts/gates/.gate-executor-ledger.json`，每条含「为什么不能进钩子」+「谁按需跑」）。
  *      判定型 = 源码里有 `process.exit`（会以非零退出阻断某次运行）。
  *   ② **报告型脚本自称「供 pre-commit 调用」** ⇒ 红。报告型 = 0 处 `process.exit`
  *      （只出清单不判失败），它按定义不该有判定者，那句承诺必然是假的
@@ -39,7 +39,7 @@
  *   · `.githooks/pre-commit`（提交门槛）与 `.githooks/prepare-commit-msg`（提交消息门槛）
  *     —— 后者是 ISSUE #1594 起的第二个本地钩子:「合并提交必须双亲」只能在那里判
  *     （`pre-commit` 看不到本次的消息），漏了它那条判据会被判成「无执行者」。
- *   · `scripts/quality-gate.mjs`（`pnpm check:all` 的编排）
+ *   · `scripts/gates/quality-gate.mjs`（`pnpm check:all` 的编排）
  *   · `package.json` 的 `scripts`（`pnpm <名>` 入口）
  *   · `scripts/build-desktop.mjs`（打包链）
  *   · `scripts/standalone-private-inputs.mjs`（`pnpm build` 收尾，与上面同族）
@@ -74,7 +74,7 @@ const ROOT = path.resolve(__dirname, "../..");
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
 const UPDATE = ARGS.has("--update");
-const LEDGER = path.join(__dirname, "../.gate-executor-ledger.json");
+const LEDGER = path.join(__dirname, ".gate-executor-ledger.json");
 
 /* ── 扫描范围：`scripts/` 下的判据脚本 ─────────────────────────── */
 
@@ -166,7 +166,7 @@ const EXECUTOR_SOURCES = [
   // 「合并前的固定动作」此前唯一的执行者是人的记性（规范 §13.6.2.1）。不登记它，
   // 那次接线就会被读成「文档说有人跑、实际没人跑」—— 与本文件立案的现场同形。
   ".githooks/pre-push",
-  "scripts/quality-gate.mjs",
+  "scripts/gates/quality-gate.mjs",
   "package.json",
   "scripts/build-desktop.mjs",
   "scripts/standalone-private-inputs.mjs",
@@ -581,7 +581,7 @@ for (const name of names) {
       report.judgeOrphaned.push(name);
       problems.push(
         `「${name}」是判定型（有 process.exit）却一个执行者都没有，也没登记台账 —— ` +
-          `要么接进 .githooks/pre-commit，要么在 scripts/.gate-executor-ledger.json ` +
+          `要么接进 .githooks/pre-commit，要么在 scripts/gates/.gate-executor-ledger.json ` +
           `登记「为什么不能进钩子」与「谁按需跑」（ISSUE #1451 的立案现场就是这一族）`,
       );
     }
@@ -626,7 +626,7 @@ if (UPDATE) {
    * 一次随手 --update 就把 #2530 这层判据变成空转（账面连红都不会红，因为没东西可验）。 */
   next.entrypoints = ledger.entrypoints;
   fs.writeFileSync(LEDGER, `${JSON.stringify(next, null, 2)}\n`);
-  console.log(`台账已重写：scripts/.gate-executor-ledger.json`);
+  console.log(`台账已重写：scripts/gates/.gate-executor-ledger.json`);
   process.exit(0);
 }
 

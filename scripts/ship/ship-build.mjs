@@ -16,7 +16,7 @@
  * `null` / `unknown`，**不猜方向**（空数组会被读成「查过了、没有我的」，而 null 才是
  * 「没拿到列表」）。
  */
-import { readCnbField } from "../cnb-fields.mjs";
+import { readCnbField } from "../platform/cnb-fields.mjs";
 
 /** build 的终态集合（其余一律当「还没完」）。 */
 const TERMINAL = new Set(["success", "failed", "error", "cancelled", "canceled"]);

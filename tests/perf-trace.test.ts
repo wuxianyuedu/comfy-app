@@ -11,10 +11,10 @@ import {
   parseArgs,
   slugForRoute,
   usage,
-} from "../scripts/perf-trace.mjs";
+} from "../scripts/devtools/perf-trace.mjs";
 
 /**
- * `scripts/perf-trace.mjs` 的判据（ISSUE #3843）：性能取证这件事在 #3771 的排查里
+ * `scripts/devtools/perf-trace.mjs` 的判据（ISSUE #3843）：性能取证这件事在 #3771 的排查里
  * 是第二次真实需要（第一次靠临时脚本），按 §12.20 收成有名字的入口。这条用例钉住
  * 入口的**形状**：参数怎么读、trace 落哪（按次命名，不覆盖旧证据）、录什么类别。
  */

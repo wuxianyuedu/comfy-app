@@ -270,7 +270,7 @@ describe("仓库根收口（resolveRepoRoot）", () => {
       "scripts/dev.mjs",
       "scripts/start.mjs",
       "scripts/dev-launcher.mjs",
-      "scripts/storybook.mjs",
+      "scripts/devtools/storybook.mjs",
     ];
     for (const rel of callSites) {
       const src = fs.readFileSync(path.join(process.cwd(), rel), "utf8");

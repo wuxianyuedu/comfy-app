@@ -10,7 +10,7 @@ import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
-const GATE_PS1 = path.join(ROOT, "scripts", "quality-gate.ps1");
+const GATE_PS1 = path.join(ROOT, "scripts", "gates", "quality-gate.ps1");
 const LOCK_CLI = path.join(ROOT, "scripts", "lockfile", "diff-cli.mjs");
 const gateSrc = fs.readFileSync(GATE_PS1, "utf8");
 
@@ -70,15 +70,16 @@ function makeFakeRepo(
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dep-precheck-"));
   tmpDirs.push(root);
   fs.mkdirSync(path.join(root, "scripts", "lockfile"), { recursive: true });
+  fs.mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
   fs.mkdirSync(path.join(root, "node_modules", ".pnpm"), { recursive: true });
-  fs.copyFileSync(GATE_PS1, path.join(root, "scripts", "quality-gate.ps1"));
+  fs.copyFileSync(GATE_PS1, path.join(root, "scripts", "gates", "quality-gate.ps1"));
   if (opts.patchGateText) {
-    const p = path.join(root, "scripts", "quality-gate.ps1");
+    const p = path.join(root, "scripts", "gates", "quality-gate.ps1");
     fs.writeFileSync(p, opts.patchGateText(fs.readFileSync(p, "utf8")), "utf8");
   }
   fs.copyFileSync(
-    path.join(ROOT, "scripts", "quality-gate-shared.mjs"),
-    path.join(root, "scripts", "quality-gate-shared.mjs"),
+    path.join(ROOT, "scripts", "gates", "quality-gate-shared.mjs"),
+    path.join(root, "scripts", "gates", "quality-gate-shared.mjs"),
   );
   for (const name of ["diff-cli.mjs", "lock-diff.mjs", "render-lock-diff.mjs"]) {
     fs.copyFileSync(
@@ -108,7 +109,7 @@ function runGate(root: string): { out: string; status: number } {
       "-ExecutionPolicy",
       "Bypass",
       "-File",
-      path.join(root, "scripts", "quality-gate.ps1"),
+      path.join(root, "scripts", "gates", "quality-gate.ps1"),
       "-Mode",
       "dependencyAudit",
     ],

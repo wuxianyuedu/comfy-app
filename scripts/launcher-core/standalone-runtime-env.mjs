@@ -36,7 +36,7 @@ export const LOOPBACK_HOST = "127.0.0.1";
 /**
  * 本地 OAuth 占位值：非空即可过 `src/env.js` 的 schema，不参与任何真实鉴权。
  *
- * 单一定义点：`scripts/env-init.mjs` 原先自己写了一份同样的字面量，现改为 import
+ * 单一定义点：`scripts/devtools/env-init.mjs` 原先自己写了一份同样的字面量，现改为 import
  * 这里（§12.12「跨文件不许各写一份」），两侧不一致的表现是「桌包与 dev 检出的
  * 鉴权配置形状不同」，而不是一个能看见的报错。
  */

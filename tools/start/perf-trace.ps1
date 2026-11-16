@@ -6,7 +6,7 @@ perf-trace.ps1 — 给「定位性能 / 冻结类问题要一段主线程 trace�
 （含主线程任务与 CPU 采样），按次命名落 log\profiles\，并把本机路径与「怎么读」
 打印出来。
 
-实际逻辑在 scripts\perf-trace.mjs（跨平台唯一实现，见
+实际逻辑在 scripts\devtools\perf-trace.mjs（跨平台唯一实现，见
 docs\standards\launch-and-build.md §9.5），本入口只负责「定位项目根 → 转交 → 透传退出码」。
 
 用法：
@@ -43,14 +43,14 @@ if (-not $node) {
     exit 1
 }
 
-$script = Join-Path $root "scripts\perf-trace.mjs"
+$script = Join-Path $root "scripts\devtools\perf-trace.mjs"
 if (-not (Test-Path -LiteralPath $script)) {
-    Write-Host "[ERROR] 未找到 scripts\perf-trace.mjs（性能取证的跨平台实现）。" -ForegroundColor Red
+    Write-Host "[ERROR] 未找到 scripts\devtools\perf-trace.mjs（性能取证的跨平台实现）。" -ForegroundColor Red
     exit 1
 }
 
 Write-Host "[INFO] 正在录性能 trace（加载 + 静置一段，含主线程任务与 CPU 采样）..." -ForegroundColor Cyan
-Write-Host "[INFO] 底层脚本：scripts\perf-trace.mjs" -ForegroundColor Cyan
+Write-Host "[INFO] 底层脚本：scripts\devtools\perf-trace.mjs" -ForegroundColor Cyan
 Write-Host ""
 
 # 命令行回显：入口经 Start-Process 起进程后命令行不再出现在窗口里，

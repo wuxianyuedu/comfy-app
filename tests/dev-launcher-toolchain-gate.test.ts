@@ -1125,7 +1125,7 @@ import {
   collectDependencyFloors,
   parseRange,
   satisfies,
-} from "../scripts/node-engines.mjs";
+} from "../scripts/launcher-core/node-engines.mjs";
 
 /**
  * Node 下限这一格存在的理由（规范 §2.1.8）：`next` 的下限（`>=20.9.0`）比测试链低得多 ⇒「Node 太旧」的表现是

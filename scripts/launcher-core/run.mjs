@@ -29,7 +29,7 @@ import { crc32, deflateRaw } from "node:zlib";
 const deflateRawAsync = promisify(deflateRaw);
 
 import { localTimestamp } from "./log.mjs";
-import { resolveGitDir } from "../git-dir.mjs";
+import { resolveGitDir } from "../lib/git-dir.mjs";
 
 /** 日志根下的固定名（改这里即改布局，别在别处拼这些字面量）。 */
 export const LOG_LAYOUT = {

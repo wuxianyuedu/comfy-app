@@ -7,7 +7,7 @@
   **最不该每次都跑**的那几条：`base-check` 105.9s、`tw4-hardgate-behaviour` 54.5s、
   `check-bundle-budget` 51.7s、`a11y-rules-gate` 47.5s —— 都是「在临时工作区里现拷夹具、
   跑那个被测工具」的行为自检，业务代码怎么改都不会让它们的判决漂。
-  现在这四条登记在 `scripts/fixed-gate-input-faces.mjs`，`resolveAffectedTests` 在增量档按面
+  现在这四条登记在 `scripts/gates/fixed-gate-input-faces.mjs`，`resolveAffectedTests` 在增量档按面
   切（同一把尺，平台侧那 13 条 `ifModify` 早就是这么做的，见 §13.5.20 / §13.5.22）。
   实测 `--changed docs/README.md`：90 份 → 86 份，跳过的正是这四条，且**逐条点名**
   （`固定 N` 那个数同时改成「这次真跑到的条数」—— 拿清单长度冒充实跑，跳过的几条就在

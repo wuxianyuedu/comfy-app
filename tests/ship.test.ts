@@ -153,7 +153,7 @@ import {
 import { main } from "../scripts/ship/ship.mjs";
 import { createShipResultSink, readShipResult } from "../scripts/ship/ship-result.mjs";
 import { parseStatusTarget, runStatus, statusExitCode } from "../scripts/ship/ship-status.mjs";
-import { EMPTY_COMMIT_ENV } from "../scripts/intentional-empty-commit.mjs";
+import { EMPTY_COMMIT_ENV } from "../scripts/platform/intentional-empty-commit.mjs";
 
 /** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
 const BUILD_ENVELOPE_AND_DATA = {

@@ -30,8 +30,8 @@
 
   **顺带量到一条不属于本批的红，已立案不顺手修（ISSUE #2716，P2）**：本判据的 `--check`
   在 `master` 上有 **1 处**存量（`NodesTab.tsx:28` 的 `max-h-[480px]`，4px 一格 ⇒ `max-h-120`）。
-  归属由 `scripts/base-check.mjs` 当场判：**干净基线上同样命中 ⇒ 别线的红**。
-  它活得下来的原因也当场读出来了：这条判据登记在 `scripts/.gate-executor-ledger.json`
+  归属由 `scripts/gates/base-check.mjs` 当场判：**干净基线上同样命中 ⇒ 别线的红**。
+  它活得下来的原因也当场读出来了：这条判据登记在 `scripts/gates/.gate-executor-ledger.json`
   的 **`onDemand`** 一节（只有 `why` / `who`，没有自动执行者）⇒ 「判据在场、执行者不在场」。
   **本批不动视图文件**（动它要 `--write` + `vitest -u` 重生成快照，是另一条凭据链）。
 

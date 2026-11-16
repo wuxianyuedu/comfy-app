@@ -8,7 +8,7 @@
  *
  * `scripts/ci/ci-daily-build.mjs` 里躺着两处死声明（`ARTIFACT_TIMEOUT_MS` 被 import 却从未
  * 使用、`const HERE` 定义后从未使用），`pnpm exec tsc --noEmit` 在主干上**全绿**。它们
- * 之所以现形，只是因为 ISSUE #2503 新增的 `scripts/publish-desktop-bundle.mjs` 里写了
+ * 之所以现形，只是因为 ISSUE #2503 新增的 `scripts/build/publish-desktop-bundle.mjs` 里写了
  * 一行 `import { runContext } from "../ci/ci-daily-build.mjs"` —— **唯一变量是那行 import**。
  *
  * ## 根因：主配置的 include 里根本没有 `**\/*.mjs`
@@ -25,7 +25,7 @@
  * （31 份文件，登记时的读数）；合并并行那批 #2585（scripts 的 84 条死代码逐条清零）之后
  * 重测 **310 处 / 29 份**，最大一类 167 处 `TS7006` 隐式 any 参数，而 `TS6133`（声明了
  * 没用到）**账上归零** —— 本单点名的那一类死代码，落地当天就没有存量了。另有一处是真故障：
- * `scripts/quality-gate.mjs` 有四条 `fail(...)` 调用而那个名字在本文件从未声明
+ * `scripts/gates/quality-gate.mjs` 有四条 `fail(...)` 调用而那个名字在本文件从未声明
  * （`TS2304`）—— 那四条失败路径运行期抛的是 `ReferenceError`，不是它想打的那句话。
  *
  * ## 范围口径（本单要的那一句）
@@ -107,8 +107,8 @@ const ROOT = process.env.COMFY_SCRIPTS_TYPECHECK_ROOT
   : REPO;
 const CONFIG_REL = "tsconfig.scripts.json";
 /* 基线落点跟着 ROOT 走：夹具那一档必须能自己写一份基线，才测得出「上涨被拒」这一支。
- * 真仓库里 `ROOT === REPO`，这一句取到的正是 `scripts/.scripts-typecheck-baseline.json`。 */
-const BASELINE = path.join(ROOT, "scripts", ".scripts-typecheck-baseline.json");
+ * 真仓库里 `ROOT === REPO`，这一句取到的正是 `scripts/gates/.scripts-typecheck-baseline.json`。 */
+const BASELINE = path.join(ROOT, "scripts", "gates", ".scripts-typecheck-baseline.json");
 const TSC_ENTRY = path.join(REPO, "node_modules", "typescript", "lib", "tsc.js");
 const RULE_VERSION = 1;
 const TAG = "[scripts-typecheck]";

@@ -197,7 +197,7 @@ pnpm ui:primitives:report   # 按档分组出清单（CORE / SURFACE 两段）
 那天静默改错地方** —— 所以顺带把 `demoteToRatchet()` 锚回 `HARD_GATE_RULES` 那一段。
 
 **判据**（`scripts/gates/check-ui-primitives.cjs`，基线
-`scripts/.ui-primitives-baseline.json`）：
+`scripts/gates/.ui-primitives-baseline.json`）：
 
 | ID          | 判据                                                                                                                                                                                                                                 | 应改用什么                                                                                                                                                                                                      |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -564,7 +564,7 @@ const VARIANTS: ButtonVariant[] = ["default", "outline" /* … */];
 对「故事文件自己怎么写」无感。
 
 **判据四条**（`tests/storybook-cva-variant-source.test.ts` +
-门禁 `scripts/storybook-check.mjs`，共用
+门禁 `scripts/devtools/storybook-check.mjs`，共用
 `scripts/storybook-checks/cva-variant-source.mjs` 里的纯函数；AST 判，不靠正则，
 所以注释里写 `xxxVariants.variants` 讲这条规则本身**不算违规**）：
 
@@ -586,7 +586,7 @@ PR 流水线的 `受影响用例` 一格执行，规范 §13.5.25）跑的是用
 故事」。那一层以外的人（以及只看脚本的读者）也要能一条命令问出结论：
 
 ```bash
-node scripts/storybook-check.mjs      # 或 pnpm check:all 里的 storybook 档
+node scripts/devtools/storybook-check.mjs      # 或 pnpm check:all 里的 storybook 档
 ```
 
 脚本自己**不做第二份实现**：它调的是与用例同一份 `cva-variant-source.mjs`。
@@ -599,12 +599,12 @@ Storybook 接入后剩下的那一格是「**组件覆盖率太低**」：`ui/` 
 「只提醒 = 没有判据」那一族的形态。F6 的组件覆盖率那一格就是这么挂着的。
 
 现在它是机器判据（`tests/storybook-component-coverage.test.ts` +
-`scripts/storybook-check.mjs`，共用 `scripts/storybook-checks/coverage-ledger.mjs`
+`scripts/devtools/storybook-check.mjs`，共用 `scripts/storybook-checks/coverage-ledger.mjs`
 的纯函数）：
 
 | #   | 判据                                                                                      | 为什么                                                                    |
 | --- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| 1   | 分子（有 story 的组件数）**只许升不许降**，比 `scripts/.storybook-coverage-baseline.json` | 删 / 改组件名之后 story 的 `import` 没跟着改，覆盖率静默下降              |
+| 1   | 分子（有 story 的组件数）**只许升不许降**，比 `scripts/gates/.storybook-coverage-baseline.json` | 删 / 改组件名之后 story 的 `import` 没跟着改，覆盖率静默下降              |
 | 2   | 分母（`ui/` 的可预览文件数）变了要同批改基线                                              | 新增组件这件事**必须**被回答一次：补 story，或写进理由表                  |
 | 3   | 理由表（`NO_STORY_REASON`）与磁盘双向对得上                                               | 指向不存在文件的条目是过期账；已有 story 还留着的条目会静默放行下一次回归 |
 
@@ -622,7 +622,7 @@ hook（`use-*.ts`）不算（它们没有可看的东西，判据是用例，见
 逐条理由写在 `scripts/storybook-checks/coverage-ledger.mjs`，与代码同源。
 
 ```bash
-node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命令出结论
+node scripts/devtools/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命令出结论
 ```
 
 ##### 16.2.3.6 「有数据依赖」不是免票：Args → 数据源的注入层
@@ -675,7 +675,7 @@ node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命�
 于是 tRPC 那一族 story 通常给你看的是**降级形态**（controller 静默失败 → 空态）
 或**错误分支**。**刻意不绕**：为一个开发工具去改生产端的安全面（`next.config.js`
 的 headers / `src/proxy.ts`）不划算，`next.config.js` 那侧本仓也早有口径
-（见 `scripts/storybook.mjs` 顶部）。要看有数据的形态，需要应用在跑**并且同源**。
+（见 `scripts/devtools/storybook.mjs` 顶部）。要看有数据的形态，需要应用在跑**并且同源**。
 
 **判据**：`tests/storybook-data-sources.test.ts`（进 `FIXED_STRUCTURAL_TESTS`）
 守注册表接线、媒体名与磁盘**双向**对齐、「`.storybook/**` 进了 tsc / eslint 的
@@ -722,7 +722,7 @@ node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命�
 story 份数 34 → **当时的 86 份 / 337 条**（含既有 `studio/` `workshop/`），理由表 5 条 → **0 条**。
 
 > **那两个数说的是「当时」**：此后 `studio/` / `workshop/` 两批（§16.2.3.9、§16.2.3.10）与
-> `UI/` 那批又各带进来一批故事，现读数由 `node scripts/storybook-check.mjs` 现算（它打印
+> `UI/` 那批又各带进来一批故事，现读数由 `node scripts/devtools/storybook-check.mjs` 现算（它打印
 > 「故事面 N 份」与「组件覆盖率 N/N」），**不要在文档里回填一个新数字** —— 回填的那个
 > 下个月还会漂（同 §12.14 的口径：会漂的读数不写死）。
 
@@ -752,7 +752,7 @@ story `import` 到了，它就计一分。而「看过」有四种漏法，**四
 
 判据在 `scripts/storybook-checks/story-surface.mjs`（纯函数），三处落点共用同一份
 实现：`tests/storybook-story-surface.test.ts`（进 `FIXED_STRUCTURAL_TESTS`）、
-`scripts/storybook-check.mjs` 的 `--changed` 档、pre-commit 的 D 组
+`scripts/devtools/storybook-check.mjs` 的 `--changed` 档、pre-commit 的 D 组
 （`run "故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）"`）。
 
 **② 的判法值得单独说**：适配件**是正当写法**（受控状态、把值源解析成 props、
@@ -850,7 +850,7 @@ module-level store 里，story 里要「先按真形状写进 store 再摆」，
 > 本批只修实例、记账，不为它顺手加第三个扫描器。
 
 **这一批的数量**：`studio/` + `workshop/` 的 story 从 5 份 → 23 份，全仓 88 → **108 份**。
-`ui/` 的覆盖率棘轮（`ui/` 满覆盖，读数以 `scripts/.storybook-coverage-baseline.json` 为准）不受影响 —— 它的分母只看 `ui/`，业务目录那两棵树
+`ui/` 的覆盖率棘轮（`ui/` 满覆盖，读数以 `scripts/gates/.storybook-coverage-baseline.json` 为准）不受影响 —— 它的分母只看 `ui/`，业务目录那两棵树
 **不在那张表里**，理由见 §16.2.3.5 的「分母是什么」。
 
 ##### 16.2.3.10 三层注入（store / React Flow / 整屏容器）：业务目录故事的最后一道门槛
@@ -1341,7 +1341,7 @@ story 不经 store 读）。
 变体只能接管外观语义，尺寸与排布仍由调用处的 `className` 承担。
 
 **批次流水不在这里记账**：逐批「哪个目录清零了几处」的权威源是 git 历史与门禁当下的基线文件
-（`scripts/.ui-primitives-baseline.json` —— `total: 0`、`rules: {}`，即 P1/P2/P3 的存量已清零、
+（`scripts/gates/.ui-primitives-baseline.json` —— `total: 0`、`rules: {}`，即 P1/P2/P3 的存量已清零、
 三条都升成了硬闸；复算入口是 `node scripts/gates/check-ui-primitives.cjs` 自己的结论行）。抄一份处数进文档
 就是第二个会脱钩的事实来源。留在这里的只有转换本身评出来的口径。两批当时的手法一句话收着：图标钮走
 `size="icon-xs"`、Tab 项走 `variant="ghost"`、文字动作走 `variant="outline"` / `"ghost"`，
@@ -3005,7 +3005,7 @@ TS/TSX 视图，而 **`public/{{shell.splash}}`（启动页源，编译期内嵌
 只认**同一 JSX 子树**里的可见文本，被 `<FormField>` 包一层再传进去的控件不在它的靶子里。
 
 判据 `scripts/gates/check-form-field-wiring.cjs`（进 pre-commit 的 D 组）：**棘轮**，
-基线 `scripts/.form-field-wiring-baseline.json`（只许降，`--update` 拒绝上涨）。
+基线 `scripts/gates/.form-field-wiring-baseline.json`（只许降，`--update` 拒绝上涨）。
 这一批收口前实测 **35 处** plain-children 站点，其中 **22 处是真控件**
 （收口后归零，基线只剩 3 处合法形态）。
 
@@ -6183,7 +6183,7 @@ P82 只盯 `<Button title=` 一个锚点 —— #3672 清掉 `<Badge title=…>`
    static + dynamic`）。差异只有一处：锚点从字面 `<Button` 换成**小写 host 标签**
    （capitalized 组件是组件 prop、不是原生 tooltip，不计）。门禁首轮实测
    **107 处 / 59 文件**（`span` 82 + `div` 17 + 其余标签）。
-2. **棘轮冻结只许降不许升**：存量登记进 `scripts/.ui-primitives-baseline.json`，
+2. **棘轮冻结只许降不许升**：存量登记进 `scripts/gates/.ui-primitives-baseline.json`，
    P88 先只进 `RULE_TIERS`、不进 `HARD_GATE_RULES`。
 3. **一次治理清零，升为硬闸**：107 处全部改写成 `<Hint label=…>`（`~/components/ui/hint`，
    Base UI Tooltip），基线归零、P88 进 `HARD_GATE_RULES` —— 基线里空对象是正常状态，

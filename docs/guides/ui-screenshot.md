@@ -10,7 +10,7 @@
 pnpm screenshot /settings      # 起应用 → 无头 chromium 打开 /settings → 明暗两态各截一张
 ```
 
-Windows 上也可以双击 `tools\start\take-screenshot.ps1`（逻辑是同一份 `scripts/screenshot.mjs`）。
+Windows 上也可以双击 `tools\start\take-screenshot.ps1`（逻辑是同一份 `scripts/devtools/screenshot.mjs`）。
 
 ## 前置（一次性）
 

@@ -134,7 +134,7 @@
 | 221 | ??-left | C   | `m[1]` 是正则必需分组，运行时恒非空，但这处 `??` 只服务于 tsc（删了当场 TS2345）；`noUncheckedIndexedAccess` 那一层规则没建模，按 C 格留注释 + 落账 |
 | 819 | ??-left | C   | `reasons` 索引访问，同上（`Record<string, string \| undefined>`）                                                                                   |
 
-### scripts/agent-film.mjs
+### scripts/platform/agent-film.mjs
 
 |  行 | 类别      | 格  | 代码 / 理由                                                                              |
 | --: | --------- | --- | ---------------------------------------------------------------------------------------- |
@@ -144,7 +144,7 @@
 | 237 | opt-chain | A   | 同上：`snapshot.run.status`，轮询条件                                                    |
 | 299 | opt-chain | A   | 同上：收尾读 status                                                                      |
 
-### scripts/agent-index.mjs
+### scripts/platform/agent-index.mjs
 
 |  行 | 类别       | 格  | 代码 / 理由                                                                                      |
 | --: | ---------- | --- | ------------------------------------------------------------------------------------------------ |
@@ -192,7 +192,7 @@
 | 378 | ??-left | A | `const sql = (exported.stdout ?? "").trim();` —— drizzle-kit 起不来时 stdout 实测 undefined；本文件按实测形状声明 exported |
 | 382 | ??-left | A | ``${(exported.stderr ?? "").slice(0, 400) \|\| "没有输出"}——桌包首启将没有建表能力`,` —— 同上 stderr（失败分支才读，ENOENT 时同样缺） |
 
-### scripts/changed-scope.mjs
+### scripts/lib/changed-scope.mjs
 
 |  行 | 类别    | 格  | 代码 / 理由                                                                 |
 | --: | ------- | --- | --------------------------------------------------------------------------- |
@@ -673,7 +673,7 @@
 | 107 | ??-left | A | `lines.push(` —— 状态词表四档与 `mark` 的四档同一份，`?? "?"` 恒不成立；删掉后状态扩档由 tsc 当场点名 |
 | 109 | ??-left | B | `for (const action of lever.actions ?? []) {` —— `Lever.actions` 必填（`buildLevers` 每条都给数组），`?? []` 恒不成立 |
 
-### scripts/dev-handle.mjs
+### scripts/platform/dev-handle.mjs
 
 |  行 | 类别    | 格  | 代码 / 理由                                                       |
 | --: | ------- | --- | ----------------------------------------------------------------- |
@@ -686,7 +686,7 @@
 | --: | ---------- | --- | ------------------------ |
 |  49 | no-overlap |     | `if (a === undefined) {` |
 
-### scripts/doc-toc.mjs
+### scripts/docs/doc-toc.mjs
 
 |  行 | 类别       | 格  | 代码 / 理由                                                         |
 | --: | ---------- | --- | ------------------------------------------------------------------- |
@@ -696,7 +696,7 @@
 | 121 | no-overlap |     | `if (next !== undefined && next.level <= h.level) {`                |
 | 140 | ??-left    |     | `const raw = String(name ?? "")`                                    |
 
-### scripts/docs-api-input-closure.mjs
+### scripts/docs/docs-api-input-closure.mjs
 
 |  行 | 类别       | 格  | 代码 / 理由                                                                                      |
 | --: | ---------- | --- | ------------------------------------------------------------------------------------------------ |
@@ -708,13 +708,13 @@
 | --: | ------- | --- | ---------------------------------------------------------------------------- |
 | 445 | ??-left |     | ``[e2e-run] ✗ 理由（"${String(raw ?? "").trim()}"）不算「有人回答过」—— ` +` |
 
-### scripts/env-preflight.mjs
+### scripts/devtools/env-preflight.mjs
 
 |  行 | 类别    | 格  | 代码 / 理由                        |
 | --: | ------- | --- | ---------------------------------- |
 |  46 | ??-left |     | `let value = (m[2] ?? "").trim();` |
 
-### scripts/eslint-gate-canary.mjs
+### scripts/gates/eslint-gate-canary.mjs
 
 |  行 | 类别      | 格  | 代码 / 理由                                                                      |
 | --: | --------- | --- | -------------------------------------------------------------------------------- |
@@ -751,7 +751,7 @@
 | 481 | ??-left      |     | `const ciOwned = String(track.ciStage ?? "").trim() !== "";`        |
 | 600 | ??-left      |     | `(track.dirty ?? []).length > 0`                                    |
 
-### scripts/full-suite-run.mjs
+### scripts/affected-tests/full-suite-run.mjs
 
 |  行 | 类别    | 格  | 代码 / 理由                                                                 |
 | --: | ------- | --- | --------------------------------------------------------------------------- |
@@ -765,7 +765,7 @@
 | 737 | ??-left | D   | `runPnpmSync` 是注入面，出参形状不由本文件保证                              |
 | 737 | ??-left |     | `const out = `${String(res2.stdout ?? "")}\n${String(res2.stderr ?? "")}`;` |
 
-### scripts/gates-which.mjs
+### scripts/gates/gates-which.mjs
 
 |  行 | 类别       | 格  | 代码 / 理由                                                                                      |
 | --: | ---------- | --- | ------------------------------------------------------------------------------------------------ |
@@ -774,14 +774,14 @@
 | 174 | ??-left    |     | `const stderr = String(res.stderr ?? "");`                                                       |
 | 395 | no-overlap |     | `if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {` |
 
-### scripts/generate-api-docs.mjs
+### scripts/docs/generate-api-docs.mjs
 
 |  行 | 类别       | 格  | 代码 / 理由                                           |
 | --: | ---------- | --- | ----------------------------------------------------- |
 |  96 | no-overlap |     | `if (arg === undefined) {`                            |
 | 116 | no-overlap |     | `if (next === undefined \|\| next.startsWith("-")) {` |
 
-### scripts/git-dir.mjs
+### scripts/lib/git-dir.mjs
 
 |  行 | 类别    | 格  | 代码 / 理由                                  |
 | --: | ------- | --- | -------------------------------------------- |
@@ -793,13 +793,13 @@
 | --: | ------- | --- | ----------------------------------------------------------------------- |
 |  33 | ??-left |     | `return { ok: r.status === 0, stdout: String(r.stdout ?? "").trim() };` |
 
-### scripts/junit-readout-diag.mjs
+### scripts/affected-tests/junit-readout-diag.mjs
 
 |  行 | 类别         | 格  | 代码 / 理由    |
 | --: | ------------ | --- | -------------- |
 | 101 | always-falsy |     | `if (!best) {` |
 
-### scripts/known-failed-selftest-gate.mjs
+### scripts/gates/known-failed-selftest-gate.mjs
 
 |  行 | 类别    | 格  | 代码 / 理由                                                                    |
 | --: | ------- | --- | ------------------------------------------------------------------------------ |
@@ -883,7 +883,7 @@
 | 163 | always-truthy |     | `const dup = [...(diff.duplicates?.old \|\| []), ...(diff.duplicates?.new \|\| [])];` |
 | 163 | opt-chain     |     | `const dup = [...(diff.duplicates?.old \|\| []), ...(diff.duplicates?.new \|\| [])];` |
 
-### scripts/merge-changelog-fragments.mjs
+### scripts/docs/merge-changelog-fragments.mjs
 
 |  行 | 类别         | 格  | 代码 / 理由                     |
 | --: | ------------ | --- | ------------------------------- |
@@ -899,7 +899,7 @@
 |  99 | no-overlap |     | `if (line === undefined \|\| spec === undefined) {` |
 |  99 | no-overlap |     | `if (line === undefined \|\| spec === undefined) {` |
 
-### scripts/node-engines.mjs
+### scripts/launcher-core/node-engines.mjs
 
 |  行 | 类别          | 格  | 代码 / 理由                                              |
 | --: | ------------- | --- | -------------------------------------------------------- |
@@ -913,13 +913,13 @@
 | 441 | ??-left       | A   | 同上                                                     |
 | 470 | always-truthy | D   | 索引访问在 noUncheckedIndexedAccess 下可缺，规则没建模   |
 
-### scripts/package-bin-entry.mjs
+### scripts/lib/package-bin-entry.mjs
 
 |  行 | 类别       | 格  | 代码 / 理由                                                                                      |
 | --: | ---------- | --- | ------------------------------------------------------------------------------------------------ |
 | 247 | no-overlap |     | `if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {` |
 
-### scripts/precommit-timing.mjs
+### scripts/gates/precommit-timing.mjs
 
 |  行 | 类别       | 格  | 代码 / 理由                       |
 | --: | ---------- | --- | --------------------------------- |
@@ -927,7 +927,7 @@
 | 603 | no-overlap |     | `if (arg === undefined) {`        |
 | 608 | no-overlap |     | `if (next !== undefined) {`       |
 
-### scripts/premerge-check.mjs
+### scripts/gates/premerge-check.mjs
 
 |  行 | 类别      | 格  | 代码 / 理由                                            |
 | --: | --------- | --- | ------------------------------------------------------ |
@@ -936,7 +936,7 @@
 | 335 | ??-left   |     | `for (const c of commands ?? []) {`                    |
 | 336 | opt-chain |     | `for (const a of c?.argv ?? []) {`                     |
 
-### scripts/premerge-proof.mjs
+### scripts/gates/premerge-proof.mjs
 
 |  行 | 类别      | 格  | 代码 / 理由                                                                      |
 | --: | --------- | --- | -------------------------------------------------------------------------------- |
@@ -950,7 +950,7 @@
 | 452 | opt-chain |     | `(s) => `${String(s?.label ?? s?.key ?? "?")}（退 ${String(s?.code ?? "?")}）`,` |
 | 457 | opt-chain | A   | `if (reds.every((s) => s?.key === "base")) {`                                    |
 
-### scripts/premerge-timing.mjs
+### scripts/gates/premerge-timing.mjs
 
 |  行 | 类别          | 格  | 代码 / 理由                                                                                                |
 | --: | ------------- | --- | ---------------------------------------------------------------------------------------------------------- |
@@ -959,20 +959,20 @@
 |  72 | ??-left       |     | `const usable = (entries ?? []).filter((e) => e && e.label && Number.isFinite(e.ms) && e.ms >= 0);`        |
 |  72 | always-truthy |     | `const usable = (entries ?? []).filter((e) => e && e.label && Number.isFinite(e.ms) && e.ms >= 0);`        |
 
-### scripts/publish-desktop-bundle.mjs
+### scripts/build/publish-desktop-bundle.mjs
 
 |  行 | 类别    | 格  | 代码 / 理由                                                             |
 | --: | ------- | --- | ----------------------------------------------------------------------- |
 | 264 | ??-left |     | `const sha = String(runGit(["rev-parse", "HEAD"]) ?? "").trim();`       |
 | 299 | ??-left |     | `return { ok: r.status === 0, stdout: String(r.stdout ?? "").trim() };` |
 
-### scripts/qoder-ignore.mjs
+### scripts/docs/qoder-ignore.mjs
 
 |  行 | 类别       | 格  | 代码 / 理由                                                                                      |
 | --: | ---------- | --- | ------------------------------------------------------------------------------------------------ |
 | 224 | no-overlap |     | `if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {` |
 
-### scripts/quality-gate.mjs
+### scripts/gates/quality-gate.mjs
 
 |  行 | 类别         | 格  | 代码 / 理由                                            |
 | --: | ------------ | --- | ------------------------------------------------------ |
@@ -980,13 +980,13 @@
 | 483 | always-falsy |     | `if (!gate) {`                                         |
 | 548 | no-overlap   |     | `process.argv[1] !== undefined &&`                     |
 
-### scripts/run-tests.mjs
+### scripts/affected-tests/run-tests.mjs
 
 |  行 | 类别    | 格  | 代码 / 理由                                                            |
 | --: | ------- | --- | ---------------------------------------------------------------------- |
 | 85 | ??-left | D | `for (const m of String(xml ?? "").matchAll(/<testsuite\b[^>]*>/g)) {` —— `xml` 是磁盘上的 junit 产物（外部数据），`String(xml ?? "")` 兜的是「读不到文件」；规则按形参声明读成恒非空 |
 
-### scripts/setup-comfy-cli-venv.mjs
+### scripts/devtools/setup-comfy-cli-venv.mjs
 
 |  行 | 类别    | 格  | 代码 / 理由                                         |
 | --: | ------- | --- | --------------------------------------------------- |
@@ -995,7 +995,7 @@
 | 420 | ??-left |     | `const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;` |
 | 420 | ??-left |     | `const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;` |
 
-### scripts/shell-gate.mjs
+### scripts/gates/shell-gate.mjs
 
 |  行 | 类别       | 格  | 代码 / 理由                                    |
 | --: | ---------- | --- | ---------------------------------------------- |
@@ -1120,21 +1120,21 @@
 | --: | ------- | --- | -------------------------------------------------- |
 |  31 | ??-left |     | `const m = /^host:\s*(\S+)$/m.exec(output ?? "");` |
 
-### scripts/smoke-executor-host-standalone.mjs
+### scripts/devtools/smoke-executor-host-standalone.mjs
 
 |  行 | 类别    | 格  | 代码 / 理由                                                |
 | --: | ------- | --- | ---------------------------------------------------------- |
 | 128 | ??-left |     | `const stdout = `${run.stdout ?? ""}${run.stderr ?? ""}`;` |
 | 128 | ??-left |     | `const stdout = `${run.stdout ?? ""}${run.stderr ?? ""}`;` |
 
-### scripts/spawn-shell-scan.mjs
+### scripts/gates/spawn-shell-scan.mjs
 
 |  行 | 类别       | 格  | 代码 / 理由                                                                                      |
 | --: | ---------- | --- | ------------------------------------------------------------------------------------------------ |
 | 138 | ??-left    |     | `for (const part of (m[1] ?? "").split(",")) {`                                                  |
 | 393 | no-overlap |     | `if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {` |
 
-### scripts/standalone-link-repair.mjs
+### scripts/build/standalone-link-repair.mjs
 
 |  行 | 类别    | 格  | 代码 / 理由                                                 |
 | --: | ------- | --- | ----------------------------------------------------------- |
@@ -1158,7 +1158,7 @@
 | 232 | ??-left   |     | `fail(`server failed to start: ${err?.message ?? err}`);`      |
 | 232 | opt-chain |     | `fail(`server failed to start: ${err?.message ?? err}`);`      |
 
-### scripts/storybook-check.mjs
+### scripts/devtools/storybook-check.mjs
 
 |  行 | 类别       | 格  | 代码 / 理由                          |
 | --: | ---------- | --- | ------------------------------------ |
@@ -1184,7 +1184,7 @@
 | 567 | no-overlap |     | `while (current.parent !== undefined) {`                                |
 | 643 | no-overlap |     | `m.name !== undefined &&`                                               |
 
-### scripts/suspended-gate-tests.mjs
+### scripts/affected-tests/suspended-gate-tests.mjs
 
 |  行 | 类别         | 格  | 代码 / 理由                                                                     |
 | --: | ------------ | --- | ------------------------------------------------------------------------------- |
@@ -1211,7 +1211,7 @@
 | 158 | no-overlap |     | `if (piece === undefined) {` |
 | 175 | no-overlap |     | `if (piece === undefined) {` |
 
-### scripts/typedoc-run.mjs
+### scripts/docs/typedoc-run.mjs
 
 |  行 | 类别      | 格  | 代码 / 理由                         |
 | --: | --------- | --- | ----------------------------------- |

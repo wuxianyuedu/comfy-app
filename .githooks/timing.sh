@@ -87,7 +87,7 @@ run() {
   # 只有「已跑多久」这一行能区分「卡住」与「真就这么慢」。D0 是 16s 的快档，
   # 不付这层开销（开关由钩子在 D 块里显式导出）。
   if [ -n "$COMFY_STEP_PROGRESS" ]; then
-    timed_step "$_run_label" "$LOGD/steps.ms" node scripts/progress-heartbeat.mjs --label "$_run_label" -- "$@"
+    timed_step "$_run_label" "$LOGD/steps.ms" node scripts/gates/progress-heartbeat.mjs --label "$_run_label" -- "$@"
   else
     timed_step "$_run_label" "$LOGD/steps.ms" "$@"
   fi

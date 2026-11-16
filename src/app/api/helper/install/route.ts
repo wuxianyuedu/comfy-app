@@ -7,10 +7,10 @@ export const runtime = "nodejs";
 /**
  * 端点：GET /api/helper/install
  * 把 install-comfyapp-helper.ps1 作为下载返回，方便用户在别的机器/会话取用。
- * 同机用户其实直接双击项目内 scripts\install-comfyapp-helper.ps1 即可。
+ * 同机用户其实直接双击项目内 scripts\devtools\install-comfyapp-helper.ps1 即可。
  */
 export function GET() {
-  const installer = path.join(process.cwd(), "scripts", "install-comfyapp-helper.ps1");
+  const installer = path.join(process.cwd(), "scripts", "devtools", "install-comfyapp-helper.ps1");
   if (!fs.existsSync(installer)) {
     return NextResponse.json({ error: "installer not found" }, { status: 404 });
   }

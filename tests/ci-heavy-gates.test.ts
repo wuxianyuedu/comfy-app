@@ -114,21 +114,21 @@ describe("复合档 —— 判决面只在「本次改动」上的那一步（IS
   });
 
   it("拿得到基线 ⇒ 换成 `--base` 形态（真判，不再恒绿无声）", () => {
-    const got = heavyGateArgv(["node", "scripts/shell-gate.mjs"], {
+    const got = heavyGateArgv(["node", "scripts/gates/shell-gate.mjs"], {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
     });
     expect(got.ok).toBe(true);
     if (!got.ok) {
       return;
     }
-    expect(got.argv).toEqual(["node", "scripts/shell-gate.mjs", "--base", "abc123"]);
+    expect(got.argv).toEqual(["node", "scripts/gates/shell-gate.mjs", "--base", "abc123"]);
     /* 这一族把「没跑起来」报成 2（仓库三态），这一档必须认它 —— 不然「拿不到
      * 基线」会被读成「判红」。 */
     expect(got.notRunCodes).toContain(2);
   });
 
   it("拿不到基线 ⇒ 这一条「没判」（不许计入绿）", () => {
-    const got = heavyGateArgv(["node", "scripts/shell-gate.mjs"], {
+    const got = heavyGateArgv(["node", "scripts/gates/shell-gate.mjs"], {
       cwd: dirWithHook(),
       env: {},
     });
@@ -251,9 +251,9 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
     /* `生成态文档与源同步` 退役后 INCREMENTAL_GATES 暂无成员 —— 收窄机制
      * （判据脚本反查 → 面比对）保留给未来的单执行者一格；登记表空 ⇒
      * narrowingEntryForScript 恒 null ⇒ 一条都不跳（宁可多跑）。 */
-    expect(narrowingEntryForScript("scripts/render-doc-placeholders.cjs")).toBeNull();
+    expect(narrowingEntryForScript("scripts/docs/render-doc-placeholders.cjs")).toBeNull();
     const decision = narrowingDecision(
-      { label: "任一格", argv: ["node", "scripts/render-doc-placeholders.cjs"] },
+      { label: "任一格", argv: ["node", "scripts/docs/render-doc-placeholders.cjs"] },
       { files: ["docs/README.md"] },
     );
     expect(decision.skip).toBe(false);
@@ -278,7 +278,7 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
     /* 反查口径（#3586 后登记表暂空，任何脚本都查不到）：查不到就是不许收窄 ——
        收窄只能来自登记表，不能手抄第二份面。 */
     expect(narrowingEntryForScript("scripts/gates/check-gate-executors.cjs")).toBeNull();
-    expect(narrowingEntryForScript("scripts/render-doc-placeholders.cjs")).toBeNull();
+    expect(narrowingEntryForScript("scripts/docs/render-doc-placeholders.cjs")).toBeNull();
   });
 
   it("收窄判据按**判据脚本**查（不看标签名）", () => {
@@ -295,7 +295,7 @@ describe("复合档 —— 逐条按面收窄（ISSUE #2255）", () => {
   it("收窄**不能**把一条该跑的判据吞掉：查不到登记 ⇒ 不跳（反向验证）", () => {
     const step = {
       label: "生成态文档与源同步",
-      argv: ["node", "scripts/render-doc-placeholders.cjs"],
+      argv: ["node", "scripts/docs/render-doc-placeholders.cjs"],
     };
     const ran = narrowingDecision(step, { files: ["docs/README.md"] });
     expect(ran.skip).toBe(false);
@@ -351,19 +351,19 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
   it("这一族拿 `--base`，而且**把 `--staged` 一起剥掉**（判据只该有一个判决面来源）", () => {
     /* 样本：`shell-gate`（连旗标都没有的那一形）。样本判据
      * `check-doc-mirror-pairing.cjs` 已随 #3586 退役。 */
-    const got = heavyGateArgv(["node", "scripts/shell-gate.mjs", "--staged"], {
+    const got = heavyGateArgv(["node", "scripts/gates/shell-gate.mjs", "--staged"], {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
     });
     expect(got.ok).toBe(true);
     if (!got.ok) {
       return;
     }
-    expect(got.argv).toEqual(["node", "scripts/shell-gate.mjs", "--base", "abc123"]);
+    expect(got.argv).toEqual(["node", "scripts/gates/shell-gate.mjs", "--base", "abc123"]);
     expect(got.argv).not.toContain("--staged");
   });
 
   it("「已知基线失败登记·自证」也在这一族里（它连旗标都没有）", () => {
-    const got = heavyGateArgv(["node", "scripts/known-failed-selftest-gate.mjs"], {
+    const got = heavyGateArgv(["node", "scripts/gates/known-failed-selftest-gate.mjs"], {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
     });
     expect(got.ok).toBe(true);
@@ -372,7 +372,7 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
     }
     expect(got.argv).toEqual([
       "node",
-      "scripts/known-failed-selftest-gate.mjs",
+      "scripts/gates/known-failed-selftest-gate.mjs",
       "--base",
       "abc123",
     ]);
@@ -384,8 +384,8 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
      * `check-doc-mirror-pairing.cjs` 曾也在（#2265），#3586 随镜像退役退出 ——
      * 退役判据不留在名单里：留着它 = 复合档仍会为它发 `--base`，而脚本已不在。 */
     expect(CHANGED_SCOPED).not.toContain("scripts/check-doc-mirror-pairing.cjs");
-    expect(CHANGED_SCOPED).toContain("scripts/known-failed-selftest-gate.mjs");
-    expect(CHANGED_SCOPED).toContain("scripts/shell-gate.mjs");
+    expect(CHANGED_SCOPED).toContain("scripts/gates/known-failed-selftest-gate.mjs");
+    expect(CHANGED_SCOPED).toContain("scripts/gates/shell-gate.mjs");
   });
 
   /**

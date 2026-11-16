@@ -129,7 +129,7 @@ export function writeInstallFingerprint(root, value) {
  */
 export function changedFiles(run) {
   /* 每条都带 `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见
-   * `scripts/changed-scope.mjs` 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，
+   * `scripts/lib/changed-scope.mjs` 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，
    * 而机器之间还不一样：本机全局配了 `core.quotepath=false`，CI runner 是 git 默认值）。 */
   const attempts = [
     /* PR：平台 checkout 的是预合并提交，与目标分支的差集就是本次 PR 的变更面。

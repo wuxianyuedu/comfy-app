@@ -27,9 +27,9 @@
  * `pnpm check:base:batch` 已经把「合并前把 tsc 在干净快照上复算一遍」做完了）。
  * 所以本判据**不跑 tsc**，它判的是**那条判据自己的执行者**：
  *
- *   ① **判据 ⇄ 执行者的索引**：`scripts/.tsc-diagnostic-executors.json` 里每一条声明
+ *   ① **判据 ⇄ 执行者的索引**：`scripts/gates/.tsc-diagnostic-executors.json` 里每一条声明
  *      都必须答出「tsc 怎么找到它」+「它交给谁执行」，且那份台账**必须与
- *      `scripts/.declaration-readers.json` 逐行同源**（两处各记一份 ⇒ 必然分叉；
+ *      `scripts/gates/.declaration-readers.json` 逐行同源**（两处各记一份 ⇒ 必然分叉；
  *      分开的原因只是「谁会被敲」与「判据本身是谁」两个维度，见文件末的「刻意不做」）。
  *   ② **未登记的声明不许新增**：新写一处 JSDoc / 类型注解就红，除非把它登记进台账
  *      —— 登记的动作就是被迫回答「它由谁执行、谁来敲」。
@@ -74,8 +74,8 @@ const REPORT_ONLY = ARGS.has("--report");
 const UPDATE = ARGS.has("--update");
 
 /** 本判据的台账（声明 ⇄ 执行者）与它的姊妹索引（声明 ⇄ 读者）。 */
-const LEDGER = path.join(__dirname, "../.tsc-diagnostic-executors.json");
-const READERS_LEDGER = path.join(__dirname, "../.declaration-readers.json");
+const LEDGER = path.join(__dirname, ".tsc-diagnostic-executors.json");
+const READERS_LEDGER = path.join(__dirname, ".declaration-readers.json");
 
 /**
  * 站点扫描面 —— 与 `tsconfig.json` 的 `include` 同口径（`**​/*.ts` + `**​/*.tsx` +

@@ -1,6 +1,6 @@
 ## Added
 
-- **`scripts/git-dir.mjs` —— 「本检出的 `.git` 到底在哪」的唯一实现**，与落在它里面的
+- **`scripts/lib/git-dir.mjs` —— 「本检出的 `.git` 到底在哪」的唯一实现**，与落在它里面的
   机器本地文件的统一落点（`gitScratchPath(root, name)`）。
   这件事此前有**三份**各自实现加**五处**硬拼：
   `precommit-timing.mjs` 里一份正确的（走 `git rev-parse --absolute-git-dir`）、

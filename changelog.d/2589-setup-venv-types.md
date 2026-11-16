@@ -1,6 +1,6 @@
 ## Fixed
 
-- **脚本档清账批 3：`scripts/setup-comfy-cli-venv.mjs` 14 格清零，账从 273 处 / 20 份降到
+- **脚本档清账批 3：`scripts/devtools/setup-comfy-cli-venv.mjs` 14 格清零，账从 273 处 / 20 份降到
   259 处 / 19 份（ISSUE #2589 / 规范 §13.5.14.1）**：13 格 `TS7006` 是各函数的形参没写 JSDoc
   类型（`writeLog` / `writeStatus` / `runStep` / `compareVersions` / `saveUpgradeState` /
   `upgradeCheckDue` / `pythonMeetsFloor`），第 14 格是 `runStep()` 里那句

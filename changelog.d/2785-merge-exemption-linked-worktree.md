@@ -9,9 +9,9 @@
     「合并会把上游整批格式化带进来，这一档不适用」这条豁免在那种检出里**从来不生效**：
     表现不是红，是**该跳过的判定照跑**，于是在 worktree 里做一次 `git merge` 会被要求
     「把格式化拆成两次提交」——而上游形态已定死在历史里，本地做不到。
-    改法：取 `scripts/git-dir.mjs` 的 `hasInProgressMerge(ROOT)`（#2747 为 `check-format.cjs`
+    改法：取 `scripts/lib/git-dir.mjs` 的 `hasInProgressMerge(ROOT)`（#2747 为 `check-format.cjs`
     建的那一份，同一件事的第二处使用），不再自己拼检出位置。
-  - 防这一族的判据 `scripts/git-dir-literal-scan.mjs` 的收集面**只认 `.mjs`** ⇒
+  - 防这一族的判据 `scripts/lib/git-dir-literal-scan.mjs` 的收集面**只认 `.mjs`** ⇒
     `scripts/**` 那 86 份 `.cjs` 全在面外 —— 上面这一处正是 `.cjs`。防「又有人硬拼一个检出
     路径」的护栏，恰好漏掉了这一族第二次发生的文件形态（#2072 修的四例都是 `.mjs`）。
     扩面到 `.mjs` + `.cjs`。
@@ -24,9 +24,9 @@
   等于 `.git`」的形状 —— 跳过名单、注释、话术字符串（`console.error("请删掉 .git/MERGE_HEAD")`）
   天然不在判点里。这正是 §13.5.x 与 #2660 反复付过学费的那条「整档搜字面量没有语义作用域」。
   成本上仍便宜但不为零：先做一次 `src.includes('".git"')` 的前置过滤，绝大多数文件不解析；
-  本回合实测整脚本墙钟 **1.79s**（`T0=$(date +%s%3N); node scripts/git-dir-literal-scan.mjs;
+  本回合实测整脚本墙钟 **1.79s**（`T0=$(date +%s%3N); node scripts/lib/git-dir-literal-scan.mjs;
   T1=$(date +%s%3N)`，本机、与两条 PR 构建并发 ⇒ 只当量级看）。这一格在固定清单里
-  （`scripts/fixed-structural-tests.mjs`，每次提交都跑），所以这个数是要付的 —— 记在这里，
+  （`scripts/affected-tests/fixed-structural-tests.mjs`，每次提交都跑），所以这个数是要付的 —— 记在这里，
   别让它下一次靠"看起来没变慢"过关。
 
   已知盲区**写在文件头并有用例钉住**（拼接与模板形态 `root + "/.git/MERGE_HEAD"` 不判）：

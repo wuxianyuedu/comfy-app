@@ -15,7 +15,7 @@
  *      发现「文档里那条命令不存在」）。
  *
  *   ② **会失效的标记不许各写一份**：`KNOWN_FAILED_FILES`（已知基线失败清单）
- *      只允许在 `scripts/quality-gate-shared.mjs` 里定义一次；两侧的 `.ps1`
+ *      只允许在 `scripts/gates/quality-gate-shared.mjs` 里定义一次；两侧的 `.ps1`
  *      只能是**读取**它。此前它定义在 `quality-gate.ps1` 里、由 `run-tests.ps1`
  *      正则解析 `.ps1` 源码 —— 那等于把另一门语言的源码当数据源，改一次写法
  *      就静默返回空数组，而「排除项悄悄为空」看起来就像「本来就没有基线失败」。
@@ -35,7 +35,7 @@ const problems = [];
 /** 跨平台动作对照表所在的规范文档（唯一登记处）。 */
 const SPEC_REL = "docs/standards/launch-and-build.md";
 /** 清单类标记的单点定义处。 */
-const SHARED_REL = "scripts/quality-gate-shared.mjs";
+const SHARED_REL = "scripts/gates/quality-gate-shared.mjs";
 /** 本门禁自身（它的正则里会出现被检标记的字面量，必须跳过自己）。 */
 const SELF_REL = "scripts/gates/check-ps1-consistency.mjs";
 /** 标注为「跨平台动作对」的表格锚点：以它开头的代码行才算登记。 */

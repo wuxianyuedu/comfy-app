@@ -8,7 +8,7 @@
   判法只读判据自己打的那两句判决行（`违规（阻断）` / `读数（不参与判定）`，与
   `check-bundle-budget.cjs` 源码对账），**不改预算闸的判定**：开发期暂撤（#2634）那一档
   不升级；正文取不到 / 归因行读不出 / 连续天数回看不到一律念「读不出 ⇒ 不构成结论」，
-  不许落成 0。两个门限挂在数值账（`scripts/.gate-thresholds.json`），业主改那两条即可。
+  不许落成 0。两个门限挂在数值账（`scripts/gates/.gate-thresholds.json`），业主改那两条即可。
   连续天数与主取数共用 `fetchBuildsCoveringWindow()`（窗口按门限天数算、`covered` 自证照旧）；
   离线档只从 `stageLogs[sn]` 读正文，连续天数一律「读不出」。
 

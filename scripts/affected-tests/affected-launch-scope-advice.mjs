@@ -37,7 +37,7 @@ import { fmtSec } from "./affected-launch-rerun-report.mjs";
 /* 这一跳的外部命令是 `spawnSync`（见 `affected-launch-changed-list.mjs` 的
  * `spawnAffected`）：主线程被阻塞期间进程内定时器不跳，所以进度心跳只能来自另一个
  * 进程 —— `startProgressSync`（ISSUE #3144）。它只往 stderr 加「进行中」那一行。 */
-import { startProgressSync } from "../progress-heartbeat.mjs";
+import { startProgressSync } from "../gates/progress-heartbeat.mjs";
 
 /**
  * 调 `affected-tests.mjs --attribute` 拿「每个改动文件各自影响多少份」。

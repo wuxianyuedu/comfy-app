@@ -1,6 +1,6 @@
 ## Fixed
 
-- **`#2585` 那一批删了 `value()` 的形参、没改两处调用点 —— `scripts/generate-api-docs.mjs`
+- **`#2585` 那一批删了 `value()` 的形参、没改两处调用点 —— `scripts/docs/generate-api-docs.mjs`
   带着 `TS2554` ×2 落进了主干（ISSUE #2609）**：`pnpm run docs` 的 `--out <dir>` /
   `--attempts <n>` 解析里，`opts.out = value("out")` 与 `Number.parseInt(value("attempts"), 10)`
   两处给一个**不收参数**的函数传了实参。JS 里多传实参不报错 ⇒ **运行期没有任何症状**；
@@ -13,11 +13,11 @@
   $ node scripts/check-scripts-typecheck.cjs
   [scripts-typecheck] 实跑：program 内 939 份文件，脚本档报错 312 处 / 29 份文件
   [scripts-typecheck] ✗ 脚本档新增类型错误 / 死代码（ISSUE #2524 / 规范 §13.5.14）：
-      · scripts/generate-api-docs.mjs TS2554: 基线 0 → 当前 2（新增 2 处）
+      · scripts/docs/generate-api-docs.mjs TS2554: 基线 0 → 当前 2（新增 2 处）
 
   $ node node_modules/typescript/lib/tsc.js -p tsconfig.scripts.json --noEmit --pretty false
-  scripts/generate-api-docs.mjs(61,71): error TS2554: Expected 0 arguments, but got 1.
-  scripts/generate-api-docs.mjs(63,39): error TS2554: Expected 0 arguments, but got 1.
+  scripts/docs/generate-api-docs.mjs(61,71): error TS2554: Expected 0 arguments, but got 1.
+  scripts/docs/generate-api-docs.mjs(63,39): error TS2554: Expected 0 arguments, but got 1.
   ```
 
   修法是**两处调用点去掉多余实参**（`value()`），而不是把那个形参加回去：形参之所以被删，

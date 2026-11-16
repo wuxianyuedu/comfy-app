@@ -9,4 +9,4 @@
   §12.18）；把那一族当**被测输入**的用例显式 `run([...], { … })` 传。`tests/setup.ts`
   那一道只在 worker 启动时剥一次，夹具自己起的子进程不该指望上游清理过
   （同 `gate-repo.ts` 那句「共享夹具要自带隔离」）。
-- 判据一个字没动：`scripts/premerge-check.mjs` / `scripts/check-commit-claims.mjs` 原样保留。
+- 判据一个字没动：`scripts/gates/premerge-check.mjs` / `scripts/check-commit-claims.mjs` 原样保留。

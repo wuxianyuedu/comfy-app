@@ -11,7 +11,7 @@ fetch-daily-shell.ps1 — 从 CNB 站内每日成品获取纯壳并补齐本地�
   2. 保存为 src-tauri\target\release\app.exe（正确位置与名称，父目录自动创建）；
   3. 若项目根缺少 "Comfy APP.lnk"，则生成指向该壳的快捷方式。
 
-逻辑在 scripts/fetch-daily-shell.mjs（跨平台）；本入口只负责定位项目根、调用 node 脚本、
+逻辑在 scripts/devtools/fetch-daily-shell.mjs（跨平台）；本入口只负责定位项目根、调用 node 脚本、
 透传参数与退出码。跨平台等价：pnpm fetch:daily-shell
 #>
 [CmdletBinding()]
@@ -30,7 +30,7 @@ Set-Location $root
 Write-Host "[INFO] 正在从 CNB 每日成品获取纯壳（ComfyAPP-shell.exe -> src-tauri\target\release\app.exe）..." -ForegroundColor Cyan
 Write-Host ""
 
-$nodeArgs = @("scripts/fetch-daily-shell.mjs") + $ScriptArgs
+$nodeArgs = @("scripts/devtools/fetch-daily-shell.mjs") + $ScriptArgs
 $code = 0
 try {
     & node @nodeArgs

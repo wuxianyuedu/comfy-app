@@ -467,7 +467,7 @@ configureExecutorCli({
 - 拆法（已签）：**3-B0 = host 运行时地基**（tsx 加载 + libsql file 客户端 + `createTaskRepoImpl` + boot 注入 + Q2 首扫，不领流量）；**3-B1 = 接流量**（tRPC `generate` 写值 + host claim 循环 + runner/executor-cli/executor-finalize/executor-ws 四条 seam 的 host 版 deps）；**3-B 领取模型**（已签）：inline 保持 push 驱动、host 独占 pull+claim；**ComfyUI 进程归属**（已签）：host 沿用 launcher 已起的 ComfyUI，不自 spawn。
 - **reaper 归属分片从 3-B1 提前到 3-B0**（代码事实倒逼，非方向变更）：`reaper.ts` 模块加载即有一次 sweep（`startReaper()` 副作用），而孤儿判决依赖**进程内**内存足迹——host 不分片就会把 inline「QUEUED>30s 尚未进 ComfyUI」的在飞任务误判成孤儿杀掉。落地形态：`listStaleQueued/listStaleRunning` 加 `owner` 参数（缺省 `'inline'`，Next 侧调用签名与行为不变），谓词与领取共用 impl 的单一定义 `ownedBy()`；`configureReaper({ taskRepo, owner: "host" })`；`resolveTaskRepo()` 在未注入且 Next barrel 不可达时**跳过本轮 + 一次性 warn**（修掉 host 加载 reaper 即两条 unhandled rejection 的实测崩溃）。
 - 3-B0 注入面收口：只 inject 已验证可纯 Node 加载且 Q2 需要的三条 seam（reaper/enqueue/trace）；其余四条属 3-B1（缺的是 host 版执行依赖，不是接线）。
-- host 的 `DATABASE_URL` 解析优先级对齐 Next 侧（进程 env → `.env` 回读 → 默认），复用 `scripts/env-preflight.mjs` 的 `parseEnvFile`——launcher 只透传 `process.env`，自定义库路径下不读 `.env` 会让 host 连错库。
+- host 的 `DATABASE_URL` 解析优先级对齐 Next 侧（进程 env → `.env` 回读 → 默认），复用 `scripts/devtools/env-preflight.mjs` 的 `parseEnvFile`——launcher 只透传 `process.env`，自定义库路径下不读 `.env` 会让 host 连错库。
 
 **3-B1（接流量）——实施前已签的四个决定（2026-09-26 追加，签 A/A/A + 打包）**
 

@@ -70,7 +70,7 @@ export {
  * 拆的边界与 `e2e-run-playwright.mjs` 同一条：那一层是**判据与机制**，本文件是
  * **编排与打印**（§12.6 R5：本文件涨过了 900 行硬闸，出口只有拆）。 */
 import { checkSchemaBeforeRun, ensureSchemaBeforeRun } from "./e2e-schema-preflight.mjs";
-import { parseLedgerFlag, writeLedgerNote } from "../daily-run.mjs";
+import { parseLedgerFlag, writeLedgerNote } from "../affected-tests/daily-run.mjs";
 import { pnpmCli } from "../ci/ci-install-deps.mjs";
 import {
   E2E_PREFLIGHT_ENV_KEY,
@@ -396,7 +396,7 @@ export function shouldRecord({ exitCode, dryRun, extra = [] }) {
 
 /**
  * 从 argv 里读出「这次是不是记一条不跑的账」——「给定开关 → 读理由 → 判合不合用」那三步
- * 收在 `scripts/daily-run.mjs` 的 `parseLedgerFlag`（四档共用一份，§12.12）。
+ * 收在 `scripts/affected-tests/daily-run.mjs` 的 `parseLedgerFlag`（四档共用一份，§12.12）。
  *
  * 这一层只是把那份共用解析的返回值**按本档的形状再包一层**：`skipped` 让调用点一句
  * `if (exit.skipped)` 就走掉，而「缺理由 / 占位理由 / 开关后面什么都没给」这三条边界

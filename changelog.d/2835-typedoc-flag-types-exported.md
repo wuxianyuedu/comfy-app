@@ -27,7 +27,7 @@
   这条账记在单子末尾：**全仓机械重构批的自检清单里该有一条「产物侧判据」**
   （`pnpm docs:check` / `pnpm run doc:render -- --check`），不只是类型与 lint。
 
-  归属不是猜的：`node scripts/base-check.mjs "node scripts/check-docs-api.cjs"` 在
+  归属不是猜的：`node scripts/gates/base-check.mjs "node scripts/check-docs-api.cjs"` 在
   **干净的 `origin/master` 快照**（临时 worktree `comfy-base-check-KEICBk`）上复算 ⇒
   `baseline-red`，基线那侧输出的末尾逐字是那两条 warning。
   本 PR 就是那条口径里说的「挡路的硬闸类红 ⇒ 单独一个 commit + 单独一条碎片」那一笔，

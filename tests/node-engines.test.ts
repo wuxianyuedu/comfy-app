@@ -13,7 +13,7 @@ import {
   describeNodeAgainstFloor,
   parseRange,
   satisfies,
-} from "../scripts/node-engines.mjs";
+} from "../scripts/launcher-core/node-engines.mjs";
 
 describe("within() 下界包容性矩阵（曾取反的 bug）", () => {
   it("下界四行全对（含修复前误报为 true 的真实 gap）", () => {

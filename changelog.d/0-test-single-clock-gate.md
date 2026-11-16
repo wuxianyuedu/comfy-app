@@ -28,7 +28,7 @@
   `lastIndex` 残留会让「全仓只看得到第一份文件」**绿着** —— 本判据的第一版正是这样
   把自己的规则 B 静默判死，被这一格抓回来的。
 - 登记：`.githooks/pre-commit` 的 D 组步骤（那句 `D(N 个判据脚本)` 同步 +1，由
-  `tests/doc-check-hook-wiring.test.ts` 核与实际步骤数一致）、`scripts/fixed-structural-tests.mjs`
+  `tests/doc-check-hook-wiring.test.ts` 核与实际步骤数一致）、`scripts/affected-tests/fixed-structural-tests.mjs`
   的固定清单、规范 11 §11.14 与 13 §13.5 的门禁清单。
 
 ## Fixed

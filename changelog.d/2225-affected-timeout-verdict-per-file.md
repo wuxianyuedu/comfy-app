@@ -28,10 +28,10 @@
   **只认 0/1 两档的系统读不出它**，而那正是这次假绿的形状。
 - **新落点**：判决粒度住在 `scripts/affected-launch-retry-verdict.mjs`
   （`classifyRetry` / `mergePerFileReads` 两份纯函数，假 spawn 就能整条跑）；
-  逐 suite 的失败文本由 `scripts/precommit-timing.mjs` 新增的 `failingSuiteTextsFromJunit` 提供
+  逐 suite 的失败文本由 `scripts/gates/precommit-timing.mjs` 新增的 `failingSuiteTextsFromJunit` 提供
   （与既有 `failingSuitesFromJunit` 同源于同一份 XML 布局，只多带一份 `body`）。
   新增的补跑上限 `PER_FILE_RERUN_MAX` 与既有的 `SCOPE_ADVICE_MIN` 一起进了
-  `scripts/.gate-thresholds.json`（`report` 档）—— 顺手把这本账对该文件的覆盖面补上。
+  `scripts/gates/.gate-thresholds.json`（`report` 档）—— 顺手把这本账对该文件的覆盖面补上。
 - **用例 58 → 65 条**（`tests/hook-affected-launch.test.ts`）：负控制那份最关键 ——
   一份超时 + 一份断言红 ⇒ **退 1** 并点名那一份（旧实现这里退 0）；其余是每份都超时 ⇒ 退 0 且
   名单只含超时那两份、认不出自己 ⇒ 逐文件补跑后按各自结论定、补跑绿的那份不进名单、

@@ -12,7 +12,7 @@
      翻成「**要么没有，要么必须是自托管 + 已登记的那一份**」——顶层必须是
      `分支: { 事件: [流水线] }`（#1229 那份顶层直接写 `stages:` 的配置从不触发、
      静默失效），必须有 `runner.namespace: group` 与非空 `tags`（漏掉会静默回落到
-     **计费的**平台池），必须挂 `pull_request` 与 `push`；`scripts/doc-facts.cjs`
+     **计费的**平台池），必须挂 `pull_request` 与 `push`；`scripts/docs/doc-facts.cjs`
      把 `.cnb.yml` 登记回 path 类事实，规范锚点句同步改写。判据没撤，换了个方向。
   2. **与旧的 Linux 平台池配置是两套形态**：自托管**没有 docker**
      （`pipeline.docker.image` 不生效），所以工具链必须预装在宿主机上——配置第一步

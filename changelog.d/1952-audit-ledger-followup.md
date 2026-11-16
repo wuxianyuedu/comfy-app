@@ -3,7 +3,7 @@
 - **台账 R8-01 / R13-01 跟平到当日的可核读数**（ISSUE #1952）：两处「仍欠」的写法都过期，
   且都在同一个位置上错了 —— 把「排在冒烟**前面**的那道预算红」读成了「冒烟本身红」。
   逐条读数：
-  ① **R13-01**：基线文件 `scripts/.bundle-budget-baseline.json` 仍是 #1916（`14f0e0a8`）那份
+  ① **R13-01**：基线文件 `scripts/gates/.bundle-budget-baseline.json` 仍是 #1916（`14f0e0a8`）那份
   （`generatedAt 2026-10-14` / `baselineRev 8d15f9fe` / `gzip 2272.1 KB` / `files 221`）——
   **③ 的归属名单一条都没被认过账，基线也没人再抬**。当天现算：`8d15f9fe..HEAD` 有 **28 次提交**，
   其中动过 bundle 面（`src/**` / `next.config.js` / 依赖声明）的 **15 条**，

@@ -5,7 +5,7 @@ build-all.ps1 — 一键发布构建入口（原 tools\build\build-all.bat，逻
 编排两步（逻辑在 tools\scripts\build-all.ps1，口径见规范 launch-and-build.md §7.0 / §7.7）：
   1) `pnpm tauri build` —— 整条桌包链：`build-desktop.mjs`（`pnpm build` → 装配 static
      → sidecar）→ cargo 编译 → bundle，产出**安装包**（nsis / msi）
-  2) `node scripts/publish-desktop-bundle.mjs --root dist\desktop` —— 把安装包发布到
+  2) `node scripts/build/publish-desktop-bundle.mjs --root dist\desktop` —— 把安装包发布到
      **项目内** `dist\desktop`（本机自己的包不写常驻目录，ISSUE #3546）：一份一个目录 +
      `manifest.json`，`latest.txt` 只是指针文件，轮转留最近 2 份
 

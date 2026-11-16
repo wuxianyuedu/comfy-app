@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { junitMissingLine } from "../scripts/junit-readout-diag.mjs";
+import { junitMissingLine } from "../scripts/affected-tests/junit-readout-diag.mjs";
 
 describe("junit 落点三态话术（#2697）", () => {
   it("落点目录是链接 ⇒ 点名 realpath，报「没落盘」", () => {

@@ -6,14 +6,14 @@
   —— 于是「索引为什么这么贵」每台机器重新发现一遍，排除表各写一份形状不一的，
   而没人知道该包含哪些目录。现在的走法是「拿到仓库执行一次」：`pnpm qoder:ignore` 装好，
   `pnpm qoder:ignore:check` 只比对（不一致退 1），`--print` 不落盘打到标准输出。
-- **唯一写出者把「排除项」与「为什么排除」绑成一条数据**：`scripts/qoder-ignore.mjs` 的
+- **唯一写出者把「排除项」与「为什么排除」绑成一条数据**：`scripts/docs/qoder-ignore.mjs` 的
   `IGNORE_SECTIONS` 每条 pattern 带一句 `why`，渲染时 `# <why>` 紧贴在其 pattern 上一行 ——
   一行没有理由的排除，下一个人只能猜它是不是漏配，而猜的结果通常是直接删掉那条
   （索引再贵回去）。三条形状约定各有用例：产物里**不写绝对体积读数**（那是「这台机器、
   这一刻」的数，写进去就是一条会过期的陈述）；代码里**只有一处落盘**且落点是仓库根那份
   （`.git/info/exclude` 只出现在说明里 —— 那是每台机器自己的本地状态，工具跑在谁身上
   都不该改变它）；渲染**幂等**（内容相同 ⇒ 一个字节都不写）。
-- **登记面同批落**：`tests/qoder-ignore.test.ts` 进 `scripts/fixed-structural-tests.mjs`
+- **登记面同批落**：`tests/qoder-ignore.test.ts` 进 `scripts/affected-tests/fixed-structural-tests.mjs`
   固定清单。理由与 `tests/build-desktop-step-readings.test.ts`（#2574）同因 —— 它判的是
   **两份文本**（入库那份 ⇄ 工具渲染那份），而 `.qoderignore` 不被任何代码 import、
   `package.json` 那条出口住在仓库根，静态 import 图两条都追不到：改那份表不会把用例

@@ -214,7 +214,7 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
   it("只改 scripts ⇒ 指纹不变：它不在安装闭包里（ISSUE #2489）", () => {
     const before = pnpmInstallFingerprint(tmp);
     const pkg = readPkg();
-    pkg.scripts["setup:comfy-cli-venv"] = "node scripts/setup-comfy-cli-venv.mjs";
+    pkg.scripts["setup:comfy-cli-venv"] = "node scripts/devtools/setup-comfy-cli-venv.mjs";
     /* 回写**整份** `package.json`（`name` 等其余键一个都不能少 —— 少了指纹就换键）。 */
     fs.writeFileSync(path.join(tmp, "package.json"), `${JSON.stringify(pkg.parsed, null, 2)}\n`);
     expect(pnpmInstallFingerprint(tmp), "scripts 变也换键 ⇒ 白付一次整装，而槽的内容逐字不变").toBe(

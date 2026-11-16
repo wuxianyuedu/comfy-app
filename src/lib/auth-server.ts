@@ -37,7 +37,7 @@ const DEMO_NAME = "体验用户";
  *
  * 这里只记 **email**，不记解析结果 —— 这是一个刻意的选择，理由是可验证的：
  * 记住「id / name」会让缓存**越过数据库**：`user` 表被重建（`drizzle-kit push`
- * 的 `__new_X` 重建流程，见 `scripts/heal-db.cjs`）或那行被删掉之后，缓存里
+ * 的 `__new_X` 重建流程，见 `scripts/db/heal-db.cjs`）或那行被删掉之后，缓存里
  * 的 id 依然会被返回，而**这个 id 在库里已经不存在**。下游每一处按 userId
  * 写入的地方（任务、工作流、素材）都会 ForeignKey 失败或留下孤儿行，且报错
  * 指向的是写入语句，看不出「用户其实是虚构的」。

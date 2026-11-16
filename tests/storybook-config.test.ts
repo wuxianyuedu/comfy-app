@@ -38,7 +38,7 @@ const REPO_ROOT = resolve(".");
 const STORYBOOK_DIR = resolve(REPO_ROOT, ".storybook");
 const MAIN = resolve(REPO_ROOT, ".storybook/main.ts");
 const PREVIEW = resolve(REPO_ROOT, ".storybook/preview.tsx");
-const LAUNCHER = resolve(REPO_ROOT, "scripts/storybook.mjs");
+const LAUNCHER = resolve(REPO_ROOT, "scripts/devtools/storybook.mjs");
 
 /** 故事文件是组件目录下的 `*.stories.tsx`（与组件同目录，见 §12.1 的组织口径）。 */
 const STORY_GLOB = "../src/**/*.stories.@(ts|tsx)";
@@ -108,8 +108,8 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
   });
 
   it("package.json 的 Storybook 脚本走 Node 启动器，且不写死 pnpm 包名", () => {
-    expect(pkg.scripts.storybook).toBe("node scripts/storybook.mjs dev");
-    expect(pkg.scripts["storybook:build"]).toBe("node scripts/storybook.mjs build");
+    expect(pkg.scripts.storybook).toBe("node scripts/devtools/storybook.mjs dev");
+    expect(pkg.scripts["storybook:build"]).toBe("node scripts/devtools/storybook.mjs build");
   });
 
   it("依赖钉在同一版本（Storybook 各包版本错配的报错指向完全无关的内部 API）", () => {

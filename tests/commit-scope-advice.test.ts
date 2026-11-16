@@ -137,7 +137,7 @@ describe("受影响用例的启动器 —— 「大改动拆小」这条建议�
     const fnStart = adviceSrc.indexOf("export function collectAttribute() {");
     expect(fnStart, "解不出 collectAttribute").toBeGreaterThan(-1);
     const fnBody = adviceSrc.slice(fnStart, adviceSrc.indexOf("\n}\n", fnStart));
-    expect(adviceSrc, "没接同一入口").toContain('from "../progress-heartbeat.mjs"');
+    expect(adviceSrc, "没接同一入口").toContain('from "../gates/progress-heartbeat.mjs"');
     expect(fnBody, "必须是跨进程那条").toContain("startProgressSync(");
     expect(fnBody, "要报出当前段名").toContain("progress.step(");
     expect(fnBody, "失败分支也必须收尾").toContain("finally {");

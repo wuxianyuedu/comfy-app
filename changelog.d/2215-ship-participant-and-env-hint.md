@@ -9,7 +9,7 @@
     会明说「经手记录只增不删」。写后独立回读仍然两枚一起验（写后一次 `get-issue` 看得见
     才算打上）。
   - `pnpm ship --claims` 仍只按 `处理人:` 列当前领取中的单（`参与人:` 是历史，不参与这个列表）。
-  - 阶段 0 复用 `scripts/env-preflight.mjs` 的 `envInitHint()`（与 `pnpm dev` / `pnpm start`
+  - 阶段 0 复用 `scripts/devtools/env-preflight.mjs` 的 `envInitHint()`（与 `pnpm dev` / `pnpm start`
     同一份实现，#2205）念出 `.env` 缺的键与 `pnpm env:init`，并带这一份检出的绝对路径；
     它是读数、不参与退码，`.env` 齐全时不出声。
   规范 §13.10.10 / §13.10.11、`AGENTS.md` 硬规则 14、`ship` Skill 与

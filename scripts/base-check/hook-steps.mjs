@@ -234,7 +234,7 @@ export function groupSteps(hookPath = HOOK) {
  *   · `shell-gate` —— 钩子行里**连 `--staged` 都没有**，它自己读暂存区；
  *   · （`check-doc-mirror-pairing.cjs` 曾在这一族里，#3586 随镜像退役一并退出。）
  *   · `known-failed-selftest-gate.mjs` —— 同样**连旗标都没有**（钩子行是
- *     `node scripts/known-failed-selftest-gate.mjs`），它自己读暂存区。
+ *     `node scripts/gates/known-failed-selftest-gate.mjs`），它自己读暂存区。
  *
  * `check-reformat-only.cjs` 曾也在这一族里（ISSUE #3032），**现已退出**（ISSUE #3035）：
  * 它钩子行上的 `--staged` 是可剥的 —— 剥掉之后落到「判 `HEAD` 这一次提交」那一支，
@@ -252,7 +252,10 @@ export function groupSteps(hookPath = HOOK) {
  * 也让合并前复算**不收**它们（`mayDecideOnCleanSnapshot`）—— 那条复算在干净快照上
  * 同样没有暂存区，收进去只会多一行恒绿。
  */
-export const CHANGED_SCOPED = ["scripts/shell-gate.mjs", "scripts/known-failed-selftest-gate.mjs"];
+export const CHANGED_SCOPED = [
+  "scripts/gates/shell-gate.mjs",
+  "scripts/gates/known-failed-selftest-gate.mjs",
+];
 
 /**
  * 一条指令**能不能在干净的上游快照上判决** —— 判据是它的**参数形态**，不是名字。
@@ -328,7 +331,7 @@ export function readHookSteps(hookPath = HOOK) {
  * 只认**步骤行**，块边界就是 `run_group D0` 那一行到它 `sh -c '` 的收尾引号。
  *
  * 消费方：`.githooks/pre-commit` 的档位开关（默认只跑这一档）与
- * `scripts/premerge-check.mjs`（合并前那一跳**默认就跑全套**，`--light` 才减到这一档）。
+ * `scripts/gates/premerge-check.mjs`（合并前那一跳**默认就跑全套**，`--light` 才减到这一档）。
  *
  * @param {string} hookPath @returns {Set<string>}
  */
