@@ -51,7 +51,8 @@ describe("UIKitGallery", () => {
     expect(screen.getByRole("textbox", { name: "速览输入框" })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "速览开关" })).toBeInTheDocument();
     /* 内容锚：核心基元的记号标签在速览区那一节里各出现一次（限定在该 section 内）。 */
-    const overviewSection = sections[overviewAt];
+    /* overviewAt 上面已断言 >= 0；索引取值兜一个空 section，缺失时下面的内容锚必失败。 */
+    const overviewSection = sections[overviewAt] ?? document.createElement("section");
     for (const label of [
       "Button",
       "Toggle",
