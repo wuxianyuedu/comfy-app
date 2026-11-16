@@ -286,6 +286,40 @@ describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
 });
 
 /**
+ * 删除不进判面（ISSUE #4145）：`git diff`（暂存 / 改动两档都一样）会把**删除**的
+ * 路径列进改动面，而 oxfmt 按路径读工作区 —— 删除项已无字节可判，靶子全剩不下时
+ * 它以「Expected at least one target file」退出 2。现场：#4142 一次只删 14 份垫片
+ * + 一份 `.md` 碎片（`.md` 不在 GLOBS 里）⇒ 靶子恰好全是删除，提交被格式门误拦。
+ */
+describe("oxfmt 格式判据 删除不进判面（ISSUE #4145）", () => {
+  test("暂存面靶子全是删除 → 剔除后放行（纯删除提交不再被误拦）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.write("scripts/old.cjs", "module.exports = { a: 1 };\n");
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.git("rm", "scripts/old.cjs");
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).toContain("不进格式判面");
+    expect(r.output).not.toContain("Expected at least one target file");
+  });
+
+  test("删除与改动混在暂存面 → 删除剔除、改动照判（脏文件照样点名）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.write("scripts/old.cjs", "module.exports = { a: 1 };\n");
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.git("rm", "scripts/old.cjs");
+    repo.write("src/lib/fresh.ts", DIRTY);
+    repo.git("add", "src/lib/fresh.ts");
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("src/lib/fresh.ts");
+    expect(r.output).not.toContain("scripts/old.cjs");
+  });
+});
+
+/**
  * `--staged` 的输入面不只管「哪些路径」，还得管「这些路径的内容从哪来」（ISSUE #3259）。
  * 现场：暂存一份脏文件、再把工作区改干净却不重新 `git add`（AM），oxfmt 按路径读工作区
  * ⇒ 判绿，而提交进历史的是 index 里那份没过格式的 blob。这里五条一起钉：① 两个方向的
