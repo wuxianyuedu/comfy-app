@@ -28,7 +28,12 @@ export async function POST(req: NextRequest) {
     return unauthorizedResponse();
   }
 
-  const form = await req.formData();
+  /* 畸形表单是客户端错误 → 400（#4045）：与 bgm / materials 同一口径，
+   * 不让它落成未捕获的 500 非 JSON 体。 */
+  const form = await req.formData().catch(() => null);
+  if (form === null) {
+    return NextResponse.json({ error: "表单解析失败" }, { status: 400 });
+  }
   const file = form.get("image");
   if (file === null) {
     return NextResponse.json({ error: "未收到文件" }, { status: 400 });

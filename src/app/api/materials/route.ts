@@ -136,8 +136,13 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return unauthorizedResponse();
   }
+  /* 畸形表单是客户端错误 → 400（#4045）：与 bgm / upload 同一口径，
+   * 不落进下面的 catch 被错报成 500「上传失败」。 */
+  const form = await req.formData().catch(() => null);
+  if (form === null) {
+    return NextResponse.json({ error: "表单解析失败" }, { status: 400 });
+  }
   try {
-    const form = await req.formData();
     const entry = form.get("file");
     const file = entry instanceof File ? entry : null;
     if (!file) {
