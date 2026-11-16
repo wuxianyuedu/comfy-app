@@ -57,6 +57,7 @@ import {
   SheetTrigger,
 } from "~/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import { CATEGORY_IDS } from "~/components/ui/ui-kit-gallery-categories";
 import { GalleryCell, GalleryGrid, GallerySection } from "~/components/ui/ui-kit-gallery-parts";
 
 /**
@@ -124,6 +125,7 @@ function ControlledDialogsDemo() {
 export function OverlaysSection() {
   return (
     <GallerySection
+      id={CATEGORY_IDS.overlays}
       note="每个浮层都开一次：壳底 / 内容底 / 遮罩三层在两态下各自检查。"
       title="浮层与对话框"
     >

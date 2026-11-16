@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
+import { UI_KIT_CATEGORIES } from "~/components/ui/ui-kit-gallery-categories";
 import { UIKitGallery } from "~/components/ui/ui-kit-gallery";
 
 afterEach(cleanup);
@@ -25,7 +26,9 @@ describe("UIKitGallery", () => {
       "反馈与状态",
       "数据展示与杂项",
     ]) {
-      expect(screen.getByText(title)).toBeInTheDocument();
+      /* ISSUE #4125：左侧大类导航也列出同名标题 ⇒ 每个标题出现两次（导航 + 分区），
+         这里只钉「至少出现一次」。锚点与分区 id 的一一对应另有一条专门测。 */
+      expect(screen.getAllByText(title).length).toBeGreaterThan(0);
     }
   });
 
@@ -95,5 +98,52 @@ describe("UIKitGallery", () => {
     expect(container.querySelector('[data-slot="ui-kit-scroll"]')?.className).toContain("h-full");
     rerender(<UIKitGallery />);
     expect(container.querySelector('[data-slot="ui-kit-scroll"]')?.className).toContain("100vh");
+  });
+
+  /**
+   * ISSUE #4125：左侧大类导航 —— 八个分区各有锚点链接，href 指向对应分区 id，
+   * 且每个 id 在页面里真有落点（否则点过去跳空）。清单与分区共用 ui-kit-gallery-categories。
+   */
+  it("左侧大类导航的锚点一一对应分区 id", () => {
+    const { container } = render(<UIKitGallery />);
+    const nav = screen.getByRole("navigation", { name: "控件分类" });
+    const links = [...nav.querySelectorAll("a")];
+    expect(links).toHaveLength(UI_KIT_CATEGORIES.length);
+    for (const [i, category] of UI_KIT_CATEGORIES.entries()) {
+      expect(links[i]).toHaveAttribute("href", `#${category.id}`);
+      expect(container.querySelector(`#${category.id}`)).toBeInTheDocument();
+    }
+  });
+
+  /** ISSUE #4125：大标题去掉 —— 唯一 h1 以 sr-only 留在 DOM（读屏可跳转），无可见 h1。 */
+  it("页头标题仅读屏可见，页面只有一个 h1", () => {
+    const { container } = render(<UIKitGallery />);
+    const headings = [...container.querySelectorAll("h1")];
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveTextContent("UI 控件总览");
+    expect(headings[0]?.className).toContain("sr-only");
+  });
+
+  /** ISSUE #4125：补全的基元都有一枚代表形态落在对应分区（按可访问名 / 记号标签锚定）。 */
+  it("补全的基元在对应分区可见", () => {
+    const { container } = render(<UIKitGallery />);
+    const labels = [
+      "Icon",
+      "Separator",
+      "TruncatedText",
+      "StepperInput（悬浮步进）",
+      "SelectMenu（深色定制下拉）",
+      "MultiSegmentPopover（分段选择）",
+      "FilePickerButton（文件选择）",
+      "MediaThumbnail（媒体缩略图）",
+      "StatusButton（状态行专用按钮）",
+    ];
+    for (const label of labels) {
+      expect(
+        [...container.querySelectorAll("span")].some((span) => span.textContent === label),
+      ).toBe(true);
+    }
+    /* PageHeader 以 h2 展示（不制造第二个 h1）。 */
+    expect(screen.getByRole("heading", { level: 2, name: "页头示例" })).toBeInTheDocument();
   });
 });

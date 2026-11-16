@@ -43,6 +43,7 @@ import {
   SidebarProvider,
 } from "~/components/ui/sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { CATEGORY_IDS } from "~/components/ui/ui-kit-gallery-categories";
 import { GalleryCell, GalleryGrid, GallerySection } from "~/components/ui/ui-kit-gallery-parts";
 
 /**
@@ -54,6 +55,7 @@ import { GalleryCell, GalleryGrid, GallerySection } from "~/components/ui/ui-kit
 export function NavigationSection() {
   return (
     <GallerySection
+      id={CATEGORY_IDS.navigation}
       note="导航件的三档状态色（默认 / 悬停 / 选中）逐档看，当前页与选中项最容易错。"
       title="导航与布局"
     >

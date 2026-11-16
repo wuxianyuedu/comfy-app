@@ -78,7 +78,7 @@ export const NOT_A_UI_SURFACE = new Map([
  * @type {Map<string, string>} 文件 → 理由
  */
 export const NO_STORY_REASON = new Map([
-  /* ── UI 控件总览页（/ui-kit，ISSUE #3525 / #4110）的十件 ──
+  /* ── UI 控件总览页（/ui-kit，ISSUE #3525 / #4110 / #4125）的十二件 ──
    * 它们不是基元，是「把全部基元摆到一屏」的演示分组：这页本身就是活的
    * 展示载体（真实主题链路下渲染全部控件），再加 story 等于把页内每个
    * 演示格抄进工作台、还多出一条会漂的第二事实来源。
@@ -103,6 +103,14 @@ export const NO_STORY_REASON = new Map([
   ["ui-kit-gallery-navigation.tsx", "总览页的导航 / 布局分组：只是基元调用清单，由总览页用例覆盖"],
   ["ui-kit-gallery-status.tsx", "总览页的反馈 / 状态分组：只是基元调用清单，由总览页用例覆盖"],
   ["ui-kit-gallery-data.tsx", "总览页的数据展示分组：只是基元调用清单，由总览页用例覆盖"],
+  [
+    "ui-kit-gallery-nav.tsx",
+    "总览页的左侧大类导航（#4125）：分区锚点清单的简单列表，由总览页用例覆盖",
+  ],
+  [
+    "ui-kit-gallery-categories.ts",
+    "总览页分区清单的常量表（#4125）：只有 id / 标题数据、无 UI 形态，由总览页用例覆盖",
+  ],
 ]);
 
 /**

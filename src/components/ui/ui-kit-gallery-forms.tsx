@@ -5,6 +5,7 @@ import { Search, X } from "lucide-react";
 
 import { Checkbox } from "~/components/ui/checkbox";
 import { Field, FieldDescription, FieldError, FieldLabel } from "~/components/ui/field";
+import { FilePickerButton } from "~/components/ui/file-picker";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
 import {
@@ -26,9 +27,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { SelectMenu } from "~/components/ui/select-menu";
+import { MultiSegmentPopover } from "~/components/ui/segment-popover";
 import { Slider } from "~/components/ui/slider";
+import { StepperInput } from "~/components/ui/stepper-input";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
+import { CATEGORY_IDS } from "~/components/ui/ui-kit-gallery-categories";
 import { GalleryCell, GalleryGrid, GallerySection } from "~/components/ui/ui-kit-gallery-parts";
 
 /**
@@ -51,9 +56,70 @@ function NumberFieldDemo() {
   return <NumberField max={100} min={0} onChange={setValue} value={value} />;
 }
 
+/** 下面四个也是受控件 / 带回调，各包一层小壳（ISSUE #4125 补全）。 */
+function StepperInputDemo() {
+  const [value, setValue] = useState("1");
+  return (
+    <StepperInput
+      ariaLabel="步进输入演示"
+      className="w-24"
+      max={9}
+      min={0}
+      onValueChange={setValue}
+      value={value}
+    />
+  );
+}
+
+function SelectMenuDemo() {
+  const [value, setValue] = useState("SDXL");
+  return (
+    <SelectMenu
+      aria-label="深色选择菜单演示"
+      onChange={setValue}
+      options={["SDXL", "Flux", "Illustrious"]}
+      value={value}
+    />
+  );
+}
+
+function SegmentedDemo() {
+  const [ratio, setRatio] = useState("16:9");
+  const [pixel, setPixel] = useState("1k");
+  return (
+    <div className="w-56">
+      <MultiSegmentPopover
+        ariaLabel="分段选择演示"
+        sections={[
+          {
+            label: "比例",
+            onChange: setRatio,
+            options: [
+              { label: "16:9", value: "16:9" },
+              { label: "1:1", value: "1:1" },
+            ],
+            value: ratio,
+          },
+          {
+            label: "像素",
+            onChange: setPixel,
+            options: [
+              { label: "1k", value: "1k" },
+              { label: "2k", value: "2k" },
+            ],
+            value: pixel,
+          },
+        ]}
+        triggerContent={`${ratio} / ${pixel}`}
+      />
+    </div>
+  );
+}
+
 export function FormsSection() {
   return (
     <GallerySection
+      id={CATEGORY_IDS.forms}
       note="重点看：placeholder / 描边在两态下是否可见，禁用与 invalid 档是否仍能区分。"
       title="输入与选择"
     >
@@ -155,6 +221,20 @@ export function FormsSection() {
             modes={["T2I", "I2V", "R2I"]}
             onChange={() => undefined}
           />
+        </GalleryCell>
+        <GalleryCell label="StepperInput（悬浮步进）">
+          <StepperInputDemo />
+        </GalleryCell>
+        <GalleryCell label="SelectMenu（深色定制下拉）">
+          <SelectMenuDemo />
+        </GalleryCell>
+        <GalleryCell label="MultiSegmentPopover（分段选择）">
+          <SegmentedDemo />
+        </GalleryCell>
+        <GalleryCell label="FilePickerButton（文件选择）">
+          <FilePickerButton accept="image/*" onPick={() => undefined} size="sm">
+            选择文件
+          </FilePickerButton>
         </GalleryCell>
       </GalleryGrid>
     </GallerySection>
