@@ -520,6 +520,22 @@ describe("useModelTest：工作流提供的图片/视频模型（ISSUE #4080 评
     });
   });
 
+  it("工作流候选显示模型名（模型标签）而非工作流名；同标签多工作流用工作流名消歧（#4080 评论 17）", () => {
+    workflowsData = [
+      { ...WF_IMAGE, name: "image_z_image_int8_t2i", modelTags: ["z-image"] },
+      { ...WF_IMAGE, id: "wf-3", name: "image_z_image_v2", modelTags: ["z-image"] },
+      { ...WF_IMAGE, id: "wf-4", name: "image_no_tag", modelTags: [] },
+    ];
+    const { result } = renderModelTest();
+    /* 下拉显示名：模型标签优先；同标签多工作流用工作流名消歧；无标签退工作流名。 */
+    expect(result.current.candidateLabels).toEqual({
+      "agnes-image": "agnes-image",
+      "wf::wf-1": "z-image",
+      "wf::wf-3": "z-image · image_z_image_v2",
+      "wf::wf-4": "image_no_tag",
+    });
+  });
+
   it("取消生成：中止本地任务并取消服务端任务（#4080 评论 12 回归）", async () => {
     workflowsData = [WF_IMAGE];
     buildLibraryWorkflowInputMock.mockResolvedValue({
