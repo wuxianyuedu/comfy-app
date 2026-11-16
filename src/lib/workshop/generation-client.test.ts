@@ -12,10 +12,24 @@ import {
   apiGenerateImage,
   apiPollVideo,
   apiSubmitVideo,
+  fetchWorkshopWorkflows,
   preparePortraitReferences,
 } from "./generation-client";
 import type { Character } from "./types";
 import { isRecord } from "~/lib/is-record";
+
+/* fetchWorkshopWorkflows 的 workflow.list 读数（#4119 回归）：现役形状是
+ * { workflows, localPending, localRoots }，历史形状是裸数组。 */
+let vanillaListResult: unknown;
+vi.mock("~/trpc/vanilla", () => ({
+  vanillaApi: {
+    workflow: {
+      list: {
+        query: () => Promise.resolve(vanillaListResult),
+      },
+    },
+  },
+}));
 
 function makeCharacter(id: string, portraitUrl?: string): Character {
   return {
@@ -232,5 +246,52 @@ describe("apiGenerateImage / apiSubmitVideo / apiPollVideo 的 onDebug 与 seed"
     });
     expect(relayBodyOf(mock).debug).toBe(true);
     expect(seen).toHaveLength(0);
+  });
+});
+
+/* fetchWorkshopWorkflows：workflow.list 返回形状的解析（#4119 回归）。
+ * 现役形状是 { workflows, localPending, localRoots }，历史形状是裸数组 ——
+ * 两种都要能取到 workflows 数组，否则工坊「生成资源」与测试模型页的工作流
+ * 候选恒为空。 */
+describe("fetchWorkshopWorkflows：workflow.list 形状解析（#4119 回归）", () => {
+  it("对象形状（现役）：取 workflows 数组并映射出选项", async () => {
+    vanillaListResult = {
+      workflows: [
+        {
+          id: "wf-1",
+          name: "image_z_image_int8_t2i",
+          taskType: "T2I",
+          modes: ["T2I"],
+          typeCategory: "image",
+          modelTags: ["z-image"],
+          workflowIO: {},
+          paramMap: null,
+        },
+      ],
+      localPending: [],
+      localRoots: null,
+    };
+    const options = await fetchWorkshopWorkflows();
+    expect(options).toHaveLength(1);
+    expect(options[0]).toMatchObject({
+      id: "wf-1",
+      name: "image_z_image_int8_t2i",
+      category: "image",
+      modes: ["T2I"],
+    });
+  });
+
+  it("裸数组形状（历史）：照旧可用", async () => {
+    vanillaListResult = [
+      { id: "wf-2", name: "video_wf", taskType: "T2V", modes: ["T2V"], typeCategory: "video" },
+    ];
+    const options = await fetchWorkshopWorkflows();
+    expect(options).toHaveLength(1);
+    expect(options[0]?.category).toBe("video");
+  });
+
+  it("既不是数组也没有 workflows 字段：安全回落空清单", async () => {
+    vanillaListResult = { localPending: [], localRoots: null };
+    expect(await fetchWorkshopWorkflows()).toEqual([]);
   });
 });
