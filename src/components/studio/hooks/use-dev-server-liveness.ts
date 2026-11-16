@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useInterval } from "~/components/ui/use-interval";
 import { SERVER_ID_ENDPOINT } from "~/lib/log/panel-self-poll";
 import { isPlainRecord } from "~/lib/is-record";
+import { withTimeoutResult } from "~/lib/with-timeout";
 import { readAppServiceProcessAlive } from "~/lib/shell/desktop-shell-client";
 import {
   describeAppServiceExit,
@@ -244,30 +245,18 @@ export function useDevServerLiveness(): DevServerLiveness {
     /* 问壳「进程还在吗」（ISSUE #4146，判据在壳侧读编排器的进程树名单）。
      * 每个失败拍都问：IPC 是读一份小文件 + 查几个 PID，毫秒级；而失败窗口正是
      * 进程状态可能变化（死 / 被重启）的时段，不去重。答案只在本拍之后、恢复
-     * 之前被消费。套 2.5s 超时：壳自己被卡住时这一问不能把探活链路拖死；
-     * 拿不到（浏览器 / 旧壳 / 无会话文件）回 null，判据按「没有进程外信号」
-     * 退回原行为。 */
+     * 之前被消费。超时走 withTimeoutResult 的统一出口（超时回 null = 「这一拍
+     * 没问到」），壳拿不到（浏览器 / 旧壳 / 无会话文件）也是 null——判据按
+     * 「没有进程外信号」退回原行为，一次也不编答案。 */
     const askShellWhetherProcessAlive = async (): Promise<void> => {
-      let timer: ReturnType<typeof setTimeout> | null = null;
       try {
-        const answer = await Promise.race([
-          readAppServiceProcessAlive(),
-          new Promise<null>((resolve) => {
-            timer = setTimeout(() => {
-              resolve(null);
-            }, 2500);
-          }),
-        ]);
+        const answer = await withTimeoutResult(readAppServiceProcessAlive(), 2500, null);
         if (!stoppedRef.current) {
           setProcessAlive(answer);
         }
       } catch {
         if (!stoppedRef.current) {
           setProcessAlive(null);
-        }
-      } finally {
-        if (timer !== null) {
-          clearTimeout(timer);
         }
       }
     };
