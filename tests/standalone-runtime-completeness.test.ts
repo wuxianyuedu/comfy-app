@@ -146,9 +146,12 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
 describe("`pnpm start` 的入口：仓库检出里必须走 `next start`（不换 standalone 入口）", () => {
   const source = readCode("scripts/start.mjs");
 
-  it("用的是 `next start`（经 pnpm 可执行形态判据，不是裸名字）", () => {
-    expect(source).toMatch(/"next",\s*\n?\s*"start"/);
-    expect(source).toMatch(/pnpmInvocation\(\[/);
+  it("用的是 `next start`（bin 经 next-bin 共用件解析，不是裸名字；ISSUE #4155）", () => {
+    /* #4155 起 server 链不经 pnpm：bin 由 resolveNextBin 从 next 自己的 bin 字段
+     * 解析，`start` 子命令仍是字面量 —— 两条一起钉住「起的是 next start」这件事。 */
+    expect(source).toMatch(/resolveNextBin\(root\)/);
+    expect(source).toMatch(/"start",\s*\n?\s*"-p"/);
+    expect(source).toMatch(/spawnSync\(process\.execPath, \[nextBin/);
   });
 
   it("**不许**出现「盘上有 server.js 就走 standalone 入口」那套决策", () => {

@@ -504,12 +504,15 @@ describe("dev/start 在起 Next 之前预检", () => {
         fs.copyFileSync(path.join(from, name), path.join(to, name));
       }
     }
-    // `dev.mjs` 依赖 `launcher-core/shell.mjs`（pnpm 可执行形态的单一判据，
-    // 见规范 §2.1.1）与它 import 的 `command-echo.mjs`（命令行回显的唯一出口，
-    // 见规范 §4.4）、`log.mjs`（runStamp 的唯一出口）与 `executor-host-spawn.mjs`
+    // `dev.mjs` 依赖 `launcher-core/next-bin.mjs`（next bin 直启的解析共用件，
+    // ISSUE #4155；dev.mjs 顶层静态 import 它）与 `launcher-core/shell.mjs`
+    // （pnpm 可执行形态的单一判据，见规范 §2.1.1）和它 import 的
+    // `command-echo.mjs`（命令行回显的唯一出口，见规范 §4.4）、`log.mjs`
+    // （runStamp 的唯一出口）与 `executor-host-spawn.mjs`
     // （按开关拉起执行器宿主的唯一一份实现，ISSUE #1767）：副本里少一份，
     // import 就失败、测的就不是预检了。
     for (const name of [
+      "next-bin.mjs",
       "shell.mjs",
       "command-echo.mjs",
       "log.mjs",
