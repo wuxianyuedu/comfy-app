@@ -12,7 +12,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground hover:bg-primary/80 dark:bg-primary-600 dark:hover:bg-primary-hover",
+          "bg-primary text-primary-foreground hover:bg-primary-hover dark:bg-primary-600 dark:hover:bg-primary-hover",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
@@ -37,11 +37,11 @@ const buttonVariants = cva(
         "primary-solid":
           "bg-primary-500 text-primary-foreground hover:bg-primary-600 focus-visible:border-primary-600 focus-visible:ring-primary-500/40 dark:bg-primary-600 dark:hover:bg-primary-hover",
         "danger-solid":
-          "bg-destructive text-primary-foreground hover:bg-destructive/90 focus-visible:border-destructive focus-visible:ring-destructive/30",
+          "bg-destructive text-primary-foreground hover:bg-[color-mix(in_oklch,var(--color-destructive),black_10%)] focus-visible:border-destructive focus-visible:ring-destructive/30",
         "success-solid":
-          "bg-success text-on-success hover:bg-success/90 focus-visible:border-success focus-visible:ring-success/30",
+          "bg-success text-on-success hover:bg-[color-mix(in_oklch,var(--color-success),black_10%)] focus-visible:border-success focus-visible:ring-success/30",
         "warning-solid":
-          "bg-warning-strong text-primary-foreground hover:bg-warning-strong/90 focus-visible:border-warning-strong focus-visible:ring-warning/30",
+          "bg-warning-strong text-primary-foreground hover:bg-[color-mix(in_oklch,var(--color-warning-strong),black_10%)] focus-visible:border-warning-strong focus-visible:ring-warning/30",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

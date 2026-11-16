@@ -294,7 +294,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             className={topBarButtonClass(
               "ghost",
               "compact",
-              debugMode ? "bg-primary-500 text-primary-foreground hover:bg-primary-500 shadow" : "",
+              debugMode ? "bg-primary-500 text-primary-foreground hover:bg-primary-600 shadow" : "",
             )}
             onClick={toggleDebugMode}
             variant="ghost"

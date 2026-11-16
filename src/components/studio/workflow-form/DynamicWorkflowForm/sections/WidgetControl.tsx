@@ -138,7 +138,7 @@ export function WidgetControl({
       return (
         <Button
           aria-checked={value === true}
-          className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep ${compact ? "h-[28px] px-2.5" : "mt-1 h-7.5 px-3"} w-full justify-between rounded-md text-xs ${
+          className={`nodrag nopan bg-canvas-deep hover:bg-surface-2 ${compact ? "h-[28px] px-2.5" : "mt-1 h-7.5 px-3"} w-full justify-between rounded-md text-xs ${
             on ? "text-success-strong" : "text-ink-muted"
           } ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
           disabled={disabled}
@@ -174,7 +174,7 @@ export function WidgetControl({
       return (
         <div className={compact ? "" : "mt-1"}>
           <Button
-            className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep text-ink-soft hover:text-ink-bright text-2xs gap-1.5 rounded-md px-2.5 ${
+            className={`nodrag nopan bg-canvas-deep hover:bg-surface-2 text-ink-soft hover:text-ink-bright text-2xs gap-1.5 rounded-md px-2.5 ${
               compact ? "h-[28px] w-full" : "h-auto py-1.5"
             } ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
             disabled={disabled || uploading}
