@@ -78,7 +78,7 @@ describe("project.list", () => {
 describe("project.upsert", () => {
   it("新建：行落在请求方名下，nodes/edges 原样存", async () => {
     const res = await createCaller(ctxB()).upsert({
-      id: "proj_b1",
+      projectId: "proj_b1",
       name: "画布一",
       nodes: NODES,
       edges: EDGES,
@@ -93,7 +93,7 @@ describe("project.upsert", () => {
   it("覆盖自己的项目：仍然一行，内容换掉", async () => {
     seedProject(tdb, { id: "p1", userId: "user-a", name: "旧名" });
     await createCaller(makeCtx()).upsert({
-      id: "p1",
+      projectId: "p1",
       name: "新名",
       nodes: NODES,
     });
@@ -113,7 +113,7 @@ describe("project.upsert", () => {
     });
     await expect(
       createCaller(ctxB()).upsert({
-        id: "p-victim",
+        projectId: "p-victim",
         name: "被覆盖",
         nodes: [],
         edges: [],
@@ -131,10 +131,10 @@ describe("project.upsert", () => {
 
   it("Zod 校验：空 id / 空 name → BAD_REQUEST", async () => {
     const caller = createCaller(makeCtx());
-    await expect(caller.upsert({ id: "", name: "x" })).rejects.toMatchObject({
+    await expect(caller.upsert({ projectId: "", name: "x" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
-    await expect(caller.upsert({ id: "p1", name: "" })).rejects.toMatchObject({
+    await expect(caller.upsert({ projectId: "p1", name: "" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
   });
