@@ -17,6 +17,7 @@ import { SectionLabel } from "~/components/ui/section-label";
 
 /** 一个分组：段级标题 + 一句「这组看什么」+ 演示面（卡片面）。 */
 export function GallerySection({
+  id,
   title,
   note,
   children,
@@ -24,12 +25,14 @@ export function GallerySection({
 }: {
   children: ReactNode;
   className?: string;
+  /** 分区锚点 id（左侧大类导航跳转用）；从 ui-kit-gallery-categories 取，别手抄。 */
+  id?: string;
   /** 这组的观察要点，一句话；没有就传 undefined，不渲染。 */
   note?: string;
   title: string;
 }) {
   return (
-    <section className={cn("flex flex-col gap-3", className)}>
+    <section className={cn("flex flex-col gap-3 scroll-mt-4", className)} id={id}>
       <div className="flex flex-col gap-0.5">
         <SectionLabel>{title}</SectionLabel>
         {note ? <p className="text-ink-muted text-xs">{note}</p> : null}

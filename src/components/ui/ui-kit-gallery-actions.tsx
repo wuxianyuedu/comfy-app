@@ -39,6 +39,7 @@ import { StatusDot } from "~/components/ui/status-dot";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { Toggle } from "~/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
+import { CATEGORY_IDS } from "~/components/ui/ui-kit-gallery-categories";
 import { GalleryCell, GalleryGrid, GallerySection } from "~/components/ui/ui-kit-gallery-parts";
 
 /**
@@ -57,6 +58,7 @@ const DOT_STATES = ["up", "busy", "probing", "down"] as const;
 export function ActionsSection() {
   return (
     <GallerySection
+      id={CATEGORY_IDS.actions}
       note="全部 variant × 尺寸档，另看禁用 / 加载 / 图标钮 —— 禁用态与卡片底最容易混。"
       title="按钮、徽标与状态件"
     >

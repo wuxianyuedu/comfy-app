@@ -94,6 +94,11 @@
   置于 token 墙之后、功能分区之前，ISSUE #4110）与六个功能基元分组，全部走语义
   token 类名（`theme:check` 判 0 写死色值）；速览与功能分区是同一批基元的两档视图
   —— 前者一眼扫「有哪些基元」，后者看全 variant / 尺寸矩阵，逐 prop 形态仍归 Storybook。
+  页头大标题改为仅读屏可见（`srTitle`）—— 顶栏已在说屏名，可见 h1 不重复；
+  左侧有固定的大类导航（八个分区锚点，点击跳到对应分区，ISSUE #4125），
+  窄屏下自动隐藏。补全了此前未展示的基元（Icon / Separator / TruncatedText /
+  StepperInput / SelectMenu / MultiSegmentPopover / FilePickerButton /
+  MediaThumbnail / StatusButton / PageHeader），全库可视化基元基本覆盖。
   右上角开关切换的是应用全局主题
   （与设置页同源）；命令面板（⌘/Ctrl+K）「其他」组有「UI 控件总览」
   入口；工作区里以 `uiKit` 视图页签打开（ISSUE #3726），默认独立标签页、

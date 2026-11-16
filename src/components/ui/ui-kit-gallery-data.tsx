@@ -31,6 +31,8 @@ import {
 } from "~/components/ui/item";
 import { JsonViewer } from "~/components/ui/json-viewer";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { PageHeader } from "~/components/ui/page-header";
 import { SettingsCard } from "~/components/ui/settings-card";
 import { SectionLabel } from "~/components/ui/section-label";
 import {
@@ -43,6 +45,7 @@ import {
 } from "~/components/ui/table";
 import { TreeRow } from "~/components/ui/tree-rows";
 import { ViewableImage } from "~/components/ui/image-viewer";
+import { CATEGORY_IDS } from "~/components/ui/ui-kit-gallery-categories";
 import { GalleryCell, GalleryGrid, GallerySection } from "~/components/ui/ui-kit-gallery-parts";
 
 /**
@@ -57,6 +60,7 @@ const SAMPLE_IMAGE = "/ui-kit-sample.svg";
 export function DataSection() {
   return (
     <GallerySection
+      id={CATEGORY_IDS.data}
       note="卡片 / 表格 / 树行的隔行底与边框档两态各看一遍；JSON 与代码块主题随态切换。"
       title="数据展示与杂项"
     >
@@ -181,6 +185,21 @@ export function DataSection() {
             <p className="text-sm">卡内内容。</p>
           </SettingsCard>
           <SectionLabel hint="带问号的段标题">段落标题</SectionLabel>
+        </GalleryCell>
+        <GalleryCell label="MediaThumbnail（媒体缩略图）">
+          <MediaThumbnail
+            alt="示例缩略图"
+            className="border-border h-16 w-24 rounded-md border object-cover"
+            src={SAMPLE_IMAGE}
+          />
+        </GalleryCell>
+        <GalleryCell className="col-span-full" label="PageHeader（屏级页头，as=h2 避免第二个 h1）">
+          <PageHeader
+            as="h2"
+            className="border-border rounded-lg border p-2"
+            description="一行副说明，右侧可挂动作组。"
+            title="页头示例"
+          />
         </GalleryCell>
       </GalleryGrid>
     </GallerySection>

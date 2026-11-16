@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "~/lib/utils";
+import { CATEGORY_IDS } from "~/components/ui/ui-kit-gallery-categories";
 import { GalleryGrid, GallerySection } from "~/components/ui/ui-kit-gallery-parts";
 
 /**
@@ -106,6 +107,7 @@ function BorderSwatch({ item }: { item: SwatchItem }) {
 export function TokenWall() {
   return (
     <GallerySection
+      id={CATEGORY_IDS.tokens}
       note="两态各看一遍：某枚 token 在其中一态下和承载面混掉，就是错档。"
       title="语义 token 墙"
     >

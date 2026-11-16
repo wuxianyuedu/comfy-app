@@ -20,8 +20,10 @@ import { Progress, ProgressLabel } from "~/components/ui/progress";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
+import { StatusButton } from "~/components/ui/service-status-row";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { WaterFillProgress } from "~/components/ui/water-fill-progress";
+import { CATEGORY_IDS } from "~/components/ui/ui-kit-gallery-categories";
 import { GalleryCell, GalleryGrid, GallerySection } from "~/components/ui/ui-kit-gallery-parts";
 
 /**
@@ -59,6 +61,7 @@ const SAMPLE_ERRORS = [
 export function StatusSection() {
   return (
     <GallerySection
+      id={CATEGORY_IDS.status}
       note="通知块六档 variant 的软底与字色两态各看一遍；进度条看轨道与填充的对比。"
       title="反馈与状态"
     >
@@ -134,6 +137,14 @@ export function StatusSection() {
           <Button onClick={() => toast.error("保存失败：磁盘已满")} variant="outline">
             弹一条错误 toast
           </Button>
+        </GalleryCell>
+        <GalleryCell label="StatusButton（状态行专用按钮）">
+          <StatusButton onClick={() => undefined} variant="primary-solid">
+            主行动
+          </StatusButton>
+          <StatusButton onClick={() => undefined} variant="outline">
+            次行动
+          </StatusButton>
         </GalleryCell>
       </GalleryGrid>
     </GallerySection>

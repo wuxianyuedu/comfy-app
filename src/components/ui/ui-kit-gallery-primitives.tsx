@@ -4,12 +4,14 @@ import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Icon } from "~/components/ui/icon";
 import { Input } from "~/components/ui/input";
 import { Kbd } from "~/components/ui/kbd";
 import { Label } from "~/components/ui/label";
 import { Progress, ProgressLabel } from "~/components/ui/progress";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
+import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Slider } from "~/components/ui/slider";
 import { Spinner } from "~/components/ui/spinner";
@@ -17,6 +19,8 @@ import { StatusBadge } from "~/components/ui/status-badge";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { Toggle } from "~/components/ui/toggle";
+import { TruncatedText } from "~/components/ui/truncated-text";
+import { CATEGORY_IDS } from "~/components/ui/ui-kit-gallery-categories";
 import { GalleryCell, GalleryGrid, GallerySection } from "~/components/ui/ui-kit-gallery-parts";
 
 /**
@@ -35,6 +39,7 @@ import { GalleryCell, GalleryGrid, GallerySection } from "~/components/ui/ui-kit
 export function PrimitivesOverviewSection() {
   return (
     <GallerySection
+      id={CATEGORY_IDS.primitives}
       note="核心基元各取一态、紧凑速览；全 variant / 尺寸矩阵见下方六个分区，逐 prop 形态见 Storybook。"
       title="基元 UI 速览"
     >
@@ -99,6 +104,25 @@ export function PrimitivesOverviewSection() {
             <Kbd>Ctrl</Kbd>
             <Kbd>K</Kbd>
           </span>
+        </GalleryCell>
+        <GalleryCell label="Icon">
+          <span className="flex items-center gap-2">
+            <Icon name="sparkles" />
+            <Icon name="check" />
+            <Icon name="alert" />
+          </span>
+        </GalleryCell>
+        <GalleryCell label="Separator">
+          <div className="flex w-32 flex-col gap-2">
+            <span className="text-2xs">上</span>
+            <Separator />
+            <span className="text-2xs">下</span>
+          </div>
+        </GalleryCell>
+        <GalleryCell label="TruncatedText">
+          <TruncatedText className="text-ink w-32 truncate text-xs">
+            一段会被省略的很长的说明文字
+          </TruncatedText>
         </GalleryCell>
       </GalleryGrid>
     </GallerySection>
