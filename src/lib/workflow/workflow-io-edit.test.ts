@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { WorkflowIOEntry } from "./workflow-io-types";
 import {
   clearModeOverrides,
+  withIOGroupReordered,
   withIOReordered,
   withIOLabel,
   withModeOverride,
@@ -107,5 +108,105 @@ describe("withIOReordered（ISSUE #4073：IO 预览的参数顺序可调）", ()
   it("fromKey 不在表内 / 与目标相同：原样返回同一引用", () => {
     expect(withIOReordered(io, "missing", B, "before")).toBe(io);
     expect(withIOReordered(io, A, A, "before")).toBe(io);
+  });
+
+  /* ISSUE #4073 复审：原实现只改键序、不重编 displayOrder，而展示层
+   * `splitWorkflowIO` 按 displayOrder 排序 —— 带旧 order 的条目松手就弹回。
+   * 这条用例复现该缺陷：即便键序已改，按 displayOrder 读必须得到新顺序。 */
+  it("条目带 displayOrder 时重编该组顺序，展示层按 displayOrder 读到新序", () => {
+    const ordered = {
+      [A]: entry({ name: "a", displayOrder: 1 }),
+      [B]: entry({ name: "b", displayOrder: 2 }),
+      [C]: entry({ name: "c", displayOrder: 3 }),
+    };
+    const next = withIOReordered(ordered, C, A, "before");
+    /* 视觉序列 [c, a, b] → displayOrder 依次 1/2/3。 */
+    expect(next[C]?.displayOrder).toBe(1);
+    expect(next[A]?.displayOrder).toBe(2);
+    expect(next[B]?.displayOrder).toBe(3);
+    /* 模拟展示层：按 displayOrder 排序后应与视觉序列一致（不再弹回）。 */
+    const shown = Object.entries(next)
+      .sort((x, y) => (x[1].displayOrder ?? 0) - (y[1].displayOrder ?? 0))
+      .map(([key]) => key);
+    expect(shown).toEqual([C, A, B]);
+  });
+
+  it("只在被移动项所属组内重排：wire / output 组的 displayOrder 不受影响", () => {
+    const mixed = {
+      [A]: entry({ name: "a", displayOrder: 1 }),
+      [B]: entry({ name: "b", displayOrder: 2 }),
+      WIRE: entry({ name: "wire", kind: "param", displayOrder: 1 }),
+      OUT: entry({ name: "out", direction: "output", displayOrder: 1 }),
+    };
+    const next = withIOReordered(mixed, B, A, "before");
+    expect(next.WIRE?.displayOrder).toBe(1);
+    expect(next.OUT?.displayOrder).toBe(1);
+    expect(next[B]?.displayOrder).toBe(1);
+    expect(next[A]?.displayOrder).toBe(2);
+  });
+
+  it("targetKey 落在别的组时，退化为移到本组末尾，不动其它组", () => {
+    const mixed = {
+      [A]: entry({ name: "a", displayOrder: 1 }),
+      [B]: entry({ name: "b", displayOrder: 2 }),
+      OUT: entry({ name: "out", direction: "output", displayOrder: 1 }),
+    };
+    const next = withIOReordered(mixed, A, "OUT", "before");
+    expect(Object.keys(next).filter((k) => k !== "OUT")).toEqual([B, A]);
+    expect(next[A]?.displayOrder).toBe(2);
+    expect(next.OUT).toEqual(mixed.OUT);
+  });
+});
+
+describe("withIOGroupReordered（ISSUE #4073 复审第 5 条：尺寸 / 视频组合块整体调序）", () => {
+  const A = "1::widget::a";
+  const W = "2::widget::width";
+  const H = "3::widget::height";
+  const B = "4::widget::b";
+  const io = {
+    [A]: entry({ name: "a", displayOrder: 1 }),
+    [W]: entry({ name: "width", displayOrder: 2 }),
+    [H]: entry({ name: "height", displayOrder: 3 }),
+    [B]: entry({ name: "b", displayOrder: 4 }),
+  };
+
+  const shownOrder = (next: Record<string, WorkflowIOEntry>) =>
+    Object.entries(next)
+      .sort((x, y) => (x[1].displayOrder ?? 0) - (y[1].displayOrder ?? 0))
+      .map(([key]) => key);
+
+  it("尺寸块作为整体搬到目标之前，块内相对顺序不变、组号连续重编", () => {
+    const next = withIOGroupReordered(io, [W, H], A, "before");
+    expect(shownOrder(next)).toEqual([W, H, A, B]);
+    expect(next[W]?.displayOrder).toBe(1);
+    expect(next[H]?.displayOrder).toBe(2);
+    expect(next[A]?.displayOrder).toBe(3);
+    expect(next[B]?.displayOrder).toBe(4);
+  });
+
+  it("搬到目标之后：块不散开，displayOrder 与展示序一致", () => {
+    const next = withIOGroupReordered(io, [H, W], B, "after");
+    expect(shownOrder(next)).toEqual([A, B, H, W]);
+    expect(next[H]?.displayOrder).toBe(3);
+    expect(next[W]?.displayOrder).toBe(4);
+  });
+
+  it("targetKey 落在被搬块内部 / 传空键 / 跨组键：原样返回同一引用", () => {
+    expect(withIOGroupReordered(io, [W, H], H, "before")).toBe(io);
+    expect(withIOGroupReordered(io, [], A, "before")).toBe(io);
+    const withOtherGroup = { ...io, OUT: entry({ name: "out", direction: "output" }) };
+    expect(withIOGroupReordered(withOtherGroup, [W, "OUT"], A, "before")).toBe(withOtherGroup);
+  });
+
+  it("不重排其它组：wire / output 的 displayOrder 原样保留", () => {
+    const mixed = {
+      ...io,
+      WIRE: entry({ name: "wire", kind: "param", displayOrder: 1 }),
+      OUT: entry({ name: "out", direction: "output", displayOrder: 1 }),
+    };
+    const next = withIOGroupReordered(mixed, [W, H], A, "before");
+    expect(next.WIRE).toEqual(mixed.WIRE);
+    expect(next.OUT).toEqual(mixed.OUT);
+    expect(shownOrder(next).filter((key) => key !== "WIRE" && key !== "OUT")).toEqual([W, H, A, B]);
   });
 });
