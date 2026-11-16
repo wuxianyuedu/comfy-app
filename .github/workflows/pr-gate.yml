@@ -77,6 +77,14 @@ on:
         description: 要搬哪条 GA run 的日志（留空 = 本 run；按需档可点名已跑完的绿 run）
         required: false
         default: ""
+      # ISSUE #3998：按需档把结论送回 CNB 时要绑**PR 预合并 sha**（commit-statuses
+      # 的那一笔），而它只存在于自动档的 `client_payload.cnb_merge_sha` 里。
+      # 缺这个输入 ⇒ 按需档的回调恒「前提不成立」（三态退 2），CNB 侧读到的是
+      # status 缺席。留空 = 不送结论（与缺 `pr_number` 同一种「不写 CNB」的语义）。
+      merge_sha:
+        description: 按需档的 PR 预合并 sha（40 位十六进制；留空 = 只有日志搬运，不送结论）
+        required: false
+        default: ""
 
 # 显式最小权限（CodeQL `actions/missing-workflow-permissions`，#3–#7）：本工作流只读仓库
 # —— checkout、装依赖、跑各判据、上传 artifact。不写这一栏时 GITHUB_TOKEN 拿仓库默认
@@ -531,7 +539,7 @@ jobs:
 
       # ISSUE #3981 / #3980：标题走 `GITHUB_ENV` 传给收尾那一跳（它只认文件）。
       #
-      # 取值**只有一个入口**（`scripts/ci-ga-verdict-title.mjs` 内三条路依次回落）：
+      # 取值**只有一个入口**（`scripts/ci/ci-ga-verdict-title.mjs` 内三条路依次回落）：
       #   ① `GA_PR_TITLE`（显式注入，手跑复验用）
       #   ② `client_payload.pr_title`（镜像格送来的那枚，与 `run-name` 同源）
       #   ③ 站内 `GET /{repo}/-/pulls/{n}`（按需档 #3667 没有 payload）
@@ -551,8 +559,8 @@ jobs:
         env:
           CNB_TRIGGER_TOKEN: ${{ secrets.CNB_TRIGGER_TOKEN }}
           CNB_REPO_SLUG: moon-read/comfy-app-t3
-          CNB_PULL_REQUEST_IID: ${{ github.event.inputs.pr_number || github.event.client_payload.pr_number || '' }}
-        run: node scripts/ci-ga-verdict-title.mjs
+          CNB_PULL_REQUEST_IID: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.pr_number || inputs.pr_number || '' }}
+        run: node scripts/ci/ci-ga-verdict-title.mjs
 
       - name: 把结论送回 CNB
         env:
@@ -561,8 +569,18 @@ jobs:
           # 两条触发形态都读（ISSUE #3710）：自动档（repository_dispatch）在
           # client_payload，按需档（workflow_dispatch，#3667）在 inputs ——
           # 只读后者会让按需档的结论回调恒 failure（0s 退出那一格的病灶）。
-          CNB_PULL_REQUEST_IID: ${{ github.event.inputs.pr_number || github.event.client_payload.pr_number || '' }}
-          CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event.client_payload.cnb_merge_sha || '' }}
+          #
+          # ⚠️ 这里**必须先判 `github.event_name`**，不能写成
+          # `github.event.inputs.x || github.event.client_payload.x`（ISSUE #3998 现场）：
+          # GitHub 的 `||` 是表达式语法，`github.event.inputs` 这个键**恒存在**（自动档
+          # 展开成空串），而 `||` 只在左侧为 null / false 时短路 —— 空串不算，于是自动档
+          # 永远取到空串、回不到 client_payload。镜像格那一刻 `CNB_PULL_REQUEST_MERGE_SHA`
+          # 为空时，回调恒「前提不成立」退 2，CNB 侧读到的是 status 缺席（那跑白等 70m）。
+          # 先按事件分形态，`||` 两边才各是「这个形态下真的会空」的取值。
+          # 兜底还有一层：`ci-ga-verdict-callback.mjs` 自己读 `GITHUB_EVENT_PATH` 的
+          # payload（脚本里的顺序是 旗标 → payload → 环境变量），两处都指向同一份字段名。
+          CNB_PULL_REQUEST_IID: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.pr_number || inputs.pr_number || '' }}
+          CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.cnb_merge_sha || inputs.merge_sha || '' }}
           # ISSUE #3981：CNB 构建历史里回调 build 的标题 —— 不送就一律落到平台缺省
           # （历史现场全是 `API custom event`），认不出属于哪张 PR。取值来自上面
           # 那一步写进 `GITHUB_ENV` 的 `GA_PR_TITLE`（三条路依次回落，见该脚本文件头）；
@@ -609,8 +627,8 @@ jobs:
           CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
           CNB_PULL_REQUEST_TOKEN: ${{ secrets.CNB_PULL_REQUEST_TOKEN }}
           CNB_REPO_SLUG: moon-read/comfy-app-t3
-          CNB_PULL_REQUEST_IID: ${{ github.event.inputs.pr_number || github.event.client_payload.pr_number || '' }}
-          CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event.client_payload.cnb_merge_sha || '' }}
+          CNB_PULL_REQUEST_IID: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.pr_number || inputs.pr_number || '' }}
+          CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.cnb_merge_sha || inputs.merge_sha || '' }}
           GITHUB_TOKEN: ${{ github.token }}
           GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}
           # ISSUE #3667：按需档给 relay_scope=all ⇒ 判绿也把全部 job 搬进 CNB；

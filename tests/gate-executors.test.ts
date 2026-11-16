@@ -11,9 +11,10 @@ import { defineGateRepo, describe } from "./helpers/gate-repo";
 import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 const REPO_ROOT = process.cwd();
-const SCRIPT_NAME = "check-gate-executors.cjs";
-/* #3930 起判据归入 `scripts/gates/`：夹具与直跑一律按域相对路径定位（basename 全仓唯一）。 */
-const SCRIPT_REL = `gates/${SCRIPT_NAME}`;
+/* 判据脚本在 `scripts/` 里的落点（带域子目录，ISSUE #3930）：本文件在多处以它拼绝对路径跑判据、
+ * 又以它过滤「名字族」那一半盘点面 —— 域布局之后只写 basename 会让每一处都 `${ROOT}/scripts/<名>`
+ * 拼出个不存在的路径，而读数长得像判据坏了。 */
+const SCRIPT_REL = "gates/check-gate-executors.cjs";
 
 /** 判据脚本的识别口径与脚本自身保持一致（前缀族）。 */
 const GATE_PREFIXES = [
@@ -30,27 +31,18 @@ const GATE_PREFIXES = [
  * `package.json` 同族）；它们一出现，「某个探针一个执行者都没有」这一档就被喂成「有执行者」，用例测的东西
  * 当场变成别的东西 —— 所以这里的过滤是**判据语义的一部分**，不是图省事。 */
 function copyGateScripts(repo: { dir: string }): void {
+  const srcScripts = join(REPO_ROOT, "scripts");
   const dstScripts = join(repo.dir, "scripts");
   mkdirSync(dstScripts, { recursive: true });
-  /* #3930 起判据归入 `scripts/<域>/` 子目录：与判据自身的扫描面同口径，递归枚举
-   * `scripts/**`（跳过 `__pycache__`），拷进沙箱时压平成 `scripts/<basename>` ——
-   * 沙箱里的探针与被判据都按 cwd 下的 `scripts/` 找人，平铺即可互见。 */
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        if (entry.name !== "__pycache__") {
-          walk(join(dir, entry.name));
-        }
-        continue;
-      }
-      const isGate =
-        /\.(?:cjs|mjs)$/.test(entry.name) && GATE_PREFIXES.some((p) => entry.name.startsWith(p));
-      if (isGate) {
-        copyFileSync(join(dir, entry.name), join(dstScripts, entry.name));
-      }
+  for (const entry of readdirSync(srcScripts)) {
+    /* 只捞顶层：判据按家族归入 `scripts/<域>/` 之后（#3930），这里要造的是「临时区里
+     * 一个判据脚本都没有」那一档，而顶层的夹具探针（`check-a.cjs` 一族）正是为它准备的。
+     * 子目录里的真判据不该进临时区 —— 它们一出现，「某个探针一个执行者都没有」当场变成别的东西。 */
+    const isGate = /\.(?:cjs|mjs)$/.test(entry) && GATE_PREFIXES.some((p) => entry.startsWith(p));
+    if (isGate) {
+      copyFileSync(join(srcScripts, entry), join(dstScripts, entry));
     }
-  };
-  walk(join(REPO_ROOT, "scripts"));
+  }
 }
 
 const { test, expect } = defineGateRepo({
@@ -316,28 +308,13 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     const output = runInRepo(["--report"]);
     const total = Number(/判据脚本 (?<count>\d+) 份/.exec(output)?.groups?.count ?? "0");
     expect(total, "扫描面空转（退成 0 时下面每一条都照样报 OK）").toBeGreaterThan(40);
-    /* #3930 起判据归入域子目录：与判据自身的扫描面同口径，递归枚举 `scripts/**`
-     * （跳过 `__pycache__`）后按「门禁链事实 ∪ 名字族」过滤。过渡期垫片与真身
-     * 同名各一份，判据按名字计数（`names.length`），这里同样按名字递归计数才对得上。 */
-    const listed: Array<string> = [];
-    const walkScripts = (dir: string): void => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (entry.isDirectory()) {
-          if (entry.name !== "__pycache__") {
-            walkScripts(join(dir, entry.name));
-          }
-          continue;
-        }
-        if (
-          /\.(?:cjs|mjs)$/.test(entry.name) &&
-          (chainScripts().includes(entry.name) ||
-            GATE_PREFIXES.some((p) => entry.name.startsWith(p)))
-        ) {
-          listed.push(entry.name);
-        }
-      }
-    };
-    walkScripts(join(REPO_ROOT, "scripts"));
+    /* 名字族那一半按**域递归**枚举（#3930 之后判据可能落在 `scripts/<域>/` 里）：
+     * 与判据自己的盘点面同口径 —— 只看顶层会把整批子目录里的判据漏成「不在数里」。 */
+    const listed = readdirSync(join(REPO_ROOT, "scripts"), { recursive: true })
+      .map(String)
+      .filter((n) => /\.(?:cjs|mjs)$/.test(n))
+      .map((n) => n.split(/[\\/]/).pop() ?? "")
+      .filter((n) => chainScripts().includes(n) || GATE_PREFIXES.some((p) => n.startsWith(p)));
     expect(total, "份数 = 「门禁链事实 ∪ 名字族」自己数出来的份数（不写死数字）").toBe(
       listed.length,
     );

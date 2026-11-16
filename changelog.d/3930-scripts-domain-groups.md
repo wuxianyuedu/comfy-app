@@ -20,5 +20,12 @@
   对齐、预算注释取 master 新值），并把合并带入的新脚本归入对应域子目录
   （ship-status / ship-fetch-issue → ship/、freshness-ledger-write → freshness/、
   db-unique-sweep → db/、affected-launcher-hygiene + launcher-closure → affected-tests/）。
-  `src-tauri/src/single_instance.rs` 测试模块里的一行路径注释留待下次重编壳时顺带更新
+- **漏搬补齐**（PR 首次派发即红，ISSUE #3997 现场）：`ci-ga-verdict-title.mjs` 没随家族
+  搬进 `scripts/ci/` —— 文件停在 `scripts/` 顶层，`pr-gate.yml` 那一步也仍指
+  `scripts/ci-ga-verdict-title.mjs`（两处一起漏，闭环比单点漏更难发现）。GA 按 PR 预合并
+  sha 检出、跑的是源分支里的文件，于是那一步 0s 报 `MODULE_NOT_FOUND`：这一跳本应只丢
+  标题、判绿，实际把 `ga-verdict-callback` job 后面两个运输步骤一起染成 ✗。现在文件搬进
+  `scripts/ci/`，workflow、用例、规范与文件内路径注释同批对齐；顺带修好该文件内两处仍
+  指向顶层 `scripts/ci-mirror-payload.mjs` 的过期注释路径。
+- `src-tauri/src/single_instance.rs` 测试模块里的一行路径注释留待下次重编壳时顺带更新
  （为一行注释触发整壳重编不值当；截图脚本双 BOM 同批由 #3974 在 master 修复，#3946 登记为重复）。

@@ -1267,7 +1267,12 @@ describe("每日全量档的超时指纹复跑（档位表与组 C 同一条判�
  */
 describe("覆盖率门槛的档位与接线（ISSUE #2669）", () => {
   it("默认档念的是「没判」并给出硬档出口，而不是冒充「已通过」", () => {
-    const gate = coverageGate([]);
+    /* 环境**显式给空**（ISSUE #4014）：`coverageGate()` 的第二参缺省是 `process.env`，
+     * 而 `pnpm check:all` 恰好会给 `test` 这一档的子进程注入 `COMFY_COVERAGE_ENFORCE=1`
+     * （`quality-gate.mjs` 的 `runGate`）—— 用缺省值判「默认档」，在它就是唯一执行者的
+     * 那一跑里恒红。这一格要的是「没旗标也没环境变量」的读数，那就把那件事写出来，
+     * 不靠「跑它的进程恰好没设它」这个隐含前提。 */
+    const gate = coverageGate([], {});
     expect(gate.enforce).toBe(false);
     expect(gate.reading).toContain("没判");
     /* 下一动作必须在话术里（§13.5.3.5.1）：只说「没判」而不说怎么判，

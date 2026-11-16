@@ -565,12 +565,14 @@ function runOnce(
       out += chunk.toString();
     });
     /* 'close' 在 stdio 流**冲刷完**后才触发（'exit' 可能在最后一块 stdout 落地前
-     * 就到 —— #3976：结论行会晚于 onBusy 的 warn 半拍，先到就解析会漏掉结论）。 */
+     * 就到 —— #3976：结论行会晚于 onBusy 的 warn 半拍，先到就解析会漏掉结论）。
+     * 结论行按**形状**认、并看**全部**行（#3976 + #3978）：retry 形状下出口的缺省
+     * onBusy 会在撞锁时先打一行 warn（#3954），而 pino 的 stdout 冲刷是**异步**的 ——
+     * 那行 warn 可能落在结论行**前后任一位置**（实测如此），按位置认不可靠。
+     * worker 的结论只有两种形状：恰好 `ok`，或 `fail:` 开头。**第一条**出现的结论行说了算
+     * （`find` 取首个命中；两者都没有才回落退出码）—— 出口只会在 retry 成功时补一行 `ok`、
+     * 在彻底失败时给 `fail:`，不会先 `ok` 再 `fail:`。 */
     child.on("close", (code) => {
-      /* 结论行按**形状**认，不按位置认（#3976）：retry 形状下出口的缺省 onBusy
-       * 会在撞锁时先打一行 warn（#3954），而 pino 的 stdout 冲刷是**异步**的 ——
-       * 那行 warn 可能落在结论行**之后**才进管道（实测如此），首行/末行都不可靠。
-       * worker 的结论只有两种形状：恰好 `ok`，或 `fail:` 开头。 */
       const lines = out
         .split("\n")
         .map((l) => l.trim())
