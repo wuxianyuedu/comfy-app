@@ -1640,6 +1640,18 @@ const BASE_CONFIG = defineConfig({
          *      不能给「谁没盖住」的名单** —— 本单最初把 `executable-resolve.ts` 的两个函数
          *      列为嫌疑（子集里它们没被命中），全量一读那是 22/22 全覆盖。要点名空位，
          *      必须用判据自己那份执行者跑一遍，再去 lcov 里数 `FNDA:0`。 */
+        /* 服务端出网约束域（ISSUE #3904/#4052）：统一 URL 安全校验与安全 fetch。
+         * 新增域同批登记（规范 §12.5.3 R14 / §18.6）。实测值取自
+         * pnpm exec vitest run --coverage --coverage.include='src/lib/network/outbound-url.server.ts' src/lib/network/outbound-url.server.test.ts
+         *（79.03 / 70.86 / 100 / 78.57）向下取整到 5 的倍数 → 75/70/100/75。
+         * 未满 100 的分支与行主要是 IPv6/重定向边界与 DNS 异常回落路径，
+         * 主路径与 SSRF 拦截场景已覆盖。 */
+        "src/lib/network/**": {
+          lines: 75,
+          functions: 100,
+          statements: 75,
+          branches: 70,
+        },
         "src/lib/process/**": {
           lines: 94,
           functions: 96,

@@ -15,6 +15,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { lookup } from "node:dns/promises";
+
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(),
+}));
 
 import { parseDataUrl } from "~/lib/media/data-url";
 import { generatedRoot } from "~/lib/media/output-paths";
@@ -31,6 +36,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "media-source-"));
 const ROOT = generatedRoot(TMP);
 
 const cwdSpy = vi.spyOn(process, "cwd");
+const lookupMock = vi.mocked(lookup);
 
 beforeAll(() => {
   fs.mkdirSync(ROOT, { recursive: true });
@@ -38,12 +44,18 @@ beforeAll(() => {
 
 beforeEach(() => {
   cwdSpy.mockReturnValue(TMP);
+  // 默认把域名解析到公网地址：既有 http(s) 用例继续走网络桩，不受 DNS 环境影响。
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- dns.lookup(all) mock 返回数组
+  lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }] as unknown as Awaited<
+    ReturnType<typeof lookup>
+  >);
 });
 
 afterEach(() => {
   // 只清调用记录，不 restore：restore 之后再把值塞回同一个 spy 就不生效了，
   // 表现为「后一半用例突然读到真实 cwd」
   cwdSpy.mockClear();
+  lookupMock.mockReset();
   // （原第二份顶层 afterEach 并入这里：stubFetch 的替身随每条用例统一摘除）
   vi.unstubAllGlobals();
 });
@@ -241,6 +253,38 @@ describe("resolveMediaBytes 的 http(s) 分支", () => {
       // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await expect(resolveMediaBytes(src, "http://x")).rejects.toThrow("不支持的图片来源");
     }
+  });
+
+  it("远程媒体地址命中内网/回环/链路本地/元数据目标时拒绝出网（SSRF 约束，#3904/#4052）", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    const blocked = [
+      "http://127.0.0.1:8188/image.png",
+      "http://localhost/admin.png",
+      "http://10.0.0.5/a.png",
+      "http://192.168.1.20/a.png",
+      "http://172.16.0.9/a.png",
+      "http://169.254.169.254/latest/meta-data/",
+      "http://[::1]/a.png",
+    ];
+    for (const src of blocked) {
+      // oxlint-disable-next-line no-await-in-loop -- 逐条断言可读的失败地址
+      await expect(resolveMediaBytes(src, "http://x")).rejects.toThrow(/拉取参考图失败/);
+    }
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("域名解析到内网地址时同样拒绝（#3904/#4052）", async () => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- dns.lookup(all) mock 返回数组
+    lookupMock.mockResolvedValue([{ address: "10.2.3.4", family: 4 }] as unknown as Awaited<
+      ReturnType<typeof lookup>
+    >);
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    await expect(resolveMediaBytes("https://cdn.example.com/a.png", "http://x")).rejects.toThrow(
+      /拉取参考图失败/,
+    );
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it("协议相对地址（//host/x.png）不联网，走本地产物那一支并被拒", async () => {

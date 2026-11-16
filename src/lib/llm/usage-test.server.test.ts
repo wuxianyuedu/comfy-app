@@ -17,6 +17,10 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { REMOTE_MODEL_KINDS } from "~/lib/llm/types";
 import { asRecord } from "~/lib/is-record";
 
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(() => Promise.resolve([{ address: "93.184.216.34", family: 4 }])),
+}));
+
 vi.mock("~/lib/llm/server", () => ({
   getLLMConfig: vi.fn(() => ({
     provider: "remote",

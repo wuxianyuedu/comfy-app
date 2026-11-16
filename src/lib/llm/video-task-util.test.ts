@@ -3,6 +3,10 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(() => Promise.resolve([{ address: "93.184.216.34", family: 4 }])),
+}));
+
 /* 本模块的两条契约都只在「边界输入」上才看得出来：
  *   ① `safeModelDir` 必须拦住路径穿越 —— 模型名来自用户可改的配置，是真正的外部输入；
  *   ② `saveMediaToLocalTemp` 失败一律返回 null 不抛错（本地落盘只是增强，不是主链路）。

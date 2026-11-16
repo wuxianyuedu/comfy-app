@@ -7,6 +7,7 @@ import { getLLMConfig } from "~/lib/llm/server";
 import { apiErrorDetail } from "~/lib/api-error";
 import { chatHeaders } from "~/lib/llm/api-format";
 import { httpFailureDetail } from "~/lib/llm/http-failure";
+import { isUnsafeOutboundUrlError, safeFetch } from "~/lib/network/outbound-url.server";
 import {
   isLlmApiFormat,
   joinApiUrl,
@@ -81,9 +82,11 @@ async function probeWithFormat(
   try {
     const headers = chatHeaders(format, apiKey);
     const base = probeBaseOf(baseUrl);
-    const res = await fetch(probeModelsUrl(base), {
+    const targetUrl = probeModelsUrl(base);
+    const res = await safeFetch(targetUrl, {
       headers,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      scenario: "llm-upstream",
     });
     if (!res.ok) {
       /* 探测地址一并点名：用户对照服务商文档改 Base URL 时，得先看清
@@ -94,7 +97,7 @@ async function probeWithFormat(
         detail: httpFailureDetail({
           body: await res.text().catch(() => ""),
           status: res.status,
-          url: probeModelsUrl(base),
+          url: targetUrl,
         }),
       };
     }
@@ -112,7 +115,10 @@ async function probeWithFormat(
     }
     return { kind: "ok", detail, models };
   } catch (error) {
-    return { kind: "network", detail: apiErrorDetail(error, "连接失败") };
+    return {
+      kind: "network",
+      detail: isUnsafeOutboundUrlError(error) ? error.message : apiErrorDetail(error, "连接失败"),
+    };
   }
 }
 
