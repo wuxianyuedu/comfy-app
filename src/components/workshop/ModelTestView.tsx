@@ -451,12 +451,8 @@ export function ModelTestView() {
   /* 回调里读 c.result 会丢掉 JSX 条件的收窄 —— 先取一次稳定引用。
      对话测试（#4080）的产物是文本，没有可外链的 URL。 */
   const resultUrl = c.result !== null && c.result.kind !== "chat" ? c.result.url : null;
-  /* 请求详情的行：生成后用真实读数；生成前显示「准备请求」（#3949 需求 8，
-   * 按当前模式 / 模型 / 输入现算）—— 切模式 / 换模型时 hook 已清空读数，
-   * 不会残留上一份。 */
-  const detailRows =
-    c.debugRows.length > 0 ? c.debugRows : c.previewRows.length > 0 ? c.previewRows : [];
-  const previewOnly = c.debugRows.length === 0 && c.previewRows.length > 0;
+  /* 请求与响应分区显示（#4080 评论 13）：请求行（本地提交 + 实际请求）生成后
+   * 保留、仅徽标翻转；响应读数单独一部分。 */
 
   return (
     <DocumentFrame
@@ -697,7 +693,9 @@ export function ModelTestView() {
                 {c.generating && (
                   <Button
                     className="h-auto px-3 py-2 text-xs"
-                    onClick={c.cancelGenerate}
+                    onClick={() => {
+                      c.cancelGenerate();
+                    }}
                     variant="outline"
                   >
                     {c.kind === "chat" ? "取消发送" : "取消生成"}
@@ -800,19 +798,30 @@ export function ModelTestView() {
                   直接指到任务停在哪个节点。 */}
               {c.taskLogs.length > 0 && <TaskLogSection logs={c.taskLogs} />}
 
-              {/* 请求详情（ISSUE #3791；#3799：点生成即显示本地提交行 + 生成中
-                  走秒 + 响应摘要默认格式化、可切原始；#3949 需求 4/8：生成前
-                  显示「准备请求」、按模式 / 模型隔离、解释换算字段；#3995：
-                  生成前同时可见「本地提交 + 实际请求」两行预览）。渲染收在
-                  RequestDetailSection（§12.13 第二刀）。 */}
-              {detailRows.length > 0 && (
+              {/* 请求（本地提交 + 实际请求）：生成后保留，仅徽标从
+                  「准备请求 / 未发送」翻成「已请求 / 已发送」（#4080 评论 13）。
+                  渲染收在 RequestDetailSection（§12.13 第二刀）。 */}
+              {c.requestRows.length > 0 && (
                 <RequestDetailSection
                   excerptPretty={excerptPretty}
                   generating={c.generating}
                   generatingSince={c.generatingSince}
                   onExcerptPretty={setExcerptPretty}
-                  previewOnly={previewOnly}
-                  rows={detailRows}
+                  rows={c.requestRows}
+                  sent={c.generating || c.responseRows.length > 0}
+                  variant="request"
+                />
+              )}
+
+              {/* 响应：真实调用回来了什么，单独一部分显示（#4080 评论 13）。 */}
+              {c.responseRows.length > 0 && (
+                <RequestDetailSection
+                  excerptPretty={excerptPretty}
+                  generating={c.generating}
+                  generatingSince={c.generatingSince}
+                  onExcerptPretty={setExcerptPretty}
+                  rows={c.responseRows}
+                  variant="response"
                 />
               )}
             </>

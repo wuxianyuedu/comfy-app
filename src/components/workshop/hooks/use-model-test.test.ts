@@ -14,6 +14,7 @@ import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import { isRecord } from "~/lib/is-record";
 import type { TaskWatchHandlers, WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 
 import { MODEL_TEST_DEFAULT_RESOLUTION, modeTabsForKind } from "../model-test-config";
@@ -31,7 +32,13 @@ const apiPreviewRequestMock =
   vi.fn<
     (body: Record<string, unknown>, kind: "image" | "video") => Promise<Array<ApiCallDebugRow>>
   >();
-const apiGenerateImageMock = vi.fn<(req: unknown) => Promise<string>>();
+const apiGenerateImageMock =
+  vi.fn<
+    (
+      req: unknown,
+      opts?: { onDebug?: (rows: Array<ApiCallDebugRow>) => void; signal?: AbortSignal },
+    ) => Promise<string>
+  >();
 /** tRPC mutation 的统一替身：对话测试（#4080）与外链打开都走它，按需给返回值。 */
 const mutateAsyncSpy = vi.fn<(input: unknown) => Promise<unknown>>();
 
@@ -71,7 +78,10 @@ vi.mock("~/trpc/react", () => ({
 }));
 
 vi.mock("~/lib/workshop/generation-client", () => ({
-  apiGenerateImage: (req: unknown) => apiGenerateImageMock(req),
+  apiGenerateImage: (
+    req: unknown,
+    opts?: { onDebug?: (rows: Array<ApiCallDebugRow>) => void; signal?: AbortSignal },
+  ) => apiGenerateImageMock(req, opts),
   apiPollVideo: vi.fn(),
   apiPreviewRequest: (body: Record<string, unknown>, kind: "image" | "video") =>
     apiPreviewRequestMock(body, kind),
@@ -188,7 +198,7 @@ afterEach(() => {
 });
 
 describe("useModelTest：生成前的请求预览（ISSUE #3995）", () => {
-  it("选中模型、未点生成：previewRows 首行是本地提交行、后随实际请求行，预览请求带 kind", async () => {
+  it("选中模型、未点生成：requestRows 首行是本地提交行、后随实际请求行，预览请求带 kind", async () => {
     upstreamPreview = [UPSTREAM_ROW];
     apiPreviewRequestMock.mockResolvedValue(upstreamPreview);
     const { result } = renderModelTest();
@@ -216,8 +226,8 @@ describe("useModelTest：生成前的请求预览（ISSUE #3995）", () => {
     );
 
     /* 面板读数：首行本地提交（relay 端点 + 统一输入），后随实际上游请求。 */
-    expect(result.current.previewRows).toHaveLength(2);
-    const localRow = result.current.previewRows[0];
+    expect(result.current.requestRows).toHaveLength(2);
+    const localRow = result.current.requestRows[0];
     expect(localRow?.phase).toBe("relay");
     expect(localRow?.endpoint).toBe("/api/workshop-api/generate");
     expect(localRow?.body).toMatchObject({
@@ -226,7 +236,7 @@ describe("useModelTest：生成前的请求预览（ISSUE #3995）", () => {
       model: "agnes-image",
       prompt: "测试提示词",
     });
-    expect(result.current.previewRows[1]).toEqual(UPSTREAM_ROW);
+    expect(result.current.requestRows[1]).toEqual(UPSTREAM_ROW);
   });
 
   it("未选模型：不发预览请求，也不给预览行", async () => {
@@ -238,11 +248,19 @@ describe("useModelTest：生成前的请求预览（ISSUE #3995）", () => {
       await vi.advanceTimersByTimeAsync(700);
     });
     expect(apiPreviewRequestMock).not.toHaveBeenCalled();
-    expect(result.current.previewRows).toEqual([]);
+    expect(result.current.requestRows).toEqual([]);
   });
 
-  it("点生成：debugRows 首行是本地提交行，产物落位后预览让位（真实读数接棒）", async () => {
-    apiGenerateImageMock.mockResolvedValue("https://img.example/x.png");
+  it("点生成：请求行保留（本地提交），真实读数进响应区（#4080 评论 13）", async () => {
+    apiGenerateImageMock.mockImplementation(
+      (
+        _req: unknown,
+        opts?: { onDebug?: (rows: Array<ApiCallDebugRow>) => void; signal?: AbortSignal },
+      ) => {
+        opts?.onDebug?.([UPSTREAM_ROW]);
+        return Promise.resolve("https://img.example/x.png");
+      },
+    );
     const { result } = renderModelTest();
 
     act(() => {
@@ -257,14 +275,18 @@ describe("useModelTest：生成前的请求预览（ISSUE #3995）", () => {
 
     expect(apiGenerateImageMock).toHaveBeenCalledWith(
       expect.objectContaining({ mode: "T2I", model: "agnes-image", prompt: "测试提示词" }),
+      expect.anything(),
     );
     expect(result.current.result).toEqual({ kind: "image", url: "https://img.example/x.png" });
     expect(result.current.generating).toBe(false);
-    expect(result.current.debugRows).toHaveLength(1);
-    const localRow = result.current.debugRows[0];
+    /* 请求行保留（本地提交行还在），真实读数单独进响应区（#4080 评论 13）。 */
+    expect(result.current.requestRows).toHaveLength(1);
+    const localRow = result.current.requestRows[0];
     expect(localRow?.phase).toBe("relay");
     expect(localRow?.endpoint).toBe("/api/workshop-api/generate");
     expect(localRow?.body).toMatchObject({ kind: "image", prompt: "测试提示词" });
+    expect(result.current.responseRows).toHaveLength(1);
+    expect(result.current.responseRows[0]).toEqual(UPSTREAM_ROW);
   });
 });
 
@@ -318,8 +340,15 @@ describe("useModelTest：本地模型与对话测试（ISSUE #4080）", () => {
     });
     expect(result.current.result).toEqual({ kind: "chat", text: "pong" });
     expect(result.current.generating).toBe(false);
-    expect(result.current.debugRows).toHaveLength(1);
-    const chatRow = result.current.debugRows[0];
+    /* 请求行保留（对话的本地提交预览），真实读数单独进响应区（#4080 评论 13）。 */
+    expect(result.current.requestRows).toHaveLength(1);
+    expect(result.current.requestRows[0]?.body).toMatchObject({
+      kind: "chat",
+      model: "qwen3-8b",
+      prompt: "ping",
+    });
+    expect(result.current.responseRows).toHaveLength(1);
+    const chatRow = result.current.responseRows[0];
     expect(chatRow?.endpoint).toBe("http://127.0.0.1:11434/v1/chat/completions");
     expect(chatRow?.durationMs).toBe(1234);
     expect(chatRow?.excerpt).toBe("pong");
@@ -458,16 +487,17 @@ describe("useModelTest：工作流提供的图片/视频模型（ISSUE #4080 评
     expect(startLocalGenerateMock).toHaveBeenCalledTimes(1);
     expect(result.current.result).toEqual({ kind: "image", url: "http://local/preview.png" });
     expect(result.current.generating).toBe(false);
-    /* 请求详情：本地提交行 + 本地任务行（phase local-task）。 */
-    expect(result.current.debugRows).toHaveLength(2);
-    expect(result.current.debugRows[0]?.phase).toBe("relay");
-    expect(result.current.debugRows[0]?.endpoint).toBe("generate.generate（本地 ComfyUI）");
+    /* 请求行（本地提交，带落点清单）与响应行（本地任务）分区（#4080 评论 13）。 */
+    expect(result.current.requestRows).toHaveLength(1);
+    expect(result.current.requestRows[0]?.phase).toBe("relay");
+    expect(result.current.requestRows[0]?.endpoint).toBe("generate.generate（本地 ComfyUI）");
     /* 提交体带完整的落点清单（口 → 节点 → 值），尺寸等不再只见条数（#4080 评论 8）。 */
-    expect(result.current.debugRows[0]?.body).toMatchObject({
+    expect(result.current.requestRows[0]?.body).toMatchObject({
       workflowInputs: [{ name: "width", nodeId: "5", value: 832 }],
     });
-    expect(result.current.debugRows[1]?.phase).toBe("local-task");
-    expect(result.current.debugRows[1]?.excerpt).toBe("http://local/preview.png");
+    expect(result.current.responseRows).toHaveLength(1);
+    expect(result.current.responseRows[0]?.phase).toBe("local-task");
+    expect(result.current.responseRows[0]?.excerpt).toBe("http://local/preview.png");
     /* 执行日志随 SSE log 帧进 taskLogs（#4080 评论 8）。 */
     expect(result.current.taskLogs.length).toBeGreaterThan(0);
     expect(result.current.taskLogs[0]?.msg).toContain("已订阅 SSE");
@@ -480,13 +510,113 @@ describe("useModelTest：工作流提供的图片/视频模型（ISSUE #4080 评
       result.current.selectModel("wf::wf-1");
     });
     /* selectModel 已按最常用档预置尺寸（1:1 + 1k）—— 预览行里原样可见。 */
-    expect(result.current.previewRows).toHaveLength(1);
-    expect(result.current.previewRows[0]?.endpoint).toBe("generate.generate（本地 ComfyUI）");
-    expect(result.current.previewRows[0]?.body).toMatchObject({
+    expect(result.current.requestRows).toHaveLength(1);
+    expect(result.current.requestRows[0]?.endpoint).toBe("generate.generate（本地 ComfyUI）");
+    expect(result.current.requestRows[0]?.body).toMatchObject({
       workflow: "工作流·生图A",
       mode: "T2I",
       "aspect-ratio": "1:1",
       resolution: MODEL_TEST_DEFAULT_RESOLUTION,
     });
+  });
+
+  it("取消生成：中止本地任务并取消服务端任务（#4080 评论 12 回归）", async () => {
+    workflowsData = [WF_IMAGE];
+    buildLibraryWorkflowInputMock.mockResolvedValue({
+      input: { workflow: "wf-1", prompt: "测试提示词", workflowInputs: [] },
+      unmatched: [],
+      mode: "T2I",
+      modes: ["T2I"],
+      usesFirstFrame: false,
+      usesLastFrame: false,
+    });
+    startLocalGenerateMock.mockResolvedValue("task-abcd1234");
+    cancelLocalTaskMock.mockResolvedValue(undefined);
+    /* 任务不落定：停在等 SSE 的状态，等取消来救。 */
+    watchTaskMock.mockImplementation(() => () => undefined);
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("wf::wf-1");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "测试提示词");
+    });
+    void result.current.generate();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    act(() => {
+      result.current.cancelGenerate();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.error).toBe("已取消生成");
+    expect(result.current.generating).toBe(false);
+    expect(cancelLocalTaskMock).toHaveBeenCalledWith("task-abcd1234");
+  });
+
+  it("不同模型可同时测试：第二格的生成不被第一格拦下（#4080 评论 12）", async () => {
+    workflowsData = [
+      WF_IMAGE,
+      { ...WF_IMAGE, id: "wf-2", name: "工作流·生图B", modes: ["T2I"], taskType: "T2I" },
+    ];
+    /* 按请求的工作流 id 区分任务号：两格并发的断言才分得出彼此。 */
+    buildLibraryWorkflowInputMock.mockImplementation((id: string) =>
+      Promise.resolve({
+        input: { workflow: id, prompt: "x", workflowInputs: [] },
+        unmatched: [],
+        mode: "T2I",
+        modes: ["T2I"],
+        usesFirstFrame: false,
+        usesLastFrame: false,
+      }),
+    );
+    startLocalGenerateMock.mockImplementation((input: unknown) =>
+      Promise.resolve(isRecord(input) && input.workflow === "wf-1" ? "task-1" : "task-2"),
+    );
+    cancelLocalTaskMock.mockResolvedValue(undefined);
+    /* 任务不落定：停在等 SSE 的状态。 */
+    watchTaskMock.mockImplementation(() => () => undefined);
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("wf::wf-1");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "x");
+    });
+    void result.current.generate();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(startLocalGenerateMock).toHaveBeenCalledTimes(1);
+    /* 切到另一个模型再发起：不被第一格的重入闸门拦下（可同时测试）。 */
+    act(() => {
+      result.current.selectModel("wf::wf-2");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "y");
+    });
+    void result.current.generate();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(startLocalGenerateMock).toHaveBeenCalledTimes(2);
+    expect(cancelLocalTaskMock).not.toHaveBeenCalled();
+    /* 收尾：取消两格，让挂起的 promise 落定（不留悬挂任务）。 */
+    act(() => {
+      result.current.cancelGenerate("image::T2I::wf::wf-1");
+      result.current.cancelGenerate("image::T2I::wf::wf-2");
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(cancelLocalTaskMock).toHaveBeenCalledWith("task-1");
+    expect(cancelLocalTaskMock).toHaveBeenCalledWith("task-2");
   });
 });
