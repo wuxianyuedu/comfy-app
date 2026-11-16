@@ -9,7 +9,8 @@ import { parseDraftDto } from "~/lib/workshop/draft-sync-shared";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import type { AgentChatRequest, AgentMessageLike } from "~/lib/agent/shared";
 import { apiErrorBody } from "~/lib/api-error";
-import { unauthorizedResponse } from "~/server/lib/error-response";
+import { unauthorizedResponse, errorResponse } from "~/server/lib/error-response";
+import { AppError } from "~/lib/core/errors";
 import { isRecord } from "~/lib/is-record";
 
 export const runtime = "nodejs";
@@ -60,7 +61,9 @@ export async function POST(req: NextRequest) {
     ? body.messages.filter(isAgentMessageLike)
     : [];
   if (rawMessages.length === 0) {
-    return NextResponse.json({ error: "messages 不能为空" }, { status: 400 });
+    /* 400 也走结构化信封（#4048）：同一路由三种错误形状（401 结构化 / 400 裸
+     * 字符串 / 502 apiErrorBody）收成一种，客户端按同一判据解析。 */
+    return errorResponse(new AppError("messages 不能为空", "validation.messages-empty", 400));
   }
 
   const request: AgentChatRequest = {
