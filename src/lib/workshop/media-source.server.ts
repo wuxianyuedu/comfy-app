@@ -12,6 +12,7 @@ import { isRecord } from "~/lib/is-record";
 import { artifactDiskPath } from "~/lib/media/output-paths";
 import { isInlineMedia, parseDataUrl, toDataUrl } from "~/lib/media/data-url";
 import { DEFAULT_IMAGE_MIME, extOfPath, mimeForExt } from "~/lib/media/mime-ext";
+import { isUnsafeOutboundUrlError, safeFetch } from "~/lib/network/outbound-url.server";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 const MAX_BYTES = 24 * 1024 * 1024;
@@ -68,9 +69,15 @@ export async function resolveMediaBytes(src: string, _origin: string): Promise<R
   if (/^https?:\/\//.test(src)) {
     let res: Response;
     try {
-      res = await fetch(src, { signal: AbortSignal.timeout(30_000) });
+      res = await safeFetch(src, {
+        signal: AbortSignal.timeout(30_000),
+        scenario: "remote-media",
+      });
     } catch (error) {
-      throw new Error(errorText(error, "拉取参考图失败"), { cause: error });
+      const detail = isUnsafeOutboundUrlError(error)
+        ? error.message
+        : errorText(error, "拉取参考图失败").replace(/^拉取参考图失败：/u, "");
+      throw new Error(`拉取参考图失败：${detail}`, { cause: error });
     }
     if (!res.ok) {
       throw new Error(`拉取参考图失败 (${res.status})`);

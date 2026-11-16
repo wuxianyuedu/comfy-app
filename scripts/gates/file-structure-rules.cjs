@@ -97,6 +97,10 @@ const DOMAINS = [
    * `comfyui/markdown.ts`，于是第二个、第三个消费方（剧本预览、工坊剧本区）
    * 每次取用它都要反向依赖 ComfyUI 域。 */
   "markdown",
+  /* 服务端出网约束域（ISSUE #3904/#4052）：用户可控 URL 的统一校验与安全 fetch
+   *（scheme/高风险目标/重定向逐跳约束）。它不属于 `llm` 或 `workshop` —— 多个
+   * 业务域复用同一套出网判据，判据本身是跨域的网络安全地基。 */
+  "network",
   "process",
   "production",
   "project-canvas",

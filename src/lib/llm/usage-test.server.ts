@@ -17,6 +17,11 @@ import { errorMessage } from "~/lib/error-message";
 import { httpFailureDetail } from "~/lib/llm/http-failure";
 import { INLINE_JSON_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import {
+  assertSafeOutboundUrl,
+  isUnsafeOutboundUrlError,
+  safeFetch,
+} from "~/lib/network/outbound-url.server";
+import {
   extractBase64DataUrl,
   extractMediaUrl,
   extractRemoteTaskId,
@@ -206,10 +211,20 @@ export async function resolveUpstream(
   if (kind === "video" && path !== "" && /\/videos\/?$/i.test(base)) {
     base = base.replace(/\/videos\/?$/i, "");
   }
+  const url = joinApiUrl(base, path);
+  try {
+    await assertSafeOutboundUrl(url, "llm-upstream");
+  } catch (error) {
+    return {
+      error: isUnsafeOutboundUrlError(error)
+        ? `目标地址不允许出网：${error.message}`
+        : `目标地址不允许出网：${errorMessage(error, "地址校验失败")}`,
+    };
+  }
   return {
     base,
     path,
-    url: joinApiUrl(base, path),
+    url,
     headers,
   };
 }
@@ -334,16 +349,27 @@ export async function callChat(
   prompt: string,
   extra: Record<string, unknown>,
 ): Promise<{ ok: true; text: string } | { detail: string; ok: false }> {
-  const res = await fetch(up.url, {
-    method: "POST",
-    headers: up.headers,
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      ...extra,
-    }),
-    signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
-  });
+  let res: Response;
+  try {
+    res = await safeFetch(up.url, {
+      method: "POST",
+      headers: up.headers,
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: prompt }],
+        ...extra,
+      }),
+      signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+      scenario: "llm-upstream",
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      detail: isUnsafeOutboundUrlError(error)
+        ? `目标地址不允许出网：${error.message}`
+        : errorMessage(error, "连接失败"),
+    };
+  }
   if (!res.ok) {
     return {
       ok: false,
@@ -375,18 +401,29 @@ export async function callImage(
   size: string,
   extra: Record<string, unknown>,
 ): Promise<{ ok: true; url: string } | { detail: string; ok: false }> {
-  const res = await fetch(up.url, {
-    method: "POST",
-    headers: up.headers,
-    body: JSON.stringify({
-      model,
-      prompt,
-      n: 1,
-      ...(size === "" ? {} : { size }),
-      ...extra,
-    }),
-    signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
-  });
+  let res: Response;
+  try {
+    res = await safeFetch(up.url, {
+      method: "POST",
+      headers: up.headers,
+      body: JSON.stringify({
+        model,
+        prompt,
+        n: 1,
+        ...(size === "" ? {} : { size }),
+        ...extra,
+      }),
+      signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
+      scenario: "llm-upstream",
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      detail: isUnsafeOutboundUrlError(error)
+        ? `目标地址不允许出网：${error.message}`
+        : errorMessage(error, "连接失败"),
+    };
+  }
   if (!res.ok) {
     return {
       ok: false,
@@ -419,12 +456,23 @@ export async function callVideo(
   prompt: string,
   extra: Record<string, unknown>,
 ): Promise<VideoSubmitOutcome> {
-  const res = await fetch(up.url, {
-    method: "POST",
-    headers: up.headers,
-    body: JSON.stringify({ model, prompt, ...extra }),
-    signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
-  });
+  let res: Response;
+  try {
+    res = await safeFetch(up.url, {
+      method: "POST",
+      headers: up.headers,
+      body: JSON.stringify({ model, prompt, ...extra }),
+      signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
+      scenario: "llm-upstream",
+    });
+  } catch (error) {
+    return {
+      status: "error",
+      detail: isUnsafeOutboundUrlError(error)
+        ? `目标地址不允许出网：${error.message}`
+        : errorMessage(error, "连接失败"),
+    };
+  }
   if (!res.ok) {
     return {
       status: "error",

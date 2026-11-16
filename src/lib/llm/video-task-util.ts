@@ -12,6 +12,7 @@
 import "server-only";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { assertSafeOutboundUrl, safeFetch } from "~/lib/network/outbound-url.server";
 import { lastSegments } from "~/lib/path-display";
 import { formatCompactStamp } from "~/lib/time-format";
 import { base64PayloadOf, isInlineMedia } from "~/lib/media/data-url";
@@ -107,10 +108,14 @@ export async function pollRemoteVideoTask(
     await sleep(VIDEO_POLL_INTERVAL_MS);
     for (const pollUrl of pollUrls) {
       try {
+        // 出网目标同样走统一约束（#3904/#4052）：轮询地址由可控 base 派生。
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        const pollRes = await fetch(pollUrl, {
+        await assertSafeOutboundUrl(pollUrl, "llm-upstream");
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+        const pollRes = await safeFetch(pollUrl, {
           headers,
           signal: AbortSignal.timeout(30_000),
+          scenario: "llm-upstream",
         });
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const pollPayload: unknown = await pollRes.json().catch(() => null);
