@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 import { isPlainRecord } from "~/lib/is-record";
 
 const statusFile = path.join(process.cwd(), "log", "current", "tools", "schema-sync.json");
@@ -14,6 +15,12 @@ const spawnSchemaSync = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../../scripts/db/db-schema-state.mjs", () => ({
   spawnSchemaSync,
+}));
+
+/* 路由新增鉴权闸（#4040）：这里只判「放行后的行为」，鉴权按已登录用户替掉
+ * （真鉴权链路会拉 better-auth → env 校验，测试环境起不来）。 */
+vi.mock("~/server/auth/request-user", () => ({
+  requireRequestUser: () => ({ id: "user-test", email: "t@test.dev", name: "t" }),
 }));
 
 /** 把状态文件的内容钉在 spy 上；其余路径穿透到真实现（本文件不读别的文件）。 */
@@ -38,7 +45,8 @@ afterEach(() => {
 
 async function post(): Promise<Response> {
   const { POST } = await import("./route");
-  return POST();
+  /* 路由要读 Origin 做同源校验（#4040）：测试里给一个与应用同源的请求。 */
+  return POST(new NextRequest("http://localhost:3000/api/schema/push", { method: "POST" }));
 }
 
 describe("POST /api/schema/push", () => {
@@ -102,5 +110,35 @@ describe("POST /api/schema/push", () => {
     const body: unknown = await res.json();
     const error = isPlainRecord(body) && typeof body.error === "string" ? body.error : "";
     expect(error).toContain("找不到");
+  });
+});
+
+describe("鉴权与同源闸（#4040）", () => {
+  it("跨站 Origin → 403，绝不发起同步", async () => {
+    stubStatusFile(statusJson("stale", "含「会丢数据」的语句 2 条"));
+    spawnSchemaSync.mockReturnValue({ started: true });
+    const { POST } = await import("./route");
+    const res = await POST(
+      new NextRequest("http://localhost:3000/api/schema/push", {
+        method: "POST",
+        headers: { origin: "https://evil.example" },
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(spawnSchemaSync).not.toHaveBeenCalled();
+  });
+
+  it("启动页那一族 Origin 放行（splash 白名单，与 health 同一清单）", async () => {
+    stubStatusFile(statusJson("stale"));
+    spawnSchemaSync.mockReturnValue({ started: true });
+    const { POST } = await import("./route");
+    const res = await POST(
+      new NextRequest("http://localhost:3000/api/schema/push", {
+        method: "POST",
+        headers: { origin: "http://tauri.localhost" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(spawnSchemaSync).toHaveBeenCalledTimes(1);
   });
 });
