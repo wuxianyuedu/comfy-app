@@ -148,25 +148,19 @@ describe("createdAt 经 superjson 仍是 Date → 历史面板镜像照常收行
     /* 线上形状自证：superjson 往返后 createdAt 真的是 Date（不是字符串）。 */
     expect(rows[0]!.createdAt).toBeInstanceOf(Date);
     for (const row of rows) {
-      const parsed = historyTaskRowSchema.safeParse(row);
-      expect(parsed.success).toBe(true);
-      if (parsed.success) {
-        expect(parsed.data.createdAt).not.toBe("");
-      }
+      /* parse 失败即抛（等价断言），规避 no-conditional-expect。 */
+      expect(historyTaskRowSchema.parse(row).createdAt).not.toBe("");
     }
     /* 首行（视频任务，createdAt=new Date(2000)）归一成 ISO 字符串。 */
     expect(historyTaskRowSchema.parse(rows[0]).createdAt).toBe(new Date(2000).toISOString());
   });
 
   it("字符串形态的 createdAt（老快照 / 其他消费方）也照常收行", () => {
-    const parsed = historyTaskRowSchema.safeParse({
+    const parsed = historyTaskRowSchema.parse({
       id: "t1",
       createdAt: "2000-01-01T00:00:00.000Z",
     });
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data.createdAt).toBe("2000-01-01T00:00:00.000Z");
-    }
+    expect(parsed.createdAt).toBe("2000-01-01T00:00:00.000Z");
   });
 });
 
