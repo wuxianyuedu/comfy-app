@@ -21,9 +21,22 @@ import {
 export const DEV_SERVER_PROBE_MS = 2000;
 
 /**
+ * 单拍探测超时。取 5s（ISSUE #4140）：进程**真死**时 TCP 立即被拒（ECONNREFUSED），
+ * 探测瞬间失败、不走这条超时——真实断开的检出速度由「连拍门槛」决定，与这个数无关。
+ * 会走满超时的只有「进程活着但一时答不上」：ComfyUI 同进程启动、冷编译、按需编译、
+ * Turbopack 抢锁那类重载窗口。此前取 2.5s，这类窗口里连续两拍超时（≈4.5s）就把
+ * 好好地在跑的服务翻成「应用服务已断开」（用户现场：ComfyUI 启动的 70s 窗口内
+ * 「莫名」断开，服务与页面全程正常）；放宽到 5s 后，要**连续约 7s** 无应答才判断
+ * 开——那种程度的无响应本来就值得报。
+ */
+export const PROBE_TIMEOUT_MS = 5000;
+
+/**
  * 「连续失败几拍才认断开」的门槛。单拍失败不算：`/api/dev/server-id` 是应用服务自己的
- * HTTP，冷编译 / 按需编译 / Turbopack 抢锁时都可能超过 2.5s 超时，当断开会让服务好好的
- * 界面翻成「已断开」并写两条消息。取 2（两拍 ≈ 4 秒）；恢复侧不需要门槛。
+ * HTTP，冷编译 / 按需编译 / Turbopack 抢锁时都可能超过单拍超时，当断开会让服务好好的
+ * 界面翻成「已断开」并写两条消息。取 2（两拍）；配合 {@link PROBE_TIMEOUT_MS}：
+ * 真死（立即拒连）约 2~4 秒判出，纯超时（进程活着、无应答）要连续约 7 秒。
+ * 恢复侧不需要门槛。
  */
 export const OFFLINE_CONFIRM_FAILURES = 2;
 
@@ -87,7 +100,8 @@ export type DevServerLiveness = {
 /**
  * 「上一拍发起 → 这一拍发起」之间有多少毫秒是**没人在探测**的。扣掉 `DEV_SERVER_PROBE_MS`：
  * 那一拍本来就该走完（正常连拍为 0），超出部分才是停表；clamp 到 ≥0，首拍与时钟回拨都不该为负。
- * 用**发起**时刻而非应答时刻：探活有 2.5s 超时，拿应答算会把「这一拍慢了」记成停表。
+ * 用**发起**时刻而非应答时刻：探活有单拍超时（`PROBE_TIMEOUT_MS`），拿应答算会把
+ * 「这一拍慢了」记成停表。
  */
 export function probeGapMs(previousStartedAt: number | null, startedAt: number): number {
   if (previousStartedAt === null) {
@@ -139,7 +153,7 @@ async function probeBootId(): Promise<ProbeResult> {
   try {
     const res = await fetch(SERVER_ID_ENDPOINT, {
       cache: "no-store",
-      signal: AbortSignal.timeout(2500),
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
     if (!res.ok) {
       return {

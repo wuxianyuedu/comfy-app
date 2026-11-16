@@ -11,6 +11,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import {
   DEV_SERVER_PROBE_MS,
   OFFLINE_CONFIRM_FAILURES,
+  PROBE_TIMEOUT_MS,
   probeGapMs,
   useDevServerLiveness,
 } from "./use-dev-server-liveness";
@@ -266,6 +267,15 @@ describe("useDevServerLiveness：单拍抖动不算断开", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("useDevServerLiveness：单拍探活超时（ISSUE #4140）", () => {
+  /* 现场：ComfyUI 同进程启动的 70s 重载窗口里，2.5s 单拍超时连续两拍失守
+   * （≈4.5s 无应答），把好好的服务翻成「已断开」。进程真死是立即拒连、不走
+   * 超时，所以放宽超时只放慢「活着一时答不上」那一档的判出，真实断开不变慢。 */
+  it("单拍超时是 5s：重载窗口的慢应答（≤5s）不再计为探测失败", () => {
+    expect(PROBE_TIMEOUT_MS).toBe(5000);
   });
 });
 
