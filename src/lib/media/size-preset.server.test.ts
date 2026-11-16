@@ -19,7 +19,7 @@
  * 这里**真读写临时目录**（不 mock fs）：这一层的全部价值就是「读到了哪一份、
  * 落盘了什么」——桩掉 fs 之后这两件都判不出来。`root` 参数就是为它留的。
  */
-import { mkdirSync, mkdtempSync, writeFileSync, promises as fsp } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, promises as fsp } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -193,5 +193,49 @@ describe("size-preset.server（ISSUE #3788）", () => {
     const table = await loadSizePresetTable(root);
     expect(cell(table, "image", "16:9 横屏", "1k")).toEqual({ width: 1280, height: 720 });
     expect(cell(table, "image", "16:9 横屏", "2k")).toEqual({ width: 1111, height: 222 });
+  });
+});
+
+/* ── 差集落盘（ISSUE #3973）── */
+
+describe("size-preset.server 差集落盘（ISSUE #3973）", () => {
+  it("落盘的是与项目默认的差集，不是整份表", async () => {
+    const saved = await saveSizePresetTable(customizedTable(), root);
+    expect(cell(saved, "image", "16:9 横屏", "1k")).toEqual({ width: 1280, height: 720 });
+
+    /* 覆盖文件里只留真改过的那一格；未改的格子不落盘（读侧回落项目默认）。 */
+    const raw: unknown = JSON.parse(readFileSync(path.join(root, SIZE_PRESETS_REL_PATH), "utf8"));
+    expect(raw).toEqual({
+      image: { "16:9 横屏": { "1k": { width: 1280, height: 720 } } },
+    });
+  });
+
+  it("项目默认后续改动能穿透到存过覆盖的机器（整份落盘会把基准钉死）", async () => {
+    /* 这台机器改了一格（image 16:9 / 1k → 1280×720）并存了本机覆盖 */
+    await saveSizePresetTable(customizedTable(), root);
+
+    /* 别的检出把项目默认的 video 16:9 / 1k 改成 1920×1080 并提交 */
+    mkdirSync(path.join(root, "scripts"), { recursive: true });
+    writeFileSync(path.join(root, "scripts", "dev-launcher.mjs"), "// dev", "utf8");
+    const newDefaults = structuredClone(DEFAULT_SIZE_PRESET_TABLE);
+    cell(newDefaults, "video", "16:9 横屏", "1k").width = 1920;
+    cell(newDefaults, "video", "16:9 横屏", "1k").height = 1080;
+    await saveSizePresetTableAsProjectDefaults(newDefaults, root);
+
+    const table = await loadSizePresetTable(root);
+    /* 本机真改过的格子仍是覆盖值 */
+    expect(cell(table, "image", "16:9 横屏", "1k")).toEqual({ width: 1280, height: 720 });
+    /* 没改过的格子拿到**新的**项目默认 —— 整份落盘时这里会钉在旧值 1280×720。 */
+    expect(cell(table, "video", "16:9 横屏", "1k")).toEqual({ width: 1920, height: 1080 });
+  });
+
+  it("改回默认的格子从覆盖里消失（全部改回时覆盖为空对象）", async () => {
+    await saveSizePresetTable(customizedTable(), root);
+
+    /* 把整份表改回项目默认：没有任何格子与基准不同 ⇒ 覆盖为空。 */
+    await saveSizePresetTable(DEFAULT_SIZE_PRESET_TABLE, root);
+    const raw: unknown = JSON.parse(readFileSync(path.join(root, SIZE_PRESETS_REL_PATH), "utf8"));
+    expect(raw).toEqual({});
+    expect(await loadSizePresetTable(root)).toEqual(DEFAULT_SIZE_PRESET_TABLE);
   });
 });
