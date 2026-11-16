@@ -23,15 +23,20 @@ import {
 
 describe("testCandidatesForKind", () => {
   const entries = [
-    { baseUrl: "https://a/v1", kind: "image", name: "agnes-image" },
-    { baseUrl: "https://a/v1", kind: "video", name: "agnes-video" },
-    { baseUrl: "https://a/v1", kind: "chat", name: "agnes-3.0" },
-    { baseUrl: null, kind: "image", name: "无址条目" },
+    { baseUrl: "https://a/v1", kind: "image", name: "agnes-image", local: false },
+    { baseUrl: "https://a/v1", kind: "video", name: "agnes-video", local: false },
+    { baseUrl: "https://a/v1", kind: "chat", name: "agnes-3.0", local: false },
+    { baseUrl: null, kind: "image", name: "无址条目", local: false },
+    { baseUrl: null, kind: "chat", name: "qwen3-8b", local: true },
   ];
 
-  it("按 kind 过滤；chat 不参与；无名条目丢弃", () => {
+  it("按 kind 过滤；无名条目丢弃；本地候选只进对话（#4080）", () => {
     expect(testCandidatesForKind("image", entries).map((c) => c.name)).toEqual(["agnes-image"]);
     expect(testCandidatesForKind("video", entries).map((c) => c.name)).toEqual(["agnes-video"]);
+    expect(testCandidatesForKind("chat", entries).map((c) => c.name)).toEqual([
+      "agnes-3.0",
+      "qwen3-8b",
+    ]);
   });
 });
 

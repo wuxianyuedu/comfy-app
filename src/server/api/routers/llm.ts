@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { getConfigForClient } from "~/lib/llm/server";
+import { getConfigForClient, resolveRemoteModelConnection } from "~/lib/llm/server";
+import { completeWorkshopLLM, getWorkshopLLMConfig } from "~/server/workshop/llm";
+import type { WorkshopLLMConfig } from "~/server/workshop/llm";
 import { remoteModelEntrySchema } from "~/lib/llm/remote-model-schema";
 import {
   LLM_API_FORMATS,
@@ -226,6 +229,49 @@ export const llmRouter = createTRPCRouter({
     const cfg = await getConfigForClient();
     return { config: cfg };
   }),
+
+  /** 对话测试（ISSUE #4080）：向被测模型发一条短提示词，返回补全与耗时。
+   *  本地模型（Ollama，extraModels 里的字符串候选）走设置里配置的本地服务
+   *  （连接参数 = 生效 LLM 配置，模型名换成被测的那个）；远端模型按名解析
+   *  连接参数（baseUrl / apiKey 走模型自己或其供应商的）。 */
+  chatTest: authedProcedure
+    .input(
+      z.object({
+        name: z.string().min(1),
+        local: z.boolean(),
+        prompt: z.string().min(1).max(4000),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const started = Date.now();
+      let cfg: WorkshopLLMConfig;
+      if (input.local) {
+        const base = await getWorkshopLLMConfig();
+        cfg = { ...base, model: input.name };
+      } else {
+        const entry = await resolveRemoteModelConnection(input.name);
+        if (!entry?.baseUrl) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `模型「${input.name}」不存在或没有可用的接口地址`,
+          });
+        }
+        cfg = {
+          baseUrl: entry.baseUrl,
+          apiKey: entry.apiKey,
+          model: entry.name,
+          temperature: 0.7,
+          maxTokens: 2048,
+        };
+      }
+      const reply = await completeWorkshopLLM(cfg, [{ role: "user", content: input.prompt }]);
+      return {
+        reply,
+        durationMs: Date.now() - started,
+        endpoint: `${cfg.baseUrl}/chat/completions`,
+        model: cfg.model,
+      };
+    }),
 
   /** 供应商 + 模型全量清单（#3501「远程模型」页的数据源）。 */
   providersGet: authedProcedure.query(async () => readProviderState()),

@@ -14,6 +14,13 @@ import React, { useMemo } from "react";
 import { cn } from "~/lib/utils";
 import { useOverlayBoundary } from "~/components/ui/use-overlay-boundary";
 
+type SelectMenuGroup = {
+  /** 分组标题（渲染成组头，不可选）。 */
+  label: string;
+  /** 该组内的选项值（与 `options` 同一取值空间）。 */
+  options: Array<string>;
+};
+
 type SelectMenuProps = {
   "aria-describedby"?: string;
   "aria-invalid"?: boolean | "true" | "false";
@@ -35,6 +42,11 @@ type SelectMenuProps = {
    * 触发器取**固定宽度**（铺满容器）而不是「随内容自适应」。缺省是自适应。
    */
   fullWidth?: boolean;
+  /**
+   * 分组展示（ISSUE #4080）：给出时选项按组渲染（组头不可选），`options` 被
+   * 忽略、取各组的并集。触发器与单选语义不变。
+   */
+  groups?: Array<SelectMenuGroup>;
   /**
    * a11y 转发口 · 挂在 Trigger（真正可交互的按钮元素）上。`<FormField>` 的 render prop 会 spread `{ id, "aria-describedby", "aria-invalid" }` 给控件、`<label htmlFor>` 也靠 `id` 关联。
    * 此前调用点用原生 `<select>` 天然吃这些属性、迁 SelectMenu 需要显式开这一层；`title` 也一并转（不推荐用它替代 Tooltip · 存量调用点保留行为）。
@@ -93,6 +105,7 @@ export function SelectMenu({
   value,
   onChange,
   options,
+  groups,
   labels,
   placeholder = "选择…",
   disabled = false,
@@ -109,6 +122,11 @@ export function SelectMenu({
   "aria-invalid": ariaInvalid,
   title,
 }: SelectMenuProps) {
+  /* 分组给出时选项取各组并集（保持组内顺序）；否则用平铺的 options。 */
+  const flatOptions = useMemo(
+    () => (groups ? groups.flatMap((group) => group.options) : options),
+    [groups, options],
+  );
   /* 浮层可用区域：视口减去应用级标题行（壳态）—— 见 `useOverlayBoundary`。 */
   const boundary = useOverlayBoundary();
   const effectiveMinWidth = useMemo(() => {
@@ -116,7 +134,7 @@ export function SelectMenu({
       return popoverMinWidth;
     }
     let longest = 0;
-    for (const opt of options) {
+    for (const opt of flatOptions) {
       const node = labels?.[opt];
       const text = typeof node === "string" || typeof node === "number" ? String(node) : opt;
       if (text.length > longest) {
@@ -127,14 +145,14 @@ export function SelectMenu({
     const bounded = Math.max(POPOVER_AUTO_MIN, approx);
     const effective = Math.max(popoverMinWidth, bounded);
     return Math.min(POPOVER_AUTO_MAX, effective);
-  }, [autoFitFromOptions, options, labels, popoverMinWidth]);
+  }, [autoFitFromOptions, flatOptions, labels, popoverMinWidth]);
 
   /* 触发器显示：与 PR 之前的 `label` 表达式**完全一致**——有值时取
    * labels[value]、value 本身或 placeholder；空值直接落 placeholder。
    * base-ui 的 `<SelectPrimitive.Value>` 允许 children 为 ReactNode
    * （其 .d.ts 行 32）——不再需要 render prop。 */
   const display: React.ReactNode = value
-    ? (labels?.[value] ?? options.find((option) => option === value) ?? placeholder)
+    ? (labels?.[value] ?? flatOptions.find((option) => option === value) ?? placeholder)
     : placeholder;
 
   const hasFooter = Boolean(footer);
@@ -193,11 +211,26 @@ export function SelectMenu({
             }}
           >
             <SelectPrimitive.List className={LIST_BASE}>
-              {options.map((opt) => (
-                <SelectPrimitive.Item className={ITEM_BASE} key={opt} value={opt}>
-                  <SelectPrimitive.ItemText>{labels?.[opt] ?? opt}</SelectPrimitive.ItemText>
-                </SelectPrimitive.Item>
-              ))}
+              {groups
+                ? groups.map((group) => (
+                    <SelectPrimitive.Group key={group.label}>
+                      <SelectPrimitive.GroupLabel className="text-muted-foreground text-2xs px-2.5 pt-1.5 pb-1 font-semibold tracking-wide uppercase">
+                        {group.label}
+                      </SelectPrimitive.GroupLabel>
+                      {group.options.map((opt) => (
+                        <SelectPrimitive.Item className={ITEM_BASE} key={opt} value={opt}>
+                          <SelectPrimitive.ItemText>
+                            {labels?.[opt] ?? opt}
+                          </SelectPrimitive.ItemText>
+                        </SelectPrimitive.Item>
+                      ))}
+                    </SelectPrimitive.Group>
+                  ))
+                : flatOptions.map((opt) => (
+                    <SelectPrimitive.Item className={ITEM_BASE} key={opt} value={opt}>
+                      <SelectPrimitive.ItemText>{labels?.[opt] ?? opt}</SelectPrimitive.ItemText>
+                    </SelectPrimitive.Item>
+                  ))}
             </SelectPrimitive.List>
             {hasFooter ? (
               <div className="border-border-strong mt-1 border-t pt-1">{footer}</div>
