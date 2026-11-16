@@ -56,11 +56,15 @@ export const taskRouter = createTRPCRouter({
       z
         .object({
           take: z.number().int().min(1).max(200).optional().default(60),
+          /* 真分页（#4044）：cursor 由 tRPC 的无限查询自动带入（= 已拉取的行数，
+           * 即仓储层的 skip）；响应带 hasMore / scanned，media 过滤的截断对
+           * 调用方可见。 */
+          cursor: z.number().int().min(0).optional().default(0),
           projectId: z.string().optional(),
           media: z.enum(["image", "video", "audio"]).optional(),
           status: z.string().optional(),
         })
-        .default({ take: 60 }),
+        .default({ take: 60, cursor: 0 }),
     )
     .query(async ({ ctx, input }) => {
       const statusList =
@@ -115,15 +119,27 @@ export const taskRouter = createTRPCRouter({
         });
       };
 
+      /* hasMore 的语义（#4044）：「这一页之外还可能有更多」——只要扫描没有
+       * 触到表尾（exhausted）就为 true；精确与否由调用方的下一页兜底
+       * （下一页拉回 0 行时 hasMore 自然变 false）。 */
       if (!input.media) {
-        return { tasks: await scanOnce(0) };
+        const rows = await scanOnce(input.cursor);
+        /* 多取一行判 hasMore：返回行数超过 take = 还有下一页。 */
+        const hasMore = rows.length > PAGE;
+        return { tasks: rows.slice(0, PAGE), hasMore, scanned: rows.length };
       }
 
       type Card = Awaited<ReturnType<typeof scanOnce>>[number];
       const matched: Array<Card> = [];
+      let scanned = 0;
+      let exhausted = false;
       for (let round = 0; round < MAX_ROUNDS; round += 1) {
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        const page = await scanOnce(round * PAGE);
+        const page = await scanOnce(input.cursor + round * PAGE);
+        scanned += page.length;
+        if (page.length < PAGE) {
+          exhausted = true;
+        }
         for (const card of page) {
           if (card.mediaType === input.media) {
             matched.push(card);
@@ -132,11 +148,11 @@ export const taskRouter = createTRPCRouter({
             break;
           }
         }
-        if (matched.length >= PAGE || page.length < PAGE) {
+        if (matched.length >= PAGE || exhausted) {
           break;
         }
       }
-      return { tasks: matched };
+      return { tasks: matched, hasMore: !exhausted, scanned };
     }),
 
   /* GET /api/tasks/[id] —— 读 */
