@@ -536,6 +536,61 @@ describe("useModelTest：工作流提供的图片/视频模型（ISSUE #4080 评
     });
   });
 
+  it("切换模型保留各自已填参数（#4080 评论 19）", () => {
+    workflowsData = [
+      WF_IMAGE,
+      { ...WF_IMAGE, id: "wf-2", name: "工作流·生图B", modelTags: ["b-image"] },
+    ];
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("wf::wf-1");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "甲模型的提示词");
+    });
+    act(() => {
+      result.current.selectModel("wf::wf-2");
+    });
+    /* 切到 B：B 是新格，参数是该模式的默认档（提示词为空）。 */
+    expect(result.current.values.prompt ?? "").toBe("");
+    act(() => {
+      result.current.patchValue("prompt", "乙模型的提示词");
+    });
+    /* 切回 A：A 已填的参数原样保留（#4080 评论 19）。 */
+    act(() => {
+      result.current.selectModel("wf::wf-1");
+    });
+    expect(result.current.values.prompt).toBe("甲模型的提示词");
+    act(() => {
+      result.current.selectModel("wf::wf-2");
+    });
+    expect(result.current.values.prompt).toBe("乙模型的提示词");
+  });
+
+  it("切走模型后，已完模型的响应读数不串格（#4080 评论 12/19）", async () => {
+    workflowsData = [WF_IMAGE];
+    apiGenerateImageMock.mockImplementation((_req, opts) => {
+      opts?.onDebug?.([UPSTREAM_ROW]);
+      return Promise.resolve("https://img.example/x.png");
+    });
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("agnes-image");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "测试提示词");
+    });
+    await act(async () => {
+      await result.current.generate();
+    });
+    expect(result.current.responseRows).toHaveLength(1);
+    /* 切到另一格：那一格没有 A 的响应读数（按格隔离）。 */
+    act(() => {
+      result.current.selectModel("wf::wf-1");
+    });
+    expect(result.current.responseRows).toEqual([]);
+  });
+
   it("取消生成：中止本地任务并取消服务端任务（#4080 评论 12 回归）", async () => {
     workflowsData = [WF_IMAGE];
     buildLibraryWorkflowInputMock.mockResolvedValue({

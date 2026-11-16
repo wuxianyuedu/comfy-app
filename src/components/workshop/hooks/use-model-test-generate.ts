@@ -47,12 +47,16 @@ export type ModelTestSession = {
   generating: boolean;
   generatingSince: number | null;
   notice: { kind: "ok" | "err"; text: string } | null;
+  /** 该格的「实际请求」预览行（dry-run 产物；#4080 评论 20：生成中保持可见）。 */
+  previewRows: Array<ApiCallDebugRow>;
   /** 响应读数（真实调用回来了什么）：与「请求」分区显示（#4080 评论 13）。 */
   responseRows: Array<ApiCallDebugRow>;
   result: ModelTestResult;
   /** 本地提交行（工作流候选在封装后升级为带 workflowInputs 落点清单的实况）。 */
   submissionRow: ApiCallDebugRow | null;
   taskLogs: Array<TaskLogEntry>;
+  /** 该格的统一输入表单值（#4080 评论 19：切模型不丢已填参数）。 */
+  values: ModelTestValues;
   workflowProgress: { label?: string; pct: number } | null;
 };
 
@@ -63,6 +67,8 @@ export function emptyModelTestSession(): ModelTestSession {
     generating: false,
     generatingSince: null,
     notice: null,
+    values: {},
+    previewRows: [],
     responseRows: [],
     result: null,
     submissionRow: null,
