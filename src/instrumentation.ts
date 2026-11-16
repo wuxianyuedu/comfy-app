@@ -2,18 +2,27 @@
  * Next.js 遥测/观测初始化入口（Next 15 约定文件，自动执行）。
  * 仅在配置了 SENTRY_DSN 时启用 Sentry；未配置则全部 no-op。
  *
+ * 启动耗时形状（本文件的唯一耗时契约）：
+ *   · **请求会等 register() 返回**（Next 的启动语义），所以本函数里 await 的每一步
+ *     都直接加在「首个请求被响应」之前 —— 这里只保留两步**有先后契约**的串行：
+ *     产物根搬迁（先于一切读产物的启动点）→ 流捕获（先于其余分支可能产生的输出）。
+ *   · 其余五支（reaper / dispatch / film 恢复 / 事件循环观测 / Sentry）互不依赖、
+ *     都是「起循环即返回」或纯后台核对，**并行踢出、不阻塞 register**：串行 await
+ *     它们的模块图编译（每支都要拉起一大片 server 代码）曾占掉暖启动就绪时间的
+ *     一半（ISSUE #4137 的实测读数）。
+ *
  * 注意：本文件在 Node.js 与 Edge 两种 runtime 下都会执行，
- * 必须按 runtime 分别加载对应配置，禁止在此处引入 server-only 模块。
+ * 必须按 runtime 分别加载对应配置，禁止在此处引入 server-only 模块；
+ * Node-only 分件因此一律走动态 import（不能进 Edge 图）。
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     /* 产物根的一次性搬迁（台账 A13 的结构性关法）：历史落点在 `public/generated/`，
      * 而 `public/**` 由 Next 按静态文件直接发出、根本不经过带闸的 route handler ——
      * 把根搬到 `generated/` 之后那条旁路**不存在**。搬这一动作必须排在所有会读产物的
-     * 启动点**之前**（下面的成片监看恢复就会读镜头视频）。
-     * 已知窗口：dev 下本文件懒编译（实测 `✓ Ready` 之后约 40s 才跑这一支），
-     * 所以升级到本版的开发机在头 40 秒里读历史产物会拿 404；桌包是进程起来就跑，
-     * 用户侧没有这个窗口。 */
+     * 启动点**之前**（下面的成片监看恢复就会读镜头视频），所以它是这里串行等待的
+     * 第一步；dev 下本文件懒编译（`✓ Ready` 之后首个请求触发），这个编译窗口仍存在，
+     * 但它只覆盖下面两步串行，不再叠加五支后台分支。 */
     await import("./lib/media/artifact-root-migration.server").then((m) =>
       m.migrateLegacyArtifactRoot(),
     );
@@ -21,45 +30,92 @@ export async function register() {
      * 此前首屏编译错误、Turbopack FATAL、未捕获的服务端异常只落在
      * log/nextjs/nextjs-stderr-*.log，而「应用日志」面板不读它——应用服务起不来
      * 时用户打开面板看到一片空白（ISSUE #360）。
-     * 用动态 import 是刻意的：本文件在 Edge runtime 也会执行，Node-only 模块
-     * 不能进入 Edge 图（同下方 sentry.server.config 的处理）。 */
+     * 排在其余分支之前：并行分支的失败读数（含 console.error）要能被它收进面板。 */
     await import("./lib/log/capture-streams.server").then((m) => {
       m.installStreamCapture();
     });
-    /* ComfyUI 孤儿任务回收的**唯一** Next 侧启动点（P3 §5 ADR §14 D3）：
-     * 它过去靠 `enqueue.ts` 的裸副作用 import 顺带起来，那条隐式耦合让
-     * 「谁起 reaper」在模块图上不可见、且被删 import 时会静默失效。
-     * 动态 import 的理由与上面两条相同：本文件在 Edge runtime 也执行，
-     * Node-only 模块不能进 Edge 图。 */
-    await import("./lib/comfyui/reaper").then((m) => {
-      m.startReaper();
-    });
-    /* 派发循环的**唯一** Next 侧启动点（P3 §5 ADR §14 D1 第二刀）：Next 也是一
-     * 个执行宿主（owner='inline'），要按库里 `claimedBy` 归自己的那些行去领。
-     * 与 reaper 同形态：不起就没有安全网——提交后那一次即时 kick 若正好撞上
-     * ComfyUI 还没起来，之后就再没人推进它。dev 下本文件懒编译（见
-     * launch-and-build §5 排障表），所以「即时 kick」才是首条路径。 */
-    await import("./lib/comfyui/executor-dispatch").then((m) => {
-      m.startDispatchLoop();
-    });
-    /* 成片监看的**唯一** Next 侧恢复点（P3 §5 ADR 5-A）：`startFilm` 末尾那条
-     * `void watchFilm()` 只活在当前进程里，热重启 / 桌包重启会把它弄丢，而镜头任务
-     * 还在库里由执行侧推进 —— 没人监看就是影片永远停在 GENERATING（既不出片也不失败）。
-     * 放在这里的同一条 nodejs 分支、与 reaper / dispatch 并排，是刻意的：本文件在
-     * Edge runtime 也执行，Node-only 与 server-only 模块只能走动态 import。
-     * 注意 dev 下本文件**懒编译**（实测 `✓ Ready` 之后约 40s 才跑完这一支），
-     * 所以热重启后的恢复会晚到几十秒，属正常而不是没接上；桌包（standalone 编译产物）
-     * 则是进程起来就跑。 */
-    await import("./server/film/orchestrator").then((m) => m.resumeStalledFilms());
-    /* 事件循环阻塞观测的**唯一**启动点（ISSUE #3369）：服务「断开约 20 秒自行恢复」
-     * 的现场里进程没死、无异常、无慢查询记录，服务端一个字都不留——没有这份读数，
-     * 断开永远「莫名」。心跳漂移检测 + 恢复消息读回（GET /api/dev/loop-blocks），
-     * 把「多半是短暂无响应」的猜测换成事实。与 reaper / dispatch 同形态：动态
-     * import 是刻意的，本文件在 Edge runtime 也执行。 */
-    await import("./lib/log/event-loop-watch.server").then((m) => {
-      m.startEventLoopWatch();
-    });
-    await import("./sentry.server.config");
+
+    /* ── 并行启动分支（ISSUE #4137）────────────────────────────────────────
+     *
+     * 五支互不依赖的后台任务，此处只「踢出」不等待：
+     *   · reaper —— ComfyUI 孤儿任务回收的**唯一** Next 侧启动点（P3 §5 ADR §14 D3）：
+     *     它过去靠 `enqueue.ts` 的裸副作用 import 顺带起来，那条隐式耦合让
+     *     「谁起 reaper」在模块图上不可见、且被删 import 时会静默失效。
+     *   · dispatch —— 派发循环的**唯一** Next 侧启动点（P3 §5 ADR §14 D1 第二刀）：
+     *     Next 也是一个执行宿主（owner='inline'），要按库里 `claimedBy` 归自己的
+     *     那些行去领。与 reaper 同形态：不起就没有安全网——提交后那一次即时 kick
+     *     若正好撞上 ComfyUI 还没起来，之后就再没人推进它。
+     *   · film-resume —— 成片监看的**唯一** Next 侧恢复点（P3 §5 ADR 5-A）：
+     *     `startFilm` 末尾那条 `void watchFilm()` 只活在当前进程里，热重启 /
+     *     桌包重启会把它弄丢，而镜头任务还在库里由执行侧推进 —— 没人监看就是影片
+     *     永远停在 GENERATING（既不出片也不失败）。**必须在产物搬迁完成之后**
+     *     （它读镜头视频）——它排在 `register()` 串行段之后才被踢出，顺序由结构保证。
+     *   · event-loop-watch —— 事件循环阻塞观测的**唯一**启动点（ISSUE #3369）：
+     *     服务「断开约 20 秒自行恢复」的现场里进程没死、无异常、无慢查询记录，
+     *     服务端一个字都不留——没有这份读数，断开永远「莫名」。
+     *   · sentry —— SDK 配置；未配 DSN 时 no-op。
+     *
+     * 每支的失败只记日志、**不许**冒泡成 register 的拒绝：这些是自愈/观测网，
+     * 单支失效不该让首个请求失败；console.error 由上面装好的流捕获收进面板。
+     * 完成后落一行逐支耗时（启动页不显示，进 app-runtime 日志），给「启动耗时」
+     * 的后续取证留同源读数。
+     */
+    const bootStartedAt = Date.now();
+    /** @param {string} name 分支名（也进汇总行的键位） */
+    const branchDoneMs = new Map<string, number>();
+    const startBranch = (name: string, run: () => Promise<unknown>): Promise<void> =>
+      run().then(
+        () => {
+          branchDoneMs.set(name, Date.now() - bootStartedAt);
+        },
+        (error: unknown) => {
+          branchDoneMs.set(name, -1);
+          console.error(
+            `[boot] ${name} 启动分支失败：${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+          );
+        },
+      );
+    /* 三个 void 返回的启动器（reaper / dispatch / event-loop-watch）用块体调用：
+     * 箭头简写把 void 值当返回值会被 no-confusing-void-expression 判红，
+     * 而这里的语义本来就是「调一下、不等它」。 */
+    const branches = [
+      [
+        "reaper",
+        () =>
+          import("./lib/comfyui/reaper").then((m) => {
+            m.startReaper();
+          }),
+      ],
+      [
+        "dispatch",
+        () =>
+          import("./lib/comfyui/executor-dispatch").then((m) => {
+            m.startDispatchLoop();
+          }),
+      ],
+      [
+        "film-resume",
+        () => import("./server/film/orchestrator").then((m) => m.resumeStalledFilms()),
+      ],
+      [
+        "event-loop-watch",
+        () =>
+          import("./lib/log/event-loop-watch.server").then((m) => {
+            m.startEventLoopWatch();
+          }),
+      ],
+      ["sentry", () => import("./sentry.server.config")],
+    ] as const satisfies ReadonlyArray<[string, () => Promise<unknown>]>;
+    void Promise.all(branches.map(([name, run]) => startBranch(name, run)))
+      .then(() => {
+        const detail = branches
+          .map(([name]) => `${name}=${branchDoneMs.get(name) ?? "?"}ms`)
+          .join(" · ");
+        console.info(`[boot] 后台启动分支全部完成（并行，不阻塞服务就绪）：${detail}`);
+      })
+      .catch((error: unknown) => {
+        console.error(`[boot] 启动分支汇总失败：${String(error)}`);
+      });
   }
   if (process.env.NEXT_RUNTIME === "edge") {
     await import("./sentry.edge.config");
