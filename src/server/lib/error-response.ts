@@ -8,14 +8,33 @@ import "server-only";
 import { NextResponse } from "next/server";
 
 import { AuthError, toErrorEnvelope, normalizeError } from "~/lib/core/errors";
+import { logger } from "~/server/lib/logger";
 
 /**
  * 把任意异常映射为 REST 错误响应。
  * - `AppError` 子类 → 用其 `code` 与 `httpStatus`；
  * - 其余异常 → 归一化为 500 / `"internal"`，**不泄露堆栈与内部细节**。
+ *
+ * 这里也是 REST 失败路径的**日志漏斗点**（#4092）：绝大多数 route 自身不写日志，
+ * 若本函数只回信封不落日志，5xx 就成了「客户端看得见、服务端无迹可查」的静默失败。
+ * 按状态分级：≥500 → `logger.error`（带原始 err，堆栈只进日志）；4xx → `logger.debug`
+ * （预期内的客户端错误，不进告警面，免得噪声淹没真故障）。
  */
 export function errorResponse(err: unknown): NextResponse {
   const appErr = normalizeError(err);
+  if (appErr.httpStatus >= 500) {
+    logger.error(
+      {
+        err,
+        code: appErr.code,
+        httpStatus: appErr.httpStatus,
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      "rest_error",
+    );
+  } else {
+    logger.debug({ code: appErr.code, httpStatus: appErr.httpStatus }, "rest_error_client");
+  }
   return NextResponse.json(toErrorEnvelope(appErr), {
     status: appErr.httpStatus,
   });

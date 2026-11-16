@@ -57,16 +57,36 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
 /**
  * 2. INITIALIZATION
  */
+/**
+ * tRPC 错误日志分级（#4093）：服务端故障与客户端错误必须分开。
+ * - `INTERNAL_SERVER_ERROR`（未捕获异常）→ `logger.error` 并带 stack——真 5xx
+ *   不能淹在 warn 里，也不能只留一句 message 丢掉堆栈；
+ * - 其余（BAD_REQUEST / NOT_FOUND / TIMEOUT…客户端侧错误）→ 维持 `warn`；
+ * - `UNAUTHORIZED` / `FORBIDDEN` 是预期内的鉴权拒绝（未登录探测 / 越权），不记，
+ *   免得告警面被正常流量刷成噪声。
+ */
+export function logTrpcError(error: TRPCError, path?: string): void {
+  if (error.code === "UNAUTHORIZED" || error.code === "FORBIDDEN") {
+    return;
+  }
+  const fields = {
+    code: error.code,
+    path,
+    name: error.name,
+    message: error.message,
+  };
+  if (error.code === "INTERNAL_SERVER_ERROR") {
+    logger.error({ ...fields, stack: error.stack }, "trpc_error_server_fault");
+    return;
+  }
+  logger.warn(fields, "trpc_error");
+}
+
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,
   errorFormatter({ shape, error, path }) {
-    // 生产级可观测性：所有 tRPC 错误落结构化日志
-    if (error.code !== "UNAUTHORIZED" && error.code !== "FORBIDDEN") {
-      logger.warn(
-        { code: error.code, path, name: error.name, message: error.message },
-        "trpc_error",
-      );
-    }
+    // 生产级可观测性：所有 tRPC 错误按「服务端故障 / 客户端错误」分级落结构化日志
+    logTrpcError(error, path);
     return {
       ...shape,
       data: {

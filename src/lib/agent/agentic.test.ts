@@ -8,7 +8,7 @@
  * 钉住的都是异常路径 —— 用户只在出错时看到它们，而出错时的表现是
  * 「问了一句废话 / 方案参数是空的 / 模型答了但界面卡住」，没有任何报错。
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { chatAgent, expandIdea } from "./agentic";
 
 /** 造一个 fetch 返回。 */
@@ -16,7 +16,17 @@ function mockFetch(impl: () => Promise<Response> | Response) {
   vi.stubGlobal("fetch", vi.fn(impl));
 }
 
+/* 降级告警（#4094）走 console.warn：文件级 spy 统一收音——
+ * 既压掉 fallback 用例的 stderr 噪声，也给「降级必须可见」那格当断言面。 */
+const makeWarnSpy = () => vi.spyOn(console, "warn").mockImplementation(() => undefined);
+let warnSpy: ReturnType<typeof makeWarnSpy>;
+
+beforeEach(() => {
+  warnSpy = makeWarnSpy();
+});
+
 afterEach(() => {
+  warnSpy.mockRestore();
   vi.unstubAllGlobals();
 });
 
@@ -105,6 +115,15 @@ describe("chatAgent：LLM 路径", () => {
     const res = await chatAgent([{ role: "user", content: "画只猫" }]);
     expect(res.ready).toBe(false);
     expect(res.reply).toContain("图片");
+  });
+
+  it("LLM 失败降级必须可见：先 console.warn 记告警再回落，不许静默（#4094）", async () => {
+    mockFetch(() => Promise.reject(new Error("network down")));
+    const res = await chatAgent([{ role: "user", content: "画只猫" }]);
+    expect(res.ready).toBe(false);
+    expect(res.reply).toContain("图片");
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("LLM"), expect.any(Error));
   });
 
   it("JSON 畸形（`{` 后无合法 JSON）→ 落到文本分支而不是抛错", async () => {
