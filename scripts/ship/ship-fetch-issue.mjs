@@ -21,6 +21,9 @@
  *     `issues get-imgs` 三条读命令，一次也不写平台（与 --diagnose 同族）。
  *   · 图片走**官方通道**（`get-imgs`），不再让人手拼 URL 撞 404；
  *     某张图确实取不到（平台侧已删）⇒ 原样保留链接并念一行 warn，不阻断整体。
+ *   · 落盘的 md 里图片一律换**本地相对路径**：整条 URL（含站点前缀）换掉，
+ *     不留 `https://<站点>/-/` 尾巴 —— 只换尾段会拼出看似合法实则 404 的地址
+ *     （ISSUE #4057 的现场）。
  *   · 退出码：读到 issue ⇒ 0；issue 取不到 / 没有执行者 ⇒ 2（「没跑起来」，
  *     不是「内容为空」）。
  */
@@ -31,17 +34,37 @@ import process from "node:process";
 import { CODE } from "./ship-codes.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 
-/** issue/PR 图片链接的尾段形状（cnb-api 约定：imgs/<issues|pulls>/<ID>/<key>/<文件名>）。 */
-const IMG_TAIL_RE = /imgs\/(?:issues|pulls)\/[A-Za-z0-9._/-]+/g;
+/** 图片链接（完整形态：可带 `scheme://站点/` 前缀，也可裸尾段）。
+ *  #4057：改写必须吃掉**整个 URL** —— 只换 `imgs/issues/...` 尾段会把
+ *  `https://<站点>/-/` 留在原地，拼出「看似合法实则 404」的地址。 */
+const IMG_URL_RE = /(?:https?:\/\/[^\s"'()<>]+?)?imgs\/(?:issues|pulls)\/[A-Za-z0-9._/-]+/g;
 
 /** 评论分页：单页 50、最多 5 页（250 条评论的封顶，超过的极少见、真有就明说）。 */
 const COMMENTS_PAGE_SIZE = 50;
 const COMMENTS_MAX_PAGES = 5;
 
 /**
- * 从一段 markdown 里按出现顺序抽**去重**的图片尾段。
- * 纯函数：不认协议、不认域名，只认平台图片链接的固定尾段形状——
+ * 从一段 markdown 里按出现顺序抽**去重**的图片完整链接（可带 scheme + 站点前缀）。
+ * 纯函数：不认协议之外的具体站点，只认平台图片链接的固定形状——
  * 这样正文、评论、相对/绝对链接都覆盖，且不会被 `)` / 空格 / 中文标点带偏。
+ *
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function extractImageUrls(text) {
+  /** @type {string[]} */
+  const found = [];
+  for (const m of String(text ?? "").matchAll(IMG_URL_RE)) {
+    if (!found.includes(m[0])) {
+      found.push(m[0]);
+    }
+  }
+  return found;
+}
+
+/**
+ * 从一段 markdown 里按出现顺序抽**去重**的图片尾段（`get-imgs --img-path`
+ * 要的就是尾段）。纯函数。
  *
  * @param {string} text
  * @returns {string[]}
@@ -49,8 +72,8 @@ const COMMENTS_MAX_PAGES = 5;
 export function extractImageTails(text) {
   /** @type {string[]} */
   const found = [];
-  for (const m of String(text ?? "").matchAll(IMG_TAIL_RE)) {
-    const tail = m[0];
+  for (const url of extractImageUrls(text)) {
+    const tail = url.slice(url.indexOf("imgs/"));
     if (!found.includes(tail)) {
       found.push(tail);
     }
@@ -59,15 +82,15 @@ export function extractImageTails(text) {
 }
 
 /**
- * 把文本里的图片链接换成**本地相对路径**（已成功下载的）；取不到的原样保留。
- * 纯函数：`mapping` 是 尾段 → 本地相对路径。
+ * 把文本里的图片链接（整个 URL，含站点前缀）换成**本地相对路径**（已成功
+ * 下载的）；取不到的原样保留。纯函数：`mapping` 是 完整链接 → 本地相对路径。
  *
  * @param {string} text
  * @param {Map<string, string>} mapping
  * @returns {string}
  */
 export function rewriteImageLinks(text, mapping) {
-  return String(text ?? "").replaceAll(IMG_TAIL_RE, (tail) => mapping.get(tail) ?? tail);
+  return String(text ?? "").replaceAll(IMG_URL_RE, (url) => mapping.get(url) ?? url);
 }
 
 /**
@@ -248,23 +271,33 @@ export function runFetchIssue(io) {
   const imgsDir = path.join(dir, "imgs");
   fs.mkdirSync(imgsDir, { recursive: true });
 
-  /* 图片：正文 + 全部评论按序抽尾段，去重下载；成功的换本地相对路径。 */
+  /* 图片：正文 + 全部评论按序抽完整链接，去重下载；成功的把**整个链接**换成
+   * 本地相对路径（#4057：只换尾段会留下 `https://<站点>/-/`，拼出 404 地址）。
+   * 同一张图以不同形态（带域名 / 裸尾段）出现时按尾段去重，只下载一次。 */
   const mapping = new Map();
   const usedNames = new Set();
-  const tails = [
-    ...extractImageTails(body),
-    ...comments.flatMap((c) => extractImageTails(c.body)),
-  ].filter((tail, i, all) => all.indexOf(tail) === i);
+  const tailToName = new Map();
+  const urls = [
+    ...extractImageUrls(body),
+    ...comments.flatMap((c) => extractImageUrls(c.body)),
+  ].filter((url, i, all) => all.indexOf(url) === i);
   let failed = 0;
-  for (const tail of tails) {
-    const localName = imageLocalName(tail, usedNames);
-    const ok = downloadImage({ run, log, slug, tail, dest: path.join(imgsDir, localName) });
-    if (ok) {
-      mapping.set(tail, `imgs/${localName}`);
-    } else {
-      failed += 1;
+  for (const url of urls) {
+    const tail = url.slice(url.indexOf("imgs/"));
+    if (!tailToName.has(tail)) {
+      const localName = imageLocalName(tail, usedNames);
+      const ok = downloadImage({ run, log, slug, tail, dest: path.join(imgsDir, localName) });
+      tailToName.set(tail, ok ? localName : null);
+      if (!ok) {
+        failed += 1;
+      }
+    }
+    const name = tailToName.get(tail);
+    if (name !== null) {
+      mapping.set(url, `imgs/${name}`);
     }
   }
+  const tails = [...tailToName.keys()];
 
   const rewrittenBody = rewriteImageLinks(body, mapping);
   const rewrittenComments = comments.map((c, i) => ({
