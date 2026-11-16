@@ -8,7 +8,9 @@ import { asRecord } from "~/lib/is-record";
 export const projectRouter = createTRPCRouter({
   /* GET /api/projects —— 读 */
   list: authedProcedure.query(async ({ ctx }) => {
-    return projectRepository.listByUser(ctx.user.id);
+    const rows = await projectRepository.listByUser(ctx.user.id);
+    /* 容量保护：单用户项目数通常有限，仍加上上限避免异常数据放大响应（#4061）。 */
+    return rows.slice(0, 500);
   }),
 
   /* POST /api/projects —— 新建：upsert (client-generated id) */
@@ -92,14 +94,21 @@ export const projectRouter = createTRPCRouter({
 
   /* GET /api/projects/[id]/outputs —— 读 */
   outputs: authedProcedure
-    .input(z.object({ projectId: z.string() }))
+    .input(
+      z.object({
+        projectId: z.string(),
+        /* 容量保护：避免一次返回过大的输出集合（#4061）。 */
+        take: z.number().int().min(1).max(2000).optional().default(500),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const project = await projectRepository.findById(input.projectId);
       if (project?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "项目不存在" });
       }
       const tasks = await taskRepository.findByProjectIdWithImages(input.projectId);
-      const outputs = tasks.map((task) => {
+      const limited = tasks.slice(0, input.take);
+      const outputs = limited.map((task) => {
         // params 是任务表的 JSON 列:非对象(标量)时所有属性读取均为 undefined,与原
         // `(task.params ?? {}) as Record<string, any>` 的读取结果一致。
         const rawParams: unknown = task.params ?? {};
