@@ -62,9 +62,8 @@
  * node scripts/ci/ci-pr-failure-issue.mjs --lane package --no-block  # 桌面成品包那一档
  * ```
  *
- * `--lane` 是 ISSUE #2550 加的：同一份读写链今天也被桌面成品包那两个触发口
- * （`crontab: 0 2 * * *` / `web_trigger_package`）引用，而那一档**没有 PR 可挂**。
- * 不给它就照旧只认 `pull_request` 那一族（那一族今天因为令牌限制写不动，见 #2339），
+ * `--lane` 是 ISSUE #2550 加的：同一份读写链今天也被桌面成品包 / push 那几个触发口
+ * 引用，而那些档**没有 PR 可挂**。不给它就照旧只认 `pull_request` 那一族，
  * 给了它这一格才把非 PR 事件也算进来，并且标题 / 去重键按档分开。
  */
 import fs from "node:fs";
@@ -169,9 +168,7 @@ export function resolveTarget({ env, list, sn, lane = null }) {
   const eventUrl = String(row?.eventUrl ?? "");
   const prIid = /^\d+$/.test(fromEnv) ? Number(fromEnv) : prIidFromUrl(eventUrl);
   /* `--lane` 是「这一档的立案口就是我」的显式声明（ISSUE #2550）：给了它，非
-   * `pull_request` 事件同样归本格管 —— 桌面成品包那一档（`crontab: 0 2 * * *` /
-   * `web_trigger_package`）没有 PR 可挂，它的红今天是**一点都看不见**的
-   * （PR 那一档是另一种形状：格子有、写不动 —— 令牌只有 `repo-code:r`，见 #2339）。
+   * `pull_request` 事件同样归本格管 —— 桌面成品包 / push 那几档没有 PR 可挂。
    * 没有 `--lane` 时那些跑仍然一律不写 —— 那一处才知道两种形状的区别。 */
   const declaredLane = lane !== null && String(lane).trim() !== "" ? String(lane).trim() : null;
   const yesPR =
@@ -531,20 +528,21 @@ export function main(io = {}) {
      * 拿它当门槛就是恒真（ISSUE #3298）。 */
     list = fetchBuildList(run, slug, lane && lane !== "pr" ? "" : "pull_request", 60, { log });
     if (!list) {
-      /* 这一句是这一格**唯一**的失效形态（它是 `endStages`，退出码不构成流水线结论），
-       * 所以要把「下一次该谁做什么」也写在这里，而不是只留一句「取不到」。
-       * 2026-10-25 的现场读数（`cnb-uh5-1k5olev2q`）：平台原话是 `errcode 10023`
-       * 加一句 `Missing required scopes: repo-cnb-history:r` —— 即**流水线里的
-       * `CNB_TOKEN` 少了「构建历史只读」**这一项。它按事件类型分配
-       * （官方 `zh/build/build-in-env.md` §CNB_TOKEN）：`pull_request` 属可信事件本应有，
-       * 所以这一行读数是配置面的问题，代码改不动它 —— 出路是让这一跑拿到那份 scope。 */
+      /* 列表取不到**不再收工**（ISSUE #3491）：平台把流水线里的 `cnb_cli` 应用形态
+       * 挡在 `repo-cnb-history:r` 之外（现场原话 `errcode 10025 / High-risk operation…`；
+       * 2026-10-25 那次是 `10023 Missing required scopes`，同一枚 scope），PR 档在这一步
+       * **恒取不到**。而列表在这里只用来认「这一跑是谁 / 事件是什么」，判红走的是
+       * `get-build-status` 的逐格读数（ISSUE #3298）—— 平台已无条件注入
+       * `CNB_BUILD_ID`（本跑 sn）与 `CNB_PULL_REQUEST_IID`（落点 PR），身份改认环境变量
+       * 即可继续；没有 `--lane` 又认不出 PR 号 / 事件的那几跑，照旧由 `resolveTarget()`
+       * 落成「不归本格管 ⇒ 不写」。**不许**为过这一关往流水线里塞个人令牌
+       * （硬规则 17 / #2339）。 */
       log(
-        "[pr-failure-issue] 取不到构建列表 ⇒ 没有结论，一次都不写。" +
-          "原因见上面 `[build-readout]` 那一行；若是 `Missing required scopes: repo-cnb-history:r`，" +
-          "那是这一跑的 `CNB_TOKEN` 权限面（官方 build-in-env.md §CNB_TOKEN 按事件类型分配），" +
-          "不是这一格的判据。",
+        "[pr-failure-issue] 构建列表取不到（`cnb_cli` 应用形态没有 `repo-cnb-history:r`，" +
+          "见 #3491；原因见上面 `[build-readout]` 那一行）⇒ " +
+          "身份改认平台注入的环境变量（`CNB_BUILD_ID` / `CNB_PULL_REQUEST_IID` / `CNB_BUILD_EVENT`），" +
+          "继续按逐格读数判红没红。",
       );
-      return finish(CODE.NO_FACT, "取不到构建列表");
     }
   }
 
