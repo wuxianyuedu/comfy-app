@@ -560,9 +560,12 @@ describe("ModelRepository", () => {
     });
     await modelRepository.setAvailabilityByFolder("loras", false);
 
-    expect((await modelRepository.list()).map((m) => m.name)).toEqual(["DreamShaper"]);
-    expect(await modelRepository.list({ type: "LORA" })).toEqual([]);
-    expect((await modelRepository.list({ q: "dream" })).map((m) => m.name)).toEqual([
+    const listed = await modelRepository.list();
+    expect(listed.rows.map((m) => m.name)).toEqual(["DreamShaper"]);
+    /* total 是同条件下的可用模型总数（#4049）：rows 封顶 300，超限时可表达「还有更多」。 */
+    expect(listed.total).toBe(1);
+    expect((await modelRepository.list({ type: "LORA" })).rows).toEqual([]);
+    expect((await modelRepository.list({ q: "dream" })).rows.map((m) => m.name)).toEqual([
       "DreamShaper",
     ]);
   });

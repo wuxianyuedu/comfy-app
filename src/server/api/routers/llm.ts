@@ -91,7 +91,9 @@ const providerInputSchema = z.object({
 const modelInputSchema = z.object({
   apiFormat: z.enum(LLM_API_FORMATS).nullish(),
   apiKey: z.string().nullish(),
-  baseUrl: z.string().nullish(),
+  /* 与供应商级 / configSave 级同一校验（#4049）：模型行的坏 baseUrl 会在运行期
+   * 按「模型级 → 供应商级」覆盖好值。空值放行（nullish = 未配置 / 清空）。 */
+  baseUrl: z.string().refine(isHttpUrl, { message: "Base URL 必须为 http/https" }).nullish(),
   capabilities: z.array(z.enum(MODEL_CAPABILITIES)).nullish(),
   contextWindow: z.number().int().positive().nullish(),
   /** 图像 / 视频模型的接口端点动作路径（#3656）：写侧按行用途白名单收窄。 */

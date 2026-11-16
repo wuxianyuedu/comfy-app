@@ -56,6 +56,9 @@ export const season = sqliteTable(
   ],
 );
 
+/** 集状态词表（#4049）：路由的 zod 与列的取值同源，不再两处手抄。 */
+export const EPISODE_STATUSES = ["draft", "producing", "done"] as const;
+
 export const episode = sqliteTable(
   "episode",
   {

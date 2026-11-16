@@ -17,7 +17,7 @@ import {
   loadSeries,
 } from "./series-shared";
 import { seriesCharacterProcedures } from "./series-character";
-import { episode, season, series } from "~/server/db/schema";
+import { EPISODE_STATUSES, episode, season, series } from "~/server/db/schema";
 
 export const seriesRouter = createTRPCRouter({
   // ───────────────────────────── 系列 (FR-SR-01) ─────────────────────────────
@@ -192,7 +192,7 @@ export const seriesRouter = createTRPCRouter({
         title: z.string().max(120).optional(),
         synopsis: z.string().max(4000).optional(),
         targetDurationSec: z.number().int().positive().optional(),
-        status: z.enum(["draft", "producing", "done"]).optional(),
+        status: z.enum(EPISODE_STATUSES).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -236,7 +236,7 @@ export const seriesRouter = createTRPCRouter({
         title: z.string().max(120).optional(),
         synopsis: z.string().max(4000).optional(),
         targetDurationSec: z.number().int().positive().optional(),
-        status: z.enum(["draft", "producing", "done"]).optional(),
+        status: z.enum(EPISODE_STATUSES).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

@@ -12,8 +12,9 @@ export const modelRouter = createTRPCRouter({
   list: authedProcedure
     .input(z.object({ type: z.string().optional(), q: z.string().optional() }).optional())
     .query(async ({ input }) => {
-      const models = await modelRepository.list(input ?? {});
-      return { models };
+      const { rows, total } = await modelRepository.list(input ?? {});
+      /* total 随响应透出（#4049）：rows 封顶 300，超限时调用方能表达「还有更多」。 */
+      return { models: rows, total };
     }),
 
   /* POST /api/models/sync —— 新建：rescan model folders */
