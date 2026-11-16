@@ -19,19 +19,14 @@ import {
 import type { ModeContractEditorController } from "../hooks/use-mode-contract-editor";
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
-import { FieldLabel } from "~/components/ui/field";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Hint } from "~/components/ui/hint";
-import { SelectMenu } from "~/components/ui/select-menu";
 import { PageHeader } from "~/components/ui/page-header";
 import { SectionLabel } from "~/components/ui/section-label";
 import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ContractInputCatalog } from "./ContractInputCatalog";
+import { ContractRequiredToggle } from "../ContractRequiredBadge";
 import { ModeContractModeNav } from "./ModeContractModeNav";
-
-/** 输出类别的唯一取值清单（下拉选项与回写校验共用）。 */
-const OUTPUT_OPTIONS: Array<ModeContract["output"]> = ["image", "video", "audio"];
 
 /** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id。 */
 function LabelWithId({ label, id }: { id: string; label: string }) {
@@ -88,7 +83,7 @@ export function ModeContractEditorView({
             <ModeContractDraftPanel controller={controller} draft={draft} />
           ) : (
             <p className="text-muted-foreground pt-2 text-sm">
-              从左侧选一条模式，配置它对外有哪些统一输入 / 输出。
+              从左侧选一条模式，配置它对外有哪些统一输入。
             </p>
           )}
         </div>
@@ -102,7 +97,7 @@ export function ModeContractEditorView({
 }
 
 /**
- * 当前模式契约的编辑区 —— 输入口清单 + 参数库 + 输出类别 + 保存。
+ * 当前模式契约的编辑区 —— 输入口清单 + 参数库 + 保存。
  * 抽成局部组件只为让 `ModeContractEditorView` 那层只剩「布局」（规范 §12.13）。
  */
 function ModeContractDraftPanel({
@@ -134,11 +129,11 @@ function ModeContractDraftPanel({
         trigger={<>口径说明（必备口、尺寸的两类写法）</>}
       >
         <p>
-          「必备」表示这条模式
+          「必填」表示这条模式
           <span className="text-ink font-medium">少不得</span>
           这个口：本地工作流缺它的落点时，「工坊封装」会判为未配置
-          （工坊驱动不起来）。哪些口必备按模式配，不写死在代码里 ——
-          例如纯文生图把「提示词」勾必备、「负向提示词」不勾。
+          （工坊驱动不起来）。哪些口必填按模式配，不写死在代码里 ——
+          例如纯文生图把「提示词」标成必填、「负向提示词」标成可选（点口名旁的徽标就能翻面）。
         </p>
         <p>
           「尺寸」是两类等价的写法，在尺寸选择器里任选其一：比例 + 分辨率（1k / 2k / 4k），或 比例 +
@@ -180,26 +175,8 @@ function ModeContractDraftPanel({
         onRenameCustom={controller.renameCustomInput}
       />
 
-      <div>
-        <SectionLabel>输出类别</SectionLabel>
-        <SelectMenu
-          aria-label="该模式的输出类别"
-          className="text-xs"
-          labels={{
-            image: "图片（image）",
-            video: "视频（video）",
-            audio: "音频（audio）",
-          }}
-          onChange={(value) => {
-            const output = OUTPUT_OPTIONS.find((item) => item === value);
-            if (output !== undefined) {
-              controller.setOutput(output);
-            }
-          }}
-          options={OUTPUT_OPTIONS}
-          value={draft.output}
-        />
-      </div>
+      {/* 输出类别不再是契约的一格（ISSUE #4072）：模式本身已按类别区分
+          （左栏就按类别分组），再让用户为每个模式挑一次是重复选择。 */}
 
       {!draft.inputs.includes("prompt") && (
         <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
@@ -268,7 +245,7 @@ function ModeContractDraftPanel({
 }
 
 /** 输入口清单里的一行：序号 + 名称（悬停给类型，`size` 展开到组成，ISSUE #3762）
- *  + 调序 / 必备 / 移除。 */
+ *  + 调序 / 必填·可选（徽标即开关，ISSUE #4072）/ 移除。 */
 function ContractInputRow({
   controller,
   draft,
@@ -283,30 +260,48 @@ function ContractInputRow({
   const label = modeContractInputIdLabel(input, draft.customInputs);
   const kind = customInputKindOf(input);
   const typeInfo = contractInputTypeInfo(input, draft.customInputs ?? []);
+  const required = controller.isRequired(input);
 
   return (
     <div className="border-border bg-bg flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
-      {/* 类型与描述分两行（ISSUE #3778）：类型值用英文（与口 id 同一语言），
-          描述另起一行；无类型信息（未知口）时只给描述一行。 */}
-      <Hint
-        label={
-          <span>
-            {typeInfo.type !== "" && <span className="block">类型：{typeInfo.type}</span>}
-            <span className="block">{typeInfo.description}</span>
-          </span>
-        }
-        wrap
-      >
-        <span className="text-ink min-w-0 cursor-help text-sm">
-          <span className="text-muted-foreground mr-1 tabular-nums">{index + 1}.</span>
-          <LabelWithId id={input} label={label} />
-          {kind && (
-            <span className="text-muted-foreground bg-subtle border-border-strong text-2xs ml-2 rounded border px-1.5 py-0.5">
-              {customInputKindLabel(kind)}
+      <span className="flex min-w-0 items-center gap-2">
+        {/* 类型与描述分两行（ISSUE #3778）：类型值用英文（与口 id 同一语言），
+            描述另起一行；无类型信息（未知口）时只给描述一行。 */}
+        <Hint
+          label={
+            <span>
+              {typeInfo.type !== "" && <span className="block">类型：{typeInfo.type}</span>}
+              <span className="block">{typeInfo.description}</span>
             </span>
-          )}
-        </span>
-      </Hint>
+          }
+          wrap
+        >
+          <span className="text-ink min-w-0 cursor-help text-sm">
+            <span className="text-muted-foreground mr-1 tabular-nums">{index + 1}.</span>
+            <LabelWithId id={input} label={label} />
+            {kind && (
+              <span className="text-muted-foreground bg-subtle border-border-strong text-2xs ml-2 rounded border px-1.5 py-0.5">
+                {customInputKindLabel(kind)}
+              </span>
+            )}
+          </span>
+        </Hint>
+        {/* 必填 / 可选：徽标即开关（点一下改这个口的「必备」状态）。此前那一格
+            是「勾选框 + 一句固定的『必备』」—— 勾上写「必备」、没勾也写
+            「必备」，读的人看不出「没勾 = 可选」。 */}
+        <Hint
+          label="必备口：本地工作流缺它的落点时，工坊里驱动不起来（点一下改这一口必不必备）"
+          wrap
+        >
+          <ContractRequiredToggle
+            onToggle={() => {
+              controller.toggleRequired(input);
+            }}
+            required={required}
+            srLabel={label}
+          />
+        </Hint>
+      </span>
       <span className="flex shrink-0 items-center gap-1.5">
         {/* 顺序**就是**工坊对外的参数顺序（序号即数组下标），
             所以调序改的是契约本身，不是界面偏好。 */}
@@ -336,19 +331,6 @@ function ContractInputRow({
             ↓
           </Button>
         </span>
-        <FieldLabel
-          className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs"
-          title="必备口：本地工作流缺它的落点时，工坊里驱动不起来"
-        >
-          <Checkbox
-            checked={controller.isRequired(input)}
-            className="size-4"
-            onCheckedChange={() => {
-              controller.toggleRequired(input);
-            }}
-          />
-          必备
-        </FieldLabel>
         {/* 最后一口禁删的说明走 Hint（P82：不用原生 title=）；禁用态弹不出
             原因，按组件口径挂 wrap 锚点。 */}
         <Hint
