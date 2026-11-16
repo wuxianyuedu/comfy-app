@@ -18,7 +18,7 @@ import {
   type TaskLogEntry,
   type WorkshopWorkflowOption,
 } from "~/lib/workshop/generation-client";
-import { debugBodyOf } from "~/lib/workshop/api-channel-core";
+import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import {
   pruneEmptyExposedValues,
@@ -82,6 +82,9 @@ export async function runWorkflowModelTest(args: {
   onNotice?: (text: string) => void;
   /** 任务进度（SSE state 帧；整百分比变化才上报，避免逐帧重渲）。 */
   onProgress?: (progress: { label?: string; pct: number }) => void;
+  /** 本地提交行（封装算出的 workflowInputs 落点清单）：发起前先上抛给
+   *  请求详情的「本地提交」行（#4080 评论 8 / 评论 13）。 */
+  onSubmissionRow?: (row: ApiCallDebugRow) => void;
   /** 参考图组（data URL，已按「多张参考图，否则单图行」归并）。 */
   referenceImages: ReadonlyArray<string>;
   signal: AbortSignal;
@@ -140,32 +143,31 @@ export async function runWorkflowModelTest(args: {
   }
 
   const startedAt = Date.now();
-  /* 本地提交行（与 relay 行同形）：点生成即出现在请求详情里。 */
-  args.onDebug([
-    {
-      body: debugBodyOf({
-        kind,
-        debug: true,
-        workflow: workflow.name,
-        mode,
-        prompt: exposed.prompt ?? "",
-        /* 完整的落点清单（口 → 节点 → 值）：尺寸等输入有没有真的进提交参数，
-         * 在这里逐条可见；没落进端口的口在 unmatched 里如实列出。 */
-        workflowInputs: built.input.workflowInputs ?? [],
-        ...(built.unmatched.length > 0 ? { unmatched: built.unmatched } : {}),
-        ...(uploadedRefs.files.length > 0 ? { referenceImages: uploadedRefs.files } : {}),
-        ...(uploadedFirstFrame.files[0] === undefined
-          ? {}
-          : { firstFrame: uploadedFirstFrame.files[0] }),
-      }),
-      durationMs: null,
-      endpoint: "generate.generate（本地 ComfyUI）",
-      excerpt: null,
-      ok: true,
-      phase: "relay",
-      status: null,
-    },
-  ]);
+  /* 本地提交行（与 relay 行同形）：发起前先上抛，请求详情的「本地提交」行
+   * 用它显示完整的落点清单（#4080 评论 8 / 评论 13）。 */
+  args.onSubmissionRow?.({
+    body: debugBodyOf({
+      kind,
+      debug: true,
+      workflow: workflow.name,
+      mode,
+      prompt: exposed.prompt ?? "",
+      /* 完整的落点清单（口 → 节点 → 值）：尺寸等输入有没有真的进提交参数，
+       * 在这里逐条可见；没落进端口的口在 unmatched 里如实列出。 */
+      workflowInputs: built.input.workflowInputs ?? [],
+      ...(built.unmatched.length > 0 ? { unmatched: built.unmatched } : {}),
+      ...(uploadedRefs.files.length > 0 ? { referenceImages: uploadedRefs.files } : {}),
+      ...(uploadedFirstFrame.files[0] === undefined
+        ? {}
+        : { firstFrame: uploadedFirstFrame.files[0] }),
+    }),
+    durationMs: null,
+    endpoint: "generate.generate（本地 ComfyUI）",
+    excerpt: null,
+    ok: true,
+    phase: "relay",
+    status: null,
+  });
 
   const taskId = await startLocalGenerate(built.input);
   let closer: () => void = () => undefined;
@@ -173,10 +175,19 @@ export async function runWorkflowModelTest(args: {
   const result = await withTimeoutResult<WorkflowTestResult | null>(
     new Promise<WorkflowTestResult>((resolve, reject) => {
       let settled = false;
+      /* 取消（abort）本身也要走 settle：此前的 `!signal.aborted` 守卫把取消
+       * 路径自己拦死了 —— 点击取消生成毫无效果、要等 30 分钟超时（#4080
+       * 评论 12）。终态只判 `settled`；「取消后不再接受产物/失败收尾」由
+       * 调用处用 settleUnlessAborted 表达。 */
       const settle = (fn: () => void) => {
-        if (!settled && !signal.aborted) {
+        if (!settled) {
           settled = true;
           fn();
+        }
+      };
+      const settleUnlessAborted = (fn: () => void) => {
+        if (!signal.aborted) {
+          settle(fn);
         }
       };
       closer = watchTask(taskId, {
@@ -197,13 +208,13 @@ export async function runWorkflowModelTest(args: {
           /* 图片测试只要图片产物、视频测试只要视频产物（另一类是别的阶段的）。 */
           const wanted = kind === "video" ? out.kind !== "image" : out.kind === "image";
           if (wanted) {
-            settle(() => {
+            settleUnlessAborted(() => {
               resolve({ kind, url: out.url });
             });
           }
         },
         onSettled: (r) => {
-          settle(() => {
+          settleUnlessAborted(() => {
             reject(new Error(r.ok ? "任务完成但没有可用产物" : (r.message ?? "本地任务失败")));
           });
         },
