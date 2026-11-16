@@ -11043,6 +11043,16 @@ exec node scripts/gates/check-pending-merge-loss.mjs "$2"          # ② 内容�
    是 git 自己的簿记目录，不是放工作树的地方。契约判据
    `tests/worktree-location.test.ts` 扫全仓调用点守着这条（正/负控在场）。
 
+   **worktree 里也不许放指向主检出的 junction / symlink**（ISSUE #4058 现场）：为省一次
+   冷装，把主检出的 `node_modules` 用 `mklink /J` 接进临时 worktree 后跑测试，随后
+   `git worktree remove --force` 清理该 worktree —— 目录删除**沿 junction 递归进了链接
+   目标**，主检出的依赖被整棵删空（`ls node_modules` = 0 项，`vitest` / `oxlint` / `tsc`
+   全部 `Command not found`），只能 `pnpm install --frozen-lockfile` 重装。口径：
+   **worktree 里不要放指向主检出的 junction / symlink**（尤其 `node_modules`）；共享依赖
+   要么每树自装（`pnpm install --frozen-lockfile`），要么用 pnpm 自身的共享机制，不要用
+   目录链接；**删 worktree 前先拆掉这类链接**。将来谁写 worktree 清理工具，判据必须
+   「先拆链、再删树」。
+
 2. **判断它挡不挡路**：挡路（硬闸类，所有人都提交不了）就地修掉；不挡路（棘轮类、
    或测试基线红）按 §11.12 登记进 `KNOWN_FAILED_FILES` 并写清归属与「别处更强的执行者」。
 3. **修了就写清归属**：硬闸红随本批一起修时，**单独一个 commit + 单独一条
