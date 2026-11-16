@@ -16,7 +16,7 @@ const { requireRequestUser, probeComfyUi, ensureComfyUiReady, logger } = vi.hois
   requireRequestUser: vi.fn<() => Promise<{ id: string } | null>>(),
   probeComfyUi: vi.fn<(ms: number) => Promise<string | null>>(),
   ensureComfyUiReady: vi.fn<(options: EnsureOptions) => Promise<unknown>>(),
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock("~/server/auth/request-user", () => ({
@@ -36,6 +36,7 @@ beforeEach(() => {
   requireRequestUser.mockResolvedValue({ id: "u-1" });
   probeComfyUi.mockReset();
   ensureComfyUiReady.mockReset();
+  logger.debug.mockClear();
   logger.info.mockClear();
   logger.error.mockClear();
 });
