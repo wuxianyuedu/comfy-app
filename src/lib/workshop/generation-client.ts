@@ -183,10 +183,14 @@ function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption 
   };
 }
 
-/** 拉取工作流列表，供工坊选择「用哪个工作流库工作流生成」。 */
+/** 拉取工作流列表，供工坊选择「用哪个工作流库工作流生成」。
+ *
+ *  workflow.list 的返回形状是 `{ workflows, localPending, localRoots }`
+ *  （本地工作流根目录跟踪加入后，#4119）；历史上是裸数组 —— 两种形状都认，
+ *  取 `workflows` 数组，否则「生成资源」与测试模型页的候选会恒为空。 */
 export async function fetchWorkshopWorkflows(): Promise<Array<WorkshopWorkflowOption>> {
   const res = await vanillaApi.workflow.list.query({});
-  const rows: unknown = res;
+  const rows: unknown = Array.isArray(res) ? res : isRecord(res) ? res.workflows : res;
   if (!Array.isArray(rows)) {
     return [];
   }
@@ -545,6 +549,7 @@ export {
   apiPreviewRequest,
   apiSubmitVideo,
   fetchApiChannels,
+  pollVideoUntilDone,
   prepareLocalInputImage,
   preparePortraitReferences,
   type ApiVideoSubmitResult,

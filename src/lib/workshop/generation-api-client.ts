@@ -8,6 +8,7 @@
 // 每份网络载荷都用 unknown 守卫收窄（不做类型断言）。
 
 import { isRecord } from "~/lib/is-record";
+import { sleep } from "~/lib/with-timeout";
 import type { ApiCallDebugRow as ApiRelayDebugRow } from "./api-channel-core";
 import type { ApiChannelView, ApiChannelsView } from "./api-channel-shared";
 import type { Character } from "./types";
@@ -264,6 +265,49 @@ export async function apiSubmitVideo(
   }
   const url = typeof data.url === "string" && data.url ? data.url : undefined;
   return { url, pending: url === undefined };
+}
+
+/* 视频任务的轮询循环（#3949 需求 5 起带取消信号）：3s 一轮 / 10 分钟上限，
+ * 与 VideoStudio 同一节奏。用户 abort 后下一轮立即以「已取消生成」落定。
+ * 从测试页的 use-model-test 拆来（§12.13：宿主文件越过行数硬闸）—— 它只
+ * 服务测试页，但轮询口径与 VideoStudio 的 pollApiVideo 同族，住回这里与
+ * apiPollVideo 作伴。 */
+const TEST_VIDEO_POLL_INTERVAL_MS = 3000;
+const TEST_VIDEO_POLL_DEADLINE_MS = 600_000;
+
+export async function pollVideoUntilDone(args: {
+  mode: string;
+  model: string;
+  onDebug: RelayDebugSink;
+  signal: AbortSignal;
+  taskId: string;
+}): Promise<{ kind: "video"; url: string }> {
+  const deadline = Date.now() + TEST_VIDEO_POLL_DEADLINE_MS;
+  while (Date.now() < deadline) {
+    if (args.signal.aborted) {
+      throw new Error("已取消生成");
+    }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一轮轮询用前一轮的结果
+    await sleep(TEST_VIDEO_POLL_INTERVAL_MS);
+    if (args.signal.aborted) {
+      throw new Error("已取消生成");
+    }
+    // oxlint-disable-next-line no-await-in-loop -- 同上
+    const round = await apiPollVideo(args.taskId, {
+      debug: true,
+      mode: args.mode,
+      model: args.model,
+      onDebug: args.onDebug,
+      signal: args.signal,
+    });
+    if (round.url !== undefined && round.url !== "") {
+      return { kind: "video", url: round.url };
+    }
+    if (!round.pending) {
+      throw new Error("API 视频任务已结束但未返回视频");
+    }
+  }
+  throw new Error("API 视频任务轮询超时（约 10 分钟）—— 可稍后重试");
 }
 
 /* 把生成出/参考用的图片上传进本机 ComfyUI 的 input 目录，
