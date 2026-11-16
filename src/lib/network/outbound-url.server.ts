@@ -3,6 +3,8 @@ import "server-only";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
+import { upperTokenOr } from "~/lib/upper-token";
+
 /**
  * 服务端出网 URL 的统一约束入口（单一实现，#3904/#4052）。
  *
@@ -370,7 +372,7 @@ export async function safeFetch(input: string | URL, init: SafeFetchInit): Promi
     const location = redirectLocation(res, new URL(currentUrl));
     // 丢弃重定向响应体，释放连接（不阻塞后续跳转）
     if (res.body !== null) {
-      void res.body.cancel();
+      void res.body.cancel().catch(() => undefined);
     }
 
     if (location === null) {
@@ -382,7 +384,7 @@ export async function safeFetch(input: string | URL, init: SafeFetchInit): Promi
     remaining -= 1;
 
     // 303 / 301(POST->GET 语义由 fetch 实现差异处理，这里按安全保守：POST/非GET在跨跳时改GET)
-    const method = (requestInit.method ?? "GET").toUpperCase();
+    const method = upperTokenOr(requestInit.method, "GET");
     if (
       (res.status === 303 || res.status === 301 || res.status === 302) &&
       method !== "GET" &&
