@@ -96,3 +96,53 @@ describe("startEventLoopWatch 启动侧", () => {
     expect(vi.getTimerCount()).toBe(1);
   });
 });
+
+describe("状态跨模块实例存活（dev 热重载，ISSUE #4140）", () => {
+  /* 现场：应用运行期改写 src 里的源码文件（如侧栏偏好落盘）触发 Turbopack 热重载，
+   * `event-loop-watch.server.ts` 被重新实例化，而 `instrumentation.register()` 每进程
+   * 只跑一次 —— 模块级状态随旧实例变孤儿，`/api/dev/loop-blocks` 从此永远
+   * `running:false, blocks:[]`，恢复消息读不到阻塞事实。状态挂 globalThis 后，
+   * 新实例必须接得上旧实例的运行标记与记录。 */
+  beforeEach(() => {
+    resetEventLoopWatchForTests();
+  });
+
+  afterEach(() => {
+    resetEventLoopWatchForTests();
+    vi.resetModules();
+  });
+
+  it("模块重新实例化后，运行标记与已记阻塞不丢", async () => {
+    startEventLoopWatch();
+    eventLoopBeat(1000);
+    expect(eventLoopBeat(6000)).not.toBeNull(); // 一次 4s 阻塞
+
+    // 模拟热重载：清掉模块注册表再重新加载 —— 新实例、同一个 globalThis。
+    vi.resetModules();
+    const revived = await import("~/lib/log/event-loop-watch.server");
+
+    expect(revived.eventLoopWatchRunning()).toBe(true);
+    expect(revived.latestEventLoopBlocks()).toHaveLength(1);
+    expect(revived.latestEventLoopBlocks()[0]?.driftMs).toBe(4000);
+    // 新实例的心跳接在同一条基准上：恢复后第一拍不把旧阻塞记成第二条。
+    expect(revived.eventLoopBeat(7000)).toBeNull();
+    expect(revived.latestEventLoopBlocks()).toHaveLength(1);
+  });
+
+  it("新实例上重复启动不叠加定时器（旧实例的心跳还活着）", async () => {
+    vi.useFakeTimers();
+    try {
+      startEventLoopWatch();
+      expect(vi.getTimerCount()).toBe(1);
+
+      vi.resetModules();
+      const revived = await import("~/lib/log/event-loop-watch.server");
+      revived.startEventLoopWatch();
+
+      expect(revived.eventLoopWatchRunning()).toBe(true);
+      expect(vi.getTimerCount()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
