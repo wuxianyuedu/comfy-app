@@ -12,8 +12,7 @@
 // **本机覆盖是「改一档即存」**（ISSUE #3948）：此前配好要再点一次「保存」，改完没点
 // 就切走 = 白改（配置面与「尺寸配置表」那一族的口径不一致）。于是这一层不再有
 // 「保存」按钮：改一档直接落本机（`data/sidebar-tab-behavior.json`），只有「写项目
-// 默认（本机基线）」才是一个显式动作 —— 那一份落本机运行时目录（不入库），
-// 不能顺手就改（ISSUE #4150）。
+// 默认（跟代码走）」才是一个显式动作 —— 那一份进代码库，不能顺手就改。
 //
 // **草稿不从查询回读重新播种**（只播种一次，之后只由用户的动作改）：自动保存期间
 // 服务端会回读两次（前一票的响应可能落后于用户刚改的那一格），拿它播种会把用户
@@ -43,7 +42,7 @@ export type SidebarTabSectionController = {
   resetBusy: boolean;
   /** 还原默认：删掉本机覆盖，生效值回落项目默认。 */
   resetToDefault: () => Promise<void>;
-  /** 「保存为项目默认（本机）」：写进本机项目默认覆盖（data/，不入库）。 */
+  /** 「保存为项目默认（跟代码走）」：写进入库那份 JSON。 */
   saveAsProjectDefaults: () => Promise<void>;
   /** 改一档即存本机（进行中）。 */
   saving: boolean;
@@ -113,8 +112,8 @@ export function useSidebarTabSection(): SidebarTabSectionController {
     try {
       const file = await actions.saveAsProjectDefaults(current);
       setStatus(
-        `已写入本机项目默认（${file ?? ""}），本机重启与重构建都保留；` +
-          "要改出厂默认请改 src/lib/shell/sidebar-tab-defaults.json 走 PR（ISSUE #4150）。",
+        `已写入项目默认（${file ?? ""}），提交后每个检出与桌包都是这一份；` +
+          "桌面包要把这份 JSON 重新构建才会带上。",
       );
     } catch (error) {
       setStatus(errorText(error, "写入失败"));

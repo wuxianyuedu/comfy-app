@@ -2,23 +2,19 @@
 // 尺寸预设表（比例 × 分辨率，图片 / 视频两场景）的两层来源，与模式契约 / 侧栏页签
 // 行为同一套口径：
 //
-//   ① 编译进包的默认值（`src/lib/media/size-preset-defaults.json`）—— 静态
-//      import 进产物的那份快照（`size-presets.ts` 的 `DEFAULT_SIZE_PRESET_TABLE`）
-//      就是它的编译态；**运行期不写它**（ISSUE #4150：运行期写 src 的代价是工作树
-//      常挂 M + dev 下 Turbopack 模块图失效）。改它走代码 / PR。
-//   ② 本机项目默认覆盖（`data/size-preset-project-defaults.json`，#4150 起）——
-//      「保存为项目默认」写出来的全量基线，不入库；在而不空才作为基准，压过 ①。
-//   ③ 本机覆盖（`data/size-presets.json`）—— 在而不空才生效，逐格压过基准
-//      （②或①，谁在用谁）。
+//   ① 项目默认（`src/lib/media/size-preset-defaults.json`，入库、跟代码走）——
+//      静态 import 进产物的那份快照（`size-presets.ts` 的 `DEFAULT_SIZE_PRESET_TABLE`）
+//      是它的编译态；开发检出里**现读磁盘**（写完即生效，不必重启进程，与 #3634
+//      同一口径），读不出来才回落那份快照（正式包里没有源码）。
+//   ② 本机覆盖（`data/size-presets.json`）—— 在而不空才生效，逐格压过 ①。
 //
 // 读取侧逐格合并（`mergeSizePresetTable`）：缺行、缺档、改坏的值一律回退基准，
 // 因此升级新增比例行不需要写迁移。写侧**差集落盘**（ISSUE #3973）：只留与项目
 // 默认不同的格子（`diffSizePresetTable`），与侧栏页签行为 / 模式契约同一口径 ——
 // 项目默认后续改动能穿透到存过覆盖的机器，「改回默认」= 该格从覆盖里消失。
 //
-// 「保存为项目默认」写的是 ② 那份运行时覆盖（ISSUE #4150 起；此前直接写 src
-// 那份编译源，由人提交后生效）—— 只有开发检出有这个入口；要改出厂默认请改
-// ① 走 PR。
+// 「保存到项目代码库」写的是 ① 那份 JSON（ISSUE #3948）：提交后每个检出与每个
+// 桌包都是这一份 —— 只有开发检出有可写的目标文件。
 //
 // **读取侧在 `size-preset-fs.server.ts`**（ISSUE #3972 起拆出）：MCP stdio 等
 // 纯 Node 宿主要读生效表（出图链路的换算），不能碰 `server-only`；本文件保留
@@ -46,7 +42,6 @@ import {
   readRawSizePresetOverrideFile,
   SIZE_PRESETS_REL_PATH,
   SIZE_PRESET_DEFAULTS_REL_PATH,
-  SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH,
 } from "~/lib/media/size-preset-fs.server";
 
 /* 读取侧唯一实现（含两个落点常量）在 size-preset-fs.server.ts；这里原样
@@ -57,7 +52,6 @@ export {
   loadSizePresetTable,
   SIZE_PRESETS_REL_PATH,
   SIZE_PRESET_DEFAULTS_REL_PATH,
-  SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH,
 };
 
 /** 同一份覆盖文件的多个写方（保存 / 按场景还原）先进进程内互斥（ISSUE #3859）：
@@ -137,12 +131,11 @@ export async function resetSizePresetSceneOverride(
 }
 
 /**
- * 「保存为项目默认」：把当前这份表**全量**写进本机项目默认覆盖（`data/`，
- * ISSUE #4150）。
+ * 「保存为项目默认（跟代码走）」：把当前这份表**全量**写进入库的项目默认 JSON。
  *
- * 只有开发检出可以调：这格是出厂默认流程的开发期入口。写完后读取侧现读运行时
- * 覆盖（`loadSizePresetProjectDefaults`），**写完即生效**；要改出厂默认请改
- * `src/lib/media/size-preset-defaults.json` 走 PR（那份是编译源，运行期不写它）。
+ * 只有开发检出可以调：正式包没有源码可写，这格调用本身就是错用 —— 大声失败而不是
+ * 假装成功。写完后读取侧现读磁盘（`loadSizePresetProjectDefaults`），**写完即生效**；
+ * 提交之后别的检出与桌包才是这一份（桌包要重新构建才带上）。
  */
 export async function saveSizePresetTableAsProjectDefaults(
   raw: unknown,
@@ -150,11 +143,12 @@ export async function saveSizePresetTableAsProjectDefaults(
 ): Promise<{ file: string; table: SizePresetTable }> {
   if (!isDevCheckout(root)) {
     throw new Error(
-      "保存为项目默认只在开发检出可用——" + "正式包的改动请改一格即存（只落本机覆盖）。",
+      "保存为项目默认只在开发检出可用（这份检出里没有 scripts/dev-launcher.mjs）——" +
+        "正式包的改动请改一格即存（只落本机）。",
     );
   }
   const table = parseSizePresetDefaults(raw);
-  const file = path.join(root, SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH);
+  const file = path.join(/*turbopackIgnore: true*/ root, SIZE_PRESET_DEFAULTS_REL_PATH);
   try {
     await fs.mkdir(path.dirname(file), { recursive: true });
     await atomicWriteText(file, `${JSON.stringify(table, null, 2)}\n`);

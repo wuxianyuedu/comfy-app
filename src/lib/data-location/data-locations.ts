@@ -228,7 +228,7 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     kind: "mode-contract",
     kindLabel: "模式契约",
     migration:
-      "出厂默认就是这份编译源（改它走代码 / PR）；「保存为项目默认」另存本机覆盖 data/workshop-mode-contract-project-defaults.json（不入库，ISSUE #4150），迁移时把它一起拷走。",
+      "项目默认入库、跟代码走：迁移就是把这个文件一起提交（src/lib/workshop/mode-contract-defaults.json），别的检出与桌包都是这一份。",
     target: "src/lib/workshop/mode-contract-defaults.json",
   },
   "model-adapter": {
@@ -275,8 +275,7 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     category: "repo-file",
     kind: "sidebar-tab",
     kindLabel: "侧栏页签行为",
-    migration:
-      "出厂默认就是这份编译源（改它走代码 / PR）；「保存为项目默认」另存本机覆盖 data/sidebar-tab-project-defaults.json（不入库，ISSUE #4150），迁移时把它一起拷走。",
+    migration: "项目默认入库、跟代码走：迁移就是把这个文件一起提交，别的检出与桌包都是这一份。",
     target: "src/lib/shell/sidebar-tab-defaults.json",
   },
   "size-presets-local": {
@@ -292,7 +291,7 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     kind: "size-presets",
     kindLabel: "尺寸配置表",
     migration:
-      "出厂默认就是这份编译源（改它走代码 / PR）；「保存为项目默认」另存本机覆盖 data/size-preset-project-defaults.json（不入库，ISSUE #4150），迁移时把它一起拷走。",
+      "项目默认跟代码走：src/lib/media/size-preset-defaults.json 就是这份基线（设置页「保存到项目代码库」写的就是它），改默认值等于改代码。",
     target: "src/lib/media/size-preset-defaults.json",
   },
   "task-artifacts-db": {

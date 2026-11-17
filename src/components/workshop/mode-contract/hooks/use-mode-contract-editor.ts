@@ -54,7 +54,7 @@ export type ModeContractEditorController = {
   resetToDefault: () => Promise<void>;
   /** 保存当前草稿（并入整份注册表）。 */
   save: () => Promise<void>;
-  /** 把当前草稿并入整份注册表后写回**本机项目默认覆盖**（data/；只有开发检出可用，
+  /** 把当前草稿并入整份注册表后写回**项目默认**（跟代码走；只有开发检出可用，
    *  正式包该入口不渲染、服务端也会拒）。解析为写盘的文件路径。 */
   saveAsProjectDefault: () => Promise<string | null>;
   /** 本次打开期间是否已成功保存过（视图据此提示「另一处已生效」）。 */

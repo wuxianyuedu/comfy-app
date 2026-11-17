@@ -32,7 +32,6 @@ import {
   saveSizePresetTable,
   saveSizePresetTableAsProjectDefaults,
   SIZE_PRESET_DEFAULTS_REL_PATH,
-  SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH,
   SIZE_PRESETS_REL_PATH,
 } from "./size-preset.server";
 import {
@@ -136,27 +135,27 @@ describe("size-preset.server（ISSUE #3788）", () => {
 
   /* ── 项目默认那份（ISSUE #3948）── */
 
-  it("读不到本机基线覆盖时回落编译进包的快照", async () => {
+  it("读不到项目默认那份时回落编译进包的快照", async () => {
     expect(await loadSizePresetProjectDefaults(root)).toEqual(DEFAULT_SIZE_PRESET_TABLE);
     /* 坏 JSON 同样回落 —— 一份坏文件不该把整张表打成「没有默认」。 */
-    const file = path.join(root, SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH);
+    const file = path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH);
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, "{ 这不是 JSON", "utf8");
     expect(await loadSizePresetProjectDefaults(root)).toEqual(DEFAULT_SIZE_PRESET_TABLE);
   });
 
-  it("「保存为项目默认」写进本机基线覆盖（data/，不写 src），写完即生效（ISSUE #4150）", async () => {
+  it("「保存到项目代码库」写进入库那份 JSON，写完即生效（不必重启进程）", async () => {
     /* 开发检出的判据：检出里有启动编排器 */
     mkdirSync(path.join(root, "scripts"), { recursive: true });
     writeFileSync(path.join(root, "scripts", "dev-launcher.mjs"), "// dev", "utf8");
 
     const { file, table } = await saveSizePresetTableAsProjectDefaults(customizedTable(), root);
-    expect(file).toBe(path.join(root, SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH));
+    expect(file).toBe(path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH));
     expect(cell(table, "image", "16:9 横屏", "1k")).toEqual({ width: 1280, height: 720 });
 
-    /* 写进去的那份就是磁盘上那份（本机运行时覆盖，data/） */
+    /* 写进去的那份就是磁盘上那份（入库、跟代码走） */
     const written: unknown = JSON.parse(
-      await fsp.readFile(path.join(root, SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH), "utf8"),
+      await fsp.readFile(path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH), "utf8"),
     );
     expect(written).toMatchObject({
       image: { "16:9 横屏": { "1k": { width: 1280, height: 720 } } },
@@ -173,11 +172,8 @@ describe("size-preset.server（ISSUE #3788）", () => {
     await expect(saveSizePresetTableAsProjectDefaults(customizedTable(), root)).rejects.toThrow(
       /保存为项目默认只在开发检出可用/,
     );
-    /* 没有写出去任何东西（src 编译源与 data/ 运行时覆盖都不在） */
+    /* 没有写出去任何东西 */
     await expect(fsp.access(path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH))).rejects.toThrow();
-    await expect(
-      fsp.access(path.join(root, SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH)),
-    ).rejects.toThrow();
   });
 
   it("本机覆盖的合并基准是**当前项目默认**那份（项目默认改过之后，新写入的覆盖不再带旧值）", async () => {
@@ -241,42 +237,5 @@ describe("size-preset.server 差集落盘（ISSUE #3973）", () => {
     const raw: unknown = JSON.parse(readFileSync(path.join(root, SIZE_PRESETS_REL_PATH), "utf8"));
     expect(raw).toEqual({});
     expect(await loadSizePresetTable(root)).toEqual(DEFAULT_SIZE_PRESET_TABLE);
-  });
-});
-
-describe("存量搬迁：旧版写进 src 的项目默认自动迁去 data/（ISSUE #4150）", () => {
-  it("src 内容 ≠ 编译快照 → 读链上搬迁，runtime 接住用户态", async () => {
-    /* 旧版现场：src 那份被「保存为项目默认」写过（image 16:9 / 1k → 1280×720）。 */
-    const legacy = structuredClone(DEFAULT_SIZE_PRESET_TABLE);
-    cell(legacy, "image", "16:9 横屏", "1k").width = 1280;
-    cell(legacy, "image", "16:9 横屏", "1k").height = 720;
-    mkdirSync(path.dirname(path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH)), {
-      recursive: true,
-    });
-    writeFileSync(
-      path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH),
-      JSON.stringify(legacy, null, 2),
-      "utf8",
-    );
-    expect(await loadSizePresetProjectDefaults(root)).toEqual(legacy);
-    const migrated: unknown = JSON.parse(
-      readFileSync(path.join(root, SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH), "utf8"),
-    );
-    expect(migrated).toEqual(legacy);
-  });
-
-  it("src 与编译快照一致（提交态）时不迁移：本机不钉住基线", async () => {
-    mkdirSync(path.dirname(path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH)), {
-      recursive: true,
-    });
-    writeFileSync(
-      path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH),
-      JSON.stringify(DEFAULT_SIZE_PRESET_TABLE, null, 2),
-      "utf8",
-    );
-    expect(await loadSizePresetProjectDefaults(root)).toEqual(DEFAULT_SIZE_PRESET_TABLE);
-    expect(() =>
-      readFileSync(path.join(root, SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH), "utf8"),
-    ).toThrow();
   });
 });
