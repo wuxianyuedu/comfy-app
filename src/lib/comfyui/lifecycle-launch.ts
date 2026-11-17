@@ -27,6 +27,8 @@ import { COMFYUI_DEFAULT_PORT, comfyUiBaseUrl } from "../endpoints";
 import { INLINE_STDERR_MAX, clampText } from "../text-clamp";
 import type { getSettingsSync } from "../app-settings/app-settings.server";
 import { resolveComfyLaunchPlan } from "./launch-path";
+import { buildDepDriftWarning, checkComfyDepDrift } from "./dep-drift";
+import { findLatestKeepAliveLogs, pruneKeepAliveLogs } from "./keepalive-logs";
 import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { spawnManaged, waitForDetachMediator } from "~/lib/process/process-launch";
@@ -227,6 +229,17 @@ export async function runEnsureLaunch(input: {
     note(
       `提示：所选解释器（${plan.cmd}）的 site-packages 里没有 torch，启动大概率会失败——请检查 ComfyUI 环境`,
     );
+  }
+  /* 源码 ↔ 环境依赖脱节核对（ISSUE #4192）：源码被升级而运行环境的 Python 依赖
+   * 没跟上时，ComfyUI 照常能拉起，脱节要等到节点执行期才爆出难懂的 Python
+   * TypeError（实测：comfy-aimdo 源码侧要 0.6.0、环境里还是 0.5.6，CLIPTextEncode
+   * 报 ModelVBAR ... unexpected keyword argument 'pageout_callback'）。在 spawn
+   * 之前做一次只读核对，把 `==` 锁包的差异面提前点名并给出修法。只预警不阻断：
+   * 判「能不能拉起」仍归上面的既有链路。checkComfyDepDrift 内部吞掉一切读取
+   * 失败（返回 null 即无从核对），预警通道绝不把启动带崩。 */
+  const depDriftReport = checkComfyDepDrift(plan.cwd, plan.cmd);
+  if (depDriftReport !== null && depDriftReport.drift.length > 0) {
+    note(buildDepDriftWarning(depDriftReport));
   }
 
   // 有效端口/额外参数：桌面实例读 Comfy Desktop 元数据（launchArgs→headless
@@ -659,79 +672,6 @@ function startKeepAliveWatch(params: {
       keepAliveExitWatcher = null;
     },
   });
-}
-
-/**
- * 找 SERVICES_LOG_DIR 里最新的一对 `comfyui-keepalive-*.{out,err}.log`。
- *
- * 用于「接管」场景：那个实例不是本进程拉起的，拿不到它当次的重定向文件路径，
- * 只能按 mtime 取最近被写入的那份（还在跑的实例还在写，基本就是它）。
- * 取不到就返回空对象 —— 退出时带不出尾部，但监督本身照常。
- */
-function findLatestKeepAliveLogs(): { err?: string; out?: string } {
-  try {
-    if (!fs.existsSync(SERVICES_LOG_DIR)) {
-      return {};
-    }
-    const pick = (suffix: string): string | undefined => {
-      const newest = fs
-        .readdirSync(SERVICES_LOG_DIR)
-        .filter((name) => name.startsWith("comfyui-keepalive-") && name.endsWith(suffix))
-        .map((name) => ({
-          name,
-          mtime: fs.statSync(path.join(SERVICES_LOG_DIR, name)).mtimeMs,
-        }))
-        .sort((a, b) => b.mtime - a.mtime)[0];
-      if (!newest) {
-        return undefined;
-      }
-      return path.join(SERVICES_LOG_DIR, newest.name);
-    };
-    return { out: pick(".out.log"), err: pick(".err.log") };
-  } catch {
-    return {};
-  }
-}
-
-/** 保活重定向日志的保留份数（一次拉起 = out + err 两个文件）。 */
-const KEEPALIVE_LOG_KEEP_LAUNCHES = 10;
-
-/**
- * 只保留最近 N 次保活拉起的重定向日志，删掉更老的。
- *
- * 这些文件是**按次命名**的（`comfyui-keepalive-<时间戳>.{out,err}.log`）：好处
- * 是不会被长持句柄锁死、不会互相覆盖，代价是**只建不删**——每次拉起都新增两个，
- * 长期用会在 `log/services/` 里一直堆积（AGENTS 硬规则 4 要的就是这种产物
- * 「按次命名 + 轮转」，光有命名没有轮转仍会堆积）。
- *
- * 每次新拉起顺手清一次最老的：保留的是 mtime 最新的那些，因此
- *   - 本次刚建的（最新）不会被自己删掉；
- *   - 仍在运行、还在被写入的实例（mtime 靠前）也不会被删。
- * 清理失败不该影响启动本身，故整体吞掉异常。
- */
-export function pruneKeepAliveLogs(): void {
-  try {
-    if (!fs.existsSync(SERVICES_LOG_DIR)) {
-      return;
-    }
-    const files = fs
-      .readdirSync(SERVICES_LOG_DIR)
-      .filter(
-        (name) =>
-          name.startsWith("comfyui-keepalive-") &&
-          (name.endsWith(".out.log") || name.endsWith(".err.log")),
-      )
-      .map((name) => ({
-        name,
-        mtime: fs.statSync(path.join(SERVICES_LOG_DIR, name)).mtimeMs,
-      }))
-      .sort((a, b) => b.mtime - a.mtime);
-    for (const old of files.slice(KEEPALIVE_LOG_KEEP_LAUNCHES * 2)) {
-      fs.unlinkSync(path.join(SERVICES_LOG_DIR, old.name));
-    }
-  } catch {
-    /* 清理失败不影响启动 */
-  }
 }
 
 /**
