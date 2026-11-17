@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import fs from "node:fs";
+import type fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 
 import { toDisplayPath } from "~/lib/path-display";
@@ -23,9 +24,9 @@ const REPO_ROOT = process.cwd();
 
 type FileFingerprint = string;
 
-function fingerprintOf(abs: string): FileFingerprint | null {
+async function fingerprintOf(abs: string): Promise<FileFingerprint | null> {
   try {
-    const st = fs.statSync(/*turbopackIgnore: true*/ abs);
+    const st = await fsp.stat(abs);
     if (!st.isFile()) {
       return null;
     }
@@ -35,46 +36,69 @@ function fingerprintOf(abs: string): FileFingerprint | null {
   }
 }
 
-/** 递归收集目录下的文件绝对路径。 */
-function walkFiles(dirAbs: string, out: Array<string> = []): Array<string> {
+/** 递归收集目录下的文件绝对路径。
+ *
+ *  全程 `fs.promises`（ISSUE #4203）：本路由被前端每 30s 轮询，`src-tauri/` 的
+ *  文件数随仓库增长——同步 `readdirSync`/`statSync` 的每一次都是对单事件循环的
+ *  直接占用，异步版走线程池，不再阻塞包括探活在内的其它请求。子目录并发展开
+ *  （等待全部落定后按序拼回），循环体里不留 `await`。 */
+async function walkFiles(dirAbs: string): Promise<Array<string>> {
   let entries: Array<fs.Dirent>;
   try {
-    entries = fs.readdirSync(/*turbopackIgnore: true*/ dirAbs, {
-      withFileTypes: true,
-    });
+    entries = await fsp.readdir(dirAbs, { withFileTypes: true });
   } catch {
-    return out;
+    return [];
   }
-  for (const e of entries) {
-    if (e.isDirectory()) {
-      if (SKIP_DIRS.has(e.name)) {
-        continue;
+  const nested = await Promise.all(
+    entries.map(async (e) => {
+      if (e.isDirectory()) {
+        if (SKIP_DIRS.has(e.name)) {
+          return [];
+        }
+        return walkFiles(path.join(dirAbs, e.name));
       }
-      walkFiles(path.join(dirAbs, e.name), out);
-    } else if (e.isFile()) {
-      out.push(path.join(dirAbs, e.name));
-    }
+      return e.isFile() ? [path.join(dirAbs, e.name)] : [];
+    }),
+  );
+  const out: Array<string> = [];
+  for (const part of nested) {
+    out.push(...part);
   }
   return out;
 }
 
-/** 把一组根（文件或目录）展开成 { 相对路径 → 指纹 }。 */
-function collectGroup(roots: Array<string>): Map<string, FileFingerprint> {
+/** 单个根（文件或目录）展开成 { 相对路径 → 指纹 }；文件的指纹并发取。 */
+async function collectRoot(rel: string): Promise<Map<string, FileFingerprint>> {
   const map = new Map<string, FileFingerprint>();
-  for (const rel of roots) {
-    const abs = path.join(/*turbopackIgnore: true*/ REPO_ROOT, rel);
-    if (!fs.existsSync(abs)) {
-      map.set(rel, "missing");
-      continue;
-    }
-    const st = fs.statSync(/*turbopackIgnore: true*/ abs);
-    if (st.isDirectory()) {
-      for (const f of walkFiles(abs)) {
-        const fp = fingerprintOf(f);
-        map.set(toDisplayPath(f, REPO_ROOT), fp ?? "missing");
-      }
-    } else {
-      map.set(rel, fingerprintOf(abs) ?? "missing");
+  const abs = path.join(REPO_ROOT, rel);
+  let st: fs.Stats;
+  try {
+    st = await fsp.stat(abs);
+  } catch {
+    map.set(rel, "missing");
+    return map;
+  }
+  if (!st.isDirectory()) {
+    map.set(rel, (await fingerprintOf(abs)) ?? "missing");
+    return map;
+  }
+  const files = await walkFiles(abs);
+  const fingerprints = await Promise.all(files.map((f) => fingerprintOf(f)));
+  for (const [i, f] of files.entries()) {
+    const fp = fingerprints.at(i);
+    map.set(toDisplayPath(f, REPO_ROOT), fp ?? "missing");
+  }
+  return map;
+}
+
+/** 把一组根（文件或目录）展开成 { 相对路径 → 指纹 }。根的数量是个位数、彼此
+ *  无依赖，并发收集后按声明顺序并回一张表。 */
+async function collectGroup(roots: Array<string>): Promise<Map<string, FileFingerprint>> {
+  const maps = await Promise.all(roots.map((rel) => collectRoot(rel)));
+  const map = new Map<string, FileFingerprint>();
+  for (const part of maps) {
+    for (const [rel, fp] of part) {
+      map.set(rel, fp);
     }
   }
   return map;
@@ -89,11 +113,11 @@ let baseline: {
   restart: Map<string, FileFingerprint>;
 } | null = null;
 
-function diffGroup(
+async function diffGroup(
   roots: Array<string>,
   base: Map<string, FileFingerprint> | undefined,
-): { dirty: boolean; files: Array<string> } {
-  const current = collectGroup(roots);
+): Promise<{ dirty: boolean; files: Array<string> }> {
+  const current = await collectGroup(roots);
   // 还没有基线：记录当前态作为以后比对参照，本轮视为「无变化」。
   if (!base) {
     return { dirty: false, files: [] };
@@ -113,28 +137,28 @@ function diffGroup(
   return { dirty: files.length > 0, files: files.sort() };
 }
 
-export function GET() {
+export async function GET() {
   const currentBaseline = baseline;
   const groups = [
     {
       key: "restart",
       label: "重启生效",
       hint: "需重启应用（dev server）才生效",
-      ...diffGroup(RESTART_ROOTS, currentBaseline?.restart),
+      ...(await diffGroup(RESTART_ROOTS, currentBaseline?.restart)),
     },
     {
       key: "recompile",
       label: "重编壳生效",
       hint: "需重编壳后重启才生效（cargo build --release --features custom-protocol）",
-      ...diffGroup(RECOMPILE_ROOTS, currentBaseline?.recompile),
+      ...(await diffGroup(RECOMPILE_ROOTS, currentBaseline?.recompile)),
     },
   ];
 
   // 尚未有基线时（首次请求）先定格基线，本次不当作「检测到更新」。
   if (!currentBaseline) {
     baseline = {
-      recompile: collectGroup(RECOMPILE_ROOTS),
-      restart: collectGroup(RESTART_ROOTS),
+      recompile: await collectGroup(RECOMPILE_ROOTS),
+      restart: await collectGroup(RESTART_ROOTS),
     };
   }
 

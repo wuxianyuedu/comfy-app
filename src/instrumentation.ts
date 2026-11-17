@@ -15,8 +15,39 @@
  * 必须按 runtime 分别加载对应配置，禁止在此处引入 server-only 模块；
  * Node-only 分件因此一律走动态 import（不能进 Edge 图）。
  */
+/** 进程级兜底是否已挂（幂等闸：register 可能被 Next 以不同 runtime 多次触发）。 */
+let processSafetyNetInstalled = false;
+
+/**
+ * 显式注册 `unhandledRejection` / `uncaughtException` 的进程级兜底（ISSUE #4216）。
+ *
+ * 策略与既有有效行为一致：**只记日志、不退出**——常驻桌面服务里，一条后台循环
+ * （成片监看 / 派发 / reaper）的 rejection 不该打挂整个应用。此前这层只来自
+ * `@sentry/node` 默认集成的隐式副作用（且 `scripts/executor-host.mjs` 等宿主进程
+ * 没有这层）；这里显式化之后，谁起服务谁就有这张网。
+ *
+ * 导出仅为可测（注册是进程级副作用，用例直接调用并断言监听器挂载与输出）。
+ */
+export function installProcessSafetyNet(): void {
+  if (processSafetyNetInstalled) {
+    return;
+  }
+  processSafetyNetInstalled = true;
+  const describe = (reason: unknown): string =>
+    reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+  process.on("unhandledRejection", (reason: unknown) => {
+    console.error(`[process] unhandledRejection：${describe(reason)}`);
+  });
+  process.on("uncaughtException", (error: Error) => {
+    console.error(`[process] uncaughtException：${describe(error)}`);
+  });
+}
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    /* 进程级兜底（ISSUE #4216）：先于一切后台分支挂上——后台循环（成片监看、
+     * 派发、reaper）的 rejection 不该打挂常驻服务。 */
+    installProcessSafetyNet();
     /* 产物根的一次性搬迁（台账 A13 的结构性关法）：历史落点在 `public/generated/`，
      * 而 `public/**` 由 Next 按静态文件直接发出、根本不经过带闸的 route handler ——
      * 把根搬到 `generated/` 之后那条旁路**不存在**。搬这一动作必须排在所有会读产物的

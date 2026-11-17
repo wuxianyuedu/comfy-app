@@ -450,3 +450,74 @@ describe("configureExecutorCli 接缝", () => {
     }).not.toThrow();
   });
 });
+
+/* ── #4189：comfy-cli v1.24.0+ 用法升级（client-id / 部分执行）─────────────
+ * 纯函数断言，dynamic import 同上（不拖累上面的静态用例）。 */
+describe("comfy-cli run 参数构造（#4189）", () => {
+  it("client id 按任务拼接（ComfyUI 侧按它对账本次提交）", async () => {
+    const mod = await import("./executor-cli");
+    expect(mod.comfyCliClientId("task-123")).toBe("comfy-app-task-123");
+  });
+
+  it("基础参数保持既有口径，--client-id 随提交下发", async () => {
+    const mod = await import("./executor-cli");
+    const args = mod.buildComfyCliRunArgs({
+      clientId: "comfy-app-t1",
+      host: "127.0.0.1",
+      port: 8188,
+      workflowFile: "temp/comfy-cli/wf-t1.json",
+    });
+    expect(args).toEqual([
+      "-m",
+      "comfy_cli",
+      "run",
+      "--workflow",
+      "temp/comfy-cli/wf-t1.json",
+      "--json",
+      "--wait",
+      "--where",
+      "local",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "8188",
+      "--client-id",
+      "comfy-app-t1",
+      "--no-notify",
+      "--timeout",
+      "600",
+    ]);
+  });
+
+  it("outputNodeIds 逐个追加可重复的 --output-node-ids；缺省一个都不加", async () => {
+    const mod = await import("./executor-cli");
+    const base = mod.buildComfyCliRunArgs({
+      clientId: "c",
+      host: "127.0.0.1",
+      port: 8188,
+      workflowFile: "wf.json",
+    });
+    expect(base.filter((a) => a === "--output-node-ids")).toHaveLength(0);
+    const partial = mod.buildComfyCliRunArgs({
+      clientId: "c",
+      host: "127.0.0.1",
+      port: 8188,
+      workflowFile: "wf.json",
+      outputNodeIds: ["9", "12"],
+    });
+    expect(partial.slice(-4)).toEqual(["--output-node-ids", "9", "--output-node-ids", "12"]);
+  });
+
+  it("sanitizeOutputNodeIds：只收非空字符串、去重、封顶 64；空/坏形状回 undefined", async () => {
+    const mod = await import("./executor-cli");
+    expect(mod.sanitizeOutputNodeIds(undefined)).toBeUndefined();
+    expect(mod.sanitizeOutputNodeIds("9")).toBeUndefined();
+    expect(mod.sanitizeOutputNodeIds({})).toBeUndefined();
+    expect(mod.sanitizeOutputNodeIds([])).toBeUndefined();
+    expect(mod.sanitizeOutputNodeIds(["", "   "])).toBeUndefined();
+    // 非字符串项跳过；重复 id 只留一个；保留首现顺序
+    expect(mod.sanitizeOutputNodeIds(["9", 9, null, "9", "12"])).toEqual(["9", "12"]);
+    const flooded = mod.sanitizeOutputNodeIds(Array.from({ length: 100 }, (_, i) => `n${i}`));
+    expect(flooded).toHaveLength(64);
+  });
+});

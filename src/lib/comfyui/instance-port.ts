@@ -24,6 +24,7 @@ import { classifyComfyInstall } from "./instance-kind";
 import { comfyUiBaseUrl } from "../endpoints";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { collectComfyPythonCandidates } from "./env-python";
+import { clearSweepNegative, markSweepNegative, sweepNegativeHit } from "./sweep-negative-cache";
 import { launcherCommandCandidates, readRegisteredLauncher } from "./status";
 
 /** 事实来源，与 status.ts 的快照口径一致（便于日志里对照两处结论）。 */
@@ -70,6 +71,15 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
     return noProcess();
   }
 
+  /* 「确认查无实例」的短窗黏滞（ISSUE #4195，与 status.ts 同一缓存）：最近一次
+   * 完整扫描确认这条路径下没有实例进程时，窗口内不再重复发起进程表扫描——
+   * 那是每拍最多约 6 路并发 PowerShell 枚举的重活。端口事实不受影响：调用方
+   * （resolveComfyBase）在「没找到进程」之后照旧做配置端口 + 偏移端口扫描，
+   * 实例落回任何端口仍会被即时认出。 */
+  if (sweepNegativeHit(root)) {
+    return noProcess();
+  }
+
   let unverified = false;
   const plan = resolveComfyLaunchPlan(root);
 
@@ -77,6 +87,7 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
   if (!("error" in plan)) {
     const lookup = await findPidForMainPyDetailed(plan.mainPy);
     if (lookup.pid !== null) {
+      clearSweepNegative();
       return withPort(lookup.pid, "process", "配置路径的实例");
     }
     if (lookup.failed) {
@@ -128,11 +139,17 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
       unverified = true;
     }
     if (lookup.pid !== null) {
+      clearSweepNegative();
       return withPort(lookup.pid, candidate.source, candidate.via);
     }
   }
 
   // 一条候选都没命中：查过但没查失败 = 「确认不在跑」；有失败 = 结论不可信。
+  // 只有「确认不在跑」才黏滞（#4195）：查询失败（unverified）的结论不可信，
+  // 黏滞它会把下一拍本可命中的扫描也跳掉。
+  if (candidates.length > 0 && !unverified) {
+    markSweepNegative(root);
+  }
   return noProcess({ unverified });
 }
 

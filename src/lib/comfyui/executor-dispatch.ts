@@ -56,7 +56,7 @@ import {
   takeQueuedEntries,
 } from "./runner-state";
 import type { Job, LogEntry } from "./runner-state";
-import { executeViaComfyCli } from "./executor-cli";
+import { executeViaComfyCli, sanitizeOutputNodeIds } from "./executor-cli";
 import { connect } from "./executor-ws";
 import { finalizeFailure } from "./executor-finalize";
 import { registerQueueAnnounce, registerQueueKick } from "./executor-continuation";
@@ -231,11 +231,18 @@ async function claimAndDispatchOnceInner(options?: {
 
   const paramsRaw = row.params;
   const overridesRaw = isRecord(paramsRaw) ? paramsRaw.workflowInputs : undefined;
+  /* 部分执行目标（调试，comfy-cli `--output-node-ids`）：schema 在提交口已收窄成
+   * string[]，这里再过一次清洗 —— `params` 是库里的一列 JSON，旧行 / 异常行形状
+   * 不作保证；清完为空等价于「不传」= 整图执行。 */
+  const outputNodeIds = sanitizeOutputNodeIds(
+    isRecord(paramsRaw) ? paramsRaw.outputNodeIds : undefined,
+  );
   const job: Job = {
     taskId,
     workflowName: row.workflowName,
     rawJson: row.execPayload,
     overrides: Array.isArray(overridesRaw) ? overridesRaw : undefined,
+    ...(outputNodeIds === undefined ? {} : { outputNodeIds }),
   };
 
   /* 完整输入参数入日志（原 `processQueue` 里那条）：任务日志是复现与排障的唯一

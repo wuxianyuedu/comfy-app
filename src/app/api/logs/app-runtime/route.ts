@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
 import { isRecord } from "~/lib/is-record";
-import { RUNTIME_LOG_MESSAGE_MAX, clampText } from "~/lib/text-clamp";
+import { RUNTIME_LOG_FIELDS_MAX, RUNTIME_LOG_MESSAGE_MAX, clampText } from "~/lib/text-clamp";
+import { checkRateLimit } from "~/server/api/middleware/rate-limit";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
@@ -27,11 +28,20 @@ function isAllowedLevel(v: unknown): v is "info" | "warn" | "error" {
  */
 const MAX_MSG_LEN = RUNTIME_LOG_MESSAGE_MAX;
 
+/** fields 序列化后的最大字符数（超限整段替换为截断标记）：app-runtime 日志只追加不轮转，
+ * 无界的 fields 会把单行撑到 MB 级（#4051 写入端点的最小体积约束）。 */
+const MAX_FIELDS_JSON_LEN = RUNTIME_LOG_FIELDS_MAX;
+
 export async function POST(request: Request) {
   /* 鉴权与 /api/logs/list 同一口径（#4041）：运行日志的写入端点不对外开放。 */
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* 限流与 tRPC `rateLimitedProcedure` 同一套滑动窗口（纯函数零依赖，#4051 最小滥用约束）：
+   * 按已登录用户计数，窗口内超限一律 429 —— 客户端写入失败本就静默，不阻塞业务。 */
+  if (!checkRateLimit(`app-runtime-log:${user.id}`)) {
+    return NextResponse.json({ ok: false }, { status: 429 });
   }
   try {
     const rawBody: unknown = await request.json();
@@ -56,7 +66,15 @@ export async function POST(request: Request) {
       marker: "",
     });
     const rawFields: unknown = body.fields;
-    const fields = isRecord(rawFields) ? rawFields : undefined;
+    let fields = isRecord(rawFields) ? rawFields : undefined;
+    if (fields !== undefined) {
+      /* 请求体来自 JSON.parse，不可能有环，stringify 不会抛；超长不截半截 JSON
+       * （半截结构对排障没有价值），整段换成有界的截断标记。 */
+      const serializedLength = JSON.stringify(fields).length;
+      if (serializedLength > MAX_FIELDS_JSON_LEN) {
+        fields = { truncated: true, originalChars: serializedLength };
+      }
+    }
 
     const log = createAppRuntimeLogger(ns);
     log[level](msg, fields);

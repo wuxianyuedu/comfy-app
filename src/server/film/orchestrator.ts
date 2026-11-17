@@ -547,11 +547,31 @@ async function watchFilm(id: string, opts: { resumed?: boolean } = {}): Promise<
     /* 等旧循环退场期间，别的调用方已经起新循环：让位。 */
     return;
   }
-  const loop = watchLoop(id, opts).finally(() => {
-    if (inFlightFilms().get(id) === loop) {
-      inFlightFilms().delete(id);
-    }
-  });
+  const loop = watchLoop(id, opts)
+    .catch(async (error: unknown) => {
+      /* 监看循环的任何 rejection 都就地收口（ISSUE #4216）：这是 `void` 起的
+       * 常驻后台链，冒出去就是 unhandledRejection（进程级事故，#4146 那类
+       * 「服务莫名断开」的又一来源）。失败要让用户看见：影片日志记 error、
+       * 影片判 FAILED（不留 GENERATING 假活）。收口自身可能正踩在故障路径上
+       * （DB BUSY / 磁盘），再各兜一层，不让收口自己变成新的漏网口。 */
+      const detail = errorText(error, "成片监看循环异常终止");
+      logger.error(`[film] 监看循环异常终止（film=${id}）：${detail}`);
+      try {
+        await appendFilmLog(id, "error", `监看循环异常终止：${detail}`);
+      } catch {
+        /* 日志路径本身失败时不再冒泡 */
+      }
+      try {
+        await filmRepository.markFailed(id, detail);
+      } catch {
+        /* 同上 */
+      }
+    })
+    .finally(() => {
+      if (inFlightFilms().get(id) === loop) {
+        inFlightFilms().delete(id);
+      }
+    });
   inFlightFilms().set(id, loop);
   return loop;
 }

@@ -6,6 +6,7 @@
 import { withQuery } from "~/lib/query-string";
 import { isRecord } from "~/lib/is-record";
 import { normalizeProductionProgress, type ProductionProgress } from "~/lib/production/progress";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 /** 一次生产数据写入的载荷（字段与 production 表列一一对应）。 */
 export type ProductionPayload = {
@@ -49,7 +50,7 @@ export async function pushProduction(projectId: string, payload: ProductionPaylo
     return;
   }
   try {
-    await fetch("/api/production", {
+    await fetchWithTimeout("/api/production", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ project: projectId, production: payload }),
@@ -65,7 +66,7 @@ export async function fetchProduction(projectId: string): Promise<ProductionData
     return null;
   }
   try {
-    const res = await fetch(withQuery("/api/production", { project: projectId }));
+    const res = await fetchWithTimeout(withQuery("/api/production", { project: projectId }));
     if (!res.ok) {
       return null;
     }

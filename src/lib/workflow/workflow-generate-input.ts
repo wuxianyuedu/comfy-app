@@ -55,6 +55,11 @@ export const generateInputSchema = z.object({
    * `z.record(z.string(), z.string())` —— 那表达不了这层结构（见该模块文件头）。 */
   paramMap: workflowParamMapInputSchema,
   workflowInputs: z.array(workflowInputSchema).optional(),
+  /** 部分执行（调试，comfy-cli v1.24.0 `--output-node-ids`）：只跑到这些输出
+   *  节点及其依赖子图，用于把大工作流拆成「只跑可疑输出分支」定位故障。
+   *  缺省 = 整图执行。节点 id 必须存在于提交的工作流且是输出节点，否则
+   *  comfy-cli 提交前报 invalid_output_node_ids。 */
+  outputNodeIds: z.array(z.string().min(1)).max(64).optional(),
   projectId: z.string().optional(),
   /** 工坊镜头号：只作归属，不参与执行（执行载荷与它无关）。 */
   shotId: z.string().optional(),

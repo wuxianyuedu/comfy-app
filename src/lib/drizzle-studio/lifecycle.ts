@@ -223,25 +223,30 @@ export async function ensureDrizzleStudioUp(
     child.stderr?.on("data", outSink);
     /* 会话起点：存活时长基于它算。 */
     const spawnedAt = Date.now();
-    child.on(
-      "exit",
-      createChildExitHandler({
-        subject: "Drizzle Studio",
-        appendRuntimeLog,
-        log: note,
-        clearChild: () => {
-          if (st.child === child) {
-            st.child = undefined;
-          }
-        },
-        context: () => ({
-          pid: child.pid ?? null,
-          uptimeMs: Date.now() - spawnedAt,
-          stopRequested: st.stopRequested === true,
-          mode: "studio",
-        }),
+    const onChildGone = createChildExitHandler({
+      subject: "Drizzle Studio",
+      appendRuntimeLog,
+      log: note,
+      clearChild: () => {
+        if (st.child === child) {
+          st.child = undefined;
+        }
+      },
+      context: () => ({
+        pid: child.pid ?? null,
+        uptimeMs: Date.now() - spawnedAt,
+        stopRequested: st.stopRequested === true,
+        mode: "studio",
       }),
-    );
+    });
+    child.on("exit", onChildGone);
+    /* 异步 spawn 失败走 error 事件（exit 不发）——不接住就是 uncaughtException，
+     * 且等待循环会空转到 deadline。按「进程没了」同形收口（ISSUE #4202；
+     * 这里的可执行文件是 process.execPath、恒存在，风险低一档，但缺口是同一族）。 */
+    child.on("error", (err: Error) => {
+      appendRuntimeLog(`[spawn] Drizzle Studio 子进程启动失败：${err.message}`);
+      onChildGone(null, null);
+    });
 
     const r = await waitForComfyReady({
       deadline: Date.now() + timeoutMs,

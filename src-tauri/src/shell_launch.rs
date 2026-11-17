@@ -86,12 +86,12 @@ pub const PROJECT_ROOT_ENV: &str = "COMFYAPP_PROJECT_ROOT";
 
 /// 已由壳完成编排（= 本次启动的 dev server 由壳拉起）。
 pub fn is_owning() -> bool {
-  ORCHESTRATOR.lock().unwrap().is_some()
+  ORCHESTRATOR.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_some()
 }
 
 /// 记录本次启动的编排子进程，供退出时回收。
 pub fn adopt(child: tauri_plugin_shell::process::CommandChild) {
-  *ORCHESTRATOR.lock().unwrap() = Some(child);
+  *ORCHESTRATOR.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(child);
 }
 
 /// 这个进程是不是「同一个壳亲手起的那个编排器」。
@@ -211,15 +211,18 @@ pub fn read_foreground_env() -> Option<bool> {
 ///
 /// `kill()` 成功即顺手清掉会话锚点：那是编排器**没机会**清的（见
 /// `clear_session_anchor`）。`kill()` 失败则原样留着，交给下一次启动的孤儿回收。
-pub fn reap(project_root: &str) {
-  let child = ORCHESTRATOR.lock().unwrap().take();
+pub fn reap(project_root: &str, deadline: std::time::Instant) {
+  let child = ORCHESTRATOR
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner)
+    .take();
   let Some(child) = child else { return };
   let pid = child.pid();
   /* 先派发统一回收、后做插件 kill（ISSUE #3857）：taskkill 的目标在进程**还
    * 活着**时不存在 PID 复用（复用前提是先终止），「kill 成功 → 丢句柄 →
    * taskkill」那段窗口被整个消掉，而不是靠握句柄缓解。插件 kill 落在已被
    * reaper 收掉的进程上是无害 no-op（报一条 warn）。 */
-  spawn_reaper(project_root, pid);
+  spawn_reaper(project_root, pid, deadline);
   match child.kill() {
     Ok(()) => log::info!("[ComfyAPP] shell orchestrator stopped via shell plugin (pid {pid})"),
     Err(e) => {
@@ -237,13 +240,13 @@ pub fn reap(project_root: &str) {
 /// 与 `reap` 的差别只在「句柄从哪来」：`reap` 收的是本进程持有的 `CommandChild`，
 /// 这里收的是上一次运行留下的孤儿（壳被强杀 / job 与进程组都没来得及回收）。
 /// 两者都转交同一处平台判据，壳里**不出现** `taskkill` / 单杀 leader（硬规则 3）。
-pub fn reap_pid(project_root: &str, pid: u32) {
+pub fn reap_pid(project_root: &str, pid: u32, deadline: std::time::Instant) {
   if pid == 0 || pid == std::process::id() {
     return;
   }
   // KILL_ON_JOB_CLOSE 的 job 已经会带走自己那一棵树；这里补的是
   // 「job 也没挂上 / 壳被硬杀」的边角，动作仍走统一回收。
-  spawn_reaper(project_root, pid);
+  spawn_reaper(project_root, pid, deadline);
 }
 
 /// 编排器的会话锚点（`run/launcher-session.json`）。
@@ -1212,7 +1215,7 @@ pub(crate) fn run_with_budget(
 /// **不自己拼 `taskkill` / `kill`**：平台判据只允许有一份，在
 /// `src/lib/process/kill-process-tree.ts`（命令行入口就是 reap-process.mjs）。
 /// 这里再写一遍，就是「各写各的、POSIX 上退化成单杀」那条老路的翻版。
-fn spawn_reaper(project_root: &str, pid: u32) {
+fn spawn_reaper(project_root: &str, pid: u32, deadline: std::time::Instant) {
   if project_root.is_empty() || pid == 0 {
     return;
   }
@@ -1238,7 +1241,10 @@ fn spawn_reaper(project_root: &str, pid: u32) {
     use std::os::windows::process::CommandExt;
     command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
   }
-  match run_with_budget(command, REAPER_BUDGET) {
+  /* 预算来自调用方的**共享截止时刻**（ISSUE #4219）：退出路径上两段回收串行，
+   * 各自独立预算的叠加会把关窗后的假死拉长到 20s 量级。 */
+  let budget = deadline.saturating_duration_since(std::time::Instant::now());
+  match run_with_budget(command, budget) {
     Ok(out) => log::info!(
       "[ComfyAPP] 编排器进程树统一回收：{}",
       String::from_utf8_lossy(&out.stdout).trim()
@@ -1350,14 +1356,14 @@ pub fn spawn_orchestrator(
 #[cfg(windows)]
 pub fn attach_kill_on_close_job() {
   let pid = {
-    let guard = ORCHESTRATOR.lock().unwrap();
+    let guard = ORCHESTRATOR.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     match guard.as_ref() {
       Some(child) => child.pid(),
       None => return,
     }
   };
   if let Some(job) = assign_kill_on_close_job(pid, "orchestrator") {
-    *JOB_HANDLE.lock().unwrap() = job;
+    *JOB_HANDLE.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = job;
   }
 }
 
@@ -1381,7 +1387,7 @@ pub fn attach_kill_on_close_job() {
 #[allow(dead_code)]
 pub fn attach_sidecar_kill_on_close_job(pid: u32) {
   if let Some(job) = assign_kill_on_close_job(pid, "sidecar") {
-    *SIDECAR_JOB_HANDLE.lock().unwrap() = job;
+    *SIDECAR_JOB_HANDLE.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = job;
   }
 }
 

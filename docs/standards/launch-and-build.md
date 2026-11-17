@@ -206,6 +206,15 @@ POSIX 上 `python3 -m venv` 缺 `ensurepip`（Debian/Ubuntu 系在单独的 `pyt
 4. 日志与状态文件沿用 §4 布局：`log/current/tools/comfy-cli-setup.log`、
    `run/comfy-cli-setup.json`（`{ phase, message, done, error, updated_at }`）。
 
+**执行链的提交参数（comfy-cli v1.24+）**：`executor-cli.ts` 的 `comfy run` 固定带
+`--client-id comfy-app-<taskId>`（按任务拼接，ComfyUI 侧队列 / 历史与服务端日志
+可据此对账本次提交——此前 cli 自生成随机 id，两边对不上号），并支持
+`--output-node-ids`（可重复）做部分执行：工作流库「实际使用」页签勾选输出后只跑
+目标分支及其依赖子图。参数构造收在纯函数 `buildComfyCliRunArgs`，部分执行回执
+（`partial_execution` / `partial_execution_targets_ignored`）由
+`executor-cli-stream.ts` 落进任务日志。排查顺序与命令示例见
+`docs/guides/comfy-cli-debug.md`。
+
 ### 1.3 启动完成后的前台归属（用户还在等就给，用户让出前台才不抢）
 
 启动要几十秒，用户往往在这段时间切去别的窗口干活。**加载完成时该不该把窗口顶到

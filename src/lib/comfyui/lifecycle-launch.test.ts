@@ -55,6 +55,12 @@ vi.mock("~/lib/process/process-launch", () => ({
   spawnManaged: vi.fn(),
   waitForDetachMediator: vi.fn().mockResolvedValue({ code: 0, stderr: "" }),
 }));
+/* bound 路径直接用 node:child_process 的 spawn：只换掉 spawn（其余——含测试自己
+ * 用来造句柄的 ChildProcess 类——保持原实现），错误事件用例据此驱动（ISSUE #4202）。 */
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, spawn: vi.fn() };
+});
 /* 日志目录隔离到临时目录（保活重定向文件按次落在这里）。 */
 vi.mock("~/lib/log/log-paths", () => {
   const dir = `${process.env.TEMP ?? process.env.TMPDIR ?? "/tmp"}/comfyapp-lifecycle-launch-test`;
@@ -73,11 +79,8 @@ import { getExitPolicy, getSettingsSync } from "../app-settings/app-settings.ser
 import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 
 import { startComfyExitWatcher } from "./lifecycle-exit";
-import {
-  ensureKeepAliveWatchOnAdoption,
-  pruneKeepAliveLogs,
-  type LaunchHost,
-} from "./lifecycle-launch";
+import { ensureKeepAliveWatchOnAdoption, type LaunchHost } from "./lifecycle-launch";
+import { pruneKeepAliveLogs } from "./keepalive-logs";
 import type { ComfyRuntimeSnapshot } from "./status";
 
 /* 造一个只带 pid 的子进程句柄（`spawnManaged` 的桩只需这一格事实）。 */
@@ -313,5 +316,63 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
     // 关键：没有为「接管」再 spawn 第二个进程
     expect(vi.mocked(spawnManaged)).toHaveBeenCalledTimes(1);
     expect(notes.join("\n")).toContain("转为等待该实例就绪");
+  });
+});
+
+describe("launchBoundMode —— 异步 spawn 失败走 error 事件（ISSUE #4202）", () => {
+  beforeEach(() => {
+    vi.mocked(getExitPolicy).mockReturnValue({
+      exitKillComfyui: true,
+      exitKillOllama: false,
+    });
+    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
+  });
+
+  it("spawn 后异步 error：不炸进程、清句柄、等待循环以失败收场", async () => {
+    const { spawn } = await import("node:child_process");
+    const fakeChild = new ChildProcess();
+    Object.defineProperty(fakeChild, "pid", { value: 5555, configurable: true });
+    vi.mocked(spawn).mockImplementation(() => {
+      /* spawn 返回之后监听器才挂上（launchBoundMode 同步接线）；用 setImmediate
+       * 模拟「Node 稍后以 error 事件报异步 spawn 失败」。 */
+      setImmediate(() => {
+        fakeChild.emit("error", new Error("spawn EACCES（模拟异步失败）"));
+      });
+      return fakeChild;
+    });
+    const { getComfyRuntimeSnapshot } = await import("./status");
+    vi.mocked(getComfyRuntimeSnapshot).mockResolvedValue({
+      running: false,
+      pid: null,
+      port: null,
+      via: null,
+      unverified: false,
+      didQueryProcTable: true,
+      source: null,
+    });
+
+    const { runEnsureLaunch } = await import("./lifecycle-launch");
+    const st: { child?: ChildProcess; stopRequested: boolean } = { stopRequested: false };
+    const notes: Array<string> = [];
+    const r = await runEnsureLaunch({
+      host: {
+        st,
+        appendRuntimeLog: vi.fn(),
+        beginRuntimeSession: () => "/tmp/comfyui-runtime-test.log",
+        clearComfyStopping: vi.fn(),
+        localTimestamp: () => "stamp",
+        markSessionStart: vi.fn(),
+        markSessionEnd: vi.fn(),
+        probeComfyUi: vi.fn().mockResolvedValue(null),
+      },
+      settings: getSettingsSync(),
+      timeoutMs: 5000,
+      note: (msg) => notes.push(msg),
+    });
+
+    expect(r.ok, JSON.stringify({ r, notes })).toBe(false);
+    /* 句柄被清掉（等待循环据此判死），退出账也落了。 */
+    expect(st.child).toBeUndefined();
+    expect(notes.join("\n")).toContain("退出");
   });
 });

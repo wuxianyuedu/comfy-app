@@ -6,6 +6,7 @@ import { withQuery } from "~/lib/query-string";
 
 import { isRecord } from "~/lib/is-record";
 import type { GenerationLogStage } from "./generation-log";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 /** 一条待落盘的执行日志（与界面条目同形：ts / kind / summary / detail?）。 */
 export type PersistableGenerationLog = {
@@ -27,7 +28,7 @@ export function persistGenerationLogs(
   }
   const payload = JSON.stringify({ stage, entries });
   try {
-    void fetch(LOGS_ENDPOINT, {
+    void fetchWithTimeout(LOGS_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: payload,
@@ -47,7 +48,7 @@ export async function fetchGenerationLogs(
 ): Promise<Array<PersistableGenerationLog>> {
   let res: Response;
   try {
-    res = await fetch(withQuery(LOGS_ENDPOINT, { stage, limit: limit || undefined }));
+    res = await fetchWithTimeout(withQuery(LOGS_ENDPOINT, { stage, limit: limit || undefined }));
   } catch {
     return [];
   }

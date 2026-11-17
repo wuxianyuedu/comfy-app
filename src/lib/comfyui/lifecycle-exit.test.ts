@@ -115,11 +115,16 @@ describe("describeComfyExit", () => {
 
 describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
   /** 可控定时器：测试自己决定什么时候「到了下一轮」。 */
-  function harness(findPid: () => Promise<PidLookup>, stopRequested = false) {
+  function harness(
+    findPid: () => Promise<PidLookup>,
+    stopRequested = false,
+    extra: Partial<Parameters<typeof startComfyExitWatcher>[0]> = {},
+  ) {
     const ticks: Array<() => void> = [];
     let stopped = false;
     const onExit = vi.fn();
     const watcher = startComfyExitWatcher({
+      ...extra,
       findPid,
       onExit,
       isStopped: () => stopRequested,
@@ -233,6 +238,68 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
     await h.tick(); // miss 1
     await h.tick(); // miss 2 → 判死
     expect(h.onExit).toHaveBeenCalledTimes(1);
+    expect(h.stopped()).toBe(true);
+  });
+
+  it("便宜先导信号说活着 → 本拍不起进程表查询（ISSUE #4197）", async () => {
+    const findPid = vi
+      .fn<() => Promise<PidLookup>>()
+      .mockResolvedValue({ pid: null, failed: false });
+    const probeAlive = vi.fn<() => Promise<boolean>>().mockResolvedValue(true);
+    const h = harness(findPid, false, { probeAlive });
+    await h.tick();
+    await h.tick();
+    expect(probeAlive).toHaveBeenCalledTimes(2);
+    expect(findPid).not.toHaveBeenCalled();
+    expect(h.onExit).not.toHaveBeenCalled();
+    expect(h.stopped()).toBe(false);
+  });
+
+  it("便宜信号不应答 → 落到进程表确认，判死判据不变", async () => {
+    const findPid = vi
+      .fn<() => Promise<PidLookup>>()
+      .mockResolvedValueOnce({ pid: 7001, failed: false })
+      .mockResolvedValue({ pid: null, failed: false });
+    const probeAlive = vi.fn<() => Promise<boolean>>().mockResolvedValue(false);
+    const h = harness(findPid, false, { probeAlive });
+    await h.tick(); // 便宜信号不应答 → 进程表命中 7001
+    expect(findPid).toHaveBeenCalledTimes(1);
+    await h.tick(); // 进程表 miss 1
+    await h.tick(); // miss 2 → 判死
+    expect(h.onExit).toHaveBeenCalledTimes(1);
+    expect(h.onExit).toHaveBeenCalledWith({ pid: 7001, uptimeMs: 0 });
+    expect(h.stopped()).toBe(true);
+  });
+
+  it("便宜信号抛错 → 不下结论，照旧走进程表确认", async () => {
+    const findPid = vi
+      .fn<() => Promise<PidLookup>>()
+      .mockResolvedValue({ pid: 7001, failed: false });
+    const probeAlive = vi.fn<() => Promise<boolean>>().mockRejectedValue(new Error("boom"));
+    const h = harness(findPid, false, { probeAlive });
+    await h.tick();
+    expect(findPid).toHaveBeenCalledTimes(1);
+    expect(h.onExit).not.toHaveBeenCalled();
+    expect(h.stopped()).toBe(false);
+  });
+
+  it("便宜信号由活转死：端口不应答 + 进程表连续两次查不到才判死", async () => {
+    const findPid = vi
+      .fn<() => Promise<PidLookup>>()
+      .mockResolvedValue({ pid: null, failed: false });
+    const probeAlive = vi
+      .fn<() => Promise<boolean>>()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    const h = harness(findPid, false, { probeAlive });
+    await h.tick(); // 便宜说活（不起查询）
+    await h.tick(); // 便宜说活
+    await h.tick(); // 便宜不应答 → 进程表 miss 1
+    await h.tick(); // 便宜不应答 → 进程表 miss 2 → 判死
+    expect(h.onExit).toHaveBeenCalledTimes(1);
+    /* 从未走过进程表命中 ⇒ pid 未知，如实带 null（uptime 仍由监督起点起算）。 */
+    expect(h.onExit).toHaveBeenCalledWith({ pid: null, uptimeMs: 0 });
     expect(h.stopped()).toBe(true);
   });
 });

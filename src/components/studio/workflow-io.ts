@@ -420,6 +420,14 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
   };
 }
 
+/** 输出条目在 **comfy-cli 展开后的图**里的节点 id（部分执行 `--output-node-ids`
+ *  的目标 id）。顶层节点就是 `nodeId`；子图内部条目（勾了「下钻」、带
+ *  `hostNodeId`）在展开后的 id 是「宿主 id : 内部 id」的拼接形式 —— 与
+ *  `workflow-io-types.ts` 里 `hostNodeId` 注释记录的运行期事实同源。 */
+export function cliOutputNodeId(entry: { hostNodeId?: string; nodeId: string }): string {
+  return entry.hostNodeId ? `${entry.hostNodeId}:${entry.nodeId}` : entry.nodeId;
+}
+
 /** 按当前模式过滤掉 `modeOverrides[mode].visible === false` 的行；未开启模式时原样返回，既有调用方行为不变。刻意只在「展示层」过滤：`defaultInputValues` 依旧给被隐藏的参数播种模式默认值，提交的 payload 不会因某参数在当前模式不可见就缺字段 —— 隐藏只是不打扰用户，不代表值不用下发。
  */
 export function filterVisibleInMode<

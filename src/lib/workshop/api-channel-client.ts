@@ -5,6 +5,7 @@
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { isRecord } from "~/lib/is-record";
 import type { ApiChannelSaveInput, ApiChannelsView, ApiChannelView } from "./api-channel-shared";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 /** POST /api/workshop-api/config 的请求体：两个通道各自可选，只补丁改字段。 */
 export type ApiChannelSavePayload = {
@@ -50,7 +51,7 @@ export function readApiErrorMessage(body: unknown): string | null {
 export async function saveApiChannels(payload: ApiChannelSavePayload): Promise<ApiChannelsView> {
   let res: Response;
   try {
-    res = await fetch(SAVE_ENDPOINT, {
+    res = await fetchWithTimeout(SAVE_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
