@@ -91,6 +91,9 @@ export function WorkflowCanvasNodePreview({
   /* 右列选中的对外输出口 —— 与左列的选中互斥（同一时刻只有一处被选，否则
    *  「按 ⌫ 断的是哪一根」说不清）。 */
   const [selectedOutputId, setSelectedOutputId] = useState<string | null>(null);
+  /* 调试用的部分执行目标（comfy-cli v1.24.0 `--output-node-ids`）：勾选的输出
+   *  节点（cli 展开后 id）。空 = 整图执行，与旧行为一致。 */
+  const [debugOutputIds, setDebugOutputIds] = useState<Array<string>>([]);
 
   /* 生效模式与节点上的模式 chip 同一口径（defaultMode → modes[0] → taskType）——
    * 卡片列、宿主表单、seed 模式、必填判定全都按它解析，不会再出现「chip 显示着
@@ -277,6 +280,8 @@ export function WorkflowCanvasNodePreview({
       values,
       effectiveParamMap: wiring.effectiveParamMap,
       seedModes,
+      /* 调试：勾了输出就只跑这些分支（comfy-cli --output-node-ids）。 */
+      ...(debugOutputIds.length > 0 ? { outputNodeIds: debugOutputIds } : {}),
     });
   }
 
@@ -390,11 +395,13 @@ export function WorkflowCanvasNodePreview({
       {viewMode === "use" && (
         <WorkflowPreviewUsePanel
           canRun={canRun}
+          debugOutputIds={debugOutputIds}
           effectiveMode={effectiveMode}
           effectiveModeLabel={effectiveModeLabel}
           logViewTaskId={logViewTaskId}
           missingLabels={missingLabels}
           modes={modes}
+          onDebugOutputIdsChange={setDebugOutputIds}
           onModeChange={onModeChange}
           onOpenLog={() => {
             setLogOpen(true);

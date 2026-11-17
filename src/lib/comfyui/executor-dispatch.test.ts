@@ -15,14 +15,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { isRecord } from "~/lib/is-record";
+import type * as ExecutorCliModule from "./executor-cli";
 
 vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock("./executor-cli", () => ({
-  executeViaComfyCli: vi.fn(),
-  cliProcs: new Map(),
-}));
+vi.mock("./executor-cli", async (importOriginal) => {
+  /* 保留真模块的纯函数（sanitizeOutputNodeIds 等），只替换会起子进程的提交口。 */
+  const actual = await importOriginal<typeof ExecutorCliModule>();
+  return { ...actual, executeViaComfyCli: vi.fn() };
+});
 vi.mock("./executor-ws", () => ({ connect: vi.fn() }));
 vi.mock("./executor-finalize", () => ({ finalizeFailure: vi.fn() }));
 /* Next 侧兜底会 dynamic import barrel；这里让它失败，用来验「未注入」那条路。 */
@@ -253,6 +255,45 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
     expect(state().pendingDispatch.has("t-raw")).toBe(true);
     expect(typeof state().startedAt.get("t-raw")).toBe("number");
     expect(logsOf("t-raw").some((m) => m.includes("任务已从队列领取"))).toBe(true);
+  });
+
+  it("params 里的 outputNodeIds 清洗后进 Job（部分执行，#4189）", async () => {
+    openWs();
+    const repo = fakeRepo({
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-part"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: { nodes: [] },
+          params: { outputNodeIds: ["9", "12", "", 7, "9"] },
+        }),
+      ),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    await mod.claimAndDispatchOnce();
+
+    // 只收非空字符串并去重；坏形状的行不得把整条任务带崩。
+    expect(cli.executeViaComfyCli).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: "t-part", outputNodeIds: ["9", "12"] }),
+    );
+  });
+
+  it("params 不带 outputNodeIds 时 Job 不带该字段（整图执行，行为不变）", async () => {
+    openWs();
+    const repo = fakeRepo({
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-full"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({ workflowName: "w", execPayload: { nodes: [] }, params: {} }),
+      ),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    await mod.claimAndDispatchOnce();
+
+    const job = vi.mocked(cli.executeViaComfyCli).mock.calls.at(-1)?.[0];
+    expect(job).toBeTruthy();
+    expect(job && "outputNodeIds" in job).toBe(false);
   });
 
   it("把 workflowInputs 全量打进任务日志（dev 重启后日志是唯一现场）", async () => {

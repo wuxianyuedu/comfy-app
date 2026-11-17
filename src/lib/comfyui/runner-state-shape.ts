@@ -24,6 +24,11 @@ export type RawWorkflowOverride = {
 };
 
 export type Job = {
+  /** 部分执行目标（调试用，comfy-cli v1.24.0 `--output-node-ids`）：只跑这些
+   *  输出节点及其依赖子图。缺省 = 整图执行，与旧行为逐字一致。取值已经过
+   *  `sanitizeOutputNodeIds` 清洗（非空字符串、去重、封顶）。 */
+  outputNodeIds?: Array<string>;
+
   /** 执行前注入到原始 JSON 里的画布 `workflowInputs`。 */
   overrides?: Array<RawWorkflowOverride>;
 
