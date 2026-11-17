@@ -264,7 +264,7 @@ export function usage() {
     "  -h, --help              显示帮助",
     "",
     "截图落本机（log/ 不进库）；上传到诉求单走现成命令：",
-    "  pnpm exec cnb issues upload-image --file <上面打印的路径> --number <诉求单号>",
+    "  pnpm exec cnb issues upload-image --repo moon-read/comfy-app-t3 --file <上面打印的路径> --number <诉求单号>",
   ].join("\n");
 }
 
@@ -530,7 +530,10 @@ export async function main(io = {}) {
 
   process.stdout.write(
     `\n[screenshot] 上传到诉求单（把 <单号> 与 <路径> 换掉）：\n${written
-      .map((file) => `  pnpm exec cnb issues upload-image --file "${file}" --number <单号>`)
+      .map(
+        (file) =>
+          `  pnpm exec cnb issues upload-image --repo moon-read/comfy-app-t3 --file "${file}" --number <单号>`,
+      )
       .join("\n")}\n`,
   );
   return 0;

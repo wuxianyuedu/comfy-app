@@ -66,7 +66,7 @@ pnpm screenshot --help                         # 全部选项
 上传走现成命令（**不新造第二套**，形状见 `cnb-upload-attachment` skill）：
 
 ```bash
-pnpm exec cnb issues upload-image --file "<上面打印的路径>" --number <诉求单号>
+pnpm exec cnb issues upload-image --repo moon-read/comfy-app-t3 --file "<上面打印的路径>" --number <诉求单号>
 pnpm exec cnb issues comment --number <诉求单号> --body "改后截图：<asset_link> · <改了哪、请核什么>"
 ```
 
