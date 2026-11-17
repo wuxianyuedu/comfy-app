@@ -6,6 +6,8 @@ import {
   DEFAULT_SETTLE_MS,
   DEFAULT_WIDTH,
   SCREENSHOT_DIR,
+  isMsysMangledRoute,
+  normalizeRoute,
   outputPathFor,
   parseArgs,
   slugForRoute,
@@ -103,5 +105,40 @@ describe("screenshot 帮助文本", () => {
     expect(text).toContain("--theme");
     expect(text).toContain("cnb issues upload-image");
     expect(text).toContain("log/screenshots");
+  });
+});
+
+describe("normalizeRoute —— Git Bash 的 MSYS 路径转换恢复（ISSUE #4161）", () => {
+  it("被转换的形状（盘符冒号开头）从 MSYS 安装根标记后恢复", () => {
+    expect(normalizeRoute("D:/Program Files/Git/settings")).toBe("/settings");
+    expect(normalizeRoute("C:/Git/settings")).toBe("/settings");
+    expect(normalizeRoute("D:/PortableGit/settings")).toBe("/settings");
+    /* 用户路由恰好以 /git 开头：first-match 落在安装根上，仍完整恢复。 */
+    expect(normalizeRoute("D:/Program Files/Git/git/settings")).toBe("/git/settings");
+  });
+
+  it("用户只传了「/」被翻成安装根 → 缺省路由", () => {
+    expect(normalizeRoute("D:/Program Files/Git")).toBe("/");
+    expect(normalizeRoute("C:/Git")).toBe("/");
+  });
+
+  it("恢复不了的改写保持原样（run() 据此给指向 MSYS_NO_PATHCONV 的报错）", () => {
+    expect(normalizeRoute("D:/tools/msys64/settings")).toBe("D:/tools/msys64/settings");
+    expect(isMsysMangledRoute("D:/tools/msys64/settings")).toBe(true);
+  });
+
+  it("缺斜杠 / 双斜杠 / 空值 / 正常路由", () => {
+    expect(normalizeRoute("settings")).toBe("/settings");
+    expect(normalizeRoute("//settings")).toBe("/settings");
+    expect(normalizeRoute("/settings")).toBe("/settings");
+    expect(normalizeRoute("")).toBe("/");
+    expect(normalizeRoute("/")).toBe("/");
+    expect(isMsysMangledRoute("/settings")).toBe(false);
+  });
+
+  it("parseArgs 的路由出口经过同一份归一化", () => {
+    expect(parseArgs(["D:/Program Files/Git/settings"]).route).toBe("/settings");
+    expect(parseArgs(["settings"]).route).toBe("/settings");
+    expect(parseArgs(["//settings"]).route).toBe("/settings");
   });
 });
