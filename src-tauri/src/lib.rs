@@ -30,10 +30,15 @@ mod shell_launch;
 ///
 /// 用 **tauri-plugin-shell 的 CommandChild** 而不是 `std::process::Command`：
 /// 官方的 shell 插件按平台选择解释器（Windows `cmd /C`、POSIX `sh -c`），
-/// 且 `kill()` 会连带回收子进程（POSIX 走进程组、Windows 走 Job/任务终止），
 /// 这正是「跨平台启动链路」里最不能自己手写的一段（AGENTS 硬规则 3）。
-/// 自持 `Command::new` + `taskkill` 的写法在 POSIX 上只剩单杀 leader ——
-/// node 之下的 next-server / turbopack worker 会残留成孤儿，继续占端口锁日志。
+/// 注意插件的 `kill()` **并非**无条件回收整棵树：树级回收（POSIX 进程组 /
+/// Windows Job）只在 spawn 时启用了 `.set_process_group(true)` 才有，而本侧
+/// 刻意没启用——那会再叠一层不带 `BREAKAWAY_OK` 的 job，保活服务的逃逸
+/// （`CREATE_BREAKAWAY_FROM_JOB`）会被它拦下。树级回收由两道专职机制承担：
+/// 正常关窗走 `kill_sidecar`（插件单杀 + `reap-process.mjs` 补刀）；壳被硬杀走
+/// `attach_sidecar_kill_on_close_job` 挂上的 `KILL_ON_JOB_CLOSE` job（ISSUE #4165，
+/// 句柄由壳持有）。自持 `Command::new` + `taskkill` 的写法在 POSIX 上只剩单杀
+/// leader —— node 之下的 next-server 会残留成孤儿，继续占端口锁日志。
 #[cfg(not(debug_assertions))]
 static SIDECAR: Mutex<Option<tauri_plugin_shell::process::CommandChild>> = Mutex::new(None);
 
@@ -1337,7 +1342,14 @@ fn spawn_sidecar(
     // 落在同一层，否则「server 写的库」和「入口要补的配置」是两个地方。
     .current_dir(&payload.app_root)
     .spawn()?;
+  let sidecar_pid = child.pid();
   *SIDECAR.lock().unwrap() = Some(child);
+  // OS 级兜底（ISSUE #4165）：给 sidecar 这棵树也挂 KILL_ON_JOB_CLOSE job。
+  // 正常关窗走 kill_sidecar（插件 kill + reap 补刀）；壳被硬杀时那条链一步都
+  // 跑不了，由 OS 关闭壳持有的 job 句柄当场终止整棵树——与编排器那棵树
+  // （attach_kill_on_close_job）同构。standalone 不写会话锚点，下一次启动的
+  // 孤儿回收对它没有认亲方式，所以这一层必须在壳死当场生效。
+  shell_launch::attach_sidecar_kill_on_close_job(sidecar_pid);
 
   // sidecar 的 stdout/stderr 必须有人读：shell 插件把输出投递到事件通道，
   // 无人消费时管道写满会让 sidecar 静默卡死（表现为「服务一直不就绪」）。
@@ -2960,6 +2972,43 @@ mod standalone_payload_tests {
     assert!(
       resolve.contains("FellBackToDevUrl") && spawn.contains("FellBackToDevUrl"),
       "「载荷缺失 + 允许回退 dev」这条分支要仍在解析侧与起进程两侧各自可见：{resolve}"
+    );
+  }
+
+  /// sidecar 这棵树也要有 OS 级硬杀兜底（ISSUE #4165）。
+  ///
+  /// 判据落在源码形态：「壳被硬杀」要任务管理器收掉 app.exe 才看得见，构建期一片绿。
+  /// 此前 §7.6 说的两条兜底里，`KILL_ON_JOB_CLOSE` job 只挂在编排器上——sidecar 这棵
+  /// 树没挂，壳被硬杀时内嵌 server 整棵成孤儿（且 standalone 不写会话锚点，下一次
+  /// 启动的孤儿回收认不出它）。钉住三件事：spawn_sidecar 起完就挂 job；job 两个旗标
+  /// 成对（KILL_ON_JOB_CLOSE 兜硬杀、BREAKAWAY_OK 保保活逃逸）；不启用插件的
+  /// process_group（它自建的 job 不带 BREAKAWAY_OK，会拦下保活服务的逃逸）。
+  #[test]
+  fn sidecar_tree_gets_its_own_kill_on_close_job() {
+    let spawn = fn_body("fn spawn_sidecar");
+    assert!(
+      spawn.contains("shell_launch::attach_sidecar_kill_on_close_job(sidecar_pid)"),
+      "spawn_sidecar 必须在句柄入槽后给 sidecar 挂 KILL_ON_JOB_CLOSE job：{spawn}"
+    );
+    let launch = include_str!("shell_launch.rs");
+    assert!(
+      launch.contains("pub fn attach_sidecar_kill_on_close_job"),
+      "shell_launch 必须提供 sidecar 版挂 job 入口（与编排器同构）"
+    );
+    assert!(
+      launch.contains("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK"),
+      "job 旗标必须成对：KILL_ON_JOB_CLOSE 兜硬杀，BREAKAWAY_OK 保保活逃逸"
+    );
+    // 判据看实现不看注释（与 vitest 侧 stripComments 同一取向）：doc 注释里正解释
+    // 「为什么不用插件的进程组开关」，不能让注释自己命中这条负控判据。
+    let launch_code = launch
+      .lines()
+      .map(|line| line.split("//").next().unwrap_or(""))
+      .collect::<Vec<&str>>()
+      .join("\n");
+    assert!(
+      !launch_code.contains("set_process_group"),
+      "sidecar 不得启用插件的进程组开关：插件自建的 job 不带 BREAKAWAY_OK，会拦下保活服务的 CREATE_BREAKAWAY_FROM_JOB"
     );
   }
 

@@ -3005,7 +3005,7 @@ Cannot find package 'promise-limit' imported from …\.next\standalone\…
 
 - **由 Rust 壳直接装配**：端口口径、密钥生成、按次命名日志、回收语义都得在另一门语言再写一份（ADR §14 D5「判据只收一处」+ 硬规则 3），且每次改动都要重编壳（硬规则 5）。
 - **由 Next 进程 fork 宿主**：把 Phase 4-B3 才卸掉的「Next 负责拉起执行宿主」耦合装回去，且宿主与 server 同生死。
-- **新增一个 standalone 运行入口**（选定）：它是壳的直系子进程，起 `server.js`（必要时起宿主），退出时按整棵树回收。多出来的一层进程由既有两条机制兜住——壳的 `KILL_ON_JOB_CLOSE` Job Object，与壳退出时的 `scripts/reap-process.mjs` 补刀。
+- **新增一个 standalone 运行入口**（选定）：它是壳的直系子进程，起 `server.js`（必要时起宿主），退出时按整棵树回收。多出来的一层进程由既有两条机制兜住——壳的 `KILL_ON_JOB_CLOSE` Job Object，与壳退出时的 `scripts/reap-process.mjs` 补刀。**两条对 sidecar 这棵树都真实在场**（ISSUE #4165）：job 由壳在 `spawn_sidecar` 起完就挂到 sidecar 的 pid 上（`attach_sidecar_kill_on_close_job`，句柄同样由壳持有、`BREAKAWAY_OK` 保住保活服务的逃逸）——此前只有编排器那棵树挂了 job，壳被硬杀时内嵌 server 整棵成孤儿，而 standalone 不写会话锚点、下一次启动的孤儿回收对它没有认亲方式，所以兜底必须在壳死当场生效，不能指望「下次启动再收」。Job Object 是 Windows 机制；POSIX 上两棵树（编排器 / sidecar）的硬杀兜底都缺席，树级回收只有退出补刀一条（既定边界，见 §3.3）。
 
 入口按**内容**被选中：载荷里有 `scripts/standalone-runtime.mjs` 就走它，没有就退回直接起 `server.js`（兼容按旧配置组装的载荷）。与 §1.5「按检出里有没有编排器定形态」同一条取向：环境开关会撒谎，文件内容不会。
 
