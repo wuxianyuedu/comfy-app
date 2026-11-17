@@ -103,13 +103,13 @@ describe("tabConfigSaveProjectDefaults —— 落项目默认（跟代码走）"
     ).rejects.toThrow();
   });
 
-  it("开发检出：写进入库那份 JSON，并把路径回传给界面", async () => {
+  it("开发检出：写进本机项目默认覆盖（data/，不写 src，ISSUE #4150），并把路径回传给界面", async () => {
     devCheckout.isDevCheckout.mockReturnValue(true);
     const res = await caller().tabConfigSaveProjectDefaults({
       config: { console: "shared", models: "shared" },
     });
     expect(res.config).toEqual({ console: "shared", models: "shared" });
-    expect(res.file).toBe(path.join(root, "src", "lib", "shell", "sidebar-tab-defaults.json"));
+    expect(res.file).toBe(path.join(root, "data", "sidebar-tab-project-defaults.json"));
   });
 });
 

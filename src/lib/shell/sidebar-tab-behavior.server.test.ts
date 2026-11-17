@@ -28,6 +28,7 @@ import {
   saveSidebarTabConfig,
   saveSidebarTabConfigAsProjectDefaults,
   SIDEBAR_TAB_DEFAULTS_REL_PATH,
+  SIDEBAR_TAB_PROJECT_DEFAULTS_RUNTIME_REL_PATH,
   SIDEBAR_TAB_LOCAL_REL_PATH,
 } from "./sidebar-tab-behavior.server";
 import { projectSidebarTabConfig } from "./sidebar-tab-behavior";
@@ -64,6 +65,9 @@ describe("侧栏页签行为：项目默认 + 本机覆盖", () => {
     expect(SIDEBAR_TAB_LOCAL_REL_PATH.startsWith("data/")).toBe(true);
     expect(SIDEBAR_TAB_LOCAL_REL_PATH.startsWith("config/")).toBe(false);
     expect(SIDEBAR_TAB_DEFAULTS_REL_PATH).toBe("src/lib/shell/sidebar-tab-defaults.json");
+    expect(SIDEBAR_TAB_PROJECT_DEFAULTS_RUNTIME_REL_PATH).toBe(
+      path.join("data", "sidebar-tab-project-defaults.json"),
+    );
   });
 
   it("没有覆盖文件时读到的是项目默认（不是空配置）", async () => {
@@ -126,26 +130,80 @@ describe("保存为项目默认：开发检出的写回入口（ISSUE #3623）",
     await expect(
       saveSidebarTabConfigAsProjectDefaults({ console: "shared" }, root),
     ).rejects.toThrow(/只在开发检出可用/);
-    // 拒绝的同时什么都没写
+    // 拒绝的同时什么都没写（src 编译源与 data/ 运行时覆盖都不在）
     await expect(
       fs.readFile(path.join(root, SIDEBAR_TAB_DEFAULTS_REL_PATH), "utf8"),
     ).rejects.toThrow();
+    await expect(
+      fs.readFile(path.join(root, SIDEBAR_TAB_PROJECT_DEFAULTS_RUNTIME_REL_PATH), "utf8"),
+    ).rejects.toThrow();
   });
 
-  it("开发检出：全量写进入库那份 JSON（跟代码走）", async () => {
+  it("开发检出：全量写进本机项目默认覆盖（data/，不写 src，ISSUE #4150）", async () => {
     await asDevCheckout();
     const res = await saveSidebarTabConfigAsProjectDefaults(
       { console: "shared", models: "shared" },
       root,
     );
     expect(res.config).toEqual({ console: "shared", models: "shared" });
-    const raw = await fs.readFile(path.join(root, SIDEBAR_TAB_DEFAULTS_REL_PATH), "utf8");
+    const raw = await fs.readFile(
+      path.join(root, SIDEBAR_TAB_PROJECT_DEFAULTS_RUNTIME_REL_PATH),
+      "utf8",
+    );
     expect(JSON.parse(raw)).toEqual(res.config);
-    expect(res.file).toBe(path.join(root, SIDEBAR_TAB_DEFAULTS_REL_PATH));
+    expect(res.file).toBe(path.join(root, SIDEBAR_TAB_PROJECT_DEFAULTS_RUNTIME_REL_PATH));
+    /* src 那份编译源运行期不再被写：工作树噪声与 dev 模块图失效的根源。 */
+    await expect(
+      fs.readFile(path.join(root, SIDEBAR_TAB_DEFAULTS_REL_PATH), "utf8"),
+    ).rejects.toThrow();
+    /* 写完即生效：读取链先认本机覆盖。 */
+    await expect(loadSidebarTabProjectDefaults(root)).resolves.toEqual(res.config);
   });
 
-  it("项目默认读不出来时回落编译进来的那份快照（正式包里没有源码）", async () => {
-    // root 下没有那份 JSON（正式包形态）
+  it("存量搬迁：旧版写进 src 的用户态在读链上自动搬去 data/（ISSUE #4150）", async () => {
+    await asDevCheckout();
+    /* 旧版现场：src 那份被「保存为项目默认」写过、与编译快照不同
+     * （快照里 console="independent"）。 */
+    const legacy = { console: "shared", models: "shared" };
+    await fs.mkdir(path.dirname(path.join(root, SIDEBAR_TAB_DEFAULTS_REL_PATH)), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(root, SIDEBAR_TAB_DEFAULTS_REL_PATH),
+      `${JSON.stringify(legacy, null, 2)}
+`,
+      "utf8",
+    );
+    await expect(loadSidebarTabProjectDefaults(root)).resolves.toEqual(legacy);
+    /* runtime 落点接住了用户态；此后 src 即使被还原也不影响读取。 */
+    const migrated = await fs.readFile(
+      path.join(root, SIDEBAR_TAB_PROJECT_DEFAULTS_RUNTIME_REL_PATH),
+      "utf8",
+    );
+    expect(JSON.parse(migrated)).toEqual(legacy);
+  });
+
+  it("src 与编译快照一致（提交态）时不迁移：本机不钉住基线", async () => {
+    await asDevCheckout();
+    const committed = projectSidebarTabConfig();
+    await fs.mkdir(path.dirname(path.join(root, SIDEBAR_TAB_DEFAULTS_REL_PATH)), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(root, SIDEBAR_TAB_DEFAULTS_REL_PATH),
+      `${JSON.stringify(committed, null, 2)}
+`,
+      "utf8",
+    );
+    await expect(loadSidebarTabProjectDefaults(root)).resolves.toEqual(committed);
+    /* 没有用户态就没有搬迁：runtime 落点保持缺省回落。 */
+    await expect(
+      fs.readFile(path.join(root, SIDEBAR_TAB_PROJECT_DEFAULTS_RUNTIME_REL_PATH), "utf8"),
+    ).rejects.toThrow();
+  });
+
+  it("本机覆盖读不出来时回落编译进来的那份快照（正式包形态）", async () => {
+    // root 下没有 data/ 覆盖（正式包形态）
     await expect(loadSidebarTabProjectDefaults(root)).resolves.toEqual(projectSidebarTabConfig());
   });
 });
