@@ -672,7 +672,10 @@ pub fn read_app_service_exit(project_root: &str) -> Option<String> {
 /// ## 返回语义（三态，`None` 不是错误）
 ///
 /// · `None`：会话文件读不到 / 解析不了 / 没有可查的 PID——**不知道**（典型：手工
-///   `pnpm dev` 没走编排器）。前端按「没有进程外信号」处理，退回纯 HTTP 判据（原行为）。
+///   `pnpm dev` 没走编排器）。注意这只代表**第一档**答不上：standalone 分发形态
+///   同样没有会话文件，那一档由壳持有的 sidecar 句柄直答（`liveness_from_sidecar`，
+///   ISSUE #4151；两档的按序归并在 lib.rs 的 `get_app_service_liveness`）。前端对
+///   最终的 `None` 按「没有进程外信号」处理，退回纯 HTTP 判据（原行为）。
 /// · `Some(true)`：名单里**任一**进程还活着——服务没死（正在忙 / 正在被编排器重启）。
 /// · `Some(false)`：名单全部不在了——进程确实没了，配合探活失败即是真断开。
 ///
@@ -736,9 +739,37 @@ fn liveness_from_pids(pids: &[u32], probe: impl Fn(u32) -> bool) -> Option<bool>
   Some(pids.iter().any(|pid| probe(*pid)))
 }
 
+/// 第二档判据的纯函数（ISSUE #4151）：standalone（分发）形态没有编排器与会话文件，
+/// 但壳**直接持有**内嵌 server（sidecar）的 `CommandChild` 句柄——不需要任何落盘
+/// 痕迹就能回答「进程还在吗」。与 `liveness_from_pids`（第一档：编排器会话名单）
+/// 互补，三态语义一致：
+///
+/// · 句柄不在（`None`）：这一档答不上——壳没起过 sidecar（prebuilt / 兜底 dev
+///   URL / debug 壳），回 `None` 让调用方落「不知道」，前端退回纯 HTTP 判据。
+/// · `terminated`（壳在事件通道里亲眼看到 `Terminated`）：进程确实没了，直接判
+///   `Some(false)`。这是进程外事实，且句柄在壳的整个生命周期里都指向同一个 PID，
+///   判死从此不受「PID 复用」影响，也不必再查一次系统。
+/// · 其余：按句柄上的 PID 查存活。死亡事件未达的毫秒级窗口里靠 PID 兜底，与
+///   第一档对会话名单的取向一致（#4146：名单刚写下时 PID 复用在这个时间尺度上
+///   不构成误读）。
+///
+/// 探活函数注入：与第一档同一取向，判据纯函数化，测试不必真起进程。
+pub fn liveness_from_sidecar(
+  handle_pid: Option<u32>,
+  terminated: bool,
+  probe: impl Fn(u32) -> bool,
+) -> Option<bool> {
+  let pid = handle_pid?;
+  if terminated {
+    return Some(false);
+  }
+  Some(probe(pid))
+}
+
 /// PID 还在吗（只查存在性，不关心它此刻忙不忙——忙正是软信号要容忍的那一档）。
+/// 两档判据共用：第一档查会话名单（#4146），第二档查壳持有的 sidecar 句柄（#4151）。
 #[cfg(windows)]
-fn pid_alive(pid: u32) -> bool {
+pub(crate) fn pid_alive(pid: u32) -> bool {
   use windows::Win32::Foundation::CloseHandle;
   use windows::Win32::System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
   // STILL_ACTIVE 的值（Win32 常量 259）；windows 0.62 的 Threading 模块没有导出这个名字，
@@ -759,9 +790,9 @@ fn pid_alive(pid: u32) -> bool {
 }
 
 /// POSIX：`kill(pid, 0)` 只探测存在性。0 = 在；EPERM = 在但没权限（也算在）；
-/// ESRCH = 不在。
+/// ESRCH = 不在。可见性说明见 Windows 档。
 #[cfg(not(windows))]
-fn pid_alive(pid: u32) -> bool {
+pub(crate) fn pid_alive(pid: u32) -> bool {
   // SAFETY: kill(2) 是无状态系统调用，只有 errno 需要读。
   let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
   rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
@@ -2190,5 +2221,29 @@ mod tests {
     assert_eq!(read_app_service_liveness(root), Some(false));
     assert!(read_app_service_liveness("").is_none(), "项目根为空回 None");
     let _ = std::fs::remove_dir_all(&dir);
+  }
+
+  /// 第二档判据（ISSUE #4151）：壳持有 sidecar 句柄时的三态归并。standalone 分发
+  /// 形态没有会话文件，这一档就是「进程外信号」的全部来源——「不知道」档不许
+  /// 编答案，壳亲眼看到的死亡事实（`Terminated` 已见）直接判死、PID 探测不再参与。
+  #[test]
+  fn sidecar_liveness_answers_from_handle_or_none() {
+    let alive_probe = |_: u32| true;
+    let dead_probe = |_: u32| false;
+
+    // 句柄不在（prebuilt / 兜底 dev URL / debug 壳）：无论死亡标记如何都答不上。
+    assert_eq!(liveness_from_sidecar(None, false, alive_probe), None);
+    assert_eq!(liveness_from_sidecar(None, true, alive_probe), None);
+
+    // 句柄在、进程在（Terminated 未见的常态）。
+    assert_eq!(liveness_from_sidecar(Some(4242), false, alive_probe), Some(true));
+
+    // 句柄在、探测说没了：死亡事件未达的毫秒级窗口里按 PID 兜底判死。
+    assert_eq!(liveness_from_sidecar(Some(4242), false, dead_probe), Some(false));
+
+    // 壳亲眼看到 Terminated：直接判死——即便探测（在 PID 复用误读的假想里）
+    // 说它活着，死亡事实也压过探测。
+    assert_eq!(liveness_from_sidecar(Some(4242), true, alive_probe), Some(false));
+    assert_eq!(liveness_from_sidecar(Some(4242), true, dead_probe), Some(false));
   }
 }

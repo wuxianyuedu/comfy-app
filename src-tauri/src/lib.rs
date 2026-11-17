@@ -37,6 +37,14 @@ mod shell_launch;
 #[cfg(not(debug_assertions))]
 static SIDECAR: Mutex<Option<tauri_plugin_shell::process::CommandChild>> = Mutex::new(None);
 
+/// 壳是否亲眼看到 sidecar 的 `Terminated` 事件（ISSUE #4151）。一经置位不复位：
+/// 句柄在壳的整个生命周期里都指向同一个 PID，看到它退出之后 PID 探测就既不必
+/// 再做、也不可信（PID 理论上会被系统复用）——死亡本身已经是进程外事实。
+/// 句柄本身仍留在槽位里不摘：退出时 `kill_sidecar` 还要靠它回收作业里可能残留
+/// 的孙辈进程（AGENTS 硬规则 3：必须杀整棵树），清槽位等于放弃那道回收。
+#[cfg(not(debug_assertions))]
+static SIDECAR_TERMINATED: AtomicBool = AtomicBool::new(false);
+
 /// 应用级状态：由 launcher 通过环境变量传入项目根目录，
 /// 启动页调用 get_launch_status / navigate_to_app 时使用。
 struct AppState {
@@ -1043,17 +1051,48 @@ fn get_app_service_exit(state: tauri::State<'_, AppState>) -> Result<Option<Stri
 }
 
 /// 读回「本检出的应用服务进程还活着吗」——**不经过应用服务自己**的进程外信号
-/// （ISSUE #4146）。判据与三态语义见 `shell_launch::read_app_service_liveness`。
+/// （ISSUE #4146）。两档判据按序作答，三态语义一致（`None` 是「不知道」，不是错误）：
+///
+/// · 第一档（prebuilt）：读编排器落下的 `run/launcher-session.json`（PID 名单）
+///   逐个查存活——判据见 `shell_launch::read_app_service_liveness`；
+/// · 第二档（ISSUE #4151）：会话文件答不上、但壳持有 standalone 内嵌 server 的
+///   `CommandChild` 句柄 → 按句柄存活直答（`shell_launch::liveness_from_sidecar`）。
+///   分发形态没有编排器与会话文件，此前只能退回纯 HTTP 判据，#3369 的「服务忙
+///   几秒被判断开」在桌包上仍会发生——壳正握着那棵树的句柄，理应由它作答。
+/// · 两档都答不上（手工 `pnpm dev` / prebuilt 无 sidecar / 浏览器 / 旧壳）→
+///   `Ok(None)`，前端按原行为退化；旧壳没有本命令时 invoke 报错，catch 后同样退化。
 ///
 /// 为什么探活失败时还需要这一问：dev server 是单事件循环，同步重活会把它停走数秒，
 /// 期间 HTTP 探活必然连续超时，而进程活得好好的。前端拿这个答案区分「真断开」
 /// （进程没了）与「暂时无响应」（进程在、忙）——后者不再把界面翻红。
-///
-/// 回 `Ok(None)`：会话文件读不到（手工 `pnpm dev`）等「不知道」档，前端按原行为
-/// 退化；旧壳没有本命令时前端 invoke 报错，catch 后同样退化。
 #[tauri::command]
 fn get_app_service_liveness(state: tauri::State<'_, AppState>) -> Result<Option<bool>, String> {
-  Ok(shell_launch::read_app_service_liveness(&state.project_root()))
+  // 第一档读到结论就直接用：会话名单是编排器刚写下的当下事实，优先级恒在第二档
+  // 之前。两档在运行期互斥（起 sidecar 的形态没有编排器），按序只是把「谁更权威」
+  // 写明——万一将来出现两者并存的形态，这里不会静默换源。
+  if let Some(alive) = shell_launch::read_app_service_liveness(&state.project_root()) {
+    return Ok(Some(alive));
+  }
+  Ok(sidecar_liveness())
+}
+
+/// 第二档判据的数据面（ISSUE #4151）：壳手里的 sidecar 句柄在不在、死没死。
+/// 三态归并（纯函数）在 `shell_launch::liveness_from_sidecar`，句柄的持有与
+/// 生命周期（槽位 / Terminated 置位 / 退出回收）见 `SIDECAR` / `SIDECAR_TERMINATED`。
+///
+/// debug 壳不编译 sidecar 整档（`SIDECAR` / `spawn_sidecar` 都是 release-only），
+/// 这一档恒为「不知道」：`tauri dev` 走 prebuilt，第一档的会话文件已覆盖。
+#[cfg(not(debug_assertions))]
+fn sidecar_liveness() -> Option<bool> {
+  let slot = SIDECAR.lock().unwrap();
+  let handle_pid = slot.as_ref().map(|child| child.pid());
+  let terminated = SIDECAR_TERMINATED.load(Ordering::Relaxed);
+  shell_launch::liveness_from_sidecar(handle_pid, terminated, shell_launch::pid_alive)
+}
+
+#[cfg(debug_assertions)]
+fn sidecar_liveness() -> Option<bool> {
+  None
 }
 
 /// 关闭窗口（默认启动页）。
@@ -1317,6 +1356,11 @@ fn spawn_sidecar(
         }
         CommandEvent::Terminated(payload) => {
           log::info!("[sidecar] terminated: {:?}", payload.code);
+          /* 壳亲眼看到它死了：把这一事实记给第二档探活判据（ISSUE #4151），此后
+           * get_app_service_liveness 不再靠 PID 探测作答。写在事件回调里而不是
+           * 别处：这个事件是壳内唯一「确定它已退出」的时刻。句柄留在槽位里——
+           * 退出时 kill_sidecar 还要靠它回收作业内可能残留的孙辈进程。 */
+          SIDECAR_TERMINATED.store(true, Ordering::Relaxed);
           /* 服务死的那一刻落盘（ISSUE #1692 的 sidecar 档）：探测那一格打的是服务
            * 自己的 HTTP，服务一不在就永远问不到「为什么没了」——答案只能由此刻
            * 还活着的壳写下（见 shell_launch::write_sidecar_exit_record）。写在事件回调里
