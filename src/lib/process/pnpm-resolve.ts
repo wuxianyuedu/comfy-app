@@ -347,6 +347,11 @@ const invocationCache = new Map<
  *  永久当成结论。 */
 const INVOCATION_MISS_TTL_MS = 60_000;
 
+/** 命中（可用）结论的黏滞时长（ISSUE #4256）：由「进程级永久存活」改为 10 分钟——
+ *  会话中途迁移 / 升级工具链（corepack 换目录、nvm 切换）后，旧绝对路径可能已
+ *  不存在；10 分钟后重新探针一次（一次 spawnSync 约几十毫秒）即可自愈。 */
+const INVOCATION_HIT_TTL_MS = 10 * 60 * 1000;
+
 /** 缓存条目上限：键是用户敲的命令名，实际上个位数；上限只为防病态输入无界生长
  *  （到顶淘汰最早写入的一条，与 `sweep-negative-cache` 同一取向）。 */
 const INVOCATION_CACHE_MAX = 64;
@@ -415,7 +420,9 @@ export function resolveCommandInvocation(
   const key = `${platform}|${file}|${probeArgs.join(" ")}`;
   if (cacheable) {
     const hit = invocationCache.get(key);
-    if (hit !== undefined && (hit.found || Date.now() - hit.at < INVOCATION_MISS_TTL_MS)) {
+    /* 命中（可用）结论按 10 分钟黏滞、未命中按 60s——见两个 TTL 常量的注释。 */
+    const ttl = hit?.found === true ? INVOCATION_HIT_TTL_MS : INVOCATION_MISS_TTL_MS;
+    if (hit !== undefined && Date.now() - hit.at < ttl) {
       return hit.resolve(args);
     }
   }
