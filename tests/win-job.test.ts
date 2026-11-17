@@ -33,8 +33,15 @@ describe("Job Object 防孤儿（壳内联实现，唯一出处）", () => {
     expect(src).toContain("static JOB_HANDLE");
     expect(src).toContain("static SIDECAR_JOB_HANDLE");
     // 共同内核返回句柄值，两棵树（编排器 / standalone sidecar，#4165）各存各的 static。
-    expect(src).toContain("*JOB_HANDLE.lock().unwrap() = job;");
-    expect(src).toContain("*SIDECAR_JOB_HANDLE.lock().unwrap() = job;");
+    /* 这条 pin 的语义是「句柄存进 static 且赋值发生」，不钉锁的错误处理写法：
+     * #4248 把 unwrap 换成防中毒形态（unwrap_or_else(PoisonError::into_inner)）
+     * 时旧字符串 pin 当场过期（#4259）——两种形态都算在场。 */
+    expect(src).toMatch(
+      /\*JOB_HANDLE\.lock\(\)\.(?:unwrap\(\)|unwrap_or_else\(std::sync::PoisonError::into_inner\)) = job;/,
+    );
+    expect(src).toMatch(
+      /\*SIDECAR_JOB_HANDLE\.lock\(\)\.(?:unwrap\(\)|unwrap_or_else\(std::sync::PoisonError::into_inner\)) = job;/,
+    );
   });
 
   it("外部脚本路径已移除：win_job.py 删除、无 attach_job_via_helper（内联是唯一实现）", () => {
