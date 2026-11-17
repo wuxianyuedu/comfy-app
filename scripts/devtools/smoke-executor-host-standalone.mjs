@@ -10,13 +10,15 @@
  * `next start` 与这里的 `output: standalone` 不兼容——所以只查配置的门禁等于在
  * 断言一句没人验证过的承诺。
  *
- * 查的三件事，按「失败时哪一条最可行动」排序：
+ * 查的四件事，按「失败时哪一条最可行动」排序：
  *   1. 预编译运行时图与它的构建清单在不在
  *      （`scripts/executor-host.runtime.mjs` / `executor-host.build.json`）
- *   2. bundle 记账下来的每个 external（扣掉 Node 内置模块）**能不能从产物里解析到**
+ *   2. RUNTIME_SCRIPTS 白名单里的每件运行期脚本是否真的被追踪带进了产物
+ *      （白名单只保证「剔除时保留」，救不了「追踪没带进来」——ISSUE #4167）
+ *   3. bundle 记账下来的每个 external（扣掉 Node 内置模块）**能不能从产物里解析到**
  *      ——这一条抓的是「`drizzle-orm` 根本不在产物的 node_modules 里」那类问题，
  *      趁还没把坏包发给使用者之前抓住
- *   3. 产物里的那份宿主**真的能 boot**：在产物目录内跑
+ *   4. 产物里的那份宿主**真的能 boot**：在产物目录内跑
  *      `node scripts/executor-host.mjs --once`，必须退出 0 且日志出现 `runtime inject-ok`
  *
  * `--once` 在 boot + 注入 + 一次队列扫描之后就退出，所以这里既不派发任务，也不需要
@@ -33,6 +35,7 @@ import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { builtinModules, createRequire } from "node:module";
+import { RUNTIME_SCRIPTS } from "../standalone-private-inputs.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const DEFAULT_TARGET = path.join(ROOT, ".next", "standalone");
@@ -74,6 +77,28 @@ export function smokeExecutorHostArtifact(targetDir = DEFAULT_TARGET) {
     }
   }
   if (problems.length > 0) {
+    return { ok: false, problems, detail };
+  }
+
+  // 3) RUNTIME_SCRIPTS 白名单里的每一件都必须真的在产物里。白名单只保证「剔除时
+  //    保留在场文件」——它救不了「追踪根本没把文件带进产物」的情况（ISSUE #4167：
+  //    Linux 追踪按 contains 子串语义套用 outputFileTracingExcludes，"devtools/"
+  //    含 "tools/"、"affected-tests/" 含 "tests/"，整棵子树被排除出产物）。这里
+  //    逐件点名，缺几件、缺哪几件一次说全，别让调用方从 ERR_MODULE_NOT_FOUND 反推。
+  const missingRuntimeScripts = RUNTIME_SCRIPTS.filter(
+    (rel) => !fs.existsSync(path.join(targetDir, "scripts", rel)),
+  );
+  if (missingRuntimeScripts.length > 0) {
+    fail(
+      problems,
+      `runtime scripts missing from the artifact (${missingRuntimeScripts.length}): ` +
+        `${missingRuntimeScripts.join(", ")} - the tracer skipped their subtree ` +
+        "(Linux applies outputFileTracingExcludes with contains semantics, so " +
+        '"scripts/devtools" matches "./tools/**" and "scripts/affected-tests" ' +
+        'matches "./tests/**"); add the exact paths to outputFileTracingIncludes ' +
+        "in next.config.js (spec launch-and-build.md 7.5.1)",
+    );
+    // 缺运行期脚本是最可行动的那一档：先把清单报全再返回，不往下起进程。
     return { ok: false, problems, detail };
   }
 
