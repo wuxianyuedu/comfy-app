@@ -171,6 +171,39 @@ describe("冒烟判据本身有效", () => {
     expect(result.problems.join(" ")).toContain("server.js");
   });
 
+  /** ISSUE #4167 的现场：三件宿主文件在场、但追踪没把 `scripts/devtools/**` 带进产物。
+   *  冒烟必须先逐件核对 RUNTIME_SCRIPTS 并一次报全缺件清单，而不是等 spawn 出
+   *  ERR_MODULE_NOT_FOUND 再让调用方反推缺了哪件。 */
+  it("RUNTIME_SCRIPTS 有缺件时报缺件清单，而不是照常起进程", async () => {
+    const { smokeExecutorHostArtifact } =
+      await import("../scripts/devtools/smoke-executor-host-standalone.mjs");
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "comfyapp-smoke-missing-"));
+    try {
+      fs.writeFileSync(path.join(dir, "server.js"), "");
+      fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+      for (const [name, body] of [
+        ["executor-host.mjs", ""],
+        ["executor-host.runtime.mjs", ""],
+        ["executor-host.build.json", '{"externals":[]}'],
+      ] as const) {
+        fs.writeFileSync(path.join(dir, "scripts", name), body);
+      }
+      const result = smokeExecutorHostArtifact(dir);
+      expect(result.ok).toBe(false);
+      const problem = result.problems.join("\n");
+      expect(problem).toContain("runtime scripts missing");
+      // #4167 缺的那一件必须被点名
+      expect(problem).toContain("devtools/env-preflight.mjs");
+      // 缺件档先返回，不往下起进程（externals / boot 不在这一次的诊断里）
+      expect(problem).not.toContain("externals");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("冒烟读的是构建清单里的 externals，而不是再猜一份", () => {
     expect(smokeScript).toContain("executor-host.build.json");
     expect(smokeScript).toMatch(/manifest\.externals/);
