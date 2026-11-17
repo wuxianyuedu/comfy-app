@@ -429,12 +429,11 @@ export const llmRouter = createTRPCRouter({
       });
     }),
 
-  /** 把当前编辑的适配器写进**本机项目默认覆盖**
-   *  （`data/workshop-model-adapter-project-defaults.json`，不入库；ISSUE #3951，
-   *  #4171 起落点迁出 src）。与「模式契约」的保存为项目默认同一档：只有开发
-   *  检出可写（正式包没有可写目标，调用即错用，大声失败）；写完现读即生效，
-   *  不必重启。端点路径与 workshopAdaptersSave 同口径：省略 = 取生效档现值
-   *  （本页不编辑它）。 */
+  /** 把当前编辑的适配器写进入库的**项目默认**
+   *  （`src/lib/workshop/model-adapter-defaults.json`，跟代码走；ISSUE #3951）。
+   *  与「模式契约」的保存为项目默认同一档：只有开发检出可写（正式包没有源码，
+   *  调用即错用，大声失败）；写完现读即生效，不必重启。端点路径与
+   *  workshopAdaptersSave 同口径：省略 = 取生效档现值（本页不编辑它）。 */
   workshopAdaptersSaveAsDefaults: authedProcedure
     .input(
       z.object({
