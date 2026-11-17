@@ -61,6 +61,8 @@ const shell = vi.hoisted(() => ({
 }));
 vi.mock("~/lib/shell/desktop-shell-client", () => ({
   readAppServiceExitRecord: shell.readAppServiceExitRecord,
+  /* 轮询内核（poll-timer）也从这个模块取环境判据：jsdom 按浏览器形态（非桌面壳）。 */
+  isDesktopShell: () => false,
 }));
 
 function stubShellExitRecord(record: unknown = EXIT_RECORD) {
@@ -476,5 +478,97 @@ describe("useAppServiceMessageLog：每条消息盖「启动戳」", () => {
 
     await expect.poll(() => messages().length).toBe(1);
     expect(messages()[0]!.runId).toBeNull();
+  });
+});
+
+describe("useAppServiceMessageLog：启动分支失败提示（ISSUE #4257）", () => {
+  /** 让 `/api/dev/boot-branches` 回一份分支清单，并记录它被打了几次；
+   *  其余端点照常兜底（last-exit 回无记录）。 */
+  function stubBootBranchEndpoint(branches: unknown[], opts: { fail?: boolean } = {}) {
+    const calls = { bootBranches: 0 };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes("/api/dev/boot-branches")) {
+          calls.bootBranches += 1;
+          if (opts.fail === true) {
+            throw new Error("network down");
+          }
+          return Response.json({ branches });
+        }
+        if (!url.includes("/api/dev/last-exit")) {
+          return new Response("{}", { status: 404 });
+        }
+        return Response.json({ record: null, currentRunId: DEFAULT_RUN_ID });
+      }),
+    );
+    return calls;
+  }
+
+  function bootMessages() {
+    return messages().filter((m) => m.id?.startsWith("boot-branch-"));
+  }
+
+  it("新进程就绪后拉到失败的功能分支 → 推一条带确定 id 的提示（标题给后果与出路）", async () => {
+    const calls = stubBootBranchEndpoint([
+      { name: "dispatch", ok: false, detail: "派发循环没能启动", at: "2026-11-18T00:00:00.000Z" },
+    ]);
+    mount({ state: "online", processIsNew: true });
+
+    await expect.poll(() => bootMessages().length).toBe(1);
+    expect(calls.bootBranches).toBeGreaterThanOrEqual(1);
+    const m = bootMessages()[0]!;
+    expect(m.kind).toBe("info");
+    /* id 按 runId + 分支名确定：刷新与重复轮询靠它去重。 */
+    expect(m.id).toBe(`boot-branch-${DEFAULT_RUN_ID}-dispatch`);
+    expect(m.title).toBe("应用服务：任务自动派发未启动");
+    expect(m.body).toContain("排队中的任务不会被自动执行");
+    expect(m.body).toContain("重启");
+    expect(m.runId).toBe(DEFAULT_RUN_ID);
+  });
+
+  it("同一启动内重复轮询（同分支同 id）不重复推——由 store 的幂等去重吸收", async () => {
+    const calls = stubBootBranchEndpoint([
+      { name: "reaper", ok: false, detail: "回收循环没能启动", at: "2026-11-18T00:00:00.000Z" },
+    ]);
+    const { rerender } = mount({ state: "online", processIsNew: true });
+    await expect.poll(() => bootMessages().length).toBe(1);
+
+    /* 假→真翻转让轮询 effect 重建、immediate 再查一拍：id 不变 ⇒ 仍只有一条。 */
+    rerender({ processIsNew: false });
+    rerender({ processIsNew: true });
+    await expect.poll(() => calls.bootBranches).toBeGreaterThanOrEqual(2);
+    expect(bootMessages()).toHaveLength(1);
+    expect(bootMessages()[0]!.id).toBe(`boot-branch-${DEFAULT_RUN_ID}-reaper`);
+    expect(bootMessages()[0]!.title).toBe("应用服务：孤儿任务回收未启动");
+  });
+
+  it("接口报来的失败分支都推（功能筛选是路由层的判据）；未知分支落通用文案", async () => {
+    const calls = stubBootBranchEndpoint([
+      { name: "event-loop-watch", ok: false, detail: "观测挂了", at: "2026-11-18T00:00:00.000Z" },
+      { name: "film-resume", ok: true, detail: "", at: "2026-11-18T00:00:00.000Z" },
+    ]);
+    mount({ state: "online", processIsNew: true });
+
+    await expect.poll(() => bootMessages().length).toBe(1);
+    expect(calls.bootBranches).toBeGreaterThanOrEqual(1);
+    /* 只推失败的（ok:true 的 film-resume 不出现）；报上来的分支不在已知名单里
+     * 也给通用文案，不整条吞掉。 */
+    expect(bootMessages()[0]!.id).toBe(`boot-branch-${DEFAULT_RUN_ID}-event-loop-watch`);
+    expect(bootMessages()[0]!.title).toBe("应用服务：后台功能「event-loop-watch」未启动");
+    expect(bootMessages()[0]!.body).toContain("重启");
+  });
+
+  it("端点挂了不炸也不留消息（分支失败本身已有 boot 日志兜底）", async () => {
+    stubBootBranchEndpoint([], { fail: true });
+    mount({ state: "online", processIsNew: true });
+
+    /* 排空一轮微任务：拉取失败已被 check 内的 catch 吸收，确认没有副作用。 */
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(bootMessages()).toHaveLength(0);
   });
 });

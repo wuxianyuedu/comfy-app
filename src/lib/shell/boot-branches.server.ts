@@ -67,8 +67,22 @@ export function failedFunctionalBootBranches(): BootBranchOutcome[] {
   return bootBranchOutcomes().filter((o) => !o.ok && FUNCTIONAL_BRANCHES.has(o.name));
 }
 
-/** 落盘（`run/boot-branches.json`，gitignore 的运行期目录）。 */
-export async function persistBootBranches(): Promise<void> {
+/** 落盘串行队列：分支失败可能接连发生，每次记账都会触发一次落盘——并发写
+ *  同一文件在 Windows 上会互相踩（EPERM），而「慢的那次旧快照后到」会把
+ *  新快照覆盖回旧内容（CI 上读回用例实测输过一次）。写入排成一条链：
+ *  永远串行、后写覆盖先写，读回永远看到最新一次的完整快照。 */
+let writeChain: Promise<void> = Promise.resolve();
+
+/** 落盘（`run/boot-branches.json`，gitignore 的运行期目录）。返回的 promise 在
+ *  **这一笔**写完（或失败）时结算；生产里是 fire-and-forget，测试要确定性
+ *  就显式 await（它排在队列里，之前欠的写入也会一并完成）。 */
+export function persistBootBranches(): Promise<void> {
+  const next = writeChain.then(persistNow, persistNow);
+  writeChain = next;
+  return next;
+}
+
+async function persistNow(): Promise<void> {
   const payload = {
     generatedAt: nowIso(),
     branches: bootBranchOutcomes(),
