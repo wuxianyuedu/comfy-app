@@ -53,8 +53,8 @@ const { llmServer, contracts, defaults, workshopLlm } = vi.hoisted(() => ({
     effectiveModelAdaptersDoc: vi.fn((_name: string, dbDoc: RemoteModelAdaptersDoc) => dbDoc),
     saveModelAdaptersAsDefaults: vi.fn((_name: string, doc: RemoteModelAdaptersDoc) => ({
       doc,
-      file: "src/lib/workshop/model-adapter-defaults.json",
-      relPath: "src/lib/workshop/model-adapter-defaults.json",
+      file: "data/workshop-model-adapter-project-defaults.json",
+      relPath: "data/workshop-model-adapter-project-defaults.json",
     })),
   },
 }));
@@ -642,7 +642,7 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
     expect(defaults.saveModelAdaptersAsDefaults).toHaveBeenCalledTimes(1);
     const passed = defaults.saveModelAdaptersAsDefaults.mock.calls[0]?.[1];
     expect(passed?.adapters[0]?.mode).toBe("TXT2IMG");
-    expect(res.relPath).toBe("src/lib/workshop/model-adapter-defaults.json");
+    expect(res.relPath).toBe("data/workshop-model-adapter-project-defaults.json");
   });
 
   it("保存为项目默认：端点路径省略 = 取生效档现值（本页不编辑这格）", async () => {
