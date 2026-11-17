@@ -13,7 +13,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 /* POSIX 宿主探针改由 fixture 提供（`tests/helpers/platform-fixtures.ts`）——
  * 原来本文件自己写了一份 `posixHost()`，与 `kill-process-tree` 那边同形。
  * fixture 版是同一份实现，改一处两边都动。 */
@@ -24,6 +24,7 @@ import {
   executableKind,
   pnpmInvocation,
   pnpmJsEntry,
+  realUsabilityProbe,
   resolveCommandInvocation,
   usableCommand,
   whichCommand,
@@ -612,5 +613,50 @@ describe("whichCommand：每次调用现解析（不再有进程内记忆化）"
       args: [],
       resolved: false,
     });
+  });
+});
+
+describe("resolveCommandInvocation —— 解析结论的进程级缓存（ISSUE #4201）", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("存在的命令：第二次解析命中缓存，不再起 spawnSync 探针", () => {
+    const spawnSpy = vi.spyOn(realUsabilityProbe, "spawn");
+    const first = resolveCommandInvocation("node", ["--flag"]);
+    expect(first.resolved).toBe(true);
+    const spawnsAfterFirst = spawnSpy.mock.calls.length;
+    expect(spawnsAfterFirst).toBeGreaterThan(0);
+    const second = resolveCommandInvocation("node", ["--other"]);
+    expect(second.resolved).toBe(true);
+    expect(second.command).toBe(first.command);
+    /* 命中的结论来自缓存：同一台机器上同一命令的解析不该再付一遍
+     * spawnSync 探针（那是请求路径上最长 30s 的同步阻塞来源）。 */
+    expect(spawnSpy.mock.calls.length).toBe(spawnsAfterFirst);
+  });
+
+  it("未命中结论短窗黏滞：窗口内不重扫，过期后重新解析（装上命令能自愈）", () => {
+    vi.useFakeTimers();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "exec-cache-4201-"));
+    const savedPath = process.env.PATH;
+    const name = "totally-fake-cmd-4201";
+    process.env.PATH = `${dir}${path.delimiter}${savedPath ?? ""}`;
+    try {
+      /* 还没装：完整扫描后落「未命中」结论并黏滞。 */
+      expect(resolveCommandInvocation(name, []).resolved).toBe(false);
+      /* 装上一个**真起得来**的候选（探针会真起它一次；本层的「找到候选」以
+       * 可用性探针为准，文本假文件会被探针判死、结论仍是未命中）。 */
+      const installed = path.join(dir, process.platform === "win32" ? `${name}.exe` : name);
+      fs.copyFileSync(process.execPath, installed);
+      fs.chmodSync(installed, 0o755);
+      vi.advanceTimersByTime(61_000);
+      /* 黏滞过期：重新扫描认出这个新装上的候选。若仍返回 false，说明把
+       * 过期结论也黏滞死了（装上命令无法自愈）。 */
+      expect(resolveCommandInvocation(name, []).resolved).toBe(true);
+    } finally {
+      process.env.PATH = savedPath;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

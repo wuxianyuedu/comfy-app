@@ -325,6 +325,45 @@ export type ResolvedInvocation = {
   resolved: boolean;
 };
 
+/* ── 解析结论的进程级缓存（ISSUE #4201）────────────────────────────────
+ * `resolveCommandInvocation` 的探针是**同步** `spawnSync`（上限 30s），而它的两个
+ * 调用方（`/api/console/run`、`/api/feedback/publish`）都在**请求路径**上——单事件
+ * 循环的服务里，一次慢探针就是一次全体请求排队（#4195/#4146 同族）。同一个命令名
+ * 在一台机器上的解析结论（PATH 扫描 + 可用性确认）几乎不随时间变化，因此：
+ *   · **命中（可用）结论**进程级存活；
+ *   · **未命中 / 不可用结论**只黏滞 {@link INVOCATION_MISS_TTL_MS}——命令装上了
+ *     要能自愈；
+ *   · 只对「默认环境 + 默认探针 + 当前平台」的生产形态生效：注入了 env / probe /
+ *     platform 的调用方（测试、特殊宿主）各不相同，一律不进缓存。
+ */
+type InvocationResolver = (args: Array<string>) => ResolvedInvocation;
+
+const invocationCache = new Map<
+  string,
+  { at: number; found: boolean; resolve: InvocationResolver }
+>();
+
+/** 未命中 / 不可用结论的黏滞时长：命令装上之后要能自愈，不能把「现在没有」
+ *  永久当成结论。 */
+const INVOCATION_MISS_TTL_MS = 60_000;
+
+/** 缓存条目上限：键是用户敲的命令名，实际上个位数；上限只为防病态输入无界生长
+ *  （到顶淘汰最早写入的一条，与 `sweep-negative-cache` 同一取向）。 */
+const INVOCATION_CACHE_MAX = 64;
+
+function resetInvocationCacheEntry(
+  key: string,
+  entry: { at: number; found: boolean; resolve: InvocationResolver },
+): void {
+  if (invocationCache.size >= INVOCATION_CACHE_MAX && !invocationCache.has(key)) {
+    const oldest = invocationCache.keys().next().value;
+    if (oldest !== undefined) {
+      invocationCache.delete(oldest);
+    }
+  }
+  invocationCache.set(key, entry);
+}
+
 /**
  * 把一行「用户想跑的命令」解析成这台机器上真能起得来的形态。
  *
@@ -368,19 +407,41 @@ export function resolveCommandInvocation(
     probeArgs = ["--version"],
   }: WhichCommandOptions = {},
 ): ResolvedInvocation {
+  /* 只缓存「默认环境 + 默认探针 + 当前平台」的生产形态（ISSUE #4201）：
+   * 注入 env / probe / platform 的调用方（测试、特殊宿主）结论各不相同，
+   * 不进缓存，行为与旧版逐字一致。 */
+  const cacheable =
+    env === process.env && platform === process.platform && probe === realUsabilityProbe;
+  const key = `${platform}|${file}|${probeArgs.join(" ")}`;
+  if (cacheable) {
+    const hit = invocationCache.get(key);
+    if (hit !== undefined && (hit.found || Date.now() - hit.at < INVOCATION_MISS_TTL_MS)) {
+      return hit.resolve(args);
+    }
+  }
   const candidate = whichCommand(file, { env, platform, probe, probeArgs });
   /* 候选是 PATH 上拼出来的绝对路径，空串不可能出现 */
+  let resolve: InvocationResolver;
+  let found: boolean;
   if (candidate === null) {
-    return { command: file, args, resolved: false };
+    resolve = (runArgs) => ({ command: file, args: runArgs, resolved: false });
+    found = false;
+  } else {
+    const usable = usableCommand(candidate, probeArgs, { env, platform, probe });
+    // 可用即用宿主形态；不可用（如 `.cmd` 且无 `.ps1` 回退）仍把**绝对路径**
+    // 交出去 —— 让 spawn 报一个带绝对路径的错，比报裸名字更有排障价值。
+    if (usable.ok) {
+      const command = usable.command;
+      const prefixArgs = usable.prefixArgs;
+      resolve = (runArgs) => ({ command, args: [...prefixArgs, ...runArgs], resolved: true });
+      found = true;
+    } else {
+      resolve = (runArgs) => ({ command: candidate, args: runArgs, resolved: true });
+      found = false;
+    }
   }
-  const usable = usableCommand(candidate, probeArgs, { env, platform, probe });
-  // 可用即用宿主形态；不可用（如 `.cmd` 且无 `.ps1` 回退）仍把**绝对路径**
-  // 交出去 —— 让 spawn 报一个带绝对路径的错，比报裸名字更有排障价值。
-  return usable.ok
-    ? {
-        command: usable.command,
-        args: [...usable.prefixArgs, ...args],
-        resolved: true,
-      }
-    : { command: candidate, args, resolved: true };
+  if (cacheable) {
+    resetInvocationCacheEntry(key, { at: Date.now(), found, resolve });
+  }
+  return resolve(args);
 }
