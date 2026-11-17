@@ -19,7 +19,11 @@ export function Field({
   type = "text",
   placeholder,
   onBlur,
+  error,
 }: {
+  /** 字段级错误文案（透传 `FormField.error`：错误行 + aria-invalid +
+   *  aria-describedby 自动齐全，规范 §6.8）。 */
+  error?: string | null;
   label: string;
   /** 失焦回调（即时自动保存：文本输入失焦即落库）。 */
   onBlur?: () => void;
@@ -34,7 +38,7 @@ export function Field({
    * className 覆盖 shadcn 默认回本页深色档：`h-auto` 让 py-2 定高、`bg-surface-2`
    * 深色底、文字与 placeholder 走项目色板。 */
   return (
-    <FormField className="mb-3" label={label}>
+    <FormField className="mb-3" error={error} label={label}>
       {(a11y) => (
         <Input
           {...a11y}

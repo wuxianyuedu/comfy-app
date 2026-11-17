@@ -45,6 +45,7 @@ function controller(
     pathConfigured: true,
     instanceType: "portable",
     desktopManaged: false,
+    pathExists: true,
   },
 ): ReadySettingsPageController {
   const stub: unknown = {
@@ -131,10 +132,62 @@ describe("ComfyuiSection（只配置路径）", () => {
       <ComfyuiSection
         c={controller(
           { comfyuiPath: "" },
-          { pathConfigured: false, instanceType: null, desktopManaged: false },
+          { pathConfigured: false, instanceType: null, desktopManaged: false, pathExists: false },
         )}
       />,
     );
     expect(screen.getByText(/未配置——ComfyUI 未运行时任务会失败/)).toBeInTheDocument();
+  });
+
+  /* ISSUE #4138：路径填了错误内容（已保存但判不出安装形态）必须行上有提示，
+   * 不能再显示「已配置」。判据是已保存路径的 fs 结论（comfyInstance），失焦
+   * 保存即 refetch 重判 —— 用例钉的是「结论 → 提示」的映射。 */
+  it("填了不存在的路径：行上报「找不到目录」，不再显示「已配置」（#4138）", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          {},
+          { pathConfigured: true, instanceType: null, desktopManaged: false, pathExists: false },
+        )}
+      />,
+    );
+    expect(screen.getByText(/磁盘上找不到这个目录/)).toBeInTheDocument();
+    expect(screen.queryByText(/已配置——这里只管路径/)).not.toBeInTheDocument();
+    expect(screen.getByText(/未配置——ComfyUI 未运行时任务会失败/)).toBeInTheDocument();
+  });
+
+  it("目录存在但不是 ComfyUI 安装：提示对照安装形态说明自查（#4138）", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          {},
+          { pathConfigured: true, instanceType: null, desktopManaged: false, pathExists: true },
+        )}
+      />,
+    );
+    expect(screen.getByText(/不是有效的 ComfyUI 安装/)).toBeInTheDocument();
+    expect(screen.queryByText(/已配置——这里只管路径/)).not.toBeInTheDocument();
+  });
+
+  it("形态判定成功时不显示无效提示（错误行不常驻）", () => {
+    render(<ComfyuiSection c={controller()} />);
+    expect(screen.queryByText(/ComfyUI 路径无效/)).not.toBeInTheDocument();
+    expect(screen.getByText(/已配置——这里只管路径/)).toBeInTheDocument();
+  });
+
+  it("无效提示与输入框 ARIA 关联（aria-invalid + aria-describedby，规范 §6.8）", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          {},
+          { pathConfigured: true, instanceType: null, desktopManaged: false, pathExists: false },
+        )}
+      />,
+    );
+    const input = screen.getByLabelText("ComfyUI 路径（源码根或桌面版实例根）");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const describedBy = input.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(screen.getByText(/磁盘上找不到这个目录/)).toHaveAttribute("id", describedBy);
   });
 });

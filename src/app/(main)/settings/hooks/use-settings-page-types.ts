@@ -139,6 +139,8 @@ export type SettingsPageController = {
     instanceType: "desktop" | "portable" | "venv" | null;
     /** 配置里是否填了路径（与形态同源，都是设置行的事实）。 */
     pathConfigured: boolean;
+    /** 已填路径指向的目录是否存在（#4138：无效路径的行内提示判据）。 */
+    pathExists: boolean;
   } | null;
   /** 桌面实例的六个存储目录（模型 / 共享模型 / 输入 / 共享输入 / 输出 /
    *  共享输出）——**只读**；非桌面实例为 null（便携版 / venv 的目录只由启动参数
