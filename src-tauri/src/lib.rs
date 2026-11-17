@@ -2275,29 +2275,14 @@ pub fn run() {
       }
 
       // ── 方向 B：启动页与「应用」窗口分离 ──
-      // 配置里的 splash 窗口仅显示启动进度；「应用」窗口（label="main"）在此创建
-      // 为隐藏窗口，先停在 about:blank，由启动页探测后端就绪后经 navigate_to_app
-      // 导航到应用 URL，加载完成后由 create_main_window 里挂的回调交换窗口。
-      create_main_window(app)?;
-      watch_main_first_paint(app.handle().clone(), expect_slow_first_paint);
-
-      install_splash_close_handler(app);
-      spawn_splash_watchdog(app);
+      wire_startup_windows(app, expect_slow_first_paint)?;
 
       // standalone 载荷缺失/损坏（ISSUE #4214）：Err 不能冒到 Builder::build 的
       // expect——那是无声崩溃（windows_subsystem 下无控制台、无启动页）。窗口此刻
       // 已创建：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态。
       #[cfg(not(debug_assertions))]
       if let Err(e) = setup_standalone_runtime(app) {
-        log::error!("[ComfyAPP] standalone runtime setup failed: {e}");
-        shell_launch::mark_launch_failed(
-          &app.state::<AppState>().project_root(),
-          &format!(
-            "standalone 运行时装配失败：{e}\n\
-             请确认安装目录 resources/static/ 下的内嵌服务随包完整分发（重新安装/解压一次），\
-             详见 log/current/shell/shell.log。"
-          ),
-        );
+        report_standalone_setup_failure(app, &e.to_string());
       }
 
       // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
@@ -2311,6 +2296,42 @@ pub fn run() {
     .expect("error while building tauri application");
 
   app.run(handle_run_event);
+}
+
+/// 启动页与「应用」主窗的装配（ISSUE #4214 顺带：`run()` 越过 Rust 函数长度
+/// 硬闸，把这一段收成命名步骤）。
+///
+/// ── 方向 B：启动页与「应用」窗口分离 ──
+/// 配置里的 splash 窗口仅显示启动进度；「应用」窗口（label="main"）在此创建
+/// 为隐藏窗口，先停在 about:blank，由启动页探测后端就绪后经 navigate_to_app
+/// 导航到应用 URL，加载完成后由 create_main_window 里挂的回调交换窗口。
+/// 「关闭启动页 = 放弃启动」的处理器与看门狗也在这里挂。
+fn wire_startup_windows(
+  app: &mut tauri::App,
+  expect_slow_first_paint: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+  create_main_window(app)?;
+  watch_main_first_paint(app.handle().clone(), expect_slow_first_paint);
+
+  install_splash_close_handler(app);
+  spawn_splash_watchdog(app);
+  Ok(())
+}
+
+/// standalone 装配失败的可见出口（ISSUE #4214）：Err 不能冒到 `Builder::build`
+/// 的 expect——那是无声崩溃（`windows_subsystem` 下无控制台、无启动页）。窗口
+/// 此刻已创建：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态。
+#[cfg(not(debug_assertions))]
+fn report_standalone_setup_failure(app: &tauri::App, error: &str) {
+  log::error!("[ComfyAPP] standalone runtime setup failed: {error}");
+  shell_launch::mark_launch_failed(
+    &app.state::<AppState>().project_root(),
+    &format!(
+      "standalone 运行时装配失败：{error}\n\
+       请确认安装目录 resources/static/ 下的内嵌服务随包完整分发（重新安装/解压一次），\
+       详见 log/current/shell/shell.log。"
+    ),
+  );
 }
 
 /// 双击壳（唯一的启动入口形态）：承担原先 Python 启动器的那一段编排。
