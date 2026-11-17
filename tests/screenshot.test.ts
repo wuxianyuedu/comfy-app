@@ -104,6 +104,9 @@ describe("screenshot 帮助文本", () => {
     expect(text).toContain("pnpm screenshot");
     expect(text).toContain("--theme");
     expect(text).toContain("cnb issues upload-image");
+    /* --repo 必须显式在提示里：cli 的 --repo 缺省回落 CNB_REPO_SLUG，本检出通常
+     * 没设它，缺了会报误导性的 Resource not found（ISSUE #4162）。 */
+    expect(text).toContain("--repo moon-read/comfy-app-t3");
     expect(text).toContain("log/screenshots");
   });
 });
