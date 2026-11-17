@@ -80,6 +80,56 @@ export async function GET(
     });
   }
   const window = range.kind === "partial" ? range.window : null;
+
+  /* 无 Range 的整档请求改走**分块流**（ISSUE #4252）：下载器 / 杀软 / curl /
+   * 预览抓取都不带 Range，按原实现会把整份产物（视频可达数百 MB）一次性
+   * alloc 进内存。Range 窗口请求仍走定长缓冲（每段只有窗口那么大）。 */
+  if (!window) {
+    const handle = await fs.open(abs, "r");
+    let position = 0;
+    let open = true;
+    const chunkSize = 1024 * 1024;
+    const body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        if (!open || position >= size) {
+          if (open) {
+            open = false;
+            await handle.close();
+          }
+          controller.close();
+          return;
+        }
+        const buf = Buffer.allocUnsafe(Math.min(chunkSize, size - position));
+        try {
+          const { bytesRead } = await handle.read(buf, 0, buf.length, position);
+          position += bytesRead;
+          if (bytesRead > 0) {
+            controller.enqueue(new Uint8Array(buf.subarray(0, bytesRead)));
+          }
+          if (bytesRead === 0) {
+            /* 文件在一次请求之内被裁短：读不到更多就按 EOF 收尾，
+             * 不许无限空转（ISSUE #4252）。 */
+            if (open) {
+              open = false;
+              await handle.close();
+            }
+            controller.close();
+          }
+        } catch (error) {
+          open = false;
+          await Promise.resolve(handle.close()).catch(() => undefined);
+          controller.error(error instanceof Error ? error : new Error(String(error)));
+        }
+      },
+      cancel() {
+        open = false;
+        void Promise.resolve(handle.close()).catch(() => undefined);
+      },
+    });
+    return new Response(body, {
+      headers: { "Content-Type": contentTypeForPath(abs), ...SHARED_HEADERS },
+    });
+  }
   const start = window?.start ?? 0;
   const length = (window?.endInclusive ?? size - 1) - start + 1;
 
