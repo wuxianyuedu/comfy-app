@@ -507,36 +507,42 @@ export async function streamLLM(
   let buffer = "";
   let full = "";
 
-  while (true) {
-    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) {
-        continue;
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
       }
-      const data = trimmed.slice(5).trim();
-      if (data === "[DONE]") {
-        continue;
-      }
-      try {
-        const token = extractStreamDelta(format, JSON.parse(data));
-        if (token) {
-          full += token;
-          onToken(token);
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) {
+          continue;
         }
-      } catch {
-        // 忽略格式不对的保活分片
+        const data = trimmed.slice(5).trim();
+        if (data === "[DONE]") {
+          continue;
+        }
+        try {
+          const token = extractStreamDelta(format, JSON.parse(data));
+          if (token) {
+            full += token;
+            onToken(token);
+          }
+        } catch {
+          // 忽略格式不对的保活分片
+        }
       }
     }
+  } finally {
+    /* onToken（写 SSE）抛错——典型是客户端中途断开、enqueue 同步失败——时，
+     * 上游 body 也要停：不 cancel 会滞留一条上游连接（ISSUE #4218）。 */
+    void reader.cancel().catch(() => undefined);
   }
 
   return full;
