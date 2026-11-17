@@ -10,7 +10,8 @@
 //
 // 两种保存方式与「模式契约」同一条口径：
 //   · 「保存」 —— 落本机（`data/`），开发版与正式包都能用；
-//   · 「保存为项目默认（跟代码走）」 —— 落项目默认那份入库 JSON，只有开发检出可用。
+//   · 「保存为项目默认（本机）」 —— 落本机项目默认覆盖（data/，不入库；#4150），
+//     只有开发检出可用。
 
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,7 +26,7 @@ export type SidebarTabConfigQuery = {
   config: SidebarTabConfig;
   /** 这份检出能不能「保存为项目默认」（正式包为 false，界面隐藏该入口）。 */
   projectDefaultEditable: boolean;
-  /** 项目默认那份（跟代码走的那份）：「还原默认」的基准。 */
+  /** 项目默认基线（本机覆盖优先，缺省回落编译快照）：「还原默认」的基准。 */
   projectDefaults: SidebarTabConfig;
 };
 
@@ -66,7 +67,7 @@ export function useSidebarTabConfigActions() {
     [saveBusy, saveMutation, queryClient, trpc.sidebar.tabConfigGet],
   );
 
-  /** 「保存为项目默认（跟代码走）」：全量写进入库 JSON。返回写盘的绝对路径
+  /** 「保存为项目默认（本机）」：全量写进本机项目默认覆盖（data/）。返回写盘路径
    *  （界面转告「提交后生效」）；非开发检出服务端会拒。 */
   const saveAsProjectDefaults = useCallback(
     async (config: SidebarTabConfig): Promise<string | null> => {

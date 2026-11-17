@@ -9,7 +9,8 @@
  *
  * 两种保存口径与「界面页签行为」「模式契约」同一套（ISSUE #3948）：
  *   · 本机覆盖 —— **改一格即存**（落应用数据，开发版与正式包都能用）；
- *   · 「保存为项目默认（跟代码走）」 —— 写入库那份 JSON，只有开发检出可用。
+ *   · 「保存为项目默认（本机）」 —— 写本机项目默认覆盖（data/，不入库），只有
+ *     开发检出可用；要改出厂默认改 src 那份编译源走 PR（ISSUE #4150）。
  */
 
 import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
@@ -34,15 +35,15 @@ export function SizePresetSection() {
     >
       <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
         生成时「比例 × 分辨率」的宽高都查这张表（图片 / 视频两套口径）。
-        改一格即存本机应用数据（data/size-presets.json）；项目默认跟代码走
-        （src/lib/media/size-preset-defaults.json）。
+        改一格即存本机应用数据（data/size-presets.json）；「保存为项目默认」落
+        本机基线覆盖（data/size-preset-project-defaults.json，不入库）。
       </p>
       <SizePresetTablePanel />
 
-      {/* 「保存为项目默认（跟代码走）」：只有开发检出有可写的目标文件（正式包没有源码可写）。
-          写的是**当前这份表**（本机覆盖 + 项目默认合起来的那份），提交后每个检出
-          与每个桌包都是它 —— 与「界面页签」「模式契约」的项目默认同一套口径与同一句
-          文案（§12.14：同一件事只许一种说法）。 */}
+      {/* 「保存为项目默认（本机）」：只有开发检出可用（ISSUE #4150 起落本机基线
+          覆盖 data/，不入库；此前直接写 src 那份编译源）。写的是**当前这份表**
+          （本机覆盖 + 项目默认合起来的那份）—— 与「界面页签」「模式契约」的
+          项目默认同一套口径与同一句文案（§12.14：同一件事只许一种说法）。 */}
       {c.projectDefaultEditable && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button
@@ -52,7 +53,7 @@ export function SizePresetSection() {
             }}
             variant="outline"
           >
-            {c.savingProjectDefaults ? "写入中…" : "保存为项目默认（跟代码走）"}
+            {c.savingProjectDefaults ? "写入中…" : "保存为项目默认（本机）"}
           </Button>
         </div>
       )}

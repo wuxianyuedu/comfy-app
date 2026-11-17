@@ -90,7 +90,7 @@ export function ModeContractEditorView({
       </div>
 
       {/* 修改即自动保存（#3949 需求 1）：草稿有改动就自动落本机覆盖，
-          不再有「保存模式契约」按钮与切换确认弹窗；「保存为项目默认（跟代码走）」
+          不再有「保存模式契约」按钮与切换确认弹窗；「保存为项目默认（本机）」
           是仅存的显式保存动作。 */}
     </div>
   );
@@ -192,7 +192,7 @@ function ModeContractDraftPanel({
       {/* 修改即自动保存（#3949 需求 1）：本机覆盖不再要手动点保存；失败在此可见（#3637）。 */}
       <p className="text-muted-foreground text-2xs">
         修改即自动保存到本机应用数据（data/workshop-mode-contracts.json），无需手动保存；
-        要跟着代码走用「保存为项目默认」。{" "}
+        要存成本机基线用「保存为项目默认」。{" "}
         <span className="tabular-nums">
           {controller.saving
             ? "正在保存…"
@@ -232,7 +232,7 @@ function ModeContractDraftPanel({
             }}
             variant="outline"
           >
-            {controller.savingProjectDefaults ? "写入中…" : "保存为项目默认（跟代码走）"}
+            {controller.savingProjectDefaults ? "写入中…" : "保存为项目默认（本机）"}
           </Button>
         )}
         {/* 契约有两层，各存在一处（ISSUE #3625）：本机覆盖跟着这台机器走、项目默认
