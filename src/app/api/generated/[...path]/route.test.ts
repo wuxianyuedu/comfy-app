@@ -177,21 +177,29 @@ describe("整份读（没有 Range）", () => {
     expect(await res.text()).toBe("");
   });
 
-  it("整份读时被裁短：按实际读到的字节回，且不配 Content-Range", async () => {
-    // 没有 Range 的那一支也要能短读 —— 少了这条，「短读只处理分段路径」这种半修
-    // 会在 Coverage 的分支上留痕（这里刻意断言**没有** Content-Range：整份请求
-    // 客户端没要窗口，给它一个 206 的形状才是真错）。
+  it("句柄短读也照常收尾：读到多少发多少，读完关句柄", async () => {
+    // 流式改写（ISSUE #4252）后，「短读」的契约是：把读到的字节发出去，
+    // 读不到更多（EOF）就收尾关句柄，不许无限空转。
+    let reads = 0;
+    let closed = 0;
     open.mockImplementationOnce(() => ({
       read: (buf: Buffer, offset: number) => {
+        reads += 1;
+        if (reads > 1) {
+          return { bytesRead: 0, buffer: buf };
+        }
         Buffer.from("01").copy(buf, offset);
         return { bytesRead: 2, buffer: buf };
       },
-      close: () => undefined,
+      close: () => {
+        closed += 1;
+      },
     }));
     const res = await get(["t1", "a.png"]);
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("01");
     expect(res.headers.get("Content-Range")).toBeNull();
+    expect(closed).toBe(1);
   });
 
   it("读完必须 close 句柄（漏了它，Windows 上产物会被自己锁住，重生成即失败）", async () => {
@@ -206,11 +214,13 @@ describe("整份读（没有 Range）", () => {
         closed += 1;
       },
     }));
-    await get(["t1", "a.png"]);
+    const res = await get(["t1", "a.png"]);
+    /* 流式响应要**消费完 body** 句柄才会关（读到位 → EOF → close）。 */
+    expect(await res.text()).toBe("0123456789");
     expect(closed).toBe(1);
   });
 
-  it("读取抛错时也必须把已经拿到的句柄闭上（finally 那条路）", async () => {
+  it("读取抛错时也要关句柄，并把错误顺着流抛给消费方", async () => {
     let closed = 0;
     open.mockImplementationOnce(() => ({
       read: () => {
@@ -220,7 +230,9 @@ describe("整份读（没有 Range）", () => {
         closed += 1;
       },
     }));
-    expect((await get(["t1", "a.png"])).status).toBe(404);
+    const res = await get(["t1", "a.png"]);
+    expect(res.status).toBe(200);
+    await expect(res.text()).rejects.toThrow("EIO");
     expect(closed).toBe(1);
   });
 });
