@@ -26,6 +26,7 @@ import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
 import { AsyncMutex } from "~/lib/async-mutex";
+import { atomicWriteTextIfChanged } from "~/lib/workshop/atomic-write.server";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 
 import {
@@ -141,12 +142,10 @@ export async function saveSidebarTabConfigAsProjectDefaults(
   }
   const full = parseSidebarTabConfig(config);
   const file = path.join(/*turbopackIgnore: true*/ root, SIDEBAR_TAB_DEFAULTS_REL_PATH);
-  try {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, `${JSON.stringify(full, null, 2)}\n`, "utf8");
-  } catch (error) {
-    throw new Error(errorText(error, `项目默认写入失败（${file}）`), { cause: error });
-  }
+  /* 原子写 + 内容相同就跳过（ISSUE #4253）：这份文件在 src/ 树内，每次写入都会
+   * 触发 Turbopack 增量重编译——同内容点按钮不该再付一波重编译；tmp+rename
+   * 保证进程死在写入中途也不留半截 JSON。 */
+  await atomicWriteTextIfChanged(file, `${JSON.stringify(full, null, 2)}\n`);
   return { config: full, file };
 }
 
