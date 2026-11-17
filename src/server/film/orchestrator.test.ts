@@ -698,13 +698,13 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
   });
 });
 
-/* ── 监看循环的兜底（#4220）────────────────────────────────
- * `watchLoop` 全函数原本无 try/catch，而它的 promise 被调用点 `void` 起飞——
- * 一次瞬时 SQLITE_BUSY（与宿主并发写同一份 WAL 库）就让 rejection 冒成
- * unhandledRejection，Node ≥15 默认直接退出整个 Next 进程。这一组用例的
- * 「不冒 rejection」判据由 vitest 本身承压：mock 让循环真的炸一次，
- * 若兜底缺失，冒出的 unhandledRejection 会把用例记为失败。 */
-describe("监看循环的兜底（#4220）：rejection 收口，不打崩进程", () => {
+/* ── 监看交接与收口的增量（#4220 ⊕ #4216）──────────────────
+ * 循环体 rejection 的就地收口已由 #4216（watchFilm 里那道 .catch）收编，本组
+ * 只钉它的两处增量：① 收口自身再炸（判失败/行日志也抛）时仍不冒 rejection；
+ * ② 交接重读段（watchFilm 里 await previous 之后的 findById）不在 .catch 的
+ * 收口面内——那是 watchFilm 起飞后、循环未起前的缝隙，让位退场而不是冒出去。
+ * 「不冒 rejection」判据由 vitest 本身承压：冒出来即记败。 */
+describe("监看交接与收口的增量（#4220）", () => {
   /* 在飞表的类型由 orchestrator.ts 的 `declare global` 增广进本项目（测试导入它），
    * 直接经 globalThis 读写，不用再过一道断言。 */
   const inFlightMap = (): Map<string, Promise<void>> | undefined => globalThis.filmWatchInFlight_v1;
@@ -714,7 +714,7 @@ describe("监看循环的兜底（#4220）：rejection 收口，不打崩进程"
   });
 
   /* 与「startFilm — 自主成片逐镜生成」那条用例同一套读序列：开头读一次、
-   * 逐镜提交前每镜再读一次，监看循环的首拍是第三次。 */
+   * 逐镜提交前每镜再读一次，监看（交接/首拍）是第三次。 */
   const oneShotRow = () => [
     {
       id: "s1",
@@ -725,29 +725,7 @@ describe("监看循环的兜底（#4220）：rejection 收口，不打崩进程"
     },
   ];
 
-  it("监看首拍读库炸（SQLITE_BUSY 形）：影片判失败 + 行日志留痕，rejection 不冒出", async () => {
-    filmRepo.findById
-      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
-      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
-      .mockRejectedValueOnce(new Error("SQLITE_BUSY: database is locked"));
-    shotRepo.listByFilm.mockResolvedValue(oneShotRow());
-
-    await startFilm("f1");
-
-    await expect
-      .poll(() => filmRepo.markFailed, { message: "监看循环兜底判失败的调用现场" })
-      .toHaveBeenCalledWith("f1", expect.stringContaining("监看异常中断"));
-    /* 行日志的留痕断言照同文件既有形态走 mock.calls 取值（objectContaining 的
-     * stringContaining 值是 any，过不了零 any 口径）。 */
-    const errorEntry = filmRepo.appendLog.mock.calls.find(
-      (call) => call[0] === "f1" && call[1]?.level === "error",
-    );
-    expect(errorEntry?.[1]?.msg).toContain("监看异常中断");
-    expect(loggerMock.error).toHaveBeenCalledWith(expect.stringContaining("监看循环异常退出"));
-    await expect.poll(() => inFlightMap()?.size, { message: "在飞表随循环退场清空" }).toBe(0);
-  });
-
-  it("兜底收口自己再炸（判失败/行日志都抛）：两级 Warn，rejection 仍不冒出", async () => {
+  it("收口自身再炸（判失败/行日志都抛）：rejection 仍不冒出，在飞表照常清空", async () => {
     /* 扫描会连查 GENERATING 与 COMPOSING 两轮；按状态各回各的，别让第二次扫描
      * 拿到同一条行、把「判失败/留痕」的 Once 桩提前消费掉。 */
     filmRepo.listByStatus.mockImplementation((statuses) =>
@@ -761,11 +739,13 @@ describe("监看循环的兜底（#4220）：rejection 收口，不打崩进程"
 
     await resumeStalledFilms();
 
-    /* 等的是「值」走 expect.poll（§11.14.3）：把两级兜底的 Warn 拼成一条轮询值。 */
-    const warnTexts = (): string => loggerMock.warn.mock.calls.map((c) => String(c[0])).join("|");
-    await expect.poll(warnTexts).toContain("判失败也失败");
-    await expect.poll(warnTexts).toContain("行日志也写不进");
+    /* 收口动作各自再兜一层（.catch 内部的 try/catch）：两层都炸也不把刚处理完的
+     * rejection 变回 unhandled。 */
+    const inflight = inFlightMap()?.get("f-w");
+    expect(inflight).toBeDefined();
+    await inflight;
     expect(inFlightMap()?.size).toBe(0);
+    expect(loggerMock.error).toHaveBeenCalledWith(expect.stringContaining("监看循环异常终止"));
   });
 
   it("交接重读失败：让位退场不冒 rejection，也不误判失败", async () => {
@@ -789,9 +769,9 @@ describe("监看循环的兜底（#4220）：rejection 收口，不打崩进程"
     expect(filmRepo.markFailed).not.toHaveBeenCalled();
   });
 
-  it("两个调用点都走 fireAndForget：源码里不再有 void watchFilm 形态", () => {
+  it("源码形态：收口走 watchFilm 的 .catch（#4216），交接守卫在场（#4220）", () => {
     const src = readFileSync(path.join(import.meta.dirname, "orchestrator.ts"), "utf8");
-    expect(src).not.toMatch(/void watchFilm/);
-    expect(src.match(/fireAndForget\(watchFilm/g)).toHaveLength(2);
+    expect(src).toContain("监看循环异常终止");
+    expect(src).toContain("监看交接重读失败");
   });
 });

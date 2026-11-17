@@ -1,3 +1,3 @@
 ## Fixed
 
-- film 监看循环 rejection 无兜底，瞬时 SQLITE_BUSY 可打崩整个 Next 进程（#4220）：`watchLoop` 外层收口为「判失败 + 行日志留痕」（`markFailed` 是条件更新，不覆盖用户终态），收口动作各自再兜一层防二次抛；`startFilm` 与恢复扫描两处调用点改走 `fireAndForget`，交接重读失败让位退场。用例：mock 监看首拍炸 SQLITE_BUSY，断言影片落 FAILED + 留痕 + 在飞表清空、rejection 不冒出。
+- film 监看循环 rejection 无兜底（#4220）：循环体收口已由 #4216 那一刀以 watchFilm 的 `.catch` 落地（同批合入，本单不再重复实现，两套实现已在合并态归一为一）；本单补上对方收口面之外的两处增量——① 收口自身再炸（判失败/行日志都抛）时 rejection 仍不冒出的用例；② **交接重读段守卫**：watchFilm 里 `await previous` 之后的 `findById` 不在那道 `.catch` 的收口面内（循环未起前的缝隙），DB 撞锁时只让位退场（boot 恢复扫描接回），不冒 rejection、不越权改写影片状态。用例：收口再炸不冒出 + 在飞表清空、交接让位不误判失败、源码形态（收口在 #4216 位置 + 交接守卫在场）。

@@ -4,7 +4,6 @@
 // 每个镜头走与手动「视频」页签同一条库工作流链（工作流库 id + 封装），所以不需要任何内置模板。
 
 import { TRPCError } from "@trpc/server";
-import { fireAndForget } from "~/lib/async-action";
 import { clamp } from "~/lib/clamp";
 import { sleep } from "~/lib/with-timeout";
 import "server-only";
@@ -490,11 +489,9 @@ export async function startFilm(id: string) {
     }
   }
 
-  // 后台监看 → 合成。fireAndForget 是防将来有人改掉「watchLoop 整体不抛」前提的
-  // 第二道防线：这一格一旦冒出 rejection 就是整个进程陪葬（见 runWatchLoop 的 catch）。
-  fireAndForget(watchFilm(id), (error) => {
-    logger.error(`[film] ${errorText(error, "watchFilm 调用异常（应为不可达的兜底）")}`);
-  });
+  // 后台监看 → 合成（循环 rejection 的就地收口在 watchFilm 里那道 .catch，#4216；
+  // 交接重读段的守卫见 watchFilm 开头，#4220 —— 两段合起来 watchFilm 不 reject）。
+  void watchFilm(id);
 }
 
 // ── watch + update ──────────────────────────────────────────
@@ -576,33 +573,7 @@ async function watchFilm(id: string, opts: { resumed?: boolean } = {}): Promise<
   return loop;
 }
 
-/** 监看循环的兜底壳（ISSUE #4220）：循环体内的任何异常（最典型是与 executor host
- *  并发写同一份 WAL 库的瞬时 SQLITE_BUSY——Next 侧刻意不设 busy_timeout）在这里
- *  收口成「判失败 + 行日志留痕」，而不是冒成 unhandledRejection——Node ≥15 默认
- *  该事件直接退出整个进程，一次 DB 撞锁等于整个应用后端挂掉。收口动作各自再兜一层：
- *  这里很可能就是 DB 故障现场，兜底自己二次抛只会把刚处理完的 rejection 又变回
- *  unhandled。`markFailed` 是条件更新（终态不可覆盖，见 repository-film），用户已
- *  取消/已完成的影片不会被改判；判失败后用户可重跑，好过「停在 GENERATING 且
- *  startFilm 的 claimGenerating 过不去、只能等重启恢复扫描」的替代出路。 */
 async function watchLoop(id: string, opts: { resumed?: boolean }) {
-  try {
-    await runWatchLoop(id, opts);
-  } catch (error) {
-    logger.error(`[film] ${errorText(error, "监看循环异常退出")}`);
-    try {
-      await filmRepository.markFailed(id, errorText(error, "监看异常中断"));
-    } catch (markError) {
-      logger.warn(`[film] ${errorText(markError, "监看异常中断后判失败也失败（留给恢复扫描）")}`);
-    }
-    try {
-      await appendFilmLog(id, "error", errorText(error, "监看异常中断，已判失败"));
-    } catch (logError) {
-      logger.warn(`[film] ${errorText(logError, "监看异常中断后行日志也写不进（不再放大）")}`);
-    }
-  }
-}
-
-async function runWatchLoop(id: string, opts: { resumed?: boolean }) {
   if (opts.resumed === true) {
     /* 续跑要在行日志里留痕：否则用户看到的是「重启之后它自己动起来了」，
      * 而支持现场需要据这一行判断「是 boot 扫描接上的，还是原循环还活着」。 */
@@ -792,9 +763,7 @@ export async function resumeStalledFilms(): Promise<{
         continue;
       }
       resumed.push(film.id);
-      fireAndForget(watchFilm(film.id, { resumed: true }), (error) => {
-        logger.error(`[film] ${errorText(error, "恢复监看调用异常（应为不可达的兜底）")}`);
-      });
+      void watchFilm(film.id, { resumed: true });
     }
 
     /* COMPOSING **不**续跑，直接判掉。`composeFilm` 一见到 COMPOSING 就早退
