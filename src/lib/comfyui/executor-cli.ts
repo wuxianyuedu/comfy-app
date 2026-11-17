@@ -560,7 +560,7 @@ export async function executeViaComfyCli(job: Job) {
       void taskRepository.updateProgress(taskId, progress, node).catch((error: unknown) => {
         /* 形态对齐上方 markRunning 与 executor-ws 的同名路径（#4229）：
          * fire-and-forget 保留，失败补 warn 不再静默。 */
-        cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `updateProgress(${taskId}) 落库失败`)}`);
+        cliWarn(`[comfyui] ${sqliteAwareErrorText(error, `updateProgress(${taskId}) 落库失败`)}`);
       });
     },
   });
