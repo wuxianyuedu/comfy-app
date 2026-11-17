@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => {
     createTask: vi.fn(() => ({ taskId: "ff-task" })),
     upload: vi.fn(() => ({ name: "ff_ff-task.png" })),
     readFile: vi.fn(() => Buffer.from("png-bytes")),
+    /* #4222：等待失败路径的补偿取消。桩件收在句柄上，断言「失败必撤、成功不撤」。 */
+    cancelTask: vi.fn((_taskId: string) => Promise.resolve(undefined)),
   };
 });
 
@@ -44,6 +46,7 @@ vi.mock("~/lib/core/repository-task", () => ({
 vi.mock("~/lib/workshop/workflow-run.server", () => ({
   createWorkflowRunTask: mocks.createTask,
 }));
+vi.mock("~/lib/comfyui/enqueue", () => ({ cancelTask: mocks.cancelTask }));
 vi.mock("./client", () => ({ uploadImage: mocks.upload }));
 vi.mock("fs", () => ({ promises: { readFile: mocks.readFile } }));
 
@@ -72,6 +75,7 @@ beforeEach(() => {
   mocks.progress.mockClear();
   mocks.upload.mockClear();
   mocks.readFile.mockClear();
+  mocks.cancelTask.mockClear();
 });
 
 afterEach(() => {
@@ -110,7 +114,14 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
     expect(mocks.upload).not.toHaveBeenCalled();
   });
 
-  it("FAILED：把库里那句失败原因原样抛出去，而不是只说「失败了」", async () => {
+  it("上传回执没有文件名：判「首帧上传失败」，不把空名当成功", async () => {
+    mocks.rows.push(succeeded("/api/generated/ff-task/img_0.png"));
+    mocks.upload.mockResolvedValueOnce({ name: "" });
+
+    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow("首帧上传失败");
+  });
+
+  it("FAILED：把库里那句失败原因原样抛出去，且先补偿取消已入队的任务（#4222）", async () => {
     mocks.rows.push({
       status: "FAILED",
       progress: 0,
@@ -119,6 +130,7 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
     });
 
     await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow("CUDA out of memory");
+    expect(mocks.cancelTask).toHaveBeenCalledWith("ff-task");
   });
 
   it("CANCELLED 且库里没有原因：退化成带状态的说明，不许抛 undefined", async () => {
@@ -146,9 +158,31 @@ describe("synthesizeFirstFrame 等的是库里那一行", () => {
     expect(mocks.progress).toHaveBeenCalledTimes(2);
   });
 
-  it("任务行消失：立刻说明原因，不把它拖成一次超时", async () => {
+  it("任务行消失：立刻说明原因，不把它拖成一次超时，且补偿取消（#4222）", async () => {
     mocks.rows.push(null);
 
     await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow("首帧任务已不存在");
+    expect(mocks.cancelTask).toHaveBeenCalledWith("ff-task");
+  });
+
+  it("成功路径不触发补偿取消（#4222）", async () => {
+    mocks.rows.push(succeeded("/api/generated/ff-task/img_0.png"));
+
+    await expect(mod.synthesizeFirstFrame(opts)).resolves.toBe("ff_ff-task.png");
+    expect(mocks.cancelTask).not.toHaveBeenCalled();
+  });
+
+  it("补偿取消自身失败也不掩盖原始错误（#4222）：撤不掉就让位，原错误照抛", async () => {
+    mocks.rows.push({
+      status: "FAILED",
+      progress: 0,
+      resultImages: null,
+      error: "CUDA out of memory",
+    });
+    mocks.cancelTask.mockRejectedValueOnce(new Error("cancel raced a terminal write"));
+
+    /* 原错误（CUDA out of memory）必须到达调用方，补偿的失败只被吞掉。 */
+    await expect(mod.synthesizeFirstFrame(opts)).rejects.toThrow("CUDA out of memory");
+    expect(mocks.cancelTask).toHaveBeenCalledWith("ff-task");
   });
 });

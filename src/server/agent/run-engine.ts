@@ -41,6 +41,14 @@ import { sleep } from "~/lib/with-timeout";
 
 const MAX_TICKS = 240;
 const TICK_MS = 4000;
+/* render_film 等待拍的上界（#4223）：成片管线自带监看预算（film orchestrator 的
+ * WATCH_MAX_ITER×WATCH_POLL_MS ≈16 分钟，到点会自行判 FAILED），这里的等待拍挂
+ * film 终态收口、**不消耗**执行步数预算——旧形态把等待拍与执行步同池计数，多镜头
+ * 视频超过 16 分钟时 run 被误判「步数超限」而 film 其实最终 DONE（状态矛盾）。
+ * 等待本身仍要有上界（§08 8.11④ 常驻等待要能退）：预算对齐监看再加余量，兜
+ * 「监看刚耗尽、终态还没落库」的尾差；耗尽按「成片仍在生成」落 failed，而不是把
+ * 等待误读成执行卡死。测试经 advanceRunLoop 的 opts 注入小预算。 */
+const FILM_WAIT_MAX_TICKS = 300;
 const nowIso = () => new Date().toISOString();
 
 /**
@@ -654,14 +662,19 @@ async function execFilm(
 /**
  * 推进 run 到下一个停点（等点头 / 完成 / 失败 / 被暂停）。fire-and-forget 调用即可；
  * 内部对每步失败落 failed，不抛给调用方。同一 (user, project) 已有循环在跑时复用同一 promise。
+ * `filmWaitMaxTicks` 只给测试注入小预算用（#4223 的用例要能当场跑完等待上界）。
  */
-export function advanceRunLoop(userId: string, projectId: string): Promise<void> {
+export function advanceRunLoop(
+  userId: string,
+  projectId: string,
+  opts: { filmWaitMaxTicks?: number } = {},
+): Promise<void> {
   const key = `${userId}:${projectId}`;
   const existing = activeLoops().get(key);
   if (existing) {
     return existing;
   }
-  const loop = advanceRunLoopOnce(userId, projectId).finally(() => {
+  const loop = advanceRunLoopOnce(userId, projectId, opts).finally(() => {
     if (activeLoops().get(key) === loop) {
       activeLoops().delete(key);
     }
@@ -670,7 +683,14 @@ export function advanceRunLoop(userId: string, projectId: string): Promise<void>
   return loop;
 }
 
-async function advanceRunLoopOnce(userId: string, projectId: string): Promise<void> {
+async function advanceRunLoopOnce(
+  userId: string,
+  projectId: string,
+  opts: { filmWaitMaxTicks?: number } = {},
+): Promise<void> {
+  const filmWaitMaxTicks = opts.filmWaitMaxTicks ?? FILM_WAIT_MAX_TICKS;
+  /* render_film 的等待拍独立计数：等待不是执行，不该花执行步数（#4223）。 */
+  let filmWaitTicks = 0;
   try {
     for (let tick = 0; tick < MAX_TICKS; tick++) {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
@@ -772,11 +792,23 @@ async function advanceRunLoopOnce(userId: string, projectId: string): Promise<vo
       }
 
       // 出片这一步不 gate：起片后睡一拍再看 rendered（合成完由 syncFilmToProject 回写）。
+      // 等待拍挂 film 终态收口、退还执行预算（#4223，上界见 FILM_WAIT_MAX_TICKS 的注释）。
       if (action.kind === "render_film") {
+        filmWaitTicks += 1;
+        if (filmWaitTicks > filmWaitMaxTicks) {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+          await saveRun(userId, projectId, {
+            ...run,
+            status: "failed",
+            error: `成片等待超时（超过 ${Math.round((filmWaitMaxTicks * TICK_MS) / 60_000)} 分钟仍未收口）：请到成片页签看实际状态后重试`,
+          });
+          return;
+        }
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await saveRun(userId, projectId, run);
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await sleep(TICK_MS);
+        tick -= 1; // 本拍只是等待，退还给执行步数预算
         continue;
       }
 

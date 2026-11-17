@@ -489,7 +489,8 @@ export async function startFilm(id: string) {
     }
   }
 
-  // 后台监看 → 合成
+  // 后台监看 → 合成（循环 rejection 的就地收口在 watchFilm 里那道 .catch，#4216；
+  // 交接重读段的守卫见 watchFilm 开头，#4220 —— 两段合起来 watchFilm 不 reject）。
   void watchFilm(id);
 }
 
@@ -526,8 +527,16 @@ async function watchFilm(id: string, opts: { resumed?: boolean } = {}): Promise<
   const previous = inFlight.get(id);
   if (previous) {
     await previous.catch(() => undefined);
-    const film = await filmRepository.findById(id);
-    if (film?.status !== "GENERATING") {
+    /* 交接重读失败（DB 撞锁等）只让位退场，不把 rejection 冒给调用点（#4220）：
+     * 本条循环不起最坏也只是影片停在 GENERATING，boot 恢复扫描会接回；
+     * 让 rejection 打崩进程的代价不成比例。 */
+    try {
+      const film = await filmRepository.findById(id);
+      if (film?.status !== "GENERATING") {
+        return;
+      }
+    } catch (error) {
+      logger.warn(`[film] ${errorText(error, "监看交接重读失败，本条循环让位")}`);
       return;
     }
   }
@@ -728,7 +737,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
 
 /**
  * 进程重启后的恢复扫描：把丢了监看主体的影片接回去（P3 §5 ADR 的 5-A）。`startFilm` 末尾的
- * `void watchFilm()` 只活在**当前进程**，dev 热重启与桌包重启都会让它消失 —— 而任务还在库里由执行侧
+ * `watchFilm` 起的循环只活在**当前进程**，dev 热重启与桌包重启都会让它消失 —— 而任务还在库里由执行侧
  * 推进（宿主不跟 Next 一起死，ADR §14 D1）。没人监看 ⇒ 影片永远停在 `GENERATING`；返回值只给日志与用例。
  */
 export async function resumeStalledFilms(): Promise<{

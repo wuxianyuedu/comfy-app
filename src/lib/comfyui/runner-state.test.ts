@@ -186,3 +186,51 @@ describe("logWhileQueued / takeQueuedEntries", () => {
     expect(s.queuedEntries.has(`t-bound-${total - 1}`)).toBe(true);
   });
 });
+
+/* ── 防抖回调的最后兜底（#4221）────────────────────────────
+ * persistLogs 的双重失败（落库失败 + logger 也炸）会 re-throw。定时器回调里
+ * 原先写的是 `void persistLogs(...)`——没人接，rejection 冒成
+ * unhandledRejection，Node ≥15 默认即退出进程。钉死「回调走 fireAndForget +
+ * stderr 兜底」这条显式出口。 */
+/** 一条流换成「只记录、不外发」的桩（形态对齐 capture-streams.server.test.ts）。 */
+function recordWrite(bucket: Array<string>): typeof process.stderr.write {
+  return (chunk: string | Uint8Array) => {
+    bucket.push(String(chunk));
+    return true;
+  };
+}
+
+describe("定时器回调的双重失败兜底（#4221）", () => {
+  it("落库与 logger 都炸时走 stderr 兜底，不产生 unhandledRejection", async () => {
+    vi.useFakeTimers();
+    const mod = await loadRunnerState();
+    const stderrLines: Array<string> = [];
+    const originalWrite: typeof process.stderr.write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = recordWrite(stderrLines);
+
+    try {
+      mod.configureRunner({
+        taskRepo: {
+          replaceLogs: () => Promise.reject(new Error("db gone")),
+          replaceRawCli: () => Promise.resolve(undefined),
+        },
+        /* 注入一个自己也会炸的 warn：复刻「连 logger 都起不来」的双重失败现场。 */
+        log: {
+          warn: () => {
+            throw new Error("logger gone");
+          },
+        },
+      });
+      mod.schedulePersistLogs("t-df");
+
+      await vi.runAllTimersAsync();
+
+      const joined = stderrLines.join("");
+      expect(joined).toContain("persistLogs 双重失败");
+      expect(joined).toContain("db gone");
+    } finally {
+      process.stderr.write = originalWrite;
+      vi.useRealTimers();
+    }
+  });
+});

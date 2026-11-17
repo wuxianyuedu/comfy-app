@@ -135,7 +135,8 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
     const shell = stripComments(read("src-tauri/src/shell_launch.rs"));
     expect(shell).toContain("process_env_is_owned(pid, project_root)");
     expect(shell).toContain("PROJECT_ROOT_ENV}={project_root}");
-    expect(branch).toContain("shell_launch::reap_pid(project_root, pid)");
+    expect(branch).toContain("shell_launch::reap_pid(");
+    expect(branch).toContain("shell_launch::REAPER_BUDGET");
     expect(branch).toContain("start_own_orchestrator(app.handle(), project_root)");
     // 命中残留要说清「先回收再启动」，别让它看起来像一次正常启动。
     expect(branch).toContain("先回收它再启动本次编排");
@@ -308,7 +309,7 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
 describe("壳自编排：回收链", () => {
   it("壳退出时回收自己起的编排器整棵树（转发给 reap-process.mjs）", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
-    expect(rust).toMatch(/pub fn reap\(project_root: &str\)/);
+    expect(rust).toMatch(/pub fn reap\(project_root: &str, deadline: std::time::Instant\)/);
     // 两道机制：插件的 kill()（跨平台）+ 统一回收（不漏 node 下面那几层）。
     expect(rust).toContain("child.kill()");
     expect(rust).toContain("reap-process.mjs");
@@ -322,7 +323,7 @@ describe("壳自编排：回收链", () => {
     const lib = stripComments(read("src-tauri/src/lib.rs"));
     const onExit = since(lib, "tauri::RunEvent::Exit =>");
     expect(onExit).toContain("shell_launch::is_owning()");
-    expect(onExit).toContain("shell_launch::reap(&root)");
+    expect(onExit).toContain("shell_launch::reap(&root, exit_deadline)");
   });
 
   // 会话锚点只有编排器自己会在 `clearSession()` 里清，而壳收它是 `Child.kill()`
@@ -331,12 +332,16 @@ describe("壳自编排：回收链", () => {
   // PID …」，而那些 PID 早已被插件 kill / Job Object 收干净（回收是空转）。
   it("壳收走编排器后清掉会话锚点（否则每次启动都刷「回收遗留进程树」）", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
-    const reap = sliceBetween(rust, "pub fn reap(project_root: &str)", "pub fn reap_pid(");
+    const reap = sliceBetween(
+      rust,
+      "pub fn reap(project_root: &str, deadline: std::time::Instant)",
+      "pub fn reap_pid(",
+    );
     // 回收换序（#3857）：先派发 reaper（taskkill 目标在进程活着时不存在 PID
     // 复用），插件 kill 多半落在已被收走的进程上（无害 no-op）。两道任一落地
     // 都要清锚点 —— 它在 spawn_reaper 之后无条件执行。
     expect(reap).toMatch(
-      /spawn_reaper\(project_root, pid\)[\s\S]{0,400}clear_session_anchor\(project_root\)/,
+      /spawn_reaper\(project_root, pid, deadline\)[\s\S]{0,400}clear_session_anchor\(project_root\)/,
     );
     expect(rust).toContain("pub fn clear_session_anchor(");
     // 路径与 Node 侧同源（唯一实现是 `scripts/dev-launcher-session.mjs`）：
