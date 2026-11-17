@@ -96,6 +96,8 @@ type Behavior = {
     desktopManaged: boolean;
     instanceType: "desktop" | "portable" | "venv" | null;
     pathConfigured: boolean;
+    /** 已填路径指向的目录是否存在（#4138：无效路径行内提示的判据）。 */
+    pathExists: boolean;
   };
   /** comfyOpen（在浏览器打开）的返回文案；默认成功。 */
   comfyOpen?: { detail: string; ok: boolean };
@@ -139,6 +141,7 @@ const mockRouter = t.router({
           /* SAFETY: 类型断言已复核 */
           instanceType: "portable" as const,
           desktopManaged: false,
+          pathExists: true,
         },
     ),
     comfyEmbeddable: t.procedure.query(

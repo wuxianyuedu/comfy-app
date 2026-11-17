@@ -33,9 +33,22 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
   const instanceType = c.comfyInstance?.instanceType ?? null;
   const desktopManaged = c.comfyInstance?.desktopManaged === true;
 
+  /* 路径填了无效内容时的行内提示（ISSUE #4138）：判据是**已保存**路径的 fs 结论
+   * （comfyInstance 是它的函数，失焦保存即 refetch 重判）。「填了但判不出形态」
+   * 按 pathExists 分两种说法——目录不存在去查盘符与目录名；目录在但不是
+   * ComfyUI 安装，对照下面那句安装形态说明自查。 */
+  const instance = c.comfyInstance;
+  const pathInvalidHint =
+    instance?.pathConfigured === true && instance.instanceType === null
+      ? instance.pathExists
+        ? "ComfyUI 路径无效：这里不是有效的 ComfyUI 安装（需要含 main.py 的源码根，或含 ComfyUI/ 子目录的桌面版实例根）。"
+        : "ComfyUI 路径无效：磁盘上找不到这个目录，请检查盘符与目录名。"
+      : null;
+
   return (
     <SettingsCard>
       <Field
+        error={pathInvalidHint}
         label="ComfyUI 路径（源码根或桌面版实例根）"
         onBlur={() => {
           void c.savePrefs();
@@ -50,7 +63,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         桌面版（ComfyUI Desktop）请直接配置实例根目录（含 ComfyUI/ 子目录与
         standalone-env/），便携版配置含 main.py 的源码根。自动识别 python_embeded / standalone-env /
         .venv 解释器，多个环境并存时优先选用装了依赖（torch）的那个。
-        {c.comfyInstance?.pathConfigured === true
+        {c.comfyInstance?.pathConfigured === true && instanceType !== null
           ? "已配置——这里只管路径；启动 / 关闭与启动日志在侧栏「ComfyUI」页。"
           : "未配置——ComfyUI 未运行时任务会失败，侧栏「ComfyUI」页也启动不了它。"}
       </p>
