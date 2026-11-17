@@ -135,6 +135,21 @@
   `src/server/api/routers/sidebar.ts`、
   `src/app/(main)/settings/components/SidebarTabSection.tsx`
 
+#### FR-WS-11 启动耗时可视化（逐阶段）
+
+- 状态：已上线
+- 需求：启动过程中能看出「耗时都花费在了哪里」，为后续启动优化提供跨运行可比的
+  读数（ISSUE #4185）。
+- 行为与验收：启动页进度条下有逐阶段耗时条与秒数行（随每次进度快照边等边刷新，
+  进行中的段实时补时长，悬停见「段名 + 秒数」）；`dev-launcher.log` 的
+  「启动耗时分解」一行给出逐段秒数与**墙钟合计**（成功 / 超时 / 失败路径都打）；
+  `run/launch-status.json` 与 `run.json` 带 `timings` 字段（后者随运行包归档，
+  供跨运行对比）。阶段划分与出口见规范 launch-and-build.md §3.3「耗时时间线」行。
+- 落点：`scripts/launcher-core/timeline.mjs`（唯一实现）、
+  `scripts/dev-launcher.mjs`（埋点与分解行）、
+  `scripts/launcher-core/{startup-gates,shell-stage,dev-boot}.mjs`（分段计时）、
+  `{{shell.splash}}`（耗时条渲染）
+
 ---
 
 ## 2. 账号与访问（FR-AU）

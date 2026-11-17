@@ -143,6 +143,9 @@ const ALLOWED_SCRIPTS = new Set([
   "launcher-core/shell-stage.mjs",
   "launcher-core/dev-boot.mjs",
   "launcher-core/ready-wait.mjs",
+  // 启动耗时时间线（ISSUE #4185）：dev-launcher.mjs 顶层静态 import，缺这份
+  // 同样是加载期 ERR_MODULE_NOT_FOUND。与 RUNTIME_SCRIPTS 同源，缺一份即红。
+  "launcher-core/timeline.mjs",
   // 运行期「陈旧路由表」自愈与它的归因纯函数：`dev-launcher.mjs` 顶层静态 import
   // 两份 —— 缺任一份就是加载期 `ERR_MODULE_NOT_FOUND`（表同上）。与
   // `RUNTIME_SCRIPTS` 同源，缺一份即红。

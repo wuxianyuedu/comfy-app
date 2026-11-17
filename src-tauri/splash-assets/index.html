@@ -136,6 +136,38 @@
       transition: width 0.35s ease;
       box-shadow: 0 0 12px var(--violet-dim);
     }
+    /* 启动耗时条（ISSUE #4185）：每段一个阶段，宽度按耗时占比，悬停看「段名 + 秒数」；
+       下面一行文字给出逐段秒数与合计。数据来自 launch-status.json 的 timings
+       （编排器随每次进度快照写入），启动过程中就边等边刷新。 */
+    .timings {
+      margin: 0 0 6px;
+      flex-shrink: 0;
+    }
+    .timing-strip {
+      display: flex;
+      height: 4px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.04);
+      margin-bottom: 3px;
+    }
+    .timing-strip span {
+      display: block;
+      height: 100%;
+      min-width: 2px;
+      flex-shrink: 1;
+    }
+    .timing-text {
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--dim);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      user-select: text;
+      cursor: text;
+    }
     .meta {
       display: flex;
       justify-content: space-between;
@@ -311,6 +343,10 @@
     <div class="stale-banner" id="stale-banner" data-no-drag></div>
     <div class="bar-track">
       <div class="bar-fill" id="bar"></div>
+    </div>
+    <div class="timings" id="timings" data-no-drag style="display:none">
+      <div class="timing-strip" id="timing-strip"></div>
+      <div class="timing-text" id="timing-text"></div>
     </div>
     <div class="meta">
       <span class="phase" id="phase"><span class="spinner"></span>初始化</span>
@@ -642,7 +678,59 @@
      * 较大值：快照永远不许让进度条倒退。 */
     let updateFromShellFallback = false;
 
-    function updateUI(progress, phase, message, error, elapsed) {
+    /** 阶段段配色（循环取用）：段数 ≤12，颜色在深底上相互可分。 */
+    const TIMING_COLORS = [
+      '#7C5CFC', '#F59E0B', '#22D3EE', '#F472B6', '#34D399', '#FB923C',
+      '#A78BFA', '#FACC15', '#38BDF8', '#F87171', '#4ADE80', '#E879F9',
+    ];
+
+    function fmtSec(ms) {
+      return (Math.max(0, Number(ms) || 0) / 1000).toFixed(1) + 's';
+    }
+
+    /** 画启动耗时条（ISSUE #4185）：timings 为空 / 缺席时整块隐藏。
+     *  每段宽度按 durationMs 占比（近零段给 2px 细条兜底，不设百分比下限，
+     *  免得 0.0s 的段在条上被放大到误导）；title 给「段名 + 秒数」；
+     *  endMs 为 null 的段是进行中段（durationMs 已是截至当下的耗时）。
+     *  文字行只列 ≥0.1s 的段 —— 紧凑窗口一行放不下全部段名，把「不到 0.1s」
+     *  的噪声段让位给真正花时间的段与合计（全量明细在条形与悬停、日志里）。 */
+    function renderTimings(timings) {
+      const wrap = $('timings');
+      const strip = $('timing-strip');
+      const text = $('timing-text');
+      if (!wrap || !strip || !text) return;
+      if (!Array.isArray(timings) || timings.length === 0) {
+        wrap.style.display = 'none';
+        strip.innerHTML = '';
+        text.textContent = '';
+        return;
+      }
+      const lastEnd = timings.reduce(
+        (acc, t) => Math.max(acc, (t.endMs === null || t.endMs === undefined) ? t.startMs + t.durationMs : t.endMs),
+        0,
+      );
+      const firstStart = timings.reduce((acc, t) => Math.min(acc, t.startMs || 0), Infinity);
+      const totalMs = Math.max(0, lastEnd - firstStart);
+      strip.innerHTML = '';
+      timings.forEach((t, i) => {
+        const seg = document.createElement('span');
+        const pct = totalMs > 0 ? (t.durationMs / totalMs) * 100 : 100 / timings.length;
+        seg.style.width = pct.toFixed(2) + '%';
+        seg.style.background = TIMING_COLORS[i % TIMING_COLORS.length];
+        const running = t.endMs === null || t.endMs === undefined;
+        seg.title = `${t.label} ${fmtSec(t.durationMs)}${running ? '（进行中）' : ''}`;
+        strip.appendChild(seg);
+      });
+      const parts = timings
+        .filter((t) => (Number(t.durationMs) || 0) >= 100)
+        .map((t) => `${t.label} ${fmtSec(t.durationMs)}`);
+      text.textContent = parts.length > 0
+        ? parts.join(' · ') + ` · 合计 ${fmtSec(totalMs)}`
+        : `合计 ${fmtSec(totalMs)}`;
+      wrap.style.display = 'block';
+    }
+
+    function updateUI(progress, phase, message, error, elapsed, timings) {
       let raw = Math.max(0, Math.min(1, progress || 0));
       if (updateFromShellFallback && !error) raw = Math.max(raw, maxProgress);
       if (raw < maxProgress && !error) return;
@@ -665,6 +753,10 @@
         messageEl.dataset.progressText = message || '';
       }
       elapsedEl.textContent = fmtTime(elapsed || 0);
+      /* 耗时条只在「这轮带来了新读数」时重画：编排器快照必带 timings 字段
+         （可能为空数组 = 还没记到任何段）；壳的兜底快照 / 无状态轮次不带，
+         此时保留上一次画面，不闪空块。 */
+      if (Array.isArray(timings)) renderTimings(timings);
     }
 
     // ── 日志面板：展示 dev-launcher 编排日志尾部（Rust 命令 get_launch_log 提供）──
@@ -874,7 +966,7 @@
         // 这一轮是不是壳的快照（而非编排器的权威进度）——见 updateUI 上的说明。
         updateFromShellFallback =
           status.fallback === true || status.phase === 'no-status-file';
-        updateUI(status.progress || 0, status.phase, status.message, status.error, status.elapsed);
+        updateUI(status.progress || 0, status.phase, status.message, status.error, status.elapsed, status.timings);
         // 壳过期提醒（dev-launcher 预检写入 launch-status.json 的 stale_shell）
         // 常驻语义：一旦出现过就保持可见（window.staleShown 锁存），不再随
         // 后续轮询反复显示/隐藏——状态文件里的 stale_shell 消失（如字段
