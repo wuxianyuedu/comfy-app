@@ -1275,6 +1275,23 @@ describe("FilmRepository / FilmShotRepository", () => {
     expect(await filmRepository.findById(g.id)).toMatchObject({ status: "FAILED" });
   });
 
+  it("FAILED 影片可被重新认领合成（#4251 恢复出口）；CANCELLED 仍不可（#3867 抢跑）", async () => {
+    const f = await filmRepository.create(CREATE);
+    await filmRepository.claimGenerating(f.id); // PARSING → GENERATING
+    await filmRepository.markFailed(f.id, "合成失败（ffmpeg 缺失）");
+    /* 重新合成是文档承诺的恢复出口：FAILED → COMPOSING 必须走得通，
+     * 否则按钮点了静默空转、影片永久卡 FAILED（ISSUE #4251）。 */
+    expect(await filmRepository.claimComposing(f.id)).toBe(true);
+    expect(await filmRepository.findById(f.id)).toMatchObject({ status: "COMPOSING" });
+
+    const g = await filmRepository.create(CREATE);
+    await filmRepository.claimGenerating(g.id); // PARSING → GENERATING
+    await filmRepository.markCancelled(g.id); // GENERATING → CANCELLED
+    /* 取消抢跑保护（#3867）保持：CANCELLED 不被合成认领。 */
+    expect(await filmRepository.claimComposing(g.id)).toBe(false);
+    expect(await filmRepository.findById(g.id)).toMatchObject({ status: "CANCELLED" });
+  });
+
   it("镜头状态流转与两类筛选：status / onlyWithVideo", async () => {
     const f = await filmRepository.create(CREATE);
     await filmShotRepository.createMany(f.id, [
