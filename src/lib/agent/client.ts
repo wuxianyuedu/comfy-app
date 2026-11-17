@@ -4,12 +4,13 @@
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { isRecord } from "~/lib/is-record";
 import type { AgentChatRequest, AgentChatResponse } from "./shared";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 /** 向 Agent 服务端发送一轮消息，返回响应（reply / tool_calls / fallback）。 */
 export async function sendAgentMessage(req: AgentChatRequest): Promise<AgentChatResponse> {
   let res: Response;
   try {
-    res = await fetch("/api/agent/chat", {
+    res = await fetchWithTimeout("/api/agent/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req),

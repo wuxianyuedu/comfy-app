@@ -5,6 +5,7 @@
  */
 
 import { isRecord } from "~/lib/is-record";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 export type UpdateGroup = {
   dirty: boolean;
@@ -39,7 +40,7 @@ function isUpdateGroupList(v: unknown): v is Array<UpdateGroup> {
 /** 拉一次更新检测；请求失败（路由不可达等）返回空态便于降级静默。 */
 export async function fetchUpdateCheck(): Promise<UpdateCheckPayload> {
   try {
-    const res = await fetch(`/api/update-check`, { cache: "no-store" });
+    const res = await fetchWithTimeout(`/api/update-check`, { cache: "no-store" });
     if (!res.ok) {
       return EMPTY;
     }

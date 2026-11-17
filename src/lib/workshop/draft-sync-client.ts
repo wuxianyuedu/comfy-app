@@ -8,11 +8,12 @@
 import { isRecord } from "~/lib/is-record";
 import { withQuery } from "~/lib/query-string";
 import { parseDraftDto, type WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 /** 拉取某项目的服务端草稿；服务端无该行或已空 → 返回 null。 */
 export async function fetchServerDraft(projectId: string): Promise<WorkshopDraftDto | null> {
   try {
-    const res = await fetch(withQuery("/api/workshop/draft", { project: projectId }));
+    const res = await fetchWithTimeout(withQuery("/api/workshop/draft", { project: projectId }));
     if (!res.ok) {
       return null;
     }
@@ -29,7 +30,7 @@ export async function fetchServerDraft(projectId: string): Promise<WorkshopDraft
 /** 把某项目草稿写穿到服务端（写本地之外的第二份持久化副本）。静默失败不影响编辑。 */
 export async function pushServerDraft(projectId: string, draft: WorkshopDraftDto): Promise<void> {
   try {
-    await fetch("/api/workshop/draft", {
+    await fetchWithTimeout("/api/workshop/draft", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ project: projectId, draft }),

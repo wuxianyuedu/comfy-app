@@ -16,6 +16,7 @@ import { comfyImageUrl } from "~/lib/media/media-url";
 import { parseValidationErrorsJson, type ValidationError } from "~/lib/comfyui/validation";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { GenerateInput } from "~/lib/workflow/workflow-generate-input";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 /** 单次 /api/upload 的结果：成功给出文件名，失败给出可读原因与可否重试。 */
 type UploadAttempt =
@@ -28,7 +29,7 @@ async function postUpload(file: File): Promise<UploadAttempt> {
   fd.append("image", file);
   let res: Response;
   try {
-    res = await fetch("/api/upload", { method: "POST", body: fd });
+    res = await fetchWithTimeout("/api/upload", { method: "POST", body: fd });
   } catch {
     // 网络层失败（应用服务重启窗口）：按可重试处理，不把 fetch 原文抛给用户。
     return {
@@ -110,7 +111,7 @@ export async function importOutputAsInput(localPath: string): Promise<string> {
     return cached;
   }
   const abs = localPath.startsWith("/") ? localPath : `/${localPath}`;
-  const res = await fetch(abs);
+  const res = await fetchWithTimeout(abs);
   if (!res.ok) {
     throw new Error("读取上游输出失败");
   }
