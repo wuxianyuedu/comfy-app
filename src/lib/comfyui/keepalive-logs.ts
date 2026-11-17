@@ -1,9 +1,9 @@
-/* ── 保活重定向日志的按次命名与轮转（自 lifecycle-launch 拆出，R5）──────
+/* ── 保活重定向日志的按次命名与轮转（自 lifecycle-launch 拆出）──────────
  *
  * 保活拉起把 ComfyUI 的 stdio 重定向到按次命名的
  * `comfyui-keepalive-<时间戳>.{out,err}.log`；这两个函数管「找最新一份」与
  * 「轮转清理」，与 spawn 编排本身无状态耦合，单独成件让 lifecycle-launch
- * 回到文件长度硬闸之内（规范 §12.6 R5）。
+ * 回到单文件长度硬闸之内（规范 12.6 文件长度）。
  *
  * §18.4 三选一：只有 node:fs / node:path 的 value import，与 launch-path.ts
  * 同族按第三类登记（tests/lib-node-only-declarations.test.ts 的
