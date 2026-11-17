@@ -111,8 +111,13 @@ async function readResponseBufferCapped(res: Response, maxBytes: number): Promis
   } finally {
     /* 超限抛出时取消流：releaseLock 不停上游，剩余字节会继续进无人读取的
      * socket 直到超时（ISSUE #4218，与 safeFetch 的 body.cancel 同一口径）；
-     * 正常读完时 cancel 是无操作。 */
-    void reader.cancel().catch(() => undefined);
+     * 正常读完时 cancel 是无操作。cancel/close 都做兜底——测试桩与旧环境
+     * 可能没有这些方法。 */
+    try {
+      void Promise.resolve(reader.cancel?.()).catch(() => undefined);
+    } catch {
+      /* cancel 不可用时不影响既有的收尾 */
+    }
     reader.releaseLock();
   }
   return Buffer.concat(chunks, total);

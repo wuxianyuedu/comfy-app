@@ -541,8 +541,13 @@ export async function streamLLM(
     }
   } finally {
     /* onToken（写 SSE）抛错——典型是客户端中途断开、enqueue 同步失败——时，
-     * 上游 body 也要停：不 cancel 会滞留一条上游连接（ISSUE #4218）。 */
-    void reader.cancel().catch(() => undefined);
+     * 上游 body 也要停：不 cancel 会滞留一条上游连接（ISSUE #4218）。
+     * cancel 做兜底：测试桩/旧环境可能没有这个方法。 */
+    try {
+      void Promise.resolve(reader.cancel?.()).catch(() => undefined);
+    } catch {
+      /* cancel 不可用时不影响既有的收尾 */
+    }
   }
 
   return full;
