@@ -35,6 +35,7 @@ import type {
   SettingsStreamEvent,
   SummaryPkg,
 } from "../types";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 /** 解析控制台日志的内存上限（规范 §2.1）：流式解析可能一次性吐出成百上千行，
  * 无上限会泄漏内存并让面板重渲染变贵。 */
@@ -471,7 +472,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    *  用 `reloadFromServer`。 */
   const fetchSettings = useCallback(async () => {
     try {
-      const res = await fetch("/api/custom-nodes");
+      const res = await fetchWithTimeout("/api/custom-nodes");
       const ct = res.headers.get("content-type") ?? "";
       const isStream = ct.includes("ndjson");
 
@@ -634,7 +635,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     setError_(null);
     setLogs([]);
     try {
-      const res = await fetch("/api/custom-nodes", {
+      const res = await fetchWithTimeout("/api/custom-nodes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(packages ? { action: "parse", packages } : { action: "parse" }),

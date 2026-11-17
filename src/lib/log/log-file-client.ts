@@ -11,6 +11,7 @@ import { isRecord } from "~/lib/is-record";
 import { withQuery } from "~/lib/query-string";
 import { LOG_SLICE_ENDPOINT } from "./panel-self-poll";
 import type { LogSessionsPayload } from "./log-sessions";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 export type FileLogSlice = {
   /**
@@ -74,7 +75,7 @@ export async function fetchFileLogSlice(
   offset: number,
   bootId?: string,
 ): Promise<FileLogSlice | null> {
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     withQuery(LOG_SLICE_ENDPOINT, {
       source: sourceQuery(source),
       /* `offset` 是**游标**：`0` 表示「从头上读」，是真实的值不是缺值
@@ -135,7 +136,9 @@ export async function fetchLogSessions(
 ): Promise<LogSessionsPayload | null> {
   try {
     /* 会话 id 可选：空值由出口省略（不再自己 `if` 一次再 `set`）。 */
-    const res = await fetch(withQuery("/api/logs/sessions", { source, session: sessionId }));
+    const res = await fetchWithTimeout(
+      withQuery("/api/logs/sessions", { source, session: sessionId }),
+    );
     if (!res.ok) {
       return null;
     }
@@ -182,7 +185,7 @@ function isSavedLogExport(value: unknown): value is SavedLogExport {
  */
 export async function saveLogExport(label: string, content: string): Promise<SavedLogExport> {
   try {
-    const res = await fetch("/api/logs/export", {
+    const res = await fetchWithTimeout("/api/logs/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label, content }),
@@ -211,7 +214,7 @@ export async function saveLogExport(label: string, content: string): Promise<Sav
  */
 export async function saveDiagnosticsPackage(): Promise<SavedLogExport> {
   try {
-    const res = await fetch("/api/logs/diagnostics", { method: "POST" });
+    const res = await fetchWithTimeout("/api/logs/diagnostics", { method: "POST" });
     const data: unknown = await res.json();
     return isSavedLogExport(data) ? data : { ok: false, error: "响应形状不合法" };
   } catch (error) {
@@ -247,7 +250,7 @@ export async function postAppRuntimeLog(
   fields?: Record<string, unknown>,
 ): Promise<void> {
   try {
-    await fetch("/api/logs/app-runtime", {
+    await fetchWithTimeout("/api/logs/app-runtime", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ns, level, msg, fields }),

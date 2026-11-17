@@ -36,6 +36,7 @@ import {
   type SizePresetTable,
   type SizeScene,
 } from "./size-presets";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 /** 旧 localStorage 键（迁移源：历史版本把这张表存在浏览器里）。 */
 export const SIZE_PRESET_LEGACY_STORAGE_KEY = "comfyapp:size-presets:v1";
@@ -113,7 +114,7 @@ function commit(next: SizePresetTable): void {
 
 async function persist(table: SizePresetTable): Promise<void> {
   try {
-    const response = await fetch(SIZE_PRESETS_ENDPOINT, {
+    const response = await fetchWithTimeout(SIZE_PRESETS_ENDPOINT, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(table),
@@ -143,7 +144,7 @@ export async function hydrateSizePresetsFromServer(): Promise<void> {
   let serverTable: SizePresetTable | null = null;
   let serverDefaults: SizePresetTable | null = null;
   try {
-    const response = await fetch(SIZE_PRESETS_ENDPOINT);
+    const response = await fetchWithTimeout(SIZE_PRESETS_ENDPOINT);
     if (response.ok) {
       const raw: unknown = await response.json();
       const payload = isRecord(raw) ? raw : null;
@@ -232,7 +233,7 @@ export function resetSizePresetScene(scene: SizeScene): void {
 export async function saveSizePresetTableToProjectDefaults(
   table: SizePresetTable,
 ): Promise<{ file: string; table: SizePresetTable }> {
-  const response = await fetch(SIZE_PRESET_PROJECT_DEFAULT_ENDPOINT, {
+  const response = await fetchWithTimeout(SIZE_PRESET_PROJECT_DEFAULT_ENDPOINT, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(table),

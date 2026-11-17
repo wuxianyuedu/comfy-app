@@ -6,6 +6,7 @@
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { isRecord } from "~/lib/is-record";
 import { withQuery } from "~/lib/query-string";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 export type DebugSourcePayload = {
   /** 绝对路径（正斜杠盘符格式），供 vscode://file/ 协议打开 */
@@ -36,7 +37,7 @@ function assertDebugSourcePayload(value: unknown): asserts value is DebugSourceP
 export async function fetchDebugSource(file: string): Promise<DebugSourcePayload> {
   /* 一行也走出口：编码是出口的责任，调用处不必记得（漏一处就是静默 404，
    * 见规范 16 §16.2.4.32 的第 ④ 条）。 */
-  const res = await fetch(withQuery("/api/debug/source", { file }));
+  const res = await fetchWithTimeout(withQuery("/api/debug/source", { file }));
   /* 读法收在一处（规范 16 §16.2.4.35）：这里此前在 `unknown` 上直接取
    * `body?.error`（服务端回结构化信封时读不到），且 `res.json()` 各调一遍。 */
   const body = await readJsonBody(res);
