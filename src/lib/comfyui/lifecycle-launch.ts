@@ -783,30 +783,37 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
   child.stderr?.on("data", outSink);
   /* 会话起点：存活时长基于它算（「跑了 3 分钟就死」与「刚起就死」是两种问题）。 */
   const spawnedAt = Date.now();
-  child.on(
-    "exit",
-    createChildExitHandler({
-      /* 横幅直接写「为什么退出」：此前只有 `code=...`，而用户的问题是
-       * 「它是由什么退出的」—— 结论该出现在日志里，不该留给读者去推。 */
-      subject: "ComfyUI",
-      appendRuntimeLog,
-      log: note,
-      clearChild: () => {
-        if (st.child === child) {
-          st.child = undefined;
-        }
-      },
-      context: () => ({
-        pid: child.pid ?? null,
-        uptimeMs: Date.now() - spawnedAt,
-        stopRequested: st.stopRequested === true,
-        mode: "bound",
-      }),
-      onExitReport: (report) => {
-        host.markSessionEnd(report);
-      },
+  const onChildGone = createChildExitHandler({
+    /* 横幅直接写「为什么退出」：此前只有 `code=...`，而用户的问题是
+     * 「它是由什么退出的」—— 结论该出现在日志里，不该留给读者去推。 */
+    subject: "ComfyUI",
+    appendRuntimeLog,
+    log: note,
+    clearChild: () => {
+      if (st.child === child) {
+        st.child = undefined;
+      }
+    },
+    context: () => ({
+      pid: child.pid ?? null,
+      uptimeMs: Date.now() - spawnedAt,
+      stopRequested: st.stopRequested === true,
+      mode: "bound",
     }),
-  );
+    onExitReport: (report) => {
+      host.markSessionEnd(report);
+    },
+  });
+  child.on("exit", onChildGone);
+  /* 异步 spawn 失败（EACCES / 被安全软件拦截 / existsSync 校验与真正 spawn
+   * 之间的竞态）走的是 **error 事件**而不是同步抛错，且 `exit` 不会发——
+   * 不接住就是 uncaughtException 打挂应用服务，而上面的等待循环拿不到任何
+   * 信号、会一直空转到 deadline（设置页手动启动没有 deadline）。按「进程
+   * 没了」同形收口：清句柄（isDead 随之判死、用留底给出口）+ 落账（ISSUE #4202）。 */
+  child.on("error", (err: Error) => {
+    appendRuntimeLog(`[spawn] ComfyUI 子进程启动失败：${err.message}`);
+    onChildGone(null, null);
+  });
 
   /* 等待循环：deadline 为 null（设置页手动启动）时不设硬超时，一直等到
    * 就绪、进程退出或用户手动关闭；显式传 timeoutMs 的调用方（任务自动
