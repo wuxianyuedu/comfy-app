@@ -679,6 +679,23 @@ fn open_comfyui_window(app: tauri::AppHandle, url: String) -> Result<String, Str
   Ok(format!("已在壳内打开 ComfyUI（{}）", url))
 }
 
+/// 「host:port 此刻能否在 1s 内建立 TCP 连接」（ISSUE #4213）。
+///
+/// 无超时的 `TcpStream::connect` 在端口被防火墙 DROP 时按系统默认 SYN 重试
+/// 阻塞十几秒，而两个调用点一个在**主线程**的页面加载回调、一个在就绪看护
+/// 线程——前者被冻住就是整个壳卡死。解析取第一个地址（探测对象是本机回环
+/// 的应用服务，无 DNS 漂移面）。
+fn tcp_probe(host: &str, port: u16) -> bool {
+  use std::net::ToSocketAddrs;
+  let Ok(mut addrs) = (host, port).to_socket_addrs() else {
+    return false;
+  };
+  let Some(addr) = addrs.next() else {
+    return false;
+  };
+  TcpStream::connect_timeout(&addr, Duration::from_millis(1000)).is_ok()
+}
+
 /// 目标 URL 的 host:port 当前能否建立 TCP 连接。
 /// 交换窗口前的二次校验依据：WebView2 对「导航失败」（连接被拒/超时）同样会
 /// 触发 on_page_load(Finished)，页面内嵌 Edge 错误页且 URL 仍是 http://，
@@ -691,7 +708,7 @@ fn url_reachable(url: &tauri::Url) -> bool {
     return false;
   }
   match url.port_or_known_default() {
-    Some(port) => TcpStream::connect((host, port)).is_ok(),
+    Some(port) => tcp_probe(host, port),
     None => false,
   }
 }
@@ -1441,7 +1458,7 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
       poll_clock::PollClock::new(Duration::from_secs(120), Duration::from_millis(500));
     while !clock.expired() {
       clock.tick();
-      if TcpStream::connect((host.as_str(), port)).is_ok() {
+      if tcp_probe(host.as_str(), port) {
         // 端口刚通时 HTTP 未必已能响应，稍等一下再导航 —— 这是就绪后的
         // **沉降等待**，不是轮询拍（拍只有一种，在循环顶上）。
         std::thread::sleep(Duration::from_millis(500));
@@ -3472,5 +3489,19 @@ mod log_filter_tests {
     let tail = tail_log_file_since_marker(&path, "=== 启动会话开始", 256, 200).unwrap();
     assert!(tail.contains("新会话日志行"), "应包含新会话内容：{tail}");
     assert!(!tail.contains("旧会话日志行"), "不得带回旧会话内容：{tail}");
+  }
+
+  #[test]
+  fn tcp_probe_judges_bound_and_closed_ports() {
+    // 监听中的端口可达；已释放的端口立即拒连（ISSUE #4213：探测带 1s 超时，
+    // 不再有无超时 connect 冻结主线程的形态）。
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let bound_port = listener.local_addr().unwrap().port();
+    assert!(tcp_probe("127.0.0.1", bound_port));
+
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let closed_port = closed.local_addr().unwrap().port();
+    drop(closed);
+    assert!(!tcp_probe("127.0.0.1", closed_port));
   }
 }
