@@ -3,10 +3,9 @@
 // instrumentation 的五个后台分支（dispatch / reaper / film-resume /
 // event-loop-watch / sentry）失败时原先只有一行 boot 日志——功能**静默失效**：
 // dispatch 挂了任务永久 QUEUED、reaper 挂了孤儿任务永不对账、film-resume 挂了
-// 影片永停 GENERATING。这里收三件事：
+// 影片永停 GENERATING。这里收两件事：
 //
 //   · 结果记账（进程内注册表 + 落盘 run/boot-branches.json，重启后仍可查）；
-//   · 功能分支的自愈重试（最多 3 次、间隔 30s——先自愈，撑不过再落败）；
 //   · 供 `/api/dev/boot-branches` 读取的只读出口（消息中心据此提示）。
 //
 // 不带 `server-only`：instrumentation 的 nodejs 分支动态引它，`/api/dev/*`
@@ -23,10 +22,6 @@ export const FUNCTIONAL_BRANCHES: ReadonlySet<string> = new Set([
   "reaper",
   "film-resume",
 ]);
-
-/** 功能分支的重试预算：最多 3 次、间隔 30s（自愈优先，撑不过再落败）。 */
-export const BOOT_BRANCH_RETRY_MAX = 3;
-export const BOOT_BRANCH_RETRY_DELAY_MS = 30_000;
 
 export type BootBranchOutcome = {
   at: string;
@@ -104,32 +99,4 @@ function isOutcome(value: unknown): value is BootBranchOutcome {
     typeof value.name === "string" &&
     typeof value.ok === "boolean"
   );
-}
-
-/**
- * 带自愈重试地跑一个后台启动分支：失败重试至多 {@link BOOT_BRANCH_RETRY_MAX}
- * 次（间隔 {@link BOOT_BRANCH_RETRY_DELAY_MS}），仍失败则记账（落盘）；
- * 成功则清掉该分支的失败记录。rejection 向上冒给调用方的启动分支处理。
- */
-export async function runBootBranchWithRetry(
-  name: string,
-  run: () => Promise<unknown>,
-): Promise<unknown> {
-  let lastError: unknown = null;
-  for (let attempt = 1; attempt <= BOOT_BRANCH_RETRY_MAX; attempt++) {
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一次重试在前一次失败之后
-      const result = await run();
-      recordBootBranch(name, true, "启动成功");
-      return result;
-    } catch (error) {
-      lastError = error;
-      if (attempt < BOOT_BRANCH_RETRY_MAX) {
-        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一次重试在前一次失败之后
-        await new Promise((resolve) => setTimeout(resolve, BOOT_BRANCH_RETRY_DELAY_MS));
-      }
-    }
-  }
-  recordBootBranch(name, false, lastError instanceof Error ? lastError.message : String(lastError));
-  throw lastError;
 }

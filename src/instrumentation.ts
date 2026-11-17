@@ -109,33 +109,49 @@ export async function register() {
     const bootStartedAt = Date.now();
     /** @param {string} name 分支名（也进汇总行的键位） */
     const branchDoneMs = new Map<string, number>();
-    const startBranch = (name: string, run: () => Promise<unknown>): Promise<void> =>
-      import("./lib/shell/boot-branches.server").then(
-        ({ FUNCTIONAL_BRANCHES, runBootBranchWithRetry }) => {
-          /* 功能分支（dispatch / reaper / film-resume）带**自愈重试**（ISSUE #4257）：
-           * 失败重试至多 3 次（间隔 30s），仍失败则记账落盘——消息中心据此提示，
-           * 任务/影片不再静默卡死。`COMFYAPP_BOOT_BRANCH_FAIL=<名[,名…]>` 是
-           * 测试注入点（强制某分支失败，验证提示链路用）。 */
-          const attempt = (): Promise<unknown> => {
-            const forced = process.env.COMFYAPP_BOOT_BRANCH_FAIL?.split(",").includes(name);
-            if (forced === true) {
-              return Promise.reject(new Error(`注入的启动失败（${name}）`));
-            }
-            return FUNCTIONAL_BRANCHES.has(name) ? runBootBranchWithRetry(name, run) : run();
-          };
-          return attempt().then(
-            () => {
-              branchDoneMs.set(name, Date.now() - bootStartedAt);
-            },
-            (error: unknown) => {
-              branchDoneMs.set(name, -1);
-              console.error(
-                `[boot] ${name} 启动分支失败：${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
-              );
-            },
-          );
+    /* 预取后台分支的记账模块（ISSUE #4257）：startBranch 里不再有动态 import，
+     * 分支的首次 kick 保持**同步**（instrumentation-boot 测试的 flushAsync 契约：
+     * 分支的动态 import 不得挡在首次 kick 之前）。预取不阻塞 register；
+     * 记账模块取不到（理论不可达）时分支失败只走日志。 */
+    const bootBranchesModule = import("./lib/shell/boot-branches.server").catch(() => null);
+
+    const startBranch = (name: string, run: () => Promise<unknown>): Promise<void> => {
+      /* 功能分支（dispatch / reaper / film-resume）失败 → 记账（ISSUE #4257）：
+       * 消息中心经 /api/dev/boot-branches 读到仍失败的分支并提示（后果 + 出路）。
+       * `COMFYAPP_BOOT_BRANCH_FAIL=<名[,名…]>` 是测试注入点（强制某分支失败，
+       * 验证提示链路用）。 */
+      const attempt = (): Promise<unknown> => {
+        const forced = process.env.COMFYAPP_BOOT_BRANCH_FAIL?.split(",").includes(name);
+        if (forced === true) {
+          return Promise.reject(new Error(`注入的启动失败（${name}）`));
+        }
+        return run().catch((error: unknown) => {
+          recordBranchFailure(name, error);
+          throw error;
+        });
+      };
+      return attempt().then(
+        () => {
+          branchDoneMs.set(name, Date.now() - bootStartedAt);
+        },
+        (error: unknown) => {
+          recordBranchFailure(name, error);
         },
       );
+
+      function recordBranchFailure(branch: string, error: unknown): void {
+        branchDoneMs.set(branch, -1);
+        const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
+        void bootBranchesModule
+          .then((m) => {
+            if (m?.FUNCTIONAL_BRANCHES.has(branch)) {
+              m.recordBootBranch(branch, false, detail);
+            }
+          })
+          .catch(() => undefined);
+        console.error(`[boot] ${branch} 启动分支失败：${detail}`);
+      }
+    };
     /* 三个 void 返回的启动器（reaper / dispatch / event-loop-watch）用块体调用：
      * 箭头简写把 void 值当返回值会被 no-confusing-void-expression 判红，
      * 而这里的语义本来就是「调一下、不等它」。 */
