@@ -22,7 +22,7 @@ import path from "node:path";
 
 import bundledModelAdapterDefaults from "./model-adapter-defaults.json";
 import { MODEL_ADAPTER_DEFAULTS_REL_PATH } from "./model-adapter-defaults-path";
-import { atomicWriteText } from "./atomic-write.server";
+import { atomicWriteTextIfChanged } from "./atomic-write.server";
 import { errorText } from "~/lib/error-message";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import { isRecord } from "~/lib/is-record";
@@ -132,8 +132,9 @@ export async function saveModelAdaptersAsDefaults(
   existing[name] = normalized;
   const text = `${JSON.stringify({ version: 1, models: existing }, null, 2)}\n`;
   try {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await atomicWriteText(file, text);
+    /* 内容相同就跳过（ISSUE #4253）：这份文件在 src/ 树内，每次写入都会
+     * 触发 Turbopack 增量重编译。 */
+    await atomicWriteTextIfChanged(file, text);
   } catch (error) {
     throw new Error(errorText(error, `项目默认写入失败（${file}）`), { cause: error });
   }
