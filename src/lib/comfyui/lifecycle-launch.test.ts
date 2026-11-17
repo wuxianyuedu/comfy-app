@@ -73,11 +73,8 @@ import { getExitPolicy, getSettingsSync } from "../app-settings/app-settings.ser
 import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 
 import { startComfyExitWatcher } from "./lifecycle-exit";
-import {
-  ensureKeepAliveWatchOnAdoption,
-  pruneKeepAliveLogs,
-  type LaunchHost,
-} from "./lifecycle-launch";
+import { ensureKeepAliveWatchOnAdoption, type LaunchHost } from "./lifecycle-launch";
+import { pruneKeepAliveLogs } from "./keepalive-logs";
 import type { ComfyRuntimeSnapshot } from "./status";
 
 /* 造一个只带 pid 的子进程句柄（`spawnManaged` 的桩只需这一格事实）。 */

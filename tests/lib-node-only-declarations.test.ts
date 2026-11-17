@@ -39,6 +39,10 @@ const PURE_NODE_HOSTS = [
   // server-only 侧模块；与 launch-path.ts 同族（复用其 site-packages 布局判据），
   // 执行器宿主侧同样可能用到，故按第三类登记。
   "src/lib/comfyui/dep-drift.ts",
+  // keepalive-logs.ts：保活重定向日志的按次命名查找与轮转清理（自 lifecycle-launch
+  // 拆出，R5）。只有 `node:fs`/`node:path` 的 value import，不引 server-only 侧模块；
+  // 与 launch-path.ts 同族按第三类登记。
+  "src/lib/comfyui/keepalive-logs.ts",
   // comfy-cli-python.ts（ISSUE #1239）：与 `launch-path.ts` 同族的纯解析地基 —— 从设置项 `comfyCliPython`
   // 推导解释器落点、按形态给「找不到」提示。只有 `node:path` 一条 value import、不引 server-only 侧模块；
   // 消费方是本清单第三类的 `executor-cli.ts`，桌包里跑在纯 Node 宿主，故按第三类登记而非 `server-only`。
