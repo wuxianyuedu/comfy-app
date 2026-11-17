@@ -1763,11 +1763,11 @@ zustand 队列，而不是再加一个模块级单例。
 
 | 环节     | 判据                                                                                                                                                       |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 进程外信号 | 壳命令 `get_app_service_liveness`（`shell_launch::read_app_service_liveness`）：读编排器落下的 `run/launcher-session.json`（`launcher_pid` + `child_pids`），逐个查 PID 存活。**不经过 dev server 的任何线程**，不受它忙闲影响。三态：任一活着 / 全部不在 / 读不到（手工 `pnpm dev` 没有会话文件 → `None`） |
+| 进程外信号 | 壳命令 `get_app_service_liveness`，**两档按序作答**，三态语义一致（`None` = 不知道，不是错误）。**第一档**（prebuilt）：读编排器落下的 `run/launcher-session.json`（`launcher_pid` + `child_pids`），逐个查 PID 存活（`shell_launch::read_app_service_liveness`）。**第二档**（standalone 分发形态，ISSUE #4151）：没有编排器与会话文件，壳用它**直接持有**的内嵌 server `CommandChild` 句柄直答（`shell_launch::liveness_from_sidecar`）——句柄在 → 查 PID 存活；壳在事件通道里亲眼看到 `Terminated` → 直接判死（句柄在壳的整个生命周期里指向同一 PID，判死从此不受 PID 复用影响；句柄仍留在槽位里，退出时 `kill_sidecar` 还要靠它回收作业内残留）。两档都答不上（手工 `pnpm dev` / 浏览器 / 旧壳）→ `None`。**不经过被测进程的任何线程**，不受它忙闲影响 |
 | 前端判据 | 探活失败的每一拍问一次壳（`readAppServiceProcessAlive`，2.5s 超时防壳自身卡死）。`deriveDevServerStatus` 收 `processAlive`：不可达 + 进程在 → **`unresponsive` 软状态**（琥珀色「应用服务无响应」，不写消息中心的断开消息）；不可达 + 进程没了 / 没有信号（`null`，浏览器 / 旧壳）→ `offline`（原行为，**不编一个答案出来**） |
 | 边沿     | 进 / 出 `unresponsive` 消息中心**都静默**（状态栏自己显示；每次重载窗口写一条「无响应/恢复」是噪声）；`unresponsive → offline`（停走期间进程真没了）仍记断开 |
-| 语义     | 「已断开」从「一时答不上」收紧为「**进程没了**」；CPU 阻塞最多产生一个软提示，翻不了红                                                                                     |
-| 回归判据 | `dev-server-status.test.ts`（unresponsive / processAlive=false / null 退回 / stale 优先）、`use-dev-server-liveness.test.ts`「双信号」一组、`app-service-message.test.ts`「unresponsive 的边沿」一组、壳侧 `shell_launch` 的会话解析与三态归并用例 |
+| 语义     | 「已断开」从「一时答不上」收紧为「**进程没了**」；CPU 阻塞最多产生一个软提示，翻不了红。standalone 形态（#3369 的原始现场就是桌包）同样吃这一语义：第二档判据只回答「进程在不在」，判不了假死，与第一档一致 |
+| 回归判据 | `dev-server-status.test.ts`（unresponsive / processAlive=false / null 退回 / stale 优先）、`use-dev-server-liveness.test.ts`「双信号」一组、`app-service-message.test.ts`「unresponsive 的边沿」一组、壳侧 `shell_launch` 的会话解析与三态归并用例（含 `liveness_from_sidecar`：句柄不在 → None、句柄在 → PID 探测、`Terminated` 已见 → 判死压过探测） |
 
 #### 4.5.3 结束记录要**两个写点**，读不到时也不许编成因
 
