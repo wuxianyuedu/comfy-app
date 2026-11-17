@@ -32,7 +32,8 @@ const sidebarTabConfigSchema = z.object({
  *
  * 两种保存方式与「模式契约」同一条口径：
  *   · `tabConfigSave` —— 落**本机**（`data/`），开发版与正式包都能用；
- *   · `tabConfigSaveProjectDefaults` —— 落**项目默认**（入库 JSON，跟代码走），
+ *   · `tabConfigSaveProjectDefaults` —— 落**本机项目默认覆盖**（data/，不入库；
+ *     ISSUE #4150），
  *     只有开发检出有可写的目标文件。
  */
 export const sidebarRouter = createTRPCRouter({
@@ -58,7 +59,7 @@ export const sidebarRouter = createTRPCRouter({
     return { config: await loadSidebarTabConfig() };
   }),
 
-  /** 「保存为项目默认（跟代码走）」：全量写进入库 JSON。
+  /** 「保存为项目默认（本机）」：全量写进本机项目默认覆盖（data/，#4150）。
    *  只有开发检出可用 —— 正式包大声失败（判据与出口都在服务端那一层）。 */
   tabConfigSaveProjectDefaults: authedProcedure
     .input(sidebarTabConfigSchema)
