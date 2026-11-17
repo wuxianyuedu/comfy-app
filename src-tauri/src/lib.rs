@@ -1891,16 +1891,24 @@ const TRAY_ID: &str = "comfyapp-tray";
 /// 但「启动完成后窗口在任务栏、用户又切走了」这类场景需要一个稳定的唤起入口，
 /// 因此常驻一个最小托盘——左键单击把主窗口带回前台，右键给出显示/退出。
 /// 托盘是窗口的附属入口，不改变窗口关闭语义（关主窗即退出应用）。
-fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+fn build_tray(app: &tauri::AppHandle) -> Result<(), String> {
   use tauri::menu::{Menu, MenuItem};
   use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-  let open_item = MenuItem::with_id(app, "open-main", "打开主界面", true, None::<&str>)?;
-  let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-  let menu = Menu::with_items(app, &[&open_item, &quit_item])?;
+  let open_item = MenuItem::with_id(app, "open-main", "打开主界面", true, None::<&str>)
+    .map_err(|e| e.to_string())?;
+  let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)
+    .map_err(|e| e.to_string())?;
+  let menu = Menu::with_items(app, &[&open_item, &quit_item]).map_err(|e| e.to_string())?;
+
+  let Some(icon) = app.default_window_icon() else {
+    // 图标资源缺失（bundle icons 被改坏）只该让托盘缺位，不该让 setup 阶段的
+    // unwrap 把整个应用带走（ISSUE #4214；调用方本来就按 WARN 兜底）。
+    return Err("默认窗口图标缺失：请检查 tauri.conf.json 的 bundle.icons 配置".to_string());
+  };
 
   TrayIconBuilder::with_id(TRAY_ID)
-    .icon(app.default_window_icon().unwrap().clone())
+    .icon(icon.clone())
     .tooltip("Comfy APP")
     .menu(&menu)
     .show_menu_on_left_click(false)
@@ -1920,7 +1928,8 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         show_main_window_without_focus(tray.app_handle(), true);
       }
     })
-    .build(app)?;
+    .build(app)
+    .map_err(|e| e.to_string())?;
   log::info!("[ComfyAPP] tray icon created");
   Ok(())
 }
@@ -2275,8 +2284,21 @@ pub fn run() {
       install_splash_close_handler(app);
       spawn_splash_watchdog(app);
 
+      // standalone 载荷缺失/损坏（ISSUE #4214）：Err 不能冒到 Builder::build 的
+      // expect——那是无声崩溃（windows_subsystem 下无控制台、无启动页）。窗口此刻
+      // 已创建：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态。
       #[cfg(not(debug_assertions))]
-      setup_standalone_runtime(app)?;
+      if let Err(e) = setup_standalone_runtime(app) {
+        log::error!("[ComfyAPP] standalone runtime setup failed: {e}");
+        shell_launch::mark_launch_failed(
+          &app.state::<AppState>().project_root(),
+          &format!(
+            "standalone 运行时装配失败：{e}\n\
+             请确认安装目录 resources/static/ 下的内嵌服务随包完整分发（重新安装/解压一次），\
+             详见 log/current/shell/shell.log。"
+          ),
+        );
+      }
 
       // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
       // （缺图标资源 / 系统限制）只记 WARN，绝不能让整个应用起不来。
@@ -3063,7 +3085,7 @@ mod standalone_payload_tests {
       .find("setup_splash_window(app);")
       .expect("找不到启动页的创建点");
     let read = src
-      .find("setup_standalone_runtime(app)?;")
+      .find("if let Err(e) = setup_standalone_runtime(app) {")
       .expect("找不到 standalone 装配的调用点");
     assert!(
       write < splash && splash < read,
