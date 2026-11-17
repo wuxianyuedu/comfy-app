@@ -9,6 +9,7 @@
  * 引的叶子 ~/lib/llm/types 派生 —— 值与类型都只有一处定义，别名不会再漂。 */
 import type { RemoteModelKind } from "~/lib/llm/types";
 import { asRecord } from "~/lib/is-record";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 export type UsageTestKind = RemoteModelKind;
 
@@ -48,11 +49,16 @@ export type UsageTestResult = {
 };
 
 export async function testModelUsage(input: UsageTestInput): Promise<UsageTestResult> {
-  const res = await fetch("/api/llm/test-usage", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
+  const res = await fetchWithTimeout(
+    "/api/llm/test-usage",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+    /* 视频用途的服务端预算是分钟级（上游 180s），默认 15s 会误杀真在跑的测试。 */
+    200_000,
+  );
   const raw: unknown = await res.json().catch(() => ({}));
   const json = asRecord(raw) ?? {};
   return parseUsageTestResult(res, json);
@@ -90,11 +96,16 @@ function parseUsageTestResult(res: Response, json: Record<string, unknown>): Usa
 /** 对已提交的异步视频任务再等一轮：产物就绪则返回 videoUrl（并落盘本地），
  *  否则仍 pending 返回，供调用方继续提供「继续等待」入口。 */
 export async function queryUsageTask(input: UsageTaskQueryInput): Promise<UsageTestResult> {
-  const res = await fetch("/api/llm/test-usage/query", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
+  const res = await fetchWithTimeout(
+    "/api/llm/test-usage/query",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+    /* 查询侧只读任务状态，但上游也可能慢：给 120s，仍远紧于无限期。 */
+    120_000,
+  );
   const raw: unknown = await res.json().catch(() => ({}));
   const json = asRecord(raw) ?? {};
   return parseUsageTestResult(res, json);

@@ -679,6 +679,23 @@ fn open_comfyui_window(app: tauri::AppHandle, url: String) -> Result<String, Str
   Ok(format!("已在壳内打开 ComfyUI（{}）", url))
 }
 
+/// 「host:port 此刻能否在 1s 内建立 TCP 连接」（ISSUE #4213）。
+///
+/// 无超时的 `TcpStream::connect` 在端口被防火墙 DROP 时按系统默认 SYN 重试
+/// 阻塞十几秒，而两个调用点一个在**主线程**的页面加载回调、一个在就绪看护
+/// 线程——前者被冻住就是整个壳卡死。解析取第一个地址（探测对象是本机回环
+/// 的应用服务，无 DNS 漂移面）。
+fn tcp_probe(host: &str, port: u16) -> bool {
+  use std::net::ToSocketAddrs;
+  let Ok(mut addrs) = (host, port).to_socket_addrs() else {
+    return false;
+  };
+  let Some(addr) = addrs.next() else {
+    return false;
+  };
+  TcpStream::connect_timeout(&addr, Duration::from_millis(1000)).is_ok()
+}
+
 /// 目标 URL 的 host:port 当前能否建立 TCP 连接。
 /// 交换窗口前的二次校验依据：WebView2 对「导航失败」（连接被拒/超时）同样会
 /// 触发 on_page_load(Finished)，页面内嵌 Edge 错误页且 URL 仍是 http://，
@@ -691,7 +708,7 @@ fn url_reachable(url: &tauri::Url) -> bool {
     return false;
   }
   match url.port_or_known_default() {
-    Some(port) => TcpStream::connect((host, port)).is_ok(),
+    Some(port) => tcp_probe(host, port),
     None => false,
   }
 }
@@ -1441,7 +1458,7 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
       poll_clock::PollClock::new(Duration::from_secs(120), Duration::from_millis(500));
     while !clock.expired() {
       clock.tick();
-      if TcpStream::connect((host.as_str(), port)).is_ok() {
+      if tcp_probe(host.as_str(), port) {
         // 端口刚通时 HTTP 未必已能响应，稍等一下再导航 —— 这是就绪后的
         // **沉降等待**，不是轮询拍（拍只有一种，在循环顶上）。
         std::thread::sleep(Duration::from_millis(500));
@@ -1874,16 +1891,24 @@ const TRAY_ID: &str = "comfyapp-tray";
 /// 但「启动完成后窗口在任务栏、用户又切走了」这类场景需要一个稳定的唤起入口，
 /// 因此常驻一个最小托盘——左键单击把主窗口带回前台，右键给出显示/退出。
 /// 托盘是窗口的附属入口，不改变窗口关闭语义（关主窗即退出应用）。
-fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+fn build_tray(app: &tauri::AppHandle) -> Result<(), String> {
   use tauri::menu::{Menu, MenuItem};
   use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-  let open_item = MenuItem::with_id(app, "open-main", "打开主界面", true, None::<&str>)?;
-  let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-  let menu = Menu::with_items(app, &[&open_item, &quit_item])?;
+  let open_item = MenuItem::with_id(app, "open-main", "打开主界面", true, None::<&str>)
+    .map_err(|e| e.to_string())?;
+  let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)
+    .map_err(|e| e.to_string())?;
+  let menu = Menu::with_items(app, &[&open_item, &quit_item]).map_err(|e| e.to_string())?;
+
+  let Some(icon) = app.default_window_icon() else {
+    // 图标资源缺失（bundle icons 被改坏）只该让托盘缺位，不该让 setup 阶段的
+    // unwrap 把整个应用带走（ISSUE #4214；调用方本来就按 WARN 兜底）。
+    return Err("默认窗口图标缺失：请检查 tauri.conf.json 的 bundle.icons 配置".to_string());
+  };
 
   TrayIconBuilder::with_id(TRAY_ID)
-    .icon(app.default_window_icon().unwrap().clone())
+    .icon(icon.clone())
     .tooltip("Comfy APP")
     .menu(&menu)
     .show_menu_on_left_click(false)
@@ -1903,7 +1928,8 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         show_main_window_without_focus(tray.app_handle(), true);
       }
     })
-    .build(app)?;
+    .build(app)
+    .map_err(|e| e.to_string())?;
   log::info!("[ComfyAPP] tray icon created");
   Ok(())
 }
@@ -2249,17 +2275,15 @@ pub fn run() {
       }
 
       // ── 方向 B：启动页与「应用」窗口分离 ──
-      // 配置里的 splash 窗口仅显示启动进度；「应用」窗口（label="main"）在此创建
-      // 为隐藏窗口，先停在 about:blank，由启动页探测后端就绪后经 navigate_to_app
-      // 导航到应用 URL，加载完成后由 create_main_window 里挂的回调交换窗口。
-      create_main_window(app)?;
-      watch_main_first_paint(app.handle().clone(), expect_slow_first_paint);
+      wire_startup_windows(app, expect_slow_first_paint)?;
 
-      install_splash_close_handler(app);
-      spawn_splash_watchdog(app);
-
+      // standalone 载荷缺失/损坏（ISSUE #4214）：Err 不能冒到 Builder::build 的
+      // expect——那是无声崩溃（windows_subsystem 下无控制台、无启动页）。窗口此刻
+      // 已创建：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态。
       #[cfg(not(debug_assertions))]
-      setup_standalone_runtime(app)?;
+      if let Err(e) = setup_standalone_runtime(app) {
+        report_standalone_setup_failure(app, &e.to_string());
+      }
 
       // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
       // （缺图标资源 / 系统限制）只记 WARN，绝不能让整个应用起不来。
@@ -2272,6 +2296,42 @@ pub fn run() {
     .expect("error while building tauri application");
 
   app.run(handle_run_event);
+}
+
+/// 启动页与「应用」主窗的装配（ISSUE #4214 顺带：`run()` 越过 Rust 函数长度
+/// 硬闸，把这一段收成命名步骤）。
+///
+/// ── 方向 B：启动页与「应用」窗口分离 ──
+/// 配置里的 splash 窗口仅显示启动进度；「应用」窗口（label="main"）在此创建
+/// 为隐藏窗口，先停在 about:blank，由启动页探测后端就绪后经 navigate_to_app
+/// 导航到应用 URL，加载完成后由 create_main_window 里挂的回调交换窗口。
+/// 「关闭启动页 = 放弃启动」的处理器与看门狗也在这里挂。
+fn wire_startup_windows(
+  app: &mut tauri::App,
+  expect_slow_first_paint: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+  create_main_window(app)?;
+  watch_main_first_paint(app.handle().clone(), expect_slow_first_paint);
+
+  install_splash_close_handler(app);
+  spawn_splash_watchdog(app);
+  Ok(())
+}
+
+/// standalone 装配失败的可见出口（ISSUE #4214）：Err 不能冒到 `Builder::build`
+/// 的 expect——那是无声崩溃（`windows_subsystem` 下无控制台、无启动页）。窗口
+/// 此刻已创建：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态。
+#[cfg(not(debug_assertions))]
+fn report_standalone_setup_failure(app: &tauri::App, error: &str) {
+  log::error!("[ComfyAPP] standalone runtime setup failed: {error}");
+  shell_launch::mark_launch_failed(
+    &app.state::<AppState>().project_root(),
+    &format!(
+      "standalone 运行时装配失败：{error}\n\
+       请确认安装目录 resources/static/ 下的内嵌服务随包完整分发（重新安装/解压一次），\
+       详见 log/current/shell/shell.log。"
+    ),
+  );
 }
 
 /// 双击壳（唯一的启动入口形态）：承担原先 Python 启动器的那一段编排。
@@ -3046,7 +3106,7 @@ mod standalone_payload_tests {
       .find("setup_splash_window(app);")
       .expect("找不到启动页的创建点");
     let read = src
-      .find("setup_standalone_runtime(app)?;")
+      .find("if let Err(e) = setup_standalone_runtime(app) {")
       .expect("找不到 standalone 装配的调用点");
     assert!(
       write < splash && splash < read,
@@ -3472,5 +3532,19 @@ mod log_filter_tests {
     let tail = tail_log_file_since_marker(&path, "=== 启动会话开始", 256, 200).unwrap();
     assert!(tail.contains("新会话日志行"), "应包含新会话内容：{tail}");
     assert!(!tail.contains("旧会话日志行"), "不得带回旧会话内容：{tail}");
+  }
+
+  #[test]
+  fn tcp_probe_judges_bound_and_closed_ports() {
+    // 监听中的端口可达；已释放的端口立即拒连（ISSUE #4213：探测带 1s 超时，
+    // 不再有无超时 connect 冻结主线程的形态）。
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let bound_port = listener.local_addr().unwrap().port();
+    assert!(tcp_probe("127.0.0.1", bound_port));
+
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let closed_port = closed.local_addr().unwrap().port();
+    drop(closed);
+    assert!(!tcp_probe("127.0.0.1", closed_port));
   }
 }
