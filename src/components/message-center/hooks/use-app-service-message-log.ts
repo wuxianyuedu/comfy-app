@@ -14,6 +14,7 @@ import {
   fetchCurrentDisconnectExit,
   isPreviousRunExit,
 } from "~/lib/shell/app-service-exit";
+import { isRecord } from "~/lib/is-record";
 import { fetchLoopBlockForOffline } from "~/lib/shell/app-service-loop-blocks";
 import type { DevServerState } from "~/lib/shell/dev-server-status";
 import {
@@ -112,6 +113,40 @@ async function recordStart(
   push({ kind: "restart", title, body, runId, time: event.at });
 }
 
+/** 后台启动分支失败的用户可见文案（ISSUE #4257）：按分支给后果与出路；
+ *  未知分支给通用文案。导出仅为可测。 */
+export function bootBranchNotice(name: string): { body: string; title: string } {
+  switch (name) {
+    case "dispatch": {
+      return {
+        body:
+          "后台的任务派发循环没能启动，排队中的任务不会被自动执行（重启应用通常可恢复；" +
+          "若反复出现，请到控制台反馈并附应用日志）。",
+        title: "应用服务：任务自动派发未启动",
+      };
+    }
+    case "reaper": {
+      return {
+        body:
+          "后台的回收循环没能启动，失败或超时的任务可能停留在「生成中」。" + "重启应用通常可恢复。",
+        title: "应用服务：孤儿任务回收未启动",
+      };
+    }
+    case "film-resume": {
+      return {
+        body: "重启前中断的影片可能停留在「生成中」，不会自动续跑。重启应用通常可恢复。",
+        title: "应用服务：成片监看恢复未启动",
+      };
+    }
+    default: {
+      return {
+        body: "一个后台功能没能启动，相关能力可能不可用。重启应用通常可恢复。",
+        title: `应用服务：后台功能「${name}」未启动`,
+      };
+    }
+  }
+}
+
 export function useAppServiceMessageLog({
   state,
   processIsNew,
@@ -168,4 +203,53 @@ export function useAppServiceMessageLog({
     }
     void recordStart(event, stoppedRef, currentRunId);
   }, [state, processIsNew, currentRunId, unprobedMs]);
+
+  /* 后台启动分支的失败提示（ISSUE #4257）：新进程就绪后（以及此后每分钟）
+   * 问一次 /api/dev/boot-branches，把仍失败的功能分支记进消息中心——
+   * dispatch / reaper / film-resume 静默失效时，用户能看见「为什么任务不动」。
+   * 消息 id 按 runId + 分支名确定 ⇒ 刷新与重复轮询由 store 的幂等去重吸收。 */
+  useEffect(() => {
+    if (!processIsNew || currentRunId === null) {
+      return;
+    }
+    let cancelled = false;
+    const check = async (): Promise<void> => {
+      try {
+        const res = await fetch("/api/dev/boot-branches");
+        const raw: unknown = await res.json();
+        if (!isRecord(raw) || !Array.isArray(raw.branches)) {
+          return;
+        }
+        for (const branch of raw.branches) {
+          if (
+            cancelled ||
+            !isRecord(branch) ||
+            branch.ok !== false ||
+            typeof branch.name !== "string"
+          ) {
+            continue;
+          }
+          const notice = bootBranchNotice(branch.name);
+          push({
+            kind: "info",
+            id: `boot-branch-${currentRunId}-${branch.name}`,
+            title: notice.title,
+            body: notice.body,
+            runId: currentRunId,
+            time: Date.now(),
+          });
+        }
+      } catch {
+        /* 拉不到就算了：分支失败本身已有 boot 日志兜底 */
+      }
+    };
+    void check();
+    const timer = setInterval(() => {
+      void check();
+    }, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [processIsNew, currentRunId]);
 }
