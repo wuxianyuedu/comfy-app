@@ -7,6 +7,9 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
+import { fireAndForget } from "~/lib/async-action";
+import { errorText } from "~/lib/error-message";
+import { logger } from "~/lib/core/logger";
 import { isPlainRecord } from "~/lib/is-record";
 import { productionRepository } from "~/lib/core/repository-production";
 import {
@@ -37,12 +40,21 @@ import {
 const approvalModeEnum = z.enum(APPROVAL_MODES);
 const reviewModeEnum = z.enum(["gacha", "reprompt"]);
 
-/** fire-and-forget 拉起执行引擎推进 run（动态 import 解耦；引擎自带异常兜底，不外抛）。 */
+/** fire-and-forget 拉起执行引擎推进 run（动态 import 解耦；引擎自带异常兜底，不外抛）。
+ *  能 reject 的只剩动态 `import()` 本身（模块编译 / 加载失败）——fireAndForget 显式接住
+ *  落 error 日志，不让它冒成 unhandledRejection（#4224）。 */
 function kickEngine(userId: string, projectId: string): void {
-  void (async () => {
-    const { advanceRunLoop } = await import("~/server/agent/run-engine");
-    await advanceRunLoop(userId, projectId);
-  })();
+  fireAndForget(
+    (async () => {
+      const { advanceRunLoop } = await import("~/server/agent/run-engine");
+      await advanceRunLoop(userId, projectId);
+    })(),
+    (error) => {
+      logger.error(
+        `[run] ${errorText(error, `拉起执行引擎失败（user=${userId} project=${projectId}）`)}`,
+      );
+    },
+  );
 }
 
 function missingProductionError(): TRPCError {

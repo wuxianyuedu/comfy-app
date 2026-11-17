@@ -33,6 +33,7 @@
 //
 
 import { errorText } from "~/lib/error-message";
+import { fireAndForget } from "~/lib/async-action";
 import { HISTORY_READ } from "../retry-policy";
 import { lastSegments } from "~/lib/path-display";
 import { createEmptyState, type LogEntry, type RunnerState } from "./runner-state-shape";
@@ -315,6 +316,18 @@ export function cancelPersistLogs(taskId: string): void {
   persistTimers.delete(taskId);
 }
 
+/* 防抖/看门狗定时器回调里的最后兜底（#4221）：persistLogs 的双重失败（落库失败 +
+ * logger 也起不来）会 re-throw。`await persistLogs(...)` 的调用方自己接那个 throw；
+ * 这三个定时器回调原本写的是 `void persistLogs(...)`——没人接，rejection 直接走
+ * unhandledRejection，Node ≥15 默认即退出整个进程。这里显式接住：logger 既已不可用，
+ * stderr 是两宿主（Next / executor host）都被启动链捕获落日志的最后通道；语义从
+ * 「意外崩进程」改为「响亮留痕 + 继续跑」。 */
+function onPersistLogsFailure(error: unknown): void {
+  process.stderr.write(
+    `[comfyui] persistLogs 双重失败（落库与 logger 均不可用）：${errorText(error, "unknown")}\n`,
+  );
+}
+
 export function schedulePersistLogs(taskId: string) {
   if (!taskId) {
     return;
@@ -336,7 +349,7 @@ export function schedulePersistLogs(taskId: string) {
         persistTimers.delete(taskId);
       }
 
-      void persistLogs(taskId);
+      fireAndForget(persistLogs(taskId), onPersistLogsFailure);
     }, PERSIST_DEBOUNCE_MS);
 
     return;
@@ -351,7 +364,7 @@ export function schedulePersistLogs(taskId: string) {
       persistTimers.delete(taskId);
     }
 
-    void persistLogs(taskId);
+    fireAndForget(persistLogs(taskId), onPersistLogsFailure);
   }, PERSIST_DEBOUNCE_MS);
 
   const maxDelay = setTimeout(() => {
@@ -363,7 +376,7 @@ export function schedulePersistLogs(taskId: string) {
       persistTimers.delete(taskId);
     }
 
-    void persistLogs(taskId);
+    fireAndForget(persistLogs(taskId), onPersistLogsFailure);
   }, PERSIST_MAX_DELAY_MS);
 
   persistTimers.set(taskId, { debounce, maxDelay });
@@ -581,8 +594,8 @@ export async function persistLogs(taskId: string) {
   const arr = state().logs.get(taskId) ?? [];
 
   // 内部把 DB 落库的失败咽下——理由与旧行为不匹配：
-  //   · caller 有 3 处写 `void persistLogs(...)`（防抖回调里），
-  //     不 catch 就直接变成 unhandledRejection，进程级噪声；
+  //   · 防抖/看门狗定时器回调里的 3 处经 fireAndForget 接到 onPersistLogsFailure
+  //     （stderr 最后通道），rejection 不再走 unhandledRejection；
   //   · 另外几处 `await persistLogs(...)`
   //     （enqueue / executor-finalize / reaper），若这里抛错会让 finalize 链路整段回滚，
   //     表现比「一份日志没落库」严重得多。
@@ -604,8 +617,9 @@ export async function persistLogs(taskId: string) {
       const { log } = await resolveDeps();
       log.warn(message);
     } catch {
-      // 完全无法落库 + 无法 warn：让 caller 通过 unhandled rejection 感知，
-      // 不吞掉。
+      // 完全无法落库 + 无法 warn：对 `await persistLogs(...)` 的调用方照抛（它们有自己的
+      // try/catch）；定时器回调那三处走 fireAndForget 的 stderr 兜底（onPersistLogsFailure），
+      // 不再借 unhandledRejection 当信号通道（那等于崩进程）。
       throw error;
     }
   }

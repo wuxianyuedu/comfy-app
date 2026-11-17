@@ -699,3 +699,63 @@ describe("advanceRunLoop · execFilm 起片恢复（#3962）", () => {
     expect(run.error).toContain("未进入可恢复生成态");
   });
 });
+
+describe("advanceRunLoop · render_film 等待挂 film 终态（#4223）", () => {
+  /** 起片认领已写、影片实体在 GENERATING：规划器每拍都回 render_film 的现场。 */
+  async function seedFilmWaiting(): Promise<string> {
+    const { filmRepository } = await import("~/lib/core/repository");
+    const film = await filmRepository.create({
+      userId: USER,
+      projectId: PROJ,
+      title: "片",
+      script: "",
+      type: "short_video",
+      size: "{}",
+      fps: 16,
+      framesPerShot: 49,
+      subtitleOn: true,
+    });
+    await filmRepository.claimGenerating(film.id);
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0, imageUrl: "/x.png" }],
+        rendered: false,
+      },
+      { status: "running", approvalMode: "auto", filmStartedAt: "2026-01-01T00:00:00.000Z" },
+    );
+    return film.id;
+  }
+
+  it("film 长跑超过等待预算：落「成片等待超时」的诚实文案，不再被误判「步数超限」", async () => {
+    vi.useFakeTimers();
+    try {
+      await seedFilmWaiting();
+      /* 预算注入 3 拍：第 4 拍等待时超界收口。等待拍不消耗执行步数——若退还原
+       * 机制（同池计数），这条用例会在 MAX_TICKS 耗尽后拿到「执行引擎步数超限」。 */
+      const loop = advanceRunLoop(USER, PROJ, { filmWaitMaxTicks: 3 });
+      await vi.runAllTimersAsync();
+      await loop;
+
+      const run = normalizeProductionRun((await readRow())!.run);
+      expect(run.status).toBe("failed");
+      expect(run.error).toContain("成片等待超时");
+      expect(run.error).not.toContain("步数超限");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("film 终态 FAILED：run 跟随落 failed 并透传 film 侧原因（等待拍不白耗）", async () => {
+    const filmId = await seedFilmWaiting();
+    const { filmRepository } = await import("~/lib/core/repository");
+    await filmRepository.markFailed(filmId, "镜头 1 生成失败");
+
+    await advanceRunLoop(USER, PROJ, { filmWaitMaxTicks: 3 });
+
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("影片已终止");
+  });
+});

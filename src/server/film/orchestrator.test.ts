@@ -3,6 +3,8 @@
 // `composeFilm` 无 ffmpeg/无可用镜头须落 FAILED 并带可行动文案，否则影片停在「合成中」；`createFilm` 的帧数/帧率/尺寸
 // 折算写错 = 片子与设置不符而无报错。IO 全经注入点桩掉（仓储/队列/LLM/ffmpeg），不必起真 ComfyUI、不必真调 ffmpeg。
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 /* ── 仓储与依赖桩 ─────────────────────────────────────────── */
@@ -693,5 +695,83 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
     const registry = (globalThis as { filmWatchInFlight_v1?: Map<string, Promise<void>> })
       .filmWatchInFlight_v1;
     expect(registry?.size).toBe(0);
+  });
+});
+
+/* ── 监看交接与收口的增量（#4220 ⊕ #4216）──────────────────
+ * 循环体 rejection 的就地收口已由 #4216（watchFilm 里那道 .catch）收编，本组
+ * 只钉它的两处增量：① 收口自身再炸（判失败/行日志也抛）时仍不冒 rejection；
+ * ② 交接重读段（watchFilm 里 await previous 之后的 findById）不在 .catch 的
+ * 收口面内——那是 watchFilm 起飞后、循环未起前的缝隙，让位退场而不是冒出去。
+ * 「不冒 rejection」判据由 vitest 本身承压：冒出来即记败。 */
+describe("监看交接与收口的增量（#4220）", () => {
+  /* 在飞表的类型由 orchestrator.ts 的 `declare global` 增广进本项目（测试导入它），
+   * 直接经 globalThis 读写，不用再过一道断言。 */
+  const inFlightMap = (): Map<string, Promise<void>> | undefined => globalThis.filmWatchInFlight_v1;
+
+  beforeEach(() => {
+    globalThis.filmWatchInFlight_v1 = new Map();
+  });
+
+  /* 与「startFilm — 自主成片逐镜生成」那条用例同一套读序列：开头读一次、
+   * 逐镜提交前每镜再读一次，监看（交接/首拍）是第三次。 */
+  const oneShotRow = () => [
+    {
+      id: "s1",
+      order: 0,
+      prompt: "海边日落",
+      negative: null,
+      params: { videoWorkflowId: "wf-v", imageWorkflowId: "wf-i" },
+    },
+  ];
+
+  it("收口自身再炸（判失败/行日志都抛）：rejection 仍不冒出，在飞表照常清空", async () => {
+    /* 扫描会连查 GENERATING 与 COMPOSING 两轮；按状态各回各的，别让第二次扫描
+     * 拿到同一条行、把「判失败/留痕」的 Once 桩提前消费掉。 */
+    filmRepo.listByStatus.mockImplementation((statuses) =>
+      Promise.resolve(statuses.includes("GENERATING") ? [{ id: "f-w", status: "GENERATING" }] : []),
+    );
+    filmRepo.findById.mockRejectedValue(new Error("SQLITE_BUSY: database is locked"));
+    filmRepo.markFailed.mockRejectedValueOnce(new Error("db gone"));
+    filmRepo.appendLog
+      .mockResolvedValueOnce(undefined) /* 续跑留痕那条成功，让循环走进首拍 */
+      .mockRejectedValueOnce(new Error("db gone"));
+
+    await resumeStalledFilms();
+
+    /* 收口动作各自再兜一层（.catch 内部的 try/catch）：两层都炸也不把刚处理完的
+     * rejection 变回 unhandled。 */
+    const inflight = inFlightMap()?.get("f-w");
+    expect(inflight).toBeDefined();
+    await inflight;
+    expect(inFlightMap()?.size).toBe(0);
+    expect(loggerMock.error).toHaveBeenCalledWith(expect.stringContaining("监看循环异常终止"));
+  });
+
+  it("交接重读失败：让位退场不冒 rejection，也不误判失败", async () => {
+    /* 先占住在飞表 = 「旧循环还在飞」的交接现场（#3867 的语义）。 */
+    const seed = new Map<string, Promise<void>>();
+    seed.set("f1", Promise.resolve());
+    globalThis.filmWatchInFlight_v1 = seed;
+
+    filmRepo.findById
+      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
+      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
+      .mockRejectedValue(new Error("SQLITE_BUSY: database is locked"));
+    shotRepo.listByFilm.mockResolvedValue(oneShotRow());
+
+    await startFilm("f1");
+
+    await expect
+      .poll(() => loggerMock.warn.mock.calls.map((c) => String(c[0])).join("|"))
+      .toContain("监看交接重读失败");
+    /* 让位 ≠ 判失败：影片交给 boot 恢复扫描接回，兜底不许越权改写用户可见状态。 */
+    expect(filmRepo.markFailed).not.toHaveBeenCalled();
+  });
+
+  it("源码形态：收口走 watchFilm 的 .catch（#4216），交接守卫在场（#4220）", () => {
+    const src = readFileSync(path.join(import.meta.dirname, "orchestrator.ts"), "utf8");
+    expect(src).toContain("监看循环异常终止");
+    expect(src).toContain("监看交接重读失败");
   });
 });
