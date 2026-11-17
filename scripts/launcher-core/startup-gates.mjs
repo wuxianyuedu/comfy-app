@@ -24,6 +24,8 @@ import process from "node:process";
  * @param {(m: string, l?: import("./log.mjs").LogLevel) => void} ctx.log 日志出口
  * @param {string} ctx.root 检出根
  * @param {(phase: string, progress: number, message: string, extra?: object) => void} ctx.status 进度快照
+ * @param {import("./timeline.mjs").LaunchTimeline} [ctx.timeline]
+ *   启动耗时时间线（ISSUE #4185）；测试夹具可不传 —— 各埋点都是可选调用。
  * @param {(root: string) => Promise<number[] | null>} ctx.reapStaleSession 回收上次孤儿
  * @param {(root: string) => { message: string } | null} ctx.checkEnvFile 环境文件门禁
  * @param {(root: string) => string | null} ctx.envInitHint 非阻断读数：`.env` 缺哪些 `env:init` 会补的键
@@ -37,21 +39,25 @@ import process from "node:process";
  * @returns {Promise<{ ok: true, port: number } | { ok: false, error: { message: string, statusMessage: string, staleShell?: string | null } }>}
  */
 export async function runStartupGates(ctx, target) {
-  const { log, root, status } = ctx;
+  const { log, root, status, timeline } = ctx;
   const { portOrNull, mode } = target;
 
   log(`project_root=${root}`, "INFO");
   log(`平台=${process.platform}，模式=${mode}`, "INFO");
 
   // 0) 上一次的孤儿回收（必须在起新进程之前：否则新旧实例抢同一端口）
+  timeline?.begin("stale-reap", "回收上次残留");
   const reaped = await ctx.reapStaleSession(root);
+  timeline?.end("stale-reap");
   if (reaped) {
     log(`回收上一次运行遗留的进程树：PID ${reaped.join(", ")}`, "WARN");
   }
 
   // 1) 预检：环境文件（与 dev.mjs / start.mjs 同判据）+ 工具链
+  timeline?.begin("env-toolchain", "环境与工具链");
   const envProblem = ctx.checkEnvFile(root);
   if (envProblem) {
+    timeline?.end("env-toolchain");
     return {
       ok: false,
       error: {
@@ -70,6 +76,7 @@ export async function runStartupGates(ctx, target) {
   }
 
   const gateProblem = ctx.runToolchainGate(root);
+  timeline?.end("env-toolchain");
   if (gateProblem) {
     // 多行提示分两条写：`status` 的 message 是启动页**一行**标题位，塞整段
     // 会把「先做什么」挤没；完整提示（含修复命令）放 stale_shell 横幅，
@@ -89,7 +96,10 @@ export async function runStartupGates(ctx, target) {
   //      报错会落在业务模块解析失败上，与「依赖没装」这句结论长得完全不一样。
   //      判据是 lockfile 的**实质差异**（`lockfileDrift`），差异明细复用
   //      scripts/lockfile/ 的既有实现（唯一出处，质量门禁同源）。
+  //      这一段是启动耗时里最可能「分钟级」的一格（pnpm install），必须单独立段。
+  timeline?.begin("deps-sync", "依赖对齐");
   const syncProblem = await ctx.syncDependencies(root, { status });
+  timeline?.end("deps-sync");
   if (syncProblem) {
     return {
       ok: false,
@@ -106,11 +116,13 @@ export async function runStartupGates(ctx, target) {
   //      执行宿主、后台 schema 同步）。运行期多个进程持有同一个库，运行期覆盖
   //      `db.sqlite` 等于在别人握着句柄时换掉文件 —— 这里换是唯一安全的时刻。
   //      空转（没有标记）是绝大多数启动的形态。
+  timeline?.begin("db-restore", "备份恢复");
   const restore = ctx.applyPendingRestoreAtBoot(root, {
     write: (/** @type {string} */ line) => {
       log(line.replace(/^\[db-backup\] /, "").trimEnd(), "INFO");
     },
   });
+  timeline?.end("db-restore");
   if (restore.status === "restored") {
     log(`数据库已从备份恢复（${restore.from}）`, "OK");
   } else if (restore.status === "failed") {
@@ -118,7 +130,9 @@ export async function runStartupGates(ctx, target) {
   }
 
   // 2) 端口（单一事实源：app-port.mjs，绝不在这里重算）
+  timeline?.begin("port-resolve", "端口解析");
   const port = portOrNull ?? ctx.resolveAppPort(root);
+  timeline?.end("port-resolve");
   log(`使用端口 ${port}（.env 显式值优先，否则按检出路径推导，见 §1.1）`, "INFO");
   status("port-check", 0.05, "正在检查端口占用…");
   return { ok: true, port };

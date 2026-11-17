@@ -33,7 +33,13 @@ import { applyPendingRestoreAtBoot } from "./db/db-backup-core.mjs";
 import { spawnSchemaSync } from "./db/db-schema-state.mjs";
 import { checkEnvFile, envInitHint } from "./devtools/env-preflight.mjs";
 import { createLogSink, currentDirOf, runtimeStamp, runStamp } from "./launcher-core/log.mjs";
-import { pruneRuns, recordPid, recoverStaleCurrent, startRun } from "./launcher-core/run.mjs";
+import {
+  pruneRuns,
+  patchRun,
+  recordPid,
+  recoverStaleCurrent,
+  startRun,
+} from "./launcher-core/run.mjs";
 import {
   classifyProbe,
   usesExplicitPort,
@@ -44,6 +50,9 @@ import {
   describeReadyTimeout,
   waitForDevReady,
 } from "./launcher-core/ready-wait.mjs";
+// 启动耗时时间线（ISSUE #4185）：逐阶段 span 的唯一实现，三处出口（启动页
+// timings / 日志分解行 / run.json）共用这一份读数。
+import { createLaunchTimeline, formatLaunchTimeline } from "./launcher-core/timeline.mjs";
 // 「收尾定性」这一族（downstreamExitKind / readShellMarkers /
 // describeDownstreamExit / runtimeExitRecord）判的是同一件事的四个侧面，收在
 // launcher-core/downstream-exit.mjs（入口文件长度的约束，§12.6 R5 的姊妹档）。
@@ -382,6 +391,8 @@ export function parseArgs(argv) {
 export async function run(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const startedAt = Date.now();
+  /** 启动耗时时间线（ISSUE #4185）：与 startedAt 同一刻起算，偏移口径一致。 */
+  const timeline = createLaunchTimeline(startedAt);
   /* 归因用的「起点」：启动那一刻的 HEAD。只存内存、只为通知文案服务 —— 运行期
    * 自愈时拿它比一次 `git diff`（懒归因，见 launcher-core/runtime-heal.mjs）。
    * git 不可用 / 非检出 → null（文案退化为「无法归因」，自愈照常）。 */
@@ -405,8 +416,21 @@ export async function run(argv = process.argv.slice(2)) {
       message,
       appPort: portOrNull ?? currentPort,
       startedAt,
+      timings: timeline.snapshot(),
       ...extra,
     });
+
+  /** 逐阶段耗时落两处：dev-launcher.log 一行 + run.json 的 `timings` 字段。
+   *  成功 / 超时 / 失败路径都调 —— 「时间花在哪」恰恰最常在没走完的路上被问起。
+   *  run.json 由 patchRun 合并写入，随后随运行包归档进 log/runs/，跨运行可比。 */
+  const reportTimeline = () => {
+    const spans = timeline.snapshot();
+    if (spans.length === 0) {
+      return;
+    }
+    log(formatLaunchTimeline(spans), "INFO");
+    patchRun(ROOT, { timings: spans });
+  };
   // 0~2) 预检桥段（孤儿回收 → 环境/工具链门禁 → 依赖对齐 → 备份恢复 → 端口）
   // 实现见 `launcher-core/startup-gates.mjs`（ISSUE #1811 拆 R5 超限文件）；
   // 那一段的**内部顺序是契约**（回收在起进程前、换库在开库前），见模块注释。
@@ -415,6 +439,7 @@ export async function run(argv = process.argv.slice(2)) {
       log,
       root: ROOT,
       status,
+      timeline,
       reapStaleSession,
       checkEnvFile,
       envInitHint,
@@ -425,10 +450,9 @@ export async function run(argv = process.argv.slice(2)) {
     },
     { portOrNull, mode: args.mode },
   );
-  /** 预检桥段结束的时刻（耗时分解行的第一段终点）。 */
-  const gatesDoneAt = Date.now();
   if (!gated.ok) {
     log(gated.error.message, "ERROR");
+    reportTimeline();
     status("error", 1, gated.error.statusMessage, {
       error: true,
       ...(gated.error.staleShell ? { staleShell: gated.error.staleShell } : {}),
@@ -447,6 +471,7 @@ export async function run(argv = process.argv.slice(2)) {
       {
         log,
         root: ROOT,
+        timeline,
         appendRuntimeWarning,
         defaultShellExe,
         ensureSplashResource,
@@ -486,17 +511,21 @@ export async function run(argv = process.argv.slice(2)) {
   // （一次双击起不来的典型现场：两个窗口没了，应用也起不来）。残留是**上一次**启动的，
   // 不在这一次启动的单一实例假设里，因此端口族回收必须每次都跑。
   let portSummary;
+  timeline.begin("port-reclaim", "端口残留回收");
   try {
     portSummary = await reconcilePort(port, ROOT, {
       explicit: usesExplicitPort(portOrNull),
     });
+    timeline.end("port-reclaim");
   } catch (error) {
+    timeline.end("port-reclaim");
     /* 端口 / 进程探测没跑起来：不是「端口空闲」，也不是「被别人占着」。
      * 这一格**没有结论**，不许继续起服务（会撞残留 / EADDRINUSE），
      * 也不许被最外层泛化成「启动编排异常」而不给可行动作（§13.6.3）。 */
     if (error instanceof ProbeUnavailableError) {
       const reason = error.message;
       log(`端口归属判据没量到：${reason}`, "ERROR");
+      reportTimeline();
       status("error", 1, "端口归属判据没量到，未继续启动", { error: true, staleShell: reason });
       return 1;
     }
@@ -514,6 +543,7 @@ export async function run(argv = process.argv.slice(2)) {
       log,
       root: ROOT,
       status,
+      timeline,
       spawnedChildren: () => spawned,
       appendRuntimeWarning,
       syncNextCache,
@@ -541,8 +571,6 @@ export async function run(argv = process.argv.slice(2)) {
   const nextOut = booted.nextOut;
   const nextErr = booted.nextErr;
   staleShell = booted.staleShell;
-  /** dev server 已拉起的时刻（耗时分解行的第二段终点；此后是 Next 自己的启动时间）。 */
-  const devSpawnedAt = Date.now();
   const heartbeat = setInterval(() => {
     touchHeartbeat(ROOT);
   }, HEARTBEAT_INTERVAL_MS);
@@ -628,6 +656,7 @@ export async function run(argv = process.argv.slice(2)) {
     });
   }
 
+  timeline.begin("ready-wait", "等待服务就绪");
   const waited = await waitForDevReady(
     {
       log,
@@ -650,8 +679,10 @@ export async function run(argv = process.argv.slice(2)) {
       startedAt,
     },
   );
+  timeline.end("ready-wait");
 
   if (devExited()) {
+    reportTimeline();
     return await concludeDownstreamExit(downstreamCtx, {
       dev,
       shell,
@@ -671,23 +702,17 @@ export async function run(argv = process.argv.slice(2)) {
       timeoutMs: READY_TIMEOUT_MS,
     });
     log(verdict.log, verdict.level);
+    reportTimeline();
     status("error", 1, verdict.statusMessage, { error: true, staleShell });
     await shutdown(1);
   }
   log(`服务已就绪：http://${args.host}:${port}`, "OK");
-  /* 启动耗时分解（ISSUE #4137）：三段各管一件事 —— 预检（工具链/依赖/备份），
-   * 端口与缓存（netstat/指纹/壳），Next 启动与就绪探测（pnpm 链 + 编译 + instrumentation）。
+  /* 启动耗时分解（ISSUE #4137 三段行 → #4185 逐阶段化）：预检（工具链/依赖/备份）、
+   * 端口与缓存、dev server 拉起、等待就绪各成一段；读数由 timeline 统一给出，
+   * 三处出口同源（启动页耗时条 / 这行日志 / run.json 归档）。
    * 「哪一段变慢了」要在每一次启动的日志里直接可读，而不是让排查的人对着
    * 行首时间戳手工做减法；秒数带出处，后续优化才有可比的基线。 */
-  /**
-   * @param {number} from 起点（毫秒）
-   * @param {number} to 终点（毫秒）
-   */
-  const secBetween = (from, to) => `${((to - from) / 1000).toFixed(1)}s`;
-  log(
-    `启动耗时分解：预检 ${secBetween(startedAt, gatesDoneAt)} · 端口与缓存 ${secBetween(gatesDoneAt, devSpawnedAt)} · Next 启动与就绪 ${secBetween(devSpawnedAt, Date.now())}`,
-    "INFO",
-  );
+  reportTimeline();
   status("dev-server-ready", 0.9, "本地服务已就绪", {
     ready: true,
     staleShell,

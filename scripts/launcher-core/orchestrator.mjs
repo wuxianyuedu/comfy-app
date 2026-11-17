@@ -20,6 +20,8 @@ import path from "node:path";
  * @property {string | null} [staleShell]
  * @property {string | null} [pnpmMismatch]
  * @property {number | null} [startedAt]
+ * @property {import("./timeline.mjs").LaunchTimingSpan[] | null} [timings] 各阶段耗时
+ *   （ISSUE #4185）：编排器传入，启动页据此画耗时条；壳侧兜底快照不写它。
  */
 
 /**
@@ -42,6 +44,7 @@ export function writeLaunchStatus(
     staleShell = null,
     pnpmMismatch = null,
     startedAt = null,
+    timings = null,
   },
 ) {
   const elapsed = startedAt ? Math.round((Date.now() - startedAt) / 100) / 10 : 0;
@@ -56,6 +59,9 @@ export function writeLaunchStatus(
     stale_shell: staleShell,
     pnpm_mismatch: pnpmMismatch,
     updated_at: new Date().toISOString(),
+    /* 耗时明细只在编排器给出来时带上：壳侧兜底快照 / 退出定性那两处不传，
+     * 启动页按「字段缺席」跳过渲染，不画空条。 */
+    ...(Array.isArray(timings) ? { timings } : {}),
   };
   try {
     const dir = path.join(root, "run");
