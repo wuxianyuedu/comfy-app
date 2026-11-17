@@ -19,6 +19,8 @@ import process from "node:process";
  * @param {(m: string, l?: import("./log.mjs").LogLevel) => void} ctx.log 日志出口
  * @param {string} ctx.root 检出根
  * @param {(phase: string, progress: number, message: string, extra?: object) => void} ctx.status 进度快照
+ * @param {import("./timeline.mjs").LaunchTimeline} [ctx.timeline]
+ *   启动耗时时间线（ISSUE #4185）；测试夹具可不传 —— 各埋点都是可选调用。
  * @param {() => import("node:child_process").ChildProcess[]} ctx.spawnedChildren 本次会话的子进程账本
  * @param {(msg: string) => void} ctx.appendRuntimeWarning 把 pnpm 提醒补进 app-runtime 通道
  * @param {(root: string, env: Record<string, string | undefined>, fingerprint?: { hash: string, files: Record<string, string> }) => { cleaned: boolean, reason: string }} ctx.syncNextCache .next 缓存策略
@@ -42,11 +44,12 @@ import process from "node:process";
  * @returns {{ dev: import("node:child_process").ChildProcess, nextOut: string, nextErr: string, staleShell: string | null }}
  */
 export function bootDevServerStage(ctx, target) {
-  const { log, root, status } = ctx;
+  const { log, root, status, timeline } = ctx;
   const { port, host, mode, runTimestamp, startedAt } = target;
   let staleShell = target.staleShell;
 
   // 5) .next 缓存策略（与 .ps1 同一指纹口径）
+  timeline?.begin("cache", "编译缓存");
   const cache = ctx.syncNextCache(root, process.env);
   log(
     cache.cleaned
@@ -55,6 +58,7 @@ export function bootDevServerStage(ctx, target) {
     cache.cleaned ? "STEP" : "OK",
   );
   const pnpm = ctx.reconcilePnpmVersion(root);
+  timeline?.end("cache");
   if (pnpm?.tip) {
     ctx.appendRuntimeWarning(pnpm.tip);
     staleShell = staleShell ? `${staleShell}；${pnpm.tip}` : pnpm.tip;
@@ -64,6 +68,7 @@ export function bootDevServerStage(ctx, target) {
   });
 
   // 6) 起 dev server（输出重定向到 log/nextjs/，按次命名后轮转保留 5 份）
+  timeline?.begin("dev-spawn", "服务拉起");
   const nextDir = ctx.currentDirOf("nextjs", root);
   ctx.pruneTimestampedLogs(nextDir, ["nextjs-stdout-", "nextjs-stderr-"], 5);
   const nextOut = path.join(nextDir, `nextjs-stdout-${runTimestamp}.log`);
@@ -71,6 +76,7 @@ export function bootDevServerStage(ctx, target) {
   log(`启动 Next.js dev server（${host}:${port}）…`, "STEP");
   const dev = ctx.spawnDevServer({ port, host, outFile: nextOut, errFile: nextErr });
   ctx.recordPid(root, "nextjs", dev.pid ?? null);
+  timeline?.end("dev-spawn");
   log(`dev server 已启动（PID ${dev.pid}，输出见 ${nextOut}）`, "OK");
 
   // 6.5) 可选：拉起 ComfyUI 执行器独立宿主（P3 §5 第 2 期 · Phase 2-C）
@@ -90,7 +96,9 @@ export function bootDevServerStage(ctx, target) {
    * 注入 —— 门控形状不变：只认 `host`，未知值 warn 后走 inline 分支。 */
   const { mode: executorMode, unknown: unknownExecutor } = ctx.resolveExecutorMode();
   if (executorMode === "host") {
+    timeline?.begin("executor-host", "执行器宿主");
     const hostChild = ctx.spawnExecutorHost();
+    timeline?.end("executor-host");
     log(
       `executor-host 已启动（PID ${hostChild?.pid ?? "?"}，COMFY_EXECUTOR=host 灰度中；host 领取 claimedBy='host' 的行）`,
       "OK",
@@ -119,7 +127,10 @@ export function bootDevServerStage(ctx, target) {
   //    跑 db:push」由这里兜住，但**不阻塞启动** —— drizzle 同步一次 15~30 秒，
   //    等它等于让用户盯着空窗。判据见 db-schema-state.mjs 的 spawnSchemaSync；
   //    不一致时它会自动同步，页面经 GET /api/schema 显示「已同步，请刷新」。
+  //    计时只记「踢出」这一下（后台同步与就绪等待并行，它的完成时刻不进启动关键路径）。
+  timeline?.begin("schema-sync", "后台建表");
   const schema = ctx.spawnSchemaSync(root);
+  timeline?.end("schema-sync");
   if (schema.started) {
     log("数据库结构核对已在后台开始（不一致时自动同步，页面会提示刷新）", "INFO");
   } else {

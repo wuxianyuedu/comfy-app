@@ -148,7 +148,7 @@
 | key                          | 文档形态（保留直观值）      | meaning（可读语义）   | source（权威定义文件）                            | extract                                  |
 | ---------------------------- | --------------------------- | --------------------- | ------------------------------------------------- | ---------------------------------------- |
 | `product.domains.count`     | `17 个功能域`              | 产品功能域数         | `docs/product/feature-catalog.md` 的 §2 分域小节  | 数 `### 2.x` 小节标题数                  |
-| `product.requirements.count` | `100 条编号化需求`         | 编号化需求条数       | `docs/product/feature-catalog.md` 的总表行        | 数总表里以 `FR-` 开头的行                |
+| `product.requirements.count` | `103 条编号化需求`         | 编号化需求条数       | `docs/product/feature-catalog.md` 的总表行        | 数总表里以 `FR-` 开头的行                |
 
 ---
 

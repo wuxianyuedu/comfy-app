@@ -335,6 +335,10 @@ export const RUNTIME_SCRIPTS = [
   "launcher-core/shell-stage.mjs",
   "launcher-core/dev-boot.mjs",
   "launcher-core/ready-wait.mjs",
+  // 启动耗时时间线（ISSUE #4185）：dev-launcher.mjs 顶层静态 import 它的
+  // createLaunchTimeline / formatLaunchTimeline —— 缺这份同样是整个编排器
+  // 加载期 ERR_MODULE_NOT_FOUND（「双击没反应」）。
+  "launcher-core/timeline.mjs",
   // 运行期「陈旧路由表」自愈与它的归因纯函数：`ready-wait.mjs` 与本模块都由
   // `dev-launcher.mjs` 顶层静态 import（自愈只在这两份里，见
   // `tests/dev-launcher-runtime-heal.test.ts` 的接线断言）—— 缺任一份同样是整个
