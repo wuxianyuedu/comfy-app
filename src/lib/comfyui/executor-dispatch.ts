@@ -247,17 +247,16 @@ async function claimAndDispatchOnceInner(options?: {
 
   /* 完整输入参数入日志（原 `processQueue` 里那条）：任务日志是复现与排障的唯一
    * 现场，本次提交的 workflowInputs 全量进日志，执行面板与历史回放都能看到
-   * 当时到底填了什么。 */
+   * 当时到底填了什么。**序列化结果截断到 4000 字符**（ISSUE #4255）：overrides
+   * 里可能有无上限的大字符串（画布端口值），全量进日志会落出 MB 级单行随
+   * persistLogs 落库——完整参数仍在 task.params 里，日志只是排障现场。 */
   if (job.overrides !== undefined && job.overrides.length > 0) {
-    log(
-      taskId,
-      "info",
-      `输入参数（workflowInputs，${job.overrides.length} 项）：\n${JSON.stringify(
-        job.overrides,
-        null,
-        2,
-      )}`,
-    );
+    const serialized = JSON.stringify(job.overrides, null, 2);
+    const text =
+      serialized.length > 4000
+        ? `${serialized.slice(0, 4000)}\n…（已截断，完整参数见任务记录）`
+        : serialized;
+    log(taskId, "info", `输入参数（workflowInputs，${job.overrides.length} 项）：\n${text}`);
   }
 
   /* fire-and-forget + `.catch`：`executeViaComfyCli` 若 reject（resolveComfyBase
