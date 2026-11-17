@@ -25,7 +25,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
-import { atomicWriteText } from "./atomic-write.server";
+import { atomicWriteText, atomicWriteTextIfChanged } from "./atomic-write.server";
 import { AsyncMutex } from "~/lib/async-mutex";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import { upperToken } from "~/lib/upper-token";
@@ -258,8 +258,9 @@ export async function saveModeContractsAsProjectDefaults(
     }));
     const file = path.join(/*turbopackIgnore: true*/ root, MODE_CONTRACT_DEFAULTS_REL_PATH);
     try {
-      await fs.mkdir(path.dirname(file), { recursive: true });
-      await atomicWriteText(file, `${JSON.stringify(full, null, 2)}\n`);
+      /* 内容相同就跳过（ISSUE #4253）：这份文件在 src/ 树内，每次写入都会
+       * 触发 Turbopack 增量重编译。 */
+      await atomicWriteTextIfChanged(file, `${JSON.stringify(full, null, 2)}\n`);
     } catch (error) {
       throw new Error(errorText(error, `项目默认写入失败（${file}）`), { cause: error });
     }

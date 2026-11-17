@@ -28,6 +28,7 @@ import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
 import { AsyncMutex } from "~/lib/async-mutex";
+import { atomicWriteTextIfChanged } from "~/lib/workshop/atomic-write.server";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import { diffSizePresetTable } from "~/lib/media/size-presets-diff";
 import {
@@ -150,8 +151,9 @@ export async function saveSizePresetTableAsProjectDefaults(
   const table = parseSizePresetDefaults(raw);
   const file = path.join(/*turbopackIgnore: true*/ root, SIZE_PRESET_DEFAULTS_REL_PATH);
   try {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await atomicWriteText(file, `${JSON.stringify(table, null, 2)}\n`);
+    /* 内容相同就跳过（ISSUE #4253）：这份文件在 src/ 树内，每次写入都会
+     * 触发 Turbopack 增量重编译。 */
+    await atomicWriteTextIfChanged(file, `${JSON.stringify(table, null, 2)}\n`);
   } catch (error) {
     throw new Error(errorText(error, `尺寸配置表项目默认写入失败（${file}）`), { cause: error });
   }
