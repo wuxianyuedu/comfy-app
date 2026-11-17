@@ -12,6 +12,12 @@ pnpm screenshot /settings      # 起应用 → 无头 chromium 打开 /settings 
 
 Windows 上也可以双击 `tools\start\take-screenshot.ps1`（逻辑是同一份 `scripts/devtools/screenshot.mjs`）。
 
+> **Git Bash（MSYS）注意**（ISSUE #4161）：以 `/` 开头的路由参数会被 MSYS 路径
+> 转换翻成 Windows 路径（实测 `/settings` → `D:/Program Files/Git/settings`，
+> 导航到非法 URL）。出口任选其一：`MSYS_NO_PATHCONV=1 pnpm screenshot /settings`；
+> 路由以 `//` 开头（双斜杠不参与转换）；或去掉开头斜杠（`pnpm screenshot settings`）。
+> 脚本对能识别的改写形状会自动恢复，恢复不了会给指向本注记的报错。
+
 ## 前置（一次性）
 
 | 需要什么                 | 怎么装                                                          | 缺了会怎样                                                                   |
@@ -34,6 +40,10 @@ pnpm screenshot /settings --wait-for "text=本地模型"  # 等某个元素出�
 pnpm screenshot / --no-server                  # 应用已经在跑，别自己起
 pnpm screenshot --help                         # 全部选项
 ```
+
+> Git Bash 下 `/` 开头的路由会被 MSYS 路径转换改写（#4161）：加
+> `MSYS_NO_PATHCONV=1`、把路由写成 `//` 开头、或去掉开头斜杠均可；
+> 脚本对能识别的改写形状会自动恢复。
 
 - **路由**就是应用内地址（`/settings`、`/workspace`、项目页等）。
 - **视口**缺省 1440×900（`--width` / `--height` 可改）。
