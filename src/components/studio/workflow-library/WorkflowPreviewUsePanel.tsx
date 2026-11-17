@@ -10,6 +10,9 @@ import { useMemo } from "react";
 
 import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 import { WorkflowNodeActionButton } from "~/components/studio/workflow-form/WorkflowNodeParts";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Disclosure } from "~/components/ui/disclosure";
+import { FieldLabel } from "~/components/ui/field";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import {
@@ -133,38 +136,42 @@ export function WorkflowPreviewUsePanel({
             节点及其依赖子图，用于把「执行出错找原因」拆成逐条输出分支二分。
             折叠在表单与按钮之间，不勾选 = 行为与从前逐字一致。 */}
         {outputEntries.length > 1 && (
-          <details className="border-border mt-3 rounded-lg border px-3 py-2">
-            <summary className="text-ink-faint cursor-pointer text-xs select-none">
-              调试：只跑到指定输出
-              {debugOutputIds.length > 0
-                ? `（已选 ${debugOutputIds.length} 个，其余分支不执行）`
-                : "（缺省跑整图）"}
-            </summary>
-            <div className="mt-2 flex flex-col gap-1">
-              {outputEntries.map((entry) => {
-                const cliId = cliOutputNodeId(entry);
-                const checked = debugOutputIds.includes(cliId);
-                return (
-                  <label className="text-ink flex items-center gap-2 text-xs" key={entry.ioKey}>
-                    <input
-                      checked={checked}
-                      onChange={(e) => {
-                        const next = e.target.checked
+          <Disclosure
+            className="text-ink-faint text-xs"
+            panelClassName="mt-2 flex flex-col gap-1"
+            rootClassName="border-border mt-3 rounded-lg border px-3 py-2"
+            trigger={
+              <span>
+                调试：只跑到指定输出
+                {debugOutputIds.length > 0
+                  ? `（已选 ${debugOutputIds.length} 个，其余分支不执行）`
+                  : "（缺省跑整图）"}
+              </span>
+            }
+          >
+            {outputEntries.map((entry) => {
+              const cliId = cliOutputNodeId(entry);
+              const checked = debugOutputIds.includes(cliId);
+              return (
+                <FieldLabel className="text-ink flex items-center gap-2 text-xs" key={entry.ioKey}>
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={(value) => {
+                      const next =
+                        value === true
                           ? [...debugOutputIds, cliId]
                           : debugOutputIds.filter((id) => id !== cliId);
-                        onDebugOutputIdsChange(next);
-                      }}
-                      type="checkbox"
-                    />
-                    <span className="truncate">
-                      {ioLabel(entry)}
-                      <span className="text-ink-faint ml-1">（节点 {cliId}）</span>
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          </details>
+                      onDebugOutputIdsChange(next);
+                    }}
+                  />
+                  <span className="truncate">
+                    {ioLabel(entry)}
+                    <span className="text-ink-faint ml-1">（节点 {cliId}）</span>
+                  </span>
+                </FieldLabel>
+              );
+            })}
+          </Disclosure>
         )}
         <div className="mt-4">
           <WorkflowNodeActionButton
