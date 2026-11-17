@@ -95,15 +95,19 @@ import { historyByFile, readBlobText, resolveBlobs } from "../base-check/merged-
 /** 一条 git 命令；失败回 `null`（取不到 ≠ 空值，调用方据此判 `2`）。
  * @param {string[]} args
  * @param {string} [input] 给标准输入喂内容时传（`git cat-file --batch` 那一路）
+ * @param {{trim?: boolean}} [opts] `trim: false` 保留 stdout 原样 —— **喂给
+ *   `git apply` 的 diff 必须用它**：patch 尾部的空白是语义（hunk 最后一行可以
+ *   是空行上下文），trim 掉一格，`apply --check` 就报 corrupt patch（ISSUE #4181）。
  * @returns {string | null} */
-function git(args, input) {
+function git(args, input, { trim = true } = {}) {
   try {
-    return execFileSync("git", ["-c", "core.quotepath=false", ...args], {
+    const out = execFileSync("git", ["-c", "core.quotepath=false", ...args], {
       encoding: "utf8",
       stdio: input === undefined ? ["ignore", "pipe", "ignore"] : ["pipe", "pipe", "ignore"],
       input,
       maxBuffer: 1 << 28,
-    }).trim();
+    });
+    return trim ? out.trim() : out;
   } catch {
     return null;
   }
@@ -381,7 +385,10 @@ export function ownDiffExplains({ sha, from, files }) {
    * 早先这里写成 `diff -R`，那等于把补丁先反过来、再反向应用一次 = 正向应用，
    * 对着「已经改过」的结果必然 apply 不上（实测：一笔 3 行改动报
    * `patch does not apply`，而真事故 ad81a912 的 README.md 反倒「通过」—— 判据整个反了）。 */
-  const patch = git(["diff", "--binary", from, sha, ...specs]);
+  /* `trim: false`（ISSUE #4181）：diff 尾部可以是空行上下文（被改文件以空行
+   * 收尾），trim 掉一格，`apply --check` 就报 corrupt patch——本笔减除随之
+   * 静默失效，把一笔「自己改回上一版」的正常提交误拦成「整份退回」。 */
+  const patch = git(["diff", "--binary", from, sha, ...specs], undefined, { trim: false });
   if (patch === null) {
     return null;
   }
