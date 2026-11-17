@@ -54,7 +54,7 @@ function PopoverContent({
       >
         <PopoverPrimitive.Popup
           className={cn(
-            "border-border-strong bg-popover text-popover-foreground data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-popup flex w-72 origin-(--transform-origin) flex-col gap-2.5 rounded-lg border p-2.5 text-sm shadow-lg ring-1 shadow-black/5 ring-(--ring-shadow) outline-hidden duration-100 dark:shadow-black/40",
+            "border-border-strong bg-popover text-popover-foreground data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-popup max-h-(--available-height) overflow-x-hidden overflow-y-auto flex w-72 origin-(--transform-origin) flex-col gap-2.5 rounded-lg border p-2.5 text-sm shadow-lg ring-1 shadow-black/5 ring-(--ring-shadow) outline-hidden duration-100 dark:shadow-black/40",
             className,
           )}
           data-slot="popover-content"

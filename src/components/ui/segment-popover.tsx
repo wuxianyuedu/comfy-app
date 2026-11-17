@@ -190,8 +190,11 @@ export function MultiSegmentPopover({
       <PopoverContent
         align={align === "right" ? "end" : "start"}
         /* 面板自身滚动：段数与选项数都不固定，给高度封顶。
+           `max-h-(--available-height)` 是定位器按触发点算出的真实可用空间——
+           写死 `min(60vh, 460px)` 这类整屏比例，触发点靠下时浮层照样溢出
+           （ISSUE #4188，与 #4073 在 multi-mode-select 修的是同一病）。
            `p-3` 是该面板原来的内距，`gap-0` 抵消基元默认的 `gap-2.5`。 */
-        className="bg-panel ring-border-strong max-h-[min(60vh,460px)] w-[min(92vw,360px)] gap-0 overflow-y-auto rounded-xl p-3 shadow-2xl ring-1 shadow-black/10"
+        className="bg-panel ring-border-strong max-h-(--available-height) w-[min(92vw,360px)] gap-0 overflow-y-auto rounded-xl p-3 shadow-2xl ring-1 shadow-black/10"
         sideOffset={6}
       >
         {sections.map((section, i) => (
