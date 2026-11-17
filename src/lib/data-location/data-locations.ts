@@ -103,7 +103,6 @@ export type DataLocationId =
   | "mode-contract-local"
   | "mode-contract-project"
   | "model-adapter"
-  | "model-adapter-project"
   | "model-tag-library"
   | "remote-model"
   | "sidebar-tab-local"
@@ -239,14 +238,6 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     migration:
       "每条远程模型的工坊字段映射存在 remoteModel 表的 workshopAdapters 列里，跟着库走；换机器时带库，或在新机器重新配一遍字段映射。",
     target: "remoteModel 表：workshopAdapters 列",
-  },
-  "model-adapter-project": {
-    category: "repo-file",
-    kind: "model-adapter",
-    kindLabel: "模型适配",
-    migration:
-      "出厂默认就是这份编译源（改它走代码 / PR）；「保存为项目默认」另存本机覆盖 data/workshop-model-adapter-project-defaults.json（不入库，ISSUE #4171），迁移时把它一起拷走。",
-    target: "src/lib/workshop/model-adapter-defaults.json",
   },
   "model-tag-library": {
     category: "database",
