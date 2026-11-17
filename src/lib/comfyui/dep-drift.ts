@@ -85,7 +85,12 @@ export function parsePinnedRequirements(content: string): Array<PinnedRequiremen
     if (m?.groups === undefined) {
       continue;
     }
-    out.push({ name: normalizePkgName(m.groups.name!), version: m.groups.version!.trim() });
+    const pinnedName = m.groups.name;
+    const pinnedVersion = m.groups.version;
+    if (pinnedName === undefined || pinnedVersion === undefined) {
+      continue;
+    }
+    out.push({ name: normalizePkgName(pinnedName), version: pinnedVersion.trim() });
   }
   return out;
 }
