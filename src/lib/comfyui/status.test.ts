@@ -620,7 +620,7 @@ describe("查无实例的短窗黏滞（ISSUE #4195）", () => {
       await getComfyRuntimeSnapshot({ force: true });
       const sweepsAfterFirst = vi.mocked(findPidForMainPyDetailed).mock.calls.length;
       expect(sweepsAfterFirst).toBeGreaterThan(0);
-      /* 快照 TTL（1.5s）已过、负面黏滞（10s）仍在的时间点：这一拍不应再扫。 */
+      /* 快照 TTL（1.5s）已过、负面黏滞（30s）仍在的时间点：这一拍不应再扫。 */
       vi.advanceTimersByTime(2000);
       const snap = await getComfyRuntimeSnapshot();
       expect(snap.running).toBe(false);
