@@ -83,7 +83,7 @@ const TRIGGER_BASE =
  * `--anchor-width` 变量，`w-(--anchor-width)` 让浮层至少跟触发器同宽；
  * `min-w` / `max-w` 通过 style 传入。 */
 const CONTENT_BASE =
-  "relative isolate flex max-h-96 flex-col overflow-hidden rounded-md border border-border-strong bg-card p-1 text-xs shadow-lg shadow-black/5 outline-none dark:shadow-black/40";
+  "relative isolate flex max-h-(--available-height) flex-col overflow-hidden rounded-md border border-border-strong bg-card p-1 text-xs shadow-lg shadow-black/5 outline-none dark:shadow-black/40";
 
 /* 可滚动区（旧 <ul role="listbox">）；max-h-60 与旧一致。base-ui 的 List
  * 会自己管 `data-` 属性与滚动条按钮，不需要我们手挂 role。 */
