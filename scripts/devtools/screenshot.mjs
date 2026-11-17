@@ -33,6 +33,12 @@
  * pnpm screenshot /workspace --full-page       # 整页而不是只截视口
  * pnpm screenshot / --no-server                # 应用已经在跑，别自己起
  * ```
+ *
+ * Git Bash（MSYS）注意：以 `/` 开头的参数会被路径转换翻成 Windows 路径
+ * （实测 `/settings` → `D:/Program Files/Git/settings`，ISSUE #4161）。
+ * 出口任选其一：`MSYS_NO_PATHCONV=1` 前缀；路由以 `//` 开头（双斜杠不参与
+ * 转换）；或去掉开头斜杠（`pnpm screenshot settings`）。脚本会对能识别的
+ * 改写形状自动恢复，恢复不了的给可读报错。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -133,7 +139,8 @@ const VALUE_FLAGS = new Set([
 ]);
 
 /**
- * 路由 = 第一个既不是旗标、也不是旗标取值的裸参数。
+ * 路由 = 第一个既不是旗标、也不是旗标取值的裸参数，经 {@link normalizeRoute}
+ * 归一化（Git Bash 的 MSYS 路径转换改写在这里恢复，ISSUE #4161）。
  *
  * @param {string[]} argv
  * @returns {string}
@@ -147,9 +154,58 @@ function routeFrom(argv) {
       }
       continue;
     }
-    return token;
+    return normalizeRoute(token);
   }
   return "/";
+}
+
+/** 参数是不是被 MSYS 路径转换改写成了 Windows 路径（盘符冒号开头）。
+ *  应用内路由永远以 `/` 开头 —— 盘符形状只可能来自转换事故。
+ *
+ *  @param {string} route 归一化前的路由参数
+ *  @returns {boolean} */
+export function isMsysMangledRoute(route) {
+  return /^[A-Za-z]:[/]/.test(route);
+}
+
+/**
+ * 路由归一化（ISSUE #4161）：容忍 Git Bash 的 MSYS 路径转换、缺斜杠、双斜杠。
+ *
+ *  · 被转换的形状（盘符冒号开头）：能从安装根标记 `/git/` 恢复的就恢复
+ *    （`D:/Program Files/Git/settings` → `/settings`）；恢复不了（安装根不叫
+ *    Git）保持原样 —— 调用方（run）据此给指向 `MSYS_NO_PATHCONV` 的可读报错；
+ *  · `//settings`（双斜杠不参与转换）→ `/settings`；
+ *  · `settings`（没写斜杠）→ `/settings`；
+ *  · 空值 → `/`（缺省路由）。
+ *
+ * @param {string} token 裸参数原值
+ * @returns {string} 应用内路由（以 `/` 开头；恢复失败时可能是盘符路径）
+ */
+export function normalizeRoute(token) {
+  const raw = String(token ?? "").trim();
+  if (raw === "") {
+    return "/";
+  }
+  if (isMsysMangledRoute(raw)) {
+    /* 安装根的目录名以 Git 结尾（Program Files/Git、PortableGit…）：取**第一个**
+     * `/git/`（不分大小写）标记之后的部分 —— 用户路由恰好以 /git 开头时，
+     * first-match 落在安装根上，仍能完整恢复。整条以 /Git 结尾 = 用户只传了
+     * 「/」被翻成安装根 → 缺省路由。PortableGit 这类「段尾是 git、前面没斜杠」
+     * 的布局由第二层回退接住。 */
+    if (/\/git$/i.test(raw)) {
+      return "/";
+    }
+    const marker = raw.match(/\/git\/(?<rest>.*)$/i) ?? raw.match(/git[/](?<rest>.+)$/i);
+    if (marker) {
+      const rest = marker.groups?.rest ?? "";
+      return rest === "" ? "/" : `/${rest}`;
+    }
+    return raw;
+  }
+  if (raw.startsWith("//")) {
+    return `/${raw.slice(2)}`;
+  }
+  return raw.startsWith("/") ? raw : `/${raw}`;
 }
 
 /**
@@ -208,7 +264,7 @@ export function usage() {
     "  -h, --help              显示帮助",
     "",
     "截图落本机（log/ 不进库）；上传到诉求单走现成命令：",
-    "  pnpm exec cnb issues upload-image --file <上面打印的路径> --number <诉求单号>",
+    "  pnpm exec cnb issues upload-image --repo moon-read/comfy-app-t3 --file <上面打印的路径> --number <诉求单号>",
   ].join("\n");
 }
 
@@ -381,6 +437,18 @@ export async function main(io = {}) {
     process.stdout.write(`${usage()}\n`);
     return 0;
   }
+  /* MSYS 改写恢复不了时（安装根不叫 Git），不猜 —— 给指向 MSYS_NO_PATHCONV 的
+   * 可读报错（ISSUE #4161 的现场：路由被翻成 Windows 路径，导航到非法 URL）。 */
+  if (isMsysMangledRoute(args.route)) {
+    process.stderr.write(
+      `[screenshot] ✗ 路由参数被 Git Bash 的 MSYS 路径转换改写成了 Windows 路径（${args.route}），没法当应用内路由。\n` +
+        "[screenshot]   出口任选其一：\n" +
+        "[screenshot]   · MSYS_NO_PATHCONV=1 pnpm screenshot /settings\n" +
+        "[screenshot]   · 路由以 // 开头（双斜杠不参与转换）：pnpm screenshot //settings\n" +
+        "[screenshot]   · 去掉开头斜杠：pnpm screenshot settings\n",
+    );
+    return 2;
+  }
   const root = io.root ?? resolveRepoRoot();
   const port = resolveAppPort(root);
   const origin = `http://127.0.0.1:${port}`;
@@ -462,7 +530,10 @@ export async function main(io = {}) {
 
   process.stdout.write(
     `\n[screenshot] 上传到诉求单（把 <单号> 与 <路径> 换掉）：\n${written
-      .map((file) => `  pnpm exec cnb issues upload-image --file "${file}" --number <单号>`)
+      .map(
+        (file) =>
+          `  pnpm exec cnb issues upload-image --repo moon-read/comfy-app-t3 --file "${file}" --number <单号>`,
+      )
       .join("\n")}\n`,
   );
   return 0;

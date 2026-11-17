@@ -899,9 +899,12 @@
   页签）；删除模式要过二次确认；输入映射含「分辨率」统一输入（1k/2k/4k
   档位随请求下发，#3622）；保存成功后失效存档与概览查询（页签往返不丢
   刚配的模式）。「模型适配」是全局瞬态视图。适配器可**保存为项目默认
-  （跟代码走）**（#3951）：页面按钮把当前草稿写进入库的
-  `src/lib/workshop/model-adapter-defaults.json`（只有开发检出可写，正式包
-  里大声失败）；生效档 = 项目默认与 DB 存档**逐模式合并**（DB 同名模式压过、
+  （本机）**（#3951；#4171 起落点迁出 src）：页面按钮把当前草稿写进本机
+  项目默认覆盖 `data/workshop-model-adapter-project-defaults.json`（不入库；
+  只有开发检出可写，正式包里大声失败）。src 的
+  `src/lib/workshop/model-adapter-defaults.json` 只剩编译进包的默认值，
+  运行期不写它（改它走代码 / PR）；旧版写进 src 的用户态由读侧存量搬迁搬去
+  新落点。生效档 = 项目默认与 DB 存档**逐模式合并**（DB 同名模式压过、
   端点路径 DB 非空优先）——编辑器播种、概览「已配」与工坊生成链路读的都是
   生效档。
 - 存放位置提示（#3625）：本页配置的适配器落在 `remoteModel` 表的
@@ -909,6 +912,8 @@
   迁移办法（FR-ST-05）。
 - 落点：`src/components/workshop/ModelAdaptersView.tsx`、
   `src/components/workshop/hooks/use-model-adapters.ts`、
+  `src/lib/workshop/model-adapter-defaults.json`（编译源，运行期不写它）、
+  `data/workshop-model-adapter-project-defaults.json`（本机项目默认覆盖，#4171）、
   `src/lib/workshop/remote-model-adapter.ts`（envelope 与统一输入词表）、
   `src/server/api/routers/llm.ts`
 

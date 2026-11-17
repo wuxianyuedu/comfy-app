@@ -12835,7 +12835,7 @@ devDependency、e2e 天天在用），此前缺的只是「把某一屏拍下来
 Issue 侧的两条现成命令就够了（形状见 cnb-upload-attachment skill）：
 
 ```bash
-cnb issues upload-image --file <本机截图路径> --number <诉求单号>   # 拿回 ![](...) 形式的 asset_link
+cnb issues upload-image --repo moon-read/comfy-app-t3 --file <本机截图路径> --number <诉求单号>   # 拿回 ![](...) 形式的 asset_link（--repo 缺省也可用环境变量 CNB_REPO_SLUG；两者都缺会报误导性的 Resource not found，#4162）
 cnb issues comment --number <诉求单号> --body '改后截图：<asset_link> · <改了哪、明暗两态、请核对什么>'
 ```
 

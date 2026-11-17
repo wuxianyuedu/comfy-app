@@ -12,6 +12,12 @@ pnpm screenshot /settings      # 起应用 → 无头 chromium 打开 /settings 
 
 Windows 上也可以双击 `tools\start\take-screenshot.ps1`（逻辑是同一份 `scripts/devtools/screenshot.mjs`）。
 
+> **Git Bash（MSYS）注意**（ISSUE #4161）：以 `/` 开头的路由参数会被 MSYS 路径
+> 转换翻成 Windows 路径（实测 `/settings` → `D:/Program Files/Git/settings`，
+> 导航到非法 URL）。出口任选其一：`MSYS_NO_PATHCONV=1 pnpm screenshot /settings`；
+> 路由以 `//` 开头（双斜杠不参与转换）；或去掉开头斜杠（`pnpm screenshot settings`）。
+> 脚本对能识别的改写形状会自动恢复，恢复不了会给指向本注记的报错。
+
 ## 前置（一次性）
 
 | 需要什么                 | 怎么装                                                          | 缺了会怎样                                                                   |
@@ -35,6 +41,22 @@ pnpm screenshot / --no-server                  # 应用已经在跑，别自己�
 pnpm screenshot --help                         # 全部选项
 ```
 
+**设置页分区直达**（ISSUE #4163）：`/settings` 支持用 hash 指向某个分区
+（与分区节的 DOM 锚点同形），不用再写一次性脚本点击 + 滚动：
+
+```bash
+pnpm screenshot "/settings#settings-comfyui"   # 直达「创作后端」分区
+pnpm screenshot "/settings#settings-sizePresets" --theme dark  # 直达「尺寸配置表」
+```
+
+分区 id 见 `SETTINGS_SECTIONS`（`use-settings-page-types.ts`）：appearance /
+sidebar / appUpdate / llmLocal / llmRemote / comfyui / database / backup /
+dataLocation / sizePresets / exit / logs。
+
+> Git Bash 下 `/` 开头的路由会被 MSYS 路径转换改写（#4161）：加
+> `MSYS_NO_PATHCONV=1`、把路由写成 `//` 开头、或去掉开头斜杠均可；
+> 脚本对能识别的改写形状会自动恢复。
+
 - **路由**就是应用内地址（`/settings`、`/workspace`、项目页等）。
 - **视口**缺省 1440×900（`--width` / `--height` 可改）。
 - **等多久**：默认等「网络空闲」+ 静置 2s（`--settle`）。首屏是异步加载时（转圈那种），
@@ -56,7 +78,7 @@ pnpm screenshot --help                         # 全部选项
 上传走现成命令（**不新造第二套**，形状见 `cnb-upload-attachment` skill）：
 
 ```bash
-pnpm exec cnb issues upload-image --file "<上面打印的路径>" --number <诉求单号>
+pnpm exec cnb issues upload-image --repo moon-read/comfy-app-t3 --file "<上面打印的路径>" --number <诉求单号>
 pnpm exec cnb issues comment --number <诉求单号> --body "改后截图：<asset_link> · <改了哪、请核什么>"
 ```
 

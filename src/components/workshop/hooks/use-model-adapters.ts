@@ -49,8 +49,8 @@ export type ModelAdaptersController = {
   /** 还原默认：丢弃本地草稿，回到服务端当前存档（ISSUE #3741）。 */
   reset: () => void;
   save: () => Promise<void>;
-  /** 保存为项目默认（跟代码走，ISSUE #3951）：把当前草稿写进入库的
-   *  `model-adapter-defaults.json`，成为应用自带的基线配置。 */
+  /** 保存为项目默认（ISSUE #3951；#4171 起落本机运行时覆盖）：把当前草稿写进
+   *  本机项目默认基线（data/，不入库），成为这台机器上的基线配置。 */
   saveToCodebase: () => Promise<void>;
   saving: boolean;
   selectedModel: string;
@@ -126,7 +126,7 @@ export function useModelAdapters(): ModelAdaptersController {
   }
 
   const saveMutation = useMutation(trpc.llm.workshopAdaptersSave.mutationOptions());
-  /* 保存为项目默认（跟代码走，ISSUE #3951）：写 `model-adapter-defaults.json`。
+  /* 保存为项目默认（ISSUE #3951；#4171 起落本机运行时覆盖 data/）。
    * 忙碌位与 DB 保存分开 —— 两颗按钮可以分别转圈。 */
   const saveDefaultsMutation = useMutation(
     trpc.llm.workshopAdaptersSaveAsDefaults.mutationOptions(),
@@ -200,10 +200,10 @@ export function useModelAdapters(): ModelAdaptersController {
     }
   }, [selectedModel, draft, saveMutation, saveBusy, queryClient, trpc]);
 
-  /* 保存为项目默认（ISSUE #3951）：当前草稿写进入库基线
-   * （`src/lib/workshop/model-adapter-defaults.json`），成为应用自带配置。
-   * 与 DB 保存互相独立 —— 要「本机生效」点保存适配器，要「跟代码走」点这颗
-   * （两颗都点也合法：先落库、再导出）。 */
+  /* 保存为项目默认（ISSUE #3951；#4171 起落本机运行时覆盖）：当前草稿写进
+   * 本机项目默认基线（data/，不入库）。与 DB 保存互相独立 —— 要「本机生效」
+   * 点保存适配器，要「存成本机基线」点这颗（两颗都点也合法：先落库、再导出）；
+   * 要改**出厂**默认改 src 那份编译源走 PR。 */
   const saveToCodebase = useCallback(async () => {
     if (!selectedModel) {
       return;
@@ -225,7 +225,7 @@ export function useModelAdapters(): ModelAdaptersController {
       });
       setMessage({
         kind: "ok",
-        text: `已把 ${selectedModel} 的适配器存为项目默认（${saved.relPath}）· 记得随代码提交。`,
+        text: `已把 ${selectedModel} 的适配器存为本机项目默认（${saved.relPath}）。`,
       });
     } catch (error) {
       setMessage({
