@@ -48,14 +48,12 @@ vi.mock("~/lib/shell/launch-diagnostics", async () => {
   };
 });
 
-/* 鉴权在单机模式下会回落演示用户（要读库），这里直接放行：本用例断言的是
- * 增量读取契约，不是鉴权（与 export / diagnostics 两份同口径）。 */
+/* 鉴权在单机模式下会回落演示用户（要读库），这里用可翻面开关放行：默认放行
+ * （本用例断言的是增量读取契约，不是鉴权，与 export / diagnostics 两份同口径）；
+ * 「未登录 401」由专门的回归用例翻面验证（ISSUE #4051）。 */
+let authed = true;
 vi.mock("~/server/auth/request-user", () => ({
-  requireRequestUser: () => ({
-    id: "u1",
-    email: "t@example.com",
-    name: null,
-  }),
+  requireRequestUser: () => (authed ? { id: "u1", email: "t@example.com", name: null } : null),
 }));
 
 vi.mock("~/lib/log/log-paths", async () => {
@@ -119,6 +117,7 @@ async function read(source: string, offset = 0) {
 }
 
 beforeEach(() => {
+  authed = true;
   fs.mkdirSync(servicesDir, { recursive: true });
   fs.writeFileSync(logFile, "", "utf8");
   /* 面板转录目录按用例重建：`source=app` 依赖它存在且含一份 nextjs-panel-* 文件。 */
@@ -129,6 +128,17 @@ beforeEach(() => {
 
 afterEach(() => {
   fs.rmSync(logFile, { force: true });
+});
+
+describe("GET /api/logs/current 鉴权", () => {
+  it("未登录不读日志：401（鉴权与同族端点一致，ISSUE #4051 回归）", async () => {
+    writeLines(2);
+    authed = false;
+    const res = await GET(new Request("http://localhost/api/logs/current?source=app-runtime"));
+    expect(res.status).toBe(401);
+    const body: unknown = await res.json();
+    expect(isRecord(body)).toBe(true);
+  });
 });
 
 describe("GET /api/logs/current 增量读取", () => {
