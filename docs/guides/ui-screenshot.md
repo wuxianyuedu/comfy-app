@@ -41,6 +41,18 @@ pnpm screenshot / --no-server                  # 应用已经在跑，别自己�
 pnpm screenshot --help                         # 全部选项
 ```
 
+**设置页分区直达**（ISSUE #4163）：`/settings` 支持用 hash 指向某个分区
+（与分区节的 DOM 锚点同形），不用再写一次性脚本点击 + 滚动：
+
+```bash
+pnpm screenshot "/settings#settings-comfyui"   # 直达「创作后端」分区
+pnpm screenshot "/settings#settings-sizePresets" --theme dark  # 直达「尺寸配置表」
+```
+
+分区 id 见 `SETTINGS_SECTIONS`（`use-settings-page-types.ts`）：appearance /
+sidebar / appUpdate / llmLocal / llmRemote / comfyui / database / backup /
+dataLocation / sizePresets / exit / logs。
+
 > Git Bash 下 `/` 开头的路由会被 MSYS 路径转换改写（#4161）：加
 > `MSYS_NO_PATHCONV=1`、把路由写成 `//` 开头、或去掉开头斜杠均可；
 > 脚本对能识别的改写形状会自动恢复。

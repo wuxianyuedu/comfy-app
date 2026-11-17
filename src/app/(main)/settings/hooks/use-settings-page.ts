@@ -91,6 +91,27 @@ function readInitialSection(raw: string | null | undefined): Section | null {
   return match ? match.id : null;
 }
 
+/** 独立路由的 URL 直达（ISSUE #4163）：把 location.hash 收敛成合法分区 id。
+ *
+ *  认两种形状：`#settings-<分区 id>`（与分区节 DOM 锚点同形，见
+ *  SettingsShell 的 `sectionAnchorId`，分享 / 收藏用）与裸分区 id
+ *  （`#comfyui`）。不在白名单里（含空 hash）返回 null —— 走默认分区，
+ *  与应用内跳转载荷同一条收敛路径（`readInitialSection`）。
+ *
+ * @param {string | null | undefined} hash location.hash 原值（含 #）
+ * @returns {string | null} 合法分区 id；给不出就是 null
+ */
+export function sectionFromLocationHash(hash: string | null | undefined): string | null {
+  /* 先 trim 再剥 # 再 trim：外部链接里的 hash 可能是 " #settings-x "（# 前带空格），
+   * 只在开头剥一次会漏掉这种。 */
+  const raw = (hash ?? "").trim().replace(/^#/, "").trim();
+  if (raw === "") {
+    return null;
+  }
+  const candidate = raw.startsWith("settings-") ? raw.slice("settings-".length) : raw;
+  return readInitialSection(candidate);
+}
+
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */
 export function useSettingsPage(options?: {
   /** 跳转要求直接停驻的分区 id（一次性载荷，来自 `workspace:navigate`）。 */
