@@ -137,6 +137,12 @@ export type SettingsPageController = {
     desktopManaged: boolean;
     /** 桌面版 / 便携版 / venv；未配置路径或判不出形态时为 null。 */
     instanceType: "desktop" | "portable" | "venv" | null;
+    /** comfy-cli 解释器的事实（#4164）：configured=填了、exists=磁盘上有没有。
+     *  留空是合法语义（退回默认落点）——只有「填了但不存在」才构成行内提示。 */
+    interpreter: {
+      configured: boolean;
+      exists: boolean | null;
+    } | null;
     /** 配置里是否填了路径（与形态同源，都是设置行的事实）。 */
     pathConfigured: boolean;
     /** 已填路径指向的目录是否存在（#4138：无效路径的行内提示判据）。 */
