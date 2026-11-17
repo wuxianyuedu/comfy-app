@@ -175,6 +175,8 @@ type Behavior = {
     desktopManaged: boolean;
     instanceType: "desktop" | "portable" | "venv" | null;
     pathConfigured: boolean;
+    /** 已填路径指向的目录是否存在（#4138：无效路径行内提示的判据）。 */
+    pathExists: boolean;
   };
   comfyStatusPending?: boolean;
   dbStudioStatusError?: string;
@@ -237,7 +239,7 @@ const mockRouter = t.router({
       };
     }),
     /* 安装形态与运行态**分开取**（fs-only，与首屏配置同批）：这里给一份便携版默认。
-     * 用例不关心形态时不必改它；要断言徽标文案就按需覆写这三个字段。 */
+     * 用例不关心形态时不必改它；要断言徽标文案就按需覆写这几个字段。 */
     comfyInstance: t.procedure.query(
       () =>
         behavior.comfyInstance ?? {
@@ -245,6 +247,7 @@ const mockRouter = t.router({
           /* SAFETY: 类型断言已复核 */
           instanceType: "portable" as const,
           desktopManaged: false,
+          pathExists: true,
         },
     ),
     /* Drizzle Studio：分区拉起的 status 查询与动作，均需有 mock handler，
