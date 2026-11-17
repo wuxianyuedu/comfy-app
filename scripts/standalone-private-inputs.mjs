@@ -84,16 +84,18 @@ export const PRIVATE_INPUTS = [
   // 被 `model-mode-contract.ts` 静态 import ⇒ 编译进产物；桌包里 `src/` 不随包 ⇒
   // 读到的就是编译进包的那份快照）。
   "data/workshop-mode-contracts.json",
-  // 三族「项目默认」的**本机运行时覆盖**（ISSUE #4150）：写入方是三个
+  // 四族「项目默认」的**本机运行时覆盖**（ISSUE #4150 / #4171）：写入方是四个
   // 「保存为项目默认」服务端入口（`sidebar-tab-behavior.server.ts` /
-  // `mode-contract.server.ts` / `size-preset.server.ts`，落盘路径常量在各自
-  // 模块）。#4150 起运行期不再写 src 那几份编译源，改写这三份 `data/` 文件 ——
+  // `mode-contract.server.ts` / `size-preset.server.ts` /
+  // `model-adapter-defaults.server.ts`，落盘路径常量在各自模块）。
+  // #4150 / #4171 起运行期不再写 src 那几份编译源，改写这四份 `data/` 文件 ——
   // 它们是「造包者机器上点过『保存为项目默认』的那点基线改动」，随包出去等于
   // 让所有用户拿到造包者的基线；出厂件该读的是编译进产物的那份默认。
-  // 运行期谁读它们：三族各自的 load（先本机覆盖、缺省回落编译快照）。
+  // 运行期谁读它们：四族各自的 load（先本机覆盖、缺省回落编译快照）。
   "data/sidebar-tab-project-defaults.json",
   "data/workshop-mode-contract-project-defaults.json",
   "data/size-preset-project-defaults.json",
+  "data/workshop-model-adapter-project-defaults.json",
   // 工坊 API 通道的**本机配置**，**含上游 apiKey**（写入方：
   // `src/lib/workshop/api-channel.server.ts` 与 MCP 侧 `src/server/workshop/api-channel.ts`，
   // 两者共用 `api-channel-core.ts` 的 `WORKSHOP_API_SETTINGS_FILE`）。凭据类，随包出去
