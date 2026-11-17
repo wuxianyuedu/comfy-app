@@ -106,6 +106,19 @@ function writeLine(msg) {
 // 不假设 CWD 与脚本目录一致）。这样未来 launcher 从其它工作目录拉起也不飘。
 process.chdir(ROOT);
 
+// 进程级兜底（ISSUE #4216）：与 Next 侧 instrumentation 同款——只记日志、不退出。
+// 本宿主进程没有 Sentry 那层隐式副作用，一条后台循环的 rejection 不该打挂常驻宿主。
+process.on("unhandledRejection", (reason) => {
+  writeLine(
+    `unhandledRejection：${reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)}`,
+  );
+});
+process.on("uncaughtException", (error) => {
+  writeLine(
+    `uncaughtException：${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+  );
+});
+
 const bootId = process.env.COMFYAPP_HOST_BOOT_ID ?? Date.now().toString(36);
 
 /** 判据与 launcher **同源**于 `launcher-core/executor-mode.mjs`（ADR §14 D5）。
