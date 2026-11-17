@@ -372,7 +372,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     const lib = readCode("src-tauri/src/lib.rs");
     // kill_sidecar 除了插件的 kill()，还要补一刀统一回收：Node 之下的
     // next-server / turbopack worker 才是真正会残留成孤儿的那几层。
-    expect(lib).toMatch(/fn kill_sidecar\(project_root: &str\)/);
+    expect(lib).toMatch(/fn kill_sidecar\(project_root: &str, deadline: std::time::Instant\)/);
     expect(lib).toContain("reap-process.mjs");
     expect(lib).not.toMatch(/Command::new\("taskkill"\)/);
   });

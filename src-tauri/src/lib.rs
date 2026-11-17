@@ -120,18 +120,18 @@ impl AppState {
 
   /// 标记「用户已放弃本次启动」并返回标记前的值（幂等：重复关闭启动页只记一次）。
   fn mark_abandoned(&self) -> bool {
-    let mut abandoned = self.abandoned.lock().unwrap();
+    let mut abandoned = self.abandoned.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let was = *abandoned;
     *abandoned = true;
     was
   }
 
   fn is_abandoned(&self) -> bool {
-    *self.abandoned.lock().unwrap()
+    *self.abandoned.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
   }
 
   fn foreground(&self) -> bool {
-    *self.foreground.lock().unwrap()
+    *self.foreground.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
   }
 
   /// 前端「本次启动要不要自动给前台」的**一次性**答复。
@@ -144,7 +144,7 @@ impl AppState {
     if !self.foreground() {
       return false;
     }
-    let mut consumed = self.startup_activation_consumed.lock().unwrap();
+    let mut consumed = self.startup_activation_consumed.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     if *consumed {
       return false;
     }
@@ -154,7 +154,7 @@ impl AppState {
 
   /// 标记应用窗口已显示过并返回「本次是否为首次显示」。
   fn mark_shown(&self) -> bool {
-    let mut shown = self.shown.lock().unwrap();
+    let mut shown = self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let first = !*shown;
     *shown = true;
     first
@@ -166,34 +166,34 @@ impl AppState {
   /// 窗口一旦显示出来，就不再往页面里注入加载占位——顺手注入的 `eval` 会在
   /// 页面**就位之后**才执行，那一刻用户可能已经在用真界面了。
   fn is_main_shown(&self) -> bool {
-    *self.shown.lock().unwrap()
+    *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
   }
 
   fn set_attention(&self, value: bool) {
-    *self.attention.lock().unwrap() = value;
+    *self.attention.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = value;
   }
 
   fn take_attention(&self) -> bool {
-    let mut a = self.attention.lock().unwrap();
+    let mut a = self.attention.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let had = *a;
     *a = false;
     had
   }
 
   fn project_root(&self) -> String {
-    self.project_root.lock().unwrap().clone()
+    self.project_root.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
   }
 
   fn app_url(&self) -> String {
-    self.app_url.lock().unwrap().clone()
+    self.app_url.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
   }
 
   fn set_app_url(&self, url: String) {
-    *self.app_url.lock().unwrap() = url;
+    *self.app_url.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = url;
   }
 
   fn is_standalone(&self) -> bool {
-    *self.standalone.lock().unwrap()
+    *self.standalone.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
   }
 
   /// 进入一次「显示主窗」请求（含随后被早退拦下的那一次）。
@@ -1120,7 +1120,7 @@ fn get_app_service_liveness(state: tauri::State<'_, AppState>) -> Result<Option<
 /// 这一档恒为「不知道」：`tauri dev` 走 prebuilt，第一档的会话文件已覆盖。
 #[cfg(not(debug_assertions))]
 fn sidecar_liveness() -> Option<bool> {
-  let slot = SIDECAR.lock().unwrap();
+  let slot = SIDECAR.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
   let handle_pid = slot.as_ref().map(|child| child.pid());
   let terminated = SIDECAR_TERMINATED.load(Ordering::Relaxed);
   shell_launch::liveness_from_sidecar(handle_pid, terminated, shell_launch::pid_alive)
@@ -1349,7 +1349,7 @@ fn spawn_sidecar(
    * 覆盖成孤儿（kill_sidecar 只收得到最后一个）。现行唯一调用点在 setup 阶段
    * 执行一次；真重复到这里说明别处出了错，拒绝覆盖而不是静默顶掉。 */
   {
-    let slot = SIDECAR.lock().unwrap();
+    let slot = SIDECAR.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     if slot.is_some() {
       return Err("sidecar 已在运行，拒绝重复拉起".into());
     }
@@ -1374,7 +1374,7 @@ fn spawn_sidecar(
     .current_dir(&payload.app_root)
     .spawn()?;
   let sidecar_pid = child.pid();
-  *SIDECAR.lock().unwrap() = Some(child);
+  *SIDECAR.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(child);
   // OS 级兜底（ISSUE #4165）：给 sidecar 这棵树也挂 KILL_ON_JOB_CLOSE job。
   // 正常关窗走 kill_sidecar（插件 kill + reap 补刀）；壳被硬杀时那条链一步都
   // 跑不了，由 OS 关闭壳持有的 job 句柄当场终止整棵树——与编排器那棵树
@@ -1632,8 +1632,8 @@ fn watch_main_first_paint(handle: tauri::AppHandle, mut stub_visible: bool) {
 /// 判据**留在 `scripts/reap-process.mjs`（与编排器、Python 启动器同一入口），
 /// 而不是在 Rust 里再写一遍平台分支。
 #[cfg(not(debug_assertions))]
-fn kill_sidecar(project_root: &str) {
-  let child = SIDECAR.lock().unwrap().take();
+fn kill_sidecar(project_root: &str, deadline: std::time::Instant) {
+  let child = SIDECAR.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
   let Some(child) = child else { return };
   // 插件用的 sidecar pid：先记下来，交给统一回收做第二道。
   let pid = child.pid();
@@ -1641,7 +1641,7 @@ fn kill_sidecar(project_root: &str) {
     Ok(()) => log::info!("[ComfyAPP] sidecar killed via shell plugin (pid {pid})"),
     Err(e) => log::warn!("[ComfyAPP] sidecar kill via shell plugin failed: {e:?}"),
   }
-  reap_process_tree(project_root, pid);
+  reap_process_tree(project_root, pid, deadline);
 }
 
 /// 用编排侧的统一回收补一刀（`scripts/reap-process.mjs`）。
@@ -1650,7 +1650,7 @@ fn kill_sidecar(project_root: &str) {
 /// 与 POSIX 进程组）只允许有一份。Rust 侧再写一遍，就是历史上「各写各的、
 /// POSIX 上退化成单杀」那条老路的翻版。
 #[cfg(not(debug_assertions))]
-fn reap_process_tree(project_root: &str, pid: u32) {
+fn reap_process_tree(project_root: &str, pid: u32, deadline: std::time::Instant) {
   if project_root.is_empty() || pid == 0 {
     return;
   }
@@ -1672,7 +1672,9 @@ fn reap_process_tree(project_root: &str, pid: u32) {
     use std::os::windows::process::CommandExt;
     command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
   }
-  match shell_launch::run_with_budget(command, shell_launch::REAPER_BUDGET) {
+  /* 预算来自退出回收的共享截止时刻（ISSUE #4219），不再各发一个 10s。 */
+  let budget = deadline.saturating_duration_since(std::time::Instant::now());
+  match shell_launch::run_with_budget(command, budget) {
     Ok(out) => log::info!(
       "[ComfyAPP] sidecar 进程树统一回收：{}",
       String::from_utf8_lossy(&out.stdout).trim()
@@ -2363,7 +2365,12 @@ fn start_self_orchestration(app: &mut tauri::App, project_root: &str) {
     log::warn!(
       "[ComfyAPP] 上一次运行遗留的编排器仍在跑（pid {pid}），先回收它再启动本次编排"
     );
-    shell_launch::reap_pid(project_root, pid);
+    /* 启动前的残留清理不在退出路径上：给完整的 REAPER_BUDGET。 */
+    shell_launch::reap_pid(
+      project_root,
+      pid,
+      std::time::Instant::now() + shell_launch::REAPER_BUDGET,
+    );
   }
   start_own_orchestrator(app.handle(), project_root);
 }
@@ -2813,14 +2820,18 @@ fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
   match event {
     tauri::RunEvent::Exit => {
       let root = app.state::<AppState>().project_root();
+      /* 退出回收的**总预算**（ISSUE #4219）：编排器与 sidecar 两段回收串行，
+       * 各自独立预算的叠加会把关窗后的假死拉长到 20s 量级——共享同一个截止
+       * 时刻，后一段只拿剩余时间。 */
+      let exit_deadline = std::time::Instant::now() + Duration::from_secs(12);
       // 先收自己起的编排器（它下面还挂着 dev server 整棵树），再收 standalone
       // sidecar：前者是 dev/prebuilt 链路的根，后者只在内嵌 server 模式存在。
       if shell_launch::is_owning() {
         log::info!("[ComfyAPP] exiting, reaping the orchestrator started by this shell");
-        shell_launch::reap(&root);
+        shell_launch::reap(&root, exit_deadline);
       }
       #[cfg(not(debug_assertions))]
-      kill_sidecar(&root);
+      kill_sidecar(&root, exit_deadline);
     }
     tauri::RunEvent::ExitRequested { code, .. } => {
       /* 壳的退出码是「谁结束了这次启动」在壳侧唯一可靠的出口：prebuilt 链路里
