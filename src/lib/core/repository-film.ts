@@ -230,10 +230,14 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
     return rows.length > 0;
   }
 
-  /** 同 {@link claimGenerating}，合成侧：仅当不在 COMPOSING/DONE/CANCELLED/FAILED 时写成 COMPOSING。
-   *  CANCELLED/FAILED 也在排除集（ISSUE #3867）：原先只排 COMPOSING/DONE，
-   *  「取消」与「合成抢跑」赛跑时会给已取消的影片跑完 ffmpeg 并标 DONE——
-   *  状态与产物互相矛盾。 */
+  /** 同 {@link claimGenerating}，合成侧：仅当不在 COMPOSING/DONE/CANCELLED 时写成 COMPOSING。
+   *  CANCELLED 也在排除集（ISSUE #3867）：「取消」与「合成抢跑」赛跑时，
+   *  不能给已取消的影片跑完 ffmpeg 并标 DONE——状态与产物互相矛盾。
+   *  FAILED **不在**排除集（ISSUE #4251）：合成失败后装好 ffmpeg / 补齐镜头视频，
+   *  「重新合成」是文档承诺的恢复出口——把它挡在门外就是静默空转（按钮点了
+   *  没有任何反应，影片永久卡 FAILED）。FAILED 影片的监看循环早已退场、恢复
+   *  扫描也只会维持 FAILED，不存在自动路径会误碰它；能走到这里的只有显式的
+   *  「重新合成」。 */
   async claimComposing(id: string): Promise<boolean> {
     const rows = await db
       .update(filmProject)
@@ -241,7 +245,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       .where(
         and(
           eq(filmProject.id, id),
-          notInArray(filmProject.status, ["COMPOSING", "DONE", "CANCELLED", "FAILED"]),
+          notInArray(filmProject.status, ["COMPOSING", "DONE", "CANCELLED"]),
         ),
       )
       .returning({ id: filmProject.id });
