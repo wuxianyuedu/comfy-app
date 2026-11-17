@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { comfyCliInterpreter, comfyCliMissingHint } from "./comfy-cli-python";
+import {
+  comfyCliInterpreter,
+  comfyCliMissingHint,
+  describeComfyCliInterpreter,
+} from "./comfy-cli-python";
 
 /**
  * comfy-cli 解释器的落点与「找不到」的提示（ISSUE #1239）。
@@ -51,5 +55,33 @@ describe("comfyCliMissingHint：按形态给可执行的出口", () => {
     expect(nix).toContain("python3 -m venv python-venv/comfy-cli");
     expect(nix).toContain("comfy-cli/bin/python -m pip install comfy-cli");
     expect(nix).not.toContain("python-venv\\");
+  });
+});
+
+describe("describeComfyCliInterpreter：解释器事实（ISSUE #4164）", () => {
+  it("留空（含空白）→ 未配置，exists 恒 null（留空是合法语义，不是错误）", () => {
+    expect(describeComfyCliInterpreter("")).toEqual({ configured: false, exists: null });
+    expect(describeComfyCliInterpreter("   ")).toEqual({ configured: false, exists: null });
+    expect(describeComfyCliInterpreter(null)).toEqual({ configured: false, exists: null });
+    expect(describeComfyCliInterpreter(undefined)).toEqual({ configured: false, exists: null });
+  });
+
+  it("填了且文件存在 → configured + exists=true", () => {
+    expect(
+      describeComfyCliInterpreter("D:/venv/python.exe", (p) => p === "D:/venv/python.exe"),
+    ).toEqual({ configured: true, exists: true });
+  });
+
+  it("填了但磁盘上不存在 → configured + exists=false（行内提示的判据）", () => {
+    expect(describeComfyCliInterpreter("D:/nope/python.exe", () => false)).toEqual({
+      configured: true,
+      exists: false,
+    });
+  });
+
+  it("路径两端的空白不参与存在性判定（与保存侧的 trim 同口径）", () => {
+    expect(
+      describeComfyCliInterpreter("  D:/venv/python.exe  ", (p) => p === "D:/venv/python.exe"),
+    ).toEqual({ configured: true, exists: true });
   });
 });

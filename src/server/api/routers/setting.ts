@@ -13,6 +13,7 @@ import {
   stopComfyUiProcess,
 } from "~/lib/comfyui/lifecycle";
 import { describeComfyInstance } from "~/lib/comfyui/instance-kind";
+import { describeComfyCliInterpreter } from "~/lib/comfyui/comfy-cli-python";
 import { noteComfyStateChange } from "~/lib/comfyui/state-watch";
 import { resolveDesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths.server";
 import { decideComfyTabOpen, probeComfyEmbeddable } from "~/lib/comfy/comfy-embed";
@@ -105,7 +106,14 @@ export const settingRouter = createTRPCRouter({
    * 的：形态只取决于配置路径的目录形态（实测毫秒级），而运行态要付「进程表查询 + 端口探测」（秒级）。同在一个
    * 响应里时，形态会被拖到探测结束才出现 —— 设置页先看不到「安装形态」徽标，「端口 / 启动参数」输入框也要等探测
    * 完成才消失。设置页首屏与 `setting.get` 同批拉它，保存路径后再 refetch（见 launch-and-build §5）。 */
-  comfyInstance: authedProcedure.query(() => describeComfyInstance(getSettingsSync().comfyuiPath)),
+  comfyInstance: authedProcedure.query(() => {
+    const settings = getSettingsSync();
+    return {
+      ...describeComfyInstance(settings.comfyuiPath),
+      /* 解释器事实与形态同批返回（同为毫秒级 fs 判定，#4164）。 */
+      interpreter: describeComfyCliInterpreter(settings.comfyCliPython),
+    };
+  }),
 
   /** 桌面实例的存储目录（模型 / 共享模型 / 输入 / 输出 / 共享输入输出）——**只读**。数据全部来自实例侧文件与
    * 元数据：`extra_model_paths.yaml`（共享目录的唯一来源）+ Comfy Desktop 登记的启动参数（`--base-directory`

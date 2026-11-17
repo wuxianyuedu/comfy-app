@@ -45,6 +45,15 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         : "ComfyUI 路径无效：磁盘上找不到这个目录，请检查盘符与目录名。"
       : null;
 
+  /* comfy-cli 解释器的行内提示（ISSUE #4164，与 #4138 同形）：判据是**已保存**
+   * 路径的 fs 结论（comfyInstance.interpreter，失焦保存即 refetch 重判）。
+   * 留空是合法语义（退回默认落点）——只有「填了但文件不存在」才提示。 */
+  const interpreter = c.comfyInstance?.interpreter ?? null;
+  const interpreterInvalidHint =
+    interpreter?.configured === true && interpreter.exists === false
+      ? "comfy-cli 解释器无效：磁盘上找不到这个文件，请检查盘符与路径。"
+      : null;
+
   return (
     <SettingsCard>
       <Field
@@ -68,6 +77,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           : "未配置——ComfyUI 未运行时任务会失败，侧栏「ComfyUI」页也启动不了它。"}
       </p>
       <Field
+        error={interpreterInvalidHint}
         label="comfy-cli 解释器（Python 绝对路径）"
         onBlur={() => {
           void c.savePrefs();
@@ -83,7 +93,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         解释器。桌面版不随包 Python：请自备后把解释器的绝对路径填在这里；留空则退回 项目目录下的
         python-venv/comfy-cli（开发检出的默认落点）。
         {c.drafts.settings.comfyCliPython.trim()
-          ? "已配置——执行链会用这个解释器。"
+          ? interpreterInvalidHint
+            ? "已配置——但这个解释器文件不存在，执行链会失败。"
+            : "已配置——执行链会用这个解释器。"
           : "未配置——开发检出里若已有 python-venv/comfy-cli 可留空，桌面版任务会失败。"}
       </p>
       {instanceType && (

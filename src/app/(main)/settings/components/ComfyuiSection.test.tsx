@@ -46,6 +46,7 @@ function controller(
     instanceType: "portable",
     desktopManaged: false,
     pathExists: true,
+    interpreter: { configured: false, exists: null },
   },
 ): ReadySettingsPageController {
   const stub: unknown = {
@@ -132,7 +133,13 @@ describe("ComfyuiSection（只配置路径）", () => {
       <ComfyuiSection
         c={controller(
           { comfyuiPath: "" },
-          { pathConfigured: false, instanceType: null, desktopManaged: false, pathExists: false },
+          {
+            pathConfigured: false,
+            instanceType: null,
+            desktopManaged: false,
+            pathExists: false,
+            interpreter: { configured: false, exists: null },
+          },
         )}
       />,
     );
@@ -147,7 +154,13 @@ describe("ComfyuiSection（只配置路径）", () => {
       <ComfyuiSection
         c={controller(
           {},
-          { pathConfigured: true, instanceType: null, desktopManaged: false, pathExists: false },
+          {
+            pathConfigured: true,
+            instanceType: null,
+            desktopManaged: false,
+            pathExists: false,
+            interpreter: { configured: false, exists: null },
+          },
         )}
       />,
     );
@@ -161,7 +174,13 @@ describe("ComfyuiSection（只配置路径）", () => {
       <ComfyuiSection
         c={controller(
           {},
-          { pathConfigured: true, instanceType: null, desktopManaged: false, pathExists: true },
+          {
+            pathConfigured: true,
+            instanceType: null,
+            desktopManaged: false,
+            pathExists: true,
+            interpreter: { configured: false, exists: null },
+          },
         )}
       />,
     );
@@ -180,7 +199,13 @@ describe("ComfyuiSection（只配置路径）", () => {
       <ComfyuiSection
         c={controller(
           {},
-          { pathConfigured: true, instanceType: null, desktopManaged: false, pathExists: false },
+          {
+            pathConfigured: true,
+            instanceType: null,
+            desktopManaged: false,
+            pathExists: false,
+            interpreter: { configured: false, exists: null },
+          },
         )}
       />,
     );
@@ -189,5 +214,87 @@ describe("ComfyuiSection（只配置路径）", () => {
     const describedBy = input.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
     expect(screen.getByText(/磁盘上找不到这个目录/)).toHaveAttribute("id", describedBy);
+  });
+});
+
+describe("comfy-cli 解释器的行内提示（ISSUE #4164，与 #4138 同形）", () => {
+  it("填了但磁盘上不存在：行上报「找不到文件」，不再显示「已配置——执行链会用这个解释器」", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          { comfyCliPython: "D:/nope/python.exe" },
+          {
+            pathConfigured: true,
+            instanceType: "portable",
+            desktopManaged: false,
+            pathExists: true,
+            interpreter: { configured: true, exists: false },
+          },
+        )}
+      />,
+    );
+    expect(screen.getByText(/磁盘上找不到这个文件/)).toBeInTheDocument();
+    expect(screen.queryByText(/已配置——执行链会用这个解释器/)).not.toBeInTheDocument();
+  });
+
+  it("提示与输入框 ARIA 关联（aria-invalid + aria-describedby，规范 §6.8）", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          { comfyCliPython: "D:/nope/python.exe" },
+          {
+            pathConfigured: true,
+            instanceType: "portable",
+            desktopManaged: false,
+            pathExists: true,
+            interpreter: { configured: true, exists: false },
+          },
+        )}
+      />,
+    );
+    const input = screen.getByLabelText("comfy-cli 解释器（Python 绝对路径）");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const describedBy = input.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(screen.getByText(/磁盘上找不到这个文件/)).toHaveAttribute("id", describedBy);
+  });
+
+  it("填了且存在 / 留空：不显示无效提示（错误行不常驻）", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          { comfyCliPython: "D:/venv/python.exe" },
+          {
+            pathConfigured: true,
+            instanceType: "portable",
+            desktopManaged: false,
+            pathExists: true,
+            interpreter: { configured: true, exists: true },
+          },
+        )}
+      />,
+    );
+    expect(screen.queryByText(/comfy-cli 解释器无效/)).not.toBeInTheDocument();
+    expect(screen.getByText(/已配置——执行链会用这个解释器/)).toBeInTheDocument();
+  });
+
+  it("留空是合法语义（退回默认落点）：不提示（#4164 的边界）", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          { comfyCliPython: "" },
+          {
+            pathConfigured: true,
+            instanceType: "portable",
+            desktopManaged: false,
+            pathExists: true,
+            interpreter: { configured: false, exists: null },
+          },
+        )}
+      />,
+    );
+    expect(screen.queryByText(/comfy-cli 解释器无效/)).not.toBeInTheDocument();
+    const input = screen.getByLabelText("comfy-cli 解释器（Python 绝对路径）");
+    expect(input).not.toHaveAttribute("aria-invalid");
   });
 });

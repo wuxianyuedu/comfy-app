@@ -38,6 +38,7 @@ function controller(over: Partial<ComfyuiControlController> = {}): ComfyuiContro
       instanceType: "portable",
       desktopManaged: false,
       pathExists: true,
+      interpreter: { configured: false, exists: null },
     },
     starting: false,
     stopping: false,
@@ -140,6 +141,7 @@ describe("ComfyuiControlView", () => {
             instanceType: null,
             desktopManaged: false,
             pathExists: false,
+            interpreter: { configured: false, exists: null },
           },
         })}
       />,
@@ -158,6 +160,7 @@ describe("ComfyuiControlView", () => {
             instanceType: null,
             desktopManaged: false,
             pathExists: false,
+            interpreter: { configured: false, exists: null },
           },
         })}
       />,

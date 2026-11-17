@@ -12,6 +12,7 @@
 // `./launch-path.ts`），登记在 `tests/lib-node-only-declarations.test.ts` 的
 // `PURE_NODE_HOSTS`。除 `node:path` 外零内建 import、零 server-only 侧依赖。
 
+import fs from "node:fs";
 import path from "node:path";
 
 /** 平台相关的 venv 内解释器落点（`Scripts/python.exe` vs `bin/python`）。 */
@@ -76,4 +77,30 @@ export function comfyCliMissingHint(input: {
     `  ${pip} -m pip install comfy-cli\n` +
     "或设置环境变量 COMFY_CLI_PYTHON / 在「设置 → 创作后端 → comfy-cli 解释器」填已有的解释器。"
   );
+}
+
+/** 设置页要的解释器事实视图（ISSUE #4164）：「填了但文件不存在」才构成行内
+ *  提示；留空是合法语义（退回默认落点）—— configured=false 时 exists 无意义，
+ *  恒为 null。 */
+export type ComfyCliInterpreterView = {
+  /** 设置里填了解释器路径（非空）。 */
+  configured: boolean;
+  /** 填的路径在磁盘上存在与否；未配置时无意义，恒 null。 */
+  exists: boolean | null;
+};
+
+/**
+ * 解释器事实：**纯文件系统判定**（与 `describeComfyInstance` 同族，毫秒级、
+ * 不做任何进程 / 端口探测）。`exists` 用注入的谓词（缺省 `fs.existsSync`），
+ * 与 #4138 同一条测试口径。
+ */
+export function describeComfyCliInterpreter(
+  configured: string | null | undefined,
+  exists: (p: string) => boolean = fs.existsSync,
+): ComfyCliInterpreterView {
+  const trimmed = (configured ?? "").trim();
+  if (!trimmed) {
+    return { configured: false, exists: null };
+  }
+  return { configured: true, exists: exists(trimmed) };
 }
