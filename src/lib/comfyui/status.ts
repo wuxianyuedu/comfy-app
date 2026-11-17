@@ -50,6 +50,7 @@ import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { probeComfyAtPort } from "./probe";
 import { collectComfyPythonCandidates } from "./env-python";
+import { clearSweepNegative, markSweepNegative, sweepNegativeHit } from "./sweep-negative-cache";
 import { logger } from "~/lib/core/logger";
 
 /** 进程/端口事实的快照：拿不到就都为空。 */
@@ -276,7 +277,7 @@ async function resolvePortFast(
   return authoritative;
 }
 
-async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
+async function snapshotOnce(opts: { force?: boolean } = {}): Promise<ComfyRuntimeSnapshot> {
   const settings = getSettingsSync();
 
   // 1) bound 子进程：本进程亲手拉起的，PID 直接可信（无需查进程表）。
@@ -334,6 +335,17 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
    * `didQueryProcTable` 为假），于是状态行被永远按在「ComfyUI 状态检测中…」
    * 上：用户没配路径，却看着一个一直在转的探测（ISSUE #1900）。 */
   if (!comfyuiPath) {
+    return { ...emptySnapshot(), didQueryProcTable: true };
+  }
+
+  // 1.9) 「确认查无实例」的短窗黏滞（ISSUE #4195）：最近一次完整扫描（全部候选
+  //      都问到了、且一个都没命中）之后的小窗口内，不再重复发起进程表扫描——
+  //      那是每拍最多约 6 路并发 PowerShell 枚举 Win32_Process 的重活，实例已经
+  //      不在时每一拍都是白付，持续轰击会占满机器并饿死页面的探活连接池。窗口内
+  //      的实例回归仍由上面的配置端口探测（步骤 1.5）与调用方的 HTTP 探测即时
+  //      认出；启动 / 关闭 / 配置保存等动作经 resetComfyRuntimeSnapshot 作废本缓存。
+  //      `force`（「不要任何二手答案」）同样绕开它——黏滞的正是二手结论。
+  if (opts.force !== true && sweepNegativeHit(comfyuiPath)) {
     return { ...emptySnapshot(), didQueryProcTable: true };
   }
 
@@ -423,6 +435,11 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
 
   // 一条候选都没问过（配置路径存在但没有可解释器候选）时同样算「没查过」：
   // 上层不能把这份空快照当成「探明没在跑」。
+  // 「查过且全部成功且一个都没命中」才黏滞（#4195）：查询失败（unverified）的
+  // 结论不可信，黏滞它会把下一拍本可命中的扫描也跳掉。
+  if (candidates.length > 0 && !lookupFailed) {
+    markSweepNegative(comfyuiPath);
+  }
   return {
     ...emptySnapshot(),
     unverified: lookupFailed,
@@ -471,13 +488,18 @@ export async function getComfyRuntimeSnapshot(
   if (opts.force !== true && st.inflight !== undefined) {
     return st.inflight;
   }
-  const task = snapshotOnce()
+  const task = snapshotOnce({ force: opts.force })
     .catch((error: unknown) => {
       logger.warn(`[comfyui] ${errorText(error, "运行态快照失败")}`);
       // 探测异常不能报成「未运行」：标 unverified 让调用方退回 HTTP 判据。
       return { ...emptySnapshot(), unverified: true };
     })
     .then((snap) => {
+      /* 实例又在了：「查无实例」的黏滞当即作废——负面结论在「知道它在跑」的
+       * 这一刻天然过期，之后的进程树变化要靠新的扫描回答（#4195）。 */
+      if (snap.running) {
+        clearSweepNegative();
+      }
       /* 迟到的旧结论不许覆盖或清掉更新的那次在途（见 `resetComfyRuntimeSnapshot`）。
        * 一份慢查询完全可能与一次 reset + 重查交错：后者先回来、写好了新缓存，
        * 前者随后落地 —— 若不比对身份，它既会把旧事实写回缓存，也会把
@@ -502,4 +524,8 @@ export async function getComfyRuntimeSnapshot(
 export function resetComfyRuntimeSnapshot(): void {
   st.cached = undefined;
   st.inflight = undefined;
+  /* 进程树事实即将变化（启动 / 关闭 / 配置保存 / 会话结束）：「确认查无实例」
+   * 的短窗黏滞一并作废——否则刚点完启动的那一拍还会沿用动作前的扫描结论
+   * （ISSUE #4195）。 */
+  clearSweepNegative();
 }

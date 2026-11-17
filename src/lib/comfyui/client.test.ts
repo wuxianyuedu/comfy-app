@@ -44,6 +44,7 @@ import {
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { resolveComfyLaunchPlan } from "./launch-path";
+import { resetSweepNegativeForTests } from "./sweep-negative-cache";
 import { logger } from "~/lib/core/logger";
 
 const plan = {
@@ -69,6 +70,9 @@ beforeEach(() => {
   resetComfyBase();
   resetProbeMissLog();
   resetStartingLog();
+  /* 进程表「查无实例」的黏滞是跨用例的 globalThis 状态（与上面三个 reset 同族）：
+   * 前一个用例的「全部落空」不该吃掉后一个用例的扫描断言（ISSUE #4195）。 */
+  resetSweepNegativeForTests();
   vi.mocked(getSettingsSync).mockReturnValue({
     autoSyncLocalWorkflow: false,
     comfyCliPython: "",

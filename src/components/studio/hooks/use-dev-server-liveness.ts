@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
-import { SERVER_ID_ENDPOINT } from "~/lib/log/panel-self-poll";
+import { devServerProbeUrl } from "~/lib/shell/dev-server-probe-url";
 import { isPlainRecord } from "~/lib/is-record";
 import { withTimeoutResult } from "~/lib/with-timeout";
 import { readAppServiceProcessAlive } from "~/lib/shell/desktop-shell-client";
@@ -165,10 +165,17 @@ type ProbeResult =
  *（分两次会在「服务刚恢复」那一刻拿着旧 runId，把恢复消息盖错启动组）。 */
 async function probeBootId(): Promise<ProbeResult> {
   try {
-    const res = await fetch(SERVER_ID_ENDPOINT, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-    });
+    /* 探活地址走「另一张环回卡」（#4195）：页面在 localhost / ::1 上时改打
+     * 127.0.0.1，与业务轮询分桶连接池——重载窗口里自家慢请求占满同源池时，
+     * 探活不再跟着排队超时。其余形态（页面本就在 127.0.0.1 / 非环回来源 /
+     * 无 location）返回同源相对地址，行为与旧版一致。 */
+    const res = await fetch(
+      devServerProbeUrl(typeof location === "undefined" ? undefined : location.origin),
+      {
+        cache: "no-store",
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      },
+    );
     if (!res.ok) {
       return {
         ok: false,

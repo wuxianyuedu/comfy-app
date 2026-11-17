@@ -600,3 +600,81 @@ describe("配置端口已应答 → 直接判「在跑」，不再枚举进程�
     expect(snap.port).toBe(9000);
   });
 });
+
+describe("查无实例的短窗黏滞（ISSUE #4195）", () => {
+  /** 让扫描「有候选可查」（默认 beforeEach 是空候选 → 不算「查过」，不黏滞）。 */
+  function withUvCandidate(): void {
+    vi.mocked(collectComfyPythonCandidates).mockReturnValue([
+      { exe: String.raw`C:\uv\python.exe`, via: "standalone-env 的 pyvenv.cfg" },
+    ]);
+  }
+
+  beforeEach(() => {
+    withUvCandidate();
+  });
+
+  it("完整扫描确认查无实例后，窗口内不再重复发起进程表扫描", async () => {
+    vi.useFakeTimers();
+    try {
+      /* 第一次：完整扫描，全部落空（配置端口探空 + 所有候选进程表落空）。 */
+      await getComfyRuntimeSnapshot({ force: true });
+      const sweepsAfterFirst = vi.mocked(findPidForMainPyDetailed).mock.calls.length;
+      expect(sweepsAfterFirst).toBeGreaterThan(0);
+      /* 快照 TTL（1.5s）已过、负面黏滞（10s）仍在的时间点：这一拍不应再扫。 */
+      vi.advanceTimersByTime(2000);
+      const snap = await getComfyRuntimeSnapshot();
+      expect(snap.running).toBe(false);
+      expect(snap.unverified).toBe(false);
+      expect(snap.didQueryProcTable).toBe(true);
+      expect(vi.mocked(findPidForMainPyDetailed).mock.calls.length).toBe(sweepsAfterFirst);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("查询失败（unverified）的结论不黏滞：下一拍照常重扫", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: null, failed: true });
+      await getComfyRuntimeSnapshot({ force: true });
+      const sweepsAfterFirst = vi.mocked(findPidForMainPyDetailed).mock.calls.length;
+      vi.advanceTimersByTime(2000);
+      const snap = await getComfyRuntimeSnapshot();
+      expect(snap.unverified).toBe(true);
+      expect(vi.mocked(findPidForMainPyDetailed).mock.calls.length).toBeGreaterThan(
+        sweepsAfterFirst,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("动作重置（resetComfyRuntimeSnapshot）作废黏滞：刚点完启动的那一拍必须重扫", async () => {
+    await getComfyRuntimeSnapshot({ force: true });
+    const sweepsAfterFirst = vi.mocked(findPidForMainPyDetailed).mock.calls.length;
+    resetComfyRuntimeSnapshot();
+    await getComfyRuntimeSnapshot({ force: true });
+    expect(vi.mocked(findPidForMainPyDetailed).mock.calls.length).toBeGreaterThan(sweepsAfterFirst);
+  });
+
+  it("实例回归（快照判 running）即作废黏滞：之后实例再消失时照常重扫", async () => {
+    vi.useFakeTimers();
+    try {
+      await getComfyRuntimeSnapshot({ force: true });
+      const sweepsAfterFirst = vi.mocked(findPidForMainPyDetailed).mock.calls.length;
+      /* 实例回来了（配置端口应答 → 步骤 1.5 直接判 running）。 */
+      vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:8188");
+      const up = await getComfyRuntimeSnapshot({ force: true });
+      expect(up.running).toBe(true);
+      /* 实例又没了：负面黏滞已被「running」作废，这一拍必须重新扫描。 */
+      vi.mocked(probeComfyAtPort).mockResolvedValue(null);
+      vi.advanceTimersByTime(2000);
+      await getComfyRuntimeSnapshot();
+      expect(vi.mocked(findPidForMainPyDetailed).mock.calls.length).toBeGreaterThan(
+        sweepsAfterFirst,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
