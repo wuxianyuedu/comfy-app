@@ -241,6 +241,17 @@ const config = {
       // check-daily-attendance 一起红）。显式把该变体目录（含其私有 node_modules）收进产物。
       // 见仓库独立 issue（standalone 构建回归）。
       "./node_modules/.pnpm/styled-jsx@*/node_modules/**",
+      // 这两份是 RUNTIME_SCRIPTS 白名单里的运行期脚本，但住在 `scripts/devtools/` 下。
+      // Linux runner（路径用正斜杠）上，上面 outputFileTracingExcludes 的
+      // `./tools/**` / `./tests/**` 等条目按 contains（子串）语义匹配整条路径：
+      // "devtools/" 含子串 "tools/"、"affected-tests/" 含 "tests/" ⇒ 整棵子树被
+      // 排除出全项目追踪，白名单「保留在场文件」的前提落空，产物里静默缺件
+      // （ISSUE #4167：执行器宿主冒烟报 ERR_MODULE_NOT_FOUND）。Windows 路径用
+      // 反斜杠，子串匹配打不中，所以本地构建一直是绿的、测不出这一类缺件。
+      // 补法即本键的职责（§7.5.1：excludes 只做减法，缺件只能由 includes 加回）；
+      // 白名单里再有多少件搬进被误伤的子树，由冒烟那一步的逐件在场检查兜底。
+      "./scripts/devtools/env-preflight.mjs",
+      "./scripts/devtools/install-comfyapp-helper.ps1",
     ],
   },
   // ── dev 期回环两种拼法都要放行（Next 16 的 dev 资源跨源闸门）────────

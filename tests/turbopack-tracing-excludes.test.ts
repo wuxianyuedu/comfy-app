@@ -118,6 +118,43 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
   });
 });
 
+describe("outputFileTracingIncludes：被排除子树误伤的白名单件必须逐件加回（ISSUE #4167）", () => {
+  // Linux runner 上路径用正斜杠，outputFileTracingExcludes 按 contains（子串）语义
+  // 匹配整条产物路径："scripts/devtools/x" 含 "tools/"、"scripts/affected-tests/x"
+  // 含 "tests/" ⇒ 整棵子树不进产物，RUNTIME_SCRIPTS 白名单救不回（白名单只保证
+  // 「剔除时保留在场文件」）。Windows 路径用反斜杠打不中子串，本机测不出这一类
+  // 缺件——所以这里做静态判据：白名单里每一件，只要其产物路径含某个排除模式的
+  // 段名，就必须逐件登记进 outputFileTracingIncludes（§7.5.1 的既定补法）。
+  const excludesBlock = config.slice(
+    config.indexOf("outputFileTracingExcludes"),
+    config.indexOf("outputFileTracingIncludes"),
+  );
+  const excludeBases = [...excludesBlock.matchAll(/"\.\/(?<base>[^"/]+)\/\*\*"/g)]
+    .map((m) => m.groups?.base ?? "")
+    .filter((base) => base !== "" && !base.includes("/"));
+  const includesBlock = config.slice(config.indexOf("outputFileTracingIncludes"));
+
+  it("从排除清单解析出了单层段名（判据自身不空跑）", () => {
+    expect(excludeBases, `解析结果：${excludeBases.join("、")}`).toContain("tools");
+    expect(excludeBases).toContain("tests");
+  });
+
+  it("白名单里住在排除子树里的每一件都已登记进 outputFileTracingIncludes", async () => {
+    const { RUNTIME_SCRIPTS } = await import("../scripts/standalone-private-inputs.mjs");
+    const missing = RUNTIME_SCRIPTS.filter((rel) => {
+      const artifactPath = `scripts/${rel}`;
+      const inSwallowedSubtree = excludeBases.some((base) => artifactPath.includes(`${base}/`));
+      return inSwallowedSubtree && !includesBlock.includes(`"./${artifactPath}"`);
+    });
+    expect(
+      missing,
+      `这些 RUNTIME_SCRIPTS 件住在会被 contains 子串误伤的子树里，但没登记进 ` +
+        `outputFileTracingIncludes——Linux 追踪会把整个子树排除出产物，宿主/编排器 ` +
+        `在产物里 ERR_MODULE_NOT_FOUND（ISSUE #4167）：\n  ${missing.join("\n  ")}`,
+    ).toEqual([]);
+  });
+});
+
 /* ── 产物级探针：真看 .next/standalone 里有没有不该有的东西 ──────────────
  * 产物存在时才数（守的是构建结果），没有则整组跳过。① 文件顶层不得调用 listFiles：describe 回调体在收集期
  * 执行，跳过判定救不了那行 scandir ⇒ 产物缺失时整份文件 ENOENT（CI test 排在 Build 前必挂，本机有 .next 全绿）。
