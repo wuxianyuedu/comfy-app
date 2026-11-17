@@ -56,6 +56,12 @@ use tauri::Wry;
 #[cfg(windows)]
 static JOB_HANDLE: Mutex<usize> = Mutex::new(0);
 
+/// standalone sidecar 那棵树的 job 句柄（ISSUE #4165）。语义与 `JOB_HANDLE` 相同：
+/// 句柄由壳持有到进程退出，壳死（含被硬杀）时 OS 替我们关句柄，整棵内嵌 server 树
+/// 当场回收——正常关窗那条链（kill_sidecar → reap 补刀）管不到「壳已经没了」的场景。
+#[cfg(windows)]
+static SIDECAR_JOB_HANDLE: Mutex<usize> = Mutex::new(0);
+
 /// 本次启动的编排子进程句柄（`node scripts/dev-launcher.mjs --mode prebuilt`）。
 ///
 /// 用 **tauri-plugin-shell 的 CommandChild** 而不是 `std::process::Command`：
@@ -1338,8 +1344,53 @@ pub fn spawn_orchestrator(
 /// 模型，随启动器移除已废弃；这里不再经外部脚本，内联实现是唯一出处。）
 ///
 /// 失败一律只记 WARN：这是兜底，正常回收链不依赖它，挂不上不该拦住启动。
+///
+/// standalone sidecar 那棵树的同款兜底见 [`attach_sidecar_kill_on_close_job`]
+/// （ISSUE #4165）：两条树各挂各的 job，共用下面那一份内核。
 #[cfg(windows)]
 pub fn attach_kill_on_close_job() {
+  let pid = {
+    let guard = ORCHESTRATOR.lock().unwrap();
+    match guard.as_ref() {
+      Some(child) => child.pid(),
+      None => return,
+    }
+  };
+  if let Some(job) = assign_kill_on_close_job(pid, "orchestrator") {
+    *JOB_HANDLE.lock().unwrap() = job;
+  }
+}
+
+/// 给 standalone sidecar（内嵌 server 那棵树）挂同一个 OS 级兜底（ISSUE #4165）。
+///
+/// standalone 的进程树是「壳 app.exe → node sidecar → next-server / 执行宿主」，
+/// 壳同样是顶：正常关窗有「壳退出 → `kill_sidecar` → `reap-process.mjs` 补刀」
+/// 这条链，但壳被**硬杀**（任务管理器收掉 app.exe / 壳崩溃）时那条链一步都跑不了
+/// ——此前这棵树没有任何 OS 级兜底（插件自建的 job 只在 `.set_process_group(true)`
+/// 时存在，本侧没启用），孤儿 node / next-server 继续占端口与日志句柄；且 standalone
+/// 不写会话锚点，下一次启动的孤儿回收对它**没有认亲方式**——所以兜底必须在壳死的
+/// 当场生效，不能指望「下一次启动再收」。挂上壳自持的 `KILL_ON_JOB_CLOSE` job 后，
+/// 壳一死 OS 关句柄，整棵树当场回收，与编排器那棵树（[`attach_kill_on_close_job`]）
+/// 同构。`BREAKAWAY_OK` 的逃逸语义（保活服务）在这棵树上同样要保。
+///
+/// 失败只记 WARN，语义与编排器那侧相同：兜底挂不上不该拦住启动。
+///
+/// `#[allow(dead_code)]`：唯一调用点 `spawn_sidecar` 是 release-only
+/// （`#[cfg(not(debug_assertions))]`），debug 构建（`cargo test`）里它没人调。
+#[cfg(windows)]
+#[allow(dead_code)]
+pub fn attach_sidecar_kill_on_close_job(pid: u32) {
+  if let Some(job) = assign_kill_on_close_job(pid, "sidecar") {
+    *SIDECAR_JOB_HANDLE.lock().unwrap() = job;
+  }
+}
+
+/// 共同内核：给 `pid` 建一个 `KILL_ON_JOB_CLOSE | BREAKAWAY_OK` 的 job 并挂上。
+///
+/// 成功返回**有意泄漏**的 job 句柄值（语义见 `JOB_HANDLE` 的注释：壳持有到进程
+/// 退出，OS 在壳死时替我们关闭）；失败返回 `None` 并只记 WARN。`what` 只用于日志。
+#[cfg(windows)]
+fn assign_kill_on_close_job(pid: u32, what: &str) -> Option<usize> {
   use windows::Win32::Foundation::CloseHandle;
   use windows::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
@@ -1351,28 +1402,21 @@ pub fn attach_kill_on_close_job() {
     OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
   };
 
-  let pid = {
-    let guard = ORCHESTRATOR.lock().unwrap();
-    match guard.as_ref() {
-      Some(child) => child.pid(),
-      None => return,
-    }
-  };
   if pid == 0 {
-    return;
+    return None;
   }
   unsafe {
     let job = match CreateJobObjectW(None, windows::core::PCWSTR::null()) {
       Ok(handle) => handle,
       Err(e) => {
         log::warn!("[ComfyAPP] CreateJobObjectW failed: {e:?}");
-        return;
+        return None;
       }
     };
     let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
     info.BasicLimitInformation = JOBOBJECT_BASIC_LIMIT_INFORMATION {
       /* KILL_ON_JOB_CLOSE：壳消失（含被硬杀）时 job 关闭即终止整棵树 —— 编排器
-       * 崩溃后不留孤儿的 OS 级兜底。
+       * / sidecar 崩溃后不留孤儿的 OS 级兜底。
        *
        * BREAKAWAY_OK 是它的**必要配对**：保活服务（keepAlive 的服务）必须能逃出
        * 这个 job，否则「应用退出后不关闭」在 Windows 上不成立（job 成员身份在
@@ -1392,13 +1436,13 @@ pub fn attach_kill_on_close_job() {
     if let Err(e) = set {
       log::warn!("[ComfyAPP] SetInformationJobObject failed: {e:?}");
       let _ = CloseHandle(job);
-      return;
+      return None;
     }
     match OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, false, pid) {
       Ok(process) => {
         match AssignProcessToJobObject(job, process) {
           Ok(()) => log::info!(
-            "[ComfyAPP] orchestrator {pid} attached to kill-on-close job (shell is its owner)"
+            "[ComfyAPP] {what} {pid} attached to kill-on-close job (shell is its owner)"
           ),
           Err(e) => log::warn!("[ComfyAPP] AssignProcessToJobObject failed: {e:?}"),
         }
@@ -1407,15 +1451,24 @@ pub fn attach_kill_on_close_job() {
       Err(e) => log::warn!("[ComfyAPP] OpenProcess({pid}) failed: {e:?}"),
     }
     // 句柄**故意不关**：job 的语义是「最后一个句柄关闭即杀整棵树」，而壳退出
-    // 时 OS 会替我们关掉它，那一刻才是「壳死了，编排器也别活」的触发点。
-    // 这里把句柄塞进一个 `static` 就是「有意泄漏」的写法 —— `mem::forget` 对
-    // `HANDLE`（`Copy`）是空操作，写它会连编译都提醒「什么也没做」。
-    *JOB_HANDLE.lock().unwrap() = job.0 as usize;
+    // 时 OS 会替我们关掉它，那一刻才是「壳死了，这棵树也别活」的触发点。
+    // 这里把句柄交给调用方塞进 `static`（JOB_HANDLE / SIDECAR_JOB_HANDLE）就是
+    // 「有意泄漏」的写法 —— `mem::forget` 对 `HANDLE`（`Copy`）是空操作，写它
+    // 会连编译都提醒「什么也没做」。
+    Some(job.0 as usize)
   }
 }
 
 #[cfg(not(windows))]
 pub fn attach_kill_on_close_job() {}
+
+/// 非 Windows 没有 Job Object：两棵树（编排器 / sidecar）的硬杀兜底都缺席，
+/// 树级回收只剩「退出时的 reap-process.mjs / kill-process-tree」一条（既定边界，
+/// 见规范 §3.3 / §7.6）。留空实现使调用点无需按平台分叉。
+/// `#[allow(dead_code)]`：同上，调用点随 `spawn_sidecar` 只在 release 编译。
+#[cfg(not(windows))]
+#[allow(dead_code)]
+pub fn attach_sidecar_kill_on_close_job(_pid: u32) {}
 
 /// 编排器进程的环境块里有没有 `COMFYAPP_SHELL_OWNED=1`（Windows）。
 ///

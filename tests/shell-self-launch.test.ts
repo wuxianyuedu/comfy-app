@@ -383,6 +383,21 @@ describe("壳自编排：回收链", () => {
       expect(cargo).toContain(feature);
     }
   });
+
+  it("standalone sidecar 这棵树也挂 KILL_ON_JOB_CLOSE job（#4165：壳被硬杀时内嵌 server 不成孤儿）", () => {
+    const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
+    expect(rust).toContain("pub fn attach_sidecar_kill_on_close_job");
+    expect(rust).toContain("static SIDECAR_JOB_HANDLE");
+    // 与编排器同构：非 Windows 留空实现，调用点不分叉（判据只收一处，§9.2）。
+    // （cfg 与 fn 之间允许夹 #[allow(dead_code)]：调用点随 spawn_sidecar 只在 release 编译。）
+    expect(rust).toMatch(
+      /#\[cfg\(not\(windows\)\)\]\s*(?:#\[allow\(dead_code\)\]\s*)?pub fn attach_sidecar_kill_on_close_job\(_pid: u32\) \{\}/,
+    );
+    // 调用点在 spawn_sidecar：起完就挂——standalone 不写会话锚点，下一次启动的
+    // 孤儿回收认不出它，兜底必须在壳死当场生效。
+    const lib = stripComments(read("src-tauri/src/lib.rs"));
+    expect(lib).toContain("shell_launch::attach_sidecar_kill_on_close_job(sidecar_pid)");
+  });
 });
 
 describe("壳自编排：能自起的判据与真起得来", () => {
