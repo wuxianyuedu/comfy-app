@@ -1,0 +1,64 @@
+# Dependabot 告警巡检（镜像档，ISSUE #4168）
+#
+# 把 GitHub Dependabot 的 open 告警按**依赖**聚合成 CNB issue（一包一单）。
+# 实现与六条口径见 `scripts/ci/ci-dependabot-triage.mjs` 文件头；与 code scanning
+# 那一族（code-scanning-triage.yml）同一套机制、Dependabot 自己的形状。
+#
+# 为什么是 GA 而不是 CNB：告警本体在 GitHub 那一侧（镜像仓的 Dependabot），
+# `workflow_dispatch` 的手动按钮也是 GA 原生（daily.yml / code-scanning-triage.yml
+# 同一写法）。
+#
+# 排班：北京 03:00 = UTC 19:00 —— 与 02:00 的 code scanning 巡检错开一小时
+# （不抢同一夜的 runner），也避开 01:00 的每日单元测试那一档。
+#
+# 权限只给两项：读代码（检出脚本）与读安全事件（告警）。`security-events: read`
+# 同时覆盖 code scanning 与 Dependabot alerts（GitHub 的 Security events 细粒度
+# 权限三合一）。**不写 GitHub issue**：落点已定为 CNB（`moon-read/comfy-app-t3`），
+# GitHub 镜像仓的 issues 不参与。
+#
+# `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7）。
+name: Dependabot triage (mirror)
+
+on:
+  schedule:
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: read
+
+concurrency:
+  # 独立一把锁：与每日档 / 桌包档 / code scanning 巡检互不相干；不掐旧跑
+  #（两次并发会让同一依赖的两张单同时创建）。
+  group: dependabot-triage
+  cancel-in-progress: false
+
+env:
+  CNB_API_ENDPOINT: "https://api.cnb.cool"
+  CNB_REPO_SLUG: "moon-read/comfy-app-t3"
+
+jobs:
+  triage:
+    runs-on: ubuntu-24.04
+    # 一次全量分页（告警 / 已有单）+ 至多几次写：给 10m，卡死要早报。
+    timeout-minutes: 10
+    steps:
+      - name: 检出（只要脚本这一层）
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts
+          fetch-depth: 1
+
+      - name: 装 Node（与 engines 同一条线）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: 巡检并建单
+        env:
+          # 内置 token：权限由本文件顶层的 `permissions:` 授予（`security-events: read`）。
+          GH_TOKEN: ${{ github.token }}
+          # CNB 侧建单 / 改单 / 贴标签（repo-issue:rw）与评论 / 仓库标签（repo-notes:rw）。
+          CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
+        run: node scripts/ci/ci-dependabot-triage.mjs
