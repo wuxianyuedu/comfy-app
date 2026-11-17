@@ -796,7 +796,10 @@ fn tail_log_file_since_marker(
   max_bytes: usize,
   max_lines: usize,
 ) -> Option<String> {
-  let data = std::fs::read(path).ok()?;
+  // 只读尾部（ISSUE #4212）：本命令被启动页每 800ms 轮询、跑在主线程，整文件
+  // 读入的成本随历史线性变贵。会话标记若落在尾部窗口之前，max_bytes / max_lines
+  // 的双重截断会把结果收敛到同一条尾部；marker 在窗口内时照常精确命中。
+  let (data, truncated) = read_tail_bytes(path, max_bytes)?;
   if data.is_empty() {
     return Some(String::new());
   }
@@ -815,7 +818,12 @@ fn tail_log_file_since_marker(
     .iter()
     .rposition(|l| l.contains(marker))
     .map(|i| i + 1)
-    .unwrap_or_else(|| lines.len().saturating_sub(max_lines));
+    .unwrap_or_else(|| {
+      // 尾读的首行可能是被截断的残行（无 marker 锚定时没有别的方式丢掉它）。
+      let first = usize::from(truncated && !lines.is_empty());
+      let usable_len = lines.len() - first;
+      first + usable_len.saturating_sub(max_lines)
+    });
 
   if start >= lines.len() {
     return Some(String::new());
@@ -826,7 +834,13 @@ fn tail_log_file_since_marker(
   }
   let mut joined = selected.join("\n");
   if joined.len() > max_bytes {
-    let cut = joined.len() - max_bytes;
+    // 字节偏移回退到字符边界：日志正文含中文（3 字节/字），cut 落进多字节
+    // 字符中间时 `joined[cut..]` 会当场 panic（ISSUE #4212，启动页每 800ms
+    // 轮询这条命令）。
+    let mut cut = joined.len() - max_bytes;
+    while cut > 0 && !joined.is_char_boundary(cut) {
+      cut -= 1;
+    }
     // 从截断点向后找到第一个换行符，避免首行残缺
     let next_newline = joined[cut..].find('\n').map(|i| cut + i + 1).unwrap_or(cut);
     joined = joined[next_newline..].to_string();
@@ -3432,5 +3446,31 @@ mod log_filter_tests {
     std::fs::write(&path, "").unwrap();
     let tail = tail_log_file_since_marker(&path, "=== 启动会话开始", 1024, 10).unwrap();
     assert!(tail.is_empty());
+  }
+
+  #[test]
+  fn tail_since_marker_multibyte_truncation_does_not_panic() {
+    // 中文（3 字节/字）把字节截断点顶进多字节字符中间时，切片必须回退到
+    // 字符边界而不是 panic（ISSUE #4212：启动页每 800ms 轮询这条命令）。
+    let path = temp_log("multibyte-truncation");
+    let content = "中文日志行，包含多字节字符。\n".repeat(120);
+    std::fs::write(&path, &content).unwrap();
+    let tail = tail_log_file_since_marker(&path, "=== 启动会话开始", 64, 200);
+    assert!(tail.is_some());
+    let tail = tail.unwrap();
+    assert!(tail.contains("中文日志行") || tail.is_empty());
+  }
+
+  #[test]
+  fn tail_since_marker_reads_only_tail_window() {
+    // 尾读模式：会话标记在尾部窗口之前时，结果应与「取尾部」一致，
+    // 且不得把窗口外的旧会话内容带回来（ISSUE #4212）。
+    let path = temp_log("tail-window");
+    let old = "旧会话日志行 很长的中文内容用来撑爆尾部窗口。\n".repeat(40);
+    let new = "新会话日志行 另一段中文内容同样很长。\n".repeat(40);
+    std::fs::write(&path, format!("=== 启动会话开始 ===\n{old}{new}")).unwrap();
+    let tail = tail_log_file_since_marker(&path, "=== 启动会话开始", 256, 200).unwrap();
+    assert!(tail.contains("新会话日志行"), "应包含新会话内容：{tail}");
+    assert!(!tail.contains("旧会话日志行"), "不得带回旧会话内容：{tail}");
   }
 }
