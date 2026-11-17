@@ -6,16 +6,30 @@
  * （<WorkflowCanvasNodePreview>）持有，本组件只负责把这一页签的控件摆出来。
  */
 
+import { useMemo } from "react";
+
 import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 import { WorkflowNodeActionButton } from "~/components/studio/workflow-form/WorkflowNodeParts";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Disclosure } from "~/components/ui/disclosure";
+import { FieldLabel } from "~/components/ui/field";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { TruncatedText } from "~/components/ui/truncated-text";
-import type { WorkflowIOMap } from "../workflow-io";
+import {
+  cliOutputNodeId,
+  filterVisibleInMode,
+  ioLabel,
+  splitWorkflowIO,
+  type WorkflowIOMap,
+} from "../workflow-io";
 import { WorkflowRunLogButton } from "./WorkflowRunLogButton";
 import { modeLabel } from "./workflow-library-config";
 
 type Props = {
   canRun: boolean;
+  /** 调试用的部分执行目标（comfy-cli `--output-node-ids`，cli 展开后 id）。
+   *  空 = 整图执行。选择态在容器持有，本组件只摆控件。 */
+  debugOutputIds: Array<string>;
   effectiveMode: string | null;
   effectiveModeLabel: string;
   logViewTaskId: string | null;
@@ -23,6 +37,7 @@ type Props = {
   missingLabels: Array<string>;
   /** 多模式工作流：提供时右上角变成模式切换下拉。 */
   modes?: Array<string>;
+  onDebugOutputIdsChange: (ids: Array<string>) => void;
   onModeChange?: (code: string) => void;
   onOpenLog: () => void;
   onSeedModeChange?: (ioKey: string, mode: string) => void;
@@ -63,7 +78,14 @@ export function WorkflowPreviewUsePanel({
   missingLabels,
   logViewTaskId,
   onOpenLog,
+  debugOutputIds,
+  onDebugOutputIdsChange,
 }: Props) {
+  /* 输出多于一个才有「只跑某个分支」可调：单输出工作流没有可二分的对象。 */
+  const outputEntries = useMemo(
+    () => filterVisibleInMode(splitWorkflowIO(workflowIO).outputs, effectiveMode),
+    [workflowIO, effectiveMode],
+  );
   return (
     <div className="flex w-full max-w-120 flex-col gap-3">
       <div className="border-border bg-panel rounded-xl border p-4">
@@ -110,6 +132,47 @@ export function WorkflowPreviewUsePanel({
           values={values}
           workflowId={workflowId}
         />
+        {/* 调试选择器（comfy-cli v1.24.0 的部分执行）：勾了输出就只跑这些输出
+            节点及其依赖子图，用于把「执行出错找原因」拆成逐条输出分支二分。
+            折叠在表单与按钮之间，不勾选 = 行为与从前逐字一致。 */}
+        {outputEntries.length > 1 && (
+          <Disclosure
+            className="text-ink-faint text-xs"
+            panelClassName="mt-2 flex flex-col gap-1"
+            rootClassName="border-border mt-3 rounded-lg border px-3 py-2"
+            trigger={
+              <span>
+                调试：只跑到指定输出
+                {debugOutputIds.length > 0
+                  ? `（已选 ${debugOutputIds.length} 个，其余分支不执行）`
+                  : "（缺省跑整图）"}
+              </span>
+            }
+          >
+            {outputEntries.map((entry) => {
+              const cliId = cliOutputNodeId(entry);
+              const checked = debugOutputIds.includes(cliId);
+              return (
+                <FieldLabel className="text-ink flex items-center gap-2 text-xs" key={entry.ioKey}>
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={(value) => {
+                      const next =
+                        value === true
+                          ? [...debugOutputIds, cliId]
+                          : debugOutputIds.filter((id) => id !== cliId);
+                      onDebugOutputIdsChange(next);
+                    }}
+                  />
+                  <span className="truncate">
+                    {ioLabel(entry)}
+                    <span className="text-ink-faint ml-1">（节点 {cliId}）</span>
+                  </span>
+                </FieldLabel>
+              );
+            })}
+          </Disclosure>
+        )}
         <div className="mt-4">
           <WorkflowNodeActionButton
             disabled={!canRun}

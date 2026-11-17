@@ -47,6 +47,9 @@ type RunPayload = {
   /** 载荷按**映射表**组装（不是裸的「暴露 pin 全量下发」）——
    *  生效映射（含本地 overlay）由容器的 `useParamWiring` 持有。 */
   effectiveParamMap: Record<string, unknown>;
+  /** 调试用的部分执行目标（comfy-cli `--output-node-ids`）：只跑这些输出节点
+   *  及其依赖子图。空 / 缺省 = 整图执行。 */
+  outputNodeIds?: Array<string>;
   seedModes: Record<string, string>;
   taskType: string;
   values: Record<string, unknown>;
@@ -103,6 +106,10 @@ async function executeRun(
     const taskId = await startLocalGenerate({
       workflow: workflowId,
       workflowInputs: [...workflowInputs, ...cagInputs],
+      /* 部分执行（调试）：非空才带上，缺省整图。 */
+      ...(payload.outputNodeIds && payload.outputNodeIds.length > 0
+        ? { outputNodeIds: payload.outputNodeIds }
+        : {}),
     });
     setPhase({ kind: "running", pct: 0 });
     registerWorkflowRun({

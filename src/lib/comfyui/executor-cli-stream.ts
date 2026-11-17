@@ -293,6 +293,22 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
       );
       return;
     }
+    if (evt.type === "partial_execution" || evt.type === "partial_execution_targets_ignored") {
+      /* comfy-cli v1.24.0 的部分执行回执（本应用带 `--output-node-ids` 时才会
+       * 出现）：`partial_execution` 是「按目标节点统计」的提示；`…_ignored` 是
+       * 服务端**忽略了目标、跑了全图**的警告（计费与耗时都会按全图走，必须
+       * 让用户看见）。原始事件行已在面板（[comfy-cli 原始]），这里给一句定性。 */
+      const detail =
+        typeof evt.message === "string" && evt.message
+          ? evt.message
+          : clampText(JSON.stringify(evt.data ?? evt), { maxLength: 200, marker: "…" });
+      if (evt.type === "partial_execution") {
+        log(taskId, "info", `部分执行回执：${detail}`);
+      } else {
+        log(taskId, "warn", `⚠ 部分执行目标被服务端忽略（实际按全图执行）：${detail}`);
+      }
+      return;
+    }
     if (
       evt.type === "progress" &&
       typeof evt.completed === "number" &&

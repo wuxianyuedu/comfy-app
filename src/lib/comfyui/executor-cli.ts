@@ -144,6 +144,79 @@ export const cliProcs: Map<string, ChildProcess> = (globalThis.__comfyCliProcs_v
 
 const CLI_TIMEOUT_MS = 25 * 60 * 1000;
 
+/** 本次 comfy-cli 提交的客户端标识（comfy-cli v1.24.0 起 `run --client-id` 可指定）。
+ *
+ *  此前 comfy-cli 自己生成随机 client_id，ComfyUI 侧的 /queue /history 与服务端
+ *  日志都答不了「这条在跑的是哪个任务」（reaper 的注释记过这笔账）。现在按任务
+ *  拼一个确定性 id 随提交下发，用户拿它即可在 ComfyUI 侧日志 / 队列 extra_data
+ *  里对上号。前缀 `comfy-app-` 与自有 WS 连接的 `comfy-app-web`（runner-state）
+ *  同族，但逐任务不同，不会与长连接混淆。 */
+export function comfyCliClientId(taskId: string): string {
+  return `comfy-app-${taskId}`;
+}
+
+/** 清洗来自任务 `params` 列的 `outputNodeIds`（部分执行目标，comfy-cli
+ *  v1.24.0 `--output-node-ids`）。库里那一列是历史数据，形状不作保证：
+ *  只收「非空字符串数组」，去重、去掉空串，条数封顶（防失控载荷）；
+ *  不是数组或清完为空 → undefined（= 整图执行，与旧行为逐字一致）。 */
+export function sanitizeOutputNodeIds(raw: unknown): Array<string> | undefined {
+  if (!Array.isArray(raw)) {
+    return undefined;
+  }
+  const ids: Array<string> = [];
+  for (const item of raw) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const trimmed = item.trim();
+    if (trimmed && !ids.includes(trimmed)) {
+      ids.push(trimmed);
+    }
+    if (ids.length >= 64) {
+      break;
+    }
+  }
+  return ids.length > 0 ? ids : undefined;
+}
+
+/** `python -m comfy_cli run …` 的完整参数清单（**纯函数**：单测直接断言，
+ *  不必起真进程）。
+ *
+ *  `outputNodeIds` 非空时逐个追加**可重复**的 `--output-node-ids <id>`
+ *  （comfy-cli 只执行这些输出节点及其依赖子图；本地与云端都支持）。 */
+export function buildComfyCliRunArgs(options: {
+  clientId: string;
+  host: string;
+  outputNodeIds?: ReadonlyArray<string>;
+  port: number;
+  workflowFile: string;
+}): Array<string> {
+  const args = [
+    "-m",
+    "comfy_cli",
+    "run",
+    "--workflow",
+    options.workflowFile,
+    "--json",
+    "--wait",
+    "--where",
+    "local",
+    "--host",
+    options.host,
+    "--port",
+    String(options.port),
+    "--client-id",
+    options.clientId,
+    "--no-notify",
+    "--timeout",
+    "600",
+  ];
+  for (const id of options.outputNodeIds ?? []) {
+    args.push("--output-node-ids", id);
+  }
+  return args;
+}
+
 /* 纯 UI 节点的名单与剔除逻辑收在 `./raw-ui-only-nodes`（纯叶子：单测可直接喂
  * 夹具，不必把本模块那一串服务端依赖拉进测试；名单缺项此前也没有判据会红 —— 那
  * 正是 `Bookmark (rgthree)` 让整单校验失败的成因）。 */
@@ -248,24 +321,18 @@ export async function executeViaComfyCli(job: Job) {
   }
 
   const py = comfyCliInterpreter(getSettingsSync().comfyCliPython);
-  const args = [
-    "-m",
-    "comfy_cli",
-    "run",
-    "--workflow",
-    tmpFile,
-    "--json",
-    "--wait",
-    "--where",
-    "local",
-    "--host",
-    host,
-    "--port",
-    String(port),
-    "--no-notify",
-    "--timeout",
-    "600",
-  ];
+  const clientId = comfyCliClientId(taskId);
+  const outputNodeIds = sanitizeOutputNodeIds(job.outputNodeIds);
+  const args = buildComfyCliRunArgs({ clientId, host, outputNodeIds, port, workflowFile: tmpFile });
+  if (outputNodeIds !== undefined) {
+    /* 部分执行（comfy-cli v1.24.0）：只跑这些输出节点及其依赖子图 —— 调试时把
+     * 大工作流拆成「只跑可疑输出分支」，快速二分故障在上游还是某条输出链路。 */
+    log(
+      taskId,
+      "info",
+      `部分执行：只跑输出节点 ${outputNodeIds.join("、")} 及其依赖子图（--output-node-ids）`,
+    );
+  }
 
   // 提前检查 Python 解释器是否存在，避免把原始 ENOENT 抛给用户
   try {
@@ -294,6 +361,10 @@ export async function executeViaComfyCli(job: Job) {
     "info",
     `comfy-cli 执行${isRaw ? " raw 工作流（UI→API 转换）" : " API 工作流"}（${host}:${port}）`,
   );
+  /* 客户端标识单独给一行：ComfyUI 侧的队列 / 历史 / 服务端日志都带 client_id，
+   * 用户拿这一行就能把「本应用这次提交」与 ComfyUI 侧的现场对上号（排障时
+   * 两边日志可以互相印证）。 */
+  log(taskId, "info", `客户端标识：${clientId}（ComfyUI 侧队列/日志按它对上本次提交）`);
   // 打完整解释器路径而不是裸 `python.exe`：这一行的用途是「照着复现这次调用」，
   // 而解释器落在哪（设置项 / 项目根 venv）正是复现时最容易搞错的一件事。
   log(taskId, "info", `  ${py} ${args.join(" ")}`);

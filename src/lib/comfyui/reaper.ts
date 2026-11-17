@@ -267,8 +267,9 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
     const qd: unknown = await q.json();
     const all = [...queueEntries(qd, "queue_running"), ...queueEntries(qd, "queue_pending")];
     /* 队列非空 → 本应用（MAX_CONCURRENCY=1）必有任务在跑。raw 路径的
-     *  comfy-cli 自己生成 client_id，无法反查属于哪个 taskId，因此无法区分
-     *  时一律不杀。 */
+     *  comfy-cli 提交时带 `--client-id comfy-app-<taskId>`（见 executor-cli.ts），
+     *  /queue 条目的 extra_data.client_id 已可反查任务；但本判据刻意保持保守
+     *  （队列非空一律不杀），不按 client_id 细分。 */
     if (all.length > 0) {
       return true;
     }

@@ -74,6 +74,10 @@ const SCOPED_DOCS = [
    * （`log/profiles/`）、录制类别与浏览器安装前提都来自源码，漂了就会指着一个
    * 不存在的命令说「照这个录」—— 与 `ui-screenshot.md` 同类，纳入校验。 */
   "docs/guides/perf-trace.md",
+  /* comfy-cli 执行排障指南（ISSUE #4189）：里面写着的 setup 入口、执行链落点
+   * （executor-cli / executor-cli-stream）、run 状态与日志文件名都来自源码，
+   * 漂了就会指着一个不存在的文件排障 —— 与 `sync-after-pull.md` 同类，纳入校验。 */
+  "docs/guides/comfy-cli-debug.md",
   /* 产品需求文档（ISSUE #2421）：产品功能与需求的唯一口径。里面大量引用代码落点
    * （router / 组件 / 表名）与功能状态，漂了就会指着一个不存在的实现说需求 ——
    * 与功能流程图同类，纳入校验。 */
