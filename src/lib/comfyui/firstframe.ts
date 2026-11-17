@@ -15,6 +15,7 @@ import { isRecord } from "~/lib/is-record";
 import { isTerminalTaskStatus } from "~/lib/task-state";
 import { taskRepository } from "../core/repository-task";
 import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
+import { cancelTask } from "~/lib/comfyui/enqueue";
 import { uploadImage } from "./client";
 
 export async function synthesizeFirstFrame(opts: {
@@ -42,7 +43,19 @@ export async function synthesizeFirstFrame(opts: {
     },
   });
 
-  const localPath = await waitForImage(taskId);
+  /* 等待失败要补偿取消（#4222）：这个 taskId 已经在队列里，失败/超时后若不撤，
+   * 它会照常被派发执行、占满 MAX_CONCURRENCY=1 的唯一执行槽烧 GPU，而产物
+   * （首帧）已无人消费——后续所有出图任务在它跑完前全部排队。补偿与 film
+   * orchestrator 记账失败路径的 `cancelTask(taskId).catch(...)` 同形：尽力撤，
+   * 撤不掉（任务已终态 / DB 撞锁）就让位，不掩盖原始错误。任务已 SUCCEEDED
+   * 的上传失败不走这里（cancelTask 是条件更新，终态行本来就不会被改写）。 */
+  let localPath: string;
+  try {
+    localPath = await waitForImage(taskId);
+  } catch (error) {
+    await cancelTask(taskId).catch(() => undefined);
+    throw error;
+  }
   /* 地址 → 磁盘只有一处判据（含越界）。这一句此前是自己拼的
    * `path.join(cwd, "public", localPath 去掉 /api/)` —— 与成片合成那侧
    * **对同一个输入结论相反**（那侧忘了剥 `api/`，于是永远找不到文件），

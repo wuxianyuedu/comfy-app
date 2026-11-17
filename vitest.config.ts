@@ -1527,11 +1527,15 @@ const BASE_CONFIG = defineConfig({
         // 未覆盖部分是真的起进程 / 拉工作流 / 等轮询的分支 —— 硬抬门槛会让无关
         // 提交变红（§18.6）。补它的正确方法是给编排判决面（镜头参数折算 / 合成
         // 前置条件 / 取消撤销）继续加用例，届时同批上调这里。
+        //
+        // #4220（2026-11-18）：监看循环兜底那批补了「首拍炸 SQLITE_BUSY → 判失败 +
+        // 留痕」「交接让位」「兜底自身再炸」三形用例，聚合实测 63.86/72.72/63.7/52.15
+        // —— 门槛按实测整数抬到 63/72/63/52（只升不降，§18.6）。
         "src/server/film/**": {
-          lines: 30,
-          functions: 50,
-          statements: 35,
-          branches: 25,
+          lines: 63,
+          functions: 72,
+          statements: 63,
+          branches: 52,
         },
         /* MCP 服务端面（台账 F13′ 那一刀的落点）：按**实测满档**登记。
          * 这里能到 100 是因为整层只有一件事 —— 把一次工具调用翻译成一次
@@ -2123,10 +2127,10 @@ const BASE_CONFIG = defineConfig({
          *     这一支的执行者（含那条 `path.sep` 边界的反向验证），`http(s)` 拉取与
          *     `resolveMediaDataUrl` 两族（第 58–121 行）仍**零执行者**，那是 E7 的账；
          *     登记低档是为了让「新增未覆盖」看得见，而不是把它藏进 workshop 的通配档里；
-         *   · `firstframe.ts` 分支 75 / 语句 95 —— 缺的是 `values` 里三个「参数没给
-         *     就不写」的展开支（38–40）、等待轮询的退避支（53）与「库里那行没有图」
-         *     的兜底支（74）。「地址不合法就不读盘」那一条本批已补用例并改成
-         *     精确断言整条绝对路径（不再用 `stringContaining` 蒙过去）。 */
+         *   · `firstframe.ts` 语句 95→100 / 分支 75→87（#4222 同批抬档）：补偿取消
+         *     把等待失败三形（FAILED / 任务行消失 / cancel 自身失败）全部盖住，
+         *     「上传回执无文件名」也补了用例；剩的一档分支是 `res.name === undefined`
+         *     的 true 侧（mock 只回空串形态，再造一个 undefined 回执不值当）。 */
         "src/server/film/compose-steps.ts": {
           lines: 100,
           functions: 100,
@@ -2166,8 +2170,8 @@ const BASE_CONFIG = defineConfig({
         "src/lib/comfyui/firstframe.ts": {
           lines: 100,
           functions: 100,
-          statements: 95,
-          branches: 75,
+          statements: 100,
+          branches: 87,
         },
         /* ⑨ 第六刀 · 产物根搬迁。`output-layout.ts` 四维满档（四个导出各有用例，
          * 含界面用的 `artifactDirDisplay`）。搬迁那份留一档下限：唯一没盖到的是
