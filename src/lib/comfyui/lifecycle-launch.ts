@@ -27,6 +27,7 @@ import { COMFYUI_DEFAULT_PORT, comfyUiBaseUrl } from "../endpoints";
 import { INLINE_STDERR_MAX, clampText } from "../text-clamp";
 import type { getSettingsSync } from "../app-settings/app-settings.server";
 import { resolveComfyLaunchPlan } from "./launch-path";
+import { buildDepDriftWarning, checkComfyDepDrift } from "./dep-drift";
 import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { spawnManaged, waitForDetachMediator } from "~/lib/process/process-launch";
@@ -227,6 +228,17 @@ export async function runEnsureLaunch(input: {
     note(
       `提示：所选解释器（${plan.cmd}）的 site-packages 里没有 torch，启动大概率会失败——请检查 ComfyUI 环境`,
     );
+  }
+  /* 源码 ↔ 环境依赖脱节核对（ISSUE #4192）：源码被升级而运行环境的 Python 依赖
+   * 没跟上时，ComfyUI 照常能拉起，脱节要等到节点执行期才爆出难懂的 Python
+   * TypeError（实测：comfy-aimdo 源码侧要 0.6.0、环境里还是 0.5.6，CLIPTextEncode
+   * 报 ModelVBAR ... unexpected keyword argument 'pageout_callback'）。在 spawn
+   * 之前做一次只读核对，把 `==` 锁包的差异面提前点名并给出修法。只预警不阻断：
+   * 判「能不能拉起」仍归上面的既有链路。checkComfyDepDrift 内部吞掉一切读取
+   * 失败（返回 null 即无从核对），预警通道绝不把启动带崩。 */
+  const depDriftReport = checkComfyDepDrift(plan.cwd, plan.cmd);
+  if (depDriftReport !== null && depDriftReport.drift.length > 0) {
+    note(buildDepDriftWarning(depDriftReport));
   }
 
   // 有效端口/额外参数：桌面实例读 Comfy Desktop 元数据（launchArgs→headless

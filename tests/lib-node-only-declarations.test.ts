@@ -33,6 +33,12 @@ const PURE_NODE_HOSTS = [
   // `gpu-vram.ts`（nvidia-smi 显存）/ `launch-path.ts`（comfyuiPath 推导源码根+解释器）/ `proc-detect.ts`（查监听端口）。
   "src/lib/comfyui/gpu-vram.ts",
   "src/lib/comfyui/launch-path.ts",
+  // dep-drift.ts（ISSUE #4192）：ComfyUI 源码 requirements.txt 的 `==` 锁包 ↔
+  // 所选解释器 site-packages 实际版本的只读核对，拉起前预警「源码升了、依赖没跟上」。
+  // 只有 `node:fs`/`node:path` 的只读读取（文件读取面收敛在 io 注入点），不引
+  // server-only 侧模块；与 launch-path.ts 同族（复用其 site-packages 布局判据），
+  // 执行器宿主侧同样可能用到，故按第三类登记。
+  "src/lib/comfyui/dep-drift.ts",
   // comfy-cli-python.ts（ISSUE #1239）：与 `launch-path.ts` 同族的纯解析地基 —— 从设置项 `comfyCliPython`
   // 推导解释器落点、按形态给「找不到」提示。只有 `node:path` 一条 value import、不引 server-only 侧模块；
   // 消费方是本清单第三类的 `executor-cli.ts`，桌包里跑在纯 Node 宿主，故按第三类登记而非 `server-only`。
