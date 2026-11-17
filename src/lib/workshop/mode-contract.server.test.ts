@@ -39,14 +39,12 @@ import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import {
   MODE_CONTRACTS_REL_PATH,
   MODE_CONTRACT_DEFAULTS_REL_PATH,
-  MODE_CONTRACT_PROJECT_DEFAULTS_RUNTIME_REL_PATH,
 } from "./mode-contract-write-path";
 import {
   configuredModeContracts,
   derivedModeContract,
   parseModeContracts,
 } from "./model-mode-contract";
-import defaultsJson from "./mode-contract-defaults.json";
 
 let root: string;
 
@@ -75,9 +73,9 @@ async function writeLegacy(contracts: unknown): Promise<string> {
   return legacy;
 }
 
-/** 往临时 root 里写一份本机项目默认覆盖（`data/`，#4150 起读取链先认它）。 */
+/** 往临时 root 里写一份项目默认基线（`src/lib/workshop/mode-contract-defaults.json`）。 */
 async function writeProjectDefaults(contracts: unknown): Promise<string> {
-  const file = path.join(root, MODE_CONTRACT_PROJECT_DEFAULTS_RUNTIME_REL_PATH);
+  const file = path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH);
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, JSON.stringify(contracts, null, 2), "utf8");
   return file;
@@ -274,12 +272,9 @@ describe("保存为项目默认：开发检出的写回入口（ISSUE #3396 / #3
     await expect(
       saveModeContractsAsProjectDefaults([{ mode: "T2I", inputs: ["prompt"] }], root),
     ).rejects.toThrow(/只在开发检出可用/);
-    // 拒绝的同时什么都没写（src 编译源与 data/ 运行时覆盖都不在）
+    // 拒绝的同时什么都没写
     await expect(
       fs.readFile(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH), "utf8"),
-    ).rejects.toThrow();
-    await expect(
-      fs.readFile(path.join(root, MODE_CONTRACT_PROJECT_DEFAULTS_RUNTIME_REL_PATH), "utf8"),
     ).rejects.toThrow();
   });
 
@@ -304,17 +299,10 @@ describe("保存为项目默认：开发检出的写回入口（ISSUE #3396 / #3
     for (const contract of res.contracts) {
       expect(Array.isArray(contract.required), contract.mode).toBe(true);
     }
-    const raw = await fs.readFile(
-      path.join(root, MODE_CONTRACT_PROJECT_DEFAULTS_RUNTIME_REL_PATH),
-      "utf8",
-    );
+    const raw = await fs.readFile(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH), "utf8");
     expect(JSON.parse(raw)).toEqual(res.contracts);
-    // 落点是本机运行时覆盖（data/，不入库；ISSUE #4150）
-    expect(res.file).toBe(path.join(root, MODE_CONTRACT_PROJECT_DEFAULTS_RUNTIME_REL_PATH));
-    /* src 那份编译源运行期不再被写。 */
-    await expect(
-      fs.readFile(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH), "utf8"),
-    ).rejects.toThrow();
+    // 落点就是入库的那一份（跟代码走的文件）
+    expect(res.file).toBe(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH));
   });
 
   it("写出的文件始终是完整基线：其余模式的内容不消失（#3634）", async () => {
@@ -328,10 +316,7 @@ describe("保存为项目默认：开发检出的写回入口（ISSUE #3396 / #3
     const effective = await loadModeContracts(root);
     await saveModeContractsAsProjectDefaults(effective, root);
 
-    const raw = await fs.readFile(
-      path.join(root, MODE_CONTRACT_PROJECT_DEFAULTS_RUNTIME_REL_PATH),
-      "utf8",
-    );
+    const raw = await fs.readFile(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH), "utf8");
     const parsed: unknown = JSON.parse(raw);
     const written = parseModeContracts(parsed);
     expect(written).toHaveLength(configuredModeContracts().length);
@@ -341,52 +326,5 @@ describe("保存为项目默认：开发检出的写回入口（ISSUE #3396 / #3
     // 写完之后读取侧现读磁盘：生效值立刻是新基线，不必重启。
     const reloaded = await loadModeContracts(root);
     expect(reloaded.find((c) => c.mode === "T2I")?.required).toEqual(["prompt", "size"]);
-  });
-});
-
-describe("存量搬迁：旧版写进 src 的项目默认自动迁去 data/（ISSUE #4150）", () => {
-  /** 把临时 root 布置成一份「开发检出」（迁移判据本身不查这个，但读链口径与
-   *  保存侧同源，保持同现场）。 */
-  async function asDevCheckout(): Promise<void> {
-    const launcher = path.join(root, "scripts", "dev-launcher.mjs");
-    await fs.mkdir(path.dirname(launcher), { recursive: true });
-    await fs.writeFile(launcher, "// 桩：形态判据只看它在不在", "utf8");
-  }
-
-  it("src 内容 ≠ 编译快照 → 读链上搬迁，runtime 接住用户态", async () => {
-    await asDevCheckout();
-    /* 旧版现场：src 那份被「保存为项目默认」写过（T2I 多固了一个必备口）。 */
-    const legacy = [{ ...derivedModeContract("T2I"), required: ["prompt", "size"] }];
-    await fs.mkdir(path.dirname(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH)), {
-      recursive: true,
-    });
-    await fs.writeFile(
-      path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH),
-      JSON.stringify(legacy, null, 2),
-      "utf8",
-    );
-    const configured = await readConfiguredModeContracts(root);
-    expect(configured.find((c) => c.mode === "T2I")?.required).toEqual(["prompt", "size"]);
-    const migrated = await fs.readFile(
-      path.join(root, MODE_CONTRACT_PROJECT_DEFAULTS_RUNTIME_REL_PATH),
-      "utf8",
-    );
-    expect(parseModeContracts(JSON.parse(migrated))).toEqual(legacy);
-  });
-
-  it("src 与编译快照一致（提交态）时不迁移：本机不钉住基线", async () => {
-    await asDevCheckout();
-    await fs.mkdir(path.dirname(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH)), {
-      recursive: true,
-    });
-    await fs.writeFile(
-      path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH),
-      JSON.stringify(parseModeContracts(defaultsJson), null, 2),
-      "utf8",
-    );
-    await expect(readConfiguredModeContracts(root)).resolves.toEqual(configuredModeContracts());
-    await expect(
-      fs.readFile(path.join(root, MODE_CONTRACT_PROJECT_DEFAULTS_RUNTIME_REL_PATH), "utf8"),
-    ).rejects.toThrow();
   });
 });

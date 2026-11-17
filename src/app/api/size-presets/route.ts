@@ -1,15 +1,14 @@
 // ── 尺寸配置表（ISSUE #3788）的应用数据端点：GET/PUT /api/size-presets ─────────
-// 尺寸表（比例 × 分辨率，图片 / 视频两场景）的**唯一持有者在服务端**：编译进包
-// 的默认值在 `src/lib/media/size-preset-defaults.json`（静态 import 的编译源，
-// #3948 起），本机项目默认覆盖落 `data/size-preset-project-defaults.json`、
+// 尺寸表（比例 × 分辨率，图片 / 视频两场景）的**唯一持有者在服务端**：项目默认
+// 入库在 `src/lib/media/size-preset-defaults.json`（跟代码走，ISSUE #3948 起），
 // 本机覆盖落 `data/size-presets.json`（应用数据），读取侧逐格合并 —— 都在
-// `size-preset.server.ts`（#4150：运行期不读写 src）。画布 / 表单 / 设置页共用
-// 的 `size-preset-store` 经这里同读同写。鉴权沿用 requireRequestUser（未开启
-// 登录门槛时回落本地演示用户，单机照常可用）。
+// `size-preset.server.ts`。画布 / 表单 / 设置页共用的 `size-preset-store`
+// 经这里同读同写。鉴权沿用 requireRequestUser（未开启登录门槛时回落本地
+// 演示用户，单机照常可用）。
 //
-// GET 回**两层**（`defaults` = 项目默认基线那份、`table` = 生效表）与「能不能写
-// 项目默认」那个开关：客户端的「恢复默认」要以项目默认为基准（基线能被「保存为
-// 项目默认」的本机覆盖改过，#4150），而这个入口只在开发检出出现。
+// GET 回**两层**（`defaults` = 项目默认那份、`table` = 生效表）与「能不能写项目
+// 默认」那个开关：客户端的「恢复默认」要以项目默认为基准（项目默认能被「保存到
+// 项目代码库」改过），而「保存到项目代码库」这个入口只在开发检出出现。
 import { type NextRequest, NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";

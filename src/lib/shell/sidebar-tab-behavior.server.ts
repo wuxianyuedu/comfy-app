@@ -1,28 +1,23 @@
 // ── 侧栏页签行为：服务端存储（规范 §17.2 服务端层）──────────────────────────
 //
-// 「工作区的全局视图点开后是独立标签页还是共享标签页」（ISSUE #3623 / #3798）有三层落点，
+// 「工作区的全局视图点开后是独立标签页还是共享标签页」（ISSUE #3623 / #3798）有两层落点，
 // 与「模式契约」同一套形状：
 //
-//   ① 编译进包的默认值（`src/lib/shell/sidebar-tab-defaults.json`）—— **静态 import
-//      的编译源**（`projectSidebarTabConfig()` 读的就是它），随构建走、每个检出与
-//      每个桌包都是同一份。改它要走改代码 / 提 PR 那条路；**运行期不写它**
-//      （ISSUE #4150：运行期写 src 的代价是工作树常挂 M + dev 下 Turbopack 模块图
-//      失效、服务端模块内存态随旧实例变孤儿）。
-//   ② 本机项目默认覆盖（`data/sidebar-tab-project-defaults.json`）—— 界面里点
-//      「保存为项目默认」写出来的那份（整份、全量配置），落在本机运行期目录。
-//      它在而不空才作为基线，压过 ①；不随 git 走。
-//   ③ 本机覆盖（`data/sidebar-tab-behavior.json`）—— 编辑器「一档即存」写出来的
-//      那份，**逐项差集**压过基线（②或①，谁在用谁）。
+//   ① 项目默认（`src/lib/shell/sidebar-tab-defaults.json`）—— 编译进源码的**完整
+//      基线**（配置面内的每一项都显式在文件里），随构建走、每个检出与每个桌包都是
+//      同一份。改它要走改代码 / 提 PR 那条路。
+//   ② 本机覆盖（`data/sidebar-tab-behavior.json`）—— 编辑器保存出来的那份，按
+//      `process.cwd()` 锚在应用根。它在而不空才生效，**逐项**压过 ①。
 //
-// 为什么覆盖是「逐项压过」而不是「整份压过」：③存的是「哪几项被改过」，
-// 整份压过会把没改过的项一起带走。模式契约那边存的是一张完整注册表，所以那边
-// 的覆盖是整份压 —— 两边的覆盖语义不同，合并方式也就不同。
+// 为什么覆盖是「逐项压过」而不是「整份压过」：这边存的是「哪几项被改过」
+// （差集化后落盘），整份压过会把没改过的项一起带走。模式契约那边存的是一张完整
+// 注册表，所以那边是整份压 —— 两边的覆盖语义不同，合并方式也就不同。
 //
-// 与 `data/` 那条私有目录的关系：②③都落在 `data/` 里正合适 —— 它们**就是**
+// 与 `data/` 那条私有目录的关系：本机覆盖落在 `data/` 里正合适 —— 它**就是**
 // 「这台机器上额外改的那点东西」，不是随包分发的项目配置（同目录的
 // `llm-secret.key` / `runtime-secret.json` 是另一类：那是必须留在本机的凭据）。
-// 分发产物里没有这些文件（按运行期路径读，不进 file tracing），出厂件读到的
-// 就是编译进包的那份。
+// 分发产物里没有这个文件（它按运行期路径读，不进 file tracing），出厂件读到的
+// 就是项目默认。
 
 import "server-only";
 
@@ -31,8 +26,6 @@ import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
 import { AsyncMutex } from "~/lib/async-mutex";
-import { logger } from "~/lib/core/logger";
-import { migrateLegacyDefaultsFile } from "~/lib/core/defaults-legacy-migration.server";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 
 import {
@@ -46,18 +39,11 @@ import {
 /** 本机覆盖相对**仓库根**（= 运行期的 `process.cwd()`）的路径。 */
 export const SIDEBAR_TAB_LOCAL_REL_PATH = "data/sidebar-tab-behavior.json";
 
-/** 本机项目默认覆盖的落点（ISSUE #4150）：「保存为项目默认」的运行期写入落这里，
- *  不入库。与 {@link SIDEBAR_TAB_DEFAULTS_REL_PATH} 的分工：那份只剩编译期默认值
- *  （静态 import 的编译源，改它走代码 / PR），这份是「这台机器上点过『保存为项目
- *  默认』的那份全量基线」。 */
-export const SIDEBAR_TAB_PROJECT_DEFAULTS_RUNTIME_REL_PATH = path.join(
-  "data",
-  "sidebar-tab-project-defaults.json",
-);
-
-/** 编译进包的默认值落点 —— 静态 import 的编译源（`sidebar-tab-behavior.ts` 引它），
- *  **运行期不再写它**。本常量现仅服务存量迁移的判据（旧版把「保存为项目默认」
- *  写在这里，遗留的用户态要搬去 {@link SIDEBAR_TAB_PROJECT_DEFAULTS_RUNTIME_REL_PATH}）。 */
+/** 项目默认显式覆盖 —— 相对**仓库根**的路径，入库、跟代码走。
+ *
+ *  与 {@link SIDEBAR_TAB_LOCAL_REL_PATH} 的分工：那份是「这台机器上的额外改动」
+ *  （不入库），这份是「界面里点『保存为项目默认』写出来的默认」（提交后每个检出
+ *  与每个桌包都是它）。只有开发检出有写它的入口（正式包载荷里没有源码）。 */
 export const SIDEBAR_TAB_DEFAULTS_REL_PATH = "src/lib/shell/sidebar-tab-defaults.json";
 
 /** 生效配置：项目默认 + 本机覆盖（覆盖逐项压过默认）。
@@ -78,34 +64,16 @@ export async function loadSidebarTabConfig(
   return mergeSidebarTabConfig(project, override);
 }
 
-/** 项目默认基线（跟代码走的默认值 + 本机「保存为项目默认」的覆盖，谁在用谁）：
- *  设置页要拿它当「还原默认」的基准与差集基准。
- *
- *  读链（ISSUE #4150 收口）：先本机运行时覆盖（`data/`），缺省回落编译进包的
- *  快照 —— 不再读 src 那份文件（它与快照在提交态下逐字节同源，读它只会把
- *  「运行期写 src」的旧病带回读链）。 */
+/** 项目默认那份（跟代码走的那份）：设置页要拿它当「还原默认」的基准与差集基准。 */
 export async function loadSidebarTabProjectDefaults(
   root: string = process.cwd(),
 ): Promise<SidebarTabConfig> {
-  const runtimeFile = path.join(root, SIDEBAR_TAB_PROJECT_DEFAULTS_RUNTIME_REL_PATH);
-  /* 存量搬迁：旧版把「保存为项目默认」直接写进 src，遗留的用户态搬去新落点
-   * （详见 defaults-legacy-migration.server —— 与快照一致时不迁移）。 */
-  const migrated = await migrateLegacyDefaultsFile({
-    srcFile: path.join(root, SIDEBAR_TAB_DEFAULTS_REL_PATH),
-    runtimeFile,
-    snapshot: projectSidebarTabConfig(),
-  });
-  if (migrated) {
-    logger.info(
-      `[shell] 已把旧版写进 src 的侧栏页签项目默认迁到 ${SIDEBAR_TAB_PROJECT_DEFAULTS_RUNTIME_REL_PATH}` +
-        "（src 里的那份回归编译源，遗留的工作树改动可 git checkout -- 收掉）",
-    );
-  }
+  const file = path.join(/*turbopackIgnore: true*/ root, SIDEBAR_TAB_DEFAULTS_REL_PATH);
   try {
-    const raw = await fs.readFile(runtimeFile, "utf8");
+    const raw = await fs.readFile(file, "utf8");
     return parseSidebarTabConfig(JSON.parse(raw));
   } catch {
-    /* 本机覆盖读不出来（没有 / 手改坏了）：回落编译进包的那份快照。 */
+    /* 项目默认读不出来（手改坏了 / 正式包里没有源码）：回落编译进来的那份快照。 */
     return projectSidebarTabConfig();
   }
 }
@@ -156,12 +124,10 @@ export async function saveSidebarTabConfig(
 }
 
 /**
- * 把「当前编辑的配置」**全量**写进本机项目默认覆盖（`data/`，ISSUE #4150）。
+ * 把「当前编辑的配置」**全量**写进入库的项目默认（跟代码走的那份 JSON）。
  *
- * 只有开发检出可以调：这格是出厂默认流程的开发期入口（正式包的改动请改一档
- * 即存，只落本机覆盖）。写完后读取侧现读运行时文件 ⇒ **不必重启进程**即生效；
- * 要让改动进出厂默认，改 `src/lib/shell/sidebar-tab-defaults.json` 走 PR
- * （那份是编译源，运行期不写它）。
+ * 只有开发检出可以调：正式包没有源码可写，这格调用本身就是错用 —— 大声失败而不是
+ * 假装成功。写完后读取侧（静态 import 的那份快照）要**重启进程**才会变。
  */
 export async function saveSidebarTabConfigAsProjectDefaults(
   config: SidebarTabConfig,
@@ -169,14 +135,15 @@ export async function saveSidebarTabConfigAsProjectDefaults(
 ): Promise<{ config: SidebarTabConfig; file: string }> {
   if (!isDevCheckout(root)) {
     throw new Error(
-      "保存为项目默认只在开发检出可用——" + "正式包的改动请改一档即存（只落本机覆盖）。",
+      "保存为项目默认只在开发检出可用（这份检出里没有 scripts/dev-launcher.mjs）——" +
+        "正式包的改动请改一档即存（只落本机）。",
     );
   }
   const full = parseSidebarTabConfig(config);
-  const file = path.join(root, SIDEBAR_TAB_PROJECT_DEFAULTS_RUNTIME_REL_PATH);
+  const file = path.join(/*turbopackIgnore: true*/ root, SIDEBAR_TAB_DEFAULTS_REL_PATH);
   try {
     await fs.mkdir(path.dirname(file), { recursive: true });
-    await atomicWriteText(file, `${JSON.stringify(full, null, 2)}\n`);
+    await fs.writeFile(file, `${JSON.stringify(full, null, 2)}\n`, "utf8");
   } catch (error) {
     throw new Error(errorText(error, `项目默认写入失败（${file}）`), { cause: error });
   }

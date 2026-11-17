@@ -370,4 +370,30 @@ describe("check-merged-side-loss —— 整份退回的事后复算", () => {
     expect(output).toContain("src/s.ts");
     expect(output).not.toContain("只差空白/断行");
   });
+
+  test("16 diff 尾部空行不破坏「本笔自身增补」减除：文件以空行收尾、分支改回更早版 ⇒ 放行（ISSUE #4181）", ({
+    repo,
+  }) => {
+    // 被改文件**以空行收尾**：它的 diff 末行是空行上下文（单个空格）。
+    repo.write("src/a.ts", "export const a = 1;\n\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: v1（以空行收尾）");
+
+    repo.write("src/a.ts", "export const a = 2;\n\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "feat: 主干前移");
+    const good = out(repo.dir, "rev-parse", "HEAD");
+
+    // 分支把内容改回 v1：结果版 == 更早祖先版（命中），而本笔 diff 反向应用必回基线
+    // —— 这正是「本笔自身增补」减除要放行的形状。
+    repo.write("src/a.ts", "export const a = 1;\n\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "fix: 改回 v1");
+    const head = out(repo.dir, "rev-parse", "HEAD");
+
+    // 修前：git() 的 trim 吃掉补丁末行 → apply 报 corrupt patch → 减除静默失效 → 退 1。
+    const { code, output } = repo.run([head, "--baseline", good, "--own-from", good]);
+    expect(code, `output=${output}`).toBe(0);
+    expect(output).not.toContain("src/a.ts");
+  });
 });

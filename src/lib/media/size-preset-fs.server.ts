@@ -13,8 +13,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-import { logger } from "~/lib/core/logger";
-import { migrateLegacyDefaultsFile } from "~/lib/core/defaults-legacy-migration.server";
 import {
   DEFAULT_SIZE_PRESET_TABLE,
   mergeSizePresetTable,
@@ -25,19 +23,12 @@ import {
 /** 本机覆盖的落点（应用根相对路径）。 */
 export const SIZE_PRESETS_REL_PATH = path.join("data", "size-presets.json");
 
-/** 本机项目默认覆盖的落点（ISSUE #4150）：「保存为项目默认」的运行期写入落这里，
- *  不入库。与 {@link SIZE_PRESET_DEFAULTS_REL_PATH} 的分工：那份只剩编译期默认值
- *  （静态 import 的编译源，改它走代码 / PR），这份是「这台机器上点过『保存为项目
- *  默认』的那份全量基线」。 */
-export const SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH = path.join(
-  "data",
-  "size-preset-project-defaults.json",
-);
-
-/** 编译进包的默认值落点 —— 静态 import 的编译源（`size-presets.ts` 引它），
- *  **运行期不再写它**。本常量现仅服务存量迁移的判据（旧版把「保存为项目默认」
- *  写在这里，遗留的用户态要搬去
- *  {@link SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH}）。 */
+/** 项目默认那份（入库、跟代码走）的落点（仓库根相对路径）。
+ *
+ *  与 {@link SIZE_PRESETS_REL_PATH} 的分工：那份是「这台机器上的额外改动」（不入库），
+ *  这份是「界面里点『保存到项目代码库』写出来的默认」（提交后每个检出与每个桌包
+ *  都是它）。只有开发检出有写它的入口（正式包载荷里没有源码）。
+ */
 export const SIZE_PRESET_DEFAULTS_REL_PATH = "src/lib/media/size-preset-defaults.json";
 
 /** 读本机覆盖文件：不在 / 坏 JSON ⇒ null（按「没有覆盖」处理）。
@@ -57,36 +48,20 @@ export async function readRawSizePresetOverrideFile(file: string): Promise<unkno
   }
 }
 
-/** 项目默认基线：现读本机项目默认覆盖（`data/`），读不出来 / 坏掉才回落编译进包
- *  的那份快照。
+/** 项目默认那份：现读磁盘上那份，读不出来 / 坏掉才回落编译进包的那份快照。
  *
- *  为什么现读（与「模式契约」#3634 同一口径）：「保存为项目默认」写完必须**立刻**
- *  读到 —— 否则用户写完还得重启进程才生效。#4150 起写入落点从 src 那份编译源
- *  改为本机运行时覆盖（`SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH`），读链
- *  随之收口：运行期不再读 / 写 src（工作树噪声与 dev 模块图失效的根源）。
+ *  为什么现读（与「模式契约」#3634 同一口径）：「保存到项目代码库」写的就是它，
+ *  写完必须**立刻**读到 —— 否则用户写完还得重启进程才生效。
  */
 export async function loadSizePresetProjectDefaults(
   root: string = process.cwd(),
 ): Promise<SizePresetTable> {
-  const runtimeFile = path.join(root, SIZE_PRESET_PROJECT_DEFAULTS_RUNTIME_REL_PATH);
-  /* 存量搬迁：旧版把「保存为项目默认」直接写进 src，遗留的用户态搬去新落点
-   * （详见 defaults-legacy-migration.server —— 与编译快照一致时不迁移）。 */
-  const migrated = await migrateLegacyDefaultsFile({
-    srcFile: path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH),
-    runtimeFile,
-    snapshot: DEFAULT_SIZE_PRESET_TABLE,
-  });
-  if (migrated) {
-    logger.info(
-      `[media] 已把旧版写进 src 的尺寸配置表项目默认迁到 data/size-preset-project-defaults.json` +
-        "（src 里的那份回归编译源，遗留的工作树改动可 git checkout -- 收掉）",
-    );
-  }
+  const file = path.join(/*turbopackIgnore: true*/ root, SIZE_PRESET_DEFAULTS_REL_PATH);
   let raw: string;
   try {
-    raw = await fs.readFile(runtimeFile, "utf8");
+    raw = await fs.readFile(file, "utf8");
   } catch {
-    /* 读不出来（没有 / 手改删了）：回落编译进包的那份快照。 */
+    /* 读不出来（正式包里没有源码 / 手改删了）：回落编译进包的那份快照。 */
     return DEFAULT_SIZE_PRESET_TABLE;
   }
   try {

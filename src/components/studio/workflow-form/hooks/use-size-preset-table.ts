@@ -87,17 +87,15 @@ export function useSizePresetTable(): SizePresetTableController {
     [defaults, table],
   );
 
-  /* 「保存为项目默认（本机）」：把当前这份表写进本机基线覆盖 data/（ISSUE #4150
-   * 起不入库；此前直接写 src 那份编译源）。写完即生效（服务端现读运行时覆盖），
-   * 重启与重构建都保留；要改出厂默认改 src/lib/media/size-preset-defaults.json
-   * 走 PR。 */
+  /* 「保存为项目默认（跟代码走）」：把当前这份表写进代码库那份 JSON（ISSUE #3948）。
+   * 写完即生效（服务端现读磁盘那份），但**别的检出与桌包**要等提交 / 重新构建。 */
   const saveAsProjectDefaults = useCallback(async (): Promise<string | null> => {
     setSavingProjectDefaults(true);
     try {
       const { file } = await saveSizePresetTableToProjectDefaults(table);
       setStatus(
-        `已写入本机项目默认（${file}），本机重启与重构建都保留；` +
-          "要改出厂默认请改 src/lib/media/size-preset-defaults.json 走 PR（ISSUE #4150）。",
+        `已写入项目默认（${file}），提交后每个检出与桌包都是这一份；` +
+          "桌面包要把这份 JSON 重新构建才会带上。",
       );
       return file;
     } catch (error) {
