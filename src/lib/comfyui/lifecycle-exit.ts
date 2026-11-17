@@ -159,6 +159,14 @@ export type ComfyExitWatcherDeps = {
   now?: () => number;
   /** 确定退出时回调一次（之后监督器自停）。 */
   onExit: (facts: { pid: number | null; uptimeMs: number | null }) => void;
+  /** 便宜先导信号（ISSUE #4197）：实例「此刻活着」的毫秒级判据（配置端口上的
+   *  HTTP 探测）。提供时每拍**先问它**：应答 = 实例必然活着，本拍直接记「已见」、
+   *  **不再起 PowerShell 进程表查询**——那是每 10s 一路 WMI 枚举的常驻开销，
+   *  实例在跑多久就扫多久。不应答 ≠ 死了（可能在加载 / 端口偏移 / 瞬时抖动）、
+   *  未提供或本信号抛错 → 照旧走 {@link ComfyExitWatcherDeps.findPid} 确认，
+   *  判死判据（连续 missThreshold 拍）不变。便宜拍不刷新 `seenPid`（它只证明
+   *  「活着」，证明不了「是哪个 pid」）——退出报告里的 pid 仍来自进程表事实。 */
+  probeAlive?: () => Promise<boolean>;
   /** 定时器工厂（测试传入可控实现）。 */
   setTimer?: (fn: () => void, ms: number) => ReturnType<typeof setInterval>;
 };
@@ -214,6 +222,26 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
       stop();
       return;
     }
+    /* 便宜先导信号（ISSUE #4197）：端口应答 = 实例必然活着，本拍到此为止——
+     * 省掉那一拍 PowerShell 进程表枚举。不应答 / 抛错都不下结论，落到下面的
+     * 进程表确认（判死判据不变：连续 missThreshold 拍查不到）。 */
+    if (deps.probeAlive !== undefined) {
+      let cheapAlive: boolean;
+      try {
+        cheapAlive = await deps.probeAlive();
+      } catch {
+        cheapAlive = false;
+      }
+      if (stopped) {
+        return;
+      }
+      if (cheapAlive) {
+        missCount = 0;
+        startedAt ??= now();
+        return;
+      }
+    }
+
     const lookup = await deps.findPid().catch(() => ({ pid: null, failed: true }));
     if (stopped) {
       return;

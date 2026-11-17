@@ -31,6 +31,7 @@ import { buildDepDriftWarning, checkComfyDepDrift } from "./dep-drift";
 import { findLatestKeepAliveLogs, pruneKeepAliveLogs } from "./keepalive-logs";
 import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
+import { probeComfyAtPort } from "./probe";
 import { spawnManaged, waitForDetachMediator } from "~/lib/process/process-launch";
 import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 import {
@@ -108,6 +109,9 @@ export type LaunchHost = {
 type EnsureCtx = {
   /** 最终启动参数（已含 --port / --enable-cors-header / 额外参数）。 */
   args: Array<string>;
+  /** 配置端口（0 / 未配置已按平台默认解析成最终值）：保活退出监督器的便宜
+   *  先导探测用它（ISSUE #4197），两条保活装配路径共用同一个口径。 */
+  configuredPort: number;
   /** 生效的 CPU 档位（ISSUE #1959）。在拉起前解析一次、两条路径共用 ——
    *  「哪一档」是用户设置，与「怎么起」无关，不该在两条路径里各判一遍。 */
   cpuLimitMode: CpuLimitMode;
@@ -274,6 +278,10 @@ export async function runEnsureLaunch(input: {
     note,
     plan,
     args,
+    configuredPort:
+      settings.comfyuiPort && settings.comfyuiPort > 0
+        ? settings.comfyuiPort
+        : COMFYUI_DEFAULT_PORT,
     stdioEnv: {
       ...process.env,
       ...eff.envVars,
@@ -630,6 +638,7 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
   startKeepAliveWatch({
     host,
     mainPy: plan.mainPy,
+    configuredPort: ctx.configuredPort,
     logs: { out: kaOutLog, err: kaErrLog },
     isStopped: () => st.stopRequested === true,
     note,
@@ -646,6 +655,8 @@ let keepAliveExitWatcher: { stop: () => void } | null = null;
  * 会话、把新进程当成「旧的那个回来了」。
  */
 function startKeepAliveWatch(params: {
+  /** 配置端口（已解析成最终值）：退出监督的便宜先导探测用（ISSUE #4197）。 */
+  configuredPort: number;
   host: LaunchHost;
   isStopped: () => boolean;
   /** 崩溃尾部来源（本次拉起的重定向文件；接管场景给不出来时留空 ——
@@ -657,6 +668,12 @@ function startKeepAliveWatch(params: {
   keepAliveExitWatcher?.stop();
   keepAliveExitWatcher = startComfyExitWatcher({
     findPid: () => findPidForMainPyDetailed(params.mainPy),
+    /* 便宜先导信号（ISSUE #4197）：每拍先探配置端口（环回 HTTP 毫秒级），
+     * 应答 = 实例活着、不再起 PowerShell 进程表枚举——否则实例在跑多久，
+     * WMI 查询就每 10s 陪跑多久。端口不应答（加载中 / 偏移端口 / 抖动）
+     * 才落到 findPid 确认，判死判据不变。COMFYUI_BASE（远端实例）时
+     * probeComfyAtPort 恒回 null ⇒ 每拍都走进程表，与旧行为一致。 */
+    probeAlive: () => probeComfyAtPort(params.configuredPort).then((base) => base !== null),
     isStopped: params.isStopped,
     onExit: (facts) => {
       const report = reportKeepAliveExit({
@@ -703,6 +720,10 @@ export function ensureKeepAliveWatchOnAdoption(input: {
   startKeepAliveWatch({
     host,
     mainPy: plan.mainPy,
+    configuredPort:
+      settings.comfyuiPort && settings.comfyuiPort > 0
+        ? settings.comfyuiPort
+        : COMFYUI_DEFAULT_PORT,
     logs: findLatestKeepAliveLogs(),
     isStopped: () => host.st.stopRequested === true,
     note,
