@@ -176,4 +176,30 @@ describe("safeFetch（逐跳校验重定向，#3904/#4052）", () => {
       safeFetch("https://a.example.com/start", { scenario: "llm-upstream", maxRedirects: 2 }),
     ).rejects.toThrow(/重定向次数/);
   });
+
+  it("未传 signal 时注入兜底超时（ISSUE #4205）", async () => {
+    const fetchMock = vi
+      .fn<(input: unknown, init?: RequestInit) => Promise<Response>>()
+      .mockResolvedValue(new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await safeFetch("https://a.example.com/start", { scenario: "remote-media" });
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("显式传了 signal 时不覆盖（调用方自己的预算优先）", async () => {
+    const fetchMock = vi
+      .fn<(input: unknown, init?: RequestInit) => Promise<Response>>()
+      .mockResolvedValue(new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+
+    await safeFetch("https://a.example.com/start", {
+      scenario: "remote-media",
+      signal: controller.signal,
+    });
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.signal).toBe(controller.signal);
+  });
 });

@@ -348,7 +348,15 @@ export type SafeFetchInit = RequestInit & {
   maxRedirects?: number;
   /** 约束场景（必填）—— 不指定场景就不能出网。 */
   scenario: OutboundUrlScenario;
+  /** 兜底超时（毫秒）：调用方**没传 `signal`** 时注入 `AbortSignal.timeout`。
+   *  默认 60s（现有调用方的远程媒体/轮询预算在 30s 档）。传了 `signal` 的
+   *  调用方维持原样——自己的预算自己定（ISSUE #4205：新调用方漏传时，
+   *  这条 fetch 连同逐跳重定向会无限挂起）。 */
+  timeoutMs?: number;
 };
+
+/** 调用方未传 `signal` 时的兜底超时。 */
+const SAFE_FETCH_DEFAULT_TIMEOUT_MS = 60_000;
 
 /**
  * 带统一 SSRF 约束的 `fetch`：校验初始 URL，并以 `redirect: "manual"` 逐跳
@@ -358,13 +366,21 @@ export type SafeFetchInit = RequestInit & {
  * 对于需要流式读取响应体的调用方同样可用：返回的是最终 Response。
  */
 export async function safeFetch(input: string | URL, init: SafeFetchInit): Promise<Response> {
-  const { scenario, maxRedirects = MAX_REDIRECTS, ...requestInit } = init;
+  const {
+    scenario,
+    maxRedirects = MAX_REDIRECTS,
+    timeoutMs = SAFE_FETCH_DEFAULT_TIMEOUT_MS,
+    ...requestInit
+  } = init;
+  /* 兜底超时只注入一次、随整条重定向链共用同一份预算；调用方显式给了
+   * `signal`（含 `null`）就以它为准。 */
+  const signal = requestInit.signal ?? AbortSignal.timeout(timeoutMs);
   let currentUrl = await assertSafeOutboundUrl(String(input), scenario);
   let remaining = maxRedirects;
 
   for (;;) {
     // oxlint-disable-next-line no-await-in-loop -- 重定向必须逐跳校验后再决定是否跟随
-    const res = await fetch(currentUrl, { ...requestInit, redirect: "manual" });
+    const res = await fetch(currentUrl, { ...requestInit, signal, redirect: "manual" });
     if (!REDIRECT_STATUSES.has(res.status)) {
       return res;
     }
