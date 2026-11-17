@@ -17,6 +17,7 @@ import {
 } from "~/lib/llm/usage-test-config";
 import type { UsageTestKind, UsageTestResult } from "~/lib/llm/usage-test-client";
 import type { RemoteModelEntry } from "~/lib/llm/types";
+import { errorText } from "~/lib/error-message";
 
 import type { ReadySettingsPageController } from "./use-settings-page";
 import { createUsageFieldEditor, type UsageFieldEditor } from "./usage-field-editor";
@@ -169,18 +170,26 @@ export function useUsageTestDialogs(c: ReadySettingsPageController): UsageTestDi
      * 只靠服务端按名字查已保存配置，会漏掉「加了条目还没点保存」的情况，
      * 表现为 401 未提供令牌。（空串显式回落，不能用 ?? —— ?? 不处理空串） */
     const typedKey = usageTest.apiKey.trim();
-    const out = await c.testModelUsage({
-      kind: usageTest.kind,
-      name: usageTest.entry.name,
-      baseUrl: usageTest.baseUrl.trim(),
-      path: usageTest.path.trim(),
-      apiKey: typedKey === "" ? (usageTest.entry.apiKey ?? undefined) : typedKey,
-      prompt: usageTest.prompt,
-      size: usageTest.size.trim() || undefined,
-      /* 由结构化字段行生成请求体 JSON（替代原先手填整段 JSON）；
-       * 视频且 mode=text 时媒体字段已被界面隐藏，这里同样排除，避免 invalid mode */
-      extraJson: usageFieldsToJson(editor.usageFieldsToSend(usageTest)) || undefined,
-    });
+    /* 网络层失败（应用服务重启窗口 / 断网）也要把进行态复位：此前裸 await
+     * fetch，reject 直接冒成 unhandled rejection，`running` 永远为 true、
+     * 按钮卡死（ISSUE #4217）。 */
+    let out: UsageTestResult;
+    try {
+      out = await c.testModelUsage({
+        kind: usageTest.kind,
+        name: usageTest.entry.name,
+        baseUrl: usageTest.baseUrl.trim(),
+        path: usageTest.path.trim(),
+        apiKey: typedKey === "" ? (usageTest.entry.apiKey ?? undefined) : typedKey,
+        prompt: usageTest.prompt,
+        size: usageTest.size.trim() || undefined,
+        /* 由结构化字段行生成请求体 JSON（替代原先手填整段 JSON）；
+         * 视频且 mode=text 时媒体字段已被界面隐藏，这里同样排除，避免 invalid mode */
+        extraJson: usageFieldsToJson(editor.usageFieldsToSend(usageTest)) || undefined,
+      });
+    } catch (error) {
+      out = { ok: false, detail: errorText(error, "请求未送达（应用服务不可达？）") };
+    }
     setUsageTest((prev) =>
       prev ? { ...prev, running: false, querying: false, result: out } : prev,
     );
@@ -198,13 +207,19 @@ export function useUsageTestDialogs(c: ReadySettingsPageController): UsageTestDi
     }
     setUsageTest({ ...usageTest, querying: true });
     const typedKey = usageTest.apiKey.trim();
-    const out = await c.queryUsageTask({
-      name: usageTest.entry.name,
-      baseUrl: usageTest.baseUrl.trim(),
-      path: usageTest.path.trim(),
-      apiKey: typedKey === "" ? (usageTest.entry.apiKey ?? undefined) : typedKey,
-      taskId,
-    });
+    /* 同上（ISSUE #4217）：网络层失败也要复位 `querying`，不让按钮卡死。 */
+    let out: UsageTestResult;
+    try {
+      out = await c.queryUsageTask({
+        name: usageTest.entry.name,
+        baseUrl: usageTest.baseUrl.trim(),
+        path: usageTest.path.trim(),
+        apiKey: typedKey === "" ? (usageTest.entry.apiKey ?? undefined) : typedKey,
+        taskId,
+      });
+    } catch (error) {
+      out = { ok: false, detail: errorText(error, "请求未送达（应用服务不可达？）") };
+    }
     setUsageTest((prev) => (prev ? { ...prev, querying: false, result: out } : prev));
   }
 
