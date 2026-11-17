@@ -81,13 +81,14 @@ const dims = (width: number, height: number): SizeDims => ({ width, height });
  *          4K UHD = 3840×2160；超宽档按行业常见值单列。
  *
  * 这份基线**住在入库的 JSON 里**（`size-preset-defaults.json`，ISSUE #3948）：
- * 设置页「保存到项目代码库」写的就是它，提交后每个检出与每个桌包都是同一份。
+ * 它是**编译源**：运行期不写它（ISSUE #4150 起「保存为项目默认」改写 data/ 下的
+ * 本机基线覆盖）；改出厂默认走代码 / PR。
  * 静态 import（不走 fs）—— 编译进产物后读到的就是这份快照，与写回侧
  * （`size-preset.server.ts` 落 `SIZE_PRESET_DEFAULTS_REL_PATH`）指向同一份文件，
  * 与「侧栏页签行为」「模式契约」的项目默认同一套口径。 */
 import defaultsJson from "./size-preset-defaults.json";
 
-/** 项目默认那份（跟代码走的那份基线）：由入库 JSON 解析而来，逐格校验过。
+/** 编译进包的那份基线：由入库 JSON 解析而来，逐格校验过。
  *
  *  它同时是**编译进产物的快照**（正式包没有源码，读到的就是这份）与**本机覆盖的
  *  基准**（`mergeSizePresetTable` 的默认基准）。开发检出里磁盘上那份可能被

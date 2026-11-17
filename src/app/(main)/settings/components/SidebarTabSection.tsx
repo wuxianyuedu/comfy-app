@@ -11,7 +11,8 @@
  * 两种保存方式与「模式契约」同一套口径：
  *   · 本机覆盖 —— **改一格即存**（落 `data/`，开发版与正式包都能用；ISSUE #3948
  *     去掉了「保存」那一步：配好就落盘，改完没点就切走不该等于白改）；
- *   · 「保存为项目默认（跟代码走）」 —— 落项目默认那份入库 JSON，只有开发检出可用。
+ *   · 「保存为项目默认（本机）」 —— 落本机项目默认覆盖（data/，不入库），只有
+ *     开发检出可用；要改出厂默认改 src 那份编译源走 PR（ISSUE #4150）。
  *
  * 纯展示：只消费 `useSidebarTabSection` 那个控制器（逻辑层），自身不碰 tRPC。
  */
@@ -110,7 +111,7 @@ export function SidebarTabSection() {
             }}
             variant="outline"
           >
-            {c.savingProjectDefaults ? "写入中…" : "保存为项目默认（跟代码走）"}
+            {c.savingProjectDefaults ? "写入中…" : "保存为项目默认（本机）"}
           </Button>
         )}
       </div>

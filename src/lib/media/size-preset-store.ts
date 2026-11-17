@@ -223,11 +223,12 @@ export function resetSizePresetScene(scene: SizeScene): void {
 }
 
 /**
- * 「保存为项目默认（跟代码走）」：把当前这份表写进入库那份 JSON（ISSUE #3948）。
+ * 「保存为项目默认（本机）」：把当前这份表写进本机基线覆盖 data/（ISSUE #4150；
+ * 此前直接写 src 那份编译源）。
  *
- * 与本机覆盖是**两件事**：那一件写应用数据目录（改一格即存），这一件写代码库
- * （提交后每个检出与每个桌包都是这一份）。只有开发检出有可写的目标文件，服务端
- * 在正式包里会大声失败 —— 返回写盘的路径与落盘后的表。
+ * 与本机覆盖是**两件事**：那一件写应用数据目录（改一格即存），这一件写本机
+ * 基线覆盖（不入库；要改出厂默认改 src 那份编译源走 PR）。只有开发检出可调，
+ * 服务端在正式包里会大声失败 —— 返回写盘的路径与落盘后的表。
  */
 export async function saveSizePresetTableToProjectDefaults(
   table: SizePresetTable,

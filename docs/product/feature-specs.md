@@ -130,7 +130,8 @@
 - 落点：`src/components/studio/NavItems.tsx`（配置面清单 + 判据）、
   `src/components/studio/workspace-tabs.ts`（状态规则）、
   `src/lib/shell/sidebar-tab-behavior.ts`（纯函数层）、
-  `src/lib/shell/sidebar-tab-defaults.json`（项目默认）、
+  `src/lib/shell/sidebar-tab-defaults.json`（编译源，运行期不写它）、
+  `data/sidebar-tab-project-defaults.json`（本机项目默认覆盖，#4150）、
   `src/lib/shell/sidebar-tab-behavior.server.ts`（落盘）、
   `src/server/api/routers/sidebar.ts`、
   `src/app/(main)/settings/components/SidebarTabSection.tsx`
@@ -847,13 +848,15 @@
   「模式契约」是全局瞬态视图（与当前项目无关）。保存分两种（#3396）：
   「保存模式契约」只落本机（`data/workshop-mode-contracts.json`，不入库，
   正式包与开发检出都可用），**只落与成品配置有差异的模式**；「保存为项目
-  默认（跟代码走）」把编辑器现状**全量**写进入库的
-  `src/lib/workshop/mode-contract-defaults.json`（#3603：该文件是**完整基线**
-  —— 全部生成类模式的口清单 / 必备口都显式在文件里，`required`
-  一并固化，读取侧不再有「代码推导」这一出处；推导只承担迁移生成源与
-  手改缺模时的兜底），**只在开发检出可用**（正式包无源码可写，入口随之
-  隐藏、服务端大声拒绝）；生效顺序是 本机覆盖 → 项目默认 JSON（完整）→
-  推导兜底，**逐模式**合并（本机覆盖存的是差集，拿它整份替换注册表会让其余
+  默认（本机）」把编辑器现状**全量**写进本机项目默认覆盖
+  `data/workshop-mode-contract-project-defaults.json`（#4150 起不入库；此前
+  直接写入库的 `src/lib/workshop/mode-contract-defaults.json` —— 该文件是
+  **编译进包的默认值源**（#3603：完整基线，全部生成类模式的口清单 / 必备口
+  都显式在文件里，`required` 一并固化，读取侧不再有「代码推导」这一出处；
+  推导只承担迁移生成源与手改缺模时的兜底），**运行期不再写它**），**只在
+  开发检出可用**（入口随之隐藏、服务端大声拒绝）；生效顺序是 本机覆盖 →
+  本机项目默认覆盖 → 编译进包的基线（完整）→ 推导兜底，**逐模式**合并
+  （本机覆盖存的是差集，拿它整份替换注册表会让其余
   模式回落推导）。「已改」徽标判的是内容（与本模式成品配置深比较），不是
   「覆盖文件里有没有」；改过的模式可一键「还原默认」（从本机覆盖移除，
   生效值回落默认）。
@@ -878,7 +881,8 @@
   「没勾 = 可选」。徽标形态与「工作流库 → 工坊封装」那一行同源（共用
   `ContractRequiredBadge`，两处不各写一份胶囊类名）。
 - 落点：`src/components/workshop/mode-contract/ModeContractView.tsx`、
-  `src/lib/workshop/mode-contract-defaults.json`（完整基线）、
+  `src/lib/workshop/mode-contract-defaults.json`（编译源）、
+  `data/workshop-mode-contract-project-defaults.json`（本机项目默认覆盖，#4150）、
   `src/lib/workshop/mode-contract-registry.ts`（三层合并与差集）、
   `src/server/api/routers/llm.ts`
 
@@ -1055,11 +1059,13 @@
 - 需求：设置页「尺寸配置表」分区列出图片 / 视频两场景的「比例 × 分辨率」宽高表，
   改一格即用；两条保存口径：**本机覆盖**（改一格即存，落应用数据）与
   **项目代码库**（写进入库那份 JSON，提交后每个检出与每个桌包都是这一份）。
-- 行为与验收：① 项目默认那份是**入库 JSON**
-  （`src/lib/media/size-preset-defaults.json`），读侧现读磁盘、读不出来才回落
-  编译进包的快照（写完即生效，不必重启进程）；② 本机覆盖落
-  `data/size-presets.json`，读取侧逐格合并（缺行 / 缺档 / 坏值一律回退基准）；
-  ③ 「保存为项目默认（跟代码走）」只在开发检出出现（正式包没有源码可写，服务端大声失败）；
+- 行为与验收：① 编译进包的默认值是**入库 JSON**
+  （`src/lib/media/size-preset-defaults.json`，静态 import 的编译源，运行期
+  不写它）；「保存为项目默认」写本机项目默认覆盖
+  `data/size-preset-project-defaults.json`（#4150 起不入库），读侧先读本机
+  覆盖、读不出来才回落编译进包的快照（写完即生效，不必重启进程）；
+  ② 本机覆盖落 `data/size-presets.json`，读取侧逐格合并（缺行 / 缺档 / 坏值
+  一律回退基准）；③ 「保存为项目默认（本机）」只在开发检出出现（服务端大声失败）；
   ④ 还原默认的基准是**当前项目默认**那份，不是编译进包的旧快照；
   ⑤ 本机覆盖**差集落盘**（ISSUE #3973）：覆盖文件只留与项目默认不同的格子
   （写侧对现读项目默认取差集）—— 项目默认后续改动能穿透到存过覆盖的机器，
@@ -1071,7 +1077,8 @@
   改的是出图行为，不只是界面显示；「尺寸 · 分辨率档」端口的**档位反解**
   也按同一份生效表比对（ISSUE #4099），不与正向换算用两份表。
 - 落点：`src/lib/media/size-presets.ts`（纯函数层 + 项目默认解析）、
-  `src/lib/media/size-preset-defaults.json`（项目默认）、
+  `src/lib/media/size-preset-defaults.json`（编译源）、
+  `data/size-preset-project-defaults.json`（本机项目默认覆盖，#4150）、
   `src/lib/media/size-preset-fs.server.ts`（读侧：生效表，双宿主安全）、
   `src/lib/media/size-preset.server.ts`（写侧落盘）、
   `src/app/api/size-presets/route.ts`、
