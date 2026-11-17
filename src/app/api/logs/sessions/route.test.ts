@@ -31,14 +31,12 @@ vi.mock("~/lib/log/log-paths", async () => {
   };
 });
 
-/* 鉴权在单机模式下会回落演示用户（要读库），这里直接放行：本用例断言的是
- * 会话列表契约，不是鉴权（与 export / diagnostics 两份同口径）。 */
+/* 鉴权在单机模式下会回落演示用户（要读库），这里用可翻面开关放行：默认放行
+ * （本用例断言的是会话列表契约，不是鉴权，与 export / diagnostics 两份同口径）；
+ * 「未登录 401」由专门的回归用例翻面验证（ISSUE #4051）。 */
+let authed = true;
 vi.mock("~/server/auth/request-user", () => ({
-  requireRequestUser: () => ({
-    id: "u1",
-    email: "t@example.com",
-    name: null,
-  }),
+  requireRequestUser: () => (authed ? { id: "u1", email: "t@example.com", name: null } : null),
 }));
 
 const { GET } = await import("./route");
@@ -128,6 +126,7 @@ function makePack(
 }
 
 beforeEach(() => {
+  authed = true;
   fs.rmSync(path.join(logRoot, "current"), { recursive: true, force: true });
   fs.rmSync(runsDir, { recursive: true, force: true });
   fs.mkdirSync(servicesDir, { recursive: true });
@@ -135,6 +134,17 @@ beforeEach(() => {
 
 afterAll(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+describe("鉴权（ISSUE #4051 回归）", () => {
+  it("未登录不列日志：401（鉴权与同族端点一致）", async () => {
+    makeFile("comfyui-runtime-20261005-093612.log", "x\n");
+    authed = false;
+    const res = await GET(new Request("http://localhost/api/logs/sessions?source=comfyui-runtime"));
+    expect(res.status).toBe(401);
+    const body: unknown = await res.json();
+    expect(isPlainRecord(body)).toBe(true);
+  });
 });
 
 describe("来源与空态的明确出口", () => {
