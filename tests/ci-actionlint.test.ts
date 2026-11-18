@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ACTIONLINT_PLAN,
   CODE,
+  IGNORED_FINDINGS,
+  ignoreArgs,
   parseArgs,
   renderVerdict,
   runCiActionlint,
@@ -206,6 +208,33 @@ describe("runCiActionlint：三态端到端（注入面，不起真二进制还�
       }),
     );
     expect(code).toBe(CODE.NO_FACT);
+  });
+
+  it("权限表滞后项按整句 -ignore 传给二进制（#4168 后续）", () => {
+    const root = tmpDir();
+    const dir = toolDir(root);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, ACTIONLINT_PLAN.exeName), "pinned");
+    let seenArgs: Array<string> = [];
+    const { code } = capture(() =>
+      runCiActionlint({
+        env: { COMFY_CI_TOOLS_ROOT: root },
+        hashOf: () => ACTIONLINT_PLAN.exeSha256,
+        runStore: () => ({ status: 0 }),
+        readDir: () => ["pr-gate.yml"],
+        spawn: (_exe: string, args: Array<string>) => {
+          seenArgs = args;
+          return { status: 0, stderr: "", stdout: "" };
+        },
+      }),
+    );
+    expect(code).toBe(CODE.OK);
+    // -ignore 在前、被判文件在后（Go 的 flag 解析遇到首个位置参数就停）。
+    expect(seenArgs.slice(0, 2)).toEqual(ignoreArgs());
+    expect(seenArgs).toContain(".github/workflows/pr-gate.yml");
+    expect(ignoreArgs()).toEqual(["-ignore", 'unknown permission scope "vulnerability-alerts"']);
+    // 清单只许这一条：再添要过评审，不许顺手加。
+    expect(IGNORED_FINDINGS).toHaveLength(1);
   });
 });
 
