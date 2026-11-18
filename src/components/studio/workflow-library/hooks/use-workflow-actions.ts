@@ -247,6 +247,14 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
               toast.info("磁盘文件未变化", name);
             } else if (d?.updated === true) {
               toast.success("已同步磁盘内容", name);
+              /* #4377：同步后新版本里断掉的 IO 连线要提示重新配置。 */
+              const broken = d.broken ?? [];
+              if (broken.length > 0) {
+                toast.error(
+                  `同步完成，但 ${broken.length} 条 IO 连线已断开，请重新配置`,
+                  broken.map((wire) => `${wire.entryId} ⇢ ${wire.ioKey}`).join("；"),
+                );
+              }
               await load();
             }
             return true;

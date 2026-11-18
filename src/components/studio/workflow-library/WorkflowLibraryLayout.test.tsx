@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { stripComments } from "../../../../tests/helpers/strip-comments";
 import type { WorkflowRow } from "./workflow-library-config";
@@ -65,11 +65,14 @@ function headerRow(over: Partial<WorkflowRow> = {}): WorkflowRow {
   };
 }
 
-function renderHeader() {
+function renderHeader(args: { source?: "local" | "online" } = {}) {
+  const row = headerRow({ source: args.source ?? "local" });
+  const onUpdateJson = vi.fn();
   render(
     <DetailHeader
       busyDownload={false}
       busyResync={false}
+      busyUpdateJson={false}
       canResync={false}
       isTechnical={false}
       meta={meta}
@@ -79,11 +82,14 @@ function renderHeader() {
       onEdit={vi.fn()}
       onOpenSource={vi.fn()}
       onResync={vi.fn()}
+      onUpdateJson={onUpdateJson}
       onUse={vi.fn()}
+      showUpdateJson={row.source === "online"}
       usable
-      workflow={headerRow()}
+      workflow={row}
     />,
   );
+  return { onUpdateJson };
 }
 
 describe("详情头部：窄屏不丢按钮", () => {
@@ -105,6 +111,19 @@ describe("详情头部：窄屏不丢按钮", () => {
   it("标题区有可读下限（压缩压力交给它，标题截断而不是把按钮挤出去）", () => {
     renderHeader();
     expect(screen.getByTestId("detail-title-block").className).toContain("min-w-45");
+  });
+});
+
+describe("详情头部：在线工作流的「更新」入口（#4377）", () => {
+  it("在线工作流显示「更新」按钮，点击打开更新弹窗", () => {
+    const { onUpdateJson } = renderHeader({ source: "online" });
+    fireEvent.click(screen.getByRole("button", { name: "更新" }));
+    expect(onUpdateJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("本地工作流不显示「更新」按钮（本地走「同步」）", () => {
+    renderHeader({ source: "local" });
+    expect(screen.queryByRole("button", { name: "更新" })).toBeNull();
   });
 });
 

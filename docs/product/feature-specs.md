@@ -527,6 +527,30 @@
   `src/components/studio/workflow-library/reference-loader/`（预设库弹窗与绑定区）、
   `src/lib/workshop/reference-loader-plan.ts`（载荷计划构造）
 
+#### FR-WF-13 工作流更新（在线从 JSON 更新；IO 连线保持与断线提示）
+
+- 状态：已上线
+- 需求：工作流支持更新。本地工作流已有「同步」（磁盘文件变更后重新导入）；
+  在线工作流（粘贴 / API 导入、无磁盘文件）此前无法更新。无论本地还是在线，
+  更新后作者编辑过的 IO 连线要**尽量保持**（不要一更新就全断），不能保持的
+  要逐条提示哪里断了、提示重新配置。
+- 行为与验收：
+  - 在线工作流详情面板显示「更新」按钮 → 弹窗粘贴新版本的完整工作流 JSON
+    （ComfyUI「导出 (工作流格式)」）→ 提交到 `workflow.updateFromJson`：
+    rawJson 替换为新图；布局坐标保留（存活节点不跳位）。
+  - **连线保持**：`paramMap` 的落点线 / 输出取值行 / 装载绑定追加端口、
+    `workflowIO` 的逐口编辑，凡目标端口（ioKey）在新图里仍存在的**原样保留**；
+    新图里已消失的端口，连线摘除并逐条上报（`broken` / `droppedIOKeys`）。
+    作者显式断开的线（null）保持断开；子图内部端口不在判定量程（原样保留）。
+  - **断线提示**：更新 / 同步完成后，界面逐条列出断开的连线
+    （`[模式] 槽位 ⇢ 端口`）并提示到「编辑对外参数」页签重新配置。
+  - 本地工作流的「同步」走同一套保持 / 断线报告；在线工作流的更新入口对
+    本地工作流拒绝（提示用「同步」）；非法 JSON 拒绝（BAD_REQUEST）。
+- 落点：`src/lib/workflow/workflow-update-remap.ts`（连线保持 / 断线报告纯模块）、
+  `src/server/api/routers/workflow-mutations.ts`（`updateFromJson` / `resync`）、
+  `src/components/studio/workflow-library/UpdateJsonModal.tsx`（更新弹窗）、
+  `src/components/studio/workflow-library/hooks/use-workflow-update-from-json.ts`
+
 ---
 
 ## 6. 生成与任务（FR-GN）
