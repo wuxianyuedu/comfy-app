@@ -819,6 +819,12 @@ pub fn sidecar_exit_reason(code: Option<i32>) -> String {
   }
 }
 
+/// `log_launch_line` 的行形态（`[时刻] [级别] 正文`）。同步直写与 [`LineLog`]
+/// 两条路共用同一份拼法——各拼各的必然漂。
+fn launch_log_line(level: &str, message: &str) -> String {
+  format!("[{}] [{}] {}\n", local_timestamp(), level.to_uppercase(), message)
+}
+
 /// 把编排链路日志写一行（时间戳 + 级别 + 正文）。
 ///
 /// **为什么必须有这份文件**：release 壳（Windows `windows_subsystem = "windows"`）
@@ -832,8 +838,10 @@ pub fn log_launch_line(project_root: &str, level: &str, message: &str) {
   if project_root.is_empty() {
     return;
   }
-  let line = format!("[{}] [{}] {}\n", local_timestamp(), level.to_uppercase(), message);
-  if let Err(e) = append_line(&launch_log_path(project_root), &line) {
+  if let Err(e) = append_line(
+    &launch_log_path(project_root),
+    &launch_log_line(level, message),
+  ) {
     log::warn!("[ComfyAPP] 编排链路日志写入失败：{e:?}");
   }
 }
@@ -845,14 +853,18 @@ pub fn log_launch_line(project_root: &str, level: &str, message: &str) {
 /// 改另一条，就会「面板读到的（`[orchestrator] 时刻 级别 正文`）与 channel 里的
 /// （另一份）对不上」—— 而两侧看各自都对。`level` 走 `orchestrator_level_to_shell`
 /// 的归一结论，不再让 stdout 恒 info / stderr 恒 warn 覆盖掉编排器自己的级别。
-fn log_orchestrator_line(project_root: &str, level: &str, body: &str) {
+///
+/// shell-launch.log 那一路经 [`LineLog`] 的专用写线程落盘：泵在 tokio worker 上
+/// 逐行消费编排器输出，同步写文件会在慢盘 / 高频输出时拖住 worker，并让无界上游
+/// 在内存里堆积（ISSUE #4334）。
+fn log_orchestrator_line(sink: &LineLog, level: &str, body: &str) {
   let message = format!("[orchestrator] {body}");
   match level {
     "error" => log::error!("{message}"),
     "warn" => log::warn!("{message}"),
     _ => log::info!("{message}"),
   }
-  log_launch_line(project_root, level, &message);
+  sink.send_line(launch_log_line(level, &message));
 }
 
 /// 启动会话标记前缀。壳在每次启动时往 shell-launch.log 写一行，
@@ -950,6 +962,151 @@ fn append_bytes(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
 /// 不是常规路径——`current/` 每次运行结束会被归档清空，正常情况下远到不了这里。
 pub const SHELL_LOG_MAX_BYTES: u64 = 40 * 1024 * 1024;
 
+/// 行日志的**有界异步写入器**：专用写线程 + 有界通道 + 丢弃计数（ISSUE #4334）。
+///
+/// 解决的问题：子进程输出泵跑在 tokio worker 上，此前逐行做同步文件 IO（stat +
+/// open + write + close）。磁盘慢（杀毒扫描 / 网络盘）或子进程高频刷屏（首次编译
+/// 期的 Next / turbopack）时：worker 被文件 IO 拖住，同一线程上的其它 async 任务
+/// 跟着挨饿；上游（tauri-plugin-shell 的事件通道）又是无界 mpsc，消费慢就在内存里
+/// 无界堆积。这里把「落盘」整体挪进一条专用线程：调用方只做一次有界 `try_send`——
+/// **从不阻塞、从不做 IO**；通道满 = 落盘跟不上产出，按「丢弃 + 计数」处理，写线程
+/// 在下一行前补一条「丢弃 N 行」，内存有界、现场不静默。
+struct LineLog {
+  tx: std::sync::mpsc::SyncSender<LineMsg>,
+  dropped: std::sync::Arc<std::sync::atomic::AtomicU64>,
+  worker: Option<std::thread::JoinHandle<()>>,
+}
+
+/// 通道里传的三种消息：正文行 / 排空屏障（仅测试）/ 收尾。
+enum LineMsg {
+  Line(String),
+  #[cfg(test)]
+  Barrier(std::sync::mpsc::Sender<()>),
+  Close,
+}
+
+impl LineLog {
+  /// 通道容量：内存上界 ≈ 容量 × 单行字节。既要给写线程留出「高频刷屏时匀速
+  /// 消化」的深度，又必须远小于「无界」——满了就丢，不再收。
+  const CHANNEL_CAPACITY: usize = 1024;
+
+  /// 按默认容量起一个写线程。`write` 是真正的落盘动作（含轮转 / 重建语义），
+  /// 由写线程**独占**执行——单线程单通道，落盘行序因此与入队顺序一致。
+  fn spawn<W>(write: W) -> Self
+  where
+    W: FnMut(&[u8]) -> std::io::Result<()> + Send + 'static,
+  {
+    Self::spawn_with_capacity(write, Self::CHANNEL_CAPACITY)
+  }
+
+  /// 按指定容量起写线程（测试用：小容量才能不依赖时序地测出「满了丢弃」）。
+  fn spawn_with_capacity<W>(write: W, capacity: usize) -> Self
+  where
+    W: FnMut(&[u8]) -> std::io::Result<()> + Send + 'static,
+  {
+    let (tx, rx) = std::sync::mpsc::sync_channel::<LineMsg>(capacity);
+    let dropped = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let dropped_in_worker = dropped.clone();
+    let worker = std::thread::Builder::new()
+      .name("comfyapp-line-log".into())
+      .spawn(move || {
+        let mut write = write;
+        while let Ok(msg) = rx.recv() {
+          match msg {
+            LineMsg::Line(line) => {
+              // 丢弃计数在成功消费时结算：拥塞解除后的第一行前先补一条，
+              // 让「丢了多少」在日志里可见，而不是静默吞掉。
+              let n = dropped_in_worker.swap(0, std::sync::atomic::Ordering::Relaxed);
+              if n > 0 {
+                let _ = write(format!("（落盘滞后：前段已丢弃 {n} 行）\n").as_bytes());
+              }
+              let _ = write(line.as_bytes());
+            }
+            #[cfg(test)]
+            LineMsg::Barrier(ack) => {
+              let _ = ack.send(());
+            }
+            LineMsg::Close => break,
+          }
+        }
+        // 收尾兜底：Close 之后若还有未消费的正文（防御，正常没有），尽力写完再退。
+        while let Ok(msg) = rx.try_recv() {
+          if let LineMsg::Line(line) = msg {
+            let _ = write(line.as_bytes());
+          }
+        }
+        // 到这一刻还在涨的丢弃计数没有下一行可挂了，补最后一次读数。
+        let n = dropped_in_worker.swap(0, std::sync::atomic::Ordering::Relaxed);
+        if n > 0 {
+          let _ = write(format!("（落盘滞后：前段已丢弃 {n} 行）\n").as_bytes());
+        }
+      })
+      .expect("日志写线程启动失败");
+    Self {
+      tx,
+      dropped,
+      worker: Some(worker),
+    }
+  }
+
+  /// 投递一行（**非阻塞**）：通道满即丢弃并计数。用有界的内存换两条硬保证——
+  /// 调用线程绝不被磁盘拖住、async worker 上绝不出现同步文件 IO。
+  fn send_line(&self, line: String) {
+    match self.tx.try_send(LineMsg::Line(line)) {
+      Ok(()) => {}
+      Err(std::sync::mpsc::TrySendError::Full(_)) => {
+        self
+          .dropped
+          .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+      }
+      // 写线程已退出（只发生在 Drop 之后）；诊断通道丢就丢了，不恐慌。
+      Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {}
+    }
+  }
+
+  /// 排空屏障：等写线程把**此刻已入队**的行全部写完。只给测试用——生产热路径
+  /// 不调它（fern 可能在每条记录后调 flush，若在这里等排空，调用线程又被拖回
+  /// 磁盘节奏，#4334 就白修了）。
+  #[cfg(test)]
+  fn barrier(&self) {
+    let (ack_tx, ack_rx) = std::sync::mpsc::channel();
+    if self.tx.send(LineMsg::Barrier(ack_tx)).is_ok() {
+      let _ = ack_rx.recv_timeout(std::time::Duration::from_secs(10));
+    }
+  }
+}
+
+impl Drop for LineLog {
+  fn drop(&mut self) {
+    // 发 Close 后 join：写线程会把 Close 之前入队的行全部写完再退出，所以
+    // Drop 语义是「尽力把尾巴落盘」。磁盘真挂住时，join 等的是写线程当前那一次
+    // 写——与旧实现「调用线程等在自己的 write 上」同代价，不再放大。
+    let _ = self.tx.send(LineMsg::Close);
+    if let Some(handle) = self.worker.take() {
+      let _ = handle.join();
+    }
+  }
+}
+
+/// shell.log 一行的落盘动作：超过上限整份重建（丢旧保新）+ 按次开合追加。
+/// 语义与 #3574 一致，只是执行线程从「调用方」换成了 [`LineLog`] 的写线程
+/// （ISSUE #4334）。
+fn write_shell_log_bytes(
+  path: &std::path::Path,
+  max_bytes: u64,
+  buf: &[u8],
+) -> std::io::Result<()> {
+  let oversized = std::fs::metadata(path)
+    .map(|m| m.len() >= max_bytes)
+    .unwrap_or(false);
+  if oversized {
+    // 按次开合意味着没有谁长期攥着这份文件，删除是即时的；删失败（被瞬时
+    // 只读句柄占住）就先不轮转，下一行再试——丢上限与丢现场之间选后者。
+    let _ = std::fs::remove_file(path);
+  }
+  append_bytes(path, buf)
+}
+
 /// 壳自持日志（`log/current/shell/shell.log`）的**按次开合**写入器。
 ///
 /// 为什么不沿用 tauri-plugin-log 的 Folder target（#3574）：它把文件句柄一直
@@ -959,19 +1116,25 @@ pub const SHELL_LOG_MAX_BYTES: u64 = 40 * 1024 * 1024;
 /// Windows 上删除对持句柄文件成功（Rust std 以含 FILE_SHARE_DELETE 打开），
 /// 目录项即刻消失，此后插件的所有写入都落进一个已解除链接的句柄——**静默丢失，
 /// 日志冻在清空发生前的那几行**。每次写入按路径重开 + 追加 + 即关，目录被清了
-/// 下一行自己重建（与 `append_line` 同一取向）；代价是每行一次 open/close，
-/// 桌面壳的日志频率下完全无感。
+/// 下一行自己重建（与 `append_line` 同一取向）。
+///
+/// 落盘走 [`LineLog`] 的专用写线程（ISSUE #4334）：日志可能从 tokio worker
+/// （sidecar / 编排器输出泵）里发出，同步文件 IO 会在慢盘 / 高频输出时把 worker
+/// 拖住——这里 `write()` 只入队，真正的 stat / 轮转 / 写盘都在写线程里。
 pub struct ResilientShellLog {
-  path: std::path::PathBuf,
-  max_bytes: u64,
+  sink: LineLog,
 }
 
 impl ResilientShellLog {
   /// 按默认大小上限（[`SHELL_LOG_MAX_BYTES`]）建一个写入器。
   pub fn new(path: std::path::PathBuf) -> Self {
+    Self::with_max_bytes(path, SHELL_LOG_MAX_BYTES)
+  }
+
+  /// 按指定大小上限建一个写入器（测试用）。
+  fn with_max_bytes(path: std::path::PathBuf, max_bytes: u64) -> Self {
     Self {
-      path,
-      max_bytes: SHELL_LOG_MAX_BYTES,
+      sink: LineLog::spawn(move |buf| write_shell_log_bytes(&path, max_bytes, buf)),
     }
   }
 }
@@ -979,21 +1142,14 @@ impl ResilientShellLog {
 impl std::io::Write for ResilientShellLog {
   fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
     // fern 的 writer 输出每次给一整条格式化好的行，write_fmt 内部按 write_all
-    // 语义调用本函数；这里同步落盘，返回「全部写完」。
-    let oversized = std::fs::metadata(&self.path)
-      .map(|m| m.len() >= self.max_bytes)
-      .unwrap_or(false);
-    if oversized {
-      // 按次开合意味着没有谁长期攥着这份文件，删除是即时的；删失败（被瞬时
-      // 只读句柄占住）就先不轮转，下一行再试——丢上限与丢现场之间选后者。
-      let _ = std::fs::remove_file(&self.path);
-    }
-    append_bytes(&self.path, buf)?;
+    // 语义调用本函数；这里只入队（从不阻塞、不做 IO），返回「全部收下」。
+    self.sink.send_line(String::from_utf8_lossy(buf).into_owned());
     Ok(buf.len())
   }
 
   fn flush(&mut self) -> std::io::Result<()> {
-    // 落盘在 write() 里同步完成，没有缓冲可冲。
+    // 故意不做屏障：fern 可能在每条记录后调 flush，在这里等写线程排空会把
+    // 调用线程拖回磁盘节奏。收尾排空由 Drop（Close + join）负责。
     Ok(())
   }
 }
@@ -1303,7 +1459,12 @@ pub fn spawn_orchestrator(
   // 编排器的输出必须有人读：shell 插件把输出投递到事件通道，无人消费时管道
   // 写满会让它静默卡死（表现为「启动页一直停在第一步」）。落进壳日志，同时
   // 转发给 dlog 让 dev-launcher 自己写的那份日志之外还有一条「谁起的它」。
-  let log_root = project_root.to_string();
+  //
+  // shell-launch.log 那一路的落盘走专用写线程（[`LineLog`]：有界通道 + 丢弃
+  // 计数）：本泵跑在 tokio worker 上，逐行同步写文件会在慢盘 / 高频输出时拖住
+  // worker、并让无界上游在内存里堆积（ISSUE #4334）。
+  let launch_log_file = launch_log_path(project_root);
+  let launch_sink = LineLog::spawn(move |buf| append_bytes(&launch_log_file, buf));
   tauri::async_runtime::spawn(async move {
     use tauri_plugin_shell::process::CommandEvent;
     while let Some(event) = rx.recv().await {
@@ -1314,25 +1475,27 @@ pub fn spawn_orchestrator(
           // 否则同一条物理行里会叠出两个时刻两个级别（见 strip_orchestrator_line_prefix）。
           let (body, level) = strip_orchestrator_line_prefix(&text);
           let shell_level = orchestrator_level_to_shell(level, "info");
-          log_orchestrator_line(&log_root, shell_level, body);
+          log_orchestrator_line(&launch_sink, shell_level, body);
         }
         CommandEvent::Stderr(line) => {
           let text = String::from_utf8_lossy(&line).trim_end().to_string();
           let (body, level) = strip_orchestrator_line_prefix(&text);
           let shell_level = orchestrator_level_to_shell(level, "warn");
-          log_orchestrator_line(&log_root, shell_level, body);
+          log_orchestrator_line(&launch_sink, shell_level, body);
         }
         CommandEvent::Terminated(payload) => {
           log::info!("[ComfyAPP] orchestrator terminated: {:?}", payload.code);
-          log_launch_line(
-            &log_root,
+          // 经同一个 sink 落盘，保证它排在已入队的编排器行之后（只走 log::
+          // 的话，channel / shell.log 与 shell-launch.log 的先后会分叉）。
+          launch_sink.send_line(launch_log_line(
             "info",
             &format!("编排器结束，退出码 {:?}", payload.code),
-          );
+          ));
         }
         _ => {}
       }
     }
+    // launch_sink 在此 drop：Close + join，把队列里剩下的行写完再退。
   });
   Ok(())
 }
@@ -1741,6 +1904,7 @@ mod tests {
     let path = dir.join("shell").join("shell.log");
     let mut writer = ResilientShellLog::new(path.clone());
     std::io::Write::write_all(&mut writer, b"first\n").unwrap();
+    writer.sink.barrier();
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "first\n");
 
     // 模拟 current/ 被清：文件和目录整个删掉（此时「插件」手里还留着旧句柄——
@@ -1748,6 +1912,7 @@ mod tests {
     std::fs::remove_dir_all(&dir).unwrap();
 
     std::io::Write::write_all(&mut writer, b"second\n").unwrap();
+    writer.sink.barrier();
     assert_eq!(
       std::fs::read_to_string(&path).unwrap(),
       "second\n",
@@ -1768,19 +1933,120 @@ mod tests {
         .unwrap_or(0)
     ));
     let path = dir.join("shell").join("shell.log");
-    let mut writer = ResilientShellLog {
-      path: path.clone(),
-      max_bytes: 8,
-    };
+    let mut writer = ResilientShellLog::with_max_bytes(path.clone(), 8);
     std::io::Write::write_all(&mut writer, b"12345678\n").unwrap();
+    writer.sink.barrier();
     // 恰好达到上限：这一行还在。
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "12345678\n");
     std::io::Write::write_all(&mut writer, b"9\n").unwrap();
+    writer.sink.barrier();
     assert_eq!(
       std::fs::read_to_string(&path).unwrap(),
       "9\n",
       "越过上限的下一行必须重建文件，而不是无限追加"
     );
+  }
+
+  /// 通道满 = 落盘跟不上产出：后续行必须被丢弃并计数，而不是无界堆积（#4334）；
+  /// 拥塞解除后要补一条「丢弃 N 行」读数，被丢的行不出现，留下的行保持顺序。
+  #[test]
+  fn line_log_drops_and_notices_when_writer_lags() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Condvar, Mutex};
+
+    let entered = Arc::new(AtomicBool::new(false));
+    let gate = Arc::new(Mutex::new(false));
+    let cv = Arc::new(Condvar::new());
+    let captured = Arc::new(Mutex::new(String::new()));
+
+    let entered_w = entered.clone();
+    let gate_w = gate.clone();
+    let cv_w = cv.clone();
+    let captured_w = captured.clone();
+    let sink = LineLog::spawn_with_capacity(
+      move |buf| {
+        entered_w.store(true, Ordering::SeqCst);
+        // 闸门关着就等：模拟「磁盘写不动」。
+        let mut open = gate_w.lock().unwrap();
+        while !*open {
+          open = cv_w.wait(open).unwrap();
+        }
+        captured_w
+          .lock()
+          .unwrap()
+          .push_str(std::str::from_utf8(buf).unwrap());
+        Ok(())
+      },
+      2,
+    );
+
+    sink.send_line("L1\n".into());
+    // 等写线程真的取走 L1、堵在闸门里：此后通道空、容量确定，断言才不靠时序。
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !entered.load(Ordering::SeqCst) {
+      assert!(
+        std::time::Instant::now() < deadline,
+        "写线程没有进入写入函数，测试前提不成立"
+      );
+      std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+
+    sink.send_line("L2\n".into());
+    sink.send_line("L3\n".into()); // 通道 [L2, L3]，已满
+    sink.send_line("L4\n".into()); // 满 ⇒ 丢弃并计数
+    sink.send_line("L5\n".into()); // 满 ⇒ 丢弃并计数
+
+    // 放行：写线程先补「丢弃 2 行」，再按序写 L2、L3。
+    *gate.lock().unwrap() = true;
+    cv.notify_all();
+    sink.barrier();
+
+    let out = captured.lock().unwrap().clone();
+    assert!(out.contains("L1\n"), "先入队的 L1 必须落盘：{out}");
+    assert!(out.contains("丢弃 2 行"), "丢弃必须有读数，不许静默：{out}");
+    assert!(
+      out.contains("L2\n") && out.contains("L3\n"),
+      "容量内的行必须保序落盘：{out}"
+    );
+    assert!(
+      !out.contains("L4") && !out.contains("L5"),
+      "超容量的行必须被丢掉，而不是堆在内存里：{out}"
+    );
+    let idx = |needle: &str| out.find(needle).unwrap();
+    assert!(
+      idx("L1\n") < idx("丢弃 2 行")
+        && idx("丢弃 2 行") < idx("L2\n")
+        && idx("L2\n") < idx("L3\n"),
+      "丢弃告示要插在拥塞段落之后、后续行之前，且行序保持：{out}"
+    );
+  }
+
+  /// Drop 语义：Close 之前入队的行必须全部落盘（尽力不丢尾巴）——输出泵退出时
+  /// 靠这个把队列里剩下的编排器行写完。
+  #[test]
+  fn line_log_drains_pending_lines_on_drop() {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-line-log-drop-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+    ));
+    let path = dir.join("line-log-drop.log");
+    {
+      let p = path.clone();
+      let sink = LineLog::spawn(move |buf| append_bytes(&p, buf));
+      for i in 0..50 {
+        sink.send_line(format!("line-{i}\n"));
+      }
+      // 故意不 barrier：直接 drop，靠 Drop 里的 Close + join 排空。
+    }
+    let content = std::fs::read_to_string(&path).unwrap();
+    for i in 0..50 {
+      assert!(content.contains(&format!("line-{i}\n")), "缺 line-{i}：{content}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
   }
 
   /// 「最新一份」必须按 mtime 判，不能按文件名序 —— ISSUE #576 那个坑的回归：
@@ -2049,7 +2315,10 @@ mod tests {
 
     let raw = "[2026-10-02 11:50:31.384] [STEP ] 检查端口占用";
     let (body, level) = strip_orchestrator_line_prefix(raw);
-    log_orchestrator_line(root, orchestrator_level_to_shell(level, "info"), body);
+    let log_file = launch_log_path(root);
+    let sink = LineLog::spawn(move |buf| append_bytes(&log_file, buf));
+    log_orchestrator_line(&sink, orchestrator_level_to_shell(level, "info"), body);
+    sink.barrier();
 
     let content = std::fs::read_to_string(launch_log_path(root)).unwrap();
     // 产出形态必须是 `[<壳时刻 23 字符>] [INFO] [orchestrator] 正文`：
