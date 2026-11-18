@@ -165,8 +165,12 @@ export async function probeCnbCli(): Promise<{ available: boolean; reason: strin
     }, CLI_TIMEOUT_MS);
     timer.unref();
     child.stdout?.setEncoding("utf8");
+    /* 输出上限与 runCnb 同判据（#4339）：探测只需要判「已登录」三个字，
+     * cli 行为异常狂刷输出时不得在此窗口内无界累积内存。 */
     child.stdout?.on("data", (chunk: string) => {
-      stdout += chunk;
+      if (stdout.length < MAX_OUTPUT_CHARS) {
+        stdout += chunk;
+      }
     });
     child.on("error", (error) => {
       finish({ available: false, reason: errorText(error, "无法执行 cnb status") });
