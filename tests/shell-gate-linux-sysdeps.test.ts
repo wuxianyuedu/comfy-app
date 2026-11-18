@@ -229,13 +229,11 @@ describe("GA 侧真的装了那些系统库（ISSUE #3572 / #3580）", () => {
     const rest = workflow.slice(start);
     const next = rest.indexOf("\n      - name:", 1);
     const step = next === -1 ? rest : rest.slice(0, next);
-    const lines = step.split("\n");
-    const at = lines.findIndex((l) => l.includes("apt-get install"));
-    expect(at).toBeGreaterThan(-1);
-    return lines
-      .slice(at + 1)
-      .map((l) => l.trim().replace(/\\$/, "").trim())
-      .filter((l) => l.length > 0);
+    /* #4295 起 apt 清单整体进了重试循环（if ... && install ...; then），不再
+     * 依赖「install 行之后每行一个包」的排版——按包名 token 形状提取，
+     * 去重后与判据映射比对。 */
+    const tokens = step.match(/\b(?:lib[a-z0-9.+-]+-dev|build-essential)\b/g) ?? [];
+    return [...new Set(tokens)];
   }
 
   it("装依赖的那一步在 GA 的 PR 门禁里，且在重档之前", () => {
