@@ -567,6 +567,7 @@ export async function run(argv = process.argv.slice(2)) {
       root: ROOT,
       status,
       timeline,
+      spawned,
       spawnedChildren: () => spawned,
       appendRuntimeWarning,
       syncNextCache,

@@ -593,6 +593,17 @@ describe("waitForDetachMediator —— 中介的退出码与 stderr", () => {
     expect(outcome.stderr).toBe("还在等");
   });
 
+  it("超时那一刻回收中介：kill 被调用，不留挂死的中介进程（#4349）", async () => {
+    const child = fakeChild();
+    const kill = vi.fn<() => boolean>(() => true);
+    Object.assign(child, { kill });
+    const p = waitForDetachMediator(child, 20);
+    /* 不 emit exit：让超时赢这一轮赛跑——超时那一刻必须把中介收掉，
+     * 否则每次失败拉起都在进程表里漏一个 PowerShell 中介。 */
+    await p;
+    expect(kill).toHaveBeenCalledTimes(1);
+  });
+
   it("没有 stderr 管道（stdio 全 ignore）时不崩，照样回退出码", async () => {
     const bare = Object.assign(new EventEmitter(), {
       pid: 1,
