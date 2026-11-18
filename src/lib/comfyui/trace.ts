@@ -123,6 +123,91 @@ function clampLine(text: string): string {
   });
 }
 
+/* ── 异步批量写 + 按大小轮转（#4227）────────────────────────
+ * 旧形态每行走一次同步 `appendFileSync`：WS 每帧、comfy-cli stdout/stderr 每个
+ * chunk 都在热路径上，出图高峰的同步 IO 会阻塞事件循环（#3369 的同步 zip 冻结
+ * 事件循环是同族先例）；且单文件 append-only 无轮转，长会话无界增长。
+ * 现形态：行进内存队列，微任务延迟合并成一次异步 appendFile；超过单文件上限
+ * 就把当前文件挪成 `.1`（只保留一代），本拍写新文件。「写入失败绝不阻塞业务」
+ * 的契约不变——失败行就地丢弃，只 swallow。 */
+const TRACE_ROTATE_BYTES = 16 * 1024 * 1024;
+/** 轮转阈值独立成可写变量：用例经 {@linkcode configureTraceRotateBytesForTest}
+ *  注入小阈值，真实轮转不必写 16MB 数据。 */
+let traceRotateBytes = TRACE_ROTATE_BYTES;
+
+/** 只给用例：注入轮转阈值（不落库、不入全局——单测自己的临时目录里验）。 */
+export function configureTraceRotateBytesForTest(bytes: number): void {
+  traceRotateBytes = bytes;
+}
+/** 队列项自带目的地：`configureTraceLogPath` 切换后，切换前排队的行仍落到
+ *  它们产生时约定的文件（「覆盖生效、旧文件不追加」的契约由它兑现）。 */
+let pendingEntries: Array<{ line: string; path: string }> = [];
+let flushScheduled = false;
+/** 串行化 flush：并发 appendFile 会乱序，链式排队保证写入顺序与产生顺序一致。 */
+let flushChain: Promise<void> = Promise.resolve();
+
+function scheduleFlush(): void {
+  if (flushScheduled) {
+    return;
+  }
+  flushScheduled = true;
+  setTimeout(() => {
+    flushScheduled = false;
+    flushChain = flushChain.then(() => flushTraceLines()).catch(() => undefined);
+  }, 0);
+}
+
+async function appendWithRotate(tracePath: string, chunk: string): Promise<void> {
+  const dir = path.dirname(tracePath);
+  await fs.promises.mkdir(dir, { recursive: true });
+  const stat = await fs.promises.stat(tracePath).catch(() => null);
+  if (stat !== null && stat.size >= traceRotateBytes) {
+    // 只保留一代：旧 .1 直接被本次轮转覆盖，总量有界（≤ 2 × 上限）。
+    await fs.promises.rename(tracePath, `${tracePath}.1`).catch(() => undefined);
+  }
+  await fs.promises.appendFile(tracePath, chunk, "utf8");
+}
+
+async function flushTraceLines(): Promise<void> {
+  const batch = pendingEntries;
+  pendingEntries = [];
+  if (batch.length === 0) {
+    return;
+  }
+  // 连续同目的地的行合并成一次 append（批量的意义）；跨目的地的边界处各写各的。
+  // **逐组容错**（#4227 复盘）：一个坏目的地（只读盘 / 路径被占 / ENOTDIR）只丢
+  // 自己那一组，不许把同批里其它目的地的行一起带走。
+  let group: { chunk: string; path: string } | null = null;
+  for (const entry of batch) {
+    if (group !== null && group.path === entry.path) {
+      group.chunk += entry.line;
+      continue;
+    }
+    if (group !== null) {
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- 逐组串行是语义本身：写入顺序必须与产生顺序一致（链式 flush 只保证批间序，批内靠这里的 await）
+        await appendWithRotate(group.path, group.chunk);
+      } catch {
+        /* trace 写入失败绝不阻塞业务主流程（可能是只读盘 / 路径被占）。 */
+      }
+    }
+    group = { chunk: entry.line, path: entry.path };
+  }
+  if (group !== null) {
+    try {
+      await appendWithRotate(group.path, group.chunk);
+    } catch {
+      /* trace 写入失败绝不阻塞业务主流程（可能是只读盘 / 路径被占）。 */
+    }
+  }
+}
+
+/** 只给用例：立即排空队列（不等 0ms 定时器），返回排空后的链。 */
+export function flushTraceForTest(): Promise<void> {
+  flushChain = flushChain.then(() => flushTraceLines()).catch(() => undefined);
+  return flushChain;
+}
+
 /**
  * 追加写一条 trace。`taskId` 可为空（会话级事件，如协议探测/连接会话）。
  *
@@ -141,10 +226,6 @@ export function trace(
     if (tracePath === null) {
       return;
     }
-    const dir = path.dirname(tracePath);
-    if (!fs.existsSync(/*turbopackIgnore: true*/ dir)) {
-      fs.mkdirSync(/*turbopackIgnore: true*/ dir, { recursive: true });
-    }
     // 唯一脱敏实现（规范 07 §7.18.2.1）：本通道直写文件、不经 pino，
     // 因此必须在写入边界自己过一次值形状守卫，否则原始回执里的密钥（路径上的
     // Authorization / token、工作流里的 apiKey 参数）会明文落盘。
@@ -154,7 +235,8 @@ export function trace(
         ? ` ${clampLine(JSON.stringify(redactSecretShaped(meta)))}`
         : "";
     const line = `[${localTimestamp()}] [INFO] [trace] ${channel} [${taskId ?? "-"}] ${text}${metaText}\n`;
-    fs.appendFileSync(/*turbopackIgnore: true*/ tracePath, line, "utf8");
+    pendingEntries.push({ line, path: tracePath });
+    scheduleFlush();
   } catch {
     /* trace 写入失败绝不阻塞业务主流程（可能是只读盘 / 路径被占）。 */
   }

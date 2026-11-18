@@ -11,6 +11,8 @@ import {
   queueTraceSummary,
   trace,
   configureTraceLogPath,
+  configureTraceRotateBytesForTest,
+  flushTraceForTest,
 } from "./trace";
 
 describe("traceStringify — 任意回执都能落成可读文本", () => {
@@ -150,12 +152,14 @@ describe("TRACE_MAX_LINE", () => {
  *  临时目录**里，绝不落到仓库 `log/` （见 MEMORY 的「写日志类用例给自己的临时
  *  目录」条）。 */
 describe("trace() 与 configureTraceLogPath 的落盘契约", () => {
-  it("configureTraceLogPath 指向可写临时目录后，trace 追加一行、匹配格式", () => {
+  it("configureTraceLogPath 指向可写临时目录后，trace 追加一行、匹配格式", async () => {
     const tmp = mkdtempSync(path.join(tmpdir(), "comfy-trace-"));
     try {
       const file = path.join(tmp, "comfyui-trace.log");
       configureTraceLogPath(file);
       trace("cli", "t-1", "hello 世界", { extra: "meta" });
+      /* #4227 起落盘是异步批量：等 flush 链落定再断言文件内容。 */
+      await flushTraceForTest();
 
       expect(existsSync(file)).toBe(true);
       const content = readFileSync(file, "utf8");
@@ -169,7 +173,7 @@ describe("trace() 与 configureTraceLogPath 的落盘契约", () => {
     }
   });
 
-  it("configureTraceLogPath 覆盖生效：第二次写入换目的地、第一份文件不追加", () => {
+  it("configureTraceLogPath 覆盖生效：第二次写入换目的地、第一份文件不追加", async () => {
     const tmp = mkdtempSync(path.join(tmpdir(), "comfy-trace-"));
     try {
       const fileA = path.join(tmp, "a.log");
@@ -178,6 +182,8 @@ describe("trace() 与 configureTraceLogPath 的落盘契约", () => {
       trace("ws", "t-a", "first");
       configureTraceLogPath(fileB);
       trace("ws", "t-b", "second");
+      /* 队列项自带产生时约定的目的地：切换前的行落 A、之后的落 B。 */
+      await flushTraceForTest();
 
       const a = readFileSync(fileA, "utf8");
       const b = readFileSync(fileB, "utf8");
@@ -208,6 +214,33 @@ describe("trace() 与 configureTraceLogPath 的落盘契约", () => {
         trace("http", "t-skip", "should not throw");
       }).not.toThrow();
     } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("trace 的按大小轮转（#4227）", () => {
+  it("单文件超阈值：旧行挪成 .1，新行写新文件（只保留一代）", async () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), "comfy-trace-rotate-"));
+    try {
+      /* 先排空前面用例可能残留的队列（模块级单例，队列跨用例共享）。 */
+      await flushTraceForTest();
+      const file = path.join(tmp, "t.log");
+      configureTraceLogPath(file);
+      configureTraceRotateBytesForTest(200);
+      trace("ws", "t-1", `first-line-${"x".repeat(220)}`);
+      await flushTraceForTest();
+      trace("ws", "t-2", "second-line");
+      await flushTraceForTest();
+
+      expect(existsSync(`${file}.1`)).toBe(true);
+      expect(readFileSync(`${file}.1`, "utf8")).toContain("first-line");
+      const fresh = readFileSync(file, "utf8");
+      expect(fresh).toContain("second-line");
+      expect(fresh).not.toContain("first-line");
+    } finally {
+      /* 阈值复位：别把小阈值泄漏给同文件其后的用例。 */
+      configureTraceRotateBytesForTest(16 * 1024 * 1024);
       rmSync(tmp, { recursive: true, force: true });
     }
   });

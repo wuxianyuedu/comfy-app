@@ -91,8 +91,21 @@ export async function syncFilmToProject(
 
 // ── ffmpeg helpers ─────────────────────────────────────────
 let _ffmpegOk: boolean | null = null;
+/* ffmpeg 可用性缓存的口径（#4226）：**正结果长期有效**（装了不会自己消失），
+ * **负结果带 TTL**——环境是可变的（装 ffmpeg / 修 PATH / 改 FFMPEG_BIN），
+ * 「首次没装就永远不可用直到重启」是旧形态的坑。TTL 30s：合成是分钟级动作，
+ * 探测 8s 超时 + 30s 窗口内不会造成探测风暴。 */
+const FFMPEG_PROBE_TTL_MS = 30_000;
+let _ffmpegProbedAt = 0;
+
+/** 只给用例：复位探测缓存（模块级状态不跨用例泄漏）。 */
+export function resetFFmpegProbeForTest(): void {
+  _ffmpegOk = null;
+  _ffmpegProbedAt = 0;
+}
+
 export async function isFFmpegAvailable(): Promise<boolean> {
-  if (_ffmpegOk !== null) {
+  if (_ffmpegOk !== null && (_ffmpegOk || Date.now() - _ffmpegProbedAt < FFMPEG_PROBE_TTL_MS)) {
     return _ffmpegOk;
   }
   try {
@@ -101,7 +114,36 @@ export async function isFFmpegAvailable(): Promise<boolean> {
   } catch {
     _ffmpegOk = false;
   }
+  _ffmpegProbedAt = Date.now();
   return _ffmpegOk;
+}
+
+/** stderr 的**尾部**收集器（#4228）：异常 ffmpeg（坏片循环告警）可以输出 GB 级
+ *  stderr，字符串无界增长会顶到 OOM。**保留尾部**——ffmpeg 的结论在最后几行，
+ *  progress 刷屏在前。分片淘汰（shift 最旧）而不是每次 slice(-N)，摊销后近似
+ *  O(n)。独立成纯助手：上限语义可单测（runFFmpeg 本体要 spawn 真进程）。
+ *  上限 256K 与 cnb-cli.ts 同档。 */
+export function createStderrTailSink(maxChars = 256 * 1024): {
+  sink: (chunk: Buffer) => void;
+  text: () => string;
+} {
+  const parts: Array<string> = [];
+  let total = 0;
+  return {
+    sink: (chunk: Buffer) => {
+      const text = chunk.toString();
+      parts.push(text);
+      total += text.length;
+      while (total > maxChars) {
+        const dropped = parts.shift();
+        if (dropped === undefined) {
+          break;
+        }
+        total -= dropped.length;
+      }
+    },
+    text: () => parts.join(""),
+  };
 }
 
 function runFFmpeg(
@@ -111,12 +153,12 @@ function runFFmpeg(
 ): Promise<{ code: number; stderr: string }> {
   const bin = process.env.FFMPEG_BIN ?? "ffmpeg";
   const cp = spawn(/*turbopackIgnore: true*/ bin, args, { cwd });
-  let stderr = "";
-  cp.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+  const stderrSink = createStderrTailSink();
+  cp.stderr.on("data", stderrSink.sink);
   return withTimeoutResult(
     new Promise<{ code: number; stderr: string }>((resolve) => {
       cp.on("close", (code) => {
-        resolve({ code: code ?? -1, stderr });
+        resolve({ code: code ?? -1, stderr: stderrSink.text() });
       });
       cp.on("error", () => {
         resolve({ code: -2, stderr: "spawn error" });

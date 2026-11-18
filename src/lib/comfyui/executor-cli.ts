@@ -105,6 +105,47 @@ function cliWarn(msg: string): void {
   (depsOverride.logger ?? _loggerRef)?.warn(msg);
 }
 
+/* 临时工作流目录的形状只有这一份出处：写入（executeViaComfyCli）与
+ * 清理（settle 时的删除 + reaper 的兜底扫描）都引用它，别处不重拼。 */
+const TEMP_WORKFLOW_DIR = path.join(process.cwd(), "temp", "comfy-cli");
+/** 崩溃孤儿的保留窗：进程在「写完」与「收口」之间崩掉时文件会留下，
+ * 按 mtime 留一小时余量再删（收口即删是正常路径，这里只兜孤儿）。 */
+const TEMP_WORKFLOW_MAX_AGE_MS = 60 * 60_000;
+
+/**
+ * 清理崩溃残留的临时工作流文件（#4225）：正常路径在任务收口（settle）时就删，
+ * 这里只兜「写完与收口之间进程崩掉」的孤儿——按 mtime 留 {@linkcode TEMP_WORKFLOW_MAX_AGE_MS}
+ * 的余量，目录不存在 / 读不到就整轮跳过（诊断通道，不参与业务退码）。
+ * reaper 的 `sweepOnce` 每拍顺带跑一次。
+ */
+export async function pruneTempWorkflowFiles(
+  maxAgeMs: number = TEMP_WORKFLOW_MAX_AGE_MS,
+  dir: string = TEMP_WORKFLOW_DIR,
+): Promise<void> {
+  let entries: Array<string>;
+  try {
+    entries = await fs.readdir(dir);
+  } catch {
+    /* 目录不存在 = 没有残留 */
+    return;
+  }
+  const cutoff = Date.now() - maxAgeMs;
+  await Promise.all(
+    entries
+      .filter((name) => name.startsWith("wf-") && name.endsWith(".json"))
+      .map(async (name) => {
+        try {
+          const stat = await fs.stat(path.join(dir, name));
+          if (stat.mtimeMs < cutoff) {
+            await fs.unlink(path.join(dir, name));
+          }
+        } catch {
+          /* 单个文件失败（被并发收口删掉 / 句柄占用）不影响其余 */
+        }
+      }),
+  );
+}
+
 /** taskRepo / resolveComfyBase 是关键路径：拿不到（未注入 + 纯 Node dynamic
  *  import 撞 server-only）→ 让 `executeViaComfyCli` 的 await 直接 reject，
  *  caller（executor-dispatch）感知。 */
@@ -302,9 +343,8 @@ export async function executeViaComfyCli(job: Job) {
     patched = prep.graph;
   }
   /* 临时工作流文件统一放到项目根目录 temp/comfy-cli/，便于清理和跨平台管理。 */
-  const tmpDir = path.join(process.cwd(), "temp", "comfy-cli");
-  await fs.mkdir(tmpDir, { recursive: true });
-  const tmpFile = path.join(tmpDir, `wf-${taskId}.json`);
+  await fs.mkdir(TEMP_WORKFLOW_DIR, { recursive: true });
+  const tmpFile = path.join(TEMP_WORKFLOW_DIR, `wf-${taskId}.json`);
   log(taskId, "info", `写入临时工作流文件：${tmpFile}`);
   await fs.writeFile(tmpFile, JSON.stringify(patched), "utf8");
   // 记下本次实际提交出去的工作流：RAW 是（覆盖 + 剔除后的）未展开原件，
@@ -469,6 +509,11 @@ export async function executeViaComfyCli(job: Job) {
       settled = true;
       clearTimeout(guard);
       cliProcs.delete(taskId);
+      /* 临时工作流文件的生命周期到收口为止（#4225）：comfy-cli 启动时读入，
+       * 之后不再需要——所有收口路径（complete/fail/看门狗/进程退出）都汇聚到
+       * 这一个 settle。best-effort：Windows 上句柄未放时会 EBUSY，残留交给
+       * reaper 的 pruneTempWorkflowFiles 兜底。 */
+      void fs.rm(tmpFile, { force: true }).catch(() => undefined);
       return true;
     },
     promptId: () => promptId,
