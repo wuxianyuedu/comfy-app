@@ -80,7 +80,10 @@ export function ProgressBar({
           />
         ) : (
           <div
-            className={cn("bg-primary h-full rounded-full transition-transform", fillClassName)}
+            className={cn(
+              "bg-primary h-full w-full rounded-full transition-transform",
+              fillClassName,
+            )}
             data-slot="progress-bar-fill"
             style={{ transform: `translateX(${width - 100}%)` }}
           />
