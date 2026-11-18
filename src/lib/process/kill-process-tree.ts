@@ -38,11 +38,11 @@
 
 import { execFile, execFileSync, spawn } from "node:child_process";
 
-/* 本模块会被 .mjs 宿主（reap-process.mjs / e2e）用**真 Node**直接加载 —— 那里
- * 没有 tsconfig 的 `~` 别名，且 ESM 相对导入必须带扩展名，因此这里用
- * 「相对路径 + 显式 .ts 扩展」（tsconfig 已开 allowImportingTsExtensions）。
- * 判据：tests/host-ts-loads-in-node.test.ts（#4332 现场复训）。 */
-import { withTimeoutResult } from "../with-timeout.ts";
+/* 本模块会被 .mjs 宿主（reap-process.mjs / e2e）用**真 Node**直接加载（见
+ * tests/host-ts-loads-in-node.test.ts 与 tests/esm-cross-host-imports.test.ts）：
+ * 那里没有 tsconfig 的 `~` 别名，且跨宿主地基层模块必须保持**叶子**（只依赖
+ * node 内建与清单内模块）—— 所以这里不 import 任何仓库模块，超时收口也不用
+ * with-timeout（见 dispatchTaskkillAwait 的说明）。 */
 
 /** 回收目标的描述。pid <= 0 一律视为「没有可回收目标」，直接返回 ok。 */
 export type KillProcessTreeOptions = {
@@ -81,8 +81,6 @@ export type KillProcessTreeResult = {
 /** 事后探活的默认预算与轮询间隔（#4332）。 */
 export const KILL_VERIFY_BUDGET_MS = 3000;
 const KILL_VERIFY_INTERVAL_MS = 100;
-/** taskkill 自身的退出等待上限（正常 <1s；超时按「没杀成」处理）。 */
-const TASKKILL_EXIT_BUDGET_MS = 10_000;
 
 /**
  * 目标 pid 是否已经退出（**有界轮询**，#4332）。
@@ -122,38 +120,26 @@ export async function waitForPidGone(
  */
 function dispatchTaskkillAwait(
   args: Array<string>,
-  timeoutMs: number = TASKKILL_EXIT_BUDGET_MS,
 ): Promise<{ code: number | null; ok: boolean; via: string }> {
   const exe = windowsTaskkillPath();
   const via = `${exe} ${args.join(" ")}`;
-  /* 超时收口走 ~/lib/with-timeout（P58：不自写定时器样板）。 */
-  const run = new Promise<{ code: number | null; ok: boolean; reason: string }>((resolve) => {
+  return new Promise((resolve) => {
     try {
       const child = spawn(exe, args, { stdio: "ignore", windowsHide: true });
       child.on("error", () => {
-        resolve({ code: null, ok: false, reason: "taskkill 起不来" });
+        resolve({ code: null, ok: false, via: `${via}（taskkill 起不来）` });
       });
       child.on("close", (code) => {
         resolve({
           code,
           ok: code === 0,
-          reason:
-            code === 0 ? "" : `taskkill 未成功（exit=${code}；目标可能已不在 / 被拦截 / 权限不足）`,
+          via: code === 0 ? via : `${via}（exit=${code}；目标可能已不在 / 被拦截 / 权限不足）`,
         });
       });
     } catch {
-      resolve({ code: null, ok: false, reason: "taskkill 无法派发" });
+      resolve({ code: null, ok: false, via: `${via}（taskkill 无法派发）` });
     }
   });
-  return withTimeoutResult(run, timeoutMs, {
-    code: null,
-    ok: false,
-    reason: `taskkill 未在 ${timeoutMs}ms 内退出`,
-  }).then((outcome) => ({
-    code: outcome.code,
-    ok: outcome.ok,
-    via: outcome.reason === "" ? via : `${via}（${outcome.reason}）`,
-  }));
 }
 
 /** 当前平台是否是 Windows（进程树机制的分叉点）。 */
