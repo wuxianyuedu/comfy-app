@@ -1522,7 +1522,9 @@ fn spawn_sidecar(
     let port = pick_free_port();
     spawn_sidecar_attempt(app, &payload, port, project_root_for_exit)?;
 
-    // grace 窗口：还活着 = 端口到手；窗口内就退 = 换端口重试。
+    // grace 窗口：还活着 = 端口到手；窗口内就退 = 换端口重试。等待写在
+    // 启动页可见的状态里（ISSUE #4391）：setup 在主线程，grace 期间启动页的
+    // 轮询 IPC 会停摆，至少让用户看到「在等什么」。
     if !sidecar_died_within(SIDECAR_START_GRACE) {
       // 更新应用 URL，供启动页 ready 后导航
       let app_url = format!("http://127.0.0.1:{}/workspace", port);
@@ -1531,6 +1533,15 @@ fn spawn_sidecar(
       }
       return Ok(());
     }
+    shell_launch::write_idle_status(
+      project_root_for_exit,
+      "shell-prepare",
+      &format!(
+        "内嵌服务第 {attempt}/{SIDECAR_PORT_ATTEMPTS} 次拉起未成功（端口 {port} 可能被抢占），\
+         正在换端口重试…"
+      ),
+      None,
+    );
     log::warn!(
       "[ComfyAPP] sidecar 第 {attempt}/{SIDECAR_PORT_ATTEMPTS} 次拉起后立即退出\
        （端口 {port} 可能已被抢占，或载荷自身起不来），换新端口重试"
@@ -1604,23 +1615,26 @@ fn spawn_sidecar_attempt(
         CommandEvent::Stderr(line) => {
           log::warn!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
         }
-        CommandEvent::Terminated(payload) => {
-          log::info!("[sidecar] terminated: {:?}", payload.code);
-          /* 壳亲眼看到它死了：把这一事实记给第二档探活判据（ISSUE #4151），此后
-           * get_app_service_liveness 不再靠 PID 探测作答。写在事件回调里而不是
-           * 别处：这个事件是壳内唯一「确定它已退出」的时刻。句柄留在槽位里——
-           * 退出时 kill_sidecar 还要靠它回收作业内可能残留的孙辈进程。 */
-          SIDECAR_TERMINATED.store(true, Ordering::Relaxed);
-          /* 服务死的那一刻落盘（ISSUE #1692 的 sidecar 档）：探测那一格打的是服务
-           * 自己的 HTTP，服务一不在就永远问不到「为什么没了」——答案只能由此刻
-           * 还活着的壳写下（见 shell_launch::write_sidecar_exit_record）。写在事件回调里
-           * 而不是别处：这个事件是唯一带着退出码的地方。 */
-          shell_launch::write_sidecar_exit_record(
-            &exit_root,
-            payload.code,
-            &shell_launch::sidecar_exit_reason(payload.code),
-          );
-        }
+          CommandEvent::Terminated(payload) => {
+            log::info!("[sidecar] terminated: {:?}", payload.code);
+            /* 壳亲眼看到它死了：把这一事实记给第二档探活判据（ISSUE #4151），此后
+             * get_app_service_liveness 不再靠 PID 探测作答。写在事件回调里而不是
+             * 别处：这个事件是壳内唯一「确定它已退出」的时刻。句柄留在槽位里——
+             * 退出时 kill_sidecar 还要靠它回收作业内可能残留的孙辈进程。 */
+            SIDECAR_TERMINATED.store(true, Ordering::Relaxed);
+            /* 服务死的那一刻落盘（ISSUE #1692 的 sidecar 档）：探测那一格打的是服务
+             * 自己的 HTTP，服务一不在就永远问不到「为什么没了」——答案只能由此刻
+             * 还活着的壳写下（见 shell_launch::write_sidecar_exit_record）。写在事件回调里
+             * 而不是别处：这个事件是唯一带着退出码的地方。落盘是同步文件 IO，
+             * 挪进阻塞线程池（ISSUE #4393）——泵本身在 tokio worker 上，别让
+             * 一次性小文件写占住 async 上下文。 */
+            let exit_root = exit_root.clone();
+            let code = payload.code;
+            let reason = shell_launch::sidecar_exit_reason(payload.code);
+            tauri::async_runtime::spawn_blocking(move || {
+              shell_launch::write_sidecar_exit_record(&exit_root, code, &reason);
+            });
+          }
         _ => {}
       }
     }
@@ -2742,7 +2756,16 @@ fn start_self_orchestration(app: &mut tauri::App, project_root: &str) {
     log::warn!(
       "[ComfyAPP] 上一次运行遗留的编排器仍在跑（pid {pid}），先回收它再启动本次编排"
     );
-    /* 启动前的残留清理不在退出路径上：给完整的 REAPER_BUDGET。 */
+    /* 启动前的残留清理不在退出路径上：给完整的 REAPER_BUDGET。回收必须先于
+     * 本次编排（遗留进程占着端口），等待因此是顺序必需的；这里把「要等多久、
+     * 在等谁」写进启动页可见的状态（ISSUE #4391）——主线程在等待期间无法
+     * 处理启动页的轮询 IPC，至少让用户看到的是解释而不是无解释的冻结。 */
+    shell_launch::write_idle_status(
+      project_root,
+      "shell-prepare",
+      "发现上次运行遗留的编排器，正在回收（最多约 10 秒，完成后自动继续）…",
+      Some(shell_launch::startup_report_json(project_root, PHASE_NOTE)),
+    );
     shell_launch::reap_pid(
       project_root,
       pid,
