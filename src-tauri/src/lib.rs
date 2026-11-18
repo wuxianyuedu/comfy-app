@@ -262,8 +262,9 @@ fn default_dev_url(host: &str) -> String {
 /// 但判据仍然要能分辨**真故障**：读失败若是「权限 / IO 错误」而不是
 /// `NotFound`，那是实打实的问题，照样回 Err —— 不能被兜底吞掉。
 ///
-/// async 形态（ISSUE #4272）：启动页每 250ms 轮询一次，这段同步文件 IO
-/// 落到 Tauri 的命令线程池执行，不占主线程。
+/// async 形态（ISSUE #4272）：启动页每 250ms 轮询一次，不占主线程。
+/// 同步文件 IO 落在**阻塞线程池**而非 tokio worker（ISSUE #4335）：常驻轮询
+/// 叠加阻塞 IO 会周期性占用 async worker，与输出泵的同步 IO 同类相长。
 /// 把「交换窗口失败、正在重导航」注入启动状态 JSON（ISSUE #4328）。
 ///
 /// 启动页 250ms 轮询的就是这一份状态：失败态借同一条通道透出，页面据此把
@@ -314,8 +315,13 @@ async fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, 
     ));
   }
   let path = shell_launch::status_file_path(&root);
-  match std::fs::read_to_string(&path) {
-    Ok(text) => Ok(inject_navigate_stalled(&text, state.is_renavigating())),
+  // 同步文件 IO 挪进**阻塞线程池**（ISSUE #4335）：本命令被启动页 250ms 常驻
+  // 轮询，read_to_string 留在 async 命令体里就等于周期性占用 tokio worker 做
+  // 阻塞 IO。spawn_blocking 对调用方仍是异步等待；磁盘慢时最多占住一条阻塞
+  // 线程，worker 池不受影响。
+  let renavigating = state.is_renavigating();
+  tauri::async_runtime::spawn_blocking(move || match std::fs::read_to_string(&path) {
+    Ok(text) => Ok(inject_navigate_stalled(&text, renavigating)),
     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
       // 编排器还没写（正常启动窗口期）或路径不对（环境问题）——两者都可能，
       // 因此把判断所需的事实（应然路径 + 壳侧日志位置）一起给出去。
@@ -330,7 +336,9 @@ async fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, 
       ))
     }
     Err(e) => Err(format!("无法读取启动状态文件：{} ({})", path.display(), e)),
-  }
+  })
+  .await
+  .map_err(|e| format!("启动状态读取任务失败：{e}"))?
 }
 
 /// 构造「没有状态文件」时的兜底状态（形态与编排器写的那份同域 + 多两个字段）。
@@ -757,6 +765,47 @@ fn url_reachable(url: &tauri::Url) -> bool {
   }
 }
 
+/// [`tcp_probe`] 的**有界等待**形态（ISSUE #4336）：解析（`to_socket_addrs`）+
+/// 连接整体丢进一次性后台线程，调用方只做有上限的等待，到点按「不可达」放手。
+///
+/// 为什么需要它：`to_socket_addrs` 是**无超时的阻塞解析**。探测目标通常是
+/// `127.0.0.1`/`localhost`（命中 hosts，瞬回），但应用地址可被 `COMFYAPP_DEV_URL`
+/// 注入任意主机名——一旦走真实 DNS 且解析卡住，调用线程就冻在系统调用上；
+/// 主线程调用点（页面加载回调）冻住 = 整个壳无响应。预算到点后探测线程
+/// 随后自行结束（DNS 终有系统级超时），主线程不再陪冻。
+///
+/// 起不了线程（极端资源紧张）按「不可达」回答：调用方对 false 的处置
+/// （不交换窗口 / 进重导航循环）都是安全的重试，不会误判成「服务已就绪」。
+fn tcp_probe_bounded(host: &str, port: u16, budget: Duration) -> bool {
+  let (tx, rx) = std::sync::mpsc::channel();
+  let host = host.to_string();
+  let spawned = std::thread::Builder::new()
+    .name("comfyapp-tcp-probe".into())
+    .spawn(move || {
+      let _ = tx.send(tcp_probe(&host, port));
+    });
+  match spawned {
+    Ok(_) => rx.recv_timeout(budget).unwrap_or(false),
+    Err(_) => false,
+  }
+}
+
+/// [`tcp_probe_bounded`] 的 URL 形态：解析 host/port 后走同一探测。
+/// 后台线程里的调用点（重导航循环 / 就绪看护）继续用 [`url_reachable`]，
+/// 不必多付一线程；**主线程**调用点一律走这里（ISSUE #4336）。
+fn url_reachable_bounded(url: &tauri::Url, budget: Duration) -> bool {
+  let Some(host) = url.host_str() else {
+    return false;
+  };
+  if host.is_empty() {
+    return false;
+  }
+  match url.port_or_known_default() {
+    Some(port) => tcp_probe_bounded(host, port, budget),
+    None => false,
+  }
+}
+
 /// main 窗口加载到错误页后的重导航循环：每 2s 探测一次应用地址，恢复可达后
 /// 重新导航；最多约 3 分钟（覆盖 150s 安全网）。RENAVIGATING 防止多次
 /// Finished 事件触发重复循环。
@@ -1003,8 +1052,9 @@ fn no_log_guidance(root: &str) -> String {
 /// 最先有内容的一份，见 §1.5.1），启动卡住时用户能直接在启动页看到
 ///「执行到哪一步 / 卡在哪里」。
 ///
-/// async 形态（ISSUE #4272）：启动页每 800ms 轮询一次，多份日志尾读 +
-/// 目录枚举这段同步文件 IO 落到 Tauri 的命令线程池执行，不占主线程。
+/// async 形态（ISSUE #4272）：启动页每 800ms 轮询一次，不占主线程。
+/// 同步文件 IO（多份尾读 + 目录枚举）落在**阻塞线程池**而非 tokio worker
+/// （ISSUE #4335）——常驻轮询叠加阻塞 IO 会周期性占用 async worker。
 #[tauri::command]
 async fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   let root = state.project_root();
@@ -1015,7 +1065,19 @@ async fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, Str
     // 至少把根因写出来了。
     return Ok(no_log_guidance(""));
   }
-  let log_dir = shell_launch::launcher_dir(&root);
+  // 同步文件 IO（多份日志尾读 + 目录枚举）挪进**阻塞线程池**（ISSUE #4335）：
+  // 本命令被启动页 800ms 常驻轮询，留在外层 async 体里就等于周期性占用
+  // tokio worker 做阻塞 IO；对调用方这里仍是异步等待，主线程同样不沾。
+  tauri::async_runtime::spawn_blocking(move || collect_launch_log(&root))
+    .await
+    .map_err(|e| format!("启动日志读取任务失败：{e}"))?
+}
+
+/// [`get_launch_log`] 的同步主体：多份日志尾读 + 目录枚举 + 拼面板文本。
+/// 只做 IO 与文本，不关心调用线程——由命令层决定跑在哪（ISSUE #4335 起
+/// 跑在阻塞线程池）。
+fn collect_launch_log(root: &str) -> Result<String, String> {
+  let log_dir = shell_launch::launcher_dir(root);
   let mut sections: Vec<String> = Vec::new();
 
   let dev_log = std::fs::read_to_string(log_dir.join("dev-launcher-current.txt"))
@@ -1047,7 +1109,7 @@ async fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, Str
   // 壳自持日志（release 落 log/current/shell/shell.log；dev 由 launcher 重定向
   // stderr，不产生此文件）。启动期壳的导航/看门狗/侧车诊断都经 log:: 打到这份
   // 文件，正式版壳脱离 launcher（standalone 双击）崩溃时仍有可查日志。
-  let shell_log = shell_launch::shell_log_path(&root);
+  let shell_log = shell_launch::shell_log_path(root);
   // 同上：追加不轮转，靠会话标记只取本次启动的壳自持日志（dev 模式下这份文件
   // 不产生，下面取不到标记会退回空切片，不影响其它段）。
   if let Some(tail) = tail_log_file_since_marker(
@@ -1068,7 +1130,7 @@ async fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, Str
   //
   // 取**本次运行**的最新一份（按 mtime，不是文件名序，见 latest_prefixed_log）：
   // current/ 每次运行结束整目录归档清空，因此该目录内的都属于本次运行。
-  let nextjs_dir = shell_launch::nextjs_log_dir(&root);
+  let nextjs_dir = shell_launch::nextjs_log_dir(root);
   for (label, prefix) in [
     ("服务输出（Next.js stdout）", "nextjs-stdout-"),
     ("服务错误输出（Next.js stderr）", "nextjs-stderr-"),
@@ -1093,7 +1155,7 @@ async fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, Str
   //
   // 这份日志是追加写的，会累积历次启动。壳在每次启动时先写一行会话标记，
   // 这里只取最后一个标记之后的行，保证面板只显示本次启动相关的内容。
-  let launch_log = shell_launch::launch_log_path(&root);
+  let launch_log = shell_launch::launch_log_path(root);
   if let Some(tail) = tail_log_file_since_marker(
     &launch_log,
     shell_launch::SESSION_START_MARKER,
@@ -1113,10 +1175,10 @@ async fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, Str
   // 磁盘上确实一份日志都没有 —— 那段窗口期里「这条日志读不到」的现场就只剩
   // 这一份报告（项目根 / 编排脚本在不在 / 依赖门禁 / 端口 / 各日志路径）。
   if sections.is_empty() {
-    let report = shell_launch::startup_report_section(&root, "（读不到日志，这是壳接手时的快照）");
+    let report = shell_launch::startup_report_section(root, "（读不到日志，这是壳接手时的快照）");
     // 「没了」这一步必须给出**下一步做什么**，否则用户唯一能做的就是把屏幕
     // 截图发出来（手验反馈正是如此）。
-    return Ok(format!("{}\n\n{}", report, no_log_guidance(&root)));
+    return Ok(format!("{}\n\n{}", report, no_log_guidance(root)));
   }
   Ok(sections.join("\n\n"))
 }
@@ -2864,7 +2926,11 @@ fn on_main_page_finished(handle: &tauri::AppHandle, url: tauri::Url) {
     log::info!("[ComfyAPP] launch abandoned by user, skip window swap");
     return;
   }
-  if !url_reachable(&url) {
+  // 主线程（页面加载回调）不做可能无界阻塞的系统调用：解析 + 连接整体移出，
+  // 这里只做有上限的等待（ISSUE #4336）。预算 3s：正常回环探测瞬回，最坏
+  // 合法情形（两个地址各 1s 连接超时）也覆盖得住；只有 DNS 卡死才会等满，
+  // 那时按不可达交给重导航循环（它在后台线程用无界探测继续追）。
+  if !url_reachable_bounded(&url, Duration::from_millis(3000)) {
     log::warn!("[ComfyAPP] swap aborted, app url unreachable: {}", url_str);
     // 页面是内嵌错误页时占位会被导航冲掉：再补一次，直到重导航把真页面带回来
     watch_main_first_paint(handle.clone(), true);
@@ -3795,6 +3861,26 @@ mod log_filter_tests {
       tcp_probe("localhost", bound_port),
       "只绑 127.0.0.1 的服务必须能经 localhost 探测到（试全部解析地址）"
     );
+  }
+
+  #[test]
+  fn tcp_probe_bounded_answers_like_tcp_probe_within_budget() {
+    // 有界形态与直接探测**同判**（ISSUE #4336）：监听中的端口可达、已释放的
+    // 端口拒连即败。预算给足（2s）——正常回环探测（解析命中 hosts + 立即
+    // 连通/拒连）远用不满；「到点放手」由 recv_timeout 的上界保证，不是靠
+    // 探测自身守时。
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let bound_port = listener.local_addr().unwrap().port();
+    assert!(tcp_probe_bounded("127.0.0.1", bound_port, Duration::from_secs(2)));
+
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let closed_port = closed.local_addr().unwrap().port();
+    drop(closed);
+    assert!(!tcp_probe_bounded(
+      "127.0.0.1",
+      closed_port,
+      Duration::from_secs(2)
+    ));
   }
 
   #[test]
