@@ -7,6 +7,9 @@
  *   ③ 401 / 403 / 限流 / 5xx 被读成「没有结论」以外的东西；
  *   ④ 建单后漏了补标签（`create-issue --labels` 实测不落地）。
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { normalizeAlert } from "../scripts/ci/ci-dependabot-triage-model.mjs";
@@ -346,13 +349,22 @@ describe("失败姿态：读不全 / 认证 / 限流 ⇒ 红且零写入", () =>
     expect(classifyGithubFailure(401, "", null).detail).toContain("GH_TOKEN");
   });
 
-  it("403 ⇒ 点名缺 `security-events: read`", async () => {
+  it("403 ⇒ 点名缺 `vulnerability-alerts: read`（GITHUB_TOKEN 的 security-events 不覆盖 Dependabot）", async () => {
     const { code, logs } = await runMain(
       () => response(403, "forbidden"),
       () => response(200, []),
     );
     expect(code).toBe(CODE.NO_FACT);
-    expect(logs.join("\n")).toContain("security-events: read");
+    expect(logs.join("\n")).toContain("vulnerability-alerts: read");
+  });
+
+  it("workflow 权限块给的是 `vulnerability-alerts: read`，不是 security-events", () => {
+    const yaml = readFileSync(
+      join(process.cwd(), ".github", "workflows", "dependabot-triage.yml"),
+      "utf8",
+    );
+    expect(yaml).toMatch(/^\s*vulnerability-alerts:\s*read\s*$/m);
+    expect(yaml).not.toMatch(/^\s*security-events:\s*read\s*$/m);
   });
 
   it("403 + 配额 0 ⇒ 读成限流，不读成缺权限", () => {

@@ -9,9 +9,9 @@
  *
  * ## 权限
  *
- * 内置 `GITHUB_TOKEN` 的 `security-events: read` 同时覆盖 code scanning 与
- * Dependabot alerts（GitHub 的「Security events」细粒度权限是三合一：code
- * scanning / Dependabot / secret scanning），所以 workflow 那侧不用加新权限。
+ * 内置 `GITHUB_TOKEN` 按**族**给权限：Dependabot alerts 要 `vulnerability-alerts: read`；
+ * `security-events: read` 只覆盖 code scanning，两枚互不覆盖（细粒度 PAT 的
+ * 「Security events」才是一项三合一）。所以 workflow 那侧各自声明自己那一枚。
  *
  * @typedef {import("./ci-dependabot-triage-model.mjs").FetchLike} FetchLike
  * @typedef {import("./ci-dependabot-triage-model.mjs").Alert} Alert
