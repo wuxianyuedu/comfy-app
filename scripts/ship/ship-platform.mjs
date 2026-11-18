@@ -45,6 +45,7 @@ import {
   readPullVerdict,
 } from "./ship-core.mjs";
 import { findLandedPull, openScanReadout, scanPullPages } from "./ship-scan.mjs";
+import { PR_ALREADY_OPEN_ERRCODE, readCreatedPullNumber } from "./ship-pull-reuse.mjs";
 import { planCreateBody, updatePullBodyOnReuse, updatePullTitleOnReuse } from "./ship-pr-body.mjs";
 import { diffBaseRef, pickTitle } from "./ship-title.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
@@ -369,13 +370,17 @@ export function createOrReusePull(ctx) {
     log("[ship] 建 PR 没拿到可解析的响应 ⇒ 这一格没有结论（不是「失败」也不是「成功」）");
     return { number: null, stop: CODE.NOT_RUN };
   }
-  number = readPullVerdict(made.json).number;
+  /* #4318：取号认成功 data.number / 409 已有开放 PR 的 errparam.number；判定在独立模块。 */
+  const created = readCreatedPullNumber(made.json);
+  number = created.number;
+  if (created.via === "duplicate") {
+    log(
+      `[ship] 建 PR 撞平台 409：该分支已有开放 PR #${number}` +
+        `（errcode=${PR_ALREADY_OPEN_ERRCODE}，号在 errparam.number）⇒ 复用，不重建（#4318）。`,
+    );
+  }
   if (!number) {
-    /* ⚠️ 这一格错过一次，而且是最重的那一类：响应**能解析**、`data` 里却没有号
-     * （实测 `cnb pulls post-pull` 带一个含 `--xxx=yyy` 的 `--title` 经 PowerShell 宿主
-     * 转发时失败），上一版把 `✓ 已建 PR #null` 先打了出去 —— 平台上根本没有那个 PR，
-     * 而屏幕上写着成功。取值之后**先验再念**：念出来的一句「已建」必须有一个号撑着。
-     * 原文与 stderr 一起给：这个工具的职责是如实转述执行者，不是替它总结。 */
+    /* 能解析却无号：「已建」那句话必须有一个号撑着，原文与 stderr 一起给。 */
     log(
       "[ship] 建 PR 的响应解析出来了，但里面**没有 PR 号** ⇒ 不打印「已建」，" +
         "这一格按「没跑起来」处理（exit 2）。",
@@ -383,8 +388,6 @@ export function createOrReusePull(ctx) {
     log(`[ship]   退码 ${made.code} · 响应原文（截 500 字）：${made.raw.slice(0, 500)}`);
     const platErr = readPullCreateError(made.json);
     if (platErr) {
-      /* 单独一行，不靠上面那个字符窗口：拒绝理由是平台给的原值，念得出就不该让人
-       * 再去数一遍截断截到哪儿（ISSUE #2248：`2000003 body length exceeded …`）。 */
       log(
         `[ship]   平台给的拒绝：errcode=${platErr.errcode || "(无)"} · ${platErr.errmsg || "(无)"}`,
       );
@@ -394,11 +397,18 @@ export function createOrReusePull(ctx) {
     }
     return { number: null, stop: CODE.NOT_RUN };
   }
-  log(`[ship] ✓ 已建 PR #${number}`);
+  if (created.via !== "duplicate") log(`[ship] ✓ 已建 PR #${number}`);
   stampHandlerLabel({ run, log, slug, number, handle, root });
   return {
     number,
-    stop: reportPullConflict({ run, log, slug, number, baseRef, via: "新建" })
+    stop: reportPullConflict({
+      run,
+      log,
+      slug,
+      number,
+      baseRef,
+      via: created.via === "duplicate" ? "复用" : "新建",
+    })
       ? CODE.CONFLICT
       : null,
   };
