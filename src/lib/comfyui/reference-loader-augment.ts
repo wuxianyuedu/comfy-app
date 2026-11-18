@@ -16,6 +16,8 @@
  * 无 React、无 IO（规范 §17.2 第①层），可直接单测。
  */
 
+import { isRecord } from "~/lib/is-record";
+
 /** 覆盖项三元组（与 `RawWorkflowOverride` 的形状一致，这里收窄成最小依赖）。 */
 export type LoaderOverride = {
   name: string;
@@ -31,10 +33,6 @@ export type AugmentedGraph<R> = {
   /** 增强后的覆盖项：落点改写到新补的 LoadImage 节点上。 */
   overrides: Array<LoaderOverride>;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function asArray(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value) ? value.filter(isRecord) : [];
