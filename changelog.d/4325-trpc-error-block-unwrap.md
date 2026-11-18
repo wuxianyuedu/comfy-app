@@ -1,0 +1,5 @@
+## Fixed
+
+- e2e 的 tRPC 薄封装不再把错误块吞成 `undefined`（ISSUE #4325，#4274 排障现场）：`trpcCall` 原来只解成功块（`json[2][0][0]`），服务端批内单过程报错（典型：入参 zod 校验失败）在 tRPC v11 流式响应下 HTTP 仍是 200、`res.ok()` 拦不到，错误块被当过程返回值漏到下游断言——`project.upsert` 入参没过却红在两条之后的 `project.list`（Received: undefined）。现在解包+错误识别抽成纯函数 `e2e/support/trpc-response.ts`，识别 `{error:{message,code,data:{code,path}}}` 并抛带过程名与服务端 message 的错，e2e 红在真实失败点；空响应体 / 非法 JSON / 信封缺 `json[2]` 也一律抛清楚错，不再静默 undefined。`main-journey.spec.ts` 接入该函数并顺手消掉本地重复的 `isUnknownArray`（用 `~/lib/is-record` 唯一出口）。
+- **错误块形状经真实响应取证，不照猜**（issue 的明确要求）：本地起 dev server 发空入参的 `project.upsert` mutation，实测 HTTP 200 + 两行 JSONL，末行 `json[2][0][0]` = `{error:{message(zod 文本), code:-32600, data:{code:BAD_REQUEST, httpStatus:400, path:"project.upsert"}}}`；原始响应落盘 `.git/evidence/trpc-error-block-4325.jsonl`（gitignored）。判据要求 `error.message` 是字符串且 `error.code` 是数字，避免把业务对象里叫 `error` 的字段误判。
+- 测试（`tests/e2e-trpc-response.test.ts`）：取证形状的错误块抛错（带过程名 / code / zod 文本）、长 message 截断、业务对象 `error` 字段不误判；成功路径用真桩 `trpcJsonlBody` 产出验证逐字等价旧逻辑；畸形响应三态抛清楚错。
