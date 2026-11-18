@@ -56,6 +56,10 @@ import { applyApiOverrides, applyRawOverrides, type JsonRecord } from "./raw-ove
 import { trace } from "./trace";
 import { COMFYUI_DEFAULT_PORT, LOOPBACK_HOST } from "../endpoints";
 
+/* 进度落库失败已留痕的任务（ISSUE #4268）：进度事件高频，每个任务只记第一次
+ * 失败防刷屏；集合带上限（超限清空重来），不随任务数无界增长。 */
+const progressPersistWarned = new Set<string>();
+
 /* ── 依赖注入接缝（P3 §5 第 1 期·第三步·执行批） ────────────────────── */
 
 export type LoggerLike = { warn(msg: string): void };
@@ -492,7 +496,17 @@ export async function executeViaComfyCli(job: Job) {
             log(taskId, "warn", "任务已由其它路径收口，忽略本次 prompt_id 回传（不再改写终态）");
           }
         })
-        .catch(() => undefined);
+        .catch((markError: unknown) => {
+          /* 落库失败要看得见（ISSUE #4268）：上面 updated=false 是 CAS 让位
+           * （业务性，已 warn）；这里接的是 promise **拒绝**——SQLite busy 等
+           * 真故障会让行停在 QUEUED/promptId=null，reaper 的「QUEUED 超时且无
+           * promptId」规则可能把正在执行的任务误判孤儿。低频事件，逐条留痕。 */
+          log(
+            taskId,
+            "warn",
+            `markRunning 落库失败（状态推进受阻）：${sqliteAwareErrorText(markError, "markRunning 落库")}`,
+          );
+        });
     },
     onProgress: (
       progress: number,
@@ -508,7 +522,21 @@ export async function executeViaComfyCli(job: Job) {
        *  的进度事件此前只发进程内 emitter——host 模式下界面全程 0% 的根因。
        *  CAS 语义在 updateProgress 内部（终态行不再改写），这里 fire-and-forget，
        *  形态对齐上方 onPromptId 的 markRunning 调用。 */
-      void taskRepository.updateProgress(taskId, progress, node).catch(() => undefined);
+      void taskRepository.updateProgress(taskId, progress, node).catch((progressError: unknown) => {
+        /* 进度落库失败要看得见（ISSUE #4268）：进度事件高频，只记每个任务的
+         * 第一次失败防刷屏；持续失败时界面进度静默停在旧值，这条 warn 是唯一线索。 */
+        if (!progressPersistWarned.has(taskId)) {
+          progressPersistWarned.add(taskId);
+          if (progressPersistWarned.size > 500) {
+            progressPersistWarned.clear();
+          }
+          log(
+            taskId,
+            "warn",
+            `进度落库失败（界面进度将停在旧值）：${sqliteAwareErrorText(progressError, "进度落库")}`,
+          );
+        }
+      });
     },
   });
   child.stdout.on("data", stdoutParser.sink);
