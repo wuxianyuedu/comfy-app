@@ -365,6 +365,9 @@ const GA_PR_INFRA_STEPS: ReadonlyArray<string> = [
   "装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）",
   "装 Node（engines 下限 26.12.1；脚本只吃 node:*）",
   "装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）",
+  /* 同一安装的两个条件重试步（ISSUE #4296）：apt 源抖动时自愈，不是判据。 */
+  "重试装 Tauri 的 Linux 系统依赖（apt 源抖动自愈，#4296）",
+  "二次重试装 Tauri 的 Linux 系统依赖（#4296）",
   "cargo 缓存",
   "恢复 node_modules 缓存（灰度）",
   "安装依赖",

@@ -462,7 +462,52 @@ jobs:
       # 而这一格原来既无重试、也无连接 / 步级超时 ⇒ 整条 PR 流水线被压在 pending。
       # 两条 apt 命令加重试与空闲超时让短暂抖动自愈、死镜像早退；步级超时兜住真挂住，
       # 让失败落在这一步自己的名字上。判据一字不改，只硬化这层环境前置（#3589）。
+      #
+      # 步级**整体重试**（#4296）：Acquire::Retries 只救单个下载，救不了「安装中途
+      # 卡死到步级超时」——2026-11-18 一天内该步超时 3 次（#4281/#4283/#4284 的
+      # PR），每次都要人工重派。这里把「装依赖」拆成 1 + 2 个条件重试步：每步都有
+      # 自己的 15 分钟预算；上一失败步成功后，后续步骤照常跑重档。
       - name: 装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）
+        id: tauri-sysdeps
+        timeout-minutes: 15
+        run: |
+          sudo apt-get update -qq -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+          sudo apt-get install -y -qq --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+            libglib2.0-dev \
+            libatk1.0-dev \
+            libcairo2-dev \
+            libgdk-pixbuf-2.0-dev \
+            libpango1.0-dev \
+            libgtk-3-dev \
+            libdbus-1-dev \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libsoup-3.0-dev \
+            build-essential \
+            libayatana-appindicator3-dev
+
+      - name: 重试装 Tauri 的 Linux 系统依赖（apt 源抖动自愈，#4296）
+        id: tauri-sysdeps-retry
+        if: failure() && steps.tauri-sysdeps.outcome == 'failure'
+        timeout-minutes: 15
+        run: |
+          sudo apt-get update -qq -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+          sudo apt-get install -y -qq --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+            libglib2.0-dev \
+            libatk1.0-dev \
+            libcairo2-dev \
+            libgdk-pixbuf-2.0-dev \
+            libpango1.0-dev \
+            libgtk-3-dev \
+            libdbus-1-dev \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libsoup-3.0-dev \
+            build-essential \
+            libayatana-appindicator3-dev
+
+      - name: 二次重试装 Tauri 的 Linux 系统依赖（#4296）
+        if: failure() && steps.tauri-sysdeps-retry.outcome == 'failure'
         timeout-minutes: 15
         run: |
           # 2026-11-18（#4294）：GA runner 的 apt 镜像抖动频发——「找不到包」与
