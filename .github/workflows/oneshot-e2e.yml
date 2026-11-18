@@ -35,7 +35,7 @@ env:
 
 jobs:
   oneshot-e2e:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # 四格预算之和（20 + 30 + 20 + 45）量级之上的整数档。
     timeout-minutes: 120
     steps:

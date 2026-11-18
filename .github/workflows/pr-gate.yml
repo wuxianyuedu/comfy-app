@@ -130,9 +130,10 @@ jobs:
   # 一格串行跑完（CNB 上每格各自付一次 job 开销的教训见 `.cnb.yml` 「重档静态判据」
   # 上方那段 —— 这里一开始就是合格形态）。
   static-gates:
-    # `ubuntu-latest` 2026-10-19 ~ 11-19 正从 24.04 分批迁往 26.04：跟着浮动标签跑，等于让
-    # 这一格的机器由平台排期决定。钉版本 → 换镜像是单独一次决定（先按 `ubuntu-26.04` 试跑）。
-    runs-on: ubuntu-24.04
+    # 显式钉 `ubuntu-26.04`、不跟 `ubuntu-latest` 浮动标签：浮动标签的镜像随平台排期漂移，
+    # 同一份代码两次跑可能落在不同镜像上。换镜像是单独一次决定（先在 26.04 上试跑验证），
+    # 不交给浮动标签抖动。
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - name: 检出（按镜像 payload 的 sha）
@@ -226,7 +227,7 @@ jobs:
   # ── 安装 + 数据库表结构 + 类型检查 + oxfmt ─────────────────────────────
   # 对应 `.cnb.yml` 的 Install dependencies / 同步数据库表结构 / 类型检查 / oxfmt 格式。
   typecheck-db-format:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
       - name: 检出（按镜像 payload 的 sha）
@@ -321,7 +322,7 @@ jobs:
   # diff（CNB_PULL_REQUEST_TARGET_SHA 基线，ISSUE #3375），两段都需要 LFS 真身（字体
   # 用例），故合并后 `fetch-depth: 0` + `lfs: true`。
   test-gates:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 90
     env:
       COMFY_AFFECTED_QUIET: "1"
@@ -394,11 +395,11 @@ jobs:
 
   # ── 重档静态判据（钩子注册表执行面，含 cargo test）─────────────────────
   # `.cnb.yml` 那一格带 `.cargo-env` 锚点是自托管 Windows 的 rustup 代理路径
-  # （G:\.cargo + C:\Users\yuedu\.rustup）；ubuntu-24.04 镜像自带 Rust 工具链，
+  # （G:\.cargo + C:\Users\yuedu\.rustup）；Ubuntu hosted 镜像自带 Rust 工具链，
   # 不需要那一对变量。cargo 依赖缓存由 swatinem/rust-cache 承担（钉 v2：
   # `git ls-remote --tags` 核过它只有一个主版本，v2 即最新，且已是 node24 运行时）。
   heavy-gates:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
     env:
       # 「格式化提交与行为改动分离」判据（reformat-preview-range.mjs）认合成合并预览
@@ -457,8 +458,8 @@ jobs:
       #     The system library `glib-2.0` required by crate `glib-sys` was not found.
       #     （cargo 退 101 = **编译期**失败，不是断言失败）
       #
-      # ubuntu-24.04 runner 只预装 `pkg-config`，不预装下面这些（actions/runner-images 的
-      # Ubuntu2404 apt 清单逐条核对过）。
+      # hosted runner 不保证预装下面这些（actions/runner-images 的 apt 清单随镜像版本变）；
+      # 显式 apt 装、不依赖镜像预装，换镜像版本也不影响这一格。
       #
       # 清单**不是照抄 Tauri 官方 Prerequisites 页**：官方那一栏是「给人装环境」用的，
       # 而这一格要的是「编译期真会被问到的 `.pc`」—— 两者差着四个（#3580 的现场：#3572 照
@@ -569,7 +570,7 @@ jobs:
   # `GA_JOB_RESULTS` 把五个 result 交给脚本折成一个 conclusion —— 不用
   # `${{ job.status }}`：它在本格里恒为 success，读不出上游的红。
   ga-verdict-callback:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs:
       - static-gates
       - typecheck-db-format

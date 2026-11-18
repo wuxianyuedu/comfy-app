@@ -266,7 +266,7 @@ jobs:
   # 脚本只认 jobs API 的 `steps[].conclusion`，跑在 `package` 内部时那个 job 自己还是
   # in_progress，实测读回 0 个红格 ⇒ 零写入。`needs: package` 让上游先 completed。
   package-failure-issue:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: package
     # 判的是**上游那一跑**：`package` 里任一格红即成立。绿跑一个字节都不付（job 直接 skipped）。
     if: failure()
