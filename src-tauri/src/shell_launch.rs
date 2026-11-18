@@ -974,6 +974,12 @@ fn append_bytes(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
 /// 不是常规路径——`current/` 每次运行结束会被归档清空，正常情况下远到不了这里。
 pub const SHELL_LOG_MAX_BYTES: u64 = 40 * 1024 * 1024;
 
+/// 编排链路日志（shell-launch.log）的大小上限：超过即整份重建（丢旧保新），
+/// 与 shell.log 的 [`SHELL_LOG_MAX_BYTES`] 同一取向（ISSUE #4389）。该日志
+/// 原为「追加不轮转」——prebuilt 长开会话里编排器/服务的持续输出会把文件推到
+/// 无界；40MB 对单次会话的编排诊断远超够用。
+pub const SHELL_LAUNCH_LOG_MAX_BYTES: u64 = 40 * 1024 * 1024;
+
 /// 行日志的**有界异步写入器**：专用写线程 + 有界通道 + 丢弃计数（ISSUE #4334）。
 ///
 /// 解决的问题：子进程输出泵跑在 tokio worker 上，此前逐行做同步文件 IO（stat +
@@ -1004,15 +1010,33 @@ impl LineLog {
 
   /// 按默认容量起一个写线程。`write` 是真正的落盘动作（含轮转 / 重建语义），
   /// 由写线程**独占**执行——单线程单通道，落盘行序因此与入队顺序一致。
+  ///
+  /// 写线程起不来（极端资源紧张）**不 panic**（ISSUE #4392）：降级为「入队即丢」
+  /// 的断开通道，诊断面损失但壳照常运行——与 `tcp_probe_bounded` 对 spawn 失败
+  /// 的宽容取向一致。
   fn spawn<W>(write: W) -> Self
   where
     W: FnMut(&[u8]) -> std::io::Result<()> + Send + 'static,
   {
-    Self::spawn_with_capacity(write, Self::CHANNEL_CAPACITY)
+    match Self::try_spawn(write, Self::CHANNEL_CAPACITY) {
+      Ok(sink) => sink,
+      Err(error) => {
+        log::error!("[ComfyAPP] 日志写线程启动失败，该诊断通道改为丢弃：{error}");
+        Self::broken()
+      }
+    }
   }
 
   /// 按指定容量起写线程（测试用：小容量才能不依赖时序地测出「满了丢弃」）。
+  #[cfg(test)]
   fn spawn_with_capacity<W>(write: W, capacity: usize) -> Self
+  where
+    W: FnMut(&[u8]) -> std::io::Result<()> + Send + 'static,
+  {
+    Self::try_spawn(write, capacity).expect("测试写线程不应起不来")
+  }
+
+  fn try_spawn<W>(write: W, capacity: usize) -> std::io::Result<Self>
   where
     W: FnMut(&[u8]) -> std::io::Result<()> + Send + 'static,
   {
@@ -1052,12 +1076,23 @@ impl LineLog {
         if n > 0 {
           let _ = write(format!("（落盘滞后：前段已丢弃 {n} 行）\n").as_bytes());
         }
-      })
-      .expect("日志写线程启动失败");
-    Self {
+      })?;
+    Ok(Self {
       tx,
       dropped,
       worker: Some(worker),
+    })
+  }
+
+  /// 断开通道的空实现（[`Self::spawn`] 的降级出口）：`send_line` 恒走
+  /// Disconnected 分支丢弃，`barrier` 立即返回，`Drop` 无线程可等。
+  fn broken() -> Self {
+    let (tx, rx) = std::sync::mpsc::sync_channel(0);
+    drop(rx);
+    Self {
+      tx,
+      dropped: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+      worker: None,
     }
   }
 
@@ -1090,12 +1125,20 @@ impl LineLog {
 
 impl Drop for LineLog {
   fn drop(&mut self) {
-    // 发 Close 后 join：写线程会把 Close 之前入队的行全部写完再退出，所以
-    // Drop 语义是「尽力把尾巴落盘」。磁盘真挂住时，join 等的是写线程当前那一次
-    // 写——与旧实现「调用线程等在自己的 write 上」同代价，不再放大。
-    let _ = self.tx.send(LineMsg::Close);
+    // Close 尽力而为：通道满时丢这枚哨兵也无妨——随后 tx 随 self 一起 drop
+    // 会断开通道，写线程把队列里剩下的行收完自然退出（recv 对「已断开且空」
+    // 返回 Err）。
+    let _ = self.tx.try_send(LineMsg::Close);
     if let Some(handle) = self.worker.take() {
-      let _ = handle.join();
+      // join 要等写线程把积压行写完（磁盘慢时秒级）——绝不能在调用方线程上
+      // 等：输出泵的收尾发生在 tokio worker 上（ISSUE #4390），在这里 join
+      // 等于把 worker 交回给磁盘节奏。挪进一次性守护线程，调用方立即返回；
+      // 尾巴落盘变为尽力而为（积压 ≤ 通道容量，有界）。
+      let _ = std::thread::Builder::new()
+        .name("comfyapp-line-log-join".into())
+        .spawn(move || {
+          let _ = handle.join();
+        });
     }
   }
 }
@@ -1382,6 +1425,12 @@ pub(crate) fn run_with_budget(
 /// 瞬间收完；给 2s 是给「写端还没关」的窄窗口一个来得及收的余地。
 pub(crate) const PIPE_DRAIN_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
 
+/// 单条管道残余收取的容量上限（ISSUE #4388）：收尾读取线程无条件 `read_to_end`
+/// 会在「后代继承写端且持续输出」时无界吃内存——这里封住内存面。超限即停累积；
+/// 读取线程本身在写端全部关闭前可能仍滞留（detached，进程退出时由 OS 回收），
+/// 但内存与主流程都已有界。
+const PIPE_DRAIN_CAP_BYTES: usize = 64 * 1024;
+
 /// 已退出的子进程把 stdout/stderr 残余收干净——但**有界**（ISSUE #4337）。
 ///
 /// `read_to_end` 要等管道**所有**写端关闭才返回：被回收脚本留下的后代进程若
@@ -1389,7 +1438,8 @@ pub(crate) const PIPE_DRAIN_BUDGET: std::time::Duration = std::time::Duration::f
 /// 退出路径无限期挂住（主线程冻在 `RunEvent::Exit` 里，表现为「关了窗却退不
 /// 出」——`try_wait` 那段有预算，这一段原先没有）。这里把每条管道的收取挪进
 /// 一次性线程、整体给一个宽限预算：到点放弃，拿到多少算多少——残余输出是
-/// 诊断信息，丢给它换退出路径的墙钟上限，值得。
+/// 诊断信息，丢给它换退出路径的墙钟上限，值得。容量上限见
+/// [`PIPE_DRAIN_CAP_BYTES`]（ISSUE #4388）。
 fn drain_pipes_bounded(
   child: &mut std::process::Child,
   budget: std::time::Duration,
@@ -1397,20 +1447,21 @@ fn drain_pipes_bounded(
   use std::io::Read;
   let (tx, rx) = std::sync::mpsc::channel::<(bool, Vec<u8>)>();
   let mut spawned = 0usize;
-  if let Some(mut s) = child.stdout.take() {
+  if let Some(s) = child.stdout.take() {
     let tx = tx.clone();
     spawned += 1;
     std::thread::spawn(move || {
       let mut buf = Vec::new();
-      let _ = s.read_to_end(&mut buf);
+      // take(CAP)：超限即停累积——写端不关时 read_to_end 本会无限等下去。
+      let _ = s.take(PIPE_DRAIN_CAP_BYTES as u64).read_to_end(&mut buf);
       let _ = tx.send((true, buf));
     });
   }
-  if let Some(mut s) = child.stderr.take() {
+  if let Some(s) = child.stderr.take() {
     spawned += 1;
     std::thread::spawn(move || {
       let mut buf = Vec::new();
-      let _ = s.read_to_end(&mut buf);
+      let _ = s.take(PIPE_DRAIN_CAP_BYTES as u64).read_to_end(&mut buf);
       let _ = tx.send((false, buf));
     });
   }
@@ -1526,7 +1577,11 @@ pub fn spawn_orchestrator(
   // 计数）：本泵跑在 tokio worker 上，逐行同步写文件会在慢盘 / 高频输出时拖住
   // worker、并让无界上游在内存里堆积（ISSUE #4334）。
   let launch_log_file = launch_log_path(project_root);
-  let launch_sink = LineLog::spawn(move |buf| append_bytes(&launch_log_file, buf));
+  // 落盘走 write_shell_log_bytes：超上限整份重建（ISSUE #4389），别让长开
+  // 会话把这份日志推到无界。
+  let launch_sink = LineLog::spawn(move |buf| {
+    write_shell_log_bytes(&launch_log_file, SHELL_LAUNCH_LOG_MAX_BYTES, buf)
+  });
   tauri::async_runtime::spawn(async move {
     use tauri_plugin_shell::process::CommandEvent;
     while let Some(event) = rx.recv().await {
@@ -2169,9 +2224,17 @@ mod tests {
       for i in 0..50 {
         sink.send_line(format!("line-{i}\n"));
       }
-      // 故意不 barrier：直接 drop，靠 Drop 里的 Close + join 排空。
+      // 故意不 barrier：直接 drop。Drop 现在把 join 挪进守护线程（#4390），
+      // 尾巴落盘是异步完成的——轮询等待排空（50 行小写入，秒内完成）。
     }
-    let content = std::fs::read_to_string(&path).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let content = loop {
+      let content = std::fs::read_to_string(&path).unwrap_or_default();
+      if content.matches('\n').count() >= 50 || std::time::Instant::now() >= deadline {
+        break content;
+      }
+      std::thread::sleep(std::time::Duration::from_millis(20));
+    };
     for i in 0..50 {
       assert!(content.contains(&format!("line-{i}\n")), "缺 line-{i}：{content}");
     }

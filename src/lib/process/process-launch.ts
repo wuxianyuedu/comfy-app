@@ -31,6 +31,7 @@
 // + log-paths #1074 通链，纯 Node 可加载） / `~/lib/with-timeout`（纯函数）。
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
+import { errorText } from "~/lib/error-message";
 import { logger } from "~/lib/core/logger";
 import { elevateLogLevel } from "./probe-exe.ts";
 import { withTimeoutResult } from "~/lib/with-timeout";
@@ -159,6 +160,9 @@ export type DetachMediatorOutcome = {
 export type DetachMediatorHandle = {
   /** 超时回收中介用（ISSUE #4349）；真 `ChildProcess` 天然满足，测试句柄可不给。 */
   kill?: (() => boolean) | undefined;
+  /** 拉起失败（ENOENT 等）走**异步 error 事件**、不发 exit（ISSUE #4396）——
+   * 真句柄天然有；测试句柄可不给。等到它按「中介失败」收场，不再假成功。 */
+  on?(event: "error", listener: (error: Error) => void): unknown;
   once(event: "exit", listener: (code: number | null) => void): unknown;
   stderr?: {
     on(event: "data", listener: (chunk: Buffer) => void): unknown;
@@ -190,6 +194,14 @@ export function waitForDetachMediator(
           stderr: readSoFar(),
         });
       });
+      // 拉起失败走 error 事件、不发 exit（ISSUE #4396）：等到它按「中介失败」
+      // 收场（code=-1），失败原因并进 stderr——调用方不再给「已执行」的假成功。
+      child.on?.("error", (error: Error) => {
+        resolve({
+          code: -1,
+          stderr: `${readSoFar()}\n[process-launch] ${errorText(error, "中介拉起")}`.trim(),
+        });
+      });
     }),
     timeoutMs,
     null,
@@ -217,6 +229,18 @@ export function waitForDetachMediator(
  *    keepAlive 不返回可用的 child（stdio/exit 语义不可用），返回的 child 上
  *    pid 为中介进程 PID 而非目标，调用方不要依赖；就绪与否请用外部探测。
  */
+/**
+ * keepAlive 的 child / 中介必须挂 `error` 监听（ISSUE #4396）：目标不存在
+ * （ENOENT）等拉起失败走**异步 error 事件**、不发 exit——无人监听就是
+ * uncaughtException（被进程安全网兜住只剩噪声），且调用方的就绪等待只能等满
+ * 超时、给出「启动命令已执行」的假成功。这里至少把失败读进日志。
+ */
+function attachSpawnErrorLogger(child: ChildProcess, label: string): void {
+  child.on("error", (error: Error) => {
+    logger.warn(`[process-launch] ${errorText(error, `${label} 拉起`)}`);
+  });
+}
+
 export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
   const { command, args, mode } = opts;
   if (mode === "bound") {
@@ -269,6 +293,7 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
         detached: true,
         stdio,
       });
+      attachSpawnErrorLogger(child, `keepAlive ${command}`);
       child.unref();
       closeOpenedFds();
       return { child };
@@ -307,6 +332,7 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
         windowsHide: true,
         stdio: ["ignore", "ignore", "pipe"],
       });
+      attachSpawnErrorLogger(mediator, `keepAlive 中介（壳 CLI）${shellExe}`);
       mediator.unref();
       return { child: mediator };
     } catch (error) {
@@ -346,6 +372,7 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
       windowsHide: true,
       stdio: ["ignore", "ignore", "pipe"],
     });
+    attachSpawnErrorLogger(mediator, "keepAlive 中介（powershell 回退）");
     mediator.unref();
     // 中介是立即退出的 powershell；返回它仅供调用方持有引用，pid 不代表目标。
     return { child: mediator };
