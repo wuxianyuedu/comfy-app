@@ -73,7 +73,22 @@ export function ScriptMarkdownEditor({
   }, [value, emitChange]);
 
   const outline = React.useMemo(() => buildOutline(value), [value]);
-  const previewHtml = React.useMemo(() => markdownToHtml(value), [value]);
+  /* 预览 HTML 按需计算（#4341）：成本挂在 value 上、消费与否取决于 showPreview——
+   * 预览关闭时结果不渲染，但 memo 仍会在每个按键上跑全量管线（marked.parse +
+   * sanitize）。showPreview 进依赖：关着时给空串（EditorBody 只在预览分支消费它，
+   * 空串不可见），开着才解析；关→开的那一拍按当前 value 算一次。 */
+  const previewHtml = React.useMemo(
+    () => (showPreview ? markdownToHtml(value) : ""),
+    [value, showPreview],
+  );
+  /* 页脚统计（#4341）：渲染期表达式收敛进 memo——value 没变的那批重渲染
+   * （开关预览 / 撤销栈变化 / 父组件同值重渲染）不再全量扫描两遍字符串。 */
+  const footerStats = React.useMemo(() => {
+    return {
+      chars: value.trim().length,
+      lines: value.split("\n").filter((line) => line.trim()).length,
+    };
+  }, [value]);
 
   function pushHistory(nextValue: string, start: number, end: number) {
     if (historyLockRef.current) {
@@ -355,7 +370,7 @@ export function ScriptMarkdownEditor({
       {/* Footer */}
       <footer className="border-border bg-panel flex h-16 items-center justify-end gap-3 border-t px-6">
         <span className="text-ink-fainter mr-auto text-xs">
-          {value.split("\n").filter((line) => line.trim()).length} 行 · {value.trim().length} 字符
+          {footerStats.lines} 行 · {footerStats.chars} 字符
         </span>
         <Button
           className="border-border text-ink-strong hover:bg-subtle h-auto rounded-lg px-5 py-2"
