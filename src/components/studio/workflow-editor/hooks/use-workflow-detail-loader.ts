@@ -137,6 +137,15 @@ export function useWorkflowDetailLoader({
    *  排副作用 —— React StrictMode 会双调用 updater，导致重复发请求）。所有栈
    *  变更都走 updateStack，保证镜像与 state 同步。 */
   const stackRef = useRef<Array<WorkflowSubgraphStackEntry>>([]);
+  /* 卸载判活（ISSUE #4288）：进/出子图的 setTimeout(0) → fetchDetail 链，
+   * 若同一拍内组件已卸载，就不再发出请求、也不把结果写进已消失的界面。 */
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
   const updateStack = useCallback(
     (
       updater:
@@ -395,11 +404,13 @@ export function useWorkflowDetailLoader({
       setSubgraphLoading(true);
       const hostChain = [parentHostId, nodeId].filter(Boolean).join(":");
       setTimeout(() => {
-        void fetchDetail({
-          subgraphUid: uid,
-          parentTitle,
-          hostNodeId: hostChain,
-        });
+        if (aliveRef.current) {
+          void fetchDetail({
+            subgraphUid: uid,
+            parentTitle,
+            hostNodeId: hostChain,
+          });
+        }
       }, 0);
     },
     [fetchDetail, setSubgraphError, setSubgraphLoading],
@@ -420,15 +431,19 @@ export function useWorkflowDetailLoader({
       /* 回到上一层同样带上它自己的宿主链：上一层若是子图内部视图，坐标也存成
        *  `宿主:内部`，不带前缀会退回原始坐标。 */
       setTimeout(() => {
-        void fetchDetail({
-          subgraphUid: parent.uid,
-          parentTitle: parent.name,
-          hostNodeId: parent.nodeId,
-        });
+        if (aliveRef.current) {
+          void fetchDetail({
+            subgraphUid: parent.uid,
+            parentTitle: parent.name,
+            hostNodeId: parent.nodeId,
+          });
+        }
       }, 0);
     } else {
       setTimeout(() => {
-        void fetchDetail();
+        if (aliveRef.current) {
+          void fetchDetail();
+        }
       }, 0);
     }
   }, [fetchDetail, updateStack, setSubgraphLoading]);
