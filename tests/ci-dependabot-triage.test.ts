@@ -129,8 +129,8 @@ function response(
 function ghOk(alerts: unknown[], calls?: HttpCall[]) {
   return (url: string, init?: { body?: string; method?: string }): Promise<FakeResponse> => {
     calls?.push({ url, init: init ?? {} });
-    const page = Number(new URL(url).searchParams.get("page") ?? "1");
-    return page === 1 ? response(200, alerts) : response(200, []);
+    /* 单页形态：没有 Link 头 ⇒ 取完即停。 */
+    return response(200, alerts);
   };
 }
 
@@ -325,18 +325,40 @@ describe("失败姿态：读不全 / 认证 / 限流 ⇒ 红且零写入", () =>
     const cnbCalls: HttpCall[] = [];
     const ghFetch = (url: string): Promise<FakeResponse> => {
       ghCalls.push({ url, init: {} });
-      return new URL(url).searchParams.get("page") === "1"
-        ? response(200, full)
-        : response(500, "boom");
+      /* 首页（无游标）给满页 + Link 下一页；带游标的那一页一律 500。 */
+      return new URL(url).searchParams.has("after")
+        ? response(500, "boom")
+        : response(200, full, {
+            link: `<https://api.github.com/repos/wuxianyuedu/comfy-app/dependabot/alerts?state=open&per_page=100&after=cur1>; rel="next"`,
+          });
     };
     const { code, logs } = await runMain(ghFetch, (url, init) => {
       cnbCalls.push({ url, init: init ?? {} });
       return response(200, []);
     });
     expect(code).toBe(CODE.NO_FACT);
-    expect(ghCalls.length).toBe(1 + 1 + 2); // 第 1 页 + 第 2 页 + 两次重试
+    expect(ghCalls.length).toBe(1 + 1 + 2); // 首页 + 游标页 + 两次重试
     expect(cnbCalls).toEqual([]);
     expect(logs.join("\n")).toContain("一次都不写");
+  });
+
+  it("分页走 Link 头游标：请求不带 page 参数，下一页取 rel=next 的原地址", async () => {
+    const full = Array.from({ length: 100 }, (_, i) => rawAlert(i + 1));
+    const ghCalls: HttpCall[] = [];
+    const cursorUrl =
+      "https://api.github.com/repos/wuxianyuedu/comfy-app/dependabot/alerts?state=open&per_page=100&after=cur1";
+    const ghFetch = (url: string): Promise<FakeResponse> => {
+      ghCalls.push({ url, init: {} });
+      return new URL(url).searchParams.has("after")
+        ? response(200, [rawAlert(101)])
+        : response(200, full, { link: `<${cursorUrl}>; rel="next"` });
+    };
+    const { code } = await runMain(ghFetch, () => response(200, []), ["--dry-run"]);
+    expect(code).toBe(CODE.DONE);
+    expect(ghCalls.length).toBe(2);
+    /* page 参数会被 400 拒掉（#4168 现场）：首页只准有 state/open/per_page，没有 page。 */
+    expect(new URL(ghCalls[0]?.url ?? "").searchParams.has("page")).toBe(false);
+    expect(ghCalls[1]?.url).toBe(cursorUrl);
   });
 
   it("401 ⇒ NO_FACT，话术点名令牌那一格", async () => {
