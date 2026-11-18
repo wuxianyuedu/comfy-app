@@ -21,29 +21,12 @@ import { isPlainRecord } from "~/lib/is-record";
 import { lastSegments } from "~/lib/path-display";
 import { CanvasNode } from "./project-canvas/CanvasNode";
 import { WorkflowNodeArdot } from "./project-canvas/WorkflowNodeArdot";
-import {
-  type CanvasNodeType,
-  NODE_META,
-  defaultData,
-  type NodeKind,
-} from "~/lib/project-canvas/canvas-types";
-import { makeFitViewScheduler, placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
-import { applyShotPatches, planShotSync, shotToNodePatch } from "~/lib/production/sync";
-import { fetchProduction, type ProductionData } from "~/lib/production/production-client";
-import { normalizeProductionProgress, type ProductionProgress } from "~/lib/production/progress";
+import { type CanvasNodeType, NODE_META, type NodeKind } from "~/lib/project-canvas/canvas-types";
+import { makeFitViewScheduler } from "~/lib/project-canvas/canvas-helpers";
+import type { ProductionProgress } from "~/lib/production/progress";
 import { CanvasProgressIndicator } from "./project-canvas/CanvasProgressIndicator";
 import { useCanvasMenu } from "./project-canvas/hooks/use-canvas-menu";
-import type { Shot } from "~/lib/workshop/types";
-import {
-  createDraftProject, // new: lands on a canvas w/o polluting the index until first real change
-  hydrateFromServer,
-  listProjects,
-  getProject,
-  reapAllEmptyDrafts,
-  setActive,
-  getActiveId,
-  type CanvasProject,
-} from "~/lib/project-canvas/canvas-store";
+import { useCanvasHydration } from "./project-canvas/hooks/use-canvas-hydration";
 import { useProjectPersistence } from "./project-canvas/hooks/use-project-persistence";
 import { useCanvasConnections } from "./project-canvas/hooks/use-canvas-connections";
 import { useCanvasDrop } from "./project-canvas/hooks/use-canvas-drop";
@@ -109,73 +92,9 @@ const DEFAULT_EDGE_OPTIONS = {
 
 const PRO_OPTIONS = { hideAttribution: true };
 
-type PlaceFlowFn = Parameters<typeof placeCanvasNode>[0]["flow"]["screenToFlowPosition"];
-
 /** 回写器只保证 React Flow 的 `Node`；本画布的表恒为 CanvasNodeType —— 用守卫收回。 */
 function isCanvasNodeType(node: FlowNode): node is CanvasNodeType {
   return node.type === "canvasNode" || node.type === "workflowArdot";
-}
-
-/** 节点上的镜头 id（非镜头节点没有 `data.shotId`）。 */
-function shotIdOfNode(n: CanvasNodeType): string | undefined {
-  /* SAFETY: 类型断言已复核 */
-  const data = n.data as { shotId?: string } | undefined;
-  return data?.shotId;
-}
-
-/** `production.shots`（`unknown[]`）逐项收窄：缺必填字段 / 类型不符的记录不投影。 */
-function isShot(value: unknown): value is Shot {
-  if (!isPlainRecord(value)) {
-    return false;
-  }
-  return (
-    typeof value.id === "string" &&
-    value.id !== "" &&
-    typeof value.index === "number" &&
-    Number.isInteger(value.index) &&
-    typeof value.sceneId === "string" &&
-    typeof value.sceneHeading === "string" &&
-    typeof value.shotType === "string" &&
-    typeof value.description === "string" &&
-    Array.isArray(value.characterIds) &&
-    value.characterIds.every((id) => typeof id === "string") &&
-    typeof value.status === "string" &&
-    typeof value.prompt === "string" &&
-    typeof value.negativePrompt === "string" &&
-    isPlainRecord(value.params)
-  );
-}
-
-/** 把 production.shots 物化 / 合并进画布节点（Phase 3c-2a，幂等）。
- *  已有镜头节点（data.shotId 命中）合并补丁，缺失的新建；非镜头节点原样保留。
- *  独立于 CanvasInner，避免其超过函数长度棘轮（§12.13）。 */
-function materializeProductionShots(
-  nodes: Array<CanvasNodeType>,
-  prod: ProductionData | null,
-  screenToFlowPosition: PlaceFlowFn,
-): Array<CanvasNodeType> {
-  const shots = prod && Array.isArray(prod.shots) ? prod.shots.filter(isShot) : [];
-  if (shots.length === 0) {
-    return nodes;
-  }
-  const existingShotIds = new Set(
-    nodes.map(shotIdOfNode).filter((id): id is string => Boolean(id)),
-  );
-  const { patches, newShotIds } = planShotSync(shots, existingShotIds);
-  let result = applyShotPatches(nodes, patches);
-  const byId = new Map(shots.map((s) => [s.id, s]));
-  for (const sid of newShotIds) {
-    const shot = byId.get(sid);
-    if (!shot) {
-      continue;
-    }
-    result = placeCanvasNode({
-      nodes: result,
-      flow: { screenToFlowPosition },
-      data: { ...defaultData("image"), ...shotToNodePatch(shot) },
-    });
-  }
-  return result;
 }
 
 type ProjectCanvasProps = {
@@ -219,21 +138,47 @@ function CanvasInner({
    *  与下面 <MiniMap pannable zoomable onClick={onMiniMapJump} /> 配对。 */
   const onMiniMapJump = useMiniMapJump(rf);
 
+  /* 双 rAF fitView：等 ReactFlow 完成本轮布局后再 fit，
+   * 替代 setTimeout(80ms) 魔法数字（慢机器上可能布局未完成）。 */
+  const requestFitView = useMemo(
+    () =>
+      makeFitViewScheduler((...fitViewArgs: Parameters<typeof fitView>) => {
+        fitView(...fitViewArgs).catch(() => {
+          /* noop */
+        });
+      }),
+    [fitView],
+  );
+
+  // 初始项目从存储水合完成前一直是 true。
+  // 避免内容加载时闪一下「空画布」提示。
+  /* 挂载水合抽到 use-canvas-hydration（#4235）：编排 + 失败收口 + 卸载守卫在那边
+   * 一处内聚，这里只留接线。 */
+  const hydrating = useCanvasHydration({
+    onConsumePending,
+    onConsumeSeed,
+    pendingWorkflow,
+    requestFitView,
+    screenToFlowPosition,
+    seedNew,
+    setEdges,
+    setNodes,
+    setProgress,
+    setProjectId,
+    setProjectName,
+  });
+
   /* 保存事件处理器 / flush 用的最新值的 ref */
   const edgesRef = useRef(edges);
   const nodesRef = useRef(nodes);
   const projectIdRef = useRef(projectId);
   const projectNameRef = useRef(projectName);
-  const loadedRef = useRef(false);
   useEffect(() => {
     edgesRef.current = edges;
     nodesRef.current = nodes;
     projectIdRef.current = projectId;
     projectNameRef.current = projectName;
   }, [edges, nodes, projectId, projectName]);
-  // 初始项目从存储水合完成前一直是 true。
-  // 避免内容加载时闪一下「空画布」提示。
-  const [hydrating, setHydrating] = useState(true);
   /* ── 持久化三件套 → useProjectPersistence（CanvasInner 只留编排与 JSX）。
    *  连线分派 → useCanvasConnections；媒体落地 → useCanvasDrop；右键菜单 /
    *  工具栏 / 空状态 → 独立组件。
@@ -268,91 +213,6 @@ function CanvasInner({
       setNodes((nodes) => updater(nodes).filter(isCanvasNodeType));
     },
   });
-
-  /* 双 rAF fitView：等 ReactFlow 完成本轮布局后再 fit，
-   * 替代 setTimeout(80ms) 魔法数字（慢机器上可能布局未完成）。 */
-  const requestFitView = useMemo(
-    () =>
-      makeFitViewScheduler((...fitViewArgs: Parameters<typeof fitView>) => {
-        fitView(...fitViewArgs).catch(() => {
-          /* noop */
-        });
-      }),
-    [fitView],
-  );
-
-  /* ── 挂载时加载（或新建）当前项目 ──
-   *  草稿感知：用户点「新建项目」时**不**立刻往项目索引里落一行空记录，而由 `seedNew` 经 `createDraftProject`
-   *  分配新 id、只写 active-id。项目行只在用户产出真实内容那一刻（下面的自动落盘 effect），或经
-   *  `commitRename` / `newProject` 里的手动 upsert 才进索引。挂载前先清掉历史会话遗留的「空默认」行，免得最近项目列表一直脏着。 */
-  useEffect(() => {
-    if (loadedRef.current) {
-      return;
-    }
-    loadedRef.current = true;
-    void (async () => {
-      // 在读取当前项目**之前**先把服务端项目对账进 localStorage，
-      // 这样换端口（3100↔3102）/ 换设备都不会丢掉
-      // 已落库的画布数据。
-      await hydrateFromServer();
-      reapAllEmptyDrafts(); // one-shot cleanup of pre-fix pollution
-      let proj: CanvasProject | null = null;
-      if (seedNew === true) {
-        proj = createDraftProject();
-      } else {
-        const activeId = getActiveId();
-        if (activeId !== null && activeId !== "") {
-          proj = getProject(activeId);
-        }
-        proj ??= listProjects()[0] ?? null;
-        proj ??= createDraftProject();
-      }
-      setProjectId(proj.id);
-      setProjectName(proj.name);
-
-      /* 从工作流库「使用」跳转回来时，pendingWorkflow 在挂载时就
-       * 已传入。project 加载 effect 会覆盖 nodes，因此必须在这里把新节点合并进
-       * baseNodes，否则原来的独立 effect 临时放置的节点会被 setNodes(baseNodes)
-       * 覆盖掉，导致用户只看到已有节点被聚焦。 */
-      const baseNodes = proj.nodes ?? [];
-      let nextNodes = baseNodes;
-      if (pendingWorkflow) {
-        /* 落点四步走唯一出口（规范 16 §16.2.4.38）：这里没有落点信息，
-         * 由出口的 `viewportCenter()` 给视口中心。 */
-        nextNodes = placeCanvasNode({
-          nodes: baseNodes,
-          flow: { screenToFlowPosition },
-          data: {
-            ...defaultData("workflow"),
-            workflowId: pendingWorkflow.id,
-            workflowName: pendingWorkflow.name,
-            workflowTaskType: pendingWorkflow.taskType,
-          },
-        });
-        onConsumePending?.();
-      }
-      const prod = await fetchProduction(proj.id);
-      nextNodes = materializeProductionShots(nextNodes, prod, screenToFlowPosition);
-      /* 顺带取回完成状态：与工坊共读同一份 production.progress（Phase 4b / §7）。 */
-      setProgress(prod ? normalizeProductionProgress(prod.progress) : null);
-      setNodes(nextNodes);
-
-      setEdges(proj.edges ?? []);
-      setActive(proj.id);
-      // fit after nodes are applied（双 rAF，等 ReactFlow 完成布局）
-      requestFitView();
-      setHydrating(false);
-      onConsumeSeed?.();
-    })().catch(() => {
-      /* noop */
-    });
-    /* 仅首挂载执行一次：这是「打开画布时把落库内容灌进来」的初始化，
-     * 依赖里的每个值都在挂载那一刻读一次即可 —— 之后的变化由各自的
-     * 独立 effect 接管（选中项 / 节点 / 连线各有一条）。
-     * 把它挂上完整依赖会让每次节点变动都重跑一遍整段水合，把用户刚拖的
-     * 位置覆盖回库里的旧值。 */
-    // oxlint-disable-next-line react/exhaustive-deps
-  }, []);
 
   /* MiniMap 用的「稳定身份 → 颜色」查表。不依赖任何东西
    *（类别色是静态的），所以拖节点时 MiniMap 不会因为回调
