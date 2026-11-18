@@ -2426,11 +2426,9 @@ pub fn run() {
       }
 
       // ── 方向 B：启动页与「应用」窗口分离 ──
-      // 窗口装配失败（WebView2 初始化失败 / 窗口配置损坏等，#4329）与下面
-      // standalone 装配失败同理：Err 不能冒到 Builder::build 的 expect——那是
-      // 无声崩溃（windows_subsystem 下无控制台、无启动页，用户只看到双击闪退）。
-      // 接住它：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态
-      // （启动页仍在时）；至少也落了壳日志，不再是「无声」。
+      // 装配失败（WebView2 初始化失败等，#4329）与下面 standalone 装配失败同理：
+      // Err 不能冒到 Builder::build 的 expect——那是无声崩溃。接住并写状态文件，
+      // 壳继续跑着显示失败态（详见 report_window_setup_failure）。
       if let Err(e) = wire_startup_windows(app, expect_slow_first_paint) {
         report_window_setup_failure(app, &e.to_string());
       }
