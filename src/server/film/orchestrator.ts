@@ -814,7 +814,13 @@ export async function cancelFilm(id: string) {
   for (const s of shots) {
     if (s.taskId !== null && s.taskId !== "") {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      await cancelTask(s.taskId).catch(() => undefined);
+      await cancelTask(s.taskId).catch((cancelError: unknown) => {
+        /* 补偿取消失败要看得见（ISSUE #4269，范式同 #4254）：取消影片时子任务
+         * 撤单失败，任务仍会在 ComfyUI 侧继续执行烧 GPU——不能静默。 */
+        logger.warn(
+          `[film] cancelFilm 补偿取消任务失败（task=${s.taskId}）：${errorText(cancelError, "补偿取消失败")}`,
+        );
+      });
     }
   }
   /* 两步收进同一事务（ISSUE #3867）：「镜头染 FAILED」与「影片置 CANCELLED」
