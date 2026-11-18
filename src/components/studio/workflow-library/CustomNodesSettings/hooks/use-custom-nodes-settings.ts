@@ -340,13 +340,16 @@ async function consumeSettingsStream(
   return { paths, summary, lastReport, byPath, discoveredByParent };
 }
 
-/** 延迟一拍 fire-and-forget 地拉一次数据，返回清定时器的 cleanup（三处 useEffect 共用）。 */
-function scheduleDeferredRefresh(run: () => Promise<unknown>): () => void {
+/** 延迟一拍 fire-and-forget 地拉一次数据，返回清定时器的 cleanup（三处 useEffect 共用）。
+ *  cleanup 时同时 abort 在途请求（ISSUE #4288）：卸载/依赖变化后，响应不再写回界面。 */
+function scheduleDeferredRefresh(run: (signal: AbortSignal) => Promise<unknown>): () => void {
+  const abort = new AbortController();
   const timer = setTimeout(() => {
-    void run();
+    void run(abort.signal);
   }, 0);
   return () => {
     clearTimeout(timer);
+    abort.abort();
   };
 }
 
@@ -391,12 +394,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    * 落到已拆除的环境上（test 里表现为 React 读 window 抛
    * `ReferenceError: window is not defined`，`pnpm test` 因此随机非零退出，
    * 而用例层面全绿）。ISSUE #489。 */
-  const aliveRef = useRef(true);
   const progressHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    aliveRef.current = true;
     return () => {
-      aliveRef.current = false;
       if (progressHideTimerRef.current) {
         clearTimeout(progressHideTimerRef.current);
       }
@@ -469,65 +469,79 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
   /** 从服务端拉取设置并写入本地 state。首个 await 之前不做同步 setState，因此可直接
    *  从 effect 调用（React 19 规则：effect 内不 set-state）。想要重置 spinner 的调用方
-   *  用 `reloadFromServer`。 */
-  const fetchSettings = useCallback(async () => {
-    try {
-      const res = await fetchWithTimeout("/api/custom-nodes");
-      const ct = res.headers.get("content-type") ?? "";
-      const isStream = ct.includes("ndjson");
+   *  用 `reloadFromServer`。
+   *  `signal`：卸载判活（ISSUE #4288）——调用方（deferred refresh 的 effect）在
+   *  卸载时 abort，await 之后的写入据此不再落进已卸载的界面。用 signal 而不是
+   *  读 ref：本函数经 `runParse` 在 render 期被传给 `createParseActions`，
+   *  react(refs) 禁止这条链上出现 ref 读取。 */
+  const fetchSettings = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        const res = await fetchWithTimeout("/api/custom-nodes");
+        const ct = res.headers.get("content-type") ?? "";
+        const isStream = ct.includes("ndjson");
 
-      if (!isStream) {
-        // 缓存预热路径：服务端返回单个 JSON blob。
-        const data: unknown = await res.json();
-        if (!isSettingsResp(data)) {
-          throw new Error(`读取配置失败（HTTP ${res.status}）`);
-        }
-        const parsed = parseSettingsBlob(data, res.status);
-        setSavedPaths(parsed.paths);
-        setSummary(parsed.summary);
-        setReport(parsed.lastReport);
-        setDiscoveredByParent(parsed.discoveredByParent);
-        setByPath(parsed.byPath);
-        seedParentDefaults(parsed.paths);
-        return;
-      }
-
-      // 冷路径：读取 ndjson 进度事件流（消费器拆到模块级，见其说明）。
-      const acc = await consumeSettingsStream(res, { setProgress, setSaveErr });
-      setSavedPaths(acc.paths);
-      setSummary(acc.summary);
-      setReport(acc.lastReport);
-      setDiscoveredByParent(acc.discoveredByParent);
-      setByPath(acc.byPath);
-      seedParentDefaults(acc.paths);
-    } catch (error) {
-      setSaveErr(errorText(error, "读取配置失败"));
-    } finally {
-      /* 卸载后不再碰任何 state。原写法在 finally 里 `return` —— 那会吞掉
-       * try/catch 抛出的任何异常（no-unsafe-finally 拦的正是这个形态）；
-       * 定时器回调自带 aliveRef 检查，组件卸载后触发也只是空转。 */
-      if (aliveRef.current) {
-        setLoading(false);
-        // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
-        if (progressHideTimerRef.current) {
-          clearTimeout(progressHideTimerRef.current);
-        }
-        progressHideTimerRef.current = setTimeout(() => {
-          if (!aliveRef.current) {
+        if (!isStream) {
+          // 缓存预热路径：服务端返回单个 JSON blob。
+          const data: unknown = await res.json();
+          if (!isSettingsResp(data)) {
+            throw new Error(`读取配置失败（HTTP ${res.status}）`);
+          }
+          const parsed = parseSettingsBlob(data, res.status);
+          if (signal?.aborted) {
             return;
           }
-          setProgress({
-            phase: "",
-            done: 0,
-            total: 0,
-            discovered: 0,
-            parent: "",
-            msg: "",
-          });
-        }, 800);
+          setSavedPaths(parsed.paths);
+          setSummary(parsed.summary);
+          setReport(parsed.lastReport);
+          setDiscoveredByParent(parsed.discoveredByParent);
+          setByPath(parsed.byPath);
+          seedParentDefaults(parsed.paths);
+          return;
+        }
+
+        // 冷路径：读取 ndjson 进度事件流（消费器拆到模块级，见其说明）。
+        const acc = await consumeSettingsStream(res, { setProgress, setSaveErr });
+        if (signal?.aborted) {
+          return;
+        }
+        setSavedPaths(acc.paths);
+        setSummary(acc.summary);
+        setReport(acc.lastReport);
+        setDiscoveredByParent(acc.discoveredByParent);
+        setByPath(acc.byPath);
+        seedParentDefaults(acc.paths);
+      } catch (error) {
+        if (!signal?.aborted) {
+          setSaveErr(errorText(error, "读取配置失败"));
+        }
+      } finally {
+        /* 卸载后不再碰任何 state。原写法在 finally 里 `return` —— 那会吞掉
+         * try/catch 抛出的任何异常（no-unsafe-finally 拦的正是这个形态）。 */
+        if (!signal?.aborted) {
+          setLoading(false);
+          // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
+          if (progressHideTimerRef.current) {
+            clearTimeout(progressHideTimerRef.current);
+          }
+          progressHideTimerRef.current = setTimeout(() => {
+            if (signal?.aborted) {
+              return;
+            }
+            setProgress({
+              phase: "",
+              done: 0,
+              total: 0,
+              discovered: 0,
+              parent: "",
+              msg: "",
+            });
+          }, 800);
+        }
       }
-    }
-  }, [seedParentDefaults]);
+    },
+    [seedParentDefaults],
+  );
 
   /** 重置 spinner/状态再拉取。仅从事件处理器或异步回调调用（绝不在 effect 内同步调用）。 */
   const reloadFromServer = useCallback(() => {

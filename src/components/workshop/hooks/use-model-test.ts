@@ -159,6 +159,15 @@ function useRequestPreview(args: {
 }): void {
   const { busy, buildBodies, kind, onError, patchSession, selectedModel, sessionKey, skip } = args;
   const seqRef = useRef(0);
+  /* 卸载判活（ISSUE #4288）：防抖窗口过后组件可能已卸载，在途请求回来
+   * 不再写父级 state（seq 只防连发竞态，不防「卸载后写」）。 */
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
   useEffect(() => {
     const timer = setTimeout(() => {
       if (kind === "chat" || skip || selectedModel === "") {
@@ -179,7 +188,7 @@ function useRequestPreview(args: {
           if (!Array.isArray(rows)) {
             return { ok: true as const };
           }
-          if (seqRef.current === seq) {
+          if (aliveRef.current && seqRef.current === seq) {
             patchSession(sessionKey, { previewRows: rows });
           }
           return { ok: true as const };
