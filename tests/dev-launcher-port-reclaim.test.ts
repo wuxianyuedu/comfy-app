@@ -5,9 +5,10 @@
  */
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { isRecord, isUnknownArray } from "~/lib/is-record";
+import { waitForPortsFree } from "../scripts/launcher-core/port-reap.mjs";
 
 const LAUNCHER = JSON.stringify(
   pathToFileURL(join(process.cwd(), "scripts", "dev-launcher.mjs")).href,
@@ -171,5 +172,50 @@ describe("端口残留回收：显式端口 + 应用服务自证（ISSUE #621）
       ownership: "own",
       ownPids: [4401],
     });
+  });
+});
+
+describe("waitForPortsFree —— 回收与清缓存/起服务之间的有界同步点（#4333）", () => {
+  it("端口族全部空闲 → free=true，且只探一轮", async () => {
+    const probe = vi.fn(() => Promise.resolve([]));
+    const result = await waitForPortsFree(probe, [3779, 3780], { budgetMs: 300 });
+    expect(result.free).toBe(true);
+    expect(probe).toHaveBeenCalledTimes(2);
+  });
+
+  it("预算内一直被占 → free=false，并点名被占端口", async () => {
+    const probe = vi.fn(() => Promise.resolve([1234]));
+    const logs: Array<string> = [];
+    const result = await waitForPortsFree(probe, [3779], {
+      budgetMs: 300,
+      intervalMs: 50,
+      log: (m) => logs.push(m),
+    });
+    expect(result.free).toBe(false);
+    expect(result.occupied).toEqual([3779]);
+    expect(logs.join("\n")).toContain("3779 仍被占用");
+  });
+
+  it("先被占、等待中释放 → free=true（轮询生效）", async () => {
+    let calls = 0;
+    const probe = vi.fn(() => {
+      calls += 1;
+      return Promise.resolve(calls >= 3 ? [] : [1234]);
+    });
+    const result = await waitForPortsFree(probe, [3779], { budgetMs: 2000, intervalMs: 50 });
+    expect(result.free).toBe(true);
+    expect(calls).toBeGreaterThanOrEqual(3);
+  });
+
+  it("探测不可用 ≠ 空闲：如实 free=false（不许把没量到说成量到空）", async () => {
+    const probe = vi.fn(() => Promise.reject(new Error("netstat 不可用")));
+    const logs: Array<string> = [];
+    const result = await waitForPortsFree(probe, [3779], {
+      budgetMs: 300,
+      intervalMs: 50,
+      log: (m) => logs.push(m),
+    });
+    expect(result.free).toBe(false);
+    expect(logs.join("\n")).toContain("探测不可用");
   });
 });
