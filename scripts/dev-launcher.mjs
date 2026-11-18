@@ -50,6 +50,9 @@ import {
   describeReadyTimeout,
   waitForDevReady,
 } from "./launcher-core/ready-wait.mjs";
+// 服务端耗时细分（#4365）：从 dev server 的 stdout 落盘文件里扫「Next 就绪 /
+// 首页编译」标记，反推两段服务端耗时补进时间线（详见该模块注释）。
+import { createServerTimingWatcher, makeFileTailReader } from "./launcher-core/server-timings.mjs";
 // 启动耗时时间线（ISSUE #4185）：逐阶段 span 的唯一实现，三处出口（启动页
 // timings / 日志分解行 / run.json）共用这一份读数。
 import { createLaunchTimeline, formatLaunchTimeline } from "./launcher-core/timeline.mjs";
@@ -464,7 +467,8 @@ export async function run(argv = process.argv.slice(2)) {
   // 3) 桌面壳（prebuilt 模式最先拉起：用户双击后第一件事是看见窗口）
   // 这一段在 `launcher-core/shell-stage.mjs`（ISSUE #1811 拆 R5 超限文件）；
   // 主文件只把壳层动作与日志出口注进去，并接「找不到壳」这个提前返回。
-  let shell = /** @type {import("node:child_process").ChildProcess | null} */ (null);
+  /** @type {import("node:child_process").ChildProcess | null} */
+  let shell = null;
   let staleShell = null;
   if (args.mode === "prebuilt") {
     const staged = startShellStage(
@@ -717,6 +721,22 @@ export async function run(argv = process.argv.slice(2)) {
     ready: true,
     staleShell,
   });
+  /* 服务端耗时细分（#4365）：「等待服务就绪」此前是一段黑盒——Next 进程
+   * 启动、健康探针编译各占多少没有读数。dev server 的 stdout 落盘文件由
+   * 编排器持有，这里按增量扫描其中的标记，把「服务进程启动 / 首页编译」
+   * 反推进时间线（分解行、启动页耗时条与应用内卡片随即可见）。 */
+  createServerTimingWatcher({
+    timeline,
+    refreshStatus: () =>
+      status("dev-server-ready", 0.9, "本地服务已就绪", {
+        ready: true,
+        staleShell,
+      }),
+    readNew: makeFileTailReader(nextOut),
+    now: () => Date.now(),
+    startedAt,
+    devExited,
+  }).start();
 
   // 9.5) 运行期自愈：常驻探测「接口层是不是整体 404」。
   //

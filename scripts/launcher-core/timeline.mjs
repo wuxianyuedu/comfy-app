@@ -32,6 +32,9 @@
  * @typedef {object} LaunchTimeline
  * @property {(key: string, label: string) => void} begin 开始一个阶段
  * @property {(key: string) => void} end 结束一个阶段
+ * @property {(key: string, label: string, startMs: number, endMs: number) => void} add
+ *   事后推算一段**已完成**的 span（#4365：服务端耗时从 stdout 标记反推）；
+ *   同 key 重复追加是 no-op。
  * @property {() => LaunchTimingSpan[]} snapshot 当前读数
  */
 
@@ -72,6 +75,21 @@ export function createLaunchTimeline(startedAt) {
         endMs: span.endMs,
         durationMs: span.endMs === null ? Math.max(0, nowMs - span.startMs) : span.durationMs,
       }));
+    },
+    /**
+     * 追加一段**事后推算**的完成段（#4365）：起点/终点是相对启动起点的毫秒偏移。
+     * 供「从 dev server 的 stdout 标记反推」的服务端细分使用——Next 进程启动、
+     * 首页编译这些时刻不在编排器的 begin/end 调用点上，只能由标记出现的时间与
+     * 标记自述的耗时反推。同 key 重复追加是 no-op（监视器每轮都会看到同一批
+     * 标记，幂等由这里兜住）。
+     */
+    add(key, label, startMs, endMs) {
+      if (spans.some((span) => span.key === key)) {
+        return;
+      }
+      const start = Math.max(0, startMs);
+      const end = Math.max(start, endMs);
+      spans.push({ key, label, startMs: start, endMs: end, durationMs: end - start });
     },
   };
 }
