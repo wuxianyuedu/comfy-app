@@ -157,6 +157,8 @@ export type DetachMediatorOutcome = {
  *（台账 F13 那一族的成因）。真的 `ChildProcess` 天然满足这个形状。
  */
 export type DetachMediatorHandle = {
+  /** 超时回收中介用（ISSUE #4349）；真 `ChildProcess` 天然满足，测试句柄可不给。 */
+  kill?: (() => boolean) | undefined;
   once(event: "exit", listener: (code: number | null) => void): unknown;
   stderr?: {
     on(event: "data", listener: (chunk: Buffer) => void): unknown;
@@ -191,6 +193,18 @@ export function waitForDetachMediator(
     }),
     timeoutMs,
     null,
+    {
+      /* 超时即回收中介（ISSUE #4349）：卡住的中介（Start-Process 参数被拒后
+       * 异常挂起等）留在进程表里，每次失败拉起漏一个——与 runFFmpeg 的
+       * 超时杀进程同一取向。中介已自行退出时 kill 是无害的空操作。 */
+      onTimeout: () => {
+        try {
+          child.kill?.();
+        } catch {
+          // 中介已死等价于回收完成；kill 的同步异常不改变「超时回未知」的结论。
+        }
+      },
+    },
   ).then((outcome) => outcome ?? { code: null, stderr: readSoFar() });
 }
 
