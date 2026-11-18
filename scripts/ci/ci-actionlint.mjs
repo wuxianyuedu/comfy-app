@@ -64,6 +64,28 @@ export const ACTIONLINT_PLAN = {
 };
 
 /**
+ * 按**整句报错**精确忽略的 actionlint 发现（`-ignore` 是正则；这里全部转义后整串
+ * 字面匹配，不误伤同形前缀）。
+ *
+ * 现在只有一条：actionlint 1.7.7 的权限 scope 表落后于 GitHub 官方 workflow-syntax
+ * 权限表，不认识 `vulnerability-alerts` —— 而它是内置 GITHUB_TOKEN 读 Dependabot
+ * alerts 的**唯一**权限（#4168 实测 `security-events: read` 不覆盖 Dependabot，
+ * 用的正是这一格）。等 actionlint 升级认得了，这条 ignore 连同这段注释一起删。
+ *
+ * @type {Array<string>}
+ */
+export const IGNORED_FINDINGS = ['unknown permission scope "vulnerability-alerts"'];
+
+/**
+ * 把忽略清单转成 `-ignore` 参数（每条一对；正则元字符全部转义）。
+ *
+ * @param {Array<string>} [findings] @returns {Array<string>}
+ */
+export function ignoreArgs(findings = IGNORED_FINDINGS) {
+  return findings.flatMap((f) => ["-ignore", f.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)]);
+}
+
+/**
  * 常驻根里那一份的落点（一个版本一个目录：升版本是「多一份」而不是「覆盖掉旧的」）。
  *
  * @param {string} root 常驻工具根 @returns {string} 目录绝对路径
@@ -248,7 +270,11 @@ export function runCiActionlint(io = {}) {
     log(`[actionlint] 会判：${files.join(", ")}（exe=${exePath}）`);
     return CODE.OK;
   }
-  const res = (io.spawn ?? spawnSync)(exePath, files, { cwd, encoding: "utf8" });
+  /* `-ignore` 在前、被判文件在后（Go 的 flag 解析遇到首个位置参数就停）。 */
+  const res = (io.spawn ?? spawnSync)(exePath, [...ignoreArgs(), ...files], {
+    cwd,
+    encoding: "utf8",
+  });
   const status = res?.status ?? null;
   const output = `${res?.stdout ?? ""}${res?.stderr ?? ""}`.trimEnd();
   if (output) {
