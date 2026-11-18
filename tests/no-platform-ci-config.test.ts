@@ -343,6 +343,10 @@ const PR_GATE_YML = ".github/workflows/pr-gate.yml" as const;
  *   · 检出 / 装 pnpm / 装 Node / cargo 缓存 —— 工具链准备，恒不判红（daily 段同款）。
  *   · `装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）` —— 前提铺装（#3572 /
  *     #3580）：它装的是壳门禁的**编译期依赖**，判红的是它后面那一步。
+ *   · `这次改没改壳输入（没改就不白付 apt，#4309）` —— 上一格的**开关读数**（#4309）：
+ *     判这次 PR 要不要装那批 apt 包，恒退 0、一步也不判红（fail-open，读数拿不到
+ *     一律按「要装」）。判定面与壳门禁同源（changed-scope + `SHELL_INPUT_RE`），
+ *     误跳只会让壳门禁红在缺库上，不会静默放行。
  *   · `安装依赖`（3 个 job）与 `安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）`
  *     （1 个 job）—— **每个 job 自己装一次**的前提设施：装不上 ⇒ 那个 job 红，
  *     读数已经在账上（daily 段那一条 `安装依赖（…）` 是**整跑一次**的安装 ⇒ 是门格）。
@@ -365,6 +369,7 @@ const GA_PR_INFRA_STEPS: ReadonlyArray<string> = [
   "装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）",
   "装 Node（engines 下限 26.12.1；脚本只吃 node:*）",
   "装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）",
+  "这次改没改壳输入（没改就不白付 apt，#4309）",
   "cargo 缓存",
   "恢复 node_modules 缓存（灰度）",
   "安装依赖",
