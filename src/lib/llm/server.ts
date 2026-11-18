@@ -388,6 +388,11 @@ export const LLM_UPSTREAM_TIMEOUT_MS = 180_000;
 /** 流式上游总预算：长回答留足余量；「连上了但挂住不吐字」也会到点终止——
  *  没有这一格，一次挂起的上游就把 run 循环的当前步永久占住（可终止性审计 #3889 / #4003）。 */
 export const LLM_STREAM_TIMEOUT_MS = 600_000;
+/** SSE 行缓冲上限（#4340）：流式解析把「最后一段不完整行」留在缓冲里等下一块，
+ *  上游是任意 OpenAI 兼容端点——baseUrl 配错（指到网页端点）、返回 HTML / 二进制、
+ *  或不守协议地发超长无换行帧时，这段缓冲此前唯一的刹车是 600s 流超时，可冲高到
+ *  数百 MB。正常 SSE 帧（含 data: 行）远小于 1MB，超限即判「不是 SSE 流」。 */
+export const MAX_SSE_LINE_BUFFER_CHARS = 1024 * 1024;
 
 /**
  * 合成上游请求的 `AbortSignal`：外部取消（调用方 / 客户端断开）与墙钟预算**谁先到都算数**。
@@ -466,6 +471,10 @@ async function upstreamChat(
  *  避免用空的 model 打到后端拿一个「model not found」的含糊错误。 */
 const ERR_MODEL_UNCONFIGURED =
   "尚未配置生效模型：请先在「设置 → 本地模型/远程模型」中选择或填写要使用的模型名";
+/** 上游不是 SSE 流的统一出口文案（#4340）：指到可动作作（查 baseUrl / 上游健康），
+ *  不报一句含糊的「解析失败」。 */
+const ERR_UPSTREAM_NOT_SSE =
+  "上游输出不是 SSE 流（不完整行超过 1MB 且不含换行）：请检查模型 baseUrl 是否指向 OpenAI 兼容的 chat/completions 端点，或上游服务是否返回了网页 / 二进制内容";
 
 function assertModelConfigured(cfg: LLMConfig): void {
   if (!cfg.model.trim()) {
@@ -518,6 +527,12 @@ export async function streamLLM(
 
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
+      /* 行缓冲上限（#4340）：只留「不完整行」的设计假设它必然短小；畸形上游
+       * （baseUrl 配错 / 返回 HTML / 超长无换行帧）会把它撑到无界。超限立即
+       * 抛明确错误——finally 里的 reader.cancel 会停掉上游连接。 */
+      if (buffer.length > MAX_SSE_LINE_BUFFER_CHARS) {
+        throw new Error(ERR_UPSTREAM_NOT_SSE);
+      }
 
       for (const line of lines) {
         const trimmed = line.trim();

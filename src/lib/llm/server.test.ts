@@ -26,6 +26,7 @@ import {
   streamLLM,
   completeLLMStructured,
   completeLLMTools,
+  MAX_SSE_LINE_BUFFER_CHARS,
 } from "~/lib/llm/server";
 import type { LLMConfig, LLMTool } from "~/lib/llm/types";
 import { isRecord } from "~/lib/is-record";
@@ -509,6 +510,29 @@ describe("streamLLM（流式补全）", () => {
 
   it("未配置模型时同样先拦下", async () => {
     await expect(streamLLM(CFG({ model: "" }), [], noop)).rejects.toThrow(/尚未配置生效模型/);
+  });
+
+  it("不完整行超过 1MB 上限 → 明确报「不是 SSE 流」，不再无界累积（#4340）", async () => {
+    // 畸形上游：持续发不含换行的超大帧（baseUrl 配错 / 返回非 SSE 内容）。
+    fetchMock.mockResolvedValue(
+      streamResponse([
+        "x".repeat(MAX_SSE_LINE_BUFFER_CHARS + 1),
+        "x".repeat(MAX_SSE_LINE_BUFFER_CHARS),
+      ]),
+    );
+    await expect(streamLLM(CFG(), [], noop)).rejects.toThrow(/不是 SSE 流/);
+  });
+
+  it("恰好在上限内的不完整行不误伤（超大无换行帧合法通过）", async () => {
+    // 贴边界的缓冲行仍按 SSE 解析（坏帧跳过），后面的正常帧照常出 token。
+    fetchMock.mockResolvedValue(
+      streamResponse([
+        "x".repeat(MAX_SSE_LINE_BUFFER_CHARS),
+        "\n\n",
+        'data: {"choices":[{"delta":{"content":"X"}}]}\n\n',
+      ]),
+    );
+    expect(await streamLLM(CFG(), [], noop)).toBe("X");
   });
 });
 
