@@ -167,29 +167,47 @@ export async function POST(req: NextRequest) {
 
   // ── Streaming (SSE) ──
   const encoder = new TextEncoder();
+  /* 客户端断开（req.signal abort → 流被 cancel）之后，上游的尾随令牌仍可能
+   * 回来——对已关闭的 controller enqueue 会抛 TypeError（catch/finally 里再
+   * 抛一次），每次断开都制造一串错误噪音。closed 判据让断开后的帧静默丢弃
+   *（ISSUE #4286）。 */
+  let closed = false;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      const send = (payload: string): void => {
+        if (!closed) {
+          controller.enqueue(encoder.encode(payload));
+        }
+      };
+      req.signal.addEventListener("abort", () => {
+        closed = true;
+      });
       try {
         await streamLLM(
           cfg,
           parsed.messages,
           (token) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
+            send(`data: ${JSON.stringify({ token })}\n\n`);
           },
           /* 客户端断开（req.signal abort）→ 连上游一起停，别让挂起的生成白烧预算。 */
           req.signal,
         );
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        send("data: [DONE]\n\n");
       } catch (error) {
-        controller.enqueue(
-          encoder.encode(
+        send(
+          `data: ${JSON.stringify(
             /* SSE 的一帧也用同一个键：客户端读的是同一处 `readApiError`。 */
-            `data: ${JSON.stringify(apiErrorBody(error, "LLM 调用失败"))}\n\n`,
-          ),
+            apiErrorBody(error, "LLM 调用失败"),
+          )}\n\n`,
         );
       } finally {
-        controller.close();
+        if (!closed) {
+          controller.close();
+        }
       }
+    },
+    cancel(): void {
+      closed = true;
     },
   });
 
