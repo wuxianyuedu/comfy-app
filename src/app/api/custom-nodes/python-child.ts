@@ -15,6 +15,10 @@ import { withTimeoutResult } from "~/lib/with-timeout";
  */
 export const DISCOVER_TIMEOUT_MS = 60_000;
 
+/** 探测输出累积上限（对齐 #4339 的 cnb-cli 判据）：探测/解析只需要结构化
+ * 结果，不需要全量输出——窗口内解释器行为异常狂刷输出时内存有界（#4380）。 */
+const MAX_OUTPUT_CHARS = 256 * 1024;
+
 /** 流式解析 / 探测子进程的看门狗预算：都是「扫整棵 custom_nodes 树」的重活，
  *  给足量级但必须有界（#4004：此前这两条 spawn 链没有任何超时，卡住即永久挂着）。 */
 export const STREAM_CHILD_TIMEOUT_MS = 600_000;
@@ -101,7 +105,10 @@ export function spawnCapture(command: string, args: Array<string>): Promise<stri
     let stdout = "";
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string) => {
-      stdout += chunk;
+      // 超限即停累积（#4380）：超限后的输出不参与判读。
+      if (stdout.length < MAX_OUTPUT_CHARS) {
+        stdout += chunk;
+      }
     });
     child.on("error", () => {
       resolve(null);
