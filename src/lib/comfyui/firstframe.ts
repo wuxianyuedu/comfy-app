@@ -16,6 +16,8 @@ import { isTerminalTaskStatus } from "~/lib/task-state";
 import { taskRepository } from "../core/repository-task";
 import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
 import { cancelTask } from "~/lib/comfyui/enqueue";
+import { logger } from "~/lib/core/logger";
+import { errorText } from "~/lib/error-message";
 import { uploadImage } from "./client";
 
 export async function synthesizeFirstFrame(opts: {
@@ -53,7 +55,14 @@ export async function synthesizeFirstFrame(opts: {
   try {
     localPath = await waitForImage(taskId);
   } catch (error) {
-    await cancelTask(taskId).catch(() => undefined);
+    await cancelTask(taskId).catch((cancelError: unknown) => {
+      /* 补偿取消失败要看得见（ISSUE #4269，范式同 film orchestrator #4254）：
+       * 撤不掉的任务会照常被派发、占满 MAX_CONCURRENCY=1 的唯一执行槽烧 GPU，
+       * 阻塞后续全部出图任务——不能静默。不掩盖原始错误：下面照常 throw。 */
+      logger.warn(
+        `[firstframe] 补偿取消任务失败（task=${taskId}）：${errorText(cancelError, "补偿取消失败")}`,
+      );
+    });
     throw error;
   }
   /* 地址 → 磁盘只有一处判据（含越界）。这一句此前是自己拼的
