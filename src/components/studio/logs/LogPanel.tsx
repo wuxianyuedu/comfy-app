@@ -17,6 +17,7 @@ import { FILTER_LABELS } from "./LogFilterBar";
 import { ORIGIN_TEXT } from "./LogPanelOriginSelect";
 import { useLogPanelPin } from "./use-log-panel-pin";
 import { LogPanelHeader } from "./LogPanelHeader";
+import { LaunchTimingsCard } from "./LaunchTimingsCard";
 import { LogPanelFooter } from "./LogPanelFooter";
 import {
   LOG_MESSAGE_OVERHEAD,
@@ -355,6 +356,10 @@ export function LogPanel() {
             total={total}
             wrap={wrap}
           />
+
+          {/* 启动耗时分解（#4327）：启动页的耗时条交接后消失，应用内继续可查；
+              无读数时整卡不显示（组件自己判）。 */}
+          <LaunchTimingsCard />
 
           {/* Body */}
           <div
