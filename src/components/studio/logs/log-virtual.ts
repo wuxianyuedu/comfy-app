@@ -33,6 +33,14 @@ export const LOG_ROW_EXPANDED = 360;
 export const LOG_VIRTUAL_OVERSCAN = 12;
 
 /**
+ * 视口**尚未量到**时（打开面板的首帧；jsdom 也在此）渲染的行数上限（#4361）。
+ * 此前这一档整页渲染：2000 行 ≈ 1.5 万 DOM 节点一次性挂载，真机打开冻结数秒
+ * （量测靠挂载后的 ResizeObserver，首帧必然未量到）。改为只渲染**贴底的最后
+ * 一段**——页 1 贴底语义下用户看到的就是这段，量测到位后虚拟窗口接管。
+ */
+export const UNMEASURED_WINDOW_ROWS = 120;
+
+/**
  * 估算出的总高度上限。浏览器对 `scrollHeight` 有精度上限（约 33,554,400px），超过后滚动位置会失真；
  * 这里取更保守的值并**按比例压缩映射**（§2.1.1 第 3 条），牺牲极端情况下的物理精度换整体稳定。
  * 一整页（`LOG_PAGE_SIZE` 行 × `LOG_ROW_SINGLE`）只有几万像素，它只对「超长单行堆满一整页」生效。
