@@ -2150,7 +2150,7 @@ fn build_tray(app: &tauri::AppHandle) -> Result<(), String> {
 ///   `min(100vw - 48px)` 同口径）：小屏不越界，尺寸不够时由页面继续收；
 /// - 展开日志后页面会把窗口调到 SPLASH_WINDOW_SIZE_EXPANDED，仍是「内容多大、
 ///   窗口多大」。
-const SPLASH_WINDOW_SIZE: (f64, f64) = (744.0, 216.0);
+const SPLASH_WINDOW_SIZE: (f64, f64) = (744.0, 264.0);
 
 /// 展开日志后的窗口尺寸（对应页面里「展开日志」那一档，见 splash.html）。
 const SPLASH_WINDOW_SIZE_EXPANDED: (f64, f64) = (1424.0, 788.0);

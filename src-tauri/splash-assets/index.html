@@ -136,37 +136,58 @@
       transition: width 0.35s ease;
       box-shadow: 0 0 12px var(--violet-dim);
     }
-    /* 启动耗时条（ISSUE #4185）：每段一个阶段，宽度按耗时占比，悬停看「段名 + 秒数」；
-       下面一行文字给出逐段秒数与合计。数据来自 launch-status.json 的 timings
-       （编排器随每次进度快照写入），启动过程中就边等边刷新。 */
+    /* 启动耗时分解（ISSUE #4185 立项 / #4327 改逐行）：每行一个阶段
+       「阶段名 + 比例条 + 秒数 · 占比」。此前的 12 色密彩条颜色不承载语义、
+       段又密得认不出谁是谁，换成逐行可读形态（与应用内日志面板的「启动耗时
+       分解」卡同一取向）。数据来自 launch-status.json 的 timings（编排器随
+       每次进度快照写入），启动过程中就边等边刷新。 */
     .timings {
       margin: 0 0 6px;
       flex-shrink: 0;
     }
-    .timing-strip {
+    .timing-rows {
       display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .timing-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      line-height: 1.3;
+      color: var(--dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .timing-label {
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--muted);
+    }
+    .timing-track {
+      flex: 1 1 auto;
+      min-width: 0;
       height: 4px;
       border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
       overflow: hidden;
-      background: rgba(255, 255, 255, 0.04);
-      margin-bottom: 3px;
     }
-    .timing-strip span {
+    .timing-fill {
       display: block;
       height: 100%;
       min-width: 2px;
-      flex-shrink: 1;
+      background: linear-gradient(90deg, var(--violet), #9F7CFF);
+      border-radius: 999px;
     }
-    .timing-text {
-      font-size: 11px;
-      line-height: 1.4;
-      color: var(--dim);
-      font-variant-numeric: tabular-nums;
+    .timing-val {
+      flex: 0 0 auto;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      user-select: text;
-      cursor: text;
+    }
+    .timing-rest {
+      justify-content: flex-end;
     }
     .meta {
       display: flex;
@@ -355,8 +376,7 @@
       <div class="bar-fill" id="bar"></div>
     </div>
     <div class="timings" id="timings" data-no-drag style="display:none">
-      <div class="timing-strip" id="timing-strip"></div>
-      <div class="timing-text" id="timing-text"></div>
+      <div class="timing-rows" id="timing-rows"></div>
     </div>
     <div class="meta">
       <span class="phase" id="phase"><span class="spinner"></span>初始化</span>
@@ -454,8 +474,9 @@
     // 三条都不可用时消息区给出可见提示（不再「点了没反应」）。
     // 紧凑档尺寸：**只**在壳命令 set_splash_compact 调不动（壳过旧 / 纯 Web）
     // 时的兜底值，与壳侧 SPLASH_WINDOW_SIZE 同值。正常路径下尺寸一律由壳算，
-    // 页面不参与（见 applyCompact）。
-    const COMPACT_SIZE = { width: 744, height: 216 };
+    // 页面不参与（见 applyCompact）。高度按「逐行耗时分解（最多 3 行 + 其余
+    // 段 1 行）铺开后的内容高度」给（#4327：耗时分解读得清，窗口跟着长高）。
+    const COMPACT_SIZE = { width: 744, height: 264 };
     const subtitleEl = $('subtitle');
 
     /** 正在执行的窗口动作（'' 表示空闲）——onclick 与监听两条路的去重。 */
@@ -692,30 +713,37 @@
     let updateFromShellFallback = false;
 
     /** 阶段段配色（循环取用）：段数 ≤12，颜色在深底上相互可分。 */
-    const TIMING_COLORS = [
-      '#7C5CFC', '#F59E0B', '#22D3EE', '#F472B6', '#34D399', '#FB923C',
-      '#A78BFA', '#FACC15', '#38BDF8', '#F87171', '#4ADE80', '#E879F9',
-    ];
+    /** 逐行耗时分解的行数与点名门槛：窗口紧凑放不下全部阶段，按耗时降序
+     *  只点名 ≥0.1s 的前 3 行（与应用内日志面板同一阅读形态），其余段收进
+     *  末行「其余 N 段共 X s」。0.1s 这条线沿用旧文字行的口径。 */
+    const TIMING_ROW_LIMIT = 3;
+    const TIMING_ROW_MIN_MS = 100;
 
     function fmtSec(ms) {
       return (Math.max(0, Number(ms) || 0) / 1000).toFixed(1) + 's';
     }
 
-    /** 画启动耗时条（ISSUE #4185）：timings 为空 / 缺席时整块隐藏。
-     *  每段宽度按 durationMs 占比（近零段给 2px 细条兜底，不设百分比下限，
-     *  免得 0.0s 的段在条上被放大到误导）；title 给「段名 + 秒数」；
-     *  endMs 为 null 的段是进行中段（durationMs 已是截至当下的耗时）。
-     *  文字行只列 ≥0.1s 的段 —— 紧凑窗口一行放不下全部段名，把「不到 0.1s」
-     *  的噪声段让位给真正花时间的段与合计（全量明细在条形与悬停、日志里）。 */
+    /** 占总启动时间的百分比（一位小数，与应用内卡同一口径；totalMs 为 0 时不除零）。 */
+    function fmtPct(ms, totalMs) {
+      if (!(totalMs > 0)) return '0%';
+      return (Math.round((ms / totalMs) * 1000) / 10).toFixed(1) + '%';
+    }
+
+    /** 画启动耗时分解（ISSUE #4185 立项 / #4327 改逐行）：timings 为空 / 缺席时
+     *  整块隐藏。12 色密彩条颜色不承载语义、段密得认不出谁是谁，换成逐行
+     *  「阶段名 + 比例条 + 秒数 · 占比」：按耗时降序取 ≥0.1s 的前 3 行，条宽
+     *  按「该段 / 最长段」画（最长的一段占满轨道；最长段必在行内，口径与
+     *  应用内卡一致），其余段收进末行「其余 N 段共 X s」——0.0s 的噪声段不再
+     *  各占一条细线，也占不掉行数。合计取墙钟（最后一刻 − 最早一刻），并行段
+     *  不求和；endMs 为 null 的段是进行中段（durationMs 已是截至当下的耗时），
+     *  行尾标注「（进行中）」。 */
     function renderTimings(timings) {
       const wrap = $('timings');
-      const strip = $('timing-strip');
-      const text = $('timing-text');
-      if (!wrap || !strip || !text) return;
+      const rows = $('timing-rows');
+      if (!wrap || !rows) return;
       if (!Array.isArray(timings) || timings.length === 0) {
         wrap.style.display = 'none';
-        strip.innerHTML = '';
-        text.textContent = '';
+        rows.innerHTML = '';
         return;
       }
       const lastEnd = timings.reduce(
@@ -724,22 +752,50 @@
       );
       const firstStart = timings.reduce((acc, t) => Math.min(acc, t.startMs || 0), Infinity);
       const totalMs = Math.max(0, lastEnd - firstStart);
-      strip.innerHTML = '';
-      timings.forEach((t, i) => {
-        const seg = document.createElement('span');
-        const pct = totalMs > 0 ? (t.durationMs / totalMs) * 100 : 100 / timings.length;
-        seg.style.width = pct.toFixed(2) + '%';
-        seg.style.background = TIMING_COLORS[i % TIMING_COLORS.length];
+      const ordered = [...timings].sort(
+        (a, b) => (Number(b.durationMs) || 0) - (Number(a.durationMs) || 0) || (a.startMs || 0) - (b.startMs || 0),
+      );
+      const shown = ordered
+        .filter((t) => (Number(t.durationMs) || 0) >= TIMING_ROW_MIN_MS)
+        .slice(0, TIMING_ROW_LIMIT);
+      const shownKeys = new Set(shown);
+      const rest = ordered.filter((t) => !shownKeys.has(t));
+      const maxMs = Math.max(...ordered.map((t) => Number(t.durationMs) || 0), 1);
+      rows.innerHTML = '';
+      shown.forEach((t) => {
+        const row = document.createElement('div');
+        row.className = 'timing-row';
+        const label = document.createElement('span');
+        label.className = 'timing-label';
+        label.textContent = t.label;
+        const track = document.createElement('span');
+        track.className = 'timing-track';
+        const fill = document.createElement('span');
+        fill.className = 'timing-fill';
+        fill.style.width = (((Number(t.durationMs) || 0) / maxMs) * 100).toFixed(2) + '%';
+        track.appendChild(fill);
+        const val = document.createElement('span');
+        val.className = 'timing-val';
         const running = t.endMs === null || t.endMs === undefined;
-        seg.title = `${t.label} ${fmtSec(t.durationMs)}${running ? '（进行中）' : ''}`;
-        strip.appendChild(seg);
+        val.textContent =
+          `${fmtSec(t.durationMs)} · ${fmtPct(t.durationMs, totalMs)}${running ? '（进行中）' : ''}`;
+        row.title = `${t.label} ${fmtSec(t.durationMs)}${running ? '（进行中）' : ''}`;
+        row.append(label, track, val);
+        rows.appendChild(row);
       });
-      const parts = timings
-        .filter((t) => (Number(t.durationMs) || 0) >= 100)
-        .map((t) => `${t.label} ${fmtSec(t.durationMs)}`);
-      text.textContent = parts.length > 0
-        ? parts.join(' · ') + ` · 合计 ${fmtSec(totalMs)}`
-        : `合计 ${fmtSec(totalMs)}`;
+      const restLine = document.createElement('div');
+      restLine.className = 'timing-row timing-rest';
+      const restText = document.createElement('span');
+      if (shown.length === 0) {
+        restText.textContent = `合计 ${fmtSec(totalMs)}（${timings.length} 段均不足 0.1s）`;
+      } else if (rest.length > 0) {
+        const restMs = rest.reduce((acc, t) => acc + (Number(t.durationMs) || 0), 0);
+        restText.textContent = `其余 ${rest.length} 段共 ${fmtSec(restMs)} · 合计 ${fmtSec(totalMs)}`;
+      } else {
+        restText.textContent = `合计 ${fmtSec(totalMs)}`;
+      }
+      restLine.appendChild(restText);
+      rows.appendChild(restLine);
       wrap.style.display = 'block';
     }
 

@@ -140,15 +140,21 @@
 - 状态：已上线
 - 需求：启动过程中能看出「耗时都花费在了哪里」，为后续启动优化提供跨运行可比的
   读数（ISSUE #4185）。
-- 行为与验收：启动页进度条下有逐阶段耗时条与秒数行（随每次进度快照边等边刷新，
-  进行中的段实时补时长，悬停见「段名 + 秒数」）；`dev-launcher.log` 的
-  「启动耗时分解」一行给出逐段秒数与**墙钟合计**（成功 / 超时 / 失败路径都打）；
-  `run/launch-status.json` 与 `run.json` 带 `timings` 字段（后者随运行包归档，
-  供跨运行对比）。阶段划分与出口见规范 launch-and-build.md §3.3「耗时时间线」行。
+- 行为与验收：启动页进度条下有**逐行**的启动耗时分解——每行「阶段名 + 比例条 +
+  秒数 · 占比」，按耗时降序点名 ≥0.1s 的前 3 行，其余段收进末行「其余 N 段共 X s」
+  并给**墙钟合计**（随每次进度快照边等边刷新，进行中的段实时补时长并标注
+  「（进行中）」；#4327：此前的 12 色密彩条分不清每段是什么，改逐行可读）；
+  应用内日志面板顶部有同一读数的「启动耗时分解」卡（`GET /api/dev/launch-timings`，
+  启动页关闭后仍可查）；`dev-launcher.log` 的「启动耗时分解」一行给出逐段秒数与
+  墙钟合计（成功 / 超时 / 失败路径都打）；`run/launch-status.json` 与 `run.json`
+  带 `timings` 字段（后者随运行包归档，供跨运行对比）。阶段划分与出口见规范
+  launch-and-build.md §3.3「耗时时间线」行。
 - 落点：`scripts/launcher-core/timeline.mjs`（唯一实现）、
   `scripts/dev-launcher.mjs`（埋点与分解行）、
   `scripts/launcher-core/{startup-gates,shell-stage,dev-boot}.mjs`（分段计时）、
-  `{{shell.splash}}`（耗时条渲染）
+  `{{shell.splash}}`（逐行耗时分解渲染）、
+  `src/components/studio/logs/LaunchTimingsCard.tsx`（应用内卡）、
+  `src/app/api/dev/launch-timings/route.ts`（应用内读数端点）
 
 ---
 
