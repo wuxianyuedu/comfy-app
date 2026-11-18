@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { pruneTempWorkflowFiles } from "./executor-cli";
 import { isRecord } from "~/lib/is-record";
 import { applyRawOverrides } from "./raw-overrides";
 
@@ -519,5 +520,38 @@ describe("comfy-cli run 参数构造（#4189）", () => {
     expect(mod.sanitizeOutputNodeIds(["9", 9, null, "9", "12"])).toEqual(["9", "12"]);
     const flooded = mod.sanitizeOutputNodeIds(Array.from({ length: 100 }, (_, i) => `n${i}`));
     expect(flooded).toHaveLength(64);
+  });
+});
+
+describe("pruneTempWorkflowFiles（#4225）", () => {
+  it("只删超龄的 wf-*.json：新文件与异名文件保留，目录不存在整轮跳过", async () => {
+    const { mkdtempSync, writeFileSync, utimesSync, existsSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const nodePath = await import("node:path");
+    const tmp = mkdtempSync(nodePath.join(tmpdir(), "comfy-prune-"));
+    try {
+      const stale = nodePath.join(tmp, "wf-stale.json");
+      const fresh = nodePath.join(tmp, "wf-fresh.json");
+      const other = nodePath.join(tmp, "other.json");
+      writeFileSync(stale, "{}");
+      writeFileSync(fresh, "{}");
+      writeFileSync(other, "{}");
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60_000);
+      utimesSync(stale, twoHoursAgo, twoHoursAgo);
+
+      await pruneTempWorkflowFiles(60 * 60_000, tmp);
+
+      expect(existsSync(stale)).toBe(false);
+      expect(existsSync(fresh)).toBe(true);
+      expect(existsSync(other)).toBe(true);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("目录不存在：整轮静默跳过（不抛）", async () => {
+    await expect(
+      pruneTempWorkflowFiles(60 * 60_000, "G:/comfy-definitely-not-exists-4225"),
+    ).resolves.toBeUndefined();
   });
 });
