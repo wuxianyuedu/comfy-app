@@ -100,6 +100,41 @@ export function shouldRetryGitFailure(text) {
 }
 
 /**
+ * 把推送 / 远端读的失败回话翻成**具体那一句**（回话本身不判红，它只被念出来）。
+ * 原 `ci-github-mirror-push.mjs` 文件头那一族话术，#4315 起与它的判据（
+ * {@link isEgressFailure}）同住一份。
+ *
+ * 三形态各有各的下一动作，读的人不必自己去猜：
+ *
+ * · `Repository not found` 是**仓库层面**没通（没建 / 令牌对它没有读权）；
+ * · 其余认证回话更可能落在**令牌值 / 身份范围**上；
+ * · `Failed to connect` / `Could not connect to server` / `Connection reset` / DNS 失败 /
+ *   本仓自己给的超时（`gitTimeoutFor` 那两支）都是 **egress 层** —— 网络根本没到 GitHub。
+ *
+ * 第三支是 #3051 补的：它缺席时那一形会落到下面那句通用话术上，把「节点连不上
+ * github.com:443」念成「令牌活不活 / 仓库在不在」—— 那句把人往令牌上查，而令牌是好的
+ * （实测 `cnb-61a-1k6d4na5o` 的 `stage-endStages-2`：`Failed to connect to github.com
+ * port 443 after 21114 ms`）。
+ *
+ * 这一函数**不改变退码** —— 三种都落「前提没落地」，改的只是下一动作能不能被照着做。
+ *
+ * @param {string} text `ls-remote` 的 stdout + stderr（未脱敏）
+ * @returns {string} 一句中文读数
+ */
+export function explainRemoteProbeFailure(text) {
+  if (isEgressFailure(text)) {
+    return "到 github.com 这一跳没通（TCP / DNS / 代理层）⇒ 出网问题在节点侧（白名单 / 代理 / 换 runner），与令牌值和这一格的判据都无关";
+  }
+  if (/repository not found|does not appear to be a git repository/i.test(text)) {
+    return "目标仓库在 GitHub 上不存在（或以这枚令牌的身份看不见它）⇒ 先去建仓库，再重跑这一格";
+  }
+  if (/repository access blocked|not accessible|deploy key/i.test(text)) {
+    return "这枚令牌的身份够不到目标仓库（fine-grained PAT 须把该仓库列进仓库访问范围）";
+  }
+  return "推送被拒且不属于上面几类 ⇒ 现场拿真值在本地 `git ls-remote` / `git push --dry-run` 各定一次值（仓库在不在 / 令牌活不活 / 保护规则拦不拦）";
+}
+
+/**
  * 是不是一个可按键取值的对象（异常对象是 `unknown`，先过这一跳再读字段）。
  *
  * @param {unknown} value 任意值
