@@ -101,6 +101,47 @@ describe("createConsoleRunner", () => {
     expect(runner.busy()).toBeNull();
   });
 
+  it("并发第二条不覆盖执行槽：当场拒绝（error 帧 + 未执行结果），原命令照跑（ISSUE #4282）", async () => {
+    const runner = createConsoleRunner();
+    const secondEvents: Array<ConsoleEvent> = [];
+    const first = runner.run(
+      {
+        runId: "run-first",
+        command: "node -e sleep",
+        file: process.execPath,
+        args: ["-e", "setTimeout(()=>{},3000)"],
+        cwd: process.cwd(),
+        timeoutMs: 20_000,
+      },
+      () => undefined,
+    );
+    await expect.poll(() => runner.busy()?.runId, { timeout: 4000 }).toBe("run-first");
+
+    /* 第一条在跑时发第二条：不再覆盖执行槽，而是当场拒绝。 */
+    const second = await runner.run(
+      {
+        runId: "run-second",
+        command: "node -e echo",
+        file: process.execPath,
+        args: ["-e", "console.log('should-not-run')"],
+        cwd: process.cwd(),
+        timeoutMs: 20_000,
+      },
+      (e) => secondEvents.push(e),
+    );
+    expect(second.exitCode).toBeNull();
+    expect(second.durationMs).toBe(0);
+    expect(secondEvents.some((e) => e.type === "error")).toBe(true);
+    /* 原命令的槽没被顶掉：busy 仍是第一条；第二条的进程从未起过
+     * （error 帧在 start 帧之前，没有 spawn 发生）。 */
+    expect(runner.busy()?.runId).toBe("run-first");
+    expect(secondEvents[0]?.type).toBe("error");
+
+    await runner.cancel();
+    await first;
+    expect(runner.busy()).toBeNull();
+  });
+
   it("cancel() 掐整棵树：exit 帧标 killed，而不是伪装成「自己失败」", async () => {
     const runner = createConsoleRunner();
     const events: Array<ConsoleEvent> = [];
