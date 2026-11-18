@@ -3105,10 +3105,11 @@ node scripts/gates/check-standalone-contents.cjs                          # 真�
 是两件事，过去只有前者有执行者。
 
 **独立一条流水线，不进 `.daily-gates`**（业主口径）。`.cnb.yml` 里那张 `.package-gates`
-锚点 + `.lock-package` 那把锁 + 触发口。**触发面变过两轮**：定时那一跑 2026-11-05 起
+锚点 + `.lock-package` 那把锁 + 触发口。**触发面变过三轮**：定时那一跑 2026-11-05 起
 从这台自托管节点的 `crontab` 迁到 GA 的 `.github/workflows/package-desktop.yml`（见
 `.cnb.yml` 头注「四条流水线」），CNB 侧此后**不再挂** `crontab` 事件（`tests/no-platform-ci-config.test.ts`
-反向钉住）；2026-11-07 起再补 `api_trigger_package`（ISSUE #3297，理由见下面 NSIS 读数段）。
+反向钉住）；2026-11-07 起再补 `api_trigger_package`（ISSUE #3297，理由见下面 NSIS 读数段）；
+2026-11-18 起再补 GA 侧 `push`（master + 壳相关 paths，ISSUE #4326，见下面那条）。
 所以今天 CNB 侧是两个触发口：`web_trigger_package`（手点按钮，`.cnb/web_trigger.yml`）
 + `api_trigger_package`（CLI / NPC），**同一份** `*package_gates`、**同一把** `*lock_package`、
 同一个立案锚点 `*package_fail_stage`。判据（`tests/no-platform-ci-config.test.ts`）：桌包那几格
@@ -3164,6 +3165,17 @@ node scripts/gates/check-standalone-contents.cjs                          # 真�
 > `target_commitish`（缺省默认分支，可用 `CNB_RELEASE_TARGET` 覆盖；不用 `GITHUB_SHA`，
 > 那是镜像仓 commit），判据补「缺字段即 400」的反面与「首次创建走完整条上传链」两端。
 > 400 不是 403 ⇒ 令牌权限没问题，别去动 `CNB_RELEASE_TOKEN`。
+
+> ⚠️ **#4326（2026-11-18）起触发面再补一口：GA 侧 `push`（master + paths）**：壳相关内容
+> （`src-tauri/**`、`public/{{shell.splash}}`、`scripts/build-desktop.mjs` 等装配链脚本）合入
+> master 即自动构建一次，不等每晚 03:37 的定时档。镜像格把 CNB master 的 squash 合并以
+> `--force` 推到镜像仓默认分支（force push 必触发 push 事件，§7.7.1 已坐实），push 事件的
+> paths 按 before/after compare 取这一次合并的改动面；compare 解析不了 before（force-push
+> 边缘形态）时 GitHub 按「全部变更」处理 ⇒ 宁可多建不漏建，与「master 上永远有最新壳」
+> 同向。paths 刻意**不收 `src/**`**：嵌入包里的前端由定时档兜底刷新，别让每次前端合并都付
+> 一次 Windows 全量构建。定时档保留不动；push 触发与定时 / 手点口共用 `package` 并发锁
+> （cancel-in-progress），更新的一跑掐掉在跑的旧跑。触发面由 `tests/ci-ga-trigger-map.test.ts`
+> 钉住。
 
 **发布档的触发与「三平台」现状（#2641，2026-10-31）**：设计里曾写「`tag: v*` 触发发布档、
 三平台（ubuntu / windows / macOS）打包，20–40min」—— 那是**前瞻**，不是今天的形状，也**不**

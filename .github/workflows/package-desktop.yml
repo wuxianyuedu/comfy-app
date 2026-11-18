@@ -37,6 +37,16 @@
 # 甚至被丢弃，历史读数里本档也从来没准点过（名义 19:00 UTC 实际落在 22:31–23:55Z）。
 # `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7；pnpm/action-setup 与 rust-cache
 # 的最新主版本分别是 v6 与 v2）。
+#
+# ⚠️ `push`（master + paths，ISSUE #4326）：壳相关内容合入 master 即自动构建一次，
+# 不等每晚 03:37 的定时档。镜像格把 CNB master 的 squash 合并以 --force 推到本仓
+# 默认分支（force push 必触发 push 事件，§7.7.1 已坐实），paths 按 before/after
+# compare 取这一次合并的改动面；compare 解析不了 before（force-push 边缘形态）时
+# GitHub 按「全部变更」处理 ⇒ 宁可多建不漏建，与「master 上永远有最新壳」同向。
+# paths 刻意只收「改了它，壳或它的装配链就变了」的输入，**不收 `src/**`**：嵌入包里的
+# 前端由每日定时档兜底刷新，别让每次前端合并都付一次 Windows 全量构建（触发面由
+# `tests/ci-ga-trigger-map.test.ts` 钉住）。push 触发与 schedule / 手点口共用下面那把
+# `package` 并发锁（cancel-in-progress）：更新的一跑掐掉在跑的旧跑，最新者胜。
 name: Package desktop (mirror)
 
 # `nightly` 滚动 Release 要写 tag / 上传资产；其余格只需要读代码。
@@ -50,6 +60,17 @@ permissions:
 on:
   schedule:
     - cron: "37 19 * * *"
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/package-desktop.yml
+      - src-tauri/**
+      - public/splash.html
+      - scripts/build-desktop.mjs
+      - scripts/sidecar-name.mjs
+      - scripts/standalone-private-inputs.mjs
+      - scripts/launcher-core/splash-assets.mjs
+      - scripts/build/**
   workflow_dispatch:
     inputs:
       head_sha:
