@@ -17,6 +17,7 @@ describe("runChecking 的 single-flight（#4241）", () => {
         }),
     );
     const secondAction = vi.fn(() => Promise.resolve(true));
+    void 0;
 
     const p1 = store.runChecking(firstAction);
     const p2 = store.runChecking(secondAction);
@@ -33,13 +34,22 @@ describe("runChecking 的 single-flight（#4241）", () => {
 
   it("全部结束后 checking 才复位；空闲时逐次执行", async () => {
     const store = useUpdateCheckStore.getState();
-    const first = store.runChecking(async () => "a");
-    const second = store.runChecking(async () => "b");
+    const first = store.runChecking(async () => {
+      await Promise.resolve();
+      return true;
+    });
+    const second = store.runChecking(async () => {
+      await Promise.resolve();
+      return false;
+    });
     await Promise.all([first, second]);
     expect(useUpdateCheckStore.getState().checking).toBe(false);
 
-    const third = await store.runChecking(async () => "c");
-    expect(third).toBe("c");
+    const third = await store.runChecking(async () => {
+      await Promise.resolve();
+      return true;
+    });
+    expect(third).toBe(true);
     expect(useUpdateCheckStore.getState().checking).toBe(false);
   });
 });

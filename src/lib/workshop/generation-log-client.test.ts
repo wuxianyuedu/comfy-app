@@ -11,12 +11,9 @@ vi.mock("~/lib/network/fetch-with-timeout", () => ({
 
 import { fetchGenerationLogs } from "./generation-log-client";
 
-/** 造一个 Response 形状的 Minimal 桩（fetchWithTimeout 的返回只被读 ok / json）。 */
+/** 造一个真 Response（fetchWithTimeout 的返回只被读 ok / json）。 */
 function jsonResponse(payload: unknown, ok = true): Response {
-  return {
-    ok,
-    json: async () => payload,
-  } as unknown as Response;
+  return new Response(JSON.stringify(payload), { status: ok ? 200 : 500 });
 }
 
 beforeEach(() => {
