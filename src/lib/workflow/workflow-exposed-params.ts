@@ -138,8 +138,10 @@ export const EXPOSED_PARAM_DISPLAY_LABEL: Record<ExposedParamClass, string> = {
   "lora-strength": "LoRA 强度",
 };
 
-/** 内置默认给几张参考图槽 —— 只是默认值，契约编辑器里可以继续加，不设上限。 */
-const REFERENCE_IMAGE_DEFAULT_COUNT = 2;
+/** 内置默认给几张参考图槽 —— 只是默认值，契约编辑器里可以继续加，不设上限。
+ *  多参考图工作流（如 MiniMaxH3ImageConditioning 的 `images.image_0..N` 形态）
+ *  常见多张（首张主图），统一支持 1~16 张，故默认给满 16 槽（#4355）。 */
+const REFERENCE_IMAGE_DEFAULT_COUNT = 16;
 
 /** 一个模式是否属于「图生图类」——需要一张参考图输入。
  *

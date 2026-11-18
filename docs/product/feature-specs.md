@@ -307,14 +307,18 @@
 - 落点：`src/lib/workshop/draft-store.ts`、
   `src/app/api/workshop/draft/route.ts`、`src/server/workshop/draft-repository.ts`
 
-#### FR-WP-06 定妆照上传到 ComfyUI 输入目录
+#### FR-WP-06 定妆照与镜头参考图上传到 ComfyUI 输入目录
 
 - 状态：已上线
-- 需求：角色卡的定妆照可上传并供本机生图引用。
+- 需求：角色卡的定妆照可上传并供本机生图引用；镜头生图支持多张参考图
+  （首张为主图，1~16 张，#4355）。
 - 行为与验收：上传把本机图放进 ComfyUI 输入目录再引用
-  （`preparePortraitReferences`）；失败有错误条，不静默丢图。
+  （`prepareShotReferences`：镜头级多选优先，留空回落出场角色的定妆照）；
+  失败有错误条，不静默丢图。多参考图按契约槽位逐张下发，张量图片入口由
+  执行期图增强自动补 LoadImage，不针对单个工作流做特殊处理。
 - 落点：`src/app/api/workshop-local/prepare/route.ts`、
-  `src/lib/workshop/`（portrait references）
+  `src/lib/workshop/`（shot references）、
+  `src/lib/comfyui/reference-loader-augment.ts`
 
 #### FR-WP-07 服务端编排（5 阶段 orchestrator）
 

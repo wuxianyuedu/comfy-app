@@ -18,6 +18,7 @@
 // 每份网络载荷都用 unknown 守卫收窄（不做类型断言）。
 
 import { clampPct } from "~/lib/progress";
+import { upperToken } from "~/lib/upper-token";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
 import { isPlainRecord, isRecord } from "~/lib/is-record";
@@ -274,6 +275,20 @@ export type LibraryWorkflowBuildResult = {
   usesLastFrame: boolean;
 };
 
+/** 该模式**生效的契约口清单**（成品配置 + 本机覆盖合并后的注册表，含作者
+ *  自定义口）。注册表读不到（接口缺失 / 查询失败）→ `undefined`，调用方回落
+ *  内置默认契约 —— 生成链路不因注册表不可用而阻断。 */
+async function loadEffectiveContractIds(
+  mode: string | null,
+): Promise<ReadonlyArray<string> | undefined> {
+  try {
+    const rows = await vanillaApi.llm.modeContractsGet.query();
+    return rows.contracts.find((c) => c.mode === upperToken(mode))?.inputs;
+  } catch {
+    return undefined;
+  }
+}
+
 /** 用选定的工作流库工作流封装一次生成请求。
  *
  *  ISSUE #145：工坊对外只暴露「提示词 / 尺寸 / 参考图(首帧)」，其余 IO 参数
@@ -308,12 +323,17 @@ export async function buildLibraryWorkflowInput(
     requestedMode !== null && requestedMode !== undefined && requestedMode.trim() !== ""
       ? requestedMode
       : (detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null);
+  /* 契约口清单（#4355）：调用方没点名时取**生效注册表**（成品配置 + 本机覆盖，
+   * 含作者自定义口）里该模式那一条 —— 作者在模式契约里改过的口径（如加参考图
+   * 槽）在工坊链路真的生效；注册表读不到时回落内置默认契约（不阻断生成）。
+   * 封装页签的流程测试仍以显式入参优先。 */
+  const effectiveContractIds = contractIds ?? (await loadEffectiveContractIds(mode));
   const { workflowInputs, unmatched } = buildEncapsulatedInputs({
     io,
     paramMap: detail?.paramMap ?? null,
     mode,
     values,
-    contractIds,
+    contractIds: effectiveContractIds,
     /* 宽高按**本机生效的那份**尺寸表算（ISSUE #3972）：设置里改过的表要真的
      * 改变下发给 ComfyUI 的宽高，而不是只改界面显示。水合前的快照是默认表，
      * 与旧行为一致（不劣化）。 */
@@ -556,7 +576,7 @@ export {
   fetchApiChannels,
   pollVideoUntilDone,
   prepareLocalInputImage,
-  preparePortraitReferences,
+  prepareShotReferences,
   type ApiVideoSubmitResult,
   type RelayDebugSink,
 } from "./generation-api-client";

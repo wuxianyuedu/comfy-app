@@ -1,9 +1,9 @@
-// `preparePortraitReferences` 单测：定妆照 → 镜头生图参考图的收集与上传。
+// `prepareShotReferences` 单测：镜头参考图的收集与上传（#4355）。
 //
-// 流程口径（docs/guides/feature-workshop-flow.md §4）：定妆照是后续分镜图的
-// 参考图基准。helper 的职责边界：只收集「已选定定妆照」的角色、按镜头的
-// 角色出场序排序、上传进 ComfyUI 输入目录换文件名、单张失败不拖垮整批、
-// 同一 URL 会话内只上传一次（批量生成不再为同一张图反复落盘）。
+// 流程口径（docs/guides/feature-workshop-flow.md §4）：镜头级多选参考图
+// （首张为主图）优先，留空回落出场角色的已选定妆照。helper 的职责边界：
+// 只收集、按序上传进 ComfyUI 输入目录换文件名、单张失败不拖垮整批、
+// 同一 URL 会话内只上传一次、已是输入目录文件名的直接透传（不二次上传）。
 // 这里不 mock 本模块，直接 mock 全局 fetch（prepareLocalInputImage 的传输层），
 // 上传解析逻辑保持真实执行。
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,9 +13,9 @@ import {
   apiPollVideo,
   apiSubmitVideo,
   fetchWorkshopWorkflows,
-  preparePortraitReferences,
+  prepareShotReferences,
 } from "./generation-client";
-import type { Character } from "./types";
+import type { Character, Shot } from "./types";
 import { isRecord } from "~/lib/is-record";
 
 /* fetchWorkshopWorkflows 的 workflow.list 读数（#4119 回归）：现役形状是
@@ -79,70 +79,106 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("preparePortraitReferences", () => {
-  it("按镜头的角色出场序收集已选定妆照，逐张上传换文件名", async () => {
+function makeShot(referenceImages?: Array<string>, characterIds: Array<string> = []): Shot {
+  return {
+    id: "s1",
+    index: 1,
+    sceneId: "scene-1",
+    sceneHeading: "",
+    shotType: "medium",
+    description: "",
+    characterIds,
+    status: "idle",
+    params: {},
+    prompt: "",
+    negativePrompt: "",
+    ...(referenceImages === undefined ? {} : { referenceImages }),
+  };
+}
+
+describe("prepareShotReferences", () => {
+  it("镜头级多选优先：按用户给的顺序上传，定妆照不再参与", async () => {
     const characters = [
-      makeCharacter("c1", "/api/generated/t1/a.png"),
-      makeCharacter("c2"), // 没选定妆照 → 跳过
-      makeCharacter("c3", "/api/generated/t1/b.png"),
+      makeCharacter("c1", "/api/generated/t6/p1.png"),
+      makeCharacter("c2", "/api/generated/t6/p2.png"),
     ];
-    const mock = mockPrepare("t1");
+    const mock = mockPrepare("t6");
 
-    const { files, failedCount } = await preparePortraitReferences(characters, ["c3", "c2", "c1"]);
+    const { files, failedCount } = await prepareShotReferences(
+      makeShot(["/api/generated/t6/x.png", "/api/generated/t6/y.png"], ["c1"]),
+      characters,
+    );
 
-    // 出场序（c3 在前），不是角色表序；文件名与 URL 绑定可判序。
-    expect(files).toEqual(["up-t1-b.png", "up-t1-a.png"]);
+    expect(files).toEqual(["up-t6-x.png", "up-t6-y.png"]);
     expect(failedCount).toBe(0);
     expect(mock).toHaveBeenCalledTimes(2);
   });
 
-  it("没有角色选定妆照：空数组且不发任何请求", async () => {
-    const mock = mockPrepare("t2");
-    const { files, failedCount } = await preparePortraitReferences(
-      [makeCharacter("c1"), makeCharacter("c2")],
-      ["c1", "c2"],
+  it("留空回落出场角色的已选定妆照（按出场序，不再截两张，#4355）", async () => {
+    const characters = [
+      makeCharacter("c1", "/api/generated/t7/a.png"),
+      makeCharacter("c2", "/api/generated/t7/b.png"),
+      makeCharacter("c3", "/api/generated/t7/c.png"),
+    ];
+    const mock = mockPrepare("t7");
+
+    const { files, failedCount } = await prepareShotReferences(
+      makeShot(undefined, ["c3", "c1", "c2"]),
+      characters,
     );
+
+    expect(files).toEqual(["up-t7-c.png", "up-t7-a.png", "up-t7-b.png"]);
+    expect(failedCount).toBe(0);
+    expect(mock).toHaveBeenCalledTimes(3);
+  });
+
+  it("没有可用参考图：空数组且不发任何请求", async () => {
+    const mock = mockPrepare("t8");
+    const { files, failedCount } = await prepareShotReferences(makeShot(undefined, ["c1"]), [
+      makeCharacter("c1"),
+      makeCharacter("c2"),
+    ]);
     expect(files).toEqual([]);
     expect(failedCount).toBe(0);
     expect(mock).not.toHaveBeenCalled();
   });
 
   it("单张上传失败不拖垮整批：计入 failedCount，其余照常返回", async () => {
-    const characters = [
-      makeCharacter("c1", "/api/generated/t3/a.png"),
-      makeCharacter("c2", "/api/generated/t3/b.png"),
-    ];
-    mockPrepare("t3", new Set(["/api/generated/t3/a.png"]));
+    const characters = [makeCharacter("c1", "/api/generated/t9/a.png")];
+    mockPrepare("t9", new Set(["/api/generated/t9/a.png"]));
 
-    const { files, failedCount } = await preparePortraitReferences(characters, ["c1", "c2"]);
+    const { files, failedCount } = await prepareShotReferences(
+      makeShot(["/api/generated/t9/a.png", "/api/generated/t9/b.png"]),
+      characters,
+    );
 
-    expect(files).toEqual(["up-t3-b.png"]);
+    expect(files).toEqual(["up-t9-b.png"]);
     expect(failedCount).toBe(1);
   });
 
-  it("内置默认契约只有两个参考图槽：超过两张的定妆照不做无效上传", async () => {
-    const characters = [
-      makeCharacter("c1", "/api/generated/t4/a.png"),
-      makeCharacter("c2", "/api/generated/t4/b.png"),
-      makeCharacter("c3", "/api/generated/t4/c.png"),
-    ];
-    const mock = mockPrepare("t4");
+  it("已是输入目录文件名的直接透传，不二次上传（镜头卡片存的就是它）", async () => {
+    const mock = mockPrepare("t10");
 
-    const { files } = await preparePortraitReferences(characters, ["c1", "c2", "c3"]);
+    const { files, failedCount } = await prepareShotReferences(
+      makeShot(["workshop-ref-abc.png", "/api/generated/t10/z.png"]),
+      [],
+    );
 
-    expect(files).toHaveLength(2);
-    expect(mock).toHaveBeenCalledTimes(2);
+    expect(files).toEqual(["workshop-ref-abc.png", "up-t10-z.png"]);
+    expect(failedCount).toBe(0);
+    expect(mock).toHaveBeenCalledTimes(1);
   });
 
-  it("会话内缓存：批量生成时同一张定妆照只上传一次", async () => {
-    const characters = [makeCharacter("c1", "/api/generated/t5/a.png")];
-    const mock = mockPrepare("t5");
+  it("会话内缓存：批量生成时同一张图只上传一次", async () => {
+    const characters = [makeCharacter("c1", "/api/generated/t11/a.png")];
+    const mock = mockPrepare("t11");
 
-    const first = await preparePortraitReferences(characters, ["c1"]);
-    const second = await preparePortraitReferences(characters, ["c1"]);
+    const shot = makeShot(undefined, ["c1"]);
+    const first = await prepareShotReferences(shot, characters);
+    const second = await prepareShotReferences(shot, characters);
 
-    expect(first.files).toEqual(["up-t5-a.png"]);
-    expect(second.files).toEqual(["up-t5-a.png"]);
+    expect(first.files).toEqual(["up-t11-a.png"]);
+    expect(second.files).toEqual(["up-t11-a.png"]);
     expect(mock).toHaveBeenCalledTimes(1);
   });
 });
