@@ -11,10 +11,12 @@
 # 排班：北京 03:00 = UTC 19:00 —— 与 02:00 的 code scanning 巡检错开一小时
 # （不抢同一夜的 runner），也避开 01:00 的每日单元测试那一档。
 #
-# 权限只给两项：读代码（检出脚本）与读安全事件（告警）。`security-events: read`
-# 同时覆盖 code scanning 与 Dependabot alerts（GitHub 的 Security events 细粒度
-# 权限三合一）。**不写 GitHub issue**：落点已定为 CNB（`moon-read/comfy-app-t3`），
-# GitHub 镜像仓的 issues 不参与。
+# 权限只给两项：读代码（检出脚本）与读 Dependabot 告警。⚠️ 内置 GITHUB_TOKEN 的
+# `security-events: read` 只覆盖 code scanning；Dependabot alerts 要的是
+# `vulnerability-alerts: read`（官方权限表："For Dependabot alerts, use the
+# `vulnerability-alerts` permission"）——细粒度 PAT 的「Security events」才是一项
+# 三合一，不能拿 PAT 的经验推 GITHUB_TOKEN。**不写 GitHub issue**：落点已定为
+# CNB（`moon-read/comfy-app-t3`），GitHub 镜像仓的 issues 不参与。
 #
 # `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7）。
 name: Dependabot triage (mirror)
@@ -26,7 +28,7 @@ on:
 
 permissions:
   contents: read
-  security-events: read
+  vulnerability-alerts: read
 
 concurrency:
   # 独立一把锁：与每日档 / 桌包档 / code scanning 巡检互不相干；不掐旧跑
@@ -57,7 +59,7 @@ jobs:
 
       - name: 巡检并建单
         env:
-          # 内置 token：权限由本文件顶层的 `permissions:` 授予（`security-events: read`）。
+          # 内置 token：权限由本文件顶层的 `permissions:` 授予（`vulnerability-alerts: read`）。
           GH_TOKEN: ${{ github.token }}
           # CNB 侧建单 / 改单 / 贴标签（repo-issue:rw）与评论 / 仓库标签（repo-notes:rw）。
           CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}

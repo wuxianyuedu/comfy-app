@@ -64,7 +64,9 @@ export function classifyGithubFailure(status, body, remaining) {
     return {
       kind: "forbidden",
       detail:
-        "403：内置 GITHUB_TOKEN 缺 `security-events: read`，或细粒度令牌没开 Security events（Read-only）",
+        "403：内置 GITHUB_TOKEN 缺读告警的权限（code scanning 要 `security-events: read`，" +
+        "Dependabot alerts 要 `vulnerability-alerts: read`，两枚互不覆盖），" +
+        "或细粒度令牌没开 Security events（Read-only）",
     };
   }
   if (status >= 500) {

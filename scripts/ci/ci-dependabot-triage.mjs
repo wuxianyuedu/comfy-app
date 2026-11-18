@@ -23,8 +23,8 @@
  * 4. **失败即零写入**。告警列表取不到、只拿到部分页、已有单列表取不到 ——
  *    一律不建、不刷、不评论，只在日志与 job summary 里说明。
  * 5. **401 / 403 / 限流 / 5xx 重试两次仍失败 ⇒ 红**，且话术点名缺哪一项权限
- *    （GitHub 侧 `security-events: read` 同时覆盖两族；CNB 侧 `repo-issue:rw` /
- *    `repo-notes:rw`）。
+ *    （GitHub 侧 GITHUB_TOKEN 读 Dependabot 要 `vulnerability-alerts: read`；
+ *    CNB 侧 `repo-issue:rw` / `repo-notes:rw`）。
  * 6. **建单后必须补标签 + 独立回读**（`create-issue --labels` 实测不落地）。
  *
  * ## 为什么走 HTTP 而不是 `cnb` CLI
@@ -41,7 +41,8 @@
  * ```
  *
  * 环境变量：
- *   · `GH_TOKEN` / `GITHUB_TOKEN` —— 读 GitHub Dependabot alerts（需 `security-events: read`）
+ *   · `GH_TOKEN` / `GITHUB_TOKEN` —— 读 GitHub Dependabot alerts
+ *     （内置 GITHUB_TOKEN 需 `vulnerability-alerts: read`；细粒度 PAT 需 Security events（Read-only））
  *   · `CNB_ISSUE_TOKEN` / `CNB_TOKEN` —— 写 CNB issue（需 `repo-issue:rw` + `repo-notes:rw`）
  *   · `GITHUB_REPOSITORY`（缺省 `wuxianyuedu/comfy-app`）
  *   · `CNB_REPO_SLUG`（缺省 `moon-read/comfy-app-t3`）
@@ -252,7 +253,7 @@ export async function main(io = {}) {
 
   if (!ghToken) {
     return finish(CODE.NO_FACT, "读不到 GitHub 告警：没有 GH_TOKEN / GITHUB_TOKEN ⇒ 一次都不写。", [
-      "缺的凭据：builtin GITHUB_TOKEN（workflow 需 `permissions: security-events: read`）或细粒度 PAT",
+      "缺的凭据：builtin GITHUB_TOKEN（workflow 需 `permissions: vulnerability-alerts: read`）或细粒度 PAT",
     ]);
   }
   if (!cnbToken) {
