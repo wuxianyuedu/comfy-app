@@ -585,6 +585,12 @@ export const SKIP_SCHEMA_SYNC_ENV = "COMFYAPP_SKIP_SCHEMA_SYNC";
  *   （状态栏「立即同步」→ POST /api/schema/push）；启动编排的自动同步用默认 false。
  * @returns {{ started: boolean, reason?: string }}
  */
+/** 发起一次 schema 同步子进程（不等待：相位由子进程写进状态文件）。
+ *  @param {string} root 项目根（scripts/ 与 db.sqlite 都按它定位）。
+ *  @param {{ force?: boolean }} [options] `force` = `--force` 口径（含删列/重建表）。
+ *  @returns {{ started: false, reason: string } | { started: true, child: import("node:child_process").ChildProcess }}
+ *   `started: false` 时给 `reason`（执行件不在 / spawn 失败）；成功时交回 child，
+ *   供 `/api/schema/push` 的并发闸等子进程退出后再放行（ISSUE #4283）。 */
 export function spawnSchemaSync(root, options = {}) {
   const { force = false } = options;
   /* 脚本的实际落点在 `scripts/db/` 域目录（#3958 归家）。这里必须拼**新路径**：
@@ -621,7 +627,10 @@ export function spawnSchemaSync(root, options = {}) {
       stdio,
     });
     child.unref();
-    return { started: true };
+    /* child 一并交回：/api/schema/push 的并发闸要等子进程退出才放行
+     * （ISSUE #4283）——只罩 spawn 那几微秒防不住「子进程还没写下 syncing
+     * 相位」的窗口。其余调用方不读这个字段，加字段不破坏既有形状。 */
+    return { started: true, child };
   } catch (error) {
     return {
       started: false,

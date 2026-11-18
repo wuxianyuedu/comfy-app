@@ -35,6 +35,23 @@ function statusJson(phase: string, detail: string | null = null): string {
   return JSON.stringify({ phase, detail, at: new Date().toISOString() });
 }
 
+/** spawn 桩的成功返回（ISSUE #4283）：路由的并发闸要等 `child.once("exit")`
+ *  才放行——桩里的 child 让 once **立即**触发（模拟子进程秒退、即时放闸），
+ *  后续用例不被前一个用例的闸挡住。 */
+function startedWithInstantChild(): {
+  child: { once: (event: string, callback: () => void) => void };
+  started: true;
+} {
+  return {
+    started: true,
+    child: {
+      once: (_event: string, callback: () => void) => {
+        callback();
+      },
+    },
+  };
+}
+
 beforeEach(() => {
   spawnSchemaSync.mockReset();
 });
@@ -52,7 +69,7 @@ async function post(): Promise<Response> {
 describe("POST /api/schema/push", () => {
   it("相位是 stale 时放行，并以 force: true 发起同步", async () => {
     stubStatusFile(statusJson("stale", "含「会丢数据」的语句 2 条"));
-    spawnSchemaSync.mockReturnValue({ started: true });
+    spawnSchemaSync.mockReturnValue(startedWithInstantChild());
     const res = await post();
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ ok: true });
@@ -64,7 +81,7 @@ describe("POST /api/schema/push", () => {
 
   it("missing（表没建起来）同样放行", async () => {
     stubStatusFile(statusJson("missing", "起 pnpm 失败（ENOENT）"));
-    spawnSchemaSync.mockReturnValue({ started: true });
+    spawnSchemaSync.mockReturnValue(startedWithInstantChild());
     expect((await post()).status).toBe(200);
   });
 
@@ -111,12 +128,37 @@ describe("POST /api/schema/push", () => {
     const error = isPlainRecord(body) && typeof body.error === "string" ? body.error : "";
     expect(error).toContain("找不到");
   });
+
+  it("子进程退出前，第二个请求撞并发闸 409；退出后放行（ISSUE #4283）", async () => {
+    stubStatusFile(statusJson("stale"));
+    /* 收集每次 spawn 的 exit 回调：测试自己控制子进程何时退出。 */
+    const exits: Array<() => void> = [];
+    spawnSchemaSync.mockReturnValue({
+      started: true,
+      child: {
+        once: (_event: string, callback: () => void) => {
+          exits.push(callback);
+        },
+      },
+    });
+    const first = await post();
+    expect(first.status).toBe(200);
+    /* 子进程还在跑（exit 未触发）：第二个请求撞 spawning 闸。 */
+    const second = await post();
+    expect(second.status).toBe(409);
+    /* 子进程退出：闸放开，下一个请求照常放行。 */
+    exits[0]?.();
+    const third = await post();
+    expect(third.status).toBe(200);
+    /* 收尾：把第三次 spawn 的 child 也退出，别把闸留给后续用例。 */
+    exits[1]?.();
+  });
 });
 
 describe("鉴权与同源闸（#4040）", () => {
   it("跨站 Origin → 403，绝不发起同步", async () => {
     stubStatusFile(statusJson("stale", "含「会丢数据」的语句 2 条"));
-    spawnSchemaSync.mockReturnValue({ started: true });
+    spawnSchemaSync.mockReturnValue(startedWithInstantChild());
     const { POST } = await import("./route");
     const res = await POST(
       new NextRequest("http://localhost:3000/api/schema/push", {
@@ -130,7 +172,7 @@ describe("鉴权与同源闸（#4040）", () => {
 
   it("启动页那一族 Origin 放行（splash 白名单，与 health 同一清单）", async () => {
     stubStatusFile(statusJson("stale"));
-    spawnSchemaSync.mockReturnValue({ started: true });
+    spawnSchemaSync.mockReturnValue(startedWithInstantChild());
     const { POST } = await import("./route");
     const res = await POST(
       new NextRequest("http://localhost:3000/api/schema/push", {

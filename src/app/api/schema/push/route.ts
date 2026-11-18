@@ -58,17 +58,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  /* 闸保持到子进程退出（ISSUE #4283）：spawn 同步返回后，子进程还要百毫秒级
+   * 才会把相位写成 `syncing`——那只靠 finally 在 spawn 返回后立刻放闸是挡不住
+   * 双击/并发的（第二个请求会穿过两道闸去并发 push 同一个 SQLite）。子进程
+   * 有 600s 预算兜底（最坏 600s 后闸也会放开），正常几秒退出即放闸。 */
   spawning = true;
-  try {
-    const started = spawnSchemaSync(process.cwd(), { force: true });
-    if (!started.started) {
-      return NextResponse.json(
-        { ok: false, error: started.reason ?? "无法发起同步" },
-        { status: 404 },
-      );
-    }
-    return NextResponse.json({ ok: true });
-  } finally {
+  const started = spawnSchemaSync(process.cwd(), { force: true });
+  if (!started.started) {
     spawning = false;
+    return NextResponse.json(
+      { ok: false, error: started.reason ?? "无法发起同步" },
+      { status: 404 },
+    );
   }
+  started.child?.once("exit", () => {
+    spawning = false;
+  });
+  return NextResponse.json({ ok: true });
 }
