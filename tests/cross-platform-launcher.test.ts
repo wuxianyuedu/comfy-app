@@ -193,6 +193,49 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   // WARN 只在这种情况下出现）。
   it("回收上一次的残留：还有活着的子树才真回收并回报", async () => {
     const root = makeTmp();
+    // #4330：锚点里的 PID 要通过「命令行落在本检出根内」的归属校验才会被回收。
+    // 把长命脚本写进会话根目录、以绝对路径拉起，模拟编排器拉起的真孤儿
+    // （spawnDevServer / spawnSchemaSync 都用检出内绝对路径做入参）。
+    const keepalive = path.join(root, "keepalive.cjs");
+    fs.writeFileSync(keepalive, "setTimeout(() => {}, 60000)", "utf8");
+    const child = spawnInGroup({
+      command: process.execPath,
+      args: [keepalive],
+      // cwd 不落在会话根：归属判据看的是**命令行里的脚本绝对路径**；且 Windows
+      // 上进程的 cwd 句柄会锁住目录，afterEach 的 rmSync 会 EPERM。
+      cwd: process.cwd(),
+    });
+    const pid = child.pid;
+    expect(pid).toBeGreaterThan(0);
+    writeSession(root, {
+      launcher_pid: 0x7f_ff_ff_fe,
+      child_pids: [pid!],
+      app_port: 3311,
+      mode: "web",
+      started_at: new Date().toISOString(),
+    });
+    touchHeartbeat(root, Date.now() - HEARTBEAT_STALE_MS - 1000);
+
+    expect(await reapStaleSession(root)).toEqual([pid]);
+    expect(readSession(root)).toBeNull();
+    expect(
+      await waitUntil(() => {
+        try {
+          process.kill(pid!, 0);
+          return false;
+        } catch {
+          return true;
+        }
+      }, 8000),
+    ).toBe(true);
+  }, 20_000);
+
+  // #4330：锚点里的 PID 被系统复用给无关进程（命令行不含检出根）时**不得强杀**
+  // ——保守跳过、锚点保留，把「是不是真孤儿」留给下一次启动再验。
+  it("回收上一次的残留：PID 验不出本检出归属时不误杀、保留锚点", async () => {
+    const root = makeTmp();
+    // 命令行里没有会话根路径的活进程（模拟 PID 已被无关进程复用）。
+    // cwd 留在仓库根：Windows 上进程 cwd 句柄会锁住目录，别挂在临时目录上。
     const child = spawnInGroup({
       command: process.execPath,
       args: ["-e", "setTimeout(() => {}, 60000)"],
@@ -209,8 +252,18 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     });
     touchHeartbeat(root, Date.now() - HEARTBEAT_STALE_MS - 1000);
 
-    expect(await reapStaleSession(root)).toEqual([pid]);
-    expect(readSession(root)).toBeNull();
+    expect(await reapStaleSession(root)).toBeNull();
+    // 锚点保留：下次启动还要拿它再验一次，不能把回收线索一起丢掉。
+    expect(readSession(root)).not.toBeNull();
+    // 目标进程还活着（没有被误杀）。
+    expect(() => process.kill(pid!, 0)).not.toThrow();
+
+    // 清理：别把 60 秒的长命进程留给测试机。
+    try {
+      process.kill(pid!, "SIGKILL");
+    } catch {
+      /* 已退出则忽略 */
+    }
     expect(
       await waitUntil(() => {
         try {

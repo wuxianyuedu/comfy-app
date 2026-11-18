@@ -162,8 +162,9 @@ _tmp_*/
 /.pnpm-store/
 
 # Tauri 构建产物（本地 cargo build / build-desktop.mjs 后生成，不入库）
-# Cargo.lock 由每次构建自动更新（依赖图内嵌 sha/时间戳），保持当前入库版本不动
-/src-tauri/Cargo.lock
+# 例外：Cargo.lock **入库**（#4354）—— shell-gate 的 cargo test 带 --locked
+# （#4317），锁不入库则平台全新 clone 无锁可依、该格必红；应用类 crate 的
+# 标准做法也是提交锁文件（构建产物指的是 target/，不是锁）。
 # build.rs 声明 AppManifest 命令后由 tauri-build 自动生成的 ACL 权限文件
 /src-tauri/permissions/
 
