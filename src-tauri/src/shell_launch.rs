@@ -306,23 +306,35 @@ pub fn clear_session_anchor(project_root: &str) {
 /// 返回本次定下的模式（已写过就返回那个值）：调用方要把它记进应用状态，
 /// 让启动页在建窗后的第一句问话就能按形态回答（见 lib.rs 的 `get_launch_status`）。
 /// 判据本体仍只在这里，调用方不重复推。
+/// 本次运行启动模式的**进程内唯一写入闸**（ISSUE #4346）：`set_var` 收敛进
+/// `OnceLock` 的初始化，至多执行一次——「启动期单线程」从注释里的假设变成
+/// 结构保证；setup 阶段（runtime 已装配）再调本函数也只是读缓存，不再有
+/// 第二次写环境变量。
+static LAUNCH_MODE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
 #[cfg(not(debug_assertions))]
 pub fn ensure_launch_mode(project_root: &str) -> String {
-  if let Ok(mode) = std::env::var("COMFYAPP_LAUNCH_MODE") {
-    return mode;
-  }
-  let mode = if orchestrator_script(project_root).is_some() {
-    "prebuilt"
-  } else {
-    "standalone"
-  };
-  // SAFETY：启动期单线程（窗口与事件循环都还没建），没有并发读环境变量的路径。
-  std::env::set_var("COMFYAPP_LAUNCH_MODE", mode);
-  log::info!(
-    "[ComfyAPP] launch mode={mode}（编排器{}）",
-    if mode == "prebuilt" { "在，走 dev server" } else { "不在，走内嵌 standalone server" }
-  );
-  mode.to_string()
+  LAUNCH_MODE
+    .get_or_init(|| {
+      // 已写过（含外部注入）就沿用那个值：判据不变（已写过就返回那个值）。
+      if let Ok(mode) = std::env::var("COMFYAPP_LAUNCH_MODE") {
+        return mode;
+      }
+      let mode = if orchestrator_script(project_root).is_some() {
+        "prebuilt"
+      } else {
+        "standalone"
+      };
+      // SAFETY：写入被 [`LAUNCH_MODE`] 收敛为进程内至多一次（ISSUE #4346），
+      // 并发写不可能发生；首写处于启动期，此刻没有并发读环境变量的路径。
+      std::env::set_var("COMFYAPP_LAUNCH_MODE", mode);
+      log::info!(
+        "[ComfyAPP] launch mode={mode}（编排器{}）",
+        if mode == "prebuilt" { "在，走 dev server" } else { "不在，走内嵌 standalone server" }
+      );
+      mode.to_string()
+    })
+    .clone()
 }
 
 #[cfg(debug_assertions)]
@@ -1330,24 +1342,24 @@ pub(crate) const REAPER_BUDGET: std::time::Duration = std::time::Duration::from_
 /// `Command::output()` 会无限等子进程退出——把它放在退出路径上，一旦 reap 脚本
 /// 链路变化（比如未来加了等待确认），壳就卡死在 Exit 事件里。这里改为
 /// `spawn` + `try_wait` 轮询：到点强杀并报错。子进程只吐几行日志，管道缓冲
-/// 足够容纳，不会因不读管道而写满卡死；退出后再把剩余输出收干净。
+/// 足够容纳，不会因不读管道而写满卡死；退出后再把剩余输出收干净——收取本身
+/// 也带预算（[`drain_pipes_bounded`]，ISSUE #4337），退出回收整体保持墙钟上限。
 pub(crate) fn run_with_budget(
   mut command: std::process::Command,
   budget: std::time::Duration,
 ) -> std::io::Result<std::process::Output> {
-  use std::io::Read;
-  let mut child = command.spawn()?;
+  // spawn() 的默认 stdio 是**继承父进程**——不显式接管管道，child.stdout/stderr
+  // 恒为 None，下面的残余收取（以及返回值里的输出）从来没有内容可收。这里
+  // 显式接上管道，产出交由 [`drain_pipes_bounded`] 有界收净。
+  use std::process::Stdio;
+  let mut child = command
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()?;
   let deadline = std::time::Instant::now() + budget;
   loop {
     if let Some(status) = child.try_wait()? {
-      let mut stdout = Vec::new();
-      let mut stderr = Vec::new();
-      if let Some(mut s) = child.stdout.take() {
-        let _ = s.read_to_end(&mut stdout);
-      }
-      if let Some(mut s) = child.stderr.take() {
-        let _ = s.read_to_end(&mut stderr);
-      }
+      let (stdout, stderr) = drain_pipes_bounded(&mut child, PIPE_DRAIN_BUDGET);
       return Ok(std::process::Output {
         status,
         stdout,
@@ -1364,6 +1376,56 @@ pub(crate) fn run_with_budget(
     }
     std::thread::sleep(std::time::Duration::from_millis(50));
   }
+}
+
+/// 子进程退出后收取管道残余输出的宽限（ISSUE #4337）。正常情况残余就几行、
+/// 瞬间收完；给 2s 是给「写端还没关」的窄窗口一个来得及收的余地。
+pub(crate) const PIPE_DRAIN_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// 已退出的子进程把 stdout/stderr 残余收干净——但**有界**（ISSUE #4337）。
+///
+/// `read_to_end` 要等管道**所有**写端关闭才返回：被回收脚本留下的后代进程若
+/// 继承了 stdout/stderr 写句柄且不肯退，直接在当前线程 `read_to_end` 就会把
+/// 退出路径无限期挂住（主线程冻在 `RunEvent::Exit` 里，表现为「关了窗却退不
+/// 出」——`try_wait` 那段有预算，这一段原先没有）。这里把每条管道的收取挪进
+/// 一次性线程、整体给一个宽限预算：到点放弃，拿到多少算多少——残余输出是
+/// 诊断信息，丢给它换退出路径的墙钟上限，值得。
+fn drain_pipes_bounded(
+  child: &mut std::process::Child,
+  budget: std::time::Duration,
+) -> (Vec<u8>, Vec<u8>) {
+  use std::io::Read;
+  let (tx, rx) = std::sync::mpsc::channel::<(bool, Vec<u8>)>();
+  let mut spawned = 0usize;
+  if let Some(mut s) = child.stdout.take() {
+    let tx = tx.clone();
+    spawned += 1;
+    std::thread::spawn(move || {
+      let mut buf = Vec::new();
+      let _ = s.read_to_end(&mut buf);
+      let _ = tx.send((true, buf));
+    });
+  }
+  if let Some(mut s) = child.stderr.take() {
+    spawned += 1;
+    std::thread::spawn(move || {
+      let mut buf = Vec::new();
+      let _ = s.read_to_end(&mut buf);
+      let _ = tx.send((false, buf));
+    });
+  }
+  let deadline = std::time::Instant::now() + budget;
+  let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+  for _ in 0..spawned {
+    let left = deadline.saturating_duration_since(std::time::Instant::now());
+    match rx.recv_timeout(left) {
+      Ok((true, buf)) => stdout = buf,
+      Ok((false, buf)) => stderr = buf,
+      // 超时（或发送端提前全没）：到点放弃，不再陪卡住的写端等。
+      Err(_) => break,
+    }
+  }
+  (stdout, stderr)
 }
 
 /// 调 `scripts/reap-process.mjs`（非 TS 宿主的唯一命令行回收入口）。
@@ -1944,6 +2006,73 @@ mod tests {
       std::fs::read_to_string(&path).unwrap(),
       "9\n",
       "越过上限的下一行必须重建文件，而不是无限追加"
+    );
+  }
+
+  /// #4337 回归：子进程退出后，即使有后代进程继承了 stdout 写句柄不肯退，
+  /// run_with_budget 也必须在「预算 + 收尾宽限」内返回——退出路径不许有
+  /// 无界阻塞点（旧写法 read_to_end 会陪后代等到它退，主线程冻在 Exit 里）。
+  #[cfg(windows)]
+  #[test]
+  fn run_with_budget_stays_bounded_when_descendant_holds_pipe() {
+    // start /b 让 ping 在 cmd 退出后继续活着并**继承** cmd 的 stdout 写端 ~5s。
+    let mut command = std::process::Command::new("cmd");
+    command.args(["/C", "start /b ping -n 6 127.0.0.1 & echo ready"]);
+    let start = std::time::Instant::now();
+    let out = run_with_budget(command, REAPER_BUDGET).unwrap();
+    let elapsed = start.elapsed();
+    assert!(
+      elapsed < std::time::Duration::from_secs(4),
+      "退出回收必须在预算+宽限内返回，而不是陪攥着写端的后代等到它退：{elapsed:?}"
+    );
+    assert!(out.status.success());
+  }
+
+  /// 同上一条的 POSIX 形态（GA 的 cargo test 跑在 ubuntu 上）。
+  #[cfg(unix)]
+  #[test]
+  fn run_with_budget_stays_bounded_when_descendant_holds_pipe() {
+    // 后台 sleep 继承 sh 的 stdout 写端 6s；sh 本身立即退出。
+    let mut command = std::process::Command::new("sh");
+    command.args(["-c", "sleep 6 & echo ready"]);
+    let start = std::time::Instant::now();
+    let out = run_with_budget(command, REAPER_BUDGET).unwrap();
+    let elapsed = start.elapsed();
+    assert!(
+      elapsed < std::time::Duration::from_secs(4),
+      "退出回收必须在预算+宽限内返回，而不是陪攥着写端的后代等到它退：{elapsed:?}"
+    );
+    assert!(out.status.success());
+  }
+
+  /// 常规路径不回归：子进程正常退出、无后代攥管道时，残余输出照常收全
+  /// （#4337 的有界化不该把「本来拿得到的输出」也丢掉）。
+  #[cfg(windows)]
+  #[test]
+  fn run_with_budget_collects_output_of_clean_exit() {
+    let mut command = std::process::Command::new("cmd");
+    command.args(["/C", "echo ready"]);
+    let out = run_with_budget(command, REAPER_BUDGET).unwrap();
+    assert!(out.status.success());
+    assert!(
+      String::from_utf8_lossy(&out.stdout).contains("ready"),
+      "正常退出的子进程输出必须收全：{}",
+      String::from_utf8_lossy(&out.stdout)
+    );
+  }
+
+  /// 同上一条的 POSIX 形态。
+  #[cfg(unix)]
+  #[test]
+  fn run_with_budget_collects_output_of_clean_exit() {
+    let mut command = std::process::Command::new("sh");
+    command.args(["-c", "echo ready"]);
+    let out = run_with_budget(command, REAPER_BUDGET).unwrap();
+    assert!(out.status.success());
+    assert!(
+      String::from_utf8_lossy(&out.stdout).contains("ready"),
+      "正常退出的子进程输出必须收全：{}",
+      String::from_utf8_lossy(&out.stdout)
     );
   }
 
