@@ -344,28 +344,57 @@ export function describeStaleSession(
   );
 }
 
+/** 尾读窗口：崩溃轨迹（Python traceback / OOM / CUDA 报错）都在最后几屏里，
+ * 只读文件尾、不把整个会话日志读进内存（ISSUE #4395——保活日志单会话内无上限，
+ * 长会话可达数十 MB，整文件 readFileSync 会在崩溃处理路径上长阻塞 + 内存冲高）。 */
+const TAIL_WINDOW_BYTES = 256 * 1024;
+
 /**
  * 读文件末尾 N 行（按行裁剪），用于把保活进程崩溃前的输出带进面板。
  *
  * 保活模式拿不到退出码 / 信号，但 ComfyUI 自己的 stdout / stderr 被重定向到了
  * 按次命名的文件（见 lifecycle-launch 的 `comfyui-keepalive-*.{out,err}.log`），
- * 真正的崩溃轨迹（Python traceback / OOM / CUDA 报错）就在那里 —— 监督器只轮询
- * 进程表、看不到原因，这里把尾部直接带进 runtime 日志，用户不必翻文件。
+ * 真正的崩溃轨迹就在那里 —— 监督器只轮询进程表、看不到原因，这里把尾部直接
+ * 带进 runtime 日志，用户不必翻文件。
  *
  * 解码容错：Windows 走壳的 CLI 中介（`app.exe --spawn-detached`）时文件是子进程的
- * 原始字节（通常 UTF-8）；个别回退路径（powershell `Start-Process`）会是 UTF-16LE，
- * 这里统一识别 BOM 后按对应编码读。
+ * 原始字节（通常 UTF-8）；个别回退路径（powershell `Start-Process`）会是 UTF-16LE。
+ * 只读尾部窗口（ISSUE #4395）：窗口从文件头开始时保留原 BOM 判据；从中间开始时
+ * 按零字节占比启发式判宽字符（奇数长先丢首字节，可能是切在字符中间）。
  */
 function readTailLines(filePath: string, maxLines = 40, maxLineLen = 600): Array<string> {
   try {
     if (!fs.existsSync(filePath)) {
       return [];
     }
-    const buf = fs.readFileSync(filePath);
-    const text =
-      buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe
-        ? buf.subarray(2).toString("utf16le")
-        : buf.toString("utf8");
+    const stat = fs.statSync(filePath);
+    const start = Math.max(0, stat.size - TAIL_WINDOW_BYTES);
+    const buf = Buffer.alloc(Math.min(stat.size, TAIL_WINDOW_BYTES));
+    const fd = fs.openSync(filePath, "r");
+    try {
+      fs.readSync(fd, buf, 0, buf.length, start);
+    } finally {
+      fs.closeSync(fd);
+    }
+    const fromStart = start === 0;
+    const text = (() => {
+      if (fromStart && buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) {
+        return buf.subarray(2).toString("utf16le");
+      }
+      if (!fromStart) {
+        const body = buf.length % 2 === 1 ? buf.subarray(1) : buf;
+        let zeros = 0;
+        for (const byte of body) {
+          if (byte === 0) {
+            zeros += 1;
+          }
+        }
+        if (body.length >= 2 && zeros >= body.length / 4) {
+          return body.toString("utf16le");
+        }
+      }
+      return buf.toString("utf8");
+    })();
     const lines = text
       .split(/\r?\n/)
       .map((l) => l.trimEnd())

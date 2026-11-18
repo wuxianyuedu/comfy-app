@@ -604,6 +604,16 @@ describe("waitForDetachMediator —— 中介的退出码与 stderr", () => {
     expect(kill).toHaveBeenCalledTimes(1);
   });
 
+  it("拉起失败走 error 事件（不发 exit）：按中介失败收场，原因并进 stderr（#4396）", async () => {
+    const child = fakeChild();
+    const p = waitForDetachMediator(child, 1000);
+    child.emit("error", new Error("ENOENT: no such file"));
+    const outcome = await p;
+    expect(outcome.code).toBe(-1);
+    expect(outcome.stderr).toContain("中介拉起失败");
+    expect(outcome.stderr).toContain("ENOENT");
+  });
+
   it("没有 stderr 管道（stdio 全 ignore）时不崩，照样回退出码", async () => {
     const bare = Object.assign(new EventEmitter(), {
       pid: 1,
