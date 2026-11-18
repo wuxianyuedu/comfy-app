@@ -110,7 +110,14 @@ import {
   describeRuntimeHealCause,
   readGitHead,
 } from "./launcher-core/runtime-heal.mjs";
-import { touchHeartbeat, writeSession } from "./dev-launcher-session.mjs";
+import {
+  claimSession,
+  clearSession,
+  isSessionOwnerAlive,
+  readSession,
+  touchHeartbeat,
+  writeSession,
+} from "./dev-launcher-session.mjs";
 
 const ROOT = resolveRepoRoot();
 
@@ -448,6 +455,10 @@ export async function run(argv = process.argv.slice(2)) {
       status,
       timeline,
       reapStaleSession,
+      claimSession,
+      isSessionOwnerAlive,
+      clearSession,
+      readSession,
       checkEnvFile,
       envInitHint,
       runToolchainGate,

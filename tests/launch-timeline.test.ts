@@ -212,6 +212,10 @@ describe("阶段模块：timeline 是可选注入", () => {
           /* 静音：快照写侧已单独覆盖。 */
         },
         reapStaleSession: () => Promise.resolve(null),
+        claimSession: () => "claimed",
+        isSessionOwnerAlive: () => false,
+        clearSession: () => undefined,
+        readSession: () => null,
         checkEnvFile: () => ({ message: "缺 DATABASE_URL" }),
         envInitHint: () => null,
         runToolchainGate: () => null,

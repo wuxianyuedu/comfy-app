@@ -376,6 +376,12 @@ describe("启动器念出 env:init 缺的键（ISSUE #2205）", () => {
         root: tmp,
         status: () => undefined,
         reapStaleSession: () => Promise.resolve(null),
+        /* 互斥占坑桩（ISSUE #4345）：本组只判 `.env` 提醒，占坑行为在
+         * cross-platform-launcher 的互斥组里用真实现判。 */
+        claimSession: () => "claimed",
+        isSessionOwnerAlive: () => false,
+        clearSession: () => undefined,
+        readSession: () => null,
         checkEnvFile: (root: string) => checkEnvFile(root, {}),
         envInitHint: (root: string) => envInitHint(root, {}),
         runToolchainGate: () => null,
