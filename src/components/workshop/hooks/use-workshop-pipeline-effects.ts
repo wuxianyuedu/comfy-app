@@ -84,6 +84,9 @@ export function useWorkshopTaskRecovery(input: {
       return;
     }
     resumedRef.current = true;
+    /* 卸载守卫（#4237）：恢复结论（patch / notice）落在卸载后 = 白写 + 旧闭包
+     * 多活；与同文件 bootstrap 的 beginStaleRun 同款。 */
+    const guard = beginStaleRun();
     /** 恢复一个失联任务：查真值 → 已终态直接回写，仍在跑才重订阅。 */
     const resumeTask = (shotId: string, taskId: string, target: "image" | "video") => {
       void (async () => {
@@ -91,16 +94,18 @@ export function useWorkshopTaskRecovery(input: {
         /* 恢复是异步的：期间用户可能对同一镜头重新发起（任务 id 已换）。
          * 回写只认「仍归属本任务」的镜头，不覆盖新一轮生成的状态。 */
         const patchIfOwned = (p: Partial<Shot>) => {
-          setShots((prev) =>
-            prev.map((item) => {
-              if (item.id !== shotId) {
-                return item;
-              }
-              const owned =
-                target === "video" ? item.clipTaskId === taskId : item.taskId === taskId;
-              return owned ? { ...item, ...p } : item;
-            }),
-          );
+          guard.commit(() => {
+            setShots((prev) =>
+              prev.map((item) => {
+                if (item.id !== shotId) {
+                  return item;
+                }
+                const owned =
+                  target === "video" ? item.clipTaskId === taskId : item.taskId === taskId;
+                return owned ? { ...item, ...p } : item;
+              }),
+            );
+          });
         };
         const isVideo = target === "video";
         if (!snapshot) {
@@ -118,18 +123,23 @@ export function useWorkshopTaskRecovery(input: {
             );
           } else {
             patchIfOwned(isVideo ? { clipStatus: "failed" } : { status: "failed" });
-            setNotice(
-              isVideo
-                ? "视频任务已完成但没有产出文件，请重新生成该片段"
-                : "任务已完成但没有产出文件，请重新生成该镜头",
-            );
+            guard.commit(() => {
+              setNotice(
+                isVideo
+                  ? "视频任务已完成但没有产出文件，请重新生成该片段"
+                  : "任务已完成但没有产出文件，请重新生成该镜头",
+              );
+            });
           }
           return;
         }
         if (snapshot.status === "FAILED" || snapshot.status === "CANCELLED") {
           patchIfOwned(isVideo ? { clipStatus: "failed" } : { status: "failed" });
           if (snapshot.error !== undefined && snapshot.error !== "") {
-            setNotice(`${isVideo ? "视频" : "镜头"}生成失败：${snapshot.error}`);
+            const detail = snapshot.error;
+            guard.commit(() => {
+              setNotice(`${isVideo ? "视频" : "镜头"}生成失败：${detail}`);
+            });
           }
           return;
         }
@@ -148,6 +158,9 @@ export function useWorkshopTaskRecovery(input: {
         resumeTask(shot.id, shot.clipTaskId, "video");
       }
     }
+    return () => {
+      guard.dispose();
+    };
     // 仅挂载执行一次；镜头列表经 ref 读取（惰性初始化在首渲染已完成）
     // oxlint-disable-next-line react/exhaustive-deps
   }, []);
@@ -171,14 +184,21 @@ export function useWorkshopDraftRestore(input: {
   const { activeProjectRef, latestDraftRef, onAdopt, onSettled } = input;
 
   useEffect(() => {
+    /* 卸载守卫（#4237）：服务端草稿的采纳（onAdopt 落 localStorage + 灌受管
+     * state）落在卸载后，会与用户在另一视图的新编辑交叠。 */
+    const guard = beginStaleRun();
     void (async () => {
       const activeId = activeProjectRef.current;
       if (!activeId) {
-        onSettled();
+        guard.commit(() => {
+          onSettled();
+        });
         return;
       }
       if (serverRecoveredIds.has(activeId)) {
-        onSettled();
+        guard.commit(() => {
+          onSettled();
+        });
         return;
       }
       serverRecoveredIds.add(activeId);
@@ -195,14 +215,21 @@ export function useWorkshopDraftRestore(input: {
           return;
         }
         if (serverDraft && draftHasContent(serverDraft)) {
-          onAdopt(dtoToDraft(serverDraft));
+          guard.commit(() => {
+            onAdopt(dtoToDraft(serverDraft));
+          });
         }
       } catch {
         /* 服务不可用：保持纯本地 */
       } finally {
-        onSettled();
+        guard.commit(() => {
+          onSettled();
+        });
       }
     })();
+    return () => {
+      guard.dispose();
+    };
     // 仅首挂载执行一次；本地草稿经 ref 读取（惰性初始化在首渲染已完成）
     // oxlint-disable-next-line react/exhaustive-deps
   }, []);

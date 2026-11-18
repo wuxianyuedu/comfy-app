@@ -69,46 +69,57 @@ export function ModelLibrary() {
 
       {c.loading ? (
         <ModelListSkeleton />
-      ) : c.models.length === 0 ? (
-        <EmptyState
-          action={
-            c.comfyuiPathConfigured ? undefined : (
-              <ButtonLink
-                className="h-auto gap-1.5 px-4 py-2"
-                href="/settings"
-                variant="primary-solid"
-              >
-                <Icon data-icon="inline-start" name="settings" size={16} />
-                去设置
-              </ButtonLink>
-            )
-          }
-          description={
-            c.comfyuiPathConfigured
-              ? "把模型文件放进 ComfyUI 的模型目录后，重新扫描即可在此查看。"
-              : "还没有配置 ComfyUI 安装路径。在「设置」里填写路径后，模型库会自动扫描所有目录。"
-          }
-          minHeightClass="min-h-75"
-          title={c.comfyuiPathConfigured ? "模型库里还没有模型" : "ComfyUI 还没有配置"}
-        />
-      ) : (
-        <div className="flex gap-4">
-          <ModelFolderNav
-            activeFolder={c.activeFolder}
-            folders={c.folders}
-            onSelect={c.setActiveFolder}
+      ) : c.loadError === null ? (
+        c.models.length === 0 ? (
+          <EmptyState
+            action={
+              c.comfyuiPathConfigured ? undefined : (
+                <ButtonLink
+                  className="h-auto gap-1.5 px-4 py-2"
+                  href="/settings"
+                  variant="primary-solid"
+                >
+                  <Icon data-icon="inline-start" name="settings" size={16} />
+                  去设置
+                </ButtonLink>
+              )
+            }
+            description={
+              c.comfyuiPathConfigured
+                ? "把模型文件放进 ComfyUI 的模型目录后，重新扫描即可在此查看。"
+                : "还没有配置 ComfyUI 安装路径。在「设置」里填写路径后，模型库会自动扫描所有目录。"
+            }
+            minHeightClass="min-h-75"
+            title={c.comfyuiPathConfigured ? "模型库里还没有模型" : "ComfyUI 还没有配置"}
           />
-          <div className="min-w-0 flex-1">
-            {c.filtered.length === 0 ? (
-              <EmptyState
-                description={`当前目录里没有匹配「${c.q}」的模型。`}
-                minHeightClass="min-h-40"
-                title="没有匹配的模型"
-              />
-            ) : (
-              <ModelList items={c.filtered} />
-            )}
+        ) : (
+          <div className="flex gap-4">
+            <ModelFolderNav
+              activeFolder={c.activeFolder}
+              folders={c.folders}
+              onSelect={c.setActiveFolder}
+            />
+            <div className="min-w-0 flex-1">
+              {c.filtered.length === 0 ? (
+                <EmptyState
+                  description={`当前目录里没有匹配「${c.q}」的模型。`}
+                  minHeightClass="min-h-40"
+                  title="没有匹配的模型"
+                />
+              ) : (
+                <ModelList items={c.filtered} />
+              )}
+            </div>
           </div>
+        )
+      ) : (
+        /* 失败态独立于空态（#4236）：「加载失败」不许被空态文案盖成「没有模型」
+         * —— 用户会以为模型丢了。给原因 + 重试出口。 */
+        <div className="flex min-h-75 flex-col items-center justify-center gap-3">
+          <p className="text-ink-strong text-sm">{c.loadError}</p>
+          <Button onClick={c.retry} variant="outline">
+            重试
+          </Button>
         </div>
       )}
     </DocumentFrame>
