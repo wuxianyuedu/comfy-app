@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { isRecord } from "../src/lib/is-record";
+import { isRecord, isUnknownArray } from "../src/lib/is-record";
 import { isTerminalTaskStatus } from "../src/lib/task-state";
+import { unwrapTrpcJsonl } from "./support/trpc-response";
 
 /**
  * 主链路 E2E：**建项目 → 出图**（ISSUE #1621 阶段二 2-2，ISSUE #3827 去登录化）。此前链路含登录页注册/登录；登录页已移除且无需登录，现以演示用户语义走真 HTTP 栈。
@@ -89,19 +90,10 @@ async function trpcCall(
   if (!res.ok()) {
     throw new Error(`${procedure} 失败：HTTP ${res.status()} ${body.slice(0, 400)}`);
   }
-  const lines = body.split("\n").filter(Boolean);
-  const last = lines.at(-1);
-  if (last === undefined) {
-    throw new Error(`${procedure} 回了空响应体（预期 JSON Lines）`);
-  }
-  const parsed: unknown = JSON.parse(last);
-  /* 最后一行是 `[chunkId, status, data]`，其中 `data` 的形状是
-   * `[[值]]`「值 + 零个 asyncProp」（三段含义见 `e2e/support/trpc-stub.ts` 的
-   * 文件头）。逐层取到 `[2] → [0] → [0]` 就是过程返回的那个值本身。 */
-  const json = isRecord(parsed) ? parsed.json : undefined;
-  const data = isUnknownArray(json) ? json[2] : undefined;
-  const value = isUnknownArray(data) ? data[0] : undefined;
-  return isUnknownArray(value) ? value[0] : value;
+  /* 解包 + 错误块识别在 e2e/support/trpc-response.ts（ISSUE #4325）：tRPC v11
+   * 批内单过程报错时 HTTP 仍 200，旧版只解成功块、把错误对象漏到下游断言。
+   * `!res.ok()` 那道闸保留 —— 真 HTTP 错误仍由它接住。 */
+  return unwrapTrpcJsonl(body, procedure);
 }
 
 /** query 的薄封装（多数调用是它）。 */
@@ -112,11 +104,6 @@ function trpcQuery(page: Page, procedure: string, input?: unknown) {
 /** mutation 的薄封装。 */
 function trpcMutation(page: Page, procedure: string, input: unknown) {
   return trpcCall(page, procedure, input, "mutation");
-}
-
-/** `Array.isArray` 的内置守卫会把元素收成 `any[]`；这里收成 `unknown[]`。 */
-function isUnknownArray(value: unknown): value is Array<unknown> {
-  return Array.isArray(value);
 }
 
 /** tRPC 返回的列表：不是数组按空列表处理（原 `(listed ?? [])` 的读法）。 */
