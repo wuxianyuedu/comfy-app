@@ -7,9 +7,9 @@
 // Node 进程里会抛错。
 import path from "node:path";
 
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { drizzle, type SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 
-import { openNodeSqlite } from "~/lib/sqlite-driver";
+import { openNodeSqlite, type NodeSqliteHandle } from "~/lib/sqlite-driver";
 import { gateProxyWithPragmas } from "~/lib/sqlite-pragmas";
 import * as schema from "~/server/db/schema";
 
@@ -22,7 +22,10 @@ function resolveDbPath(url: string): string {
 }
 
 const dbUrl = process.env.DATABASE_URL ?? "file:./db.sqlite";
-const nodeSqlite = openNodeSqlite(resolveDbPath(dbUrl));
+/* 连接与实例都挂 globalThis 单例（ISSUE #4284）：热重载会重新执行本模块，
+ * 无缓存时每次都新开一个 DatabaseSync 连接（旧连接无人关闭，句柄与内存
+ * 单调增长，Windows 上还会锁住 db.sqlite）。 */
+const nodeSqlite = (globalThis.__comfyWorkshopNodeSqlite ??= openNodeSqlite(resolveDbPath(dbUrl)));
 // PRAGMA 清单与 `~/server/db` 共用（`~/lib/sqlite-pragmas`），加一条不必改两处；等锁预算
 // 本侧刻意不给 —— node:sqlite 是单连接，`PRAGMA busy_timeout` 就是同步等锁，会把这个
 // 服务进程的事件循环一起停住（判据与实测见该文件头，ISSUE #1250）。走共用出口以容忍
@@ -35,4 +38,10 @@ const nodeSqlite = openNodeSqlite(resolveDbPath(dbUrl));
 // gate 在 drizzle proxy 上：模块同步导出，而每条查询仍在 PRAGMA 就位之后才跑。
 const gatedProxy = gateProxyWithPragmas(nodeSqlite);
 
-export const workshopDb = drizzle(gatedProxy, { schema });
+declare global {
+  /** 热重载单例（ISSUE #4284）：连接与 drizzle 实例只建一次，重载复用。 */
+  var __comfyWorkshopNodeSqlite: NodeSqliteHandle | undefined;
+  var __comfyWorkshopDb: SqliteRemoteDatabase<typeof schema> | undefined;
+}
+
+export const workshopDb = (globalThis.__comfyWorkshopDb ??= drizzle(gatedProxy, { schema }));
