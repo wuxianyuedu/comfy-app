@@ -630,8 +630,10 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
     },
 
     /** 任务日志整包回写（`runner-state.persistLogs` 的落库边）。
-     *  `.catch(→undefined)` 是**故意的**：日志面板的内存视图仍完整，这一次
-     *  没持久化不影响业务；真故障由上层的 `deps.log.warn` 走镜像通道。
+     *  **不在这里吞错**（ISSUE #4271）：`runner-state.persistLogs` 的 catch +
+     *  `deps.log.warn` 镜像通道就是为这次失败设计的——在这里 `.catch(→undefined)`
+     *  会让那条告警路径成为死代码，落库失败彻底无声。日志面板的内存视图仍完整，
+     *  这一次没持久化不影响业务，但故障必须经上层镜像通道可见。
      *
      *  只带归属守卫、**不带终态守卫**：收口之后仍会有尾随日志（耗时、产物路径、
      *  取消原因），按终态挡掉就等于把失败原因从面板上抹掉——那条正是排障要看的。 */
@@ -639,8 +641,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
       await db
         .update(task)
         .set({ logs })
-        .where(and(eq(task.id, taskId), ownedBy(owner)))
-        .catch(() => undefined);
+        .where(and(eq(task.id, taskId), ownedBy(owner)));
     },
 
     /** comfy-cli 完整原文整包落库（P3 §5 ADR §14 D1 的 4-B2：「查看完整输出」

@@ -10,6 +10,8 @@ import { DrizzleRepository } from "./repository-base";
 import type { DbExecutor } from "./repository-executor-types";
 import { tailWindow } from "~/lib/page-window";
 import { KeyedAsyncMutex } from "~/lib/async-mutex";
+import { logger } from "~/lib/core/logger";
+import { errorText } from "~/lib/error-message";
 import { eq, and, desc, asc, inArray, isNotNull, notInArray, count } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
 
@@ -151,7 +153,14 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
         .update(filmProject)
         .set({ logs: tailWindow(arr, LOGS_MAX) })
         .where(eq(filmProject.id, id))
-        .catch(() => undefined);
+        .catch((writeError: unknown) => {
+          /* 落库失败要看得见（ISSUE #4271）：成片时间线（含失败原因）无声缺行，
+           * 排障时现场不完整。保持「不拒绝」契约不变——调用方（appendFilmLog）
+           * 逐个接错不现实，失败在这里留痕即可。 */
+          logger.warn(
+            `[film] 成片日志落库失败（film=${id}）：${errorText(writeError, "成片日志落库")}`,
+          );
+        });
     });
   }
 
