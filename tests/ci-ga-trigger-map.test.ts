@@ -167,6 +167,37 @@ describe("GA workflow 结构真解析（接住退役的 actionlint 位，#3504�
     }
   });
 
+  it("桌包档带 push 触发：master + 壳相关路径（#4326）—— 相关内容合入即构建，不等每日定时档", () => {
+    const on = topLevelBlock(read(".github/workflows/package-desktop.yml"), "on") ?? "";
+    expect(on, "push 触发不在场 —— 壳相关内容合入 master 后仍要等每日定时档才出新壳").toMatch(
+      /^ {2}push:$/m,
+    );
+    expect(on, "push 没限 master —— 非 master 分支的推送也会付一次 Windows 全量构建").toMatch(
+      /^ {4}branches: \[master\]$/m,
+    );
+    expect(on, "paths 名单不在场 —— 没有它每次合并都要付一次 Windows 全量构建").toMatch(
+      /^ {4}paths:$/m,
+    );
+    /* paths 逐条点名：改了「壳或它的装配链」的输入必须在触发面里，漏一条 =
+     * 「改了它却不开桌包构建」，壳可能带旧内容出厂。刻意不收 `src/**`：
+     * 嵌入包里的前端由每日定时档兜底，别让每次前端合并都付一次全量构建。 */
+    const expectedPaths = [
+      ".github/workflows/package-desktop.yml",
+      "src-tauri/**",
+      "public/splash.html",
+      "scripts/build-desktop.mjs",
+      "scripts/sidecar-name.mjs",
+      "scripts/standalone-private-inputs.mjs",
+      "scripts/launcher-core/splash-assets.mjs",
+      "scripts/build/**",
+    ];
+    for (const p of expectedPaths) {
+      expect(on, `paths 缺 \`${p}\` —— 改了它却不开桌包构建，壳可能带旧内容出厂`).toMatch(
+        new RegExp(`^ {6}- ${p.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}$`, "m"),
+      );
+    }
+  });
+
   it("单跑档不许带定时（「单跑」名不副实的那一形态在这里当场红）", () => {
     const oneshots = GA_TRIGGER_TARGETS.filter(
       (t) => t.preset !== "daily" && t.preset !== "package",
