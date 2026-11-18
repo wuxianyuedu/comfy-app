@@ -12994,4 +12994,49 @@ cnb issues comment --number <诉求单号> --body '改后截图：<asset_link> �
   `git status --short` 看它是否未跟踪；是 ⇒ 这就是上个会话的探针残留，**删掉重跑**，
   不要为此改 lint 配置、不要给探针补豁免、更不要 `--no-verify`（§13.6.1 红线照旧）。
 
+#### 13.5.43 CI 配方：`base/head/merge_tree` 三元组作为 CNB⇄GA 的对账幂等键（ISSUE #4300，2026-11-18）
+
+- **单子问的那句话**：「每次派发都会在镜像仓现场新建一个合并提交，两次派发之间分支和
+  master 都动了，这个不能保证和 cnb 侧一致吗。」先把三个 SHA 分清：
+
+  | SHA               | 是什么                                                                    | 谁定                 |
+  | ----------------- | ------------------------------------------------------------------------- | -------------------- |
+  | `base_sha`（A）   | PR 事件那一刻的目标分支快照（`CNB_PULL_REQUEST_TARGET_SHA`）               | CNB 平台             |
+  | `head_sha`（M）   | CNB 平台**合成**的 merge 提交 `merge(PR head, A)`——CNB 工作区判的就是这棵树 | CNB 平台（事件时刻） |
+  | `merge_tree`（T） | M 的内容指纹（`git rev-parse HEAD^{tree}`）                                | 本仓镜像格现算       |
+
+- **本仓的结构性答案（先说清，再谈加固）**：GA 侧不是「拿 A、B 现场重合并」——镜像格把
+  **CNB 已判的那笔 M 原样推到镜像仓**（`refs/heads/cnb-pr-<IID>`），`pr-gate.yml` 的各
+  门禁 job 按 `client_payload.head_sha`（= M）检出**同一笔提交对象**。两次派发之间 A、B
+  再怎么动，每一跑判的树都由派发那一刻的 M 钉死：**逐派发一致是结构保证，不是巧合**。
+  会「每次都出现一个新合并提交」正是因为每轮测的是新快照（M′），这是要的行为；要证明的
+  不是「两次派发同一个合并提交」，而是「**这一跑判的就是 CNB 侧判的那棵树**」。
+- **缺口在「可验证」**：这层保证此前没有当场凭证 —— GA run 日志念不出「判的是哪份
+  (A, M, T)」，而 checkout 的 `ref` 表达式带 `|| github.sha` 兜底：payload 的 `head_sha`
+  一旦缺席，各 job 会**静默改判镜像仓 master HEAD**，绿红都与 CNB 那棵树无关。
+- **落地的三件事**：
+
+  | 面      | 动作                                                                                                                                                                                                                                                               |
+  | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+  | CNB 侧  | `ci-github-mirror-push.mjs` 的 `resolveContext` 现算 `merge_tree`（取不到留空，不阻断）；payload 经 `ci-mirror-payload.mjs` 多带一键 `merge_tree`；派发前的「计划」日志行带上 `tree <短sha>`，与 base / head 并排成配方                                              |
+  | GA 侧   | 新增 `scripts/ci/ci-mirror-recipe.mjs`：`pr-gate.yml` **四个门禁 job**（static-gates / typecheck-db-format / test-gates / heavy-gates）检出后各跑一步「CI 配方核对（base/head/merge_tree）」——打印与 CNB 同词表的配方（base / head / merge_tree / 检出tree），并当 payload 带指纹时**逐字核对** `git rev-parse HEAD^{tree} == merge_tree`，不一致退 1（fail-closed：这跑判的不是 CNB 那棵树，后面的判据结果不作数）；指纹缺席（老 payload / 手动档预知不了 tree）只打印配方、不核对 |
+  | 记账面  | 门格总账 ga-pr 段登记「CI 配方核对（base/head/merge_tree）」一名（四个 job 同名 step，`gaPrGateSteps()` 现读 + 集合去重）；`tests/no-platform-ci-config.test.ts` 的「跑了没人记」判据由此继续成立                                                    |
+
+- **边界（刻意不做与不做重的）**：① 判决匹配的幂等键**仍是 `head_sha`**（每轮 M 唯一，
+  `display_title` 认领与 commit-statuses 绑定都建立在它上，换键要重做整条判决链，收益只有
+  「跨轮同名」这一种假想场景）——`merge_tree` 是**内容凭证**，不抢匹配键的位；② GA 不做
+  「按 A、B 重复合并」那一步（单子给的建议形态）：本仓推的就是已判的 M，重合并反而引入
+  第二次合成（committer / 时刻不同 → 又一个新 sha），**检出同一笔对象比重建更强**；③
+  `merge_tree` 缺席不判红 —— 核对是增量契约，不把没有指纹的旧形状判红（与 payload 其它
+  可选键同口径）；④ 配方格只读本地 git、不出网、不吃 `pnpm install`，放在各 job 检出后、
+  装依赖前也能跑。
+- **逐笔对账**：`scripts/ci/ci-mirror-payload.mjs`（payload + `merge_tree` 键）/ 
+  `scripts/ci/ci-github-mirror-push.mjs`（`resolveContext` 树指纹 + 「计划」行配方）/
+  `scripts/ci/ci-mirror-recipe.mjs`（新，配方打印 + 树核对，两态退码 0/1）/ 
+  `.github/workflows/pr-gate.yml`（四个门禁 job 的配方 step）/ 
+  `tests/ci-github-mirror-push.test.ts`（payload 逐键 + 树指纹 + 配方日志）/ 
+  `tests/ci-mirror-recipe.test.ts`（新：词表对账 + 核对三态 + env 接线）/ 
+  `tests/no-platform-ci-config.test.ts`（ga-pr 总账登记）/ 本节 + 生成态镜像 / 
+  `changelog.d/4300-ci-recipe-merge-tree.md`。
+
 ---

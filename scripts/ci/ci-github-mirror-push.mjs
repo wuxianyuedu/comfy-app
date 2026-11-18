@@ -252,7 +252,7 @@ export function buildPushUrl(repo, token, user = "oauth2") {
  * 从环境变量收口本次镜像的上下文；缺哪件就念哪件（fail-closed 的「读数」半边）。
  *
  * @param {{env: Record<string, string | undefined>, runGit: (args: string[]) => {code: number, stdout: string, stderr: string}}} io
- * @returns {{ok: true, repo: string, token: string, iid: string, ref: string, headSha: string, baseSha: string, cnbCommit: string, cnbMergeSha: string} | {ok: false, reasons: string[]}}
+ * @returns {{ok: true, repo: string, token: string, iid: string, ref: string, headSha: string, mergeTree: string, baseSha: string, cnbCommit: string, cnbMergeSha: string} | {ok: false, reasons: string[]}}
  */
 export function resolveContext(io) {
   const { env, runGit } = io;
@@ -269,6 +269,8 @@ export function resolveContext(io) {
   if (headSha.code !== 0 || !/^[0-9a-f]{40}$/i.test(headSha.stdout.trim())) {
     reasons.push(`git rev-parse HEAD 取不到（exit ${headSha.code}）`);
   }
+  /* 树指纹（ISSUE #4300）：进 payload 的 `merge_tree` 供 GA 配方格核对检出树；取不到留空（GA 侧只打印不核对）。 */
+  const mergeTree = runGit(["rev-parse", "HEAD^{tree}"]);
   if (reasons.length > 0) {
     return { ok: false, reasons };
   }
@@ -284,6 +286,7 @@ export function resolveContext(io) {
      * 「同树不同 sha」，别拿本跑 HEAD 顶替（ISSUE #3378 探针读数）。 */
     cnbMergeSha: (env.CNB_PULL_REQUEST_MERGE_SHA ?? "").trim(),
     headSha: headSha.stdout.trim(),
+    mergeTree: /^[0-9a-f]{40}$/i.test(mergeTree.stdout.trim()) ? mergeTree.stdout.trim() : "",
     iid,
     ok: true,
     ref: mirrorRefFor(iid),
@@ -511,6 +514,7 @@ export async function runMirror(io) {
     cnbCommit: ctx.cnbCommit,
     cnbMergeSha: ctx.cnbMergeSha,
     headSha: ctx.headSha,
+    mergeTree: ctx.mergeTree,
     prNumber: ctx.iid,
     ref: ctx.ref,
     title: prTitle,
@@ -518,8 +522,10 @@ export async function runMirror(io) {
   const baseNote = ctx.baseSha
     ? ` · base ${ctx.baseSha.slice(0, 8)}`
     : " · base 缺席（payload 留空）";
+  /* 配方（ISSUE #4300）：base/head/merge_tree 三元组是这一跑的快照身份，GA 配方格打同一套字段名对账同树。 */
   log(
-    `[mirror] 计划：HEAD ${ctx.headSha.slice(0, 8)} → ${ctx.repo}:${ctx.ref} · LFS 增量推送 · 派发 ${EVENT_TYPE}${baseNote}`,
+    `[mirror] 计划：HEAD ${ctx.headSha.slice(0, 8)} · tree ${ctx.mergeTree || "缺席"} → ` +
+      `${ctx.repo}:${ctx.ref} · LFS 增量推送 · 派发 ${EVENT_TYPE}${baseNote}`,
   );
   /* 派发前的自证：这一跑在 GitHub run 列表里会叫什么（与 workflow 的 run-name 同口径）。
    * 读不到标题时这一行就是老格式 —— 一眼能看出「标题没读到」而不是「标题渲染坏了」。 */
