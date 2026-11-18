@@ -38,7 +38,11 @@
 
 import { execFile, execFileSync, spawn } from "node:child_process";
 
-import { withTimeoutResult } from "~/lib/with-timeout";
+/* 本模块会被 .mjs 宿主（reap-process.mjs / e2e）用**真 Node**直接加载 —— 那里
+ * 没有 tsconfig 的 `~` 别名，且 ESM 相对导入必须带扩展名，因此这里用
+ * 「相对路径 + 显式 .ts 扩展」（tsconfig 已开 allowImportingTsExtensions）。
+ * 判据：tests/host-ts-loads-in-node.test.ts（#4332 现场复训）。 */
+import { withTimeoutResult } from "../with-timeout.ts";
 
 /** 回收目标的描述。pid <= 0 一律视为「没有可回收目标」，直接返回 ok。 */
 export type KillProcessTreeOptions = {
