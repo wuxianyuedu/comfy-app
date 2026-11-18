@@ -169,9 +169,20 @@ export async function reapAll(ctx) {
  *  没机会执行自己的 `clearSession()`，锚点于是**必然**留下；而它拉起的整棵树
  *  早已被插件 kill / Job Object 收干净。这种情形只清锚点、**不回报**，否则每次
  *  正常关窗后的启动都会刷一条「回收上一次运行遗留的进程树」（PID 早已不存在，
- *  徒增噪声，且旧号被系统复用时还有误伤无关进程的风险）。
+ *  徒增噪声）。
+ *
+ *  **强杀前先验归属（#4330）**：锚点里的 PID 只说明「上次拉起过谁」，不说明
+ *  「这个号现在还是它」——子进程 PID 只做 signal-0 探活就 `taskkill /T /F`
+ *  整树强杀，PID 被系统复用给无关进程时会连它的子树一起误杀。所以动手前
+ *  逐个读命令行（`processCommandLine`），只回收「命令行落在本检出根内」的 PID
+ *  （编排器拉起的一切子进程都以检出内绝对路径为入参，见
+ *  `spawnDevServer` / `spawnSchemaSync` / executor-host 的 spawn 实参；被复用的
+ *  无关进程几乎必然不含这个路径）。读不到命令行、或验不出归属的一律**保守
+ *  跳过**（§1.4「不猜着杀」），锚点保留，下次启动再验。
+ *
  *  本函数**不写日志**（只清锚点或回报回收结果，调用方决定怎么说）—— 因此
- *  不接 ctx。
+ *  不接 ctx；唯一例外是「验不出归属而跳过」走 `console.warn` 落进编排日志，
+ *  不让保守跳过变成静默失效。
  *  @param {string} [root] @returns {Promise<number[] | null>} 真正回收的 PID */
 export async function reapStaleSession(root = process.cwd()) {
   if (isSessionOwnerAlive(root)) {
@@ -189,12 +200,44 @@ export async function reapStaleSession(root = process.cwd()) {
     clearSession(root);
     return null;
   }
+  const owned = [];
   for (const pid of alive) {
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
+    const cmdline = await processCommandLine(pid);
+    if (cmdlineBelongsToRoot(cmdline, root)) {
+      owned.push(pid);
+    }
+  }
+  if (owned.length === 0) {
+    console.warn(
+      `[port-reap] 会话锚点里的存活 PID 验不出本检出归属（PID ${alive.join(", ")}），` +
+        "保守跳过不回收（防 PID 复用误杀，#4330）；锚点保留，下次启动再验。",
+    );
+    return null;
+  }
+  for (const pid of owned) {
     // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await reapProcessTree({ pid, detached: !isWindows(), force: true });
   }
-  clearSession(root);
-  return alive;
+  if (owned.length === alive.length) {
+    clearSession(root);
+  }
+  return owned;
+}
+
+/** 命令行是否落在检出根内（#4330 的归属判据，模块内私有）。
+ *
+ *  与 `isAppDevServerCmdline` 的分工：那条回答「跑的是不是本仓库应用服务」
+ *  （要求根路径 + dev/start/next 形状），这条只回答「这个进程是不是从本检出
+ *  出去的」——锚点里的 PID 本就来自本检出的编排器，用它防「PID 复用误杀」
+ *  足够，且能盖住 db-sync / executor-host 这类非 dev 形状的子进程。
+ *  @param {string} cmdline @param {string} root @returns {boolean} */
+function cmdlineBelongsToRoot(cmdline, root) {
+  /** @param {string} value */
+  const norm = (value) => value.replaceAll("\\", "/").toLowerCase();
+  const text = norm(cmdline);
+  const base = norm(root).replace(/\/+$/, "");
+  return Boolean(text) && Boolean(base) && text.includes(base);
 }
 
 /** 该 PID 的命令行（判「端口上的是不是本仓库的应用服务」，拿不到返回空串）。

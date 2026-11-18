@@ -1707,7 +1707,17 @@ fn kill_sidecar(project_root: &str, deadline: std::time::Instant) {
 /// POSIX 上退化成单杀」那条老路的翻版。
 #[cfg(not(debug_assertions))]
 fn reap_process_tree(project_root: &str, pid: u32, deadline: std::time::Instant) {
-  if project_root.is_empty() || pid == 0 {
+  if pid == 0 {
+    return;
+  }
+  if project_root.is_empty() {
+    // standalone 分发形态（无检出，#4331）：`scripts/reap-process.mjs` 在分发
+    // 目录里不存在，统一回收那条路走不通。Windows 有 Job Object 的
+    // KILL_ON_JOB_CLOSE 兜底（壳死时 OS 收整棵树）；POSIX 没有等价物——
+    // 在这里补树回收，别让 node 之下的 next-server / executor host 残留成
+    // 孤儿继续占端口与日志句柄。
+    #[cfg(unix)]
+    reap_descendants_posix(pid);
     return;
   }
   let script = std::path::Path::new(project_root)
@@ -1736,6 +1746,139 @@ fn reap_process_tree(project_root: &str, pid: u32, deadline: std::time::Instant)
       String::from_utf8_lossy(&out.stdout).trim()
     ),
     Err(e) => log::warn!("[ComfyAPP] 统一回收未能执行（{e}）；sidecar 可能残留，见 log/nextjs/"),
+  }
+}
+
+/// POSIX（Linux/macOS）standalone 退出树回收（#4331）。
+///
+/// shell 插件的 `kill()` 只杀 node leader，node 之下的 next-server / 执行宿主
+/// 会残留成孤儿；而 standalone 分发目录里没有 `scripts/reap-process.mjs`
+/// （统一回收入口），POSIX 也没有 Job Object 兜底——这一刀只能在 Rust 侧补。
+///
+/// 沿父子关系枚举整棵树：先杀后代、再杀 leader（顺序无关，重要的是都收到
+/// SIGKILL）。枚举判据：Linux 走 `/proc/<pid>/status` 的 PPid；macOS 无 /proc，
+/// 退用 `pgrep -P` 逐层取直接子进程。深度与数量都有界，防止异常进程关系把
+/// 退出路径拖死。
+///
+/// 可见性挂 `any(test, not(debug_assertions))`：release 由 `reap_process_tree`
+/// 的空根分支调用；debug 非测试构建里不存在（避免 dead_code 告警），测试构建
+/// 由下方用例直呼。
+#[cfg(all(unix, any(test, not(debug_assertions))))]
+fn reap_descendants_posix(leader: u32) {
+  const MAX_DEPTH: usize = 16;
+  const MAX_PIDS: usize = 256;
+  let mut tree: Vec<u32> = vec![leader];
+  let mut frontier = vec![leader];
+  for _ in 0..MAX_DEPTH {
+    if frontier.is_empty() || tree.len() >= MAX_PIDS {
+      break;
+    }
+    let mut next = Vec::new();
+    for pid in frontier.drain(..) {
+      for child in posix_child_pids(pid) {
+        if tree.len() >= MAX_PIDS {
+          break;
+        }
+        if !tree.contains(&child) {
+          tree.push(child);
+          next.push(child);
+        }
+      }
+    }
+    frontier = next;
+  }
+  for pid in tree.iter().rev() {
+    // SAFETY：kill(2) 只发信号，无内存安全前提；ESRCH（目标已退出）按已回收处理。
+    unsafe {
+      libc::kill(*pid as i32, libc::SIGKILL);
+    }
+  }
+  log::info!(
+    "[ComfyAPP] standalone POSIX 树回收：SIGKILL {} 个进程（含 leader {leader}）",
+    tree.len()
+  );
+}
+
+/// 某进程的直接子进程（尽力而为：读不到 = 视作没有子进程）。
+#[cfg(all(unix, any(test, not(debug_assertions))))]
+fn posix_child_pids(pid: u32) -> Vec<u32> {
+  #[cfg(target_os = "linux")]
+  {
+    let mut children = Vec::new();
+    if let Ok(entries) = std::fs::read_dir("/proc") {
+      for entry in entries.flatten() {
+        let Ok(child) = entry.file_name().to_string_lossy().parse::<u32>() else {
+          continue;
+        };
+        let Ok(status) = std::fs::read_to_string(entry.path().join("status")) else {
+          continue;
+        };
+        for line in status.lines() {
+          if let Some(rest) = line.strip_prefix("PPid:") {
+            if rest.trim().parse::<u32>() == Ok(pid) {
+              children.push(child);
+            }
+            break;
+          }
+        }
+      }
+    }
+    children
+  }
+  #[cfg(not(target_os = "linux"))]
+  {
+    match std::process::Command::new("pgrep").arg("-P").arg(pid.to_string()).output() {
+      Ok(out) => String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .filter_map(|token| token.parse::<u32>().ok())
+        .collect(),
+      Err(_) => Vec::new(),
+    }
+  }
+}
+
+#[cfg(all(unix, test))]
+mod standalone_posix_reap_tests {
+  use super::*;
+
+  /// #4331 的行为判据：standalone（无检出）退出时，POSIX 也要把 sidecar 的
+  /// 后代一起收走，而不是只杀 node leader。真起一棵 `sh → sleep` 的小树验证。
+  #[test]
+  fn posix_tree_reap_kills_descendants_not_just_leader() {
+    let marker_path =
+      std::env::temp_dir().join(format!("comfyapp-reap-test-{}.txt", std::process::id()));
+    let _ = std::fs::remove_file(&marker_path);
+    let script = format!("sleep 61 & echo $! > {}; wait", marker_path.display());
+    let mut leader = std::process::Command::new("sh")
+      .arg("-c")
+      .arg(&script)
+      .spawn()
+      .expect("spawn sh");
+    let leader_pid = leader.id();
+    // 等 sleep 子进程落地并写下自己的 pid（$! = 最后一个后台任务的 pid）。
+    let mut child_pid = 0u32;
+    for _ in 0..50 {
+      if let Ok(text) = std::fs::read_to_string(&marker_path) {
+        if let Ok(pid) = text.trim().parse::<u32>() {
+          child_pid = pid;
+          break;
+        }
+      }
+      std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(child_pid > 0, "sleep 子进程没起来（marker 未写出）");
+
+    reap_descendants_posix(leader_pid);
+    let _ = leader.wait();
+
+    // leader 与后代都不在了（kill(pid, 0) 报 ESRCH = 返回 -1）。
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    // SAFETY：kill(2) 只发信号。
+    unsafe {
+      assert_ne!(libc::kill(leader_pid as i32, 0), 0, "leader 仍存活");
+      assert_ne!(libc::kill(child_pid as i32, 0), 0, "后代 sleep 仍存活");
+    }
+    let _ = std::fs::remove_file(&marker_path);
   }
 }
 
@@ -2335,7 +2478,12 @@ pub fn run() {
       }
 
       // ── 方向 B：启动页与「应用」窗口分离 ──
-      wire_startup_windows(app, expect_slow_first_paint)?;
+      // 装配失败（WebView2 初始化失败等，#4329）与下面 standalone 装配失败同理：
+      // Err 不能冒到 Builder::build 的 expect——那是无声崩溃。接住并写状态文件，
+      // 壳继续跑着显示失败态（详见 report_window_setup_failure）。
+      if let Err(e) = wire_startup_windows(app, expect_slow_first_paint) {
+        report_window_setup_failure(app, &e.to_string());
+      }
 
       // standalone 载荷缺失/损坏（ISSUE #4214）：Err 不能冒到 Builder::build 的
       // expect——那是无声崩溃（windows_subsystem 下无控制台、无启动页）。窗口此刻
@@ -2376,6 +2524,24 @@ fn wire_startup_windows(
   install_splash_close_handler(app);
   spawn_splash_watchdog(app);
   Ok(())
+}
+
+/// 窗口装配失败的可见出口（#4329，与 `report_standalone_setup_failure` 同族）：
+/// 主窗/启动页创建失败（WebView2 初始化失败、窗口配置损坏等）时，Err 不能冒到
+/// `Builder::build` 的 expect——那是无声崩溃（`windows_subsystem` 下无控制台）。
+/// 接住后把原因与修法写进启动页轮询得到的状态文件（启动页仍在时用户能看到失败态；
+/// 启动页也没建成时，至少落了壳日志，不再是「无声 panic」）。
+fn report_window_setup_failure(app: &tauri::App, error: &str) {
+  log::error!("[ComfyAPP] startup windows setup failed: {error}");
+  shell_launch::mark_launch_failed(
+    &app.state::<AppState>().project_root(),
+    &format!(
+      "应用窗口装配失败：{error}\n\
+       常见原因是 WebView2 运行时缺失/损坏或窗口配置异常：请安装/修复 WebView2 Runtime \
+       （https://developer.microsoft.com/microsoft-edge/webview2/）后重试；\
+       详见 log/current/shell/shell.log。"
+    ),
+  );
 }
 
 /// standalone 装配失败的可见出口（ISSUE #4214）：Err 不能冒到 `Builder::build`

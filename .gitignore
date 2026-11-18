@@ -162,9 +162,9 @@ _tmp_*/
 /.pnpm-store/
 
 # Tauri 构建产物（本地 cargo build / build-desktop.mjs 后生成，不入库）
-# Cargo.lock **入库**（#4356 / 台账 C4）：shell-gate 的 `cargo test --locked`
-#（#4317，与 pnpm install --frozen-lockfile 同一纪律）在全新 clone 上要有这份锁
-# 才判得动——锁不入库 = 门禁必红。改了 Cargo.toml 必须同批更 Cargo.lock。
+# 例外：Cargo.lock **入库**（#4354）—— shell-gate 的 cargo test 带 --locked
+# （#4317），锁不入库则平台全新 clone 无锁可依、该格必红；应用类 crate 的
+# 标准做法也是提交锁文件（构建产物指的是 target/，不是锁）。
 # build.rs 声明 AppManifest 命令后由 tauri-build 自动生成的 ACL 权限文件
 /src-tauri/permissions/
 
