@@ -469,11 +469,10 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
   /** 从服务端拉取设置并写入本地 state。首个 await 之前不做同步 setState，因此可直接
    *  从 effect 调用（React 19 规则：effect 内不 set-state）。想要重置 spinner 的调用方
-   *  用 `reloadFromServer`。
-   *  `signal`：卸载判活（ISSUE #4288）——调用方（deferred refresh 的 effect）在
-   *  卸载时 abort，await 之后的写入据此不再落进已卸载的界面。用 signal 而不是
-   *  读 ref：本函数经 `runParse` 在 render 期被传给 `createParseActions`，
-   *  react(refs) 禁止这条链上出现 ref 读取。 */
+   *  用 `reloadFromServer`。`signal`：卸载判活（ISSUE #4288）——调用方（deferred
+   *  refresh 的 effect）在卸载时 abort，await 之后的写入据此不再落进已卸载的界面。
+   *  用 signal 而不是读 ref：本函数经 `runParse` 在 render 期被传给
+   *  `createParseActions`，react(refs) 禁止这条链上出现 ref 读取。 */
   const fetchSettings = useCallback(
     async (signal?: AbortSignal) => {
       try {
@@ -488,9 +487,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
             throw new Error(`读取配置失败（HTTP ${res.status}）`);
           }
           const parsed = parseSettingsBlob(data, res.status);
-          if (signal?.aborted) {
-            return;
-          }
+          if (signal?.aborted) return;
           setSavedPaths(parsed.paths);
           setSummary(parsed.summary);
           setReport(parsed.lastReport);
@@ -502,9 +499,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
         // 冷路径：读取 ndjson 进度事件流（消费器拆到模块级，见其说明）。
         const acc = await consumeSettingsStream(res, { setProgress, setSaveErr });
-        if (signal?.aborted) {
-          return;
-        }
+        if (signal?.aborted) return;
         setSavedPaths(acc.paths);
         setSummary(acc.summary);
         setReport(acc.lastReport);
@@ -512,9 +507,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         setByPath(acc.byPath);
         seedParentDefaults(acc.paths);
       } catch (error) {
-        if (!signal?.aborted) {
-          setSaveErr(errorText(error, "读取配置失败"));
-        }
+        if (!signal?.aborted) setSaveErr(errorText(error, "读取配置失败"));
       } finally {
         /* 卸载后不再碰任何 state。原写法在 finally 里 `return` —— 那会吞掉
          * try/catch 抛出的任何异常（no-unsafe-finally 拦的正是这个形态）。 */
@@ -525,9 +518,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
             clearTimeout(progressHideTimerRef.current);
           }
           progressHideTimerRef.current = setTimeout(() => {
-            if (signal?.aborted) {
-              return;
-            }
+            if (signal?.aborted) return;
             setProgress({
               phase: "",
               done: 0,
