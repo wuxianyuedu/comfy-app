@@ -1498,9 +1498,6 @@ fn spawn_sidecar(
   app: &tauri::AppHandle,
   project_root_for_exit: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-  use tauri_plugin_shell::process::CommandEvent;
-  use tauri_plugin_shell::ShellExt;
-
   let payload = match resolve_standalone_payload(app)? {
     ResolvedPayload::FellBackToDevUrl => return Ok(()),
     ResolvedPayload::Ready(p) => p,
@@ -1523,70 +1520,7 @@ fn spawn_sidecar(
   for attempt in 1..=SIDECAR_PORT_ATTEMPTS {
     SIDECAR_TERMINATED.store(false, Ordering::Relaxed);
     let port = pick_free_port();
-
-    // 参数用**相对载荷根**的形态（根因见 `resolve_standalone_payload` 里那段 verbatim
-    // 路径的实测说明），`cwd` 给到载荷根，二者指向同一个文件。
-    //
-    // 直接执行 sidecar 二进制本身（不经 shell 解释器）：`Command::new` 在 shell 插件里是
-    // 「可执行 + 参数」语义，路径由资源目录给出，不需要 `sh -c` / `cmd /C` 这层间接 ——
-    // 少一层中转就少一个孤儿来源。
-    let (mut rx, child) = app
-      .shell()
-      .command(payload.node.to_string_lossy().to_string())
-      .args([payload.target_arg])
-      .env("PORT", port.to_string())
-      .env("HOSTNAME", "127.0.0.1")
-      // cwd = 载荷根（`server.js` 所在那一层），不是资源根：应用里的运行期目录
-      // （`log/` / `data/` / `public/generated/` / `db.sqlite`）全部按 `process.cwd()`
-      // 解析，而 Next 的 standalone server 启动即 `process.chdir(__dirname)`——两者必须
-      // 落在同一层，否则「server 写的库」和「入口要补的配置」是两个地方。
-      .current_dir(&payload.app_root)
-      .spawn()?;
-    let sidecar_pid = child.pid();
-    *SIDECAR.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(child);
-    // OS 级兜底（ISSUE #4165）：给 sidecar 这棵树也挂 KILL_ON_JOB_CLOSE job。
-    // 正常关窗走 kill_sidecar（插件 kill + reap 补刀）；壳被硬杀时那条链一步都
-    // 跑不了，由 OS 关闭壳持有的 job 句柄当场终止整棵树——与编排器那棵树
-    // （attach_kill_on_close_job）同构。standalone 不写会话锚点，下一次启动的
-    // 孤儿回收对它没有认亲方式，所以这一层必须在壳死当场生效。
-    shell_launch::attach_sidecar_kill_on_close_job(sidecar_pid);
-
-    // sidecar 的 stdout/stderr 必须有人读：shell 插件把输出投递到事件通道，
-    // 无人消费时管道写满会让 sidecar 静默卡死（表现为「服务一直不就绪」）。
-    // 落进壳日志，也正好补上 standalone 脱离 launcher 时的诊断通道。
-    // 事件循环里还要写「应用服务结束原因」，因此再取一份 project_root（外层那个
-    // 后面还要用）；move 闭包按值捕获，与 tauri 的 'static 要求一致。
-    let exit_root = project_root_for_exit.to_string();
-    tauri::async_runtime::spawn(async move {
-      while let Some(event) = rx.recv().await {
-        match event {
-          CommandEvent::Stdout(line) => {
-            log::info!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
-          }
-          CommandEvent::Stderr(line) => {
-            log::warn!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
-          }
-          CommandEvent::Terminated(payload) => {
-            log::info!("[sidecar] terminated: {:?}", payload.code);
-            /* 壳亲眼看到它死了：把这一事实记给第二档探活判据（ISSUE #4151），此后
-             * get_app_service_liveness 不再靠 PID 探测作答。写在事件回调里而不是
-             * 别处：这个事件是壳内唯一「确定它已退出」的时刻。句柄留在槽位里——
-             * 退出时 kill_sidecar 还要靠它回收作业内可能残留的孙辈进程。 */
-            SIDECAR_TERMINATED.store(true, Ordering::Relaxed);
-            /* 服务死的那一刻落盘（ISSUE #1692 的 sidecar 档）：探测那一格打的是服务
-             * 自己的 HTTP，服务一不在就永远问不到「为什么没了」——答案只能由此刻
-             * 还活着的壳写下（见 shell_launch::write_sidecar_exit_record）。写在事件回调里
-             * 而不是别处：这个事件是唯一带着退出码的地方。 */
-            shell_launch::write_sidecar_exit_record(
-              &exit_root,
-              payload.code,
-              &shell_launch::sidecar_exit_reason(payload.code),
-            );
-          }
-          _ => {}
-        }
-      }
-    });
+    spawn_sidecar_attempt(app, &payload, port, project_root_for_exit)?;
 
     // grace 窗口：还活着 = 端口到手；窗口内就退 = 换端口重试。
     if !sidecar_died_within(SIDECAR_START_GRACE) {
@@ -1612,6 +1546,85 @@ fn spawn_sidecar(
   // 加载完成（on_page_load Finished）时再由 setup 中注册的回调交换窗口。这样由启动页
   // 统一编排，避免与启动页的探测重复导航导致应用被加载两次。
 
+  Ok(())
+}
+
+/// 单次 sidecar 拉起：组命令 → spawn → 槽位 / Job 兜底 → 输出泵。`spawn` 失败
+/// （node 缺失一类）原样上抛；成功返回后由调用方观察 grace 窗口判断端口是否
+/// 到手（ISSUE #4347 的重试编排在外层 [`spawn_sidecar`]）。
+#[cfg(not(debug_assertions))]
+fn spawn_sidecar_attempt(
+  app: &tauri::AppHandle,
+  payload: &StandalonePayload,
+  port: u16,
+  project_root_for_exit: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+  use tauri_plugin_shell::process::CommandEvent;
+  use tauri_plugin_shell::ShellExt;
+
+  // 参数用**相对载荷根**的形态（根因见 `resolve_standalone_payload` 里那段 verbatim
+  // 路径的实测说明），`cwd` 给到载荷根，二者指向同一个文件。
+  //
+  // 直接执行 sidecar 二进制本身（不经 shell 解释器）：`Command::new` 在 shell 插件里是
+  // 「可执行 + 参数」语义，路径由资源目录给出，不需要 `sh -c` / `cmd /C` 这层间接 ——
+  // 少一层中转就少一个孤儿来源。
+  let (mut rx, child) = app
+    .shell()
+    .command(payload.node.to_string_lossy().to_string())
+    .args([payload.target_arg])
+    .env("PORT", port.to_string())
+    .env("HOSTNAME", "127.0.0.1")
+    // cwd = 载荷根（`server.js` 所在那一层），不是资源根：应用里的运行期目录
+    // （`log/` / `data/` / `public/generated/` / `db.sqlite`）全部按 `process.cwd()`
+    // 解析，而 Next 的 standalone server 启动即 `process.chdir(__dirname)`——两者必须
+    // 落在同一层，否则「server 写的库」和「入口要补的配置」是两个地方。
+    .current_dir(&payload.app_root)
+    .spawn()?;
+  let sidecar_pid = child.pid();
+  *SIDECAR.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(child);
+  // OS 级兜底（ISSUE #4165）：给 sidecar 这棵树也挂 KILL_ON_JOB_CLOSE job。
+  // 正常关窗走 kill_sidecar（插件 kill + reap 补刀）；壳被硬杀时那条链一步都
+  // 跑不了，由 OS 关闭壳持有的 job 句柄当场终止整棵树——与编排器那棵树
+  // （attach_kill_on_close_job）同构。standalone 不写会话锚点，下一次启动的
+  // 孤儿回收对它没有认亲方式，所以这一层必须在壳死当场生效。
+  shell_launch::attach_sidecar_kill_on_close_job(sidecar_pid);
+
+  // sidecar 的 stdout/stderr 必须有人读：shell 插件把输出投递到事件通道，
+  // 无人消费时管道写满会让 sidecar 静默卡死（表现为「服务一直不就绪」）。
+  // 落进壳日志，也正好补上 standalone 脱离 launcher 时的诊断通道。
+  // 事件循环里还要写「应用服务结束原因」，因此再取一份 project_root（外层那个
+  // 后面还要用）；move 闭包按值捕获，与 tauri 的 'static 要求一致。
+  let exit_root = project_root_for_exit.to_string();
+  tauri::async_runtime::spawn(async move {
+    while let Some(event) = rx.recv().await {
+      match event {
+        CommandEvent::Stdout(line) => {
+          log::info!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
+        }
+        CommandEvent::Stderr(line) => {
+          log::warn!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
+        }
+        CommandEvent::Terminated(payload) => {
+          log::info!("[sidecar] terminated: {:?}", payload.code);
+          /* 壳亲眼看到它死了：把这一事实记给第二档探活判据（ISSUE #4151），此后
+           * get_app_service_liveness 不再靠 PID 探测作答。写在事件回调里而不是
+           * 别处：这个事件是壳内唯一「确定它已退出」的时刻。句柄留在槽位里——
+           * 退出时 kill_sidecar 还要靠它回收作业内可能残留的孙辈进程。 */
+          SIDECAR_TERMINATED.store(true, Ordering::Relaxed);
+          /* 服务死的那一刻落盘（ISSUE #1692 的 sidecar 档）：探测那一格打的是服务
+           * 自己的 HTTP，服务一不在就永远问不到「为什么没了」——答案只能由此刻
+           * 还活着的壳写下（见 shell_launch::write_sidecar_exit_record）。写在事件回调里
+           * 而不是别处：这个事件是唯一带着退出码的地方。 */
+          shell_launch::write_sidecar_exit_record(
+            &exit_root,
+            payload.code,
+            &shell_launch::sidecar_exit_reason(payload.code),
+          );
+        }
+        _ => {}
+      }
+    }
+  });
   Ok(())
 }
 
@@ -3378,13 +3391,20 @@ mod standalone_payload_tests {
     rest[..rest.find("\n}\n").unwrap()].to_string()
   }
 
+  /// sidecar 起进程这条路径现在拆成「编排（spawn_sidecar）+ 单次拉起
+  /// （spawn_sidecar_attempt）」两段——函数长度硬闸要求的拆分。路径判据要
+  /// 对整条路径负责，取两段拼接后的文本（属性落在哪一段都算数）。
+  fn sidecar_spawn_path() -> String {
+    fn_body("fn spawn_sidecar") + &fn_body("fn spawn_sidecar_attempt")
+  }
+
   #[test]
   fn sidecar_and_payload_root_match_the_bundler_layout() {
     // 落位判据在 `resolve_standalone_payload`（它回答「该不该起、起什么」），起进程与
     // 收尾在 `spawn_sidecar`——两处都要钉：拆函数之后只盯一处，等于给「把路径拼回旧
     // 写法」留了一条不会被发现的缝。
     let resolve = fn_body("fn resolve_standalone_payload");
-    let spawn = fn_body("fn spawn_sidecar");
+    let spawn = sidecar_spawn_path();
     assert!(
       resolve.contains("res_dir.join(sidecar_binary_name())"),
       "sidecar 必须取资源根下的 node.exe / node（打包器剥掉三元组后缀、不留 binaries/ 子目录）：{resolve}"
@@ -3436,7 +3456,7 @@ mod standalone_payload_tests {
   /// process_group（它自建的 job 不带 BREAKAWAY_OK，会拦下保活服务的逃逸）。
   #[test]
   fn sidecar_tree_gets_its_own_kill_on_close_job() {
-    let spawn = fn_body("fn spawn_sidecar");
+    let spawn = sidecar_spawn_path();
     assert!(
       spawn.contains("shell_launch::attach_sidecar_kill_on_close_job(sidecar_pid)"),
       "spawn_sidecar 必须在句柄入槽后给 sidecar 挂 KILL_ON_JOB_CLOSE job：{spawn}"
