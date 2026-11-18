@@ -12,7 +12,7 @@ import userEvent from "@testing-library/user-event";
 
 const { markdownToHtmlMock, loadRendererMock } = vi.hoisted(() => ({
   markdownToHtmlMock: vi.fn((value: string) => `<p>${value}</p>`),
-  loadRendererMock: vi.fn(async () => ({ markdownToHtml: markdownToHtmlMock })),
+  loadRendererMock: vi.fn(() => Promise.resolve({ markdownToHtml: markdownToHtmlMock })),
 }));
 
 vi.mock("~/lib/markdown", () => ({
