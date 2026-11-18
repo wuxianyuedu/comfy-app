@@ -68,6 +68,24 @@ function givenChild(stdout: string, stderr = ""): void {
   });
 }
 
+/** 造一个假子进程，stdout 按 chunks 逐段发（输出上限的判据要多段输出才测得到）。 */
+function givenChunkedChild(chunks: Array<string>): void {
+  const child: FakeChild = Object.assign(new EventEmitter(), {
+    pid: 424_242,
+    stderr: fakeStream(),
+    stdout: fakeStream(),
+  });
+  spawnMock.mockImplementation(() => {
+    queueMicrotask(() => {
+      for (const chunk of chunks) {
+        child.stdout.emit("data", chunk);
+      }
+      child.emit("close", 0);
+    });
+    return child;
+  });
+}
+
 /** 收集一次 spawn 的 argv，供断言「不经 shell、参数逐项传」。 */
 function lastArgs(): Array<string> {
   const call = spawnMock.mock.calls.at(-1);
@@ -107,6 +125,21 @@ describe("probeCnbCli（只读探测）", () => {
     const status = await probeCnbCli();
     expect(status.available).toBe(false);
     expect(status.reason).toContain("spawn ENOENT");
+  });
+
+  it("输出超过 256KB 上限后不再累积：上限之后才出现的「已登录」不算数（#4339）", async () => {
+    // 契约值与 cnb-cli.ts 的 MAX_OUTPUT_CHARS 同源（探测只需要判「已登录」，
+    // cli 狂刷输出时不得无界累积）；改上限要同批改这条。
+    const filler = "x".repeat(256 * 1024);
+    givenChunkedChild([filler, "✅ 已登录。"]);
+    const status = await probeCnbCli();
+    expect(status.available, "上限截断之后的内容不参与判读").toBe(false);
+    expect(status.reason).toContain("未登录");
+  });
+
+  it("上限内（含前导噪声）的正常探测不受截断影响", async () => {
+    givenChunkedChild(["y".repeat(100 * 1024), "✅ 已登录。"]);
+    await expect(probeCnbCli()).resolves.toEqual({ available: true, reason: "" });
   });
 });
 
