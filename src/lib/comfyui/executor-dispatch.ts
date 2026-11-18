@@ -54,6 +54,7 @@ import {
   releaseDispatchSlot,
   state,
   takeQueuedEntries,
+  touchAndEvict,
 } from "./runner-state";
 import type { Job, LogEntry } from "./runner-state";
 import { executeViaComfyCli, sanitizeOutputNodeIds } from "./executor-cli";
@@ -118,6 +119,13 @@ async function resolveDispatch(): Promise<{
  *  用户在执行日志面板上看到的仍是长时间静默。 */
 const WAIT_HINT_LIMIT = 5;
 
+/** 「等待连接」提示去重表的条目上限（ISSUE #4351）。键是 taskId，清空路径只有
+ *  WS open 一条：ComfyUI 长期起不来（自动启动被闩锁抑制后不再重连）时，集合会
+ *  随宕机期新进入提示窗口的任务只增不减。封顶后按插入序淘汰最旧键（复用
+ *  `touchAndEvict`，与 runner-state 日志驻留、instrumentation 异常去重同一形态）；
+ *  被淘汰的冷键最多再提示一行 warn，不会放大成刷屏。 */
+export const WS_WAIT_LOGGED_MAX = 512;
+
 async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
   const s = state();
   try {
@@ -126,7 +134,7 @@ async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
       if (s.wsWaitLogged.has(id)) {
         continue;
       }
-      s.wsWaitLogged.add(id);
+      touchAndEvict(s.wsWaitLogged, id, true, WS_WAIT_LOGGED_MAX);
       logWhileQueued(
         id,
         "warn",

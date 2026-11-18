@@ -207,8 +207,12 @@ const persistTimers = new Map<
  *  `skip`：命中即**跳过本轮淘汰**（#4021）。日志 Map 传「还有 pending 落库
  *  定时器」——被淘汰任务的 pending `persistLogs` 会以空数组 `replaceLogs`
  *  抹掉 DB 里已落库的日志；「日志已落库才可淘汰」这条不变式靠它守住。
- *  全部键都被 skip 时允许暂时超限（ bounded：最迟 1.5s 的兜底 flush 后回落）。 */
-function touchAndEvict<V>(
+ *  全部键都被 skip 时允许暂时超限（ bounded：最迟 1.5s 的兜底 flush 后回落）。
+ *
+ *  同一形态的第二处消费（ISSUE #4351）：`executor-dispatch` 的 `wsWaitLogged`
+ *  提示去重表也用它封顶。新需求要「有界去重 / 驻留」时直接复用本函数，
+ *  别再抄第四份淘汰循环（此前 instrumentation 与画布各有一份同形内联）。 */
+export function touchAndEvict<V>(
   map: Map<string, V>,
   taskId: string,
   value: V,

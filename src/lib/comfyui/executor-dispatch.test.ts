@@ -170,6 +170,48 @@ describe("就绪门控：不就绪就不领行", () => {
   });
 });
 
+describe("wsWaitLogged 封顶（ISSUE #4351）", () => {
+  /** 预填满去重表：WS 长期不就绪时集合只在 open 时清空，这里模拟宕机期积压。 */
+  function fillWaitLogged() {
+    const s = state();
+    for (let i = 0; i < mod.WS_WAIT_LOGGED_MAX; i += 1) {
+      s.wsWaitLogged.set(`seed-${i}`, true);
+    }
+  }
+
+  it("集合超限后按插入序淘汰最旧键，大小恒不超过 WS_WAIT_LOGGED_MAX", async () => {
+    fillWaitLogged();
+    const repo = fakeRepo({
+      listQueuedIds: vi.fn(() => Promise.resolve(["seed-0", "t-new"])),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    await mod.claimAndDispatchOnce();
+
+    const s = state();
+    expect(s.wsWaitLogged.size).toBe(mod.WS_WAIT_LOGGED_MAX);
+    expect(s.wsWaitLogged.has("seed-0")).toBe(false);
+    expect(s.wsWaitLogged.has("t-new")).toBe(true);
+    expect(logsOf("t-new").some((m) => m.includes("等待 ComfyUI"))).toBe(true);
+  });
+
+  it("被淘汰的冷键再次进窗口会重新提示（单行，不刷屏）；驻留键仍不重复", async () => {
+    fillWaitLogged();
+    const repo = fakeRepo({
+      listQueuedIds: vi.fn(() => Promise.resolve(["seed-0", "t-new"])),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    await mod.claimAndDispatchOnce();
+    await mod.claimAndDispatchOnce();
+
+    // seed-0 首拍被 t-new 挤出集合，第二拍重新提示一行——可接受的上限代价。
+    expect(logsOf("seed-0").filter((m) => m.includes("等待 ComfyUI"))).toHaveLength(1);
+    // t-new 一直驻留：两拍只提示一次，去重语义对热键不变。
+    expect(logsOf("t-new").filter((m) => m.includes("等待 ComfyUI"))).toHaveLength(1);
+  });
+});
+
 describe("槽位判据", () => {
   it("本进程在飞数已满时不领行（领了没人跑 = 悬挂）", async () => {
     openWs();
