@@ -114,32 +114,32 @@
  * `wuxianyuedu/comfy-app`）、`CNB_PULL_REQUEST_IID`、`CNB_PULL_REQUEST_TARGET_SHA`
  * （后两件只属 PR 模式；`--master` 不读它们）。
  */
-import { spawnSync } from "node:child_process";
 import { mkdirSync as realMkdirSync, writeFileSync as realWriteFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
 import {
   describeLfsCheckFailure,
-  isEgressFailure,
+  explainRemoteProbeFailure,
   renderMirrorSummary,
-  shouldRetryGitFailure,
   writeDispatchState,
 } from "./ci-mirror-failure-report.mjs";
 import { pushLfsObjects } from "./ci-mirror-lfs-push.mjs";
 import { buildRunName, dispatchPayload, EVENT_TYPE, resolvePrTitle } from "./ci-mirror-payload.mjs";
 import { verifyLfsObjects, verifyPushedRef } from "./ci-mirror-push-verify.mjs";
 import {
-  gitSubcommand,
-  gitTimeoutFor,
   PUSH_MAX_ATTEMPTS,
-  RETRY_BACKOFF_MS,
-  RETRY_MIN_ATTEMPT_MS,
+  realRunGit,
+  realSleep,
+  runGitWithRetry,
   VERIFY_MAX_ATTEMPTS,
 } from "./ci-mirror-retry-policy.mjs";
-/* 这两个纯函数随 #3346 迁去 retry-policy（给本文件腾 900 行硬闸余量）；仍从这里转出，导入面不改。 */
-export { gitSubcommand, gitTimeoutFor };
 import { createWireBudget } from "./ci-mirror-wire-budget.mjs";
+/* 这几件随历次回闸切去 retry-policy / failure-report（#3346 / #3106 / #4315）：本文件已无
+ * 本地消费的（gitSubcommand / gitTimeoutFor）改为原样转出；本地还要用的（重试执行器、
+ * 真 git 执行器与失败话术）import 后再转出 —— 用例与调用方的导入面一个字不改。 */
+export { gitSubcommand, gitTimeoutFor } from "./ci-mirror-retry-policy.mjs";
+export { realRunGit, realSleep, runGitWithRetry };
 /* 纯拼装切出去之后仍从这里转出，用例与调用方的导入面不用动（见该模块「为什么单独一份」）。 */
 export { dispatchPayload };
 
@@ -152,6 +152,7 @@ export {
   DISPATCH_STATE_DIR,
   DISPATCH_STATE_FILE,
   explainLfsPushFailure,
+  explainRemoteProbeFailure,
   isEgressFailure,
   LFS_FAILURE_KINDS,
   LFS_FAILURE_SHORT_ACTIONS,
@@ -193,19 +194,6 @@ const ROOT = path.resolve(import.meta.dirname, "../..");
  */
 export function pushArgs(url, ref) {
   return ["-c", "core.hooksPath=", "push", "--force", url, `HEAD:${ref}`];
-}
-
-/**
- * git 子进程的环境：清掉 `GIT_DIR` / `GIT_WORK_TREE`（文件头第 7 条）。
- *
- * @returns {NodeJS.ProcessEnv} 交给 `spawnSync` 的环境
- */
-function gitEnv() {
-  /** @type {NodeJS.ProcessEnv} */
-  const env = { ...process.env };
-  delete env.GIT_DIR;
-  delete env.GIT_WORK_TREE;
-  return env;
 }
 
 /**
@@ -325,138 +313,6 @@ export function resolveMasterContext(io) {
     repo: (env.GITHUB_MIRROR_REPO ?? DEFAULT_REPO).trim(),
     token: token.trim(),
   };
-}
-
-/**
- * 真身：git 子进程执行器（测试注入点同形的假件在用例里给）。
- *
- * ⚠️ 超时不是「git 回了个非零」：`spawnSync` 到点是**本仓把它杀了**，`status` 变 `null`、
- * `error.code` 是 `ETIMEDOUT`。原样交出去只会读成一句「exit -1」，所以这里补一句回话，
- * 让 `explainRemoteProbeFailure()` 把它归进 egress 那一类（#3051 之前这一形被念成
- * 「令牌活不活 / 仓库在不在」，把人指到错的下一动作上）。
- *
- * @param {string[]} args git 参数表
- * @param {{timeout?: number}} [opts] 这一次尝试的墙钟（缺省按子命令取 {@link gitTimeoutFor}）
- * @returns {{code: number, stderr: string, stdout: string}}
- */
-export function realRunGit(args, opts) {
-  const timeout = opts?.timeout ?? gitTimeoutFor(args);
-  const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", env: gitEnv(), timeout });
-  /* 念出来的是子命令而不是 `args[0]` —— 推送那一跳的 `args[0]` 是 `-c`。 */
-  const sub = gitSubcommand(args);
-  if ((r.error ?? null) !== null || r.status === null) {
-    /* Node 把 `spawnSync` 的 `error` 标成 `Error`，而超时那一支带 `code: "ETIMEDOUT"`（类型没申出来）⇒ 按形状读一次。 */
-    const err = typeof r.error === "object" ? r.error : null;
-    const code = err !== null && "code" in err ? String(err.code) : undefined;
-    const why =
-      code === "ETIMEDOUT"
-        ? `git ${sub} 超时（>${String(timeout)} ms）：这一跳没拿到任何回话 —— 是没通，不是判出的红`
-        : `git ${sub} 连上都没连上：${String(r.error ?? "拿不到退出码")}`;
-    return {
-      code: -1,
-      stderr: `${String(r.stderr ?? "")}\n${why}`,
-      stdout: String(r.stdout ?? ""),
-    };
-  }
-  return { code: r.status, stderr: String(r.stderr ?? ""), stdout: String(r.stdout ?? "") };
-}
-
-/**
- * 真身的退避等待（测试注入 `io.sleep` 的假件，用例一次真墙钟都不付）。
- *
- * @param {number} ms 等多久
- * @returns {Promise<void>}
- */
-export const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * 带有限重试的一跳（文件头第 8 条）：**只有 `shouldRetryGitFailure()` 认下的 egress ∪
- * 远端 5xx** 才消耗重试；认证 / 权限 / 仓库不存在一律一次交账。判据在
- * `ci-mirror-failure-report.mjs`，话术仍只认 egress（5xx 不该被念成节点出网问题）。
- *
- * 两道上限同时收口（2026-11-05）：`maxAttempts` 管次数（别把日志刷成一片），`budgetMs`
- * 管墙钟（这一跳从第一刀到交账不许超过窗口）。给了预算会把**重试**那些尝试的超时裁到
- * 「剩余预算」，所以「首刀 240s 挂了再来一刀 240s」不会发生；**首刀不裁**（照吃单跳上限），
- * 免得 LFS 那 60s 预算把一次「慢但正常」的上传掐死。瞬时失败只吃退避 ⇒ 整档在窗口内反复试。
- * 取法与数字的理由见 `ci-mirror-retry-policy.mjs`。
- *
- * 每一次重试都留一行读数（第几次、等多久），重试耗尽后交回**最后一次**的结果 ——
- * 退码与后续话术与没有重试时逐字同形（推送没通仍是 exit 2 —— 前提没落地）。
- *
- * @param {string[]} args git 参数表
- * @param {{runGit: typeof realRunGit, sleep: (ms: number) => Promise<void>, log: (line: string) => void, prefix: string, label: string, maxAttempts: number, budgetMs?: number, now?: () => number}} ctx
- * @returns {Promise<{attempts: number, code: number, stderr: string, stdout: string}>} 最后一次尝试的结果 + 实际消耗的次数
- */
-export async function runGitWithRetry(args, ctx) {
-  const { budgetMs, label, log, maxAttempts, prefix, runGit, sleep, now = Date.now } = ctx;
-  const startedAt = now();
-  /** 这一跳还剩多少预算；不给预算 ⇒ 无穷（那时只有 `maxAttempts` 生效）。 */
-  const remaining = () =>
-    budgetMs === undefined ? Number.POSITIVE_INFINITY : budgetMs - (now() - startedAt);
-  /** @type {(ms: number) => {timeout: number} | undefined} 有预算就裁到剩余量，否则留 undefined。 */
-  const callOpts = (ms) => {
-    const base = gitTimeoutFor(args);
-    return budgetMs === undefined || base === undefined
-      ? undefined
-      : { timeout: Math.min(base, Math.round(ms)) };
-  };
-  let attempts = 1;
-  /* 首刀不裁（照吃单跳上限，保护「慢但正常」的上传）；裁的只有下面那几跳重试。 */
-  let result = runGit(args);
-  for (let attempt = 2; attempt <= maxAttempts && result.code !== 0; attempt += 1) {
-    if (!shouldRetryGitFailure(`${result.stdout}\n${result.stderr}`)) {
-      break;
-    }
-    const wait = RETRY_BACKOFF_MS[attempt - 2] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
-    const left = remaining() - wait;
-    if (left < RETRY_MIN_ATTEMPT_MS) {
-      log(
-        `[${prefix}] ${label}重试预算用尽：已试 ${String(attempt - 1)} 次、耗 ${String(Math.round((now() - startedAt) / 1000))}s（预算 ${String((budgetMs ?? 0) / 1000)}s，低于一次尝试的 ${String(RETRY_MIN_ATTEMPT_MS / 1000)}s 就不再发起）⇒ 按最后一次结果交账`,
-      );
-      break;
-    }
-    log(
-      `[${prefix}] ${label}第 ${String(attempt - 1)}/${String(maxAttempts)} 次没通（可重试类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt)} 次（网络抖动 / 远端 5xx 重试；认证 / 权限类不重试）`,
-    );
-    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
-    await sleep(wait);
-    attempts = attempt;
-    result = runGit(args, callOpts(left));
-  }
-  return { ...result, attempts };
-}
-
-/**
- * 把推送 / 远端读的失败回话翻成**具体那一句**（回话本身不判红，它只被念出来）。
- *
- * 三形态各有各的下一动作，读的人不必自己去猜：
- *
- * · `Repository not found` 是**仓库层面**没通（没建 / 令牌对它没有读权）；
- * · 其余认证回话更可能落在**令牌值 / 身份范围**上；
- * · `Failed to connect` / `Could not connect to server` / `Connection reset` / DNS 失败 /
- *   本仓自己给的超时（`gitTimeoutFor` 那两支）都是 **egress 层** —— 网络根本没到 GitHub。
- *
- * 第三支是 #3051 补的：它缺席时那一形会落到下面那句通用话术上，把「节点连不上
- * github.com:443」念成「令牌活不活 / 仓库在不在」—— 那句把人往令牌上查，而令牌是好的
- * （实测 `cnb-61a-1k6d4na5o` 的 `stage-endStages-2`：`Failed to connect to github.com
- * port 443 after 21114 ms`）。
- *
- * 这一函数**不改变退码** —— 三种都落「前提没落地」，改的只是下一动作能不能被照着做。
- *
- * @param {string} text `ls-remote` 的 stdout + stderr（未脱敏）
- * @returns {string} 一句中文读数
- */
-export function explainRemoteProbeFailure(text) {
-  if (isEgressFailure(text)) {
-    return "到 github.com 这一跳没通（TCP / DNS / 代理层）⇒ 出网问题在节点侧（白名单 / 代理 / 换 runner），与令牌值和这一格的判据都无关";
-  }
-  if (/repository not found|does not appear to be a git repository/i.test(text)) {
-    return "目标仓库在 GitHub 上不存在（或以这枚令牌的身份看不见它）⇒ 先去建仓库，再重跑这一格";
-  }
-  if (/repository access blocked|not accessible|deploy key/i.test(text)) {
-    return "这枚令牌的身份够不到目标仓库（fine-grained PAT 须把该仓库列进仓库访问范围）";
-  }
-  return "推送被拒且不属于上面几类 ⇒ 现场拿真值在本地 `git ls-remote` / `git push --dry-run` 各定一次值（仓库在不在 / 令牌活不活 / 保护规则拦不拦）";
 }
 
 /**
