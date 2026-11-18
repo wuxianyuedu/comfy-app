@@ -15,6 +15,7 @@ import { ChevronRight, Plus, Trash2, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { SelectMenu } from "~/components/ui/select-menu";
 import type { ReferenceChainClassDef } from "~/lib/comfyui/reference-loader-catalog";
 import type {
@@ -246,7 +247,7 @@ export function ReferenceLoaderPresetModal({ onClose, open }: Props) {
     >
       <DialogContent
         className="max-w-4xl"
-        popupClassName="flex max-h-[80vh] flex-col"
+        popupClassName={`flex ${OVERLAY_MAX_HEIGHT} flex-col`}
         showCloseButton={false}
       >
         <div className="border-border-subtle flex items-center justify-between border-b px-4 py-3">
