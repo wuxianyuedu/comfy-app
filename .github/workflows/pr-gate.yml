@@ -452,26 +452,42 @@ jobs:
       # （pkg-config 读的就是 `.pc`），不是 `.so` 本身 —— 少了 `-dev` 就是「pkg-config 找不到
       # glib-2.0」这一句。
       #
-      # 这一步**只在重档真会碰壳时**才需要，但重档是「一条龙」跑几十条判据、触发面在判据
-      # 内部算（判据本人才知道有没有改壳），workflow 层拿不到那个面 ⇒ 只能无条件装。
-      # 代价是每个 PR 多付约 30s 的 apt（apt 源走 GitHub runner 的本地缓存，
-      # 不额外引入出网依赖）。换来的是「这一格不再恒红于环境」—— 它第一次真跑就撞上缺库，
-      # 那样每一次改壳的 PR 都会红在一条与代码无关的地方。
+      # 这一步**只在重档真会碰壳时**才需要。触发面本来在判据内部算（判据本人才知道
+      # 有没有改壳），一度只能无条件装、每个 PR 多付约 30s 的 apt；#4309 起由
+      # `ci-shell-face.mjs` 在 workflow 层用**同一条链**（changed-scope 的
+      # resolveBaseRef → changedFilesForBaseRef → reconcileSyntheticMergeFace）与
+      # **同一个正则**（shell-gate 的 `SHELL_INPUT_RE`，直接 import 不抄第二份）提前
+      # 回答「这次碰没碰壳」——没碰就不装。误跳的代价是壳门禁红在缺库上，所以判定
+      # 任何一环拿不到读数都 fail-open（按要装处理）；判据说要编，这里必然装了。
+      #
+      # 实测读数（#4309，15 次 pr-gate）：这一步 8 次约 22~35s，7 次被 apt 拖到
+      # 8~15 分钟（慢的不是拉索引——13.2MB 只要 3s——是 install 阶段 `-qq` 之下的
+      # 整段静默，慢样本里 561s 一行日志都没有），2 次撞死在步级超时上。三件事随本条
+      # 同批修：① 没碰壳的 PR 整步跳过；② install 去 `-qq`（与 #4294 对 update 的
+      # 处置同源），下载阶段显形；③ 两条 apt 命令加 `DPkg::Lock::Timeout=120`，
+      # 真撞上 dpkg 锁（unattended-upgrades 那一族）时 120s 内失败、落进下面的整体重试，
+      # 不再无声干等。
       #
       # 镜像侧瞬时故障（DNS 解析 / 连接不上）会让 apt 无声空等二十多分钟才 exit 100，
       # 而这一格原来既无重试、也无连接 / 步级超时 ⇒ 整条 PR 流水线被压在 pending。
       # 两条 apt 命令加重试与空闲超时让短暂抖动自愈、死镜像早退；步级超时兜住真挂住，
       # 让失败落在这一步自己的名字上。判据一字不改，只硬化这层环境前置（#3589）。
+      - name: 这次改没改壳输入（没改就不白付 apt，#4309）
+        id: shell-face
+        run: node scripts/ci/ci-shell-face.mjs
+
       - name: 装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）
+        # fail-open 的双保险：输出不是字面 'false'（含本步没跑到 / 输出缺席）都装。
+        if: steps.shell-face.outputs.shell != 'false'
         timeout-minutes: 15
         run: |
           # 2026-11-18（#4294）：GA runner 的 apt 镜像抖动频发——「找不到包」与
           # 「装到一半超时」轮流出现，一天内三次把在途 PR 卡死。#3589 的连接级
           # 重试之外，这里再加**一次整体重试**：第一次失败（含 index 拉到坏镜像）
-          # 后清掉 lists 重来一次；两次都失败才让这一格红。30 分钟步级超时罩住
+          # 后清掉 lists 重来一次；两次都失败才让这一格红。15 分钟步级超时罩住
           # 两次尝试。
           for attempt in 1 2; do
-            if sudo apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30               && sudo apt-get install -y -qq --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30                 libglib2.0-dev                 libatk1.0-dev                 libcairo2-dev                 libgdk-pixbuf-2.0-dev                 libpango1.0-dev                 libgtk-3-dev                 libdbus-1-dev                 libwebkit2gtk-4.1-dev                 libjavascriptcoregtk-4.1-dev                 libsoup-3.0-dev                 build-essential                 libayatana-appindicator3-dev; then
+            if sudo apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120               && sudo apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120                 libglib2.0-dev                 libatk1.0-dev                 libcairo2-dev                 libgdk-pixbuf-2.0-dev                 libpango1.0-dev                 libgtk-3-dev                 libdbus-1-dev                 libwebkit2gtk-4.1-dev                 libjavascriptcoregtk-4.1-dev                 libsoup-3.0-dev                 build-essential                 libayatana-appindicator3-dev; then
               exit 0
             fi
             if [ "$attempt" = "2" ]; then

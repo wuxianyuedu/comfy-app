@@ -25,7 +25,8 @@
  *   ③ workflow 那一层**真的装了**那些包 —— 少了就是「Linux 上编不出壳」，
  *      多装了就是白付一次 apt。
  */
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -38,6 +39,7 @@ import {
   runGate,
   tauriLinuxAptPackages,
 } from "../scripts/gates/shell-gate.mjs";
+import { main as runShellFace, shellFace } from "../scripts/ci/ci-shell-face.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const PR_GATE = ".github/workflows/pr-gate.yml";
@@ -280,5 +282,126 @@ describe("GA 侧真的装了那些系统库（ISSUE #3572 / #3580）", () => {
       expect(line).toContain("Acquire::https::Timeout");
     }
     expect(step).toContain("timeout-minutes:");
+  });
+});
+
+/* ── apt 只在真碰了壳输入时才跑（#4309）─────────────────────────────────
+ *
+ * 实测 15 次 pr-gate：这一步 8 次约 22~35s、7 次被 apt 拖到 8~15 分钟、2 次撞死在
+ * 步级超时上。那些库只有壳门禁真要编 Tauri 时才被问到 ⇒ 判定挪到 workflow 层，
+ * 用与 shell-gate 同一条链（changed-scope）+ 同一个正则（直接 import，不抄第二份）。
+ * 本组用例钉三件事：workflow 的条件形状、判定脚本与判据同源（不漂）、fail-open。
+ */
+
+/** 按 git 子命令分发的假 runGit：merge-base / rev-list / diff 各给一份固定输出。 */
+function fakeGit(handlers: {
+  diff?: string;
+  failArgs?: string[];
+  mergeBase?: string;
+  parents?: string;
+}): (args: string[], cwd: string) => { ok: boolean; stdout: string } {
+  return (args: string[]) => {
+    if (handlers.failArgs?.some((a) => args.includes(a))) {
+      return { ok: false, stdout: "boom" };
+    }
+    if (args.includes("merge-base")) {
+      return { ok: true, stdout: handlers.mergeBase ?? "" };
+    }
+    if (args.includes("rev-list")) {
+      return { ok: true, stdout: handlers.parents ?? "" };
+    }
+    if (args.includes("diff")) {
+      return { ok: true, stdout: handlers.diff ?? "" };
+    }
+    return { ok: true, stdout: "" };
+  };
+}
+
+describe("apt 只在真碰了壳输入时才跑（#4309）", () => {
+  const workflow = read(PR_GATE);
+
+  it("判定步骤在 apt 之前，apt 挂在它的输出上，且条件是 fail-open 形状", () => {
+    const faceAt = workflow.indexOf("- name: 这次改没改壳输入");
+    const installAt = workflow.indexOf("- name: 装 Tauri 的 Linux 系统依赖");
+    expect(faceAt).toBeGreaterThan(-1);
+    expect(installAt).toBeGreaterThan(faceAt);
+    // 不是字面 'false' 就装：判定步没跑到 / 输出缺席时同样是装（fail-open 的另一层）。
+    expect(workflow).toContain("if: steps.shell-face.outputs.shell != 'false'");
+    expect(workflow).toContain("run: node scripts/ci/ci-shell-face.mjs");
+  });
+
+  it("判定脚本与判据同源：import SHELL_INPUT_RE 与 changed-scope，不抄第二份模式", () => {
+    const src = read("scripts/ci/ci-shell-face.mjs");
+    expect(src).toContain('from "../gates/shell-gate.mjs"');
+    expect(src).toContain("SHELL_INPUT_RE");
+    expect(src).toContain('from "../lib/changed-scope.mjs"');
+    // 不许重新定义那把尺 —— 出现第二份 `SHELL_INPUT_RE =` 迟早和判据漂开。
+    expect(src).not.toContain("SHELL_INPUT_RE =");
+  });
+
+  it("改动面命中 src-tauri 的壳输入 ⇒ 要装", () => {
+    const got = shellFace({
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "aaa" },
+      runGit: fakeGit({
+        diff: "M\tsrc/app/page.tsx\nM\tsrc-tauri/src/lib.rs",
+      }),
+    });
+    expect(got.shell).toBe(true);
+    expect(got.hits).toContain("src-tauri/src/lib.rs");
+  });
+
+  it("没碰壳（纯前端 / 文档）⇒ 不装", () => {
+    const got = shellFace({
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "aaa" },
+      runGit: fakeGit({ diff: "M\tsrc/app/page.tsx\nM\tdocs/README.md" }),
+    });
+    expect(got.shell).toBe(false);
+    expect(got.hits).toEqual([]);
+  });
+
+  it("改名的两侧都算壳输入（与判据的 rename 口径一致）", () => {
+    const got = shellFace({
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "aaa" },
+      runGit: fakeGit({ diff: "R100\tsrc-tauri/src/old.rs\tsrc-tauri/src/new.rs" }),
+    });
+    expect(got.shell).toBe(true);
+    expect(got.hits).toEqual(["src-tauri/src/old.rs", "src-tauri/src/new.rs"]);
+  });
+
+  it("基线拿不到 ⇒ fail-open（按要装处理，绝不误跳）", () => {
+    const got = shellFace({
+      env: {},
+      fallbackRef: null,
+      runGit: fakeGit({}),
+    });
+    expect(got.shell).toBe(true);
+    expect(got.via).toContain("fail-open");
+  });
+
+  it("diff 没跑起来 ⇒ fail-open（按要装处理）", () => {
+    const got = shellFace({
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "aaa" },
+      runGit: fakeGit({ failArgs: ["diff"] }),
+    });
+    expect(got.shell).toBe(true);
+    expect(got.via).toContain("fail-open");
+  });
+
+  it("步骤入口把结论写进 GITHUB_OUTPUT，恒退 0", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "shell-face-"));
+    const output = path.join(dir, "output.txt");
+    const logs: Array<string> = [];
+    const code = runShellFace({
+      env: {
+        CNB_PULL_REQUEST_TARGET_SHA: "aaa",
+        GITHUB_OUTPUT: output,
+      },
+      log: (line) => logs.push(line),
+      runGit: fakeGit({ diff: "M\tsrc/app/page.tsx" }),
+    });
+    expect(code).toBe(0);
+    expect(readFileSync(output, "utf8")).toBe("shell=false\n");
+    expect(logs.join("\n")).toContain("不装");
+    rmSync(dir, { recursive: true, force: true });
   });
 });
