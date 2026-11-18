@@ -585,7 +585,11 @@ describe("spawnSchemaSync —— 脚本路径必须跟 db-sync.mjs 的实际落�
       const { spawnSchemaSync } = await import("../scripts/db/db-schema-state.mjs");
       const result = spawnSchemaSync(tmpSpawn);
       expect(result.started).toBe(false);
-      expect(result.reason ?? "").toContain("db-sync.mjs");
+      /* 判别联合先收窄：只有 started=false 那一支带 reason（ISSUE #4283 的类型面）。 */
+      if (result.started) {
+        throw new Error("不应起成功：该临时根里没有 db-sync.mjs");
+      }
+      expect(result.reason).toContain("db-sync.mjs");
     } finally {
       rmTempWithRetry(tmpSpawn);
     }
