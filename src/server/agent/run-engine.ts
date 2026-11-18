@@ -34,7 +34,7 @@ import { fixed } from "~/lib/number-format";
 import { displayValue } from "~/lib/display-value";
 import { reviewContent, reviewScript, reviewShotImage, reviseScript } from "~/server/agent/review";
 import type { ProductionStage } from "~/lib/production/progress";
-import { errorMessage } from "~/lib/error-message";
+import { errorMessage, errorText } from "~/lib/error-message";
 import { isProjectType, normalizeShotType } from "~/lib/workshop/types";
 import type { Character, Shot } from "~/lib/workshop/types";
 import type { Production } from "~/server/db/schema";
@@ -585,7 +585,7 @@ async function execFilm(
          * claimFilmStart 永远抢不到，该项目在释放成功前无法再次起片——这种失败
          * 不许静默（也不上抛：恢复路径还有多级补偿，抛出会掩盖原始错误）。 */
         logger.warn(
-          `[run] 释放起片认领失败（project=${projectId}）：${errorMessage(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
+          `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
         );
       });
       return {
@@ -605,7 +605,7 @@ async function execFilm(
          * claimFilmStart 永远抢不到，该项目在释放成功前无法再次起片——这种失败
          * 不许静默（也不上抛：恢复路径还有多级补偿，抛出会掩盖原始错误）。 */
         logger.warn(
-          `[run] 释放起片认领失败（project=${projectId}）：${errorMessage(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
+          `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
         );
       });
       return {
@@ -620,7 +620,7 @@ async function execFilm(
          * claimFilmStart 永远抢不到，该项目在释放成功前无法再次起片——这种失败
          * 不许静默（也不上抛：恢复路径还有多级补偿，抛出会掩盖原始错误）。 */
         logger.warn(
-          `[run] 释放起片认领失败（project=${projectId}）：${errorMessage(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
+          `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
         );
       });
       return {
@@ -635,7 +635,7 @@ async function execFilm(
          * claimFilmStart 永远抢不到，该项目在释放成功前无法再次起片——这种失败
          * 不许静默（也不上抛：恢复路径还有多级补偿，抛出会掩盖原始错误）。 */
         logger.warn(
-          `[run] 释放起片认领失败（project=${projectId}）：${errorMessage(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
+          `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
         );
       });
       return { ok: true, run: cleared, skipLog: true, summary: "成片已完成，等待状态同步" };
@@ -683,7 +683,7 @@ async function execFilm(
        * 该项目在释放成功前无法再次起片；此处是起片失败的补偿路径，上抛会掩盖
        * 原始错误，只留痕。 */
       logger.warn(
-        `[run] 释放起片认领失败（project=${projectId}）：${errorMessage(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
+        `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
       );
     });
     return { ok: false, error: errorMessage(error, "启动成片失败") };
