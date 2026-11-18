@@ -23,14 +23,14 @@ const mod = await import("./executor-finalize");
 
 describe("configureExecutorFinalize 接缝", () => {
   it("接受 Partial<ExecutorFinalizeDeps> 且不抛", () => {
-    const runtimeLog = { info: vi.fn(), error: vi.fn() };
+    const runtimeLog = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
     expect(() => {
       mod.configureExecutorFinalize({ runtimeLog });
     }).not.toThrow();
   });
 
   it("两次调用是合并语义（Partial 逐次填、未传的字段保留）", () => {
-    const a = { info: vi.fn(), error: vi.fn() };
+    const a = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
     const getView = vi.fn(() => Promise.resolve(Buffer.from("x")));
     mod.configureExecutorFinalize({ runtimeLog: a });
     // 第二次只填 getView，runtimeLog 应保留（内部 `{ ...depsOverride, ...next }`）。
