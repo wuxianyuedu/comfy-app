@@ -646,8 +646,22 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
   return result;
 }
 
-/** 当前保活会话的退出监督器（同一时刻最多一个，重新拉起前会被停掉）。 */
-let keepAliveExitWatcher: { stop: () => void } | null = null;
+/* 当前保活会话的退出监督器（同一时刻最多一个，重新拉起前会被停掉）。
+ * 挂 globalThis（#4230）：同文件其它跨 HMR 单例同款——模块级变量在 dev 热重载
+ * 后换新、旧监督器的 interval 还活着（unref 后可活到事件循环结束），新实例看到
+ * null 会再挂一个 → 双监督器并存、退出横幅可能双发。键名带版本号是既定坑位写法
+ * （`??=` 只认键名，不给旧单例补字段）。 */
+declare global {
+  var __comfyKeepAliveWatch_v1: { stop: () => void } | null | undefined;
+}
+
+function currentKeepAliveWatch(): { stop: () => void } | null {
+  return globalThis.__comfyKeepAliveWatch_v1 ?? null;
+}
+
+function setKeepAliveWatch(watch: { stop: () => void } | null): void {
+  globalThis.__comfyKeepAliveWatch_v1 = watch;
+}
 
 /**
  * 保活退出监督的统一装配入口：「本次会话拉起」与「重启后接管」两条路径共用。
@@ -665,30 +679,32 @@ function startKeepAliveWatch(params: {
   mainPy: string;
   note: (msg: string) => void;
 }): void {
-  keepAliveExitWatcher?.stop();
-  keepAliveExitWatcher = startComfyExitWatcher({
-    findPid: () => findPidForMainPyDetailed(params.mainPy),
-    /* 便宜先导信号（ISSUE #4197）：每拍先探配置端口（环回 HTTP 毫秒级），
-     * 应答 = 实例活着、不再起 PowerShell 进程表枚举——否则实例在跑多久，
-     * WMI 查询就每 10s 陪跑多久。端口不应答（加载中 / 偏移端口 / 抖动）
-     * 才落到 findPid 确认，判死判据不变。COMFYUI_BASE（远端实例）时
-     * probeComfyAtPort 恒回 null ⇒ 每拍都走进程表，与旧行为一致。 */
-    probeAlive: () => probeComfyAtPort(params.configuredPort).then((base) => base !== null),
-    isStopped: params.isStopped,
-    onExit: (facts) => {
-      const report = reportKeepAliveExit({
-        facts,
-        stopRequested: params.isStopped(),
-        appendRuntimeLog: params.host.appendRuntimeLog,
-        log: params.note,
-        keepAliveLogs: params.logs,
-      });
-      params.host.markSessionEnd(report);
-      /* 监督器已自停：清掉引用，之后若这个实例又活了（外部/别处拉起），
-       * 「接管」路径能重新挂上监督。 */
-      keepAliveExitWatcher = null;
-    },
-  });
+  currentKeepAliveWatch()?.stop();
+  setKeepAliveWatch(
+    startComfyExitWatcher({
+      findPid: () => findPidForMainPyDetailed(params.mainPy),
+      /* 便宜先导信号（ISSUE #4197）：每拍先探配置端口（环回 HTTP 毫秒级），
+       * 应答 = 实例活着、不再起 PowerShell 进程表枚举——否则实例在跑多久，
+       * WMI 查询就每 10s 陪跑多久。端口不应答（加载中 / 偏移端口 / 抖动）
+       * 才落到 findPid 确认，判死判据不变。COMFYUI_BASE（远端实例）时
+       * probeComfyAtPort 恒回 null ⇒ 每拍都走进程表，与旧行为一致。 */
+      probeAlive: () => probeComfyAtPort(params.configuredPort).then((base) => base !== null),
+      isStopped: params.isStopped,
+      onExit: (facts) => {
+        const report = reportKeepAliveExit({
+          facts,
+          stopRequested: params.isStopped(),
+          appendRuntimeLog: params.host.appendRuntimeLog,
+          log: params.note,
+          keepAliveLogs: params.logs,
+        });
+        params.host.markSessionEnd(report);
+        /* 监督器已自停：清掉引用，之后若这个实例又活了（外部/别处拉起），
+         * 「接管」路径能重新挂上监督。 */
+        setKeepAliveWatch(null);
+      },
+    }),
+  );
 }
 
 /**
@@ -710,7 +726,7 @@ export function ensureKeepAliveWatchOnAdoption(input: {
   if (resolveLaunchPolicy(getExitPolicy().exitKillComfyui) !== "keepAlive") {
     return;
   }
-  if (keepAliveExitWatcher !== null) {
+  if (currentKeepAliveWatch() !== null) {
     return;
   }
   const plan = resolveComfyLaunchPlan(settings.comfyuiPath);

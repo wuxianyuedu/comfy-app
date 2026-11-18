@@ -404,8 +404,14 @@ export class RemoteModelRepository {
 
   /** 新建 / 更新一条供应商下的模型（#3501）。
    *  `apiKey` 三态与 `syncRemoteModels` 同一语义：缺键 = 不动既有、`null`/空白 = 清空、
-   *  非空串 = 加密后写入。 */
-  async saveModel(input: RemoteModelInput): Promise<RemoteModel> {
+   *  非空串 = 加密后写入。
+   *  `opts.workshopAdapters`（#4232）：调用方要把端点存档与模型行**同一条语句**落库时
+   *  传入合并好的整份 doc（省略 = 不动既有列）。原先路由器两段独立提交，第二段失败时
+   *  模型行已是新值、endpointPath 存档仍旧值（§08 8.12② 的失败窗口）。 */
+  async saveModel(
+    input: RemoteModelInput,
+    opts?: { workshopAdapters?: RemoteModelAdaptersDoc },
+  ): Promise<RemoteModel> {
     const name = input.name.trim();
     if (name === "") {
       throw new Error("模型名称不能为空");
@@ -437,6 +443,9 @@ export class RemoteModelRepository {
     };
     if (input.id !== undefined) {
       const patch: Record<string, unknown> = { ...values, updatedAt: new Date() };
+      if (opts?.workshopAdapters !== undefined) {
+        patch.workshopAdapters = JSON.stringify(opts.workshopAdapters);
+      }
       if (input.apiKey !== undefined) {
         patch.apiKey =
           input.apiKey === null || input.apiKey.trim() === ""
@@ -465,6 +474,9 @@ export class RemoteModelRepository {
         .insert(remoteModel)
         .values({
           ...values,
+          ...(opts?.workshopAdapters === undefined
+            ? {}
+            : { workshopAdapters: JSON.stringify(opts.workshopAdapters) }),
           apiKey: encryptLlmKey(input.apiKey?.trim() ? input.apiKey.trim() : null),
         })
         .returning();
