@@ -35,7 +35,14 @@ function resolveDbPath(url: string): string {
 
 // Absolutize here so hot reloads, the executor host and drizzle-kit keep
 // pointing at the same file regardless of process CWD shifts.
-const nodeSqlite = openNodeSqlite(resolveDbPath(env.DATABASE_URL ?? DEFAULT_DB_FILE));
+/* The connection is a globalThis singleton too (ISSUE #4284): hot reloads
+ * re-execute this module, and without a cache each pass opens a fresh
+ * DatabaseSync connection, runs the PRAGMAs again, then drops it via `??`
+ * with nobody closing it -- handles and memory grow monotonically, and on
+ * Windows the leftover open handle keeps db.sqlite locked. */
+const nodeSqlite = (globalThis.__comfyNodeSqlite ??= openNodeSqlite(
+  resolveDbPath(env.DATABASE_URL ?? DEFAULT_DB_FILE),
+));
 
 // PRAGMA init must NOT be a top-level await (ISSUE #3252): TLA makes Turbopack
 // emit this module as an async module, and `db` is imported by
@@ -52,6 +59,9 @@ declare global {
    * desync cross-module reads/writes). Ambient declaration instead of the old
    * `globalThis as unknown as { db: ... }` cast, so access stays typed. */
   var db: SqliteRemoteDatabase<typeof schema> | undefined;
+  /** Hot-reload singleton (ISSUE #4284): the connection is opened once and
+   * reused across reloads. */
+  var __comfyNodeSqlite: NodeSqliteHandle | undefined;
 }
 
 export const db = globalThis.db ?? drizzle(gatedProxy, { schema });
