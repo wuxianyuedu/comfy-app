@@ -502,7 +502,11 @@ export function runCargoTest({
   if (!prep.ok) {
     return { code: 1 };
   }
-  const r = spawnSync(cargo, ["test"], {
+  /* `--locked`（#4317）：与 Node 侧 `pnpm install --frozen-lockfile` 同一纪律 ——
+   * 改了 Cargo.toml 就必须同批更 Cargo.lock，漂移在门禁当场红，而不是在别人的
+   * 下一跑里静默换依赖版本。锁与清单的同步在 #4317 交付时用 `cargo metadata
+   * --locked` 实测过。 */
+  const r = spawnSync(cargo, ["test", "--locked"], {
     cwd: path.join(ROOT, "src-tauri"),
     stdio: "inherit",
     windowsHide: true,

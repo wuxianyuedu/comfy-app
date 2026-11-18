@@ -405,3 +405,29 @@ describe("apt 只在真碰了壳输入时才跑（#4309）", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe("cargo 缓存与 --locked（#4317）", () => {
+  const workflow = read(PR_GATE);
+
+  /** 从 workflow 里切出「cargo 缓存」那一步的原文。 */
+  function cargoCacheStep(): string {
+    const start = workflow.indexOf("- name: cargo 缓存");
+    expect(start).toBeGreaterThan(-1);
+    const rest = workflow.slice(start);
+    const next = rest.indexOf("\n      - name:", 1);
+    return next === -1 ? rest : rest.slice(0, next);
+  }
+
+  it("rust-cache 指到 src-tauri 的 workspace，且编译失败也落缓存", () => {
+    const step = cargoCacheStep();
+    expect(step).toContain("workspaces: src-tauri");
+    expect(step).toContain("cache-on-failure: true");
+  });
+
+  it("壳门禁的 cargo test 带 --locked —— 改了 Cargo.toml 必须同批更 Cargo.lock", () => {
+    // 与 Node 侧 `pnpm install --frozen-lockfile` 同一纪律；锁与清单的同步在
+    // #4317 交付时用 `cargo metadata --locked` 实测过，这里钉的是判据形状。
+    const src = read("scripts/gates/shell-gate.mjs");
+    expect(src).toContain('spawnSync(cargo, ["test", "--locked"]');
+  });
+});

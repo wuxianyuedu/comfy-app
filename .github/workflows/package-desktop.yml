@@ -96,6 +96,12 @@ jobs:
 
       - name: cargo 缓存
         uses: swatinem/rust-cache@v2
+        with:
+          # workspace 在 src-tauri/（仓根没有 Cargo.toml）——与 pr-gate.yml 同一填法；
+          # 不指过去，rust-cache 在仓根跑 `cargo metadata` 只会拿到 exit 101。
+          workspaces: src-tauri
+          # 打包编译最贵；前一笔失败也要把已编好的依赖留给下一跑（#4317）。
+          cache-on-failure: true
 
       - name: 安装依赖（better-sqlite3 原生编译吃 VS 生成工具，镜像自带）
         run: pnpm install --frozen-lockfile

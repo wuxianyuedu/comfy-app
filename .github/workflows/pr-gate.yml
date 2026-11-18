@@ -440,6 +440,9 @@ jobs:
           # 仓根没有 Cargo.toml（workspace 在 src-tauri/），缺省 `cargo metadata`
           # 在根上跑 ⇒ exit 101 噪音（不红，但每跑都刷一条）。指到真 workspace 即消。
           workspaces: src-tauri
+          # 编译失败也落缓存（#4317）：壳门禁的 cargo test 常红在编到一半
+          # （缺库 / 断言红），下一跑从热缓存起编，而不是从零再来一遍。
+          cache-on-failure: true
 
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
