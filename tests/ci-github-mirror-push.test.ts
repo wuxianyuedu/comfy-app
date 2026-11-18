@@ -144,7 +144,7 @@ function dispatchedState(written: Array<string>): {
  * 派发请求体：先落 `unknown`，再逐字段收窄（读不出的字段就是没有，不替它猜）。
  */
 function readDispatchBody(bodyText: string): {
-  client_payload?: { head_sha?: string; pr_title?: string };
+  client_payload?: { head_sha?: string; merge_tree?: string; pr_title?: string };
   event_type?: string;
 } {
   const parsed: unknown = JSON.parse(bodyText);
@@ -152,12 +152,14 @@ function readDispatchBody(bodyText: string): {
   const payload = parsed.client_payload;
   const client = isRecord(payload) ? payload : undefined;
   const headSha = client?.head_sha;
+  const mergeTree = client?.merge_tree;
   const prTitle = client?.pr_title;
   const eventType = parsed.event_type;
   return {
     client_payload: client
       ? {
           head_sha: typeof headSha === "string" ? headSha : undefined,
+          merge_tree: typeof mergeTree === "string" ? mergeTree : undefined,
           pr_title: typeof prTitle === "string" ? prTitle : undefined,
         }
       : undefined,
@@ -677,6 +679,7 @@ describe("纯函数", () => {
       cnbCommit: "bb".repeat(20),
       cnbMergeSha: "cc".repeat(20),
       headSha: SHA,
+      mergeTree: "dd".repeat(20),
       prNumber: "2649",
       ref: mirrorRefFor("2649"),
     });
@@ -687,6 +690,8 @@ describe("纯函数", () => {
       cnb_commit: "b".repeat(40),
       cnb_merge_sha: "c".repeat(40),
       head_sha: SHA,
+      /* 树指纹（ISSUE #4300）：GA 侧配方格（ci-mirror-recipe.mjs）据此核对检出树。 */
+      merge_tree: "d".repeat(40),
       pr_number: "2649",
       /* 不给标题 ⇒ 键在、值为空串：workflow 的 run-name 据此退回老格式
        * `PR #号 · sha`（与没有这个键的老 payload 渲染出同一句）。 */
@@ -704,6 +709,18 @@ describe("纯函数", () => {
         title: "fix(ci): run 标题带上 PR 标题",
       }).client_payload.pr_title,
     ).toBe("fix(ci): run 标题带上 PR 标题");
+    /* merge_tree 与 title 同款：缺省（老调用方 / 取不到）键在、值为空串 ⇒ GA 侧配方格
+     * 对空值只打印配方、不核对（增量契约，不把没有指纹的旧形状判红）。 */
+    expect(
+      dispatchPayload({
+        baseSha: "",
+        cnbCommit: "",
+        cnbMergeSha: "",
+        headSha: SHA,
+        prNumber: "2649",
+        ref: mirrorRefFor("2649"),
+      }).client_payload.merge_tree,
+    ).toBe("");
   });
 });
 
@@ -925,6 +942,23 @@ describe("resolveContext（fail-closed 的读数半边）", () => {
     });
     expect(overridden).toMatchObject({ ok: true, repo: "other/repo" });
   });
+
+  it("mergeTree：取 HEAD^{tree} 进上下文；取不到留空串（GA 侧只打印配方不核对，ISSUE #4300）", () => {
+    /* gitOk 对任何 rev-parse 都回 SHA ⇒ 树指纹就是它（假件不分 HEAD 与 HEAD^{tree}）。 */
+    const got = resolveContext({ env: okEnv, runGit: gitOk });
+    expect(got.ok).toBe(true);
+    if (!got.ok) throw new Error("unreachable：ok=true 已由上一行断言");
+    expect(got.mergeTree).toBe(SHA);
+    /* rev-parse HEAD^{tree} 失败 ⇒ 指纹留空，不阻断本格（与 base sha 缺席同一档）。 */
+    const noTree = resolveContext({
+      env: okEnv,
+      runGit: (args: Array<string>) =>
+        args[0] === "rev-parse" && args[1] === "HEAD^{tree}"
+          ? { code: 128, stdout: "", stderr: "fatal: not a repo" }
+          : gitOk(args),
+    });
+    expect(noTree).toMatchObject({ ok: true, mergeTree: "" });
+  });
 });
 
 describe("runMirror（git 与 fetch 全假件）", () => {
@@ -1137,6 +1171,12 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     const body = readDispatchBody(calls[0]?.bodyText ?? "");
     expect(body.event_type).toBe("cnb-pr-sync");
     expect(body.client_payload?.head_sha).toBe(SHA);
+    /* 树指纹随 payload 走（ISSUE #4300）：假 git 对 rev-parse HEAD^{tree} 也回 SHA。 */
+    expect(body.client_payload?.merge_tree).toBe(SHA);
+    /* 派发前打印配方：base / head / merge_tree 三元组进日志（GA 侧配方格同词表对账）。 */
+    expect(heard.some((l) => l.includes("计划：") && l.includes(`tree ${SHA.slice(0, 8)}`))).toBe(
+      true,
+    );
     expect(heard.some((l) => l.includes("已推") && l.includes("已派发"))).toBe(true);
     /* 第二跳 LFS：同一条认证路径、不带 --all（增量由 git-lfs 自己对账，文件头第 9 条）。 */
     expect(lfsPushes).toHaveLength(1);
