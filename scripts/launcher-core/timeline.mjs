@@ -32,6 +32,9 @@
  * @typedef {object} LaunchTimeline
  * @property {(key: string, label: string) => void} begin 开始一个阶段
  * @property {(key: string) => void} end 结束一个阶段
+ * @property {(key: string, label: string, startMs: number, endMs: number) => void} add
+ *   事后推算一段**已完成**的 span（#4365：服务端耗时从 stdout 标记反推）；
+ *   同 key 重复追加是 no-op。
  * @property {() => LaunchTimingSpan[]} snapshot 当前读数
  */
 

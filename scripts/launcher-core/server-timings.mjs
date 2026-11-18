@@ -17,21 +17,36 @@
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 
 /**
+ * @typedef {object} ServerMarkers
+ * @property {number | null} readyMs Next 自报的启动耗时
+ * @property {number | null} firstPageMs 首个 /workspace 请求的编译+渲染耗时
+ */
+
+/**
  * 从 dev server 的 stdout 文本里提取服务端耗时标记。
  * 时间单位两种形态都收（Next 对快请求打 `ms`、慢请求打 `s`），统一成毫秒。
  *
  * @param {string} text 新增的 stdout 内容（增量，可含多轮输出）
- * @returns {{ readyMs: number | null, firstPageMs: number | null }}
- *   `readyMs` = Next 自报的启动耗时；`firstPageMs` = 首个 /workspace 请求的
- *   编译+渲染耗时；没扫到就是 null。
+ * @returns {ServerMarkers} 没扫到的标记为 null
  */
 export function scanServerMarkers(text) {
   const ready = text.match(/✓\s*Ready in (?<value>\d+(?:\.\d+)?)(?<unit>ms|s)/);
   const page = text.match(/GET \/workspace 200 in (?<value>\d+(?:\.\d+)?)(?<unit>ms|s)/);
+  /**
+   * @param {string} value
+   * @param {string} unit
+   * @returns {number}
+   */
   const toMs = (value, unit) => (unit === "s" ? Math.round(Number(value) * 1000) : Number(value));
+  const readyValue = ready?.groups?.value;
+  const readyUnit = ready?.groups?.unit;
+  const pageValue = page?.groups?.value;
+  const pageUnit = page?.groups?.unit;
   return {
-    readyMs: ready ? toMs(ready.groups.value, ready.groups.unit) : null,
-    firstPageMs: page ? toMs(page.groups.value, page.groups.unit) : null,
+    readyMs:
+      readyValue !== undefined && readyUnit !== undefined ? toMs(readyValue, readyUnit) : null,
+    firstPageMs:
+      pageValue !== undefined && pageUnit !== undefined ? toMs(pageValue, pageUnit) : null,
   };
 }
 
@@ -43,6 +58,10 @@ export function scanServerMarkers(text) {
  * @param {string} filePath dev server stdout 落盘文件
  */
 export function makeFileTailReader(filePath) {
+  /**
+   * @param {number} fromOffset 已扫到的字节偏移
+   * @returns {{ text: string, endOffset: number }}
+   */
   return function readNew(fromOffset) {
     let size;
     try {
@@ -66,19 +85,23 @@ export function makeFileTailReader(filePath) {
 }
 
 /**
+ * @typedef {object} ServerTimingWatcherDeps
+ * @property {{ add: (key: string, label: string, startMs: number, endMs: number) => void }} timeline
+ * @property {() => void} refreshStatus 重写 launch-status 快照（timings 已变化）
+ * @property {(fromOffset: number) => { text: string, endOffset: number }} readNew
+ * @property {() => number} now 时钟（测试注入）
+ * @property {number} startedAt 本次启动起点（`Date.now()`，偏移量口径）
+ * @property {() => boolean} [devExited] dev server 是否已退出
+ * @property {number} [intervalMs] 轮询间隔
+ * @property {number} [budgetMs] 总预算
+ */
+
+/**
  * 服务端耗时的**监视器**：每轮从 `readNew` 取新增 stdout、扫标记、把反推出的
  * 两段补进 `timeline` 并经 `refreshStatus` 刷新进度快照（启动页耗时条与应用内
  * 卡片随即可见）。两个标记都落地、dev 退出或预算（默认 5 分钟）用尽即停。
  *
- * @param {object} deps
- * @param {{ add: (key: string, label: string, startMs: number, endMs: number) => void }} deps.timeline
- * @param {() => void} deps.refreshStatus 重写 launch-status 快照（timings 已变化）
- * @param {(fromOffset: number) => { text: string, endOffset: number }} deps.readNew
- * @param {() => number} deps.now 时钟（测试注入）
- * @param {number} deps.startedAt 本次启动起点（`Date.now()`，偏移量口径）
- * @param {() => boolean} [deps.devExited] dev server 是否已退出
- * @param {number} [deps.intervalMs] 轮询间隔
- * @param {number} [deps.budgetMs] 总预算
+ * @param {ServerTimingWatcherDeps} deps
  * @returns {{ start: () => void, stop: () => void, tick: () => void }}
  */
 export function createServerTimingWatcher(deps) {
@@ -95,6 +118,7 @@ export function createServerTimingWatcher(deps) {
   let readyRecorded = false;
   let firstPageRecorded = false;
   let scannedUpTo = 0;
+  /** @type {ReturnType<typeof setInterval> | null} */
   let handle = null;
 
   const stop = () => {
