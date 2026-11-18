@@ -2,8 +2,8 @@
 
 import React from "react";
 import { X, FileText } from "lucide-react";
-import { markdownToHtml } from "~/lib/markdown";
 import { normalizeMarkdown, buildOutline, getLineStart, getLineEnd } from "./script-markdown-utils";
+import { useMarkdownHtml } from "~/components/workshop/hooks/use-markdown-html";
 import { EditorToolbar, OutlineSidebar, EditorBody } from "./ScriptMarkdownEditor.parts";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 import { Button } from "~/components/ui/button";
@@ -73,7 +73,10 @@ export function ScriptMarkdownEditor({
   }, [value, emitChange]);
 
   const outline = React.useMemo(() => buildOutline(value), [value]);
-  const previewHtml = React.useMemo(() => markdownToHtml(value), [value]);
+  /* 预览走按需渲染地基（ISSUE #4384）：marked + dompurify 不再进编辑器静态图，
+   * 预览首开才动态加载。`showPreview` 同时是计算闸——关闭时给空串（hook 对空串
+   * 早退，不加载渲染器），与 #4341 的「关预览不做全量解析」语义等价。 */
+  const previewHtml = useMarkdownHtml(showPreview ? value : "");
 
   function pushHistory(nextValue: string, start: number, end: number) {
     if (historyLockRef.current) {
