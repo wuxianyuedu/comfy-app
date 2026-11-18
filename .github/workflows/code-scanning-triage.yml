@@ -40,7 +40,7 @@ env:
 
 jobs:
   triage:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # 一次全量分页（告警 / 分析 / 已有单）+ 至多 9 次写：给 10m，卡死要早报。
     timeout-minutes: 10
     steps:
