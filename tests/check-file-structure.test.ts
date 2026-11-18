@@ -1335,8 +1335,9 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
 
   it("splash 开窗是紧凑的一条，不铺满屏幕留空白", () => {
     const win = splashWindow();
-    // 高度必须贴着「收起日志时的内容高度」（约 190px），而不是留出一大块空白：
-    // 旧值 1680×1000 就是这块空白的来源（内容只占上面两百来像素）。
+    // 高度必须贴着「收起日志时的内容高度」（逐行耗时分解铺开后约 247px，
+    // #4327：耗时分解读得清，窗口跟着长高；此前 216px 是密彩条时代的内容高），
+    // 而不是留出一大块空白：旧值 1680×1000 就是这块空白的来源。
     expect(win.width).toBeLessThanOrEqual(900);
     expect(win.height).toBeLessThanOrEqual(280);
     expect(win.width).toBeGreaterThanOrEqual(640);
