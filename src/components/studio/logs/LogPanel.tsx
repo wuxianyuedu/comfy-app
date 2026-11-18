@@ -22,6 +22,7 @@ import { LogPanelFooter } from "./LogPanelFooter";
 import {
   LOG_MESSAGE_OVERHEAD,
   LOG_ROW_SINGLE,
+  UNMEASURED_WINDOW_ROWS,
   layoutRows,
   scrollHeightOf,
   visibleRange,
@@ -86,7 +87,12 @@ function useVirtualWindow(input: {
   const { height: scrollHeight } = scrollHeightOf(totalSize);
   const rowWindow = useMemo(() => {
     if (viewportHeight <= 0) {
-      return { start: 0, end: pageLogs.length, entries: pageLogs };
+      /* 未量到视口（打开面板的首帧；jsdom 也在此）**不再整页渲染**：2000 行
+       * ≈ 1.5 万节点一次性挂载，真机打开冻结数秒（#4361）。改渲染**贴底的
+       * 最后一段**——页 1 贴底语义下用户此刻看到的就是这段；量测到位后由
+       * 虚拟窗口接管。 */
+      const start = Math.max(0, pageLogs.length - UNMEASURED_WINDOW_ROWS);
+      return { start, end: pageLogs.length, entries: pageLogs.slice(start) };
     }
     const range = visibleRange(rows, scrollTop, viewportHeight);
     return {

@@ -168,7 +168,7 @@ function OriginSelect({
     >
       <SelectTrigger
         aria-label="按来源筛选"
-        className="border-border-strong bg-canvas-deep text-ink-field h-8 rounded-lg text-xs"
+        className="border-border-strong bg-canvas-deep text-ink-field h-8 w-44 truncate rounded-lg text-xs"
         size="sm"
         title="按来源筛选：展开后每项都标出该类别的条数与本机上的信息 / 警告 / 错误"
       >
