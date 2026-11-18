@@ -25,6 +25,12 @@ const launchStatusTimingsSchema = z.object({
   timings: z.array(launchTimingSpanSchema).nullish(),
 });
 
+/** `/api/dev/launch-timings` 的应答形状（客户端侧同样 zod 校验，规范 §5.5）。 */
+export const launchTimingsResponseSchema = z.object({
+  phases: z.array(launchTimingSpanSchema.extend({ percent: z.number().finite() })).nullable(),
+  totalMs: z.number().finite().nullable(),
+});
+
 /** 渲染用的一行：span 原样 + 占合计的百分比（一位小数）。 */
 export type LaunchTimingPhase = {
   durationMs: number;

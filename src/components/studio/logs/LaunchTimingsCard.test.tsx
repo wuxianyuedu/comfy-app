@@ -45,7 +45,7 @@ describe("启动耗时分解卡（#4327）", () => {
     );
     render(<LaunchTimingsCard />);
     await waitFor(() => {
-      expect(screen.getByText("环境与工具链")).toBeTruthy();
+      expect(screen.getByText("环境与工具链")).toBeInTheDocument();
     });
     expect(screen.getByText("等待服务就绪").textContent).toBe("等待服务就绪");
     expect(screen.getByText("合计 8.9s").textContent).toBe("合计 8.9s");
@@ -58,7 +58,7 @@ describe("启动耗时分解卡（#4327）", () => {
     );
     render(<LaunchTimingsCard />);
     await waitFor(() => {
-      expect(screen.getByText(/（进行中）/)).toBeTruthy();
+      expect(screen.getByText(/（进行中）/)).toBeInTheDocument();
     });
   });
 
@@ -68,7 +68,7 @@ describe("启动耗时分解卡（#4327）", () => {
     );
     const { container } = render(<LaunchTimingsCard />);
     await waitFor(() => {
-      expect(screen.queryByText("启动耗时分解")).toBeNull();
+      expect(screen.queryByText("启动耗时分解")).not.toBeInTheDocument();
     });
     expect(container.textContent).toBe("");
   });

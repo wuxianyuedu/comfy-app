@@ -26,7 +26,7 @@ export function useLaunchTimings(enabled: boolean): LaunchTimings | null {
           setState(data);
         }
       })
-      .catch(() => {});
+      .catch(() => undefined);
     return () => {
       alive = false;
     };
