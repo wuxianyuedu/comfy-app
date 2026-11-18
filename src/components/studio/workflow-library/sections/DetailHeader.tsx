@@ -4,7 +4,7 @@
 // 纯展示；「导入画布」与右上角按钮同款式。
 
 import { useState } from "react";
-import { Download, Edit3, FileJson, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Download, Edit3, FileJson, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
@@ -21,6 +21,8 @@ import { zClass } from "~/lib/shell/overlay-z";
 type DetailHeaderProps = {
   busyDownload: boolean;
   busyResync: boolean;
+  /** 「从 JSON 更新」进行中（仅在线工作流有该入口）。 */
+  busyUpdateJson: boolean;
   canResync: boolean;
   isTechnical: boolean;
   /** 类型 / 模型编辑器（含多模式与模型标签），渲染在头部内。 */
@@ -31,7 +33,10 @@ type DetailHeaderProps = {
   onEdit: () => void;
   onOpenSource: () => void;
   onResync: () => void;
+  onUpdateJson: () => void;
   onUse: () => void;
+  /** 仅在线工作流显示「更新」入口（本地工作流走「同步」）。 */
+  showUpdateJson: boolean;
   usable: boolean;
   workflow: WorkflowRow;
 };
@@ -40,16 +45,19 @@ export function DetailHeader({
   workflow,
   usable,
   canResync,
+  showUpdateJson,
   missing,
   isTechnical,
   busyDownload,
   busyResync,
+  busyUpdateJson,
   meta,
   onEdit,
   onResync,
   onDownload,
   onDelete,
   onOpenSource,
+  onUpdateJson,
   onUse,
 }: DetailHeaderProps) {
   /* 多模式时点击顶部模式徽标展开全部模式的小提示（问题：模式重复罗列，
@@ -186,6 +194,17 @@ export function DetailHeader({
             onClick={onEdit}
             title="在工作流编辑器中打开"
           />
+          {showUpdateJson && (
+            <ActionButton
+              disabled={busyUpdateJson}
+              icon={
+                busyUpdateJson ? <Spinner className="size-3.5" /> : <Upload className="size-3.5" />
+              }
+              label={busyUpdateJson ? "更新中" : "更新"}
+              onClick={onUpdateJson}
+              title="从新 JSON 更新此工作流：保留可对应的 IO 连线，断开的会提示重新配置"
+            />
+          )}
           {canResync && (
             <ActionButton
               disabled={busyResync}
