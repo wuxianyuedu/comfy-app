@@ -96,8 +96,12 @@ import {
   reapStaleSession as portReapReapStale,
   reconcilePort as portReapReconcilePort,
   scanPorts,
+  waitForPortsFree as portReapWaitForPortsFree,
 } from "./launcher-core/port-reap.mjs";
-import { ProbeUnavailableError } from "./launcher-core/procs.mjs";
+import {
+  listeningPidsOnPort as procsListeningPidsOnPort,
+  ProbeUnavailableError,
+} from "./launcher-core/procs.mjs";
 // `COMFY_EXECUTOR` 判据的纯 Node 侧唯一定义（与 executor-host.mjs 共用，ADR §14 D5）
 import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
 import { pruneTimestampedLogs, syncNextCache } from "./launcher-core/worktree.mjs";
@@ -257,7 +261,7 @@ export function appendRuntimeWarning(message, root = ROOT) {
 // 桌面壳层与收尾路径共用的**唯一整树回收出口**，所以仍从本文件导出（薄包装在
 // 下方 `shellOpsCtx` 里也引用它，同一份实现、不抄第二遍）。
 
-export { reapProcessTree, scanPorts };
+export { reapProcessTree, scanPorts, portReapWaitForPortsFree as waitForPortsFree };
 
 /** 回收层的注入上下文（与桌面壳层同源的三样状态 / 能力）。 */
 const portReapCtx = {
@@ -536,6 +540,10 @@ export async function run(argv = process.argv.slice(2)) {
     throw error;
   }
   log(`端口检查：${portSummary}`, "OK");
+  /* #4333：回收派发与「清缓存 / 起服务」之间补一个**有界同步点** —— 旧进程
+   * 没死透时清 .next 会 EBUSY、旧 server 还占口会让新 Next 顺延 +1（就绪探测
+   * 只探原端口 → 180 秒假超时）。 */
+  await portReapWaitForPortsFree(procsListeningPidsOnPort, [port], { log });
   status("port-ready", 0.12, "端口已就绪，处理编译缓存…", { staleShell });
 
   // 5~8) 起服务桥段（缓存策略 → dev server → 执行器宿主 → 会话锚点 → 后台 schema）
@@ -643,7 +651,20 @@ export async function run(argv = process.argv.slice(2)) {
         );
       }
     }
-    syncNextCache(ROOT, { FORCE_CLEAN: "1" });
+    /* #4333：同上——回收之后先等端口释放，再清缓存（旧进程没死透时
+     * rm -rf .next 会 EBUSY，一次自愈重启不该被打成启动失败）。 */
+    await portReapWaitForPortsFree(procsListeningPidsOnPort, [port], { log });
+    try {
+      syncNextCache(ROOT, { FORCE_CLEAN: "1" });
+    } catch (error) {
+      /* 清缓存失败（典型：仍有进程持有 .next 文件句柄）不再把整次自愈炸成
+       * 启动失败——记可行动错误后带现有缓存继续；服务起不来时 watchDevChild
+       * 会按既有失败路径收口。 */
+      log(
+        `清空 .next 失败（${error instanceof Error ? error.message : String(error)}）——带现有缓存继续拉起；若自愈未生效请重启应用`,
+        "ERROR",
+      );
+    }
     /** @type {Record<string, string>} */
     const extraEnv = { COMFYAPP_RESTART_REASON: reason };
     if (detail) {

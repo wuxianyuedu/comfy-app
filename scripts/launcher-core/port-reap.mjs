@@ -369,3 +369,63 @@ export async function reconcilePort(ctx, port, root = process.cwd(), { explicit 
   }
   return summary.join("；");
 }
+
+/** 有界等待端口族**全部空闲**（#4333）：回收派发与「清缓存 / 起新服务」之间的
+ *  同步点。
+ *
+ *  为什么要有它：Windows 侧 taskkill 是异步派发，「进程死」与「端口 / 文件句柄
+ *  释放」之间还有内核收尾的间隙。旧 Turbopack 未死透时 `rm -rf .next` 会
+ *  EBUSY/EPERM（一次自愈重启被打成启动失败）；旧 server 还占着口时新 Next 会
+ *  静默顺延 +1，而就绪探测只探原端口 → 空等满 180 秒（假超时）。所以在回收
+ *  之后、动缓存 / spawn 之前**等一个有界的窗口**。
+ *
+ *  预算耗尽或探测不可用（`ProbeUnavailableError` 族）都不抛错：如实返回
+ *  `free: false` 并记 WARN，由调用方决定继续（下游各自有探测与提示兜底）——
+ *  「没量到」不许被说成「空闲」（§13.6.3）。
+ *
+ * @param {(port: number) => Promise<number[]>} probe 端口探测（注入，便于测试）
+ * @param {number[]} ports 要等空闲的端口（含需要一并观察的顺延位）
+ * @param {{ budgetMs?: number, intervalMs?: number, log?: (m: string, l?: import("./log.mjs").LogLevel) => void }} [options]
+ * @returns {Promise<{ free: boolean, occupied: number[] }>} free=false = 预算内没等到空闲
+ */
+export async function waitForPortsFree(
+  probe,
+  ports,
+  { budgetMs = 10_000, intervalMs = 250, log } = {},
+) {
+  const deadline = Date.now() + budgetMs;
+  /** @type {number[]} */
+  let occupied;
+  /** 探测不可用（没量到）与「量到被占」是两种读数，文案要分开。 */
+  let probeBroken;
+  for (;;) {
+    occupied = [];
+    probeBroken = false;
+    for (const port of ports) {
+      // oxlint-disable-next-line no-await-in-loop -- 端口族按序探测（与启动编排同一节奏）
+      const pids = await Promise.resolve(probe(port)).catch(() => null);
+      if (pids === null) {
+        probeBroken = true;
+        continue;
+      }
+      if (pids.length > 0) {
+        occupied.push(port);
+      }
+    }
+    if (!probeBroken && occupied.length === 0) {
+      return { free: true, occupied: [] };
+    }
+    if (Date.now() >= deadline) {
+      const reason = probeBroken
+        ? "端口探测不可用（没量到 ≠ 空闲）"
+        : `端口 ${occupied.join(", ")} 仍被占用`;
+      log?.(
+        `等端口释放超时（${budgetMs}ms）：${reason} —— 继续启动；若接下来失败，请回看上方回收日志`,
+        "WARN",
+      );
+      return { free: false, occupied };
+    }
+    // oxlint-disable-next-line no-await-in-loop -- 有界轮询（预算封顶）
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}

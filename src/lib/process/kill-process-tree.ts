@@ -38,6 +38,12 @@
 
 import { execFile, execFileSync, spawn } from "node:child_process";
 
+/* 本模块会被 .mjs 宿主（reap-process.mjs / e2e）用**真 Node**直接加载（见
+ * tests/host-ts-loads-in-node.test.ts 与 tests/esm-cross-host-imports.test.ts）：
+ * 那里没有 tsconfig 的 `~` 别名，且跨宿主地基层模块必须保持**叶子**（只依赖
+ * node 内建与清单内模块）—— 所以这里不 import 任何仓库模块，超时收口也不用
+ * with-timeout（见 dispatchTaskkillAwait 的说明）。 */
+
 /** 回收目标的描述。pid <= 0 一律视为「没有可回收目标」，直接返回 ok。 */
 export type KillProcessTreeOptions = {
   /** 子进程是否以 detached 方式拉起。仅作为「连 ps 都拿不到 PGID」时的
@@ -52,13 +58,14 @@ export type KillProcessTreeOptions = {
   mode?: KillProcessTreeMode;
   /** 目标进程 PID（通常是 leader）。 */
   pid: number;
-  /** 派发回收命令后是否**等到它真正结束**（默认 false = 只派发）。
+  /** 事后探活的等待预算（毫秒；默认 {@link KILL_VERIFY_BUDGET_MS}）。测试可调小。 */
+  verifyBudgetMs?: number;
+  /** 派发回收命令后是否**等到它真正结束**（#4332 起两种取值都会**核结果**）。
    *
-   *  服务生命周期不需要等：回收是尽力而为，随后由各自的「探测确认」收口。
-   *  但「派发完就退出」的调用方必须等 —— Windows 上 taskkill 是独立进程，
-   *  调用方立刻 `process.exit()` 会把还没跑起来的它一起带走，现象是
-   *  **打印了命令、退出码 0、目标进程却还在**（命令行入口
-   *  `scripts/reap-process.mjs` 正是这种形态）。 */
+   *  历史语义：false = 只派发，调用方随后自行探测确认。#4332 之后两种取值都在
+   *  派发后做**有界事后探活**并如实回报成败——「派发了 taskkill」不再被当作
+   *  「树已死」。`wait: true` 保留给「派发完立刻 exit」的调用方（命令行入口
+   *  `scripts/reap-process.mjs`），其关切已被「核结果」涵盖。 */
   wait?: boolean;
 };
 
@@ -70,6 +77,70 @@ export type KillProcessTreeResult = {
   /** 实际使用的命令 / 信号，便于写进运行日志与断言。 */
   via: string;
 };
+
+/** 事后探活的默认预算与轮询间隔（#4332）。 */
+export const KILL_VERIFY_BUDGET_MS = 3000;
+const KILL_VERIFY_INTERVAL_MS = 100;
+
+/**
+ * 目标 pid 是否已经退出（**有界轮询**，#4332）。
+ *
+ * `process.kill(pid, 0)` 是跨平台的「只探存在」：ESRCH = 已退出；EPERM =
+ * 存在但无权限（仍算存活）。预算耗尽仍未退出 → `false`（调用方如实报失败，
+ * 不冒充已回收）。
+ */
+export async function waitForPidGone(
+  pid: number,
+  budgetMs: number = KILL_VERIFY_BUDGET_MS,
+  intervalMs: number = KILL_VERIFY_INTERVAL_MS,
+): Promise<boolean> {
+  const deadline = Date.now() + budgetMs;
+  for (;;) {
+    let alive = true;
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      alive =
+        typeof error === "object" && error !== null && "code" in error && error.code === "EPERM";
+    }
+    if (!alive) {
+      return true;
+    }
+    if (Date.now() >= deadline) {
+      return false;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- 有界轮询（预算封顶），串行等进程退出
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
+/**
+ * 派发 taskkill 并**等到它退出**（#4332：退出码参与结果判定，不再只派发）。
+ * spawn 同步抛错 / `error` 事件都收成 `ok:false`（模块承诺：回收失败不抛错）。
+ */
+function dispatchTaskkillAwait(
+  args: Array<string>,
+): Promise<{ code: number | null; ok: boolean; via: string }> {
+  const exe = windowsTaskkillPath();
+  const via = `${exe} ${args.join(" ")}`;
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(exe, args, { stdio: "ignore", windowsHide: true });
+      child.on("error", () => {
+        resolve({ code: null, ok: false, via: `${via}（taskkill 起不来）` });
+      });
+      child.on("close", (code) => {
+        resolve({
+          code,
+          ok: code === 0,
+          via: code === 0 ? via : `${via}（exit=${code}；目标可能已不在 / 被拦截 / 权限不足）`,
+        });
+      });
+    } catch {
+      resolve({ code: null, ok: false, via: `${via}（taskkill 无法派发）` });
+    }
+  });
+}
 
 /** 当前平台是否是 Windows（进程树机制的分叉点）。 */
 export function isWindowsPlatform(platform: NodeJS.Platform = process.platform): boolean {
@@ -257,7 +328,13 @@ export async function killProcessTreeByImage(image: string): Promise<KillProcess
     return { ok: false, via: "无映像名（跳过）" };
   }
   if (isWindowsPlatform()) {
-    return { ok: true, via: spawnTaskkill(windowsKillArgs(image, "image")) };
+    /* #4332：核结果——exit 0 = 已杀掉；128 = 没有匹配的映像（目标本就不在，
+     * 回收目标同样达成）；其余非 0（被安全软件拦 / 权限不足）如实 ok:false。 */
+    const dispatch = await dispatchTaskkillAwait(windowsKillArgs(image, "image"));
+    return {
+      ok: dispatch.ok || dispatch.code === 128,
+      via: dispatch.via,
+    };
   }
   return await new Promise<KillProcessTreeResult>((resolve) => {
     const child = spawn("pkill", ["-x", image], { stdio: "ignore" });
@@ -340,29 +417,39 @@ export async function killProcessTreeWith(
   opts: KillProcessTreeOptions,
   { windows = isWindowsPlatform(), image = "" }: { image?: string; windows?: boolean },
 ): Promise<KillProcessTreeResult> {
-  const { pid, detached = false, force = false, mode = "tree", wait = false } = opts;
+  const {
+    pid,
+    detached = false,
+    force = false,
+    mode = "tree",
+    verifyBudgetMs = KILL_VERIFY_BUDGET_MS,
+  } = opts;
   if (!pid || pid <= 0) {
     return { ok: false, via: "无有效 PID（跳过）" };
   }
 
   if (windows) {
-    // taskkill 是异步派发：默认不等它退出，调用方随后用「探测确认」收尾
-    // （与同步入口同一语义）。命令原文写进 via，便于运行日志给出可复现线索。
+    // #4332：「派发了 taskkill」不再被当作「树已死」——派发后**核结果**：
+    //   ① taskkill 退出码非 0（目标已不在 / 被安全软件拦 / 权限不足）→ 记进 via；
+    //   ② tree 模式做事后探活（有界等待 pid 消失），仍存活 → 如实 ok:false，
+    //      调用方按真实结果记日志与决策，不冒充已回收；
+    //   ③ image 模式没有 pid 可探，以 taskkill 退出码为准（「本就不在」的
+    //      exit=128 单独认作成功，不冒充「已杀掉」也不误报失败）。
+    // 探活与等待都有墙钟上限，不会把收尾路径拖死。
     const target = mode === "image" ? image : String(pid);
     const args = windowsKillArgs(target, mode);
-    if (!wait) {
-      return { ok: true, via: spawnTaskkill(args) };
+    const dispatch = await dispatchTaskkillAwait(args);
+    if (mode === "tree") {
+      const gone = await waitForPidGone(pid, verifyBudgetMs);
+      if (!gone) {
+        return { ok: false, via: `${dispatch.via}；事后探活：${verifyBudgetMs}ms 内目标仍存活` };
+      }
+      return { ok: true, via: `${dispatch.via}；探活通过（目标已退出）` };
     }
-
-    // 等它结束（`wait: true`）：给「派发完立刻 exit」的调用方用 —— 否则那条命令
-    // 可能随父进程一起消失，让人以为已经回收。退出码同时写进 via（taskkill 对
-    // 「目标已不在」也返回非 0，因此这里只作线索，不据此判定成败）。
-    return await new Promise<KillProcessTreeResult>((resolve) => {
-      let via = "";
-      via = spawnTaskkill(args, (ok) => {
-        resolve({ ok, via: `${via}（exit ${ok ? "0" : "非 0"}）` });
-      });
-    });
+    return {
+      ok: dispatch.ok || dispatch.code === 128,
+      via: dispatch.via,
+    };
   }
 
   return killPosix(pid, detached, force, await readOwnPgid());

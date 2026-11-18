@@ -50,7 +50,22 @@ export function bootDevServerStage(ctx, target) {
 
   // 5) .next 缓存策略（与 .ps1 同一指纹口径）
   timeline?.begin("cache", "编译缓存");
-  const cache = ctx.syncNextCache(root, process.env);
+  /* #4333：清缓存失败（典型：仍有进程持有 .next 文件句柄）不再把启动炸成
+   * 退出 1 —— 记可行动错误后带现有缓存继续（Turbopack 对残缺缓存有自己的
+   * 恢复路径；起不来时由 dev-spawn 之后的失败出口收口）。 */
+  let cache;
+  try {
+    cache = ctx.syncNextCache(root, process.env);
+  } catch (error) {
+    cache = {
+      cleaned: false,
+      reason: `清空 .next 失败：${error instanceof Error ? error.message : String(error)}`,
+    };
+    log(
+      `清空 .next 失败（${cache.reason}）——带现有缓存继续；若随后编译异常，请重启应用后再试`,
+      "ERROR",
+    );
+  }
   log(
     cache.cleaned
       ? `清空 .next 全量重编译（${cache.reason}）`

@@ -16,6 +16,7 @@
  *
  * 反向验证：把 `windowsKillArgs` 的 `/T` 去掉，本文件立刻失败。
  */
+import { spawn } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -194,8 +195,10 @@ describe("另外两个 Windows 落点（映像名回收 / 同步入口）", () =
       asPlatform("win32");
       process.env.COMFYAPP_TASKKILL = process.execPath;
       const result = await killProcessTreeByImage("ollama.exe");
-      expect(result.ok).toBe(true);
-      expect(result.via).toBe(`${process.execPath} /IM ollama.exe /T /F`);
+      /* node 当 taskkill 必然非 0 退出（且不是 128「无匹配」）：#4332 起 ok 如实
+       * 反映派发结果——这里只判命令形态。 */
+      expect(result.ok).toBe(false);
+      expect(result.via).toContain(`${process.execPath} /IM ollama.exe /T /F`);
     },
   );
 
@@ -219,49 +222,136 @@ describe("另外两个 Windows 落点（映像名回收 / 同步入口）", () =
   );
 });
 
-describe("回收命令的派发与等待（`wait`）", () => {
+describe("回收命令的派发与结果核实（#4332）", () => {
+  /** 起一个 30 秒的长命进程当「活目标」（用完由调用方 SIGKILL）。 */
+  function spawnSleeper(): number {
+    const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"], {
+      stdio: "ignore",
+    });
+    return child.pid ?? 0;
+  }
+
   /**
    * 「派发完就退出」的调用方（命令行入口 `scripts/reap-process.mjs`）必须等命令结束：
    * Windows 上 taskkill 是独立进程，父进程立刻 exit 会把它一起带走 —— 现象是
    * **打印了命令、退出码 0、目标进程却还在**（实测过：不等时目标存活，等 3s 后消失）。
    * 这里用一个「一定跑得起来、但参数不合法」的真可执行文件（node 自己）当 taskkill：
-   * 它会立刻以非 0 退出，因此既验证「确实等到了结束」，也验证退出码进了 via。
+   * 它会立刻以非 0 退出 —— 退出码进 via；而**结果以事后探活为准**（#4332）：
+   * 目标（4321，不存在）已不在 = 回收完成，ok=true。
    */
-  it("wait=true 时等到命令结束，并把退出码写进 via", async () => {
+  it("wait=true：等到命令结束，退出码进 via；目标已不在 = 回收完成", async () => {
     process.env.COMFYAPP_TASKKILL = process.execPath;
     const result = await killProcessTreeWith({ pid: 4321, wait: true }, { windows: true });
     expect(result.via).toContain("/PID 4321 /T /F");
-    expect(result.via).toContain("非 0");
-    expect(result.ok).toBe(false);
+    expect(result.via).toMatch(/exit=\d+/);
+    expect(result.via).toContain("探活通过");
+    expect(result.ok).toBe(true);
   });
 
-  it("wait=false（默认）只派发，不等结果", async () => {
+  it("wait=false（默认）同样核结果：目标已不在 → 探活通过、ok=true（#4332）", async () => {
     process.env.COMFYAPP_TASKKILL = process.execPath;
     const result = await killProcessTreeWith({ pid: 4321 }, { windows: true });
-    expect(result.via).toBe(`${process.execPath} /PID 4321 /T /F`);
+    expect(result.via).toContain("/PID 4321 /T /F");
+    expect(result.via).toContain("探活通过");
+    expect(result.ok).toBe(true);
   });
 
-  it("命令起不来时返回 ok=false，不抛错（回收失败不打断调用方）", async () => {
+  it("命令起不来 + 目标已不在：如实记因、不抛错（回收目标已达成）", async () => {
     process.env.COMFYAPP_TASKKILL = join(tempDir(), "not-a-taskkill");
     const result = await killProcessTreeWith({ pid: 4321, wait: true }, { windows: true });
-    expect(result.ok).toBe(false);
     expect(result.via).toContain("not-a-taskkill /PID 4321 /T /F");
+    expect(result.via).toContain("taskkill 起不来");
+    expect(result.ok).toBe(true);
   });
 
-  it("spawn **同步抛错**那一形态也收成失败（Windows 上 .cmd 走的就是这条）", async () => {
+  it("命令起不来 + 目标仍存活：ok=false（不冒充已回收，#4332）", async () => {
+    const pid = spawnSleeper();
+    expect(pid).toBeGreaterThan(0);
+    try {
+      process.env.COMFYAPP_TASKKILL = join(tempDir(), "not-a-taskkill");
+      const result = await killProcessTreeWith(
+        { pid, wait: true, verifyBudgetMs: 300 },
+        { windows: true },
+      );
+      expect(result.ok).toBe(false);
+      expect(result.via).toContain("taskkill 起不来");
+      expect(result.via).toContain("仍存活");
+    } finally {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        /* 已退出则忽略 */
+      }
+    }
+  });
+
+  it("taskkill 没杀成 + 目标仍存活：探活预算耗尽 → ok=false（#4332）", async () => {
+    const pid = spawnSleeper();
+    expect(pid).toBeGreaterThan(0);
+    try {
+      /* 假 taskkill「成功退出」但根本没杀目标：结果只能由探活判定。 */
+      const { exe } = fakeTaskkill(tempDir());
+      process.env.COMFYAPP_TASKKILL = exe;
+      const result = await killProcessTreeWith({ pid, verifyBudgetMs: 300 }, { windows: true });
+      expect(result.ok).toBe(false);
+      expect(result.via).toContain("仍存活");
+    } finally {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        /* 已退出则忽略 */
+      }
+    }
+  });
+
+  it("目标在派发前已退出：探活通过 → ok=true（taskkill 没杀成也不碍事）", async () => {
+    const pid = spawnSleeper();
+    expect(pid).toBeGreaterThan(0);
+    try {
+      process.kill(pid, "SIGKILL");
+      /* 假 taskkill（node 自己）必然非 0 退出 —— 但结果由探活说了算。 */
+      process.env.COMFYAPP_TASKKILL = process.execPath;
+      const result = await killProcessTreeWith({ pid, verifyBudgetMs: 300 }, { windows: true });
+      expect(result.ok).toBe(true);
+      expect(result.via).toContain("探活通过");
+    } finally {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        /* 已退出则忽略 */
+      }
+    }
+  });
+
+  it("spawn 同步抛错那一形态也收成失败（Windows 上 .cmd 走的就是这条；目标存活时）", async () => {
     /* 两条失败形态不一样：路径不存在 / 不可执行 → `error` 事件（异步）；而 Windows 上
      * 直接 spawn 一个批处理是 **EINVAL 同步抛**（Node 自 CVE-2024-27980 起禁止）。
      * 本模块对外承诺「回收失败不抛错」，两端的结论必须落在同一个 ok=false ——
      * 漏掉同步那条的表现是 taskkill 起不来时**整个收尾调用链被异常打断**。
      * 同步这条只有 Windows 造得出来（Linux 上同一个文件给的是异步 EACCES），
-     * 所以这里是「两端各测一条形态、共享同一条断言」。 */
-    const dir = tempDir();
-    const exe = join(dir, "taskkill.cmd");
-    /* 故意**不** chmod：让它存在但不可执行。 */
-    writeFileSync(exe, "@echo off\r\nexit /b 0\r\n");
-    process.env.COMFYAPP_TASKKILL = exe;
-    const result = await killProcessTreeWith({ pid: 4321, wait: true }, { windows: true });
-    expect(result.ok).toBe(false);
-    expect(result.via).toContain("非 0");
+     * 所以这里是「两端各测一条形态、共享同一条断言」。目标用**活的**进程：
+     * 派发失败 + 目标仍在 = 如实 ok:false（#4332）。 */
+    const pid = spawnSleeper();
+    expect(pid).toBeGreaterThan(0);
+    try {
+      const dir = tempDir();
+      const exe = join(dir, "taskkill.cmd");
+      /* 故意**不** chmod：让它存在但不可执行。 */
+      writeFileSync(exe, "@echo off\r\nexit /b 0\r\n");
+      process.env.COMFYAPP_TASKKILL = exe;
+      const result = await killProcessTreeWith(
+        { pid, wait: true, verifyBudgetMs: 300 },
+        { windows: true },
+      );
+      expect(result.ok).toBe(false);
+      /* 两种失败形态的文案不同：Windows 同步抛 →「无法派发」；异步 error →「起不来」。 */
+      expect(result.via).toMatch(/taskkill (?<reason>起不来|无法派发)/);
+    } finally {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        /* 已退出则忽略 */
+      }
+    }
   });
 });
