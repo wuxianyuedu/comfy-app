@@ -9,7 +9,9 @@
  * **内部顺序是契约，不是排版**：
  *   · 孤儿回收在起任何新进程之前（否则新旧实例抢同一端口，§1.7）；
  *   · 备份恢复在**任何会开库的东西**之前（壳 / Next / 执行宿主 / schema 同步）——
- *     运行期多个进程持有同一个库，此时换文件是唯一安全的时刻（§9.1）。
+ *     运行期多个进程持有同一个库，此时换文件是唯一安全的时刻（§9.1）；
+ *   · 互斥占坑（2.5，ISSUE #4345）在依赖补装之后、起任何服务之前 —— 占坑即写
+ *     会话锚点，补装前的「实例在跑」判据会把自己当成已在跑的实例、误停补装。
  * 两条都有回归判据（`tests/db-backup-wiring.test.ts`、`cross-platform-launcher`）。
  *
  * **依赖靠注入**：本模块不 import 主文件（回引会成环），三个主文件侧的能力
@@ -27,6 +29,10 @@ import process from "node:process";
  * @param {import("./timeline.mjs").LaunchTimeline} [ctx.timeline]
  *   启动耗时时间线（ISSUE #4185）；测试夹具可不传 —— 各埋点都是可选调用。
  * @param {(root: string) => Promise<number[] | null>} ctx.reapStaleSession 回收上次孤儿
+ * @param {(root: string, session: import("../dev-launcher-session.mjs").LauncherSession) => "claimed" | "exists" | "unavailable"} ctx.claimSession 原子占坑（互斥锚点，ISSUE #4345）
+ * @param {(root: string, now?: number) => boolean} ctx.isSessionOwnerAlive 上一位编排器是否还活着（心跳 + PID）
+ * @param {(root: string) => void} ctx.clearSession 清会话锚点
+ * @param {(root: string) => import("../dev-launcher-session.mjs").LauncherSession | null} ctx.readSession 读会话锚点
  * @param {(root: string) => { message: string } | null} ctx.checkEnvFile 环境文件门禁
  * @param {(root: string) => string | null} ctx.envInitHint 非阻断读数：`.env` 缺哪些 `env:init` 会补的键
  * @param {(root: string) => string | null} ctx.runToolchainGate 工具链门禁
@@ -135,5 +141,48 @@ export async function runStartupGates(ctx, target) {
   timeline?.end("port-resolve");
   log(`使用端口 ${port}（.env 显式值优先，否则按检出路径推导，见 §1.1）`, "INFO");
   status("port-check", 0.05, "正在检查端口占用…");
+
+  // 2.5) 编排器并发互斥（ISSUE #4345）：同一检出同时只允许一个编排器进入「起服务」段。
+  //      原子占坑（`claimSession` 的 `wx` 独占创建）先到者得，后到者占不到即退出 ——
+  //      否则两份编排各自 spawn dev server，后到者的 Next 在端口被占时静默顺延 +1，
+  //      而它的就绪探测打的是原端口，命中先到者的服务，「就绪」结论被冒领。
+  //      **必须排在依赖补装（1.5）之后**：占坑即写会话锚点，而补装前的「实例在跑」
+  //      判据（runningAppInstances 的 session 支路）会把自己当成已在跑的实例、误停补装。
+  timeline?.begin("session-claim", "编排器互斥占坑");
+  /** @type {import("../dev-launcher-session.mjs").LauncherSession} */
+  const session = {
+    launcher_pid: process.pid,
+    child_pids: [],
+    app_port: port,
+    mode,
+    started_at: new Date().toISOString(),
+  };
+  let claim = ctx.claimSession(root, session);
+  if (claim === "exists" && !ctx.isSessionOwnerAlive(root)) {
+    // 锚点在但上一位已死（写完锚点即被杀、或回收时保守跳过留下的残留）：清掉重占一次。
+    // 重占再失败 = 清与占之间又有人占到（真并发），按冲突处理。
+    ctx.clearSession(root);
+    claim = ctx.claimSession(root, session);
+  }
+  timeline?.end("session-claim");
+  if (claim !== "claimed") {
+    const holder = ctx.readSession(root);
+    const holderPid = Number(holder?.launcher_pid);
+    const detail =
+      Number.isInteger(holderPid) && holderPid > 0
+        ? `（PID ${holderPid}，锚点 run/launcher-session.json）`
+        : "（锚点 run/launcher-session.json）";
+    return {
+      ok: false,
+      error: {
+        message:
+          `本检出已有编排器实例在运行${detail}，本次启动退出。\n` +
+          "同一检出同时只允许一个启动编排：双实例会互抢同一端口，后启动一方的就绪探测会命中先启动一方的服务，「就绪」结论被冒领（ISSUE #4345）。\n" +
+          "出口：先停掉现有实例（关闭应用窗口，或结束正在跑的 pnpm dev / dev-launcher），再重新启动。",
+        statusMessage: "已有实例在运行，本次未启动",
+      },
+    };
+  }
+  log(`编排器互斥占坑：已写入会话锚点（PID ${process.pid}，端口 ${port}）`, "INFO");
   return { ok: true, port };
 }

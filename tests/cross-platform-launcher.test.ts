@@ -21,12 +21,14 @@ import {
 } from "../scripts/dev-launcher.mjs";
 import {
   HEARTBEAT_STALE_MS,
+  claimSession,
   clearSession,
   isSessionOwnerAlive,
   readSession,
   touchHeartbeat,
   writeSession,
 } from "../scripts/dev-launcher-session.mjs";
+import { runStartupGates } from "../scripts/launcher-core/startup-gates.mjs";
 import { assertAbsoluteRoot, resolveSpawnTarget } from "../scripts/launcher-core/shell.mjs";
 import { killProcessTree } from "../src/lib/process/kill-process-tree";
 import { stripComments as stripJs } from "./helpers/strip-comments";
@@ -168,6 +170,110 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
     clearSession(root);
     expect(readSession(root)).toBeNull();
+  });
+
+  // ── 编排器并发互斥（ISSUE #4345）────────────────────────────────────────
+  // 此前编排器无互斥：两个 launcher 同时启动都会通过回收/端口检查并各自 spawn
+  // dev server，后到者的 Next 静默顺延 +1、就绪探测却打原端口 —— 「就绪」结论
+  // 被先到者的服务冒领。修法 = 会话锚点的原子占坑（wx 独占创建），先到者得。
+
+  /** 起服务前的全路径预检桥段夹具：门禁全部空转，会话四件套用**真实现**（对 tmp 根落盘）。 */
+  function gatesCtx(root: string) {
+    return {
+      log: () => {
+        /* 静音：本组只判占坑判决，不判日志文案。 */
+      },
+      root,
+      status: () => {
+        /* 静音：进度快照写侧不在本组断言面。 */
+      },
+      reapStaleSession: () => Promise.resolve(null),
+      claimSession,
+      isSessionOwnerAlive,
+      clearSession,
+      readSession,
+      checkEnvFile: () => null,
+      envInitHint: () => null,
+      runToolchainGate: () => null,
+      syncDependencies: () => Promise.resolve(null),
+      applyPendingRestoreAtBoot: () => ({ status: "nothing-to-do" }) as const,
+      resolveAppPort: () => 3311,
+    };
+  }
+
+  it("claimSession 原子占坑：先到者占到、后到者拿到 exists、清坑后可再占（ISSUE #4345）", () => {
+    const root = makeTmp();
+    const session = {
+      launcher_pid: process.pid,
+      child_pids: [] as Array<number>,
+      app_port: 3311,
+      mode: "web",
+      started_at: new Date().toISOString(),
+    };
+    expect(claimSession(root, session)).toBe("claimed");
+    // 占坑即带新鲜心跳：后到者据此判「上一位还活着」。
+    expect(isSessionOwnerAlive(root)).toBe(true);
+
+    // 并发的第二份编排占坑：原子创建失败，且**不覆盖**先到者的会话。
+    expect(claimSession(root, { ...session, launcher_pid: 0x7f_ff_ff_fe })).toBe("exists");
+    expect(readSession(root)?.launcher_pid).toBe(process.pid);
+
+    // 清坑后可再占 —— 对应「锚点在但上一位已死」的重占路径。
+    clearSession(root);
+    expect(claimSession(root, { ...session, launcher_pid: 0x7f_ff_ff_fe })).toBe("claimed");
+    expect(readSession(root)?.launcher_pid).toBe(0x7f_ff_ff_fe);
+  });
+
+  it("编排器互斥：上一位还活着时后到者报「已有实例在运行」并退出（ISSUE #4345）", async () => {
+    const root = makeTmp();
+    writeSession(root, {
+      launcher_pid: process.pid, // 测试进程本身活着 ⇒ 会话判活为真
+      child_pids: [],
+      app_port: 3311,
+      mode: "web",
+      started_at: new Date().toISOString(),
+    });
+    touchHeartbeat(root);
+
+    const gated = await runStartupGates(gatesCtx(root), { portOrNull: null, mode: "web" });
+    expect(gated.ok).toBe(false);
+    const message = gated.ok ? "" : gated.error.message;
+    expect(message).toContain("已有编排器实例在运行");
+    expect(message).toContain(`PID ${process.pid}`);
+    expect(message).toContain("ISSUE #4345");
+    // 冲突路径不清上一位的锚点（它还活着，锚点是它的回收线索）。
+    expect(readSession(root)?.launcher_pid).toBe(process.pid);
+  });
+
+  it("编排器互斥：锚点在但上一位已死时清坑重占、本次照常通过（ISSUE #4345）", async () => {
+    const root = makeTmp();
+    writeSession(root, {
+      launcher_pid: 0x7f_ff_ff_fe, // 不存在的 PID + 陈旧心跳 = 上一位已死
+      child_pids: [],
+      app_port: 3311,
+      mode: "web",
+      started_at: new Date().toISOString(),
+    });
+    touchHeartbeat(root, Date.now() - HEARTBEAT_STALE_MS - 1000);
+
+    const gated = await runStartupGates(gatesCtx(root), { portOrNull: null, mode: "web" });
+    expect(gated.ok).toBe(true);
+    const port = gated.ok ? gated.port : null;
+    expect(port).toBe(3311);
+    // 坑换成本次编排者的（child_pids 待起服务后由 writeSession 补齐）。
+    expect(readSession(root)?.launcher_pid).toBe(process.pid);
+    expect(readSession(root)?.app_port).toBe(3311);
+  });
+
+  it("编排器互斥：无锚点时占坑即通过，会话带解析出的端口与模式（ISSUE #4345）", async () => {
+    const root = makeTmp();
+    const gated = await runStartupGates(gatesCtx(root), { portOrNull: null, mode: "prebuilt" });
+    expect(gated.ok).toBe(true);
+    const session = readSession(root);
+    expect(session?.launcher_pid).toBe(process.pid);
+    expect(session?.app_port).toBe(3311);
+    expect(session?.mode).toBe("prebuilt");
+    expect(session?.child_pids).toEqual([]);
   });
 
   // 会话锚点是「上一次没走优雅收尾」的必然残留：壳收编排器走的是
