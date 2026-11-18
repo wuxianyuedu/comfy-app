@@ -77,6 +77,14 @@ export function ScriptMarkdownEditor({
    * 预览首开才动态加载。`showPreview` 同时是计算闸——关闭时给空串（hook 对空串
    * 早退，不加载渲染器），与 #4341 的「关预览不做全量解析」语义等价。 */
   const previewHtml = useMarkdownHtml(showPreview ? value : "");
+  /* 页脚统计（#4341）：渲染期表达式收敛进 memo——value 没变的那批重渲染
+   * （开关预览 / 撤销栈变化 / 父组件同值重渲染）不再全量扫描两遍字符串。 */
+  const footerStats = React.useMemo(() => {
+    return {
+      chars: value.trim().length,
+      lines: value.split("\n").filter((line) => line.trim()).length,
+    };
+  }, [value]);
 
   function pushHistory(nextValue: string, start: number, end: number) {
     if (historyLockRef.current) {
@@ -358,7 +366,7 @@ export function ScriptMarkdownEditor({
       {/* Footer */}
       <footer className="border-border bg-panel flex h-16 items-center justify-end gap-3 border-t px-6">
         <span className="text-ink-fainter mr-auto text-xs">
-          {value.split("\n").filter((line) => line.trim()).length} 行 · {value.trim().length} 字符
+          {footerStats.lines} 行 · {footerStats.chars} 字符
         </span>
         <Button
           className="border-border text-ink-strong hover:bg-subtle h-auto rounded-lg px-5 py-2"

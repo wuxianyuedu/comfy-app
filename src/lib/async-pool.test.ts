@@ -1,7 +1,9 @@
 // `runWithConcurrency` 单测：有界并发池的节奏与语义。
 //
-// 钉死四条契约：并发峰值不超 limit、全部条目都被处理、limit 夹取（0 → 串行 /
-// 超出条数不空转）、worker 抛错短路整个池但其余 runner 仍跑完各自队列。
+// 钉死契约：并发峰值不超 limit、全部条目都被处理、limit 夹取（0 → 串行 /
+// 超出条数不空转）、worker 抛错 = 失败短路——池停止派发后续条目、等在途
+// 任务落定后以首个错误 reject（多条聚合 AggregateError，不吞 rejection）。
+// （旧语义「其余 runner 仍跑完各自队列」是 ISSUE #4342 的病根，已改。）
 import { describe, expect, it } from "vitest";
 
 import { runWithConcurrency } from "./async-pool";
@@ -51,32 +53,57 @@ describe("runWithConcurrency", () => {
     expect(calls).toBe(2);
   });
 
-  it("worker 抛错：整个池立即 reject，其余 runner 仍跑完各自队列", async () => {
+  it("worker 抛错：池停止派发后续条目，等在途任务落定后以该错误 reject（#4342）", async () => {
     const processed: Array<number> = [];
     await expect(
-      runWithConcurrency([1, 2, 3, 4], 2, (item) => {
+      runWithConcurrency([1, 2, 3, 4], 2, async (item) => {
         if (item === 1) {
+          // 让一步：runner2 先把 2 领走、进入在途，再炸——才能验证
+          // 「已开跑的照常落定、后续不再派发」这条完整的短路语义。
+          await Promise.resolve();
           throw new Error("第一条炸了");
         }
         processed.push(item);
-        return Promise.resolve();
       }),
     ).rejects.toThrow("第一条炸了");
-    /* runner2 的队列（2、4）不因 runner1 的抛错而丢 —— 只是调用方不再等待它。
-     * `expect.poll` 在这里比的不是「等了 20ms」而是「最终都处理过了」：
-     * 失败时打出的 `processed` 数组就是缺了哪几条的现场。 */
-    await expect
-      .poll(
-        /* `toEqual` 而不是 `toContain`：失败时打出的 `processed` 数组直接指出
-         *「缺了哪一条、多了哪一条」，而两条 `toContain` 只会说「没找到 4」。 */
-        () => [...processed].sort((a, b) => a - b),
-        {
-          timeout: 2000,
-          interval: 20,
-          message: "短路后其余队列没有跑完（下面是实际处理过的条目）",
-        },
-      )
-      .toContain(4);
+    /* 短路短的是「后续派发」：runner2 手里的 2 已开跑、照常落定；微任务时序下
+     * 它可能再多领一条（2 或 2,3），但 4 以后一定不再派发——队列尾不再被消费
+     * 就是硬判据。旧实现会陪跑完整条队列、且调用方的 busy 标记提前清除。 */
+    expect(processed).toContain(2);
+    expect(processed).not.toContain(4);
+    expect(processed.length).toBeLessThanOrEqual(2);
+  });
+
+  it("多条失败聚合成 AggregateError，rejection 不再被吞（#4342）", async () => {
+    const processed: Array<string> = [];
+    await expect(
+      runWithConcurrency(["a", "b", "c", "d", "e", "f"], 2, (item) => {
+        processed.push(item);
+        if (item === "a" || item === "b") {
+          return Promise.reject(new Error(`fail ${item}`));
+        }
+        return Promise.resolve();
+      }),
+    ).rejects.toBeInstanceOf(AggregateError);
+    // 宽 2：a、b 已开跑并失败；短路后 c 以后不再派发。
+    expect(processed).toEqual(["a", "b"]);
+  });
+
+  it("在途任务跑完才落定：短路不制造悬空的在途任务", async () => {
+    let settled = false;
+    await expect(
+      runWithConcurrency(["slow", "x"], 1, async (item) => {
+        if (item === "slow") {
+          // sleep-ok: mock 内部延迟：在途任务要「真的还没落定」才能验证
+          // 池会等它，立即 resolve 的假任务验证不了这一条。
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          settled = true;
+          throw new Error("慢任务失败");
+        }
+        throw new Error("短路后不应再派发");
+      }),
+    ).rejects.toThrow("慢任务失败");
+    expect(settled).toBe(true);
   });
 
   it("空列表：直接 resolve，worker 不被调用", async () => {
