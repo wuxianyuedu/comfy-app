@@ -25,6 +25,7 @@ import {
   type WorkspaceView,
 } from "../NavItems";
 import type { SidebarTabConfig } from "~/lib/shell/sidebar-tab-behavior";
+import { readSessionStorageItem, writeSessionStorageItem } from "~/lib/browser-storage";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { useSidebarTabConfigQuery } from "./use-sidebar-tab-config";
@@ -55,10 +56,9 @@ export const WORKSPACE_VIEWS: Array<WorkspaceView> = [
 ];
 
 function readTabsState(): WorkspaceTabsState | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  const raw = sessionStorage.getItem(WS_TABS_KEY);
+  /* 走安全出口（ISSUE #4287）：隐私模式 / 存储被禁 / 配额满时不抛——
+   * 这里的读写在 effect（commit 阶段）里，异常会打断渲染。 */
+  const raw = readSessionStorageItem(WS_TABS_KEY);
   if (raw === null || raw === "") {
     return null;
   }
@@ -66,10 +66,7 @@ function readTabsState(): WorkspaceTabsState | null {
 }
 
 function writeTabsState(state: WorkspaceTabsState, isTransient: TransientJudge): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  sessionStorage.setItem(WS_TABS_KEY, serializeWorkspaceTabs(state, isTransient));
+  writeSessionStorageItem(WS_TABS_KEY, serializeWorkspaceTabs(state, isTransient));
 }
 
 export type WorkspaceTabsController = {

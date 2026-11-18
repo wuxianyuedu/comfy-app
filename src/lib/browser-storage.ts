@@ -95,6 +95,36 @@ export function removeStorageItem(key: string): boolean {
 }
 
 /**
+ * 读一个 **sessionStorage** 字符串键；没有浏览器 / 键不存在 / 读失败一律返回 `null`。
+ *
+ * 与 localStorage 版分开成两条是**刻意的**：两者语义不同（会话内 vs 跨会话），
+ * 判据却同形 —— SSR / 隐私模式 / 被策略禁用都静默（ISSUE #4287：视图层的
+ * 读写在 commit 阶段，抛异常会打断渲染）。 */
+export function readSessionStorageItem(key: string): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** 写一个 **sessionStorage** 字符串键；没有浏览器 / 写失败（配额满 / 隐私模式）**静默失败**。 */
+export function writeSessionStorageItem(key: string, value: string): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    window.sessionStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 读一个 JSON 键并回退到默认值。
  *
  * **坏数据与「没存过」都回落默认值**，且**不抛**：这是全库此前写法的并集
