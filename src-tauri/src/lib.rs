@@ -93,6 +93,10 @@ struct AppState {
   /// 探测 tick 在失败 3 秒后重试，`navigate_to_app` 可能被反复 invoke；每次
   /// 都重新导航 + 新起两个看护线程。防重入口在壳侧，前端节流只是第二道。
   navigated: AtomicBool,
+  /// 交换窗口失败后的「重导航循环」是否在跑（ISSUE #4328）：启动页 250ms
+  /// 轮询 `get_launch_status`，借此把「服务已就绪，正在加载应用…」翻成可见的
+  /// 失败/重试态，而不是无声地永远等下去。置位与清除都在 `spawn_renavigate`。
+  renavigating: AtomicBool,
 }
 
 impl AppState {
@@ -115,6 +119,7 @@ impl AppState {
       abandoned: Mutex::new(false),
       standalone: Mutex::new(standalone),
       navigated: AtomicBool::new(false),
+      renavigating: AtomicBool::new(false),
     }
   }
 
@@ -192,6 +197,15 @@ impl AppState {
     *self.app_url.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = url;
   }
 
+  /// 重导航循环的置位 / 清除与读取（唯一写点是 `spawn_renavigate`）。
+  fn set_renavigating(&self, value: bool) {
+    self.renavigating.store(value, Ordering::SeqCst);
+  }
+
+  fn is_renavigating(&self) -> bool {
+    self.renavigating.load(Ordering::SeqCst)
+  }
+
   fn is_standalone(&self) -> bool {
     *self.standalone.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
   }
@@ -250,6 +264,25 @@ fn default_dev_url(host: &str) -> String {
 ///
 /// async 形态（ISSUE #4272）：启动页每 250ms 轮询一次，这段同步文件 IO
 /// 落到 Tauri 的命令线程池执行，不占主线程。
+/// 把「交换窗口失败、正在重导航」注入启动状态 JSON（ISSUE #4328）。
+///
+/// 启动页 250ms 轮询的就是这一份状态：失败态借同一条通道透出，页面据此把
+/// 「服务已就绪，正在加载应用…」翻成可见的错误/重试态。状态文件本身是
+/// 编排器的权威产物，这里只加字段不改写它的任何值；解析失败（不应发生）
+/// 时原样返回，不吞掉原始状态。
+fn inject_navigate_stalled(status: &str, stalled: bool) -> String {
+  if !stalled {
+    return status.to_string();
+  }
+  match serde_json::from_str::<serde_json::Value>(status) {
+    Ok(mut value) if value.is_object() => {
+      value["navigateStalled"] = serde_json::Value::Bool(true);
+      value.to_string()
+    }
+    _ => status.to_string(),
+  }
+}
+
 #[tauri::command]
 async fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String> {
   let root = state.project_root();
@@ -282,7 +315,7 @@ async fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, 
   }
   let path = shell_launch::status_file_path(&root);
   match std::fs::read_to_string(&path) {
-    Ok(text) => Ok(text),
+    Ok(text) => Ok(inject_navigate_stalled(&text, state.is_renavigating())),
     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
       // 编排器还没写（正常启动窗口期）或路径不对（环境问题）——两者都可能，
       // 因此把判断所需的事实（应然路径 + 壳侧日志位置）一起给出去。
@@ -686,17 +719,25 @@ fn open_comfyui_window(app: tauri::AppHandle, url: String) -> Result<String, Str
 ///
 /// 无超时的 `TcpStream::connect` 在端口被防火墙 DROP 时按系统默认 SYN 重试
 /// 阻塞十几秒，而两个调用点一个在**主线程**的页面加载回调、一个在就绪看护
-/// 线程——前者被冻住就是整个壳卡死。解析取第一个地址（探测对象是本机回环
-/// 的应用服务，无 DNS 漂移面）。
+/// 线程——前者被冻住就是整个壳卡死。解析出的**每个**地址都试到连通为止
+/// （`localhost` 会同时解析出 ::1 与 127.0.0.1，服务可能只绑其中一支，
+/// 见 ISSUE #4328）。
 fn tcp_probe(host: &str, port: u16) -> bool {
   use std::net::ToSocketAddrs;
-  let Ok(mut addrs) = (host, port).to_socket_addrs() else {
+  let Ok(addrs) = (host, port).to_socket_addrs() else {
     return false;
   };
-  let Some(addr) = addrs.next() else {
-    return false;
-  };
-  TcpStream::connect_timeout(&addr, Duration::from_millis(1000)).is_ok()
+  // 逐个尝试**全部**解析地址（ISSUE #4328）：`localhost` 在 Windows 上常把 ::1
+  // 排在前面，而 dev server 只绑 127.0.0.1 —— 只试第一个地址会把「服务在 IPv4
+  // 上好好的」判成不可达，交换窗口被错误中止、启动页永远停在「服务已就绪」。
+  // 每个地址仍带 1s 超时（ISSUE #4213，不冻结主线程）；回环主机最多两个地址，
+  // 拒连是立即失败，最坏也就 2s。
+  for addr in addrs {
+    if TcpStream::connect_timeout(&addr, Duration::from_millis(1000)).is_ok() {
+      return true;
+    }
+  }
+  false
 }
 
 /// 目标 URL 的 host:port 当前能否建立 TCP 连接。
@@ -726,6 +767,12 @@ fn spawn_renavigate(handle: tauri::AppHandle, url: tauri::Url) {
   if RENAVIGATING.swap(true, Ordering::SeqCst) {
     return;
   }
+  // 置位给启动页看（ISSUE #4328）：循环期间启动页把「服务已就绪，正在加载
+  // 应用…」翻成可见的失败/重试态，不再无声地等。退出（成功 / 预算耗尽 /
+  // 启动页已关）时必须清除，状态才回到常规进度。
+  if let Some(s) = handle.try_state::<AppState>() {
+    s.set_renavigating(true);
+  }
   std::thread::spawn(move || {
     log::warn!("[ComfyAPP] 应用地址在交换窗口时不可达，进入重导航循环：{}", url);
     // 2s × 90 ≈ 180s 预算（覆盖 150s 安全网）—— #2192 起统一走 poll_clock。
@@ -744,6 +791,9 @@ fn spawn_renavigate(handle: tauri::AppHandle, url: tauri::Url) {
       }
     }
     RENAVIGATING.store(false, Ordering::SeqCst);
+    if let Some(s) = handle.try_state::<AppState>() {
+      s.set_renavigating(false);
+    }
   });
 }
 
@@ -2268,10 +2318,12 @@ impl LaunchContext {
   /// 占位，正是本字段注释说要避免的白闪。
   fn collect(self_launch: bool, launch_mode: &str) -> Self {
     let project_root = resolve_project_root();
-    // 开发模式默认跳本地 Next.js dev server；脚本 / 终端调用可经环境变量注入。
+    // 回环主机写 127.0.0.1 不写 localhost（硬规则 20）：dev server 按显式
+    // `-H 127.0.0.1` 起在 IPv4 上，导航 URL 也用同一地址，别让壳自己拼出
+    // 一份「localhost」（会先解析成 ::1，见 tcp_probe 的 ISSUE #4328 注）。
     // 生产模式在 spawn_sidecar 中更新为实际 sidecar 端口。
     let app_url = std::env::var("COMFYAPP_DEV_URL")
-      .unwrap_or_else(|_| default_dev_url("localhost"));
+      .unwrap_or_else(|_| default_dev_url("127.0.0.1"));
     if self_launch {
       log::info!(
         "[ComfyAPP] no external launcher owns this process (COMFYAPP_PROJECT_ROOT absent): \
@@ -3729,5 +3781,36 @@ mod log_filter_tests {
     let closed_port = closed.local_addr().unwrap().port();
     drop(closed);
     assert!(!tcp_probe("127.0.0.1", closed_port));
+  }
+
+  #[test]
+  fn tcp_probe_reaches_ipv4_service_via_localhost() {
+    // ISSUE #4328 回归：dev server 只绑 127.0.0.1，而 `localhost` 常把 ::1
+    // 排在解析结果首位 —— 探测必须逐个尝试全部地址，只试第一个会把「服务在
+    // IPv4 上好好的」判成不可达，交换窗口被错误中止、启动页永远停在
+    // 「服务已就绪」。
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let bound_port = listener.local_addr().unwrap().port();
+    assert!(
+      tcp_probe("localhost", bound_port),
+      "只绑 127.0.0.1 的服务必须能经 localhost 探测到（试全部解析地址）"
+    );
+  }
+
+  #[test]
+  fn navigate_stalled_is_injected_only_when_set() {
+    // 注入是纯函数：置位时加字段、不改动编排器的既有值；未置位时原样返回。
+    let status = r#"{"phase":"dev-server-ready","progress":1,"ready":true}"#;
+    let untouched = inject_navigate_stalled(status, false);
+    assert_eq!(untouched, status);
+
+    let injected = inject_navigate_stalled(status, true);
+    let value: serde_json::Value = serde_json::from_str(&injected).unwrap();
+    assert_eq!(value["navigateStalled"], serde_json::Value::Bool(true));
+    assert_eq!(value["phase"], "dev-server-ready");
+    assert_eq!(value["ready"], serde_json::Value::Bool(true));
+
+    // 非 JSON（不应发生）原样返回，不吞原始状态。
+    assert_eq!(inject_navigate_stalled("not-json", true), "not-json");
   }
 }

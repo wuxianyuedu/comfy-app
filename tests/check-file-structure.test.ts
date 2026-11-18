@@ -1519,4 +1519,32 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(html).toContain("white-space: pre;");
     expect(html).toContain("overflow-x: auto;");
   });
+
+  it("启动页把「页面加载失败」画出来，日志按级别着色（ISSUE #4328）", () => {
+    const html = readFileSync(SPLASH_COPIES[0] ?? "", "utf8");
+    // 交换失败（壳注入的 navigateStalled）必须有可见的错误/重试态，
+    // 且重试期间不再重复 invoke 已被壳侧一次性标记挡掉的导航命令。
+    expect(html).toContain("app-page-stalled");
+    expect(html).toContain("navigateStalled");
+    expect(html).toContain("应用页面加载失败，正在自动重试");
+    expect(html).toContain("!status?.navigateStalled");
+    // 日志按级别着色：级别判据与四档颜色类、段头结构线都在场
+    expect(html).toContain("logLineClass");
+    expect(html).toContain("LOG_LEVEL_CLASS");
+    for (const cls of ["lv-error", "lv-warn", "lv-ok", "lv-step", "log-section"]) {
+      expect(html).toContain(cls);
+    }
+    // 逐行 textContent 渲染，不走 innerHTML（日志里可能有用户数据拼出的 <）
+    expect(html).toContain("replaceChildren");
+    expect(html).not.toContain("logPre.innerHTML");
+
+    const rust = readFileSync(LIB_RS, "utf8");
+    // 壳侧把重导航状态注入启动页轮询的启动状态（借同一条 250ms 通道透出）
+    expect(rust).toContain("fn inject_navigate_stalled");
+    expect(rust).toContain('value["navigateStalled"]');
+    expect(rust).toContain("renavigating: AtomicBool");
+    // tcp_probe 逐个尝试全部解析地址（localhost 先解析出 ::1 的现场不再误判）
+    expect(rust).toContain("for addr in addrs");
+    expect(rust).not.toContain("let Some(addr) = addrs.next()");
+  });
 });
