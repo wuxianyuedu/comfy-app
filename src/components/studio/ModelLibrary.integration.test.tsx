@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { TRPCError } from "@trpc/server";
 import { setupTrpcServer } from "../../../tests/helpers/trpc-msw";
@@ -6,6 +6,10 @@ import { createTestTRPC } from "../../../tests/helpers/test-trpc";
 import { renderWithProviders } from "../../../tests/helpers/renderWithProviders";
 import { pageHeaderTitle } from "./NavItems";
 import { ModelLibrary } from "./ModelLibrary";
+
+/* #4236 起 hook 会读 ToastProvider（sync 失败 toast）：桩掉，断言不依赖浮层。 */
+const toast = vi.hoisted(() => ({ info: vi.fn(), error: vi.fn() }));
+vi.mock("~/components/studio/ToastProvider", () => ({ useToast: () => toast }));
 
 /* ModelLibrary 走 trpc.model.list / trpc.model.sync / trpc.model.configList 三条真实 tRPC 管线。
  * 用「可变 behavior」驱动测试 router 在 MSW 网络层提供可控数据/错误，

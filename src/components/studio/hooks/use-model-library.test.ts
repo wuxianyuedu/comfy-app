@@ -10,7 +10,7 @@ import { httpBatchStreamLink } from "@trpc/client";
 import { http } from "msw/http";
 import { TRPCError } from "@trpc/server";
 import SuperJSON from "superjson";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createTestTRPC, testTrpcEndpoint } from "../../../../tests/helpers/test-trpc";
 import { forwardForTest, setupTrpcServer } from "../../../../tests/helpers/trpc-msw";
@@ -78,6 +78,10 @@ const mockRouter = t.router({
 });
 
 const server = setupTrpcServer(mockRouter);
+
+/* #4236：sync 失败要给用户可见出口（toast）。ToastProvider 用桩替掉，断言打在桩上。 */
+const toast = vi.hoisted(() => ({ info: vi.fn(), error: vi.fn() }));
+vi.mock("~/components/studio/ToastProvider", () => ({ useToast: () => toast }));
 
 const ONE: Row = {
   id: "m1",
@@ -254,6 +258,39 @@ describe("useModelLibrary", () => {
     expect(result.current.folders).toEqual([]);
     expect(result.current.activeFolder).toBeNull();
     expect(result.current.filtered).toEqual([]);
+  });
+
+  it("list 失败 → loadError 带原因浮现，retry 重拉后恢复（#4236）", async () => {
+    behavior = { models: [ONE], listError: "后端炸了" };
+    const { result } = renderHook(() => useModelLibrary(), {
+      wrapper: makeWrapper(),
+    });
+    await expect.poll(() => result.current.loading).toBe(false);
+
+    /* 失败态独立于空态：错误原因可见（含动作前缀与原文），而不是空库文案。 */
+    expect(result.current.loadError).toContain("模型库加载失败");
+    expect(result.current.loadError).toContain("后端炸了");
+
+    /* 重试：服务端恢复后，retry 重新拉取 → 错误清空、模型行到位。 */
+    behavior = { models: [ONE] };
+    await act(async () => {
+      result.current.retry();
+      await Promise.resolve();
+    });
+    await expect.poll(() => result.current.loadError).toBeNull();
+    await expect.poll(() => result.current.models).toHaveLength(1);
+  });
+
+  it("sync 失败 → toast.error 带动作前缀与原因（#4236）", async () => {
+    behavior = { models: [ONE], syncError: "磁盘只读" };
+    const { result } = renderHook(() => useModelLibrary(), {
+      wrapper: makeWrapper(),
+    });
+    await waitSyncSettled(result);
+
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(String(toast.error.mock.calls[0]?.[0])).toContain("模型同步失败");
+    expect(String(toast.error.mock.calls[0]?.[0])).toContain("磁盘只读");
   });
 
   it("sync 失败不阻塞列表：loading 仍收敛，行照常渲染", async () => {

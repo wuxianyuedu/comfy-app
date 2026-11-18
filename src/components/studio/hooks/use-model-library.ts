@@ -11,6 +11,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { useTRPC } from "~/trpc/react";
+import { useToast } from "~/components/studio/ToastProvider";
+import { errorText } from "~/lib/error-message";
 
 import { type ModelFolder, type ModelRow, filterModels, foldersOf } from "../model-library-config";
 
@@ -23,6 +25,9 @@ export type ModelLibraryController = {
   filtered: Array<ModelRow>;
   /** 左侧目录列（由模型数据派生，只含有模型的目录）。 */
   folders: Array<ModelFolder>;
+  /** 列表查询失败的原因（null = 没失败）。失败态必须独立于空态呈现（#4236）：
+   *  「加载失败」被空态文案盖住 = 谎报「没有模型」。 */
+  loadError: string | null;
   /** 列表首次加载中（尚无数据）—— 驱动首屏骨架，不等后台同步。 */
   loading: boolean;
   models: Array<ModelRow>;
@@ -30,18 +35,28 @@ export type ModelLibraryController = {
   q: string;
   /** 后台同步 / 刷新进行中：不挡首屏，只给轻指示。 */
   refreshing: boolean;
+  /** 失败后的重试（重新拉取列表）。 */
+  retry: () => void;
   setActiveFolder: (folder: string) => void;
   setQ: (q: string) => void;
 };
 
 export function useModelLibrary(): ModelLibraryController {
   const trpc = useTRPC();
+  const toast = useToast();
   const [q, setQ] = useState("");
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 
   const listQ = useQuery(trpc.model.list.queryOptions());
   const configQ = useQuery(trpc.model.configList.queryOptions());
-  const syncMut = useMutation(trpc.model.sync.mutationOptions());
+  const syncMut = useMutation(
+    trpc.model.sync.mutationOptions({
+      /* 挂载期静默同步失败不再无声（#4236）：用户看到的库可能因此落后于磁盘。 */
+      onError: (e) => {
+        toast.error(errorText(e, "模型同步失败"));
+      },
+    }),
+  );
 
   /* 静默刷新：不置 `loading`（首屏骨架由 listQ.isLoading 驱动），
    * refetch 失败由 query 自身的 error 态承载 —— 这里不补 setState，
@@ -106,6 +121,12 @@ export function useModelLibrary(): ModelLibraryController {
     activeFolder,
     filtered,
     loading: listQ.isLoading,
+    /* 失败原因走 errorMessage 唯一出口（§10.7.1）：网络层原文翻译成人话。 */
+    loadError:
+      listQ.error === null || listQ.error === undefined
+        ? null
+        : errorText(listQ.error, "模型库加载失败"),
+    retry: reload,
     refreshing: syncMut.isPending || listQ.isFetching,
     q,
     setQ,
