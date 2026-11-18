@@ -543,6 +543,11 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
     note: "ISSUE #3662 出口 B：同上，**这一格在 GA 的 PR 侧仍在跑**（`pr-gate.yml` 的 `fixed-structural-tests` job，2026-11-12/13 实测墙钟 87~133s / 10 跑全绿）。撤档理由（45m 预算 / 冷节点 25m+ / AggregateError 假红）在 GA 侧不成立 —— 逐条读数与那 4 次红的形状见规范 §13.5.41。",
   },
   { name: "schema⇄迁移等价（cnb 同款判据一字不改）", tier: "ga-pr" },
+  {
+    name: "CI 配方核对（base/head/merge_tree）",
+    tier: "ga-pr",
+    note: "ISSUE #4300：镜像档每个门禁 job 检出后打印 base/head/merge_tree 配方并核对检出树 == payload.merge_tree（不一致 fail-closed 红 —— 判的不是 CNB 侧那棵树）。它判的是「这跑的输入对不对」，不是代码缺陷，故四个 job 各跑一次、总账记一名。",
+  },
   // ── retired（降级登记，必须带理由；§13.5.30）──
   /* ISSUE #3378 收尾（08:25 指令）：CNB 侧从承重平台退成「站内回读结论 + 平台池镜像出口」，
    * 只为过去 CNB 承重 / 自托管节点环境存在的格子整批摘掉。降级 ≠ 删除，逐条登记「现在谁跑」。 */

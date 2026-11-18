@@ -144,6 +144,19 @@ jobs:
           # 分支守卫 / 提交声明核对 / 三点 diff 都要完整历史。
           fetch-depth: 0
 
+      # ISSUE #4300：配方核对。payload 的 base/head/merge_tree 是 CNB 镜像格派发时固定的
+      # 快照身份；head_sha 是 CNB 平台合成的 merge 提交，检出它即与 CNB 侧同树。本步打印
+      # 配方（与镜像日志同字段名，可逐字段对账）并核对「检出树 == merge_tree」：不一致 =
+      # 判的不是 CNB 那棵树，fail-closed 红。典型现场：payload 的 head_sha 缺失 ⇒ checkout
+      # 静默回落 github.sha（镜像 master HEAD）—— 没有这一步，那种跑会**静默判错树**。
+      # merge_tree 缺席（老 payload / 手动档预知不了 tree）只打印配方、不核对（增量契约）。
+      - name: CI 配方核对（base/head/merge_tree）
+        env:
+          MIRROR_BASE_SHA: ${{ github.event.client_payload.base_sha || github.event.inputs.base_sha || '' }}
+          MIRROR_HEAD_SHA: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          MIRROR_MERGE_TREE: ${{ github.event.client_payload.merge_tree || '' }}
+        run: node scripts/ci/ci-mirror-recipe.mjs
+
       - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
         uses: actions/setup-node@v7
         with:
@@ -228,6 +241,14 @@ jobs:
           # 全量历史，与 static / heavy 同形态（fixed 段不解析改动面，仍可浅检出）。基线缺席时
           # `--changed` 自己退「没判」。
           fetch-depth: 0
+
+      # 配方核对（ISSUE #4300）：打印 base/head/merge_tree 并核对检出树，语义见 static-gates 同名步骤。
+      - name: CI 配方核对（base/head/merge_tree）
+        env:
+          MIRROR_BASE_SHA: ${{ github.event.client_payload.base_sha || github.event.inputs.base_sha || '' }}
+          MIRROR_HEAD_SHA: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          MIRROR_MERGE_TREE: ${{ github.event.client_payload.merge_tree || '' }}
+        run: node scripts/ci/ci-mirror-recipe.mjs
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6
@@ -316,6 +337,14 @@ jobs:
           fetch-depth: 0
           lfs: true
 
+      # 配方核对（ISSUE #4300）：打印 base/head/merge_tree 并核对检出树，语义见 static-gates 同名步骤。
+      - name: CI 配方核对（base/head/merge_tree）
+        env:
+          MIRROR_BASE_SHA: ${{ github.event.client_payload.base_sha || github.event.inputs.base_sha || '' }}
+          MIRROR_HEAD_SHA: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          MIRROR_MERGE_TREE: ${{ github.event.client_payload.merge_tree || '' }}
+        run: node scripts/ci/ci-mirror-recipe.mjs
+
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6
 
@@ -387,6 +416,14 @@ jobs:
           # 浅克隆里没有这条 ref（它按 remote 名现算，不会是合成 merge 的父）⇒ 不随
           # 上面三格一起收窄。它也是 static-gates 之外唯一还用 `origin/master` 的格。
           fetch-depth: 0
+
+      # 配方核对（ISSUE #4300）：打印 base/head/merge_tree 并核对检出树，语义见 static-gates 同名步骤。
+      - name: CI 配方核对（base/head/merge_tree）
+        env:
+          MIRROR_BASE_SHA: ${{ github.event.client_payload.base_sha || github.event.inputs.base_sha || '' }}
+          MIRROR_HEAD_SHA: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          MIRROR_MERGE_TREE: ${{ github.event.client_payload.merge_tree || '' }}
+        run: node scripts/ci/ci-mirror-recipe.mjs
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6

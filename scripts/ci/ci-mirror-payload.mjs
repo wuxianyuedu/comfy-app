@@ -49,7 +49,12 @@ const ROOT = path.resolve(import.meta.dirname, "../..");
  * `PR #号 · sha` 的老格式 —— 老 payload（没有这个键）与「有新键但值为空」在 GitHub 侧
  * 渲染出同一句，两者都不报错。
  *
- * @param {{ref: string, headSha: string, baseSha: string, cnbCommit: string, cnbMergeSha: string, prNumber: string, title?: string}} args
+ * `merge_tree`（ISSUE #4300）是本跑那棵树的**内容指纹**：CNB 侧判的是平台合成的
+ * merge 提交，两次派发之间 base / head 都动时合并提交的 sha 必然不同，但「两边判的
+ * 是不是同一份内容」只看 tree。GA 侧的配方格（`ci-mirror-recipe.mjs`）拿它逐字核对
+ * 检出树；缺席（取不到 / 老调用方）留空串，GA 侧对空值只打印配方、不核对。
+ *
+ * @param {{ref: string, headSha: string, baseSha: string, cnbCommit: string, cnbMergeSha: string, mergeTree?: string, prNumber: string, title?: string}} args
  * @returns {{event_type: string, client_payload: Record<string, string>}}
  */
 export function dispatchPayload({
@@ -57,6 +62,7 @@ export function dispatchPayload({
   cnbCommit,
   cnbMergeSha = "",
   headSha,
+  mergeTree = "",
   prNumber,
   ref,
   title = "",
@@ -68,6 +74,7 @@ export function dispatchPayload({
       cnb_commit: cnbCommit,
       cnb_merge_sha: cnbMergeSha,
       head_sha: headSha,
+      merge_tree: mergeTree,
       pr_number: prNumber,
       pr_title: title,
     },
