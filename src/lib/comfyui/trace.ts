@@ -177,17 +177,25 @@ async function flushTraceLines(): Promise<void> {
   // 连续同目的地的行合并成一次 append（批量的意义）；跨目的地的边界处各写各的。
   // **逐组容错**（#4227 复盘）：一个坏目的地（只读盘 / 路径被占 / ENOTDIR）只丢
   // 自己那一组，不许把同批里其它目的地的行一起带走。
-  let index = 0;
-  while (index < batch.length) {
-    const dest = batch[index]!.path;
-    let chunk = "";
-    while (index < batch.length && batch[index]!.path === dest) {
-      chunk += batch[index]!.line;
-      index += 1;
+  let group: { chunk: string; path: string } | null = null;
+  for (const entry of batch) {
+    if (group !== null && group.path === entry.path) {
+      group.chunk += entry.line;
+      continue;
     }
+    if (group !== null) {
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- 逐组串行是语义本身：写入顺序必须与产生顺序一致（链式 flush 只保证批间序，批内靠这里的 await）
+        await appendWithRotate(group.path, group.chunk);
+      } catch {
+        /* trace 写入失败绝不阻塞业务主流程（可能是只读盘 / 路径被占）。 */
+      }
+    }
+    group = { chunk: entry.line, path: entry.path };
+  }
+  if (group !== null) {
     try {
-      // oxlint-disable-next-line no-await-in-loop -- 逐组串行是语义本身：写入顺序必须与产生顺序一致（链式 flush 只保证批间序，批内靠这里的 await）
-      await appendWithRotate(dest, chunk);
+      await appendWithRotate(group.path, group.chunk);
     } catch {
       /* trace 写入失败绝不阻塞业务主流程（可能是只读盘 / 路径被占）。 */
     }

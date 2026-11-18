@@ -8,6 +8,7 @@
 // host 侧 `scripts/executor-host.mjs`，各一处 `startReaper()`；模块加载不再有副作用。
 // 常驻循环用 globalThis 键兜住，Next.js HMR 因此永远不会造出第二个定时器。
 
+import { fireAndForget } from "~/lib/async-action";
 import { errorText } from "~/lib/error-message";
 import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { isSchemaReady } from "~/lib/db-schema-ready";
@@ -642,8 +643,9 @@ function sweepOnce(): void {
   void reapStaleQueuedTasks();
   void reapStaleRunningTasks();
   /* 崩溃残留的临时工作流文件按拍兜底清理（#4225）：正常路径在任务收口时已删，
-   * 这里只扫「写完与收口之间进程崩掉」的孤儿（按 mtime 留一小时余量）。 */
-  void pruneTempWorkflowFiles();
+   * 这里只扫「写完与收口之间进程崩掉」的孤儿（按 mtime 留一小时余量）。
+   * prune 自吞全部 IO 错误，onError 是不可达的最后一道。 */
+  fireAndForget(pruneTempWorkflowFiles(), () => undefined);
 }
 
 /**
