@@ -19,6 +19,7 @@ import {
   type ReferenceLoaderBinding,
 } from "~/lib/workshop/reference-loader-binding";
 import { referenceSlotOf } from "~/lib/workshop/workflow-encapsulation";
+import { upperToken } from "~/lib/upper-token";
 
 import { useReferenceLoaderPresets } from "../hooks/use-reference-loader-presets";
 import { ReferenceLoaderPresetModal } from "./ReferenceLoaderPresetModal";
@@ -56,7 +57,7 @@ export function ReferenceLoaderBindingSection({
   const candidates = useMemo(() => {
     return Object.entries(io ?? {})
       .filter(([, entry]) => {
-        const type = (entry.type ?? "").toUpperCase();
+        const type = upperToken(entry.type);
         return entry.direction === "input" && (type === "IMAGE" || type === "MASK");
       })
       .map(([ioKey, entry]) => ({
@@ -90,7 +91,7 @@ export function ReferenceLoaderBindingSection({
           size="sm"
           variant="outline"
         >
-          <Settings2 className="size-3.5" /> 管理预设
+          <Settings2 className="size-3.5" data-icon="inline-start" /> 管理预设
         </Button>
       </div>
       <div className="flex flex-col gap-2">
@@ -135,19 +136,20 @@ export function ReferenceLoaderBindingSection({
                       key={ioKey}
                     >
                       {label}
-                      <button
+                      <Button
                         aria-label={`移除追加端口 ${label}`}
-                        className="text-muted-foreground hover:text-destructive"
+                        className="text-muted-foreground hover:text-destructive size-4 p-0"
                         onClick={() => {
                           write(slot.id, {
                             ...binding,
                             extraTargets: extras.filter((t) => t !== ioKey),
                           });
                         }}
-                        type="button"
+                        size="icon"
+                        variant="ghost"
                       >
-                        <X className="size-3" />
-                      </button>
+                        <X className="size-3" data-icon="inline-start" />
+                      </Button>
                     </span>
                   );
                 })}

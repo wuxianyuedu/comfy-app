@@ -15,6 +15,7 @@ import { ChevronRight, Plus, Trash2, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { SelectMenu } from "~/components/ui/select-menu";
 import type { ReferenceChainClassDef } from "~/lib/comfyui/reference-loader-catalog";
@@ -22,6 +23,8 @@ import type {
   ReferenceLoaderPreset,
   ReferenceLoaderStep,
 } from "~/lib/workshop/reference-loader-preset";
+import { upperToken } from "~/lib/upper-token";
+import { nextId } from "~/lib/unique-id";
 
 import {
   useNodeClassCatalog,
@@ -38,9 +41,7 @@ type Props = {
 };
 
 function newPresetId(): string {
-  return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-    ? `rp-${crypto.randomUUID().slice(0, 8)}`
-    : `rp-${Date.now().toString(36)}`;
+  return nextId("rp-");
 }
 
 /** 部件值 → 文本（控件显示用）：只有原始类型直转，其余给空串兜底。 */
@@ -63,7 +64,7 @@ function WidgetField(props: {
 }) {
   const { def, name, onChange, value } = props;
   const port = def.inputs.find((input) => input.name === name);
-  const type = (port?.type ?? "").toUpperCase();
+  const type = upperToken(port?.type);
   const choices =
     def.choices[name] ?? (type === "COMBO" && typeof value === "string" ? [value] : []);
   if (choices.length > 0) {
@@ -84,9 +85,9 @@ function WidgetField(props: {
   }
   if (type === "INT" || type === "FLOAT") {
     return (
-      <input
+      <Input
         aria-label={name}
-        className="border-border bg-surface text-ink text-3xs h-7 w-full rounded-md border px-2 font-mono"
+        className="text-3xs h-7 w-full font-mono"
         onChange={(event) => {
           const raw = event.target.value;
           if (raw === "") {
@@ -102,9 +103,9 @@ function WidgetField(props: {
     );
   }
   return (
-    <input
+    <Input
       aria-label={name}
-      className="border-border bg-surface text-ink text-3xs h-7 w-full rounded-md border px-2"
+      className="text-3xs h-7 w-full"
       onChange={(event) => {
         onChange(event.target.value);
       }}
@@ -259,7 +260,7 @@ export function ReferenceLoaderPresetModal({ onClose, open }: Props) {
             </p>
           </div>
           <Button aria-label="关闭" onClick={onClose} size="icon" variant="ghost">
-            <X className="size-4" />
+            <X className="size-4" data-icon="inline-start" />
           </Button>
         </div>
 
@@ -267,7 +268,7 @@ export function ReferenceLoaderPresetModal({ onClose, open }: Props) {
           {/* 左列：预设清单 */}
           <div className="border-border-subtle flex min-h-0 flex-col gap-2 overflow-y-auto border-r p-3">
             <Button className="w-full" onClick={createPreset} size="sm" variant="outline">
-              <Plus className="size-3.5" /> 新建预设
+              <Plus className="size-3.5" data-icon="inline-start" /> 新建预设
             </Button>
             {draft.map((preset) => (
               <div
@@ -276,28 +277,33 @@ export function ReferenceLoaderPresetModal({ onClose, open }: Props) {
                 }`}
                 key={preset.id}
               >
-                <button
-                  className="text-ink min-w-0 flex-1 truncate text-left text-xs"
+                <Button
+                  className="text-ink min-w-0 flex-1 justify-start px-1 text-left text-xs"
                   onClick={() => {
                     setSelectedId(preset.id);
                   }}
-                  type="button"
+                  variant="ghost"
                 >
-                  {preset.name}
-                  <span className="text-muted-foreground/60 text-3xs block">
-                    {preset.steps.length === 0 ? "直连（无处理）" : `${preset.steps.length} 级处理`}
+                  <span className="block truncate">
+                    {preset.name}
+                    <span className="text-muted-foreground/60 text-3xs block">
+                      {preset.steps.length === 0
+                        ? "直连（无处理）"
+                        : `${preset.steps.length} 级处理`}
+                    </span>
                   </span>
-                </button>
-                <button
+                </Button>
+                <Button
                   aria-label={`删除预设 ${preset.name}`}
-                  className="text-muted-foreground hover:text-destructive shrink-0 p-1"
+                  className="text-muted-foreground hover:text-destructive size-6 shrink-0"
                   onClick={() => {
                     removePreset(preset.id);
                   }}
-                  type="button"
+                  size="icon"
+                  variant="ghost"
                 >
-                  <Trash2 className="size-3.5" />
-                </button>
+                  <Trash2 className="size-3.5" data-icon="inline-start" />
+                </Button>
               </div>
             ))}
             {draft.length === 0 && (
@@ -313,17 +319,18 @@ export function ReferenceLoaderPresetModal({ onClose, open }: Props) {
               <p className="text-muted-foreground text-xs">在左侧选择一个预设进行编辑。</p>
             ) : (
               <div className="flex flex-col gap-3">
-                <label className="flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-2 text-xs">
                   <span className="text-muted-foreground shrink-0">预设名称</span>
-                  <input
-                    className="border-border bg-surface text-ink h-8 flex-1 rounded-md border px-2 text-xs"
+                  <Input
+                    aria-label="预设名称"
+                    className="h-8 flex-1 text-xs"
                     onChange={(event) => {
                       patchPreset({ name: event.target.value });
                     }}
                     type="text"
                     value={selected.name}
                   />
-                </label>
+                </div>
 
                 {/* 装载链可视化：LoadImage → 各级处理卡片 */}
                 <div className="border-border/60 bg-surface rounded-xl border p-3">
@@ -347,16 +354,17 @@ export function ReferenceLoaderPresetModal({ onClose, open }: Props) {
                               <p className="text-ink text-3xs truncate font-semibold">
                                 {def ? step.class : `${step.class}（类定义缺失）`}
                               </p>
-                              <button
+                              <Button
                                 aria-label={`移除第 ${index + 1} 级 ${step.class}`}
-                                className="text-muted-foreground hover:text-destructive shrink-0 p-0.5"
+                                className="text-muted-foreground hover:text-destructive size-6 shrink-0"
                                 onClick={() => {
                                   removeStep(index);
                                 }}
-                                type="button"
+                                size="icon"
+                                variant="ghost"
                               >
-                                <Trash2 className="size-3" />
-                              </button>
+                                <Trash2 className="size-3" data-icon="inline-start" />
+                              </Button>
                             </div>
                             {def ? (
                               def.inputs
@@ -393,9 +401,9 @@ export function ReferenceLoaderPresetModal({ onClose, open }: Props) {
 
                   {/* 加节点：按关键词搜 ComfyUI 节点目录 */}
                   <div className="mt-3 flex items-center gap-2">
-                    <input
+                    <Input
                       aria-label="搜索节点类"
-                      className="border-border bg-surface text-ink text-3xs h-7 flex-1 rounded-md border px-2"
+                      className="text-3xs h-7 flex-1"
                       onChange={(event) => {
                         setSearch(event.target.value);
                       }}
@@ -407,17 +415,18 @@ export function ReferenceLoaderPresetModal({ onClose, open }: Props) {
                   {search.trim().length >= 2 && searchResults.length > 0 && (
                     <div className="border-border mt-2 flex flex-wrap gap-1 rounded-lg border p-2">
                       {searchResults.map((className) => (
-                        <button
-                          className="border-border bg-surface text-ink hover:border-primary text-3xs rounded-md border px-2 py-1"
+                        <Button
+                          className="text-ink text-3xs px-2 py-1"
                           key={className}
                           onClick={() => {
                             addStep(className);
                             setSearch("");
                           }}
-                          type="button"
+                          size="sm"
+                          variant="outline"
                         >
                           + {className}
-                        </button>
+                        </Button>
                       ))}
                     </div>
                   )}

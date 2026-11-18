@@ -276,6 +276,22 @@ export function buildComfyCliRunArgs(options: {
  * 夹具，不必把本模块那一串服务端依赖拉进测试；名单缺项此前也没有判据会红 —— 那
  * 正是 `Bookmark (rgthree)` 让整单校验失败的成因）。 */
 
+/** 装载链目录（#4376）：计划非空时现查 object_info 归一；ComfyUI 未就绪 → null
+ *  （计划本轮不生效，相关入口回落裸 LoadImage），打一行 warn 说明。 */
+async function resolveChainCatalog(
+  taskId: string,
+  loaderPlan: Job["loaderPlan"],
+): Promise<ReturnType<typeof buildReferenceChainCatalog>> {
+  if (!loaderPlan || Object.keys(loaderPlan).length === 0) {
+    return null;
+  }
+  const catalog = buildReferenceChainCatalog(await fetchObjectInfo());
+  if (catalog === null) {
+    log(taskId, "warn", "参考图装载计划未生效：ComfyUI 节点目录不可用，相关入口回落裸 LoadImage");
+  }
+  return catalog;
+}
+
 export async function executeViaComfyCli(job: Job) {
   // 关键路径依赖在函数入口 resolve 成同名局部（`taskRepository` /
   // `resolveComfyBase`）；下游 closure 沿用旧名，call site 一字不动。
@@ -315,15 +331,8 @@ export async function executeViaComfyCli(job: Job) {
   log(taskId, "info", `ComfyUI 目标：${host}:${port}（${base}）`);
 
   let patched: JsonRecord;
-  /* 装载链目录（#4376）：按计划里的类名现查 object_info；ComfyUI 未就绪 → null，
-   * 计划本轮不生效（相关入口回落裸 LoadImage），打一行 warn 说明。 */
-  let chainCatalog: ReturnType<typeof buildReferenceChainCatalog> = null;
-  if (job.loaderPlan && Object.keys(job.loaderPlan).length > 0) {
-    chainCatalog = buildReferenceChainCatalog(await fetchObjectInfo());
-    if (chainCatalog === null) {
-      log(taskId, "warn", "参考图装载计划未生效：ComfyUI 节点目录不可用，相关入口回落裸 LoadImage");
-    }
-  }
+  /* 装载链目录（#4376）：计划命中的端点按预设实例化子图时要用节点类定义。 */
+  const chainCatalog = await resolveChainCatalog(taskId, job.loaderPlan);
   if (isRaw) {
     /* 装载链（#4376）：计划命中的端点按预设实例化 LoadImage → 处理链子图，
      * 再把剩余覆盖项交给裸增强。 */
