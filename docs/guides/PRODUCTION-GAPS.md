@@ -598,7 +598,7 @@
 - [ ] **C1 零依赖漏洞扫描 / license 合规 / SBOM / 自动升级**。证据：全仓 renovate/dependabot/audit/sbom = 0。
 - [ ] **C2 `minimumReleaseAge: 0`** 关闭投毒版本时间窗。证据：`pnpm-workspace.yaml:6`。
 - [ ] **C3 `.env.production` / `.env.development` 未被忽略**（仅 `.env` + `.env*.local`）。证据：`.gitignore:37-38` vs `next.config.js:50`。（已修：`.gitignore` 改为 `.env.*` + `!.env.example`）
-- [ ] **C4 `Cargo.lock` 被忽略** → Rust 二进制依赖树不可复现。证据：`.gitignore:113-114`。
+- [x] **C4 `Cargo.lock` 被忽略** → Rust 二进制依赖树不可复现。**已闭合（#4356）**：`.gitignore` 摘掉忽略行、`src-tauri/Cargo.lock` 入库 —— shell-gate 的 `cargo test --locked`（#4317）在 fresh clone 上因此有锁可冻结（此前锁不入库 = 该格在全新 clone 必红，PR #4352 的 GA 跑现场）；本机 cargo 1.98.0 / 1.99.1 双工具链 × 冷 `CARGO_HOME` × Linux target 实测 `--locked` 全过。
 - [ ] **C5 `pnpm-workspace.yaml` 无 `packages:` 字段** + `allowBuilds` 手工清单疑漏 `sharp`。证据：`pnpm-workspace.yaml`（grep packages = 0）；`pnpm-lock.yaml:12198`。
 - [ ] **C6 生产 CSP 仍 `'unsafe-inline'`**，无 nonce/hash / `object-src 'none'` / `upgrade-insecure-requests` / `report-uri`。证据：`next.config.js:109-112`。
 - [ ] **C7 未关 `poweredByHeader`**；`typescript.ignoreBuildErrors:true`。证据：`next.config.js`（0 命中）/ `:17-19`。
