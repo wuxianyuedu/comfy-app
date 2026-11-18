@@ -297,29 +297,31 @@ export const llmRouter = createTRPCRouter({
 
   /** 新建 / 更新供应商下的一条模型。 */
   modelSave: authedProcedure.input(modelInputSchema).mutation(async ({ input }) => {
-    const saved = await remoteModelRepository.saveModel(input);
     /* 图像 / 视频的接口端点（#3656）落**模型级适配器存档**（workshopAdapters
      * envelope 的 endpointPath 一格，#3622/#3659 的同一份存储），不另开列。
      * `null`（文本行 / 弹窗重置）= 清空该格；白名单外的值折成空串 = 按用途
      * 默认第一项（读侧 `resolveMediaEndpointPath` 统一回落）。省略 = 不动既有
-     * （旧调用方不带这格）。 */
-    if (input.endpointPath !== undefined) {
-      await workshopAdaptersMutex.run(saved.name, async () => {
-        const doc = await remoteModelRepository.getWorkshopAdaptersDoc(saved.name);
-        const path =
-          isMediaEndpointKind(saved.kind) &&
-          typeof input.endpointPath === "string" &&
-          isMediaEndpointPath(saved.kind, input.endpointPath)
-            ? input.endpointPath
-            : "";
-        if (path !== doc.endpointPath) {
-          await remoteModelRepository.saveWorkshopAdaptersDoc(saved.name, {
-            ...doc,
-            endpointPath: path,
-          });
-        }
-      });
+     * （旧调用方不带这格）。
+     *
+     * endpointPath 与模型行**同一条语句**落库（#4232）：原先两段独立提交——
+     * 第二段失败时模型行已是新值、端点存档仍旧值（§08 8.12② 的失败窗口）。
+     * 现在读-合并-写整体在 keyed mutex 内完成（并发保存的串行化不变），
+     * 合并好的整份 doc 折进 saveModel 的同一条 INSERT/UPDATE。 */
+    if (input.endpointPath === undefined) {
+      await remoteModelRepository.saveModel(input);
+      return readProviderState();
     }
+    await workshopAdaptersMutex.run(input.name.trim(), async () => {
+      const doc = await remoteModelRepository.getWorkshopAdaptersDoc(input.name.trim());
+      const endpointPath =
+        isMediaEndpointKind(input.kind) &&
+        typeof input.endpointPath === "string" &&
+        isMediaEndpointPath(input.kind, input.endpointPath)
+          ? input.endpointPath
+          : "";
+      const merged = endpointPath === doc.endpointPath ? doc : { ...doc, endpointPath };
+      await remoteModelRepository.saveModel(input, { workshopAdapters: merged });
+    });
     return readProviderState();
   }),
 
