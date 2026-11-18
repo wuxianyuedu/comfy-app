@@ -58,10 +58,12 @@ export function WorkflowLibraryDetailView({
     patchWorkflowIO,
     usable,
     canResync,
+    canConvert,
     missing,
     isTechnical,
     busyDownload,
     busyResync,
+    busyConvert,
     actions,
   } = controller;
   /* dev server 重建后懒分块可能已被换掉，这一块自己给出路（与画布预览同款）。 */
@@ -86,13 +88,16 @@ export function WorkflowLibraryDetailView({
     /* SAFETY: 类型断言已复核 */
     <div className="bg-panel-deep flex h-full flex-col overflow-hidden">
       <DetailHeader
+        busyConvert={busyConvert}
         busyDownload={busyDownload}
         busyResync={busyResync}
         busyUpdateJson={updateJson.submitting}
+        canConvert={canConvert}
         canResync={canResync}
         isTechnical={isTechnical}
         meta={metaEditor}
         missing={missing}
+        onConvert={actions.convert}
         onDelete={actions.remove}
         onDownload={actions.download}
         onEdit={actions.edit}

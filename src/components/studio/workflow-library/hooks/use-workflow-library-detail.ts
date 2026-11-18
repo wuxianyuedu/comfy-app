@@ -28,6 +28,7 @@ import type { ModelTagSummary } from "~/lib/workflow/workflow-list-types";
 import { isPlainRecord } from "~/lib/is-record";
 
 export type WorkflowLibraryDetailActions = {
+  convert: () => void;
   download: () => void;
   edit: () => void;
   remove: () => void;
@@ -65,8 +66,12 @@ export type WorkflowLibraryDetailController = {
    *  测试（ISSUE #720 第 3 条）。换工作流时重置回该工作流的默认模式。 */
   activeMode: string | null;
   activeTab: DetailTab;
+  /** 「转为在线」进行中（按当前选中行判）。 */
+  busyConvert: boolean;
   busyDownload: boolean;
   busyResync: boolean;
+  /** 仅本地工作流可转在线（在线 / 未载入占位行不可）。 */
+  canConvert: boolean;
   canResync: boolean;
   /** 画布预览那一份常驻实例是否该挂载（首次访问画布页签之后才为真）。
    *
@@ -139,12 +144,14 @@ export function useWorkflowLibraryDetail(
     onPatchWorkflowIO,
     onPatchParamMap,
     isBundleBusy,
+    isConvertBusy,
     isResyncBusy,
     onUse,
     onEdit,
     onDelete,
     onDownload,
     onResync,
+    onConvertToOnline,
   } = props;
 
   const [sourceOpen, setSourceOpen] = useState(false);
@@ -305,8 +312,13 @@ export function useWorkflowLibraryDetail(
           onResync(workflow.id, workflow.name);
         }
       },
+      convert: () => {
+        if (workflow) {
+          onConvertToOnline(workflow.id, workflow.name);
+        }
+      },
     }),
-    [workflow, onUse, onEdit, onDelete, onDownload, onResync],
+    [workflow, onUse, onEdit, onDelete, onDownload, onResync, onConvertToOnline],
   );
 
   const metaEditor = useMemo<MetaEditorController>(
@@ -404,12 +416,14 @@ export function useWorkflowLibraryDetail(
     sourceData,
     usable: formatFlags.usable,
     canResync: syncFlags.canResync,
+    canConvert: workflow?.source === "local",
     missing: syncFlags.missing,
     isTechnical: !!workflow && isTechnicalName(workflow.name),
     /* 真实声明的模式，不做兜底 —— 消费方与口径见 controller 类型上的说明。 */
     workflowModes: workflow?.modes ?? [],
     busyDownload: !!workflow && isBundleBusy(workflow.id),
     busyResync: !!workflow && isResyncBusy(workflow.id),
+    busyConvert: !!workflow && isConvertBusy(workflow.id),
     actions,
   };
 }

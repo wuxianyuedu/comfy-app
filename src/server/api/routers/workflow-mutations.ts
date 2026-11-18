@@ -576,4 +576,34 @@ export const workflowMutationProcedures = {
         template: updated,
       };
     }),
+
+  /* POST /api/workflows/[id]/convert-to-online —— 本地工作流一键转在线（ISSUE #4372）。
+   * 只做「解除磁盘跟踪」这一件事：sourcePath / sourceMtime / sourceChecksum 置空。
+   * list 出口按 `sourcePath === null` 判在线，该行随即归为在线；磁盘文件不再被
+   * 任何行引用，自动落入 localPending（未载入池），再次载入即可找回。
+   * 内容以库中当前版本为准，**不重读磁盘**：rawJson 里含用户在编辑器追加的
+   * 分组 / 便签 / 坐标，重读会把这些编辑丢掉（「同步」才是以文件为事实源的入口）。 */
+  convertToOnline: authedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.id);
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workflow not found",
+        });
+      }
+      /* 已是在线（没有绑磁盘文件）时幂等返回，不写库。 */
+      if (existing.sourcePath === null) {
+        return { ok: true, converted: false };
+      }
+      await workflowTemplateRepository.update(existing.id, {
+        sourcePath: null,
+        sourceMtime: null,
+        sourceChecksum: null,
+      });
+      /* 详情缓存 TTL 30s：不清的话转换后进详情仍会吃到按「本地」算的旧缓存。 */
+      invalidateWorkflowDetailCache(ctx.user.id, existing.id);
+      return { ok: true, converted: true };
+    }),
 };

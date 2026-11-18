@@ -152,7 +152,11 @@ export function WorkflowLibrary({
               <WorkflowLibraryDetail
                 allModelTags={c.modelTags}
                 isBundleBusy={c.isBundleBusy}
+                isConvertBusy={c.isConvertBusy}
                 isResyncBusy={c.isResyncBusy}
+                onConvertToOnline={(id, name) => {
+                  void c.handleConvertToOnline(id, name);
+                }}
                 onDelete={c.handleDeleteClick}
                 onDownload={(id, name) => {
                   void c.handleDownload(id, name);
