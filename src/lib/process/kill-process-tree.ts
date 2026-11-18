@@ -38,6 +38,8 @@
 
 import { execFile, execFileSync, spawn } from "node:child_process";
 
+import { withTimeoutResult } from "~/lib/with-timeout";
+
 /** 回收目标的描述。pid <= 0 一律视为「没有可回收目标」，直接返回 ok。 */
 export type KillProcessTreeOptions = {
   /** 子进程是否以 detached 方式拉起。仅作为「连 ps 都拿不到 PGID」时的
@@ -120,33 +122,34 @@ function dispatchTaskkillAwait(
 ): Promise<{ code: number | null; ok: boolean; via: string }> {
   const exe = windowsTaskkillPath();
   const via = `${exe} ${args.join(" ")}`;
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (ok: boolean, note: string, code: number | null): void => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      resolve({ ok, via: note === "" ? via : `${via}（${note}）`, code });
-    };
-    const timer = setTimeout(() => {
-      finish(false, `taskkill 未在 ${timeoutMs}ms 内退出`, null);
-    }, timeoutMs);
+  /* 超时收口走 ~/lib/with-timeout（P58：不自写定时器样板）。 */
+  const run = new Promise<{ code: number | null; ok: boolean; reason: string }>((resolve) => {
     try {
       const child = spawn(exe, args, { stdio: "ignore", windowsHide: true });
       child.on("error", () => {
-        clearTimeout(timer);
-        finish(false, "taskkill 起不来", null);
+        resolve({ code: null, ok: false, reason: "taskkill 起不来" });
       });
       child.on("close", (code) => {
-        clearTimeout(timer);
-        finish(code === 0, `exit=${code}`, code);
+        resolve({
+          code,
+          ok: code === 0,
+          reason:
+            code === 0 ? "" : `taskkill 未成功（exit=${code}；目标可能已不在 / 被拦截 / 权限不足）`,
+        });
       });
     } catch {
-      clearTimeout(timer);
-      finish(false, "taskkill 无法派发", null);
+      resolve({ code: null, ok: false, reason: "taskkill 无法派发" });
     }
   });
+  return withTimeoutResult(run, timeoutMs, {
+    code: null,
+    ok: false,
+    reason: `taskkill 未在 ${timeoutMs}ms 内退出`,
+  }).then((outcome) => ({
+    code: outcome.code,
+    ok: outcome.ok,
+    via: outcome.reason === "" ? via : `${via}（${outcome.reason}）`,
+  }));
 }
 
 /** 当前平台是否是 Windows（进程树机制的分叉点）。 */
