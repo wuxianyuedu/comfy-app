@@ -22,6 +22,51 @@ let processSafetyNetInstalled = false;
  *  每拍异常不再把日志文件灌满（ISSUE #4256）。 */
 const SAFETY_NET_REPEAT_EVERY = 50;
 
+/** 洪水防护去重表的条目上限（ISSUE #4338）。键是完整异常文本（含 stack），
+ *  故障态下后台循环每拍抛出的变体（不同 id / 路径 / SQL 片段）各占一条长键；
+ *  不设上限时键数随变体数无界增长，常驻数周的桌面进程内存缓慢上涨。
+ *  封顶后淘汰「最久未重复」的冷变体键；持续重复的热键每次命中都刷新位次、
+ *  不会被挤掉，限频记账不中断。 */
+export const SAFETY_NET_MAX_KEYS = 512;
+
+/** 洪水防护的记账器（去重 + 限频 + 封顶）。独立成工厂是为了单测能直接断言
+ *  「键数封顶 / 热键不被冷变体洪水挤掉」，不必真挂进程级监听器。 */
+export type SafetyNetReporter = {
+  report: (kind: string, reason: unknown) => void;
+  /** 当前驻留的去重键数（恒 ≤ SAFETY_NET_MAX_KEYS）。 */
+  readonly size: number;
+};
+
+export function createSafetyNetReporter(): SafetyNetReporter {
+  const describe = (reason: unknown): string =>
+    reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+  const counts = new Map<string, number>();
+  return {
+    get size(): number {
+      return counts.size;
+    },
+    report: (kind: string, reason: unknown): void => {
+      const text = describe(reason);
+      const count = (counts.get(text) ?? 0) + 1;
+      /* LRU 触碰（与 runner-state 的 touchAndEvict 同一形态）：Map 迭代序=插入序、
+       * 对已存在的键 set 不改位次，所以先 delete 再 set 刷新「最近使用」；
+       * 超限时淘汰迭代器首项（最久未用）。 */
+      counts.delete(text);
+      counts.set(text, count);
+      while (counts.size > SAFETY_NET_MAX_KEYS) {
+        const oldest = counts.keys().next().value;
+        if (oldest === undefined) {
+          break;
+        }
+        counts.delete(oldest);
+      }
+      if (count <= 3 || count % SAFETY_NET_REPEAT_EVERY === 0) {
+        console.error(`[process] ${kind}#${count}：${text}`);
+      }
+    },
+  };
+}
+
 /**
  * 显式注册 `unhandledRejection` / `uncaughtException` 的进程级兜底（ISSUE #4216）。
  *
@@ -31,7 +76,9 @@ const SAFETY_NET_REPEAT_EVERY = 50;
  * 没有这层）；这里显式化之后，谁起服务谁就有这张网。
  *
  * 洪水防护（ISSUE #4256）：同一 message 的重复异常只记首 3 条、之后每 50 条记
- * 一条（带累计序号），防止「周期循环每拍抛同一异常」把日志文件灌满。
+ * 一条（带累计序号），防止「周期循环每拍抛同一异常」把日志文件灌满；去重表
+ * 封顶 SAFETY_NET_MAX_KEYS 条、LRU 淘汰（ISSUE #4338），长生命周期进程不再
+ * 随异常变体数无界增长。
  * 导出仅为可测（注册是进程级副作用，用例直接调用并断言监听器挂载与输出）。
  */
 export function installProcessSafetyNet(): void {
@@ -39,22 +86,12 @@ export function installProcessSafetyNet(): void {
     return;
   }
   processSafetyNetInstalled = true;
-  const describe = (reason: unknown): string =>
-    reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
-  const counts = new Map<string, number>();
-  const report = (kind: string, reason: unknown): void => {
-    const text = describe(reason);
-    const count = (counts.get(text) ?? 0) + 1;
-    counts.set(text, count);
-    if (count <= 3 || count % SAFETY_NET_REPEAT_EVERY === 0) {
-      console.error(`[process] ${kind}#${count}：${text}`);
-    }
-  };
+  const reporter = createSafetyNetReporter();
   process.on("unhandledRejection", (reason: unknown) => {
-    report("unhandledRejection", reason);
+    reporter.report("unhandledRejection", reason);
   });
   process.on("uncaughtException", (error: Error) => {
-    report("uncaughtException", error);
+    reporter.report("uncaughtException", error);
   });
 }
 
