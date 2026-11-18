@@ -61,10 +61,15 @@ describe("pinFamily — 分类只看声明类型", () => {
     expect(pinFamily(pin("1", "seed", { type: undefined }))).toBe("number");
   });
 
-  it("连线型端口、输出口、未知类型都不属于任何族", () => {
+  it("连线型端口：张量图片入口入图片族（#4355），其余族与输出口不属任何族", () => {
     expect(pinFamily(pin("1", "model", { kind: "param", type: "MODEL" }))).toBe(null);
+    /* #4355：张量型图片入口（无 widget）可作参考图落点 —— 执行期由图增强
+     * 自动补 LoadImage 供给（reference-loader-augment）。 */
+    expect(pinFamily(pin("69", "images.image_1", { kind: "param", type: "IMAGE" }))).toBe("image");
+    expect(pinFamily(pin("69", "mask", { kind: "param", type: "MASK" }))).toBe("image");
+    expect(pinFamily(pin("1", "clip", { kind: "param", type: "CLIP" }))).toBe(null);
+    expect(pinFamily(pin("1", "text_in", { kind: "param", type: "STRING" }))).toBe(null);
     expect(pinFamily(pin("1", "IMAGE", { direction: "output", type: "IMAGE" }))).toBe(null);
-    expect(pinFamily(pin("1", "clip", { type: "CLIP" }))).toBe(null);
   });
 
   it("族内几个对外参数共享同一份候选（谁是谁由连线声明）", () => {

@@ -340,6 +340,11 @@ export const shotInputSchema = z
     status: z.enum(SHOT_STATUSES).default("idle"),
     taskId: z.string().optional(),
     imageUrl: z.string().optional(),
+    /** 镜头级参考图（#4355）：首张为主图，其余按序落其余参考图槽；上限 16 张
+     *  （超出按序截断，UI 侧同样限 16）。留空 = 回落「出场角色的定妆照」
+     *  （既有口径，见 feature-workshop-flow.md §4）。`.optional()` 收在**最外层**
+     *  （transform 之后）：输出类型里这个键保持可选，旧的对象字面量不破。 */
+    referenceImages: stringList.transform((value) => value.slice(0, 16)).optional(),
     // ── 视频生成计划 ──
     dialogue: z.string().optional(), // 对白 / 字幕文本
     motion: optionalEnum(MOTION_LEVELS), // 运动强度（I2V）

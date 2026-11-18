@@ -11,7 +11,7 @@ import { isRecord } from "~/lib/is-record";
 import { sleep } from "~/lib/with-timeout";
 import type { ApiCallDebugRow as ApiRelayDebugRow } from "./api-channel-core";
 import type { ApiChannelView, ApiChannelsView } from "./api-channel-shared";
-import type { Character } from "./types";
+import type { Character, Shot } from "./types";
 
 /* 从中继错误信封里取出可读信息
  *（形如 `{ error: string }`，或鉴权失败时的 `{ error: { message } }`）。 */
@@ -332,35 +332,45 @@ export async function prepareLocalInputImage(image: string): Promise<string> {
   return filename;
 }
 
-/* 定妆照 URL → 已上传文件名的会话内缓存：批量生成时同一镜的同一张定妆照
+/* 参考图 URL → 已上传文件名的会话内缓存：批量生成时同一镜的同一张参考图
  * 会随每个镜头反复请求，缓存让 ComfyUI 输入目录里不再为同一张图堆 N 份副本。 */
-const portraitRefCache = new Map<string, string>();
-/** 缓存上限：超过就整表清掉（定妆照数量有限，正常到不了）。 */
-const PORTRAIT_REF_CACHE_MAX = 32;
+const referenceUploadCache = new Map<string, string>();
+/** 缓存上限：超过就整表清掉（参考图数量有限，正常到不了）。 */
+const REFERENCE_UPLOAD_CACHE_MAX = 32;
 
-/** 收集镜头相关角色的**已选定定妆照**，上传进 ComfyUI 输入目录，
- *  作为本次镜头生图的参考图（`referenceImages` 的值）。
+/** 收集本次镜头生图的**参考图**，上传进 ComfyUI 输入目录，作为
+ *  `referenceImages` 的值（首张为主图，#4355）。
  *
- *  流程口径（docs/guides/feature-workshop-flow.md §4）：定妆照就是「后续分镜图
- *  的参考图基准」。参考图口吃的是**已上传文件的文件名**，所以逐张经
- *  `prepareLocalInputImage` 上传；单张失败不拖垮整次生成 —— 跳过并计入
- *  `failedCount`，由调用方决定是否提示（降级不得静默，规范 10 §10.3.1）。
+ *  来源两档（docs/guides/feature-workshop-flow.md §4）：
+ *  ① 镜头级 `shot.referenceImages`（用户在镜头卡片上多选的图，第一张为主图，
+ *     其余按序落其余参考图槽）—— 非空时**就用它**；
+ *  ② 留空回落既有口径「出场角色的已选定定妆照」（按 characterIds 出场序）。
  *
- *  顺序按 `characterIds`（分镜里的角色出场序）。内置默认契约只有两个参考图槽
- *  （reference-image / -2），超过两张的定妆照落不进端口，这里截到两张、
- *  不做无效上传。没有角色选了定妆照 → 空数组，调用方不给这个口。 */
-export async function preparePortraitReferences(
+ *  参考图口吃的是**已上传文件的文件名**，所以逐张经 `prepareLocalInputImage`
+ *  上传；单张失败不拖垮整次生成 —— 跳过并计入 `failedCount`，由调用方决定
+ *  是否提示（降级不得静默，规范 10 §10.3.1）。上限 16 张（#4355，与契约默认
+ *  槽位数一致）。没有可用的参考图 → 空数组，调用方不给这个口。 */
+export async function prepareShotReferences(
+  shot: Shot,
   characters: Array<Character>,
-  characterIds: ReadonlyArray<string>,
 ): Promise<{ failedCount: number; files: Array<string> }> {
-  const urls = characterIds
-    .map((id) => characters.find((c) => c.id === id)?.portraitUrl)
-    .filter((url): url is string => typeof url === "string" && url !== "")
-    .slice(0, 2);
+  const picked =
+    shot.referenceImages && shot.referenceImages.length > 0
+      ? shot.referenceImages
+      : shot.characterIds
+          .map((id) => characters.find((c) => c.id === id)?.portraitUrl)
+          .filter((url): url is string => typeof url === "string" && url !== "");
+  const urls = picked.slice(0, 16);
   const files: Array<string> = [];
   let failedCount = 0;
   for (const url of urls) {
-    const cached = portraitRefCache.get(url);
+    /* 已是 ComfyUI 输入目录里的**文件名**（镜头卡片上传后存的就是它，#4355）
+     * → 直接用，不再二次上传；形如 data: / http(s): / 根相对 的才走上传通道。 */
+    if (!/^(?:data:|https?:|\/)/.test(url)) {
+      files.push(url);
+      continue;
+    }
+    const cached = referenceUploadCache.get(url);
     if (cached !== undefined) {
       files.push(cached);
       continue;
@@ -368,10 +378,10 @@ export async function preparePortraitReferences(
     try {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const filename = await prepareLocalInputImage(url);
-      if (portraitRefCache.size >= PORTRAIT_REF_CACHE_MAX) {
-        portraitRefCache.clear();
+      if (referenceUploadCache.size >= REFERENCE_UPLOAD_CACHE_MAX) {
+        referenceUploadCache.clear();
       }
-      portraitRefCache.set(url, filename);
+      referenceUploadCache.set(url, filename);
       files.push(filename);
     } catch {
       failedCount += 1;

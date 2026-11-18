@@ -25,7 +25,7 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
     buildLibraryWorkflowInput: vi.fn(),
     startLocalGenerate: vi.fn(),
     watchTask: vi.fn(),
-    preparePortraitReferences: vi.fn(() => ({
+    prepareShotReferences: vi.fn(() => ({
       files: [],
       failedCount: 0,
     })),
