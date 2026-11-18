@@ -610,7 +610,7 @@ describe("waitForDetachMediator —— 中介的退出码与 stderr", () => {
     child.emit("error", new Error("ENOENT: no such file"));
     const outcome = await p;
     expect(outcome.code).toBe(-1);
-    expect(outcome.stderr).toContain("中介拉起失败");
+    expect(outcome.stderr).toContain("中介拉起");
     expect(outcome.stderr).toContain("ENOENT");
   });
 

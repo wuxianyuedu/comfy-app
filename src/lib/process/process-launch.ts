@@ -31,6 +31,7 @@
 // + log-paths #1074 通链，纯 Node 可加载） / `~/lib/with-timeout`（纯函数）。
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
+import { errorText } from "~/lib/error-message";
 import { logger } from "~/lib/core/logger";
 import { elevateLogLevel } from "./probe-exe.ts";
 import { withTimeoutResult } from "~/lib/with-timeout";
@@ -198,7 +199,7 @@ export function waitForDetachMediator(
       child.on?.("error", (error: Error) => {
         resolve({
           code: -1,
-          stderr: `${readSoFar()}\n[process-launch] 中介拉起失败：${error.message}`.trim(),
+          stderr: `${readSoFar()}\n[process-launch] ${errorText(error, "中介拉起")}`.trim(),
         });
       });
     }),
@@ -236,7 +237,7 @@ export function waitForDetachMediator(
  */
 function attachSpawnErrorLogger(child: ChildProcess, label: string): void {
   child.on("error", (error: Error) => {
-    logger.warn(`[process-launch] ${label} 拉起失败：${error.message}`);
+    logger.warn(`[process-launch] ${errorText(error, `${label} 拉起`)}`);
   });
 }
 
