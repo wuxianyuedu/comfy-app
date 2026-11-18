@@ -1348,6 +1348,24 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(compactHeight).toBe(win.height);
   });
 
+  it("页面侧兜底 COMPACT_SIZE 与壳侧 SPLASH_WINDOW_SIZE 同值（#4375）", () => {
+    // splash.html 的 COMPACT_SIZE 是「与壳侧 SPLASH_WINDOW_SIZE 同值」的复述常量
+    //（壳过旧 / 纯 Web 预览、set_splash_compact 调不动时的回落档）。这条一致
+    // 性原先只写在注释里——改壳侧常量忘了改页面侧时钩子全绿，只有回落场景
+    // 退回旧尺寸。conf⇄lib.rs 那一对已有上一条判据，这里补页面侧三份副本。
+    const rust = readFileSync(LIB_RS, "utf8");
+    const [shellWidth, shellHeight] = sizeConst(rust, "SPLASH_WINDOW_SIZE");
+    for (const copy of SPLASH_COPIES) {
+      const html = readFileSync(copy, "utf8");
+      const m = /const COMPACT_SIZE = \{ width: (?<w>\d+), height: (?<h>\d+) \};/.exec(html);
+      if (!m?.groups) {
+        throw new Error(`${copy} 里没有 COMPACT_SIZE 常量`);
+      }
+      expect(Number(m.groups.w), `${copy} 的 COMPACT_SIZE.width 要跟壳侧同值`).toBe(shellWidth);
+      expect(Number(m.groups.h), `${copy} 的 COMPACT_SIZE.height 要跟壳侧同值`).toBe(shellHeight);
+    }
+  });
+
   it("展开日志那一档够放下未折行的日志（旧的 1280 太窄）", () => {
     const rust = readFileSync(LIB_RS, "utf8");
     const [expandedWidth, expandedHeight] = sizeConst(rust, "SPLASH_WINDOW_SIZE_EXPANDED");
