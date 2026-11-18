@@ -39,6 +39,14 @@ const SHELL_CHAIN_PATHS = launchPaths(process.cwd());
 const TAIL_BYTES = 1024 * 1024;
 
 /**
+ * 增量拉取的窗口上限（ISSUE #4281）：游标到文件尾超过它就改取尾部窗口。
+ * 与 TAIL_BYTES 同量级——正常增量远小于它；只有「游标落后了几 MB」的异常
+ * 积压（休眠一夜后回来、或手工构造 offset=1）才会触顶，此时面板拿到的是
+ * 最近 8MB，而不是一次 OOM 级的整段分配。
+ */
+const INCREMENTAL_MAX_BYTES = 8 * 1024 * 1024;
+
+/**
  * 文件的当前字节数；**不存在**回 null，其它错误照抛 —— 「没有这个文件」是空切片（面板显示「还没有输出」），
  * 而「读不到」（权限 / 磁盘）是接口挂了 ⇒ 必须走 500 出口，不许并成同一个 null 冒充「没有日志」。一次 `stat` 同时回答这两件事。
  */
@@ -171,11 +179,21 @@ async function readLogSlice(
     };
   }
   let start = cursorValid ? requestedOffset : Math.max(0, fileSize - TAIL_BYTES);
+  /* 增量窗口同样要封顶（ISSUE #4281）：游标合法只说明它落在文件里，不说明
+   * 「游标到文件尾」值得整段读进内存——追加型日志可积累到几十 MB 以上，
+   * 休眠一夜后客户端带着旧小游标回来（或手工 offset=1）就会一次分配近似
+   * 整个文件的 Buffer、再序列化一份同量级字符串，单请求即可把服务进程打
+   * OOM。超限改取「最后 INCREMENTAL_MAX_BYTES」窗口：起点不再是上一拍的
+   * 行边界，与滑动窗口同款走掐头对齐，响应照常带最新 offset。 */
+  let alignHead = !cursorValid;
+  if (fileSize - start > INCREMENTAL_MAX_BYTES) {
+    start = fileSize - INCREMENTAL_MAX_BYTES;
+    alignHead = true;
+  }
 
   const buf = (await readBytes(logFile, start, fileSize - start)) ?? Buffer.alloc(0);
-  /* 只有「滑动窗口」分支才需要掐头对齐：游标来自上一次响应的 `size`，
-   * 它本身就在行边界上（或者是文件末尾）。 */
-  if (!cursorValid) {
+  /* 「滑动窗口」分支需要掐头对齐：跳过窗口第一个半行，否则面板解析出乱码行。 */
+  if (alignHead) {
     start = alignToLineStart(buf, start, fileSize);
     const skip = start - (fileSize - buf.length);
     return {
