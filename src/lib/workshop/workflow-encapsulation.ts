@@ -108,6 +108,9 @@ export type SizeSpecValue = {
 
 /** 一次封装的结果。 */
 export type EncapsulatedInputs = {
+  /** 契约槽位 id → 主落点 ioKey（resolveMapping 的结果；null = 未连线）。
+   *  参考图装载计划（#4376）据此把文件名扇出到追加端口。 */
+  resolved: Record<string, string | null>;
   /** 用户给了值、但落不到任何端口的口（未连线 / 作者显式断开 / 端口已消失）。
    *  以前这里会按名字猜一个端口兜住，现在如实上报 —— 没连线就是「未配置」。 */
   unmatched: Array<string>;
@@ -281,8 +284,8 @@ function toContractValues(args: {
 }
 
 /** 契约口 id → 对外值里对应的参考图槽位（`reference-image` = 0，`-2` = 1…）。
- *  非参考图口返回 -1。 */
-function referenceSlotOf(id: string): number {
+ *  非参考图口返回 -1。装载绑定 / 装载计划（#4376）用它识别参考图槽位。 */
+export function referenceSlotOf(id: string): number {
   if (id === "reference-image") {
     return 0;
   }
@@ -471,7 +474,7 @@ export function buildEncapsulatedInputs(args: {
 }): EncapsulatedInputs {
   const { io, paramMap, mode, values, contractIds, table = DEFAULT_SIZE_PRESET_TABLE } = args;
   if (!io || typeof io !== "object") {
-    return { workflowInputs: [], unmatched: [] };
+    return { workflowInputs: [], unmatched: [], resolved: {} };
   }
   const effectiveMode = mode ?? null;
   const entries = buildParamEntries(io, undefined, {
@@ -531,7 +534,7 @@ export function buildEncapsulatedInputs(args: {
       reported.add(id);
     }
   }
-  return { workflowInputs: inputs, unmatched: [...reported] };
+  return { workflowInputs: inputs, unmatched: [...reported], resolved };
 }
 
 /* ── unmatched 的用户口径 ──────────────────────────────────────────────

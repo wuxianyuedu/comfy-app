@@ -482,6 +482,51 @@
   `src/lib/comfyui/executor-cli.ts`、`src/lib/comfyui/executor-cli-stream.ts`、
   `src/lib/workflow/workflow-generate-input.ts`
 
+#### FR-WF-11 本地工作流一键转在线（原文件转未载入）
+
+- 状态：已上线
+- 需求：来源为「本地」的工作流（绑定磁盘文件）可一键转成在线工作流
+  （纯数据库保存，不再跟踪磁盘文件）；原有的本地磁盘文件随之变为
+  「未载入」状态，出现在左侧「未载入的本地工作流」区，可随时再次载入。
+- 行为与验收：详情面板仅当 `source === "local"` 时显示「转为在线」按钮；
+  点击后该行 `sourcePath` / `sourceMtime` / `sourceChecksum` 置空——
+  列表徽标由「本地」翻「在线」，磁盘原文件（不删除）因不再被任何行引用
+  而进入 localPending 未载入池。名称、工坊封装（paramMap / workflowIO）、
+  模式与模型标签、画布布局全部保留；内容以库中当前版本为准，**不重读
+  磁盘文件**（避免覆盖编辑器里追加的分组 / 便签 / 布局）。对已是在线的行
+  重复触发幂等（`converted: false`）。已知边界：转换后再「载入」同名原文件
+  会因 `(userId, name)` 唯一约束报「同名工作流已存在」，需先改名。
+- 落点：`src/server/api/routers/workflow-mutations.ts`（`convertToOnline`）、
+  `src/components/studio/workflow-library/sections/DetailHeader.tsx`、
+  `src/components/studio/workflow-library/hooks/use-workflow-actions.ts`
+
+#### FR-WF-12 参考图装载预设（多参考图动态建链 / 扇出）
+
+- 状态：已上线
+- 需求：多参考图工作流（如 MiniMax H3 的 `image_0..image_4`）的参考图装载链
+  （LoadImage → ResizeImageMaskNode → … → image_N）不必逐张工作流手工连线：
+  每条装载链可存成**预设**，执行时按预设为每张参考图动态生成装载子图，
+  并把同一张图扇出到它该到达的所有端口。
+- 行为与验收：
+  - 「工坊封装」页签的参考图槽位行可配**装载预设**（缺省 = 裸 LoadImage 直连，
+    即 #4355 行为）与**追加端口**（同一张图除主落点外再喂给的端口，扇出）；
+    绑定随模式存放，写回 `paramMap` 的 `referenceLoaders` 命名空间。
+  - 预设库弹窗（封装页签「管理预设」）可新建 / 编辑 / 删除预设：名称 +
+    装载链（LoadImage 之后串哪些处理节点，控件值就地编辑，节点类从
+    ComfyUI object_info 目录按关键词搜索追加）。
+  - 执行期（comfy-cli 提交前）：计划命中的端点按预设实例化
+    `LoadImage → 处理链 → 端口` 子图，文件名写入新 LoadImage；同文件多端点
+    各自成链（扇出）；目录不可用 / 类缺失 / 预设已删的端点回落裸 LoadImage。
+  - 已知边界：预设链为**线性串接**（覆盖 LoadImage → Resize → … → 端口的
+    完整流程）；链内分支不在本版量程。绑定只作用于工坊生成链路（画布单图
+    通道维持裸 LoadImage 行为）。
+- 落点：`src/lib/comfyui/reference-loader-chain.ts`（执行期建链）、
+  `src/lib/comfyui/reference-loader-catalog.ts`（object_info 归一）、
+  `src/lib/workshop/reference-loader-preset*.ts`（预设存储）、
+  `src/server/api/routers/reference-loader.ts`（路由）、
+  `src/components/studio/workflow-library/reference-loader/`（预设库弹窗与绑定区）、
+  `src/lib/workshop/reference-loader-plan.ts`（载荷计划构造）
+
 ---
 
 ## 6. 生成与任务（FR-GN）
@@ -920,9 +965,9 @@
   一行**，类型值用英文（`text` / `number` / `image` / `size` —— 与口 id
   同一语言，不再中译一层「文本 / 数字」）。
 - 必填 / 可选用**徽标**标出，且徽标就是开关（#4072）：此前那一格是「勾选框
-  + 一句固定的『必备』」—— 勾上写「必备」、没勾也写「必备」，读的人看不出
-  「没勾 = 可选」。徽标形态与「工作流库 → 工坊封装」那一行同源（共用
-  `ContractRequiredBadge`，两处不各写一份胶囊类名）。
+  - 一句固定的『必备』」—— 勾上写「必备」、没勾也写「必备」，读的人看不出
+    「没勾 = 可选」。徽标形态与「工作流库 → 工坊封装」那一行同源（共用
+    `ContractRequiredBadge`，两处不各写一份胶囊类名）。
 - 落点：`src/components/workshop/mode-contract/ModeContractView.tsx`、
   `src/lib/workshop/mode-contract-defaults.json`（完整基线）、
   `src/lib/workshop/mode-contract-registry.ts`（三层合并与差集）、
