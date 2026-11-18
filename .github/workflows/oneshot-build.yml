@@ -56,7 +56,7 @@ env:
 
 jobs:
   oneshot-build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # 三格预算之和（20 + 30 + 30）量级之上的整数档；GitHub 单 job 硬上限 6h，这条在它之内。
     timeout-minutes: 90
     steps:

@@ -16,7 +16,7 @@
  * 绑定由 `tests/no-platform-ci-config.test.ts` 的触发口对账钉着 —— 这里**不重复**，
  * 这里只答「注册表 ↔ 磁盘上的 workflow 文件」这半边闭环。
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -284,5 +284,40 @@ describe("与 .cnb.yml 的闭环：触发口双向登记（#3504）", () => {
       "这些 `*_trigger_*` 流水线没登记进 ci-ga-trigger-map 的注册表 —— 加触发口必须同批加一行",
     ).toEqual([]);
     expect(lanes.length, "一条触发口都没有 —— 判据空转").toBeGreaterThan(0);
+  });
+});
+
+/* ── runner 镜像一律显式钉版（ISSUE #4297）─────────────────────────────────
+ * `ubuntu-latest` 随平台排期在 24.04 / 26.04 之间漂移，同一份代码两次跑可能落在
+ * 不同镜像上；显式钉版后「换镜像」变成单独一次可审计的决定。这里动态枚举目录下
+ * 全部 workflow（含注册表外的 pr-gate / master-gate / code-scanning-triage），
+ * 新增 workflow 自动纳入，不靠手工维护清单。 */
+describe("GA workflow 的 runner 一律显式钉版、不跟浮动标签（#4297）", () => {
+  const workflowsDir = path.join(ROOT, ".github/workflows");
+  const allWorkflows = readdirSync(workflowsDir)
+    .filter((f) => f.endsWith(".yml"))
+    .sort();
+
+  it("至少扫到一份 workflow —— 判据空转防线", () => {
+    expect(allWorkflows.length, ".github/workflows 下一份 .yml 都没有 —— 判据空转").toBeGreaterThan(
+      0,
+    );
+  });
+
+  it("每个 workflow 的每个 runs-on 都是显式钉版：ubuntu-N.N / windows-NNNN，不出现 *-latest", () => {
+    const offenders: Array<string> = [];
+    for (const file of allWorkflows) {
+      const text = read(`.github/workflows/${file}`);
+      for (const m of text.matchAll(/^ {4}runs-on:\s*(?<label>\S+)\s*$/gm)) {
+        const label = m.groups?.label ?? "";
+        if (!/^(?:ubuntu-\d+\.\d+|windows-\d{4})$/.test(label)) {
+          offenders.push(`${file}: ${label}`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      "这些 runner 不是显式钉版（期望 ubuntu-N.N / windows-NNNN）—— 浮动标签让镜像由平台排期决定，换镜像应是单独一次决定",
+    ).toEqual([]);
   });
 });

@@ -99,8 +99,8 @@ env:
 
 jobs:
   daily:
-    # 钉 24.04 不跟浮动标签的理由见 pr-gate.yml 同名注释。
-    runs-on: ubuntu-24.04
+    # 钉 26.04 不跟浮动标签的理由见 pr-gate.yml 同名注释。
+    runs-on: ubuntu-26.04
     # CNB 各格预算之和（build 30m + lint 30m + E2E 45m + 单测 45m + 安装/浏览器）≈ 160m，
     # 冷装与现场编译留一个量级，给到 300m。GitHub 单 job 硬上限 6h，这条在它之内。
     timeout-minutes: 300
@@ -183,7 +183,7 @@ jobs:
         run: node scripts/affected-tests/full-suite-run.mjs
 
       # 环境证据（ISSUE #3333）：重格红成「子进程被信号打死 / 没有读数」时，OOM 定性
-      # 此前只能停在「最大嫌疑」——内核的 OOM 行不会自己进 step 日志，而 ubuntu-24.04
+      # 此前只能停在「最大嫌疑」——内核的 OOM 行不会自己进 step 日志，而 Ubuntu
       # 镜像的 dmesg 要 sudo（hosted runner 有免密 sudo）。`if: failure()` 兜住上面
       # 全部会红的格：证据只花在红的那一跑，绿的那一跑一个字节都不付。
       # grep 无命中退 1 是「内核没记 OOM」这一读数本身，`|| echo` 把它接住、不冒充第二格红。
@@ -238,7 +238,7 @@ jobs:
   # 脚本只认 jobs API 的 `steps[].conclusion`，而 step 形态下那个 job 自己还在飞，
   # 实测读回 0 个红格 ⇒ 零写入。`needs: daily` 让上游先 `completed`，conclusion 才是终值。
   daily-failure-issue:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: daily
     # 判的是**上游那一跑**：`daily` 里任一格红即成立。绿跑一个字节都不付（job 直接 skipped）。
     if: failure()
