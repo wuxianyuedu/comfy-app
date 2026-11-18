@@ -32,6 +32,8 @@ import {
 } from "~/lib/workflow/workflow-exposed-params";
 import { parseWorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import { buildEncapsulatedInputs, type WorkshopExposedValues } from "./workflow-encapsulation";
+import { referenceLoaderBindingsForMode } from "./reference-loader-binding";
+import { buildReferenceLoaderPlan } from "./reference-loader-plan";
 import { deriveEncapsulationStatus } from "./workshop-encapsulation-status";
 
 /* 本地（ComfyUI）生成 mutation 的 tRPC 传输契约。 */
@@ -328,7 +330,7 @@ export async function buildLibraryWorkflowInput(
    * 槽）在工坊链路真的生效；注册表读不到时回落内置默认契约（不阻断生成）。
    * 封装页签的流程测试仍以显式入参优先。 */
   const effectiveContractIds = contractIds ?? (await loadEffectiveContractIds(mode));
-  const { workflowInputs, unmatched } = buildEncapsulatedInputs({
+  const { workflowInputs, unmatched, resolved } = buildEncapsulatedInputs({
     io,
     paramMap: detail?.paramMap ?? null,
     mode,
@@ -339,6 +341,33 @@ export async function buildLibraryWorkflowInput(
      * 与旧行为一致（不劣化）。 */
     table: getSizePresetTable(),
   });
+  /* 参考图装载计划（#4376）：绑定了装载预设 / 追加端口的参考图槽位，把文件名
+   * 扇出到全部目标端口，并给执行期下发「端点 → 预设」计划（计划随任务行自含）。
+   * 预设清单现取一次（清单很小）；取不到 → 不下发计划，相关入口回落裸
+   * LoadImage（与契约注册表取不到时回落内置契约同一口径，不阻断生成）。 */
+  let finalInputs = workflowInputs;
+  let referenceLoaderPlan: GenerateInput["referenceLoaderPlan"];
+  const loaderBindings = referenceLoaderBindingsForMode(detail?.paramMap, mode);
+  if (Object.keys(loaderBindings).length > 0 && (values.referenceImages?.length ?? 0) > 0) {
+    try {
+      const { presets } = await vanillaApi.referenceLoader.presetsGet.query();
+      const { plan, extraInputs } = buildReferenceLoaderPlan({
+        bindings: loaderBindings,
+        filenames: values.referenceImages ?? [],
+        io,
+        presets,
+        resolved,
+      });
+      if (extraInputs.length > 0) {
+        finalInputs = [...workflowInputs, ...extraInputs];
+      }
+      if (Object.keys(plan).length > 0) {
+        referenceLoaderPlan = plan;
+      }
+    } catch {
+      /* 预设清单取不到 → 不下发计划（裸 LoadImage 兜底），不阻断生成。 */
+    }
+  }
   /* 尺寸**不**再带 `size`（"WxH"）兼容字段：尺寸只以「比例 + 分辨率」或
    *  「比例 + 百万像素 + 倍数」表达，逐端口落进 `workflowInputs`；
    *  目标工作流要 width/height 时由封装层按场景尺寸表现算（见
@@ -351,7 +380,8 @@ export async function buildLibraryWorkflowInput(
     ...(values.lastFrame === undefined ? {} : { lastFrame: values.lastFrame }),
     // 视频时长：帧数走内置字段，秒数由 workflowInputs 里的时长口落下去。
     ...(values.frames === undefined ? {} : { frames: values.frames }),
-    ...(workflowInputs.length > 0 ? { workflowInputs } : {}),
+    ...(finalInputs.length > 0 ? { workflowInputs: finalInputs } : {}),
+    ...(referenceLoaderPlan ? { referenceLoaderPlan } : {}),
   };
   return {
     input,

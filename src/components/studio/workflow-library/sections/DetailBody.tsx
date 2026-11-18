@@ -175,6 +175,7 @@ export function DetailBody({
            * （`metaEditor.modes`：缺省回退 [taskType]，兼容旧行）。 */
           modes={meta?.modes ?? []}
           onModeChange={onActiveModeChange}
+          onPatchParamMap={onPatchParamMap}
           paramMap={paramMap}
           workflowId={workflow.id}
           workflowIO={workflowIO}
