@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Hint } from "~/components/ui/hint";
@@ -59,6 +59,15 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
   const [tasks, setTasks] = useState<Array<VideoTask>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  /* 卸载判活（ISSUE #4288）：4s 轮询的在途请求回来时弹窗可能已卸载，
+   * 不再把结果写进已消失的界面状态。 */
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   const loadTasks = useCallback(async () => {
     if (!open) {
@@ -67,11 +76,17 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
     setLoading(true);
     try {
       const videos = await fetchVideoTasks();
-      setTasks(videos);
+      if (aliveRef.current) {
+        setTasks(videos);
+      }
     } catch {
-      setError("加载队列失败");
+      if (aliveRef.current) {
+        setError("加载队列失败");
+      }
     } finally {
-      setLoading(false);
+      if (aliveRef.current) {
+        setLoading(false);
+      }
     }
   }, [open]);
 

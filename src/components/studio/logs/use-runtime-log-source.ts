@@ -106,6 +106,15 @@ export function useRuntimeLogSource({
   /* 在途请求序号：切换 / 刷新与轮询可能重叠，只认最后一次的响应 ——
    * 否则后到的旧响应会把用户刚切过去的会话顶回去。 */
   const seqRef = useRef(0);
+  /* 卸载判活（ISSUE #4288）：在途拉取回来时组件可能已卸载，不再整块写入
+   * 已消失的界面状态（seq 只防「旧盖新」，不防「卸载后写」）。 */
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   const pull = useCallback(async () => {
     const seq = (seqRef.current += 1);
@@ -135,6 +144,9 @@ export function useRuntimeLogSource({
     /* 服务端回落的选中项（请求的 id 已不在列表里时它会选最新）：以它为准。 */
     sessionRef.current = slice.selectedId;
     const text = slice.content.replaceAll(CR_RE, "");
+    if (!aliveRef.current) {
+      return;
+    }
     setSnapshot({
       text,
       segments: capSegments(parse(text)),

@@ -90,6 +90,15 @@ export function useAgentRun(): AgentRunController {
   /* 轮次令牌（ISSUE #3906）：请求耗时超过轮询间隔时两发在途，先发后至者
    * 不得把旧快照盖在新快照上（样板见 use-runtime-log-source 的 seqRef）。 */
   const pollSeqRef = useRef(0);
+  /* 卸载判活（ISSUE #4288）：轮询的在途请求回来时组件可能已卸载，
+   * 不再把快照写进已消失的界面状态（初始取数那条路有 beginStaleRun 守）。 */
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
   useInterval(
     () => {
       if (!projectId) {
@@ -98,7 +107,7 @@ export function useAgentRun(): AgentRunController {
       const seq = ++pollSeqRef.current;
       void fetchRunStatus(projectId)
         .then((snap) => {
-          if (seq === pollSeqRef.current) {
+          if (aliveRef.current && seq === pollSeqRef.current) {
             apply(snap);
           }
         })
