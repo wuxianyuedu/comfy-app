@@ -463,7 +463,7 @@ jobs:
       # 两条 apt 命令加重试与空闲超时让短暂抖动自愈、死镜像早退；步级超时兜住真挂住，
       # 让失败落在这一步自己的名字上。判据一字不改，只硬化这层环境前置（#3589）。
       - name: 装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）
-        timeout-minutes: 30
+        timeout-minutes: 15
         run: |
           # 2026-11-18（#4294）：GA runner 的 apt 镜像抖动频发——「找不到包」与
           # 「装到一半超时」轮流出现，一天内三次把在途 PR 卡死。#3589 的连接级
@@ -471,7 +471,7 @@ jobs:
           # 后清掉 lists 重来一次；两次都失败才让这一格红。30 分钟步级超时罩住
           # 两次尝试。
           for attempt in 1 2; do
-            if sudo apt-get update -qq -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30               && sudo apt-get install -y -qq --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30                 libglib2.0-dev                 libatk1.0-dev                 libcairo2-dev                 libgdk-pixbuf-2.0-dev                 libpango1.0-dev                 libgtk-3-dev                 libdbus-1-dev                 libwebkit2gtk-4.1-dev                 libjavascriptcoregtk-4.1-dev                 libsoup-3.0-dev                 build-essential                 libayatana-appindicator3-dev; then
+            if sudo apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30               && sudo apt-get install -y -qq --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30                 libglib2.0-dev                 libatk1.0-dev                 libcairo2-dev                 libgdk-pixbuf-2.0-dev                 libpango1.0-dev                 libgtk-3-dev                 libdbus-1-dev                 libwebkit2gtk-4.1-dev                 libjavascriptcoregtk-4.1-dev                 libsoup-3.0-dev                 build-essential                 libayatana-appindicator3-dev; then
               exit 0
             fi
             if [ "$attempt" = "2" ]; then
