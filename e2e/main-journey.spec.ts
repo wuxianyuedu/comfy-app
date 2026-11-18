@@ -166,8 +166,11 @@ test.describe("主链路：建项目 → 出图 @critical", () => {
     /* ── ② 建项目：真写库 ── */
     const projectId = `proj_e2e_${stamp}`;
     const projectName = `E2E 主链路 ${stamp}`;
+    /* 入参键是 `projectId`（#4049 起与其余端点统一；此前的 `id` 会被 zod 判缺
+     * 必填项，upsert 在 JSONL 流里回错误块、这边的薄封装不抛 ⇒ 拖到下面的
+     * project.list 断言才红，且读数是「list 里没这一行」而非真因）。 */
     await trpcMutation(page, "project.upsert", {
-      id: projectId,
+      projectId,
       name: projectName,
       nodes: [],
       edges: [],
