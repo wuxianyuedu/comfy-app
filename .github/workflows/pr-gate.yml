@@ -462,23 +462,38 @@ jobs:
       # 而这一格原来既无重试、也无连接 / 步级超时 ⇒ 整条 PR 流水线被压在 pending。
       # 两条 apt 命令加重试与空闲超时让短暂抖动自愈、死镜像早退；步级超时兜住真挂住，
       # 让失败落在这一步自己的名字上。判据一字不改，只硬化这层环境前置（#3589）。
+      #
+      # 步级**整体重试**（#4296）：Acquire::Retries 只救单个下载，救不了「安装中途
+     # 卡死到步级超时」——2026-11-18 一天内该步超时 3 次（#4281/#4283/#4284 的
+      # PR），每次都要人工重派。这里把 update+install 整体循环最多 3 次，步级预算
+      # 相应提到 30 分钟（一次挂满 15 分钟后仍留有余量给重试）。
       - name: 装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: |
-          sudo apt-get update -qq -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
-          sudo apt-get install -y -qq --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
-            libglib2.0-dev \
-            libatk1.0-dev \
-            libcairo2-dev \
-            libgdk-pixbuf-2.0-dev \
-            libpango1.0-dev \
-            libgtk-3-dev \
-            libdbus-1-dev \
-            libwebkit2gtk-4.1-dev \
-            libjavascriptcoregtk-4.1-dev \
-            libsoup-3.0-dev \
-            build-essential \
-            libayatana-appindicator3-dev
+          for attempt in 1 2 3; do
+            echo "[apt] 第 ${attempt}/3 次尝试安装 Tauri 系统依赖"
+            if sudo apt-get update -qq -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+              && sudo apt-get install -y -qq --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+                libglib2.0-dev \
+                libatk1.0-dev \
+                libcairo2-dev \
+                libgdk-pixbuf-2.0-dev \
+                libpango1.0-dev \
+                libgtk-3-dev \
+                libdbus-1-dev \
+                libwebkit2gtk-4.1-dev \
+                libjavascriptcoregtk-4.1-dev \
+                libsoup-3.0-dev \
+                build-essential \
+                libayatana-appindicator3-dev; then
+              echo "[apt] 安装成功（第 ${attempt} 次尝试）"
+              exit 0
+            fi
+            echo "[apt] 第 ${attempt} 次尝试失败，10s 后重试"
+            sleep 10
+          done
+          echo "[apt] 3 次尝试均失败"
+          exit 1
 
       - name: 重档静态判据（cnb 同款判据一字不改）
         # 「没判」那一档（缺 CNB_COMMIT 等前提）由脚本自己打结论行，外壳据此折成非红；
