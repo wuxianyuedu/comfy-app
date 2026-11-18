@@ -327,6 +327,11 @@ export const RUNTIME_SCRIPTS = [
   // createLaunchTimeline / formatLaunchTimeline —— 缺这份同样是整个编排器
   // 加载期 ERR_MODULE_NOT_FOUND（「双击没反应」）。
   "launcher-core/timeline.mjs",
+  // 服务端耗时细分（#4365）：dev-launcher.mjs 顶层静态 import 它的
+  // createServerTimingWatcher / makeFileTailReader（就绪后扫 dev server 的
+  // stdout 落盘文件，把「Next 启动 / 首页编译」反推进时间线）—— 缺这份
+  // 与上面同款：整个编排器加载即 ERR_MODULE_NOT_FOUND。
+  "launcher-core/server-timings.mjs",
   // 运行期「陈旧路由表」自愈与它的归因纯函数：`ready-wait.mjs` 与本模块都由
   // `dev-launcher.mjs` 顶层静态 import（自愈只在这两份里，见
   // `tests/dev-launcher-runtime-heal.test.ts` 的接线断言）—— 缺任一份同样是整个
