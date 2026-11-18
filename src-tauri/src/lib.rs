@@ -373,6 +373,29 @@ fn no_status_payload(root: &str, reason: &str) -> String {
   .to_string()
 }
 
+/// 关闭启动页：失败记 WARN 并**就地重试一次**（ISSUE #4348）。
+///
+/// 交接路径上 `close()` 偶发失败（窗口正在销毁 / WebView 忙）原先被 `let _`
+/// 吞掉：主窗已显示不至卡死，但启动页可能残留在屏幕上，splash 相关的看门狗
+/// 与安全网还会继续空转。这里把「吞错」换成「读数 + 一次有界重试」——仍不因
+/// 关页失败反过来中止交接；两次都失败时 ERROR 留痕，现场可查。
+fn close_splash_window(handle: &tauri::AppHandle) {
+  for attempt in 1..=2 {
+    match handle.get_webview_window("splash") {
+      Some(splash) => match splash.close() {
+        Ok(()) => return,
+        Err(e) => {
+          log::warn!("[ComfyAPP] 关闭启动页失败（第 {attempt} 次）：{e:?}");
+          std::thread::sleep(Duration::from_millis(100));
+        }
+      },
+      // 已经不在了：目标达成。
+      None => return,
+    }
+  }
+  log::error!("[ComfyAPP] 启动页关闭重试后仍失败：启动页可能残留（窗口可能正在销毁），现场见壳日志");
+}
+
 /// 启动页检测到 ready 后，让 Rust 侧把「应用」窗口（main，隐藏）导航到真正的应用 URL。
 /// 启动页（splash）保持可见，直到 main 的页面真正加载完成（on_page_load Finished）才交换窗口。
 /// 这比前端直接 window.location 更可靠，可跨越 tauri:// 与 http:// 协议边界。
@@ -430,9 +453,7 @@ fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHand
       // 强制交接：主窗可能还停在空白 / 错误页，先注入占位再显示，别把空白顶给用户
       watch_main_first_paint(monitor.clone(), true);
       show_main_window_without_focus(&monitor, false);
-      if let Some(s) = monitor.get_webview_window("splash") {
-        let _ = s.close();
-      }
+      close_splash_window(&monitor);
     }
   });
   Ok(())
@@ -702,7 +723,10 @@ fn open_comfyui_window(app: tauri::AppHandle, url: String) -> Result<String, Str
   if let Some(win) = app.get_webview_window("comfyui") {
     let current = win.url().map(|u| u.to_string()).unwrap_or_default();
     if current != url {
-      let _ = win.navigate(parsed.clone());
+      // 重新导航失败原先被 `let _` 吞掉：用户停在旧页且无任何提示（ISSUE #4348）。
+      if let Err(e) = win.navigate(parsed.clone()) {
+        log::warn!("[ComfyAPP] ComfyUI 窗口重新导航失败（仍停在旧页 {current}）：{e:?}");
+      }
     }
     // 同主窗：最小化时 show() 不还原，先 unminimize 再显示/聚焦。
     if win.is_minimized().unwrap_or(false) {
@@ -1330,6 +1354,25 @@ fn sidecar_binary_name() -> &'static str {
   }
 }
 
+/// sidecar 端口重试次数与「拉起后多久没退算成功」的 grace（ISSUE #4347）。
+#[cfg(not(debug_assertions))]
+const SIDECAR_PORT_ATTEMPTS: u32 = 3;
+#[cfg(not(debug_assertions))]
+const SIDECAR_START_GRACE: Duration = Duration::from_millis(1500);
+
+/// 等 sidecar 的启动 grace 窗口：窗口内 [`SIDECAR_TERMINATED`] 被置位 ⇒ 拉起即退。
+#[cfg(not(debug_assertions))]
+fn sidecar_died_within(grace: Duration) -> bool {
+  let grace_end = std::time::Instant::now() + grace;
+  while !SIDECAR_TERMINATED.load(Ordering::Relaxed) {
+    if std::time::Instant::now() >= grace_end {
+      return false;
+    }
+    std::thread::sleep(Duration::from_millis(50));
+  }
+  true
+}
+
 /// 生产模式：以 Node sidecar 启动 Next standalone server，端口就绪后主窗口跳转。
 ///
 /// 进程经 **tauri-plugin-shell** 拉起（而不是 `std::process::Command`）：
@@ -1458,7 +1501,6 @@ fn spawn_sidecar(
   use tauri_plugin_shell::process::CommandEvent;
   use tauri_plugin_shell::ShellExt;
 
-  let port = pick_free_port();
   let payload = match resolve_standalone_payload(app)? {
     ResolvedPayload::FellBackToDevUrl => return Ok(()),
     ResolvedPayload::Ready(p) => p,
@@ -1473,75 +1515,97 @@ fn spawn_sidecar(
     }
   }
 
-  // 参数用**相对载荷根**的形态（根因见 `resolve_standalone_payload` 里那段 verbatim
-  // 路径的实测说明），`cwd` 给到载荷根，二者指向同一个文件。
-  //
-  // 直接执行 sidecar 二进制本身（不经 shell 解释器）：`Command::new` 在 shell 插件里是
-  // 「可执行 + 参数」语义，路径由资源目录给出，不需要 `sh -c` / `cmd /C` 这层间接 ——
-  // 少一层中转就少一个孤儿来源。
-  let (mut rx, child) = app
-    .shell()
-    .command(payload.node.to_string_lossy().to_string())
-    .args([payload.target_arg])
-    .env("PORT", port.to_string())
-    .env("HOSTNAME", "127.0.0.1")
-    // cwd = 载荷根（`server.js` 所在那一层），不是资源根：应用里的运行期目录
-    // （`log/` / `data/` / `public/generated/` / `db.sqlite`）全部按 `process.cwd()`
-    // 解析，而 Next 的 standalone server 启动即 `process.chdir(__dirname)`——两者必须
-    // 落在同一层，否则「server 写的库」和「入口要补的配置」是两个地方。
-    .current_dir(&payload.app_root)
-    .spawn()?;
-  let sidecar_pid = child.pid();
-  *SIDECAR.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(child);
-  // OS 级兜底（ISSUE #4165）：给 sidecar 这棵树也挂 KILL_ON_JOB_CLOSE job。
-  // 正常关窗走 kill_sidecar（插件 kill + reap 补刀）；壳被硬杀时那条链一步都
-  // 跑不了，由 OS 关闭壳持有的 job 句柄当场终止整棵树——与编排器那棵树
-  // （attach_kill_on_close_job）同构。standalone 不写会话锚点，下一次启动的
-  // 孤儿回收对它没有认亲方式，所以这一层必须在壳死当场生效。
-  shell_launch::attach_sidecar_kill_on_close_job(sidecar_pid);
+  // 端口交接的 TOCTOU（ISSUE #4347）：pick_free_port 拿到端口即放手，到 node
+  // 真正 bind 之间可能被其它进程抢占——sidecar 因 EADDRINUSE 一类原因早夭，
+  // 一次启动就此失败。这里按「拉起后 grace 窗口内就退」判失败，换一个新端口
+  // 重试；重试救的是「可避免的失败」，三次都早退时维持单次失败的原有行为
+  // （Terminated 已记录，启动页按不可达处理，不挂死）。
+  for attempt in 1..=SIDECAR_PORT_ATTEMPTS {
+    SIDECAR_TERMINATED.store(false, Ordering::Relaxed);
+    let port = pick_free_port();
 
-  // sidecar 的 stdout/stderr 必须有人读：shell 插件把输出投递到事件通道，
-  // 无人消费时管道写满会让 sidecar 静默卡死（表现为「服务一直不就绪」）。
-  // 落进壳日志，也正好补上 standalone 脱离 launcher 时的诊断通道。
-  // 事件循环里还要写「应用服务结束原因」，因此再取一份 project_root（外层那个
-  // 后面还要用）；move 闭包按值捕获，与 tauri 的 'static 要求一致。
-  let exit_root = project_root_for_exit.to_string();
-  tauri::async_runtime::spawn(async move {
-    while let Some(event) = rx.recv().await {
-      match event {
-        CommandEvent::Stdout(line) => {
-          log::info!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
+    // 参数用**相对载荷根**的形态（根因见 `resolve_standalone_payload` 里那段 verbatim
+    // 路径的实测说明），`cwd` 给到载荷根，二者指向同一个文件。
+    //
+    // 直接执行 sidecar 二进制本身（不经 shell 解释器）：`Command::new` 在 shell 插件里是
+    // 「可执行 + 参数」语义，路径由资源目录给出，不需要 `sh -c` / `cmd /C` 这层间接 ——
+    // 少一层中转就少一个孤儿来源。
+    let (mut rx, child) = app
+      .shell()
+      .command(payload.node.to_string_lossy().to_string())
+      .args([payload.target_arg])
+      .env("PORT", port.to_string())
+      .env("HOSTNAME", "127.0.0.1")
+      // cwd = 载荷根（`server.js` 所在那一层），不是资源根：应用里的运行期目录
+      // （`log/` / `data/` / `public/generated/` / `db.sqlite`）全部按 `process.cwd()`
+      // 解析，而 Next 的 standalone server 启动即 `process.chdir(__dirname)`——两者必须
+      // 落在同一层，否则「server 写的库」和「入口要补的配置」是两个地方。
+      .current_dir(&payload.app_root)
+      .spawn()?;
+    let sidecar_pid = child.pid();
+    *SIDECAR.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(child);
+    // OS 级兜底（ISSUE #4165）：给 sidecar 这棵树也挂 KILL_ON_JOB_CLOSE job。
+    // 正常关窗走 kill_sidecar（插件 kill + reap 补刀）；壳被硬杀时那条链一步都
+    // 跑不了，由 OS 关闭壳持有的 job 句柄当场终止整棵树——与编排器那棵树
+    // （attach_kill_on_close_job）同构。standalone 不写会话锚点，下一次启动的
+    // 孤儿回收对它没有认亲方式，所以这一层必须在壳死当场生效。
+    shell_launch::attach_sidecar_kill_on_close_job(sidecar_pid);
+
+    // sidecar 的 stdout/stderr 必须有人读：shell 插件把输出投递到事件通道，
+    // 无人消费时管道写满会让 sidecar 静默卡死（表现为「服务一直不就绪」）。
+    // 落进壳日志，也正好补上 standalone 脱离 launcher 时的诊断通道。
+    // 事件循环里还要写「应用服务结束原因」，因此再取一份 project_root（外层那个
+    // 后面还要用）；move 闭包按值捕获，与 tauri 的 'static 要求一致。
+    let exit_root = project_root_for_exit.to_string();
+    tauri::async_runtime::spawn(async move {
+      while let Some(event) = rx.recv().await {
+        match event {
+          CommandEvent::Stdout(line) => {
+            log::info!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
+          }
+          CommandEvent::Stderr(line) => {
+            log::warn!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
+          }
+          CommandEvent::Terminated(payload) => {
+            log::info!("[sidecar] terminated: {:?}", payload.code);
+            /* 壳亲眼看到它死了：把这一事实记给第二档探活判据（ISSUE #4151），此后
+             * get_app_service_liveness 不再靠 PID 探测作答。写在事件回调里而不是
+             * 别处：这个事件是壳内唯一「确定它已退出」的时刻。句柄留在槽位里——
+             * 退出时 kill_sidecar 还要靠它回收作业内可能残留的孙辈进程。 */
+            SIDECAR_TERMINATED.store(true, Ordering::Relaxed);
+            /* 服务死的那一刻落盘（ISSUE #1692 的 sidecar 档）：探测那一格打的是服务
+             * 自己的 HTTP，服务一不在就永远问不到「为什么没了」——答案只能由此刻
+             * 还活着的壳写下（见 shell_launch::write_sidecar_exit_record）。写在事件回调里
+             * 而不是别处：这个事件是唯一带着退出码的地方。 */
+            shell_launch::write_sidecar_exit_record(
+              &exit_root,
+              payload.code,
+              &shell_launch::sidecar_exit_reason(payload.code),
+            );
+          }
+          _ => {}
         }
-        CommandEvent::Stderr(line) => {
-          log::warn!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
-        }
-        CommandEvent::Terminated(payload) => {
-          log::info!("[sidecar] terminated: {:?}", payload.code);
-          /* 壳亲眼看到它死了：把这一事实记给第二档探活判据（ISSUE #4151），此后
-           * get_app_service_liveness 不再靠 PID 探测作答。写在事件回调里而不是
-           * 别处：这个事件是壳内唯一「确定它已退出」的时刻。句柄留在槽位里——
-           * 退出时 kill_sidecar 还要靠它回收作业内可能残留的孙辈进程。 */
-          SIDECAR_TERMINATED.store(true, Ordering::Relaxed);
-          /* 服务死的那一刻落盘（ISSUE #1692 的 sidecar 档）：探测那一格打的是服务
-           * 自己的 HTTP，服务一不在就永远问不到「为什么没了」——答案只能由此刻
-           * 还活着的壳写下（见 shell_launch::write_sidecar_exit_record）。写在事件回调里
-           * 而不是别处：这个事件是唯一带着退出码的地方。 */
-          shell_launch::write_sidecar_exit_record(
-            &exit_root,
-            payload.code,
-            &shell_launch::sidecar_exit_reason(payload.code),
-          );
-        }
-        _ => {}
       }
-    }
-  });
+    });
 
-  // 更新应用 URL，供启动页 ready 后导航
-  let app_url = format!("http://127.0.0.1:{}/workspace", port);
-  if let Some(state) = app.try_state::<AppState>() {
-    state.set_app_url(app_url.clone());
+    // grace 窗口：还活着 = 端口到手；窗口内就退 = 换端口重试。
+    if !sidecar_died_within(SIDECAR_START_GRACE) {
+      // 更新应用 URL，供启动页 ready 后导航
+      let app_url = format!("http://127.0.0.1:{}/workspace", port);
+      if let Some(state) = app.try_state::<AppState>() {
+        state.set_app_url(app_url);
+      }
+      return Ok(());
+    }
+    log::warn!(
+      "[ComfyAPP] sidecar 第 {attempt}/{SIDECAR_PORT_ATTEMPTS} 次拉起后立即退出\
+       （端口 {port} 可能已被抢占，或载荷自身起不来），换新端口重试"
+    );
   }
+  log::error!(
+    "[ComfyAPP] sidecar 连续 {SIDECAR_PORT_ATTEMPTS} 次拉起后立即退出：维持单次失败的原有行为\
+     （不挂死、不另立失败出口），原因见 run/app-service-exit.json 与上方 [sidecar] 日志"
+  );
 
   // 注意：不再在此直接导航「应用」窗口。启动页（splash）会自行探测 sidecar 端口，
   // 就绪后调用 navigate_to_app 命令把隐藏的 main 窗口导航到应用 URL；main 页面真正
@@ -1582,7 +1646,10 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
         std::thread::sleep(Duration::from_millis(500));
         if let Some(win) = handle.get_webview_window("main") {
           if let Ok(target) = url.parse::<tauri::Url>() {
-            let _ = win.navigate(target);
+            // 兜底导航失败原先被吞：主窗停在黑屏/旧页且无读数（ISSUE #4348）。
+            if let Err(e) = win.navigate(target) {
+              log::warn!("[ComfyAPP] 兜底导航到应用地址失败（{url}）：{e:?}");
+            }
           }
         }
         // 启动页（splash）不可用，无窗口可交换：直接显示「应用」窗口并关闭黑屏 splash。
@@ -1593,9 +1660,7 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
           .unwrap_or(false);
         if !abandoned {
           show_main_window_without_focus(&handle, false);
-          if let Some(splash) = handle.get_webview_window("splash") {
-            let _ = splash.close();
-          }
+          close_splash_window(&handle);
         }
         return;
       }
@@ -2028,17 +2093,24 @@ fn resolve_project_root() -> String {
 ///
 /// 因此调用点必须是「先捕获 `self_launch` → 再回填」（见 `run()`）：
 /// 顺序反过来会把那条判据变成永远为假的常量，双击链路于是不再自编排。
+/// 回填动作的**进程内唯一写入闸**（ISSUE #4346）：与启动模式那份同一取向，
+/// `set_var` 至多执行一次，「启动期单线程」从注释里的假设变成结构保证。
+static PROJECT_ROOT_PUBLISHED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
 fn publish_project_root_env(root: &str) {
   if root.is_empty() {
     return;
   }
-  if let Ok(existing) = std::env::var("COMFYAPP_PROJECT_ROOT") {
-    if !existing.trim().is_empty() {
-      return; // 外部注入优先：不覆盖「谁起的壳」这条一手证据
+  PROJECT_ROOT_PUBLISHED.get_or_init(|| {
+    if let Ok(existing) = std::env::var("COMFYAPP_PROJECT_ROOT") {
+      if !existing.trim().is_empty() {
+        return; // 外部注入优先：不覆盖「谁起的壳」这条一手证据
+      }
     }
-  }
-  // SAFETY：启动期单线程（事件循环与窗口都还没建），没有并发读环境变量的路径。
-  std::env::set_var("COMFYAPP_PROJECT_ROOT", root);
+    // SAFETY：写入被 [`PROJECT_ROOT_PUBLISHED`] 收敛为至多一次（ISSUE #4346），
+    // 并发写不可能发生；首写处于启动期，此刻没有并发读环境变量的路径。
+    std::env::set_var("COMFYAPP_PROJECT_ROOT", root);
+  });
 }
 
 /// 把壳自己的 exe 路径发布给下游（编排器 → dev server → 服务生命周期）。
@@ -2048,11 +2120,17 @@ fn publish_project_root_env(root: &str) {
 /// server 由编排器拉起，因此这一行写下的变量会顺着链传下去。
 ///
 /// 与 `publish_project_root_env` 同一时机（启动期、建窗口之前）写入。
+/// 壳 exe 路径的**进程内唯一写入闸**（ISSUE #4346，理由同上）。
+static SHELL_EXE_PUBLISHED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
 fn publish_shell_exe_env() {
-  if let Ok(exe) = std::env::current_exe() {
-    // SAFETY：同 publish_project_root_env —— 启动期单线程。
-    std::env::set_var("COMFYAPP_SHELL_EXE", exe);
-  }
+  SHELL_EXE_PUBLISHED.get_or_init(|| {
+    if let Ok(exe) = std::env::current_exe() {
+      // SAFETY：写入被 [`SHELL_EXE_PUBLISHED`] 收敛为至多一次（ISSUE #4346）；
+      // 首写处于启动期，此刻没有并发读环境变量的路径。
+      std::env::set_var("COMFYAPP_SHELL_EXE", exe);
+    }
+  });
 }
 
 /// 日志插件：开发模式走 stdout（launcher 已把 stderr 重定向进
@@ -2945,9 +3023,7 @@ fn on_main_page_finished(handle: &tauri::AppHandle, url: tauri::Url) {
   // 启动期可能已过了几十秒，用户很可能切到了别的窗口：这里只把应用显示到
   // 任务栏并做闪烁提醒，不把窗口顶到前台（见 show_main_window_without_focus）。
   show_main_window_without_focus(handle, false);
-  if let Some(s) = handle.get_webview_window("splash") {
-    let _ = s.close();
-  }
+  close_splash_window(handle);
 }
 
 /// 启动页关闭 = 放弃本次启动，整个应用直接退出。
