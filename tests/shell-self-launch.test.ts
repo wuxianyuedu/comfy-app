@@ -302,7 +302,9 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
     // 三个路径全空 → 只回「暂无日志」等于让用户去贴截图；报告里有项目根、
     // 编排脚本是否找到、端口与各日志路径，用户贴这一屏就等于把现场带出来。
     expect(rust).toContain("startup_report_section");
-    expect(rust).toMatch(/report[\s\S]{0,200}no_log_guidance\(&root\)/);
+    // 兜底在 collect_launch_log（同步主体，#4335 起由命令层挪阻塞线程池）：
+    // 报告 + 指引必须同屏给出。
+    expect(rust).toMatch(/report[\s\S]{0,200}no_log_guidance\(root\)/);
   });
 });
 
