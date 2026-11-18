@@ -659,4 +659,17 @@ describe("resolveCommandInvocation —— 解析结论的进程级缓存（ISSUE
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("命中结论 10 分钟后过期：重新探针（工具链搬迁能自愈，ISSUE #4256）", () => {
+    vi.useFakeTimers();
+    const spawnSpy = vi.spyOn(realUsabilityProbe, "spawn");
+    const first = resolveCommandInvocation("node", []);
+    expect(first.resolved).toBe(true);
+    const spawnsAfterFirst = spawnSpy.mock.calls.length;
+    vi.advanceTimersByTime(10 * 60 * 1000 + 1);
+    const second = resolveCommandInvocation("node", []);
+    expect(second.resolved).toBe(true);
+    expect(second.command).toBe(first.command);
+    expect(spawnSpy.mock.calls.length).toBeGreaterThan(spawnsAfterFirst);
+  });
 });

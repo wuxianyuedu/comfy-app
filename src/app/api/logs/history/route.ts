@@ -2,11 +2,33 @@ import { NextResponse } from "next/server";
 import { apiErrorBody } from "~/lib/api-error";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { isRecord } from "~/lib/is-record";
-import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 const LOG_DIR = path.join(process.cwd(), "log");
+
+/** 历史日志一次回读的字节上限（ISSUE #4252）：这份日志会积累到几十 MB，
+ *  整文件读进内存再 JSON 序列化，轮询并发下是 MB 级堆尖峰。超限只回尾部
+ *  窗口（与壳侧 `read_tail_bytes` 同思路），首行残缺丢弃并加一行说明。 */
+const MAX_HISTORY_BYTES = 8 * 1024 * 1024;
+
+/** 读文件尾部至多 maxBytes 字节；`truncated` = 文件比上限大、首行可能是残行。 */
+async function readLogTail(
+  full: string,
+  maxBytes: number,
+): Promise<{ text: string; truncated: boolean }> {
+  const handle = await fsp.open(full, "r");
+  try {
+    const { size } = await handle.stat();
+    const start = size > maxBytes ? size - maxBytes : 0;
+    const buf = Buffer.alloc(size - start);
+    await handle.read(buf, 0, buf.length, start);
+    return { text: buf.toString("utf8"), truncated: start > 0 };
+  } finally {
+    await handle.close();
+  }
+}
 
 export async function GET(request: Request) {
   const user = await requireRequestUser();
@@ -38,14 +60,22 @@ export async function GET(request: Request) {
       return invalidOrMissing();
     }
 
-    let content: string;
+    let text: string;
+    let truncated: boolean;
     try {
-      content = await fs.promises.readFile(full, "utf8");
+      ({ text, truncated } = await readLogTail(full, MAX_HISTORY_BYTES));
     } catch (error) {
       if (isRecord(error) && error.code === "ENOENT") {
         return invalidOrMissing();
       }
       throw error;
+    }
+    let content = text;
+    if (truncated) {
+      /* 首行是被截断点切出来的残行：丢弃，并说明只展示了尾部。 */
+      const nl = text.indexOf("\n");
+      const body = nl === -1 ? "" : text.slice(nl + 1);
+      content = `…（日志过大，仅显示最后 ${Math.floor(MAX_HISTORY_BYTES / 1024 / 1024)}MB）\n${body}`;
     }
     return NextResponse.json({ content, size: content.length });
   } catch (error) {

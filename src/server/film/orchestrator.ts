@@ -473,7 +473,17 @@ export async function startFilm(id: string) {
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await filmShotRepository.markFailed(shot.id);
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        await cancelTask(taskId).catch(() => undefined);
+        await cancelTask(taskId).catch((cancelError: unknown) => {
+          /* 补偿取消失败要看得见（ISSUE #4254）：任务行还是 QUEUED、会被
+           * 派发照常执行——「已补偿取消任务」的日志不能掩盖这次失败。 */
+          const detail = errorText(cancelError, "补偿取消失败");
+          logger.warn(`[film] 补偿取消任务失败（task=${taskId}）：${detail}`);
+          void appendFilmLog(
+            id,
+            "error",
+            `${errorText(error, `镜头 ${shot.order + 1} 记账失败`)}；补偿取消任务 ${taskId} 也失败（${detail}）——任务可能仍会被执行，请到 ComfyUI 侧手动中断。`,
+          ).catch(() => undefined);
+        });
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await appendFilmLog(
           id,
@@ -804,7 +814,13 @@ export async function cancelFilm(id: string) {
   for (const s of shots) {
     if (s.taskId !== null && s.taskId !== "") {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      await cancelTask(s.taskId).catch(() => undefined);
+      await cancelTask(s.taskId).catch((cancelError: unknown) => {
+        /* 补偿取消失败要看得见（ISSUE #4269，范式同 #4254）：取消影片时子任务
+         * 撤单失败，任务仍会在 ComfyUI 侧继续执行烧 GPU——不能静默。 */
+        logger.warn(
+          `[film] cancelFilm 补偿取消任务失败（task=${s.taskId}）：${errorText(cancelError, "补偿取消失败")}`,
+        );
+      });
     }
   }
   /* 两步收进同一事务（ISSUE #3867）：「镜头染 FAILED」与「影片置 CANCELLED」

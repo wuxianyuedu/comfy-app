@@ -18,6 +18,10 @@
 /** 进程级兜底是否已挂（幂等闸：register 可能被 Next 以不同 runtime 多次触发）。 */
 let processSafetyNetInstalled = false;
 
+/** 同一条消息的重复记账：首 3 条全量记，之后每 50 条记一条——周期循环里的
+ *  每拍异常不再把日志文件灌满（ISSUE #4256）。 */
+const SAFETY_NET_REPEAT_EVERY = 50;
+
 /**
  * 显式注册 `unhandledRejection` / `uncaughtException` 的进程级兜底（ISSUE #4216）。
  *
@@ -26,6 +30,8 @@ let processSafetyNetInstalled = false;
  * `@sentry/node` 默认集成的隐式副作用（且 `scripts/executor-host.mjs` 等宿主进程
  * 没有这层）；这里显式化之后，谁起服务谁就有这张网。
  *
+ * 洪水防护（ISSUE #4256）：同一 message 的重复异常只记首 3 条、之后每 50 条记
+ * 一条（带累计序号），防止「周期循环每拍抛同一异常」把日志文件灌满。
  * 导出仅为可测（注册是进程级副作用，用例直接调用并断言监听器挂载与输出）。
  */
 export function installProcessSafetyNet(): void {
@@ -35,11 +41,20 @@ export function installProcessSafetyNet(): void {
   processSafetyNetInstalled = true;
   const describe = (reason: unknown): string =>
     reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+  const counts = new Map<string, number>();
+  const report = (kind: string, reason: unknown): void => {
+    const text = describe(reason);
+    const count = (counts.get(text) ?? 0) + 1;
+    counts.set(text, count);
+    if (count <= 3 || count % SAFETY_NET_REPEAT_EVERY === 0) {
+      console.error(`[process] ${kind}#${count}：${text}`);
+    }
+  };
   process.on("unhandledRejection", (reason: unknown) => {
-    console.error(`[process] unhandledRejection：${describe(reason)}`);
+    report("unhandledRejection", reason);
   });
   process.on("uncaughtException", (error: Error) => {
-    console.error(`[process] uncaughtException：${describe(error)}`);
+    report("uncaughtException", error);
   });
 }
 
@@ -94,18 +109,49 @@ export async function register() {
     const bootStartedAt = Date.now();
     /** @param {string} name 分支名（也进汇总行的键位） */
     const branchDoneMs = new Map<string, number>();
-    const startBranch = (name: string, run: () => Promise<unknown>): Promise<void> =>
-      run().then(
+    /* 预取后台分支的记账模块（ISSUE #4257）：startBranch 里不再有动态 import，
+     * 分支的首次 kick 保持**同步**（instrumentation-boot 测试的 flushAsync 契约：
+     * 分支的动态 import 不得挡在首次 kick 之前）。预取不阻塞 register；
+     * 记账模块取不到（理论不可达）时分支失败只走日志。 */
+    const bootBranchesModule = import("./lib/shell/boot-branches.server").catch(() => null);
+
+    const startBranch = (name: string, run: () => Promise<unknown>): Promise<void> => {
+      /* 功能分支（dispatch / reaper / film-resume）失败 → 记账（ISSUE #4257）：
+       * 消息中心经 /api/dev/boot-branches 读到仍失败的分支并提示（后果 + 出路）。
+       * `COMFYAPP_BOOT_BRANCH_FAIL=<名[,名…]>` 是测试注入点（强制某分支失败，
+       * 验证提示链路用）。 */
+      const attempt = (): Promise<unknown> => {
+        const forced = process.env.COMFYAPP_BOOT_BRANCH_FAIL?.split(",").includes(name);
+        if (forced === true) {
+          return Promise.reject(new Error(`注入的启动失败（${name}）`));
+        }
+        return run().catch((error: unknown) => {
+          recordBranchFailure(name, error);
+          throw error;
+        });
+      };
+      return attempt().then(
         () => {
           branchDoneMs.set(name, Date.now() - bootStartedAt);
         },
         (error: unknown) => {
-          branchDoneMs.set(name, -1);
-          console.error(
-            `[boot] ${name} 启动分支失败：${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
-          );
+          recordBranchFailure(name, error);
         },
       );
+
+      function recordBranchFailure(branch: string, error: unknown): void {
+        branchDoneMs.set(branch, -1);
+        const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
+        void bootBranchesModule
+          .then((m) => {
+            if (m?.FUNCTIONAL_BRANCHES.has(branch)) {
+              m.recordBootBranch(branch, false, detail);
+            }
+          })
+          .catch(() => undefined);
+        console.error(`[boot] ${branch} 启动分支失败：${detail}`);
+      }
+    };
     /* 三个 void 返回的启动器（reaper / dispatch / event-loop-watch）用块体调用：
      * 箭头简写把 void 值当返回值会被 no-confusing-void-expression 判红，
      * 而这里的语义本来就是「调一下、不等它」。 */

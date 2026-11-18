@@ -65,6 +65,9 @@ export type GetViewLike = (filename: string, subfolder: string, type: string) =>
 export type RuntimeLoggerLike = {
   error(msg: string, ctx?: unknown): void;
   info(msg: string, ctx?: unknown): void;
+  /** 真实运行日志器（app-runtime-log）本就有 warn 档；此前类型漏了它，
+   *  导致「该用 warn 的失败」只能降级成 info 或错用 error（ISSUE #4270）。 */
+  warn(msg: string, ctx?: unknown): void;
 };
 export type ExecutorFinalizeDeps = {
   getView: GetViewLike;
@@ -486,7 +489,13 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   };
   await fs
     .writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8")
-    .catch(() => undefined);
+    .catch((writeError: unknown) => {
+      /* 复现产物落盘失败要看得见（ISSUE #4270）：DB 说有产物、盘上没有的那类
+       * 「磁盘状态对不上」故障，没有这条 warn 就只能靠人肉对账发现。 */
+      taskRuntimeLog?.warn(
+        `[finalize] manifest.json 落盘失败（dir=${dir}）：${friendlyError(writeError)}`,
+      );
+    });
 
   // 落盘本次执行实际用到的 workflow.json。种子等已在
   // manifest.seed + TaskImage.seed 持久化，工作流模板后续改动时凭这份快照即可
@@ -495,7 +504,13 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   if (executedWorkflow !== null && executedWorkflow !== undefined) {
     await fs
       .writeFile(path.join(dir, "workflow.json"), JSON.stringify(executedWorkflow, null, 2), "utf8")
-      .catch(() => undefined);
+      .catch((writeError: unknown) => {
+        /* 同上（ISSUE #4270）：工作流快照落盘失败也要留痕，否则后续模板改动
+         * 时这份「本次实际用到的图」就无声缺失、无法复现。 */
+        taskRuntimeLog?.warn(
+          `[finalize] workflow.json 落盘失败（dir=${dir}）：${friendlyError(writeError)}`,
+        );
+      });
   }
 
   await persistLogs(taskId);

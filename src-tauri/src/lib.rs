@@ -247,8 +247,11 @@ fn default_dev_url(host: &str) -> String {
 ///
 /// 但判据仍然要能分辨**真故障**：读失败若是「权限 / IO 错误」而不是
 /// `NotFound`，那是实打实的问题，照样回 Err —— 不能被兜底吞掉。
+///
+/// async 形态（ISSUE #4272）：启动页每 250ms 轮询一次，这段同步文件 IO
+/// 落到 Tauri 的命令线程池执行，不占主线程。
 #[tauri::command]
-fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String> {
+async fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String> {
   let root = state.project_root();
   if root.is_empty() {
     // standalone 形态：安装目录里本来就没有检出，「没有状态文件」是设计如此，
@@ -949,8 +952,11 @@ fn no_log_guidance(root: &str) -> String {
 /// 壳自持日志与**壳侧编排链路日志**（`log/current/launcher/shell-launch.log`，启动期
 /// 最先有内容的一份，见 §1.5.1），启动卡住时用户能直接在启动页看到
 ///「执行到哪一步 / 卡在哪里」。
+///
+/// async 形态（ISSUE #4272）：启动页每 800ms 轮询一次，多份日志尾读 +
+/// 目录枚举这段同步文件 IO 落到 Tauri 的命令线程池执行，不占主线程。
 #[tauri::command]
-fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
+async fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   let root = state.project_root();
   if root.is_empty() {
     // 项目根为空时不再回一句「没设环境变量」：面板需要的是**能做点什么**，

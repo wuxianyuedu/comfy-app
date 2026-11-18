@@ -14,6 +14,7 @@ import {
   fetchCurrentDisconnectExit,
   isPreviousRunExit,
 } from "~/lib/shell/app-service-exit";
+import { isRecord } from "~/lib/is-record";
 import { fetchLoopBlockForOffline } from "~/lib/shell/app-service-loop-blocks";
 import type { DevServerState } from "~/lib/shell/dev-server-status";
 import {
@@ -27,6 +28,7 @@ import {
 } from "~/lib/shell/app-service-message";
 
 import { useMessageCenterStore, type NewMessage } from "../message-center-store";
+import { useInterval } from "~/components/ui/use-interval";
 
 export type AppServiceMessageLogInput = {
   /** 当前是哪一次启动（runId）；null = 拿不到（手工 `pnpm dev` 等）。 */
@@ -112,6 +114,72 @@ async function recordStart(
   push({ kind: "restart", title, body, runId, time: event.at });
 }
 
+/** 后台启动分支失败的用户可见文案（ISSUE #4257）：按分支给后果与出路；
+ *  未知分支给通用文案。导出仅为可测。 */
+export function bootBranchNotice(name: string): { body: string; title: string } {
+  switch (name) {
+    case "dispatch": {
+      return {
+        body:
+          "后台的任务派发循环没能启动，排队中的任务不会被自动执行（重启应用通常可恢复；" +
+          "若反复出现，请到控制台反馈并附应用日志）。",
+        title: "应用服务：任务自动派发未启动",
+      };
+    }
+    case "reaper": {
+      return {
+        body:
+          "后台的回收循环没能启动，失败或超时的任务可能停留在「生成中」。" + "重启应用通常可恢复。",
+        title: "应用服务：孤儿任务回收未启动",
+      };
+    }
+    case "film-resume": {
+      return {
+        body: "重启前中断的影片可能停留在「生成中」，不会自动续跑。重启应用通常可恢复。",
+        title: "应用服务：成片监看恢复未启动",
+      };
+    }
+    default: {
+      return {
+        body: "一个后台功能没能启动，相关能力可能不可用。重启应用通常可恢复。",
+        title: `应用服务：后台功能「${name}」未启动`,
+      };
+    }
+  }
+}
+
+/** 启动分支结果的轮询间隔：就绪后先查一次，之后每分钟对账一次。 */
+const BOOT_BRANCH_POLL_MS = 60_000;
+
+/** 拉一次启动分支失败清单并记进消息中心；全程不抛——这一刻若服务不健康，
+ *  拉不到是常态，分支失败本身已有 boot 日志兜底。 */
+async function checkBootBranches(runId: string, stopped: StoppedFlag): Promise<void> {
+  try {
+    const res = await fetch("/api/dev/boot-branches");
+    const raw: unknown = await res.json();
+    /* 卸载后再回来的一拍不再写消息（stopped 由 hook 的卸载守卫翻转）。 */
+    if (stopped.current || !isRecord(raw) || !Array.isArray(raw.branches)) {
+      return;
+    }
+    for (const branch of raw.branches) {
+      if (!isRecord(branch) || branch.ok !== false || typeof branch.name !== "string") {
+        continue;
+      }
+      const notice = bootBranchNotice(branch.name);
+      push({
+        kind: "info",
+        id: `boot-branch-${runId}-${branch.name}`,
+        title: notice.title,
+        body: notice.body,
+        runId,
+        time: Date.now(),
+      });
+    }
+  } catch {
+    /* 拉不到就算了：分支失败本身已有 boot 日志兜底 */
+  }
+}
+
 export function useAppServiceMessageLog({
   state,
   processIsNew,
@@ -168,4 +236,20 @@ export function useAppServiceMessageLog({
     }
     void recordStart(event, stoppedRef, currentRunId);
   }, [state, processIsNew, currentRunId, unprobedMs]);
+
+  /* 后台启动分支的失败提示（ISSUE #4257）：新进程就绪后（以及此后每分钟）
+   * 问一次 /api/dev/boot-branches，把仍失败的功能分支记进消息中心——
+   * dispatch / reaper / film-resume 静默失效时，用户能看见「为什么任务不动」。
+   * 消息 id 按 runId + 分支名确定 ⇒ 刷新与重复轮询由 store 的幂等去重吸收。
+   * 轮询走 `useInterval`（视图层定时器的唯一出口，P12）：就绪即查一次，
+   * 后台标签页自动暂停、回前台补跑一次——手写 setInterval 会空转白拉。 */
+  useInterval(
+    () => {
+      if (currentRunId === null) {
+        return;
+      }
+      void checkBootBranches(currentRunId, stoppedRef);
+    },
+    { ms: processIsNew && currentRunId !== null ? BOOT_BRANCH_POLL_MS : null },
+  );
 }

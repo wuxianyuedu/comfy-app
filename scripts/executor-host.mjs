@@ -108,15 +108,27 @@ process.chdir(ROOT);
 
 // 进程级兜底（ISSUE #4216）：与 Next 侧 instrumentation 同款——只记日志、不退出。
 // 本宿主进程没有 Sentry 那层隐式副作用，一条后台循环的 rejection 不该打挂常驻宿主。
+// 洪水防护（ISSUE #4256）：同一 message 只记首 3 条、之后每 50 条记一条——
+// 周期循环里的每拍异常不再把日志文件灌满。
+const safetyNetCounts = new Map();
+/**
+ * @param {string} kind
+ * @param {unknown} reason
+ * @returns {void}
+ */
+function reportSafetyNet(kind, reason) {
+  const text = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+  const count = (safetyNetCounts.get(text) ?? 0) + 1;
+  safetyNetCounts.set(text, count);
+  if (count <= 3 || count % 50 === 0) {
+    writeLine(`${kind}#${count}：${text}`);
+  }
+}
 process.on("unhandledRejection", (reason) => {
-  writeLine(
-    `unhandledRejection：${reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)}`,
-  );
+  reportSafetyNet("unhandledRejection", reason);
 });
 process.on("uncaughtException", (error) => {
-  writeLine(
-    `uncaughtException：${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
-  );
+  reportSafetyNet("uncaughtException", error);
 });
 
 const bootId = process.env.COMFYAPP_HOST_BOOT_ID ?? Date.now().toString(36);

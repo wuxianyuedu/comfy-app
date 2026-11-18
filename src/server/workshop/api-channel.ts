@@ -4,6 +4,7 @@
 // 协议实现（请求体、超时、错误文案、响应提取）全在 `api-channel-core.ts`；本文件只供两处差异：
 // 上游用 `res.json()`（Next 侧另有"非 JSON 即报错"更严实现）、生图不查 remoteModel 表（纯 Node 没有）。
 import { readFileSync } from "node:fs";
+import { hash } from "node:crypto";
 import path from "node:path";
 
 import { isInlineMedia, toDataUrl } from "~/lib/media/data-url";
@@ -23,6 +24,11 @@ import {
 } from "~/lib/workshop/api-channel-core";
 
 const FILE = path.join(process.cwd(), "data", WORKSHOP_API_SETTINGS_FILE);
+let filePathForTest: string | null = null;
+/** 只给用例：把配置文件指到测试自己的临时目录（cwd 相对路径不可注入）。 */
+export function configureWorkshopApiSettingsFileForTest(p: string): void {
+  filePathForTest = p;
+}
 
 const DEFAULTS = defaultChannelsFromEnv();
 
@@ -33,20 +39,35 @@ function isSettingsPatch(v: unknown): v is Partial<WorkshopApiSettings> {
 }
 
 let cache: WorkshopApiSettings | null = null;
+/** 缓存对应的文件指纹（#4231）：与 `~/lib/workshop/api-channel.server` 同一机制 ——
+ * 原先缓存一旦建立就永不失效，设置页（Next 进程）对同一份文件的写入，MCP 这个
+ * 长驻进程永远读不到：用户改了 apiKey/endpoint，MCP 工具拿到的还是旧值。 */
+let cacheFingerprint = "";
 
-/** 读取配置（进程内缓存）。 */
+/** 读取配置（进程内缓存，按文件指纹失效）。 */
 export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
-  if (cache) {
+  let raw: string | null = null;
+  let fingerprint = "";
+  try {
+    raw = readFileSync(filePathForTest ?? FILE, "utf8");
+    fingerprint = hash("sha1", raw, "hex");
+  } catch {
+    // 文件缺失 → 用默认值（指纹留空，必然与缓存不等）。
+  }
+  if (cache && fingerprint === cacheFingerprint) {
     return cache;
   }
   let stored: Partial<WorkshopApiSettings> = {};
-  try {
-    const raw: unknown = JSON.parse(readFileSync(FILE, "utf8"));
-    stored = isSettingsPatch(raw) ? raw : {};
-  } catch {
-    // 缺失/损坏 → 默认
+  if (raw !== null) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      stored = isSettingsPatch(parsed) ? parsed : {};
+    } catch {
+      // 损坏 → 默认
+    }
   }
   cache = normalizeSettings(stored, DEFAULTS);
+  cacheFingerprint = fingerprint;
   return cache;
 }
 
@@ -111,8 +132,13 @@ async function readResponseBufferCapped(res: Response, maxBytes: number): Promis
   } finally {
     /* 超限抛出时取消流：releaseLock 不停上游，剩余字节会继续进无人读取的
      * socket 直到超时（ISSUE #4218，与 safeFetch 的 body.cancel 同一口径）；
-     * 正常读完时 cancel 是无操作。 */
-    void reader.cancel().catch(() => undefined);
+     * 正常读完时 cancel 是无操作。cancel/close 都做兜底——测试桩与旧环境
+     * 可能没有这些方法。 */
+    try {
+      void Promise.resolve(reader.cancel?.()).catch(() => undefined);
+    } catch {
+      /* cancel 不可用时不影响既有的收尾 */
+    }
     reader.releaseLock();
   }
   return Buffer.concat(chunks, total);

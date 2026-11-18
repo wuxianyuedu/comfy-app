@@ -7,6 +7,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { logger } from "~/lib/core/logger";
 import { productionRepository } from "~/lib/core/repository-production";
 import { completeLLM, completeLLMStructured, getLLMConfig } from "~/lib/llm/server";
 import { buildScriptMarkdownMessages } from "~/lib/llm/prompts";
@@ -33,7 +34,7 @@ import { fixed } from "~/lib/number-format";
 import { displayValue } from "~/lib/display-value";
 import { reviewContent, reviewScript, reviewShotImage, reviseScript } from "~/server/agent/review";
 import type { ProductionStage } from "~/lib/production/progress";
-import { errorMessage } from "~/lib/error-message";
+import { errorMessage, errorText } from "~/lib/error-message";
 import { isProjectType, normalizeShotType } from "~/lib/workshop/types";
 import type { Character, Shot } from "~/lib/workshop/types";
 import type { Production } from "~/server/db/schema";
@@ -579,7 +580,14 @@ async function execFilm(
     const latest = await filmRepository.findLatestByProjectId(userId, projectId);
     const cleared = { ...run, filmStartedAt: "" };
     if (latest === null) {
-      await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
+      await productionRepository.clearFilmStart(userId, projectId).catch((clearError: unknown) => {
+        /* 释放失败要看得见（ISSUE #4267）：释放不掉 = filmStartedAt 永久残留、
+         * claimFilmStart 永远抢不到，该项目在释放成功前无法再次起片——这种失败
+         * 不许静默（也不上抛：恢复路径还有多级补偿，抛出会掩盖原始错误）。 */
+        logger.warn(
+          `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
+        );
+      });
       return {
         ok: false,
         error: "成片启动中断（未创建影片实体），已释放起片认领，请重试",
@@ -592,7 +600,14 @@ async function execFilm(
       } catch {
         // 补偿尽力而为；仍需释放认领避免永久卡死。
       }
-      await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
+      await productionRepository.clearFilmStart(userId, projectId).catch((clearError: unknown) => {
+        /* 释放失败要看得见（ISSUE #4267）：释放不掉 = filmStartedAt 永久残留、
+         * claimFilmStart 永远抢不到，该项目在释放成功前无法再次起片——这种失败
+         * 不许静默（也不上抛：恢复路径还有多级补偿，抛出会掩盖原始错误）。 */
+        logger.warn(
+          `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
+        );
+      });
       return {
         ok: false,
         error: "成片启动中断（影片未进入可恢复生成态），已释放起片认领，请重试",
@@ -600,7 +615,14 @@ async function execFilm(
       };
     }
     if (latest.status === "FAILED" || latest.status === "CANCELLED") {
-      await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
+      await productionRepository.clearFilmStart(userId, projectId).catch((clearError: unknown) => {
+        /* 释放失败要看得见（ISSUE #4267）：释放不掉 = filmStartedAt 永久残留、
+         * claimFilmStart 永远抢不到，该项目在释放成功前无法再次起片——这种失败
+         * 不许静默（也不上抛：恢复路径还有多级补偿，抛出会掩盖原始错误）。 */
+        logger.warn(
+          `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
+        );
+      });
       return {
         ok: false,
         error: "成片生成未完成（影片已终止），已释放起片认领，请重试",
@@ -608,7 +630,14 @@ async function execFilm(
       };
     }
     if (latest.status === "DONE") {
-      await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
+      await productionRepository.clearFilmStart(userId, projectId).catch((clearError: unknown) => {
+        /* 释放失败要看得见（ISSUE #4267）：释放不掉 = filmStartedAt 永久残留、
+         * claimFilmStart 永远抢不到，该项目在释放成功前无法再次起片——这种失败
+         * 不许静默（也不上抛：恢复路径还有多级补偿，抛出会掩盖原始错误）。 */
+        logger.warn(
+          `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
+        );
+      });
       return { ok: true, run: cleared, skipLog: true, summary: "成片已完成，等待状态同步" };
     }
     return { ok: true, skipLog: true, summary: "成片生成中（等待合成完成）" };
@@ -649,7 +678,14 @@ async function execFilm(
         // 补偿失败不掩盖原始错误；起片权仍需释放以免卡死重试。
       }
     }
-    await productionRepository.clearFilmStart(userId, projectId).catch(() => undefined);
+    await productionRepository.clearFilmStart(userId, projectId).catch((clearError: unknown) => {
+      /* 释放失败要看得见（ISSUE #4267）：释放不掉 = filmStartedAt 永久残留，
+       * 该项目在释放成功前无法再次起片；此处是起片失败的补偿路径，上抛会掩盖
+       * 原始错误，只留痕。 */
+      logger.warn(
+        `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
+      );
+    });
     return { ok: false, error: errorMessage(error, "启动成片失败") };
   }
   return {

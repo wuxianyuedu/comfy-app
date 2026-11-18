@@ -37,6 +37,9 @@ export type MessageRecord = {
 
 /** 供 push 传入的载荷（id/time/read 由 store 补全，runId 缺省取当前启动）。 */
 export type NewMessage = Omit<MessageRecord, "id" | "time" | "read" | "runId"> & {
+  /** 确定性 id（ISSUE #4257）：给了它，同 id 的消息不重复入列（幂等推送）——
+   *  刷新 / 重复轮询由这里吸收。缺省随机生成（恒不撞）。 */
+  id?: string;
   /** 缺省时由 store 用「当前是哪一次启动」盖上，于是各生产方不必各自去取。 */
   runId?: string | null;
   /**
@@ -97,27 +100,34 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
     set({ open: !get().open });
   },
   push: (m) => {
-    set((s) => ({
-      messages: [
-        {
-          ...m,
-          /* runId **没给**时盖「当前这一次启动」：生产方不必各自去接探活链路，
-           * 也不会漏盖（漏盖只能落到「未标记启动」组）。
-           * 判 `=== undefined` 而不是 `??`：显式给的 null 是「明确不知道」（纯手工
-           * `pnpm dev`、探活未首答），必须留 null；`??` 补盖等于断言「属于这次」，
-           * 分组依据就错了。 */
-          runId: m.runId === undefined ? s.currentRunId : m.runId,
-          id: makeId(),
-          time: m.time ?? Date.now(),
-          read: false,
-        },
-        ...s.messages,
-      ]
-        /* 最新在前**按事件时刻排**（而不是「谁先 push 完」）：断开那条要先读原因，
-         * 它的 push 天然比事件晚，靠插入次序摆放会把「断开 → 恢复」翻成反的。 */
-        .sort((a, b) => b.time - a.time)
-        .slice(0, MAX_MESSAGES),
-    }));
+    set((s) => {
+      /* 幂等 id（ISSUE #4257）：调用方给了确定性 id（如按 runId + 分支名）时，
+       * 同一条消息不重复入列——刷新 / 重复轮询由这里吸收。没给 id 的调用方
+       * 照旧每次新起（随机 id 恒不撞）。 */
+      const id = m.id ?? makeId();
+      if (s.messages.some((x) => x.id === id)) {
+        return s;
+      }
+      return {
+        messages: [
+          {
+            ...m,
+            /* runId **没给**时盖「当前这一次启动」：生产方不必各自去接探活链路，
+             * 也不会漏盖（漏盖只能落到「未标记启动」组）。
+             * 判 `=== undefined` 而不是 `??`：显式给的 null 是「明确不知道」（纯手工
+             * `pnpm dev`、探活未首答），必须留 null；`??` 补盖等于断言「属于这次」，
+             * 分组依据就错了。 */
+            runId: m.runId === undefined ? s.currentRunId : m.runId,
+            id,
+            time: m.time ?? Date.now(),
+            read: false,
+          },
+          ...s.messages,
+        ]
+          .sort((a, b) => b.time - a.time)
+          .slice(0, MAX_MESSAGES),
+      };
+    });
   },
   setCurrentRunId: (runId) => {
     set({ currentRunId: runId });
