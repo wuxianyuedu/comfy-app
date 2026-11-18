@@ -9,6 +9,9 @@ import { useCallback, useState } from "react";
 import { readFileAsDataUrl } from "~/lib/file-io";
 import { runAsyncAction } from "~/lib/async-action";
 
+/** 参考图组上限：多参考图统一支持 1~16 张（#4355，含工坊镜头与测试页）。 */
+export const REFERENCE_IMAGE_MAX = 16;
+
 /** 参考图组（#3949 需求 6/7）的子 hook：多张取值（data URL）+ 追加 / 移除 /
  * 清空。 */
 export function useReferenceImageGroup(onError: (text: string) => void): {
@@ -27,8 +30,8 @@ export function useReferenceImageGroup(onError: (text: string) => void): {
             // oxlint-disable-next-line no-await-in-loop -- 顺序读文件，失败即停
             urls.push(await readFileAsDataUrl(file));
           }
-          /* 上限 8 张：与 relay 侧的宽松界一致。 */
-          setImages((prev) => [...prev, ...urls].slice(0, 8));
+          /* 上限 16 张（#4355：多参考图统一 1~16）。 */
+          setImages((prev) => [...prev, ...urls].slice(0, REFERENCE_IMAGE_MAX));
           return { ok: true as const };
         },
         {

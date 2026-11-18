@@ -42,6 +42,10 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { primaryModelName } from "./executed-model";
 import { comfyCliInterpreter, comfyCliMissingHint } from "./comfy-cli-python";
+import {
+  augmentReferenceImageLoadersApi,
+  augmentReferenceImageLoadersRaw,
+} from "./reference-loader-augment";
 import { state, log, appendRawCli } from "./runner-state";
 import type { Job } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
@@ -306,7 +310,14 @@ export async function executeViaComfyCli(job: Job) {
 
   let patched: JsonRecord;
   if (isRaw) {
-    patched = applyRawOverrides(rawJson, overrides);
+    /* 图增强（#4355）：参考图落点是张量图片入口（无 widget）时，先自动补
+     * LoadImage 装载节点再应用覆盖 —— 否则多参考图工作流第 2~N 张图没有可写之处
+     * （只能在每个工作流的画布里手工加节点）。 */
+    const augmented = augmentReferenceImageLoadersRaw(rawJson, overrides);
+    if (augmented.added > 0) {
+      log(taskId, "info", `图增强：为 ${augmented.added} 个张量图片入口自动补 LoadImage 装载节点`);
+    }
+    patched = applyRawOverrides(augmented.graph, augmented.overrides);
     const stripped = stripUiOnlyNodes(patched);
     patched = stripped.raw;
     if (stripped.removed > 0) {
@@ -322,7 +333,12 @@ export async function executeViaComfyCli(job: Job) {
      *
      * 顺序不能反：先注入覆盖、再收拾图。被旁路/静音的节点会被收拾掉，写给它们的
      * 覆盖项本就该随之丢弃（它们不会执行）。 */
-    const withOverrides = applyApiOverrides(prompt, overrides);
+    /* 图增强（#4355）：同 RAW 侧，先补张量图片入口的 LoadImage 再应用覆盖。 */
+    const augmented = augmentReferenceImageLoadersApi(prompt, overrides);
+    if (augmented.added > 0) {
+      log(taskId, "info", `图增强：为 ${augmented.added} 个张量图片入口自动补 LoadImage 装载节点`);
+    }
+    const withOverrides = applyApiOverrides(augmented.graph, augmented.overrides);
     const prep = prepareGraphForExecution(withOverrides);
     if (!Object.keys(prep.graph).length) {
       log(taskId, "error", "工作流没有可执行的节点（可能全部被禁用）");

@@ -13,7 +13,7 @@ import { errorMessage } from "~/lib/error-message";
 import {
   buildLibraryWorkflowInput,
   LOCAL_TASK_TIMEOUT_MS,
-  preparePortraitReferences,
+  prepareShotReferences,
   startLocalGenerate,
   watchTask,
   withGenerationAttribution,
@@ -80,12 +80,13 @@ export function useWorkshopGeneration({
     async (shot: Shot): Promise<{ input: GenerateInput; unmatchedWarning: string | null }> => {
       /* 草稿里存的是尺寸表达（老数据可能是 "832x1216" 字符串，回读时归一）。 */
       const sizeSpec = parseShotSize(shot.params.size);
-      /* 定妆照 → 参考图（流程 §4 的口径）：镜头相关角色选了定妆照就带上下发，
-       * 落到作者连给参考图口的行上；工作流没连参考图口时进 unmatched，由
-       * 下面的提示条告知。上传失败不拖垮生成，只有失败数需要提示。 */
-      const refs = await preparePortraitReferences(characters, shot.characterIds);
+      /* 参考图（流程 §4 的口径，#4355）：镜头级多选（首张为主图）优先，
+       * 留空回落出场角色的定妆照；落到作者连给参考图口的行上；工作流没连
+       * 参考图口时进 unmatched，由下面的提示条告知。上传失败不拖垮生成，
+       * 只有失败数需要提示。 */
+      const refs = await prepareShotReferences(shot, characters);
       if (refs.failedCount > 0) {
-        notify(`${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`);
+        notify(`${refs.failedCount} 张参考图上传失败，本次生成未使用它们`);
       }
       /* 角色 LoRA（FR-QA-02③ · #2622）：出场角色里第一个绑定的生效；
        * 工作流没连 lora 口 → unmatched 提示（describeUnmatchedInputs）。 */

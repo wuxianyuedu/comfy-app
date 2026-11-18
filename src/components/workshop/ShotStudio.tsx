@@ -23,7 +23,7 @@ import {
   buildLibraryWorkflowInput,
   WORKSHOP_BATCH_CONCURRENCY,
   LOCAL_TASK_TIMEOUT_MS,
-  preparePortraitReferences,
+  prepareShotReferences,
   startLocalGenerate,
   withGenerationAttribution,
   watchTask,
@@ -44,6 +44,10 @@ import { SHOT_STATUS_LABEL } from "./shot-status-config";
 import { SeedAdvancedField } from "./SeedAdvancedField";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
+import { comfyImageUrl } from "~/lib/media/media-url";
+import { ReferenceImageField } from "./ReferenceImageField";
+import { useShotReferenceUpload } from "./hooks/use-shot-reference-upload";
+import { REFERENCE_IMAGE_MAX } from "./hooks/use-reference-image-group";
 import { errorMessage } from "~/lib/error-message";
 import { IndexDot } from "~/components/workshop/IndexDot";
 import { paramString } from "~/lib/workshop/param-coerce";
@@ -256,11 +260,12 @@ export function ShotStudio({
         const sizeSpec = parseShotSize(
           shot.params.size !== undefined && shot.params.size !== "" ? shot.params.size : shotSize,
         );
-        /* 定妆照 → 参考图（流程 §4 的口径）：镜头相关角色选了定妆照就带上；
-         * 没连参考图口的工作流会经 unmatched 提示，上传失败只提示失败数。 */
-        const refs = await preparePortraitReferences(characters, shot.characterIds);
+        /* 参考图（流程 §4 的口径，#4355）：镜头级多选（首张为主图）优先，
+         * 留空回落出场角色的定妆照；没连参考图口的工作流会经 unmatched 提示，
+         * 上传失败只提示失败数。 */
+        const refs = await prepareShotReferences(shot, characters);
         if (refs.failedCount > 0) {
-          onNotice(`${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`);
+          onNotice(`${refs.failedCount} 张参考图上传失败，本次生成未使用它们`);
         }
         /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个生图工作流
          *（封装口径只暴露 提示词 / 尺寸 / 参考图，其余走工作流默认值），否则
@@ -504,6 +509,9 @@ export function ShotStudio({
                 editedRef.current.add(id);
                 patchShot(id, { prompt });
               }}
+              onReferenceImagesChange={(id, images) => {
+                patchShot(id, { referenceImages: images });
+              }}
               progress={progress[shot.id] ?? 0}
               shot={shot}
               workflowId={workflowId}
@@ -555,6 +563,8 @@ type ShotCardRowProps = {
   onGenerate: (shot: Shot) => void;
   /** 提示词被手改：父层记入 editedRef（自动预填不再覆盖）并写回镜头。 */
   onPromptChange: (id: string, prompt: string) => void;
+  /** 镜头级参考图变更（#4355）：增 / 删都整表写回（首张为主图）。 */
+  onReferenceImagesChange: (id: string, images: Array<string>) => void;
   /** 本条目的实时进度（0~100）。 */
   progress: number;
   shot: Shot;
@@ -574,8 +584,13 @@ function ShotCardRow({
   gachaBusy,
   onCancel,
   onPromptChange,
+  onReferenceImagesChange,
 }: ShotCardRowProps) {
   const [gachaCount, setGachaCount] = React.useState(2);
+  /* 镜头级参考图（#4355）：上传中 / 上传失败的行内读数。 */
+  const [refError, setRefError] = React.useState<string | undefined>(undefined);
+  const refUpload = useShotReferenceUpload(setRefError);
+  const referenceImages = shot.referenceImages ?? [];
   return (
     <div className="border-border bg-surface rounded-xl border p-4" data-shot-index={shot.index}>
       <div className="mb-2 flex items-center gap-2">
@@ -620,6 +635,48 @@ function ShotCardRow({
         >
           {error}
         </Alert>
+      )}
+
+      {channel === "local" && (
+        /* 镜头级参考图（#4355）：多选，首张为主图，其余按序落其余参考图槽；
+         * 留空回落出场角色的定妆照。草稿里存上传后的文件名，缩略图经
+         * /api/images?type=input 回读。 */
+        <div className="mt-2">
+          <ReferenceImageField
+            disabled={refUpload.busy || shot.status === "running"}
+            hint="首张为主图，其余按序作为额外参考图（最多 16 张）"
+            id={`shot-ref-${shot.id}`}
+            images={referenceImages.map(
+              (filename) => comfyImageUrl({ filename, type: "input" }) ?? "",
+            )}
+            label="参考图"
+            onAdd={(files) => {
+              void refUpload.upload(files).then((names) => {
+                if (names.length > 0) {
+                  onReferenceImagesChange(
+                    shot.id,
+                    [...referenceImages, ...names].slice(0, REFERENCE_IMAGE_MAX),
+                  );
+                }
+              });
+            }}
+            onRemove={(index) => {
+              onReferenceImagesChange(
+                shot.id,
+                referenceImages.filter((_, i) => i !== index),
+              );
+            }}
+            required={false}
+          />
+          {refError !== undefined && refError !== "" && (
+            <Alert
+              className="text-2xs mt-1 block rounded-md border-transparent px-2 py-1"
+              variant="danger"
+            >
+              {refError}
+            </Alert>
+          )}
+        </div>
       )}
 
       <div className="mt-2 flex items-center gap-3">

@@ -42,6 +42,7 @@ import {
   type ModeTab,
 } from "./model-test-config";
 import { RequestDetailSection } from "./ModelTestRequestDetail";
+import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
 import { useModelTest } from "./hooks/use-model-test";
 
 /** 用途页签（图片 / 视频）：SelectChip 的 pill 单选组，与「模型适配」的
@@ -163,19 +164,7 @@ function SizeField({
   );
 }
 
-/** 必备 / 可选标识（ISSUE #3778 问题 2）：来自模式契约的 required 生效集。 */
-function RequiredBadge({ required }: { required: boolean }) {
-  return (
-    <span
-      className={cn(
-        "shrink-0 rounded-full px-1.5 py-0.5 text-2xs",
-        required ? "bg-primary/12 text-primary-strong" : "bg-elevated text-muted-foreground",
-      )}
-    >
-      {required ? "必填" : "可选"}
-    </span>
-  );
-}
+/** 必备 / 可选标识已抽到 `./ReferenceImageField`（工坊通用，#4355）。 */
 
 /** 一行统一输入的渲染（按类型给控件；文案 = 契约口的展示名）。行标签右侧带
  *  必填 / 可选标识（ISSUE #3778，来自契约 required）。尺寸复合口不在这里 ——
@@ -313,77 +302,7 @@ function InputRow({
   );
 }
 
-/** 参考图多选行（#3949 需求 6/7）：一个契约口（reference-image）收多张，
- *  请求里以数组整体下发；清除按钮悬停时出现在缩略图右上角。 */
-function ReferenceImageField({
-  disabled,
-  hint,
-  id,
-  images,
-  label,
-  onAdd,
-  onRemove,
-  required,
-}: {
-  disabled?: boolean;
-  hint?: string;
-  id: string;
-  images: Array<string>;
-  label: string;
-  onAdd: (files: Array<File>) => void;
-  onRemove: (index: number) => void;
-  required: boolean;
-}) {
-  const labelNode = (
-    <span className="flex min-w-0 items-center gap-1.5">
-      <TruncatedText className="truncate">{label}</TruncatedText>
-      <RequiredBadge required={required} />
-    </span>
-  );
-  return (
-    <FormField hint={hint} id={id} label={labelNode} labelClassName="mb-1.5">
-      {() => (
-        <div className="flex flex-wrap items-center gap-2">
-          {images.map((src, i) => (
-            <div className="group relative" key={`${String(i)}-${src.slice(0, 24)}`}>
-              <MediaThumbnail
-                alt={`参考图 ${i + 1}`}
-                as="image"
-                className="border-border size-16 rounded-lg border object-cover"
-                src={src}
-              />
-              {/* 清除按钮：悬停才出现在缩略图右上角（#3949 需求 7）。 */}
-              <Button
-                aria-label={`移除第 ${i + 1} 张参考图`}
-                className="text-2xs absolute top-1 right-1 hidden rounded-full bg-black/60 px-1.5 py-0.5 leading-none text-white group-hover:block"
-                onClick={() => {
-                  onRemove(i);
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                ✕
-              </Button>
-            </div>
-          ))}
-          <FilePickerButton
-            accept="image/*"
-            className="h-auto px-3 py-2 text-xs"
-            disabled={disabled}
-            multiple
-            onPick={(_file, files) => {
-              onAdd([...files]);
-            }}
-            size="sm"
-            variant="outline"
-          >
-            {images.length > 0 ? "添加图片" : "上传参考图"}
-          </FilePickerButton>
-        </div>
-      )}
-    </FormField>
-  );
-}
+/** 参考图多选行已抽到 `./ReferenceImageField`（工坊通用，#4355）。 */
 
 /** 本地工作流任务的执行日志（#4080 评论 8）：与工作流库「就地运行」同一份
  *  SSE log 流。新日志到达时自动滚到底部 —— 任务一直没动静或卡住时，最后几行
