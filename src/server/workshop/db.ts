@@ -22,9 +22,10 @@ function resolveDbPath(url: string): string {
 }
 
 const dbUrl = process.env.DATABASE_URL ?? "file:./db.sqlite";
-/* 连接与实例都挂 globalThis 单例（ISSUE #4284）：热重载会重新执行本模块，
- * 无缓存时每次都新开一个 DatabaseSync 连接（旧连接无人关闭，句柄与内存
- * 单调增长，Windows 上还会锁住 db.sqlite）。 */
+/* Connection and instance are globalThis singletons (ISSUE #4284): hot
+ * reloads re-execute this module; without a cache each pass opens a fresh
+ * DatabaseSync connection (the old one is never closed -- handles and memory
+ * grow monotonically, and on Windows it keeps db.sqlite locked). */
 const nodeSqlite = (globalThis.__comfyWorkshopNodeSqlite ??= openNodeSqlite(resolveDbPath(dbUrl)));
 // PRAGMA 清单与 `~/server/db` 共用（`~/lib/sqlite-pragmas`），加一条不必改两处；等锁预算
 // 本侧刻意不给 —— node:sqlite 是单连接，`PRAGMA busy_timeout` 就是同步等锁，会把这个
@@ -39,7 +40,8 @@ const nodeSqlite = (globalThis.__comfyWorkshopNodeSqlite ??= openNodeSqlite(reso
 const gatedProxy = gateProxyWithPragmas(nodeSqlite);
 
 declare global {
-  /** 热重载单例（ISSUE #4284）：连接与 drizzle 实例只建一次，重载复用。 */
+  /** Hot-reload singleton (ISSUE #4284): connection and drizzle instance are
+   * created once and reused across reloads. */
   var __comfyWorkshopNodeSqlite: NodeSqliteHandle | undefined;
   var __comfyWorkshopDb: SqliteRemoteDatabase<typeof schema> | undefined;
 }

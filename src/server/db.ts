@@ -35,9 +35,11 @@ function resolveDbPath(url: string): string {
 
 // Absolutize here so hot reloads, the executor host and drizzle-kit keep
 // pointing at the same file regardless of process CWD shifts.
-/* 连接同样挂 globalThis 单例（ISSUE #4284）：热重载会重新执行本模块，若无缓存
- * 每次都新开一个 DatabaseSync 连接再跑一遍 PRAGMA，然后被 `??` 丢弃、无人关闭
- * ——句柄与内存单调增长，Windows 上残留句柄还会锁住 db.sqlite。 */
+/* The connection is a globalThis singleton too (ISSUE #4284): hot reloads
+ * re-execute this module, and without a cache each pass opens a fresh
+ * DatabaseSync connection, runs the PRAGMAs again, then drops it via `??`
+ * with nobody closing it -- handles and memory grow monotonically, and on
+ * Windows the leftover open handle keeps db.sqlite locked. */
 const nodeSqlite = (globalThis.__comfyNodeSqlite ??= openNodeSqlite(
   resolveDbPath(env.DATABASE_URL ?? DEFAULT_DB_FILE),
 ));
@@ -57,7 +59,8 @@ declare global {
    * desync cross-module reads/writes). Ambient declaration instead of the old
    * `globalThis as unknown as { db: ... }` cast, so access stays typed. */
   var db: SqliteRemoteDatabase<typeof schema> | undefined;
-  /** 热重载单例（ISSUE #4284）：连接只开一次，重载复用同一句柄。 */
+  /** Hot-reload singleton (ISSUE #4284): the connection is opened once and
+   * reused across reloads. */
   var __comfyNodeSqlite: NodeSqliteHandle | undefined;
 }
 
