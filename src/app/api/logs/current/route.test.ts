@@ -172,6 +172,19 @@ describe("GET /api/logs/current 增量读取", () => {
     expect(data.size).toBe(fs.statSync(logFile).size);
   });
 
+  it("增量窗口超上限时改取尾部窗口，不做 OOM 级整段分配（ISSUE #4281）", async () => {
+    /* 合法游标也会被钳到尾部窗口：游标落在文件里 ≠「游标到文件尾」值得
+     * 整段读进内存。约 9MB 的文件 + offset=1（旧小游标），改取最近 8MB。 */
+    const filler = `${"F".repeat(100)}\n`.repeat(90_000);
+    fs.writeFileSync(logFile, `FIRST-LINE-MARKER\n${filler}`, "utf8");
+    const data = await read("app-runtime", 1);
+    expect(data.size).toBe(fs.statSync(logFile).size);
+    /* 起点被钳到尾部窗口并对齐：不再是旧游标，但仍是行边界。 */
+    expect(data.offset).toBeGreaterThan(1);
+    expect(data.content).not.toContain("FIRST-LINE-MARKER");
+    expect(data.content.length).toBeLessThan(9 * 1024 * 1024);
+  });
+
   /* ISSUE #1326：一次启动一份文件后「会不会累积历史行」从根上消失，故 `sessionStart`
    * 对本族恒为 null —— 下发起点会让客户端把本次启动最早的行当残留丢掉（ISSUE #262 复审）。 */
   it("runtime 来源不下发会话起点（一份文件只属于一次启动）", async () => {
