@@ -33,7 +33,12 @@ export function useMarkdownHtml(text: string): string {
       guard.commit(() => {
         setRendered({ from: text, html: markdownToHtml(text) });
       });
-    })();
+    })().catch((error: unknown) => {
+      /* #4238：分块加载失败不再静默——rejection 无人接只会进 LogProvider 的
+       * unhandled 桶；这里留一条带现场的日志（进面板），预览保持纯文本，
+       * 下次 text 变更自然重触发加载。 */
+      console.error("[workshop] markdown 渲染器加载失败，剧本预览暂不可用", error);
+    });
     return () => {
       guard.dispose();
     };

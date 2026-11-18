@@ -116,6 +116,7 @@ export function ExtractToolbar({
   /* 执行日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [history, setHistory] = React.useState<Array<PersistableGenerationLog> | null>(null);
+  const [historyFailed, setHistoryFailed] = React.useState(false);
   const loadHistory = () => {
     if (!logStage) {
       return;
@@ -124,7 +125,14 @@ export function ExtractToolbar({
     if (history) {
       return;
     }
-    void fetchGenerationLogs(logStage, 100).then(setHistory);
+    /* 失败与空态分开说（#4242）：失败时把 history 复位成 null，重开「历史」可重试。 */
+    void fetchGenerationLogs(logStage, 100).then((res) => {
+      setHistory(res.entries);
+      setHistoryFailed(!res.ok);
+      if (!res.ok) {
+        setHistory(null);
+      }
+    });
   };
 
   return (
@@ -241,7 +249,9 @@ export function ExtractToolbar({
               <p className="text-muted-foreground text-3xs">
                 历史日志（含此前会话，保存在 log/workshop/）
               </p>
-              {history === null ? (
+              {historyFailed ? (
+                <p className="text-destructive text-2xs">历史日志拉取失败：请稍后重试。</p>
+              ) : history === null ? (
                 <p className="text-muted-foreground text-2xs">加载中…</p>
               ) : history.length === 0 ? (
                 <p className="text-muted-foreground text-2xs">还没有落盘的历史日志。</p>

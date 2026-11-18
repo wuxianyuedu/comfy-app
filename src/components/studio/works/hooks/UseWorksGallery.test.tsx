@@ -135,3 +135,23 @@ describe("useWorksGallery", () => {
     await expect.poll(() => listProjectsWithServerMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("useWorksGallery 的卸载守卫（#4239）", () => {
+  it("卸载后回包不落地：projects 保持空、loading 不翻转", async () => {
+    let release!: (value: { entries: Array<EntryRow>; ok: boolean }) => void;
+    const gated = new Promise<{ entries: Array<EntryRow>; ok: boolean }>((resolve) => {
+      release = resolve;
+    });
+    listProjectsWithServerMock.mockReturnValue(gated);
+
+    const { result, unmount } = renderHook(() => useWorksGallery());
+    unmount();
+    release({ entries: [entry()], ok: true });
+    await act(async () => {
+      await gated;
+    });
+
+    expect(result.current.projects).toEqual([]);
+    expect(result.current.loading).toBe(true);
+  });
+});

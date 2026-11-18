@@ -6,7 +6,8 @@
  * `dbStudioLogActive` = 正在启动 OR 服务端快照 starting；返回形状与 controller 逐字段一致（§12.18 拆包不动契约）。
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { useExternalAction } from "~/components/ui/use-external-action";
 import { runAsyncAction } from "~/lib/async-action";
 import { useTRPC } from "~/trpc/react";
@@ -52,13 +53,15 @@ export function useSettingsDbStudio({
   const startM = useMutation(trpc.setting.dbStudioStart.mutationOptions());
   const stopM = useMutation(trpc.setting.dbStudioStop.mutationOptions());
   const openM = useMutation(trpc.setting.dbStudioOpen.mutationOptions());
-  const [starting, setStarting] = useState(false);
-  const [stopping, setStopping] = useState(false);
+  /* 启停忙碌位走 useBusyAction（#4240）：启动 Studio 耗时较长，期间切走设置页时
+   * 手写 useState 的 finally 复位会落在已卸载组件上（无效调度）。busy.run 的
+   * set 自带卸载守卫（规范 16 §16.2.4.71 的既有地基）。 */
+  const startBusy = useBusyAction();
+  const stopBusy = useBusyAction();
 
   /* ── Drizzle Studio 启动 / 关闭 / 打开 ─────────────────── */
   const startDbStudio = useCallback(async () => {
-    setStarting(true);
-    try {
+    await startBusy.run(async () => {
       await runAsyncAction(
         async () => {
           const result = await startM.mutateAsync();
@@ -67,14 +70,11 @@ export function useSettingsDbStudio({
         },
         { report: showFlash, failureText: "启动 Drizzle Studio 失败" },
       );
-    } finally {
-      setStarting(false);
-    }
-  }, [startM, statusQ, showFlash]);
+    });
+  }, [startBusy, startM, statusQ, showFlash]);
 
   const stopDbStudio = useCallback(async () => {
-    setStopping(true);
-    try {
+    await stopBusy.run(async () => {
       await runAsyncAction(
         async () => {
           const result = await stopM.mutateAsync();
@@ -83,10 +83,8 @@ export function useSettingsDbStudio({
         },
         { report: showFlash, failureText: "关闭 Drizzle Studio 失败" },
       );
-    } finally {
-      setStopping(false);
-    }
-  }, [stopM, statusQ, showFlash]);
+    });
+  }, [stopBusy, stopM, statusQ, showFlash]);
 
   const openDbStudioAction = useExternalAction({
     target: "browser",
@@ -96,7 +94,7 @@ export function useSettingsDbStudio({
     await openDbStudioAction.run(() => openM.mutateAsync());
   }, [openDbStudioAction, openM]);
 
-  const logActive = starting || statusQ.data?.starting === true;
+  const logActive = startBusy.busy || statusQ.data?.starting === true;
   const log = useRuntimeLogSource({
     source: "drizzle-studio-runtime",
     active: logActive,
@@ -111,8 +109,8 @@ export function useSettingsDbStudio({
           port: raw.port,
         }
       : null,
-    dbStudioStarting: starting,
-    dbStudioStopping: stopping,
+    dbStudioStarting: startBusy.busy,
+    dbStudioStopping: stopBusy.busy,
     dbStudioOpening: openDbStudioAction.busy,
     dbStudioLog: { ...log, active: logActive },
     startDbStudio,
