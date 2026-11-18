@@ -193,3 +193,21 @@ describe("build-desktop 与 daily 生产构建同用一份 pnpm 形态判据（I
     );
   });
 });
+
+describe("cargo 缓存（#4317）", () => {
+  it("rust-cache 指到 src-tauri 的 workspace，且编译失败也落缓存", () => {
+    const yml = readFileSync(
+      join(process.cwd(), ".github", "workflows", "package-desktop.yml"),
+      "utf8",
+    );
+    const start = yml.indexOf("- name: cargo 缓存");
+    expect(start).toBeGreaterThan(-1);
+    const rest = yml.slice(start);
+    const next = rest.indexOf("\n      - name:", 1);
+    const step = next === -1 ? rest : rest.slice(0, next);
+    // 不指 workspace，rust-cache 在仓根跑 `cargo metadata` 只会拿到 exit 101
+    //（仓根没有 Cargo.toml）——pr-gate.yml 那一格的注释早已记过这个坑。
+    expect(step).toContain("workspaces: src-tauri");
+    expect(step).toContain("cache-on-failure: true");
+  });
+});
