@@ -154,7 +154,16 @@ overrides:
   #       但它与 ip-address 同链，一并升掉不留待办。
   #       4.13.7 → 4.13.11（ISSUE #3267）：#1242595（`serveStatic` 把请求路径二次解码，
   #       可绕过静态路径上的 middleware）patched `>=4.13.11`。
-  'hono@4': '4.13.11'
+  #       4.13.11 → 4.13.16（ISSUE #4308）：Dependabot 同链五条（#16–#20，最高 medium）
+  #       patched 一律 `>=4.13.16`（css 助手未转义 / RegExpRouter 跳过通配 middleware /
+  #       mount 前缀绕过 / form 校验跳过 / csrf 不查 text/ping）。按本文件纪律取
+  #       **最小可达修复版** 4.13.16。
+  'hono@4': '4.13.16'
+  #     · @hono/node-server 2.1.5 → 2.1.6（ISSUE #4310）：Dependabot 两条（#14/#15，
+  #       medium，`@modelcontextprotocol/sdk > @hono/node-server`）：反斜杠路径被当作
+  #       分隔符可绕过反代访问控制、WebSocket 升级期 ECONNRESET 未处理可打挂进程。
+  #       patched `>=2.1.6`，取最小可达修复版。
+  '@hono/node-server@2': '2.1.6'
   #     · postcss-selector-parser 7.1.5 → 7.1.6（`shadcn > postcss-selector-parser`，
   #       flat selector 解析的二次复杂度）。构建期工具链，不进产物。
   #       ⚠️ 它的**另一条路径**（`@storybook/nextjs > css-loader > postcss-modules-*`）
