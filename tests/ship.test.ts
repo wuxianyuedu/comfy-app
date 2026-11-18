@@ -65,6 +65,10 @@ import {
   findMergedPullForHeadSha,
 } from "../scripts/ship/ship-scan.mjs";
 import {
+  PR_ALREADY_OPEN_ERRCODE,
+  readCreatedPullNumber,
+} from "../scripts/ship/ship-pull-reuse.mjs";
+import {
   addPathKey,
   classifyStagedSurface,
   runCommitStage,
@@ -6298,6 +6302,104 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     // 没有 errcode 的旧形状不猜：那一格仍由响应原文转述，不由这里编一个理由。
     expect(readPullCreateError({ status: 400, data: { message: "title invalid" } })).toBeNull();
     expect(readPullCreateError(null)).toBeNull();
+  });
+
+  /* ── #4318：建 PR 响应取号认两种来源 ──────────────────────────────────
+   * 成功取 data.number；409「已有开放 PR」取 data.errparam.number。旧版只认前者，
+   * list-pulls 抖动时误判无 PR、真去建、撞 409，号在响应里却退 2。 */
+  it("readCreatedPullNumber：成功取 data.number，409 已有开放 PR 取 errparam.number（#4318）", () => {
+    expect(readCreatedPullNumber({ status: 201, data: { number: 3002 } })).toEqual({
+      number: 3002,
+      via: "created",
+    });
+    const already = {
+      status: 409,
+      data: {
+        errcode: PR_ALREADY_OPEN_ERRCODE,
+        errmsg: "there is already have open pull from refs/heads/x into refs/heads/master",
+        errparam: { number: 4316 },
+      },
+    };
+    expect(readCreatedPullNumber(already)).toEqual({ number: 4316, via: "duplicate" });
+    // errcode 数字字符串也认（平台两种形态都出现过）。
+    expect(
+      readCreatedPullNumber({
+        status: 409,
+        data: { errcode: String(PR_ALREADY_OPEN_ERRCODE), errparam: { number: "4316" } },
+      }),
+    ).toEqual({ number: 4316, via: "duplicate" });
+  });
+
+  it("readCreatedPullNumber：别的 errcode / 缺 errparam / 非数字号一律取不到，不猜（#4318）", () => {
+    // 别的拒绝（如 body too long）即使带 errparam.number 也不许当成 PR 号。
+    expect(
+      readCreatedPullNumber({
+        status: 400,
+        data: { errcode: 2_000_003, errparam: { number: 9999 } },
+      }),
+    ).toEqual({ number: null, via: null });
+    // errcode 对、但 errparam 缺号 / 号不是正整数。
+    expect(
+      readCreatedPullNumber({ status: 409, data: { errcode: PR_ALREADY_OPEN_ERRCODE } }),
+    ).toEqual({ number: null, via: null });
+    expect(
+      readCreatedPullNumber({
+        status: 409,
+        data: { errcode: PR_ALREADY_OPEN_ERRCODE, errparam: { number: "abc" } },
+      }),
+    ).toEqual({ number: null, via: null });
+    // 信封形状不对 / 空响应。
+    expect(readCreatedPullNumber(null)).toEqual({ number: null, via: null });
+    expect(readCreatedPullNumber({ status: 409 })).toEqual({ number: null, via: null });
+  });
+
+  it("建 PR 撞 409 已有开放 PR ⇒ 复用那个号继续走，不落 exit 2（#4318）", () => {
+    /* 复现 issue 现场：list-pulls 抖动没读到开放清单 ⇒ 走建 PR ⇒ 平台 409 拒绝，
+     * 号在 errparam.number 里。旧版把这一格判 exit 2；现在应复用 #4316。 */
+    const { heard, io } = pullHarness({
+      openPullsFail: true,
+      closedPullsPages: ['{"status":200,"data":[]}'],
+      postPull: {
+        status: 0,
+        stdout: JSON.stringify({
+          status: 409,
+          data: {
+            errcode: PR_ALREADY_OPEN_ERRCODE,
+            errmsg:
+              "there is already have open pull from refs/heads/feat/big into refs/heads/master",
+            errparam: { number: 4316 },
+          },
+        }),
+        stderr: "",
+        error: null,
+      },
+    });
+    const out = createOrReusePull(io);
+    expect(out.number).toBe(4316);
+    expect(out.stop, "复用了就不该再收口为没跑起来").toBeNull();
+    const all = heard.join("\n");
+    expect(all).toContain("已有开放 PR #4316");
+    expect(all).toContain("复用，不重建");
+    expect(all).not.toContain("没有 PR 号");
+    expect(all, "复用不是本次新建，不许念「已建」").not.toContain("✓ 已建 PR #4316");
+    // 别的拒绝（body too long）仍照旧退 2 —— 409 复用不能放宽到所有错误响应。
+    const bad = pullHarness({
+      openPullsFail: true,
+      closedPullsPages: ['{"status":200,"data":[]}'],
+      postPull: {
+        status: 0,
+        stdout: JSON.stringify({
+          status: 400,
+          data: { errcode: 2_000_003, errmsg: "body length exceeded", errparam: { number: 9999 } },
+        }),
+        stderr: "",
+        error: null,
+      },
+    });
+    const badOut = createOrReusePull(bad.io);
+    expect(badOut.number).toBeFalsy();
+    expect(badOut.stop).not.toBeNull();
+    expect(bad.heard.join("\n")).toContain("没有 PR 号");
   });
 
   it("栈式复用正文：diffstat 跟平台 base.ref，不是本地 upstream（ISSUE #3021）", () => {
