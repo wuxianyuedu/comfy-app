@@ -33,6 +33,9 @@ export type UpdateCheckState = {
   setEnabled: (value: boolean) => void;
 };
 
+/** 在飞的 check 的 promise（#4241 single-flight）：并发触发共用同一 promise。 */
+let checkingInFlight: Promise<unknown> | null = null;
+
 export const useUpdateCheckStore = create<UpdateCheckState>((set) => ({
   enabled: true,
   dirty: false,
@@ -48,13 +51,25 @@ export const useUpdateCheckStore = create<UpdateCheckState>((set) => ({
   setChecking: (value) => {
     set({ checking: value });
   },
-  runChecking: async (action) => {
-    set({ checking: true });
-    try {
-      return await action();
-    } finally {
-      set({ checking: false });
+  runChecking: async <T>(action: () => Promise<T>) => {
+    /* single-flight（#4241）：30s 轮询与手动触发并发时，布尔标志会让先结束的
+     * 一方把 checking 提前熄灭（还有一路在跑却显示空闲）。在跑时复用同一
+     * promise，指示器在全部结束后才熄灭。 */
+    if (checkingInFlight) {
+      /* single-flight 只合并「同一入口的并发触发」，复用即同一 promise；
+       * 槽位按 unknown 存（zustand store 不带泛型），此处收窄回调用方的 T。 */
+      return checkingInFlight as Promise<T>;
     }
+    const current: Promise<unknown> = action().finally(() => {
+      if (checkingInFlight === current) {
+        checkingInFlight = null;
+        set({ checking: false });
+      }
+    });
+    checkingInFlight = current;
+    set({ checking: true });
+    /* SAFETY: single-flight 复用即同一 promise，槽位按 unknown 存，此处收窄回 T。 */
+    return current as Promise<T>;
   },
   clearDirty: () => {
     set({ dirty: false, groups: [] });

@@ -6,7 +6,7 @@
 // 三口径：列表 = 本地 ∪ 服务端按 updatedAt 倒序（同 id 取较新）；每行标 origin（服务端/本地/两侧）如实说明；
 // 拉取失败照常列本地项目、serverOk=false，视图据此说「服务端那份没拉到」，而非端空列表。
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { subscribeAppEvent } from "~/lib/app-events";
 import { useSyncRefusalNotice } from "../../project-canvas/hooks/use-sync-refusal-notice";
@@ -45,6 +45,9 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
   const [serverOk, setServerOk] = useState(true);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  /* 卸载守卫（#4239）：快速切视图时 load 的回包可能晚于卸载——与
+   * use-sidebar-projects 同款 alive 判据，卸载后不落地。 */
+  const aliveRef = useRef(true);
 
   /* 服务端明确拒收时的用户可见出口（硬规则 4）。这一屏是**发起删除**的那一页，
    * 所以它得自己说得出「没能从服务端删掉」—— 否则失败的表现就是「删了没反应」
@@ -53,6 +56,9 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
 
   const load = useCallback(async (): Promise<void> => {
     const { entries, ok } = await listProjectsWithServer();
+    if (!aliveRef.current) {
+      return;
+    }
     setProjects(entries);
     setServerOk(ok);
     setLoading(false);
@@ -71,9 +77,13 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
     void load();
     /* 画布内的编辑（upsert / rename / delete）会广播这一条，重取即可 ——
      * 装配层不重复实现增量更新。 */
-    return subscribeAppEvent("comfyapp:canvas-store-changed", () => {
+    const unsubscribe = subscribeAppEvent("comfyapp:canvas-store-changed", () => {
       void load();
     });
+    return () => {
+      aliveRef.current = false;
+      unsubscribe();
+    };
   }, [load]);
 
   const openProject = useCallback(

@@ -41,30 +41,40 @@ export function persistGenerationLogs(
   }
 }
 
-/** 拉取某环节的历史执行日志（时间正序，最多 limit 条）。失败返回空数组。 */
+/** 拉取结果区分「空」与「失败」（#4242）：失败被折成空数组会让用户把
+ *  「拉取失败」误读成「没有历史」。ok=false 时 entries 恒为空数组。 */
+export type GenerationLogsResult =
+  | { entries: Array<PersistableGenerationLog>; ok: true }
+  | { entries: []; ok: false };
+
+/** 拉取某环节的历史执行日志（时间正序，最多 limit 条）。 */
 export async function fetchGenerationLogs(
   stage: GenerationLogStage,
   limit = 100,
-): Promise<Array<PersistableGenerationLog>> {
+): Promise<GenerationLogsResult> {
   let res: Response;
   try {
     res = await fetchWithTimeout(withQuery(LOGS_ENDPOINT, { stage, limit: limit || undefined }));
   } catch {
-    return [];
+    return { entries: [], ok: false };
   }
   if (!res.ok) {
-    return [];
+    return { entries: [], ok: false };
   }
   try {
     const data: unknown = await res.json();
     if (!isRecord(data) || !Array.isArray(data.entries)) {
-      return [];
+      /* 对端可达但载荷不符合契约：也算失败（调用方给「拉取失败」，不是「没有历史」）。 */
+      return { entries: [], ok: false };
     }
-    return data.entries.filter(
-      (e): e is PersistableGenerationLog =>
-        isRecord(e) && typeof e.summary === "string" && e.summary !== "",
-    );
+    return {
+      entries: data.entries.filter(
+        (e): e is PersistableGenerationLog =>
+          isRecord(e) && typeof e.summary === "string" && e.summary !== "",
+      ),
+      ok: true,
+    };
   } catch {
-    return [];
+    return { entries: [], ok: false };
   }
 }
