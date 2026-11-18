@@ -151,10 +151,13 @@ export type RunnerState = {
   /** 当前使用的 WS 路径下标（连接失败时推进到下一条路径重试）。 */
   wsPathIndex: number;
 
-  /** 已向排队任务写入过「等待 ComfyUI 连接/启动」提示的 taskId 集合。
+  /** 已向排队任务写入过「等待 ComfyUI 连接/启动」提示的 taskId 集合（键=taskId）。
    *  防止领取循环每 2s 撞一次不就绪、对同一任务反复刷同一行。
-   *  领到该行时不清除（它已经不排队了）；下一轮全新提交是新的 taskId。 */
-  wsWaitLogged: Set<string>;
+   *  领到该行时不清除（它已经不排队了）；下一轮全新提交是新的 taskId。
+   *  封顶 + 插入序淘汰（ISSUE #4351）：清空路径只有 WS open 一条，ComfyUI 长期
+   *  不就绪时集合会随宕机期的新提示任务只增不减；写入侧经 `touchAndEvict`
+   *  限住（上限见 executor-dispatch 的 `WS_WAIT_LOGGED_MAX`）。 */
+  wsWaitLogged: Map<string, true>;
 };
 
 /** 建一份 RunnerState 的初始值。
@@ -183,6 +186,6 @@ export function createEmptyState(): RunnerState {
     reconnectAttempts: 0,
     wsPathIndex: 0,
     executedWorkflow: new Map(),
-    wsWaitLogged: new Set(),
+    wsWaitLogged: new Map(),
   };
 }
