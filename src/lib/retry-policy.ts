@@ -174,6 +174,22 @@ export const OLLAMA_STOP_PROBE = {
 } as const;
 
 /**
+ * comfy 状态长轮询的**失败**退避（#4234）：健康路径的「等」在服务端（25s 长轮询），
+ * 客户端立即重发；一旦请求失败，对端可能长时间不可用（dev server 重编译 / 进程退出 /
+ * 端口被占），毫秒级失败重发会变成失败请求热循环——按 §08 8.10② 选 exponential。
+ * 多标签页会同时撞同一个后端，8.10③ 默认开 equal 抖动错峰。基数 500ms：单次失败后
+ * 先给一小拍冷却；封顶 15s 对齐 `WS_RECONNECT`（对端恢复后最多半分钟内接上）；
+ * maxAttempt 5（500×32 已过封顶，再涨无意义）。
+ */
+export const COMFY_STATE_POLL_BACKOFF = {
+  shape: "exponential",
+  baseMs: 500,
+  maxMs: 15_000,
+  maxAttempt: 5,
+  jitter: "equal",
+} as const satisfies BackoffShapeOptions;
+
+/**
  * 终态那一次库写：最多 4 次写、指数退避基数 40ms、封顶 300ms（累计等待 40+80+160 = 280ms）。
  *
  * 场景与 `WS_RECONNECT` **不同**，所以不复用它的形状：对手不是「可能长时间不可用的服务」，
