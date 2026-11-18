@@ -40,11 +40,28 @@ const modeTableSchema = z.record(z.string(), z.union([z.string(), z.null()]));
  *  两处各写一份判据正是要消掉的东西）。 */
 const modeTableNamespaceSchema = z.record(z.string(), modeTableSchema);
 
+/** 参考图装载绑定（#4376）：某个参考图槽位在某个模式下用哪条装载预设、
+ *  除已连线端口外再额外喂给哪些端口（扇出）。读写执行者见
+ *  `~/lib/workshop/reference-loader-binding`。 */
+const referenceLoaderBindingSchema = z.object({
+  /** 装载预设 id；缺省 / 预设已删 = 裸 LoadImage 直连（#4355 行为）。 */
+  presetId: z.string().optional(),
+  /** 追加的喂给端口（ioKey 列表）：同一张参考图除了主落点外还要到达的端口。 */
+  extraTargets: z.array(z.string()).optional(),
+});
+
+const referenceLoaderNamespaceSchema = z.record(
+  z.string(),
+  z.record(z.string(), referenceLoaderBindingSchema),
+);
+
 export const workflowParamMapSchema = z.looseObject({
   /** 作者画的输入落点线（运行期据此派值）。 */
   source: modeTableNamespaceSchema.optional(),
   /** 作者改过的输出取值行（纯视图层选取，无运行期语义）。 */
   output: modeTableNamespaceSchema.optional(),
+  /** 参考图装载绑定（#4376）：`mode:<模式>` → `{ <槽位id>: 绑定 }`。 */
+  referenceLoaders: referenceLoaderNamespaceSchema.optional(),
 });
 
 /** `paramMap` JSON 列的权威类型。

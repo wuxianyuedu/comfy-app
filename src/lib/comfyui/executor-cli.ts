@@ -46,6 +46,12 @@ import {
   augmentReferenceImageLoadersApi,
   augmentReferenceImageLoadersRaw,
 } from "./reference-loader-augment";
+import {
+  applyReferenceLoaderChainsApi,
+  applyReferenceLoaderChainsRaw,
+} from "./reference-loader-chain";
+import { buildReferenceChainCatalog } from "./reference-loader-catalog";
+import { fetchObjectInfo } from "./raw";
 import { state, log, appendRawCli } from "./runner-state";
 import type { Job } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
@@ -270,6 +276,22 @@ export function buildComfyCliRunArgs(options: {
  * 夹具，不必把本模块那一串服务端依赖拉进测试；名单缺项此前也没有判据会红 —— 那
  * 正是 `Bookmark (rgthree)` 让整单校验失败的成因）。 */
 
+/** 装载链目录（#4376）：计划非空时现查 object_info 归一；ComfyUI 未就绪 → null
+ *  （计划本轮不生效，相关入口回落裸 LoadImage），打一行 warn 说明。 */
+async function resolveChainCatalog(
+  taskId: string,
+  loaderPlan: Job["loaderPlan"],
+): Promise<ReturnType<typeof buildReferenceChainCatalog>> {
+  if (!loaderPlan || Object.keys(loaderPlan).length === 0) {
+    return null;
+  }
+  const catalog = buildReferenceChainCatalog(await fetchObjectInfo());
+  if (catalog === null) {
+    log(taskId, "warn", "参考图装载计划未生效：ComfyUI 节点目录不可用，相关入口回落裸 LoadImage");
+  }
+  return catalog;
+}
+
 export async function executeViaComfyCli(job: Job) {
   // 关键路径依赖在函数入口 resolve 成同名局部（`taskRepository` /
   // `resolveComfyBase`）；下游 closure 沿用旧名，call site 一字不动。
@@ -309,11 +331,19 @@ export async function executeViaComfyCli(job: Job) {
   log(taskId, "info", `ComfyUI 目标：${host}:${port}（${base}）`);
 
   let patched: JsonRecord;
+  /* 装载链目录（#4376）：计划命中的端点按预设实例化子图时要用节点类定义。 */
+  const chainCatalog = await resolveChainCatalog(taskId, job.loaderPlan);
   if (isRaw) {
+    /* 装载链（#4376）：计划命中的端点按预设实例化 LoadImage → 处理链子图，
+     * 再把剩余覆盖项交给裸增强。 */
+    const chained = applyReferenceLoaderChainsRaw(rawJson, overrides, job.loaderPlan, chainCatalog);
+    if (chained.added > 0) {
+      log(taskId, "info", `参考图装载链：${chained.added} 个入口按预设生成装载子图`);
+    }
     /* 图增强（#4355）：参考图落点是张量图片入口（无 widget）时，先自动补
      * LoadImage 装载节点再应用覆盖 —— 否则多参考图工作流第 2~N 张图没有可写之处
      * （只能在每个工作流的画布里手工加节点）。 */
-    const augmented = augmentReferenceImageLoadersRaw(rawJson, overrides);
+    const augmented = augmentReferenceImageLoadersRaw(chained.graph, chained.overrides);
     if (augmented.added > 0) {
       log(taskId, "info", `图增强：为 ${augmented.added} 个张量图片入口自动补 LoadImage 装载节点`);
     }
@@ -333,8 +363,12 @@ export async function executeViaComfyCli(job: Job) {
      *
      * 顺序不能反：先注入覆盖、再收拾图。被旁路/静音的节点会被收拾掉，写给它们的
      * 覆盖项本就该随之丢弃（它们不会执行）。 */
-    /* 图增强（#4355）：同 RAW 侧，先补张量图片入口的 LoadImage 再应用覆盖。 */
-    const augmented = augmentReferenceImageLoadersApi(prompt, overrides);
+    /* 装载链（#4376）：同 RAW 侧，先按计划实例化装载子图，剩余端点再走裸增强。 */
+    const chained = applyReferenceLoaderChainsApi(prompt, overrides, job.loaderPlan, chainCatalog);
+    if (chained.added > 0) {
+      log(taskId, "info", `参考图装载链：${chained.added} 个入口按预设生成装载子图`);
+    }
+    const augmented = augmentReferenceImageLoadersApi(chained.graph, chained.overrides);
     if (augmented.added > 0) {
       log(taskId, "info", `图增强：为 ${augmented.added} 个张量图片入口自动补 LoadImage 装载节点`);
     }

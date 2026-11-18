@@ -27,6 +27,7 @@ import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulatio
 import { displayValue } from "~/lib/display-value";
 import { EncapsulationTestForm } from "./EncapsulationTestForm";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { ReferenceLoaderBindingSection } from "../reference-loader/ReferenceLoaderBindingSection";
 
 /* 运行日志弹窗按需拉（规范 §12.19）：它下面挂着 `ui/json-viewer`
  * → `react18-json-view`，而本面板只在**真的点开日志**时才需要它。此前那条静态边
@@ -49,6 +50,8 @@ type WorkshopEncapsulationPanelProps = {
    * 模式跑一次流程测试 —— 文生图 / 图生图两条链路的封装口往往不同，只看默认
    * 模式测不出另一条能不能用。 */
   onModeChange?: (mode: string) => void;
+  /** 整份 paramMap 的写回口（参考图装载绑定落 `referenceLoaders` 命名空间）。 */
+  onPatchParamMap?: (next: Record<string, unknown>) => Promise<void> | void;
   paramMap: Record<string, unknown> | null;
   workflowId: string;
   workflowIO: WorkflowIOMap | null;
@@ -86,6 +89,7 @@ export function WorkshopEncapsulationPanel({
   mode,
   modes,
   onModeChange,
+  onPatchParamMap,
 }: WorkshopEncapsulationPanelProps) {
   /* 模式契约注册表：契约口清单、必备口与封装状态都经 `useWorkflowEncapsulation`
    * 取生效注册表（本机覆盖逐模式压过项目默认）—— 与模式契约编辑器、列表行徽标、
@@ -247,6 +251,18 @@ export function WorkshopEncapsulationPanel({
           );
         })}
       </div>
+
+      {/* 参考图装载绑定（#4376）：有参考图槽位时给出「装载预设 + 追加端口」配置。
+       *  写回 paramMap 的 referenceLoaders 命名空间，生成时变成执行期装载计划。 */}
+      {onPatchParamMap && mode !== null && mode !== undefined && mode !== "" && (
+        <ReferenceLoaderBindingSection
+          entries={status.entries}
+          io={workflowIO}
+          mode={mode}
+          onPatchParamMap={onPatchParamMap}
+          paramMap={paramMap}
+        />
+      )}
 
       {/* 流程测试：按封装口径真实跑一次（提示词 / 负向 / 尺寸 / 图片 / 时长 → ComfyUI） */}
       <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">

@@ -17,6 +17,8 @@
 
 import type WebSocket from "ws";
 
+import type { ReferenceLoaderPreset } from "~/lib/workshop/reference-loader-preset";
+
 export type RawWorkflowOverride = {
   name: string;
   nodeId: string;
@@ -24,6 +26,11 @@ export type RawWorkflowOverride = {
 };
 
 export type Job = {
+  /** 参考图装载计划（#4376）：键 `${nodeId}::${入口名}` → 预设定义。派发侧按
+   *  id 从预设库回查后放进 Job；id 对不上已删预设的端点不进这张表（执行期回落
+   *  裸 LoadImage）。 */
+  loaderPlan?: Record<string, ReferenceLoaderPreset>;
+
   /** 部分执行目标（调试用，comfy-cli v1.24.0 `--output-node-ids`）：只跑这些
    *  输出节点及其依赖子图。缺省 = 整图执行，与旧行为逐字一致。取值已经过
    *  `sanitizeOutputNodeIds` 清洗（非空字符串、去重、封顶）。 */
