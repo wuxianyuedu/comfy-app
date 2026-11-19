@@ -30,17 +30,6 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-/** `tauri.conf.json` 里那张窗口表：逐字段认到 `app.windows` 这一层。 */
-type SplashWindowConf = {
-  decorations?: boolean;
-  height: number;
-  label?: string;
-  width: number;
-};
-function isSplashConfig(v: unknown): v is { app: { windows: Array<SplashWindowConf> } } {
-  return isRecord(v) && isRecord(v.app) && Array.isArray(v.app.windows);
-}
-
 /** 「这台机器上有没有某个解释器」的候选表与探测参数 —— 顺序取自各自判据，本文件不抄第二份。
  * `powershell` 在前：Windows PowerShell 5.1 每台 Windows 都有，`pwsh`(7) 是可选安装；反过来先试 `pwsh` 只会在
  * 装了 7 的机器上多起一次进程。`python` 那条走 `pythonCandidates()`（平台差异在原处回答，见那份模块头注）。 */
@@ -1296,31 +1285,13 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
    * 也走极端（#412：1680×1000 开窗而卡片只有 720/1400，2K/4K 大片空白）。现取向 **窗口即内容**：开窗紧凑档
    * （SPLASH_WINDOW_SIZE）、展开日志由壳调 SPLASH_WINDOW_SIZE_EXPANDED（页面只 `set_splash_compact`，不写
    * 第二份尺寸常量）、两档按显示器收敛；`decorations: false`，最小化/关闭由启动页按钮提供。改三份副本 /
-   * tauri.conf.json / lib.rs 前先看这条。 */
-  const CONF = join(process.cwd(), "src-tauri", "tauri.conf.json");
+   * lib.rs 前先看这条（#4440 起 splash 窗口由壳程序化创建，tauri.conf.json 不再声明窗口表）。 */
   const LIB_RS = join(process.cwd(), "src-tauri", "src", "lib.rs");
   const SPLASH_COPIES = [
     join(process.cwd(), "src-tauri", "splash-assets", "splash.html"),
     join(process.cwd(), "src-tauri", "splash-assets", "index.html"),
     join(process.cwd(), "public", "splash.html"),
   ];
-
-  const splashWindow = (): {
-    decorations?: boolean;
-    height: number;
-    label?: string;
-    width: number;
-  } => {
-    const conf: unknown = JSON.parse(readFileSync(CONF, "utf8"));
-    if (!isSplashConfig(conf)) {
-      throw new Error("tauri.conf.json 里没有窗口表");
-    }
-    const win = conf.app.windows.find((w) => w.label === "splash") ?? conf.app.windows[0];
-    if (!win) {
-      throw new Error("tauri.conf.json 里没有窗口配置");
-    }
-    return win;
-  };
 
   /** 从 lib.rs 里取某个尺寸常量（`const NAME: (f64, f64) = (w, h);`）。 */
   const sizeConst = (rust: string, name: string): [number, number] => {
@@ -1331,6 +1302,34 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
       throw new Error(`lib.rs 里没有常量 ${name}`);
     }
     return [Number(m[1]), Number(m[2])];
+  };
+
+  /** #4440 起 splash 窗口由壳**程序化建窗**（`WebviewWindowBuilder::new(app, "splash", …)`），
+   * tauri.conf.json 不再声明窗口表 ⇒ 尺寸 / 装饰的真值来源是 lib.rs 的
+   * `SPLASH_WINDOW_SIZE` 常量与 builder 链。这里从 lib.rs 读，保证「测的就是
+   * 开窗用的那一份」，而不是另立一份会漂的配置读数。 */
+  const splashWindow = (): {
+    decorations?: boolean;
+    height: number;
+    label?: string;
+    width: number;
+  } => {
+    const rust = readFileSync(LIB_RS, "utf8");
+    const [width, height] = sizeConst(rust, "SPLASH_WINDOW_SIZE");
+    const at = rust.indexOf('WebviewWindowBuilder::new(app, "splash"');
+    if (at === -1) {
+      throw new Error("lib.rs 里没有 splash 的程序化建窗");
+    }
+    const builder = rust.slice(at, at + 800);
+    if (!builder.includes(".inner_size(SPLASH_WINDOW_SIZE.0, SPLASH_WINDOW_SIZE.1)")) {
+      throw new Error("splash 建窗没用 SPLASH_WINDOW_SIZE 常量——开窗与回落档会是两个尺寸");
+    }
+    return {
+      decorations: !builder.includes(".decorations(false)"),
+      height,
+      label: "splash",
+      width,
+    };
   };
 
   it("splash 开窗是紧凑的一条，不铺满屏幕留空白", () => {
