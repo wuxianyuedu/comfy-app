@@ -33,7 +33,7 @@ import { LibraryHostCard } from "./LibraryHostCard";
 import { WorkflowPreviewUsePanel } from "./WorkflowPreviewUsePanel";
 import { WorkflowPreviewRunFeedback } from "./WorkflowPreviewRunFeedback";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
-import { latestRunForWorkflow } from "~/lib/workflow/workflow-run-store";
+import { useLatestRunTaskId } from "./hooks/use-latest-run-task-id";
 
 type Props = {
   defaultMode?: string;
@@ -185,10 +185,9 @@ export function WorkflowCanvasNodePreview({
    * 与「工坊封装」页签各自一处（ISSUE #611 旧形态：两个页签各写各的）。 */
   const [logOpen, setLogOpen] = useState(false);
   const [logTaskId, setLogTaskId] = useState<string | null>(null);
-  const latestLogTaskId = useMemo(
-    () => latestRunForWorkflow(workflowId, "canvas-node")?.taskId ?? null,
-    [workflowId],
-  );
+  /* 订阅运行登记表取最近一次（#4466）：此前 useMemo 依赖只有 workflowId，
+   * 登记表变化不重算，摘要指向旧一次运行。 */
+  const latestLogTaskId = useLatestRunTaskId(workflowId, "canvas-node");
   const logViewTaskId = logTaskId ?? latestLogTaskId;
 
   const statusLabel = phase.kind === "running" ? `生成中 ${phase.pct}%` : STATUS_LABEL[phase.kind];
