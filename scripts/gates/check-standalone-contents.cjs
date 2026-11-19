@@ -380,6 +380,24 @@ function missingRequiredRuntimeFiles(dir) {
 }
 
 /**
+ * 判「产物里的脚本路径」是否在源码里已不存在（ISSUE #4553）。
+ *
+ * build-desktop.mjs 只会拷贝源码里存在的路径（源码缺件它自己就 fail 了），
+ * 所以「产物里有、源码里没有」只剩一种解释：这一层是某次移动/改名**之前**
+ * 组装的陈旧产物。此时该做的是重建 static，而不是按通用指引去登记白名单
+ * —— 给一个源码里已经不存在的路径登记白名单，等于给旧布局发永久通行证。
+ *
+ * 产物相对路径与仓库相对路径对 `scripts/` 是同一个（判据按产物根锚定），
+ * 所以这里直接拿它对 `ROOT` 判存在性即可。
+ *
+ * @param {string[]} artifactPaths 产物相对路径（如 "scripts/db-backup-core.mjs"）
+ * @returns {string[]} 在源码里已不存在的那些（即陈旧产物信号）
+ */
+function staleScriptPaths(artifactPaths) {
+  return artifactPaths.filter((p) => !fs.existsSync(path.join(ROOT, p)));
+}
+
+/**
  * 数一份产物的文件并做同一份禁忌清单检查。
  * @param {string} dir 产物目录
  * @param {string} label 输出前缀
@@ -432,13 +450,20 @@ function checkDir(dir, label) {
   }
   if (strayScripts.length > 0) {
     failed = true;
+    // 陈旧产物诊断（ISSUE #4553）：只对 static 层提 —— standalone 层总随 pnpm build
+    // 新鲜产出，不存在「陈旧」一说。判定结果不变（陈旧的 static 层确实不该被内嵌进
+    // exe），要改的只是排障指引：别把「该重建」误导成「去登记白名单」。
+    const stale = label === "static" ? staleScriptPaths(strayScripts) : [];
+    const staleHint =
+      stale.length > 0
+        ? `\n  ⚠️ 以上 ${stale.length} 个路径在源码 scripts/ 里已不存在（脚本被移动/改名过）——这一层是**陈旧产物**，不是白名单漏登记：\n    先重建再判：node scripts/build-desktop.mjs （或 tools/build/rebuild-static.ps1）\n    不要为这些旧路径往 ALLOWED_SCRIPTS 加条目 —— 那是给源码里已不存在的布局发通行证。`
+        : "";
     console.error(
       `[${label}] 内部门禁脚本不该进产物，却发现 ${strayScripts.length} 个：\n  ${strayScripts
         .slice(0, 8)
         .join("\n  ")}${
         strayScripts.length > 8 ? `\n  …（其余 ${strayScripts.length - 8} 个省略）` : ""
-      }\n  （runtime 真的会读的脚本靠 ALLOWED_SCRIPTS 白名单保留；` +
-        `新增脚本默认应被剔除，要保留请登记并说明理由）`,
+      }\n  （runtime 真的会读的脚本靠 ALLOWED_SCRIPTS 白名单保留；新增脚本默认应被剔除，要保留请登记并说明理由）${staleHint}`,
     );
   }
   // 宿主必需文件的反向检查（3-E1）。**两层产物都查**，但只在这一层真的是个产物时
@@ -633,4 +658,5 @@ module.exports = {
   collectFiles,
   missingRequiredRuntimeFiles,
   checkDir,
+  staleScriptPaths,
 };
