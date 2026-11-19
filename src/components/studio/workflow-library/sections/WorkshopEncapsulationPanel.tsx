@@ -6,7 +6,7 @@
 // 显式：必填/可选随模式契约（`ModeContract.required`，能不能跑只认必填口）；
 // 模式可切换（只改「看/测哪个模式」，不动默认模式）；流程测试按封装口径真实跑一次。
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 
 import { Badge } from "~/components/ui/badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
@@ -19,6 +19,7 @@ import { getWorkflowType } from "~/lib/workflow/workflow-types";
 import { modeLabel } from "../workflow-library-config";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import { workflowDefaultSizeSpec } from "~/components/studio/workflow-io";
 import { useWorkflowEncapsulation } from "../hooks/use-workflow-encapsulation";
 import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
 import { useLatestRunTaskId } from "../hooks/use-latest-run-task-id";
@@ -50,6 +51,9 @@ type WorkshopEncapsulationPanelProps = {
    * 另一条能不能用。 */
   onModeChange?: (mode: string) => void;
   paramMap: Record<string, unknown> | null;
+  /** RAW（UI 格式）工作流 JSON（`sourceData.source`）：流程测试的尺寸初值在
+   *  暴露面没给尺寸口时从这里直读图内默认（ISSUE #4550）。 */
+  rawJson?: unknown;
   workflowId: string;
   workflowIO: WorkflowIOMap | null;
 };
@@ -83,6 +87,7 @@ export function WorkshopEncapsulationPanel({
   displayName,
   workflowIO,
   paramMap,
+  rawJson,
   mode,
   modes,
   onModeChange,
@@ -104,6 +109,16 @@ export function WorkshopEncapsulationPanel({
     mode: mode ?? null,
     contractIds,
   });
+
+  /* 工作流的图内默认尺寸（ISSUE #4550）：流程测试表单的尺寸初值跟它走 ——
+   * 作者在图内控件里配的尺寸（如 MiniMax H3 的 1:1 / 4M / 32）就是这条
+   * 工作流的「默认尺寸」，测试不该另起一份全局默认。判据与画布组合控件
+   * 同源（`workflowDefaultSizeSpec` 内部走 `inferDimensionGroup`）；认不出
+   * 时给 null，表单回退全局默认。 */
+  const defaultSize = useMemo(
+    () => workflowDefaultSizeSpec({ io: workflowIO, mode: mode ?? null, rawJson }),
+    [workflowIO, mode, rawJson],
+  );
 
   /* 表单交上来的就是**工坊对外值**本身（口子清单 = 该模式的契约口，见
    *`EncapsulationTestForm`），这里不再做第二道字段过滤。 */
@@ -265,6 +280,7 @@ export function WorkshopEncapsulationPanel({
           <EncapsulationTestForm
             canRun={status.ready}
             entries={status.entries}
+            initialSize={defaultSize}
             onRun={runTest}
             runDisabledReason={
               status.ready

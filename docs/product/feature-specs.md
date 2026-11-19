@@ -431,7 +431,10 @@
 - 需求：可编辑工作流对外暴露的参数（paramMap）与输入 / 输出端口映射
   （workflowIO）。
 - 行为与验收：参数编辑在「编辑对外参数」页签的画布上做（落点 ↔ 端口）；
-  IO 映射含节点内建 IO；改动即时进 `workflowTemplate` 行。
+  IO 映射含节点内建 IO；改动即时进 `workflowTemplate` 行。工作流**没有配置
+  模式**时参数落点不能连线是正常口径（落点必须归属一个模式），页签画布上方
+  给一句可操作的提示（到编辑器「编辑 IO」配置模式，#4550），不静默禁用。
+- 落点（提示）：`src/components/studio/workflow-library/WorkflowCanvasNodePreview.tsx`。
 - 落点：`src/lib/workflow/workflow-param-mapping.ts`、
   `src/lib/workflow/workflow-io-types.ts`、`io-exposure.ts`
 
@@ -452,7 +455,10 @@
   ▶ 生成、「工坊封装」页签的执行流程测试），共用同一份运行态。
 - 行为与验收：运行登记表在客户端（`workflow-run-store`，localStorage 写穿，
   上限 32 条运行 / 300 行日志）；运行日志有弹窗（`WorkflowRunLogModal`）；
-  两个入口不各存一份态。
+  两个入口不各存一份态。流程测试表单的**尺寸初值跟随工作流的图内默认尺寸**
+  （`workflowDefaultSizeSpec`：分组判据与画布组合控件同源、取值走「模式覆盖 →
+  图内 defaultValue」的两级回退；#4550）——用户改过尺寸后不再被默认值覆盖，
+  认不出图内默认时回退全局默认。
 - 落点：`src/lib/workflow/workflow-run-store.ts`、
   `src/components/studio/workflow-library/WorkflowRunLogModal.tsx`
 

@@ -6,7 +6,7 @@
 // ComfyUI 输入目录，值以文件名落回该口。表单只认 `WorkshopExposedValues`，空串提交前
 // 剪掉（`pruneEmptyExposedValues`），免得抹掉作者写好的负向提示词 / 首帧。
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { textHandler } from "~/lib/form-props";
 
 import { runAsyncAction } from "~/lib/async-action";
@@ -45,6 +45,10 @@ type EncapsulationTestFormProps = {
   canRun: boolean;
   /** 该模式的契约口清单（`status.entries`：含落点 / 必备信息，但**不过滤**）。 */
   entries: Array<EncapsulationEntryStatus>;
+  /** 工作流的图内默认尺寸（ISSUE #4550，`workflowDefaultSizeSpec` 的产物）；
+   *  null / 缺省 = 没认得出，回退 `DEFAULT_SHOT_SIZE`。用户改过尺寸后不再
+   *  跟随（换模式重算的新默认只对「没动过」的表单生效）。 */
+  initialSize?: ShotSizeState | null;
   onRun: (values: WorkshopExposedValues) => void;
   runDisabledReason?: string;
   running: boolean;
@@ -56,6 +60,7 @@ type EncapsulationTestFormProps = {
 
 export function EncapsulationTestForm({
   entries,
+  initialSize,
   scene,
   running,
   canRun,
@@ -68,7 +73,15 @@ export function EncapsulationTestForm({
   const [texts, setTexts] = useState<WorkshopExposedValues>({
     prompt: DEFAULT_TEST_PROMPT,
   });
-  const [size, setSize] = useState<ShotSizeState>(DEFAULT_SHOT_SIZE);
+  const [size, setSize] = useState<ShotSizeState>(initialSize ?? DEFAULT_SHOT_SIZE);
+  /* 用户动没动过尺寸：没动过时跟随 `initialSize`（换模式会重算出新的图内
+   * 默认，表单应同步跟过去）；动过之后用户的选择优先，不再被默认值覆盖。 */
+  const sizeTouchedRef = useRef(false);
+  useEffect(() => {
+    if (!sizeTouchedRef.current && initialSize) {
+      setSize(initialSize);
+    }
+  }, [initialSize]);
   const [duration, setDuration] = useState(DEFAULT_TEST_DURATION);
   /* 自定义「数字」口的值（`控制形态 number`）。文本 / 图片口的值走`texts`
    * （`withExposedValue` 按 id 收进`custom`），数字口要下发 number，所以单独
@@ -153,7 +166,15 @@ export function EncapsulationTestForm({
           return (
             <div className="flex flex-col gap-1" key={entry.id}>
               <FieldLabel label={entry.label} />
-              <ShotSizePicker disabled={disabled} onChange={setSize} scene={scene} value={size} />
+              <ShotSizePicker
+                disabled={disabled}
+                onChange={(next) => {
+                  sizeTouchedRef.current = true;
+                  setSize(next);
+                }}
+                scene={scene}
+                value={size}
+              />
             </div>
           );
         }

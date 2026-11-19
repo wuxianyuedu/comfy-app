@@ -149,8 +149,17 @@ export function rawUiNodeType(raw: unknown, nodeId: string): string | undefined 
   const type = resolveRawNode(raw, nodeId)?.type;
   return typeof type === "string" && type ? type : undefined;
 }
-/** 具名控件输入在 UI 节点 `widgets_values` 数组里的下标。 */
-function widgetSlot(node: RawUiNode, name: string): number {
+/** 控件槽位读取的节点最小视图：只要 inputs（每项带 name / widget 真值）与
+ *  widgets_values。`RawUiNode` 与读侧（`workflow-io-groups` 的图内默认尺寸
+ *  直读，#4550）构造的轻量视图都按结构兼容。 */
+export type RawNodeSlotView = {
+  inputs?: ReadonlyArray<{ name?: unknown; widget?: unknown } | undefined>;
+  widgets_values?: ReadonlyArray<unknown>;
+};
+
+/** 具名控件输入在 UI 节点 `widgets_values` 数组里的下标。
+ *  读侧复用（#4550）与写侧同一口径：槽位序 = 带 `widget` 标记的输入序。 */
+export function widgetSlot(node: RawNodeSlotView, name: string): number {
   const inputs = node.inputs ?? [];
   let slot = 0;
   for (const inp of inputs) {
