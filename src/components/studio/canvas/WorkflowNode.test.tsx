@@ -181,3 +181,78 @@ describe("FlowNode 右上角编号", () => {
     expect(screen.queryByText("#3")).toBeNull();
   });
 });
+
+/* ── ISSUE #4548 ─────────────────────────────────────────────────────────────
+ * 已连线的 widget 输入（convert to input + link）曾经被三处观感一起误伤：
+ *  ① 折叠锚点只认「值为连线元组」的条目，widget 联动输入的值是字符串，
+ *    折叠态下没有 Handle → 落在这类输入上的边被 React Flow 静默丢弃（连线消失）；
+ *  ② widget 行照常渲染值井 / textarea（数值明明由连线传递）；
+ *  ③ StringTextarea 在 hasSize 的 flex 链上没有下限，多行 STRING 堆叠时被压成一条缝。
+ * 下面三组用例分别钉住修复后的行为。 */
+
+const LINKED_WIDGET_INPUTS = [
+  {
+    name: "string",
+    type: "STRING",
+    isConnection: true,
+    widget: { name: "string" },
+    widgetValue: "",
+  },
+  {
+    name: "find",
+    type: "STRING",
+    isConnection: false,
+    widget: { name: "find" },
+    widgetValue: "{input text}",
+    multiline: true,
+  },
+  {
+    name: "replace",
+    type: "STRING",
+    isConnection: true,
+    widget: { name: "replace" },
+    widgetValue: "",
+  },
+];
+
+describe("折叠态的已连线 widget 输入保留锚点（#4548 连线消失）", () => {
+  it("折叠时已连线的 widget 输入仍有同 id 的 Handle，未连线的不出锚点", () => {
+    renderFlowNode(
+      nodeData({
+        rawInputs: LINKED_WIDGET_INPUTS,
+        flags: { collapsed: true },
+        /* 折叠态的输出锚点只给「已连线」的输出 —— 模拟 LATENT 被下游占用。 */
+        connectedOutputs: new Set(["LATENT"]),
+      }),
+    );
+    /* string / replace 是 widget 联动输入（值为字符串）——折叠锚点必须照样给出
+     * Handle，否则 buildEdges 的 targetHandle 找不到落点，边被静默丢弃。 */
+    expect(document.querySelector('[data-handleid="string"]')).not.toBeNull();
+    expect(document.querySelector('[data-handleid="replace"]')).not.toBeNull();
+    /* find 没有连线 —— 不需要锚点。 */
+    expect(document.querySelector('[data-handleid="find"]')).toBeNull();
+    /* 输出侧锚点不受影响（nodeData 的 classType 是 KSampler，静态输出 LATENT）。 */
+    expect(document.querySelector('[data-handleid="out:LATENT"]')).not.toBeNull();
+  });
+});
+
+describe("已连线 widget 行不再渲染取值控件（#4548）", () => {
+  it("连线行只剩标签 + 端点；未连线行保留值井 / textarea", () => {
+    renderFlowNode(nodeData({ rawInputs: LINKED_WIDGET_INPUTS }));
+    const linkedRow = document.querySelector('[data-input-key="string"]');
+    expect(linkedRow).not.toBeNull();
+    /* 数值由连线传递：本地 widgets_values 是过期的默认值，不再显示。 */
+    expect(linkedRow?.querySelector(".bg-canvas-deep")).toBeNull();
+    expect(linkedRow?.querySelector("textarea")).toBeNull();
+    const replaceRow = document.querySelector('[data-input-key="replace"]');
+    expect(replaceRow?.querySelector(".bg-canvas-deep")).toBeNull();
+    expect(replaceRow?.querySelector("textarea")).toBeNull();
+    /* 端点仍要可见（边的落点）。 */
+    expect(document.querySelector('[data-handleid="string"]')).not.toBeNull();
+
+    /* 未连线的「查找」保留值井 + textarea（值是真实本地值）。 */
+    const findRow = document.querySelector('[data-input-key="find"]');
+    expect(findRow?.querySelector(".bg-canvas-deep")).not.toBeNull();
+    expect(findRow?.querySelector("textarea")).not.toBeNull();
+  });
+});

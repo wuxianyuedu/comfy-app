@@ -40,6 +40,10 @@ export function FlowNodeWidgetRows({
         const isConn = rawMeta[k]?.isConnection === true;
         // 边界连线：包裹暴露该槽位的哨兵（origin_id -10）。
         const isBoundary = rawMeta[k]?.isBoundary === true || data.boundaryInputs?.has(k) === true;
+        // 已连线（含边界连线）的槽位不再显示取值控件 —— 数值由连线传递，本地
+        // widgets_values 只是过期的默认值（ISSUE #4548：json_string 有 link 还
+        // 显示输入框、width/height 显示 0）。行退化成「标签 + 端点」的连接行。
+        const linked = isConn || isBoundary;
         // 类型一律从 JS 类型的标量值推导（连线元组
         // 的 edgeType 路径在顶部针脚区）。
         const inputType = inferInputType(data.classType, k, v);
@@ -74,10 +78,14 @@ export function FlowNodeWidgetRows({
             })
           ];
 
+        /* STRING 堆叠块只属于「未连线」的行：已连线的行退化成紧凑连接行
+         * （标签 + 端点），textarea / 值井都不渲染 —— 数值由连线传递。 */
+        const stackedString = isStringWidget && !linked;
+
         return (
           <div
             className={
-              isStringWidget
+              stackedString
                 ? "group text-2xs relative flex min-h-0 flex-1 flex-col gap-1.5 py-1.5 pr-2 pl-5"
                 : // min-h-5.5 h-auto lets long labels wrap.
                   "group text-2xs relative flex h-auto min-h-5.5 items-center gap-1.5 py-0.5 pr-2 pl-5"
@@ -114,7 +122,7 @@ export function FlowNodeWidgetRows({
               type="target"
             />
 
-            {isStringWidget ? (
+            {stackedString ? (
               /* STRING 堆叠块 —— 顶部是 LABEL + IoCheckbox，textarea
                * 在下方占满剩余竖向空间。 */
               <div className="flex shrink-0 items-center gap-1.5">
@@ -187,29 +195,33 @@ export function FlowNodeWidgetRows({
 
                 {/* widget 取值渲染成「凹陷井」：深底 + 细描边 + 圆角，铺满
                  *  标签列之后的整格，文本左对齐、超长省略（完整值走 <Hint>）。
-                 *  已连线的行仍显示取值（ComfyUI 从不隐藏），只是文字调暗。
-                 *  形态与 SubgraphWidgetRow 的值框同一套（#4533）。 */}
-                <Hint label={String(v)}>
-                  <span
-                    className="text-2xs bg-canvas-deep border-border-subtle min-w-0 truncate rounded-sm border px-1.5 text-left tabular-nums"
-                    style={{
-                      flex: "1 1 0",
-                      display: "flex",
-                      alignItems: "center",
-                      minHeight: 18,
-                      color: valueCellColor(v, isConn),
-                    }}
-                  >
-                    {renderWidgetValue(v)}
-                  </span>
-                </Hint>
+                 *  已连线的行不再渲染取值（ISSUE #4548：数值由连线传递，
+                 *  本地 widgets_values 只是过期的默认值，显示出来会误导
+                 *  「这个 0 是真实值」）；形态与 SubgraphWidgetRow 的值框
+                 *  同一套（#4533）。 */}
+                {!linked && (
+                  <Hint label={String(v)}>
+                    <span
+                      className="text-2xs bg-canvas-deep border-border-subtle min-w-0 truncate rounded-sm border px-1.5 text-left tabular-nums"
+                      style={{
+                        flex: "1 1 0",
+                        display: "flex",
+                        alignItems: "center",
+                        minHeight: 18,
+                        color: valueCellColor(v, isConn),
+                      }}
+                    >
+                      {renderWidgetValue(v)}
+                    </span>
+                  </Hint>
+                )}
               </div>
             )}
             {/* STRING widget 文本框 —— **堆叠**在 LABEL 行下方。
              * <textarea readOnly> 胜过 <div> + Tailwind 任意类
              *（它们在这个子树里会静默失效）。值为空时回落到
              * 淡淡的（空）占位。 */}
-            {isStringWidget && (
+            {stackedString && (
               <div className="flex min-w-0 flex-1 flex-col">
                 {stringText.length > 0 ? (
                   <StringTextarea hasSize={hasSize} value={stringText} />

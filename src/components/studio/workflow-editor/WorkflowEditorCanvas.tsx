@@ -74,6 +74,13 @@ const DEFAULT_EDGE_OPTIONS = {
   },
 };
 
+/* 非受控画布（#4536）的挂载初值：`defaultEdges` 必须**在场**（空数组也算）——
+ * React Flow 的 `rf.setEdges` 把更新丢进批处理队列，队列只在 `hasDefaultEdges`
+ * 为真时才写 store，否则静默丢弃（没有受控模式的 `onEdgesChange` 可回调）⇒
+ * 父层 sync effect 的连线同步全部空转，画布上表现为「连线消失」（ISSUE #4548）。
+ * 项目画布 / 工作流库画布（#4541）同一条坑，注释见各自文件。模块级常量保持引用稳定。 */
+const INITIAL_EDGES: Array<Edge> = [];
+
 export type WorkflowEditorCanvasProps = {
   canvasSettings: CanvasSettings;
   canvasSettingsHydrated: boolean;
@@ -174,6 +181,7 @@ export function WorkflowEditorCanvas({
       /* 非受控画布（#4536）：节点/连线状态住 React Flow store，拖拽的逐帧位置
        * 更新不再经父层 setState 重渲染整棵编辑器树。图同步走父层的
        * `rf.setNodes` / `rf.setEdges`。 */
+      defaultEdges={INITIAL_EDGES}
       defaultNodes={defaultNodes}
       edgeTypes={workflowEdgeTypes}
       isValidConnection={isValidConnection}
