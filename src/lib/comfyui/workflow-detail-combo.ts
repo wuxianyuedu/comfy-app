@@ -8,6 +8,7 @@
  * 子图 wrapper 节点渲染出真正的 <select>，而不是一个自由文本框。
  * 缺失或连不上时落到 undefined，消费方优雅回落到纯文本控件。
  */
+import { isRecord } from "~/lib/is-record";
 import { union, uniqueSorted } from "~/lib/ordered-set";
 import { fetchObjectInfo } from "~/lib/comfyui/raw";
 import { localModelFileNames } from "~/lib/models";
@@ -32,10 +33,8 @@ const comboOptionsFromSpec = (spec: unknown): Array<string> | undefined => {
     return opts.length ? opts : undefined;
   }
   const extra: unknown = spec[1];
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (extra != null && typeof extra === "object") {
-    /* SAFETY: 类型断言已复核 */
-    const opts = (extra as Record<string, unknown>).options;
+  if (isRecord(extra)) {
+    const opts = extra.options;
     if (Array.isArray(opts)) {
       const list = opts.filter((x): x is string => typeof x === "string");
       return list.length ? list : undefined;
@@ -175,12 +174,10 @@ export function createObjectInfoResolvers(): {
       return undefined;
     }
     const extra: unknown = spec[1];
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (extra == null || typeof extra !== "object") {
+    if (!isRecord(extra)) {
       return undefined;
     }
-    /* SAFETY: 类型断言已复核 */
-    return (extra as Record<string, unknown>).multiline === true;
+    return extra.multiline === true;
   };
 
   return {

@@ -6,22 +6,36 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LLMMessage } from "~/lib/llm/types";
 import type { WorkshopSessionState } from "./types";
 import type { WorkshopLLMConfig } from "./llm";
-import type { Character, Shot } from "~/lib/workshop/types";
+import { isProjectType, type Character, type Shot } from "~/lib/workshop/types";
+import { asRecord } from "~/lib/is-record";
 import type { CreateSessionInput } from "./repository";
+import { generateImageViaApi } from "./api-channel";
+
+/* 生效表换桩（ISSUE #3972）：把 image 场景 16:9 / 1k 改成 1280×720（项目默认
+ * 1024×576），验证 api 通道的 WxH 折算读的是现读的生效表。 */
+vi.mock("~/lib/media/size-preset-fs.server", async () => {
+  const { mergeSizePresetTable } = await import("~/lib/media/size-presets");
+  return {
+    loadSizePresetTable: () =>
+      Promise.resolve(
+        mergeSizePresetTable({ image: { "16:9 横屏": { "1k": { width: 1280, height: 720 } } } }),
+      ),
+  };
+});
 
 const { store } = vi.hoisted(() => ({
   store: new Map<string, WorkshopSessionState>(),
 }));
 
 vi.mock("./repository", () => {
-  const createSession = vi.fn(async (input: CreateSessionInput = {}) => {
+  const createSession = vi.fn((input: CreateSessionInput = {}) => {
     const id = `sess_${Math.random().toString(36).slice(2)}`;
     const state: WorkshopSessionState = {
       idea: input.idea ?? "",
       meta: {
         title: input.title ?? "未命名工坊项目",
-        /* SAFETY: 类型断言已复核 */
-        type: (input.type ?? "short_video") as WorkshopSessionState["meta"]["type"],
+        // input.type 是外来 string，用运行期枚举守卫收进 ProjectType，认不出就回落默认档。
+        type: isProjectType(input.type) ? input.type : "short_video",
         tone: input.tone ?? "",
         logline: input.logline ?? "",
         scriptMarkdown: "",
@@ -35,12 +49,12 @@ vi.mock("./repository", () => {
     store.set(id, state);
     return id;
   });
-  const getSession = vi.fn(async (id: string) => store.get(id) ?? null);
-  const updateState = vi.fn(async (id: string, state: WorkshopSessionState) => {
+  const getSession = vi.fn((id: string) => store.get(id) ?? null);
+  const updateState = vi.fn((id: string, state: WorkshopSessionState) => {
     store.set(id, state);
   });
-  const listSessions = vi.fn(async () => []);
-  const deleteSession = vi.fn(async (id: string) => {
+  const listSessions = vi.fn(() => []);
+  const deleteSession = vi.fn((id: string) => {
     const had = store.has(id);
     store.delete(id);
     return had;
@@ -55,62 +69,68 @@ vi.mock("./repository", () => {
 });
 
 vi.mock("./llm", () => ({
-  getWorkshopLLMConfig: vi.fn(async (): Promise<WorkshopLLMConfig> => ({
-    baseUrl: "http://x",
-    model: "m",
-    apiKey: null,
-    temperature: 0.7,
-    maxTokens: 100,
-  })),
+  getWorkshopLLMConfig: vi.fn((): Promise<WorkshopLLMConfig> =>
+    Promise.resolve({
+      baseUrl: "http://x",
+      model: "m",
+      apiKey: null,
+      temperature: 0.7,
+      maxTokens: 100,
+    }),
+  ),
   completeWorkshopLLM: vi.fn(
-    async (_cfg: WorkshopLLMConfig, messages: Array<LLMMessage>): Promise<string> => {
+    (_cfg: WorkshopLLMConfig, messages: Array<LLMMessage>): Promise<string> => {
       const sys = typeof messages[0]?.content === "string" ? messages[0].content : "";
       if (sys.includes("编剧")) {
-        return "# 场景1 · 咖啡馆\nΔ 小满走进咖啡馆。\nV1 小满：今天天气真好。";
+        return Promise.resolve("# 场景1 · 咖啡馆\nΔ 小满走进咖啡馆。\nV1 小满：今天天气真好。");
       }
       if (sys.includes("剧本分析师")) {
-        return JSON.stringify([
-          {
-            name: "小满",
-            ageGender: "女,20岁",
-            appearance: "短发",
-            costume: "红裙",
-            personality: "活泼",
-            styleTags: ["厚涂"],
-          },
-        ]);
+        return Promise.resolve(
+          JSON.stringify([
+            {
+              name: "小满",
+              ageGender: "女,20岁",
+              appearance: "短发",
+              costume: "红裙",
+              personality: "活泼",
+              styleTags: ["厚涂"],
+            },
+          ]),
+        );
       }
       if (sys.includes("分镜师")) {
-        return JSON.stringify([
-          {
-            sceneHeading: "场景1 · 咖啡馆",
-            shotType: "wide",
-            description: "全景",
-            characterNames: ["小满"],
-            dialogue: "",
-          },
-        ]);
+        return Promise.resolve(
+          JSON.stringify([
+            {
+              sceneHeading: "场景1 · 咖啡馆",
+              shotType: "wide",
+              description: "全景",
+              characterNames: ["小满"],
+              dialogue: "",
+            },
+          ]),
+        );
       }
-      return "";
+      return Promise.resolve("");
     },
   ),
 }));
 
 vi.mock("./api-channel", () => ({
-  generateImageViaApi: vi.fn(async () => "http://img/1.png"),
-  submitVideoViaApi: vi.fn(async () => ({ remoteTaskId: "task123" })),
-  pollVideoViaApi: vi.fn(async () => ({
+  generateImageViaApi: vi.fn(() => "http://img/1.png"),
+  submitVideoViaApi: vi.fn(() => ({ remoteTaskId: "task123" })),
+  pollVideoViaApi: vi.fn(() => ({
     url: "http://vid/1.mp4",
     pending: false,
   })),
-  resolveMediaDataUrl: vi.fn(async (ref: string) => ref),
+  resolveMediaDataUrl: vi.fn((ref: string) => ref),
 }));
 
 vi.mock("./comfyui", () => ({
-  generateImageViaComfyUI: vi.fn(async () => "file://comfy/1.png"),
-  submitVideoViaComfyUI: vi.fn(async () => ({ url: "file://comfy/v.mp4" })),
-  saveComfySettings: vi.fn(async (p: unknown) => p),
-  resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
+  generateImageViaComfyUI: vi.fn(() => "file://comfy/1.png"),
+  submitVideoViaComfyUI: vi.fn(() => ({ url: "file://comfy/v.mp4" })),
+  saveComfySettings: vi.fn((p: unknown) => p),
+  resolveComfyBase: vi.fn(() => "http://127.0.0.1:8188"),
 }));
 
 vi.mock("./final-compose", () => ({
@@ -133,8 +153,8 @@ vi.mock("./final-compose", () => ({
       dialogue: s.dialogue ?? "",
     })),
   })),
-  writeCompositionPlan: vi.fn(async () => "/data/workshop-compositions/x.json"),
-  renderComposition: vi.fn(async () => ({ ok: false, note: "no ffmpeg" })),
+  writeCompositionPlan: vi.fn(() => "/data/workshop-compositions/x.json"),
+  renderComposition: vi.fn(() => ({ ok: false, note: "no ffmpeg" })),
 }));
 
 import * as orchestrator from "./orchestrator";
@@ -169,8 +189,8 @@ describe("workshop orchestrator 全流程", () => {
     expect(after?.shots[0]?.imageUrl).toBe("http://img/1.png");
 
     const sub = await orchestrator.submitVideo(id, { shotId: shot.id });
-    /* SAFETY: 类型断言已复核 */
-    expect((sub as { remoteTaskId?: string }).remoteTaskId).toBe("task123");
+    // 各通道的回执形状不同，用宽松记录视图读 remoteTaskId。
+    expect(asRecord(sub)?.remoteTaskId).toBe("task123");
 
     const polled = await orchestrator.pollVideo(id, shot.id);
     expect(polled.url).toBe("http://vid/1.mp4");
@@ -213,7 +233,8 @@ describe("workshop orchestrator 全流程", () => {
   });
 
   it("submitVideo comfyui 通道写入 clipUrl", async () => {
-    const id = await orchestrator.createSession({ idea: "x" });
+    // idea 与上一条错开：createSession 的重试去重（#3852）会按参数指纹合并。
+    const id = await orchestrator.createSession({ idea: "submit-video-y" });
     await orchestrator.setIdea(id, "x");
     await orchestrator.generateScript(id);
     await orchestrator.extractCharacters(id);
@@ -231,7 +252,8 @@ describe("workshop orchestrator 全流程", () => {
   });
 
   it("composeFinal 产出合成清单路径", async () => {
-    const id = await orchestrator.createSession({ idea: "x" });
+    // idea 与前几条错开：createSession 的重试去重（#3852）会按参数指纹合并。
+    const id = await orchestrator.createSession({ idea: "compose-z" });
     await orchestrator.setIdea(id, "x");
     await orchestrator.generateScript(id);
     await orchestrator.extractCharacters(id);
@@ -239,5 +261,27 @@ describe("workshop orchestrator 全流程", () => {
     const r = await orchestrator.composeFinal(id, { render: true });
     expect(r.planPath).toBe("/data/workshop-compositions/x.json");
     expect(r.renderNote).toBe("no ffmpeg");
+  });
+});
+
+/* ── 尺寸换算按生效表（ISSUE #3972）────────────────────────────── */
+
+describe("generateImage 按生效表折算宽高（ISSUE #3972）", () => {
+  it("api 通道：WxH 按现读的生效表算，不再用编译进包的默认", async () => {
+    // idea 用独立值：createSession 的重试去重（#3852）会按参数指纹合并。
+    const id = await orchestrator.createSession({ idea: "size-table-3972" });
+    await orchestrator.setIdea(id, "x");
+    await orchestrator.generateScript(id);
+    await orchestrator.extractCharacters(id);
+    const board = await orchestrator.buildStoryboard(id);
+    const shot = board.shots[0]!;
+    await orchestrator.generateImage(id, {
+      shotId: shot.id,
+      size: { ratio: "16:9 横屏", clarity: "1k", multiple: 64 },
+    });
+    const payload = vi.mocked(generateImageViaApi).mock.calls.at(-1)?.[0];
+    /* 桩里的生效表把 16:9 / 1k 改成了 1280×720 —— 上游收到的必须是它，
+     * 而不是默认表的 1024×576。 */
+    expect(payload?.size).toBe("1280x720");
   });
 });

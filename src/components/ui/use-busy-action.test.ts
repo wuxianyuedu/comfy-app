@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 /**
  * `~/components/ui/use-busy-action` 的契约（ISSUE #672 / 规范 16 §16.2.4.71）。
- *
- * 这条账的实质是「先置忙、跑完复位」的执行态各写一份，而复位写在哪一处
- * 决定了「失败之后按钮还能不能点」：写在 `await` 之后的 9 处只要动作抛错，
- * 忙碌位就永远停在 true。用例因此按**复位时机**写。
+ * 实质是「先置忙、跑完复位」的执行态各写一份，而复位写在哪决定「失败之后按钮还能不能点」：
+ * 写在 `await` 之后的 9 处只要动作抛错，忙碌位就永远停在 true。用例按**复位时机**写。
  */
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
@@ -42,7 +40,7 @@ describe("useBusyAction", () => {
     const { result } = renderHook(() => useBusyAction());
     await act(async () => {
       await expect(
-        result.current.run(async () => {
+        result.current.run(() => {
           throw new Error("boom");
         }),
       ).rejects.toThrow("boom");
@@ -55,7 +53,7 @@ describe("useBusyAction", () => {
     let caught: unknown = null;
     await act(async () => {
       try {
-        await result.current.run(async () => {
+        await result.current.run(() => {
           throw new Error("保存失败");
         });
       } catch (error) {
@@ -63,8 +61,10 @@ describe("useBusyAction", () => {
       }
     });
     expect(caught).toBeInstanceOf(Error);
-    /* SAFETY: 类型断言已复核 */
-    expect((caught as Error).message).toBe("保存失败");
+    if (!(caught instanceof Error)) {
+      throw new Error("期望抛出 Error，实际是别的值");
+    }
+    expect(caught.message).toBe("保存失败");
   });
 
   it("`set` 可以手动置忙 / 复位（跨多段 await 的落点）", () => {

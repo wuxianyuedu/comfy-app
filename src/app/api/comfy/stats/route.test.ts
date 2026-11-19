@@ -1,19 +1,7 @@
 /**
- * `GET /api/comfy/stats` —— 底部状态栏显存/内存那一格的轮询端点。
- *
- * 它做两件事：**代理 ComfyUI `/system_stats`**，以及**在 HTTP 这一拍读不到时给出
- * 一个不会把「在跑」闪成「未运行」的降级包**。这条降级链是状态栏正确性的落点
- * （规范 §10 的降级要求），所以钉的四件事：
- *   1. 有数据时按采集器的形状转发，并补一个 `processAlive: true` —— 但**不许覆盖
- *      采集器自己的字段**（`{...stats}` 在前、`processAlive` 在后）；
- *   2. 读不到（`null`）时回落**进程级快照**：`{ online: false, processAlive: snap.running }`。
- *      为什么必须有这一路：ComfyUI 跑图 GPU 满载时 `/system_stats` 会连续超时，
- *      只认 HTTP 会把「正在生成」闪报成「未运行」；口径与 `/api/comfy/queue` 同源；
- *   3. 降级包**永远带 `online` 字段** —— 采集器类型是 `| null`，但 `undefined`
- *      也不能回出一个没有 `online` 的包（状态栏据此渲染，缺字段就是第三种状态）；
- *   4. 这个端点必须每次真探 —— `dynamic = "force-dynamic"` 一旦被去掉，
- *      Next 会把 GET 结果缓存住，状态栏就永远停在第一次采到的那个值。
- *      第 4 条是这条用例长期存在的理由：前三条写错会立刻显形，这条只会静默。
+ * `GET /api/comfy/stats` —— 状态栏显存/内存格的轮询端点（规范 §10 降级要求的落点）。钉四件：有数据按采集器形状转发并补 `processAlive: true` 但不许覆盖采集器字段；
+ * 读不到时回落进程级快照 `{ online:false, processAlive: snap.running }`（跑图 GPU 满载时 `/system_stats` 连续超时，只认 HTTP 会把「正在生成」闪报成「未运行」），降级包永远带 `online`；
+ * `force-dynamic` 不能掉（被缓存后状态栏永远停在第一次的值 —— 只会静默坏，是本用例长期存在的理由）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

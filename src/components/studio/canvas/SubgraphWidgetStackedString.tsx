@@ -1,20 +1,12 @@
 "use client";
-/* 子图封装节点上的 STRING widget 堆叠块 —— 标签行 + 只读多行文本框，
- * 堆叠在 LABEL 行**下方**（与 WorkflowNode 对齐）。行是
- * `flex-col gap-1.5 flex-1`，好让标签 + 字数章占住顶行、
- * 下面的 textarea 填满剩下的竖向空间。
- *
- * 与 WorkflowNode 分支配对：真正的 <textarea readOnly>
- * 让多行提示自动换行，溢出部分原生滚动
- * （不依赖 Tailwind className —— WorkflowNode
- * 子树历史上对任意值 className
- * 编译不可靠）。子图包裹 widget 用 `mono` 字体
- * （它们通常是系统名 / ID）。值为空时
- * 回落到淡淡的「（空）」占位，仍占住
- * flex-1 容器，行布局保持均衡。 */
+/* 子图封装节点的 STRING widget 堆叠块（LABEL 行下方）：标签行 + 字数章 + 只读多行 textarea。
+ * 行是 `flex-col gap-1.5 flex-1`，textarea 填满剩余竖向空间；原生 readOnly textarea 自动换行、
+ * 溢出原生滚动（不依赖 Tailwind className —— 该子树对任意值编译不可靠）。
+ * 子图包裹 widget 用 mono 字体；空值回落到「（空）」占位，仍占住 flex-1 容器。 */
 import { StringTextarea } from "../StringTextarea";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { RawInputMeta } from "../workflow-types";
+import { Hint } from "~/components/ui/hint";
 
 /** 该 widget 槽是否按「上下堆叠」渲染成多行文本框：服务端盖的
  *  `multiline` 章（节点类型声明 `("STRING", {"multiline": true})`）加上
@@ -74,24 +66,24 @@ export function SubgraphWidgetStackedString({
               }}
             />
           )}
-          <span
-            /* 子图 STRING 堆叠行的标签同样去掉 `truncate` ——
-             *  理由与 WorkflowNode 内联分支相同。 */
-            className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
-            style={{
-              color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
-            }}
-            title={label}
-          >
-            {label}
-          </span>
+          <Hint label={label}>
+            <span
+              /* 子图 STRING 堆叠行的标签同样去掉 `truncate` ——
+               *  理由与 WorkflowNode 内联分支相同。 */
+              className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
+              style={{
+                color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
+              }}
+            >
+              {label}
+            </span>
+          </Hint>
           {/* 标签与字数之间同样不画分隔线（与 ComfyUI 同款版式）。 */}
-          <span
-            className="text-ink-muted text-3xs text-right tracking-wider uppercase"
-            title={`STRING · ${stringText.length} chars`}
-          >
-            {stringText.length}c
-          </span>
+          <Hint label={`STRING · ${stringText.length} chars`}>
+            <span className="text-ink-muted text-3xs text-right tracking-wider uppercase">
+              {stringText.length}c
+            </span>
+          </Hint>
         </div>
         {stringText.length > 0 ? (
           <StringTextarea hasSize={hasSize} mono value={stringText} />

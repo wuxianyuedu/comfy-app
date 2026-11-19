@@ -1,15 +1,7 @@
 /**
- * `scripts/ci-pr-failure-issue.mjs` 的契约（ISSUE #2332）。
- *
- * 这一格是「**PR 那一跑红了 ⇒ 有人知道**」的唯一执行者。它的失效形态与每日档那一格同源，
- * 但多一条：**落点选错**。所以本文件三组对着三个方向：
- *
- *   ① **把没结论写成红**（绿 / 被取消 / 认不出哪一格 / 取不到读数 ⇒ 不该写一个字）；
- *   ② **把红写成静默**（`--no-block` 只许改退码，不许改「那句话有没有被打出来」）；
- *   ③ **落点**（有 PR ⇒ 评论在 PR 下；没有 ⇒ 建单，且同一格不重复建）。
- *
- * 判据与定性都不在这里重写：喂进去的 `details` 就是 `classifyBuildOutcome()` 认的那份
- * 平台形状，所以断言测的是接线。
+ * `scripts/ci/ci-pr-failure-issue.mjs` 的契约（ISSUE #2332）：这一格是「**PR 那一跑红了 ⇒ 有人知道**」的唯一
+ * 执行者。失效形态与每日档同源，但多一条**落点选错**，故三组对着三方向：① 没结论写成红；② 红写成静默
+ * （`--no-block` 只改退码、不改那句话是否打出）；③ 落点（有 PR ⇒ 评论，没有 ⇒ 建单且同格不重复建）。
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -27,11 +19,11 @@ import {
   prIidFromUrl,
   resolveTarget,
   titleKey,
-} from "../scripts/ci-pr-failure-issue.mjs";
+} from "../scripts/ci/ci-pr-failure-issue.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 
-const ENTRY = path.join(ROOT, "scripts", "ci-pr-failure-issue.mjs");
+const ENTRY = path.join(ROOT, "scripts", "ci/ci-pr-failure-issue.mjs");
 
 type StageRow = { id: string; name: string; status: string };
 
@@ -42,12 +34,13 @@ const build = (
   sn: string,
   event = "pull_request",
   eventUrl = "https://cnb.cool/moon-read/comfy-app-t3/-/pulls/2323",
+  status = "error",
 ) => ({
   sn,
   event,
   eventUrl,
   createTime: "2026-10-25T03:08:18.000Z",
-  status: "error",
+  status,
 });
 
 /**
@@ -129,11 +122,9 @@ describe("认「这一跑是谁」：PR 号只从不猜的字段取", () => {
 });
 
 /**
- * `--lane`：桌面成品包那一档（ISSUE #2550）。
- *
- * 这一单例外是**显式声明**的那一半：定时 / 手点那两跑没有 PR 可挂，而它们同样要有人
- * 把红说出来。所以这里钉的是三件事 —— ① 不给 `--lane` 时那些跑仍然一概不写；
- * ② 给了才认进来；③ 标题与去重键按档分开（两族混起来就是「同一格各红一次只立一张」）。
+ * `--lane`：桌面成品包那一档（ISSUE #2550）。定时 / 手点两跑没有 PR 可挂，同样要有人把红说出来。
+ * 钉三件事：① 不给 `--lane` 时一律不写；② 给了才认进来；③ 标题与去重键按档分开（两族混起来就是
+ * 「同一格各红一次只立一张」）。
  */
 describe("`--lane`：只有显式声明的那一档才认非 PR 事件", () => {
   it("不给 `--lane` ⇒ 定时那一跑照旧不归这一格管（那一刀今天仍然要留着）", () => {
@@ -570,25 +561,128 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
   });
 });
 
+/**
+ * ISSUE #3298 的回归面：这一格挂在 `endStages`，**执行时列表里当前这一跑的构建级
+ * `status` 恒 `pending`**（整条流水线还没收尾，平台没给它终态）。旧实现拿这个字段当
+ * 「到没到终态」的门槛 ⇒ 恒真 ⇒ 立案格跑了却一句结论都不写（桌包档连红六次、
+ * 一张单没落）。判「红没红」改认 `get-build-status` 的逐格读数：主链 stages 此刻
+ * 已经跑完、逐格状态已落定，立案格自己在飞那一格属 endStages 可见性面、不进判决池。
+ *
+ * 三条钉住：① 列表 pending + 逐格 error ⇒ 照常判红并念出要写（旧实现在这里短路）；
+ * ② 逐格也还在跑 ⇒ 仍不写（「取不到 / 没结论」的兜底没被删掉）；
+ * ③ PR 档同形（不带 --lane）也不许再被列表 status 挡住。
+ */
+describe("ISSUE #3298：判红只认逐格读数，不认列表里恒 `pending` 的构建级 status", () => {
+  /** 一台会应答的假执行者：列表认 `status`，逐格详情认 `get-build-status`。 */
+  function runner(listStatus: string, detailState: Verdict) {
+    const calls: Array<string> = [];
+    const heard: Array<string> = [];
+    const code = main({
+      argv: ["--lane", "package", "--dry-run"],
+      slug: "moon-read/comfy-app-t3",
+      env: { CNB_BUILD_ID: "sn-pkg", CNB_PULL_REQUEST_IID: "" },
+      log: (s: string) => heard.push(s),
+      run: (cmd: string, args: Array<string>) => {
+        const key = args.join(" ");
+        calls.push(`${cmd} ${key}`);
+        const json = (data: unknown) => ({
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data }),
+          stderr: "",
+          error: null,
+        });
+        if (key.includes("get-build-logs")) {
+          /* `endStages` 现场：列表里本跑的 status 是 pending，不是 error。 */
+          return json([build("sn-pkg", "crontab: 0 3 * * *", "", listStatus)]);
+        }
+        if (key.includes("get-build-status")) {
+          return json(detail(detailState).data);
+        }
+        if (key.includes("list-issues")) {
+          /* 查得到「开着的单」、且确实一张都没有 ⇒ 走新建（不是「查不到 ⇒ 不写」）。
+           * `openIssues()` 认 `{data: []}` 这一形；给 `{}` 会被判成取不到列表。 */
+          return json([]);
+        }
+        return json({});
+      },
+    });
+    return { code, out: heard.join("\n"), calls };
+  }
+
+  it("列表 `status=pending` + 逐格 error ⇒ 判 failed 并念出要建单（旧实现恒短路成「还没到终态」）", () => {
+    const { code, out, calls } = runner("pending", "failed");
+    expect(out).not.toContain("还没到终态");
+    expect(out).toContain("判定 failed");
+    expect(out).toContain("档 package");
+    /* 没有 PR 可挂 ⇒ 落点是「按格名建单」；dry-run 只念不写。 */
+    expect(out).toContain("新建一张：ci(package): 桌包档红在「类型检查」");
+    expect(code, out).toBe(CODE.DONE);
+    /* 读链真的走到了逐格详情（不是靠 --from 绕过去的），且一个写命令都没发。 */
+    expect(calls.some((c) => c.includes("get-build-status"))).toBe(true);
+    expect(
+      calls.some((c) => c.includes("create-issue") || c.includes("post-pull-comment")),
+      `dry-run 却发了写命令：${calls.join(" / ")}`,
+    ).toBe(false);
+  });
+
+  it("负控：列表 pending、逐格也还在跑 ⇒ 仍不写（`running` 由既有 decideAction 判 no-fact）", () => {
+    const { code, out } = runner("pending", "running");
+    expect(out).toContain("判定 running");
+    expect(out).toContain("不写");
+    expect(out).not.toContain("新建一张");
+    expect(code).toBe(CODE.NO_FACT);
+  });
+
+  it("PR 档同形：不带 --lane 时列表 pending 也不许被挡住（--dry-run 走完读链）", () => {
+    const calls: Array<string> = [];
+    const heard: Array<string> = [];
+    const code = main({
+      argv: ["--dry-run"],
+      slug: "moon-read/comfy-app-t3",
+      env: { CNB_BUILD_ID: "sn-live", CNB_PULL_REQUEST_IID: "2323" },
+      log: (s: string) => heard.push(s),
+      run: (cmd: string, args: Array<string>) => {
+        const key = args.join(" ");
+        calls.push(`${cmd} ${key}`);
+        const json = (data: unknown) => ({
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data }),
+          stderr: "",
+          error: null,
+        });
+        if (key.includes("get-build-logs")) {
+          return json([build("sn-live", "pull_request", "", "pending")]);
+        }
+        if (key.includes("get-build-status")) {
+          return json(detail("failed").data);
+        }
+        return json({});
+      },
+    });
+    const out = heard.join("\n");
+    expect(out).not.toContain("还没到终态");
+    expect(out).toContain("判定 failed");
+    expect(out).toContain("--dry-run：「类型检查」→ 评论在 PR #2323 下");
+    expect(code, out).toBe(CODE.DONE);
+    expect(calls.some((c) => c.includes("get-build-status"))).toBe(true);
+  });
+});
+
 describe("平台配置：这一格是 Pipeline 级 `endStages`，不是 `stages` 里的一格", () => {
   const CONFIG = fs.readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
 
   /* 正控：真的读到了那一格（否则下面几条断言会在「配置里没有它」上以别的名义绿掉）。 */
   it("`.cnb.yml` 里有这一格，入口是脚本而不是裸命令", () => {
-    expect(CONFIG).toContain("    - name: PR 失败立案");
-    expect(CONFIG).toContain("node scripts/ci-pr-failure-issue.mjs --no-block");
-    const at = CONFIG.indexOf("    - name: PR 失败立案");
+    expect(CONFIG).toContain("        - name: PR 失败立案");
+    expect(CONFIG).toContain("node scripts/ci/ci-pr-failure-issue.mjs --no-block");
+    const at = CONFIG.indexOf("        - name: PR 失败立案");
     expect(CONFIG.slice(at, at + 800)).toContain("timeout: 5m");
   });
 
   /**
-   * 「红也要跑」这件事**不能**靠 `stages` 里的某一格：本仓 `stages` 是串行链，
-   * 前面哪里一红后面整片 `skipped`（实测 `cnb-dbu-1k5ohq6p4`：`受影响用例` 红 ⇒
-   * 它后面 23 格全是 skipped）。平台原生那一档是 Pipeline 级 `endStages`
-   * （`zh/build/grammar.md`：「无论 stages 是否成功，endStages 都将执行」）。
-   *
-   * 这条判据守的是**位置**：有人把它挪回 `*gates`（那个 stage 数组锚点）里，
-   * 它就又变回「红了 = 不跑」，而这两种形态在 diff 上只差两行缩进。
+   * 「红也要跑」**不能**靠 `stages` 里的某一格：`stages` 是串行链，前面一红后面整片 `skipped`
+   * （实测 `cnb-dbu-1k5ohq6p4`：`受影响用例` 红 ⇒ 后面 23 格全 skipped）。平台原生那一档是 Pipeline 级
+   * `endStages`（`zh/build/grammar.md`：「无论 stages 是否成功，endStages 都将执行」）；挪回 `*gates` 就变回「红了 = 不跑」。
    */
   it("它挂在 `endStages` 下，而不是 `stages: *gates` 的那个数组里", () => {
     const gatesAt = CONFIG.indexOf(".gates: &gates");
@@ -601,54 +695,35 @@ describe("平台配置：这一格是 Pipeline 级 `endStages`，不是 `stages`
         "而「红了要有人知道」正是它唯一的用途。它属于 Pipeline 级 `endStages`。",
     ).not.toContain("PR 失败立案");
 
-    const anchorAt = CONFIG.indexOf(".pr-fail-stage: &pr_fail_stage");
-    expect(anchorAt).toBeGreaterThan(0);
-    expect(CONFIG.slice(anchorAt, anchorAt + 200)).toContain("endStages:");
+    /* #3478 起它是**内联**在 `pull_request` 流水线里的 `endStages`（旧独立锚点
+     * `*pr_fail_stage` 随主列迁平台池一并退役）—— 形态由下面几条按内联层钉。 */
+    const prAt = CONFIG.indexOf("  pull_request:");
+    expect(CONFIG.slice(prAt, CONFIG.indexOf("\n  push:", prAt))).toContain("  endStages:");
   });
 
-  it("PR 那条流水线真的引入了这个锚点（写了锚点却没人引用 = 永远不跑）", () => {
+  it("PR 那条流水线真的带着这个 endStages（写了却没人引用 = 永远不跑）", () => {
     const at = CONFIG.indexOf("  pull_request:");
-    const body = CONFIG.slice(at, at + 500);
-    /* 两个锚点合在**一个**合并键里：同一层写两行 `<<:` 是非法 YAML（`yaml` 解析器当场
-     * `Map keys must be unique`），而它坏掉的方式是静默的 —— 两个键只有一个生效。
-     * 所以这里钉的是流式形态，不是「两行」。 */
-    expect(body).toContain("- <<: [*common, *pr_fail_stage]");
-  });
-
-  it("锚点真的落在流水线项那一层（写了锚点却没人引用 = 永远不跑）", () => {
-    const at = CONFIG.indexOf("  pull_request:");
-    expect(at).toBeGreaterThan(0);
     const body = CONFIG.slice(at, CONFIG.indexOf("\n  push:", at));
-    expect(
-      body,
-      "`pull_request` 那条流水线没有引用 `*pr_fail_stage` —— 锚点写了也是白写",
-    ).toContain("- <<: [*common, *pr_fail_stage]");
-    expect(body, "`*gates`（串行链）也不许把它带回来").not.toContain("PR 失败立案");
+    /* #3478 起主列不吃 `*common` / `*pr_fail_stage`（平台池例外，runner / docker / lock
+     * 全自带）—— 旧锚点合并键不许回流：回流 = 整条迁回自托管 Windows。 */
+    expect(body).not.toContain("- <<: [*common, *pr_fail_stage]");
+    expect(body).toContain("      endStages:");
   });
 
-  /**
-   * 缩进是**语义**：`endStages:` 挂在哪一层，决定平台认不认它是这条流水线的收尾档。
-   *
-   * 前面那些断言判的是「文本里有那段字」，而缩进错一格在它们眼里是**绿**的 ——
-   * 它会变成一个谁也不认识的字段，平台照读照跑，这一格永远不执行。
-   * 判据按锚点里那一层的缩进认：`endStages:` 是 2 空格（锚点展开进流水线项那一层），
-   * 它的格是 4 空格。
-   */
-  it("锚点里 `endStages:` 的缩进是流水线项那一层，格在它下面一层", () => {
-    const anchorAt = CONFIG.indexOf(".pr-fail-stage: &pr_fail_stage");
-    expect(anchorAt).toBeGreaterThan(0);
-    const lines = CONFIG.slice(anchorAt).split("\n");
-    const endAt = lines.findIndex((l) => l === "  endStages:");
+  it("endStages 落在流水线项那一层（缩进错一层 = 谁也不认识的字段，静默不执行）", () => {
+    const at = CONFIG.indexOf("  pull_request:");
+    const lines = CONFIG.slice(at, CONFIG.indexOf("\n  push:", at)).split("\n");
+    const endAt = lines.findIndex((l) => l === "      endStages:");
     expect(
       endAt,
-      "`*pr_fail_stage` 里没有 2 空格的 `endStages:` —— 它被挂到了错的那一层",
+      "`pull_request` 里没有 6 空格的 `endStages:` —— 它被挂到了错的那一层",
     ).toBeGreaterThan(0);
-    expect(lines[endAt + 1]).toBe("    - name: PR 失败立案");
+    expect(lines[endAt + 1]).toBe("        - name: PR 失败立案");
   });
 
   it("**不是** `failStages`：那一档只在红时跑，「这一格自己挂了」会一起消失", () => {
-    const anchorAt = CONFIG.indexOf(".pr-fail-stage: &pr_fail_stage");
-    const block = CONFIG.slice(anchorAt, anchorAt + 400);
+    const at = CONFIG.indexOf("  pull_request:");
+    const block = CONFIG.slice(at, CONFIG.indexOf("\n  push:", at));
     expect(block).not.toContain("failStages");
     expect(block).not.toContain("ifModify");
     /* 那两条没被验证过的条件语法也不许回来当「红也跑」的手段 —— 第一版写成
@@ -658,5 +733,146 @@ describe("平台配置：这一格是 Pipeline 级 `endStages`，不是 `stages`
     expect(block).not.toContain("always()");
     expect(block).not.toContain("when:");
     expect(block).not.toContain("run:");
+  });
+});
+
+/**
+ * ISSUE #3491 的回归面：平台把流水线里的 `cnb_cli` 应用形态挡在 `repo-cnb-history:r`
+ * 之外（现场原话 `errcode 10025 / High-risk operation…`），`get-build-logs` 在 PR 档
+ * **恒取不到**。旧实现在这一步直接退 2（平台那跳 `--no-block` 折 0）⇒ 立案格绿着空转、
+ * 「PR 红了没人知道」这个它本该治的形状以「绿着不写」留在账上。
+ * 修法：列表只负责认「这一跑是谁 / 事件是什么」，身份改认平台无条件注入的环境变量
+ * （`CNB_BUILD_ID` / `CNB_PULL_REQUEST_IID` / `CNB_BUILD_EVENT`），判红仍走
+ * `get-build-status` 的逐格读数（ISSUE #3298 那条链）—— 列表挂了也要走完。
+ */
+describe("ISSUE #3491：构建列表取不到 ⇒ 回落环境变量认身份，判红照走逐格读数", () => {
+  /** 平台现场的那句拒绝：信封顶层 200，`data` 里才是 401 语义（`asArray` 认不出 ⇒ null）。 */
+  const denied = {
+    status: 0,
+    stdout: JSON.stringify({
+      status: 200,
+      data: {
+        code: 401,
+        message:
+          'High-risk operation, only supported by the user in person. Application "cnb_cli" is missing required scopes: repo-cnb-history:r',
+      },
+    }),
+    stderr: "",
+    error: null,
+  };
+
+  it("PR 档：列表被权限挡 ⇒ 认 env 里的 PR 号继续判，dry-run 念出评论落点，一个写命令不发", () => {
+    const calls: Array<string> = [];
+    const heard: Array<string> = [];
+    const code = main({
+      argv: ["--dry-run"],
+      slug: "moon-read/comfy-app-t3",
+      env: { CNB_BUILD_ID: "sn-live", CNB_PULL_REQUEST_IID: "2323" },
+      log: (s: string) => heard.push(s),
+      run: (cmd: string, args: Array<string>) => {
+        const key = args.join(" ");
+        calls.push(`${cmd} ${key}`);
+        const json = (data: unknown) => ({
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data }),
+          stderr: "",
+          error: null,
+        });
+        if (key.includes("get-build-logs")) {
+          return denied;
+        }
+        if (key.includes("get-build-status")) {
+          return json(detail("failed").data);
+        }
+        return json({});
+      },
+    });
+    const out = heard.join("\n");
+    expect(code, out).toBe(CODE.DONE);
+    expect(out).toContain("身份改认平台注入的环境变量");
+    /* 读链真的继续走了：判红来自逐格读数，不是靠「列表挂了就当没看见」。 */
+    expect(out).toContain("判定 failed");
+    expect(out).toContain("--dry-run：「类型检查」→ 评论在 PR #2323 下");
+    expect(calls.some((c) => c.includes("get-build-status"))).toBe(true);
+    expect(
+      calls.some((c) => c.includes("post-pull-comment") || c.includes("create-issue")),
+      `dry-run 却发了写命令：${calls.join(" / ")}`,
+    ).toBe(false);
+  });
+
+  it("push 档：列表被权限挡 ⇒ `--lane push` 显式声明接住，按格名走建单落点（dry-run 只念不写）", () => {
+    const calls: Array<string> = [];
+    const heard: Array<string> = [];
+    const code = main({
+      argv: ["--dry-run", "--lane", "push"],
+      slug: "moon-read/comfy-app-t3",
+      env: { CNB_BUILD_ID: "sn-push", CNB_PULL_REQUEST_IID: "" },
+      log: (s: string) => heard.push(s),
+      run: (cmd: string, args: Array<string>) => {
+        const key = args.join(" ");
+        calls.push(`${cmd} ${key}`);
+        const json = (data: unknown) => ({
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data }),
+          stderr: "",
+          error: null,
+        });
+        if (key.includes("get-build-logs")) {
+          return denied;
+        }
+        if (key.includes("get-build-status")) {
+          return json(detail("failed").data);
+        }
+        if (key.includes("list-issues")) {
+          /* 查得到「开着的单」、且确实一张都没有 ⇒ 走新建（不是「查不到 ⇒ 不写」）。 */
+          return json([]);
+        }
+        return json({});
+      },
+    });
+    const out = heard.join("\n");
+    expect(code, out).toBe(CODE.DONE);
+    expect(out).toContain("身份改认平台注入的环境变量");
+    expect(out).toContain("判定 failed");
+    expect(out).toContain("新建一张：ci(push): push 档红在「类型检查」");
+    expect(calls.some((c) => c.includes("get-build-status"))).toBe(true);
+    expect(
+      calls.some((c) => c.includes("create-issue") || c.includes("post-pull-comment")),
+      `dry-run 却发了写命令：${calls.join(" / ")}`,
+    ).toBe(false);
+  });
+
+  it("负控：列表挂、env 又认不出 PR 号 / 事件、也没给 --lane ⇒ 照旧「不归本格管」，不写", () => {
+    const calls: Array<string> = [];
+    const heard: Array<string> = [];
+    const code = main({
+      argv: ["--dry-run"],
+      slug: "moon-read/comfy-app-t3",
+      /* `CNB_PULL_REQUEST_IID: ""` 清掉用例进程自己带的 PR 号（与上面离线档同一条理由）。 */
+      env: { CNB_BUILD_ID: "sn-x", CNB_PULL_REQUEST_IID: "" },
+      log: (s: string) => heard.push(s),
+      run: (cmd: string, args: Array<string>) => {
+        const key = args.join(" ");
+        calls.push(`${cmd} ${key}`);
+        const json = (data: unknown) => ({
+          status: 0,
+          stdout: JSON.stringify({ status: 200, data }),
+          stderr: "",
+          error: null,
+        });
+        if (key.includes("get-build-logs")) {
+          return denied;
+        }
+        return json({});
+      },
+    });
+    const out = heard.join("\n");
+    /* 回落发生了，但身份仍认不出 ⇒ `resolveTarget()` 的既有判决接住：不归本格管 ⇒ 不写。
+     * 这是「不写」而非「没结论」—— push / 定时那几跑本来就与 PR 无关。 */
+    expect(code, out).toBe(CODE.DONE);
+    expect(out).toContain("身份改认平台注入的环境变量");
+    expect(out).toContain("不是 pull_request");
+    /* 身份在详情之前就被拦下 ⇒ 不该再往下发读命令。 */
+    expect(calls.some((c) => c.includes("get-build-status"))).toBe(false);
   });
 });

@@ -3,7 +3,7 @@
 //     直连的 `taskRepository` 单例；
 //   · `configureRunner({ log })` 覆盖后，DB 失败分支走注入侧、不再打 `logger`。
 // 两条用例合起来把「接缝真的接上了」这件事钉死，兼作 `check-dead-exports`
-// 眼里的消费方（同目录 `.test.ts` 算数，见 scripts/check-dead-exports.cjs
+// 眼里的消费方（同目录 `.test.ts` 算数，见 scripts/gates/check-dead-exports.cjs
 // `TEST_CONSUMER_EXT`）。
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,8 +13,8 @@ import type { LogEntry } from "./runner-state";
 // 具体断言靠 configureRunner 注入的**第二层**替身完成，这两份 mock 只是「默认侧
 // 的兜底哨兵」，用来证明「configureRunner 一覆盖，就走不到它们」。
 const defaultTaskRepoMock = {
-  replaceLogs: vi.fn(async () => undefined),
-  replaceRawCli: vi.fn(async () => undefined),
+  replaceLogs: vi.fn(() => Promise.resolve(undefined)),
+  replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
 };
 const defaultLoggerMock = {
   warn: vi.fn(),
@@ -48,11 +48,11 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
 
   it("configureRunner({ taskRepo }) 之后 persistLogs 走注入侧、不再打默认 taskRepository", async () => {
     const mod = await loadRunnerState();
-    const injectedReplace = vi.fn(async () => undefined);
+    const injectedReplace = vi.fn(() => Promise.resolve(undefined));
     mod.configureRunner({
       taskRepo: {
         replaceLogs: injectedReplace,
-        replaceRawCli: vi.fn(async () => undefined),
+        replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
       },
     });
 
@@ -65,14 +65,14 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
 
   it("注入的 taskRepo 抛错时，configureRunner({ log }) 的 warn 收到「落库失败」消息", async () => {
     const mod = await loadRunnerState();
-    const injectedReplace = vi.fn(async () => {
+    const injectedReplace = vi.fn(() => {
       throw new Error("db-on-fire");
     });
     const injectedWarn = vi.fn();
     mod.configureRunner({
       taskRepo: {
         replaceLogs: injectedReplace,
-        replaceRawCli: vi.fn(async () => undefined),
+        replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
       },
       log: { warn: injectedWarn },
     });
@@ -93,12 +93,12 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
 
   it("configureRunner 传 Partial 时未覆盖的一侧仍沿用默认（防止误清空）", async () => {
     const mod = await loadRunnerState();
-    const injectedReplace = vi.fn(async () => undefined);
+    const injectedReplace = vi.fn(() => Promise.resolve(undefined));
     // 只注入 taskRepo；log 一侧留空。
     mod.configureRunner({
       taskRepo: {
         replaceLogs: injectedReplace,
-        replaceRawCli: vi.fn(async () => undefined),
+        replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
       },
     });
 
@@ -152,10 +152,11 @@ describe("logWhileQueued / takeQueuedEntries", () => {
     const written: Array<Array<unknown>> = [];
     mod.configureRunner({
       taskRepo: {
-        replaceLogs: vi.fn(async (_taskId: string, entries: Array<LogEntry>) => {
+        replaceLogs: vi.fn((_taskId: string, entries: Array<LogEntry>) => {
           written.push(entries.map((e) => e.msg));
+          return Promise.resolve(undefined);
         }),
-        replaceRawCli: vi.fn(async () => undefined),
+        replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
       },
     });
     /* 复刻真实时序：`complete()` 先 await persistLogs 落整包，**之后**才打
@@ -183,5 +184,53 @@ describe("logWhileQueued / takeQueuedEntries", () => {
     /* Map 的迭代顺序=插入顺序，所以最早那批先出局，而最贴近当前排队的行留着。 */
     expect(s.queuedEntries.has("t-bound-0")).toBe(false);
     expect(s.queuedEntries.has(`t-bound-${total - 1}`)).toBe(true);
+  });
+});
+
+/* ── 防抖回调的最后兜底（#4221）────────────────────────────
+ * persistLogs 的双重失败（落库失败 + logger 也炸）会 re-throw。定时器回调里
+ * 原先写的是 `void persistLogs(...)`——没人接，rejection 冒成
+ * unhandledRejection，Node ≥15 默认即退出进程。钉死「回调走 fireAndForget +
+ * stderr 兜底」这条显式出口。 */
+/** 一条流换成「只记录、不外发」的桩（形态对齐 capture-streams.server.test.ts）。 */
+function recordWrite(bucket: Array<string>): typeof process.stderr.write {
+  return (chunk: string | Uint8Array) => {
+    bucket.push(String(chunk));
+    return true;
+  };
+}
+
+describe("定时器回调的双重失败兜底（#4221）", () => {
+  it("落库与 logger 都炸时走 stderr 兜底，不产生 unhandledRejection", async () => {
+    vi.useFakeTimers();
+    const mod = await loadRunnerState();
+    const stderrLines: Array<string> = [];
+    const originalWrite: typeof process.stderr.write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = recordWrite(stderrLines);
+
+    try {
+      mod.configureRunner({
+        taskRepo: {
+          replaceLogs: () => Promise.reject(new Error("db gone")),
+          replaceRawCli: () => Promise.resolve(undefined),
+        },
+        /* 注入一个自己也会炸的 warn：复刻「连 logger 都起不来」的双重失败现场。 */
+        log: {
+          warn: () => {
+            throw new Error("logger gone");
+          },
+        },
+      });
+      mod.schedulePersistLogs("t-df");
+
+      await vi.runAllTimersAsync();
+
+      const joined = stderrLines.join("");
+      expect(joined).toContain("persistLogs 双重失败");
+      expect(joined).toContain("db gone");
+    } finally {
+      process.stderr.write = originalWrite;
+      vi.useRealTimers();
+    }
   });
 });

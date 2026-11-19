@@ -29,11 +29,17 @@ import path from "node:path";
 
 import { resolveAppPort, resolveRepoRoot } from "./app-port.mjs";
 import { writeAppServiceExit } from "./app-service-exit.mjs";
-import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
-import { spawnSchemaSync } from "./db-schema-state.mjs";
-import { checkEnvFile, envInitHint } from "./env-preflight.mjs";
+import { applyPendingRestoreAtBoot } from "./db/db-backup-core.mjs";
+import { spawnSchemaSync } from "./db/db-schema-state.mjs";
+import { checkEnvFile, envInitHint } from "./devtools/env-preflight.mjs";
 import { createLogSink, currentDirOf, runtimeStamp, runStamp } from "./launcher-core/log.mjs";
-import { pruneRuns, recordPid, recoverStaleCurrent, startRun } from "./launcher-core/run.mjs";
+import {
+  pruneRuns,
+  patchRun,
+  recordPid,
+  recoverStaleCurrent,
+  startRun,
+} from "./launcher-core/run.mjs";
 import {
   classifyProbe,
   usesExplicitPort,
@@ -44,6 +50,12 @@ import {
   describeReadyTimeout,
   waitForDevReady,
 } from "./launcher-core/ready-wait.mjs";
+// 服务端耗时细分（#4365）：从 dev server 的 stdout 落盘文件里扫「Next 就绪 /
+// 首页编译」标记，反推两段服务端耗时补进时间线（详见该模块注释）。
+import { createServerTimingWatcher, makeFileTailReader } from "./launcher-core/server-timings.mjs";
+// 启动耗时时间线（ISSUE #4185）：逐阶段 span 的唯一实现，三处出口（启动页
+// timings / 日志分解行 / run.json）共用这一份读数。
+import { createLaunchTimeline, formatLaunchTimeline } from "./launcher-core/timeline.mjs";
 // 「收尾定性」这一族（downstreamExitKind / readShellMarkers /
 // describeDownstreamExit / runtimeExitRecord）判的是同一件事的四个侧面，收在
 // launcher-core/downstream-exit.mjs（入口文件长度的约束，§12.6 R5 的姊妹档）。
@@ -77,6 +89,7 @@ import {
   openBrowser as miscOpsOpenBrowser,
   parseArgs as miscOpsParseArgs,
   shutdown as miscOpsShutdown,
+  wireSignalShutdown as miscOpsWireSignalShutdown,
 } from "./launcher-core/misc-ops.mjs";
 import {
   reapAll as portReapReapAll,
@@ -84,7 +97,12 @@ import {
   reapStaleSession as portReapReapStale,
   reconcilePort as portReapReconcilePort,
   scanPorts,
+  waitForPortsFree as portReapWaitForPortsFree,
 } from "./launcher-core/port-reap.mjs";
+import {
+  listeningPidsOnPort as procsListeningPidsOnPort,
+  ProbeUnavailableError,
+} from "./launcher-core/procs.mjs";
 // `COMFY_EXECUTOR` 判据的纯 Node 侧唯一定义（与 executor-host.mjs 共用，ADR §14 D5）
 import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
 import { pruneTimestampedLogs, syncNextCache } from "./launcher-core/worktree.mjs";
@@ -93,7 +111,14 @@ import {
   describeRuntimeHealCause,
   readGitHead,
 } from "./launcher-core/runtime-heal.mjs";
-import { touchHeartbeat, writeSession } from "./dev-launcher-session.mjs";
+import {
+  claimSession,
+  clearSession,
+  isSessionOwnerAlive,
+  readSession,
+  touchHeartbeat,
+  writeSession,
+} from "./dev-launcher-session.mjs";
 
 const ROOT = resolveRepoRoot();
 
@@ -104,6 +129,13 @@ export { spawnInGroup, whichCommand } from "./launcher-core/shell.mjs";
 export { orchestratePnpm, probePnpm, packageManagerVersion } from "./launcher-core/corepack.mjs";
 
 /** 工具链门禁留下的 pnpm 修复提示（供启动页横幅 / 测试取值）。 */
+/** 工具链门禁认定的 pnpm 修复提示（非 null 时会被记进启动页横幅）。
+ *
+ *  为什么要在模块里留一份：门禁跑在**弹壳之前**，那一刻启动页还不存在，
+ *  无法把提示交出去；而这条提示恰恰是「服务起不来」现场里最该被看到的一句。
+ *  落进 launch-status 的 stale_shell 通道（启动页已有的横幅），用户不必先去翻日志。 */
+let lastPnpmTip = /** @type {string | null} */ (null);
+
 /** @returns {string | null} */
 export function pnpmToolchainTip() {
   return lastPnpmTip;
@@ -195,16 +227,18 @@ export function log(message, level = "INFO") {
 /** @type {import("node:child_process").ChildProcess[]} */
 const spawned = [];
 
-/** 工具链门禁认定的 pnpm 修复提示（非 null 时会被记进启动页横幅）。
- *
- *  为什么要在模块里留一份：门禁跑在**弹壳之前**，那一刻启动页还不存在，
- *  无法把提示交出去；而这条提示恰恰是「服务起不来」现场里最该被看到的一句。
- *  落进 launch-status 的 stale_shell 通道（启动页已有的横幅），用户不必先去翻日志。 */
-let lastPnpmTip = /** @type {string | null} */ (null);
-
 // ── 预检 ────────────────────────────────────────────────────────────────────
 // 实现搬到 `launcher-core/preflight.mjs`（ISSUE #1811 拆 R5 超限文件），这里只做
 // **同名薄包装**：导出面一字不变，`shell-gate.mjs` 与各用例照旧。
+
+/** 预检层的注入上下文（日志出口 / 启动戳 / pnpm 提示的落点）。 */
+const preflightCtx = {
+  log,
+  stamp: launchStamp,
+  setPnpmTip: (/** @type {string | null} */ tip) => {
+    lastPnpmTip = tip;
+  },
+};
 
 /** 工具链门禁（实现见 `launcher-core/preflight.mjs`）。
  * @param {string} [root] @returns {string | null} */
@@ -227,15 +261,6 @@ export function appendRuntimeWarning(message, root = ROOT) {
   preflightAppendRuntimeWarning(preflightCtx, message, root);
 }
 
-/** 预检层的注入上下文（日志出口 / 启动戳 / pnpm 提示的落点）。 */
-const preflightCtx = {
-  log,
-  stamp: launchStamp,
-  setPnpmTip: (/** @type {string | null} */ tip) => {
-    lastPnpmTip = tip;
-  },
-};
-
 // ── 端口 / 回收 ────────────────────────────────────────────────────────────
 // 实现搬到 `launcher-core/port-reap.mjs`（ISSUE #1811 拆 R5 超限文件），这里只
 // 做**同名薄包装**。需要模块状态的三个函数把 `log` / `spawned` / `root` 注入进去。
@@ -244,7 +269,14 @@ const preflightCtx = {
 // 桌面壳层与收尾路径共用的**唯一整树回收出口**，所以仍从本文件导出（薄包装在
 // 下方 `shellOpsCtx` 里也引用它，同一份实现、不抄第二遍）。
 
-export { reapProcessTree, scanPorts };
+export { reapProcessTree, scanPorts, portReapWaitForPortsFree as waitForPortsFree };
+
+/** 回收层的注入上下文（与桌面壳层同源的三样状态 / 能力）。 */
+const portReapCtx = {
+  log,
+  spawned,
+  root: ROOT,
+};
 
 /** 回收本次会话拉起的整棵进程树（实现见 `launcher-core/port-reap.mjs`）。 */
 export function reapAll() {
@@ -265,13 +297,6 @@ export { processCommandLine, isAppDevServerCmdline } from "./launcher-core/port-
 export function reconcilePort(port, root = ROOT, options = {}) {
   return portReapReconcilePort(portReapCtx, port, root, options);
 }
-
-/** 回收层的注入上下文（与桌面壳层同源的三样状态 / 能力）。 */
-const portReapCtx = {
-  log,
-  spawned,
-  root: ROOT,
-};
 
 // ── 桌面壳 ──────────────────────────────────────────────────────────────────
 // 实现搬到 `launcher-core/shell-ops.mjs`（ISSUE #1811 拆 R5 超限文件），这里只
@@ -356,11 +381,9 @@ export function syncDependencies(root, deps = {}) {
 }
 
 /** 起 dev server（实现见 `launcher-core/downstream.mjs`）。
- * @param {number} port @param {string} host
- * @param {string} outFile @param {string} errFile
- * @param {Record<string, string>} [extraEnv] */
-export function spawnDevServer(port, host, outFile, errFile, extraEnv = {}) {
-  return downstreamSpawnDevServer(downstreamCtx, port, host, outFile, errFile, extraEnv);
+ * @param {{port: number, host: string, outFile: string, errFile: string, extraEnv?: Record<string, string>}} opts */
+export function spawnDevServer(opts) {
+  return downstreamSpawnDevServer(downstreamCtx, opts);
 }
 
 /** 拉起 executor host（实现见 `launcher-core/downstream.mjs`）。 */
@@ -383,12 +406,15 @@ export function parseArgs(argv) {
 export async function run(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const startedAt = Date.now();
+  /** 启动耗时时间线（ISSUE #4185）：与 startedAt 同一刻起算，偏移口径一致。 */
+  const timeline = createLaunchTimeline(startedAt);
   /* 归因用的「起点」：启动那一刻的 HEAD。只存内存、只为通知文案服务 —— 运行期
    * 自愈时拿它比一次 `git diff`（懒归因，见 launcher-core/runtime-heal.mjs）。
    * git 不可用 / 非检出 → null（文案退化为「无法归因」，自愈照常）。 */
   const headAtBoot = readGitHead(ROOT);
   const explicitPort = Number.parseInt(args.port ?? "", 10);
   const portOrNull = Number.isInteger(explicitPort) && explicitPort > 0 ? explicitPort : null;
+  let currentPort = portOrNull;
   /** 进度快照 + 提醒字段（一次运行内共享）。 */
   /**
    * 写一次进度快照。
@@ -397,6 +423,7 @@ export async function run(argv = process.argv.slice(2)) {
    * @param {string} message 给用户看的说明
    *  @param {Partial<import("./launcher-core/orchestrator.mjs").LaunchStatusPayload>} [extra] 附加上报字段
    */
+
   const status = (phase, progress, message, extra = {}) =>
     writeLaunchStatus(ROOT, {
       phase,
@@ -404,10 +431,21 @@ export async function run(argv = process.argv.slice(2)) {
       message,
       appPort: portOrNull ?? currentPort,
       startedAt,
+      timings: timeline.snapshot(),
       ...extra,
     });
-  let currentPort = portOrNull;
 
+  /** 逐阶段耗时落两处：dev-launcher.log 一行 + run.json 的 `timings` 字段。
+   *  成功 / 超时 / 失败路径都调 —— 「时间花在哪」恰恰最常在没走完的路上被问起。
+   *  run.json 由 patchRun 合并写入，随后随运行包归档进 log/runs/，跨运行可比。 */
+  const reportTimeline = () => {
+    const spans = timeline.snapshot();
+    if (spans.length === 0) {
+      return;
+    }
+    log(formatLaunchTimeline(spans), "INFO");
+    patchRun(ROOT, { timings: spans });
+  };
   // 0~2) 预检桥段（孤儿回收 → 环境/工具链门禁 → 依赖对齐 → 备份恢复 → 端口）
   // 实现见 `launcher-core/startup-gates.mjs`（ISSUE #1811 拆 R5 超限文件）；
   // 那一段的**内部顺序是契约**（回收在起进程前、换库在开库前），见模块注释。
@@ -416,7 +454,12 @@ export async function run(argv = process.argv.slice(2)) {
       log,
       root: ROOT,
       status,
+      timeline,
       reapStaleSession,
+      claimSession,
+      isSessionOwnerAlive,
+      clearSession,
+      readSession,
       checkEnvFile,
       envInitHint,
       runToolchainGate,
@@ -428,6 +471,7 @@ export async function run(argv = process.argv.slice(2)) {
   );
   if (!gated.ok) {
     log(gated.error.message, "ERROR");
+    reportTimeline();
     status("error", 1, gated.error.statusMessage, {
       error: true,
       ...(gated.error.staleShell ? { staleShell: gated.error.staleShell } : {}),
@@ -436,16 +480,23 @@ export async function run(argv = process.argv.slice(2)) {
   }
   const port = gated.port;
   currentPort = port;
+  /* 占坑后续拍（#4413）：占坑那一刻的心跳要撑到起服务之后的常驻 interval，中间
+   * 夹着端口回收（逐 PID 验活）与 portsFree 等待，加起来可逼近 30s 阈值 —— 心跳
+   * 一陈旧，并发互斥（ISSUE #4345）会把「启动中的编排器」当成死了的，第二个
+   * 实例照样进来互抢。这里补一拍；清缓存那段由 dev-boot 桥段自己续拍。 */
+  touchHeartbeat(ROOT);
   // 3) 桌面壳（prebuilt 模式最先拉起：用户双击后第一件事是看见窗口）
   // 这一段在 `launcher-core/shell-stage.mjs`（ISSUE #1811 拆 R5 超限文件）；
   // 主文件只把壳层动作与日志出口注进去，并接「找不到壳」这个提前返回。
-  let shell = /** @type {import("node:child_process").ChildProcess | null} */ (null);
+  /** @type {import("node:child_process").ChildProcess | null} */
+  let shell = null;
   let staleShell = null;
   if (args.mode === "prebuilt") {
     const staged = startShellStage(
       {
         log,
         root: ROOT,
+        timeline,
         appendRuntimeWarning,
         defaultShellExe,
         ensureSplashResource,
@@ -484,10 +535,32 @@ export async function run(argv = process.argv.slice(2)) {
   // 新 dev server 会撞 `EADDRINUSE` 立刻退出，编排器随之 `await [dev]` 解析为 1 整体退出
   // （一次双击起不来的典型现场：两个窗口没了，应用也起不来）。残留是**上一次**启动的，
   // 不在这一次启动的单一实例假设里，因此端口族回收必须每次都跑。
-  let portSummary = await reconcilePort(port, ROOT, {
-    explicit: usesExplicitPort(portOrNull),
-  });
+  let portSummary;
+  timeline.begin("port-reclaim", "端口残留回收");
+  try {
+    portSummary = await reconcilePort(port, ROOT, {
+      explicit: usesExplicitPort(portOrNull),
+    });
+    timeline.end("port-reclaim");
+  } catch (error) {
+    timeline.end("port-reclaim");
+    /* 端口 / 进程探测没跑起来：不是「端口空闲」，也不是「被别人占着」。
+     * 这一格**没有结论**，不许继续起服务（会撞残留 / EADDRINUSE），
+     * 也不许被最外层泛化成「启动编排异常」而不给可行动作（§13.6.3）。 */
+    if (error instanceof ProbeUnavailableError) {
+      const reason = error.message;
+      log(`端口归属判据没量到：${reason}`, "ERROR");
+      reportTimeline();
+      status("error", 1, "端口归属判据没量到，未继续启动", { error: true, staleShell: reason });
+      return 1;
+    }
+    throw error;
+  }
   log(`端口检查：${portSummary}`, "OK");
+  /* #4333：回收派发与「清缓存 / 起服务」之间补一个**有界同步点** —— 旧进程
+   * 没死透时清 .next 会 EBUSY、旧 server 还占口会让新 Next 顺延 +1（就绪探测
+   * 只探原端口 → 180 秒假超时）。 */
+  await portReapWaitForPortsFree(procsListeningPidsOnPort, [port], { log });
   status("port-ready", 0.12, "端口已就绪，处理编译缓存…", { staleShell });
 
   // 5~8) 起服务桥段（缓存策略 → dev server → 执行器宿主 → 会话锚点 → 后台 schema）
@@ -499,6 +572,8 @@ export async function run(argv = process.argv.slice(2)) {
       log,
       root: ROOT,
       status,
+      timeline,
+      spawned,
       spawnedChildren: () => spawned,
       appendRuntimeWarning,
       syncNextCache,
@@ -594,13 +669,26 @@ export async function run(argv = process.argv.slice(2)) {
         );
       }
     }
-    syncNextCache(ROOT, { FORCE_CLEAN: "1" });
+    /* #4333：同上——回收之后先等端口释放，再清缓存（旧进程没死透时
+     * rm -rf .next 会 EBUSY，一次自愈重启不该被打成启动失败）。 */
+    await portReapWaitForPortsFree(procsListeningPidsOnPort, [port], { log });
+    try {
+      syncNextCache(ROOT, { FORCE_CLEAN: "1" });
+    } catch (error) {
+      /* 清缓存失败（典型：仍有进程持有 .next 文件句柄）不再把整次自愈炸成
+       * 启动失败——记可行动错误后带现有缓存继续；服务起不来时 watchDevChild
+       * 会按既有失败路径收口。 */
+      log(
+        `清空 .next 失败（${error instanceof Error ? error.message : String(error)}）——带现有缓存继续拉起；若自愈未生效请重启应用`,
+        "ERROR",
+      );
+    }
     /** @type {Record<string, string>} */
     const extraEnv = { COMFYAPP_RESTART_REASON: reason };
     if (detail) {
       extraEnv.COMFYAPP_RESTART_DETAIL = detail;
     }
-    dev = spawnDevServer(port, args.host, nextOut, nextErr, extraEnv);
+    dev = spawnDevServer({ port, host: args.host, outFile: nextOut, errFile: nextErr, extraEnv });
     watchDevChild(dev);
     writeSession(ROOT, {
       launcher_pid: process.pid,
@@ -611,6 +699,7 @@ export async function run(argv = process.argv.slice(2)) {
     });
   }
 
+  timeline.begin("ready-wait", "等待服务就绪");
   const waited = await waitForDevReady(
     {
       log,
@@ -633,8 +722,10 @@ export async function run(argv = process.argv.slice(2)) {
       startedAt,
     },
   );
+  timeline.end("ready-wait");
 
   if (devExited()) {
+    reportTimeline();
     return await concludeDownstreamExit(downstreamCtx, {
       dev,
       shell,
@@ -654,14 +745,37 @@ export async function run(argv = process.argv.slice(2)) {
       timeoutMs: READY_TIMEOUT_MS,
     });
     log(verdict.log, verdict.level);
+    reportTimeline();
     status("error", 1, verdict.statusMessage, { error: true, staleShell });
     await shutdown(1);
   }
   log(`服务已就绪：http://${args.host}:${port}`, "OK");
+  /* 启动耗时分解（ISSUE #4137 三段行 → #4185 逐阶段化）：预检（工具链/依赖/备份）、
+   * 端口与缓存、dev server 拉起、等待就绪各成一段；读数由 timeline 统一给出，
+   * 三处出口同源（启动页耗时条 / 这行日志 / run.json 归档）。
+   * 「哪一段变慢了」要在每一次启动的日志里直接可读，而不是让排查的人对着
+   * 行首时间戳手工做减法；秒数带出处，后续优化才有可比的基线。 */
+  reportTimeline();
   status("dev-server-ready", 0.9, "本地服务已就绪", {
     ready: true,
     staleShell,
   });
+  /* 服务端耗时细分（#4365）：「等待服务就绪」此前是一段黑盒——Next 进程
+   * 启动、健康探针编译各占多少没有读数。dev server 的 stdout 落盘文件由
+   * 编排器持有，这里按增量扫描其中的标记，把「服务进程启动 / 首页编译」
+   * 反推进时间线（分解行、启动页耗时条与应用内卡片随即可见）。 */
+  createServerTimingWatcher({
+    timeline,
+    refreshStatus: () =>
+      status("dev-server-ready", 0.9, "本地服务已就绪", {
+        ready: true,
+        staleShell,
+      }),
+    readNew: makeFileTailReader(nextOut),
+    now: () => Date.now(),
+    startedAt,
+    devExited,
+  }).start();
 
   // 9.5) 运行期自愈：常驻探测「接口层是不是整体 404」。
   //
@@ -694,16 +808,11 @@ export async function run(argv = process.argv.slice(2)) {
   // 「等任一退出」这个语义本身不回答是谁。
   const ended = await new Promise((resolve) => {
     /* dev 的监听由 watchDevChild 接（它随每次轻量重启重新武装）；这里只把解析器
-     * 交出去 + 接壳与信号这两条一轮会话内不会变的边。 */
+     * 交出去 + 接壳退出这条边。**signal 不在这里 resolve**（#4409）：它一律走
+     * 模块级处理器的「回收后退出」单出口，本 promise 只服务「谁先正常退出」。 */
     resolveLaunchEnd = resolve;
     shell?.once("exit", (code) => {
       resolve({ who: "shell", code: code ?? 0 });
-    });
-    process.once("SIGINT", () => {
-      resolve({ who: "signal", code: 0 });
-    });
-    process.once("SIGTERM", () => {
-      resolve({ who: "signal", code: 0 });
     });
     watchDevChild(dev);
   });
@@ -750,17 +859,16 @@ function clearIntervalGuard(timer) {
 }
 
 // 信号处理：任何中断都要先回收整棵进程树再退出（硬规则 3）。
-let shuttingDown = false;
-for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-  process.on(signal, () => {
-    if (shuttingDown) {
-      return;
-    }
-    shuttingDown = true;
+// signal 一律交模块级处理器**独占**收尾：常驻 promise 里不注册 SIGINT/SIGTERM
+// 监听 —— 若 signal 也从 promise resolve 出 `code:0`，run() 的微任务续体会抢在
+// reapAll（真实异步、挂在宏任务上）完成之前执行 process.exit(0)，POSIX 下
+// dev / executor-host 成孤儿（#4409）。
+miscOpsWireSignalShutdown({
+  onSignal: (/** @type {string} */ signal) => {
     log(`收到 ${signal}：回收子进程树后退出`, "WARN");
     void shutdown(signal === "SIGINT" ? 130 : 143);
-  });
-}
+  },
+});
 
 // 直跑（被 import 时不执行）：供测试复用上面这些纯函数。
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {

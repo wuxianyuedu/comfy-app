@@ -1,23 +1,7 @@
 /**
- * 提交门槛自检：注释语言判据（ISSUE #678 / #1811 收尾 / 规范 §12.4.6）。
- *
- * 这一条在 ISSUE #1811 收尾时**从棘轮翻成硬闸**：中文化治理已全库清零，
- * 于是棘轮车道没有成员 —— `--update` 写回去的永远是一份空账，而留下的却是
- * 一条「手改 JSON 就能把新违规登记成已知存量」的通道（§13.6.2 的两类对照）。
- * 所以基线文件已删、`--update` / `--strict` 已不存在，用例改判「命中即退 1」
- * 与「那两个旗标是断头的」。
- *
- * 判据的价值仍全在**两个方向**都成立上：既要真的拦住英文注释，也要在合规时
- * 放行（一个永远返回空的扫描器会让「无违规」全绿）。用「临时工作区 + 只放
- * 被测文件」跑真脚本，两个方向各断言一次。
- *
- * 为什么必须把「白名单只定义一次」也写成用例：白名单分散成两份（文档一份、
- * 脚本一份）时的表现是「文档说允许、判据说违规」，而两边看起来都对 —— 这正是
- * §12.18 / §12.4.6 反复出现的形态。判据由 doc-facts 反向解析 reference-facts
- * 的那一行承载，这里把它当场锁住。
- *
- * 规范：docs/standards/12-代码组织与文件结构.md §12.4.6
- *      docs/standards/launch-and-build.md §9.6（例外为什么必须存在）
+ * 提交门槛自检：注释语言判据（ISSUE #678 / #1811，规范 §12.4.6）。#1811 收尾时从棘轮翻硬闸：基线已删、
+ * `--update`/`--strict` 断头，用例改判「命中即退 1」。两个方向都要证（永远返回空会让「无违规」全绿），
+ * 真脚本 + 临时工作区。白名单必须只定义一次：分散两份时表现为「文档说允许、判据说违规」（§12.18），由 doc-facts 反向解析锁住。
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -25,14 +9,14 @@ import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const REPO_ROOT = process.cwd();
-const SCRIPT = join(REPO_ROOT, "scripts", "check-comment-language.cjs");
+const SCRIPT = join(REPO_ROOT, "scripts", "gates/check-comment-language.cjs");
 
 const { test, expect } = defineGateRepo({
-  script: "check-comment-language.cjs",
+  script: "gates/check-comment-language.cjs",
   dirs: ["src/lib"],
   /* 脚本 `await import("./doc-facts.cjs")` 去读文档事实 —— 同级动态导入只能
    * 把那份模块也拷到工作区（真实布局就是 scripts/ 下这两份并排）。 */
-  copy: [{ from: "scripts/doc-facts.cjs", to: "scripts/doc-facts.cjs" }],
+  copy: [{ from: "scripts/docs/doc-facts.cjs", to: "scripts/docs/doc-facts.cjs" }],
   /* `docs/reference-facts.md` 里那一行是白名单的唯一来源；隔离环境里也得在，
    * 否则脚本读不到名单。默认给一个**空名单**的版本（等价于此前 `beforeEach`
    * 里那句 `seedFactsDoc([])`）；要造白名单档的用例再覆盖它。 */
@@ -42,6 +26,16 @@ const { test, expect } = defineGateRepo({
       "# refs\n\n| `comment.language.asciiOnly` |  | 白名单 | 本行 | 解析本行 |\n",
   },
 });
+
+/** execFileSync 抛出的失败形状（status / stdout / stderr 都可能缺）：运行时守卫取字段，
+ * 不走 `as` 断言（B5 清账）。 */
+function failureFields(value: unknown): {
+  status?: unknown;
+  stderr?: unknown;
+  stdout?: unknown;
+} {
+  return typeof value === "object" && value !== null ? value : {};
+}
 
 /** 跑门禁：直接在本仓库工作区跑（验「仓库里的基线 ⇄ 仓库里的代码」）。 */
 function runInRepo(args: Array<string> = []): { code: number; output: string } {
@@ -53,22 +47,19 @@ function runInRepo(args: Array<string> = []): { code: number; output: string } {
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    const e = failureFields(error);
     return {
       code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      output: `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`,
     };
   }
 }
 
 /**
  * 白名单的权威定义在 `docs/reference-facts.md` 的那一行，脚本用
- * `scripts/doc-facts.cjs` 反向解析它。临时工作区里没有那篇文档，因此这里放一份
+ * `scripts/docs/doc-facts.cjs` 反向解析它。临时工作区里没有那篇文档，因此这里放一份
  * 最小替身（只含被解析的那一行），把「脚本从哪里读名单」这件事在隔离环境里钉住。
  */
 function seedFactsDoc(repo: GateRepo, modules: Array<string>): void {
@@ -190,13 +181,10 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
   });
 
   test("参数名恰好是英文虚词（from / to / at）的结构行不参与统计（实测误报 3 处）", ({ repo }) => {
-    // 判据的真实缺陷：`@param {string} from` 剥掉类型块后剩 `from`，而 `from` 在
-    // 英文虚词表里 —— 于是一条**纯类型语法行**（一个英文说明字都没有）被判成
-    // 「英文说明句」。实测全仓 3 处：`scripts/launcher-core/run.mjs` 的
-    // `@param {Date} at` / `@param {string} from` / `@param {string} to`，
-    // 而该文件当时没有执行者（判据不在钩子里 —— 正是 ISSUE #1451 立案的现场），
-    // 直到它被接进钩子才拦住从 master 分出的每一个提交。
-    // 修法 = 先剥掉「@tag + 类型块 + 参数名」三段再判虚词。
+    // 判据真实缺陷：`@param {string} from` 剥掉类型块剩 `from`，落在英文虚词表里 —— 纯类型语法行
+    // （零英文说明字）被判成「英文说明句」。实测全仓 3 处：`run.mjs` 的 `@param {Date} at` /
+    // `@param {string} from` / `@param {string} to`；该文件当时无执行者（ISSUE #1451 现场），
+    // 接进钩子后拦住从 master 分出的每一个提交。修法 = 先剥「@tag + 类型块 + 参数名」再判虚词。
     repo.write(
       "src/lib/jsdoc-prose-param-name.ts",
       [
@@ -336,13 +324,10 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(r.output).toContain("src/lib/url.ts");
   });
 
-  /* ── 「引用行」不计入判定（判据版本 3 新增的第二条腿）─────────────────
-   * 本规则治的是「人读的说明文字用英文写」。中文段落把一批标识符 / 路径 /
-   * 类名折到下一行是常见写法，旧口径（只看词数）会整片误判 —— 仓库实测 21 行
-   * 里 20 行是这一类。真英文散文几乎必然含虚词（表与 JSDoc 结构行豁免同源），
-   * 所以判据改成两条同时成立：剥完引用还剩 ≥3 个英文词 **且** 含虚词/动词。
-   * 下面四条分别钉住这条腿的四个面：清单不计、连字符里的虚词不计、反引号内的
-   * 原文引用不计，而**裸写的英文句子仍然计**（不设这条就等于把门禁改成噪音）。 */
+  /* 「引用行」不计入判定（判据版本 3 第二条腿）。规则治「人读说明用英文」；中文段落把标识符/路径
+   * 折到下一行是常见写法，旧口径只看词数会整片误判（实测 21 行里 20 行是这类）。真英文散文几乎必含
+   * 虚词，所以两条同时成立才算：剥完引用剩 ≥3 英文词 **且** 含虚词/动词。下面四条钉四个面：清单不计、
+   * 连字符里的虚词不计、反引号引用不计，而**裸写英文句子仍计**（不设这条门禁就是噪音）。 */
   test("中文段落里折行的标识符 / 路径清单不计入", ({ repo }) => {
     repo.write(
       "src/lib/citation.ts",
@@ -497,12 +482,32 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
 });
 
 describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
+  /** `doc-facts.cjs` 无类型：按出口键做运行时守卫，不走 `as` 断言（B5 清账）。 */
+  function isDocFactsModule(value: unknown): value is {
+    extractAsciiOnlyModules: () => Array<string>;
+    FACTS: Array<{ key: string; kind: string }>;
+  } {
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      "extractAsciiOnlyModules" in value &&
+      "FACTS" in value
+    );
+  }
+
+  async function loadDocFacts(): Promise<{
+    extractAsciiOnlyModules: () => Array<string>;
+    FACTS: Array<{ key: string; kind: string }>;
+  }> {
+    const mod: unknown = await import("../scripts/docs/doc-facts.cjs");
+    if (!isDocFactsModule(mod)) {
+      throw new Error("doc-facts.cjs 的出口形状不对（缺 extractAsciiOnlyModules / FACTS）");
+    }
+    return mod;
+  }
+
   test("doc-facts 从 reference-facts 的那一行解析出名单，而不是另存一份", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-      extractAsciiOnlyModules: () => Array<string>;
-      FACTS: Array<{ key: string; kind: string }>;
-    };
+    const mod = await loadDocFacts();
     const paths = mod.extractAsciiOnlyModules();
     expect(paths).toContain("src/lib/db-schema-ready.ts");
     expect(paths).toContain("src/server/db.ts");
@@ -516,30 +521,25 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
   });
 
   test("事实已登记在 FACTS 里（有 key 才参与 doc:check 的核对）", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-      FACTS: Array<{ key: string }>;
-    };
+    const mod = await loadDocFacts();
     expect(mod.FACTS.some((f) => f.key === "comment.language.asciiOnly")).toBe(true);
   });
 
   /**
-   * 翻硬闸之后，仍然要有一条判据盯「**仓库自己的树**是干净的」。
-   *
-   * 上面那批用例在临时工作区里跑，验的是「脚本判据对不对」；而仓库自己有没有
-   * 违规没有任何东西盯着 —— 违规若因为「钩子没跑 / 跑了没看」被提交进来，
-   * 下一个做任何提交的人都会失败，且原因与他的改动毫无关系。棘轮时代靠
-   * 「基线 ⇄ 树逐项比对」守这一格；现在基线没了，守的形态就变成「读数必须为 0」。
-   * 写法上仍走真仓库里的同一个脚本（同一份判据，不另写一遍统计）。
+   * 翻硬闸后仍需一条判据盯「仓库自己的树干净」：上面那批在临时工作区验判据对不对，违规若因钩子没跑
+   * 而被提交，下一个提交者会失败且原因与他的改动无关。棘轮时代靠「基线 ⇄ 树逐项比对」，现在基线没了，
+   * 守的形态就是「读数必须为 0」，仍走真仓库里的同一个脚本（同一份判据，不另写统计）。
    */
   test("仓库自己的树是干净的（硬闸形态下这一格才是终局）", () => {
     const report = runInRepo(["--report"]);
     expect(report.code, report.output).toBe(0);
-    const header = /疑似英文注释 (\d+) 行,分布在 (\d+) 个文件/.exec(report.output);
+    const header = /疑似英文注释 (?<lineCount>\d+) 行,分布在 (?<fileCount>\d+) 个文件/.exec(
+      report.output,
+    );
     expect(header, `无法解析 --report 表头：${report.output}`).toBeTruthy();
     expect(
-      Number(header![1]),
-      `${header![2]} 个文件里有 ${header![1]} 行英文注释 —— ` +
+      Number(header?.groups?.lineCount ?? -1),
+      `${header?.groups?.fileCount ?? 0} 个文件里有 ${header?.groups?.lineCount ?? 0} 行英文注释 —— ` +
         "注释一律中文（§12.4.6）。属构建期纯 ASCII 模块就把路径登记进 " +
         "docs/reference-facts.md 的 `comment.language.asciiOnly` 一行。",
     ).toBe(0);

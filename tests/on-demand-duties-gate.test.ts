@@ -1,48 +1,56 @@
 /**
- * 「不进钩子的按需档 ⇄ 执行者」双向判据的门禁自测（规范 §13.5.4）。
- *
- * 判据 `scripts/check-on-demand-duties.cjs` 的价值全在**两个方向**都成立上：
- *   ① 索引里点名的机器事实必须仍然存在（档被删 / 改名 / 已接进钩子 ⇒ 过期承诺）；
- *   ② 每一个机器事实都必须被索引登记（新增一档却忘了登记 ⇒ 那一档**谁都不判**，
- *      正是 §13.5.12 的立案现场：判据的覆盖面与它自称的不符）。
- *
- * 两个方向各一组，外加「判据自己不许静默降级」那一档（索引解析不出 / 行数塌到
- * 下限以下时不许退化成「0 行、全绿」，同 §11.18.3 首版那个 `include: []` 退 0）。
- *
- * 事实从**既有出处**现算（`FRESHNESS_TRACKS` / `quality-gate.mjs` 的 `run:false` /
- * 按需召唤台账）—— 所以夹具必须把这三份**真的**摆好，判据才读得到（抄一份假的
- * 就等于在测另一个东西）。
+ * 「不进钩子的按需档 ⇄ 执行者」双向判据的门禁自测（规范 §13.5.4）：①索引点名的机器事实必须仍在（档删除 / 改名 / 已接钩子 = 过期承诺）；
+ * ②每个机器事实都必须被登记（新档漏登记 ⇒ 无人判，§13.5.12）。另判「不许静默降级」：解析不出 / 行数塌到下限也不许退成 0 行全绿
+ * （§11.18.3 的 `include: []`）。事实从既有出处现算（`FRESHNESS_TRACKS` / `quality-gate.mjs` 的 `run:false` / 按需台账），夹具须摆真件。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 import { describe, defineGateRepo } from "./helpers/gate-repo";
 
 /* `test` 与 `expect` 都由夹具给出（`test` 带 `repo`；`expect` 是它转发的那一份，
  * 这样断言的实现与夹具同源）；`describe` 不随 `extend` 变，从夹具模块取。 */
 const { test, expect } = defineGateRepo({
-  script: "check-on-demand-duties.cjs",
+  script: "gates/check-on-demand-duties.cjs",
   /* 判据靠 `__dirname/..` 定位仓库根，所以脚本必须落在 `scripts/` 下。 */
   dir: "scripts",
   workdir: "on-demand-duties",
-  /* 两份「既有出处」要从源码仓库拷进来，判据才知道有哪些机器事实：
-   *   · `freshness-ledger.mjs` —— 新鲜度档的键（判据 `import` 它）；它按 `scripts/**` 900 行
-   *     硬闸把「机器分支回看 / 回写」拆到了 `freshness-ledger-sync.mjs`，所以那份也得一并
-   *     拷进来，否则 `import` 链到半路 `ERR_MODULE_NOT_FOUND`、整组用例红。
-   *   · `quality-gate.mjs`    —— `run: false` 的门禁项。
-   *
-   * **按需召唤台账刻意不拷真件**：那两份 tw4 条目只需一条在场就够（夹具要的是
-   * 「台账里有东西」这个形状，不是那两份文件本身）。拷真件再覆盖的顺序由夹具决定
-   * （`files` 在后），但那会让「夹具提供了什么」这件事不可读 —— 直接写更清楚。 */
+  /* 两份「既有出处」要从源码仓库拷进来，判据才知道有哪些机器事实：`freshness-ledger.mjs` —— 新鲜度档的键（判据
+   * `import` 它）；它按 `scripts/**` 900 行硬闸把机器分支回看 / 回写拆到 `freshness-ledger-sync.mjs`，那份也得拷，
+   * 否则 `import` 链半路 `ERR_MODULE_NOT_FOUND`、整组红。`quality-gate.mjs` —— `run: false` 的门禁项。**按需台账
+   * 刻意不拷真件**：只需一条在场（要的是「台账里有东西」的形状，不是文件），拷真件再覆盖会让「夹具提供了什么」不可读。 */
   copy: [
-    { from: "scripts/freshness-ledger.mjs", to: "scripts/freshness-ledger.mjs" },
-    { from: "scripts/freshness-ledger-sync.mjs", to: "scripts/freshness-ledger-sync.mjs" },
-    { from: "scripts/quality-gate.mjs", to: "scripts/quality-gate.mjs" },
+    {
+      from: "scripts/freshness/freshness-ledger.mjs",
+      to: "scripts/freshness/freshness-ledger.mjs",
+    },
+    {
+      from: "scripts/freshness/freshness-ledger-sync.mjs",
+      to: "scripts/freshness/freshness-ledger-sync.mjs",
+    },
+    { from: "scripts/gates/quality-gate.mjs", to: "scripts/gates/quality-gate.mjs" },
+    {
+      /* `base-check-chained` 那一类事实也从既有出处现算（`CHAINED_STEPS`）——
+       * 判据按 `__dirname/../base-check/chained-steps.mjs` 读它，少拷这一份，
+       * 夹具自己在读事实那一步就 ENOENT（看着像判据坏了，实为夹具缺口）。 */
+      from: "scripts/base-check/chained-steps.mjs",
+      to: "scripts/base-check/chained-steps.mjs",
+    },
   ],
-  /* 台账与索引都按用例改写 —— 夹具给一份最小可用的。 */
+  /* 台账与索引都按用例改写 —— 夹具给一份最小可用的。
+   * ⚠️ 台账是**两行**：真索引里 `on-demand-ledger` 类事实有 `tw4-canonical-report.mjs`
+   * 与 `tw4-spacing-canonical.mjs` 两条（#3930 之后它们仍按 basename 登记），少一条
+   * 就会让「双向核对」的方向①把真索引里那一行判成过期承诺。 */
   files: {
-    "scripts/.gate-executor-ledger.json": JSON.stringify(
-      { onDemand: { "tw4-canonical-report.mjs": { why: "起 Tailwind 引擎", who: "按需" } } },
+    "scripts/gates/.gate-executor-ledger.json": JSON.stringify(
+      {
+        onDemand: {
+          "tw4-canonical-report.mjs": { why: "起 Tailwind 引擎", who: "按需" },
+          "tw4-spacing-canonical.mjs": { why: "起 Tailwind 引擎", who: "按需" },
+        },
+      },
       null,
       2,
     ),
@@ -103,7 +111,19 @@ function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
         id: "tw4-canonical-report",
         name: "CSS 等价改写汇总",
         notInHook: "要起 Tailwind 引擎",
+        /* 台账（`.gate-executor-ledger.json`）按 **basename** 登记，判据用同一个键对账；
+         * 这里写成 `tw4/<f>` 会让方向①（点名的事实不存在）与方向②（事实没被登记）
+         * 同时报红 —— 两边的取值口径只有一份。 */
         fact: { kind: "on-demand-ledger", script: "tw4-canonical-report.mjs" },
+        executor: "按需召唤 + 棘轮",
+      },
+      {
+        /* 第二份 tw4 工具也是同一种事实（台账里那第二条），夹具要跟着台账长：
+         * 少这一行，方向② 就把「有一条事实没人登记」念成红。 */
+        id: "tw4-spacing-canonical",
+        name: "px ↔ spacing 倍数等价改写",
+        notInHook: "要起 Tailwind 引擎",
+        fact: { kind: "on-demand-ledger", script: "tw4-spacing-canonical.mjs" },
         executor: "按需召唤 + 棘轮",
       },
       {
@@ -154,10 +174,13 @@ function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
 }
 
 /** 真实仓库里的三份事实读数 —— 夹具的断言按它来，避免写死会漂的数字。 */
-/* SAFETY: 类型断言已复核 */
-const REAL = JSON.parse(
-  readFileSync(join(process.cwd(), "scripts", ".on-demand-duties.json"), "utf8"),
-) as { duties: Array<unknown> };
+const realParsed: unknown = JSON.parse(
+  readFileSync(join(process.cwd(), "scripts", "gates", ".on-demand-duties.json"), "utf8"),
+);
+if (!isRecord(realParsed) || !isUnknownArray(realParsed.duties)) {
+  throw new Error("scripts/gates/.on-demand-duties.json 形状不对：缺 duties 数组");
+}
+const REAL = { duties: realParsed.duties };
 
 describe("on-demand-duties —— 双向", () => {
   test("索引与实际机器事实一致 ⇒ 通过", ({ repo }) => {
@@ -165,7 +188,7 @@ describe("on-demand-duties —— 双向", () => {
      * 夹具里只有 FRESHNESS_TRACKS 的三档 + quality-gate 的 premerge。
      * 真实索引还登记了 dependencyAudit / tw4 等条目（需要真实 quality-gate 与台账），
      * 所以这里不直接用真索引，而是用最小的那份。 */
-    repo.write("scripts/.on-demand-duties.json", JSON.stringify(ledgerDuties(), null, 2));
+    repo.write("scripts/gates/.on-demand-duties.json", JSON.stringify(ledgerDuties(), null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(0);
     expect(output).toContain("双向核对通过");
@@ -173,7 +196,7 @@ describe("on-demand-duties —— 双向", () => {
 
   test("方向①：点名一个不存在的档 ⇒ 红（过期承诺）", ({ repo }) => {
     repo.write(
-      "scripts/.on-demand-duties.json",
+      "scripts/gates/.on-demand-duties.json",
       JSON.stringify(
         ledgerDuties({
           extra: [
@@ -199,7 +222,7 @@ describe("on-demand-duties —— 双向", () => {
     /* 抹掉 e2e 那一行 —— 事实还在，登记没了。 */
     const led = ledgerDuties();
     led.duties = led.duties.filter((d: DutyRow) => d.id !== "e2e");
-    repo.write("scripts/.on-demand-duties.json", JSON.stringify(led, null, 2));
+    repo.write("scripts/gates/.on-demand-duties.json", JSON.stringify(led, null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("freshness-track:e2e");
@@ -207,9 +230,9 @@ describe("on-demand-duties —— 双向", () => {
   });
 
   test("方向②：新增的按需台账条目没登记 ⇒ 红", ({ repo }) => {
-    repo.write("scripts/.on-demand-duties.json", JSON.stringify(ledgerDuties(), null, 2));
+    repo.write("scripts/gates/.on-demand-duties.json", JSON.stringify(ledgerDuties(), null, 2));
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       JSON.stringify(
         { onDemand: { "some-new-report.mjs": { why: "起引擎", who: "按需" } } },
         null,
@@ -230,14 +253,17 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
   });
 
   test("索引不是合法 JSON ⇒ 红", ({ repo }) => {
-    repo.write("scripts/.on-demand-duties.json", "{ 这不是 json");
+    repo.write("scripts/gates/.on-demand-duties.json", "{ 这不是 json");
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("不是合法 JSON");
   });
 
   test("duties 为空数组 ⇒ 红（空索引 = 把门禁关掉）", ({ repo }) => {
-    repo.write("scripts/.on-demand-duties.json", JSON.stringify({ why: "", duties: [] }, null, 2));
+    repo.write(
+      "scripts/gates/.on-demand-duties.json",
+      JSON.stringify({ why: "", duties: [] }, null, 2),
+    );
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("duties");
@@ -245,7 +271,7 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
 
   test("行数塌到下限以下 ⇒ 红（解析规则坏了）」", ({ repo }) => {
     repo.write(
-      "scripts/.on-demand-duties.json",
+      "scripts/gates/.on-demand-duties.json",
       JSON.stringify(
         { why: "", duties: [{ id: "a", name: "a", fact: { kind: "x" }, executor: "e" }] },
         null,
@@ -259,13 +285,12 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
 
   test("行缺字段 ⇒ 红（id / name / fact.kind / executor 都要有）", ({ repo }) => {
     const led = ledgerDuties();
-    /* 造「缺字段」那一档 —— 用 `Partial` 表达「这一行故意缺了 executor」。 */
-    /* SAFETY: 类型断言已复核 */
+    /* 造「缺字段」那一档 —— 用 `Partial` 表达「这一行故意缺了 executor」。
+       落盘走 unknown 信封（B5 清账）：缺字段的行不再断言回 DutyRow。 */
     const broken = { ...led.duties[0] } as Partial<DutyRow>;
     delete broken.executor;
-    /* SAFETY: 类型断言已复核 */
-    led.duties = [broken as DutyRow, ...led.duties.slice(1)];
-    repo.write("scripts/.on-demand-duties.json", JSON.stringify(led, null, 2));
+    const brokenLedger: unknown = { ...led, duties: [broken, ...led.duties.slice(1)] };
+    repo.write("scripts/gates/.on-demand-duties.json", JSON.stringify(brokenLedger, null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("缺字段");

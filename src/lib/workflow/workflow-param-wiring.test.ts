@@ -66,20 +66,14 @@ describe("canApplyWireEdit", () => {
 
   it("落点不在 workflowIO 里 → 拒绝（否则画得出线、运行期落不到值）", () => {
     expect(
-      canApplyWireEdit(
-        { entryId: "size-megapixels", ioKey: "9::widget::不存在", mode: "T2I" },
-        io,
-      ),
+      canApplyWireEdit({ entryId: "size-megapixels", ioKey: "9::widget::不存在", mode: "T2I" }, io),
     ).toBe(false);
   });
 
   it("显式断开只要有模式就受理（不需要落点存在）", () => {
-    expect(
-      canApplyWireEdit(
-        { entryId: "size-megapixels", ioKey: null, mode: "T2I" },
-        io,
-      ),
-    ).toBe(true);
+    expect(canApplyWireEdit({ entryId: "size-megapixels", ioKey: null, mode: "T2I" }, io)).toBe(
+      true,
+    );
   });
 });
 
@@ -115,10 +109,7 @@ describe("applyWireEdit", () => {
   });
 
   it("显式断开也落库（null）——不落的话刷新后会被自动判定复活", () => {
-    const next = applyWireEdit(
-      {},
-      { entryId: "prompt", ioKey: null, mode: "T2I" },
-    );
+    const next = applyWireEdit({}, { entryId: "prompt", ioKey: null, mode: "T2I" });
     expect(parseParamMapping(next).manualByMode).toEqual({
       T2I: { prompt: null },
     });
@@ -170,10 +161,7 @@ describe("hasWireEdit / clearWireEdit", () => {
       },
     );
     expect(hasWireEdit(changed, "size-megapixels", "T2I")).toBe(true);
-    const off = applyWireEdit(
-      {},
-      { entryId: "size-megapixels", ioKey: null, mode: "T2I" },
-    );
+    const off = applyWireEdit({}, { entryId: "size-megapixels", ioKey: null, mode: "T2I" });
     expect(hasWireEdit(off, "size-megapixels", "T2I")).toBe(true);
   });
 
@@ -258,9 +246,7 @@ describe("resolveDropTarget", () => {
 
   it("整块矩形都没命中（height 0 的占位）→ null", () => {
     expect(
-      resolveDropTarget({ x: 500, y: 500 }, [
-        { ioKey: "a", rect: rect(0, 0, 0, 0) },
-      ]),
+      resolveDropTarget({ x: 500, y: 500 }, [{ ioKey: "a", rect: rect(0, 0, 0, 0) }]),
     ).toBeNull();
   });
 });

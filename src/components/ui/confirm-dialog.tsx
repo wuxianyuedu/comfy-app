@@ -1,43 +1,10 @@
 "use client";
 
-/**
- * ConfirmDialog —— 跟随应用主题的居中确认弹窗。
- *
- * 替换 `window.confirm()` / `window.alert()`，让提示语与应用
- * 视觉体系一致，而不是弹原生浏览器窗口
- *（它别扭地贴在视口左上 / 居中
- * 且忽略深色 CSS）。
- *
- * 实现基于 `~/components/ui/dialog`（规范 16 §16.2.3 P2）：此前这里自搓了一套
- * `createPortal` + 手写 Esc + 手写遮罩点击关闭，于是同一件「模态对话框」在库里
- * 有 `ui/dialog`（零引用）与它两份实现 —— 焦点陷阱、Esc 语义、焦点归还这些
- * 无障碍行为只在一边有。现在动作语义交给 base-ui Dialog 原语（Esc / 点遮罩关闭、
- * 焦点锁在弹窗内、关闭后焦点归还触发元素），本组件只负责「确认弹窗」的形态。
- *
- * 视觉语言与全局设计 token 一致（浅色 / 深色两态）：
- *   - 背景遮罩:  走 `ui/dialog` 的 `dialogBackdropClass()`（`bg-scrim` 两态取值，
- *               由 `tests/dialog-backdrop-contrast.test.ts` 真量对比度）
- *   - 卡片:      bg-panel + 中性 ring（浅色深 ring、深色浅 ring）
- *                + border-destructive/30（危险） /
- *                border-primary-500/25（信息）
- *
- * 卡片**不带背景模糊**（ISSUE #2031 · 规范 03 §3.13）：它本来就坐在一层
- * 带色遮罩上，模糊只在「下面有活的、会动的东西」时才看得出来，而这个弹窗
- * 出现时下半屏是静止的遮罩 —— 观感差别读不出来，代价是把整张卡片和它背后
- * 的内容拖进一个 backdrop-filter 图层。扁平档的浮层靠**投影 + 描边 + 不透明
- * 底色**分层，不靠模糊。
- *
- * 颜色全部走语义 token（规范 03 §3.6.2）：这里曾把 `violet-500/600` 写死
- * 6 处，于是「改品牌色」对确认弹窗不起作用 —— 它绕开了 `--color-primary`。
- *   - 间距:   p-6, gap-4, rounded-2xl
- *   - 按钮:   幽灵次级 + 品牌 / 危险主按钮
- *
- * 行为：
- *   - 点遮罩或按 Esc → onClose()
- *   - 确认按钮自动聚焦，好让 Enter 立刻触发它
- *   - 禁用的确认按钮保持禁用直到重新启用（异步场景很好用）
- *   - `pending` prop 把确认按钮置为 spinner 态
- */
+/** ConfirmDialog —— 跟随应用主题的居中确认弹窗，替换 `window.confirm()` / `window.alert()`（后者贴视口左上、忽略深色 CSS）。
+ * 实现基于 `~/components/ui/dialog`（规范 16 §16.2.3 P2）：此前自搓 createPortal + 手写 Esc + 手写遮罩点击，焦点陷阱 / Esc 语义 / 焦点归还只在 `ui/dialog` 一边有；现在动作语义交给 base-ui Dialog 原语，本组件只管确认弹窗形态。
+ * 遮罩走 `dialogBackdropClass()`（`bg-scrim` 两态取值，`tests/dialog-backdrop-contrast.test.ts` 真量对比度）；卡片 bg-panel + 中性 ring + border-destructive/30（危险）/ border-primary-500/25（信息）。
+ * 卡片不带背景模糊（ISSUE #2031 · 规范 03 §3.13）：它坐在带色遮罩上、下方静止，模糊读不出差别，却会把卡片和背后内容拖进 backdrop-filter 图层；扁平浮层靠投影 + 描边 + 不透明底色分层。
+ * 颜色全走语义 token（§3.6.2，曾把 violet-500/600 写死 6 处）；行为：点遮罩 / Esc → onClose()，确认按钮自动聚焦（Enter 立即可用），禁用保持到重新启用，`pending` 转 spinner。 */
 
 import React, { useEffect, useId, useRef } from "react";
 import { Info, TriangleAlert } from "lucide-react";
@@ -117,12 +84,7 @@ export function ConfirmDialog({
     >
       <DialogContent
         aria-labelledby={titleId}
-        /* 卡片外观由本组件的内部 div 决定（与库里其它自绘弹窗同一惯例）：
-           popup 基元自带 `fixed top-1/2 left-1/2` 居中定位，**不能**把
-           `overlayClass("modal", …)`（那是给遮罩层的「铺满内容区」定位）传给
-           DialogContent —— 它会落在卡片上，和基元的居中定位打架：卡片被拉伸
-           成整块内容区又被 −50% 平移，实体卡缩到左上角视口之外，用户看到的
-           就是一块空黑框（「数据库过期 → 点击同步」的确认弹窗实测如此）。 */
+        /* 卡片外观由本组件的内部 div 决定（与库里其它自绘弹窗同一惯例）：popup 基元自带 `fixed top-1/2 left-1/2` 居中定位，不能把 `overlayClass("modal", …)`（那是遮罩层的「铺满内容区」定位）传给 DialogContent —— 它会落在卡片上并与居中定位打架：卡片被拉成整块内容区又被 −50% 平移，实体卡缩到左上角视口之外，只剩空黑框（「数据库过期 → 点击同步」实测）。 */
         className="bg-transparent p-0 ring-0"
         data-testid="modal-dialog"
         popupClassName="w-fit"

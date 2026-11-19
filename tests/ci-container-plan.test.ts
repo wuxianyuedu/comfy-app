@@ -1,30 +1,7 @@
 /**
- * 「永远不用平台池，只用自托管节点上的容器」这条决定的判据（ISSUE #1993）。
- *
- * ## 它守的是哪一格
- *
- * 用户在 ISSUE 里把话说死了：**平台池永远不用，容器用自托管节点上的**。这句话在
- * 配置里不是**一个键**，而是三件的合取 —— 而三件里任一件写错，症状都是「看起来对、
- * 其实跑在别处」：
- *
- * 1. `runner.namespace: group`（自托管）—— 漏掉会**静默回落计费的平台池**；
- * 2. `runner.tags` 非空、且**不含平台池标签** —— 自托管节点离线/满载时平台会自动改派，
- *    而「其他可用节点」就是平台池（`.cnb.yml` 头注第 5 条）；
- * 3. 「用容器」落在 **Job 级 `image:`**（`pipeline.docker.image` 在自托管上不生效；
- *    而 **stage 级 `image:`** 不是「被忽略」，是整格 99ms 就答
- *    `Runner does not enable Docker.` —— 见下面「写错层」那一组用例）。
- *
- * ## 还有一件比上面三件更容易漏的：桥
- *
- * Job 级 `image:` 每一格都是**一个新容器**。不挂卷，「上一格下的 120 MiB」到下一格
- * 就不存在了 ⇒ 每跑一遍重取一遍。那是**不报错、只是慢**的形态 —— 与本仓最贵的那类
- * 红同族（环境是隐形的）。所以本文件判的第二件事是：**每一格容器格都挂着同一份
- * 浏览器落点**。
- *
- * ## 判据的形状：正向 + 反向
- *
- * 每条正向判据都配一条**改坏夹具**的复算（摘掉 `namespace`、换回平台池标签、删卷），
- * 否则「清单对不对」会退化成「文档读了两遍」（本仓 §12.18 那条口径）。
+ * 「永远不用平台池，只用自托管节点上的容器」（ISSUE #1993）是三件合取：`runner.namespace: group`（漏掉就
+ * 静默回落计费平台池）、`runner.tags` 非空且不是平台池标签（节点离线会改派，`.cnb.yml` 头注第 5 条）、
+ * 容器在 Job 级 `image:`（stage 级答 `Runner does not enable Docker.`）；每格须挂同一份浏览器落点，反向控制靠改坏夹具复算。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -41,8 +18,8 @@ import {
   SELF_HOSTED_TAG,
   stageLevelImages,
   stripYamlComments,
-} from "../scripts/ci-container-plan.mjs";
-import { platformImageStages, ROOT } from "../scripts/ci-image-identity.mjs";
+} from "../scripts/ci/ci-container-plan.mjs";
+import { platformImageStages, ROOT } from "../scripts/ci/ci-image-identity.mjs";
 import { stageBlock } from "./no-platform-ci-config.test";
 
 const CNB = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
@@ -113,13 +90,7 @@ describe("runner 形态：自托管与平台池只差一行，而那一行会静
 });
 
 /**
- * 两格**容器格**的夹具（`- name:` + `jobs:` + 同名 Job，Job 那一层挂 `image:`）。
- *
- * 它替的是「现役 `.cnb.yml` 里那两格」这个角色：现役配置此刻**没有**容器格
- * （节点没开 Docker，写 `image:` 会在起格之前被平台答 `Runner does not enable
- * Docker.`，见 §13.5.3.4.1.5），而「桥通不通」这条判据仍然要有执行对象 —— 否则
- * 它会在配置变得没有容器格那天，悄悄变成一条恒绿的空转判据。
- *
+ * 容器格夹具（Job 层挂 `image:`），现役配置无容器格（`image:` 被答 Docker 未启用，§13.5.3.4.1.5），保证「桥」判据有执行对象、不空转。
  * @param {{ bridge?: string[] }} [over] 哪几格挂卷（缺省 = 两格都挂同一份落点）
  * @returns {string}
  */
@@ -145,15 +116,16 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
      * 为空）；没有容器格 ⇒ `none`（不是 `broken`，也不是「桥修好了」）。后者是这一档
      * 此刻的真形态 —— 两格都跑在宿主机上，同一块盘，没有「跨容器」这回事。 */
     const p = plan(CNB);
-    if (p.containers.length === 0) {
-      expect(
-        p.bridge,
-        "没有容器格时 `bridge` 必须是 `none` —— `complete` 会让人以为桥在起作用",
-      ).toBe("none");
-      expect(p.missing).toEqual([]);
-      return;
-    }
-    expect(p.bridge, `没挂 ${BROWSERS_VOLUME} 的格：${p.missing.join(" / ")}`).toBe("complete");
+    /* 两态都由同一份现役配置判出来：有容器格 ⇒ 桥必须通（`complete` 且 `missing`
+     * 为空）；没有容器格 ⇒ `none`（不是 `broken`，也不是「桥修好了」）—— 后者是
+     * 这一档此刻的真形态：两格都跑在宿主机上，同一块盘，没有「跨容器」这回事。
+     * 分支收进期望值，断言本体无条件跑（no-conditional-expect）。 */
+    expect(
+      p.containers.length === 0 ? p.bridge === "none" : p.bridge === "complete",
+      p.containers.length === 0
+        ? "没有容器格时 `bridge` 必须是 `none` —— `complete` 会让人以为桥在起作用"
+        : `没挂 ${BROWSERS_VOLUME} 的格：${p.missing.join(" / ")}`,
+    ).toBe(true);
     expect(p.missing).toEqual([]);
   });
 
@@ -247,27 +219,22 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
     ).toEqual([]);
   });
 
-  it("容器格的 `env` / `timeout` 真的在 Job 那一层（不是「看着缩进对、其实挂在 stage 上」）", () => {
-    /* 这条判据是一次**真踩到的坑**：把 `image:` 下移到 Job 时，`env:` 下面的键与
-     * `timeout:` 的缩进没跟着走 —— YAML 于是把 `PLAYWRIGHT_DOWNLOAD_HOST` 之类读成
-     * **stage 项自己的键**（`env:` 变成 `null`），配置仍然合法、`env` 却空了。
-     *
-     * 而 `.cnb.yml` 里没有任何 YAML 解析器跑（判据全按行读原文），所以这种「缩进
-     * 半途而废」在本地可以全绿。这里按**层级**判：`timeout` 必须是项自己的键
-     * （`- name:` 深一层），`env` 的键必须与项自己的键**同层**（`env:` 深一层、它的键
-     * 再深一层，正好落在那里）—— 更浅的都在 stage 那一层，YAML 会把 `env` 读成 null。 */
-    /** @type {string[]} */
-    const offenders = [];
-    /* 名单**按「配置里真的带 `env:` 的格」取**，不写死：2026-10-19 撤掉 PR 那一格的
-     * `E2E 关键流程` 之后，带 env 的格换成了每日那两格（下载根 / 连接超时 / 显式档名）；
-     * 同日再把 `浏览器安装` 也撤到每日档，于是 PR 上已经没有带 `env:` 的格 ——
-     * 名单里那个 PR 名字随之去掉，否则这条判据会以「找不到 stage 项」红在一个**正确**的
-     * 配置上（那是假红，与本仓要治的「解析失败伪装成结论」同族）。
-     * 写死名字的话，这条判据会在下一次挪档时以「找不到 stage 项」红 —— 两害相权：
-     * 留显式名单 + 下面那句「名单里的格必须在配置里取到块」的前置断言。 */
-    for (const name of ["每日浏览器安装", "每日全量E2E"]) {
-      const block = stageBlock(CNB, name);
-      expect(block, `找不到 stage 项：${name}`).toBeTruthy();
+  it("带 `env:` 的执行格，`env` / `timeout` 真的挂在它自己那一层（不是「看着缩进对、其实挂到了别层」）", () => {
+    /* 真踩到的坑：`image:` 下移到 Job 时 `env:`/`timeout:` 缩进没跟着走 —— YAML 把
+       `PLAYWRIGHT_DOWNLOAD_HOST` 读成 stage 项自己的键（`env:` 变 null），配置仍合法而 `env` 空了。
+       #3504 起带 `env:` 的执行格整体搬到了 GA `daily.yml`（CNB 侧只剩不带 `env:` 的回读格，
+       lane 级 `env:` 是整条流水线共享的，不存在「挂在某一格上」的形态），而同一个坑在 GA 的
+       step 形态里**同形**：`- name:` 深一层是 step 自己的键，`env:` 的键再深一层。
+       判据全按行读原文、本地无 YAML 解析器，故按层级判：`timeout` 属项自己（`- name:` 深一层），
+       `env` 的键与项自己的键同层；更浅的都落在别层，YAML 会把 `env` 读成 null。 */
+    const offenders: Array<string> = [];
+    /**
+     * 对一个「`- name:` 项块」跑层级扫描（缩进无关：`keyIndent` 从项自己的行算出来，
+     * CNB 的 2 空格 stage 与 GA 的 6 空格 step 共用同一套判法）。
+     * @param {string} label 读数前缀（人照着它去改）
+     * @param {string} block 项块原文
+     */
+    const scan = (label: string, block: string): void => {
       /** 当前项的键应该在的缩进（`- name:` 缩进 + 2）。 */
       /** @type {number | null} */
       let keyIndent = null;
@@ -280,8 +247,8 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
         }
         const indent = raw.length - raw.trimStart().length;
         const body = raw.trim();
-        /* stage 块尾会带上**下一个 stage 之前那一段注释**（`stageBlock()` 只按缩进与
-         * 顶格键收尾），它不属于本项的任何一层 —— 跳过，否则深度判据会对着注释开火。 */
+        /* 项块尾会带上**下一项之前那一段注释**（块收口只按缩进与顶格键），它不属于
+         * 本项的任何一层 —— 跳过，否则深度判据会对着注释开火。 */
         if (body.startsWith("#")) {
           continue;
         }
@@ -297,20 +264,20 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
          * 是**合法**的更深层键 —— 只有当 `env` 正在收键时越过它才算挂错层。 */
         if (body.startsWith("- ")) {
           if (envKeyIndent !== null && indent <= envKeyIndent) {
-            offenders.push(`${name}：${body}`);
+            offenders.push(`${label}：${body}`);
             envKeyIndent = null;
           }
           continue;
         }
         /* `env:` 正在收键：比 `env:` 还浅（`indent < envKeyIndent`）就是跑到了项上面
-         * —— `env` 会被读成 null，那几个键挂到 stage 那一层，而本判据要抓的就是这一次。
+         * —— `env` 会被读成 null，那几个键挂到别层，而本判据要抓的就是这一次。
          * ⚠️ 这一支必须排在「比项自己的键更浅 ⇒ 结束」**之前**：挂错层时它们的缩进
          * 恰好等于项自己那一层，先判「结束」会悄悄放过去。 */
         if (envKeyIndent !== null) {
           if (indent >= envKeyIndent) {
             continue;
           }
-          offenders.push(`${name}：${body.slice(0, 30)}（缩进 ${indent}，该在 ${envKeyIndent}）`);
+          offenders.push(`${label}：${body.slice(0, 30)}（缩进 ${indent}，该在 ${envKeyIndent}）`);
           envKeyIndent = null;
           continue;
         }
@@ -320,23 +287,68 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
           continue;
         }
         if (body.startsWith("env:")) {
-          /* `env:` 的键与项自己的键**同一层**（这是 YAML 的形态：`env:` 深一层，
-           * 它的键再深一层 —— 正好落在项自己的键那一层上）。 */
+          /* `env:` 的键与项自己的键**同一层**（`env:` 深一层，它的键再深一层 ——
+           * 正好落在项自己的键那一层上）。 */
           envKeyIndent = keyIndent;
           if (indent !== keyIndent) {
-            offenders.push(`${name}：env:（缩进 ${indent}，该在 ${keyIndent}）`);
+            offenders.push(`${label}：env:（缩进 ${indent}，该在 ${keyIndent}）`);
           }
           continue;
         }
-        /* 不在 `env` 里：`timeout` 该在 `keyIndent` 那一层。 */
+        /* 不在 `env` 里：`timeout` 该在 `keyIndent` 那一层。
+         * （GA 的 `timeout-minutes:` 不以 `timeout:` 开头，不会被误抓。） */
         if (body.startsWith("timeout:") && indent !== keyIndent) {
-          offenders.push(`${name}：${body}`);
+          offenders.push(`${label}：${body}`);
         }
       }
+    };
+
+    /* CNB 侧：现役唯一带外置键的格是回读格（`timeout`）—— 写错层的话整个格的外框就没了。 */
+    const readout = stageBlock(CNB, "GA 回调结论回读");
+    expect(readout, "找不到 stage 项：GA 回调结论回读").toBeTruthy();
+    scan("GA 回调结论回读", readout ?? "");
+
+    /* GA 侧：带 `env:` 的 step（#3504 起执行格的家）。**名单不写死** —— 按 6 空格
+     * step 头全量扫，谁搬进来都逃不掉；但至少要扫到一块带 `env:` 的，不然这条
+     * 用例空转（同「解析失败伪装成结论」族）。 */
+    const daily = readFileSync(path.join(ROOT, ".github", "workflows", "daily.yml"), "utf8");
+    const gaStepBlocks = (text: string): Array<[string, string]> => {
+      const lines = text.split("\n");
+      const out: Array<[string, string]> = [];
+      for (let i = 0; i < lines.length; i += 1) {
+        const head = /^ {6}- name: (?<name>.+)$/.exec(lines[i] ?? "");
+        if (!head) {
+          continue;
+        }
+        let end = lines.length;
+        for (let j = i + 1; j < lines.length; j += 1) {
+          /* 块尾有两种：下一个 step 头，或**下一个 job 的边界**（2 空格缩进的非空行 ——
+           * job 键或挂在它头上的注释段）。少了后者，一个 job 的**最后一步**会把下一个
+           * job 的头整段吞进来，于是 `env:` 的收键层一路收到 `  <job>:` 那一行上，
+           * 报出「缩进 2，该在 8」这种指不到真因的红（daily.yml 自 #3563 起有两个 job）。 */
+          if (/^ {6}- name: /.test(lines[j] ?? "") || /^ {2}\S/.test(lines[j] ?? "")) {
+            end = j;
+            break;
+          }
+        }
+        out.push([(head.groups?.name ?? "").trim(), lines.slice(i, end).join("\n")]);
+      }
+      return out;
+    };
+    let envBlocks = 0;
+    for (const [name, block] of gaStepBlocks(daily)) {
+      if (/\n {8}env:/.test(block)) {
+        envBlocks += 1;
+      }
+      scan(`${name}（GA daily.yml）`, block);
     }
     expect(
+      envBlocks,
+      "GA daily.yml 里一块带 `env:` 的 step 都没扫到 —— 这条判据空转了",
+    ).toBeGreaterThan(0);
+    expect(
       offenders,
-      "这些键没挂在它那一项的正确层级上 —— YAML 会把它们读成 stage 项自己的键（`env` 变 null），" +
+      "这些键没挂在它那一项的正确层级上 —— YAML 会把它们读成别层的键（`env` 变 null），" +
         "而配置文件仍然合法、本地判据（按行读）也全绿",
     ).toEqual([]);
   });
@@ -380,9 +392,11 @@ describe("解析器的两处细节：注释与卷写法", () => {
   it("读数是人读的三行，且断桥那一档**点名**（不是一句「有问题」）", () => {
     const lines = describePlan(CNB);
     expect(lines[0]).toContain("self-hosted");
-    if (plan(CNB).containers.length > 0) {
-      expect(lines.join("\n")).toContain(BROWSERS_VOLUME);
-    }
+    /* 有容器格才读得到卷名 —— 条件收进合取式（无容器格即恒真），
+     * 断言本体无条件跑（no-conditional-expect）。 */
+    expect(plan(CNB).containers.length === 0 || lines.join("\n").includes(BROWSERS_VOLUME)).toBe(
+      true,
+    );
     const broken = describePlan(containerFixture({ bridge: [] }));
     expect(broken.join("\n")).toContain("重下");
     /* 点名到格：两格都要出现，不是一句「有格没挂卷」。 */

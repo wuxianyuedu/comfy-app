@@ -111,8 +111,8 @@ export function clearPnpmProbeCache() {
 export function packageManagerVersion(root = process.cwd()) {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-    const match = /^pnpm@(\S+)$/.exec(String(pkg.packageManager ?? ""));
-    return match?.[1] ?? null;
+    const match = /^pnpm@(?<version>\S+)$/.exec(String(pkg.packageManager ?? ""));
+    return match?.groups?.version ?? null;
   } catch {
     return null;
   }
@@ -204,7 +204,7 @@ export function probeCommand(
     );
   }
   const output = `${probe.stdout ?? ""}${probe.stderr ?? ""}`;
-  const version = /(\d+\.\d+[\w.-]*)/.exec(output)?.[1] ?? null;
+  const version = /(?<version>\d+\.\d+[\w.-]*)/.exec(output)?.groups?.version ?? null;
   if (probe.status !== 0) {
     return failed(command, "exit-nonzero", firstLines(output), probe.status ?? null);
   }

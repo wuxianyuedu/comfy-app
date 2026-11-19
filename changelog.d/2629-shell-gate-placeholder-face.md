@@ -1,7 +1,7 @@
 ## Fixed
 
 - **跑过一次壳的 `cargo test` 之后，`pnpm build` 不再恒红在产物层**（ISSUE #2629）。
-  `scripts/shell-gate.mjs` 的编译前提格曾往 `src-tauri/static/` 写一枚
+  `scripts/gates/shell-gate.mjs` 的编译前提格曾往 `src-tauri/static/` 写一枚
   `.cargo-test-placeholder`，而**这一层正是 `check-standalone-contents.cjs` 数的第二层**
   （真被 `bundle.resources` 装进安装包、编译期内嵌进 exe 的那份载荷根）。于是判据报
   「顶层出现白名单外的条目 .cargo-test-placeholder」——读起来像谁把脏文件塞进了出厂件，

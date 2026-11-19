@@ -1,20 +1,7 @@
-/**
- * 「Enter 提交 / Esc 取消」的判据（规范 16 §16.2.4.29）。
- *
- * 这条账的形状与 `list-filter` 同族：**不是重复代码，是判据** —— 全库 11 处
- * 各在 `onKeyDown` 里判键，而它们对两件事各判各的：
- *   · **Enter 要不要 `preventDefault`**（6 处写了、5 处没写 —— 没写的那几处在
- *     `<form>` 里会连带提交整页）；
- *   · **Esc 取消要不要复位草稿**（复位是 3 处，其余留在原值）。
- *
- * 用例逐个钉住这六件事：
- *   1. Enter → 提交，且 **`preventDefault` 一定被调用**（表单隐式 submit）；
- *   2. Esc → 取消；**没给 `onCancel` 时不接管 Esc**（「只提交不取消」是合法形态）；
- *   3. **组字中的 Enter 不算提交**（中文输入法确认候选词，不是提交）；
- *   4. Shift+Enter 不算提交（换行）；
- *   5. 其它键一概不管（不误伤 Backspace / 方向键）；
- *   6. `role="button"` 那类 Space 键位**不在本出口的范围内**（它是 `<Button>` 的账）。
- */
+/** 「Enter 提交 / Esc 取消」的判据（规范 16 §16.2.4.29），与 `list-filter` 同族。全库 11 处各在 `onKeyDown` 里判键：
+ * Enter 要不要 `preventDefault`（6 处写了、5 处没写，没写的在 `<form>` 里会连带提交整页）；Esc 取消要不要复位草稿
+ *（3 处复位）。用例钉住：Enter 提交且必调 `preventDefault`；Esc 取消、没给 `onCancel` 则不接管；组字中的 Enter
+ * 不算提交（输入法确认候选词）；Shift+Enter 换行；其它键不管；`role="button"` 的 Space 不在本出口。 */
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

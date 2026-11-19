@@ -1,13 +1,9 @@
 // @vitest-environment jsdom
 // 「应用服务为什么断了」在 controller 层的取数契约（ISSUE #1692）。
-//
-// 这一层要锁住三件事，都是「读一次就够、读错就白读」的：
-//   ① 记录只在服务**成功应答之后**才去读（探活走的是刚死那个服务自己的 HTTP）；
-//   ② 每个 bootId 只读一次 —— 轮询 2s 一拍，不设这道闸等于每拍都打一次端点；
-//   ③ 只认「说的是上一次运行」的记录（runId 与当前进程相同的不显示）。
-//
-// 判据本身（成因文案、runId 对比）在 `~/lib/shell/app-service-exit` 的单测里，
-// 这里只验取数时机与去重。
+// 锁三件事：① 只在服务成功应答后才读记录（探活走刚死服务的 HTTP）；
+// ② 每个 bootId 只读一次（2s 轮询，不设闸等于每拍打一次端点）；
+// ③ 只认「说的是上一次运行」的记录（runId 与当前进程相同的不显示）。
+// 判据本身在 `~/lib/shell/app-service-exit` 单测，这里只验取数时机与去重。
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
@@ -15,9 +11,31 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import {
   DEV_SERVER_PROBE_MS,
   OFFLINE_CONFIRM_FAILURES,
+  PROBE_TIMEOUT_MS,
   probeGapMs,
   useDevServerLiveness,
 } from "./use-dev-server-liveness";
+
+import type * as ShellClient from "~/lib/shell/desktop-shell-client";
+
+/* 壳侧进程外信号（ISSUE #4146）的桩：默认 null（= 没有这条通道，退回纯 HTTP 判据），
+ * 双信号那组用例按需改写 answer。只替换这一个导出，其余走真实实现——
+ * `readAppServiceExitRecord` 在 jsdom（非壳）里本就回 null。 */
+const shellLiveness = vi.hoisted(() => ({
+  answer: null as boolean | null,
+  calls: 0,
+}));
+
+vi.mock("~/lib/shell/desktop-shell-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof ShellClient>();
+  return {
+    ...actual,
+    readAppServiceProcessAlive: vi.fn(() => {
+      shellLiveness.calls += 1;
+      return Promise.resolve(shellLiveness.answer);
+    }),
+  };
+});
 
 const EXIT_RECORD = {
   at: "2026-10-10T10:00:00.000Z",
@@ -52,7 +70,7 @@ function stubFetch({
   const calls = { serverId: 0, lastExit: 0 };
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
+    vi.fn((input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (url.includes("/api/dev/server-id")) {
         calls.serverId += 1;
@@ -149,7 +167,7 @@ describe("useDevServerLiveness：上一次结束的原因", () => {
   it("端点挂了不影响探活本身（探测那一格仍照常工作）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn((input: RequestInfo | URL) => {
         if (urlOf(input).includes("/api/dev/server-id")) {
           return new Response(JSON.stringify({ bootId: "b1" }), {
             status: 200,
@@ -182,7 +200,7 @@ describe("useDevServerLiveness：当前是哪一次启动（runId）", () => {
     let serverOk = true;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn((input: RequestInfo | URL) => {
         if (urlOf(input).includes("/api/dev/server-id")) {
           if (!serverOk) {
             throw new Error("probe timeout");
@@ -222,7 +240,7 @@ describe("useDevServerLiveness：单拍抖动不算断开", () => {
     let serverOk = true;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn((input: RequestInfo | URL) => {
         if (urlOf(input).includes("/api/dev/server-id")) {
           if (!serverOk) {
             throw new Error("probe timeout");
@@ -273,6 +291,94 @@ describe("useDevServerLiveness：单拍抖动不算断开", () => {
   });
 });
 
+describe("useDevServerLiveness：单拍探活超时（ISSUE #4140）", () => {
+  /* 现场：ComfyUI 同进程启动的 70s 重载窗口里，2.5s 单拍超时连续两拍失守
+   * （≈4.5s 无应答），把好好的服务翻成「已断开」。进程真死是立即拒连、不走
+   * 超时，所以放宽超时只放慢「活着一时答不上」那一档的判出，真实断开不变慢。 */
+  it("单拍超时是 5s：重载窗口的慢应答（≤5s）不再计为探测失败", () => {
+    expect(PROBE_TIMEOUT_MS).toBe(5000);
+  });
+});
+
+describe("useDevServerLiveness：双信号——失败时问壳进程还在吗（ISSUE #4146）", () => {
+  /** 探活一直失败的桩：server-id 抛错（超时形态），其余端点照常应答。 */
+  function stubFailingProbe() {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        if (urlOf(input).includes("/api/dev/server-id")) {
+          throw new Error("probe timeout");
+        }
+        return new Response(JSON.stringify({ record: null, currentRunId: null }), {
+          status: 200,
+        });
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    shellLiveness.answer = null;
+    shellLiveness.calls = 0;
+  });
+
+  it("探活失败时问壳，答案供成 processAlive（true = 进程还在）", async () => {
+    stubFailingProbe();
+    shellLiveness.answer = true;
+    const { result } = renderHook(() => useDevServerLiveness());
+    await expect.poll(() => result.current.processAlive).toBe(true);
+    expect(shellLiveness.calls).toBeGreaterThan(0);
+  });
+
+  it("壳说进程没了 → processAlive=false（真断开那一档）", async () => {
+    stubFailingProbe();
+    shellLiveness.answer = false;
+    const { result } = renderHook(() => useDevServerLiveness());
+    await expect.poll(() => result.current.processAlive).toBe(false);
+  });
+
+  it("壳也拿不到（null）→ processAlive 保持 null：判据退回纯 HTTP 行为", async () => {
+    stubFailingProbe();
+    const { result } = renderHook(() => useDevServerLiveness());
+    await expect.poll(() => shellLiveness.calls).toBeGreaterThan(0);
+    expect(result.current.processAlive).toBeNull();
+  });
+
+  it("探通即清回 null：旧答案不在下一轮判断里冒充现在的事实", async () => {
+    let serverOk = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        if (urlOf(input).includes("/api/dev/server-id")) {
+          if (!serverOk) {
+            throw new Error("probe timeout");
+          }
+          return new Response(JSON.stringify({ bootId: "b1" }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ record: null, currentRunId: null }), {
+          status: 200,
+        });
+      }),
+    );
+    shellLiveness.answer = true;
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useDevServerLiveness());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2100);
+      });
+      expect(result.current.processAlive).toBe(true);
+      serverOk = true;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2100);
+      });
+      expect(result.current.probeOk).toBe(true);
+      expect(result.current.processAlive).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("useDevServerLiveness：探活端点 404（陈旧路由表）", () => {
   /* 现场（ISSUE #1918）：Turbopack 会话级路由失效，页面本身还在被同一个进程
    * 正常渲染，而 `/api/dev/server-id` 返回 404。旧实现把任何非 2xx 都并进
@@ -281,7 +387,7 @@ describe("useDevServerLiveness：探活端点 404（陈旧路由表）", () => {
   function stubNotFound() {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn((input: RequestInfo | URL) => {
         if (urlOf(input).includes("/api/dev/server-id")) {
           return new Response("{}", { status: 404 });
         }
@@ -303,7 +409,7 @@ describe("useDevServerLiveness：探活端点 404（陈旧路由表）", () => {
     let notFound = true;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn((input: RequestInfo | URL) => {
         if (urlOf(input).includes("/api/dev/server-id")) {
           return notFound
             ? new Response("{}", { status: 404 })
@@ -322,7 +428,7 @@ describe("useDevServerLiveness：探活端点 404（陈旧路由表）", () => {
   it("网络层失败不设 routeTableStale（没拿到应答就谈不上「答的是 404」）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn((input: RequestInfo | URL) => {
         if (urlOf(input).includes("/api/dev/server-id")) {
           throw new Error("ECONNREFUSED");
         }

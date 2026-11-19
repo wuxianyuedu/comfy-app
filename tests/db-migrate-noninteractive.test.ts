@@ -1,33 +1,15 @@
-/**
- * 回归护栏：**`db:migrate` 在前提不成立时会留下 0 字节库**（ISSUE #1624）。
- *
- * 缺陷形态（实测，无 TTY）：`drizzle-kit migrate` 在 `drizzle/` 目录缺失时
- * **先建出库文件、再退 1** —— 于是 `db.sqlite` 是一个 0 字节的空壳。调用方拿到
- * 的是一个看起来像「迁移失败」的退出码 + 一个坏掉的库，而下一个动作（起应用）
- * 才炸成 `no such table`，那时已经看不出是谁干的。
- *
- * 这与 `tests/db-push-noninteractive.test.ts` 护的是**同一族**（ISSUE #489 的
- * 「报错 + 留空库」），只是 `push` 那条早就修了、`migrate` 这条路没有。
- *
- * 四条契约：
- *   1. `pnpm db:migrate` 走 `scripts/db-migrate.mjs`（不是裸 `drizzle-kit migrate`）；
- *   2. **前置判决**：没有迁移文件时，它在起 drizzle-kit **之前**就拦下 ——
- *      这才是「不留 0 字节库」的机制（事后复核只能发现，不能阻止）；
- *   3. 判定依据是**库里的真事实**（表数 + 账本条数），不是 drizzle-kit 的退出码；
- *   4. 真跑：前提不成立时非零退出，**且不产出 0 字节库**。
- *
- * 用例在**真仓库里跑**（不是搭一个沙箱检出）：被测脚本的顶层 import 会一路链到
- * `src/lib/process/executable-resolve.ts`，把那条链整棵拷进沙箱等于重造半个仓库，
- * 而那样测的就不再是「真仓库里的这条命令」了。前提用**真目录的移开/放回**控制，
- * 库路径用 `DATABASE_URL` 指到临时目录（与 `db-push-noninteractive.test.ts` 同法）。
- */
+/** 回归护栏：**`db:migrate` 在前提不成立时会留下 0 字节库**（ISSUE #1624）。实测（无 TTY）：
+ * `drizzle-kit migrate` 在 `drizzle/` 缺失时**先建库文件、再退 1** —— 调用方拿到「迁移失败」退出码
+ * + 0 字节空壳，直到起应用才炸 `no such table`（同族 ISSUE #489 的 push 已修、migrate 这条路没有）。
+ * 契约：走 `scripts/db/db-migrate.mjs`；在起 drizzle-kit **之前**拦下（事后复核只能发现、不能阻止）；
+ * 判据是库里的真事实（表数 + 账本条数）而非退出码。用例在真仓库跑，前提靠移开/放回真 `drizzle/`。 */
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveSqlitePath } from "../scripts/db-schema-state.mjs";
+import { resolveSqlitePath } from "../scripts/db/db-schema-state.mjs";
 import { acquireRepoDrizzle } from "./helpers/repo-drizzle-lock";
 
 let tmp: string;
@@ -56,15 +38,10 @@ function restoreMigrations(): void {
   moved = null;
 }
 
-/**
- * 整个文件持有真 `drizzle/` 的独占锁（`tests/helpers/repo-drizzle-lock.ts`）。
- *
- * 本文件判「前提不成立」的唯一造法就是**把真迁移目录挪开**，而
- * `tests/db-migrate-equivalence.test.ts`（两次真起 `db-migrate`）与下面「绝对库真的落表」
- * 那一档都**要靠它在场**。两个文件在不同 worker 里并行时，实测红法是：
- * 等价性那份**一条断言都没红**、整个文件在 `beforeAll` 里挂，话术写着「没有可应用的迁移」。
- * 锁按文件粒度取（不是每条用例一次）：等待只可能发生一次，而 `hookTimeout` 是 45s，
- * 对面那份文件实测要 ~80s —— 按用例取锁会先把钩子自己顶穿。
+/** 整个文件持有真 `drizzle/` 的独占锁（`tests/helpers/repo-drizzle-lock.ts`）。本文件造「前提不成立」
+ * 只能把真目录挪开，而 `db-migrate-equivalence.test.ts` 与下面「绝对库真的落表」都要它在场；并行时实测
+ * 红法：等价性那份一条断言都没红、整个文件在 `beforeAll` 挂，话术写着「没有可应用的迁移」。锁按文件取
+ * （不是每条用例）：等待只可能发生一次，而 `hookTimeout` 45s、对面实测 ~80s，按用例取会顶穿钩子。
  */
 beforeAll(async () => {
   releaseDrizzle = await acquireRepoDrizzle("db-migrate-noninteractive");
@@ -89,7 +66,7 @@ afterEach(() => {
 function runMigrate(databaseUrl = `file:${dbFile}`, extraArgs: Array<string> = []) {
   return spawnSync(
     process.execPath,
-    [path.join(process.cwd(), "scripts", "db-migrate.mjs"), ...extraArgs],
+    [path.join(process.cwd(), "scripts", "db/db-migrate.mjs"), ...extraArgs],
     {
       cwd: process.cwd(),
       encoding: "utf8",
@@ -100,19 +77,54 @@ function runMigrate(databaseUrl = `file:${dbFile}`, extraArgs: Array<string> = [
   );
 }
 
+/** package.json 的 scripts 段：`JSON.parse` 的 any 用运行时守卫收窄（B5 清账，不走 `as` 断言）。 */
+function packageScripts(): Record<string, string> {
+  const parsed: unknown = JSON.parse(
+    fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+  );
+  if (typeof parsed !== "object" || parsed === null || !("scripts" in parsed)) {
+    throw new Error("package.json 形状不对（缺 scripts）");
+  }
+  const scripts: unknown = parsed.scripts;
+  if (typeof scripts !== "object" || scripts === null) {
+    throw new Error("package.json 形状不对（scripts 不是对象）");
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(scripts)) {
+    if (typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/** drizzle.config 的默认导出类型不展开 `dbCredentials`：运行时守卫取值
+ * （B5 清账，不走 `as` 断言 —— 那会同时吃 no-unsafe-assignment/member-access）。 */
+function drizzleConfigUrl(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || !("default" in value)) {
+    return undefined;
+  }
+  const config: unknown = value.default;
+  if (typeof config !== "object" || config === null || !("dbCredentials" in config)) {
+    return undefined;
+  }
+  const credentials: unknown = config.dbCredentials;
+  if (typeof credentials !== "object" || credentials === null || !("url" in credentials)) {
+    return undefined;
+  }
+  return credentials.url;
+}
+
 describe("pnpm db:migrate 非交互可用", () => {
-  it("package.json 的 db:migrate 经 scripts/db-migrate.mjs，而不是裸 drizzle-kit migrate", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
+  it("package.json 的 db:migrate 经 scripts/db/db-migrate.mjs，而不是裸 drizzle-kit migrate", () => {
+    const scripts = packageScripts();
     // 裸 `drizzle-kit migrate` 在前提不成立时「先建库、再退 1、留空壳」（实测）。
-    expect(pkg.scripts["db:migrate"]).toBe("node scripts/db-migrate.mjs");
-    expect(pkg.scripts["db:migrate"]).not.toContain("drizzle-kit");
+    expect(scripts["db:migrate"]).toBe("node scripts/db/db-migrate.mjs");
+    expect(scripts["db:migrate"]).not.toContain("drizzle-kit");
   });
 
   it("判定依据是库里的真事实（表数 + 账本），不是 drizzle-kit 的退出码", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db-migrate.mjs"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db/db-migrate.mjs"), "utf8");
     expect(src).toContain("countUserTables");
     expect(src).toContain("appliedMigrations");
     // 退出码在这条链路上不可信（实测：先建 0 字节库、再退 1），源码里必须写明。
@@ -120,7 +132,7 @@ describe("pnpm db:migrate 非交互可用", () => {
   });
 
   it("前置判决按 .sql 筛，而不是「目录在不在」", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db-migrate.mjs"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db/db-migrate.mjs"), "utf8");
     // 「目录在、但一份迁移都没有」与「目录不在」是同样建不出库的现场，
     // 判据只认前者的话会漏过去。
     expect(src).toContain('.endsWith(".sql")');
@@ -128,21 +140,11 @@ describe("pnpm db:migrate 非交互可用", () => {
   });
 });
 
-/**
- * 参数契约（ISSUE #2096）：认不出的旗标**不许**被吞掉之后照旧落库。
- *
- * 立案实测（修之前）：这个入口一句 `argv` 都不读，于是
- * `node scripts/db-migrate.mjs --dry-run` 被当成「没有参数的那一次调用」照跑 ——
- * 临时库里建出 23 张表、`__drizzle_migrations` 记上 1/1，**退出码 0**。
- *
- * ⚠️ 这一档刻意**不挪开**真 `drizzle/`（与上面那档相反）：判的正是
- * 「迁移文件在场、写库那条路是活的」那一形 —— 拿「前提不成立」的早退来当
- * 「它没写库」的证据，会把这条缺陷读成不存在。
- *
- * 断言的重心是**库里的事实**（库文件没被建出来），不是话术里有没有那两个字：
- * 「打印了拒绝的话」与「没动库」是两件事，后者才是这条链要的（同
- * `tests/db-push-noninteractive.test.ts` 的 #1956 那一条）。
- */
+/** 参数契约（ISSUE #2096）：认不出的旗标**不许**被吞掉之后照旧落库。修之前这个入口一句 `argv` 都不读，
+ * `node scripts/db/db-migrate.mjs --dry-run` 被当成无参调用照跑 —— 临时库建 23 张表、`__drizzle_migrations`
+ * 记 1/1、退出码 0。⚠️ 这一档刻意**不挪开**真 `drizzle/`（与上面相反）：判的正是「迁移文件在场、写库
+ * 那条路是活的」，拿「前提不成立」的早退当「它没写库」的证据会把缺陷读成不存在。断言重心是库里的事实
+ * （库文件没被建出来），不是话术里有没有那两个字。 */
 describe("参数契约：未知旗标拦下，且一个字节都不写", () => {
   it("`--dry-run` ⇒ 非零退出，库文件**根本没被创建**", () => {
     const r = runMigrate(`file:${dbFile}`, ["--dry-run"]);
@@ -189,26 +191,11 @@ describe("前提不成立时：非零退出，且不产出 0 字节库", () => {
   }, 150_000);
 });
 
-/**
- * 库地址那一档（同一批实测里挖出来的，比「留 0 字节库」更隐蔽）。
- *
- * `drizzle.config.ts` 原先无条件 `.replace(/^file:/, "")`，注释写着「drizzle-kit
- * 需要纯路径」。实测它是**错的**：drizzle-kit@0.31.11 的 sqlite 驱动就是
- * `@libsql/client`（`connectToSQLite` → `createClient` → `expandConfig`），而 libsql
- * 把裸字符串按 URL 解析 —— 绝对 Windows 地址 `C:\...\db.sqlite` 被读成
- * scheme="C:"，当场 `URL_SCHEME_NOT_SUPPORTED`；**并且它报错后仍然 exit 0**
- * （实测两档都 0），于是这条链路上「静默没建表」只由查库复核抓到。
- *
- * 长期没暴露的原因：日常 `.env` 是 `file:./db.sqlite`，剥完是 `./db.sqlite`，
- * 里面没有冒号。而运行期装配的地址（`launcher-core/standalone-runtime-env.mjs`）
- * 与本文件的临时库地址都是**绝对**形式 —— 正是被剥坏的那一档。
- *
- * 三档各判一件事，缺一档就退回原来的形状：
- *   1. 地址形状（与机器无关）：五种 `DATABASE_URL` 形态都不许退化成裸盘符，
- *      且剥完前缀必须落回 `resolveSqlitePath` 说的同一个文件；
- *   2. 真跑：绝对临时库 + 真 `drizzle/` 必须**真的建出表**（修之前这条恒红）；
- *   3. 失败话术：非零那一支要把 drizzle 自己的话带出来，「输出见上」不算原因。
- */
+/** 库地址那一档（同一批实测挖出，比「留 0 字节库」更隐蔽）：`drizzle.config.ts` 原先无条件剥 `file:`，
+ * 但 drizzle-kit@0.31.11 的 sqlite 驱动是 `@libsql/client`，libsql 把裸串按 URL 解析 —— 绝对 Windows
+ * 路径 `C:\...\db.sqlite` 读成 scheme="C:" 当场 `URL_SCHEME_NOT_SUPPORTED`，且**报错后仍然 exit 0**。
+ * 日常 `.env` 是 `file:./db.sqlite`（剥完无冒号）才长期没暴露；运行期装配的地址与本文件临时库都是绝对形式。
+ * 三档：① 五种形态不许退化成裸盘符且剥完落回 `resolveSqlitePath`；② 绝对库真建表；③ 失败话术带原话。 */
 describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一份", () => {
   /** 数一遍临时库里的用户表（读不到就返回 -1，让断言自己说清是哪种缺件）。 */
   function countTables(file: string): number {
@@ -251,11 +238,8 @@ describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一�
         /* 配置在 **import 时**读环境变量，所以每一档都要重新求值模块，
          * 否则第一档的常量会被 module 缓存带到后面四档去（那是自证式的假绿）。 */
         vi.resetModules();
-        /* SAFETY: 类型断言已复核 */
-        const imported = (await import("../drizzle.config")) as {
-          default?: { dbCredentials?: { url?: string } };
-        };
-        const url = imported.default?.dbCredentials?.url;
+        // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
+        const url = drizzleConfigUrl(await import("../drizzle.config"));
         if (typeof url !== "string" || url === "") {
           problems.push(`DATABASE_URL="${value}" → 配置里拿不到 dbCredentials.url`);
           continue;
@@ -317,4 +301,32 @@ describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一�
       `失败话术里那一段必须是内容而不是一句标题：\n${r.stderr}`,
     ).toBeGreaterThan(1);
   }, 300_000);
+});
+
+/** push 管的既有检出（ISSUE #3665）：账本恒空、但结构已与 schema.ts 收敛。 */
+describe("push 管的检出：账本空但 schema 已收敛", () => {
+  it("不再报「迁移没应用全、别直接起应用」，按读数返回并可直接起应用", () => {
+    // 先用 db:push 建出与当前 schema 一致、且已登记指纹的库（push 管的检出形态）。
+    const push = spawnSync(
+      process.execPath,
+      [path.join(process.cwd(), "scripts", "db/db-push.mjs")],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 300_000,
+      },
+    );
+    expect(push.status, `${push.stdout}\n${push.stderr}`).toBe(0);
+
+    // 此时 __drizzle_migrations 为空（push 不写账），但 schema 已收敛；
+    // 再跑 migrate 不应误报「半途状态、别直接起应用」。
+    const r = runMigrate();
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    expect(r.stdout).toContain("本检出的库由 `pnpm db:push` 管理");
+    expect(r.stdout).toContain("迁移账本为空、结构已收敛，可直接起应用");
+    expect(r.stderr).not.toContain("迁移没应用全");
+    expect(r.stderr).not.toContain("别直接起应用");
+  }, 600_000);
 });

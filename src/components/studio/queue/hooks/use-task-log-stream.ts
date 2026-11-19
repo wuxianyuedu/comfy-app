@@ -1,24 +1,16 @@
 "use client";
 
-// ── 队列页「执行日志」弹窗的数据源（第②层，视图零 IO）──────────────────
-//
-// 包一层 `watchTask`（`~/lib/workshop/generation-client` 的 SSE 订阅）：打开即
-// 订阅 `/api/tasks/:id/stream`，服务端先回放全量历史（内存 → DB `task.logs`），
-// 再按 3s 增量推送 —— 所以对**任何** taskId 都成立：在跑的实时跟，排队的看着
-// 它开跑，已结束的历史任务打开就能回放完整日志。
-//
-// 为什么不让视图自己订阅：§17 UI/逻辑分离 —— 网络与生命周期收在 hook，
-// 视图只收 { logs, settled, started } 渲染。
-//
-// 与 workflow-run-store 的关系：那套 store 按 workflowId 登记「画布节点 / 工坊
-// 封装」两条链路的运行，队列页的任务不在登记表里（也拿不到 workflowId）；
-// 这里走 taskId 直连，日志只在本弹窗生命周期内累积，不写穿 localStorage。
+// ── 队列页「执行日志」弹窗数据源（第②层，视图零 IO）──
+// 包一层 watchTask（~/lib/workshop/generation-client 的 SSE）：打开即订阅 /api/tasks/:id/stream，
+// 服务端先回放全量历史（内存 → DB task.logs），再按 3s 增量推送 —— 对任何 taskId 都成立。
+// 视图不自己订阅（§17 UI/逻辑分离），只收 { logs, settled, started }。
+// 与 workflow-run-store 的关系：那套按 workflowId 登记画布节点/工坊链路，队列任务不在登记表（拿不到 workflowId）；这里 taskId 直连、日志只在弹窗生命周期累积，不写 localStorage。
 
 import { useEffect, useRef, useState } from "react";
 
 import { watchTask, type TaskLogEntry } from "~/lib/workshop/generation-client";
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
-import { tailWindowAppend } from "~/lib/page-window";
+import { tailWindowAppendUnique } from "~/lib/page-window";
 
 /** 弹窗内存里最多留多少条：与 `LOG_MODAL_MAX_ROWS` 的展示上限同源，
  * 累积侧先截，长任务（几千条 progress 行）也不会把 state 撑大。 */
@@ -70,7 +62,11 @@ export function useTaskLogStream(taskId: string | null): TaskLogStreamState {
         if (stoppedRef.current) {
           return;
         }
-        setLogs((prev) => tailWindowAppend(prev, entry, STREAM_MAX_LOGS));
+        /* 全窗去重（ISSUE #3896）：SSE 重连会把全量历史从头回放，不丢重复帧
+         * 的话弹窗时间线出现成片重复、尾窗被重复行占满。 */
+        setLogs((prev) =>
+          tailWindowAppendUnique(prev, entry, STREAM_MAX_LOGS, (e) => `${e.t}|${e.msg}`),
+        );
       },
       onProgress: () => {
         if (stoppedRef.current) {

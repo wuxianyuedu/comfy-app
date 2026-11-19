@@ -1,16 +1,7 @@
 /**
- * 「按环境跳过的那一组，得说得出**为什么**」判据的自测（ISSUE #2316）。
- *
- * 判据本体是 `scripts/check-skip-probe-readings.mjs`：凡是「这台机器上没有某个工具 ⇒
- * 这一组跳过」的站点，都必须把**逐候选的读数**打出来。没有那一行，下一次只能看到一片
- * `skipped`，说不出「安静地跳过了」还是「安静地判错了」—— 而两种的下一动作完全不同
- * （去装 / 改探测）。
- *
- * 这一份钉三件事：**该拦的拦**（有站点没读数）、**该放的放**（有站点有读数 / 压根没有
- * 站点）、以及**判据不是空转**（扫描面里真有两个站点 —— 零站点时它已经什么都不保了，
- * 那正是它自己报的那一句）。
- *
- * ⚠️ 用 `defineGateRepo`（§11.16.1）：临时仓库样板只有一份实现，别在这儿手搓第二份。
+ * 「按环境跳过的一组要说出为什么」判据自测（ISSUE #2316）。本体 `scripts/gates/check-skip-probe-readings.mjs`：凡「本机没某工具
+ * ⇒ 这组跳过」的站点必须打出逐候选读数，否则下次只看到 `skipped`，分不清「安静跳过」与「安静判错」（下一动作不同）。
+ * 本份钉：该拦的拦、该放的放、扫描面真有两个站点（零站点即失保）。⚠️ 用 `defineGateRepo`（§11.16.1），别手搓第二份。
  */
 import { execFileSync } from "node:child_process";
 import path from "node:path";
@@ -18,14 +9,14 @@ import path from "node:path";
 import { defineGateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-skip-probe-readings.mjs",
+  script: "gates/check-skip-probe-readings.mjs",
   workdir: "skip-probe-readings",
   /* 两个扫描根都要在：判据把「扫描根不存在」判成**故障**（不是「没有站点」）——
    * 那是它自己的地板口径（读不到输入 ≠ 没有问题），所以沙箱得把空目录建出来。 */
   dirs: ["src", "tests"],
   /* 共享读取器（`walkForScan` / `readForScan`）必须一起带进沙箱：少带时判据在临时
    * 仓库里直接 `ERR_MODULE_NOT_FOUND`，用例读到的是「门禁坏了」而不是「夹具缺一块」。 */
-  copy: [{ from: "scripts/gate-scan-read.cjs", to: "scripts/gate-scan-read.cjs" }],
+  copy: [{ from: "scripts/gates/gate-scan-read.cjs", to: "scripts/gates/gate-scan-read.cjs" }],
 });
 
 /** 一个最小测试文件：`probe` 处填探测站点的写法（空串 = 没有站点）。 */
@@ -83,7 +74,7 @@ test("本仓库的扫描面里真有两个探测站点（这两格是登记过�
    * 它确实读到了那两个站点 —— 否则「[ok] N 个」那一行是空的，什么都没保住。 */
   const out = execFileSync(
     process.execPath,
-    [path.join(process.cwd(), "scripts", "check-skip-probe-readings.mjs")],
+    [path.join(process.cwd(), "scripts", "gates/check-skip-probe-readings.mjs")],
     { cwd: process.cwd(), encoding: "utf8" },
   );
   expect(out).toMatch(/\[ok\] [1-9]\d* 个/);

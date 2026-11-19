@@ -1,18 +1,7 @@
 /**
- * 构建缓存槽的判据（ISSUE #2158）。
- *
- * 这一档要钉住的是**机制的四条边界**，不是「省了多少秒」：
- *  ① **四道门分得开** —— 开关没开 / 槽根算不出 / 面算不出 / 工作区里已有缓存 /
- *    空间不够，是五件不同的事，合成一档之后日志上那句「不接槽」就说不清是哪一种；
- *  ② **面指纹不含源码** —— 源码变了指纹必须不变（变了就等于每次提交都丢缓存，
- *    这份机制的收益整个吃掉；而 Turbopack 自己按内容失效，实测过）；
- *  ③ **摘链不许穿链** —— 收尾时删掉的是「链接本身」，常驻目录里的东西必须还在
- *    （穿链删 = 一次构建把常驻缓存整个删掉）；
- *  ④ **失败即退回** —— 开关关着时，这一跑与「没有这个机制」逐字相同。
- *
- * 头注里那三跑读数（冷 95s / 暖 14.9s / 暖+改源码 14.8s）是**实测**，不是引用 ——
- * 但它是**性能**事实，不是一条会过期的门槛：这里判的是**形状**（接不接、接在哪、
- * 收尾收不干净），性能那部分归文档与那条读数。
+ * 构建缓存槽判据（#2158）：钉机制形状而非省多少秒 —— ①几道门分得开（没开 / 槽根算不出 / 面算不出 / 已有缓存 / 空间不够）；
+ * ②面指纹不含源码（源码变了必须不变，否则每次提交丢缓存）；③摘链不穿链（删链接本身，常驻目录必须还在，否则一次构建删光）；
+ * ④开关关着时与「没有这机制」逐字相同。头注 95s / 14.9s 是实测性能读数，不参与判形状。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -28,21 +17,15 @@ import {
   linkBuildCache,
   planBuildCache,
   withBuildCacheSlot,
-} from "../scripts/ci-build-cache-slot.mjs";
-import {
-  CACHE_ROOT_ENV,
-  resolveBuildCacheRoot,
-  resolveCacheRoot,
-} from "../scripts/ci-cache-slot.mjs";
+} from "../scripts/ci/ci-build-cache-slot.mjs";
+import { resolveBuildCacheRoot } from "../scripts/ci/ci-cache-slot.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const FACE = "a".repeat(64);
 
 /**
- * 临时目录（真实文件系统 —— 「链接摘掉之后目标还在」那一档造不出夹具）。
- *
- * 落在**仓库所在卷**上：槽根那一侧有「同卷」的推导，而 `os.tmpdir()` 在 C:、
- * 本仓在 G: —— 拿 tmp 当槽根会让「同卷」那一档永远测不到。
+ * 临时目录（真实文件系统 —— 「摘链后目标还在」那一档造不出夹具）。必须落在仓库所在卷：槽根有「同卷」推导，
+ * `os.tmpdir()` 在 C:、本仓在 G:，拿 tmp 当槽根会让「同卷」那一档永远测不到。
  */
 const made: Array<string> = [];
 const slotRoots: Array<string> = [];
@@ -286,27 +269,14 @@ describe("槽根：与依赖面那套槽同源、不同目录", () => {
   const store = path.join(path.parse(ROOT).root, ".pnpm-store", "v11");
   const run = () => ({ status: 0, stdout: `${store}\\n` });
 
-  it("两者同卷、不同目录（混在一个根下时依赖面那侧的淘汰会删掉这边在用的目录）", () => {
-    const deps = resolveCacheRoot({ cwd: ROOT, env: {}, run });
+  it("构建缓存槽的根带自己的目录名（与成品 / 工具两套根互不相扰）", () => {
     const build = resolveBuildCacheRoot({ cwd: ROOT, env: {}, run });
-    expect(deps.root).not.toBeNull();
     expect(build.root).not.toBeNull();
-    expect(path.parse(String(build.root)).root).toBe(path.parse(String(deps.root)).root);
-    expect(String(build.root)).not.toBe(String(deps.root));
     expect(String(build.root)).toContain("ci-build-cache");
   });
 
-  it("显式出口只覆盖依赖面那套槽（构建缓存槽不跟着它搬走 —— 它的语义是「那个槽根」）", () => {
-    const env = { [CACHE_ROOT_ENV]: "H:/somewhere" };
-    expect(resolveCacheRoot({ cwd: ROOT, env, run }).root).toBe("H:/somewhere");
-    const build = resolveBuildCacheRoot({ cwd: ROOT, env, run });
-    expect(build.root).toBeNull();
-    expect(build.from).toContain(CACHE_ROOT_ENV);
-  });
-
-  it("问不出 store ⇒ 两边都答「不猜路径」（宁可不省，也不猜一个卷）", () => {
+  it("问不出 store ⇒ 答「不猜路径」（宁可不省，也不猜一个卷）", () => {
     const noStore = () => ({ status: 1, stdout: "" });
     expect(resolveBuildCacheRoot({ cwd: ROOT, env: {}, run: noStore }).root).toBeNull();
-    expect(resolveCacheRoot({ cwd: ROOT, env: {}, run: noStore }).root).toBeNull();
   });
 });

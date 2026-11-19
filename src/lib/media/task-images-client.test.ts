@@ -5,14 +5,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fetchTaskImages } from "./task-images-client";
 
-const taskDetailQuery = vi.fn();
+const taskDetailQuery = vi.fn<(args: { id: string }) => Promise<unknown>>();
 
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     task: {
       detail: {
-        /* SAFETY: 类型断言已复核 */
-        query: (...args: Array<unknown>) => taskDetailQuery(...args) as never,
+        query: (args: { id: string }): Promise<unknown> => taskDetailQuery(args),
       },
     },
   },

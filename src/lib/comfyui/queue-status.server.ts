@@ -72,8 +72,9 @@ async function describeRunning(): Promise<ComfyRunningTask | null> {
    * 内存版的旧行为一致，不是新缺口。 */
   const node =
     /* SAFETY: 类型断言已复核 */
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    row.progressNode != null && typeof row.progressNode === "object"
+    row.progressNode !== null &&
+    row.progressNode !== undefined &&
+    typeof row.progressNode === "object"
       ? (row.progressNode as {
           classType?: unknown;
         })

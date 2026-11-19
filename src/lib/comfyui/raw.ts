@@ -37,11 +37,15 @@ import { comfyBase } from "./client";
  * 这里只留兼容再导出（本模块的 `asRecord` 有三个既有 import 点）。 */
 export { asRecord } from "~/lib/is-record";
 
+/** 根是普通对象且 `nodes` 为数组时收窄成 RawWorkflow（其余字段读取点自行守卫）。 */
+function isRawWorkflow(v: unknown): v is RawWorkflow {
+  return isPlainRecord(v) && Array.isArray(v.nodes);
+}
+
 /** DB Json 列 / JSON.parse 产物 → RawWorkflow 视图。根不是普通对象时返回
  *  null（下游均有 `Array.isArray(raw.nodes)` 类守卫，路径与旧代码等价）。 */
 export function asRawWorkflow(v: unknown): RawWorkflow | null {
-  /* SAFETY: 类型断言已复核 */
-  return isPlainRecord(v) ? (v as RawWorkflow) : null;
+  return isRawWorkflow(v) ? v : null;
 }
 
 /** `String(v)` 的类型收窄等价：值全部来自 JSON 反序列化产物（无 symbol /
@@ -228,7 +232,6 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
     return out;
   }
   for (const n of raw.nodes) {
-    // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 nodes 数组元素运行期可能为 null，保留防御判空
     if (n && Array.isArray(n.pos) && n.pos.length >= 2) {
       const id = String(n.id);
       out[id] = [Number(n.pos[0]) || 0, Number(n.pos[1]) || 0];
@@ -249,7 +252,6 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
   const subs = raw.definitions?.subgraphs;
   if (subs && typeof subs === "object") {
     for (const wrapper of raw.nodes) {
-      // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 nodes 数组元素运行期可能为 null，保留防御判空
       if (!wrapper || typeof wrapper.type !== "string") {
         continue;
       }
@@ -269,7 +271,6 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
         continue;
       }
       for (const inner of innerNodes) {
-        // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的子图内部 nodes 数组元素运行期可能为 null，保留防御判空
         if (inner && Array.isArray(inner.pos) && inner.pos.length >= 2) {
           const iId = String(inner.id);
           out[`${wId}:${iId}`] = [Number(inner.pos[0]) || 0, Number(inner.pos[1]) || 0];
@@ -363,13 +364,24 @@ let _objectInfoCache: { at: number; data: ObjectInfo } | null = null;
  *  导致打开工作流 / 展开子工作流在 ComfyUI 未启动时反复拖慢 20s。
  *  失败后 30s 内直接返回 null，让慢请求只发生一次。 */
 let _objectInfoFailedAt = 0;
-export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
+/** 在途去重（ISSUE #3876）：缓存过期瞬间的并发请求（tRPC 批处理正是这个
+ *  形态）共享同一次拉取，不再各自发起 20s 上限的 ~4.7MB 全量下载。 */
+let _objectInfoInflight: Promise<ObjectInfo | null> | null = null;
+
+export function fetchObjectInfo(): Promise<ObjectInfo | null> {
   if (_objectInfoCache && Date.now() - _objectInfoCache.at < 5 * 60_000) {
-    return _objectInfoCache.data;
+    return Promise.resolve(_objectInfoCache.data);
   }
   if (_objectInfoFailedAt && Date.now() - _objectInfoFailedAt < 30_000) {
-    return null;
+    return Promise.resolve(null);
   }
+  _objectInfoInflight ??= fetchObjectInfoOnce().finally(() => {
+    _objectInfoInflight = null;
+  });
+  return _objectInfoInflight;
+}
+
+async function fetchObjectInfoOnce(): Promise<ObjectInfo | null> {
   try {
     const res = await fetch(`${comfyBase()}/api/object_info`, {
       /* ComfyUI 序列化完整 object_info（~4.7MB）在
@@ -380,6 +392,9 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
       signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) {
+      /* 非 2xx 与网络失败同口径进负缓存（ISSUE #3876）：ComfyUI 启动窗口期
+       * 的 503 也会被 30s 防抖挡住，紧随的每个请求不再各自白等。 */
+      _objectInfoFailedAt = Date.now();
       return null;
     }
     const parsed = ObjectInfoEnvelopeSchema.safeParse(await res.json());
@@ -404,7 +419,7 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
  * 连接类型（MODEL、LATENT、IMAGE、CONDITIONING、CLIP …）排除在外，
  * 因为它们来自 `links`，而不是 `widgets_values`。 */
 const CONNECTION_TYPE_RE =
-  /^(MODEL|LATENT|IMAGE|IMAGE_TENSOR|MASK|CONDITIONING|CLIP|CLIP_VISION|CLIP_VISION_OUTPUT|VAE|MODEL_PATCH|GLIGEN|UPSCALE_MODEL|STYLE_MODEL|CONTROL_NET|SIGMAS|NOISE|SAMPLER|MASKED_IMAGE|IMAGE_3D|MESH|VOXEL|MESH_HOLDER|LATENT_3D|LOAD_3D|LATENT_4D|AUDIO|VIDEO|INT_ARRAY|FLOAT_ARRAY|STRING_ARRAY|TRANSFORMERS_MODEL_TENSOR|MT5|MT5_MODEL|CLIP_MODEL|UNET|UNET_TIMESTEP_EMBEDDING)$/i;
+  /^(?:MODEL|LATENT|IMAGE|IMAGE_TENSOR|MASK|CONDITIONING|CLIP|CLIP_VISION|CLIP_VISION_OUTPUT|VAE|MODEL_PATCH|GLIGEN|UPSCALE_MODEL|STYLE_MODEL|CONTROL_NET|SIGMAS|NOISE|SAMPLER|MASKED_IMAGE|IMAGE_3D|MESH|VOXEL|MESH_HOLDER|LATENT_3D|LOAD_3D|LATENT_4D|AUDIO|VIDEO|INT_ARRAY|FLOAT_ARRAY|STRING_ARRAY|TRANSFORMERS_MODEL_TENSOR|MT5|MT5_MODEL|CLIP_MODEL|UNET|UNET_TIMESTEP_EMBEDDING)$/i;
 
 /**
  * ComfyUI 前端会在 seed 类 INT 控件后面**自动插入**一个 `control_after_generate`
@@ -423,7 +438,7 @@ function hasControlAfterGenerate(
   if (type !== "INT") {
     return false;
   }
-  return SEED_WIDGET_NAMES.has(name) || options?.control_after_generate === true;
+  return SEED_WIDGET_NAMES.has(name) || options.control_after_generate === true;
 }
 
 /**
@@ -468,6 +483,46 @@ export function pairWidgetValues(
   });
   return map;
 }
+
+/* 拿不到 /object_info 时，给常见节点类用的控件映射兜底表。
+ * 这里的顺序只按「控件输入」的显示顺序排（不含连接），
+ * 与 `widgets_values` 在磁盘上的序列化顺序一致。 */
+const FALLBACK_WIDGETS: Record<string, Array<string>> = {
+  KSampler: ["seed", CONTROL_SENTINEL, "steps", "cfg", "sampler_name", "scheduler", "denoise"],
+  KSamplerAdvanced: [
+    "add_noise",
+    "noise_seed",
+    CONTROL_SENTINEL,
+    "steps",
+    "cfg",
+    "sampler_name",
+    "scheduler",
+    "start_at_step",
+    "end_at_step",
+    "return_with_leftover_noise",
+  ],
+  CLIPTextEncode: ["text"],
+  CheckpointLoaderSimple: ["ckpt_name"],
+  LoraLoader: ["lora_name", "strength_model", "strength_clip"],
+  LoraLoaderModelOnly: ["lora_name", "strength_model"],
+  EmptyLatentImage: ["width", "height", "batch_size"],
+  EmptySD3LatentImage: ["width", "height", "batch_size"],
+  VAEEncode: [],
+  VAEDecode: [],
+  SaveImage: ["filename_prefix"],
+  SaveImageAdvanced: ["filename_prefix", "output_type"],
+  PreviewImage: [],
+  LoadImage: ["image"],
+  ImageScale: ["width", "height", "upscale_method", "crop"],
+  ImageScaleBy: ["scale_by", "upscale_method"],
+  VAELoader: ["vae_name"],
+  CLIPSetLastLayer: ["stop_at_clip_layer"],
+  CLIPVisionLoader: ["clip_name"],
+  DualCLIPLoader: ["clip_name1", "clip_name2", "type", "device"],
+  UNETLoader: ["unet_name", "weight_dtype"],
+  ControlNetLoader: ["control_net_name"],
+  UpscaleModelLoader: ["upscale_model_name"],
+};
 
 /** 画布 raw_inputs 配对用的「classType → 控件名顺序表」。
  *
@@ -550,7 +605,7 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): Array<string> 
       return;
     }
     // forceInput 的标量输入被渲染成插槽，同样不占 widgets_values 的位置。
-    if (options?.forceInput === true) {
+    if (options.forceInput === true) {
       return;
     }
     out.push(name);
@@ -568,43 +623,3 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): Array<string> 
   }
   return out;
 }
-
-/* 拿不到 /object_info 时，给常见节点类用的控件映射兜底表。
- * 这里的顺序只按「控件输入」的显示顺序排（不含连接），
- * 与 `widgets_values` 在磁盘上的序列化顺序一致。 */
-const FALLBACK_WIDGETS: Record<string, Array<string>> = {
-  KSampler: ["seed", CONTROL_SENTINEL, "steps", "cfg", "sampler_name", "scheduler", "denoise"],
-  KSamplerAdvanced: [
-    "add_noise",
-    "noise_seed",
-    CONTROL_SENTINEL,
-    "steps",
-    "cfg",
-    "sampler_name",
-    "scheduler",
-    "start_at_step",
-    "end_at_step",
-    "return_with_leftover_noise",
-  ],
-  CLIPTextEncode: ["text"],
-  CheckpointLoaderSimple: ["ckpt_name"],
-  LoraLoader: ["lora_name", "strength_model", "strength_clip"],
-  LoraLoaderModelOnly: ["lora_name", "strength_model"],
-  EmptyLatentImage: ["width", "height", "batch_size"],
-  EmptySD3LatentImage: ["width", "height", "batch_size"],
-  VAEEncode: [],
-  VAEDecode: [],
-  SaveImage: ["filename_prefix"],
-  SaveImageAdvanced: ["filename_prefix", "output_type"],
-  PreviewImage: [],
-  LoadImage: ["image"],
-  ImageScale: ["width", "height", "upscale_method", "crop"],
-  ImageScaleBy: ["scale_by", "upscale_method"],
-  VAELoader: ["vae_name"],
-  CLIPSetLastLayer: ["stop_at_clip_layer"],
-  CLIPVisionLoader: ["clip_name"],
-  DualCLIPLoader: ["clip_name1", "clip_name2", "type", "device"],
-  UNETLoader: ["unet_name", "weight_dtype"],
-  ControlNetLoader: ["control_net_name"],
-  UpscaleModelLoader: ["upscale_model_name"],
-};

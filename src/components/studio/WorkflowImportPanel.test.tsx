@@ -18,10 +18,9 @@ const RAW_WF = { nodes: [{ id: 3, type: "KSampler", pos: [10, 20] }] };
 const FILE_LABEL = "选择工作流 JSON 文件";
 
 /** 面板只消费 hook 返回的 state，所以让真 hook 跑起来、只把 mutation 换成假的。 */
-/* SAFETY: 类型断言已复核 */
-const createMut = {
-  mutateAsync: vi.fn(),
-} as unknown as UseWorkflowImportArgs["createMut"];
+const createMut: UseWorkflowImportArgs["createMut"] = {
+  mutateAsync: vi.fn<UseWorkflowImportArgs["createMut"]["mutateAsync"]>(),
+};
 
 function Harness() {
   const state = useWorkflowImport({ createMut, load: () => undefined });
@@ -32,7 +31,7 @@ function Harness() {
 function jsonFile(name: string, content: unknown): File {
   const text = JSON.stringify(content);
   const file = new File([text], name, { type: "application/json" });
-  Object.defineProperty(file, "text", { value: async () => text });
+  Object.defineProperty(file, "text", { value: () => text });
   return file;
 }
 
@@ -62,8 +61,10 @@ describe("导入面板的文件入口", () => {
   });
 
   it("把文件拖到面板上同样能导入", async () => {
-    const { container } = render(<Harness />);
-    const panel = container.firstElementChild;
+    render(<Harness />);
+    /* 模态化后（ISSUE #3759），投放处理挂在弹窗内容卡上 —— 取 aria-label
+     * 那一层的第一个子元素来投放。 */
+    const panel = screen.getByLabelText("导入 ComfyUI 工作流").firstElementChild;
     expect(panel).not.toBeNull();
 
     fireEvent.drop(panel!, {

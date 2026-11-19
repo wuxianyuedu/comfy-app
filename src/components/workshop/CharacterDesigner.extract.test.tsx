@@ -1,11 +1,8 @@
 //
 // 回归测试 ISSUE #202 问题1：从剧本「提取/导入」角色卡成功后，并入结果必须
-// 经 onCharactersChange 回写到父级状态，否则卡片不出现在下方列表中。
-// 根因：handleExtract / handleImportFile 调用了 mergeCharacterDrafts 却从未把
-// 返回的 res.list 通过 onCharactersChange 上抛，导致提取"成功"但列表不刷新。
-//
-// 提取通道只剩本地 / 远端模型（「工具」确定性解析已移除），故这里 mock 掉
-// `~/lib/llm/browser` 的 streamChat，让它返回一段角色卡 JSON，验证并入回写。
+// 经 onCharactersChange 回写到父级状态，否则卡片不出现在下方列表中（根因：
+// handleExtract / handleImportFile 从未把 mergeCharacterDrafts 的 res.list 上抛）。
+// mock `~/lib/llm/browser` 的 streamChat 返回一段角色卡 JSON，验证并入回写。
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { CharacterDesigner } from "~/components/workshop/CharacterDesigner";
@@ -37,7 +34,7 @@ vi.mock("~/components/workshop/LLMContext", () => ({
 }));
 
 vi.mock("~/lib/llm/browser", () => ({
-  streamChat: vi.fn(async () => {
+  streamChat: vi.fn(() => {
     return JSON.stringify([{ name: "小满", appearance: "短黑发,清秀,白色连衣裙" }]);
   }),
 }));
@@ -55,7 +52,7 @@ afterEach(() => {
 
 describe("CharacterDesigner 提取后回写角色列表", () => {
   it("模型通道提取成功后将并入的角色写入 onCharactersChange", async () => {
-    const onCharactersChange = vi.fn();
+    const onCharactersChange = vi.fn<(c: Array<Character>) => void>();
     render(
       <CharacterDesigner
         characters={[]}
@@ -75,11 +72,10 @@ describe("CharacterDesigner 提取后回写角色列表", () => {
        给不出区分。 */
     await expect.poll(() => onCharactersChange.mock.calls.length).toBe(1);
 
-    /* SAFETY: 类型断言已复核 */
-    const listArg = onCharactersChange.mock.calls[0]?.[0] as Array<Character> | undefined;
+    const listArg = onCharactersChange.mock.calls[0]?.[0];
     expect(listArg).toBeDefined();
     const first = listArg?.[0];
     expect(first).toBeDefined();
-    expect(first!.name).toBe("小满");
+    expect(first?.name).toBe("小满");
   });
 });

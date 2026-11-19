@@ -1,13 +1,11 @@
 /**
- * run-tests.mjs 的名称过滤读数（ISSUE #2400）。
- *
- * vitest 对「-t 一条都没命中」退 0 —— 与真绿在退出码上逐字同形，一次敲错的用例名
- * 换来一次无可指摘的绿。入口为此把那一次跑与 junit 配对，读出「执行了几条」：
- * 这里钉住两个纯函数的形状（识别过滤器、从 junit 算执行数）。
+ * run-tests.mjs 名称过滤读数（ISSUE #2400）：vitest 对「-t 一条都没命中」退 0，与真绿在退出码上逐字同形 ——
+ * 敲错用例名就换来一次无可指摘的绿。入口因此把该次跑与 junit 配对读出执行条数；
+ * 这里钉住两个纯函数（识别过滤器、从 junit 算执行数）。
  */
 import { describe, expect, it } from "vitest";
 
-import { hasNameFilter, junitExecutedCount } from "../scripts/run-tests.mjs";
+import { hasNameFilter, junitExecutedCount } from "../scripts/affected-tests/run-tests.mjs";
 
 describe("hasNameFilter：识别透传参数里的名称过滤", () => {
   it("四种形状都认：-t <pat> / -t=<pat> / --testNamePattern <pat> / --testNamePattern=pat", () => {

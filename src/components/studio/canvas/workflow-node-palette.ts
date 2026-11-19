@@ -7,19 +7,10 @@ const BYPASS_COLOR = "#ec4899";
 const DISABLED_COLOR = "#6b7280";
 
 /**
- * 节点卡片的表面颜色。这些值原来是写死的深色 hex
- *（卡片体 `#16161E` / 头部 `#1A1A22` / 边框 `rgba(255,255,255,0.20)` /
- * 标题 `#E2E2EA`），导致浅色下卡片依然是近黑 —— 下面算出的着色是**叠在**
- * 底色之上的，深底色加角色色调读出来仍是深色卡片。把底色交给主题，
- * 整张卡片在两种模式下才都诚实。
- *
- * 取值与画布其它地方用的语义 token 对应：
- *   卡片体 → `--color-node`
- *   头部   → `--color-node-accent`
- *   边框   → `--color-border-strong`
- *   标题   → `--color-ink-bright`
- *   圆点   → `--color-ink-muted`
- */
+ * 节点卡片表面颜色。原值写死为深色 hex（体 #16161E / 头 #1A1A22 / 边框 rgba(255,255,255,.2) / 标题 #E2E2EA），
+ * 浅色下仍是近黑卡片 —— 着色叠在底色上，深底加角色色调仍读作深色。
+ * 取值对应语义 token：体 --color-node、头 --color-node-accent、边框 --color-border-strong、
+ * 标题 --color-ink-bright、圆点 --color-ink-muted。 */
 export type NodePaletteBase = {
   body: string;
   borderFallback: string;
@@ -62,12 +53,8 @@ export type NodePalette = {
 };
 
 /**
- * 节点模式（LiteGraph 0=始终 / 2=不静音 / 4=旁路）会覆盖角色色调，
- * 让用户一眼读出 ComfyUI 状态：旁路 → 粉，静音 → 灰，正常 → 角色色 / 默认色。
- * 返回整张卡片的配色。
- *
- * `base` 携带主题的表面颜色（见 `NodePaletteBase`）；着色代数不变，
- * 只是把底色从常量挪到了调用方，浅色 / 深色各自从正确的表面出发。
+ * 节点模式（LiteGraph 0 始终 / 2 静音 / 4 旁路）覆盖角色色调：旁路→粉、静音→灰、正常→角色/默认色。
+ * 返回整张卡片配色；`base` 携带主题表面颜色，着色代数不变，只把底色从常量挪到调用方。
  */
 export function computeNodePalette(
   data: WorkflowNodeData,
@@ -109,11 +96,9 @@ export function computeNodePalette(
 }
 
 /**
- * 折叠态锚点「圆柱」—— 节点折叠时替换端口堆的那个装饰性 6px 药丸。
- * 它原来是一段写死的深色渐变（`#d4d4d8 → #52525b → #18181b` + 45% 白
- * 边框），即「深底上的浅圆柱」。同样的值放到浅色下就成了**白底上的白边框**
- *（`rgba(255,255,255,0.45)` 叠在浅色画布上）—— 锚点直接看不见。把色标
- * 交给主题，药丸在两种模式下都读得出来，与 `--color-port-surface` 同一判断。
+ * 折叠态锚点「圆柱」—— 折叠时替换端口堆的 6px 装饰药丸。
+ * 原为写死深色渐变（#d4d4d8→#52525b→#18181b + 45% 白边框），浅色下成了白底白边框、锚点看不见。
+ * 色标交给主题后两种模式都可读，与 --color-port-surface 同一判断。
  */
 export type AnchorCylinderTheme = {
   border: string;

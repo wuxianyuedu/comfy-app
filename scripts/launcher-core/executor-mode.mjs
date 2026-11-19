@@ -24,7 +24,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { parseEnvFile } from "../env-preflight.mjs";
+import { parseEnvFile } from "../devtools/env-preflight.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 

@@ -1,30 +1,15 @@
 /**
- * 回归护栏：`pnpm` 工具链门禁的**可用性判据**与可行动提示（ISSUE #576）。
- *
- * 用户现场（Windows，`F:\AI\Other\Comfy-APP-T3`）：
- *
- *   dev-launcher-stderr.log 为空
- *   dev-launcher-stdout: [ERROR] pnpm 工具链不可用（exit=?）：未知错误
- *   疑似 corepack 切换版本时本地缓存损坏。
- *   修复：corepack enable && corepack prepare pnpm@<项目版本> --activate，再重启应用。
- *
- * 三个观测点指向同一个根因，但当时被读成了「缓存损坏」：
- *   ① `exit=?` + **stdout/stderr 全空** ⇒ `spawnSync` 的 `probe.error.code` 才是原因
- *      （命令压根没起来），旧实现只用 `probe.status ?? "?"` 表达，所有失败塌成一句；
- *   ② 「stderr 空」与真·corepack 缓存损坏（会在 stderr 打印
- *      `Failed to switch pnpm to ...`）恰好相反 —— 后者有输出；
- *   ③ 提示里的版本号是 `<项目版本>` 占位符。
- *
- * 本组用例钉死三条契约（反向验证：还原旧实现，对应用例必失败）：
- *   · `whichCommand` 不会选中「存在但跑不起来」的候选（含 PATHEXT 顺序与回退）；
- *   · 探测结果区分「命令起不来」与「命令报错退出」，并把 `error.code` 带出来；
- *   · 修复提示里的版本号解析自 `package.json`，且**修完必须复核**（不看 prepare 退出码）。
+ * 回归护栏：`pnpm` 工具链门禁的可用性判据与可行动提示（ISSUE #576）。现场 `exit=?` + 输出全空 ⇒ 真因是 `probe.error.code`（命令没起来），
+ * 旧实现用 `probe.status ?? "?"` 塌成一句；「stderr 空」恰与 corepack 缓存损坏（会打印 `Failed to switch pnpm to …`）相反，提示版本只是占位符。
+ * 钉三条契约：不选「存在但跑不起来」的候选（含 PATHEXT 顺序与回退）、区分起不来与非零退出并带出 `error.code`、修复版本取自 `package.json` 且修完必须复核。
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 import { launcherChainSource } from "./helpers/launcher-source";
 import { stripComments } from "./helpers/strip-comments";
@@ -52,7 +37,6 @@ const judgedCode = (text: string): string => stripComments(text, { trailing: tru
 const needsPosixExec = it.skipIf(process.platform === "win32");
 
 import {
-  clearWhichCommandCache,
   commandInvocation,
   executableExts,
   executableKind,
@@ -60,7 +44,7 @@ import {
   usableCommand,
   whichCommand,
 } from "../scripts/launcher-core/shell.mjs";
-import { pnpmCli } from "../scripts/ci-install-deps.mjs";
+import { pnpmCli } from "../scripts/ci/ci-install-deps.mjs";
 import {
   buildTip,
   clearPnpmProbeCache,
@@ -78,9 +62,9 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "toolchain-gate-"));
-  // `whichCommand` 与 `probePnpm` 都有进程内记忆化，而本文件的用例会在**同一个
-  // tmp 路径**上覆写重造 pnpm 形态 —— 每个用例先清缓存，避免读到上一个用例的旧结论。
-  clearWhichCommandCache();
+  // `probePnpm` 有进程内记忆化，而本文件的用例会在**同一个 tmp 路径**上覆写重造
+  // pnpm 形态 —— 每个用例先清它，避免读到上一个用例的旧结论。
+  // （`whichCommand` 不再记忆化，每次都重新解析，ISSUE #3327。）
   clearPnpmProbeCache();
 });
 
@@ -177,19 +161,9 @@ describe("可执行形态的候选顺序（executableExts）", () => {
   });
 
   /**
-   * `.PS1` **不看 `PATHEXT`**（ISSUE #1961）。
-   *
-   * 这条此前是**反向**的 —— 老用例断言 `.PS1` 必须「没声明就不出现」，而
-   * Windows 系统的默认 `PATHEXT`（`.COM;.EXE;.BAT;.CMD;.VBS;…`）**从不含 `.PS1`**
-   * （PowerShell 脚本不在「cmd.exe 敲名字就会跑」的那一类里）。于是：
-   *
-   *   · corepack 摆在 `.tools\pnpm\<ver>\bin` 的三个形态里，只有 `.ps1` 能被 Node 起；
-   *   · 候选表里却没有它 ⇒ `whichCommand()` 一个都选不出 ⇒ 返回 `null`
-   *     ⇒ 上层报「PATH 上没有任何可用的 pnpm 形态」，而能跑的那个就在旁边。
-   *
-   * 现场（自托管 Windows 节点，流水线第 1 步）：
-   *   `== pnpm ==` → `(pnpm 不可用)`，而同一台机器上 `pnpm install` 跑得好好的
-   *   —— 整条流水线停在一个**不成立的结论**上。
+   * `.PS1` **不看 `PATHEXT`**（ISSUE #1961）。此前判据是反向的：老用例断言没声明就不出现，而 Windows 默认
+   * `PATHEXT`（`.COM;.EXE;.BAT;.CMD;…`）从不含 `.PS1`。corepack 摆的三个形态里只有 `.ps1` 能被 Node 起，候选表却没有它
+   * ⇒ `whichCommand()` 一个都选不出 ⇒ 上层报「PATH 上没有可用 pnpm 形态」，而能跑的就在旁边（现场流水线停在不成立的结论上）。
    */
   it("`.PS1` 无条件在候选里 —— 默认 PATHEXT 从不声明它，由它决定就是永远选不出来", () => {
     // Windows 的默认 PATHEXT（实测形态：没有 .PS1）。
@@ -214,26 +188,15 @@ describe("可执行形态的候选顺序（executableExts）", () => {
 });
 
 /**
- * `.PS1` 是候选里的一员 —— 这一格此前**没有任何判据**（ISSUE #1961）。
- *
- * `executableExts` 那份候选表在 `PATHEXT` 不含 `.PS1` 时**根本不摆出 `pnpm.ps1`**，
- * 而 Windows 默认的 `PATHEXT` 从不含它。于是「`.ps1` 回退」那条判据虽然齐备，
- * 却只在「先撞上 `.CMD`」的路径上被走到过 —— **直接摆着一个 `pnpm.ps1` 的目录**
- * （corepack 装出来的形态）在修复前一个候选都命中不了。
- *
- * 现场代价：自托管 Windows 节点上 `pnpmInvocation()` 返回 `null`，工具链自证
- * 报「pnpm 不可用」，整条流水线第 1 秒就停 —— 而那台机器上 `pnpm install`
- * 本来跑得好好的（一条不成立的结论比没有结论更贵）。
+ * `.PS1` 是候选里的一员 —— 这一格此前**没有任何判据**（ISSUE #1961）：`executableExts` 在 `PATHEXT` 不含 `.PS1` 时根本不摆出
+ * `pnpm.ps1`，于是「`.ps1` 回退」只在「先撞上 `.CMD`」的路径上被走到；直接摆一个 `pnpm.ps1` 的目录（corepack 装出来的形态）
+ * 修复前一个候选都命中不了。代价：`pnpmInvocation()` 返回 `null`，自证报「pnpm 不可用」，流水线第 1 秒就停。
  */
 describe("`.PS1` 是候选（Windows 默认 PATHEXT 不含它，ISSUE #1961）", () => {
   /**
-   * 只摆一个 `pnpm.PS1`（无扩展名 shim 与 `.CMD` 都不在）的目录。
-   *
-   * **文件名写大写**是刻意的：候选是按 `PATHEXT` 的写法拼的（`.PS1`），而判据
-   * 走到「这个文件在不在盘上」这一步。Windows 的 NTFS 不敏感、大小写随便写都命中；
-   * 而 CI 跑在 POSIX 上，那里 `pnpm.ps1` 与 `pnpm.PS1` 是**两个不同的文件** ——
-   * 写小写会让这条用例在 Linux 上恒假（判的是宿主的大小写敏感，不是被测逻辑）。
-   * 现场那台 Windows 节点上两者等价，所以这里按判据拼出来的形态造。
+   * 只摆一个 `pnpm.PS1`（无扩展名 shim 与 `.CMD` 都不在）的目录。**大写**是刻意的：候选按 `PATHEXT` 的写法拼
+   * （`.PS1`），判据走到「这个文件在不在盘上」。NTFS 不敏感、大小写随便写都命中；CI 跑在 POSIX，那里
+   * `pnpm.ps1` 与 `pnpm.PS1` 是两个文件 —— 写小写会让这条用例在 Linux 上恒假（判的是宿主的大小写敏感）。
    */
   const ps1OnlyDir = () => {
     const dir = path.join(tmp, "ps1-only");
@@ -253,7 +216,6 @@ describe("`.PS1` 是候选（Windows 默认 PATHEXT 不含它，ISSUE #1961）",
       PATH: `${dir}${path.delimiter}${hostDir}`,
       PATHEXT: ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC",
     };
-    clearWhichCommandCache();
     /* 反向验证：把 `executableExts` 里那句 `.PS1` 无条件放行去掉，这一格立刻
      * 从 `pnpm.ps1` 变回 `null` —— 这正是修复前的实测读数。 */
     const found = whichCommand("pnpm", {
@@ -274,12 +236,9 @@ describe("`.PS1` 是候选（Windows 默认 PATHEXT 不含它，ISSUE #1961）",
   });
 
   /**
-   * 反向：`.ps1` 被摆上 PATH 时，**没有宿主就不能算「可用」**。
-   *
-   * 这一格判的是「`.PS1` 进候选表」之后必须同批补上的另一半：只让它被找到、
-   * 却给出一个 `prefixArgs: []` 的形态，等于把缺陷从「找不到」挪成
-   * 「找到了但起不来」—— 后者更贵（上层会拿着它去 spawn，然后拿到一个
-   * 说不清成因的失败）。`.
+   * 反向：`.ps1` 被摆上 PATH 时，**没有宿主就不能算「可用」**。这一格判的是「`.PS1` 进候选表」之后必须同批补上的
+   * 另一半：只让它被找到、却给出 `prefixArgs: []` 的形态，等于把缺陷从「找不到」挪成「找到了但起不来」——
+   * 后者更贵（上层拿着它去 spawn，然后拿到一个说不清成因的失败）。
    */
   it("`.ps1` 的形态是「宿主 + `-File`」，不是把 `.ps1` 自己当可执行文件", () => {
     const dir = ps1OnlyDir();
@@ -296,7 +255,6 @@ describe("`.PS1` 是候选（Windows 默认 PATHEXT 不含它，ISSUE #1961）",
 
   it("POSIX 上同一条判据不生效（`.PS1` 不是那儿的形态）", () => {
     const dir = ps1OnlyDir();
-    clearWhichCommandCache();
     expect(
       whichCommand("pnpm", {
         env: { PATH: dir },
@@ -567,13 +525,21 @@ describe("编排器与启动页的接线契约", () => {
     expect(launcher).toContain("gated.error.staleShell");
   });
 
-  it("起 dev server 用同一个命令形态（commandInvocation），不自己拼可执行名", () => {
-    expect(launcher).toContain("commandInvocation(candidate");
+  it("起 dev server 直启 dev.mjs（与 beforeDevCommand 同形），不经 pnpm 包装（ISSUE #4155）", () => {
+    /* 链拼接源里 `spawnDevServer` 有两处：dev-launcher.mjs 的同名薄包装（先出现）与
+     * downstream.mjs 的真实现 —— 判据只看真实现那一段，从**最后一次**出现切起。 */
     const spawnDev = launcher.slice(
-      launcher.indexOf("export function spawnDevServer"),
+      launcher.lastIndexOf("export function spawnDevServer"),
       launcher.indexOf("async function concludeDownstreamExit"),
     );
-    expect(spawnDev).toContain("...invocation.prefixArgs");
+    // 编排器与 `tauri.conf.json` 的 beforeDevCommand 统一成同一形态：
+    // `node scripts/dev.mjs`（process.execPath 直启），server 链不付 pnpm shim 冷启。
+    expect(spawnDev, "以 process.execPath 直启").toContain("process.execPath");
+    expect(spawnDev, "入口必须是 scripts/dev.mjs").toContain('"scripts", "dev.mjs"');
+    // pnpm shim 不在 server 链上：旧的那套形态选择（whichCommand → commandInvocation）不应再出现
+    expect(spawnDev, "server 链不得再经 commandInvocation 起 pnpm").not.toContain(
+      "commandInvocation",
+    );
   });
 
   it("启动页横幅按换行原样渲染（修复动作不能被压成一行）", () => {
@@ -581,13 +547,15 @@ describe("编排器与启动页的接线契约", () => {
   });
 
   it("自查入口是跨平台薄壳，且登记在 package.json 与 §9.5 对照表", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    expect(pkg.scripts["check:toolchain"]).toBe("node scripts/check-pnpm-available.mjs");
+    /* scripts 按字段读（B5 清账）：那一格缺了 / 不是串就给空串，让 toBe 自己红。 */
+    const pkg: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const scripts: unknown = isRecord(pkg) ? pkg.scripts : {};
+    const entry: unknown = isRecord(scripts) ? scripts["check:toolchain"] : undefined;
+    expect(typeof entry === "string" ? entry : "").toBe(
+      "node scripts/gates/check-pnpm-available.mjs",
+    );
     const selfCheck = fs.readFileSync(
-      path.join(ROOT, "scripts", "check-pnpm-available.mjs"),
+      path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs"),
       "utf8",
     );
     // 薄壳：判据只能来自 corepack.mjs，不重写一遍探测。
@@ -602,14 +570,9 @@ describe("编排器与启动页的接线契约", () => {
 });
 
 /**
- * 在「这一跑确定拿得到 pnpm」的环境里起自查脚本（ISSUE #2281）。
- *
- * 为什么要它：这几条用例判的是**自查脚本自己的结论**，而它们此前直接继承宿主的环境。
- * 平台侧那台机是**服务账号会话**，PATH 里没有 pnpm —— 于是「当前环境 pnpm 可用」
- * 这条前提在 CI 上不成立，八条用例一起变成「红在宿主」而不是「红在判据」。
- * 这里用**同一条发现逻辑**（`pnpmCli()`，与产品代码共用一个实现）把落点补进 PATH；
- * 真的哪儿都没有时**返回 null**，用例据此跳过并把原因说出来 —— 那仍然是「没量到」，
- * 不许读成「判据过了」。
+ * 在「这一跑确定拿得到 pnpm」的环境里起自查脚本（ISSUE #2281）。它判的是**自查脚本自己的结论**，而此前用例直接继承
+ * 宿主环境——平台侧那台机是服务账号会话、PATH 里没有 pnpm，前提在 CI 上不成立，八条用例一起红在宿主。这里用同一条发现
+ * 逻辑（`pnpmCli()`，与产品代码共用）把落点补进 PATH；真找不到时返回 `null`，用例据此跳过并说出原因 —— 那仍是「没量到」。
  */
 function envWithPnpm() {
   const cli = pnpmCli({ write: () => undefined });
@@ -630,7 +593,7 @@ describe("pnpm check:toolchain 真跑", () => {
   runIfPnpm("当前环境（pnpm 可用）退出 0 并报告版本", () => {
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       {
         encoding: "utf8",
         env: env ?? process.env,
@@ -643,7 +606,7 @@ describe("pnpm check:toolchain 真跑", () => {
   runIfPnpm("依赖已装时，结论里点名 tsc / eslint / vitest 都能跑（不是只报「已装」）", () => {
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       { encoding: "utf8", env: env ?? process.env },
     );
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);
@@ -653,22 +616,16 @@ describe("pnpm check:toolchain 真跑", () => {
   });
 
   /**
-   * 「无 node_modules」这一分支的措辞就是判据（ISSUE #1568）。
-   *
-   * 现场：有人在无依赖容器里读了旧版这一分支的一句 WARN + `pnpm install`，
-   * 得出的结论是「本机跑不了 tsc / eslint / vitest」，跳过三条门禁、把这句话写进
-   * 提交信息 —— 25 条类型错因此落进 `master`。所以这一分支必须正面回答
-   * 「能装 / 装多久 / 装完能跑什么」，并点名「不得据此跳过门禁」。
-   *
-   * `--deps-root` 只换依赖检查的根（不换工具链探测的根，否则会报一个与本检出无关的
-   * pnpm 版本 —— 见脚本里的注释）；给一个空目录即可复现「没装依赖」。
+   * 「无 node_modules」这一分支的措辞就是判据（ISSUE #1568）。现场：有人在无依赖容器里读旧版一句 WARN + `pnpm install`，
+   * 得出「本机跑不了 tsc/eslint/vitest」，跳过三条门禁并写进提交信息 —— 25 条类型错因此落进 `master`。故它必须正面回答
+   * 「能装 / 装多久 / 装完能跑什么」并点名「不得据此跳过门禁」；`--deps-root` 只换依赖检查根，给空目录即可复现。
    */
   runIfPnpm("依赖未装时：说清「能装 / 装多久 / 装完能跑什么」，并点名禁止据此跳过门禁", () => {
     const emptyRoot = path.join(tmp, "no-deps");
     fs.mkdirSync(emptyRoot, { recursive: true });
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "--deps-root", emptyRoot],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs"), "--deps-root", emptyRoot],
       { encoding: "utf8", env: env ?? process.env },
     );
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
@@ -686,7 +643,10 @@ describe("pnpm check:toolchain 真跑", () => {
   });
 
   it("依赖判据与启动器同一个实现（不在自检里留一份弱化副本）", () => {
-    const src = fs.readFileSync(path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "utf8");
+    const src = fs.readFileSync(
+      path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs"),
+      "utf8",
+    );
     // 两份口径并存时「自检说已装、启动器说残缺」是必然的，且会各自漂移：
     // 旧版这里只查 `.modules.yaml` 一项，而启动器查 .bin/next + 关键依赖目录。
     expect(src).toContain("checkNodeModules");
@@ -698,7 +658,7 @@ describe("pnpm check:toolchain 真跑", () => {
   it("pnpm 不可用时非零退出，并给出含版本号的修复命令", () => {
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       {
         encoding: "utf8",
         env: { ...process.env, PATH: tmp, PATHEXT: "" },
@@ -718,7 +678,7 @@ describe("pnpm check:toolchain 真跑", () => {
     fs.mkdirSync(badPath, { recursive: true });
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       {
         encoding: "utf8",
         env: { ...process.env, PATH: badPath, PATHEXT: "" },
@@ -733,15 +693,11 @@ describe("pnpm check:toolchain 真跑", () => {
   });
 });
 
-/** 版本不一致时，自查入口必须与启动器同一条口径：**先对齐、复核通过才算一致**。
+/** 版本不一致时，自查入口必须与启动器同一条口径：**先对齐、复核通过才算一致**（ISSUE #576 第三轮）。
  *
- *  用户现场（ISSUE #576 第三轮）：`pnpm check:toolchain` 只报一句
- *  `[WARN] 版本与 package.json 要求不一致（本机 10.34.5，要求 12.4.1）`
- *  就结束了 —— 而真启动时启动器**自己就会 corepack 对齐**（`reconcilePnpmVersion()`
- *  → `preparePnpm()` + 复核），`prepare-local-run.ps1` 第 3 步也早已这么做。
- *  于是自检看起来像「排查完了、没办法」，用户只能手动跑 corepack；更糟的是
- *  脚本还以 0 退出、不提示其实还有一道「node_modules 未装」的门禁在等着。
- */
+ *  用户现场：`pnpm check:toolchain` 只报一句 `[WARN] 版本与 package.json 要求不一致（本机 10.34.5，要求 12.4.1）`
+ *  就结束，而真启动时启动器自己会 corepack 对齐（`reconcilePnpmVersion()` → `preparePnpm()` + 复核），
+ *  `prepare-local-run.ps1` 第 3 步早已如此；脚本还以 0 退出，不提示后面还有「node_modules 未装」门禁。 */
 describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口径", () => {
   /** 造一个能跑的 POSIX pnpm + corepack：corepack prepare 会把「激活状态」落盘，
    *  pnpm 据此报告不同版本（对齐成功 / 失败的两种现场都靠它模拟）。 */
@@ -780,7 +736,7 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
   function runSelfCheck(bin: string) {
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       { encoding: "utf8", env: { ...process.env, PATH: bin, PATHEXT: "" } },
     );
     return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
@@ -818,20 +774,11 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
   );
 });
 
-/** 自检要把「探到的是哪个 pnpm」打印清楚（ISSUE #576 第四轮）。
- *
- *  用户现场（Windows）：
- *    $ pnpm --version           → 12.4.1
- *    $ pnpm check:toolchain     → [OK] pnpm 可用：10.34.5（C:\Program Files\PowerShell\7\pwsh.EXE）
- *
- *  「本机 10.34.5」与「终端里 12.4.1」并不矛盾：终端敲的 `pnpm` 与 Node 探测到的
- *  **不是同一个文件**。corepack 的 `.ps1` 形态必须经宿主执行，所以命令名打印出来
- *  是 `pwsh.EXE`；而 PATH 上并存多个 pnpm 时，被选中的那个又是另一个版本。
- *  旧文案只给「版本号 + 命令名」，这个现场看起来就无解（ISSUE #576 第四轮）。
- *
- *  契约：① 打印**选中的文件**（PATH 上命中的那个）；② 经宿主执行时额外打印
- *  「宿主 → 真实文件」；③ 版本漂移的提示把方向指向「选中的 pnpm」。
- */
+/** 自检要把「探到的是哪个 pnpm」打印清楚（ISSUE #576 第四轮）：现场 `pnpm --version` → 12.4.1，而
+ *  `pnpm check:toolchain` → `[OK] pnpm 可用：10.34.5（C:\…\pwsh.EXE）`。终端敲的 `pnpm` 与 Node 探到的**不是同一个
+ *  文件**（corepack 的 `.ps1` 须经宿主执行，故命令名是 `pwsh.EXE`）；PATH 并存多个时选中者又是另一个版本。
+ *  旧文案只给「版本号 + 命令名」，现场看起来就无解。契约：① 打印选中的文件；② 经宿主执行额外打印「宿主 →
+ *  真实文件」；③ 版本漂移提示把方向指向「选中的 pnpm」。 */
 describe("pnpm check:toolchain：打印探测身份，版本漂移可自解释", () => {
   it("经宿主执行时，选中的文件与真实命名的区别可被解释（`.ps1` → 宿主）", () => {
     const dir = makeInstalledPnpmDir({ cmd: false });
@@ -846,19 +793,20 @@ describe("pnpm check:toolchain：打印探测身份，版本漂移可自解释",
     const host = path.join(hostDir, "pwsh.EXE");
     // 经宿主时命令名会变成宿主（现场里那句 `（…\pwsh.EXE）` 就是这么来的）——
     // 自检据此把「命令是 pwsh.EXE」译回「它跑的是哪个 .ps1」。
-    if (invocation.command === host) {
-      expect(invocation.prefixArgs).toContain(script);
-    } else {
-      // 机器上 `.ps1` 被当成可直接执行（POSIX 的 shebang 语义）时退化为原样调用：
-      // 那也满足「命令名可解释」，只是无需再打印宿主一行。
-      expect(invocation.command).toBe(script);
-    }
+    // 两条解释都满足「命令名可解释」：经宿主时脚本进 prefixArgs；机器上 `.ps1`
+    // 可直接执行（POSIX shebang 语义）时退化为原样调用。分支收进期望值，
+    // 断言本体无条件跑（no-conditional-expect）。
+    expect(
+      invocation.command === host
+        ? invocation.prefixArgs.includes(script)
+        : invocation.command === script,
+    ).toBe(true);
   });
 
   (envWithPnpm() ? it : it.skip)("自检打印「选中的 pnpm」一行（版本漂移的先查对象）", () => {
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       {
         encoding: "utf8",
         env: envWithPnpm() ?? process.env,
@@ -870,23 +818,9 @@ describe("pnpm check:toolchain：打印探测身份，版本漂移可自解释",
 });
 
 /**
- * 回归护栏：**任何**由 Node 去 spawn pnpm 的地方都走同一条形态判据（ISSUE #576）。
- *
- * 现场：双击 `start-tauri.exe`，启动页报「应用启动失败：启动进程 dev-launcher.mjs
- * 提前退出（exit=1）」，日志里 `dev server 已启动（PID …）` 之后**两秒**就
- * `dev server 自身退出（exit=0）`，`最近 stdout` 只有一行 `[dev.mjs] COMFYAPP_PORT=…`，
- * stderr 全空 —— 用户「看不出哪里有问题」。
- *
- * 根因在**内层**：`scripts/dev.mjs` 写死 `spawnSync("pnpm.cmd", …)`。Windows 上
- * 批处理只有 cmd.exe 会解释，Node 起它会失败（EINVAL/EACCES），于是
- * `result.status === null`，而旧代码 `process.exit(result.status ?? 0)` 把它读成
- * **成功退出 0** —— dev server 静默消失、Next 一行输出都没有。
- * 这正是 `whichCommand()` / `commandInvocation()` 早已解决的同一坑
- * （见 §2.1.1），只是「起服务的那一层」没复用同一个判据。
- *
- * 契约（反向验证：把 `pnpmInvocation` 换回写死 `pnpm.cmd`，对应用例必失败）：
- *   · 形态判据只有一个出口（`shell.mjs` 的 `pnpmInvocation`），内层脚本不许自己拼；
- *   · 「命令没起来」必须与非零退出分开报，绝不塌成 `?? 0`。
+ * 回归护栏：**任何**由 Node 去 spawn pnpm 的地方都走同一条形态判据（ISSUE #576）。现场双击 `start-tauri.exe` 报「dev-launcher.mjs
+ * 提前退出（exit=1）」，两秒后 `dev server 自身退出（exit=0）`、stderr 全空。根因在 `scripts/dev.mjs` 写死 `spawnSync("pnpm.cmd", …)`：
+ * Windows 上批处理只有 cmd.exe 会解释，`result.status === null` 被旧代码 `?? 0` 读成成功退出。契约：唯一出口 `pnpmInvocation`、命令没起来必须分开报。
  */
 describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）", () => {
   it("pnpmInvocation 与 whichCommand + commandInvocation 结果一致", () => {
@@ -901,23 +835,11 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     const args = ["exec", "next", "dev", "--turbo", "-p", "3734"];
     const inv = pnpmInvocation(args, { env, platform: "win32" });
     expect(inv, "PATH 上有可用形态时必须给出调用方式").not.toBeNull();
-    /* **不钉「选中了哪一个文件」**，只钉「选中的是那个目录里真有的形态、且经宿主起」。
-     *
-     * 原先这里写死 `candidate === pnpm.CMD`，而那条断言**只在 POSIX 上成立**
-     * （平台侧第十一跑实测：Windows 上这条红）—— 因为
-     * `executableExts()` 把 `.PS1` 改成**无条件进候选**之后（ISSUE #1961），
-     * 顺序成了 `"" → .EXE → .PS1 → .CMD`，而 **Windows 的查找不区分大小写**：
-     * 目录里那个 `pnpm.ps1` 会被 `pnpm.PS1` 这个候选命中，于是轮不到 `.CMD`
-     * （`.CMD` 只在 `.ps1` 不在时才被选中、再由它走同胞回退）。
-     *
-     * 两条路**最终落在同一处**（经 PowerShell 宿主起，见下面那两条断言），
-     * 差别只是「先命中的是哪一个文件」。写死一侧就是这个文件反复踩过的形态 ——
-     * 把「跑判据那台宿主的样子」写成了恒真性质。
-     *
-     * **按大小写不敏感比**：`whichCommand()` 交出来的是拿 `PATHEXT` 的写法拼出来的
-     * 候选（`.PS1`），只在 Windows 上才由 `onDiskName()` 回写成盘上的实际写法 ——
-     * 直接 `toContain` 大小写敏感的那两种拼法，等于又留了一格「宿主/盘上怎么写」
-     * 决定结论的断言，而那正是这条用例刚被修掉的形状。 */
+    /* **不钉「选中了哪一个文件」**，只钉「选中的是那个目录里真有的形态、且经宿主起」。原先写死 `candidate === pnpm.CMD`
+     * 只在 POSIX 成立（Windows 实测红）：`.PS1` 无条件进候选后（ISSUE #1961）顺序成 `"" → .EXE → .PS1 → .CMD`，而
+     * Windows 查找不分大小写，目录里的 `pnpm.ps1` 会被 `pnpm.PS1` 命中。两条路最终同落 PowerShell 宿主，差别只是
+     * 先命中哪个文件；**按大小写不敏感比**是因为 `whichCommand()` 交出的是按 `PATHEXT` 拼的候选、只在 Windows 上由
+     * `onDiskName()` 回写实际写法，直接 `toContain` 等于又留一格「盘上怎么写决定结论」的断言。 */
     const selected = inv!.candidate.toLowerCase();
     expect(
       [path.join(dir, "pnpm.CMD"), path.join(dir, "pnpm.ps1")].map((p) => p.toLowerCase()),
@@ -952,33 +874,26 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     expect(inv!.command).toBe(path.join(dir, "pnpm"));
   });
 
-  it("dev.mjs / start.mjs 不再各自拼 pnpm 可执行名", () => {
+  it("dev.mjs / start.mjs 的 server 链不经 pnpm：直启 next bin（ISSUE #4155）", () => {
     for (const rel of ["scripts/dev.mjs", "scripts/start.mjs"]) {
-      const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
-      expect(src, `${rel}: 必须复用 pnpmInvocation`).toContain("pnpmInvocation");
+      const code = stripComments(fs.readFileSync(path.join(ROOT, rel), "utf8"), { trailing: true });
+      // server 链的 bin 入口必须经共用件解析（不写死 pnpm-layout 落点、不自己拼路径），
+      // 并以 process.execPath 直启 —— pnpm shim 从 server 链上摘掉（#4155 的读数与因果）。
+      expect(code, `${rel}: next bin 必须经 resolveNextBin 共用件解析`).toContain("resolveNextBin");
+      expect(code, `${rel}: 以 process.execPath 直启 next bin`).toContain("process.execPath");
+      expect(code, `${rel}: server 链不得再经 pnpmInvocation 起 pnpm`).not.toContain(
+        "pnpmInvocation",
+      );
       // 写死平台后缀的旧写法必须消失（它是这条缺陷的形态本身）
-      expect(judgedCode(src), `${rel}: 不得再写死 pnpm.cmd`).not.toContain('"pnpm.cmd"');
-      expect(judgedCode(src), `${rel}: 不得再按平台三元表达式拼可执行名`).not.toMatch(/win32"\s*\?\s*"pnpm/);
+      expect(code, `${rel}: 不得再写死 pnpm.cmd`).not.toContain('"pnpm.cmd"');
+      expect(code, `${rel}: 不得再按平台三元表达式拼可执行名`).not.toMatch(/win32"\s*\?\s*"pnpm/);
     }
   });
 
   /**
-   * 全仓范围：**任何**由 Node 去起 pnpm 的地方都必须经同一处形态判据（ISSUE #638）。
-   *
-   * 前一条用例只钉住三个**服务类**入口；而门禁与工具脚本（`check-format.cjs`
-   * 同类「动作 ⇄ 脚本」映射还有：
-   * 另有 check-reformat-only / check-app-port-vectors / heal-db / db-push 等，
-   * `build-desktop.mjs`）当时**都没进这份清单**，于是同一个坑换了地方复发：
-   *
-   *   [format] 无法执行 prettier:spawnSync pnpm.cmd EINVAL
-   *
-   * `check-format.cjs` 里写着 `process.platform === "win32" ? "pnpm.cmd" : "pnpm"`
-   * —— 那正是 §2.1.1 早已判定「Node 起不来」的批处理形态。`pnpm format:ratchet`
-   * 是格式棘轮入口，也是 `pnpm check:all` 的一环，于是 Windows 上提交门槛直接崩。
-   *
-   * 判据按**形态**扫，不按文件白名单：`pnpm.cmd` 字面量、「按平台三元的 pnpm 可执行名」、
-   * 以及**裸 spawn/exec 一个 pnpm**（没有 `pnpmInvocation` / `runPnpmSync`）。
-   * 「会静默失效的清单只许定义一次」——所以这里用扫描而不是再列一张会漂移的文件清单。
+   * 全仓范围：**任何**由 Node 起 pnpm 的地方都经同一处形态判据（ISSUE #638）。前一格只钉三个服务类入口，`check-format.cjs`、
+   * `build-desktop.mjs` 等没进清单，同坑遂复发：`[format] ... spawnSync pnpm.cmd EINVAL` —— 那里写着 `win32 ? "pnpm.cmd" : "pnpm"`
+   * （§2.1.1 判定的起不来形态），且 `format:ratchet` 在 `check:all` 里。故按**形态**扫：`pnpm.cmd` 字面量、平台三元名、裸 spawn/exec pnpm。
    */
   it("全仓 scripts/**：由 Node 起 pnpm 一律经 shell.mjs 的形态判据", () => {
     const offenders: Array<string> = [];
@@ -999,7 +914,7 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     };
 
     for (const abs of walk(path.join(ROOT, "scripts"))) {
-      if (!/\.(mjs|cjs|ts)$/.test(abs)) {
+      if (!/\.(?:mjs|cjs|ts)$/.test(abs)) {
         continue;
       }
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");
@@ -1010,7 +925,7 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
       const raw = fs.readFileSync(abs, "utf8");
       // 注释里会**引用**旧写法作反面说明，判据只看代码（与 dev.mjs 那条同口径）。
       // **块注释也要剥**：`/** … */` 里的举例会被逐行扫成「真写了这句」
-      // （`scripts/ci-cp936-exit.mjs` 头注里就有 `spawn("pnpm")` 这种反面举例，
+      // （`scripts/ci/ci-cp936-exit.mjs` 头注里就有 `spawn("pnpm")` 这种反面举例，
       // 只剥 `//` 会让本判据把它判成违规）。先剥 `/* … */` 再剥行注释。
       const code = stripComments(raw, { trailing: true });
 
@@ -1045,12 +960,10 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     // 注释里会**引用**旧写法作反面说明，判据只看代码：先剥掉行注释（共享件，#2969 收敛）。
     const code = stripComments(raw, { trailing: true });
     expect(code).toContain("result.error");
-    /* 「把 code 打出来」钉在**失败块那一段**里，而不是整份文件的子串：这一格原本断的是
-     * 字面量 `result.error.code`，而它判的是语义 ——「那条失败路径必须报出错误码」。
-     * 脚本侧为了过类型检查把那一位收成一句局部变量之后，整档搜子串就红在一个
-     * **没有变过的行为**上（ISSUE #2589 批 1 的现场：CI `受影响用例` 那一格）。
-     * 收窄到块内既保留原意，也不再被邻近的改写牵动；反面那半（不许 `?? 0` 吞掉）
-     * 仍在下面，它才是这条用例真正的来由。 */
+    /* 「把 code 打出来」钉在**失败块那一段**，而不是整份文件的子串：原本断字面量 `result.error.code`，而它判的是语义
+     * ——「那条失败路径必须报出错误码」。脚本侧把那一位收成局部变量后，整档搜子串就红在一个**没变过的行为**上
+     * （ISSUE #2589 批 1 现场）。收窄到块内保留原意，也不再被邻近改写牵动；反面那半（不许 `?? 0` 吞掉）仍在下。
+     */
     const failureBlock = code.slice(
       code.indexOf("if (result.error)"),
       code.indexOf("if (result.status === null)"),
@@ -1068,16 +981,9 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
 });
 
 /**
- * 一次启动里 `pnpm -v` 只探一次（ISSUE #1516）。
- *
- * 现场：启动日志里「端口检查」到「pnpm 版本匹配」之间空了 **2.77s**，用户框出来
- * 问「这段能不能优化」。那 2.77s 不是编排在算什么，而是**第二次 spawnSync 冷启
- * pnpm shim** —— 工具链门禁（`orchestratePnpm`）刚问过同一个问题，稍后版本一致性
- * 对齐（`reconcilePnpmVersion`）又原样问了一遍。Windows 上 corepack shim 要经
- * node 中转到 pnpm，单次 1~3s，等于白付两遍。
- *
- * 判据是「问几次」而不是「多快」：用计数脚本当 pnpm，数它被 spawn 了几次。
- * 反向验证：去掉 `probeMemo`，第一条用例立刻变 2 次、必红。
+ * 一次启动里 `pnpm -v` 只探一次（ISSUE #1516）：日志里「端口检查」到「pnpm 版本匹配」之间空了 2.77s —— 那不是编排在算，而是
+ * **第二次 spawnSync 冷启 pnpm shim**（工具链门禁 `orchestratePnpm` 刚问过，稍后 `reconcilePnpmVersion` 又原样问一遍）；Windows 上
+ * corepack shim 经 node 中转单次 1~3s，等于白付两遍。判据是「问几次」而非「多快」：计数脚本当 pnpm，去掉 `probeMemo` 立刻变 2 次。
  */
 describe("pnpm 探测的记忆化（一次启动只探一次）", () => {
   /** 造一个「每次被 spawn 就往计数文件追加一行」的假 pnpm。 */
@@ -1181,20 +1087,9 @@ describe("pnpm 探测的记忆化（一次启动只探一次）", () => {
   });
 });
 /**
- * 「同一个问题在链路里只问一次」（ISSUE #1687）。
- *
- * 现场：用户对着启动日志框出一段 0.46s —— 壳已启动 →「端口检查：<端口> 空闲；<端口+1> 空闲；<端口+2> 空闲」。它不是「3100 空了还非要查后面」（+1/+2 是 Next 静默
- * 顺延的探测位，属端口族整体判据），而是**同一次启动里同一个问题被问了两遍**：
- * 壳自编排是 `app.exe → 编排器` 一段，壳自己判定（单实例 + 端口族）之后，
- * 编排器接手又走了一遍。
- *
- * 本组用例钉死两条边界（反向验证：删掉任一条件，对应用例必失败）：
- *   · 自编排链路里编排器**不再起第二个壳**——判据是
- *     「本次编排由壳拉起」这一个标记（§1.5：拉起编排器的那只壳就是应用宿主）；
- *   · 端口判据（含回收本检出残留）**仍必须每次跑**：壳的单实例判据只认互斥量、
- *     从不碰端口，跳过它就会撞上一次启动残留的 dev server（ISSUE #1687 的
- *     「只问一次」前提不含历史残留）；标记缺席（手工 `pnpm dev` / 直接
- *     `--mode prebuilt`）照常起壳、照常查。
+ * 「同一问题在链路里只问一次」（ISSUE #1687）：0.46s 不是「端口空了还查后面」（+1/+2 是 Next 静默顺延的探测位），而是壳自编排
+ * （单实例 + 端口族）后编排器接手又走一遍。边界：① 自编排链路里编排器**不再起第二个壳**（标记「本次编排由壳拉起」，§1.5）；
+ * ② 端口判据（含回收残留）**仍必须每次跑**（壳只认互斥量、从不碰端口）；标记缺席（手工 `pnpm dev`）照常起壳、照常查。
  */
 describe("启动期重复判定的短路（ISSUE #1687）", () => {
   /* 自编排那一段的实现随 R5 拆刀（ISSUE #1811）搬进了
@@ -1209,12 +1104,10 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
     expect(launcher).toContain("const launchedByShell =");
     expect(launcher).toContain('process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1"');
     expect(launcher).toContain('mode === "prebuilt"');
-    /* 不起壳那一支必须真的跳过 spawnShell。R5 拆刀（ISSUE #1811）把它重整成
-     * **提前返回**（`if (launchedByShell) { …; return { ok: true, shell: null, staleShell }; }`），
-     * 不再用 `} else {` 分叉 —— 所以「这一段有没有 spawn」要看**从分支开始到它的
-     * return**，用 `} else {` 去切会一路吃到文件尾（那里的 spawnShell 在另一支里）。
-     * 返回形状的 `ok: true` 是本次拆刀补上的（与另一支的 `{ ok: true, shell, staleShell }`
-     * 对齐），断言按**实际形态**写，不按记忆里的旧形态。 */
+    /* 不起壳那一支必须真的跳过 spawnShell。R5 拆刀（ISSUE #1811）把它重整成**提前返回**（`if (launchedByShell) {
+     * …; return { ok: true, shell: null, staleShell }; }`），不再用 `} else {` 分叉 —— 所以要看**从分支开始到它的
+     * return**，用 `} else {` 去切会一路吃到文件尾。返回形状的 `ok: true` 是拆刀补上的（与另一支对齐），按实际形态断言。
+     */
     const skipStart = launcher.indexOf("if (launchedByShell) {");
     expect(skipStart, "找不到自编排分支（拆刀后别断了接线）").toBeGreaterThan(-1);
     const skipEnd = launcher.indexOf("return { ok: true, shell: null, staleShell };", skipStart);
@@ -1252,7 +1145,9 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
       lib.indexOf("fn another_instance_owns_this_checkout") + 1500,
     );
     expect(body, "任何壳都照常判单实例").toContain("single_instance::another_instance_running()");
-    expect(judgedCode(lib), "「被编排器起的壳」形态已随第二个壳一起移除").not.toContain("is_shell_child");
+    expect(judgedCode(lib), "「被编排器起的壳」形态已随第二个壳一起移除").not.toContain(
+      "is_shell_child",
+    );
   });
 });
 
@@ -1261,18 +1156,12 @@ import {
   collectDependencyFloors,
   parseRange,
   satisfies,
-} from "../scripts/node-engines.mjs";
+} from "../scripts/launcher-core/node-engines.mjs";
 
 /**
- * Node 下限这一格存在的理由（规范 §2.1.8）：`next` 自己的下限（`>=20.9.0`）比测试链低得多，
- * 所以「Node 太旧」在这台仓库上的表现是**开发链路全绿、只有用例档炸**，
- * 而报错是 `Cannot find module` 一类、指不出该换版本。旧 README 那句「Node ≥ 22」
- * 比 jsdom 的 `^22.22.2` 还松 —— 松掉的正是最常见的那一档。
- *
- * 判据方向是**本仓声明 ⊆ 每个依赖声明**（不是反过来）：`next` 写的是无上界的
- * `>=20.9.0`，倒过来判会永远不成立。方向记反的形态由下面「无上界写法也不合法」
- * 那一格钉住 —— `>=24.15.0` 允许 25.x，而 vitest / jsdom / eslint 声明的都是
- * `^24` 档、不接受 25.x，所以它照样是错的。
+ * Node 下限这一格存在的理由（规范 §2.1.8）：`next` 的下限（`>=20.9.0`）比测试链低得多 ⇒「Node 太旧」的表现是
+ * **开发链路全绿、只有用例档炸**（`Cannot find module` 一类、指不出该换版本），旧 README「Node ≥ 22」比 jsdom 的
+ * `^22.22.2` 还松。判据是**本仓声明 ⊆ 每个依赖声明**（`next` 无上界，方向反了永不成立）；`>=24.15.0` 亦不合法（允许 25.x）。
  */
 describe("Node 下限：engines.node 必须被每个依赖自己声明的范围接受", () => {
   const scanned = collectDependencyFloors(ROOT);
@@ -1338,7 +1227,7 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
     () => {
       const r = spawnSync(
         process.execPath,
-        [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+        [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
         {
           encoding: "utf8",
           env: { ...(envWithPnpm() ?? process.env), COMFYAPP_NODE_VERSION: "v20.9.0" },
@@ -1372,7 +1261,7 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
       );
       const r = spawnSync(
         process.execPath,
-        [path.join(ROOT, "scripts", "check-pnpm-available.mjs"), "--deps-root", tmp],
+        [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs"), "--deps-root", tmp],
         { encoding: "utf8", env: envWithPnpm() ?? process.env },
       );
       expect(r.status, `stdout=${r.stdout ?? ""} stderr=${r.stderr ?? ""}`).toBe(0);
@@ -1393,7 +1282,7 @@ describe("Node 下限：engines.node 必须被每个依赖自己声明的范围�
     delete env.COMFYAPP_NODE_VERSION;
     const r = spawnSync(
       process.execPath,
-      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      [path.join(ROOT, "scripts", "gates/check-pnpm-available.mjs")],
       { encoding: "utf8", env },
     );
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(0);

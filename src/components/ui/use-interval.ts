@@ -4,53 +4,18 @@ import { useEffect, useRef } from "react";
 
 import { startPollTimer } from "~/lib/poll-timer";
 
-/**
- * useInterval —— 「按固定间隔重复跑一个异步动作」的**唯一实现**
- * （规范 16 §16.2.4.15）。
- *
- * 为什么收口：全库有 **9 处**各自 `setInterval(onDone, N)` + 在清理函数里
- * `clearInterval`，写法分成几族、缺陷也各不相同：
- *
- *  - **不立刻跑一次**（只等第一个间隔到点）：`VideoQueueModal`、
- *    `use-history-panel`、`use-runtime-log-source` —— 用户要等一个完整
- *    间隔才看到内容（挂载后先空着）；
- *  - **在后台标签页里空转**：浏览器把后台定时器降到 ≥1min 一次，但请求仍然
- *    发出，白白占着服务端；只有 `use-comfy-stats` 与 `use-update-check`
- *    接了 `visibilitychange` 暂停 —— 而**同一段「前后台开关」被逐字抄了两份**；
- *  - **跑在已卸载的组件上**：`setInterval(() => void poll())` 里没有「是否
- *    已卸载」的守卫，异步回调可能在组件消失后才 `setState`。
- *
- * 本 hook 把这三件事一次给全：
- *  1. 挂载即先跑一次（`immediate`，默认 true），不等第一个间隔；
- *  2. `pauseWhenHidden`（默认 true）—— 切后台暂停、回前台**立即补跑一次**，
- *     语义与 `use-comfy-stats` / `use-update-check` 的既有实现一致；
- *  3. 间隔之间的「上一轮还没回来就发下一轮」不在这里挡 —— 那是**背压**问题，
- *     由调用方决定（多数轮询是幂等的单次查询，重叠无害；需要串行的落点应自己
- *     在 `run` 里排队）。本 hook 只负责「什么时候该跑」。**唯一的例外是
- *     `ms` 返回 `0` 那一档**：「本拍跑完立刻再来」按定义就得等本拍结算，
- *     实现本体（`~/lib/poll-timer`）会等 —— 不等就成了空转叠发。
- *
- * **桌面场景补的一条**（`pauseWhenUnfocused`）：WebView2 里窗口被别的窗口
- * 遮挡但未最小化时，`document.visibilityState` 仍报 `visible`、`visibilitychange`
- * 不会触发，全库 15 处轮询会**白拉**——用户切回来时看到的是几秒前的状态，
- * 而不是他目光回到窗口那一刻的实况。判据用 `document.hasFocus()` +
- * `window` 的 focus/blur 事件补上；默认跟随 `isDesktopShell()`（浏览器 tab
- * 场景保留既有语义，避免「切走焦点就不刷新」的过度反应）。
- *
- * 与 `useFlashState`（一次性定时器）的分工：那个管「按一下亮一会儿」，
- * 这个管「每隔一段时间重复跑」。两者都用定时器，但取消语义与生命周期不同。
- */
+/** useInterval —— 「按固定间隔重复跑一个异步动作」的唯一实现（规范 16 §16.2.4.15）。收口前全库 9 处各自 `setInterval` + 清理，
+ * 缺陷各异：不立刻跑一次（挂载后先空着等一个间隔）；后台标签页空转（请求照发）；跑在已卸载组件上（异步回调后才 `setState`）。
+ * 本 hook 一次给全：`immediate` 挂载先跑一次、`pauseWhenHidden` 切后台暂停且回前台立即补跑；背压由调用方决定
+ *（例外：`ms` 返回 0 时 `~/lib/poll-timer` 会等本拍结算）。桌面补 `pauseWhenUnfocused`：WebView2 遮挡未最小化时
+ * `visibilityState` 仍报 visible、`visibilitychange` 不触发，15 处轮询会白拉；默认跟随 `isDesktopShell()`。定时器 vs `useFlashState` 分工。 */
 export type UseIntervalOptions = {
   /** 是否在挂载时立即执行一次（默认 `true`）。 */
   immediate?: boolean;
-  /** 间隔毫秒数；传 `null` / `0` 表示**不轮询**（受控开关）。
-   *
-   *  也可以给一个**函数**：每拍跑完重新问一次「下一拍等多久」——
-   *  用于「按阶段给频率」（ISSUE #1351，存活探测在启动等待 / 空闲 / 出图 /
-   *  隐藏四档之间跨一个数量级，而档位在运行中会变）。函数形态**必须引用稳定**
-   *  （模块级常量或 `useCallback`），否则每次渲染换一个新函数会让 effect
-   *  重建定时器、计时被反复重置 —— 与 `run` 那一条同坑，只是 `run` 走了 ref
-   *  而这里不能（换档本身就得让实现重排）。 */
+  /** 间隔毫秒数；传 `null` / `0` 表示**不轮询**（受控开关）。也可给**函数**：每拍跑完重新问一次「下一拍
+   * 等多久」（用于按阶段给频率，ISSUE #1351：存活探测在启动等待 / 空闲 / 出图 / 隐藏四档跨一个数量级，
+   * 档位运行中会变）。函数形态**必须引用稳定**（模块级常量或 `useCallback`），否则每次渲染换新函数会让
+   * effect 重建定时器、计时被反复重置。 */
   ms: number | null | (() => number | null);
   /**
    * 轮询动作抛错时的通道；缺省落浏览器控制台（视图层可以这么写，
@@ -58,17 +23,13 @@ export type UseIntervalOptions = {
    */
   onError?: (err: unknown) => void;
   /**
-   * 是否在页面不可见时暂停（默认 `true`）。
-   * 暂停期间不发起调用；`visibilitychange` 回到 visible 时**立即补跑一次**
-   * 再恢复定时（与 `use-comfy-stats` 的既有行为一致 —— 用户切回来看到的
-   * 是最新状态，不用等一个间隔）。
+   * 是否在页面不可见时暂停（默认 `true`）。暂停期间不发起调用；`visibilitychange` 回到 visible 时
+   * **立即补跑一次**再恢复定时（与 `use-comfy-stats` 既有行为一致：切回来看到最新状态，不用等一个间隔）。
    */
   pauseWhenHidden?: boolean;
   /**
-   * 是否在窗口失焦时也暂停（默认跟随 `isDesktopShell()`）。
-   * 桌面壳里 WebView2 遮挡未最小化时，`visibilitychange` 不会触发，靠这条
-   * 补上。浏览器 tab 场景**默认 false**：切焦点到别的窗口时用户可能仍希望
-   * 页面在跟新（例如挂着看长任务进度），维持既有语义不越过边界。
+   * 是否在窗口失焦时也暂停（默认跟随 `isDesktopShell()`）。桌面壳里 WebView2 遮挡未最小化时
+   * `visibilitychange` 不触发，靠这条补上；浏览器 tab 默认 `false`（切焦点时用户可能仍希望页面跟新）。
    */
   pauseWhenUnfocused?: boolean;
 };
@@ -79,10 +40,8 @@ function reportPollError(err: unknown): void {
 }
 
 /**
- * @param run 每个间隔要跑的动作（返回值被忽略 —— 允许直接传 `async` 函数，
- *   包括返回 `boolean` 的 `checkNow` 这类）。它会被放进 ref，因此**不必**
- *   为稳定性包 `useCallback` —— 传新函数不会重建定时器（这是此前两处
- *   `useCallback` 依赖数组容易写错的地方）。
+ * `run` 是每个间隔要跑的动作（返回值被忽略，可直接传 `async` 函数）。它会被放进 ref，因此**不必**为
+ * 稳定性包 `useCallback` —— 传新函数不会重建定时器。
  */
 export function useInterval(
   run: () => unknown,

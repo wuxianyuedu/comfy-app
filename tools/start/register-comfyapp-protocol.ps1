@@ -6,14 +6,14 @@ register-comfyapp-protocol.ps1 — 注册 comfyapp:// 自定义 URL 协议（原
 注册后在任务历史里点「打开文件夹」即可唤起资源管理器。
 
 前置（一次性）：Windows 默认双击 .ps1 是「用记事本打开」，需先右键
-  scripts\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
+  scripts\devtools\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
 
 用法：
   双击 <项目根>\tools\start\register-comfyapp-protocol.ps1
   或在终端执行：
     powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\start\register-comfyapp-protocol.ps1
 
-实际逻辑在 scripts\install-comfyapp-helper.ps1。
+实际逻辑在 scripts\devtools\install-comfyapp-helper.ps1。
 #>
 [CmdletBinding()]
 param()
@@ -29,7 +29,7 @@ Set-Location $root
 Write-Host "[INFO] 正在注册 comfyapp:// 协议（HKCU，无需管理员）..." -ForegroundColor Cyan
 Write-Host ""
 
-$code = Invoke-Entry -ScriptPath "scripts\install-comfyapp-helper.ps1"
+$code = Invoke-Entry -ScriptPath "scripts\devtools\install-comfyapp-helper.ps1"
 
 Write-Host ""
 if ($code -ne 0) {

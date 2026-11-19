@@ -1,9 +1,9 @@
 // ── 工坊草稿的元素级「形状不对但仍要留着」判据（台账 F13″）──────────────────
 //
 // 两处读草稿的地方（服务端的 `parseDraftDto` 与浏览器侧的 `parseDraft`）都只判容器：
-// `Array.isArray(obj.characters) ? (obj.characters as Character[]) : []`。
+// `Array.isArray(obj.characters) ? obj.characters : []`。
 // 于是「数组里躺着一条 `styleTags` 是字符串的角色」照样能从 localStorage 进服务端镜像 ——
-// 类型在这一格是被 `as` 叫停的，之后所有读它的地方都以为它是好的。
+// 类型在这一格只停在「是不是数组」的容器判据，之后所有读它的地方都以为它是好的。
 //
 // ## 为什么是「留着 + 标出来」，不是「丢掉」也不是「继续不判」
 //
@@ -33,6 +33,7 @@
 // 不许改值、不许补默认，只许**报告**。拿 `safeParse` 当判据会永远「通过」，
 // 因为那些 schema 的默认值就是为「通过」而写的。
 
+import { isRecord } from "~/lib/is-record";
 import { SHOT_STATUSES } from "~/lib/workshop/types";
 
 /** 草稿里三类元素的种类名（进结论，好让界面按种类分组与跳转）。 */
@@ -192,8 +193,7 @@ function auditOne(kind: DraftElementKind, index: number, value: unknown): Array<
       },
     ];
   }
-  /* SAFETY: 类型断言已复核 */
-  const source = value as Record<string, unknown>;
+  const source = isRecord(value) ? value : {};
   const id = check.idOf(source);
   const label =
     id === null ? `${noun} #${String(index + 1)}` : `${noun} #${String(index + 1)}「${id}」`;

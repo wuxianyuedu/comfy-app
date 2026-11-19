@@ -161,9 +161,9 @@ describe("档位 → 命令形态（两种平台各断言一次，避免「按�
           cpuCount: 4,
         });
         for (const cmd of [priority, affinity]) {
-          if (cmd) {
-            expect(cmd.describe.length).toBeGreaterThan(0);
-          }
+          /* 两项命令都可缺席（平台没有对应机制时给 null）：在场的那项必须自带
+           * 描述。可缺席分支收进合取式，断言本体无条件跑（no-conditional-expect）。 */
+          expect(!cmd || cmd.describe.length > 0).toBe(true);
         }
       }
     }

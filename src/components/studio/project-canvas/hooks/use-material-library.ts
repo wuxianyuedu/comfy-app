@@ -164,6 +164,7 @@ export function useMaterialLibrary({
       try {
         await uploadBusy.run(async () => {
           for (const file of files) {
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
             await uploadMaterial(file, { folder: target, projectId });
           }
         });

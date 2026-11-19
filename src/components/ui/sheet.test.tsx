@@ -1,10 +1,5 @@
-/**
- * `SheetContent` 必须套一层 `SheetPrimitive.Portal`（`sheet.tsx` 曾经漏掉）：
- * Base UI 的 `Dialog.Popup` 不像 Radix 那样允许省略 Portal —— 缺了会直接抛
- * `Base UI: <Dialog.Portal> is missing.`，把整棵组件树打崩（面板连同右上角
- * 关闭按钮一起消失）。且只在**打开面板**时炸：关闭时 Portal 不渲染子节点。
- * 这里把抽屉打开渲染一遍，确认内容与关闭按钮都正常出现、不再抛错。
- */
+/** `SheetContent` 必须套一层 `SheetPrimitive.Portal`（`sheet.tsx` 曾经漏掉）：Base UI 的 `Dialog.Popup` 不像 Radix 那样允许省略 Portal —— 缺了会直接抛 `Base UI: <Dialog.Portal> is missing.`，把整棵组件树打崩（面板连同右上角关闭按钮一起消失）。且只在打开面板时炸：关闭时 Portal 不渲染子节点。
+ * 这里把抽屉打开渲染一遍，确认内容与关闭按钮都正常出现、不再抛错。 */
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 

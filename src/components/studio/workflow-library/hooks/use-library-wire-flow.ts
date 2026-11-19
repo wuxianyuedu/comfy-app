@@ -1,23 +1,10 @@
 "use client";
 
 /* ── 工作流库「画布节点」预览的 React Flow 编排（规范 §17.2 第②层）──
- *
- * 库里那三列（对外参数卡片列 + 宿主卡片 + 对外输出参数卡片列）现在是一个真正的
- * React Flow 画布（ISSUE #529）：
- *   · 视口（拖动平移 / 滚轮缩放 / fitView）由 React Flow 自己承担，自绘的
- *     `WorkflowCanvasViewportFrame` 与量 rect 的 SVG 连线层一并退场；
- *   · 端点是真的 `<Handle>`，连线是真的 edge（渲染交给 React Flow）；
- *   · 「这一行收不收这个口子」收敛到一个纯函数 `isValidConnection`。
- *
- * 本层只做编排：把派生出来的连线（`workflow-library-param-cards` 的 wires）与
- * 编辑动作（`use-param-wiring` / `outputWiring`）接上，视图只负责摆 DOM。
- *
- * **不受控 `defaultNodes` / `defaultEdges`**：节点与边的集合由这里派生一次，
- * React Flow 只持有「用户拖过的位置 / 选中」这类瞬时状态。受控写法会在拖动时
- * 每帧重建整棵 DOM —— 而节点内部是一整张表单，代价极高（§2.11 画布性能模式）。
- * 派生结果变化（换工作流 / 改模式 / 改落点）由 `key` 重建画布，与既有
- * `WorkflowCanvasNodePreview` 的 `key={workflow.id}` 同一口径。
- */
+ * 三列现在是真正的 React Flow 画布（ISSUE #529）：视口、真 `<Handle>`、真 edge，以及
+ * 「这一行收不收这个口子」的纯函数 `isValidConnection`。本层只做编排（接上 wires 与
+ * 编辑动作），视图负责摆 DOM。**不受控 `defaultNodes` / `defaultEdges`**：集合由这里
+ * 派生一次，React Flow 只持有拖拽/选中；受控写法会在拖动时每帧重建整张表单。 */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Connection, Edge, Node, OnConnectEnd } from "@xyflow/react";
@@ -150,14 +137,10 @@ export function useLibraryWireFlow({
   }, []);
 
   /* ── 节点与边（只在挂载时派生一次）──
-   * 换工作流 / 改模式 / 改落点都由**重建画布**（上层给 `key`）兜住，不必每帧
-   * 重算 —— 每帧重建边对象会让输入卡顿，重建节点更糟（节点里是一整张表单）。
-   *
-   * 节点位置与尺寸由布局常量给出：尺寸给出来 React Flow 才能在首帧算出边的落点
-   * （jsdom / 首帧布局前量不到 DOM 尺寸会一条边都不画），真实高度由内容撑开。
-   * **节点的渲染内容不在这里**：它随渲染变（表单值 / 运行态 / 候选端点），走
-   * `nodeContent` 由画布经 Context 下发 —— 塞进 `node.data` 就只能在「冻在首帧」
-   * 与「每帧 setNodes 打循环」里二选一（见画布的说明）。 */
+   * 换工作流 / 改模式 / 改落点都由**重建画布**（上层给 `key`）兜住。节点位置与
+   * 尺寸由布局常量给出：首帧要能算出边落点（jsdom 量不到 DOM 尺寸会一条边都不画）。
+   * **节点渲染内容不在这里**（表单值/运行态/候选端点随渲染变），走 `nodeContent`
+   * 经 Context 下发 —— 塞进 `node.data` 只能在「冻在首帧」与「每帧 setNodes」二选一。 */
   /* 背景板尺寸随容器尺寸变（窗口缩放 / 面板拖动），所以 `defaultNodes` 不再
    *  完全「只在挂载时派生」——尺寸变了要重建。用它的**两个数字**当依赖（而不是
    *  对象引用）：尺寸真的变了，重建才有意义；重建代价是四个节点对象 + 一次
@@ -174,25 +157,19 @@ export function useLibraryWireFlow({
       ),
     [backdropWidth, backdropHeight],
   );
-  /* 边的**集合**跟随派生：改落点（含库内本地 overlay）、恢复默认、换模式之后，
-   *  新写入的线要能进画布。只在挂载时派生一次的话，写入成功的线永远进不了画布
-   *  —— 用户看到的就是「松手线就消失」（ISSUE #355 复审）。
-   *
-   *  节点集合仍是固定的（三列布局，见 `defaultNodes` 的说明）：节点内部是整张
-   *  表单，逐帧重建代价高；边只是几条线，重建无妨。 */
+  /* 边的**集合**跟随派生：改落点、恢复默认、换模式后新线要能进画布；只在挂载时
+   *  派生一次的话，写入成功的线永远进不了画布（「松手线就消失」，ISSUE #355 复审）。
+   *  节点集合仍固定（三列布局）：节点内部是整张表单，逐帧重建代价高；边只是几条线。 */
   const defaultEdges = useMemo(
     () => deriveLibraryEdges(paramCards.wires, outputWires, canWire === true, selectedEdgeIds),
     [paramCards.wires, outputWires, canWire, selectedEdgeIds],
   );
 
   /* ── 类型闸门（第 2 步的核心）──
-   * 拖动中 React Flow 逐个候选调用它，`true` = 这个落点收这个口子。判据与自动
-   * 落点**同一份**（`pinAcceptsEntry`）：条目接受的端口分类里必须包含这个端口
-   * 自己的分类 —— 不过这道闸门就会连出「提示词 → 宽高比」这种运行期取不到值的
-   * **假线**。
-   *
-   * 方向也在这里判（loose 模式下任意方向都发得出来）：左列卡片 → 宿主输入行、
-   * 宿主输出行 → 右列卡片，同列与反向一律拒绝。 */
+   * 拖动中 React Flow 逐个候选调用，`true` = 这个落点收这个口子。判据与自动落点
+   * **同一份**（`pinAcceptsEntry`）：条目接受的端口分类里必须包含该端口自己的分类，
+   * 否则会连出「提示词 → 宽高比」这种运行期取不到值的假线。方向也在这里判：左列
+   * 卡片 → 宿主输入行、宿主输出行 → 右列卡片，同列与反向一律拒绝。 */
   const isValidConnection = useCallback(
     (connection: Connection | Edge): boolean =>
       libraryConnectionAllowed(connection, { io, entries }),
@@ -281,14 +258,10 @@ export const LIBRARY_CONTENT_NODE_IDS = [LIB_NODE_PARAMS, LIB_NODE_HOST, LIB_NOD
 export const LIBRARY_FIT_PADDING = 0.08;
 
 /** 首帧定向 fitView 的入参：**只按三列内容节点**缩放。
- *
- *  为什么不交给 `<ReactFlow fitView>` 的默认口径：那个口径按**全部节点**的并集
- *  包围盒缩放，而背景板（`LIB_NODE_BACKDROP`，职责是「把缩放下限钉住 + 铺满画布
- *  底」）在宽高两个方向都严格大于视口 —— 把它算进包围盒会把首帧缩放钉在「铺满
- *  背景板」的那个值上，三列缩成面板中间一小团（ISSUE #596 的另一面）。
- *
- *  `nodes` 只给 id（React Flow 的 `FitViewOptions.nodes` 接受 `{ id }` 形状），
- *  避免把节点对象复制成第二份事实。 */
+ *  默认 fitView 按全部节点的并集包围盒缩放，背景板（`LIB_NODE_BACKDROP`）在两个
+ *  方向都大于视口，三列会被缩成面板中间一小团（ISSUE #596 的另一面）。
+ *  `nodes` 只给 id，避免把节点对象复制成第二份事实。
+ */
 export function libraryFitViewOptions(): {
   nodes: Array<{ id: string }>;
   padding: number;
@@ -299,18 +272,10 @@ export function libraryFitViewOptions(): {
   };
 }
 
-/** 三列节点的位置与首帧尺寸（真实尺寸由内容撑开）。
- *
- *  `nodesDraggable` 要求节点**必须能放得下内容的拖拽命中面**（见画布里的说明），
- *  所以「撑起画布高度」这件事不能靠给卡片节点虚报尺寸 —— 虚报的尺寸会被 React Flow
- *  当作端口几何的依据（见 `contentNode` 的说明）。改为在三列之下垫一层
- *  **背景板**（`LIB_NODE_BACKDROP`，无内容、无端口）：它把画布的包围盒撑到面板
- *  可视高度，`fitView` 于是只会落在「等比铺满视口」的那个缩放上，画布不会在
- *  内容高度处收边、下面留出一块面板底色（ISSUE #596）。
- *
- *  @param sizing       三列布局尺寸
- *  @param backdropSize 背景板尺寸（不传则取 `fillHeight` 见方的兜底值）
- */
+/** 三列节点的位置与首帧尺寸（真实尺寸由内容撑开）。`nodesDraggable` 要求节点有可
+ *  放置内容的拖拽命中面，但「撑起画布高度」不能靠给卡片节点虚报尺寸（虚报会被当作
+ *  端口几何依据）。改为在三列之下垫背景板（`LIB_NODE_BACKDROP`，无内容、无端口）：
+ *  包围盒撑到可视高度，fitView 只会落在「等比铺满视口」的缩放上（ISSUE #596）。 */
 export function buildLibraryNodes(
   sizing: LayoutSizing,
   backdropSize?: { height: number; width: number },
@@ -320,27 +285,11 @@ export function buildLibraryNodes(
     width: sizing.paramsWidth + sizing.hostWidth + sizing.outputsWidth,
     height: sizing.fillHeight,
   });
-  /* 三列内容节点的首帧尺寸**只用 `initialWidth` / `initialHeight`**。
-   *
-   * 写成 `width` / `height` 会把节点**永久钉死**在声明值上（用户报「线没连到端点
-   * 上、有的线连不上也没有提示」的根因）：那两个键会被 React Flow 当尺寸写进
-   * 节点 DOM 的内联样式，而且 `handleBounds` 量到之后**仍然**取声明值
-   * （`getNodeInlineStyleDimensions`：`node.width ?? node.style.width`）。于是：
-   *
-   *   1. 卡片列的真实高度由内容撑开（表单随 IO 到位长高、行数变多），外框却不动
-   *      → 节点元素**不再触发 ResizeObserver** → `updateNodeInternals` 不再跑
-   *      → `handleBounds`（端点圆点的坐标）停在**挂载后第一次**量到的那一份；
-   *   2. 边按 `handleBounds` 画（`getHandlePosition` = 记录坐标 + 节点绝对位置），
-   *      坐标一旧，线就从卡片半空出发 / 落在圆点旁边 —— 截图里那几根没接上的线；
-   *   3. 更糟的是**首帧之后才出现的端点**（IO 到位后新增的行）从未进过
-   *      `handleBounds`：React Flow 起手就按它找 handle（`getHandle`），找不到便
-   *      **静默 return**，连 `onConnectEnd` 都不回调 —— 「连不上，也没有提示」。
-   *
-   * `initial*` 正是为这件事准备的键：只在**还没量到尺寸**时充当内联尺寸
-   * （`handleBounds === undefined` 那一支），量到即撤、外框改由内容决定。首帧几何
-   * 照旧（jsdom / 布局前也算得出落点），内容一变就重新量。
-   * 背景板相反：它的尺寸**就是**声明值（没有内容可量、也没有端点），继续用
-   * `width` / `height`（视口变化时由画布 `setNodes` 改它的声明尺寸）。 */
+  /* 三列内容节点的首帧尺寸**只用 `initialWidth` / `initialHeight`**：写成
+   *  `width` / `height` 会永久钉死外框，节点不再触发 ResizeObserver，端点坐标停在
+   *  首次测量那份（线从半空出发）；首帧后新增的端点登记不上，`getHandle` 找不到
+   *  就静默 return（无提示）。`initial*` 只在未量到尺寸时充当内联尺寸，量到即撤；
+   *  背景板无内容可量，继续用 `width` / `height`。 */
   const contentNode = (id: LibNodeId, type: string, width: number): Node => ({
     id,
     type,
@@ -376,15 +325,11 @@ export function buildLibraryNodes(
   ];
 }
 
-/** 三列的**端点清单**（画布用它判断「要不要请 React Flow 重算落点」，见
- *  `WorkflowLibraryCanvas` 的 `useHandleInventoryRefresh`）。
- *
+/** 三列的**端点清单**（画布据此判断要不要请 React Flow 重算落点）。
  *  左列一个口一颗点（handle id = 条目 id）、右列一个输出口一颗点（handle id = ioKey）、
- *  宿主的表单行与输出行按 ioKey 认；`canWire` 也算进来 —— 它决定端点是否
- *  `connectable`（只读档下同一颗点不接受拖线）。
- *
- *  拼成**字符串**是关键：纯重渲染（同一批口的新数组）得到同一个串，不会白发一次
- *  重算请求；只有口真的增减 / 换 id 才变。 */
+ *  宿主表单行与输出行按 ioKey 认；`canWire` 也算进来（只读档下端点不可拖）。
+ *  拼成字符串：纯重渲染得到同一个串，不白发重算请求；只有口增减 / 换 id 才变。
+ */
 export function handleInventoryOf(
   paramCards: LibraryParamCards,
   outputCards: LibraryOutputCards,
@@ -414,17 +359,11 @@ export type LibraryGateContext = {
   io: WorkflowIOMap | null | undefined;
 };
 
-/** 库内连线的**类型闸门**（纯函数，可单测）。
- *
- *  拖动中 React Flow 逐个候选调用它，`true` = 这个落点收这个口子。判据与自动
- *  落点**同一份**（`pinAcceptsEntry`）：条目接受的端口分类里必须包含这个端口
- *  自己的分类 —— 不过这道闸门就会连出「提示词 → 宽高比」这种运行期取不到值的
- *  **假线**（ISSUE #529 把这件事从手势层收进一个纯函数）。
- *
- *  方向也在这里判，允许的只有两段：
- *     · 左列卡片圆点（source）→ 宿主卡片的某一行（target）；
- *     · 宿主输出行（source）→ 右列卡片圆点（target）。
- *  同列、跨列、两端同向一律拒绝。 */
+/** 库内连线的**类型闸门**（纯函数，可单测）。判据与自动落点**同一份**
+ *  （`pinAcceptsEntry`）：条目接受的端口分类里必须包含该端口自己的分类，否则会连出
+ *  「提示词 → 宽高比」这种运行期取不到值的假线（ISSUE #529 把这件事从手势层收进纯
+ *  函数）。只允许两段：左列卡片圆点（source）→ 宿主行（target）、宿主输出行
+ *  （source）→ 右列卡片圆点（target）。 */
 export function libraryConnectionAllowed(
   connection: LibraryConnection,
   ctx: LibraryGateContext,
@@ -506,12 +445,10 @@ function connectionFromDrop(state: {
 }
 
 /** 两条 wire 列表 → 库内的边集合（纯函数，可单测）。
- *
- *  输入侧与输出侧共用同一个 id 形状（`libraryEdgeId`），但**两端与 handle 取值
- *  刚好相反**：输入侧从卡片出发去宿主行，输出侧从宿主行出发去卡片。
- *  `interactive` 控制边是否可被单独点选 / 删除（只读时不可，避免误删）；
- *  `selectedIds` 是画布上当前点选中的边 id 集合 —— 命中的边在 `style` 里直接注入
- *  高亮（内联 style 优先级确定，不依赖 React Flow 是否给 `<g>` 加 `.selected`）。 */
+ *  输入侧与输出侧共用同一个 id 形状（`libraryEdgeId`），但两端与 handle 取值刚好
+ *  相反。`interactive` 控制边是否可单独点选/删除（只读时不可，避免误删）；
+ *  `selectedIds` 命中的边在 `style` 里直接注入高亮（内联 style 优先级确定）。
+ */
 export function deriveLibraryEdges(
   inputWires: ReadonlyArray<ParamCardWire>,
   outputWires: ReadonlyArray<ParamCardWire>,
@@ -553,11 +490,10 @@ function entryForHandle(entries: ReadonlyArray<ParamEntry>, handleId: string): P
 }
 
 /** 输入侧一条边：左列卡片圆点 → 宿主卡片的落点行。
- *
- *  边**可被单独点选 / 删除**（`selectable` / `deletable` 受 `canWire` 控制）：连错
- *  某一条线时不必用卡片头 ↺ 把整张卡（尺寸卡是六条形态线）一起清掉 —— 点这条线、
- *  按 Delete 即可只断这一条（断开的就是它对应的那个 entryId）。只读（无模式 /
- *  无落库回调）时不可交互，避免误删。 */
+ *  边**可被单独点选/删除**（`selectable` / `deletable` 受 `canWire` 控制）：连错
+ *  一条不必用卡片头 ↺ 清掉整张卡，点线按 Delete 只断这一条。只读（无模式 / 无
+ *  落库回调）时不可交互，避免误删。
+ */
 export function buildInputEdge(wire: ParamCardWire, interactive: boolean, selected = false): Edge {
   return {
     id: libraryEdgeId("param", wire.entryId, wire.handleId),

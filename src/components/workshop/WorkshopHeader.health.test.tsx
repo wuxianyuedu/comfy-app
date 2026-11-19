@@ -1,15 +1,24 @@
-// 顶栏进度这一块的唯一出处：一段胶囊 + 一根分段条。
-//
-// 这个胶囊过去自己数一遍 ratio，与总进度条各说一次同一件事；两处口径一旦不同，
-// 用户先撞上的是自相矛盾而不是某个具体的错。后来总进度条换成了分段控件（一段一根
-// 细条），同一条账还是只有一份数据源。用例锁四件事：段数来自 health 快照、可见段名
-// 走两字缩略而可访问名走全名（两者来自不同字段，不是同一个值写两遍）、色档由 ratio
-// 决定（数据里不带色值）、全完成时不留假缺口。
+// 顶栏进度这一块的唯一出处：一段胶囊 + 一根分段条，同一条账只有一份数据源。
+// 用例锁四件事：段数来自 health 快照、可见段名走两字缩略而可访问名走全名
+//（不同字段）、色档由 ratio 决定（数据不带色值）、全完成时不留假缺口。
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { WorkshopHeader } from "./WorkshopHeader";
 import { STAGE_DEFS, computeStageRatios, type HealthRow } from "./stage-config";
+
+const STAGE_IDS: Record<HealthRow["id"], true> = {
+  script: true,
+  character: true,
+  storyboard: true,
+  shots: true,
+  video: true,
+  render: true,
+};
+
+function isStageId(value: string): value is HealthRow["id"] {
+  return Object.hasOwn(STAGE_IDS, value);
+}
 
 function healthOf(overrides: Partial<Record<string, boolean | number>> = {}): Array<HealthRow> {
   const rows = computeStageRatios(
@@ -24,19 +33,20 @@ function healthOf(overrides: Partial<Record<string, boolean | number>> = {}): Ar
     },
     true,
   );
-  /* SAFETY: 类型断言已复核 */
-  return (Object.keys(rows) as Array<HealthRow["id"]>).map((id) => {
-    const override = overrides[id];
-    const ratio = typeof override === "number" ? override : override === true ? 1 : 0;
-    /* 缩略与全名故意取不同值：写成一样就无法证明视图分别用了这两个字段。 */
-    return {
-      id,
-      label: id,
-      shortLabel: id.slice(0, 2),
-      ratio,
-      pending: ratio < 1,
-    };
-  });
+  return Object.keys(rows)
+    .filter(isStageId)
+    .map((id) => {
+      const override = overrides[id];
+      const ratio = typeof override === "number" ? override : override === true ? 1 : 0;
+      /* 缩略与全名故意取不同值：写成一样就无法证明视图分别用了这两个字段。 */
+      return {
+        id,
+        label: id,
+        shortLabel: id.slice(0, 2),
+        ratio,
+        pending: ratio < 1,
+      };
+    });
 }
 
 function renderHeader(health: Array<HealthRow>) {
@@ -105,13 +115,12 @@ describe("WorkshopHeader 的健康度分段条", () => {
     expect(fills).toHaveLength(STAGE_DEFS.length);
     rows.forEach((row, i) => {
       const cls = fills[i]?.className ?? "";
-      if (row.ratio >= 1) {
-        expect(cls).toContain("bg-success");
-        expect(cls).not.toContain("bg-primary");
-      } else {
-        expect(cls).toContain("bg-primary");
-        expect(cls).not.toContain("bg-success");
-      }
+      /* 满档用 bg-success、未满用 bg-primary：分支收进期望值，断言本体无条件跑
+       * （no-conditional-expect —— 条件里的断言在另一支上会静默不跑）。 */
+      const want = row.ratio >= 1 ? "bg-success" : "bg-primary";
+      const not = row.ratio >= 1 ? "bg-primary" : "bg-success";
+      expect(cls).toContain(want);
+      expect(cls).not.toContain(not);
     });
   });
 

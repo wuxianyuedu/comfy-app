@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX `account_provider_account_user_uniq` ON `account` (`providerId`,`accountId`,`userId`);--> statement-breakpoint
+CREATE UNIQUE INDEX `wt_user_name_uniq` ON `workflowTemplate` (`userId`,`name`);

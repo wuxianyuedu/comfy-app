@@ -4,7 +4,7 @@ import { Hint } from "~/components/ui/hint";
 /* 按需取 JsonViewer（规范 §12.19）：本弹窗只在「查看源文件」时打开，而
  * `ui/json-viewer` 顶层 import 了 `react18-json-view`（含它那份样式表）。
  * 静态 import 会使这条重依赖顺着 `components/studio/index.ts` 一路到入口 ——
- * 实测链见 `scripts/check-barrel-heavy-deps.cjs` 的报告。 */
+ * 实测链见 `scripts/gates/check-barrel-heavy-deps.cjs` 的报告。 */
 import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
@@ -20,11 +20,7 @@ const RAW_FORMAT_CHIP =
 // p71-allow:end
 
 /**
- * 查看源文件弹窗（只读）。
- *
- * 展示的是 ComfyUI 保存的原始 JSON（`last_node_id` / `nodes[]` /
- * `widgets_values` …）—— 也就是库里的 `rawJson` 列。本应用只接受这一种格式，
- * 所以没有「另一种格式的兜底」这回事。
+ * 查看源文件弹窗（只读）。展示的是 ComfyUI 保存的原始 JSON（`last_node_id` / `nodes[]` / `widgets_values` …）—— 即库里的 `rawJson` 列。本应用只接受这一种格式，所以没有「另一种格式的兜底」这回事。
  */
 export type SourceModalData = {
   /** 当前 detail 是否来自子工作流 (drill-in 进 sub) 视图。用于文案区分。 */
@@ -46,8 +42,7 @@ export type SourceModalProps = {
 
 export function SourceModal({ data, loading, error, onClose }: SourceModalProps) {
   const activeText = useMemo(() => {
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (data?.source == null) {
+    if (data?.source === null || data?.source === undefined) {
       return "";
     }
     return JSON.stringify(data.source, null, 2);
@@ -84,12 +79,9 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
             <div>
               <h2 className="text-ink-bright flex items-center gap-2 text-sm font-semibold">
                 查看源文件 · {displayValue(data?.name)}
-                <span
-                  className={RAW_FORMAT_CHIP}
-                  title="ComfyUI 原始 JSON（nodes[] / links[] / widgets_values）"
-                >
-                  RAW 原件
-                </span>
+                <Hint label="ComfyUI 原始 JSON（nodes[] / links[] / widgets_values）">
+                  <span className={RAW_FORMAT_CHIP}>RAW 原件</span>
+                </Hint>
               </h2>
               <p className="text-ink-muted mt-0.5 text-xs">
                 {data?.isSubgraph === true
@@ -133,8 +125,7 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
               <p className="text-ink-muted px-5 py-3 text-sm">加载中…</p>
             ) : error !== undefined && error !== "" ? (
               <p className="text-destructive px-5 py-3 text-sm">{error}</p>
-            ) : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-            data?.source == null ? (
+            ) : data?.source === null || data?.source === undefined ? (
               <p className="text-ink-muted px-5 py-3 text-sm">没有可显示的数据</p>
             ) : (
               <LazyJsonViewer

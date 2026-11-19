@@ -150,8 +150,12 @@ export function friendlyNodeTitle(
   // 不调换这个顺序的话，静态表（例如 SaveImage 对应「保存图像」）
   // 会悄悄盖掉用户自定义的名字（例如 "Save Z-Anime Upscaled"），
   // 用户的意图在画布上就看不出来了。
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (rawTitle != null && rawTitle.trim() !== "" && rawTitle.trim() !== classType) {
+  if (
+    rawTitle !== null &&
+    rawTitle !== undefined &&
+    rawTitle.trim() !== "" &&
+    rawTitle.trim() !== classType
+  ) {
     return rawTitle.trim();
   }
 
@@ -173,17 +177,17 @@ export function friendlyNodeTitle(
  * 静态表与 rawTitle 都不适用时，用它作为最后兜底的显示名。 */
 export function prettifyClassType(classType: string, lang: "zh" | "en" = "zh"): string {
   // 去掉尾部的库名括号后缀，例如 "(rgthree)" 或 "(advanced)"
-  const parenMatch = /\s*\(([^)]+)\)\s*$/.exec(classType);
+  const parenMatch = /\s*\((?<suffix>[^)]+)\)\s*$/.exec(classType);
   let name = classType;
   let suffix = "";
   if (parenMatch) {
-    suffix = parenMatch[1]!;
+    suffix = parenMatch.groups?.suffix ?? "";
     name = classType.slice(0, parenMatch.index).trim();
   }
   // 把 camelCase 与 PascalCase 拆成以空格分隔的单词。
   const spaced = name
-    .replaceAll(/([a-z])([A-Z])/g, "$1 $2")
-    .replaceAll(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replaceAll(/(?<lowerHead>[a-z])(?<upperHead>[A-Z])/g, "$<lowerHead> $<upperHead>")
+    .replaceAll(/(?<upperRun>[A-Z]+)(?<wordStart>[A-Z][a-z])/g, "$<upperRun> $<wordStart>")
     .replaceAll(/_+/g, " ")
     .trim();
   if (lang === "en") {

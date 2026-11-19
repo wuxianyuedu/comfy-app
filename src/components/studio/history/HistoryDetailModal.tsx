@@ -5,6 +5,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { isVideo } from "~/lib/media/media";
 import { fetchTaskWorkflow, openTaskFolder } from "~/lib/history-detail-actions";
+import { isPlainRecord } from "~/lib/is-record";
 
 import {
   deriveTaskOrigin,
@@ -41,17 +42,10 @@ type HistoryDetailModalProps = {
 };
 
 /**
- * 历史任务详情弹窗 —— 纯展示层（规范 17 §17.2 第③层）。
- * 图片网格 + 工坊参数（工坊发起时）+ 工作流参数 + 打开目录 / 下载工作流。
- *
- * **不再有「独立」的提示词块与「生成参数」卡**：它们显示的内容与参数表重复
- * （同一句提示词出现两次），而卡片只认一小撮硬编码键名，种子这类关键参数
- * 反而从参数表里被过滤掉。现在一切参数都按来源分块，名字取工作流 IO 的作者
- * 标签（`workflowIO`）。
- *
- * 数据派生在 history-detail-derive.ts，动作在 hooks/use-history-detail-actions.ts，
- * 网络在 lib/history-detail-actions.ts；本文件只做排版与事件上抛。
- */
+ * 历史任务详情弹窗 —— 纯展示层（规范 17 §17.2 第③层）：图片网格 + 工坊参数（工坊发起时）+ 工作流参数 + 打开目录/下载工作流。
+ * 不再有独立提示词块与「生成参数」卡：它们与参数表重复（同一提示词出现两次），且只看硬编码键名，
+ * 反而过滤掉种子等关键参数；现在一切参数按来源分块，名字取工作流 IO 作者标签（workflowIO）。
+ * 派生在 history-detail-derive.ts、动作在 hooks/use-history-detail-actions.ts、网络在 lib/…；本文件只排版与上抛。 */
 export function HistoryDetailModal({
   detailId,
   detail,
@@ -88,8 +82,11 @@ export function HistoryDetailModal({
     hasAny: hasParams,
   } = deriveWorkflowParams(current, workflowIO);
   const firstImage = Array.isArray(current?.images) ? current.images[0] : undefined;
-  /* SAFETY: 类型断言已复核 */
-  const snapSource = (current?.workflowSnapshot as { source?: string } | null | undefined)?.source;
+  /* 快照是 DB 的 JSON 列（unknown）：先确认它是对象、`source` 是字符串再读，
+   *  其余（null / 旧数据 / 非字符串）都按「磁盘回退快照」显示。 */
+  const snapshot = current?.workflowSnapshot;
+  const snapSource =
+    isPlainRecord(snapshot) && typeof snapshot.source === "string" ? snapshot.source : undefined;
   const sourceLabel =
     snapSource === "backfill"
       ? "历史记录回填快照"
@@ -141,7 +138,7 @@ export function HistoryDetailModal({
               {actions.folderPopover && (
                 /* 浮层内容不关闭面板：`onClick={stopPropagation}` 是**守卫**，
                    不是交互 —— 键等价物无从谈起。 */
-                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- onClick 是 stopPropagation 守卫，不是交互 */
+                /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events, jsx_a11y/no-static-element-interactions -- onClick 是 stopPropagation 守卫，不是交互 */
                 <div
                   className={`border-border bg-panel-deep absolute top-13 right-5 ${zClass("popup")} w-[min(440px,calc(100vw-40px))] rounded-lg border p-3 shadow-xl`}
                   onClick={(event) => {
@@ -167,11 +164,12 @@ export function HistoryDetailModal({
                       未检测到 ComfyApp 助手，浏览器没有弹出「打开外部应用」确认框。
                       请双击运行项目内
                       <code className="text-warning-strong">
-                        scripts\install-comfyapp-helper.ps1
+                        scripts\devtools\install-comfyapp-helper.ps1
                       </code>
                       注册
                       <code className="text-warning-strong">comfyapp://</code>
                       协议（仅本机、无需管理员）， 或直接
+                      {/* oxlint-disable-next-line next/no-html-link-for-pages -- `/api/helper/install` 是 API 端点而非页面路由；下载需原生 `<a>` 语义，换 `Link` 会走客户端路由、破坏下载。 */}
                       <a className="hover:text-warning-strong underline" href="/api/helper/install">
                         下载安装脚本
                       </a>
@@ -220,12 +218,11 @@ export function HistoryDetailModal({
                       下载工作流
                     </Button>
                   </Hint>
-                  <span
-                    className="bg-subtle text-ink-muted text-3xs hidden rounded px-1.5 py-0.5 sm:inline"
-                    title={sourceLabel}
-                  >
-                    {sourceLabel}
-                  </span>
+                  <Hint label={sourceLabel}>
+                    <span className="bg-subtle text-ink-muted text-3xs hidden rounded px-1.5 py-0.5 sm:inline">
+                      {sourceLabel}
+                    </span>
+                  </Hint>
                 </div>
               )}
               <Button
@@ -313,7 +310,6 @@ export function HistoryDetailModal({
  种子这类也一样 —— 单独再摆一份只会与参数表重复，而那份卡片
  还会把种子从参数表里过滤掉（用户实测：「参数乱糟糟的」）。 */}
 
-                {/* oxlint-disable-next-line no-unnecessary-condition -- error 声明为 string，但遗留行可能存过对象/[object Object]；保留判 undefined 作旧数据运行时防御 */}
                 {current.error !== undefined && current.error !== null && current.error !== "" && (
                   <div className="bg-destructive/10 text-destructive rounded-lg p-2.5 text-xs">
                     错误：{current.error}

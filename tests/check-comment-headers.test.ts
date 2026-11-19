@@ -1,29 +1,12 @@
 /**
- * 「平台文字开头一行署名」这条约定的只读审计（`scripts/check-comment-headers.mjs`，ISSUE #2269）。
- *
- * 这一格存在的理由是「在册 ≠ 出勤」那一型：署名由 `ship` 四条出口保证（#2268），
- * 但手工 `create-issue` 那一路与 #2217 之前的存量都不经过它 —— 立案当场扫 open 单子
- * 21 张：缺 19 · 重复 1 · 正常 1，而**没有任何一处能读出这件事**。
- *
- * 所以本文件钉的全是「读数会不会被读错」：
- *   ① 三态：`2`（一次列表都没读到）**不等于** `0` —— 那是「没审」，不是「审过且干净」；
- *   ② 单张 `get-issue` / `get-pull` 读不到 ⇒ 记「读不到」，不判成「缺」、不因此变红
- *      （「拿不到测量」与「测量是红的」是两件事）；
- *   ③ 只读：一次写动作都不许发生；
- *   ④ **PR 正文只认逐张 `get-pull` 那一份** —— 这一条在本文件里曾经写成它的反面
- *      （「PR 正文用列表自带的 `body`，不逐张再问」，理由是省一轮网络）。那句教义
- *      正是 ISSUE #2788 的藏身处：`list-pulls` 确实**有** `body` 这个键、类型是 string，
- *      而列表形态里它的值是**空串**（实测四张 open PR 全为 0 长度）—— 于是每一条 PR
- *      都被判成「缺署名」，而断言 `calls 里没有 get-pull` 把这个取数错误**钉成了要求**。
- *      ⇒ 判据的 bug 会在被测面长出教义；修判据时那条教义必须同批反过来，
- *      否则下一次「优化」还会照原样省掉那一问。
- *
- * 不碰真平台：`run` 全程注入假执行者。
+ * 「平台文字开头一行署名」的只读审计（`scripts/gates/check-comment-headers.mjs`，ISSUE #2269）：`ship` 四条出口保证署名（#2268），
+ * 但手工 `create-issue` 与 #2217 前存量绕过它 —— 立案扫 21 张 open 单：缺 19·重复 1·正常 1，无处读出。钉子：`2`≠`0`、单张
+ * 读不到记「读不到」、全程只读、PR 正文只认逐张 `get-pull`（`list-pulls` 的 `body` 是空串，旧版反写成教义 = #2788）。
  */
 import { describe, expect, it } from "vitest";
 
-import { collectShapes, main } from "../scripts/check-comment-headers.mjs";
-import { headerShape } from "../scripts/ship-ticket.mjs";
+import { collectShapes, main } from "../scripts/gates/check-comment-headers.mjs";
+import { headerShape } from "../scripts/ship/ship-ticket.mjs";
 
 type FakeResult = {
   error: string | null;
@@ -129,10 +112,8 @@ describe("collectShapes：只读，且 PR 正文只认逐张 get-pull 那一份"
   });
 
   /**
-   * 这一条就是 #2788 本身：夹具给的是**实测形态**（`list-pulls` 的 `body` 是空串，
-   * `get-pull` 的那份才有署名）。修之前这里拿列表那份判 ⇒ 「缺」；修之后拿 `get-pull`
-   * ⇒ 「正常」。断言同时数 `get-pull` 的**次数** —— 只判形状的话，
-   * 「整条 PR 侧都不参与判决」也能绿。
+   * 这一条就是 #2788 本身：夹具给实测形态（`list-pulls` 的 `body` 是空串，`get-pull` 那份才有署名）。修前拿列表判
+   * ⇒「缺」，修后拿 `get-pull` ⇒「正常」。同时数 `get-pull` 的次数 —— 只判形状的话，「PR 侧整条不参与判决」也能绿。
    */
   it("列表的 body 是空串（真形态）：判「正常」而不是「缺」，且每张 PR 确实各问一次", () => {
     const { run, calls } = fake({
@@ -231,6 +212,24 @@ describe("main：三态与点名", () => {
   });
 
   it("`--json` 只发一份 JSON 文档，且 rows 只装非正常的那些", () => {
+    /** 外来值是不是普通对象 / 数组。 */
+    function isPlainObject(v: unknown): v is Record<string, unknown> {
+      return typeof v === "object" && v !== null && !Array.isArray(v);
+    }
+    function isUnknownArray(v: unknown): v is Array<unknown> {
+      return Array.isArray(v);
+    }
+
+    /** --json 结论的形状：外来 JSON 先落 unknown，再逐字段收窄。 */
+    function isJsonReport(v: unknown): v is { rows: Array<{ number: string }>; total: number } {
+      if (!isPlainObject(v) || typeof v.total !== "number") return false;
+      const rows: unknown = v.rows;
+      return (
+        isUnknownArray(rows) &&
+        rows.every((row) => isPlainObject(row) && typeof row.number === "string")
+      );
+    }
+
     const { run } = fake({
       issues: ISSUES,
       bodies: { "2265": `${HEAD("y")}\n\n正文`, "2195": "## 症状\n" },
@@ -239,11 +238,11 @@ describe("main：三态与点名", () => {
     main({ run, log, slug: "o/r", json: true });
     /* 追一行人类总结会让机器侧 `JSON.parse` 撞「尾部多余内容」，看起来像数据坏了。 */
     expect(heard).toHaveLength(1);
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(heard.join("\n")) as {
-      rows: Array<{ number: string }>;
-      total: number;
-    };
+    const raw: unknown = JSON.parse(heard.join("\n"));
+    if (!isJsonReport(raw)) {
+      throw new Error("--json 结论形状不对");
+    }
+    const parsed = raw;
     expect(parsed.total).toBe(3);
     expect(parsed.rows.map((r: { number: string }) => r.number)).toEqual(["2195", "2194"]);
   });

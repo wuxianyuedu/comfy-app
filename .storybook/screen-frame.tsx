@@ -218,8 +218,8 @@ export type ProjectSceneName = keyof typeof PROJECT_SCENES;
 
 /** 取一个场景；名字不认识时**抛错**（与值源 / 画布场景同一条口径）。 */
 export function projectScene(name: string): ProjectScene {
-  /* SAFETY: 类型断言已复核 */
-  const scene: ProjectScene | undefined = PROJECT_SCENES[name as ProjectSceneName];
+  const registry: Record<string, ProjectScene> = PROJECT_SCENES;
+  const scene: ProjectScene | undefined = registry[name];
   if (scene === undefined) {
     throw new Error(
       `项目场景里没有叫「${name}」的那种。现有的：${PROJECT_SCENE_NAMES.join(" / ")}`,

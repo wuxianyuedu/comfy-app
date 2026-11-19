@@ -21,8 +21,14 @@
  * 同一根字号换算，两处各写一个 16 会随根字号调整悄悄漂开。 */
 export const REM_PX = 16;
 
-/** 展开态导航宽（与 `ui/sidebar.tsx` 的 `--sidebar-width` 同源）。 */
-export const NAV_WIDTH_EXPANDED_PX = 16 * REM_PX;
+/**
+ * 展开态导航宽（与 `ui/sidebar.tsx` 的 `--sidebar-width` 同源）。
+ *
+ * 按内容实需取宽：一行 = 组内边距 16 + 按钮内边距 16 + 图标 16 + 图文间距 8
+ * + 最宽标签（四个汉字，`text-sm`）56 = 112px 下限，取 160 留一档余量；
+ * 再宽只是空白，把那部分让给内容区（ISSUE #3587）。
+ */
+export const NAV_WIDTH_EXPANDED_PX = 10 * REM_PX;
 /** 收起态导航宽（图标轨，与 `--sidebar-width-icon` 同源）。 */
 export const NAV_WIDTH_COLLAPSED_PX = 3 * REM_PX;
 

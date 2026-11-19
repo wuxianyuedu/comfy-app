@@ -1,13 +1,11 @@
-// 「创作后端」分区**撤掉运行态之后仍然自洽**（ISSUE #1900）。
-//
-// 这一分区从「配置 + 运行态 + 日志」收成「只配置」。收的过程里最容易出的错是
-// **留一段没有出口的空白**：四个动作按钮与日志框没了，而用户按老位置找「启动
-// ComfyUI」时看到几个输入框，会以为功能被砍了。所以这里判两件：
-//   · 配置项都还在（路径 / 解释器 / 端口 / 启动参数 / 自动拉起 / 存储目录）；
-//   · 有一个**能点**的出口指向侧栏「ComfyUI」页（`workspace:navigate`）。
+// 「创作后端」分区**撤掉运行态之后仍然自洽**（ISSUE #1900）：收成「只配置」后
+// 最容易出的错是留一段没有出口的空白。判两件：配置项都还在；有一个**能点**的
+// 出口指向侧栏「ComfyUI」页（`workspace:navigate`）。
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 import { ComfyuiSection } from "./ComfyuiSection";
@@ -25,21 +23,39 @@ afterEach(() => {
   emitAppEventMock.mockClear();
 });
 
+/** 本分区只读配置草稿、安装形态与保存态；接口其余成员与本节无关。 */
+function isComfyuiSectionController(v: unknown): v is ReadySettingsPageController {
+  if (!isRecord(v)) {
+    return false;
+  }
+  const drafts = v.drafts;
+  return (
+    isRecord(drafts) &&
+    isRecord(drafts.settings) &&
+    typeof v.comfyDefaultPort === "number" &&
+    typeof v.saving === "boolean" &&
+    typeof v.savePrefs === "function" &&
+    typeof v.patchSettings === "function"
+  );
+}
+
 function controller(
   over: Partial<ReadySettingsPageController["drafts"]["settings"]> = {},
   instance: ReadySettingsPageController["comfyInstance"] = {
     pathConfigured: true,
     instanceType: "portable",
     desktopManaged: false,
+    pathExists: true,
+    interpreter: { configured: false, exists: null },
   },
 ): ReadySettingsPageController {
-  /* SAFETY: 类型断言已复核 */
-  return {
+  const stub: unknown = {
     comfyDefaultPort: 8188,
     comfyInstance: instance,
     comfyStorage: null,
     saving: false,
-    savePrefs: vi.fn(async () => undefined),
+    savePrefs: vi.fn(() => undefined),
+    commitPrefs: vi.fn(),
     patchSettings: vi.fn(),
     drafts: {
       settings: {
@@ -54,7 +70,11 @@ function controller(
         ...over,
       },
     },
-  } as unknown as ReadySettingsPageController;
+  };
+  if (!isComfyuiSectionController(stub)) {
+    throw new Error("创作后端分区的 controller 替身缺少本分区要读的字段");
+  }
+  return stub;
 }
 
 describe("ComfyuiSection（只配置路径）", () => {
@@ -73,7 +93,19 @@ describe("ComfyuiSection（只配置路径）", () => {
         name: "提交任务时 ComfyUI 未运行则自动启动",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "保存偏好" })).toBeInTheDocument();
+    // 即时自动保存：不再有显式「保存偏好」按钮
+    expect(screen.queryByRole("button", { name: "保存偏好" })).not.toBeInTheDocument();
+  });
+
+  it("切换偏好即时落库（无保存按钮，commitPrefs 即调即存）", async () => {
+    const user = userEvent.setup();
+    const c = controller();
+    render(<ComfyuiSection c={c} />);
+    const cb = screen.getByRole("checkbox", {
+      name: "提交任务时 ComfyUI 未运行则自动启动",
+    });
+    await user.click(cb);
+    expect(c.commitPrefs).toHaveBeenCalled();
   });
 
   it("运行态那几颗按钮与日志框都不在这一分区了", () => {
@@ -101,10 +133,168 @@ describe("ComfyuiSection（只配置路径）", () => {
       <ComfyuiSection
         c={controller(
           { comfyuiPath: "" },
-          { pathConfigured: false, instanceType: null, desktopManaged: false },
+          {
+            pathConfigured: false,
+            instanceType: null,
+            desktopManaged: false,
+            pathExists: false,
+            interpreter: { configured: false, exists: null },
+          },
         )}
       />,
     );
     expect(screen.getByText(/未配置——ComfyUI 未运行时任务会失败/)).toBeInTheDocument();
+  });
+
+  /* ISSUE #4138：路径填了错误内容（已保存但判不出安装形态）必须行上有提示，
+   * 不能再显示「已配置」。判据是已保存路径的 fs 结论（comfyInstance），失焦
+   * 保存即 refetch 重判 —— 用例钉的是「结论 → 提示」的映射。 */
+  it("填了不存在的路径：行上报「找不到目录」，不再显示「已配置」（#4138）", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          {},
+          {
+            pathConfigured: true,
+            instanceType: null,
+            desktopManaged: false,
+            pathExists: false,
+            interpreter: { configured: false, exists: null },
+          },
+        )}
+      />,
+    );
+    expect(screen.getByText(/磁盘上找不到这个目录/)).toBeInTheDocument();
+    expect(screen.queryByText(/已配置——这里只管路径/)).not.toBeInTheDocument();
+    expect(screen.getByText(/未配置——ComfyUI 未运行时任务会失败/)).toBeInTheDocument();
+  });
+
+  it("目录存在但不是 ComfyUI 安装：提示对照安装形态说明自查（#4138）", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          {},
+          {
+            pathConfigured: true,
+            instanceType: null,
+            desktopManaged: false,
+            pathExists: true,
+            interpreter: { configured: false, exists: null },
+          },
+        )}
+      />,
+    );
+    expect(screen.getByText(/不是有效的 ComfyUI 安装/)).toBeInTheDocument();
+    expect(screen.queryByText(/已配置——这里只管路径/)).not.toBeInTheDocument();
+  });
+
+  it("形态判定成功时不显示无效提示（错误行不常驻）", () => {
+    render(<ComfyuiSection c={controller()} />);
+    expect(screen.queryByText(/ComfyUI 路径无效/)).not.toBeInTheDocument();
+    expect(screen.getByText(/已配置——这里只管路径/)).toBeInTheDocument();
+  });
+
+  it("无效提示与输入框 ARIA 关联（aria-invalid + aria-describedby，规范 §6.8）", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          {},
+          {
+            pathConfigured: true,
+            instanceType: null,
+            desktopManaged: false,
+            pathExists: false,
+            interpreter: { configured: false, exists: null },
+          },
+        )}
+      />,
+    );
+    const input = screen.getByLabelText("ComfyUI 路径（源码根或桌面版实例根）");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const describedBy = input.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(screen.getByText(/磁盘上找不到这个目录/)).toHaveAttribute("id", describedBy);
+  });
+});
+
+describe("comfy-cli 解释器的行内提示（ISSUE #4164，与 #4138 同形）", () => {
+  it("填了但磁盘上不存在：行上报「找不到文件」，不再显示「已配置——执行链会用这个解释器」", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          { comfyCliPython: "D:/nope/python.exe" },
+          {
+            pathConfigured: true,
+            instanceType: "portable",
+            desktopManaged: false,
+            pathExists: true,
+            interpreter: { configured: true, exists: false },
+          },
+        )}
+      />,
+    );
+    expect(screen.getByText(/磁盘上找不到这个文件/)).toBeInTheDocument();
+    expect(screen.queryByText(/已配置——执行链会用这个解释器/)).not.toBeInTheDocument();
+  });
+
+  it("提示与输入框 ARIA 关联（aria-invalid + aria-describedby，规范 §6.8）", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          { comfyCliPython: "D:/nope/python.exe" },
+          {
+            pathConfigured: true,
+            instanceType: "portable",
+            desktopManaged: false,
+            pathExists: true,
+            interpreter: { configured: true, exists: false },
+          },
+        )}
+      />,
+    );
+    const input = screen.getByLabelText("comfy-cli 解释器（Python 绝对路径）");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const describedBy = input.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(screen.getByText(/磁盘上找不到这个文件/)).toHaveAttribute("id", describedBy);
+  });
+
+  it("填了且存在 / 留空：不显示无效提示（错误行不常驻）", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          { comfyCliPython: "D:/venv/python.exe" },
+          {
+            pathConfigured: true,
+            instanceType: "portable",
+            desktopManaged: false,
+            pathExists: true,
+            interpreter: { configured: true, exists: true },
+          },
+        )}
+      />,
+    );
+    expect(screen.queryByText(/comfy-cli 解释器无效/)).not.toBeInTheDocument();
+    expect(screen.getByText(/已配置——执行链会用这个解释器/)).toBeInTheDocument();
+  });
+
+  it("留空是合法语义（退回默认落点）：不提示（#4164 的边界）", () => {
+    render(
+      <ComfyuiSection
+        c={controller(
+          { comfyCliPython: "" },
+          {
+            pathConfigured: true,
+            instanceType: "portable",
+            desktopManaged: false,
+            pathExists: true,
+            interpreter: { configured: false, exists: null },
+          },
+        )}
+      />,
+    );
+    expect(screen.queryByText(/comfy-cli 解释器无效/)).not.toBeInTheDocument();
+    const input = screen.getByLabelText("comfy-cli 解释器（Python 绝对路径）");
+    expect(input).not.toHaveAttribute("aria-invalid");
   });
 });

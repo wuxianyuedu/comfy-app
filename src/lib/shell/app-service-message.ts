@@ -30,6 +30,7 @@
  * | `online → offline`                  | 断开        | 用户在状态栏真的会看到「应用服务已断开」 |
  * | `processIsNew` 由假转真             | 启动 / 恢复 | 这一份进程此前不在（或已被换掉）       |
  * | `offline → online`（进程没换）      | 恢复        | 断了又通，用户在界面上看着它变了        |
+ * | 进 / 出 `unresponsive`              | （不记）    | 软状态：进程外信号说进程还在，只是一时答不上（#4146）。状态栏自己会显示它，消息中心进出都**静默**——每次重载窗口都写一条「无响应/恢复」是噪声。`unresponsive → offline`（进程真没了）仍走第一行记断开 |
  *
  * **刷新不产生「启动」**：整页刷新后判据仍是「这份进程不是新的」（`processIsNew`
  * 在刷新前就是真），于是边沿不成立 —— 否则用户每按一次 Ctrl+R 消息中心就多一条
@@ -48,6 +49,7 @@
 import { formatClock } from "~/lib/time-format";
 
 import type { AppServiceExitNotice } from "./app-service-exit";
+import type { AppServiceLoopBlock } from "./app-service-loop-blocks";
 import type { DevServerState } from "./dev-server-status";
 
 /** 一条可直接 `push` 的消息文案。 */
@@ -64,7 +66,7 @@ export type AppServiceEventCursor = {
   offlineAt: number | null;
   /** 上一次看到的「这份进程是新的吗」。 */
   processIsNew: boolean;
-  /** 上一次看到的四态。 */
+  /** 上一次看到的五态。 */
   state: DevServerState;
 };
 
@@ -86,7 +88,7 @@ export type AppServiceEvent =
 export type AppServiceFacts = {
   /** 本次看到的「这份进程对本次页面会话来说是新的吗」。 */
   processIsNew: boolean;
-  /** 本次看到的四态。 */
+  /** 本次看到的五态。 */
   state: DevServerState;
   /**
    * 这一拍之前有多少毫秒**没人在探测**（0 = 紧接上一拍）。
@@ -272,6 +274,11 @@ export type AppServiceStartInput = {
   at: number;
   /** 上一份进程结束记录的落盘时刻（ISO 串或毫秒）；没有为 null。 */
   exitAt: number | null;
+  /**
+   * 与本次断开窗口重叠的一次事件循环阻塞读数；没有则省略（观测未启动 / 没阻塞 /
+   * 窗口不重叠）。见 `~/lib/shell/app-service-loop-blocks`：数据在恢复应答之后才读得到。
+   */
+  loopBlock?: AppServiceLoopBlock | null;
   /** 上一份进程为什么结束；没有为 null。 */
   notice: AppServiceExitNotice | null;
   /** 本次会话观测到的断开时刻；冷启动为 null。 */
@@ -300,7 +307,7 @@ export type AppServiceStartInput = {
  * 「启动」。三档对三件事，不把「重启」说成「首次启动」。
  */
 export function describeAppServiceStart(input: AppServiceStartInput): AppServiceMessageText {
-  const { at, offlineAt, exitAt, notice, unprobedMs } = input;
+  const { at, offlineAt, exitAt, notice, loopBlock = null, unprobedMs } = input;
   const recovered = offlineAt !== null;
   const span = recovered ? formatOfflineSpan(offlineAt, at) : null;
 
@@ -338,6 +345,17 @@ export function describeAppServiceStart(input: AppServiceStartInput): AppService
       }${notice.why}。${notice.detail}。`,
     );
     lines.push(`建议：${notice.action}。`);
+  } else if (recovered && loopBlock !== null) {
+    /* 服务端观测读到了与本次断开窗口重叠的事件循环阻塞：把「多半是短暂无响应」
+     * 的猜测换成事实（ISSUE #3369 的核心现场）。进程没死、无结束记录的那一类
+     * 「断开」，成因在进程外的共同签名就是事件循环停走了多久——这正是这份读数。
+     * 时长是**下界**（心跳可能没赶上阻塞的头），所以写「约」。 */
+    const driftSpan = formatOfflineSpan(0, loopBlock.driftMs);
+    lines.push(
+      `原因已从服务端观测读到：应用服务进程的事件循环在 ${formatClock(loopBlock.startedAt)}` +
+        ` 起被阻塞了约 ${driftSpan ?? "未知时长"}，期间所有请求（包括探活）都无法处理，` +
+        `${formatClock(loopBlock.endedAt)} 恢复调度——与这次断开的时间对得上。`,
+    );
   } else {
     /* 读不到记录有三条互斥的成因（文件从未写过 / 写侧只覆盖启动期那一档 /
      * 记录与当前 runId 相同而被判掉），而「读不到」这一个事实**无法**从中
@@ -355,6 +373,9 @@ export function describeAppServiceStart(input: AppServiceStartInput): AppService
             "（这种抖动不写下结束记录），或它结束的那一刻没有旁证人记下。"
         : "这是一次冷启动：本次运行里应用服务还没有结束过，因此没有「上一次结束」可读。",
     );
+  }
+
+  if (notice === null) {
     lines.push(
       /* 指**整包**而不是某个子目录（这一条此前指向 `log/current/nextjs/`）：
        * 一次运行结束时它的输出会被归档进 `log/runs/<时间戳>-<runId>/`，所以

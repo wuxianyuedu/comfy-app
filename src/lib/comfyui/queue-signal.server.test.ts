@@ -7,13 +7,15 @@
  *   · 最后一个订阅者退订即停循环（不再打 ComfyUI）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ComfyQueueStatus } from "./queue-status-types";
 
 /* `vi.mock` 会被 hoist 到文件顶部，工厂里引用的 `collect` 必须同样 hoist，否则
  * 模块求值阶段（导入被测模块 → 触发 mock 工厂）会撞上 `const collect` 的 TDZ。 */
-const { collect } = vi.hoisted(() => ({ collect: vi.fn() }));
+const { collect } = vi.hoisted(() => ({
+  collect: vi.fn<() => Promise<ComfyQueueStatus>>(),
+}));
 vi.mock("~/lib/comfyui/queue-status.server", () => ({
-  /* SAFETY: 类型断言已复核 */
-  collectComfyQueueStatus: collect as unknown as () => Promise<unknown>,
+  collectComfyQueueStatus: collect,
 }));
 
 import { subscribeQueueChanged, resetQueueChangedSignalForTest } from "./queue-signal.server";

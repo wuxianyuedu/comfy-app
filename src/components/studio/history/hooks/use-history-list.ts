@@ -5,7 +5,7 @@
 // HistoryList 视图只消费本 hook 返回的 controller，不再自己发请求。
 
 import { useCallback, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 /* 取消走集中出口（`task-cancel-client`）：这里此前自己挂了一份
@@ -42,8 +42,12 @@ const EMPTY_WORKFLOW_IO: WorkflowIOMap = {};
 
 export type HistoryListController = {
   cancel: (id: string) => Promise<void>;
+  /** 取消删除（ConfirmDialog 的关闭侧，ISSUE #3771）。 */
+  cancelRemove: () => void;
   canLoadMore: boolean;
   closeDetail: () => void;
+  /** 确认删除待删目标（ConfirmDialog 的确认侧，ISSUE #3771）。 */
+  confirmRemove: () => Promise<void>;
   /** 各状态计数，key 为 FilterKey 或任务 status。 */
   counts: Record<string, number>;
   detail: TaskDetail | null;
@@ -64,14 +68,17 @@ export type HistoryListController = {
   /** 进行中任务的模拟进度 Map。 */
   progressMap: Record<string, number>;
   refresh: () => void;
-  remove: (id: string) => Promise<void>;
+  /** 打开删除确认弹窗（非阻塞，ISSUE #3771）。 */
+  remove: (id: string) => void;
+  /** 待删除的任务 id（ConfirmDialog 的 open 侧，ISSUE #3771）。 */
+  removeTarget: string | null;
   retry: (task: TaskItem) => Promise<void>;
   retryingId: string | null;
   setSort: (sort: SortKey) => void;
   sort: SortKey;
   switchFilter: (filter: FilterKey) => void;
   tasks: Array<TaskItem>;
-  /** 当前可见的日期分组（已按 displayCount 裁剪）。 */
+  /** 当前可见的日期分组（已拉取各页的并集；翻页走服务端 skip，#4044）。 */
   visibleGroups: Array<{ items: Array<TaskItem>; key: string }>;
   visibleTotal: number;
   /** 本任务所用工作流的 IO 定义（参数可读名从它的 `label` 查）。
@@ -80,13 +87,9 @@ export type HistoryListController = {
 };
 
 /**
- * 历史记录列表的全部逻辑。
- *
- * 「打开详情」只有列表行那一个入口（`HistoryList` 把 `openDetail` 挂在每行的
- * 点击上）。此前这里还订阅过一个 `open-task` 事件、注释写着「VideoQueueModal
- * 的详情按钮会派发它」，而那个派发方早已搬走 —— 一条**没有任何触发源**的监听器
- * 不会报错、不会红，只会让下一个读代码的人以为「别处也能打开详情」。
- * `tests/app-event-pairing.test.ts` 现在拦得住这种只剩一端的通道。
+ * 历史记录列表的全部逻辑。「打开详情」只有列表行一个入口（HistoryList 每行挂 openDetail）。
+ * 此前还订阅过一个 open-task 事件、注释称 VideoQueueModal 会派发，而派发方早已搬走 ——
+ * 无触发源的监听器不报错，只误导后来者以为别处能打开详情；tests/app-event-pairing.test.ts 现在拦得住只剩一端的通道。
  */
 export function useHistoryList(): HistoryListController {
   const trpc = useTRPC();
@@ -94,33 +97,46 @@ export function useHistoryList(): HistoryListController {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<FilterKey>("ALL");
   const [sort, setSort] = useState<SortKey>("newest");
-  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [detailId, setDetailId] = useState<string | null>(null);
   /* 「哪一条在重试」收在 `useItemAction`（规范 16 §16.2.4.40）：
    * 此前是本文件自持的 `useState<string | null>`，与工坊两处（AI 润色）、
    * 工作流库的下载与同步各写一份 —— 而「同一条能不能重复点」四处都没防。 */
   const retryAction = useItemAction();
+  /* 真分页（#4044）：无限查询按页拉取（skip = 已拉取行数，由 getNextPageParam
+   * 累计）；hasMore 由服务端响应给出（media 过滤的截断也因此对调用方可见）。 */
+  const tasksQ = useInfiniteQuery(
+    trpc.task.list.infiniteQueryOptions(
+      { take: PAGE_SIZE },
+      {
+        getNextPageParam: (lastPage, allPages) => {
+          if (!lastPage.hasMore) {
+            return undefined;
+          }
+          const fetched = allPages.reduce((sum, p) => sum + p.tasks.length, 0);
+          return fetched;
+        },
+      },
+    ),
+  );
+  const hasMore = tasksQ.data?.pages.at(-1)?.hasMore ?? false;
 
-  const tasksQ = useQuery(
-    trpc.task.list.queryOptions(undefined, {
-      /* 保持旧数据：refetch / 删除后回源不闪空列表 */
-      placeholderData: (prev) => prev,
-    }),
-  );
-  const tasks = useMemo<Array<TaskItem>>(
-    () =>
-      (tasksQ.data?.tasks ?? []).map((task) => ({
-        ...task,
-        createdAt: String(task.createdAt),
-      })),
-    [tasksQ.data?.tasks],
-  );
+  /* 各页并集（按 id 去重、保持「新到旧」的页序）：渲染期从查询结果派生，
+   * 不在 effect 里 setState（规范 8.6 / 2.4）。 */
+  const tasks = useMemo<Array<TaskItem>>(() => {
+    const byId = new Map<string, TaskItem>();
+    for (const page of tasksQ.data?.pages ?? []) {
+      for (const task of page.tasks) {
+        byId.set(task.id, { ...task, createdAt: String(task.createdAt) });
+      }
+    }
+    return [...byId.values()];
+  }, [tasksQ.data]);
   const loading = tasksQ.isLoading;
   const progressMap = useSimulatedProgress(tasks);
 
   const refresh = useCallback(() => {
-    void tasksQ.refetch();
-  }, [tasksQ]);
+    void queryClient.invalidateQueries({ queryKey: trpc.task.list.queryKey() });
+  }, [queryClient, trpc]);
 
   const openDetail = useCallback((id: string) => {
     setDetailId(id);
@@ -151,9 +167,7 @@ export function useHistoryList(): HistoryListController {
     ),
   );
   const workflowIO = useMemo<WorkflowIOMap>(
-    () =>
-      // oxlint-disable-next-line no-unnecessary-condition -- ioQ.data 来自 tRPC workflow.detail（外部数据），旧服务端可能缺 template/workflowIO，? 是运行时守卫
-      ioQ.isSuccess ? parseWorkflowIOMap(ioQ.data?.template?.workflowIO) : EMPTY_WORKFLOW_IO,
+    () => (ioQ.isSuccess ? parseWorkflowIOMap(ioQ.data?.template?.workflowIO) : EMPTY_WORKFLOW_IO),
     [ioQ.isSuccess, ioQ.data],
   );
   /* 模式契约注册表：详情弹窗按「任务模式 + 生效契约」枚举工坊对外口（与工坊
@@ -171,10 +185,13 @@ export function useHistoryList(): HistoryListController {
     [tasks, filter, sort],
   );
   const counts = useMemo(() => countByStatus(tasks), [tasks]);
-  const { visibleGroups, visibleTotal, canLoadMore } = useMemo(
-    () => paginateGroups(groupByDate(filtered), displayCount),
-    [filtered, displayCount],
+  /* 已拉取的行全部可见（分页走服务端 cursor，#4044）；「还有没有下一页」由
+   * 服务端的 hasMore 回答——media 过滤的 400 行截断也因此对调用方可见。 */
+  const { visibleGroups, visibleTotal } = useMemo(
+    () => paginateGroups(groupByDate(filtered), tasks.length),
+    [filtered, tasks],
   );
+  const canLoadMore = hasMore;
   const empty = useMemo(() => {
     const label = FILTERS.find((f) => f.key === filter)?.label ?? "";
     return emptyStateText(filter, label);
@@ -182,21 +199,19 @@ export function useHistoryList(): HistoryListController {
 
   const switchFilter = useCallback((filterKey: FilterKey) => {
     setFilter(filterKey);
-    setDisplayCount(PAGE_SIZE);
   }, []);
   const loadMore = useCallback(() => {
-    setDisplayCount((count) => count + PAGE_SIZE);
-  }, []);
+    if (!hasMore) {
+      return;
+    }
+    void tasksQ.fetchNextPage();
+  }, [hasMore, tasksQ]);
 
   const deleteTask = useMutation(trpc.task.delete.mutationOptions());
 
-  /* 反馈通道适配：本面板的「成功」走 `info`（一句陈述，不是庆祝），
-   * 「失败」走 `error`。收口前「取消失败，请稍后重试」这类**引导性文案**
-   * 是写死的，网络层原文（`ECONNREFUSED` / `Failed to fetch`）被整个丢掉 ——
-   * 现在统一走 `~/lib/async-action` 的 `errorMessage`。
-   *
-   * 成功那一侧用 `successText` 给一句陈述句；「取消失败」那条的失败文案
-   * 保留可执行动作（「稍后重试」），它是这条账里唯一值得写的引导。 */
+  /* 反馈通道：成功走 info（一句陈述，不是庆祝）、失败走 error。收口前「取消失败，请稍后重试」
+   * 等引导文案写死、网络层原文（ECONNREFUSED / Failed to fetch）被丢弃；现统一走 ~/lib/async-action 的 errorMessage。
+   * 成功侧用 successText 陈述句；「取消失败」保留可执行动作（稍后重试）。 */
   const report: ActionReport = useCallback(
     (kind, detail) => (kind === "ok" ? toast.info(detail) : toast.error(detail)),
     [toast],
@@ -214,29 +229,50 @@ export function useHistoryList(): HistoryListController {
     [refresh, report],
   );
 
-  const remove = useCallback(
-    async (id: string) => {
-      if (!confirm("删除此任务记录？已生成的文件不会从磁盘删除。")) {
-        return;
-      }
-      await runAsyncAction(
-        async () => {
-          await deleteTask.mutateAsync({ id });
-          /* 乐观移除：直接改查询缓存，避免本地镜像 state */
-          queryClient.setQueryData(
-            trpc.task.list.queryKey(undefined),
-            /* 键自带 DataTag：`old` 的形状由查询结果推导，不再手写窄类型 */
-            (old) => (old ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) } : old),
-          );
-          if (detailId === id) {
-            setDetailId(null);
-          }
-        },
-        { report, failureText: "删除失败", successText: "已删除任务" },
-      );
-    },
-    [deleteTask, detailId, report, queryClient, trpc],
-  );
+  /* 删除走**非阻塞确认弹窗**（`ConfirmDialog`，ISSUE #3771）：原生 `confirm()`
+   * 是同步对话框 —— 在内嵌浏览器（IAB）里弹出后若无人处置，同源渲染进程的
+   * 主线程会以 0 CPU 整体卡死（连无应用 JS 的 splash.html 都冻结）。这里只
+   * 记下待删目标，由视图挂 ConfirmDialog 承接确认。 */
+  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+  const remove = useCallback((id: string) => {
+    setRemoveTarget(id);
+  }, []);
+  const cancelRemove = useCallback(() => {
+    setRemoveTarget(null);
+  }, []);
+  const confirmRemove = useCallback(async () => {
+    const id = removeTarget;
+    if (!id) {
+      return;
+    }
+    setRemoveTarget(null);
+    await runAsyncAction(
+      async () => {
+        await deleteTask.mutateAsync({ id });
+        /* 乐观移除：直接改无限查询缓存里的各页（避免本地镜像 state，#4044） */
+        queryClient.setQueryData(
+          trpc.task.list.infiniteQueryKey({ take: PAGE_SIZE }),
+          /* 键自带 DataTag：`old` 的形状由查询结果推导，不再手写窄类型 */
+          (old) => {
+            if (!old) {
+              return old;
+            }
+            return {
+              ...old,
+              pages: old.pages.map((page) => ({
+                ...page,
+                tasks: page.tasks.filter((task) => task.id !== id),
+              })),
+            };
+          },
+        );
+        if (detailId === id) {
+          setDetailId(null);
+        }
+      },
+      { report, failureText: "删除失败", successText: "已删除任务" },
+    );
+  }, [deleteTask, detailId, removeTarget, report, queryClient, trpc]);
 
   /* 「重试」= `task.retry` 的**原样重跑**（#2481）：后端按原任务的 execPayload +
    * 参数 / 参考图重建一个 QUEUED 任务，返回新 taskId。成功文案带上新任务号
@@ -291,6 +327,9 @@ export function useHistoryList(): HistoryListController {
     closeDetail,
     cancel,
     remove,
+    removeTarget,
+    confirmRemove,
+    cancelRemove,
     retry,
   };
 }

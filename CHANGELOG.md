@@ -5,7 +5,7 @@
 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
 > **本文件不要直接手改**：新条目先进 `changelog.d/<issue号>-<slug>.md` 碎片
-> （一件变更一个文件），由 `node scripts/merge-changelog-fragments.mjs` 并入这里。
+> （一件变更一个文件），由 `node scripts/docs/merge-changelog-fragments.mjs` 并入这里。
 > 这样并行分支不会在同一份文本上撞车，见
 > [前端工程规范 §13.10.5](docs/standards/13-提交与-code-review.md#13105-碎片化落地改-changelogd不改-changelogmd)。
 >
@@ -130,7 +130,7 @@
   优先展示完整文件路径与行号，不再截断。
 - **comfy-cli 虚拟环境随启动自动准备**：`start-tauri.exe` 启动时检测
   `python-venv/comfy-cli`，缺失则后台自动创建 venv 并安装 comfy-cli，不阻塞启动。
-- **UI 与逻辑分离护栏（棘轮）**：新增 `scripts/check-ui-logic-separation.cjs`，
+- **UI 与逻辑分离护栏（棘轮）**：新增 `scripts/gates/check-ui-logic-separation.cjs`，
   统计视图层里的 `fetch(` / `vanillaApi.*` / tRPC hook 三类 IO，违规数**只许降不许升**，
   已接入 `pre-commit` 与 CI（治理后必须 `--update` 收紧基线）。
   当前基线 16 处 / 10 文件（P1–P4 已落地，104 → 16）。
@@ -167,8 +167,8 @@
   （原 `run-desktop.bat`）/ `start-tauri.ps1`（原 `start-tauri.vbs`）/
   `register-comfyapp-protocol.ps1` 及 `tools/**` 下 9 个入口；新增
   `scripts/entry-common.ps1` 收敛「定位项目根 / 解析 pwsh / 透传退出码 / 双击暂停」，
-  新增 `scripts/enable-ps1-double-click.ps1` 做一次性双击关联（用户级 HKCU，免管理员）。
-  **升级注意**：首次双击 `.ps1` 前需右键 `scripts/enable-ps1-double-click.ps1`
+  新增 `scripts/devtools/enable-ps1-double-click.ps1` 做一次性双击关联（用户级 HKCU，免管理员）。
+  **升级注意**：首次双击 `.ps1` 前需右键 `scripts/devtools/enable-ps1-double-click.ps1`
   →「使用 PowerShell 运行」，否则 Windows 默认用记事本打开脚本。
 - **双击入口归位 `tools/`，根目录只留工程配置**（ISSUE #29）：6 个启动类入口由仓库根
   迁入 `tools/start/`（`start-web` / `start-tauri` / `start-desktop` / `run-local` /

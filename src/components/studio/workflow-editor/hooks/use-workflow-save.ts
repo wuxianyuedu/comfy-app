@@ -1,13 +1,8 @@
-/* ── 工作流编辑器的保存 mutation（第②层逻辑）─────────────────────────
- * WorkflowEditorInner 原先直接 \`useMutation(trpc.workflow.update.mutationOptions())\` 再把
- * mutation 对象透传给 useWorkflowPersistence。这意味着「哪个组件持有
- * mutation」和「谁用它」是绑死的，而视图层持有 tRPC hook 正是规范 17
- * 的 S3 条目。
- *
- * 抽出来后：视图拿到的只有一个窄接口（mutate / mutateAsync），
- * 既满足 S3，也让 useWorkflowPersistence 不再依赖 \`api\` 的具体类型
- * ——测试里塞个假的 saver 就能跑。
- */
+/* ── 工作流编辑器的保存 mutation（第②层逻辑）──
+ * 原先 WorkflowEditorInner 直接 `useMutation(...)` 再把 mutation 对象透传给
+ * useWorkflowPersistence，把「谁持有 mutation」与「谁用它」绑死，而视图层持有 tRPC
+ * hook 正是规范 17 的 S3 条目。抽出后视图只拿窄接口（mutate / mutateAsync），
+ * useWorkflowPersistence 也不再依赖 `api` 的具体类型 —— 测试塞个假 saver 就能跑。 */
 
 "use client";
 

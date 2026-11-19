@@ -13,18 +13,18 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 /* POSIX 宿主探针改由 fixture 提供（`tests/helpers/platform-fixtures.ts`）——
  * 原来本文件自己写了一份 `posixHost()`，与 `kill-process-tree` 那边同形。
  * fixture 版是同一份实现，改一处两边都动。 */
 import { test as platformTest } from "../../../tests/helpers/platform-fixtures";
 
 import {
-  clearWhichCommandCache,
   executableExts,
   executableKind,
   pnpmInvocation,
   pnpmJsEntry,
+  realUsabilityProbe,
   resolveCommandInvocation,
   usableCommand,
   whichCommand,
@@ -33,16 +33,12 @@ import {
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "exec-resolve-"));
 let seq = 0;
-/** 每个用例一个独立目录：同一个 tmp 路径被覆写重造会让记忆化缓存说谎。 */
+/** 每个用例一个独立目录：同名文件被覆写重造不会串到别的用例（`whichCommand` 不再记忆化）。 */
 function freshDir(): string {
   const dir = path.join(tmp, `case-${seq++}`);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
-
-beforeEach(() => {
-  clearWhichCommandCache();
-});
 
 afterAll(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -205,7 +201,7 @@ describe("resolveCommandInvocation：控制台起进程前的那一问", () => {
      * 喂的参数此前正是本函数的第二入参 —— 于是「调用方要跑什么」与「探针喂什么」
      * 被合成了一件东西，**探针把真命令整条跑了一遍**：
      *
-     *   `resolveCommandInvocation("node", ["scripts/e2e-run.mjs", "--grep=@critical"])`
+     *   `resolveCommandInvocation("node", ["scripts/e2e/e2e-run.mjs", "--grep=@critical"])`
      *   ⇒ 探针真的起了一次 e2e-run（拉 Playwright 的 webServer、假 ComfyUI），
      *   而 `spawnSync` 超时**只收直接子进程** —— 孙子进程留在端口上接着跑。
      *   `.cnb.yml` 里每条 `node scripts/…` / `pnpm run build` 因此都被执行两遍。
@@ -511,10 +507,9 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     writeExec(path.join(dir, "pnpm"), "#!/bin/sh\nexit 0\n");
     expect(pnpmJsEntry(dir)).toBeNull();
     const inv = pnpmInvocation(["install"], { env: { PATH: dir } });
-    // 「没走 JS 入口」= 起的那条命令不是 `process.execPath` + `node_modules` 里的入口
-    if (inv) {
-      expect(inv.command).not.toBe(process.execPath);
-    }
+    // 「没走 JS 入口」= 起的那条命令不是 `process.execPath` + `node_modules` 里的入口；
+    // inv 可空（没起命令也是合规态）—— 可空分支收进合取式，断言无条件跑。
+    expect(inv === null || inv.command !== process.execPath).toBe(true);
   });
 
   it("PATH 上只有垫片、包真身在本机落点上：仍走 JS 入口（不退回宿主）", () => {
@@ -549,5 +544,132 @@ describe("pnpmInvocation：优先跑包真身的 JS 入口（ISSUE #2562）", ()
     expect(inv!.command).toBe(process.execPath);
     expect(inv!.args).toEqual([entry, "install"]);
     expect(inv!.viaHost).toBe(false);
+  });
+});
+
+/**
+ * 解析结果**不跨调用共享**（ISSUE #3327）。
+ *
+ * 此前模块级 `Map` 把每次解析的产物写进同一张表，另一次「按名字查」的调用会把它读回来：
+ * 既会读到过期值（PATH 上的文件在本进程存活期间被删 / 重造），也构成一条进程内通道
+ * （扫描器据此把一次调用当成另一次的源）。去掉记忆化后每次调用都现扫 PATH，下面四条钉的是
+ * 「合法值照旧、旧值不再复用、探针换了立即生效」。
+ */
+describe("whichCommand：每次调用现解析（不再有进程内记忆化）", () => {
+  /** 只看候选名、不真起进程 —— `access` 与 `spawn` 都放行。 */
+  function passthrough(): UsabilityProbe {
+    return { access: () => undefined, spawn: () => null };
+  }
+
+  it("合法值照旧：PATH 上唯一的候选就是返回的绝对路径", () => {
+    const dir = freshDir();
+    const exe = path.join(dir, "tool");
+    writeExec(exe, "#!/bin/sh\nexit 0\n");
+    expect(
+      whichCommand("tool", { env: { PATH: dir }, platform: "linux", probe: passthrough() }),
+    ).toBe(exe);
+  });
+
+  it("同名、同 PATH、文件已删：第二次不再读回第一次的旧路径", () => {
+    const dir = freshDir();
+    const exe = path.join(dir, "tool");
+    writeExec(exe, "#!/bin/sh\nexit 0\n");
+    const env = { PATH: dir };
+    expect(whichCommand("tool", { env, platform: "linux", probe: passthrough() })).toBe(exe);
+    fs.rmSync(exe);
+    /* 旧实现的记忆化键只有 name + PATH + PATHEXT + platform ⇒ 这里会读回已删掉的旧路径。 */
+    expect(whichCommand("tool", { env, platform: "linux", probe: passthrough() })).toBeNull();
+  });
+
+  it("换探针不再需要先清缓存：同一条 PATH 上一次通过、一次拒绝", () => {
+    const dir = freshDir();
+    writeExec(path.join(dir, "tool"), "#!/bin/sh\nexit 0\n");
+    const env = { PATH: dir };
+    expect(whichCommand("tool", { env, platform: "linux", probe: passthrough() })).not.toBeNull();
+    /* 旧实现的键里不含 probe ⇒ 这一格会读到上一条的「可用」结论。 */
+    expect(
+      whichCommand("tool", {
+        env,
+        platform: "linux",
+        probe: { access: () => undefined, spawn: () => "ENOEXEC" },
+      }),
+    ).toBeNull();
+  });
+
+  it("已删除的落点不会以旧值再进 `spawn` 的参数（resolveCommandInvocation）", () => {
+    const dir = freshDir();
+    const exe = path.join(dir, "tool");
+    writeExec(exe, "#!/bin/sh\nexit 0\n");
+    const options = { env: { PATH: dir }, platform: "linux" as const, probe: passthrough() };
+    expect(resolveCommandInvocation("tool", [], options)).toEqual({
+      command: exe,
+      args: [],
+      resolved: true,
+    });
+    fs.rmSync(exe);
+    /* 找不到就退回裸名字（交给 OS 按名字解析），而不是上一次解析出的绝对路径。 */
+    expect(resolveCommandInvocation("tool", [], options)).toEqual({
+      command: "tool",
+      args: [],
+      resolved: false,
+    });
+  });
+});
+
+describe("resolveCommandInvocation —— 解析结论的进程级缓存（ISSUE #4201）", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("存在的命令：第二次解析命中缓存，不再起 spawnSync 探针", () => {
+    const spawnSpy = vi.spyOn(realUsabilityProbe, "spawn");
+    const first = resolveCommandInvocation("node", ["--flag"]);
+    expect(first.resolved).toBe(true);
+    const spawnsAfterFirst = spawnSpy.mock.calls.length;
+    expect(spawnsAfterFirst).toBeGreaterThan(0);
+    const second = resolveCommandInvocation("node", ["--other"]);
+    expect(second.resolved).toBe(true);
+    expect(second.command).toBe(first.command);
+    /* 命中的结论来自缓存：同一台机器上同一命令的解析不该再付一遍
+     * spawnSync 探针（那是请求路径上最长 30s 的同步阻塞来源）。 */
+    expect(spawnSpy.mock.calls.length).toBe(spawnsAfterFirst);
+  });
+
+  it("未命中结论短窗黏滞：窗口内不重扫，过期后重新解析（装上命令能自愈）", () => {
+    vi.useFakeTimers();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "exec-cache-4201-"));
+    const savedPath = process.env.PATH;
+    const name = "totally-fake-cmd-4201";
+    process.env.PATH = `${dir}${path.delimiter}${savedPath ?? ""}`;
+    try {
+      /* 还没装：完整扫描后落「未命中」结论并黏滞。 */
+      expect(resolveCommandInvocation(name, []).resolved).toBe(false);
+      /* 装上一个**真起得来**的候选（探针会真起它一次；本层的「找到候选」以
+       * 可用性探针为准，文本假文件会被探针判死、结论仍是未命中）。 */
+      const installed = path.join(dir, process.platform === "win32" ? `${name}.exe` : name);
+      fs.copyFileSync(process.execPath, installed);
+      fs.chmodSync(installed, 0o755);
+      vi.advanceTimersByTime(61_000);
+      /* 黏滞过期：重新扫描认出这个新装上的候选。若仍返回 false，说明把
+       * 过期结论也黏滞死了（装上命令无法自愈）。 */
+      expect(resolveCommandInvocation(name, []).resolved).toBe(true);
+    } finally {
+      process.env.PATH = savedPath;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("命中结论 10 分钟后过期：重新探针（工具链搬迁能自愈，ISSUE #4256）", () => {
+    vi.useFakeTimers();
+    const spawnSpy = vi.spyOn(realUsabilityProbe, "spawn");
+    const first = resolveCommandInvocation("node", []);
+    expect(first.resolved).toBe(true);
+    const spawnsAfterFirst = spawnSpy.mock.calls.length;
+    vi.advanceTimersByTime(10 * 60 * 1000 + 1);
+    const second = resolveCommandInvocation("node", []);
+    expect(second.resolved).toBe(true);
+    expect(second.command).toBe(first.command);
+    expect(spawnSpy.mock.calls.length).toBeGreaterThan(spawnsAfterFirst);
   });
 });

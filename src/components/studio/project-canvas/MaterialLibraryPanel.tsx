@@ -4,7 +4,7 @@ import { ChevronLeft, CircleHelp, Plus, Search, X } from "lucide-react";
 import { Hint } from "~/components/ui/hint";
 import { textHandler } from "~/lib/form-props";
 import { ARTIFACT_ROOT_DIR } from "~/lib/media/output-layout";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
@@ -24,6 +24,13 @@ export type { MaterialItem };
 /* ── Types ───────────────────────────────────────────────── */
 
 type DisplayMode = "grid" | "list";
+
+/** 作用域白名单：`Tabs` 的 `onValueChange` 给的是 `string`，收窄回联合类型。 */
+const MATERIAL_SCOPE_VALUES: ReadonlyArray<string> = ["project", "cross"];
+
+function isMaterialScope(value: unknown): value is MaterialScope {
+  return typeof value === "string" && MATERIAL_SCOPE_VALUES.includes(value);
+}
 
 /* ── Component ───────────────────────────────────────────── */
 
@@ -63,8 +70,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
   /* 素材上传选择器：多选、无类型限制（素材库也收音频/视频）。 */
   const uploadPicker = useFilePicker({
     multiple: true,
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    onPick: (_first, files) => void upload(files),
+    onPick: (_first, files) => {
+      void upload(files);
+    },
   });
 
   return (
@@ -99,18 +107,15 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
       </div>
 
       {/* ── Tabs（下划线页签）──
-          此前是手搓的 `<Button variant="ghost">` + 下划线三元：选中档给
-          `border-b-2 border-accent`，**未选中档根本没写那条边框** —— 未选中的
-          那一枚整体比选中的矮 2px，切来切去文字基线上下跳。这就是「一排里选
-          一个」的又一处手搓，与 `project-canvas/HistoryPanel` 的作用域切换
-          **逐字同形**（规范 16 §16.2.4.75）。
-          改用 `ui/tabs` 的 `line` 档：选中态由 `data-active` 驱动（字色 +
-          下划线两层），两枚同高同基线。 */}
+          此前选中给下边框、未选中没写，未选中那枚矮 2px、切换时基线上下跳；
+          与 HistoryPanel 的作用域切换逐字同形（规范 16 §16.2.4.75）。
+          改用 `ui/tabs` 的 `line` 档：选中态由 `data-active` 驱动，两枚同高同基线。 */}
       <Tabs
         className="gap-0"
         onValueChange={(value) => {
-          /* SAFETY: 类型断言已复核 */
-          setScope(value as MaterialScope);
+          if (isMaterialScope(value)) {
+            setScope(value);
+          }
         }}
         value={scope}
       >
@@ -167,7 +172,7 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
             </Hint>
           )}
         </div>
-        <uploadPicker.Input />
+        <FilePicker {...uploadPicker.inputProps} />
         <Hint
           label={
             folder === null

@@ -1,18 +1,7 @@
-/* 工作流库画布预览里的**映射编辑** —— ISSUE #355 / #529
- *
- * 用户两条要求合一：库里要看得见对外参数与它们的线，**而且线要能改**
- * （「连线要能编辑，现在编辑不了」）。库里那三列现在是一个 React Flow 画布
- * （ISSUE #529）：
- *
- *   · 三列各一个 node（`[data-testid="wflib-canvas-node-params|host|outputs"]`）；
- *   · 每条映射线是一条 edge（`[data-testid="rf__edge-<edgeId>"]`），
- *     身份由 `libraryEdgeId` 给出，点选它即可反查出「点的是哪个口」；
- *   · 端点是真的 `<Handle>`（`[data-handleid]`），拖动由 React Flow 承担。
- *
- * 这里断言的是**节点 / 边的 DOM**（第 3 步口径：不再量 path 的 `d`），落库载荷
- * 仍按 `source.mode:<模式> = { <entryId>: ioKey }` 的形状断言（与编辑器逐字一致）。
- *
- * 运行相关的副作用（生成 / SSE / 日志弹窗）打桩，避免在 jsdom 里真发请求。 */
+/* 工作流库画布预览里的映射编辑 —— ISSUE #355 / #529：三列各一个 node、映射线
+ * 是 edge（身份由 `libraryEdgeId` 给出）、端点是真 `<Handle>`。这里断言节点/边
+ * 的 DOM 与落库形状 `source.mode:<模式> = { <entryId>: ioKey }`（与编辑器一致）。
+ * 运行相关副作用打桩。 */
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -130,13 +119,9 @@ function renderPreview(paramMap: Record<string, unknown>) {
 }
 
 describe("库内映射编辑", () => {
-  /* 手感（按下 → 拖动 → 落点）现在由 React Flow 承担，落点合法性由
-   * `isValidConnection`（`libraryConnectionAllowed`）判 —— 那一层有独立、可直接
-   * 断言的纯函数用例（`workflow-library-wire-graph.test.ts`）。这里断言的是它
-   * **接到视图上之后**的两件事：
-   *   ① 拖动起点是真的 <Handle>（画布的连线手势认得它）；
-   *   ② 上抛回来的落点被写进 `paramMap.source.mode:<模式>`。
-   */
+  /* 手势由 React Flow 承担，合法性由 `isValidConnection`（已在
+   * workflow-library-wire-graph.test.ts 直测）。这里只断言接到视图后的两点：
+   * 起点是真 `<Handle>`；上抛的落点写进 `paramMap.source.mode:<模式>`。 */
   it("卡片圆点是真正的 <Handle>（画布的连线手势认得它）", () => {
     const { container } = renderPreview({});
     const dot = container.querySelector(
@@ -226,12 +211,8 @@ describe("库内映射编辑", () => {
 describe("尺寸卡：六行的类型与拖线后的线（回归）", () => {
   const ROOT = path.resolve(__dirname);
   const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
-  /* 用户口径：「这几个都是固定类型的为什么显示星号，线连不上，一松手线就消失。」
-   *
-   * 两个症状各对应一处：
-   *   ① 行的类型只从**落点**取 —— 未连过时 `io[target]` 无从取，徽标退成 `*`；
-   *   ② 边集合是画布挂载时的快照（`useEdgesState` 的初值 + 挂载时派生一次），
-   *      新写入的线进不了画布 —— 松手即消失（写入本身是成功的）。 */
+  /* 用户口径：「固定类型却显示星号、线连不上、一松手就消失」。两个成因：
+   * ① 行类型只从落点取，未连过时徽标退成 `*`；② 边集合是挂载时的快照。 */
   it("未连过的行显示形态固定的类型，而不是星号", () => {
     /* 用户口径：宽度 / 高度 / 像素量 = FLOAT，分辨率档 / 倍数 = INT，
      *  宽高比 = COMBO —— 形态语义固定，**连上之后也不改口**（落点那一行声明
@@ -266,12 +247,9 @@ describe("尺寸卡：六行的类型与拖线后的线（回归）", () => {
   });
 
   it("边集合跟随派生（新写入的线必须能进画布）", () => {
-    /* 这条只能锁**源码形态**：jsdom 里 React Flow 渲染不出边（`ResizeObserver` 是
-     *  桩、量不到 handleBounds，首帧带线的渲染也数不到 `.react-flow__edge`），
-     *  所以这里钉的是两处必需形态：
-     *   · `defaultEdges` 跟着 wires **重新派生**（不是挂载时算一次）；
-     *   · 画布把派生出来的边**写回 edges 状态**。
-     *  缺任一处，写入成功的线永远进不了画布 —— 用户看到的就是「一松手线就消失」。 */
+    /* jsdom 里 React Flow 渲不出边（ResizeObserver 是桩、量不到 handleBounds），
+     * 只能锁源码形态：`defaultEdges` 随 wires 重新派生，且画布把派生边写回
+     * edges 状态 —— 缺任一处，写入成功的线松手即消失。 */
     const flow = read("hooks/use-library-wire-flow.ts");
     /* 判据要**容忍换行**：prettier 会把这条调用拆成多行，
      * 而 `\s*` 化的写法既钉住了「四个实参按此顺序」这件事，
@@ -285,13 +263,9 @@ describe("尺寸卡：六行的类型与拖线后的线（回归）", () => {
 });
 
 describe("画布铺满：背景板（ISSUE #596）", () => {
-  /* 用户口径：「全屏时，下方区域有空白却不是画布」。
-   *
-   * 画布的缩放由 React Flow 的 `fitView` 按节点包围盒算 —— 卡片比视口矮时它只会
-   * 放大到内容高度，画布底边以下就落回面板底色。三列之上垫的那层背景板把包围盒
-   * 撑到「视口与内容取大」，最优缩放因此只能是「等比铺满视口」的那个值。
-   *
-   * 背景板必须是**透明、不可交互**的：它只是底，不能抢走卡片与表单的点击 / 拖动。 */
+  /* 用户口径：「全屏时下方有空白却不是画布」。fitView 按节点包围盒缩放，卡片比
+   * 视口矮时不会铺满；垫一层背景板把包围盒撑到「视口与内容取大」，缩放即铺满。
+   * 背景板必须透明且不可交互，不能抢走卡片与表单的点击/拖动。 */
   it("三列之下有一层背景板节点，且它不抢交互", () => {
     const { container } = renderPreview({});
     const backdrop = container.querySelector('[data-testid="wflib-canvas-backdrop"]');
@@ -417,16 +391,9 @@ describe("尺寸各项各自可取外部值", () => {
   });
 
   it("每个子口各派生出一条边（宽高比与百万像素都要能连出去）", () => {
-    /* ISSUE #355 复审：截图里「尺寸」卡片有宽高比 / 百万像素两颗圆点，画面上
-     *  却只有一条线通到宿主卡片 —— 用户要的是「这两项都需要能导入到工作流中，
-     *  所以 2 条线都要能连出去」。
-     *
-     *  拆分之后六种形态各有自己的子口（`SIZE_WIRED` 那条老 `size` 线按落点形态
-     *  归到「尺寸 · 宽度」），每个子口连到哪一行就派生哪一条边 —— 三条线各画各的。
-     *
-     *  ISSUE #529 之后这件事是**纯派生**：几条该画的线就有几条 edge，id 里带
-     *  handle（`libwire:param:<条目>?<handle>`）。这里断言派生结果 —— 边的
-     *  渲染本身由 React Flow 负责，jsdom 量不到 handleBounds。 */
+    /* ISSUE #355 复审：「尺寸」卡片的两颗圆点都要能连出去。六种形态各有子口，
+     * 每个子口连到哪一行就派生哪条边；ISSUE #529 后是纯派生（id 带 handle，
+     * `libwire:param:<条目>?<handle>`）。这里断言派生结果，边由 React Flow 渲染。 */
     const paramCards = deriveLibraryParamCards({
       io,
       paramMap: {

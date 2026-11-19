@@ -1,13 +1,6 @@
-/**
- * `SlotOutlet` 的形状判据（规范 §12.18：一处实现、多处复用）。
- *
- * 它守的是三条**失效时都不会报错、只会静默画错**的边界：
- *   ① 有落点时内容真的落在落点里、原地不留副本（留一份 = 同一块 UI 出现两次）；
- *   ② 没落点时走 `fallback`（不传就原地渲染）—— 不挂壳的渲染路径全靠这条；
- *   ③ 服务端首帧不传送（`createPortal` 在 SSR 里会直接抛）。
- *
- * 判的是 DOM 上的归属与去留，不判内部实现（规范 11.2）。
- */
+/** `SlotOutlet` 的形状判据（规范 §12.18：一处实现、多处复用），守三条**静默画错**的边界：① 有落点时内容落在落点里、
+ * 原地不留副本（留一份 = 同一块 UI 出现两次）；② 没落点时走 `fallback`（不传就原地渲染）；③ 服务端首帧不传送
+ *（`createPortal` 在 SSR 里会直接抛）。判的是 DOM 上的归属与去留，不判内部实现（规范 11.2）。 */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 

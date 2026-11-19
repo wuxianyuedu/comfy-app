@@ -12,24 +12,20 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
-import { clearWhichCommandCache, type UsabilityProbe } from "./executable-resolve";
+import type { UsabilityProbe } from "./executable-resolve";
 import { pythonCandidates, pythonProbeArgs } from "./python-candidates";
 import { findPython, resolvePython } from "./python-resolve";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "python-resolve-"));
 let seq = 0;
-/** 每个用例一个独立目录：同名文件被覆写重造会让 `whichCommand` 的记忆化缓存说谎。 */
+/** 每个用例一个独立目录：同名文件被覆写重造不会串到别的用例（`whichCommand` 不再记忆化）。 */
 function freshDir(): string {
   const dir = path.join(tmp, `case-${seq++}`);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
-
-beforeEach(() => {
-  clearWhichCommandCache();
-});
 
 afterAll(() => {
   fs.rmSync(tmp, { recursive: true, force: true });

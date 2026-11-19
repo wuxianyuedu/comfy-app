@@ -1,12 +1,7 @@
-// 工坊屏的标题结构守卫（按源码读，不做渲染）。
-//
-// 为什么是源码判据而不是渲染判据：工坊六段是互斥懒加载，走渲染要 mock 掉
-// 800 行的 pipeline controller 与四个网络客户端，测的却是「一屏一个 h1、
-// 标题走档」这种纯结构事实 —— 读源码即可判定，且不会因为 mock 走形而假绿。
-// 同款手法在库里有先例（settings 的 status-row 判据也是按路径读源码）。
-//
-// 屏级标题的**档位本身**由 P83 在提交阶段管（`check-ui-primitives.cjs`）；
-// 这里补的是它管不到的那一侧：工坊**整屏**只能有一个 h1，段标题必须走段级档。
+// 工坊屏的标题结构守卫（按源码读，不做渲染）：六段互斥懒加载，走渲染要 mock 掉
+// 800 行 controller 与四个网络客户端，测的却是纯结构事实，读源码即可判且不假绿
+//（先例：settings 的 status-row 判据）。屏级标题档位本身由 P83 在提交阶段管
+//（`check-ui-primitives.cjs`），这里补它管不到的：整屏只能有一个 h1。
 
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";

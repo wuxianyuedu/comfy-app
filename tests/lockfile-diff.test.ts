@@ -1,19 +1,14 @@
 /**
- * ISSUE #550：run-local.ps1 / quality-gate.ps1 只比对两个 lockfile 的 SHA256，
- * 只能回答「不一致」，回答不了「哪里不一致」——用户拿到的是「检测到依赖与
- * lockfile 不一致」，然后就没有下文了。
- *
- * 本用例锁两件事：
- *   1. scripts/lockfile/lock-diff.mjs 能从真实形态的 pnpm-lock.yaml 里解析出
- *      「哪个依赖加了 / 删了 / 版本变了」（直接喂真仓库 lockfile，不喂玩具样本）；
- *   2. 两个入口脚本在漂移分支里真的调用了差异渲染（防「细节又被删掉」回潮）。
- *
- * 差异定位的判据是 lockfile 段落，与 pnpm 内部结构解耦；
- * 不引入 YAML 依赖（standalone 产物里也不带第三方解析器）。
+ * ISSUE #550：run-local.ps1 / quality-gate.ps1 只比两个 lockfile 的 SHA256，只能答「不一致」不能答「哪里不一致」，用户拿到「检测到依赖与 lockfile 不一致」就没有下文。
+ * 锁两件事：① `lock-diff.mjs` 能从真实形态 pnpm-lock.yaml 解析「加了/删了/版本变了」（直接喂真仓库 lockfile，不喂玩具样本）；
+ * ② 两个入口脚本在漂移分支真调用差异渲染（防细节被删回潮）。差异定位按 lockfile 段落、与 pnpm 内部结构解耦；不引入 YAML 依赖（standalone 产物不带第三方解析器）。
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
+
 import {
   diffLockfiles,
   isEmptyDiff,
@@ -28,10 +23,20 @@ const LOCK = readFileSync(join(ROOT, "pnpm-lock.yaml"), "utf8");
 /** package.json 的声明范围：下面断言「lockfile 记的 specifier」时以它为准，
  *  而不是把某个版本号抄进用例 —— 抄字面量的那版在 next 升个小版本时就红了，
  *  而它要验的是**解析器**，不是「当前钉的是哪一版」。 */
-/* SAFETY: 类型断言已复核 */
-const PKG = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
-  dependencies: Record<string, string>;
-};
+/** 消费形状守卫（B5 清账）：dependencies 必须是「名 → 串」映射。 */
+function isDependencyMap(value: unknown): value is { dependencies: Record<string, string> } {
+  return (
+    isRecord(value) &&
+    isRecord(value.dependencies) &&
+    Object.values(value.dependencies).every((entry) => typeof entry === "string")
+  );
+}
+
+const pkgParsed: unknown = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+if (!isDependencyMap(pkgParsed)) {
+  throw new Error("package.json 形状不对：dependencies 应是「名 → 串」映射");
+}
+const PKG = pkgParsed;
 
 /**
  * 真 lockfile 的正文段：仓库 lockfile 头部含一段 pnpm 自举（bundled CLI）内容，
@@ -43,11 +48,9 @@ function lockBody(text: string): string {
 }
 
 /**
- * 根 importer 里某个直接依赖的条目原文（包名 / specifier / version 三行）。
- *
- * 用例拿它当「改一处」的锚点。**别把版本号抄成字面量**：抄了等于把判据挂在
- * 「当前钉的是哪一版」上 —— 本文件已经被 `next` 与 `zod` 各绊过一次，升级依赖时
- * 打红的是一批与升级毫无关系的用例。锚点从真 lockfile 里现取，升到哪一版都成立。
+ * 根 importer 里某直接依赖的条目原文（包名 / specifier / version 三行），用例拿它当「改一处」的锚点。
+ * **别把版本号抄成字面量**：抄了等于把判据挂在「当前钉的是哪一版」上 —— 本文件已被 `next` 与 `zod` 各绊过一次，
+ * 升级依赖时打红的是一批与升级无关的用例；锚点从真 lockfile 现取，升到哪一版都成立。
  */
 function importerEntry(body: string, name: string): string {
   const found = new RegExp(`^ {6}${name}:\\n^ {8}specifier: .*\\n^ {8}version: .*$`, "m").exec(
@@ -66,7 +69,7 @@ function withEntryVersion(entry: string, version: string): string {
 
 const ZOD = importerEntry(lockBody(LOCK), "zod");
 /** zod 在**当前** lockfile 里解析到的版本：渲染用例要断言它出现在报告里。 */
-const ZOD_VERSION = /^ {8}version: (\S+)$/m.exec(ZOD)![1];
+const ZOD_VERSION = /^ {8}version: (?<version>\S+)$/m.exec(ZOD)?.groups?.version;
 
 describe("stripBundledSection（pnpm 自举段必须剔除，否则差异报告全是噪声）", () => {
   it("仓库 lockfile 头部那段 pnpm 自举内容被剔掉，只留依赖正文", () => {
@@ -258,13 +261,13 @@ describe("漂移分支接线（防细节被删掉回潮）", () => {
   const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
   it("prepare-local-run.ps1 在漂移分支调用差异渲染", () => {
-    const s = read("scripts/prepare-local-run.ps1");
+    const s = read("scripts/devtools/prepare-local-run.ps1");
     expect(s).toContain(String.raw`lockfile\diff-cli.mjs`);
     expect(s).toContain("$drifted");
   });
 
   it("quality-gate.ps1 的依赖预检同样输出明细，且判决只用那份语义比较器", () => {
-    const s = read("scripts/quality-gate.ps1");
+    const s = read("scripts/gates/quality-gate.ps1");
     expect(s).toContain(String.raw`lockfile\diff-cli.mjs`);
     // 断言打在**行为形状**上而不是函数名上：旧实现靠 `Write-DepDriftDetail` 再调一次
     // diff-cli，而那次调用的结论与判决阶段的结论可以不一致（ISSUE #1338 实测到的正是

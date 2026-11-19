@@ -1,27 +1,10 @@
 "use client";
 
-/* 工作流库「画布节点」预览的 **React Flow 画布**（ISSUE #529）。
- *
- * 三列各一个节点（对外参数卡片列 / 宿主运行卡片 / 对外输出参数卡片列），连线是
- * 真正的 edge、端点是真正的 <Handle>：
- *   · 视口（拖动平移 / 滚轮缩放 / 适应）由 React Flow 承担 —— 自绘的
- *     `WorkflowCanvasViewportFrame` 与量 rect 的 SVG 连线层一并退场；
- *   · 「这一行收不收这个口子」是 `isValidConnection` 一个纯函数（与自动落点
- *     同一份判据 `pinAcceptsEntry`），不再由手势层各写一套；
- *   · 拖线没落上时的原因提示由 `onConnectEnd` 补回来（不许功能回退）；
- *   · 三列节点只用 `initialWidth` / `initialHeight` 声明首帧尺寸，端点清单变化时再
- *     主动重算一次 `handleBounds` —— 这两件事合起来保证「线永远接在圆点上、首帧
- *     之后新出现的口一定连得上」（见 hooks 的 `buildLibraryNodes` 与下面的
- *     `useHandleInventoryRefresh`）。
- *
- * **`onlyRenderVisibleElements` 关掉**：编辑器画布那边开它是为了 130 节点的模板，
- * 代价是「长边可见、端点节点未挂载」会成批刷 error#008（ISSUE #374）。库里一共
- * 三个节点，全是卡片与表单，视口裁剪省不下什么、却要接一份同样的过滤 —— 直接关掉，
- * 三列常驻挂载，边永远量得到 handleBounds。
- *
- * 节点位置不受控（`defaultNodes`）：用户拖过的位置由 React Flow 自己持有；节点与
- * 边的**集合**由 `key` 重建（换工作流 / 改模式 / 改落点），避免每帧重建整棵表单。
- */
+/* 工作流库「画布节点」预览的 React Flow 画布（ISSUE #529）：三列各一个节点，
+ * 连线是真 edge、端点是真 `<Handle>`，视口与门槛判据（`isValidConnection` /
+ * `pinAcceptsEntry`）都交给 React Flow。节点只用 `initialWidth` / `initialHeight`
+ * 声明首帧尺寸，端点清单变化时主动重算 handleBounds。关闭
+ * `onlyRenderVisibleElements`：三个节点常驻挂载，边才量得到 handleBounds。 */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -129,13 +112,9 @@ function positionOf(nodeId: string): { x: number; y: number } | null {
 }
 
 /** 画布容器的可视尺寸 → 背景板尺寸（ISSUE #596）。
- *
- *  背景板要「铺满面板」，所以尺寸得从真实布局里量。量的是画布容器自己：
- *  React Flow 会把 `.react-flow__viewport` 拉伸到容器大小，容器尺寸即视口尺寸。
- *
- *  首帧（以及 SSR / jsdom 里量不到尺寸时）用 `LAYOUT_SIZING.fillHeight` 的兜底值
- *  —— 高度只会由「视口」与「内容」取大，兜底量级与卡片列一致，不会比真实需要的
- *  更小。尺寸变化时（窗口缩放、面板拖动）重新派生，同步进 React Flow 的节点表。
+ *  背景板要铺满面板，尺寸从真实布局量：React Flow 把 `.react-flow__viewport`
+ *  拉伸到容器大小，容器尺寸即视口尺寸。首帧 / SSR / jsdom 量不到尺寸时用
+ *  `LAYOUT_SIZING.fillHeight` 兜底（高度取「视口与内容」的较大者，不会偏小）。
  */
 function useCanvasBackdropSize(box: ElementBox | null): {
   height: number;
@@ -160,15 +139,10 @@ function useCanvasBackdropSize(box: ElementBox | null): {
 }
 
 /** 端点**清单**（哪个节点上有哪些口）—— 变了就主动重算落点。
- *
- *  React Flow 的落点几何（`handleBounds`）只在**节点元素尺寸变化**时重算（它给自己
- *  挂了 ResizeObserver，见 hooks 里 `contentNode` 的说明）。多数端点变化会连带改变列高
- *  （新增一行表单、多一张卡片），尺寸变化顺手就重算了；但**恰好等高**的替换不会
- *  （一个行换成另一个行、切模式换掉同高的候选口），那时新端点登记不上：拖不动、也
- *  落不下，而且是**静默**的（连 `onConnectEnd` 都不回调）。
- *
- *  所以这里把「清单变了」显式告诉 React Flow。清单是拼出来的**字符串**：只在口
- *  真的增减 / 换 id 时才变，纯重渲染（同一批口的新数组）不会发重算请求。 */
+ *  React Flow 的 handleBounds 只在节点元素尺寸变化时重算；恰好等高的替换
+ *  （切模式换掉同高的候选口）不会重算，新端点登记不上且**静默**（连
+ *  `onConnectEnd` 都不回调）。清单是拼出来的字符串，纯重渲染不会发重算请求。
+ */
 function useHandleInventoryRefresh(inventory: string) {
   const updateNodeInternals = useUpdateNodeInternals();
   const applied = useRef(inventory);
@@ -262,18 +236,10 @@ function WorkflowLibraryCanvasInner({
   }, []);
 
   /* 首帧**定向 fitView**：只按三列内容节点缩放（见 `libraryFitViewOptions`）。
-   *
-   *  为什么不能用 `<ReactFlow fitView>` 的默认口径：它按**全部节点**的并集包围盒
-   *  缩放，而背景板在宽高两个方向都严格大于视口 —— 三列会被缩成面板中间一小团。
-   *
-   *  为什么首帧要遮住（`fitted` 之前画布不可见）：React Flow 在**测量到容器尺寸
-   *  之前**按默认视口（translate 0,0 scale 1）绘制一帧，量到之后才跑 fitView
-   *  —— 用户看到的正是「切到这个页签，整块画布先按错误缩放闪一下、再跳到正确
-   *  缩放」。fitView 的结果依赖测量值，无法在首帧前算出，所以**第一帧不画**，
-   *  等 fit 落地再显形：宁可少一帧空画布，也不要一帧错缩放。
-   *
-   *  三条退出路径都置 `fitted`（fitView 完成 / 视口首次变化 / 兜底定时器），
-   *  任一条都不会让画布停在「永远不显形」上。 */
+   *  默认 fitView 按全部节点的并集包围盒缩放，背景板在两个方向都大于视口，
+   *  三列会被缩成一小团。`fitted` 之前画布不可见：React Flow 在量到容器尺寸
+   *  前会按 translate 0,0 scale 1 画一帧；fitView 完成 / 视口首次变化 / 兜底
+   *  定时器三条路径都会置 `fitted`，不会永远不显形。 */
   const [fitted, setFitted] = useState(false);
   const markFitted = useCallback(() => {
     setFitted(true);
@@ -321,21 +287,14 @@ function WorkflowLibraryCanvasInner({
 
   /* 节点与边在挂载时取一次：React Flow 自己持有视口、位置与选中。
    *
-   * 节点的**渲染内容**不放进 `node.data` —— 那会把「每帧都变的表单子树」塞进
-   * React Flow 的状态里：要么把它冻在首帧（表单永远停在未播种的那一帧），要么
-   * 每帧 setNodes 刷新它（setNodes → 重渲染 → setNodes 无限循环）。改由
-   * `LibraryNodeContentContext` 下发，节点组件直接读最新那一份
-   * （view 组件本来就在同一个渲染树里，引用天然是最新的）。 */
+   *  节点渲染内容不进 `node.data` —— 否则只能冻在首帧或每帧 setNodes 打循环；
+   *  改由 `LibraryNodeContentContext` 下发，节点组件读最新那一份。 */
   const [nodes, setNodes, onNodesChange] = useNodesState(flow.defaultNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(flow.defaultEdges);
 
-  /* 派生出来的边**同步进 React Flow**：`useEdgesState` 只在挂载时取初值，不同步
-   *  的话，库内新拖出来的线（写入 → paramMap 生效 → wires 重新派生）永远进不了
-   *  画布 —— 用户看到的就是「一松手线就消失」（写入本身是成功的，见
-   *  `deriveLibraryParamCards` 的用例）。
-   *
-   *  依赖是 `flow.defaultEdges` 的**引用**：它由 wires 派生（useMemo），只在真的
-   *  变化时换新数组，因此这条 effect 不会每帧触发。 */
+  /* 派生出来的边同步进 React Flow：`useEdgesState` 只在挂载时取初值，不同步则
+   *  库内新拖的线永远进不了画布（写入成功，用户却看到「松手线就消失」）。
+   *  依赖是 `flow.defaultEdges` 的引用（wires 派生），不会每帧触发。 */
   useEffect(() => {
     setEdges(flow.defaultEdges);
   }, [flow.defaultEdges, setEdges]);
@@ -407,19 +366,10 @@ function WorkflowLibraryCanvasInner({
           nodeDragThreshold={6}
           nodes={nodes}
           nodesConnectable={canWire}
-          /* 节点**可拖**（React Flow 用它给 `.react-flow__node` 打开命中与指针事件
-           *  —— 关掉它，卡片列与宿主卡片整块变成 `pointer-events: none`，表单输入、
-           *  圆点、按钮全部点不动，Playwright / RTL 也会直接报「元素不可交互」）。
-           *  `nodeDragThreshold` 把误拖阈值调到 6px：从输入框上按下再抬手的抖动
-           *  不会被当成拖动。
-           *
-           *  三列是固定布局，拖散了看不出「哪一列是哪一列」—— 所以用「拖完吸附回
-           *  布局位置」兜住（见 onNodeDragStop）：手势在、位置不回退。
-           *
-           *  节点**不可选中 / 不可删**：三列卡片是固定的布局列，选中会在卡片上挂蓝
-           *  框、按 Delete 还可能误删整列；连线的选中 / 删除只针对 edge（边在
-           *  `buildInputEdge` / `buildOutputEdge` 里按 `canWire` 单独开
-           *  `selectable` / `deletable`）。 */
+          /* 节点**可拖**：关掉它，列与宿主卡片整块变成 pointer-events: none，
+           *  输入、圆点、按钮全部点不动。`nodeDragThreshold` 6px 过滤误拖；
+           *  拖完吸附回布局位置（见 onNodeDragStop）。节点不可选中/不可删：
+           *  选中会挂蓝框、Delete 可能误删整列；连线的选中/删除只针对 edge。 */
           nodesDraggable
           nodeTypes={NODE_TYPES}
           onConnect={flow.onConnect}

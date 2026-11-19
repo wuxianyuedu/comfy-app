@@ -13,9 +13,8 @@
  * 否则会把自己的图判成 404。真正的默认放行清单写在下面 `UNSCOPED_PREFIXES` 里，
  * 让「还有哪些前缀判不了」是看得见的、而不是被 `return false` 悄悄吸收。
  *
- * 只在 `loginRequired` 打开时启用（理由在调用点与 A13 里）：关掉时每个请求都解析成
- * 同一个演示用户，归属判定在数学上不可能有不同结果，只可能因为历史行的 `userId`
- * 漂移把用户自己的产物打裂。 */
+ * 历史上仅在 `loginRequired` 打开时启用；登录页与登录开关已移除（ISSUE #3827），
+ * 当前产物读取口不再按该开关做归属拦截，以避免单用户模式下误伤可用产物。 */
 import "server-only";
 
 import { filmRepository } from "~/lib/core/repository-film";

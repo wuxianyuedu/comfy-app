@@ -97,6 +97,8 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
     [ioApi],
   );
   const toast = useToast();
+  /* 顶栏 stats 行（节点数 / IO 数 / 注释 / 分组 / 子图层）—— 窄屏截断时展开提示取这一份全文。 */
+  const statsLabel = `${detail.nodes.filter((node) => !isNoteType(node.class_type)).length} 个节点 · ${Object.keys(workflowIO).length} 个暴露 IO · ${detail.notes?.length ?? 0} 个注释 · ${detail.groups?.length ?? 0} 个分组${subgraphStack.length > 0 ? ` · 子工作流 #${subgraphStack.at(-1)?.uid}` : ""}`;
 
   return (
     <header
@@ -115,21 +117,11 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           <ArrowLeft data-icon="inline-start" size={18} />
         </Button>
         <div className="flex flex-col">
-          {/* 面包屑：根工作流名 · 子图 1 · 子图 2 …
-           *  首段永远是**根**工作流的显示
-           *  名（首次顶层拉取时捕获，跨子图导航时保留），
-           *  所以下钻进子图永远不会
-           *  把首段改写成子图自己的名字。
-           *  点根段跳回顶层。每个
-           *  中间层子图段是可点击按钮，
-           *  下钻回那一层。**最后**一段（用户
-           *  当前所在的子图）渲染成不可交互的
-           *  span，配紫色选择框 —— 点它
-           *  不会重入同一子图（那会把另一层压进
-           *  `subgraphStack`，很令人困惑）。
-           *  截断用 `max-w` + `truncate`，超长名字
-           *  收成省略号；全名仍可经
-           *  `title` 属性（浏览器原生 tooltip）读到。 */}
+          {/* 面包屑：根工作流名 · 子图 1 · 子图 2 …。首段永远是**根**工作流的显示名
+              （首次顶层拉取时捕获，跨子图导航保留），下钻不会把首段改写成子图名；
+              点根段回顶层，中间各层是可点按钮。**最后**一段（当前子图）是不可交互的
+              span + 紫色选择框 —— 点它会重入同一子图、把另一层压进 `subgraphStack`。
+              `max-w` + `truncate` 截断，全名经悬停提示读到。 */}
           <div className="flex items-center gap-1.5 text-xs">
             <Hint
               label={
@@ -166,13 +158,14 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 return (
                   <React.Fragment key={crumb.uid + i}>
                     <span className="text-ink-fainter text-sm">/</span>
-                    <span
-                      className={`${baseCls} border-primary-500/40 bg-primary-500/15 text-primary-strong rounded-md border px-2 py-0.5`}
-                      style={{ cursor: "default" }}
-                      title={crumb.name}
-                    >
-                      {crumb.name}
-                    </span>
+                    <Hint label={crumb.name}>
+                      <span
+                        className={`${baseCls} border-primary-500/40 bg-primary-500/15 text-primary-strong rounded-md border px-2 py-0.5`}
+                        style={{ cursor: "default" }}
+                      >
+                        {crumb.name}
+                      </span>
+                    </Hint>
                   </React.Fragment>
                 );
               }
@@ -239,30 +232,32 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               </Button>
             </Hint>
           </div>
-          <p className="text-ink-soft text-2xs mt-0.5 truncate font-medium">
-            {detail.nodes.filter((node) => !isNoteType(node.class_type)).length} 个节点
-            <span className="text-ink-fainter mx-1.5">·</span>
-            {Object.keys(workflowIO).length} 个暴露 IO
-            <span className="text-ink-fainter mx-1.5">·</span>
-            {detail.notes?.length ?? 0} 个注释
-            <span className="text-ink-fainter mx-1.5">·</span>
-            {detail.groups?.length ?? 0} 个分组
-            {subgraphStack.length > 0 && (
-              <>
-                <span className="text-ink-fainter mx-1.5">·</span>
-                <span className="text-primary-strong">子工作流 #{subgraphStack.at(-1)?.uid}</span>
-              </>
-            )}
-          </p>
+          <Hint label={statsLabel}>
+            <p className="text-ink-soft text-2xs mt-0.5 truncate font-medium">
+              {detail.nodes.filter((node) => !isNoteType(node.class_type)).length} 个节点
+              <span className="text-ink-fainter mx-1.5">·</span>
+              {Object.keys(workflowIO).length} 个暴露 IO
+              <span className="text-ink-fainter mx-1.5">·</span>
+              {detail.notes?.length ?? 0} 个注释
+              <span className="text-ink-fainter mx-1.5">·</span>
+              {detail.groups?.length ?? 0} 个分组
+              {subgraphStack.length > 0 && (
+                <>
+                  <span className="text-ink-fainter mx-1.5">·</span>
+                  <span className="text-primary-strong">子工作流 #{subgraphStack.at(-1)?.uid}</span>
+                </>
+              )}
+            </p>
+          </Hint>
           {detail.sourcePath !== undefined &&
           detail.sourcePath !== null &&
           detail.sourcePath !== "" ? (
             detail.sourceMissing === true ? (
               <p className="border-destructive/30 bg-destructive/10 text-danger-strong text-2xs mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1">
                 <span className="font-semibold">本地文件已丢失：</span>
-                <span className="truncate font-mono" title={detail.sourcePath}>
-                  {lastSegments(detail.sourcePath, 3)}
-                </span>
+                <Hint label={detail.sourcePath}>
+                  <span className="truncate font-mono">{lastSegments(detail.sourcePath, 3)}</span>
+                </Hint>
                 <span className="text-danger-strong/80 ml-1 shrink-0">
                   · 修改保存后刷新将自动重连
                 </span>
@@ -271,20 +266,18 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               <p className="border-warning/30 bg-warning/10 text-warning-strong text-2xs mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1">
                 <span className="font-semibold">磁盘文件有更新</span>
                 <span className="opacity-80">· 回工作流库点「同步」拉取最新内容</span>
-                <span
-                  className="text-success-strong/80 truncate font-mono"
-                  title={detail.sourcePath}
-                >
-                  {lastSegments(detail.sourcePath, 3)}
-                </span>
+                <Hint label={detail.sourcePath}>
+                  <span className="text-success-strong/80 truncate font-mono">
+                    {lastSegments(detail.sourcePath, 3)}
+                  </span>
+                </Hint>
               </p>
             ) : (
-              <p
-                className="border-success/20 bg-success/5 text-success-strong/80 text-2xs mt-1 truncate rounded-md border px-2 py-1"
-                title={detail.sourcePath}
-              >
-                已连接本地文件 · 文件改动后刷新即可同步
-              </p>
+              <Hint label={detail.sourcePath}>
+                <p className="border-success/20 bg-success/5 text-success-strong/80 text-2xs mt-1 truncate rounded-md border px-2 py-1">
+                  已连接本地文件 · 文件改动后刷新即可同步
+                </p>
+              </Hint>
             )
           ) : null}
         </div>
@@ -301,7 +294,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             className={topBarButtonClass(
               "ghost",
               "compact",
-              debugMode ? "bg-primary-500 text-primary-foreground hover:bg-primary-500 shadow" : "",
+              debugMode ? "bg-primary-500 text-primary-foreground hover:bg-primary-600 shadow" : "",
             )}
             onClick={toggleDebugMode}
             variant="ghost"
@@ -310,20 +303,11 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           </Button>
         </Hint>
         {error && <span className="text-destructive text-xs">{error}</span>}
-        {/* 「编辑 IO」/「预览 IO」在**两层**都可用
-         *  —— 根工作流与子图内部都可用。
-         *
-         *  子图本身没有独立的 IO 契约（它由父工作流经边界 pin 进入），但**父
-         *  工作流**完全可以把参数暴露在子图内部的节点上（`LoadImage` 的
-         *  `image`、`PrimitiveInt` 的 `value`…）。下钻后仍能勾选，作者才能把
-         *  这类内部参数接进父工作流的对外参数；勾选时画布把「从哪一层钻进来」
-         *  的宿主节点 id 一并带上（`IoRef.hostNodeId`），运行期据此把内部节点
-         *  id 还原成 comfy-cli 展开后的 `宿主id:内部id`。
-         *
-         *  内层视图没有服务端富化结果（子图路由不产出 workflowIO：它按整份
-         *  工作流的下标打键，带进内层会误伤顶层未保存的编辑），IO 预览按当前
-         *  视图节点的原始元数据就地派生（见 `enrichFromViewNodes`），保证两层
-         *  取名口径一致。 */}
+        {/* 「编辑 IO」/「预览 IO」在**两层**都可用：子图本身没有独立 IO 契约，但**父
+            工作流**可以把参数暴露在子图内部的节点上（LoadImage `image`、PrimitiveInt
+            `value`…），下钻后仍能勾选，勾选时带上 `IoRef.hostNodeId`，运行期据此把内部
+            节点 id 还原成 comfy-cli 展开后的 `宿主id:内部id`。内层没有服务端富化
+            （子图路由不产出 workflowIO），预览按当前视图节点原始元数据就地派生。 */}
         <Hint label="进入 IO 编辑模式：在每个节点参数前显示勾选框，勾选即把该参数暴露为工作流的外部输入或输出。退出编辑模式时会一并关闭 IO 预览">
           <Button
             className={topBarButtonClass(ioEditMode ? "ioOn" : "outline", "compact")}
@@ -340,16 +324,10 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             )}
           </Button>
         </Hint>
-        {/* IO 预览开关。挨着「编辑 IO」放，好让
-         *  作者一次就切进编辑 + 打开预览。
-         *  编辑模式外禁用 —— 预览只有在
-         *  有 IO 选择可渲染时才有意义。用户打开
-         *  面板但还没进编辑模式时，也自动切进编辑，
-         *  好让复选框与预览一起可用。
-         *
-         *  两个方向都耦合：关预览会一并退出编辑模式（面板消失后画布上不该
-         *  再留一排没有结果的勾选框），关编辑模式也一并关预览。耦合落在 store
-         *  的 `setIoEditMode` / `setIoPreviewOpen` 上，不在这里手写两处 setState。 */}
+        {/* IO 预览开关，挨着「编辑 IO」放。编辑模式外禁用 —— 预览要有 IO 选择可渲染；
+            用户打开面板但还没进编辑模式时自动切进编辑，让复选框与预览一起可用。
+            两个方向都耦合：关预览一并退出编辑；关编辑也一并关预览。落在 store 的
+            `setIoEditMode` / `setIoPreviewOpen`，不在这里手写两处 setState。 */}
         <Hint
           label="预览当前勾选的 IO 在最终表单中的样子；预览面板中每个名称都可点击重命名。关闭预览时会一并退出 IO 编辑模式"
           wrap

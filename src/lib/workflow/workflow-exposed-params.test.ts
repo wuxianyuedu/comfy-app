@@ -25,12 +25,13 @@ describe("exposedParamsForMode", () => {
     ]);
   });
 
-  it("图生图额外给参考图（输入本身就是一张图）", () => {
+  it("图生图额外给参考图（输入本身就是一张图；默认 16 槽，#4355）", () => {
     expect(ids("I2I")).toEqual([
       "prompt",
       "negative",
-      "reference-image",
-      "reference-image-2",
+      ...Array.from({ length: 16 }, (_, i) =>
+        i === 0 ? "reference-image" : `reference-image-${i + 1}`,
+      ),
       "size",
       "seed",
       "lora-name",

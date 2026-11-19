@@ -1,18 +1,8 @@
-/**
- * 「面板加宽档」出口的判据（规范 16 §16.2.4.18）。
- *
- * 这条账的形状与 `dialog-width` 相邻但不同：那个模块管「宽度怎么写才生效」，
- * 本模块管**加宽这个动作在三处各写一遍**，以及三处**共同欠着的一件事**——
- * 「加宽」这个选择没有任何记忆。所以用例重点分两半：
- *
- *  1. 收口本身：三份同形写法（`useState` + 两处三元 + 按钮文案与图标）
- *     现在由一处给出，且 `widthClass` / `toggleLabel` 两处不可能不一致；
- *  2. 补上的行为：**加宽态跨挂载保持**（关掉面板再打开仍是用户选过的档），
- *     以及「没有记录时用调用处给的默认档」。
- *
- * ⚠️ 每个用例都要 `resetWidePanelsForTest()` —— `WIDE_PANELS` 是模块级单例，
- * 跨用例会串（这与 `useCanvasSettings` 的 store 是同一形态）。
- */
+/** 「面板加宽档」出口的判据（规范 16 §16.2.4.18）。它与 `dialog-width` 相邻但不同：后者管「宽度怎么写才生效」，
+ * 本模块管**加宽动作在三处各写一遍**，以及三处共同欠的「加宽这个选择没有记忆」。用例分两半：① 收口本身 —— 三份
+ * 同形写法（`useState` + 两处三元 + 按钮文案与图标）由一处给出，`widthClass` / `toggleLabel` 不可能不一致；
+ * ② 补上的行为 —— **加宽态跨挂载保持**，没有记录时用调用处给的默认档。⚠️ 每个用例都要 `resetWidePanelsForTest()`，
+ * `WIDE_PANELS` 是模块级单例、跨用例会串。 */
 import { act, render, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

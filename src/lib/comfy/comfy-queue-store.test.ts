@@ -46,21 +46,26 @@ class FakeEventSource {
 
 const fetchMock = vi.fn();
 
-function queueRes(payload: unknown): Response {
-  /* SAFETY: 类型断言已复核 */
+/** 可重复读的响应替身：同一份回包会被多拍复用（真实 body 只能读一次）。 */
+type QueueResponse = {
+  json: () => Promise<unknown>;
+  ok: boolean;
+};
+
+function queueRes(payload: unknown): QueueResponse {
   return {
     ok: true,
-    json: async () => payload,
-  } as unknown as Response;
+    json: () => Promise.resolve(payload),
+  };
 }
 
 /** 一把可以手动收口的 Promise —— 用来造「两拍重叠」的背压现场。 */
 function deferred(): {
-  promise: Promise<Response>;
-  resolve: (value: Response) => void;
+  promise: Promise<QueueResponse>;
+  resolve: (value: QueueResponse) => void;
 } {
-  let resolve!: (value: Response) => void;
-  const promise = new Promise<Response>((res) => {
+  let resolve!: (value: QueueResponse) => void;
+  const promise = new Promise<QueueResponse>((res) => {
     resolve = res;
   });
   return { promise, resolve };
@@ -69,6 +74,7 @@ function deferred(): {
 /** 把挂着的微任务跑完（mock 的 fetch 是立刻 resolve 的，几拍就够）。 */
 async function flush(times = 5): Promise<void> {
   for (let i = 0; i < times; i += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }
@@ -147,7 +153,7 @@ describe("comfy-queue-store", () => {
     off();
   });
 
-  it("SSE 只建一条：两个订阅者共用同一个连接", async () => {
+  it("SSE 只建一条：两个订阅者共用同一个连接", () => {
     const a = mod.subscribeComfyQueue(vi.fn());
     const b = mod.subscribeComfyQueue(vi.fn());
     expect(FakeEventSource.created).toBe(1);

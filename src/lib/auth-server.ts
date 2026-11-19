@@ -13,16 +13,13 @@
  *     不再直接碰 `lib/auth-server`；
  *   - `lib/auth-server` 的用例可以喂任意会话形状，不需要 Next 运行时。
  *
- * `app-settings.json` 的 `loginRequired` 是唯一的登录开关（统一配置管理）：
- *   - false（默认，本机单用户模式）：未登录自动回落演示用户，不限制
- *     「登录才能执行操作」；
- *   - true：无会话返回 null（调用方 401 / UNAUTHORIZED），materials / upload /
- *     logs / llm / custom-nodes / debug 等敏感写入口恢复登录门槛。
+ * 本应用不再提供登录页/登录流程（ISSUE #3827），所有请求按本机单用户模式处理：
+ *   - 已有会话（历史遗留 cookie）仍解析为真实用户；
+ *   - 无会话统一回落演示用户，不因 `loginRequired` 设置返回 401。
  *
  * tRPC 的 `authedProcedure` 与 REST 的 `requireRequestUser` **共用这里的
  * `requireServerUser` 单点判决**——两个 API 面不存在第二份兜底实现。
  */
-import { getSettingsSync } from "./app-settings/app-settings.server";
 import { userRepository } from "./core/repository";
 
 export type ServerUser = { email: string; id: string; name: string | null };
@@ -40,7 +37,7 @@ const DEMO_NAME = "体验用户";
  *
  * 这里只记 **email**，不记解析结果 —— 这是一个刻意的选择，理由是可验证的：
  * 记住「id / name」会让缓存**越过数据库**：`user` 表被重建（`drizzle-kit push`
- * 的 `__new_X` 重建流程，见 `scripts/heal-db.cjs`）或那行被删掉之后，缓存里
+ * 的 `__new_X` 重建流程，见 `scripts/db/heal-db.cjs`）或那行被删掉之后，缓存里
  * 的 id 依然会被返回，而**这个 id 在库里已经不存在**。下游每一处按 userId
  * 写入的地方（任务、工作流、素材）都会 ForeignKey 失败或留下孤儿行，且报错
  * 指向的是写入语句，看不出「用户其实是虚构的」。
@@ -91,8 +88,8 @@ export async function getServerUser(session: SessionLike | null): Promise<Server
 }
 
 /**
- * REST Route Handlers 的鉴权闸：`loginRequired` 打开时无会话返回 null
- * （调用方 401），否则与 `getServerUser` 一样回落演示用户。
+ * REST Route Handlers 的鉴权闸：无登录流程的单用户模式下，无会话一律回落
+ * 演示用户（不再因 `loginRequired` 返回 401）。
  */
 export async function requireServerUser(session: SessionLike | null): Promise<ServerUser | null> {
   const email = session?.user?.email;
@@ -100,8 +97,5 @@ export async function requireServerUser(session: SessionLike | null): Promise<Se
   if (email !== undefined && email !== null && email !== "") {
     return resolveUserByEmail(email, session?.user?.name ?? null);
   }
-  if (!getSettingsSync().loginRequired) {
-    return getDemoUser();
-  }
-  return null;
+  return getDemoUser();
 }

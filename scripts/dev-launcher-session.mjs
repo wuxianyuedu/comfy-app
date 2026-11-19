@@ -18,6 +18,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { writeJson } from "./launcher-core/run.mjs";
+
 /**
  * 启动会话的持久化形状（`run/launcher-session.json`）。
  * @typedef {object} LauncherSession
@@ -72,7 +74,13 @@ export function isPidAlive(pid) {
     return true;
   } catch (error) {
     // EPERM：进程存在但没权限发信号 —— 仍算活着。
-    return /** @type {NodeJS.ErrnoException} */ (error).code === "EPERM";
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string" &&
+      error.code === "EPERM"
+    );
   }
 }
 
@@ -91,19 +99,63 @@ export function readSession(root) {
   }
 }
 
-/** 写本次会话（原子写：先写临时文件再 rename，避免读到半截 JSON）。
+/** 写本次会话（原子写 + rename 短暂重试，复用 `launcher-core/run.mjs` 的
+ *  `writeJson` —— ISSUE #3836）：原先这里只有「pid 后缀临时文件 + 一次性
+ *  rename」，Windows 上目标正被对方 rename 的瞬间会 EPERM / EBUSY，失败被
+ *  静默吞掉，会话锚点停留在旧内容，下次启动的孤儿回收据此漏收 / 误判。
+ *  两处本是同一件事（§12.12），不再各留一份会漂的实现。
  * @param {string} root @param {LauncherSession} session @returns {string} 写入路径 */
 export function writeSession(root, session) {
   ensureRunDir(root);
   const target = sessionFilePath(root);
-  const tmp = `${target}.${process.pid}.tmp`;
   try {
-    fs.writeFileSync(tmp, JSON.stringify(session, null, 2), "utf8");
-    fs.renameSync(tmp, target);
+    writeJson(target, session);
   } catch {
     /* 见 ensureRunDir 注释 */
   }
   return target;
+}
+
+/**
+ * 原子占坑（ISSUE #4345）：并发启动的互斥锚点。
+ *
+ * 两个编排器同时启动时，靠「先原子创建会话锚点」决出唯一进入者：`wx` 独占创建
+ * 在同一路径上只有一个进程能成功，后到者拿到 `exists`，由调用方报
+ * 「已有实例在跑」并退出 —— 否则两份编排都会继续 spawn dev server，后到者的
+ * Next 在端口被占时静默顺延 +1，而它的就绪探测打的是原端口，「就绪」结论被
+ * 先到者的服务冒领（两份编排日志 / 会话锚点指向不同进程）。
+ *
+ * 返回值三态：
+ *   · `"claimed"` —— 占到（锚点已写、心跳已触）。起服务后的补齐（child_pids 等）
+ *     仍走 `writeSession` 的覆盖写，与本函数不冲突。
+ *   · `"exists"` —— 锚点已存在（并发下另一位先到，或上一位的锚点还在）。
+ *     「上一位是否还活着」由调用方用 `isSessionOwnerAlive` 另判，本函数不判。
+ *   · `"unavailable"` —— 落盘失败（权限 / IO）。会话锚点历来是尽力而为档
+ *     （`writeSession` 同样吞错），互斥在坏盘环境下退化为不设防，但不阻断启动。
+ *
+ * @param {string} root
+ * @param {LauncherSession} session
+ * @param {number} [now] 心跳时间戳（测试注入用）
+ * @returns {"claimed" | "exists" | "unavailable"}
+ */
+export function claimSession(root, session, now = Date.now()) {
+  ensureRunDir(root);
+  try {
+    const fd = fs.openSync(sessionFilePath(root), "wx");
+    try {
+      fs.writeFileSync(fd, `${JSON.stringify(session, null, 2)}\n`, "utf8");
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch (error) {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? /** @type {{code?: unknown}} */ (error).code
+        : null;
+    return code === "EEXIST" ? "exists" : "unavailable";
+  }
+  touchHeartbeat(root, now);
+  return "claimed";
 }
 
 /** 更新心跳（有它才谈得上「上一位是否已死」）。

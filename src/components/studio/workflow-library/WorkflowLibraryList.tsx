@@ -14,9 +14,9 @@ import { Hint } from "~/components/ui/hint";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
-import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
+import { useWorkflowEncapsulation } from "./hooks/use-workflow-encapsulation";
 import { SourceTag } from "~/components/ui/source-tag";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { EmptyState } from "~/components/ui/empty-state";
 import { StatusDot } from "~/components/ui/status-dot";
 import { ListBadge } from "~/components/ui/list-badge";
@@ -53,12 +53,9 @@ type WorkflowLibraryListProps = {
 };
 
 /**
- * 左侧工作流列表：搜索 + 可滚动条目。选中项高亮，右侧详情面板联动。
- *
- * 三态必须可区分（规范 10.5：空态要说清「为什么是空的」）：
- * 加载中 / 数据没回来 → 进度提示，绝不渲染成「未找到匹配的工作流」；
- * 拉取超时 → 提示「仍在加载」并说明可以做什么，不假装是空库；
- * 确实没有（且未筛选）→ 指引导入或配置本地目录。
+ * 左侧工作流列表：搜索 + 可滚动条目，选中项高亮，右侧详情联动。三态必须可区分
+ * （规范 10.5）：加载中/数据没回来 → 进度提示，绝不渲染成「未找到」；拉取超时 →
+ * 提示「仍在加载」；确实没有（且未筛选）→ 引导导入或配置本地目录。
  */
 export function WorkflowLibraryList({
   workflows,
@@ -100,12 +97,19 @@ export function WorkflowLibraryList({
         <div className="relative">
           <Search className="text-ink-fainter pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
           <Input
-            className="border-border bg-subtle text-ink-bright placeholder:text-ink-fainter focus-visible:border-primary-500/40 focus-visible:ring-primary/30 h-8 w-full rounded-lg border pr-3 pl-8 text-xs"
+            className="border-border bg-subtle text-ink-bright placeholder:text-ink-fainter focus-visible:border-primary-500/40 h-8 w-full rounded-lg border pr-3 pl-8 text-xs"
             onChange={textHandler(onSearchChange)}
             placeholder="搜索工作流名称…"
             type="text"
             value={search}
           />
+        </div>
+        {/* 列表里的工作流有两个来源（ISSUE #3625）：原件在用户自己配的磁盘目录里、
+            导入后的记录在库里。徽标把两处落点说清 —— 换机器时两样都得搬，
+            只搬一样会变成「有记录没有原件」。 */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <DataLocationBadge id="workflow-library-disk" />
+          <DataLocationBadge id="workflow-library-db" />
         </div>
       </div>
 
@@ -114,7 +118,6 @@ export function WorkflowLibraryList({
           松开即可读取该工作流 JSON
         </p>
       )}
-      {/* oxlint-disable-next-line no-unnecessary-condition -- 该 prop 声明为 string|null，undefined 判定对声明类型恒真；保留它兼容调用方缺省/显式 undefined */}
       {fileErr !== null && fileErr !== undefined && fileErr !== "" && (
         <p className="border-destructive/25 bg-destructive/8 text-destructive text-2xs border-b px-3 py-1.5">
           ⚠ {fileErr}
@@ -124,12 +127,21 @@ export function WorkflowLibraryList({
       {/* 列表：已载入工作流排在前 */}
       <div className="flex-1 overflow-y-auto px-1.5 py-1.5">
         {empty && loading ? (
-          <EmptyState
-            description="本地目录会一起扫描，文件多时首次载入需要几秒。"
-            icon={<Spinner className="size-6" />}
-            minHeightClass="min-h-40"
-            title="正在加载工作流…"
-          />
+          /* 首次载入的加载态收在**骨架行**（ISSUE #4073 第 1 条）：不再用
+           * 带转圈的整块加载界面占住列表列——「加载中」的转圈交给右侧详情区
+           * （见 WorkflowLibrary 的右栏）。骨架不做动画（P3：视图里不许
+           * 手写 animate-pulse / animate-spin）。 */
+          <ul aria-label="正在加载工作流" className="flex flex-col gap-1">
+            {[1, 2, 3, 4, 5, 6, 7].map((row) => (
+              <li
+                className="border-border-subtle bg-subtle rounded-lg border px-2 py-2"
+                key={`skeleton-${row}`}
+              >
+                <div className="bg-border-strong h-3 w-2/3 rounded" />
+                <div className="bg-border mt-1.5 h-2.5 w-1/3 rounded" />
+              </li>
+            ))}
+          </ul>
         ) : empty && stalled ? (
           <EmptyState
             action={
@@ -197,9 +209,9 @@ export function WorkflowLibraryList({
                 return (
                   <li key={pending.id}>
                     <div className="border-border-subtle bg-subtle flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2">
-                      <span className="text-ink-strong text-2xs truncate" title={pending.name}>
-                        {pending.name}
-                      </span>
+                      <Hint label={pending.name}>
+                        <span className="text-ink-strong text-2xs truncate">{pending.name}</span>
+                      </Hint>
                       <Hint label={`载入「${pending.name}」`} wrap>
                         <Button
                           className="text-3xs h-auto shrink-0 gap-1 rounded-md px-2 py-1 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
@@ -230,19 +242,9 @@ export function WorkflowLibraryList({
 }
 
 /**
- * 列表项的名称最大显示宽度（px）。
- *
- * 侧栏是固定宽度（`w-80` = 320px，减去内边距与两侧 gap 后约 280px 可用），
- * 而工作流名常来自磁盘文件名 ——`22WorkflowsI2VSVI2_fastfidelityCAIoV88`
- * 这类可以长到 40+ 字符。名称不设上限时有两种坏法，两种都真发生过：
- *
- * ① 名称吃掉整行宽度，右侧徽标被挤出侧栏，被根容器的`overflow-hidden`
- * 裁掉（用户看到的是「徽标不见了」）；
- * ② 名称在换行点折成两行，行高翻倍，一屏少看好几条。
- *
- * 因此给出显式上限：`truncate` +`max-w-33` 把可截断的那块钉住，
- * 宽度压力由它承担，徽标一律`shrink-0`（规范 03 §3.8.1：可截断的块要有
- * 贴着实测宽度的下限，按钮/徽标不许被压扁）。完整名称仍在`title` 里。
+ * 列表项的名称最大显示宽度（px）：侧栏 `w-80` 减内边距与 gap 约 280px 可用，而磁盘
+ * 文件名可长到 40+ 字符。不设上限会 ① 名称吃掉整行、徽标被挤出裁掉；② 名称折成两行、
+ * 行高翻倍。`truncate` + `max-w-33` 钉住可截断块，徽标 `shrink-0`（规范 03 §3.8.1）。
  */
 const NAME_MAX_WIDTH_CLASS = "max-w-33";
 
@@ -258,11 +260,12 @@ function WorkflowListItem({
   const { usable } = deriveFormatFlags(workflow);
   const { missing, canResync } = deriveSyncFlags(workflow);
   const isTech = isTechnicalName(workflow.name);
-  /* 对外参数封装状态（与生成链路同口径）：提示词口已有落点 = 工坊可直接驱动。 */
-  const encapsulation = deriveEncapsulationStatus({
+  /* 对外参数封装状态（与生成链路同口径）：提示词口已有落点 = 工坊可直接驱动。
+   * 契约口与必备口读生效注册表（本机覆盖优先）—— 与详情「工坊封装」页签
+   * 同一份口径（ISSUE #4113：此前列表行回落内置默认，用户改过的契约不生效）。 */
+  const { status: encapsulation } = useWorkflowEncapsulation({
     io: workflow.workflowIO ?? null,
     paramMap: workflow.paramMap ?? null,
-    // oxlint-disable-next-line no-unnecessary-condition -- defaultMode 来自 tRPC 列表响应，旧行可能缺该字段
     mode: workflow.defaultMode ?? workflow.taskType ?? null,
   });
 
@@ -280,16 +283,17 @@ function WorkflowListItem({
       >
         {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}
         <div className="flex min-w-0 items-center gap-1.5">
-          <span
-            className={[
-              NAME_MAX_WIDTH_CLASS,
-              "shrink truncate text-xs leading-tight font-medium",
-              isTech ? "text-ink-strong font-mono" : "text-ink-bright",
-            ].join("")}
-            title={workflow.name}
-          >
-            {workflow.name}
-          </span>
+          <Hint label={workflow.name}>
+            <span
+              className={[
+                NAME_MAX_WIDTH_CLASS,
+                "shrink truncate text-xs leading-tight font-medium",
+                isTech ? "text-ink-strong font-mono" : "text-ink-bright",
+              ].join("")}
+            >
+              {workflow.name}
+            </span>
+          </Hint>
           {!usable && (
             <ListBadge title="没有工作流(RAW)原件 —— 没有可执行内容" tone="danger">
               无可执行内容

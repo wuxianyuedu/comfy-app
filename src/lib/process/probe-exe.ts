@@ -8,7 +8,7 @@
 //     `spawnSync(candidate, ["-NoProfile", …])` 起得来却解释不了参数 ⇒ 守卫脚本的
 //      `HITS=` 一个都不出现 ⇒ `toContain` 等满 20s 才抛 `Test timed out` —— 一条
 //     「这一格在这台机器上判不了」变成了「这一格红了」，而报错行指向「超时」。
-//   · `scripts/check-app-port-vectors.cjs` 的 `python3 --version` 探针：形态不对的命令
+//   · `scripts/gates/check-app-port-vectors.cjs` 的 `python3 --version` 探针：形态不对的命令
 //     被归进「这台机器没有 Python」，而那句话是假的 —— 下一动作（去装）也是错的。
 //
 // 所以这里给**一次探测**三个出口，调用方按语义挑一个用（不许糊成一个布尔）：
@@ -153,8 +153,8 @@ export function probeExecutable(
      * 「没有码」（它会打出一句「起不来（）」），所以这里刻意不用 `??`。 */
     /* SAFETY: 类型断言已复核 */
     const errno = (probe.error as NodeJS.ErrnoException).code;
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-    const code: string = errno || "UNKNOWN"; // oxlint-disable-line strict-boolean-expressions -- 刻意保留 || 兜底：errno 为空串同样是「没有码」，不能换成 ??
+    // oxlint-disable-next-line typescript/prefer-nullish-coalescing
+    const code: string = errno || "UNKNOWN";
     if (code === "ETIMEDOUT") {
       return { ok: false, failure: { kind: "timeout", timeoutMs } };
     }

@@ -6,12 +6,8 @@ import { logger } from "~/server/lib/logger";
 
 /**
  * 审计日志（安全事件留痕）：登录失败、提权、删除、导出等敏感操作调用。
- *
- * - 先打结构化日志，再异步落库；审计写入失败绝不阻塞主流程。
- * - 只记录 userId/ip/事件类型/meta，不外泄 PII。
- *
- * 用法：
- *   用法：await audit("login_failed", { session, headers }, { email })
+ * 先打结构化日志再异步落库；审计写入失败绝不阻塞主流程。只记录 userId/ip/事件类型/meta，不外泄 PII。
+ * 用法：await audit("login_failed", { session, headers }, { email })
  */
 export type AuditEvent =
   | "login_failed"

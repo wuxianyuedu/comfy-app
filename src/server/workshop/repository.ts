@@ -1,8 +1,10 @@
 // ── Workshop MCP 会话持久化（repository）───────────────────────
 // 纯函数 rowToState / stateToRow 不触碰 DB，便于单测；CRUD 走 workshopDb。
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import type { Character, PipelineStageId, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
+import { asRecord } from "~/lib/is-record";
+import { isProjectType } from "~/lib/workshop/types";
+import type { Character, PipelineStageId, Scene, Shot } from "~/lib/workshop/types";
 import {
   workshopSession,
   type WorkshopSession,
@@ -26,6 +28,18 @@ const VALID_STAGES: ReadonlyArray<PipelineStageId> = [
   "video_generation",
   "final_edit",
 ];
+
+// JSON 列只判「是数组」这一层（元素形状由写入端保证，读侧 draft-integrity 判），
+// 非数组回落 []。
+function isSceneArray(v: unknown): v is Array<Scene> {
+  return Array.isArray(v);
+}
+function isCharacterArray(v: unknown): v is Array<Character> {
+  return Array.isArray(v);
+}
+function isShotArray(v: unknown): v is Array<Shot> {
+  return Array.isArray(v);
+}
 
 export function isStage(v: unknown): v is PipelineStageId {
   return (
@@ -74,8 +88,8 @@ function applyContentToState(
     meta: {
       ...state.meta,
       title: content.title,
-      /* SAFETY: 类型断言已复核 */
-      type: (content.type as ProjectMeta["type"]) ?? state.meta.type,
+      // type 是外来字符串：不在词表回落 state.meta.type（既有回落口径）。
+      type: isProjectType(content.type) ? content.type : state.meta.type,
       tone: content.tone,
       logline: content.logline,
       scriptMarkdown: content.scriptMarkdown,
@@ -92,40 +106,17 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
     idea: row.idea,
     meta: {
       title: row.title,
-      /* SAFETY: 类型断言已复核 */
-      type: (row.type as ProjectMeta["type"]) ?? "short_video",
+      // type 列是外来字符串：不在词表回落 "short_video"。
+      type: isProjectType(row.type) ? row.type : "short_video",
       tone: row.tone,
       logline: row.logline,
       scriptMarkdown: row.scriptMarkdown,
     },
-    /* SAFETY: 类型断言已复核 */
-    scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
-    /* SAFETY: 类型断言已复核 */
-    characters: Array.isArray(row.characters) ? (row.characters as Array<Character>) : [],
-    /* SAFETY: 类型断言已复核 */
-    shots: Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [],
+    scenes: isSceneArray(row.scenes) ? row.scenes : [],
+    characters: isCharacterArray(row.characters) ? row.characters : [],
+    shots: isShotArray(row.shots) ? row.shots : [],
     stage: isStage(row.stage) ? row.stage : "script",
     projectId: row.projectId ?? null,
-  };
-}
-
-function summarize(row: WorkshopSession): WorkshopSessionSummary {
-  return {
-    id: row.id,
-    userId: row.userId,
-    projectId: row.projectId ?? null,
-    title: row.title,
-    type: row.type,
-    tone: row.tone,
-    logline: row.logline,
-    stage: isStage(row.stage) ? row.stage : "script",
-    ideaLength: (row.idea ?? "").length,
-    scriptLength: (row.scriptMarkdown ?? "").length,
-    sceneCount: Array.isArray(row.scenes) ? row.scenes.length : 0,
-    characterCount: Array.isArray(row.characters) ? row.characters.length : 0,
-    shotCount: Array.isArray(row.shots) ? row.shots.length : 0,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -188,11 +179,47 @@ export async function getSession(id: string): Promise<WorkshopSessionState | nul
 }
 
 export async function listSessions(): Promise<Array<WorkshopSessionSummary>> {
+  /* #4421：列表只要摘要（summarize 只消费 id/title/长度/计数），内容 JSON 列
+   * （idea / scriptMarkdown / scenes / characters / shots）整批拉回内存只留摘要
+   * ——会话表没有清理路径、只增不减，列表随历史长度线性变慢。投影改按需取
+   * 标量 + length() / json_array_length()；内容本体留给 getSession 的单行读。 */
   const rows = await workshopDb
-    .select()
+    .select({
+      id: workshopSession.id,
+      userId: workshopSession.userId,
+      projectId: workshopSession.projectId,
+      title: workshopSession.title,
+      type: workshopSession.type,
+      tone: workshopSession.tone,
+      logline: workshopSession.logline,
+      stage: workshopSession.stage,
+      ideaLength: sql<number>`length(${workshopSession.idea})`,
+      scriptLength: sql<number>`length(${workshopSession.scriptMarkdown})`,
+      sceneCount: sql<number>`json_array_length(${workshopSession.scenes})`,
+      characterCount: sql<number>`json_array_length(${workshopSession.characters})`,
+      shotCount: sql<number>`json_array_length(${workshopSession.shots})`,
+      createdAt: workshopSession.createdAt,
+      updatedAt: workshopSession.updatedAt,
+    })
     .from(workshopSession)
     .orderBy(desc(workshopSession.updatedAt));
-  return rows.map(summarize);
+  return rows.map((row) => ({
+    id: row.id,
+    userId: row.userId,
+    projectId: row.projectId ?? null,
+    title: row.title,
+    type: row.type,
+    tone: row.tone,
+    logline: row.logline,
+    stage: isStage(row.stage) ? row.stage : "script",
+    ideaLength: row.ideaLength ?? 0,
+    scriptLength: row.scriptLength ?? 0,
+    sceneCount: row.sceneCount ?? 0,
+    characterCount: row.characterCount ?? 0,
+    shotCount: row.shotCount ?? 0,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  }));
 }
 
 export async function updateState(id: string, state: WorkshopSessionState): Promise<void> {
@@ -205,28 +232,42 @@ export async function updateState(id: string, state: WorkshopSessionState): Prom
   if (!row) {
     return;
   } // 既有语义：无行不写（编排器先 load，正常到不了这里）。
-  let projectId = row.projectId;
-  if (projectId === null) {
-    // 遗留会话（桥之前建的）首次写 → 桥接：以当前内容为初始值新建项目，
-    // 此后与界面同一份真值；只读不写的遗留会话保持原样、不凭空长出项目。
-    const ownerId = await resolveOwnerUserId(row.userId);
-    projectId = await ensureProductionProject(null, ownerId, state.meta.title);
-  }
-  await writeContentToProduction(
-    projectId,
-    row.userId ?? (await resolveOwnerUserId(row.userId)),
-    contentOf(state),
+  /* 读-判-写收进 immediate 事务（ISSUE #3852）：遗留行的 ensureProductionProject
+   * 查后插 + production 内容写 + 会话行写，原先三段各自提交——并发 MCP 调用
+   * （同时生图两个镜头、setStoryboard 与 generateImage 交叠）会以各自 load()
+   * 的旧快照互相覆盖，还会重复建项目。SQLite 单写者 + immediate 拿锁把整段
+   * 串行化（与 saveLlmSettings 同一形状，§18.10.1）。 */
+  await workshopDb.transaction(
+    async (tx) => {
+      let projectId = row.projectId;
+      if (projectId === null) {
+        // 遗留会话（桥之前建的）首次写 → 桥接：以当前内容为初始值新建项目，
+        // 此后与界面同一份真值；只读不写的遗留会话保持原样、不凭空长出项目。
+        const ownerId = await resolveOwnerUserId(row.userId);
+        projectId = await ensureProductionProject(null, ownerId, state.meta.title, tx);
+      }
+      await writeContentToProduction(
+        projectId,
+        row.userId ?? (await resolveOwnerUserId(row.userId)),
+        contentOf(state),
+        tx,
+      );
+      // 会话行：idea / stage / projectId 是自己的权威字段；内容列写镜像，
+      // 防「直接读表的人看到陈旧内容」的第二真值困惑（权威读始终在 production）。
+      await tx
+        .update(workshopSession)
+        .set({ ...stateToRow(state), projectId })
+        .where(eq(workshopSession.id, id));
+    },
+    { behavior: "immediate" },
   );
-  // 会话行：idea / stage / projectId 是自己的权威字段；内容列写镜像，
-  // 防「直接读表的人看到陈旧内容」的第二真值困惑（权威读始终在 production）。
-  await workshopDb
-    .update(workshopSession)
-    .set({ ...stateToRow(state), projectId })
-    .where(eq(workshopSession.id, id));
 }
 
 export async function deleteSession(id: string): Promise<boolean> {
   const result = await workshopDb.delete(workshopSession).where(eq(workshopSession.id, id));
-  // libsql 的 ResultSet 用 rowsAffected（better-sqlite3 的 RunResult.changes 已不存在）。
-  return (result.rowsAffected ?? 0) > 0;
+  // node:sqlite 的 sqlite-proxy run 结果给 changes（libsql ResultSet 的 rowsAffected 已随驱动退场，#3171）：
+  // drizzle 的 SqliteRemoteResult 类型只声明 rows，故按驱动实际返回形状取一次；
+  // 只有数字才认，外来/异常值按 0 回落。
+  const changes = asRecord(result)?.changes;
+  return (typeof changes === "number" ? changes : 0) > 0;
 }

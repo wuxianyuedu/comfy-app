@@ -9,9 +9,7 @@ describe("EmptyStateHint", () => {
   it("未传 emptyHint 时渲染默认引导文案", () => {
     render(<EmptyStateHint />);
     expect(screen.getByText(/该工作流尚未标记对外参数/)).toBeInTheDocument();
-    expect(
-      screen.getByText(/打开工作流编辑器 → 顶栏「IO 编辑」/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/打开工作流编辑器 → 顶栏「IO 编辑」/)).toBeInTheDocument();
   });
 
   it("传入 emptyHint 时渲染自定义内容(支持 ReactNode)", () => {
@@ -27,8 +25,6 @@ describe("EmptyStateHint", () => {
     expect(screen.getByText(/自定义提示/)).toBeInTheDocument();
     expect(screen.getByText("加粗部分")).toBeInTheDocument();
     // 默认文案不再出现
-    expect(
-      screen.queryByText(/该工作流尚未标记对外参数/),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/该工作流尚未标记对外参数/)).not.toBeInTheDocument();
   });
 });

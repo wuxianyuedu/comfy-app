@@ -43,17 +43,13 @@ describe("deriveLocalRootsHint 空列表原因", () => {
 
   it("根在但一个工作流文件都没有 → 指出目录里没有文件", () => {
     expect(
-      deriveLocalRootsHint([
-        { absPath: "D:/Comfy/workflows", exists: true, count: 0 },
-      ]),
+      deriveLocalRootsHint([{ absPath: "D:/Comfy/workflows", exists: true, count: 0 }]),
     ).toContain("没有工作流文件");
   });
 
   it("根可用且扫到文件 → 不算「因为目录有问题」，返回 null 走默认空态文案", () => {
     expect(
-      deriveLocalRootsHint([
-        { absPath: "D:/Comfy/workflows", exists: true, count: 7 },
-      ]),
+      deriveLocalRootsHint([{ absPath: "D:/Comfy/workflows", exists: true, count: 7 }]),
     ).toBeNull();
     // 多个根里只要有一个可用并扫到文件，也不归因到目录
     expect(
@@ -74,9 +70,10 @@ describe("deriveFormatFlags 格式标志推导", () => {
   });
 
   it("RAW 原件缺失时不可执行", () => {
-    expect(
-      deriveFormatFlags(makeRow({ hasRaw: false, usable: false })),
-    ).toEqual({ hasRaw: false, usable: false });
+    expect(deriveFormatFlags(makeRow({ hasRaw: false, usable: false }))).toEqual({
+      hasRaw: false,
+      usable: false,
+    });
   });
 
   it("服务端没给 usable 时按 hasRaw 回填", () => {
@@ -124,9 +121,11 @@ describe("deriveSyncFlags 手动同步标志聚合", () => {
   });
 
   it("同时 dirty 与 missing 时 canResync 跟随 dirty", () => {
-    expect(
-      deriveSyncFlags(makeRow({ diskDirty: true, diskMissing: true })),
-    ).toEqual({ dirty: true, missing: true, canResync: true });
+    expect(deriveSyncFlags(makeRow({ diskDirty: true, diskMissing: true }))).toEqual({
+      dirty: true,
+      missing: true,
+      canResync: true,
+    });
   });
 
   it("diskDirty 为 undefined 等 falsy 值时视为 false", () => {

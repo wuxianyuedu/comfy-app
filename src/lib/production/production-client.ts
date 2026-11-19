@@ -6,6 +6,7 @@
 import { withQuery } from "~/lib/query-string";
 import { isRecord } from "~/lib/is-record";
 import { normalizeProductionProgress, type ProductionProgress } from "~/lib/production/progress";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 /** 一次生产数据写入的载荷（字段与 production 表列一一对应）。 */
 export type ProductionPayload = {
@@ -24,13 +25,32 @@ export type ProductionPayload = {
 /** 读回的生产数据（与写入载荷同形）。 */
 export type ProductionData = ProductionPayload;
 
+/**
+ * 服务端 production 行的宽松读法：必填字段缺省 / 类型不符按默认兜底，其余键原样保留
+ * （画布还会读 `scriptReview` / `run` 等不在载荷类型里的列）。不抛。
+ */
+function normalizeProductionData(raw: Record<string, unknown>): ProductionData {
+  return {
+    ...raw,
+    characters: Array.isArray(raw.characters) ? raw.characters : [],
+    logline: typeof raw.logline === "string" ? raw.logline : "",
+    progress: normalizeProductionProgress(raw.progress),
+    scenes: Array.isArray(raw.scenes) ? raw.scenes : [],
+    scriptMarkdown: typeof raw.scriptMarkdown === "string" ? raw.scriptMarkdown : "",
+    shots: Array.isArray(raw.shots) ? raw.shots : [],
+    title: typeof raw.title === "string" ? raw.title : "",
+    tone: typeof raw.tone === "string" ? raw.tone : "",
+    type: typeof raw.type === "string" ? raw.type : "",
+  };
+}
+
 /** 把某项目的生产数据写穿到服务端 production 表（按 proj_* upsert）。静默失败。 */
 export async function pushProduction(projectId: string, payload: ProductionPayload): Promise<void> {
   if (!projectId) {
     return;
   }
   try {
-    await fetch("/api/production", {
+    await fetchWithTimeout("/api/production", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ project: projectId, production: payload }),
@@ -46,14 +66,13 @@ export async function fetchProduction(projectId: string): Promise<ProductionData
     return null;
   }
   try {
-    const res = await fetch(withQuery("/api/production", { project: projectId }));
+    const res = await fetchWithTimeout(withQuery("/api/production", { project: projectId }));
     if (!res.ok) {
       return null;
     }
     const data: unknown = await res.json();
     if (isRecord(data) && data.exists === true && isRecord(data.production)) {
-      /* SAFETY: 类型断言已复核 */
-      return data.production as unknown as ProductionData;
+      return normalizeProductionData(data.production);
     }
     return null;
   } catch {

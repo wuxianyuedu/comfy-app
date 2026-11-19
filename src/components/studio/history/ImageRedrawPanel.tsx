@@ -49,7 +49,7 @@ export function ImageRedrawPanel({
       failureText: "模板清单加载失败",
     });
     // 只在面板挂载时拉一次（ensureTemplates 自带去重）。
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- ensureTemplates 是稳定回调
+    // oxlint-disable-next-line react/exhaustive-deps -- ensureTemplates 是稳定回调
   }, []);
 
   return (
@@ -58,9 +58,11 @@ export function ImageRedrawPanel({
         <FieldLabel>模式</FieldLabel>
         <RadioGroup
           className="flex flex-row gap-4"
-          onValueChange={(v) => {
-            /* SAFETY: 类型断言已复核 */
-            controller.setMode(v as "upscale" | "inpaint");
+          onValueChange={(v: unknown) => {
+            /* base-ui 的 `onValueChange` 给的是宽值；只有这两档是重绘模式。 */
+            if (v === "upscale" || v === "inpaint") {
+              controller.setMode(v);
+            }
           }}
           value={controller.mode}
         >
@@ -152,8 +154,9 @@ export function ImageRedrawPanel({
             !controller.selectedTemplateId ||
             (controller.mode === "inpaint" && (controller.mask === null || controller.mask === ""))
           }
-          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-          onClick={() => void controller.run(imageUrl)}
+          onClick={() => {
+            void controller.run(imageUrl);
+          }}
           size="sm"
           type="button"
         >

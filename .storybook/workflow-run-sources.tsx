@@ -35,7 +35,7 @@
  *    「横幅 + 时间线里那行」这对关系在画布上就是真的。
  */
 
-import type { Decorator } from "@storybook/nextjs";
+import type { Decorator } from "@storybook/nextjs-vite";
 
 import {
   appendWorkflowRunLog,
@@ -218,8 +218,8 @@ export function runSceneError(name: string): string | undefined {
 
 /** 按名字取场景；写错就抛（`parameters` 里那个名字是不可信输入）。 */
 function requireScene(name: string): WorkflowRunScene {
-  /* SAFETY: 类型断言已复核 */
-  const scene: WorkflowRunScene | undefined = WORKFLOW_RUN_SCENES[name as RunSceneName];
+  const registry: Record<string, WorkflowRunScene> = WORKFLOW_RUN_SCENES;
+  const scene: WorkflowRunScene | undefined = registry[name];
   if (scene === undefined) {
     throw new Error(
       `运行场景里没有叫「${name}」的那种。现有的：${WORKFLOW_RUN_SCENE_NAMES.join(" / ")}`,

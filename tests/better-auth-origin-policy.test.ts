@@ -1,21 +1,7 @@
 /**
- * 认证 origin 策略的判据（ISSUE #2158 第 4 条）。
- *
- * 判的是**三件会静默失效的事**：
- *
- *  ① **允许名单的形状**：better-auth 的 `getHost()` 取 `new URL(url).host`
- *     ⇒ host **带端口**。名单里写裸 `127.0.0.1` 与写 `127.0.0.1:*` 的差别是
- *     「一个不匹配 / 一个匹配」—— 而不匹配的那份**不报错**，只是解析不出 origin，
- *     于是回调/重定向指向兜底值。⇒ 这一条用 better-auth 自己的匹配器判。
- *  ② **动态解析真的按请求的 Host 头走**：桌面形态的端口运行期才定
- *     （`standalone-runtime-env.mjs`），编译期写死的 baseURL 对它永远不对 ⇒
- *     这一条判「请求的 host 就是解析出来的 origin」。
- *  ③ **外来 host 落兜底而不是被解析成它**：允许名单是**安全面**（谁能配当
- *     origin）；不在名单里的 host 必须落兜底，否则 DNS rebinding 那类
- *     `Host: evil.example.com` 会被当成合法 origin（回调指向攻击者）。
- *
- * 另有一条负控制：baseURL **不许**退回字符串形态（那正是本条要治的病），
- * 兜底值必须与「应用自身 origin」那一份同口径（不另写一份拼法）。
+ * 认证 origin 策略判据（ISSUE #2158 第 4 条）：① 允许名单形状 —— better-auth `getHost()` 取带端口的 host，裸
+ * `127.0.0.1` 与 `127.0.0.1:*` 一个是「不匹配且不报错」；② 动态解析按请求 Host 头走（桌面端口运行期才定）。
+ * ③ 外来 host 必须落兜底，否则 `Host: evil.example.com` 被当合法 origin（DNS rebinding）；负控制：baseURL 不许退回字符串形态。
  */
 import { describe, expect, it, vi } from "vitest";
 import { matchesHostPattern, resolveBaseURL } from "better-auth";

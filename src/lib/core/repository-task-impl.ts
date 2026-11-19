@@ -119,9 +119,9 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
      *
      * 原子性由 SQLite「单写语句内子查询同语句求值」保证：inline/host 两个领取方
      * 各自最多领走互不重叠的行。刻意不用 `db.transaction` + 先 SELECT 后 UPDATE：
-     * 本实现要同时跑在三种宿主（better-sqlite3 同步测试库 / libsql http /
-     * libsql file）上，async 事务回调在同步驱动上于 continuation 之前就 COMMIT，
-     * 原子性静默失效。
+     * 本实现要同时跑在两种宿主（运行时 node:sqlite 的 sqlite-proxy / 测试 better-sqlite3
+     * 的 sqlite-proxy）上，事务语义要靠回调被 await；单语句领取不依赖任何一方的
+     * 事务实现。
      *
      * 归属谓词跟 ADR §6：host 只领显式 `'host'` 的行；inline 领 NULL（历史行与
      * 未带归属的建行）与 `'inline'`。领取时把 `claimedBy` 覆写为 `mode`，NULL
@@ -215,15 +215,26 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
           ),
         )
         .limit(take);
-      /* 谓词里已有 `claimedBy IS NOT NULL`，而 drizzle 不会据此把投影收窄成非空：
-       * 在边界上断言一次，读侧（把陌生归属值写进用户可见的判死原因）不必再判空。 */
-      /* SAFETY: 类型断言已复核 */
-      return rows as Array<{
+      /* 谓词里已有 `claimedBy IS NOT NULL`，但 drizzle 不会据此把投影收窄成非空：
+       * 这里按运行期判型，读侧（把陌生归属值写进用户可见的判死原因）不必再判空。 */
+      const claimedRows: Array<{
         claimedBy: string;
         createdAt: Date;
         id: string;
         workflowName: string;
-      }>;
+      }> = [];
+      for (const row of rows) {
+        if (typeof row.claimedBy !== "string") {
+          continue;
+        }
+        claimedRows.push({
+          id: row.id,
+          createdAt: row.createdAt,
+          workflowName: row.workflowName,
+          claimedBy: row.claimedBy,
+        });
+      }
+      return claimedRows;
     },
 
     /** reaper 扫 RUNNING 孤儿（ISSUE #1184 起**不再要求 `promptId` 非空**）：
@@ -335,9 +346,9 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
  * 故意做成必填。
  *
  * `TaskRepoDb` 是结构最小约束（见 `./repository-task-impl-types`），只锁本
- * 文件用到的 `.select()/.update()/.insert()` 三条 builder；drizzle 的
- * libsql / better-sqlite3 两种 adapter 都天然满足，测试里可以直接把
- * `createTestDb()` 传进来（走 `as unknown as TaskRepoDb` 一次性断言）。
+ * 文件用到的 `.select()/.update()/.insert()` 三条 builder；sqlite-proxy（运行时
+ * node:sqlite，ISSUE #3171）与 better-sqlite3 两种 adapter 都天然满足，测试里
+ * 可以直接把 `createTestDb()` 传进来（走 `as unknown as TaskRepoDb` 一次性断言）。
  */
 
 export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMode }) {
@@ -352,8 +363,8 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
    *  进度帧每几秒一发，只有第一条把 `claimedAt` 从 NULL 落成时刻，之后的都不
    *  刷新——否则「已运行」永远接近零。
    *  参数给 **ISO 字符串而不是 `Date`**（实测两条都踩过才定下来）：`sql` 模板里的
-   *  值**不走**该列的 `toDriver`（那是给 `.set()` 直接赋值用的），而 better-sqlite3
-   *  与 libsql 都只能绑 primitive——给 `Date` 会死在
+   *  值**不走**该列的 `toDriver`（那是给 `.set()` 直接赋值用的），而 node:sqlite
+   *  与 libsql / better-sqlite3 都只能绑 primitive——给 `Date` 会死在
    *  `SQLite3 can only bind numbers, strings, …`。ISO 文本正是本列 `toDriver` 的
    *  产物，所以两种写法落库的形态一致。 */
   function claimStamp() {
@@ -482,6 +493,67 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
       return updated.length > 0 ? "written" : classifySkipped(taskId);
     },
 
+    /** 成功收口 + 产物行同事务（ISSUE #3881）：原先 finalizeSuccess 提交后
+     *  createImages 若失败（如 DB 忙超时），任务已是 SUCCEEDED 但 TaskImage
+     *  0 行——画廊里该任务无产物且无补写路径。两写同为同连接纯 DB 写，收进
+     *  一个 immediate 事务：任一失败整体回滚，任务保持 RUNNING，由回收器
+     *  下一轮对账（writeGuard 的归属/终态判据不变）。 */
+    async finalizeSuccessWithImages(
+      taskId: string,
+      data: {
+        params: unknown;
+        resultImages: unknown;
+        workflowSnapshot?: unknown;
+      },
+      images: Array<{
+        height?: number | null;
+        isCover: boolean;
+        localPath: string;
+        mediaType: string;
+        seed: string | null;
+        sortIndex: number;
+        width?: number | null;
+      }>,
+    ): Promise<TaskWriteOutcome> {
+      return db.transaction(
+        async (tx) => {
+          const updated = await tx
+            .update(task)
+            .set({
+              status: "SUCCEEDED",
+              progress: 100,
+              finishedAt: new Date(),
+              resultImages: data.resultImages,
+              params: data.params,
+              ...(data.workflowSnapshot === undefined
+                ? {}
+                : { workflowSnapshot: data.workflowSnapshot }),
+            })
+            .where(writeGuard(taskId))
+            .returning({ id: task.id });
+          if (updated.length === 0) {
+            return classifySkipped(taskId);
+          }
+          if (images.length > 0) {
+            await tx.insert(taskImage).values(
+              images.map((im) => ({
+                taskId,
+                localPath: im.localPath,
+                sortIndex: im.sortIndex,
+                isCover: im.isCover,
+                mediaType: im.mediaType,
+                seed: im.seed,
+                width: im.width ?? null,
+                height: im.height ?? null,
+              })),
+            );
+          }
+          return "written" as const;
+        },
+        { behavior: "immediate" },
+      );
+    },
+
     /** 失败收口：写 FAILED + error + finishedAt；`validationErrors` 空数组与
      *  undefined 都归一存 null，非空才 stringify。
      *
@@ -558,8 +630,10 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
     },
 
     /** 任务日志整包回写（`runner-state.persistLogs` 的落库边）。
-     *  `.catch(→undefined)` 是**故意的**：日志面板的内存视图仍完整，这一次
-     *  没持久化不影响业务；真故障由上层的 `deps.log.warn` 走镜像通道。
+     *  **不在这里吞错**（ISSUE #4271）：`runner-state.persistLogs` 的 catch +
+     *  `deps.log.warn` 镜像通道就是为这次失败设计的——在这里 `.catch(→undefined)`
+     *  会让那条告警路径成为死代码，落库失败彻底无声。日志面板的内存视图仍完整，
+     *  这一次没持久化不影响业务，但故障必须经上层镜像通道可见。
      *
      *  只带归属守卫、**不带终态守卫**：收口之后仍会有尾随日志（耗时、产物路径、
      *  取消原因），按终态挡掉就等于把失败原因从面板上抹掉——那条正是排障要看的。 */
@@ -567,8 +641,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
       await db
         .update(task)
         .set({ logs })
-        .where(and(eq(task.id, taskId), ownedBy(owner)))
-        .catch(() => undefined);
+        .where(and(eq(task.id, taskId), ownedBy(owner)));
     },
 
     /** comfy-cli 完整原文整包落库（P3 §5 ADR §14 D1 的 4-B2：「查看完整输出」
@@ -594,8 +667,17 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
         .where(eq(task.id, taskId))
         .limit(1);
       const value = rows[0]?.rawCli;
-      /* SAFETY: 类型断言已复核 */
-      return Array.isArray(value) ? (value as Array<string>) : null;
+      if (!Array.isArray(value)) {
+        return null;
+      }
+      const lines: Array<string> = [];
+      for (const item of value) {
+        if (typeof item !== "string") {
+          return null;
+        }
+        lines.push(item);
+      }
+      return lines;
     },
   };
 }

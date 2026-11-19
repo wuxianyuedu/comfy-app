@@ -1,31 +1,24 @@
 /**
- * `base-check` 那条「把本检出的依赖树链进干净快照」的链接，收尾**必须先摘**（ISSUE #1913 收尾翻出来的）。
- *
- * 判的是什么：`linkDependencies` 建的是一条**方向朝外**的链接 ——
- * `<快照>/node_modules` → 本检出的 `node_modules`。而清理那一步原本是
- * `git worktree remove --force <快照>`，实测它在 Windows 上**穿 junction 走进目标**逐个删，
- * 于是「销毁一个临时快照」变成了「销毁调用者正在干活的那棵树」。现场形态：
- * 跑完一次复算后 `node_modules/.bin` 整批不见，下一次 e2e 报
- * `Command "next" not found` + `Timed out waiting 180000ms from config.webServer`，
- * 全量档记成 `exit 1` —— 红的形状与「应用坏了」逐字同形，一个字都不指向复算工具。
- *
- * 两向都钉（与本仓 `tests/git-sandbox-env.test.ts` 同一个口径：只判正向的那一档，
- * 在「机制其实不成立」的世界里同样为绿）：
- *   ① **不摘就删 ⇒ 目标树确实被删穿**（机制成立，不是臆测）。只在 win32 判 ——
- *      POSIX 上 `git` 把符号链接当链接摘掉，没有这一跳；按平台分档判据的先例见
- *      `scripts/.runtime-budget-baseline.json`。
- *   ② **先 `unlinkDependencies` 再删 ⇒ 两边都活着**（修法有效）。
- *
- * ① 用的「被删的那棵树」是本测试自己 `mkdtempSync` 出来的夹具，**绝不是运行它的那份检出**
- * —— 判据可以随便毁夹具，但不许拿调用方的工作树做实验（那正是被测事故本身的形态）。
+ * `base-check`「把本检出的依赖树链进干净快照」的收尾必须**先摘链接**（ISSUE #1913）：链接方向朝外，清理却用 `git worktree remove --force`，
+ * 它在 Windows 上穿 junction 走进目标逐个删 ——「销毁临时快照」变成「销毁调用者的工作树」（现场 `.bin` 整批不见、`Command "next" not found`，与「应用坏了」同形）。
+ * 两向都钉：不摘就删 ⇒ 真被删穿（仅 win32，POSIX 把符号链接当链接摘）；先 `unlinkDependencies` 再删 ⇒ 两边都活。夹具用本测试 `mkdtempSync` 的树，不拿运行中的检出做实验。
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { linkDependencies, unlinkDependencies } from "../scripts/base-check.mjs";
+import { linkDependencies, unlinkDependencies } from "../scripts/gates/base-check.mjs";
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 /** 本文件造出来的夹具目录；用例失败也一律收尾。 */
@@ -38,11 +31,9 @@ afterEach(() => {
 });
 
 /**
- * 起一份「像真实检出」的夹具：一次提交 + 一份**不入库**的 `node_modules/.bin/next`。
- *
- * `node_modules` 必须在提交之后才建 —— 否则它会进了索引，`git worktree add` 就在快照里
- * 直接检出一份真目录，`linkDependencies` 那条「已存在就不链」的短路会生效，
- * 实验就退化成「链都没建」的假绿。
+ * 造一份「像真实检出」的夹具：一次提交 + 一份**不入库**的 `node_modules/.bin/next`。
+ * `node_modules` 必须在提交之后才建 —— 否则它进了索引、`git worktree add` 会在快照里检出真目录，
+ * `linkDependencies` 的「已存在就不链」短路生效，实验退化成「链都没建」的假绿。
  */
 function makeFakeCheckout(name: string): string {
   const dir = mkdtempSync(join(tmpdir(), `base-check-snap-${name}-`));
@@ -91,6 +82,34 @@ function addWorktree(
 
 const shimOf = (root: string) => join(root, "node_modules", ".bin", "next");
 
+/**
+ * 造一条指向 `checkout/node_modules` 的链接 —— `junction` 与 `dir`（symlink）两形都走这里，
+ * 这样两条用例判的是同一个东西（ISSUE #2997：两形在外部命令里摘链结果不同）。
+ */
+function makeLink(checkout: string, type: "junction" | "dir"): string {
+  const parent = mkdtempSync(join(tmpdir(), `base-check-snap-${type}-`));
+  dirs.push(parent);
+  const link = join(parent, "node_modules");
+  symlinkSync(join(checkout, "node_modules"), link, type);
+  return link;
+}
+
+/** 本机能不能造 `dir` 形态的 symlink（Windows 要开发者模式）；造不出就如实跳过那一向。 */
+function canMakeDirSymlink(): boolean {
+  const dir = mkdtempSync(join(tmpdir(), "base-check-probe-symlink-"));
+  try {
+    mkdirSync(join(dir, "target"));
+    symlinkSync(join(dir, "target"), join(dir, "link"), "dir");
+    return true;
+  } catch {
+    return false;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const DIR_SYMLINK_OK = canMakeDirSymlink();
+
 describe("复算快照的依赖链接：谁在链上、收尾谁先走", () => {
   it("①不摘链接就 `git worktree remove --force` ⇒ 链出去的那半边被删穿（win32 机制在案）", () => {
     // POSIX 上 `git` 把符号链接当**链接**摘掉，不走进目标；这一跳只在 Windows 上存在。
@@ -103,20 +122,17 @@ describe("复算快照的依赖链接：谁在链上、收尾谁先走", () => {
 
     git(["worktree", "remove", "--force", wt]);
 
-    if (process.platform === "win32") {
-      /**
-       * 这里断言的是**伤害确实发生**：目标树上的 `next` 垫片没了。
-       * 若哪天 git 修成「穿链接不删」，这条会红 —— 那是好消息（危害消失，届时把
-       * `unlinkDependencies` 降级成防御性冗余并订正碎片），不许反过来把它 skip 掉。
-       */
-      expect(
-        existsSync(shimOf(checkout)),
-        "win32 上 `git worktree remove --force` 不再穿 junction —— 危害假设变了，" +
-          "请回来订正 base-check 的这段注释与碎片，别直接 skip",
-      ).toBe(false);
-    } else {
-      expect(existsSync(shimOf(checkout))).toBe(true);
-    }
+    /**
+     * 这里断言的是**伤害确实发生**：目标树上的 `next` 垫片没了（win32 断 false；
+     * POSIX 上 junction 本就随目录树活着，断 true）。
+     * 若哪天 git 修成「穿链接不删」，win32 支会红 —— 那是好消息（危害消失，届时把
+     * `unlinkDependencies` 降级成防御性冗余并订正碎片），不许反过来把它 skip 掉。
+     */
+    expect(
+      existsSync(shimOf(checkout)),
+      "win32 上 `git worktree remove --force` 不再穿 junction —— 危害假设变了，" +
+        "请回来订正 base-check 的这段注释与碎片，别直接 skip",
+    ).toBe(process.platform !== "win32");
   }, 30_000);
 
   it("②先 `unlinkDependencies` 再摘 worktree ⇒ 两边都活着（这就是修法的顺序）", () => {
@@ -148,12 +164,50 @@ describe("复算快照的依赖链接：谁在链上、收尾谁先走", () => {
     /* 上面两向判的是机制，这一条判的是**编排**：`finally` 里若有人把
      * `git worktree remove` 挪回 `unlinkDependencies` 之前，机制那条会红，
      * 但红在「谁先跑」这种读起来像实现细节的地方 —— 这一条把顺序本身说出口。 */
-    const src = readFileSync("scripts/base-check.mjs", "utf8");
+    const src = readFileSync("scripts/gates/base-check.mjs", "utf8");
     const unlinkAt = src.indexOf("unlinkDependencies(dependencyLink)");
     const removeAt = src.indexOf('git(["worktree", "remove", "--force"');
     expect(unlinkAt, "finally 里不再调用 unlinkDependencies —— 链接会被穿删").toBeGreaterThan(-1);
     expect(removeAt).toBeGreaterThan(-1);
     expect(unlinkAt < removeAt, "顺序反了：先摘 worktree 就会穿 junction 删进本检出").toBe(true);
     expect(src).toContain("dependencyLink = linkDependencies(ROOT, worktreePath)");
+  });
+
+  it("⑤junction 与 symlink 摘链结果一致：只摘链接本体、目标 shim 仍在（ISSUE #2997）", () => {
+    /* 判据只认 lstat：`existsSync` 对断链为假，会把「链接还在」读成「已经摘掉」。
+     * junction 这一向每个平台都判；`dir` symlink 在造不出来的机器上另立一条（下面）。 */
+    const checkout = makeFakeCheckout("forms-junction");
+    const link = makeLink(checkout, "junction");
+    expect(lstatSync(link).isSymbolicLink(), "夹具不是链接 ⇒ 这一向判空").toBe(true);
+
+    expect(unlinkDependencies(link), "junction 没摘掉").toBe(true);
+    expect(() => lstatSync(link), "junction 本体还在").toThrow();
+    expect(existsSync(shimOf(checkout)), "摘 junction 时删到了目标").toBe(true);
+    expect(readFileSync(shimOf(checkout), "utf8")).toBe("shim\n");
+
+    expect(unlinkDependencies(link), "已经摘掉的链接再摘一次要判「已摘」").toBe(true);
+  });
+
+  it.skipIf(!DIR_SYMLINK_OK)(
+    "⑥dir symlink：与 junction 同一条结果 —— 只摘链接本体、目标 shim 仍在（ISSUE #2997）",
+    () => {
+      /* 现场是 MSYS `ln -s` 那一形：一条 `cmd /c rmdir` 对 junction 有效、对它退 145
+       * 且链接仍在。这里钉的是「我们不再靠外部命令，两形都走同一条原语阶梯」。 */
+      const checkout = makeFakeCheckout("forms-symlink");
+      const link = makeLink(checkout, "dir");
+      expect(lstatSync(link).isSymbolicLink(), "夹具不是链接 ⇒ 这一向判空").toBe(true);
+
+      expect(unlinkDependencies(link), "symlink 没摘掉").toBe(true);
+      expect(() => lstatSync(link), "symlink 本体还在").toThrow();
+      expect(existsSync(shimOf(checkout)), "摘 symlink 时删到了目标").toBe(true);
+      expect(readFileSync(shimOf(checkout), "utf8")).toBe("shim\n");
+    },
+  );
+
+  it("⑦真目录不是链接：`unlinkDependencies` 判 false 且一个文件都不碰（ISSUE #2997）", () => {
+    /* 这一向是「别人装出来的树」：摘链函数没有资格删它 —— 返回值让调用方停手。 */
+    const checkout = makeFakeCheckout("forms-real");
+    expect(unlinkDependencies(join(checkout, "node_modules")), "真目录被当成链接了").toBe(false);
+    expect(existsSync(shimOf(checkout)), "真目录里的文件被删了").toBe(true);
   });
 });

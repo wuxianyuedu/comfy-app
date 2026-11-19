@@ -3,11 +3,11 @@
 这份指南回答一个问题：**仓库里有什么东西能让「新接一台构建节点」这件事快起来**，以及
 它**不能**替你做什么。
 
-一句话：`node scripts/ci-image-plan.mjs` 打印三条命令（造镜像 / 装进宿主机 / 钉身份），
+一句话：`node scripts/ci/ci-image-plan.mjs` 打印三条命令（造镜像 / 装进宿主机 / 钉身份），
 镜像是**人**装机的产物 —— 仓库不碰 docker（理由见最后一节）。
 
 > 口径与决策记录在规范 §13.5.3.4.1.2；「这台机长自哪一版」那一步的读数是
-> `scripts/ci-image-identity.mjs`（§13.5.3.4.1.1）；同一份读数里还有一行
+> `scripts/ci/ci-image-identity.mjs`（§13.5.3.4.1.1）；同一份读数里还有一行
 > 「容器格（任务级 `image:`）」—— 它现在的答案是**零格**：那条路在这台节点上 70ms
 > 就红在 `Runner does not enable Docker` 上（§13.5.3.4.1.3）。**所以本文这条
 > 「把节点预装成一张镜像」不再是「两件事里的另一件」，而是唯一还兑现得了的那一件。**
@@ -28,7 +28,7 @@ Job 级 `image:` 是另一档，见 §13.5.3.4.1.3）。所以「节点上该
 | Python                       | 三条装通道挨个试，唯一真跑通过的是官方 embed 包（下载 + 解压） | §13.5.3.5.1                |
 | `cargo build --release` 首次 | 拉整棵 Rust 依赖树 + 编译壳                                    | §7                         |
 
-`node scripts/ci-image-plan.mjs` 铺的就是**前三行**。它**省不掉**的：
+`node scripts/ci/ci-image-plan.mjs` 铺的就是**前三行**。它**省不掉**的：
 
 - `next build`、`vitest`、Playwright 跑用例、`cargo build` 的墙钟 —— 那些依赖**当次源码**，
   任何预装都替不掉；
@@ -43,10 +43,10 @@ Job 级 `image:` 是另一档，见 §13.5.3.4.1.3）。所以「节点上该
 
 ```powershell
 # 0) 先看一眼它打算怎么做（版本号全部现读，不给版本时它会去镜像源取一版）
-node scripts/ci-image-plan.mjs --node-version v24.22.0
+node scripts/ci/ci-image-plan.mjs --node-version v24.22.0
 
 # 1) 造镜像（在一台有 docker 的机器上；`-f -` 直接吃 stdin 喂进来的 Dockerfile）
-node scripts/ci-image-plan.mjs --dockerfile --node-version v24.22.0 |
+node scripts/ci/ci-image-plan.mjs --dockerfile --node-version v24.22.0 |
   docker build --build-arg NODE_VERSION=v24.22.0 -t comfyapp-ci:ci-node-v1 -f - .
 
 # 2) 装进宿主机（`docker cp` 拷出来，不挂载宿主目录）
@@ -60,7 +60,7 @@ docker rm -f comfyapp-ci-ci-node-v1
 > 构建输入）：
 >
 > ```powershell
-> node scripts/ci-image-plan.mjs --write --node-version v24.22.0
+> node scripts/ci/ci-image-plan.mjs --write --node-version v24.22.0
 > # → [ci-image-plan] 已写出 docker/ci-node.Dockerfile（comfyapp-ci:ci-node-v1）
 > ```
 >
@@ -70,7 +70,7 @@ docker rm -f comfyapp-ci-ci-node-v1
 > 文件名，报 `The system cannot find the file specified` —— 那条红读起来像「脚本没产出
 > 文件」，实际是这两句根本不是同一件事。管道喂 stdin 在两个 shell 里是同一个写法。
 
-> `node scripts/ci-image-plan.mjs` 的完整输出里还带着 `docker save`（跨机搬运）与
+> `node scripts/ci/ci-image-plan.mjs` 的完整输出里还带着 `docker save`（跨机搬运）与
 > `docker image inspect`（取 digest）两条，照抄即可 —— 那一段是**唯一出处**，别手写第二份。
 
 装完之后逐件核对（与本脚本在镜像里做的构建期自证是**同一份清单**）：
@@ -101,7 +101,7 @@ docker image inspect --format "{{index .RepoDigests 0}}" comfyapp-ci:ci-node-v1
 
 ## 4. 为什么仓库不碰 docker
 
-`scripts/ci-image-plan.mjs` 只**算命令**、只**打包**，一行 `spawn("docker")` 都没有。
+`scripts/ci/ci-image-plan.mjs` 只**算命令**、只**打包**，一行 `spawn("docker")` 都没有。
 三个理由，每个都能独立成立：
 
 1. **构建容器里没有 docker**（§13.5.3.4.1 已写死）：本脚本在流水线里跑时起不了任何容器，

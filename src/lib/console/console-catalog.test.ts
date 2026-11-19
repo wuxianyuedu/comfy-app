@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { isRecord } from "~/lib/is-record";
+
 import {
   allPresets,
   CONSOLE_PRESETS,
@@ -119,11 +121,17 @@ describe("预设命令表", () => {
   });
 
   it("预设里的 pnpm 脚本都真的在 package.json 里（防「按钮点了报错」）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    const scriptNames = new Set(Object.keys(pkg.scripts));
+    const parsedPkg: unknown = JSON.parse(
+      readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+    );
+    if (!isRecord(parsedPkg)) {
+      throw new Error("package.json 不是对象");
+    }
+    const scripts = parsedPkg.scripts;
+    if (!isRecord(scripts)) {
+      throw new Error("package.json 缺少 scripts");
+    }
+    const scriptNames = new Set(Object.keys(scripts));
     for (const preset of allPresets()) {
       const parsed = parseConsoleLine(preset.command);
       if (!parsed.ok) {

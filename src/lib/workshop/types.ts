@@ -3,6 +3,8 @@
 
 import { z } from "zod";
 
+import { isPlainRecord } from "~/lib/is-record";
+
 /* 整条流水线的项目元数据。 */
 export type ProjectMeta = {
   logline: string; // 一句话的卖点概述
@@ -13,13 +15,23 @@ export type ProjectMeta = {
   type: ProjectType;
 };
 
-export type ProjectType =
-  | "short_video" // 短视频
-  | "micro_film" // 微电影
-  | "animation" // 动画
-  | "ad" // 广告
-  | "comic" // 漫画/漫剧
-  | "other";
+/** `ProjectType` 的运行期词表：union 与守卫同一出处，写法同 `SHOT_TYPES`。 */
+export const PROJECT_TYPES = [
+  "short_video", // 短视频
+  "micro_film", // 微电影
+  "animation", // 动画
+  "ad", // 广告
+  "comic", // 漫画/漫剧
+  "other",
+] as const;
+
+export type ProjectType = (typeof PROJECT_TYPES)[number];
+
+/** `ProjectType` 的运行期守卫：外来值（DB 列、草稿 JSON）收进 union，
+ *  不在词表里返回 false，由调用点按自己的口径回落（本文件不替业务选默认值）。 */
+export function isProjectType(v: unknown): v is ProjectType {
+  return PROJECT_TYPES.some((candidate) => candidate === v);
+}
 
 /* 剧本里的一个场景。 */
 export type Scene = {
@@ -70,7 +82,7 @@ export const TRANSITION_LABELS: Record<Transition, string> = {
  * 而清单本身要被三类人共用 —— 提示词里那句「取值之一：…」（两处曾各自抄一份，
  * 加一个景别就要记得改两边，第三边还会忘）、`SHOT_TYPE_LABELS` 的键、
  * 以及**从 LLM 回来的字符串**收窄回 `ShotType` 的那条判据
- *（`normalizeShotType`）。曾经有一份把这条收窄跳过去写成 `as never`，
+ *（`normalizeShotType`）。曾经有一份把这条收窄跳过去、直接压成 `never` 型，
  * 表现是「LLM 说什么就存什么」，而类型层完全不知道。
  */
 /* SAFETY: 类型断言已复核 */
@@ -93,12 +105,12 @@ export const DEFAULT_SHOT_TYPE: ShotType = "medium";
 /** 把**外来**的景别值（LLM 输出、解析出的 JSON、URL 参数）收进清单。
  *  不在清单里的一律回落默认档 —— 不抛错（一条镜头的景别写错不该毁掉整批解析），
  *  但也不放它进类型系统。 */
+function isShotType(v: unknown): v is ShotType {
+  return typeof v === "string" && SHOT_TYPES.some((type) => type === v);
+}
+
 export function normalizeShotType(raw: unknown): ShotType {
-  /* SAFETY: 类型断言已复核 */
-  /* SAFETY: 类型断言已复核 */
-  return (SHOT_TYPES as ReadonlyArray<string>).includes(typeof raw === "string" ? raw : "")
-    ? (raw as ShotType)
-    : DEFAULT_SHOT_TYPE;
+  return isShotType(raw) ? raw : DEFAULT_SHOT_TYPE;
 }
 
 export const SHOT_TYPE_LABELS: Record<ShotType, string> = {
@@ -141,6 +153,30 @@ export type PipelineStageId =
   | "video_generation"
   | "final_edit";
 
+/** 流水线阶段的单调序（下标即推进度，越靠后越「完成」）。 */
+export const PIPELINE_STAGE_ORDER: ReadonlyArray<PipelineStageId> = [
+  "script",
+  "character",
+  "storyboard",
+  "shot_generation",
+  "video_generation",
+  "final_edit",
+];
+
+/**
+ * 阶段游标只进不退（ISSUE #3902）：set* / generate* 工具各想把 stage 拨到
+ * 自己那一格，但会话已推进到更后面时（如已 final_edit），补调前面的工具
+ * 不应把游标拉回去 —— 取两者中更靠后的那一格。
+ */
+export function advancePipelineStage(
+  current: PipelineStageId,
+  next: PipelineStageId,
+): PipelineStageId {
+  return PIPELINE_STAGE_ORDER.indexOf(next) > PIPELINE_STAGE_ORDER.indexOf(current)
+    ? next
+    : current;
+}
+
 export type StageStatus = "locked" | "pending" | "ready" | "done" | "stale";
 
 export type PipelineStage = {
@@ -178,7 +214,7 @@ export type Asset = {
  * 为什么写在类型旁边而不是 MCP 文件里：这一层的形状只有**一份事实**（上面的接口），
  * 契约与接口分两处就会漂移。而它要挡的是能直接把 JSON 递进来的调用方 ——
  * `workshop_set_characters` / `workshop_set_storyboard` 是**整幅覆盖**草稿并落库，
- * MCP 侧原本是 `z.array(z.any())` 再 `as never` 压进 `Character[]`，等于任何形状都能进。
+ * MCP 侧原本是 `z.array(z.any())` 再压进 `Character[]`（以 `never` 型兜底），等于任何形状都能进。
  * 两个实测到的后果：`styleTags` 给成字符串时 `buildCharacterPrompt` 先过
  * `c.styleTags.length`（字符串也成立）再 `.join()` → TypeError 直接把写入路径打断；
  * `characterIds` 同理被 `rebuildShotPrompts` 的 `.includes` 用掉。
@@ -208,23 +244,23 @@ const stringList = z
  * 写在里面时输出类型是「必带这个键（值可为 undefined）」，与消费侧 `motion?:`
  * 那一类声明正好反过来，派生出来的类型就会让所有字面量集体报 `TS2741`。
  */
+function includesEnumValue<const T extends ReadonlyArray<string>>(
+  values: T,
+  value: unknown,
+): value is T[number] {
+  return typeof value === "string" && values.some((candidate) => candidate === value);
+}
+
 function optionalEnum<const T extends ReadonlyArray<string>>(values: T) {
   return z
     .unknown()
-    .transform((value) =>
-      /* SAFETY: 类型断言已复核 */
-      /* SAFETY: 类型断言已复核 */
-      values.includes(value as string) ? (value as T[number]) : undefined,
-    )
+    .transform((value) => (includesEnumValue(values, value) ? value : undefined))
     .optional();
 }
 
 /** 只收对象：`params` 是必填字段，非对象（含缺省）一律换成空对象。 */
 function paramsObject(value: unknown): Record<string, unknown> {
-  /* SAFETY: 类型断言已复核 */
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return isPlainRecord(value) ? value : {};
 }
 
 export const characterPortraitInputSchema = z.object({
@@ -304,6 +340,11 @@ export const shotInputSchema = z
     status: z.enum(SHOT_STATUSES).default("idle"),
     taskId: z.string().optional(),
     imageUrl: z.string().optional(),
+    /** 镜头级参考图（#4355）：首张为主图，其余按序落其余参考图槽；上限 16 张
+     *  （超出按序截断，UI 侧同样限 16）。留空 = 回落「出场角色的定妆照」
+     *  （既有口径，见 feature-workshop-flow.md §4）。`.optional()` 收在**最外层**
+     *  （transform 之后）：输出类型里这个键保持可选，旧的对象字面量不破。 */
+    referenceImages: stringList.transform((value) => value.slice(0, 16)).optional(),
     // ── 视频生成计划 ──
     dialogue: z.string().optional(), // 对白 / 字幕文本
     motion: optionalEnum(MOTION_LEVELS), // 运动强度（I2V）

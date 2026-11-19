@@ -1,12 +1,6 @@
-// CustomNodesSettings 逻辑层行为测试（ISSUE #318 的「先补护栏」步骤）。
-//
-// 为什么先补这一层：这个对话框的拆分已经做过一轮（1116 行 → 容器 73 +
-// NodesTab 379 + hook 503 + parsing 纯函数），但 **hook 与容器没有任何行为
-// 测试**。于是「解析失败要看得见」「打开/关闭要拉数据」「错误不会被下一次
-// 成功拉取冲掉」这些规则全靠人读代码，改动容易静默回归。
-//
-// 本文件只测逻辑层（renderHook），不渲染视图——视图由 SettingsParts.test.tsx
-// 与 NodesTab 承担。用例名直接写出「什么行为 → 什么可见结果」。
+// CustomNodesSettings 逻辑层行为测试（ISSUE #318）：拆分后 hook 与容器一直没有
+// 行为测试，「解析失败要看得见」「打开要拉数据」「错误不被下次成功冲掉」全靠
+// 人读代码。本文件只测 renderHook，视图由 SettingsParts / NodesTab 承担。
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,6 +11,7 @@ vi.mock("~/config/custom-nodes", () => ({
 }));
 
 import { getCustomNodesManifest, refreshCustomNodes } from "~/config/custom-nodes";
+import { isPlainRecord } from "~/lib/is-record";
 import { useCustomNodesSettings } from "./use-custom-nodes-settings";
 
 const mockedManifest = vi.mocked(getCustomNodesManifest);
@@ -52,8 +47,7 @@ function settingsBlob(over: Record<string, unknown> = {}) {
     settings: {
       paths: ["D:/comfy/custom_nodes"],
       localWorkflowPaths: [],
-      /* SAFETY: 类型断言已复核 */
-      ...(settings as object | undefined),
+      ...(isPlainRecord(settings) ? settings : {}),
     },
   });
 }
@@ -191,7 +185,7 @@ describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
 
 describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle）", () => {
   it("未找到自定义节点目录时 onParseAll 直接给出可行动提示，不发请求", async () => {
-    fetchMock.mockImplementation(async () => settingsBlob({ settings: { paths: [] } }));
+    fetchMock.mockImplementation(() => Promise.resolve(settingsBlob({ settings: { paths: [] } })));
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => {
       result.current.setOpen(true);
@@ -223,16 +217,18 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
     // 并在 lastReport 里带回服务端落库的报告 —— 这是解析完成后 report 的真实来源
     // （解析流的 done 事件也会 setReport，但随后的 reloadFromServer 会以服务端
     // 状态为准，见下条用例）。
-    fetchMock.mockImplementation(async (_input, init?: RequestInit) => {
+    fetchMock.mockImplementation((_input, init?: RequestInit) => {
       const isParse = (init?.method ?? "GET").toUpperCase() === "POST";
       if (isParse) {
-        return ndjson([
-          { type: "log", level: "info", msg: "开始解析…" },
-          { type: "log", level: "info", msg: "✔ 解析完成" },
-          { type: "done", ok: true, report },
-        ]);
+        return Promise.resolve(
+          ndjson([
+            { type: "log", level: "info", msg: "开始解析…" },
+            { type: "log", level: "info", msg: "✔ 解析完成" },
+            { type: "done", ok: true, report },
+          ]),
+        );
       }
-      return settingsBlob({ lastReport: report });
+      return Promise.resolve(settingsBlob({ lastReport: report }));
     });
 
     const { result } = renderHook(() => useCustomNodesSettings());
@@ -274,10 +270,10 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
     // 改坏这条会让界面显示过期的解析报告。
     const streamReport = { ok: true, packages: [{ from: "stream" }] };
     const serverReport = { ok: true, packages: [{ from: "server" }] };
-    fetchMock.mockImplementation(async (_input, init?: RequestInit) =>
+    fetchMock.mockImplementation((_input, init?: RequestInit) =>
       (init?.method ?? "GET").toUpperCase() === "POST"
-        ? ndjson([{ type: "done", ok: true, report: streamReport }])
-        : settingsBlob({ lastReport: serverReport }),
+        ? Promise.resolve(ndjson([{ type: "done", ok: true, report: streamReport }]))
+        : Promise.resolve(settingsBlob({ lastReport: serverReport })),
     );
 
     const { result } = renderHook(() => useCustomNodesSettings());
@@ -317,10 +313,10 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
   });
 
   it("单包解析：perPkgParsing 标记该包为进行中，结束后清除", async () => {
-    fetchMock.mockImplementation(async (_i, init) =>
+    fetchMock.mockImplementation((_i, init) =>
       (init?.method ?? "GET").toUpperCase() === "POST"
-        ? ndjson([{ type: "done", ok: true, report: { ok: true } }])
-        : settingsBlob(),
+        ? Promise.resolve(ndjson([{ type: "done", ok: true, report: { ok: true } }]))
+        : Promise.resolve(settingsBlob()),
     );
 
     const { result } = renderHook(() => useCustomNodesSettings());
@@ -359,8 +355,10 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
       status: 200,
       headers: { "content-type": "application/x-ndjson" },
     });
-    fetchMock.mockImplementation(async (_i, init) =>
-      (init?.method ?? "GET").toUpperCase() === "POST" ? noBody : settingsBlob(),
+    fetchMock.mockImplementation((_i, init) =>
+      (init?.method ?? "GET").toUpperCase() === "POST"
+        ? Promise.resolve(noBody)
+        : Promise.resolve(settingsBlob()),
     );
 
     const { result } = renderHook(() => useCustomNodesSettings());

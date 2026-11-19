@@ -1,6 +1,6 @@
 ## Added
 
-- **每日全量那一跑现在有第二份榜：分文件「装载税」**（`scripts/full-suite-run.mjs` 的
+- **每日全量那一跑现在有第二份榜：分文件「装载税」**（`scripts/affected-tests/full-suite-run.mjs` 的
   `parseJunitPhaseCosts` / `suitePhaseTax`）。动机是 vitest 收尾自报的相位分解三次读数一致
   （`tests 46–51%`、`setup 23–24%`、`environment 13–14%`、`import 12–13%`，见
   `cnb-b0l-1k59op66t` 2442.43s / `cnb-r0d-1k5a0348r` 2729.89s / 本地 1609.51s）——

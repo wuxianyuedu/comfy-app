@@ -1,12 +1,9 @@
 "use client";
 
 /**
- * StoryboardPlanner 的状态与全部业务逻辑抽离为 hook。
- * 主组件（StoryboardPlanner.tsx）仅负责渲染，本文件负责：
- *   - 三通道提取（工具 / 本地模型 / 配置 API）+ 外部导入
- *   - 从剧本导入 / AI 智能拆镜 / 批量生成 / 清空
- *   - 镜头字段更新、删除、提示词重算
- * 行为与原组件内联实现逐值一致。
+ * StoryboardPlanner 的状态与全部业务逻辑抽离为 hook：三通道提取 + 外部导入、
+ * 从剧本导入 / AI 智能拆镜 / 批量生成 / 清空、镜头字段更新与提示词重算。
+ * 主组件仅负责渲染；行为与原组件内联实现逐值一致。
  */
 
 import { useState } from "react";
@@ -163,10 +160,22 @@ export function useStoryboardPlanner(props: Props) {
     onShotsChange(shots.filter((shot) => shot.id !== id));
   }
 
+  /* 清空走**非阻塞确认弹窗**（`ConfirmDialog`，ISSUE #3771）：原生 `confirm()`
+   * 是同步对话框 —— 内嵌浏览器（IAB）里未被处置时，同源渲染进程的主线程会
+   * 以 0 CPU 整体卡死。这里只翻开确认弹窗，由视图承接确认。 */
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+
   function clearShots() {
-    if (confirm("确定清空当前所有分镜？")) {
-      onShotsChange([]);
-    }
+    setClearConfirmOpen(true);
+  }
+
+  function confirmClearShots() {
+    onShotsChange([]);
+    setClearConfirmOpen(false);
+  }
+
+  function cancelClearShots() {
+    setClearConfirmOpen(false);
   }
 
   async function handleAISplit() {
@@ -190,6 +199,7 @@ export function useStoryboardPlanner(props: Props) {
          * 把 `noUncheckedIndexedAccess` 加上的 `undefined` 抹掉。 */
         for (const [i, scene] of scenes.entries()) {
           setAiProgress(`正在拆镜 ${i + 1}/${scenes.length} · ${scene.heading}`);
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const full = await streamChat({
             messages: buildStoryboardMessages(scene, charNames),
             /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
@@ -300,6 +310,7 @@ export function useStoryboardPlanner(props: Props) {
      * `useItemAction`，这里是「整批」，两者形态不同、并用。 */
     await polishAllBusy.run(async () => {
       for (const shot of shots) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await polishOne(shot);
       }
     });
@@ -325,6 +336,9 @@ export function useStoryboardPlanner(props: Props) {
     updateShot,
     removeShot,
     clearShots,
+    clearConfirmOpen,
+    confirmClearShots,
+    cancelClearShots,
     handleAISplit,
     polishBusyId: polishAction.busyId,
     /* 「这一条忙不忙」的判据收在出口里，视图不再自己写 `busyId === item.id`

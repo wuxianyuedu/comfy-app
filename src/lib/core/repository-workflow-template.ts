@@ -11,6 +11,7 @@ import {
   type WorkflowTemplate,
 } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
+import type { DbExecutor } from "./repository-executor-types";
 import { eq, and, desc, type SQL } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
 
@@ -156,15 +157,28 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
       .where(eq(workflowTemplate.id, id));
   }
 
-  async setModelTags(id: string, tagIds: Array<string>): Promise<void> {
-    await db
-      .delete(workflowModelTagToWorkflowTemplate)
-      .where(eq(workflowModelTagToWorkflowTemplate.workflowTemplate, id));
-    if (tagIds.length) {
-      await db
-        .insert(workflowModelTagToWorkflowTemplate)
-        .values(tagIds.map((t) => ({ workflowModelTag: t, workflowTemplate: id })));
+  /** 全量覆盖模板的模型标签（保存工作流时调用，重复执行结果应一致）。
+   *  delete + insert 收进 immediate 事务（ISSUE #3835）：原先两条语句各自提交，
+   *  insert 失败会残留「无标签」中间态；并发保存交错（A 删 → B 删 → A 插 → B 插）
+   *  还会落下重复关联行（关联表无 (tag, template) 唯一约束），列表 count 虚高。
+   *  `executor`：由调用方更大的事务传入（ISSUE #3870，「模板列 + 标签」三段一事务）；
+   *  传入时不再自开事务（SQLite 不许嵌套 begin）。 */
+  async setModelTags(id: string, tagIds: Array<string>, executor?: DbExecutor): Promise<void> {
+    const apply = async (tx: DbExecutor): Promise<void> => {
+      await tx
+        .delete(workflowModelTagToWorkflowTemplate)
+        .where(eq(workflowModelTagToWorkflowTemplate.workflowTemplate, id));
+      if (tagIds.length) {
+        await tx
+          .insert(workflowModelTagToWorkflowTemplate)
+          .values(tagIds.map((t) => ({ workflowModelTag: t, workflowTemplate: id })));
+      }
+    };
+    if (executor) {
+      await apply(executor);
+      return;
     }
+    await db.transaction(async (tx) => apply(tx), { behavior: "immediate" });
   }
 }
 

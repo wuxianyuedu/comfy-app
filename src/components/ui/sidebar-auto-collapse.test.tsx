@@ -1,19 +1,19 @@
-/**
- * 左轨自动收起的接线判据（窄窗判据 → provider 生效态 → 提示文案的自动/手动之分）。
- *
- * 纯推导部分在 `src/lib/layout-budget.test.ts`；这里只钉「接起来对不对」：
- *   · 窄窗首屏就收起，且**不写 cookie**（纪律不能把用户偏好写脏 —— 写了下次启动
- *     就变成用户自己的选择了）；
- *   · 用户在窄窗里点开 → 生效态跟随用户，且提示要说「已按你的选择」而不是自动；
- *   · 窗口跨越阈值后回到纪律 —— 那条表态不该永久否决让位。
- *
- * 判据用 `innerWidth` 驱动 `matchMedia` 存根，与真浏览器同源（`use-narrow-nav`
- * 与 `use-mobile` 都读同一个数），不 mock 到「永远不窄」那种自洽状态。
- */
+/** 左轨自动收起的接线判据（窄窗判据 → provider 生效态 → 提示文案的自动/手动之分）；
+ * 纯推导在 `src/lib/layout-budget.test.ts`。窄窗首屏即收起且**不写 cookie**（纪律不能
+ * 把用户偏好写脏），用户窄窗里点开则跟随用户并提示「已按你的选择」，窗口跨越阈值后回到
+ * 纪律。判据用 `innerWidth` 驱动 `matchMedia` 存根，与真浏览器同源（两边读同一个数）。 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 
+import { NAV_AUTO_COLLAPSE_MAX_PX, NAV_EXPANDED_MIN_PX } from "~/lib/layout-budget";
+
 import { SidebarProvider, useSidebar } from "./sidebar";
+
+/* 窗宽夹具从唯一出处推导，不写字面量：阈值由各列宽算出（`layout-budget.ts`），
+   这里写死 1200 这类数字，列宽一改就会悄悄落到阈值的另一侧（ISSUE #3587 收窄
+   导航宽时当场红过 —— 1200 在旧阈值下是窄窗、新阈值下已是宽窗）。 */
+const WIDE_PX = NAV_EXPANDED_MIN_PX + 100;
+const NARROW_PX = NAV_AUTO_COLLAPSE_MAX_PX - 100;
 
 /* jsdom 没有 matchMedia（本仓库既有测试的桩形态）；这里让它跟着 innerWidth 走，
    否则「窄窗」在用例里永远不可能成立。 */
@@ -32,26 +32,42 @@ function setViewport(width: number): void {
   });
 }
 
+/** `EventListenerOrEventListenerObject` 里只有函数形态会进 `listeners`：`use-narrow-nav`
+ *  传的是零参回调；对象形态（`handleEvent`）在这条桩上不参与。 */
+function isFunctionListener(cb: EventListenerOrEventListenerObject): cb is () => void {
+  return typeof cb === "function";
+}
+
 beforeEach(() => {
   listeners.clear();
-  /* SAFETY: 类型断言已复核 */
-  window.matchMedia = ((query: string) => ({
+  window.matchMedia = (query: string): MediaQueryList => ({
     get matches() {
-      const max = /max-width:\s*(\d+)px/.exec(query)?.[1];
+      const max = /max-width:\s*(?<maxWidth>\d+)px/.exec(query)?.groups?.maxWidth;
       return max === undefined ? false : window.innerWidth <= Number(max);
     },
     media: query,
     onchange: null,
-    addEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
-      /* SAFETY: 类型断言已复核 */
-      listeners.add(cb as () => void);
+    addListener() {
+      void 0;
     },
-    removeEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
-      /* SAFETY: 类型断言已复核 */
-      listeners.delete(cb as () => void);
+    removeListener() {
+      void 0;
     },
-  })) as unknown as typeof window.matchMedia;
-  setViewport(1440);
+    addEventListener(_: string, cb: EventListenerOrEventListenerObject) {
+      if (isFunctionListener(cb)) {
+        listeners.add(cb);
+      }
+    },
+    removeEventListener(_: string, cb: EventListenerOrEventListenerObject) {
+      if (isFunctionListener(cb)) {
+        listeners.delete(cb);
+      }
+    },
+    dispatchEvent() {
+      return false;
+    },
+  });
+  setViewport(WIDE_PX);
 });
 
 afterEach(cleanup);
@@ -91,14 +107,14 @@ describe("窄窗下左轨自动让位", () => {
     expect(state()).toBe("expanded");
     expect(isAuto()).toBe("false");
 
-    setViewport(1200);
+    setViewport(NARROW_PX);
     expect(state()).toBe("collapsed");
     expect(isAuto()).toBe("true");
   });
 
   it("窄窗里用户点开 → 听用户的；窗口再跨越阈值则回到纪律", () => {
     mount();
-    setViewport(1200);
+    setViewport(NARROW_PX);
     expect(state()).toBe("collapsed");
 
     act(() => {
@@ -109,26 +125,19 @@ describe("窄窗下左轨自动让位", () => {
     expect(isAuto()).toBe("false");
 
     /* 放大窗口：宽窗 + 无表态（上次那条是「窄窗档」的）→ 仍展开（默认偏好）。 */
-    setViewport(1500);
+    setViewport(WIDE_PX);
     expect(state()).toBe("expanded");
     /* 再缩回窄窗：那条豁免属于另一档窗宽，纪律重新接管。 */
-    setViewport(1200);
+    setViewport(NARROW_PX);
     expect(state()).toBe("collapsed");
     expect(isAuto()).toBe("true");
   });
 
-  /* ISSUE #1267 回归：首帧对账不能被「订阅周期」绑住。
-   *
-   * 现场是 React 开发态的**双挂载**（挂载 → 卸载 → 再挂载）：旧实现把
-   * `setTimeout(0)` 补的那次通知挂在订阅的清理函数上，卸载时的 `clearTimeout`
-   * 把它取消了 —— 于是「进页面时窗口就已经是窄窗」这件事再也没有人通知，
-   * `data-state` 停在服务端那份「展开」上，只能等某个无关的重渲染顺带纠正。
-   * 并发跑 E2E 时那次重渲染晚到 5s 之后 ⇒ `e2e/nav-auto-collapse.spec.ts`
-   * 两条在默认并发下必红（`--workers=1` 串行则绿，与报告一致）。
-   *
-   * 这里把「卸载 → 再挂载」显式跑一遍，并**只**让模块级那次通知来做对账：
-   * 期间不派发任何 `change`（模拟「进页面就已经是窄窗」，媒体查询不会再 change）。
-   */
+  /* ISSUE #1267 回归：首帧对账不能被订阅周期绑住。React 开发态双挂载（挂载 → 卸载 →
+   * 再挂载）时，旧实现把 `setTimeout(0)` 的通知挂在订阅清理函数上，卸载的 `clearTimeout`
+   * 取消了它 —— 「进页面时已是窄窗」无人通知，`data-state` 停在服务端「展开」，并发 E2E
+   * 里要等无关重渲染（晚到 5s+）才纠正（`--workers=1` 串行则绿）。这里显式跑「卸载 →
+   * 再挂载」，且只让模块级那次通知对账：期间不派发任何 `change`。 */
   it("订阅被卸载再挂载后，首帧对账仍由 store 自己的通知落地", async () => {
     mount();
     expect(state()).toBe("expanded");
@@ -136,7 +145,7 @@ describe("窄窗下左轨自动让位", () => {
     /* 窄窗（订阅建立之前就是），不派发 change。 */
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
-      value: 1100,
+      value: NARROW_PX,
       writable: true,
     });
 
@@ -156,7 +165,7 @@ describe("窄窗下左轨自动让位", () => {
     const writeSpy = vi.spyOn(document, "cookie", "set");
     mount();
     writeSpy.mockClear();
-    setViewport(1100);
+    setViewport(NARROW_PX);
     expect(state()).toBe("collapsed");
     expect(writeSpy).not.toHaveBeenCalled();
     /* 用户自己点才算表态，才写偏好。 */

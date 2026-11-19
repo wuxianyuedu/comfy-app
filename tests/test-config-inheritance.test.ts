@@ -1,42 +1,29 @@
 /**
- * 根 `test` 上的共享项**真的落到了两个 project 上**吗（规范 §11.17.3）。
- *
- * 动因：这一档的口径在本仓库**写反过一次**。`vitest.config.ts` 里曾经立着一个
- * `SHARED_TEST_OPTIONS` 常量、两个 project 各 spread 一次，理由写的是
- * 「`projects` 不继承声明方 `test` 的选项（实测）」。本轮按仓库规矩去复现那次实测，
- * 结论是**那次测量站不住**：vitest 5 的 inline project（`projects: [{ test: {…} }]`）
- * 默认继承本文件 `test` 这一层的选项，`extends: false` 才是关掉它的开关。
- * 所以共享项回到了根 `test` 上、那一层复制消失 —— 而**口径改对了不等于以后不会写回去**。
- *
- * 这条判据的形状与 §11.17.1.2「冗余文件头」同族：**同一件事只该有一个来源**。
- * 但判法不同 —— 那条能纯文本判（glob 能算），这一条**判不了**：
- * 「共享项有没有生效」是 vitest 解析配置的结果，不是配置文本的形状。
- * 所以这里**用 vitest 自己的 `createVitest()`**（`vitest/node`）把配置解析出来，
- * 逐档读 `project.config` 上的**解析后**取值。
- * ⚠️ 不自己写一份「继承规则」或 glob 引擎 —— #1509 那轮手写 glob 引擎算覆盖，
- * 把 `src/components/ui` 误判成「已覆盖」，删完当场被 `vitest list` 揭穿。
- *
- * 判四件：
- *   1. **两档都拿到了**共享项（不是「至少一档」—— 失效形态正是一档落后）；
- *   2. **`extends` 没被关掉**（写 `extends: false` 是唯一的例外口，得显式登记理由）；
- *   3. 根 `test` 上的**共享项白名单**没被塞进「只对某档有意义」的项
- *      （`environment` 写根上会让两档同环境，正是 §11.17 整套分档要防的事）；
- *   4. project 里**不再重复声明**共享项（同一件事两个来源）。
+ * 根 `test` 的共享项是否**真的落到两个 project**上（§11.17.3）。此口径曾写反：vitest 5 inline project 默认继承
+ * 根 `test`，`extends: false` 才是关掉的开关，故共享项回到根上。判四件：两档都拿到、`extends` 未关、根级
+ * 白名单无分档专属项、project 不重复声明；用 `createVitest()` 读解析值，不手写继承规则 / glob（#1509）。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createVitest, type Vitest } from "vitest/node";
 
-import { resolveCiWorkers } from "../scripts/ci-load.mjs";
-import { resolveTimeoutBudget } from "../vitest.config";
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
+import configDefault, { resolveTimeoutBudget } from "../vitest.config";
+import { resolveCiWorkers } from "../scripts/ci/ci-load.mjs";
 import { stripComments } from "./helpers/strip-comments";
+
+/** 解析后配置按 unknown 读（B5 清账）：字段形状由守卫 / typeof 现场答，不再整段断言。 */
+function configRecord(config: unknown): Record<string, unknown> {
+  return isRecord(config) ? config : {};
+}
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const CONFIG = path.join(ROOT, "vitest.config.ts");
 
 /**
- * 根配置**自己**那一档并发：来自唯一出处 `scripts/ci-load.mjs`（ISSUE #2324），
+ * 根配置**自己**那一档并发：来自唯一出处 `scripts/ci/ci-load.mjs`（ISSUE #2324），
  * 不是这里写死的数字。表里放推导值仍然抓得住漂移 —— 谁把 `vitest.config.ts`
  * 改回字面常数（例如 8），配置读数与这一格就不相等，当场红。
  */
@@ -58,17 +45,20 @@ const SHARED_EXPECTATIONS = {
   testTimeout: resolveTimeoutBudget(process.env.COMFY_TEST_TIMEOUT_SCALE).testTimeout,
   hookTimeout: resolveTimeoutBudget(process.env.COMFY_TEST_TIMEOUT_SCALE).hookTimeout,
   maxWorkers: ROOT_WORKERS,
+  /* `reporters`（2026-11-09）：显式钉 `["default"]`，关掉 vitest 在 `GITHUB_ACTIONS=true`
+   * 下自动追加的 `github-actions` reporter —— 它每个 vitest 进程各往 `$GITHUB_STEP_SUMMARY`
+   * 写一份 `Vitest Test Report`，一次 job 几个进程就有几段互相矛盾的计数。两档都要这份
+   * 钉法，所以它是共享项；判据 `tests/vitest-gha-summary.test.ts` 从终态正面钉。 */
+  reporters: ["default"],
 } as const;
 
 /** `expect.poll` 的预算（对象形状，单独比）。 */
 const EXPECT_POLL = { timeout: 4000, interval: 50 };
 
 /**
- * 根 `test` **允许**出现的项（共享白名单）。
- *
- * `projects` 是分档本身；`coverage` 按文档只由根配置认（不进 project）——
- * 两者都**不是**要被两档继承的东西。新增根级项时先回答「它是共享的吗」，
- * 是就往 `SHARED_EXPECTATIONS` 里加，不是就往这里加并写清理由。
+ * 根 `test` **允许**出现的项（共享白名单）。`projects` 是分档本身，`coverage` 按文档只由根配置认，
+ * 两者都**不是**要被两档继承的东西。新增根级项时先回答「它是共享的吗」：是就往 `SHARED_EXPECTATIONS`
+ * 加，不是就往这里加并写清理由。
  */
 const ROOT_ALLOWED_KEYS = new Set([
   "projects",
@@ -79,24 +69,15 @@ const ROOT_ALLOWED_KEYS = new Set([
 
 /**
  * 期望分档：按目录声明的两档（§11.17），少一档 / 多一档都要有人解释。
- *
- * ⚠️ **DOM 档的 `name` 与它的 `environment` 是两个字段**（本轮加档后的口径）：
- * `name: "happy-dom"` 是**这一档是谁**（也决定了 `vitest list` 打出来的 `[标签]`），
- * `environment: "happy-dom"` 是**它默认跑在哪个实现上**。两者当前同名，
- * 但**不是**同一件事 —— 档里的少数用例可以用文件头
- * `// @vitest-environment jsdom` 改跑在另一个实现上，而档名不变。
- * 测试下面的 `environment` 断言读的是后者；`EXPECTED_PROJECTS` 读的是前者。
+ * ⚠️ DOM 档的 `name` 与 `environment` 是两个字段：前者是「这一档是谁」（也决定 `vitest list` 的
+ * `[标签]`），后者是默认跑在哪个实现上（少数用例可用文件头 `// @vitest-environment jsdom` 改跑）；断言读后者。
  */
 const EXPECTED_PROJECTS = ["happy-dom", "node"];
 
 /**
- * 每档的**默认环境实现**（`environment`）。
- *
- * 这一格单独成表而不是从档名推：把 `environment` 写成 `name` 的副本，
- * 会让「给 DOM 档换一个实现（jsdom ⟷ happy-dom）」这类改动在**不改判据**的
- * 情况下直接通过 —— 而它正是本档最值得被人看一眼的那次改动（代价与保真度
- * 都随之整档变化）。§11.17.1.2「同一件事只该有一个来源」的另一面：
- * 两个字段各自说自己的话，就不许拿一个去顶另一个。
+ * 每档的**默认环境实现**（`environment`）。单独成表而不从档名推：写成 `name` 的副本，
+ * 会让「给 DOM 档换实现（jsdom ⟷ happy-dom）」在不改判据的情况下直接通过 —— 而那正是
+ * 本档最该被看一眼的改动（代价与保真度整档变化）。同 §11.17.1.2：两个字段各说各的。
  */
 /* SAFETY: 类型断言已复核 */
 const EXPECTED_TIER_ENVIRONMENTS = {
@@ -113,19 +94,19 @@ async function resolvedVitest(): Promise<Vitest> {
 
 describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () => {
   it("两档都在，且命名与文档一致", async () => {
-    const vitest = await resolvedVitest();
-    expect(vitest.projects.map((p) => p.name).sort()).toEqual(EXPECTED_PROJECTS);
+    const vitestRun = await resolvedVitest();
+    expect(vitestRun.projects.map((p) => p.name).sort()).toEqual(EXPECTED_PROJECTS);
   });
 
   it("**每一档**都拿到了共享项（失效形态是一档落后，所以逐档判）", async () => {
-    const vitest = await resolvedVitest();
-    for (const project of vitest.projects) {
-      /* SAFETY: 类型断言已复核 */
-      const cfg = project.config as unknown as Record<string, unknown>;
+    const vitestRun = await resolvedVitest();
+    for (const project of vitestRun.projects) {
+      const cfg = configRecord(project.config);
       const prefix = `[${project.name}]`;
       // setupFiles 在解析后是**绝对路径**，所以比形状（落在仓库根之下、名字对）。
-      /* SAFETY: 类型断言已复核 */
-      const setupFiles = cfg.setupFiles as Array<string>;
+      const setupFiles = isUnknownArray(cfg.setupFiles)
+        ? cfg.setupFiles.filter((f): f is string => typeof f === "string")
+        : [];
       /* 比较前归一分隔符：`path.relative()` 在 win32 上给出 `tests\setup.ts`，而期望
          值按配置源码写成 POSIX 形式 —— 不归一的话这条判据在每台 Windows 上都红，
          且红的原因与它要判的事（共享项有没有落到每一档）毫无关系。 */
@@ -137,8 +118,15 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       expect(cfg.testTimeout, prefix).toBe(SHARED_EXPECTATIONS.testTimeout);
       expect(cfg.hookTimeout, prefix).toBe(SHARED_EXPECTATIONS.hookTimeout);
       expect(cfg.maxWorkers, prefix).toBe(SHARED_EXPECTATIONS.maxWorkers);
-      /* SAFETY: 类型断言已复核 */
-      expect((cfg.expect as { poll?: unknown } | undefined)?.poll, prefix).toEqual(EXPECT_POLL);
+      /* vitest 解析后把 `reporters` 归一成 `[名字, 选项?]` 元组数组 —— 按名字归一后比，
+       * 否则这条判据红在「配置写法」而不是「这一档拿没拿到」（同 setupFiles 的归一口径）。 */
+      const reporterEntries = isUnknownArray(cfg.reporters) ? cfg.reporters : [];
+      const reporterNames = reporterEntries.map((entry) =>
+        Array.isArray(entry) ? String(entry[0]) : String(entry),
+      );
+      expect(reporterNames, prefix).toEqual(SHARED_EXPECTATIONS.reporters);
+      const expectCfg: unknown = cfg.expect;
+      expect(isRecord(expectCfg) ? expectCfg.poll : undefined, prefix).toEqual(EXPECT_POLL);
     }
   });
 
@@ -148,79 +136,66 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
    * 而 DOM 档下跑纯逻辑**不报错、只是变慢**（静默的那一侧，§11.17.1）。
    */
   it("`environment` 按档分叉，没被抬到根级共享（那正是分档要防的事）", async () => {
-    const vitest = await resolvedVitest();
-    const byName = new Map(vitest.projects.map((p) => [p.name, p.config]));
+    const vitestRun = await resolvedVitest();
+    const byName = new Map(vitestRun.projects.map((p) => [p.name, p.config]));
     for (const [name, env] of Object.entries(EXPECTED_TIER_ENVIRONMENTS)) {
       expect(byName.get(name)?.environment, `[${name}]`).toBe(env);
     }
   });
 
   it("没有一档写 `extends: false` 把自己摘出继承（例外要显式登记）", async () => {
-    const vitest = await resolvedVitest();
+    const vitestRun = await resolvedVitest();
     // `extends` 在解析后的配置上不会原样留名，改用它的**结果**判：
     // 关掉继承的那一档拿不到共享项 —— 由上面「逐档都拿到了」那一条兜住。
     // 这里只钉住「两档都不缺失」，并留一处源码级断言防住 `extends: false` 字样回来。
     const { readFile } = await import("node:fs/promises");
     const source = stripComments(await readFile(CONFIG, "utf8"));
     expect(source).not.toMatch(/extends\s*:\s*false/);
-    for (const project of vitest.projects) {
-      /* SAFETY: 类型断言已复核 */
+    for (const project of vitestRun.projects) {
       expect(
-        (project.config as unknown as Record<string, unknown>).globals,
+        configRecord(project.config).globals,
         `[${project.name}] 共享项缺席 = 这一档把继承关掉了`,
       ).toBe(SHARED_EXPECTATIONS.globals);
     }
   });
 
-  it("根 `test` 上没有「只对某档有意义」的项，project 里不再重复声明共享项", async () => {
+  it("根 `test` 上没有「只对某档有意义」的项，project 里不再重复声明共享项", () => {
     // 这一条判**配置文本**（解析后看不出「它写在哪一层」），用 TS 模块直接读默认导出。
-    /* SAFETY: 类型断言已复核 */
-    const mod = (await import(path.join(ROOT, "vitest.config.ts"))) as {
-      default: { test: Record<string, unknown> };
-    };
-    const rootTest = mod.default.test;
+    // 静态 import（B5 清账）：test 面按 unknown 读、形状由守卫现场答，不再断言。
+    const rootTest: Record<string, unknown> = isRecord(configDefault.test)
+      ? configDefault.test
+      : {};
     const extra = Object.keys(rootTest).filter((k) => !ROOT_ALLOWED_KEYS.has(k));
     expect(extra, "新增根级项先回答「它是不是共享项」").toEqual([]);
 
     /**
-     * **声明**在根上，不只是「解析出来的值恰好对」。
-     *
-     * 这两件事不等价，实测撞出来的：把根上的 `globals: false` 整行删掉，
-     * 上面「逐档都拿到了」那条**照样全绿** —— 因为 `globals` 的出厂值本来就是
-     * `false`（`configDefaults.globals === false`），删了它解析结果一个字不变。
-     * 也就是说 `globals: false` 这一行是**文档**（写明「与仓里既有口径一致：
-     * 不注入全局」），不是行为；只按解析值判，就等于允许它被顺手删掉而没人发现。
-     * 判「声明在不在」才是这一条的本意（同 §11.17.1.2：同一件事只该有一个来源）。
+     * **声明**在根上，不只是「解析出来的值恰好对」：`globals` 出厂值本就是 `false`，把根上的
+     * `globals: false` 整行删掉，「逐档都拿到了」照样全绿。那一行是**文档**（写明不注入全局）
+     * 而非行为；只按解析值判就等于允许它被顺手删掉。同 §11.17.1.2：同一件事只该有一个来源。
      */
     const declared = Object.keys(rootTest);
     for (const key of Object.keys(SHARED_EXPECTATIONS)) {
       expect(declared, `共享项 \`${key}\` 该声明在根 \`test\` 上`).toContain(key);
     }
 
-    /* SAFETY: 类型断言已复核 */
-    const projects = rootTest.projects as Array<{
-      test: Record<string, unknown> & { name?: string };
-    }>;
-    for (const entry of projects) {
-      const duplicated = Object.keys(entry.test).filter((k) =>
+    const projects: unknown = rootTest.projects ?? [];
+    for (const entry of isUnknownArray(projects) ? projects : []) {
+      const entryTest: unknown = isRecord(entry) ? entry.test : undefined;
+      const duplicated = Object.keys(isRecord(entryTest) ? entryTest : {}).filter((k) =>
         Object.keys(SHARED_EXPECTATIONS).includes(k),
       );
-      expect(duplicated, `[${String(entry.test.name)}] 共享项该只在根 \`test\` 上定义一次`).toEqual(
-        [],
-      );
+      expect(
+        duplicated,
+        `[${String(isRecord(entryTest) ? entryTest.name : "")}] 共享项该只在根 \`test\` 上定义一次`,
+      ).toEqual([]);
     }
   });
 });
 
 /**
- * 判据预算的**临时乘数**（ISSUE #2959）—— 它必须既买得到余量，又收得回原状。
- *
- * 这一格存在是因为「临时放宽」这四个字在仓库里最容易腐化成两种形状：
- *   ① 有人把 `testTimeout` 直接改成 60_000（那就没人知道原来是 30_000、也没人知道
- *      什么时候该收回 —— §13.6.4 明令禁止的那个动作）；
- *   ② 放宽之后日志里读不出来（于是下一次「这台机器为什么这么慢」会去查配置）。
- * 所以判四件事：缺省 = 原值、乘数按上限截断并说出口、生效值真的落到 vitest 解析后的配置上、
- * 而 `.cnb.yml` 里那一行就是「临时」的全部承重。
+ * 判据预算的**临时乘数**（ISSUE #2959）：既要买得到余量，又要收得回原状。它防两种腐化：
+ * 把 `testTimeout` 直接改成 60_000（§13.6.4 禁止，没人知道何时收回）、放宽后日志里读不出。
+ * 判四件：缺省 = 原值、乘数按上限截断并说出口、生效值落到解析后配置、`.cnb.yml` 那行是承重。
  */
 describe("判据预算的临时乘数（ISSUE #2959）", () => {
   it("缺省（不设变量）与放宽前逐字相同 —— 收回去不需要改代码", () => {
@@ -249,25 +224,28 @@ describe("判据预算的临时乘数（ISSUE #2959）", () => {
   });
 
   it("这一跑**实际生效**的值就是乘数算出来的（不是只改了常量）", async () => {
-    const vitest = await resolvedVitest();
+    const vitestRun = await resolvedVitest();
     const expected = resolveTimeoutBudget(process.env.COMFY_TEST_TIMEOUT_SCALE);
-    for (const project of vitest.projects) {
-      /* SAFETY: 类型断言已复核 */
-      const cfg = project.config as unknown as Record<string, unknown>;
+    for (const project of vitestRun.projects) {
+      const cfg = configRecord(project.config);
       expect(cfg.testTimeout, `[${project.name}]`).toBe(expected.testTimeout);
       expect(cfg.hookTimeout, `[${project.name}]`).toBe(expected.hookTimeout);
     }
   });
 
-  it("`COMFY_TEST_TIMEOUT_SCALE` 是流水线级 env 里**唯一**的一行（那是「临时」的承重处）", () => {
+  it("`COMFY_TEST_TIMEOUT_SCALE` 若出现，必须是流水线级 env 里**唯一**的一行（那是「临时」的承重处）", () => {
     const text = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
     const hits = text.split("\n").filter((line) => /^\s*COMFY_TEST_TIMEOUT_SCALE\s*:/.test(line));
+    /* 两档合法形态（ISSUE #3489）：
+     *   · 0 行 = 已收回（#2959 的 ×2 放宽按业主口径撤掉，缺省乘数 1 逐字等价原状）；
+     *   · 1 行 = 又临时放宽了 —— 只许写在 `.common` 的 `env:` 里，写进某一格就只有那一格放宽。 */
     expect(
-      hits,
-      "这个键只该在 `.common` 的 `env:` 里出现一次 —— 写进某一格就只有那一格放宽",
-    ).toHaveLength(1);
+      hits.length,
+      "这个键要么不出现（已收回），要么只在 `.common` 的 `env:` 里出现一次",
+    ).toBeLessThanOrEqual(1);
     /* 值必须是「置着」的形态：空值 / 非数字 / 超过 3 都等于没放宽或放宽过头，
-     * 而这两种在日志里只差一行 note。 */
-    expect(hits[0]).toMatch(/:\s*"?(1(\.\d+)?|2(\.\d+)?|3(\.\d+)?)"?\s*$/);
+     * 而这两种在日志里只差一行 note。0 行时这一条恒真（`?? ""`），不写条件分支 ——
+     * `vitest/no-conditional-expect` 不认 if 里的 expect。 */
+    expect(hits[0] ?? "").toMatch(/^(?:$|:\s*"?(?:1(?:\.\d+)?|2(?:\.\d+)?|3(?:\.\d+)?)"?\s*$)/);
   });
 });

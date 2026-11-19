@@ -159,6 +159,14 @@ export type ComfyExitWatcherDeps = {
   now?: () => number;
   /** 确定退出时回调一次（之后监督器自停）。 */
   onExit: (facts: { pid: number | null; uptimeMs: number | null }) => void;
+  /** 便宜先导信号（ISSUE #4197）：实例「此刻活着」的毫秒级判据（配置端口上的
+   *  HTTP 探测）。提供时每拍**先问它**：应答 = 实例必然活着，本拍直接记「已见」、
+   *  **不再起 PowerShell 进程表查询**——那是每 10s 一路 WMI 枚举的常驻开销，
+   *  实例在跑多久就扫多久。不应答 ≠ 死了（可能在加载 / 端口偏移 / 瞬时抖动）、
+   *  未提供或本信号抛错 → 照旧走 {@link ComfyExitWatcherDeps.findPid} 确认，
+   *  判死判据（连续 missThreshold 拍）不变。便宜拍不刷新 `seenPid`（它只证明
+   *  「活着」，证明不了「是哪个 pid」）——退出报告里的 pid 仍来自进程表事实。 */
+  probeAlive?: () => Promise<boolean>;
   /** 定时器工厂（测试传入可控实现）。 */
   setTimer?: (fn: () => void, ms: number) => ReturnType<typeof setInterval>;
 };
@@ -190,13 +198,18 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
   let startedAt: number | null = null;
   let seenPid: number | null = null;
   let missCount = 0;
+  /* 句柄收在一个可变对象里：`stop` 的闭包要用它，而赋值发生在 `tick` 定义之后
+   * （`setTimer` 的回调引 `tick`，先定义 tick 才不会踩 TDZ）。 */
+  const timer: { handle?: ReturnType<typeof setTimer> } = {};
 
   const stop = () => {
     if (stopped) {
       return;
     }
     stopped = true;
-    clearTimer(handle);
+    if (timer.handle !== undefined) {
+      clearTimer(timer.handle);
+    }
   };
 
   const tick = async () => {
@@ -209,6 +222,26 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
       stop();
       return;
     }
+    /* 便宜先导信号（ISSUE #4197）：端口应答 = 实例必然活着，本拍到此为止——
+     * 省掉那一拍 PowerShell 进程表枚举。不应答 / 抛错都不下结论，落到下面的
+     * 进程表确认（判死判据不变：连续 missThreshold 拍查不到）。 */
+    if (deps.probeAlive !== undefined) {
+      let cheapAlive: boolean;
+      try {
+        cheapAlive = await deps.probeAlive();
+      } catch {
+        cheapAlive = false;
+      }
+      if (stopped) {
+        return;
+      }
+      if (cheapAlive) {
+        missCount = 0;
+        startedAt ??= now();
+        return;
+      }
+    }
+
     const lookup = await deps.findPid().catch(() => ({ pid: null, failed: true }));
     if (stopped) {
       return;
@@ -245,7 +278,7 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
     startedAt ??= now();
   };
 
-  const handle = setTimer(() => {
+  timer.handle = setTimer(() => {
     // tick 里同步调用 `deps.isStopped()`、`deps.onExit()` 与异步 `findPid()`；
     // 任何一处抛都会让 `void tick()` 变 unhandledRejection。本模块刻意保持
     // 「纯逻辑 + 依赖注入」、不引 logger，兜底就留在回调里：监督器自己炸不能
@@ -259,9 +292,9 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
   }, interval);
   /* 监督器不该成为「进程退不出去」的原因（Node 里未 unref 的 interval 会吊住
    * 事件循环）。 */
-  if (typeof handle === "object" && handle !== null && "unref" in handle) {
+  if (typeof timer.handle === "object" && timer.handle !== null && "unref" in timer.handle) {
     /* SAFETY: 类型断言已复核 */
-    (handle as { unref: () => void }).unref();
+    (timer.handle as { unref: () => void }).unref();
   }
 
   return { stop };
@@ -311,28 +344,57 @@ export function describeStaleSession(
   );
 }
 
+/** 尾读窗口：崩溃轨迹（Python traceback / OOM / CUDA 报错）都在最后几屏里，
+ * 只读文件尾、不把整个会话日志读进内存（ISSUE #4395——保活日志单会话内无上限，
+ * 长会话可达数十 MB，整文件 readFileSync 会在崩溃处理路径上长阻塞 + 内存冲高）。 */
+const TAIL_WINDOW_BYTES = 256 * 1024;
+
 /**
  * 读文件末尾 N 行（按行裁剪），用于把保活进程崩溃前的输出带进面板。
  *
  * 保活模式拿不到退出码 / 信号，但 ComfyUI 自己的 stdout / stderr 被重定向到了
  * 按次命名的文件（见 lifecycle-launch 的 `comfyui-keepalive-*.{out,err}.log`），
- * 真正的崩溃轨迹（Python traceback / OOM / CUDA 报错）就在那里 —— 监督器只轮询
- * 进程表、看不到原因，这里把尾部直接带进 runtime 日志，用户不必翻文件。
+ * 真正的崩溃轨迹就在那里 —— 监督器只轮询进程表、看不到原因，这里把尾部直接
+ * 带进 runtime 日志，用户不必翻文件。
  *
  * 解码容错：Windows 走壳的 CLI 中介（`app.exe --spawn-detached`）时文件是子进程的
- * 原始字节（通常 UTF-8）；个别回退路径（powershell `Start-Process`）会是 UTF-16LE，
- * 这里统一识别 BOM 后按对应编码读。
+ * 原始字节（通常 UTF-8）；个别回退路径（powershell `Start-Process`）会是 UTF-16LE。
+ * 只读尾部窗口（ISSUE #4395）：窗口从文件头开始时保留原 BOM 判据；从中间开始时
+ * 按零字节占比启发式判宽字符（奇数长先丢首字节，可能是切在字符中间）。
  */
 function readTailLines(filePath: string, maxLines = 40, maxLineLen = 600): Array<string> {
   try {
     if (!fs.existsSync(filePath)) {
       return [];
     }
-    const buf = fs.readFileSync(filePath);
-    const text =
-      buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe
-        ? buf.subarray(2).toString("utf16le")
-        : buf.toString("utf8");
+    const stat = fs.statSync(filePath);
+    const start = Math.max(0, stat.size - TAIL_WINDOW_BYTES);
+    const buf = Buffer.alloc(Math.min(stat.size, TAIL_WINDOW_BYTES));
+    const fd = fs.openSync(filePath, "r");
+    try {
+      fs.readSync(fd, buf, 0, buf.length, start);
+    } finally {
+      fs.closeSync(fd);
+    }
+    const fromStart = start === 0;
+    const text = (() => {
+      if (fromStart && buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) {
+        return buf.subarray(2).toString("utf16le");
+      }
+      if (!fromStart) {
+        const body = buf.length % 2 === 1 ? buf.subarray(1) : buf;
+        let zeros = 0;
+        for (const byte of body) {
+          if (byte === 0) {
+            zeros += 1;
+          }
+        }
+        if (body.length >= 2 && zeros >= body.length / 4) {
+          return body.toString("utf16le");
+        }
+      }
+      return buf.toString("utf8");
+    })();
     const lines = text
       .split(/\r?\n/)
       .map((l) => l.trimEnd())

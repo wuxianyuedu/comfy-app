@@ -109,7 +109,7 @@ git 原生支持条件加载，不需要脚本、不需要 hook、对各家 IDE 
 > 在并行检出之间**逐字相同**（issue 是被 token 的账号本体创建的），所以「谁提的这张单」平台答不出来。
 > 单子的留痕走另一条路：`.env` 的 `COMFYAPP_DEV_HANDLE` + 单子上的 `提单人:<短名>` 标签
 > （领取打 `处理人:<短名>` 与只增不删的 `参与人:<短名>`，结束只撤前者，见规范 §13.10.11）。
-> **没填也有名字**：取值链见 `scripts/dev-handle.mjs`（`COMFYAPP_DEV_HANDLE` →
+> **没填也有名字**：取值链见 `scripts/platform/dev-handle.mjs`（`COMFYAPP_DEV_HANDLE` →
 > `CNB_NPC_NAME` / `CNB_TOKEN_USER_NAME` → `git config user.name` → 兜底 `cnb`，§13.10.10），
 > 所以「单子上那个名字」与「提交身份」是两件事 —— 前者可能不是谁填的，是取的。
 > 优先级走平台原生 `--priority` —— 口径与那两条命令的实测形态见规范 §13.10.10，

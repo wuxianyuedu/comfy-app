@@ -38,30 +38,50 @@ export const generateRouter = createTRPCRouter({
 
     const executorClaim = resolveExecutorClaim();
 
-    const task = await taskRepository.createQueued({
+    const projectId = data.projectId ?? null;
+    const shotId = data.shotId ?? null;
+    const baseInput = {
       userId: ctx.user.id,
       type: taskType,
       prompt: data.prompt ?? "",
       negativePrompt: data.negative,
       params: data,
       workflowName,
-      projectId: data.projectId ?? null,
-      shotId: data.shotId ?? null,
+      projectId,
+      shotId,
       referenceImages: (data.referenceImages?.length ?? 0) > 0 ? data.referenceImages : undefined,
       claimedBy: executorClaim,
       execPayload: tpl.rawJson,
       parentId: data.parentId ?? null,
-    });
+    };
+
+    /* 同一镜头同时至多一条进行中的生成任务（#3849/#4001，重复扣款形态）：统一走
+     * immediate 事务内「查活动任务 + 入队」原子守卫，跨入口（单镜生成 / 整季批量 /
+     * 原样重跑）共用同一判据，避免进程内分散互斥导致的 TOCTOU。 */
+    const createdTask =
+      projectId !== null && shotId !== null
+        ? await taskRepository.createQueuedForShotIfNoActive({
+            ...baseInput,
+            projectId,
+            shotId,
+          })
+        : await taskRepository.createQueued(baseInput);
+    if (createdTask === null) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "该镜头已有进行中的生成任务，等它完成或取消后再试",
+      });
+    }
     /* 提交只写库里那一行，派发动作不在这里（P3 §5 ADR §14 D1 第二刀）：
      * 这里过去对 inline 片直接 `enqueue()` 推进进程内存队列，于是「队列」有两份
      * 真相（内存 vs 库）。现在两宿主统一走 `executor-dispatch.ts` 的一条 pull，
      * 这次 kick 只是省掉等 2s 节拍；行归对侧（host 片）时它自然空转，
      * 不会与 host 抢同一行——领取谓词是 impl 里唯一的 `ownedBy()`。 */
     kickQueue();
-    generateRuntimeLog.info(`生成任务已入队 ${task.id}`, {
+    generateRuntimeLog.info(`生成任务已入队 ${createdTask.id}`, {
       type: taskType,
       workflow: workflowName,
     });
-    return { taskId: task.id };
+    return { taskId: createdTask.id };
   }),
 });

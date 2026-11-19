@@ -1,19 +1,7 @@
 /**
- * `scripts/build-desktop.mjs` 的步骤读数 —— 「念得出每一步多久」的执行者（ISSUE #2574）。
- *
- * 为什么要有这一条：装配那一大段（standalone 整树 `cpSync` → 顶层白名单剔除 → 载荷实体化
- * → 体积护栏 → 出厂计数）从第一步到最后一步**一个耗时都不念**，几百 MB 的一跳期间屏幕上
- * 没有任何新行 —— 在 CI 上长得和「卡死 / 超时前兆」一模一样，而脚本正在正常干活。
- * 本仓已经为此误判过一次（E2E 那格 36 分钟被平台按 stage 超时 kill），当时能用来分辨
- * 「在跑」与「挂了」的只有平台那一格的 duration（整格一个数，且它是**毫秒** —— #2442）。
- *
- * 面：这些断言读的是**磁盘文本**（`readFileSync`），不在任何 import 图里 ——
- * 改 `build-desktop.mjs` 不会让增量面把本文件带上去，而「有人把读数删掉 / 改成不参与判决
- * 的判定」恰好都不在改动面上。所以它登记进 `scripts/fixed-structural-tests.mjs` 固定跑
- * （与 `tests/env-import-meta-shape.test.ts`、`tests/eslint-gate-canary.test.ts` 同因）。
- *
- * 钉的是**语义**而不是行形状：哪一步念了时长、那一跳的计数口径是什么、读数不许变成判定、
- * 时长格式化只有一份。逐字比 `console.log` 的文案会随引号形态漂，所以按调用站点取。
+ * `scripts/build-desktop.mjs` 的步骤读数：装配整树几百 MB 一跳期间一个耗时都不念，CI 上长得像卡死
+ * （为此误判过一次，E2E 那格 36 分钟被 stage 超时 kill；平台 duration 是毫秒 —— #2442）。ISSUE #2574。
+ * 断言读磁盘文本、不在任何 import 图里，故登记进 `scripts/affected-tests/fixed-structural-tests.mjs` 固定跑；钉语义不钉行形状。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -68,6 +56,31 @@ describe("build-desktop 念得出每一步多久（ISSUE #2574）", () => {
     }
   });
 
+  /* #3144 的进行中读数：本脚本每一跳都是阻塞式（`spawnSync` 起 pnpm / drizzle-kit /
+   * 产物检查，`cpSync` 搬整树），进程内定时器在那些时段整段不跳 —— 所以必须用跨进程
+   * 那条（`startProgressSync`），而且每个长耗时阶段都要有打点，不能只打首尾两行。 */
+  it("每个长耗时阶段都进同一条跨进程进度线（不是只打首尾两行）", () => {
+    expect(src).toContain('from "./gates/progress-heartbeat.mjs"');
+    expect(src).toMatch(/startProgressSync\(\{ label: "build-desktop"/);
+    for (const stage of [
+      "1/4 pnpm build",
+      "2/4 组装 static",
+      "2.1 启动脚本同步",
+      "2.1 白名单装配",
+      "2.2 分发卫生",
+      "2.3 首启建表",
+      "2.4 载荷实体化",
+      "2.4 静态资源与启动页",
+      "2.5 体积护栏",
+      "2.6 出厂计数",
+      "3/4 sidecar",
+      "4/4 完成",
+    ]) {
+      expect(src, `「${stage}」没有进度打点`).toContain(`progress.step("${stage}")`);
+    }
+    expect(src, "正常收尾要把进度线收掉").toContain("progress.done(");
+  });
+
   /* `filter` 的计数口径是这条读数的全部价值：白名单在场时「挡得对不对」只有这两个数能证。
    * ⚠️ `cpSync` 的 filter 对**每一个将要复制的路径**（目录与文件都算）各调一次，
    * 所以念的是「条目数」。谁把它改口成「文件数」，这条当场红 —— 那不是一个字之差，
@@ -82,10 +95,10 @@ describe("build-desktop 念得出每一步多久（ISSUE #2574）", () => {
   });
 
   it("时长格式化只有一份：用 src/lib/time-format 那一处，不在脚本里再写一份", () => {
-    // 脚本侧从 .mjs 引 .ts 的先例是 `scripts/ci-build-readout.mjs:96`，同一形态。
+    // 脚本侧从 .mjs 引 .ts 的先例是 `scripts/ci/ci-build-readout.mjs:96`，同一形态。
     expect(src).toContain('from "../src/lib/time-format.ts"');
     expect(src, "不许在本文件里长出第二份时长格式化").not.toMatch(
-      /(function|const)\s+formatDuration/,
+      /(?:function|const)\s+formatDuration/,
     );
     expect(src).not.toMatch(/Math\.round\([^)]*\/\s*1000\)\s*\}/);
   });

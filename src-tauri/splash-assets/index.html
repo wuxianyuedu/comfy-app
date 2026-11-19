@@ -136,6 +136,59 @@
       transition: width 0.35s ease;
       box-shadow: 0 0 12px var(--violet-dim);
     }
+    /* 启动耗时分解（ISSUE #4185 立项 / #4327 改逐行）：每行一个阶段
+       「阶段名 + 比例条 + 秒数 · 占比」。此前的 12 色密彩条颜色不承载语义、
+       段又密得认不出谁是谁，换成逐行可读形态（与应用内日志面板的「启动耗时
+       分解」卡同一取向）。数据来自 launch-status.json 的 timings（编排器随
+       每次进度快照写入），启动过程中就边等边刷新。 */
+    .timings {
+      margin: 0 0 6px;
+      flex-shrink: 0;
+    }
+    .timing-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .timing-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      line-height: 1.3;
+      color: var(--dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .timing-label {
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--muted);
+    }
+    .timing-track {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+    }
+    .timing-fill {
+      display: block;
+      height: 100%;
+      min-width: 2px;
+      background: linear-gradient(90deg, var(--violet), #9F7CFF);
+      border-radius: 999px;
+    }
+    .timing-val {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    .timing-rest {
+      justify-content: flex-end;
+    }
     .meta {
       display: flex;
       justify-content: space-between;
@@ -163,6 +216,26 @@
     }
     .message.error {
       color: var(--error);
+    }
+    /* 服务端动态（ISSUE #4431）：等待就绪的窗口期里，把服务进程自己刚说过的
+       那句有信息量的输出（Next 横幅 / ✓ Ready / ComfyUI 拉起进度 / 编译与报错）
+       摆到进度文案下面——「等待服务就绪 12.7s（进行中）」不再是一句空话。
+       数据来自壳命令 get_server_activity（只读一份 Next 日志尾，可常驻轮询）；
+       取不到读数（服务还没输出）或壳过旧（命令不存在）时整行收起，不摆空话。 */
+    .server-activity {
+      display: none;
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--muted);
+      margin: 0 0 6px;
+      flex-shrink: 0;
+      /* 内容是服务日志的原行，可能带路径——允许选中复制（与消息区同一档）；
+         文本现场不参与整窗拖拽（data-no-drag，见 startSplashDrag 的判定口径）。 */
+      user-select: text;
+      cursor: text;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .footer {
       display: flex;
@@ -236,6 +309,16 @@
       user-select: text;
       cursor: text;
     }
+    /* 日志按级别着色（ISSUE #4328）：服务报错时红、警告琥珀、成功绿，
+       一眼可辨——服务错误了不再「看起来不明显」。判据在 logLineClass：
+       级别取自行首方括号（编排器与壳两种行形）或 Next 的 ⚠/⨯/✓ 记号，
+       认不出保持默认色；这里只放颜色，不放判据。 */
+    .log-panel pre .lv-error { color: #F87171; }
+    .log-panel pre .lv-warn { color: #F5C07A; }
+    .log-panel pre .lv-ok { color: #4ADE80; }
+    .log-panel pre .lv-step { color: #7DD3FC; }
+    /* 段头（「─ 启动编排日志 …─」）用品牌色弱化成结构线，不与级别色混。 */
+    .log-panel pre .log-section { color: var(--violet); opacity: 0.9; }
     /* 「回到最新」：用户上翻看历史后，刷新不再把他拽回底部（见 renderLog）。
        但「不自动滚」不能等于「不知道有新内容」——硬规则 4 要求降级路径有
        用户可见出口，所以贴底暂停时把这个按钮浮在面板右下角，点它回到最新。
@@ -312,11 +395,15 @@
     <div class="bar-track">
       <div class="bar-fill" id="bar"></div>
     </div>
+    <div class="timings" id="timings" data-no-drag style="display:none">
+      <div class="timing-rows" id="timing-rows"></div>
+    </div>
     <div class="meta">
       <span class="phase" id="phase"><span class="spinner"></span>初始化</span>
       <span id="percent">0%</span>
     </div>
     <div class="message" id="message" data-no-drag>启动器正在初始化…</div>
+    <div class="server-activity" id="server-activity" data-no-drag></div>
     <div class="footer">
       <span class="hint">关闭（右上角 ✕）即放弃本次启动</span>
       <button class="log-toggle" id="log-btn" type="button">查看日志</button>
@@ -357,6 +444,9 @@
       ready: '启动完成',
       error: '启动失败',
       timeout: '仍在启动',
+      // 交换窗口失败、壳正在重导航（ISSUE #4328）：服务本身已就绪（/api/health
+      // 200），但应用页面没加载出来。单独一档，别把它画成「服务已就绪」。
+      'app-page-stalled': '页面加载失败（重试中）',
       // 壳自编排（ISSUE #784）后新增的三档：壳自己会在「编排器还没写状态」的
       // 窗口期写一份 fallback 快照（见 src/lib/shell/launch-diagnostics.ts），
       // 状态文件真读不到时 Rust 侧回 no-status-file。标签给全，页面才不会把
@@ -405,8 +495,10 @@
     // 三条都不可用时消息区给出可见提示（不再「点了没反应」）。
     // 紧凑档尺寸：**只**在壳命令 set_splash_compact 调不动（壳过旧 / 纯 Web）
     // 时的兜底值，与壳侧 SPLASH_WINDOW_SIZE 同值。正常路径下尺寸一律由壳算，
-    // 页面不参与（见 applyCompact）。
-    const COMPACT_SIZE = { width: 744, height: 216 };
+    // 页面不参与（见 applyCompact）。高度按「逐行耗时分解（最多 3 行 + 其余
+    // 段 1 行）铺开后的内容高度」给（#4327：耗时分解读得清，窗口跟着长高），
+    // #4431 起另含「服务端动态」一行。
+    const COMPACT_SIZE = { width: 744, height: 288 };
     const subtitleEl = $('subtitle');
 
     /** 正在执行的窗口动作（'' 表示空闲）——onclick 与监听两条路的去重。 */
@@ -589,6 +681,42 @@
       return null;
     }
 
+    // ── 服务端动态（ISSUE #4431）──
+    // 「等待服务就绪」是启动里最长的一段，此前画面上只有一句「进行中」。
+    // 服务进程自己的输出才是「此刻在做什么」的答案：壳命令 get_server_activity
+    // 从本次运行最新的 Next 日志尾里挑出最近一条有信息量的行（健康探活的访问
+    // 日志与 ComfyUI 拉起期的逐拍轮询这类高频噪声行不算，判据在壳侧），这里
+    // 常驻轮询把它摆到进度文案下面。每 1s 一拍（tick 的每 4 轮）：命令只读
+    // 一份 8KB 日志尾，成本可控。取不到读数（服务还没输出）整行收起；
+    // 壳过旧（命令未注册）这一行整体退场，不逐轮重试。
+    const serverActivityEl = $('server-activity');
+    let serverActivityRetired = false;
+    let serverActivityLast = null;
+
+    function renderServerActivity(line) {
+      if (line === serverActivityLast) return;
+      serverActivityLast = line;
+      if (!serverActivityEl) return;
+      if (line === '') {
+        serverActivityEl.style.display = 'none';
+        serverActivityEl.textContent = '';
+        return;
+      }
+      serverActivityEl.textContent = `服务端：${line}`;
+      serverActivityEl.style.display = 'block';
+    }
+
+    async function fetchServerActivity() {
+      if (serverActivityRetired) return;
+      try {
+        const data = await invokeRaw('get_server_activity');
+        renderServerActivity(typeof data === 'string' ? data.trim() : '');
+      } catch (e) {
+        serverActivityRetired = true;
+        renderServerActivity('');
+      }
+    }
+
     // 解析出需要探测的真实应用 URL：优先 Rust 状态 > launch-status.json > 兜底 dev URL
     async function resolveAppUrl() {
       try {
@@ -642,7 +770,94 @@
      * 较大值：快照永远不许让进度条倒退。 */
     let updateFromShellFallback = false;
 
-    function updateUI(progress, phase, message, error, elapsed) {
+    /** 阶段段配色（循环取用）：段数 ≤12，颜色在深底上相互可分。 */
+    /** 逐行耗时分解的行数与点名门槛：窗口紧凑放不下全部阶段，按耗时降序
+     *  只点名 ≥0.1s 的前 3 行（与应用内日志面板同一阅读形态），其余段收进
+     *  末行「其余 N 段共 X s」。0.1s 这条线沿用旧文字行的口径。 */
+    const TIMING_ROW_LIMIT = 3;
+    const TIMING_ROW_MIN_MS = 100;
+
+    function fmtSec(ms) {
+      return (Math.max(0, Number(ms) || 0) / 1000).toFixed(1) + 's';
+    }
+
+    /** 占总启动时间的百分比（一位小数，与应用内卡同一口径；totalMs 为 0 时不除零）。 */
+    function fmtPct(ms, totalMs) {
+      if (!(totalMs > 0)) return '0%';
+      return (Math.round((ms / totalMs) * 1000) / 10).toFixed(1) + '%';
+    }
+
+    /** 画启动耗时分解（ISSUE #4185 立项 / #4327 改逐行）：timings 为空 / 缺席时
+     *  整块隐藏。12 色密彩条颜色不承载语义、段密得认不出谁是谁，换成逐行
+     *  「阶段名 + 比例条 + 秒数 · 占比」：按耗时降序取 ≥0.1s 的前 3 行，条宽
+     *  按「该段 / 最长段」画（最长的一段占满轨道；最长段必在行内，口径与
+     *  应用内卡一致），其余段收进末行「其余 N 段共 X s」——0.0s 的噪声段不再
+     *  各占一条细线，也占不掉行数。合计取墙钟（最后一刻 − 最早一刻），并行段
+     *  不求和；endMs 为 null 的段是进行中段（durationMs 已是截至当下的耗时），
+     *  行尾标注「（进行中）」。 */
+    function renderTimings(timings) {
+      const wrap = $('timings');
+      const rows = $('timing-rows');
+      if (!wrap || !rows) return;
+      if (!Array.isArray(timings) || timings.length === 0) {
+        wrap.style.display = 'none';
+        rows.innerHTML = '';
+        return;
+      }
+      const lastEnd = timings.reduce(
+        (acc, t) => Math.max(acc, (t.endMs === null || t.endMs === undefined) ? t.startMs + t.durationMs : t.endMs),
+        0,
+      );
+      const firstStart = timings.reduce((acc, t) => Math.min(acc, t.startMs || 0), Infinity);
+      const totalMs = Math.max(0, lastEnd - firstStart);
+      const ordered = [...timings].sort(
+        (a, b) => (Number(b.durationMs) || 0) - (Number(a.durationMs) || 0) || (a.startMs || 0) - (b.startMs || 0),
+      );
+      const shown = ordered
+        .filter((t) => (Number(t.durationMs) || 0) >= TIMING_ROW_MIN_MS)
+        .slice(0, TIMING_ROW_LIMIT);
+      const shownKeys = new Set(shown);
+      const rest = ordered.filter((t) => !shownKeys.has(t));
+      const maxMs = Math.max(...ordered.map((t) => Number(t.durationMs) || 0), 1);
+      rows.innerHTML = '';
+      shown.forEach((t) => {
+        const row = document.createElement('div');
+        row.className = 'timing-row';
+        const label = document.createElement('span');
+        label.className = 'timing-label';
+        label.textContent = t.label;
+        const track = document.createElement('span');
+        track.className = 'timing-track';
+        const fill = document.createElement('span');
+        fill.className = 'timing-fill';
+        fill.style.width = (((Number(t.durationMs) || 0) / maxMs) * 100).toFixed(2) + '%';
+        track.appendChild(fill);
+        const val = document.createElement('span');
+        val.className = 'timing-val';
+        const running = t.endMs === null || t.endMs === undefined;
+        val.textContent =
+          `${fmtSec(t.durationMs)} · ${fmtPct(t.durationMs, totalMs)}${running ? '（进行中）' : ''}`;
+        row.title = `${t.label} ${fmtSec(t.durationMs)}${running ? '（进行中）' : ''}`;
+        row.append(label, track, val);
+        rows.appendChild(row);
+      });
+      const restLine = document.createElement('div');
+      restLine.className = 'timing-row timing-rest';
+      const restText = document.createElement('span');
+      if (shown.length === 0) {
+        restText.textContent = `合计 ${fmtSec(totalMs)}（${timings.length} 段均不足 0.1s）`;
+      } else if (rest.length > 0) {
+        const restMs = rest.reduce((acc, t) => acc + (Number(t.durationMs) || 0), 0);
+        restText.textContent = `其余 ${rest.length} 段共 ${fmtSec(restMs)} · 合计 ${fmtSec(totalMs)}`;
+      } else {
+        restText.textContent = `合计 ${fmtSec(totalMs)}`;
+      }
+      restLine.appendChild(restText);
+      rows.appendChild(restLine);
+      wrap.style.display = 'block';
+    }
+
+    function updateUI(progress, phase, message, error, elapsed, timings) {
       let raw = Math.max(0, Math.min(1, progress || 0));
       if (updateFromShellFallback && !error) raw = Math.max(raw, maxProgress);
       if (raw < maxProgress && !error) return;
@@ -665,6 +880,10 @@
         messageEl.dataset.progressText = message || '';
       }
       elapsedEl.textContent = fmtTime(elapsed || 0);
+      /* 耗时条只在「这轮带来了新读数」时重画：编排器快照必带 timings 字段
+         （可能为空数组 = 还没记到任何段）；壳的兜底快照 / 无状态轮次不带，
+         此时保留上一次画面，不闪空块。 */
+      if (Array.isArray(timings)) renderTimings(timings);
     }
 
     // ── 日志面板：展示 dev-launcher 编排日志尾部（Rust 命令 get_launch_log 提供）──
@@ -723,10 +942,52 @@
       renderLogFollow();
     }
 
+    // ── 日志按级别着色（ISSUE #4328）──
+    // 面板混着四路来源：编排器（`[时刻] [级别] [runId][ns] 正文`）、壳
+    // （`[日期][时刻][级别][模块] 正文`）、壳侧链路（`[时刻] [级别] 正文`）
+    // 与 Next.js 原始输出（⚠ / ⨯ / ✓ 记号）。级别一律只从行首前 96 字符里认，
+    // 认不出保持默认色——着色是可读性增强，不改变任何一行内容。
+    const LOG_LEVEL_CLASS = {
+      ERROR: 'lv-error',
+      WARN: 'lv-warn',
+      OK: 'lv-ok',
+      STEP: 'lv-step',
+    };
+
+    function logLineClass(line) {
+      const head = line.slice(0, 96);
+      // 编排器的级别带定宽填充（`[INFO ]` / `[OK   ]`），壳的不带（`[INFO]`），
+      // 一个正则同时吃下两种行形。
+      const bracket = head.match(/\[(INFO|OK|STEP|WARN|ERROR)\s*\]/);
+      if (bracket) {
+        const level = bracket[1];
+        return level === 'INFO' ? '' : LOG_LEVEL_CLASS[level];
+      }
+      // 段头先于内容启发式：段名里出现「错误输出」这类字样时仍按结构线着色。
+      if (/^─.*─$/.test(line.trim())) return 'log-section';
+      if (head.startsWith('⚠')) return 'lv-warn';
+      if (head.startsWith('⨯') || head.startsWith('✗')) return 'lv-error';
+      if (head.startsWith('✓')) return 'lv-ok';
+      // Next 的编译错误行常不带级别括号（如「Ecmascript file had an error」），
+      // 行首窗口里出现独立的 error 一词按错误色处理。
+      if (/\berror\b/i.test(head)) return 'lv-error';
+      return '';
+    }
+
     function renderLog(text) {
       if (text === logPre.dataset.raw) return;
       logPre.dataset.raw = text || '';
-      logPre.textContent = text || '';
+      // 逐行包 span 着色：textContent 逐行赋值，不走 innerHTML，不引入
+      // HTML 解析面（日志内容里可能有用户数据拼出的 < 等字符）。
+      const frag = document.createDocumentFragment();
+      for (const line of (text || '').split('\n')) {
+        const span = document.createElement('span');
+        const cls = logLineClass(line);
+        if (cls) span.className = cls;
+        span.textContent = line + '\n';
+        frag.appendChild(span);
+      }
+      logPre.replaceChildren(frag);
       /* 只在用户仍贴着底时贴底。他上翻看历史时就**一个字都不动**——位置被
        * 覆盖等于把他正在读的那几行抽走，这正是本函数此前每 1.5s 干的事。 */
       if (logFollow) logScroll.scrollTop = logScroll.scrollHeight;
@@ -844,6 +1105,8 @@
     async function tick() {
       if (navigating) return;
       ticks++;
+      // 服务端动态每 1s 一拍（其余轮次只走 250ms 的状态轮询）。
+      if (ticks % 4 === 1) void fetchServerActivity();
 
       /* 应用地址每轮向壳重取，不在第一轮锁死。
        * standalone 形态下 sidecar 听的是**现挑的空闲端口**（`spawn_sidecar` 的
@@ -874,7 +1137,23 @@
         // 这一轮是不是壳的快照（而非编排器的权威进度）——见 updateUI 上的说明。
         updateFromShellFallback =
           status.fallback === true || status.phase === 'no-status-file';
-        updateUI(status.progress || 0, status.phase, status.message, status.error, status.elapsed);
+        // 交换窗口失败、壳正在重导航（ISSUE #4328）：服务本身已就绪，但应用
+        // 页面没加载出来。把「服务已就绪，正在加载应用…」翻成可见的错误/重试
+        // 态——错误态不受进度只进不退限制；恢复后 navigateStalled 消失，
+        // 自动回到编排器的常规进度文案。
+        if (status.navigateStalled) {
+          // 进度钉在 95%：这是「就绪之后的页面交换没成功」，不是「启动完成」；
+          // 也不吃 status.progress 的 1.0 —— 那会让 ✓ 号画在失败文案前面。
+          updateUI(
+            0.95,
+            'app-page-stalled',
+            '应用页面加载失败，正在自动重试…（服务本身已就绪，原因见「查看日志」）',
+            true,
+            status.elapsed ?? Math.floor(ticks / 4),
+          );
+        } else {
+          updateUI(status.progress || 0, status.phase, status.message, status.error, status.elapsed, status.timings);
+        }
         // 壳过期提醒（dev-launcher 预检写入 launch-status.json 的 stale_shell）
         // 常驻语义：一旦出现过就保持可见（window.staleShown 锁存），不再随
         // 后续轮询反复显示/隐藏——状态文件里的 stale_shell 消失（如字段
@@ -939,7 +1218,12 @@
       // 时探 /api/health，真就绪才导航。判据与「状态文件在」时同源（都要求
       // 2xx），因此不会把半死会话放进来。
       const shouldNavigate =
-        authoritativeReady || ((!status || shellFallback) && (await probeBackend(appUrl)));
+        !status?.navigateStalled &&
+        (authoritativeReady || ((!status || shellFallback) && (await probeBackend(appUrl))));
+      // 交换失败重试期间（navigateStalled），重导航循环由壳自己跑
+      //（spawn_renavigate，探到可达后自行把主窗导航回去）：启动页不再重复
+      // invoke navigate_to_app（壳侧的一次性标记本来也会把它挡掉），只负责
+      // 把失败/重试态画在界面上。
       if (shouldNavigate) {
         navigating = true;
         updateUI(0.95, 'dev-server-ready', '服务已就绪，正在加载应用…', false, Math.floor(ticks / 4));

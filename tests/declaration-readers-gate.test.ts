@@ -1,24 +1,7 @@
 /**
- * 「声明 ⇄ 读者」索引门禁自测（规范 §11.23）。
- *
- * 判据的价值全在**判定口径**上，所以这里跑的是**真脚本**（临时仓库 + 只放被测文件）。
- * 八条口径各一条执行者：
- *
- *   ① 索引齐备（该放）：读者存在、执行者在钩子步骤上 → 通过。
- *   ② **读者丢了**（该拦）：那一行点名的脚本不存在 —— 这正是「声明写得出来不算数，
- *      读的人在跑才算」的第一个入口。
- *   ③ **钩子步骤被摘掉**（该拦）：`hook-step` 的执行者标签不在钩子里 —— 判据在场、
- *      没人敲它（§11.23.1 第一行那个立案现场）。
- *   ④ **用例离开 C 组固定清单**（该拦）：`fixed-test` 的执行者不在
- *      `FIXED_STRUCTURAL_TESTS` 里 —— 只在碰到它时才跑，不再是执行者。
- *   ⑤ **索引解析不出 / carriers 不是数组**（该拦）：判据不许静默降级。
- *   ⑥ **carriers 为空 / 低于地板**（该拦）：解析规则退化成「读出 0 行」时，
- *      本判据会空转、照样报 OK（同族：§11.18.3 首版 `include: []` 却退 0）。
- *   ⑦ **行内字段不全 / id 重复**（该拦）。
- *   ⑧ **每条必须点名规范节**（该拦）：`section` 空 = 「这条声明归哪个节管」还是没答案。
- *   ⑨ **`npm-script` 执行者的入口被删 / `package.json` 解析不出**（该拦）：
- *      按需召唤那一档的执行者就是 `pnpm <名>` 入口本身，入口没了那条声明再没有
- *      东西能兑现（§11.23.2）；解析不出 `scripts` = 判据静默降级。
+ * 「声明 ⇄ 读者」索引门禁自测（规范 §11.23）。判据价值全在**判定口径**上，所以跑**真脚本**（临时仓库 + 只放被测文件），每条口径各一条执行者。
+ * ① 索引齐备放行；② 读者脚本丢了拦；③ `hook-step` 标签不在钩子里拦（§11.23.1 立案现场）；④ `fixed-test` 不在 `FIXED_STRUCTURAL_TESTS` 里拦；⑤ 索引解析不出 / carriers 非数组拦。
+ * ⑥ carriers 为空或低于地板拦（否则解析退化成 0 行、判据空转照样报 OK）；⑦ 行内字段不全 / id 重复拦；⑧ `section` 空拦；⑨ `npm-script` 入口被删 / `package.json` 解析不出拦（§11.23.2）。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -26,21 +9,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-declaration-readers.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-declaration-readers.cjs");
 
 /**
  * 够过地板（MIN_CARRIERS = 8）的一份合法索引。
- *
- * **第 0 行是「本索引自己」**，与真索引逐行同形（`declaration-index-itself`
- * → 钩子步骤「声明 ⇄ 读者索引」）—— 那条不是对称性洁癖：判据第一版让
- * 「把钩子里这一步注释掉」照样全绿，因为索引为每一种声明都登记了读者、
- * 唯独没登记它自己的（规范 §11.23.3 那条 ⚠️）。
+ * **第 0 行是「本索引自己」**，与真索引逐行同形 —— 不是对称性洁癖：判据第一版让「把钩子里这一步注释掉」
+ * 照样全绿，因为索引为每种声明都登记了读者，唯独没登记它自己的（规范 §11.23.3 那条 ⚠️）。
  */
 function selfRow(): Record<string, unknown> {
   return {
     id: "declaration-index-itself",
     name: "本索引自己（声明 ⇄ 读者）在位",
-    declaredAt: "scripts/.declaration-readers.json",
+    declaredAt: "scripts/gates/.declaration-readers.json",
     reader: "scripts/reader.cjs",
     executor: { kind: "hook-step", label: "声明 ⇄ 读者索引" },
     section: "11.23",
@@ -48,12 +28,9 @@ function selfRow(): Record<string, unknown> {
 }
 
 /**
- * 每次调用都**现造一份全新对象**（`executor` 也是新对象）——
- * 首版把 `SELF_ROW` 当常量返回，于是「删字段」那一格
- * （`delete missing[0].reader`）把**共享的那个对象**改坏了，
- * 后面所有格都跟着看到一份残行：**夹具成了一份共享可变状态**。
- * 表现是同一文件里靠后的那一格红、而它测的与被改坏的原因毫无关系 ——
- * 与 §11.19 那条「并发档把共享状态从「各自持有一份」变成「互相踩」」同族。
+ * 每次调用都**现造一份全新对象**（`executor` 也是新对象）—— 首版把 `SELF_ROW` 当常量返回，于是「删字段」
+ * 那一格（`delete missing[0].reader`）改坏了**共享的那个对象**，后面所有格都看到一份残行：**夹具成了共享
+ * 可变状态**，靠后的那一格红而与被改坏的原因无关（与 §11.19「并发档共享状态互相踩」同族）。
  */
 function carriers(n = 8): Array<Record<string, unknown>> {
   return [
@@ -81,29 +58,31 @@ type Fixture = {
 
 const DEFAULT_HOOK = `${Array.from({ length: 9 }, (_, i) => `  run "标签 ${i}" node x.cjs\n`).join(
   "",
-)}  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs\n`;
+)}  run "声明 ⇄ 读者索引" node scripts/gates/check-declaration-readers.cjs\n`;
 const DEFAULT_FIXED_LIST =
   'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/fixed.test.ts",\n];\n';
 const DEFAULT_PKG = JSON.stringify({
   name: "fixture",
-  scripts: { "check:claims": "node scripts/check-commit-claims.mjs" },
+  scripts: { "check:claims": "node scripts/gates/check-commit-claims.mjs" },
 });
 
 /** 在临时仓库里跑真脚本（cwd = 临时仓库根）。 */
 function gate(fx: Fixture): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "decl-readers-"));
-  mkdirSync(path.join(root, "scripts"), { recursive: true });
+  /* 沙箱布局镜像真实仓库（#3930）：判据在 scripts/gates/，它的 `../` 台账与 `../../` 钩子锚才指得回。 */
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  mkdirSync(path.join(root, "scripts", "affected-tests"), { recursive: true });
   mkdirSync(path.join(root, ".githooks"), { recursive: true });
   mkdirSync(path.join(root, "tests"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
 
   if (fx.ledger !== undefined) {
     const body = typeof fx.ledger === "string" ? fx.ledger : JSON.stringify(fx.ledger);
-    writeFileSync(path.join(root, "scripts", ".declaration-readers.json"), body);
+    writeFileSync(path.join(root, "scripts", "gates", ".declaration-readers.json"), body);
   }
   writeFileSync(path.join(root, ".githooks", "pre-commit"), fx.hook ?? DEFAULT_HOOK);
   writeFileSync(
-    path.join(root, "scripts", "fixed-structural-tests.mjs"),
+    path.join(root, "scripts", "affected-tests", "fixed-structural-tests.mjs"),
     fx.fixedList ?? DEFAULT_FIXED_LIST,
   );
   writeFileSync(path.join(root, "package.json"), fx.pkg ?? DEFAULT_PKG);
@@ -119,16 +98,26 @@ function gate(fx: Fixture): { ok: boolean; output: string } {
   try {
     return {
       ok: true,
-      output: execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
-        cwd: root,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      }),
+      output: execFileSync(
+        process.execPath,
+        [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
+        {
+          cwd: root,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      ),
     };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as { stderr?: string; stdout?: string };
-    return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const e: { stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
+    return {
+      ok: false,
+      output: `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`,
+    };
   }
 }
 

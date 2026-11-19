@@ -103,7 +103,7 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
             t.id === id
               ? {
                   ...t,
-                  label: tab.label ?? t.label,
+                  label: tab.label,
                   url: tab.url ?? t.url,
                   blockedReason: tab.blockedReason ?? null,
                   blockedUrl: tab.blockedUrl ?? null,

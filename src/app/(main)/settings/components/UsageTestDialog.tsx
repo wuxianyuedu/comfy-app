@@ -2,10 +2,8 @@
 
 /**
  * 「实际使用」测试弹窗（规范 17 §17.2 第③层）。
- *
- * 按用途（chat / 生图 / 生视频）真实调用一次；路径 / 提示词 / 尺寸 / 额外字段
- * 均可自定义输入。图片 / 视频会消耗提供方额度，弹窗内有预告。交互状态与动作
- * 由 `useRemoteModelDialogs`（第②层）承载。
+ * 按用途真实调用一次，路径 / 提示词 / 尺寸 / 额外字段均可自定义；图片 / 视频
+ * 消耗提供方额度（弹窗内有预告）。交互态与动作由 `useUsageTestDialogs` 承载。
  */
 
 import {
@@ -23,7 +21,7 @@ import {
 import type { UsageTestKind } from "~/lib/llm/usage-test-client";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { Hint } from "~/components/ui/hint";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
@@ -36,7 +34,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { fixed } from "~/lib/number-format";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
-import type { RemoteModelDialogs, UsageTestDialogState } from "../hooks/use-remote-model-dialogs";
+import type { UsageTestDialogs, UsageTestDialogState } from "../hooks/use-usage-test-dialogs";
 
 const USAGE_TEST_KIND_LABELS: Record<UsageTestKind, string> = {
   chat: "文本",
@@ -49,7 +47,7 @@ export function UsageTestDialog({
   usageTest,
 }: {
   c: ReadySettingsPageController;
-  d: RemoteModelDialogs;
+  d: UsageTestDialogs;
   /** 非空由调用方保证：仅在弹窗打开时渲染。 */
   usageTest: NonNullable<UsageTestDialogState>;
 }) {
@@ -240,8 +238,9 @@ export function UsageTestDialog({
             <Button
               className="h-auto rounded-lg px-4 py-2 text-sm font-semibold"
               disabled={usageTest.running || usageTest.querying || !usageTest.prompt.trim()}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onClick={() => void d.runUsageTest()}
+              onClick={() => {
+                void d.runUsageTest();
+              }}
             >
               {usageTest.querying ? "等待中…" : usageTest.running ? "调用中…" : "执行测试"}
             </Button>
@@ -257,15 +256,15 @@ function UsageVideoModeQuickPick({
   d,
   usageTest,
 }: {
-  d: RemoteModelDialogs;
+  d: UsageTestDialogs;
   usageTest: NonNullable<UsageTestDialogState>;
 }) {
   /* mode 快捷选择的当前值：fields 里的 mode 值合法（在预设清单内、非坏值）
    * 才回填 ToggleGroup，否则给空数组（全不选）。 */
   const modeValue = usageTest.fields.find((f) => f.key === "mode")?.value;
   const trimmedModeValue = modeValue?.trim();
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  const modeValueIsBroken = modeValue != null && isModeValueBroken(modeValue);
+  const modeValueIsBroken =
+    modeValue !== null && modeValue !== undefined && isModeValueBroken(modeValue);
   const modeToggleValue =
     trimmedModeValue !== undefined &&
     trimmedModeValue !== "" &&
@@ -354,7 +353,7 @@ function UsageFieldEditor({
   d,
   usageTest,
 }: {
-  d: RemoteModelDialogs;
+  d: UsageTestDialogs;
   usageTest: NonNullable<UsageTestDialogState>;
 }) {
   return (
@@ -367,12 +366,9 @@ function UsageFieldEditor({
 
       <div className="mb-2 flex flex-col gap-2">
         {d.usageFieldsToSend(usageTest).map((f) => {
-          /* `i` 是给动作（`patchField` / `setVideoMode`）用的**当下下标**，
-           * 每次渲染现算都正确；但**不能拿它当 React 的 `key`** ——
-           * 删中间一行会让后面所有行的下标整体左移，React 于是复用错误的
-           * DOM 节点，用户在某行刚输入的内容会闪到隔壁字段。`key` 用
-           * `f.id`（字段自带的稳定标识，见 `usage-test-config` 的
-           * `makeUsageField`）。 */
+          /* `i` 是给动作用的**当下下标**，不能当 React 的 `key`：删中间一行会让
+           * 后面行的下标整体左移，React 复用错误 DOM 节点，输入内容会闪到隔壁
+           * 字段。`key` 用 `f.id`（字段自带的稳定标识，见 `usage-test-config`）。 */
           const i = usageTest.fields.indexOf(f);
           return (
             <div className="flex flex-col gap-1.5" key={f.id}>
@@ -404,17 +400,17 @@ function UsageFieldEditor({
                   value={f.value}
                 />
                 {f.key === "mode" ? (
-                  <span
-                    className="text-muted-foreground/40 border-border/40 text-2xs shrink-0 cursor-not-allowed rounded-lg border px-2 py-1.5"
-                    title="mode 是模式名（text / keyframe / reference），不能填图片；先添加 images / first_frame 行再传图"
-                  >
-                    上传
-                  </span>
+                  <Hint label="mode 是模式名（text / keyframe / reference），不能填图片；先添加 images / first_frame 行再传图">
+                    <span className="text-muted-foreground/40 border-border/40 text-2xs shrink-0 cursor-not-allowed rounded-lg border px-2 py-1.5">
+                      上传
+                    </span>
+                  </Hint>
                 ) : (
                   <FieldImageButton
                     hint="本地上传一张图片作为该字段的值（自动转 data URL）"
-                    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                    onPick={(file) => void d.pickFieldImage(i, file)}
+                    onPick={(file) => {
+                      void d.pickFieldImage(i, file);
+                    }}
                   />
                 )}
                 {!(usageTest.kind === "video" && isMediaField(f.key)) && f.key !== "mode" && (
@@ -471,7 +467,7 @@ function UsageTestResultPanel({
   result,
 }: {
   c: ReadySettingsPageController;
-  d: RemoteModelDialogs;
+  d: UsageTestDialogs;
   /** 非空由调用方保证：仅在有结果且不在调用中时渲染。 */
   result: NonNullable<UsageTestDialogState["result"]>;
   usageTest: NonNullable<UsageTestDialogState>;
@@ -483,11 +479,12 @@ function UsageTestResultPanel({
           <>
             <p className="bg-success/10 text-success-strong mb-2 rounded-lg px-3 py-2 text-xs">
               {result.detail}
-              {/* oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined */}
-              {result.elapsedMs != null && ` · 耗时 ${fixed(result.elapsedMs / 1000, 1) ?? "0"}s`}
+              {result.elapsedMs !== null &&
+                result.elapsedMs !== undefined &&
+                ` · 耗时 ${fixed(result.elapsedMs / 1000, 1) ?? "0"}s`}
             </p>
             {result.chatText !== undefined && result.chatText !== "" && (
-              <p className="border-border/50 bg-surface-1 max-h-40 overflow-y-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
+              <p className="border-border/50 bg-surface-row max-h-40 overflow-y-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
                 {result.chatText}
               </p>
             )}
@@ -502,8 +499,9 @@ function UsageTestResultPanel({
               <Hint label="在系统默认浏览器中打开生成的视频">
                 <Button
                   className="text-primary h-auto items-center gap-1 p-0 text-xs font-medium"
-                  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                  onClick={() => void c.openExternalUrl(result.videoUrl ?? "")}
+                  onClick={() => {
+                    void c.openExternalUrl(result.videoUrl ?? "");
+                  }}
                   variant="link"
                 >
                   打开生成的视频
@@ -511,13 +509,12 @@ function UsageTestResultPanel({
               </Hint>
             )}
             {result.savedPath !== undefined && result.savedPath !== "" && (
-              <p
-                className="border-border/50 bg-surface-1 text-muted-foreground text-2xs mt-2 rounded-lg border px-3 py-2 break-all"
-                title="本次产出的内容已在本地 temp 子目录保存一份"
-              >
-                已保存到本地：
-                <span className="font-mono">{result.savedPath}</span>
-              </p>
+              <Hint label="本次产出的内容已在本地 temp 子目录保存一份">
+                <p className="border-border/50 bg-surface-row text-muted-foreground text-2xs mt-2 rounded-lg border px-3 py-2 break-all">
+                  已保存到本地：
+                  <span className="font-mono">{result.savedPath}</span>
+                </p>
+              </Hint>
             )}
             {result.pending === true &&
               result.taskId !== undefined &&
@@ -531,11 +528,11 @@ function UsageTestResultPanel({
                   <Button
                     className="mt-2 h-auto items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold"
                     disabled={usageTest.querying}
-                    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                    onClick={() => void d.continueUsageWait()}
+                    onClick={() => {
+                      void d.continueUsageWait();
+                    }}
                     variant="warning-solid"
                   >
-                    {/* oxlint-disable-next-line no-unnecessary-condition -- 外层 !usageTest.querying 已把它收窄成 false，三元留作渲染防御 */}
                     {usageTest.querying ? (
                       <Spinner className="text-primary-foreground size-3" />
                     ) : (
@@ -577,7 +574,7 @@ function FieldImageButton({ hint, onPick }: { hint: string; onPick: (file: File)
           上传
         </Button>
       </Hint>
-      <picker.Input />
+      <FilePicker {...picker.inputProps} />
     </>
   );
 }

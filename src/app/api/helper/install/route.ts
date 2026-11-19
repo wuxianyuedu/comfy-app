@@ -7,24 +7,25 @@ export const runtime = "nodejs";
 /**
  * 端点：GET /api/helper/install
  * 把 install-comfyapp-helper.ps1 作为下载返回，方便用户在别的机器/会话取用。
- * 同机用户其实直接双击项目内 scripts\install-comfyapp-helper.ps1 即可。
+ * 同机用户其实直接双击项目内 scripts\devtools\install-comfyapp-helper.ps1 即可。
  */
-export async function GET() {
-  const installer = path.join(
-    process.cwd(),
-    "scripts",
-    "install-comfyapp-helper.ps1",
-  );
+export function GET() {
+  const installer = path.join(process.cwd(), "scripts", "devtools", "install-comfyapp-helper.ps1");
   if (!fs.existsSync(installer)) {
     return NextResponse.json({ error: "installer not found" }, { status: 404 });
   }
-  const buf = fs.readFileSync(installer);
-  return new NextResponse(buf, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Content-Disposition":
-        'attachment; filename="install-comfyapp-helper.ps1"',
-    },
-  });
+  try {
+    const buf = fs.readFileSync(installer);
+    return new NextResponse(buf, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="install-comfyapp-helper.ps1"',
+      },
+    });
+  } catch (error) {
+    /* 读失败（权限 / 杀软锁文件）给 JSON 错误而不是裸 500 HTML 页。 */
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: `读取 installer 失败：${message}` }, { status: 500 });
+  }
 }

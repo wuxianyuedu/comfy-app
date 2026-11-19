@@ -1,22 +1,7 @@
 /**
- * 故事「面」的判据（`scripts/storybook-checks/story-surface.mjs`）。
- *
- * 它补的是覆盖率台账那三条判据的**盲区**：台账只看「文件名 ↔ 故事文件」，
- * 于是下面四种「构建全绿、画布也画得出来」的错法一个都拦不住 ——
- *
- *  ① 没有 `title`：Storybook 按路径自动生成条目，落在侧栏哪个分组取决于推导
- *     规则（构建、覆盖率、渲染全都正常）；
- *  ② 真组件没接上：`meta` 连的是 story 内部自造的适配件，而适配件里也没有那个
- *     组件 —— 画布上摆的是别的东西；
- *  ③ 必填 props 没给 `args`：组件在画布上抛 `Cannot read properties of undefined`
- *     —— 与 §16.2.3.4 那轮踩的坑同形（侧栏有故事、画布一片空白）；
- *  ④ 同一目录两套分组前缀：分组靠人写 `title:` 的字符串维系。
- *
- * 用例只调那几个**纯函数**（不写第二份实现、不起子进程），四个方向各断言一遍：
- * 该拦的拦、该放的放、空转要报错 —— 以及「正当形态不许误伤」（适配件把真组件
- * 渲染进去是允许的，那是 §16.2.3.6 注入层的常规写法）。
- *
- * 规范：docs/standards/16-shadcn-ui与表单校验.md §16.2.3.8。
+ * 故事「面」的判据（`scripts/storybook-checks/story-surface.mjs`），补覆盖率台账只看「文件名 ↔ 故事文件」的盲区 ——
+ * 拦四种构建全绿却错：无 `title`（分组靠路径推导）、适配件没接真组件、必填 props 缺 `args`（画布抛 undefined，同 §16.2.3.4）、同目录两套前缀。
+ * 用例只调纯函数、不起子进程，四方向各断言一遍（含「正当适配注入不误伤」§16.2.3.6）；规范 §16.2.3.8。
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -69,7 +54,7 @@ export const thingVariants = cva("base", {
   });
 }
 
-const GOOD_STORY = `import type { Meta, StoryObj } from "@storybook/nextjs";
+const GOOD_STORY = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Thing } from "./thing";
 
 const meta = {
@@ -105,7 +90,7 @@ describe("故事面的判据（规范 16 §16.2.3.8）", () => {
   });
 
   it("放行适配件 —— 只要它把真组件渲染进去（注入层的常规写法，不许误伤）", () => {
-    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Thing } from "./thing";
 
 /** 适配件：受控状态 / 值源解析都是这个形状（§16.2.3.6）。 */
@@ -132,7 +117,7 @@ export const Default: Story = {};
   });
 
   it("拦下真组件根本没接上的故事（画布上摆的是别的东西）", () => {
-    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 function SomethingElse() {
   return <div>这不是 Thing</div>;
@@ -238,7 +223,7 @@ export const Probe = ({ label }: ProbeProps) => <div>{label}</div>;
 `,
     );
     const storyFile = join(dir, "probe.stories.tsx");
-    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Probe } from "./probe";
 
 function ProbeHost({ tone }: { tone: string }) {
@@ -280,7 +265,7 @@ export function useProbe({ onPick }: ProbeProps) {
 `,
     );
     const storyFile = join(dir, "probe.stories.tsx");
-    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { useProbe } from "./probe";
 
 function ProbeDemo() {
@@ -321,7 +306,7 @@ export function probeProps(): ProbeProps {
 `,
     );
     const storyFile = join(dir, "probe.stories.tsx");
-    const story = `import type { Meta, StoryObj } from "@storybook/nextjs";
+    const story = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { probeProps } from "./probe";
 
 function ProbeCard() {

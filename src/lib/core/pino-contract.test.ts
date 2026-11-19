@@ -11,6 +11,7 @@ import {
   REDACT_PATHS,
 } from "~/lib/core/logger";
 import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
+import { isRecord } from "~/lib/is-record";
 
 /**
  * 日志「格式 + 脱敏」契约测试（原 `src/server/lib/logger.test.ts`）。
@@ -41,6 +42,24 @@ function capture(): { dest: Writable; lines: () => Array<string> } {
   return { dest, lines: () => chunks.join("").trim().split("\n") };
 }
 
+/** 取第一行日志；空输出让用例显式失败。 */
+function firstLine(readLines: () => Array<string>): string {
+  const line = readLines()[0];
+  if (line === undefined) {
+    throw new Error("没有日志行");
+  }
+  return line;
+}
+
+/** 把一行日志解析成 JSON 对象；解析结果不是对象就让用例显式失败。 */
+function parseLogLine(line: string): Record<string, unknown> {
+  const value: unknown = JSON.parse(line);
+  if (!isRecord(value)) {
+    throw new Error("日志行不是 JSON 对象");
+  }
+  return value;
+}
+
 /**
  * 等到 pino 异步落盘完成 —— 必须走真挂钟（规范 §11.14 明写的逃逸口）：
  * pino 的底层写是**真异步 I/O**，假定时器会把它一起冻住（advanceTimersByTime 推不动
@@ -61,13 +80,7 @@ describe("pino 输出格式契约", () => {
     await flush();
 
     expect(lines()).toHaveLength(1);
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(lines()[0]!) as {
-      level: number;
-      msg: string;
-      taskId: string;
-      time: number;
-    };
+    const parsed = parseLogLine(firstLine(lines));
     // pino level 30 == info（数值编码，采集端靠数字分流）
     expect(parsed.level).toBe(30);
     expect(typeof parsed.time).toBe("number");
@@ -105,12 +118,11 @@ describe("pino 脱敏契约（redact 生效）", () => {
     );
     await flush();
 
-    const raw = lines()[0]!;
+    const raw = firstLine(lines);
     expect(raw).not.toContain("sample-password-明文");
     expect(raw).not.toContain("sample-token-明文");
     expect(raw).not.toContain("sample-key-明文");
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parsed = parseLogLine(raw);
     expect(parsed.password).toBe("[Redacted]");
     expect(parsed.token).toBe("[Redacted]");
     expect(parsed.apiKey).toBe("[Redacted]");
@@ -136,13 +148,12 @@ describe("pino 脱敏契约（redact 生效）", () => {
     );
     await flush();
 
-    const raw = lines()[0]!;
+    const raw = firstLine(lines);
     expect(raw).not.toContain("sample-nested-明文");
     expect(raw).not.toContain("sample-api-value-明文");
     expect(raw).not.toContain("sample-token-明文");
     expect(raw).not.toContain("sid=sample-session");
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parsed = parseLogLine(raw);
     expect(parsed.client).toEqual({
       secret: "[Redacted]",
       apiSecret: "[Redacted]",
@@ -162,7 +173,7 @@ describe("pino 脱敏契约（redact 生效）", () => {
     log.error({ BETTER_AUTH_SECRET: "sample-value-明文" }, "cfg");
     await flush();
 
-    const raw = lines()[0]!;
+    const raw = firstLine(lines);
     expect(raw).not.toContain("sample-value-明文");
   });
 });
@@ -174,12 +185,9 @@ describe("日志不落 PII / prompt 原文（§11.5 埋点纪律扩展到日志�
     log.info({ prompt: "一只在月球上的猫 wearing 蓝色围巾" }, "probe");
     await flush();
 
-    const raw = lines()[0]!;
+    const raw = firstLine(lines);
     expect(raw).not.toContain("一只在月球上的猫");
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(raw) as {
-      prompt: string;
-    };
+    const parsed = parseLogLine(raw);
     expect(parsed.prompt).toBe("[Redacted]");
   });
 
@@ -189,15 +197,16 @@ describe("日志不落 PII / prompt 原文（§11.5 埋点纪律扩展到日志�
     log.info({ request: { prompt: "negative 明文", negativePrompt: "n-明文" } }, "gen");
     await flush();
 
-    const raw = lines()[0]!;
+    const raw = firstLine(lines);
     expect(raw).not.toContain("negative 明文");
     expect(raw).not.toContain("n-明文");
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(raw) as {
-      request: { negativePrompt: string; prompt: string };
-    };
-    expect(parsed.request.prompt).toBe("[Redacted]");
-    expect(parsed.request.negativePrompt).toBe("[Redacted]");
+    const parsed = parseLogLine(raw);
+    const request = parsed.request;
+    if (!isRecord(request)) {
+      throw new Error("日志行的 request 字段不是对象");
+    }
+    expect(request.prompt).toBe("[Redacted]");
+    expect(request.negativePrompt).toBe("[Redacted]");
   });
 
   it("PII（email/phone）不作为明文字段落盘", async () => {
@@ -206,14 +215,10 @@ describe("日志不落 PII / prompt 原文（§11.5 埋点纪律扩展到日志�
     log.info({ email: "u@example.com", phone: "13800000000" }, "signup");
     await flush();
 
-    const raw = lines()[0]!;
+    const raw = firstLine(lines);
     expect(raw).not.toContain("u@example.com");
     expect(raw).not.toContain("13800000000");
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(raw) as {
-      email: string;
-      phone: string;
-    };
+    const parsed = parseLogLine(raw);
     expect(parsed.email).toBe("[Redacted]");
     expect(parsed.phone).toBe("[Redacted]");
   });

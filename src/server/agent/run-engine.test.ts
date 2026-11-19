@@ -6,11 +6,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { completeLLM, completeLLMStructured, getLLMConfig } = vi.hoisted(() => ({
-  completeLLM: vi.fn(async (_cfg: unknown, _msgs: unknown) => "# 生成的剧本"),
+  completeLLM: vi.fn((_cfg: unknown, _msgs: unknown): string | Promise<string> => "# 生成的剧本"),
   completeLLMStructured: vi.fn<
     (cfg: unknown, msgs: unknown, schema: unknown) => Promise<Array<unknown>>
-  >(async () => []),
-  getLLMConfig: vi.fn(async () => ({})),
+  >(() => Promise.resolve([])),
+  getLLMConfig: vi.fn(() => ({})),
 }));
 vi.mock("~/lib/llm/server", () => ({
   getLLMConfig,
@@ -21,19 +21,19 @@ vi.mock("~/lib/llm/prompts", () => ({
   buildScriptMarkdownMessages: () => [{ role: "user", content: "x" }],
 }));
 const synthesizeFirstFrame = vi.hoisted(() =>
-  vi.fn(async (_opts: unknown) => "/api/generated/shot.png"),
+  vi.fn((_opts: unknown): string | Promise<string> => "/api/generated/shot.png"),
 );
 vi.mock("~/lib/comfyui/firstframe", () => ({ synthesizeFirstFrame }));
 // 引擎经服务端成片编排起片（createFilmFromProject + startFilm），mock 掉避免真跑管线。
 vi.mock("~/server/film/orchestrator", () => ({
-  createFilmFromProject: vi.fn(async () => ({ id: "film-1", shots: 1 })),
-  startFilm: vi.fn(async () => undefined),
+  createFilmFromProject: vi.fn(() => ({ id: "film-1", shots: 1 })),
+  startFilm: vi.fn(() => undefined),
 }));
 // 自动评审执行器调 reviewContent / reviewScript / reviseScript / reviewShotImage（LLM 判定与改写）——
 // mock 掉，按用例返回。默认文本与视觉都通过，只测「循环控制」本身；双裁判语义见下方专用用例。
 const reviewContent = vi.hoisted(() =>
   vi.fn(
-    async (
+    (
       _u: string,
       _p: string,
       _k: string,
@@ -43,12 +43,12 @@ const reviewContent = vi.hoisted(() =>
       pass: boolean;
       scoredAt: string;
       suggestion: string;
-    }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
+    }> => Promise.resolve({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
   ),
 );
 const reviewShotImage = vi.hoisted(() =>
   vi.fn(
-    async (
+    (
       _u: string,
       _p: string,
       _id: string,
@@ -57,12 +57,12 @@ const reviewShotImage = vi.hoisted(() =>
       pass: boolean;
       scoredAt: string;
       suggestion: string;
-    }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
+    }> => Promise.resolve({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
   ),
 );
 const reviewScript = vi.hoisted(() =>
   vi.fn(
-    async (
+    (
       _u: string,
       _p: string,
     ): Promise<{
@@ -73,13 +73,14 @@ const reviewScript = vi.hoisted(() =>
         scoredAt: string;
         suggestion: string;
       };
-    }> => ({
-      verdict: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
-      history: [],
-    }),
+    }> =>
+      Promise.resolve({
+        verdict: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
+        history: [],
+      }),
   ),
 );
-const reviseScript = vi.hoisted(() => vi.fn(async (_u: string, _p: string) => "# 改写后的剧本"));
+const reviseScript = vi.hoisted(() => vi.fn((_u: string, _p: string) => "# 改写后的剧本"));
 vi.mock("~/server/agent/review", () => ({
   reviewContent,
   reviewScript,
@@ -92,21 +93,32 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 
 import { productionRepository } from "~/lib/core/repository-production";
+import { isRecord } from "~/lib/is-record";
 import {
   normalizeProductionRun,
   scriptDigestOf,
   type ProductionRun,
 } from "~/lib/production/run-types";
-import { advanceRunLoop } from "~/server/agent/run-engine";
+import { advanceRunLoop, resetRunLoopGuardsForTest } from "~/server/agent/run-engine";
 import { getTestDb, seedUser } from "../../../tests/helpers/test-db";
 
 const tdb = getTestDb();
 const USER = "user-a";
 const PROJ = "proj_run";
+
+/** `unknown` 收窄成对象数组；不是对象数组就当场抛。 */
+function assertRecordArray(
+  value: unknown,
+  label: string,
+): asserts value is Array<Record<string, unknown>> {
+  if (!Array.isArray(value) || !value.every((item) => isRecord(item))) {
+    throw new TypeError(`${label} 不是对象数组`);
+  }
+}
 
 /** 建/改生产数据行：内容列 + progress + run 列（run 直接写库，模拟 start 之后的状态）。 */
 async function seed(
@@ -141,6 +153,7 @@ const readRow = () => productionRepository.getForUser(USER, PROJ);
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
+  resetRunLoopGuardsForTest();
   seedUser(tdb, { id: USER, email: "a@test.dev" });
 });
 
@@ -173,13 +186,27 @@ describe("advanceRunLoop", () => {
     expect(steps[0]!.detail).toMatch(/^已生成剧本（\d+ 字）$/);
   });
 
+  it("同一项目并发 kick 收敛为一条循环（#3829）：动作只执行一遍，不会并行推进两套", async () => {
+    await seed({}, { status: "running", approvalMode: "stage" });
+    // 第一拍还没落定就再 kick 一次（双击 / resume·approve 与上一轮重叠的形状）：
+    // per-project 在飞表应当把第二次调用并到同一条循环上。
+    const first = advanceRunLoop(USER, PROJ);
+    const second = advanceRunLoop(USER, PROJ);
+    await Promise.all([first, second]);
+    // 剧本生成是这条循环的第一个动作：被并发拉起两次的话，这里会记到 2。
+    expect(completeLLM).toHaveBeenCalledTimes(1);
+    const row = await readRow();
+    expect(normalizeProductionRun(row!.run)).toMatchObject({ status: "awaiting_approval" });
+  });
+
   it("角色步：completeLLMStructured 产出写入 characters 后停在角色阶段等确认", async () => {
     completeLLMStructured.mockResolvedValueOnce([{ name: "阿宁", appearance: "短发" }]);
     await seed({ scriptMarkdown: "# 剧本" }, { status: "running", approvalMode: "stage" });
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    /* SAFETY: 类型断言已复核 */
-    expect((row!.characters as Array<{ name: string }>)[0]).toMatchObject({
+    const characters = row?.characters;
+    assertRecordArray(characters, "characters");
+    expect(characters[0]).toMatchObject({
       name: "阿宁",
     });
     expect(normalizeProductionRun(row!.run).awaitingStage).toBe("character");
@@ -196,13 +223,8 @@ describe("advanceRunLoop", () => {
     );
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    /* SAFETY: 类型断言已复核 */
-    const shots = row!.shots as Array<{
-      index: number;
-      prompt: string;
-      rev: number;
-      status: string;
-    }>;
+    const shots = row?.shots;
+    assertRecordArray(shots, "shots");
     expect(shots).toHaveLength(2);
     expect(shots[0]).toMatchObject({
       index: 0,
@@ -227,12 +249,16 @@ describe("advanceRunLoop", () => {
     const row = await readRow();
     expect(synthesizeFirstFrame).toHaveBeenCalledTimes(1);
     // 「种子」默认随机：首刷也带一个新的随机 seed（走「种子」对外参数；作者没连种子口则落不下去）。
-    /* SAFETY: 类型断言已复核 */
-    const firstSeed = (synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }).seed;
+    const firstArg = synthesizeFirstFrame.mock.calls[0]?.[0];
+    if (!isRecord(firstArg)) {
+      throw new TypeError("生图参数不是对象");
+    }
+    const firstSeed = firstArg.seed;
     expect(typeof firstSeed).toBe("number");
     expect(Number.isFinite(firstSeed)).toBe(true);
-    /* SAFETY: 类型断言已复核 */
-    const shot = (row!.shots as Array<{ imageUrl?: string; status: string }>)[0];
+    const shotRows = row?.shots;
+    assertRecordArray(shotRows, "shots");
+    const shot = shotRows[0];
     expect(shot).toMatchObject({
       status: "done",
       imageUrl: "/api/generated/shot.png",
@@ -263,8 +289,11 @@ describe("advanceRunLoop", () => {
       workflowId: "wf-img",
     });
     // 重出走的是「抽卡」：带一个有限数字 seed（具体值随机，只断类型）
-    /* SAFETY: 类型断言已复核 */
-    const seedArg = (synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }).seed;
+    const seedArgSource = synthesizeFirstFrame.mock.calls[0]?.[0];
+    if (!isRecord(seedArgSource)) {
+      throw new TypeError("生图参数不是对象");
+    }
+    const seedArg = seedArgSource.seed;
     expect(typeof seedArg).toBe("number");
     expect(Number.isFinite(seedArg)).toBe(true);
   });
@@ -296,6 +325,29 @@ describe("advanceRunLoop", () => {
   it("无生产数据行 → 直接返回，不抛", async () => {
     await expect(advanceRunLoop(USER, "no_such")).resolves.toBeUndefined();
     expect(completeLLM).not.toHaveBeenCalled();
+  });
+
+  it("同一项目并发 kick 时推进循环不重入", async () => {
+    let resolveScript!: (value: string) => void;
+    completeLLM.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveScript = resolve;
+        }),
+    );
+    await seed({}, { status: "running", approvalMode: "stage" });
+    const first = advanceRunLoop(USER, PROJ);
+    const second = advanceRunLoop(USER, PROJ);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(completeLLM).toHaveBeenCalledTimes(1);
+    resolveScript("# 生成的剧本");
+    await Promise.all([first, second]);
+    const row = await readRow();
+    expect(row!.scriptMarkdown).toBe("# 生成的剧本");
+    expect(
+      normalizeProductionRun(row!.run).log.filter((s) => s.kind === "generate_script"),
+    ).toHaveLength(1);
   });
 });
 
@@ -526,13 +578,184 @@ describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () =
     expect(reviewScript).toHaveBeenCalledTimes(1);
     expect(scriptDigestOf(revised)).not.toBe(scriptDigestOf("# 旧剧本"));
     const row = await readRow();
-    /* SAFETY: 类型断言已复核 */
-    const shots = row!.shots as Array<{
-      id: string;
-      prompt: string;
-    }>;
-    expect(shots.some((s) => s.id === "old")).toBe(false); // 旧分镜被新剧本的分镜覆盖
+    const shots = row?.shots;
+    assertRecordArray(shots, "shots");
+    expect(shots.some((item) => item.id === "old")).toBe(false); // 旧分镜被新剧本的分镜覆盖
     const run = normalizeProductionRun(row!.run);
     expect(run.storyboardScriptDigest).toBe(scriptDigestOf(revised));
+  });
+});
+
+describe("advanceRunLoop · 用户意图位不被引擎回写（#3893）", () => {
+  /** 模拟用户在动作在飞时点 run.pause / run.cancel（直接写 run 列，同路由的无条件写）。 */
+  const setUserStatus = (status: "paused" | "cancelled") => async () => {
+    const row = await productionRepository.getForUser(USER, PROJ);
+    const base = normalizeProductionRun(row?.run);
+    await productionRepository.updateRun(USER, PROJ, {
+      ...base,
+      status,
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  it("生图动作执行期间用户取消：引擎收口不把 cancelled 回退成 running/done", async () => {
+    synthesizeFirstFrame.mockImplementationOnce(async () => {
+      await setUserStatus("cancelled")();
+      return "/api/generated/shot.png";
+    });
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0 }],
+        rendered: true, // 生图后规划器本可判 done：旧实现会把 cancelled 一路覆盖成 done
+      },
+      { status: "running", approvalMode: "auto", imageWorkflowId: "wf-img" },
+    );
+    await advanceRunLoop(USER, PROJ);
+    expect(normalizeProductionRun((await readRow())!.run).status).toBe("cancelled");
+  });
+
+  it("生图动作执行期间用户暂停：引擎收口写被跳过，run 停在 paused", async () => {
+    synthesizeFirstFrame.mockImplementationOnce(async () => {
+      await setUserStatus("paused")();
+      return "/api/generated/shot.png";
+    });
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0 }],
+        rendered: true,
+      },
+      { status: "running", approvalMode: "auto", imageWorkflowId: "wf-img" },
+    );
+    await advanceRunLoop(USER, PROJ);
+    expect(normalizeProductionRun((await readRow())!.run).status).toBe("paused");
+  });
+
+  it("动作失败与取消相交：取消优先，不落 failed", async () => {
+    completeLLM.mockImplementationOnce(async () => {
+      await setUserStatus("cancelled")();
+      return ""; // 空返回 → 该步失败；旧实现会把 cancelled 覆盖成 failed
+    });
+    await seed({}, { status: "running", approvalMode: "stage" });
+    await advanceRunLoop(USER, PROJ);
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.status).toBe("cancelled");
+    expect(run.error ?? null).toBeNull();
+  });
+});
+
+describe("advanceRunLoop · execFilm 起片恢复（#3962）", () => {
+  it("filmStartedAt 已认领但无影片实体：释放认领并失败可重试", async () => {
+    const { createFilmFromProject, startFilm } = await import("~/server/film/orchestrator");
+    vi.mocked(createFilmFromProject).mockClear();
+    vi.mocked(startFilm).mockClear();
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0, imageUrl: "/x.png" }],
+        rendered: false,
+      },
+      { status: "running", approvalMode: "auto", filmStartedAt: "2026-01-01T00:00:00.000Z" },
+    );
+    await advanceRunLoop(USER, PROJ);
+    expect(createFilmFromProject).not.toHaveBeenCalled();
+    expect(startFilm).not.toHaveBeenCalled();
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.filmStartedAt).toBe("");
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("未创建影片实体");
+  });
+
+  it("filmStartedAt 已认领但影片停在 PARSING：判失败并释放认领", async () => {
+    const { filmRepository } = await import("~/lib/core/repository");
+    await filmRepository.create({
+      userId: USER,
+      projectId: PROJ,
+      title: "片",
+      script: "",
+      type: "short_video",
+      size: "{}",
+      fps: 16,
+      framesPerShot: 49,
+      subtitleOn: true,
+    });
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0, imageUrl: "/x.png" }],
+        rendered: false,
+      },
+      { status: "running", approvalMode: "auto", filmStartedAt: "2026-01-01T00:00:00.000Z" },
+    );
+    await advanceRunLoop(USER, PROJ);
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.filmStartedAt).toBe("");
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("未进入可恢复生成态");
+  });
+});
+
+describe("advanceRunLoop · render_film 等待挂 film 终态（#4223）", () => {
+  /** 起片认领已写、影片实体在 GENERATING：规划器每拍都回 render_film 的现场。 */
+  async function seedFilmWaiting(): Promise<string> {
+    const { filmRepository } = await import("~/lib/core/repository");
+    const film = await filmRepository.create({
+      userId: USER,
+      projectId: PROJ,
+      title: "片",
+      script: "",
+      type: "short_video",
+      size: "{}",
+      fps: 16,
+      framesPerShot: 49,
+      subtitleOn: true,
+    });
+    await filmRepository.claimGenerating(film.id);
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 0, imageUrl: "/x.png" }],
+        rendered: false,
+      },
+      { status: "running", approvalMode: "auto", filmStartedAt: "2026-01-01T00:00:00.000Z" },
+    );
+    return film.id;
+  }
+
+  it("film 长跑超过等待预算：落「成片等待超时」的诚实文案，不再被误判「步数超限」", async () => {
+    vi.useFakeTimers();
+    try {
+      await seedFilmWaiting();
+      /* 预算注入 3 拍：第 4 拍等待时超界收口。等待拍不消耗执行步数——若退还原
+       * 机制（同池计数），这条用例会在 MAX_TICKS 耗尽后拿到「执行引擎步数超限」。 */
+      const loop = advanceRunLoop(USER, PROJ, { filmWaitMaxTicks: 3 });
+      await vi.runAllTimersAsync();
+      await loop;
+
+      const run = normalizeProductionRun((await readRow())!.run);
+      expect(run.status).toBe("failed");
+      expect(run.error).toContain("成片等待超时");
+      expect(run.error).not.toContain("步数超限");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("film 终态 FAILED：run 跟随落 failed 并透传 film 侧原因（等待拍不白耗）", async () => {
+    const filmId = await seedFilmWaiting();
+    const { filmRepository } = await import("~/lib/core/repository");
+    await filmRepository.markFailed(filmId, "镜头 1 生成失败");
+
+    await advanceRunLoop(USER, PROJ, { filmWaitMaxTicks: 3 });
+
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("影片已终止");
   });
 });

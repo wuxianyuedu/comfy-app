@@ -1,10 +1,6 @@
-/* workflow 路由的 `list` procedure（从 workflow.ts 拆出）。
- *
- * 这一屏回答「库里的工作流 + 磁盘上还没导入的」两件事：DB 查询、本地目录
- * 递归扫描（带 30s 超时，防网络驱动器挂死整个请求）、按内容寻址的重命名
- * 重关联、类型/预览/IO 富化、以及「本地待导入」占位行。磁盘与路径判据
- * 全在 `./workflow-local-roots`（与导入守卫同一出处）。
- */
+/* workflow 路由的 `list` procedure（从 workflow.ts 拆出）：回答「库里的工作流 + 磁盘上还没导入的」——
+ * DB 查询、本地目录递归扫描（30s 超时，防网络驱动器挂死整个请求）、按内容寻址的改名重关联、
+ * 类型/预览/IO 富化、以及「本地待导入」占位行。磁盘与路径判据全在 `./workflow-local-roots`。 */
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -40,6 +36,11 @@ import {
   type LocalPendingRow,
   executionShapeOf,
 } from "./workflow-local-roots";
+
+/** 本地目录扫描的墙钟预算：主扫描与 checksum 重关联扫描同用一份（#4415）——
+ *  某些文件系统（网络驱动器 / WSL 路径 / 云盘占位符）会让 fs.promises 长时间
+ *  挂起而不抛错，没预算的请求一直不返回、前端无限转圈。 */
+const SCAN_TIMEOUT_MS = 30_000;
 
 export const workflowListProcedures = {
   list: authedProcedure
@@ -123,15 +124,10 @@ export const workflowListProcedures = {
       }> = [];
       let localAllFiles: Array<LocalWorkflowFile> = [];
       if (localRoots.length > 0) {
-        /* 递归扫描：ComfyUI 自己的 workflows/ 与桌面版的 user/default/workflows
-         * 都会分子目录（default/、image/…），用户给一个根就是要「这个目录下的都算」，
-         * 只扫一层会把它们全漏掉而界面上只显示「还没有工作流」。
-         *
-         * 加整体超时：某些特殊文件系统（网络驱动器 / WSL 路径 / 云盘占位符）可能
-         * 让 `fs.promises` 长时间挂起而不抛错，导致整个 `workflow.list` 请求一直
-         * 不返回，前端无限转圈。超时后抛 `TimeoutError`，由 tRPC 转成可展示错误，
-         * 用户至少能看到原因并重试。 */
-        const SCAN_TIMEOUT_MS = 30_000;
+        /* 递归扫描：ComfyUI 的 workflows/ 与桌面版 user/default/workflows 都会分子目录（default/、image/…），
+         * 只扫一层会把它们全漏掉而界面只显示「还没有工作流」。整体超时见模块顶的
+         * SCAN_TIMEOUT_MS：超时抛 `TimeoutError`，由 tRPC 转成可展示错误，用户至少
+         * 能看到原因并重试。 */
         const { roots, allFiles } = await withTimeout(
           scanLocalWorkflowRoots(localRoots, { recursive: true }),
           SCAN_TIMEOUT_MS,
@@ -164,7 +160,13 @@ export const workflowListProcedures = {
       // ── 按内容寻址重新关联（本地文件被改名的情况） ──
       const renamedFromTo = new Map<string, string>();
       if (localAllFiles.length > 0) {
-        const checksumEntries = await scanLocalWorkflowChecksums(localRoots);
+        /* 与主扫描同口径：递归 + 整体超时（#4415——此前不递归，子目录改名文件
+         * 永远无法重连；且这一趟没有预算，网络盘挂起会让列表请求一直不返回）。 */
+        const checksumEntries = await withTimeout(
+          scanLocalWorkflowChecksums(localRoots, { recursive: true }),
+          SCAN_TIMEOUT_MS,
+          { label: "扫描本地工作流校验和" },
+        );
         const checksumIndex = new Map<string, { absPath: string; mtimeMs: number }>();
         for (const e of checksumEntries) {
           if (!e.checksum) {
@@ -178,33 +180,51 @@ export const workflowListProcedures = {
             });
           }
         }
-        for (const w of list) {
+        const relinkCandidates = list.flatMap((w) => {
           if (w.sourcePath === null || w.sourceChecksum === null) {
-            continue;
+            return [];
           }
           if (diskMtimeByPath.has(pathKey(w.sourcePath))) {
-            continue;
+            return [];
           }
           const hit = checksumIndex.get(w.sourceChecksum);
           if (!hit) {
-            continue;
+            return [];
           }
-          /* 末段取文件名进「改名对账」展示文本——出口走 path-display 的
-           * lastSegments（P56），空段语义由出口统一。 */
-          const oldName = lastSegments(w.sourcePath, 1) || w.sourcePath;
-          const newName = lastSegments(hit.absPath, 1) || hit.absPath;
-          try {
-            await workflowTemplateRepository.relinkSourcePath(w.id, {
-              sourcePath: hit.absPath,
-              sourceMtime: Math.floor(hit.mtimeMs / 1000),
-            });
-            w.sourcePath = hit.absPath;
-            w.sourceMtime = Math.floor(hit.mtimeMs / 1000);
-            diskMtimeByPath.set(pathKey(hit.absPath), hit.mtimeMs);
-            renamedFromTo.set(w.id, `${oldName} → ${newName}`);
-          } catch (error: unknown) {
-            const msg = errorMessage(error, String(error));
-            logger.warn(`[workflow.list] relink failed for ${w.id}: ${msg}`);
+          return [{ w, hit }];
+        });
+        if (relinkCandidates.length > 0) {
+          const relinkResults = await Promise.allSettled(
+            relinkCandidates.map(async ({ w, hit }) => {
+              await workflowTemplateRepository.relinkSourcePath(w.id, {
+                sourcePath: hit.absPath,
+                sourceMtime: Math.floor(hit.mtimeMs / 1000),
+              });
+              return { w, hit };
+            }),
+          );
+          for (let i = 0; i < relinkResults.length; i++) {
+            const res = relinkResults[i];
+            const candidate = relinkCandidates[i];
+            if (!res || !candidate) {
+              continue;
+            }
+            if (res.status === "fulfilled") {
+              const { w, hit } = res.value;
+              /* 末段取文件名进「改名对账」展示文本——出口走 path-display 的
+               * lastSegments（P56），空段语义由出口统一。 */
+              const oldSeg = lastSegments(candidate.w.sourcePath ?? "", 1);
+              const oldName = oldSeg === "" ? (candidate.w.sourcePath ?? "") : oldSeg;
+              const newSeg = lastSegments(hit.absPath, 1);
+              const newName = newSeg === "" ? hit.absPath : newSeg;
+              w.sourcePath = hit.absPath;
+              w.sourceMtime = Math.floor(hit.mtimeMs / 1000);
+              diskMtimeByPath.set(pathKey(hit.absPath), hit.mtimeMs);
+              renamedFromTo.set(w.id, `${oldName} → ${newName}`);
+            } else {
+              const msg = errorMessage(res.reason, String(res.reason));
+              logger.warn(`[workflow.list] relink failed for ${candidate.w.id}: ${msg}`);
+            }
           }
         }
       }
@@ -216,11 +236,9 @@ export const workflowListProcedures = {
       const enriched: Array<WorkflowListRow> = list.map((list) => {
         const def = getWorkflowType(normalizeTaskType(list.taskType));
         const rawView = asRawWorkflow(list.rawJson);
-        const graphObj =
-          /* SAFETY: 类型断言已复核 */
-          rawView && Array.isArray(rawView.nodes)
-            ? (rawView as unknown as Record<string, unknown>)
-            : null;
+        /* RawWorkflow 自带 `[k: string]: unknown` 索引签名，本身就是
+         * `Record<string, unknown>` 的子形态 —— 原先的双断言是纯仪式。 */
+        const graphObj = rawView && Array.isArray(rawView.nodes) ? rawView : null;
         const exec = executionShapeOf(list);
 
         let diskMtimeSec: number | null = null;
@@ -228,8 +246,7 @@ export const workflowListProcedures = {
         let diskMissing = false;
         if (list.sourcePath !== null) {
           const diskMs = diskMtimeByPath.get(pathKey(list.sourcePath));
-          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-          if (diskMs == null) {
+          if (diskMs === null || diskMs === undefined) {
             diskMissing = true;
           } else {
             diskMtimeSec = Math.floor(diskMs / 1000);
@@ -286,7 +303,7 @@ export const workflowListProcedures = {
           if (existingByPath.has(key)) {
             continue;
           }
-          const friendly = f.name.replace(/\.(json|workflow)$/i, "").trim() || "未命名工作流";
+          const friendly = f.name.replace(/\.(?:json|workflow)$/i, "").trim() || "未命名工作流";
           localPending.push({
             id: pendingId(f.absPath),
             name: friendly,

@@ -1,11 +1,9 @@
 "use client";
 
-// ── 成片工作室：业务逻辑层（规范 17 §17.2 第②层）────────────────────────────
-// 承载表单状态、成片轮询、一键成片/取消/重新合成三个动作与 BGM 上传。
-// FilmStudio 视图只消费本 hook 返回的 controller，不再出现 vanillaApi / fetch。
-//
-// 时间轴编辑（镜头列表、播放态、播放头）是纯视觉状态、不产生网络请求，
-// 按规范留在视图层——下沉反而要透传一堆 prop。
+// ── 成片工作室：业务逻辑层（规范 17 §17.2 第②层）
+// 承载表单状态、成片轮询、一键成片/取消/重新合成三个动作与 BGM 上传；
+// 视图只消费 controller，不再出现 vanillaApi / fetch。
+// 时间轴编辑（镜头列表、播放态、播放头）是纯视觉状态，按规范留在视图层。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -16,6 +14,7 @@ import { uploadBgm } from "~/lib/film/bgm-client";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { fetchProduction } from "~/lib/production/production-client";
 import { requestShotRedo } from "~/lib/production/shot-writeback";
+import { isRecord } from "~/lib/is-record";
 import type { SizeSpec } from "~/lib/media/size-presets";
 import { vanillaApi } from "~/trpc/vanilla";
 
@@ -87,6 +86,33 @@ export type FilmStudioController = {
 };
 
 /**
+ * `/api/film/[id]` 返回原始 FilmProject 行，`status` / `logs` 等字段比本地
+ * `Film` 视图类型更宽；按视图必需的字段逐项做运行时校验后才收窄。
+ */
+function isFilmView(value: unknown): value is Film {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    typeof value.script === "string" &&
+    typeof value.type === "string" &&
+    typeof value.size === "string" &&
+    typeof value.fps === "number" &&
+    typeof value.framesPerShot === "number" &&
+    typeof value.subtitleOn === "boolean" &&
+    typeof value.progress === "number" &&
+    typeof value.status === "string" &&
+    (value.styleSlug === null || typeof value.styleSlug === "string") &&
+    (value.bgmName === null || typeof value.bgmName === "string") &&
+    (value.error === null || typeof value.error === "string") &&
+    (value.finalVideo === null || typeof value.finalVideo === "string") &&
+    Array.isArray(value.shots)
+  );
+}
+
+/**
  * 拉取成片详情并在进行中时启动轮询。
  * 轮询器写成局部函数而非 `useCallback` 自引用——自引用会让 React Compiler
  * 无法校验 memo 化（rh/preserve-manual-memoization），局部函数语义等价。
@@ -150,8 +176,10 @@ export function useFilmStudio(): FilmStudioController {
       // /api/film/[id] 返回原始 FilmProject 行（status/logs/shots 比本地
       // `Film` 视图类型更宽，shape 由路由固定）；经 unknown 收窄为 UI 视图类型。
       const data = await vanillaApi.film.detail.query({ id });
-      /* SAFETY: 类型断言已复核 */
-      setFilm(data.film as unknown as Film);
+      const filmRow: unknown = data.film;
+      if (isFilmView(filmRow)) {
+        setFilm(filmRow);
+      }
     } catch {
       /* 拉详情失败静默忽略，下一次轮询会重试 */
     }
@@ -173,36 +201,35 @@ export function useFilmStudio(): FilmStudioController {
           /* 工作流库列表：按内容类别分栏，逐镜生成只能选视频工作流、
            * 合成首帧只能选图类工作流（内置模板已移除）。 */
           const rawWorkflows: unknown = wData;
-          const wfRows = Array.isArray(rawWorkflows) ? rawWorkflows : [];
+          const wfRows: Array<unknown> = Array.isArray(rawWorkflows) ? rawWorkflows : [];
           const pick = (category: "video" | "image") =>
             wfRows.flatMap((raw) => {
-              if (typeof raw !== "object" || raw === null) {
+              if (!isRecord(raw)) {
                 return [];
               }
-              /* SAFETY: 类型断言已复核 */
-              const wf = raw as Record<string, unknown>;
+              const wf = raw;
               if (typeof wf.id !== "string" || typeof wf.name !== "string") {
                 return [];
               }
               return wf.typeCategory === category ? [{ id: wf.id, name: wf.name }] : [];
             });
           // skill.list 返回 `{...record, tags}` 行（router 的 spread 丢了索引签名），
-          // 故按 record 视图读 slug/name；断言而非强转，畸形负载的行为与原先一致。
+          // 故按 record 视图读 slug/name；畸形负载直接跳过。
           const rawList: unknown = sData.skills;
-          const list = Array.isArray(rawList) ? rawList : [];
+          const list: Array<unknown> = Array.isArray(rawList) ? rawList : [];
           guard.commit(() => {
             setVideoWorkflows(pick("video"));
             setImageWorkflows(pick("image"));
             setSkills(
-              list.map((raw) => {
-                /* SAFETY: 类型断言已复核 */
-                const s = raw as Record<string, unknown>;
-                return {
-                  /* SAFETY: 类型断言已复核 */
-                  slug: s.slug as string,
-                  /* SAFETY: 类型断言已复核 */
-                  name: s.name as string,
-                };
+              list.flatMap((raw) => {
+                if (!isRecord(raw)) {
+                  return [];
+                }
+                const { name, slug } = raw;
+                if (typeof slug !== "string" || typeof name !== "string") {
+                  return [];
+                }
+                return [{ slug, name }];
               }),
             );
             setFfmpegAvailable(!!fData.ffmpegAvailable);
@@ -410,12 +437,10 @@ export function useFilmStudio(): FilmStudioController {
 
   const running = useMemo(() => !!film && isFilmRunning(film.status), [film]);
 
-  /* 成片在跑时按 `FILM_POLL_MS` 轮询详情，跑完自动停 —— 「要不要轮询」由
-   * `running` 决定，不再由 `fetchDetail` 自己起停定时器。`immediate: false`：
-   * 进 running 那一次详情**已经由 `create` / `cancel` / `recompose` 显式拉过**
-   * （它们都 `await fetchDetail(...)`），这里再补一次只会把刚拿到的状态多刷
-   * 一遍、也让首个间隔的语义说不清。`useInterval` 每次渲染把回调搬进 ref，
-   * 所以下面的闭包始终读到最新的 `film.id`。 */
+  /* 成片在跑时按 `FILM_POLL_MS` 轮询详情，跑完自动停 —— 「要不要轮询」由 `running`
+   * 决定，不再由 `fetchDetail` 自己起停定时器。`immediate: false`：进 running 那一次
+   * 详情**已由 create / cancel / recompose 显式拉过**，再补一次只会重刷刚拿到的状态。
+   * `useInterval` 每次渲染把回调搬进 ref，所以闭包始终读到最新的 `film.id`。 */
   const pollId = film?.id ?? null;
   useInterval(
     () => {

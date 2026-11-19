@@ -36,8 +36,6 @@ describe("describeUnhandledRejection", () => {
   });
 
   it("reason 是字符串时输出带说明的原文", () => {
-    expect(describeUnhandledRejection("something")).toBe(
-      "something（未提供错误对象，仅有此信息）",
-    );
+    expect(describeUnhandledRejection("something")).toBe("something（未提供错误对象，仅有此信息）");
   });
 });

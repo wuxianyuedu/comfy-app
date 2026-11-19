@@ -1,20 +1,7 @@
 /**
- * 覆盖率报告的**输出量**必须有预算（ISSUE #1959）。
- *
- * 现场：CNB 构建日志里只有一句 `The log length exceeds the limit(102400)`，
- * 后面全被截断 —— 用户看不到任何失败原因。实测根因是 `coverage.reporter` 里的
- * `text`：它把报告里**每一个文件**打一行，而本仓有 450+ 个文件落在覆盖率面上，
- * 那张表本身就有 ~90KB。实测 `pnpm test:coverage` 跑三个目录
- * （`src/lib/{comfyui,log,workshop}`）就已经 107456 字节，全量更是数倍。
- *
- * 判据分两条，缺一不可：
- *   ① **默认档不变**（本地人手动跑时那张表正是他要看的）；
- *   ② **安静档存在且真的更省** —— 由 `COMFYAPP_QUIET_COVERAGE` 切到
- *      `text-summary`（只打总计），而逐文件明细仍留在 `json-summary` / `lcov` 里。
- *
- * 为什么用源码形状判而不是真跑一次：真跑一次要 ~10 分钟（本文件会进钩子的
- * 受影响集），而「报告里有哪几个 reporter」是**配置形状**、可静态断言。
- * 量级那条则由下面的用例去量**真实输出字节**（小范围、秒级）。
+ * 覆盖率报告输出量必须有预算（ISSUE #1959）：CNB 日志只剩 `The log length exceeds the limit(102400)`，根因是
+ * `coverage.reporter` 的 `text` 逐个文件打行，450+ 文件约 90KB（三个目录实测已 107456 字节）。判两条：①默认档
+ * 不变（本地要看那张表）；②`COMFYAPP_QUIET_COVERAGE` 切 `text-summary`，明细仍在 `json-summary`/`lcov`（可静态断言）。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";

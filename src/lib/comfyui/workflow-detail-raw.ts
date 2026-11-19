@@ -42,14 +42,12 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): Array<RawNodeMeta> {
   const rawNodeMeta: Array<RawNodeMeta> = [];
   if (raw && Array.isArray(raw.nodes)) {
     for (const rn of raw.nodes) {
-      // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 nodes 数组元素运行期可能为 null，保留防御判空
       if (!rn || rn.type === "Note" || rn.type === "MarkdownNote") {
         continue;
       }
       const outputs: Array<RawOutputEntry> = [];
       if (Array.isArray(rn.outputs)) {
         for (const o of rn.outputs) {
-          // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 outputs 数组元素运行期可能为 null，保留防御判空
           if (!o || typeof o.name !== "string") {
             continue;
           }
@@ -70,7 +68,6 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): Array<RawNodeMeta> {
       //  rgthree Compact 等会用的 ComfyUI LiteGraph 状态）。
       //  只保留纯对象形态的 flags，其余一律丢掉 ——
       //  避免把类实例泄漏进 JSON 载荷。
-      // oxlint-disable-next-line strict-boolean-expressions -- rn 是外部 JSON 数组元素，运行期可能为 null，保留防御判空
       const flags = rn && typeof rn.flags === "object" && rn.flags !== null ? rn.flags : {};
       rawNodeMeta.push({
         id: String(rn.id),
@@ -81,7 +78,6 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): Array<RawNodeMeta> {
          *  驱动的运行期 UI —— 最典型的例子是 rgthree 的
          *  `Fast Groups Bypasser`。 */
         properties:
-          // oxlint-disable-next-line strict-boolean-expressions -- rn 是外部 JSON 数组元素，运行期可能为 null，保留防御判空
           rn && typeof rn.properties === "object" && rn.properties !== null ? rn.properties : {},
         mode: typeof rn.mode === "number" ? rn.mode : 0,
       });
@@ -96,8 +92,7 @@ export function buildNodeTypeMap(raw: RawWorkflow | null): Record<string, string
   const nodeTypeById: Record<string, string> = {};
   if (raw && Array.isArray(raw.nodes)) {
     for (const n of raw.nodes) {
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      if (n?.id != null) {
+      if (n?.id !== null && n?.id !== undefined) {
         nodeTypeById[String(n.id)] = typeof n.type === "string" ? n.type : "";
       }
     }
@@ -129,8 +124,7 @@ export function buildInnerNodeInputs(
       continue;
     }
     for (const node of subDef.nodes) {
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      if (node?.id == null) {
+      if (node?.id === null || node?.id === undefined) {
         continue;
       }
       const inputs = Array.isArray(node.inputs) ? node.inputs : [];
@@ -142,7 +136,6 @@ export function buildInnerNodeInputs(
         : [];
       const list: Array<RawInputEntry> = [];
       for (const inp of inputs) {
-        // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 inputs 数组元素运行期可能为 null，保留防御判空
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
@@ -152,10 +145,13 @@ export function buildInnerNodeInputs(
           name: inp.name,
           label: typeof inp.label === "string" ? inp.label : undefined,
           localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
-          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-          type: typeof inp.type === "string" ? inp.type : inp.link == null ? "STRING" : "*",
-          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-          isConnection: inp.link != null,
+          type:
+            typeof inp.type === "string"
+              ? inp.type
+              : inp.link === null || inp.link === undefined
+                ? "STRING"
+                : "*",
+          isConnection: inp.link !== null && inp.link !== undefined,
         };
         if (widgetName !== undefined && widgetName !== "") {
           entry.widget = { name: widgetName };
@@ -196,14 +192,17 @@ export function buildRawView(
   if (raw && Array.isArray(raw.nodes)) {
     const rawGraph = buildRawViewGraph(raw);
     const rawViewNodes: Array<DetailNodeView> = Object.entries(rawGraph).map(([nodeId, n]) => {
-      /* 与旧 `n?.class_type || (n?.type as string) || "?"` 语义逐值等价
+      /* 与旧 `n?.class_type || n?.type || "?"` 语义逐值等价
        *  （`a || b` ≡ `a ? a : b`）：class_type/type 为空串时同样回退。 */
-      /* SAFETY: 类型断言已复核 */
-      // oxlint-disable-next-line strict-boolean-expressions -- class_type/type 是外部图记录的 unknown 字段，空串等 falsy 形态都要回退占位符，保留原真值语义
-      const classType: string = n?.class_type ? n.class_type : n?.type ? (n.type as string) : "?";
+      const classType: string =
+        n.class_type === ""
+          ? typeof n.type === "string" && n.type !== ""
+            ? n.type
+            : "?"
+          : n.class_type;
       const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
       let resolvedTitle: string | undefined;
-      if (isUuidClass && raw?.definitions?.subgraphs) {
+      if (isUuidClass && raw.definitions?.subgraphs) {
         const subs = raw.definitions.subgraphs;
         let def = subs[classType];
         if (!def) {
@@ -219,7 +218,7 @@ export function buildRawView(
       return {
         id: nodeId,
         class_type: classType,
-        title: resolvedTitle ?? n?._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
+        title: resolvedTitle ?? n._meta?.title ?? (isUuidClass ? "" : classType),
         is_subgraph: isUuidClass,
         raw_inputs: rawInputsById[nodeId] ?? [],
         size: sizeById[nodeId],

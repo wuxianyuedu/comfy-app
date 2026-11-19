@@ -3,6 +3,8 @@ import { clamp } from "~/lib/clamp";
 import React from "react";
 import { Icon } from "~/components/ui/icon";
 import { EmptyState } from "~/components/ui/empty-state";
+import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { Button } from "~/components/ui/button";
 import { downloadJson } from "~/lib/browser-io";
 import { fixed } from "~/lib/number-format";
@@ -52,10 +54,9 @@ export function motionPromptSuffix(motion: MotionLevel | undefined): string {
 }
 
 /**
- * 成片合成 stage：消费上游产出的镜头列表（imageUrl / clipUrl /
- * duration / transition / dialogue）—— 纯客户端合成。提供
- * 顺序预览播放器、逐镜头时长与转场编辑，以及
- * 合成方案导出（JSON）作为管线的最终产物。
+ * 成片合成 stage：消费上游产出的镜头列表（imageUrl / clipUrl / duration /
+ * transition / dialogue），纯客户端合成 —— 顺序预览播放器、逐镜头时长与转场
+ * 编辑、合成方案导出（JSON）作为管线的最终产物。
  */
 export function FinalComposer({
   shots,
@@ -100,13 +101,10 @@ export function FinalComposer({
         return idx;
       }
       const next = timeline[idx + 1];
-      if (
-        next &&
-        (next.shot.clipUrl === undefined || next.shot.clipUrl === "") &&
-        next.shot.imageUrl !== undefined &&
-        next.shot.imageUrl !== ""
-      ) {
-        // 静止帧兜底：按住该镜头时长。
+      /* 静止帧兜底：按住该镜头时长。**无画面镜头也要排**（#4428）：既无视频
+       * （没有 onEnded）也无图（原先不排定时器）的镜头，两个推进源都缺席——
+       * 播放到它就永久停住，只能手动「停止」。 */
+      if (next && (next.shot.clipUrl === undefined || next.shot.clipUrl === "")) {
         imageTimerRef.current = setTimeout(() => {
           advance();
         }, next.duration * 1000);
@@ -125,12 +123,9 @@ export function FinalComposer({
     const first = timeline[0];
     setCurrentIdx(0);
     setPlaying(true);
-    if (
-      first &&
-      (first.shot.clipUrl === undefined || first.shot.clipUrl === "") &&
-      first.shot.imageUrl !== undefined &&
-      first.shot.imageUrl !== ""
-    ) {
+    /* 与 advance 同口径：无画面镜头也排前进定时器（#4428），首个镜头即缺画面
+     * 时不再卡死在第 1 镜。 */
+    if (first && (first.shot.clipUrl === undefined || first.shot.clipUrl === "")) {
       imageTimerRef.current = setTimeout(() => {
         advance();
       }, first.duration * 1000);
@@ -316,24 +311,36 @@ export function FinalComposer({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-ink truncate text-xs font-medium">{shot.sceneHeading}</div>
-                <div className="text-muted-foreground text-2xs mt-0.5 truncate">
-                  {shot.clipUrl !== undefined && shot.clipUrl !== ""
-                    ? "片段就绪"
-                    : shot.imageUrl !== undefined && shot.imageUrl !== ""
-                      ? "待生成视频（以静帧占位）"
-                      : "待生成画面"}
-                  {shot.dialogue !== undefined && shot.dialogue !== ""
-                    ? ` · 字幕: ${shot.dialogue}`
-                    : ""}
-                </div>
+                <TruncatedText className="text-ink truncate text-xs font-medium">
+                  {shot.sceneHeading}
+                </TruncatedText>
+                <Hint
+                  label={`${
+                    shot.clipUrl !== undefined && shot.clipUrl !== ""
+                      ? "片段就绪"
+                      : shot.imageUrl !== undefined && shot.imageUrl !== ""
+                        ? "待生成视频（以静帧占位）"
+                        : "待生成画面"
+                  }${shot.dialogue !== undefined && shot.dialogue !== "" ? ` · 字幕: ${shot.dialogue}` : ""}`}
+                >
+                  <div className="text-muted-foreground text-2xs mt-0.5 truncate">
+                    {shot.clipUrl !== undefined && shot.clipUrl !== ""
+                      ? "片段就绪"
+                      : shot.imageUrl !== undefined && shot.imageUrl !== ""
+                        ? "待生成视频（以静帧占位）"
+                        : "待生成画面"}
+                    {shot.dialogue !== undefined && shot.dialogue !== ""
+                      ? ` · 字幕: ${shot.dialogue}`
+                      : ""}
+                  </div>
+                </Hint>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <FormField label="时长(s)" labelClassName="text-muted-foreground mb-0.5 text-3xs">
                   {(field) => (
                     <Input
                       {...field}
-                      className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-1 text-xs"
+                      className="border-border bg-bg text-ink focus-visible:border-primary h-auto w-14 rounded-md px-2 py-1 text-xs"
                       max={20}
                       min={1}
                       onChange={(event) => {
@@ -353,10 +360,10 @@ export function FinalComposer({
                       className="bg-subtle! border-border! text-xs"
                       labels={TRANSITION_LABELS}
                       onChange={(value) => {
-                        updateShot(shot.id, {
-                          /* SAFETY: 类型断言已复核 */
-                          transition: value as Transition,
-                        });
+                        const transition = TRANSITIONS.find((item) => item === value);
+                        if (transition !== undefined) {
+                          updateShot(shot.id, { transition });
+                        }
                       }}
                       options={TRANSITIONS}
                       placeholder="转场"
@@ -371,10 +378,10 @@ export function FinalComposer({
                       className="bg-subtle! border-border! text-xs"
                       labels={MOTION_LABELS}
                       onChange={(value) => {
-                        updateShot(shot.id, {
-                          /* SAFETY: 类型断言已复核 */
-                          motion: value as MotionLevel,
-                        });
+                        const motion = MOTIONS.find((item) => item === value);
+                        if (motion !== undefined) {
+                          updateShot(shot.id, { motion });
+                        }
                       }}
                       options={MOTIONS}
                       placeholder="运动"

@@ -1,19 +1,19 @@
-// AI 自主执行 run 的控制端点（Phase 6 地基）。
-//
-// run = 挂在统一项目上的一份「AI 正在把流水线跑到成片」的协调态（生命周期 + 审批粒度 +
-// 每镜已处理 rev 快照），落在 production.run 列、由这里**单独写**（工坊自动保存不碰 run）。
-// 两个视图（画布 / 工坊）都是它的操纵台：都能 start / pause / resume / approve / cancel，
-// 都能读 status 看「下一步该做什么」。
-//
-// 控制端点管理 run 生命周期、`status` 用纯规划器算出下一步动作并回显。`start / resume / approve`
-// 把 run 置为 running 后，以 fire-and-forget 拉起服务端执行引擎 `advanceRunLoop`（推进到下一个
-// 停点：等点头 / 完成 / 失败 / 被暂停），引擎内部自带异常兜底、不抛给调用方。
+// AI 自主执行 run 的控制端点（Phase 6 地基）。run = 挂统一项目上的「AI 跑到成片」协调态（生命周期 + 审批
+// 粒度 + 每镜 rev 快照），落 `production.run` 列、由这里**单独写**（工坊自动保存不碰 run）。两视图（画布 /
+// 工坊）都是操纵台：start/pause/resume/approve/cancel + status。status 用纯规划器算下一步动作；
+// start/resume/approve 置 running 后 fire-and-forget 拉起 `advanceRunLoop`（推进到下一停点：点头/完成/
+// 失败/暂停），引擎自带兜底、不抛给调用方。
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
+import { fireAndForget } from "~/lib/async-action";
+import { errorText } from "~/lib/error-message";
+import { logger } from "~/lib/core/logger";
+import { isPlainRecord } from "~/lib/is-record";
 import { productionRepository } from "~/lib/core/repository-production";
 import {
+  APPROVAL_MODES,
   normalizeProductionRun,
   planNextRunAction,
   scriptDigestOf,
@@ -27,6 +27,7 @@ import {
   applyScriptHumanVerdict,
 } from "~/lib/production/review-types";
 import { calibrateFromShots } from "~/lib/production/review-calibration";
+import { withProductionContentLock } from "~/lib/production/content-write-lock";
 import {
   regenerateShot,
   reviewContent,
@@ -36,45 +37,85 @@ import {
   reviseScript,
 } from "~/server/agent/review";
 
-const approvalModeEnum = z.enum(["auto", "stage", "shot"]);
+const approvalModeEnum = z.enum(APPROVAL_MODES);
 const reviewModeEnum = z.enum(["gacha", "reprompt"]);
 
-/** fire-and-forget 拉起执行引擎推进 run（动态 import 解耦；引擎自带异常兜底，不外抛）。 */
+/** fire-and-forget 拉起执行引擎推进 run（动态 import 解耦；引擎自带异常兜底，不外抛）。
+ *  能 reject 的只剩动态 `import()` 本身（模块编译 / 加载失败）——fireAndForget 显式接住
+ *  落 error 日志，不让它冒成 unhandledRejection（#4224）。 */
 function kickEngine(userId: string, projectId: string): void {
-  void (async () => {
-    const { advanceRunLoop } = await import("~/server/agent/run-engine");
-    await advanceRunLoop(userId, projectId);
-  })();
+  fireAndForget(
+    (async () => {
+      const { advanceRunLoop } = await import("~/server/agent/run-engine");
+      await advanceRunLoop(userId, projectId);
+    })(),
+    (error) => {
+      logger.error(
+        `[run] ${errorText(error, `拉起执行引擎失败（user=${userId} project=${projectId}）`)}`,
+      );
+    },
+  );
 }
 
-/** 读项目并归一 run；无生产数据行 → 抛可行动错误。 */
-async function loadRun(userId: string, projectId: string): Promise<ProductionRun> {
-  const row = await productionRepository.getForUser(userId, projectId);
-  // PRECONDITION_FAILED 而不是 NOT_FOUND：这一支要告诉调用方「先去医院，先产出内容」。
-  // 探测面没有变大 —— 别人的项目与没内容的项目走的是同一条 `row === null`，
-  // 回的是同一句话（口径同 A2 / A3 / A12 的「越权与不存在同形」）。
-  if (!row) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "该项目还没有生产数据（先在工坊产出内容再启动）",
-    });
-  }
-  return normalizeProductionRun(row.run);
+function missingProductionError(): TRPCError {
+  return new TRPCError({
+    code: "PRECONDITION_FAILED",
+    message: "该项目还没有生产数据（先在工坊产出内容再启动）",
+  });
 }
 
-/** 保存 run 并回显下一步动作（含规划视图）。 */
-async function persistAndPlan(
+/** 控制路由写回时必须保留的引擎进度字段（ISSUE #3960）：控制态与进度态分治，
+ *  事务内取 `current` 的这些字段，避免 stale 读或并发推进被控制写覆盖。 */
+function preserveProgress(current: ProductionRun, patch: Partial<ProductionRun>): ProductionRun {
+  return {
+    ...current,
+    ...patch,
+    stage: current.stage,
+    log: current.log,
+    processedShotRev: current.processedShotRev,
+    autoReview: patch.autoReview ?? current.autoReview,
+    reviewedShotRev: current.reviewedShotRev,
+    reviewAttempts: current.reviewAttempts,
+    scriptReviewDigest: current.scriptReviewDigest,
+    scriptReviewAttempts: current.scriptReviewAttempts,
+    scriptRevisionPending: current.scriptRevisionPending,
+    storyboardScriptDigest: current.storyboardScriptDigest,
+    filmStartedAt: current.filmStartedAt,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function planForRun(
   userId: string,
   projectId: string,
   run: ProductionRun,
-): Promise<{ action: RunAction; run: ProductionRun }> {
-  const saved = await productionRepository.updateRun(userId, projectId, run);
-  if (!saved) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
-  }
+): Promise<RunAction> {
   const row = await productionRepository.getForUser(userId, projectId);
-  const action = planNextRunAction(toRunView(row ?? null), run);
-  return { run, action };
+  return planNextRunAction(toRunView(row ?? null), run);
+}
+
+type ControlDecision = { noop: true; run: ProductionRun } | { next: ProductionRun; noop: false };
+
+async function applyControlMutation(
+  userId: string,
+  projectId: string,
+  decide: (current: ProductionRun) => ControlDecision,
+): Promise<{ action: RunAction; run: ProductionRun; wrote: boolean }> {
+  const outcome = await productionRepository.mutateRun(userId, projectId, (current) => {
+    const decision = decide(current);
+    if (decision.noop) {
+      return null;
+    }
+    return { meta: undefined, next: decision.next };
+  });
+  if (!outcome) {
+    throw missingProductionError();
+  }
+  const run = outcome.next;
+  const action = outcome.wrote
+    ? await planForRun(userId, projectId, run)
+    : { kind: "idle" as const };
+  return { action, run, wrote: outcome.wrote };
 }
 
 export const runRouter = createTRPCRouter({
@@ -109,103 +150,93 @@ export const runRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const run = await loadRun(ctx.user.id, input.projectId);
-      const next: ProductionRun = {
-        ...run,
-        status: "running",
-        approvalMode: input.approvalMode ?? run.approvalMode,
-        goal: input.goal ?? run.goal,
-        imageWorkflowId: input.imageWorkflowId ?? run.imageWorkflowId,
-        videoWorkflowId: input.videoWorkflowId ?? run.videoWorkflowId,
-        autoReview: input.autoReview ?? run.autoReview,
-        awaitingStage: null,
-        error: null,
-        updatedAt: new Date().toISOString(),
-      };
-      const result = await persistAndPlan(ctx.user.id, input.projectId, next);
-      kickEngine(ctx.user.id, input.projectId);
-      return result;
+      const result = await applyControlMutation(ctx.user.id, input.projectId, (current) => ({
+        noop: false,
+        next: preserveProgress(current, {
+          status: "running",
+          approvalMode: input.approvalMode ?? current.approvalMode,
+          goal: input.goal ?? current.goal,
+          imageWorkflowId: input.imageWorkflowId ?? current.imageWorkflowId,
+          videoWorkflowId: input.videoWorkflowId ?? current.videoWorkflowId,
+          autoReview: input.autoReview ?? current.autoReview,
+          awaitingStage: null,
+          error: null,
+        }),
+      }));
+      if (result.wrote) {
+        kickEngine(ctx.user.id, input.projectId);
+      }
+      return { action: result.action, run: result.run };
     }),
 
   /** 用户主动暂停（画布/工坊的「暂停」按钮）。 */
   pause: authedProcedure
     .input(z.object({ projectId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const run = await loadRun(ctx.user.id, input.projectId);
-      if (run.status !== "running" && run.status !== "awaiting_approval") {
-        return {
-          run,
-          /* SAFETY: 类型断言已复核 */
-          action: {
-            kind: "idle",
-          } as RunAction,
-        };
-      }
-      return persistAndPlan(ctx.user.id, input.projectId, {
-        ...run,
-        status: "paused",
-        updatedAt: new Date().toISOString(),
+      const result = await applyControlMutation(ctx.user.id, input.projectId, (current) => {
+        if (current.status !== "running" && current.status !== "awaiting_approval") {
+          return { noop: true, run: current };
+        }
+        return { noop: false, next: preserveProgress(current, { status: "paused" }) };
       });
+      return { action: result.action, run: result.run };
     }),
 
   /** 继续（从 paused 恢复）。awaiting_approval 的点头走 approve。 */
   resume: authedProcedure
     .input(z.object({ projectId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const run = await loadRun(ctx.user.id, input.projectId);
-      if (run.status !== "paused") {
-        return {
-          run,
-          /* SAFETY: 类型断言已复核 */
-          action: {
-            kind: "idle",
-          } as RunAction,
-        };
-      }
-      const result = await persistAndPlan(ctx.user.id, input.projectId, {
-        ...run,
-        status: "running",
-        updatedAt: new Date().toISOString(),
+      const result = await applyControlMutation(ctx.user.id, input.projectId, (current) => {
+        if (current.status !== "paused") {
+          return { noop: true, run: current };
+        }
+        return { noop: false, next: preserveProgress(current, { status: "running" }) };
       });
-      kickEngine(ctx.user.id, input.projectId);
-      return result;
+      if (result.wrote) {
+        kickEngine(ctx.user.id, input.projectId);
+      }
+      return { action: result.action, run: result.run };
     }),
 
   /** 对某步点头放行（awaiting_approval → running）。 */
   approve: authedProcedure
     .input(z.object({ projectId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const run = await loadRun(ctx.user.id, input.projectId);
-      if (run.status !== "awaiting_approval") {
+      const result = await applyControlMutation(ctx.user.id, input.projectId, (current) => {
+        if (current.status !== "awaiting_approval") {
+          return { noop: true, run: current };
+        }
         return {
-          run,
-          /* SAFETY: 类型断言已复核 */
-          action: {
-            kind: "idle",
-          } as RunAction,
+          noop: false,
+          next: preserveProgress(current, { status: "running", awaitingStage: null }),
         };
-      }
-      const result = await persistAndPlan(ctx.user.id, input.projectId, {
-        ...run,
-        status: "running",
-        awaitingStage: null,
-        updatedAt: new Date().toISOString(),
       });
-      kickEngine(ctx.user.id, input.projectId);
-      return result;
+      if (result.wrote) {
+        kickEngine(ctx.user.id, input.projectId);
+      }
+      return { action: result.action, run: result.run };
     }),
 
   /** 取消整条自主执行。 */
   cancel: authedProcedure
     .input(z.object({ projectId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const run = await loadRun(ctx.user.id, input.projectId);
-      return persistAndPlan(ctx.user.id, input.projectId, {
-        ...run,
-        status: "cancelled",
-        awaitingStage: null,
-        updatedAt: new Date().toISOString(),
+      const result = await applyControlMutation(ctx.user.id, input.projectId, (current) => {
+        /* 终态幂等（ISSUE #3901）：done / failed 已收尾，取消不改写终态、
+         * 原样回显；重复取消（已 cancelled）同样幂等返回。 */
+        if (
+          current.status === "done" ||
+          current.status === "failed" ||
+          current.status === "cancelled"
+        ) {
+          return { noop: true, run: current };
+        }
+        return {
+          noop: false,
+          next: preserveProgress(current, { status: "cancelled", awaitingStage: null }),
+        };
       });
+      return { action: result.action, run: result.run };
     }),
 
   /** 评审一个分镜镜头（文本评审）：调模型给判定 → 落库 `shot.review` → 回显判定。 */
@@ -321,37 +352,50 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
       if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+        throw missingProductionError();
       }
       const rawList = input.kind === "shot" ? row.shots : row.characters;
       const list: Array<unknown> = Array.isArray(rawList) ? rawList : [];
-      const rec = list.find(
-        (item) =>
-          /* SAFETY: 类型断言已复核 */
-          typeof item === "object" &&
-          item !== null &&
-          (item as { id?: unknown }).id === input.targetId,
-      );
+      const rec = list.find((item) => isPlainRecord(item) && item.id === input.targetId);
       if (rec === undefined) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: `找不到要裁决的${input.kind === "shot" ? "镜头" : "角色卡"}`,
         });
       }
-      /* SAFETY: 类型断言已复核 */
-      const revRaw = (rec as { rev?: unknown }).rev;
-      const rev = typeof revRaw === "number" && Number.isFinite(revRaw) ? revRaw : 0;
-      const verdict = {
-        pass: input.pass,
-        note: input.note.trim(),
-        at: new Date().toISOString(),
-        rev,
-      };
-      const nextList = applyHumanVerdict(list, input.targetId, verdict);
-      await productionRepository.patchContent(ctx.user.id, input.projectId, {
-        ...(input.kind === "shot" ? { shots: nextList } : { characters: nextList }),
+      /* 写回收进 per-project 内容写锁（ISSUE #3864）：裁决快照的 rev 取**锁内
+       * 重读**到的最新值，叠加裁决后整列写回——与引擎/评审器的并发修改不再互覆。 */
+      const humanVerdict = await withProductionContentLock(input.projectId, async () => {
+        const fresh = await productionRepository.getForUser(ctx.user.id, input.projectId);
+        if (!fresh) {
+          throw missingProductionError();
+        }
+        const freshRaw = input.kind === "shot" ? fresh.shots : fresh.characters;
+        const freshList: Array<unknown> = Array.isArray(freshRaw) ? freshRaw : [];
+        const freshRec = freshList.find(
+          (item) => isPlainRecord(item) && item.id === input.targetId,
+        );
+        if (freshRec === undefined) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `找不到要裁决的${input.kind === "shot" ? "镜头" : "角色卡"}`,
+          });
+        }
+        const revRaw = isPlainRecord(freshRec) ? freshRec.rev : undefined;
+        const rev = typeof revRaw === "number" && Number.isFinite(revRaw) ? revRaw : 0;
+        const verdict = {
+          pass: input.pass,
+          note: input.note.trim(),
+          at: new Date().toISOString(),
+          rev,
+        };
+        const nextList = applyHumanVerdict(freshList, input.targetId, verdict);
+        await productionRepository.patchContent(ctx.user.id, input.projectId, {
+          ...(input.kind === "shot" ? { shots: nextList } : { characters: nextList }),
+        });
+        return verdict;
       });
-      return { humanVerdict: verdict };
+      return { humanVerdict };
     }),
 
   /** 人工评分一个镜头（0~5；null = 清除）。写 `shot.humanRating`。 */
@@ -366,18 +410,26 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
       if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+        throw missingProductionError();
       }
-      const shots: Array<unknown> = Array.isArray(row.shots) ? row.shots : [];
-      const nextShots = applyHumanRating(shots, input.shotId, input.rating);
-      if (nextShots === shots) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "找不到要评分的镜头",
+      /* 写回收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新 shots 再叠加
+       * 评分，不与引擎/评审器的并发修改互覆。 */
+      await withProductionContentLock(input.projectId, async () => {
+        const fresh = await productionRepository.getForUser(ctx.user.id, input.projectId);
+        if (!fresh) {
+          throw missingProductionError();
+        }
+        const shots: Array<unknown> = Array.isArray(fresh.shots) ? fresh.shots : [];
+        const nextShots = applyHumanRating(shots, input.shotId, input.rating);
+        if (nextShots === shots) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "找不到要评分的镜头",
+          });
+        }
+        await productionRepository.patchContent(ctx.user.id, input.projectId, {
+          shots: nextShots,
         });
-      }
-      await productionRepository.patchContent(ctx.user.id, input.projectId, {
-        shots: nextShots,
       });
       return { ok: true };
     }),
@@ -394,7 +446,7 @@ export const runRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const row = await productionRepository.getForUser(ctx.user.id, input.projectId);
       if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "生产数据行不存在" });
+        throw missingProductionError();
       }
       const script = typeof row.scriptMarkdown === "string" ? row.scriptMarkdown : "";
       const verdict = {
@@ -403,9 +455,17 @@ export const runRouter = createTRPCRouter({
         at: new Date().toISOString(),
         digest: scriptDigestOf(script),
       };
-      const next = applyScriptHumanVerdict(row.scriptReview, verdict);
-      await productionRepository.patchContent(ctx.user.id, input.projectId, {
-        scriptReview: next,
+      /* 写回收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新评审位再叠加
+       * 人工裁决，裁决快照的指纹按当前剧本算。 */
+      await withProductionContentLock(input.projectId, async () => {
+        const fresh = await productionRepository.getForUser(ctx.user.id, input.projectId);
+        if (!fresh) {
+          throw missingProductionError();
+        }
+        const next = applyScriptHumanVerdict(fresh.scriptReview, verdict);
+        await productionRepository.patchContent(ctx.user.id, input.projectId, {
+          scriptReview: next,
+        });
       });
       return { humanVerdict: verdict };
     }),

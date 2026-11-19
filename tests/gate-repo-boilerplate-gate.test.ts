@@ -1,23 +1,7 @@
 /**
- * 「门禁自测别再手搓临时仓库样板」判据的自测（规范 §11.16.1）。
- *
- * 判据的价值全在**形状识别口径**上，所以这里跑的是**真脚本**（临时仓库 + 只放被测
- * 文件），断言「该拦的拦、不该误伤的放过」。六条口径各有执行者：
- *
- *   ① **手搓样板**（该拦）：`tmpdir()` + 自己写的 `run(args)`（`execFileSync` 从
- *      `workdir` 拉脚本）—— 本判据的立案形态。
- *   ② **用了共享夹具**（该放）：文件里出现 `helpers/gate-repo` 就整个跳过 ——
- *      契约的边界是「有没有走共享件」，不是「写得像不像」。
- *   ③ **只造临时目录、不拉脚本**（该放）：`test-db` / `symlink-dir` / 产物探针那一类
- *      正当写法 —— 只吃①这一刀会让判据误报一片（§11.18.4）。
- *   ④ **拉的是别的可执行文件**（该放）：`execFileSync(process.execPath, [PRETTIER, …])`
- *      这类没有 `join(workdir` 窗口的形态不在靶子里。
- *   ⑤ **硬闸**：命中即退 1；`--update` / `--allow-new` 两条放宽通道已经删掉，
- *      再传它们**不会写出任何 JSON**（ISSUE #1811 收尾：基线归零后翻硬闸）。
- *   ⑥ **夹具文件不进扫描面**（`FIXTURE_SKIP`）：本文件自己写着「手搓样板」的夹具字符串
- *      与真代码两种形态，判它等于判自己的量具（§11.18.3.1）。
- *
- * ⚠️ 本文件自己**不进扫描面**（`FIXTURE_SKIP`）。
+ * 「门禁自测别再手搓临时仓库样板」判据的自测（规范 §11.16.1）：跑真脚本（临时仓库 + 只放被测文件），钉六条口径 ——
+ * 手搓样本要拦；出现 `helpers/gate-repo`、只造临时目录、拉别的可执行文件三种放过（§11.18.4）；命中退 1 的硬闸
+ * （`--update`/`--allow-new` 已删，再传不写出 JSON，ISSUE #1811）；本文件自身因 `FIXTURE_SKIP` 不进扫描面（§11.18.3.1，判它等于判自己的量具）。
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -35,7 +19,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
-const SCRIPT = path.join(SCRIPTS_DIR, "check-gate-repo-boilerplate.cjs");
+const SCRIPT = path.join(SCRIPTS_DIR, "gates/check-gate-repo-boilerplate.cjs");
 
 /** 临时仓库列表，用例结束统一清掉。 */
 const roots: Array<string> = [];
@@ -50,7 +34,6 @@ afterEach(() => {
 
 /**
  * 在临时仓库里跑真脚本（cwd = 临时仓库根，只放被测文件）。
- *
  * @param files 相对路径 → 内容
  * @param args 额外参数（`--report`，以及断头用例故意传的旧旗标）
  */
@@ -60,20 +43,20 @@ function gate(
 ): { ok: boolean; output: string; root: string } {
   const root = mkdtempSync(path.join(tmpdir(), "gate-repo-boilerplate-"));
   roots.push(root);
-  mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", "check-gate-repo-boilerplate.cjs"));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates/check-gate-repo-boilerplate.cjs"));
   /* 判据共用的扫描读取器（`gate-` 前缀，不是 `check-`）：少带时本判据在临时仓库里
    * 直接 MODULE_NOT_FOUND，用例读到的是「门禁坏了」而不是「夹具缺一块」。 */
   copyFileSync(
-    path.join(SCRIPTS_DIR, "gate-scan-read.cjs"),
-    path.join(root, "scripts", "gate-scan-read.cjs"),
+    path.join(SCRIPTS_DIR, "gates/gate-scan-read.cjs"),
+    path.join(root, "scripts", "gates/gate-scan-read.cjs"),
   );
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
     writeFileSync(abs, content);
   }
-  const entry = path.join(root, "scripts", "check-gate-repo-boilerplate.cjs");
+  const entry = path.join(root, "scripts", "gates/check-gate-repo-boilerplate.cjs");
   try {
     return {
       ok: true,
@@ -85,9 +68,16 @@ function gate(
       }),
     };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as { stderr?: string; stdout?: string };
-    return { ok: false, root, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const e: { stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
+    return {
+      ok: false,
+      root,
+      output: `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`,
+    };
   }
 }
 

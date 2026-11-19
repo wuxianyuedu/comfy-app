@@ -1,17 +1,7 @@
 /**
- * 模态遮罩（scrim）的可见性 —— 「弹窗背后真的被压暗了吗」（ISSUE #1742）。
- *
- * 背景：`ui/dialog` 的 `DialogContent` 一度**只铺 Portal + Popup**，不渲染带色的
- * `Backdrop` —— 基元自动注入的那层 `InternalBackdrop` 是 `role="presentation"`
- * 的**透明**层（只用于外部点击判定），肉眼看不见。于是绝大多数弹窗背后又亮又像
- * 能点：用户分不清哪块是活的、也看不出「这是个要先处理掉的对话框」。
- *
- * 这类故障 tsc / eslint / 主题色扫描器都看不见 —— 色值全都来自 token、命名也没错，
- * 错的是**遮罩压在本应用背景上之后还剩多少对比**。所以判据必须是「真量」，
- * 并且量在**编译产物**上（Tailwind 会 tree-shake 没被引用的 `@theme` 变量）。
- *
- * 取值口径：复用 `tests/helpers/theme-tokens.ts`（真编译 globals.css + 解析 `var()` 链）。
- * `bg-scrim` 已登记进它的 `PINNED_UTILITY_CLASSES`，产物里必须有这条 utility。
+ * 模态遮罩（scrim）可见性判据（ISSUE #1742）：`DialogContent` 曾只铺 Portal + Popup，基元注入的 `InternalBackdrop` 是透明层
+ * （`role="presentation"`，只判外部点击），弹窗背后又亮又像能点；色值全来自 token、命名也对，tsc/eslint 看不见，错的是
+ * 遮罩压上去后的**对比**，故须真量且量在编译产物（Tailwind 会 tree-shake 未引用 `@theme`）；取值走 `theme-tokens`（`bg-scrim` 已 pin）。
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";
@@ -27,29 +17,29 @@ beforeAll(async () => {
 /** 解析 `rgb(r g b / a)` 或 `#rrggbb`（本仓 token 的两种写法）。 */
 function parseColor(value: string): { a: number; rgb: [number, number, number] } {
   const v = value.trim();
-  const hex = /^#([0-9a-f]{6})$/i.exec(v);
+  const hex = /^#(?<hex>[0-9a-f]{6})$/i.exec(v);
   if (hex) {
-    const n = Number.parseInt(hex[1]!, 16);
+    const n = Number.parseInt(hex.groups?.hex ?? "", 16);
     return { rgb: [(n >> 16) & 255, (n >> 8) & 255, n & 255], a: 1 };
   }
-  const m = /^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*(?:\/\s*([\d.]+)\s*)?\)$/.exec(v);
+  const m = /^rgb\(\s*(?<r>\d+)\s+(?<g>\d+)\s+(?<b>\d+)\s*(?:\/\s*(?<alpha>[\d.]+)\s*)?\)$/.exec(v);
   if (!m) {
     throw new Error(`期望 rgb(r g b / a) 或 #rrggbb，实际是 ${JSON.stringify(value)}`);
   }
   return {
-    rgb: [Number(m[1]), Number(m[2]), Number(m[3])],
-    a: m[4] === undefined ? 1 : Number(m[4]),
+    rgb: [Number(m.groups?.r ?? 0), Number(m.groups?.g ?? 0), Number(m.groups?.b ?? 0)],
+    a: m.groups?.alpha === undefined ? 1 : Number(m.groups?.alpha),
   };
 }
 
 /** WCAG 相对亮度（0~1）。 */
 function luminance([r, g, b]: [number, number, number]): number {
-  /* SAFETY: 类型断言已复核 */
-  const lin = [r, g, b].map((c) => {
+  const lin = (c: number): number => {
     const s = c / 255;
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  }) as [number, number, number];
-  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  };
+  /* 逐分量显式写出（B5 清账）：不再对 map 的返回断言成三元组。 */
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 
 /** WCAG 对比度，1:1 ~ 21:1。 */
@@ -64,11 +54,11 @@ function over(
   src: { a: number; rgb: [number, number, number] },
   bg: [number, number, number],
 ): [number, number, number] {
-  /* SAFETY: 类型断言已复核 */
-  return src.rgb.map((c, i) => Math.round(c * src.a + bg[i]! * (1 - src.a))) as [
-    number,
-    number,
-    number,
+  /* 逐分量显式写出（B5 清账）：不再对 map 的返回断言成三元组。 */
+  return [
+    Math.round(src.rgb[0] * src.a + bg[0] * (1 - src.a)),
+    Math.round(src.rgb[1] * src.a + bg[1] * (1 - src.a)),
+    Math.round(src.rgb[2] * src.a + bg[2] * (1 - src.a)),
   ];
 }
 

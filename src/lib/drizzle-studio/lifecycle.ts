@@ -223,25 +223,30 @@ export async function ensureDrizzleStudioUp(
     child.stderr?.on("data", outSink);
     /* 会话起点：存活时长基于它算。 */
     const spawnedAt = Date.now();
-    child.on(
-      "exit",
-      createChildExitHandler({
-        subject: "Drizzle Studio",
-        appendRuntimeLog,
-        log: note,
-        clearChild: () => {
-          if (st.child === child) {
-            st.child = undefined;
-          }
-        },
-        context: () => ({
-          pid: child.pid ?? null,
-          uptimeMs: Date.now() - spawnedAt,
-          stopRequested: st.stopRequested === true,
-          mode: "studio",
-        }),
+    const onChildGone = createChildExitHandler({
+      subject: "Drizzle Studio",
+      appendRuntimeLog,
+      log: note,
+      clearChild: () => {
+        if (st.child === child) {
+          st.child = undefined;
+        }
+      },
+      context: () => ({
+        pid: child.pid ?? null,
+        uptimeMs: Date.now() - spawnedAt,
+        stopRequested: st.stopRequested === true,
+        mode: "studio",
       }),
-    );
+    });
+    child.on("exit", onChildGone);
+    /* 异步 spawn 失败走 error 事件（exit 不发）——不接住就是 uncaughtException，
+     * 且等待循环会空转到 deadline。按「进程没了」同形收口（ISSUE #4202；
+     * 这里的可执行文件是 process.execPath、恒存在，风险低一档，但缺口是同一族）。 */
+    child.on("error", (err: Error) => {
+      appendRuntimeLog(`[spawn] Drizzle Studio 子进程启动失败：${err.message}`);
+      onChildGone(null, null);
+    });
 
     const r = await waitForComfyReady({
       deadline: Date.now() + timeoutMs,
@@ -249,16 +254,19 @@ export async function ensureDrizzleStudioUp(
       readyDetail: `Drizzle Studio 已就绪（端口 ${port}）`,
       intervalMs: 500,
       probe: async () => ((await probeDrizzleStudio(port)) ? `127.0.0.1:${port}` : null),
-      isDead: async () => {
+      isDead: () => {
         if (st.child === child) {
-          return null;
+          return Promise.resolve(null);
         }
-        const modErr = /Cannot find module '([^']+)'|Cannot find package '([^']+)'/.exec(
-          ledger.lines.join("\n"),
+        const modErr =
+          /Cannot find module '(?<moduleName>[^']+)'|Cannot find package '(?<packageName>[^']+)'/.exec(
+            ledger.lines.join("\n"),
+          );
+        return Promise.resolve(
+          modErr
+            ? `Drizzle Studio 启动后立即退出：缺少依赖（${modErr.groups?.moduleName ?? modErr.groups?.packageName}）——请确认已安装 drizzle-kit（pnpm install），详见 log/services/drizzle-studio-runtime.log`
+            : "Drizzle Studio 进程启动后立即退出，详见 log/services/drizzle-studio-runtime.log",
         );
-        return modErr
-          ? `Drizzle Studio 启动后立即退出：缺少依赖（${modErr[1] ?? modErr[2]}）——请确认已安装 drizzle-kit（pnpm install），详见 log/services/drizzle-studio-runtime.log`
-          : "Drizzle Studio 进程启动后立即退出，详见 log/services/drizzle-studio-runtime.log";
       },
     });
     return { ok: r.ok, port, detail: r.detail };
@@ -300,7 +308,9 @@ export async function stopDrizzleStudio(
   logger.info(`[drizzle-studio] 回收进程树：${kill.via}`);
   st.child = undefined;
   for (let i = 0; i < DRIZZLE_STOP_PROBE.maxAttempts; i++) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(DRIZZLE_STOP_PROBE.baseMs);
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     if (!(await probeDrizzleStudio(port))) {
       return { ok: true, detail: "Drizzle Studio 已关闭" };
     }

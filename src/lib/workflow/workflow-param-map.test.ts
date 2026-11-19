@@ -7,10 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  parseWorkflowParamMap,
-  workflowParamMapInputSchema,
-} from "./workflow-param-map";
+import { parseWorkflowParamMap, workflowParamMapInputSchema } from "./workflow-param-map";
 
 describe("parseWorkflowParamMap 读边界", () => {
   it("按模式归拢的三层结构原样收下", () => {

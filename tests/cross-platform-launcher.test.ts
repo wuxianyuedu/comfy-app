@@ -1,20 +1,7 @@
 /**
- * 回归护栏：**跨平台启动编排**（ISSUE #489，「启动全链路 + Tauri v2 壳改跨平台」）。
- *
- * 背景（实测）：全项目 11 个 scripts 下的 .ps1 + 29 个 tools 下的 .ps1，唯一的
- * 启动编排者 `dev-launcher.ps1`（1324 行 / 19 处 Windows 专属：`taskkill` /
- * `Get-CimInstance` / Job Object / `cmd.exe`）在 Linux / macOS 上不可用，而仓库里
- * **没有任何等价入口**。也就是说「跨平台」这一侧此前不是漏了几个平台判断，
- * 而是根本没有实现。
- *
- * 本用例钉死三条契约（都做了反向验证：还原旧实现，对应用例必失败）：
- *   1. `dev-launcher.mjs` 起的 dev server **自建进程组**，收尾能整组回收 ——
- *      不建组时 `killProcessTree` 只能单杀 leader，其下的 node/pnpm 残留成孤儿
- *      （AGENTS 硬规则 3 禁止的形态，且这正是上一轮 PR #500 修过又被真实进程树
- *      推翻的地方）。
- *   2. 会话锚点（PID + 心跳）能分辨「上一次的启动器还活着」与「它已死、留下孤儿」，
- *      且**不由 PID 是否存在单独决定**（PID 会被系统复用）。
- *   3. `.next` 缓存指纹只覆盖构建配置；指纹变化才清缓存（源码改动交给 HMR）。
+ * 回归护栏：**跨平台启动编排**（ISSUE #489）。此前 `dev-launcher.ps1`（1324 行 / 19 处 Windows 专属）
+ * 在 Linux/macOS 不可用且无等价入口。钉三条：① 自建进程组、收尾整组回收（否则孤儿残留，AGENTS
+ * 硬规则 3）；② 会话锚点 = PID + 心跳，不由 PID 单独决定；③ `.next` 指纹只覆盖构建配置（源码交给 HMR）。
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -34,31 +21,23 @@ import {
 } from "../scripts/dev-launcher.mjs";
 import {
   HEARTBEAT_STALE_MS,
+  claimSession,
   clearSession,
   isSessionOwnerAlive,
   readSession,
   touchHeartbeat,
   writeSession,
 } from "../scripts/dev-launcher-session.mjs";
+import { runStartupGates } from "../scripts/launcher-core/startup-gates.mjs";
+import { assertAbsoluteRoot, resolveSpawnTarget } from "../scripts/launcher-core/shell.mjs";
 import { killProcessTree } from "../src/lib/process/kill-process-tree";
 import { stripComments as stripJs } from "./helpers/strip-comments";
 import { launcherChainSource } from "./helpers/launcher-source";
 
 /**
- * 读一份源文件并**剥掉注释**（唯一实现 `./helpers/strip-comments`，`{trailing:true}` 连行尾一起去）。
- *
- * 为什么这一族的反向断言必须先剥：`scripts/launcher-core/shell.mjs` 里就有一句
- * 「写着 `process.platform === "win32" ? "pnpm.cmd" : "pnpm"`。那条判据在 Windows 上…」——
- * 拿原文去判「编排器不许自己摸 platform」，就会红在**正在解释为什么不该这么写**的那行文档上。
- *
- * 为什么不用这份文件里 `describe` 内那一份本地 `stripComments`（`scripts 里的 src/lib 路径字面量`
- * 那一组里）：那份是台账登记的另一型（`tests/strip-comments-single-source.test.ts`），
- * 它只服务那一组的说明符扫描，换语言面不同 —— 引它的名字会构成第二份定义。
- *
- * ⚠️ `#` 注释语法的两份接收者（`scripts/dev-launcher.ps1` 与 `src-tauri/Cargo.toml`）
- * 走 `{ syntax: "hash" }` 这一档（ISSUE #2934）：它们用 `#` 开注释，JS 档剥不动
- * （实测前后字符数完全相同 2898 → 2898）。那一格自己的口径写着「判据是『不再调用』
- * 而不是『不再提及』」—— 注释里说清「以前用过什么、现在为什么不用」是有价值的。
+ * 读源码并**剥掉注释**（唯一实现 `./helpers/strip-comments`，`{trailing:true}`）。必须先剥：`shell.mjs`
+ * 里有一句写着 `process.platform === "win32" ? "pnpm.cmd" : "pnpm"`，拿原文判「不许摸 platform」会红在
+ * 解释为什么不该这么写的文档上。`#` 语法的接收者（.ps1 / Cargo.toml）走 `{ syntax: "hash" }`（#2934）判「不再调用」非「不再提及」。
  */
 const readCode = (rel: string, syntax: "js" | "hash" = "js"): string =>
   stripJs(fs.readFileSync(path.join(process.cwd(), rel), "utf8"), { syntax, trailing: true });
@@ -71,13 +50,9 @@ function countMarkedProcesses(marker: string): number {
 }
 
 /**
- * 等一个条件成立 —— 用 `expect.poll` 而不是手搓 `while + await setTimeout`（规范 §11.14）。
- *
- * 手搓版本失败时只留一个 `false`、拿不到现场，而这里等的是**真进程动作**
- * （`spawn` 落地、孙进程被 taskkill 收走）：失败时最该看到的就是当时还剩下
- * 哪几个 PID，那正是 `expect.poll` 会打出来的实际值。判据是「等的是一个条件」，
- * 所以两边都读同一个 `check`：先轮询等它成立，再把**最终读数**交回调用点
- * （调用点自己仍用 `toBe(true)` 判结论，报错文案里保留各自的语义）。
+ * 等一个条件成立 —— 用 `expect.poll` 而不是手搓 `while + await setTimeout`（§11.14）。手搓版本失败只留
+ * `false`、拿不到现场，而这里等的是真进程动作（spawn 落地、孙进程被收走），最该看到的是当时还剩哪几个
+ * PID —— 那正是 `expect.poll` 会打出来的实际值；两边读同一个 `check`，调用点仍自己 `toBe(true)` 判结论。
  */
 async function waitUntil(check: () => boolean, timeoutMs = 5000): Promise<boolean> {
   await expect.poll(check, { timeout: timeoutMs, interval: 100 }).toBe(true);
@@ -197,6 +172,110 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     expect(readSession(root)).toBeNull();
   });
 
+  // ── 编排器并发互斥（ISSUE #4345）────────────────────────────────────────
+  // 此前编排器无互斥：两个 launcher 同时启动都会通过回收/端口检查并各自 spawn
+  // dev server，后到者的 Next 静默顺延 +1、就绪探测却打原端口 —— 「就绪」结论
+  // 被先到者的服务冒领。修法 = 会话锚点的原子占坑（wx 独占创建），先到者得。
+
+  /** 起服务前的全路径预检桥段夹具：门禁全部空转，会话四件套用**真实现**（对 tmp 根落盘）。 */
+  function gatesCtx(root: string) {
+    return {
+      log: () => {
+        /* 静音：本组只判占坑判决，不判日志文案。 */
+      },
+      root,
+      status: () => {
+        /* 静音：进度快照写侧不在本组断言面。 */
+      },
+      reapStaleSession: () => Promise.resolve(null),
+      claimSession,
+      isSessionOwnerAlive,
+      clearSession,
+      readSession,
+      checkEnvFile: () => null,
+      envInitHint: () => null,
+      runToolchainGate: () => null,
+      syncDependencies: () => Promise.resolve(null),
+      applyPendingRestoreAtBoot: () => ({ status: "nothing-to-do" }) as const,
+      resolveAppPort: () => 3311,
+    };
+  }
+
+  it("claimSession 原子占坑：先到者占到、后到者拿到 exists、清坑后可再占（ISSUE #4345）", () => {
+    const root = makeTmp();
+    const session = {
+      launcher_pid: process.pid,
+      child_pids: [] as Array<number>,
+      app_port: 3311,
+      mode: "web",
+      started_at: new Date().toISOString(),
+    };
+    expect(claimSession(root, session)).toBe("claimed");
+    // 占坑即带新鲜心跳：后到者据此判「上一位还活着」。
+    expect(isSessionOwnerAlive(root)).toBe(true);
+
+    // 并发的第二份编排占坑：原子创建失败，且**不覆盖**先到者的会话。
+    expect(claimSession(root, { ...session, launcher_pid: 0x7f_ff_ff_fe })).toBe("exists");
+    expect(readSession(root)?.launcher_pid).toBe(process.pid);
+
+    // 清坑后可再占 —— 对应「锚点在但上一位已死」的重占路径。
+    clearSession(root);
+    expect(claimSession(root, { ...session, launcher_pid: 0x7f_ff_ff_fe })).toBe("claimed");
+    expect(readSession(root)?.launcher_pid).toBe(0x7f_ff_ff_fe);
+  });
+
+  it("编排器互斥：上一位还活着时后到者报「已有实例在运行」并退出（ISSUE #4345）", async () => {
+    const root = makeTmp();
+    writeSession(root, {
+      launcher_pid: process.pid, // 测试进程本身活着 ⇒ 会话判活为真
+      child_pids: [],
+      app_port: 3311,
+      mode: "web",
+      started_at: new Date().toISOString(),
+    });
+    touchHeartbeat(root);
+
+    const gated = await runStartupGates(gatesCtx(root), { portOrNull: null, mode: "web" });
+    expect(gated.ok).toBe(false);
+    const message = gated.ok ? "" : gated.error.message;
+    expect(message).toContain("已有编排器实例在运行");
+    expect(message).toContain(`PID ${process.pid}`);
+    expect(message).toContain("ISSUE #4345");
+    // 冲突路径不清上一位的锚点（它还活着，锚点是它的回收线索）。
+    expect(readSession(root)?.launcher_pid).toBe(process.pid);
+  });
+
+  it("编排器互斥：锚点在但上一位已死时清坑重占、本次照常通过（ISSUE #4345）", async () => {
+    const root = makeTmp();
+    writeSession(root, {
+      launcher_pid: 0x7f_ff_ff_fe, // 不存在的 PID + 陈旧心跳 = 上一位已死
+      child_pids: [],
+      app_port: 3311,
+      mode: "web",
+      started_at: new Date().toISOString(),
+    });
+    touchHeartbeat(root, Date.now() - HEARTBEAT_STALE_MS - 1000);
+
+    const gated = await runStartupGates(gatesCtx(root), { portOrNull: null, mode: "web" });
+    expect(gated.ok).toBe(true);
+    const port = gated.ok ? gated.port : null;
+    expect(port).toBe(3311);
+    // 坑换成本次编排者的（child_pids 待起服务后由 writeSession 补齐）。
+    expect(readSession(root)?.launcher_pid).toBe(process.pid);
+    expect(readSession(root)?.app_port).toBe(3311);
+  });
+
+  it("编排器互斥：无锚点时占坑即通过，会话带解析出的端口与模式（ISSUE #4345）", async () => {
+    const root = makeTmp();
+    const gated = await runStartupGates(gatesCtx(root), { portOrNull: null, mode: "prebuilt" });
+    expect(gated.ok).toBe(true);
+    const session = readSession(root);
+    expect(session?.launcher_pid).toBe(process.pid);
+    expect(session?.app_port).toBe(3311);
+    expect(session?.mode).toBe("prebuilt");
+    expect(session?.child_pids).toEqual([]);
+  });
+
   // 会话锚点是「上一次没走优雅收尾」的必然残留：壳收编排器走的是
   // `Child.kill()`（TerminateProcess），编排器没有清理机会。此时它的子树早已被
   // 插件 kill / Job Object 收干净 —— 回收这一步只该清锚点，不该报「回收了 PID …」
@@ -220,6 +299,49 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   // WARN 只在这种情况下出现）。
   it("回收上一次的残留：还有活着的子树才真回收并回报", async () => {
     const root = makeTmp();
+    // #4330：锚点里的 PID 要通过「命令行落在本检出根内」的归属校验才会被回收。
+    // 把长命脚本写进会话根目录、以绝对路径拉起，模拟编排器拉起的真孤儿
+    // （spawnDevServer / spawnSchemaSync 都用检出内绝对路径做入参）。
+    const keepalive = path.join(root, "keepalive.cjs");
+    fs.writeFileSync(keepalive, "setTimeout(() => {}, 60000)", "utf8");
+    const child = spawnInGroup({
+      command: process.execPath,
+      args: [keepalive],
+      // cwd 不落在会话根：归属判据看的是**命令行里的脚本绝对路径**；且 Windows
+      // 上进程的 cwd 句柄会锁住目录，afterEach 的 rmSync 会 EPERM。
+      cwd: process.cwd(),
+    });
+    const pid = child.pid;
+    expect(pid).toBeGreaterThan(0);
+    writeSession(root, {
+      launcher_pid: 0x7f_ff_ff_fe,
+      child_pids: [pid!],
+      app_port: 3311,
+      mode: "web",
+      started_at: new Date().toISOString(),
+    });
+    touchHeartbeat(root, Date.now() - HEARTBEAT_STALE_MS - 1000);
+
+    expect(await reapStaleSession(root)).toEqual([pid]);
+    expect(readSession(root)).toBeNull();
+    expect(
+      await waitUntil(() => {
+        try {
+          process.kill(pid!, 0);
+          return false;
+        } catch {
+          return true;
+        }
+      }, 8000),
+    ).toBe(true);
+  }, 20_000);
+
+  // #4330：锚点里的 PID 被系统复用给无关进程（命令行不含检出根）时**不得强杀**
+  // ——保守跳过、锚点保留，把「是不是真孤儿」留给下一次启动再验。
+  it("回收上一次的残留：PID 验不出本检出归属时不误杀、保留锚点", async () => {
+    const root = makeTmp();
+    // 命令行里没有会话根路径的活进程（模拟 PID 已被无关进程复用）。
+    // cwd 留在仓库根：Windows 上进程 cwd 句柄会锁住目录，别挂在临时目录上。
     const child = spawnInGroup({
       command: process.execPath,
       args: ["-e", "setTimeout(() => {}, 60000)"],
@@ -236,8 +358,18 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     });
     touchHeartbeat(root, Date.now() - HEARTBEAT_STALE_MS - 1000);
 
-    expect(await reapStaleSession(root)).toEqual([pid]);
-    expect(readSession(root)).toBeNull();
+    expect(await reapStaleSession(root)).toBeNull();
+    // 锚点保留：下次启动还要拿它再验一次，不能把回收线索一起丢掉。
+    expect(readSession(root)).not.toBeNull();
+    // 目标进程还活着（没有被误杀）。
+    expect(() => process.kill(pid!, 0)).not.toThrow();
+
+    // 清理：别把 60 秒的长命进程留给测试机。
+    try {
+      process.kill(pid!, "SIGKILL");
+    } catch {
+      /* 已退出则忽略 */
+    }
     expect(
       await waitUntil(() => {
         try {
@@ -329,7 +461,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
       expect(
         fs.readFileSync(path.join(capsDir, name), "utf8"),
         `capabilities/${name}：不许把执行能力透给前端`,
-      ).not.toMatch(/shell:(allow-execute|allow-spawn)/);
+      ).not.toMatch(/shell:(?:allow-execute|allow-spawn)/);
     }
   });
 
@@ -399,7 +531,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     const lib = readCode("src-tauri/src/lib.rs");
     // kill_sidecar 除了插件的 kill()，还要补一刀统一回收：Node 之下的
     // next-server / turbopack worker 才是真正会残留成孤儿的那几层。
-    expect(lib).toMatch(/fn kill_sidecar\(project_root: &str\)/);
+    expect(lib).toMatch(/fn kill_sidecar\(project_root: &str, deadline: std::time::Instant\)/);
     expect(lib).toContain("reap-process.mjs");
     expect(lib).not.toMatch(/Command::new\("taskkill"\)/);
   });
@@ -415,16 +547,9 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 });
 
 /**
- * Phase 2-C：`scripts/executor-host.mjs` 作为 launcher 的受管子进程。
- *
- * 真进程级验证在 `tests/executor-host.test.ts`（Phase 2-B 已合入）——那三条断
- * 进程能起来、能收 SIGTERM、日志落对地方。这一族**只测接线**：dev-launcher 侧
- * 的 spawnExecutorHost 必须走同一份 `spawnInGroup`（否则 POSIX 上无进程组、
- * reapAll 只能单杀 leader 留孤儿，正是 AGENTS 硬规则 3 禁止的形态）、必须把
- * child 塞进 `spawned` 数组（否则 launcher 收尾时 host 变孤儿）、必须受
- * `COMFY_EXECUTOR` env 门控且**默认 inline**（Phase 2 是灰度起手，不接管流量）。
- * 另加一条：`standalone-private-inputs.mjs` 的 `RUNTIME_SCRIPTS` 必须含
- * `executor-host.mjs`——桌面包用户改 `.env` 试 host 模式时，脚本得随包带出去。
+ * Phase 2-C：`scripts/executor-host.mjs` 作为 launcher 的受管子进程。真进程级验证在 `tests/executor-host.test.ts`
+ * （2-B）；这一族**只测接线**：必须走同一份 `spawnInGroup`（否则无进程组、reapAll 只能单杀 leader 留孤儿，
+ * AGENTS 规则 3）、child 必须进 `spawned`、受 `COMFY_EXECUTOR` 门控且默认 inline；`RUNTIME_SCRIPTS` 须含它。
  */
 describe("Phase 2-C：executor-host 接入 launcher", () => {
   /* 编排器已按职责拆进 `launcher-core/`（ISSUE #1811 / R5 超限文件），下面几条
@@ -486,12 +611,9 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
      * spawned」，与转发层无关。 */
     const start = launcherSrc.indexOf("export function spawnExecutorHost(ctx)");
     expect(start, "downstream.mjs 里没找到实现").toBeGreaterThan(-1);
-    /* 终点必须先验存在：`indexOf("\n}", start)` 取不到给 -1，`slice(start, -1)` 会给出
-     * "从实现起点到倒数第二个字符"—— 那比整个函数宽得多，下面两条 `toContain` 仍然成立，
-     * 于是判据从"这个包装器记了 child"漂成"后面某处记了 child"。（**已知判不到的那一形**：
-     * 收尾被改成缩进、同时 push 搬到后面的函数里 —— 我拿字符串级模拟试过，
-     * "区间里只许有一个顶层 export function"那种廉价边界断言在那一形下不红，
-     * 所以不留它当装饰；要覆盖它得做配对花括号或 AST 作用域，见 #2660 的批 4 评论。） */
+    /* 终点必须先验存在：`indexOf("\n}", start)` 取不到给 -1，`slice(start, -1)` 会给出「从实现起点到
+       倒数第二个字符」—— 比整个函数宽得多，两条 `toContain` 仍成立，判据从「这个包装器记了 child」漂成
+       「后面某处记了」。已知判不到的一形：收尾被缩进且 push 搬到后面的函数（要覆盖得配对花括号或 AST，#2660）。 */
     const end = launcherSrc.indexOf("\n}", start);
     expect(
       end,
@@ -539,23 +661,14 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
 });
 
 /**
- * 目录迁移的静默失效面：`scripts/**` 用**运行时字符串**加载 `src/lib` 的 TS 模块
- * （纯 Node 靠类型剥离加载，因此路径必须带 `.ts` 后缀），这种说明符不参与 `tsc` /
- * `eslint` 的静态解析，模块换子域时它不会红，只在执行到那一行时抛
- * ERR_MODULE_NOT_FOUND。实测代价：`kill-process-tree` 从 `src/lib/` 迁到
- * `src/lib/process/` 后，回收进程树这条路径整体失效 —— 编排器在「回收上一次残留」这
- * 一步就崩，于是双击起不来、孤儿进程再没人收（它们占着端口，也把产物目录锁住），
- * 而日志里只有一句与真因无关的模块找不到。
- *
- * 判据取**路径字面量本身**（不看 import 语法，字符串常量中转也照样管）：
- * `scripts/` 下出现的每条相对 `../src/lib/` 的 `.ts` 路径都必须真实存在。
- * 拼字符串的形态（把路径拆成数组再 `join`）搜不到 —— 那种写法已在两处说明符的注释里
- * 明确禁止，代之以常量中转（它是字面量，tsc 也不误报 TS5097）。
+ * 目录迁移的静默失效面：`scripts/**` 用**运行时字符串**加载 `src/lib` 的 TS 模块（路径必须带 `.ts`，
+ * 不进 tsc / eslint 静态解析 ⇒ 换子域不红、执行到才抛 ERR_MODULE_NOT_FOUND（实测 `kill-process-tree`
+ * 迁到 `src/lib/process/` 后回收整条失效、双击起不来）。判**路径字面量**：`scripts/` 下每条 `../src/lib/*.ts` 都必须存在。
  */
 describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静默失效）", () => {
   const ROOT = process.cwd();
   /** 相对形态 + `.ts` 后缀：这两点都是在纯 Node 下真的能加载起来的前提。 */
-  const SPEC_LITERAL_RE = /["'`](\.\.\/src\/lib\/[^"'`\n]+\.ts)["'`]/g;
+  const SPEC_LITERAL_RE = /["'`](?<specifier>\.\.\/src\/lib\/[^"'`\n]+\.ts)["'`]/g;
 
   /** 剥掉块注释与整行 `//` 注释：注释里解释「为什么用动态 import」不该被当成说明符。 */
   function stripComments(source: string): string {
@@ -568,7 +681,7 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         out.push(...scriptFiles(full));
-      } else if (/\.(mjs|cjs|ts)$/.test(entry.name)) {
+      } else if (/\.(?:mjs|cjs|ts)$/.test(entry.name)) {
         out.push(full);
       }
     }
@@ -582,7 +695,7 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");
       const source = stripComments(fs.readFileSync(abs, "utf8"));
       for (const match of source.matchAll(SPEC_LITERAL_RE)) {
-        const specifier = match[1];
+        const specifier = match.groups?.specifier;
         if (specifier === undefined || specifier === "") {
           continue;
         }
@@ -607,7 +720,7 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("2xx → ready", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: true, status: 200 })),
+      vi.fn(() => ({ ok: true, status: 200 })),
     );
     expect(await classifyProbe({ port: 3100 })).toBe("ready");
   });
@@ -615,7 +728,7 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("404 → route-404（服务活着、路由没进编译图：陈旧路由表的确切签名）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: false, status: 404 })),
+      vi.fn(() => ({ ok: false, status: 404 })),
     );
     expect(await classifyProbe({ port: 3100 })).toBe("route-404");
   });
@@ -623,7 +736,7 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("其它非 2xx（如 500 真故障）→ not-up，绝不误判成路由失效去清缓存", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: false, status: 500 })),
+      vi.fn(() => ({ ok: false, status: 500 })),
     );
     expect(await classifyProbe({ port: 3100 })).toBe("not-up");
   });
@@ -631,10 +744,10 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("连接上但库是空的（503 + db=empty）→ schema-not-ready 单独一档", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
+      vi.fn(() => ({
         ok: false,
         status: 503,
-        json: async () => ({
+        json: () => ({
           status: "error",
           db: "empty",
           hint: "数据库表还没建：执行 pnpm db:push",
@@ -647,10 +760,10 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("503 但 db=down（库真起不来）→ not-up：不许把真故障说成「表还没建」", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
+      vi.fn(() => ({
         ok: false,
         status: 503,
-        json: async () => ({ status: "error", db: "down" }),
+        json: () => ({ status: "error", db: "down" }),
       })),
     );
     expect(await classifyProbe({ port: 3100 })).toBe("not-up");
@@ -659,10 +772,10 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("503 响应体读不出 JSON → not-up（判不出就不下结论）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
+      vi.fn(() => ({
         ok: false,
         status: 503,
-        json: async () => {
+        json: () => {
           throw new Error("Unexpected token < in JSON");
         },
       })),
@@ -673,7 +786,7 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
   it("连不上（fetch 抛错）→ not-up", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => {
+      vi.fn(() => {
         throw new Error("ECONNREFUSED");
       }),
     );
@@ -782,5 +895,48 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
     fs.writeFileSync(path.join(panelDir, "nextjs-stdout-1.log"), "不是转录", "utf8");
     expect(latestPanelTranscript(panelDir)).toContain("nextjs-panel-2-2.log");
     expect(latestPanelTranscript(path.join(panelDir, "不存在"))).toBeNull();
+  });
+});
+
+/**
+ * ISSUE #3327：`spawn` 的参数数组只许放写死的相对入口，变量部分（项目根 / 载荷根）
+ * 留在 `cwd`，根与入口都先过判据。这里钉判据本身：合法值逐字同值，非法值显式拒绝。
+ */
+describe("spawn 入口判据（ISSUE #3327）", () => {
+  const root = path.resolve(import.meta.dirname, "..");
+
+  it("合法入口：落点与 path.join 逐字同值（正常路径行为不变）", () => {
+    expect(resolveSpawnTarget(root, "server.js", "server")).toBe(path.join(root, "server.js"));
+    expect(resolveSpawnTarget(root, "scripts/executor-host.mjs", "host")).toBe(
+      path.join(root, "scripts", "executor-host.mjs"),
+    );
+  });
+
+  /** 「形状非法」的入口样本：每一条都必须在判据第一跳被拒（不靠后续 path 归一化兜底）。 */
+  const rejectedEntries: Array<[string, string]> = [
+    ["父级跳转", "../server.js"],
+    ["嵌在中间", "scripts/../../server.js"],
+    ["反斜杠跳转", String.raw`scripts\..\..\server.js`],
+    ["POSIX 绝对路径", "/etc/passwd"],
+    ["Windows 盘符", String.raw`C:\Windows\System32\cmd.exe`],
+    ["空值", ""],
+    ["两端空白", " server.js "],
+    ["当前目录段", "./server.js"],
+    ["空段（尾部斜杠）", "scripts/executor-host.mjs/"],
+    ["只有父级", ".."],
+  ];
+
+  it.for(rejectedEntries)("拒绝 %s：%j", ([label, entry]) => {
+    expect(() => resolveSpawnTarget(root, entry, "入口"), label).toThrow();
+  });
+
+  it("根必须是规范化的绝对路径（不静默归一化）", () => {
+    expect(() => assertAbsoluteRoot("relative-root", "根")).toThrow(/绝对路径/u);
+    expect(() => assertAbsoluteRoot(`${root}${path.sep}.`, "根")).toThrow(/规范化/u);
+    expect(assertAbsoluteRoot(root, "根")).toBe(root);
+  });
+
+  it("根非法时，入口判据也不放行", () => {
+    expect(() => resolveSpawnTarget("relative-root", "server.js", "入口")).toThrow(/绝对路径/u);
   });
 });

@@ -1,15 +1,7 @@
-/**
- * 「分支落地读数」的判据自测（规范 §13.6.5，ISSUE #2427）。
- *
- * 这一件存在的理由是：**它要防的那个错法我自己犯过** —— 用
- * `git diff origin/master...<分支>` 判「合了没」，而 squash 拓扑下它恒非空。
- * 所以这里钉的不是「输出好不好看」，而是三条会让人误删的形状：
- *   ① 结论只有三种，且「没取到」与「没合并」**必须长得不一样**；
- *   ② 匹配要按平台的 `head.ref = "refs/heads/<名>"` 形状 —— 裸名匹配会把九条已合并
- *      分支全判成「没找到 PR」；
- *   ③ 这一趟**一次也不删**：任何写 ref 的命令都不许出现在 calls 里。
- * 另有一条主干排除（`resolveTrunk()` 给的是带远端前缀的 `origin/master`，
- * 与清单里的裸分支名不同形 —— 狗食这一跑抓到过）。
+/** 「分支落地读数」判据自测（规范 §13.6.5，ISSUE #2427）。防的错法：`git diff origin/master...<分支>` 在 squash
+ * 拓扑下恒非空，会被误判为「没合并」。钉三点：① 结论仅三种且「没取到」≠「没合并」；② 匹配按
+ * `head.ref = "refs/heads/<名>"`（裸名匹配会把九条已合并分支判成「没找到 PR」）；③ 一次也不删，任何写
+ * ref 的命令都不许出现在 calls 里。另加主干排除：`resolveTrunk()` 的 `origin/master` 与清单裸名不同形。
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -18,8 +10,8 @@ import {
   branchLandingRows,
   fetchPullsForBranches,
   readListHasMore,
-} from "../scripts/ship-branches.mjs";
-import { main } from "../scripts/ship.mjs";
+} from "../scripts/ship/ship-branches.mjs";
+import { main } from "../scripts/ship/ship.mjs";
 
 const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
 
@@ -146,9 +138,7 @@ describe("ISSUE #3058：取数窗口 —— 终止看平台形状，8 页硬顶�
   });
   /** 一页 100 条满页（编号从 start 往下数）。 */
   const fullPage = (start: number) =>
-    Array.from({ length: BRANCH_PULL_PAGE_SIZE }, (_, i) =>
-      pull(start - i, `b${start - i}`, true),
-    );
+    Array.from({ length: BRANCH_PULL_PAGE_SIZE }, (_, i) => pull(start - i, `b${start - i}`, true));
   /** 按 `--page` 参数给应答的假执行者（没登记的页给空页）。 */
   const pagedRun = (pages: Record<number, unknown>, counter?: { n: number }) => {
     return (_cmd: string, args: Array<string>): FakeResult => {

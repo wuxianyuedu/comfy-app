@@ -106,11 +106,10 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
                 /* SAFETY: 类型断言已复核 */
                 labels={PROJECT_TYPE_LABELS as Record<string, string>}
                 onChange={(value) => {
-                  onMetaChange({
-                    ...meta,
-                    /* SAFETY: 类型断言已复核 */
-                    type: value as ProjectType,
-                  });
+                  const type = PROJECT_TYPES.find((item) => item === value);
+                  if (type !== undefined) {
+                    onMetaChange({ ...meta, type });
+                  }
                 }}
                 options={PROJECT_TYPES}
                 placeholder="选择类型"

@@ -11,6 +11,8 @@
  * 别各自 `Object.keys(...).length > 0` 一遍。
  */
 
+import { isPlainRecord } from "~/lib/is-record";
+
 /** 一条工作流模板里与「可执行形态」相关的列（其余列无关）。 */
 export type ExecutionShapes = {
   /** 工作流(RAW)格式列（可空）。 */
@@ -22,11 +24,10 @@ export type ExecutionShapes = {
  *  `nodes` 是 RAW 形态的成立条件：litegraph 存盘一定有它，空数组等于没有节点，
  *  拿去 comfy-cli 只会得到一份空图。 */
 export function hasRawContent(rawJson: unknown): boolean {
-  if (typeof rawJson !== "object" || rawJson === null || Array.isArray(rawJson)) {
+  if (!isPlainRecord(rawJson)) {
     return false;
   }
-  /* SAFETY: 类型断言已复核 */
-  const nodes = (rawJson as Record<string, unknown>).nodes;
+  const nodes = rawJson.nodes;
   return Array.isArray(nodes) && nodes.length > 0;
 }
 

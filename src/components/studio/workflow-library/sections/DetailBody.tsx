@@ -14,25 +14,30 @@ import type { WorkflowRow } from "../workflow-library-config";
 import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
 import { ErrorBoundary } from "~/components/ui/error-boundary";
 import { useLazyChunkFallback } from "~/components/ui/use-lazy-chunk-fallback";
+import { PageLoading } from "~/components/ui/page-loading";
 import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { WorkshopEncapsulationPanel } from "./WorkshopEncapsulationPanel";
 
-/* ── 两个页签的重型内容各自懒加载（规范 §12.19 / 02 §2.9） ─────────────────
- * 本面板在「工作流库」视图里常驻，而它下面挂着两件重物：
- *   · 画布预览 → `@xyflow/react`（整个画布引擎）；
- *   · 源文件页签 → `react18-json-view`。
- * 两者都是**按页签条件渲染**的，此前却是静态 import —— 于是「打开工作流库、
- * 只看一眼列表」也要把画布引擎和 JSON 树渲染器拖进静态图，再顺着
- * `components/studio/index.ts` 一路到入口。实测链见
- * `scripts/check-barrel-heavy-deps.cjs` 的报告。
- *
- * 换成 `React.lazy` 之后，模块只在**切到对应页签**时才下载。`key=workflow.id`
- * 那两处重建语义不变（懒加载组件同样按 key 重挂）。 */
+/* ── 两个页签的重型内容各自懒加载（规范 §12.19 / 02 §2.9）──
+ * 本面板常驻，下面挂着画布引擎 `@xyflow/react` 与 `react18-json-view`；此前静态
+ * import，打开工作流库看一眼列表也要把两者拖进静态图（见 check-barrel-heavy-deps）。
+ * 改 `React.lazy` 后只在切到对应页签时下载；`key=workflow.id` 重建语义不变。 */
 const LazyWorkflowCanvasNodePreview = React.lazy(() =>
   import("../WorkflowCanvasNodePreview").then((m) => ({
     default: m.WorkflowCanvasNodePreview,
   })),
 );
+
+/** 页签内容区的局部加载态：懒分块还在下载 / 现编译时，spinner 只占这一块
+ *  面板，不冒泡到路由级边界（那里换来的整屏加载会把侧栏一起顶掉 —— 不允许）。
+ *  导出给 `WorkflowLibraryDetailView` 的 IO 页签 Suspense 用：同一件事只写一份。 */
+export function TabContentLoading({ label }: { label: string }) {
+  return (
+    <div className="flex h-full min-h-40 items-center justify-center">
+      <PageLoading label={label} />
+    </div>
+  );
+}
 
 type DetailBodyProps = {
   /** **两个页签共用的当前模式**（详情层持有，见 `WorkflowLibraryDetailController`
@@ -92,16 +97,11 @@ export function DetailBody({
   return (
     <>
       {(tab === "canvas" || tab === "use") && (
-        /* 「编辑对外参数 / 实际使用」是同一份预览的两个视图模式（受控
-         * `viewMode`）：两个分支**必须渲染同一棵元素树**（同样的包裹层 +
-         * 同一个 `WorkflowCanvasNodePreview`，只有 `viewMode` 取值不同），
-         * 页签切换时 React 才会认成同一个实例 —— 表单值、运行态、结果图
-         * 因此都不丢（外层视图用常驻容器挂载本分支，见
-         * `WorkflowLibraryDetailView`）。
-         *
-         *  画布页签**吃满可用高度**（不再钉在 420px）：用户把详情面板看全屏时，
-         *  画布要一直铺到面板底部，下面不留一块面板底色（ISSUE #596）。高度链条
-         *  靠 flex 传下去 —— 外层的 `min-h-0 flex-1` 与本层的 `h-full` 缺一不可。 */
+        /* 「编辑对外参数 / 实际使用」是同一份预览的两个视图模式：两个分支**必须
+         * 渲染同一棵元素树**（同样包裹层 + `WorkflowCanvasNodePreview`，只差
+         * `viewMode`），页签切换时 React 才认成同一实例，表单值/运行态/结果图不丢
+         * （外层常驻容器见 `WorkflowLibraryDetailView`）。画布页签吃满可用高度
+         * （ISSUE #596），外层 `min-h-0 flex-1` 与本层 `h-full` 缺一不可。 */
         <div className="border-border bg-panel-deep flex h-full min-h-105 flex-col rounded-2xl border p-1">
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-ink-faint text-xs font-medium">
@@ -129,28 +129,34 @@ export function DetailBody({
               {/* 画布预览是懒加载的（下面挂着画布引擎）：dev server 重建后它的分块
                   可能已被换掉，`import()` 只剩 reject。没有这层边界时错误会冒到路由级
                   边界、把整个工作流库打成错误页。 */}
+              {/* Suspense 同理必须在**本地**：懒分块下载期间组件会 suspend，没有
+                  局部边界就会一路冒到路由级 fallback（app/loading.tsx），把侧栏 +
+                  列表 + 详情整屏顶成「加载中」（ISSUE #3800）。fallback 只占画布区，
+                  外层卡片框架立即出现，切换页签不闪整屏。 */}
               <ErrorBoundary fallback={chunkFallback}>
-                <LazyWorkflowCanvasNodePreview
-                  /* 生效模式取详情层那一份（两个页签共用）；`defaultMode` 仍传，
-                   * 作为「未切过时的初值」与卡片上的默认标记。 */
-                  defaultMode={activeMode ?? meta?.defaultMode}
-                  key={workflow.id}
-                  modes={meta?.modes}
-                  onModeChange={(code) => {
-                    meta?.onModeChange(code);
-                  }}
-                  onPatchParamMap={onPatchParamMap}
-                  onSeedModeChange={onSeedModeChange}
-                  paramMap={paramMap}
-                  taskType={workflow.taskType}
-                  usable={usable}
-                  /* 页签即视图模式：「实际使用」页签可生成、可看结果，
-                   * 「编辑对外参数」页签是参数落点编辑画布。 */
-                  viewMode={tab === "use" ? "use" : "edit"}
-                  workflowId={workflow.id}
-                  workflowIO={workflowIO}
-                  workflowName={workflow.name}
-                />
+                <React.Suspense fallback={<TabContentLoading label="加载画布预览…" />}>
+                  <LazyWorkflowCanvasNodePreview
+                    /* 生效模式取详情层那一份（两个页签共用）；`defaultMode` 仍传，
+                     * 作为「未切过时的初值」与卡片上的默认标记。 */
+                    defaultMode={activeMode ?? meta?.defaultMode}
+                    key={workflow.id}
+                    modes={meta?.modes}
+                    onModeChange={(code) => {
+                      meta?.onModeChange(code);
+                    }}
+                    onPatchParamMap={onPatchParamMap}
+                    onSeedModeChange={onSeedModeChange}
+                    paramMap={paramMap}
+                    taskType={workflow.taskType}
+                    usable={usable}
+                    /* 页签即视图模式：「实际使用」页签可生成、可看结果，
+                     * 「编辑对外参数」页签是参数落点编辑画布。 */
+                    viewMode={tab === "use" ? "use" : "edit"}
+                    workflowId={workflow.id}
+                    workflowIO={workflowIO}
+                    workflowName={workflow.name}
+                  />
+                </React.Suspense>
               </ErrorBoundary>
             </div>
           </div>
@@ -169,6 +175,7 @@ export function DetailBody({
            * （`metaEditor.modes`：缺省回退 [taskType]，兼容旧行）。 */
           modes={meta?.modes ?? []}
           onModeChange={onActiveModeChange}
+          onPatchParamMap={onPatchParamMap}
           paramMap={paramMap}
           workflowId={workflow.id}
           workflowIO={workflowIO}
@@ -181,8 +188,7 @@ export function DetailBody({
             <span className="text-ink-faint text-xs font-medium">工作流(RAW)格式原件</span>
           </div>
           <div className={`bg-canvas-deep ${EMBEDDED_SCROLL_MAX_HEIGHT} overflow-auto rounded-xl`}>
-            {/* oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined */}
-            {sourceData?.source == null ? (
+            {sourceData?.source === null || sourceData?.source === undefined ? (
               <p className="text-ink-fainter px-4 py-10 text-center text-xs">暂无源文件数据</p>
             ) : (
               <LazyJsonViewer

@@ -1,31 +1,7 @@
 /**
- * 「环境前提」那一步的判据（ISSUE #1959）。
- *
- * ## 它守的是哪一格
- *
- * 用户那一句诉求是「**别等到执行几十分钟后才发现环境安装不上**」。缺件那一半已经
- * 由 `工具链自证` / `Python 可用性` 在最便宜的位置答了（判据在
- * `tests/ci-toolchain-selfcheck.test.ts`）。**在，但版本不对**与**配置配错了**这两半
- * 此前没人答，而它们的红法恰好是「晚」：
- *
- *   · 解释器低于本仓下限（Python 3.10）时**没有任何一步会红** —— 门禁的 Python 侧
- *     以「探测不到」的名义退出四侧比对、那几条真跑的用例走 `env` 档跳过并登记，
- *     也就是「版本不对」与「装好了」在日志里**逐字同形**；
- *   · `.cnb.yml` 里写了 host 侧 PowerShell（5.1）认不了的语法（`?.` / `??`）时，
- *     它**不在解析期报错**，只在跑到那一段时整段炸 —— 实测红在 `Install dependencies`，
- *     而那时前面的预算已经花掉了。
- *
- * ## 两处判据都**不重写**（这一条比本文件判什么更要紧）
- *
- *   · 「解释器在哪」走 `ci-toolchain-python.mjs` 的 `findPython()`（与
- *     `Python 可用性` 同一份候选表、同一个探针 —— §12.18 不造第二轮子）；
- *   · 「`.cnb.yml` 有没有 host 认不了的语法」复用
- *     `tests/no-platform-ci-config.test.ts` 导出那一份 `ps7OnlySyntaxIn`。
- *
- * 但那一份是 `.ts`、本步跑在**任何依赖安装之前**（那时 `node_modules` 还没有），
- * 所以 `scripts/ci-env-probe.mjs` 里留了一份**文本副本** —— 与本仓既有的
- * `check-app-port-vectors.cjs` ⇄ `python-candidates.ts` 同一处置（`.cjs` 也 import
- * 不到那份 `.ts`）。本文件第一组用例就是**对账那一份副本**：漂了就红。
+ * 「环境前提」那一步的判据（ISSUE #1959）：别等到执行几十分钟后才发现环境装不上。缺件已由 `ci-toolchain-selfcheck.test.ts` 答了。
+ * 这里答「在但版本不对」（解释器低于 Python 3.10 时那些用例走 `env` 档跳过，与「装好了」日志同形）与「配置配错」：host PowerShell 5.1
+ * 认不了 `?.` / `??`，不在解析期报错、跑到那段整段炸。判据不重写（`findPython()` / `ps7OnlySyntaxIn` 各一处）；`.ts` 在装依赖前 import 不到，故留文本副本、第一组用例对账。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -42,11 +18,10 @@ import {
   stageBlockIn,
   stageEnvValue,
   stagesWithImage,
-} from "../scripts/ci-env-probe.mjs";
-/* 每个 stage 现在都以 `node scripts/ci-cp936-exit.mjs -- <真命令>` 起（ISSUE #1977），
+} from "../scripts/ci/ci-env-probe.mjs";
+/* 每个 stage 现在都以 `node scripts/ci/ci-cp936-exit.mjs -- <真命令>` 起（ISSUE #1977），
  * 而下面那条「环境前提点名的入口在不在盘上」判据抓的是 `scripts/…` —— 不剥外壳就会
  * 抓到外壳自己（它当然在盘上），判据从「接线对不对」退化成「外壳在不在」。 */
-import { unwrapCp936 } from "../scripts/ci-cp936-exit.mjs";
 import {
   commentedStageBlock,
   ps7OnlySyntaxIn as ps7OnlySyntaxInGate,
@@ -57,7 +32,7 @@ import {
   isReachableVerdict,
   playwrightReachability,
   playwrightReachabilityVerdicts,
-} from "../scripts/ci-toolchain-browser.mjs";
+} from "../scripts/ci/ci-toolchain-browser.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
@@ -91,7 +66,7 @@ describe("环境前提：两处判据不许各写一份答案", () => {
     expect(gate.length, "门禁那一份没命中 —— 夹具本身写坏了").toBe(4);
     expect(probe.length, "脚本那一份没命中 —— 副本漂了").toBe(gate.length);
     /* 行号必须指到同一行（差一行就等于有一边扫错了块边界）。 */
-    const lineOf = (s: string) => Number(/第 (\d+) 行/.exec(s)?.[1] ?? -1);
+    const lineOf = (s: string) => Number(/第 (?<line>\d+) 行/.exec(s)?.groups?.line ?? -1);
     expect(probe.map(lineOf)).toEqual(gate.map(lineOf));
   });
 
@@ -115,7 +90,7 @@ describe("环境前提：解释器版本下限（低于下限时没有任何一�
     expect(PYTHON_MIN_TEXT).toBe("3.10");
     /* ISSUE #2197 起，下限的**唯一定义**就是本文件 import 的 PYTHON_MIN_VERSION；
      * setup-comfy-cli-venv.mjs 必须引用它（不许另抄一份数字），.ps1 薄壳不再写数字。 */
-    const venv = read("scripts/setup-comfy-cli-venv.mjs");
+    const venv = read("scripts/devtools/setup-comfy-cli-venv.mjs");
     expect(
       venv.includes("PYTHON_MIN_VERSION"),
       "setup-comfy-cli-venv.mjs 必须引用 PYTHON_MIN_VERSION（下限唯一出处）",
@@ -124,7 +99,7 @@ describe("环境前提：解释器版本下限（低于下限时没有任何一�
       venv.includes("3.10"),
       "setup-comfy-cli-venv.mjs 里不应另抄下限数字（引用 PYTHON_MIN_VERSION 即可）",
     ).toBe(false);
-    const ps1 = read("scripts/setup-comfy-cli-venv.ps1");
+    const ps1 = read("scripts/devtools/setup-comfy-cli-venv.ps1");
     expect(ps1.includes("3.10"), "薄壳 .ps1 里也不许另抄下限数字").toBe(false);
   });
 
@@ -152,10 +127,8 @@ describe("环境前提：解释器版本下限（低于下限时没有任何一�
 describe("环境前提：判定面的两个方向（红了要红在「几秒就能问出来」的位置）", () => {
   /**
    * 一份「解释器达标、pnpm 起得来、配置干净、浏览器落点已就位」的注入面。
-   *
-   * ⚠️ **浏览器那两格必须显式注入**（不是可选的省事）：缺省实现会去读真落点、
-   * 真发 HEAD 请求 —— 那会让这一组用例的结论取决于「跑它的这台机器出不出得去外网」，
-   * 也就是一条**看着绿、实际什么都没判**的判据（本仓最反对的那一类）。
+   * ⚠️ 浏览器那两格必须显式注入：缺省实现会读真落点、真发 HEAD —— 那样结论取决于这台机器出不出得去外网，
+   * 成了一条看着绿、实际什么都没判的判据（本仓最反对的那一类）。
    */
   function greenPorts(overrides: Record<string, unknown> = {}) {
     return {
@@ -471,15 +444,9 @@ describe("环境前提：浏览器那一格的两个消费者不许各写一份�
   });
 
   it("量的是**真资源**不是裸根：根回 4xx 而资源 2xx/3xx ⇒ 判通（ISSUE #1966）", () => {
-    /* 这一条是那次误报的**回归判据**。现场：`环境前提` 在 41 秒处当场红说
-     * 「一个下载根都到不了」，而 `.cnb.yml` 里配着的那个根好着 —— 整条流水线
-     * 后 30 步全 skipped。
-     *
-     * 根因是探测拿**裸根**去 HEAD：实测 `https://cdn.npmmirror.com/binaries/playwright`
-     * （配置里那个根）回 **404**，而它下面真资源的路径回 **200**；
-     * `https://cdn.playwright.dev` 同理（裸根 400 / 真资源 307）。
-     * 所以这里钉住两件事：探测打到的是**带资源路径**的 URL，且**根自己的结论
-     * 不参与 `ok`**。 */
+    /* 那次误报的**回归判据**：`环境前提` 在 41 秒处红说「一个下载根都到不了」，而 `.cnb.yml` 配的根好着 ——
+     * 根因是探测拿**裸根**去 HEAD（`cdn.npmmirror.com/binaries/playwright` 裸根 404、真资源 200；
+     * `cdn.playwright.dev` 裸根 400、真资源 307）。所以钉两件事：探测打的是**带资源路径**的 URL，根自己的结论不参与 `ok`。 */
     const asked: Array<string> = [];
     const root = "https://cdn.npmmirror.com/binaries/playwright";
     const verdicts = playwrightReachabilityVerdicts({
@@ -508,58 +475,29 @@ describe("环境前提：浏览器那一格的两个消费者不许各写一份�
   });
 });
 
-describe("环境前提：流水线上真的在跑它，且排在装依赖之前", () => {
-  it("`COMFYAPP_CI_GATES` 里登记了它，且它排在 `Install dependencies` 之前", () => {
+describe("环境前提：已随 CNB 主列瘦身退役（ISSUE #3378）", () => {
+  it("不再挂在 `COMFYAPP_CI_GATES` 上，脚本仍留盘", () => {
+    /* 这一格问的是自托管节点的工具链 / 浏览器下载根前提。GA 承接全部代码判据后，
+     * CNB `pull_request` build 只剩「站内读 GA 送回的结论」，没有哪个判据在这台节点
+     * 上跑到下载根 ⇒ 退役。脚本留盘（每日档的环境判据仍 import 它的模块）。 */
     const order = registeredGateOrder(read(".cnb.yml"));
     expect(order.length, "解析不出 COMFYAPP_CI_GATES —— 键被删了？").toBeGreaterThan(0);
-    const at = order.indexOf("环境前提");
-    const depsAt = order.indexOf("Install dependencies");
-    expect(at, "`环境前提` 不在清单里 —— 那一步因此没有任何执行者").toBeGreaterThan(-1);
-    expect(depsAt).toBeGreaterThan(-1);
     expect(
-      at,
-      "`环境前提` 必须排在 `Install dependencies` 之前：它要答的是「装得成装不成」的" +
-        "前提，排在后面 = 那些结论要等装完（或装失败）才看得到",
-    ).toBeLessThan(depsAt);
-  });
-
-  it("那一步点名的入口真的在盘上（脚本存在而配置没接上 = 这一步白写）", () => {
-    const block = /^\s*-\s*name:\s*环境前提\s*$\r?\n\s*script:\s*(\S.*)$/m.exec(
-      read(".cnb.yml"),
-    )?.[1];
-    expect(block, "解析不出「环境前提」那一步的 script").toBeTruthy();
-    const command = String(block).trim();
-    /* ⚠️ 脚本那一行的开头**已经不一定**是 `node …`（2026-10-16 起每个 stage 都在
-     * 前面挂一句 `[Console]::OutputEncoding=…`，外面还包着 `ci-cp936-exit.mjs`
-     * —— ISSUE #1977 的 CP936 出口；`unwrapCp936()` 剥掉最后那一层）：
-     * 平台的 stage shell 是 PowerShell，它默认按 CP936 解子进程的 UTF-8 输出，
-     * 于是所有中文日志在平台侧都是乱码。所以这里判「这一段命令里点到的是哪个入口」，
-     * 而不是「它是不是从第一个字符就开始」（那是排版，不是接线）。 */
+      order.indexOf("环境前提"),
+      "`环境前提` 又回到 PR 清单了 —— 它已随 #3378 退役，要加回请先给出它在这条 build 上的消费者",
+    ).toBe(-1);
     expect(
-      command,
-      "「环境前提」的脚本里没有给 PowerShell 设 UTF-8 输出编码 —— 平台日志会全是乱码",
-    ).toContain("[Console]::OutputEncoding");
-    const entry = /(?:^|;)\s*(?:node\s+)?(scripts\/[^\s;]+)/.exec(unwrapCp936(command))?.[1];
-    expect(entry, `解析不出「环境前提」点名的入口：${command}`).toBe("scripts/ci-env-probe.mjs");
-    expect(read(entry ?? "").length, "「环境前提」点名的入口不在盘上").toBeGreaterThan(0);
+      order.indexOf("GA 回调结论回读"),
+      "承重回读格不在清单里 —— §13.6 的锚不能丢",
+    ).toBeGreaterThan(-1);
+    expect(read("scripts/ci/ci-env-probe.mjs").length, "脚本留盘").toBeGreaterThan(0);
   });
 });
 
 /**
- * 「量的是**这一步会真用的那个根**」—— ISSUE #1966 之后那一跑买来的（`cnb-ald-1k51g8dt9`）。
- *
- * 那一次 `环境前提` 报绿（「下载根有 5/5 条到得了」），30 分钟后 `浏览器安装` 从
- * **同一个根**下载、`timed out after 120000ms`（0 字节）。病在这两步问的不是同一个
- * 问题：前者问「**某个**根通不通」，而它存在的理由是回答「**这一趟**装得成吗」。
- *
- * `PLAYWRIGHT_DOWNLOAD_HOST` 设在 `浏览器安装` 那一步的 `env` 上，本步的 stage 看不到
- * 它 —— 但本步**读得到那份配置**（判语法面时已经读了），所以判据是**配置里那一个根**。
- *
- * ## 两处解析不许各写一份答案
- *
- * 从 `.cnb.yml` 摘 stage 块的那一段与 `tests/no-platform-ci-config.test.ts` 的
- * `stageBlock()` 是**同一个解析**的两份文本副本（那一份是 `.ts`，本步跑在装依赖之前，
- * import 不到 —— 处置与 `ps7OnlySyntaxIn` 逐字相同）。这一组第一条就是对账它。
+ * 「量的是**这一步会真用的那个根**」（ISSUE #1966，`cnb-ald-1k51g8dt9`）：旧判据问「某个根通不通」，而 `浏览器安装` 从同一个根下载却 120s 超时（0 字节）。
+ * `PLAYWRIGHT_DOWNLOAD_HOST` 设在别步 `env` 上、本步看不到，但读得到配置，所以判配置里那一个根。摘 stage 块的解析是
+ * `no-platform-ci-config.test.ts` 的 `stageBlock()` 的文本副本（那份 `.ts` 在装依赖前 import 不到）；这一组第一条对账它。
  */
 describe("环境前提：浏览器那一格量的是「配置里那个根」（ISSUE #1966）", () => {
   /* 形状按**现役 `.cnb.yml`**：stage 项是**顶格锚点列表的直接子项**（恰好两空格），
@@ -568,9 +506,9 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
   const YML = [
     ".gates: &gates",
     "  - name: 环境前提",
-    "    script: node scripts/ci-env-probe.mjs",
+    "    script: node scripts/ci/ci-env-probe.mjs",
     `  - name: ${BROWSER_INSTALL_STAGE}`,
-    "    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+    "    script: node scripts/ci/ci-toolchain-selfcheck.mjs --playwright-only",
     "    env:",
     '      PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
     '      PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"',
@@ -590,21 +528,14 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
   });
 
   it("两份解析同一份答案：现役配置按**活的**形态对账，注释态回退拿夹具对账", () => {
-    /* `stageBlockIn()` 从 ISSUE #1966 起**活的没有就看注释态**，那一支与 `.ts` 侧
-     * `commentedStageBlock()` 必须同口径（与上一条同源：两份文本副本 + 一条对账判据）。
-     *
-     * ⚠️ 现役 `.cnb.yml` 上**题在 2026-10-16 换了**：那两段以顶格注释留着的原文
-     * 被取消失效（`浏览器安装` / `E2E 关键流程` 恢复成 active），所以现在要对账的
-     * 是**活的**形态 —— 活的那一支（`stageBlockIn` 的 `^ {2}-`）同样是「两份文本
-     * 副本」的一半，一样会漂。
-     * 注释态那一支改拿**夹具**对账：它判的是「两份实现同口径」，与「现役配置里还有
-     * 没有停用项」无关 —— 靠现役配置出题会让这条用例随停用清单一起失效。 */
+    /* `stageBlockIn()` 从 ISSUE #1966 起活的不见就看注释态，那一支与 `.ts` 侧 `commentedStageBlock()` 必须同口径
+     * （两份文本副本 + 一条对账判据）。现役 `.cnb.yml` 在 2026-10-16 换了题：两段注释原文被取消失效，所以活的那支
+     * （`^ {2}-`）才是要对账的形态；注释态那支改拿夹具，靠现役配置出题会让用例随停用清单一起失效。
+     * #3504 起现役 `.gates` 锚里只剩**这一格**（其余执行格整体搬去了 GA daily.yml）——
+     * 对账对象随之换成它。**换格不换判**：判的还是「两份解析同口径」；带 `env:` 块与
+     * `script: |` 多行体两种形状由上面的夹具对账与 `stageEnvValue` 组钉着，不在这里重复。 */
     const live = readPipelineConfig(ROOT) ?? "";
-    /* 两格各代表一种形状：`每日浏览器安装` 带 `env:` 块，`Install dependencies` 是
-     * `script: |` 的多行体（2026-10-19 之前第二个名字用的是 PR 的 `E2E 关键流程`，
-     * 那一格现在撤到每日档；`浏览器安装` 也一并撤到每日档 ⇒ 这里读的是它在每日档里的
-     * 名字。**换格不换判**：判的还是「两份解析同口径」）。 */
-    for (const name of [BROWSER_INSTALL_STAGE, "Install dependencies"]) {
+    for (const name of ["GA 回调结论回读"]) {
       const active = stageBlockIn(live, name);
       expect(active, `${name} 解析不出内容`).toBeTruthy();
       expect(active, `活的形态下两份解析漂了（${name}）`).toBe(stageBlockGate(live, name));
@@ -612,7 +543,7 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     const disabledFixture = [
       ".gates: &gates",
       `# - name: ${BROWSER_INSTALL_STAGE}`,
-      "# script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+      "# script: node scripts/ci/ci-toolchain-selfcheck.mjs --playwright-only",
       "# env:",
       '# PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
       "",
@@ -636,16 +567,23 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     ).toBe("120000");
     expect(stageEnvValue(YML, BROWSER_INSTALL_STAGE, "没有这个键")).toBeNull();
     expect(stageEnvValue(YML, "没有这一步", "PLAYWRIGHT_DOWNLOAD_HOST")).toBeNull();
-    /* 现役 `.cnb.yml` 里那一步真的配了它 —— 判据指着的那一行必须是**真的存在**的。
-     * 名字取 `BROWSER_INSTALL_STAGE`（与被测实现同一个常量）：2026-10-19 那一格撤到
+    /* 名字取 `BROWSER_INSTALL_STAGE`（与被测实现同一个常量）：那一格 2026-10-19 撤到
      * 每日档、名字加了前缀，判据与实现各写一份字符串就会在下次挪档时**同时指错** ——
-     * 实现读不到根就退回量候选，判据却还在为「读到了」而绿。 */
+     * 实现读不到根就退回量候选，判据却还在为「读到了」而绿。
+     * #3504 起那一格（连同它的 `env:`）整体搬到了 GA `daily.yml`（step
+     * `浏览器安装（cnb 同款入口；npmmirror 镜像源同 CNB）`，那里的键由
+     * no-platform-ci-config 的「套接字超时」判据钉着，这里不重复）。CNB 配置上
+     * 这一格**预期读不到**：`stageEnvValue` 回 `null`，实现退回「量候选根」——
+     * 那是「不知道」，不是「不达标」。这里反向登记：谁把这一格加回 `.cnb.yml`，
+     * 实现就会**静默**重新读到一份配置里的根 —— 那必须连脚本口径一起改，而不是
+     * 搬运时留下的残根。 */
     const live = readPipelineConfig(ROOT) ?? "";
     expect(
-      stageEnvValue(live, BROWSER_INSTALL_STAGE, "PLAYWRIGHT_DOWNLOAD_HOST"),
-      `现役 \`.cnb.yml\` 的 \`${BROWSER_INSTALL_STAGE}\` 没有 \`PLAYWRIGHT_DOWNLOAD_HOST\` —— ` +
-        "这一组判据量不到任何东西",
-    ).toMatch(/^https:\/\//);
+      stageBlockIn(live, BROWSER_INSTALL_STAGE),
+      `${BROWSER_INSTALL_STAGE} 又出现在现役 \`.cnb.yml\` 里 —— #3504 起它的执行者（连同 \`env:\`）在 GA daily.yml；` +
+        "把它加回来会让 ci-env-probe 的「配置里那个根」读数**静默**改指 CNB 旧格，须连 scripts/ci/ci-env-probe.mjs 的口径一起改",
+    ).toBeNull();
+    expect(stageEnvValue(live, BROWSER_INSTALL_STAGE, "PLAYWRIGHT_DOWNLOAD_HOST")).toBeNull();
   });
 
   it("配置里那个根取不回字节 ⇒ **当场红**，并点名该换哪一行", () => {
@@ -712,25 +650,21 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
   });
 
   /**
-   * 第三格：**配了一条这条路径根本不支持的路**（任务级 `image:`）。
-   *
-   * 实测 `cnb-cqk-1k550gpp2`（PR #2003 首跑）：`.cnb.yml` 给 `浏览器安装` 加了
-   * `image: mcr.microsoft.com/playwright:v1.63.0-noble`，那一格 70 毫秒就红在
-   * `Runner does not enable Docker` 上 —— 脚本一行都没执行，前面三十三步全绿。
-   * 所以「有人又加了一格」这件事必须红在**便宜的位置**（装依赖之前），
-   * 而不是整条流水线倒数第二步。
+   * 第三格：**配了一条这条路径根本不支持的路**（任务级 `image:`）。实测 `cnb-cqk-1k550gpp2`（PR #2003 首跑）：
+   * `.cnb.yml` 给 `浏览器安装` 加了 `image: mcr.microsoft.com/playwright:v1.63.0-noble`，那一格 70 毫秒就红在
+   * `Runner does not enable Docker`，脚本一行未执行、前面三十三步全绿。所以这种改动必须红在便宜的位置（装依赖前）。
    */
   describe("环境前提：`.cnb.yml` 里不许有 stage 带 `image:`（自托管起不来容器）", () => {
     const WITH_IMAGE = [
       ".gates: &gates",
       "  - name: 浏览器安装",
       "    image: mcr.microsoft.com/playwright:v1.63.0-noble",
-      "    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+      "    script: node scripts/ci/ci-toolchain-selfcheck.mjs --playwright-only",
       "    env:",
       '      PLAYWRIGHT_DOWNLOAD_HOST: "https://m/root"',
       "    timeout: 20m",
       "  - name: 环境前提",
-      "    script: node scripts/ci-env-probe.mjs",
+      "    script: node scripts/ci/ci-env-probe.mjs",
       "",
     ].join("\n");
 
@@ -811,7 +745,7 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
       config: [
         ".gates: &gates",
         "  - name: 浏览器安装",
-        "    script: node scripts/ci-toolchain-selfcheck.mjs --playwright-only",
+        "    script: node scripts/ci/ci-toolchain-selfcheck.mjs --playwright-only",
         "",
       ].join("\n"),
       findPythonImpl: () => ({

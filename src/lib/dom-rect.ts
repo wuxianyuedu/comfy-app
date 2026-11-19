@@ -118,10 +118,10 @@ export function readElementBox(
     bottom: rect.bottom,
     width: rect.width,
     height: rect.height,
-    clientWidth: box.clientWidth ?? 0,
-    clientHeight: box.clientHeight ?? 0,
-    scrollWidth: box.scrollWidth ?? 0,
-    scrollHeight: box.scrollHeight ?? 0,
+    clientWidth: box.clientWidth,
+    clientHeight: box.clientHeight,
+    scrollWidth: box.scrollWidth,
+    scrollHeight: box.scrollHeight,
     pageX: view?.scrollX ?? 0,
     pageY: view?.scrollY ?? 0,
   };
@@ -146,8 +146,7 @@ export function offsetWithin(
   }
   const innerRect = inner.getBoundingClientRect();
   const outerRect = outer.getBoundingClientRect();
-  /* SAFETY: 类型断言已复核 */
-  const outerScroll = (outer as unknown as { scrollTop?: number }).scrollTop ?? 0;
+  const outerScroll = typeof outer.scrollTop === "number" ? outer.scrollTop : 0;
   return innerRect.top - outerRect.top + outerScroll;
 }
 

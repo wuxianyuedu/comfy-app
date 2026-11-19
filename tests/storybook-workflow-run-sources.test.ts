@@ -1,28 +1,7 @@
 /**
- * 「工作流运行（执行日志）→ story」注入层的**契约判据**
- *（ISSUE #1381 续，规范 16 §16.2.3.15）。
- *
- * 为什么需要它：`TaskLogTimeline` 是**纯 props** 的，看起来「给一数组就能摆」——
- * 而它吃的那个数组在真机上是 `workflow-run-store` 按 SSE 帧累积出来的
- * `TaskLogEntry[]`。手捏一份字面量会跳过 store 的两条真实取舍：
- *
- *  · **按 `(t, msg)` 去重**（SSE 重放与增量推送会发同一帧）；
- *  · **`MAX_LOGS`（300）截尾**（长任务几千条 progress 行）。
- *
- * 两者都决定画布上的计数与截尾口，所以「手捏数组」的失效形态是「画布看着对、
- * 真机上不对」—— 与这一整族注入层同源。
- *
- * 另有两处**只有真机才会暴露、而画布上照样有内容**的坑，一并钉住：
- *
- *  · **失败行与整条链路的时刻要落在同一段里**。`failWorkflowRun()` 补的 error 行
- *    用的是它自己的 `Date.now()`（生产口径）；若场景把步骤锚在一个写死的日期上，
- *    画布上会出现「最后一步 09:30、失败行 18:32」——同一次运行差九个多小时，
- *    读故事的人会以为哪里算错了（本批实测抓到过）。
- *  · **装饰器要挂在链上**，否则 `parameters.runScene` 没人读，story 在那儿、
- *    时间线空着，而全绿。
- *
- * 判的是**接线与形状**，不是语义（「有没有真的画出来」由真浏览器逐 story 渲染
- * 核对那一半守着）。
+ * 「工作流运行 → story」注入层契约判据（ISSUE #1381 续，§16.2.3.15）。`TaskLogTimeline` 是纯 props，但数组真机上是
+ * store 按 SSE 帧累积的 `TaskLogEntry[]`；手捏字面量会跳过按 `(t, msg)` 去重与 `MAX_LOGS`（300）截尾，二者都决定画布计数。
+ * 另钉两处：失败行 `Date.now()` 须与步骤同段（否则差九小时，实测）；装饰器要挂在链上，否则 `runScene` 没人读。
  */
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -44,20 +23,9 @@ const preview = readFileSync(PREVIEW, "utf8");
 const story = readFileSync(STORY, "utf8");
 
 /**
- * 「这个标识符在**剥了注释**的源码里被**调用**过」。
- *
- * ## 为什么不用 `toContain`
- *
- * `toContain("registerWorkflowRun(")` 会被**顶部的 import**满足 —— 那个名字在
- * `import { registerWorkflowRun, … }` 里也在，于是把调用整行删掉判据照样绿。
- * 本文件的两个变异（去掉 `clearAllWorkflowRuns()`、把三元组调用点改名）都是
- * 这么漏过去的，所以一律走「剥注释 + 排除 import 行 + 真有一次 `名字(`」。
- *
- * 判据是**三次**都在场：① 剥注释之后还有 `名字(`；② 那一行不是 `import … from`
- * 那种声明行；③ 括号配对能走完（不是半截字符串）。
- *
- * 为什么不用「实参非空」判：`clearAllWorkflowRuns()` 本来就**没有**参数，
- * 拿「有没有实参」当「有没有调用」会把它误判成没调用（实测踩过）。
+ * 「标识符在剥注释后的源码里被真正调用过」。`toContain("registerWorkflowRun(")` 会被顶部 `import` 满足 ——
+ * 两处变异（删 `clearAllWorkflowRuns()`、改名三元组调用点）都这么漏过。判三件：剥注释后仍有 `名字(`；该行不是
+ * `import … from` 声明；括号配对走完。不用「实参非空」判 —— `clearAllWorkflowRuns()` 本来就无参（实测踩过）。
  */
 function callsIn(code: string, name: string): boolean {
   const re = new RegExp(`\\b${name}\\s*\\(`, "g");
@@ -152,15 +120,10 @@ describe("Storybook 工作流运行注入层的契约（ISSUE #1381）", () => {
   it("story 接真组件，且日志经 store 读而不是直接拿数组", () => {
     expect(story, "story 没 import 真组件").toContain("TaskLogTimeline");
     expect(story).toContain("component: TaskLogTimeline");
-    /* 经 store 读末态：`useSyncExternalStore` 三元组就是 `WorkflowRunLogModal`
-       里那一份（同一个订阅、同一个快照函数）。
-
-       ## 判的是**调用处**，不是名字在场（这条判据自己的第一个变异）
-       第一版写 `expect(story).toContain("getWorkflowRunStoreSnapshot")` —— 实测
-       把 story 里那**两处调用**都改名之后判据**照样绿**：上面 import 那两行
-       就把名字满足了。这正是本仓反复记着的「拿名字在场当判据」（§12.4），
-       所以改成在**剥了注释**的那一份上锚 `useSyncExternalStore(` 的开括号 ——
-       从调用点到配对闭括号之间必须真的出现那两个标识符。 */
+    /* 经 store 读末态：`useSyncExternalStore` 三元组与 `WorkflowRunLogModal` 那一份相同（同订阅、同快照）。判调用处
+       而非名字在场（本条自己的第一个变异）：`toContain("getWorkflowRunStoreSnapshot")` 在两处调用都改名后仍绿 ——
+       import 满足了名字（§12.4「拿名字在场当判据」）。改在剥注释副本上锚 `useSyncExternalStore(` 的开括号，
+       从调用点到配对闭括号之间必须真出现那两个标识符。 */
     const code = stripComments(story);
     const callStart = code.indexOf("useSyncExternalStore(");
     expect(callStart, "story 里找不到 useSyncExternalStore( 调用 —— 改写法了？").toBeGreaterThan(

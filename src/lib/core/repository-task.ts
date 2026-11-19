@@ -5,17 +5,67 @@
 import "server-only";
 
 import { db } from "~/lib/db";
+import { isRecord } from "~/lib/is-record";
 import { task, taskImage, type Task, type TaskImage } from "~/server/db/schema";
 import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";
 import { eq, and, inArray, desc, asc, sql, count } from "drizzle-orm";
 import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
+import { isTerminalTaskStatus } from "~/lib/task-state";
 
-/** 列表卡的行形状：`task.list` 的映射只需要十来个字段，而 `workflowSnapshot`
- *  （整份工作流 JSON）与 `logs`（全量日志）单行就能到数 MB —— take=60 的列表页
- *  会把它们整批拉回来、反序列化、然后立刻丢弃。列表查询排除这两列。 */
-export type TaskCardRow = Omit<Task, "workflowSnapshot" | "logs">;
+/** 任务卡的四个重列（唯一名单）：`workflowSnapshot`（整份工作流 JSON）、
+ *  `execPayload`（提交时刻的 RAW 原件）、`rawCli`（comfy-cli 完整原文，上限
+ *  5000 行）、`logs`（全量日志）—— 单行就能到数 MB，take=60 的列表页会把它们
+ *  整批拉回来、反序列化、然后立刻丢弃（node:sqlite 是同步驱动，这批反序列化
+ *  直接压在事件循环上）。#4411：`execPayload` / `rawCli` 是 #4044 裁剪清单之后
+ *  才进 schema 的，彼时没跟着更新排除集。 */
+/** 必须导出：`HeavyTaskColumns`（公开签名 `TaskCardRow` 的 Omit 键）从它派生，
+ *  typedoc 只收「从入口可达且带 export」的符号——不导出会让 API 文档自检
+ *  报「referenced … but not included」（ISSUE #4407 / 修法先例 #2835）。 */
+export const HEAVY_TASK_COLUMNS = [
+  "execPayload",
+  "logs",
+  "rawCli",
+  "workflowSnapshot",
+] as const satisfies ReadonlyArray<keyof Task>;
+/** 必须导出：它在公开签名 `TaskCardRow`（`Omit<Task, …>` 的键）里被引用，
+ *  typedoc 只收「从入口可达且带 export」的符号——不导出会让 API 文档自检
+ *  报「referenced … but not included」（ISSUE #4407 / 修法先例 #2835）。 */
+export type HeavyTaskColumns = (typeof HEAVY_TASK_COLUMNS)[number];
+
+/** 列表卡的行形状：`task.list` 与 `project.outputs` 的映射只需要十来个字段。 */
+export type TaskCardRow = Omit<Task, HeavyTaskColumns>;
+
+/** 任务卡列集：除四个重列之外的全部列，逐列显式点名。普通 select 分支（只给
+ *  skip 的无 limit 分页，relational query 表达不了）用它取数；relational 分支
+ *  （findMany）用 `columns` 排除集 —— 两条路必须同口径，否则同一次列表在
+ *  不同分页参数下行为漂移。`satisfies` 把列名钉在 Task 的键集上：schema 加列 /
+ *  改名列而这份清单没跟，当场编译红（#4411 的病根就是没人被逼着更新它）。 */
+const taskCardColumns = {
+  id: task.id,
+  userId: task.userId,
+  type: task.type,
+  prompt: task.prompt,
+  negativePrompt: task.negativePrompt,
+  params: task.params,
+  workflowName: task.workflowName,
+  projectId: task.projectId,
+  shotId: task.shotId,
+  referenceImages: task.referenceImages,
+  parentId: task.parentId,
+  status: task.status,
+  promptId: task.promptId,
+  progress: task.progress,
+  resultImages: task.resultImages,
+  error: task.error,
+  validationErrors: task.validationErrors,
+  createdAt: task.createdAt,
+  finishedAt: task.finishedAt,
+  claimedBy: task.claimedBy,
+  claimedAt: task.claimedAt,
+  progressNode: task.progressNode,
+} satisfies Omit<Record<keyof Task, unknown>, HeavyTaskColumns>;
 
 /**
  * SQLite 表达「不限条数，只跳过前 n 条」的写法是 `LIMIT -1 OFFSET n` ——
@@ -43,10 +93,27 @@ const NO_LIMIT = sql`-1`;
  * `cancel` 正是 impl 里唯一免归属的写。判据与理由见 ADR §14 D4。 */
 const impl: TaskRepoImpl = createTaskRepoImpl(db, { owner: "inline" });
 
+/** 运行期确认构造器带可调用的 `limit`（drizzle 的链式查询对象满足此形状）。 */
+function hasLimit(value: unknown): value is { limit(n: unknown): unknown } {
+  return isRecord(value) && typeof value.limit === "function";
+}
+
+/** 链式调用在运行期返回对象；把它接回调用点的查询类型。 */
+function isQueryOf<Q>(value: unknown): value is Q {
+  return isRecord(value);
+}
+
 /** 把「不限条数」作为 limit 传下去（run-time 是 `sql` 片段，见 NO_LIMIT 注释）。 */
 function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
-  /* SAFETY: 类型断言已复核 */
-  return (q as unknown as { limit(n: unknown): Q }).limit(NO_LIMIT);
+  const candidate: unknown = q;
+  if (!hasLimit(candidate)) {
+    return q;
+  }
+  const chained = candidate.limit(NO_LIMIT);
+  if (!isQueryOf<Q>(chained)) {
+    return q;
+  }
+  return chained;
 }
 
 /**
@@ -56,7 +123,9 @@ function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
  * query 表达不了无 limit 的 offset），但对外仍要返回带 images 的行 —— 与其在
  * 两处分头拼 `with`，不如把「按 id 装载」收到这里，保证两种取法给出同一形状。
  */
-async function attachImages(rows: Array<Task>): Promise<Array<TaskWithCover>> {
+async function attachImages<R extends { id: string }>(
+  rows: Array<R>,
+): Promise<Array<R & { images: Array<TaskImage> }>> {
   if (!rows.length) {
     return [];
   }
@@ -124,6 +193,69 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return firstRowRequired(rows, "任务插入");
   }
 
+  /**
+   * 按镜头原子入队（ISSUE #4001/#4002 / #3892）：在 immediate 事务内检查同一
+   * 用户+项目+镜头是否存在活动任务（`QUEUED/RUNNING`），无则插入 queued 行并返回；
+   * 已存在活动任务则不写入并返回 `null`。统一各入口的“查重 + 入队”边界，避免
+   * 跨入口/并发 check-then-insert 重复入队。
+   */
+  async createQueuedForShotIfNoActive(input: {
+    claimedBy?: "inline" | "host" | null;
+    execPayload?: unknown;
+    negativePrompt?: string | null;
+    params: unknown;
+    parentId?: string | null;
+    projectId: string;
+    prompt: string;
+    referenceImages?: unknown;
+    shotId: string;
+    type: string;
+    userId: string;
+    workflowName: string;
+    workflowSnapshot?: unknown;
+  }): Promise<Task | null> {
+    return db.transaction(
+      async (tx) => {
+        const occupied = await tx
+          .select({ id: task.id })
+          .from(task)
+          .where(
+            and(
+              eq(task.userId, input.userId),
+              eq(task.projectId, input.projectId),
+              eq(task.shotId, input.shotId),
+              inArray(task.status, ["QUEUED", "RUNNING"]),
+            ),
+          )
+          .limit(1);
+        if (occupied.length > 0) {
+          return null;
+        }
+        const rows = await tx
+          .insert(task)
+          .values({
+            userId: input.userId,
+            type: input.type,
+            prompt: input.prompt,
+            negativePrompt: input.negativePrompt ?? null,
+            params: input.params,
+            workflowName: input.workflowName,
+            projectId: input.projectId,
+            shotId: input.shotId,
+            referenceImages: input.referenceImages ?? undefined,
+            workflowSnapshot: input.workflowSnapshot ?? undefined,
+            claimedBy: input.claimedBy ?? null,
+            execPayload: input.execPayload ?? null,
+            parentId: input.parentId ?? null,
+            status: "QUEUED",
+          })
+          .returning();
+        return firstRowRequired(rows, "任务插入");
+      },
+      { behavior: "immediate" },
+    );
+  }
+
   async listByUser(
     userId: string,
     opts: {
@@ -167,25 +299,32 @@ export class TaskRepository extends DrizzleRepository<Task> {
         : undefined,
     );
     if (opts?.includeImages === true) {
-      const withImages = (rows: Array<Task>) => attachImages(rows);
+      const withImages = <R extends { id: string }>(rows: Array<R>) => attachImages(rows);
       // 分页口径与下面普通 select 分支**必须一致**：drizzle 的 relational
       // query 只认 `limit`（`limit: -1` 会被整个丢掉，实测），所以「只给 skip」
       // 那条路走不了它 —— 先用普通 select 取到这一页的 id，再按 id 装载图片。
       // 两条路都产出「同一页 + 同一份 images」，顺序由外层 orderBy 保证。
       if (opts.skip !== undefined && opts.take === undefined) {
         const page = await limitAll(
-          db.select().from(task).where(where).orderBy(desc(task.createdAt)),
+          /* 排序带 id tiebreaker（#4044）：同毫秒批量入队的行序稳定，skip 翻页不重不漏。
+           * 列集走 taskCardColumns（四个重列不拉，#4411）——与下方 findMany 的
+           * columns 排除集同口径。 */
+          db
+            .select(taskCardColumns)
+            .from(task)
+            .where(where)
+            .orderBy(desc(task.createdAt), desc(task.id)),
         ).offset(opts.skip);
         return withImages(page);
       }
       const rows = await db.query.task.findMany({
         where,
-        orderBy: [desc(task.createdAt)],
+        orderBy: [desc(task.createdAt), desc(task.id)],
         ...(opts.take === undefined ? {} : { limit: opts.take }),
-        /* 列表卡只要十来个字段：`workflowSnapshot` 与 `logs` 单行可达数 MB，
-         * take=60 时是几十 MB 的白拉白反序列化（router 只映射卡片字段）。
-         * 详情查询（findByIdWithImages）不受影响，仍取全列。 */
-        columns: { workflowSnapshot: false, logs: false },
+        /* 列表卡只要十来个字段：四个重列（workflowSnapshot / logs / execPayload /
+         * rawCli）单行可达数 MB，take=60 时是几十 MB 的白拉白反序列化（router 只
+         * 映射卡片字段）。详情查询（findByIdWithImages）不受影响，仍取全列。 */
+        columns: { execPayload: false, logs: false, rawCli: false, workflowSnapshot: false },
         with: {
           images: {
             orderBy: [desc(taskImage.isCover), asc(taskImage.sortIndex)],
@@ -194,7 +333,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
       });
       return rows;
     }
-    const q = db.select().from(task).where(where).orderBy(desc(task.createdAt));
+    const q = db.select().from(task).where(where).orderBy(desc(task.createdAt), desc(task.id));
     if (opts?.skip === undefined) {
       return opts?.take === undefined ? q : q.limit(opts.take);
     }
@@ -220,6 +359,12 @@ export class TaskRepository extends DrizzleRepository<Task> {
     const existing = await this.findByIdForUser(userId, id);
     if (!existing) {
       throw new NotFoundError(`任务不存在: ${id}`);
+    }
+    /* 终态守卫（ISSUE #3912）：与执行链 writeGuard 同判据 —— 终态行
+     * （SUCCEEDED / FAILED / CANCELLED）不再被这一入口改写，堵住绕过
+     * repository-task-impl 守卫的旁路写点；对终态重复调用按幂等返回原行。 */
+    if (isTerminalTaskStatus(existing.status)) {
+      return existing;
     }
     const data: Partial<Task> = { status };
     if (extra) {
@@ -263,10 +408,14 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return rows[0] ?? null;
   }
 
-  async findByProjectIdWithImages(projectId: string) {
+  async findByProjectIdWithImages(projectId: string, opts?: { take?: number }) {
     return db.query.task.findMany({
       where: eq(task.projectId, projectId),
       orderBy: [desc(task.createdAt)],
+      /* 产物页只映射卡片字段（project.outputs）：四个重列整批拉回只为 slice 后
+       * 丢弃（#4411）。take 顺带下推到 SQL —— 调用方本来就要 slice 到同一数。 */
+      ...(opts?.take === undefined ? {} : { limit: opts.take }),
+      columns: { execPayload: false, logs: false, rawCli: false, workflowSnapshot: false },
       with: { images: { orderBy: [asc(taskImage.sortIndex)] } },
     });
   }
@@ -356,7 +505,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
         resultImages: task.resultImages,
         // 3-C（ADR §13 D1/D2）：SSE 单源化后轮询要读节点进度与日志增量。
         // 「轻量投影」的边界随之从「不含大列」改为「不含 workflowSnapshot」——
-        // 本机 libsql 异步驱动、单用户个位数活跃流，3s 一次可承受。
+        // 本机 sqlite-proxy（node:sqlite）单连接、单用户个位数活跃流，3s 一次可承受。
         progressNode: task.progressNode,
         logs: task.logs,
       })
@@ -431,6 +580,9 @@ export class TaskRepository extends DrizzleRepository<Task> {
 
   finalizeSuccess: TaskRepoImpl["finalizeSuccess"] = (taskId, data) =>
     impl.finalizeSuccess(taskId, data);
+
+  finalizeSuccessWithImages: TaskRepoImpl["finalizeSuccessWithImages"] = (taskId, data, images) =>
+    impl.finalizeSuccessWithImages(taskId, data, images);
 
   finalizeFailure: TaskRepoImpl["finalizeFailure"] = (taskId, error, validationErrors) =>
     impl.finalizeFailure(taskId, error, validationErrors);

@@ -22,7 +22,7 @@ import path from "node:path";
  *
  * `TOOLS_LOG_DIR` 曾在同一批里被删掉，ISSUE #1326 又**按同一条判据**加了回来
  * —— 这次有真消费方（`SCHEMA_SYNC_STATUS_FILE` 的读取者横跨
- * `scripts/db-schema-state.mjs`（写）与 `src/app/api/schema/route.ts`（读）两个
+ * `scripts/db/db-schema-state.mjs`（写）与 `src/app/api/schema/route.ts`（读）两个
  * 进程，路径必须只有一处）。
  *
  * ## §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批）
@@ -36,12 +36,23 @@ import path from "node:path";
  * `log-paths`；只要它带 server-only，纯 Node 里 `await import("~/lib/core/logger")`
  * 的 promise 就会因这一层的 throw 而 reject、上层 comfyui 的 lazy 兜底接不进去。
  * 「浏览器图别引我」这条约束**不由 server-only 兜**——scanner 的 clientReachable
- * 判据（`scripts/lib-node-only-scan.mjs`）盯着「有 `"use client"` 静态引到时
+ * 判据（`scripts/gates/lib-node-only-scan.mjs`）盯着「有 `"use client"` 静态引到时
  * 顶层是否有 Node 内建」，path 命中即红。
  */
 
-/** 日志根目录（<项目根>/log）。 */
-export const LOG_ROOT = path.join(process.cwd(), "log");
+/**
+ * 日志根目录。
+ *
+ * standalone 桌包下由启动器经 `COMFY_APP_DATA_DIR` 环境变量注入运行期可写数据根
+ * （见 `scripts/launcher-core/app-data-dir.mjs` 与 `standalone-runtime.mjs`）：载荷根 /
+ * 安装目录不可写或会被更新清掉，日志与导出必须落进 OS app-data 目录（ISSUE #3498）。
+ * 下游 `LOG_CURRENT_DIR` / `LOG_EXPORT_DIR` 等全部由本常量派生，改这一处即可整体随动。
+ *
+ * 开发态不设该变量 ⇒ 回退 `process.cwd()/log`（仓库根下的 log，与既有开发习惯一致）。
+ */
+export const LOG_ROOT = process.env.COMFY_APP_DATA_DIR
+  ? path.join(process.env.COMFY_APP_DATA_DIR, "log")
+  : path.join(process.cwd(), "log");
 
 /* ── 「一次运行一包」的写点：log/current/ ──────────────────────────────────
  * 进程**始终**写 current/（路径固定，见规范 §4）；退出时由启动编排的
@@ -88,10 +99,7 @@ export const WORKSHOP_LOG_DIR = path.join(LOG_CURRENT_DIR, "workshop");
 /** 壳自己的启动链路日志：壳把 `[ComfyAPP]` 诊断与编排器输出（`[orchestrator] …`）
  *  重定向到这里，是双击链路排障的第一现场（Python 启动器已随 ISSUE #784 移除，
  *  这个常量名沿用是为了不动日志面板的来源契约）。 */
-export const LAUNCHER_SHELL_LOG = path.join(
-  LAUNCHER_LOG_DIR,
-  "dev-launcher-stderr.log",
-);
+export const LAUNCHER_SHELL_LOG = path.join(LAUNCHER_LOG_DIR, "dev-launcher-stderr.log");
 /** dev-launcher 当前运行日志（每次运行覆盖，供启动页/应用内面板实时读取）。 */
 export const DEV_LAUNCHER_LOG = path.join(LAUNCHER_LOG_DIR, "dev-launcher.log");
 /** sentinel：内容为本次运行真实 dev-launcher 日志的绝对路径（文件被锁回退改名时靠它定位）。 */
@@ -104,10 +112,7 @@ export const DEV_LAUNCHER_CURRENT_SENTINEL = path.join(
  *  /history 与 /queue 原始 JSON。诊断通道，追加写（见 comfyui/trace.ts）。 */
 export const COMFYUI_TRACE_DIR = COMFYUI_LOG_DIR;
 /** ISSUE #216：ComfyUI 返回内容完整打印到这一份文件。 */
-export const COMFYUI_TRACE_LOG = path.join(
-  COMFYUI_TRACE_DIR,
-  "comfyui-trace.log",
-);
+export const COMFYUI_TRACE_LOG = path.join(COMFYUI_TRACE_DIR, "comfyui-trace.log");
 
 /** 构建与工具脚本日志（tools/scripts/Log-Common.ps1、setup 脚本、schema 同步）。 */
 export const TOOLS_LOG_DIR = path.join(LOG_CURRENT_DIR, "tools");
@@ -115,17 +120,14 @@ export const TOOLS_LOG_DIR = path.join(LOG_CURRENT_DIR, "tools");
 /**
  * schema 后台同步的状态文件（`log/current/tools/schema-sync.json`）。
  *
- * 「双宿主」的**唯一交汇处**：写它的是 `scripts/db-sync.mjs` 子进程，读它的
+ * 「双宿主」的**唯一交汇处**：写它的是 `scripts/db/db-sync.mjs` 子进程，读它的
  * 是另一个进程里的 Next 服务端（`GET /api/schema`）—— 两者只能靠磁盘通信。
  *
  * 此前它孤零零躺在 `log/` 根目录（Issue #1326 点名的孤儿之一）：根目录只该有
  * `current/` `runs/` `latest.txt` `exports/`，否则时间一长必然变成杂物堆。
  * 归 `tools/` 是因为它的写入方是工具脚本链（`db-sync.mjs` / `db-schema-state.mjs`）。
  */
-export const SCHEMA_SYNC_STATUS_FILE = path.join(
-  TOOLS_LOG_DIR,
-  "schema-sync.json",
-);
+export const SCHEMA_SYNC_STATUS_FILE = path.join(TOOLS_LOG_DIR, "schema-sync.json");
 
 /**
  * 日志面板「保存到本地」的落盘目录（`log/exports/`，按次命名）。

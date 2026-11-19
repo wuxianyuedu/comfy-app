@@ -1,18 +1,21 @@
 # PR 质量门禁（镜像档）—— 双远端镜像的 PR 门禁主体（ISSUE #2978 起，本批从一格冒烟扩成主体）
 #
-# 触发链：cnb PR 流水线的「GitHub 镜像同步」格把本跑 HEAD 推到本仓库的
-# `cnb-pr-<IID>` 专属 ref，再派发 `repository_dispatch`（event_type 逐字配对
-# `scripts/ci-github-mirror-push.mjs` 的 `EVENT_TYPE`）；本 workflow 按**同一笔 sha**
+# 触发链：cnb PR 流水线的**平台池镜像出口**（`.cnb.yml` 的 `pull_request`
+# 第二条「GitHub 镜像同步（平台池）」）把本跑 HEAD 推到本仓库的 `cnb-pr-<IID>`
+# 专属 ref，再派发 `repository_dispatch`（event_type 逐字配对
+# `scripts/ci/ci-github-mirror-push.mjs` 的 `EVENT_TYPE`）；本 workflow 按**同一笔 sha**
 # 检出并跑判据 —— 两边判同一份树，读数才对得上账。
+# ISSUE #3418 起：自托管主列那格停用（出网不稳、判断推送成功半天出不来），
+# 推送与派发整个由平台池那条承担；本 workflow 的触发方式一字未变。
 #
 # 与 `.cnb.yml` 质量门禁的对应（命令一字不改，判据同源）：
 #   · 本文件**承接**：分支守卫 / 提交声明核对 / 同步数据库表结构 / 类型检查 /
 #     固定结构用例 / 受影响用例 / 14 个 check-* 静态格 / lib Node-only 声明 /
-#     oxfmt 格式 / 重档静态判据。
+#     oxfmt 格式 / 重档静态判据 / schema⇄迁移等价（ISSUE #3599）。
 #   · **留在 CNB**（平台专有，本文件刻意不跑）：镜像身份 / 工作区复用读数 /
-#     缓存槽读数 / GitHub 镜像同步 / 环境前提（自托管节点事实读数）/
-#     覆盖率上报（`ci-coverage-report.mjs` 走 `cnb` CLI）/ 失败立案与令牌权限读数
-#     （CNB API）。
+#     缓存槽读数 / 环境前提（自托管节点事实读数）/ GitHub 镜像同步（平台池出口，
+#     ISSUE #3418 起不在自托管主列）/ 覆盖率上报（`ci-coverage-report.mjs`
+#     走 `cnb` CLI）/ 失败立案与令牌权限读数（CNB API）。
 #   · diff 类判据（`ci-affected-tests` / `premerge-check` / `check-format --changed`）
 #     读 `CNB_PULL_REQUEST_TARGET_SHA` 做三点 diff —— 这里用镜像 payload 的 `base_sha`
 #     注入同名变量，脚本零改动；缺席时它们各自退回 merge-base（脚本内已有该口径）。
@@ -37,8 +40,14 @@ name: PR gate (mirror)
 # run-name 进 run 列表的 display_title：CNB 回读格按 `event=repository_dispatch`
 # 拉 run 后靠 display_title 里的 head_sha 认领本跑（`?head_sha=` 对 dispatch 触发的
 # run 失效 —— 那类 run 的 head_sha 落默认分支 HEAD，payload 的 sha 只在 client_payload）。
-# 字段名逐字对 `scripts/ci-github-mirror-push.mjs` 的 dispatchPayload（pr_number/head_sha）。
-run-name: "PR #${{ github.event.client_payload.pr_number || 'manual' }} · ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}"
+# 字段名逐字对 `scripts/ci/ci-github-mirror-push.mjs` 的 dispatchPayload（pr_number/head_sha）。
+#
+# 标题（`pr_title`）排在中间、sha 留在**末尾且不截断**：认领靠整 sha 子串匹配，
+# 排版怎么变都动不到它。`pr_title` 缺席（老 payload / 平台标题读不到）时正中间那段
+# 是空串、尾随分隔符也不出现 ⇒ 渲染回老格式 `PR #号 · sha`，不是 `PR #号 ·  · sha`。
+# 标题由镜像格归一成单行并截到 160 字符（`scripts/ci/ci-mirror-payload.mjs`），
+# 这里不做二次处理：run-name 总量上限 256，前缀 + 标题 + sha 最坏 ≈ 211。
+run-name: "PR #${{ github.event.client_payload.pr_number || 'manual' }} · ${{ github.event.client_payload.pr_title || '' }}${{ github.event.client_payload.pr_title && ' · ' }}${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}"
 
 on:
   repository_dispatch:
@@ -53,6 +62,39 @@ on:
         description: 三点 diff 的基线（留空 = 各判据退回 merge-base）
         required: false
         default: ""
+      # ISSUE #3667：判绿时「有需要」也能经 GA→CNB→本地 拿到日志正文。
+      # 这两个输入只服务手动/按需那一跑：repository_dispatch（PR 自动档）不带它们，
+      # 收尾 relay step 读到的就是空串 ⇒ 逐字保持 #3437「只搬失败 job」的默认路径。
+      pr_number:
+        description: 按需把日志挂到哪张 PR（留空 = 不写 CNB，仅本 run 自检）
+        required: false
+        default: ""
+      relay_scope:
+        description: 搬运范围 failed（缺省，只搬失败 job）/ all（全部 job，判绿也搬）
+        required: false
+        default: ""
+      run_id:
+        description: 要搬哪条 GA run 的日志（留空 = 本 run；按需档可点名已跑完的绿 run）
+        required: false
+        default: ""
+      # ISSUE #3998：按需档把结论送回 CNB 时要绑**PR 预合并 sha**（commit-statuses
+      # 的那一笔），而它只存在于自动档的 `client_payload.cnb_merge_sha` 里。
+      # 缺这个输入 ⇒ 按需档的回调恒「前提不成立」（三态退 2），CNB 侧读到的是
+      # status 缺席。留空 = 不送结论（与缺 `pr_number` 同一种「不写 CNB」的语义）。
+      merge_sha:
+        description: 按需档的 PR 预合并 sha（40 位十六进制；留空 = 只有日志搬运，不送结论）
+        required: false
+        default: ""
+
+# 显式最小权限（CodeQL `actions/missing-workflow-permissions`，#3–#7）：本工作流只读仓库
+# —— checkout、装依赖、跑各判据、上传 artifact。不写这一栏时 GITHUB_TOKEN 拿仓库默认
+# 权限（可能含 contents: write），对一条纯判据工作流没有必要。
+# ISSUE #3437 补 `actions: read`：收尾 job 用内置 `github.token` 读**本 run** 的失败 job
+# 日志正文（`GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs`），搬到 CNB 侧，
+# 让本地判红时不必再出站 github.com 拉日志。只读，不写 GitHub。
+permissions:
+  contents: read
+  actions: read
 
 concurrency:
   group: pr-${{ github.event.client_payload.pr_number || github.run_id }}
@@ -64,10 +106,14 @@ env:
   SKIP_ENV_VALIDATION: "1"
   BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
   CI: "true"
-  # vitest 判据预算临时放宽 ×2（ISSUE #2959；`.cnb.yml` 同键同值，口径见那里的注释）。
-  COMFY_TEST_TIMEOUT_SCALE: "2"
   # 覆盖率 reporter 安静档（ISSUE #1959；逐文件明细在落盘的 lcov / json-summary 里）。
   COMFYAPP_QUIET_COVERAGE: "1"
+  # vitest 并发：默认由 `scripts/ci/ci-load.mjs:resolveCiWorkers()` 按平台分档推导 ——
+  # GA 托管 runner（`GITHUB_ACTIONS=true`，每个 job 独享 4 核 VM）走 `ceil(cores/2)` ⇒ 2；
+  # CNB 自托管（共享宿主机）仍走 `ceil(cores/8)` ⇒ 16 核上 2，行为逐字不变。
+  # 这里只接「人的覆盖出口」，**不写数**：仓库变量没设 ⇒ 展开成空串 ⇒ 走上面的默认；
+  # 设成 ≥1 整数才覆盖，只调并发、不动任何判据（口径同 `.cnb.yml` 同名键）。
+  COMFY_CI_MAX_WORKERS: ${{ vars.COMFY_CI_MAX_WORKERS }}
   # 三点 diff 基线：镜像 payload 给的是 cnb 平台合成 merge 时的目标侧 sha，
   # 与 CNB 上 `CNB_PULL_REQUEST_TARGET_SHA` 同源 ⇒ 同名注入，脚本零改动。
   CNB_PULL_REQUEST_TARGET_SHA: ${{ github.event.client_payload.base_sha || github.event.inputs.base_sha || '' }}
@@ -84,9 +130,10 @@ jobs:
   # 一格串行跑完（CNB 上每格各自付一次 job 开销的教训见 `.cnb.yml` 「重档静态判据」
   # 上方那段 —— 这里一开始就是合格形态）。
   static-gates:
-    # `ubuntu-latest` 2026-10-19 ~ 11-19 正从 24.04 分批迁往 26.04：跟着浮动标签跑，等于让
-    # 这一格的机器由平台排期决定。钉版本 → 换镜像是单独一次决定（先按 `ubuntu-26.04` 试跑）。
-    runs-on: ubuntu-24.04
+    # 显式钉 `ubuntu-26.04`、不跟 `ubuntu-latest` 浮动标签：浮动标签的镜像随平台排期漂移，
+    # 同一份代码两次跑可能落在不同镜像上。换镜像是单独一次决定（先在 26.04 上试跑验证），
+    # 不交给浮动标签抖动。
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - name: 检出（按镜像 payload 的 sha）
@@ -98,70 +145,111 @@ jobs:
           # 分支守卫 / 提交声明核对 / 三点 diff 都要完整历史。
           fetch-depth: 0
 
+      # ISSUE #4300：配方核对。payload 的 base/head/merge_tree 是 CNB 镜像格派发时固定的
+      # 快照身份；head_sha 是 CNB 平台合成的 merge 提交，检出它即与 CNB 侧同树。本步打印
+      # 配方（与镜像日志同字段名，可逐字段对账）并核对「检出树 == merge_tree」：不一致 =
+      # 判的不是 CNB 那棵树，fail-closed 红。典型现场：payload 的 head_sha 缺失 ⇒ checkout
+      # 静默回落 github.sha（镜像 master HEAD）—— 没有这一步，那种跑会**静默判错树**。
+      # merge_tree 缺席（老 payload / 手动档预知不了 tree）只打印配方、不核对（增量契约）。
+      - name: CI 配方核对（base/head/merge_tree）
+        env:
+          MIRROR_BASE_SHA: ${{ github.event.client_payload.base_sha || github.event.inputs.base_sha || '' }}
+          MIRROR_HEAD_SHA: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          MIRROR_MERGE_TREE: ${{ github.event.client_payload.merge_tree || '' }}
+        run: node scripts/ci/ci-mirror-recipe.mjs
+
       - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
         uses: actions/setup-node@v7
         with:
           node-version: 26
 
       - name: 分支守卫（cnb 同款判据一字不改）
-        run: node scripts/check-branch-guard.cjs --pr-check --target master
+        # 手动派发形态（ISSUE #3102）：`workflow_dispatch` 检出的就是 master HEAD，
+        # 「源分支没有超出 master 的提交」是派发形态本身 ⇒ 显式「不判」（exit 2，
+        # 外壳 `ci-step-verdict.mjs` 只在标记出现时折成非红）。PR 形态不带这个旗标，
+        # 判据照旧红。
+        run: node scripts/ci/ci-step-verdict.mjs --label "分支守卫" --inconclusive-marker "[branch-guard] 结论：不判" -- node scripts/gates/check-branch-guard.cjs --pr-check --target master ${{ github.event_name == 'workflow_dispatch' && '--manual-dispatch' || '' }}
 
       - name: 提交声明核对（cnb 同款判据一字不改）
-        run: node scripts/premerge-check.mjs --only=claims
+        run: node scripts/gates/premerge-check.mjs --only=claims
 
       - name: 标题行让位
-        run: node scripts/check-title-bar-clearance.cjs
+        run: node scripts/gates/check-title-bar-clearance.cjs
 
       - name: 文件结构硬规则
-        run: node scripts/check-file-structure.cjs
+        run: node scripts/gates/check-file-structure.cjs
 
       - name: 跨平台动作对照
-        run: node scripts/check-ps1-consistency.mjs
+        run: node scripts/gates/check-ps1-consistency.mjs
 
       - name: import 别名统一
-        run: node scripts/check-import-alias.cjs
+        run: node scripts/gates/check-import-alias.cjs
 
       - name: ComfyUI 端口口径
-        run: node scripts/check-comfyui-port-contract.cjs
+        run: node scripts/gates/check-comfyui-port-contract.cjs
 
       - name: 内联样式注入
-        run: node scripts/check-inline-style.cjs
+        run: node scripts/gates/check-inline-style.cjs
 
       - name: 跨文件重复块
-        run: node scripts/check-code-duplication.cjs
+        run: node scripts/gates/check-code-duplication.cjs
 
       - name: 函数长度 TS
-        run: node scripts/check-function-length.cjs
+        run: node scripts/gates/check-function-length.cjs
 
       - name: 函数长度 Rust
-        run: node scripts/check-rust-function-length.cjs
+        run: node scripts/gates/check-rust-function-length.cjs
 
       - name: 模块循环依赖
-        run: node scripts/check-circular-deps.cjs
+        run: node scripts/gates/check-circular-deps.cjs
 
       - name: 端口推导跨语言一致性
-        run: node scripts/check-app-port-vectors.cjs
+        run: node scripts/gates/check-app-port-vectors.cjs
 
       - name: CHANGELOG 碎片
-        run: node scripts/check-changelog-fragments.cjs
+        run: node scripts/gates/check-changelog-fragments.cjs
 
       - name: 主题色扫描
-        run: node scripts/check-theme-colors.cjs
+        run: node scripts/gates/check-theme-colors.cjs
 
       - name: UI/逻辑分离
-        run: node scripts/check-ui-logic-separation.cjs
+        run: node scripts/gates/check-ui-logic-separation.cjs
+
+      - name: 失败时上传诊断产物
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-gate-static-gates
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 7
 
   # ── 安装 + 数据库表结构 + 类型检查 + oxfmt ─────────────────────────────
   # 对应 `.cnb.yml` 的 Install dependencies / 同步数据库表结构 / 类型检查 / oxfmt 格式。
   typecheck-db-format:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
       - name: 检出（按镜像 payload 的 sha）
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          # `--changed` 的基线是 payload 的 `CNB_PULL_REQUEST_TARGET_SHA`（PR 事件注入的
+          # 目标分支快照），**不等于**合成 merge 的 base 父：master 在 PR 存活期间继续前进时
+          # 它会比 base 父更老，这批历史落在 depth=2 之外 ⇒ 三点 diff 的 merge-base / 基线对象
+          # 取不到、判据 fail-closed 退 2（ISSUE #3375 的现场：老 PR 重跑 + master 已前进）。
+          # 全量档走 `git ls-files` 数当前树、不读历史，但两格共用同一次 checkout ⇒ 一起回到
+          # 全量历史，与 static / heavy 同形态（fixed 段不解析改动面，仍可浅检出）。基线缺席时
+          # `--changed` 自己退「没判」。
           fetch-depth: 0
+
+      # 配方核对（ISSUE #4300）：打印 base/head/merge_tree 并核对检出树，语义见 static-gates 同名步骤。
+      - name: CI 配方核对（base/head/merge_tree）
+        env:
+          MIRROR_BASE_SHA: ${{ github.event.client_payload.base_sha || github.event.inputs.base_sha || '' }}
+          MIRROR_HEAD_SHA: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          MIRROR_MERGE_TREE: ${{ github.event.client_payload.merge_tree || '' }}
+        run: node scripts/ci/ci-mirror-recipe.mjs
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6
@@ -172,41 +260,91 @@ jobs:
           node-version: 26
           cache: pnpm
 
-      - name: 安装依赖（冷装约 8 分钟；allowBuilds 清单见 pnpm-workspace.yaml）
+      - name: 安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）
         run: pnpm install --frozen-lockfile
 
       - name: 同步数据库表结构（cnb 同款判据一字不改）
-        run: node scripts/db-push.mjs
+        run: node scripts/db/db-push.mjs
+
+      - name: schema⇄迁移等价（cnb 同款判据一字不改）
+        # 「版本化迁移 ⇄ `schema.ts`」这一格（ISSUE #1624 验收第 2 条）：
+        # `db:migrate` 建出来的库与 `db:push` 建出来的库必须是**同一份形状**
+        # （表集合 / 逐表逐列 / 索引集合）。漂开了不报错，只在某处业务写入时炸 ——
+        # #3565 的现场：migrate 侧少一张表 / 十列 / 一个索引，在 master 上活了两周，
+        # 暴露通道只剩次日 01:37 的全量单测。
+        #
+        # 为什么它能进 PR 档（§13.5.30 三条门槛，逐条评过）：
+        #   · **确定性** —— 结论由这份树决定（两次真起 drizzle 建两个临时库再比结构），
+        #     不随节点负载 / 并发条数 / 网络抖动变；锁（真 `drizzle/` 的跨进程独占锁）
+        #     在这一条流水线里只有一个用户，不与别的 job 争。
+        #   · **快** —— 本机实跑 7 条 / 墙钟 87s（首跑，drizzle-kit 冷）/ 53s（暖态），
+        #     用例本身 ~50s；它落在**已经装好依赖**的这一格里，不新增一次
+        #     `pnpm install`，也不新增一个 job ⇒ PR 的关键路径不受影响。
+        #     （对照 §13.5.30 那条参照：全仓 ESLint 121s 那一量级属 L2。）
+        #   · **本地可复现** —— 一条命令就能先跑一遍：
+        #     `pnpm exec vitest run tests/db-migrate-equivalence.test.ts`。
+        #
+        # 判据本体一字未改（`tests/db-migrate-equivalence.test.ts` 是这件事的**唯一**
+        # 判据，别为平台侧另写一份 —— §12.12 / §12.18）。
+        run: node scripts/ci/ci-run-tool.mjs vitest run tests/db-migrate-equivalence.test.ts
 
       - name: 类型检查（cnb 同款判据一字不改）
-        run: node scripts/ci-run-tool.mjs tsc --noEmit
+        run: node scripts/ci/ci-run-tool.mjs tsc --noEmit
 
       - name: oxfmt 格式（cnb 同款判据一字不改；基线 = CNB_PULL_REQUEST_TARGET_SHA）
-        run: node scripts/check-format.cjs --changed
+        run: node scripts/gates/check-format.cjs --changed
+
+      - name: oxfmt 格式（全量档：硬闸「未过 oxfmt 的文件一个都不许有」）
+        # 与上一格互补，不是重复：`--changed` 判「这次 PR 带来的那一批」，这一格判全库
+        # 不变式。缺口的形态是「PR 自己改判面」—— 扩 `SCAN_ROOTS` / 删 `IGNORE_GLOBS` /
+        # 改 `.oxfmtrc.json` 时，`--changed` 只看得见被碰的文件（`.oxfmtrc.json` 连
+        # `GLOBS` 都不进），新纳入的那些存量没有任何判决面。
+        # 成本只有实测读数：本机全量档 3.5–4.8s（2107 份判据面，热缓存）。PR 档是
+        # 合入前唯一的自动执行点 ⇒ 红在合入前、暴露窗口 0（不会先落主干再回补）。
+        run: node scripts/gates/check-format.cjs
 
       - name: lib Node-only 声明（cnb 同款判据一字不改）
-        run: node scripts/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts
+        run: node scripts/ci/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts
 
-  # ── 固定结构用例（FIXED_STRUCTURAL_TESTS 静态清单，不解析改动面）─────────
-  fixed-structural-tests:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
+      - name: 失败时上传诊断产物
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-gate-typecheck-db-format
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ── 固定结构 + 受影响用例（同脚本两段，合并为单格以省一次装链；ISSUE #3076）──
+  # 方案 1：两段串行共用同一检出与依赖安装（装链从 2 次降 1 次）。脚本 / 命令 /
+  # segment env 一字不改；失败矩阵变窄（前段失败截断后段）与 wall-clock 串行相加
+  # 的取舍按 #3076 记录（当前私有仓口径）。检出取并集：受影响段需要全历史做三点
+  # diff（CNB_PULL_REQUEST_TARGET_SHA 基线，ISSUE #3375），两段都需要 LFS 真身（字体
+  # 用例），故合并后 `fetch-depth: 0` + `lfs: true`。
+  test-gates:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
     env:
       COMFY_AFFECTED_QUIET: "1"
       COMFY_AFFECTED_NOISE_FILTER: "1"
-      COMFY_AFFECTED_SEGMENT: "fixed"
     steps:
       - name: 检出（按镜像 payload 的 sha）
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          # 取两段检出形状的并集：受影响段依赖三点 diff 的目标分支基线（PR 事件快照，
+          # 非合成 merge 的 base 父；老 PR 重跑 + master 前进时 depth=2 取不到 ⇒ fail-closed
+          # 退 2，ISSUE #3375）⇒ 全量历史；字体用例断言 LFS 真身字节 ⇒ lfs: true。
           fetch-depth: 0
-          # 固定结构用例清单里有字体用例（tests/embedded-title-font.test.ts）：它断言
-          # 工作树里的字体是**真身字节**（与 index 里 LFS 指针记的 size 一致），只检指针
-          # 文件必红 ⇒ 这一格必须拉 LFS 真身。对象由镜像那一格 `git lfs push` 送过去。
-          # 配额：GitHub 免费档 LFS 1 GiB 存储 + 1 GiB/月带宽，**每次拉取都计带宽**
-          # （字体约 8.6 MB）—— 撞墙是 Billing 的事，不是这一格的事。
           lfs: true
+
+      # 配方核对（ISSUE #4300）：打印 base/head/merge_tree 并核对检出树，语义见 static-gates 同名步骤。
+      - name: CI 配方核对（base/head/merge_tree）
+        env:
+          MIRROR_BASE_SHA: ${{ github.event.client_payload.base_sha || github.event.inputs.base_sha || '' }}
+          MIRROR_HEAD_SHA: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          MIRROR_MERGE_TREE: ${{ github.event.client_payload.merge_tree || '' }}
+        run: node scripts/ci/ci-mirror-recipe.mjs
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6
@@ -215,55 +353,53 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 26
-          cache: pnpm
+
+      # node_modules 直缓存灰度（ISSUE #3076，方案 2，先单格）：只缓存 node_modules，
+      # 锁文件/Node/runner 维度作 key；命中时 install 仍会校验链接但应显著快于冷装。
+      # pnpm symlink 与原生产物在恢复后的正确性需持续观察（回滚 = 删本步 + 恢复 store 缓存）。
+      - name: 恢复 node_modules 缓存（灰度）
+        id: node-modules-cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node26-node_modules-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: 安装依赖
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      # 缓存命中 ⇒ pnpm 不再重跑 postinstall ⇒ `.storybook/assets/` 缺席（那三张 svg 是
+      # postinstall 按当前检出现生成的开发期夹具，gitignored、不入库，也不在 node_modules
+      # 缓存里）。故障现场：#3748 —— FIXED_STRUCTURAL 段里 storybook-data-sources 判据红。
+      # 这里无条件补一次同款入口（幂等，毫秒级），与 fresh 检出行为对齐。
+      - name: Storybook 开发期资源（postinstall 不重跑时现生成）
+        run: node scripts/install-git-hooks.mjs
 
       - name: 固定结构用例（cnb 同款判据一字不改）
-        run: node scripts/ci-affected-tests.mjs
-
-  # ── 受影响用例（固定清单之外 + 这个 PR 改动牵扯到的用例，三点 diff）──────
-  affected-tests:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    env:
-      COMFY_AFFECTED_QUIET: "1"
-      COMFY_AFFECTED_NOISE_FILTER: "1"
-      COMFY_AFFECTED_SEGMENT: "affected"
-    steps:
-      - name: 检出（按镜像 payload 的 sha）
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
-          fetch-depth: 0
-          # 与 fixed 那格同因：改动面含字体资产 / 字体用例时这一格也会跑到
-          # tests/embedded-title-font.test.ts，只检指针文件必红 ⇒ 同开 lfs: true。
-          # 配额口径见 fixed 那格（每次拉取计带宽，撞墙是 Billing 的事）。
-          lfs: true
-
-      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
-        uses: pnpm/action-setup@v6
-
-      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
-        uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: pnpm
-
-      - name: 安装依赖
-        run: pnpm install --frozen-lockfile
+        env:
+          COMFY_AFFECTED_SEGMENT: fixed
+        run: node scripts/ci/ci-step-verdict.mjs --label "固定结构用例" -- node scripts/ci/ci-affected-tests.mjs
 
       - name: 受影响用例（cnb 同款判据一字不改）
-        run: node scripts/ci-affected-tests.mjs
+        env:
+          COMFY_AFFECTED_SEGMENT: affected
+        run: node scripts/ci/ci-step-verdict.mjs --label "受影响用例" -- node scripts/ci/ci-affected-tests.mjs
+
+      - name: 失败时上传诊断产物
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-gate-test-gates
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 7
 
   # ── 重档静态判据（钩子注册表执行面，含 cargo test）─────────────────────
   # `.cnb.yml` 那一格带 `.cargo-env` 锚点是自托管 Windows 的 rustup 代理路径
-  # （G:\.cargo + C:\Users\yuedu\.rustup）；ubuntu-24.04 镜像自带 Rust 工具链，
+  # （G:\.cargo + C:\Users\yuedu\.rustup）；Ubuntu hosted 镜像自带 Rust 工具链，
   # 不需要那一对变量。cargo 依赖缓存由 swatinem/rust-cache 承担（钉 v2：
   # `git ls-remote --tags` 核过它只有一个主版本，v2 即最新，且已是 node24 运行时）。
   heavy-gates:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
     env:
       # 「格式化提交与行为改动分离」判据（reformat-preview-range.mjs）认合成合并预览
@@ -277,7 +413,18 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          # 这一格**留在全历史**：`依赖新鲜度` 的基准是 `merge-base HEAD origin/master`，
+          # 浅克隆里没有这条 ref（它按 remote 名现算，不会是合成 merge 的父）⇒ 不随
+          # 上面三格一起收窄。它也是 static-gates 之外唯一还用 `origin/master` 的格。
           fetch-depth: 0
+
+      # 配方核对（ISSUE #4300）：打印 base/head/merge_tree 并核对检出树，语义见 static-gates 同名步骤。
+      - name: CI 配方核对（base/head/merge_tree）
+        env:
+          MIRROR_BASE_SHA: ${{ github.event.client_payload.base_sha || github.event.inputs.base_sha || '' }}
+          MIRROR_HEAD_SHA: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          MIRROR_MERGE_TREE: ${{ github.event.client_payload.merge_tree || '' }}
+        run: node scripts/ci/ci-mirror-recipe.mjs
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
         uses: pnpm/action-setup@v6
@@ -294,9 +441,257 @@ jobs:
           # 仓根没有 Cargo.toml（workspace 在 src-tauri/），缺省 `cargo metadata`
           # 在根上跑 ⇒ exit 101 噪音（不红，但每跑都刷一条）。指到真 workspace 即消。
           workspaces: src-tauri
+          # 编译失败也落缓存（#4317）：壳门禁的 cargo test 常红在编到一半
+          # （缺库 / 断言红），下一跑从热缓存起编，而不是从零再来一遍。
+          cache-on-failure: true
 
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
+      # Tauri 在 Linux 上编译要的系统库（ISSUE #3572 / #3580）。
+      #
+      # 为什么这一格以前不需要它：承重门禁是 #3064（2026-11-02）从 CNB 自托管节点迁到 GA 的，
+      # 而那个节点是 **Windows**（`.cnb.yml` 节点 tag = win）—— Windows 编 Tauri 走 MSVC +
+      # WebView2，不需要 glib / webkit 这套 Linux 系统库。迁移之后 master 上 418 笔提交里
+      # 没有一笔碰过 `src-tauri/src/`，所以「桌面壳（改了 src-tauri 才跑）」那一格在 GA 上
+      # **从来没有真跑过 `cargo test`**；第一次真跑就是 ISSUE #3562 那一笔，当场编译失败：
+      #
+      #     pkg-config exited with status code 1
+      #     > pkg-config --libs --cflags glib-2.0 'glib-2.0 >= 2.70'
+      #     The system library `glib-2.0` required by crate `glib-sys` was not found.
+      #     （cargo 退 101 = **编译期**失败，不是断言失败）
+      #
+      # hosted runner 不保证预装下面这些（actions/runner-images 的 apt 清单随镜像版本变）；
+      # 显式 apt 装、不依赖镜像预装，换镜像版本也不影响这一格。
+      #
+      # 清单**不是照抄 Tauri 官方 Prerequisites 页**：官方那一栏是「给人装环境」用的，
+      # 而这一格要的是「编译期真会被问到的 `.pc`」—— 两者差着四个（#3580 的现场：#3572 照
+      # 官方清单写探针，`rsvg-2.0` / `xdo` / `ayatana-appindicator3-0.1` / `openssl` 这四个
+      # 模块**注定永远报缺** —— 名字错 / 不在依赖图 / 运行期 dlopen / 不参与编译 ⇒ GA
+      # runner 上 apt 明明装成功了、探针仍报缺 ⇒ 那一格对任何碰 `src-tauri/**` 的 PR 恒红）。
+      # 下面这份清单与 `scripts/gates/shell-gate.mjs` 的 `TAURI_LINUX_PC_PACKAGES` **一一对应**：
+      # 每个被探的 `.pc` 模块由哪个 `-dev` 包提供，写在同一个地方，两边脱钩由用例挡。
+      #
+      #   libglib2.0-dev               → glib-2.0 / gobject-2.0 / gio-2.0
+      #   libatk1.0-dev                → atk
+      #   libcairo2-dev                → cairo / cairo-gobject
+      #   libgdk-pixbuf-2.0-dev        → gdk-pixbuf-2.0
+      #   libpango1.0-dev              → pango
+      #   libgtk-3-dev                 → gtk+-3.0 / gdk-3.0 / gdk-x11-3.0
+      #   libdbus-1-dev                → dbus-1（`libdbus-sys` 缺它直接 panic）
+      #   libwebkit2gtk-4.1-dev        → webkit2gtk-4.1（webview 后端）
+      #   libsoup-3.0-dev              → libsoup-3.0
+      #   libjavascriptcoregtk-4.1-dev → javascriptcoregtk-4.1
+      #
+      # 另外两个不是 `.pc` 的提供者：
+      #   libayatana-appindicator3-dev —— **运行期**托盘后端（`libappindicator-sys` 没有
+      #     build.rs，它在运行期 `dlopen` `libayatana-appindicator3.so.1`）⇒ 编译期不探它，
+      #     但 Linux 上真跑起来要它，托盘没了会静默失败。
+      #   build-essential —— C 依赖的链接器与头文件（glib-sys / gtk-sys 全走它）。
+      #
+      # ⚠️ 装的是 **dev** 包不是运行时包：cargo test 要的是头文件与 `.pc` 描述文件
+      # （pkg-config 读的就是 `.pc`），不是 `.so` 本身 —— 少了 `-dev` 就是「pkg-config 找不到
+      # glib-2.0」这一句。
+      #
+      # 这一步**只在重档真会碰壳时**才需要。触发面本来在判据内部算（判据本人才知道
+      # 有没有改壳），一度只能无条件装、每个 PR 多付约 30s 的 apt；#4309 起由
+      # `ci-shell-face.mjs` 在 workflow 层用**同一条链**（changed-scope 的
+      # resolveBaseRef → changedFilesForBaseRef → reconcileSyntheticMergeFace）与
+      # **同一个正则**（shell-gate 的 `SHELL_INPUT_RE`，直接 import 不抄第二份）提前
+      # 回答「这次碰没碰壳」——没碰就不装。误跳的代价是壳门禁红在缺库上，所以判定
+      # 任何一环拿不到读数都 fail-open（按要装处理）；判据说要编，这里必然装了。
+      #
+      # 实测读数（#4309，15 次 pr-gate）：这一步 8 次约 22~35s，7 次被 apt 拖到
+      # 8~15 分钟（慢的不是拉索引——13.2MB 只要 3s——是 install 阶段 `-qq` 之下的
+      # 整段静默，慢样本里 561s 一行日志都没有），2 次撞死在步级超时上。三件事随本条
+      # 同批修：① 没碰壳的 PR 整步跳过；② install 去 `-qq`（与 #4294 对 update 的
+      # 处置同源），下载阶段显形；③ 两条 apt 命令加 `DPkg::Lock::Timeout=120`，
+      # 真撞上 dpkg 锁（unattended-upgrades 那一族）时 120s 内失败、落进下面的整体重试，
+      # 不再无声干等。
+      #
+      # 镜像侧瞬时故障（DNS 解析 / 连接不上）会让 apt 无声空等二十多分钟才 exit 100，
+      # 而这一格原来既无重试、也无连接 / 步级超时 ⇒ 整条 PR 流水线被压在 pending。
+      # 两条 apt 命令加重试与空闲超时让短暂抖动自愈、死镜像早退；步级超时兜住真挂住，
+      # 让失败落在这一步自己的名字上。判据一字不改，只硬化这层环境前置（#3589）。
+      - name: 这次改没改壳输入（没改就不白付 apt，#4309）
+        id: shell-face
+        run: node scripts/ci/ci-shell-face.mjs
+
+      - name: 装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）
+        # fail-open 的双保险：输出不是字面 'false'（含本步没跑到 / 输出缺席）都装。
+        if: steps.shell-face.outputs.shell != 'false'
+        timeout-minutes: 15
+        run: |
+          # 2026-11-18（#4294）：GA runner 的 apt 镜像抖动频发——「找不到包」与
+          # 「装到一半超时」轮流出现，一天内三次把在途 PR 卡死。#3589 的连接级
+          # 重试之外，这里再加**一次整体重试**：第一次失败（含 index 拉到坏镜像）
+          # 后清掉 lists 重来一次；两次都失败才让这一格红。15 分钟步级超时罩住
+          # 两次尝试。
+          for attempt in 1 2; do
+            if sudo apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120               && sudo apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120                 libglib2.0-dev                 libatk1.0-dev                 libcairo2-dev                 libgdk-pixbuf-2.0-dev                 libpango1.0-dev                 libgtk-3-dev                 libdbus-1-dev                 libwebkit2gtk-4.1-dev                 libjavascriptcoregtk-4.1-dev                 libsoup-3.0-dev                 build-essential                 libayatana-appindicator3-dev; then
+              exit 0
+            fi
+            if [ "$attempt" = "2" ]; then
+              exit 1
+            fi
+            echo "apt 安装第 ${attempt} 次失败，清理 lists 后重试一次"
+            sudo rm -rf /var/lib/apt/lists/*
+            sleep 5
+          done
+
       - name: 重档静态判据（cnb 同款判据一字不改）
-        run: node scripts/ci-heavy-gates.mjs
+        # 「没判」那一档（缺 CNB_COMMIT 等前提）由脚本自己打结论行，外壳据此折成非红；
+        # 有红 / 有缺件不折，红照样红（ISSUE #3102）。
+        run: node scripts/ci/ci-step-verdict.mjs --label "重档静态判据" --inconclusive-marker "[重档] 结论：没判" -- node scripts/ci/ci-heavy-gates.mjs
+
+      - name: 失败时上传诊断产物
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-gate-heavy-gates
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ── GA 结论送回 CNB（ISSUE #3378 · 2026-11-08 转正）────────────────────────
+  #
+  # 探针（#3374）验过：GA 侧用 `repo-cnb-trigger:rw` 的令牌调一次
+  # `POST /{repo}/-/build/start`，带 `event=api_trigger_ga_verdict`、
+  # `sha=<PR 预合并 sha>`、`env.GA_VERDICT=<结论>`、
+  # `env.GA_CALLBACK_SHA=<同一个预合并 sha>`，平台把那条短流水线的终态
+  # 自动写进该 sha 的 commit-statuses。后者让 CNB 回调 build 的日志也念得出
+  # 自己绑在哪笔上（平台 `CNB_COMMIT` 对 `api_trigger*` 无明文取值保证）。
+  #
+  # 这一跳是**转正后的唯一判决数据源**：CNB 侧 `质量门禁` 的
+  # `GA 回调结论回读`（§13.5.33 逐笔对账）站内读这条 status，折成
+  # `pull_request` build 的退码 —— 出站轮询 GitHub conclusion 的主列已停用，
+  # 自托管机一台都不必碰 github.com。`continue-on-error: true` 保留：这一格
+  # 是「送结论」，它自己发没发出去不该反过来改本 run 的 conclusion。
+  #
+  # `needs` 列全五个判据 job：`if: always()` 让任一格红/取消时本格照样跑，
+  # 把「红」也送回去（否则 GA 判红而 CNB 侧一直没有终态，PR 会一直挂着）。
+  # `GA_JOB_RESULTS` 把五个 result 交给脚本折成一个 conclusion —— 不用
+  # `${{ job.status }}`：它在本格里恒为 success，读不出上游的红。
+  ga-verdict-callback:
+    runs-on: ubuntu-26.04
+    needs:
+      - static-gates
+      - typecheck-db-format
+      - test-gates
+      - heavy-gates
+    if: always()
+    # 这一跳是「送结论」，不该反过来改本 run 的 conclusion（自指面见上）。
+    continue-on-error: true
+    timeout-minutes: 5
+    steps:
+      - name: 检出（回调脚本在仓库里）
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          fetch-depth: 1
+          lfs: false
+
+      - name: 装 Node（engines 下限 26.12.1；脚本只吃 node:*）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      # ISSUE #3981 / #3980：标题走 `GITHUB_ENV` 传给收尾那一跳（它只认文件）。
+      #
+      # 取值**只有一个入口**（`scripts/ci/ci-ga-verdict-title.mjs` 内三条路依次回落）：
+      #   ① `GA_PR_TITLE`（显式注入，手跑复验用）
+      #   ② `client_payload.pr_title`（镜像格送来的那枚，与 `run-name` 同源）
+      #   ③ 站内 `GET /{repo}/-/pulls/{n}`（按需档 #3667 没有 payload）
+      #
+      # 为什么不再分两步、也不再读 `github.event.pull_request.title`（#3980 现场）：
+      # 本 workflow 的触发面只有 `repository_dispatch` / `workflow_dispatch`，
+      # **没有 `pull_request`** ⇒ 那个表达式恒为空串 ⇒ 旧的两步里「自动档」那一步
+      # 从来没执行过，「按需档」那一步又因为 `pr_number` 缺失而空转，于是 100% 的
+      # 回调 build 都落回平台缺省 `API custom event`。payload 文件里本来就有标题，
+      # 直接读它即可 —— 这里不再写任何 `github.event.pull_request.*` 表达式。
+      #
+      # `continue-on-error`：标题只是那一列的显示，读不到不该让一条本可送达的
+      # 判决送不出去 —— 它的成败不进 `needs.*.result`（step 不是 job）。
+      - name: 取 PR 标题（写进 GITHUB_ENV）
+        if: always()
+        continue-on-error: true
+        env:
+          CNB_TRIGGER_TOKEN: ${{ secrets.CNB_TRIGGER_TOKEN }}
+          CNB_REPO_SLUG: moon-read/comfy-app-t3
+          CNB_PULL_REQUEST_IID: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.pr_number || inputs.pr_number || '' }}
+        run: node scripts/ci/ci-ga-verdict-title.mjs
+
+      - name: 把结论送回 CNB
+        env:
+          CNB_TRIGGER_TOKEN: ${{ secrets.CNB_TRIGGER_TOKEN }}
+          CNB_REPO_SLUG: moon-read/comfy-app-t3
+          # 两条触发形态都读（ISSUE #3710）：自动档（repository_dispatch）在
+          # client_payload，按需档（workflow_dispatch，#3667）在 inputs ——
+          # 只读后者会让按需档的结论回调恒 failure（0s 退出那一格的病灶）。
+          #
+          # ⚠️ 这里**必须先判 `github.event_name`**，不能写成
+          # `github.event.inputs.x || github.event.client_payload.x`（ISSUE #3998 现场）：
+          # GitHub 的 `||` 是表达式语法，`github.event.inputs` 这个键**恒存在**（自动档
+          # 展开成空串），而 `||` 只在左侧为 null / false 时短路 —— 空串不算，于是自动档
+          # 永远取到空串、回不到 client_payload。镜像格那一刻 `CNB_PULL_REQUEST_MERGE_SHA`
+          # 为空时，回调恒「前提不成立」退 2，CNB 侧读到的是 status 缺席（那跑白等 70m）。
+          # 先按事件分形态，`||` 两边才各是「这个形态下真的会空」的取值。
+          # 兜底还有一层：`ci-ga-verdict-callback.mjs` 自己读 `GITHUB_EVENT_PATH` 的
+          # payload（脚本里的顺序是 旗标 → payload → 环境变量），两处都指向同一份字段名。
+          CNB_PULL_REQUEST_IID: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.pr_number || inputs.pr_number || '' }}
+          CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.cnb_merge_sha || inputs.merge_sha || '' }}
+          # ISSUE #3981：CNB 构建历史里回调 build 的标题 —— 不送就一律落到平台缺省
+          # （历史现场全是 `API custom event`），认不出属于哪张 PR。取值来自上面
+          # 那一步写进 `GITHUB_ENV` 的 `GA_PR_TITLE`（三条路依次回落，见该脚本文件头）；
+          # 都取不到 ⇒ 脚本不送 `title` 键、回落缺省，不发明「无标题」这一形态。
+          GA_PR_TITLE: ${{ env.GA_PR_TITLE || '' }}
+          GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}
+        run: node scripts/ci/ci-ga-verdict-callback.mjs
+
+      # ISSUE #3437：把**失败 job 的日志正文**搬到 CNB 侧（站内），本地 `pnpm ship
+      # --gh-logs` 优先从 CNB 读，判红时不必再出站 github.com —— 本单从头治的那一格。
+      # 与「结论回调」同一条「GA 入站推送 + CNB 站内读」分工，只是载荷从 conclusion
+      # 换成日志正文。`if: always()` + step 级 `continue-on-error`：日志搬不到绝不
+      # 反过来改本 run 的 conclusion（判红该拦的闸在 CNB 侧，与这一格无关）。
+      # 脚本自己判有没有失败 job（判绿时不发评论），无条件跑最不容易在 GA 表达式上出错。
+      #
+      # 令牌分两枚，不互相扩权（ISSUE #3454 期望 3：另配写描述专用令牌）：
+      #   · `CNB_ISSUE_TOKEN`（`repo-notes:rw`，code-scanning-triage.yml 同一枚）：
+      #     上传附件 + 发 PR 评论。评论是权威读源，也是附件「发布」那一跳。
+      #   · `CNB_PULL_REQUEST_TOKEN`（`repo-pr:rw`，人已配）：**只**用于
+      #     `GET /-/pulls/{n}` → 读改写 → `PATCH /-/pulls/{n}`，把同一份附件链
+      #     镜像进 PR 描述（最新一份）。`CNB_ISSUE_TOKEN` 写不了描述（会 403），
+      #     也没给它扩权；这枚缺席/失败时脚本只发评论，不改三态、不拦合。
+      # `CNB_TRIGGER_TOKEN`（`repo-cnb-trigger:rw`）是结论回调起 build 用的，第三码事。
+      # `GITHUB_TOKEN` 走内置 `github.token`（顶层 `actions: read`），读本 run 的 job logs。
+      # ⚠️ 首跑复验出口：`actions: read` 能不能读到同 run 的 job logs、
+      # `CNB_ISSUE_TOKEN` 在 PR 事件上带不带 notes 写权、以及
+      # `CNB_PULL_REQUEST_TOKEN` 带不带 `repo-pr:rw`，看这一跑的 stage 读数
+      # （`[ga-logs-relay] 已搬到 CNB` / `PR 描述已镜像` / 「只发评论」那几行）。
+      #
+      # ISSUE #3452：评论里并列念「送达 / 判决」两件事。commit-status 那格叫
+      # 「GA 判决回调」、显示 `error [2.2s]`，读起来像回调腿挂了；它其实是
+      # **GA 判决结论的镜像**（红 = GA 判红生效）。平台这格 description 没有写入口
+      # （Swagger 三条 commit-status 路径全是 get），承重退码更一字不能动，
+      # 于是把解释念进这条本来就会发的 PR 评论。`GA_JOB_RESULTS` 与结论回调
+      # 那一跳同源，脚本复用同一份结论折叠，不另立判据。判绿时不发评论（无失败 job）。
+      # ISSUE #3710：这一步**不再带 step 级 continue-on-error** —— 前提不成立时
+      # （按需档最典型：inputs 没送达 / PR 号不是数字）脚本会 0s 退出，此前被
+      # 这枚旗标盖成绿色 ✓，与「跑过但没日志」在 run 列表里不可区分。摘掉后
+      # 失败在这格上可见（✗）；job 级的 continue-on-error 仍在，run 的结论
+      # （判红该拦的闸在 CNB 侧）不随日志搬运成败变化。
+      - name: 把 GA 判红日志正文搬到 CNB
+        if: always()
+        env:
+          CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
+          CNB_PULL_REQUEST_TOKEN: ${{ secrets.CNB_PULL_REQUEST_TOKEN }}
+          CNB_REPO_SLUG: moon-read/comfy-app-t3
+          CNB_PULL_REQUEST_IID: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.pr_number || inputs.pr_number || '' }}
+          CNB_PULL_REQUEST_MERGE_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.cnb_merge_sha || inputs.merge_sha || '' }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GA_JOB_RESULTS: ${{ join(needs.*.result, ',') }}
+          # ISSUE #3667：按需档给 relay_scope=all ⇒ 判绿也把全部 job 搬进 CNB；
+          # 自动档（repository_dispatch）没有这个 input ⇒ 空串 ⇒ scope=failed，#3437 原样。
+          GA_LOG_SCOPE: ${{ github.event.inputs.relay_scope || '' }}
+          GA_LOG_RUN_ID: ${{ github.event.inputs.run_id || '' }}
+        run: node scripts/ci/ci-ga-logs-relay.mjs

@@ -1,22 +1,7 @@
 /**
- * FR-SR 系列 / 季 / 集 / 角色库表（#2477）。
- *
- * 从 schema.ts 拆出：schema.ts 触到 900 行文件行数硬闸（规范 §12.6），按「只拆不改」
- * 把本域五张表挪到这里，schema.ts 末尾 `export * from "./schema-series"` 原样再导出，
- * 故 `~/server/db/schema` 的既有导入方与 drizzle-kit push（读 schema.ts 的导出面）均无损。
- * 本文件与 schema.ts 互相引用是刻意的 ESM 环：`series.userId → user.id` 外键经
- * `() => user.id` 惰性回调解析，模块初始化期不触碰对方绑定。
- *
- * 设计约束：本仓 `db:push` 走 `drizzle-kit push --force`（自动批准丢数据语句），
- * schema 注释因此明令「纯新增表、不动既有表」。故本文件**只新增表**，绝不改
- * `production` 的 `characters` / `shots` JSON 列 —— 那些列的抽取是破坏性迁移，
- * 单列走 `db:generate` + `db:migrate`（带回填），不在本变更内。
- *
- * 层级（FR-SR-01/02）：series → season → episode；一集 = 一次创作链路 + 一部成片。
- * 角色（FR-SR-03）：`character` 是系列级可复用实体，`episodeCharacter` 是「引用」
- * 而非「拷贝」的关联（同一角色被多集引用时只有一份真相）。`character` 字段对齐
- * `src/lib/workshop/types.ts` 的 `Character` + `characterInputSchema`，便于将来与
- * `production.characters` 工作副本做双向同步时形状一致。
+ * FR-SR 系列 / 季 / 集 / 角色库表（#2477）。schema.ts 触到 900 行硬闸（规范 §12.6）后「只拆不改」搬来，末尾
+ * `export * from "./schema-series"` 原样再导出（导入方与 drizzle-kit push 均无损）。`db:push --force` 自动批准丢数据，
+ * 故只新增表、绝不改 `production` 的 `characters`/`shots` 列（走 `db:generate` + `db:migrate`）；`character` 对齐 `workshop/types.ts`。
  */
 
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
@@ -63,8 +48,16 @@ export const season = sqliteTable(
       .$defaultFn(() => new Date())
       .$onUpdate(() => new Date()),
   },
-  (t) => [index("season_series_idx").on(t.seriesId)],
+  (t) => [
+    index("season_series_idx").on(t.seriesId),
+    // 同一系列下季号唯一（#3849）：服务端按「现有最大季号 +1」发号（UI 建季
+    // 不传号），唯一索引兜住并发与显式传号撞号的路径。
+    uniqueIndex("season_series_number_uniq").on(t.seriesId, t.seasonNumber),
+  ],
 );
+
+/** 集状态词表（#4049）：路由的 zod 与列的取值同源，不再两处手抄。 */
+export const EPISODE_STATUSES = ["draft", "producing", "done"] as const;
 
 export const episode = sqliteTable(
   "episode",
@@ -94,6 +87,9 @@ export const episode = sqliteTable(
   },
   (t) => [
     index("episode_season_idx").on(t.seasonId),
+    // 同一季下集号唯一（#3849）：服务端按「现有最大集号 +1」发号（UI 建集
+    // 不传号），唯一索引兜住并发与显式传号撞号的路径。
+    uniqueIndex("episode_season_number_uniq").on(t.seasonId, t.episodeNumber),
     uniqueIndex("episode_project_uniq").on(t.projectId),
   ],
 );
@@ -127,7 +123,13 @@ export const character = sqliteTable(
       .$defaultFn(() => new Date())
       .$onUpdate(() => new Date()),
   },
-  (t) => [index("character_series_idx").on(t.seriesId)],
+  (t) => [
+    index("character_series_idx").on(t.seriesId),
+    // 同一系列下角色名唯一（#3849）：promoteFromProduction 按 name 合并 /
+    // 去重，同名两行会让合并只命中其一；服务端 create / 改名路径把撞名转成
+    // 业务冲突（409），这里补上库级兜底。
+    uniqueIndex("character_series_name_uniq").on(t.seriesId, t.name),
+  ],
 );
 
 /** 集 ↔ 角色 关联（FR-SR-03：引用而非拷贝）。 */

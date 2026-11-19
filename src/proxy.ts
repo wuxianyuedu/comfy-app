@@ -3,11 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 /**
  * Proxy（Next 16 的 `middleware` 新名字）：本机单用户桌面应用，不做登录墙。
  *
- * - 本应用为本地 ComfyUI 桌面壳，所有 tRPC 过程（authedProcedure）在无会话时
- *   自动回退到 demo 用户（见 src/server/api/trpc.ts），REST 路由由
- *   getServerUser() 兜底，无需登录即可使用全部界面功能。
- * - 原先这里会把 /settings、/workshop 等界面路由在缺少会话 cookie 时重定向到
- *   /login；现已移除该限制，点击左下角「设置」等入口可直接进入，无需登录。
+ * - 本应用为本地 ComfyUI 桌面壳，无需登录即可使用全部界面功能：所有 tRPC 过程
+ *   （authedProcedure）与 REST 路由在无会话时回退到 demo 用户（见
+ *   src/server/api/trpc.ts 与 src/lib/auth-server.ts）。
+ * - 登录页已移除（ISSUE #3827），此处不再对界面路由做登录重定向。
  * - /api/* 不在此拦截：鉴权由 tRPC protected/authed 过程与服务端
  *   getServerUser() / requireServerUser() 在各自路由内处理。
  *
@@ -73,8 +72,8 @@ export const config = {
    * `proxy()` 里的判据一次都不会执行，而且不报错。
    * `/generated` 不带斜杠那条也要匹配：它会解析成产物根目录本身，交给 route 回 404，
    * 而不是在这里替它决定。 */
-  /* oxlint-disable-next-line unicorn/prefer-string-raw -- Next 16 对段配置导出做静态求值
-   * （extract-const-value 只认字面量节点），String.raw 标签模板判 unsupported ⇒
-   * errorFromUnsupportedSegmentConfig 构建必红（#3087 的 oxlint --fix 引入的现场） */
-  matcher: ["/((?!_next|.*\\..*).*)", "/generated", "/generated/:path*"],
+  /* `matcher` 由 Next 16 静态求值（extract-const-value 只认字面量节点）：用字符类 `[.]`
+   * 匹配字面点，既不引入转义，也不用 `String.raw` 标签模板 —— 后者在该静态求值里判
+   * unsupported，errorFromUnsupportedSegmentConfig 会让构建必红。 */
+  matcher: ["/((?!_next|.*[.].*).*)", "/generated", "/generated/:path*"],
 };

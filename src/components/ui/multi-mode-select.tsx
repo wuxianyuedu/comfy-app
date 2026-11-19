@@ -1,54 +1,9 @@
 "use client";
 
-/**
- * MultiModeSelect —— 一个工作流可挂多种模式（multi-select chip）。
- *
- * 工作流卡片右上角用它替代单选 SelectMenu：
- *   - 主 chip：默认 mode（按所在分类着色）
- *   - +N pill：附加模式弱化占位
- *   - 点主 chip 或 +N pill 开同一个多选 popover：
- *       · 搜索框（label / code / subCategory）
- *       · 按 image / video / audio 分类分组页签
- *       · 每行 = checkbox + label + code + 默认 toggle
- *       · 底部 取消 / 保存（显示已选条数）
- *
- * 浮层走 `~/components/ui/popover`（规范 16 §16.2.3 P2）：此前这里照抄了
- * SelectMenu 的全套自搓浮层（portal + fixed 定位 + 滚动重定位 + 手写 Esc /
- * 外点关闭 + z-index 魔数）—— 同一件事在库里因此有两份副本，改一处漏一处。
- * 现在定位与关闭语义交给 base-ui，本组件只留「多选 + 草稿」这件事自己。
- *
- * ## 为什么没合到 shadcn `Combobox`（P67 §12.18 中间地带 · 已评估保留）
- *
- * 曾装过 `~/components/ui/combobox`（**Base UI 版 Combobox**，带搜索；
- * 界面层最严格审计 §2.9 判定为"装了但 src 内 0 消费点"的死装件、已
- * 随本 PR 删除）。从形状看它与本件「搜索 + 多选」有重叠，但本件有
- * **3 条 Combobox 撑不住的复合语义**、硬合会丢业务判据 —— 这三条与
- * "磁盘上是否装有 combobox"无关，即便未来重新引入也需要独立评估：
- *
- *   1. **draft / apply 事务**：面板内 `useState<Set<string>>(new Set(modes))`
- *      起一份草稿、只有点「保存」才 `onChange` 回父层；点「取消」直接关
- *      浮层不改动。Combobox 是「即时选中即 `onChange`」的单向流，草稿态
- *      需要在外层再手写一份、并把 Combobox 的多选模式关掉——那时其实
- *      本件已经**不是 Combobox 的复用、而是 Combobox 的二次包装**，收益
- *      抵不上把 Base UI Combobox 拉进浮层里做多套状态同步的复杂度。
- *   2. **`defaultMode` 指针**：`modes` 里额外标一位「哪个是默认」并显示
- *      在 chip 主色上；`draftDefault` 与 draft 一起编辑、保存时若被取消
- *      勾选会回退到 `arr[0]` 保证 `defaultMode ⊆ modes` 约束成立。Combobox
- *      只有一维「选中集」、没有 second-class 的默认指针。
- *   3. **分类页签（image / video / audio）**：面板顶部切段、`activeTab`
- *      打开时定位到第一个已选模式的分类；每段独立展示符合该分类的候选。
- *      Combobox 是单一搜索列表、没有页签维度。
- *
- * 三条业务判据叠在一起、本件是**「草稿事务化的多选编辑器」**、Combobox
- * 是「即选即提交的可搜索单选/多选下拉」——语义不同，保留自绘（§12.18
- * 「确认是这一处独有的业务才就地写」）。文件里的**共性**（浮层定位 /
- * 外点关闭 / Esc）已经吃 base-ui Popover；**独立**的 draft / tab /
- * default 三态是本件的核心、没有对应基元可复用。
- *
- * 注：`ui/combobox.tsx` 已删除；上面这段选型论证不再依赖磁盘上有 combobox
- * 存在，若未来重新引入 Base UI Combobox（例如给多处搜索型下拉做统一出口）
- * 或本件被拆解，这段需要重新评估。
- */
+/** MultiModeSelect —— 一个工作流可挂多种模式（multi-select chip）：主 chip 显示默认 mode（按所在分类着色）、+N pill 弱化占位；点任一入口开同一个多选 popover（搜索 label / code / subCategory、按 image / video / audio 分类分组页签、每行 = checkbox + label + code + 默认 toggle、底部取消 / 保存并显示已选条数）。
+ * 浮层走 `~/components/ui/popover`（规范 16 §16.2.3 P2）：此前这里照抄了 SelectMenu 的全套自搓浮层（portal + fixed 定位 + 滚动重定位 + 手写 Esc / 外点关闭 + z-index 魔数），同一件事在库里有两份副本；现在定位与关闭语义交给 base-ui，本组件只留「多选 + 草稿」。
+ * 为什么没合到 shadcn `Combobox`（P67 §12.18 中间地带 · 已评估保留；曾装的 Base UI 版 Combobox 因 src 内 0 消费点已删除）：本件有 3 条 Combobox 撑不住的复合语义 —— ① draft / apply 事务（面板内 `useState<Set<string>>(new Set(modes))` 起草稿，只有点「保存」才 onChange 回父层、取消直接关不改动；Combobox 是即时选中即 onChange，硬合等于把 Combobox 二次包装再多做套状态同步）；② `defaultMode` 指针（`modes` 里额外标一位默认并显示在 chip 主色上，`draftDefault` 随草稿编辑、保存时若被取消勾选回退到 `arr[0]` 以保证 defaultMode ⊆ modes；Combobox 只有一维选中集）；③ 分类页签（打开时定位到第一个已选模式的分类、每段独立展示候选；Combobox 是单一搜索列表、没有页签维度）。
+ * 三条业务判据叠加，本件是「草稿事务化的多选编辑器」、Combobox 是「即选即提交的可搜索下拉」—— 语义不同，保留自绘（§12.18）；共性（浮层定位 / 外点关闭 / Esc）已吃 base-ui Popover，独立的 draft / tab / default 三态是本件核心。若未来重新引入 Base UI Combobox 或本件被拆解，这段选型论证需重新评估。 */
 
 import { useCallback, useMemo, useState } from "react";
 import { textHandler } from "~/lib/form-props";
@@ -58,6 +13,7 @@ import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { ALL_WORKFLOW_TYPES, type WorkflowCategory } from "~/lib/workflow/workflow-types";
 
 /* ── per-category pill colors（走语义 token，规范 03 §3.6.2）── */
@@ -96,7 +52,13 @@ type MultiModeSelectProps = {
   onChange: (modes: Array<string>, defaultMode: string) => void;
 };
 
-const POPOVER_MAX_H = 360;
+/* 候选列表**内容**上限（不是浮层高度上限）：内容少时不撑满，内容多时靠它进入
+ * 自身滚动。浮层高度上限交给 base-ui 的 `--available-height`（ISSUE #4073 复审第 1 条）：
+ * 它是定位器按触发点算出的「到视口边缘的实际可用空间」，`max-h-(--available-height)`
+ * 让整块浮层——而不是某个写死的视口百分比——不越界，底部「取消 / 保存」才不会被裁。
+ * 此前用 `max-h-[85vh]`：85vh 是相对整屏的固定比例，触发点靠下时浮层照样溢出，
+ * 底下的按钮被切在视口外（`overflow-hidden` 又让整块浮层无法滚动救回来）。 */
+const LIST_CONTENT_MAX_H = 360;
 
 export function MultiModeSelect({
   modes,
@@ -233,12 +195,15 @@ export function MultiModeSelect({
       <PopoverContent
         align="start"
         aria-label="工作流模式编辑器"
-        className="border-border-strong bg-card w-[min(92vw,320px)] gap-0 overflow-hidden rounded-xl p-0 shadow-2xl shadow-black/5 dark:shadow-black/40"
+        /* max-h-(--available-height)：浮层不超过定位器给出的真实可用空间（见
+         * LIST_CONTENT_MAX_H 注释）；列表 `min-h-0 flex-1` 在空间收紧时让位，
+         * 搜索框 / 页签 / 底栏 shrink-0 保持原高，保存按钮始终在视口内。 */
+        className="border-border-strong bg-card flex max-h-(--available-height) w-[min(92vw,320px)] flex-col gap-0 overflow-hidden rounded-xl p-0 shadow-2xl shadow-black/5 dark:shadow-black/40"
         role="dialog"
         sideOffset={4}
       >
-        {/* search */}
-        <div className="border-border-subtle border-b p-2">
+        {/* search —— 固定高度，不参与列表空间收缩 */}
+        <div className="border-border-subtle shrink-0 border-b p-2">
           <input
             autoFocus
             onChange={textHandler(setQuery)}
@@ -250,8 +215,8 @@ export function MultiModeSelect({
           />
         </div>
 
-        {/* tabs — switchable 图像 / 视频 / 音频 */}
-        <div className="border-border-subtle flex items-center gap-1 border-b px-2 pt-2">
+        {/* tabs — switchable 图像 / 视频 / 音频（固定高度，不参与收缩） */}
+        <div className="border-border-subtle flex shrink-0 items-center gap-1 border-b px-2 pt-2">
           {(["image", "video", "audio"] as Array<WorkflowCategory>).map((cat) => {
             const selCount = (grouped[cat] ?? []).filter((type) => draft.has(type.code)).length;
             const isActive = activeTab === cat;
@@ -259,7 +224,7 @@ export function MultiModeSelect({
               <Button
                 className={`relative h-auto flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold ${
                   isActive
-                    ? `${CATEGORY_TEXT[cat]} bg-surface-2 hover:bg-surface-2`
+                    ? `${CATEGORY_TEXT[cat]} bg-surface-2 dark:hover:bg-ink/15 hover:bg-[color-mix(in_oklch,var(--color-surface-2),black_8%)]`
                     : "text-ink-muted hover:text-ink-strong"
                 }`}
                 key={cat}
@@ -282,8 +247,12 @@ export function MultiModeSelect({
           })}
         </div>
 
-        {/* 列表 —— 只列当前页签分类下的项 */}
-        <div className="overflow-y-auto py-1" style={{ maxHeight: POPOVER_MAX_H }}>
+        {/* 列表 —— 只列当前页签分类下的项。`min-h-0 flex-1` 让它在浮层被
+         *  `--available-height` 收紧时优先收缩，把固定高度让给底栏按钮。 */}
+        <div
+          className="min-h-0 flex-1 overflow-y-auto py-1"
+          style={{ maxHeight: LIST_CONTENT_MAX_H }}
+        >
           {items.length === 0 ? (
             <div className="text-ink-muted px-3 py-4 text-center text-xs">
               {query.trim() ? "没有匹配的模式" : `${CATEGORY_LABEL[activeTab]}暂无模式`}
@@ -295,9 +264,9 @@ export function MultiModeSelect({
               return (
                 /* 键出口是 `{...simpleKeyHandler(…)}` 的**属性展开**，而
                  * `jsx-a11y/click-events-have-key-events` 只读字面量 `onKeyDown`
-                 * —— 规则认不出展开。豁免已在 `scripts/.a11y-rule-ledger.json`
+                 * —— 规则认不出展开。豁免已在 `scripts/gates/.a11y-rule-ledger.json`
                  * 的 `inlineExemptions` 登记（守它的是 `check-click-keyboard.cjs`）。 */
-                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 键出口是 simpleKeyHandler 的属性展开，规则读不到 */
+                /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events -- 键出口是 simpleKeyHandler 的属性展开，规则读不到 */
                 <div
                   className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${
                     isSelected
@@ -305,12 +274,8 @@ export function MultiModeSelect({
                       : "text-ink-strong hover:bg-subtle"
                   }`}
                   key={item.code}
-                  /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`）——
-                   * 因此**必须**自带键盘等价物：ARIA 的 `checkbox` 角色承诺
-                   * 「Space 可切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」。
-                   * 键判据走 `simpleKeyHandler`（§16.2.4.57 的唯一出口：归一
-                   * 键名 + `preventDefault` 显式），不在这里手写第二份
-                   * `event.key === " "` —— 那正是这条账要消除的形态。 */
+                  /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`），因此必须自带键盘等价物：ARIA 的 `checkbox` 角色承诺「Space 可切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」。
+                   * 键判据走 `simpleKeyHandler`（§16.2.4.57 的唯一出口：归一键名 + `preventDefault` 显式），不在这里手写第二份 `event.key === " "` —— 那正是这条账要消除的形态。 */
                   onClick={() => {
                     toggle(item.code);
                   }}
@@ -341,7 +306,9 @@ export function MultiModeSelect({
                       </svg>
                     )}
                   </span>
-                  <span className="flex-1 truncate text-sm font-medium">{item.label}</span>
+                  <TruncatedText className="flex-1 truncate text-sm font-medium">
+                    {item.label}
+                  </TruncatedText>
                   {/* 默认模式标记：点星星把该模式设为默认（未选中会顺带勾上） */}
                   <Button
                     className={`text-3xs h-auto shrink-0 rounded px-1 py-0.5 font-medium ${
@@ -370,8 +337,8 @@ export function MultiModeSelect({
           )}
         </div>
 
-        {/* footer */}
-        <div className="border-border-subtle flex items-center gap-2 border-t p-2">
+        {/* footer —— shrink-0：列表收缩到底时这排按钮仍完整可见可点（ISSUE #4073） */}
+        <div className="border-border-subtle flex shrink-0 items-center gap-2 border-t p-2">
           <Button
             className="h-auto flex-1 rounded-md px-3 py-1.5 text-sm"
             onClick={() => {

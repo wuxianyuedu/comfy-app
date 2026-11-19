@@ -22,9 +22,6 @@ import {
   type HumanVerdict,
 } from "~/lib/production/review-types";
 
-/** 点头粒度：全自动 / 每阶段确认 / 逐镜确认。默认 `stage`。 */
-export type ApprovalMode = "auto" | "stage" | "shot";
-
 /** run 生命周期。`awaiting_approval`=跑到某步停下等用户点头；`paused`=用户主动暂停。 */
 export type RunStatus =
   | "idle"
@@ -145,7 +142,24 @@ const RUN_STATUSES: ReadonlyArray<RunStatus> = [
   "failed",
   "cancelled",
 ];
-const APPROVAL_MODES: ReadonlyArray<ApprovalMode> = ["auto", "stage", "shot"];
+/** 点头粒度词表（#4049）：导出给 zod 等校验派生，类型与判据不再各写一份。 */
+export const APPROVAL_MODES = ["auto", "stage", "shot"] as const;
+
+/** 点头粒度：全自动 / 每阶段确认 / 逐镜确认。默认 `stage`。 */
+export type ApprovalMode = (typeof APPROVAL_MODES)[number];
+
+const RUN_STATUS_SET = new Set<string>(RUN_STATUSES);
+const APPROVAL_MODE_SET = new Set<string>(APPROVAL_MODES);
+
+/** 外部 JSON → run 生命周期状态；不是已知取值 → false。 */
+function isRunStatus(value: unknown): value is RunStatus {
+  return typeof value === "string" && RUN_STATUS_SET.has(value);
+}
+
+/** 外部 JSON → 点头粒度；不是已知取值 → false。 */
+function isApprovalMode(value: unknown): value is ApprovalMode {
+  return typeof value === "string" && APPROVAL_MODE_SET.has(value);
+}
 
 /** 宽容解析一个 `id → 有限数字` 的映射（rev 快照类字段共用）；非对象 / 非法值丢弃。 */
 function parseRevMap(raw: unknown): Record<string, number> {
@@ -168,16 +182,8 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
   if (!obj) {
     return { ...DEFAULT_PRODUCTION_RUN };
   }
-  /* SAFETY: 类型断言已复核 */
-  /* SAFETY: 类型断言已复核 */
-  const status = RUN_STATUSES.includes(obj.status as RunStatus)
-    ? (obj.status as RunStatus)
-    : "idle";
-  /* SAFETY: 类型断言已复核 */
-  /* SAFETY: 类型断言已复核 */
-  const approvalMode = APPROVAL_MODES.includes(obj.approvalMode as ApprovalMode)
-    ? (obj.approvalMode as ApprovalMode)
-    : "stage";
+  const status = isRunStatus(obj.status) ? obj.status : "idle";
+  const approvalMode = isApprovalMode(obj.approvalMode) ? obj.approvalMode : "stage";
   const log: Array<RunStep> = [];
   if (Array.isArray(obj.log)) {
     for (const raw of obj.log) {

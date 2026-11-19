@@ -4,7 +4,7 @@
 >
 > - `.git/comfy-precommit-timing.jsonl`（本机逐步耗时账，**不入库**）+ 固定清单实际条数。
 >   样本只有 9 次运行且跨 2026-10-13 → 10-15，期间这台机器被并行会话压过（同一天里
->   342s 与 5295s 都出现过）⇒ **下面的秒数是量级，不是承诺值**。重取：`pnpm exec node scripts/precommit-timing.mjs`。
+>   342s 与 5295s 都出现过）⇒ **下面的秒数是量级，不是承诺值**。重取：`pnpm exec node scripts/gates/precommit-timing.mjs`。
 
 > **重构后补记（D0 形态前置档）**：钩子形状现在是 **组 0 + D0 + A/B/C/D** —— 仍是 51 条 `run`
 > 判据、**一条没增没减**，只是其中 14 条换到 **D0**，在 A/B/C/D 启动之前**串行**跑完。
@@ -120,14 +120,14 @@
 
 ## 别顺手做的一件事（实测过后果）
 
-**不要把 `check-bundle-budget.cjs` 挂进 pre-commit 或 premerge 复算名单。** 在干净 worktree（无构建产物）里 `node scripts/check-bundle-budget.cjs` 实测 **EXIT=0** 并自报「跳过：`.next/static/chunks` 不存在」⇒ 挂进去等于加一条恒 0 的静默绿。要走这条路必须先把它自己的语义改成「产物不在 ⇒ 报未校验」。（台账 R13-01；体积确认归 ISSUE #1952 点名的那 9 条提交。）
+**不要把 `check-bundle-budget.cjs` 挂进 pre-commit 或 premerge 复算名单。** 在干净 worktree（无构建产物）里 `node scripts/gates/check-bundle-budget.cjs` 实测 **EXIT=0** 并自报「跳过：`.next/static/chunks` 不存在」⇒ 挂进去等于加一条恒 0 的静默绿。要走这条路必须先把它自己的语义改成「产物不在 ⇒ 报未校验」。（台账 R13-01；体积确认归 ISSUE #1952 点名的那 9 条提交。）
 
 ## 重取这份数
 
 ```
-node scripts/precommit-timing.mjs            # 近 N 次总时长 + 各组中位 + D 组前 10
+node scripts/gates/precommit-timing.mjs            # 近 N 次总时长 + 各组中位 + D 组前 10
 git grep -c 'run "' .githooks/pre-commit     # 步数（当前 51）
-node -e "import('./scripts/fixed-structural-tests.mjs').then(m=>console.log(m.FIXED_STRUCTURAL_TESTS.length))"   # C 组输入面（当前 90 条）
+node -e "import('./scripts/affected-tests/fixed-structural-tests.mjs').then(m=>console.log(m.FIXED_STRUCTURAL_TESTS.length))"   # C 组输入面（当前 90 条）
 ```
 
 > 本文件是**一次性的重构前基线快照**（含 2026-10-13→10-15 的 9 个样本）。

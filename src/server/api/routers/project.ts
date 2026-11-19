@@ -8,14 +8,17 @@ import { asRecord } from "~/lib/is-record";
 export const projectRouter = createTRPCRouter({
   /* GET /api/projects —— 读 */
   list: authedProcedure.query(async ({ ctx }) => {
-    return projectRepository.listByUser(ctx.user.id);
+    const rows = await projectRepository.listByUser(ctx.user.id);
+    /* 容量保护：单用户项目数通常有限，仍加上上限避免异常数据放大响应（#4061）。 */
+    return rows.slice(0, 500);
   }),
 
   /* POST /api/projects —— 新建：upsert (client-generated id) */
   upsert: authedProcedure
     .input(
       z.object({
-        id: z.string().min(1),
+        /* 键名与其余端点统一为 projectId（#4049）；值仍是客户端生成的 proj_* id。 */
+        projectId: z.string().min(1),
         name: z.string().min(1),
         // React Flow 节点/边 JSON,形状由前端持有;仓储层入参即 unknown,收口校验由调用方保证。
         nodes: z.unknown().optional(),
@@ -23,20 +26,14 @@ export const projectRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      /* 归属判定（台账 A3 的同族，此前漏网）：`id` 由客户端生成并随每次画布自动
-       * 保存一起送上来，而仓储的 update 分支只按 `id` 定位行 —— 于是任何人把别人
-       * 的项目 id 抄进请求，就能把对方的 `name/nodes/edges` 整幅覆盖掉。
-       * 与 `get` / `patch` 同口径先判归属：
-       *   · 行不存在 → 建（落在我名下）；
-       *   · 行存在且归我 → 覆盖（自动保存的正常路径）；
-       *   · 行存在但不归我 → FORBIDDEN，一行都不改。
-       * 前端这一路是「尽力而为的镜像」（localStorage 才是画布的事实源），被拒后
-       * 本地不受影响，所以这里必须留一行日志——否则「我的画布为什么不进服务端
-       * 列表」这类问题完全没有可查的出口（硬规则 4）。 */
-      const existing = await projectRepository.findById(input.id);
+      /* 归属判定（台账 A3 同族，此前漏网）：`projectId` 由客户端生成、随自动保存一起送上来，而仓储 update 只按 `id`
+       * 定位行 —— 别人把项目 id 抄进请求就能覆盖对方的 `name/nodes/edges`。与 `get`/`patch` 同口径：
+       * 不存在→建（落我名下）、归我→覆盖、不归我→FORBIDDEN 一行不改。前端只是「尽力而为的镜像」
+       * （localStorage 才是事实源），被拒后本地不受影响，所以必须留一行日志（硬规则 4）。 */
+      const existing = await projectRepository.findById(input.projectId);
       if (existing && existing.userId !== ctx.user.id) {
         logger.warn(
-          `[project.upsert] 拒绝覆盖他人项目：projectId=${input.id} 归属=${existing.userId} 请求方=${ctx.user.id}`,
+          `[project.upsert] 拒绝覆盖他人项目：projectId=${input.projectId} 归属=${existing.userId} 请求方=${ctx.user.id}`,
         );
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -44,7 +41,7 @@ export const projectRouter = createTRPCRouter({
         });
       }
       return projectRepository.upsertForUser(ctx.user.id, {
-        id: input.id,
+        id: input.projectId,
         name: input.name,
         nodes: input.nodes,
         edges: input.edges,
@@ -65,7 +62,8 @@ export const projectRouter = createTRPCRouter({
     .input(
       z.object({
         projectId: z.string(),
-        name: z.string().optional(),
+        /* 与 upsert 的 name 同一松紧（#4049）：不允许把名字改成空串。 */
+        name: z.string().min(1).optional(),
         nodes: z.unknown().optional(),
         edges: z.unknown().optional(),
       }),
@@ -98,14 +96,23 @@ export const projectRouter = createTRPCRouter({
 
   /* GET /api/projects/[id]/outputs —— 读 */
   outputs: authedProcedure
-    .input(z.object({ projectId: z.string() }))
+    .input(
+      z.object({
+        projectId: z.string(),
+        /* 容量保护：避免一次返回过大的输出集合（#4061）。 */
+        take: z.number().int().min(1).max(2000).optional().default(500),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const project = await projectRepository.findById(input.projectId);
       if (project?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "项目不存在" });
       }
-      const tasks = await taskRepository.findByProjectIdWithImages(input.projectId);
-      const outputs = tasks.map((task) => {
+      const tasks = await taskRepository.findByProjectIdWithImages(input.projectId, {
+        take: input.take,
+      });
+      const limited = tasks.slice(0, input.take);
+      const outputs = limited.map((task) => {
         // params 是任务表的 JSON 列:非对象(标量)时所有属性读取均为 undefined,与原
         // `(task.params ?? {}) as Record<string, any>` 的读取结果一致。
         const rawParams: unknown = task.params ?? {};
@@ -126,8 +133,12 @@ export const projectRouter = createTRPCRouter({
           steps: params.steps ?? null,
           cfg: params.cfg ?? null,
           checkpoint: params.checkpoint ?? null,
-          /* SAFETY: 类型断言已复核 */
-          referenceImages: (task.referenceImages as Array<string> | null) ?? [],
+          /* 引擎写入的是 string 列表；非字符串数组（损坏行）按空处理，不再原样透传。 */
+          referenceImages:
+            Array.isArray(task.referenceImages) &&
+            task.referenceImages.every((img) => typeof img === "string")
+              ? task.referenceImages
+              : [],
           parentId: task.parentId ?? null,
           createdAt: task.createdAt,
           images: task.images.map((img) => ({

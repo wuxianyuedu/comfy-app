@@ -1,17 +1,16 @@
 // ── 「模式契约」编辑器的展示配置与派生（规范 17 §17.2 第①层：纯配置）──────
-// 契约本身（有哪些模式、每个模式有哪些统一输入口）由 `lib/workshop/
-// model-mode-contract` 定义，这里只放**两个入口共用**的展示口径：
-// 模式按类别分组、可追加的固定口清单、以及「该模式当前生效的契约」。
-//
-// 为什么独立成模块：模式契约有两个入口（工坊「模式契约」弹窗、工作流库
-// 「模式契约」弹窗），两处必须说同一套话 —— 分组顺序、标签、哪些口能追加一旦
-// 各写一份，就会在改动时静默分叉。
+// 契约本身由 `lib/workshop/model-mode-contract` 定义，这里只放**两个入口共用**的
+// 展示口径：模式按类别分组、可追加的固定口清单、「该模式当前生效的契约」。
+// 独立成模块是因为两处必须说同一套话，各写一份会在改动时静默分叉。
 
 import { upperToken } from "~/lib/upper-token";
 import {
   MODE_CONTRACT_INPUT_TYPES,
+  configuredModeContracts,
   derivedModeContract,
+  modeContractSignature,
   type ModeContract,
+  type ModeContractCustomInput,
   type ModeContractCustomKind,
   type ModeContractInputType,
 } from "~/lib/workshop/model-mode-contract";
@@ -20,7 +19,10 @@ import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 /** 可参与契约编辑的模式（生成类；与工坊的驱动口径一致）。 */
 export const CONTRACT_MODES = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative);
 
-/** 模式按输出类别分组 —— 模式清单有二十多个，不分组找不到。 */
+/** 模式按类别分组 —— 模式清单有二十多个，不分组找不到。
+ *
+ *  类别取自**工作流类型表**（模式本身带的那一格），不是契约里的一格：输出类别
+ *  早已不是可配项（ISSUE #4072），类别由模式码唯一决定。 */
 export const CONTRACT_MODE_GROUPS: Array<{
   category: "image" | "video" | "audio";
   label: string;
@@ -31,19 +33,8 @@ export const CONTRACT_MODE_GROUPS: Array<{
 ];
 
 /**
- * 导航树的**一棵树**：一个父行（输出类别）+ 挂在它下面的模式项。
- *
- * 与 `CONTRACT_MODE_GROUPS` 的关系是「同一件事的两种投影」——那个给的是**类别顺序
- * 与名字**，这个把模式按类别挂上去、并顺手丢掉空组。模式的**顺序与内容**一律从
- * `CONTRACT_MODES` 派生，不在这里重抄一遍（§12.18）。
- *
- * 为什么要有这一层：模式有二十多个，平铺成一排 chip 要占三四行；收成
- * 「父行 = 类别 + 子行 = 模式」的树之后，纵向空间由子行自己的滚动条承担（与设置页
- * 分区导航同一形态，ISSUE #1694 的结论）。
- *
- * 每一组**必须非空**（空父行没有意义），并集恰好等于 `CONTRACT_MODES` ——
- * 由 `mode-contract-config.test.ts` 双向比对守住（漏项是这张表的失效模式：
- * 某个模式从导航上静默消失，界面其它地方都不会说）。
+ * 导航树的**一棵树**：父行（模式类别）+ 挂在它下面的模式项。模式的顺序与内容一律从 `CONTRACT_MODES` 派生，不在这里重抄（§12.18）；空组顺手丢掉。
+ * 每一组**必须非空**、并集恰好等于 `CONTRACT_MODES` —— 由 `mode-contract-config.test.ts` 双向比对守住（漏项是这张表的失效模式：某个模式从导航上静默消失）。
  */
 export type ContractModeTreeGroup = {
   category: "image" | "video" | "audio";
@@ -65,31 +56,46 @@ export function contractModeLabel(mode: string): string {
   return ALL_WORKFLOW_TYPES.find((t) => t.code === mode.toUpperCase())?.label ?? mode;
 }
 
-/** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置现算。
+/** 成品配置的**静态快照**（编译进包的那份）—— 服务端读数到达前的兜底。
  *
- *  「改过 / 没改过」的判据收在这里一处：两个入口的「已改」徽标、编辑器初值、
- *  封装视图都读它，避免各自 `find` 一遍再各自判空。
- *
- *  这里传进来的 `stored` 是**本机覆盖**（`useModeContracts` 的读取结果），不是
- *  成品配置 —— 成品配置由 `derivedModeContract` 现算，没有第二处需要查。 */
+ *  服务端下发的是**现读**的项目默认基线（写完即生效的那份，#3634）；这份静态
+ *  快照只在「读数还没到」这一小段时间里顶一下，读数到了就以它为准。 */
+const STATIC_CONFIGURED: ReadonlyArray<ModeContract> = configuredModeContracts();
+const STATIC_BY_MODE: ReadonlyMap<string, ModeContract> = new Map(
+  STATIC_CONFIGURED.map((contract) => [contract.mode, contract]),
+);
+
+/** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置（项目默认显式覆盖）。
+ *  「改过/没改过」的判据收在这一处（两个入口的徽标、编辑器初值、封装视图都读它）。
+ *  `stored` 是**生效注册表**（服务端合好的：成品配置 + 本机覆盖），
+ *  `configured` 是**成品配置基准**（判「已改」用；缺省 = 静态快照）。 */
 export function effectiveModeContract(
   mode: string,
   stored: ReadonlyArray<ModeContract>,
+  configured?: ReadonlyArray<ModeContract>,
 ): { contract: ModeContract; customized: boolean } {
   const code = upperToken(mode);
+  const base = configured && configured.length > 0 ? configured : STATIC_CONFIGURED;
+  const fallback =
+    base.find((c) => c.mode === code) ?? STATIC_BY_MODE.get(code) ?? derivedModeContract(code);
   const found = stored.find((c) => c.mode === code);
-  if (found) {
+  if (found && modeContractSignature(found) !== modeContractSignature(fallback)) {
     return { contract: found, customized: true };
   }
-  return { contract: derivedModeContract(code), customized: false };
+  /* 「已改」判的是**内容**（与本模式成品配置深比较），不是「覆盖文件里有没有
+   * 这一条」（ISSUE #3396 反馈 1 的现场：旧版保存把整份注册表写进覆盖，用户
+   * 只改了一个模式、二十多个原样入库，徽标全部点亮）。内容相同的覆盖条目按
+   * 没改过处理 —— 生效值回落成品配置本身，两条本来就一模一样。 */
+  return { contract: fallback, customized: false };
 }
 
 /** 某模式是否已被用户改过（「已改」徽标）。 */
 export function isModeContractCustomized(
   mode: string,
   stored: ReadonlyArray<ModeContract>,
+  configured?: ReadonlyArray<ModeContract>,
 ): boolean {
-  return effectiveModeContract(mode, stored).customized;
+  return effectiveModeContract(mode, stored, configured).customized;
 }
 
 /** 契约里还没有的固定口（供「＋ 添加口」按钮清单）。
@@ -119,6 +125,68 @@ export const CUSTOM_INPUT_KINDS: ReadonlyArray<{
 /** 自定义口类型 → 展示名。 */
 export function customInputKindLabel(kind: ModeContractCustomKind): string {
   return CUSTOM_INPUT_KINDS.find((item) => item.kind === kind)?.label ?? kind;
+}
+
+/** 契约口的**类型说明**（ISSUE #3762：变量名悬停可见类型；ISSUE #3778：
+ *  类型一行、描述另起一行，类型值用英文 —— 与口 id 同一语言，不再中译一层的
+ *  「文本 / 数字」）。
+ *
+ *  `size` 是复合口，描述里展开它的两类等价组成（与编辑器「口径说明」同源，
+ *  不另抄一份规则）；自定义口的类型就是作者选的简单类型（kind 本身是英文词），
+ *  描述取该类型的常驻说明。返回**结构**而不是拼好的一整句：分两行渲染由视图
+ *  负责，这里只管内容。 */
+export function contractInputTypeInfo(
+  id: string,
+  customInputs: ReadonlyArray<ModeContractCustomInput>,
+): { description: string; type: string } {
+  const custom = customInputs.find((def) => def.id === id);
+  if (custom) {
+    return {
+      description:
+        CUSTOM_INPUT_KINDS.find((item) => item.kind === custom.kind)?.hint ?? "自定义参数",
+      type: custom.kind,
+    };
+  }
+  switch (id) {
+    case "prompt": {
+      return { description: "生成内容的描述", type: "text" };
+    }
+    case "negative": {
+      return { description: "不想出现的内容，可留空", type: "text" };
+    }
+    case "size": {
+      return {
+        description:
+          "两类等价写法任选：比例 + 分辨率（1k/2k/4k），" +
+          "或 比例 + 百万像素（1M/2M/4M）+ 倍数（8/16/32/64）；选分辨率时按场景尺寸表换算",
+        type: "size",
+      };
+    }
+    case "seed": {
+      return { description: "抽卡种子，同一种子同一结果", type: "number" };
+    }
+    case "duration": {
+      return { description: "视频时长（秒）", type: "number" };
+    }
+    case "lora-name": {
+      return { description: "角色 LoRA 名称", type: "text" };
+    }
+    case "lora-strength": {
+      return { description: "LoRA 强度（0~1）", type: "number" };
+    }
+    case "reference-image": {
+      return { description: "参考图（可多个，按序号槽追加）", type: "image" };
+    }
+    case "first-frame": {
+      return { description: "视频首帧", type: "image" };
+    }
+    case "last-frame": {
+      return { description: "视频尾帧", type: "image" };
+    }
+    default: {
+      return { description: "统一输入口", type: "" };
+    }
+  }
 }
 
 /** **全部预制口** + 「本契约是否已经用了它」—— 「浏览全部参数」用。

@@ -51,11 +51,9 @@ function noop(): void {
 }
 
 /**
- * 视频生成 stage：消费上游产出的镜头图片（自动用作
- * I2V 首帧）与镜头的运动 / 时长（从
- * 分镜方案自动预填）。本地通道跑 ComfyUI 的 img2video/txt2video
- * 工作流；API 通道中转到配置的视频端点（同步 URL 或
- * 异步任务）。结果写回 Shot.clipUrl，供成片合成。
+ * 视频生成 stage：消费上游镜头图片（自动用作 I2V 首帧）与运动/时长（分镜预填）。
+ * 本地通道跑 ComfyUI img2video/txt2video 工作流；API 通道中转到配置的端点
+ *（同步 URL 或异步任务）。结果写回 Shot.clipUrl，供成片合成。
  */
 export function VideoStudio({
   shots,
@@ -151,7 +149,9 @@ export function VideoStudio({
   async function pollApiVideo(shotId: string, remoteTaskId: string): Promise<void> {
     const deadline = Date.now() + 10 * 60 * 1000;
     while (Date.now() < deadline) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await sleep(3000);
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const r = await apiPollVideo(remoteTaskId);
       if (r.url !== undefined && r.url !== "") {
         patchShot(shotId, { clipStatus: "done", clipUrl: r.url });
@@ -264,8 +264,9 @@ export function VideoStudio({
         fps={fps}
         onChannelChange={setChannel}
         onFpsChange={setFps}
-        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-        onGenerateBatch={() => void generateBatch()}
+        onGenerateBatch={() => {
+          void generateBatch();
+        }}
         onNextStage={onNextStage}
         onOpenModelAdapters={onOpenModelAdapters}
         pendingCount={pending.length}
@@ -290,8 +291,9 @@ export function VideoStudio({
               onCancel={() => {
                 onCancelShot(shot);
               }}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onGenerate={() => void generateClip(shot)}
+              onGenerate={() => {
+                void generateClip(shot);
+              }}
               onPatch={(p) => {
                 patchShot(shot.id, p);
               }}

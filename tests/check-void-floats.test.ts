@@ -1,24 +1,14 @@
 /**
- * src/lib `void someFn(...)` 语句棘轮自检:把 `scripts/check-void-floats.cjs`
- * 当黑盒跑在临时工作区上,验证 AST 判据、基线读写与「只挡新增、允许下降」的
- * 棘轮语义。
- *
- * 规范:docs/standards/13-提交与-code-review.md §13.5.7
- *      docs/standards/18-lib层规范.md
- *
- * 为什么值得有门禁:PR-4b 加了 `fireAndForget` 地基、PR-10 逐个审了 lib 里
- * 30+ 处 `void fn()` 把 10 处真漏改走 fireAndForget;但**人工审计会漂**——
- * 下一位开发者写下 `void persistLogs(taskId)`(若被调方没有内部 catch)就是一颗
- * 未来的 unhandledRejection,pre-commit 不会响。这条判据**强制显式**:
- * 写下 `void someFn()` 这个形态本身要走一次评审,要么改用 fireAndForget,
- * 要么 `--update` 收紧基线时说明「被调方内部已 catch、这里是刻意悬空」。
+ * src/lib `void someFn(...)` 语句棘轮自检：把 `scripts/gates/check-void-floats.cjs` 当黑盒跑在临时工作区上，验证 AST 判据、基线读写与「只挡新增、允许下降」的棘轮语义（规范 §13.5.7 / `18-lib层规范.md`）。
+ * 为什么值得有门禁：PR-4b 加了 `fireAndForget` 地基、PR-10 审过 lib 里 30+ 处 `void fn()` 并改走 10 处真漏；但人工审计会漂 —— 后来者写下 `void persistLogs(taskId)`（被调方无内部 catch）就是未来的 unhandledRejection，pre-commit 不响。
+ * 判据**强制显式**：写下 `void someFn()` 这个形态本身要走一次评审，要么改用 fireAndForget，要么 `--update` 收紧基线时说明「被调方内部已 catch、刻意悬空」。
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-void-floats.cjs",
+  script: "gates/check-void-floats.cjs",
   dirs: ["src/lib"],
   /* 判据走 TS AST，要能解析 typescript —— 临时工作区旁边没有 node_modules，
    * 靠 NODE_PATH 指回源码仓库（脚本真的依赖这个输入，不是顺手给的口子）。 */
@@ -28,6 +18,53 @@ const { test, expect } = defineGateRepo({
 /** 在 `src/lib/` 下写一个文件（判据只扫 lib 生产代码）。 */
 function writeSrcFile(repo: GateRepo, rel: string, body: string): void {
   repo.write(join("src", "lib", rel), body);
+}
+
+/** 外来值是不是普通对象（数组不算）：本文件收窄基线 JSON 的统一入口。 */
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * 基线 JSON 的形状：`files` 是「文件 → 处数」的表，`ruleVersion` 是判据版本，
+ * `total` 是总数。
+ *
+ * 逐字段校验过才收窄 —— 断言外来 JSON 一次等于把「读到的形状」与「假定的形状」
+ * 混成一句话，而这里有一处**要把它原样写回盘**（改判据版本那条用例），
+ * 形状判错就会把基线改坏。故返回值带上 `Record<string, unknown>` ——
+ * 基线里还有 `generatedAt` / `note` 等字段，写回时不能丢。
+ */
+function isVoidFloatsBaseline(v: unknown): v is Record<string, unknown> & {
+  files: Record<string, number>;
+  ruleVersion: number;
+  total: number;
+} {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  const files = v.files;
+  if (!isPlainRecord(files)) {
+    return false;
+  }
+  if (!Object.values(files).every((count) => typeof count === "number")) {
+    return false;
+  }
+  return typeof v.ruleVersion === "number" && typeof v.total === "number";
+}
+
+/** 读基线并收窄成「文件 → 处数」那张表。 */
+function readBaseline(repo: GateRepo): Record<string, unknown> & {
+  files: Record<string, number>;
+  ruleVersion: number;
+  total: number;
+} {
+  const parsed: unknown = JSON.parse(
+    readFileSync(join(repo.dir, "scripts", "gates", ".void-floats-baseline.json"), "utf8"),
+  );
+  if (!isVoidFloatsBaseline(parsed)) {
+    throw new Error("void-floats 基线的形状不对");
+  }
+  return parsed;
 }
 
 describe("check-void-floats AST 判据", () => {
@@ -100,10 +137,7 @@ void b();`,
     // 建立基线
     const upd = repo.run(["--update"]);
     expect(upd.code).toBe(0);
-    /* SAFETY: 类型断言已复核 */
-    const baseline = JSON.parse(
-      readFileSync(join(repo.dir, "scripts", ".void-floats-baseline.json"), "utf8"),
-    ) as { files: Record<string, number>; ruleVersion: number; total: number };
+    const baseline = readBaseline(repo);
     expect(baseline.total).toBe(2);
     expect(baseline.files["src/lib/mod.ts"]).toBe(2);
     // 同数量:OK
@@ -152,12 +186,14 @@ void a();`,
 void a();`,
     );
     repo.run(["--update"]);
-    const p = join(repo.dir, "scripts", ".void-floats-baseline.json");
-    /* SAFETY: 类型断言已复核 */
-    const json = JSON.parse(readFileSync(p, "utf8")) as {
-      ruleVersion: number;
-    };
-    json.ruleVersion = 999;
+    const p = join(repo.dir, "scripts", "gates", ".void-floats-baseline.json");
+    /* 改判据版本：**整份基线原样写回**（这里只改 ruleVersion 一个字段，
+       其余字段必须留着 —— 少了任何一个，判据下一句读到的就是「基线文件损坏」）。 */
+    const parsed: unknown = JSON.parse(readFileSync(p, "utf8"));
+    if (!isVoidFloatsBaseline(parsed)) {
+      throw new Error("void-floats 基线的形状不对");
+    }
+    const json = { ...parsed, ruleVersion: 999 };
     writeFileSync(p, `${JSON.stringify(json, null, 2)}\n`, "utf8");
     const r = repo.run();
     expect(r.code).toBe(1);

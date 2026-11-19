@@ -15,6 +15,8 @@
  * 客户端 import 的模块改动都会让它变，这正是「运行图可能已过期」的定义。
  */
 
+import { isRecord } from "~/lib/is-record";
+
 /** 构建标识的请求路径（服务端按构建器实时给出，不缓存）。 */
 export const BUILD_ID_ENDPOINT = "/api/dev/build-id";
 
@@ -125,15 +127,10 @@ export async function fetchBuildId(): Promise<BuildIdProbe> {
     if (!res.ok) {
       return empty;
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      bootId?: unknown;
-      buildId?: unknown;
-      depsStale?: unknown;
-      depsState?: unknown;
-      restartDetail?: unknown;
-      restartReason?: unknown;
-    };
+    const data: unknown = await res.json();
+    if (!isRecord(data)) {
+      return empty;
+    }
     return {
       buildId: typeof data.buildId === "string" && data.buildId ? data.buildId : null,
       bootId: typeof data.bootId === "string" && data.bootId ? data.bootId : null,

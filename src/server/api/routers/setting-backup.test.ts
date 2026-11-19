@@ -1,21 +1,7 @@
 /**
- * `setting.backupList` / `backupCreate` / `backupRestore` 的契约（D6 / ISSUE #1611）。
- *
- * 这三个 procedure 是「备份与恢复」那一页的唯一服务端出口，要钉住的是**它们各自
- * 守住了什么** —— 三条都不是「调了函数就完事」的形态：
- *
- *   1. `backupCreate` 失败时**返回 `{ ok: false, reason }` 而不是抛** —— 备份失败
- *      是可预期的一档（磁盘满 / 库被独占），界面上要能看见「为什么没成」，
- *      而不是一句网络错误的笼统文案；
- *   2. `backupRestore` **只写待恢复标记**，绝不就地换文件 —— 运行期有多个进程
- *      持有这个库，就地覆盖 `db.sqlite` 是不可逆的数据事故。这条用例同时断言
- *      「库文件一个字节都没动」；
- *   3. 名字是**请求方给的字符串**，必须过「是不是这个目录里认得出的备份名」这道
- *      闸 —— 否则「恢复」会变成「用任意文件覆盖数据库」。
- *
- * 走**真实现**（真临时目录、真 `node:sqlite` 库），不 mock 核心 —— 这三条判据
- * 的错法全在「真的动了哪个文件」上，mock 断言不到。`process.cwd()` 被指到临时
- * 目录（产品代码一律按 `process.cwd()` 解析应用根）。
+ * `setting.backupList` / `backupCreate` / `backupRestore` / `backupImportFromDir` 的契约（D6 / ISSUE #1611 / #3732）。都不是「调了函数就完事」：
+ * ① `backupCreate` 失败**返回 `{ ok: false, reason }` 而不抛**（磁盘满/库被独占是可预期一档，界面要能看见为什么没成）；② `backupRestore` **只写待恢复标记、绝不就地换文件**（多进程持库，就地覆盖不可逆；同时断言库文件一字节没动）；
+ * ③ 备份名是请求方给的字符串，必须过「本目录认得出的备份名」闸，否则恢复＝任意文件覆盖库；走真实现且 `process.cwd()` 指到临时目录（错法都在「真动了哪个文件」上）。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -31,13 +17,13 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { settingRouter } from "~/server/api/routers/setting";
 import { makeCtx } from "../../../../tests/helpers/trpc";
-import { BACKUP_DIR } from "../../../../scripts/db-backup-core.mjs";
+import { BACKUP_DIR } from "../../../../scripts/db/db-backup-core.mjs";
 
 const createCaller = createCallerFactory(settingRouter);
 
@@ -78,7 +64,7 @@ describe("setting.backupCreate", () => {
     if (!result.ok) {
       return;
     }
-    expect(result.name).toMatch(/^db-backup-\d{8}-\d{6}(-\d+)?\.sqlite$/);
+    expect(result.name).toMatch(/^db-backup-\d{8}-\d{6}(?:-\d+)?\.sqlite$/);
 
     const listed = await caller.backupList();
     expect(listed.backups.map((b) => b.name)).toContain(result.name);
@@ -137,12 +123,51 @@ describe("setting.backupRestore", () => {
       "not-a-backup.sqlite",
       "db-backup-19990101-000000.sqlite",
     ]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const result = await caller.backupRestore({ name: bad });
       expect(result.ok, `${bad} 不该被接受`).toBe(false);
     }
     // 一次都不该留下标记
     const listed = await caller.backupList();
     expect(listed.pending).toBeNull();
+  });
+});
+
+describe("setting.backupImportFromDir", () => {
+  it("从指定目录导入：认得出的件进清单，恢复那一步复用同一份清单", async () => {
+    const caller = createCaller(makeCtx());
+    /* 来源目录里摆一份「别的机器的备份」：一份真库快照 + 一套应用数据目录 */
+    const from = path.join(root, "from-other-machine");
+    fs.mkdirSync(path.join(from, "app-data-backup-20261113-000000"), { recursive: true });
+    fs.writeFileSync(path.join(from, "app-data-backup-20261113-000000", "app-settings.json"), "{}");
+    const seeded = new DatabaseSync(path.join(from, "db-backup-20261113-000000.sqlite"));
+    try {
+      seeded.exec("CREATE TABLE t (id INTEGER PRIMARY KEY)");
+    } finally {
+      seeded.close();
+    }
+
+    const result = await caller.backupImportFromDir({ dir: from });
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.imported).toContain("db-backup-20261113-000000.sqlite");
+    expect(result.imported).toContain("app-data-backup-20261113-000000");
+
+    const listed = await caller.backupList();
+    expect(listed.backups.map((b) => b.name)).toContain("db-backup-20261113-000000.sqlite");
+    expect(listed.appDataBackups.map((s) => s.name)).toContain("app-data-backup-20261113-000000");
+  });
+
+  it("读不到的目录：返回失败原因，不抛", async () => {
+    const caller = createCaller(makeCtx());
+    const result = await caller.backupImportFromDir({ dir: path.join(root, "no-such-dir") });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.reason).toContain("读不到");
   });
 });
 

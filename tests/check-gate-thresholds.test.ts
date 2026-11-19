@@ -1,17 +1,14 @@
 /**
- * `scripts/check-gate-thresholds.cjs` 的判据（ISSUE #2156）。
- *
- * 这一格守的是「放宽判据这件事本身」，所以用例必须能喂**假账 + 假源码**跑出来：
- * 真仓里的数值只能证明"今天一致"，证明不了「方向反了会不会红」—— 而那恰恰是这本账
- * 唯一的技术难点（A 档越大越松、B 档越小越危险，`strictness` 记错一条就会把收紧判成放宽）。
- * 因此 `analyze()` 是纯函数，这里全走它；末了两条再拿真仓自证一次。
+ * `scripts/gates/check-gate-thresholds.cjs` 的判据（ISSUE #2156）：守「放宽判据这件事本身」，故必须能喂
+ * **假账 + 假源码**跑 —— 真仓数值只证明「今天一致」，证明不了方向反了会不会红（A 档越大越松、B 档
+ * 越小越危险，`strictness` 记错就会把收紧判成放宽）。`analyze()` 是纯函数，这里全走它。
  */
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { analyze, isLooser, num } from "../scripts/check-gate-thresholds.cjs";
-import { gateChainScripts } from "../scripts/gate-chain-scripts.cjs";
+import { analyze, isLooser, num } from "../scripts/gates/check-gate-thresholds.cjs";
+import { gateChainPaths, gateChainScripts } from "../scripts/gates/gate-chain-scripts.cjs";
 
 /** 账里一条的形状（`group` / `movedFrom` / `movedIssue` 都是可选位）。 */
 type Entry = {
@@ -25,6 +22,18 @@ type Entry = {
   unit?: string;
   value: number;
 };
+
+/**
+ * 外来值（`JSON.parse` 的账本）先落 `unknown`，过这道守卫后逐字段 `typeof` 收窄才使用。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** 账本的导出面：逐字段认 `entries` 是数组。 */
+function isLedger(v: unknown): v is { entries: Array<Entry> } {
+  return isRecord(v) && Array.isArray(v.entries);
+}
 
 /** 一条 A 档阻断阈值 + 一条 B 档地板 + 一条 report，构成最小可判的账。 */
 const baseEntries = (): Array<Entry> => [
@@ -210,12 +219,9 @@ describe("analyze：组内同数、未入账、相对主干签字", () => {
 });
 
 /* ── 扫描根来自磁盘，不是从账里推（ISSUE #2188）──────────────────────────
- *
- * 这三条判的是「这条判据自己会不会漏看一份文件」，所以它们比上面那些更脆：
- * 只测「账里点名的文件」时，一份整体没入账的新判据永远不在循环里 —— 那种漏
- * 表现为绿，没有任何一条红会指向它。三条各钉一个方向：红 / 补一条就绿 /
- * **不给扫描根时测不到**（最后那条是变异证明：它证明「面从磁盘来」这件事承重，
- * 而不是断言恰好被别的路径顺带满足了）。
+ * 判的是「这条判据自己会不会漏看一份文件」：只测「账里点名的文件」时，整份未入账的新判据永远不在
+ * 循环里，那种漏表现为绿、没有任何一条红指向它。三条各钉一个方向：红 / 补一条就绿 / **不给扫描根时
+ * 测不到**（变异证明：「面从磁盘来」这件事承重，而非恰被别的路径顺带满足）。
  */
 describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）", () => {
   /** 一份账上完全没有的新判据文件，里面只有一个顶层具名数值。 */
@@ -275,18 +281,20 @@ describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）
 
   it("自指面在扫描根里，且真仓在这张面上今天全绿", () => {
     const root = path.resolve(__dirname, "..");
-    /* SAFETY: 类型断言已复核 */
-    const ledger = JSON.parse(
-      readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
-    ) as { entries: Array<Entry> };
+    const ledger: unknown = JSON.parse(
+      readFileSync(path.join(root, "scripts/gates/.gate-thresholds.json"), "utf8"),
+    );
+    if (!isLedger(ledger)) {
+      throw new Error(".gate-thresholds.json 里没有 entries");
+    }
     /* glob 写错的失效形态是「面为空 ⇒ 整格恒绿」，所以这里按磁盘自己数一遍：
        扫描根必须非空、必须含这份判据自己（`MIN_ENTRIES` 那条自证的下限在账里），
        否则「覆盖面」这句话只是断言里的一个装饰。 */
-    const scanned = readdirSync(path.join(root, "scripts"))
+    const scanned = readdirSync(path.join(root, "scripts", "gates"))
       .filter((n) => /^check-.*\.cjs$/.test(n))
-      .map((n) => `scripts/${n}`);
+      .map((n) => `scripts/gates/${n}`);
     expect(scanned.length).toBeGreaterThan(10);
-    expect(scanned).toContain("scripts/check-gate-thresholds.cjs");
+    expect(scanned).toContain("scripts/gates/check-gate-thresholds.cjs");
     const r = analyze({
       entries: ledger.entries,
       readSource: (f: string) => {
@@ -304,12 +312,9 @@ describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）
 });
 
 /* ── `export const` 也在覆盖面内（ISSUE #2236）───────────────────────────────
- *
- * 「一条阈值承不承重」与「它被不被别的文件 import」是两件事。旧写法的两处正则都只认
- * 行首 `const`，于是 `export const` 形态整体在面外 —— 本仓自己先撞上：新常量先写成
- * `export const`，账一个字都没念它，改成非导出才进得来。
- * 两处消费必须同一把尺子：只放宽扫面会造出「这份文件被扫到了，但账上那条找不到」这种
- * 自相矛盾的红；只放宽取值则永远不会新抓到东西。所以三个方向各测一次。
+ * 「阈值承不承重」与「它被不被 import」是两件事：旧正则只认行首 `const`，`export const` 整体在面外
+ * （本仓新常量先写成 `export const`，账一个字没念它）。两处消费须同一把尺子：只放宽扫面会造「文件
+ * 被扫到、账上那条找不到」的自相矛盾红，只放宽取值则永不多抓；三个方向各测一次。
  */
 describe("账的覆盖面：export 前缀不是挡箭牌", () => {
   const NEW_FILE = "scripts/check-exported-gate.cjs";
@@ -353,10 +358,12 @@ describe("账的覆盖面：export 前缀不是挡箭牌", () => {
 describe("真仓自证：这本账现在必须与源码一致", () => {
   it("账里每条都能在源码里定位到，且数值相等", () => {
     const root = path.resolve(__dirname, "..");
-    /* SAFETY: 类型断言已复核 */
-    const ledger = JSON.parse(
-      readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
-    ) as { entries: Array<Entry> };
+    const ledger: unknown = JSON.parse(
+      readFileSync(path.join(root, "scripts/gates/.gate-thresholds.json"), "utf8"),
+    );
+    if (!isLedger(ledger)) {
+      throw new Error(".gate-thresholds.json 里没有 entries");
+    }
     const r = analyze({
       entries: ledger.entries,
       readSource: (f: string) => {
@@ -380,8 +387,8 @@ describe("扫描根：门禁链按名字调起的判定脚本也要进面（ISSU
 
   it("共享实现只有一份：两个消费方都 require gate-chain-scripts.cjs（§12.12）", () => {
     for (const consumer of [
-      "scripts/check-gate-executors.cjs",
-      "scripts/check-gate-thresholds.cjs",
+      "scripts/gates/check-gate-executors.cjs",
+      "scripts/gates/check-gate-thresholds.cjs",
     ]) {
       expect(
         readFileSync(path.join(root, consumer), "utf8"),
@@ -396,12 +403,13 @@ describe("扫描根：门禁链按名字调起的判定脚本也要进面（ISSU
     /* 链上的每份脚本都应被 scanJudgeFiles 收进 —— 用真仓的判定脚本入口跑一遍，
      * 断的是「扩面之后链外没有藏带顶层数值的判据」这一格由共享实现保证。 */
     const filesToScan = new Set([
-      ...[...chain].map((n) => `scripts/${n}`),
-      ...readdirSync(path.join(root, "scripts"))
+      ...gateChainPaths(),
+      /* #3930 起判据在 scripts/gates/：扫描根要把那一层也数进去。 */
+      ...readdirSync(path.join(root, "scripts", "gates"))
         .filter((f) => /^check-.*\.cjs$/.test(f))
-        .map((f) => `scripts/${f}`),
+        .map((f) => `scripts/gates/${f}`),
     ]);
-    expect(filesToScan.has("scripts/shell-gate.mjs")).toBe(true);
-    expect(filesToScan.has("scripts/check-file-structure.cjs")).toBe(true);
+    expect(filesToScan.has("scripts/gates/shell-gate.mjs")).toBe(true);
+    expect(filesToScan.has("scripts/gates/check-file-structure.cjs")).toBe(true);
   });
 });

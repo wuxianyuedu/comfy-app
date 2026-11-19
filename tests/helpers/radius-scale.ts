@@ -1,13 +1,7 @@
 /**
- * 圆角刻度的解析口径 —— `--radius` 基数与「由它派生的各档」这件事，全仓只允许有
- * 一份读法（规范 §12.18）。两处判据共用：
- *   · `tests/theme-token-single-source.test.ts` 的 T4（判定义侧：刻度对不对）；
- *   · `tests/design-md-contract-sync.test.ts`（判调用侧：有没有把档位值重抄成字面 px）。
- *
- * 读的是 `src/app/globals.css` 的**源码文本**而不是编译产物，这是刻意的：
- * `@theme inline` 的语义是「值内插进工具类」，未被 `var()` 引用的档位根本不会
- * 出现在产物 `:root` 里（实测只有 `--radius-md` / `--radius-lg` 存活），
- * 拿产物当判据会看不见其余五档。定义侧的唯一事实来源仍然是 globals.css 本身。
+ * 圆角刻度的解析口径 —— `--radius` 基数与派生各档全仓只允许一份读法（规范 §12.18），两处判据共用：
+ * `theme-token-single-source.test.ts` 的 T4（定义侧）、`design-md-contract-sync.test.ts`（调用侧是否重抄字面 px）。
+ * 读 `src/app/globals.css` 源码而非产物是刻意的：`@theme inline` 未被 `var()` 引用的档位不进产物 `:root`（实测只剩 md/lg），拿产物当判据会漏五档。
  */
 
 /** 一颗派生式：`渲染值 = 基数 × coef + offset`。 */
@@ -31,24 +25,26 @@ export type RadiusScale = {
 export function parseDerivations(css: string): Map<string, RadiusDerivation> {
   const derivations = new Map<string, RadiusDerivation>();
   for (const m of css.matchAll(
-    /^\s*(--radius-[a-z0-9]+)\s*:\s*(?:var\(--radius\)|calc\(var\(--radius\)\s*(?:(\*)\s*([0-9.]+)|([+-])\s*([0-9.]+)px)\))\s*;/gm,
+    /^\s*(?<name>--radius-[a-z0-9]+)\s*:\s*(?:var\(--radius\)|calc\(var\(--radius\)\s*(?:(?<op1>\*)\s*(?<value1>[0-9.]+)|(?<op2>[+-])\s*(?<value2>[0-9.]+)px)\))\s*;/gm,
   )) {
-    if (m[1] === undefined || m[1] === "") {
+    const name = m.groups?.name ?? "";
+    if (name === "") {
       continue;
     }
-    if (m[2] === "*") {
-      derivations.set(m[1], {
-        coef: Number.parseFloat(m[3] ?? "1"),
+    const op2 = m.groups?.op2 ?? "";
+    if ((m.groups?.op1 ?? "") === "*") {
+      derivations.set(name, {
+        coef: Number.parseFloat(m.groups?.value1 ?? "1"),
         offset: 0,
       });
-    } else if (m[4] !== undefined && m[4] !== "") {
-      const magnitude = Number.parseFloat(m[5] ?? "0");
-      derivations.set(m[1], {
+    } else if (op2 === "+" || op2 === "-") {
+      const magnitude = Number.parseFloat(m.groups?.value2 ?? "0");
+      derivations.set(name, {
         coef: 1,
-        offset: m[4] === "-" ? -magnitude : magnitude,
+        offset: (m.groups?.op2 ?? "") === "-" ? -magnitude : magnitude,
       });
     } else {
-      derivations.set(m[1], { coef: 1, offset: 0 });
+      derivations.set(name, { coef: 1, offset: 0 });
     }
   }
   return derivations;
@@ -56,9 +52,9 @@ export function parseDerivations(css: string): Map<string, RadiusDerivation> {
 
 /** 基数 + 派生表一起解出来（`css` 必须是 globals.css 全文）。 */
 export function parseRadiusScale(css: string): RadiusScale {
-  const baseMatch = /^\s*--radius\s*:\s*([0-9.]+)(rem|px)\s*;/m.exec(css);
-  const baseValue = baseMatch?.[1];
-  const baseUnit = baseMatch?.[2];
+  const baseMatch = /^\s*--radius\s*:\s*(?<value>[0-9.]+)(?<unit>rem|px)\s*;/m.exec(css);
+  const baseValue = baseMatch?.groups?.value;
+  const baseUnit = baseMatch?.groups?.unit;
   if (baseValue === undefined || baseValue === "" || baseUnit === undefined || baseUnit === "") {
     throw new Error("globals.css 里找不到 --radius 基数");
   }

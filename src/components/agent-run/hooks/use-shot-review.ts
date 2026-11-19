@@ -1,12 +1,9 @@
 "use client";
 
 // 分镜镜头「AI 评审 + 不合格重生成」的共享控制 hook（Phase 8 · P8-1b）。
-//
-// 把「评审一个镜头 → 不合格时抽卡 / 改提示词重生成」这条交互的执行态收在一处，供
-// `ShotReviewDialog` 消费。IO 全走 `~/lib/production/run-client`（视图/hook 不碰 vanillaApi，
-// §17）；评审是在途异步，用 `beginStaleRun` 作废守卫（弹窗中途关闭即不落地，§16.2.4.34）；
-// 重生成走 `useBusyAction` + `runAsyncAction`（忙碌位绑 finally 复位 + 成功/失败都有可见出口，
-// §16.2.4.71 / §16.2.4.30），成功后回调通知调用方刷新镜头列表。
+// IO 全走 `~/lib/production/run-client`（视图/hook 不碰 vanillaApi，§17）；
+// 评审是在途异步，用 `beginStaleRun` 作废守卫（弹窗中途关闭即不落地，§16.2.4.34）；
+// 重生成走 `useBusyAction` + `runAsyncAction`（忙碌位绑 finally 复位，§16.2.4.71 / §16.2.4.30）。
 import { useCallback, useState } from "react";
 
 import { useBusyAction } from "~/components/ui/use-busy-action";

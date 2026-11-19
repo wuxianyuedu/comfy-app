@@ -1,0 +1,3 @@
+## Fixed
+
+- 修复 `CodeBlock` 分片高亮把 shiki 抛错变成未捕获异常（#3551）：`processChunk` 经 `setTimeout(…, 0)` 排在 effect 的 `try` 块退出之后，`codeToTokensBase` 抛出的 `ShikiError`（现场是调用方传入未载入的 `language="bash"`）不会冒泡回那个只包住同步段与 `await getHighlighter()` 的 catch，Next dev 错误浮层直接报 `Uncaught ShikiError: Language \`bash\` not found`。现在把分片回调整体纳入 `try/catch`，并与 `getHighlighter()` 失败共用同一个 `failHighlight` 出口（`guard.commit` → `setTokens(null)` + `errorMessage(err, "代码高亮失败")`）：失败落到既有的「非致命降级」文案、保持纯文本兜底，不再有未捕获异常，抛错那一轮也不会继续调度后续分片。新增 `src/components/ui/code-block.test.tsx` 两条用例钉住两边——不支持的语言走降级文案（隔离反向验证：修复前这条红且能复现 `Timeout.processChunk` 里的未捕获异常），受支持的语言仍按 token 渲染并保留行号。`/ui-kit` 调用点上的 `language="bash"` 归 #3525 一并处理，本次不动。

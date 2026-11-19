@@ -1,8 +1,7 @@
 // ── Workshop MCP 本地 ComfyUI 通道 ──────────────────────────────
-// 不依赖 Next/rpc 的 SSE 链路（那套依赖浏览器与 server-only），改为直接调用
-// 本地 ComfyUI 的 HTTP API：/api/prompt → /api/history → /api/view。
-// 工作流为 ComfyUI「API 格式」图（节点平铺），默认内置一个模型无关的 SDXL
-// txt2img 图；视频(i2v)与自定义图走 data/workshop-comfy-settings.json 模板，
+// 不依赖 Next/rpc 的 SSE 链路（那套依赖浏览器与 server-only），直接调本地 ComfyUI HTTP API：
+// /api/prompt → /api/history → /api/view。工作流为「API 格式」图（节点平铺），默认内置一个
+// 模型无关的 SDXL txt2img；视频(i2v)与自定义图走 data/workshop-comfy-settings.json 模板，
 // 支持 {{prompt}}/{{negative}}/{{image}} 占位替换，从而与任意已安装模型解耦。
 import { randomUUID } from "node:crypto";
 
@@ -14,7 +13,15 @@ import { sleep } from "~/lib/with-timeout";
 import { promises as fs, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
-import { DEFAULT_SIZE_SPEC, sizeSpecDims, type SizeSpec } from "~/lib/media/size-presets";
+import { asRecord, isPlainRecord } from "~/lib/is-record";
+import { AsyncMutex } from "~/lib/async-mutex";
+import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
+import {
+  DEFAULT_SIZE_SPEC,
+  sizeSpecDims,
+  type SizePresetTable,
+  type SizeSpec,
+} from "~/lib/media/size-presets";
 
 const OUTPUT_DIR = path.join(process.cwd(), "data", "workshop-outputs");
 const SETTINGS_FILE = path.join(process.cwd(), "data", "workshop-comfy-settings.json");
@@ -24,6 +31,31 @@ export type ComfySettings = {
   imageWorkflow?: unknown;
   videoWorkflow?: unknown;
 };
+
+// settings 文件是外来 JSON：非对象、或 checkpoint 不是字符串时按「空配置」回落
+// （与 IO 失败的 catch 同口径）；imageWorkflow/videoWorkflow 是任意值，原样留着。
+function isComfySettings(v: unknown): v is ComfySettings {
+  return isPlainRecord(v) && (v.checkpoint === undefined || typeof v.checkpoint === "string");
+}
+
+// /api/prompt 响应是外来 JSON：只认「对象且 error/prompt_id 是字符串或缺失」，
+// 其余按空结果回落（透传原对象，保留额外键供错误文案 stringify）。
+function isComfyPromptResult(v: unknown): v is ComfyPromptResult {
+  return (
+    isPlainRecord(v) &&
+    (v.error === undefined || typeof v.error === "string") &&
+    (v.prompt_id === undefined || typeof v.prompt_id === "string")
+  );
+}
+
+// history 的单个 node 输出只判「是对象」这层（写入端=ComfyUI，images/gifs 元素
+// 形状读侧判），非对象按「没有输出」处理。
+function isComfyNodeOutput(v: unknown): v is {
+  gifs?: Array<{ filename: string; subfolder: string; type: string }>;
+  images?: Array<{ filename: string; subfolder: string; type: string }>;
+} {
+  return isPlainRecord(v);
+}
 
 let resolvedBase: string | null = null;
 
@@ -47,27 +79,26 @@ export type SettingsFileIo = {
 const realSettingsFileIo: SettingsFileIo = {
   read: (file) => readFileSync(file, "utf8"),
   fingerprint: settingsFileFingerprint,
+  /* 原子写（ISSUE #3859）：tmp + rename，读侧（250ms 级的界面读取 / MCP）不会
+   * 撞到半截 JSON。 */
   write: async (file, content) => {
     await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, content, "utf8");
+    const tmp = `${file}.${process.pid}.tmp`;
+    await fs.writeFile(tmp, content, "utf8");
+    await fs.rename(tmp, file);
   },
 };
 
-/**
- * settings 文件的指纹 memo（ISSUE #2194）。
- *
- * 为什么是**指纹比对**而不是显式 `reset`：**用户被本模块的话术指着手改这个文件**
- * （搜「comfyui 视频通道需要 i2v 工作流模板」），而显式 reset 需要一个「文件被改了」
- * 的执行者 —— 那只能是一个 watcher（为 397 行的模块引一套 fs.watch）或「没人按的按钮」。
- * size+mtime 指纹让**手改这个动作本身**成为执行者：改完的下一次读取必然 miss。
- * 指纹形状与 custom-nodes manifest 摘要（audit E6）/ lockfile 漂移（L11）同一族；
- * 一次 statSync，微秒级。
- *
- * 导出仅为用例（注入 io 不碰真盘）；模块自己用 `settingsMemo` 那一份。
- */
+/** settings 文件的指纹 memo（ISSUE #2194）：用户会被本模块话术指着手改这个文件，而显式 `reset` 需要
+ * 「执行者」—— 一个 watcher 或没人按的按钮；size+mtime 指纹让**改这个动作本身**成为执行者，改完的下一次
+ * 读取必然 miss。形状与 custom-nodes manifest 摘要（audit E6）/ lockfile 漂移（L11）同族，一次 statSync。
+ * 导出仅为用例（注入 io 不碰真盘）；模块自己用 `settingsMemo`。 */
 export function createSettingsFileMemo(file: string, io: SettingsFileIo = realSettingsFileIo) {
   let cache: ComfySettings | null = null;
   let fingerprint: string | null = null;
+  /* 保存串行化（ISSUE #3859）：两个并发 save 各自从旧快照合并、整份覆盖，
+   * 先写者的 patch 被后写者顶掉。进程内互斥串行化（写入方都在本进程）。 */
+  const saveMutex = new AsyncMutex();
   return {
     load(): ComfySettings {
       const fp = io.fingerprint(file);
@@ -76,8 +107,8 @@ export function createSettingsFileMemo(file: string, io: SettingsFileIo = realSe
       }
       let parsed: ComfySettings;
       try {
-        /* SAFETY: 类型断言已复核 */
-        parsed = JSON.parse(io.read(file)) as ComfySettings;
+        const raw: unknown = JSON.parse(io.read(file));
+        parsed = isComfySettings(raw) ? raw : {};
       } catch {
         parsed = {};
       }
@@ -86,10 +117,12 @@ export function createSettingsFileMemo(file: string, io: SettingsFileIo = realSe
       return parsed;
     },
     save(patch: Partial<ComfySettings>): Promise<ComfySettings> {
-      const next = { ...this.load(), ...patch };
-      return io.write(file, JSON.stringify(next, null, 2)).then(() => {
-        cache = next;
-        fingerprint = io.fingerprint(file);
+      return saveMutex.run(async () => {
+        const next = { ...this.load(), ...patch };
+        await io.write(file, JSON.stringify(next, null, 2)).then(() => {
+          cache = next;
+          fingerprint = io.fingerprint(file);
+        });
         return next;
       });
     },
@@ -103,17 +136,10 @@ function loadSettings(): ComfySettings {
   return settingsMemo.load();
 }
 
-/**
- * 丢掉缓存的 ComfyUI base，让下一次 `resolveComfyBase()` 重新探测。
- *
- * 与 `~/lib/comfyui/client.ts` 的 `resetComfyBase()` 同一条语义（同维度两份缓存、
- * 此前只有那一侧带出口 —— ISSUE #2194）：ComfyUI 重启后可能落在**另一个**端口
- * （配置端口被占用时它会自己 +1），不清缓存就会在整个进程生命周期里钉死在
- * 一个已经死掉的端口上。
- *
- * **执行者**是本模块自己的网络层失败路径（`guardNetworkFailure`）——
- * 没有执行者的失效出口只是一层没人按的按钮（#2194 原话）。
- */
+/** 丢掉缓存的 ComfyUI base，让下一次 `resolveComfyBase()` 重新探测。与 `~/lib/comfyui/client.ts` 的
+ * `resetComfyBase()` 同语义（两处缓存此前只有那侧有出口，ISSUE #2194）：ComfyUI 重启后可能落在另一个
+ * 端口（配置端口被占用时自行 +1），不清就钉死在死端口上整个进程周期。执行者是本模块的
+ * `guardNetworkFailure` —— 没有执行者的失效出口只是没人按的按钮。 */
 export function resetWorkshopComfyBase(): void {
   resolvedBase = null;
 }
@@ -134,12 +160,10 @@ function guardNetworkFailure(e: unknown): never {
   throw e;
 }
 
-/** 解析 ComfyUI base（含端口探测，落 127.0.0.1 避免 localhost→IPv6 解析失败）。
- *
- * 存活判据走 `~/lib/comfyui/probe` 的 `probeBaseOnce` 唯一口径（**连上即存活**，
- * 含 GPU OOM 的 500 应答，#685）——此前这里自己 `r.ok`，与设置页的单点探测
- * 分叉：同一实例一边判活、这边判死。本模块是纯 Node 宿主（MCP），probe.ts
- * 是零依赖叶子（只有 fetch + 地址拼接），import 安全。 */
+/** 解析 ComfyUI base（含端口探测；落 127.0.0.1 避免 localhost→IPv6 解析失败）。存活判据走
+ * `~/lib/comfyui/probe` 的 `probeBaseOnce` 唯一口径（**连上即存活**，含 GPU OOM 的 500，#685）——
+ * 此前这里自己判 `r.ok`，与设置页单点探测分叉：同一实例一边判活、这边判死。`probe.ts` 是零依赖
+ * 叶子（只有 fetch + 地址拼接），本模块是纯 Node 宿主（MCP），import 安全。 */
 export async function resolveComfyBase(): Promise<string> {
   if (resolvedBase !== null) {
     return resolvedBase;
@@ -156,6 +180,7 @@ export async function resolveComfyBase(): Promise<string> {
   }
   for (let offset = 0; offset <= 5; offset++) {
     const base = `http://${host}:${port + offset}`;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     if ((await probeBaseOnce(base, 800)) !== null) {
       resolvedBase = base;
       return base;
@@ -190,8 +215,8 @@ export async function postComfyPrompt(prompt: unknown): Promise<ComfyPromptResul
         `ComfyUI /api/prompt 失败 (${res.status}): ${await res.text().catch(() => "")}`,
       );
     }
-    /* SAFETY: 类型断言已复核 */
-    return (await res.json()) as ComfyPromptResult;
+    const raw: unknown = await res.json();
+    return isComfyPromptResult(raw) ? raw : {};
   } catch (error) {
     guardNetworkFailure(error);
   }
@@ -206,8 +231,8 @@ export async function getComfyHistory(promptId: string): Promise<Record<string, 
     if (!res.ok) {
       throw new Error(`ComfyUI /api/history 失败 (${res.status})`);
     }
-    /* SAFETY: 类型断言已复核 */
-    return (await res.json()) as Record<string, unknown>;
+    const raw: unknown = await res.json();
+    return asRecord(raw) ?? {};
   } catch (error) {
     guardNetworkFailure(error);
   }
@@ -250,14 +275,12 @@ export async function uploadComfyImage(buffer: Buffer, filename: string): Promis
     if (!res.ok) {
       throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      name?: string;
-    };
-    if (data.name === undefined || data.name === "") {
+    const raw: unknown = await res.json();
+    const name = asRecord(raw)?.name;
+    if (typeof name !== "string" || name === "") {
       throw new Error("ComfyUI 上传未返回文件名");
     }
-    return data.name;
+    return name;
   } catch (error) {
     guardNetworkFailure(error);
   }
@@ -273,6 +296,57 @@ export function outputDirForSession(sessionId?: string): string {
   return OUTPUT_DIR;
 }
 
+/** 远程媒体下载上限：只挡异常大体积，不改变正常参考图/首帧流程。 */
+const MAX_REMOTE_MEDIA_BYTES = 24 * 1024 * 1024;
+
+async function readResponseBufferCapped(res: Response, maxBytes: number): Promise<Buffer> {
+  const len = res.headers.get("content-length");
+  if (len !== null) {
+    const n = Number(len);
+    if (Number.isFinite(n) && n > maxBytes) {
+      throw new Error(`媒体超过 ${Math.floor(maxBytes / 1024 / 1024)}MB 上限`);
+    }
+  }
+  if (!res.body) {
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.byteLength > maxBytes) {
+      throw new Error(`媒体超过 ${Math.floor(maxBytes / 1024 / 1024)}MB 上限`);
+    }
+    return buf;
+  }
+  const reader = res.body.getReader();
+  const chunks: Array<Uint8Array> = [];
+  let total = 0;
+  try {
+    for (;;) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- 流式读取必须逐块等待，无法并行
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (value) {
+        total += value.byteLength;
+        if (total > maxBytes) {
+          throw new Error(`媒体超过 ${Math.floor(maxBytes / 1024 / 1024)}MB 上限`);
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    /* 超限抛出时取消流：releaseLock 不停上游，剩余字节会继续进无人读取的
+     * socket 直到超时（ISSUE #4218，与 safeFetch 的 body.cancel 同一口径）；
+     * 正常读完时 cancel 是无操作。cancel/close 都做兜底——测试桩与旧环境
+     * 可能没有这些方法。 */
+    try {
+      void Promise.resolve(reader.cancel?.()).catch(() => undefined);
+    } catch {
+      /* cancel 不可用时不影响既有的收尾 */
+    }
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, total);
+}
+
 /** 把远程 URL / data URL 归一为可上传的 Buffer。 */
 export async function fetchToBuffer(ref: string): Promise<Buffer> {
   if (isInlineMedia(ref)) {
@@ -285,13 +359,17 @@ export async function fetchToBuffer(ref: string): Promise<Buffer> {
     if (base64 === null) {
       throw new Error("参考图 data URL 格式无效");
     }
-    return Buffer.from(base64, "base64");
+    const buf = Buffer.from(base64, "base64");
+    if (buf.byteLength > MAX_REMOTE_MEDIA_BYTES) {
+      throw new Error(`媒体超过 ${Math.floor(MAX_REMOTE_MEDIA_BYTES / 1024 / 1024)}MB 上限`);
+    }
+    return buf;
   }
   const res = await fetch(ref, { signal: AbortSignal.timeout(30_000) });
   if (!res.ok) {
     throw new Error(`获取参考图失败 (${res.status})`);
   }
-  return Buffer.from(await res.arrayBuffer());
+  return readResponseBufferCapped(res, MAX_REMOTE_MEDIA_BYTES);
 }
 
 /** 持久化 ComfyUI 通道配置（checkpoint / 自定义图模板）。 */
@@ -302,12 +380,18 @@ export async function saveComfySettings(patch: Partial<ComfySettings>): Promise<
 /** 尺寸表达 → 内置 SDXL 图的宽高。
  *
  *  服务端也吃同一套尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见
- *  `lib/size-presets`）：缺省按图片场景的默认档（3:4 1k），不写像素字面量。 */
-export function sizeDimsForImage(spec?: SizeSpec): {
+ *  `lib/size-presets`）：缺省按图片场景的默认档（3:4 1k），不写像素字面量。
+ *  查表用**生效的那份**（ISSUE #3972）：`table` 缺省才是编译进包的默认快照，
+ *  调用方（`generateImageViaComfyUI`）先 `loadSizePresetTable()` 现读 ——
+ *  设置里改过的表在 comfyui 通道真的生效。 */
+export function sizeDimsForImage(
+  spec?: SizeSpec,
+  table?: SizePresetTable,
+): {
   height: number;
   width: number;
 } {
-  return sizeSpecDims(spec ?? DEFAULT_SIZE_SPEC, "image");
+  return sizeSpecDims(spec ?? DEFAULT_SIZE_SPEC, "image", table);
 }
 
 /** 模型无关的默认 SDXL txt2img 图（SaveImage 输出，供 /api/view 取回）。 */
@@ -317,13 +401,15 @@ export function buildTxt2ImgWorkflow(input: {
   prompt: string;
   seed?: number;
   size?: SizeSpec;
+  /** 生效的尺寸表（ISSUE #3972）：宽高按它查，不再用编译进包的默认快照。 */
+  table?: SizePresetTable;
 }): unknown {
   const ckpt =
     input.checkpoint ??
     loadSettings().checkpoint ??
     process.env.WORKSHOP_COMFYUI_CHECKPOINT ??
     "sd_xl_base_1.0.safetensors";
-  const { width, height } = sizeDimsForImage(input.size);
+  const { width, height } = sizeDimsForImage(input.size, input.table);
   return {
     "3": {
       class_type: "KSampler",
@@ -363,20 +449,47 @@ export function buildTxt2ImgWorkflow(input: {
   };
 }
 
-/** 把模板里的 {{prompt}}/{{negative}}/{{image}} 替换为实际值。 */
+/** 把模板里的 {{prompt}}/{{negative}}/{{image}} 替换为实际值。
+ *
+ *  先解析成结构、再对**字符串值**做替换（#4414）：此前在 JSON.stringify 的文本上
+ *  做裸字符串手术——prompt / negative 里带 `"`、`\` 或换行（图像提示词里极常见）
+ *  时，替换结果是非法 JSON，JSON.parse 抛 SyntaxError，整次生成失败。占位符
+ *  位于 ComfyUI API 图节点的字符串字段内，按值遍历替换与原口径同范围（整树），
+ *  但值本身不再需要是合法 JSON 片段。 */
 export function substitutePlaceholders(
   template: unknown,
   vars: { image?: string; negative?: string; prompt: string },
 ): unknown {
-  const json = JSON.stringify(template)
-    .split("{{prompt}}")
-    .join(vars.prompt)
-    .split("{{negative}}")
-    .join(vars.negative ?? "")
-    .split("{{image}}")
-    .join(vars.image ?? "");
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(json) as unknown;
+  let parsed: unknown = template;
+  if (typeof template === "string") {
+    try {
+      parsed = JSON.parse(template);
+    } catch {
+      throw new Error("工作流模板不是合法 JSON：请重新导入该模板");
+    }
+  }
+  return substituteInValue(parsed, vars);
+}
+
+/** 深度遍历：字符串值做占位替换，数组 / 对象递归，其余原样返回。 */
+function substituteInValue(
+  value: unknown,
+  vars: { image?: string; negative?: string; prompt: string },
+): unknown {
+  if (typeof value === "string") {
+    let out = value.split("{{prompt}}").join(vars.prompt);
+    out = out.split("{{negative}}").join(vars.negative ?? "");
+    return out.split("{{image}}").join(vars.image ?? "");
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => substituteInValue(item, vars));
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, substituteInValue(item, vars)]),
+    );
+  }
+  return value;
 }
 
 export type ComfyRunResult = {
@@ -399,37 +512,51 @@ export async function runComfyWorkflow(
 
   const deadline = Date.now() + 10 * 60_000;
   let history: Record<string, unknown> = {};
+  let timedOut = true;
   while (Date.now() < deadline) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     history = await getComfyHistory(promptId).catch(() => ({}));
-    /* SAFETY: 类型断言已复核 */
-    const entry = history[promptId] as
-      | { status?: { completed?: boolean; status_str?: string } }
-      | undefined;
-    const done = entry?.status?.completed === true || entry?.status?.status_str === "success";
-    const failed = entry?.status?.status_str === "error";
+    const entry = asRecord(history[promptId]);
+    const status = asRecord(entry?.status);
+    const done = status?.completed === true || status?.status_str === "success";
+    const failed = status?.status_str === "error";
     if (done || failed) {
+      timedOut = false;
       break;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(1500);
   }
 
-  /* SAFETY: 类型断言已复核 */
-  const entry = history[promptId] as { outputs?: Record<string, unknown> } | undefined;
-  const outputs = entry?.outputs ?? {};
+  if (timedOut) {
+    /* 超时 ≠ 完成（ISSUE #3878）：原先把「10 分钟没等到」落进「完成但没有输出
+     * 文件」的失败分支，排障方向全错；且 ComfyUI 侧该 prompt 仍在消耗 GPU、
+     * 无人取消。这里单独报错，并尽力 /interrupt 停掉在跑的 prompt（尽力而为，
+     * 失败不掩盖主错误——interrupt 不区分 prompt，误伤面由「本应用单飞」兜住）。 */
+    void fetch(`${comfyBase()}/api/interrupt`, {
+      method: "POST",
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => undefined);
+    throw new Error(
+      `ComfyUI 任务 10 分钟仍未等到结果（已尽力中断 prompt ${promptId}）——请确认工作流规模 / 模型加载或 ComfyUI 负载后重试`,
+    );
+  }
+
+  const entry = asRecord(history[promptId]);
+  const outputs: Record<string, unknown> = asRecord(entry?.outputs) ?? {};
   const files: Array<string> = [];
   const outDir = outputDirForSession(opts?.sessionId);
   await fs.mkdir(outDir, { recursive: true });
   for (const nodeOut of Object.values(outputs)) {
-    /* SAFETY: 类型断言已复核 */
-    const rec = nodeOut as {
-      gifs?: Array<{ filename: string; subfolder: string; type: string }>;
-      images?: Array<{ filename: string; subfolder: string; type: string }>;
-    };
-    const items = [...(rec.images ?? []), ...(rec.gifs ?? [])];
+    const items = isComfyNodeOutput(nodeOut)
+      ? [...(nodeOut.images ?? []), ...(nodeOut.gifs ?? [])]
+      : [];
     for (const item of items) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const buf = await getComfyView(item.filename, item.subfolder, item.type);
       const outName = `comfy-${promptId}-${files.length}-${item.filename}`;
       const outPath = path.join(outDir, safeFileNameSegment(outName));
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await fs.writeFile(outPath, buf);
       files.push(`file://${outPath}`);
     }
@@ -451,6 +578,9 @@ export async function generateImageViaComfyUI(input: {
   size?: SizeSpec;
 }): Promise<string> {
   const settings = loadSettings();
+  /* 生效的尺寸表现读磁盘（ISSUE #3972）：设置里改过的表、被「保存到项目代码库」
+   * 改过的项目默认，都在这份里 —— 宽高换算与界面同源。 */
+  const sizeTable = await loadSizePresetTable();
   const workflow =
     settings.imageWorkflow !== undefined && settings.imageWorkflow !== null
       ? substitutePlaceholders(settings.imageWorkflow, {
@@ -461,6 +591,7 @@ export async function generateImageViaComfyUI(input: {
           prompt: input.prompt,
           negative: input.negative,
           size: input.size,
+          table: sizeTable,
         });
   const { files } = await runComfyWorkflow(workflow, {
     sessionId: input.sessionId,

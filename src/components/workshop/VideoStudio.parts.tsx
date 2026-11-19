@@ -5,6 +5,7 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
 import { FieldLabel } from "~/components/ui/field";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { SelectChip } from "~/components/ui/select-chip";
@@ -142,6 +143,13 @@ export function ChannelSwitch({
   );
 }
 
+/* 片段状态 → 文案。与镜头状态同源（只多一档「片段就绪」），配色同样走
+ * `ui/status-badge`（规范 16 §16.2.4.5）。 */
+const CLIP_STATUS_LABEL = {
+  ...SHOT_STATUS_LABEL,
+  done: "片段就绪",
+} satisfies Record<NonNullable<Shot["clipStatus"]>, string>;
+
 /* ── 某镜头片段生成的状态药丸 ── */
 export function ClipBadge({ status }: { status: NonNullable<Shot["clipStatus"]> }) {
   return (
@@ -153,13 +161,6 @@ export function ClipBadge({ status }: { status: NonNullable<Shot["clipStatus"]> 
     />
   );
 }
-
-/* 片段状态 → 文案。与镜头状态同源（只多一档「片段就绪」），配色同样走
- * `ui/status-badge`（规范 16 §16.2.4.5）。 */
-const CLIP_STATUS_LABEL = {
-  ...SHOT_STATUS_LABEL,
-  done: "片段就绪",
-} satisfies Record<NonNullable<Shot["clipStatus"]>, string>;
 
 /* ── 单个镜头行：首帧、提示词、时长 / 运动控件、生成 ── */
 export function ShotCard({
@@ -189,7 +190,9 @@ export function ShotCard({
     <div className="border-border bg-surface rounded-xl border p-4">
       <div className="mb-2 flex items-center gap-2">
         <IndexDot index={shot.index} />
-        <span className="text-muted-foreground truncate text-xs">{shot.sceneHeading}</span>
+        <TruncatedText className="text-muted-foreground truncate text-xs">
+          {shot.sceneHeading}
+        </TruncatedText>
         <ClipBadge status={clipStatus} />
         {clipStatus === "running" && (
           <span className="text-muted-foreground text-3xs">
@@ -234,7 +237,7 @@ export function ShotCard({
             <FieldLabel className="text-2xs flex items-center gap-1">
               <span className="text-muted-foreground">时长(s)</span>
               <Input
-                className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 text-2xs h-auto w-14 rounded-md px-2 py-0.5"
+                className="border-border bg-bg text-ink focus-visible:border-primary text-2xs h-auto w-14 rounded-md px-2 py-0.5"
                 max={20}
                 min={1}
                 onChange={(e) => {
@@ -252,10 +255,10 @@ export function ShotCard({
                 className="bg-subtle! border-border! text-2xs"
                 labels={MOTION_LABELS}
                 onChange={(v) => {
-                  onPatch({
-                    /* SAFETY: 类型断言已复核 */
-                    motion: v as MotionLevel,
-                  });
+                  const motion = MOTIONS.find((item) => item === v);
+                  if (motion !== undefined) {
+                    onPatch({ motion });
+                  }
                 }}
                 options={MOTIONS}
                 placeholder="运动"

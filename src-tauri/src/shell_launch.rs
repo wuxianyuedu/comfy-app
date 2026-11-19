@@ -39,7 +39,7 @@
 //! 同路径、同形态；那边的单测锁住路径与行形态，这里保持逐项一致）：
 //!   1. 写**常驻进度快照**（`run/launch-status.json`，`fallback: true`）——
 //!      编排器一写自己的状态就把它顶掉，因此它只服务启动窗口期；
-//!   2. 落一份**壳自持的编排链路日志**（`log/launcher/shell-launch.log`）——
+//!   2. 落一份**壳自持的编排链路日志**（`log/current/launcher/shell-launch.log`）——
 //!      编排器输出（`[orchestrator] …`）与其启动报告都写它，release 也可靠；
 //!   3. 起不来时**先写状态再回一条可行动的出口**，别让日志面板指向空文件。
 
@@ -55,6 +55,12 @@ use tauri::Wry;
 /// 壳这一侧持有到进程结束，OS 才会在壳死时替我们关掉它并终止整棵树。
 #[cfg(windows)]
 static JOB_HANDLE: Mutex<usize> = Mutex::new(0);
+
+/// standalone sidecar 那棵树的 job 句柄（ISSUE #4165）。语义与 `JOB_HANDLE` 相同：
+/// 句柄由壳持有到进程退出，壳死（含被硬杀）时 OS 替我们关句柄，整棵内嵌 server 树
+/// 当场回收——正常关窗那条链（kill_sidecar → reap 补刀）管不到「壳已经没了」的场景。
+#[cfg(windows)]
+static SIDECAR_JOB_HANDLE: Mutex<usize> = Mutex::new(0);
 
 /// 本次启动的编排子进程句柄（`node scripts/dev-launcher.mjs --mode prebuilt`）。
 ///
@@ -73,14 +79,19 @@ static ORCHESTRATOR: Mutex<Option<tauri_plugin_shell::process::CommandChild>> = 
 /// 认出来并回收，不会误伤别人的启动过程（认亲判据仍只认环境块，不按形态猜）。
 pub const OWNED_ENV: &str = "COMFYAPP_SHELL_OWNED";
 
+/// 编排器环境块里的检出身份（ISSUE #3851）：认亲判据除了「是不是某个壳起的」，
+/// 还要比对「是不是**本检出**的壳起的」——同一台机器多检出并行（§1.4）时，
+/// 只看前者会把别家正在跑的编排器当成自己的残留误杀整树。
+pub const PROJECT_ROOT_ENV: &str = "COMFYAPP_PROJECT_ROOT";
+
 /// 已由壳完成编排（= 本次启动的 dev server 由壳拉起）。
 pub fn is_owning() -> bool {
-  ORCHESTRATOR.lock().unwrap().is_some()
+  ORCHESTRATOR.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_some()
 }
 
 /// 记录本次启动的编排子进程，供退出时回收。
 pub fn adopt(child: tauri_plugin_shell::process::CommandChild) {
-  *ORCHESTRATOR.lock().unwrap() = Some(child);
+  *ORCHESTRATOR.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(child);
 }
 
 /// 这个进程是不是「同一个壳亲手起的那个编排器」。
@@ -200,18 +211,28 @@ pub fn read_foreground_env() -> Option<bool> {
 ///
 /// `kill()` 成功即顺手清掉会话锚点：那是编排器**没机会**清的（见
 /// `clear_session_anchor`）。`kill()` 失败则原样留着，交给下一次启动的孤儿回收。
-pub fn reap(project_root: &str) {
-  let child = ORCHESTRATOR.lock().unwrap().take();
+pub fn reap(project_root: &str, deadline: std::time::Instant) {
+  let child = ORCHESTRATOR
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner)
+    .take();
   let Some(child) = child else { return };
   let pid = child.pid();
+  /* 先派发统一回收、后做插件 kill（ISSUE #3857）：taskkill 的目标在进程**还
+   * 活着**时不存在 PID 复用（复用前提是先终止），「kill 成功 → 丢句柄 →
+   * taskkill」那段窗口被整个消掉，而不是靠握句柄缓解。插件 kill 落在已被
+   * reaper 收掉的进程上是无害 no-op（报一条 warn）。 */
+  spawn_reaper(project_root, pid, deadline);
   match child.kill() {
-    Ok(()) => {
-      log::info!("[ComfyAPP] shell orchestrator stopped via shell plugin (pid {pid})");
-      clear_session_anchor(project_root);
+    Ok(()) => log::info!("[ComfyAPP] shell orchestrator stopped via shell plugin (pid {pid})"),
+    Err(e) => {
+      log::warn!("[ComfyAPP] shell orchestrator stop via shell plugin failed (tree already reaped): {e:?}")
     }
-    Err(e) => log::warn!("[ComfyAPP] shell orchestrator stop via shell plugin failed: {e:?}"),
   }
-  spawn_reaper(project_root, pid);
+  /* 锚点清理放宽为「两道任一落地」：reaper 的 taskkill 或插件 kill 任一收掉
+   * 这棵树，锚点就该清 —— 原先只在插件 kill 成功时清，换序后 kill 多半落在
+   * 已死进程上，留着会让下次启动多报一条无害的「回收上一次遗留」。 */
+  clear_session_anchor(project_root);
 }
 
 /// 回收一个**已知进程号**的编排器（启动前清理上一次的残留，见调用点）。
@@ -219,13 +240,13 @@ pub fn reap(project_root: &str) {
 /// 与 `reap` 的差别只在「句柄从哪来」：`reap` 收的是本进程持有的 `CommandChild`，
 /// 这里收的是上一次运行留下的孤儿（壳被强杀 / job 与进程组都没来得及回收）。
 /// 两者都转交同一处平台判据，壳里**不出现** `taskkill` / 单杀 leader（硬规则 3）。
-pub fn reap_pid(project_root: &str, pid: u32) {
+pub fn reap_pid(project_root: &str, pid: u32, deadline: std::time::Instant) {
   if pid == 0 || pid == std::process::id() {
     return;
   }
   // KILL_ON_JOB_CLOSE 的 job 已经会带走自己那一棵树；这里补的是
   // 「job 也没挂上 / 壳被硬杀」的边角，动作仍走统一回收。
-  spawn_reaper(project_root, pid);
+  spawn_reaper(project_root, pid, deadline);
 }
 
 /// 编排器的会话锚点（`run/launcher-session.json`）。
@@ -285,23 +306,35 @@ pub fn clear_session_anchor(project_root: &str) {
 /// 返回本次定下的模式（已写过就返回那个值）：调用方要把它记进应用状态，
 /// 让启动页在建窗后的第一句问话就能按形态回答（见 lib.rs 的 `get_launch_status`）。
 /// 判据本体仍只在这里，调用方不重复推。
+/// 本次运行启动模式的**进程内唯一写入闸**（ISSUE #4346）：`set_var` 收敛进
+/// `OnceLock` 的初始化，至多执行一次——「启动期单线程」从注释里的假设变成
+/// 结构保证；setup 阶段（runtime 已装配）再调本函数也只是读缓存，不再有
+/// 第二次写环境变量。
+static LAUNCH_MODE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
 #[cfg(not(debug_assertions))]
 pub fn ensure_launch_mode(project_root: &str) -> String {
-  if let Ok(mode) = std::env::var("COMFYAPP_LAUNCH_MODE") {
-    return mode;
-  }
-  let mode = if orchestrator_script(project_root).is_some() {
-    "prebuilt"
-  } else {
-    "standalone"
-  };
-  // SAFETY：启动期单线程（窗口与事件循环都还没建），没有并发读环境变量的路径。
-  std::env::set_var("COMFYAPP_LAUNCH_MODE", mode);
-  log::info!(
-    "[ComfyAPP] launch mode={mode}（编排器{}）",
-    if mode == "prebuilt" { "在，走 dev server" } else { "不在，走内嵌 standalone server" }
-  );
-  mode.to_string()
+  LAUNCH_MODE
+    .get_or_init(|| {
+      // 已写过（含外部注入）就沿用那个值：判据不变（已写过就返回那个值）。
+      if let Ok(mode) = std::env::var("COMFYAPP_LAUNCH_MODE") {
+        return mode;
+      }
+      let mode = if orchestrator_script(project_root).is_some() {
+        "prebuilt"
+      } else {
+        "standalone"
+      };
+      // SAFETY：写入被 [`LAUNCH_MODE`] 收敛为进程内至多一次（ISSUE #4346），
+      // 并发写不可能发生；首写处于启动期，此刻没有并发读环境变量的路径。
+      std::env::set_var("COMFYAPP_LAUNCH_MODE", mode);
+      log::info!(
+        "[ComfyAPP] launch mode={mode}（编排器{}）",
+        if mode == "prebuilt" { "在，走 dev server" } else { "不在，走内嵌 standalone server" }
+      );
+      mode.to_string()
+    })
+    .clone()
 }
 
 #[cfg(debug_assertions)]
@@ -359,7 +392,7 @@ pub fn mark_launch_failed(project_root: &str, message: &str) {
       return;
     }
   }
-  match std::fs::write(&path, payload.to_string()) {
+  match atomic_write(&path, &payload.to_string()) {
     Ok(()) => log::error!("[ComfyAPP] launch failed (reported on the splash): {message}"),
     Err(e) => log::warn!("[ComfyAPP] cannot write {}: {e:?}", path.display()),
   }
@@ -453,6 +486,43 @@ pub fn latest_prefixed_log(dir: &std::path::Path, prefix: &str) -> Option<std::p
     }
   }
   best.map(|(_, path)| path)
+}
+
+/// 等待就绪窗口期里，服务输出中的两类**高频重复行**（ISSUE #4431）：
+///   · 健康探活的访问日志（`GET /api/health 200 in 24ms …`）—— 编排器每秒一拍；
+///   · ComfyUI 拉起期的逐拍轮询（`[comfyui] Configured instance (pid=…, via=…)
+///     starting, port not bound yet`）—— 约 1.5s 一条，同句反复刷屏。
+/// 它们都不是「服务此刻在做什么」的答案；真正的答案在同一段输出里的低频行：
+/// `▲ Next.js` 横幅、`✓ Ready in …`、`[comfyui-lifecycle] ComfyUI 正在启动中，
+/// 等待就绪…`、编译与报错行。
+pub fn is_server_noise_line(line: &str) -> bool {
+  let l = line.trim();
+  if l.is_empty() {
+    return true;
+  }
+  // 访问日志：HTTP 方法 + 空格 + “/” 路径开头（Next 的 request 日志行）。
+  for method in ["GET /", "POST /", "PUT /", "PATCH /", "DELETE /", "HEAD /", "OPTIONS /"] {
+    if l.starts_with(method) {
+      return true;
+    }
+  }
+  // ComfyUI 拉起期的逐拍轮询：同一句只换 pid / 时间地重复。
+  l.contains("Configured instance") && l.contains("starting, port not bound yet")
+}
+
+/// 从服务日志尾部文本里挑「最近一条有信息量的行」：从最后一行往前扫，
+/// 跳过噪声行（[`is_server_noise_line`]），命中即返回（去首尾空白）。
+///
+/// 纯函数（不碰文件系统），供 [`crate::collect_server_activity`] 与壳内用例共用。
+/// 全部是噪声 / 空文本时返回 `None`——调用方据此让启动页把「服务端」这一行收起，
+/// 而不是显示一句空话。
+pub fn latest_meaningful_server_line(tail: &str) -> Option<String> {
+  tail
+    .lines()
+    .rev()
+    .map(str::trim)
+    .find(|l| !is_server_noise_line(l))
+    .map(String::from)
 }
 
 /// 编排器自己行首的时间戳 + 级别前缀（`[YYYY-MM-DD HH:MM:SS.mmm] [LEVEL ]`）。
@@ -599,7 +669,7 @@ pub fn write_sidecar_exit_record(
   }
   // 无 BOM：走 `fs::write` 而不是带 BOM 分支的任何写法，与 launch-status.json 同口径。
   // 读取侧是 JSON.parse，BOM 会让它当场失败。
-  match std::fs::write(&path, body.as_bytes()) {
+  match atomic_write(&path, &body) {
     Ok(()) => {
       log::info!("[ComfyAPP] 已记录内嵌服务结束原因：{}", path.display());
       true
@@ -644,6 +714,148 @@ pub fn read_app_service_exit(project_root: &str) -> Option<String> {
   Some(trimmed.to_string())
 }
 
+/// 读回「本检出的应用服务进程还活着吗」——**双信号判据的进程外那一半**（ISSUE #4146）。
+///
+/// ## 为什么这条判据必须在壳里
+///
+/// 探活（`GET /api/dev/server-id`）由应用服务自己应答，而 dev server 是**单事件循环**：
+/// 同步重活（进程探针 `spawnSync`、Turbopack 编译锁、大型同步压缩）会把事件循环停走
+/// 数秒，期间**所有**请求（含探活）都排不上队——进程活得好好的，HTTP 探活却连续超时
+/// （ISSUE #4140 的现场）。「还能不能应答」只能问服务本身，所以这条信号永远带着被测
+/// 进程的忙闲；要让**离线判定**不被它牵着走，必须有一个不经过该进程的信号。壳正是
+/// 那个旁证人：编排器（launcher）是壳的子进程，它把本次启动的进程树（`launcher_pid`
+/// + `child_pids`）写进 `run/launcher-session.json`，壳读这份文件、逐个查 PID 存活，
+/// 完全不经过 dev server 的任何线程。
+///
+/// ## 返回语义（三态，`None` 不是错误）
+///
+/// · `None`：会话文件读不到 / 解析不了 / 没有可查的 PID——**不知道**（典型：手工
+///   `pnpm dev` 没走编排器）。注意这只代表**第一档**答不上：standalone 分发形态
+///   同样没有会话文件，那一档由壳持有的 sidecar 句柄直答（`liveness_from_sidecar`，
+///   ISSUE #4151；两档的按序归并在 lib.rs 的 `get_app_service_liveness`）。前端对
+///   最终的 `None` 按「没有进程外信号」处理，退回纯 HTTP 判据（原行为）。
+/// · `Some(true)`：名单里**任一**进程还活着——服务没死（正在忙 / 正在被编排器重启）。
+/// · `Some(false)`：名单全部不在了——进程确实没了，配合探活失败即是真断开。
+///
+/// PID 复用的说明：Windows 的 PID 理论上会被复用，但那是「编号耗尽回绕」之后的事，
+/// 而这里的名单一分钟前刚由编排器写下；把「名单里任一还活着」当「服务没死」在这个
+/// 时间尺度上是稳的，不值得为它再查进程身份。
+pub fn read_app_service_liveness(project_root: &str) -> Option<bool> {
+  if project_root.is_empty() {
+    return None;
+  }
+  let raw = std::fs::read_to_string(launcher_session_path(project_root)).ok()?;
+  let pids = parse_launcher_session_pids(&raw)?;
+  liveness_from_pids(&pids, pid_alive)
+}
+
+/// 会话文件名，与 `scripts/launcher-core/` 的落盘名逐字相同。
+const LAUNCHER_SESSION_FILE: &str = "launcher-session.json";
+
+fn launcher_session_path(project_root: &str) -> std::path::PathBuf {
+  std::path::Path::new(project_root)
+    .join("run")
+    .join(LAUNCHER_SESSION_FILE)
+}
+
+/// 从会话文件原文里取要查活的 PID 名单（`launcher_pid` + `child_pids`）。
+///
+/// 解析不出 / 一个 PID 都没有 → `None`（调用方按「不知道」处理）。字段缺失、
+/// 类型不对、混进非法值（0 / 负数 / 超出 u32）都逐项跳过而不是整份作废：
+/// 名单里多一个坏项不该把其余好项的读数也丢掉。
+pub fn parse_launcher_session_pids(raw: &str) -> Option<Vec<u32>> {
+  let value: serde_json::Value = serde_json::from_str(raw).ok()?;
+  let mut pids: Vec<u32> = Vec::new();
+  let mut push = |pid: u64| {
+    if pid > 0 && pid <= u32::MAX as u64 {
+      pids.push(pid as u32);
+    }
+  };
+  if let Some(pid) = value.get("launcher_pid").and_then(|v| v.as_u64()) {
+    push(pid);
+  }
+  if let Some(children) = value.get("child_pids").and_then(|v| v.as_array()) {
+    for child in children {
+      if let Some(pid) = child.as_u64() {
+        push(pid);
+      }
+    }
+  }
+  if pids.is_empty() {
+    None
+  } else {
+    Some(pids)
+  }
+}
+
+/// 名单 → 三态结论：空名单 `None`；任一活着 `Some(true)`；全部不在 `Some(false)`。
+/// 探活函数注入：判据纯函数化，测试不必真起进程。
+fn liveness_from_pids(pids: &[u32], probe: impl Fn(u32) -> bool) -> Option<bool> {
+  if pids.is_empty() {
+    return None;
+  }
+  Some(pids.iter().any(|pid| probe(*pid)))
+}
+
+/// 第二档判据的纯函数（ISSUE #4151）：standalone（分发）形态没有编排器与会话文件，
+/// 但壳**直接持有**内嵌 server（sidecar）的 `CommandChild` 句柄——不需要任何落盘
+/// 痕迹就能回答「进程还在吗」。与 `liveness_from_pids`（第一档：编排器会话名单）
+/// 互补，三态语义一致：
+///
+/// · 句柄不在（`None`）：这一档答不上——壳没起过 sidecar（prebuilt / 兜底 dev
+///   URL / debug 壳），回 `None` 让调用方落「不知道」，前端退回纯 HTTP 判据。
+/// · `terminated`（壳在事件通道里亲眼看到 `Terminated`）：进程确实没了，直接判
+///   `Some(false)`。这是进程外事实，且句柄在壳的整个生命周期里都指向同一个 PID，
+///   判死从此不受「PID 复用」影响，也不必再查一次系统。
+/// · 其余：按句柄上的 PID 查存活。死亡事件未达的毫秒级窗口里靠 PID 兜底，与
+///   第一档对会话名单的取向一致（#4146：名单刚写下时 PID 复用在这个时间尺度上
+///   不构成误读）。
+///
+/// 探活函数注入：与第一档同一取向，判据纯函数化，测试不必真起进程。
+pub fn liveness_from_sidecar(
+  handle_pid: Option<u32>,
+  terminated: bool,
+  probe: impl Fn(u32) -> bool,
+) -> Option<bool> {
+  let pid = handle_pid?;
+  if terminated {
+    return Some(false);
+  }
+  Some(probe(pid))
+}
+
+/// PID 还在吗（只查存在性，不关心它此刻忙不忙——忙正是软信号要容忍的那一档）。
+/// 两档判据共用：第一档查会话名单（#4146），第二档查壳持有的 sidecar 句柄（#4151）。
+#[cfg(windows)]
+pub(crate) fn pid_alive(pid: u32) -> bool {
+  use windows::Win32::Foundation::CloseHandle;
+  use windows::Win32::System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+  // STILL_ACTIVE 的值（Win32 常量 259）；windows 0.62 的 Threading 模块没有导出这个名字，
+  // 只能写字面量——含义与 SDK 的 `NT_SUCCESS(Status) == FALSE && Status == STATUS_PENDING` 档一致。
+  const STILL_ACTIVE: u32 = 259;
+  unsafe {
+    // 打开失败 = 进程不在。
+    let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+      return false;
+    };
+    let mut exit_code: u32 = 0;
+    // 打开成功但退出码不是 STILL_ACTIVE = 已经退出：句柄被别人握着时 OpenProcess
+    // 仍会成功，退出码才是裁决。
+    let alive = GetExitCodeProcess(handle, &mut exit_code).is_ok() && exit_code == STILL_ACTIVE;
+    let _ = CloseHandle(handle);
+    alive
+  }
+}
+
+/// POSIX：`kill(pid, 0)` 只探测存在性。0 = 在；EPERM = 在但没权限（也算在）；
+/// ESRCH = 不在。可见性说明见 Windows 档。
+#[cfg(not(windows))]
+pub(crate) fn pid_alive(pid: u32) -> bool {
+  // SAFETY: kill(2) 是无状态系统调用，只有 errno 需要读。
+  let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
+  rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
 /// 把 sidecar 的终止事实翻译成给用户看的一句话（记录里的 `reason`）。
 ///
 /// 与 Node 侧 `describeDownstreamExit` 同一个取向：**只陈述这一次具体是什么结束的**，
@@ -654,6 +866,12 @@ pub fn sidecar_exit_reason(code: Option<i32>) -> String {
     Some(c) => format!("内嵌服务（standalone server）已终止，退出码 {c}"),
     None => "内嵌服务（standalone server）已终止，未拿到退出码".to_string(),
   }
+}
+
+/// `log_launch_line` 的行形态（`[时刻] [级别] 正文`）。同步直写与 [`LineLog`]
+/// 两条路共用同一份拼法——各拼各的必然漂。
+fn launch_log_line(level: &str, message: &str) -> String {
+  format!("[{}] [{}] {}\n", local_timestamp(), level.to_uppercase(), message)
 }
 
 /// 把编排链路日志写一行（时间戳 + 级别 + 正文）。
@@ -669,8 +887,10 @@ pub fn log_launch_line(project_root: &str, level: &str, message: &str) {
   if project_root.is_empty() {
     return;
   }
-  let line = format!("[{}] [{}] {}\n", local_timestamp(), level.to_uppercase(), message);
-  if let Err(e) = append_line(&launch_log_path(project_root), &line) {
+  if let Err(e) = append_line(
+    &launch_log_path(project_root),
+    &launch_log_line(level, message),
+  ) {
     log::warn!("[ComfyAPP] 编排链路日志写入失败：{e:?}");
   }
 }
@@ -682,14 +902,18 @@ pub fn log_launch_line(project_root: &str, level: &str, message: &str) {
 /// 改另一条，就会「面板读到的（`[orchestrator] 时刻 级别 正文`）与 channel 里的
 /// （另一份）对不上」—— 而两侧看各自都对。`level` 走 `orchestrator_level_to_shell`
 /// 的归一结论，不再让 stdout 恒 info / stderr 恒 warn 覆盖掉编排器自己的级别。
-fn log_orchestrator_line(project_root: &str, level: &str, body: &str) {
+///
+/// shell-launch.log 那一路经 [`LineLog`] 的专用写线程落盘：泵在 tokio worker 上
+/// 逐行消费编排器输出，同步写文件会在慢盘 / 高频输出时拖住 worker，并让无界上游
+/// 在内存里堆积（ISSUE #4334）。
+fn log_orchestrator_line(sink: &LineLog, level: &str, body: &str) {
   let message = format!("[orchestrator] {body}");
   match level {
     "error" => log::error!("{message}"),
     "warn" => log::warn!("{message}"),
     _ => log::info!("{message}"),
   }
-  log_launch_line(project_root, level, &message);
+  sink.send_line(launch_log_line(level, &message));
 }
 
 /// 启动会话标记前缀。壳在每次启动时往 shell-launch.log 写一行，
@@ -768,12 +992,258 @@ pub fn log_session_start(project_root: &str) {
 
 /// 追加一行（目录缺失时递归建）。返回 Err 而不是 panic —— 调用方一律只记 WARN。
 fn append_line(path: &std::path::Path, line: &str) -> std::io::Result<()> {
+  append_bytes(path, line.as_bytes())
+}
+
+/// 追加一段字节（目录缺失时递归建）。`append_line` 的字节形态，供按次开合的
+/// 日志写入器复用同一份「建目录 + 开-写-即关」的落盘语义。
+fn append_bytes(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
   use std::io::Write;
   if let Some(dir) = path.parent() {
     std::fs::create_dir_all(dir)?;
   }
   let mut file = std::fs::OpenOptions::new().create(true).append(true).open(path)?;
-  file.write_all(line.as_bytes())
+  file.write_all(bytes)
+}
+
+/// 壳自持日志的大小上限：超过即整份重建（丢旧保新，等效插件 Folder target 的
+/// KeepOne 轮转）。设防的是「壳长开数日 + 编排器转发日志把文件推到无界」，
+/// 不是常规路径——`current/` 每次运行结束会被归档清空，正常情况下远到不了这里。
+pub const SHELL_LOG_MAX_BYTES: u64 = 40 * 1024 * 1024;
+
+/// 编排链路日志（shell-launch.log）的大小上限：超过即整份重建（丢旧保新），
+/// 与 shell.log 的 [`SHELL_LOG_MAX_BYTES`] 同一取向（ISSUE #4389）。该日志
+/// 原为「追加不轮转」——prebuilt 长开会话里编排器/服务的持续输出会把文件推到
+/// 无界；40MB 对单次会话的编排诊断远超够用。
+pub const SHELL_LAUNCH_LOG_MAX_BYTES: u64 = 40 * 1024 * 1024;
+
+/// 行日志的**有界异步写入器**：专用写线程 + 有界通道 + 丢弃计数（ISSUE #4334）。
+///
+/// 解决的问题：子进程输出泵跑在 tokio worker 上，此前逐行做同步文件 IO（stat +
+/// open + write + close）。磁盘慢（杀毒扫描 / 网络盘）或子进程高频刷屏（首次编译
+/// 期的 Next / turbopack）时：worker 被文件 IO 拖住，同一线程上的其它 async 任务
+/// 跟着挨饿；上游（tauri-plugin-shell 的事件通道）又是无界 mpsc，消费慢就在内存里
+/// 无界堆积。这里把「落盘」整体挪进一条专用线程：调用方只做一次有界 `try_send`——
+/// **从不阻塞、从不做 IO**；通道满 = 落盘跟不上产出，按「丢弃 + 计数」处理，写线程
+/// 在下一行前补一条「丢弃 N 行」，内存有界、现场不静默。
+struct LineLog {
+  tx: std::sync::mpsc::SyncSender<LineMsg>,
+  dropped: std::sync::Arc<std::sync::atomic::AtomicU64>,
+  worker: Option<std::thread::JoinHandle<()>>,
+}
+
+/// 通道里传的三种消息：正文行 / 排空屏障（仅测试）/ 收尾。
+enum LineMsg {
+  Line(String),
+  #[cfg(test)]
+  Barrier(std::sync::mpsc::Sender<()>),
+  Close,
+}
+
+impl LineLog {
+  /// 通道容量：内存上界 ≈ 容量 × 单行字节。既要给写线程留出「高频刷屏时匀速
+  /// 消化」的深度，又必须远小于「无界」——满了就丢，不再收。
+  const CHANNEL_CAPACITY: usize = 1024;
+
+  /// 按默认容量起一个写线程。`write` 是真正的落盘动作（含轮转 / 重建语义），
+  /// 由写线程**独占**执行——单线程单通道，落盘行序因此与入队顺序一致。
+  ///
+  /// 写线程起不来（极端资源紧张）**不 panic**（ISSUE #4392）：降级为「入队即丢」
+  /// 的断开通道，诊断面损失但壳照常运行——与 `tcp_probe_bounded` 对 spawn 失败
+  /// 的宽容取向一致。
+  fn spawn<W>(write: W) -> Self
+  where
+    W: FnMut(&[u8]) -> std::io::Result<()> + Send + 'static,
+  {
+    match Self::try_spawn(write, Self::CHANNEL_CAPACITY) {
+      Ok(sink) => sink,
+      Err(error) => {
+        log::error!("[ComfyAPP] 日志写线程启动失败，该诊断通道改为丢弃：{error}");
+        Self::broken()
+      }
+    }
+  }
+
+  /// 按指定容量起写线程（测试用：小容量才能不依赖时序地测出「满了丢弃」）。
+  #[cfg(test)]
+  fn spawn_with_capacity<W>(write: W, capacity: usize) -> Self
+  where
+    W: FnMut(&[u8]) -> std::io::Result<()> + Send + 'static,
+  {
+    Self::try_spawn(write, capacity).expect("测试写线程不应起不来")
+  }
+
+  fn try_spawn<W>(write: W, capacity: usize) -> std::io::Result<Self>
+  where
+    W: FnMut(&[u8]) -> std::io::Result<()> + Send + 'static,
+  {
+    let (tx, rx) = std::sync::mpsc::sync_channel::<LineMsg>(capacity);
+    let dropped = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let dropped_in_worker = dropped.clone();
+    let worker = std::thread::Builder::new()
+      .name("comfyapp-line-log".into())
+      .spawn(move || {
+        let mut write = write;
+        while let Ok(msg) = rx.recv() {
+          match msg {
+            LineMsg::Line(line) => {
+              // 丢弃计数在成功消费时结算：拥塞解除后的第一行前先补一条，
+              // 让「丢了多少」在日志里可见，而不是静默吞掉。
+              let n = dropped_in_worker.swap(0, std::sync::atomic::Ordering::Relaxed);
+              if n > 0 {
+                let _ = write(format!("（落盘滞后：前段已丢弃 {n} 行）\n").as_bytes());
+              }
+              let _ = write(line.as_bytes());
+            }
+            #[cfg(test)]
+            LineMsg::Barrier(ack) => {
+              let _ = ack.send(());
+            }
+            LineMsg::Close => break,
+          }
+        }
+        // 收尾兜底：Close 之后若还有未消费的正文（防御，正常没有），尽力写完再退。
+        while let Ok(msg) = rx.try_recv() {
+          if let LineMsg::Line(line) = msg {
+            let _ = write(line.as_bytes());
+          }
+        }
+        // 到这一刻还在涨的丢弃计数没有下一行可挂了，补最后一次读数。
+        let n = dropped_in_worker.swap(0, std::sync::atomic::Ordering::Relaxed);
+        if n > 0 {
+          let _ = write(format!("（落盘滞后：前段已丢弃 {n} 行）\n").as_bytes());
+        }
+      })?;
+    Ok(Self {
+      tx,
+      dropped,
+      worker: Some(worker),
+    })
+  }
+
+  /// 断开通道的空实现（[`Self::spawn`] 的降级出口）：`send_line` 恒走
+  /// Disconnected 分支丢弃，`barrier` 立即返回，`Drop` 无线程可等。
+  fn broken() -> Self {
+    let (tx, rx) = std::sync::mpsc::sync_channel(0);
+    drop(rx);
+    Self {
+      tx,
+      dropped: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+      worker: None,
+    }
+  }
+
+  /// 投递一行（**非阻塞**）：通道满即丢弃并计数。用有界的内存换两条硬保证——
+  /// 调用线程绝不被磁盘拖住、async worker 上绝不出现同步文件 IO。
+  fn send_line(&self, line: String) {
+    match self.tx.try_send(LineMsg::Line(line)) {
+      Ok(()) => {}
+      Err(std::sync::mpsc::TrySendError::Full(_)) => {
+        self
+          .dropped
+          .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+      }
+      // 写线程已退出（只发生在 Drop 之后）；诊断通道丢就丢了，不恐慌。
+      Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {}
+    }
+  }
+
+  /// 排空屏障：等写线程把**此刻已入队**的行全部写完。只给测试用——生产热路径
+  /// 不调它（fern 可能在每条记录后调 flush，若在这里等排空，调用线程又被拖回
+  /// 磁盘节奏，#4334 就白修了）。
+  #[cfg(test)]
+  fn barrier(&self) {
+    let (ack_tx, ack_rx) = std::sync::mpsc::channel();
+    if self.tx.send(LineMsg::Barrier(ack_tx)).is_ok() {
+      let _ = ack_rx.recv_timeout(std::time::Duration::from_secs(10));
+    }
+  }
+}
+
+impl Drop for LineLog {
+  fn drop(&mut self) {
+    // Close 尽力而为：通道满时丢这枚哨兵也无妨——随后 tx 随 self 一起 drop
+    // 会断开通道，写线程把队列里剩下的行收完自然退出（recv 对「已断开且空」
+    // 返回 Err）。
+    let _ = self.tx.try_send(LineMsg::Close);
+    if let Some(handle) = self.worker.take() {
+      // join 要等写线程把积压行写完（磁盘慢时秒级）——绝不能在调用方线程上
+      // 等：输出泵的收尾发生在 tokio worker 上（ISSUE #4390），在这里 join
+      // 等于把 worker 交回给磁盘节奏。挪进一次性守护线程，调用方立即返回；
+      // 尾巴落盘变为尽力而为（积压 ≤ 通道容量，有界）。
+      let _ = std::thread::Builder::new()
+        .name("comfyapp-line-log-join".into())
+        .spawn(move || {
+          let _ = handle.join();
+        });
+    }
+  }
+}
+
+/// shell.log 一行的落盘动作：超过上限整份重建（丢旧保新）+ 按次开合追加。
+/// 语义与 #3574 一致，只是执行线程从「调用方」换成了 [`LineLog`] 的写线程
+/// （ISSUE #4334）。
+fn write_shell_log_bytes(
+  path: &std::path::Path,
+  max_bytes: u64,
+  buf: &[u8],
+) -> std::io::Result<()> {
+  let oversized = std::fs::metadata(path)
+    .map(|m| m.len() >= max_bytes)
+    .unwrap_or(false);
+  if oversized {
+    // 按次开合意味着没有谁长期攥着这份文件，删除是即时的；删失败（被瞬时
+    // 只读句柄占住）就先不轮转，下一行再试——丢上限与丢现场之间选后者。
+    let _ = std::fs::remove_file(path);
+  }
+  append_bytes(path, buf)
+}
+
+/// 壳自持日志（`log/current/shell/shell.log`）的**按次开合**写入器。
+///
+/// 为什么不沿用 tauri-plugin-log 的 Folder target（#3574）：它把文件句柄一直
+/// 攥到进程退出，而 `current/` 的生命周期里有多次「整目录清空」——启动时编排器
+/// 的崩溃补做（`recoverStaleCurrent`，把壳先写进来的会话头当成上一次的残留）、
+/// 退出时的收包归档（`archiveCurrent`）。任何一次清空都发生在壳还活着的时候：
+/// Windows 上删除对持句柄文件成功（Rust std 以含 FILE_SHARE_DELETE 打开），
+/// 目录项即刻消失，此后插件的所有写入都落进一个已解除链接的句柄——**静默丢失，
+/// 日志冻在清空发生前的那几行**。每次写入按路径重开 + 追加 + 即关，目录被清了
+/// 下一行自己重建（与 `append_line` 同一取向）。
+///
+/// 落盘走 [`LineLog`] 的专用写线程（ISSUE #4334）：日志可能从 tokio worker
+/// （sidecar / 编排器输出泵）里发出，同步文件 IO 会在慢盘 / 高频输出时把 worker
+/// 拖住——这里 `write()` 只入队，真正的 stat / 轮转 / 写盘都在写线程里。
+pub struct ResilientShellLog {
+  sink: LineLog,
+}
+
+impl ResilientShellLog {
+  /// 按默认大小上限（[`SHELL_LOG_MAX_BYTES`]）建一个写入器。
+  pub fn new(path: std::path::PathBuf) -> Self {
+    Self::with_max_bytes(path, SHELL_LOG_MAX_BYTES)
+  }
+
+  /// 按指定大小上限建一个写入器（测试用）。
+  fn with_max_bytes(path: std::path::PathBuf, max_bytes: u64) -> Self {
+    Self {
+      sink: LineLog::spawn(move |buf| write_shell_log_bytes(&path, max_bytes, buf)),
+    }
+  }
+}
+
+impl std::io::Write for ResilientShellLog {
+  fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+    // fern 的 writer 输出每次给一整条格式化好的行，write_fmt 内部按 write_all
+    // 语义调用本函数；这里只入队（从不阻塞、不做 IO），返回「全部收下」。
+    self.sink.send_line(String::from_utf8_lossy(buf).into_owned());
+    Ok(buf.len())
+  }
+
+  fn flush(&mut self) -> std::io::Result<()> {
+    // 故意不做屏障：fern 可能在每条记录后调 flush，在这里等写线程排空会把
+    // 调用线程拖回磁盘节奏。收尾排空由 Drop（Close + join）负责。
+    Ok(())
+  }
 }
 
 /// `YYYY-MM-DD HH:MM:SS.mmm` 时间戳（与 Node 侧 `formatLogLine` 的**形态**同形）。
@@ -801,6 +1271,23 @@ fn local_timestamp() -> String {
 /// `report` 是壳接手那一刻的启动报告（`startup_report_json` 的产物），随快照
 /// 一起写进 `diagnostics`：编排器写自己的状态时会把这份快照整份顶掉，所以报告
 /// 必须在**它被顶掉之前**就已经落到磁盘上，启动期才有现场可查。
+/// 原子写小文件（ISSUE #3857）：先写同目录的 `.tmp-<pid>` 再 `rename` 到位。
+/// `launch-status.json` 是「壳 + 编排器两个写方、启动页 250ms 一个读方」的热
+/// 文件，`std::fs::write` 的 truncate+write 直写会让读方撞到空串 / 半截 JSON；
+/// 同目录 rename 在同一卷上是原子的。失败时收掉自己的临时文件。
+fn atomic_write(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
+  let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
+  let result = (|| -> std::io::Result<()> {
+    std::fs::write(&tmp, contents)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+  })();
+  if result.is_err() {
+    let _ = std::fs::remove_file(&tmp);
+  }
+  result
+}
+
 pub fn write_idle_status(
   project_root: &str,
   phase: &str,
@@ -834,7 +1321,7 @@ pub fn write_idle_status(
       return;
     }
   }
-  if let Err(e) = std::fs::write(&path, payload.to_string()) {
+  if let Err(e) = atomic_write(&path, &payload.to_string()) {
     log::warn!("[ComfyAPP] 无法写 {}：{e:?}", path.display());
   }
 }
@@ -927,12 +1414,114 @@ fn iso_timestamp() -> String {
   format!("unix:{secs}")
 }
 
+/// 回收命令的等待预算（#4006）：平时秒回；这是退出路径上的同步等待，不许无界。
+pub(crate) const REAPER_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// 同步跑一条命令，但带墙钟预算（#4006）。
+///
+/// `Command::output()` 会无限等子进程退出——把它放在退出路径上，一旦 reap 脚本
+/// 链路变化（比如未来加了等待确认），壳就卡死在 Exit 事件里。这里改为
+/// `spawn` + `try_wait` 轮询：到点强杀并报错。子进程只吐几行日志，管道缓冲
+/// 足够容纳，不会因不读管道而写满卡死；退出后再把剩余输出收干净——收取本身
+/// 也带预算（[`drain_pipes_bounded`]，ISSUE #4337），退出回收整体保持墙钟上限。
+pub(crate) fn run_with_budget(
+  mut command: std::process::Command,
+  budget: std::time::Duration,
+) -> std::io::Result<std::process::Output> {
+  // spawn() 的默认 stdio 是**继承父进程**——不显式接管管道，child.stdout/stderr
+  // 恒为 None，下面的残余收取（以及返回值里的输出）从来没有内容可收。这里
+  // 显式接上管道，产出交由 [`drain_pipes_bounded`] 有界收净。
+  use std::process::Stdio;
+  let mut child = command
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()?;
+  let deadline = std::time::Instant::now() + budget;
+  loop {
+    if let Some(status) = child.try_wait()? {
+      let (stdout, stderr) = drain_pipes_bounded(&mut child, PIPE_DRAIN_BUDGET);
+      return Ok(std::process::Output {
+        status,
+        stdout,
+        stderr,
+      });
+    }
+    if std::time::Instant::now() >= deadline {
+      let _ = child.kill();
+      let _ = child.wait();
+      return Err(std::io::Error::new(
+        std::io::ErrorKind::TimedOut,
+        "回收命令超出预算，已强杀",
+      ));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(50));
+  }
+}
+
+/// 子进程退出后收取管道残余输出的宽限（ISSUE #4337）。正常情况残余就几行、
+/// 瞬间收完；给 2s 是给「写端还没关」的窄窗口一个来得及收的余地。
+pub(crate) const PIPE_DRAIN_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// 单条管道残余收取的容量上限（ISSUE #4388）：收尾读取线程无条件 `read_to_end`
+/// 会在「后代继承写端且持续输出」时无界吃内存——这里封住内存面。超限即停累积；
+/// 读取线程本身在写端全部关闭前可能仍滞留（detached，进程退出时由 OS 回收），
+/// 但内存与主流程都已有界。
+const PIPE_DRAIN_CAP_BYTES: usize = 64 * 1024;
+
+/// 已退出的子进程把 stdout/stderr 残余收干净——但**有界**（ISSUE #4337）。
+///
+/// `read_to_end` 要等管道**所有**写端关闭才返回：被回收脚本留下的后代进程若
+/// 继承了 stdout/stderr 写句柄且不肯退，直接在当前线程 `read_to_end` 就会把
+/// 退出路径无限期挂住（主线程冻在 `RunEvent::Exit` 里，表现为「关了窗却退不
+/// 出」——`try_wait` 那段有预算，这一段原先没有）。这里把每条管道的收取挪进
+/// 一次性线程、整体给一个宽限预算：到点放弃，拿到多少算多少——残余输出是
+/// 诊断信息，丢给它换退出路径的墙钟上限，值得。容量上限见
+/// [`PIPE_DRAIN_CAP_BYTES`]（ISSUE #4388）。
+fn drain_pipes_bounded(
+  child: &mut std::process::Child,
+  budget: std::time::Duration,
+) -> (Vec<u8>, Vec<u8>) {
+  use std::io::Read;
+  let (tx, rx) = std::sync::mpsc::channel::<(bool, Vec<u8>)>();
+  let mut spawned = 0usize;
+  if let Some(s) = child.stdout.take() {
+    let tx = tx.clone();
+    spawned += 1;
+    std::thread::spawn(move || {
+      let mut buf = Vec::new();
+      // take(CAP)：超限即停累积——写端不关时 read_to_end 本会无限等下去。
+      let _ = s.take(PIPE_DRAIN_CAP_BYTES as u64).read_to_end(&mut buf);
+      let _ = tx.send((true, buf));
+    });
+  }
+  if let Some(s) = child.stderr.take() {
+    spawned += 1;
+    std::thread::spawn(move || {
+      let mut buf = Vec::new();
+      let _ = s.take(PIPE_DRAIN_CAP_BYTES as u64).read_to_end(&mut buf);
+      let _ = tx.send((false, buf));
+    });
+  }
+  let deadline = std::time::Instant::now() + budget;
+  let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+  for _ in 0..spawned {
+    let left = deadline.saturating_duration_since(std::time::Instant::now());
+    match rx.recv_timeout(left) {
+      Ok((true, buf)) => stdout = buf,
+      Ok((false, buf)) => stderr = buf,
+      // 超时（或发送端提前全没）：到点放弃，不再陪卡住的写端等。
+      Err(_) => break,
+    }
+  }
+  (stdout, stderr)
+}
+
 /// 调 `scripts/reap-process.mjs`（非 TS 宿主的唯一命令行回收入口）。
 ///
 /// **不自己拼 `taskkill` / `kill`**：平台判据只允许有一份，在
 /// `src/lib/process/kill-process-tree.ts`（命令行入口就是 reap-process.mjs）。
 /// 这里再写一遍，就是「各写各的、POSIX 上退化成单杀」那条老路的翻版。
-fn spawn_reaper(project_root: &str, pid: u32) {
+fn spawn_reaper(project_root: &str, pid: u32, deadline: std::time::Instant) {
   if project_root.is_empty() || pid == 0 {
     return;
   }
@@ -958,7 +1547,10 @@ fn spawn_reaper(project_root: &str, pid: u32) {
     use std::os::windows::process::CommandExt;
     command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
   }
-  match command.output() {
+  /* 预算来自调用方的**共享截止时刻**（ISSUE #4219）：退出路径上两段回收串行，
+   * 各自独立预算的叠加会把关窗后的假死拉长到 20s 量级。 */
+  let budget = deadline.saturating_duration_since(std::time::Instant::now());
+  match run_with_budget(command, budget) {
     Ok(out) => log::info!(
       "[ComfyAPP] 编排器进程树统一回收：{}",
       String::from_utf8_lossy(&out.stdout).trim()
@@ -1008,7 +1600,7 @@ pub fn spawn_orchestrator(
     // 判定已由壳跑过），并且**不再起第二个壳**（§1.5：首壳就是应用宿主）。
     .env("COMFYAPP_SHELL_SELF_LAUNCH", "1")
     .env("COMFYAPP_PORT", port.to_string())
-    .env("COMFYAPP_PROJECT_ROOT", project_root)
+    .env(PROJECT_ROOT_ENV, project_root)
     .env("COMFYAPP_LAUNCH_MODE", "prebuilt")
     .current_dir(project_root)
     .spawn()?;
@@ -1017,7 +1609,16 @@ pub fn spawn_orchestrator(
   // 编排器的输出必须有人读：shell 插件把输出投递到事件通道，无人消费时管道
   // 写满会让它静默卡死（表现为「启动页一直停在第一步」）。落进壳日志，同时
   // 转发给 dlog 让 dev-launcher 自己写的那份日志之外还有一条「谁起的它」。
-  let log_root = project_root.to_string();
+  //
+  // shell-launch.log 那一路的落盘走专用写线程（[`LineLog`]：有界通道 + 丢弃
+  // 计数）：本泵跑在 tokio worker 上，逐行同步写文件会在慢盘 / 高频输出时拖住
+  // worker、并让无界上游在内存里堆积（ISSUE #4334）。
+  let launch_log_file = launch_log_path(project_root);
+  // 落盘走 write_shell_log_bytes：超上限整份重建（ISSUE #4389），别让长开
+  // 会话把这份日志推到无界。
+  let launch_sink = LineLog::spawn(move |buf| {
+    write_shell_log_bytes(&launch_log_file, SHELL_LAUNCH_LOG_MAX_BYTES, buf)
+  });
   tauri::async_runtime::spawn(async move {
     use tauri_plugin_shell::process::CommandEvent;
     while let Some(event) = rx.recv().await {
@@ -1028,25 +1629,27 @@ pub fn spawn_orchestrator(
           // 否则同一条物理行里会叠出两个时刻两个级别（见 strip_orchestrator_line_prefix）。
           let (body, level) = strip_orchestrator_line_prefix(&text);
           let shell_level = orchestrator_level_to_shell(level, "info");
-          log_orchestrator_line(&log_root, shell_level, body);
+          log_orchestrator_line(&launch_sink, shell_level, body);
         }
         CommandEvent::Stderr(line) => {
           let text = String::from_utf8_lossy(&line).trim_end().to_string();
           let (body, level) = strip_orchestrator_line_prefix(&text);
           let shell_level = orchestrator_level_to_shell(level, "warn");
-          log_orchestrator_line(&log_root, shell_level, body);
+          log_orchestrator_line(&launch_sink, shell_level, body);
         }
         CommandEvent::Terminated(payload) => {
           log::info!("[ComfyAPP] orchestrator terminated: {:?}", payload.code);
-          log_launch_line(
-            &log_root,
+          // 经同一个 sink 落盘，保证它排在已入队的编排器行之后（只走 log::
+          // 的话，channel / shell.log 与 shell-launch.log 的先后会分叉）。
+          launch_sink.send_line(launch_log_line(
             "info",
             &format!("编排器结束，退出码 {:?}", payload.code),
-          );
+          ));
         }
         _ => {}
       }
     }
+    // launch_sink 在此 drop：Close + join，把队列里剩下的行写完再退。
   });
   Ok(())
 }
@@ -1064,8 +1667,53 @@ pub fn spawn_orchestrator(
 /// 模型，随启动器移除已废弃；这里不再经外部脚本，内联实现是唯一出处。）
 ///
 /// 失败一律只记 WARN：这是兜底，正常回收链不依赖它，挂不上不该拦住启动。
+///
+/// standalone sidecar 那棵树的同款兜底见 [`attach_sidecar_kill_on_close_job`]
+/// （ISSUE #4165）：两条树各挂各的 job，共用下面那一份内核。
 #[cfg(windows)]
 pub fn attach_kill_on_close_job() {
+  let pid = {
+    let guard = ORCHESTRATOR.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    match guard.as_ref() {
+      Some(child) => child.pid(),
+      None => return,
+    }
+  };
+  if let Some(job) = assign_kill_on_close_job(pid, "orchestrator") {
+    *JOB_HANDLE.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = job;
+  }
+}
+
+/// 给 standalone sidecar（内嵌 server 那棵树）挂同一个 OS 级兜底（ISSUE #4165）。
+///
+/// standalone 的进程树是「壳 app.exe → node sidecar → next-server / 执行宿主」，
+/// 壳同样是顶：正常关窗有「壳退出 → `kill_sidecar` → `reap-process.mjs` 补刀」
+/// 这条链，但壳被**硬杀**（任务管理器收掉 app.exe / 壳崩溃）时那条链一步都跑不了
+/// ——此前这棵树没有任何 OS 级兜底（插件自建的 job 只在 `.set_process_group(true)`
+/// 时存在，本侧没启用），孤儿 node / next-server 继续占端口与日志句柄；且 standalone
+/// 不写会话锚点，下一次启动的孤儿回收对它**没有认亲方式**——所以兜底必须在壳死的
+/// 当场生效，不能指望「下一次启动再收」。挂上壳自持的 `KILL_ON_JOB_CLOSE` job 后，
+/// 壳一死 OS 关句柄，整棵树当场回收，与编排器那棵树（[`attach_kill_on_close_job`]）
+/// 同构。`BREAKAWAY_OK` 的逃逸语义（保活服务）在这棵树上同样要保。
+///
+/// 失败只记 WARN，语义与编排器那侧相同：兜底挂不上不该拦住启动。
+///
+/// `#[allow(dead_code)]`：唯一调用点 `spawn_sidecar` 是 release-only
+/// （`#[cfg(not(debug_assertions))]`），debug 构建（`cargo test`）里它没人调。
+#[cfg(windows)]
+#[allow(dead_code)]
+pub fn attach_sidecar_kill_on_close_job(pid: u32) {
+  if let Some(job) = assign_kill_on_close_job(pid, "sidecar") {
+    *SIDECAR_JOB_HANDLE.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = job;
+  }
+}
+
+/// 共同内核：给 `pid` 建一个 `KILL_ON_JOB_CLOSE | BREAKAWAY_OK` 的 job 并挂上。
+///
+/// 成功返回**有意泄漏**的 job 句柄值（语义见 `JOB_HANDLE` 的注释：壳持有到进程
+/// 退出，OS 在壳死时替我们关闭）；失败返回 `None` 并只记 WARN。`what` 只用于日志。
+#[cfg(windows)]
+fn assign_kill_on_close_job(pid: u32, what: &str) -> Option<usize> {
   use windows::Win32::Foundation::CloseHandle;
   use windows::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
@@ -1077,28 +1725,21 @@ pub fn attach_kill_on_close_job() {
     OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
   };
 
-  let pid = {
-    let guard = ORCHESTRATOR.lock().unwrap();
-    match guard.as_ref() {
-      Some(child) => child.pid(),
-      None => return,
-    }
-  };
   if pid == 0 {
-    return;
+    return None;
   }
   unsafe {
     let job = match CreateJobObjectW(None, windows::core::PCWSTR::null()) {
       Ok(handle) => handle,
       Err(e) => {
         log::warn!("[ComfyAPP] CreateJobObjectW failed: {e:?}");
-        return;
+        return None;
       }
     };
     let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
     info.BasicLimitInformation = JOBOBJECT_BASIC_LIMIT_INFORMATION {
       /* KILL_ON_JOB_CLOSE：壳消失（含被硬杀）时 job 关闭即终止整棵树 —— 编排器
-       * 崩溃后不留孤儿的 OS 级兜底。
+       * / sidecar 崩溃后不留孤儿的 OS 级兜底。
        *
        * BREAKAWAY_OK 是它的**必要配对**：保活服务（keepAlive 的服务）必须能逃出
        * 这个 job，否则「应用退出后不关闭」在 Windows 上不成立（job 成员身份在
@@ -1118,13 +1759,13 @@ pub fn attach_kill_on_close_job() {
     if let Err(e) = set {
       log::warn!("[ComfyAPP] SetInformationJobObject failed: {e:?}");
       let _ = CloseHandle(job);
-      return;
+      return None;
     }
     match OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, false, pid) {
       Ok(process) => {
         match AssignProcessToJobObject(job, process) {
           Ok(()) => log::info!(
-            "[ComfyAPP] orchestrator {pid} attached to kill-on-close job (shell is its owner)"
+            "[ComfyAPP] {what} {pid} attached to kill-on-close job (shell is its owner)"
           ),
           Err(e) => log::warn!("[ComfyAPP] AssignProcessToJobObject failed: {e:?}"),
         }
@@ -1133,15 +1774,24 @@ pub fn attach_kill_on_close_job() {
       Err(e) => log::warn!("[ComfyAPP] OpenProcess({pid}) failed: {e:?}"),
     }
     // 句柄**故意不关**：job 的语义是「最后一个句柄关闭即杀整棵树」，而壳退出
-    // 时 OS 会替我们关掉它，那一刻才是「壳死了，编排器也别活」的触发点。
-    // 这里把句柄塞进一个 `static` 就是「有意泄漏」的写法 —— `mem::forget` 对
-    // `HANDLE`（`Copy`）是空操作，写它会连编译都提醒「什么也没做」。
-    *JOB_HANDLE.lock().unwrap() = job.0 as usize;
+    // 时 OS 会替我们关掉它，那一刻才是「壳死了，这棵树也别活」的触发点。
+    // 这里把句柄交给调用方塞进 `static`（JOB_HANDLE / SIDECAR_JOB_HANDLE）就是
+    // 「有意泄漏」的写法 —— `mem::forget` 对 `HANDLE`（`Copy`）是空操作，写它
+    // 会连编译都提醒「什么也没做」。
+    Some(job.0 as usize)
   }
 }
 
 #[cfg(not(windows))]
 pub fn attach_kill_on_close_job() {}
+
+/// 非 Windows 没有 Job Object：两棵树（编排器 / sidecar）的硬杀兜底都缺席，
+/// 树级回收只剩「退出时的 reap-process.mjs / kill-process-tree」一条（既定边界，
+/// 见规范 §3.3 / §7.6）。留空实现使调用点无需按平台分叉。
+/// `#[allow(dead_code)]`：同上，调用点随 `spawn_sidecar` 只在 release 编译。
+#[cfg(not(windows))]
+#[allow(dead_code)]
+pub fn attach_sidecar_kill_on_close_job(_pid: u32) {}
 
 /// 编排器进程的环境块里有没有 `COMFYAPP_SHELL_OWNED=1`（Windows）。
 ///
@@ -1151,7 +1801,7 @@ pub fn attach_kill_on_close_job() {}
 /// 返回 false —— 宁可多起一个编排器（会被端口与单实例判据挡住），也不能去杀
 /// 一个身份不明的进程。
 #[cfg(windows)]
-pub fn process_env_is_owned(pid: u32) -> bool {
+pub fn process_env_is_owned(pid: u32, project_root: &str) -> bool {
   use windows::Win32::Foundation::CloseHandle;
   use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -1160,7 +1810,7 @@ pub fn process_env_is_owned(pid: u32) -> bool {
     let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
       return false;
     };
-    let owned = read_owned_env_from_process(handle);
+    let owned = read_owned_env_from_process(handle, project_root);
     let _ = CloseHandle(handle);
     owned
   }
@@ -1177,13 +1827,14 @@ pub fn process_env_is_owned(pid: u32) -> bool {
 /// 正是这条链路的地基（§9.2）。
 #[cfg(not(windows))]
 #[allow(dead_code)]
-pub fn process_env_is_owned(_pid: u32) -> bool {
+pub fn process_env_is_owned(_pid: u32, _project_root: &str) -> bool {
   false
 }
 
 #[cfg(windows)]
 unsafe fn read_owned_env_from_process(
   handle: windows::Win32::Foundation::HANDLE,
+  project_root: &str,
 ) -> bool {
   use windows::Wdk::System::Threading::{
     NtQueryInformationProcess, ProcessBasicInformation,
@@ -1249,32 +1900,86 @@ unsafe fn read_owned_env_from_process(
   if env_addr == 0 {
     return false;
   }
-  // 环境块是一串 NUL 结尾的 UTF-16 串，以空串（双 NUL）收尾。整块读一次，
-  // 截断风险由「读到空串为止」兜住：这里只做**包含**判定，不需要完整块。
-  const MAX_ENV_BYTES: usize = 64 * 1024;
-  let mut buf = vec![0u8; MAX_ENV_BYTES];
-  let mut read = 0usize;
-  if unsafe {
-    ReadProcessMemory(
-      handle,
-      env_addr as *const std::ffi::c_void,
-      buf.as_mut_ptr() as *mut std::ffi::c_void,
-      MAX_ENV_BYTES,
-      Some(&mut read),
-    )
-  }
-  .is_err()
-  {
+  // 环境块是一串 NUL 结尾的 UTF-16 串，以空串（双 NUL）收尾。按块循环读直到
+  // 终止符（#4426：此前只读一次定长 64KB，开发机大 PATH + pnpm/corepack 注入的
+  // 环境块轻松超 64KB，两枚认亲针落在窗口之外时认亲判负——启动前对「上次强杀
+  // 遗留的编排器」视而不见、不去回收）。这里只做**包含**判定，不需要完整块。
+  let Some(raw) = (unsafe { read_env_block_until_terminator(handle, env_addr) }) else {
     return false;
+  };
+  let text = env_block_text(&raw);
+  /* 认亲双判据（ISSUE #3851）：「是某个壳起的」（OWNED_ENV）**且**「是本检出
+   * 的壳起的」（PROJECT_ROOT_ENV 与当前根一致）。多检出并行时，只看前者会把
+   * 别家正在跑的编排器当成自己的残留 —— 后果是误杀整树。 */
+  let owned_needle = format!("{OWNED_ENV}=1");
+  let root_needle = format!("{PROJECT_ROOT_ENV}={project_root}");
+  text.split('\0').any(|entry| entry.trim() == owned_needle)
+    && text.split('\0').any(|entry| entry.trim() == root_needle)
+}
+
+/// 环境块读取的上限与块大小（#4426）：上限 1MB——正常环境块到不了这个量级，
+/// 顶到上限按「读不完整」判负并落 WARN（宁可少回收，不误杀）。
+const ENV_BLOCK_MAX_BYTES: usize = 1024 * 1024;
+const ENV_BLOCK_CHUNK_BYTES: usize = 32 * 1024;
+
+/// 按块读目标进程的环境块原始字节，直到双 NUL 终止符（#4426）。
+///
+/// 读失败 → None；顶到上限没读到终止符 → 落 WARN 后 None（认亲判负）。
+#[cfg(windows)]
+unsafe fn read_env_block_until_terminator(
+  handle: windows::Win32::Foundation::HANDLE,
+  env_addr: usize,
+) -> Option<Vec<u8>> {
+  use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
+  let mut raw: Vec<u8> = Vec::new();
+  for offset in (0..ENV_BLOCK_MAX_BYTES).step_by(ENV_BLOCK_CHUNK_BYTES) {
+    let mut chunk = vec![0u8; ENV_BLOCK_CHUNK_BYTES];
+    let mut read = 0usize;
+    if unsafe {
+      ReadProcessMemory(
+        handle,
+        (env_addr + offset) as *const std::ffi::c_void,
+        chunk.as_mut_ptr() as *mut std::ffi::c_void,
+        ENV_BLOCK_CHUNK_BYTES,
+        Some(&mut read),
+      )
+    }
+    .is_err()
+    {
+      return None;
+    }
+    if read == 0 {
+      break;
+    }
+    raw.extend_from_slice(&chunk[..read]);
+    /* 双 NUL 可能跨块边界，整块重扫（≤32 次迭代，成本可忽略）。 */
+    let units: Vec<u16> = raw
+      .chunks_exact(2)
+      .map(|c| u16::from_le_bytes([c[0], c[1]]))
+      .collect();
+    if units.windows(2).any(|w| w == [0, 0]) {
+      return Some(raw);
+    }
+    if read < ENV_BLOCK_CHUNK_BYTES {
+      break;
+    }
   }
-  buf.truncate(read);
-  let units: Vec<u16> = buf
+  if raw.len() >= ENV_BLOCK_MAX_BYTES {
+    log::warn!(
+      "[ComfyAPP] 环境块认亲：读到 1MB 上限仍未见双 NUL 终止符，按「读不完整」判负（#4426）"
+    );
+  }
+  None
+}
+
+/// UTF-16 环境块字节 → 字符串（按 u16 LE 解码；奇数字节走 lossy 替换）。
+#[cfg(windows)]
+fn env_block_text(raw: &[u8]) -> String {
+  let units: Vec<u16> = raw
     .chunks_exact(2)
     .map(|c| u16::from_le_bytes([c[0], c[1]]))
     .collect();
-  let text = String::from_utf16_lossy(&units);
-  let needle = format!("{OWNED_ENV}=1");
-  text.split('\0').any(|entry| entry.trim() == needle)
+  String::from_utf16_lossy(&units)
 }
 
 /// 找到「已经在跑、且是本模块亲手起的」编排器进程号（找不到 = None）。
@@ -1283,7 +1988,7 @@ unsafe fn read_owned_env_from_process(
 /// 环境块认亲。**命令行**这一层只用来做廉价预筛（省掉绝大多数 OpenProcess），
 /// 真正的判据是环境块（见 `is_own` 的注释）。
 #[cfg(windows)]
-pub fn find_owned_orchestrator() -> Option<u32> {
+pub fn find_owned_orchestrator(project_root: &str) -> Option<u32> {
   use windows::Win32::Foundation::CloseHandle;
   use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
@@ -1307,7 +2012,7 @@ pub fn find_owned_orchestrator() -> Option<u32> {
         if pid != 0
           && pid != self_pid
           && is_probable_node_process(&entry.szExeFile)
-          && process_env_is_owned(pid)
+          && process_env_is_owned(pid, project_root)
         {
           result = Some(pid);
           break;
@@ -1323,7 +2028,7 @@ pub fn find_owned_orchestrator() -> Option<u32> {
 }
 
 #[cfg(not(windows))]
-pub fn find_owned_orchestrator() -> Option<u32> {
+pub fn find_owned_orchestrator(_project_root: &str) -> Option<u32> {
   None
 }
 
@@ -1387,6 +2092,241 @@ mod tests {
     );
   }
 
+  /// #3574 的回归判据：文件被清（编排器崩溃补做 / 退出归档的 `emptyDir`）之后，
+  /// 下一行写入必须自己把文件重建出来——而不是把内容写进已解除链接的旧句柄里。
+  #[test]
+  fn resilient_shell_log_survives_file_removal() {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-resilient-log-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+    ));
+    let path = dir.join("shell").join("shell.log");
+    let mut writer = ResilientShellLog::new(path.clone());
+    std::io::Write::write_all(&mut writer, b"first\n").unwrap();
+    writer.sink.barrier();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "first\n");
+
+    // 模拟 current/ 被清：文件和目录整个删掉（此时「插件」手里还留着旧句柄——
+    // 本写入器没有长期句柄，这正是被测行为）。
+    std::fs::remove_dir_all(&dir).unwrap();
+
+    std::io::Write::write_all(&mut writer, b"second\n").unwrap();
+    writer.sink.barrier();
+    assert_eq!(
+      std::fs::read_to_string(&path).unwrap(),
+      "second\n",
+      "清空后的写入必须重建文件；内容丢失 = 写进了已解除链接的句柄（#3574 的病根）"
+    );
+  }
+
+  /// 大小上限的等效 KeepOne：超过上限的下一行把文件整份重建（丢旧保新），
+  /// 别让长开会话把壳自持日志推到无界。
+  #[test]
+  fn resilient_shell_log_rebuilds_past_size_cap() {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-resilient-cap-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+    ));
+    let path = dir.join("shell").join("shell.log");
+    let mut writer = ResilientShellLog::with_max_bytes(path.clone(), 8);
+    std::io::Write::write_all(&mut writer, b"12345678\n").unwrap();
+    writer.sink.barrier();
+    // 恰好达到上限：这一行还在。
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "12345678\n");
+    std::io::Write::write_all(&mut writer, b"9\n").unwrap();
+    writer.sink.barrier();
+    assert_eq!(
+      std::fs::read_to_string(&path).unwrap(),
+      "9\n",
+      "越过上限的下一行必须重建文件，而不是无限追加"
+    );
+  }
+
+  /// #4337 回归：子进程退出后，即使有后代进程继承了 stdout 写句柄不肯退，
+  /// run_with_budget 也必须在「预算 + 收尾宽限」内返回——退出路径不许有
+  /// 无界阻塞点（旧写法 read_to_end 会陪后代等到它退，主线程冻在 Exit 里）。
+  #[cfg(windows)]
+  #[test]
+  fn run_with_budget_stays_bounded_when_descendant_holds_pipe() {
+    // start /b 让 ping 在 cmd 退出后继续活着并**继承** cmd 的 stdout 写端 ~5s。
+    let mut command = std::process::Command::new("cmd");
+    command.args(["/C", "start /b ping -n 6 127.0.0.1 & echo ready"]);
+    let start = std::time::Instant::now();
+    let out = run_with_budget(command, REAPER_BUDGET).unwrap();
+    let elapsed = start.elapsed();
+    assert!(
+      elapsed < std::time::Duration::from_secs(4),
+      "退出回收必须在预算+宽限内返回，而不是陪攥着写端的后代等到它退：{elapsed:?}"
+    );
+    assert!(out.status.success());
+  }
+
+  /// 同上一条的 POSIX 形态（GA 的 cargo test 跑在 ubuntu 上）。
+  #[cfg(unix)]
+  #[test]
+  fn run_with_budget_stays_bounded_when_descendant_holds_pipe() {
+    // 后台 sleep 继承 sh 的 stdout 写端 6s；sh 本身立即退出。
+    let mut command = std::process::Command::new("sh");
+    command.args(["-c", "sleep 6 & echo ready"]);
+    let start = std::time::Instant::now();
+    let out = run_with_budget(command, REAPER_BUDGET).unwrap();
+    let elapsed = start.elapsed();
+    assert!(
+      elapsed < std::time::Duration::from_secs(4),
+      "退出回收必须在预算+宽限内返回，而不是陪攥着写端的后代等到它退：{elapsed:?}"
+    );
+    assert!(out.status.success());
+  }
+
+  /// 常规路径不回归：子进程正常退出、无后代攥管道时，残余输出照常收全
+  /// （#4337 的有界化不该把「本来拿得到的输出」也丢掉）。
+  #[cfg(windows)]
+  #[test]
+  fn run_with_budget_collects_output_of_clean_exit() {
+    let mut command = std::process::Command::new("cmd");
+    command.args(["/C", "echo ready"]);
+    let out = run_with_budget(command, REAPER_BUDGET).unwrap();
+    assert!(out.status.success());
+    assert!(
+      String::from_utf8_lossy(&out.stdout).contains("ready"),
+      "正常退出的子进程输出必须收全：{}",
+      String::from_utf8_lossy(&out.stdout)
+    );
+  }
+
+  /// 同上一条的 POSIX 形态。
+  #[cfg(unix)]
+  #[test]
+  fn run_with_budget_collects_output_of_clean_exit() {
+    let mut command = std::process::Command::new("sh");
+    command.args(["-c", "echo ready"]);
+    let out = run_with_budget(command, REAPER_BUDGET).unwrap();
+    assert!(out.status.success());
+    assert!(
+      String::from_utf8_lossy(&out.stdout).contains("ready"),
+      "正常退出的子进程输出必须收全：{}",
+      String::from_utf8_lossy(&out.stdout)
+    );
+  }
+
+  /// 通道满 = 落盘跟不上产出：后续行必须被丢弃并计数，而不是无界堆积（#4334）；
+  /// 拥塞解除后要补一条「丢弃 N 行」读数，被丢的行不出现，留下的行保持顺序。
+  #[test]
+  fn line_log_drops_and_notices_when_writer_lags() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Condvar, Mutex};
+
+    let entered = Arc::new(AtomicBool::new(false));
+    let gate = Arc::new(Mutex::new(false));
+    let cv = Arc::new(Condvar::new());
+    let captured = Arc::new(Mutex::new(String::new()));
+
+    let entered_w = entered.clone();
+    let gate_w = gate.clone();
+    let cv_w = cv.clone();
+    let captured_w = captured.clone();
+    let sink = LineLog::spawn_with_capacity(
+      move |buf| {
+        entered_w.store(true, Ordering::SeqCst);
+        // 闸门关着就等：模拟「磁盘写不动」。
+        let mut open = gate_w.lock().unwrap();
+        while !*open {
+          open = cv_w.wait(open).unwrap();
+        }
+        captured_w
+          .lock()
+          .unwrap()
+          .push_str(std::str::from_utf8(buf).unwrap());
+        Ok(())
+      },
+      2,
+    );
+
+    sink.send_line("L1\n".into());
+    // 等写线程真的取走 L1、堵在闸门里：此后通道空、容量确定，断言才不靠时序。
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !entered.load(Ordering::SeqCst) {
+      assert!(
+        std::time::Instant::now() < deadline,
+        "写线程没有进入写入函数，测试前提不成立"
+      );
+      std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+
+    sink.send_line("L2\n".into());
+    sink.send_line("L3\n".into()); // 通道 [L2, L3]，已满
+    sink.send_line("L4\n".into()); // 满 ⇒ 丢弃并计数
+    sink.send_line("L5\n".into()); // 满 ⇒ 丢弃并计数
+
+    // 放行：写线程先补「丢弃 2 行」，再按序写 L2、L3。
+    *gate.lock().unwrap() = true;
+    cv.notify_all();
+    sink.barrier();
+
+    let out = captured.lock().unwrap().clone();
+    assert!(out.contains("L1\n"), "先入队的 L1 必须落盘：{out}");
+    assert!(out.contains("丢弃 2 行"), "丢弃必须有读数，不许静默：{out}");
+    assert!(
+      out.contains("L2\n") && out.contains("L3\n"),
+      "容量内的行必须保序落盘：{out}"
+    );
+    assert!(
+      !out.contains("L4") && !out.contains("L5"),
+      "超容量的行必须被丢掉，而不是堆在内存里：{out}"
+    );
+    let idx = |needle: &str| out.find(needle).unwrap();
+    assert!(
+      idx("L1\n") < idx("丢弃 2 行")
+        && idx("丢弃 2 行") < idx("L2\n")
+        && idx("L2\n") < idx("L3\n"),
+      "丢弃告示要插在拥塞段落之后、后续行之前，且行序保持：{out}"
+    );
+  }
+
+  /// Drop 语义：Close 之前入队的行必须全部落盘（尽力不丢尾巴）——输出泵退出时
+  /// 靠这个把队列里剩下的编排器行写完。
+  #[test]
+  fn line_log_drains_pending_lines_on_drop() {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-line-log-drop-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+    ));
+    let path = dir.join("line-log-drop.log");
+    {
+      let p = path.clone();
+      let sink = LineLog::spawn(move |buf| append_bytes(&p, buf));
+      for i in 0..50 {
+        sink.send_line(format!("line-{i}\n"));
+      }
+      // 故意不 barrier：直接 drop。Drop 现在把 join 挪进守护线程（#4390），
+      // 尾巴落盘是异步完成的——轮询等待排空（50 行小写入，秒内完成）。
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let content = loop {
+      let content = std::fs::read_to_string(&path).unwrap_or_default();
+      if content.matches('\n').count() >= 50 || std::time::Instant::now() >= deadline {
+        break content;
+      }
+      std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    for i in 0..50 {
+      assert!(content.contains(&format!("line-{i}\n")), "缺 line-{i}：{content}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+
   /// 「最新一份」必须按 mtime 判，不能按文件名序 —— ISSUE #576 那个坑的回归：
   /// 戳的历史形态（下划线）与现行形态（连字符）字典序与时间序相反，按名字取
   /// 「最新」会拿到上一次运行的日志，用户照着面板给的路径去看，看到的是别的现场。
@@ -1426,6 +2366,63 @@ mod tests {
     assert_eq!(latest_prefixed_log(&dir, "no-such-prefix-"), None);
 
     std::fs::remove_dir_all(&dir).ok();
+  }
+
+  /// 服务端动态的噪声判据（ISSUE #4431）：两类高频重复行不算「在做什么」。
+  #[test]
+  fn server_noise_lines_are_recognized() {
+    // 健康探活的访问日志（编排器每秒一拍，行形取自真实 nextjs-stdout 日志）。
+    assert!(is_server_noise_line(
+      "GET /api/health 200 in 24ms (next.js: 6ms, proxy.ts: 6ms, application-code: 7ms)"
+    ));
+    assert!(is_server_noise_line("POST /api/health 200 in 5ms"));
+    // ComfyUI 拉起期的逐拍轮询（同一句只换 pid / 时刻地反复刷）。
+    assert!(is_server_noise_line(
+      "[01:54:20.180] INFO (101696): [comfyui] Configured instance (pid=101432, via=配置路径的实例) starting, port not bound yet"
+    ));
+    // 空行 / 纯空白。
+    assert!(is_server_noise_line(""));
+    assert!(is_server_noise_line("   "));
+    // 有信息量的行不算噪声。
+    assert!(!is_server_noise_line("▲ Next.js 16.4.3 (Turbopack)"));
+    assert!(!is_server_noise_line("✓ Ready in 485ms"));
+    assert!(!is_server_noise_line(
+      "[01:54:20.182] INFO (101696): [comfyui-lifecycle] ComfyUI 正在启动中，等待就绪…"
+    ));
+  }
+
+  /// 倒序挑行：尾部一串噪声行之下的「最近一条有信息量的行」才是答案——
+  /// 真实日志里 ComfyUI 拉起期每 1.5s 刷一条轮询行、每秒一条健康探活，
+  /// 直接取最后一行永远只会看到噪声。
+  #[test]
+  fn latest_meaningful_server_line_skips_trailing_noise() {
+    let tail = [
+      "[dev.mjs] COMFYAPP_PORT=3740 host=127.0.0.1（来源：命令行 -p/--port）",
+      "▲ Next.js 16.4.3 (Turbopack)",
+      "- Local:         http://127.0.0.1:3740",
+      "✓ Ready in 485ms",
+      "GET /api/health 200 in 592ms (next.js: 526ms)",
+      "[comfyui] Configured instance (pid=101432, via=配置路径的实例) starting, port not bound yet",
+      "[comfyui-lifecycle] ComfyUI 正在启动中，等待就绪…",
+      "[comfyui] Configured instance (pid=101432, via=配置路径的实例) starting, port not bound yet",
+      "GET /api/health 200 in 15ms (next.js: 4ms)",
+      "",
+    ]
+    .join("\n");
+    assert_eq!(
+      latest_meaningful_server_line(&tail).as_deref(),
+      Some("[comfyui-lifecycle] ComfyUI 正在启动中，等待就绪…")
+    );
+  }
+
+  /// 全噪声 / 空文本 ⇒ None：调用方（启动页）据此把「服务端」这一行收起，
+  /// 而不是摆一句空话。
+  #[test]
+  fn latest_meaningful_server_line_returns_none_for_all_noise() {
+    assert_eq!(latest_meaningful_server_line(""), None);
+    assert_eq!(latest_meaningful_server_line("\n\n"), None);
+    let noisy = "GET /api/health 200 in 24ms\n\nGET /api/health 200 in 21ms\n";
+    assert_eq!(latest_meaningful_server_line(noisy), None);
   }
 
   /// 会话锚点的路径与 `scripts/dev-launcher-session.mjs` 同源：壳要清理的
@@ -1653,7 +2650,10 @@ mod tests {
 
     let raw = "[2026-10-02 11:50:31.384] [STEP ] 检查端口占用";
     let (body, level) = strip_orchestrator_line_prefix(raw);
-    log_orchestrator_line(root, orchestrator_level_to_shell(level, "info"), body);
+    let log_file = launch_log_path(root);
+    let sink = LineLog::spawn(move |buf| append_bytes(&log_file, buf));
+    log_orchestrator_line(&sink, orchestrator_level_to_shell(level, "info"), body);
+    sink.barrier();
 
     let content = std::fs::read_to_string(launch_log_path(root)).unwrap();
     // 产出形态必须是 `[<壳时刻 23 字符>] [INFO] [orchestrator] 正文`：
@@ -1827,5 +2827,86 @@ mod tests {
     assert!(without.contains("未拿到退出码"), "{without}");
     // 「拿不到」与「正常退出」必须是两句不同的话。
     assert_ne!(without, sidecar_exit_reason(Some(0)));
+  }
+
+  #[test]
+  fn launcher_session_pids_parses_launcher_and_children() {
+    // 与 scripts/launcher-core 落盘的真实形状同形（本机 run/ 里的活样本）。
+    let raw = r#"{"launcher_pid":134816,"child_pids":[129684],"app_port":3797,"mode":"prebuilt","started_at":"2026-11-16T16:02:50.131Z"}"#;
+    assert_eq!(
+      parse_launcher_session_pids(raw),
+      Some(vec![134816, 129684])
+    );
+  }
+
+  #[test]
+  fn launcher_session_pids_skips_bad_items_and_is_none_when_empty() {
+    // 非法项（0 / 负数 / 非数字 / null）逐项跳过，不整份作废；1 与 3 都是合法 PID，
+    // 必须保留；一个都剩不下 → None。
+    assert_eq!(
+      parse_launcher_session_pids(r#"{"launcher_pid":0,"child_pids":[1,-2,"x",null,3]}"#),
+      Some(vec![1, 3])
+    );
+    assert_eq!(parse_launcher_session_pids("{}"), None);
+    assert_eq!(parse_launcher_session_pids("不是 JSON"), None);
+    assert_eq!(parse_launcher_session_pids(""), None);
+  }
+
+  #[test]
+  fn liveness_from_pids_is_three_state() {
+    // 空名单 = 不知道；任一活着 = 没死；全部不在 = 真没了。
+    assert_eq!(liveness_from_pids(&[], |_| true), None);
+    assert_eq!(liveness_from_pids(&[1, 2], |pid| pid == 2), Some(true));
+    assert_eq!(liveness_from_pids(&[1, 2], |_| false), Some(false));
+  }
+
+  #[test]
+  fn read_app_service_liveness_reads_session_file_or_none() {
+    // 文件不在 → None（手工 pnpm dev / 没走编排器的检出）；
+    // 文件在 → 按名单判活。真 PID 的存活判据不在这里测（要起真进程），
+    // 三态归并已由上面的纯函数用例钉住。
+    let dir = exit_record_fixture("liveness");
+    let root = dir.to_str().unwrap();
+    assert!(
+      read_app_service_liveness(root).is_none(),
+      "会话文件不存在必须是 None"
+    );
+    let run = dir.join("run");
+    std::fs::create_dir_all(&run).unwrap();
+    // 名单用几乎不可能被分配的高位 PID（Linux pid_max 上限 4194304、Windows 同量级；
+    // PID 1 在 POSIX 上是 init/launchd，真的活着，不能拿来当「不在」的反例）。
+    std::fs::write(
+      run.join("launcher-session.json"),
+      r#"{"launcher_pid":4193810,"child_pids":[4193814]}"#,
+    )
+    .unwrap();
+    // 两个 PID 都不存在 → Some(false)：说明「读到了名单并真的查了」。
+    assert_eq!(read_app_service_liveness(root), Some(false));
+    assert!(read_app_service_liveness("").is_none(), "项目根为空回 None");
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+
+  /// 第二档判据（ISSUE #4151）：壳持有 sidecar 句柄时的三态归并。standalone 分发
+  /// 形态没有会话文件，这一档就是「进程外信号」的全部来源——「不知道」档不许
+  /// 编答案，壳亲眼看到的死亡事实（`Terminated` 已见）直接判死、PID 探测不再参与。
+  #[test]
+  fn sidecar_liveness_answers_from_handle_or_none() {
+    let alive_probe = |_: u32| true;
+    let dead_probe = |_: u32| false;
+
+    // 句柄不在（prebuilt / 兜底 dev URL / debug 壳）：无论死亡标记如何都答不上。
+    assert_eq!(liveness_from_sidecar(None, false, alive_probe), None);
+    assert_eq!(liveness_from_sidecar(None, true, alive_probe), None);
+
+    // 句柄在、进程在（Terminated 未见的常态）。
+    assert_eq!(liveness_from_sidecar(Some(4242), false, alive_probe), Some(true));
+
+    // 句柄在、探测说没了：死亡事件未达的毫秒级窗口里按 PID 兜底判死。
+    assert_eq!(liveness_from_sidecar(Some(4242), false, dead_probe), Some(false));
+
+    // 壳亲眼看到 Terminated：直接判死——即便探测（在 PID 复用误读的假想里）
+    // 说它活着，死亡事实也压过探测。
+    assert_eq!(liveness_from_sidecar(Some(4242), true, alive_probe), Some(false));
+    assert_eq!(liveness_from_sidecar(Some(4242), true, dead_probe), Some(false));
   }
 }

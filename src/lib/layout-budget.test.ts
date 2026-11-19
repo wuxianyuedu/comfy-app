@@ -31,10 +31,7 @@ const REM_PX = 16;
 
 /** 读 src 下的真实源码（相对本文件定位，不依赖 cwd）。 */
 function sourceOf(relFromSrc: string): string {
-  return readFileSync(
-    new URL(path.join("..", relFromSrc), import.meta.url),
-    "utf8",
-  );
+  return readFileSync(new URL(path.join("..", relFromSrc), import.meta.url), "utf8");
 }
 
 describe("左轨让位这笔账的算式", () => {
@@ -55,20 +52,14 @@ describe("左轨让位这笔账的算式", () => {
     expect(NAV_WIDTH_COLLAPSED_PX).toBeLessThan(NAV_WIDTH_EXPANDED_PX);
     /* 方向不能写反：收起换出来的宽度必须够内容区站到下限之上，否则自动收起是
        「收了也白收」的抖动。取阈值那一档（最窄的允许展开宽）来验。 */
-    expect(NAV_COLLAPSE_LEAVES_VIEWPORT_PX).toBeGreaterThanOrEqual(
-      WORKSPACE_MIN_PX,
-    );
+    expect(NAV_COLLAPSE_LEAVES_VIEWPORT_PX).toBeGreaterThanOrEqual(WORKSPACE_MIN_PX);
   });
 });
 
 describe("resolveRailCollapsed 的三档优先", () => {
   it("未表态：跟随窗宽", () => {
-    expect(
-      resolveRailCollapsed({ narrow: true, crossings: 0, choice: null }),
-    ).toBe(true);
-    expect(
-      resolveRailCollapsed({ narrow: false, crossings: 0, choice: null }),
-    ).toBe(false);
+    expect(resolveRailCollapsed({ narrow: true, crossings: 0, choice: null })).toBe(true);
+    expect(resolveRailCollapsed({ narrow: false, crossings: 0, choice: null })).toBe(false);
   });
 
   it("窄窗里用户点开：跨越次数没变之前听用户的，不再被纪律按下去", () => {
@@ -144,22 +135,17 @@ describe("账与真实列宽一致（漂移判据）", () => {
 
   it("工坊阶段轨道列宽与 globals 的刻度同源", () => {
     const css = sourceOf(path.join("app", "globals.css"));
-    const declared = /--spacing-stage-rail:\s*(\d+(?:\.\d+)?)rem/.exec(css);
-    expect(
-      declared,
-      "globals.css 里找不到 --spacing-stage-rail 的 rem 刻度",
-    ).not.toBeNull();
-    expect(Number(declared?.[1]) * REM_PX).toBe(STAGE_RAIL_WIDTH_PX);
+    const declared = /--spacing-stage-rail:\s*(?<rem>\d+(?:\.\d+)?)rem/.exec(css);
+    expect(declared, "globals.css 里找不到 --spacing-stage-rail 的 rem 刻度").not.toBeNull();
+    expect(Number(declared?.groups?.rem) * REM_PX).toBe(STAGE_RAIL_WIDTH_PX);
   });
 
   it("工坊检查器列宽、列间距与内边距与网格模板一致", () => {
-    const pipeline = sourceOf(
-      path.join("components", "workshop", "WorkshopPipeline.tsx"),
-    );
+    const pipeline = sourceOf(path.join("components", "workshop", "WorkshopPipeline.tsx"));
     /* 网格模板第三列就是检查器宽。 */
-    const inspector = /_([0-9.]+)px]/.exec(pipeline);
+    const inspector = /_(?<width>[0-9.]+)px]/.exec(pipeline);
     expect(inspector, "找不到检查器列宽（网格模板第三列）").not.toBeNull();
-    expect(Number(inspector?.[1])).toBe(INSPECTOR_WIDTH_PX);
+    expect(Number(inspector?.groups?.width)).toBe(INSPECTOR_WIDTH_PX);
     /* Tailwind `gap-5` = 1.25rem = 20px，两道列间距；`p-6` = 1.5rem = 24px，左右两侧。 */
     expect(pipeline).toContain("gap-5");
     expect(WORKSHOP_COLUMN_GAP_PX).toBe(20 * 2);

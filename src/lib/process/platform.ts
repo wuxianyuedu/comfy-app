@@ -19,8 +19,6 @@
 // 按源码形状判它（叶子性 + 跨宿主 import 的扩展名形态）。
 
 /** 是否是 Windows（`src/lib/process/kill-process-tree.ts` 等处的同一判据）。 */
-export function isWindows(
-  platform: NodeJS.Platform = process.platform,
-): boolean {
+export function isWindows(platform: NodeJS.Platform = process.platform): boolean {
   return platform === "win32";
 }

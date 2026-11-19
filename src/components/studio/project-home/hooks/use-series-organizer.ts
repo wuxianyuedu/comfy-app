@@ -1,25 +1,16 @@
 "use client";
 
 /**
- * 系列 / 季 / 集 / 角色库 组织者的逻辑层（FR-SR-01/02/03，#2508）。
- *
- * 规范 17（UI 与逻辑分离）+ 硬闸 S3：视图层不得直接调 tRPC 取数，必须经由
- * controller hook 暴露数据。本文件即该 controller —— `SeriesOrganizer.tsx`
- * 只消费这里返回的字段与动作，不再出现 `useQuery(trpc.series…)`。
- *
- * 同时本文件集中消费 `series.*` 全部分支 procedure（list/create/update/delete +
- * seasons/createSeason/updateSeason/deleteSeason + episodes/createEpisode/
- * updateEpisode/deleteEpisode + byProject/assignProject + 角色库全部分支：
- * characters/createCharacter/updateCharacter/deleteCharacter + episodeCharacters/
- * characterEpisodes/linkCharacter/unlinkCharacter + promoteFromProduction/
- * injectToProduction），以及 `seriesGeneration.*` 的整季生成
- * seasonGenerationProgress/batchGenerateSeason（FR-SR-04），
- * 满足 `tests/trpc-surface-executors.test.ts` 的消费方判据。
- */
+ * 系列 / 季 / 集 / 角色库 组织者的逻辑层（FR-SR-01/02/03，#2508）。规范 17 + 硬闸 S3：
+ * 视图层不得直接调 tRPC，必须经 controller —— SeriesOrganizer.tsx 只消费返回的字段与动作。
+ * 本文件集中消费 series.* 全部分支（list/create/update/delete + seasons + episodes + byProject/assignProject +
+ * 角色库全分支 + seriesGeneration 的 seasonGenerationProgress/batchGenerateSeason），满足 trpc-surface-executors 判据。 */
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTRPC, type RouterOutputs } from "~/trpc/react";
+import { useToast } from "~/components/studio/ToastProvider";
+import { errorText } from "~/lib/error-message";
 
 type Series = RouterOutputs["series"]["list"][number];
 type Season = RouterOutputs["series"]["seasons"][number];
@@ -60,7 +51,11 @@ export type SeriesOrganizerController = {
   /** 角色库：建 / 改 / 删。 */
   createCharacter: (seriesId: string, name: string) => void;
   createEpisode: (seasonId: string, title: string) => void;
+  /** 新建集在途（按钮禁用判据，#3833：双击不再重复建行）。 */
+  createEpisodePending: boolean;
   createSeason: (seriesId: string, title: string) => void;
+  /** 新建季在途（按钮禁用判据，#3833）。 */
+  createSeasonPending: boolean;
   createSeries: (title: string) => void;
   /** 当前项目归属的集（无归属为 null）。 */
   currentEp?: Episode | null;
@@ -105,6 +100,15 @@ export type SeriesOrganizerController = {
 export function useSeriesOrganizer(projectId?: string): SeriesOrganizerController {
   const trpc = useTRPC();
   const qc = useQueryClient();
+  const toast = useToast();
+
+  /* 失败反馈的唯一出口（#4233）：本 hook 的全部 mutation 此前只有 onSuccess——请求
+   * 失败（dev server 重启 / DB busy / 网络抖动）时界面毫无反应，删除看似成功但列表
+   * 还在、整季批量生成看似开始但永远没有进度。文案走 errorText（§10.7.1 唯一出口，
+   * 网络层原文会被翻译成人话），通道与 use-queue-monitor 同款走 ToastProvider。 */
+  const reportFailure = (action: string) => (error: unknown) => {
+    toast.error(errorText(error, action));
+  };
 
   const [seriesId, setSeriesId] = useState<string | null>(null);
   const [seasonId, setSeasonId] = useState<string | null>(null);
@@ -156,39 +160,46 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   );
   const workflowList = useQuery(trpc.workflow.list.queryOptions(undefined));
 
-  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-  const invalidateSeries = () => void qc.invalidateQueries(trpc.series.list.queryFilter());
-  const invalidateSeasons = (sid: string) =>
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  const invalidateSeries = () => {
+    void qc.invalidateQueries(trpc.series.list.queryFilter());
+  };
+  const invalidateSeasons = (sid: string) => {
     void qc.invalidateQueries(trpc.series.seasons.queryFilter({ seriesId: sid }));
-  const invalidateEpisodes = (sid: string) =>
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  };
+  const invalidateEpisodes = (sid: string) => {
     void qc.invalidateQueries(trpc.series.episodes.queryFilter({ seasonId: sid }));
+  };
   const invalidateCurrent = () => {
     if (projectId !== undefined && projectId !== "") {
       void qc.invalidateQueries(trpc.series.byProject.queryFilter({ projectId }));
     }
   };
-  const invalidateCharacters = (sid: string) =>
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  const invalidateCharacters = (sid: string) => {
     void qc.invalidateQueries(trpc.series.characters.queryFilter({ seriesId: sid }));
-  const invalidateEpisodeChars = (eid: string) =>
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  };
+  const invalidateEpisodeChars = (eid: string) => {
     void qc.invalidateQueries(trpc.series.episodeCharacters.queryFilter({ episodeId: eid }));
-  const invalidateCharacterEpisodes = (cid: string) =>
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  };
+  const invalidateCharacterEpisodes = (cid: string) => {
     void qc.invalidateQueries(trpc.series.characterEpisodes.queryFilter({ characterId: cid }));
-  const invalidateSeasonProgress = () =>
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+  };
+  const invalidateSeasonProgress = () => {
     void qc.invalidateQueries(
       trpc.seriesGeneration.seasonGenerationProgress.queryFilter({ seasonId: seasonId ?? "" }),
     );
+  };
 
   const createSeries = useMutation(
-    trpc.series.create.mutationOptions({ onSuccess: invalidateSeries }),
+    trpc.series.create.mutationOptions({
+      onSuccess: invalidateSeries,
+      onError: reportFailure("创建系列失败"),
+    }),
   );
   const updateSeries = useMutation(
-    trpc.series.update.mutationOptions({ onSuccess: invalidateSeries }),
+    trpc.series.update.mutationOptions({
+      onSuccess: invalidateSeries,
+      onError: reportFailure("重命名系列失败"),
+    }),
   );
   const deleteSeries = useMutation(
     trpc.series.delete.mutationOptions({
@@ -197,6 +208,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
         setSeriesId(null);
         setSeasonId(null);
       },
+      onError: reportFailure("删除系列失败"),
     }),
   );
 
@@ -207,6 +219,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
           invalidateSeasons(seriesId);
         }
       },
+      onError: reportFailure("创建季失败"),
     }),
   );
   const updateSeason = useMutation(
@@ -216,6 +229,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
           invalidateSeasons(seriesId);
         }
       },
+      onError: reportFailure("重命名季失败"),
     }),
   );
   const deleteSeason = useMutation(
@@ -226,6 +240,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
         }
         setSeasonId(null);
       },
+      onError: reportFailure("删除季失败"),
     }),
   );
 
@@ -236,6 +251,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
           invalidateEpisodes(seasonId);
         }
       },
+      onError: reportFailure("创建集失败"),
     }),
   );
   const updateEpisode = useMutation(
@@ -245,6 +261,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
           invalidateEpisodes(seasonId);
         }
       },
+      onError: reportFailure("重命名集失败"),
     }),
   );
   const deleteEpisode = useMutation(
@@ -255,11 +272,15 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
         }
         setEpisodeId(null);
       },
+      onError: reportFailure("删除集失败"),
     }),
   );
 
   const assignProject = useMutation(
-    trpc.series.assignProject.mutationOptions({ onSuccess: invalidateCurrent }),
+    trpc.series.assignProject.mutationOptions({
+      onSuccess: invalidateCurrent,
+      onError: reportFailure("集归属到当前项目失败"),
+    }),
   );
 
   // ── 系列角色库（FR-SR-03）──────────────────────────────
@@ -270,6 +291,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
           invalidateCharacters(seriesId);
         }
       },
+      onError: reportFailure("创建角色失败"),
     }),
   );
   const updateCharacterMut = useMutation(
@@ -279,6 +301,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
           invalidateCharacters(seriesId);
         }
       },
+      onError: reportFailure("保存角色失败"),
     }),
   );
   const deleteCharacterMut = useMutation(
@@ -291,6 +314,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
           invalidateEpisodeChars(episodeId);
         }
       },
+      onError: reportFailure("删除角色失败"),
     }),
   );
   const linkCharacterMut = useMutation(
@@ -301,6 +325,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
         }
         invalidateCharacterEpisodes(vars.characterId);
       },
+      onError: reportFailure("关联角色到集失败"),
     }),
   );
   const unlinkCharacterMut = useMutation(
@@ -311,6 +336,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
         }
         invalidateCharacterEpisodes(vars.characterId);
       },
+      onError: reportFailure("解除角色与集的关联失败"),
     }),
   );
   const promoteMut = useMutation(
@@ -323,16 +349,21 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
           invalidateEpisodeChars(episodeId);
         }
       },
+      onError: reportFailure("把项目角色提升进系列库失败"),
     }),
   );
   const injectMut = useMutation(
-    trpc.series.injectToProduction.mutationOptions({ onSuccess: invalidateCurrent }),
+    trpc.series.injectToProduction.mutationOptions({
+      onSuccess: invalidateCurrent,
+      onError: reportFailure("把系列角色注入项目失败"),
+    }),
   );
 
   // ── 整季生成（FR-SR-04 ①②）────────────────────────────
   const batchGenerateMut = useMutation(
     trpc.seriesGeneration.batchGenerateSeason.mutationOptions({
       onSuccess: invalidateSeasonProgress,
+      onError: reportFailure("整季生成启动失败"),
     }),
   );
 
@@ -346,6 +377,8 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     characterEpisodes: charEpisodes.data,
     seasonProgress: seasonProgressQuery.data,
     batchGenerating: batchGenerateMut.isPending,
+    createSeasonPending: createSeason.isPending,
+    createEpisodePending: createEpisode.isPending,
     workflows: workflowList.data?.workflows.map((w) => ({ id: w.id, name: w.name })),
     inspectedCharacterId,
     seriesId,

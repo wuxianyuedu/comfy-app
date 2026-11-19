@@ -73,14 +73,12 @@ export function mediaReferenceFilename(reference: unknown): string {
   if (typeof reference === "string") {
     return reference.trim();
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (reference == null || typeof reference !== "object") {
+  if (reference === null || reference === undefined || typeof reference !== "object") {
     return "";
   }
   /* SAFETY: 类型断言已复核 */
   const raw: unknown = Array.isArray(reference) ? (reference as Array<unknown>)[0] : reference;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (raw != null && typeof raw === "object") {
+  if (raw !== null && raw !== undefined && typeof raw === "object") {
     /* SAFETY: 类型断言已复核 */
     const f = (raw as { filename?: unknown }).filename;
     return typeof f === "string" ? f.trim() : "";
@@ -100,8 +98,7 @@ export function mediaReferenceFilename(reference: unknown): string {
  * `MediaThumbnail` 的 `src`（它本来就接受 `null`），调用处不必再包三元。
  */
 export function mediaPreviewUrl(reference: unknown): string | null {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (reference == null) {
+  if (reference === null || reference === undefined) {
     return null;
   }
 

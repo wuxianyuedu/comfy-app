@@ -1,29 +1,7 @@
 /**
- * 「按 `COMFY_EXECUTOR` 拉起执行器宿主」这一格的判据（ISSUE #1767）。
- *
- * ## 它守的是什么
- *
- * host 模式下行被写成 `claimedBy='host'`，而**只有宿主**会去领它（inline 那侧的
- * 回收器刻意不跨片误杀，ISSUE #1204）。于是「某个启动入口忘了起宿主」的现场是
- * 「任务永远停在队列、没有任何失败出口」—— 而它此前只在 `dev-launcher.mjs` 的
- * 编排 6.5 步里有执行者：`dev.mjs` 那一格被写进了 §5 排障表（靠人读文档），
- * `scripts/start.mjs` 那一格**连文档都没有**。
- *
- * 代价在本 ISSUE 里量出来了：Playwright 的 CI 档（`CI=1`）webServer 跑的就是
- * `pnpm start`，于是本机 `.env` 写着 host 的开发者会看到两条 `@critical` 主链路
- * 用例各超时 60s 全红，报错话术却是「下游替身没应答」—— 真因在另一个进程里。
- *
- * 因此本文件钉两件事：
- *   ① 共用件的判决（哪些值会起、认不出的值怎么办、入口缺件时不退回 inline、
- *      起进程时 env 有没有显式回写归一化值）；
- *   ② **四个启动入口都接线了**，且 `dev.mjs` / `start.mjs` 那两次调用排在起
- *      Next 之前。第 ② 条读源码而不是起进程：那次缺陷的全部内容就是「入口少了
- *      这一步」，只有源码级断言语义对得上（起进程的判据必须真配一个 host 才能
- *      观察到差别，而那取决于当前 `.env`）。
- *
- * `dev.mjs` 这一格是随 ISSUE #1767 的后续一并收的：`pnpm dev` / `tauri dev`
- * （`beforeDevCommand = node scripts/dev.mjs`）都不经编排器的 6.5 步，于是它成了
- * 「三个裸入口里最后一个缺口」——被文档记着的那个「已知未修」。
+ * 「按 `COMFY_EXECUTOR` 拉起执行器宿主」判据（#1767）：host 行写 `claimedBy='host'`，只有宿主会领它（inline 回收器不跨片误杀 #1204），
+ * 所以入口忘起宿主即「任务永远停在队列、无失败出口」；`pnpm start` 是 Playwright CI webServer，现场两条 @critical 各超时 60s。
+ * 钉共用件判决（缺件不退回 inline、env 归一化回写）与四个入口接线（读源码：缺陷就是「入口少了这一步」，`dev.mjs` 随 #1767 后续补收）。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -36,7 +14,9 @@ import {
   EXECUTOR_HOST_SCRIPT,
   maybeSpawnExecutorHost,
   planExecutorHostSpawn,
+  SKIP_EXECUTOR_HOST_ENV,
 } from "../scripts/launcher-core/executor-host-spawn.mjs";
+import { resolveSpawnTarget } from "../scripts/launcher-core/shell.mjs";
 import { launcherChainSource } from "./helpers/launcher-source";
 import { stripComments } from "./helpers/strip-comments";
 
@@ -75,23 +55,9 @@ function scriptBody(source: string): string {
 }
 
 /**
- * 找出 `name(` **在顶层真的会被执行**的那一处调用，返回它在 `body` 里的下标（找不到返回 -1）。
- *
- * 为什么不直接 `indexOf("maybeSpawnExecutorHost({")`：那样只能证明**字符串在文件里**，
- * 证不出这一步会跑 —— 把它改成 `if (false) …`、搬进某个永不进入的分支、或整段注释掉，
- * 三种「这一步事实上没接线」的形态都能骗过纯字面匹配。本判据要守的恰恰是「接线与否」，
- * 所以按 TSDoc 意义上的**脚本本体**（`#!` 之后、顶层，注释先剥掉）来判：
- *
- *   · 注释里的字样不算（块注释与行注释都剥，唯一实现 `./helpers/strip-comments`）；
- *   · 前面紧跟 `if (false) ` / `void ` 之类改写被视作「不在顶层执行」——这里只认
- *     「行首（可有空白）就是 name(`」，够用且不引入解析器；
- *   · 反向验证：改成 `if (false) …` 后本函数返回 -1，调用方那条 expect 当场红。
- *
- * ⚠️ 参数是 `scriptBody()` 的结果而不是原文：返回的下标属于**剥后文本**那一个下标空间，
- * 调用方拿去比的锚点必须也从同一份文本上取。旧写法把块注释**掩成等长空格**，是想让下标
- * 能直接和原文比 —— 实测那个等长从来不成立（行注释那一跳是把字符删掉的）：
- * `scripts/dev.mjs` 里那次调用原文下标 5143，掩位法给的是 4254。既然两个下标本来就不同源，
- * 比较就是在赌余量，所以改成「同一份文本上取两个下标」，而不是去补那个等长假设（ISSUE #2969）。
+ * 找出 `name(` 在顶层真的会被执行的那一处调用的下标（找不到返回 -1）。不用 `indexOf`：字面匹配骗得过
+ * `if (false)` / 死分支 / 整段注释三种「没接线」形态。此处先剥注释（`./helpers/strip-comments`），只认行首 `name(`；改
+ * 成 `if (false)` 后返回 -1（调用方 expect 当场红）。参数是 `scriptBody()` 的结果：下标属于剥后文本，锚点须同源（#2969）。
  */
 function topLevelCallAt(body: string, name: string): number {
   const re = new RegExp(`^[ \t]*${name}\\(`, "m");
@@ -127,6 +93,24 @@ describe("planExecutorHostSpawn：哪些值会起宿主", () => {
       shouldSpawn: false,
     });
   });
+
+  it("编排器跳过标记（#3830）→ 即使 COMFY_EXECUTOR=host 也不起（判决照算，进程不拉）", () => {
+    // launcher 链路里 dev-launcher（6.5 步）已起过一份，downstream 把这个标记
+    // 传给 dev.mjs；没有它，host 模式下一次启动会确定性双宿主。
+    expect(
+      planExecutorHostSpawn({ env: { COMFY_EXECUTOR: "host", [SKIP_EXECUTOR_HOST_ENV]: "1" } }),
+    ).toEqual({ mode: "host", unknown: null, shouldSpawn: false });
+    // 标记缺省时行为不变。
+    expect(
+      planExecutorHostSpawn({ env: { COMFY_EXECUTOR: "host", [SKIP_EXECUTOR_HOST_ENV]: "" } }),
+    ).toEqual({ mode: "host", unknown: null, shouldSpawn: true });
+  });
+
+  it("downstream 的 dev server 子进程 env 里带上了跳过标记（接线回归）", () => {
+    const body = scriptBody(readScript("scripts/launcher-core/downstream.mjs"));
+    expect(body).toContain("[SKIP_SCHEMA_SYNC_ENV]");
+    expect(body).toContain("[SKIP_EXECUTOR_HOST_ENV]");
+  });
 });
 
 describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
@@ -142,6 +126,20 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
     expect(result).toBeNull();
     // inline 是正常路径，不该有任何警告。
     expect(lines.join("\n")).not.toContain("✗");
+  });
+
+  it("root 不是规范化的绝对路径：显式报一批、不起进程（ISSUE #3327）", () => {
+    const lines: Array<string> = [];
+    const result = maybeSpawnExecutorHost({
+      root: "relative-root",
+      runTimestamp: "t",
+      env: { COMFY_EXECUTOR: "host" },
+      logLine: (m) => lines.push(m),
+    });
+    expect(result).toBeNull();
+    const text = lines.join("\n");
+    expect(text).toContain("✗ 拒绝拉起执行器宿主");
+    expect(text).toContain("必须是绝对路径");
   });
 
   it("设了 host 但入口不在：不退回 inline，并说清后果", () => {
@@ -175,12 +173,21 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
 
   it("host 模式下起进程：args 指宿主入口、env 显式回写归一化值、日志按次命名", async () => {
     const root = mkRoot();
-    /** 起进程的那一步换成假实现：本判据要的是**传了什么**，不该真拉一个宿主。 */
-    const spawnInGroup = vi.fn((_options: unknown): { pid: number } => ({
-      pid: 4242,
-    }));
+    /** 起进程的那一步换成假实现：本判据要的是**传了什么**，不该真拉一个宿主。
+     *  入参标上类型，复核走类型化 calls（B5 清账，不走 `as` 断言）。 */
+    const spawnInGroup = vi.fn(
+      (_options: {
+        args: Array<string>;
+        command: string;
+        cwd: string;
+        env: Record<string, string>;
+        platform: string;
+      }): { pid: number } => ({ pid: 4242 }),
+    );
     vi.resetModules();
-    vi.doMock("../scripts/launcher-core/shell.mjs", () => ({ spawnInGroup }));
+    /* 只替换「拉起」这一步；入口判据（resolveSpawnTarget）用真实现，
+     * 否则本用例验证的就不是接线后的形态（ISSUE #3327）。 */
+    vi.doMock("../scripts/launcher-core/shell.mjs", () => ({ spawnInGroup, resolveSpawnTarget }));
     try {
       const mod = await import("../scripts/launcher-core/executor-host-spawn.mjs");
       const result = mod.maybeSpawnExecutorHost({
@@ -191,16 +198,15 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
       });
 
       expect(spawnInGroup).toHaveBeenCalledTimes(1);
-      /* SAFETY: 类型断言已复核 */
-      const call = spawnInGroup.mock.calls[0]?.[0] as {
-        args: Array<string>;
-        command: string;
-        cwd: string;
-        env: Record<string, string>;
-        platform: string;
-      };
+      const call = spawnInGroup.mock.calls[0]?.[0];
+      if (call === undefined) {
+        throw new Error("spawnInGroup 没拿到调用入参");
+      }
       expect(call.command).toBe(process.execPath);
-      expect(call.args).toEqual([path.join(root, EXECUTOR_HOST_SCRIPT)]);
+      /* 参数数组只放**写死的相对入口**，根在 cwd 里（ISSUE #3327：注入面收窄）。
+       * 断言意图不变：拼起来仍必须正好是 root 下的宿主入口。 */
+      expect(call.args).toEqual([EXECUTOR_HOST_SCRIPT]);
+      expect(path.join(call.cwd, call.args[0] ?? "")).toBe(path.join(root, EXECUTOR_HOST_SCRIPT));
       expect(call.cwd).toBe(root);
       /* 归一化后的值必须**显式**传下去：`.env` 来源时它不在 `process.env` 里，
        * 不传就是「调用方认为 host、宿主起着骨架」的静默错配（ADR §14 D5）。 */
@@ -235,8 +241,9 @@ describe("四个启动入口都接线（回归到「没人起宿主」的那道�
     const callAt = topLevelCallAt(body, "maybeSpawnExecutorHost");
     /* 锚在**起 Next 的那一次 spawnSync** 上（与 start.mjs 同口径）：`nextArgs`
      * 的参数里也有 "next"/"dev" 字面量，用它当锚会把手上的位置判反。锚点与 `callAt`
-     * 必须取自**同一份**剥后文本，否则比的是两个下标空间。 */
-    const nextAt = body.indexOf("spawnSync(invocation.command, invocation.args");
+     * 必须取自**同一份**剥后文本，否则比的是两个下标空间。#4155 起 server 链
+     * 直启 next bin，spawn 的第一参是 process.execPath。 */
+    const nextAt = body.indexOf("spawnSync(process.execPath, [nextBin");
     expect(callAt).toBeGreaterThan(-1);
     expect(nextAt).toBeGreaterThan(-1);
     expect(callAt).toBeLessThan(nextAt);
@@ -249,10 +256,11 @@ describe("四个启动入口都接线（回归到「没人起宿主」的那道�
     const source = readScript("scripts/start.mjs");
     const body = scriptBody(source);
     const callAt = topLevelCallAt(body, "maybeSpawnExecutorHost");
-    /* 锚在**起 Next 的那一次 spawnSync** 上：`pnpmInvocation([...])` 的参数里
-     * 也有 "next"/"start" 两个字面量，用它当锚会把手上的位置判反。锚点与 `callAt`
-     * 同样取自那份剥后文本（现在由 `body` 显式给出）。 */
-    const nextAt = body.indexOf("spawnSync(invocation.command, invocation.args");
+    /* 锚在**起 Next 的那一次 spawnSync** 上：`nextArgs` 的参数里也有
+     * "next"/"start" 两个字面量，用它当锚会把手上的位置判反。锚点与 `callAt`
+     * 同样取自那份剥后文本（现在由 `body` 显式给出）。#4155 起 server 链
+     * 直启 next bin，spawn 的第一参是 process.execPath。 */
+    const nextAt = body.indexOf("spawnSync(process.execPath, [nextBin");
     expect(callAt).toBeGreaterThan(-1);
     expect(nextAt).toBeGreaterThan(-1);
     expect(callAt).toBeLessThan(nextAt);
@@ -263,6 +271,10 @@ describe("四个启动入口都接线（回归到「没人起宿主」的那道�
      * R5 拆分后「入口那一层转发、实现住 `downstream.mjs`」才是形态，
      * 只读主文件时 `maybeSpawnExecutorHost` 在这两处分散着、断言看不出全貌。 */
     const source = launcherChainSource();
+    expect(
+      source.trim(),
+      "launcherChainSource 拼出空文 ⇒ 落在它身上的反向断言恒真（#2660）",
+    ).not.toHaveLength(0);
     expect(source).toContain("maybeSpawnExecutorHost");
     /* **入口那一层**不许再拼一次 spawnInGroup：两份实现并存就是本判据要防的
      * 形态（改成「两边一起改」靠的是纪律，不是机制）。实现那一份里出现
@@ -279,7 +291,7 @@ describe("四个启动入口都接线（回归到「没人起宿主」的那道�
     /* 桌包链的 env 复用外壳装配结果、日志落在载荷根，与两条检出路径形态不同；
      * 它的存在只需被看见，不在本判据里强行合并。 */
     expect(readScript("scripts/standalone-runtime.mjs")).toContain(
-      "spawnExecutorHost(childEnv, stamp)",
+      "spawnExecutorHost(childEnv, stamp, APP_DATA_DIR)",
     );
   });
 });

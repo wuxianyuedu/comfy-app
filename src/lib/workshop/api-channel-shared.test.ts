@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   extractBase64DataUrl,
+  extractRemoteTaskId,
   extractSavedOutputs,
   guessMediaKind,
   resolveImagesGenerationsEndpoint,
 } from "~/lib/workshop/api-channel-shared";
+
+describe("extractRemoteTaskId", () => {
+  it("认得 Agnes 视频接口的原生任务键 video_id（#3577）", () => {
+    expect(extractRemoteTaskId({ video_id: "vid_abc" })).toBe("vid_abc");
+    expect(extractRemoteTaskId({ videoId: "vid_abc" })).toBe("vid_abc");
+    /* 既有键不回退：id / task_id 仍按原顺序优先 */
+    expect(extractRemoteTaskId({ id: "t1", video_id: "t2" })).toBe("t1");
+    expect(extractRemoteTaskId({ task_id: "t1" })).toBe("t1");
+  });
+});
 
 describe("guessMediaKind", () => {
   it("视频扩展名(含 query 与大小写) → video", () => {
@@ -27,15 +38,13 @@ describe("guessMediaKind", () => {
 
 describe("extractBase64DataUrl", () => {
   it("已带 data: 前缀原样返回", () => {
-    expect(
-      extractBase64DataUrl({ b64_json: "data:image/png;base64,AAA" }),
-    ).toBe("data:image/png;base64,AAA");
+    expect(extractBase64DataUrl({ b64_json: "data:image/png;base64,AAA" })).toBe(
+      "data:image/png;base64,AAA",
+    );
   });
 
   it("裸 base64 包裹为默认 mime", () => {
-    expect(extractBase64DataUrl({ base64: "AAA" })).toBe(
-      "data:image/png;base64,AAA",
-    );
+    expect(extractBase64DataUrl({ base64: "AAA" })).toBe("data:image/png;base64,AAA");
   });
 
   it("无字符串可提取 → null", () => {
@@ -53,15 +62,13 @@ describe("extractSavedOutputs", () => {
   });
 
   it("单字符串 → 单元素数组", () => {
-    expect(extractSavedOutputs("/a.png")).toEqual([
-      { url: "/a.png", kind: "image" },
-    ]);
+    expect(extractSavedOutputs("/a.png")).toEqual([{ url: "/a.png", kind: "image" }]);
   });
 
   it("对象条目取 localPath/url 与 mediaType", () => {
-    expect(
-      extractSavedOutputs([{ localPath: "/c.jpg", mediaType: "image" }]),
-    ).toEqual([{ url: "/c.jpg", kind: "image" }]);
+    expect(extractSavedOutputs([{ localPath: "/c.jpg", mediaType: "image" }])).toEqual([
+      { url: "/c.jpg", kind: "image" },
+    ]);
   });
 
   it("无 localPath 的对象跳过", () => {
@@ -80,9 +87,9 @@ describe("resolveImagesGenerationsEndpoint", () => {
       "https://x.com/v1/images/generations",
     );
     // 已含完整动作段 → 原样（回归：曾被再拼一次打到 /v1/images/images/generations）
-    expect(
-      resolveImagesGenerationsEndpoint("https://x.com/v1/images/generations"),
-    ).toBe("https://x.com/v1/images/generations");
+    expect(resolveImagesGenerationsEndpoint("https://x.com/v1/images/generations")).toBe(
+      "https://x.com/v1/images/generations",
+    );
     // 尾部斜杠归一
     expect(resolveImagesGenerationsEndpoint("https://x.com/v1/")).toBe(
       "https://x.com/v1/images/generations",

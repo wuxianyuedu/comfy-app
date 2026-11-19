@@ -91,21 +91,10 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
   );
 }
 
-/* ---------------------------------------------------------------------------
- *  NodeFrost —— 绕过 / 禁用节点用的**真·透视**毛玻璃层。
- *
- *  它用真正的 `backdrop-filter: blur(...)`，被模糊的是节点背后**真实的画布**
- *（不是合成的色块）。Chromium 有个经典 bug：`backdrop-filter` 在屏幕上
- *  尺寸极小的元素上会**重铺平铺** —— 缩小时节点的屏幕占位变小，模糊核超出
- *  它的底层纹理，边缘像素开始回绕 → 于是用户看到的 2² / 3² / 4²（即 4 / 9 / 16）
- *  重影伪影。
- *
- *  修法：缩小时把模糊元素按 1/zoom 反向缩放，让它的**屏幕占位**保持在
- *  节点 zoom=1 时的尺寸（那个大小总够干净地模糊）。外层 wrapper 再用
- *  `overflow:hidden` 裁回节点边界，于是只显示「与节点同形的那一片」采样背景
- *（此时它已经足够大）。模糊半径除以同一个比例，
- *  让各个缩放档下的有效屏幕模糊都约为 6px。结果就是：真实画布的真模糊视图，
- *  任何缩放档都不平铺。 */
+/* NodeFrost —— 绕过/禁用节点用的真·透视毛玻璃层（backdrop-filter 模糊真实画布）。
+ * Chromium 经典 bug：backdrop-filter 在屏幕占位极小的元素上会重铺平铺，缩小时出现 2²/3²/4² 重影。
+ * 修法：按 1/zoom 反向缩放模糊元素，使屏幕占位保持 zoom=1 尺寸；外层 overflow:hidden 裁回节点边界，
+ * 模糊半径除以同一比例，各缩放档有效屏幕模糊约 6px。 */
 export function NodeFrost({
   zoom,
   color,
@@ -140,36 +129,15 @@ export function NodeFrost({
   );
 }
 
-/* ---------------------------------------------------------------------------
- *  FrostLayer —— 感知缩放的 <NodeFrost> 包装层。
- *
- *  只有绕过 / 禁用节点才渲染 <NodeFrost>，但以前**每个**画布节点都会订阅
- *  `useStore(state => state.transform[2])`，只为把 `zoom` 传下去 ——
- *  于是捏合 / 滚轮缩放会把 130 个节点全部重渲染，
- *  哪怕绝大多数根本不用毛玻璃。把缩放订阅挪到这个组件之后，
- *  就只有真的渲染毛玻璃层的节点会响应缩放变化
- *（它们的屏幕毛玻璃尺寸必须跟随视口），普通节点在缩放时纹丝不动。
- * ------------------------------------------------------------------------- */
+/* FrostLayer —— 感知缩放的 <NodeFrost> 包装层。
+ * 此前每个节点都订阅 `transform[2]` 只为传 zoom，捏合/滚轮会让上百节点全部重渲染。
+ * 把缩放订阅挪到这一层后，只有真的渲染毛玻璃的节点响应缩放，普通节点纹丝不动。 */
 export function FrostLayer({ color, nodeMode }: { color: string | null; nodeMode: number }) {
   const zoom = useStore((state) => state.transform[2]);
   return <NodeFrost color={color} nodeMode={nodeMode} zoom={zoom} />;
 }
 
-/* ---------------------------------------------------------------------------
- *  StringTextarea —— 给长 STRING 控件（提示词、说明文字 …）用的多行只读文本框。
- *  它用浏览器原生的可滚动 textarea 取代了旧的 `<div>`
- *（后者的 Tailwind 空白 / 溢出类在这一子树里编译不可靠），
- *  于是换行与滚动都能工作，且不依赖任何 class。
- *
- *  高度策略（完全纵向堆叠布局）：
- *    • 行用 `flex-col gap-1.5 flex-1` —— 标签行在上，
- *      这个容器占满下方剩余空间。
- *    • 节点有固定框（`hasSize`）时，由 CSS 的 `flex-1 min-h-0` 链条处理高度：
- *      框高固定，控件区用 flex-1 拿走「框减去头部与主体行」的剩余空间，
- *      这个 textarea 再占 STRING 行的那一份。
- *      `maxHeight` 是**有意移除**的（以前是 96px），好让 12 行的提示词
- *      占满整个 STRING 行槽位，而不是被限高、悄悄躲在布局后面滚动。
- *      溢出内容在这个固定框内原生滚动。
- *    • 节点高度随内容（没有固定框）时，useLayoutEffect 把 textarea 的高度
- *      设成不限幅的 `scrollHeight`，好让 12 行提示词把这一行撑到能显示每一行
- *      —— 填充意图与 `flex-1` 链条相同，只是由 JS 而不是 CSS 驱动。 */
+/* StringTextarea —— 长 STRING 控件的多行只读文本框：用原生可滚动 textarea 取代旧的 <div>
+ *（Tailwind 空白/溢出类在该子树编译不可靠），换行与滚动不依赖 class。
+ * 高度：固定框（hasSize）走 `flex-col gap-1.5 flex-1` + `flex-1 min-h-0`，maxHeight 有意移除（曾 96px），
+ * 让 12 行提示占满 STRING 行并在框内原生滚动；无固定框时 useLayoutEffect 设高度为 scrollHeight。 */

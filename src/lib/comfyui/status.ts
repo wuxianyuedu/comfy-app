@@ -32,11 +32,12 @@
 //      见 env-python.ts）。
 
 import { errorText } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 // §18.4 三选一：本模块走第三类（P3 迁移第 1 期·lib 层地基批·汇聚点）。
 // 静态依赖——`~/lib/error-message` / `fs` / `path` /
 // `../app-settings/app-settings.server`（`.server` 后缀、内部无 server-only） /
 // `../endpoints` / `./launch-path` / `./instance-kind` / `./proc-detect` /
-// `~/lib/shell/tracing-ignore` / `./probe` / `./env-python` /
+// `./probe` / `./env-python` /
 // `~/lib/core/logger`（经 `app-runtime-log` #1075 + `log-paths` #1074 通链）
 // —— 在前 8 批 comfyui 与 lib 层地基批完成之后**全部**纯 Node 可加载。
 // 登记进 `tests/lib-node-only-declarations.test.ts` 的 `PURE_NODE_HOSTS`。
@@ -47,9 +48,9 @@ import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
-import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
 import { probeComfyAtPort } from "./probe";
 import { collectComfyPythonCandidates } from "./env-python";
+import { clearSweepNegative, markSweepNegative, sweepNegativeHit } from "./sweep-negative-cache";
 import { logger } from "~/lib/core/logger";
 
 /** 进程/端口事实的快照：拿不到就都为空。 */
@@ -156,7 +157,7 @@ export function launcherCommandCandidates(pythonExe: string): Array<string> {
   const exts = process.platform === "win32" ? ["pythonw.exe", "python.exe"] : ["pythonw", "python"];
   // 去重：便携版解释器本身就叫 python.exe，枚举结果与候选重复时不必查两遍。
   return [
-    ...new Set([...exts.map((name) => path.join(...tracingIgnoreArgs(), dir, name)), pythonExe]),
+    ...new Set([...exts.map((name) => path.join(/*turbopackIgnore: true*/ dir, name)), pythonExe]),
   ];
 }
 
@@ -168,7 +169,7 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
     return null;
   }
   const registry = path.join(
-    ...tracingIgnoreArgs(),
+    /*turbopackIgnore: true*/
     comfyuiPath,
     ".venv",
     "Lib",
@@ -178,11 +179,11 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
   );
   let raw: string;
   try {
-    raw = fs.readFileSync(...tracingIgnoreArgs(), registry, "utf8");
+    raw = fs.readFileSync(/*turbopackIgnore: true*/ registry, "utf8");
   } catch {
     // 兜底：comfyuiPath 本身就是注册表文件（少见，但比「静默不认」好）。
     try {
-      raw = fs.readFileSync(...tracingIgnoreArgs(), comfyuiPath, "utf8");
+      raw = fs.readFileSync(/*turbopackIgnore: true*/ comfyuiPath, "utf8");
     } catch {
       return null;
     }
@@ -193,7 +194,7 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
   if (cmds === null) {
     return null;
   }
-  const first = /^"([^"]+)"/.exec(cmds)?.[1] ?? cmds.trim().split(/\s+/)[0];
+  const first = /^"(?<cmd>[^"]+)"/.exec(cmds)?.groups?.cmd ?? cmds.trim().split(/\s+/)[0];
   if (first === undefined || !/\.exe$|python/i.test(first)) {
     return null;
   }
@@ -204,9 +205,14 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
 export function extractSetupCmds(raw: string): string | null {
   try {
     const parsed: unknown = JSON.parse(raw);
-    /* SAFETY: 类型断言已复核 */
-    const setup = (parsed as { setup?: { cmds?: unknown } })?.setup;
-    const cmds = setup?.cmds;
+    if (!isRecord(parsed)) {
+      return null;
+    }
+    const setup = parsed.setup;
+    if (!isRecord(setup)) {
+      return null;
+    }
+    const cmds = setup.cmds;
     return typeof cmds === "string" && cmds.trim() ? cmds : null;
   } catch {
     return null;
@@ -271,7 +277,7 @@ async function resolvePortFast(
   return authoritative;
 }
 
-async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
+async function snapshotOnce(opts: { force?: boolean } = {}): Promise<ComfyRuntimeSnapshot> {
   const settings = getSettingsSync();
 
   // 1) bound 子进程：本进程亲手拉起的，PID 直接可信（无需查进程表）。
@@ -329,6 +335,17 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
    * `didQueryProcTable` 为假），于是状态行被永远按在「ComfyUI 状态检测中…」
    * 上：用户没配路径，却看着一个一直在转的探测（ISSUE #1900）。 */
   if (!comfyuiPath) {
+    return { ...emptySnapshot(), didQueryProcTable: true };
+  }
+
+  // 1.9) 「确认查无实例」的短窗黏滞（ISSUE #4195）：最近一次完整扫描（全部候选
+  //      都问到了、且一个都没命中）之后的小窗口内，不再重复发起进程表扫描——
+  //      那是每拍最多约 6 路并发 PowerShell 枚举 Win32_Process 的重活，实例已经
+  //      不在时每一拍都是白付，持续轰击会占满机器并饿死页面的探活连接池。窗口内
+  //      的实例回归仍由上面的配置端口探测（步骤 1.5）与调用方的 HTTP 探测即时
+  //      认出；启动 / 关闭 / 配置保存等动作经 resetComfyRuntimeSnapshot 作废本缓存。
+  //      `force`（「不要任何二手答案」）同样绕开它——黏滞的正是二手结论。
+  if (opts.force !== true && sweepNegativeHit(comfyuiPath)) {
     return { ...emptySnapshot(), didQueryProcTable: true };
   }
 
@@ -406,6 +423,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
       return {
         running: true,
         pid: lookup.pid,
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         port: await resolvePortFast(lookup.pid, configuredPort, configuredPortUp),
         via: candidate.via,
         unverified: false,
@@ -417,6 +435,11 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
 
   // 一条候选都没问过（配置路径存在但没有可解释器候选）时同样算「没查过」：
   // 上层不能把这份空快照当成「探明没在跑」。
+  // 「查过且全部成功且一个都没命中」才黏滞（#4195）：查询失败（unverified）的
+  // 结论不可信，黏滞它会把下一拍本可命中的扫描也跳掉。
+  if (candidates.length > 0 && !lookupFailed) {
+    markSweepNegative(comfyuiPath);
+  }
   return {
     ...emptySnapshot(),
     unverified: lookupFailed,
@@ -465,13 +488,18 @@ export async function getComfyRuntimeSnapshot(
   if (opts.force !== true && st.inflight !== undefined) {
     return st.inflight;
   }
-  const task = snapshotOnce()
+  const task = snapshotOnce({ force: opts.force })
     .catch((error: unknown) => {
       logger.warn(`[comfyui] ${errorText(error, "运行态快照失败")}`);
       // 探测异常不能报成「未运行」：标 unverified 让调用方退回 HTTP 判据。
       return { ...emptySnapshot(), unverified: true };
     })
     .then((snap) => {
+      /* 实例又在了：「查无实例」的黏滞当即作废——负面结论在「知道它在跑」的
+       * 这一刻天然过期，之后的进程树变化要靠新的扫描回答（#4195）。 */
+      if (snap.running) {
+        clearSweepNegative();
+      }
       /* 迟到的旧结论不许覆盖或清掉更新的那次在途（见 `resetComfyRuntimeSnapshot`）。
        * 一份慢查询完全可能与一次 reset + 重查交错：后者先回来、写好了新缓存，
        * 前者随后落地 —— 若不比对身份，它既会把旧事实写回缓存，也会把
@@ -496,4 +524,8 @@ export async function getComfyRuntimeSnapshot(
 export function resetComfyRuntimeSnapshot(): void {
   st.cached = undefined;
   st.inflight = undefined;
+  /* 进程树事实即将变化（启动 / 关闭 / 配置保存 / 会话结束）：「确认查无实例」
+   * 的短窗黏滞一并作废——否则刚点完启动的那一拍还会沿用动作前的扫描结论
+   * （ISSUE #4195）。 */
+  clearSweepNegative();
 }

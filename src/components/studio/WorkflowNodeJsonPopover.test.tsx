@@ -1,25 +1,7 @@
 /**
- * 节点 JSON 浮层的行为回归（ISSUE #717）。
- *
- * 用户报的现场：点节点右上角的 `#id` 芯片后，浮层被推到视口之上（实测
- * `top: -174`），头部（标题 / 复制 / 关闭）与 JSON 开头整片裁在窗口外。
- *
- * 根因是**定位口径**：浮层从自搓定位收拢到 `ui/dialog` 时（ISSUE #672），
- * 丢掉了「贴着锚点」这件事 —— `ui/dialog` 的 Popup 基类自带
- * `top-1/2 -translate-y-1/2`，调用处再用 `top-24` 覆盖，两者叠加把浮层推到了
- * 视口上方。`ui/dialog` 的 Popup 里没有 Positioner，**结构上就表达不了锚点定位**。
- *
- * 因此本守卫锁两件事：
- *   ① 浮层走 `ui/popover`，并把锚点交给 Positioner（不是自己算像素、不是
- *      自写视口夹紧）；
- *   ② 关闭语义仍然齐全：Esc / 关闭按钮。
- *
- * **不断言 `style.top` 这类派生像素值** —— 翻转与「视口内收边」是 base-ui
- * Positioner 的契约（与 `seed-mode-button.test.tsx` 同一条口径）。真实浏览器
- * 里的「浮层四边都在视口内」已按 ISSUE #717 手工验过（1295×900 与 820×560
- * 两档：浮层分别落在 170~710 / 164~500）。「点浮层外关闭」由 base-ui 的
- * `outsidePress`（`pointerdown`）负责，jsdom 没有 PointerEvent 语义，
- * 断言不到 —— 硬凑只会得到一条假绿的用例。
+ * 节点 JSON 浮层的行为回归（ISSUE #717）：点 `#id` 芯片后浮层被推到视口之上（实测 `top: -174`），
+ * 根因是从自搓定位改到 `ui/dialog` 时丢了「贴锚点」—— 其 `top-1/2 -translate-y-1/2` 基类结构上
+ * 表达不了锚点。守卫锁「走 `ui/popover`、锚点交 Positioner」与「Esc / 关闭按钮齐全」，不断言派生像素。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

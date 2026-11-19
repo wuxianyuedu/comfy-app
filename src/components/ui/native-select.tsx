@@ -38,7 +38,10 @@ function NativeSelect({ className, size = "default", ...props }: NativeSelectPro
 function NativeSelectOption({ className, ...props }: React.ComponentProps<"option">) {
   return (
     <option
-      className={cn("bg-[Canvas] text-[CanvasText]", className)}
+      /* option 弹层的底/字走主题令牌（与全局 `select option` 规则同源），
+       * 不用 `Canvas`/`CanvasText` 系统色 —— 那两个色随 OS 的 color-scheme 解析，
+       * 在 WebView2 上会脱离应用主题自行变脸（#3720 第 3 条的深灰底即这一族）。 */
+      className={cn("bg-node text-ink-field", className)}
       data-slot="native-select-option"
       {...props}
     />
@@ -48,7 +51,7 @@ function NativeSelectOption({ className, ...props }: React.ComponentProps<"optio
 function NativeSelectOptGroup({ className, ...props }: React.ComponentProps<"optgroup">) {
   return (
     <optgroup
-      className={cn("bg-[Canvas] text-[CanvasText]", className)}
+      className={cn("bg-node text-ink-field", className)}
       data-slot="native-select-optgroup"
       {...props}
     />

@@ -1,38 +1,61 @@
 /**
- * llm.router 的闸门用例（体检清单 ⑨ 第二刀）。
- *
- * 这一层此前**没有执行者**：脱敏与密钥三态的判决在 `lib/llm/server` 与
- * `repository.test.ts` 里判着，而「请求方给的东西能不能走到写库那一步」的
- * router 层 zod 闸一条都没钉 —— 台账 A 系列几批复算的共同结论就是：
- * 「一个 router 没有执行者」的实际含义是「它的闸门坏了没人红」。这里按闸门组织：
- *
- *   · **地址闸**（A5 同族）：`baseUrl` 只许 http/https，非法值必须在 `upsertSingleton`
- *     之前挡下 —— 写进库的地址会被服务端拿去发请求，那是 SSRF 的入口；
- *   · **枚举闸**（`provider` / `taskType` / 契约口 id）：静默回退比报错更坏
- *     （旧代码把垃圾 provider 按 local 误路由）；
- *   · **候选清单的拆分**：字符串 = 本地 ollama 候选、对象 = 远端模型，两类不能混存。
- *     没给 `extraModels` 时必须是 `undefined` 一路透传（「这次不给意见」），
- *     一旦把它折成空数组，就等于替用户清空全部远端模型 —— 与 A11 同族的数据丢失。
- *     拆分与两张表的写入范围都在仓库层那一个入口里（ISSUE #2592），所以这一组的
- *     远端那一半**断言落在库里有什么**，不是「哪个方法被调了」。
- *
- * mock 边界：`~/server/db`（内存库，`as never` 那类形状错误会当场现形）、
- * `~/lib/llm/server`（会真发 LLM 请求）、`~/lib/workshop/mode-contract.server`（会读写
- * `data/workshop-mode-contracts.json` 那份本机覆盖）、`llmConfigRepository.upsertSingleton`
- * 用 spy 记账但保留真实现、`~/server/better-auth`、`~/lib/core/logger`。
+ * llm.router 的闸门用例（体检清单 ⑨ 第二刀）：router 层 zod 闸此前没有执行者。地址闸只许 http/https，非法
+ * `baseUrl` 必须在 `upsertSingleton` 前挡下（SSRF 入口）；枚举闸静默回退比报错更坏；`extraModels` 缺省须 `undefined`
+ * 透传，折成空数组 = 清空远端模型（ISSUE #2592）。mock：内存库/真 LLM/本机覆盖文件，spy 保真实现。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { RemoteModelAdaptersDoc } from "~/lib/workshop/remote-model-adapter";
 
-const { llmServer, contracts } = vi.hoisted(() => ({
+const { llmServer, contracts, defaults, workshopLlm } = vi.hoisted(() => ({
   llmServer: {
-    getConfigForClient: vi.fn(async () => ({
+    getConfigForClient: vi.fn(() => ({
       provider: "remote",
       hasApiKey: true,
     })),
+    /* 对话测试（#4080）的按名解析：只认远端演示名，其余回 null（路由据此判 NOT_FOUND）。
+     * 同步实现直接返回值即可（路由侧会 await）。 */
+    resolveRemoteModelConnection: vi.fn((name: string) => {
+      if (name === "remote-model") {
+        return { name, baseUrl: "https://remote.example/v1", apiKey: "remote-key" };
+      }
+      return null;
+    }),
+  },
+  workshopLlm: {
+    getWorkshopLLMConfig: vi.fn(() => ({
+      apiKey: "local-key",
+      baseUrl: "http://127.0.0.1:11434",
+      maxTokens: 2048,
+      model: "configured-default",
+      temperature: 0.7,
+    })),
+    completeWorkshopLLM: vi.fn(() => "pong"),
   },
   contracts: {
-    loadModeContracts: vi.fn(async () => [{ mode: "TXT2IMG" }]),
-    saveModeContracts: vi.fn(async (c: unknown) => c),
+    loadModeContractLayers: vi.fn(() => ({
+      configured: [{ mode: "TXT2IMG" }],
+      override: [],
+      contracts: [{ mode: "TXT2IMG" }],
+    })),
+    saveModeContracts: vi.fn((c: unknown) => c),
+    isDevCheckout: vi.fn(() => false),
+    saveModeContractsAsProjectDefaults: vi.fn(() => ({
+      contracts: [{ mode: "TXT2IMG" }],
+      file: "src/lib/workshop/mode-contract-defaults.json",
+    })),
+    resetModeContractOverride: vi.fn(() => ({
+      contracts: [],
+      effective: { mode: "TXT2IMG", inputs: ["prompt"] },
+    })),
+  },
+  defaults: {
+    /* 生效档缺省直通 DB 存档（合并逻辑的单元测试在 model-adapter-defaults.server.test.ts）。 */
+    effectiveModelAdaptersDoc: vi.fn((_name: string, dbDoc: RemoteModelAdaptersDoc) => dbDoc),
+    saveModelAdaptersAsDefaults: vi.fn((_name: string, doc: RemoteModelAdaptersDoc) => ({
+      doc,
+      file: "src/lib/workshop/model-adapter-defaults.json",
+      relPath: "src/lib/workshop/model-adapter-defaults.json",
+    })),
   },
 }));
 
@@ -41,21 +64,38 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 vi.mock("~/lib/core/logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 vi.mock("~/lib/llm/server", () => ({
   getConfigForClient: llmServer.getConfigForClient,
+  resolveRemoteModelConnection: llmServer.resolveRemoteModelConnection,
+}));
+vi.mock("~/server/workshop/llm", () => ({
+  getWorkshopLLMConfig: workshopLlm.getWorkshopLLMConfig,
+  completeWorkshopLLM: workshopLlm.completeWorkshopLLM,
 }));
 vi.mock("~/lib/workshop/mode-contract.server", () => ({
-  loadModeContracts: contracts.loadModeContracts,
+  loadModeContractLayers: contracts.loadModeContractLayers,
   saveModeContracts: contracts.saveModeContracts,
+  saveModeContractsAsProjectDefaults: contracts.saveModeContractsAsProjectDefaults,
+  resetModeContractOverride: contracts.resetModeContractOverride,
+}));
+vi.mock("~/lib/workshop/model-adapter-defaults.server", () => ({
+  effectiveModelAdaptersDoc: defaults.effectiveModelAdaptersDoc,
+  saveModelAdaptersAsDefaults: defaults.saveModelAdaptersAsDefaults,
+}));
+/* 「是不是开发检出」这条判据已搬到 `~/lib/shell/dev-checkout.server`（ISSUE #3623
+   起两处配置面共用它）—— 桩跟着搬家，不搬的话这条真函数在仓库根跑会答 true。 */
+vi.mock("~/lib/shell/dev-checkout.server", () => ({
+  isDevCheckout: contracts.isDevCheckout,
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { llmConfigRepository, remoteModelRepository } from "~/lib/core/repository";
+import type { LlmConfig } from "~/server/db/schema";
 import { llmRouter } from "~/server/api/routers/llm";
 import { getTestDb, seedRemoteModel, type TestDb } from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
@@ -63,6 +103,20 @@ import { makeCtx } from "../../../../tests/helpers/trpc";
 const createCaller = createCallerFactory(llmRouter);
 const tdb: TestDb = getTestDb();
 const caller = () => createCaller(makeCtx());
+
+/** upsertSingleton 的最小回执行：测试只消费 provider / apiKey 派生的脱敏视图与调用账。 */
+const upsertedConfig = {
+  id: "singleton",
+  provider: "remote",
+  baseUrl: "https://api.example/v1",
+  model: "m1",
+  extraModels: null,
+  apiKey: "enc:v1:test",
+  temperature: 0.7,
+  temperatureByTask: null,
+  maxTokens: 2048,
+  updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+} satisfies LlmConfig;
 
 async function codeOf(promise: Promise<unknown>): Promise<string> {
   return promise.then(
@@ -80,6 +134,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
   it("baseUrl 走非 http(s) 协议 → BAD_REQUEST，且一个字都不写库", async () => {
     const upsert = vi.spyOn(llmConfigRepository, "upsertSingleton");
     for (const bad of ["javascript:alert(1)", "file:///etc/passwd", "http://", "not-a-url"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       expect(await codeOf(caller().configSave({ baseUrl: bad }))).toBe("BAD_REQUEST");
     }
     expect(upsert).not.toHaveBeenCalled();
@@ -90,7 +145,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     const upsert = vi
       .spyOn(llmConfigRepository, "upsertSingleton")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue(undefined as never);
+      .mockResolvedValue(upsertedConfig);
     expect(await codeOf(caller().configSave({ baseUrl: "HTTPS://x.example" }))).toBe("OK");
     expect(await codeOf(caller().configSave({ baseUrl: "http://127.0.0.1:11434/v1" }))).toBe("OK");
     expect(upsert).toHaveBeenCalledTimes(2);
@@ -102,7 +157,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     expect(
       await codeOf(
         caller().configSave({
-          /* SAFETY: 类型断言已复核 */
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 故意喂不在枚举里的值：zod 闸必须拦下（线上 JSON 载荷绕得过编译期类型，绕不过这道闸）
           provider: "azure" as never,
         }),
       ),
@@ -115,7 +170,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     const upsert = vi
       .spyOn(llmConfigRepository, "upsertSingleton")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue(undefined as never);
+      .mockResolvedValue(upsertedConfig);
     await caller().configSave({
       extraModels: ["llama3", { name: "gpt-x", baseUrl: "https://api.example/v1", apiKey: "k" }],
     });
@@ -131,7 +186,8 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
       name: "gpt-x",
       baseUrl: "https://api.example/v1",
     });
-    expect(String(rows[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
+    /* `list()` 读侧已解密（#3509），落盘形态只能读原始表行。 */
+    expect(String(tdb.$tables.remoteModels[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
     upsert.mockRestore();
   });
 
@@ -139,7 +195,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     const upsert = vi
       .spyOn(llmConfigRepository, "upsertSingleton")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue(undefined as never);
+      .mockResolvedValue(upsertedConfig);
     seedRemoteModel(tdb, { name: "既有远端" });
     await caller().configSave({ model: "m1" });
     expect(upsert.mock.calls[0]?.[0]).toMatchObject({ extraModels: undefined });
@@ -153,7 +209,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     const upsert = vi
       .spyOn(llmConfigRepository, "upsertSingleton")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue(undefined as never);
+      .mockResolvedValue(upsertedConfig);
     const res = await caller().configSave({ model: "m1" });
     expect(res.config).toEqual({ provider: "remote", hasApiKey: true });
     upsert.mockRestore();
@@ -164,7 +220,7 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
     expect(
       await codeOf(
         caller().configSave({
-          /* SAFETY: 类型断言已复核 */
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 故意喂不在枚举里的键：zod 闸必须拦下（线上载荷可绕过编译期类型）
           temperatureByTask: {
             translate: 0.9,
           } as never,
@@ -190,14 +246,240 @@ describe("configSave —— 写库之前的地址与枚举闸", () => {
   });
 });
 
+describe("providers —— 供应商 / 模型的入参闸与全量回读（#3501）", () => {
+  const saveProvider = (patch: Record<string, unknown> = {}) =>
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 用例故意用宽松 patch 造各种入参
+    caller().providerSave({
+      name: "Agnes",
+      baseUrl: "https://platform.agnes-ai.com",
+      apiFormat: "anthropic-messages",
+      ...patch,
+    } as never);
+
+  it("providersGet 空库：两份清单都是空数组（历史遗留迁移跑过也不造假数据）", async () => {
+    expect(await caller().providersGet()).toEqual({ providers: [], models: [] });
+  });
+
+  it("providerSave 新建 / 更新：回全量视图，密钥只报 hasApiKey，落库密文", async () => {
+    const created = await saveProvider({ apiKey: "sk-provider" });
+    expect(created.providers).toHaveLength(1);
+    expect(created.providers[0]).toMatchObject({
+      name: "Agnes",
+      baseUrl: "https://platform.agnes-ai.com",
+      apiFormat: "anthropic-messages",
+      hasApiKey: true,
+    });
+    expect(created.providers[0]).not.toHaveProperty("apiKey");
+    const providerId = created.providers[0]!.id;
+    expect(String(tdb.$tables.llmProviders[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
+
+    // 更新不带 apiKey ⇒ 保持既有；显式 null ⇒ 清空（hasApiKey 跟着变 false）
+    const updated = await caller().providerSave({
+      id: providerId,
+      name: "Agnes 2",
+      baseUrl: "https://agnes.example.com",
+      apiFormat: "responses",
+    });
+    expect(updated.providers[0]).toMatchObject({
+      id: providerId,
+      name: "Agnes 2",
+      apiFormat: "responses",
+      hasApiKey: true,
+    });
+
+    const cleared = await caller().providerSave({
+      id: providerId,
+      name: "Agnes 2",
+      baseUrl: "https://agnes.example.com",
+      apiFormat: "responses",
+      apiKey: null,
+    });
+    expect(cleared.providers[0]?.hasApiKey).toBe(false);
+    expect(tdb.$tables.llmProviders[0]!.apiKey).toBeNull();
+  });
+
+  it("providerSave 的 zod 闸：Base URL 非 http(s) / 空名 / 未知格式都 BAD_REQUEST，且不落库", async () => {
+    for (const patch of [
+      { baseUrl: "ftp://x" },
+      { baseUrl: "not a url" },
+      { name: "   " },
+      { apiFormat: "grpc" },
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序
+      expect(await codeOf(saveProvider(patch))).toBe("BAD_REQUEST");
+    }
+    expect(tdb.$tables.llmProviders).toEqual([]);
+  });
+
+  it("modelSave / modelToggle / modelDelete：全量回读、启停、删除", async () => {
+    const providerId = (await saveProvider()).providers[0]!.id;
+    const saved = await caller().modelSave({
+      providerId,
+      name: "claude-sonnet-4",
+      kind: "chat",
+      apiFormat: "responses",
+      apiKey: "sk-model",
+      contextWindow: 200_000,
+      maxOutputTokens: 8192,
+      inputTypes: ["text", "image"],
+      capabilities: ["structured-output"],
+      reasoningLevels: ["low", "high"],
+      reasoningParamMapping: { param: "reasoning_effort", values: { low: "low" } },
+      smartConfig: false,
+    });
+    expect(saved.models).toHaveLength(1);
+    expect(saved.models[0]).toMatchObject({
+      providerId,
+      name: "claude-sonnet-4",
+      kind: "chat",
+      apiFormat: "responses",
+      enabled: true,
+      hasApiKey: true,
+      contextWindow: 200_000,
+      maxOutputTokens: 8192,
+      inputTypes: ["text", "image"],
+      capabilities: ["structured-output"],
+      reasoningLevels: ["low", "high"],
+      reasoningParamMapping: { param: "reasoning_effort", values: { low: "low" } },
+      smartConfig: false,
+    });
+    expect(saved.models[0]).not.toHaveProperty("apiKey");
+    const modelId = saved.models[0]!.id;
+
+    const toggled = await caller().modelToggle({ id: modelId, enabled: false });
+    expect(toggled.models[0]?.enabled).toBe(false);
+    expect(tdb.$tables.remoteModels[0]!.enabled).toBe(0);
+
+    const deleted = await caller().modelDelete({ id: modelId });
+    expect(deleted.models).toEqual([]);
+    expect((await caller().providersGet()).models).toEqual([]);
+  });
+
+  it("图像行的接口端点：下拉值落模型级适配器存档、白名单外回落默认第一项（#3656）", async () => {
+    const providerId = (await saveProvider()).providers[0]!.id;
+
+    /* 图像行：显式带 endpointPath → 落 workshopAdapters envelope 的那一格，
+     * modelView 下发生效值 */
+    const saved = await caller().modelSave({
+      providerId,
+      name: "m-image",
+      kind: "image",
+      endpointPath: "/v1/images/generations",
+    });
+    expect(saved.models[0]?.endpointPath).toBe("/v1/images/generations");
+    /* workshopAdapters 列是 JSON 字符串（drizzle 侧 unknown）—— 解析成 doc 信封
+     * 再比对，不做不安全断言（零回潮判据 no-unsafe-type-assertion） */
+    const adaptersRaw: unknown = tdb.$tables.remoteModels[0]!.workshopAdapters;
+    expect(JSON.parse(String(adaptersRaw))).toMatchObject({
+      endpointPath: "/v1/images/generations",
+      adapters: [],
+    });
+
+    /* 白名单外的值折成空串 → 读侧回落用途默认第一项（=「没选用第一项」） */
+    const invalid = await caller().modelSave({
+      providerId,
+      id: saved.models[0]!.id,
+      name: "m-image",
+      kind: "image",
+      endpointPath: "/not/known",
+    });
+    expect(invalid.models[0]?.endpointPath).toBe("/v1/images/generations");
+
+    /* 文本行（或存 null）恒清空该格，视图下发 null */
+    const chat = await caller().modelSave({
+      providerId,
+      id: saved.models[0]!.id,
+      name: "m-image",
+      kind: "chat",
+      endpointPath: null,
+    });
+    expect(chat.models[0]?.endpointPath).toBeNull();
+  });
+
+  it("模型级接口格式：显式值优先，省略 = 跟随供应商默认（#3517）", async () => {
+    const providerId = (await saveProvider({ apiFormat: "anthropic-messages" })).providers[0]!.id;
+
+    const explicit = await caller().modelSave({
+      providerId,
+      name: "m-explicit",
+      apiFormat: "responses",
+    });
+    expect(explicit.models[0]?.apiFormat).toBe("responses");
+
+    const inherited = await caller().modelSave({ providerId, name: "m-inherit" });
+    expect(inherited.models.find((m) => m.name === "m-inherit")?.apiFormat).toBe(
+      "anthropic-messages",
+    );
+  });
+
+  it("模型指向已删除的供应商：生效格式回落 OpenAI 兼容，不因孤儿行报错（#3517）", async () => {
+    seedRemoteModel(tdb, { name: "orphan", providerId: "gone" });
+    const state = await caller().providersGet();
+    expect(state.models).toEqual([
+      expect.objectContaining({
+        name: "orphan",
+        providerId: "gone",
+        apiFormat: "chat-completions",
+      }),
+    ]);
+  });
+
+  it("modelSave 的 zod 闸：缺 providerId / 空名 / 0 窗口 / 未知用途 / 未知输入类型都 BAD_REQUEST", async () => {
+    const providerId = (await saveProvider()).providers[0]!.id;
+    const base = { providerId, name: "m" };
+    for (const patch of [
+      { providerId: undefined },
+      { providerId: "" },
+      { name: "   " },
+      { contextWindow: 0 },
+      { maxOutputTokens: -1 },
+      { kind: "audio" },
+      { apiFormat: "grpc" },
+      { inputTypes: ["audio"] },
+      { capabilities: ["telepathy"] },
+      { reasoningParamMapping: { param: "x", values: { low: 1 } } },
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop, typescript/no-unsafe-type-assertion -- 逐轮 await 保顺序；故意喂非法入参
+      expect(await codeOf(caller().modelSave({ ...base, ...patch } as never))).toBe("BAD_REQUEST");
+    }
+    expect(tdb.$tables.remoteModels).toEqual([]);
+  });
+
+  it("providerDelete 连名下模型一起删，并把剩余状态整份回读", async () => {
+    const first = await saveProvider({ name: "Agnes" });
+    const second = await saveProvider({ name: "Backup", baseUrl: "https://backup.example.com" });
+    const dropId = first.providers[0]!.id;
+    await caller().modelSave({ providerId: dropId, name: "owned-by-drop" });
+    await caller().modelSave({
+      providerId: second.providers.find((p) => p.name === "Backup")!.id,
+      name: "owned-by-keep",
+    });
+
+    const after = await caller().providerDelete({ id: dropId });
+    expect(after.providers.map((p) => p.name)).toEqual(["Backup"]);
+    expect(after.models.map((m) => m.name)).toEqual(["owned-by-keep"]);
+  });
+
+  it("providersGet 先把历史遗留模型迁进「默认供应商」再回读", async () => {
+    seedRemoteModel(tdb, { name: "legacy" });
+    const state = await caller().providersGet();
+    expect(state.providers.map((p) => p.name)).toEqual(["默认供应商"]);
+    expect(state.models).toHaveLength(1);
+    expect(state.models[0]).toMatchObject({
+      name: "legacy",
+      providerId: state.providers[0]!.id,
+      enabled: true,
+      hasApiKey: false,
+    });
+  });
+});
+
 describe("modeContracts —— 契约口 id 的类型守卫", () => {
   const contract = (inputs: Array<string>) => ({
     contracts: [
       {
         mode: "TXT2IMG",
         inputs,
-        /* SAFETY: 类型断言已复核 */
-        output: "image" as const,
       },
     ],
   });
@@ -222,8 +504,6 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
             {
               mode: "TXT2IMG",
               inputs: ["prompt"],
-              /* SAFETY: 类型断言已复核 */
-              output: "image" as const,
               customInputs: [
                 {
                   id,
@@ -247,40 +527,106 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
   it("读取走同一个出口（不在路由里再造一份默认契约）", async () => {
     const res = await caller().modeContractsGet();
     expect(res.contracts).toEqual([{ mode: "TXT2IMG" }]);
+    /* 下发两层：成品配置基准（判「已改」）+ 生效注册表（显示 / 编辑）。 */
+    expect(res.configured).toEqual([{ mode: "TXT2IMG" }]);
+    /* 「保存为项目默认」入口的开关来自服务端判据（isDevCheckout），不是界面猜的
+     *（ISSUE #3396）。 */
+    expect(res.projectDefaultEditable).toBe(false);
+    expect(contracts.isDevCheckout).toHaveBeenCalledTimes(1);
+  });
+
+  it("保存为项目默认：整份契约交给服务端差集写回（台账 E3 执行者）", async () => {
+    const res = await caller().modeContractsSaveProjectDefaults(
+      contract(["prompt", "negative", "size"]),
+    );
+    expect(contracts.saveModeContractsAsProjectDefaults).toHaveBeenCalledTimes(1);
+    expect(res.file).toBe("src/lib/workshop/mode-contract-defaults.json");
+  });
+
+  it("还原默认：模式码交给服务端移除覆盖（台账 E3 执行者）", async () => {
+    const res = await caller().modeContractReset({ mode: "txt2img" });
+    expect(contracts.resetModeContractOverride).toHaveBeenCalledWith("txt2img");
+    expect(res.effective).toEqual({ mode: "TXT2IMG", inputs: ["prompt"] });
+  });
+
+  it("入参不再有「输出类别」那一格：带它提交也不打回，落盘时那一格消失（#4072）", async () => {
+    /* 类别由模式码唯一决定，不再是可配项：zod 剥掉未声明的键 ⇒ 存量客户端
+     * 带着 `output` 提交不会被拒，交给存储层的那一份里那一格已经没有了。 */
+    const legacyContract = {
+      mode: "TXT2IMG",
+      inputs: ["prompt"],
+      output: "video",
+    };
+    await caller().modeContractsSave({ contracts: [legacyContract] });
+    expect(contracts.saveModeContracts).toHaveBeenCalledWith([
+      { mode: "TXT2IMG", inputs: ["prompt"] },
+    ]);
   });
 });
 
 describe("workshopAdapters —— 适配器形状与大写归一", () => {
   it("mode 归一成大写后再交给仓储（模式键的大小写只此一处决定）", async () => {
     const save = vi
-      .spyOn(remoteModelRepository, "saveWorkshopAdapters")
+      .spyOn(remoteModelRepository, "saveWorkshopAdaptersDoc")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue([] as never);
+      .mockResolvedValue({ endpointPath: "", adapters: [] });
     await caller().workshopAdaptersSave({
       name: "gpt-x",
       adapters: [
         {
           mode: "txt2img",
-          endpointPath: "/v1/images",
           inputs: [{ type: "prompt", field: "prompt" }],
         },
       ],
     });
-    /* SAFETY: 类型断言已复核 */
-    const passed = save.mock.calls[0]?.[1] as Array<{
-      mode: string;
-    }>;
-    expect(passed[0]?.mode).toBe("TXT2IMG");
+    const passed = save.mock.calls[0]?.[1] ?? { endpointPath: "", adapters: [] };
+    expect(passed.adapters[0]?.mode).toBe("TXT2IMG");
     save.mockRestore();
   });
 
-  it("inputs 空数组 / 缺 endpointPath → BAD_REQUEST，不落库", async () => {
-    const save = vi.spyOn(remoteModelRepository, "saveWorkshopAdapters");
+  it("端点路径模型级共用（#3622）：入参带 endpointPath 一格，与模式无关", async () => {
+    const save = vi
+      .spyOn(remoteModelRepository, "saveWorkshopAdaptersDoc")
+      /* SAFETY: 类型断言已复核 */
+      .mockResolvedValue({ endpointPath: "", adapters: [] });
+    await caller().workshopAdaptersSave({
+      name: "gpt-x",
+      endpointPath: "/v1/images/generations",
+      adapters: [{ mode: "T2I", inputs: [{ type: "prompt", field: "prompt" }] }],
+    });
+    expect(save.mock.calls[0]?.[1]).toMatchObject({ endpointPath: "/v1/images/generations" });
+    save.mockRestore();
+  });
+
+  it("入参省略 endpointPath = 保住既有值（#3631）：适配页不再编辑这格", async () => {
+    /* 「模型适配」页的保存不再带端点路径 —— 服务端必须拿库里既有的那个
+     *（设置页「接口端点」下拉写的），不能把省略折成空串冲掉配置。 */
+    seedRemoteModel(tdb, {
+      name: "agnes-image",
+      workshopAdapters: {
+        endpointPath: "/v1/videos",
+        adapters: [],
+      },
+    });
+    const save = vi
+      .spyOn(remoteModelRepository, "saveWorkshopAdaptersDoc")
+      /* SAFETY: 类型断言已复核 */
+      .mockResolvedValue({ endpointPath: "/v1/videos", adapters: [] });
+    await caller().workshopAdaptersSave({
+      name: "agnes-image",
+      adapters: [{ mode: "t2v", inputs: [{ type: "prompt", field: "prompt" }] }],
+    });
+    expect(save.mock.calls[0]?.[1]).toMatchObject({ endpointPath: "/v1/videos" });
+    save.mockRestore();
+  });
+
+  it("inputs 空数组 → BAD_REQUEST，不落库", async () => {
+    const save = vi.spyOn(remoteModelRepository, "saveWorkshopAdaptersDoc");
     expect(
       await codeOf(
         caller().workshopAdaptersSave({
           name: "gpt-x",
-          adapters: [{ mode: "img2img", endpointPath: "/x", inputs: [] }],
+          adapters: [{ mode: "img2img", inputs: [] }],
         }),
       ),
     ).toBe("BAD_REQUEST");
@@ -288,11 +634,55 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
     save.mockRestore();
   });
 
-  it("读取按名字取，不隐式带上全部模型", async () => {
+  it("保存为项目默认（#3951）：mode 归一成大写后交给服务端写基线", async () => {
+    const res = await caller().workshopAdaptersSaveAsDefaults({
+      name: "gpt-x",
+      adapters: [{ mode: "txt2img", inputs: [{ type: "prompt", field: "prompt" }] }],
+    });
+    expect(defaults.saveModelAdaptersAsDefaults).toHaveBeenCalledTimes(1);
+    const passed = defaults.saveModelAdaptersAsDefaults.mock.calls[0]?.[1];
+    expect(passed?.adapters[0]?.mode).toBe("TXT2IMG");
+    expect(res.relPath).toBe("src/lib/workshop/model-adapter-defaults.json");
+  });
+
+  it("保存为项目默认：端点路径省略 = 取生效档现值（本页不编辑这格）", async () => {
+    seedRemoteModel(tdb, {
+      name: "agnes-image",
+      workshopAdapters: {
+        endpointPath: "/v1/videos",
+        adapters: [],
+      },
+    });
+    await caller().workshopAdaptersSaveAsDefaults({
+      name: "agnes-image",
+      adapters: [{ mode: "t2v", inputs: [{ type: "prompt", field: "prompt" }] }],
+    });
+    const passed = defaults.saveModelAdaptersAsDefaults.mock.calls.at(-1)?.[1];
+    expect(passed?.endpointPath).toBe("/v1/videos");
+  });
+
+  it("概览只收非空存档：每条给模型名与该模型已配的模式码清单", async () => {
+    /* 「模型适配」页左栏的「已配」标记读这一格 —— 没配过的模型不出现在清单里。 */
+    seedRemoteModel(tdb, {
+      name: "agnes-image",
+      workshopAdapters: {
+        endpointPath: "/v1/images/generations",
+        adapters: [
+          { mode: "T2I", inputs: [{ type: "prompt", field: "prompt" }], outputField: "url" },
+          { mode: "I2I", inputs: [{ type: "image", field: "image" }], outputField: "" },
+        ],
+      },
+    });
+    seedRemoteModel(tdb, { name: "bare-model" });
+    const res = await caller().workshopAdaptersSummary();
+    expect(res.models).toEqual([{ modes: ["T2I", "I2I"], name: "agnes-image" }]);
+  });
+
+  it("读取按名字取整份存档（模型级 envelope），不隐式带上全部模型", async () => {
     const get = vi
-      .spyOn(remoteModelRepository, "getWorkshopAdapters")
+      .spyOn(remoteModelRepository, "getWorkshopAdaptersDoc")
       /* SAFETY: 类型断言已复核 */
-      .mockResolvedValue([] as never);
+      .mockResolvedValue({ endpointPath: "", adapters: [] });
     await caller().workshopAdaptersGet({ name: "gpt-x" });
     expect(get).toHaveBeenCalledWith("gpt-x");
     get.mockRestore();
@@ -303,6 +693,45 @@ describe("configGet —— 脱敏出口", () => {
   it("走 getConfigForClient 取脱敏配置，不顺手加载模式契约", async () => {
     await caller().configGet();
     expect(llmServer.getConfigForClient).toHaveBeenCalledTimes(1);
-    expect(contracts.loadModeContracts).not.toHaveBeenCalled();
+    expect(contracts.loadModeContractLayers).not.toHaveBeenCalled();
+  });
+});
+
+describe("chatTest —— 对话测试（ISSUE #4080）", () => {
+  it("本地模型：连接参数取生效 LLM 配置，模型名换成被测的那个", async () => {
+    const res = await caller().chatTest({ name: "qwen3-8b", local: true, prompt: "ping" });
+    expect(workshopLlm.completeWorkshopLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: "http://127.0.0.1:11434",
+        apiKey: "local-key",
+        model: "qwen3-8b",
+      }),
+      [{ role: "user", content: "ping" }],
+    );
+    expect(res).toMatchObject({
+      reply: "pong",
+      model: "qwen3-8b",
+      endpoint: "http://127.0.0.1:11434/chat/completions",
+    });
+    expect(res.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("远端模型：按名解析连接参数（模型自己或其供应商的）", async () => {
+    const res = await caller().chatTest({ name: "remote-model", local: false, prompt: "ping" });
+    expect(workshopLlm.completeWorkshopLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: "https://remote.example/v1",
+        apiKey: "remote-key",
+        model: "remote-model",
+      }),
+      [{ role: "user", content: "ping" }],
+    );
+    expect(res.reply).toBe("pong");
+  });
+
+  it("远端模型取不到或没有地址 → NOT_FOUND", async () => {
+    expect(await codeOf(caller().chatTest({ name: "nope", local: false, prompt: "ping" }))).toBe(
+      "NOT_FOUND",
+    );
   });
 });

@@ -1,18 +1,9 @@
 "use client";
 
 /**
- * StoryboardPlanner 的「三通道提取 + 外部导入」分域 sub-hook
- * （`useStoryboardPlanner` 的拆分件）。
- *
- * 收口：提取会话的接线（controller 经 props 注入 / 遗留用法退化局部会话）、
- * `handleExtract`（工具=确定性拆分；本地/API=LLM 流式输出 JSON，失败降级提示）、
- * `handleImportFile`（分镜 markdown 走工具解析器；JSON 支持分镜数组与角色卡）、
- * 以及把条目落成既有 Shot 结构的 `appendShots`。
- *
- * 只依赖注入的事实：`shots / scenes / characters / styles`（落库与重算）、
- * `onShotsChange / onCharactersChange`（写回）、`scriptMarkdown`（提取源）、
- * `config / openSettings`（LLM 配置未就绪时的引导）——不碰主钩的其它动作。
- * 返回形状与主钩原 controller 逐字段一致（§12.18 复用优先）。
+ * StoryboardPlanner 的「三通道提取 + 外部导入」分域 sub-hook。收口：提取会话接线（controller 经 props 注入 / 遗留用法退化局部会话）、`handleExtract`（工具=确定性
+ * 拆分；本地/API=LLM 流式输出 JSON，失败降级提示）、`handleImportFile`（分镜 markdown 走工具解析器；JSON 支持分镜数组与角色卡）、`appendShots` 落成既有 Shot。
+ * 返回形状与主钩原 controller 逐字段一致（§12.18）。
  */
 import type { Character, Scene, Shot, StyleRef } from "~/lib/workshop/types";
 import {
@@ -73,11 +64,10 @@ export function useStoryboardExtractFlow(input: {
   } = input;
 
   // ── 三通道提取(工具 / 本地模型 / 远端API)+ 外部导入 ──
-  // 下拉选项值（local::<model> | remote::<model>），通道与模型一并保存。
+  // 下拉选项值形如 local::<model> | remote::<model>（通道与模型一并保存）。
   // 提取的 通道/忙闲/过程/状态/错误/执行日志 已收归工坊 controller(storyboardExtract)
-  // 并经 props.extract 注入：展示读 session，写入走 actions。controller 跨阶段页签
-  // 常驻，提取中切页签再切回状态不丢，无需模块级缓存。遗留/独立使用(未注入)时
-  // 退化为本 hook 局部会话。
+  // 并经 props.extract 注入：展示读 session，写入走 actions；controller 跨页签常驻，
+  // 切页签状态不丢。遗留/独立使用(未注入)时退化为本 hook 局部会话。
   const localExtract = useExtractSession("local", "storyboard");
   const { session: extractSession, actions: extractActions } = extract ?? {
     session: localExtract[0],

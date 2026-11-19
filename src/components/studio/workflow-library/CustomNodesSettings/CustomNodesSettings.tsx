@@ -7,7 +7,7 @@ import { NodesTab } from "./NodesTab";
 import { ParseConsole, ReportCards } from "./SettingsParts";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
-import { HEADER_ACTION_BTN } from "../workflow-library-config";
+import { HEADER_ACTION_OUTLINE_BTN } from "../workflow-library-config";
 import { Hint } from "~/components/ui/hint";
 
 /** 自定义节点导入对话框。
@@ -22,7 +22,7 @@ export function CustomNodesSettings() {
     <>
       <Hint label="从 ComfyUI 安装目录的 custom_nodes 导入自定义节点（服务端只读、绝不修改这些目录里的任何文件）">
         <Button
-          className={`${HEADER_ACTION_BTN} border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright`}
+          className={HEADER_ACTION_OUTLINE_BTN}
           onClick={() => {
             ctrl.setOpen(true);
           }}

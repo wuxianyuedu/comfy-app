@@ -21,19 +21,10 @@ function isMobileNow(): boolean {
   return typeof window === "undefined" ? false : window.innerWidth < MOBILE_BREAKPOINT;
 }
 
-/**
- * 当前是否为「窄窗（移动形态）」—— `sidebar.tsx` 据此在浮层与固定栏之间选形态。
- *
- * 与官方的两处差别（都是本仓库判据逼出来的）：
- *
- * 1. 官方是 `useState<boolean | undefined>(undefined)` + 在 `useEffect` 体内
- *    **同步** `setIsMobile(...)`，而 `react-hooks/set-state-in-effect` 判它
- *    「在 effect 里直接 setState」（级联渲染）；且首帧 `undefined` 会逼每个调用处
- *    写 `!!isMobile`。改用 `useSyncExternalStore` 后首帧就有确定值，与
- *    `useWidePanel` / `useCanvasSettings` 同一套机制。
- * 2. 服务端快照显式给 `false`（桌面壳与浏览器桌面尺寸一致，首屏按非窄窗渲染），
- *    不把「还没测出来」当成第三种状态往外传。
- */
+/** 当前是否为「窄窗（移动形态）」—— `sidebar.tsx` 据此在浮层与固定栏之间选形态。与官方两处差别：① 官方
+ * `useState<boolean | undefined>` + 在 effect 体内同步 `setIsMobile`，会被 `react-hooks/set-state-in-effect` 判为级联渲染，
+ * 首帧 `undefined` 还逼每个调用处写 `!!`；改用 `useSyncExternalStore` 后首帧就有确定值。② 服务端快照显式给 `false`，
+ * 不把「还没测出来」当第三态外传。 */
 export function useIsMobile(): boolean {
   return useSyncExternalStore(subscribe, isMobileNow, () => false);
 }

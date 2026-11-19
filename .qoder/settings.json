@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "type": "stdio",
+      "command": "pnpm",
+      "args": ["dlx", "chrome-devtools-mcp@1.12.0", "--isolated", "--memoryDebugging"],
+      "description": "Chrome DevTools 官方调试 MCP（#3447）：读网络请求/响应体、performance trace、堆快照。补 browser-use 的三个空白（其 list_network_requests 不含 body）。--isolated 起干净临时实例、不碰真机浏览器登录态；堆快照工具默认关、由 --memoryDebugging 显式开。钉版本走 pnpm dlx（硬规则 1）。Qoder 不读 .mcp.json，project 落点是本文件。"
+    }
+  }
+}

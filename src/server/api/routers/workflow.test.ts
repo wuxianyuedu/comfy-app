@@ -5,23 +5,17 @@ import { readEnvVar } from "~/lib/envfile";
 import type * as AppSettingsModule from "~/lib/app-settings/app-settings.server";
 import type * as ImportSourceModule from "~/lib/comfyui/importSource";
 /**
- * workflow.router 集成测试。
- *
- * mock 边界：~/server/db（内存数据库替身，见 tests/helpers/test-db.ts）、
- * ~/server/better-auth（getSession）、~/lib/core/logger（静音）、
- * ~/lib/envfile（屏蔽真实 .env 的 LOCAL_WORKFLOWS_PATH）、
- * ~/lib/comfyui/importSource（本地文件导入/重导入，避免真实磁盘依赖）、
- * ~/lib/comfyui/raw 的 fetchObjectInfo（钉成 null：本机开着 ComfyUI 时
- * 详情里的 COMBO 候选会变成真数据，同一份断言就随开发机状态漂）。
- * 其余（repository、workflow-types、workflow.ts、workflow-detail、
- * localWorkflows、raw 的 detectFormat/extractPositions）全部走真实实现 —— 导入链
- * 里**不再有**「转 API 图」这一步，所以不需要再 mock 转换器。
+ * workflow.router 集成测试。mock 只限：db（`tests/helpers/test-db.ts` 内存替身）、better-auth `getSession`、logger（静音）、
+ * envfile（屏蔽真 `.env` 的 `LOCAL_WORKFLOWS_PATH`）、importSource（免真实磁盘）、raw 的 `fetchObjectInfo` 钉 null
+ * （本机开 ComfyUI 时 COMBO 候选会变真数据，断言随开发机漂）。其余全走真实实现；导入链已无「转 API 图」，不需 mock 转换器。
  */
 import path from "node:path";
 import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 
 const { getSessionMock } = vi.hoisted(() => ({
-  getSessionMock: vi.fn<(args: { headers: Headers }) => Promise<unknown>>(async () => null),
+  getSessionMock: vi.fn<(args: { headers: Headers }) => Promise<unknown>>(() =>
+    Promise.resolve(null),
+  ),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -63,10 +57,11 @@ vi.mock("~/lib/comfyui/importSource", async (importOriginal) => ({
  * 不是本机此刻有没有 ComfyUI。 */
 vi.mock("~/lib/comfyui/raw", async (importOriginal) => ({
   ...(await importOriginal<typeof RawModule>()),
-  fetchObjectInfo: vi.fn(async () => null),
+  fetchObjectInfo: vi.fn(() => null),
 }));
 
 import { createCallerFactory, createTRPCContext } from "~/server/api/trpc";
+import { asRecord, isPlainRecord } from "~/lib/is-record";
 import { workflowRouter } from "~/server/api/routers/workflow";
 import { importFromLocalPath, reimportFromSource } from "~/lib/comfyui/importSource";
 import { getTestDb, seedUser, seedWorkflowTemplate } from "../../../../tests/helpers/test-db";
@@ -332,7 +327,7 @@ describe("workflow.detail", () => {
     await expect(caller.detail({ id: "wf-b" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 故意喂缺必填字段的载荷：zod 闸必须报 BAD_REQUEST（线上 JSON 载荷绕得过编译期类型）
     await expect(caller.detail({} as never)).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
@@ -477,11 +472,9 @@ describe("workflow.update", () => {
     const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-1")!;
     expect(row.taskType).toBe("T2I"); // normalizeTaskType("t2i") → 规范大写 "T2I"
     expect(row.positions).toEqual({ "5": [0, 0], "1": [1, 2] }); // merge 不清空另一命名空间
-    /* SAFETY: 类型断言已复核 */
-    const rawJson = row.rawJson as {
-      nodes: Array<{ pos?: unknown }>;
-    };
-    expect(rawJson.nodes[0]?.pos).toEqual([1, 2]);
+    const rawJson = asRecord(row.rawJson);
+    const nodes = Array.isArray(rawJson?.nodes) ? rawJson.nodes : [];
+    expect(isPlainRecord(nodes[0]) ? nodes[0].pos : undefined).toEqual([1, 2]);
     expect(row.modelTags).toEqual([expect.objectContaining({ name: "SDXL", userId: "user-a" })]);
     expect(tdb.$tables.workflowModelTags).toHaveLength(1);
   });
@@ -495,14 +488,97 @@ describe("workflow.update", () => {
     });
     const res = await createCaller(makeCtx()).update({
       id: "wf-2",
-      modelTags: ["z-image", "SD3.5"],
+      modelTags: ["z-image"],
     });
     expect(res.template.name).toBe("Keep");
     const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-2")!;
-    expect(row.modelTags).toEqual([
-      expect.objectContaining({ name: "z-image", userId: "user-a" }),
-      expect.objectContaining({ name: "SD3.5", userId: "user-a" }),
-    ]);
+    expect(row.modelTags).toEqual([expect.objectContaining({ name: "z-image", userId: "user-a" })]);
+  });
+
+  it("绑定唯一性：一个工作流只允许一个模型标签（多于一个 → BAD_REQUEST）", async () => {
+    seedWorkflowTemplate(tdb, { id: "wf-multi", userId: "user-a", name: "Multi", taskType: "T2I" });
+    const err = await errorEnvelope(
+      createCaller(makeCtx()).update({ id: "wf-multi", modelTags: ["z-image", "SD3.5"] }),
+    );
+    expect(err.code).toBe("BAD_REQUEST");
+    expect(err.message).toContain("只能绑定一个模型标签");
+  });
+
+  it("绑定唯一性：同一 (标签 × 模式) 已被别的工作流占用 → CONFLICT 并点名占用者", async () => {
+    /* A：文生图 + 图生图 双模式，先绑 z-image —— 占用 z-image 的这两个模式。 */
+    seedWorkflowTemplate(tdb, {
+      id: "wf-a",
+      userId: "user-a",
+      name: "image_z_image_int8_t2i",
+      taskType: "T2I",
+      modes: '["T2I","I2I"]',
+      modelTags: [{ id: "tag-zi", userId: "user-a", name: "z-image" }],
+    });
+    /* B：只有文生图 —— 再绑 z-image 会撞 A 已占用的文生图。 */
+    seedWorkflowTemplate(tdb, {
+      id: "wf-b",
+      userId: "user-a",
+      name: "image_z_image",
+      taskType: "T2I",
+      modes: '["T2I"]',
+    });
+    const err = await errorEnvelope(
+      createCaller(makeCtx()).update({ id: "wf-b", modelTags: ["z-image"] }),
+    );
+    expect(err.code).toBe("CONFLICT");
+    expect(err.message).toContain("z-image");
+    expect(err.message).toContain("文生图");
+    expect(err.message).toContain("image_z_image_int8_t2i");
+    /* 被拒的那一笔不落库：B 仍是无标签。 */
+    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-b")!;
+    expect(row.modelTags ?? []).toHaveLength(0);
+  });
+
+  it("绑定唯一性：同标签但模式不相交 → 放行（同一模型可以按不同模式各挂一条工作流）", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "wf-a2",
+      userId: "user-a",
+      name: "t2i-only",
+      taskType: "T2I",
+      modes: '["T2I"]',
+      modelTags: [{ id: "tag-zi2", userId: "user-a", name: "z-image" }],
+    });
+    seedWorkflowTemplate(tdb, {
+      id: "wf-b2",
+      userId: "user-a",
+      name: "t2v-only",
+      taskType: "T2V",
+      modes: '["T2V"]',
+    });
+    const res = await createCaller(makeCtx()).update({
+      id: "wf-b2",
+      modelTags: ["z-image"],
+    });
+    expect(res.template.id).toBe("wf-b2");
+    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-b2")!;
+    expect(row.modelTags).toEqual([expect.objectContaining({ name: "z-image" })]);
+  });
+
+  it("绑定唯一性：换绑/清空不受自己已占用的模式影响（排除自身后无冲突）", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "wf-self",
+      userId: "user-a",
+      name: "self-ok",
+      taskType: "T2I",
+      modes: '["T2I"]',
+      modelTags: [{ id: "tag-same", userId: "user-a", name: "z-image" }],
+    });
+    /* 再存一次同标签：排除自身 ⇒ 不算冲突。 */
+    const res = await createCaller(makeCtx()).update({
+      id: "wf-self",
+      modelTags: ["z-image"],
+    });
+    expect(res.template.id).toBe("wf-self");
+    /* 清空绑定也放行。 */
+    const cleared = await createCaller(makeCtx()).update({ id: "wf-self", modelTags: [] });
+    expect(cleared.template.id).toBe("wf-self");
+    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-self")!;
+    expect(row.modelTags ?? []).toHaveLength(0);
   });
 
   it("不存在 / 他人模板 → NOT_FOUND", async () => {

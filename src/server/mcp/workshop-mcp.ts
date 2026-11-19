@@ -1,17 +1,20 @@
 // ── Workshop MCP 服务端（工具定义，双 transport 共用）───────────
-// buildWorkshopMcpServer() 返回已注册全部工坊工具的 McpServer，供 stdio
-// 与 HTTP(Streamable) 两种 transport 共用（同一份工具定义）。
-//
-// 工具覆盖工坊全流程：会话 → 脚本 → 角色 → 分镜 → 生图 → 生视频，
-// AI 客户端可按顺序调用以指挥端到端创作。
+// buildWorkshopMcpServer() 返回已注册全部工坊工具的 McpServer，stdio 与
+// HTTP(Streamable) 两种 transport 共用同一份工具定义；覆盖工坊全流程（会话 →
+// 脚本 → 角色 → 分镜 → 生图 → 生视频），AI 客户端可按顺序调用指挥端到端创作。
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { APP_VERSION } from "~/lib/app-version";
 
-import { sizeSpecFromText, toSizeSpec, type SizeSpec } from "~/lib/media/size-presets";
-import type { ProjectMeta } from "~/lib/workshop/types";
-import { characterListInputSchema, shotListInputSchema } from "~/lib/workshop/types";
+import {
+  sizeSpecFromText,
+  toSizeSpec,
+  type SizePresetTable,
+  type SizeSpec,
+} from "~/lib/media/size-presets";
+import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
+import { characterListInputSchema, isProjectType, shotListInputSchema } from "~/lib/workshop/types";
 import { saveComfySettings } from "~/server/workshop/comfyui";
 import * as orchestrator from "~/server/workshop/orchestrator";
 
@@ -36,13 +39,19 @@ const sizeArgs = {
     .describe('老口径尺寸「宽x高」，如 "1024x1024"（能用 ratio + clarity 就别用它）'),
 };
 
-/** 工具入参 → 尺寸表达；一个都没给时返回 undefined（各通道走自己的默认档）。 */
-function sizeSpecOf(args: {
-  clarity?: string;
-  multiple?: number;
-  ratio?: string;
-  size?: string;
-}): SizeSpec | undefined {
+/** 工具入参 → 尺寸表达；一个都没给时返回 undefined（各通道走自己的默认档）。
+ *
+ *  `table` 传**生效的**尺寸表（ISSUE #3972）：老口径 "WxH" 反解像素档时按它
+ *  就近落档 —— 与后续「表达 → 宽高」的正向换算同一份表，来回去不会漂。 */
+function sizeSpecOf(
+  args: {
+    clarity?: string;
+    multiple?: number;
+    ratio?: string;
+    size?: string;
+  },
+  table?: SizePresetTable,
+): SizeSpec | undefined {
   if (
     (args.ratio !== undefined && args.ratio !== "") ||
     (args.clarity !== undefined && args.clarity !== "") ||
@@ -55,7 +64,7 @@ function sizeSpecOf(args: {
     });
   }
   if (args.size !== undefined && args.size !== "") {
-    return sizeSpecFromText(args.size);
+    return sizeSpecFromText(args.size, "image", table);
   }
   return undefined;
 }
@@ -76,7 +85,7 @@ const SERVER_INSTRUCTIONS = `工坊（Workshop）创作流水线工具集。标�
 export function buildWorkshopMcpServer(): McpServer {
   /* 版本号不在源码里另写一份：它此前是硬编码的 `"0.1.0"`，而**没有人读它**
    * （MCP 客户端只把它显示在 `serverInfo` 里），于是它和 package.json 的版本
-   * 各自漂移也无人发现 —— 同 D7（`scripts/check-app-version.cjs`）治的是同一族
+   * 各自漂移也无人发现 —— 同 D7（`scripts/gates/check-app-version.cjs`）治的是同一族
    * 「同一个数手抄多处」的账。这里直接读发布版本，那三处由 D7 守着相等。 */
   const server = new McpServer(
     { name: "comfy-workshop", version: APP_VERSION },
@@ -97,7 +106,9 @@ export function buildWorkshopMcpServer(): McpServer {
     "workshop_create_session",
     {
       title: "创建工坊会话",
-      description: "创建一个新的工坊创作会话，返回 sessionId。可附带标题、类型、基调、梗概与灵感。",
+      description:
+        "创建一个新的工坊创作会话，返回 sessionId。可附带标题、类型、基调、梗概与灵感。" +
+        "幂等边界：同参数重试在 5 分钟窗口内返回同一会话、不重复建（#3852）；要开新会话请换参数。",
       inputSchema: {
         title: z.string().optional().describe("项目标题"),
         type: z
@@ -189,8 +200,8 @@ export function buildWorkshopMcpServer(): McpServer {
       json(
         await orchestrator.setMeta(args.sessionId, {
           title: args.title,
-          /* SAFETY: 类型断言已复核 */
-          type: args.type as ProjectMeta["type"] | undefined,
+          // type 入参是外来字符串：不在词表按「未给」回落（setMeta 的 patch 语义）。
+          type: isProjectType(args.type) ? args.type : undefined,
           tone: args.tone,
           logline: args.logline,
         }),
@@ -214,10 +225,14 @@ export function buildWorkshopMcpServer(): McpServer {
     "workshop_generate_script",
     {
       title: "生成剧本",
-      description: "调用 LLM 把 idea 扩写为 Markdown 剧本，并解析出场景列表。",
-      inputSchema: { sessionId: z.string() },
+      description:
+        "调用 LLM 把 idea 扩写为 Markdown 剧本，并解析出场景列表。已有剧本时默认直接返回既有剧本，force=true 才重新生成。",
+      inputSchema: {
+        sessionId: z.string(),
+        force: z.boolean().optional().describe("已有剧本时是否强制重新生成，默认 false"),
+      },
     },
-    async (args) => json(await orchestrator.generateScript(args.sessionId)),
+    async (args) => json(await orchestrator.generateScript(args.sessionId, args.force ?? false)),
   );
 
   server.registerTool(
@@ -239,10 +254,14 @@ export function buildWorkshopMcpServer(): McpServer {
     "workshop_extract_characters",
     {
       title: "提取角色卡",
-      description: "调用 LLM 从剧本提取角色卡，重名跳过并自动重算提示词。",
-      inputSchema: { sessionId: z.string() },
+      description:
+        "调用 LLM 从剧本提取角色卡，重名跳过并自动重算提示词。已有角色卡时默认直接返回，force=true 才重新提取。",
+      inputSchema: {
+        sessionId: z.string(),
+        force: z.boolean().optional().describe("已有角色卡时是否强制重新提取，默认 false"),
+      },
     },
-    async (args) => json(await orchestrator.extractCharacters(args.sessionId)),
+    async (args) => json(await orchestrator.extractCharacters(args.sessionId, args.force ?? false)),
   );
 
   server.registerTool(
@@ -264,10 +283,14 @@ export function buildWorkshopMcpServer(): McpServer {
     "workshop_build_storyboard",
     {
       title: "拆分分镜",
-      description: "调用 LLM 把剧本拆为镜头序列，自动匹配场景与角色并重算提示词。",
-      inputSchema: { sessionId: z.string() },
+      description:
+        "调用 LLM 把剧本拆为镜头序列，自动匹配场景与角色并重算提示词。已有分镜时默认直接返回，force=true 才重新拆分。",
+      inputSchema: {
+        sessionId: z.string(),
+        force: z.boolean().optional().describe("已有分镜时是否强制重新拆分，默认 false"),
+      },
     },
-    async (args) => json(await orchestrator.buildStoryboard(args.sessionId)),
+    async (args) => json(await orchestrator.buildStoryboard(args.sessionId, args.force ?? false)),
   );
 
   server.registerTool(
@@ -296,6 +319,7 @@ export function buildWorkshopMcpServer(): McpServer {
         shotId: z.string().optional().describe("目标镜头 id（与 characterId 二选一）"),
         characterId: z.string().optional().describe("目标角色 id（与 shotId 二选一）"),
         channel: z.enum(["api", "comfyui"]).optional().describe("生图通道，默认 api"),
+        force: z.boolean().optional().describe("镜头已有图片时是否强制重新生成，默认 false"),
         ...sizeArgs,
       },
     },
@@ -305,7 +329,8 @@ export function buildWorkshopMcpServer(): McpServer {
           shotId: args.shotId,
           characterId: args.characterId,
           channel: args.channel,
-          size: sizeSpecOf(args),
+          size: sizeSpecOf(args, await loadSizePresetTable()),
+          force: args.force,
         }),
       ),
   );
@@ -324,6 +349,10 @@ export function buildWorkshopMcpServer(): McpServer {
         frames: z.number().optional(),
         fps: z.number().optional(),
         useFirstFrame: z.boolean().optional().describe("是否用该镜头已生成的图片作为首帧"),
+        force: z
+          .boolean()
+          .optional()
+          .describe("镜头已有产物或在跑任务时是否强制重新提交，默认 false（重试安全）"),
       },
     },
     async (args) =>
@@ -336,6 +365,7 @@ export function buildWorkshopMcpServer(): McpServer {
           frames: args.frames,
           fps: args.fps,
           useFirstFrame: args.useFirstFrame,
+          force: args.force,
         }),
       ),
   );

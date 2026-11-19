@@ -3,6 +3,7 @@
 // 刷新 / 重启就没了。这里定义落盘的统一条目形状与归一化规则（服务端追加与
 // 读取共用，纯函数可直接单测）；文件布局见 log-paths.ts 的 WORKSHOP_LOG_DIR。
 
+import { isRecord } from "~/lib/is-record";
 import { formatDate } from "~/lib/time-format";
 
 /** 产生执行日志的工坊环节。 */
@@ -34,19 +35,15 @@ export const MAX_LOG_SUMMARY_CHARS = 600;
 export const MAX_LOG_DETAIL_CHARS = 12_000;
 
 function isGenerationLogStage(v: unknown): v is GenerationLogStage {
-  return (
-    /* SAFETY: 类型断言已复核 */
-    typeof v === "string" && (GENERATION_LOG_STAGES as ReadonlyArray<string>).includes(v)
-  );
+  return typeof v === "string" && GENERATION_LOG_STAGES.some((stage) => stage === v);
 }
 
 /** 任意输入 → 可落盘条目；形状不合法（无摘要）返回 null，坏数据不炸文件。 */
 export function normalizeGenerationLogEntry(raw: unknown): GenerationLogEntry | null {
-  if (typeof raw !== "object" || raw === null) {
+  if (!isRecord(raw)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const rec = raw as Record<string, unknown>;
+  const rec = raw;
   const summary =
     typeof rec.summary === "string" ? rec.summary.trim().slice(0, MAX_LOG_SUMMARY_CHARS) : "";
   if (!summary) {

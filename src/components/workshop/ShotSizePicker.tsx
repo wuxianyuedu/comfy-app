@@ -1,23 +1,12 @@
 "use client";
 
-/** 镜头生图尺寸选择器（比例 + 像素 [+ 倍数]）。
- *
- *  与画布 / 库里的尺寸控件同一套口径（见 `studio/shared/DimensionControl`）：
- *    · 「比例」一段；
- *    · 「像素」一段，下分「分辨率」（1k/2k/4k，宽高按场景查尺寸表）与
- *      「百万像素」（1M/2M/4M）两个子类；
- *    · 选中百万像素时追加「倍数」一段（8/16/32/64）—— 宽高由总像素预算
- *      与这个对齐倍数共同决定，因此它在百万像素档是必选项，不能藏起来。
- *
- *  「百万像素」那一组下面还有一条「自定义」步进器（`MegapixelStepper`）——
- *  百万像素在端口上是 FLOAT，档位（1M/2M/4M）之外还要能填 2.5 这类任意值。
- *
- *  弹层脚注给出尺寸表入口（可查看 / 修改各场景 1k/2k/4k 的具体宽高）。
- *
- *  换算与摘要逻辑全部在 shot-size-config.ts（纯函数），本组件只做
- *  props → 弹层段落 的映射与选中态回显。 */
+/** 镜头生图尺寸选择器（比例 + 像素 [+ 倍数]），与 `studio/shared/DimensionControl`
+ *  同一套口径：比例段 + 像素段（分辨率 1k/2k/4k 按场景查表，或百万像素 1M/2M/4M
+ *  + 自定义 `MegapixelStepper`，端口是 FLOAT 要能填 2.5）；选中百万像素时追加
+ * 「倍数」段（必选项，宽高由总像素预算与对齐倍数共定）。弹层脚注给尺寸表入口。
+ *  换算与摘要全在 shot-size-config.ts（纯函数），本组件只做 props → 弹层映射。 */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 
 import {
   ALIGN_MULTIPLE_OPTIONS,
@@ -29,9 +18,15 @@ import {
   megapixelLabel,
   megapixelTierOfLabel,
   normalizeAlignMultiple,
+  sizeSpecDims,
   sizeSpecMegapixels,
   type SizeScene,
 } from "~/lib/media/size-presets";
+import {
+  getSizePresetServerSnapshot,
+  getSizePresetTable,
+  subscribeSizePresetTable,
+} from "~/lib/media/size-preset-store";
 import {
   MultiSegmentPopover,
   RatioIcon,
@@ -65,6 +60,19 @@ export function ShotSizePicker({
   const currentMegapixels = useMemo(
     () => megapixelTierOfLabel(state.clarity) ?? sizeSpecMegapixels(state, scene),
     [state, scene],
+  );
+
+  /* 当前选择在本机尺寸配置（项目默认 + data/size-presets.json 覆盖，逐格合并）
+   * 下换算出的实际宽高（#3949 需求 2）：随选择实时显示在弹层里，不再让用户
+   * 自己查尺寸表。 */
+  const presetTable = useSyncExternalStore(
+    subscribeSizePresetTable,
+    getSizePresetTable,
+    getSizePresetServerSnapshot,
+  );
+  const actualDims = useMemo(
+    () => sizeSpecDims(state, scene, presetTable),
+    [state, scene, presetTable],
   );
 
   const sections = useMemo<Array<SegmentSection>>(() => {
@@ -147,6 +155,9 @@ export function ShotSizePicker({
             </Button>
             <span className="text-ink-faint text-3xs">
               {clarityKind === "megapixel" ? "总像素预算，宽高按倍数对齐" : "宽高按场景尺寸表取值"}
+            </span>
+            <span className="text-ink text-3xs tabular-nums">
+              本机实际尺寸：{actualDims.width}×{actualDims.height}
             </span>
           </div>
         }

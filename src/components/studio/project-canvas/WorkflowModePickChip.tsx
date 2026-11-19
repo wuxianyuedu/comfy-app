@@ -17,13 +17,10 @@ type WorkflowModePickChipProps = {
   onChange: (modes: Array<string>, defaultMode: string) => void;
 };
 
-/* transform 订阅收敛（商业级性能）。
- * 之前 ModePickChip 顶层常驻订阅 state.transform —— 画布每 pan/zoom 一次，
- * 所有工作流节点都会跟着全量重渲染，即使 99% 的节点弹层根本没打开。
- * 现在把订阅下沉到只在弹层打开时才挂载的 PopoverAutoClose：
- *   - 弹层关闭（绝大多数时间）：零订阅，画布缩放/平移完全不碰这些节点；
- *   - 弹层打开：仅该节点订阅 transform，画布一动就关弹层（行为与原来一致）。
- * 语义等价：挂载首帧跳过，transform 首次变化即关闭；卸载即取消订阅。 */
+/* transform 订阅收敛：顶层常驻订阅会让画布每次 pan/zoom 全量重渲染所有节点，
+ * 即使 99% 的弹层没打开。订阅下沉到只在弹层打开时挂载的 PopoverAutoClose：
+ * 关闭时零订阅；打开时仅该节点订阅，画布一动即关弹层。语义等价：挂载首帧跳过，
+ * transform 首次变化即关闭，卸载即取消订阅。 */
 function PopoverAutoClose({ onClose }: { onClose: () => void }) {
   const transform = useStore((state) => state.transform);
   const first = useRef(true);

@@ -1,18 +1,19 @@
 import { createElement, type ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 
 import type { WorkflowDetail } from "~/components/studio/workflow-types";
 import { ToastProvider } from "../../ToastProvider";
 import { useWorkflowPersistence } from "./use-workflow-persistence";
 
-/* 「重置布局」的回归护栏。
- *
- * 这条用例钉的是一个曾经静默失效的路径：快照与当前视图来自**不同的
- * id 命名空间**时，`Object.keys(positions).length < nodes.length` 这种
- * 跨命名空间计数会把完整的快照误判成「残缺」，于是重置退化成
- * 「清空本地 positions + Kahn 重排」—— 用户拖动过的节点纹丝不动，按钮看起来
- * 完全没反应。 */
+type SetDetail = (
+  value: WorkflowDetail | null | ((prev: WorkflowDetail | null) => WorkflowDetail | null),
+) => void;
+
+/* 「重置布局」的回归护栏：快照与当前视图来自**不同的 id 命名空间**时，
+ * `Object.keys(positions).length < nodes.length` 这种跨命名空间计数会把完整快照误判
+ * 成「残缺」，重置退化成「清空本地 positions + Kahn 重排」—— 用户拖过的节点纹丝不动，
+ * 按钮看起来完全没反应。 */
 
 function makeDetail(over: Partial<WorkflowDetail> = {}): WorkflowDetail {
   return {
@@ -46,7 +47,7 @@ function renderReset(args: {
   hostNodeId?: string;
   reloadView?: () => void;
 }) {
-  const setDetail = vi.fn();
+  const setDetail = vi.fn<SetDetail>();
   const mutate = vi.fn();
   const fitToContent = args.fitToContent ?? vi.fn();
   const { result, rerender } = renderHook(
@@ -80,12 +81,9 @@ function renderReset(args: {
 }
 
 /** 从 setDetail 的 updater 里取出写回的 positions。 */
-function readWrittenPositions(setDetail: ReturnType<typeof vi.fn>, detail: WorkflowDetail) {
-  /* SAFETY: 类型断言已复核 */
-  const updater = setDetail.mock.calls.at(-1)?.[0] as
-    | ((prev: WorkflowDetail | null) => WorkflowDetail | null)
-    | undefined;
-  if (!updater) {
+function readWrittenPositions(setDetail: Mock<SetDetail>, detail: WorkflowDetail) {
+  const updater = setDetail.mock.calls.at(-1)?.[0];
+  if (typeof updater !== "function") {
     return undefined;
   }
   return updater(detail)?.positions;
@@ -181,13 +179,10 @@ describe("resetLayout", () => {
   });
 });
 
-/* 子图视图的 id 命名空间。
- *
- * 下钻后画布上的节点 id 是**裸内部 id**（`1670`），而 `positions` 列存的
- * 是 `宿主:内部` 拼接键（`4:1670`，见 extractPositions）。两套键各写各的时
- * 会出现「子图里拖的位置顶层看不到、下钻回来又被当成原始坐标盖掉真正的原始
- * 位置」—— 用户看到的就是「重置布局回不到原始工作流，再改一次却回归到一个
- * 错误位置」。下面两条钉住写入与还原都必须走同一个拼接口径。 */
+/* 子图视图的 id 命名空间：下钻后画布节点 id 是**裸内部 id**（`1670`），而 `positions`
+ * 列存的是 `宿主:内部` 拼接键（`4:1670`，见 extractPositions）。两套键各写各的会出现
+ * 「子图里拖的位置顶层看不到、下钻回来又被当成原始坐标盖掉真正的原始位置」，即
+ * 「重置布局回不到原始工作流」。下面两条钉住写入与还原都走同一个拼接口径。 */
 describe("resetLayout · 子图 id 命名空间", () => {
   it("子图内拖动内部节点时，落库的键是 `宿主:内部` 而不是裸内部 id", () => {
     const detail = makeDetail({

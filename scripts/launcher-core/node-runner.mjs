@@ -162,7 +162,7 @@ export const POSTINSTALL_SCRIPT = "scripts/install-git-hooks.mjs";
 /** `postinstall` 里禁止出现的 shell 语法 / 宿主（判据见本文件顶部的三宿主表）。 */
 export const POSTINSTALL_FORBIDDEN = [
   {
-    pattern: /(^|[\s;&|])(?:sh|bash|zsh|dash|ksh)\s+\S/,
+    pattern: /(?:^|[\s;&|])(?:sh|bash|zsh|dash|ksh)\s+\S/,
     reason: "用 sh/bash 起脚本：Windows 上没有 sh，cmd.exe 会直接报命令不存在",
   },
   {
@@ -170,11 +170,11 @@ export const POSTINSTALL_FORBIDDEN = [
     reason: "`||` 兜底是 POSIX shell 语法，cmd.exe 不认（退出码语义也不同）",
   },
   {
-    pattern: /(^|\s)&&(\s|$)/,
+    pattern: /(?:^|\s)&&(?:\s|$)/,
     reason: "`&&` 串联是 POSIX shell 语法，cmd.exe 不认",
   },
   {
-    pattern: /(^|[\s;&|])source\s/,
+    pattern: /(?:^|[\s;&|])source\s/,
     reason: "`source` 是 POSIX shell 内建，cmd.exe 不认",
   },
   {

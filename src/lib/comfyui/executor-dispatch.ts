@@ -40,24 +40,29 @@
  */
 import WebSocket from "ws";
 import { errorText } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { fireAndForget } from "~/lib/async-action";
+import { AsyncMutex } from "~/lib/async-mutex";
 import { logger } from "~/lib/core/logger";
 import {
   MAX_CONCURRENCY,
   clearFinalize,
+  forgetTaskFootprint,
   log,
   logWhileQueued,
   markDispatched,
   releaseDispatchSlot,
   state,
   takeQueuedEntries,
+  touchAndEvict,
 } from "./runner-state";
 import type { Job, LogEntry } from "./runner-state";
-import { executeViaComfyCli } from "./executor-cli";
+import { executeViaComfyCli, sanitizeOutputNodeIds } from "./executor-cli";
 import { connect } from "./executor-ws";
 import { finalizeFailure } from "./executor-finalize";
 import { registerQueueAnnounce, registerQueueKick } from "./executor-continuation";
+import { clampText, TASK_ERROR_MAX } from "../text-clamp";
 import type { TaskClaimMode, TaskRepoImpl } from "../core/repository-task-impl";
 
 /** 领取节拍。与 host 侧原 `CLAIM_TICK_MS` 同值（2s）：它是「安全网」的节奏，
@@ -115,6 +120,13 @@ async function resolveDispatch(): Promise<{
  *  用户在执行日志面板上看到的仍是长时间静默。 */
 const WAIT_HINT_LIMIT = 5;
 
+/** 「等待连接」提示去重表的条目上限（ISSUE #4351）。键是 taskId，清空路径只有
+ *  WS open 一条：ComfyUI 长期起不来（自动启动被闩锁抑制后不再重连）时，集合会
+ *  随宕机期新进入提示窗口的任务只增不减。封顶后按插入序淘汰最旧键（复用
+ *  `touchAndEvict`，与 runner-state 日志驻留、instrumentation 异常去重同一形态）；
+ *  被淘汰的冷键最多再提示一行 warn，不会放大成刷屏。 */
+export const WS_WAIT_LOGGED_MAX = 512;
+
 async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
   const s = state();
   try {
@@ -123,7 +135,7 @@ async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
       if (s.wsWaitLogged.has(id)) {
         continue;
       }
-      s.wsWaitLogged.add(id);
+      touchAndEvict(s.wsWaitLogged, id, true, WS_WAIT_LOGGED_MAX);
       logWhileQueued(
         id,
         "warn",
@@ -149,7 +161,20 @@ async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
  * `skipReadyGate` **只**给 `executor-host.mjs --claim-once` 那个契约/排障钩子用：
  * 它要验的是「领取与载荷重建的机械步骤」，而那在不跑真 ComfyUI 的机器上永远
  * 过不了就绪门控。常驻循环与提交后的 kick 都不传它。 */
-export async function claimAndDispatchOnce(options?: {
+/** 槽位判据与记账之间隔着 `await claimNextQueued`（ISSUE #3873）：常驻 tick 与
+ *  收口后的 `kickQueue()` 并发进入时，双方都能通过 `pendingDispatch.size` 检查、
+ *  各领一行 → 在飞数突破 `MAX_CONCURRENCY`。整段「检查 + 领取 + 记账」用进程内
+ *  互斥串行化：真正的执行在 `executeViaComfyCli`（fire-and-forget）里，不占这把锁。
+ *  互斥对象是纯 TS 的 `AsyncMutex`（无 Node 内建依赖），不破坏本模块的纯宿主形态。 */
+const claimMutex = new AsyncMutex();
+
+export function claimAndDispatchOnce(options?: {
+  skipReadyGate?: boolean;
+}): Promise<string | null> {
+  return claimMutex.run(() => claimAndDispatchOnceInner(options));
+}
+
+async function claimAndDispatchOnceInner(options?: {
   skipReadyGate?: boolean;
 }): Promise<string | null> {
   const s = state();
@@ -204,57 +229,89 @@ export async function claimAndDispatchOnce(options?: {
     `任务已从队列领取（本进程在飞：${s.pendingDispatch.size}/${MAX_CONCURRENCY}）`,
   );
 
-  const row = await repo.findExecJob(taskId);
-  // oxlint-disable-next-line strict-boolean-expressions -- execPayload 是库里读出的外部数据，任何缺值形态（null/undefined/空串）都按「无执行载荷」防御性收口，不许误提交
-  if (!row?.execPayload) {
-    /* 行没有执行载荷 = 建行异常（或本刀之前的历史 host 行）。判失败并留可见原因，
-     * 不许变 RUNNING 僵尸——host 片的 reaper 是这条的兜底，主动收口更快也更准。 */
-    log(taskId, "error", "任务缺少执行载荷（execPayload），无法提交给 ComfyUI");
-    await repo.finalizeFailure(taskId, "任务缺少执行载荷（execPayload），无法提交给 ComfyUI");
-    releaseDispatchSlot(taskId);
-    return taskId;
-  }
-
-  const job: Job = {
-    taskId,
-    workflowName: row.workflowName,
-    rawJson: row.execPayload,
-    /* SAFETY: 类型断言已复核 */
-    overrides: (row.params as { workflowInputs?: Job["overrides"] })?.workflowInputs,
-  };
-
-  /* 完整输入参数入日志（原 `processQueue` 里那条）：任务日志是复现与排障的唯一
-   * 现场，本次提交的 workflowInputs 全量进日志，执行面板与历史回放都能看到
-   * 当时到底填了什么。 */
-  if (job.overrides !== undefined && job.overrides.length > 0) {
-    log(
-      taskId,
-      "info",
-      `输入参数（workflowInputs，${job.overrides.length} 项）：\n${JSON.stringify(
-        job.overrides,
-        null,
-        2,
-      )}`,
-    );
-  }
-
-  /* fire-and-forget + `.catch`：`executeViaComfyCli` 若 reject（resolveComfyBase
-   * throw、writeFile EACCES、spawn ENOENT…），不兜住就是 unhandled rejection，
-   * 而在飞记账会永远占着那个槽（界面表现：任务永远 QUEUED 0%）。 */
-  void executeViaComfyCli(job).catch(async (error: unknown) => {
-    const msg = error instanceof Error ? error.message : String(error);
-    log(taskId, "error", `工作流启动异常：${msg}`);
-    try {
-      await finalizeFailure(taskId, "", msg);
-    } catch (error) {
-      /* finalizeFailure 自己也可能抛（数据库挂了）：不再嵌 catch，只归还槽位。
-       * 这里**刻意不再立刻领一次**——走到这一支的含义就是「库此刻写不进去」，
-       * 在它上面自旋只会把每一次领取都变成一次失败；下一拍（2s 的常驻循环）
-       * 再试才是有退避的推进。 */
-      log(taskId, "error", errorText(error, "finalizeFailure 二次失败"));
+  try {
+    const row = await repo.findExecJob(taskId);
+    if (!row?.execPayload) {
+      /* 行没有执行载荷 = 建行异常（或本刀之前的历史 host 行）。判失败并留可见原因，
+       * 不许变 RUNNING 僵尸——host 片的 reaper 是这条的兜底，主动收口更快也更准。 */
+      log(taskId, "error", "任务缺少执行载荷（execPayload），无法提交给 ComfyUI");
+      await repo.finalizeFailure(taskId, "任务缺少执行载荷（execPayload），无法提交给 ComfyUI");
       releaseDispatchSlot(taskId);
+      return taskId;
     }
-  });
+
+    const paramsRaw = row.params;
+    const overridesRaw = isRecord(paramsRaw) ? paramsRaw.workflowInputs : undefined;
+    /* 参考图装载计划（#4376）：提交口已按 schema 收窄（端点 → 预设全量定义），
+     * 这里只做库列的形状兜底——`params` 是 JSON 列，旧行 / 异常行形状不作保证；
+     * 每个值须是带 steps 数组的对象，脏键丢弃（执行期该端点回落裸 LoadImage）。 */
+    let loaderPlan: NonNullable<Job["loaderPlan"]> | undefined;
+    const planRaw = isRecord(paramsRaw) ? paramsRaw.referenceLoaderPlan : undefined;
+    if (isRecord(planRaw)) {
+      for (const [key, value] of Object.entries(planRaw)) {
+        if (isRecord(value) && Array.isArray(value.steps)) {
+          /* 形状已粗检（对象 + steps 数组）；权威判据在提交口的 zod schema。 */
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          (loaderPlan ??= {})[key] = value as NonNullable<Job["loaderPlan"]>[string];
+        }
+      }
+    }
+    /* 部分执行目标（调试，comfy-cli `--output-node-ids`）：schema 在提交口已收窄成
+     * string[]，这里再过一次清洗 —— `params` 是库里的一列 JSON，旧行 / 异常行形状
+     * 不作保证；清完为空等价于「不传」= 整图执行。 */
+    const outputNodeIds = sanitizeOutputNodeIds(
+      isRecord(paramsRaw) ? paramsRaw.outputNodeIds : undefined,
+    );
+    const job: Job = {
+      taskId,
+      workflowName: row.workflowName,
+      rawJson: row.execPayload,
+      overrides: Array.isArray(overridesRaw) ? overridesRaw : undefined,
+      ...(loaderPlan === undefined ? {} : { loaderPlan }),
+      ...(outputNodeIds === undefined ? {} : { outputNodeIds }),
+    };
+
+    /* 完整输入参数入日志（原 `processQueue` 里那条）：任务日志是复现与排障的唯一
+     * 现场，本次提交的 workflowInputs 全量进日志，执行面板与历史回放都能看到
+     * 当时到底填了什么。**按任务错误列的预算截断**（ISSUE #4255）：overrides
+     * 里可能有无上限的大字符串（画布端口值），全量进日志会落出 MB 级单行随
+     * persistLogs 落库——完整参数仍在 task.params 里，日志只是排障现场。 */
+    if (job.overrides !== undefined && job.overrides.length > 0) {
+      const text = clampText(JSON.stringify(job.overrides, null, 2), {
+        maxLength: TASK_ERROR_MAX,
+        annotation: "已截断，完整参数见任务记录",
+      });
+      log(taskId, "info", `输入参数（workflowInputs，${job.overrides.length} 项）：\n${text}`);
+    }
+
+    /* fire-and-forget + `.catch`：`executeViaComfyCli` 若 reject（resolveComfyBase
+     * throw、writeFile EACCES、spawn ENOENT…），不兜住就是 unhandled rejection，
+     * 而在飞记账会永远占着那个槽（界面表现：任务永远 QUEUED 0%）。 */
+    void executeViaComfyCli(job).catch(async (error: unknown) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      log(taskId, "error", `工作流启动异常：${msg}`);
+      try {
+        await finalizeFailure(taskId, "", msg);
+      } catch (error) {
+        /* finalizeFailure 自己也可能抛（数据库挂了）：不再嵌 catch，只归还槽位。
+         * 这里**刻意不再立刻领一次**——走到这一支的含义就是「库此刻写不进去」，
+         * 在它上面自旋只会把每一次领取都变成一次失败；下一拍（2s 的常驻循环）
+         * 再试才是有退避的推进。 */
+        log(taskId, "error", errorText(error, "finalizeFailure 二次失败"));
+        releaseDispatchSlot(taskId);
+      }
+    });
+  } catch (error) {
+    /* 领取后的兜错（#4410）：行已翻 RUNNING、槽位已记账（markDispatched 在前），
+     * findExecJob / finalizeFailure 在这里 reject 一次（SQLite busy 超预算、磁盘 IO）
+     * 若不兜住，槽位永不归还 —— 常驻循环从此在 `pendingDispatch.size >= 1` 早退，
+     * reaper 又把这条当「仍被本进程认领」永久跳过，队列整体停摆（唯一恢复手段是
+     * 手动取消或重启进程）。这里不再补写库（此刻多半写不进去，与下方
+     * fire-and-forget 的 catch 同口径）：摘干净内存足迹，让 reaper 下一轮按
+     * 「无人认领的 RUNNING」接管这一行；下一拍继续领新任务。 */
+    log(taskId, "error", errorText(error, "领取后处理失败：已归还槽位，交回收器接管"));
+    forgetTaskFootprint(taskId);
+  }
 
   return taskId;
 }
@@ -289,7 +346,7 @@ export function startDispatchLoop(intervalMs = DISPATCH_TICK_MS): void {
     });
   }, intervalMs);
   /* `unref()`：常驻后台职责不该把事件循环吊住（dev server 关停能自然退出）。 */
-  dispatchState.handle.unref?.();
+  dispatchState.handle.unref();
 }
 
 /** 停循环（测试与关停路径用；生产里没有调用方就不假装需要）。 */

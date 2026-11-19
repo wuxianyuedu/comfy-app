@@ -112,8 +112,7 @@ describe("parseWorkflowIOMap —— 列边界上的历史键归一", () => {
       T2I: { defaultValue: "16:9" },
     });
     /* 旧键不留下：同一个覆盖层以两个名字在本列里往返，读的人分不清哪个是权威。 */
-    /* SAFETY: 类型断言已复核 */
-    expect((map["94::widget::aspect_ratio"] as { modes?: unknown }).modes).toBeUndefined();
+    expect(Object.hasOwn(map["94::widget::aspect_ratio"] ?? {}, "modes")).toBe(false);
   });
 
   it("新键已在时不被旧键覆盖（只在新键缺失时回退）", () => {

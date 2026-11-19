@@ -1,11 +1,7 @@
 /**
- * CHANGELOG 碎片门禁自测（ISSUE #408「changelog 经常改动，总是冲突」）。
- *
- * 这条门禁的价值全在判定口径上：太松 → 碎片写成什么都放行，发版并入时才发现；
- * 太紧（比如把 README.md 也当碎片校验）→ 成员直接删门禁。用「临时仓库 + 只放
- * 被测碎片」跑真脚本，断言「该拦的拦、不该误伤的放过」。
- *
- * 规范：docs/standards/13-提交与-code-review.md §13.10.5
+ * CHANGELOG 碎片门禁自测（ISSUE #408「changelog 经常改动，总是冲突」）。太松 → 碎片写成什么都放行、发版并入
+ * 才发现；太紧（如把 README.md 也当碎片校验）→ 成员直接删门禁。用「临时仓库 + 只放被测碎片」跑真脚本，
+ * 断言「该拦的拦、不该误伤的放过」。规范：docs/standards/13-提交与-code-review.md §13.10.5
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -15,7 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { copyGateDeps } from "./helpers/gate-repo";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-changelog-fragments.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-changelog-fragments.cjs");
 const tempDirs: Array<string> = [];
 
 /**
@@ -26,30 +22,37 @@ function scanner(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), "changelog-"));
   tempDirs.push(root);
   mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   /* 判据的结论行走 `require("./ci-log.mjs")` 的共用出口（ISSUE #2506）——
    * 临时仓库只放被测那一份时跑起来是 `Cannot find module './ci-log.mjs'`，
    * 那条红长得像「判据坏了」，实际是夹具少带一个文件。 */
-  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
+  copyGateDeps(path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
     writeFileSync(abs, content);
   }
+  /** execFileSync 抛出的失败对象：只认对象这一层，字段缺省由 `??` 兜底。 */
+  function isExecFailure(v: unknown): v is Record<string, unknown> {
+    return typeof v === "object" && v !== null;
+  }
+
   const run = (): { ok: boolean; output: string } => {
     try {
       return {
         ok: true,
         output: execFileSync(
           process.execPath,
-          [path.join(root, "scripts", path.basename(SCRIPT))],
+          [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
           { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
         ),
       };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as { stderr?: string; stdout?: string };
-      return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+      const e: Record<string, unknown> = isExecFailure(error) ? error : {};
+      const stdout = typeof e.stdout === "string" ? e.stdout : "";
+      const stderr = typeof e.stderr === "string" ? e.stderr : "";
+      return { ok: false, output: `${stdout}${stderr}` };
     }
   };
   return { root, run };

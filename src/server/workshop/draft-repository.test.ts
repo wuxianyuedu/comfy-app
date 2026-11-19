@@ -33,9 +33,9 @@ describe("draft-repository 映射", () => {
 
   it("draftToRow 反向映射", () => {
     const r = draftToRow(rowToDto(row));
-    expect(r?.title).toBe("未命名项目");
-    expect(r?.scriptMarkdown).toContain("场景1");
-    expect(r?.tone).toBe("悬疑");
+    expect(r.title).toBe("未命名项目");
+    expect(r.scriptMarkdown).toContain("场景1");
+    expect(r.tone).toBe("悬疑");
   });
 
   it("parseDraftDto 容忍损坏字段", () => {

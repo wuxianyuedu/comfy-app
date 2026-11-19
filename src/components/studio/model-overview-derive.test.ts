@@ -1,17 +1,21 @@
-// 首页模型概览的推导：一块只有判断力的界面，就把它全部钉在纯函数上。
-//
-// 四条判据各有其所以然：
-//   · 空目录不列，但要给出「有几个目录是空的」—— 全空时界面不能看起来像没做；
-//   · 按数量降序，而不是按目录名字母序 —— 这块要回答的是「我主要在用些什么」；
-//   · 首帧是 loading 不是 error —— 否则每次冷启动都会闪一句「读不到」；
-//   · total 只加有模型的那些，与列出的行是同一个口径 —— 两处口径不一致时
-//     「共 N 个」会和下面的行数对不上，正是本仓库反复栽过的那类自相矛盾。
+// 首页模型概览的推导：一块只有判断力的界面，就把它全部钉在纯函数上。四条判据各有其所以然：
+// 空目录不列但要给出「有几个目录是空的」（全空不能看起来像没做）；按数量降序而非目录名 —— 要回答
+// 「我主要在用些什么」；首帧是 loading 不是 error（否则冷启动闪「读不到」）；total 只加有模型的那些，
+// 与列出的行同一口径，否则「共 N 个」会和行数对不上。
 import { describe, expect, it } from "vitest";
 
-import { deriveModelOverview } from "./model-overview-derive";
+import { deriveModelOverview, type OverviewFolder } from "./model-overview-derive";
 
 function folder(folderName: string, label: string, count: number) {
   return { folder: folderName, label, count };
+}
+
+/* 构造「缺 count」的目录行：静态类型仍是一行完整数据，运行时把字段删掉——
+ * 用它钉住 `deriveModelOverview` 对缺失计数的兜底（不靠类型断言造假）。 */
+function folderWithoutCount(folderName: string, label: string): OverviewFolder {
+  const row: OverviewFolder = { folder: folderName, label, count: 0 };
+  Reflect.deleteProperty(row, "count");
+  return row;
 }
 
 describe("deriveModelOverview 分组与排序", () => {
@@ -58,14 +62,7 @@ describe("deriveModelOverview 分组与排序", () => {
 
   it("0 与「没有这一档」不是一回事：count 缺失的行按 0 处理，不混进列表", () => {
     const out = deriveModelOverview({
-      /* SAFETY: 类型断言已复核 */
-      folders: [
-        { folder: "a", label: "A", count: 1 },
-        {
-          folder: "b",
-          label: "B",
-        } as never,
-      ],
+      folders: [{ folder: "a", label: "A", count: 1 }, folderWithoutCount("b", "B")],
       loading: false,
       isError: false,
     });

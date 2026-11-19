@@ -27,13 +27,13 @@ export const FINGERPRINT_FILES = [
 const KEY_DEPS = ["typescript", "@typescript/native", "next"];
 
 /**
- * 顶层必须**可解析**的依赖（ISSUE #1721）。
+ * 顶层必须**可解析**的依赖（ISSUE #1721 / ISSUE #4105）。
  *
  * 与 `KEY_DEPS` 的分工是两种病、两种动作：那边判「目录在不在、空不空」（安装中断的
  * 残骸），这边判「**声明了的东西解析得到吗**」—— 依赖树整体完好、`.modules.yaml` 与
  * `.bin/next` 都在、lockfile 与仓库那份**实质一致**，而某个包就是解析不到。
  *
- * 立案现场（axe-core）：本地 `node_modules` 停在**装它之前**的那套依赖树上 ——
+ * 立案现场（axe-core，ISSUE #1721）：本地 `node_modules` 停在**装它之前**的那套依赖树上 ——
  * `axe-core` 是后来新加的直接依赖，于是它只以**传递依赖**的旧版本（4.13.0）被
  * `@storybook/addon-a11y` 拖进来、落在**包自己的私有层**里，顶层既没有提升出来的
  * 那一份、也没有任何 `.pnpm` 目录树能解析到它。表现：
@@ -46,16 +46,20 @@ const KEY_DEPS = ["typescript", "@typescript/native", "next"];
  *   - `brokenKeyDeps()` 也判绿 —— 它只点名 typescript / next，而那两个恰好没事，
  *     新加的那个包从来不在这份清单上。
  *
+ * 另一种现场（pino，ISSUE #4105）：已装好的包目录被外部清空（`package.json` 消失、
+ * `.pnpm/<pkg>/node_modules/<name>/` 变成空目录），`req.resolve('<name>/package.json')`
+ * 直接失败 —— 表现同样是 `Cannot find module`，但根因是**损坏**而不是「没装过」。
+ *
  * 所以这一档存在的理由不是「再判一遍依赖装没装」，而是：**上面那三条判据的取值口径
  * 里都没有「解析」这个维度**。判据自己的代价要付得起 —— 这几条是跑门禁时无论如何
  * 都要解析到的包，多解析一次不产生新的工作。
  *
  * 清单**只定义一次**：权威定义在 `docs/reference-facts.md` 的 `deps.resolveProbes`
- * 那一行（`scripts/doc-facts.cjs` 反向解析它），这里的字面量由
+ * 那一行（`scripts/docs/doc-facts.cjs` 反向解析它），这里的字面量由
  * `tests/deps-freshness-gate.test.ts` 逐项核对 —— 两处各记一份必然分叉，而分叉之后
  * 「哪一份是真的」没有判据能回答（同 §18「白名单只定义一次」那条口径）。
  */
-export const RESOLVE_PROBES = ["typescript", "next", "axe-core"];
+export const RESOLVE_PROBES = ["typescript", "next", "axe-core", "pino"];
 
 /**
  * 逐个探测 `RESOLVE_PROBES` 在**仓库根**的解析结果（数组为空 = 全都能解析）。
@@ -106,11 +110,11 @@ export function configFingerprint(root) {
   /** @type {Record<string, string>} */
   const files = {};
   for (const rel of FINGERPRINT_FILES) {
-    const full = path.join(root, rel);
-    if (!fs.existsSync(full)) {
+    const full = path.join(/* turbopackIgnore: true */ root, rel);
+    if (!fs.existsSync(/* turbopackIgnore: true */ full)) {
       continue;
     }
-    const digest = crypto.hash("sha256", fs.readFileSync(full), "hex");
+    const digest = crypto.hash("sha256", fs.readFileSync(/* turbopackIgnore: true */ full), "hex");
     files[rel] = digest;
     combined.update(`${rel}\u0000${digest}\u0000`);
   }
@@ -212,7 +216,14 @@ export function brokenKeyDeps(root) {
 }
 
 /**
- * node_modules 完整性预检（.modules.yaml + .bin/next + 关键依赖目录）。
+ * node_modules 完整性预检（.modules.yaml + .bin/next + 关键依赖目录 + 探针可解析）。
+ *
+ * 前三项判「装没装好 / 装坏没」的结构事实；探针（`unresolvableDeclaredDeps`）补一档
+ * 「声明了、却解析不到」—— 含「包目录被外部清空」这类损坏（ISSUE #4105：pino 的
+ * `.pnpm/.../node_modules/pino/` 变成空目录，`package.json` 消失，resolve 直接失败，
+ * 而 `.modules.yaml` / `.bin/next` / `KEY_DEPS` 都完好 ⇒ 旧判据报绿、tsc 却全灭）。
+ * 探针自身在缺 `.modules.yaml` 时返回空（不抢「没装」的话术），所以这里直接并入即可。
+ *
  * @param {string} root
  * @returns {{ healthy: boolean, reasons: string[] }}
  */
@@ -233,6 +244,9 @@ export function checkNodeModules(root) {
   }
   for (const dep of brokenKeyDeps(root)) {
     reasons.push(`关键依赖目录 node_modules/${dep} 为空或缺失`);
+  }
+  for (const dep of unresolvableDeclaredDeps(root)) {
+    reasons.push(`声明依赖 ${dep} 解析不到（包可能缺失、被清空或损坏；见 ISSUE #1721 / #4105）`);
   }
   return { healthy: reasons.length === 0, reasons };
 }
@@ -276,6 +290,10 @@ export function pruneTimestampedLogs(dir, prefixes, keep = 5) {
 // `node_modules/.pnpm/lock.yaml`。差异明细复用 `scripts/lockfile/lock-diff.mjs`
 // （唯一实现，质量门禁同源）。
 
+/** lockfile 漂移判定的短路缓存（键是两份文件的 size+mtime 指纹）。 */
+/** @type {{ repoStamp: string | null, modulesStamp: string | null, result: { state: "fresh" | "no-install" | "no-lockfile" | "drift", modulesLock: string | null, diff?: import("../lockfile/lock-diff.d.mts").LockDiff | null } } | null} */
+let driftCache = null;
+
 /**
  * lockfile 漂移判定。
  *
@@ -306,10 +324,7 @@ export function lockfileDrift(root) {
    * `git pull` 都必然触碰文件、mtime 必变，缓存自然失效。 */
   const repoStamp = stampOf(repoLock);
   const modulesStamp = stampOf(modulesLock);
-  if (
-    driftCache?.repoStamp === repoStamp &&
-    driftCache.modulesStamp === modulesStamp
-  ) {
+  if (driftCache?.repoStamp === repoStamp && driftCache.modulesStamp === modulesStamp) {
     return driftCache.result;
   }
 
@@ -329,10 +344,6 @@ export function lockfileDrift(root) {
     return { state: "no-install", modulesLock: null };
   }
 }
-
-/** lockfile 漂移判定的短路缓存（键是两份文件的 size+mtime 指纹）。 */
-/** @type {{ repoStamp: string | null, modulesStamp: string | null, result: { state: "fresh" | "no-install" | "no-lockfile" | "drift", modulesLock: string | null, diff?: import("../lockfile/lock-diff.d.mts").LockDiff | null } } | null} */
-let driftCache = null;
 
 /** 文件指纹：size + 毫秒级 mtime（读不到返回 null）。 */
 /** @param {string} file @returns {string | null} */

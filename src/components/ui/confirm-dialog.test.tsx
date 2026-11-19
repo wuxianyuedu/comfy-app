@@ -1,14 +1,7 @@
-//
-// 回归测试：「数据库结构过期 → 点击同步」的确认弹窗打开后是一块空黑框。
-//
-// 根因：ConfirmDialog 曾把 `overlayClass("modal", …)`（**遮罩层**的
-// 「铺满内容区」定位：fixed top-title-bar inset-x-0 bottom-0）传给
-// `DialogContent`。那是弹窗**卡片**（base-ui Popup），基元自带
-// `fixed top-1/2 left-1/2 -translate-1/2` 居中定位 —— 两套定位打架，卡片被
-// 拉伸成整块内容区又被 −50% 平移，真正的 420px 实体卡被甩到视口左上角之外，
-// 用户看到的就是一块空黑框。
-//
-// 这条测试锁的判据：弹窗打开后，**任何元素都不得带遮罩定位 class**
+// 回归：确认弹窗打开后曾是一块空黑框。根因：ConfirmDialog 把 `overlayClass("modal", …)`
+// （遮罩层「铺满内容区」定位：fixed top-title-bar inset-x-0 bottom-0）传给 `DialogContent`，
+// 而卡片（base-ui Popup）自带 `fixed top-1/2 left-1/2 -translate-1/2`，两套定位打架，
+// 420px 实体卡被甩到视口外。判据：打开后**任何元素都不得带遮罩定位 class**
 // （`top-title-bar` / `inset-x-0`），且标题与描述要真实渲染出来。
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";

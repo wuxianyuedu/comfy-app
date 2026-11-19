@@ -45,6 +45,7 @@ const themeMock = vi.hoisted(() => ({
   resolvedTheme: "dark",
   setTheme: vi.fn(),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => undefined }) }));
 vi.mock("next-themes", () => ({ useTheme: () => themeMock }));
 
 /** 工具条里的 `SidebarTrigger` 依赖 `ui/sidebar` 的 context，得包一层 provider。 */
@@ -72,6 +73,18 @@ describe("TopBar", () => {
     expect(screen.getByText("首页")).toBeTruthy();
   });
 
+  /* 标题左侧那根短竖线的对齐契约（ISSUE #3587）：基元竖档默认 `self-stretch`，
+     与显式 `h-4` 并存时按 flexbox 规则退化为顶对齐，线被钉在顶栏上沿成一截孤线。
+     jsdom 判不了几何居中，但 cn 合并后的类名契约在：渲染结果必须带 `self-center`
+     且不带 `self-stretch`（后者在场 = 覆盖没生效 = 回到钉上沿的形态）。 */
+  it("开合按钮与标题之间的竖线是居中的短线，不是钉在上沿的一截", () => {
+    renderTopBar("home");
+    const divider = screen.getByRole("separator");
+    expect(divider).toBeTruthy();
+    expect(divider.className).toContain("data-vertical:self-center");
+    expect(divider.className).not.toContain("self-stretch");
+  });
+
   /* 视图说明问号：挂在顶栏标题右侧（不再放屏内页头 —— 那里会与页签重复一遍屏名，
      ISSUE #1693）。判据两条：有登记的视图（历史）渲染那颗按钮；没有登记的
      （首页）整个不渲染 —— 「没有说明的不显示」。 */
@@ -84,12 +97,10 @@ describe("TopBar", () => {
     expect(screen.queryByRole("button", { name: "说明" })).toBeNull();
   });
 
-  /* ISSUE #1384：应用菜单那一颗此前把 `<Hint>` 套在 `DropdownMenuTrigger` 的
-     `render` 里，menu 的触发 props（`aria-haspopup` / pointerdown）全被 `Hint`
-     吞掉 —— 按钮点不开。这里判 `aria-haspopup`：它是**渲染结果的属性**，不依赖
-     pointerdown，所以 jsdom 也拿得到证据（"菜单真的弹出来" 只能在真浏览器里判，
-     见 `e2e/top-bar-app-menu.spec.ts`；jsdom 下连光秃秃的 trigger 都点不开）。
-     `data-slot` 被 tooltip 接管属于已知无害的副作用，不在这里判（规范 16 §16.2.3.2）。 */
+  /* ISSUE #1384：应用菜单那颗此前把 `<Hint>` 套在 `DropdownMenuTrigger` 的 `render` 里，menu 的触发 props
+     （`aria-haspopup` / pointerdown）全被 `Hint` 吞掉 —— 按钮点不开。这里判 `aria-haspopup`：它是**渲染结果的
+     属性**、不依赖 pointerdown，jsdom 也拿得到证据（「菜单真的弹出来」只能在真浏览器判，见 `e2e/top-bar-app-menu.spec.ts`）；
+     `data-slot` 被 tooltip 接管属已知无害副作用，不判（规范 16 §16.2.3.2）。 */
   it("应用菜单是菜单触发按钮：menu 的触发 props 没被外层 Hint 吞掉", () => {
     renderTopBar("home");
     expect(screen.getByRole("button", { name: "应用菜单" })).toHaveAttribute(

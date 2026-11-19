@@ -1,12 +1,9 @@
 // @vitest-environment jsdom
 // 「应用服务断开 / 启动」记进消息中心这条链路的**接线**契约。
-//
-// 判据与文案在 `~/lib/shell/app-service-message` 的单测里逐分支钉死了；这里钉的是
-// 三件只有接线才出问题的事：
-//   ① 边沿是从**上一次渲染**推进的（游标必须跨渲染存活，否则每拍都像首帧）；
-//   ② 断开那一刻的原因**走壳的 IPC** 读（`get_app_service_exit`，ISSUE #1915）——
-//      经 HTTP 那条端点由没了的那个服务自己应答，此刻必然不通；恢复那条才走 HTTP；
-//   ③ 写出去的消息**带时刻与原因**，且读不到原因时仍然发出去（时间本身已是事实）。
+// 判据与文案在 `~/lib/shell/app-service-message` 的单测里钉死了；这里钉三件只有接线
+// 才出问题的事：① 边沿从**上一次渲染**推进（游标必须跨渲染存活）；② 断开那刻的原因
+// **走壳的 IPC** 读（`get_app_service_exit`，ISSUE #1915）——HTTP 端点由没了的服务
+// 自己应答、此刻必然不通，恢复那条才走 HTTP；③ 消息带时刻与原因，读不到也照发。
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
@@ -37,7 +34,7 @@ function stubExitEndpoint({
   const calls = { lastExit: 0 };
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
+    vi.fn((input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (!url.includes("/api/dev/last-exit")) {
         return new Response("{}", { status: 404 });
@@ -55,19 +52,17 @@ function stubExitEndpoint({
 }
 
 /**
- * 让壳那条存活通道（`~/lib/shell/desktop-shell-client` 的 `readAppServiceExitRecord`，
- * 底层是壳命令 `get_app_service_exit`）回一份**记录原文**。
- *
- * 这个模块被 mock 掉是**为了能摆「壳内有这条通道」这一档**：jsdom 里
- * `isDesktopShell()` 为假，真实实现自己会回 null（浏览器形态的真实样子），
- * 那样就测不到「断开那一刻当场带上原因」。每个用例开始时它被重置回 null，
- * 于是缺省形态仍是浏览器那一档。
+ * 让壳那条存活通道（`readAppServiceExitRecord`，底层是壳命令 `get_app_service_exit`）
+ * 回一份**记录原文**。mock 掉它是**为了能摆「壳内有这条通道」这一档**：jsdom 里
+ * `isDesktopShell()` 为假，真实实现自己回 null；每个用例开始时重置回 null。
  */
 const shell = vi.hoisted(() => ({
-  readAppServiceExitRecord: vi.fn(async (): Promise<string | null> => null),
+  readAppServiceExitRecord: vi.fn((): Promise<string | null> => Promise.resolve(null)),
 }));
 vi.mock("~/lib/shell/desktop-shell-client", () => ({
   readAppServiceExitRecord: shell.readAppServiceExitRecord,
+  /* 轮询内核（poll-timer）也从这个模块取环境判据：jsdom 按浏览器形态（非桌面壳）。 */
+  isDesktopShell: () => false,
 }));
 
 function stubShellExitRecord(record: unknown = EXIT_RECORD) {
@@ -89,9 +84,8 @@ const DEFAULT_RUN_ID = "a1b2c3";
 
 /**
  * 挂上 hook 并返回「推进到某一拍」的函数。
- *
  * `rerender` 收**部分事实**并与上一拍合并（`renderHook` 的 rerender 是整体替换，
- * 而这里几乎每个用例都只改一个字段）；缺省字段取 `DEFAULT_RUN_ID` 那一档。
+ * 而几乎每个用例都只改一个字段）；缺省字段取 `DEFAULT_RUN_ID` 那一档。
  */
 function mount(initial: Partial<Facts> = {}) {
   let cur: Facts = {
@@ -279,6 +273,50 @@ describe("useAppServiceMessageLog：启动 / 恢复", () => {
     expect(recovered.body).toContain("无从得知");
   });
 
+  it("恢复时服务端观测有事件循环阻塞：恢复消息带事实读数，不说「多半是抖动」（ISSUE #3369）", async () => {
+    /* 无结束记录（进程没死的那类「断开」）+ loop-blocks 有与窗口重叠的读数。 */
+    const offlineAt = Date.now() + 1000;
+    const recoveredAt = Date.now() + 19_000;
+    stubExitEndpoint({ record: null });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/api/dev/loop-blocks")) {
+        return Promise.resolve(
+          Response.json({
+            running: true,
+            blocks: [
+              {
+                driftMs: 17_000,
+                startedAt: offlineAt - 1000,
+                endedAt: recoveredAt - 1000,
+              },
+            ],
+          }),
+        );
+      }
+      if (!url.includes("/api/dev/last-exit")) {
+        return Promise.resolve(new Response("{}", { status: 404 }));
+      }
+      return Promise.resolve(Response.json({ record: null, currentRunId: DEFAULT_RUN_ID }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const { rerender } = mount({ state: "online", processIsNew: false });
+    vi.setSystemTime(offlineAt);
+    rerender({ state: "offline", processIsNew: false });
+    vi.setSystemTime(recoveredAt);
+    rerender({ state: "online", processIsNew: false });
+    vi.useRealTimers();
+
+    await expect.poll(() => messages().length).toBe(2);
+    const recovered = messages()[0]!;
+    expect(recovered.title).toBe("应用服务已恢复");
+    expect(recovered.body).toContain("事件循环");
+    expect(recovered.body).toContain("被阻塞了约 17 秒");
+    expect(recovered.body).not.toContain("多半是服务在同一次运行内短暂无响应");
+  });
+
   it("整页刷新（进程没换新）不发任何消息", () => {
     stubExitEndpoint();
     const { rerender } = mount({ state: "online", processIsNew: true });
@@ -378,7 +416,7 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
     unmount();
     /* 应答在卸载之后才回来：`act` 的异步形态负责把这条 await 链与它之后的
      * React 提交一起排空，不需要挂钟。 */
-    await act(async () => {
+    act(() => {
       release?.(
         new Response(JSON.stringify({ record: EXIT_RECORD, currentRunId: "run-new" }), {
           status: 200,
@@ -420,7 +458,7 @@ describe("useAppServiceMessageLog：每条消息盖「启动戳」", () => {
     expect(messages()[1]!.runId, "断开属于正在死的那一次").toBe("old0001");
   });
 
-  it("把「当前是哪一次启动」同步进 store：别的生产方据此盖戳（不必各接一次探活）", async () => {
+  it("把「当前是哪一次启动」同步进 store：别的生产方据此盖戳（不必各接一次探活）", () => {
     stubExitEndpoint();
     const { rerender } = mount({ currentRunId: "a1b2c3" });
     expect(useMessageCenterStore.getState().currentRunId).toBe("a1b2c3");
@@ -440,5 +478,97 @@ describe("useAppServiceMessageLog：每条消息盖「启动戳」", () => {
 
     await expect.poll(() => messages().length).toBe(1);
     expect(messages()[0]!.runId).toBeNull();
+  });
+});
+
+describe("useAppServiceMessageLog：启动分支失败提示（ISSUE #4257）", () => {
+  /** 让 `/api/dev/boot-branches` 回一份分支清单，并记录它被打了几次；
+   *  其余端点照常兜底（last-exit 回无记录）。 */
+  function stubBootBranchEndpoint(branches: unknown[], opts: { fail?: boolean } = {}) {
+    const calls = { bootBranches: 0 };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes("/api/dev/boot-branches")) {
+          calls.bootBranches += 1;
+          if (opts.fail === true) {
+            throw new Error("network down");
+          }
+          return Response.json({ branches });
+        }
+        if (!url.includes("/api/dev/last-exit")) {
+          return new Response("{}", { status: 404 });
+        }
+        return Response.json({ record: null, currentRunId: DEFAULT_RUN_ID });
+      }),
+    );
+    return calls;
+  }
+
+  function bootMessages() {
+    return messages().filter((m) => m.id?.startsWith("boot-branch-"));
+  }
+
+  it("新进程就绪后拉到失败的功能分支 → 推一条带确定 id 的提示（标题给后果与出路）", async () => {
+    const calls = stubBootBranchEndpoint([
+      { name: "dispatch", ok: false, detail: "派发循环没能启动", at: "2026-11-18T00:00:00.000Z" },
+    ]);
+    mount({ state: "online", processIsNew: true });
+
+    await expect.poll(() => bootMessages().length).toBe(1);
+    expect(calls.bootBranches).toBeGreaterThanOrEqual(1);
+    const m = bootMessages()[0]!;
+    expect(m.kind).toBe("info");
+    /* id 按 runId + 分支名确定：刷新与重复轮询靠它去重。 */
+    expect(m.id).toBe(`boot-branch-${DEFAULT_RUN_ID}-dispatch`);
+    expect(m.title).toBe("应用服务：任务自动派发未启动");
+    expect(m.body).toContain("排队中的任务不会被自动执行");
+    expect(m.body).toContain("重启");
+    expect(m.runId).toBe(DEFAULT_RUN_ID);
+  });
+
+  it("同一启动内重复轮询（同分支同 id）不重复推——由 store 的幂等去重吸收", async () => {
+    const calls = stubBootBranchEndpoint([
+      { name: "reaper", ok: false, detail: "回收循环没能启动", at: "2026-11-18T00:00:00.000Z" },
+    ]);
+    const { rerender } = mount({ state: "online", processIsNew: true });
+    await expect.poll(() => bootMessages().length).toBe(1);
+
+    /* 假→真翻转让轮询 effect 重建、immediate 再查一拍：id 不变 ⇒ 仍只有一条。 */
+    rerender({ processIsNew: false });
+    rerender({ processIsNew: true });
+    await expect.poll(() => calls.bootBranches).toBeGreaterThanOrEqual(2);
+    expect(bootMessages()).toHaveLength(1);
+    expect(bootMessages()[0]!.id).toBe(`boot-branch-${DEFAULT_RUN_ID}-reaper`);
+    expect(bootMessages()[0]!.title).toBe("应用服务：孤儿任务回收未启动");
+  });
+
+  it("接口报来的失败分支都推（功能筛选是路由层的判据）；未知分支落通用文案", async () => {
+    const calls = stubBootBranchEndpoint([
+      { name: "event-loop-watch", ok: false, detail: "观测挂了", at: "2026-11-18T00:00:00.000Z" },
+      { name: "film-resume", ok: true, detail: "", at: "2026-11-18T00:00:00.000Z" },
+    ]);
+    mount({ state: "online", processIsNew: true });
+
+    await expect.poll(() => bootMessages().length).toBe(1);
+    expect(calls.bootBranches).toBeGreaterThanOrEqual(1);
+    /* 只推失败的（ok:true 的 film-resume 不出现）；报上来的分支不在已知名单里
+     * 也给通用文案，不整条吞掉。 */
+    expect(bootMessages()[0]!.id).toBe(`boot-branch-${DEFAULT_RUN_ID}-event-loop-watch`);
+    expect(bootMessages()[0]!.title).toBe("应用服务：后台功能「event-loop-watch」未启动");
+    expect(bootMessages()[0]!.body).toContain("重启");
+  });
+
+  it("端点挂了不炸也不留消息（分支失败本身已有 boot 日志兜底）", async () => {
+    stubBootBranchEndpoint([], { fail: true });
+    mount({ state: "online", processIsNew: true });
+
+    /* 排空一轮微任务：拉取失败已被 check 内的 catch 吸收，确认没有副作用。 */
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(bootMessages()).toHaveLength(0);
   });
 });

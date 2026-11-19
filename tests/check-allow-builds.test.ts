@@ -1,30 +1,8 @@
 /**
- * `scripts/check-allow-builds.cjs` 的自测 —— 依赖构建脚本与 `allowBuilds` 对账。
- *
- * 立案现场：AGENTS 硬规则 8 要求「新增含 postinstall 构建脚本的依赖 ⇒ 同步
- * `pnpm-workspace.yaml` 的 `allowBuilds`」，而这条此前没有执行者。它要防的故障
- * 有个讨厌的形状：**漏登记的人当场看不出来**（他自己的 `node_modules` 早装好了），
- * 第一次复现是在下一个人跑非交互 `pnpm install --frozen-lockfile` 的那一刻。
- * 「改动点与故障点不同人、且中间隔一次安装」正是判据该钉住的形态。
- *
- * 因此这一族的用例分三层：
- *   ① 判决面 —— 登记 `true` / 显式 `false` 都放行，漏登记才红；顺带钉住几个
- *      **容易写坏**的边界（空串脚本不算站点、作用域包按 `@scope/name` 认名字、
- *      同名多版本共享一条登记）；
- *   ② 输入面 —— 名单块没了、`pnpm-workspace.yaml` 没了、`node_modules/.pnpm` 没了，
- *      三种「读不到输入」都必须红。这一组比 ① 更要紧：把缺输入写成静默 `exit(0)`，
- *      判据会在一份依赖都没读的情况下报绿，而那正是 §13.5.12 立起来要防的那一族；
- *   ③ 条件触发面 —— 钩子里那一步带 `--staged`，三个方向都要钉（面外跳过 / 命中
- *      照旧真扫 / 无暂存跳过）。只看退出码不够：「跳过」与「扫过没问题」同码，
- *      把 `--staged` 实现成「永远跳过」的改动会全绿通过（ISSUE #1747 那一族）。
- *
- * 「名单里多余条目」反向**不判**，本文件用第 ⑩ 条把它钉住：现状 11 个条目里 8 个
- * 是这种正当形态（`better-sqlite3` 显式拒绝的理由写在 yaml 里、`@prisma/*` 给可选
- * peer 覆盖留位），反向判红等于误报一片 —— 那是收紧判据的反面。
- *
- * 接线那两条与 `tests/doc-check-hook-wiring.test.ts` 同族：解析 D 组步骤、
- * 只认真调用（`toContain` 对注释行照样命中，「把这一步注掉」正是要拦的动作）。
- */
+ * `scripts/gates/check-allow-builds.cjs` 的自测 —— 依赖构建脚本与 `allowBuilds` 对账（AGENTS 硬规则 8）。故障形状：漏登记的人
+ * 当场看不出来（自己 `node_modules` 早装好），首次复现是下一个人跑非交互 `--frozen-lockfile` 安装。三层用例：①判决面
+ * （`true`/显式 `false` 放行、漏登记才红；含空串脚本、作用域包、同名多版本）；②输入面（名单块 / yaml / `node_modules/.pnpm`
+ * 缺失都必须红 —— 静默 `exit(0)` 正是 §13.5.12 那族）；③条件触发面（`--staged` 三方向，只看退出码挡不住「永远跳过」，#1747）。 */
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, it } from "vitest";
@@ -32,22 +10,22 @@ import { defineGateRepo } from "./helpers/gate-repo";
 
 const ROOT = resolve(".");
 const HOOK = join(ROOT, ".githooks", "pre-commit");
-const GATE_SCRIPT = join(ROOT, "scripts", "check-allow-builds.cjs");
+const GATE_SCRIPT = join(ROOT, "scripts", "gates/check-allow-builds.cjs");
 const CHECKLIST_DOC = join(ROOT, "docs", "standards", "13-提交与-code-review.md");
-const GATE_CMD = "node scripts/check-allow-builds.cjs --staged";
+const GATE_CMD = "node scripts/gates/check-allow-builds.cjs --staged";
 const GATE_LABEL = "依赖构建脚本与 allowBuilds 对账（只判动了依赖面的提交）";
 
 const { test, expect } = defineGateRepo({
-  script: "check-allow-builds.cjs",
+  script: "gates/check-allow-builds.cjs",
   workdir: "allow-builds-gate",
   // 判据复用门禁扫描面的共用读取（消失/竞态 + `--staged` 短路器那一层），以及依赖面清单
   // 的那一处出处，两份都得带进临时工作区 —— 漏任何一份的表现都是脚本 exit 2、
   // 读起来像被测门禁自己坏了。
   copy: [
-    { from: "scripts/gate-scan-read.cjs", to: "scripts/gate-scan-read.cjs" },
+    { from: "scripts/gates/gate-scan-read.cjs", to: "scripts/gates/gate-scan-read.cjs" },
     {
-      from: "scripts/dependency-face.mjs",
-      to: "scripts/dependency-face.mjs",
+      from: "scripts/lib/dependency-face.mjs",
+      to: "scripts/lib/dependency-face.mjs",
     },
   ],
   // `--staged` 那三档的被测输入是**暂存区本身**，所以临时工作区必须是真 git 仓库；
@@ -84,6 +62,31 @@ function installed(dirName: string, name: string, scripts?: Record<string, strin
       ...(scripts ? { scripts } : {}),
     }),
   };
+}
+
+/**
+ * 造一份最小 `pnpm-lock.yaml` —— **当前依赖图的权威源**（ISSUE #3523）。
+ *
+ * 只列 `packages` 段：判据要的只是「哪些 `name@version` 还在图里」。
+ * 形态照真锁文件（键在两格缩进、值是 `resolution:` 那块）。
+ */
+function lockfile(packages: Array<string>): string {
+  return [
+    "lockfileVersion: '9.0'",
+    "",
+    "settings:",
+    "  autoInstallPeers: true",
+    "",
+    "importers:",
+    "",
+    "  .:",
+    "    dependencies: {}",
+    "",
+    "packages:",
+    "",
+    ...packages.map((id) => `  '${id}':\n    resolution: {integrity: sha512-probe}`),
+    "",
+  ].join("\n");
 }
 
 test("登记为 true 的构建脚本判绿", ({ repo }) => {
@@ -206,15 +209,10 @@ test("反向不判：名单里有无脚本的条目都不算违规", ({ repo }) 
 });
 
 /**
- * `--staged` 的输入面跳过（ISSUE #1747 同族）。
- *
- * 三个方向都要钉：不在依赖面内 ⇒ 跳过（省下那一次全树扫描）；命中依赖面 ⇒ **照旧真扫**
- * （跳过不是「让判据松掉」的后门）；无暂存 ⇒ 跳过（不为空提交白扫全库）。
- *
- * 为什么断言 `code` 之外还要看输出：「跳过」与「扫过之后没有问题」是同一个退出码，
- * 只看码的话，一条把 `--staged` 实现成「永远跳过」的改动能全绿通过 —— 那正是门禁静默
- * 失效的形态（§11.23 的「声明 ⇄ 读者」）。
- */
+ * `--staged` 的输入面跳过（ISSUE #1747 同族）。三个方向都要钉：不在依赖面内 ⇒ 跳过（省一次全树扫描）；
+ * 命中依赖面 ⇒ **照旧真扫**（跳过不是让判据松掉的后门）；无暂存 ⇒ 跳过（不为空提交白扫全库）。
+ * 为什么除 `code` 还要看输出：「跳过」与「扫过之后没问题」同退出码，把 `--staged` 实现成「永远跳过」的改动
+ * 能全绿通过 —— 那正是门禁静默失效的形态（§11.23「声明 ⇄ 读者」）。 */
 test("暂存全在依赖面外 → 跳过，不冒充扫过的结论", ({ repo }) => {
   repo.write("pnpm-workspace.yaml", workspace([]));
   const one = installed("esbuild@0.28.2", "esbuild", {
@@ -268,10 +266,10 @@ test("动了 pnpm-workspace.yaml（名单自己）也算命中依赖面", ({ rep
 
 /** D 组步骤：两空格缩进的 `run "<标签>" <命令>`，行首锚定只认真调用。 */
 function dGroupSteps(hookText: string): Array<{ cmd: string; label: string }> {
-  const re = /^ {2}run "([^"]+)" (.+)$/gm;
+  const re = /^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm;
   return [...hookText.matchAll(re)].map((m) => ({
-    label: m[1] ?? "",
-    cmd: m[2] ?? "",
+    label: m.groups?.label ?? "",
+    cmd: m.groups?.cmd ?? "",
   }));
 }
 
@@ -296,10 +294,279 @@ function readChecklistCommands(): Set<string> {
   );
 }
 
+/**
+ * ISSUE #3269：`.pnpm/node_modules` 是 pnpm 的 hoisted 虚拟目录，不是 store 条目。
+ * 旧实现每跑一次都把它读成「另有 1 个条目在扫描期间消失（工作区并发变更）」，
+ * 而 `unread` 只进结论行、不参与退码 —— 判据明明写了「本轮未读」却照旧
+ * `✅ 覆盖了全部` + exit 0。排掉 hoisted 层后，`unread > 0` 只剩「真没读到」，
+ * 按 §13.6.3 必须以 exit 2 不给结论。
+ *
+ * 四个方向都要钉：固有结构不报消失 / 真消失不许判绿 / 文件级消失同口径 /
+ * 没读全时已看到的违规不被吞。只看「有没有那句 ⚠️」不够 —— 把
+ * `vanishedNote()` 的输出删掉也能让第一、二条全绿，却什么都没修。
+ */
+describe("hoisted 层与「没读全」三态（ISSUE #3269）", () => {
+  test("pnpm 的 .pnpm/node_modules 在场 → 不报消失、正常判绿", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace(['"esbuild": true']));
+    repo.mkdir("node_modules/.pnpm/node_modules");
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("覆盖了全部带构建脚本的依赖");
+    expect(output).not.toContain("消失");
+    expect(output).not.toContain("另有");
+  });
+
+  test("真有一个 store 条目缺 node_modules → exit 2 不给结论，绝不判绿", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace(['"esbuild": true']));
+    // 固有结构与真消失同时在场：跳过只该跳过前者，不能把后者一起抹平。
+    repo.mkdir("node_modules/.pnpm/node_modules");
+    repo.mkdir("node_modules/.pnpm/ghost@1.0.0");
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("不给结论");
+    expect(output).toContain("另有 1 个条目");
+    expect(output).not.toContain("覆盖了全部带构建脚本的依赖");
+  });
+
+  test("包目录在但 package.json 读不到（文件级 ENOENT）→ 同样 exit 2", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace(['"esbuild": true']));
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    repo.mkdir("node_modules/.pnpm/ghost@1.0.0/node_modules/ghost");
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("不给结论");
+    expect(output).not.toContain("覆盖了全部带构建脚本的依赖");
+  });
+
+  test("没读全时，已经读到的漏登记事实照旧列出（不因 exit 2 被吞）", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    repo.mkdir("node_modules/.pnpm/ghost@1.0.0");
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("esbuild@1.0.0");
+    expect(output).toContain("不给结论");
+  });
+
+  it("判据源码里两处收紧都在（删掉任一条都会让上面的行为用例失去执行者）", () => {
+    const source = readFileSync(GATE_SCRIPT, "utf8");
+    expect(source).toContain('const HOISTED_DIR = "node_modules"');
+    expect(source).toContain("storeDir.name === HOISTED_DIR");
+    // `unread` / `untrusted` 不能只进打印：这一格必须以 exit 2 收口。
+    expect(source).toMatch(/if \(unread > 0 \|\| untrusted > 0\)[\s\S]*?process\.exit\(2\)/);
+  });
+});
+
+/**
+ * ISSUE #3274：第三种「没读成」—— 文件在、字节读到了，但内容不是合法 JSON（或不是对象）。
+ * 旧实现里 `scriptBearingPackage()` 解析失败返回 `null`，与「无站点」同形 ⇒ 调用处
+ * `continue` 照旧 `✅ 覆盖了全部` + exit 0。那一支恰好可能带 postinstall，判据漏掉
+ * 一条本该拦下的登记疏漏。与 #3269 的 ENOENT 同口径（exit 2 不给结论），但话术必须
+ * 与「扫描期间消失（工作区并发变更）」区分 —— 解析失败时工作区可能完全静止。
+ */
+describe("读到了但读不成：输入不可信（ISSUE #3274）", () => {
+  test("坏 JSON 的 package.json → exit 2 不给结论，点名那份文件，不冒充「覆盖了全部」", ({
+    repo,
+  }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    repo.write(
+      "node_modules/.pnpm/broken@1.0.0/node_modules/broken/package.json",
+      '{"name": "broken", "scripts": {',
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("不可信");
+    expect(output).toContain("broken/package.json");
+    expect(output).toContain("不给结论");
+    expect(output).not.toContain("覆盖了全部带构建脚本的依赖");
+    // 话术不许复用「消失 / 并发变更」那一套：解析失败时工作区可能完全静止。
+    expect(output).not.toContain("消失");
+    expect(output).not.toContain("并发变更");
+  });
+
+  test("合法 JSON 但没有 scripts → 仍是「无站点」，判绿（别把无站点误判成读不成）", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    const one = installed("plain@1.0.0", "plain");
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("覆盖了全部带构建脚本的依赖");
+    expect(output).not.toContain("不可信");
+  });
+
+  test("合法 JSON 但不是对象（数组 / null / 标量）→ 同样不可信，exit 2", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    repo.write("node_modules/.pnpm/arr@1.0.0/node_modules/arr/package.json", "[1,2,3]");
+    repo.write("node_modules/.pnpm/nul@1.0.0/node_modules/nul/package.json", "null");
+    repo.write("node_modules/.pnpm/num@1.0.0/node_modules/num/package.json", "42");
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("另有 3 份");
+    expect(output).not.toContain("覆盖了全部带构建脚本的依赖");
+  });
+
+  test("不可信与真消失同时在场 → 两种话术各念各的，都进 exit 2", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    repo.write("node_modules/.pnpm/broken@1.0.0/node_modules/broken/package.json", "{bad");
+    repo.mkdir("node_modules/.pnpm/ghost@1.0.0");
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("另有 1 个条目");
+    expect(output).toContain("不可信");
+    expect(output).toContain("不给结论");
+  });
+
+  test("没读全时，已经读到的漏登记事实照旧列出（不因 exit 2 被吞）", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    const one = installed("esbuild@0.28.2", "esbuild", { postinstall: "node install.js" });
+    repo.write(one.path, one.body);
+    repo.write("node_modules/.pnpm/broken@1.0.0/node_modules/broken/package.json", "{bad");
+    const { code, output } = repo.run();
+    expect(code, output).toBe(2);
+    expect(output).toContain("esbuild@1.0.0");
+    expect(output).toContain("不给结论");
+  });
+});
+
+/**
+ * ISSUE #3523：pnpm 移掉一个依赖之后**不回收虚拟 store 里那个条目的目录** ——
+ * 磁盘上留着上一份依赖图的条目，而名单（`allowBuilds`）是按**当前**依赖图维护的。
+ * 判据若把残留也当成已安装的依赖，一次「移掉一个带构建脚本的依赖」的提交就会在
+ * **本地**被判红，而平台流水线（全新检出、没有残留）是绿的 —— 同一份代码、两台机器
+ * 两个结论，且那一台红的那台上残留还随时间越积越多。
+ *
+ * 三条都要钉：
+ * ① 残留**不参与**对账（判绿，且被点名 —— 不点名的话那份残留就完全不可见）；
+ * ② 当前依赖图里的包**照旧**判（判据没被放松成「什么都不查」）；
+ * ③ 锁文件不在 ⇒ 归属问不出来 ⇒ 按「磁盘上的一切实打实算」处理 ——
+ *    那个方向是**误红**而不是**误绿**（把真依赖漏掉才会让别人的安装炸）。
+ */
+describe("store 残留不算已安装的依赖（ISSUE #3523）", () => {
+  test("已在当前依赖图里、但没登记 ⇒ 照旧红（判据没被放松）", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    repo.write("pnpm-lock.yaml", lockfile(["esbuild@1.0.0"]));
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("esbuild@1.0.0");
+    expect(output).toContain("ERR_PNPM_IGNORED_BUILDS");
+  });
+
+  test("不在当前依赖图里（store 残留）⇒ 不参与对账，且被点名", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    // 锁文件里没有它 ⇒ 它是上一份依赖图留下的残留。
+    repo.write("pnpm-lock.yaml", lockfile(["esbuild@1.0.0"]));
+    const orphan = installed("core-js-pure@3.51.0", "core-js-pure", {
+      postinstall: "node post.js",
+    });
+    repo.write(orphan.path, orphan.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("覆盖了全部带构建脚本的依赖");
+    // 残留必须**被看见**：它还在磁盘上，不点名的话下一个人只会看到「判据绿了」。
+    expect(output).toContain("core-js-pure@1.0.0");
+    expect(output).toContain("已不在当前依赖图里");
+  });
+
+  test("锁文件不在 ⇒ 归属问不出来 ⇒ 按磁盘上的一切实打实算（误红不误绿）", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("esbuild@1.0.0");
+    expect(output).not.toContain("已不在当前依赖图里");
+  });
+
+  it("判据源码里那处归属过滤在（删掉它上面那条就失去执行者）", () => {
+    const source = readFileSync(GATE_SCRIPT, "utf8");
+    expect(source).toContain("readGraphPackageIds");
+    expect(source).toContain("graphIds");
+    // 过滤必须在「按名字去重」**之前**：同名多版本里可能一个在图里、一个是残留，
+    // 先按名字去重会把在图里的那一个一起跳掉。
+    expect(source).toMatch(/graphIds[\s\S]*?orphans\.push\([\s\S]*?seenNames\.has\(found\.name\)/);
+  });
+});
+
+/**
+ * ISSUE #3533：pnpm 12 的锁文件键带 peer 依赖尾巴，如 `esbuild@0.25.0(unrs-resolver@1.15.0)`，
+ * 而磁盘上装出来的 `package.json` 版本是裸的 `esbuild@0.25.0`。旧实现把键**原样**收进
+ * 归属集合，裸 id 永远对不上 ⇒ **在图里的现行依赖**被误判成 store 孤儿：只落进
+ * 「另有 N 个已不在图里」的提示档、不参与对账 —— 它的构建脚本没登记，门禁照样绿。
+ * 修法：判归属前剥掉键尾的 peer 括号。两个方向都要钉：
+ * ① 带 peer 尾巴的现行依赖**照旧参与对账**（漏登记 ⇒ 红，判据没被放松）；
+ * ② 登记了即放行，且**不**出现在「已不在当前依赖图里」的孤儿提示里。
+ */
+describe("锁文件键的 peer 尾巴不是版本的一部分（ISSUE #3533）", () => {
+  test("带 peer 尾巴的现行依赖照旧对账：未登记 ⇒ 红", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace([]));
+    repo.write("pnpm-lock.yaml", lockfile(["esbuild@1.0.0(unrs-resolver@1.15.0)"]));
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("esbuild@1.0.0");
+    expect(output).toContain("ERR_PNPM_IGNORED_BUILDS");
+    expect(output).not.toContain("已不在当前依赖图里");
+  });
+
+  test("带 peer 尾巴的现行依赖已登记 ⇒ 绿，且不报孤儿", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace(['"esbuild": true']));
+    repo.write("pnpm-lock.yaml", lockfile(["esbuild@1.0.0(unrs-resolver@1.15.0)"]));
+    const one = installed("esbuild@0.28.2", "esbuild", {
+      postinstall: "node install.js",
+    });
+    repo.write(one.path, one.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("覆盖了全部带构建脚本的依赖");
+    expect(output).not.toContain("已不在当前依赖图里");
+  });
+
+  test("剥尾巴不放过同名异版本的残留：孤儿照旧点名", ({ repo }) => {
+    repo.write("pnpm-workspace.yaml", workspace(['"esbuild": true']));
+    repo.write("pnpm-lock.yaml", lockfile(["esbuild@1.0.0(bar@1.0.0)"]));
+    const orphan = installed("core-js-pure@3.51.0", "core-js-pure", {
+      postinstall: "node post.js",
+    });
+    repo.write(orphan.path, orphan.body);
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("core-js-pure@1.0.0");
+    expect(output).toContain("已不在当前依赖图里");
+  });
+
+  it("判据源码里那处剥尾在（删掉它上面两条就失去执行者）", () => {
+    const source = readFileSync(GATE_SCRIPT, "utf8");
+    expect(source).toMatch(/replace\(/);
+  });
+});
+
 describe("allow-builds 判据的接线（判据在场 ≠ 判据在跑）", () => {
   it("钩子 D 组真的执行这一步（被注释掉的行不算在场）", () => {
     const steps = dGroupSteps(readFileSync(HOOK, "utf8"));
-    const hit = steps.find((s) => s.cmd.includes("scripts/check-allow-builds.cjs"));
+    const hit = steps.find((s) => s.cmd.includes("scripts/gates/check-allow-builds.cjs"));
     expect(
       hit,
       `D 组 ${steps.length} 步里没有这一步 —— 摘掉它，硬规则 8 就又回到「零执行者」`,

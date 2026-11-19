@@ -1,11 +1,9 @@
 "use client";
 
-// ── 资源库（项目页签）：逻辑层（规范 17 §17.2 第②层）─────────────────────────
-// 页面级容器只做「取 controller → 传视图」，本文件负责：
-//   ① 跟随 canvas-store 的活跃项目（服务端读不到，SSR 首帧为 null）；
-//   ② 复用画布素材库的 `useMaterialLibrary`（同一份取数 / 上传 / 删除语义），
-//      不重造第二套网络层（§12.18 复用优先）；
-//   ③ 提供「一个分类下的素材」这一页签特有的派生（分类计数汇总）。
+// ── 资源库（项目页签）逻辑层（规范 17 §17.2 第②层）──
+// ① 跟随 canvas-store 的活跃项目（服务端读不到，SSR 首帧为 null）；
+// ② 复用画布素材库的 useMaterialLibrary（同一份取数/上传/删除语义，不重造网络层）；
+// ③ 提供「一个分类下的素材」这一页签特有的派生（分类计数汇总）。
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -29,11 +27,8 @@ export type ResourceLibraryController = {
 };
 
 /**
- * 活跃项目 id 跟随 canvas-store。
- *
- * 为什么不放进 `useMaterialLibrary`：素材库面板由画布传入 projectId（它自己
- * 就在项目里），而资源库是个独立页签 —— 它得自己订阅 store。订阅方式与
- * `ProjectOutputs` / `workspace/page.tsx` 同一约定（`canvas-store-changed` 事件）。
+ * 活跃项目 id 跟随 canvas-store。不放进 useMaterialLibrary：素材库面板由画布传入 projectId，
+ * 资源库是独立页签、得自己订阅；订阅方式与 ProjectOutputs / workspace/page.tsx 同一约定（canvas-store-changed 事件）。
  */
 function useActiveProjectId(): string | null {
   const [projectId, setProjectId] = useState<string | null>(null);

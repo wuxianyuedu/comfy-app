@@ -1,18 +1,8 @@
 import type * as LoggerModule from "~/lib/core/logger";
 /**
- * project.router 集成测试（台账 A3 这一族越权的判据）。
- *
- * 分工不是「把每个 procedure 都跑一遍」，而是把**归属**这条线钉死：本路由的 id
- * 全部由客户端生成（画布 localStorage 里的 `proj_*`，自动保存时随请求一起送），
- * 所以每个读 / 写 / 删都必须证明「越不过去」：
- *  · `upsert` 的 update 分支此前只按 id 定位行 → 任何人抄一个别人的项目 id 就能
- *    把对方的画布整幅覆盖掉（本批修的就是它）；
- *  · `delete` 走 `deleteForUser`（双条件），越界时必须是「什么都没删」而不是报错；
- *  · `get` / `patch` / `outputs` 三个读出口都要拒绝他人项目。
- *
- * mock 边界：~/server/db（内存库 + 真 Drizzle）、~/server/better-auth、
- * ~/lib/core/logger（静音，同时留一个可断言「拒绝要有日志」的句柄）。
- * repository 与限流中间件走真实实现。
+ * project.router 集成测试（台账 A3 越权判据）：id 全由客户端生成（localStorage `proj_*`），读/写/删都得证明越不过去。
+ * `upsert` update 分支曾只按 id 定位 → 抄 id 即可覆盖他人画布（本批修复）；`delete` 走 `deleteForUser`，越界须「什么都没删」
+ * 而非报错；`get`/`patch`/`outputs` 拒他人。mock 仅 db、better-auth、logger（静音，留「拒绝要有日志」句柄）。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -21,7 +11,7 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),
@@ -88,7 +78,7 @@ describe("project.list", () => {
 describe("project.upsert", () => {
   it("新建：行落在请求方名下，nodes/edges 原样存", async () => {
     const res = await createCaller(ctxB()).upsert({
-      id: "proj_b1",
+      projectId: "proj_b1",
       name: "画布一",
       nodes: NODES,
       edges: EDGES,
@@ -103,7 +93,7 @@ describe("project.upsert", () => {
   it("覆盖自己的项目：仍然一行，内容换掉", async () => {
     seedProject(tdb, { id: "p1", userId: "user-a", name: "旧名" });
     await createCaller(makeCtx()).upsert({
-      id: "p1",
+      projectId: "p1",
       name: "新名",
       nodes: NODES,
     });
@@ -123,7 +113,7 @@ describe("project.upsert", () => {
     });
     await expect(
       createCaller(ctxB()).upsert({
-        id: "p-victim",
+        projectId: "p-victim",
         name: "被覆盖",
         nodes: [],
         edges: [],
@@ -141,10 +131,10 @@ describe("project.upsert", () => {
 
   it("Zod 校验：空 id / 空 name → BAD_REQUEST", async () => {
     const caller = createCaller(makeCtx());
-    await expect(caller.upsert({ id: "", name: "x" })).rejects.toMatchObject({
+    await expect(caller.upsert({ projectId: "", name: "x" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
-    await expect(caller.upsert({ id: "p1", name: "" })).rejects.toMatchObject({
+    await expect(caller.upsert({ projectId: "p1", name: "" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
   });
@@ -156,7 +146,7 @@ describe("project.get", () => {
   it("返回自己的项目", async () => {
     seedProject(tdb, { id: "p1", userId: "user-a", name: "我的" });
     const res = await createCaller(makeCtx()).get({ projectId: "p1" });
-    expect(res?.name).toBe("我的");
+    expect(res.name).toBe("我的");
   });
 
   it("他人项目 / 不存在 → 同一个错误信封，且码是 NOT_FOUND（不给探测 id 用）", async () => {

@@ -1,10 +1,6 @@
-// 选中节点 → 端口行的关注级别：渲染层测试（用户唯一能看见的那一半）。
-//
-// 判据（哪一行属于上游 / 下游 / 无关）已由 flow-focus-ports.test.ts 覆盖；这里验的
-// 是「级别真的落到了 DOM 上」——判据算得再对，样式没落到行上也等于没做：
-//   1. 有连线落到的那一行：标签提亮加粗 + 行背景提亮 + 端口圆点放大；
-//   2. 没有连线落到的行：选中态下整行压暗（否则「相关的行」跳不出来）；
-//   3. 没有选中任何节点：全图原样（不该因为一次误点让整张节点发灰）。
+// 选中节点 → 端口行关注级别：渲染层测试（判据已在 flow-focus-ports.test.ts）。
+// 验「级别真的落到 DOM」：1) 有连线的行标签提亮加粗 + 背景提亮 + 圆点放大；
+// 2) 无连线的行在选中态压暗；3) 未选中任何节点时全图原样。
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup } from "@testing-library/react";
@@ -69,14 +65,12 @@ function makeStores(): WFStores {
 }
 
 /** 挂上端口关注标记渲染（模拟 useRelatedEdgesHighlight 写回节点 data 的结果）。 */
-/* SAFETY: 类型断言已复核 */
 function renderWithPortFocus(portFocus: Record<string, string> | undefined, active: boolean) {
   const data = nodeData();
-  /* SAFETY: 类型断言已复核 */
   if (portFocus !== undefined) {
-    (data as unknown as Record<string, unknown>)[NODE_PORT_FOCUS_DATA_KEY] = portFocus;
+    data[NODE_PORT_FOCUS_DATA_KEY] = portFocus;
   }
-  (data as unknown as Record<string, unknown>)[NODE_PORT_FOCUS_ACTIVE_KEY] = active;
+  data[NODE_PORT_FOCUS_ACTIVE_KEY] = active;
   return renderWithFlow(
     <WFStoresProvider stores={makeStores()}>
       <FlowNode data={data} />
@@ -93,7 +87,10 @@ function pinRow(handle: string): HTMLElement {
 }
 
 function labelColor(row: HTMLElement): string {
-  const span = row.querySelector<HTMLElement>("span[title]");
+  /* 标签 span 上的行内色（`var(--color-ink-bright)`）—— 原生 `title=` 撤干净，
+   * 悬浮说明改走 <Hint>，所以不能再按 title 找；同一行里第一个带行内色的
+   * span 就是（输入侧）标签。 */
+  const span = row.querySelector<HTMLElement>("span[style*='color']");
   expect(span).not.toBeNull();
   return span!.style.color;
 }

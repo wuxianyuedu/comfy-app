@@ -1,32 +1,15 @@
 /**
- * 回归护栏：**Linux / macOS 首次上手链路的 `.env` 引导**（ISSUE #489）。
- *
- * 背景（实测复现，本机 Linux 干净检出）：
- *
- *   1. 文档 §9.1 与 README 的第一步都是 `cp .env.example .env`，但
- *      `.env.example` 里 `BETTER_AUTH_SECRET` 与两个 `BETTER_AUTH_GITHUB_*`
- *      都是**空串**，而 `src/env.js` 的 createEnv 配了
- *      `emptyStringAsUndefined: true` —— 空串等价于「没给」。于是照文档走的人
- *      拿到的是 `Invalid environment variables`，看不出是「值留空」。
- *      Windows 侧一直有 `scripts/prepare-local-run.ps1` 的第 4 步自动补齐
- *      （随机密钥 + OAuth 占位值），**Linux / macOS 没有任何等价物**。
- *   2. 更误导的是失败**发生的时机**：Next 会先打印
- *      `- Local: http://localhost:<port>` 与 `✓ Ready in 77ms`，之后才抛
- *      `Failed to load next.config.js`。用户读到的是「起来了但报错」，
- *      而真相是端口无人监听；且缺文件那条提示里的小贴士指向
- *      `tools/start/run-local.ps1`（Windows 专属，本模式明确不依赖）。
- *
- * 本用例钉死两条契约（反向验证：分别还原旧实现，对应用例必失败）：
- *   · `.env` 的生成/补齐有跨平台入口 `pnpm env:init`，且它生成的内容**真的**
- *     能让 `checkEnvFile` 通过（不是「脚本跑完了」就算数）；
- *   · `dev.mjs` / `start.mjs` 在**起 Next 之前**做预检并退出，
- *     从而不可能再出现「先 ✓ Ready 再崩」。
+ * 回归护栏：**Linux / macOS 首次上手链路的 `.env` 引导**（ISSUE #489）。照文档 `cp .env.example .env` 后密钥
+ * 与 OAuth 占位都是空串（`emptyStringAsUndefined`），报错 `Invalid environment variables` 且发生在 `✓ Ready`
+ * **之后**。钉两条契约：`pnpm env:init` 生成的内容真过 `checkEnvFile`；`dev.mjs`/`start.mjs` 起 Next 前预检退出。
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 import {
   REQUIRED_ENV_KEYS,
@@ -35,7 +18,7 @@ import {
   exitIfEnvNotReady,
   missingEnvKeys,
   parseEnvFile,
-} from "../scripts/env-preflight.mjs";
+} from "../scripts/devtools/env-preflight.mjs";
 import { runStartupGates } from "../scripts/launcher-core/startup-gates.mjs";
 
 const ROOT = process.cwd();
@@ -52,19 +35,15 @@ afterEach(() => {
 });
 
 /**
- * 取一个脚本里的**相对** import 说明符（`./x` / `../x`）。
- *
- * 后缀面要比 `\.mjs` 宽（ISSUE #2562 的现场）：`scripts/launcher-core/shell.mjs` 早就
- * `import … from "../../src/lib/process/executable-resolve.ts"`（Node 的类型擦除让它能
- * 静态 import `.ts`），而那份 `.ts` 自己又 import 同目录的兄弟模块。只收 `.mjs` 的话，
- * 拷进临时检出的那一份会在**加载阶段**报 `ERR_MODULE_NOT_FOUND` —— 于是这条用例看到的
- * 是一段 ESM 解析栈，而不是它要判的「预检结论」。收 `.ts` / `.tsx` 之后闭包按事实走。
+ * 取一个脚本里的**相对** import 说明符（`./x` / `../x`）。后缀面要比 `\.mjs` 宽（ISSUE #2562）：`shell.mjs`
+ * 静态 import `.../executable-resolve.ts`（Node 的类型擦除允许），那 `.ts` 又 import 兄弟模块；只收 `.mjs`
+ * 时副本在**加载阶段**报 `ERR_MODULE_NOT_FOUND`。
  */
 function relativeImportsOf(entryFile: string): Array<string> {
   const src = fs.readFileSync(entryFile, "utf8");
   const found = new Set<string>();
-  for (const match of src.matchAll(/from\s+"(\.{1,2}\/[^"]+\.(?:mjs|cjs|ts|tsx))"/g)) {
-    const spec = match[1];
+  for (const match of src.matchAll(/from\s+"(?<spec>\.{1,2}\/[^"]+\.(?:mjs|cjs|ts|tsx))"/g)) {
+    const spec = match.groups?.spec;
     if (spec !== undefined) {
       found.add(spec);
     }
@@ -73,12 +52,9 @@ function relativeImportsOf(entryFile: string): Array<string> {
 }
 
 /**
- * 把 `scripts/<entryRel>` 连同**逐层的相对依赖**一起复制进临时检出（保持相对路径形状）。
- *
- * 为什么不只拷入口：入口的依赖闭包会长。曾经只拷 `env-init.mjs` 就够，后来它
- * import 了 `launcher-core/standalone-runtime-env.mjs`，于是子进程报的是
- * `ERR_MODULE_NOT_FOUND` 的调用栈 —— 既不是预检结论也指不到业务原因，而用例只是
- * 「exit 1」。按闭包复制之后，这类漂移不会再以同一种令人误解的方式红。
+ * 把 `scripts/<entryRel>` 连同**逐层的相对依赖**一起复制进临时检出（保持相对路径形状）。不只拷入口：
+ * 依赖闭包会长。曾经只拷 `env-init.mjs` 就够，后来它 import 了 `launcher-core/standalone-runtime-env.mjs`，
+ * 子进程便报 `ERR_MODULE_NOT_FOUND` 调用栈 —— 既不是预检结论也指不到业务原因，而用例只是「exit 1」。
  */
 function copyScriptWithRelativeClosure(entryRel: string): string {
   /* 落点按**仓库根**相对计算，不是按 `scripts/` 相对（ISSUE #2562 的现场）：这条闭包
@@ -112,7 +88,7 @@ function copyScriptWithRelativeClosure(entryRel: string): string {
   return path.join(tmp, "scripts", entryRel);
 }
 
-/** 真跑 `scripts/env-init.mjs`（把项目根换成临时目录的等价形态不成立——
+/** 真跑 `scripts/devtools/env-init.mjs`（把项目根换成临时目录的等价形态不成立——
  *  脚本按自身位置定位项目根，所以这里用一个同名的最小检出副本）。 */
 function runEnvInitIn(files: Record<string, string>): {
   scriptPath: string;
@@ -120,7 +96,7 @@ function runEnvInitIn(files: Record<string, string>): {
   stderr: string;
   stdout: string;
 } {
-  const scriptPath = copyScriptWithRelativeClosure("env-init.mjs");
+  const scriptPath = copyScriptWithRelativeClosure("devtools/env-init.mjs");
   for (const [rel, content] of Object.entries(files)) {
     fs.writeFileSync(path.join(tmp, rel), content, "utf8");
   }
@@ -138,11 +114,11 @@ function runEnvInitIn(files: Record<string, string>): {
 
 describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
   it("package.json 提供 env:init 入口（Windows 的 prepare-local-run.ps1 在 Linux 上不可用）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    expect(pkg.scripts["env:init"]).toBe("node scripts/env-init.mjs");
+    const pkgParsed: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const scripts: unknown = isRecord(pkgParsed) ? pkgParsed.scripts : undefined;
+    expect(
+      isRecord(scripts) && typeof scripts["env:init"] === "string" ? scripts["env:init"] : "",
+    ).toBe("node scripts/devtools/env-init.mjs");
   });
 
   it("从 .env.example 生成后，三个必填项都非空且能过预检", () => {
@@ -399,11 +375,17 @@ describe("启动器念出 env:init 缺的键（ISSUE #2205）", () => {
         log: (message: string) => lines.push(message),
         root: tmp,
         status: () => undefined,
-        reapStaleSession: async () => null,
+        reapStaleSession: () => Promise.resolve(null),
+        /* 互斥占坑桩（ISSUE #4345）：本组只判 `.env` 提醒，占坑行为在
+         * cross-platform-launcher 的互斥组里用真实现判。 */
+        claimSession: () => "claimed",
+        isSessionOwnerAlive: () => false,
+        clearSession: () => undefined,
+        readSession: () => null,
         checkEnvFile: (root: string) => checkEnvFile(root, {}),
         envInitHint: (root: string) => envInitHint(root, {}),
         runToolchainGate: () => null,
-        syncDependencies: async () => null,
+        syncDependencies: () => Promise.resolve(null),
         applyPendingRestoreAtBoot: () => ({ status: "nothing-to-do" }),
         resolveAppPort: () => 3100,
       },
@@ -476,7 +458,7 @@ describe("dev/start 在起 Next 之前预检", () => {
 
   it.for(entries)("%s 调用 exitIfEnvNotReady 且发生在 spawn 之前", (rel) => {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
-    expect(src).toContain('import { exitIfEnvNotReady } from "./env-preflight.mjs"');
+    expect(src).toContain('import { exitIfEnvNotReady } from "./devtools/env-preflight.mjs"');
     const gate = src.indexOf("exitIfEnvNotReady(root)");
     const spawn = src.search(/spawnSync\(/);
     expect(gate, "必须调用预检").toBeGreaterThan(-1);
@@ -496,19 +478,24 @@ describe("dev/start 在起 Next 之前预检", () => {
     // 断言曾经抓不住的东西（输出里只有 ERR_MODULE_NOT_FOUND 的调用栈）。
     const needed = [
       "dev.mjs",
-      "env-preflight.mjs",
+      "devtools/env-preflight.mjs",
       "app-port.mjs",
-      "db-schema-state.mjs",
-      "db-push-core.mjs",
+      // db 三件 #3930 起在 scripts/db/（路径保持 scripts/ 相对，落点随名字保持同形）。
+      "db/db-schema-state.mjs",
+      "db/db-push-core.mjs",
       // D6（ISSUE #1611）：`dev.mjs` 在预检之后、起 Next 之前调
       // `applyPendingRestoreAtBoot`，它静态 import 这份唯一实现 —— 少拷一份，
       // 红出来的就是 ERR_MODULE_NOT_FOUND 而不是预检结论（同下一条注释）。
-      "db-backup-core.mjs",
+      "db/db-backup-core.mjs",
+      // #3732：`db-backup-core.mjs` 静态 import 这份本机应用数据备份实现，
+      // 同理必须随最小检出副本一起拷，否则红的是模块找不到。
+      "db/app-data-backup.mjs",
       "standalone-private-inputs.mjs",
     ];
     for (const name of needed) {
       const src = path.join(ROOT, "scripts", name);
       if (fs.existsSync(src)) {
+        fs.mkdirSync(path.dirname(path.join(scriptsDir, name)), { recursive: true });
         fs.copyFileSync(src, path.join(scriptsDir, name));
       }
     }
@@ -523,12 +510,15 @@ describe("dev/start 在起 Next 之前预检", () => {
         fs.copyFileSync(path.join(from, name), path.join(to, name));
       }
     }
-    // `dev.mjs` 依赖 `launcher-core/shell.mjs`（pnpm 可执行形态的单一判据，
-    // 见规范 §2.1.1）与它 import 的 `command-echo.mjs`（命令行回显的唯一出口，
-    // 见规范 §4.4）、`log.mjs`（runStamp 的唯一出口）与 `executor-host-spawn.mjs`
+    // `dev.mjs` 依赖 `launcher-core/next-bin.mjs`（next bin 直启的解析共用件，
+    // ISSUE #4155；dev.mjs 顶层静态 import 它）与 `launcher-core/shell.mjs`
+    // （pnpm 可执行形态的单一判据，见规范 §2.1.1）和它 import 的
+    // `command-echo.mjs`（命令行回显的唯一出口，见规范 §4.4）、`log.mjs`
+    // （runStamp 的唯一出口）与 `executor-host-spawn.mjs`
     // （按开关拉起执行器宿主的唯一一份实现，ISSUE #1767）：副本里少一份，
     // import 就失败、测的就不是预检了。
     for (const name of [
+      "next-bin.mjs",
       "shell.mjs",
       "command-echo.mjs",
       "log.mjs",
@@ -542,14 +532,11 @@ describe("dev/start 在起 Next 之前预检", () => {
         path.join(scriptsDir, "launcher-core", name),
       );
     }
-    // `shell.mjs` 静态 import `src/lib/process/executable-resolve.ts`（ISSUE #1327：
-    // 可执行形态判据的唯一实现）。副本里少这份，`dev.mjs` 在**加载阶段**就
-    // ERR_MODULE_NOT_FOUND，红出来的样子与本门禁无关（同上面那条注释）。
-    //
-    // **按链抄，不按一份文件抄**（ISSUE #1961）：那一份自己的依赖（现在有个叶子
-    // `platform.ts`）少一份同样在加载阶段就断 —— 而报错会指向与本门禁无关的地方
-    // （实测：`Cannot find module '…/src/lib/process/platform.ts'`）。
-    // 与 `tests/standalone-runtime.test.ts` 的判据同一条教训：逐份手抄必然漂。
+    // `shell.mjs` 静态 import `src/lib/process/executable-resolve.ts`（ISSUE #1327：可执行形态判据唯一实现）。
+    // 副本里少这份，`dev.mjs` 在**加载阶段**就 ERR_MODULE_NOT_FOUND，红出的样子与本门禁无关。
+    // **按链抄，不按一份文件抄**（ISSUE #1961）：它自己的依赖（现在有叶子 `platform.ts`）少一份同样断在
+    // 加载阶段，报错指向与本门禁无关的地方（实测 `Cannot find module '…/src/lib/process/platform.ts'`）。
+    // 与 `tests/standalone-runtime.test.ts` 同一条教训：逐份手抄必然漂。
     const processDir = path.join(ROOT, "src", "lib", "process");
     const resolveTo = path.join(tmp, "src", "lib", "process");
     fs.mkdirSync(resolveTo, { recursive: true });

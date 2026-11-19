@@ -2,19 +2,19 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { scanSource } from "../scripts/git-dir-literal-scan.mjs";
+import { scanSource } from "../scripts/lib/git-dir-literal-scan.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-describe("scripts/git-dir-literal-scan.mjs", () => {
+describe("scripts/lib/git-dir-literal-scan.mjs", () => {
   it('scripts/** 除 git-dir.mjs 外没有硬编码的 ".git" 路径拼接', () => {
-    // 这条判据是 #2072 的护栏：「检出目录在哪」只许 scripts/git-dir.mjs 一处知道。
+    // 这条判据是 #2072 的护栏：「检出目录在哪」只许 scripts/lib/git-dir.mjs 一处知道。
     // 其它脚本若顺手 `path.join(root, ".git", …)`，在链接工作树里 `.git` 是文件，
     // MERGE_HEAD / HEAD / FETCH_HEAD 永远查不到——而改那些脚本不会把这条带进受影响集，
-    // 所以必须进固定清单（scripts/fixed-structural-tests.mjs），每次提交都跑。
+    // 所以必须进固定清单（scripts/affected-tests/fixed-structural-tests.mjs），每次提交都跑。
     let stdout = "";
     expect(() => {
-      stdout = execFileSync(process.execPath, ["scripts/git-dir-literal-scan.mjs"], {
+      stdout = execFileSync(process.execPath, ["scripts/lib/git-dir-literal-scan.mjs"], {
         cwd: ROOT,
         encoding: "utf8",
       });
@@ -23,11 +23,8 @@ describe("scripts/git-dir-literal-scan.mjs", () => {
   });
 
   /* ── 谓词本身（ISSUE #2785）───────────────────────────────────────────────
-   *
-   * 上面那条只答「现在真实仓库 0 命中」，它证不了任何一形：正例进不来、反例赶不走。
-   * 而这一格的两个风险正好都在谓词上 —— 面漏了 `.cjs`（#2785 那一处就是 CJS，
-   * 于是账面全绿地坏着），以及把「正当的 `.git` 字符串」也报成违例（那会让人
-   * 往白名单里塞文件，而白名单是按**整份文件**豁免的）。所以逐形喂夹具。 */
+   * 上面那条只答「真实仓库 0 命中」，证不了正例进不来、反例赶不走。两险都在谓词上：面漏 `.cjs`
+   * （#2785 即 CJS，账面全绿地坏着）；把正当 `.git` 报成违例（会诱使人按整份文件加白名单）。故逐形喂夹具。 */
 
   it('正例：`join` / `resolve` 的 ".git" 实参 —— .mjs 与 .cjs 两种宿主都报', () => {
     const mjs = 'const p = path.join(root, ".git", "MERGE_HEAD");\n';

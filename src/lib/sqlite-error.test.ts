@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { LOG_DETAIL_MAX } from "~/lib/text-clamp";
-import { describeSqliteWriteError, isSqliteBusyError, sqliteAwareErrorText } from "./sqlite-error";
+import {
+  describeSqliteWriteError,
+  isSqliteBusyError,
+  isSqliteUniqueViolation,
+  sqliteAwareErrorText,
+  sqliteUniqueColumns,
+} from "./sqlite-error";
 
 /* 这两条判据的形状照 drizzle 的真实包法写：drizzle 把驱动错误放在 `cause` 上，
  * 自己的 message 只有 `Failed query: <sql>\nparams: <…>`。#1250 的现场就是日志里
@@ -140,5 +146,92 @@ describe("isSqliteBusyError", () => {
     expect(isSqliteBusyError(new Error("abort"))).toBe(false);
     expect(isSqliteBusyError(undefined)).toBe(false);
     expect(isSqliteBusyError(42)).toBe(false);
+  });
+});
+
+describe("node:sqlite 的锁族字段", () => {
+  /* 运行时驱动迁到 node:sqlite 后（ISSUE #3171），字符串 `code` 一律是
+   * `ERR_SQLITE_ERROR`，锁族信息只在数字 `errcode`（5=BUSY、6=LOCKED）与
+   * `errstr` 上；不把这两个字段收进判据，生产撞锁会被当成真故障而放弃重试。 */
+  it("errcode=5 / 6 判锁族，并把 errstr 落进原因", () => {
+    for (const [errcode, name] of [
+      [5, "SQLITE_BUSY"],
+      [6, "SQLITE_LOCKED"],
+    ] as const) {
+      const err = drizzleWrapped({
+        code: "ERR_SQLITE_ERROR",
+        errcode,
+        errstr: "database is locked",
+        message: "Failed to execute statement",
+      });
+      expect(isSqliteBusyError(err), `errcode=${errcode} 应判锁族`).toBe(true);
+      const text = describeSqliteWriteError(err, "f");
+      expect(text).toContain(name);
+      expect(text, "errstr 必须落进原因").toContain("database is locked");
+    }
+  });
+
+  it("非锁族 errcode 不重试，但 errstr 仍然可见", () => {
+    const err = drizzleWrapped({
+      code: "ERR_SQLITE_ERROR",
+      errcode: 1,
+      errstr: "no such table: task",
+      message: "Failed to execute statement",
+    });
+    expect(isSqliteBusyError(err)).toBe(false);
+    expect(describeSqliteWriteError(err, "f")).toContain("no such table: task");
+  });
+});
+
+/* #3866：先查后写的入口靠这个判据把裸约束冲突转成业务语义的冲突错误。
+ * 两种驱动的真实形状都在这里钉住：libsql 给 `SQLITE_CONSTRAINT_UNIQUE` 码，
+ * node:sqlite（#3171）字符串码恒为 `ERR_SQLITE_ERROR`、人话在 message 里。 */
+describe("isSqliteUniqueViolation", () => {
+  it("libsql 形状：code=SQLITE_CONSTRAINT_UNIQUE 判真", () => {
+    const err = drizzleWrapped({
+      code: "SQLITE_CONSTRAINT_UNIQUE",
+      message: "UNIQUE constraint failed: llmProvider.name",
+    });
+    expect(isSqliteUniqueViolation(err)).toBe(true);
+  });
+
+  it("node:sqlite 形状：ERR_SQLITE_ERROR + UNIQUE 短语判真", () => {
+    const err = drizzleWrapped({
+      code: "ERR_SQLITE_ERROR",
+      errcode: 19,
+      message: "UNIQUE constraint failed: user.email",
+    });
+    expect(isSqliteUniqueViolation(err)).toBe(true);
+  });
+
+  it("锁族与普通错误不误判", () => {
+    expect(
+      isSqliteUniqueViolation(
+        drizzleWrapped({ code: "SQLITE_BUSY", message: "database is locked" }),
+      ),
+    ).toBe(false);
+    expect(isSqliteUniqueViolation(new Error("boom"))).toBe(false);
+  });
+});
+
+describe("sqliteUniqueColumns", () => {
+  it("从复合索引的冲突消息里取全部列（table.column 全名、保序）", () => {
+    const err = drizzleWrapped({
+      code: "ERR_SQLITE_ERROR",
+      message: "UNIQUE constraint failed: season.seriesId, season.seasonNumber",
+    });
+    expect(sqliteUniqueColumns(err)).toEqual(["season.seriesId", "season.seasonNumber"]);
+  });
+
+  it("沿 cause 链取（drizzle 包装层自身的 message 不含 UNIQUE 字样）", () => {
+    const err = drizzleWrapped({ message: "UNIQUE constraint failed: character.name" });
+    expect(sqliteUniqueColumns(err)).toEqual(["character.name"]);
+  });
+
+  it("非唯一冲突给空数组（调用方按「不知道撞了哪条」兜底）", () => {
+    expect(sqliteUniqueColumns(new Error("boom"))).toEqual([]);
+    expect(
+      sqliteUniqueColumns(drizzleWrapped({ code: "SQLITE_BUSY", message: "database is locked" })),
+    ).toEqual([]);
   });
 });

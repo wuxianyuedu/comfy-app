@@ -94,6 +94,7 @@ describe("describeComfyInstance", () => {
         pathConfigured: false,
         instanceType: null,
         desktopManaged: false,
+        pathExists: false,
       });
     }
   });
@@ -110,6 +111,7 @@ describe("describeComfyInstance", () => {
       pathConfigured: true,
       instanceType: "desktop",
       desktopManaged: true,
+      pathExists: true,
     });
   });
 
@@ -125,6 +127,7 @@ describe("describeComfyInstance", () => {
       pathConfigured: true,
       instanceType: "desktop",
       desktopManaged: false,
+      pathExists: true,
     });
   });
 
@@ -144,11 +147,13 @@ describe("describeComfyInstance", () => {
       pathConfigured: true,
       instanceType: "portable",
       desktopManaged: false,
+      pathExists: true,
     });
     expect(describeComfyInstance(venv, exists)).toEqual({
       pathConfigured: true,
       instanceType: "venv",
       desktopManaged: false,
+      pathExists: true,
     });
   });
 
@@ -158,6 +163,18 @@ describe("describeComfyInstance", () => {
       pathConfigured: true,
       instanceType: null,
       desktopManaged: false,
+      pathExists: true,
+    });
+  });
+
+  /* ISSUE #4138：路径填了错误内容要有提示。pathExists 是行内提示区分
+   * 「目录不存在」与「存在但不是 ComfyUI 安装」两种填错形态的判据。 */
+  it("填了不存在的路径 → pathConfigured 但 pathExists=false（提示「找不到目录」）", () => {
+    expect(describeComfyInstance("/no/such/dir", makeExists(fakeFs()))).toEqual({
+      pathConfigured: true,
+      instanceType: null,
+      desktopManaged: false,
+      pathExists: false,
     });
   });
 });

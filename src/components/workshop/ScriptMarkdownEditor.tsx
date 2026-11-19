@@ -2,8 +2,8 @@
 
 import React from "react";
 import { X, FileText } from "lucide-react";
-import { markdownToHtml } from "~/lib/markdown";
 import { normalizeMarkdown, buildOutline, getLineStart, getLineEnd } from "./script-markdown-utils";
+import { useMarkdownHtml } from "~/components/workshop/hooks/use-markdown-html";
 import { EditorToolbar, OutlineSidebar, EditorBody } from "./ScriptMarkdownEditor.parts";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 import { Button } from "~/components/ui/button";
@@ -73,7 +73,18 @@ export function ScriptMarkdownEditor({
   }, [value, emitChange]);
 
   const outline = React.useMemo(() => buildOutline(value), [value]);
-  const previewHtml = React.useMemo(() => markdownToHtml(value), [value]);
+  /* 预览走按需渲染地基（ISSUE #4384）：marked + dompurify 不再进编辑器静态图，
+   * 预览首开才动态加载。`showPreview` 同时是计算闸——关闭时给空串（hook 对空串
+   * 早退，不加载渲染器），与 #4341 的「关预览不做全量解析」语义等价。 */
+  const previewHtml = useMarkdownHtml(showPreview ? value : "");
+  /* 页脚统计（#4341）：渲染期表达式收敛进 memo——value 没变的那批重渲染
+   * （开关预览 / 撤销栈变化 / 父组件同值重渲染）不再全量扫描两遍字符串。 */
+  const footerStats = React.useMemo(() => {
+    return {
+      chars: value.trim().length,
+      lines: value.split("\n").filter((line) => line.trim()).length,
+    };
+  }, [value]);
 
   function pushHistory(nextValue: string, start: number, end: number) {
     if (historyLockRef.current) {
@@ -213,7 +224,7 @@ export function ScriptMarkdownEditor({
     const transformed = lines
       .map((line, index) => {
         const marker = ordered ? `${index + 1}.` : "-";
-        return `${marker} ${line.replace(/^(\d+\.|-)\s+/, "")}`;
+        return `${marker} ${line.replace(/^(?:\d+\.|-)\s+/, "")}`;
       })
       .join("\n");
     const nextValue = value.slice(0, lineStart) + transformed + value.slice(lineEnd);
@@ -269,11 +280,8 @@ export function ScriptMarkdownEditor({
   }
 
   /* ⌘/Ctrl+S 保存、⌘/Ctrl+Z 撤销（Shift 变重做）。
-   *
-   * `filterInput: false` 是**刻意**的：本组件是一整块全屏编辑器，而它的主体
-   * 就是个 `<textarea>` —— 默认的「焦点在输入框里就跳过」会把这两个快捷键
-   * 全部挡死（用户正是在输入框里按 ⌘S）。此前手写的那份没接 `metaKey` 之外的
-   * 平台判断，也没有统一的过滤口径，正好落在这个反例上。 */
+   * `filterInput: false` 是**刻意**的：本组件主体就是 `<textarea>`，默认的
+   *「焦点在输入框里就跳过」会把这两个快捷键全部挡死（用户正是在输入框里按 ⌘S）。 */
   const saveHotkey = React.useCallback(() => onSave?.(), [onSave]);
   useHotkey({ key: "s", mod: true }, saveHotkey, {
     filterInput: false,
@@ -358,7 +366,7 @@ export function ScriptMarkdownEditor({
       {/* Footer */}
       <footer className="border-border bg-panel flex h-16 items-center justify-end gap-3 border-t px-6">
         <span className="text-ink-fainter mr-auto text-xs">
-          {value.split("\n").filter((line) => line.trim()).length} 行 · {value.trim().length} 字符
+          {footerStats.lines} 行 · {footerStats.chars} 字符
         </span>
         <Button
           className="border-border text-ink-strong hover:bg-subtle h-auto rounded-lg px-5 py-2"

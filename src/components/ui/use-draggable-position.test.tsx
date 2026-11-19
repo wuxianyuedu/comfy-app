@@ -1,22 +1,11 @@
-/**
- * 「把一枚悬浮元素拖着摆到任意位置」的判据（`useDraggablePosition`）。
- *
- * 这条能力有三件事必须一起成立，用例逐个钉住：
- *   1. **位置跨会话记得住** —— 每次打开都跳回默认角等于没挪过；
- *   2. **位置会被夹进视口** —— 拖出视野、或窗口缩小后停在视野外的元素，
- *      用户既看不见也拖不回来（没有别的抓手）；
- *   3. **拖动与点击分得开** —— 悬浮元素通常同时是按钮，按下后位移没超阈值
- *      就是点击；超过阈值就是拖动，且**松手不该顺手把面板打开**。
- *
- * 另有一条**回归**专门钉住「元素首轮还没挂上」这条时序（见对应用例的注释）：
- * 真实调用处正好是那个时序，而其余用例默认元素一开始就在 —— 于是第一版那个
- * 「记住的位置被静默丢弃」正是在这条路径上漏出去的。
- *
- * 接线方式与真实调用处**同一条**：`elementCallbackRef` 挂到一个真的
- * `<button ref=…>` 上（不是手动调它 —— 那是渲染期 setState）。
- */
+/** 「把一枚悬浮元素拖着摆到任意位置」的判据（`useDraggablePosition`），三件必须同时成立：① 位置跨会话记得住；
+ * ② 位置被夹进视口（拖出视野或窗口缩小后用户既看不见也拖不回来）；③ 拖动与点击分得开（位移未超阈值算点击，
+ * 超过算拖动且松手不该顺手打开面板）。另有回归钉住「元素首轮还没挂上」的时序；接线与真实调用处同一条：
+ * `elementCallbackRef` 挂到真的 `<button>`。 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render } from "@testing-library/react";
+
+import { isPlainRecord, isRecord } from "~/lib/is-record";
 import {
   DRAG_EDGE_GAP_PX,
   DRAG_SLOP_PX,
@@ -48,38 +37,38 @@ function setViewport(width: number, height: number) {
 }
 
 /**
- * 一个 40×40 的假被测元素：hook 只量它的 `getBoundingClientRect`。
- *
- * 用一张固定尺寸的 stub 而不是真 `<button>`，是因为 jsdom 不做布局、
- * `getBoundingClientRect()` 恒返回 0 尺寸 —— 那样「夹取」这条判据就永远
- * 命中不了边界，等于没测。
+ * 40×40 的假被测元素：hook 只量它的 `getBoundingClientRect`。用固定尺寸 stub 而非真
+ * `<button>`，是因为 jsdom 不做布局、`getBoundingClientRect()` 恒返回 0 尺寸 —— 那样
+ * 「夹取」判据永远命中不了边界，等于没测。
  */
 function stubRect(this: HTMLElement) {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    width: 40,
-    height: 40,
-    top: 0,
-    left: 0,
-    right: 40,
-    bottom: 40,
-    x: 0,
-    y: 0,
-    /* `DOMRect` 要求 `toJSON`，但本 hook 只读尺寸与坐标 —— 给一个返回自身的
-     * 实现即可（空实现会被 `no-empty-function` 拦下）。 */
-    toJSON: () => ({}),
-  } as unknown as DOMRect;
+  return new DOMRect(0, 0, 40, 40);
 }
 
-/**
- * 被测组件：把 hook 的 controller 交出来，并把回调 ref 挂到真的元素上。
- *
- * `elementShown` 控制元素**什么时候挂上** —— 真实调用处按「量到位置了没有」
- * 决定要不要渲染它，首轮往往是 `false`。
- *
- * controller 通过 `onController` 向上交出（由 `useState` 保持最新一份），
- * 避免「渲染期写 ref」这类会触发 `react-hooks/refs` 的写法。
- */
+/** 指针事件替身：hook 只读 `button` / `pointerId` / `clientX` / `clientY`。
+ *  先按这些成员做运行时校验，再收窄成 `React.PointerEvent<HTMLElement>`。 */
+function isPointerEvent(value: unknown): value is React.PointerEvent<HTMLElement> {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    typeof value.button === "number" &&
+    typeof value.pointerId === "number" &&
+    typeof value.clientX === "number" &&
+    typeof value.clientY === "number"
+  );
+}
+
+function pointerEventOf(value: unknown): React.PointerEvent<HTMLElement> {
+  if (!isPointerEvent(value)) {
+    throw new Error("指针事件替身形状不完整");
+  }
+  return value;
+}
+
+/** 被测组件：把 hook 的 controller 交出来，并把回调 ref 挂到真的元素上。`elementShown` 控制元素**什么时候挂上** ——
+ * 真实调用处按「量到位置了没有」决定是否渲染，首轮往往是 `false`。controller 经 `onController` 向上交出
+ *（`useState` 保持最新一份），避免「渲染期写 ref」这类触发 `react-hooks/refs` 的写法。 */
 function Harness({
   onClick,
   elementShown,
@@ -147,13 +136,14 @@ function drag(
   to: { x: number; y: number },
 ) {
   act(() => {
-    /* SAFETY: 类型断言已复核 */
-    handleProps.onPointerDown({
-      button: 0,
-      pointerId: 1,
-      clientX: from.x,
-      clientY: from.y,
-    } as unknown as React.PointerEvent<HTMLElement>);
+    handleProps.onPointerDown(
+      pointerEventOf({
+        button: 0,
+        pointerId: 1,
+        clientX: from.x,
+        clientY: from.y,
+      }),
+    );
   });
   const steps = 8;
   act(() => {
@@ -190,11 +180,20 @@ describe("useDraggablePosition", () => {
     /* 往左上拖 200/100：右侧更远 → `right` 变大，下侧更远 → `bottom` 变大。 */
     drag(first.controller().handleProps, { x: 900, y: 700 }, { x: 700, y: 600 });
     await expect.poll(() => window.localStorage.getItem(KEY)).not.toBeNull();
-    /* SAFETY: 类型断言已复核 */
-    const saved = JSON.parse(window.localStorage.getItem(KEY)!) as {
-      bottom: number;
-      right: number;
-    };
+    const raw = window.localStorage.getItem(KEY);
+    if (raw === null) {
+      throw new Error("拖动后的落点没写进 storage");
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!isPlainRecord(parsed)) {
+      throw new Error("storage 里的落点不是 JSON 对象");
+    }
+    const right = parsed.right;
+    const bottom = parsed.bottom;
+    if (typeof right !== "number" || typeof bottom !== "number") {
+      throw new Error("storage 里的落点缺少数字的 right / bottom");
+    }
+    const saved = { right, bottom };
     expect(saved.right).toBeGreaterThan(DEFAULT.right);
     expect(saved.bottom).toBeGreaterThan(DEFAULT.bottom);
     cleanup();
@@ -288,13 +287,14 @@ describe("useDraggablePosition", () => {
     await expect.poll(() => controller().offset).not.toBeNull();
     const before = controller().offset;
     act(() => {
-      /* SAFETY: 类型断言已复核 */
-      controller().handleProps.onPointerDown({
-        button: 2,
-        pointerId: 1,
-        clientX: 900,
-        clientY: 700,
-      } as unknown as React.PointerEvent<HTMLElement>);
+      controller().handleProps.onPointerDown(
+        pointerEventOf({
+          button: 2,
+          pointerId: 1,
+          clientX: 900,
+          clientY: 700,
+        }),
+      );
     });
     act(() => {
       window.dispatchEvent(

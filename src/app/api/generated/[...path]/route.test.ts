@@ -1,62 +1,26 @@
 /**
- * `GET /api/generated/[...path]` —— 任务产物文件流的契约。
- *
- * 这个端点把 `<产物根>/<taskId>/<file>` 按 `/api/generated/...` 前缀吐出去，
- * 是**任意路径读取**的入口，所以它的价值全在边界上：
- *
- *   · 没有会话（`loginRequired` 开着时）必须 401，且一次都不碰磁盘；
- *   · 穿越出根目录必须 403（`../` 与兄弟目录前缀碰撞是两种不同形状，分开验）；
- *   · **属于别人的产物必须 404**（与「文件不存在」同形），且判定发生在 `stat`/`open` 之前
- *     —— 这里测的是「路由没有绕开 `~/lib/media/output-access` 那道闸」，
- *     闸本身的判据由它自己的单测管（两层各判各的，才不会两边都以为自己测过了）；
- *   · **带 `Range` 也一样过闸**：分段请求是新加的一条读盘路径，必须复用同一串判定，
- *     而不是在「读哪一段」那层再长出一套权限逻辑；
- *   · 读不到（含「指到目录」）必须 404，而不是把 EISDIR/EACCES 的原文抛成 500；
- *   · 命中时 `Content-Type` 走唯一出口 `contentTypeForPath`（不是自己 `switch` 一遍），
- *     长缓存必须是 `private` + `immutable`，并且要有 `Accept-Ranges: bytes`；
- *   · `Range` 三种结论各有状态码：206（带 `Content-Range`）、416（只写总长）、
- *     不认识的形状 → 忽略并回整份 200。形状本身在 `range-request.test.ts` 判，
- *     这里只判「翻成响应那一步对不对」，其中最要紧的一条是**只读要的那一段**
- *     —— 否则「拖进度条」= 整份成片读进内存，这条支持就白做。
- *
- * 兄弟目录那条（`generated-evil`）是这里最容易被「顺手简化」掉的一档：判据写成
- * `abs.startsWith(root)` 也能挡住 `../../etc/passwd`，看起来没坏，但会把
- * `<root>-evil/…` 一起放行。代码里那个 `+ path.sep` 就是为它存在的。
- *
- * mock 边界：`fs`（`stat` + `open` 两份假象，**读的位置与长度都记下来** ——
- * 「只读那一段」与「一次都没打开」都是要断言的事）、`~/server/auth/request-user`
- * （鉴权两态）、`~/lib/app-settings/app-settings.server`（`loginRequired` 两态）、
- * `~/lib/media/output-access`（归属判决由它自己的单测钉，这里只判「路由吃没吃它」）。
+ * `GET /api/generated/[...path]` —— 产物文件流（任意路径读取入口）的边界契约（ISSUE #3827）：
+ * 无登录流程，身份解析始终可用；穿越出根 403（`../` 与兄弟目录前缀碰撞分开验）；
+ * `Range` 只读要的那一段；读不到 404（不抛 EISDIR/EACCES 原文）；`Content-Type` 走 `contentTypeForPath`，缓存 `private`+`immutable`；Range 三态 206/416/忽略回 200。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 
-const { stat, open, readCalls, disk, userMock, loginRequiredMock, foreignMock } = vi.hoisted(
-  () => ({
-    stat: vi.fn(),
-    open: vi.fn(),
-    /* SAFETY: type assertion reviewed */
-    readCalls: [] as Array<{
-      length: number;
-      position: number;
-    }>,
-    disk: { bytes: Buffer.from("") },
-    userMock: vi.fn<() => Promise<{ id: string } | null>>(),
-    loginRequiredMock: vi.fn<() => boolean>(() => false),
-    foreignMock: vi.fn<(segments: Array<string>, userId: string) => Promise<boolean>>(
-      async () => false,
-    ),
-  }),
-);
+const { stat, open, readCalls, disk, userMock } = vi.hoisted(() => ({
+  stat: vi.fn(),
+  open: vi.fn(),
+  /* SAFETY: type assertion reviewed */
+  readCalls: [] as Array<{
+    length: number;
+    position: number;
+  }>,
+  disk: { bytes: Buffer.from("") },
+  userMock: vi.fn<() => Promise<{ id: string } | null>>(),
+}));
 
 vi.mock("fs", () => ({ promises: { stat, open } }));
 vi.mock("~/server/auth/request-user", () => ({
   requireRequestUser: userMock,
-}));
-vi.mock("~/lib/app-settings/app-settings.server", () => ({
-  getSettingsSync: () => ({ loginRequired: loginRequiredMock() }),
-}));
-vi.mock("~/lib/media/output-access", () => ({
-  isForeignOwnedArtifact: foreignMock,
 }));
 
 import { generatedRoot as generatedRootOf } from "~/lib/media/output-paths";
@@ -78,11 +42,10 @@ function paramsOf(path: Array<string> | undefined) {
 
 function get(path: Array<string> | undefined, range?: string) {
   return import("./route").then(({ GET }) =>
-    /* SAFETY: type assertion reviewed */
     GET(
-      new Request("http://x/api/generated", {
+      new NextRequest("http://x/api/generated", {
         headers: range === undefined ? {} : { range },
-      }) as never,
+      }),
       paramsOf(path),
     ),
   );
@@ -91,12 +54,12 @@ function get(path: Array<string> | undefined, range?: string) {
 /** 种一份「磁盘上的文件」：`stat` 报它的长度，`open` 之后按请求的位置与长度读它。 */
 function putFile(bytes: Uint8Array | string) {
   disk.bytes = typeof bytes === "string" ? Buffer.from(bytes) : Buffer.from(bytes);
-  stat.mockImplementation(async () => ({
+  stat.mockImplementation(() => ({
     isFile: () => true,
     size: disk.bytes.length,
   }));
-  open.mockImplementation(async () => ({
-    read: async (buf: Buffer, offset: number, length: number, position: number) => {
+  open.mockImplementation(() => ({
+    read: (buf: Buffer, offset: number, length: number, position: number) => {
       readCalls.push({ length, position });
       disk.bytes.subarray(position, position + length).copy(buf, offset);
       return {
@@ -104,7 +67,7 @@ function putFile(bytes: Uint8Array | string) {
         buffer: buf,
       };
     },
-    close: async () => undefined,
+    close: () => undefined,
   }));
 }
 
@@ -114,8 +77,6 @@ beforeEach(() => {
   readCalls.length = 0;
   disk.bytes = Buffer.from("");
   userMock.mockReset();
-  loginRequiredMock.mockReset().mockReturnValue(false);
-  foreignMock.mockReset().mockResolvedValue(false);
   userMock.mockResolvedValue({ id: "user-a" });
   putFile("0123456789");
 });
@@ -132,14 +93,10 @@ describe("闸门顺序：每一种拒绝都发生在碰磁盘之前", () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  it("未登录（loginRequired 开着）→ 401，且不做归属判定、不碰磁盘", async () => {
-    loginRequiredMock.mockReturnValue(true);
+  it("无会话也可读取产物（无需登录，#3827）", async () => {
     userMock.mockResolvedValueOnce(null);
     const res = await get(["t1", "a.png"]);
-    expect(res.status).toBe(401);
-    expect(foreignMock).not.toHaveBeenCalled();
-    expect(stat).not.toHaveBeenCalled();
-    expect(open).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
   });
 
   it("穿越出产物根 → 403 且不碰磁盘", async () => {
@@ -157,45 +114,8 @@ describe("闸门顺序：每一种拒绝都发生在碰磁盘之前", () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  it("多用户模式：属于别人的产物 → 404（与「不存在」同形）且不去读那个文件", async () => {
-    loginRequiredMock.mockReturnValue(true);
-    foreignMock.mockResolvedValueOnce(true);
-    const res = await get(["projects", "proj-b", "t9", "a.png"]);
-    expect(res.status).toBe(404);
-    expect(await res.text()).toBe("Not found");
-    expect(open).not.toHaveBeenCalled();
-    // 判定拿的是解码后的路径片段 + 当前用户，不自己再解析一遍字符串
-    expect(foreignMock).toHaveBeenCalledWith(["projects", "proj-b", "t9", "a.png"], "user-a");
-  });
-
-  it.for(["bytes=0-3", "bytes=9999-", "seconds=1-2"])(
-    "带 Range 也不许绕过闸（%s）：无会话 401、别人的 404，两次都不打开文件",
-    async (range) => {
-      loginRequiredMock.mockReturnValue(true);
-      userMock.mockResolvedValueOnce(null);
-      expect((await get(["t1", "a.png"], range)).status).toBe(401);
-      expect(open).not.toHaveBeenCalled();
-
-      userMock.mockResolvedValue({ id: "user-a" });
-      foreignMock.mockResolvedValueOnce(true);
-      expect((await get(["t1", "a.png"], range)).status).toBe(404);
-      expect(open).not.toHaveBeenCalled();
-    },
-  );
-
-  it("多用户模式：不是别人的 → 正常读出字节", async () => {
-    loginRequiredMock.mockReturnValue(true);
-    expect((await get(["t1", "a.png"])).status).toBe(200);
-    expect(foreignMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("单用户模式（默认）跳过归属判定 —— 那时人人都是同一个演示用户，判了只会误伤", async () => {
-    expect((await get(["t1", "a.png"])).status).toBe(200);
-    expect(foreignMock).not.toHaveBeenCalled();
-  });
-
   it("路径段解析回根目录本身时不去 open 目录（404，不是 500）", async () => {
-    stat.mockImplementation(async () => ({ isFile: () => false, size: 0 }));
+    stat.mockImplementation(() => ({ isFile: () => false, size: 0 }));
     const res = await get(["."]);
     expect(res.status).toBe(404);
     expect(await res.text()).toBe("Not found");
@@ -226,10 +146,16 @@ describe("整份读（没有 Range）", () => {
     expect(cache).toMatch(/^private\b/);
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
     // 读的是根目录内的那个文件，不是别处。
-    /* SAFETY: type assertion reviewed */
-    expect(normalize(stat.mock.calls[0]?.[0] as string)).toBe(`${artifactRoot}/t1/a.png`);
-    /* SAFETY: type assertion reviewed */
-    expect(normalize(open.mock.calls[0]?.[0] as string)).toBe(`${artifactRoot}/t1/a.png`);
+    const statArg: unknown = stat.mock.calls[0]?.[0];
+    if (typeof statArg !== "string") {
+      throw new Error("stat 的首个调用参数不是路径字符串");
+    }
+    expect(normalize(statArg)).toBe(`${artifactRoot}/t1/a.png`);
+    const openArg: unknown = open.mock.calls[0]?.[0];
+    if (typeof openArg !== "string") {
+      throw new Error("open 的首个调用参数不是路径字符串");
+    }
+    expect(normalize(openArg)).toBe(`${artifactRoot}/t1/a.png`);
   });
 
   it("Accept-Ranges 在场，客户端才知道可以分段要", async () => {
@@ -251,50 +177,62 @@ describe("整份读（没有 Range）", () => {
     expect(await res.text()).toBe("");
   });
 
-  it("整份读时被裁短：按实际读到的字节回，且不配 Content-Range", async () => {
-    // 没有 Range 的那一支也要能短读 —— 少了这条，「短读只处理分段路径」这种半修
-    // 会在 Coverage 的分支上留痕（这里刻意断言**没有** Content-Range：整份请求
-    // 客户端没要窗口，给它一个 206 的形状才是真错）。
-    open.mockImplementationOnce(async () => ({
-      read: async (buf: Buffer, offset: number) => {
+  it("句柄短读也照常收尾：读到多少发多少，读完关句柄", async () => {
+    // 流式改写（ISSUE #4252）后，「短读」的契约是：把读到的字节发出去，
+    // 读不到更多（EOF）就收尾关句柄，不许无限空转。
+    let reads = 0;
+    let closed = 0;
+    open.mockImplementationOnce(() => ({
+      read: (buf: Buffer, offset: number) => {
+        reads += 1;
+        if (reads > 1) {
+          return { bytesRead: 0, buffer: buf };
+        }
         Buffer.from("01").copy(buf, offset);
         return { bytesRead: 2, buffer: buf };
       },
-      close: async () => undefined,
+      close: () => {
+        closed += 1;
+      },
     }));
     const res = await get(["t1", "a.png"]);
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("01");
     expect(res.headers.get("Content-Range")).toBeNull();
+    expect(closed).toBe(1);
   });
 
   it("读完必须 close 句柄（漏了它，Windows 上产物会被自己锁住，重生成即失败）", async () => {
     let closed = 0;
-    open.mockImplementationOnce(async () => ({
-      read: async (buf: Buffer, offset: number, length: number, position: number) => {
+    open.mockImplementationOnce(() => ({
+      read: (buf: Buffer, offset: number, length: number, position: number) => {
         readCalls.push({ length, position });
         disk.bytes.subarray(position, position + length).copy(buf, offset);
         return { bytesRead: length, buffer: buf };
       },
-      close: async () => {
+      close: () => {
         closed += 1;
       },
     }));
-    await get(["t1", "a.png"]);
+    const res = await get(["t1", "a.png"]);
+    /* 流式响应要**消费完 body** 句柄才会关（读到位 → EOF → close）。 */
+    expect(await res.text()).toBe("0123456789");
     expect(closed).toBe(1);
   });
 
-  it("读取抛错时也必须把已经拿到的句柄闭上（finally 那条路）", async () => {
+  it("读取抛错时也要关句柄，并把错误顺着流抛给消费方", async () => {
     let closed = 0;
-    open.mockImplementationOnce(async () => ({
-      read: async () => {
+    open.mockImplementationOnce(() => ({
+      read: () => {
         throw new Error("EIO");
       },
-      close: async () => {
+      close: () => {
         closed += 1;
       },
     }));
-    expect((await get(["t1", "a.png"])).status).toBe(404);
+    const res = await get(["t1", "a.png"]);
+    expect(res.status).toBe(200);
+    await expect(res.text()).rejects.toThrow("EIO");
     expect(closed).toBe(1);
   });
 });
@@ -342,9 +280,9 @@ describe("Range：三种结论翻成三个状态码", () => {
   });
 
   it("一个字节都没读到（文件被裁到起点之前）→ 404，而不是回一个空体的 206", async () => {
-    open.mockImplementationOnce(async () => ({
-      read: async (buf: Buffer) => ({ bytesRead: 0, buffer: buf }),
-      close: async () => undefined,
+    open.mockImplementationOnce(() => ({
+      read: (buf: Buffer) => ({ bytesRead: 0, buffer: buf }),
+      close: () => undefined,
     }));
     expect((await get(["t1", "a.png"], "bytes=2-5")).status).toBe(404);
   });
@@ -375,13 +313,13 @@ describe("Range：三种结论翻成三个状态码", () => {
   });
 
   it("文件在一次请求内被换短：按实际读到的字节回，别让长度比正文长", async () => {
-    open.mockImplementationOnce(async () => ({
-      read: async (buf: Buffer, offset: number) => {
+    open.mockImplementationOnce(() => ({
+      read: (buf: Buffer, offset: number) => {
         // 只给得出 2 个字节，尽管要 6 个（同名产物被重新生成的那一刻）
         Buffer.from("ab").copy(buf, offset);
         return { bytesRead: 2, buffer: buf };
       },
-      close: async () => undefined,
+      close: () => undefined,
     }));
     const res = await get(["t1", "a.png"], "bytes=0-5");
     expect(res.status).toBe(206);

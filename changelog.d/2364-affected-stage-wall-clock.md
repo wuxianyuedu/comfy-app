@@ -18,7 +18,7 @@
 - 与 §13.6.4 那条「复跑的次数不许设上限」不冲突，分别是**退码**：那条禁的是
   「跳过 ⇒ 冒充成负载假红放行（退 0）」，这一条跳过时说的是「没测，退 2」。
   **封住的仍然是消耗，不是结论的形状。**
-- **三个数同批进判据数值账**（`scripts/.gate-thresholds.json` 那本账，都按 `kind: "report"` 入账，对账判据 `scripts/check-gate-thresholds.cjs`）：
+- **三个数同批进判据数值账**（`scripts/gates/.gate-thresholds.json` 那本账，都按 `kind: "report"` 入账，对账判据 `scripts/check-gate-thresholds.cjs`）：
   `STAGE_WALL_CLOCK_MS` 取 25 分钟的两个夹逼读数（盖得住 9.2 + 13.6 = 22.8 分钟的实测最坏形状，
   又必须低于平台那一刀），`PLATFORM_STAGE_KILL_MS` 是**外部量纲**（取自平台自己的拒绝原文），
   `SERIAL_RERUN_FACTOR` 是那个 1.48 的保守化整。「预算 < 掐点」这条关系由用例钉住 ——

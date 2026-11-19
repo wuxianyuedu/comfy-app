@@ -1,3 +1,4 @@
+import { asRecord } from "~/lib/is-record";
 import {
   SHOT_TYPES,
   normalizeShotType,
@@ -99,8 +100,8 @@ export type RawCharacter = {
 };
 
 export function parseCharacter(text: string): RawCharacter {
-  /* SAFETY: 类型断言已复核 */
-  const obj = (extractJson(text) as Record<string, unknown>) ?? {};
+  // extractJson 走 JSON.parse，回复是字面量 null / 非对象时 asRecord 给出 null，`?? {}` 是唯一防线
+  const obj = asRecord(extractJson(text)) ?? {};
 
   return {
     appearance: asText(obj.appearance),
@@ -129,8 +130,8 @@ export type RawCharacterFull = {
 } & RawCharacter;
 
 export function parseCharacterFull(text: string): RawCharacterFull {
-  /* SAFETY: 类型断言已复核 */
-  const obj = (extractJson(text) as Record<string, unknown>) ?? {};
+  // 同上：extractJson 遇 JSON 字面量 null / 非对象时 asRecord 给出 null，`?? {}` 是唯一防线
+  const obj = asRecord(extractJson(text)) ?? {};
 
   return {
     name: asText(obj.name, "未命名角色"),
@@ -180,18 +181,15 @@ export type RawShot = {
 export function parseStoryboard(text: string): Array<RawShot> {
   const data = extractJsonArray(text);
   return data.map((datum) => {
-    /* SAFETY: 类型断言已复核 */
-    const obj = (datum ?? {}) as Record<string, unknown>;
+    const obj = asRecord(datum) ?? {};
+    const rawNames: unknown = obj.characterNames;
 
     return {
       shotType: normalizeShotType(obj.shotType),
 
       description: asText(obj.description, ""),
 
-      /* SAFETY: 类型断言已复核 */
-      characterNames: Array.isArray(obj.characterNames)
-        ? (obj.characterNames as Array<unknown>).map(String)
-        : [],
+      characterNames: Array.isArray(rawNames) ? rawNames.map((n: unknown) => String(n)) : [],
     };
   });
 }

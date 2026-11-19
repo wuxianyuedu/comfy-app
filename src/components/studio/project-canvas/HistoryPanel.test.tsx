@@ -36,18 +36,8 @@ const { HistoryPanel } = await import("./HistoryPanel");
 
 /**
  * 画布历史面板两排「一排里选一个」的回归判据（ISSUE #1925 收口）。
- *
- * 这一屏本来有两处手搓：类型筛选（`Button variant="ghost"` + 选中三元）与
- * 作用域切换（同上，选中给 `border-b-2`、未选中**不给** → 两枚不同高）。
- * 现在分别交给 `ui/select-chip`（选中态四层 + 悬停回钉）与 `ui/tabs` 的
- * `line` 档（`data-active` 驱动，两枚同高）。
- *
- * 这里钉三件事：
- *   ① 类型筛选走单选语义（`radiogroup` + `aria-checked`），不残留旧的
- *      `aria-pressed` 按钮形态；
- *   ② 类型筛选的选中档四层俱在、悬停值回钉常态（幽灵类名 / 悬停改写那两族
- *      问题不会再从这一处回来）；
- *   ③ 作用域切换两枚**同构**（都是 `ui/tabs` 的 tab），不再一高一矮。
+ * 类型筛选与作用域切换此前都是手搓 ghost+三元；现在分别交给 `ui/select-chip`
+ * 与 `ui/tabs` 的 `line` 档。这里钉：单选语义（radiogroup/aria-checked）、选中档四层与悬停回钉、两枚同构。
  */
 describe("HistoryPanel 类型筛选（ISSUE #1925）", () => {
   it("是单选语义的 radiogroup，枚数与 FILTER_TABS 一致", () => {
@@ -58,9 +48,7 @@ describe("HistoryPanel 类型筛选（ISSUE #1925）", () => {
     expect(group).toBeTruthy();
     /* 作用域里查 —— 同一屏还有「显示密度」那一组 radio（ISSUE #1925 复查
        收口），全局查会把它一起算进来。 */
-    expect(within(group).getAllByRole("radio")).toHaveLength(
-      FILTER_TABS.length,
-    );
+    expect(within(group).getAllByRole("radio")).toHaveLength(FILTER_TABS.length);
   });
 
   it("选中项经 aria-checked 表达，且只有一枚被勾选", () => {

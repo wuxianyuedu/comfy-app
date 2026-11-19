@@ -1,23 +1,7 @@
 /**
- * 「真仓库的 `drizzle/`」的跨进程独占锁（规范 §11.19.2 那一族的补丁）。
- *
- * 为什么需要它：`tests/db-migrate-noninteractive.test.ts` 判「前提不成立」那一档时，
- * 唯一的造法就是**把真 `drizzle/` 挪开**（被测脚本的迁移目录按 `root/drizzle` 写死，
- * 换不了落点）；而 `tests/db-migrate-equivalence.test.ts` 与「绝对库真的落表」那两条
- * 要靠**真 `drizzle/` 在场**才能跑。两个文件在不同 worker 里各跑各的 ⇒
- * 一个的重命名窗口就是另一个的 `beforeAll`：实测表现是
- * `Test Files 2 failed / Tests 1 failed` ——  equivalence 那份**一条断言都没红**、
- * 整个文件在 `beforeAll` 里挂掉，话术是「没有可应用的迁移」，
- * 而读日志的人第一反应是「迁移集坏了」。
- *
- * 锁的三条口径：
- *   1. **独占**：拿到锁的人做完自己的事再放，别人在门外等（不是「等一下再试运气」）；
- *   2. **等不到就红，并点名占用者**：不许把它读成超时然后重跑碰运气（§11.13 那条）；
- *   3. **主家没了就回收**：进程崩溃留下的锁不会把后来每一次运行都顶死 ——
- *      按 owner pid 判活，死的才夺（不能只看锁的年龄：机器时钟会跳、上一轮也可能只是慢）。
- *
- * 落点在 `.next/`（已被 gitignore 覆盖），所以锁本身不会把工作树弄脏；
- * 也不放 `os.tmpdir()`：那里跨检出（多个 worktree 会互相误挡）。
+ * 「真仓库的 `drizzle/`」跨进程独占锁（规范 §11.19.2）：noninteractive 判「前提不成立」须把真目录挪开，
+ * 而 equivalence /「绝对库真落表」须它**在场**；两个文件不同 worker 并行 ⇒ 后者在 `beforeAll` 里挂掉、话术误导。
+ * 口径：独占（做完再放）、等不到就红并点名占用者（不许重跑）、主家死了按 owner pid 判活才夺；落点 `.next/`（gitignore），不放 `os.tmpdir()`（跨检出误挡）。
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -38,6 +22,11 @@ function ownerText(): string {
   }
 }
 
+/** 失败对象的 errno code 按字段读（B5 清账）：不在场返回 undefined。 */
+function errnoCode(error: unknown): unknown {
+  return typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+}
+
 /** owner 进程还活着吗？读不出 owner 时按「活着」处理（宁可等，不误夺别人的锁）。 */
 function ownerAlive(): boolean {
   const pid = Number.parseInt(ownerText(), 10);
@@ -48,8 +37,7 @@ function ownerAlive(): boolean {
     process.kill(pid, 0);
     return true;
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+    return errnoCode(error) !== "ESRCH";
   }
 }
 
@@ -72,8 +60,7 @@ export async function acquireRepoDrizzle(label: string): Promise<() => void> {
         rmSync(LOCK_DIR, { recursive: true, force: true });
       };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const code = (error as NodeJS.ErrnoException).code;
+      const code = errnoCode(error);
       if (code !== "EEXIST") {
         throw error;
       }
@@ -92,6 +79,7 @@ export async function acquireRepoDrizzle(label: string): Promise<() => void> {
           { cause: error },
         );
       }
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await new Promise((resolve) => setTimeout(resolve, POLL_MS));
     }
   }

@@ -27,6 +27,7 @@ import WebSocket from "ws";
 // resolveComfyBase via ./client）都是第三类，静态引不再牵 server-only throw。
 import { errorText } from "~/lib/error-message";
 import { fireAndForget } from "~/lib/async-action";
+import { AsyncMutex } from "~/lib/async-mutex";
 import { toPct } from "~/lib/progress";
 import { logger } from "~/lib/core/logger";
 import { probeComfyBase, resolveComfyBase, resetComfyBase, toWsBase } from "./client";
@@ -50,6 +51,13 @@ export { fetchHistoryEntry, traceComfyQueue };
 export type { ComfyHistoryEntry };
 /* 同款兼容出口：`claimSettle` 曾在本模块定义，已下沉到 runner-state（状态叶子）。 */
 export { claimSettle };
+
+/* WS 帧处理按到达顺序串行化（ISSUE #3913）：handleMessage 是 async，经
+ * fireAndForget 并发跑时，progress 分支在首个 await（resolveTaskRepo 动态
+ * import）处让出，两帧交叠会让「后发帧的 UPDATE 先落库」，DB progress 以
+ * 旧值收尾一拍。AsyncMutex 的 FIFO 链保证处理序 = 到达序；帧处理都是毫秒级
+ * DB 写，串行化不引入可感延迟。 */
+const wsMessageMutex = new AsyncMutex();
 
 /* ── 依赖注入接缝（P3 §5 第 1 期·最后一步：让 executor-ws 也能被纯 Node host 加载） ── */
 
@@ -166,7 +174,6 @@ export async function connect(): Promise<void> {
     return;
   }
   // await 期间可能已有别的调用建好了连接
-  // oxlint-disable-next-line strict-boolean-expressions -- 类型层把 s.ws 收窄成恒 null，但上面 await 期间并发 connect() 可能已建好连接（竞态见上），这是运行期防御性判空
   if (s.ws) {
     s.connecting = false;
     return;
@@ -178,7 +185,11 @@ export async function connect(): Promise<void> {
   let ws: WebSocket;
   try {
     ws = new WebSocket(url);
-  } catch {
+  } catch (error) {
+    /* URL 不合法时 `new WebSocket()` 抛错是**同步**的，走不到 error 事件；
+     * 若在这里静默重试，队列只会每拍重连一次而永不就绪（`toWsBase` 拼错协议
+     * 曾因此潜伏很久）。留一条 warn 让下一次能从日志直接认出。 */
+    logger.warn(`[comfyui] WS URL 非法（${url}）：${errorText(error, "new WebSocket 失败")}`);
     s.connecting = false;
     s.wsPathIndex += 1; // 换一条 WS 路径重试
     scheduleReconnect();
@@ -198,11 +209,20 @@ export async function connect(): Promise<void> {
     kickQueue();
   });
   ws.on("message", (data) => {
-    /* SAFETY: 类型断言已复核 */
-    const text = (data as Buffer).toString();
-    fireAndForget(handleMessage(text), (e) => {
-      logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`);
-    });
+    let text: string;
+    if (Buffer.isBuffer(data)) {
+      text = data.toString();
+    } else if (Array.isArray(data)) {
+      text = Buffer.concat(data).toString();
+    } else {
+      text = Buffer.from(data).toString();
+    }
+    fireAndForget(
+      wsMessageMutex.run(() => handleMessage(text)),
+      (e) => {
+        logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`);
+      },
+    );
   });
   // error / close 都交给 handleWsDrop 统一处理（幂等，双发只生效一次）。
   ws.on("close", () => {
@@ -211,7 +231,7 @@ export async function connect(): Promise<void> {
   ws.on("error", (err: Error) => {
     // 某些 ComfyUI 版本 / 网络下 error 之后不一定再发 close，
     // 这里兜底触发重连，否则队列会卡死在 RUNNING。
-    logger.warn(`[comfyui] WS(${path}) 出错：${err?.message ?? err}`);
+    logger.warn(`[comfyui] WS(${path}) 出错：${err.message}`);
     // 连接阶段（未 open）就失败：换下一条 WS 路径重试一次。
     if (!opened) {
       s.wsPathIndex += 1;

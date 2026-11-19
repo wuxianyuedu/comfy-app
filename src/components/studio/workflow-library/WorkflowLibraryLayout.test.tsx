@@ -1,18 +1,12 @@
 /**
- * 工作流库左右分栏的**窄屏适配**回归（用户口径：「小屏幕看不到最右侧的内容」）。
- *
- * 两个成因，缺一个都还会被裁掉：
- *   ① 详情面板是弹性项，没有 `min-w-0` 时 `min-width: auto` 会让它**不肯窄于
- *      内容的最小宽度**（面板里的画布预览、卡片列都不小）→ 整行比窗口宽，右侧
- *      连同头部按钮被根容器的 `overflow-hidden` 裁掉；
- *   ② 头部那一排按钮组此前 `shrink-0` 且外层不换行 → 面板一窄就被挤出去。
- *
- * 因此这里同时锁住「面板能变窄」与「按钮组会换行且换行后仍靠右」。
+ * 工作流库左右分栏的**窄屏适配**回归（「小屏幕看不到最右侧的内容」）：① 详情面板
+ * 是弹性项，缺 `min-w-0` 时 min-width:auto 使它不肯窄于内容，整行超出窗口、右侧连
+ * 头部按钮被 `overflow-hidden` 裁掉；② 头部按钮组此前 `shrink-0` 且外层不换行，面板一窄就被挤出去。这里同时锁住两者。
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { stripComments } from "../../../../tests/helpers/strip-comments";
 import type { WorkflowRow } from "./workflow-library-config";
@@ -25,10 +19,8 @@ afterEach(cleanup);
 
 /**
  * 取出含 `needle` 的那个 JSX 开标签原文。
- *
- * JSX 属性顺序由 oxlint `perfectionist/sort-jsx-props` 机械排序，而这里要钉的是
- * 「同一个标签上有这些属性 / 这串类名」，与属性先后无关 —— 直接对整份源码写
- * `A[\s\S]{0,80}B` 会把「排过序」读成「契约破了」（判据钉语义不钉行形状）。
+ * 属性顺序由 oxlint `perfectionist/sort-jsx-props` 机械排序，这里钉的是
+ * 「同一标签上有这些属性 / 这串类名」，与先后无关（判据钉语义不钉行形状）。
  */
 function tagContaining(src: string, needle: string): string {
   const at = src.indexOf(needle);
@@ -42,10 +34,10 @@ const meta: MetaEditorController = {
   modelTags: [],
   allModelTags: [],
   busy: false,
-  patchModes: async () => undefined,
-  patchModelTags: async () => undefined,
-  patchSeedMode: async () => undefined,
-  patchParamMap: async () => undefined,
+  patchModes: () => Promise.resolve(),
+  patchModelTags: () => Promise.resolve(null),
+  patchSeedMode: () => Promise.resolve(),
+  patchParamMap: () => Promise.resolve(),
 };
 
 /** 详情头部要的是一整行 `WorkflowRow`（不是「几字段就够」的窄接口），
@@ -73,25 +65,37 @@ function headerRow(over: Partial<WorkflowRow> = {}): WorkflowRow {
   };
 }
 
-function renderHeader() {
+function renderHeader(args: { source?: "local" | "online" } = {}) {
+  const row = headerRow({ source: args.source ?? "local" });
+  const onUpdateJson = vi.fn();
+  const onConvert = vi.fn();
   render(
     <DetailHeader
+      busyConvert={false}
       busyDownload={false}
       busyResync={false}
+      busyUpdateJson={false}
+      /* 与详情 hook 同一判据（workflow.source === "local"）：本文件只测头部
+         渲染对 canConvert 的响应，判据本身在 hook 侧。 */
+      canConvert={row.source === "local"}
       canResync={false}
       isTechnical={false}
       meta={meta}
       missing={false}
+      onConvert={onConvert}
       onDelete={vi.fn()}
       onDownload={vi.fn()}
       onEdit={vi.fn()}
       onOpenSource={vi.fn()}
       onResync={vi.fn()}
+      onUpdateJson={onUpdateJson}
       onUse={vi.fn()}
+      showUpdateJson={row.source === "online"}
       usable
-      workflow={headerRow()}
+      workflow={row}
     />,
   );
+  return { onConvert, onUpdateJson };
 }
 
 describe("详情头部：窄屏不丢按钮", () => {
@@ -113,6 +117,63 @@ describe("详情头部：窄屏不丢按钮", () => {
   it("标题区有可读下限（压缩压力交给它，标题截断而不是把按钮挤出去）", () => {
     renderHeader();
     expect(screen.getByTestId("detail-title-block").className).toContain("min-w-45");
+  });
+});
+
+describe("详情头部：在线工作流的「更新」入口（#4377）", () => {
+  it("在线工作流显示「更新」按钮，点击打开更新弹窗", () => {
+    const { onUpdateJson } = renderHeader({ source: "online" });
+    fireEvent.click(screen.getByRole("button", { name: "更新" }));
+    expect(onUpdateJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("本地工作流不显示「更新」按钮（本地走「同步」）", () => {
+    renderHeader({ source: "local" });
+    expect(screen.queryByRole("button", { name: "更新" })).toBeNull();
+  });
+});
+
+describe("详情头部：本地工作流一键转在线（ISSUE #4372）", () => {
+  it("本地行显示「转为在线」按钮，点击触发转换回调", () => {
+    const { onConvert } = renderHeader({ source: "local" });
+    fireEvent.click(screen.getByRole("button", { name: "转为在线" }));
+    expect(onConvert).toHaveBeenCalledTimes(1);
+  });
+
+  it("在线行不渲染「转为在线」按钮", () => {
+    renderHeader({ source: "online" });
+    expect(screen.queryByRole("button", { name: "转为在线" })).toBeNull();
+  });
+
+  it("转换进行中按钮禁用并显示「转换中」（防重复提交）", () => {
+    const row = headerRow({ source: "local" });
+    render(
+      <DetailHeader
+        busyConvert
+        busyDownload={false}
+        busyResync={false}
+        busyUpdateJson={false}
+        canConvert
+        canResync={false}
+        isTechnical={false}
+        meta={meta}
+        missing={false}
+        onConvert={vi.fn()}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onEdit={vi.fn()}
+        onOpenSource={vi.fn()}
+        onResync={vi.fn()}
+        onUpdateJson={vi.fn()}
+        onUse={vi.fn()}
+        showUpdateJson={false}
+        usable
+        workflow={row}
+      />,
+    );
+    /* Spinner 自带「Loading」可访问文本，按钮名是「Loading 转换中」——
+       按子串匹配文案本身，不钉死拼接顺序。 */
+    expect(screen.getByRole("button", { name: /转换中/ })).toBeDisabled();
   });
 });
 
@@ -173,16 +234,10 @@ describe("画布页签：画布铺到面板底部（ISSUE #596）", () => {
   const ROOT = path.resolve(__dirname);
   const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
 
-  /* 用户口径：「全屏时，下方区域有空白却不是画布」。
-   *
-   * 根因是**高度链条断了 + fitView 的下限由内容高度决定**：画布容器只给了一层
-   * 固定下限（`min-h-115`）、横向画布之外还套了一层 `overflow-auto`（它按内容高度收边），
-   * 而 React Flow 的 `fitView` 又只按节点包围盒缩放 —— 内容比视口矮时它不会
-   * 把画布放大到铺满视口，于是画布底边以下落回面板底色。
-   *
-   * 这里锁三件事：① 容器不再被钉死高度；② 三列之上真的垫了背景板（它才是把
-   * 包围盒撑到视口的那个）；③ 背景板尺寸由「视口与内容取大」给出（纯函数另有
-   * 精确用例，这里钉住「没被写成只按内容算」）。 */
+  /* 用户口径：「全屏时下方有空白却不是画布」。根因是高度链条断了 + fitView
+   * 下限由内容高度决定：容器只有固定下限、外层 `overflow-auto` 按内容收边，
+   * 内容比视口矮时画布不铺满视口。这里锁三件事：容器不再钉死高度；三列之上
+   * 真有背景板；背景板尺寸按「视口与内容取大」（纯函数另有精确用例）。 */
 
   it("画布容器吃满可用高度，不再被钉死在外层高度上", () => {
     const canvas = read("WorkflowLibraryCanvas.tsx");
@@ -232,7 +287,9 @@ describe("工坊封装页签：模式可切换 / 必填可分 / 不再有手动�
 
   it("第 2 条：每个口标出必填 / 可选，且说明「可选口不必连到工作流」", () => {
     const panel = read("sections/WorkshopEncapsulationPanel.tsx");
-    expect(panel).toContain('entry.required ? "必填" : "可选"');
+    /* 必填 / 可选徽标走共享组件（ISSUE #4072）：两处（模式契约编辑器 / 工坊封装）
+       共用 `ContractRequiredBadge`，不各写一份胶囊类名。 */
+    expect(panel).toContain("<ContractRequiredBadge required={entry.required} />");
     expect(panel).toContain("不必连到工作流");
     expect(panel).toContain("必填口 ");
   });
@@ -279,12 +336,9 @@ describe("页头：筛选菜单水平排列（ISSUE #716）", () => {
   const ROOT = path.resolve(__dirname);
   const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
 
-  /* 用户口径：「工作流库界面的上方筛选菜单应该是水平布局排列的」。
-   *
-   * 触发条件是宽度不足 —— 三个筛选下拉 + 「管理模型」在窄窗口里排不下时，
-   * 组内 `flex-wrap` 会让它们**各自折行**，叠成一个竖列，页头因此吃掉三行。
-   * 判据因此是两条：① 组内 `flex-nowrap`（三个下拉是一组，拆行会错位）；
-   * ② 每项 `shrink-0`（不许被压扁成两行小字，规范 03 §3.8.1）。 */
+  /* 用户口径：「上方筛选菜单应该是水平布局」。窄窗口里三个下拉 + 「管理模型」
+   * 组内 `flex-wrap` 会各自折行、叠成竖列。判据两条：① 组内 `flex-nowrap`；
+   * ② 每项 `shrink-0`（不许压成两行小字，规范 03 §3.8.1）。 */
 
   it("筛选组不换行，组内每项不收缩", () => {
     const filters = read("WorkflowLibraryFilters.tsx");
@@ -320,19 +374,11 @@ describe("页头：筛选菜单水平排列（ISSUE #716）", () => {
   });
 });
 
-/* 局部内容加载不许用「整列 / 整屏」加载界面（用户实测口径：工作流库打开时
- * 有一张「加载工作流编辑器…」的全屏加载，而这只是部分区域在加载）。
- *
- * 两处成因，都是**渲染面 > 加载面**：
- *   ① 画布编辑器是个模态，却常驻渲染 —— `dynamic()` 的分块是「一渲染就下载」，
- *      于是打开工作流库这一步就把 7k 行编辑器拉下来，它的过渡屏
- *      （`absolute inset-0`，吃满内容列）顺势盖住列表与详情；
- *   ② 详情面板的「编辑对外参数 / 实际使用」共用一份常驻实例，此前**无论当前在
- *      哪个页签都渲染**（靠 `hidden` 藏起来）—— 默认落在工坊封装时，那棵子树
- *      连同画布引擎 `@xyflow/react` 照样执行。`hidden` 只藏不卸载。
- *
- * 判据因此钉在源码上：编辑器的挂载点在 `editingId` 之后，常驻实例的挂载点在
- * `canvasMounted` 之后。 */
+/* 局部内容加载不许用「整列 / 整屏」加载界面（用户实测：打开工作流库时出现一张
+ * 全屏「加载工作流编辑器…」，而这只是部分区域在加载）。两处成因：① 画布编辑器
+ * 是模态却常驻渲染，`dynamic()` 一渲染就下载；② 详情面板共用实例此前无论哪个
+ * 页签都渲染（`hidden` 只藏不卸载）。判据钉在源码：编辑器挂在 `editingId` 之后，
+ * 常驻实例挂在 `canvasMounted` 之后。 */
 describe("局部加载不许用整列加载界面", () => {
   const ROOT = path.resolve(__dirname);
   const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");

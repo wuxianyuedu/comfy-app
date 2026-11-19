@@ -1,32 +1,8 @@
-/**
- * 「CI 的落点指到开发盘」那件事的**契约**（临时根 + 浏览器落点）。
- *
- * ## 它守的是哪两件事
- *
- * 这批改动把 CI 的两处落点从系统盘挪到开发盘（`G:`）：
- *
- *   · **临时根**（`TEMP` / `TMP`）—— 原来落在服务账号的 `systemprofile` 下（在 `C:` 上）；
- *   · **浏览器落点**（`PLAYWRIGHT_BROWSERS_PATH`）—— 原来按 `%LOCALAPPDATA%` 推，
- *     同样落在 `C:` 上；而检出工作区、pnpm store、缓存槽**早就在 `G:` 上**了
- *     （实测读数见 `docs/guides/dev-drive-refs.md` 的「CI 侧」那节）。
- *
- * 这两件事各自都能被「配置写了但没生效」悄悄废掉，而那种失效的红法极贵：
- *
- *   · 临时根不存在 ⇒ Node 仍把它当临时目录返回 ⇒ 第一笔写就 ENOENT，而日志里
- *     读不出「目录没了」；
- *   · 浏览器落点被**挪进某一格的 `env:`** ⇒ 装的那一格看得到、跑 E2E 的那一格看不到 ⇒
- *     **装好了，探不到** —— 而「明明装过」与「一件都没有」在日志里原本逐字同形。
- *
- * ⇒ 所以这里守的不是「路径写对了吗」，而是**三条形状**：
- * 三行在**流水线级** env 里、`TEMP` 与 `TMP` 成对且同卷、落点与配置**同源**。
- *
- * ## 为什么「同源」也归这一组
- *
- * 落点推导（`PLAYWRIGHT_BROWSERS_PATH` 优先、否则按平台推）只有一份实现
- * （`scripts/ci-toolchain-browser-root.mjs`）。**装**与**判**都从它拿根 —— 一旦
- * 某一处自己推一份，「装在 A、判在 B」就成立，而那正是「装了但探不到」的机制。
- * 所以第三组用例钉的是「落点推导只有一处实现」这件事本身。
- */
+/** 「CI 的落点指到开发盘」那件事的**契约**（临时根 + 浏览器落点）。三行流水线级 env
+ * （`TEMP` / `TMP` / `PLAYWRIGHT_BROWSERS_PATH`）随 #3504 的构建执行外迁而退役 ——
+ * 本文件现在是**反向登记**（三行不许回来；构建格挂回本机时才恢复正向契约）。
+ * 落点推导本身（`scripts/ci/ci-toolchain-browser-root.mjs` 那一族）仍是活代码：
+ * 本地开发机与将来任何自托管执行面都还在用同一份「装与判同源」。 */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -40,8 +16,8 @@ import {
   platformDefaultBrowsersRoot,
   playwrightBrowsersRoot,
   playwrightRootCandidates,
-} from "../scripts/ci-toolchain-browser.mjs";
-import { ensureDir } from "../scripts/ci-env-probe.mjs";
+} from "../scripts/ci/ci-toolchain-browser.mjs";
+import { ensureDir } from "../scripts/ci/ci-env-probe.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const CNB = path.join(ROOT, ".cnb.yml");
@@ -52,9 +28,7 @@ function readCnb(): string {
 }
 
 /**
- * YAML 双引号标量的**去引号 + 解转义**。
- *
- * 只解本仓实际用到的那几个转义（`\\` / `\"`）—— Windows 路径里出现的就是它们；
+ * YAML 双引号标量的**去引号 + 解转义**：只解本仓用到的 `\\` / `\"`（Windows 路径里的就是它们），
  * 其余转义原样留着（真出现时该换写法，而不是让这一段悄悄猜）。
  */
 function unquote(raw: string): string {
@@ -72,12 +46,9 @@ function unquote(raw: string): string {
 }
 
 /**
- * `.cnb.yml` 的**流水线级** env（`.common` 锚点里那个 `env:`）的键值表。
- *
- * 为什么认「流水线级」而不是「第一个 `env:`」：文件里有**两种** env ——
- * 流水线级（缩进 2 层的 `env:`，键在第 4 列）与**格级**（缩进 4 层的 `env:`，
- * 键在第 6 列）。两者的作用面差着一整个语义：格级只对那一格可见，而这一组
- * 变量要的正是「**每一格都看到**」。认错了这一层，判据就变成在给格级 env 背书。
+ * `.cnb.yml` 的**流水线级** env（`.common` 锚点里那个 `env:`）的键值表。认「流水线级」而不是「第一个
+ * `env:`」：文件里有两种 —— 流水线级（缩进 2 层，键在第 4 列）与**格级**（缩进 4 层，键在第 6 列），
+ * 格级只对那一格可见，而这一组变量要的是**每一格都看到**；认错层就等于给格级 env 背书。
  */
 function pipelineEnv(text: string): Record<string, string> {
   const lines = text.split(/\r?\n/);
@@ -100,9 +71,9 @@ function pipelineEnv(text: string): Record<string, string> {
       continue;
     }
     if (/^ {4}[A-Za-z_][A-Za-z0-9_]*:/.test(line)) {
-      const m = /^ {4}([A-Za-z_][A-Za-z0-9_]*):[ \t]*(.*)$/.exec(line);
+      const m = /^ {4}(?<key>[A-Za-z_][A-Za-z0-9_]*):[ \t]*(?<value>.*)$/.exec(line);
       if (m) {
-        out[m[1]!] = unquote(m[2] ?? "");
+        out[m.groups?.key ?? ""] = unquote(m.groups?.value ?? "");
       }
       continue;
     }
@@ -118,166 +89,66 @@ function pipelineEnv(text: string): Record<string, string> {
   return out;
 }
 
-/** 一个路径是不是绝对路径（Windows 盘符或 POSIX 根）。 */
-function isAbsolutePath(p: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("/");
-}
-
-/** 一个路径所在的**卷根**（`G:\Temp` ⇒ `G:\`；`/tmp/x` ⇒ `/`）。 */
-function volumeRootOf(p: string): string {
-  if (/^[A-Za-z]:[\\/]/.test(p)) {
-    return path.win32.parse(p).root.toLowerCase();
-  }
-  return path.posix.parse(p).root;
-}
-
-describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）", () => {
+describe("CI 落点：临时根三行已随自托管执行面退役（#3504，反向登记）", () => {
   const env = pipelineEnv(readCnb());
 
-  it("三行都在**流水线级** env 里（每一格都要看到它们）", () => {
-    expect(
-      env.TEMP,
-      "`.cnb.yml` 的流水线级 env 里没有 `TEMP` —— CI 的临时目录于是落在服务账号的 " +
-        "`systemprofile` 下（在系统盘上），与检出、store、缓存槽所在的那块盘分家",
-    ).toBeTruthy();
-    expect(
-      env.TMP,
-      "`TMP` 与 `TEMP` 必须成对（Node 只看 `TEMP`，另一些工具只看 `TMP`）",
-    ).toBeTruthy();
-    expect(
-      env.PLAYWRIGHT_BROWSERS_PATH,
-      "`.cnb.yml` 的流水线级 env 里没有 `PLAYWRIGHT_BROWSERS_PATH` —— 浏览器于是按 " +
-        "`%LOCALAPPDATA%` 推，落在服务账号的系统盘那一侧",
-    ).toBeTruthy();
-  });
-
-  it("这三行**只**在流水线级出现（挪进某一格 ⇒ 装了但探不到）", () => {
+  /**
+   * #3504 把全部构建执行搬去 GA 之后，`TEMP` / `TMP` / `PLAYWRIGHT_BROWSERS_PATH`
+   * 三行流水线级 env **没有消费者了**：它们存在的原因是「构建 / 浏览器安装在本机跑，
+   * 临时目录与浏览器落点必须落在开发盘上，不能散进服务账号的 systemprofile」。
+   * 那个前提消失后留着的害处是「配置看着像在本机干活」——读到这份配置的人会以为
+   * 落点契约还活着，而真本机跑的格早已不存在。
+   *
+   * 退役是**反向判据**，不是删测试：谁把构建格挂回 `.cnb.yml`（那才是这三行的前提
+   * 重新成立的时候），必须同批把这三行加回来并把本判据改回正向 —— 不然第一笔写
+   * 临时文件就落在系统盘上，而红会落在别人的一条用例里（ISSUE #2939 的原案发形态）。
+   */
+  it("TEMP / TMP / PLAYWRIGHT_BROWSERS_PATH 三行不在配置的任何 env 里（正向 = 构建回本机时再加回）", () => {
     const text = readCnb();
-    const offLevel: Array<string> = [];
-    for (const line of text.split(/\r?\n/)) {
-      const m = /^([ \t]*)(TEMP|TMP|PLAYWRIGHT_BROWSERS_PATH):/.exec(line);
-      if (!m) {
-        continue;
-      }
-      const indent = m[1]!.replaceAll("	", "    ").length;
-      /* 流水线级 = 第 4 列；格级 = 第 6 列（`  - name:` ⇒ `    env:` ⇒ `      KEY:`）。 */
-      if (indent !== 4) {
-        offLevel.push(line.trim());
-      }
-    }
+    const offenders = text
+      .split(/\r?\n/)
+      .filter((line) => !line.trim().startsWith("#"))
+      .map((line, no) => ({ line, no: no + 1 }))
+      .filter(({ line }) => /^(?<indent>[ \t]*)(?:TEMP|TMP|PLAYWRIGHT_BROWSERS_PATH):/.test(line))
+      .map(({ line, no }) => `${no}: ${line.trim()}`);
     expect(
-      offLevel,
-      "这三行必须只在流水线级 env 里（缩进第 4 列）：挪进某一格的 `env:` 之后，" +
-        "装浏览器的那一格看得到、跑 E2E 的那一格看不到 ⇒ 装好了，探不到",
+      offenders,
+      "`.cnb.yml` 里出现了 TEMP / TMP / PLAYWRIGHT_BROWSERS_PATH —— 这三行是**本机构建**的落点契约，" +
+        "#3504 起构建格全部在 GA，触发口一格都不在本机跑；要挂回构建格就同批恢复三行并把本判据改回正向" +
+        "（否则临时文件落进服务账号的 systemprofile，红落在别人的一条用例里，#2939）",
     ).toEqual([]);
-  });
-
-  it("`TEMP` 与 `TMP` 指向同一个目录，且三个落点同卷", () => {
-    expect(env.TEMP).toBe(env.TMP);
-    /* SAFETY: 类型断言已复核 */
-    for (const key of ["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const) {
-      const value = env[key]!;
-      expect(
-        isAbsolutePath(value),
-        `${key} 必须写绝对路径（现在写的是 ${value}）—— 相对路径指的是作业目录，` +
-          "而作业目录每跑换一个，临时文件就散在各个工作区里",
-      ).toBe(true);
-    }
-    /* SAFETY: 类型断言已复核 */
-    const roots = (["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const).map((k) =>
-      volumeRootOf(env[k]!),
-    );
+    /* 双向钉：`pipelineEnv()` 在三行真的回来时要读得到 —— 否则上面那条反向判据
+     * 与「将来恢复的正向判据」都读不到同一份事实。 */
     expect(
-      new Set(roots).size,
-      `三个落点必须同卷（现在分别是 ${roots.join(" / ")}）—— 跨卷时「往落点里挪一个` +
-        "文件」这类动作会直接 EXDEV 失败，而红会落在别人的一条用例里",
-    ).toBe(1);
-  });
-
-  it("临时根**不落进会被整目录清空的那棵树**，也不指向检出根内部", () => {
-    /* 这一条守的是「跑 CI 的人随时能清空 G:\Temp」这个前提（ISSUE #2939）。
-     *
-     * 用户的诉求是「跑的过程落在 G 盘别的目录、跑完再挪到 G:\Temp，这样随时能清
-     * G:\Temp」。**「跑完再挪」这一步本仓不做**，理由三格（规范 §13.5.3.4.4）：
-     *
-     *   ① G:\Temp 是**逐进程一次性**的落点，不是归档区 —— 两跑之间没有任何东西
-     *      依赖上一跑留在那里的文件（浏览器按 `PLAYWRIGHT_BROWSERS_PATH` 落在
-     *      `G:\.cache\ms-playwright`，工具链走机器级安装，pnpm store 与缓存槽都在
-     *      别处）。挪过去的字节没有第二个读者；
-     *   ② 「跑完」那一刻的钩子在平台上**不成立**：`stages` 是串行链，前面一红后面整片
-     *      `skipped`（平台没有 `when:` / `always()` 可依赖），而 `endStages` 与主流程
-     *      **并发**、且它自己失败不影响流水线状态 —— 拿它当收尾钩子，最该收尾的那一跑
-     *      （红了、被掐了）恰恰收不到；
-     *   ③ 挪动是一次整树拷贝（node_modules 十几万个文件跨卷重写），换来 0 秒收益。
-     *
-     * 但那条诉求的**真正前提**是「G:\Temp 里只有可以随手删掉的东西」。所以这里判的是
-     * 那个前提的形状：临时根不许落进**会被整目录清空**的那棵树，也不许落进检出根内部
-     * （那时 `清理 G:\Temp` 就等于删掉正在跑的工作区）。 */
-    const temp = env.TEMP!;
-    /* SAFETY: 类型断言已复核 */
-    const roots = (["TEMP", "PLAYWRIGHT_BROWSERS_PATH"] as const).map((k) => env[k]!);
-
-    /* ① 不许落进检出根。平台把每个 job 检出到 `…\<流水线 id>~<随机段>\workspace`，
-     *    而宿主把那个工作区的**父目录**记为 `ORANGE_RUNNER_DATA_DIR` —— 两者都认：
-     *    清空 G:\Temp 不许等于删掉正在跑的检出。 */
-    const workspaceLike = [env.COMFY_CI_WORKSPACE, env.ORANGE_RUNNER_DATA_DIR].filter(Boolean);
-    for (const root of workspaceLike) {
-      expect(
-        temp.toLowerCase().startsWith(`${root!.toLowerCase()}\\`) ||
-          temp.toLowerCase().startsWith(`${root!.toLowerCase()}/`),
-        `临时根 ${temp} 落在检出根 ${root} 内部 —— 那样「清空临时目录」就等于删掉正在跑的` +
-          "工作区，而这正是「随时可清」这条诉求要挡的那件事",
-      ).toBe(false);
-    }
-
-    /* ② 临时根本身**不许就是会被整棵树删掉的那几个缓存落点**：`G:\.cache`（浏览器）与
-     *    `G:\.cargo`（Rust 工具链）都有各自的清法，把临时根塞进去等于让「清浏览器缓存」
-     *    顺手抹掉这一跑的临时文件、反之亦然。 */
-    for (const cacheRoot of roots.slice(1)) {
-      const a = temp.toLowerCase();
-      const b = cacheRoot.toLowerCase();
-      expect(
-        a === b || a.startsWith(`${b}\\`) || b.startsWith(`${a}\\`),
-        `临时根 ${temp} 与缓存落点 ${cacheRoot} 互相嵌套 —— 两边的清理动作会互相误伤` +
-          "（清浏览器缓存顺手抹掉临时文件，或反之）",
-      ).toBe(false);
-    }
-
-    /* ③ 「清空 G:\Temp」这条动作必须**不碰**上面那两个缓存落点：它们与临时根同卷、
-     *    但必须是临时根的**兄弟**，不是子目录。 */
-    expect(volumeRootOf(temp), `临时根与缓存落点必须同卷（现在分别是 ${temp} / ${roots[1]}）`).toBe(
-      volumeRootOf(roots[1]!),
-    );
+      Object.keys(env).length,
+      "pipelineEnv() 连一行流水线级 env 都没读到 —— 解析器指错了地方",
+    ).toBeGreaterThan(0);
   });
 
   it("`stages` 里**没有**「跑完再挪」那一格（平台那一刻没有可靠的收尾钩子）", () => {
     /* 把「为什么不做跑完再挪」变成机器判据，而不是只写在注释里：下一任执行者读到那条
      * 诉求时，最容易的动作就是往 `stages` 末尾加一格 `robocopy /MOVE`。那一格在
      * **红了 / 被掐了**的那一跑上永远不会执行（串行链 + 平台没有条件语法可依赖，
-     * 实测读数见 `.cnb.yml` 的 `*pr_fail_stage` 头注），于是它只会给绿的那一跑多付
+     * 实测读数见 `.cnb.yml` 的 `pull_request` 流水线段（#3478 起立案格内联于该流水线）)，于是它只会给绿的那一跑多付
      * 一次整树拷贝 —— 一个只在成功时生效的清理动作，是「看起来做了」的标本。 */
     const text = readCnb();
     const offenders = text
       .split(/\r?\n/)
       .map((line, i) => ({ line, no: i + 1 }))
       .filter(({ line }) => !line.trim().startsWith("#"))
-      .filter(({ line }) => /\b(robocopy|Move-Item|Copy-Item)\b/.test(line))
+      .filter(({ line }) => /\b(?:robocopy|Move-Item|Copy-Item)\b/.test(line))
       .map(({ line, no }) => `${no}: ${line.trim()}`);
     expect(
       offenders,
       "`.cnb.yml` 里出现了搬文件的动作 —— 「跑完再挪到 G:\\Temp」在本仓不做（临时根" +
-        "本身就是一次性落点，挪过去的字节没有第二个读者），理由三格见「临时根不落进" +
-        "会被整目录清空的那棵树」那条用例的注释与规范 §13.5.3.4.4",
+        "本身就是一次性落点，挪过去的字节没有第二个读者），理由三格见规范 §13.5.3.4.4",
     ).toEqual([]);
-  });
-
-  it("浏览器落点**不是**容器里那个路径（它在宿主上不存在）", () => {
-    expect(env.PLAYWRIGHT_BROWSERS_PATH).not.toBe("/ms-playwright");
   });
 
   it("落点目录必须事先存在（临时根不存在 ⇒ 第一笔写就 ENOENT）", () => {
     /* 这一条**只判形状**：节点上的目录在不在，由 `环境前提` 那一格去补并打印读数
-     * （`ensureDir`），而它判的是「补不出来」那种真跑不下去的形态。 */
+     * （`ensureDir`），而它判的是「补不出来」那种真跑不下去的形态。
+     * 模块仍是活代码：本地开发机与将来任何自托管执行面都还在用同一份落点推导。 */
     const tmp = mkdtempSync(path.join(tmpdir(), "ci-devdrive-"));
     try {
       const target = path.join(tmp, "Temp");
@@ -331,12 +202,10 @@ describe("落点推导：装与判同源，且「装了却探不到」说得出�
   });
 
   it("生效落点空、而平台默认下有那一件 ⇒ 仍然判过不了，但读数点名「装了却探不到」", () => {
-    /* 现场：生效落点 = 一个空目录；平台默认落点 = 真放了一份 headless shell。
-     *
-     * ⚠️ 平台默认根**用被测的那份推导来布置**（`platformDefaultBrowsersRoot`）：
-     * 这条用例判的是**诊断行为**，不是推导本身 —— 推导由
-     * `tests/ci-toolchain-selfcheck.test.ts` 的「落点根按平台推」那一组单独钉着。
-     * 拿被测实现布置现场在这里是安全的：断言里没有一处依赖「默认根算得对不对」。 */
+    /* 现场：生效落点 = 一个空目录；平台默认落点 = 真放了一份 headless shell。⚠️ 平台默认根**用被测的
+     * 那份推导来布置**（`platformDefaultBrowsersRoot`）：这条判的是**诊断行为**，推导本身由
+     * `tests/ci-toolchain-selfcheck.test.ts` 的「落点根按平台推」单独钉着；断言没有一处依赖「默认根
+     * 算得对不对」，所以拿被测实现布置现场是安全的。 */
     const tmp = mkdtempSync(path.join(tmpdir(), "ci-pwroot-"));
     try {
       const platform = process.platform;
@@ -397,8 +266,11 @@ describe("落点推导：装与判同源，且「装了却探不到」说得出�
 describe("落点推导只有一处实现（装与判同源的前提）", () => {
   it("`ms-playwright` 这个字面量只住在落点模块里", () => {
     const literal = /["'`]ms-playwright["'`]/;
-    const root = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser-root.mjs"), "utf8");
-    const browser = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"), "utf8");
+    const root = readFileSync(
+      path.join(ROOT, "scripts", "ci/ci-toolchain-browser-root.mjs"),
+      "utf8",
+    );
+    const browser = readFileSync(path.join(ROOT, "scripts", "ci/ci-toolchain-browser.mjs"), "utf8");
     expect(literal.test(root)).toBe(true);
     expect(
       literal.test(browser),
@@ -408,7 +280,7 @@ describe("落点推导只有一处实现（装与判同源的前提）", () => {
   });
 
   it("`ci-toolchain-browser.mjs` 从落点模块取那三个名字（不是自己抄一份）", () => {
-    const src = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"), "utf8");
+    const src = readFileSync(path.join(ROOT, "scripts", "ci/ci-toolchain-browser.mjs"), "utf8");
     expect(src).toContain('from "./ci-toolchain-browser-root.mjs"');
     for (const name of [
       "playwrightBrowsersRoot",

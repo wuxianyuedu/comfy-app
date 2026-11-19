@@ -1,6 +1,5 @@
 /**
  * coverage-readout 读数（ISSUE #2689）：登记处单源、聚合口径、三态。
- *
  * 不跑全量覆盖率：纯函数层（`readRegisteredThresholds` / `aggregateForGlob` /
  * `buildCoverageReadout`）用合成 reports 与真实登记的 vitest.config.ts 核。
  */
@@ -11,14 +10,14 @@ import {
   aggregateForGlob,
   buildCoverageReadout,
   readRegisteredThresholds,
-} from "../scripts/coverage-readout.mjs";
+} from "../scripts/affected-tests/coverage-readout.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 describe("coverage-readout", () => {
-  it("登记处直接 import vitest.config.ts（单源、零正则），共 149 条对象", async () => {
+  it("登记处直接 import vitest.config.ts（单源、零正则），共 152 条对象", async () => {
     const t = await readRegisteredThresholds();
-    expect(Object.keys(t).length).toBe(149);
+    expect(Object.keys(t).length).toBe(152);
     for (const v of Object.values(t)) {
       expect(typeof v.lines).toBe("number");
       expect(typeof v.branches).toBe("number");
@@ -66,7 +65,7 @@ describe("coverage-readout", () => {
       summaryPath: path.join(ROOT, "coverage", "definitely-not-there-2697.json"),
     });
     expect(r.state).toBe("no-report");
-    expect(r.registeredCount).toBe(149);
+    expect(r.registeredCount).toBe(152);
     expect(r.rows).toEqual([]);
   });
 });

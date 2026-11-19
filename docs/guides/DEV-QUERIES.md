@@ -64,13 +64,13 @@ grep -rEn --include="*.tsx" --include="*.ts" -e "break-words" src
 grep -rEn --include="*.tsx" --include="*.ts" -e 'className="[^"]*![a-z]' src
 
 # 批量迁移脚本(幂等,只处理上面前四类模式):
-grep -rlE --include="*.tsx" --include="*.ts" -e "/\[0\.[0-9]+\]|bg-gradient-to-|\[var\(--|break-words" src | tr -d '\r' | while IFS= read -r f; do node scripts/tw4-canonical-codemod.cjs "$f"; done
+grep -rlE --include="*.tsx" --include="*.ts" -e "/\[0\.[0-9]+\]|bg-gradient-to-|\[var\(--|break-words" src | tr -d '\r' | while IFS= read -r f; do node scripts/tw4/tw4-canonical-codemod.cjs "$f"; done
 
 # 任意值 → spacing 倍数(min-h-[22px] → min-h-5.5):判据交给 Tailwind 引擎
 # (换算后的裸数值必须真能编出规则、且声明里带 var(--spacing) 才改写),
 # 顺带按 P80 把同值 w-K/h-K 合并成 size-K。dry-run 默认,加 --write 落盘:
-node scripts/tw4-spacing-canonical.mjs
-node scripts/tw4-spacing-canonical.mjs --write
+node scripts/tw4/tw4-spacing-canonical.mjs
+node scripts/tw4/tw4-spacing-canonical.mjs --write
 
 # 全量 canonical 汇总(更名/别名/遗留类,与编辑器 suggestCanonicalClasses 同源:
 # 直接问 design system 的 canonicalizeCandidates「有没有另一种写法生成相同 CSS」)。
@@ -80,9 +80,9 @@ node scripts/tw4-spacing-canonical.mjs --write
 # vitest -u 重生成)与 *.test.*(里面的类名多是断言样本,负样本改了会把判据改坏,
 # 报告里单列出来由人判断;确认要同步再加 --with-tests)。没有同名测试文件的
 # 孤儿快照永远跳过——任何用例都不会校验它。
-node scripts/tw4-canonical-report.mjs
-node scripts/tw4-canonical-report.mjs --write       # 落盘(快照仍需 vitest -u)
-node scripts/tw4-canonical-report.mjs --with-tests # 连测试文件一起改(自己先看清)
+node scripts/tw4/tw4-canonical-report.mjs
+node scripts/tw4/tw4-canonical-report.mjs --write       # 落盘(快照仍需 vitest -u)
+node scripts/tw4/tw4-canonical-report.mjs --with-tests # 连测试文件一起改(自己先看清)
 
 # 检查自定义工具类(如 u-title)是否真的存在于 globals.css,防止拼错类名静默失效
 grep -n "u-title" src/app/globals.css
@@ -94,10 +94,10 @@ grep -n "u-title" src/app/globals.css
 代码命令行全绿、编辑器标红），所以只能按语法形态扫：
 
 ```bash
-node scripts/check-ts-duplicate-keys.cjs              # 判定（有命中即退 1；默认不含 *.test.*）
-node scripts/check-ts-duplicate-keys.cjs --report     # 只出清单，不判失败
-node scripts/check-ts-duplicate-keys.cjs --with-tests # 连测试一起扫（不进钩子）
-node scripts/check-ts-duplicate-keys.cjs --json       # 机器可读
+node scripts/gates/check-ts-duplicate-keys.cjs              # 判定（有命中即退 1；默认不含 *.test.*）
+node scripts/gates/check-ts-duplicate-keys.cjs --report     # 只出清单，不判失败
+node scripts/gates/check-ts-duplicate-keys.cjs --with-tests # 连测试一起扫（不进钩子）
+node scripts/gates/check-ts-duplicate-keys.cjs --json       # 机器可读
 ```
 
 它已接进 `.githooks/pre-commit` 的 D 组「TS 重复属性判定」（实测存量 0，硬闸）。
@@ -121,11 +121,11 @@ grep -n "\"check\"\|typecheck\|\"test\"" package.json
 node -e "require('dns').lookup('registry.npmmirror.com', {all:true}, (e,a)=>console.log(e||a))"
 
 # 解法:preload 补丁强制 IPv4,只对本次命令生效,不改系统配置
-NODE_OPTIONS="--require ./scripts/force-ipv4-dns.cjs" pnpm install
-NODE_OPTIONS="--require ./scripts/force-ipv4-dns.cjs" pnpm add -D <包名>
+NODE_OPTIONS="--require ./scripts/devtools/force-ipv4-dns.cjs" pnpm install
+NODE_OPTIONS="--require ./scripts/devtools/force-ipv4-dns.cjs" pnpm add -D <包名>
 ```
 
-补丁实现见 `scripts/force-ipv4-dns.cjs`(tsconfig checkJs 会检查它,改动需保持 JSDoc 注解)。
+补丁实现见 `scripts/devtools/force-ipv4-dns.cjs`(tsconfig checkJs 会检查它,改动需保持 JSDoc 注解)。
 
 ## 8. 验证改动后的标准收尾流程
 

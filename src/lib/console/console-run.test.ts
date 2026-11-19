@@ -101,6 +101,47 @@ describe("createConsoleRunner", () => {
     expect(runner.busy()).toBeNull();
   });
 
+  it("并发第二条不覆盖执行槽：当场拒绝（error 帧 + 未执行结果），原命令照跑（ISSUE #4282）", async () => {
+    const runner = createConsoleRunner();
+    const secondEvents: Array<ConsoleEvent> = [];
+    const first = runner.run(
+      {
+        runId: "run-first",
+        command: "node -e sleep",
+        file: process.execPath,
+        args: ["-e", "setTimeout(()=>{},3000)"],
+        cwd: process.cwd(),
+        timeoutMs: 20_000,
+      },
+      () => undefined,
+    );
+    await expect.poll(() => runner.busy()?.runId, { timeout: 4000 }).toBe("run-first");
+
+    /* 第一条在跑时发第二条：不再覆盖执行槽，而是当场拒绝。 */
+    const second = await runner.run(
+      {
+        runId: "run-second",
+        command: "node -e echo",
+        file: process.execPath,
+        args: ["-e", "console.log('should-not-run')"],
+        cwd: process.cwd(),
+        timeoutMs: 20_000,
+      },
+      (e) => secondEvents.push(e),
+    );
+    expect(second.exitCode).toBeNull();
+    expect(second.durationMs).toBe(0);
+    expect(secondEvents.some((e) => e.type === "error")).toBe(true);
+    /* 原命令的槽没被顶掉：busy 仍是第一条；第二条的进程从未起过
+     * （error 帧在 start 帧之前，没有 spawn 发生）。 */
+    expect(runner.busy()?.runId).toBe("run-first");
+    expect(secondEvents[0]?.type).toBe("error");
+
+    await runner.cancel();
+    await first;
+    expect(runner.busy()).toBeNull();
+  });
+
   it("cancel() 掐整棵树：exit 帧标 killed，而不是伪装成「自己失败」", async () => {
     const runner = createConsoleRunner();
     const events: Array<ConsoleEvent> = [];
@@ -149,9 +190,9 @@ describe("createConsoleRunner", () => {
         if (event.type !== "out") {
           return;
         }
-        const m = /GRANDCHILD=(\d+)/.exec(event.text);
+        const m = /GRANDCHILD=(?<pid>\d+)/.exec(event.text);
         if (m) {
-          grandchildPid = Number(m[1]);
+          grandchildPid = Number(m.groups?.pid);
         }
       },
     );
@@ -237,10 +278,9 @@ describe("createConsoleRunner", () => {
     expect(result.exitCode).toBeNull();
     /* 文案必须**说清找过 PATH**（ISSUE #1327）：裸的 `spawn xxx ENOENT` 看着像
      * 参数写错，而用户要做的是「确认命令装没装 / 这个进程的 PATH 里有没有它」。 */
-    if (errorFrame?.type === "error") {
-      expect(errorFrame.message).toContain("definitely-not-a-real-binary-xyz");
-      expect(errorFrame.message).toContain("PATH");
-    }
+    if (errorFrame?.type !== "error") throw new Error("unreachable：上一行已断言 error 帧");
+    expect(errorFrame.message).toContain("definitely-not-a-real-binary-xyz");
+    expect(errorFrame.message).toContain("PATH");
   });
 
   it("起进程前先解析可执行形态：start 帧报的是**真正要起的那一份**", async () => {

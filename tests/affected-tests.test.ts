@@ -12,31 +12,25 @@ import {
   resolveAffectedTests,
   specCandidates,
   wideFallbackNote,
-} from "../scripts/affected-tests.mjs";
+} from "../scripts/affected-tests/affected-tests.mjs";
 /* `--name-status` 的解析住在零依赖模块里（ISSUE #2830：说明符扫描器带上了
  * `typescript`，沙箱里那份 `changed-scope.mjs` 不能再连带它）。 */
-import { changedPathsFromNameStatus } from "../scripts/git-name-status.mjs";
+import { changedPathsFromNameStatus } from "../scripts/lib/git-name-status.mjs";
 /* 清单那一跳的载体住在自己那份文件里 —— 用例按它真实的落点 import，
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
-import { describeListFailure } from "../scripts/affected-launch-changed-list.mjs";
-import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
+import { describeListFailure } from "../scripts/affected-tests/affected-launch-changed-list.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "../scripts/affected-tests/fixed-structural-tests.mjs";
 /* #2022：固定清单里开了输入面那几条在增量档会缺席，所以本文件凡是「比整表」的断言
  * 都改成比「该跑的那些」—— 用同一个选择函数，而不是在测试里再抄一遍那 4 个名字。 */
-import { selectFixedByFace } from "../scripts/fixed-gate-input-faces.mjs";
-import { KNOWN_FAILED_FILES } from "../scripts/quality-gate-shared.mjs";
+import { selectFixedByFace } from "../scripts/gates/fixed-gate-input-faces.mjs";
+import { KNOWN_FAILED_FILES } from "../scripts/gates/quality-gate-shared.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
- * 起子进程时用的环境：**把两枚着色共识旗标摘掉**。
- *
- * 为什么（PR #2990 的 `cnb-fvg-1k6botkg5`）：宿主带着 `FORCE_COLOR` 时，被 spawn 的
- * `affected-tests.mjs` 会给**整屏**加 ANSI 色号（平台日志就是要带颜色才读得动），
- * 而下面几条用例的 `maxBuffer` 按「不开色」的量级给（64 MiB 的量级余量刚够一份
- * 九千条的清单）。同一次跑里还有别的进程在抢核，读起来就是一条 `Test timed out`——
- * 与「清单太长」的真实故障长得一模一样。这里把输入面的噪声收成常量，
- * 与 `tests/ci-heavy-gates.test.ts` 的 `runHeavyChild` 同一条口径（它反过来：那边
- * 要**故意**开启色号，所以那里的注释写的是「摘掉环境里那一份，自己给」）。
+ * 起子进程时用的环境：**摘掉两枚着色共识旗标**。宿主带 `FORCE_COLOR` 时被 spawn 的 `affected-tests.mjs`
+ * 会给整屏加 ANSI 色号，而下面几条用例的 `maxBuffer` 按「不开色」量级给（64 MiB 刚够九千条清单）——
+ * 同一次跑里还有别的进程抢核，读起来就是一条 `Test timed out`，与「清单太长」的真实故障同形（PR #2990 `cnb-fvg-1k6botkg5`）。
  */
 const SPAWN_ENV: NodeJS.ProcessEnv = (() => {
   const env: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: "0" };
@@ -320,27 +314,45 @@ describe("affected-tests：改名（ISSUE #2226）", () => {
 });
 
 describe("affected-tests：兜底方向", () => {
-  it("公共地基被改 → 明确放弃收窄，且理由写在 __note 里", () => {
+  it("公共地基被改 → 明确放弃收窄，本次变更命中的用例仍并进来", () => {
     const run = harness({ [UI_TEST]: "it('x', () => {});" });
     const res = run(["vitest.config.ts", UI_SRC]);
     expect(res.mode).toBe("all");
     expect(res.reasons.__note).toContain("全局测试配置");
-    // 放弃收窄时**不**把受影响面塞进去 —— 那正是本层判定不了的部分。
-    expect(res.tests).toEqual([...FIXED_STRUCTURAL_TESTS].sort());
+    /* 兜底 = 扩大范围，不是替换（ISSUE #2792）：固定清单一条都不跳，但这次改到的
+     * 源码对应的用例必须一起跑 —— 过去这一档传的是空集，它连本次变更也一起丢了。 */
+    expect(res.tests).toContain(UI_TEST);
+    expect(res.tests).toEqual([...new Set([...FIXED_STRUCTURAL_TESTS, UI_TEST])].sort());
+  });
+
+  it("碰 package.json + 新加一份用例 ⇒ 那份用例必须跑（兜底=扩大范围，不是替换）", () => {
+    /* 这正是 ISSUE #2792 的现场：改依赖清单（wide 触发面）与新加/改过一份用例
+     * 同在一个提交里，过去只跑固定清单，那份新用例在平台上**一次都不跑**。
+     * 判定链必须继续走，把 `changed` 里的测试路径按「自身」并进来。 */
+    const ADDED = "src/components/ui/newly-added.test.tsx";
+    const run = harness({
+      [UI_TEST]: "it('x', () => {});",
+      [ADDED]: "it('y', () => {});",
+      "package.json": "{}",
+    });
+    const res = run(["package.json", ADDED]);
+    expect(res.mode).toBe("all");
+    expect(res.reasons.__note).toContain("package.json");
+    expect(res.tests).toContain(ADDED);
+    // 兜底的那一半照旧：固定清单一条都不能跳
+    expect(res.tests).toEqual([...new Set([...FIXED_STRUCTURAL_TESTS, ADDED])].sort());
   });
 
   /**
-   * wide 话术里那句「为什么不兜底跑全量」（ISSUE #1393）。
-   *
-   * 旧文本写「全量当前带别线基线红」，而重测下来真断言红是 0 条 —— 假前提每遇到一次
-   * wide 提交就当着重印，就会变成所有人不动兜底的默认解释，所以它跟判据一样要有执行者。
-   * 两条一起看：第一条钉文本内容，第二条钉「CLI 真的在打印这个函数」，
-   * 否则第一条只是在守一段死代码。
+   * wide 话术里那句「为什么不兜底跑全量」（ISSUE #1393）。旧文本写「全量当前带别线基线红」，而重测真断言红是 0 条；
+   * 假前提每遇到 wide 提交就重印一遍，会变成所有人不动兜底的默认解释，所以它跟判据一样要有执行者 ——
+   * 两条一起看：第一条钉文本内容，第二条钉「CLI 真的在打印这个函数」，否则第一条只是在守死代码。
    */
   it("wide 话术只写实测的拦路石，不许回到「带别线基线红」那句假前提", () => {
-    const note = wideFallbackNote("门槛自身", 20);
+    const note = wideFallbackNote("门槛自身", 20, 5);
     expect(note).toContain("32m35s"); // 耗时：wide 那档跑全量的实测墙钟
     expect(note).toContain("空参数"); // 机制：钩子刻意不接受「空参数=全跑」
+    expect(note).toContain("扩大范围"); // 口径：兜底=扩大范围，不是替换（ISSUE #2792）
     expect(note).not.toContain("基线红"); // 旧假前提不许回潮
     expect(note).toContain("§13.5.8");
   });
@@ -348,15 +360,16 @@ describe("affected-tests：兜底方向", () => {
   it("这段话说明确实由 CLI 打印（导出了却没人调用 = 第一条在守死代码）", () => {
     const r = spawnSync(
       process.execPath,
-      ["scripts/affected-tests.mjs", "--changed", "vitest.config.ts"],
+      ["scripts/affected-tests/affected-tests.mjs", "--changed", "vitest.config.ts"],
       { cwd: ROOT, encoding: "utf8" },
     );
     expect(r.status).toBe(0);
     // 断言「后半句逐字同源」：清单条数与放弃原因都由 CLI 自己算，这里不抄常量。
-    const tail = wideFallbackNote("X", 0).split("只跑固定清单 0 个。")[1]?.trim();
+    const note = wideFallbackNote("X", 0, 0);
+    const tail = note.slice(note.indexOf("兜底是")).trim();
     expect(tail, "话术构造函数自己变了形").toBeTruthy();
     expect(r.stderr).toContain("放弃收窄");
-    expect(r.stderr).toContain(tail ?? "");
+    expect(r.stderr).toContain(tail);
   });
 
   it("只改文档 → 跑「固定清单里该跑的那些」，结果永不为空", () => {
@@ -377,14 +390,9 @@ describe("affected-tests：兜底方向", () => {
   });
 
   /**
-   * 边④「按路径引用」的比对面必须是**剥注释之后**的代码文本（ISSUE #2022）。
-   *
-   * 这一条挡的是本仓自己造出来、又被自己踩中的形态：硬规则 15 要求门禁自测在文件头
-   * 引用规范章节，于是「注释里写着这份文档的路径」与「运行期读了这份文档」在原文里
-   * 逐字同形。实测只提交文档时，`docs/standards/13-提交与-code-review.md` 一个路径
-   * 把 7 份门禁自测拉进增量面（上次账本逐文件读数合计 480.7s：`check-reformat-only`
-   * 278.9s、`check-bundle-budget` 101.2s、`check-format` 52.0s…），而那七份里没有一份
-   * 在运行期读那份 `.md` —— 「改到哪、测到哪」被反向用成了「改一句注释就陪跑九分钟」。
+   * 边④「按路径引用」的比对面必须是**剥注释之后**的代码文本（ISSUE #2022）。挡的是本仓自造又自踩的形态：
+   * 硬规则 15 要求门禁自测在文件头引用规范章节，于是「注释里写着文档路径」与「运行期读了文档」逐字同形。
+   * 实测只提交一份文档时，7 份门禁自测被拉进增量面（合计 480.7s：`check-reformat-only` 278.9s、`check-bundle-budget` 101.2s…）。
    */
   it("边④：注释里的路径引用不算消费方（文档提交不再陪跑门禁自测）", () => {
     const run = harness({
@@ -570,14 +578,10 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
   });
 
   it("归因的数**本身**是对的：拿手工数得出来的夹具硬钉，不靠与主链互证", () => {
-    // 上一条钉的是「两处不漂」，它对**两边同时错**是瞎的（实测：把「按路径引用」
-    // 那一档整体跳过，对拍照样全绿）。所以这一条拿一个能手算的图，把期望值写死。
-    //
-    // 图（箭头 = import）：
-    //   hub.ts        ← hub.test.ts        （兄弟测试 + 闭包 1 跳）
-    //   hub.ts        ← mid.tsx ← mid.test.tsx（闭包 2 跳）
-    //   hub.ts        ← 被 notes.test.ts **按路径字面量**引用（不是 import，闭包抓不到）
-    //   leaf.ts       ← leaf.test.ts
+    // 上一条钉的是「两处不漂」，它对**两边同时错**是瞎的（实测：把「按路径引用」档整体跳过，对拍照样全绿）。
+    // 所以这一条拿一个能手算的图，把期望值写死（箭头 = import）：
+    //   hub.ts ← hub.test.ts（兄弟测试 + 闭包 1 跳）；hub.ts ← mid.tsx ← mid.test.tsx（闭包 2 跳）
+    //   hub.ts ← 被 notes.test.ts **按路径字面量**引用（不是 import，闭包抓不到）；leaf.ts ← leaf.test.ts
     const files = {
       "src/lib/hub.ts": "export const h = 1;\n",
       "src/lib/hub.test.ts": "import { h } from '../../lib/hub';\n",
@@ -644,29 +648,14 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
 });
 
 /**
- * 改动面清单的**载体**（ISSUE #2240）。
- *
- * ## 现场
- *
- * 平台「受影响用例」那一格把整份改动面**逐个铺进 argv** 送给 `affected-tests.mjs`
- * ⇒ 改动面大到几千条时（实测 2672 条 / 172796 字符）那个子进程**根本起不来**
- * （`spawnSync` 报 `ENAMETOOLONG`、`status=null`）⇒ 这一格红在
- * 「清单解析失败（退出码 信号）」，**后面 22 个 stage 全 `skipped`**。
- *
- * 同一个上限在这个仓里早被写在 `scripts/affected-tests.mjs` 的文件头里，只是认错了对象：
- * 那句讲的是**全量清单**走 argv（为此造了 `--full` 那条显式通道），
- * 而**改动面清单**走的是同一条 argv —— 没人看见。
- *
- * 现在改动面走 **stdin**。这一组钉四件事：
- *   ① 两种载体**给同一份清单**时结果逐字相同（判决链一个字没改）；
- *   ② 清单长到超过 Windows 的命令行上限时，stdin 那条**仍然跑得起来**；
- *   ③ 启动器**不许**再把改动面铺进 argv（形状钉，防回潮）；
- *   ④ 失败话术分得开「起不来」与「判红」，并念出条数（对账用）。
+ * 改动面清单的**载体**（ISSUE #2240）：平台把整份改动面逐个铺进 argv（实测 2672 条 / 172796 字符），子进程
+ * 报 `ENAMETOOLONG` / `status=null`，这一格红在「清单解析失败」、后面 22 个 stage 全 skipped。现在走 stdin；
+ * 钉四件事：① 两载体同清单结果逐字相同 ② 超 Windows 命令行上限仍跑得起来 ③ 启动器不许再铺进 argv ④ 失败话术分得开并念条数。
  */
 describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2240）", () => {
-  const CLI = path.join(ROOT, "scripts", "affected-tests.mjs");
-  const LAUNCHER = path.join(ROOT, "scripts", "run-affected-tests.mjs");
-  const CARRIER = path.join(ROOT, "scripts", "affected-launch-changed-list.mjs");
+  const CLI = path.join(ROOT, "scripts", "affected-tests/affected-tests.mjs");
+  const LAUNCHER = path.join(ROOT, "scripts", "affected-tests/run-affected-tests.mjs");
+  const CARRIER = path.join(ROOT, "scripts", "affected-tests/affected-launch-changed-list.mjs");
 
   /** 一份「长到超过 Windows 命令行上限」的改动面（路径都不存在，判决只看形状与条数）。 */
   function hugeList(n = 900): Array<string> {
@@ -720,18 +709,10 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
   });
 
   it("`--dry-run` 的 return 排在 `resolveVitestEntry()` **之前**（读数档不许依赖 node_modules）", () => {
-    /* 现场：`--dry-run` 的两处 return 曾排在 `resolveVitestEntry()` **之后**，而那是这个
-     * 启动器里第一个依赖 `node_modules` 的调用（解析不到就 `throw`）。于是「不起 vitest 的
-     * 读数档」反而成了唯一必须装好依赖的一档 —— 干净检出 / 只读沙箱上它红在
-     * 「解析不到 vitest 入口」，而它的全部用途（对账清单份数、问一句跑得起来吗）一个都用不上。
-     *
-     * 判据为什么是**源码顺序**而不是真起进程：`resolvePackageBinEntry` 按
-     * `createRequire(root)` 解析，而 vitest 进程内（哪怕 `root` 是 `/tmp` 的夹具）那条
-     * require 仍沿 `node_modules` 向上找到本仓那份 —— 于是「跑一次 `--full --dry-run`」
-     * 在改前改后**都**绿，这条用例就成了恒绿判据（本仓最狠的那一族）。顺序是唯一可判形态。
-     *
-     * ⚠️ 必须找**调用**（`= resolveVitestEntry()`）而不是裸名字：那份出口在本文件里
-     * 先被 `export { … }` 提了一次，按裸名字取 `indexOf` 会落到导出那一行上（实测）。 */
+    /* 现场：`--dry-run` 的两处 return 曾排在 `resolveVitestEntry()` 之后 —— 那是启动器里第一个依赖 `node_modules`
+     * 的调用（解析不到就 throw），于是「不起 vitest 的读数档」反而成了唯一必须装好依赖的一档，干净检出 / 只读沙箱上
+     * 红在「解析不到 vitest 入口」。判源码顺序而非真起进程：进程内 `require` 会沿 `node_modules` 找到本仓那份，改前改后都绿。
+     * 必须找**调用**（`= resolveVitestEntry()`）而不是裸名字：该出口先被 `export { … }` 提过，按裸名取会落到导出那一行。 */
     const src = fs.readFileSync(LAUNCHER, "utf8");
     const CALL = "= resolveVitestEntry()";
     for (const anchor of ['argv.includes("--full")', "const files = collectList()"]) {
@@ -787,5 +768,114 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
     expect(changedPathsFrom(["--changed", "a.ts", "--json"]).paths).toEqual(["a.ts"]);
     /* 暂存区那一档要真的起 git（这个仓库有暂存区可读）⇒ 只断言它是个数组。 */
     expect(Array.isArray(changedPathsFrom([]).paths)).toBe(true);
+  });
+});
+
+/**
+ * 启动器的**旗标面**：`--changed-stdin` 真消费，读不到 / 空清单**退 2**（ISSUE #2869）。现场：该旗标早先被静默忽略 ——
+ * 进了 argv 但没有分支读它，改动面仍取暂存区 / `COMFY_AFFECTED_CHANGED`，于是本地预检只跑固定清单，
+ * **看着绿、这一份改动对应的用例一条没跑**。
+ */
+describe("启动器消费 --changed-stdin，读不到就显式降级（ISSUE #2869）", () => {
+  const LAUNCHER = path.join(ROOT, "scripts", "affected-tests/run-affected-tests.mjs");
+  /** 一份自带映射的改动面（用例文件按路径命中自己）。 */
+  const LIST = ["tests/ship.test.ts"];
+
+  function run(args: Array<string>, input?: string) {
+    return spawnSync(process.execPath, [LAUNCHER, ...args], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: SPAWN_ENV,
+      input,
+      maxBuffer: 64 << 20,
+    });
+  }
+
+  it("有 stdin 时按 stdin 的清单跑（与 COMFY_AFFECTED_CHANGED 逐字同结果）", () => {
+    const viaEnv = spawnSync(process.execPath, [LAUNCHER, "--dry-run"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: { ...SPAWN_ENV, COMFY_AFFECTED_CHANGED: LIST.join("\n") },
+      maxBuffer: 64 << 20,
+    });
+    const viaStdin = run(["--dry-run", "--changed-stdin"], LIST.join("\n"));
+    expect(viaEnv.status, viaEnv.stderr ?? "").toBe(0);
+    expect(viaStdin.status, viaStdin.stderr ?? "").toBe(0);
+    expect(viaStdin.stdout).toBe(viaEnv.stdout);
+    expect(viaStdin.stderr).toContain("改动面自 stdin：1 条");
+  });
+
+  it("stdin 是空清单 ⇒ 退 2 并喊出来，不退回固定清单", () => {
+    const r = run(["--changed-stdin"], "");
+    expect(r.status, r.stderr ?? "").toBe(2);
+    expect(r.stdout).toBe("");
+    expect(r.stderr).toContain("清单是空的");
+    expect(r.stderr).toContain("退 2");
+  });
+
+  it("不认识的旗标 ⇒ 退 2 并点名（拼错与没写不能长得一样）", () => {
+    const r = run(["--changed-files=tests/ship.test.ts"]);
+    expect(r.status, r.stderr ?? "").toBe(2);
+    expect(r.stderr).toContain("--changed-files=tests/ship.test.ts");
+  });
+});
+
+/**
+ * 编排器产物清单判据的增量面（ISSUE #3812）：`tests/dist-artifact-hygiene.test.ts`
+ * 对编排器闭包成员（`db-backup-core.mjs` / `launcher-core/*` …）的消费是**运行时读文本
+ * 解析**，③ 的静态 import 图追不到 —— 不补这一格，「新增内部分件漏登记
+ * `RUNTIME_SCRIPTS`」会以同一形态反复漏出增量面（#3732 那批就是这样落到主干的）。
+ */
+describe("affected-tests：编排器闭包成员带进产物清单判据（ISSUE #3812）", () => {
+  const HYGIENE = "tests/dist-artifact-hygiene.test.ts";
+
+  /** 最小夹具：判据用例在输出候选里，其余是可能被改到的 scripts 模块。 */
+  function run(changed: Array<string>, closure: Array<string>) {
+    const files: Record<string, string> = {
+      [HYGIENE]: "it('x', () => {});",
+      "scripts/db/db-backup-core.mjs": "export {};",
+      "scripts/gates/check-standalone-contents.cjs": "module.exports = {};",
+      "scripts/tw4/tw4-scan-core.mjs": "export {};",
+    };
+    return resolveAffectedTests({
+      changedPaths: changed,
+      testFiles: Object.keys(files).filter(isTestPath),
+      sourceFiles: Object.keys(files).filter(isSourcePath),
+      readText: (rel) => files[rel] ?? null,
+      launcherClosure: new Set(closure),
+    });
+  }
+
+  it("⑤ 改编排器闭包内的模块（db-backup-core.mjs）→ 产物清单判据进面", () => {
+    const res = run(
+      ["scripts/db/db-backup-core.mjs"],
+      ["scripts/dev-launcher.mjs", "scripts/db/db-backup-core.mjs"],
+    );
+    expect(res.tests).toContain(HYGIENE);
+    expect(res.reasons[HYGIENE] ?? "").toContain("编排器产物清单判据");
+  });
+
+  it("改判据直接读文本的检查侧本体（check-standalone-contents.cjs）→ 同样进面", () => {
+    const res = run(["scripts/gates/check-standalone-contents.cjs"], []);
+    expect(res.tests).toContain(HYGIENE);
+  });
+
+  it("不在闭包、也不是消费源的 scripts/*.mjs 不拉判据（面不许无限扩大）", () => {
+    const res = run(["scripts/tw4/tw4-scan-core.mjs"], ["scripts/dev-launcher.mjs"]);
+    expect(res.tests).not.toContain(HYGIENE);
+  });
+
+  it("真仓库上 main 接线：改 db-backup-core.mjs 的面里带判据（真实闭包算过了）", () => {
+    const CLI = path.join(ROOT, "scripts", "affected-tests", "affected-tests.mjs");
+    // 用默认输出（空格分隔的测试清单）而不是 --json：解析 JSON 要再立一条类型守卫，
+    // 这里只断言「清单里有这一份」，字符串包含就够。
+    const out = spawnSync(process.execPath, [CLI, "--changed", "scripts/db/db-backup-core.mjs"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: SPAWN_ENV,
+      maxBuffer: 64 << 20,
+    });
+    expect(out.status, out.stderr ?? "").toBe(0);
+    expect(out.stdout).toContain(HYGIENE);
   });
 });

@@ -1,17 +1,8 @@
 /**
- * 桌包发布那一格的判据（ISSUE #2503）。
- *
- * 这一档钉的是**形状**，不是「包有多大」：
- *  ① **常驻根与两份缓存槽同卷、不同目录** —— 混进 `ci-build-cache/` 里，那边按 TTL
- *    淘汰键位的刀就会把人要取的安装包删掉；
- *  ② **一份一个目录 + `latest` 是指针文件** —— 原地覆盖会让「这一份是什么时候的」
- *    只能靠 mtime 猜（规范 §4.3 那一族）；
- *  ③ **每份自带 manifest** —— 轮转那一刀的排序键就是它，读不到时按 mtime 退档并**念出来**；
- *  ④ **三态退出码分得开** —— 「今天没有新包」（构建没出成品 = 1）与「没能把包放出去」
- *    （问不出根 / 盘不够 = 2）不许都退 0，也不许退成同一个数。
- *
- * 临时目录一律落在**仓库所在卷**（同 `ci-build-cache-slot.test.ts` 的理由：卷是这份
- * 机制的一部分），并给各自的前缀，收尾删干净。
+ * 桌包发布判据（ISSUE #2503），钉的是形状不是包大小：①常驻根与两份缓存槽同卷、不同目录 —— 混进
+ * `ci-build-cache/` 会被 TTL 淘汰刀删掉人取的安装包；②一份一个目录 + `latest` 是指针文件，否则只能靠 mtime 猜；
+ * ③每份自带 manifest（轮转排序键，读不到按 mtime 退档并念出来）；④三态退出码分得开（1 = 今天没新包，2 = 没放出去，不许都退 0）。
+ * ⑤落点可由 `--root` 显式给出（ISSUE #3546：本地那条链落项目内 `dist/desktop`），优先于环境变量与 store 推导。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -19,12 +10,14 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import {
   ARTIFACT_ROOT_ENV,
   resolveArtifactRoot,
   resolveBuildCacheRoot,
-  resolveCacheRoot,
-} from "../scripts/ci-cache-slot.mjs";
+  resolveToolRoot,
+} from "../scripts/ci/ci-cache-slot.mjs";
 import {
   DEFAULT_KEEP,
   LATEST_POINTER_FILE,
@@ -34,7 +27,7 @@ import {
   listReleases,
   main,
   planRotation,
-} from "../scripts/publish-desktop-bundle.mjs";
+} from "../scripts/build/publish-desktop-bundle.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const made: Array<string> = [];
@@ -91,31 +84,17 @@ describe("常驻根（resolveArtifactRoot）", () => {
     const volumeRoot = path.parse(ROOT).root;
     const derived = resolveArtifactRoot({ cwd: ROOT, env: {}, run: storeOn(volumeRoot) });
     /* 目录名取的是**本仓 package.json 的 name**（同依赖槽那一份推导），不写死字面量。 */
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
-      name?: string;
-    };
-    expect(derived.root).toBe(
-      path.join(volumeRoot, "ci-artifacts", String(pkg.name).toLowerCase()),
-    );
+    const pkg: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const pkgName = isRecord(pkg) && typeof pkg.name === "string" ? pkg.name : "";
+    expect(derived.root).toBe(path.join(volumeRoot, "ci-artifacts", pkgName.toLowerCase()));
   });
 
-  it("成品根不许落在缓存槽的根里（那边按键位淘汰会删掉安装包）", () => {
+  it("成品根不许落在别的常驻根里（构建缓存按键位回收、工具镜像另有一套 —— 互不相扰）", () => {
     const io = { cwd: ROOT, env: {}, run: storeOn(path.parse(ROOT).root) };
     const artifacts = resolveArtifactRoot(io).root ?? "";
-    for (const other of [resolveCacheRoot(io).root ?? "", resolveBuildCacheRoot(io).root ?? ""]) {
+    for (const other of [resolveBuildCacheRoot(io).root ?? "", resolveToolRoot(io).root ?? ""]) {
       expect(artifacts.startsWith(other)).toBe(false);
     }
-  });
-
-  it("`COMFY_CI_CACHE_ROOT` 只搬依赖槽，不带着成品根一起走 ⇒ 判「取不到」", () => {
-    const r = resolveArtifactRoot({
-      cwd: ROOT,
-      env: { COMFY_CI_CACHE_ROOT: "G:/slots" },
-      run: storeOn("G:"),
-    });
-    expect(r.root).toBeNull();
-    expect(r.from).toContain("成品目录不跟着它走");
   });
 });
 
@@ -196,16 +175,16 @@ describe("发布那一跑（main）", () => {
     const { code } = runPublish({ root });
     expect(code).toBe(0);
     const dir = path.join(root, "r1");
-    /* SAFETY: 类型断言已复核 */
-    const manifest = JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf8")) as Record<
-      string,
-      unknown
-    >;
+    /* manifest 用运行时守卫收窄（B5 清账，不走 as 断言）。 */
+    const manifest: unknown = JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf8"));
+    if (!isRecord(manifest)) {
+      throw new Error("manifest 不是对象");
+    }
     expect(manifest.label).toBe("r1");
     expect(manifest.sha).toBe("cafe1234567890");
     expect(manifest.keep).toBe(DEFAULT_KEEP);
-    /* SAFETY: 类型断言已复核 */
-    expect((manifest.files as Array<{ path: string }>).map((f) => f.path)).toEqual([
+    const files = isUnknownArray(manifest.files) ? manifest.files : [];
+    expect(files.map((f) => (isRecord(f) ? f.path : ""))).toEqual([
       "msi/app.msi",
       "nsis/app-setup.exe",
     ]);
@@ -278,5 +257,46 @@ describe("发布那一跑（main）", () => {
     expect(code).toBe(0);
     expect(log).toContain("--dry-run：不落盘");
     expect(fs.readdirSync(root)).toEqual([]);
+  });
+});
+
+describe("--root（本地落点，ISSUE #3546）", () => {
+  it("压过环境变量；相对路径按 cwd 解析，env 指的常驻根一个字不写", () => {
+    const envRoot = tmpDir("envroot");
+    const repo = fakeBundleRepo("rootflag");
+    const sink: Array<string> = [];
+    const code = main({
+      argv: ["--label", "r1", "--root", path.join("dist", "desktop")],
+      cwd: repo,
+      env: { [ARTIFACT_ROOT_ENV]: envRoot },
+      log: (line: string) => sink.push(line),
+      runStore: storeOn("G:"),
+      runGit: () => "cafe1234567890",
+      now: new Date("2026-11-11T00:00:00.000Z"),
+    });
+    expect(code).toBe(0);
+    const target = path.join(repo, "dist", "desktop", "r1");
+    expect(fs.existsSync(path.join(target, MANIFEST_FILE))).toBe(true);
+    /* 显式落点是**唯一**的落点：环境变量指的那份常驻根不许被顺带写一份。 */
+    expect(fs.readdirSync(envRoot)).toEqual([]);
+    /* 来源要念得出来 —— 「为什么这次落在项目里」不能只靠读代码。 */
+    expect(sink.join("\n")).toContain("来源：命令行 --root");
+  });
+
+  it("绝对路径自己就是落点：问不出 store 也照落、退 0", () => {
+    const root = tmpDir("absroot");
+    const sink: Array<string> = [];
+    const code = main({
+      argv: ["--label", "r1", "--root", root],
+      cwd: fakeBundleRepo("absroot"),
+      env: {},
+      log: (line: string) => sink.push(line),
+      runStore: noStore,
+      runGit: () => "cafe1234567890",
+      now: new Date("2026-11-11T00:00:00.000Z"),
+    });
+    expect(code).toBe(0);
+    expect(fs.readFileSync(path.join(root, LATEST_POINTER_FILE), "utf8").trim()).toBe("r1");
+    expect(sink.join("\n")).toContain(root);
   });
 });

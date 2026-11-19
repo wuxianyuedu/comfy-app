@@ -2,8 +2,18 @@ import { afterEach, describe, expect, it } from "vitest";
 import { PassThrough } from "node:stream";
 
 import { createLogger, coreLogger } from "~/lib/core/logger";
+import { isRecord } from "~/lib/is-record";
 
 const streams: Array<PassThrough> = [];
+
+/** 把一行日志解析成 JSON 对象；解析结果不是对象就让用例显式失败。 */
+function parseLogLine(line: string): Record<string, unknown> {
+  const value: unknown = JSON.parse(line);
+  if (!isRecord(value)) {
+    throw new Error("日志行不是 JSON 对象");
+  }
+  return value;
+}
 
 afterEach(() => {
   while (streams.length > 0) {
@@ -46,8 +56,7 @@ function makeLogger(ns: string) {
       .trim()
       .split("\n")
       .filter(Boolean)
-      /* SAFETY: 类型断言已复核 */
-      .map((l) => JSON.parse(l) as Record<string, unknown>);
+      .map((l) => parseLogLine(l));
   return { log, lines };
 }
 
@@ -78,13 +87,7 @@ describe("core/logger — 核心层门面（实现只有一份，就是本模块
       .trim()
       .split("\n")
       .filter(Boolean)
-      .map(
-        /* SAFETY: 类型断言已复核 */
-        (l) =>
-          JSON.parse(l) as {
-            level: number;
-          },
-      );
+      .map((l) => parseLogLine(l));
     expect(out.map((l) => l.level)).toEqual([50]);
   });
 

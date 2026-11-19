@@ -11,6 +11,7 @@ import { useBusyAction } from "~/components/ui/use-busy-action";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FormField } from "~/components/ui/form-field";
 import { SelectChip } from "~/components/ui/select-chip";
+import { TruncatedText } from "~/components/ui/truncated-text";
 
 type LLMContextValue = {
   closeSettings: () => void;
@@ -140,8 +141,10 @@ function LLMSettingsModal({
   }, [initial]);
 
   async function handleSave() {
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (draftModel == null && draftProvider == null) {
+    if (
+      (draftModel === null || draftModel === undefined) &&
+      (draftProvider === null || draftProvider === undefined)
+    ) {
       onClose();
       return;
     }
@@ -285,7 +288,7 @@ function LLMSettingsModal({
                       activeModel === name ? "bg-primary" : "bg-surface-2"
                     }`}
                   />
-                  <span className="flex-1 truncate">{name}</span>
+                  <TruncatedText className="flex-1 truncate">{name}</TruncatedText>
                   {provider === "local" && (
                     <span className="text-muted-foreground text-3xs">本地</span>
                   )}
@@ -321,15 +324,18 @@ function LLMSettingsModal({
             </Button>
             <Button
               className="h-auto flex-1 rounded-lg px-4 py-2 text-sm"
-              // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-              disabled={saving || (draftModel == null && draftProvider == null)}
+              disabled={
+                saving ||
+                ((draftModel === null || draftModel === undefined) &&
+                  (draftProvider === null || draftProvider === undefined))
+              }
               onClick={handleSave}
               variant="primary-solid"
             >
               {saving
                 ? "保存中…"
-                : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-                  draftModel == null && draftProvider == null
+                : (draftModel === null || draftModel === undefined) &&
+                    (draftProvider === null || draftProvider === undefined)
                   ? "使用当前配置"
                   : "保存并生效"}
             </Button>

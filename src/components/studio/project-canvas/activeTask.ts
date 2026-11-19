@@ -1,14 +1,9 @@
 "use client";
 
 /**
- * 全局执行日志面板关注的 "当前任务" 状态。
- *
- * 节点卡片自身仍负责运行按钮与状态渲染；本模块只解决「全局日志面板该看哪个
- * task」的问题。用模块级变量 + useSyncExternalStore，避免把 taskId 通过 React Flow
- * 边界层层传递。
- *
- * 同时维护 taskId → nodeId 的映射，让日志面板的任务选择器能按画布节点短序号
- * (#1, #2…) 展示，而不是让用户辨认工作流名或 taskId。
+ * 全局执行日志面板关注的「当前任务」状态。节点卡片自身负责运行按钮与状态渲染；本模块只
+ * 解决「全局日志面板该看哪个 task」：用模块级变量 + useSyncExternalStore，避免把 taskId
+ * 通过 React Flow 边界层层传递。同时维护 taskId → nodeId 映射，让选择器按节点短序号展示。
  */
 
 import { useSyncExternalStore } from "react";
@@ -16,6 +11,22 @@ import { useSyncExternalStore } from "react";
 const listeners = new Set<() => void>();
 let activeTaskId: string | null = null;
 const taskNodeMap = new Map<string, string>();
+
+/** 映射条目上限：桌面应用常驻数天，历史任务 id 只进不出会慢性吃内存（#4007）。
+ *  超限按「最久没写过」淘汰——Map 保插入序，重写先删再插即得 LRU 语义
+ * （与 `runner-state` 的 `touchAndEvict` 同一形态）。 */
+const TASK_NODE_MAP_MAX = 256;
+
+function rememberTaskNode(id: string, nodeId: string): void {
+  taskNodeMap.delete(id);
+  taskNodeMap.set(id, nodeId);
+  if (taskNodeMap.size > TASK_NODE_MAP_MAX) {
+    const oldest = taskNodeMap.keys().next().value;
+    if (oldest !== undefined) {
+      taskNodeMap.delete(oldest);
+    }
+  }
+}
 
 export function setActiveTaskId(id: string | null, nodeId?: string): void {
   if (
@@ -30,7 +41,7 @@ export function setActiveTaskId(id: string | null, nodeId?: string): void {
   }
   activeTaskId = id;
   if (id !== null && id !== "" && nodeId !== undefined && nodeId !== "") {
-    taskNodeMap.set(id, nodeId);
+    rememberTaskNode(id, nodeId);
   }
   for (const l of listeners) {
     l();

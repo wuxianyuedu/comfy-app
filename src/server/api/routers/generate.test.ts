@@ -1,12 +1,8 @@
 import type * as LoggerModule from "~/lib/core/logger";
 /**
- * generate.router 集成测试。
- *
- * mock 边界：~/server/db（内存数据库替身）、~/server/better-auth、
- * ~/lib/core/logger（静音）、~/lib/comfyui/enqueue（enqueue 整体 mock——
- * 真模块 import 时会启动 reaper 定时器并连 ComfyUI WS）、
- * repository 走真实实现（内置模板 + token 替换已移除，故不再 mock
- * `~/lib/comfyui/client` 的 listModels）。
+ * generate.router 集成测试。mock 边界：~/server/db（内存替身）、~/server/better-auth、~/lib/core/logger（静音）、
+ * ~/lib/comfyui/enqueue 整体 mock（真模块 import 会启动 reaper 定时器并连 ComfyUI WS）；repository 走真实实现
+ * （内置模板 + token 替换已移除，故不再 mock `~/lib/comfyui/client` 的 listModels）。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type * as AppRuntimeLogModule from "~/lib/log/app-runtime-log";
@@ -43,8 +39,14 @@ vi.mock("~/lib/comfyui/executor-continuation", async () => {
 });
 
 import { createCallerFactory } from "~/server/api/trpc";
+import { asRecord } from "~/lib/is-record";
 import { generateRouter } from "~/server/api/routers/generate";
-import { getTestDb, seedUser, seedWorkflowTemplate } from "../../../../tests/helpers/test-db";
+import {
+  getTestDb,
+  seedTask,
+  seedUser,
+  seedWorkflowTemplate,
+} from "../../../../tests/helpers/test-db";
 import { errorEnvelope, makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(generateRouter);
@@ -94,8 +96,7 @@ describe("generate.generate（工作流库工作流）", () => {
     // 派发不再经内存 Job（§14 D1 第二刀）：载荷只随行走（上面两条断言：
     // claimedBy=inline 与 execPayload），这里踢一次只是省掉等 2s 节拍。
     expect(kickMock).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    expect((row?.params as { workflowInputs?: unknown }).workflowInputs).toEqual([
+    expect(asRecord(row?.params)?.workflowInputs).toEqual([
       { nodeId: "1", name: "text", value: "a cat" },
     ]);
   });
@@ -130,6 +131,32 @@ describe("generate.generate（工作流库工作流）", () => {
     const rowB = tdb.$tables.tasks.find((t) => t.id === bare.taskId);
     expect(rowB?.projectId).toBeNull();
     expect(rowB?.shotId).toBeNull();
+  });
+
+  it("同镜头已有活动任务时拒绝重复生成（#4001）", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "wf-lib",
+      userId: "user-a",
+      name: "库生图",
+      taskType: "T2I",
+      rawJson: RAW_WF,
+    });
+    seedTask(tdb, {
+      id: "task-active",
+      userId: "user-a",
+      projectId: "proj_1",
+      shotId: "shot-3",
+      status: "RUNNING",
+    });
+    await expect(
+      createCaller(makeCtx()).generate({
+        workflow: "wf-lib",
+        prompt: "a cat",
+        projectId: "proj_1",
+        shotId: "shot-3",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(tdb.$tables.tasks).toHaveLength(1);
   });
 
   it("host 模式（COMFY_EXECUTOR=host）：建 host 归属行 + 落 execPayload，**不**进程内 enqueue", async () => {
@@ -201,8 +228,7 @@ describe("generate.generate（RAW 原件执行路径）", () => {
     // 「不再走 /prompt」这条口径现在由 dispatch 只读 execPayload 保证
     // （见 executor-dispatch.test.ts 的「两种载荷都只交 comfy-cli」组）。
     expect(row?.execPayload).toEqual(rawJson);
-    /* SAFETY: 类型断言已复核 */
-    expect((row?.params as { workflowInputs?: unknown }).workflowInputs).toEqual([
+    expect(asRecord(row?.params)?.workflowInputs).toEqual([
       { nodeId: "1", name: "text", value: "hi" },
     ]);
   });

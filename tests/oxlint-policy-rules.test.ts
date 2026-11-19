@@ -1,0 +1,237 @@
+/**
+ * 三条策略守卫「迁到 oxlint 之后仍然真的会响」的对拍用例（#2777）：执行者从 eslint 的 `Linter` 换成 oxlint jsPlugin，
+ * 判据一个字没变（同一个 selector / 同一句 message）。做法：① 从 `oxlint.parity.config.mjs` 读规则条目，不在测试里重抄；
+ * ② 现生成最小探针配置（`node_modules/.cache/`，跑完即删）；③ 仓外临时目录造正反样本，断言命中集合与文案逐字一致。
+ * #3157 起 eslint 已退役，这三条规则只住在判决配置里；router 面排除 `*.test.ts`、drizzle 面只覆盖 components/features。
+ */
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
+import oxlintConfig from "../oxlint.parity.config.mjs";
+
+const ROOT = path.resolve(import.meta.dirname, "..");
+const OXLINT_BIN = path.join(ROOT, "node_modules", "oxlint", "bin", "oxlint");
+const CACHE_DIR = path.join(ROOT, "node_modules", ".cache");
+const ROUTER_GLOB = "src/server/api/routers/**/*.ts";
+const ROUTER_TEST_EXCLUDE = "src/server/api/routers/**/*.test.ts";
+
+/** 一条规则条目：`["error", ...entries]`。 */
+type RuleSetting = [string, ...Array<unknown>];
+type Override = {
+  excludeFiles?: Array<string> | string;
+  files?: Array<string> | string;
+  rules?: Record<string, unknown>;
+};
+/** 作用面档的消费形状守卫（B5 清账）：files / excludeFiles / rules 逐个对型。 */
+function isOverride(value: unknown): value is Override {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const stringOrStrings = (v: unknown): boolean =>
+    v === undefined ||
+    typeof v === "string" ||
+    (isUnknownArray(v) && v.every((s) => typeof s === "string"));
+  return (
+    stringOrStrings(value.files) &&
+    stringOrStrings(value.excludeFiles) &&
+    (value.rules === undefined || isRecord(value.rules))
+  );
+}
+
+/** oxlint JSON 报告的 diagnostics 守卫（B5 清账）：filename / message 都可选串。 */
+function isDiagnostics(value: unknown): value is Array<{ filename?: string; message?: string }> {
+  return (
+    isUnknownArray(value) &&
+    value.every(
+      (d) =>
+        isRecord(d) &&
+        (d.filename === undefined || typeof d.filename === "string") &&
+        (d.message === undefined || typeof d.message === "string"),
+    )
+  );
+}
+
+const storeSelectorMessage =
+  "store selector 里现拼对象字面量 = 每次 store 写入都返回新引用（字段没变也重渲染）。改成只返回原始值/稳定引用，或把派生下沉进 store；useShallow 是最后手段（规范 01 §1.2 / 07 §7.15.1）。";
+const storeNewArrayMessage =
+  "store selector 里用 .map/.filter/.slice 造新数组 = 每次求值都是新引用（字段没变也重渲染）。把它下沉进 store 或抽成 store 内的稳定切片（规范 01 §1.2）。";
+const routerMessage =
+  "router 里请抛 new TRPCError({ code, message })：裸 Error 会被 tRPC 归成 INTERNAL_SERVER_ERROR，客户端就分不出「不存在 / 越权 / 重名」（规范 §11.2.1 第七条、台账 E8）。";
+const drizzleMessage = "UI/features 不得直接依赖 Drizzle orm,请经 src/lib/core 仓储访问数据。";
+
+function overrides(): Array<Override> {
+  const config: unknown = oxlintConfig;
+  const list: unknown = isRecord(config) ? config.overrides : undefined;
+  expect(isUnknownArray(list), "判决配置缺 overrides 数组").toBe(true);
+  return isUnknownArray(list) ? list.filter(isOverride) : [];
+}
+
+function filesOf(one: Override): Array<string> {
+  const files = one.files;
+  if (files === undefined) return [];
+  return Array.isArray(files) ? files : [files];
+}
+
+/** 某条规则在**某一份作用面**上的条目（`files` 命中给定 glob 的那一档）。 */
+function ruleEntries(rule: string, fileGlob: string): Array<unknown> {
+  const block = overrides().find((one) => filesOf(one).includes(fileGlob));
+  if (block === undefined) throw new Error(`判决配置里没有 ${fileGlob} 这一档`);
+  const setting: unknown = block.rules?.[rule];
+  expect(isUnknownArray(setting), `${fileGlob} 那一档没有 ${rule}`).toBe(true);
+  return isUnknownArray(setting) ? setting.slice(1) : [];
+}
+
+/** 判决配置里出现过的全部 `no-restricted-syntax` 条目（按 message 去重：
+ *  router 专档会为了「层覆盖」再把 store 那两条带一遍，探针只需要一份）。 */
+function syntaxEntries(): Array<Record<string, unknown>> {
+  const seen = new Map<string, Record<string, unknown>>();
+  for (const one of overrides()) {
+    const setting: unknown = one.rules?.["eslint-js/no-restricted-syntax"];
+    if (!isUnknownArray(setting)) continue;
+    /* 整条 entry 原样保留（selector + message）——探针少一个字段 oxlint 的
+       options 校验就拒（实测 "Options validation failed"）。 */
+    for (const entry of setting.slice(1)) {
+      const message: unknown = isRecord(entry) ? entry.message : undefined;
+      if (typeof message === "string" && isRecord(entry)) {
+        seen.set(message, entry);
+      }
+    }
+  }
+  expect(seen.size, "store 两条 + router 一条").toBe(3);
+  return [...seen.values()];
+}
+
+/** 在 `node_modules/.cache/` 写一份只含三条策略的最小探针配置（跑完即删）。 */
+function writeProbeConfig(probePath: string): void {
+  const drizzleEntries = ruleEntries("eslint-js/no-restricted-imports", "src/components/**");
+  const drizzleSetting: RuleSetting = ["error", ...drizzleEntries];
+  const body = `// 本文件由 tests/oxlint-policy-rules.test.ts 每次运行现生成，勿手改。
+export default {
+  categories: {
+    correctness: "off",
+    suspicious: "off",
+    perf: "off",
+    style: "off",
+    restriction: "off",
+    nursery: "off",
+    pedantic: "off",
+  },
+  jsPlugins: [{ name: "eslint-js", specifier: "oxlint-plugin-eslint" }],
+  rules: {
+    "eslint-js/no-restricted-syntax": ${JSON.stringify(["error", ...syntaxEntries()])},
+    "eslint-js/no-restricted-imports": ${JSON.stringify(drizzleSetting)},
+  },
+};
+`;
+  writeFileSync(probePath, body, "utf8");
+}
+
+/** 跑一次 oxlint，返回「文件名 → 诊断文案」的映射。 */
+function runProbe(probeConfig: string, fixtures: Array<string>): Map<string, Array<string>> {
+  const r = spawnSync(
+    process.execPath,
+    [OXLINT_BIN, "--config", probeConfig, "-f", "json", ...fixtures],
+    {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+    },
+  );
+  const out = r.stdout;
+  expect(out, `oxlint 没输出 JSON：${r.stderr}`).toBeTruthy();
+  const reportParsed: unknown = JSON.parse(out);
+  const diagnostics: unknown = isRecord(reportParsed) ? reportParsed.diagnostics : undefined;
+  if (!isDiagnostics(diagnostics)) {
+    throw new Error(`oxlint 的 JSON 报告形状变了：${out.slice(0, 200)}`);
+  }
+  const report = { diagnostics };
+  const map = new Map<string, Array<string>>();
+  for (const diag of report.diagnostics ?? []) {
+    const name = path.basename(diag.filename ?? "");
+    const list = map.get(name) ?? [];
+    list.push(diag.message ?? "");
+    map.set(name, list);
+  }
+  return map;
+}
+
+describe("① oxlint 侧真的会响：store selector / router / drizzle 三条全在", () => {
+  it("正反样本按原口径命中，文案逐字不变", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "oxlint-policy-"));
+    const probeConfig = path.join(CACHE_DIR, "oxlint-policy-probe.config.mjs");
+    try {
+      const samples: Record<string, string> = {
+        "store-object.ts": "export const a = useShellTabs((s) => ({ tabs: s.tabs }));\n",
+        "store-new-array.ts":
+          "export const b = useLogCategoryStore((s) => s.items.filter((x) => x.enabled));\n",
+        "store-ok.ts": "export const c = useShellTabs((s) => s.activeTabId);\n",
+        "store-react-hook.ts": "const f = useMemo(() => ({ n: 1 }), []);\n",
+        "router-bare.ts": 'export const d = () => {\n  throw new Error("x");\n};\n',
+        "router-typeerror.ts": 'export const e = () => {\n  throw new TypeError("x");\n};\n',
+        "router-trpc.ts":
+          'export const f = () => {\n  throw new TRPCError({ code: "NOT_FOUND" });\n};\n',
+        "import-drizzle.ts": 'import { eq } from "drizzle-orm";\nexport const g = eq;\n',
+        "import-drizzle-sub.ts":
+          'import { pgTable } from "drizzle-orm/pg-core";\nexport const h = pgTable;\n',
+        "import-core.ts":
+          'import { listProjects } from "~/lib/core/projects";\nexport const i = listProjects;\n',
+      };
+      const fixtures: Array<string> = [];
+      for (const [name, code] of Object.entries(samples)) {
+        const file = path.join(dir, name);
+        writeFileSync(file, code, "utf8");
+        fixtures.push(file);
+      }
+
+      writeProbeConfig(probeConfig);
+      const hits = runProbe(probeConfig, fixtures);
+
+      expect(hits.get("store-object.ts")).toEqual([storeSelectorMessage]);
+      expect(hits.get("store-new-array.ts")).toEqual([storeNewArrayMessage]);
+      expect(hits.get("router-bare.ts")).toEqual([routerMessage]);
+      expect(hits.get("router-typeerror.ts")).toEqual([routerMessage]);
+      expect(hits.get("import-drizzle.ts")).toEqual([
+        `'drizzle-orm' import is restricted from being used by a pattern. ${drizzleMessage}`,
+      ]);
+      expect(hits.get("import-drizzle-sub.ts")).toEqual([
+        `'drizzle-orm/pg-core' import is restricted from being used by a pattern. ${drizzleMessage}`,
+      ]);
+
+      // 反向对照：合法形态一条都不报（闸过宽时这里会红）。
+      expect(hits.has("store-ok.ts")).toBe(false);
+      expect(hits.has("store-react-hook.ts")).toBe(false);
+      expect(hits.has("router-trpc.ts")).toBe(false);
+      expect(hits.has("import-core.ts")).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      if (existsSync(probeConfig)) rmSync(probeConfig, { force: true });
+    }
+  });
+});
+
+describe("③ 文件作用面与原来一致", () => {
+  it("router 专档仍排除 *.test.ts（夹具要模拟裸 Error）", () => {
+    const block = overrides().find((one) => filesOf(one).includes(ROUTER_GLOB));
+    expect(block, `判决配置里没有 ${ROUTER_GLOB} 这一档`).toBeDefined();
+    const exclude = block?.excludeFiles;
+    expect(Array.isArray(exclude) ? exclude : [exclude]).toContain(ROUTER_TEST_EXCLUDE);
+  });
+
+  it("drizzle 档只覆盖 components / features", () => {
+    const entries = ruleEntries("eslint-js/no-restricted-imports", "src/components/**");
+    /* 条目形状按 unknown 读（B5 清账）：patterns[0].group 逐层守卫。 */
+    const options: unknown = entries[0];
+    const patterns: unknown = isRecord(options) ? options.patterns : undefined;
+    const first: unknown = isUnknownArray(patterns) ? patterns[0] : undefined;
+    const group: unknown = isRecord(first) ? first.group : undefined;
+    expect(isUnknownArray(group) ? group : undefined).toEqual(["drizzle-orm", "drizzle-orm/*"]);
+    const scoped = overrides().filter((one) => filesOf(one).includes("src/components/**"));
+    expect(scoped).toHaveLength(1);
+    expect(filesOf(scoped[0] ?? {})).toEqual(["src/components/**", "src/features/**"]);
+  });
+});

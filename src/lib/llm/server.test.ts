@@ -26,9 +26,16 @@ import {
   streamLLM,
   completeLLMStructured,
   completeLLMTools,
+  MAX_SSE_LINE_BUFFER_CHARS,
 } from "~/lib/llm/server";
+import { logger } from "~/lib/core/logger";
 import type { LLMConfig, LLMTool } from "~/lib/llm/types";
-import { llmConfigRepository } from "~/lib/core/repository-user";
+import { isRecord } from "~/lib/is-record";
+import {
+  llmConfigRepository,
+  llmProviderRepository,
+  remoteModelRepository,
+} from "~/lib/core/repository-user";
 import { getTestDb, seedRemoteModel } from "../../../tests/helpers/test-db";
 import { z } from "zod";
 
@@ -45,38 +52,34 @@ const CFG = (over: Partial<LLMConfig> = {}): LLMConfig => ({
   ...over,
 });
 
-/** 一次性响应替身：`res.json()` / `res.text()` 都可用。 */
-function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}): Response {
-  const status = init.status ?? 200;
-  /* SAFETY: 类型断言已复核 */
-  return {
-    ok: init.ok ?? (status >= 200 && status < 300),
-    status,
-    json: async () => body,
-    text: async () => JSON.stringify(body),
-    body: null,
-  } as unknown as Response;
+/** 一次性响应替身：真实 `Response`，`res.json()` / `res.text()` 都可用。 */
+function jsonResponse(body: unknown, init: { status?: number } = {}): Response {
+  return new Response(JSON.stringify(body), { status: init.status ?? 200 });
 }
 
-/** 流式响应替身：按给定 chunk 逐次吐出 `reader.read()` 的结果。 */
+/** 流式响应替身：把给定 chunk 逐段写进真实 `ReadableStream` 作为响应体。 */
 function streamResponse(chunks: Array<string>): Response {
   const encoder = new TextEncoder();
-  let i = 0;
-  /* SAFETY: 类型断言已复核 */
-  return {
-    ok: true,
-    status: 200,
-    json: async () => ({}),
-    text: async () => "",
-    body: {
-      getReader: () => ({
-        read: async () =>
-          i < chunks.length
-            ? { done: false, value: encoder.encode(chunks[i++]) }
-            : { done: true, value: undefined },
-      }),
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
     },
-  } as unknown as Response;
+  });
+  return new Response(stream, { status: 200 });
+}
+
+/** fetch 首参收窄成 URL 字符串（运行时只可能是字符串或 Request）。 */
+function readCallUrl(input: unknown): string {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input instanceof Request) {
+    return input.url;
+  }
+  throw new TypeError("fetch 首参既不是字符串也不是 Request");
 }
 
 /** 忽略 token 回调的占位（避免 lint 的空函数告警，同时语义清楚）。 */
@@ -86,26 +89,33 @@ const fetchMock = vi.fn<typeof fetch>();
 
 /** 取第 n 次 fetch 调用的 (url, init)，并把 init 收成可安全访问的形状。 */
 function callAt(n = 0): { init: RequestInit; url: string } {
-  const call = fetchMock.mock.calls[n]!;
-  // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
-  // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
-  const arg: unknown = call[0];
-  /* SAFETY: 类型断言已复核 */
-  const url = typeof arg === "string" ? arg : (arg as Request).url;
-  return { url, init: call[1] ?? {} };
+  const call = fetchMock.mock.calls[n];
+  if (!call) {
+    throw new TypeError(`fetch 第 ${n} 次调用不存在`);
+  }
+  return { url: readCallUrl(call[0]), init: call[1] ?? {} };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
 function sentBody(n = 0): Record<string, unknown> {
   const raw = callAt(n).init.body;
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<string, unknown>;
+  const parsed: unknown = JSON.parse(typeof raw === "string" ? raw : "{}");
+  return isRecord(parsed) ? parsed : {};
 }
 
 /** 取第 n 次 fetch 调用的请求头。 */
 function sentHeaders(n = 0): Record<string, string> {
-  /* SAFETY: 类型断言已复核 */
-  return (callAt(n).init.headers ?? {}) as Record<string, string>;
+  const headers: unknown = callAt(n).init.headers ?? {};
+  if (!isRecord(headers)) {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return out;
 }
 
 beforeEach(() => {
@@ -217,6 +227,24 @@ describe("getLLMConfig 的三层叠加（env → DB → 请求覆盖）", () => 
     expect(local.apiKey).toBe("sk-global");
   });
 
+  it("远端行：模型级格式优先，未设时回落供应商默认（#3517）", async () => {
+    await llmConfigRepository.upsertSingleton({ provider: "remote", baseUrl: "https://global/v1" });
+    const provider = await llmProviderRepository.save({
+      name: "Agnes",
+      baseUrl: "https://apihub.agnes-ai.com/v1",
+      apiFormat: "anthropic-messages",
+    });
+    await remoteModelRepository.saveModel({
+      name: "own-format",
+      providerId: provider.id,
+      apiFormat: "responses",
+    });
+    await remoteModelRepository.saveModel({ name: "inherit-format", providerId: provider.id });
+
+    expect((await getLLMConfig({ model: "own-format" })).apiFormat).toBe("responses");
+    expect((await getLLMConfig({ model: "inherit-format" })).apiFormat).toBe("anthropic-messages");
+  });
+
   it("DB 的本地候选名 + remoteModel 表条目 + 遗留远端对象三者合并进 extraModels", async () => {
     await llmConfigRepository.upsertSingleton({
       baseUrl: "https://global/v1",
@@ -259,6 +287,8 @@ describe("getConfigForClient", () => {
         // 但「这条存没存过密钥」必须出门，否则客户端分不清「没配过」与「没重填」。
         hasApiKey: false,
         kind: "chat",
+        // #3501：所属供应商 id（历史遗留行为 null，供应商页据此分组）。
+        providerId: null,
       },
     ]);
     expect(out.apiKey).toBeUndefined();
@@ -286,7 +316,7 @@ describe("getConfigForClient", () => {
     expect(serialized).not.toContain("sk-remote-secret");
     // 脱敏不等于把条目也删掉：设置页要看得见「这条远端模型存在、且配过密钥」——
     // 后者是台账 A11 的另一半：没有这个信息，客户端就无法把「没重填」与「清空」分开表达。
-    const remote = out.extraModels.find((e) => typeof e === "object" && e?.name === "tbl-keyed");
+    const remote = out.extraModels.find((e) => typeof e === "object" && e.name === "tbl-keyed");
     expect(remote).toMatchObject({
       name: "tbl-keyed",
       baseUrl: "https://t/v1",
@@ -414,6 +444,7 @@ describe("completeLLM（一次性补全）", () => {
   it("choices 缺失 / 空数组 / content 缺失 → 回空串而不是崩", async () => {
     for (const payload of [{}, { choices: [] }, { choices: [{}] }]) {
       fetchMock.mockResolvedValue(jsonResponse(payload));
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       expect(await completeLLM(CFG(), [])).toBe("");
     }
   });
@@ -438,13 +469,7 @@ describe("completeLLM（一次性补全）", () => {
   });
 
   it("错误响应体为空时不拼多余的冒号", async () => {
-    /* SAFETY: 类型断言已复核 */
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 502,
-      text: async () => "",
-      json: async () => ({}),
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(new Response("", { status: 502 }));
     await expect(completeLLM(CFG(), [])).rejects.toThrow(/LLM 请求失败 \(502\)$/);
   });
 });
@@ -480,19 +505,35 @@ describe("streamLLM（流式补全）", () => {
   });
 
   it("服务端不返回 body → 明确报「未返回数据流」", async () => {
-    /* SAFETY: 类型断言已复核 */
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      body: null,
-      json: async () => ({}),
-      text: async () => "",
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
     await expect(streamLLM(CFG(), [], noop)).rejects.toThrow(/未返回数据流/);
   });
 
   it("未配置模型时同样先拦下", async () => {
     await expect(streamLLM(CFG({ model: "" }), [], noop)).rejects.toThrow(/尚未配置生效模型/);
+  });
+
+  it("不完整行超过 1MB 上限 → 明确报「不是 SSE 流」，不再无界累积（#4340）", async () => {
+    // 畸形上游：持续发不含换行的超大帧（baseUrl 配错 / 返回非 SSE 内容）。
+    fetchMock.mockResolvedValue(
+      streamResponse([
+        "x".repeat(MAX_SSE_LINE_BUFFER_CHARS + 1),
+        "x".repeat(MAX_SSE_LINE_BUFFER_CHARS),
+      ]),
+    );
+    await expect(streamLLM(CFG(), [], noop)).rejects.toThrow(/不是 SSE 流/);
+  });
+
+  it("恰好在上限内的不完整行不误伤（超大无换行帧合法通过）", async () => {
+    // 贴边界的缓冲行仍按 SSE 解析（坏帧跳过），后面的正常帧照常出 token。
+    fetchMock.mockResolvedValue(
+      streamResponse([
+        "x".repeat(MAX_SSE_LINE_BUFFER_CHARS),
+        "\n\n",
+        'data: {"choices":[{"delta":{"content":"X"}}]}\n\n',
+      ]),
+    );
+    expect(await streamLLM(CFG(), [], noop)).toBe("X");
   });
 });
 
@@ -608,5 +649,22 @@ describe("completeLLMTools（tools 协议）", () => {
       content: "",
       toolCalls: [],
     });
+  });
+});
+
+describe("getLLMConfig 的配置行读取失败出口（#4419）", () => {
+  it("DB 读失败：留 warn 读数并回落 env 默认（故障可见，不冒充成功）", async () => {
+    const base = await getLLMConfig();
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    const spy = vi
+      .spyOn(llmConfigRepository, "findSingleton")
+      .mockRejectedValueOnce(new Error("db down"));
+
+    const cfg = await getLLMConfig();
+
+    expect(cfg).toEqual(base);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("配置行读取失败"));
+    spy.mockRestore();
+    warn.mockRestore();
   });
 });

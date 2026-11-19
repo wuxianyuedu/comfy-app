@@ -70,9 +70,7 @@ describe("renderProjectFilm", () => {
   });
 
   it("服务端报错（如无镜头）→ 回传失败 + 原因", async () => {
-    createMock.mockRejectedValue(
-      new Error("该项目还没有镜头，请先在工坊产出镜头再成片"),
-    );
+    createMock.mockRejectedValue(new Error("该项目还没有镜头，请先在工坊产出镜头再成片"));
     const r = await renderProjectFilm({
       projectId: "proj_1",
       videoWorkflowId: "wf-video",

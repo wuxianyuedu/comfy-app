@@ -6,22 +6,71 @@
 # 刻意不承接 / 不同形：
 #   · `打包·壳工具链自证`（--rust-only）是自托管宿主机事实读数；windows-latest 镜像
 #     自带 Rust 工具链，无需自证，cargo 缓存由 swatinem/rust-cache 承担。
-#   · ⚠️ **发布落点不同形（待确认的决策点）**：CNB 那一格 `publish-desktop-bundle.mjs`
-#     发布到**本机常驻目录**（留 2 份）；GitHub runner 是即弃机，等价物是
-#     `upload-artifact`（下方最后一步）。要 GitHub Releases / 仍回写那台机的常驻目录 /
-#     两者都要，是单独一次决定 —— 决定落地前这里先出 artifact。
+#   · **发布落点不同形（已定）**：CNB 桌包档已随 #3504 退役，`publish-desktop-bundle.mjs`
+#     今天只有本地一个执行者（落点见规范 §7.7）；GitHub runner 是即弃机，回写开发机既没有
+#     通道也不该让一次 CI 反过来写它。所以这里是 `upload-artifact`（14 天，按 run 取）+
+#     滚动 `nightly` GitHub Release（按名字取，每天都指向最新一份）。两者各答一件事：
+#     「这一跑产了什么」与「现在要拿一个包去哪拿」。Release 用 runner 自带的 `gh`
+#     与 workflow 级 `permissions: contents: write`，不引第三方 action。
+#     **#3607 起再多一个 CNB 站内落点**：同一份成品由收尾步
+#     `ci-ga-desktop-relay.mjs` 回传到 CNB 的滚动 `nightly` Release（站内取包地）——
+#     GitHub 对这条链只是镜像仓，用户在 CNB 侧提诉求、也该在 CNB 侧拿包。
+#   · **两类成品分开下载（ISSUE #3345）**：安装版（nsis / msi）与免安装版（解压即用的
+#     portable zip）是两种分发形态，不再混进同一个 artifact。`pnpm tauri build` 只产
+#     安装包；紧接着那一格用 `scripts/build/package-desktop-portable.mjs` 把同一份载荷按
+#     打包器同布局（`app.exe` + `node.exe` + `static/**`，见规范 §7.6）收成单个 zip。
+#     两个 artifact 各传一类、Release 资产也按名字分开 —— 拿包的人不用再从一堆 exe 里挑。
 #   · CNB 的 `ci-cp936-exit.mjs` 包裹是给 CP936 控制台的转码层；GitHub Windows runner
 #     的 pwsh 输出 UTF-8，直跑真命令。
 #
+# ⚠️ 桌包工具预置这一格曾四跑全红（schedule #1~#4，均 3-4s、`exit code 2`）⇒ 打包步
+#    整片 skipped，artifact 与 nightly 从第一天起就是空的。根因不是资产失效（URL / sha256 /
+#    字节 / zip 顶层目录逐件实测为真），而是 `tauri-tools-cache.mjs --download` 用 `tar -xf`
+#    解 zip，而本步 `shell: bash` 是 Git Bash、里面的 `tar` 是 GNU tar、不读 zip —— 下载完
+#    即 `bail(2)`。脚本侧已把解 zip 换成仓内既有的纯 Node `extractZipTo`（带 zip-slip 防护），
+#    不再押 Windows 自带 bsdtar；本文件这一侧同步把工具根从写死盘符换成 `runner.temp`。
+#    详见 §7.7 与 `ci-toolchain-browser-fetch.mjs`「为什么不走 tar -xf」。
+#
 # ⚠️ schedule 只跑在**镜像仓默认分支**上（同 daily.yml 那段前提，#3064 起已接上）。
-# `workflow_dispatch`（可指 sha）仍是手动入口。GitHub cron 是 UTC：北京 03:00 = UTC 19:00。
+# `workflow_dispatch`（可指 sha）仍是手动入口。GitHub cron 是 UTC：北京 03:37 = UTC 19:37。
+# 挪出整点（#3485）理由同 daily.yml 文件头：官方明示整点高负载下 schedule 会延迟
+# 甚至被丢弃，历史读数里本档也从来没准点过（名义 19:00 UTC 实际落在 22:31–23:55Z）。
 # `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7；pnpm/action-setup 与 rust-cache
 # 的最新主版本分别是 v6 与 v2）。
+#
+# ⚠️ `push`（master + paths，ISSUE #4326）：壳相关内容合入 master 即自动构建一次，
+# 不等每晚 03:37 的定时档。镜像格把 CNB master 的 squash 合并以 --force 推到本仓
+# 默认分支（force push 必触发 push 事件，§7.7.1 已坐实），paths 按 before/after
+# compare 取这一次合并的改动面；compare 解析不了 before（force-push 边缘形态）时
+# GitHub 按「全部变更」处理 ⇒ 宁可多建不漏建，与「master 上永远有最新壳」同向。
+# paths 刻意只收「改了它，壳或它的装配链就变了」的输入，**不收 `src/**`**：嵌入包里的
+# 前端由每日定时档兜底刷新，别让每次前端合并都付一次 Windows 全量构建（触发面由
+# `tests/ci-ga-trigger-map.test.ts` 钉住）。push 触发与 schedule / 手点口共用下面那把
+# `package` 并发锁（cancel-in-progress）：更新的一跑掐掉在跑的旧跑，最新者胜。
 name: Package desktop (mirror)
+
+# `nightly` 滚动 Release 要写 tag / 上传资产；其余格只需要读代码。
+# 不写成仓库级默认写权限 —— 这一档是唯一需要它的 workflow。
+permissions:
+  contents: write
+  # 失败立案要读这一跑的 jobs（`/actions/runs/{id}/jobs`），因此显式要 actions: read；
+  # 其余权限按最小面给（本档只需要写 Release + 读自身 jobs）。
+  actions: read
 
 on:
   schedule:
-    - cron: "0 19 * * *"
+    - cron: "37 19 * * *"
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/package-desktop.yml
+      - src-tauri/**
+      - public/splash.html
+      - scripts/build-desktop.mjs
+      - scripts/sidecar-name.mjs
+      - scripts/standalone-private-inputs.mjs
+      - scripts/launcher-core/splash-assets.mjs
+      - scripts/build/**
   workflow_dispatch:
     inputs:
       head_sha:
@@ -38,10 +87,6 @@ env:
   SKIP_ENV_VALIDATION: "1"
   BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
   CI: "true"
-  # NSIS 工具镜像的常驻根（resolveToolRoot 的显式出口，scripts/ci-cache-slot.mjs）。
-  # 即弃机没有「本机种过」的前提 ⇒ 根必须落在 actions/cache 接住的路径上（下方 cache 步），
-  # miss 那一跑由 tauri-tools-cache.mjs --download 从被钉的公开资产建镜像。
-  COMFY_CI_TOOLS_ROOT: "D:\\ci-tools"
 
 jobs:
   package:
@@ -54,12 +99,14 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.head_sha || github.sha }}
-          fetch-depth: 0
+          # 桌包档定时触发在 master HEAD，打包不做三点 diff / 不读 origin/master ⇒ 1 够。
+          fetch-depth: 1
           # 打包要把字体真身嵌进成品（LFS 指针文件打进去就是坏包）⇒ 这一格必须拉 LFS。
           # 对象由镜像那一格 `git lfs push` 送到；配额口径见 pr-gate.yml 同名注释。
           lfs: true
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        id: setup-pnpm
         uses: pnpm/action-setup@v6
 
       - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
@@ -70,37 +117,216 @@ jobs:
 
       - name: cargo 缓存
         uses: swatinem/rust-cache@v2
+        with:
+          # workspace 在 src-tauri/（仓根没有 Cargo.toml）——与 pr-gate.yml 同一填法；
+          # 不指过去，rust-cache 在仓根跑 `cargo metadata` 只会拿到 exit 101。
+          workspaces: src-tauri
+          # 打包编译最贵；前一笔失败也要把已编好的依赖留给下一跑（#4317）。
+          cache-on-failure: true
 
-      - name: 安装依赖（冷装约 8 分钟；better-sqlite3 原生编译吃 VS 生成工具，镜像自带）
+      - name: 安装依赖（better-sqlite3 原生编译吃 VS 生成工具，镜像自带）
         run: pnpm install --frozen-lockfile
 
+      # `pnpm tauri build` 的 `beforeBuildCommand` 是 `node scripts/build-desktop.mjs`：
+      # 它跑在 Node 子进程里，再从 `ci-install-deps.mjs` 的 `pnpmCli()` 找 pnpm —— 那条
+      # 判据只认「PATH 条目下能真起 `pnpm.exe -v` 的绝对路径」。action-setup 加进 PATH
+      # 的是 `<dest>/node_modules/.bin`（npm 在 Windows 摆 `pnpm` / `.cmd` / `.ps1` 垫片）
+      # 与 `<dest>/node_modules/.bin/bin`（`self-update` 落点）；pnpm 12 的原生 `pnpm.exe`
+      # 在 `<dest>/node_modules/pnpm/`，**不在 PATH 上**（ISSUE #3305）。
+      #
+      # 不能从 `bin_dest` 拼父目录猜：bootstrap 装 12.17.0、本仓钉 12.4.1 ⇒ 走
+      # `self-update`，`bin_dest` 实为 `.bin/bin`，它的父目录里 `pnpm` 是**垫片文件**而非
+      # 目录，`Test-Path` 对文件也返回真 —— 上一轮就是这样把文件路径追加进 GITHUB_PATH、
+      # 该格假绿，而 build-desktop 仍回落裸 `pnpm` ⇒ ENOENT。这一格改为取 action-setup 的
+      # `dest` 输出，枚举真身目录并**真起一次 `pnpm.exe -v`**，起不来就当场红，不冒充绿。
+      - name: 把 pnpm 真身目录补进 PATH（供 beforeBuildCommand 的 Node 子进程）
+        shell: pwsh
+        env:
+          # `${{ }}` 不直接写进 `run:`：经 env 传入，避免表达式文本被宿主二次解释。
+          PNPM_DEST: ${{ steps.setup-pnpm.outputs.dest }}
+          PNPM_BIN_DEST: ${{ steps.setup-pnpm.outputs.bin_dest }}
+        run: |
+          # 顺序有意义：`bin_dest` 是 self-update 的落点（版本与 packageManager 一致），
+          # 优先用它；bootstrap 的 `<dest>/node_modules/pnpm` 是 12.17.0 真身，作兜底。
+          $candidates = @(
+            $env:PNPM_BIN_DEST,
+            (Join-Path $env:PNPM_DEST 'node_modules/pnpm')
+          ) | Select-Object -Unique
+          $found = $null
+          foreach ($dir in $candidates) {
+            if (-not (Test-Path -LiteralPath $dir -PathType Container)) { continue }
+            $exe = Join-Path $dir 'pnpm.exe'
+            if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { continue }
+            & $exe -v | Out-Null
+            if ($LASTEXITCODE -ne 0) { continue }
+            $found = $dir
+            break
+          }
+          if (-not $found) {
+            Write-Error "没找到能真起 pnpm.exe -v 的目录（候选：$($candidates -join ', ')）"
+            exit 1
+          }
+          # 补的是**真身目录**（不是 .bin 垫片目录）：pwsh 与 Node 两条解析面都够得着。
+          $found | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "[package-desktop] pnpm 真身目录已补进 PATH：$found"
+
       # NSIS 工具镜像做成跨跑缓存：key 锁死 NSIS_PLAN 的版本（3.13），版本升上去 = 同批改
-      # 这里与 scripts/tauri-tools-cache.mjs 的 NSIS_PLAN。path 即 mirrorDir 的落点
-      # （<COMFY_CI_TOOLS_ROOT>/nsis/3.13）。命中 ⇒ 预置步的 ensure 直接补齐 bundler 缓存；
-      # miss ⇒ 预置步先 --download 建镜像（付一次下载），本步在跑尾把镜像存进缓存。
+      # 这里与 scripts/build/tauri-tools-cache.mjs 的 NSIS_PLAN。path 即 mirrorDir 的落点
+      # （<COMFY_CI_TOOLS_ROOT>/nsis/3.13），与预置步 COMFY_CI_TOOLS_ROOT 同源。命中 ⇒ 预置步的
+      # ensure 直接补齐 bundler 缓存；miss ⇒ 预置步先 --download 建镜像（付一次下载），
+      # 本步在跑尾把镜像存进缓存。
       - name: NSIS 工具镜像缓存（锁 3.13）
         uses: actions/cache@v6
         with:
-          path: D:\ci-tools\nsis\3.13
+          path: ${{ runner.temp }}\ci-tools\nsis\3.13
           key: comfyapp-nsis-3.13-${{ runner.os }}
 
       # ensure || (download && ensure)：三态 fail-closed 不静默降级 —— 镜像已在场
       # （缓存命中）⇒ ensure 补齐即过；两边都没有（缓存 miss）⇒ ensure 退 2，接 --download
       # 从被钉的公开资产建镜像再 ensure；下载/解压失败退 2、哈希对不上退 1，都是红。
-      # 用 bash 是为了 `||`/`&&` 链式语义在所有 Windows runner 镜像上一致（不依赖 pwsh 版本）。
+      # `shell: bash` 只为 `||`/`&&` 链式语义一致；脚本内部的解 zip 已改用纯 Node，不再
+      # 经 bash 里的 `tar`（GNU tar 不读 zip，正是四跑全红那一格）。
       - name: 桌包工具预置（cnb 同款入口；缓存 miss 时先 --download 建镜像）
         shell: bash
-        run: node scripts/tauri-tools-cache.mjs || (node scripts/tauri-tools-cache.mjs --download && node scripts/tauri-tools-cache.mjs)
+        # `runner` context 只在 step 级可用；放进 workflow 级 env 会让整份文件解析失败
+        # （Unrecognized named-value: 'runner'）。工具根与上方 cache 的 path 同源。
+        env:
+          COMFY_CI_TOOLS_ROOT: ${{ runner.temp }}\ci-tools
+        run: node scripts/build/tauri-tools-cache.mjs || (node scripts/build/tauri-tools-cache.mjs --download && node scripts/build/tauri-tools-cache.mjs)
 
       - name: 桌面成品构建（cnb 同款判据一字不改）
         run: pnpm tauri build
 
+      # 免安装版：同一份载荷、不打安装器。输出刻意放在 bundle/ 之外 —— 放进 bundle/
+      # 会被下面「安装版」artifact 一起收走，两类成品又混回一处。
+      # 组装步只读三件现成产物（壳 / sidecar / static），缺件即红，不重跑任何构建。
+      - name: 组装免安装版（portable zip；与安装包同一次构建、同一份载荷）
+        run: node scripts/build/package-desktop-portable.mjs --out portable/ComfyAPP-portable.zip --stage portable-stage
+
       # upload-artifact v4 → v7（2026-11-02 核过 tag）：v5 起 node24 运行时，v6 起要求
       # runner ≥ 2.327.1（托管 runner 恒满足），v7 新增 `archive` 输入（缺省 true ⇒
       # 本步的 name/path/retention-days 用法不变）。
-      - name: 上传桌面成品（artifact；发布落点的最终决定见文件头）
+      # 两个 artifact 各装一类：下载页上能分别点「安装版」与「免安装版」。
+      - name: 上传安装版（artifact：nsis / msi）
         uses: actions/upload-artifact@v7
         with:
-          name: comfyapp-desktop-bundle
-          path: src-tauri/target/release/bundle/
+          name: comfyapp-desktop-installer
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
           retention-days: 14
+          # 打包绿了却一个安装包都没有 ⇒ 判红，不许 warn 蒙混（§7.7「发布只能排在构建绿之后」）。
+          if-no-files-found: error
+
+      - name: 上传免安装版（artifact：解压即用的 portable zip）
+        uses: actions/upload-artifact@v7
+        with:
+          name: comfyapp-desktop-portable
+          path: portable/ComfyAPP-portable.zip
+          retention-days: 14
+          # 免安装版缺件也判红：少 sidecar / server.js 的包在用户机器上是「双击没反应」，
+          # 构建侧静默放行 = 发一个起不来的包。
+          if-no-files-found: error
+
+      # 发布落点：CNB 那一格把成品留在本机常驻目录（留 2 份），GitHub runner 是即弃机，
+      # 等价物是 GitHub Releases 的滚动 `nightly` tag —— artifact 只活 14 天，而「现在
+      # 要拿一个包」的人不该先去翻某一次 run。用 runner 自带的 `gh`，不引第三方
+      # action（`uses:` 主版本要逐仓核 tag，这里没有需要它的能力）。
+      # `--clobber` 是滚动 tag 的关键：每天同一组资产名，没有它第二天就撞已存在。
+      - name: 发布到滚动 Release（nightly）
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 先数两类成品再动 Release：空手时不许先 create 出一个没有资产的 nightly tag。
+          mapfile -d '' installers < <(find src-tauri/target/release/bundle -type f \( -name '*.exe' -o -name '*.msi' \) -print0)
+          portable=portable/ComfyAPP-portable.zip
+          if [ ${#installers[@]} -eq 0 ] || [ ! -f "$portable" ]; then
+            echo "两类成品不齐（安装包 ${#installers[@]} 份 / 免安装版 $([ -f "$portable" ] && echo 有 || echo 无)），滚动 Release 不动"
+            exit 1
+          fi
+          gh release view nightly >/dev/null 2>&1 || \
+            gh release create nightly --title "每日桌面成品" \
+              --notes "定时任务滚动更新，保留最新一份。安装版 = setup.exe / msi；免安装版 = *-portable.zip（解压后双击 app.exe 即用）" --prerelease
+          gh release upload nightly "${installers[@]}" "$portable" --clobber
+
+      # ISSUE #3607：把**同一份成品**回传到 CNB 侧的滚动 `nightly` Release —— 用户是在
+      # CNB 这一侧提诉求、拿包的（本地双击 build-all.ps1 得 release 壳，希望「这步的产物
+      # 能在 CNB 侧执行和获取」），GitHub 只是镜像仓，不是取包地。与 #3437 日志搬运同一条
+      # 「GA 写 / CNB 站内读」分工，载荷换成真正的二进制成品；落点是 Release 附件（有稳定
+      # 下载 URL），不是制品库（裸 exe/msi/zip 不适配）也不是 Issue 附件（随 PR 号找）。
+      #
+      # ⚠️ 诉求原意含「只要 build-tauri-release.ps1 那个壳、dev server 照用」：本格除
+      # 安装版 / 免安装版外，另回传一个**单文件纯壳** `ComfyAPP-shell.exe`（读现成的
+      # `src-tauri/target/release/app.exe`，不重编、不打包）。它与本地编出来的壳同为
+      # prebuilt 形态：放进项目检出根后壳自编排起 dev-launcher.mjs（§1.5），页面由本地
+      # dev server 提供。二进制 PUT 的墙钟与网络类重试在脚本内（ISSUE #3621），这一格
+      # 只负责把现成产物的落点传进去。
+      #
+      # 刻意排在 GH Release 之后：GH 那一步已保证「两类成品都在盘上」，本步只读现成文件、
+      # 不重跑任何构建。`continue-on-error: true` 与 #3437 同口径 —— 回传失败只多一行读数、
+      # 绝不反过来把「桌包打出来了」判成失败（判闸在 CNB 侧，与本格无关）。
+      #
+      # 令牌专用 `CNB_RELEASE_TOKEN`（`repo-release:rw`）：现有 `CNB_ISSUE_TOKEN` 只有
+      # `repo-notes:rw`（写 Release 会 403），给它扩权违反最小权限；这枚只服务本格。
+      # 脚本复用 `ci-ga-logs-relay.mjs` 导出的 `cnbRequest` 底座，不另写一套请求层。
+      # 首次创建 CNB `nightly` Release 时脚本带 `target_commitish`（缺省默认分支 master，
+      # 可用 `CNB_RELEASE_TARGET` 覆盖）——服务端硬必填，漏带即 400（ISSUE #3611）；
+      # 这里不用 `GITHUB_SHA`，那是镜像仓的 commit，CNB 仓未必有同一个 sha。
+      - name: 回传成品到 CNB（滚动 nightly Release）
+        continue-on-error: true
+        env:
+          CNB_RELEASE_TOKEN: ${{ secrets.CNB_RELEASE_TOKEN }}
+          CNB_REPO_SLUG: moon-read/comfy-app-t3
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          DESKTOP_SHELL_EXE: src-tauri/target/release/app.exe
+        run: node scripts/ci/ci-ga-desktop-relay.mjs
+
+  # 失败立案（#2874 的立案格：桌包档跑红 ⇒ CNB 单，按格名去重）。
+  # 本档此前**没有**这一格 —— CNB 的 `桌包失败立案` 判的是 CNB 自己的上一跑
+  # （`.cnb.yml` 的 `package` 格），那条自托管链已随 #3504 退役，桌包跑红只剩 GA 侧
+  # 匿名可见 ⇒ 判据在场、执行者不在场。`needs: package` 只让本格在上游 completed 之后跑，
+  # 脚本认得的是 jobs API 的终值（step conclusion=failure）。
+  #
+  # **为什么是独立 job 而不是 `package` 里的一个 step**：与 daily.yml 同一理由（#3563）——
+  # 脚本只认 jobs API 的 `steps[].conclusion`，跑在 `package` 内部时那个 job 自己还是
+  # in_progress，实测读回 0 个红格 ⇒ 零写入。`needs: package` 让上游先 completed。
+  package-failure-issue:
+    runs-on: ubuntu-26.04
+    needs: package
+    # 判的是**上游那一跑**：`package` 里任一格红即成立。绿跑一个字节都不付（job 直接 skipped）。
+    if: failure()
+    # 本格自己发没发出去不该给这一跑叠第二个红；但**不静默** —— 失败话术与手工出口由脚本
+    # 原样打印（`tests/ci-ga-daily-failure-issue.test.ts` 钉住）。
+    continue-on-error: true
+    timeout-minutes: 10
+    steps:
+      # 只要脚本自己与它 import 的那几个模块，不要历史也不要 LFS 字体，对位 daily.yml
+      # 的 `daily-failure-issue`（整条 import 链只吃 node:*，这一 job 不装依赖）。
+      - name: 检出（立案脚本在仓库里）
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.head_sha || github.sha }}
+          fetch-depth: 1
+          lfs: false
+
+      - name: 装 Node（engines 下限 26.12.1；脚本只吃 node:*）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: 桌包失败立案（补洞：桌包档跑红 ⇒ CNB 单，按格名去重）
+        env:
+          # 内置 token 只读这一跑的 jobs（`actions: read` 见顶层 permissions）。
+          GITHUB_TOKEN: ${{ github.token }}
+          # CNB 侧建单 / 贴标签 / 评论（repo-issue:rw + repo-notes:rw），与 code-scanning-triage 同一枚。
+          CNB_ISSUE_TOKEN: ${{ secrets.CNB_ISSUE_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          # 桌包档自己的标识 —— 标题前缀、自动 handle、workflow 名分别对位 daily.yml 那一枚。
+          GA_FAILURE_ISSUE_HANDLE: ci-ga-package-desktop
+          GA_FAILURE_ISSUE_PREFIX: "ci(ga-package-desktop): "
+          GA_FAILURE_ISSUE_WORKFLOW: Package desktop (mirror)
+        # `--no-block`：脚本自己的出口话术按「平台那一跳」念（非零落 0 + 手工出口），
+        # 与 job 侧的 continue-on-error 同向，两边口径一致（同 daily.yml 那一格）。
+        run: node scripts/ci/ci-ga-daily-failure-issue.mjs --no-block

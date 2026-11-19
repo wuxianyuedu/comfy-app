@@ -1,41 +1,9 @@
 "use client";
 
-// ── 「模式契约」编辑器：纯展示视图（规范 17 §17.2 第③层）────────────────
-// 两个入口（工坊 / 工作流库）共用同一份表单：输入口清单 + 输出类别 + 保存。
-// 契约本身（口有哪些、口叫什么）由`lib/workshop/model-mode-contract` 定义，
-// 展示分组与「已改」判据来自`mode-contract-config`。
-//
-// ── 本次改版（ISSUE #1870）：模式清单收成**左侧的树形页签** ───────────────
-// 改版前模式是**按类别平铺成三排 chip**（实测 22 枚），纵向要吃掉三四行、窗口
-// 一窄还反复折行 —— 用户的原话是「模式契约设计成树形页签，现在散放一堆占空间」。
-// 现在收成左右两栏：**左栏 = 分类树**（父行是输出类别、子行是模式，见
-// `ModeContractModeNav`），**右栏 = 当前模式的编辑区**。两栏各自滚动，
-// 模式不再和正文抢纵向空间（与设置页分区导航同一形态，ISSUE #1694）。
-//
-// **第二刀：每一类可折叠**（同一 ISSUE 的下一条反馈）。树收起来了，但最长的那个
-// 类别（图像，11 条模式）仍会把另外两类挤出可视区 —— 现在每个类别的父行是一个
-// 折叠开关（默认全部展开），折起来的状态留在 `ModeContractModeNav` 自己那层，
-// 这一层（布局）不感知它。左栏的 `custom-scrollbar` 仍在：折起来只省纵向空间，
-// 不取消滚动 —— 三类全拼开时它照样可能超出。
-//
-// ── 上一版（ISSUE #1423）：字号收敛 + 选中态修好 ────────────────────────
-//
-// **字号**：改版前这一屏实测 **7 种字号 / 63 个文本叶节点，其中 36 个（57%）
-// 是 `text-3xs`(10px)** —— 模式 chip 的文案、`必备` 勾选框的字、id 上标、
-// 三段「口径说明」的正文全在 10px。用户的原话是「字体太多，有的字体太小
-// 看的费劲」。现在：正文与控件 14px（`text-sm`）、副说明 12px（`text-xs`）、
-// id 上标 11px（`text-2xs`，这一档是「副说明下的元信息」，不给可读文案用）。
-// 10px 那档（「角标 / 极小徽标」）在本屏零使用。
-//
-// **三段口径说明**（「必备」什么意思 / 「尺寸」两类写法）此前是 10px 正文、
-// 每开一个模式都要从上往下读一遍才够到第一个控件。现在收进一条可折叠的
-// 「口径说明」（`ui/disclosure`），默认收起、需要时展开 —— 它们回答的是
-// 「这套规则怎么理解」，不是「现在这一步填什么」。
-//
-// **选中态**：改版前模式 chip 的选中分支只写了 `border-primary text-primary
-// bg-primary/10`，而 `Button variant="outline"` 自带 `hover:text-foreground`
-// —— 划到已选中的那一枚上字色翻白（用户原话：「按钮的选中状态悬浮和非悬浮
-// 一个紫色，一个白色」）。根因与修法见 `ui/select-chip.tsx` 文件头。
+// ── 「模式契约」编辑器：纯展示视图（规范 17 §17.2 第③层）。两个入口（工坊 / 工作流库）共用同一份表单；契约本身由
+// `lib/workshop/model-mode-contract` 定义，展示分组与「已改」判据来自 `mode-contract-config`。
+// ISSUE #1870：模式清单收成左侧树形页签（`ModeContractModeNav`，每类可折叠、默认展开），右栏 = 当前模式编辑区，两栏各自滚动。
+// 三段口径说明收进可折叠的 `ui/disclosure`（默认收起）；选中态根因与修法见 `ui/select-chip.tsx` 文件头。
 
 import {
   customInputKindOf,
@@ -43,6 +11,7 @@ import {
   type ModeContract,
 } from "~/lib/workshop/model-mode-contract";
 import {
+  contractInputTypeInfo,
   contractModeLabel,
   customInputKindLabel,
   isModeContractCustomized,
@@ -50,13 +19,13 @@ import {
 import type { ModeContractEditorController } from "../hooks/use-mode-contract-editor";
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
-import { FieldLabel } from "~/components/ui/field";
-import { Checkbox } from "~/components/ui/checkbox";
-import { SelectMenu } from "~/components/ui/select-menu";
+import { Hint } from "~/components/ui/hint";
 import { PageHeader } from "~/components/ui/page-header";
 import { SectionLabel } from "~/components/ui/section-label";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ContractInputCatalog } from "./ContractInputCatalog";
+import { ContractRequiredToggle } from "../ContractRequiredBadge";
 import { ModeContractModeNav } from "./ModeContractModeNav";
 
 /** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id。 */
@@ -80,19 +49,11 @@ export function ModeContractEditorView({
     /* 两栏分屏：高度由外层 `WorkspaceFrame` 给，这里只是把它切成一左一右。
        `min-h-0` 让两栏都能在自己的滚动条里收缩（缺了它 flex 子项不会缩到内容以外）。 */
     <div className="flex h-full min-h-0 flex-col">
-      {/* 页头走 `ui/page-header`（规范 03 §3.10 / 16 §16.2.4.73）。这一屏的屏名已经由
-          页签给出，所以按 ISSUE #1693 那一档收：不传可见 `title`（屏名退成 `sr-only`，
-          读屏仍按标题跳转），那句契约口径不是每次进屏都要读的、挂成悬浮「说明」——
-          由顶栏标题右侧那颗问号承载（`viewHelp()`），页眉因此不再占两行。屏名仍从注册表
-          取（`pageHeaderTitle`），与侧栏 / 页签同一个出处。
-          **不自绘关闭按钮**：那枚 ✕ 是弹窗时代的产物；契约现在是视图页签，
-          「关」由页签自己的关闭按钮承担，这里再画一枚就是两个入口做同一件事。
-          横向留白只在这一层（`px-4 sm:px-8`）：页眉与两栏此前各带一枚 `px-5`，
-          那是「外壳不给左右」时代的产物，外壳补上留白之后叠在这里是 32+20=52px 一圈。
-          **上内距收一档**（ISSUE #1871）：这一屏换 `WorkspaceFrame` 之后，容器上内距
-          不再由外壳给、全在这一层 —— 而这枚页眉的可见内容只有 `sr-only` 屏名（没标题、
-          没动作），`pt-8 sm:pt-10` 会在页眉之上白留一整条空气。收成 `pt-4 sm:pt-5`，
-          与其余文档型视图同一档。 */}
+      {/* 页头走 `ui/page-header`（规范 03 §3.10 / 16 §16.2.4.73）。屏名已由页签给出，
+          故按 ISSUE #1693 不传可见 `title`（退成 `sr-only`），契约口径说明挂成页眉
+          右侧问号的悬浮「说明」（`viewHelp()`）。**不自绘关闭按钮**：「关」由页签承担。
+          横向留白只在这一层（`px-4 sm:px-8`）；上内距收成 `pt-4 sm:pt-5`（ISSUE #1871：
+          换 `WorkspaceFrame` 后外壳不再给内距，而页眉可见内容只有 sr-only 屏名）。 */}
       <div className="px-4 sm:px-8">
         <PageHeader className="pt-4 pb-3 sm:pt-5" srTitle={pageHeaderTitle("mode-contract")} />
       </div>
@@ -109,7 +70,10 @@ export function ModeContractEditorView({
           <ModeContractModeNav
             activeMode={mode}
             onSelect={controller.selectMode}
-            storedCustomized={(code) => isModeContractCustomized(code, stored)}
+            storedCustomized={(code) =>
+              isModeContractCustomized(code, stored, controller.configured)
+            }
+            unsavedMode={controller.dirty ? mode : null}
           />
         </nav>
 
@@ -119,20 +83,22 @@ export function ModeContractEditorView({
             <ModeContractDraftPanel controller={controller} draft={draft} />
           ) : (
             <p className="text-muted-foreground pt-2 text-sm">
-              从左侧选一条模式，配置它对外有哪些统一输入 / 输出。
+              从左侧选一条模式，配置它对外有哪些统一输入。
             </p>
           )}
         </div>
       </div>
+
+      {/* 修改即自动保存（#3949 需求 1）：草稿有改动就自动落本机覆盖，
+          不再有「保存模式契约」按钮与切换确认弹窗；「保存为项目默认（跟代码走）」
+          是仅存的显式保存动作。 */}
     </div>
   );
 }
 
 /**
- * 当前模式契约的编辑区 —— 输入口清单 + 参数库 + 输出类别 + 保存。
- *
- * 抽成一个局部组件只是为了让 `ModeContractEditorView` 那一层只剩「布局」：
- * 两栏怎么摆与里面填什么，是两件改起来互不相干的事（规范 §12.13 函数长度）。
+ * 当前模式契约的编辑区 —— 输入口清单 + 参数库 + 保存。
+ * 抽成局部组件只为让 `ModeContractEditorView` 那层只剩「布局」（规范 §12.13）。
  */
 function ModeContractDraftPanel({
   controller,
@@ -141,7 +107,9 @@ function ModeContractDraftPanel({
   controller: ModeContractEditorController;
   draft: ModeContract;
 }) {
-  const { saving, saved, nextReferenceImageId } = controller;
+  const { nextReferenceImageId } = controller;
+  /* 「还原默认」只对真改过的模式出现：判据与左栏「已改」徽标同源（内容比较）。 */
+  const customized = isModeContractCustomized(draft.mode, controller.stored, controller.configured);
 
   return (
     <section className="border-border bg-surface flex flex-col gap-4 rounded-xl border p-4">
@@ -161,11 +129,11 @@ function ModeContractDraftPanel({
         trigger={<>口径说明（必备口、尺寸的两类写法）</>}
       >
         <p>
-          「必备」表示这条模式
+          「必填」表示这条模式
           <span className="text-ink font-medium">少不得</span>
           这个口：本地工作流缺它的落点时，「工坊封装」会判为未配置
-          （工坊驱动不起来）。哪些口必备按模式配，不写死在代码里 ——
-          例如纯文生图把「提示词」勾必备、「负向提示词」不勾。
+          （工坊驱动不起来）。哪些口必填按模式配，不写死在代码里 ——
+          例如纯文生图把「提示词」标成必填、「负向提示词」标成可选（点口名旁的徽标就能翻面）。
         </p>
         <p>
           「尺寸」是两类等价的写法，在尺寸选择器里任选其一：比例 + 分辨率（1k / 2k / 4k），或 比例 +
@@ -207,24 +175,8 @@ function ModeContractDraftPanel({
         onRenameCustom={controller.renameCustomInput}
       />
 
-      <div>
-        <SectionLabel>输出类别</SectionLabel>
-        <SelectMenu
-          aria-label="该模式的输出类别"
-          className="text-xs"
-          labels={{
-            image: "图片（image）",
-            video: "视频（video）",
-            audio: "音频（audio）",
-          }}
-          onChange={(value) => {
-            /* SAFETY: 类型断言已复核 */
-            controller.setOutput(value as ModeContract["output"]);
-          }}
-          options={["image", "video", "audio"]}
-          value={draft.output}
-        />
-      </div>
+      {/* 输出类别不再是契约的一格（ISSUE #4072）：模式本身已按类别区分
+          （左栏就按类别分组），再让用户为每个模式挑一次是重复选择。 */}
 
       {!draft.inputs.includes("prompt") && (
         <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
@@ -237,29 +189,63 @@ function ModeContractDraftPanel({
           缺任何口都不再提示。若你不是有意如此，给承载生成输入的那个口勾上。
         </p>
       )}
-      {saved && (
-        <p className="bg-success/10 text-success-strong rounded-lg px-3 py-2 text-xs">
-          已保存 —— 工坊与工作流库读的是同一份注册表，另一处刷新后即生效。
-          <span className="text-ink font-medium">改动只落在这台机器上，不会跟着代码走。</span>
+      {/* 修改即自动保存（#3949 需求 1）：本机覆盖不再要手动点保存；失败在此可见（#3637）。 */}
+      <p className="text-muted-foreground text-2xs">
+        修改即自动保存到本机应用数据（data/workshop-mode-contracts.json），无需手动保存；
+        要跟着代码走用「保存为项目默认」。{" "}
+        <span className="tabular-nums">
+          {controller.saving
+            ? "正在保存…"
+            : controller.saveError === null
+              ? controller.dirty
+                ? "有修改待自动保存。"
+                : controller.saved
+                  ? "已自动保存。"
+                  : ""
+              : ""}
+        </span>
+      </p>
+      {controller.saveError !== null && (
+        <p className="bg-danger/10 text-danger-strong rounded-lg px-3 py-2 text-xs">
+          自动保存失败：{controller.saveError}
         </p>
       )}
 
-      <div>
-        <Button
-          disabled={saving}
-          onClick={() => {
-            void controller.save();
-          }}
-          variant="primary-solid"
-        >
-          {saving ? "保存中…" : "保存模式契约"}
-        </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        {customized && (
+          <Button
+            disabled={controller.resetting}
+            onClick={() => {
+              void controller.resetToDefault();
+            }}
+            variant="outline"
+          >
+            {controller.resetting ? "还原中…" : "还原默认"}
+          </Button>
+        )}
+        {/* 只在开发检出出现：正式包没有源码可写，「项目默认」无从谈起（ISSUE #3396）。 */}
+        {controller.projectDefaultEditable && (
+          <Button
+            disabled={controller.savingProjectDefaults}
+            onClick={() => {
+              void controller.saveAsProjectDefault();
+            }}
+            variant="outline"
+          >
+            {controller.savingProjectDefaults ? "写入中…" : "保存为项目默认（跟代码走）"}
+          </Button>
+        )}
+        {/* 契约有两层，各存在一处（ISSUE #3625）：本机覆盖跟着这台机器走、项目默认
+            入库跟代码走。徽标说清「保存落到哪儿」，迁移时才不会只搬走一半。 */}
+        <DataLocationBadge id="mode-contract-local" />
+        <DataLocationBadge id="mode-contract-project" />
       </div>
     </section>
   );
 }
 
-/** 输入口清单里的一行：序号 + 名称 + 调序 / 必备 / 移除。 */
+/** 输入口清单里的一行：序号 + 名称（悬停给类型，`size` 展开到组成，ISSUE #3762）
+ *  + 调序 / 必填·可选（徽标即开关，ISSUE #4072）/ 移除。 */
 function ContractInputRow({
   controller,
   draft,
@@ -273,17 +259,48 @@ function ContractInputRow({
 }) {
   const label = modeContractInputIdLabel(input, draft.customInputs);
   const kind = customInputKindOf(input);
+  const typeInfo = contractInputTypeInfo(input, draft.customInputs ?? []);
+  const required = controller.isRequired(input);
 
   return (
     <div className="border-border bg-bg flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
-      <span className="text-ink min-w-0 text-sm">
-        <span className="text-muted-foreground mr-1 tabular-nums">{index + 1}.</span>
-        <LabelWithId id={input} label={label} />
-        {kind && (
-          <span className="text-muted-foreground bg-subtle border-border-strong text-2xs ml-2 rounded border px-1.5 py-0.5">
-            {customInputKindLabel(kind)}
+      <span className="flex min-w-0 items-center gap-2">
+        {/* 类型与描述分两行（ISSUE #3778）：类型值用英文（与口 id 同一语言），
+            描述另起一行；无类型信息（未知口）时只给描述一行。 */}
+        <Hint
+          label={
+            <span>
+              {typeInfo.type !== "" && <span className="block">类型：{typeInfo.type}</span>}
+              <span className="block">{typeInfo.description}</span>
+            </span>
+          }
+          wrap
+        >
+          <span className="text-ink min-w-0 cursor-help text-sm">
+            <span className="text-muted-foreground mr-1 tabular-nums">{index + 1}.</span>
+            <LabelWithId id={input} label={label} />
+            {kind && (
+              <span className="text-muted-foreground bg-subtle border-border-strong text-2xs ml-2 rounded border px-1.5 py-0.5">
+                {customInputKindLabel(kind)}
+              </span>
+            )}
           </span>
-        )}
+        </Hint>
+        {/* 必填 / 可选：徽标即开关（点一下改这个口的「必备」状态）。此前那一格
+            是「勾选框 + 一句固定的『必备』」—— 勾上写「必备」、没勾也写
+            「必备」，读的人看不出「没勾 = 可选」。 */}
+        <Hint
+          label="必备口：本地工作流缺它的落点时，工坊里驱动不起来（点一下改这一口必不必备）"
+          wrap
+        >
+          <ContractRequiredToggle
+            onToggle={() => {
+              controller.toggleRequired(input);
+            }}
+            required={required}
+            srLabel={label}
+          />
+        </Hint>
       </span>
       <span className="flex shrink-0 items-center gap-1.5">
         {/* 顺序**就是**工坊对外的参数顺序（序号即数组下标），
@@ -314,30 +331,29 @@ function ContractInputRow({
             ↓
           </Button>
         </span>
-        <FieldLabel
-          className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs"
-          title="必备口：本地工作流缺它的落点时，工坊里驱动不起来"
+        {/* 最后一口禁删的说明走 Hint（P82：不用原生 title=）；禁用态弹不出
+            原因，按组件口径挂 wrap 锚点。 */}
+        <Hint
+          label={
+            draft.inputs.length <= 1
+              ? "至少保留一个输入口：空清单的契约保存不了，工坊也驱动不起来"
+              : undefined
+          }
+          wrap
         >
-          <Checkbox
-            checked={controller.isRequired(input)}
-            className="size-4"
-            onCheckedChange={() => {
-              controller.toggleRequired(input);
+          <Button
+            aria-label={`移除 ${label}`}
+            className="text-muted-foreground/60 hover:text-danger-strong disabled:opacity-25"
+            disabled={draft.inputs.length <= 1}
+            onClick={() => {
+              controller.removeInput(input);
             }}
-          />
-          必备
-        </FieldLabel>
-        <Button
-          aria-label={`移除 ${label}`}
-          className="text-muted-foreground/60 hover:text-danger-strong"
-          onClick={() => {
-            controller.removeInput(input);
-          }}
-          size="icon-sm"
-          variant="ghost"
-        >
-          ✕
-        </Button>
+            size="icon-sm"
+            variant="ghost"
+          >
+            ✕
+          </Button>
+        </Hint>
       </span>
     </div>
   );

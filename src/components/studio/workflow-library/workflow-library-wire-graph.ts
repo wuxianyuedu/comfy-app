@@ -1,23 +1,8 @@
 /* 工作流库「画布节点」预览的**连线图派生**（纯函数 + 常量，规范 §17.2 第①层）。
- *
- * 库里的三列（对外参数卡片列 + 宿主卡片 + 对外输出参数卡片列）此前是普通
- * DOM 并排摆放，连线由 `WorkflowParamWires` 量 rect 自绘 SVG —— 「能不能连」
- * 的判据（类型闸门 `pinAcceptsEntry`）藏在手势层，与画布上的 React Flow 语义
- * 各写一份。
- *
- * 现在三列各是一个 React Flow 节点（节点内部仍是普通 DOM，卡片与表单不变），
- * 连线是真正的 edge、端点是真正的 `<Handle>`，闸门收敛到 `isValidConnection`
- * 一个纯函数 —— 与编辑器画布同一套语义（ISSUE #529）。
- *
- * 本模块只产出**数据**：节点 id、边、以及 handle id 的换算规则；节点位置与
- * 视图模型由视图层摆（`use-library-wire-flow`）。
- *
- * 键空间（两个都必须分清，混了就「线画不出来」）：
- *   · **ioKey**（`<nodeId>::<kind>::<name>`）—— workflowIO 的字典键、落库的
- *     `paramMap.source.mode:<模式>` 的值、边的业务身份；
- *   · **handle id** —— DOM 上的端点标识。库里三列的端口一一对应，所以 handle
- *     id 直接用 ioKey（与项目画布的 `WidgetInputRow` 同口径）。
- */
+ * 三列各是一个 React Flow 节点（内部仍是普通 DOM），连线是真 edge、端点是真
+ * `<Handle>`，闸门收敛到 `isValidConnection` 一个纯函数（ISSUE #529）。本模块只产出
+ * 数据：节点 id、边与 handle id 换算。键空间必须分清：ioKey（字典键/落库值/边身份）
+ * 与 handle id（DOM 端点标识）；库内三列端口一一对应，故 handle id 直接用 ioKey。 */
 
 import type { ReactNode } from "react";
 
@@ -54,10 +39,9 @@ export const LIB_EDGE_PREFIX = "libwire";
 
 /** 一条库内映射连线的身份（从边的 id 里取回）。
  *
- *  **必须带上 handle id**：一个对外参数可以**一对多**（「尺寸」的宽高比 /
- *  像素量 / 倍数各一条线，见 `wiredTargetsForEntry` 的 `allCandidates`），
- *  只用条目 id 会让三条线共用同一个 key（React 重复 key，点选高亮张冠李戴，
- *  且 React Flow 的 edgeLookup 会互相覆盖）。 */
+ *  **必须带上 handle id**：一个对外参数可以一对多（「尺寸」的宽高比 / 像素量 /
+ *  倍数各一条线），只用条目 id 会让三条线共用同一个 key（React 重复 key、高亮
+ *  张冠李戴，React Flow 的 edgeLookup 也会互相覆盖）。 */
 export function libraryEdgeId(
   namespace: "param" | "output",
   entryId: string,
@@ -106,10 +90,8 @@ export type LibraryWire = {
 export const MANUAL_STROKE = "#a78bfa";
 /** 库里一条边的样式：**一律是作者画过的线**（实线）。
  *
- *  库里不画「猜出来的」默认线 —— 未连过的口根本不画线（用户口径：这是**编辑对外
- *  参数**的界面，「未连过就不要连」），所以没有虚线分支，也没有「默认线」那一档
- *  描边色。默认落点仍算在 `resolved` 里（卡片与运行期读它），只是不在画布上画
- *  一条虚线占位。 */
+ *  库里不画「猜出来的」默认线（用户口径：编辑对外参数时「未连过就不要连」）；
+ *  默认落点仍算在 `resolved` 里（卡片与运行期读它），只是不在画布上画虚线占位。 */
 /* SAFETY: 类型断言已复核 */
 export const LIBRARY_EDGE_STYLE = {
   stroke: MANUAL_STROKE,
@@ -126,30 +108,11 @@ export const SELECTED_STROKE = "#c4b5fd";
 export type LibraryNodeSizing = {
   /** 三列之间的横向间距 —— 留出走线的空间，线不至于贴着卡片拐出尖角。 */
   columnGap: number;
-  /* ── 两套高度尺寸（不是一个值）────────────────────────────────────────
-   * 用户口径（ISSUE #596「全屏时，下方区域有空白却不是画布」）：画布要一直
-   * 铺到面板底部，下面那块空白不该出现。
-   *
-   * 成因：面板靠 React Flow 的 `fitView` 把三列收进视口，而 `fitView` 按**节点
-   * 的并集包围盒**缩放。卡片的真实高度是内容撑出来的（通常 300~400px），而
-   * 视口可能上千像素高 —— 于是「内容比视口矮」时 fitView 反被内容高度限制、
-   * 只放大到贴满**内容高度**，画布底边以下就落回面板底色，成了那块空白。
-   *
-   * 两个尺寸各司其职：
-   *   · `envelopeHeight` —— 首个（宿主）节点的**声明尺寸**，给 React Flow 首帧
-   *     算边落点用（jsdom / 布局前量不到 DOM 尺寸会一条边都不画），沿用卡片列
-   *     高度量级即可，不再承担「撑满视口」的职责；
-   *   · `fillHeight` —— 三列节点共用的一层**透明背景板**高度，铺满面板可视高度
-   *     与卡片列高度中的较大者。它把画布的缩放下限钉住：fitView 的最优缩放因此
-   *     只会是「等比铺满视口」的那个值，画布不再停在内容高度上。
-   *
-   * 为什么是「背景板」而不是把三个节点的声明高度一起抬到 `fillHeight`：节点的
-   * 声明尺寸会被 React Flow 用来**断言节点尺寸**（首帧给边算落点），声明得比
-   * 实际卡片高，卡片上的端口圆点就会被算到偏下的位置、线从卡片半空里穿出来。
-   * 背景板是空节点、没有端口，抬高它不影响任何端点几何。（抬高卡片节点也走不通：
-   *  卡片列要按内容量尺寸，`height` 会把外框钉死、端点坐标从此不再重算 —— 见
-   *  `buildLibraryNodes` 里那段说明。）
-   * ──────────────────────────────────────────────────────────────────── */
+  /* ── 两套高度尺寸，ISSUE #596「全屏时下方空白不是画布」：fitView 按节点并集包围盒
+   *  缩放，内容比视口矮时只放大到内容高度、底边以下落回面板底色。`envelopeHeight`
+   *  仅作首帧声明尺寸（jsdom 量不到 DOM 会一条边都不画）；`fillHeight` 是透明背景板
+   *  高度 max(视口, 卡片列)，把最优缩放钉在「铺满视口」。不抬高卡片：声明尺寸会被当
+   *  作端点几何依据（圆点算偏），且 `height` 钉死外框后端点坐标不再重算；板无端口。 */
   /** 三列内容节点的**首帧**包络高度（px）。
    *
    *  必须走 `initialHeight` 声明（不是 `height`）：内容由卡片撑开，量到尺寸后这一层
@@ -222,14 +185,10 @@ export function libraryBackdropSize(
 }
 
 /** 三列节点的**渲染内容**（`LibraryNodeContentContext` 下发的值）。
- *
- *  刻意放在本模块（纯类型 + 纯函数，无 React）：`hooks/use-library-wire-flow`
- *  要引用它的三段，而 hooks 不得 import `.tsx`（§17.2 的 H1 依赖倒置红线）。
- *  类型放在这里，两侧都只依赖一个 `.ts`。
- *
- *  为什么渲染内容**不进 `node.data`**：那会把「每帧都变的表单子树」塞进 React
- *  Flow 的状态里 —— 要么冻在首帧（表单永远停在未播种的那一帧），要么每帧
- *  `setNodes` 刷新它（setNodes → 重渲染 → setNodes 无限循环）。 */
+ *  放在本模块（纯类型 + 纯函数，无 React）：hooks 不得 import `.tsx`（§17.2 的
+ *  H1 依赖倒置红线），两侧都只依赖一个 `.ts`。渲染内容不进 `node.data`：那会把
+ *  每帧都变的表单子树塞进 React Flow 状态，要么冻在首帧，要么每帧 `setNodes`
+ *  刷新它（setNodes → 重渲染 → setNodes 无限循环）。 */
 export type LibraryNodeContent = {
   host: { host: ReactNode };
   outputs: {

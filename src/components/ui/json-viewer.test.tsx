@@ -1,14 +1,7 @@
 /**
- * `JsonViewer` 的首屏折叠契约。
- *
- * 「整棵树全量展开」曾把 comfy-cli 完整输出弹窗卡死：payload 里一个几百个键的
- * `prompt` 对象、每个节点还各带 `inputs` / `_meta`，全量展开一次就是几十万个 DOM
- * 元素；而那个界面还会每 1.5s 轮询重渲染一次。
- *
- * 根因不是阈值设错，而是**阈值根本没跑**：库里 `isCollapsed()` 的第一句是
- * `if (typeof collapsed === 'boolean') return collapsed;`，而我们此前传了
- * `collapsed={false}` —— 于是每个容器都被判「不折叠」。所以这里钉的是**行为**：
- * 项数超阈值的容器首屏必须折起来（它的叶子不许进 DOM），小容器照常可见。
+ * `JsonViewer` 的首屏折叠契约。全量展开曾把 comfy-cli 完整输出弹窗卡死（几十万 DOM，且每 1.5s
+ * 轮询重渲染）。根因是库里 `isCollapsed()` 先看显式 `collapsed` 布尔，传 `collapsed={false}` 会让
+ * 每个容器都判「不折叠」。这里钉行为：超阈值容器首屏必须折起（叶子不进 DOM），小容器照常可见。
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";

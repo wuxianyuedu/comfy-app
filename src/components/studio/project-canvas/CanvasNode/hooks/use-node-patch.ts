@@ -15,9 +15,8 @@ export function useNodePatch(id: string) {
           node.id === id
             ? {
                 ...node,
-                /* SAFETY: 类型断言已复核 */
                 data: {
-                  ...(node.data as CanvasNodeData),
+                  ...node.data,
                   ...p,
                 },
               }

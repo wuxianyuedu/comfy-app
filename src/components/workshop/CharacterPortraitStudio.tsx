@@ -14,7 +14,7 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import { SelectChip } from "~/components/ui/select-chip";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { Progress } from "~/components/ui/progress";
 import { Alert } from "~/components/ui/alert";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -54,8 +54,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   /* 导入定妆照：隐藏 input + 选完复位收进`ui/file-picker`。 */
   const importPicker = useFilePicker({
     accept: "image/*",
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    onPick: (file) => void actions.importFile(character, file),
+    onPick: (file) => {
+      void actions.importFile(character, file);
+    },
   });
 
   /** 会话消息只挂在发起它的那张卡上，别的角色卡不重复展示同一份进度与日志。 */
@@ -97,12 +98,20 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   /* 生成日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [history, setHistory] = React.useState<Array<PersistableGenerationLog> | null>(null);
+  const [historyFailed, setHistoryFailed] = React.useState(false);
   const loadHistory = () => {
     setHistoryOpen(true);
     if (history) {
       return;
     }
-    void fetchGenerationLogs("portrait", 100).then(setHistory);
+    /* 失败与空态分开说（#4242）：失败时把 history 复位成 null，重开「历史」可重试。 */
+    void fetchGenerationLogs("portrait", 100).then((res) => {
+      setHistory(res.entries);
+      setHistoryFailed(!res.ok);
+      if (!res.ok) {
+        setHistory(null);
+      }
+    });
   };
 
   const candidates = portraitCandidates(character);
@@ -167,8 +176,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         <Button
           className="h-auto rounded-md px-3 py-1.5"
           disabled={!canGenerate}
-          onClick={() =>
-            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+          onClick={() => {
             void actions.generate(
               character,
               session.channel === "remote" && effectiveRemoteModel
@@ -179,8 +187,8 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                       localLabel: localOptionLabels[session.localWorkflowId] ?? "库工作流",
                     }
                   : undefined,
-            )
-          }
+            );
+          }}
           size="xs"
           variant="primary-solid"
         >
@@ -195,7 +203,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         >
           {importing ? "导入中…" : "导入图片"}
         </Button>
-        <importPicker.Input />
+        <FilePicker {...importPicker.inputProps} />
       </div>
 
       {/* 通道门禁提示：说清缺什么、去哪里补，不让按钮无声失效 */}
@@ -257,7 +265,6 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
               {session.error}
             </Alert>
           )}
-          {/* oxlint-disable-next-line no-unnecessary-condition -- 本块在外层 {focused && …} 内、focused 已收窄为真使本条件恒真；保留 || focused 与外层守卫解耦，防守卫调整后语义漂移 */}
           {(session.log.length > 0 || focused) && (
             /* 触发行右侧的「历史」是**另一个动作**（打开历史日志），不是折叠
              * 开关 —— 它不能放进`Disclosure` 的 trigger 里：
@@ -308,7 +315,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   <p className="text-muted-foreground text-3xs">
                     历史日志（含此前会话，保存在 log/workshop/）
                   </p>
-                  {history === null ? (
+                  {historyFailed ? (
+                    <p className="text-destructive text-2xs">历史日志拉取失败：请稍后重试。</p>
+                  ) : history === null ? (
                     <p className="text-muted-foreground text-2xs">加载中…</p>
                   ) : history.length === 0 ? (
                     <p className="text-muted-foreground text-2xs">还没有落盘的历史日志。</p>

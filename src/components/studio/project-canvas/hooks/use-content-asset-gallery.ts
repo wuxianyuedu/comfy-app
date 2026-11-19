@@ -1,16 +1,7 @@
-/* ── 内容载体节点的图片组（多图相册）拉取逻辑 ──────────────────────────
- * 从 ContentAssetBody（.tsx 视图）里抽出的第②层逻辑：
- *   1. 按 taskId 拉 task.detail，取出图片列表；只有 >1 张才启用相册
- *      （单图仍走节点主体的常规预览路径）；
- *   2. 相册开关与当前下标是纯视觉状态，但它们是「数据驱动」的（没有多图
- *      就没有相册可开），所以一并放在这里，视图只消费不决策。
- *
- * 错误策略：拉取失败**静默**——单图模式仍要正常显示内容，不能因为一次
- * 查询失败就把整个节点渲染成错误态。
- *
- * taskId / enabled 切换时要立刻拿不到旧图，否则新任务的首帧会先渲染上一张
- * 任务的相册缩略图。做法是把图集和「它属于哪一轮上下文」一起存成一条 state，
- * 渲染时按上下文键取值（不再用渲染期 setState 清空）。
+/* ── 内容载体节点的图片组（多图相册）拉取逻辑 ──
+ * 第②层逻辑：按 taskId 拉 task.detail，取图片列表，只有 >1 张才启用相册。
+ * 拉取失败**静默**：单图模式仍要正常显示，不能把整个节点渲染成错误态。
+ * taskId / enabled 切换必须立刻拿不到旧图，否则新任务首帧会渲染上一张；图集与上下文一起存 state。
  */
 
 "use client";
@@ -67,7 +58,6 @@ export function useContentAssetGallery({
         guard.commit(() => {
           setGallery({
             key: ctxKey,
-            // oxlint-disable-next-line no-unnecessary-condition -- fetchTaskImages 的类型与实现都保证返回数组，判空恒真；保留相册降级口径，防空值防御被移除后静默崩溃
             images: list !== null && list.length > 1 ? list : null,
           });
         });

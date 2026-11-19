@@ -40,6 +40,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { isRecord } from "~/lib/is-record";
 import { redactSecretShaped } from "~/lib/core/redact-secret";
 import { formatLocalStamp } from "~/lib/time-format";
 import { TRACE_LINE_MAX, clampText } from "~/lib/text-clamp";
@@ -84,8 +85,7 @@ function localTimestamp(): string {
 
 /** 把任意值转成可读文本（对齐规范 07 §7.10：Error 取 stack，循环引用兜底）。 */
 export function traceStringify(value: unknown): string {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (value == null) {
+  if (value === null || value === undefined) {
     return "null";
   }
   if (typeof value === "string") {
@@ -108,9 +108,11 @@ export function traceStringify(value: unknown): string {
   if (typeof value === "function") {
     return `[function ${value.name || "anonymous"}]`;
   }
-  /* 此处 value 已是 string/number/boolean/bigint（其余分支均已 return）。 */
-  /* SAFETY: 类型断言已复核 */
-  return `${value as string | number | boolean | bigint}`;
+  /* 此处 value 已是 number/boolean/bigint（其余分支均已 return）。 */
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return "";
 }
 
 /** 单行截断（保留头部，尾注原始长度 —— 诊断通道最想知道「被切了多少」）。 */
@@ -119,6 +121,91 @@ function clampLine(text: string): string {
     maxLength: TRACE_MAX_LINE,
     annotation: `truncated, 原始 ${text.length} 字符`,
   });
+}
+
+/* ── 异步批量写 + 按大小轮转（#4227）────────────────────────
+ * 旧形态每行走一次同步 `appendFileSync`：WS 每帧、comfy-cli stdout/stderr 每个
+ * chunk 都在热路径上，出图高峰的同步 IO 会阻塞事件循环（#3369 的同步 zip 冻结
+ * 事件循环是同族先例）；且单文件 append-only 无轮转，长会话无界增长。
+ * 现形态：行进内存队列，微任务延迟合并成一次异步 appendFile；超过单文件上限
+ * 就把当前文件挪成 `.1`（只保留一代），本拍写新文件。「写入失败绝不阻塞业务」
+ * 的契约不变——失败行就地丢弃，只 swallow。 */
+const TRACE_ROTATE_BYTES = 16 * 1024 * 1024;
+/** 轮转阈值独立成可写变量：用例经 {@linkcode configureTraceRotateBytesForTest}
+ *  注入小阈值，真实轮转不必写 16MB 数据。 */
+let traceRotateBytes = TRACE_ROTATE_BYTES;
+
+/** 只给用例：注入轮转阈值（不落库、不入全局——单测自己的临时目录里验）。 */
+export function configureTraceRotateBytesForTest(bytes: number): void {
+  traceRotateBytes = bytes;
+}
+/** 队列项自带目的地：`configureTraceLogPath` 切换后，切换前排队的行仍落到
+ *  它们产生时约定的文件（「覆盖生效、旧文件不追加」的契约由它兑现）。 */
+let pendingEntries: Array<{ line: string; path: string }> = [];
+let flushScheduled = false;
+/** 串行化 flush：并发 appendFile 会乱序，链式排队保证写入顺序与产生顺序一致。 */
+let flushChain: Promise<void> = Promise.resolve();
+
+function scheduleFlush(): void {
+  if (flushScheduled) {
+    return;
+  }
+  flushScheduled = true;
+  setTimeout(() => {
+    flushScheduled = false;
+    flushChain = flushChain.then(() => flushTraceLines()).catch(() => undefined);
+  }, 0);
+}
+
+async function appendWithRotate(tracePath: string, chunk: string): Promise<void> {
+  const dir = path.dirname(tracePath);
+  await fs.promises.mkdir(dir, { recursive: true });
+  const stat = await fs.promises.stat(tracePath).catch(() => null);
+  if (stat !== null && stat.size >= traceRotateBytes) {
+    // 只保留一代：旧 .1 直接被本次轮转覆盖，总量有界（≤ 2 × 上限）。
+    await fs.promises.rename(tracePath, `${tracePath}.1`).catch(() => undefined);
+  }
+  await fs.promises.appendFile(tracePath, chunk, "utf8");
+}
+
+async function flushTraceLines(): Promise<void> {
+  const batch = pendingEntries;
+  pendingEntries = [];
+  if (batch.length === 0) {
+    return;
+  }
+  // 连续同目的地的行合并成一次 append（批量的意义）；跨目的地的边界处各写各的。
+  // **逐组容错**（#4227 复盘）：一个坏目的地（只读盘 / 路径被占 / ENOTDIR）只丢
+  // 自己那一组，不许把同批里其它目的地的行一起带走。
+  let group: { chunk: string; path: string } | null = null;
+  for (const entry of batch) {
+    if (group !== null && group.path === entry.path) {
+      group.chunk += entry.line;
+      continue;
+    }
+    if (group !== null) {
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- 逐组串行是语义本身：写入顺序必须与产生顺序一致（链式 flush 只保证批间序，批内靠这里的 await）
+        await appendWithRotate(group.path, group.chunk);
+      } catch {
+        /* trace 写入失败绝不阻塞业务主流程（可能是只读盘 / 路径被占）。 */
+      }
+    }
+    group = { chunk: entry.line, path: entry.path };
+  }
+  if (group !== null) {
+    try {
+      await appendWithRotate(group.path, group.chunk);
+    } catch {
+      /* trace 写入失败绝不阻塞业务主流程（可能是只读盘 / 路径被占）。 */
+    }
+  }
+}
+
+/** 只给用例：立即排空队列（不等 0ms 定时器），返回排空后的链。 */
+export function flushTraceForTest(): Promise<void> {
+  flushChain = flushChain.then(() => flushTraceLines()).catch(() => undefined);
+  return flushChain;
 }
 
 /**
@@ -139,10 +226,6 @@ export function trace(
     if (tracePath === null) {
       return;
     }
-    const dir = path.dirname(tracePath);
-    if (!fs.existsSync(/*turbopackIgnore: true*/ dir)) {
-      fs.mkdirSync(/*turbopackIgnore: true*/ dir, { recursive: true });
-    }
     // 唯一脱敏实现（规范 07 §7.18.2.1）：本通道直写文件、不经 pino，
     // 因此必须在写入边界自己过一次值形状守卫，否则原始回执里的密钥（路径上的
     // Authorization / token、工作流里的 apiKey 参数）会明文落盘。
@@ -152,7 +235,8 @@ export function trace(
         ? ` ${clampLine(JSON.stringify(redactSecretShaped(meta)))}`
         : "";
     const line = `[${localTimestamp()}] [INFO] [trace] ${channel} [${taskId ?? "-"}] ${text}${metaText}\n`;
-    fs.appendFileSync(/*turbopackIgnore: true*/ tracePath, line, "utf8");
+    pendingEntries.push({ line, path: tracePath });
+    scheduleFlush();
   } catch {
     /* trace 写入失败绝不阻塞业务主流程（可能是只读盘 / 路径被占）。 */
   }
@@ -176,7 +260,7 @@ export type HistoryVerdict = {
   statusStr?: string;
 };
 
-function nonEmptyArray(v: unknown): boolean {
+function nonEmptyArray(v: unknown): v is Array<unknown> {
   return Array.isArray(v) && v.length > 0;
 }
 
@@ -191,16 +275,15 @@ export function historyTraceSummary(
   promptId: string,
   hist: Record<string, unknown> | null | undefined,
 ): HistoryVerdict {
-  const entry =
-    /* SAFETY: 类型断言已复核 */
-    hist && promptId ? (hist[promptId] as Record<string, unknown> | undefined) : undefined;
+  const candidate = hist && promptId ? hist[promptId] : undefined;
+  const entry = isRecord(candidate) ? candidate : undefined;
   if (!entry) {
     return { found: false, outputNodeCount: 0 };
   }
-  /* SAFETY: 类型断言已复核 */
-  const outputs = (entry.outputs ?? {}) as Record<string, unknown>;
-  /* SAFETY: 类型断言已复核 */
-  const status = (entry.status ?? {}) as Record<string, unknown>;
+  const rawOutputs = entry.outputs;
+  const outputs = isRecord(rawOutputs) ? rawOutputs : {};
+  const rawStatus = entry.status;
+  const status = isRecord(rawStatus) ? rawStatus : {};
   const messages = status.messages;
   let executionError: string | undefined;
   if (Array.isArray(messages)) {
@@ -208,12 +291,8 @@ export function historyTraceSummary(
       if (!Array.isArray(msg) || msg[0] !== "execution_error") {
         continue;
       }
-      /* SAFETY: 类型断言已复核 */
-      const payload = msg[1] as Record<string, unknown> | null | undefined;
-      const ex =
-        payload && typeof payload === "object"
-          ? (payload.exception_message ?? payload.message)
-          : undefined;
+      const payload: unknown = msg[1];
+      const ex = isRecord(payload) ? (payload.exception_message ?? payload.message) : undefined;
       if (typeof ex === "string" && ex.trim()) {
         executionError = ex;
         break;
@@ -238,19 +317,15 @@ export function historyOutputKeys(
   hist: Record<string, unknown> | null | undefined,
   promptId: string,
 ): Array<{ keys: Array<string>; nodeId: string }> {
-  const entry =
-    /* SAFETY: 类型断言已复核 */
-    hist && promptId ? (hist[promptId] as Record<string, unknown> | undefined) : undefined;
+  const candidate = hist && promptId ? hist[promptId] : undefined;
+  const entry = isRecord(candidate) ? candidate : undefined;
   const outputs = entry?.outputs;
   if (typeof outputs !== "object" || outputs === null) {
     return [];
   }
   return Object.entries(outputs).map(([nodeId, v]) => ({
     nodeId,
-    keys:
-      /* SAFETY: 类型断言已复核 */
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      v != null && typeof v === "object" ? Object.keys(v as object) : [],
+    keys: isRecord(v) ? Object.keys(v) : [],
   }));
 }
 
@@ -266,14 +341,12 @@ export function queueTraceSummary(qd: unknown): {
       return [];
     }
     const ids: Array<string> = [];
-    /* SAFETY: 类型断言已复核 */
-    for (const it of v as Array<unknown>) {
+    for (const it of v) {
       if (Array.isArray(it)) {
         if (typeof it[1] === "string" && it[1]) {
           ids.push(it[1]);
         }
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      } else if (it != null && typeof it === "object") {
+      } else if (it !== null && it !== undefined && typeof it === "object") {
         /* SAFETY: 类型断言已复核 */
         const id = (it as { prompt_id?: unknown }).prompt_id;
         if (typeof id === "string" && id) {

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { beginStaleRun } from "~/lib/stale-run";
 import { fetchLocalModels, fetchRemoteModels } from "~/lib/llm/model-catalog-client";
 import { useLLM } from "~/components/workshop/LLMContext";
@@ -11,7 +12,7 @@ import { parseChannelOption } from "~/lib/workshop/channel-options";
 function optionLabel(name: string, badge: string): React.ReactNode {
   return (
     <span className="flex w-full items-center">
-      <span className="min-w-0 flex-1 truncate">{name}</span>
+      <TruncatedText className="min-w-0 flex-1 truncate">{name}</TruncatedText>
       <span className="text-muted-foreground text-3xs ml-2 shrink-0">{badge}</span>
     </span>
   );
@@ -95,7 +96,6 @@ export function ExtractModelSelect({
   /* 无已缓存结果即视为校验中（探测在选中时即被 effect 触发）。 */
   const selChecking = !!selKey && !selAvail;
   let hint: React.ReactNode = null;
-  // oxlint-disable-next-line no-unnecessary-condition -- channel 由 parseChannelOption 归一化为 local/remote 两档、类型与运行值域都恒真；保留判空作防御，防未来新增空档时静默穿透
   if (channel) {
     const badge = channel === "local" ? "本地" : "远端";
     if (selChecking) {

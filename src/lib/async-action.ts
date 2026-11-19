@@ -202,7 +202,7 @@ export async function runAsyncAction(
       if (detail) {
         report("ok", detail);
       }
-      return { ok: true, detail: detail ?? "" };
+      return { ok: true, detail };
     }
     /* 服务端给了 `detail` / `error` 就用它（它比标题更能说明原因），
      * 没给才回落标题。与 `toActionResult` 的兜底同源。 */

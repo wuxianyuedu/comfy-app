@@ -28,6 +28,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { isRecord } from "~/lib/is-record";
 
 /** 清单文件名（相对仓库根）—— 解析器与读取侧共用这一个字面量。 */
 export const CUSTOM_NODES_MANIFEST_REL = path.join("src", "generated", "customNodes.manifest.json");
@@ -77,8 +78,7 @@ export function readCustomNodesManifest(root: string = process.cwd()): CustomNod
       stamp: customNodesManifestStamp(root),
     };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const code = (error as NodeJS.ErrnoException).code;
+    const code = isRecord(error) && typeof error.code === "string" ? error.code : undefined;
     if (code === "ENOENT") {
       return { kind: "missing" };
     }

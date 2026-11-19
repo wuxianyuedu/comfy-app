@@ -27,9 +27,7 @@ const AT = new Date(2026, 9, 5, 9, 36, 12);
 
 describe("文件名形态", () => {
   it("是 <来源>-<YYYYMMDD-HHmmss>.log", () => {
-    expect(runtimeLogFileName("comfyui-runtime", AT)).toBe(
-      "comfyui-runtime-20261005-093612.log",
-    );
+    expect(runtimeLogFileName("comfyui-runtime", AT)).toBe("comfyui-runtime-20261005-093612.log");
   });
 
   it("**不含冒号**（Windows 下 : 是非法文件名字符，带上它就是静默失败）", () => {
@@ -42,18 +40,9 @@ describe("文件名形态", () => {
   });
 
   it("字典序 = 时间序（ls 一眼就是时间线）", () => {
-    const a = runtimeLogFileName(
-      "ollama-runtime",
-      new Date(2026, 9, 5, 9, 0, 0),
-    );
-    const b = runtimeLogFileName(
-      "ollama-runtime",
-      new Date(2026, 9, 5, 10, 0, 0),
-    );
-    const c = runtimeLogFileName(
-      "ollama-runtime",
-      new Date(2026, 8, 30, 23, 59, 59),
-    );
+    const a = runtimeLogFileName("ollama-runtime", new Date(2026, 9, 5, 9, 0, 0));
+    const b = runtimeLogFileName("ollama-runtime", new Date(2026, 9, 5, 10, 0, 0));
+    const c = runtimeLogFileName("ollama-runtime", new Date(2026, 8, 30, 23, 59, 59));
     expect([b, a, c].sort()).toEqual([c, a, b]);
   });
 
@@ -76,16 +65,12 @@ describe("文件名形态", () => {
 
 describe("解析", () => {
   it("回时刻（本地时区）与序号", () => {
-    const parsed = parseRuntimeLogFileName(
-      "comfyui-runtime-20261005-093612.log",
-    );
+    const parsed = parseRuntimeLogFileName("comfyui-runtime-20261005-093612.log");
     expect(parsed?.source).toBe("comfyui-runtime");
     expect(parsed?.startedAt).toBe(AT.getTime());
     expect(parsed?.ordinal).toBe(1);
 
-    const second = parseRuntimeLogFileName(
-      "comfyui-runtime-20261005-093612-3.log",
-    );
+    const second = parseRuntimeLogFileName("comfyui-runtime-20261005-093612-3.log");
     expect(second?.ordinal).toBe(3);
     expect(second?.startedAt).toBe(AT.getTime());
   });
@@ -105,14 +90,10 @@ describe("解析", () => {
   });
 
   it("旧固定名的形态由 legacyRuntimeLogFileName 给（读侧要认得它）", () => {
-    expect(legacyRuntimeLogFileName("ollama-runtime")).toBe(
-      "ollama-runtime.log",
-    );
+    expect(legacyRuntimeLogFileName("ollama-runtime")).toBe("ollama-runtime.log");
     /* 它与新形态**必须**互斥：一致的话 `parse` 会把迁移前那份也当成一次启动，
      * 于是它在列表里拿不到「更早的日志」这个说得通的位置。 */
-    expect(
-      parseRuntimeLogFileName(legacyRuntimeLogFileName("ollama-runtime")),
-    ).toBeNull();
+    expect(parseRuntimeLogFileName(legacyRuntimeLogFileName("ollama-runtime"))).toBeNull();
   });
 });
 
@@ -129,18 +110,13 @@ describe("compareRuntimeLogFiles（旧 → 新，三级判据）", () => {
     startedAt: parseRuntimeLogFileName(name)?.startedAt ?? null,
   });
   const older = runtimeLogFileName("comfyui-runtime", AT);
-  const newer = runtimeLogFileName(
-    "comfyui-runtime",
-    new Date(2026, 9, 5, 9, 36, 13),
-  );
+  const newer = runtimeLogFileName("comfyui-runtime", new Date(2026, 9, 5, 9, 36, 13));
   const second = runtimeLogFileName("comfyui-runtime", AT, 2);
 
   it("时刻不同 ⇒ 时刻升序，与谁的名字更长无关", () => {
     expect(parseRuntimeLogFileName(older)?.startedAt).not.toBeNull();
     expect(compareRuntimeLogFiles(entry(older), entry(newer))).toBeLessThan(0);
-    expect(compareRuntimeLogFiles(entry(newer), entry(older))).toBeGreaterThan(
-      0,
-    );
+    expect(compareRuntimeLogFiles(entry(newer), entry(older))).toBeGreaterThan(0);
   });
 
   it("同一秒的两份 ⇒ 第一份在前，**而按名字比会把它排反**", () => {
@@ -150,20 +126,17 @@ describe("compareRuntimeLogFiles（旧 → 新，三级判据）", () => {
      * 而用户把它读成「第一次的失败现场」（其实是第二次的）。 */
     expect(older.localeCompare(second)).toBeGreaterThan(0);
     expect(compareRuntimeLogFiles(entry(older), entry(second))).toBeLessThan(0);
-    expect(
-      [entry(second), entry(older)]
-        .sort(compareRuntimeLogFiles)
-        .map((e) => e.name),
-    ).toEqual([older, second]);
+    expect([entry(second), entry(older)].sort(compareRuntimeLogFiles).map((e) => e.name)).toEqual([
+      older,
+      second,
+    ]);
   });
 
   it("旧固定名永远排最前（两个方向都是它在前）", () => {
     const legacy = legacyRuntimeLogFileName("comfyui-runtime");
     expect(entry(legacy).startedAt).toBeNull();
     expect(compareRuntimeLogFiles(entry(legacy), entry(older))).toBeLessThan(0);
-    expect(compareRuntimeLogFiles(entry(older), entry(legacy))).toBeGreaterThan(
-      0,
-    );
+    expect(compareRuntimeLogFiles(entry(older), entry(legacy))).toBeGreaterThan(0);
   });
 
   it("两份都没有时刻 ⇒ 退到名字序，而不是返回 0 把它们混在一起", () => {
@@ -184,23 +157,17 @@ describe("compareRuntimeLogFiles（旧 → 新，三级判据）", () => {
 describe("下拉文案", () => {
   it("日期 + 时刻都要（只有 HH:mm:ss 时「昨天那次」与「今天那次」看起来一样）", () => {
     expect(
-      runtimeLogFileLabel(
-        parseRuntimeLogFileName("ollama-runtime-20261005-093612.log")!,
-      ),
+      runtimeLogFileLabel(parseRuntimeLogFileName("ollama-runtime-20261005-093612.log")!),
     ).toBe("10-05 09:36:12");
     expect(
-      runtimeLogFileLabel(
-        parseRuntimeLogFileName("ollama-runtime-20260930-190000.log")!,
-      ),
+      runtimeLogFileLabel(parseRuntimeLogFileName("ollama-runtime-20260930-190000.log")!),
     ).toBe("09-30 19:00:00");
   });
 
   it("读不到时刻（旧固定名）给「更早的日志」，不是退回文件名", () => {
     /* 退回文件名的后果：`comfyui-runtime.log` 读起来像是「现在那一份」，而它
      * 实际是所有新份之前的全部历史 —— 用户会据此挑错。 */
-    expect(
-      runtimeLogFileLabel({ source: "", startedAt: null, ordinal: 1 }),
-    ).toBe("更早的日志");
+    expect(runtimeLogFileLabel({ source: "", startedAt: null, ordinal: 1 })).toBe("更早的日志");
   });
 });
 
@@ -226,9 +193,7 @@ describe("parseLaunchStamp（launcher → dev server 的名字戳）", () => {
     const stamp = "20261010-053059";
     const at = parseLaunchStamp(stamp);
     expect(at).not.toBeNull();
-    expect(runtimeLogFileName("app-runtime", at!)).toBe(
-      `app-runtime-${stamp}.log`,
-    );
+    expect(runtimeLogFileName("app-runtime", at!)).toBe(`app-runtime-${stamp}.log`);
   });
 
   it("缺值 / 空串给 null（非双击链路启动：根本没有 launcher 要合并）", () => {

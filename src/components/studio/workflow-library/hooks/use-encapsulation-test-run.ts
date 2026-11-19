@@ -1,22 +1,10 @@
 "use client";
 
-/* ── 工坊封装页签的「流程测试」运行编排（规范 §17.2 第②层）─────────────
- *
- * 「画布节点」页签的「▶ 用此工作流生成」与「工坊封装」页签的「执行流程测试」
- * 是同一份封装口径下的两次运行：同一个 ComfyUI 链路（generate.generate →
- * SSE）、同一个运行登记表（`workflow-run-store`）、同一个全屏日志弹窗。
- *
- * 此前流程测试把运行态与日志放在组件 useState 里：切页签（组件卸载）即丢，
- * 且它**不进**运行登记表 —— 于是两个页签看上去各占一个「执行视角」，一边在跑，
- * 另一边点了像「执行不了」（ISSUE #611）。
- *
- * 本 hook 把流程测试接进共享运行态：登记（registerWorkflowRun）→ 累积日志
- * （appendWorkflowRunLog）→ 终态（patchWorkflowRun / failWorkflowRun）。
- * 视图只消费 controller，不碰网络。
- *
- * 与画布节点那次运行的**唯一差别**是 `source` 标记与「按封装口径组载荷」
- * （提示词 + 负向 + 尺寸，`buildLibraryWorkflowInput`）—— 两个入口本来就是
- * 同一个动作的两种触发方式，不该有两套运行态。 */
+/* ── 工坊封装页签的「流程测试」运行编排（规范 §17.2 第②层）──
+ * 与「画布节点」的「▶ 用此工作流生成」是同一条 ComfyUI 链路、同一份
+ * `workflow-run-store`、同一个全屏日志弹窗。此前流程测试把状态放在组件 useState 里
+ * （切页签即丢、也不进登记表），两个页签像各占一个执行视角（ISSUE #611）。本 hook
+ * 接进共享运行态：登记 → 累积日志 → 终态；差别只有 `source` 标记与载荷组装。 */
 
 import { useCallback, useMemo, useState } from "react";
 import { runAsyncAction } from "~/lib/async-action";
@@ -137,13 +125,11 @@ export function useEncapsulationTestRun({
       setError("");
       setResultUrl(null);
       void (async () => {
-        /* 外层只兜「提交阶段抛错」（buildLibraryWorkflowInput / startLocalGenerate
-         * 失败、还没拿到 taskId）→ 走 runAsyncAction 的失败出口 setError；
-         * 运行本身的终态由 watchWorkflowRun 的 onSettled 落 setError，所以
-         * readResultEnvelope:false（动作返回 void，不靠返回值判成败）、成功静默。
-         * 重入闸门与忙碌位归调用处，收尾在 await 之后（两道都不能写进动作体：
-         * 它们要用 catch 之后的 `lock`）—— 而 `runAsyncAction` 不向外抛错，
-         * 所以 await 之后的收尾不会因异常被跳过。 */
+        /* 外层只兜「提交阶段抛错」（还没拿到 taskId）→ 走 runAsyncAction 的失败出口
+         * setError；运行终态由 watchWorkflowRun 的 onSettled 落 setError，故
+         * readResultEnvelope:false、成功静默。重入闸门与忙碌位归调用处，收尾在 await
+         * 之后（两道都要用 catch 之后的 `lock`）；runAsyncAction 不向外抛错，收尾不会
+         * 被异常跳过。 */
         await runAsyncAction(
           async () => {
             /* 按**当前选中的模式**组载荷：封装页签可以逐个模式跑一次流程测试

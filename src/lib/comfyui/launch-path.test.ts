@@ -7,6 +7,7 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveComfyLaunchPlan } from "./launch-path";
+import type { ComfyLaunchPlan } from "./launch-path";
 
 type Fs = Set<string>;
 /** 构造一组「存在」的路径，用于注入 exists 回调。 */
@@ -16,6 +17,14 @@ function fakeFs(...paths: Array<string>): Fs {
 
 function makeExists(fsSet: Fs) {
   return (p: string): boolean => fsSet.has(path.normalize(p));
+}
+
+/** 把「成功 plan / 错误对象」联合收窄成成功分支；错误分支直接让用例失败。 */
+function expectPlan(plan: ComfyLaunchPlan | { error: string }): ComfyLaunchPlan {
+  if ("error" in plan) {
+    throw new Error(plan.error);
+  }
+  return plan;
 }
 
 describe("resolveComfyLaunchPlan", () => {
@@ -185,8 +194,10 @@ describe("resolveComfyLaunchPlan", () => {
     const fsSet = fakeFs(root, path.join(root, "main.py"));
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
     expect(plan).toHaveProperty("error");
-    /* SAFETY: 类型断言已复核 */
-    const err = (plan as { error: string }).error;
+    if (!("error" in plan)) {
+      throw new Error("预期返回错误对象");
+    }
+    const err = plan.error;
     // 文案要同时点出 Windows 与 POSIX 两种布局，用户才知道该配什么。
     expect(err).toContain("Python 解释器");
     expect(err).toContain(".venv/bin/python");
@@ -205,8 +216,7 @@ describe("resolveComfyLaunchPlan", () => {
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
     expect(plan).not.toHaveProperty("error");
-    /* SAFETY: 类型断言已复核 */
-    expect((plan as { cmd: string }).cmd).toBe(path.join(root, ".venv", "bin", "python"));
+    expect(expectPlan(plan).cmd).toBe(path.join(root, ".venv", "bin", "python"));
   });
 
   it("Linux venv 优先 bin/python3（POSIX 只保证 python3 存在）", () => {
@@ -218,8 +228,7 @@ describe("resolveComfyLaunchPlan", () => {
       path.join(root, ".venv", "bin", "python"),
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
-    /* SAFETY: 类型断言已复核 */
-    expect((plan as { cmd: string }).cmd).toBe(path.join(root, ".venv", "bin", "python3"));
+    expect(expectPlan(plan).cmd).toBe(path.join(root, ".venv", "bin", "python3"));
   });
 
   it("Linux venv：torch 装在 lib/python3.12/site-packages 也认（不是 Lib/site-packages）", () => {
@@ -241,12 +250,8 @@ describe("resolveComfyLaunchPlan", () => {
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
     // 选中带 torch 的 .venv（依赖判据认 POSIX 的 lib/python3.x/site-packages）
-    /* SAFETY: 类型断言已复核 */
-    expect((plan as { cmd: string; hasDeps?: boolean }).cmd).toBe(
-      path.join(envRoot, "bin", "python3"),
-    );
-    /* SAFETY: 类型断言已复核 */
-    expect((plan as { hasDeps?: boolean }).hasDeps).toBe(true);
+    expect(expectPlan(plan).cmd).toBe(path.join(envRoot, "bin", "python3"));
+    expect(expectPlan(plan).hasDeps).toBe(true);
   });
 
   it("Linux venv 无 torch：仍返回解释器，但 hasDeps=false（交由调用方提示装依赖）", () => {
@@ -255,7 +260,6 @@ describe("resolveComfyLaunchPlan", () => {
     const fsSet = fakeFs(root, path.join(root, "main.py"), path.join(envRoot, "bin", "python"));
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
     expect(plan).not.toHaveProperty("error");
-    /* SAFETY: 类型断言已复核 */
-    expect((plan as { hasDeps?: boolean }).hasDeps).toBe(false);
+    expect(expectPlan(plan).hasDeps).toBe(false);
   });
 });

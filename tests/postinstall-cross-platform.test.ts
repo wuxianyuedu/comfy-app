@@ -1,27 +1,15 @@
 /**
- * 回归护栏：**`pnpm install` 的 `postinstall` 必须在 Windows 上真的能跑**（ISSUE #636）。
- *
- * 背景（用户现场，Windows）：双击 `tools/start/run-local.ps1` 一键初始化，
- * `pnpm install` 走到 postinstall 时输出
- * `'sh' is not recognized as an internal or external command` 与
- * `'true' is not recognized as …`，随后
- * `Error: ERR_PNPM_EXECUTOR_LIFECYCLE_SCRIPT_FAILED` —— 整个 `pnpm install` 失败，
- * 入口给用户的提示却是「请检查网络后重新双击本脚本」（照做永远修不好）。
- *
- * 根因是 `package.json` 写的是 `sh scripts/install-git-hooks.sh || true`：
- * **`postinstall` 在三个宿主上执行**（Windows 的 cmd.exe 语义 / Git for Windows 的
- * bash / Linux、macOS 的 sh），只有后两种有 `sh`；而 `|| true` 本身就是 cmd.exe 不认的
- * POSIX shell 语法 —— 脚本里那句「任何一步失败都不阻断安装」也救不了自己。
- * 更隐蔽的是 **CI 在 Linux 上跑，这条永远不会红**。
- *
- * 本用例把「postinstall 只拉跨平台同一个入口」机器化，并**真跑一遍**那个入口
- * （模拟 Windows 宿主：不经 shell、纯 Node），反向验证：改回 `sh … || true` 即失败。
+ * 回归护栏：**`pnpm install` 的 `postinstall` 必须在 Windows 上真能跑**（ISSUE #636）：现场报
+ * `'sh' is not recognized`，整条 install 失败；根因是 `package.json` 的 `sh scripts/install-git-hooks.sh || true`。
+ * 三宿主只有 bash/sh 有 `sh`，`|| true` 是 cmd.exe 不认的 POSIX 语法（CI 跑 Linux 永不红）；用例纯 Node 真跑入口，改回即失败。
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 import {
   POSTINSTALL_FORBIDDEN,
@@ -31,11 +19,17 @@ import {
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 const ROOT = process.cwd();
-/* SAFETY: 类型断言已复核 */
-const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
-  scripts: Record<string, string>;
-};
-const postinstall = pkg.scripts.postinstall ?? "";
+/* package.json 的 scripts 段：JSON.parse 的 any 用运行时守卫收窄（B5 清账，不走 as）。 */
+const pkgRaw: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+const pkgScripts: Record<string, string> = {};
+if (isRecord(pkgRaw) && isRecord(pkgRaw.scripts)) {
+  for (const [key, value] of Object.entries(pkgRaw.scripts)) {
+    if (typeof value === "string") {
+      pkgScripts[key] = value;
+    }
+  }
+}
+const postinstall = pkgScripts.postinstall ?? "";
 
 const tmpDirs: Array<string> = [];
 afterEach(() => {
@@ -147,7 +141,7 @@ describe("postinstall 的入口真跑（模拟 Windows 宿主：不经 shell）"
     const src = fs.readFileSync(path.join(ROOT, POSTINSTALL_SCRIPT), "utf8");
     const code = src
       .split("\n")
-      .filter((l) => !/^\s*(\/\/|#|\*|\/\*)/.test(l))
+      .filter((l) => !/^\s*(?:\/\/|#|\*|\/\*)/.test(l))
       .join("\n");
     // `sh` 只允许出现在说明「为什么不能用它」的注释里。
     expect(code).not.toMatch(/\bsh\s+scripts\//);

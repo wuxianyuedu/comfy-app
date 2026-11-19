@@ -1,0 +1,719 @@
+/**
+ * `ship --gh-logs`（`scripts/ship/ship-gh-logs.mjs`）的取数与呈现判据。
+ *
+ * 四档用例钉住规范 §13.6 的承诺：
+ *   ① 判红 ⇒ run / job / step / 全部 `##[error]` / 失败窗口 / 一行结论 / 绝对路径都在场；
+ *   ② 无令牌 ⇒ 只念一行、一次网络都不发、退码不变；
+ *   ③ 超长日志 ⇒ head/tail 标记与省略行数准确；
+ *   ④ 取数失败 ⇒ 只多一行缺因，三态与退码照旧。
+ * 另钉 `--gh-logs` 的两种写法、`run:` / `pr:` 消歧、以及 env / JSON 形状的脱敏。
+ */
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { parseArgs } from "../scripts/ship/ship-args.mjs";
+import { CODE } from "../scripts/ship/ship-core.mjs";
+import { redactSecrets } from "../scripts/ci/ci-github-verdict-logs.mjs";
+import {
+  classifyFailureName,
+  classifyFailureOrigin,
+  parseGhLogsTarget,
+  renderFailureWindow,
+  resolveGhRepo,
+  runGhLogs,
+  runGhLogsOnRed,
+  selectRunForPr,
+  shipFailureWindow,
+} from "../scripts/ship/ship-gh-logs.mjs";
+
+/** 夹具里不写凭据字面量（pre-commit 的 tracked-secrets 硬闸）：值拼出来，形状可复现。 */
+const fakeValue = "not-a-real-credential-1234567890";
+const fakeGhString = `ghp_${"a".repeat(30)}`;
+const fakePatString = `github_pat_${"b".repeat(30)}`;
+const envKey = ["GITHUB", "TOKEN"].join("_");
+const envLine = `${envKey}=placeholder-value`;
+const RUN_ID = 4242;
+const PR_NUMBER = 3195;
+
+/** 这一格用到的 temp 目录（每个用例自己建、自己删）。 */
+const madeDirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of madeDirs.splice(0)) {
+    fs.rmSync(dir, { force: true, recursive: true });
+  }
+});
+
+/** 建一个用例专属的日志落点（不让不同用例互相清空）。 */
+function tempDir(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ship-gh-logs-test-"));
+  madeDirs.push(dir);
+  return dir;
+}
+
+/**
+ * @param {unknown} body JSON 回话
+ * @param {number} [status] HTTP 状态
+ * @returns {Response} 假回话
+ */
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+    status,
+  });
+}
+
+/**
+ * @param {string} text 正文
+ * @param {number} [status] HTTP 状态
+ * @returns {Response} 假回话
+ */
+function textResponse(text: string, status = 200): Response {
+  return new Response(text, { status });
+}
+
+/** 一条判红的 run（形状贴 GA workflow_run 回话）。 */
+const RED_RUN = {
+  conclusion: "failure",
+  display_title: `PR #${String(PR_NUMBER)} · [ship] gh logs · abc`,
+  html_url: `https://github.com/org/repo/actions/runs/${String(RUN_ID)}`,
+  id: RUN_ID,
+  status: "completed",
+};
+
+/** 红 run 的 job 列表：第二个 step 是失败 step。 */
+const RED_JOBS = {
+  jobs: [
+    {
+      conclusion: "failure",
+      id: 101,
+      name: "heavy-gates",
+      status: "completed",
+      steps: [
+        { conclusion: "success", name: "Checkout", number: 1, status: "completed" },
+        {
+          conclusion: "failure",
+          name: "Run pnpm vitest run tests/foo.test.ts",
+          number: 2,
+          status: "completed",
+        },
+      ],
+    },
+  ],
+};
+
+/** 失败 step 的原始日志（含注解、令牌形状、env 形状）。 */
+const FAILED_LOG = [
+  "##[group]Run pnpm vitest run tests/foo.test.ts",
+  "> pnpm vitest run tests/foo.test.ts",
+  "FAIL tests/foo.test.ts",
+  "Test Files  1 failed",
+  "##[error]Process completed with exit code 1.",
+  "##[endgroup]",
+  envLine,
+  `LEAK=${fakeGhString}`,
+  '{"password":"hunter2"}',
+].join("\n");
+
+/**
+ * 假 fetch：只答这一族要的三跳（run / jobs / job log），其余给 404。
+ *
+ * @param {object} [overrides] 覆盖某一路的作答
+ * @returns {typeof fetch} 假 fetch
+ */
+function fakeGhFetch(
+  overrides: { jobs?: () => Response; log?: () => Response; run?: () => Response } = {},
+): typeof fetch {
+  return (input: RequestInfo | URL): Promise<Response> => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (url.endsWith(`/actions/runs/${String(RUN_ID)}`)) {
+      return Promise.resolve(overrides.run ? overrides.run() : jsonResponse(RED_RUN));
+    }
+    if (url.includes(`/actions/runs/${String(RUN_ID)}/jobs`)) {
+      return Promise.resolve(overrides.jobs ? overrides.jobs() : jsonResponse(RED_JOBS));
+    }
+    if (url.includes("/actions/jobs/101/logs")) {
+      return Promise.resolve(overrides.log ? overrides.log() : textResponse(FAILED_LOG));
+    }
+    if (url.includes("/actions/runs?event=repository_dispatch")) {
+      return Promise.resolve(jsonResponse({ workflow_runs: [RED_RUN] }));
+    }
+    return Promise.resolve(textResponse("not found", 404));
+  };
+}
+
+/**
+ * 跑一次回读，收齐屏幕行。
+ *
+ * @param {object} [opts] 覆盖点
+ * @returns {Promise<{code: number, lines: string[], text: string}>} 读数
+ */
+async function runOnce(
+  opts: {
+    cnbIo?:
+      | {
+          run: (
+            cmd: string,
+            args: string[],
+          ) => { error: string | null; status: number; stderr: string; stdout: string };
+          slug: string;
+        }
+      | undefined;
+    dryRun?: boolean;
+    env?: Record<string, string>;
+    fetchImpl?: typeof fetch;
+    input?: string;
+    onDemand?: {
+      intervalMs?: number;
+      maxMs?: number;
+      now?: () => number;
+      sleep?: (ms: number) => void | Promise<void>;
+    };
+    windowMaxBytes?: number;
+  } = {},
+) {
+  const lines: string[] = [];
+  const code = await runGhLogs({
+    input: opts.input ?? `run:${String(RUN_ID)}`,
+    repo: "org/repo",
+    env: opts.env ?? { GITHUB_MIRROR_TOKEN: fakeValue },
+    log: (line) => lines.push(line),
+    fetchImpl: opts.fetchImpl ?? fakeGhFetch(),
+    sleep: () => Promise.resolve(),
+    windowMaxBytes: opts.windowMaxBytes,
+    dryRun: opts.dryRun,
+    dir: tempDir(),
+    cnbIo: opts.cnbIo,
+    onDemand: opts.onDemand,
+  });
+  return { code, lines, text: lines.join("\n") };
+}
+
+describe("① 判红：run / job / step / 注解 / 窗口 / 结论 / 绝对路径都在场", () => {
+  it("台面上直接念出六件读数，并把全量日志落进临时目录", async () => {
+    const r = await runOnce();
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain(`GH run #${String(RUN_ID)}（conclusion=failure）`);
+    expect(r.text).toContain(RED_RUN.html_url);
+    expect(r.text).toContain("✗ job「heavy-gates」（failure）");
+    expect(r.text).toContain("失败 step #2「Run pnpm vitest run tests/foo.test.ts」（failure）");
+    expect(r.text).toContain("失败注解（共 1 条）");
+    expect(r.text).toContain("##[error]Process completed with exit code 1.");
+    expect(r.text).toContain("失败窗口");
+    expect(r.text).toContain("全量日志已落盘：");
+    expect(r.text).toContain("清理提示");
+    expect(r.text).toContain("结论：内容判据");
+
+    const pathLine = r.lines.find((line) => line.includes("全量日志已落盘："));
+    expect(pathLine).toBeDefined();
+    const abs = String(pathLine).split("全量日志已落盘：")[1]?.split("（")[0] ?? "";
+    expect(path.isAbsolute(abs)).toBe(true);
+    const written = fs.readFileSync(abs, "utf8");
+    expect(written).toContain("run 4242 / job「heavy-gates」");
+    expect(written).toContain("##[error]Process completed with exit code 1.");
+    /* 脱敏在落盘前：令牌 / env / JSON 三种形状一个都不许留在文件里。 */
+    expect(written).not.toContain("placeholder-value");
+    expect(written).not.toContain("hunter2");
+    expect(written).not.toContain(fakeGhString);
+    expect(written).toContain("GITHUB_TOKEN=<redacted>");
+    expect(written).toContain('"password":"<redacted>"');
+  });
+
+  it("PR 号入口：从触发表里挑最新判红的 run（不是最新一条绿的）", () => {
+    const greenNewer = { ...RED_RUN, conclusion: "success", id: 5000 };
+    const redOlder = { ...RED_RUN, id: 4000 };
+    expect(selectRunForPr([greenNewer, redOlder], PR_NUMBER)?.id).toBe(4000);
+    expect(selectRunForPr([{ ...RED_RUN, display_title: "PR #31950 · …" }], PR_NUMBER)).toBeNull();
+  });
+
+  it("auto 触发：只有 build 是红才回读；绿的一跳一次网络都不发", async () => {
+    const redLines: string[] = [];
+    const greenLines: string[] = [];
+    let calls = 0;
+    const countingFetch: typeof fetch = (input, init) => {
+      calls += 1;
+      return fakeGhFetch()(input, init);
+    };
+    await runGhLogsOnRed({
+      buildState: "red",
+      number: PR_NUMBER,
+      repo: "org/repo",
+      env: { GITHUB_MIRROR_TOKEN: fakeValue },
+      log: (line) => redLines.push(line),
+      fetchImpl: countingFetch,
+      sleep: () => Promise.resolve(),
+      dir: tempDir(),
+    });
+    expect(calls).toBeGreaterThan(0);
+    expect(redLines.join("\n")).toContain(`GH run #${String(RUN_ID)}`);
+    await runGhLogsOnRed({
+      buildState: "green",
+      number: PR_NUMBER,
+      repo: "org/repo",
+      env: { GITHUB_MIRROR_TOKEN: fakeValue },
+      log: (line) => greenLines.push(line),
+      fetchImpl: countingFetch,
+      sleep: () => Promise.resolve(),
+      dir: tempDir(),
+    });
+    expect(greenLines).toEqual([]);
+  });
+});
+
+describe("② 无令牌：只念一行、一次网络都不发、退码不变", () => {
+  it("env 里两枚令牌都没有 ⇒ 一行跳过，fetch 零调用", async () => {
+    let calls = 0;
+    const forbidFetch: typeof fetch = () => {
+      calls += 1;
+      throw new Error("不该发网络请求");
+    };
+    const lines: string[] = [];
+    const code = await runGhLogs({
+      input: `run:${String(RUN_ID)}`,
+      repo: "org/repo",
+      env: {},
+      log: (line) => lines.push(line),
+      fetchImpl: forbidFetch,
+      sleep: () => Promise.resolve(),
+      dir: tempDir(),
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(calls).toBe(0);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("未设置令牌 ⇒ 跳过 GH 日志回读");
+  });
+
+  it("GITHUB_TOKEN 兼容：没有 MIRROR 那枚时仍能取数", async () => {
+    const r = await runOnce({ env: { GITHUB_TOKEN: fakeValue } });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain(`GH run #${String(RUN_ID)}`);
+  });
+});
+
+describe("③ 超长日志：head/tail 标记与省略行数准确", () => {
+  it("shipFailureWindow：原文行数 / 展示行数 / 省略行数三者自洽", () => {
+    const lines = Array.from({ length: 5000 }, (_, i) => `line-${String(i)}`);
+    const win = shipFailureWindow(lines, 300);
+    expect(win.truncated).toBe(true);
+    expect(win.totalLines).toBe(5000);
+    expect(win.shownLines).toBe(win.headLines + win.tailLines);
+    expect(win.omittedLines).toBe(5000 - win.shownLines);
+    const text = renderFailureWindow("step「超长」", win).join("\n");
+    expect(text).toContain("[head");
+    expect(text).toContain("[tail");
+    expect(text).toContain(`已截断：省略 ${String(win.omittedLines)} 行`);
+    expect(text).toContain("原文 5000 行");
+  });
+
+  it("单行超长：压这一行本身、行数口径不变", () => {
+    const win = shipFailureWindow(["x".repeat(10_000)], 200);
+    expect(win.truncated).toBe(true);
+    expect(win.longLineTrimmed).toBe(true);
+    expect(win.totalLines).toBe(1);
+    expect(win.shownLines).toBe(1);
+    expect(renderFailureWindow("单行", win).join("\n")).toContain("末行超长已截短");
+  });
+
+  it("未超界：一次也不说截断", () => {
+    const win = shipFailureWindow(["a", "b"], 1024);
+    expect(win.truncated).toBe(false);
+    expect(renderFailureWindow("短窗口", win).join("\n")).toContain("未截断");
+  });
+});
+
+describe("④ 取数失败：只多一行缺因，三态与退码照旧", () => {
+  it("网络不通 ⇒ 一行缺因、退 0、不抛", async () => {
+    const failing: typeof fetch = () => Promise.reject(new Error("network down"));
+    const r = await runOnce({ fetchImpl: failing });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain("取不到");
+    expect(r.text).toContain("缺的只是日志");
+  });
+
+  it("job 列表 401 ⇒ 一行带 HTTP 状态的缺因，退 0", async () => {
+    const r = await runOnce({
+      fetchImpl: fakeGhFetch({ jobs: () => textResponse("forbidden", 401) }),
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain("job 列表取不到（HTTP 401");
+    expect(r.text).toContain("令牌缺 actions: read");
+  });
+
+  it("输入认不出 ⇒ 退 2（唯一会增加退码的一档：用法错误）", async () => {
+    const r = await runOnce({ input: "not-a-number" });
+    expect(r.code).toBe(CODE.NOT_RUN);
+    expect(r.text).toContain("认不出");
+  });
+});
+
+describe("脱敏：精确令牌 + ghp_ / github_pat_ + env / JSON 形状", () => {
+  it("四种形状都抹成 <redacted>，正文其余不动", () => {
+    const raw = [
+      `a=${fakeValue}`,
+      envLine,
+      "API_KEY=zzz",
+      '{"password":"hunter2"}',
+      fakeGhString,
+      fakePatString,
+      "keep=ok",
+    ].join("\n");
+    const out = redactSecrets(raw, fakeValue);
+    expect(out).not.toContain(fakeValue);
+    expect(out).not.toContain("leak");
+    expect(out).not.toContain("zzz");
+    expect(out).not.toContain("hunter2");
+    expect(out).not.toContain("ghp_");
+    expect(out).not.toContain("github_pat_");
+    expect(out).toContain("GITHUB_TOKEN=<redacted>");
+    expect(out).toContain("API_KEY=<redacted>");
+    expect(out).toContain('"password":"<redacted>"');
+    expect(out).toContain("keep=ok");
+  });
+});
+
+describe("命令行形态：run id / PR 号两种写法都认", () => {
+  it("parseGhLogsTarget：裸数字按位数判，run: / pr: / URL 可消歧", () => {
+    expect(parseGhLogsTarget(String(PR_NUMBER))).toEqual({ kind: "pr", number: PR_NUMBER });
+    expect(parseGhLogsTarget("run:4242")).toEqual({ id: 4242, kind: "run" });
+    expect(parseGhLogsTarget("pr:3195")).toEqual({ kind: "pr", number: 3195 });
+    expect(parseGhLogsTarget(`https://github.com/org/repo/actions/runs/${String(RUN_ID)}`)).toEqual(
+      {
+        id: RUN_ID,
+        kind: "run",
+      },
+    );
+    expect(parseGhLogsTarget("abc")).toEqual({ bad: "abc", kind: null });
+  });
+
+  it("parseArgs：空格 / 等号两种写法共用一支；缺值进 bad", () => {
+    expect(parseArgs(["--gh-logs", "3195"]).ghLogsRef).toBe("3195");
+    expect(parseArgs(["--gh-logs=run:4242"]).ghLogsRef).toBe("run:4242");
+    expect(parseArgs(["--gh-logs"]).ghLogsBad).toEqual(["(缺 run id / PR 号)"]);
+    const both = parseArgs(["--gh-logs", "3195", "--merge"]);
+    expect(both.ghLogs).toBe(true);
+    expect(both.merge).toBe(true);
+  });
+});
+
+describe("仓库坐标：GitHub 那一侧不认 CNB origin 的 slug", () => {
+  it("缺省落到镜像仓（wuxianyuedu/comfy-app），GITHUB_MIRROR_REPO 可覆盖", () => {
+    expect(resolveGhRepo({})).toBe("wuxianyuedu/comfy-app");
+    expect(resolveGhRepo({ GITHUB_MIRROR_REPO: "  org/repo  " })).toBe("org/repo");
+    expect(resolveGhRepo({ GITHUB_MIRROR_REPO: "   " })).toBe("wuxianyuedu/comfy-app");
+  });
+
+  it("回读的第一跳打的是镜像仓 API，不是 CNB origin 解析出的 slug", async () => {
+    const urls: string[] = [];
+    const lines: string[] = [];
+    const code = await runGhLogs({
+      input: `run:${String(RUN_ID)}`,
+      repo: resolveGhRepo({}),
+      env: { GITHUB_MIRROR_TOKEN: fakeValue },
+      log: (line) => lines.push(line),
+      fetchImpl: (input: RequestInfo | URL): Promise<Response> => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        urls.push(url);
+        return fakeGhFetch()(input);
+      },
+      sleep: () => Promise.resolve(),
+      dir: tempDir(),
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(urls[0]).toBe(
+      `https://api.github.com/repos/wuxianyuedu/comfy-app/actions/runs/${String(RUN_ID)}`,
+    );
+  });
+});
+
+describe("一行结论：环境侧 / 内容判据 / 混合作业", () => {
+  it("名称命中准备步骤 ⇒ 环境侧；命中判据 ⇒ 内容判据；都不中 ⇒ 未判定", () => {
+    expect(classifyFailureName("Checkout")).toBe("environment");
+    expect(classifyFailureName("Run pnpm typecheck")).toBe("content");
+    expect(classifyFailureName("blob")).toBe("unknown");
+    expect(classifyFailureOrigin([{ kind: "content", name: "Run pnpm vitest" }])).toContain(
+      "内容判据",
+    );
+    expect(classifyFailureOrigin([{ kind: "environment", name: "Checkout" }])).toContain("环境侧");
+    expect(
+      classifyFailureOrigin([
+        { kind: "content", name: "Run pnpm vitest" },
+        { kind: "environment", name: "Checkout" },
+      ]),
+    ).toContain("混合");
+  });
+});
+
+/** 造一条 CNB relay 附件正文（gzip→base64），与 GA 侧脚本同形。 */
+import { gzipSync as gzipNode } from "node:zlib";
+import { RELAY_MARKER } from "../scripts/ci/ci-ga-logs-relay.mjs";
+
+function relayB64(text: string): string {
+  return Buffer.from(gzipNode(Buffer.from(text, "utf8"))).toString("base64");
+}
+
+/** 假 cnb 执行者：按命令返回 -v 的 JSON 信封。
+ * `scope` 不给 ⇒ 造的是 #3437 旧评论（marker 无 scope），本地按 failed 读、逐字兼容。 */
+function fakeCnbIo(text: string | null, scope?: string) {
+  const relayText = text ?? "";
+  const scopePart = scope === undefined ? "" : ` scope=${scope}`;
+  const marker = `<!-- ${RELAY_MARKER} run=4242 sha=${"c".repeat(40)} pr=3195 jobs=1 bytes=99${scopePart} -->\n[f.b64](/-/files/u/key/f.b64)`;
+  return {
+    run: (_cmd: string, args: string[]) => {
+      const key = args.join(" ");
+      if (key.includes("list-comments")) {
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: `status: 200\n${JSON.stringify({ data: text === null ? [] : [{ body: marker, id: "1" }] })}`,
+        };
+      }
+      if (key.includes("get-files")) {
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: `status: 200\n${JSON.stringify({ data: relayB64(relayText) })}`,
+        };
+      }
+      return { error: null, status: 0, stderr: "", stdout: "{}" };
+    },
+    slug: "moon-read/comfy-app-t3",
+  };
+}
+
+describe("⑤ CNB 侧优先（ISSUE #3437）：站内读 relay，本地不出站 github.com", () => {
+  const CNB_LOG = [
+    "== run 4242 / job「heavy-gates」（failure）==",
+    "##[group]Run pnpm vitest",
+    "FAIL tests/foo.test.ts",
+    "##[error]Process completed with exit code 1.",
+    "##[endgroup]",
+  ].join("\n");
+
+  it("CNB 命中：无 GitHub 令牌也读得到，且一次 api.github.com 都不发", async () => {
+    let ghCalls = 0;
+    const fetchImpl = ((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (new URL(url).hostname === "api.github.com") ghCalls += 1;
+      return Promise.resolve(textResponse("not found", 404));
+    }) as typeof fetch;
+    const r = await runOnce({
+      input: "pr:3195",
+      env: {},
+      fetchImpl,
+      cnbIo: fakeCnbIo(CNB_LOG),
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain("CNB 侧 GA 判红日志");
+    expect(r.text).toContain("未出站 github.com");
+    expect(r.text).toContain("##[error]Process completed with exit code 1.");
+    expect(r.text).toContain("全量日志已落盘");
+    expect(ghCalls).toBe(0);
+  });
+
+  it("CNB 缺席 ⇒ 如实念一行，退回 GitHub 链路（快速回退）", async () => {
+    const r = await runOnce({
+      input: "pr:3195",
+      cnbIo: fakeCnbIo(null),
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain("CNB 侧没有 GA 日志 relay 评论 ⇒ 退回 GitHub 链路");
+    /* 退回之后 GitHub 链路确实把日志读回来了（快速回退不是空念一句）。 */
+    expect(r.text).toContain(`GH run #${String(RUN_ID)}`);
+    expect(r.text).toContain("全量日志已落盘");
+  });
+
+  it("run: 形态不走 CNB（附件按 PR 号归属），照旧走 GA 出站链路", async () => {
+    const r = await runOnce({ input: `run:${String(RUN_ID)}`, cnbIo: fakeCnbIo(CNB_LOG) });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).not.toContain("CNB 侧 GA 判红日志");
+    expect(r.text).toContain(`GH run #${String(RUN_ID)}`);
+  });
+
+  it("没有 cnbIo（旧调用方）行为不变：仍走 GitHub 链路", async () => {
+    const r = await runOnce({ input: `run:${String(RUN_ID)}` });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain(`GH run #${String(RUN_ID)}`);
+  });
+
+  /* ISSUE #3667：判绿按需档。marker 带 scope=all ⇒ 呈现成「按需全量」而不是
+   * 「判红日志」，且绿跑没有 ##[error] 是正常形态、正文照常落盘。 */
+  it("CNB 命中 scope=all：判绿日志也站内读回，零 api.github.com，且无失败注解不误报", async () => {
+    const greenLog = [
+      "== run 4242 / job「static-gates」（success）==",
+      "##[group]Run pnpm lint",
+      "lint ok",
+      "##[endgroup]",
+    ].join("\n");
+    let ghCalls = 0;
+    const fetchImpl = ((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (new URL(url).hostname === "api.github.com") ghCalls += 1;
+      return Promise.resolve(textResponse("not found", 404));
+    }) as typeof fetch;
+    const r = await runOnce({
+      cnbIo: fakeCnbIo(greenLog, "all"),
+      env: {},
+      fetchImpl,
+      input: "pr:3195",
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain("CNB 侧 GA 日志·按需全量（ISSUE #3667）");
+    expect(r.text).not.toContain("CNB 侧 GA 判红日志");
+    expect(r.text).toContain("无 ##[error] 行（判绿 job 的正常形态");
+    expect(r.text).toContain("全量日志已落盘");
+    expect(ghCalls).toBe(0);
+  });
+
+  it("旧评论（marker 无 scope）按 failed 读：呈现逐字兼容 #3437", async () => {
+    const r = await runOnce({ cnbIo: fakeCnbIo(CNB_LOG), env: {}, input: "pr:3195" });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(r.text).toContain("CNB 侧 GA 判红日志（ISSUE #3437）");
+    expect(r.text).not.toContain("无 ##[error] 行（判绿 job 的正常形态");
+    expect(r.text).toContain("##[error]Process completed with exit code 1.");
+  });
+});
+
+/**
+ * 一条 `--gh-logs pr:<号>` 自己完成按需搬运（§12.20）：过去要先手工敲
+ * `cnb build start-build …`，现在 `--gh-logs` 在 CNB 侧没有 relay 时自己发起、自己等回读。
+ * 用假的 cnb 执行者模拟「第一眼还没评论、第二眼 GA 把 scope=all 写回来了」。
+ */
+describe("⑥ 按需档：一条 --gh-logs pr:<号> 自己发起搬运并站内读回", () => {
+  /** 可编排的 cnb 执行者：relay 评论只在「触发已派出」之后才出现（模拟 GA 跑完写回）。 */
+  function onDemandCnbIo(opts: { alreadyThere?: boolean; attachment: string; scope?: string }) {
+    const calls: string[] = [];
+    let triggered = opts.alreadyThere ?? false;
+    const asset = "u/key/new.b64";
+    const marker = `<!-- ${RELAY_MARKER} run=4242 sha=${"c".repeat(40)} pr=3195 jobs=2 bytes=99${
+      opts.scope === undefined ? "" : ` scope=${opts.scope}`
+    } -->\n[f.b64](/-/files/${asset})`;
+    const run = (_cmd: string, args: string[]) => {
+      const key = args.join(" ");
+      calls.push(key);
+      if (key.includes("start-build")) {
+        triggered = true;
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: `status: 200\n${JSON.stringify({ data: { sn: "cnb-test-1k79abc" } })}`,
+        };
+      }
+      if (key.includes("list-comments")) {
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: `status: 200\n${JSON.stringify({
+            data: triggered ? [{ body: marker, id: "2" }] : [],
+          })}`,
+        };
+      }
+      if (key.includes("get-files")) {
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: `status: 200\n${JSON.stringify({ data: relayB64(opts.attachment) })}`,
+        };
+      }
+      return { error: null, status: 0, stderr: "", stdout: "{}" };
+    };
+    return { calls, run, slug: "moon-read/comfy-app-t3" };
+  }
+
+  it("CNB 侧原本没有 relay ⇒ 自动发起一次触发，等回读后呈现全量档，零 api.github.com", async () => {
+    const greenLog = [
+      "== run 4242 / job「static-gates」（success）==",
+      "##[group]Run pnpm lint",
+      "lint ok",
+      "##[endgroup]",
+    ].join("\n");
+    const io = onDemandCnbIo({ attachment: greenLog, scope: "all" });
+    let ghCalls = 0;
+    const fetchImpl = ((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (new URL(url).hostname === "api.github.com") ghCalls += 1;
+      return Promise.resolve(textResponse("not found", 404));
+    }) as typeof fetch;
+    const r = await runOnce({
+      input: "pr:3195",
+      env: {},
+      fetchImpl,
+      cnbIo: io,
+      onDemand: { intervalMs: 1, maxMs: 10_000, sleep: () => Promise.resolve() },
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(io.calls.filter((c) => c.includes("start-build")).length).toBe(1);
+    expect(r.text).toContain("按需触发已派发：build cnb-test-1k79abc");
+    expect(r.text).toContain("站内回读命中");
+    expect(r.text).toContain("CNB 侧 GA 日志·按需全量（ISSUE #3667）");
+    expect(r.text).toContain("lint ok");
+    expect(r.text).toContain("全量日志已落盘");
+    expect(ghCalls).toBe(0);
+  });
+
+  it("没给 onDemand（判红自动回读那种旧调用方）⇒ 不伸手触发，行为逐字不变", async () => {
+    const io = onDemandCnbIo({ alreadyThere: true, attachment: "unused", scope: "all" });
+    const r = await runOnce({ input: "pr:3195", cnbIo: io, env: {} });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(io.calls.filter((c) => c.includes("start-build")).length).toBe(0);
+    expect(r.text).toContain("CNB 侧 GA 日志·按需全量（ISSUE #3667）");
+  });
+
+  it("CNB 侧已有旧评论但附件读不回 ⇒ 不重复发起搬运（如实退回 GitHub 链路）", async () => {
+    const io = onDemandCnbIo({ alreadyThere: true, attachment: "", scope: "all" });
+    io.run = (_cmd: string, args: string[]) => {
+      const key = args.join(" ");
+      if (key.includes("list-comments")) {
+        return {
+          error: null,
+          status: 0,
+          stderr: "",
+          stdout: `status: 200\n${JSON.stringify({
+            data: [
+              {
+                body: `<!-- ${RELAY_MARKER} run=4242 sha=${"c".repeat(40)} pr=3195 jobs=1 bytes=99 -->\n[f](/-/files/u/key/old.b64)`,
+                id: "1",
+              },
+            ],
+          })}`,
+        };
+      }
+      if (key.includes("get-files")) {
+        return { error: null, status: 0, stderr: "", stdout: "{}" };
+      }
+      return { error: null, status: 0, stderr: "", stdout: "{}" };
+    };
+    const r = await runOnce({
+      input: "pr:3195",
+      cnbIo: io,
+      env: {},
+      onDemand: { intervalMs: 1, maxMs: 10_000, sleep: () => Promise.resolve() },
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(io.calls.filter((c) => c.includes("start-build")).length).toBe(0);
+    expect(r.text).toContain("不重复发起搬运");
+    expect(r.text).toContain("退回 GitHub 链路");
+  });
+
+  it("--dry-run 只念触发计划，一条 cnb 写动作都不发", async () => {
+    const io = onDemandCnbIo({ attachment: "" });
+    const r = await runOnce({
+      input: "pr:3195",
+      cnbIo: io,
+      dryRun: true,
+      env: {},
+      onDemand: { intervalMs: 1, maxMs: 10_000, sleep: () => Promise.resolve() },
+    });
+    expect(r.code).toBe(CODE.GREEN);
+    expect(io.calls).toHaveLength(0);
+    expect(r.text).toContain("--dry-run 计划：cnb build start-build");
+    expect(r.text).toContain("api_trigger_ga_logs");
+  });
+});

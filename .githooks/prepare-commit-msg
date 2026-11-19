@@ -1,9 +1,9 @@
 #!/bin/sh
 # 提交门槛（prepare-commit-msg）：两条判据，一前一后 ——
 #
-#   ① 提交信息声明是合并时，本次提交必须真的有两个父（scripts/check-merge-parents.mjs）；
+#   ① 提交信息声明是合并时，本次提交必须真的有两个父（scripts/gates/check-merge-parents.mjs）；
 #   ② 本次提交是合并时，结果里不许有文件整份取了非 HEAD 侧
-#      （scripts/check-pending-merge-loss.mjs，ISSUE #1618）。
+#      （scripts/gates/check-pending-merge-loss.mjs，ISSUE #1618）。
 #
 # 为什么都在这里而不在 pre-commit：pre-commit **看不到本次的消息** —— 实测
 # `COMMIT_EDITMSG` 在 pre-commit 时仍停在**上一条**提交的信息上（git 先跑钩子、
@@ -17,9 +17,9 @@
 HOOK_DIR="$(dirname "$0")"
 
 # ① 合并必须双亲（形态档）。
-node "$HOOK_DIR/../scripts/check-merge-parents.mjs" "$1" "$2" || exit 1
+node "$HOOK_DIR/../scripts/gates/check-merge-parents.mjs" "$1" "$2" || exit 1
 
 # ② 双亲在、内容丢了一侧（内容档）。非合并提交时它零输出、零耗时。
 # 两个参数都要透传：`$1` 是提交信息文件（判据要靠它读「逐份认账」那一段，少了它
 # 那条出口永远认不了账、只剩 `--no-verify` 一条路），`$2` 是 source（`--amend` 的排除）。
-node "$HOOK_DIR/../scripts/check-pending-merge-loss.mjs" "$1" "$2"
+node "$HOOK_DIR/../scripts/gates/check-pending-merge-loss.mjs" "$1" "$2"

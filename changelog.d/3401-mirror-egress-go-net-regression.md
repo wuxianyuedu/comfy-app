@@ -1,0 +1,5 @@
+## Fixed
+
+- **补回 #3401 在解冲突里被整份丢掉的定向用例**：`299c9876a` 合入主干时按「整份取一侧」处理 `tests/ci-github-mirror-push.test.ts`（分支版是另一份实现的断言），`scripts/ci-mirror-failure-report.mjs` 的 `#3401 补认` 与 `isRetryableFetchFailure` 作为分支独有产物保留，但那一批用例没跟过来 —— 当前全库用例对 `connectex` / `dial tcp` / `i/o timeout` / `no such host` 零命中。判据本身已在场（现场原话实测 `isEgressFailure` / `shouldRetryGitFailure` / `classifyLfsPushFailure` 三面全绿），缺的是护栏：下一次改正则把 Go net 那一族漏回去，没有任何用例会红。
+- 补 4 条定向用例：① PR #3398 首跑 `cnb-dto-1k6tb0h72` 的 LFS 日志 L20 原话（已脱敏）判成 egress + 可重试 + 分类 `EGRESS`，并逐字对拍 `evidence` 的 160 字截断与 `label` / `short` / `next` / `explainLfsPushFailure`；② Windows Winsock / POSIX `i/o timeout` / `connect: connection refused` / `lookup … no such host` 五形全在 egress 面，认证 / 配额 / 仓库不存在三族反控仍不认、仍不消耗重试、仍分到 `AUTH` / `QUOTA` / `LFS_DISABLED`；③ `runGitWithRetry` 端到端：同一现场原话会发起第 2 次并读到「可重试类」，认证仍一次交账（`attempts=1`）；④ `runMirror` 小结念 `LFS=败（类别：对象传输或网络中断）`、`下一步=出网问题在节点侧`，不再落到「其他 / 看上一行 git-lfs 原话」。
+- **边界**：不改 `isEgressFailure` 正则（实测五形已覆盖，不为「有改动」而动承重代码），不动 60s 墙钟预算 / 5 次上限 / 退避阶梯 / 三态退码与派发语义；只补用例与这一份碎片。原有 `3401-mirror-egress-golfs-connect-shapes.md` 记的是判据修复本身，两份各记一件变更。

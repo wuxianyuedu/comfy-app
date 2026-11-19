@@ -29,7 +29,7 @@
 
   | 用例                                              | 平台读数                              | 处置                                                                                                                                        |
   | ------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-  | `tests/check-commit-claims.test.ts` 的真历史回归  | `expected -1 to be 1`（**不是超时**） | 本机隔离跑 26 条全绿、2.0s；`node scripts/base-check.mjs` 报 `current-green` ⇒ 按 §13.6.4 的「未校验」处置，不改代码                        |
+  | `tests/check-commit-claims.test.ts` 的真历史回归  | `expected -1 to be 1`（**不是超时**） | 本机隔离跑 26 条全绿、2.0s；`node scripts/gates/base-check.mjs` 报 `current-green` ⇒ 按 §13.6.4 的「未校验」处置，不改代码                        |
   | `tests/affected-tests.test.ts` 长清单走 stdin     | `Test timed out in 60000ms`           | 本机该条 5.4s。输入面收口：起子进程时**显式摘掉两枚着色共识旗标**（宿主带 `FORCE_COLOR` 时整屏 ANSI 会让输出量翻倍、顶到 `maxBuffer` 附近） |
   | `tests/ci-heavy-gates.test.ts` 复合档逐条按面收窄 | `Test timed out in 60000ms`           | 本机该条 574ms。它真起一次生产入口，而 `maxBuffer` 没显式给（默认 1 MiB）—— 补 `64 << 20`，与同文件另外三处同口径                           |
 

@@ -23,6 +23,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
+import { resolveAppDataDir } from "./app-data-dir.mjs";
 
 /**
  * 本机回环地址。值与 `src/lib/endpoints.ts` 的 `LOOPBACK_HOST` 同形——写
@@ -35,7 +36,7 @@ export const LOOPBACK_HOST = "127.0.0.1";
 /**
  * 本地 OAuth 占位值：非空即可过 `src/env.js` 的 schema，不参与任何真实鉴权。
  *
- * 单一定义点：`scripts/env-init.mjs` 原先自己写了一份同样的字面量，现改为 import
+ * 单一定义点：`scripts/devtools/env-init.mjs` 原先自己写了一份同样的字面量，现改为 import
  * 这里（§12.12「跨文件不许各写一份」），两侧不一致的表现是「桌包与 dev 检出的
  * 鉴权配置形状不同」，而不是一个能看见的报错。
  */
@@ -68,18 +69,13 @@ export function readOrCreateAuthSecret(appRoot) {
       // 首启：还没有密钥文件。只有这一种情况才新建。
       const secret = newAuthSecret();
       mkdirSync(path.dirname(file), { recursive: true });
-      writeFileSync(
-        file,
-        `${JSON.stringify({ betterAuthSecret: secret }, null, 2)}\n`,
-        "utf8",
-      );
+      writeFileSync(file, `${JSON.stringify({ betterAuthSecret: secret }, null, 2)}\n`, "utf8");
       return secret;
     }
     // 其它读失败（权限 / 目录被删成半个）是真故障，必须报出来。
-    throw new Error(
-      `cannot read auth secret: ${file} (${error?.message ?? error})`,
-      { cause: error },
-    );
+    throw new Error(`cannot read auth secret: ${file} (${error?.message ?? error})`, {
+      cause: error,
+    });
   }
   // 以下三种「文件在但内容不能用」一律抛错，**不悄悄换一把**：换密钥等于把用户已有的
   // 会话全部作废（表现是莫名其妙被登出），而现场不会有任何线索指向密钥文件坏了。
@@ -89,13 +85,10 @@ export function readOrCreateAuthSecret(appRoot) {
   } catch {
     throw new Error(`auth secret is not valid JSON: ${file}`);
   }
-  const secret =
-    typeof parsed?.betterAuthSecret === "string" ? parsed.betterAuthSecret : "";
+  const secret = typeof parsed?.betterAuthSecret === "string" ? parsed.betterAuthSecret : "";
   // 32 是 src/env.js 的 schema 下限；短于它一定是被写坏或手工截断过。
   if (secret.length < 32) {
-    throw new Error(
-      `auth secret too short (${secret.length} chars, need >= 32): ${file}`,
-    );
+    throw new Error(`auth secret too short (${secret.length} chars, need >= 32): ${file}`);
   }
   return secret;
 }
@@ -124,17 +117,12 @@ export function standaloneDbFile(appRoot) {
  * @param {{ appRoot: string, dbFile?: string }} input
  * @returns {{ applied: boolean, tablesBefore: number, tablesAfter: number }}
  */
-export function ensureStandaloneSchema({
-  appRoot,
-  dbFile = standaloneDbFile(appRoot),
-}) {
+export function ensureStandaloneSchema({ appRoot, dbFile = standaloneDbFile(appRoot) }) {
   const schemaFile = path.join(appRoot, "schema.sql");
   const db = new DatabaseSync(dbFile);
   try {
     const count = () =>
-      db
-        .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table'")
-        .get().n;
+      db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table'").get().n;
     const tablesBefore = Number(count());
     if (tablesBefore > 0) {
       return { applied: false, tablesBefore, tablesAfter: tablesBefore };
@@ -158,9 +146,7 @@ export function ensureStandaloneSchema({
     db.exec(readFileSync(schemaFile, "utf8"));
     const tablesAfter = Number(count());
     if (tablesAfter === 0) {
-      throw new Error(
-        `schema bootstrap ran but the library still has no table: ${schemaFile}`,
-      );
+      throw new Error(`schema bootstrap ran but the library still has no table: ${schemaFile}`);
     }
     return { applied: true, tablesBefore, tablesAfter };
   } finally {
@@ -177,14 +163,14 @@ export function ensureStandaloneSchema({
  * 见 `src/server/db.ts` 的注释），所以这里的必填清单与 `src/env.js` 的 `server` 段
  * 一一对应，由 tests/standalone-runtime.test.ts 钉住「少一项即红」。
  *
- * @param {{ appRoot: string, port: number, env?: NodeJS.ProcessEnv }} input
+ * `COMFY_APP_DATA_DIR` 也由这里逐个给：standalone 下 `process.cwd()` 被 server.js 钉成
+ * 载荷根（不可写 / 更新被清），日志与导出必须落进 OS app-data 目录（ISSUE #3498），而
+ * Next 侧的 `log-paths.ts` 只读这一个变量 —— 没给就是运行期日志面板读不到任何文件。
+ *
+ * @param {{ appRoot: string, port: number, env?: NodeJS.ProcessEnv, dataDir?: string }} input
  * @returns {NodeJS.ProcessEnv}
  */
-export function buildStandaloneRuntimeEnv({
-  appRoot,
-  port,
-  env = process.env,
-}) {
+export function buildStandaloneRuntimeEnv({ appRoot, port, env = process.env, dataDir }) {
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
     throw new Error(
       `standalone runtime needs a valid PORT from the shell, got: ${JSON.stringify(port)}`,
@@ -213,5 +199,10 @@ export function buildStandaloneRuntimeEnv({
     BETTER_AUTH_URL: `http://${LOOPBACK_HOST}:${port}`,
     BETTER_AUTH_GITHUB_CLIENT_ID: OAUTH_PLACEHOLDER,
     BETTER_AUTH_GITHUB_CLIENT_SECRET: OAUTH_PLACEHOLDER,
+    // 运行期数据根（日志 / 导出）：standalone 下由启动器算好并传入；未显式传入时按 OS 算
+    // （测试与高级用户可用 `COMFY_APP_DATA_DIR` 覆盖，见 `app-data-dir.mjs`）。Next 侧的
+    // `log-paths.ts` 只读这一个变量，两侧（启动器写 server/host 日志、Next 读 log 根）必须
+    // 指向同一处，否则日志面板读不到启动器写的那份 server 日志。
+    COMFY_APP_DATA_DIR: dataDir ?? resolveAppDataDir({ env }),
   };
 }

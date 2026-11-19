@@ -1,10 +1,8 @@
 // 对外参数映射在视图层的标签与配色（纯配置 + 纯函数）。
 //
-// 映射本身的模型（聚类 / 默认落点 / 校验 / 序列化）在
-// `~/lib/workflow-param-mapping`；本文件只负责把 `ParamEntry.cls` 翻译成面向
-// 作者的中文名与配色，供工作流库画布上的「对外参数卡片」复用。
-//
-// 无 React、无副作用（规范 §17.2 第①层）。
+// 映射模型（聚类 / 默认落点 / 校验 / 序列化）在 `~/lib/workflow-param-mapping`；
+// 本文件只把 `ParamEntry.cls` 翻成面向作者的中文名与配色，供库画布「对外参数卡片」
+// 复用。无 React、无副作用（规范 §17.2 第①层）。
 
 import type { ParamClass } from "~/lib/workflow/workflow-param-mapping";
 
@@ -65,17 +63,18 @@ export type ParamClassStyle = {
   label: string;
 };
 
+/** 分类键的运行时判据（`cls` 来自持久化的参数映射，可能是历史遗留的未知值）。 */
+function isParamClass(value: string): value is ParamClass {
+  return Object.hasOwn(PARAM_CLASS_LABEL, value);
+}
+
 /** 取分类的展示名与配色（未知分类回落到「参数」）。 */
 export function paramClassStyle(cls: string): ParamClassStyle {
   if (cls === "output") {
     return PARAM_OUTPUT_STYLE;
   }
-  /* SAFETY: 类型断言已复核 */
-  const key = cls as ParamClass;
-  return {
-    // oxlint-disable-next-line no-unnecessary-condition -- key 由 cls 断言而来（cls 来自持久化的参数映射），未知分类只能运行时回落到「参数」
-    label: PARAM_CLASS_LABEL[key] ?? PARAM_CLASS_LABEL.other,
-    // oxlint-disable-next-line no-unnecessary-condition -- 同上：未知分类的配色只能运行时回落
-    color: PARAM_CLASS_COLOR[key] ?? PARAM_CLASS_COLOR.other,
-  };
+  if (!isParamClass(cls)) {
+    return { label: PARAM_CLASS_LABEL.other, color: PARAM_CLASS_COLOR.other };
+  }
+  return { label: PARAM_CLASS_LABEL[cls], color: PARAM_CLASS_COLOR[cls] };
 }

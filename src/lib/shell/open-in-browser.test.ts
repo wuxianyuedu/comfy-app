@@ -17,9 +17,22 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 type Cb = (...args: Array<unknown>) => void;
 
+/** spawn 的实参形状：生产代码每次都传第三项选项。 */
+type SpawnOptions = { stdio?: string; windowsHide?: boolean };
+type SpawnCall = (cmd: string, args: Array<string>, options: SpawnOptions) => unknown;
+
 const { spawnMock } = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
+  spawnMock: vi.fn<SpawnCall>(),
 }));
+
+/** 取某次 spawn 调用的实参；没调用过时直接让用例失败（与断言失败同义）。 */
+function spawnCallAt(index = 0): [string, Array<string>, SpawnOptions] {
+  const call = spawnMock.mock.calls[index];
+  if (call === undefined) {
+    throw new Error(`spawn 未被调用（index=${index}）`);
+  }
+  return call;
+}
 
 vi.mock("child_process", () => ({ spawn: spawnMock }));
 
@@ -91,6 +104,7 @@ describe("openUrlInBrowser 的协议闸门", () => {
 
   it("畸形地址（不是合法 URL）→ 拒绝，不起进程", async () => {
     for (const url of ["http://  ", "not a url", ""]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const res = await openUrlInBrowser(url);
       expect(res.ok).toBe(false);
     }
@@ -101,15 +115,14 @@ describe("openUrlInBrowser 的协议闸门", () => {
 describe("openUrlInBrowser 的命令形态", () => {
   it("命令与参数分开发给 spawn，URL 是独立的一个 argv 元素（不拼整串）", async () => {
     await openUrlInBrowser("http://127.0.0.1:8188?a=1&b=2");
-    /* SAFETY: 类型断言已复核 */
-    const [cmd, args] = spawnMock.mock.calls[0] as [string, Array<string>];
-    if (platform === "win32") {
-      // `start` 是 cmd 内建命令，必须由 cmd /c 承载；空串是窗口标题（防 & 被吞）
-      expect(cmd).toBeTruthy();
-      expect(args.slice(0, 3)).toEqual(["/c", "start", ""]);
-    } else {
-      expect(args).toHaveLength(1);
-    }
+    const [cmd, args] = spawnCallAt();
+    // win32：`start` 是 cmd 内建命令，必须由 cmd /c 承载（空串是窗口标题，防 & 被吞）；
+    // POSIX：URL 单参直给。平台分支收进期望值，断言本体无条件跑（no-conditional-expect）。
+    expect(
+      platform === "win32"
+        ? cmd !== "" && JSON.stringify(args.slice(0, 3)) === JSON.stringify(["/c", "start", ""])
+        : args.length === 1,
+    ).toBe(true);
     expect(args.at(-1)).toBe("http://127.0.0.1:8188?a=1&b=2");
     // 走的是 execFile 语义的 spawn + 数组参数：任何一段里都不出现 shell 二次解析
     expect(args.some((a) => a.includes("cmd /c"))).toBe(false);

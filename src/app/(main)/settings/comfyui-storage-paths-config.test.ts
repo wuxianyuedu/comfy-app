@@ -2,14 +2,9 @@
 // 这些是口径 —— 界面上「共享输入目录为空」与「共享输入目录指向别处」是两种事实。
 import { describe, expect, it } from "vitest";
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
-import {
-  buildStorageRows,
-  describeStorageHint,
-} from "./comfyui-storage-paths-config";
+import { buildStorageRows, describeStorageHint } from "./comfyui-storage-paths-config";
 
-function storageOf(
-  overrides: Partial<DesktopStoragePaths> = {},
-): DesktopStoragePaths {
+function storageOf(overrides: Partial<DesktopStoragePaths> = {}): DesktopStoragePaths {
   const dir = (path: string, source: string | null = null) => ({
     path,
     exists: true,
@@ -69,9 +64,7 @@ describe("buildStorageRows", () => {
 describe("describeStorageHint", () => {
   it("说清 yaml 落点与「只读」边界", () => {
     const hint = describeStorageHint(storageOf());
-    expect(hint).toContain(
-      "D:/installs/ComfyUI2/ComfyUI/extra_model_paths.yaml",
-    );
+    expect(hint).toContain("D:/installs/ComfyUI2/ComfyUI/extra_model_paths.yaml");
     expect(hint).toContain("只读");
   });
 

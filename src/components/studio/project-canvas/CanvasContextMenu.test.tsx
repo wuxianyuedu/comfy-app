@@ -1,9 +1,6 @@
-//
 // 画布右键菜单走 `ui/dropdown-menu` 的契约（ISSUE #672 / 规范 16 §16.2.4.6 第一档）。
-//
-// 此前是自绘外壳：`fixed` 手定位面板 + 自绘遮罩负责关闭，没有 `role="menu"`、
-// 没有 Esc、没有方向键。换基元后这些语义由 base-ui 给；本文件钉住「菜单真的
-// 是菜单」以及「调用处那份手写定位 / 关闭语义已删除」。
+// 此前是自绘外壳（fixed 手定位 + 自绘遮罩关闭），没有 role="menu"、Esc、方向键。
+// 换基元后这些语义由 base-ui 给；本文件钉住「菜单真的是菜单」以及手写定位/关闭语义已删除。
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -41,8 +38,7 @@ describe("CanvasContextMenu 走 ui/dropdown-menu", () => {
   it("点一个节点项会把对应的 kind 交给 onPick", () => {
     const onPick = vi.fn();
     renderMenu({ onPick });
-    /* SAFETY: 类型断言已复核 */
-    const kinds = Object.keys(NODE_META) as Array<NodeKind>;
+    const kinds = Object.keys(NODE_META).filter((key): key is NodeKind => key in NODE_META);
     const firstKind = kinds[0]!;
     fireEvent.click(
       screen.getByRole("menuitem", {

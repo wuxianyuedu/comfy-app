@@ -2,12 +2,15 @@
 
 import { useCallback, useState } from "react";
 import { textHandler } from "~/lib/form-props";
+import { getWorkflowType } from "~/lib/workflow/workflow-types";
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 
 import { useModelTags, type TagItem } from "./hooks/use-model-tags";
 
@@ -27,13 +30,9 @@ type ModelTagManagerProps = {
   onClose: () => void;
 };
 
-/** 管理用户级工作流模型标签库的弹窗。
- *  标签在用户的所有工作流之间共享（如 "z-image"、
- *  "wan2.2"）；在这里创建一个，它就会出现在每张工作流卡片的
- *  「＋ 标签」菜单与库的模型筛选里。
- *
- * 视图层（规范 17 §17.2 第③层）：列表合并与三个写动作在
- * hooks/use-model-tags.ts；本文件只渲染。对外 props 与导出名保持不变。 */
+/** 管理用户级工作流模型标签库的弹窗。标签在用户的所有工作流之间共享（如 "z-image"、"wan2.2"）：
+ *  在这里创建一个，它就会出现在每张工作流卡片的「＋ 标签」菜单与库的模型筛选里。
+ *  视图层（规范 17 §17.2 第③层）：列表合并与三个写动作在 `hooks/use-model-tags.ts`，本文件只渲染；对外 props 与导出名保持不变。 */
 export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagManagerProps) {
   const c = useModelTags({ initialTags, onChanged });
 
@@ -97,6 +96,11 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
             标签」绑定，并在上方按模型筛选。
           </p>
 
+          {/* 模型标签库的数据存放位置（ISSUE #3759）：与工作流库列表同款徽标。 */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <DataLocationBadge id="model-tag-library" />
+          </div>
+
           <div className="mb-4 flex gap-2">
             <input
               onChange={textHandler(c.setDraft)}
@@ -112,8 +116,9 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
             <Button
               className="h-auto rounded-lg px-3 py-2"
               disabled={c.busy || !c.draft.trim()}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onClick={() => void c.addTag()}
+              onClick={() => {
+                void c.addTag();
+              }}
               size="sm"
               variant="primary-solid"
             >
@@ -161,10 +166,8 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                           onCancel: cancelEdit,
                         })}
                         className="bg-canvas-deep text-ink-bright border-primary/50 focus:border-primary min-w-0 flex-1 rounded-md border px-2 py-0.5 text-sm outline-none"
-                        // 注意：刻意不设 onBlur → 提交。若用户以别的方式
-                        // 退出编辑（点外部、关闭对话框），
-                        // 本地状态会前进但不会发送重命名。
-                        // 保存必须走 Enter（唯一有意的保存路径），
+                        // 注意：刻意不设 onBlur → 提交。若用户以别的方式退出编辑（点外部、关闭对话框），
+                        // 本地状态会前进但不会发送重命名。保存必须走 Enter（唯一有意的保存路径），
                         // 否则两次提交会竞速（例如 Enter + blur 都触发，
                         // 第二个看到一个已重命名的标签而报 404）。
                         onBlur={() => {
@@ -177,25 +180,46 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                        *  的反面：不是「点了没反应」，是根本进不来）。这里保留双击
                        *  作为快捷方式，同时补上焦点与 Enter/F2 —— F2 是各平台通用
                        *  的「重命名」键，Enter 是 `role="button"` 的默认激活键。 */
-                      <span
-                        onDoubleClick={() => {
-                          beginEdit(tag.id, tag.name);
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        {...simpleKeyHandler(["Enter", "F2"], () => {
-                          beginEdit(tag.id, tag.name);
-                        })}
-                        className="text-ink-bright hover:bg-subtle hover:text-ink-bright focus-visible:ring-primary/40 cursor-text truncate rounded-sm px-0.5 text-sm select-none focus-visible:ring-2 focus-visible:outline-none"
-                        title="双击（或 Enter / F2）重命名"
-                      >
-                        {tag.name}
-                      </span>
+                      <Hint label={`双击（或 Enter / F2）重命名「${tag.name}」`}>
+                        <span
+                          onDoubleClick={() => {
+                            beginEdit(tag.id, tag.name);
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          {...simpleKeyHandler(["Enter", "F2"], () => {
+                            beginEdit(tag.id, tag.name);
+                          })}
+                          className="text-ink-bright hover:bg-subtle hover:text-ink-bright focus-visible:ring-primary/40 cursor-text truncate rounded-sm px-0.5 text-sm select-none focus-visible:ring-2 focus-visible:outline-none"
+                        >
+                          {tag.name}
+                        </span>
+                      </Hint>
                     )}
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="bg-surface-2 text-ink-soft text-2xs rounded-full px-2 py-0.5 tabular-nums">
-                        {tag.count} 个工作流
-                      </span>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                      {/* 按模式计数（ISSUE #4102）：不再显示「几个工作流」——
+                          同一 (标签 × 模式) 只归一条工作流，模式数才是适配容量。
+                          每个模式一枚胶囊，悬停显示占用它的工作流名与本地/在线。 */}
+                      {tag.modeBindings.length === 0 ? (
+                        <span className="text-ink-muted text-2xs">未绑定</span>
+                      ) : (
+                        <>
+                          <span className="bg-surface-2 text-ink-soft text-2xs rounded-full px-2 py-0.5 tabular-nums">
+                            {tag.modeBindings.length} 个模式
+                          </span>
+                          {tag.modeBindings.map((binding) => (
+                            <Hint
+                              key={binding.mode}
+                              label={`「${binding.workflowName}」· ${binding.local ? "本地工作流" : "在线工作流"}`}
+                              wrap
+                            >
+                              <span className="bg-surface-2 text-ink-soft hover:text-ink-bright text-2xs cursor-default rounded-full px-2 py-0.5">
+                                {getWorkflowType(binding.mode)?.label ?? binding.mode}
+                              </span>
+                            </Hint>
+                          ))}
+                        </>
+                      )}
                       <Hint
                         label={
                           tag.count > 0
@@ -208,8 +232,9 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                           aria-label={`删除 ${tag.name}`}
                           className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
                           disabled={isEditing}
-                          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                          onClick={() => void c.deleteTag(tag.name, tag.count)}
+                          onClick={() => {
+                            void c.deleteTag(tag.name, tag.count);
+                          }}
                           size="icon-xs"
                           variant="ghost"
                         >
@@ -223,6 +248,21 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
             })}
           </div>
         </div>
+        {/* 删除确认走非阻塞弹窗（ISSUE #3771）：原生 window.confirm() 在内嵌
+            浏览器里未被处置会以 0 CPU 卡死同源渲染进程。 */}
+        <ConfirmDialog
+          confirmLabel="删除"
+          danger
+          description={
+            c.pendingDelete
+              ? `该标签「${c.pendingDelete.name}」已绑定 ${c.pendingDelete.count} 个工作流。\n删除后这些工作流将一并解除绑定，且不可撤销。`
+              : undefined
+          }
+          onClose={c.cancelDeleteTag}
+          onConfirm={c.confirmDeleteTag}
+          open={c.pendingDelete !== null}
+          title={c.pendingDelete === null ? "删除标签" : `删除标签「${c.pendingDelete.name}」`}
+        />
       </DialogContent>
     </Dialog>
   );

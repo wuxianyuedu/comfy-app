@@ -1,27 +1,10 @@
 "use client";
 
 /**
- * VirtualLogList —— 日志面板的**虚拟滚动容器**（视图组件，复用 `./log-virtual`
- * 的纯逻辑行高/窗口计算）。
- *
- * ── 为什么又一个虚拟列表组件（而非各写一遍）──────────────────────────────
- * `LogPanel` 已经用 `log-virtual` 把 2000 行日志虚拟化了（ISSUE #609）。但
- * `GlobalStepLogPanel` 与 `WorkflowRunLogModal` 仍把最多 300 行一次性挂进 DOM，
- * 每来一条日志就重渲染全部行（§2.6 大列表必须虚拟滚动）。此前的做法是在两处各
- * 抄一份「量视口 + 算窗口 + 贴底」——与 `use-scroll-follow` 收口前「4 处各写一遍
- * 贴底」同源的重复。这里把「虚拟日志列表」收成**唯一**组件，两处弹窗共用。
- *
- * ── 贴底（follow）为什么收在这里 ─────────────────────────────────────────
- * `use-scroll-follow` 的文件头明确写着它**不接管虚拟化面板的贴底**：虚拟化后
- * 「滚到哪一行」靠位置表算（`log-virtual` 的 `pinPlan`/`pinScrollTop`），而这里
- * 的模型更简单——日志列表只「追到底」，且贴底必须**同步 `scrollTop` 状态**（否则
- * 窗口不重算、内容不更新）。因此本组件内联了「跟随底部」的最小语义（阈值复用
- * `use-scroll-follow` 导出的 `NEAR_BOTTOM_PX`），而不是把 `scrollTop` 交给外部。
- *
- * ── 量不到视口（jsdom / 首帧）走整页渲染 ─────────────────────────────────
- * 虚拟化是性能优化，不该变成「内容看不见」：取不到视口高度时 `rowWindow` 直接返回
- * 全部条目，与改动前行为一致（LogPanel 同款兜底）。
- */
+ * VirtualLogList —— 日志面板的**虚拟滚动容器**（复用 `./log-virtual` 的纯逻辑行高/窗口计算）。
+ * `LogPanel` 已虚拟化（ISSUE #609），但两个弹窗仍把最多 300 行一次性挂进 DOM、每来一条就重渲染
+ * 全部行（§2.6）；这里收成唯一组件。贴底也收在这里：虚拟化后必须**同步 `scrollTop` 状态**，
+ * 因此内联「跟随底部」的最小语义（阈值复用 `NEAR_BOTTOM_PX`）；量不到视口时走整页渲染。 */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useElementBox } from "~/components/ui/use-element-box";

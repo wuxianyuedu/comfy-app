@@ -73,10 +73,7 @@ export function nextId(prefix: string, options: { now?: number } = {}): string {
  *
  * `prefix` 里带不带分隔符由调用处决定；`now` 同 `nextId`（同一批导入共享时刻）。
  */
-export function uniqueStamp(
-  prefix = "",
-  options: { now?: number } = {},
-): string {
+export function uniqueStamp(prefix = "", options: { now?: number } = {}): string {
   const now = options.now ?? Date.now();
   return `${prefix}${now.toString(36)}-${randomToken(4)}`;
 }

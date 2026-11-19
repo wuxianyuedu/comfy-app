@@ -13,14 +13,18 @@
  * 轮次边界在**收口**处，见 ISSUE #1206），以及「广播给还在排队的行」——它原来读内存队列，现在读库。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import WebSocket from "ws";
+import { isRecord } from "~/lib/is-record";
+import type * as ExecutorCliModule from "./executor-cli";
 
 vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock("./executor-cli", () => ({
-  executeViaComfyCli: vi.fn(),
-  cliProcs: new Map(),
-}));
+vi.mock("./executor-cli", async (importOriginal) => {
+  /* 保留真模块的纯函数（sanitizeOutputNodeIds 等），只替换会起子进程的提交口。 */
+  const actual = await importOriginal<typeof ExecutorCliModule>();
+  return { ...actual, executeViaComfyCli: vi.fn() };
+});
 vi.mock("./executor-ws", () => ({ connect: vi.fn() }));
 vi.mock("./executor-finalize", () => ({ finalizeFailure: vi.fn() }));
 /* Next 侧兜底会 dynamic import barrel；这里让它失败，用来验「未注入」那条路。 */
@@ -41,8 +45,8 @@ const { state, MAX_CONCURRENCY } = runner;
  * 未注入那条路），所以不先把注入侧补上，每个用例都会留一串 unhandled rejection
  * （与 `enqueue.test.ts` 同一处置）。 */
 const runnerPersist = {
-  replaceLogs: vi.fn(async () => undefined),
-  replaceRawCli: vi.fn(async () => undefined),
+  replaceLogs: vi.fn(() => Promise.resolve(undefined)),
+  replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
 };
 const runnerWarn = vi.fn();
 
@@ -57,20 +61,32 @@ type ExecJobRow = {
 function fakeRepo(overrides: Record<string, unknown> = {}) {
   return {
     /* SAFETY: 类型断言已复核 */
-    claimNextQueued: vi.fn(async () => [] as Array<string>),
+    claimNextQueued: vi.fn(() => Promise.resolve([] as Array<string>)),
     /* SAFETY: 类型断言已复核 */
-    findExecJob: vi.fn(async () => null as ExecJobRow),
+    findExecJob: vi.fn(() => Promise.resolve(null as ExecJobRow)),
     /* SAFETY: 类型断言已复核 */
-    finalizeFailure: vi.fn(async () => "written" as const),
+    finalizeFailure: vi.fn(() => Promise.resolve("written" as const)),
     /* SAFETY: 类型断言已复核 */
-    listQueuedIds: vi.fn(async () => [] as Array<string>),
+    listQueuedIds: vi.fn(() => Promise.resolve([] as Array<string>)),
     ...overrides,
   };
 }
 
+/** 就绪门控只读 `readyState`；这里按运行期实际读取的字段校验形状。 */
+function isOpenWebSocket(v: unknown): v is WebSocket {
+  return isRecord(v) && v.readyState === WebSocket.OPEN;
+}
+
+function openWsValue(): WebSocket {
+  const ws: unknown = { readyState: WebSocket.OPEN };
+  if (!isOpenWebSocket(ws)) {
+    throw new Error("就绪门控夹具形状不符");
+  }
+  return ws;
+}
+
 function openWs() {
-  /* SAFETY: 类型断言已复核 */
-  state().ws = { readyState: 1 } as never;
+  state().ws = openWsValue();
 }
 
 function resetRunnerState() {
@@ -120,7 +136,7 @@ afterEach(() => {
 
 describe("就绪门控：不就绪就不领行", () => {
   it("WS 未 OPEN 时不领取，但把「在等什么」写进还在排队的行", async () => {
-    const repo = fakeRepo({ listQueuedIds: vi.fn(async () => ["t-wait"]) });
+    const repo = fakeRepo({ listQueuedIds: vi.fn(() => Promise.resolve(["t-wait"])) });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
     expect(await mod.claimAndDispatchOnce()).toBeNull();
@@ -131,7 +147,7 @@ describe("就绪门控：不就绪就不领行", () => {
   });
 
   it("同一条等待提示只写一次：2s 节拍反复撞不就绪也不能刷屏", async () => {
-    const repo = fakeRepo({ listQueuedIds: vi.fn(async () => ["t-once"]) });
+    const repo = fakeRepo({ listQueuedIds: vi.fn(() => Promise.resolve(["t-once"])) });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
     await mod.claimAndDispatchOnce();
@@ -143,7 +159,7 @@ describe("就绪门控：不就绪就不领行", () => {
 
   it("多条排队行各自都有提示（不是只提示最旧那条）", async () => {
     const repo = fakeRepo({
-      listQueuedIds: vi.fn(async () => ["t-a", "t-b"]),
+      listQueuedIds: vi.fn(() => Promise.resolve(["t-a", "t-b"])),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -151,6 +167,48 @@ describe("就绪门控：不就绪就不领行", () => {
 
     expect(logsOf("t-a").some((m) => m.includes("等待 ComfyUI"))).toBe(true);
     expect(logsOf("t-b").some((m) => m.includes("等待 ComfyUI"))).toBe(true);
+  });
+});
+
+describe("wsWaitLogged 封顶（ISSUE #4351）", () => {
+  /** 预填满去重表：WS 长期不就绪时集合只在 open 时清空，这里模拟宕机期积压。 */
+  function fillWaitLogged() {
+    const s = state();
+    for (let i = 0; i < mod.WS_WAIT_LOGGED_MAX; i += 1) {
+      s.wsWaitLogged.set(`seed-${i}`, true);
+    }
+  }
+
+  it("集合超限后按插入序淘汰最旧键，大小恒不超过 WS_WAIT_LOGGED_MAX", async () => {
+    fillWaitLogged();
+    const repo = fakeRepo({
+      listQueuedIds: vi.fn(() => Promise.resolve(["seed-0", "t-new"])),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    await mod.claimAndDispatchOnce();
+
+    const s = state();
+    expect(s.wsWaitLogged.size).toBe(mod.WS_WAIT_LOGGED_MAX);
+    expect(s.wsWaitLogged.has("seed-0")).toBe(false);
+    expect(s.wsWaitLogged.has("t-new")).toBe(true);
+    expect(logsOf("t-new").some((m) => m.includes("等待 ComfyUI"))).toBe(true);
+  });
+
+  it("被淘汰的冷键再次进窗口会重新提示（单行，不刷屏）；驻留键仍不重复", async () => {
+    fillWaitLogged();
+    const repo = fakeRepo({
+      listQueuedIds: vi.fn(() => Promise.resolve(["seed-0", "t-new"])),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    await mod.claimAndDispatchOnce();
+    await mod.claimAndDispatchOnce();
+
+    // seed-0 首拍被 t-new 挤出集合，第二拍重新提示一行——可接受的上限代价。
+    expect(logsOf("seed-0").filter((m) => m.includes("等待 ComfyUI"))).toHaveLength(1);
+    // t-new 一直驻留：两拍只提示一次，去重语义对热键不变。
+    expect(logsOf("t-new").filter((m) => m.includes("等待 ComfyUI"))).toHaveLength(1);
   });
 });
 
@@ -190,7 +248,7 @@ describe("槽位判据", () => {
     );
     wrapped.cause = { code: "SQLITE_BUSY", message: "database is locked" };
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => {
+      claimNextQueued: vi.fn(() => {
         throw wrapped;
       }),
     });
@@ -214,12 +272,14 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
     openWs();
     const rawJson = { nodes: [{ id: "1", type: "KSampler" }] };
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-raw"]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: rawJson,
-        params: { workflowInputs: [{ nodeId: "1", name: "seed", value: 42 }] },
-      })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-raw"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: rawJson,
+          params: { workflowInputs: [{ nodeId: "1", name: "seed", value: 42 }] },
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -239,17 +299,58 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
     expect(logsOf("t-raw").some((m) => m.includes("任务已从队列领取"))).toBe(true);
   });
 
+  it("params 里的 outputNodeIds 清洗后进 Job（部分执行，#4189）", async () => {
+    openWs();
+    const repo = fakeRepo({
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-part"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: { nodes: [] },
+          params: { outputNodeIds: ["9", "12", "", 7, "9"] },
+        }),
+      ),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    await mod.claimAndDispatchOnce();
+
+    // 只收非空字符串并去重；坏形状的行不得把整条任务带崩。
+    expect(cli.executeViaComfyCli).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: "t-part", outputNodeIds: ["9", "12"] }),
+    );
+  });
+
+  it("params 不带 outputNodeIds 时 Job 不带该字段（整图执行，行为不变）", async () => {
+    openWs();
+    const repo = fakeRepo({
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-full"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({ workflowName: "w", execPayload: { nodes: [] }, params: {} }),
+      ),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    await mod.claimAndDispatchOnce();
+
+    const job = vi.mocked(cli.executeViaComfyCli).mock.calls.at(-1)?.[0];
+    expect(job).toBeTruthy();
+    expect(job && "outputNodeIds" in job).toBe(false);
+  });
+
   it("把 workflowInputs 全量打进任务日志（dev 重启后日志是唯一现场）", async () => {
     openWs();
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-log"]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: { nodes: [] },
-        params: {
-          workflowInputs: [{ nodeId: "1", name: "text", value: "a cat" }],
-        },
-      })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-log"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: { nodes: [] },
+          params: {
+            workflowInputs: [{ nodeId: "1", name: "text", value: "a cat" }],
+          },
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -262,13 +363,15 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
 
   it("等待提示在同一条被领走之后仍在：缓冲重开时接回本轮排队期的行", async () => {
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-rerun"]),
-      listQueuedIds: vi.fn(async () => ["t-rerun"]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: { nodes: [] },
-        params: {},
-      })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-rerun"])),
+      listQueuedIds: vi.fn(() => Promise.resolve(["t-rerun"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: { nodes: [] },
+          params: {},
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
     state().settled.add("t-rerun");
@@ -297,7 +400,7 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
   it("排队期的登记只兑现一次：领取之后就结束，不会被下一轮复用", async () => {
     openWs();
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-once-seed"]),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-once-seed"])),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
     state().queuedEntries.set("t-once-seed", [
@@ -313,12 +416,14 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
   it("行没有执行载荷：判失败并归还槽位，不留 RUNNING 僵尸", async () => {
     openWs();
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-empty"]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: null,
-        params: {},
-      })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-empty"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: null,
+          params: {},
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -335,8 +440,8 @@ describe("领取 → 提交（两种载荷都只交 comfy-cli）", () => {
   it("载荷读不到（行已被删/收口）：不提交、槽位归还", async () => {
     openWs();
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-gone"]),
-      findExecJob: vi.fn(async () => null),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-gone"])),
+      findExecJob: vi.fn(() => Promise.resolve(null)),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -354,11 +459,13 @@ describe("提交异常必须归还槽位", () => {
     const repo = fakeRepo({
       // 领过的行在库里已是 RUNNING，不会再被领到——用 Once 表达这件事
       claimNextQueued: vi.fn().mockResolvedValueOnce(["t-err"]).mockResolvedValue([]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: { "1": {} },
-        params: {},
-      })),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: { "1": {} },
+          params: {},
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -375,11 +482,13 @@ describe("提交异常必须归还槽位", () => {
     vi.mocked(fin.finalizeFailure).mockRejectedValue(new Error("db down"));
     const repo = fakeRepo({
       claimNextQueued: vi.fn().mockResolvedValueOnce(["t-err-db"]).mockResolvedValue([]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: { "1": {} },
-        params: {},
-      })),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: { "1": {} },
+          params: {},
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -396,12 +505,14 @@ describe("提交异常必须归还槽位", () => {
   it("正常启动时不写「启动异常」，槽位留给后续收口归还", async () => {
     openWs();
     const repo = fakeRepo({
-      claimNextQueued: vi.fn(async () => ["t-ok"]),
-      findExecJob: vi.fn(async (): Promise<ExecJobRow> => ({
-        workflowName: "w",
-        execPayload: { "1": {} },
-        params: {},
-      })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-ok"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({
+          workflowName: "w",
+          execPayload: { "1": {} },
+          params: {},
+        }),
+      ),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "inline" });
 
@@ -413,10 +524,50 @@ describe("提交异常必须归还槽位", () => {
   });
 });
 
+describe("领取后的兜错（#4410）：库故障一次不能停摆整条队列", () => {
+  it("findExecJob reject：不抛、槽位归还、内存足迹摘干净（reaper 可接管 RUNNING 行）", async () => {
+    openWs();
+    const repo = fakeRepo({
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-busy"])),
+      /* SQLite busy 读超预算 / 磁盘 IO：领取后第一次读写就炸。 */
+      findExecJob: vi.fn(() => Promise.reject(new Error("database is locked"))),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    /* 修缺陷前的形态：异常沿 claimMutex 冒出调用方，槽位永不归还 ——
+     * 常驻循环从此在 pendingDispatch.size >= 1 早退，reaper 又把这条
+     * 当「仍被本进程认领」永久跳过，队列整体停摆。 */
+    await expect(mod.claimAndDispatchOnce()).resolves.toBe("t-busy");
+
+    expect(state().pendingDispatch.has("t-busy")).toBe(false);
+    expect(state().pendingDispatch.size).toBe(0);
+    expect(cli.executeViaComfyCli).not.toHaveBeenCalled();
+    expect(logsOf("t-busy").some((m) => m.includes("领取后处理失败"))).toBe(true);
+  });
+
+  it("缺载荷分支里 finalizeFailure reject：同样兜住，槽位归还（不再沿调用方冒出）", async () => {
+    openWs();
+    const repo = fakeRepo({
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-nopayload"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({ workflowName: "w", execPayload: null, params: {} }),
+      ),
+      finalizeFailure: vi.fn(() => Promise.reject(new Error("db down"))),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    await expect(mod.claimAndDispatchOnce()).resolves.toBe("t-nopayload");
+
+    expect(repo.finalizeFailure).toHaveBeenCalledTimes(1);
+    expect(state().pendingDispatch.has("t-nopayload")).toBe(false);
+    expect(cli.executeViaComfyCli).not.toHaveBeenCalled();
+  });
+});
+
 describe("叶子总线接线（这一刀把它从一条回调扩成两条）", () => {
   it("dispatch 加载即注册续跑与广播；广播写给本归属片里排队的行", async () => {
     const repo = fakeRepo({
-      listQueuedIds: vi.fn(async () => ["t-q1", "t-q2"]),
+      listQueuedIds: vi.fn(() => Promise.resolve(["t-q1", "t-q2"])),
     });
     mod.configureDispatch({ taskRepo: repo, owner: "host" });
 
@@ -436,10 +587,7 @@ describe("叶子总线接线（这一刀把它从一条回调扩成两条）", (
     vi.resetModules();
     const fresh = await import("./executor-dispatch");
     const runnerState = await import("./runner-state");
-    /* SAFETY: 类型断言已复核 */
-    runnerState.state().ws = {
-      readyState: 1,
-    } as never;
+    runnerState.state().ws = openWsValue();
 
     expect(await fresh.claimAndDispatchOnce()).toBeNull();
 

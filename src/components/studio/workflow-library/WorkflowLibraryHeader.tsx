@@ -1,24 +1,22 @@
 "use client";
 
-// 页头：标题 + 筛选下拉（来源 / 类型 / 模型）+ 导入按钮 + 模式契约 + 自定义节点设置。
+// 页头：标题 + 筛选下拉（来源 / 类型 / 模型）+ 导入按钮 + 自定义节点设置。
 //
-// **这一排是水平布局**（ISSUE #716）：标题、三个筛选下拉、右侧动作组各占一段宽度，
-// 各段一律 `shrink-0`（它们是可点目标，不许被压扁 —— 规范 03 §3.8.1），
-// 排不下时**整组一起换行**（根容器 `flex-wrap`），而不是把某个下拉挤成两行小字。
-//
-// 为什么筛选组要单独包一层 `flex-nowrap`：三个下拉是**一组**，
-// 组内换行会出现「来源 / 类型 / 模型」分别落在三行、而动作组跟在最后一行的
-// 错位画面（旧形态：三个下拉各自 `w-full` 铺满整行，一共三行）。包一层之后
-// 宽度压力只在「过滤组」与「动作组」之间分配，两组各自保持完整的一行。
+// **水平布局**（ISSUE #716）：各段 `shrink-0`（可点目标不许压扁，规范 03 §3.8.1），
+// 排不下时整组换行（根容器 `flex-wrap`）。筛选组单独包一层 `flex-nowrap`，
+// 组内换行会让「来源 / 类型 / 模型」落在三行、动作组跟错位。
 
 import { FolderInput } from "lucide-react";
 
 import { pageHeaderTitle } from "../NavItems";
 import { Button } from "~/components/ui/button";
-import { ModeContractSettings } from "./ModeContractSettings";
 import { CustomNodesSettings } from "./CustomNodesSettings";
 import { WorkflowLibraryFilters } from "./WorkflowLibraryFilters";
-import { HEADER_ACTION_BTN, type SourceFilter, type TypeFilter } from "./workflow-library-config";
+import {
+  HEADER_ACTION_OUTLINE_BTN,
+  type SourceFilter,
+  type TypeFilter,
+} from "./workflow-library-config";
 import type { ModelTagCount } from "./WorkflowLibraryFilters";
 
 type WorkflowLibraryHeaderProps = {
@@ -77,15 +75,12 @@ export function WorkflowLibraryHeader({
       </div>
 
       <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
-        {/* 渐变档不再补投影：`.btn-gradient` 的 hover 已经是 brightness，
-            而这圈 `shadow-lg shadow-primary-500/*` 是扁平规范明确不发的
-            「渐变发光」（DESIGN.md §Elevation：纯色、无阴影、无模糊、无渐变发光）。
-            剧本侧那两颗同款渐变按钮上的同一圈发光此前已刻意撤掉。 */}
-        <Button className={HEADER_ACTION_BTN} onClick={onToggleImport} variant="gradient">
+        {/* 导入按钮与右侧两枚动作按钮同款（ISSUE #3759）：描边 + 弱底，不再单独
+            用实心品牌色抬高。 */}
+        <Button className={HEADER_ACTION_OUTLINE_BTN} onClick={onToggleImport} variant="outline">
           <FolderInput data-icon="inline-start" size={13} />
           导入工作流
         </Button>
-        <ModeContractSettings />
         <CustomNodesSettings />
       </div>
     </div>

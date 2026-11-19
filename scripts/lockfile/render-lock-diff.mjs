@@ -16,8 +16,8 @@ export function shortVersion(v) {
   if (!v) {
     return "(无)";
   }
-  const m = /^([^\s(]+)/.exec(v);
-  const [, head = v] = m ?? [];
+  const m = /^(?<head>[^\s(]+)/.exec(v);
+  const head = m?.groups?.head ?? v;
   return head;
 }
 

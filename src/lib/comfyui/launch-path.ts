@@ -59,18 +59,44 @@ function findInterpreterIn(pyDir: string, exists: (p: string) => boolean): strin
   return null;
 }
 
+/** 从解释器可执行文件路径反推环境根：venv 布局的解释器在 <envRoot>/Scripts
+ *  （Windows）或 <envRoot>/bin（POSIX）下；嵌入式 / standalone-env 的解释器
+ *  直接位于环境根。 */
+export function pythonEnvRoot(pyCmd: string): string {
+  const pyDir = path.dirname(pyCmd);
+  const base = path.basename(pyDir).toLowerCase();
+  return base === "scripts" || base === "bin" ? path.dirname(pyDir) : pyDir;
+}
+
+/** 枚举一个环境根下的 site-packages 目录（Windows 与 POSIX 两种布局都认）。
+ *  依赖目录随平台命名：
+ *   Windows → <envRoot>/Lib/site-packages（大小写不敏感）
+ *   POSIX   → <envRoot>/lib/python3.x/site-packages（带版本号子目录）
+ *  只看 Windows 形态时，Linux 上明明装了依赖也会判空（torch 判定退化为
+ *  「按优先级选中空壳解释器」，启动即 No module named 'torch'）。
+ *  Windows 候选**无条件**包含：torch 判定的语义是「这个路径下有没有 torch」，
+ *  由调用方的 exists/torch 检查收口，不在这里先判目录存在（夹具/真实环境都
+ *  可能只登记更深的一层，先判目录会漏）；POSIX 仍只收实际存在的版本号目录。
+ *  torch 判定与依赖核对（dep-drift）共用这一份布局判据，不各写一遍。 */
+export function sitePackagesDirsForEnvRoot(
+  envRoot: string,
+  exists: (p: string) => boolean,
+): Array<string> {
+  return [path.join(envRoot, "Lib", "site-packages"), ...sitePackagesDirs(envRoot, exists)];
+}
+
+/** 按「解释器可执行文件路径」取 site-packages 目录（内部先反推环境根）。 */
+export function sitePackagesDirsForInterpreter(
+  pyCmd: string,
+  exists: (p: string) => boolean,
+): Array<string> {
+  return sitePackagesDirsForEnvRoot(pythonEnvRoot(pyCmd), exists);
+}
+
 export function envHasTorch(pyDir: string, exists: (p: string) => boolean): boolean {
   const base = path.basename(pyDir).toLowerCase();
   const envRoot = base === "scripts" || base === "bin" ? path.dirname(pyDir) : pyDir;
-  // 依赖目录随平台命名：
-  //   Windows → <envRoot>/Lib/site-packages（大小写不敏感）
-  //   POSIX   → <envRoot>/lib/python3.x/site-packages（带版本号子目录）
-  // 只看 Windows 形态时，Linux 上明明装了 torch 也会判 hasDeps=false，
-  // 退化成「按优先级选中空壳解释器」（启动即 No module named 'torch'）。
-  if (exists(/*turbopackIgnore: true*/ path.join(envRoot, "Lib", "site-packages", "torch"))) {
-    return true;
-  }
-  return sitePackagesDirs(envRoot, exists).some((sp) =>
+  return sitePackagesDirsForEnvRoot(envRoot, exists).some((sp) =>
     exists(/*turbopackIgnore: true*/ path.join(sp, "torch")),
   );
 }

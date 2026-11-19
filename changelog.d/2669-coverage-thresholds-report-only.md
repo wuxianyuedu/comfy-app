@@ -14,11 +14,11 @@
   没有搬家** —— 只是新增一个具名导出 `COVERAGE_THRESHOLDS`（永远在场），
   而交给 vitest 的那一份由 `COMFY_COVERAGE_ENFORCE` 决定。默认档 ⇒ 用例全绿就退 0、
   **照常记账**，`text` / `json-summary` / `lcov` 三种 reporter 一个不少（这就是「上报」那一半）；
-  要按门槛判红用 `node scripts/full-suite-run.mjs --enforce-coverage`。
+  要按门槛判红用 `node scripts/affected-tests/full-suite-run.mjs --enforce-coverage`。
   ⚠️ 刻意**不靠猜**「非零退出是不是覆盖率造成的」：默认档下这一维根本不参与退码，
   判决链比分类器短一截，也就没有「把崩溃读成覆盖率」的那第二次误判空间。
 - **登记处不能因此又变成死配置**（台账 E2 是它的前身）：`pnpm check:all` 的 `test` 条目
-  现在显式带 `COMFY_COVERAGE_ENFORCE=1`（`scripts/quality-gate.mjs` 的 `runGate` 只对这一条
+  现在显式带 `COMFY_COVERAGE_ENFORCE=1`（`scripts/gates/quality-gate.mjs` 的 `runGate` 只对这一条
   注入，不是全局开关）—— 「只升不降」必须有人真的算。当场核过执行者唯一：
   `grep quality-gate .cnb.yml .githooks/* package.json tools/**` 里它只被
   `check:all` 与 `tools/start/verify-quality.ps1` 起，平台与提交门槛都不跑它。

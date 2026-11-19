@@ -1,35 +1,9 @@
 /**
- * check-deps-freshness.mjs 的契约测试（规范 §13.5.6 同族：判据自己也要有判据）。
- *
- * 它判的是**「远端改过依赖而本地没同步」能不能被看见**这件事本身，所以用例必须在
- * 真 git 仓库上跑 —— 「远端」不是一个可 mock 的模块，它就是一条
- * `refs/remotes/<remote>/master` 引用加它自己的 reflog（远端名按引用现算，
- * 不假定叫 `origin` —— 本仓的远端实测叫 `cnb`，见 R12-01）。夹具用共享的
- * `defineGateRepo`（§11.16.1），`setup` 里把它 `git init` 好、造一次提交、
- * 再把那条远端引用指过去。
- *
- * 覆盖的分界（都是「一眼看着该红、其实绿」或反过来的那种）：
- *   1. 远端改了 `package.json` 的版本声明 → 红，且话术里有可执行出口；
- *   2. 远端改了 lockfile 的**解析结果** → 红，且明细指到具体包与版本；
- *   3. 远端只动 lockfile 的注释 / 顺序 → **不报**（实质 diff，不是字符串比）；
- *   4. 没有远端引用 / 没有取证时间 → `[未校验]`，**不给出**「一致」这个结论；
- *   5. `--offline` 不读 git → 只判本地自洽那一层；
- *   6. 不是 git 检出 → exit 2（环境故障，不是「依赖没问题」），且 ③ 的读数照旧打出来；
- *   7. `--staged` 的触发面：没碰依赖面 → 零输出退 0；碰了 → 照判并点出文件名；
- *   8. **合并已解完、提交还没落地**（`MERGE_HEAD` 在场）→ ② 不判（远端那份依赖面就在
- *      这次合并里），而不是给解冲突的人一条**永远解不开**的红。
- *   9. ③ 的**第二维**（ISSUE #1721）：两份 lockfile 逐字对得上、而某个被声明的包在这棵
- *      树上**解析不到**（只以传递依赖的旧版本落在包自己的私有层里）→ 红，且话术说的是
- *      「解析不到」而**不是**「安装记录与声明对不上」（后者会把人送去核对一份本来就对的
- *      文件）。反向对照两条：依赖压根没装（`no-install`）与依赖树完好时不误报。
- *
- * 外加两条**远端引用本身**的分界（R12-01）：远端命名为 `cnb` 时 ② 照判且话术点名比对的是
- * 哪条引用；以及引用**不领先于 HEAD** 时报「判过（已核对）」而不是回落成 `[未校验]`
- * ——「没看」与「看了且没有」必须分得开，这条判据存在的理由就在于此。
- *
- * 再加一条**基准**用例：分叉之后自己在分支上加依赖，不算「远端改过依赖」——
- * 那正是 ② 取分叉点而不取 `origin/master` 的理由（拿后者会反向误报）。
+ * `check-deps-freshness.mjs` 的契约测试（规范 §13.5.6 同族：判据自己也要有判据）。判「远端改过依赖而本地
+ * 没同步」能否被看见，故在真 git 仓库跑（「远端」= `refs/remotes/<remote>/master` + reflog，名按引用现算，本仓
+ * 实测 `cnb`，R12-01）。分界：① 版本变⇒红 ② 解析变⇒红 ③ 只动注释⇒不报 ④ 无取证⇒`[未校验]` ⑤ `--offline` 只判本地 ⑥ `MERGE_HEAD`⇒不判 ⑦ 解析不到⇒红（#1721）。
  */
+import { isRecord, isUnknownArray } from "~/lib/is-record";
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 
 /** 「远端」的依赖声明（= 工作区要同步到的目标）。 */
@@ -76,37 +50,40 @@ type FreshnessReport = {
 };
 
 /**
- * 解析 `--json` 输出。
- *
- * 不写成 `JSON.parse(output) as FreshnessReport`：那是**类型断言**，它只是让编译器
- * 闭嘴、解析出来的东西仍然可以是任意形状（§05 对 `as` 的口径）。这里走运行时收窄 ——
- * 判据改坏了形状时用例会在这一行就红，而不是在后面某个 `undefined` 上。
- * （`remoteDrifts` 的元素形状不逐项核：用例要断言的是**它空不空**与**点到哪个文件**，
- * 逐项建 schema 只会多一份要跟着判据改的清单。） */
+ * 解析 `--json` 输出。不写成 `JSON.parse(output) as FreshnessReport`：类型断言只让编译器闭嘴，解析结果
+ * 仍可以是任意形状（§05 对 `as` 的口径）。这里走运行时收窄，判据改坏形状时用例在这一行就红，而不是在
+ * 后面某个 `undefined` 上。（`remoteDrifts` 元素不逐项核：要断言的是它空不空与点到哪个文件。）
+ */
 function parseReport(output: string): FreshnessReport {
   const raw: unknown = JSON.parse(output);
-  if (typeof raw !== "object" || raw === null) {
-    throw new Error(`--json 输出不是一个对象：${output}`);
+  /* 运行时收窄（B5 清账：不走 `as` 断言）—— 形状改坏时这一行就红。 */
+  if (!isRecord(raw) || !isUnknownArray(raw.remoteDrifts)) {
+    throw new Error(`--json 输出形状不对（缺 remoteDrifts 数组）：${output}`);
   }
-  /* SAFETY: 类型断言已复核 */
-  const r = raw as Record<string, unknown>;
-  if (!Array.isArray(r.remoteDrifts)) {
-    throw new Error(`--json 输出缺少 remoteDrifts 数组：${output}`);
-  }
+  const remoteDrifts = raw.remoteDrifts.filter(
+    (entry): entry is { file: string; kind: string } =>
+      isRecord(entry) && typeof entry.file === "string" && typeof entry.kind === "string",
+  );
+  const installDrift = isRecord(raw.installDrift)
+    ? {
+        state: typeof raw.installDrift.state === "string" ? raw.installDrift.state : "",
+        unresolved: isUnknownArray(raw.installDrift.unresolved)
+          ? raw.installDrift.unresolved.filter((u): u is string => typeof u === "string")
+          : undefined,
+      }
+    : null;
   return {
-    code: typeof r.code === "number" ? r.code : -1,
-    remoteChecked: r.remoteChecked === true,
-    remoteAgeMs: typeof r.remoteAgeMs === "number" ? r.remoteAgeMs : null,
-    /* SAFETY: 类型断言已复核 */
-    remoteDrifts: r.remoteDrifts as FreshnessReport["remoteDrifts"],
-    /* SAFETY: 类型断言已复核 */
-    installDrift: (r.installDrift ?? null) as FreshnessReport["installDrift"],
-    envBroken: r.envBroken === true,
+    code: typeof raw.code === "number" ? raw.code : -1,
+    remoteChecked: raw.remoteChecked === true,
+    remoteAgeMs: typeof raw.remoteAgeMs === "number" ? raw.remoteAgeMs : null,
+    remoteDrifts,
+    installDrift,
+    envBroken: raw.envBroken === true,
   };
 }
 
 const { test, expect } = defineGateRepo({
-  script: "check-deps-freshness.mjs",
+  script: "gates/check-deps-freshness.mjs",
   workdir: "deps-freshness-gate",
   // 判据 import 了 lockfile / launcher-core 的同级模块，得一并拷进工作区。
   copy: [
@@ -118,8 +95,8 @@ const { test, expect } = defineGateRepo({
     // 依赖面清单抽到 dependency-face.mjs 之后（与 check-allow-builds.cjs 共用同一份），
     // 它也是本判据的输入之一 —— 漏拷的表现是脚本吐出非 JSON 的启动错误、契约用例全红。
     {
-      from: "scripts/dependency-face.mjs",
-      to: "scripts/dependency-face.mjs",
+      from: "scripts/lib/dependency-face.mjs",
+      to: "scripts/lib/dependency-face.mjs",
     },
   ],
   setup: (repo) => {
@@ -283,25 +260,17 @@ describe("check-deps-freshness 契约", () => {
     expect(report.installDrift?.state).toBe("no-install");
   });
 
-  /* ── ③ 的第二维：声明了、却解析不到（ISSUE #1721）──────────────────────────
-   *
-   * 立案现场：本地依赖树停在「装 axe-core 之前」—— 它只以传递依赖的旧版本被
-   * `@storybook/addon-a11y` 拖进来、落在**包自己的私有层**，顶层既没有提升出来的
-   * 那一份、也没有任何可解析路径。而 ③ 原来的口径是**两份 lockfile 的文本 diff**，
-   * 那一格在这种情况下是绿的：`node_modules/.pnpm/lock.yaml` 与仓库那份逐字相同。
-   *
-   * 夹具因此按真实布局摆三层：顶层 `node_modules/`（声明依赖解析的就是它）、
-   * `node_modules/.pnpm/lock.yaml`（③ 文本层的输入）、`node_modules/.modules.yaml`
-   * （「装过」的证据，也是解析层决定要不要表态的开关）。探针包固定是
-   * `typescript` / `next` / `axe-core` 三条，所以要造的正是这三者里**少一个**。
-   */
+  /* ── ③ 的第二维：声明了、却解析不到（ISSUE #1721 / #4105）—— 立案现场之一：本地依赖树停在「装 axe-core 之前」，
+   * 它只以传递依赖的旧版本被 `@storybook/addon-a11y` 拖进来、落在**包自己的私有层**，顶层既没提升出来
+   * 的那份、也没有可解析路径；另一现场：已装好的 `pino` 包目录被外部清空（`package.json` 消失，见 #4105）。
+   * 而 ③ 原来是两份 lockfile 的**文本 diff**，那一格在这两种情况下都可能是绿的（`node_modules/.pnpm/lock.yaml`
+   * 与仓库逐字相同 / 损坏发生在安装之后）。夹具按真实布局摆三层：顶层 `node_modules/`（解析层）、
+   * `.pnpm/lock.yaml`（③ 文本层）、`.modules.yaml`（「装过」证据与解析层表态开关）；探针包按清单造「少一个」。 */
 
   /**
-   * 让工作区看起来「装过」，且**两份 lockfile 逐字一致**（③ 的文本层判 fresh）。
-   *
-   * 一致性这一步是这一组用例的前提，不是顺手：③ 的文本层也写 `state`，两侧同时漂移
-   * 时拿到的是 `drift` 而不是 `unresolved` —— 那样测的就是「文本层还在不在」，
-   * 而不是本组要问的「解析层单独能不能报红」。
+   * 让工作区看起来「装过」，且**两份 lockfile 逐字一致**（③ 的文本层判 fresh）。一致性是这组用例的前提，
+   * 不是顺手：③ 的文本层也写 `state`，两侧同时漂移时拿到的是 `drift` 而不是 `unresolved` —— 那样测的是
+   * 「文本层还在不在」，而不是本组要问的「解析层单独能不能报红」。
    */
   const markInstalled = (repo: { write: (rel: string, content: string) => void }) => {
     repo.write("node_modules/.modules.yaml", "nodeLinker: hoisted\n");
@@ -316,11 +285,14 @@ describe("check-deps-freshness 契约", () => {
     // 有实质差异，于是 `installDrift.state` 只可能来自解析层，判据不会与文本层混淆。
     repo.write("package.json", PKG_STALE);
     markInstalled(repo);
-    // 只把 `typescript` 与 `next` 放到位：`axe-core` 缺失 = 解析不到。
+    // 只把 `typescript` / `next` / `pino` 放到位：`axe-core` 缺失 = 解析不到（探针清单
+    // 见 `docs/reference-facts.md` 的 `deps.resolveProbes`；`pino` 补在 #4105，用来钉
+    // 「包目录被外部清空」这一类损坏，缺它会让本用例测到两条缺失而不是一条）。
     // `installDep` 而不是 `mkdir`：见夹具里那条注释（临时目录的祖先里可能有别人的
     // `node_modules`，Node 会一路向上找，`mkdir` 顶替会让这条用例测到环境噪声）。
     repo.installDep("typescript");
     repo.installDep("next");
+    repo.installDep("pino");
     const { code, output } = repo.run(["--offline"]);
     expect(code).toBe(1);
     const report = parseReport(repo.run(["--offline", "--json"]).output);
@@ -347,33 +319,44 @@ describe("check-deps-freshness 契约", () => {
   test("探针清单与 reference-facts 的登记行逐项同源（只有一份权威定义）", async () => {
     // 两处各记一份必然分叉，而分叉之后「哪一份是真的」没有判据能回答。所以这里
     // 判的是**同源**：`docs/reference-facts.md` 的 `deps.resolveProbes` 那一行是
-    // 权威定义（`scripts/doc-facts.cjs` 反向解析它），判据里的字面量必须与它逐项相等。
+    // 权威定义（`scripts/docs/doc-facts.cjs` 反向解析它），判据里的字面量必须与它逐项相等。
     // 这条用例同时挡住了「解析器失灵 ⇒ 读出空清单 ⇒ 一切照旧绿」那一档
     // （§12.16 的同款教训：一个永远返回空数组的解析器会让所有断言全绿）。
-    /* SAFETY: 类型断言已复核 */
-    const facts = (await import("../scripts/doc-facts.cjs")) as unknown as {
-      FACTS: Array<{ extract: () => unknown; key: string }>;
-    };
-    const probesFact = facts.FACTS.find((f) => f.key === "deps.resolveProbes");
-    expect(probesFact, "FACTS 里缺 deps.resolveProbes 登记项").toBeDefined();
-    const declared = probesFact?.extract();
+    /* 两个 .cjs/.mjs 模块都无类型：出口按键做运行时守卫（B5 清账，不走 as 断言）。 */
+    const facts: unknown = await import("../scripts/docs/doc-facts.cjs");
+    if (!isRecord(facts) || !("FACTS" in facts)) {
+      throw new Error("doc-facts.cjs 缺 FACTS");
+    }
+    const probesFact = isUnknownArray(facts.FACTS)
+      ? facts.FACTS.find(
+          (entry): entry is { extract: () => unknown; key: string } =>
+            isRecord(entry) && entry.key === "deps.resolveProbes",
+        )
+      : undefined;
+    if (probesFact === undefined) {
+      throw new Error("FACTS 里缺 deps.resolveProbes 登记项");
+    }
+    const declared = probesFact.extract();
     expect(Array.isArray(declared)).toBe(true);
-    /* SAFETY: 类型断言已复核 */
-    const worktree = (await import("../scripts/launcher-core/worktree.mjs")) as unknown as {
-      RESOLVE_PROBES: Array<string>;
-    };
+    const worktree: unknown = await import("../scripts/launcher-core/worktree.mjs");
+    if (!isRecord(worktree) || !("RESOLVE_PROBES" in worktree)) {
+      throw new Error("worktree.mjs 缺 RESOLVE_PROBES");
+    }
     expect(worktree.RESOLVE_PROBES).toEqual(declared);
     // 清单非空也是判据的一部分：空的探针清单会让解析层**永远判绿**，
     // 而那正是它要拦的那件事。
-    expect(worktree.RESOLVE_PROBES.length).toBeGreaterThan(0);
+    expect(isUnknownArray(worktree.RESOLVE_PROBES) && worktree.RESOLVE_PROBES.length > 0).toBe(
+      true,
+    );
   });
 
-  test("依赖树完好（三个探针都在）→ 解析层不误报", ({ repo }) => {
-    // 反向对照：把三条探针都放到位 ⇒ 解析层静默。少了这条，「探针永远返回缺失」
-    // 这种失灵（§12.16 的同款教训：一个永远报红的判据会被学会绕开）测不出来。
+  test("依赖树完好（全部探针都在）→ 解析层不误报", ({ repo }) => {
+    // 反向对照：把探针清单（`docs/reference-facts.md` 的 `deps.resolveProbes`）都放到位 ⇒
+    // 解析层静默。少了这条，「探针永远返回缺失」这种失灵（§12.16 的同款教训：一个永远报红
+    // 的判据会被学会绕开）测不出来。
     repo.write("package.json", PKG_STALE);
     markInstalled(repo);
-    for (const name of ["typescript", "next", "axe-core"]) {
+    for (const name of ["typescript", "next", "axe-core", "pino"]) {
       repo.installDep(name);
     }
     const report = parseReport(repo.run(["--offline", "--json"]).output);

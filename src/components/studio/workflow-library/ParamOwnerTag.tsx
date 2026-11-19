@@ -1,24 +1,22 @@
 "use client";
 
-/* 宿主卡片里那一行参数尾部的只读徽标：标出它被哪个对外参数落到。
- *
- * 它与左侧的对外参数卡片互为两端 —— 卡片说「这个对外参数由哪些端口组成」，
- * 徽标说「这一行属于哪个对外参数」。同一份落点事实只在表单行这侧标一次，
- * 卡片不再重复画线，两处就不会表达同一件事两次。
- *
- * 没有任何对外参数落到这一行时不渲染（绝大多数行都是这种情况）。 */
+import { Hint } from "~/components/ui/hint";
+
+/* 参数行尾部的只读徽标：标出该行被哪个对外参数落到；落点事实只在表单行标一次，
+ * 卡片不重复画线。没有任何对外参数落到这一行时不渲染。 */
 
 export function ParamOwnerTag({ label }: { label?: string }) {
   if (label === undefined || label === "") {
     return null;
   }
   return (
-    <span
-      className="border-primary/30 bg-primary/10 text-primary-strong shrink-0 rounded-[3px] border px-1.5 py-px text-[9.5px] font-medium"
-      data-testid="wflib-param-owner"
-      title={`该参数是对外参数「${label}」的落点`}
-    >
-      {label}
-    </span>
+    <Hint label={`该参数是对外参数「${label}」的落点`}>
+      <span
+        className="border-primary/30 bg-primary/10 text-primary-strong shrink-0 rounded-[3px] border px-1.5 py-px text-[9.5px] font-medium"
+        data-testid="wflib-param-owner"
+      >
+        {label}
+      </span>
+    </Hint>
   );
 }

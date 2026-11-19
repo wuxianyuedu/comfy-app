@@ -1,30 +1,14 @@
 // @vitest-environment jsdom
 /**
- * 回归护栏：启动页的日志面板**不再把用户拽回底部**。
- *
- * 现场（用户反馈）：点开「查看日志」往上翻看早期编排输出，每 1.5 秒一次的
- * 轮询刷新就把他拽回最新一行——`renderLog` 当时无条件
- * `logPanel.scrollTop = logPanel.scrollHeight`，**没有「用户有没有接管滚动」
- * 这个判据**。启动页是编译期内嵌的独立页面（`src-tauri/splash-assets/**`，
- * 源在 `public/splash.html`），既不在 `src/**` 的 P21 硬闸扫描面里，也没有
- * 任何用例跑过它的脚本，所以这条一直没被判据拦下。
- *
- * 本组用例**真跑那一段页面脚本**（把内联 `<script>` 交给 jsdom 求值，不是拿
- * 正则去凑源码形态）：贴底几何是量出来的，不是读出来的。判据四条：
- *   ① 贴着底时刷新照旧贴底（新日志跟着滚）；
- *   ② 用户上翻后刷新**一个像素都不动**他的位置；
- *   ③ 暂停必须有可见出口（「回到最新」按钮出现），点了回到最新并恢复跟随；
- *   ④ 阈值内（32px）不该因为抖一下就掉出跟随态。
- *
- * 反向验证：把 `renderLog` 改回无条件贴底 → ② 立刻失败。
- *
- * 环境用 vitest 的 jsdom（**不直接 import `jsdom`**：它没有类型声明，为一条
- * 用例引入 `@types/jsdom` 是给所有人加一笔依赖）；页面 DOM 与脚本都从真实的
- * 内嵌产物里取，被测的还是那一份字节。
+ * 回归护栏：启动页日志面板**不再把用户拽回底部**（现场：1.5s 一次的轮询刷新把正在上翻的用户拽回最新一行，`renderLog` 无条件
+ * 贴底、缺「用户是否接管滚动」判据）。该页是编译期内嵌的独立页面（源 `public/splash.html`），不在 `src/**` 硬闸扫描面、也无用例跑其脚本；
+ * 本组把内联 `<script>` 交给 jsdom 真跑（不直接 import `jsdom`：无类型声明）：贴底照旧跟滚、上翻后一像素不动、暂停须有「回到最新」出口、32px 内不掉跟随。
  */
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 const ROOT = process.cwd();
 /** 用例读**内嵌进壳的那一份**（`index.html` 是窗口会加载的兜底名，与
@@ -35,11 +19,12 @@ const PAGE_HTML = fs.readFileSync(path.join(ROOT, PAGE_REL), "utf8");
 
 /** 从页面里取出内联 `<script>` 的正文（页面只有这一段）。 */
 function pageScript(html: string): string {
-  const match = /<script>([\s\S]*?)<\/script>/.exec(html);
-  if (match?.[1] === undefined || match?.[1] === "") {
+  const match = /<script>(?<body>[\s\S]*?)<\/script>/i.exec(html);
+  const body = match?.groups?.body ?? "";
+  if (body === "") {
     throw new Error(`${PAGE_REL} 里找不到内联 <script>`);
   }
-  return match[1];
+  return body;
 }
 
 /** 量得到的滚动几何（jsdom 不做布局，两个高度都得自己给）。 */
@@ -51,12 +36,15 @@ type SplashInternals = {
   renderLog: (text: string) => void;
 };
 
+/** 形状守卫替代断言收型（B5 清账）：页面交出的必须是可调用的 renderLog。 */
+function isSplashInternals(value: unknown): value is SplashInternals {
+  return isRecord(value) && typeof value.renderLog === "function";
+}
+
 /**
  * 把启动页装载进**当前** jsdom 文档并跑它的脚本。
- *
- * 定时器全部停掉：本组用例只关心「刷新一帧」这一个动作，让页面自己按
- * 250ms / 1.5s 转起来只会引入不确定性。壳 IPC 一律不可用（页面据此走兜底
- * 分支）——日志正文由用例自己喂进去，测的是渲染那一侧。
+ * 定时器全部停掉：只关心「刷新一帧」这一动作，让页面按 250ms / 1.5s 自己转起来只会引入不确定性。
+ * 壳 IPC 一律不可用（页面据此走兜底分支）—— 日志正文由用例喂入，测的是渲染那一侧。
  */
 function bootSplash(): {
   latestVisible: () => boolean;
@@ -67,10 +55,10 @@ function bootSplash(): {
 } {
   document.documentElement.innerHTML = PAGE_HTML;
 
-  /* SAFETY: 类型断言已复核 */
-  window.setInterval = (() => 0) as unknown as typeof window.setInterval;
-  /* SAFETY: 类型断言已复核 */
-  window.setTimeout = (() => 0) as unknown as typeof window.setTimeout;
+  /* 定时器桩走 defineProperty：descriptor.value 不参与类型检查，
+     「() => 0 不满足 Node 侧重载返回 Timeout」的形状争议就不再需要断言（B5 清账）。 */
+  Object.defineProperty(window, "setInterval", { configurable: true, value: () => 0 });
+  Object.defineProperty(window, "setTimeout", { configurable: true, value: () => 0 });
   /* 页面自己的 warn 与本组用例无关（壳 IPC 与网络都不可用时各喊一嗓子），
    * 静音掉——真红应当来自断言，而不是一屏噪声。 */
   window.console.warn = (): void => {
@@ -81,8 +69,13 @@ function bootSplash(): {
    * 那不是本组用例的红，却会把「6 errors」挂在结果上。一律拒掉。 */
   window.fetch = () => Promise.reject(new Error("网络在用例里不可用"));
 
-  /* SAFETY: 类型断言已复核 */
-  const internals = window.eval(`${pageScript(PAGE_HTML)}\n;({ renderLog })`) as SplashInternals;
+  /* eval 的返回是 any → 先落 unknown，再走形状守卫收窄（B5 清账）。
+     守卫不过说明内联脚本被改得交不出 renderLog —— 这本身就是该红的漂移。 */
+  const evaluated: unknown = window.eval(`${pageScript(PAGE_HTML)}\n;({ renderLog })`);
+  if (!isSplashInternals(evaluated)) {
+    throw new Error("启动页脚本没有交出可调用的 renderLog —— 内联脚本被改了？");
+  }
+  const internals = evaluated;
 
   const scroll = document.getElementById("log-scroll")!;
   Object.defineProperty(scroll, "scrollHeight", {

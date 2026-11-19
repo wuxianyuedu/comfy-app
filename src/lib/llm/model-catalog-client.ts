@@ -13,6 +13,7 @@
 
 import { withQuery } from "~/lib/query-string";
 import { errorMessage } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 
 export type RemoteModelCatalog = {
   detail: string;
@@ -36,12 +37,8 @@ async function getModels(
         signal: AbortSignal.timeout(8000),
       },
     );
-    /* SAFETY: 类型断言已复核 */
-    const json = (await res.json().catch(() => ({}))) as {
-      detail?: unknown;
-      models?: unknown;
-      ok?: unknown;
-    };
+    const body: unknown = await res.json().catch(() => ({}));
+    const json: Record<string, unknown> = isRecord(body) ? body : {};
     return {
       ok: json.ok === true,
       models: Array.isArray(json.models)

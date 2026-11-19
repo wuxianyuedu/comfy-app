@@ -1,22 +1,8 @@
 // @vitest-environment jsdom
-/* 为何**不**留在 DOM 档默认的 happy-dom（这是本档的例外，口径见规范 §11.17）：
- * 与 `option-list-popover.test.tsx` 同因（同一个 base-ui popover 栈的
- * `getAnimations` 时钟差异）：happy-dom 不推进动画时钟 ⇒
- * `useAnimationsFinished` 不 settle ⇒ 面板不卸载，「点选项即收起」那一条
- * 永远读到还开着的浮层。
- */
-/**
- * 「控件后行为」面板的行为回归（ISSUE #349 / #672）。
- *
- * 这个面板曾经自搓过一整套浮层（`createPortal` + `placeFloating` 视口翻转 +
- * 遮罩 + 手写 Esc），于是「翻上翻下」「收边」「滚动重定位」「Esc 关闭」四处
- * 语义在库里有第二份实现。按规范 16 §16.2.3 P2 收拢到 `ui/popover` 后，
- * **定位与关闭不再由本组件负责** —— 那是 base-ui 的 Positioner / Root 的
- * 契约（自有上游测试），本文件因此不再断言 `style.top` 这类派生的像素值
- * （旧断言正是「把基元的实现细节当成自己的契约」，基元一换就整片失效）。
- *
- * 现在锁定的是本组件**自己**欠的语义：四个选项、选中态、点击即回调且关面板。
- */
+/* 为何不留在 DOM 档默认的 happy-dom（本档的例外，口径见规范 §11.17）：与 `option-list-popover.test.tsx` 同因（同一个 base-ui popover 栈的 `getAnimations` 时钟差异）—— happy-dom 不推进动画时钟 ⇒ `useAnimationsFinished` 不 settle ⇒ 面板不卸载，「点选项即收起」那一条永远读到还开着的浮层。 */
+/** 「控件后行为」面板的行为回归（ISSUE #349 / #672）。
+ * 这个面板曾经自搓过一整套浮层（createPortal + placeFloating 视口翻转 + 遮罩 + 手写 Esc），于是「翻上翻下」「收边」「滚动重定位」「Esc 关闭」四处语义在库里有第二份实现。按规范 16 §16.2.3 P2 收拢到 `ui/popover` 后，定位与关闭不再由本组件负责 —— 那是 base-ui 的 Positioner / Root 的契约（自有上游测试），本文件因此不再断言 `style.top` 这类派生的像素值（旧断言正是「把基元的实现细节当成自己的契约」，基元一换就整片失效）。
+ * 现在锁定的是本组件自己欠的语义：四个选项、选中态、点击即回调且关面板。 */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
@@ -53,9 +39,7 @@ describe("SeedModeButton", () => {
       "递减值",
       "随机值",
     ]);
-    const selected = options.filter(
-      (element) => element.getAttribute("aria-selected") === "true",
-    );
+    const selected = options.filter((element) => element.getAttribute("aria-selected") === "true");
     expect(selected).toHaveLength(1);
     expect(selected[0]).toHaveTextContent("随机值");
   });

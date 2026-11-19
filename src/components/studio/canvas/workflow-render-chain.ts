@@ -1,17 +1,8 @@
 /**
- * wf-render-chain — 工作流画布（wf-* 系列）的「渲染链路模块」规则。
- *
- * 为 WorkflowNode（src/components/studio/wf-node.tsx 渲染的工作流画布节点卡片）
- * 列出该节点卡片对应的本项目代码模块，并按 classType 区分链路：
- *  - 公共链路：wf-node.tsx（节点渲染器）、src/lib/comfyui/types.ts（端口/类型推断）、
- *    src/lib/comfyui/node-titles.ts（标题本地化）
- *  - 内置节点（NODE_TYPE_REGISTRY 命中）：追加 node-registry.ts（节点配置定义处）
- *  - 自定义节点（isCustomNode / getCustomNodePackage 命中）：追加
- *    src/config/custom-nodes.ts（manifest 加载）+ src/app/api/custom-nodes/route.ts（后端处理）
- *  - 无匹配 registry 且非自定义的 classType（如 note / subgraph）：只显示公共链路
- *
- * 供 DebugChainFooter 渲染调试标签：点击复制完整相对路径、title 显示完整路径。
- */
+ * wf-render-chain — 工作流画布（wf-* 系列）的渲染链路模块规则。
+ * 按 classType 列出节点卡片对应的本项目模块：公共链路 wf-node.tsx / comfyui/types.ts / node-titles.ts；
+ * 内置节点（NODE_TYPE_REGISTRY）追加 node-registry.ts；自定义节点追加 config/custom-nodes.ts 与 api/custom-nodes/route.ts；
+ * 无匹配 registry 且非自定义（note / subgraph）只给公共链路。供 DebugChainFooter 渲染调试标签（点击复制完整路径、title 显示完整路径）。 */
 
 import type { RenderChainModule } from "../debug/DebugChainFooter";
 import { NODE_TYPE_REGISTRY } from "~/lib/comfyui/node-registry";
@@ -25,10 +16,8 @@ const WF_COMMON: Array<RenderChainModule> = [
 ];
 
 /**
- * 返回指定 classType 节点卡片的渲染链路模块列表。
- * 内置节点（NODE_TYPE_REGISTRY 命中）追加 node-registry；
- * 自定义节点（扩展包）追加 customNodes manifest 与后端 route；
- * 其余 classType（note / subgraph / 未注册）只返回公共链路。
+ * 返回指定 classType 的渲染链路模块：内置节点追加 node-registry；
+ * 自定义节点追加 customNodes manifest 与后端 route；其余只返回公共链路。
  */
 export function getWorkflowRenderChainModules(classType: string): Array<RenderChainModule> {
   const chain = [...WF_COMMON];

@@ -149,7 +149,7 @@ export function pnpmInvocation(
  *
  * 落点两种形状都接：`<落点>/node_modules/pnpm/` 与落点**自己**就是那个包
  * （corepack 的 `…/v1/pnpm/<ver>/`）。入口**从包自己的 `bin` 字段读**、不猜文件名
- * （猜文件名等于替包做决定，`scripts/package-bin-entry.mjs` 那一层早就这么写了）；
+ * （猜文件名等于替包做决定，`scripts/lib/package-bin-entry.mjs` 那一层早就这么写了）；
  * `bin` 指向原生二进制时（pnpm 11+ 是 `{ "pnpm": "pnpm" }`，那个文件是 MZ / ELF）
  * 兜一层 Corepack 对 pnpm ≥ 11 写死的 `bin/pnpm.mjs`。
  *
@@ -162,26 +162,23 @@ export function pnpmJsEntry(dropIn: string): string | null {
   if (pkgDir === null) {
     return null;
   }
-  let manifest: { bin?: unknown };
+  let bin: unknown;
   try {
-    /* SAFETY: 类型断言已复核 */
-    manifest = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8")) as {
-      bin?: unknown;
-    };
+    const manifest: unknown = JSON.parse(
+      fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"),
+    );
+    bin = undefined;
+    if (manifest !== null && typeof manifest === "object") {
+      bin = Reflect.get(manifest, "bin");
+    }
   } catch {
     return null;
   }
-  const bin = manifest.bin;
   let rel: unknown;
   if (typeof bin === "string") {
     rel = bin;
-  } else if (
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    bin != null &&
-    typeof bin === "object"
-  ) {
-    /* SAFETY: 类型断言已复核 */
-    rel = (bin as Record<string, unknown>).pnpm;
+  } else if (bin !== null && typeof bin === "object") {
+    rel = Reflect.get(bin, "pnpm");
   }
   if (typeof rel === "string" && rel !== "") {
     const target = path.resolve(pkgDir, rel);
@@ -214,11 +211,8 @@ function pnpmPackageDir(dropIn: string): string | null {
       return dir;
     }
     try {
-      /* SAFETY: 类型断言已复核 */
-      const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")) as {
-        name?: unknown;
-      };
-      if (pkg.name === "pnpm") {
+      const pkg: unknown = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+      if (pkg !== null && typeof pkg === "object" && Reflect.get(pkg, "name") === "pnpm") {
         return dir;
       }
     } catch {
@@ -331,6 +325,50 @@ export type ResolvedInvocation = {
   resolved: boolean;
 };
 
+/* ── 解析结论的进程级缓存（ISSUE #4201）────────────────────────────────
+ * `resolveCommandInvocation` 的探针是**同步** `spawnSync`（上限 30s），而它的两个
+ * 调用方（`/api/console/run`、`/api/feedback/publish`）都在**请求路径**上——单事件
+ * 循环的服务里，一次慢探针就是一次全体请求排队（#4195/#4146 同族）。同一个命令名
+ * 在一台机器上的解析结论（PATH 扫描 + 可用性确认）几乎不随时间变化，因此：
+ *   · **命中（可用）结论**进程级存活；
+ *   · **未命中 / 不可用结论**只黏滞 {@link INVOCATION_MISS_TTL_MS}——命令装上了
+ *     要能自愈；
+ *   · 只对「默认环境 + 默认探针 + 当前平台」的生产形态生效：注入了 env / probe /
+ *     platform 的调用方（测试、特殊宿主）各不相同，一律不进缓存。
+ */
+type InvocationResolver = (args: Array<string>) => ResolvedInvocation;
+
+const invocationCache = new Map<
+  string,
+  { at: number; found: boolean; resolve: InvocationResolver }
+>();
+
+/** 未命中 / 不可用结论的黏滞时长：命令装上之后要能自愈，不能把「现在没有」
+ *  永久当成结论。 */
+const INVOCATION_MISS_TTL_MS = 60_000;
+
+/** 命中（可用）结论的黏滞时长（ISSUE #4256）：由「进程级永久存活」改为 10 分钟——
+ *  会话中途迁移 / 升级工具链（corepack 换目录、nvm 切换）后，旧绝对路径可能已
+ *  不存在；10 分钟后重新探针一次（一次 spawnSync 约几十毫秒）即可自愈。 */
+const INVOCATION_HIT_TTL_MS = 10 * 60 * 1000;
+
+/** 缓存条目上限：键是用户敲的命令名，实际上个位数；上限只为防病态输入无界生长
+ *  （到顶淘汰最早写入的一条，与 `sweep-negative-cache` 同一取向）。 */
+const INVOCATION_CACHE_MAX = 64;
+
+function resetInvocationCacheEntry(
+  key: string,
+  entry: { at: number; found: boolean; resolve: InvocationResolver },
+): void {
+  if (invocationCache.size >= INVOCATION_CACHE_MAX && !invocationCache.has(key)) {
+    const oldest = invocationCache.keys().next().value;
+    if (oldest !== undefined) {
+      invocationCache.delete(oldest);
+    }
+  }
+  invocationCache.set(key, entry);
+}
+
 /**
  * 把一行「用户想跑的命令」解析成这台机器上真能起得来的形态。
  *
@@ -346,8 +384,8 @@ export type ResolvedInvocation = {
  * **真起一次**，而它喂的参数就是这里的第二入参。于是「调用方要跑什么」与「探针喂什么」
  * 被合成了一件东西 —— 后果是**探针把真命令整条跑了一遍**：
  *
- *   · `resolveCommandInvocation("node", ["scripts/e2e-run.mjs", "--grep=@critical"])`
- *     ⇒ 探针真的起了一次 `node scripts/e2e-run.mjs --grep=@critical`（`stdio: "ignore"`、
+ *   · `resolveCommandInvocation("node", ["scripts/e2e/e2e-run.mjs", "--grep=@critical"])`
+ *     ⇒ 探针真的起了一次 `node scripts/e2e/e2e-run.mjs --grep=@critical`（`stdio: "ignore"`、
  *     30s 上限），Playwright 的 webServer（`pnpm start` + 假 ComfyUI）随之被拉起来；
  *   · `spawnSync` 超时**只收直接子进程**，那些孙子进程留在端口上接着跑 —— 真那一跑
  *     再起来时撞见「端口已有人应答」，而这一步的结论被读成「解析成功」；
@@ -374,19 +412,43 @@ export function resolveCommandInvocation(
     probeArgs = ["--version"],
   }: WhichCommandOptions = {},
 ): ResolvedInvocation {
+  /* 只缓存「默认环境 + 默认探针 + 当前平台」的生产形态（ISSUE #4201）：
+   * 注入 env / probe / platform 的调用方（测试、特殊宿主）结论各不相同，
+   * 不进缓存，行为与旧版逐字一致。 */
+  const cacheable =
+    env === process.env && platform === process.platform && probe === realUsabilityProbe;
+  const key = `${platform}|${file}|${probeArgs.join(" ")}`;
+  if (cacheable) {
+    const hit = invocationCache.get(key);
+    /* 命中（可用）结论按 10 分钟黏滞、未命中按 60s——见两个 TTL 常量的注释。 */
+    const ttl = hit?.found === true ? INVOCATION_HIT_TTL_MS : INVOCATION_MISS_TTL_MS;
+    if (hit !== undefined && Date.now() - hit.at < ttl) {
+      return hit.resolve(args);
+    }
+  }
   const candidate = whichCommand(file, { env, platform, probe, probeArgs });
   /* 候选是 PATH 上拼出来的绝对路径，空串不可能出现 */
+  let resolve: InvocationResolver;
+  let found: boolean;
   if (candidate === null) {
-    return { command: file, args, resolved: false };
+    resolve = (runArgs) => ({ command: file, args: runArgs, resolved: false });
+    found = false;
+  } else {
+    const usable = usableCommand(candidate, probeArgs, { env, platform, probe });
+    // 可用即用宿主形态；不可用（如 `.cmd` 且无 `.ps1` 回退）仍把**绝对路径**
+    // 交出去 —— 让 spawn 报一个带绝对路径的错，比报裸名字更有排障价值。
+    if (usable.ok) {
+      const command = usable.command;
+      const prefixArgs = usable.prefixArgs;
+      resolve = (runArgs) => ({ command, args: [...prefixArgs, ...runArgs], resolved: true });
+      found = true;
+    } else {
+      resolve = (runArgs) => ({ command: candidate, args: runArgs, resolved: true });
+      found = false;
+    }
   }
-  const usable = usableCommand(candidate, probeArgs, { env, platform, probe });
-  // 可用即用宿主形态；不可用（如 `.cmd` 且无 `.ps1` 回退）仍把**绝对路径**
-  // 交出去 —— 让 spawn 报一个带绝对路径的错，比报裸名字更有排障价值。
-  return usable.ok
-    ? {
-        command: usable.command,
-        args: [...usable.prefixArgs, ...args],
-        resolved: true,
-      }
-    : { command: candidate, args, resolved: true };
+  if (cacheable) {
+    resetInvocationCacheEntry(key, { at: Date.now(), found, resolve });
+  }
+  return resolve(args);
 }

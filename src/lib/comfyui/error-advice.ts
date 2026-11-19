@@ -57,7 +57,7 @@ type AdviceRule = {
 const ADVICE_RULES: Array<AdviceRule> = [
   {
     // 执行链的 Python 解释器找不到（桌包不随包 Python / comfy-cli，ISSUE #1239）
-    pattern: /未找到 comfy-cli|comfy[-_]cli.{0,24}(python|解释器)|COMFY_CLI_PYTHON/i,
+    pattern: /未找到 comfy-cli|comfy[-_]cli.{0,24}(?:python|解释器)|COMFY_CLI_PYTHON/i,
     advice: () =>
       "执行链找不到 comfy-cli 的 Python 解释器。桌包不随包 Python：请自备一个装好 comfy-cli 的 Python，再到「设置 → 创作后端 → comfy-cli 解释器」填它的绝对路径（开发检出也可以直接建 `python-venv/comfy-cli`），然后点「重试」。",
   },

@@ -1,46 +1,29 @@
 /**
- * 壳内 ComfyUI 页签的**两条契约**（ISSUE #1244）。
- *
- * 用户要的形态是「同一个窗口里的多页签」（ISSUE #310 原话：「只要多页签，不要
- * 另一个窗口」），落在 ComfyUI 这一格上是两句可判的话：
- *
- *   1. **可嵌时**：内容渲染在**当前窗口的页签里**（一个 `iframe`，`title` 就是页签名）；
- *   2. **不可嵌时**：仍在**同一个页签里**给出可读说明（说明带内容地址），
- *      既不塞一个注定空白的 `iframe`，也不弹第二个窗口。
- *
- * 这两条此前没有任何自动化看守：#1243 把 e2e 那三条改成浏览器形态契约之后，
- * 壳内这半边就成了盲区 —— 浏览器形态下 `ShellTabs` **不渲染任何应用内页签栏**
- * （`useTitleBarTabsActive` 假），iframe 与说明都只存在于桌面壳里。本文件在
- * jsdom 里把形态摆到壳内那一档，判的是**用户能看见的结构**（规范 11.2），
- * 不是实现细节。
- *
- * 壳形态怎么摆：`useTitleBarTabsActive` 读的就是 `isDesktopShell()` 读的那个全局
- * 标记（`__TAURI_INTERNALS__`），所以直接打标记、不 mock 模块 —— 组件树里
- * `ShellTabs` 与 `TitleBarTabs` 各读它一次，而 ESM 的命名导入是活绑定，按模块
- * mock 要连 store 与 hook 一起假掉才能让整棵树挂起来。同一个手法见
- * `use-overlay-boundary.test.tsx`。
- *
- * ⚠️ 刻意**不判**的：页签的点击 / 关闭交互（那是 store 与 `TitleBarTabs` 各自的
- * 账）、层叠关系与真实 iframe 导航（jsdom 不做布局也不发请求，那两条留给 e2e 与
- * 壳冒烟，见规范 §11.10.4）。
+ * 壳内 ComfyUI 页签的**两条契约**（ISSUE #1244）：① 可嵌时内容渲染在当前窗口的页签里（一个 `iframe`，`title` 就是页签名）；② 不可嵌时仍在同一页签里给出可读说明（带内容地址），既不塞注定空白的 `iframe`，也不弹第二个窗口。
+ * 此前没有自动化看守：#1243 把 e2e 三条改成浏览器形态契约后，壳内这半边成了盲区（浏览器形态下 `ShellTabs` 不渲染任何应用内页签栏，iframe 与说明只存在于桌面壳）。本文件在 jsdom 里把形态摆到壳内那一档，判**用户能看见的结构**（规范 11.2）而非实现细节。
+ * 形态摆法：`useTitleBarTabsActive` 读 `isDesktopShell()` 那个全局标记（`__TAURI_INTERNALS__`），所以直接打标记、不 mock 模块（按模块 mock 要连 store 与 hook 一起假掉；同一手法见 `use-overlay-boundary.test.tsx`）。刻意**不判**：页签点击 / 关闭交互、层叠关系与真实 iframe 导航（留给 e2e 与壳冒烟，规范 §11.10.4）。
+ * ISSUE #3807 后标题行不再由 `ShellTabs` 直接画在整窗第一行，而是经 `TitleBarSlotProvider`
+ * 交给 `AppShell` 的内容列。单测里用 `TitleBarHost` 消费同一个插槽，守住「页签仍在同一棵
+ * 子树、仍是同一个窗口」这条契约；几何一致性（两形态顶部对齐）由 e2e 量 `top` 负责。
  */
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 
 import { ShellTabs } from "./ShellTabs";
+import { useTitleBarSlot } from "./TitleBarSlot";
 
 /** 摆形态：`true` = 桌面壳（打 Tauri 注入的全局标记），`false` = 浏览器 / dev。 */
 function setShellForm(on: boolean) {
   if (on) {
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
-      value: { invoke: async () => null, transformCallback: () => 0 },
+      value: { invoke: () => null, transformCallback: () => 0 },
     });
   } else {
-    /* SAFETY: 类型断言已复核 */
-    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
   }
 }
 
@@ -73,24 +56,39 @@ function openComfyTab(patch: {
 const written: Array<string> = [];
 
 beforeEach(() => {
+  resetTabs();
   written.length = 0;
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    value: { writeText: async (text: string) => void written.push(text) },
+    value: {
+      writeText: (text: string) => {
+        void written.push(text);
+      },
+    },
   });
 });
+
+/** 真实装配里消费插槽的是 `AppShell` 的 `SidebarInset`，这里用一层薄宿主扮它。 */
+function TitleBarHost({ children }: { children: ReactNode }) {
+  const slot = useTitleBarSlot();
+  return (
+    <>
+      <div data-testid="title-bar-host">{slot}</div>
+      {children}
+    </>
+  );
+}
 
 /** 挂一棵空壳（每个用例自己 `unmount`：泄漏的树会让后面的计数一起偏）。 */
 function mountTabs() {
   return render(
     <ShellTabs>
-      <div data-testid="main-content">主应用内容</div>
+      <TitleBarHost>
+        <div data-testid="main-content">主应用内容</div>
+      </TitleBarHost>
     </ShellTabs>,
   );
 }
-
-beforeEach(resetTabs);
 
 afterEach(() => {
   cleanup();
@@ -213,15 +211,8 @@ describe("ShellTabs · 壳内 ComfyUI 页签", () => {
     openComfyTab({ url: "http://127.0.0.1:8188" });
     const view = mountTabs();
     try {
-      /* 判据是 `shouldUseBrowserTab`：浏览器自带页签栏，应用内再画一条假页签栏
-       * 既占纵向空间又与原生重复。所以两件事都不发生 ——
-       *   · 没有壳内那条「应用页签」栏（`TitleBarTabs` 的 `role="tablist"`）；
-       *   · 主应用内容照常承载。
-       * ⚠️ 与 e2e 那条并不重复：那里量的是**页面上**（`iframe[title=ComfyUI]`
-       * 计数 0），因为浏览器形态下「打开查看」走的是新浏览器页签、store 里本来
-       * 不会长出 ComfyUI 页签；而这里为了把形态摆到浏览器那一档，直接往 store 里
-       * 塞了一个页签 —— 内容区按设计「始终挂载、只切显隐」，所以这棵树里**会有**
-       * 一个 iframe。这是两条用例的构造差异，不是判据冲突。 */
+      /* 判据是 `shouldUseBrowserTab`：浏览器自带页签栏，应用内再画一条既占纵向空间又与原生重复。所以不出现「应用页签」栏（`TitleBarTabs` 的 `role="tablist"`），主应用内容照常承载。
+       * ⚠️ 与 e2e 不重复：那里量页面上 `iframe[title=ComfyUI]` 计数 0（浏览器形态「打开查看」走新浏览器页签，store 里不长 ComfyUI 页签）；这里为摆到浏览器那一档直接往 store 塞了一个页签，而内容区按设计「始终挂载、只切显隐」，所以树里会有 1 个 iframe —— 构造差异，不是判据冲突。 */
       expect(screen.getByTestId("main-content")).not.toBeNull();
       expect(view.container.querySelectorAll(String.raw`[role="tablist"]`)).toHaveLength(0);
       /* 顺带钉住「不按形态改内容」这条实现取舍：这一格在两种形态下渲染得**一模一样**，
@@ -229,6 +220,27 @@ describe("ShellTabs · 壳内 ComfyUI 页签", () => {
        * 如果哪天有人给它加一个 `if (useTitleBar)` 之类的分叉，这条会红 ——
        * 那是有意的：分叉一出现，「浏览器里长不长 iframe」就变成两种形态各说各话。 */
       expect(view.container.querySelectorAll("iframe")).toHaveLength(1);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it("壳态标题行走插槽落进内容列，主窗口不再打 data-shell（ISSUE #3807）", () => {
+    setShellForm(true);
+    const view = mountTabs();
+    try {
+      /* 标题行不再占整窗第一行：`data-shell` 一旦回来，全局 CSS 就会重新把
+       * fixed 侧栏下移 36px，「首页贴顶」又没了。整屏路由页仍用这个标记，但
+       * 那棵子树不在这里（见 `ShellFullPage`）。 */
+      expect(view.container.querySelector("[data-shell]")).toBeNull();
+      /* 它确实被消费到了内容列那一侧，而不是被顺手丢掉 —— 窗口按钮、拖拽区、
+       * ComfyUI 页签都还挂在这条标题行上。 */
+      const host = screen.getByTestId("title-bar-host");
+      const titleBar = host.querySelector('[data-slot="title-bar"]');
+      expect(titleBar).not.toBeNull();
+      /* 三颗窗口按钮仍挂在这条标题行上 —— 无边框窗口的最小化 / 最大化 / 关闭
+       * 没有因为「搬到内容列」而丢掉（判据见 `WindowControls`）。 */
+      expect(titleBar!.querySelectorAll("button[data-no-drag]")).toHaveLength(3);
     } finally {
       view.unmount();
     }

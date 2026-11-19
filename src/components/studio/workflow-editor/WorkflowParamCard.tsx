@@ -1,21 +1,10 @@
 "use client";
 
-/* 对外参数卡片的**视觉本体**（无 React Flow 依赖）。
- *
- * 消费方只有一个：工作流库详情的「画布节点」页签（`WorkflowParamCardColumn` /
- * `WorkflowOutputParamCardColumn` 卡片列，端点由连线层注入）。编辑器画布不再画
- * 卡片 —— 落点映射编辑已收敛到库内这一处。
- *
- * 卡片保持与 React Flow 解耦：端点由消费方在输出端口行右侧挂上去（库里是装饰
- * 圆点 + 独立连线层），本文件不许 import `@xyflow/react`。
- *
- * 卡片体就是**一行一个端口：端点 + 参数名 + 类型**（`outputPorts`）。
- *
- * 此前这里另有一段「输入端口行」把同一批端口再列一遍（`text  STRING`），与下面
- * 的输出端口行（`text  STRING  ●`）说同一件事 —— 单端口条目上读起来就是同一个
- * 信息重复两遍，用户圈出来要求去掉（ISSUE #355 复审）。现在只保留输出端口这一段：
- * 它就是「全量候选出口」本身（每个候选一颗端点），名称与类型贴着端点画。
- */
+/* 对外参数卡片的**视觉本体**（无 React Flow 依赖）。消费方只有一个：库详情「画布
+ * 节点」页签的卡片列（端点由连线层注入）；编辑器不再画卡片，落点编辑已收敛到库内。
+ * 本文件不许 import `@xyflow/react`：端点由消费方挂在输出端口行右侧。卡片体 =
+ * **一行一个端口：端点 + 参数名 + 类型**；此前另有一段「输入端口行」把同一批端口
+ * 再列一遍（ISSUE #355 复审后删去），现在只留输出端口这一段（「全量候选出口」）。 */
 
 import type { DOMAttributes } from "react";
 import { RotateCcw } from "lucide-react";
@@ -33,15 +22,11 @@ import { Hint } from "~/components/ui/hint";
 export type WorkflowParamCardProps = {
   /** 「恢复默认」是否可用。只读消费处不传回调（按钮根本不渲染）。 */
   canReset: boolean;
-  /** 是否允许连线：false 时卡片置灰。
-   *
-   *  编辑器画布上恒为 true —— 对外参数卡片就是接线面板，**没有模式也要能连**
-   *  （模式只是这条线归属的命名空间，不影响拖线本身是否成立）。
-   *
-   *  注意与 `readOnly` 的区别：`canWire=false` 表达「这张卡当前不可编辑」
-   *  （如库内只读消费），**不等于**「因为没有模式所以不能连线」——只读卡片上
-   *  不写任何编辑提示，否则会出现「节点上明明已经选了单图生视频，卡片却说需要
-   *  选模式」这种自相矛盾的提示。 */
+  /** 是否允许连线：false 时卡片置灰。编辑器画布上恒为 true —— 对外参数卡片就是
+   *  接线面板，**没有模式也要能连**（模式只是归属命名空间，不影响能否拖线）。
+   *  注意与 `readOnly` 的区别：`canWire=false` 是「这张卡当前不可编辑」（如库内
+   *  只读消费），**不等于**「没有模式所以不能连」—— 只读卡片不写任何编辑提示，
+   *  否则会出现「节点已选单图生视频，卡片却说需要选模式」这种自相矛盾的提示。 */
   canWire: boolean;
   /** 分类中文名（悬停提示用）。 */
   classLabel: string;
@@ -84,13 +69,10 @@ export type WorkflowParamCardProps = {
   /** 该卡片（或被点选的那条线）当前是否被选中 —— 选中的卡片描边提亮，
    *  让「我选的是这个口」在两处（卡片与线）同时看得出来。 */
   selected?: boolean;
-  /** 端点槽位在哪一侧：`"right"`（默认）= 对外输入参数卡片，圆点骑跨卡片**右**缘
-   *  （线从卡片出发去宿主参数行）；`"left"` = 对外输出参数卡片，圆点骑跨卡片
-   *  **左**缘（线从宿主输出行进来）。
-   *
-   *  两侧共用同一张卡片的视觉与几何常量（行高 / 圆点尺寸 / 骑跨偏移），所以
-   *  输入卡片与输出卡片不会一边贴边、一边内缩 —— 换的只是行内顺序（名字与类型
-   *  贴着圆点站）与端点的定位侧。 */
+  /** 端点槽位在哪一侧：`"right"`（默认）= 对外输入卡片，圆点骑跨卡片**右**缘
+   *  （线从卡片去宿主参数行）；`"left"` = 对外输出卡片，圆点骑跨**左**缘（线从
+   *  宿主输出行进来）。两侧共用同一套视觉与几何常量（行高 / 圆点尺寸 / 骑跨偏移），
+   *  输入卡与输出卡不会一边贴边、一边内缩；换的只是行内顺序与端点定位侧。 */
   side?: "right" | "left";
   width: number;
   /** 该对外参数在当前模式下是否**已经落到了**宿主卡片的某一行。
@@ -146,7 +128,7 @@ export function WorkflowParamCard({
   return (
     /* `onSelect` 只做**选中高亮**（真正可交互的是 React Flow 的边），卡片是
        鼠标便捷落点 —— 卡上的动作按钮是 `<Button>`（§6.11 的 EXEMPT_SITES）。 */
-    /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- 选中高亮的便捷落点，不是交互本体 */
+    /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events, jsx_a11y/no-static-element-interactions -- 选中高亮的便捷落点，不是交互本体 */
     <div
       className="bg-card shadow-card relative flex flex-col rounded-lg border"
       data-selected={selected ? "true" : undefined}
@@ -186,15 +168,14 @@ export function WorkflowParamCard({
             boxShadow: `0 0 6px ${style.color}`,
           }}
         />
-        <span
-          className="text-ink-bright text-2xs min-w-0 flex-1 truncate font-semibold"
-          title={`${classLabel} · ${hostNodeId}`}
-        >
-          {label}
-          {idLabel !== undefined && idLabel !== "" && (
-            <span className="text-ink-faint text-3xs ml-1 font-mono font-normal">{idLabel}</span>
-          )}
-        </span>
+        <Hint label={`${classLabel} · ${hostNodeId}`}>
+          <span className="text-ink-bright text-2xs min-w-0 flex-1 truncate font-semibold">
+            {label}
+            {idLabel !== undefined && idLabel !== "" && (
+              <span className="text-ink-faint text-3xs ml-1 font-mono font-normal">{idLabel}</span>
+            )}
+          </span>
+        </Hint>
         {onReset && (
           <Hint
             label={
@@ -225,57 +206,47 @@ export function WorkflowParamCard({
         )}
       </div>
 
-      {/* ── 输出端口 ──
-          每行 = 一个对外口 + 它自己的圆点端点：圆点出去的是什么类型、叫什么
-          名字，看这一行即可。类型**恒取这个口自己的**（提示词 STRING、首帧图片
-          IMAGE、尺寸子口按形态），连上哪一行都不改口 —— 改的是线，不是口的类型；
-          落点那一行声明成什么类型在行的 title 里可查。
-          端点槽位（`endpoint`）压在这一行的右端，所以「类型 + 名称」整组**右对齐
-          到端点**：圆点就是这一行在说什么的那个口，名字与类型贴着它才读得出
-          「这颗点连到谁」。 */}
+      {/* ── 输出端口 ── 每行 = 一个对外口 + 它自己的圆点：圆点出去是什么类型、叫什么
+          名字看这一行即可。类型**恒取这个口自己的**（提示词 STRING、首帧 IMAGE、尺寸
+          子口按形态），连上哪一行都不改口 —— 改的是线；落点行声明的类型在行 title 里。
+          端点压在行右端，所以「类型 + 名称」整组右对齐到端点，才读得出这颗点连到谁。 */}
       <div className="flex flex-col px-2 pb-1">
         {outputPorts.map((port, index) => (
-          <div
-            /* `relative` 是端点定位的锚：注入的端点（画布上的 <Handle>、库内
-             *  的只读圆点）都以**这一行**为参照居中，而不是整张卡片 —— 否则
-             *  多行输出端口时圆点会全部叠在卡片中线，看不出连的是哪一行。 */
-            className={`text-2xs relative flex min-w-0 items-center gap-1.5 ${
-              side === "left" ? "justify-start" : "justify-end"
-            }`}
-            data-testid={`param-node-out-${entryId}-${index}`}
-            key={`${port.name}-${index}`}
-            style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
-            title={
-              /* 行上显示的是对外参数自己的名字（`display`）与类型（`type`）；
-               *  **落到工作流的哪一行**在这里可查（`ioKey`）—— 显示与落点是两件事，
-               *  行上不写内部键。落点那一行声明成别的类型时（首帧图片 → IMAGEUPLOAD
-               *  装载口）补一句，否则「类型不同」在界面上就没处查了。 */
-              rowTitle(port, side)
-            }
-          >
-            {/* 端点槽位与「名字 + 类型」的相对顺序跟着端点所在的一侧走：
-                圆点在左时槽位在前（DOM 顺序 = 视觉顺序），在右时槽位在后。 */}
-            {side === "left" ? endpoint?.(port, index) : null}
-            <span
-              className={`min-w-0 truncate ${
-                port.connected ? "text-ink-soft" : "text-ink-fainter"
+          <Hint key={`${port.name}-${index}`} label={rowTitle(port, side)}>
+            <div
+              /* `relative` 是端点定位的锚：注入的端点（画布上的 <Handle>、库内
+               *  的只读圆点）都以**这一行**为参照居中，而不是整张卡片 —— 否则
+               *  多行输出端口时圆点会全部叠在卡片中线，看不出连的是哪一行。 */
+              className={`text-2xs relative flex min-w-0 items-center gap-1.5 ${
+                side === "left" ? "justify-start" : "justify-end"
               }`}
+              data-testid={`param-node-out-${entryId}-${index}`}
+              style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
             >
-              {port.display ?? port.name}
-            </span>
-            <span
-              className="text-4xs shrink-0 rounded px-1 font-mono leading-3.5"
-              data-testid={`param-node-out-type-${entryId}-${index}`}
-              style={{
-                color: style.color,
-                background: `${style.color}1f`,
-                border: `1px solid ${style.color}44`,
-              }}
-            >
-              {port.type}
-            </span>
-            {side === "right" ? endpoint?.(port, index) : null}
-          </div>
+              {/* 端点槽位与「名字 + 类型」的相对顺序跟着端点所在的一侧走：
+                圆点在左时槽位在前（DOM 顺序 = 视觉顺序），在右时槽位在后。 */}
+              {side === "left" ? endpoint?.(port, index) : null}
+              <span
+                className={`min-w-0 truncate ${
+                  port.connected ? "text-ink-soft" : "text-ink-fainter"
+                }`}
+              >
+                {port.display ?? port.name}
+              </span>
+              <span
+                className="text-4xs shrink-0 rounded px-1 font-mono leading-3.5"
+                data-testid={`param-node-out-type-${entryId}-${index}`}
+                style={{
+                  color: style.color,
+                  background: `${style.color}1f`,
+                  border: `1px solid ${style.color}44`,
+                }}
+              >
+                {port.type}
+              </span>
+              {side === "right" ? endpoint?.(port, index) : null}
+            </div>
+          </Hint>
         ))}
       </div>
 

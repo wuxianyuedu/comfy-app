@@ -1,10 +1,7 @@
 /**
- * ComfyUI 端口口径门禁的自测（ISSUE #534 P1）。
- *
- * 为什么要有：这条门禁的价值全在**判定口径**上——它必须能拦下「默认端口被改回
- * 硬编码 / 两侧各写一份数字」，同时不误伤注释里解释历史口径的那两行。用「临时
- * 仓库 + 只放被测文件」跑真脚本，断言「该拦的拦、不该误伤的放过」，避免门禁
- * 自己变成误报源（成员会直接删掉误报的门禁，等于没有）。
+ * ComfyUI 端口口径门禁的自测（ISSUE #534 P1）：价值全在**判定口径**——必须拦下「默认端口被改回硬编码 /
+ * 两侧各写一份数字」，同时不误伤注释里解释历史口径的那两行。用「临时仓库 + 只放被测文件」跑真脚本，
+ * 断言「该拦的拦、不该误伤的放过」，避免门禁自己变成误报源（成员会直接删掉误报的门禁）。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -12,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-comfyui-port-contract.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-comfyui-port-contract.cjs");
 const tempDirs: Array<string> = [];
 
 /** 与真实仓库保持一致的四个判据文件（只保留被判据读到的部分）。 */
@@ -50,27 +47,34 @@ function scanner(overrides: Record<string, string> = {}) {
   const root = mkdtempSync(path.join(tmpdir(), "comfyui-port-"));
   tempDirs.push(root);
   mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   const files = { ...BASELINE_FILES, ...overrides };
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
     writeFileSync(abs, content);
   }
+  /** execFileSync 抛出的失败对象：只认对象这一层，字段缺省由 `??` 兜底。 */
+  function isExecFailure(v: unknown): v is Record<string, unknown> {
+    return typeof v === "object" && v !== null;
+  }
+
   const run = (): { ok: boolean; output: string } => {
     try {
       return {
         ok: true,
         output: execFileSync(
           process.execPath,
-          [path.join(root, "scripts", path.basename(SCRIPT))],
+          [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
           { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
         ),
       };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as { stderr?: string; stdout?: string };
-      return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+      const e: Record<string, unknown> = isExecFailure(error) ? error : {};
+      const stdout = typeof e.stdout === "string" ? e.stdout : "";
+      const stderr = typeof e.stderr === "string" ? e.stderr : "";
+      return { ok: false, output: `${stdout}${stderr}` };
     }
   };
   return { run, root };

@@ -232,7 +232,6 @@ export function parseSubgraphSlots(
 
   const innerNodes: Array<RawNode> = Array.isArray(sub.nodes) ? sub.nodes : [];
   for (const rn of innerNodes) {
-    // oxlint-disable-next-line strict-boolean-expressions -- rn.id 是外部 JSON 的 string|number，按「非空真值」判有无（0/空串视为无 id）
     if (!rn?.id) {
       continue;
     }
@@ -390,7 +389,6 @@ export function buildSubgraphGraph(
   }
 
   for (const rn of innerNodes) {
-    // oxlint-disable-next-line strict-boolean-expressions -- rn.id 是外部 JSON 的 string|number，按「非空真值」判有无（0/空串视为无 id）
     if (!rn?.id) {
       continue;
     }
@@ -419,12 +417,10 @@ export function buildSubgraphGraph(
        *  而不是空白行或错位行。 */
       const wvMap = pairWidgetValues(rn.inputs, rnWidgets);
       for (const inp of rn.inputs) {
-        // oxlint-disable-next-line strict-boolean-expressions -- inputs 元素来自外部 JSON，运行期可能是 null（类型收窄不覆盖），防御性判空
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        const isConn = inp.link != null;
+        const isConn = inp.link !== null && inp.link !== undefined;
         const widgetName =
           inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
         const widgetValue =
@@ -527,7 +523,6 @@ export function buildSubgraphGraph(
     const rawOutputs: Array<RawOutputEntry> = [];
     if (Array.isArray(rn.outputs)) {
       for (const o of rn.outputs) {
-        // oxlint-disable-next-line strict-boolean-expressions -- outputs 元素来自外部 JSON，运行期可能是 null（类型收窄不覆盖），防御性判空
         if (!o || typeof o.name !== "string") {
           continue;
         }
@@ -639,7 +634,7 @@ export function buildSubgraphGraph(
     return {
       id: nodeId,
       class_type: classType,
-      title: n._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
+      title: n._meta?.title ?? (isUuidClass ? "" : classType),
       is_subgraph: isUuidClass,
       raw_inputs: rawInputsById[nodeId] ?? [],
       is_input_endpoint: isInEp,

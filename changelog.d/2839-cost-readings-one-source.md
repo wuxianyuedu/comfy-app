@@ -17,8 +17,8 @@
   - 其余各处（规范里另外 8 处、`AGENTS.md`、`.githooks/pre-commit` 的挪档理由、
     `tests/check-docs-api.test.ts` / `tests/doc-check-hook-wiring.test.ts` /
     `tests/typedoc-run.test.ts` / `tests/generate-api-docs-args.test.ts` /
-    `scripts/typedoc-run.mjs` / `scripts/generate-api-docs.mjs` /
-    `scripts/fixed-structural-tests.mjs`）改成「**百秒级** + 见 §13.5.17」的形状。
+    `scripts/docs/typedoc-run.mjs` / `scripts/docs/generate-api-docs.mjs` /
+    `scripts/affected-tests/fixed-structural-tests.mjs`）改成「**百秒级** + 见 §13.5.17」的形状。
     用例名那条也一起改了（「不给普通提交加那 31s」→「…加一整轮重生成」）——
     理由写错了要连用例名一起改全，否则七处不一致比一处没注释更糟。
   - **历史论证那一族只加限定语、不改数**：§13.5.17 那张「钩子档实测」表列头现在明写

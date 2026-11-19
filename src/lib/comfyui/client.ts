@@ -24,6 +24,7 @@
 // 定位实际端口。端口上有别的 ComfyUI 响应 ≠ 配置路径的实例在运行。
 
 import { clamp } from "~/lib/clamp";
+import { isRecord } from "~/lib/is-record";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { COMFYUI_DEFAULT_PORT, comfyUiBaseUrl, LOOPBACK_HOST } from "../endpoints";
 import { baseForLocalPort, queryInstanceByPath } from "./instance-port";
@@ -81,8 +82,11 @@ declare global {
 
 const probeLog: SilentProbeGlobal = (globalThis.__comfySilentProbeV1 ??= {});
 
-/** 探测链路的会话标识：只有**同一会话 + 同一批地址**才算「重复」。 */
-const SESSION_ID = Math.random().toString(36).slice(2, 10);
+/** 探测链路的会话标识：只有**同一会话 + 同一批地址**才算「重复」。
+ *  用 `crypto.randomUUID()` 而不是 `Math.random()`：这串只是防刷屏的日志键，
+ *  但 CodeQL `js/insecure-randomness`（#15）认的是「安全上下文里的弱随机」；
+ *  安全随机源在本链路零成本（Node 24 / 现代浏览器都自带 `globalThis.crypto`）。 */
+const SESSION_ID = globalThis.crypto.randomUUID();
 
 /** 本次「探测全落空」是否值得再写一条日志（同一批地址、同一静默期内不重复写）。
  *  导出供回归测试直接断言节流判据。 */
@@ -103,6 +107,61 @@ export function shouldLogProbeMiss(key: string, now: number = Date.now()): boole
 export function resetProbeMissLog(): void {
   probeLog.key = undefined;
   probeLog.lastAt = undefined;
+}
+
+/** 「实例在启动中」进度行的聚合窗口：同一启动场次首条照发，其后每 30s 追一条
+ *  带已等待时长的进度行（ISSUE #4149：70s 窗口 230 条同文 INFO 把其它行顶出
+ *  可视窗口——逐拍「还没就绪」语义上是进度不是事件）。 */
+export const COMFY_STARTING_PROGRESS_MS = 30_000;
+
+/** 上一条「启动中」日志的场次状态：pid 定场次、since 定起点、lastAt 定上次写入。 */
+type StartingProgressGlobal = { lastAt?: number; pid?: number | null; since?: number };
+
+declare global {
+  var __comfyStartingLogV1: StartingProgressGlobal | undefined;
+}
+
+const startingLog: StartingProgressGlobal = (globalThis.__comfyStartingLogV1 ??= {});
+
+/** 本拍该写哪种「启动中」日志。
+ *
+ *  与 `shouldLogProbeMiss` 同族（防刷屏写入开关，不参与任何判定）：同一 pid 的
+ *  连续「进程在、端口未绑定」拍里，首条照发（文本不变，既有 grep / 面板口径不动），
+ *  其后按 {@link COMFY_STARTING_PROGRESS_MS} 聚成一条进度行；pid 变了（换实例）
+ *  视为新场次、重新从首条开始。`now` 可注入供回归测试逐拍推进时钟。
+ *
+ *  @param {number | null} pid 实例进程 PID（查询不到时 null：null 与 null 仍算同一场次）
+ *  @param {number} [now] 当前时刻（ms）
+ *  @returns {{ kind: "first", elapsedMs: 0 } | { kind: "progress", elapsedMs: number } | { kind: "silent" }}
+ */
+export function startingLogAction(
+  pid: number | null,
+  now: number = Date.now(),
+): { elapsedMs: 0; kind: "first" } | { elapsedMs: number; kind: "progress" } | { kind: "silent" } {
+  /* 解构成局部常量再判：可选字段的窄化只在局部值上成立（globalThis 上的
+   * 读写面太宽，TS 不会沿字段收窄）。 */
+  const { pid: priorPid, since: priorSince, lastAt: priorLastAt } = startingLog;
+  const isContinuation =
+    priorPid !== undefined && priorSince !== undefined && priorLastAt !== undefined;
+  if (!isContinuation || priorPid !== pid) {
+    startingLog.pid = pid;
+    startingLog.since = now;
+    startingLog.lastAt = now;
+    return { kind: "first", elapsedMs: 0 };
+  }
+  const elapsedMs = now - priorSince;
+  if (now - priorLastAt >= COMFY_STARTING_PROGRESS_MS) {
+    startingLog.lastAt = now;
+    return { kind: "progress", elapsedMs };
+  }
+  return { kind: "silent" };
+}
+
+/** 测试注入点：清掉「启动中」聚合状态（用例之间互不污染）。 */
+export function resetStartingLog(): void {
+  startingLog.pid = undefined;
+  startingLog.since = undefined;
+  startingLog.lastAt = undefined;
 }
 
 /**
@@ -186,9 +245,10 @@ export async function resolveComfyBase(): Promise<string> {
   if (comfyuiPath) {
     const found = await queryInstanceByPath(comfyuiPath);
     const portBase = baseForLocalPort(found.port);
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (found.port != null && portBase !== null) {
+    if (found.port !== null && found.port !== undefined && portBase !== null) {
       _resolvedBase = portBase;
+      /* 终态：端口已绑定，「启动中」场次随之结束——下一次启动重新从首条开始。 */
+      resetStartingLog();
       logger.info(
         `[comfyui] Connected to configured instance on :${found.port} (pid=${found.pid}, via=${found.via})`,
       );
@@ -198,10 +258,23 @@ export async function resolveComfyBase(): Promise<string> {
       /* 进程在但端口未绑定（仍在加载）——先按配置地址返回给调用方试一次；
        * 不要把这次「还在启动」的结论缓存住，否则 ComfyUI 稍后绑定端口 / 落在
        * 偏移端口上时，本进程会一直沿用这个连不上的地址（见 probeComfyUi 的
-       * 按次探测口径）。 */
-      logger.info(
-        `[comfyui] Configured instance (pid=${found.pid}, via=${found.via}) starting, port not bound yet`,
-      );
+       * 按次探测口径）。
+       *
+       * 日志按场次聚合（ISSUE #4149）：状态轮询每拍都会重进本分支，逐拍一条
+       * INFO 是进度不是事件 —— 同场次首条照发（文本不变），其后每 30s 一条
+       * 带已等待时长的进度行；终态由下方的「Connected …」承担（端口绑定后
+       * 本分支不再被走到），场次随之清零。 */
+      const action = startingLogAction(found.pid);
+      if (action.kind === "first") {
+        logger.info(
+          `[comfyui] Configured instance (pid=${found.pid}, via=${found.via}) starting, port not bound yet`,
+        );
+      } else if (action.kind === "progress") {
+        logger.info(
+          `[comfyui] 已等待 ${Math.round(action.elapsedMs / 1000)}s，仍未绑定端口` +
+            `（pid=${found.pid}, via=${found.via}）`,
+        );
+      }
       return comfyUiBaseUrl(configuredPort);
     }
     /* 没命中的两种含义必须分清（都是「不抛错」的老结论，见 ISSUE #344）：
@@ -224,6 +297,8 @@ export async function resolveComfyBase(): Promise<string> {
   if (await probePort(host, configuredPort)) {
     _resolvedBase =
       host === LOOPBACK_HOST ? comfyUiBaseUrl(configuredPort) : `http://${host}:${configuredPort}`;
+    /* 终态：同上，端口应答即场次结束。 */
+    resetStartingLog();
     logger.info(`[comfyui] Connected on configured port :${configuredPort}`);
     return _resolvedBase;
   }
@@ -233,10 +308,13 @@ export async function resolveComfyBase(): Promise<string> {
    * `_resolvedBase` 就记住了，本函数不会再走到这里。 */
   const targets = probeTargets(configuredPort);
   for (const target of targets.slice(1)) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     if (!(await probePort(host, target.port))) {
       continue;
     }
     _resolvedBase = target.url;
+    /* 终态：偏移端口 / 窗口地址应答同样是「连上了」——场次结束。 */
+    resetStartingLog();
     if (target.port === COMFY_WINDOW_PORT) {
       logger.warn(
         `[comfyui] Configured port :${configuredPort} unreachable, falling back to the ComfyUI window at :${COMFY_WINDOW_PORT}`,
@@ -288,14 +366,20 @@ export { probeComfyAtPort };
 
 export async function probeComfyBase(): Promise<string | null> {
   const cached = _resolvedBase;
+  let afterResolve: string | null = cached;
   try {
     const base = await resolveComfyBase();
+    afterResolve = _resolvedBase;
     return await probeBaseOnce(base);
   } finally {
     /* 还原会话缓存：按次探测不得污染「本次会话连哪个地址」的粘性结论。
-     * 探测本身已经写入了 `_resolvedBase`（resolveComfyBase 的既有行为），
-     * 这里回滚成探测前的值。 */
-    _resolvedBase = cached;
+     * 只回滚**本次探测链写入**的值（_resolvedBase 仍是 resolveComfyBase
+     * 返回后的那个）：探测期间第三方（uploadImage / interrupt 的
+     * resolveComfyBase）刚写入的新发现不覆盖——原先的无条件回滚会把它
+     * 践踏掉，下一拍又得重新全量探测（ISSUE #3876）。 */
+    if (_resolvedBase === afterResolve) {
+      _resolvedBase = cached;
+    }
   }
 }
 
@@ -328,16 +412,31 @@ export function resetComfyBase(): void {
 
 /** `http(s)://host:port` → `ws(s)://host:port`（ComfyUI 的 /api/ws 挂在那个地址下）。 */
 export function toWsBase(httpBase: string): string {
-  return httpBase.replace(/^http(s?):\/\//i, (_m, s) => `ws${s}://`);
+  /* 只换协议头，不再用带捕获组的 replace 回调：`String#replace` 回调的第二
+   * 个参数是**第一个捕获组字符串**、命名组对象在最后一个参数，按 `(_m, { s })`
+   * 写会从字符串上解构出 `undefined`，拼出 `wsundefined://…` —— `new WebSocket()`
+   * 直接抛协议错误且被下游静默重试，表现成「WS 永不就绪、队列任务永不领取」
+   * （daily 全量E2E 的 60s 超时）。 */
+  if (/^https:/i.test(httpBase)) {
+    return httpBase.replace(/^https/i, "wss");
+  }
+  if (/^http:/i.test(httpBase)) {
+    return httpBase.replace(/^http/i, "ws");
+  }
+  return httpBase;
 }
 
 export async function getHistory(promptId: string): Promise<Record<string, unknown>> {
-  const res = await fetch(`${comfyBase()}/api/history/${promptId}`, {
+  /* promptId 来自 ComfyUI / comfy-cli 回传的 prompt_id，只按**路径段**编码后再拼 URL
+   * （与 `getModels` 的 folder 同一口径）。裸拼会让 `../`、`?` 改写请求路径 ——
+   * CodeQL #12（js/request-forgery）报的就是这一格。host 仍是用户配置的 ComfyUI
+   * 地址（这是本应用的用途，不是攻击面），要收的只是这段路径。 */
+  const res = await fetch(`${comfyBase()}/api/history/${encodeURIComponent(promptId)}`, {
     // 本地 ComfyUI 正常秒回；此超时只兜「连上却不返回」的病态挂死，给足余量。
     signal: AbortSignal.timeout(15_000),
   });
-  /* SAFETY: 类型断言已复核 */
-  return (await res.json()) as Record<string, unknown>;
+  const raw: unknown = await res.json();
+  return isRecord(raw) ? raw : {};
 }
 
 /** `getView` 的失败带着 ComfyUI 回的状态码。
@@ -360,9 +459,9 @@ export async function getView(filename: string, subfolder: string, type: string)
 
   url.searchParams.set("filename", filename);
 
-  url.searchParams.set("subfolder", subfolder ?? "");
+  url.searchParams.set("subfolder", subfolder);
 
-  url.searchParams.set("type", type ?? "");
+  url.searchParams.set("type", type);
 
   const res = await fetch(url.toString(), {
     // 取图/视频字节，大图或视频可能慢；给足余量，只挡真正的无限悬挂。
@@ -376,6 +475,11 @@ export async function getView(filename: string, subfolder: string, type: string)
   return Buffer.from(await res.arrayBuffer());
 }
 
+/** 整个数组都是字符串才算合法（有一个坏元素就整体回落，保持「空列表」语义）。 */
+function isStringList(value: unknown): value is Array<string> {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
 // 返回某个模型目录在磁盘上的真实文件名列表。
 export async function listModels(folder: string): Promise<Array<string>> {
   try {
@@ -385,9 +489,8 @@ export async function listModels(folder: string): Promise<Array<string>> {
     if (!res.ok) {
       return [];
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as Array<string>;
-    return Array.isArray(data) ? data : [];
+    const raw: unknown = await res.json();
+    return isStringList(raw) ? raw : [];
   } catch {
     return [];
   }
@@ -410,10 +513,9 @@ export async function listModelFolders(): Promise<Array<string>> {
     if (!res.ok) {
       return [];
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as Array<string>;
-    return Array.isArray(data)
-      ? data.filter((datum) => typeof datum === "string" && datum.length > 0)
+    const raw: unknown = await res.json();
+    return Array.isArray(raw)
+      ? raw.filter((datum): datum is string => typeof datum === "string" && datum.length > 0)
       : [];
   } catch {
     return [];
@@ -438,10 +540,8 @@ export async function uploadImage(
   if (!res.ok) {
     throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
   }
-  /* SAFETY: 类型断言已复核 */
-  return (await res.json()) as {
-    name?: string;
-  };
+  const raw: unknown = await res.json();
+  return isRecord(raw) && typeof raw.name === "string" ? { name: raw.name } : {};
 }
 
 /** 让 ComfyUI 中断**当前正在执行的这一轮**（全局停、不带 prompt 参数——所以
@@ -496,6 +596,20 @@ type ComfyDevice = {
   vram_used?: number;
 };
 
+/** 单块设备的形状收窄：可选字段出现时必须是对应类型。 */
+function isComfyDevice(value: unknown): value is ComfyDevice {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    (value.name === undefined || typeof value.name === "string") &&
+    (value.type === undefined || typeof value.type === "string") &&
+    (value.vram_free === undefined || typeof value.vram_free === "number") &&
+    (value.vram_total === undefined || typeof value.vram_total === "number") &&
+    (value.vram_used === undefined || typeof value.vram_used === "number")
+  );
+}
+
 function pickGpu(devices: Array<ComfyDevice> | undefined): ComfyDevice | undefined {
   if (!Array.isArray(devices) || devices.length === 0) {
     return undefined;
@@ -517,17 +631,18 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
     if (!res.ok) {
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      devices?: Array<ComfyDevice>;
-      system?: { ram_free?: number; ram_total?: number };
-    };
-    const dev = pickGpu(data.devices);
+    const raw: unknown = await res.json();
+    const data: Record<string, unknown> = isRecord(raw) ? raw : {};
+    const devices: Array<ComfyDevice> = Array.isArray(data.devices)
+      ? data.devices.filter(isComfyDevice)
+      : [];
+    const system: Record<string, unknown> = isRecord(data.system) ? data.system : {};
+    const dev = pickGpu(devices);
     const vramTotal = dev?.vram_total ?? 0;
     const vramFree = clamp(dev?.vram_free ?? vramTotal, 0, vramTotal);
     const vramUsed = vramTotal - vramFree;
-    const ramTotal = data.system?.ram_total ?? 0;
-    const ramFree = data.system?.ram_free ?? 0;
+    const ramTotal = typeof system.ram_total === "number" ? system.ram_total : 0;
+    const ramFree = typeof system.ram_free === "number" ? system.ram_free : 0;
     // 并行查 nvidia-smi 物理专用显存：nvidia-smi 反映本机物理 GPU，与
     // ComfyUI 的 CUDA 逻辑口径并列展示供对照。查询失败 / 非 NVIDIA 卡
     // 返回 null，不影响 ComfyUI 主数据与在线状态。
@@ -538,10 +653,12 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
       vramUsed,
       vramFree,
       vramTotal,
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      smiVramUsed: smi?.usedMiB == null ? undefined : smi.usedMiB * 1024 * 1024,
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      smiVramTotal: smi?.totalMiB == null ? undefined : smi.totalMiB * 1024 * 1024,
+      smiVramUsed:
+        smi?.usedMiB === null || smi?.usedMiB === undefined ? undefined : smi.usedMiB * 1024 * 1024,
+      smiVramTotal:
+        smi?.totalMiB === null || smi?.totalMiB === undefined
+          ? undefined
+          : smi.totalMiB * 1024 * 1024,
       ramUsed: ramTotal > 0 ? Math.max(0, ramTotal - ramFree) : 0,
       ramTotal,
     };

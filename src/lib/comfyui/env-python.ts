@@ -39,7 +39,7 @@ export type PyvenvConfig = {
  */
 export function parsePyvenvCfg(content: string): PyvenvConfig {
   const out: PyvenvConfig = { home: null, executable: null };
-  for (const rawLine of (content ?? "").split(/\r?\n/)) {
+  for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) {
       continue;

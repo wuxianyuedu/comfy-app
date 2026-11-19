@@ -1,25 +1,7 @@
 /**
- * 平台侧「装依赖」这一跳的**跳过判据**（ISSUE #1981 收尾）。
- *
- * 为什么这条判据必须有：`.cnb.yml` 里那一步的逻辑**一条判据都测不到它**（配置只在
- * 平台上跑，本地一个执行者都没有）—— 这条链上已经为此付过两次学费（§13.5.3.5 里
- * 那两段就地 PowerShell 都红过）。所以判定收在 `scripts/ci-install-deps.mjs`，
- * 这里用注入的「变更清单 + 盘上有没有 node_modules」直接跑它，不碰真网络、不碰真安装。
- *
- * 判的是三个方向，每一个都有自己的失效形态：
- *
- *   ① **该装的时候必须装** —— 依赖面被碰、`node_modules` 不在、拿不到变更清单。
- *      失效形态最贵：拿一个陈旧的 `node_modules` 去跑门禁，红法全在别处（§13.5.13 同族）。
- *   ② **不该装的时候必须跳过** —— 一行 `src/` 都不碰的 PR 不该为一跳空操作付钱。
- *      失效形态是「收窄看起来做了、其实一次都没生效」。
- *   ③ **「退 0 但清单为空」不等于「没变」** —— PR 事件上三点 diff 的空集形态退 0，
- *      照「退 0 就采信」会把它读成「什么都没变」（见 `changedFiles` 里那段 ⚠️）。
- *
- * 另有第四组（ISSUE #2010）：**全新 clone 上唯一真正生效的那道闸**是
- * 「装出来的那一套 ⇄ 现在的依赖面」的指纹比对 —— 平台侧每一次构建都是全新 clone，
- * 于是「依赖面没碰就跳过」这条判据此前**一次都没生效过**（实测固定 59~61s）。
- *
- * 口径见规范 §13.5.20。
+ * 平台侧「装依赖」的跳过判据（ISSUE #1981 / #2010）。`.cnb.yml` 那一步只在平台跑、本地无执行者
+ * （§13.5.3.5 已付两次学费）⇒ 判定收在 `scripts/ci/ci-install-deps.mjs`，用注入的「变更清单 + node_modules」
+ * 跑它。失效面：该装却装陈旧依赖、不该装没跳过、退 0 空清单被当成没变；全新 clone 只靠指纹比对（#2010）。
  */
 import fs from "node:fs";
 import type { Dirent } from "node:fs";
@@ -37,9 +19,8 @@ import {
   main,
   pnpmInstallFingerprint,
   readInstallFingerprint,
-  runInstallWithSlot,
   writeInstallFingerprint,
-} from "../scripts/ci-install-deps.mjs";
+} from "../scripts/ci/ci-install-deps.mjs";
 
 /** 造一个「git 调用」替身：按参数给出退出码与 stdout。 */
 const gitStub =
@@ -63,6 +44,19 @@ function installStub() {
       return calls;
     },
   };
+}
+
+/** 外来值先落 `unknown`，过这道守卫才谈读字段（不用类型断言）。 */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** 只收「键 → 字符串」的那一格：`dependencies` / `scripts` 都是这个形状。 */
+function isStringRecord(v: unknown): v is Record<string, string> {
+  if (!isRecord(v)) {
+    return false;
+  }
+  return Object.values(v).every((item) => typeof item === "string");
 }
 
 describe("依赖面清单", () => {
@@ -195,12 +189,20 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  /* SAFETY: 类型断言已复核 */
-  const readPkg = () =>
-    JSON.parse(fs.readFileSync(path.join(tmp, "package.json"), "utf8")) as {
-      dependencies: Record<string, string>;
-      scripts: Record<string, string>;
-    };
+  /* 读回整份 `package.json`：`dependencies` / `scripts` 两格收窄成「键 → 字符串」，
+   * 其余键（`name` 等）原样带着走 —— 写回时少一个键，指纹就变了。 */
+  const readPkg = () => {
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(tmp, "package.json"), "utf8"));
+    if (!isRecord(parsed)) {
+      throw new TypeError("package.json 不是对象");
+    }
+    const dependencies = parsed.dependencies;
+    const scripts = parsed.scripts;
+    if (!isStringRecord(dependencies) || !isStringRecord(scripts)) {
+      throw new TypeError("package.json 的 dependencies / scripts 不是「键 → 字符串」");
+    }
+    return { parsed, dependencies, scripts };
+  };
 
   it("同一份依赖面 ⇒ 同一个指纹；锁文件改一个字 ⇒ 变", () => {
     const a = pnpmInstallFingerprint(tmp);
@@ -212,8 +214,9 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
   it("只改 scripts ⇒ 指纹不变：它不在安装闭包里（ISSUE #2489）", () => {
     const before = pnpmInstallFingerprint(tmp);
     const pkg = readPkg();
-    pkg.scripts["setup:comfy-cli-venv"] = "node scripts/setup-comfy-cli-venv.mjs";
-    fs.writeFileSync(path.join(tmp, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
+    pkg.scripts["setup:comfy-cli-venv"] = "node scripts/devtools/setup-comfy-cli-venv.mjs";
+    /* 回写**整份** `package.json`（`name` 等其余键一个都不能少 —— 少了指纹就换键）。 */
+    fs.writeFileSync(path.join(tmp, "package.json"), `${JSON.stringify(pkg.parsed, null, 2)}\n`);
     expect(pnpmInstallFingerprint(tmp), "scripts 变也换键 ⇒ 白付一次整装，而槽的内容逐字不变").toBe(
       before,
     );
@@ -223,7 +226,7 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
     const before = pnpmInstallFingerprint(tmp);
     const pkg = readPkg();
     pkg.dependencies.leftpad = "1.0.1";
-    fs.writeFileSync(path.join(tmp, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
+    fs.writeFileSync(path.join(tmp, "package.json"), `${JSON.stringify(pkg.parsed, null, 2)}\n`);
     expect(pnpmInstallFingerprint(tmp)).not.toBe(before);
   });
 
@@ -357,91 +360,9 @@ function makeInstalledRoot(): string {
 }
 
 /**
- * 执行档的三条出口都在日志里（规范 §13.5.3.4.3 那句「往上读收益时，出处只能是那几句打印」）。
- *
- * 这一组钉的是**读数在场**，不是收益大小：每日那一格现在按策略不接槽（ISSUE #2081），
- * 而旧实现里「开关没拨」这一条**什么都不打印** —— 于是它在日志里与「什么都没发生」逐字同形，
- * 下一个人分不清「按策略不接」与「配了槽却没接管」，只能靠猜。
- * 少一次读数比少一次收益更难查，所以这一句必须响亮。
- */
-describe("接槽执行档的三条出口", () => {
-  /** 收齐打印的替身。 */
-  function collector() {
-    const lines: Array<string> = [];
-    return {
-      write: (s: string) => lines.push(s),
-      get text() {
-        return lines.join("");
-      },
-    };
-  }
-
-  it("开关没拨：照常装，且把「按策略不接槽」打出来", async () => {
-    const stub = installStub();
-    const out = collector();
-    const code = await runInstallWithSlot(null, {
-      env: {},
-      write: out.write,
-      install: stub.run,
-    });
-    expect(code).toBe(0);
-    expect(stub.calls, "开关没拨也要真装一次 —— 每日那一格靠的就是这一跳").toBe(1);
-    expect(out.text).toContain("槽未接管（开关没拨");
-    expect(out.text).toContain("⇒ 照常装");
-    /* 那句话必须**点名是哪个开关**，且不许把理由写成某一条流水线的形状。
-     * 旧的写法是「—— 每日档后面背着 next build」：它在 `单跑E2E·安装依赖` /
-     * `单跑单测·安装依赖` / `打包·安装依赖` 那三格上念的是**别人的**理由（那三档没有
-     * 构建格），而读日志的人会把「我这一档后面背着构建」当成结论去处理。
-     * 分档的那条线是「后面有没有会真构建的格子」，那句话只许指向登记处，不许当场复述。 */
-    expect(out.text).toContain("COMFY_CI_SLOT");
-    expect(out.text).not.toContain("每日档后面背着");
-  });
-
-  it("只有 `1` 算拨开：写成 `0` 走的是同一句策略话术，而不是一句「接不上」", async () => {
-    const out = collector();
-    const code = await runInstallWithSlot(null, {
-      env: { COMFY_CI_SLOT: "0" },
-      write: out.write,
-      install: () => 0,
-    });
-    expect(code).toBe(0);
-    expect(out.text).toContain("开关没拨");
-  });
-
-  it("env 从注入读，不读进程全局（否则单测会随本机开关变结论）", async () => {
-    process.env.COMFY_CI_SLOT = "not-1";
-    try {
-      const out = collector();
-      await runInstallWithSlot(null, {
-        env: {},
-        write: out.write,
-        install: () => 0,
-      });
-      // 注入的是「没有这个键」，而进程里那条垃圾值不该把它读成别的档。
-      expect(out.text).toContain("槽未接管（开关没拨");
-    } finally {
-      delete process.env.COMFY_CI_SLOT;
-    }
-  });
-});
-
-/**
- * pnpm 的落点发现（ISSUE #2281）。
- *
- * ## 现场
- *
- * 同一台自托管节点、同一个时刻：开发者会话里 `pnpm -v` 一直正常（`C:\Users\…\pnpm`
- * 在 PATH 上），而平台上十几格齐刷刷写「pnpm 不可用」—— 那些格跑在**服务账号会话**
- * 里，它的 PATH 一条也不含 pnpm。两句话都对，所以「再补一条判据」读不懂这件事：
- * 缺的是「把 pnpm 放回 PATH」这一步。
- *
- * ## 钉住的四件事
- *
- * ① PATH 上本来就能跑 ⇒ **一次都不动 PATH**（不许为了省事无条件前插）；
- * ② PATH 上一个能跑的都没有、而 corepack 的落点里有 `pnpm-native.exe` ⇒ 把它的
- *    目录拼到最前，并且**真的起得来**（`-v` 退 0 且打出版本号才算）；
- * ③ 候选存在但起不来（shebang / `.cmd` 那一族）⇒ 不许当选，继续往后找；
- * ④ 哪儿都没有 ⇒ 如实报「问过哪几处」，并且**不装**（装是机器上的动作）。
+ * 执行档三条出口都进日志（§13.5.3.4.3：往上读收益时出处只能是那几句打印）。这一组钉「读数在场」：
+ * 每日那格按策略不接槽（ISSUE #2081），而旧实现「开关没拨」什么都不打印 ⇒ 与「什么都没发生」逐字
+ * 同形，下一个人分不清「按策略不接」与「配了槽没接管」。
  */
 describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", () => {
   /* 「盘上还有哪些**目录**」—— 落点必须先存在，里面才谈得上有没有候选。
@@ -463,15 +384,25 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
   });
 
   const LOCAL = path.join("C:", "Users", "svc", "AppData", "Local");
-  /* SAFETY: 类型断言已复核 */
-  const baseEnv = () =>
-    ({
-      LOCALAPPDATA: LOCAL,
-      PATH: "",
-    }) as unknown as NodeJS.ProcessEnv;
+  /* `ProcessEnv` 在本仓被 next 增强成「必带 `NODE_ENV`」⇒ 字面量直接给得进去，不必断言。
+   * `NODE_ENV` 不参与被测判据（它只读 `PATH` / `LOCALAPPDATA` / `USERPROFILE`）。 */
+  const baseEnv = (): NodeJS.ProcessEnv => ({
+    NODE_ENV: "test",
+    LOCALAPPDATA: LOCAL,
+    PATH: "",
+  });
   /** 只造得出 `isDirectory` 的那几项 —— 被测判据只用它，别的字段与结论无关。 */
-  /* SAFETY: 类型断言已复核 */
-  const dirEntry = (name: string) => ({ name, isDirectory: () => true }) as unknown as Dirent;
+  const dirEntry = (name: string): Dirent => ({
+    name,
+    parentPath: "",
+    isFile: () => false,
+    isDirectory: () => true,
+    isBlockDevice: () => false,
+    isCharacterDevice: () => false,
+    isSymbolicLink: () => false,
+    isFIFO: () => false,
+    isSocket: () => false,
+  });
 
   it("PATH 上本来就能跑 ⇒ 不动 PATH（不许无条件前插）", () => {
     dirs.clear();
@@ -571,25 +502,25 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
 });
 
 /**
- * 入口层不许绕过槽闸（ISSUE #2439）。
- *
- * 这条判据读的是**源码形状**，因为出事的那一笔（#2286）恰好是单测测不到的形态：
- * `main` 的 `install` 依赖有默认值（`runInstallWithSlot`），而入口层用 `{ install }`
- * 把它覆盖成裸 `runInstall` —— 单测都在测注入路径，谁也没传这个覆盖，于是
- * `.cnb.yml` 的开关还置着、`applySlot` 却在平台侧一次都不被问，每格退回全量安装。
- * 源码形状在这里是唯一测得到的现场。
+ * 入口层必须把「已亲眼看见 pnpm 起来」的探测事实传进安装（ISSUE #2281/#2439 的形态收口）。
+ * 旧口径是「不许绕过槽闸」；#3479 退役依赖槽后，同一处警戒换一个对象：探测结果不许被
+ * 裸调用丢掉 —— 而槽符号（runInstallWithSlot / applySlot / COMFY_CI_SLOT）不许残留在
+ * 脚本里（退役要剪干净，不留一条「看起来还在接槽」的死话术）。
  */
-describe("入口层不许绕过槽闸", () => {
+describe("入口层把探测事实传进安装，槽符号零残留（#3479）", () => {
   const source = fs.readFileSync(
-    fileURLToPath(new URL("../scripts/ci-install-deps.mjs", import.meta.url)),
+    fileURLToPath(new URL("../scripts/ci/ci-install-deps.mjs", import.meta.url)),
     "utf8",
   );
 
-  it("入口层的 install 必须是 runInstallWithSlot 的包装，探测结果作为依赖传进去", () => {
-    expect(source).toContain("runInstallWithSlot(boot.probing ?? null");
+  it("入口层的 install 必须是 runInstall(探测结果) 的直传", () => {
+    expect(source).toContain("runInstall(boot.probing ?? null)");
   });
 
-  it("不许再把裸 runInstall 直接当 main 的 install 依赖（#2286 的出事形状）", () => {
-    expect(source).not.toMatch(/install = \(\) => runInstall\(/);
+  it("槽符号零残留（退役剪干净：不留死话术、不留死开关）", () => {
+    expect(source).not.toContain("runInstallWithSlot");
+    expect(source).not.toContain("applySlot");
+    expect(source).not.toContain("COMFY_CI_SLOT");
+    expect(source).not.toContain("clearJobLink");
   });
 });

@@ -1,23 +1,10 @@
 "use client";
 
-// ── 工坊封装页签「流程测试」的表单（规范 §17.2 第③层：只渲染 + 上抛）───
-// 输入框由**该模式的契约口清单**逐口渲染 —— 与上方「工坊对外口一览」同一份
-//`status.entries`，**不看有没有落点**：
-// · 没落点的口照样能填（值是工坊的对外输入，落不落得下去由封装层按作者连线
-// 决定；落不下去时用工作流图内的默认值执行，不是「这一口不该出现」）；
-// · 图片口（参考图 / 首帧 / 尾帧）选本地文件 → 上传进 ComfyUI 输入目录，
-// 值以文件名落回该口。
-//
-// 此前这里按「已落点」过滤，只硬编码了提示词 / 负向 / 尺寸三格：负向提示词在
-// 上一行写着名字、下面却没有输入框；图生视频这类模式尺寸口没落点，连尺寸都
-// 选不了 —— 同一页面上「工坊能编辑的参数」与「测试能填的参数」成了两份清单。
-//
-// 两条口径：
-// · 表单只认`WorkshopExposedValues` 一种形状，读写都经
-//`exposedValueOf` /`withExposedValue` 这一个映射（契约口 id → 对外值字段），
-// 本组件里不再写第二遍「哪个 id 对应哪个字段」；
-// · 空字符串提交前一律剪掉（`pruneEmptyExposedValues`）：空串 = 用户没填，
-// 不该把工作流图里作者写好的负向提示词 / 首帧抹成空。
+// ── 工坊封装页签「流程测试」的表单（规范 §17.2 第③层：只渲染 + 上抛）──
+// 输入框由该模式的契约口清单逐口渲染（与上方「对外口一览」同一份 `status.entries`），
+// **不看有没有落点**：没落点照样能填，落不下去时用图内默认值；图片口选文件上传到
+// ComfyUI 输入目录，值以文件名落回该口。表单只认 `WorkshopExposedValues`，空串提交前
+// 剪掉（`pruneEmptyExposedValues`），免得抹掉作者写好的负向提示词 / 首帧。
 
 import { useCallback, useState } from "react";
 import { textHandler } from "~/lib/form-props";
@@ -26,12 +13,13 @@ import { runAsyncAction } from "~/lib/async-action";
 
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { Textarea } from "~/components/ui/textarea";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { mediaPreviewUrl } from "~/lib/media/media-url";
 import { readFileAsDataUrl } from "~/lib/file-io";
 import { NumberField } from "~/components/ui/number-field";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import { DEFAULT_SHOT_SIZE, type ShotSizeState } from "~/components/workshop/shot-size-config";
 import type { SizeScene } from "~/lib/media/size-presets";
@@ -97,8 +85,7 @@ export function EncapsulationTestForm({
     setTexts((prev) => withExposedValue(prev, id, next));
   };
 
-  /* 图片口的选取：`entryId` 与`file` 一起给，回调身份稳定（`useFilePicker`
-   * 的 Input 靠 props 身份做 memo，回调每次都变会让隐藏 input 反复卸载重挂）。 */
+  /* 图片口的选取：`entryId` 与`file` 一起给。 */
   const pickImage = useCallback(
     (entryId: string, file: File) => {
       setError("");
@@ -300,9 +287,9 @@ function ImageField({
     <div className="flex-col gap-1">
       <FieldLabel label={entry.label} unwired={entry.targetIoKey === null} />
       <div className="border-border bg-surface flex items-center gap-2 rounded-lg border px-2 py-1.5">
-        <span className="text-muted-foreground/70 text-3xs min-w-0 flex-1 truncate font-mono">
+        <TruncatedText className="text-muted-foreground/70 text-3xs min-w-0 flex-1 truncate font-mono">
           {displayValue(value)}
-        </span>
+        </TruncatedText>
         <Button
           className="text-2xs h-auto rounded-md px-2 py-1"
           disabled={disabled || uploading}
@@ -310,7 +297,7 @@ function ImageField({
         >
           {uploading ? "上传中…" : "选择图片"}
         </Button>
-        <picker.Input />
+        <FilePicker {...picker.inputProps} />
       </div>
       {previewUrl !== null && previewUrl !== "" && (
         <MediaThumbnail

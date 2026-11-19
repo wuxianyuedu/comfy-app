@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  SPLASH_ORIGINS,
-  corsHeadersFor,
-  isSplashOrigin,
-} from "./splash-origin";
+import { SPLASH_ORIGINS, corsHeadersFor, isSplashOrigin } from "./splash-origin";
 
 describe("isSplashOrigin / corsHeadersFor（/api/health 的跨域白名单）", () => {
   it("三个壳内源都算启动页（分平台，不分叉）", () => {

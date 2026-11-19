@@ -2,10 +2,12 @@
 
 import React from "react";
 import {
+  Blocks,
   BookOpen,
   Box,
   Cable,
   Film,
+  FlaskConical,
   Folder,
   FolderOpen,
   History,
@@ -18,33 +20,16 @@ import {
   Terminal,
 } from "lucide-react";
 
+import {
+  projectSidebarTabConfig,
+  sidebarTabModeOf,
+  type SidebarTabConfig,
+} from "~/lib/shell/sidebar-tab-behavior";
+
 /**
- * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。
- *
- * 三个分区（一处定义、多处消费，避免漂移）：
- *   · 全局项（`globalNavItems`）—— 主页侧栏顶部常驻，共十件：首页 / 模型 / 历史 /
- *     队列 / ComfyUI / 设置 / 工作流库 / 模型适配 / 模式契约 / 控制台。这十件事都是
- *     **项目无关**的，
- *     走视图页签能开能关 ——
- *     控制台也一样（它跑的是仓库级脚本命令 `pnpm test` / `drizzle-kit`，与「当前是
- *     哪个画布项目」无关，而同形的视图页签让「跑着长命令时切去别处看一眼」成立）；
- *     设置同理：它读写的是应用级配置（模型目录、Ollama、数据库、后端路径），
- *     换项目不该重配一遍；
- *     模型适配 / 模式契约此前是**全局浮层入口**（点开弹窗、不改视图），现在也是全局
- *     视图，排在「工作流库」之后、「控制台」之前 —— 理由与设置、控制台同一批：它们读写的
- *     是全局注册表（模式契约 =
- *     每种模式有哪些统一输入 / 输出；适配器 = 每个远端模型 × 每个模式的字段映射），
- *     与当前项目无关，而弹窗形态没有页签、不能一边配着别的一边对照工作流库；
- *     十件里**侧栏只列九件**（`sidebarNavItems`）—— 设置那一项撤出侧栏（顶栏右上角
- *     的应用菜单本就是它的入口），并标成 `transient`（切走即关）。它的另两个属性
- *     是「全局的」「能在页签条上开」—— 三件事各自独立，见 `NavItem` 的字段说明。
- *   · 项目页签（`projectTabs`）—— 只在「项目界面」顶部的标签栏出现（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片），
- *     不再进主页侧栏：它们是对「当前项目」的操作投影，脱离项目无意义；
- *   · 项目入口（`PROJECTS_ENTRY`）—— 侧栏最底部的「项目」分组（可展开列出已有项目）。
- *
- * 历史教训：此前用 `visibleNavItems(active)` 在「首页 vs 非首页」间切换项目页签的显隐，
- * 导致点「项目」等非首页视图时画布/工坊页签莫名复现、点首页又消失。改成「按分区归属」
- * 一次性决定每项出现在哪个界面，显隐不再随当前视图漂移。
+ * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。三个分区：全局项（`globalNavItems`，十二件项目无关的事；控制台跑仓库级脚本、设置读写应用级配置、模型适配/测试模型/模式契约读写全局配置、UI 控件总览是开发者的基元对照页，故都该能开能关）；项目页签（`projectTabs`，只在项目界面顶部的标签栏出现，脱离项目无意义）；项目入口（`PROJECTS_ENTRY`，侧栏底部「项目」分组）。
+ * 全局项共十二件，但侧栏只列十件（`sidebarNavItems`）：设置与 UI 控件总览撤出侧栏（设置的入口在顶栏应用菜单、控件总览的入口在命令面板）。「全局的 / 侧栏列不列」是两个独立属性；而「切走关不关」不再写在注册表里 —— 每个全局视图（首页除外）都在「设置 → 界面页签」的配置面里逐项配，见 `configurableTabViews` 与 `~/lib/shell/sidebar-tab-behavior`（ISSUE #3798）。
+ * 历史教训：此前用 `visibleNavItems(active)` 按「首页 vs 非首页」切换项目页签显隐，导致点非首页视图时画布/工坊复现、点首页又消失；现改为「按分区归属」一次性决定，显隐不随当前视图漂移。
  */
 export type WorkspaceView =
   | "home"
@@ -62,7 +47,9 @@ export type WorkspaceView =
   | "outputs"
   | "console"
   | "settings"
+  | "uiKit"
   | "model-adapters"
+  | "model-test"
   | "mode-contract";
 
 export type NavItem = {
@@ -77,39 +64,18 @@ export type NavItem = {
    */
   projectScoped?: boolean;
   /**
-   * 不在**侧栏**露面：入口在别处（当前只有「设置」这一项 —— 顶栏右上角的
-   * 应用菜单里已有它）。
+   * 不在**侧栏**露面：入口在别处（当前只有「设置」与「UI 控件总览」—— 前者在顶栏
+   * 应用菜单、后者在命令面板 / 「+」菜单）。与 `projectScoped` 是两条不同的判断，
+   * 别合并：那条管「归项目还是归全局」，本条只管「侧栏列不列」。
    *
-   * 与 `projectScoped` / `transient` 是三个不同的判断，别合并：`projectScoped`
-   * 管「归项目还是归全局」、`transient` 管「切走关不关」、本条只管「侧栏列不列」。
-   * 设置三样都沾一点却是三种答案里各挑一个 —— 全局的（不是项目的）、瞬时的
-   * （切走就关）、不在侧栏列表里（顶栏已有入口）。
+   * 「切走关不关」不在这里写：它归设置里的配置面管（ISSUE #3798），见
+   * `configurableTabViews`。非侧栏的界面与侧栏项同走一份配置，入口不同不改变
+   * 这件事 —— 否则「设置里配了、界面却不认」就是两处各说各话。
    */
   sidebarHidden?: boolean;
   /**
-   * 「瞬时页签」：切走就关，不常驻页签条。
-   *
-   * 页签存在的意义是**让打开的界面保持打开**（切回来接着用，不重开会丢态）——
-   * 那是对画布 / 工坊这类「有编辑态、跑着长任务」的界面说的。而设置 / 模型适配 /
-   * 模式契约是一类**读过即走的配置屏**：进来改一项、看一眼、就走，没人指望切走半天
-   * 再切回来时草稿还在原地。它们留在页签条上只贡献两件事：占宽、以及「我是不是
-   * 又开了个窗口」的错觉。
-   *
-   * 判据是**语义**不是实现：`transient` 的视图在页签条上照常有自己的一页（就是
-   * 当前这一页），也能手动关；只是**切到别处时它自动退场**。见 `workspace-tabs.ts`
-   * 的 `withTransientPruned`（那条不变式是「最多只有当前页可以是 transient」）。
-   */
-  transient?: boolean;
-  /**
-   * 屏内页头的标题。
-   *
-   * 「侧栏项 / 页签 /（桌面壳）窗口标题」用 `label` —— 那三处是**导航**，短名才排得下、
-   * 也才像导航；屏内页头有整行宽度，写全名更清楚。所以两者本来就该允许不同，
-   * 而允许不同的前提是**写在同一行里**：分居两个文件的后果是同一件事长出两个名字，
-   * 且没人知道哪个才是当前的（ISSUE #1423 的「队列」/「队列与运行」就是这么来的）。
-   *
-   * 不填 = 与 `label` 同字。填了就等于说「这一项的全名是这个」，由
-   * `pageHeaderTitle()` 统一取值 —— 视图里不再出现裸字面量。
+   * 屏内页头的标题。「侧栏项 / 页签 /（桌面壳）窗口标题」用 `label`（短名才像导航），屏内页头有整行宽度、写全名更清楚；两者允许不同，前提是写在同一行里 —— 分居两文件会长出两个名字且没人知道哪个是当前的（ISSUE #1423 的「队列」/「队列与运行」）。
+   * 不填 = 与 `label` 同字；填了由 `pageHeaderTitle()` 统一取值，视图里不再出现裸字面量。
    */
   viewLabel?: string;
 };
@@ -167,33 +133,34 @@ export const NAV_ITEMS: Array<NavItem> = [
     icon: <ListChecks size={22} strokeWidth={1.8} />,
   },
   {
-    /* ComfyUI（ISSUE #1900）：**出图后端自己的屏** —— 运行状态、启动 / 关闭 /
-       打开查看、以及每一次启动的日志。它从「设置 → 创作后端」搬出来独立成页：
-       那是改**配置**（装在哪、什么端口）的地方，而这里是**操作与观察**（开起来、
-       看它输出什么）的地方。两件事的节奏完全不同 —— 配一次 vs 每次跑图前都要看一
-       眼，挤在同一屏上的结果是改路径的人要先等一遍秒级探测、看日志的人要滚过一屏
-       输入框。
-       归**全局项**而不是项目页签：它管的是本机后端进程，与「当前是哪个画布项目」
-       无关；也不需要 `transient` —— 与队列同族（都在看「机器现在在干什么」），
-       切走再切回来该保留滚动位置与全屏日志态。 */
+    /* ComfyUI（ISSUE #1900）：**出图后端自己的屏** —— 运行状态、启动/关闭、打开查看、每次启动的日志。它从「设置 → 创作后端」搬出来独立成页：那边改**配置**（装在哪、什么端口），这边是**操作与观察**（配一次 vs 每次跑图前都要看一眼）。
+       归**全局项**而不是项目页签：它管本机后端进程，与当前画布项目无关；也不需要切走即关 —— 与队列同族，切走再回来该保留滚动位置与全屏日志态。 */
     id: "comfyui",
     label: "ComfyUI",
     enabled: true,
     icon: <Server size={22} strokeWidth={1.8} />,
   },
   {
-    /* 设置：与历史 / 队列 / 控制台同形的**视图**，不是浮层。
-     * 原先它是 workspace 里的一层全屏浮层（`SettingsOverlay`）—— 那层会盖住页签条，
-     * 且「当前在设置里」这件事只活在一个布尔值里：既没有页签可关，也不能一边开着
-     * 设置一边看别处。改成视图后，入口、高亮、可关性都和别的视图同一套契约。
-     * 仍归**全局项**而不是项目页签：它读写的是应用级配置（模型目录、Ollama、
-     * 数据库、后端路径），与「当前是哪个画布项目」无关。 */
+    /* 设置：与历史 / 队列 / 控制台同形的**视图**，不是浮层。原先的全屏浮层（`SettingsOverlay`）会盖住页签条，「当前在设置里」只活在一个布尔值里：没有页签可关，也不能一边开着设置一边看别处。
+     * 改成视图后入口、高亮、可关性与别的视图同一套契约。仍归**全局项**而非项目页签：它读写应用级配置（模型目录、Ollama、数据库、后端路径），与当前项目无关。
+     * 切走关不关由配置面决定（ISSUE #3798），出厂是「共享标签页」（读过即走）。 */
     id: "settings",
     label: "设置",
     enabled: true,
-    transient: true,
     sidebarHidden: true,
     icon: <Settings size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* UI 控件总览（ISSUE #3525/#3726/#3798）：开发者的基元对照页。原先走独立路由
+       `/ui-kit` 整窗跳转，会把工作区的页签条与关闭按钮整个盖住（ISSUE #3726）
+       —— 改成**视图页签**：命令面板 /「+」菜单里打开，页签条留在原地。
+       与设置同族：全局项、不进侧栏；但切走**不关**（#3798 的期望）—— 对照基元
+       时要来回切主题 / 切别处看效果，出厂默认「独立标签页」，同样可在设置里改。 */
+    id: "uiKit",
+    label: "UI 控件总览",
+    enabled: true,
+    sidebarHidden: true,
+    icon: <Blocks size={22} strokeWidth={1.8} />,
   },
   {
     /* 名字从「流程」改成「工作流库」（ISSUE #1847）：主页那张功能卡一直写的是
@@ -218,8 +185,16 @@ export const NAV_ITEMS: Array<NavItem> = [
     id: "model-adapters",
     label: "模型适配",
     enabled: true,
-    transient: true,
     icon: <Cable size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* 测试模型能力（#3590）：紧跟「模型适配」—— 这页消费的正是适配器配出来的
+       工坊同款输入 / 输出。放全局项（与模型适配同族）：它测的是「配置层」的模型
+       能力，与「当前是哪个画布项目」无关。 */
+    id: "model-test",
+    label: "测试模型",
+    enabled: true,
+    icon: <FlaskConical size={22} strokeWidth={1.8} />,
   },
   {
     /* 模式契约：与工作流库页头那枚「模式契约」按钮同图标 —— 同一件事在两处出现时
@@ -227,7 +202,6 @@ export const NAV_ITEMS: Array<NavItem> = [
     id: "mode-contract",
     label: "模式契约",
     enabled: true,
-    transient: true,
     icon: <Puzzle size={22} strokeWidth={1.8} />,
   },
   {
@@ -299,28 +273,84 @@ export function globalNavItems(): Array<NavItem> {
 }
 
 /**
- * 侧栏顶部实际渲染的那几项 —— `globalNavItems()` 去掉 `sidebarHidden`。
- *
- * 为什么要与 `globalNavItems()` 分开：那个出口有三个消费者（侧栏列表、页签条的
- * 「+」菜单、命令面板搜索），而用户的诉求只针对**侧栏** —— 设置从侧栏撤掉、
- * 入口归顶栏应用菜单，但它仍应能被「+」菜单和 ⌘K 搜到。收口在 `globalNavItems()`
- * 上会连带把那两处一起删掉（设置就成了只有顶栏一个入口的孤岛）。
+ * 侧栏顶部实际渲染的那几项 —— `globalNavItems()` 去掉 `sidebarHidden`。为何分开：那个出口有三个消费者（侧栏、页签条「+」菜单、命令面板），诉求只针对侧栏 —— 设置在「+」菜单与 ⌘K 里仍要能搜到，收口到 `globalNavItems()` 会把它变成只有顶栏一个入口的孤岛。
  */
 export function sidebarNavItems(): Array<NavItem> {
   return globalNavItems().filter((item) => item.sidebarHidden !== true);
 }
 
-/** 某视图是不是「瞬时页签」（切走即关，不常驻）—— 规则见 `NavItem.transient`。 */
-export function isTransientView(view: WorkspaceView): boolean {
-  return NAV_ITEMS.some((item) => item.id === view && item.transient === true);
+/**
+ * 侧栏常驻项的视图 id 集合（`sidebarNavItems()`）。
+ *
+ * 顶部视图页签条不再渲染这些页签（ISSUE #3740 的后续反馈）：它们在侧栏里恒在、可以切换与关闭，
+ * 页签条再列一遍只贡献占宽。设置 / UI 控件总览等瞬时页签与项目类页签仍照常进页签条。
+ */
+export function sidebarPinnedViewIds(): ReadonlySet<WorkspaceView> {
+  return new Set(sidebarNavItems().map((item) => item.id));
+}
+
+/** 首页视图 id —— 固定页签，恒在、不可关（`workspace-tabs.ts` 的 `HOME_VIEW` 同值）。 */
+const FIXED_HOME_VIEW: WorkspaceView = "home";
+
+/**
+ * **配置面内**的全局视图（可配「独立标签页 / 共享标签页」的那些界面，ISSUE #3623 / #3798）。
+ *
+ * 取 `globalNavItems()` 而不是 `sidebarNavItems()`：设置与 UI 控件总览虽不在侧栏
+ * 露面，但同样是常驻工作区的界面，用户想配「切走关不关」的诉求对它们一样成立
+ * （ISSUE #3798）。此前落在侧栏那份清单上，于是这两屏在设置里根本看不见、也没法
+ * 改 —— 「入口在别处」和「行为能不能配」是两件事，别混为一谈。
+ *
+ * 首页不在其中：它是**固定页签**（恒在、不可关），「切走即关」对它没有意义 ——
+ * 真按它那样做，「首页永远在列表里」这条不变式就得靠另一条规则兜着，而那条规则
+ * 本身没有任何用户可见的收益。
+ */
+export function configurableTabViews(): Array<NavItem> {
+  return globalNavItems().filter((item) => item.id !== FIXED_HOME_VIEW);
 }
 
 /**
- * 某视图屏内页头的标题 —— 与侧栏 / 页签 / 顶栏标题**同一个出处**。
+ * 某视图是不是「瞬时页签」（切走即关，不常驻）—— **只认配置面**（ISSUE #3798）。
  *
- * 为什么要有这个出口：屏内页头此前是各视图里的裸字面量（`<h1>历史记录</h1>`），
- * 与 `NAV_ITEMS` 里那一份没有任何判据把它们连起来 —— 于是同一件事长出两个名字
- * 时没有任何东西会红（ISSUE #1423）。视图改成从这里取，名字就只有一处能改。
+ * 此前是两层判据：配置优先，缺项时回落到注册表里写死的 `transient` 标记。那层兜底
+ * 正是非侧栏界面「设置里配了、界面却不认」的来源：设置与控件总览没有配置条目，
+ * 永远走注册表；把标记删掉又会让配置缺项时行为漂移。现在配置是**唯一事实来源**，
+ * `sidebar-tab-defaults.json` 为每个全局视图（首页除外）都给了档位，缺项即
+ * 「不瞬时」（独立标签页），代码里不再藏第二份意见。
+ *
+ * `config` 传的是**生效配置**（项目默认 + 本机覆盖）；服务端那份还没取回时，
+ * 调用方传项目默认（编译进产物的那份），于是「配置还没到」与「配置就是默认」
+ * 两件事在界面上长得一样 —— 那正是它们该有的样子（默认值本来就是用户看到的第一眼）。
+ */
+export function isTransientView(view: WorkspaceView, config: SidebarTabConfig): boolean {
+  return sidebarTabModeOf(view, config) === "shared";
+}
+
+/**
+ * 「这一项是不是瞬时页签」的判据 —— 由调用方注入。
+ *
+ * 为什么是参数而不是常量：配置化之后（ISSUE #3623）这个判据**因配置而异**，
+ * 纯函数层不该自己去读配置（那是 IO 面的事）。页签规则（`workspace-tabs.ts`）
+ * 只管「按判据行动」，判据由装配层给。
+ */
+export type TransientJudge = (view: WorkspaceView) => boolean;
+
+/** 按生效配置造一个判据（配置面是唯一事实来源，ISSUE #3798）。 */
+export function makeTransientJudge(config: SidebarTabConfig): TransientJudge {
+  return (view) => isTransientView(view, config);
+}
+
+/**
+ * 项目默认那份配置（编译进产物的那份）—— 「配置还没从服务端取回」时的兜底。
+ *
+ * 单独导出而不是让调用方各自 import JSON：项目默认的**形状**（哪些项、各是什么档）
+ * 只有这一份判据，调用方自己读 JSON 就会各自解析、各自兜底（§12.18）。
+ */
+export function defaultSidebarTabConfig(): SidebarTabConfig {
+  return projectSidebarTabConfig();
+}
+
+/**
+ * 某视图屏内页头的标题 —— 与侧栏 / 页签 / 顶栏标题**同一个出处**。此前页头是各视图里的裸字面量（`<h1>历史记录</h1>`），与 `NAV_ITEMS` 没有判据相连，同一件事长出两个名字时没东西会红（ISSUE #1423）；视图改从这里取，名字只有一处能改。
  */
 export function pageHeaderTitle(view: WorkspaceView): string {
   const item = NAV_ITEMS.find((it) => it.id === view);

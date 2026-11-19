@@ -7,10 +7,14 @@ import type * as TanStackQuery from "@tanstack/react-query";
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useWorkflowSaveMutation } from "./use-workflow-save";
+import {
+  useWorkflowSaveMutation,
+  type WorkflowSaveInput,
+  type WorkflowSaverMutateOptions,
+} from "./use-workflow-save";
 
-const mutate = vi.fn();
-const mutateAsync = vi.fn();
+const mutate = vi.fn<(input: WorkflowSaveInput, options?: WorkflowSaverMutateOptions) => void>();
+const mutateAsync = vi.fn<(input: WorkflowSaveInput) => Promise<unknown>>();
 
 /* 新集成（`@trpc/tanstack-react-query`）下 hub 交出来的是「options 工厂」而不是
  * hook，所以这里替两样：`useTRPC()` 给一个把 options 原样递出的工厂，`useMutation`
@@ -27,10 +31,8 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   return {
     ...actual,
     useMutation: () => ({
-      /* SAFETY: 类型断言已复核 */
-      mutate: (...args: Array<unknown>) => mutate(...args) as never,
-      /* SAFETY: 类型断言已复核 */
-      mutateAsync: (...args: Array<unknown>) => mutateAsync(...args) as never,
+      mutate,
+      mutateAsync,
       isPending: false,
       isIdle: true,
       isSuccess: false,

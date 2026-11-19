@@ -1,11 +1,7 @@
-// 首页「本机算力」卡的可见行为（规范 11.2：断言用户看得见什么，不断言内部 hook 细节）。
-//
-// 这张卡的价值不在「再画一遍百分比」，而在**把三种「看不见数」分开说**：
-//   ① 后端没跑 → 未运行的那句降级说明；
-//   ② 连着但首帧还没读到 → 「读取中」，不许报未运行；
-//   ③ 迟滞容忍期 → 显示的是上一次数据，得让用户知道数在变旧。
-// 用例逐个钉住，外加「缺读数的档一根条都不画」和「标签取自共享描述符（不是卡片自己再抄
-// 一遍字面量）」。
+// 首页「本机算力」卡的可见行为（规范 11.2：断言用户看得见什么，不断言内部 hook 细节）。这张卡的价值
+// 不在「再画一遍百分比」，而在**把三种「看不见数」分开说**：① 后端没跑 → 未运行的那句降级说明；
+// ② 连着但首帧还没读到 → 「读取中」，不许报未运行；③ 迟滞容忍期 → 显示上一次数据，得让用户知道数在变旧。
+// 用例逐个钉住，外加「缺读数的档一根条都不画」和「标签取自共享描述符（不是卡片自己再抄一遍字面量）」。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -31,9 +27,7 @@ afterEach(() => {
 
 const GIB = 1024 * 1024 * 1024;
 
-function viewModel(
-  over: Partial<ComfyStatusViewModel> = {},
-): ComfyStatusViewModel {
+function viewModel(over: Partial<ComfyStatusViewModel> = {}): ComfyStatusViewModel {
   const online = over.online ?? true;
   return {
     stats: {
@@ -61,11 +55,7 @@ describe("LocalComputeCard 有读数时", () => {
     readinessMock.mockReturnValue(viewModel());
     render(<LocalComputeCard />);
     const bars = screen.getAllByRole("progressbar");
-    expect(bars.map((b) => b.getAttribute("aria-valuenow"))).toEqual([
-      "25",
-      "8",
-      "50",
-    ]);
+    expect(bars.map((b) => b.getAttribute("aria-valuenow"))).toEqual(["25", "8", "50"]);
     /* 卡里的标签文案必须就是共享那一份（两处消费点不许各抄一遍字面量）。 */
     for (const metric of RESOURCE_METRICS) {
       expect(screen.getByText(metric.label)).toBeTruthy();

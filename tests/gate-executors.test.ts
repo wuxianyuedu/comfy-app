@@ -1,33 +1,20 @@
 /**
- * 判据 ⇄ 执行者的双向判据（ISSUE #1451 要求 2 / 规范 §13.5.12）。
- *
- * 这条门禁的价值全在**三个方向**都成立上，缺一个方向它就成了摆设：
- *   ① 判定型脚本无执行者 ⇒ 红（本次立案现场：`check-comment-language.cjs` 自称
- *      供钩子调用、文档也写着它在报红，而它一个执行者都没有）；
- *   ② 报告型脚本自称「供 pre-commit 调用」⇒ 红（报告档按定义恒 exit(0)，
- *      那句承诺必然是假的 —— 文档说谎而全绿比漏报更难发现）；
- *   ③ 台账双向拦：登记了却其实有执行者 ⇒ 红（台账是负债，不是赦免名单）。
- *
- * 为什么用「临时工作区 + 拷真脚本」而不是在本仓库里造探针：本仓库的任何临时文件
- * 都可能被并行的 C 组 `vitest run` 看见（用例之间共享同一份检出），而这里要为每条
- * 方向各造一次现场。拷进临时区后本仓库零副作用。
- *
- * 临时工作区走共享夹具 `defineGateRepo`（§11.16.1）。本文件有一处夹具选项盖不住的
- * 形状：临时区里必须**同时**放「全部判据脚本」，而**不能**放 `quality-gate.mjs` /
- * `.githooks/` / `package.json` 这些**执行者来源** —— 它们一旦在场，「某个探针没有
- * 执行者」这一档就造不出来（判据会把编排器当执行者来源读）。所以过滤拷贝写在
- * `setup` 里，而不是拿 `copy` 整目录往里灌（见那份函数的注释）。
- *
- * 规范：docs/standards/13-提交与-code-review.md §13.5.12
- */
+ * 判据 ⇄ 执行者的双向判据（ISSUE #1451 要求 2 / 规范 §13.5.12）。三向缺一即摆设：①判定型脚本无执行者 ⇒ 红
+ * （现场 `check-comment-language.cjs` 自称供钩子调用、文档也说它在报红，却一个执行者都没有）；②报告型脚本
+ * 自称「供 pre-commit 调用」⇒ 红（报告档按定义恒 exit(0)，承诺必假；文档说谎而全绿比漏报更难发现）；③台账
+ * 双向拦：登记了却其实有执行者 ⇒ 红（台账是负债，不是赦免名单）。用例在临时区拷真脚本跑（本仓临时文件会被并行 C 组 `vitest run` 看见）；临时区只放判据脚本，不放 `quality-gate.mjs` / `.githooks/` / `package.json`。 */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { defineGateRepo, describe } from "./helpers/gate-repo";
+import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 const REPO_ROOT = process.cwd();
-const SCRIPT_NAME = "check-gate-executors.cjs";
+/* 判据脚本在 `scripts/` 里的落点（带域子目录，ISSUE #3930）：本文件在多处以它拼绝对路径跑判据、
+ * 又以它过滤「名字族」那一半盘点面 —— 域布局之后只写 basename 会让每一处都 `${ROOT}/scripts/<名>`
+ * 拼出个不存在的路径，而读数长得像判据坏了。 */
+const SCRIPT_REL = "gates/check-gate-executors.cjs";
 
 /** 判据脚本的识别口径与脚本自身保持一致（前缀族）。 */
 const GATE_PREFIXES = [
@@ -39,20 +26,19 @@ const GATE_PREFIXES = [
 ];
 
 /**
- * 把**判据脚本本体**拷进临时工作区的 `scripts/`（台账由用例自己写）。
- *
- * 为什么不用夹具的 `copy` 整目录灌 `scripts/`：那会把 `quality-gate.mjs` /
- * `quality-gate.ps1` 一并带进来，而这两份正是本判据的**执行者来源**（以及
- * `.githooks/` 与 `package.json` 同族）。它们在临时区里一出现，「某个探针一个
- * 执行者都没有」那一档就被喂成了「有执行者」，用例测的东西当场变成别的东西。
- * 所以这里的过滤是**判据语义的一部分**，不是图省事。
- */
+ * 把判据脚本本体拷进临时工作区的 `scripts/`（台账由用例自己写）。为什么不用夹具的 `copy` 整目录灌 `scripts/`：
+ * 那会把 `quality-gate.mjs` / `quality-gate.ps1` 带进来，而它们是本判据的**执行者来源**（`.githooks/` 与
+ * `package.json` 同族）；它们一出现，「某个探针一个执行者都没有」这一档就被喂成「有执行者」，用例测的东西
+ * 当场变成别的东西 —— 所以这里的过滤是**判据语义的一部分**，不是图省事。 */
 function copyGateScripts(repo: { dir: string }): void {
   const srcScripts = join(REPO_ROOT, "scripts");
   const dstScripts = join(repo.dir, "scripts");
   mkdirSync(dstScripts, { recursive: true });
   for (const entry of readdirSync(srcScripts)) {
-    const isGate = /\.(cjs|mjs)$/.test(entry) && GATE_PREFIXES.some((p) => entry.startsWith(p));
+    /* 只捞顶层：判据按家族归入 `scripts/<域>/` 之后（#3930），这里要造的是「临时区里
+     * 一个判据脚本都没有」那一档，而顶层的夹具探针（`check-a.cjs` 一族）正是为它准备的。
+     * 子目录里的真判据不该进临时区 —— 它们一出现，「某个探针一个执行者都没有」当场变成别的东西。 */
+    const isGate = /\.(?:cjs|mjs)$/.test(entry) && GATE_PREFIXES.some((p) => entry.startsWith(p));
     if (isGate) {
       copyFileSync(join(srcScripts, entry), join(dstScripts, entry));
     }
@@ -60,19 +46,17 @@ function copyGateScripts(repo: { dir: string }): void {
 }
 
 const { test, expect } = defineGateRepo({
-  script: SCRIPT_NAME,
+  script: SCRIPT_REL,
   workdir: "gate-executors",
   setup: (repo) => {
     copyGateScripts(repo);
-    /* 台账原样带上（临时区里它就是「当前台账」）。
-     * 判据共用的扫描读取器 `gate-scan-read.cjs` 以 `gate-` 开头而不以 `check-` 开头，
-     * `copyGateScripts` 的前缀循环不会带它 —— 缺了它本判据会以 `MODULE_NOT_FOUND`
-     * 崩在临时区里，读起来像「台账判据坏了」，实际是夹具少一个文件。
-     * 它由夹具的 `copyGateDeps` **自动补齐**（沿脚本的 `require("./x.cjs")` 递归），
-     * 所以这里不必再抄一遍。 */
+    /* 台账原样带上（临时区里它就是「当前台账」）。共用扫描读取器 `gate-scan-read.cjs` 以 `gate-` 而非
+     * `check-` 开头，`copyGateScripts` 的前缀循环不会带它；缺了它本判据会以 `MODULE_NOT_FOUND` 崩在临时区
+     * 里，读起来像「台账判据坏了」，实际是夹具少一个文件。它由夹具的 `copyGateDeps` 自动补齐（沿脚本的
+     * `require("./x.cjs")` 递归），所以这里不必再抄一遍。 */
     copyFileSync(
-      join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"),
-      join(repo.dir, "scripts", ".gate-executor-ledger.json"),
+      join(REPO_ROOT, "scripts", "gates", ".gate-executor-ledger.json"),
+      join(repo.dir, "scripts", "gates", ".gate-executor-ledger.json"),
     );
     /* 空执行者来源：`.githooks/`、`package.json`、`tests/` 都不建 ——
      * 那正是「无执行者」这一档成立的前提。 */
@@ -83,17 +67,20 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
     // 在真仓库根跑（不建临时区）：这条断言的对象是「本仓库当前的判据-执行者关系」，
     // 而临时区里没有 `.githooks/` / `package.json` / `tests/`，所有靠它们当执行者的
     // 脚本都会被判成无执行者 —— 那是用例环境的问题，不是仓库的问题。
-    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME)], {
+    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_REL)], {
       cwd: REPO_ROOT,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
     /* 条数从台账现算，不写死：写死一份计数就等于再造一条「加了条目忘了改数」的
      * 会漂的判据（同一族先例见 #2135 那次钩子步数被钉死）。 */
-    /* SAFETY: 类型断言已复核 */
-    const onDemand = JSON.parse(
-      readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
-    ) as { onDemand: Record<string, unknown> };
+    /* 台账用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+    const onDemand: unknown = JSON.parse(
+      readFileSync(join(REPO_ROOT, "scripts", "gates", ".gate-executor-ledger.json"), "utf8"),
+    );
+    if (!isRecord(onDemand) || !isRecord(onDemand.onDemand)) {
+      throw new Error("台账形状不对（缺 onDemand）");
+    }
     expect(output).toContain(`按需召唤 ${Object.keys(onDemand.onDemand).length}`);
     expect(output).toContain("报告型自称在跑 0");
   });
@@ -136,7 +123,7 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
     );
     // 把它加进台账（读原台账、补一条）。
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       JSON.stringify({
         onDemand: {
           "check-probe-orphan.cjs": { why: "探针", who: "探针" },
@@ -183,7 +170,7 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
 
   test("台账里的孤儿条目（脚本已不存在）⇒ 红", ({ repo }) => {
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       JSON.stringify({
         onDemand: {
           "check-already-deleted.cjs": { why: "探针", who: "探针" },
@@ -210,15 +197,15 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
 
   /** D 组步骤 = `  run "<标签>" <命令>`（与同族用例同款解析，不许 toContain）。 */
   const steps = (): Array<{ cmd: string; label: string }> =>
-    [...hook().matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
-      label: m[1] ?? "",
-      cmd: m[2] ?? "",
+    [...hook().matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm)].map((m) => ({
+      label: m.groups?.label ?? "",
+      cmd: m.groups?.cmd ?? "",
     }));
 
   test("「判据执行者台账」这一步真在 D 组里（被注掉的行不算在场）", () => {
-    expect(steps().find((s) => s.cmd.includes("scripts/check-gate-executors.cjs"))).toEqual({
+    expect(steps().find((s) => s.cmd.includes("scripts/gates/check-gate-executors.cjs"))).toEqual({
       label: "判据执行者台账",
-      cmd: "node scripts/check-gate-executors.cjs",
+      cmd: "node scripts/gates/check-gate-executors.cjs",
     });
   });
 
@@ -228,11 +215,11 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
      * `run-ast-gates.cjs` —— 6 条共享一次解析。判据的**执行者**因此从
      * 「这 6 行」变成「这 1 行」，本用例跟着改靶子（钉的还是同一件事：
      * 这一步的 flag 层面不许漂）。 */
-    expect(steps().find((s) => s.cmd.includes("scripts/run-ast-gates.cjs"))).toEqual({
+    expect(steps().find((s) => s.cmd.includes("scripts/gates/run-ast-gates.cjs"))).toEqual({
       label: "AST 判据聚合（6 条共享一次解析）",
       // `--staged` = 输入面跳过（按条透传，口径见 §13.5.8.2）。逐字相等的口径
       // 保留（这一族的价值就是「flag 层面也不许漂」）。
-      cmd: "node scripts/run-ast-gates.cjs --staged",
+      cmd: "node scripts/gates/run-ast-gates.cjs --staged",
     });
   });
 
@@ -262,21 +249,14 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
 });
 
 /**
- * 扫描面本身（ISSUE #1444 残活 A）。
- *
- * 这条靶子是**判据自己的覆盖面**：旧口径只看名字前缀，于是那几份真在门禁链里跑的
- * 判定型判据（`shell-gate.mjs` / `storybook-check.mjs` 等）因名字不叫 `check-`
- * 而不在盘点里 —— 判据自报的份数与真值不符。
- * 而「判据的覆盖面与它自称的不符」正是 #1451 的立案现场，所以这里逐份把
- * **门禁链事实**钉住。
- *
- * ⚠️ 这几条**必须在真仓库根跑**：临时区里没有 `.githooks/` / `quality-gate.*`，
- * 链口径恒为空 —— 在那里测这件事等于测「前缀口径还在不在」。
- */
+ * 扫描面本身（ISSUE #1444 残活 A）：靶子是判据自己的覆盖面 —— 旧口径只看名字前缀，`shell-gate.mjs` /
+ * `storybook-check.mjs` 等真在门禁链里跑却不叫 `check-` 的判据不在盘点里，自报份数与真值不符；而「覆盖面与
+ * 自称的不符」正是 #1451 的立案现场，所以这里逐份钉住**门禁链事实**。⚠️ 这几条必须在真仓库根跑：临时区没有
+ * `.githooks/` / `quality-gate.*`，链口径恒为空，在那里测等于测「前缀口径还在不在」。 */
 describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", () => {
   /** 在**真仓库根**跑判据（不经临时区）。 */
   const runInRepo = (args: Array<string> = []): string =>
-    execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME), ...args], {
+    execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_REL), ...args], {
       cwd: REPO_ROOT,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -289,19 +269,24 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
   const chainScripts = (): Array<string> => {
     const out = new Set<string>();
     const collect = (text: string): void => {
-      for (const mm of text.matchAll(/scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g)) {
-        out.add(mm[1] ?? "");
+      // 判据在 scripts/gates/（#3930）：命令里的路径可带域子目录，归一到 basename 再入集合。
+      for (const mm of text.matchAll(/scripts[\\/]+(?<name>[A-Za-z0-9_./-]+\.(?:cjs|mjs))/g)) {
+        out.add((mm.groups?.name ?? "").split(/[\\/]/).pop() ?? "");
       }
     };
     const read = (rel: string): string => readFileSync(join(REPO_ROOT, rel), "utf8");
-    for (const m of read(".githooks/pre-commit").matchAll(/^ {2}run "[^"]+" (.+)$/gm)) {
-      collect(m[1] ?? "");
+    for (const m of read(".githooks/pre-commit").matchAll(/^ {2}run "[^"]+" (?<cmd>.+)$/gm)) {
+      collect(m.groups?.cmd ?? "");
     }
-    for (const m of read("scripts/quality-gate.mjs").matchAll(/args:\s*\[([^\]]*)\]/g)) {
-      collect(m[1] ?? "");
+    for (const m of read("scripts/gates/quality-gate.mjs").matchAll(
+      /args:\s*\[(?<body>[^\]]*)\]/g,
+    )) {
+      collect(m.groups?.body ?? "");
     }
-    for (const m of read("scripts/quality-gate.ps1").matchAll(/Args\s*=\s*@\(([^)]*)\)/g)) {
-      collect(m[1] ?? "");
+    for (const m of read("scripts/gates/quality-gate.ps1").matchAll(
+      /Args\s*=\s*@\((?<body>[^)]*)\)/g,
+    )) {
+      collect(m.groups?.body ?? "");
     }
     return [...out];
   };
@@ -309,7 +294,7 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
   test("四份「名字不叫 check- 但在门禁链里跑」的判据确实被数进去了", () => {
     const output = runInRepo(["--report"]);
     // 份数必须 > 纯前缀口径的 40 —— 差额就是「链里认出、前缀认不出」的那几份。
-    const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
+    const total = Number(/判据脚本 (?<count>\d+) 份/.exec(output)?.groups?.count ?? "0");
     expect(total, "扫描面必须含门禁链认出的判据").toBeGreaterThan(40);
     const chain = chainScripts();
     for (const name of ["shell-gate.mjs", "storybook-check.mjs"]) {
@@ -320,38 +305,25 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
   });
 
   test("只作散文举例 / 被 import 的脚本不算判据（步骤位置口径）", () => {
-    // 只读「门禁步骤位置」而非文件全文的原因：全文匹配会把这些一起打进 ——
-    // `x.cjs` / `xxx.cjs`（散文里的占位符举例）、`affected-tests.mjs`（清单库，
-    // 被钩子注释提到）、`install-git-hooks.mjs`（postinstall，被注释提到）、
-    // `run-affected-tests.mjs`（被 `node scripts/run-affected-tests.mjs` 那行调，
-    // 但它是 C 组的测试执行器、不是判据）、`quality-gate-shared.mjs`（被 import）。
-    // 实测：把口径退化成全文匹配时，下面这六份里会多认出几份（那几份本来
-    // 「有执行者」，所以 `--report` 的点名清单一个字都不变）。
-    //
-    // ⚠️ 这里**不写死份数**：份数会随「新写一份 `check-*.cjs` 还没接钩子」而正当变动
-    // （那正是名字族兜底要它可见的东西），把它冻成一个数字等于给下一份新判据留一道
-    // 无谓的红 —— 而规范 §13.5.10 的「步数不写、读数不写死」说的就是这件事。
-    // 上涨后的数字同样不写：它随仓库里散文提到 `scripts/x.mjs` 的次数漂移，
-    // 写死就成了下一个人照着它去核的假账（§12.14）。
-    //
-    // 口径（步骤位置 vs 全文）的差异**不体现为「名单里出现没出现」**：判据退化成
-    // 读全文时多出来的几份本来就「有执行者」，所以真正的执行者在
-    // **`check-gate-executors.cjs` 的 `PROSE_ONLY_SCRIPTS` 自检**里 ——
-    // 它在判据自己算出来的那张表上反查，那是唯一看得见这个差异的地方。
-    // 这里只钉三件**与口径无关**的事实（保证那个自检不是空转，且读数不写死）：
-    //   ① 扫描面非空（口径坏掉时会退成 0，而 0 份照样「无违规」）。
-    //   ② 份数 = 「门禁链事实 ∪ 名字族」独立数一遍来对（不随正当变动漂）。
-    //   ③ 那份自检的名单与这里的名单**逐字同源**（两处各写一份就会漂）。
+    // 只读「门禁步骤位置」而非全文：全文匹配会把散文里的占位符、清单库、postinstall 脚本、C 组测试执行器与
+    // 被 import 的共享模块一并算进来；实测那几份本来就「有执行者」，所以 `--report` 的点名清单一个字都不变，
+    // 口径差异只体现在 `check-gate-executors.cjs` 的 `PROSE_ONLY_SCRIPTS` 自检里（它在判据自己算出的表上反查）。
+    // ⚠️ 不写死份数：份数随「新写一份 `check-*.cjs` 还没接钩子」正当变动，上涨读数也随散文提及漂移（§12.14）。
+    // 这里只钉三件与口径无关的事实：扫描面非空（坏掉退成 0 而 0 份照样「无违规」）、份数独立重数对账、名单逐字同源。
     const output = runInRepo(["--report"]);
-    const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
+    const total = Number(/判据脚本 (?<count>\d+) 份/.exec(output)?.groups?.count ?? "0");
     expect(total, "扫描面空转（退成 0 时下面每一条都照样报 OK）").toBeGreaterThan(40);
-    const listed = readdirSync(join(REPO_ROOT, "scripts"))
-      .filter((n) => /\.(cjs|mjs)$/.test(n))
+    /* 名字族那一半按**域递归**枚举（#3930 之后判据可能落在 `scripts/<域>/` 里）：
+     * 与判据自己的盘点面同口径 —— 只看顶层会把整批子目录里的判据漏成「不在数里」。 */
+    const listed = readdirSync(join(REPO_ROOT, "scripts"), { recursive: true })
+      .map(String)
+      .filter((n) => /\.(?:cjs|mjs)$/.test(n))
+      .map((n) => n.split(/[\\/]/).pop() ?? "")
       .filter((n) => chainScripts().includes(n) || GATE_PREFIXES.some((p) => n.startsWith(p)));
     expect(total, "份数 = 「门禁链事实 ∪ 名字族」自己数出来的份数（不写死数字）").toBe(
       listed.length,
     );
-    const gateSrc = readFileSync(join(REPO_ROOT, "scripts", SCRIPT_NAME), "utf8");
+    const gateSrc = readFileSync(join(REPO_ROOT, "scripts", SCRIPT_REL), "utf8");
     for (const name of [
       "x.cjs",
       "xxx.cjs",
@@ -379,15 +351,10 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
 });
 
 /**
- * ④ 入口级登记要验（ISSUE #2530）。
- *
- * 这一层存在的理由：`hasExecutor()` 按 **basename** 比，所以「同一份脚本的两个入口」
- * 在账上塌成一个 —— 而这两档可能判的根本不是同一件事（#2385 的现场：钩子里跑的是
- * `--staged` 那一窄档，硬规则 25 说的「开工前跑一次」判的是整个 ②）。
- * 用例钉四个方向：登记了就要在写明的执行者里真找得到那行；**无旗标那一形不许被带旗标的那行
- * 冒充**（那是塌成的另一种写法）；转述型包装器把别人的旗标算到自己头上也不行；
- * 台账条目自己不许空着（`judges` 缺失 / 只登记一形 / 脚本已改名）。
- */
+ * ④ 入口级登记要验（ISSUE #2530）。`hasExecutor()` 按 **basename** 比，所以「同一份脚本的两个入口」在账上
+ * 塌成一个，而这两档可能判的根本不是同一件事（#2385：钩子跑的是 `--staged` 那窄档，硬规则 25「开工前跑
+ * 一次」判的是整个 ②）。用例钉四个方向：登记了要在写明的执行者里真找得到那行；**无旗标那一形不许被带旗标
+ * 的那行冒充**；转述型包装器不许把别人的旗标算到自己头上；台账条目不许空着（`judges` 缺失 / 只登记一形 / 脚本已改名）。 */
 describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #2530）", () => {
   /** 临时区里那份判据脚本本体（它只要名字在 `check-` 族里就进扫描面）。 */
   const PROBE = "check-probe-entry.cjs";
@@ -404,7 +371,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     repo.write(".githooks/pre-commit", `  run "窄档" node scripts/${PROBE} --staged\n`);
     repo.write("package.json", JSON.stringify({ scripts: { wide: `node scripts/${PROBE}` } }));
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -433,7 +400,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     repo.write(".githooks/pre-commit", `  run "窄档" node scripts/${PROBE} --staged\n`);
     repo.write("package.json", JSON.stringify({ scripts: { wide: `node scripts/${PROBE}` } }));
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -460,7 +427,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     // 唯一的一行调用带着 --staged：窄档确实有人跑，宽档（无旗标）没有。
     repo.write(".githooks/pre-commit", `  run "窄档" node scripts/${PROBE} --staged\n`);
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -490,7 +457,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
      * 而登记 `--json` 那一形必须认不到。 */
     repo.write(".cnb.yml", `      转述=node scripts/${PROBE} -- node scripts/inner.cjs --json\n`);
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -516,7 +483,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write("package.json", JSON.stringify({ scripts: { a: "x" } }));
     repo.write(
-      `scripts/.gate-executor-ledger.json`,
+      `scripts/gates/.gate-executor-ledger.json`,
       ledgerWith({
         [PROBE]: [
           { flags: [], judges: "", executors: ["package.json"] },
@@ -539,7 +506,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write("package.json", JSON.stringify({ scripts: { a: `node scripts/${PROBE}` } }));
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [{ flags: [], judges: "只有一形", executors: ["package.json"] }],
       }),
@@ -551,7 +518,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
 
   test("登记了脚本已不在的入口 ⇒ 红（与 onDemand 同一条反向判据）", ({ repo }) => {
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         "check-already-renamed.cjs": [
           { flags: [], judges: "x", executors: ["package.json"] },
@@ -567,14 +534,23 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   test("本仓库的台账：登记的每一形都真验得过（不是把红留在下一跳）", () => {
     // 在真仓库根跑：临时区里没有 `.githooks/` / `.cnb.yml` / `package.json` 的**原样**，
     // 而那些正是入口那一层的执行者来源 —— 这里要证的是「此刻这份账对得上」。
-    /* SAFETY: 类型断言已复核 */
-    const ledger = JSON.parse(
-      readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
-    ) as { entrypoints?: Record<string, Array<{ flags?: Array<string> }>> };
-    const entrypoints = ledger.entrypoints ?? {};
+    /* 台账用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+    const ledger: unknown = JSON.parse(
+      readFileSync(join(REPO_ROOT, "scripts", "gates", ".gate-executor-ledger.json"), "utf8"),
+    );
+    if (!isRecord(ledger) || !isRecord(ledger.entrypoints)) {
+      throw new Error("台账形状不对（缺 entrypoints）");
+    }
+    const entrypoints: Record<string, Array<unknown>> = {};
+    for (const [key, value] of Object.entries(ledger.entrypoints)) {
+      if (!isUnknownArray(value)) {
+        throw new Error(`台账 entrypoints.${key} 不是数组`);
+      }
+      entrypoints[key] = value;
+    }
     const forms = Object.values(entrypoints).reduce((n, list) => n + list.length, 0);
     expect(forms, "入口这层一条都没登记，就是 #2530 没办").toBeGreaterThan(0);
-    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME)], {
+    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_REL)], {
       cwd: REPO_ROOT,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -586,7 +562,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   test("--update 不许把入口那一半抹掉", ({ repo }) => {
     withProbe(repo);
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           { flags: [], judges: "整档", executors: ["package.json"] },
@@ -598,25 +574,22 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     const { code, output } = repo.run(["--update"]);
     expect(output, output).toContain("台账已重写");
     expect(code).toBe(0);
-    /* SAFETY: 类型断言已复核 */
-    const after = JSON.parse(
-      readFileSync(join(repo.dir, "scripts", ".gate-executor-ledger.json"), "utf8"),
-    ) as { entrypoints?: Record<string, Array<unknown>> };
-    expect(after.entrypoints?.[PROBE]?.length, "--update 之后入口条目必须原样还在").toBe(2);
+    /* 台账用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+    const after: unknown = JSON.parse(
+      readFileSync(join(repo.dir, "scripts", "gates", ".gate-executor-ledger.json"), "utf8"),
+    );
+    if (!isRecord(after) || !isRecord(after.entrypoints)) {
+      throw new Error("台账形状不对（缺 entrypoints）");
+    }
+    const afterProbe = isUnknownArray(after.entrypoints[PROBE]) ? after.entrypoints[PROBE] : [];
+    expect(afterProbe.length, "--update 之后入口条目必须原样还在").toBe(2);
   });
 
   /**
-   * #2530 那个「塌成」换了个方向（ISSUE #2590）。
-   *
-   * 当年收的是「无旗标那一形被带旗标的行冒充」，排除逻辑因此只写在那一个分支上，
-   * 于是**两个带旗标形之间还开着**：`--staged` 是 `--staged --json` 的子集时，超集那一行
-   * 同时满足两形 ⇒ 子集那一形一个执行者都没有，账面照样全绿。入口台账是
-   * 「这一形谁在跑」的唯一登记面，它一旦单向成立，把命令改成超集形状时没有任何一格会红。
-   *
-   * 四档一起建（照单子里那张表）：超集行冒充子集形 ⇒ 红；只有子集行而登记超集形 ⇒ 红
-   * （今天已经对，别被新逻辑改坏）；两行都在 ⇒ 绿；在册那种「全档形 + 收窄形」
-   * 不许被误判成包含关系（那是本仓最常用的一形对）。
-   */
+   * #2530 那个「塌成」换了个方向（ISSUE #2590）：当年收的是「无旗标那一形被带旗标的行冒充」，排除逻辑只写在
+   * 那一个分支上，于是**两个带旗标形之间还开着** —— `--staged` 是 `--staged --json` 的子集时，超集那一行同时
+   * 满足两形 ⇒ 子集那一形一个执行者都没有而账面全绿；把命令改成超集形状时没有任何一格会红。四档一起建：
+   * 超集行冒充子集形 ⇒ 红、只有子集行而登记超集形 ⇒ 红（今天已对，别改坏）、两行都在 ⇒ 绿、在册「全档形 + 收窄形」不许被误判成包含关系。 */
   const twoFlagForms = (
     repo: {
       write: (p: string, s: string) => void;
@@ -626,7 +599,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write(".githooks/pre-commit", hookBody);
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -681,7 +654,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
         `  run "整档" node scripts/${PROBE}\n`,
     );
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           { flags: [], judges: "整档全判", executors: [".githooks/pre-commit"] },
@@ -712,7 +685,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
         `  run "b" node scripts/${PROBE} --staged --json\n`,
     );
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -732,7 +705,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
 
     /* 相等那一档改成包含那一档（`--staged` 是 `--staged --json` 的子集），报的是另一句话。 */
     repo.write(
-      "scripts/.gate-executor-ledger.json",
+      "scripts/gates/.gate-executor-ledger.json",
       ledgerWith({
         [PROBE]: [
           {
@@ -754,13 +727,10 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   });
 
   /**
-   * 「入口要不要要求判定型」这一格选定的是**补正向判据**（ISSUE #2590 期望 3）。
-   * 理由：本仓「入口」在读者面上一直指「一条会判成败的命令」（`.cnb.yml` 的格表、
-   * 钩子的 `run` 行、`quality-gate.mjs` 的 `args:` 都是那个形状），而这份台账登记的
-   * 语义是「这一形由这条命令执行」。报告型没有「这一形的结论」可执行，它的在册面是
-   * §11.23 的声明索引。另一个出口（只在注释里写明「不要求」）等于把读者面的歧义留在原地，
-   * 而那条歧义正是本症状的成因 —— 所以不选。
-   */
+   * 「入口要不要要求判定型」这一格选的是**补正向判据**（ISSUE #2590 期望 3）。本仓「入口」在读者面上一直指
+   * 「一条会判成败的命令」（`.cnb.yml` 的格表、钩子的 `run` 行、`quality-gate.mjs` 的 `args:` 都是那个形状），
+   * 而台账登记的语义是「这一形由这条命令执行」；报告型没有「这一形的结论」可执行，在册面是 §11.23 的声明索引。
+   * 另一个出口（只在注释里写明「不要求」）会把读者面的歧义留在原地，而那条歧义正是本症状的成因 —— 所以不选。 */
   test("报告型脚本不许登记成入口；补上 process.exit 就不再报（反证）", ({ repo }) => {
     const reportProbe = "check-probe-report.cjs";
     const asReport = (body: string) => {
@@ -773,7 +743,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
           `  run "报告出 JSON" node scripts/${reportProbe} --json\n`,
       );
       repo.write(
-        "scripts/.gate-executor-ledger.json",
+        "scripts/gates/.gate-executor-ledger.json",
         JSON.stringify({
           onDemand: {},
           entrypoints: {

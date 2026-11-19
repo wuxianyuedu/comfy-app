@@ -1,19 +1,7 @@
 /**
- * 派发循环的启动点与「只有一条 pull」的源形态判据
- * （P3 §5 ADR §14 D1 的第二刀）。
- *
- * 为什么是源形态判据而不是行为判据：这一刀的失败形态是**静默**的——
- *   · 谁都没起循环 → 任务永远停在 `QUEUED`，直到被 reaper 判孤儿（表现为
- *     「提交后一会儿就失败」，看不出与启动点有关）；
- *   · 两宿主各起一条 → 双执行，正是 ADR §6 开头写明的「双 finalize 错乱」事故形态；
- *   · 内存队列以另一种形态长回来（提交方直接 push）→ 又变成两条循环，
- *     而两条循环并存时**每次测试都可能只跑到其中一条**。
- * 这三条都没有可单测的运行期入口（要等真进程），所以钉在源码形状上，
- * 与 `tests/reaper-side-effect.test.ts`（谁起回收器）同一族。
- *
- * 别处更强的执行者：领取/门控/槽位的**行为**判据在
- * `src/lib/comfyui/executor-dispatch.test.ts`；两宿主归属谓词同源由
- * `src/lib/core/repository-task-impl.test.ts` 的 §6 归属组钉。
+ * 派发循环的启动点 / 「只有一条 pull」的**源形态判据**（P3 §5 ADR §14 D1 第二刀）。失败形态是静默的：谁都没起循环 ⇒
+ * 任务永停 `QUEUED` 直到 reaper 判孤儿；两宿主各起一条 ⇒ 双执行（ADR §6 的「双 finalize 错乱」）；队列换形态长回来 ⇒ 两条循环并存、每次可能只跑到一条。
+ * 三者都没有可单测的运行期入口，故钉源码形状（与 `tests/reaper-side-effect.test.ts` 同族）；行为判据在 `src/lib/comfyui/executor-dispatch.test.ts`，归属谓词见 `src/lib/core/repository-task-impl.test.ts` §6。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -37,11 +25,8 @@ const code = (rel: string): string => {
 
 /**
  * 「全仓」这一格的面：`src/**` + `scripts/**` 里所有非测试源文件，**从目录派生**。
- *
- * 原来它是一份 11 项手抄清单，而这句话自称覆盖全仓 —— 手抄清单在新文件里长出第二条循环时
- * 不会红（少判在这一族上的表现是 `toEqual(["src/instrumentation.ts"])` 照样通过）。
- * 排除 `*.test.*`：`src/lib/comfyui/executor-dispatch.test.ts:451` 那两行
- * `mod.startDispatchLoop(50)` 是行为用例的正当夹具，把它算成"第二个启动点"是误报。
+ * 原来是 11 项手抄清单，而它自称覆盖全仓 —— 新文件长出第二条循环时不会红（`toEqual(["src/instrumentation.ts"])` 照样通过）。
+ * 排除 `*.test.*`：`src/lib/comfyui/executor-dispatch.test.ts:451` 的 `mod.startDispatchLoop(50)` 是行为用例的正当夹具，算成"第二个启动点"是误报。
  */
 const SCAN_LAYERS = ["src", "scripts"];
 const SOURCE_EXT = /\.(?:ts|tsx|mjs)$/;

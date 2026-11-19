@@ -2,7 +2,7 @@
 
 - **16 章 §16.2.4.2 那张「批次 / 目录 / 清零处数」表删掉，换成指权威源**。这本账是进度流水，
   不是判据：逐批处数的权威源是 git 历史与门禁当下的基线文件
-  （`scripts/.ui-primitives-baseline.json` —— `total: 0`、`rules: {}`；复算入口
+  （`scripts/gates/.ui-primitives-baseline.json` —— `total: 0`、`rules: {}`；复算入口
   `node scripts/check-ui-primitives.cjs` 自己的结论行：「当前自实现存量 0 处 / 0 个文件」
   + 「硬闸判据 N 条（全部须为 0）」）。抄一份处数进文档就是**第二个会脱钩的事实来源**，
   而它已经开始脱：原来那句「每批都把该目录清零，再 `--update` 收紧基线」描述的通道已经收窄 ——

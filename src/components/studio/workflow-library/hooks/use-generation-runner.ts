@@ -1,22 +1,16 @@
 "use client";
 
 /* ── 画布节点预览的「就地生成」运行器 ──
- *
- * 「提交 → SSE → 进度 → 产物 → 终态」是一条完整的状态机，不是 UI 的一部分：
- * 相位（Phase）、结果图与两条订阅路径都收在这里，视图只读相位渲染。
- *
- * 两条订阅路径共用**同一组回调**（{@link WorkflowRunHandlers}）：
- * • 发起路径 —— {@link executeRun} 里 `watchWorkflowRun(taskId, handlers)`；
- * • 恢复路径 —— {@link useWorkflowRunResume} 在重开窗口 / 切回页签时按
- *   登记表重订阅（服务端回放补齐历史帧）。
- * 此前两组回调各写一份（onProgress 的节流、onOutput 的产物捕获、onSettled
- * 的终态迁移逐字相同），收成一份后行为不可能再分叉。
- */
+ * 「提交 → SSE → 进度 → 产物 → 终态」是一条完整状态机，不是 UI：相位、结果图与
+ * 两条订阅路径都收在这里，视图只读相位渲染。发起路径（executeRun）与恢复路径
+ * （useWorkflowRunResume）共用**同一组回调** —— 此前各写一份，节流/产物捕获/
+ * 终态迁移逐字相同，收成一份后行为不可能再分叉。 */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 import { errorMessage } from "~/lib/error-message";
+import { getSizePresetTable } from "~/lib/media/size-preset-store";
 import { startLocalGenerate, type TaskProgressNode } from "~/lib/workshop/generation-client";
 import {
   applyParamMapping,
@@ -40,12 +34,9 @@ export type Phase =
   | { imageUrl?: string; kind: "done" }
   | { kind: "failed"; message: string };
 
-/** 当前时间戳（毫秒）。
- *
- *  抽成模块级函数而不是在组件体里直接 `Date.now()`：React 的纯度检查会顺着
- *  组件作用域内的调用点判定「渲染期调用了非纯函数」，而这里其实只在**点击运行
- *  的事件回调**里执行（永远不会在渲染期跑到）。由列出的这个事实源统一取时间，
- *  也方便将来在测试里打桩。 */
+/** 当前时间戳（毫秒）。抽成模块级函数而不是在组件体里直接 `Date.now()`：
+ *  React 纯度检查会顺着组件作用域内的调用点判「渲染期调用了非纯函数」，而这里
+ *  只在**点击运行的事件回调**里执行。统一取时间也方便测试打桩。 */
 function nowMs(): number {
   return Date.now();
 }
@@ -56,6 +47,9 @@ type RunPayload = {
   /** 载荷按**映射表**组装（不是裸的「暴露 pin 全量下发」）——
    *  生效映射（含本地 overlay）由容器的 `useParamWiring` 持有。 */
   effectiveParamMap: Record<string, unknown>;
+  /** 调试用的部分执行目标（comfy-cli `--output-node-ids`）：只跑这些输出节点
+   *  及其依赖子图。空 / 缺省 = 整图执行。 */
+  outputNodeIds?: Array<string>;
   seedModes: Record<string, string>;
   taskType: string;
   values: Record<string, unknown>;
@@ -72,6 +66,9 @@ async function executeRun(
   payload: RunPayload,
   run: {
     handlers: WorkflowRunHandlers;
+    /** 登记本次 SSE 订阅的 closer（ISSUE #3912）：组件卸载时由 effect 撤掉，
+     *  不再让订阅存活到任务终态。 */
+    registerCloser: (closer: () => void) => void;
     setPhase: (p: Phase) => void;
   },
 ) {
@@ -85,7 +82,7 @@ async function executeRun(
     effectiveParamMap,
     seedModes,
   } = payload;
-  const { setPhase, handlers } = run;
+  const { setPhase, handlers, registerCloser } = run;
   setPhase({ kind: "starting" });
   try {
     const mapped = workflowIO
@@ -95,8 +92,10 @@ async function executeRun(
             mode: effectiveMode,
           }),
           mapping: parseParamMapping(effectiveParamMap),
-          values,
           mode: effectiveMode,
+          /* 档位反解与正向换算同源：同一份本机生效表（ISSUE #4099）。 */
+          table: getSizePresetTable(),
+          values,
         })
       : null;
     const workflowInputs =
@@ -107,6 +106,10 @@ async function executeRun(
     const taskId = await startLocalGenerate({
       workflow: workflowId,
       workflowInputs: [...workflowInputs, ...cagInputs],
+      /* 部分执行（调试）：非空才带上，缺省整图。 */
+      ...(payload.outputNodeIds && payload.outputNodeIds.length > 0
+        ? { outputNodeIds: payload.outputNodeIds }
+        : {}),
     });
     setPhase({ kind: "running", pct: 0 });
     registerWorkflowRun({
@@ -121,13 +124,14 @@ async function executeRun(
     await new Promise<void>((resolve) => {
       /* onSettled 在共享回调里只做终态迁移；发起路径还要借此结束本次
        * await（恢复路径没有这一层等待），所以在这里包一层。 */
-      watchWorkflowRun(taskId, {
+      const closer = watchWorkflowRun(taskId, {
         ...handlers,
         onSettled: (id, result) => {
           handlers.onSettled(id, result);
           resolve();
         },
       });
+      registerCloser(closer);
     });
   } catch (error) {
     setPhase({ kind: "failed", message: errorMessage(error, String(error)) });
@@ -135,13 +139,9 @@ async function executeRun(
 }
 
 /**
- * 生成运行的相位状态机（供 <WorkflowCanvasNodePreview> 使用）。
- *
- * @param enabled —— 除「已在运行」外的可运行条件（只读消费方 / 必填未填 /
- *   不在「实际使用」页签）。最终 `canRun = enabled && !running`。
- * @returns `startRun` —— 发起一次运行；载荷由容器组装（见 {@link RunPayload}），
- *   这样「生效映射」等容器侧派生不必倒灌进本 hook（否则与 `useParamWiring`
- *   的回调依赖会互相成环）。
+ * 生成运行的相位状态机（供 <WorkflowCanvasNodePreview> 使用）。@param enabled 除「已在运行」外的可运行条件（只读 / 必填未填 / 不在「实际使用」
+ * 页签）；最终 `canRun = enabled && !running`。@returns `startRun` 发起一次运行；
+ * 载荷由容器组装，避免容器侧派生倒灌进本 hook（会与 `useParamWiring` 依赖成环）。
  */
 export function useGenerationRunner(params: { enabled: boolean; workflowId: string }) {
   const { workflowId, enabled } = params;
@@ -149,6 +149,16 @@ export function useGenerationRunner(params: { enabled: boolean; workflowId: stri
   /* 节点相位的节流闸门（`~/components/ui/use-throttled-progress`）。
    * 发起与恢复两条订阅路径共用同一个闸门 —— 按任务分窗，不会互相挤掉。 */
   const progressGate = useRef(createThrottleGate());
+  /* 发起路径在跑的 SSE 订阅 closer（ISSUE #3912）：executeRun 里
+   * watchWorkflowRun 返回的 closer 由此登记，卸载时撤掉，生成中切走页签
+   * 不再让 EventSource 存活到任务终态（持续打日志、占用同源连接）。 */
+  const activeCloserRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    return () => {
+      activeCloserRef.current?.();
+      activeCloserRef.current = null;
+    };
+  }, []);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   // onOutput 与 onSettled 都来自同一 SSE 闭包，state 读取会拿到渲染期旧值——
   // 用 ref 保证 onSettled 能看到 onOutput 刚写入的结果图。
@@ -210,7 +220,13 @@ export function useGenerationRunner(params: { enabled: boolean; workflowId: stri
 
   const startRun = useCallback(
     (payload: RunPayload) => {
-      void executeRun(payload, { setPhase, handlers });
+      void executeRun(payload, {
+        setPhase,
+        handlers,
+        registerCloser: (closer) => {
+          activeCloserRef.current = closer;
+        },
+      });
     },
     [handlers],
   );

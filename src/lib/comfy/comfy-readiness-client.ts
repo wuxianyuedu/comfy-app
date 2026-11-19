@@ -53,7 +53,10 @@ export function readComfyErrorMessage(body: unknown, fallback: string): string {
 async function ensureOnce(): Promise<ComfyReadyResult> {
   let res: Response;
   try {
-    res = await fetch("/api/comfy/ensure", { method: "POST" });
+    res = await fetch("/api/comfy/ensure", {
+      method: "POST",
+      signal: AbortSignal.timeout(30_000),
+    });
   } catch (error) {
     return {
       ok: false,
@@ -107,6 +110,7 @@ export async function waitForComfyReady(
   let announced = false;
 
   for (;;) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const r = await ensureOnce();
     if (r.ok) {
       return r;
@@ -122,6 +126,7 @@ export async function waitForComfyReady(
     if (Date.now() + pollMs >= deadline) {
       break;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(pollMs);
   }
   return {

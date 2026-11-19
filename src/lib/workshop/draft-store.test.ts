@@ -31,17 +31,12 @@ describe("readWorkshopDraft / writeWorkshopDraft", () => {
   });
 
   it("写入后可按同键读回（含 shots）", () => {
-    const draft = {
-      ...emptyWorkshopDraft(),
+    const draft = emptyWorkshopDraft();
+    /* 存量草稿里的 shots 运行时形状不可信：用真实草稿对象注入运行时值。 */
+    Object.assign(draft, {
       scriptMarkdown: "# 开场",
-      /* SAFETY: 类型断言已复核 */
-      shots: [
-        {
-          id: "a",
-          status: "done",
-        } as never,
-      ],
-    };
+      shots: [{ id: "a", status: "done" }],
+    });
     writeWorkshopDraft("proj_1", draft);
     expect(window.localStorage.getItem(KEY)).not.toBeNull();
     const back = readWorkshopDraft("proj_1");

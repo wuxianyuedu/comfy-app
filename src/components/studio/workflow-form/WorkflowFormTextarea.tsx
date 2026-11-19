@@ -5,26 +5,10 @@ import { textHandler } from "~/lib/form-props";
 import { Textarea } from "~/components/ui/textarea";
 import { useCallback, useLayoutEffect, useRef } from "react";
 
-/** 自动增高的 textarea，宽度严格锁死在父级。
- *
- *  替换此前的 `field-sizing: content` 方案。原生 `field-sizing`
- *  本该在 `maxWidth: 100%` 硬封顶下给出自动高度，但
- *  Chrome 的实现会让固有内容宽度溢出父级 ——
- *  当真实提示词里最长的不可断行超过控件的内部
- *  宽度（282px = 卡片 340 - 2 边框 - 14×2 内边距）时。溢出-X 规则
- *（`overflowWrap: anywhere`、`wordBreak: break-word`）只能裁掉
- *  可见文字 —— 它们约束不了 textarea 的盒子几何。
- *
- *  本组件改为：
- *   - 高度交给 JS 驱动（重置成 `auto` 后读 scrollHeight），并夹在
- *     [MIN, MAX] 内；于是 textarea 逐行自适应，永不
- *     依赖新的 `field-sizing` API；
- *   - 设 `box-sizing: border-box` + `width: 100%`，让盒子宽度严格等于
- *     父级的内容盒，不受固有尺寸影响；
- *   - 保留横向溢出守卫（pr-3 > pl-2.5，
- *     overflowX: hidden，overflowWrap: anywhere，wordBreak: break-word）；
- *   - 保留滚动条抑制（webkit + firefox + ms）。
- */
+/** 自动增高 textarea，宽度严格锁死在父级。替换 field-sizing: content —— Chrome 实现会让固有内容宽度
+ *  溢出父级（最长不可断行超过内部宽度 282px = 卡片 340 - 2 边框 - 14×2 内边距），overflowWrap 只能裁字、约束不了盒子几何。
+ *  本组件：高度交给 JS（reset auto 后读 scrollHeight，夹在 [MIN, MAX]）；box-sizing: border-box + width: 100%
+ *  让盒子严格等于父内容盒；保留横向溢出守卫与滚动条抑制（webkit/firefox/ms）。 */
 export function AutoResizeTextarea({
   value,
   placeholder,

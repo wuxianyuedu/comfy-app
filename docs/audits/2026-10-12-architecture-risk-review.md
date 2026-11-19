@@ -8,13 +8,14 @@
 
 - 目标：判断当前架构是否足以支撑「本地桌面包 + 外部 AI 客户端接入 + 提交级机器门禁」这三个意图，找出值得优化的点。
 - 范围：`src/**`、`scripts/**`、`tools/**`、`src-tauri/**`、`.githooks/**`、构建与产物链路、网络入口、治理判据自身。
-- 不含：单条业务功能对错、UI 观感、`docs/audits/2026-09-26-performance-audit.md` 已闭环的微性能项。
+- 不含：单条业务功能对错、UI 观感、2026-09 性能审计已闭环的微性能项（该过程台账已按
+  `docs/README.md` §7.3 闭环删除，条目 ↔ PR 对应在 git 历史与各 PR）。
 - 证据基线：`master` @ `b4705c3d`，工作树干净。
 - 风险容忍度假设（未与业主确认）：产品为单机桌面应用，数据只在本地；外部 AI 客户端接入是刻意能力。
 
 ## 结论摘要
 
-**处置状态（本轮之后）**：R1-01 / R1-02 已合并进 `master`（PR #1783，squash）；R4-01 已合并（PR #1787）；**R3-01 已合并（PR #1791）**——新增 `scripts/check-infra-file-size.cjs` + 基线 `.infra-file-size-baseline.json`（**该基线随 ISSUE #1811 收尾翻闸已删，见下**），登记面（`D(55→56)`、§13.1 逐字行、`docs/standards/12` 的 R5 姊妹档一节、`RATCHETS` 沙箱行、`docs/generated/**`）同批改齐，并且新判据在它自己那笔提交的钩子里就跑到了（`[ok] ── check: 基础设施层文件长度棘轮…`）。**它上线后第一次响，响的是别人的合并**（#1777 往固定清单加了 7 行注释，把 `scripts/affected-tests.mjs` 顶过基线 952）；这一格**随后由 #1793 以更好的方式解决**——把整张清单连注释搬到 `scripts/fixed-structural-tests.mjs`，那份从 963 → 487 行、退出超限名单、基线 6 → 5 收紧。本报告初稿准备的处置（压缩我自己那两条注释的行数）**因此作废、没有提交**——记录在这儿，是因为「先补自己那笔的形状」和「把长出来的理由文本搬出去」是两个方向的修法，后者才对：登记一条守卫的成本不该算进判据自身的长度。R2-01 已被 #1793 那半推进了一格（push 时有复算 + 归属），详见该节。R5-01 的接线**已于 2026-10-21 就地重做落地并取证完毕**（ISSUE #1953；2026-10-15 那件「已实施并投毒验收」的原件停在 stash，而该 stash 在本机四个检出一件都不存在，重做件不冒充继承那一次的验收）。它的前置 `pnpm run build` 跑绿当天也拿到了：**2026-10-14 时**原本是两道，R8-01 已由 #1892 在产物层修掉，只剩 R13-01 那道体积预算 —— 而它已不是「一次没解释的 +471 B」，是**基线刚认账又漂**的反复状态，见那两节。**2026-10-15 复核（ISSUE #1952）：仍是这一道，基线仍是 #1916 那份、`8d15f9fe..HEAD` 已 28 次提交**；**2026-10-21 复核（ISSUE #1953）：基线换成 `1fca2df4` 那份（10-17 业主认账一次）之后又漂 +543 B（2 条 10-20 提交），业主按 §13.5.4 例外流程确认后认账，`build:tracked` 七步全绿 + 一次完整出厂构建数出 `[standalone] 2590` + `[static] 3763`** —— 「链上自证」这一格当天补上（第 7 步冒烟至此第一次被链上执行）。
+**处置状态（本轮之后）**：R1-01 / R1-02 已合并进 `master`（PR #1783，squash）；R4-01 已合并（PR #1787）；**R3-01 已合并（PR #1791）**——新增 `scripts/gates/check-infra-file-size.cjs` + 基线 `.infra-file-size-baseline.json`（**该基线随 ISSUE #1811 收尾翻闸已删，见下**），登记面（`D(55→56)`、§13.1 逐字行、`docs/standards/12` 的 R5 姊妹档一节、`RATCHETS` 沙箱行、`docs/generated/**`）同批改齐，并且新判据在它自己那笔提交的钩子里就跑到了（`[ok] ── check: 基础设施层文件长度棘轮…`）。**它上线后第一次响，响的是别人的合并**（#1777 往固定清单加了 7 行注释，把 `scripts/affected-tests/affected-tests.mjs` 顶过基线 952）；这一格**随后由 #1793 以更好的方式解决**——把整张清单连注释搬到 `scripts/affected-tests/fixed-structural-tests.mjs`，那份从 963 → 487 行、退出超限名单、基线 6 → 5 收紧。本报告初稿准备的处置（压缩我自己那两条注释的行数）**因此作废、没有提交**——记录在这儿，是因为「先补自己那笔的形状」和「把长出来的理由文本搬出去」是两个方向的修法，后者才对：登记一条守卫的成本不该算进判据自身的长度。R2-01 已被 #1793 那半推进了一格（push 时有复算 + 归属），详见该节。R5-01 的接线**已于 2026-10-21 就地重做落地并取证完毕**（ISSUE #1953；2026-10-15 那件「已实施并投毒验收」的原件停在 stash，而该 stash 在本机四个检出一件都不存在，重做件不冒充继承那一次的验收）。它的前置 `pnpm run build` 跑绿当天也拿到了：**2026-10-14 时**原本是两道，R8-01 已由 #1892 在产物层修掉，只剩 R13-01 那道体积预算 —— 而它已不是「一次没解释的 +471 B」，是**基线刚认账又漂**的反复状态，见那两节。**2026-10-15 复核（ISSUE #1952）：仍是这一道，基线仍是 #1916 那份、`8d15f9fe..HEAD` 已 28 次提交**；**2026-10-21 复核（ISSUE #1953）：基线换成 `1fca2df4` 那份（10-17 业主认账一次）之后又漂 +543 B（2 条 10-20 提交），业主按 §13.5.4 例外流程确认后认账，`build:tracked` 七步全绿 + 一次完整出厂构建数出 `[standalone] 2590` + `[static] 3763`** —— 「链上自证」这一格当天补上（第 7 步冒烟至此第一次被链上执行）。
 **这里要订正我自己的一句**：初稿说「它落地时还会撞刚上线那道 infra 棘轮 —— `build-desktop.mjs` 记的基线就是它
 当前的 1576 行，任何净增长都拦，所以那 33 行必须先做成独立模块」。**那句不成立**：
 `wc -l scripts/build-desktop.mjs` 实测 **495 行**，而 1576 那一格记的是 `scripts/dev-launcher.mjs`
@@ -32,7 +33,7 @@
 不能因为「形状一样」就当它是已定的。
 
 1. **P0｜Workshop MCP HTTP 入口在局域网与任意网页面前可达**（无鉴权 + 通配 CORS + 未固定监听地址），而这组工具能改库、删会话、发起出图/出视频。—— **已修**（PR #1783）。
-2. **P0 → 本轮已被别人推进一半｜「合并那一跳没有机器执行者」**：`.githooks/pre-push`（现 34 行）在 HEAD / 上游引用变动时把 refs 交给 `scripts/premerge-proof.mjs`，后者**在干净的上游快照上复算钩子里那批全仓判据**，按 `yours / baseline-red / load-flake / inconclusive` 决定拦不拦（§13.6.2.1）——这正是 R2-01 要的那个「隔离执行者」的本地版本。仍剩它自己声明的两格：`不替代 pnpm check:all`（全量单测 + 覆盖率 + 依赖审计那一档仍无人敲），以及 push 是本地事件（不 push 就不跑）。详见 R2-01 的更新。
+2. **P0 → 本轮已被别人推进一半｜「合并那一跳没有机器执行者」**：`.githooks/pre-push`（现 34 行）在 HEAD / 上游引用变动时把 refs 交给 `scripts/gates/premerge-proof.mjs`，后者**在干净的上游快照上复算钩子里那批全仓判据**，按 `yours / baseline-red / load-flake / inconclusive` 决定拦不拦（§13.6.2.1）——这正是 R2-01 要的那个「隔离执行者」的本地版本。仍剩它自己声明的两格：`不替代 pnpm check:all`（全量单测 + 覆盖率 + 依赖审计那一档仍无人敲），以及 push 是本地事件（不 push 就不跑）。详见 R2-01 的更新。
 3. **P1｜债务门禁全部只扫 `src`，而判据自身（`scripts/**` 约 43k 行）在它自己的硬闸之外**：审查当时 6 个文件超过 R5 给产品代码定的 900 行上限，最大一份是判据本身。—— 判据已上线（PR #1791），存量随后由 #1793 以「搬家」方式收到 5 份（见 R3-01 的落地情况）。
 4. **P1｜覆盖率配置缺一条「每一项都要落到真实文件」的判据**（初稿的「40 条静默失效」被实测否证，订正为 3 条指向已删模块）。—— **已修**。
 5. **P1｜出厂载荷（`src-tauri/static`）的数产物判据不在出厂链路上**。—— 代码与规范已写好，停在「等 `pnpm run build` 跑绿」这一格上（前置就是 R8-01）。
@@ -54,7 +55,7 @@
 > ⚠️ **这张表是审查当日（`master` @ `b4705c3d`）的快照，不是现值** —— 尤其最后两行：
 > 它们列的棘轮存量**已随 ISSUE #1811 的收尾整体清零并翻成硬闸**（那 8 份基线文件
 > 今天一份都不在，`--update` / `--strict` 也从对应脚本里删了）。要看现值请跑
-> `node scripts/check-gate-executors.cjs` 与 `tests/ratchet-update-guards.test.ts`
+> `node scripts/gates/check-gate-executors.cjs` 与 `tests/ratchet-update-guards.test.ts`
 > 现算的那两张表（`HARD_GATE_FLIPS` / 四张归类表），**不要引用本表的数字**。
 > 这条注记是 2026-10-13 复审时补的：本文件不在 `doc:check` 的 `SCOPED_DOC_DIRS`
 > 里，所以它自己的引用漂移没有任何判据会红（见本节末「台账自身的门禁影响」）。
@@ -65,7 +66,7 @@
 | 门禁/工具层（`scripts` 顶层）    | 43,142 行 / 118 份 `.mjs`+`.cjs`                                                                 | `find scripts -maxdepth 1`                                    |
 | 测试                             | 58,100 行 / 705 份用例（另有 19 份 Playwright 规格）                                             | `find tests src e2e`                                          |
 | 文档（`.md`）                    | 57,969 行 / 82 份                                                                                | `find docs -name '*.md'`                                      |
-| 判据脚本                         | 68 份：判定型有执行者 65、按需召唤 2、报告型自称在跑 0                                           | `node scripts/check-gate-executors.cjs`（本次实跑，退 0）     |
+| 判据脚本                         | 68 份：判定型有执行者 65、按需召唤 2、报告型自称在跑 0                                           | `node scripts/gates/check-gate-executors.cjs`（本次实跑，退 0）     |
 | `src` 侧棘轮存量（**当日快照**） | 文件长度 0 / 函数长度 0 / Rust 函数长度 0 / 孪生对 0 / UI-逻辑分离 0 / 循环依赖 0 / 零消费导出 0 | 当日各 `scripts/.<name>-baseline.json`（**均已删**）          |
 | 仍带存量的棘轮（**当日快照**）   | 非空断言 167 处                                                                                  | 当日 `scripts/.non-null-assertions-baseline.json`（**已删**） |
 
@@ -104,7 +105,7 @@ R1-01 已随 #1783 合并，同一份文件里这些行现在是别的内容）
 - `tools/workshop-mcp-http.ts:52` — `httpServer.listen(PORT, cb)` 未传 host。本机实测 `require('net').createServer().listen(0)` 得到 `{"address":"::","family":"IPv6"}`，即绑定所有接口（Windows 双栈下同形暴露 IPv4）。
 - `src/server/mcp/workshop-mcp.ts:95-395` — 该入口暴露的工具含 `setScript` / `setCharacters` / `setStoryboard`（整幅覆盖草稿）、`deleteSession`、`generateImage` / `submitVideo` / `composeFinal`（消耗算力与第三方额度）。写操作只要一个 `sessionId`，而 `workshop_create_session` / `workshop_list_sessions` 就在同一未鉴权入口上。
 - `vitest.config.ts:267-270` 的注释本仓库自己的定性：这一层是「外部 AI 客户端可写的入口」。
-- 反向证据（说明不是已识别项）：全仓检索 `Access-Control-Allow-Origin` 只命中 ComfyUI 内嵌探测逻辑；`scripts/doc-facts.cjs:164-167` 与 `scripts/check-app-port-vectors.cjs` 只核对端口**数值**，没有任何判据核对**绑定范围**；`docs/workshop-mcp.md` 写的是 `http://localhost:<mcp 端口>/mcp` —— 文档描述的是回环，代码执行的是全网卡。
+- 反向证据（说明不是已识别项）：全仓检索 `Access-Control-Allow-Origin` 只命中 ComfyUI 内嵌探测逻辑；`scripts/docs/doc-facts.cjs:164-167` 与 `scripts/gates/check-app-port-vectors.cjs` 只核对端口**数值**，没有任何判据核对**绑定范围**；`docs/workshop-mcp.md` 写的是 `http://localhost:<mcp 端口>/mcp` —— 文档描述的是回环，代码执行的是全网卡。
 
 **为什么是架构级**：这是产品唯一的「机器可写入口」，其信任边界（谁能改库、谁能花用户的钱）由一个 `listen()` 参数和一个响应头决定，且这一格落在现有 68 份判据的作用域之外。它同时违反仓库自己的硬规则 20（回环主机一律显式 `127.0.0.1`，`src/lib/endpoints.ts:21` 有唯一常量出处）。
 
@@ -123,7 +124,7 @@ R1-01 已随 #1783 合并，同一份文件里这些行现在是别的内容）
 
 ### R1-02（P1）MCP 入口没有任何测试覆盖，且 `tools/**` 不在债务门禁作用域内
 
-**证据**：`src/server/mcp/workshop-mcp.test.ts` 覆盖工具定义，全仓无一处测试触及 `tools/workshop-mcp-http.ts`（`listen` 参数、CORS 头、状态码）；`scripts/check-code-duplication.cjs:18,48`（只扫 `src/**` 的 `.ts/.tsx`）、`check-function-length.cjs:42`、`check-non-null-assertions.cjs:45`、`check-file-structure.cjs` 里三处以 `})("src")` 收尾的扫描调用同样不收 `tools/**` 与 `.cjs/.mjs/.ps1`。
+**证据**：`src/server/mcp/workshop-mcp.test.ts` 覆盖工具定义，全仓无一处测试触及 `tools/workshop-mcp-http.ts`（`listen` 参数、CORS 头、状态码）；`scripts/gates/check-code-duplication.cjs:18,48`（只扫 `src/**` 的 `.ts/.tsx`）、`check-function-length.cjs:42`、`check-non-null-assertions.cjs:45`、`check-file-structure.cjs` 里三处以 `})("src")` 收尾的扫描调用同样不收 `tools/**` 与 `.cjs/.mjs/.ps1`。
 
 **修复**：为 transport 入口加一份最小用例（起服务、断言地址族与响应头），并把它列入 `vitest.config.ts` 的 `coverage.include`；R3-01 的作用域扩面同时收编 `tools/`。
 
@@ -145,7 +146,7 @@ R1-01 已随 #1783 合并，同一份文件里这些行现在是别的内容）
 
 **修复方向（须与既有判据共存，不能提「恢复平台 CI」这种会被 `no-platform-ci-config.test.ts` 当场拦下的方案）**
 
-**已落地一半（#1793，写在最前面）**：`.githooks/pre-push` 现在把待推送 refs 交给 `scripts/premerge-proof.mjs`，后者在**干净的上游快照**上复算钩子里那批全仓判据，并按归属决定拦不拦（`yours` / `load-flake` / `inconclusive` 拦，逐条都是 `baseline-red` 则放行且逐条念出）。这既是「合并那一跳的执行者」，也正是下面第 1 条当年想要的那个东西——只是它选了本地 push 时点而非平台流水线，与 §13.5.3 的额度结论不冲突。剩下的两格是它自己在文件头声明的：**不替代 `pnpm check:all`**（全量单测 + 覆盖率 + 依赖审计那一档仍无人敲），以及 push 仍是本地事件（`--no-verify` 之外的另一条静默路径是「不 push」）。
+**已落地一半（#1793，写在最前面）**：`.githooks/pre-push` 现在把待推送 refs 交给 `scripts/gates/premerge-proof.mjs`，后者在**干净的上游快照**上复算钩子里那批全仓判据，并按归属决定拦不拦（`yours` / `load-flake` / `inconclusive` 拦，逐条都是 `baseline-red` 则放行且逐条念出）。这既是「合并那一跳的执行者」，也正是下面第 1 条当年想要的那个东西——只是它选了本地 push 时点而非平台流水线，与 §13.5.3 的额度结论不冲突。剩下的两格是它自己在文件头声明的：**不替代 `pnpm check:all`**（全量单测 + 覆盖率 + 依赖审计那一档仍无人敲），以及 push 仍是本地事件（`--no-verify` 之外的另一条静默路径是「不 push」）。
 
 1. 把 `pnpm check:all` 接进同一跳（`pre-push` 里已有复算那一档，缺的是更宽那档）——它存在但除人工召唤外没有调用方；接上时要按 §11.13 的实测预算分档，别把 32 分钟塞进 push。
 2. 量化一次钩子耗时（分步日志已落 `LOGD`），据此决定哪些档留在提交钩子、哪些移到 push 那一档——重档挂在 `commit` 上是负载假红的直接来源（`§13.6.4`）。
@@ -161,7 +162,7 @@ R1-01 已随 #1783 合并，同一份文件里这些行现在是别的内容）
 
 - 作用域：`check-file-structure.cjs:13` 对 R5 的定义即「**src/** 下超 900 行的文件」，根目录参数只有 `"src"`；`check-function-length.cjs:42` `SCAN_DIR = "src"`；`check-non-null-assertions.cjs:45` 同；`check-code-duplication.cjs:18,48` 只收 `src/**` 的 `.ts/.tsx`。
 - 后果（实测）：`scripts/` 顶层有 6 份文件超过 R5 给产品代码定的 900 行硬闸——`check-ui-primitives.cjs` 4,819、`dev-launcher.mjs` 1,575、`base-check.mjs` 1,381、`check-file-structure.cjs` 1,213、`check-theme-colors.cjs` 991、`affected-tests.mjs` 931。其中「判据自己违反自己的阈值」是最刺眼的一格。
-- **落地情况（本条已闭合并被他人收口）**：判据以「另立脚本 + 另立基线」上线（PR #1791，登记面见 §13.1 / `D(56)` / `RATCHETS`）。上线后第一次响的是 #1777 加进固定清单的 7 行注释；随后 **#1793 把整张清单连注释搬进 `scripts/fixed-structural-tests.mjs`**，`affected-tests.mjs` 从 963 → 487 行、退出超限名单，基线 **6 → 5** 收紧。修法比本报告初稿准备的「压缩我自己那两条注释的行数」更对：登记一条守卫的**理由文本成本不该算进判据自身的长度**——否则「写清楚为什么」这件事会被长度判据反向惩罚。
+- **落地情况（本条已闭合并被他人收口）**：判据以「另立脚本 + 另立基线」上线（PR #1791，登记面见 §13.1 / `D(56)` / `RATCHETS`）。上线后第一次响的是 #1777 加进固定清单的 7 行注释；随后 **#1793 把整张清单连注释搬进 `scripts/affected-tests/fixed-structural-tests.mjs`**，`affected-tests.mjs` 从 963 → 487 行、退出超限名单，基线 **6 → 5** 收紧。修法比本报告初稿准备的「压缩我自己那两条注释的行数」更对：登记一条守卫的**理由文本成本不该算进判据自身的长度**——否则「写清楚为什么」这件事会被长度判据反向惩罚。
 - 非技术可行性问题：`check-comment-language.cjs:82` 的 `SCAN_DIRS = ["src","scripts","tests","e2e"]` 证明扩面做过。
 - 维度缺口：`.cjs/.mjs/.ps1` 上的孪生对、超长函数、非空断言没有任何判据（`tools/**` 共 39 份 `.ps1`）。Rust 侧有独立 120 行阈值（`check-rust-function-length.cjs`），说明「按语言分档」的先例存在。
 
@@ -184,7 +185,7 @@ R1-01 已随 #1783 合并，同一份文件里这些行现在是别的内容）
 
 这两条本身无害（指向不存在的文件 = 不判），但它们说明**「coverage 配置里的键必须还能落到真实文件」这件事没有任何判据**：删模块的人清了路由、清了 `src/**`，没有清 `vitest.config.ts`，而 68 份判据里没有任何一份会因为「配置指向已删文件」变红。同族的既有先例是 `tests/rest-endpoint-targets.test.ts`（「客户端写的 REST 地址必须有落点」，台账 E3‴）——同一类「写得很像真的、其实查无此物」，只是那一格在 `src/**`、这一格在配置文件里。
 
-**修复（已落地，PR #1787）**：加一份全库级不变量用例（登记在 `scripts/fixed-structural-tests.mjs` 的固定清单——审查当时它还在 `scripts/affected-tests.mjs` 里，#1793 搬了家），真 `require` `vitest.config.ts`（不解析源码文本，口径同 `tests/dist-artifact-hygiene.test.ts`），断言 `coverage.include` 的每个条目与 `coverage.thresholds` 的每个键都能匹配到 `src/**` 下至少一个真实文件；随本条一起删掉那三条已失效的条目（`include` 里的 `routers/train.ts` + 两条指向已删模块的档）。**注意**：判据要按 §11.7 那条坑处理转义（`src/app/\(main\)/…` 这类键带反斜杠转义，与 `include` 的写法不同形，直接字符串比会造出假红）。
+**修复（已落地，PR #1787）**：加一份全库级不变量用例（登记在 `scripts/affected-tests/fixed-structural-tests.mjs` 的固定清单——审查当时它还在 `scripts/affected-tests/affected-tests.mjs` 里，#1793 搬了家），真 `require` `vitest.config.ts`（不解析源码文本，口径同 `tests/dist-artifact-hygiene.test.ts`），断言 `coverage.include` 的每个条目与 `coverage.thresholds` 的每个键都能匹配到 `src/**` 下至少一个真实文件；随本条一起删掉那三条已失效的条目（`include` 里的 `routers/train.ts` + 两条指向已删模块的档）。**注意**：判据要按 §11.7 那条坑处理转义（`src/app/\(main\)/…` 这类键带反斜杠转义，与 `include` 的写法不同形，直接字符串比会造出假红）。
 
 **验收**：新增一条指向不存在文件的门槛键时用例必须红；本次两条失效条目删除后转绿。
 
@@ -218,7 +219,7 @@ R1-01 已随 #1783 合并，同一份文件里这些行现在是别的内容）
 
 ### R7-01（P2，记录为已知风险，非新发现）陈旧实例与壳重编耦合靠人工动作 + mtime 判据
 
-**证据**：`AGENTS.md` 硬规则 5 与 `scripts/shell-gate.mjs`（复用 `dev-launcher.mjs` 的 `shellStaleWarning()`）、`docs/guide-stale-code.md`、launch-and-build §4.3。规范自身已把「不重编 = 跑旧二进制」定性为历史黑屏事故来源，且 `tools/scripts/build-tauri-release.ps1:62-64` 记录了「`/api/update-check` 的脏检测指纹只看 mtime+size（无内容 hash）」，并为此专门改成内容相同不写盘。
+**证据**：`AGENTS.md` 硬规则 5 与 `scripts/gates/shell-gate.mjs`（复用 `dev-launcher.mjs` 的 `shellStaleWarning()`）、`docs/guide-stale-code.md`、launch-and-build §4.3。规范自身已把「不重编 = 跑旧二进制」定性为历史黑屏事故来源，且 `tools/scripts/build-tauri-release.ps1:62-64` 记录了「`/api/update-check` 的脏检测指纹只看 mtime+size（无内容 hash）」，并为此专门改成内容相同不写盘。
 
 **可优化点（低优先）**：既然 mtime+size 已被识别为不足以判脏，`shellStaleWarning()` 与 `/api/update-check` 这两处可换成内容指纹（哈希），把「时间型判据」从判据面上摘掉——这一类判据在本仓库还有别的实例（`§13.6.4` 的负载假红同源）。
 
@@ -240,7 +241,7 @@ R1-01 已随 #1783 合并，同一份文件里这些行现在是别的内容）
 
 **为什么这件事仍然值得留在台账里**
 
-1. `scripts/check-standalone-contents.cjs` 的计数口径**刻意不穿符号链接**（硬规则 17：穿链接删会损坏依赖）。于是一份「链接层根本没法被运行期解析」的 payload，在它眼里照样是 `[standalone] ✓ 产物干净`。这一格「数得干净」与「跑得起来」之间的落差，正好是 `R5-01` 想收的那一类，只是维度不同（它管缺件/多件，这一格管可解析性）。
+1. `scripts/gates/check-standalone-contents.cjs` 的计数口径**刻意不穿符号链接**（硬规则 17：穿链接删会损坏依赖）。于是一份「链接层根本没法被运行期解析」的 payload，在它眼里照样是 `[standalone] ✓ 产物干净`。这一格「数得干净」与「跑得起来」之间的落差，正好是 `R5-01` 想收的那一类，只是维度不同（它管缺件/多件，这一格管可解析性）。
 2. `build-desktop.mjs` 的 §载荷实体化（上提 + 删 `.pnpm`）存在的全部理由就是「链接语义搬不过去」（ISSUE #1216 实测的 `@swc/helpers` 那一族）。而 `smoke-executor-host-standalone` 跑在 **实体化之前** 的 `.next/standalone` 上 —— 所以它对「链接能不能被原生 Node 跟随」是敏感的，这条敏感这次确实把它响了。
 
 **已做掉的那一步：干净重建（原「待定性」项）**
@@ -257,7 +258,7 @@ R1-01 已随 #1783 合并，同一份文件里这些行现在是别的内容）
   所以本节的复现与那份检出无关，也没去动它。
 
 **还差最后一步才能定性（本审查未做）**：在**干净的上游提交快照**里跑同一条判据
-（`node scripts/base-check.mjs`），才能把「本机链接层」与「#1777 改了 import 图」这两个候选彻底分开。
+（`node scripts/gates/base-check.mjs`），才能把「本机链接层」与「#1777 改了 import 图」这两个候选彻底分开。
 它需要在那份快照里重跑一次全量 build（很重，且 base-check 的快照链的是本检出的 `node_modules`，
 有可能直接给 `inconclusive`），所以按口径交给这条线的人处置，别拿本节的复现当「master 红了」的结论。
 
@@ -320,7 +321,7 @@ Node 现建的 readlink= "..\\..\\promise-limit@2.7.0\\node_modules\\promise-lim
 stash 里等账绿 —— 这是 §11.8 那本账在起作用，不是绕过去的理由。
 
 **已处置（本台账之后的独立一笔，落在产物层）**：修法是上面那句「拷贝层可修」的直接展开 ——
-新增 `pnpm build` 的第 2 步 `scripts/standalone-link-repair.mjs`：遍历载荷的 `node_modules`
+新增 `pnpm build` 的第 2 步 `scripts/build/standalone-link-repair.mjs`：遍历载荷的 `node_modules`
 （**不穿链接**，与 §7.3 剔除侧、`check-standalone-contents.cjs` 的 `followLinks=false` 同口径），
 只对「`lstat` 说是链接而 `stat` 穿不过去」的那些，取**原链接文本**重建一次。三条不可回退的取向：
 
@@ -372,10 +373,10 @@ stash 里等账绿 —— 这是 §11.8 那本账在起作用，不是绕过去�
 | #   | 文件                                      | 检索式（拿去 grep 的那半句）                                                   | 承诺的执行者                             |
 | --- | ----------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------- |
 | 1   | `README.md`                               | `check-ps1-consistency.mjs` 在 pre-commit 与 CI                                | 两张入口表的核对                         |
-| 2   | `docs/standards/03-样式与-tailwind.md`    | `scripts/check-inline-style.cjs`（pre-commit 与 CI）                           | 写死内联样式判据                         |
+| 2   | `docs/standards/03-样式与-tailwind.md`    | `scripts/gates/check-inline-style.cjs`（pre-commit 与 CI）                           | 写死内联样式判据                         |
 | 3   | `docs/standards/03-样式与-tailwind.md`    | 已接入 `.githooks/pre-commit` 与 CI                                            | `check-theme-colors.cjs` 的写死色值棘轮  |
 | 4   | `docs/standards/12-代码组织与文件结构.md` | `tests/check-import-alias.test.ts`；已接入 pre-commit 与 CI                    | import 别名判据                          |
-| 5   | 同上                                      | 由 `scripts/check-code-duplication.cjs` 在 pre-commit 与 CI 强制               | 孪生对棘轮                               |
+| 5   | 同上                                      | 由 `scripts/gates/check-code-duplication.cjs` 在 pre-commit 与 CI 强制               | 孪生对棘轮                               |
 | 6   | 同上（§12.13 末句）                       | 在 pre-commit 与 CI 强制。                                                     | `check-function-length.cjs` 函数长度棘轮 |
 | 7   | 同上                                      | 在 pre-commit 与 CI 强制（**当日**基线 `scripts/.dead-exports-baseline.json`） | 零消费导出棘轮                           |
 
@@ -389,8 +390,8 @@ stash 里等账绿 —— 这是 §11.8 那本账在起作用，不是绕过去�
 > | 8 | `docs/standards/18-lib层规范.md` | `tests/lib-node-only-declarations.test.ts`，接入 pre-commit 与 CI | Node-only 声明判据 |
 > | 9 | `docs/standards/Comfy-APP-T3-项目开发规范.md` | 全库推进计划与棘轮护栏（已接入 pre-commit 与 CI） | 17 章那批棘轮 |
 > | 10 | `docs/standards/launch-and-build.md`（§5 排障表「配置了 ComfyUI 端口却像没配」那一行） | `check-comfyui-port-contract.cjs` | 端口契约判据 |
-> | 11 | 同上 | `scripts/check-comfyui-port-contract.cjs`（pre-commit 与 CI）把这条变成可失败 | 同上 |
-> | 12 | 同上 | **门禁**：`scripts/check-ps1-consistency.mjs`（pre-commit 与 CI | 入口清单三向对齐 |
+> | 11 | 同上 | `scripts/gates/check-comfyui-port-contract.cjs`（pre-commit 与 CI）把这条变成可失败 | 同上 |
+> | 12 | 同上 | **门禁**：`scripts/gates/check-ps1-consistency.mjs`（pre-commit 与 CI | 入口清单三向对齐 |
 
 **为什么这一版把行号换成了检索式**：初稿那 12 个行号里，`docs/standards/12` 的三条（原 `:981 / :1074 / :1358`）
 与 `launch-and-build.md` 的两条（原 `:2649 / :2778`）在本次审查收尾时已经**因为我自己合并的 #1791 / #1783 而漂移**
@@ -435,9 +436,9 @@ stash 里等账绿 —— 这是 §11.8 那本账在起作用，不是绕过去�
 
 **证据（今天在这一台机器上连测到两次，第一次的解读我还写错过一次）**
 
-- `git ls-files` 确认三本账都提交进库：`scripts/.artifact-freshness.json`、`scripts/.e2e-freshness.json`、
-  `scripts/.full-suite-freshness.json`（单槽位、一档一笔）。
-- 中午我跑 `node scripts/freshness-gate.mjs`：**e2e 档红**（`上一次跑绿在 2026-10-11T07:06Z，不是今天`）。
+- `git ls-files` 确认三本账都提交进库：`scripts/freshness/.artifact-freshness.json`、`scripts/freshness/.e2e-freshness.json`、
+  `scripts/freshness/.full-suite-freshness.json`（单槽位、一档一笔）。
+- 中午我跑 `node scripts/freshness/freshness-gate.mjs`：**e2e 档红**（`上一次跑绿在 2026-10-11T07:06Z，不是今天`）。
 - 之后我 `git fetch` + 快进到 `9d502aaa`（拉进来的是别人的合并，含 `6bdc116c`），**同一条判据立刻报三档全绿**，
   而我这边一个 e2e 都没跑。翻开账本看原因：
   ```
@@ -480,10 +481,10 @@ build + 数产物跑绿」，而产物是本地文件树 + 本地 `node_modules`
 
 **实测**：`.githooks/pre-commit` 把这笔**纯文档**提交拦下，报
 `[app-port-vectors] 四语言端口推导一致性失败：- Python 侧自检失败：spawnSync python3 ETIMEDOUT`。
-同一条判据在钩子结束后**就地复跑退 0**（`node scripts/check-app-port-vectors.cjs` ⇒ `四语言端口推导一致性 OK ✓`）。
+同一条判据在钩子结束后**就地复跑退 0**（`node scripts/gates/check-app-port-vectors.cjs` ⇒ `四语言端口推导一致性 OK ✓`）。
 ⇒ 那不是「四侧推导不一致」，是**没拿到测量**。
 
-**形状**：`scripts/check-app-port-vectors.cjs:119-127` 把 Python 侧真跑包在 `try/catch` 里，
+**形状**：`scripts/gates/check-app-port-vectors.cjs:119-127` 把 Python 侧真跑包在 `try/catch` 里，
 `timeout: 30_000`（`:122`）到点抛的 `ETIMEDOUT` 与「内容不一致」进的是**同一个 `problems` 数组**，
 所以那句「四语言端口推导一致性失败」在纯超时时也说得出嘴。同一份文件里 `hasCommand()`（`:34-41`）
 更安静：10 秒预算探测 `python3 --version`、把一切异常吞成 `false` ⇒ 负载高时它判成「这台机器没有 Python」，
@@ -529,8 +530,8 @@ Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用照旧判
 
 | 位置                                              | 写死的东西                                                              | 在本检出的表现                                                                                                                                  | 严重度差别                                                                             |
 | ------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `scripts/premerge-proof.mjs` 的 `readRevisions()` | `--verify refs/remotes/origin/master`                                   | `upstreamSha` 恒 `null` → 走「取不到上游引用」那一支 → **退 2 拦下每一次 topic 分支的 push**（`git fetch` 刚跑过、`cnb/master` 就在场上也一样） | 高：一个刚为「别把红带进 `master`」立的执行者，从落地起在这份检出上是**反作用**的      |
-| `scripts/check-deps-freshness.mjs`                | `DEFAULT_REMOTE_REV = "origin/master"`，且 reflog 路径里写死 `"origin"` | 跑它退 **0** + `[未校验] 没有可用的远端引用 … 这一行不许被读成「远端就是最新」` ⇒ AGENTS 硬规则 25 的执行者在这份检出里**恒不判**               | 中：降级话术是诚实的（不阻断、也明说没核对过），所以不是假绿 —— 但承诺的能力在这里为空 |
+| `scripts/gates/premerge-proof.mjs` 的 `readRevisions()` | `--verify refs/remotes/origin/master`                                   | `upstreamSha` 恒 `null` → 走「取不到上游引用」那一支 → **退 2 拦下每一次 topic 分支的 push**（`git fetch` 刚跑过、`cnb/master` 就在场上也一样） | 高：一个刚为「别把红带进 `master`」立的执行者，从落地起在这份检出上是**反作用**的      |
+| `scripts/gates/check-deps-freshness.mjs`                | `DEFAULT_REMOTE_REV = "origin/master"`，且 reflog 路径里写死 `"origin"` | 跑它退 **0** + `[未校验] 没有可用的远端引用 … 这一行不许被读成「远端就是最新」` ⇒ AGENTS 硬规则 25 的执行者在这份检出里**恒不判**               | 中：降级话术是诚实的（不阻断、也明说没核对过），所以不是假绿 —— 但承诺的能力在这里为空 |
 
 **为什么这算架构级而不是「本机环境麻烦」**：判据的结论应当只依赖仓库里的事实。远端名是**每台克隆机器**
 的属性（`git clone` 默认给 `origin`，本仓配成了 `cnb`），于是同一份 `master` 上的同一条判据，在 A 检出绿、
@@ -538,7 +539,7 @@ Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用照旧判
 本条是「判据读了一个不入库、也不声明的环境输入」（太窄 / 随机）。两句合起来是同一个结论——
 **判据的输入要么入库，要么当场可探测，不能假定读者的 git 配置。**
 
-**旁证（说明这不是新认识，是没被贯彻）**：`scripts/base-check.mjs` 里早就为同一件事写了
+**旁证（说明这不是新认识，是没被贯彻）**：`scripts/gates/base-check.mjs` 里早就为同一件事写了
 「remote 名随克隆方式变；本地实测是 `origin`」，并逐档实现「分支上游 / 各 remote 的 `master` / 本地 `master`」。
 也就是说仓里**已经有正确答案**，只是新写判据时没去拿 —— 与硬规则 24「写之前先查有没有现成实现」同一条病。
 
@@ -553,7 +554,7 @@ Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用照旧判
 还是在 `docs/reference-facts.md` 登记一个权威名、还是让调用方显式传。图省事把所有 remote 都遍历一遍，
 会把「未校验」变成「拿任意一个远端的陈旧程度当结论」，那是另一种假绿。
 
-**验收（给未动那一格）**：在本检出跑 `node scripts/check-deps-freshness.mjs` 必须**不再**报
+**验收（给未动那一格）**：在本检出跑 `node scripts/gates/check-deps-freshness.mjs` 必须**不再**报
 「没有可用的远端引用」，而是报出它实际比对了哪条引用（例如 `cnb/master`）与那条引用自己的取证时间；
 再造一个反例：该引用落后于本地分叉点时必须判「远端没动过」，而不是回落到「未校验」。
 
@@ -581,14 +582,14 @@ Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用照旧判
 **#1781 落地不到两小时，`master` 上的 `pnpm build` 就已经是红的了**。
 
 **执行者地图（当场核过，不是推测）**：`check-bundle-budget.cjs` 只在三处被敲 ——
-按需召唤 `pnpm check:bundle` / `check:all --mode bundleBudget`（`scripts/.on-demand-duties.json:85-92`）、
+按需召唤 `pnpm check:bundle` / `check:all --mode bundleBudget`（`scripts/gates/.on-demand-duties.json:85-92`）、
 以及 `pnpm build` 收尾兜底（`package.json:7`，位于数产物之后、冒烟之前）。
-它在 `.githooks/pre-commit` 里**没有**，也在 `scripts/premerge-check.mjs` 的全仓复算名单里**没有**
+它在 `.githooks/pre-commit` 里**没有**，也在 `scripts/gates/premerge-check.mjs` 的全仓复算名单里**没有**
 （两处各自 grep 过）。所以那批让体积涨了的 UI 改动**没有任何一档会当场报红**，
 它们合进 `master` 时这道预算是静默的。
 
 **为什么这件事值得单独一行**：后果不是「+471 B 要解释」，而是**它把产物日账那一档锁住了**。
-`pnpm build` 是 `artifact` 档唯一的凭证来源（`scripts/artifact-run.mjs` 的语义是「绿了才记」，
+`pnpm build` 是 `artifact` 档唯一的凭证来源（`scripts/build/artifact-run.mjs` 的语义是「绿了才记」，
 这次它照实说了 `✗ 产物级护栏未通过（退出码 1）—— 不记账`）。于是接下来**任何**碰
 `build-desktop.mjs` / `tauri.conf.json` / `next.config.js` 的改动，都会被 freshness 判据要求
 「这一档今天还没自证」，而它**无论重跑多少次都跑不绿** —— 除非有人先替那批 UI 改动做一次体积确认。
@@ -618,7 +619,7 @@ Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用照旧判
 **2026-10-14 补的两条实测（他们要拍口径时缺的就是这两个数）**：
 
 1. **出路① 被削掉一半**。在干净 worktree（`git worktree add --detach` 到 master，无构建产物）里直接跑
-   `node scripts/check-bundle-budget.cjs` ⇒ **EXIT=0**，输出是那句自报家门的：
+   `node scripts/gates/check-bundle-budget.cjs` ⇒ **EXIT=0**，输出是那句自报家门的：
    「跳过：`.next/static/chunks` 不存在（还没跑过 next build）—— 本判据守的是构建结果，不是构建本身」。
    ⇒ 把它原样并进 `premerge-check` 的复算名单，拿到的是一条**恒 0 的静默绿**，正是本节明令不许的答案。
    要走这条路必须先改它自己的语义（产物不在 ⇒ 报**未校验**），然后再决定「未校验」在 push 那一跳拦不拦 ——
@@ -659,7 +660,7 @@ Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用照旧判
 （而不是等到下一个跑 `pnpm build` 的人）。
 
 **2026-10-15 跟平（ISSUE #1952）**：③ 的归属名单**至今没有一条被它们的主人认过账**，基线也没人再抬 ——
-`scripts/.bundle-budget-baseline.json` 仍是 `14f0e0a8` 那份（`generatedAt 2026-10-14` /
+`scripts/gates/.bundle-budget-baseline.json` 仍是 `14f0e0a8` 那份（`generatedAt 2026-10-14` /
 `baselineRev 8d15f9fe` / `gzip 2272.1 KB` / `raw 9663.1 KB` / `files 221`）。本检出在
 `cnb/master` = `221130b7` 上按现算复核：`8d15f9fe..HEAD` 有 **28 次提交**，其中动过 bundle 面
 （`src/**` / `next.config.js` / 依赖声明）的 **15 条** —— 比上面那张 9 条的名单**又长了 6 条**
@@ -738,7 +739,7 @@ Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用照旧判
    ⚠️ 别照本条初稿的说法去找「记在 infra 基线 1576 行上的 `build-desktop.mjs`」——那份实测 495 行，
    1576 那一格是 `dev-launcher.mjs`；infra 棘轮管不到这笔改动（见结论摘要里的订正）。
 5. ~~R8-01 修法待口径~~ —— **已修，且两个候选都没选**：拍到的结论是「冒烟跑在哪一步」与「链接换成什么形状」
-   这两个问句里，后者才是病根。落法是在产物层加 `pnpm build` 第 2 步（`scripts/standalone-link-repair.mjs`），
+   这两个问句里，后者才是病根。落法是在产物层加 `pnpm build` 第 2 步（`scripts/build/standalone-link-repair.mjs`），
    把「`lstat` 说是链接而 `stat` 穿不过去」的那些按**原链接文本**重建 —— 冒烟仍留在最后一步（它判的就是最终产物），
    出厂件那条 §载荷实体化 一个字没动。为什么不算「绕过」：这 16 条在 web/standalone 形态里是真会跑的那份产物，
    不修就是分发缺陷而不是测试瑕疵。机制、七个读数与三条取向见该节与 launch-and-build §7.5.1。

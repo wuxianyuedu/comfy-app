@@ -1,22 +1,9 @@
 // @vitest-environment jsdom
-/* 为何**不**留在 DOM 档默认的 happy-dom（这是本档的例外，口径见规范 §11.17）：
- * 收起浮层由 base-ui 的 `useAnimationsFinished` 驱动，它调
- * `element.getAnimations()` 并等每个 `animation.finished`。happy-dom 实现了
- * `getAnimations`（返回空数组）但**不推进动画时钟**，base-ui 于是停在
- * 「等动画结束」那一步、面板永不卸载，`queryByRole("option")` 永远非空；
- * jsdom 下那些 promise 立刻 settle（没有真动画），卸载是同步的。
- * ⚠️ 这是**基元的机制**差异，不是本组件的语义：点一项即回调那条在两种环境下
- * 都成立，只有「收起」那一条读不到。
- */
-/**
- * `OptionListPopover` —— 「一个可滚动的浮层选项列表」的唯一实现
- * （规范 16 §16.2.4.14）。
- *
- * 收口前画布上的四个 chip 各写一份逐行同形的浮层；差别除了重复，还有
- * **「当前项」配色四份各写各的**（`violet-500/20` / `fuchsia-500/20` /
- * `primary-soft` / `bg-accent`）。所以这里既钉行为（点选即回调并收起、
- * 空态、选中项 aria-selected），也钉「选中配色走语义 token」这条口径。
- */
+/* 为何不留在 DOM 档默认的 happy-dom（本档的例外，口径见规范 §11.17）：收起浮层由 base-ui 的 `useAnimationsFinished` 驱动，它调 `element.getAnimations()` 并等每个 `animation.finished`。happy-dom 实现了 `getAnimations`（返回空数组）但不推进动画时钟，base-ui 于是停在「等动画结束」那一步、面板永不卸载，`queryByRole("option")` 永远非空；jsdom 下那些 promise 立刻 settle（没有真动画），卸载是同步的。
+ * ⚠️ 这是基元的机制差异，不是本组件的语义：点一项即回调那条在两种环境下都成立，只有「收起」那一条读不到。 */
+/** `OptionListPopover` —— 「一个可滚动的浮层选项列表」的唯一实现（规范 16 §16.2.4.14）。
+ * 收口前画布上的四个 chip 各写一份逐行同形的浮层；差别除了重复，还有「当前项」配色四份各写各的（`violet-500/20` / `fuchsia-500/20` / `primary-soft` / `bg-accent`）。
+ * 所以这里既钉行为（点选即回调并收起、空态、选中项 aria-selected），也钉「选中配色走语义 token」这条口径。 */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 

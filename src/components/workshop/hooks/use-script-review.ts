@@ -1,11 +1,9 @@
 "use client";
 
-// 剧本「AI 评审 / 定向改写」控制 hook（FR-QA-07 ④ · #2478）。
-//
-// 与镜头 / 角色卡评审 hook 同构：承载判定、分数曲线与在途态，IO 走 run-client
-// （视图/hook 不碰 vanillaApi，§17），在途用 `beginStaleRun` 作废守卫（弹窗中途关
-// 即不落地）。改写成功后把新剧本交回调用方（编辑器切到新版），再自动复评一轮 ——
-// 「评审 → 定向改写 → 复评」的闭环在界面侧也完整可走。
+// 剧本「AI 评审 / 定向改写」控制 hook（FR-QA-07 ④ · #2478）。承载判定、分数曲线
+// 与在途态，IO 走 run-client（不碰 vanillaApi，§17），在途用 `beginStaleRun`
+// 作废守卫。改写成功后把新剧本交回调用方再自动复评一轮 ——「评审 → 改写 → 复评」
+// 闭环在界面侧一次点击走完。
 import { useCallback, useState } from "react";
 
 import { useBusyAction } from "~/components/ui/use-busy-action";

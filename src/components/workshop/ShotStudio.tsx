@@ -9,6 +9,7 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
 import { SelectChip } from "~/components/ui/select-chip";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { StatusBadge as StatusBadgePrimitive } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import type { Character, Scene, Shot, StyleRef } from "~/lib/workshop/types";
@@ -22,7 +23,7 @@ import {
   buildLibraryWorkflowInput,
   WORKSHOP_BATCH_CONCURRENCY,
   LOCAL_TASK_TIMEOUT_MS,
-  preparePortraitReferences,
+  prepareShotReferences,
   startLocalGenerate,
   withGenerationAttribution,
   watchTask,
@@ -43,6 +44,10 @@ import { SHOT_STATUS_LABEL } from "./shot-status-config";
 import { SeedAdvancedField } from "./SeedAdvancedField";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
+import { comfyImageUrl } from "~/lib/media/media-url";
+import { ReferenceImageField } from "./ReferenceImageField";
+import { useShotReferenceUpload } from "./hooks/use-shot-reference-upload";
+import { REFERENCE_IMAGE_MAX } from "./hooks/use-reference-image-group";
 import { errorMessage } from "~/lib/error-message";
 import { IndexDot } from "~/components/workshop/IndexDot";
 import { paramString } from "~/lib/workshop/param-coerce";
@@ -86,14 +91,10 @@ function resolveSeed(raw: string): number {
   return Number.isFinite(n) ? Math.trunc(n) : randomSeed();
 }
 
-/** 自动预填：分镜输出 → 图片提示词。
- *
- *  从「场景分镜」来的镜头已带构建好的提示词；任何为空的（例如导入的裸镜头）
- *  从场景 + 角色卡一次性填上；被用户手改过的镜头（`editedRef`）不覆盖。
- *
- *  `scenes` / `characters` / `styles` 是父级每次渲染可能重建的数组，走 ref
- *  读最新值（每次渲染后同步），触发源只留 `shots` —— 否则父级任何一次
- *  重渲染都会让它跑一遍 O(N) 扫描（`onShotsChange` 是 setState，引用稳定）。 */
+/** 自动预填：分镜输出 → 图片提示词。为空的镜头从场景 + 角色卡一次性填上；
+ *  被用户手改过的（`editedRef`）不覆盖。
+ *  `scenes` / `characters` / `styles` 走 ref 读最新值，触发源只留 `shots` ——
+ *  否则父级每次重渲染都跑一遍 O(N) 扫描。 */
 function useAutoFillPrompts(
   shots: Array<Shot>,
   inputs: { characters: Array<Character>; scenes: Array<Scene>; styles: Array<StyleRef> },
@@ -129,10 +130,9 @@ function useAutoFillPrompts(
 }
 
 /**
- * 镜头生图 stage：消费「场景分镜」产出的镜头列表（提示词已在上游
- * 自动构建；空的在这里从场景 + 角色卡回填），并在本地 ComfyUI 链或
- * 配置的 API 通道上生成每个镜头图片。结果写回 Shot.imageUrl，好让
- * 视频 stage / FinalComposer 原样消费。
+ * 镜头生图 stage：消费「场景分镜」的镜头列表（空的提示词从场景 + 角色卡回填），
+ * 在本地 ComfyUI 链或配置的 API 通道上生成每镜图片，写回 Shot.imageUrl
+ * 供视频 stage / FinalComposer 消费。
  */
 export function ShotStudio({
   shots,
@@ -260,11 +260,12 @@ export function ShotStudio({
         const sizeSpec = parseShotSize(
           shot.params.size !== undefined && shot.params.size !== "" ? shot.params.size : shotSize,
         );
-        /* 定妆照 → 参考图（流程 §4 的口径）：镜头相关角色选了定妆照就带上；
-         * 没连参考图口的工作流会经 unmatched 提示，上传失败只提示失败数。 */
-        const refs = await preparePortraitReferences(characters, shot.characterIds);
+        /* 参考图（流程 §4 的口径，#4355）：镜头级多选（首张为主图）优先，
+         * 留空回落出场角色的定妆照；没连参考图口的工作流会经 unmatched 提示，
+         * 上传失败只提示失败数。 */
+        const refs = await prepareShotReferences(shot, characters);
         if (refs.failedCount > 0) {
-          onNotice(`${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`);
+          onNotice(`${refs.failedCount} 张参考图上传失败，本次生成未使用它们`);
         }
         /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个生图工作流
          *（封装口径只暴露 提示词 / 尺寸 / 参考图，其余走工作流默认值），否则
@@ -335,6 +336,7 @@ export function ShotStudio({
     gachaAction.run(shot.id, async () => {
       const taskIds: Array<string> = [];
       for (let i = 0; i < count; i++) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const tid = await generateShot(shot);
         if (tid !== null && tid !== "") {
           taskIds.push(tid);
@@ -436,8 +438,9 @@ export function ShotStudio({
             (channel === "local" && !workflowId) ||
             (channel === "api" && !apiReady)
           }
-          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-          onClick={() => void generateBatch()}
+          onClick={() => {
+            void generateBatch();
+          }}
           size="xs"
           variant="primary-solid"
         >
@@ -496,13 +499,18 @@ export function ShotStudio({
               onCancel={(s) => {
                 onCancelShot(s);
               }}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onGacha={(s, n) => void gachaShot(s, n)}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onGenerate={(s) => void generateShot(s)}
+              onGacha={(s, n) => {
+                void gachaShot(s, n);
+              }}
+              onGenerate={(s) => {
+                void generateShot(s);
+              }}
               onPromptChange={(id, prompt) => {
                 editedRef.current.add(id);
                 patchShot(id, { prompt });
+              }}
+              onReferenceImagesChange={(id, images) => {
+                patchShot(id, { referenceImages: images });
               }}
               progress={progress[shot.id] ?? 0}
               shot={shot}
@@ -555,6 +563,8 @@ type ShotCardRowProps = {
   onGenerate: (shot: Shot) => void;
   /** 提示词被手改：父层记入 editedRef（自动预填不再覆盖）并写回镜头。 */
   onPromptChange: (id: string, prompt: string) => void;
+  /** 镜头级参考图变更（#4355）：增 / 删都整表写回（首张为主图）。 */
+  onReferenceImagesChange: (id: string, images: Array<string>) => void;
   /** 本条目的实时进度（0~100）。 */
   progress: number;
   shot: Shot;
@@ -574,13 +584,20 @@ function ShotCardRow({
   gachaBusy,
   onCancel,
   onPromptChange,
+  onReferenceImagesChange,
 }: ShotCardRowProps) {
   const [gachaCount, setGachaCount] = React.useState(2);
+  /* 镜头级参考图（#4355）：上传中 / 上传失败的行内读数。 */
+  const [refError, setRefError] = React.useState<string | undefined>(undefined);
+  const refUpload = useShotReferenceUpload(setRefError);
+  const referenceImages = shot.referenceImages ?? [];
   return (
     <div className="border-border bg-surface rounded-xl border p-4" data-shot-index={shot.index}>
       <div className="mb-2 flex items-center gap-2">
         <IndexDot index={shot.index} />
-        <span className="text-muted-foreground truncate text-xs">{shot.sceneHeading}</span>
+        <TruncatedText className="text-muted-foreground truncate text-xs">
+          {shot.sceneHeading}
+        </TruncatedText>
         <StatusBadge status={shot.status} />
         {busyCount > 0 && shot.status === "running" && (
           <span className="text-muted-foreground text-3xs">
@@ -602,7 +619,7 @@ function ShotCardRow({
       )}
 
       <Textarea
-        className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 rounded-md px-2 py-1.5 text-xs"
+        className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary min-h-0 rounded-md px-2 py-1.5 text-xs"
         onChange={(e) => {
           onPromptChange(shot.id, e.target.value);
         }}
@@ -618,6 +635,48 @@ function ShotCardRow({
         >
           {error}
         </Alert>
+      )}
+
+      {channel === "local" && (
+        /* 镜头级参考图（#4355）：多选，首张为主图，其余按序落其余参考图槽；
+         * 留空回落出场角色的定妆照。草稿里存上传后的文件名，缩略图经
+         * /api/images?type=input 回读。 */
+        <div className="mt-2">
+          <ReferenceImageField
+            disabled={refUpload.busy || shot.status === "running"}
+            hint="首张为主图，其余按序作为额外参考图（最多 16 张）"
+            id={`shot-ref-${shot.id}`}
+            images={referenceImages.map(
+              (filename) => comfyImageUrl({ filename, type: "input" }) ?? "",
+            )}
+            label="参考图"
+            onAdd={(files) => {
+              void refUpload.upload(files).then((names) => {
+                if (names.length > 0) {
+                  onReferenceImagesChange(
+                    shot.id,
+                    [...referenceImages, ...names].slice(0, REFERENCE_IMAGE_MAX),
+                  );
+                }
+              });
+            }}
+            onRemove={(index) => {
+              onReferenceImagesChange(
+                shot.id,
+                referenceImages.filter((_, i) => i !== index),
+              );
+            }}
+            required={false}
+          />
+          {refError !== undefined && refError !== "" && (
+            <Alert
+              className="text-2xs mt-1 block rounded-md border-transparent px-2 py-1"
+              variant="danger"
+            >
+              {refError}
+            </Alert>
+          )}
+        </div>
       )}
 
       <div className="mt-2 flex items-center gap-3">
@@ -667,7 +726,6 @@ function ShotCardRow({
               gachaBusy ||
               shot.status === "running" ||
               !shot.prompt ||
-              // oxlint-disable-next-line no-unnecessary-condition -- 本按钮在外层 {channel === "local" && …} 内、channel 已收窄为 "local" 使本比较恒真；保留与上方「生成此镜头」按钮一致的条件形状，防外层守卫调整后两处口径漂移
               (channel === "local" && !workflowId)
             }
             onClick={() => {
@@ -694,7 +752,9 @@ function ShotCardRow({
           </Button>
         )}
         {shot.taskId !== undefined && shot.taskId !== "" && (
-          <span className="text-faint text-3xs truncate">任务 {shot.taskId.slice(0, 12)}…</span>
+          <TruncatedText className="text-faint text-3xs truncate">
+            {`任务 ${shot.taskId.slice(0, 12)}…`}
+          </TruncatedText>
         )}
       </div>
 

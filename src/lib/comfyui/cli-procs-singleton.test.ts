@@ -11,10 +11,15 @@
  * 同族单例（runner-state / reaper 定时器 / lifecycle 启动锁）都已挂在
  * globalThis 上；这里钉住最后一个漏网项，防止后续重构又把它改回模块级变量。
  */
+import { spawn } from "node:child_process";
 import { describe, it, expect, vi } from "vitest";
 
 /* executor-cli 的模块图会拉到 DB / 日志等副作用依赖，这里全部 mock 掉，
  * 只验证 cliProcs 的实例身份——与 reaper 测试的打桩方式一致。 */
+vi.mock("node:child_process", () => ({
+  execFile: vi.fn(),
+  spawn: vi.fn(() => ({})),
+}));
 vi.mock("../core/repository", () => ({ taskRepository: {} }));
 vi.mock("./client", () => ({ resolveComfyBase: vi.fn() }));
 vi.mock("./runner-state", () => ({
@@ -29,8 +34,7 @@ vi.mock("~/lib/core/logger", () => ({
 describe("cliProcs — 进程级单例（HMR 安全）", () => {
   it("模块重新求值后拿到同一个 Map，在飞任务不丢句柄", async () => {
     const first = await import("./executor-cli");
-    /* SAFETY: 类型断言已复核 */
-    first.cliProcs.set("t-1", {} as never);
+    first.cliProcs.set("t-1", spawn("占位进程"));
 
     // 模拟 HMR 重新求值：清模块缓存后再 import。
     // 若 cliProcs 是模块级 `new Map()`，这里会拿到一个**不同且为空**的 Map。

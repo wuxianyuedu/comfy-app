@@ -10,6 +10,7 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/u
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { displayValue } from "~/lib/display-value";
@@ -24,20 +25,11 @@ import {
   runningHintText,
 } from "./queue-monitor-config";
 
-/**
- * 队列与运行 · 第③层（纯视图）：只渲染 controller，不发请求、不含业务规则。
- *
- * 三段各答一件事，顺序就是读屏顺序 —— 跑动中（还要多久）→ 排队中（下一条是不是
- * 我的）→ 最近结果（失败的那条到底为什么失败）。
- *
- * 离线出口指向侧栏「ComfyUI」页（ISSUE #1900）：启动动作与运行状态都在那一页，
- * 这里不再把人送去设置页（设置页只管路径，去了也没有启动按钮）。
- *
- * 离线不再整页替换成空态：列表数据来自本地库的 `task.list`，离线照样拿得到，
- * 整页消失正是「状态闪一下」观感的放大器。现在离线且有任务时只多一条 warning
- * 横幅（说清「不会开始 + 连上自动接上」），列表照常铺开；离线且一条任务都没有
- * 才退回整页空态。
- */
+/** 队列与运行 · 第③层（纯视图）：只渲染 controller，不发请求、不含业务规则。
+ * 三段顺序即读屏顺序：跑动中（还要多久）→ 排队中（下一条是不是我的）→ 最近结果（失败原因）。
+ * 离线出口指向侧栏「ComfyUI」页（ISSUE #1900），不再送去设置页（那里只管路径、没有启动按钮）。
+ * 离线不整页替换：列表来自本地库 task.list，离线照样拿得到；有任务时只加 warning 横幅、列表照常，
+ * 离线且一条任务都没有才退回整页空态。 */
 export function QueueMonitorView({
   c,
   onOpenComfyui,
@@ -137,10 +129,12 @@ export function QueueMonitorView({
             {running ? (
               <article className="bg-card border-border rounded-2xl border p-4">
                 <div className="flex flex-wrap items-center gap-3">
-                  <h3 className="text-ink-bright min-w-0 flex-1 truncate text-sm font-semibold">
-                    {displayValue(running.workflowName, {
-                      fallback: "（未知工作流）",
-                    })}
+                  <h3 className="text-ink-bright min-w-0 flex-1 text-sm font-semibold">
+                    <TruncatedText className="block truncate">
+                      {displayValue(running.workflowName, {
+                        fallback: "（未知工作流）",
+                      })}
+                    </TruncatedText>
                   </h3>
                   <StatusBadge label={taskStatusLabel("RUNNING")} status="RUNNING" />
                 </div>
@@ -171,8 +165,9 @@ export function QueueMonitorView({
                     aria-label="取消正在跑的这条"
                     className="border-border rounded-lg"
                     disabled={c.isBusy(running.id)}
-                    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                    onClick={() => void c.cancel(running.id, running.workflowName)}
+                    onClick={() => {
+                      void c.cancel(running.id, running.workflowName);
+                    }}
                     size="xs"
                     variant="outline"
                   >
@@ -185,10 +180,12 @@ export function QueueMonitorView({
                 {offlineRunning.map((row) => (
                   <li className="bg-card border-border rounded-2xl border p-4" key={row.id}>
                     <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="text-ink-bright min-w-0 flex-1 truncate text-sm font-semibold">
-                        {displayValue(row.workflowName, {
-                          fallback: "（未知工作流）",
-                        })}
+                      <h3 className="text-ink-bright min-w-0 flex-1 text-sm font-semibold">
+                        <TruncatedText className="block truncate">
+                          {displayValue(row.workflowName, {
+                            fallback: "（未知工作流）",
+                          })}
+                        </TruncatedText>
                       </h3>
                       <StatusBadge label={taskStatusLabel("RUNNING")} status="RUNNING" />
                     </div>
@@ -215,8 +212,9 @@ export function QueueMonitorView({
                         aria-label="取消正在跑的这条"
                         className="border-border rounded-lg"
                         disabled={c.isBusy(row.id)}
-                        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                        onClick={() => void c.cancel(row.id, row.workflowName)}
+                        onClick={() => {
+                          void c.cancel(row.id, row.workflowName);
+                        }}
                         size="xs"
                         variant="outline"
                       >
@@ -247,12 +245,15 @@ export function QueueMonitorView({
                     <QueueRowLine
                       busy={c.isBusy(row.id)}
                       leading={`第 ${String(position)} 位`}
-                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                      onCancel={() => void c.cancel(row.id, row.workflowName)}
-                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                      onCopy={() => void c.copyForReprint(row)}
-                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                      onOpenFolder={() => void c.openFolder(row)}
+                      onCancel={() => {
+                        void c.cancel(row.id, row.workflowName);
+                      }}
+                      onCopy={() => {
+                        void c.copyForReprint(row);
+                      }}
+                      onOpenFolder={() => {
+                        void c.openFolder(row);
+                      }}
                       onOpenLog={() => {
                         c.openLog(row);
                       }}
@@ -277,12 +278,15 @@ export function QueueMonitorView({
                   <li className="border-border border-b px-4 py-3 last:border-b-0" key={row.id}>
                     <QueueRowLine
                       busy={c.isBusy(row.id)}
-                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                      onCancel={() => void c.cancel(row.id, row.workflowName)}
-                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                      onCopy={() => void c.copyForReprint(row)}
-                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                      onOpenFolder={() => void c.openFolder(row)}
+                      onCancel={() => {
+                        void c.cancel(row.id, row.workflowName);
+                      }}
+                      onCopy={() => {
+                        void c.copyForReprint(row);
+                      }}
+                      onOpenFolder={() => {
+                        void c.openFolder(row);
+                      }}
                       onOpenLog={() => {
                         c.openLog(row);
                       }}

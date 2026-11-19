@@ -19,9 +19,10 @@ import {
   modeContractInputLabel,
   parseModeContracts,
   referenceImageSlotIndex,
-  WORKSHOP_INPUT_TYPES,
+  type ModeContract,
   type ModeContractInputId,
 } from "./model-mode-contract";
+import { parseRemoteModeAdapters, WORKSHOP_INPUT_TYPES } from "./remote-model-adapter";
 
 /** 工作流库里所有「生成类」模式（契约编辑器只对它们开放）。 */
 const GENERATIVE_MODES = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative).map((t) => t.code);
@@ -85,7 +86,6 @@ describe("模式契约口 id 值域", () => {
     const entries = contractToStatusEntries({
       mode: "I2I",
       inputs: ["prompt", "size", "reference-image", "reference-image-2"],
-      output: "image",
     });
     expect(entries.map((e) => e.control)).toEqual(["text", "size", "image", "image"]);
     expect(entries[3]?.label).toBe("参考图 2");
@@ -110,7 +110,6 @@ describe("模式契约的「尺寸」口与统一尺寸口径一致", () => {
     const rows = adapterInputsFromContract({
       mode: "T2I",
       inputs: ["prompt", "size"],
-      output: "image",
     });
     expect(rows).toEqual([
       { type: "prompt", field: "prompt" },
@@ -149,16 +148,14 @@ describe("modeContractEntries：两个页签共读的那一份契约口清单", 
   });
 
   it("用户改过的模式按注册表列口，但展示名仍取统一那一份", () => {
-    const stored = parseModeContracts([
-      { mode: "T2I", inputs: ["prompt", "reference-image-2"], output: "image" },
-    ]);
+    const stored = parseModeContracts([{ mode: "T2I", inputs: ["prompt", "reference-image-2"] }]);
     const entries = modeContractEntries("t2i", stored);
     expect(entries.map((e) => e.id)).toEqual(["prompt", "reference-image-2"]);
     expect(entries[1]?.label).toBe(exposedParamDisplayLabel("reference-image-2"));
   });
 
   it("模式大小写不敏感（注册表按大写存）", () => {
-    const stored = parseModeContracts([{ mode: "T2I", inputs: ["prompt"], output: "image" }]);
+    const stored = parseModeContracts([{ mode: "T2I", inputs: ["prompt"] }]);
     expect(modeContractEntries("t2i", stored).map((e) => e.id)).toEqual(["prompt"]);
   });
 });
@@ -189,8 +186,6 @@ describe("自定义口：往返与归一化", () => {
     mode: "T2I",
     /* SAFETY: 类型断言已复核 */
     inputs: ["prompt", "custom-text-1", "size"] as Array<ModeContractInputId>,
-    /* SAFETY: 类型断言已复核 */
-    output: "image" as const,
     customInputs: [
       {
         /* SAFETY: 类型断言已复核 */
@@ -208,9 +203,7 @@ describe("自定义口：往返与归一化", () => {
   });
 
   it("没有定义的自定义口被丢弃（下游读不出名字与类型）", () => {
-    const round = parseModeContracts([
-      { mode: "T2I", inputs: ["prompt", "custom-text-9"], output: "image" },
-    ]);
+    const round = parseModeContracts([{ mode: "T2I", inputs: ["prompt", "custom-text-9"] }]);
     expect(round.map((c) => c.inputs)).toEqual([["prompt"]]);
   });
 
@@ -219,7 +212,6 @@ describe("自定义口：往返与归一化", () => {
       {
         mode: "T2I",
         inputs: ["prompt", "custom-text-1"],
-        output: "image",
         customInputs: [{ id: "custom-text-1", label: "  ", kind: "text" }],
       },
     ]);
@@ -232,7 +224,6 @@ describe("自定义口：往返与归一化", () => {
       {
         mode: "T2I",
         inputs: ["custom-image-1"],
-        output: "image",
         customInputs: [{ id: "custom-image-1", label: "风格图", kind: "text" }],
       },
     ]);
@@ -250,7 +241,6 @@ describe("自定义口：往返与归一化", () => {
       contractToStatusEntries({
         mode: "T2I",
         inputs: ["custom-image-1", "custom-number-2"],
-        output: "image",
         customInputs: [
           { id: "custom-image-1", label: "风格图", kind: "image" },
           { id: "custom-number-2", label: "强度", kind: "number" },
@@ -301,5 +291,111 @@ describe("成品配置覆盖全部生成类模式", () => {
 
   it("传入自己的模式清单时按它算（调用方不必只能吃默认全集）", () => {
     expect(configuredModeContracts(["t2i"]).map((c) => c.mode)).toEqual(["T2I"]);
+  });
+
+  it("项目默认显式覆盖按模式整份替换推导，未覆盖的模式继续跟随推导（ISSUE #3396）", () => {
+    const override: ModeContract = {
+      mode: "T2I",
+      inputs: ["prompt", "custom-text-1"],
+      required: ["prompt"],
+      customInputs: [{ id: "custom-text-1", label: "画风", kind: "text" }],
+    };
+    const all = configuredModeContracts(undefined, [override]);
+    // 被覆盖的模式 = 显式条目原样；没覆盖的仍是推导值。
+    expect(all.find((c) => c.mode === "T2I")).toEqual(override);
+    expect(all.find((c) => c.mode === "I2I")).toEqual(derivedModeContract("I2I"));
+    // 空覆盖 = 纯推导（发货形态）。
+    expect(configuredModeContracts(undefined, [])).toEqual(configuredModeContracts(undefined, []));
+  });
+
+  /* 「入库 JSON 的显式覆盖每一条都与推导有差异」（ISSUE #3396 的占位覆盖判据）
+     随 #3603 退役：基线不再是「与推导的差集」，而是**完整注册表** —— 条目与
+     推导逐字相同是迁移的正常形态（整份 JSON 就是从推导逐字固化的），不算
+     「该删的占位」。出处唯一化的守卫由下面 `mode-contract-defaults.json：
+     完整基线` 那一组承担（完整性 / 自描述 / 直读层序）。 */
+});
+
+describe("mode-contract-defaults.json：完整基线（#3603）", () => {
+  it("基线覆盖全部生成类模式、无重复（parse 去重后数量不变）", () => {
+    const baseline = configuredModeContracts();
+    expect(baseline).toHaveLength(ALL_CONTRACT_MODES.length);
+    expect(new Set(baseline.map((c) => c.mode)).size).toBe(ALL_CONTRACT_MODES.length);
+  });
+
+  it("每条必备口都显式固化（基线自描述，读取侧不留「缺省回落」这一层）", () => {
+    for (const contract of configuredModeContracts()) {
+      expect(Array.isArray(contract.required), contract.mode).toBe(true);
+      for (const id of contract.required ?? []) {
+        expect(contract.inputs.includes(id), `${contract.mode}:${id}`).toBe(true);
+      }
+    }
+  });
+
+  it("成品配置直读 JSON 条目（推导不会反盖基线 —— 层序反了这里当场红）", () => {
+    const baseline = configuredModeContracts();
+    const t2i = baseline.find((c) => c.mode === "T2I");
+    /* 迁移时刻的 T2I 基线与推导一致是事实，但**判据锚的是出处**：
+       configuredModeContracts 的返回必须逐字等于 JSON 里那条。 */
+    expect(t2i).toEqual({
+      mode: "T2I",
+      inputs: ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
+      required: ["prompt"],
+    });
+  });
+
+  it("契约里没有「输出类别」这一格（ISSUE #4072：类别由模式码唯一决定）", () => {
+    /* 回归：输出类别曾经是契约的一格（可配），于是同一个模式能被挑成与它
+     * 本身矛盾类别（把文生图挑成「视频」）。现在它既不在类型里、也不在基线
+     * 文件里 —— 读出来的契约只有「口清单 + 必备口 + 自定义口」。 */
+    for (const contract of configuredModeContracts()) {
+      expect("output" in contract, contract.mode).toBe(false);
+    }
+    expect("output" in derivedModeContract("T2I")).toBe(false);
+  });
+
+  it("旧数据里的「输出类别」被丢弃，不进归一化结果（ISSUE #4072）", () => {
+    /* 存量文件（`data/workshop-mode-contracts.json` / 旧版基线）里那一格照读
+     * 不误，但归一化后不再进契约 —— 与新写入的形状一致。 */
+    const round = parseModeContracts([
+      { mode: "T2I", inputs: ["prompt"], output: "video", required: ["prompt"] },
+    ]);
+    expect(round).toEqual([{ mode: "T2I", inputs: ["prompt"], required: ["prompt"] }]);
+  });
+});
+
+describe("parseRemoteModeAdapters：固定值字段（#3590）", () => {
+  it("constants 原样读回：field trim、空 field 丢行、同名字段留先到的", () => {
+    const out = parseRemoteModeAdapters([
+      {
+        mode: "t2v",
+        inputs: [{ type: "prompt", field: "prompt" }],
+        constants: [
+          { field: " mode ", value: "text" },
+          { field: "mode", value: "keyframe" },
+          { field: "", value: "x" },
+          { field: "size", value: 720 },
+          "bad-row",
+        ],
+      },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.constants).toEqual([
+      { field: "mode", value: "text" },
+      { field: "size", value: "720" },
+    ]);
+  });
+
+  it("没有 constants / 空数组时不挂键（与「缺省 = 没有常量」一致）", () => {
+    const out = parseRemoteModeAdapters([
+      { mode: "T2I", inputs: [{ type: "prompt", field: "prompt" }] },
+      {
+        mode: "I2V",
+        inputs: [{ type: "prompt", field: "prompt" }],
+        constants: [],
+      },
+    ]);
+    expect(out).toHaveLength(2);
+    expect("constants" in out[0]!).toBe(false);
+    expect("constants" in out[1]!).toBe(false);
   });
 });

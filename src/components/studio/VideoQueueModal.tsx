@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -13,15 +14,9 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 
 /* ── 视频队列弹窗 —— 接了真实的 VIDEO 任务 ──
- 从 /api/tasks 拉取用户的 VIDEO 类型任务（已筛选），显示实时
- 状态（QUEUED / RUNNING / SUCCEEDED / FAILED），每 4s 自动刷新，
- 并打开某个片段的结果 / 结果详情。
-
- ⚠️ 此前这里还有一个「批量提交」草稿页签 —— 它长在内置模板通路被拆除之前，
- 每条草稿只有提示词、没有必填的 workflow，这条通路**从来没成功过**
- （ISSUE #2169，业主拍板整格撤掉：生产挂载从不播种草稿，
- 新视频的唯一真实入口是创作台「视频」模式，那条路一直在）。本弹窗只读地看队列。
-*/
+ 从 /api/tasks 拉取用户的 VIDEO 类型任务（已筛选），显示实时状态（QUEUED / RUNNING / SUCCEEDED / FAILED），
+ 每 4s 自动刷新，并可打开某个片段的结果 / 详情。本弹窗只读地看队列：「批量提交」草稿页签整格撤掉（ISSUE #2169）——
+ 每条草稿只有提示词、没有必填的 workflow，那条通路**从来没成功过**；新视频唯一真实入口是创作台「视频」模式。 */
 
 type StatusMeta = { cls: string; icon: string; label: string };
 
@@ -42,13 +37,15 @@ const STATUS_META: Record<"QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCE
     CANCELLED: { icon: "ban", label: "已取消", cls: "text-ink-fainter" },
   };
 
+/** 后端给的 `task.status` 是宽字符串：只有落在 `STATUS_META` 的键上才认。 */
+function isTaskStatus(status: string): status is keyof typeof STATUS_META {
+  return Object.hasOwn(STATUS_META, status);
+}
+
 /** 按任务状态取展示元数据。`task.status` 是宽字符串（来自后端），这里收口
  *  「未知状态 → 排队中」这一条兜底判据，返回**非空**，调用点不再各自 `!`。 */
 function statusMetaFor(status: string): StatusMeta {
-  /* SAFETY: 类型断言已复核 */
-  return status in STATUS_META
-    ? STATUS_META[status as keyof typeof STATUS_META]
-    : STATUS_META.QUEUED;
+  return isTaskStatus(status) ? STATUS_META[status] : STATUS_META.QUEUED;
 }
 
 export type VideoQueueModalProps = {
@@ -62,6 +59,15 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
   const [tasks, setTasks] = useState<Array<VideoTask>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  /* 卸载判活（ISSUE #4288）：4s 轮询的在途请求回来时弹窗可能已卸载，
+   * 不再把结果写进已消失的界面状态。 */
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   const loadTasks = useCallback(async () => {
     if (!open) {
@@ -70,11 +76,17 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
     setLoading(true);
     try {
       const videos = await fetchVideoTasks();
-      setTasks(videos);
+      if (aliveRef.current) {
+        setTasks(videos);
+      }
     } catch {
-      setError("加载队列失败");
+      if (aliveRef.current) {
+        setError("加载队列失败");
+      }
     } finally {
-      setLoading(false);
+      if (aliveRef.current) {
+        setLoading(false);
+      }
     }
   }, [open]);
 
@@ -179,19 +191,20 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
                             {meta.label}
                           </span>
                         </div>
-                        <p className="text-ink-soft truncate text-xs" title={task.prompt}>
-                          {task.prompt || "（无提示词）"}
-                        </p>
-                        <p className="text-ink-fainter text-3xs mt-0.5 truncate font-mono">
-                          {task.workflowName}
-                        </p>
-                        {task.status === "FAILED" && task.error !== null && task.error !== "" && (
-                          <p
-                            className="text-destructive text-3xs mt-0.5 truncate"
-                            title={task.error}
-                          >
-                            {task.error}
+                        <Hint label={task.prompt}>
+                          <p className="text-ink-soft truncate text-xs">
+                            {task.prompt || "（无提示词）"}
                           </p>
+                        </Hint>
+                        <TruncatedText className="text-ink-fainter text-3xs mt-0.5 truncate font-mono">
+                          {task.workflowName}
+                        </TruncatedText>
+                        {task.status === "FAILED" && task.error !== null && task.error !== "" && (
+                          <Hint label={task.error}>
+                            <p className="text-destructive text-3xs mt-0.5 truncate">
+                              {task.error}
+                            </p>
+                          </Hint>
                         )}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">

@@ -4,6 +4,7 @@ import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { EmptyState } from "~/components/ui/empty-state";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { ExtractToolbar } from "~/components/workshop/ExtractToolbar";
 import { useStoryboardPlanner, type Props } from "./useStoryboardPlanner";
 import { ShotRow } from "./StoryboardPlanner.parts";
@@ -29,6 +30,9 @@ export function StoryboardPlanner(props: Props) {
     importFromScript,
     handleAISplit,
     clearShots,
+    clearConfirmOpen,
+    confirmClearShots,
+    cancelClearShots,
     generateAll,
     polishIsBusy,
     polishAnyBusy,
@@ -80,8 +84,9 @@ export function StoryboardPlanner(props: Props) {
                 <Button
                   className="h-auto rounded-lg px-3 py-1.5"
                   disabled={polishBusyAll || polishAnyBusy || aiBusy}
-                  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                  onClick={() => void polishAll()}
+                  onClick={() => {
+                    void polishAll();
+                  }}
                   size="xs"
                   variant="primary-solid"
                 >
@@ -178,8 +183,9 @@ export function StoryboardPlanner(props: Props) {
               generating={generating}
               key={shot.id}
               onGenerate={onGenerate}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onPolish={() => void polishOne(shot)}
+              onPolish={() => {
+                void polishOne(shot);
+              }}
               onRemove={planner.removeShot}
               onUpdate={planner.updateShot}
               polishBusy={polishIsBusy(shot.id)}
@@ -192,6 +198,17 @@ export function StoryboardPlanner(props: Props) {
           ))}
         </div>
       )}
+      {/* 清空确认走非阻塞弹窗（ISSUE #3771）：原生 confirm() 在内嵌浏览器里
+          未被处置会以 0 CPU 卡死同源渲染进程（连 splash.html 都冻结）。 */}
+      <ConfirmDialog
+        confirmLabel="清空"
+        danger
+        description="将移除当前全部分镜，不可撤销。"
+        onClose={cancelClearShots}
+        onConfirm={confirmClearShots}
+        open={clearConfirmOpen}
+        title="清空所有分镜？"
+      />
     </div>
   );
 }

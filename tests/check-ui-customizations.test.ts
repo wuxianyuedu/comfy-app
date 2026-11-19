@@ -1,13 +1,7 @@
 /**
- * `ui/` 定制标记 ⟺ 台账 门禁自测（规范 docs/standards/16 §16.8）。
- *
- * 这条门禁的价值全在判定口径上：太松（标记随便埋在哪都算、或把别的小节里的
- * 同名表格行当成登记）→ `shadcn add` 覆盖掉定制时没有人被拦；太紧（把只在
- * import 别名上不同的文件也要求登记）→ 20 多个文件无意义地进台账，门禁变噪音。
- *
- * 所以用「临时仓库 + 只放被测文件」跑**真脚本**（脚本按自身位置解析仓库根，
- * 必须把它一起复制进去，否则扫的还是真实仓库 —— 那样用例会「总是通过」），
- * 断言「该拦的拦、不该误伤的放过」。
+ * `ui/` 定制标记 ⟺ 台账 门禁自测（规范 docs/standards/16 §16.8）。判定口径是全部价值：太松（标记
+ * 埋哪都算、或误认别的小节同名表格行）→ `shadcn add` 覆盖定制无人被拦；太紧（import 别名不同的文件也要求登记）→ 20 多个文件进台账，门禁变噪音。
+ * 故用「临时仓库 + 只放被测文件」跑**真脚本**（脚本按自身位置解析仓库根，须一起复制，否则扫的是真实仓库、用例「总是通过」），断言「该拦的拦、不该误伤的放过」。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -15,8 +9,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-ui-customizations.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-ui-customizations.cjs");
 const DOC = "docs/standards/16-shadcn-ui与表单校验.md";
+
+/** execFileSync 抛出的失败对象：只认「是对象」这一层，字段各自再按 typeof 收窄。 */
+function isExecFailure(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
 
 /** 台账小节（形状与真实文档一致：标题 + 四列表格）。 */
 function docWithLedger(rows: Array<string>): string {
@@ -47,7 +46,8 @@ const MARKER =
 function gate(files: Record<string, string>): { ok: boolean; output: string } {
   const root = mkdtempSync(path.join(tmpdir(), "ui-customizations-"));
   mkdirSync(path.join(root, "scripts"), { recursive: true });
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
@@ -56,20 +56,21 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
   try {
     return {
       ok: true,
-      output: execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
-        cwd: root,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      }),
+      output: execFileSync(
+        process.execPath,
+        [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
+        {
+          cwd: root,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      ),
     };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
-    return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    const e: Record<string, unknown> = isExecFailure(error) ? error : {};
+    const stdout = typeof e.stdout === "string" ? e.stdout : "";
+    const stderr = typeof e.stderr === "string" ? e.stderr : "";
+    return { ok: false, output: `${stdout}${stderr}` };
   }
 }
 

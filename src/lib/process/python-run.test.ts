@@ -9,6 +9,8 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { pythonCandidates } from "./python-candidates";
 import {
   forEachOutputLine,
@@ -16,6 +18,13 @@ import {
   missingInterpreterMessage,
   pythonAttempts,
 } from "./python-run";
+
+/** `forEachOutputLine` 只用到 `.on`：假的流用它挂监听，运行期确认是对象且带 `on` 后收窄。 */
+function assertReadableStreamLike(value: unknown): asserts value is NodeJS.ReadableStream {
+  if (!isRecord(value) || typeof value.on !== "function") {
+    throw new TypeError("假的流必须能挂监听（缺少 on）");
+  }
+}
 
 const SCRIPT = ["-u", "scripts/parse_custom_nodes.py"];
 
@@ -98,13 +107,14 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
   /** 一条可编程的假流（与子进程 stdout 的监听面同形）。 */
   function fakeStream() {
     const cbs: Record<string, Array<(arg: unknown) => void>> = {};
+    const stream: unknown = {
+      on: (ev: string, cb: (arg: unknown) => void) => {
+        (cbs[ev] ??= []).push(cb);
+      },
+    };
+    assertReadableStreamLike(stream);
     return {
-      /* SAFETY: 类型断言已复核 */
-      stream: {
-        on: (ev: string, cb: (arg: unknown) => void) => {
-          (cbs[ev] ??= []).push(cb);
-        },
-      } as NodeJS.ReadableStream,
+      stream,
       push: (chunk: string) => {
         for (const cb of cbs.data ?? []) {
           cb(Buffer.from(chunk));
@@ -149,13 +159,11 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
   it("字符串 chunk 也接得住（流的编码由调用点决定，内核不许假设 Buffer）", () => {
     const cbs: Array<(arg: unknown) => void> = [];
     const lines: Array<string> = [];
-    /* SAFETY: 类型断言已复核 */
-    forEachOutputLine(
-      {
-        on: (_ev: string, cb: (arg: unknown) => void) => cbs.push(cb),
-      } as unknown as NodeJS.ReadableStream,
-      (l) => lines.push(l),
-    );
+    const stream: unknown = {
+      on: (_ev: string, cb: (arg: unknown) => void) => cbs.push(cb),
+    };
+    assertReadableStreamLike(stream);
+    forEachOutputLine(stream, (l) => lines.push(l));
     for (const cb of cbs) {
       cb("一行\n");
     }
@@ -166,12 +174,12 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
     /* 这一档是形态约束：内核只挂这两个，缺哪个就是哪个不触发，不许在这里抛 ——
      * 抛出去会把一次正常的解析变成「流内部起进程失败」。 */
     const seen: Array<string> = [];
-    /* SAFETY: 类型断言已复核 */
-    const stream = {
+    const stream: unknown = {
       on: (ev: string) => {
         seen.push(ev);
       },
-    } as unknown as NodeJS.ReadableStream;
+    };
+    assertReadableStreamLike(stream);
     expect(() => {
       forEachOutputLine(stream, () => undefined);
     }).not.toThrow();

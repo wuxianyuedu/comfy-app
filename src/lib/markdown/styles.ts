@@ -133,7 +133,7 @@ export const MARKDOWN_ELEMENT_STYLES: Readonly<Record<string, StyleRule>> = {
 };
 
 /** 扫开标签：只认「名字 + 属性区」，属性区里不含 `>`（值里的 `>` 已被 DOMPurify 转义）。 */
-const OPEN_TAG = /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
+const OPEN_TAG = /<(?<tag>[a-zA-Z][a-zA-Z0-9-]*)(?<attrs>(?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
 
 /**
  * 拼一个开标签。两处容易错的地方各留一行注释：

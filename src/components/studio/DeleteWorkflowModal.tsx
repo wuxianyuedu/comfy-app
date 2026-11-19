@@ -1,14 +1,8 @@
 "use client";
 
-/** 工作流库的删除确认弹窗。
- *
- *  此前这里自绘遮罩 + 手写 Esc 的 keydown 监听 + 手搓 danger 图标按钮排布 ——
- *  而 `ui/confirm-dialog` 就是同一件事（圆角卡片、危险色调、确认/取消双按钮、
- *  Esc / 点遮罩关闭、确认按钮自动聚焦）。两份实现曾经各自漂移：本文件承担
- *  「遮罩点击在 `deleting` 期间被阻断」这一条语义，`ConfirmDialog` 则由
- *  `pending` 把确认按钮置为 spinner 态。现在统一走 `ConfirmDialog`：
- *  `pending={deleting}` 取代「点不动」的遮罩阻断，语义更准确。
- */
+/** 工作流库的删除确认弹窗。此前自绘遮罩 + 手写 Esc + 手搓危险按钮，与 `ui/confirm-dialog`
+ *  是同一件事且各自漂移：本文件承担「遮罩点击在 `deleting` 期间被阻断」，`ConfirmDialog` 则用
+ *  `pending` 把确认按钮置为 spinner。现在统一走 `ConfirmDialog`，`pending={deleting}` 语义更准确。 */
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 
 type DeleteWorkflowModalProps = {

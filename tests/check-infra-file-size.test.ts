@@ -1,16 +1,7 @@
 /**
- * 基础设施层文件长度 **硬闸** 自检：把 `scripts/check-infra-file-size.cjs` 当黑盒
- * 跑在临时工作区上，验证它真能按 900 行这把尺子认出超限文件、且**翻闸后不再有
- * 任何登记通道**。
- *
- * 规范：docs/standards/12-代码组织与文件结构.md §12.6 R5 的姊妹档 / §12.13
- *
- * 为什么是硬闸：R5 / 函数长度 / 非空断言 / 孪生对四类债务判据的扫描根都只有 `src`，
- * 而「判据自己」这一层（`scripts/**` 的 `.cjs/.mjs` 与 `tools/**` 的 `.ps1`）此前
- * 落在它自己立的硬闸之外 —— 判据是被执行的那部分代码，它长到读不动时的表现是
- * 「这条判据恒绿」而不是报错。存量已在 ISSUE #1811 第五刀清零（`dev-launcher.mjs`
- * 按阶段拆进 `launcher-core/**`），棘轮在 0 上只剩「手改 JSON 就能登记新违规」这条
- * 通道，所以翻成硬闸 —— 出口只有一个：拆。
+ * 基础设施层文件长度**硬闸**自检：把 `scripts/gates/check-infra-file-size.cjs` 当黑盒跑在临时工作区，验证它真能按 900 行认出超限文件、且翻闸后不再有任何登记通道（规范 §12.6 R5 姊妹档 / §12.13）。
+ * 为什么硬闸：R5/函数长度/非空断言/孪生对的扫描根只有 `src`，判据自己（`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1）本在硬闸之外 —— 判据长到读不动时表现是「恒绿」而不是报错；存量已在 ISSUE #1811 第五刀清零，棘轮在 0 上只剩「手改 JSON 登记」一条通道。
+ * 出口只有一个：拆。
  */
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -18,7 +9,7 @@ import { describe } from "vitest";
 import { defineGateRepo, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-infra-file-size.cjs",
+  script: "gates/check-infra-file-size.cjs",
   /* 扫描面是两层：`scripts/`（.cjs/.mjs）与 `tools/`（.ps1）。 */
   dirs: ["scripts", "tools"],
 });
@@ -70,5 +61,49 @@ describe("check-infra-file-size 硬闸", () => {
     const r = repo.run(["--update"]);
     expect(r.code).toBe(1);
     expect(globBaselines(repo.dir)).toEqual([]);
+  });
+
+  /* ── 临近拆分提醒（ISSUE #3473）：到 800 就点名规划，不等撞闸 ──
+   * 它是读数不是闸：退出码永远由 900 那把尺子独占。边界四格里，
+   * 900 恰恰要提醒（硬闸判「超过」，900 本身不红 —— 它是再加一行就撞闸的那格）。 */
+  describe("临近拆分提醒（≥800 行，只读数不阻断；ISSUE #3473）", () => {
+    /** 造一份按闸的口径恰好 `n` 行的 `.cjs`。
+     *
+     * 行数口径是 `text.split("\n").length`：末行**不带**换行时它才恰好等于物理行数
+     * （带尾换行的 n 行会被数成 n+1 —— 首跑边界用例就是这么红的）。 */
+    const writeSized = (repo: GateRepo, n: number) => {
+      repo.write("scripts/sized.cjs", `${"// 行\n".repeat(n - 1)}module.exports = 1;`);
+    };
+
+    test("850 行：退 0 且点名（提醒不等撞闸）", ({ repo }) => {
+      writeSized(repo, 850);
+      const r = repo.run();
+      expect(r.code).toBe(0);
+      expect(r.output).toContain("临近拆分提醒");
+      expect(r.output).toContain("scripts/sized.cjs");
+    });
+
+    test("799 行不提醒、800 行整提醒（下边界）", ({ repo }) => {
+      writeSized(repo, 799);
+      expect(repo.run().output).not.toContain("临近拆分提醒");
+      writeSized(repo, 800);
+      expect(repo.run().output).toContain("临近拆分提醒");
+    });
+
+    test("900 行整：提醒在、阻断不在（硬闸判「超过」）", ({ repo }) => {
+      writeSized(repo, 900);
+      const r = repo.run();
+      expect(r.code).toBe(0);
+      expect(r.output).toContain("临近拆分提醒");
+      expect(r.output).toContain("scripts/sized.cjs");
+    });
+
+    test("提醒不接管退出码：与超限文件同跑，红的仍是 900 那把尺子", ({ repo }) => {
+      writeSized(repo, 850);
+      writeBig(repo);
+      const r = repo.run();
+      expect(r.code).toBe(1);
+      expect(r.output).toContain("scripts/big.cjs");
+    });
   });
 });

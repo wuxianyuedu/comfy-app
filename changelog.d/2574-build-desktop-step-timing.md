@@ -30,7 +30,7 @@
   当场红。`filter` 也早就在用且量过收益（省下 `src/` 11.7 MB + `changelog.d/` 3.3 MB
   与开发机私有输入；载荷实体化把 404 MB 压到 245 MB）—— 这不是「优化还没做」，是已做完并记账。
 - **新执行者 `tests/build-desktop-step-readings.test.ts`（7 条）**，并登记进
-  `scripts/fixed-structural-tests.mjs`：这条读的是**磁盘文本**，而 `build-desktop.mjs`
+  `scripts/affected-tests/fixed-structural-tests.mjs`：这条读的是**磁盘文本**，而 `build-desktop.mjs`
   不被任何测试 import ⇒ 改它不会把这条带进增量面；反过来「把读数删掉」「把时长塞进判定」
   也都不在任何改动面上 —— 不固定跑的话，它的表现不是红，是下次再撞「CI 上看起来像卡死」时
   屏幕里仍然只有体积、没有时刻。按**计时变量的归属**判而不是按步骤标号的字面位置判

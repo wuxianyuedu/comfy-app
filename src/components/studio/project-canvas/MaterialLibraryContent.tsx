@@ -1,13 +1,9 @@
 "use client";
 
 /**
- * 素材库面板的「内容区」拆分件（§17.12 视图二次拆分：只动 JSX 物理位置，
- * 不动行为）——骨架 / 空态 / 条目网格与列表 / 分类（网格与列表）四态。
- *
- * 分类识别色（KIND_STYLE）与文件夹装饰色（FOLDER_ICON_TINT）随迁：
- * 只剩本文件消费，§3.6.1 的 p71-allow 例外块照原文保留。
- *
- * 数据与动作经 `c`（MaterialLibraryController）注入，本组件零 IO。
+ * 素材库面板的「内容区」拆分件（§17.12 视图二次拆分：只动 JSX 位置，不动行为）：
+ * 骨架 / 空态 / 条目网格与列表 / 分类四态；分类识别色与文件夹装饰色随迁（只剩本文件
+ * 消费，§3.6.1 的 p71-allow 例外块照原文保留）。数据与动作经 `c` 注入，本组件零 IO。
  */
 import {
   ChevronRight,
@@ -27,6 +23,7 @@ import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
 import { fmtBytes } from "~/lib/format-bytes";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { displayValue } from "~/lib/display-value";
 import type { MaterialItem } from "~/lib/media/materials-client";
 import type { MaterialLibraryController } from "./hooks/use-material-library";
@@ -150,13 +147,15 @@ export function MaterialLibraryContent({
                     </div>
                   )}
                 </div>
-                <p className="text-ink-soft text-2xs truncate px-2 py-1.5">{item.name}</p>
+                <p className="text-ink-soft text-2xs px-2 py-1.5">
+                  <TruncatedText className="block truncate">{item.name}</TruncatedText>
+                </p>
                 {/* hover 操作 */}
                 <div className="absolute top-1 right-1 hidden gap-1 group-hover:flex">
                   {onUse && (
                     <Hint accessibleName label="加入画布">
                       <Button
-                        className="text-ink-soft rounded bg-black/70 hover:bg-black/60 hover:text-white"
+                        className="text-ink-soft rounded bg-black/70 hover:bg-black/80 hover:text-white"
                         onClick={() => {
                           onUse(item);
                         }}
@@ -169,9 +168,10 @@ export function MaterialLibraryContent({
                   )}
                   <Hint accessibleName label="删除">
                     <Button
-                      className="text-ink-soft hover:text-destructive rounded bg-black/70 hover:bg-black/60"
-                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                      onClick={() => void remove(item)}
+                      className="text-ink-soft hover:text-destructive rounded bg-black/70 hover:bg-black/80"
+                      onClick={() => {
+                        void remove(item);
+                      }}
                       size="icon-xs"
                       variant="ghost"
                     >
@@ -212,7 +212,9 @@ export function MaterialLibraryContent({
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-ink-bright truncate text-sm">{item.name}</p>
+                  <p className="text-ink-bright text-sm">
+                    <TruncatedText className="block truncate">{item.name}</TruncatedText>
+                  </p>
                   <p className="text-ink-fainter text-2xs mt-0.5">
                     {searching ? `${item.folderName} ·` : ""}
                     {displayValue(fmtBytes(item.size))}
@@ -233,20 +235,22 @@ export function MaterialLibraryContent({
                       </Button>
                     </Hint>
                   )}
-                  <a
-                    className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
-                    download={item.name}
-                    draggable={false}
-                    href={item.url}
-                    title="下载"
-                  >
-                    <Download size={13} />
-                  </a>
+                  <Hint label="下载">
+                    <a
+                      className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
+                      download={item.name}
+                      draggable={false}
+                      href={item.url}
+                    >
+                      <Download size={13} />
+                    </a>
+                  </Hint>
                   <Hint accessibleName label="删除">
                     <Button
                       className="text-ink-muted hover:bg-subtle hover:text-destructive rounded-md"
-                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                      onClick={() => void remove(item)}
+                      onClick={() => {
+                        void remove(item);
+                      }}
                       size="icon-sm"
                       variant="ghost"
                     >
@@ -275,9 +279,9 @@ export function MaterialLibraryContent({
               >
                 <Folder size={22} strokeWidth={1.8} />
               </div>
-              <span className="text-ink-soft min-w-0 truncate text-center text-xs">
+              <TruncatedText className="text-ink-soft min-w-0 truncate text-center text-xs">
                 {folder.name}
-              </span>
+              </TruncatedText>
               {folder.count > 0 && (
                 <span className="text-ink-fainter text-3xs tabular-nums">{folder.count}</span>
               )}
@@ -300,7 +304,9 @@ export function MaterialLibraryContent({
               >
                 <Folder size={18} strokeWidth={1.8} />
               </div>
-              <span className="text-ink-bright min-w-0 flex-1 truncate text-sm">{folder.name}</span>
+              <TruncatedText className="text-ink-bright min-w-0 flex-1 truncate text-sm">
+                {folder.name}
+              </TruncatedText>
               <span className="text-ink-fainter text-2xs shrink-0 tabular-nums">
                 {folder.count > 0 ? folder.count : ""}
               </span>

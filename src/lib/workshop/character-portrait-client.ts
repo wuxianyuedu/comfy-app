@@ -7,6 +7,7 @@
 import { isInlineMedia } from "~/lib/media/data-url";
 import { DEFAULT_IMAGE_MIME, extForMime } from "~/lib/media/mime-ext";
 import { uploadMaterialItem } from "~/lib/media/materials-client";
+import { getSizePresetTable } from "~/lib/media/size-preset-store";
 import { sizeSpecToRelay, sizeSpecToWxH, type SizeSpec } from "~/lib/media/size-presets";
 import type { SavedOutput } from "./api-channel-shared";
 import {
@@ -123,14 +124,17 @@ export async function generateRemotePortrait(
     projectId: string;
   },
 ): Promise<string> {
+  /* 尺寸换算按**本机生效的那份**表（ISSUE #3972）：设置里改过的表要真的改变
+   * 请求里的宽高 / 百万像素，而不是只改界面显示。 */
+  const table = getSizePresetTable();
   const url = await apiGenerateImage({
     prompt: req.prompt,
     negative: req.negative,
-    size: sizeSpecToWxH(req.size),
+    size: sizeSpecToWxH(req.size, "image", table),
     ...(opts.model !== undefined && opts.model !== "" ? { model: opts.model } : {}),
     mode: "T2I",
     /* 远端通道认「宽高比 + 百万像素」：分辨率档按场景尺寸表换算成实际总像素。 */
-    ...sizeSpecToRelay(req.size),
+    ...sizeSpecToRelay(req.size, "image", table),
   });
   return localizePortraitImage(url, opts);
 }

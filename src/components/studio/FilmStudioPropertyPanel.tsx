@@ -5,6 +5,7 @@
 import { textHandler } from "~/lib/form-props";
 
 import { Button } from "~/components/ui/button";
+import { Hint } from "~/components/ui/hint";
 import { Checkbox } from "~/components/ui/checkbox";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Separator } from "~/components/ui/separator";
@@ -112,9 +113,8 @@ export function FilmStudioPropertyPanel({
           multiple={false}
           onValueChange={(vals) => {
             const next = vals[0];
-            if (typeof next === "string" && next !== c.shotSource) {
-              /* SAFETY: 类型断言已复核 */
-              c.setShotSource(next as "project" | "script");
+            if ((next === "project" || next === "script") && next !== c.shotSource) {
+              c.setShotSource(next);
             }
           }}
           value={[c.shotSource]}
@@ -228,7 +228,9 @@ export function FilmStudioPropertyPanel({
             type="file"
           />
           {c.bgmName !== null && c.bgmName !== "" && (
-            <p className="text-primary-strong text-2xs mt-1 truncate">已选：{c.bgmName}</p>
+            <Hint label={`已选：${c.bgmName}`}>
+              <p className="text-primary-strong text-2xs mt-1 truncate">已选：{c.bgmName}</p>
+            </Hint>
           )}
         </div>
 
@@ -240,8 +242,9 @@ export function FilmStudioPropertyPanel({
               c.film.shots.some((shot) => shot.status === "SUCCEEDED") && (
                 <Button
                   className="ml-2 h-auto text-inherit underline hover:no-underline"
-                  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                  onClick={() => void c.recompose()}
+                  onClick={() => {
+                    void c.recompose();
+                  }}
                   variant="link"
                 >
                   重新合成

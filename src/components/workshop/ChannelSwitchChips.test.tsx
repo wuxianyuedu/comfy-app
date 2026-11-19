@@ -7,17 +7,8 @@ import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 afterEach(cleanup);
 
 /**
- * 工坊「生成通道」那一排的回归判据（ISSUE #1925 第三批收口）。
- *
- * 镜头台 / 影片台 / 定妆照三处此前各写一份**逐字相同**的手搓选中三元
- * （`Button variant="outline"` + `"border-primary bg-primary-soft text-primary"`），
- * 缺的都是同一半：`outline` 变体自带 `hover:bg-muted hover:text-foreground`，
- * 而选中分支没钉悬停值 —— 划过**已选中**的那一枚时悬停档胜出，紫色选中翻成
- * 白字灰底（用户原话「悬浮和非悬浮一个紫色，一个白色」，ISSUE #1423）。
- *
- * 现在整排交给 `ui/select-chip`（「一排里选一个」的全库唯一实现）。
- * 这里钉两件事：① 单选语义（`radiogroup` + `aria-checked`）；② 选中档
- * **自带与常态同值的悬停值**（少了它浏览器里就会落回 `buttonVariants`）。
+ * 工坊「生成通道」那一排的回归判据（ISSUE #1925 第三批收口 / ISSUE #1423）：手搓的 `Button variant="outline"` 选中三元没钉悬停值，划过**已选中**的那枚时
+ * 悬停档胜出，紫色选中翻成白字灰底；现整排交给 `ui/select-chip`。这里钉两件事：① 单选语义（`radiogroup` + `aria-checked`）；② 选中档**自带与常态同值的悬停值**。
  */
 const apiChannels: ApiChannelsView = {
   image: {

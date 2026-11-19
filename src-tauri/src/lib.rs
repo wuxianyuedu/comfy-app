@@ -1,6 +1,7 @@
 use std::net::TcpStream;
 #[cfg(not(debug_assertions))]
 use std::net::TcpListener;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -29,12 +30,25 @@ mod shell_launch;
 ///
 /// 用 **tauri-plugin-shell 的 CommandChild** 而不是 `std::process::Command`：
 /// 官方的 shell 插件按平台选择解释器（Windows `cmd /C`、POSIX `sh -c`），
-/// 且 `kill()` 会连带回收子进程（POSIX 走进程组、Windows 走 Job/任务终止），
 /// 这正是「跨平台启动链路」里最不能自己手写的一段（AGENTS 硬规则 3）。
-/// 自持 `Command::new` + `taskkill` 的写法在 POSIX 上只剩单杀 leader ——
-/// node 之下的 next-server / turbopack worker 会残留成孤儿，继续占端口锁日志。
+/// 注意插件的 `kill()` **并非**无条件回收整棵树：树级回收（POSIX 进程组 /
+/// Windows Job）只在 spawn 时启用了 `.set_process_group(true)` 才有，而本侧
+/// 刻意没启用——那会再叠一层不带 `BREAKAWAY_OK` 的 job，保活服务的逃逸
+/// （`CREATE_BREAKAWAY_FROM_JOB`）会被它拦下。树级回收由两道专职机制承担：
+/// 正常关窗走 `kill_sidecar`（插件单杀 + `reap-process.mjs` 补刀）；壳被硬杀走
+/// `attach_sidecar_kill_on_close_job` 挂上的 `KILL_ON_JOB_CLOSE` job（ISSUE #4165，
+/// 句柄由壳持有）。自持 `Command::new` + `taskkill` 的写法在 POSIX 上只剩单杀
+/// leader —— node 之下的 next-server 会残留成孤儿，继续占端口锁日志。
 #[cfg(not(debug_assertions))]
 static SIDECAR: Mutex<Option<tauri_plugin_shell::process::CommandChild>> = Mutex::new(None);
+
+/// 壳是否亲眼看到 sidecar 的 `Terminated` 事件（ISSUE #4151）。一经置位不复位：
+/// 句柄在壳的整个生命周期里都指向同一个 PID，看到它退出之后 PID 探测就既不必
+/// 再做、也不可信（PID 理论上会被系统复用）——死亡本身已经是进程外事实。
+/// 句柄本身仍留在槽位里不摘：退出时 `kill_sidecar` 还要靠它回收作业里可能残留
+/// 的孙辈进程（AGENTS 硬规则 3：必须杀整棵树），清槽位等于放弃那道回收。
+#[cfg(not(debug_assertions))]
+static SIDECAR_TERMINATED: AtomicBool = AtomicBool::new(false);
 
 /// 应用级状态：由 launcher 通过环境变量传入项目根目录，
 /// 启动页调用 get_launch_status / navigate_to_app 时使用。
@@ -48,14 +62,26 @@ struct AppState {
   /// 别的窗口，加载完成后突然抢焦点会把正在看的内容打断。由启动器按
   /// COMFYAPP_FOREGROUND 控制；应用已在前台 / 用户主动唤起时不改配置直接放行。
   foreground: Mutex<bool>,
-  /// 已按「不抢前台」方式显示过但用户还没看过的应用窗口，供托盘「打开主界面」
-  /// 时清掉闪烁提醒。
+  /// 「窗口只显示到任务栏、用户还没看过」——**只用于退出时的一条诊断日志**。
+  /// ISSUE #3562 起不再驱动任何窗口动作：此前它对应一次任务栏闪烁请求，而闪烁
+  /// 被重复触发又从没有停止动作，用户看到的是后台莫名的红色高亮。
   attention: Mutex<bool>,
+  /// 本次启动的「前端自动唤起前台」是否已被消费。
+  /// `COMFYAPP_FOREGROUND` 是进程级持久值，而 `useStartupForeground` 会在组件
+  /// 每次挂载时重问一次；不消费掉就是「页面一重挂就抢一次前台」（ISSUE #3562）。
+  startup_activation_consumed: Mutex<bool>,
   /// 用户在启动期关闭了启动页（放弃本次启动）。壳进程随即整体退出；置位是
   /// 为了在退出生效前的瞬间，拦住所有「把隐藏主窗显示出来」的后续路径
   /// （页面加载完成的窗口交接、150s 安全网、就绪兜底导航），避免用户已经
   /// 放弃的启动又把窗口弹出来。
   abandoned: Mutex<bool>,
+  /// 窗口显示链路的运行期读数（ISSUE #3569）：**只做诊断，不参与前台判决**。
+  /// Win32 前台 / Z 序在 CI 里取不到，源码形态判据也看不出「交接完成后又被
+  /// 重放了几次」；这三个计数与对应日志把重放变成可机器读的信号，供壳冒烟
+  /// 脚本与人工排查取用（只读出口见 `window_show_diagnostics`）。
+  show_attempts: AtomicU32,
+  auto_show_skipped: AtomicU32,
+  focus_granted: AtomicU32,
   /// 本次启动是不是 standalone 形态（壳自己拉起内嵌 server）。
   ///
   /// 值来自 `run()` 里那次 `ensure_launch_mode`（判据只在那一处），在建状态时
@@ -63,6 +89,14 @@ struct AppState {
   /// `get_launch_status` 原先把空根一律当成「环境问题」来报（要用户回检出启动 /
   /// 去跑构建脚本），一次健康启动的启动页上因此满是指出错方向的段落。
   standalone: Mutex<bool>,
+  /// 「应用窗口已经导航到应用页面」的一次性标记（ISSUE #3857）：启动页的
+  /// 探测 tick 在失败 3 秒后重试，`navigate_to_app` 可能被反复 invoke；每次
+  /// 都重新导航 + 新起两个看护线程。防重入口在壳侧，前端节流只是第二道。
+  navigated: AtomicBool,
+  /// 交换窗口失败后的「重导航循环」是否在跑（ISSUE #4328）：启动页 250ms
+  /// 轮询 `get_launch_status`，借此把「服务已就绪，正在加载应用…」翻成可见的
+  /// 失败/重试态，而不是无声地永远等下去。置位与清除都在 `spawn_renavigate`。
+  renavigating: AtomicBool,
 }
 
 impl AppState {
@@ -78,30 +112,54 @@ impl AppState {
       shown: Mutex::new(false),
       foreground: Mutex::new(foreground),
       attention: Mutex::new(false),
+      startup_activation_consumed: Mutex::new(false),
+      show_attempts: AtomicU32::new(0),
+      auto_show_skipped: AtomicU32::new(0),
+      focus_granted: AtomicU32::new(0),
       abandoned: Mutex::new(false),
       standalone: Mutex::new(standalone),
+      navigated: AtomicBool::new(false),
+      renavigating: AtomicBool::new(false),
     }
   }
 
   /// 标记「用户已放弃本次启动」并返回标记前的值（幂等：重复关闭启动页只记一次）。
   fn mark_abandoned(&self) -> bool {
-    let mut abandoned = self.abandoned.lock().unwrap();
+    let mut abandoned = self.abandoned.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let was = *abandoned;
     *abandoned = true;
     was
   }
 
   fn is_abandoned(&self) -> bool {
-    *self.abandoned.lock().unwrap()
+    *self.abandoned.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
   }
 
   fn foreground(&self) -> bool {
-    *self.foreground.lock().unwrap()
+    *self.foreground.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+  }
+
+  /// 前端「本次启动要不要自动给前台」的**一次性**答复。
+  ///
+  /// 判据仍是 `foreground`，但只放行第一次：应用内页签切换 / 路由重挂 /
+  /// WebView 重载都会重新跑 `useStartupForeground`，若每次都返回 true，
+  /// 用户切到别的应用后会被一次次拉回来（ISSUE #3562）。壳在窗口交接那一刻
+  /// 已经按 `configured` 给过前台，前端这一跳只是补唤，消费掉不影响启动体验。
+  fn take_startup_activation(&self) -> bool {
+    if !self.foreground() {
+      return false;
+    }
+    let mut consumed = self.startup_activation_consumed.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if *consumed {
+      return false;
+    }
+    *consumed = true;
+    true
   }
 
   /// 标记应用窗口已显示过并返回「本次是否为首次显示」。
   fn mark_shown(&self) -> bool {
-    let mut shown = self.shown.lock().unwrap();
+    let mut shown = self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let first = !*shown;
     *shown = true;
     first
@@ -113,34 +171,72 @@ impl AppState {
   /// 窗口一旦显示出来，就不再往页面里注入加载占位——顺手注入的 `eval` 会在
   /// 页面**就位之后**才执行，那一刻用户可能已经在用真界面了。
   fn is_main_shown(&self) -> bool {
-    *self.shown.lock().unwrap()
+    *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
   }
 
   fn set_attention(&self, value: bool) {
-    *self.attention.lock().unwrap() = value;
+    *self.attention.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = value;
   }
 
   fn take_attention(&self) -> bool {
-    let mut a = self.attention.lock().unwrap();
+    let mut a = self.attention.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let had = *a;
     *a = false;
     had
   }
 
   fn project_root(&self) -> String {
-    self.project_root.lock().unwrap().clone()
+    self.project_root.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
   }
 
   fn app_url(&self) -> String {
-    self.app_url.lock().unwrap().clone()
+    self.app_url.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
   }
 
   fn set_app_url(&self, url: String) {
-    *self.app_url.lock().unwrap() = url;
+    *self.app_url.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = url;
+  }
+
+  /// 重导航循环的置位 / 清除与读取（唯一写点是 `spawn_renavigate`）。
+  fn set_renavigating(&self, value: bool) {
+    self.renavigating.store(value, Ordering::SeqCst);
+  }
+
+  fn is_renavigating(&self) -> bool {
+    self.renavigating.load(Ordering::SeqCst)
   }
 
   fn is_standalone(&self) -> bool {
-    *self.standalone.lock().unwrap()
+    *self.standalone.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+  }
+
+  /// 进入一次「显示主窗」请求（含随后被早退拦下的那一次）。
+  fn note_show_attempt(&self) -> u32 {
+    self.show_attempts.fetch_add(1, Ordering::Relaxed) + 1
+  }
+
+  /// 自动交接被幂等早退拦下 —— 「交接完成后又被重放」唯一的机器读信号。
+  /// 壳冒烟脚本只要看交接完成后这个数还在不在涨即可，不必去猜 Win32 前台。
+  fn note_auto_show_skipped(&self) -> u32 {
+    let skipped = self.auto_show_skipped.fetch_add(1, Ordering::Relaxed) + 1;
+    log::info!(
+      "[ComfyAPP] window-show diagnostics: reason=already_shown skipped={} attempts={}",
+      skipped,
+      self.show_attempts.load(Ordering::Relaxed)
+    );
+    skipped
+  }
+
+  fn note_focus_granted(&self) -> u32 {
+    self.focus_granted.fetch_add(1, Ordering::Relaxed) + 1
+  }
+
+  fn window_show_snapshot(&self) -> WindowShowSnapshot {
+    WindowShowSnapshot {
+      attempts: self.show_attempts.load(Ordering::Relaxed),
+      auto_show_skipped: self.auto_show_skipped.load(Ordering::Relaxed),
+      focus_granted: self.focus_granted.load(Ordering::Relaxed),
+    }
   }
 }
 
@@ -165,8 +261,31 @@ fn default_dev_url(host: &str) -> String {
 ///
 /// 但判据仍然要能分辨**真故障**：读失败若是「权限 / IO 错误」而不是
 /// `NotFound`，那是实打实的问题，照样回 Err —— 不能被兜底吞掉。
+///
+/// async 形态（ISSUE #4272）：启动页每 250ms 轮询一次，不占主线程。
+/// 同步文件 IO 落在**阻塞线程池**而非 tokio worker（ISSUE #4335）：常驻轮询
+/// 叠加阻塞 IO 会周期性占用 async worker，与输出泵的同步 IO 同类相长。
+/// 把「交换窗口失败、正在重导航」注入启动状态 JSON（ISSUE #4328）。
+///
+/// 启动页 250ms 轮询的就是这一份状态：失败态借同一条通道透出，页面据此把
+/// 「服务已就绪，正在加载应用…」翻成可见的错误/重试态。状态文件本身是
+/// 编排器的权威产物，这里只加字段不改写它的任何值；解析失败（不应发生）
+/// 时原样返回，不吞掉原始状态。
+fn inject_navigate_stalled(status: &str, stalled: bool) -> String {
+  if !stalled {
+    return status.to_string();
+  }
+  match serde_json::from_str::<serde_json::Value>(status) {
+    Ok(mut value) if value.is_object() => {
+      value["navigateStalled"] = serde_json::Value::Bool(true);
+      value.to_string()
+    }
+    _ => status.to_string(),
+  }
+}
+
 #[tauri::command]
-fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String> {
+async fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String> {
   let root = state.project_root();
   if root.is_empty() {
     // standalone 形态：安装目录里本来就没有检出，「没有状态文件」是设计如此，
@@ -196,8 +315,13 @@ fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String
     ));
   }
   let path = shell_launch::status_file_path(&root);
-  match std::fs::read_to_string(&path) {
-    Ok(text) => Ok(text),
+  // 同步文件 IO 挪进**阻塞线程池**（ISSUE #4335）：本命令被启动页 250ms 常驻
+  // 轮询，read_to_string 留在 async 命令体里就等于周期性占用 tokio worker 做
+  // 阻塞 IO。spawn_blocking 对调用方仍是异步等待；磁盘慢时最多占住一条阻塞
+  // 线程，worker 池不受影响。
+  let renavigating = state.is_renavigating();
+  tauri::async_runtime::spawn_blocking(move || match std::fs::read_to_string(&path) {
+    Ok(text) => Ok(inject_navigate_stalled(&text, renavigating)),
     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
       // 编排器还没写（正常启动窗口期）或路径不对（环境问题）——两者都可能，
       // 因此把判断所需的事实（应然路径 + 壳侧日志位置）一起给出去。
@@ -212,7 +336,9 @@ fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String
       ))
     }
     Err(e) => Err(format!("无法读取启动状态文件：{} ({})", path.display(), e)),
-  }
+  })
+  .await
+  .map_err(|e| format!("启动状态读取任务失败：{e}"))?
 }
 
 /// 构造「没有状态文件」时的兜底状态（形态与编排器写的那份同域 + 多两个字段）。
@@ -247,23 +373,61 @@ fn no_status_payload(root: &str, reason: &str) -> String {
   .to_string()
 }
 
+/// 关闭启动页：失败记 WARN 并**就地重试一次**（ISSUE #4348）。
+///
+/// 交接路径上 `close()` 偶发失败（窗口正在销毁 / WebView 忙）原先被 `let _`
+/// 吞掉：主窗已显示不至卡死，但启动页可能残留在屏幕上，splash 相关的看门狗
+/// 与安全网还会继续空转。这里把「吞错」换成「读数 + 一次有界重试」——仍不因
+/// 关页失败反过来中止交接；两次都失败时 ERROR 留痕，现场可查。
+fn close_splash_window(handle: &tauri::AppHandle) {
+  for attempt in 1..=2 {
+    match handle.get_webview_window("splash") {
+      Some(splash) => match splash.close() {
+        Ok(()) => return,
+        Err(e) => {
+          log::warn!("[ComfyAPP] 关闭启动页失败（第 {attempt} 次）：{e:?}");
+          std::thread::sleep(Duration::from_millis(100));
+        }
+      },
+      // 已经不在了：目标达成。
+      None => return,
+    }
+  }
+  log::error!("[ComfyAPP] 启动页关闭重试后仍失败：启动页可能残留（窗口可能正在销毁），现场见壳日志");
+}
+
 /// 启动页检测到 ready 后，让 Rust 侧把「应用」窗口（main，隐藏）导航到真正的应用 URL。
 /// 启动页（splash）保持可见，直到 main 的页面真正加载完成（on_page_load Finished）才交换窗口。
 /// 这比前端直接 window.location 更可靠，可跨越 tauri:// 与 http:// 协议边界。
 #[tauri::command]
 fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
+  /* 一次性防重入（ISSUE #3857）：启动页的探测 tick 失败 3 秒后重试，本命令可能
+   * 被反复 invoke；每次都重新导航（= 已加载页面整页重载）并新起两个看护线程。
+   * 壳侧先抢标记：抢到才执行；导航失败把标记还回去，前端的重试闸照常生效。 */
+  if state.navigated.swap(true, Ordering::SeqCst) {
+    log::info!("[ComfyAPP] navigate_to_app: 已导航过，跳过重复 invoke");
+    return Ok(());
+  }
   let url = state.app_url();
   log::info!("[ComfyAPP] navigate_to_app called with url: {}", url);
   // 导航一发起，主窗画面就离开启动页；在应用画好首帧之前由探测持续注入加载占位，
   // 避免这段时间露出 WebView2 空白 / 内嵌错误页（见 watch_main_first_paint）。
   watch_main_first_paint(app_handle.clone(), true);
-  let parsed: tauri::Url = url.parse().map_err(|e| format!("非法 URL {}: {}", url, e))?;
+  let parsed: tauri::Url = match url.parse() {
+    Ok(parsed) => parsed,
+    Err(e) => {
+      state.navigated.store(false, Ordering::SeqCst);
+      return Err(format!("非法 URL {}: {e}", url));
+    }
+  };
   if let Some(win) = app_handle.get_webview_window("main") {
-    win
-      .navigate(parsed)
-      .map_err(|e| format!("导航失败: {:?}", e))?;
+    if let Err(e) = win.navigate(parsed) {
+      state.navigated.store(false, Ordering::SeqCst);
+      return Err(format!("导航失败: {e:?}"));
+    }
     log::info!("[ComfyAPP] navigate_to_app: navigation dispatched");
   } else {
+    state.navigated.store(false, Ordering::SeqCst);
     return Err("找不到应用窗口 main".to_string());
   }
 
@@ -289,9 +453,7 @@ fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHand
       // 强制交接：主窗可能还停在空白 / 错误页，先注入占位再显示，别把空白顶给用户
       watch_main_first_paint(monitor.clone(), true);
       show_main_window_without_focus(&monitor, false);
-      if let Some(s) = monitor.get_webview_window("splash") {
-        let _ = s.close();
-      }
+      close_splash_window(&monitor);
     }
   });
   Ok(())
@@ -313,9 +475,30 @@ fn activate_main_window(app_handle: tauri::AppHandle) -> Result<(), String> {
 /// 显式冷启动 / 唤起已有实例」注入，见 scripts/start_tauri_launcher.py 的
 /// decide_foreground）。放在 Rust 侧而不是前端读 env，是因为只有服务端渲染
 /// 阶段能拿到非 `NEXT_PUBLIC_` 前缀的变量，客户端读不到会一律降级成「不给前台」。
+///
+/// **一次性消费**（ISSUE #3562）：这个命令在组件每次挂载时都会被问到，而
+/// `foreground` 是进程级持久值。不消费就会把「启动那一次该给前台」演成
+/// 「页面每重挂一次就抢一次前台」。
 #[tauri::command]
 fn should_activate_on_launch(state: tauri::State<'_, AppState>) -> bool {
-  state.foreground()
+  state.take_startup_activation()
+}
+
+/// 窗口显示链路的运行期读数（ISSUE #3569）：给排查与壳冒烟的**只读**诊断出口。
+///
+/// 判据仍在 `show_main_window_without_focus()`；这里只把 `AppState` 的三个计数
+/// 原样返回，不推断「这次重放合不合法」——那要由壳冒烟脚本结合 Win32 前台 /
+/// Z 序读数去判。壳日志里另有一份退出汇总（见 `RunEvent::ExitRequested`）。
+#[derive(serde::Serialize)]
+struct WindowShowSnapshot {
+  attempts: u32,
+  auto_show_skipped: u32,
+  focus_granted: u32,
+}
+
+#[tauri::command]
+fn window_show_diagnostics(state: tauri::State<'_, AppState>) -> WindowShowSnapshot {
+  state.window_show_snapshot()
 }
 
 /// 供启动页读取当前应用目标 URL，用于自主探测后端是否就绪。
@@ -385,8 +568,10 @@ fn shell_owns_foreground(app: &tauri::AppHandle) -> bool {
 /// 可能在这段时间切去别的窗口干活。启动页会一直待在他眼皮底下——只要他没动手
 /// 切走，前台就还在本壳的窗口上，那就是「他还在等这个应用」，加载完成必须把前台
 /// 真的给他（只丢进任务栏的观感就是「点了启动，窗口自己在后台待着」）；只有前台
-/// 已经换成别人的窗口（他手动让出了前台）才「只显示、不激活」：窗口出现在任务栏，
-/// 同时请求一次任务栏闪烁提醒（request_user_attention），他处理完手上的事自己点开。
+/// 已经换成别人的窗口（他手动让出了前台）才「只显示、不激活」：窗口安静地出现在
+/// 任务栏，他处理完手上的事自己点开。任务栏按钮与常驻托盘就是入口——ISSUE #3562
+/// 起**不再请求任务栏闪烁**：那一下红色高亮会被自动路径的重复显示反复点燃，用户
+/// 读到的是「后台莫名在闪」。
 ///
 /// 三种情况给前台，其余一律「只显示」：
 /// 1. `request_focus`——调用方的显式意图（托盘「打开主界面」、二次启动的单实例
@@ -407,6 +592,22 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
     return;
   };
   let state = app.try_state::<AppState>();
+  let _ = state.as_ref().map(|s| s.note_show_attempt());
+
+  /* 自动交接只允许发生一次（ISSUE #3562）。
+   *
+   * 页面导航 Finished、150s 安全网、无启动页兜底都会走到这里，而窗口的
+   * `show()` 在 Windows 上是 SW_SHOW —— 对**已经可见**的窗口同样带激活语义、
+   * 会把它提到 Z 序最前。启动完成后任何一次重放，用户看到的就是「我切去别的
+   * 应用，几秒后它又弹出来盖住我正在用的窗口」。窗口显示过之后，显隐只归用户
+   * 操作：任务栏 / 托盘 / 二次启动（这些都带 request_focus = true）。 */
+  let already_shown = state.as_ref().map(|s| s.is_main_shown()).unwrap_or(false);
+  if already_shown && !request_focus {
+    // 计数 + 结构化日志都在 AppState 里：交接完成后每多一次都是「被重放」的证据。
+    let _ = state.as_ref().map(|s| s.note_auto_show_skipped());
+    return;
+  }
+
   let first_show = state.as_ref().map(|s| s.mark_shown()).unwrap_or(false);
   let configured = state.as_ref().map(|s| s.foreground()).unwrap_or(false);
   /* 「用户手动让出前台」在采样这一刻就是「前台已经不是本壳的窗口了」。
@@ -433,35 +634,53 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
     apply_saved_main_window_state(&win);
   }
 
-  /* 最小化时先还原：`show()`（tao 走 SW_SHOW）对最小化窗口不会还原——Windows
-   * 只把它「按原尺寸/原状态」显示出来，仍是任务栏上一条不动的按钮；随后的
-   * `set_focus()` 也只是把「最小化的窗口」记为前台。用户双击启动或点托盘得到的
-   * 观感就是「点了没法切到前台」，而再点一次任务栏又能出来（第二次点击走的是
-   * 系统自己的还原路径）——正是「有时候切不到前台」。
-   * 仅在确实最小化时调 unminimize：它的实现是 SW_RESTORE，对非最小化窗口带激活
-   * 语义，无条件调会把「不抢前台」策略架空（见本函数开头与 §1.3）。 */
-  if win.is_minimized().unwrap_or(false) {
+  /* 只对「确实需要改变可见状态」的那一档发窗口动作（ISSUE #3562）：已可见的
+   * 窗口再走一次 show 就是重复激活 + 重绘，托盘唤起因此发卡，还会把用户正在
+   * 用的应用盖住。最小化的窗口仍要先 unminimize（SW_RESTORE 自带显示语义），
+   * 之后不必再 show。 */
+  let minimized = win.is_minimized().unwrap_or(false);
+  let visible = win.is_visible().unwrap_or(false);
+  if minimized {
     if let Err(e) = win.unminimize() {
       log::warn!("[ComfyAPP] unminimize main window failed: {:?}", e);
     }
+  } else if !visible {
+    if let Err(e) = win.show() {
+      log::warn!("[ComfyAPP] show main window failed: {:?}", e);
+    }
   }
-  if let Err(e) = win.show() {
-    log::warn!("[ComfyAPP] show main window failed: {:?}", e);
-  }
-  // 显示动作本身会不会把前台带过来由系统决定（交接瞬间 Windows 当真当「新窗口」
-  // 放行）。这里只把结论记下来，交给启动器的交接复核进程把不该给的前台还回去。
+
   let focused_after_show = win.is_focused().unwrap_or(false);
+  // 纯诊断状态：窗口曾以「不抢前台」的方式出现、用户还没看过（见 AppState）。
   let keep_attention = !activate && !focused_after_show;
   if let Some(s) = state.as_ref() {
     s.set_attention(keep_attention);
   }
 
   if activate {
-    // 用户主动唤起 / 启动器判定用户就在等它：必须把前台拿到手——系统可能因
-    // 前台锁定（用户在别的窗口上刚有点击）拦下 set_focus，未获前台时补一次
-    // 任务栏闪烁，用户才不至于「点了没反应」。
-    let _ = win.set_focus();
-    if !win.is_focused().unwrap_or(false) {
+    // 已经聚焦就不必再发一次前台请求；只有确实没拿到前台时才争取一次。
+    if !focused_after_show {
+      let _ = win.set_focus();
+    }
+    if win.is_focused().unwrap_or(false) {
+      /* 窗口真的到前台了：把可能残留的闪烁收掉。tao 的 Windows 实现里
+       * request_user_attention(None) = FlashWindowEx(FLASHW_STOP)；此前壳只请求
+       * 「闪 4 次」、从不停止，自动路径的重复显示还会一次次重新点燃它 ——
+       * 就是 #3562 里「后台莫名红色闪烁」。 */
+      let _ = win.request_user_attention(None);
+      if let Some(s) = state.as_ref() {
+        s.set_attention(false);
+        s.note_focus_granted();
+      }
+      log::info!(
+        "[ComfyAPP] main window activated \
+         (request={} configured={} user_yielded={} first={})",
+        request_focus,
+        configured,
+        user_yielded,
+        first_show
+      );
+    } else {
       log::warn!(
         "[ComfyAPP] main window shown, foreground request not granted \
          (request={} configured={} user_yielded={})",
@@ -472,16 +691,7 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
       if let Some(s) = state.as_ref() {
         s.set_attention(true);
       }
-      let _ = win.request_user_attention(Some(tauri::UserAttentionType::Informational));
-    } else {
-      log::info!(
-        "[ComfyAPP] main window shown with focus \
-         (request={} configured={} user_yielded={} first={})",
-        request_focus,
-        configured,
-        user_yielded,
-        first_show
-      );
+      // 不再补闪烁：任务栏按钮与常驻托盘已经是稳定的「应用在这里」入口。
     }
     return;
   }
@@ -493,13 +703,7 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
     focused_after_show,
     first_show
   );
-  // 不抢前台：让任务栏按钮持续闪烁到用户点开，作为「加载好了」的提示。
-  if keep_attention {
-    match win.request_user_attention(Some(tauri::UserAttentionType::Informational)) {
-      Ok(()) => log::info!("[ComfyAPP] taskbar attention requested"),
-      Err(e) => log::warn!("[ComfyAPP] request_user_attention failed: {:?}", e),
-    }
-  }
+  // 不抢前台这一档不再请求任务栏闪烁（ISSUE #3562）：窗口安静地留在任务栏。
 }
 
 /// 桌面壳内打开 ComfyUI：把运行中的 ComfyUI 网页界面放进 Tauri 壳的独立
@@ -519,7 +723,10 @@ fn open_comfyui_window(app: tauri::AppHandle, url: String) -> Result<String, Str
   if let Some(win) = app.get_webview_window("comfyui") {
     let current = win.url().map(|u| u.to_string()).unwrap_or_default();
     if current != url {
-      let _ = win.navigate(parsed.clone());
+      // 重新导航失败原先被 `let _` 吞掉：用户停在旧页且无任何提示（ISSUE #4348）。
+      if let Err(e) = win.navigate(parsed.clone()) {
+        log::warn!("[ComfyAPP] ComfyUI 窗口重新导航失败（仍停在旧页 {current}）：{e:?}");
+      }
     }
     // 同主窗：最小化时 show() 不还原，先 unminimize 再显示/聚焦。
     if win.is_minimized().unwrap_or(false) {
@@ -540,6 +747,31 @@ fn open_comfyui_window(app: tauri::AppHandle, url: String) -> Result<String, Str
   Ok(format!("已在壳内打开 ComfyUI（{}）", url))
 }
 
+/// 「host:port 此刻能否在 1s 内建立 TCP 连接」（ISSUE #4213）。
+///
+/// 无超时的 `TcpStream::connect` 在端口被防火墙 DROP 时按系统默认 SYN 重试
+/// 阻塞十几秒，而两个调用点一个在**主线程**的页面加载回调、一个在就绪看护
+/// 线程——前者被冻住就是整个壳卡死。解析出的**每个**地址都试到连通为止
+/// （`localhost` 会同时解析出 ::1 与 127.0.0.1，服务可能只绑其中一支，
+/// 见 ISSUE #4328）。
+fn tcp_probe(host: &str, port: u16) -> bool {
+  use std::net::ToSocketAddrs;
+  let Ok(addrs) = (host, port).to_socket_addrs() else {
+    return false;
+  };
+  // 逐个尝试**全部**解析地址（ISSUE #4328）：`localhost` 在 Windows 上常把 ::1
+  // 排在前面，而 dev server 只绑 127.0.0.1 —— 只试第一个地址会把「服务在 IPv4
+  // 上好好的」判成不可达，交换窗口被错误中止、启动页永远停在「服务已就绪」。
+  // 每个地址仍带 1s 超时（ISSUE #4213，不冻结主线程）；回环主机最多两个地址，
+  // 拒连是立即失败，最坏也就 2s。
+  for addr in addrs {
+    if TcpStream::connect_timeout(&addr, Duration::from_millis(1000)).is_ok() {
+      return true;
+    }
+  }
+  false
+}
+
 /// 目标 URL 的 host:port 当前能否建立 TCP 连接。
 /// 交换窗口前的二次校验依据：WebView2 对「导航失败」（连接被拒/超时）同样会
 /// 触发 on_page_load(Finished)，页面内嵌 Edge 错误页且 URL 仍是 http://，
@@ -552,7 +784,48 @@ fn url_reachable(url: &tauri::Url) -> bool {
     return false;
   }
   match url.port_or_known_default() {
-    Some(port) => TcpStream::connect((host, port)).is_ok(),
+    Some(port) => tcp_probe(host, port),
+    None => false,
+  }
+}
+
+/// [`tcp_probe`] 的**有界等待**形态（ISSUE #4336）：解析（`to_socket_addrs`）+
+/// 连接整体丢进一次性后台线程，调用方只做有上限的等待，到点按「不可达」放手。
+///
+/// 为什么需要它：`to_socket_addrs` 是**无超时的阻塞解析**。探测目标通常是
+/// `127.0.0.1`/`localhost`（命中 hosts，瞬回），但应用地址可被 `COMFYAPP_DEV_URL`
+/// 注入任意主机名——一旦走真实 DNS 且解析卡住，调用线程就冻在系统调用上；
+/// 主线程调用点（页面加载回调）冻住 = 整个壳无响应。预算到点后探测线程
+/// 随后自行结束（DNS 终有系统级超时），主线程不再陪冻。
+///
+/// 起不了线程（极端资源紧张）按「不可达」回答：调用方对 false 的处置
+/// （不交换窗口 / 进重导航循环）都是安全的重试，不会误判成「服务已就绪」。
+fn tcp_probe_bounded(host: &str, port: u16, budget: Duration) -> bool {
+  let (tx, rx) = std::sync::mpsc::channel();
+  let host = host.to_string();
+  let spawned = std::thread::Builder::new()
+    .name("comfyapp-tcp-probe".into())
+    .spawn(move || {
+      let _ = tx.send(tcp_probe(&host, port));
+    });
+  match spawned {
+    Ok(_) => rx.recv_timeout(budget).unwrap_or(false),
+    Err(_) => false,
+  }
+}
+
+/// [`tcp_probe_bounded`] 的 URL 形态：解析 host/port 后走同一探测。
+/// 后台线程里的调用点（重导航循环 / 就绪看护）继续用 [`url_reachable`]，
+/// 不必多付一线程；**主线程**调用点一律走这里（ISSUE #4336）。
+fn url_reachable_bounded(url: &tauri::Url, budget: Duration) -> bool {
+  let Some(host) = url.host_str() else {
+    return false;
+  };
+  if host.is_empty() {
+    return false;
+  }
+  match url.port_or_known_default() {
+    Some(port) => tcp_probe_bounded(host, port, budget),
     None => false,
   }
 }
@@ -567,6 +840,12 @@ fn spawn_renavigate(handle: tauri::AppHandle, url: tauri::Url) {
   if RENAVIGATING.swap(true, Ordering::SeqCst) {
     return;
   }
+  // 置位给启动页看（ISSUE #4328）：循环期间启动页把「服务已就绪，正在加载
+  // 应用…」翻成可见的失败/重试态，不再无声地等。退出（成功 / 预算耗尽 /
+  // 启动页已关）时必须清除，状态才回到常规进度。
+  if let Some(s) = handle.try_state::<AppState>() {
+    s.set_renavigating(true);
+  }
   std::thread::spawn(move || {
     log::warn!("[ComfyAPP] 应用地址在交换窗口时不可达，进入重导航循环：{}", url);
     // 2s × 90 ≈ 180s 预算（覆盖 150s 安全网）—— #2192 起统一走 poll_clock。
@@ -579,12 +858,20 @@ fn spawn_renavigate(handle: tauri::AppHandle, url: tauri::Url) {
       }
       if url_reachable(&url) {
         if let Some(m) = handle.get_webview_window("main") {
-          let _ = m.navigate(url.clone());
-          break;
+          /* 恢复成功才离开循环；失败留读数并留在循环里等下一拍重试（#4425）：
+           * 此前 `let _` 吞掉结果还 break，恢复动作失败后主窗停在错误页，
+           * 只能等安全网强制交接（可能交的还是错误页）。 */
+          match m.navigate(url.clone()) {
+            Ok(_) => break,
+            Err(e) => log::warn!("[ComfyAPP] 重导航失败，下一拍重试：{e}"),
+          }
         }
       }
     }
     RENAVIGATING.store(false, Ordering::SeqCst);
+    if let Some(s) = handle.try_state::<AppState>() {
+      s.set_renavigating(false);
+    }
   });
 }
 
@@ -657,7 +944,10 @@ fn tail_log_file_since_marker(
   max_bytes: usize,
   max_lines: usize,
 ) -> Option<String> {
-  let data = std::fs::read(path).ok()?;
+  // 只读尾部（ISSUE #4212）：本命令被启动页每 800ms 轮询、跑在主线程，整文件
+  // 读入的成本随历史线性变贵。会话标记若落在尾部窗口之前，max_bytes / max_lines
+  // 的双重截断会把结果收敛到同一条尾部；marker 在窗口内时照常精确命中。
+  let (data, truncated) = read_tail_bytes(path, max_bytes)?;
   if data.is_empty() {
     return Some(String::new());
   }
@@ -676,7 +966,12 @@ fn tail_log_file_since_marker(
     .iter()
     .rposition(|l| l.contains(marker))
     .map(|i| i + 1)
-    .unwrap_or_else(|| lines.len().saturating_sub(max_lines));
+    .unwrap_or_else(|| {
+      // 尾读的首行可能是被截断的残行（无 marker 锚定时没有别的方式丢掉它）。
+      let first = usize::from(truncated && !lines.is_empty());
+      let usable_len = lines.len() - first;
+      first + usable_len.saturating_sub(max_lines)
+    });
 
   if start >= lines.len() {
     return Some(String::new());
@@ -687,7 +982,13 @@ fn tail_log_file_since_marker(
   }
   let mut joined = selected.join("\n");
   if joined.len() > max_bytes {
-    let cut = joined.len() - max_bytes;
+    // 字节偏移回退到字符边界：日志正文含中文（3 字节/字），cut 落进多字节
+    // 字符中间时 `joined[cut..]` 会当场 panic（ISSUE #4212，启动页每 800ms
+    // 轮询这条命令）。
+    let mut cut = joined.len() - max_bytes;
+    while cut > 0 && !joined.is_char_boundary(cut) {
+      cut -= 1;
+    }
     // 从截断点向后找到第一个换行符，避免首行残缺
     let next_newline = joined[cut..].find('\n').map(|i| cut + i + 1).unwrap_or(cut);
     joined = joined[next_newline..].to_string();
@@ -775,12 +1076,16 @@ fn no_log_guidance(root: &str) -> String {
 }
 
 /// 启动编排器的日志在文件被占用时会回退改名，以 sentinel
-/// log/launcher/dev-launcher-current.txt 指向的真实文件为准；附带 stderr 尾部、
-/// 壳自持日志与**壳侧编排链路日志**（`log/launcher/shell-launch.log`，启动期
+/// log/current/launcher/dev-launcher-current.txt 指向的真实文件为准；附带 stderr 尾部、
+/// 壳自持日志与**壳侧编排链路日志**（`log/current/launcher/shell-launch.log`，启动期
 /// 最先有内容的一份，见 §1.5.1），启动卡住时用户能直接在启动页看到
 ///「执行到哪一步 / 卡在哪里」。
+///
+/// async 形态（ISSUE #4272）：启动页每 800ms 轮询一次，不占主线程。
+/// 同步文件 IO（多份尾读 + 目录枚举）落在**阻塞线程池**而非 tokio worker
+/// （ISSUE #4335）——常驻轮询叠加阻塞 IO 会周期性占用 async worker。
 #[tauri::command]
-fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
+async fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   let root = state.project_root();
   if root.is_empty() {
     // 项目根为空时不再回一句「没设环境变量」：面板需要的是**能做点什么**，
@@ -789,7 +1094,19 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
     // 至少把根因写出来了。
     return Ok(no_log_guidance(""));
   }
-  let log_dir = shell_launch::launcher_dir(&root);
+  // 同步文件 IO（多份日志尾读 + 目录枚举）挪进**阻塞线程池**（ISSUE #4335）：
+  // 本命令被启动页 800ms 常驻轮询，留在外层 async 体里就等于周期性占用
+  // tokio worker 做阻塞 IO；对调用方这里仍是异步等待，主线程同样不沾。
+  tauri::async_runtime::spawn_blocking(move || collect_launch_log(&root))
+    .await
+    .map_err(|e| format!("启动日志读取任务失败：{e}"))?
+}
+
+/// [`get_launch_log`] 的同步主体：多份日志尾读 + 目录枚举 + 拼面板文本。
+/// 只做 IO 与文本，不关心调用线程——由命令层决定跑在哪（ISSUE #4335 起
+/// 跑在阻塞线程池）。
+fn collect_launch_log(root: &str) -> Result<String, String> {
+  let log_dir = shell_launch::launcher_dir(root);
   let mut sections: Vec<String> = Vec::new();
 
   let dev_log = std::fs::read_to_string(log_dir.join("dev-launcher-current.txt"))
@@ -818,10 +1135,10 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
       sections.push(format!("─ 错误输出（dev-launcher-stderr.log）─\n{}", tail));
     }
   }
-  // 壳自持日志（release 落 log/shell/shell.log；dev 由 launcher 重定向 stderr，
-  // 不产生此文件）。启动期壳的导航/看门狗/侧车诊断都经 log:: 打到这份文件，
-  // 正式版壳脱离 launcher（standalone 双击）崩溃时仍有可查日志。
-  let shell_log = shell_launch::shell_log_path(&root);
+  // 壳自持日志（release 落 log/current/shell/shell.log；dev 由 launcher 重定向
+  // stderr，不产生此文件）。启动期壳的导航/看门狗/侧车诊断都经 log:: 打到这份
+  // 文件，正式版壳脱离 launcher（standalone 双击）崩溃时仍有可查日志。
+  let shell_log = shell_launch::shell_log_path(root);
   // 同上：追加不轮转，靠会话标记只取本次启动的壳自持日志（dev 模式下这份文件
   // 不产生，下面取不到标记会退回空切片，不影响其它段）。
   if let Some(tail) = tail_log_file_since_marker(
@@ -831,7 +1148,7 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
     120,
   ) {
     if !tail.trim().is_empty() {
-      sections.push(format!("─ 壳日志（log/shell/shell.log）─\n{}", tail));
+      sections.push(format!("─ 壳日志（log/current/shell/shell.log）─\n{}", tail));
     }
   }
   // 服务自身的输出（Next dev server 原始 stdout/stderr）。**编排器日志答不了
@@ -842,7 +1159,7 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   //
   // 取**本次运行**的最新一份（按 mtime，不是文件名序，见 latest_prefixed_log）：
   // current/ 每次运行结束整目录归档清空，因此该目录内的都属于本次运行。
-  let nextjs_dir = shell_launch::nextjs_log_dir(&root);
+  let nextjs_dir = shell_launch::nextjs_log_dir(root);
   for (label, prefix) in [
     ("服务输出（Next.js stdout）", "nextjs-stdout-"),
     ("服务错误输出（Next.js stderr）", "nextjs-stderr-"),
@@ -860,14 +1177,14 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
       }
     }
   }
-  // 壳侧的编排链路日志（`log/launcher/shell-launch.log`）：**这是启动期最先
+  // 壳侧的编排链路日志（`log/current/launcher/shell-launch.log`）：**这是启动期最先
   // 有内容的一份**——它由壳自己落，不依赖编排器起来（编排器写的三份日志在
   // 「壳已接手、编排器还没写」的窗口期全是空的，正是手验反馈里「暂时读不到
   // 日志」的现场）。放在最后一段是因为它信息密度最高（启动报告 + 编排器输出）。
   //
   // 这份日志是追加写的，会累积历次启动。壳在每次启动时先写一行会话标记，
   // 这里只取最后一个标记之后的行，保证面板只显示本次启动相关的内容。
-  let launch_log = shell_launch::launch_log_path(&root);
+  let launch_log = shell_launch::launch_log_path(root);
   if let Some(tail) = tail_log_file_since_marker(
     &launch_log,
     shell_launch::SESSION_START_MARKER,
@@ -876,7 +1193,7 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   ) {
     if !tail.trim().is_empty() {
       sections.push(format!(
-        "─ 壳侧编排链路（log/launcher/shell-launch.log）─\n{}",
+        "─ 壳侧编排链路（log/current/launcher/shell-launch.log）─\n{}",
         tail
       ));
     }
@@ -887,12 +1204,56 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   // 磁盘上确实一份日志都没有 —— 那段窗口期里「这条日志读不到」的现场就只剩
   // 这一份报告（项目根 / 编排脚本在不在 / 依赖门禁 / 端口 / 各日志路径）。
   if sections.is_empty() {
-    let report = shell_launch::startup_report_section(&root, "（读不到日志，这是壳接手时的快照）");
+    let report = shell_launch::startup_report_section(root, "（读不到日志，这是壳接手时的快照）");
     // 「没了」这一步必须给出**下一步做什么**，否则用户唯一能做的就是把屏幕
     // 截图发出来（手验反馈正是如此）。
-    return Ok(format!("{}\n\n{}", report, no_log_guidance(&root)));
+    return Ok(format!("{}\n\n{}", report, no_log_guidance(root)));
   }
   Ok(sections.join("\n\n"))
+}
+
+/// 启动页「服务端动态」：等待服务就绪的窗口期里，**服务进程自己**正在做什么
+/// （ISSUE #4431）。进度条那一路（launch-status.json 的 phase / timings）只能给
+/// 「编排器走到哪一段」——最长的一段「等待服务就绪」里画面是空的，用户看到的
+/// 只有一句「等待服务就绪 12.7s（进行中）」。而服务此刻在做什么，答案在服务
+/// 自己的输出里（`▲ Next.js` 横幅、`✓ Ready in …`、`[comfyui-lifecycle] ComfyUI
+/// 正在启动中，等待就绪…`、编译与报错行）。
+///
+/// 取**本次运行**最新一份 Next stdout/stderr 日志尾部（与 `get_launch_log` 的
+/// 「服务输出」两段同源、同一套 mtime 判据），从后往前挑最近一条有信息量的行
+/// （噪声行判据在 [`shell_launch::latest_meaningful_server_line`]）。与日志面板
+/// 那条命令的差异：这里只读**一份**文件尾（8KB），启动页可以常驻轮询而不必
+/// 展开整个面板。
+///
+/// 一条有信息量的行都没有（服务还没产出输出 / 日志未落地 / 项目根推不出）时
+/// 回**空串**——启动页据此把这一行收起，而不是显示一句空话。
+#[tauri::command]
+async fn get_server_activity(state: tauri::State<'_, AppState>) -> Result<String, String> {
+  let root = state.project_root();
+  if root.is_empty() {
+    return Ok(String::new());
+  }
+  // 与 get_launch_log 同一条理由：阻塞 IO 挪进阻塞线程池，不占 tokio worker。
+  tauri::async_runtime::spawn_blocking(move || collect_server_activity(&root))
+    .await
+    .map_err(|e| format!("服务动态读取任务失败：{e}"))?
+}
+
+/// [`get_server_activity`] 的同步主体：逐份日志尾读 + 倒序挑行。
+/// stdout 里挑不出（全是噪声 / 为空）再试 stderr——报错行同样是「在做什么」。
+fn collect_server_activity(root: &str) -> Result<String, String> {
+  let nextjs_dir = shell_launch::nextjs_log_dir(root);
+  for prefix in ["nextjs-stdout-", "nextjs-stderr-"] {
+    let Some(path) = shell_launch::latest_prefixed_log(&nextjs_dir, prefix) else {
+      continue;
+    };
+    if let Some(tail) = tail_log_file(&path, 8 * 1024, 80) {
+      if let Some(line) = shell_launch::latest_meaningful_server_line(&tail) {
+        return Ok(line);
+      }
+    }
+  }
+  Ok(String::new())
 }
 
 /// 读回「应用服务为什么结束」这条记录（ISSUE #1915）。
@@ -914,6 +1275,51 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
 #[tauri::command]
 fn get_app_service_exit(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
   Ok(shell_launch::read_app_service_exit(&state.project_root()))
+}
+
+/// 读回「本检出的应用服务进程还活着吗」——**不经过应用服务自己**的进程外信号
+/// （ISSUE #4146）。两档判据按序作答，三态语义一致（`None` 是「不知道」，不是错误）：
+///
+/// · 第一档（prebuilt）：读编排器落下的 `run/launcher-session.json`（PID 名单）
+///   逐个查存活——判据见 `shell_launch::read_app_service_liveness`；
+/// · 第二档（ISSUE #4151）：会话文件答不上、但壳持有 standalone 内嵌 server 的
+///   `CommandChild` 句柄 → 按句柄存活直答（`shell_launch::liveness_from_sidecar`）。
+///   分发形态没有编排器与会话文件，此前只能退回纯 HTTP 判据，#3369 的「服务忙
+///   几秒被判断开」在桌包上仍会发生——壳正握着那棵树的句柄，理应由它作答。
+/// · 两档都答不上（手工 `pnpm dev` / prebuilt 无 sidecar / 浏览器 / 旧壳）→
+///   `Ok(None)`，前端按原行为退化；旧壳没有本命令时 invoke 报错，catch 后同样退化。
+///
+/// 为什么探活失败时还需要这一问：dev server 是单事件循环，同步重活会把它停走数秒，
+/// 期间 HTTP 探活必然连续超时，而进程活得好好的。前端拿这个答案区分「真断开」
+/// （进程没了）与「暂时无响应」（进程在、忙）——后者不再把界面翻红。
+#[tauri::command]
+fn get_app_service_liveness(state: tauri::State<'_, AppState>) -> Result<Option<bool>, String> {
+  // 第一档读到结论就直接用：会话名单是编排器刚写下的当下事实，优先级恒在第二档
+  // 之前。两档在运行期互斥（起 sidecar 的形态没有编排器），按序只是把「谁更权威」
+  // 写明——万一将来出现两者并存的形态，这里不会静默换源。
+  if let Some(alive) = shell_launch::read_app_service_liveness(&state.project_root()) {
+    return Ok(Some(alive));
+  }
+  Ok(sidecar_liveness())
+}
+
+/// 第二档判据的数据面（ISSUE #4151）：壳手里的 sidecar 句柄在不在、死没死。
+/// 三态归并（纯函数）在 `shell_launch::liveness_from_sidecar`，句柄的持有与
+/// 生命周期（槽位 / Terminated 置位 / 退出回收）见 `SIDECAR` / `SIDECAR_TERMINATED`。
+///
+/// debug 壳不编译 sidecar 整档（`SIDECAR` / `spawn_sidecar` 都是 release-only），
+/// 这一档恒为「不知道」：`tauri dev` 走 prebuilt，第一档的会话文件已覆盖。
+#[cfg(not(debug_assertions))]
+fn sidecar_liveness() -> Option<bool> {
+  let slot = SIDECAR.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+  let handle_pid = slot.as_ref().map(|child| child.pid());
+  let terminated = SIDECAR_TERMINATED.load(Ordering::Relaxed);
+  shell_launch::liveness_from_sidecar(handle_pid, terminated, shell_launch::pid_alive)
+}
+
+#[cfg(debug_assertions)]
+fn sidecar_liveness() -> Option<bool> {
+  None
 }
 
 /// 关闭窗口（默认启动页）。
@@ -995,6 +1401,25 @@ fn sidecar_binary_name() -> &'static str {
   } else {
     "node"
   }
+}
+
+/// sidecar 端口重试次数与「拉起后多久没退算成功」的 grace（ISSUE #4347）。
+#[cfg(not(debug_assertions))]
+const SIDECAR_PORT_ATTEMPTS: u32 = 3;
+#[cfg(not(debug_assertions))]
+const SIDECAR_START_GRACE: Duration = Duration::from_millis(1500);
+
+/// 等 sidecar 的启动 grace 窗口：窗口内 [`SIDECAR_TERMINATED`] 被置位 ⇒ 拉起即退。
+#[cfg(not(debug_assertions))]
+fn sidecar_died_within(grace: Duration) -> bool {
+  let grace_end = std::time::Instant::now() + grace;
+  while !SIDECAR_TERMINATED.load(Ordering::Relaxed) {
+    if std::time::Instant::now() >= grace_end {
+      return false;
+    }
+    std::thread::sleep(Duration::from_millis(50));
+  }
+  true
 }
 
 /// 生产模式：以 Node sidecar 启动 Next standalone server，端口就绪后主窗口跳转。
@@ -1122,14 +1547,80 @@ fn spawn_sidecar(
   app: &tauri::AppHandle,
   project_root_for_exit: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-  use tauri_plugin_shell::process::CommandEvent;
-  use tauri_plugin_shell::ShellExt;
-
-  let port = pick_free_port();
   let payload = match resolve_standalone_payload(app)? {
     ResolvedPayload::FellBackToDevUrl => return Ok(()),
     ResolvedPayload::Ready(p) => p,
   };
+  /* 防御性守卫（ISSUE #3857）：SIDECAR 槽位已有句柄时再 spawn 会把旧 child
+   * 覆盖成孤儿（kill_sidecar 只收得到最后一个）。现行唯一调用点在 setup 阶段
+   * 执行一次；真重复到这里说明别处出了错，拒绝覆盖而不是静默顶掉。 */
+  {
+    let slot = SIDECAR.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if slot.is_some() {
+      return Err("sidecar 已在运行，拒绝重复拉起".into());
+    }
+  }
+
+  // 端口交接的 TOCTOU（ISSUE #4347）：pick_free_port 拿到端口即放手，到 node
+  // 真正 bind 之间可能被其它进程抢占——sidecar 因 EADDRINUSE 一类原因早夭，
+  // 一次启动就此失败。这里按「拉起后 grace 窗口内就退」判失败，换一个新端口
+  // 重试；重试救的是「可避免的失败」，三次都早退时维持单次失败的原有行为
+  // （Terminated 已记录，启动页按不可达处理，不挂死）。
+  for attempt in 1..=SIDECAR_PORT_ATTEMPTS {
+    SIDECAR_TERMINATED.store(false, Ordering::Relaxed);
+    let port = pick_free_port();
+    spawn_sidecar_attempt(app, &payload, port, project_root_for_exit)?;
+
+    // grace 窗口：还活着 = 端口到手；窗口内就退 = 换端口重试。等待写在
+    // 启动页可见的状态里（ISSUE #4391）：setup 在主线程，grace 期间启动页的
+    // 轮询 IPC 会停摆，至少让用户看到「在等什么」。
+    if !sidecar_died_within(SIDECAR_START_GRACE) {
+      // 更新应用 URL，供启动页 ready 后导航
+      let app_url = format!("http://127.0.0.1:{}/workspace", port);
+      if let Some(state) = app.try_state::<AppState>() {
+        state.set_app_url(app_url);
+      }
+      return Ok(());
+    }
+    shell_launch::write_idle_status(
+      project_root_for_exit,
+      "shell-prepare",
+      &format!(
+        "内嵌服务第 {attempt}/{SIDECAR_PORT_ATTEMPTS} 次拉起未成功（端口 {port} 可能被抢占），\
+         正在换端口重试…"
+      ),
+      None,
+    );
+    log::warn!(
+      "[ComfyAPP] sidecar 第 {attempt}/{SIDECAR_PORT_ATTEMPTS} 次拉起后立即退出\
+       （端口 {port} 可能已被抢占，或载荷自身起不来），换新端口重试"
+    );
+  }
+  log::error!(
+    "[ComfyAPP] sidecar 连续 {SIDECAR_PORT_ATTEMPTS} 次拉起后立即退出：维持单次失败的原有行为\
+     （不挂死、不另立失败出口），原因见 run/app-service-exit.json 与上方 [sidecar] 日志"
+  );
+
+  // 注意：不再在此直接导航「应用」窗口。启动页（splash）会自行探测 sidecar 端口，
+  // 就绪后调用 navigate_to_app 命令把隐藏的 main 窗口导航到应用 URL；main 页面真正
+  // 加载完成（on_page_load Finished）时再由 setup 中注册的回调交换窗口。这样由启动页
+  // 统一编排，避免与启动页的探测重复导航导致应用被加载两次。
+
+  Ok(())
+}
+
+/// 单次 sidecar 拉起：组命令 → spawn → 槽位 / Job 兜底 → 输出泵。`spawn` 失败
+/// （node 缺失一类）原样上抛；成功返回后由调用方观察 grace 窗口判断端口是否
+/// 到手（ISSUE #4347 的重试编排在外层 [`spawn_sidecar`]）。
+#[cfg(not(debug_assertions))]
+fn spawn_sidecar_attempt(
+  app: &tauri::AppHandle,
+  payload: &StandalonePayload,
+  port: u16,
+  project_root_for_exit: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+  use tauri_plugin_shell::process::CommandEvent;
+  use tauri_plugin_shell::ShellExt;
 
   // 参数用**相对载荷根**的形态（根因见 `resolve_standalone_payload` 里那段 verbatim
   // 路径的实测说明），`cwd` 给到载荷根，二者指向同一个文件。
@@ -1149,7 +1640,14 @@ fn spawn_sidecar(
     // 落在同一层，否则「server 写的库」和「入口要补的配置」是两个地方。
     .current_dir(&payload.app_root)
     .spawn()?;
-  *SIDECAR.lock().unwrap() = Some(child);
+  let sidecar_pid = child.pid();
+  *SIDECAR.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(child);
+  // OS 级兜底（ISSUE #4165）：给 sidecar 这棵树也挂 KILL_ON_JOB_CLOSE job。
+  // 正常关窗走 kill_sidecar（插件 kill + reap 补刀）；壳被硬杀时那条链一步都
+  // 跑不了，由 OS 关闭壳持有的 job 句柄当场终止整棵树——与编排器那棵树
+  // （attach_kill_on_close_job）同构。standalone 不写会话锚点，下一次启动的
+  // 孤儿回收对它没有认亲方式，所以这一层必须在壳死当场生效。
+  shell_launch::attach_sidecar_kill_on_close_job(sidecar_pid);
 
   // sidecar 的 stdout/stderr 必须有人读：shell 插件把输出投递到事件通道，
   // 无人消费时管道写满会让 sidecar 静默卡死（表现为「服务一直不就绪」）。
@@ -1166,34 +1664,30 @@ fn spawn_sidecar(
         CommandEvent::Stderr(line) => {
           log::warn!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
         }
-        CommandEvent::Terminated(payload) => {
-          log::info!("[sidecar] terminated: {:?}", payload.code);
-          /* 服务死的那一刻落盘（ISSUE #1692 的 sidecar 档）：探测那一格打的是服务
-           * 自己的 HTTP，服务一不在就永远问不到「为什么没了」——答案只能由此刻
-           * 还活着的壳写下（见 shell_launch::write_sidecar_exit_record）。写在事件回调里
-           * 而不是别处：这个事件是唯一带着退出码的地方。 */
-          shell_launch::write_sidecar_exit_record(
-            &exit_root,
-            payload.code,
-            &shell_launch::sidecar_exit_reason(payload.code),
-          );
-        }
+          CommandEvent::Terminated(payload) => {
+            log::info!("[sidecar] terminated: {:?}", payload.code);
+            /* 壳亲眼看到它死了：把这一事实记给第二档探活判据（ISSUE #4151），此后
+             * get_app_service_liveness 不再靠 PID 探测作答。写在事件回调里而不是
+             * 别处：这个事件是壳内唯一「确定它已退出」的时刻。句柄留在槽位里——
+             * 退出时 kill_sidecar 还要靠它回收作业内可能残留的孙辈进程。 */
+            SIDECAR_TERMINATED.store(true, Ordering::Relaxed);
+            /* 服务死的那一刻落盘（ISSUE #1692 的 sidecar 档）：探测那一格打的是服务
+             * 自己的 HTTP，服务一不在就永远问不到「为什么没了」——答案只能由此刻
+             * 还活着的壳写下（见 shell_launch::write_sidecar_exit_record）。写在事件回调里
+             * 而不是别处：这个事件是唯一带着退出码的地方。落盘是同步文件 IO，
+             * 挪进阻塞线程池（ISSUE #4393）——泵本身在 tokio worker 上，别让
+             * 一次性小文件写占住 async 上下文。 */
+            let exit_root = exit_root.clone();
+            let code = payload.code;
+            let reason = shell_launch::sidecar_exit_reason(payload.code);
+            tauri::async_runtime::spawn_blocking(move || {
+              shell_launch::write_sidecar_exit_record(&exit_root, code, &reason);
+            });
+          }
         _ => {}
       }
     }
   });
-
-  // 更新应用 URL，供启动页 ready 后导航
-  let app_url = format!("http://127.0.0.1:{}/workspace", port);
-  if let Some(state) = app.try_state::<AppState>() {
-    state.set_app_url(app_url.clone());
-  }
-
-  // 注意：不再在此直接导航「应用」窗口。启动页（splash）会自行探测 sidecar 端口，
-  // 就绪后调用 navigate_to_app 命令把隐藏的 main 窗口导航到应用 URL；main 页面真正
-  // 加载完成（on_page_load Finished）时再由 setup 中注册的回调交换窗口。这样由启动页
-  // 统一编排，避免与启动页的探测重复导航导致应用被加载两次。
-
   Ok(())
 }
 
@@ -1222,13 +1716,16 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
       poll_clock::PollClock::new(Duration::from_secs(120), Duration::from_millis(500));
     while !clock.expired() {
       clock.tick();
-      if TcpStream::connect((host.as_str(), port)).is_ok() {
+      if tcp_probe(host.as_str(), port) {
         // 端口刚通时 HTTP 未必已能响应，稍等一下再导航 —— 这是就绪后的
         // **沉降等待**，不是轮询拍（拍只有一种，在循环顶上）。
         std::thread::sleep(Duration::from_millis(500));
         if let Some(win) = handle.get_webview_window("main") {
           if let Ok(target) = url.parse::<tauri::Url>() {
-            let _ = win.navigate(target);
+            // 兜底导航失败原先被吞：主窗停在黑屏/旧页且无读数（ISSUE #4348）。
+            if let Err(e) = win.navigate(target) {
+              log::warn!("[ComfyAPP] 兜底导航到应用地址失败（{url}）：{e:?}");
+            }
           }
         }
         // 启动页（splash）不可用，无窗口可交换：直接显示「应用」窗口并关闭黑屏 splash。
@@ -1239,9 +1736,7 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
           .unwrap_or(false);
         if !abandoned {
           show_main_window_without_focus(&handle, false);
-          if let Some(splash) = handle.get_webview_window("splash") {
-            let _ = splash.close();
-          }
+          close_splash_window(&handle);
         }
         return;
       }
@@ -1396,8 +1891,8 @@ fn watch_main_first_paint(handle: tauri::AppHandle, mut stub_visible: bool) {
 /// 判据**留在 `scripts/reap-process.mjs`（与编排器、Python 启动器同一入口），
 /// 而不是在 Rust 里再写一遍平台分支。
 #[cfg(not(debug_assertions))]
-fn kill_sidecar(project_root: &str) {
-  let child = SIDECAR.lock().unwrap().take();
+fn kill_sidecar(project_root: &str, deadline: std::time::Instant) {
+  let child = SIDECAR.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
   let Some(child) = child else { return };
   // 插件用的 sidecar pid：先记下来，交给统一回收做第二道。
   let pid = child.pid();
@@ -1405,7 +1900,7 @@ fn kill_sidecar(project_root: &str) {
     Ok(()) => log::info!("[ComfyAPP] sidecar killed via shell plugin (pid {pid})"),
     Err(e) => log::warn!("[ComfyAPP] sidecar kill via shell plugin failed: {e:?}"),
   }
-  reap_process_tree(project_root, pid);
+  reap_process_tree(project_root, pid, deadline);
 }
 
 /// 用编排侧的统一回收补一刀（`scripts/reap-process.mjs`）。
@@ -1414,8 +1909,18 @@ fn kill_sidecar(project_root: &str) {
 /// 与 POSIX 进程组）只允许有一份。Rust 侧再写一遍，就是历史上「各写各的、
 /// POSIX 上退化成单杀」那条老路的翻版。
 #[cfg(not(debug_assertions))]
-fn reap_process_tree(project_root: &str, pid: u32) {
-  if project_root.is_empty() || pid == 0 {
+fn reap_process_tree(project_root: &str, pid: u32, deadline: std::time::Instant) {
+  if pid == 0 {
+    return;
+  }
+  if project_root.is_empty() {
+    // standalone 分发形态（无检出，#4331）：`scripts/reap-process.mjs` 在分发
+    // 目录里不存在，统一回收那条路走不通。Windows 有 Job Object 的
+    // KILL_ON_JOB_CLOSE 兜底（壳死时 OS 收整棵树）；POSIX 没有等价物——
+    // 在这里补树回收，别让 node 之下的 next-server / executor host 残留成
+    // 孤儿继续占端口与日志句柄。
+    #[cfg(unix)]
+    reap_descendants_posix(pid);
     return;
   }
   let script = std::path::Path::new(project_root)
@@ -1436,7 +1941,9 @@ fn reap_process_tree(project_root: &str, pid: u32) {
     use std::os::windows::process::CommandExt;
     command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
   }
-  match command.output() {
+  /* 预算来自退出回收的共享截止时刻（ISSUE #4219），不再各发一个 10s。 */
+  let budget = deadline.saturating_duration_since(std::time::Instant::now());
+  match shell_launch::run_with_budget(command, budget) {
     Ok(out) => log::info!(
       "[ComfyAPP] sidecar 进程树统一回收：{}",
       String::from_utf8_lossy(&out.stdout).trim()
@@ -1445,11 +1952,144 @@ fn reap_process_tree(project_root: &str, pid: u32) {
   }
 }
 
+/// POSIX（Linux/macOS）standalone 退出树回收（#4331）。
+///
+/// shell 插件的 `kill()` 只杀 node leader，node 之下的 next-server / 执行宿主
+/// 会残留成孤儿；而 standalone 分发目录里没有 `scripts/reap-process.mjs`
+/// （统一回收入口），POSIX 也没有 Job Object 兜底——这一刀只能在 Rust 侧补。
+///
+/// 沿父子关系枚举整棵树：先杀后代、再杀 leader（顺序无关，重要的是都收到
+/// SIGKILL）。枚举判据：Linux 走 `/proc/<pid>/status` 的 PPid；macOS 无 /proc，
+/// 退用 `pgrep -P` 逐层取直接子进程。深度与数量都有界，防止异常进程关系把
+/// 退出路径拖死。
+///
+/// 可见性挂 `any(test, not(debug_assertions))`：release 由 `reap_process_tree`
+/// 的空根分支调用；debug 非测试构建里不存在（避免 dead_code 告警），测试构建
+/// 由下方用例直呼。
+#[cfg(all(unix, any(test, not(debug_assertions))))]
+fn reap_descendants_posix(leader: u32) {
+  const MAX_DEPTH: usize = 16;
+  const MAX_PIDS: usize = 256;
+  let mut tree: Vec<u32> = vec![leader];
+  let mut frontier = vec![leader];
+  for _ in 0..MAX_DEPTH {
+    if frontier.is_empty() || tree.len() >= MAX_PIDS {
+      break;
+    }
+    let mut next = Vec::new();
+    for pid in frontier.drain(..) {
+      for child in posix_child_pids(pid) {
+        if tree.len() >= MAX_PIDS {
+          break;
+        }
+        if !tree.contains(&child) {
+          tree.push(child);
+          next.push(child);
+        }
+      }
+    }
+    frontier = next;
+  }
+  for pid in tree.iter().rev() {
+    // SAFETY：kill(2) 只发信号，无内存安全前提；ESRCH（目标已退出）按已回收处理。
+    unsafe {
+      libc::kill(*pid as i32, libc::SIGKILL);
+    }
+  }
+  log::info!(
+    "[ComfyAPP] standalone POSIX 树回收：SIGKILL {} 个进程（含 leader {leader}）",
+    tree.len()
+  );
+}
+
+/// 某进程的直接子进程（尽力而为：读不到 = 视作没有子进程）。
+#[cfg(all(unix, any(test, not(debug_assertions))))]
+fn posix_child_pids(pid: u32) -> Vec<u32> {
+  #[cfg(target_os = "linux")]
+  {
+    let mut children = Vec::new();
+    if let Ok(entries) = std::fs::read_dir("/proc") {
+      for entry in entries.flatten() {
+        let Ok(child) = entry.file_name().to_string_lossy().parse::<u32>() else {
+          continue;
+        };
+        let Ok(status) = std::fs::read_to_string(entry.path().join("status")) else {
+          continue;
+        };
+        for line in status.lines() {
+          if let Some(rest) = line.strip_prefix("PPid:") {
+            if rest.trim().parse::<u32>() == Ok(pid) {
+              children.push(child);
+            }
+            break;
+          }
+        }
+      }
+    }
+    children
+  }
+  #[cfg(not(target_os = "linux"))]
+  {
+    match std::process::Command::new("pgrep").arg("-P").arg(pid.to_string()).output() {
+      Ok(out) => String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .filter_map(|token| token.parse::<u32>().ok())
+        .collect(),
+      Err(_) => Vec::new(),
+    }
+  }
+}
+
+#[cfg(all(unix, test))]
+mod standalone_posix_reap_tests {
+  use super::*;
+
+  /// #4331 的行为判据：standalone（无检出）退出时，POSIX 也要把 sidecar 的
+  /// 后代一起收走，而不是只杀 node leader。真起一棵 `sh → sleep` 的小树验证。
+  #[test]
+  fn posix_tree_reap_kills_descendants_not_just_leader() {
+    let marker_path =
+      std::env::temp_dir().join(format!("comfyapp-reap-test-{}.txt", std::process::id()));
+    let _ = std::fs::remove_file(&marker_path);
+    let script = format!("sleep 61 & echo $! > {}; wait", marker_path.display());
+    let mut leader = std::process::Command::new("sh")
+      .arg("-c")
+      .arg(&script)
+      .spawn()
+      .expect("spawn sh");
+    let leader_pid = leader.id();
+    // 等 sleep 子进程落地并写下自己的 pid（$! = 最后一个后台任务的 pid）。
+    let mut child_pid = 0u32;
+    for _ in 0..50 {
+      if let Ok(text) = std::fs::read_to_string(&marker_path) {
+        if let Ok(pid) = text.trim().parse::<u32>() {
+          child_pid = pid;
+          break;
+        }
+      }
+      std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(child_pid > 0, "sleep 子进程没起来（marker 未写出）");
+
+    reap_descendants_posix(leader_pid);
+    let _ = leader.wait();
+
+    // leader 与后代都不在了（kill(pid, 0) 报 ESRCH = 返回 -1）。
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    // SAFETY：kill(2) 只发信号。
+    unsafe {
+      assert_ne!(libc::kill(leader_pid as i32, 0), 0, "leader 仍存活");
+      assert_ne!(libc::kill(child_pid as i32, 0), 0, "后代 sleep 仍存活");
+    }
+    let _ = std::fs::remove_file(&marker_path);
+  }
+}
+
 /// 该路径是否像一个「本检出」的项目根。
 ///
 /// 判据刻意**不看平台专属文件**：此前校验的是 `scripts/dev-launcher.ps1`
 /// 是否存在，于是 Linux/macOS 上 `resolve_project_root()` 永远返回空串 ——
-/// 启动页读不到 `run/launch-status.json`、壳日志落不到 `log/shell/`，
+/// 启动页读不到 `run/launch-status.json`、壳日志落不到 `log/current/shell/`，
 /// 表现为「启动页一直转圈 + 没有日志可查」，而根因只是判据绑在了 Windows 上。
 /// 现在认两个**跨平台都存在**的仓库标识文件：`package.json`（必需）+
 /// `scripts/dev-launcher.mjs`（启动编排器的唯一实现；`.ps1` 只是它的 Windows
@@ -1529,17 +2169,24 @@ fn resolve_project_root() -> String {
 ///
 /// 因此调用点必须是「先捕获 `self_launch` → 再回填」（见 `run()`）：
 /// 顺序反过来会把那条判据变成永远为假的常量，双击链路于是不再自编排。
+/// 回填动作的**进程内唯一写入闸**（ISSUE #4346）：与启动模式那份同一取向，
+/// `set_var` 至多执行一次，「启动期单线程」从注释里的假设变成结构保证。
+static PROJECT_ROOT_PUBLISHED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
 fn publish_project_root_env(root: &str) {
   if root.is_empty() {
     return;
   }
-  if let Ok(existing) = std::env::var("COMFYAPP_PROJECT_ROOT") {
-    if !existing.trim().is_empty() {
-      return; // 外部注入优先：不覆盖「谁起的壳」这条一手证据
+  PROJECT_ROOT_PUBLISHED.get_or_init(|| {
+    if let Ok(existing) = std::env::var("COMFYAPP_PROJECT_ROOT") {
+      if !existing.trim().is_empty() {
+        return; // 外部注入优先：不覆盖「谁起的壳」这条一手证据
+      }
     }
-  }
-  // SAFETY：启动期单线程（事件循环与窗口都还没建），没有并发读环境变量的路径。
-  std::env::set_var("COMFYAPP_PROJECT_ROOT", root);
+    // SAFETY：写入被 [`PROJECT_ROOT_PUBLISHED`] 收敛为至多一次（ISSUE #4346），
+    // 并发写不可能发生；首写处于启动期，此刻没有并发读环境变量的路径。
+    std::env::set_var("COMFYAPP_PROJECT_ROOT", root);
+  });
 }
 
 /// 把壳自己的 exe 路径发布给下游（编排器 → dev server → 服务生命周期）。
@@ -1549,37 +2196,55 @@ fn publish_project_root_env(root: &str) {
 /// server 由编排器拉起，因此这一行写下的变量会顺着链传下去。
 ///
 /// 与 `publish_project_root_env` 同一时机（启动期、建窗口之前）写入。
+/// 壳 exe 路径的**进程内唯一写入闸**（ISSUE #4346，理由同上）。
+static SHELL_EXE_PUBLISHED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
 fn publish_shell_exe_env() {
-  if let Ok(exe) = std::env::current_exe() {
-    // SAFETY：同 publish_project_root_env —— 启动期单线程。
-    std::env::set_var("COMFYAPP_SHELL_EXE", exe);
-  }
+  SHELL_EXE_PUBLISHED.get_or_init(|| {
+    if let Ok(exe) = std::env::current_exe() {
+      // SAFETY：写入被 [`SHELL_EXE_PUBLISHED`] 收敛为至多一次（ISSUE #4346）；
+      // 首写处于启动期，此刻没有并发读环境变量的路径。
+      std::env::set_var("COMFYAPP_SHELL_EXE", exe);
+    }
+  });
 }
 
 /// 日志插件：开发模式走 stdout（launcher 已把 stderr 重定向进
-/// log/launcher/dev-launcher-stderr.log）；生产模式额外落一份壳自持日志到
-/// <项目根>/log/shell/（standalone 双击无 launcher 重定向时的兜底落盘，见
+/// log/current/launcher/dev-launcher-stderr.log）；生产模式额外落一份壳自持日志到
+/// log/current/shell/shell.log（standalone 双击无 launcher 重定向时的兜底落盘，见
 /// launch-and-build.md §4 日志布局：按子系统分区，新增 shell 子系统）。
 #[cfg(not(debug_assertions))]
 fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
   // 保留 stdout/stderr：launcher 下壳 stderr 被重定向进 dev-launcher-stderr.log；
-  // release（windows_subsystem）下无控制台，写 stderr 无害。生产模式另落一份
-  // 壳自持日志到 <项目根>/log/shell/shell.log——standalone 双击无 launcher 重定向，
-  // 壳若在 launcher 之外崩溃仍有日志可查（launch-and-build.md §4：按子系统分区）。
-  // 插件自带 KeepOne 轮转，避免文件无限增长。
-  // 时区固定 UseLocal：插件的默认策略是 UTC（`DEFAULT_TIMEZONE_STRATEGY`），
-  // 壳 stderr 被 launcher 重定向进 log/launcher/ 后面板直接展示——UTC 会让
-  // 同一份面板里的行与其余本地时钟的行差 8 小时。
+  // release（windows_subsystem）下无控制台，std 对无效 stdio 句柄静默丢弃，写之无害。
+  // 生产模式另落一份壳自持日志到 `log/current/shell/shell.log`——standalone 双击无
+  // launcher 重定向，壳若在 launcher 之外崩溃仍有日志可查（launch-and-build.md §4：
+  // 按子系统分区）。
+  //
+  // 这份日志**不能走插件的 Folder target**（#3574）：它把文件句柄一直攥到进程
+  // 退出，而 `current/` 会被编排器整目录清空（启动时的崩溃补做、退出时的收包）；
+  // 清空一发生，句柄就指向已删除的文件，此后所有写入静默丢失——壳日志冻在启动
+  // 头几行，navigate_to_app / 窗口交换等全程不可观测。改走自定义 fern 分发 +
+  // 按次开合的 [`shell_launch::ResilientShellLog`]：插件的总格式化管线原样生效
+  // （行形态不变），落盘换成每次按路径重开，目录被清了下一行自己重建。
+  // 大小上限见 `shell_launch::SHELL_LOG_MAX_BYTES`。
   let mut targets = vec![
     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
   ];
   if !project_root.is_empty() {
-    let shell_log_dir = shell_launch::shell_log_dir(project_root);
-    targets.push(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
-      path: shell_log_dir,
-      file_name: Some("shell.log".to_string()),
-    }));
+    // fern 经 tauri-plugin-log 的 re-export 使用（`tauri_plugin_log::fern`），
+    // 与插件内部分发共用同一版本，不新增直接依赖。
+    targets.push(tauri_plugin_log::Target::new(
+      tauri_plugin_log::TargetKind::Dispatch(tauri_plugin_log::fern::Dispatch::new().chain(
+        tauri_plugin_log::fern::Output::writer(
+          Box::new(shell_launch::ResilientShellLog::new(shell_launch::shell_log_path(
+            project_root,
+          ))),
+          "\n",
+        ),
+      )),
+    ));
   }
   tauri_plugin_log::Builder::new()
     .level(log::LevelFilter::Info)
@@ -1590,7 +2255,7 @@ fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
 
 #[cfg(debug_assertions)]
 fn build_log_plugin(_project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
-  // dev 模式：壳日志由 launcher 把 stderr 重定向进 log/launcher/，无需壳自持文件。
+  // dev 模式：壳日志由 launcher 把 stderr 重定向进 log/current/launcher/，无需壳自持文件。
   // 时区同样固定 UseLocal（理由见 release 分支的注释）。
   tauri_plugin_log::Builder::new()
     .level(log::LevelFilter::Info)
@@ -1643,16 +2308,24 @@ const TRAY_ID: &str = "comfyapp-tray";
 /// 但「启动完成后窗口在任务栏、用户又切走了」这类场景需要一个稳定的唤起入口，
 /// 因此常驻一个最小托盘——左键单击把主窗口带回前台，右键给出显示/退出。
 /// 托盘是窗口的附属入口，不改变窗口关闭语义（关主窗即退出应用）。
-fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+fn build_tray(app: &tauri::AppHandle) -> Result<(), String> {
   use tauri::menu::{Menu, MenuItem};
   use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-  let open_item = MenuItem::with_id(app, "open-main", "打开主界面", true, None::<&str>)?;
-  let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-  let menu = Menu::with_items(app, &[&open_item, &quit_item])?;
+  let open_item = MenuItem::with_id(app, "open-main", "打开主界面", true, None::<&str>)
+    .map_err(|e| e.to_string())?;
+  let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)
+    .map_err(|e| e.to_string())?;
+  let menu = Menu::with_items(app, &[&open_item, &quit_item]).map_err(|e| e.to_string())?;
+
+  let Some(icon) = app.default_window_icon() else {
+    // 图标资源缺失（bundle icons 被改坏）只该让托盘缺位，不该让 setup 阶段的
+    // unwrap 把整个应用带走（ISSUE #4214；调用方本来就按 WARN 兜底）。
+    return Err("默认窗口图标缺失：请检查 tauri.conf.json 的 bundle.icons 配置".to_string());
+  };
 
   TrayIconBuilder::with_id(TRAY_ID)
-    .icon(app.default_window_icon().unwrap().clone())
+    .icon(icon.clone())
     .tooltip("Comfy APP")
     .menu(&menu)
     .show_menu_on_left_click(false)
@@ -1672,7 +2345,8 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         show_main_window_without_focus(tray.app_handle(), true);
       }
     })
-    .build(app)?;
+    .build(app)
+    .map_err(|e| e.to_string())?;
   log::info!("[ComfyAPP] tray icon created");
   Ok(())
 }
@@ -1692,7 +2366,7 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 ///   `min(100vw - 48px)` 同口径）：小屏不越界，尺寸不够时由页面继续收；
 /// - 展开日志后页面会把窗口调到 SPLASH_WINDOW_SIZE_EXPANDED，仍是「内容多大、
 ///   窗口多大」。
-const SPLASH_WINDOW_SIZE: (f64, f64) = (744.0, 216.0);
+const SPLASH_WINDOW_SIZE: (f64, f64) = (744.0, 288.0);
 
 /// 展开日志后的窗口尺寸（对应页面里「展开日志」那一档，见 splash.html）。
 const SPLASH_WINDOW_SIZE_EXPANDED: (f64, f64) = (1424.0, 788.0);
@@ -1860,10 +2534,12 @@ impl LaunchContext {
   /// 占位，正是本字段注释说要避免的白闪。
   fn collect(self_launch: bool, launch_mode: &str) -> Self {
     let project_root = resolve_project_root();
-    // 开发模式默认跳本地 Next.js dev server；脚本 / 终端调用可经环境变量注入。
+    // 回环主机写 127.0.0.1 不写 localhost（硬规则 20）：dev server 按显式
+    // `-H 127.0.0.1` 起在 IPv4 上，导航 URL 也用同一地址，别让壳自己拼出
+    // 一份「localhost」（会先解析成 ::1，见 tcp_probe 的 ISSUE #4328 注）。
     // 生产模式在 spawn_sidecar 中更新为实际 sidecar 端口。
     let app_url = std::env::var("COMFYAPP_DEV_URL")
-      .unwrap_or_else(|_| default_dev_url("localhost"));
+      .unwrap_or_else(|_| default_dev_url("127.0.0.1"));
     if self_launch {
       log::info!(
         "[ComfyAPP] no external launcher owns this process (COMFYAPP_PROJECT_ROOT absent): \
@@ -1925,14 +2601,18 @@ fn another_instance_owns_this_checkout() -> bool {
   false
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-  /* CLI 形态（保活拉起的中介）必须在**任何**壳初始化之前分叉出去：它只做一次
-   * CreateProcess 就退出，不该建窗口、不该认领单实例身份、也不该去拉编排器
-   * （见 `detached_spawn` 模块头）。 */
+/// CLI 形态（保活拉起的中介）必须在**任何**壳初始化之前分叉出去：它只做一次
+/// CreateProcess 就退出，不该建窗口、不该认领单实例身份、也不该去拉编排器
+/// （见 `detached_spawn` 模块头）。分叉了就整进程退出。
+fn exit_if_cli_detached() {
   if let Some(code) = detached_spawn::run_from_args() {
     std::process::exit(code);
   }
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+  exit_if_cli_detached();
   let (resolved_root, self_launch) = claim_project_root_env();
 
   /* 运行模式必须在**建启动页之前**定下来：启动页从建窗那一刻起每 250ms 问一次
@@ -1986,13 +2666,16 @@ pub fn run() {
       navigate_to_app,
       get_app_url,
       get_launch_log,
+      get_server_activity,
       get_app_service_exit,
+      get_app_service_liveness,
       set_splash_compact,
       win_close,
       win_minimize,
       open_comfyui_window,
       activate_main_window,
       should_activate_on_launch,
+      window_show_diagnostics,
       open_devtools,
       devtools_available
     ])
@@ -2000,45 +2683,140 @@ pub fn run() {
     // 所有权**（`move`），否则 `expect_slow_first_paint` 这类按值传入的局部量会在
     // 闭包借用检查时直接编译不过（`closure may outlive the current function`）。
     .setup(move |app| {
-      // 模式在 `run()` 里就定了（必须早于启动页存在），但那一刻 **log 插件还没装上**：
-      // 插件是 Builder 链上 `.plugin(log_plugin)` 之后才生效的，`setup` 是最早的
-      // 安全点。这一行是「本次启动按哪种形态跑」在日志里唯一的落点，别删。
-      log::info!("[ComfyAPP] launch mode={launch_mode}");
-      // run() 只做装配，启动编排按职责拆成命名步骤（原先整段塞在 setup 闭包里，
-      // 单函数近 300 行，而 Rust 侧没有函数长度门禁——见 §12.13 / ISSUE #536 P4）。
-      // 顺序是契约：先收二次启动事件并定启动页尺寸，再建隐藏的 main 窗并挂其加载
-      // 完成回调，接着挂「关启动页 = 放弃启动」与看门狗，最后才是生产模式
-      // sidecar 与托盘。
-      setup_splash_window(app);
-
-      if self_launch {
-        start_self_orchestration(app, &project_root);
-      }
-
-      // ── 方向 B：启动页与「应用」窗口分离 ──
-      // 配置里的 splash 窗口仅显示启动进度；「应用」窗口（label="main"）在此创建
-      // 为隐藏窗口，先停在 about:blank，由启动页探测后端就绪后经 navigate_to_app
-      // 导航到应用 URL，加载完成后由 create_main_window 里挂的回调交换窗口。
-      create_main_window(app)?;
-      watch_main_first_paint(app.handle().clone(), expect_slow_first_paint);
-
-      install_splash_close_handler(app);
-      spawn_splash_watchdog(app);
-
-      #[cfg(not(debug_assertions))]
-      setup_standalone_runtime(app)?;
-
-      // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
-      // （缺图标资源 / 系统限制）只记 WARN，绝不能让整个应用起不来。
-      if let Err(e) = build_tray(app.handle()) {
-        log::warn!("[ComfyAPP] tray icon not created: {:?}", e);
-      }
+      startup_setup(
+        app,
+        &SetupParts {
+          expect_slow_first_paint,
+          launch_mode,
+          project_root,
+          self_launch,
+        },
+      );
       Ok(())
     })
     .build(tauri::generate_context!())
     .expect("error while building tauri application");
 
   app.run(handle_run_event);
+}
+
+/// setup 闭包捕获的运行期量（`move` 语义需要所有权，收成一个传递面）。
+struct SetupParts {
+  expect_slow_first_paint: bool,
+  launch_mode: String,
+  project_root: String,
+  self_launch: bool,
+}
+
+/// setup 闭包的本体（#4412/#4416 之后步骤增多，run() 越过 Rust 120 行硬闸——
+/// 收成命名步骤，闭包只保留装配）。
+///
+/// 顺序是契约：先建启动页（程序化，#4412）并定启动页尺寸，再建隐藏的 main
+/// 窗并挂其加载完成回调，接着挂「关启动页 = 放弃启动」与看门狗，最后才是
+/// 生产模式 sidecar 与托盘。残留回收与 sidecar 拉起这两段同步重活挪进后台
+/// 线程（#4416）：setup 在事件循环线程上执行，同步重活期间启动页的 IPC
+/// 轮询被同一阻塞消耗。
+fn startup_setup(app: &mut tauri::App, parts: &SetupParts) {
+  // 模式在 `run()` 里就定了（必须早于启动页存在），但那一刻 **log 插件还没装上**：
+  // 插件是 Builder 链上 `.plugin(log_plugin)` 之后才生效的，`setup` 是最早的
+  // 安全点。这一行是「本次启动按哪种形态跑」在日志里唯一的落点，别删。
+  log::info!("[ComfyAPP] launch mode={}", parts.launch_mode);
+  if let Err(e) = create_splash_window(app) {
+    report_window_setup_failure(app, &e.to_string());
+  }
+  setup_splash_window(app);
+
+  if parts.self_launch {
+    // 残留回收（find_owned_orchestrator + reap_pid，最坏 REAPER_BUDGET(10s)
+    // + drain）是同步重活，挪到后台线程（#4416）。编排器在线程里按
+    // 「回收残留 → 起自己的」顺序推进，与窗口创建无顺序依赖。
+    let handle = app.handle().clone();
+    let project_root = parts.project_root.clone();
+    std::thread::spawn(move || start_self_orchestration(&handle, &project_root));
+  }
+
+  // ── 方向 B：启动页与「应用」窗口分离 ──
+  // 装配失败（WebView2 初始化失败等，#4329）与下面 standalone 装配失败同理：
+  // Err 不能冒到 Builder::build 的 expect——那是无声崩溃。接住并写状态文件，
+  // 壳继续跑着显示失败态（详见 report_window_setup_failure）。
+  if let Err(e) = wire_startup_windows(app, parts.expect_slow_first_paint) {
+    report_window_setup_failure(app, &e.to_string());
+  }
+
+  // standalone 载荷缺失/损坏（ISSUE #4214）：Err 不能冒到 Builder::build 的
+  // expect——那是无声崩溃（windows_subsystem 下无控制台、无启动页）。窗口此刻
+  // 已创建：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态。
+  // sidecar 拉起带固定的 grace 睡眠（成功路径 1.5s）与端口重试（4.5s），
+  // 同样是启动关键路径上的同步重活 —— 一并挪到后台线程（#4416）。
+  #[cfg(not(debug_assertions))]
+  {
+    let handle = app.handle().clone();
+    std::thread::spawn(move || {
+      if let Err(e) = setup_standalone_runtime(&handle) {
+        report_standalone_setup_failure(&handle, &e.to_string());
+      }
+    });
+  }
+
+  // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
+  // （缺图标资源 / 系统限制）只记 WARN，绝不能让整个应用起不来。
+  if let Err(e) = build_tray(app.handle()) {
+    log::warn!("[ComfyAPP] tray icon not created: {:?}", e);
+  }
+}
+
+/// 启动页与「应用」主窗的装配（ISSUE #4214 顺带：`run()` 越过 Rust 函数长度
+/// 硬闸，把这一段收成命名步骤）。
+///
+/// ── 方向 B：启动页与「应用」窗口分离 ──
+/// 配置里的 splash 窗口仅显示启动进度；「应用」窗口（label="main"）在此创建
+/// 为隐藏窗口，先停在 about:blank，由启动页探测后端就绪后经 navigate_to_app
+/// 导航到应用 URL，加载完成后由 create_main_window 里挂的回调交换窗口。
+/// 「关闭启动页 = 放弃启动」的处理器与看门狗也在这里挂。
+fn wire_startup_windows(
+  app: &mut tauri::App,
+  expect_slow_first_paint: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+  create_main_window(app)?;
+  watch_main_first_paint(app.handle().clone(), expect_slow_first_paint);
+
+  install_splash_close_handler(app);
+  spawn_splash_watchdog(app);
+  Ok(())
+}
+
+/// 窗口装配失败的可见出口（#4329，与 `report_standalone_setup_failure` 同族）：
+/// 主窗/启动页创建失败（WebView2 初始化失败、窗口配置损坏等）时，Err 不能冒到
+/// `Builder::build` 的 expect——那是无声崩溃（`windows_subsystem` 下无控制台）。
+/// 接住后把原因与修法写进启动页轮询得到的状态文件（启动页仍在时用户能看到失败态；
+/// 启动页也没建成时，至少落了壳日志，不再是「无声 panic」）。
+fn report_window_setup_failure(app: &tauri::App, error: &str) {
+  log::error!("[ComfyAPP] startup windows setup failed: {error}");
+  shell_launch::mark_launch_failed(
+    &app.state::<AppState>().project_root(),
+    &format!(
+      "应用窗口装配失败：{error}\n\
+       常见原因是 WebView2 运行时缺失/损坏或窗口配置异常：请安装/修复 WebView2 Runtime \
+       （https://developer.microsoft.com/microsoft-edge/webview2/）后重试；\
+       详见 log/current/shell/shell.log。"
+    ),
+  );
+}
+
+/// standalone 装配失败的可见出口（ISSUE #4214）：Err 不能冒到 `Builder::build`
+/// 的 expect——那是无声崩溃（`windows_subsystem` 下无控制台、无启动页）。窗口
+/// 此刻已创建：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态。
+#[cfg(not(debug_assertions))]
+fn report_standalone_setup_failure(app: &tauri::AppHandle, error: &str) {
+  log::error!("[ComfyAPP] standalone runtime setup failed: {error}");
+  shell_launch::mark_launch_failed(
+    &app.state::<AppState>().project_root(),
+    &format!(
+      "standalone 运行时装配失败：{error}\n\
+       请确认安装目录 resources/static/ 下的内嵌服务随包完整分发（重新安装/解压一次），\
+       详见 log/current/shell/shell.log。"
+    ),
+  );
 }
 
 /// 双击壳（唯一的启动入口形态）：承担原先 Python 启动器的那一段编排。
@@ -2056,7 +2834,9 @@ pub fn run() {
 ///      会占着端口 → 表现为双击没反应；
 ///   4. **最后起编排器**。**不留「命中的就跳过」的捷径**：两个 `app.exe` 同时
 ///      双击的场景已由 run() 早期的单实例判定拦下（第二个进程不建窗口就退出）。
-fn start_self_orchestration(app: &mut tauri::App, project_root: &str) {
+/// `&AppHandle`（#4416 起 setup 闭包把本函数挪进后台线程）：签名从 `&mut App`
+/// 收窄到句柄 —— 本函数只经 `start_own_orchestrator` 用到它。
+fn start_self_orchestration(app: &tauri::AppHandle, project_root: &str) {
   shell_launch::ensure_launch_mode(project_root);
   const PHASE_NOTE: &str = "壳已接手（双击 app.exe）";
   shell_launch::write_idle_status(
@@ -2066,13 +2846,27 @@ fn start_self_orchestration(app: &mut tauri::App, project_root: &str) {
     Some(shell_launch::startup_report_json(project_root, PHASE_NOTE)),
   );
   shell_launch::log_startup_report(project_root, PHASE_NOTE);
-  if let Some(pid) = shell_launch::find_owned_orchestrator() {
+  if let Some(pid) = shell_launch::find_owned_orchestrator(&project_root) {
     log::warn!(
       "[ComfyAPP] 上一次运行遗留的编排器仍在跑（pid {pid}），先回收它再启动本次编排"
     );
-    shell_launch::reap_pid(project_root, pid);
+    /* 启动前的残留清理不在退出路径上：给完整的 REAPER_BUDGET。回收必须先于
+     * 本次编排（遗留进程占着端口），等待因此是顺序必需的；这里把「要等多久、
+     * 在等谁」写进启动页可见的状态（ISSUE #4391）——主线程在等待期间无法
+     * 处理启动页的轮询 IPC，至少让用户看到的是解释而不是无解释的冻结。 */
+    shell_launch::write_idle_status(
+      project_root,
+      "shell-prepare",
+      "发现上次运行遗留的编排器，正在回收（最多约 10 秒，完成后自动继续）…",
+      Some(shell_launch::startup_report_json(project_root, PHASE_NOTE)),
+    );
+    shell_launch::reap_pid(
+      project_root,
+      pid,
+      std::time::Instant::now() + shell_launch::REAPER_BUDGET,
+    );
   }
-  start_own_orchestrator(app.handle(), project_root);
+  start_own_orchestrator(app, project_root);
 }
 
 /// 自编排：由壳自己起 dev-launcher.mjs，并把「服务就绪」这一步接到启动页那条
@@ -2124,7 +2918,7 @@ fn start_own_orchestrator(app: &tauri::AppHandle, project_root: &str) {
         project_root,
         &format!(
           "无法启动本地服务（node scripts/dev-launcher.mjs 未能拉起）：{e}\n\
-           请确认已安装 Node.js / pnpm，详见 log/launcher/ 与 log/shell/shell.log。"
+           请确认已安装 Node.js / pnpm，详见 log/current/launcher/ 与 log/current/shell/shell.log。"
         ),
       );
     }
@@ -2186,8 +2980,10 @@ fn setup_splash_window(app: &mut tauri::App) {
 ///
 /// 用 `set_focus()` 而不是 `always_on_top`：置顶是**持续**语义（窗口会一直压在
 /// 别人上面，用户在启动期想切走也切不掉），而这里要的只是「出现的那一刻在前面」。
-/// Windows 的前台锁定可能让 `set_focus()` 落空（用户刚在别的窗口上点过），
-/// 此时补一次任务栏闪烁作为可见提醒，与主窗的策略保持一致。
+/// Windows 的前台锁定可能让 `set_focus()` 落空（用户刚在别的窗口上点过），此时
+/// 只记日志：ISSUE #3562 起不再为「启动页没拿到前台」请求任务栏闪烁——启动页是
+/// `WS_EX_TOOLWINDOW`，闪烁却落在应用主窗的任务栏按钮上，用户读到的是「后台
+/// 莫名有个红色提醒」。
 fn bring_splash_to_front(splash: &tauri::WebviewWindow) {
   // 声明式窗口（tauri.conf.json 的 windows[0]）默认已可见，但显式 `show()` 一次
   // 更稳：某些窗口状态插件/系统还原会把首次显示推迟，未显示的窗口 set_focus 无意义。
@@ -2196,14 +2992,12 @@ fn bring_splash_to_front(splash: &tauri::WebviewWindow) {
   }
   if let Err(e) = splash.set_focus() {
     log::warn!("[ComfyAPP] splash set_focus failed: {:?}", e);
-    let _ = splash.request_user_attention(Some(tauri::UserAttentionType::Informational));
     return;
   }
   if splash.is_focused().unwrap_or(false) {
     log::info!("[ComfyAPP] splash window brought to front");
   } else {
     log::warn!("[ComfyAPP] splash window shown but foreground not granted");
-    let _ = splash.request_user_attention(Some(tauri::UserAttentionType::Informational));
   }
 }
 
@@ -2263,6 +3057,32 @@ fn apply_saved_main_window_state(win: &tauri::WebviewWindow) {
 /// main 停在 about:blank，等启动页探测到后端就绪后经 navigate_to_app 导航；真正
 /// 导航到应用 URL 且加载完成（on_page_load Finished）时才显示 main、关闭 splash，
 /// 启动页因而会一直显示到应用首屏真正可见（不再出现「启动完成却还要等很久」）。
+/// 启动页窗口（#4412 起程序化创建）。
+///
+/// 为什么不再走 `tauri.conf.json` 的 `app.windows` 声明式创建：框架在 setup
+/// 处理里**先**建 config 窗口、**后**跑用户闭包，config 建窗的 Err 直达框架
+/// 内部的 `panic!("Failed to setup app")` —— `windows_subsystem` 下无控制台，
+/// WebView2 损坏（#4329 现场 HRESULT 0x80070057）时表现为双击后静默死亡，壳的
+/// 失败上报链一格都跑不到。程序化创建的 Err 由 setup 闭包接住
+/// （`report_window_setup_failure`），走与主窗同一条失败态出口。
+///
+/// 各项与原声明式配置逐项对齐；尺寸用 [`SPLASH_WINDOW_SIZE`]（不抄第二份，
+/// 见 `splash_window_size_matches_the_shell_constant` 那条判据）。
+fn create_splash_window(app: &mut tauri::App) -> tauri::Result<()> {
+  tauri::WebviewWindowBuilder::new(app, "splash", tauri::WebviewUrl::App("splash.html".into()))
+    .title("Comfy APP 启动中")
+    .inner_size(SPLASH_WINDOW_SIZE.0, SPLASH_WINDOW_SIZE.1)
+    .min_inner_size(620.0, 180.0)
+    .center()
+    .resizable(true)
+    .decorations(false)
+    .fullscreen(false)
+    // 原配置的 backgroundColor：深色底，避免建窗到首帧之间的白闪。
+    .background_color(tauri::window::Color(0x0A, 0x0A, 0x0F, 0xFF))
+    .build()?;
+  Ok(())
+}
+
 fn create_main_window(app: &mut tauri::App) -> tauri::Result<()> {
   let main_url: tauri::Url = "about:blank"
     .parse()
@@ -2323,6 +3143,12 @@ fn on_main_page_finished(handle: &tauri::AppHandle, url: tauri::Url) {
     log::debug!("[ComfyAPP] ignoring initial/non-app page load");
     return;
   }
+  // 交接只在启动页还在时发生（ISSUE #3562）：启动完成后应用内的整页导航 /
+  // 重载同样会触发 Finished，再走一遍交接就会把已可见的主窗重新激活一次。
+  if handle.get_webview_window("splash").is_none() {
+    log::debug!("[ComfyAPP] window handover already done, ignoring page load");
+    return;
+  }
   log::info!("[ComfyAPP] app page loaded, swapping windows");
   // 用户已在启动期关闭启动页（放弃本次启动）：壳正在退出，别再把主窗显示出来
   // （否则用户关闭后过一会儿窗口又自己冒出来）。
@@ -2334,7 +3160,11 @@ fn on_main_page_finished(handle: &tauri::AppHandle, url: tauri::Url) {
     log::info!("[ComfyAPP] launch abandoned by user, skip window swap");
     return;
   }
-  if !url_reachable(&url) {
+  // 主线程（页面加载回调）不做可能无界阻塞的系统调用：解析 + 连接整体移出，
+  // 这里只做有上限的等待（ISSUE #4336）。预算 3s：正常回环探测瞬回，最坏
+  // 合法情形（两个地址各 1s 连接超时）也覆盖得住；只有 DNS 卡死才会等满，
+  // 那时按不可达交给重导航循环（它在后台线程用无界探测继续追）。
+  if !url_reachable_bounded(&url, Duration::from_millis(3000)) {
     log::warn!("[ComfyAPP] swap aborted, app url unreachable: {}", url_str);
     // 页面是内嵌错误页时占位会被导航冲掉：再补一次，直到重导航把真页面带回来
     watch_main_first_paint(handle.clone(), true);
@@ -2349,9 +3179,7 @@ fn on_main_page_finished(handle: &tauri::AppHandle, url: tauri::Url) {
   // 启动期可能已过了几十秒，用户很可能切到了别的窗口：这里只把应用显示到
   // 任务栏并做闪烁提醒，不把窗口顶到前台（见 show_main_window_without_focus）。
   show_main_window_without_focus(handle, false);
-  if let Some(s) = handle.get_webview_window("splash") {
-    let _ = s.close();
-  }
+  close_splash_window(handle);
 }
 
 /// 启动页关闭 = 放弃本次启动，整个应用直接退出。
@@ -2471,7 +3299,9 @@ fn spawn_splash_watchdog(_app: &mut tauri::App) {}
 /// `COMFYAPP_LAUNCH_MODE` ⇒ 这里读到空串就「跳过 standalone sidecar，使用
 /// dev URL」，表现是**装完双击永远停在启动页**。
 #[cfg(not(debug_assertions))]
-fn setup_standalone_runtime(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+/// `&AppHandle`（#4416 起 setup 闭包把本函数挪进后台线程）：sidecar 拉起与
+/// splash 资产检查都经 Manager trait，句柄即可，不再需要 `&mut App`。
+fn setup_standalone_runtime(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
   // 启动模式的**唯一读取点**就在本函数里（原先由 run() 读一次再传进来，于是
   // 同一个环境变量在两处被解读，改一处判据就会悄悄分叉）。
   let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
@@ -2481,7 +3311,7 @@ fn setup_standalone_runtime(app: &mut tauri::App) -> Result<(), Box<dyn std::err
     // （ISSUE #1692）。standalone 下项目根可能就是空串（安装目录里没有检出），
     // 那种情况记录写不出去——写侧按静默处理，界面退回「没有原因可讲」。
     spawn_sidecar(
-      app.handle(),
+      app,
       &std::env::var("COMFYAPP_PROJECT_ROOT").unwrap_or_default(),
     )?;
   } else {
@@ -2500,7 +3330,7 @@ fn setup_standalone_runtime(app: &mut tauri::App) -> Result<(), Box<dyn std::err
   log::info!("[ComfyAPP] splash.html embedded: {}", has_splash);
   if !has_splash {
     log::warn!("[ComfyAPP] splash.html 未嵌入，启动页不可用，走「无启动页」兜底");
-    fallback_without_splash(app.handle());
+    fallback_without_splash(app);
   }
   Ok(())
 }
@@ -2514,20 +3344,24 @@ fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
   match event {
     tauri::RunEvent::Exit => {
       let root = app.state::<AppState>().project_root();
+      /* 退出回收的**总预算**（ISSUE #4219）：编排器与 sidecar 两段回收串行，
+       * 各自独立预算的叠加会把关窗后的假死拉长到 20s 量级——共享同一个截止
+       * 时刻，后一段只拿剩余时间。 */
+      let exit_deadline = std::time::Instant::now() + Duration::from_secs(12);
       // 先收自己起的编排器（它下面还挂着 dev server 整棵树），再收 standalone
       // sidecar：前者是 dev/prebuilt 链路的根，后者只在内嵌 server 模式存在。
       if shell_launch::is_owning() {
         log::info!("[ComfyAPP] exiting, reaping the orchestrator started by this shell");
-        shell_launch::reap(&root);
+        shell_launch::reap(&root, exit_deadline);
       }
       #[cfg(not(debug_assertions))]
-      kill_sidecar(&root);
+      kill_sidecar(&root, exit_deadline);
     }
     tauri::RunEvent::ExitRequested { code, .. } => {
       /* 壳的退出码是「谁结束了这次启动」在壳侧唯一可靠的出口：prebuilt 链路里
        * dev server 的退出码对三种成因完全一样（见 dev-launcher.mjs 的
        * downstreamExitKind），而壳写下的这一行会随 stderr 进
-       * log/launcher/dev-launcher-stderr.log，启动器能据此把「壳自己退出」与
+       * log/current/launcher/dev-launcher-stderr.log，启动器能据此把「壳自己退出」与
        * 「壳被杀」分开。异常码（0 以外的）一律记 warn：正常路径是交接完成后
        * 关主窗（code=None）与「关掉启动页 = 放弃启动」（exit(0)）。 */
       match code {
@@ -2541,6 +3375,15 @@ fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
                 "[ComfyAPP] exiting while the window was only shown in the taskbar (never opened by the user)"
               );
             }
+            /* 退出时把整段启动的窗口读数落一行（ISSUE #3569）：交接完成后
+             * `auto_show_skipped` 还在涨，就说明自动显示链路又被重放了。 */
+            let snap = state.window_show_snapshot();
+            log::info!(
+              "[ComfyAPP] window-show diagnostics at exit: attempts={} auto_show_skipped={} focus_granted={}",
+              snap.attempts,
+              snap.auto_show_skipped,
+              snap.focus_granted
+            );
           }
         }
         _ => {}
@@ -2693,13 +3536,20 @@ mod standalone_payload_tests {
     rest[..rest.find("\n}\n").unwrap()].to_string()
   }
 
+  /// sidecar 起进程这条路径现在拆成「编排（spawn_sidecar）+ 单次拉起
+  /// （spawn_sidecar_attempt）」两段——函数长度硬闸要求的拆分。路径判据要
+  /// 对整条路径负责，取两段拼接后的文本（属性落在哪一段都算数）。
+  fn sidecar_spawn_path() -> String {
+    fn_body("fn spawn_sidecar") + &fn_body("fn spawn_sidecar_attempt")
+  }
+
   #[test]
   fn sidecar_and_payload_root_match_the_bundler_layout() {
     // 落位判据在 `resolve_standalone_payload`（它回答「该不该起、起什么」），起进程与
     // 收尾在 `spawn_sidecar`——两处都要钉：拆函数之后只盯一处，等于给「把路径拼回旧
     // 写法」留了一条不会被发现的缝。
     let resolve = fn_body("fn resolve_standalone_payload");
-    let spawn = fn_body("fn spawn_sidecar");
+    let spawn = sidecar_spawn_path();
     assert!(
       resolve.contains("res_dir.join(sidecar_binary_name())"),
       "sidecar 必须取资源根下的 node.exe / node（打包器剥掉三元组后缀、不留 binaries/ 子目录）：{resolve}"
@@ -2741,6 +3591,43 @@ mod standalone_payload_tests {
     );
   }
 
+  /// sidecar 这棵树也要有 OS 级硬杀兜底（ISSUE #4165）。
+  ///
+  /// 判据落在源码形态：「壳被硬杀」要任务管理器收掉 app.exe 才看得见，构建期一片绿。
+  /// 此前 §7.6 说的两条兜底里，`KILL_ON_JOB_CLOSE` job 只挂在编排器上——sidecar 这棵
+  /// 树没挂，壳被硬杀时内嵌 server 整棵成孤儿（且 standalone 不写会话锚点，下一次
+  /// 启动的孤儿回收认不出它）。钉住三件事：spawn_sidecar 起完就挂 job；job 两个旗标
+  /// 成对（KILL_ON_JOB_CLOSE 兜硬杀、BREAKAWAY_OK 保保活逃逸）；不启用插件的
+  /// process_group（它自建的 job 不带 BREAKAWAY_OK，会拦下保活服务的逃逸）。
+  #[test]
+  fn sidecar_tree_gets_its_own_kill_on_close_job() {
+    let spawn = sidecar_spawn_path();
+    assert!(
+      spawn.contains("shell_launch::attach_sidecar_kill_on_close_job(sidecar_pid)"),
+      "spawn_sidecar 必须在句柄入槽后给 sidecar 挂 KILL_ON_JOB_CLOSE job：{spawn}"
+    );
+    let launch = include_str!("shell_launch.rs");
+    assert!(
+      launch.contains("pub fn attach_sidecar_kill_on_close_job"),
+      "shell_launch 必须提供 sidecar 版挂 job 入口（与编排器同构）"
+    );
+    assert!(
+      launch.contains("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK"),
+      "job 旗标必须成对：KILL_ON_JOB_CLOSE 兜硬杀，BREAKAWAY_OK 保保活逃逸"
+    );
+    // 判据看实现不看注释（与 vitest 侧 stripComments 同一取向）：doc 注释里正解释
+    // 「为什么不用插件的进程组开关」，不能让注释自己命中这条负控判据。
+    let launch_code = launch
+      .lines()
+      .map(|line| line.split("//").next().unwrap_or(""))
+      .collect::<Vec<&str>>()
+      .join("\n");
+    assert!(
+      !launch_code.contains("set_process_group"),
+      "sidecar 不得启用插件的进程组开关：插件自建的 job 不带 BREAKAWAY_OK，会拦下保活服务的 CREATE_BREAKAWAY_FROM_JOB"
+    );
+  }
+
   /// 「先定模式，再建启动页」这条顺序是桌包能不能**说对情况**的契约。
   ///
   /// 两层理由叠在一起（ISSUE #1216 实测的第六、七层）：
@@ -2761,7 +3648,7 @@ mod standalone_payload_tests {
       .find("setup_splash_window(app);")
       .expect("找不到启动页的创建点");
     let read = src
-      .find("setup_standalone_runtime(app)?;")
+      .find("if let Err(e) = setup_standalone_runtime(app) {")
       .expect("找不到 standalone 装配的调用点");
     assert!(
       write < splash && splash < read,
@@ -2902,22 +3789,30 @@ mod window_startup_tests {
   }
 
   #[test]
-  fn splash_config_size_matches_the_shell_constant() {
-    // 声明式窗口的尺寸与壳里的常量必须同值：壳只在「显示器上限把尺寸收窄了」
-    // 时才动窗口（见 setup_splash_window），两者一旦分叉，正常屏幕上就会变成
-    // 「建窗按配置、判断按常量」—— 每次启动都白走一次调整（= 挪一下）。
+  fn splash_window_size_matches_the_shell_constant() {
+    // splash 改为程序化创建（#4412）后，尺寸的钉子从 tauri.conf.json 挪到建窗
+    // 代码：SPLASH_WINDOW_SIZE 是「显示器上限把尺寸收窄了才动窗口」的判断基准
+    // （见 setup_splash_window），建窗尺寸与它分叉，正常屏幕上就会退化成
+    // 「每次启动都白走一次调整」（= 挪一下）。
+    let create = fn_body("fn create_splash_window");
+    assert!(
+      create.contains(".inner_size(SPLASH_WINDOW_SIZE.0, SPLASH_WINDOW_SIZE.1)"),
+      "启动页建窗必须直接用 SPLASH_WINDOW_SIZE，不许再抄第二份尺寸常量：{create}"
+    );
+    assert!(
+      create.contains(r#"WebviewUrl::App("splash.html".into())"#),
+      "启动页 URL 必须是内嵌资源 splash.html（与原声明式配置同语义）：{create}"
+    );
+
+    // 声明式窗口（app.windows）必须为空：config 建窗失败直达框架内部
+    // panic（无声崩溃），壳的失败上报链接不住它 —— splash 不得改回去（#4412）。
     let conf: String = include_str!("../tauri.conf.json")
       .chars()
       .filter(|c| !c.is_whitespace())
       .collect();
-    assert!(conf.contains(r#""label":"splash""#), "splash 窗口不见了：{conf}");
     assert!(
-      conf.contains(&format!(r#""width":{}"#, SPLASH_WINDOW_SIZE.0 as u32)),
-      "tauri.conf.json 的 splash 宽度必须等于 SPLASH_WINDOW_SIZE.0"
-    );
-    assert!(
-      conf.contains(&format!(r#""height":{}"#, SPLASH_WINDOW_SIZE.1 as u32)),
-      "tauri.conf.json 的 splash 高度必须等于 SPLASH_WINDOW_SIZE.1"
+      !conf.contains(r#""label":"splash""#),
+      "splash 不得再走声明式建窗（config 建窗失败 = 框架 panic，#4412）：{conf}"
     );
   }
 
@@ -2961,7 +3856,6 @@ mod window_startup_tests {
   /// **之前**；③ 那一支里没有再塞一颗裸 `sleep`（半吊子回潮的形状）。
   #[test]
   fn first_paint_watch_never_spins_without_sleeping() {
-    let src = include_str!("lib.rs");
     let watch = fn_body("fn watch_main_first_paint");
     let tick = watch
       .find("clock.tick();")
@@ -3016,6 +3910,91 @@ mod window_startup_tests {
     assert!(
       owns.contains("webview_windows()") && owns.contains("is_focused()"),
       "前台归属按本壳窗口的 focused 判，不看进程名 / 句柄：{owns}"
+    );
+  }
+
+  /// ISSUE #3562 的三个现象（后台红色闪烁 / 反复抢前台 / 点图标发卡）同源：
+  /// 「显示窗口」被重复执行，且任务栏闪烁只请求、从不停止。Win32 前台在 CI 里
+  /// 取不到，这里按源码形态钉住四条不变量。
+  #[test]
+  fn window_show_is_idempotent_and_never_restarts_taskbar_flashing() {
+    let show = fn_body("fn show_main_window_without_focus");
+
+    // ① 自动路径只交接一次：窗口显示过之后再被调用必须早退。
+    assert!(
+      show.contains("if already_shown && !request_focus {"),
+      "自动显示路径必须一次性（页面导航 / 安全网重放会把窗口又顶到前面）：{show}"
+    );
+    // ② 已可见的窗口不再发窗口动作：SW_SHOW 对可见窗口同样带激活语义。
+    assert!(
+      show.contains("} else if !visible {"),
+      "只对隐藏窗口发 show 动作：{show}"
+    );
+    // ③ 不再请求闪烁，改为焦点到位时 FLASHW_STOP 收掉残留。
+    assert!(
+      !show.contains("UserAttentionType::Informational"),
+      "主窗不许再请求任务栏闪烁（#3562）：{show}"
+    );
+    assert!(
+      show.contains("request_user_attention(None)"),
+      "窗口到前台时必须主动停掉闪烁：{show}"
+    );
+    // ④ 前台请求只有一处，且前台归属仍早于任何窗口动作采样。
+    assert_eq!(
+      show.matches("win.set_focus()").count(),
+      1,
+      "前台请求只允许一处：{show}"
+    );
+    let sampled = show.find("let user_yielded").expect("采样点不见了");
+    let shown = show.find("win.show()").expect("窗口显示动作不见了");
+    assert!(sampled < shown, "前台归属必须早于窗口动作采样：{show}");
+
+    let splash = fn_body("fn bring_splash_to_front");
+    assert!(
+      !splash.contains("UserAttentionType::Informational"),
+      "启动页拿不到前台时不许闪任务栏：{splash}"
+    );
+  }
+
+  /// 启动前台标记是进程级持久值，前端组件却会反复挂载：答复必须一次性。
+  #[test]
+  fn startup_foreground_is_consumed_only_once() {
+    let state = AppState::new(String::new(), String::new(), true, false);
+    assert!(state.take_startup_activation());
+    assert!(!state.take_startup_activation());
+    assert!(!state.take_startup_activation());
+    let background = AppState::new(String::new(), String::new(), false, false);
+    assert!(!background.take_startup_activation());
+  }
+
+  /// 运行期读数是「交接完成后有没有被重放」唯一的机器读信号（ISSUE #3569）。
+  /// 计数与快照在这里测；「早退分支确实记了一次」由源码形态钉住 —— Win32
+  /// 窗口在单测里造不出来，而形态回退正是这一层最可能发生的回退方式。
+  #[test]
+  fn window_show_replays_are_counted_for_diagnostics() {
+    let state = AppState::new(String::new(), String::new(), false, false);
+    assert_eq!(state.note_show_attempt(), 1);
+    assert_eq!(state.note_show_attempt(), 2);
+    assert_eq!(state.note_auto_show_skipped(), 1);
+    assert_eq!(state.note_focus_granted(), 1);
+    let snap = state.window_show_snapshot();
+    assert_eq!(snap.attempts, 2);
+    assert_eq!(snap.auto_show_skipped, 1);
+    assert_eq!(snap.focus_granted, 1);
+    assert_eq!(state.window_show_snapshot().auto_show_skipped, 1);
+
+    let show = fn_body("fn show_main_window_without_focus");
+    assert!(
+      show.contains("note_show_attempt()"),
+      "每次进入显示链路都要记一次：{show}"
+    );
+    assert!(
+      show.contains("note_auto_show_skipped()"),
+      "自动交接早退必须记一次 skipped（重放的唯一机器读信号）：{show}"
+    );
+    assert!(
+      show.contains("note_focus_granted()"),
+      "前台真正到手要记一次：{show}"
     );
   }
 }
@@ -3077,5 +4056,96 @@ mod log_filter_tests {
     std::fs::write(&path, "").unwrap();
     let tail = tail_log_file_since_marker(&path, "=== 启动会话开始", 1024, 10).unwrap();
     assert!(tail.is_empty());
+  }
+
+  #[test]
+  fn tail_since_marker_multibyte_truncation_does_not_panic() {
+    // 中文（3 字节/字）把字节截断点顶进多字节字符中间时，切片必须回退到
+    // 字符边界而不是 panic（ISSUE #4212：启动页每 800ms 轮询这条命令）。
+    let path = temp_log("multibyte-truncation");
+    let content = "中文日志行，包含多字节字符。\n".repeat(120);
+    std::fs::write(&path, &content).unwrap();
+    let tail = tail_log_file_since_marker(&path, "=== 启动会话开始", 64, 200);
+    assert!(tail.is_some());
+    let tail = tail.unwrap();
+    assert!(tail.contains("中文日志行") || tail.is_empty());
+  }
+
+  #[test]
+  fn tail_since_marker_reads_only_tail_window() {
+    // 尾读模式：会话标记在尾部窗口之前时，结果应与「取尾部」一致，
+    // 且不得把窗口外的旧会话内容带回来（ISSUE #4212）。
+    let path = temp_log("tail-window");
+    let old = "旧会话日志行 很长的中文内容用来撑爆尾部窗口。\n".repeat(40);
+    let new = "新会话日志行 另一段中文内容同样很长。\n".repeat(40);
+    std::fs::write(&path, format!("=== 启动会话开始 ===\n{old}{new}")).unwrap();
+    let tail = tail_log_file_since_marker(&path, "=== 启动会话开始", 256, 200).unwrap();
+    assert!(tail.contains("新会话日志行"), "应包含新会话内容：{tail}");
+    assert!(!tail.contains("旧会话日志行"), "不得带回旧会话内容：{tail}");
+  }
+
+  #[test]
+  fn tcp_probe_judges_bound_and_closed_ports() {
+    // 监听中的端口可达；已释放的端口立即拒连（ISSUE #4213：探测带 1s 超时，
+    // 不再有无超时 connect 冻结主线程的形态）。
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let bound_port = listener.local_addr().unwrap().port();
+    assert!(tcp_probe("127.0.0.1", bound_port));
+
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let closed_port = closed.local_addr().unwrap().port();
+    drop(closed);
+    assert!(!tcp_probe("127.0.0.1", closed_port));
+  }
+
+  #[test]
+  fn tcp_probe_reaches_ipv4_service_via_localhost() {
+    // ISSUE #4328 回归：dev server 只绑 127.0.0.1，而 `localhost` 常把 ::1
+    // 排在解析结果首位 —— 探测必须逐个尝试全部地址，只试第一个会把「服务在
+    // IPv4 上好好的」判成不可达，交换窗口被错误中止、启动页永远停在
+    // 「服务已就绪」。
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let bound_port = listener.local_addr().unwrap().port();
+    assert!(
+      tcp_probe("localhost", bound_port),
+      "只绑 127.0.0.1 的服务必须能经 localhost 探测到（试全部解析地址）"
+    );
+  }
+
+  #[test]
+  fn tcp_probe_bounded_answers_like_tcp_probe_within_budget() {
+    // 有界形态与直接探测**同判**（ISSUE #4336）：监听中的端口可达、已释放的
+    // 端口拒连即败。预算给足（2s）——正常回环探测（解析命中 hosts + 立即
+    // 连通/拒连）远用不满；「到点放手」由 recv_timeout 的上界保证，不是靠
+    // 探测自身守时。
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let bound_port = listener.local_addr().unwrap().port();
+    assert!(tcp_probe_bounded("127.0.0.1", bound_port, Duration::from_secs(2)));
+
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let closed_port = closed.local_addr().unwrap().port();
+    drop(closed);
+    assert!(!tcp_probe_bounded(
+      "127.0.0.1",
+      closed_port,
+      Duration::from_secs(2)
+    ));
+  }
+
+  #[test]
+  fn navigate_stalled_is_injected_only_when_set() {
+    // 注入是纯函数：置位时加字段、不改动编排器的既有值；未置位时原样返回。
+    let status = r#"{"phase":"dev-server-ready","progress":1,"ready":true}"#;
+    let untouched = inject_navigate_stalled(status, false);
+    assert_eq!(untouched, status);
+
+    let injected = inject_navigate_stalled(status, true);
+    let value: serde_json::Value = serde_json::from_str(&injected).unwrap();
+    assert_eq!(value["navigateStalled"], serde_json::Value::Bool(true));
+    assert_eq!(value["phase"], "dev-server-ready");
+    assert_eq!(value["ready"], serde_json::Value::Bool(true));
+
+    // 非 JSON（不应发生）原样返回，不吞原始状态。
+    assert_eq!(inject_navigate_stalled("not-json", true), "not-json");
   }
 }

@@ -1,18 +1,8 @@
 "use client";
 /**
- * 项目画布设置 ——
- *
- * **项目**画布（ProjectCanvas）右上角齿轮按钮弹出的轻量
- * 右边缘抽屉。工作流编辑器
- *（`workflow-editor/WorkflowEditorInner.tsx`）已有自己的完整设置抽屉
- *（CanvasSettingsPanel），覆盖网格 / 标尺 / minimap / 缩放 —— 那些
- * 是工作流画布的关切，不是项目画布的，所以这里不
- * 重复它们。
- *
- * 项目画布**确实**需要的：调试模式开关，好让用户
- * 不用先下钻进一条工作流就能翻转它。状态经同一个 `useCanvasSettings()`
- * store 与工作流画布共享（useSyncExternalStore + localStorage `v1`），所以在这里
- * 切换会立刻在那里生效，反之亦然。
+ * 项目画布设置 —— **项目**画布（ProjectCanvas）右上角齿轮弹出的轻量右边缘抽屉。工作流编辑器
+ * 已有自己的完整设置抽屉（网格 / 标尺 / minimap / 缩放，那是工作流画布的关切），故这里不重复；
+ * 项目画布只需调试模式开关，状态经同一个 `useCanvasSettings()` store 共享（localStorage `v1`），两边即时互通。
  */
 import { useDebugMode } from "./canvas/hooks/use-canvas-settings";
 import { useDebugStore } from "./debug/debug-store";

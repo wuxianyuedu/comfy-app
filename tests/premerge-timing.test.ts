@@ -1,10 +1,7 @@
 /**
- * `premerge-timing.mjs` 的判据（ISSUE #2832）。
- *
- * 这一层是**记账**，不是门禁 —— 判据钉的是「账的形态」而不是任何退出码：
- * 追加写、不抛、best-effort（读数空 / 写失败都回 false 而调用方照常收尾）。
- * 格式化那一半钉「快照建树单独一格 + 最慢 5 条 + 合计」的读数形状，
- * 因为「10 分钟从印象变成基线」靠的就是这一屏能被人逐格读。
+ * `premerge-timing.mjs` 的判据（ISSUE #2832）：这一层是**记账**不是门禁，钉「账的形态」而非退出码 ——
+ * 追加写、不抛、best-effort（读数空 / 写失败都回 false，调用方照常收尾）；格式化的那一半钉
+ * 「快照建树单独一格 + 最慢 5 条 + 合计」的读数形状，因为「10 分钟从印象变成基线」就靠这一屏可读。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -12,8 +9,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { formatTimingSummary, recordTimingLedger } from "../scripts/premerge-timing.mjs";
-import { resolveGitDir } from "../scripts/git-dir.mjs";
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
+import { formatTimingSummary, recordTimingLedger } from "../scripts/gates/premerge-timing.mjs";
+import { resolveGitDir } from "../scripts/lib/git-dir.mjs";
 
 let root: string;
 
@@ -54,15 +53,22 @@ describe("recordTimingLedger —— 追加写、best-effort", () => {
     const ledgerPath = path.join(resolveGitDir(root)!, "comfy-premerge-timing.jsonl");
     const lines = fs.readFileSync(ledgerPath, "utf8").trim().split("\n");
     expect(lines).toHaveLength(2);
-    /* SAFETY: 类型断言已复核 */
-    const first = JSON.parse(lines[0]!) as {
-      at: string;
-      entries: Array<{ label: string; ms: number }>;
-      ref: string;
+    /* 首行用运行时守卫收窄（B5 清账：不走 `as` 断言），字段断言在下面逐条兜。 */
+    const first: unknown = JSON.parse(lines[0] ?? "");
+    const ledgerEntries: unknown = isRecord(first) ? first.entries : undefined;
+    if (!isUnknownArray(ledgerEntries)) {
+      throw new Error("计时账首行形状不对");
+    }
+    const entryAt = (index: number): Record<string, unknown> => {
+      const entry = ledgerEntries[index];
+      if (!isRecord(entry)) {
+        throw new Error(`计时账第 ${index + 1} 条不是对象`);
+      }
+      return entry;
     };
-    expect(first.ref).toBe("origin/master");
-    expect(first.entries[0]!.ms).toBe(4200); // 取整
-    expect(first.entries[1]!.label).toContain("tsc");
+    expect(isRecord(first) && first.ref).toBe("origin/master");
+    expect(entryAt(0).ms).toBe(4200); // 取整
+    expect(String(entryAt(1).label)).toContain("tsc");
   });
 
   it("空读数不落盘（回 false，连文件都不建）", () => {

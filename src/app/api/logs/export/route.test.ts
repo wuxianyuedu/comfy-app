@@ -1,20 +1,14 @@
 /**
- * /api/logs/export 的落盘契约（ISSUE #609 用户反馈第 3 条）。
- *
- * 面板此前只有浏览器下载（`<a download>`），桌面壳里是否落盘由宿主决定——用户
- * 点完常常本地什么都没有。本端点让**服务端**把面板给的文本写进 `log/exports/`，
- * 并把路径回给面板显示（「路径说得出来」是排障现场的最低要求）。
- *
- * 钉死三条：
- *   1. 写入成功 → 回 ok + 绝对路径 + 相对 `log/` 的路径 + 字节数，且文件内容一致；
- *   2. **文件名由服务端生成**：客户端只能给白名单标签，绝不能让它决定路径
- *      （否则就是一个任意路径写入漏洞）；
- *   3. 空内容 / 超大内容如实报错，不落盘、不谎报成功。
+ * /api/logs/export 的落盘契约（ISSUE #609 反馈第 3 条）：服务端把面板文本写进 `log/exports/`
+ * 并回路径（桌面壳里浏览器下载不一定落盘）。钉三条：成功回 ok + 绝对/相对路径 + 字节数且内容一致；
+ * **文件名由服务端生成**（客户端只给白名单标签，否则就是任意路径写入漏洞）；空/超大内容如实报错不落盘。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+
+import { isPlainRecord } from "~/lib/is-record";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "log-export-"));
 const exportDir = path.join(tmp, "exports");
@@ -34,7 +28,7 @@ vi.mock("~/lib/log/log-paths", async () => {
 /* 鉴权在单机模式下会回落演示用户（要读库），这里直接放行：本用例断言的是
  * 落盘契约，不是鉴权（鉴权由 requireRequestUser 自身覆盖）。 */
 vi.mock("~/server/auth/request-user", () => ({
-  requireRequestUser: async () => ({
+  requireRequestUser: () => ({
     id: "u1",
     email: "t@example.com",
     name: null,
@@ -69,17 +63,31 @@ function post(body: unknown) {
   );
 }
 
+type ExportPayload = {
+  bytes: number;
+  ok: boolean;
+  path: string;
+  relativePath: string;
+};
+
+function isExportPayload(v: unknown): v is ExportPayload {
+  return (
+    isPlainRecord(v) &&
+    typeof v.bytes === "number" &&
+    typeof v.ok === "boolean" &&
+    typeof v.path === "string" &&
+    typeof v.relativePath === "string"
+  );
+}
+
 describe("/api/logs/export", () => {
   it("把内容写进 log/exports/ 并回绝对路径与相对路径", async () => {
     const res = await post({ label: "app-runtime", content: "第一行\n第二行" });
     expect(res.status).toBe(200);
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      bytes: number;
-      ok: boolean;
-      path: string;
-      relativePath: string;
-    };
+    const data: unknown = await res.json();
+    if (!isExportPayload(data)) {
+      throw new Error(`导出响应形状不符：${JSON.stringify(data)}`);
+    }
     expect(data.ok).toBe(true);
     expect(data.relativePath.startsWith("exports/")).toBe(true);
     expect(fs.readFileSync(data.path, "utf8")).toBe("第一行\n第二行");
@@ -91,10 +99,10 @@ describe("/api/logs/export", () => {
       label: "../../../evil",
       content: "x",
     });
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      path: string;
-    };
+    const data: unknown = await res.json();
+    if (!isExportPayload(data)) {
+      throw new Error(`导出响应形状不符：${JSON.stringify(data)}`);
+    }
     expect(path.dirname(data.path)).toBe(exportDir);
     expect(path.basename(data.path).startsWith("logs-all-")).toBe(true);
   });

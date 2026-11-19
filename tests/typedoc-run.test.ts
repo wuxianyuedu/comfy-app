@@ -1,19 +1,7 @@
 /**
- * `scripts/typedoc-run.mjs` 的判据 —— typedoc「跑 + 验 + 重试」的唯一实现。
- *
- * 要钉的是那条**无声**的失败：退出码 0 + 日志收尾 `[info] html generated at …` +
- * 一条 `[warning] Found 0 errors and N warnings`，而 `docs/api/**` 一个文件都没更新。
- * 现场里目录还堆着上一轮的产物，所以「文件数 > 0」会被蒙过去 —— 判据必须落在
- * 「探针文件是不是这一轮写的」上；而「退 0 就算成功」那种写法连这一条都问不到。
- *
- * 三条要钉的东西，各自都能「看起来还在、实际不判」：
- *   1. **验的是产物、不是退出码**：退出 0 但探针 mtime 早于本次开始 = 失败；
- *   2. **失败了要重试**：typedoc 冷跑以百秒计（现值取法见规范 §13.5.17），用例不可能真跑它 —— 用 `spawnImpl`
- *      注入缝把「起了但没写」这个现场直接喂进来，验它真的会重试到用完次数；
- *   3. **重试能救回来**：第二次才写出来的场景要判**成功**，且报第 2 次 ——
- *      重试若把「失败过一次」记成失败，就等于白重试。
- *
- * 用一次性目录做夹具，不碰仓库里的 `docs/api`。
+ * `scripts/docs/typedoc-run.mjs`：typedoc「跑 + 验 + 重试」的唯一实现。钉无声失败：退出 0 + `html generated at …`，但 `docs/api/**` 零文件更新。
+ * 目录堆着上轮产物，「文件数 > 0」会被蒙过去，判据落在「探针是不是这一轮写的」。① 验产物不验退出码：退 0 但探针 mtime 早于本次开始 = 失败。
+ * ② 失败要重试（冷跑数十秒，用 `spawnImpl` 注入「起了但没写」，验到用完次数）；③ 第二次写出判成功且报第 2 次（记成失败等于白重试）。夹具用一次性目录。
  */
 import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -26,7 +14,8 @@ import {
   resolveTypedocEntry,
   runTypedoc,
   snapshotOutput,
-} from "../scripts/typedoc-run.mjs";
+  typedocArgs,
+} from "../scripts/docs/typedoc-run.mjs";
 
 const temps: Array<string> = [];
 
@@ -132,9 +121,9 @@ describe("runTypedoc：静默失败会重试，救回来算成功", () => {
       outDir,
       attempts: 3,
       backoff: [0, 0],
-      spawnImpl: async () => {
+      spawnImpl: () => {
         calls += 1;
-        return silentRun();
+        return Promise.resolve(silentRun());
       },
       onProgress: quiet,
     });
@@ -153,12 +142,12 @@ describe("runTypedoc：静默失败会重试，救回来算成功", () => {
       outDir,
       attempts: 3,
       backoff: [0, 0],
-      spawnImpl: async (_bin: string, dir: string) => {
+      spawnImpl: (_bin: string, dir: string) => {
         calls += 1;
         if (calls >= 2) {
           writeProbe(dir);
         }
-        return silentRun();
+        return Promise.resolve(silentRun());
       },
       onProgress: quiet,
     });
@@ -175,9 +164,9 @@ describe("runTypedoc：静默失败会重试，救回来算成功", () => {
       outDir,
       attempts: 1,
       backoff: [0, 0],
-      spawnImpl: async () => {
+      spawnImpl: () => {
         calls += 1;
-        return silentRun();
+        return Promise.resolve(silentRun());
       },
       onProgress: quiet,
     });
@@ -209,9 +198,27 @@ describe("resolveTypedocEntry", () => {
   });
 });
 
+describe("typedocArgs：参数面钉在这里（ISSUE #2843）", () => {
+  it("--out 指向调用方给的目录，且带 --skipErrorChecking", () => {
+    expect(typedocArgs("G:/tmp/out")).toEqual(["--out", "G:/tmp/out", "--skipErrorChecking"]);
+  });
+
+  it("--skipErrorChecking 不是给 type error 的出口：它只跳过 typedoc 自己那趟检查", () => {
+    /* 参数面**没有**任何「把 warning 也关掉」的旗标（`--logLevel Error` 之类）。
+     * warning 类（未收录符号 / 死链 / JSDoc 漂移）必须照报 —— 本仓 §13.5.5.1 把
+     * 「typedoc 报 error / 报 warning」两种读数分开算账，关了 warning 等于把那一格
+     * 的判断抹平。这条断言就是那句「warning 照旧」的机器形态。 */
+    expect(typedocArgs("G:/tmp/out")).not.toContain("--logLevel");
+    expect(typedocArgs("G:/tmp/out")).not.toContain("--treatWarningsAsErrors");
+  });
+});
+
 describe("spawnTypedoc 不经 shell 层（ISSUE #2445）", () => {
   it("模块源码里不再有 shell 选项与手工括引号（DEP0190 的形状判据）", () => {
-    const source = readFileSync(path.resolve(process.cwd(), "scripts/typedoc-run.mjs"), "utf8");
+    const source = readFileSync(
+      path.resolve(process.cwd(), "scripts/docs/typedoc-run.mjs"),
+      "utf8",
+    );
     /* spawn 的 args 数组 + shell:true 是 Node 26 的 DEP0190 弃用形态；且 shell 一开
      * Node 就不转义参数，引号要自己括。两个形状都不许回来 —— 用例层测不到真 spawn
      * 的选项面，源码形状是那层覆盖的唯一口径（#2444 同款）。 */

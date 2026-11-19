@@ -37,6 +37,8 @@
  * （写侧 `writeStorageItem` + `emitAppEvent`）。
  */
 
+import { isRecord } from "~/lib/is-record";
+
 /**
  * 全部应用事件的**名字与载荷**表。
  *
@@ -103,6 +105,23 @@ export type AppEventName = keyof AppEvents;
 /** 某个事件的载荷类型。 */
 export type AppEventPayload<K extends AppEventName> = AppEvents[K];
 
+/** 派发侧只经由 `emitAppEvent`（P61 收口），但跨进程 / 手工派发仍可能塞进任意值 ——
+ * 读侧按表逐条校验**最小形状**，不合格的广播直接忽略（不让脏载荷进业务逻辑）。 */
+const PAYLOAD_VALIDATORS: { [K in AppEventName]: (value: unknown) => value is AppEvents[K] } = {
+  "canvas:produce": (value): value is AppEvents["canvas:produce"] =>
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.resultPath === "string" &&
+    (value.resultMediaType === undefined || typeof value.resultMediaType === "string"),
+  "comfyapp:canvas-store-changed": (value): value is undefined => value === undefined,
+  "comfyapp:canvas-sync-changed": (value): value is undefined => value === undefined,
+  "comfyapp:custom-nodes-updated": (value): value is undefined => value === undefined,
+  "workspace:navigate": (value): value is AppEvents["workspace:navigate"] =>
+    isRecord(value) &&
+    typeof value.view === "string" &&
+    (value.section === undefined || typeof value.section === "string"),
+};
+
 /**
  * 派发一条应用事件。
  *
@@ -163,9 +182,11 @@ export function subscribeAppEvent<K extends AppEventName>(
     return noop;
   }
   const listener = (event: Event) => {
-    /* SAFETY: 类型断言已复核 */
-    /* SAFETY: 类型断言已复核 */
-    handler((event as CustomEvent).detail as AppEvents[K]);
+    const detail: unknown = event instanceof CustomEvent ? event.detail : undefined;
+    const isValidPayload = PAYLOAD_VALIDATORS[name];
+    if (isValidPayload(detail)) {
+      handler(detail);
+    }
   };
   window.addEventListener(name, listener);
   return () => {

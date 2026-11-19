@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 // 消息中心的**持久化**契约（判据与文案的用例不在这里，见同目录其他两份）。
-//
-// 为什么消息中心要有持久化：它记的恰恰是「应用服务断开 / 启动」，而这两件事的
-// 观察窗口**覆盖一次整页刷新**——应用服务重启会让页面重载，纯内存的消息随之归零，
-// 于是用户回到应用点开铃铛看到空的，只能得出「记了但没生效」的结论。这份用例钉住
-// 「刷新之后还查得到」，以及坏数据不会把面板整个打不开。
+// 为什么要有持久化：记的恰恰是「应用服务断开 / 启动」，而观察窗口覆盖一次整页刷新，
+// 纯内存随之归零、用户只能得出「记了但没生效」的结论。这份用例钉住「刷新之后还查得到」，
+// 以及坏数据不会把面板整个打不开。
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { isPlainRecord } from "~/lib/is-record";
 import { MESSAGE_CENTER_STORAGE_KEY, useMessageCenterStore } from "./message-center-store";
 
 /** 造一条可用的持久化记录（字段与 `MessageRecord` 一致）。 */
@@ -21,6 +20,21 @@ function record(overrides: Record<string, unknown> = {}) {
     read: true,
     ...overrides,
   };
+}
+
+type StoredMessage = ReturnType<typeof record>;
+
+/** 落盘记录的形状校验：解析出来的 JSON 是 `unknown`，类型对得上才当记录读。 */
+function isStoredMessage(v: unknown): v is StoredMessage {
+  return (
+    isPlainRecord(v) &&
+    typeof v.id === "string" &&
+    typeof v.kind === "string" &&
+    typeof v.title === "string" &&
+    typeof v.body === "string" &&
+    typeof v.time === "number" &&
+    typeof v.read === "boolean"
+  );
 }
 
 function stored(): unknown {
@@ -47,8 +61,8 @@ describe("消息中心持久化：写", () => {
     useMessageCenterStore
       .getState()
       .push({ kind: "offline", title: "应用服务已断开", body: "正文" });
-    /* SAFETY: 类型断言已复核 */
-    const list = stored() as Array<ReturnType<typeof record>>;
+    const raw = stored();
+    const list = Array.isArray(raw) ? raw.filter(isStoredMessage) : [];
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
       kind: "offline",

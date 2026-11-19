@@ -39,7 +39,7 @@ function quoteArg(value) {
   if (!SHELL_SPECIAL.test(text)) {
     return text;
   }
-  return `"${text.replaceAll("\"", String.raw`\"`)}"`;
+  return `"${text.replaceAll('"', String.raw`\"`)}"`;
 }
 
 /**

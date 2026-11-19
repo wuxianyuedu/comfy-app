@@ -2,19 +2,8 @@
 
 /**
  * useProjectPersistence — 项目画布「持久化三件套」hook。
- *
- * 三个相互关联的持久化 effect：
- *  1. 500ms debounce：nodes / edges / projectName 变化后落盘；
- *  2. 600ms mutation effect：跳过 hydrate 后首轮空写，再落盘；
- *  3. beforeunload + unmount 立即 flush（防止切走标签页丢数据）。
- *
- * 外加**镜像被拒的出口**（`useSyncRefusalNotice`）：localStorage 是画布的事实源，
- * 服务端那份是镜像，而「服务端明确不收这一份」过去被 `catch {}` 吞掉 ——
- * 界面显示已保存、换端口一看是空的。状态在 `~/lib/project-canvas/sync-notice`
- * 里可查，这里的职责就是把它变成用户看得见的一句话（硬规则 4）。
- *
- * 对外只暴露 persistNow()，供项目切换 / 新建 / 重命名 / 删除前
- * 「立即保存当前项目」复用，避免调用方各自再写一套 draft-aware 保存。
+ * 1) 500ms debounce 落盘；2) 600ms mutation effect 跳过 hydrate 后首轮空写；3) 卸载即 flush。
+ * 外加镜像被拒出口（useSyncRefusalNotice）：localStorage 是事实源、服务端是镜像，拒收不能 `catch {}` 吞掉（硬规则 4）；persistNow() 供切换/新建/重命名/删除复用。
  */
 
 import { useCallback, useEffect, useRef } from "react";
@@ -74,12 +63,9 @@ export function useProjectPersistence({
     const nameLive = nameOverride ?? liveName;
     const isEmpty = liveNodes.length === 0 && liveEdges.length === 0;
     if (isEmpty && isEmptyDraftName(nameLive)) {
-      /* 顺序是「先问能不能回收，再决定要不要清 active」——此前反过来：
-       * 先 `clearActiveIfDraft` 再 `reapEmptyProject`，于是活跃项目被
-       * `reapEmptyProject` 拒绝回收时（ISSUE #1501 起它会拒绝）active 已经
-       * 被清了，界面留下「项目还在、上下文没了」的半截状态。
-       * 回收真正的语义是「这一条既不在索引里、也不在 active 上」，
-       * 两件事要一起做、或者一起不做。 */
+      /* 顺序是「先问能不能回收，再决定要不要清 active」：反过来会让
+       * `reapEmptyProject` 拒绝回收时（ISSUE #1501 起）active 已被清，
+       * 留下「项目还在、上下文没了」的半截状态。回收语义要求两件事一起做或都不做。 */
       if (reapEmptyProject(pid)) {
         clearActiveIfDraft(pid);
       }

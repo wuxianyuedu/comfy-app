@@ -47,7 +47,7 @@ export async function openUrlInBrowser(url: string): Promise<{ detail: string; o
     await new Promise<void>((resolve, reject) => {
       // 不走 shell：Node 按数组参数直接构造命令行，URL 原样送达，
       // 不经 cmd 二次引号剥离。`start` 需经 cmd（内建命令），由 cmd /c 承载。
-      const cp = spawn(cmd, args, {
+      const cp = spawn(/*turbopackIgnore: true*/ cmd, args, {
         stdio: "ignore",
         windowsHide: true,
       });

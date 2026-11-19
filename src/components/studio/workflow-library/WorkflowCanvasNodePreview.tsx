@@ -1,25 +1,9 @@
 "use client";
 
 /**
- * WorkflowCanvasNodePreview — 工作流库的「画布样式预览」。
- *
- * 用与项目画布一致（Ardot v5 token：W 图标头 + 状态胶囊 + 本机/工作流/类型
- * chips + 端口行 + 渐变 ActionBtn）的节点卡片呈现当前工作流的输入参数与输出，
- * 并支持就地运行（generate.generate → SSE 任务流）：进度、结果图、错误全部
- * 内联展示，方便不进画布就调试工作流。
- *
- * 执行日志走全屏弹窗（WorkflowRunLogModal，与项目画布执行日志面板同款），
- * 不再挂在节点下方。运行态/日志由 workflow-run-store 托管：关闭窗口（组件
- * 卸载）再打开，生成中状态与日志依然可见（SSE 重连由服务端回放补齐历史）。
- *
- * 与画布的差异：这里是单节点静态环境（无上游接线），wire 类输入以表单控件
- * 呈现，值为空时不下发、由 ComfyUI 侧工作流自带默认值兜底；**对外参数的落点
- * 映射**在这里可编辑（三列 React Flow 画布，见 WorkflowLibraryCanvas）。
- *
- * 本组件是容器（§17.2 ④）：状态机与编排都收在 hooks/ ——
- * • `hooks/use-generation-runner.ts` 生成的相位状态机 + SSE 订阅（发起与恢复）；
- * • `hooks/use-default-value-seeding.ts` 输入值状态 + 模式默认值播种；
- * • `hooks/use-output-wiring.ts` 对外输出落点的编辑编排。
+ * WorkflowCanvasNodePreview — 工作流库「画布样式预览」：单节点静态环境就地运行（SSE
+ * 进度/结果图/错误内联），对外参数落点映射可编辑（三列画布见 WorkflowLibraryCanvas）。
+ * 容器组件（§17.2 ④），状态与编排收在 hooks/：use-generation-runner /use-default-value-seeding / use-output-wiring。
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -107,6 +91,9 @@ export function WorkflowCanvasNodePreview({
   /* 右列选中的对外输出口 —— 与左列的选中互斥（同一时刻只有一处被选，否则
    *  「按 ⌫ 断的是哪一根」说不清）。 */
   const [selectedOutputId, setSelectedOutputId] = useState<string | null>(null);
+  /* 调试用的部分执行目标（comfy-cli v1.24.0 `--output-node-ids`）：勾选的输出
+   *  节点（cli 展开后 id）。空 = 整图执行，与旧行为一致。 */
+  const [debugOutputIds, setDebugOutputIds] = useState<Array<string>>([]);
 
   /* 生效模式与节点上的模式 chip 同一口径（defaultMode → modes[0] → taskType）——
    * 卡片列、宿主表单、seed 模式、必填判定全都按它解析，不会再出现「chip 显示着
@@ -220,22 +207,11 @@ export function WorkflowCanvasNodePreview({
     [effectiveMode, storedContracts],
   );
 
-  /* ── 对外参数卡片列（映射可编辑）──
-   * 每个对外参数一张卡片，与宿主卡片并排；卡片说「这个对外参数由哪些端口组成」，
-   * 表单行说「这一格填的是什么值」，两者不重复表达同一个落点。
-   *
-   * 库里这份映射**能改**（ISSUE #355：「连线要能编辑，现在编辑不了」）：从卡片
-   * 右侧的圆点拖到宿主卡片的某一行即改落点，点线选中后按 ⌫ 断开，卡片头 ↺ 恢复
-   * 默认。落库形状与编辑器画布逐字一致（`paramMap.source.mode:<模式>`）。 */
-  /* 宿主卡片此刻**真的画得出来**的端口（ioKey 集合）。
-   *
-   *  它是「这个端口现在连得上 / 现在能从外部取到值」的事实源：卡片右侧每个候选
-   *  圆点按它收窄（画不出端点的端口不给拖，否则拖过去只会被落点解析拒绝 —— 用户
-   *  看到的就是「点击端点拉线出现禁用标记」）。
-   *
-   *  行集合会随模式切换（可见性）、折叠状态、IO 富化结果变化，故每次宿主表单渲染
-   *  后重新收集一次；用 `useSyncExternalStore` 之外的最简办法：渲染后布局稳定时
-   *  从 DOM 现收（见下面的 effect）。 */
+  /* ── 对外参数卡片列（映射可编辑，ISSUE #355）──
+   * 卡片说「由哪些端口组成」，表单行说「填什么值」；拖线改落点、选中后 ⌫ 断开、
+   * 卡片头 ↺ 恢复。落库形状 `paramMap.source.mode:<模式>` 与编辑器逐字一致。 */
+  /* 宿主卡片此刻真的画得出来的端口（ioKey）：右侧候选圆点按它收窄，否则拖过去
+   * 只会被落点解析拒绝。行集合随模式/折叠/IO 富化变化，故渲染后从 DOM 现收。 */
   const hostRef = useRef<HTMLDivElement | null>(null);
 
   /* 映射编辑编排：本地 overlay + 落库。没有 `onPatchParamMap`（只读消费方）时
@@ -304,6 +280,8 @@ export function WorkflowCanvasNodePreview({
       values,
       effectiveParamMap: wiring.effectiveParamMap,
       seedModes,
+      /* 调试：勾了输出就只跑这些分支（comfy-cli --output-node-ids）。 */
+      ...(debugOutputIds.length > 0 ? { outputNodeIds: debugOutputIds } : {}),
     });
   }
 
@@ -364,13 +342,11 @@ export function WorkflowCanvasNodePreview({
               modes={modes}
               onModeChange={onModeChange}
               outputs={outputs}
-              /* oxlint-disable-next-line no-unnecessary-condition -- 本块在外层 viewMode === "edit" 分支内已收窄，保留比较防外层条件调整后语义漂移 */
               phaseKind={viewMode === "edit" && phase.kind === "failed" ? "idle" : phase.kind}
               running={running}
               /* 编辑对外参数页签是配置界面，不应显示上次运行的失败状态（红点 +
                *  「失败」文案）。这里把失败态渲染成「待开始」的中性状态，运行中 /
                *  已完成等状态保留，方便用户必要时感知运行进度。 */
-              /* oxlint-disable-next-line no-unnecessary-condition -- 同上：外层已收窄为 edit，保留比较与 phaseKind 口径一致 */
               statusLabel={viewMode === "edit" && phase.kind === "failed" ? "待开始" : statusLabel}
               taskType={taskType}
               workflowName={workflowName}
@@ -419,11 +395,13 @@ export function WorkflowCanvasNodePreview({
       {viewMode === "use" && (
         <WorkflowPreviewUsePanel
           canRun={canRun}
+          debugOutputIds={debugOutputIds}
           effectiveMode={effectiveMode}
           effectiveModeLabel={effectiveModeLabel}
           logViewTaskId={logViewTaskId}
           missingLabels={missingLabels}
           modes={modes}
+          onDebugOutputIdsChange={setDebugOutputIds}
           onModeChange={onModeChange}
           onOpenLog={() => {
             setLogOpen(true);

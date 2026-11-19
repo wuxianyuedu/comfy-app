@@ -14,7 +14,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../core/repository", () => ({ taskRepository: {} }));
-vi.mock("./client", () => ({ getView: async () => Buffer.from("") }));
+vi.mock("./client", () => ({ getView: () => Buffer.from("") }));
 vi.mock("~/lib/core/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
@@ -23,15 +23,15 @@ const mod = await import("./executor-finalize");
 
 describe("configureExecutorFinalize 接缝", () => {
   it("接受 Partial<ExecutorFinalizeDeps> 且不抛", () => {
-    const runtimeLog = { info: vi.fn(), error: vi.fn() };
+    const runtimeLog = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
     expect(() => {
       mod.configureExecutorFinalize({ runtimeLog });
     }).not.toThrow();
   });
 
   it("两次调用是合并语义（Partial 逐次填、未传的字段保留）", () => {
-    const a = { info: vi.fn(), error: vi.fn() };
-    const getView = vi.fn(async () => Buffer.from("x"));
+    const a = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+    const getView = vi.fn(() => Promise.resolve(Buffer.from("x")));
     mod.configureExecutorFinalize({ runtimeLog: a });
     // 第二次只填 getView，runtimeLog 应保留（内部 `{ ...depsOverride, ...next }`）。
     expect(() => {

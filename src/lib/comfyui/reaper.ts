@@ -8,22 +8,25 @@
 // host 侧 `scripts/executor-host.mjs`，各一处 `startReaper()`；模块加载不再有副作用。
 // 常驻循环用 globalThis 键兜住，Next.js HMR 因此永远不会造出第二个定时器。
 
+import { fireAndForget } from "~/lib/async-action";
 import { errorText } from "~/lib/error-message";
 import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { isSchemaReady } from "~/lib/db-schema-ready";
+import { isRecord } from "~/lib/is-record";
 // `../core/repository` 静态值 import 已改成 lazy（P3 §5 第 1 期·最后一步：
 // 让整条 reaper 边不再撞 `import "server-only"` throw、纯 Node executor host
 // 加载 reaper 时能干净过）。同 #1053 runner-state / #1068 executor-finalize
 // / #1071 executor-cli / 本 PR enqueue 的模式：`configureReaper({ taskRepo })`
 // + 未注入时首次调用 dynamic import 兜底 Next 侧真单例。
 import { resolveComfyBase } from "./client";
-import { cliProcs } from "./executor-cli";
+import { cliProcs, pruneTempWorkflowFiles } from "./executor-cli";
 import { isComfyStarting } from "./lifecycle";
 import {
   state,
   log,
   persistLogs,
   claimFinalize,
+  forgetTaskClaimEntirely,
   releaseDispatchSlot,
   type RunnerState,
 } from "./runner-state";
@@ -215,6 +218,22 @@ function claimTerminal(taskId: string): boolean {
   return true;
 }
 
+/** 从 ComfyUI /queue 回执里取 `queue_running` / `queue_pending` 的条目：
+ *  外部 JSON 不可全信，非对象元素按缺失丢弃。 */
+function queueEntries(
+  payload: unknown,
+  key: "queue_running" | "queue_pending",
+): Array<Record<string, unknown>> {
+  if (!isRecord(payload)) {
+    return [];
+  }
+  const list = payload[key];
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  return list.filter(isRecord);
+}
+
 /** 外部证据探针：ComfyUI 侧此刻是否仍有「在飞的工作流」。
  *
  *  纯「进程内记忆」不足以判死一个 QUEUED 孤儿：raw 路径的 comfy-cli 子进程
@@ -246,15 +265,12 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
     if (!q.ok) {
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    const qd = (await q.json()) as {
-      queue_pending?: Array<{ prompt_id?: string }>;
-      queue_running?: Array<{ prompt_id?: string }>;
-    } | null;
-    const all = [...(qd?.queue_running ?? []), ...(qd?.queue_pending ?? [])];
+    const qd: unknown = await q.json();
+    const all = [...queueEntries(qd, "queue_running"), ...queueEntries(qd, "queue_pending")];
     /* 队列非空 → 本应用（MAX_CONCURRENCY=1）必有任务在跑。raw 路径的
-     *  comfy-cli 自己生成 client_id，无法反查属于哪个 taskId，因此无法区分
-     *  时一律不杀。 */
+     *  comfy-cli 提交时带 `--client-id comfy-app-<taskId>`（见 executor-cli.ts），
+     *  /queue 条目的 extra_data.client_id 已可反查任务；但本判据刻意保持保守
+     *  （队列非空一律不杀），不按 client_id 细分。 */
     if (all.length > 0) {
       return true;
     }
@@ -269,9 +285,8 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
     if (!h.ok) {
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    const hd = (await h.json()) as Record<string, unknown> | null;
-    return !!hd && Object.hasOwn(hd, hintPromptId);
+    const hd: unknown = await h.json();
+    return isRecord(hd) && Object.hasOwn(hd, hintPromptId);
   } catch {
     /* 网络错误 / 超时：证据不足。 */
     return null;
@@ -329,25 +344,14 @@ export async function reapStaleQueuedTasks(): Promise<void> {
           );
           continue;
         }
-        /* 先抢终态：executor 若同时也在收口这个任务，谁先认领谁赢。
-         *  抢不到说明本进程（或上一次 tick）已经判过终态——直接跳过，
-         *  避免同一任务写出两个互相矛盾的失败原因。 */
-        if (!claimTerminal(t.id)) {
-          log(t.id, "warn", `reaper 跳过：任务终态已被本进程认领（已 ${ageSec}s）`);
-          continue;
-        }
-        /* 与 executor 共享「DB 终态一次写入」锁：executor 已经落库过就
-         *  不再写第二条原因，保证执行日志 / 应用日志 / DB 三者一致。 */
-        if (!claimFinalize(t.id)) {
-          log(t.id, "warn", `reaper 跳过：任务终态已落库（已 ${ageSec}s）`);
-          continue;
-        }
         /* 最后一道保险：进程内记忆全空不等于任务已死。raw 路径的 comfy-cli
          *  子进程是独立进程，dev server 重启后新进程看不到它，但 ComfyUI
          *  侧的工作流仍在跑。判死前先问 ComfyUI 要外部证据——有活动或探测
          *  失败都视为「证据不足」，本轮跳过，等下一 tick 再对账（见本函数
-         *  上方注释 ISSUE #378）。 */
+         *  上方注释 ISSUE #378）。取证放在抢锁**之前**（ISSUE #3865）：证据
+         *  不足时不占任何一次性锁，下一 tick 才有可能真的重试。 */
         if (comfyEvidence === undefined) {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           comfyEvidence = await comfyHasActiveWorkflow(null);
         }
         const comfyActive = comfyEvidence;
@@ -361,18 +365,44 @@ export async function reapStaleQueuedTasks(): Promise<void> {
           );
           continue;
         }
+        /* 先抢终态：executor 若同时也在收口这个任务，谁先认领谁赢。
+         *  抢不到说明本进程（或上一次 tick）已经判过终态——直接跳过，
+         *  避免同一任务写出两个互相矛盾的失败原因。 */
+        if (!claimTerminal(t.id)) {
+          log(t.id, "warn", `reaper 跳过：任务终态已被本进程认领（已 ${ageSec}s）`);
+          continue;
+        }
+        /* 与 executor 共享「DB 终态一次写入」锁：executor 已经落库过就
+         *  不再写第二条原因，保证执行日志 / 应用日志 / DB 三者一致。 */
+        if (!claimFinalize(t.id)) {
+          log(t.id, "warn", `reaper 跳过：任务终态已落库（已 ${ageSec}s）`);
+          continue;
+        }
         const reason = `任务在队列里待了 ${ageSec}s 而没有任何执行宿主会领它（claimedBy=「${t.claimedBy}」不是合法归属值，合法值只有 inline / host）— 请核对 COMFY_EXECUTOR 配置后重新执行`;
         log(t.id, "error", reason);
         /*  上面那行 error 日志与下面的终态写入就是用户拿到的全部出口：SSE 自 ADR
          *  §13-3C 起只读库，进程内合成事件那条通道随 §14 D1 退役了。这里也**不**调
          *  kickQueue()——被回收的行已经落终态、不会再被领一次，我们也不希望把一个
          *  未知工作流重新入队。尾部的 persistLogs 把原因行与终态同批落库。 */
-        const outcome = await taskRepository.finalizeFailure(t.id, reason);
-        if (outcome !== "written") {
-          /* SELECT 与 UPDATE 之间被执行方自己收口了（或归属已变）：正常的窄竞态，
-           * 不是故障，但要留一行——没有它，「判了却没落库」在日志里是隐身的。 */
-          logger.warn(`[comfyui] reaper: 跳过收口 ${t.id}（${outcome}），终态已由执行方落定`);
+        try {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+          const outcome = await taskRepository.finalizeFailure(t.id, reason);
+          if (outcome !== "written") {
+            /* SELECT 与 UPDATE 之间被执行方自己收口了（或归属已变）：正常的窄竞态，
+             * 不是故障，但要留一行——没有它，「判了却没落库」在日志里是隐身的。 */
+            logger.warn(`[comfyui] reaper: 跳过收口 ${t.id}（${outcome}），终态已由执行方落定`);
+          }
+        } catch (error) {
+          /* 写库失败（如 SQLITE_BUSY 重试穷尽）：归还两把一次性锁，下一 tick 重来。
+           * 不归还的后果：settled/finalized 被空占，isTaskClaimedInProcess 恒真、
+           * claimTerminal 恒败——任务在本进程存活期内永久卡死（ISSUE #3865）。 */
+          forgetTaskClaimEntirely(t.id);
+          logger.warn(
+            `[comfyui] ${sqliteAwareErrorText(error, `reaper 收口 ${t.id} 失败（已归还认领，下一轮重试）`)}`,
+          );
+          continue;
         }
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await persistLogs(t.id);
         /* 本进程若正握着这一条在飞，收口后必须归还槽位——否则一条被回收的死任务
          * 会把并发额度永久占住，领取循环从此不再往前走（内存队列时代这处只减计数器，
@@ -443,10 +473,21 @@ export async function reapStaleRunningTasks(): Promise<void> {
             continue;
           }
           const reason = `任务被领取后 ${ageSec}s 仍未回传 prompt_id，且连续两轮都无人认领它（执行宿主可能已崩溃）— 请重新执行`;
-          const outcome = await taskRepository.finalizeFailure(t.id, reason);
-          if (outcome !== "written") {
-            logger.warn(`[comfyui] reaper: 跳过无 promptId 行的收口 ${t.id}（${outcome}）`);
+          try {
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+            const outcome = await taskRepository.finalizeFailure(t.id, reason);
+            if (outcome !== "written") {
+              logger.warn(`[comfyui] reaper: 跳过无 promptId 行的收口 ${t.id}（${outcome}）`);
+            }
+          } catch (error) {
+            /* 写库失败：归还一次性锁，下一 tick 重来——否则任务永久卡 RUNNING（ISSUE #3865）。 */
+            forgetTaskClaimEntirely(t.id);
+            logger.warn(
+              `[comfyui] ${sqliteAwareErrorText(error, `reaper 收口 ${t.id} 失败（已归还认领，下一轮重试）`)}`,
+            );
+            continue;
           }
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           await persistLogs(t.id);
           /* 本进程若正握着这一条在飞，收口后必须归还槽位——否则一条被回收的死任务
            * 会把并发额度永久占住，领取循环从此不再往前走（内存队列时代这处只减计数器，
@@ -475,25 +516,21 @@ export async function reapStaleRunningTasks(): Promise<void> {
         let verdict: "succeeded" | "failed" | "unknown" = "unknown";
         let reason = "";
         try {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
           if (r.status === 200) {
-            /* SAFETY: 类型断言已复核 */
-            const data = (await r.json()) as Record<string, unknown> | null;
-            /* SAFETY: 类型断言已复核 */
-            const entry = data && (data[t.promptId] as Record<string, unknown> | undefined);
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+            const data: unknown = await r.json();
+            const rawEntry = isRecord(data) ? data[t.promptId] : undefined;
+            const entry = isRecord(rawEntry) ? rawEntry : undefined;
             if (entry) {
-              /* SAFETY: 类型断言已复核 */
-              const status = entry.status as
-                | {
-                    errored?: unknown;
-                    executed?: unknown;
-                    messages?: unknown;
-                  }
-                | undefined;
-              /* SAFETY: 类型断言已复核 */
-              const errMsg = (entry.error as { message?: string } | undefined)?.message;
-              // oxlint-disable-next-line strict-boolean-expressions -- errored 与 error.message 都是 ComfyUI history 回执里的外部字段，任意真值都按「有错误现场」判，防御外部形态变化
-              if (status?.errored || errMsg) {
+              const status = entry.status;
+              const errorField = entry.error;
+              const errMsg =
+                isRecord(errorField) && typeof errorField.message === "string"
+                  ? errorField.message
+                  : undefined;
+              if ((isRecord(status) && status.errored) || errMsg) {
                 verdict = "failed";
                 reason = `ComfyUI execution_error: ${errMsg ?? "未知原因"} (promptId=${t.promptId})`;
               } else {
@@ -508,17 +545,18 @@ export async function reapStaleRunningTasks(): Promise<void> {
                *  也不在 queue_pending 里，那就等于丢了 → FAILED 孤儿。 */
               let inQueue = false;
               try {
+                // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
                 const q = await fetch(`${base}/queue`, {
                   signal: AbortSignal.timeout(3000),
                 });
                 if (q.ok) {
-                  /* SAFETY: 类型断言已复核 */
-                  const qd = (await q.json()) as {
-                    queue_pending?: Array<{ prompt_id?: string }>;
-                    queue_running?: Array<{ prompt_id?: string }>;
-                  } | null;
-                  const all = [...(qd?.queue_running ?? []), ...(qd?.queue_pending ?? [])];
-                  inQueue = all.some((all) => all?.prompt_id === t.promptId);
+                  // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+                  const qd: unknown = await q.json();
+                  const all = [
+                    ...queueEntries(qd, "queue_running"),
+                    ...queueEntries(qd, "queue_pending"),
+                  ];
+                  inQueue = all.some((entry) => entry.prompt_id === t.promptId);
                 }
               } catch {
                 /* 队列探测失败 —— 落到「未知」分支 */
@@ -558,14 +596,25 @@ export async function reapStaleRunningTasks(): Promise<void> {
         }
         const finalStatus = verdict === "succeeded" ? "SUCCEEDED" : "FAILED";
         log(t.id, verdict === "succeeded" ? "success" : "error", reason);
-        const outcome = await taskRepository.finalizeFromReaper(
-          t.id,
-          finalStatus,
-          verdict === "failed" ? reason : null,
-        );
-        if (outcome !== "written") {
-          logger.warn(`[comfyui] reaper: 跳过对账收口 ${t.id}（${outcome}），终态已由执行方落定`);
+        try {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+          const outcome = await taskRepository.finalizeFromReaper(
+            t.id,
+            finalStatus,
+            verdict === "failed" ? reason : null,
+          );
+          if (outcome !== "written") {
+            logger.warn(`[comfyui] reaper: 跳过对账收口 ${t.id}（${outcome}），终态已由执行方落定`);
+          }
+        } catch (error) {
+          /* 写库失败：归还一次性锁，下一 tick 重来——否则任务永久卡死（ISSUE #3865）。 */
+          forgetTaskClaimEntirely(t.id);
+          logger.warn(
+            `[comfyui] ${sqliteAwareErrorText(error, `reaper 对账收口 ${t.id} 失败（已归还认领，下一轮重试）`)}`,
+          );
+          continue;
         }
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await persistLogs(t.id);
         /* 本进程若正握着这一条在飞，收口后必须归还槽位——否则一条被回收的死任务
          * 会把并发额度永久占住，领取循环从此不再往前走（内存队列时代这处只减计数器，
@@ -593,6 +642,10 @@ function sweepOnce(): void {
   }
   void reapStaleQueuedTasks();
   void reapStaleRunningTasks();
+  /* 崩溃残留的临时工作流文件按拍兜底清理（#4225）：正常路径在任务收口时已删，
+   * 这里只扫「写完与收口之间进程崩掉」的孤儿（按 mtime 留一小时余量）。
+   * prune 自吞全部 IO 错误，onError 是不可达的最后一道。 */
+  fireAndForget(pruneTempWorkflowFiles(), () => undefined);
 }
 
 /**
@@ -623,7 +676,7 @@ export function startReaper(): void {
   /* `unref()`：回收器是常驻后台职责，不该把 Node 事件循环吊住 ——
    * dev server 关停时能自然退出，而不必等这一轮 30s 间隔走完。
    * 常驻的 HTTP server 仍持有事件循环，unref 不会让进程提前退出。 */
-  reaperState.handle.unref?.();
+  reaperState.handle.unref();
 }
 
 /**

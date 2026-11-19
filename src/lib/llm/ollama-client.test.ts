@@ -8,12 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ollamaTagsUrl, probeOllama, startOllama } from "./ollama-client";
 
 function jsonRes(status: number, body: unknown): Response {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-  } as unknown as Response;
+  return new Response(JSON.stringify(body), { status });
 }
 
 afterEach(() => {
@@ -70,7 +65,7 @@ describe("probeOllama", () => {
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        json: async () => {
+        json: () => {
           throw new Error("Unexpected token <");
         },
       }),

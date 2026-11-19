@@ -35,6 +35,8 @@
  * 「恰好是散文的密钥」；这些仍要靠字段命名（见 REDACT_PATHS）与调用侧纪律。
  * 判据选取可读性优先于覆盖率——高召回会误伤正常日志，反而没人敢留这道守卫。
  */
+import { isRecord } from "~/lib/is-record";
+
 const PEM_BLOCK_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;
 const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b/g;
 /* 高熵候选：整条串都是 `[A-Za-z0-9_-]`、长度 ≥ 24、**自带数字**（口令/散文几乎
@@ -114,8 +116,10 @@ export function redactSecretShaped(value: unknown, depth = 0, seen = new WeakSet
     return value.map((v) => redactSecretShaped(v, depth + 1, seen));
   }
   const out: Record<string, unknown> = {};
-  /* SAFETY: 类型断言已复核 */
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+  if (!isRecord(value)) {
+    return out;
+  }
+  for (const [k, v] of Object.entries(value)) {
     out[k] = redactSecretShaped(v, depth + 1, seen);
   }
   return out;

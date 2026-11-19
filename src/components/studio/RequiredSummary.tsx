@@ -1,6 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import { resolveEntryRequired, type WorkflowIOMap } from "~/components/studio/workflow-io";
+import { Hint } from "~/components/ui/hint";
 
 export function RequiredSummary({
   io,
@@ -17,7 +18,6 @@ export function RequiredSummary({
       return { required, optional };
     }
     for (const e of Object.values(io)) {
-      // oxlint-disable-next-line no-unnecessary-condition -- io 来自服务端富化 / 持久化的工作流 IO JSON，旧数据条目可能为 null，?. 是运行时守卫
       if (e?.direction !== "input") {
         continue;
       }
@@ -73,29 +73,30 @@ export function Chip({ color, label }: { color: string; label: string }) {
  *  整个节点体是前端按图扫描出来的）。 */
 export function FrontendOnlyBadge() {
   return (
-    <div
-      className="comfy-node__frontend-only"
-      style={{
-        display: "inline-block",
-        alignSelf: "flex-start",
-        marginTop: 4,
-        marginLeft: 2,
-        padding: "1px 5px",
-        fontSize: 9,
-        lineHeight: 1.2,
-        fontFamily: "var(--font-mono)",
-        fontStyle: "italic",
-        color: "var(--color-ink-muted)",
-        letterSpacing: 0.2,
-        border: "1px solid var(--color-border-strong)",
-        borderRadius: 4,
-        pointerEvents: "none",
-        userSelect: "none",
-        whiteSpace: "nowrap",
-      }}
-      title="此节点仅在浏览器前端运行（无后端执行）"
-    >
-      frontend_only
-    </div>
+    <Hint label="此节点仅在浏览器前端运行（无后端执行）">
+      <div
+        className="comfy-node__frontend-only"
+        style={{
+          display: "inline-block",
+          alignSelf: "flex-start",
+          marginTop: 4,
+          marginLeft: 2,
+          padding: "1px 5px",
+          fontSize: 9,
+          lineHeight: 1.2,
+          fontFamily: "var(--font-mono)",
+          fontStyle: "italic",
+          color: "var(--color-ink-muted)",
+          letterSpacing: 0.2,
+          border: "1px solid var(--color-border-strong)",
+          borderRadius: 4,
+          pointerEvents: "none",
+          userSelect: "none",
+          whiteSpace: "nowrap",
+        }}
+      >
+        frontend_only
+      </div>
+    </Hint>
   );
 }

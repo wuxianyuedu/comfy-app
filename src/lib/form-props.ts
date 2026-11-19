@@ -59,18 +59,28 @@ export function textHandler<T>(
   transform?: (raw: string) => T,
 ): (event: ValueEvent) => void {
   // 走到这里 transform 一定存在，除非调用方命中的是「T = string」那条重载 ——
-  // 这时把 raw 原样交给回调就是恒等，`as unknown as T` 只在**编译器已经
-  // 通过重载决议把 T 锁到 string** 的路径上生效，不再有「非 string T 忘传
-  // transform」的漏口。
+  // 这时把 raw 原样交给回调就是恒等：编译器已经通过重载决议把 T 锁到 string，
+  // 运行时再由 `assertStringValue` 核实值确实是 string，不再有「非 string T
+  // 忘传 transform」的漏口。
   const fn: (raw: string) => T =
     transform ??
     ((raw) => {
-      /* SAFETY: 类型断言已复核 */
-      return raw as unknown as T;
+      assertStringValue<T>(raw);
+      return raw;
     });
   return (event) => {
     onValue(fn(event.target.value));
   };
+}
+
+/**
+ * 无 `transform` 的路径由**重载决议**保证 `T = string`；这里在运行时把值核到
+ * `string` 上（并借此收窄成 `T`），不再用类型断言宣称。
+ */
+function assertStringValue<T>(value: unknown): asserts value is T {
+  if (typeof value !== "string") {
+    throw new TypeError("textHandler: 未提供 transform 时取值必须是 string");
+  }
 }
 
 /**
@@ -124,9 +134,25 @@ export function bindKey<T extends object, K extends keyof T>(
   key: K,
 ): (value: T[K]) => void {
   return (value) => {
-    /* SAFETY: 类型断言已复核 */
-    patch({ [key]: value } as Pick<T, K>);
+    const partial: Partial<T> = {};
+    partial[key] = value;
+    assertOwnKey<T, K>(partial, key);
+    patch(partial);
   };
+}
+
+/**
+ * `Partial<T>` 上确实有 `key` 这一个自有字段时，收窄成 `Pick<T, K>`。
+ *
+ * `Partial → Pick` 的差别只有「这个键在不在」，所以这一条能真的校验到。
+ */
+function assertOwnKey<T extends object, K extends keyof T>(
+  value: Partial<T>,
+  key: K,
+): asserts value is Partial<T> & Pick<T, K> {
+  if (!Object.hasOwn(value, key)) {
+    throw new TypeError(`bindKey: 部分对象缺少键 "${String(key)}"`);
+  }
 }
 
 /**

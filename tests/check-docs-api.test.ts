@@ -1,24 +1,8 @@
 /**
- * `scripts/check-docs-api.cjs` 的判据（ISSUE #1329 收尾 → **ISSUE #2231 改判据对象**）。
- *
- * 这一步现在要拦的东西换了。上一版拦的是「`docs/api/**` 生成物静默过期」——
- * 它进 git、被 AGENTS 与主规范 §9 承诺「随构建链更新」，而构建链里没有任何一处调用
- * `pnpm docs`，于是产物停在最初那两次提交上（收尾时实测 2627 个文件差异，还留着指向
- * 已删模块的 `lib_comfyui_markdown.html`）。
- *
- * ISSUE #2231 把那份产物**从 git 里搬走**了（`.gitignore` 的 `docs/api/`），于是
- * 「提交进 git 的那份与源同不同步」这个问题**没有对象**了 —— 判据改成三件能答的事：
- *
- *   1. **触发面**：窄了 = 改了会改产物的东西却没触发（判据白挂）；宽了 = 每个前端提交
- *      付一整轮重生成（百秒级，然后没人愿意用；现值取法见规范 §13.5.17）。
- *      它是 typedoc `entryPoints` 的**直接映射** ∪ 闭包叶子集，
- *      不是启发式，所以这里逐条钉住边界（含 `.test.ts` 也在入口 glob 里这件事）。
- *   2. **骨架齐全 + 可移植**：产物缺了默认主题每一页都引用的那几份 = 读者打开就是坏的；
- *      产物里烤进本机绝对路径 = 这份副本换台机器就不成立。
- *   3. **`--autofix` 不再被接受**：产物不进 git ⇒ 没有「自动修完再提交」的对象；而
- *      「自动修 + 再判」这个形状正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场）。
- *
- * 用一次性目录做夹具，不碰仓库里的 `docs/api`。
+ * `scripts/gates/check-docs-api.cjs` 的判据（ISSUE #1329 收尾 → **ISSUE #2231 改判据对象**）。上一版拦「`docs/api/**` 生成物静默过期」——它进 git 且被承诺随构建链更新，构建链却不调 `pnpm docs`。
+ * #2231 把产物**从 git 搬走**（`.gitignore` 的 `docs/api/`）后该问题没了对象，改判三件事：① 触发面 = typedoc 的**解析面**
+ * （TS 程序：`tsconfig.json` 展开的根 ∪ 沿 import 走到的文件，ISSUE #2537 —— 旧面按 `entryPoints` 算，系统性偏窄）；
+ * ② 骨架齐全且可移植（缺主题文件=打开即坏、烤进本机绝对路径=换机器不成立）；③ `--autofix` 不再接受（「自动修+再判」正是让陈旧在 CI 隐形那格）。夹具用一次性目录，不碰仓库 `docs/api`。
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -33,7 +17,14 @@ import {
   judgeTypedocTail,
   matchedInputs,
   walk,
-} from "../scripts/check-docs-api.cjs";
+} from "../scripts/gates/check-docs-api.cjs";
+
+/**
+ * 外来值（`execFileSync` 抛出的对象）先落 `unknown`，过这道守卫后逐字段 `typeof` 收窄才使用。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
 
 const temps: Array<string> = [];
 
@@ -69,13 +60,18 @@ afterEach(() => {
   }
 });
 
-describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
-  it("入口 glob 覆盖的三个目录里的源码都触发", () => {
+describe("触发面 = typedoc 的解析面（TS 程序，不是 entryPoints 那几页）", () => {
+  it("解析根覆盖的目录里的源码都触发（含 src/app 与前端组件）", () => {
     for (const f of [
       "src/lib/markdown/render.ts",
       "src/lib/core/config.ts",
       "src/server/workshop/comfyui.ts",
       "src/trpc/routers/workflow.ts",
+      "src/components/workshop/WorkshopStageBody.tsx",
+      "src/app/page.tsx",
+      /* ISSUE #2537 / 事故 #2528：被 tests 静态 import 进 TS 程序、旧面漏掉的那一类。 */
+      "tests/publish-desktop-bundle.test.ts",
+      "scripts/build/publish-desktop-bundle.mjs",
     ]) {
       expect(matchedInputs([f]), `${f} 应触发`).toEqual([f]);
     }
@@ -87,14 +83,15 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
     }
   });
 
-  it("与产物无关的改动不触发（不给普通提交加一整轮重生成）", () => {
+  it("不是 typedoc 解析面的改动不触发（只改文档不给普通提交加一整轮重生成）", () => {
+    /* 注意：`src/app` / `src/components` / `tests/**` / `scripts/**` **在**解析面里
+     * （tsconfig 的 `include` 覆盖它们，typedoc 的 TS 程序读它们），所以它们触发 ——
+     * 见上一条。这里只列真的不在程序里的路径。 */
     for (const f of [
-      "src/components/workshop/WorkshopStageBody.tsx",
-      "src/app/page.tsx",
       "docs/standards/13-提交与-code-review.md",
-      "tests/check-docs-api.test.ts",
-      "scripts/check-file-structure.cjs",
+      "docs/api/index.html",
       "README.md",
+      "CHANGELOG.md",
     ]) {
       expect(matchedInputs([f]), `${f} 不该触发`).toEqual([]);
     }
@@ -103,16 +100,19 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
   it("判据自身与它共用的跑法也算输入面（ISSUE #1981）", () => {
     /* 此前改这份脚本**不触发它自己** —— 于是「改了判据 → 推上去 → 它没跑」是这类
      * 改动的默认形状，而这恰恰是「产物与源同不同步」这件事被改动的那一刻。 */
-    for (const f of ["scripts/check-docs-api.cjs", "scripts/typedoc-run.mjs"]) {
+    for (const f of ["scripts/gates/check-docs-api.cjs", "scripts/docs/typedoc-run.mjs"]) {
       expect(matchedInputs([f]), `${f} 应触发`).toEqual([f]);
     }
   });
 
-  it("入口 glob 是 `!(*.test).ts`，所以 src/lib 下的 .test.ts 也在面内", () => {
-    // 这条看着反直觉，但它是「直接映射」的证据：typedoc 的入口写的是
-    // `src/lib/**/!(*.test).ts`，`*` 不跨目录，所以嵌套测试文件本来就在展开集合里。
-    // 收窄成「排除 *.test.ts」是**多写的启发式**，与配置脱钩（配置改了它不会跟）。
+  it("`tests/**` 的测试文件也在面内（它们进 TS 程序，typedoc 解析它们）", () => {
+    /* 旧口径只收 `src/lib/**\/*.ts` 那一批；ISSUE #2537 起面按 TS 程序的解析根算 ——
+     * tsconfig 的 include 覆盖 `tests/**`，而 typedoc 正是拿它的展开结果建程序 ⇒ `tests/**`
+     * 里的文件（含 `.test.ts`）改了就会改解析结果。#2528 的漏判正是从这儿来的。 */
     expect(matchedInputs(["src/lib/endpoints.test.ts"])).toEqual(["src/lib/endpoints.test.ts"]);
+    expect(matchedInputs(["tests/check-docs-api.test.ts"])).toEqual([
+      "tests/check-docs-api.test.ts",
+    ]);
     expect(INPUT_RES.some((re) => re.test("src/lib/x.ts"))).toBe(true);
   });
 
@@ -124,7 +124,7 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
 
   it("多文件清单只回命中项，顺序保持", () => {
     expect(matchedInputs(["README.md", "src/lib/a.ts", "pnpm-lock.yaml", "src/app/x.tsx"])).toEqual(
-      ["src/lib/a.ts", "pnpm-lock.yaml"],
+      ["src/lib/a.ts", "pnpm-lock.yaml", "src/app/x.tsx"],
     );
   });
 
@@ -209,7 +209,7 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
     /* 静默忽略一个旗标正是本仓最恨的那族（脚自称与实际不一致）：产物不进 git ⇒
      * 没有「自动修完再提交」的对象，而「自动修 + 再判」这个形状正是让「产物陈旧」
      * 在 CI 上隐形的那一格（#2231 的现场：master 上差 9 处而平台报绿）。 */
-    const script = path.resolve(__dirname, "..", "scripts", "check-docs-api.cjs");
+    const script = path.resolve(__dirname, "..", "scripts", "gates/check-docs-api.cjs");
     let code = 0;
     let out;
     try {
@@ -218,10 +218,11 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
         stdio: ["ignore", "pipe", "pipe"],
       });
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as { status?: number; stderr?: string };
-      code = e.status ?? -1;
-      out = e.stderr ?? "";
+      const fields = isRecord(error) ? error : null;
+      const status = fields?.status;
+      const stderr = fields?.stderr;
+      code = typeof status === "number" ? status : -1;
+      out = typeof stderr === "string" ? stderr : "";
     }
     expect(code).toBe(1);
     expect(out).toContain("--autofix");
@@ -229,10 +230,8 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
 });
 
 /**
- * typedoc 收尾日志的结论判读（ISSUE #2444）—— 四种形态各一条：
- * 总结行在场有账（红）、总结行 0/0（绿）、总结行缺席但有 html generated（绿，
- * 0 warning 时 typedoc 不打总结行 —— 本地实测过）、两者都缺（红）。
- * ANSI 色码是平台日志的原生形态，夹具里带上它，判读必须先剥色。
+ * typedoc 收尾日志的结论判读（ISSUE #2444）—— 四种形态各一条：总结行有账（红）、0/0（绿）、缺席但有 html generated
+ * （绿，0 warning 时 typedoc 不打总结行，本地实测）、两者都缺（红）。ANSI 色码是平台日志的原生形态，夹具带上它，判读必须先剥色。
  */
 describe("judgeTypedocTail：typedoc 收尾日志的结论判读（#2444）", () => {
   it("总结行报了 errors / warnings ⇒ 红，且红话里带数", () => {

@@ -16,6 +16,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
 import {
   fetchFileLogSlice,
   fetchLogSessions,
@@ -34,7 +35,7 @@ type FetchCall = readonly [RequestInfo | URL, RequestInit?];
 
 /** 记一次 fetch 的出口：拿到请求 URL 与init，并决定这一轮怎么回。 */
 function stubFetch(reply: { body?: unknown; ok?: boolean } | { throws: unknown }) {
-  const spy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
+  const spy = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => {
     if ("throws" in reply) {
       throw reply.throws;
     }
@@ -67,8 +68,8 @@ function methodOf(call: FetchCall | undefined): string | undefined {
 /** JSON 请求体。 */
 function bodyOf(call: FetchCall | undefined): Record<string, unknown> {
   const raw = typeof call?.[1]?.body === "string" ? call[1].body : "{}";
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(raw) as Record<string, unknown>;
+  const parsed: unknown = JSON.parse(raw);
+  return isRecord(parsed) ? parsed : {};
 }
 
 describe("fetchFileLogSlice —— 增量游标", () => {
@@ -107,6 +108,7 @@ describe("fetchFileLogSlice —— 增量游标", () => {
       const fetchMock = stubFetch({
         body: { content: "", size: 0, offset: 0 },
       });
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await fetchFileLogSlice(kind, 0);
       expect(urlOf(fetchMock.mock.calls[0])).toContain(`source=${expected}`);
     }
@@ -204,7 +206,7 @@ describe("saveLogExport —— 导出到本机", () => {
   it("服务端回了非 JSON（比如网关的 HTML 错误页）同样收成失败而不是抛", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("<html>502</html>", { status: 502 })),
+      vi.fn(() => new Response("<html>502</html>", { status: 502 })),
     );
     await expect(saveLogExport("面板", "正文")).resolves.toMatchObject({
       ok: false,
@@ -251,7 +253,7 @@ describe("saveDiagnosticsPackage —— 打包整份诊断现场", () => {
   it("服务端回了非 JSON（网关的 HTML 错误页）同样收成失败而不是抛", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("<html>504</html>", { status: 504 })),
+      vi.fn(() => new Response("<html>504</html>", { status: 504 })),
     );
     await expect(saveDiagnosticsPackage()).resolves.toMatchObject({
       ok: false,

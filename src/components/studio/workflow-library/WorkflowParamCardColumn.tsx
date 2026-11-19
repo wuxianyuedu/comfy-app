@@ -1,25 +1,10 @@
 "use client";
 
-/* 工作流库「画布节点」预览左侧的**对外参数卡片列**。
- *
- * 每个对外参数一张卡片（视觉本体复用 workflow-editor/WorkflowParamCard）：
- *   · 卡片头是参数名（作者在编辑器里勾选/改名后的那个名字）；
- *   · 卡片体一行：**这个口自己的名字 + 类型**（未连线用口自己的类型，连上后是
- *     落点那一行的类型；落到哪一行在行的 `title` 里可查）；
- *   · 卡片右侧**一颗**带类型的小圆点端点 —— **一个口一颗点**（落点由线的另一端
- *     声明：拖到宿主哪一行就是哪一行）。尺寸是唯一的多行卡片：一行 = 一个形态，
- *     每行一颗点，handle 取子口 id。
- *   · 卡片**可连线**（ISSUE #355：「连线要能编辑，现在编辑不了」）：从圆点按下
- *     并拖到宿主卡片上的某一行即改落点，卡片头的 ↺ 撤销该口的手工线。
- *
- * 端点由消费方注入（`endpoint`）：库里那层注入的是 React Flow 的 `<Handle>`
- * （ISSUE #529）——「能不能连」由画布的 `isValidConnection` 判，卡片列本身
- * 不碰 React Flow（见 workflow-canvas-io-isolation-guard 的守卫）。
- *
- * 与宿主卡片的**表单行**是同一条事实的两端，不重复表达：
- *   卡片 = 这个对外参数由哪些端口组成（归属）；
- *   表单行 = 这一格现在填的是什么值（值），行尾徽标标出它属于哪个对外参数。
- */
+/* 工作流库「画布节点」预览左侧的对外参数卡片列：每个对外参数一张卡片（视觉本体
+ * 复用 workflow-editor/WorkflowParamCard）。一个口一颗圆点，尺寸卡每个形态一行
+ * 一颗点。卡片可连线（ISSUE #355）：拖圆点到宿主某一行即改落点，卡片头 ↺ 撤销。
+ * 端点由消费方注入 `<Handle>`（ISSUE #529），「能不能连」由画布判，卡片列不碰
+ * React Flow。卡片说「由哪些端口组成」，表单行说「填什么值」，不重复表达。 */
 
 import {
   paramOutputPorts,
@@ -43,13 +28,10 @@ export type WorkflowParamCardColumnProps = {
   /** 是否允许连线：库里也允许（拖圆点改落点）—— 没有模式时不给（写入无归属）。 */
   canWire?: boolean;
   /** 契约口清单（`modeContractEntries` / `exposedParamsForMode` 的产物）。
-   *
-   *  卡片头必须与「工坊封装」页签说同一句话（ISSUE #596：同一页面的两个页签，
-   *  「尺寸」一处写全、一处只写两个字）。这里**按 id 覆盖** `entry.label`：
-   *  `entry.label` 里可能混着用户自定义契约的措辞与历史落库的改名，而契约口
-   *  清单是产品对用户承诺的那几个口，名字只该有一套。
-   *
-   *  形状只要求 id + label（消费方不必 import 契约模块的类型）。 */
+   *  卡片头必须与「工坊封装」页签说同一句话（ISSUE #596）；这里按 id 覆盖
+   *  `entry.label`：契约口清单是产品对用户承诺的那几个口，名字只该有一套。
+   *  形状只要求 id + label。
+   */
   contractEntries?: ReadonlyArray<{ id: string; label: string }>;
   /** 端点槽位：消费方注入 `<Handle>` 或只读圆点。 */
   endpoint?: (port: ParamOutputPort, index: number) => ReactNode;
@@ -115,12 +97,10 @@ export function WorkflowParamCardColumn({
               idLabel="size"
               key="size"
               label={sizeLabel}
-              /* 一行 = 一个子口：卡片头的 ↺ 把六条线一起撤掉（尺寸是一张卡，
-               * 只撤其中一条会让卡片看着「还有线」）。
-               *
-               *  上抛的是聚合 id `size` —— 由消费方**一次**展开成六个子口交给
-               *  `resetMany`。在这里逐个上抛的话，消费方每收到一个就落一次库，
-               *  后一次会把前一次的删除覆盖回去（用户口径：「重置也清不掉」）。 */
+              /* 一行 = 一个子口：卡片头的 ↺ 把六条线一起撤掉（只撤其中一条会
+               *  让卡片看着「还有线」）。上抛的是聚合 id `size`，由消费方一次
+               *  展开成六个子口交给 `resetMany` —— 逐个上抛会每次落库，后一次
+               *  把前一次的删除覆盖回去（用户口径：「重置也清不掉」）。 */
               onReset={canWire ? () => onReset?.("size") : undefined}
               onSelect={
                 onSelect

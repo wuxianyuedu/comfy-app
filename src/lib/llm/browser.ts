@@ -1,8 +1,10 @@
 "use client";
 
 import type { LLMMessage, LLMRequestOptions } from "./types";
+import type { LlmApiFormat } from "./provider-types";
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { errorMessage } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 
 export type ChatArgs = {
   messages: Array<LLMMessage>;
@@ -48,21 +50,20 @@ export async function streamChat({ messages, opts, onToken, signal }: ChatArgs):
     if (data === "[DONE]") {
       return;
     }
-    let json: { error?: unknown; token?: unknown };
+    let parsed: unknown;
     try {
-      /* SAFETY: 类型断言已复核 */
-      json = JSON.parse(data) as {
-        error?: unknown;
-        token?: unknown;
-      };
+      parsed = JSON.parse(data);
     } catch {
       /* 纯语法坏帧：跳过它，不因为一行坏 JSON 丢掉整条回答。 */
       return;
     }
-    if (typeof json.error === "string" && json.error !== "") {
-      throw new Error(json.error);
+    if (!isRecord(parsed)) {
+      return;
     }
-    const token = typeof json.token === "string" ? json.token : "";
+    if (typeof parsed.error === "string" && parsed.error !== "") {
+      throw new Error(parsed.error);
+    }
+    const token = typeof parsed.token === "string" ? parsed.token : "";
     if (token) {
       full += token;
       onToken?.(token);
@@ -90,6 +91,7 @@ export async function streamChat({ messages, opts, onToken, signal }: ChatArgs):
   };
 
   while (true) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const { done, value } = await reader.read();
     if (done) {
       break;
@@ -103,22 +105,21 @@ export async function streamChat({ messages, opts, onToken, signal }: ChatArgs):
 }
 
 /* 非流式的一次性对话。 */
-export async function completeChat({ messages, opts }: ChatArgs): Promise<string> {
+export async function completeChat({ messages, opts, signal }: ChatArgs): Promise<string> {
   const res = await fetch("/api/llm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, stream: false, ...opts }),
+    /* 调用方可取消（组件卸载 / 超时兜底）；服务端上游也有自己的预算。 */
+    signal,
   });
   /* 错误信封的读法收在一处（规范 16 §16.2.4.35）。 */
-  /* SAFETY: 类型断言已复核 */
-  const json = (await readJsonBody(res)) as {
-    content?: string;
-    error?: string;
-  };
+  const body = await readJsonBody(res);
   if (!res.ok) {
-    throw new Error(readApiError(json) ?? `LLM 请求失败 (${res.status})`);
+    throw new Error(readApiError(body) ?? `LLM 请求失败 (${res.status})`);
   }
-  return json.content ?? "";
+  const content: unknown = isRecord(body) ? body.content : undefined;
+  return typeof content === "string" ? content : "";
 }
 
 export type RemoteProbeResult = {
@@ -128,16 +129,22 @@ export type RemoteProbeResult = {
   ok: boolean;
 };
 
-/**
- * 设置页「添加模型」弹窗：测试 OpenAI 兼容接口连通性并顺带拉取模型清单。
- * baseUrl / apiKey 留空时由服务端回落到已保存的全局配置（「留空则用全局」语义）。
- * 任何失败都返回 ok:false + 可读 detail，不抛异常——探测失败不是硬错误。
- */
-export async function probeRemoteApi(input: {
+export type RemoteProbeInput = {
+  /** 接口格式：决定鉴权头与 `/models` 探测路径（缺省 chat-completions）。 */
+  apiFormat?: LlmApiFormat;
   apiKey?: string;
   baseUrl?: string;
   model?: string;
-}): Promise<RemoteProbeResult> {
+  /** 已保存的供应商 id：Base URL / 格式 / 密钥由服务端按 id 代查（浏览器没有明文密钥）。 */
+  providerId?: string;
+};
+
+/**
+ * 设置页「供应商 / 模型」的连通性探测：测试上游接口并顺带拉取模型清单。
+ * 入参缺省时由服务端回落（给了 `providerId` 用该供应商已保存配置，否则用全局配置）。
+ * 任何失败都返回 ok:false + 可读 detail，不抛异常——探测失败不是硬错误。
+ */
+export async function probeRemoteApi(input: RemoteProbeInput): Promise<RemoteProbeResult> {
   let res: Response;
   try {
     res = await fetch("/api/llm/test", {
@@ -151,19 +158,14 @@ export async function probeRemoteApi(input: {
       detail: errorMessage(error, "网络请求失败"),
     };
   }
-  /* SAFETY: 类型断言已复核 */
-  const json = (await readJsonBody(res)) as {
-    detail?: unknown;
-    error?: unknown;
-    models?: unknown;
-    ok?: unknown;
-  };
+  const body = await readJsonBody(res);
+  const json: Record<string, unknown> = isRecord(body) ? body : {};
   /* `detail` 优先（它是这条路由的**业务字段**：探测结论的说明），
    * 错误信封交唯一读法（规范 16 §16.2.4.35）。 */
   const detail =
     typeof json.detail === "string"
       ? json.detail
-      : (readApiError(json) ?? `请求失败 (${res.status})`);
+      : (readApiError(body) ?? `请求失败 (${res.status})`);
   return {
     ok: json.ok === true,
     detail,

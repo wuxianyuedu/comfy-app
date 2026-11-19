@@ -1,24 +1,22 @@
 /**
- * `pnpm gates:which` —— 按改动面回答「该跑哪几条门禁 / 该跑哪份用例 / 该读哪一节规范」（ISSUE #2765）。
- *
- * 它治的是「不知道该跑哪条 ⇒ 推上去让平台告诉我红了哪格」，所以判据全钉在**读数从哪来**：
- *   ① 门禁分档只认钩子文本（`readHookSteps` / `localTierLabels`）与 `ci-incremental-gates`
- *      的收窄登记 —— 本入口不另立第二套筛法；
- *   ② 用例那一半直接起 `affected-tests.mjs` 的判决链；取不到读数时**原样带回落差**，
- *      不折成空清单（空清单在下游是「什么都不用跑」）；
- *   ③ 空改动面 / 取不到基线 / 不认识的旗标 ⇒ 退 2（= 没有结论），不是「没有问题」；
- *   ④ `AGENTS.md` 那张人读表与 `scripts/doc-reading-map.mjs` 双向对账 —— 改一边忘另一边
- *      当场红（同 `INCREMENTAL_GATES` ⇄ `.cnb.yml` 的守法）。
+ * `pnpm gates:which` —— 按改动面回答「该跑哪几条门禁 / 哪份用例 / 该读哪一节规范」（ISSUE #2765）。它治的是「不知道该跑哪条 ⇒ 推上去让平台告诉我红了哪格」，故判据全钉在**读数从哪来**：分档只认钩子文本
+ * （`readHookSteps` / `localTierLabels`）与 `ci-incremental-gates` 的收窄登记；用例那半直起 `affected-tests.mjs` 的判决链，取不到读数时**原样带回落差**，不折成空清单（空清单在下游是「什么都不用跑」）。
+ * 空改动面 / 取不到基线 / 不认识的旗标 ⇒ 退 2（= 没有结论），不是「没有问题」；`AGENTS.md` 那张人读表与 `scripts/docs/doc-reading-map.mjs` 双向对账，改一边忘另一边当场红。
  */
 import { execFileSync, type spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-import { DOC_READING_MAP, matchDocReading } from "../scripts/doc-reading-map.mjs";
-import { affectedTests, classifyHeavySteps, parseArgs, scriptOf } from "../scripts/gates-which.mjs";
+import { DOC_READING_MAP, matchDocReading } from "../scripts/docs/doc-reading-map.mjs";
+import {
+  affectedTests,
+  classifyHeavySteps,
+  parseArgs,
+  scriptOf,
+} from "../scripts/gates/gates-which.mjs";
 
-const SCRIPT = join(process.cwd(), "scripts", "gates-which.mjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates", "gates-which.mjs");
 const AGENTS = join(process.cwd(), "AGENTS.md");
 
 /** 一次 CLI 的读数形状。 */
@@ -32,15 +30,14 @@ function run(args: Array<string> = []) {
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const e: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
     return {
       code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      output: `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`,
     };
   }
 }
@@ -74,11 +71,11 @@ describe("gates:which —— 参数解析", () => {
 
 describe("gates:which —— 认得出钩子步骤跑的是哪份脚本", () => {
   test("认 `scripts/*.mjs` / `scripts/*.cjs`（含 Windows 反斜杠）", () => {
-    expect(scriptOf(["node", "scripts/affected-tests.mjs", "--json"])).toBe(
-      "scripts/affected-tests.mjs",
+    expect(scriptOf(["node", "scripts/affected-tests/affected-tests.mjs", "--json"])).toBe(
+      "scripts/affected-tests/affected-tests.mjs",
     );
-    expect(scriptOf(["node", String.raw`G:\repo\scripts\check-format.cjs`, "--staged"])).toBe(
-      "scripts/check-format.cjs",
+    expect(scriptOf(["node", String.raw`G:\repo\scripts\gates\check-format.cjs`, "--staged"])).toBe(
+      "scripts/gates/check-format.cjs",
     );
   });
 
@@ -90,37 +87,42 @@ describe("gates:which —— 认得出钩子步骤跑的是哪份脚本", () => 
 
 describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登记）", () => {
   const steps = [
-    { label: "分支守卫", argv: ["node", "scripts/check-branch-guard.cjs"] },
+    { label: "分支守卫", argv: ["node", "scripts/gates/check-branch-guard.cjs"] },
     {
-      label: "CHANGELOG 碎片",
-      argv: ["node", "scripts/check-changelog-fragments.cjs", "--staged"],
+      /* 收窄面由下面 `deps.faceFor` 的**夹具表**给：#3586 后真仓 INCREMENTAL_GATES
+       * 暂空，但 hit / skippable / noFace 三堆的分堆机制仍要各自有正/负控 ——
+       * 把机制用例绑在真表内容上，表一空这段判据就没人测了。 */
+      label: "样本收窄判据",
+      argv: ["node", "scripts/docs/render-doc-placeholders.cjs"],
     },
     { label: "类型检查", argv: ["pnpm", "exec", "tsc", "--noEmit"] },
   ];
   const deps = {
     readSteps: () => steps,
     tierLabels: () => new Set(["分支守卫"]),
+    faceFor: (script: string) =>
+      script === "scripts/docs/render-doc-placeholders.cjs" ? { globs: ["docs/**"] } : null,
   };
 
   test("碰到收窄面 ⇒ hit；没碰到 ⇒ skippable；没有登记 ⇒ noFace", () => {
-    const cls = classifyHeavySteps(["changelog.d/1-x.md"], deps);
+    const cls = classifyHeavySteps(["docs/README.md"], deps);
     expect(cls.localTier).toBe(1);
     expect(cls.totalSteps).toBe(3);
     expect(cls.heavy).toBe(2);
-    expect(cls.hit.map((x) => x.label)).toEqual(["CHANGELOG 碎片"]);
+    expect(cls.hit.map((x) => x.label)).toEqual(["样本收窄判据"]);
     expect(cls.skippable).toEqual([]);
     expect(cls.noFace.map((x) => x.label)).toEqual(["类型检查"]);
 
     const skipped = classifyHeavySteps(["src/lib/x.ts"], deps);
     expect(skipped.hit).toEqual([]);
-    expect(skipped.skippable.map((x) => x.label)).toEqual(["CHANGELOG 碎片"]);
+    expect(skipped.skippable.map((x) => x.label)).toEqual(["样本收窄判据"]);
   });
 
   test("空改动面 ⇒ 当成「不知道」照跑（不读成「没改」）", () => {
     /* 这条与 `faceTouched()` 的语义同源：把空清单读成「没改」会让整批收窄判据静默消失，
      * 而本入口的输出里「可跳过」是要被读成「不用跑」的。 */
     const cls = classifyHeavySteps([], deps);
-    expect(cls.hit.map((x) => x.label)).toEqual(["CHANGELOG 碎片"]);
+    expect(cls.hit.map((x) => x.label)).toEqual(["样本收窄判据"]);
     expect(cls.skippable).toEqual([]);
   });
 
@@ -137,17 +139,27 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
 /** 一次子进程读数的形状（只列 `affectedTests` 真正读的那几个字段）。 */
 type FakeResult = { status: number | null; stderr?: string; stdout?: string };
 
+/** 假 spawnSync 的收窄口径与 `ci-cp936-exit.test.ts` 同款：运行期确认可调用后再收窄
+ *  （B5 清账：不走 `as` 断言）。 */
+function isSpawnSyncLike(value: unknown): value is typeof spawnSync {
+  return typeof value === "function";
+}
+
+function spawnSyncPort(fake: unknown): typeof spawnSync {
+  if (!isSpawnSyncLike(fake)) {
+    throw new TypeError("假的 spawnSync 必须是可调用函数");
+  }
+  return fake;
+}
+
 /**
- * 造一个假的 `spawnSync`。
- *
- * `affectedTests` 的 JSDoc 写的是 `typeof spawnSync`，而它的重载与 `stdio` 联合类型
- * 套不进一个手写假件 —— 这里显式过一道 cast，并保证假件的参数形状与真实调用同形。
+ * 造一个假的 `spawnSync`。`affectedTests` 的 JSDoc 是 `typeof spawnSync`，其重载与 `stdio` 联合类型
+ * 套不进手写假件 —— 这里经上面的收窄口过一道，并保证假件的参数形状与真实调用同形。
  */
 function fakeSpawn(impl: (args: Array<string>, opts: { input?: string }) => FakeResult) {
   const fn = (_cmd: string, args: Array<string>, opts: { input?: string }): FakeResult =>
     impl(args, opts);
-  /* SAFETY: 只用 affectedTests 实际读的字段（status/stdout/stderr），与 spawnSync 的重载等价于此形状 */
-  return fn as unknown as typeof spawnSync;
+  return spawnSyncPort(fn);
 }
 
 describe("gates:which —— 用例那一半不重算 import 图", () => {
@@ -165,7 +177,11 @@ describe("gates:which —— 用例那一半不重算 import 图", () => {
         };
       }),
     });
-    expect(seenArgs).toEqual(["scripts/affected-tests.mjs", "--changed-stdin", "--json"]);
+    expect(seenArgs).toEqual([
+      "scripts/affected-tests/affected-tests.mjs",
+      "--changed-stdin",
+      "--json",
+    ]);
     expect(seenInput).toBe("a.ts\nb/c.ts");
     expect(got).toMatchObject({ ok: true, result: { mode: "narrow" } });
   });
@@ -175,10 +191,9 @@ describe("gates:which —— 用例那一半不重算 import 图", () => {
       spawn: fakeSpawn(() => ({ status: 2, stdout: "", stderr: "基线取不到\n" })),
     });
     expect(got.ok).toBe(false);
-    if (!got.ok) {
-      expect(got.stderr).toContain("基线取不到");
-      expect(got.reason).toContain("2");
-    }
+    if (got.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+    expect(got.stderr).toContain("基线取不到");
+    expect(got.reason).toContain("2");
   });
 
   test("stdout 不是 JSON ⇒ 没取到读数（不是「零条用例」）", () => {
@@ -214,11 +229,8 @@ describe("gates:which —— 规范匹配（机器可读副本）", () => {
 });
 
 /**
- * 解析 `AGENTS.md` 那张「强制先读规范文档的改动范围」表。
- *
- * 只从表头那一行开始收，遇到第一行非表格行即停 —— 文件里别的表格不进这一份读数。
- *
- * @returns {Array<{scope: string, spec: string}>}
+ * 解析 `AGENTS.md` 那张「强制先读规范文档的改动范围」表：从表头那一行开始收，遇到第一行非表格行即停
+ * —— 文件里别的表格不进这一份读数。@returns `Array<{scope: string, spec: string}>`
  */
 function agentsTableRows() {
   const lines = readFileSync(AGENTS, "utf8").split(/\r?\n/);
@@ -271,13 +283,18 @@ describe("gates:which —— AGENTS.md 的表与机器可读副本双向对账",
   });
 
   test("路径行必须有路径、动作行必须有「什么时候按动作判」的说明", () => {
-    for (const entry of DOC_READING_MAP) {
-      if (entry.paths.length === 0) {
-        expect(typeof entry.when).toBe("string");
-        expect((entry.when ?? "").length).toBeGreaterThan(0);
-      } else {
-        expect(entry.paths.length).toBeGreaterThan(0);
-      }
+    /* 两类行拆双循环：filters 空了下面两支就静默不跑（正是 no-conditional-expect
+     * 要防的形），所以先断言两类行都真的在场。 */
+    const actionRows = DOC_READING_MAP.filter((entry) => entry.paths.length === 0);
+    const pathRows = DOC_READING_MAP.filter((entry) => entry.paths.length > 0);
+    expect(actionRows.length).toBeGreaterThan(0);
+    expect(pathRows.length).toBeGreaterThan(0);
+    for (const entry of actionRows) {
+      expect(typeof entry.when).toBe("string");
+      expect((entry.when ?? "").length).toBeGreaterThan(0);
+    }
+    for (const entry of pathRows) {
+      expect(entry.paths.length).toBeGreaterThan(0);
     }
   });
 });
@@ -320,10 +337,7 @@ describe("gates:which —— 入口本身", () => {
      * 三态口径 —— 取不到就明说「没有结论」，不许静默退 0 冒充「查过了」。 */
     const { code, output } = run([]);
     expect([0, 2]).toContain(code);
-    if (code === 2) {
-      expect(output).toContain("没有结论");
-    } else {
-      expect(output).toContain("改动面");
-    }
+    /* 两态话术收进期望值：断言本体无条件执行（no-conditional-expect）。 */
+    expect(code === 2 ? output.includes("没有结论") : output.includes("改动面")).toBe(true);
   }, 120_000);
 });

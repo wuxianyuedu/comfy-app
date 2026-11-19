@@ -15,13 +15,13 @@
 // `pnpm start` 已因同类问题修过（scripts/start.mjs），这里补齐 dev 一侧。
 import { spawnSync } from "node:child_process";
 import { APP_PORT_ENV_KEY, resolveAppPortWithSource, resolveRepoRoot } from "./app-port.mjs";
-import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
-import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db-schema-state.mjs";
-import { exitIfEnvNotReady } from "./env-preflight.mjs";
+import { applyPendingRestoreAtBoot } from "./db/db-backup-core.mjs";
+import { spawnSchemaSync, SKIP_SCHEMA_SYNC_ENV } from "./db/db-schema-state.mjs";
+import { exitIfEnvNotReady } from "./devtools/env-preflight.mjs";
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { maybeSpawnExecutorHost } from "./launcher-core/executor-host-spawn.mjs";
 import { runStamp } from "./launcher-core/log.mjs";
-import { pnpmInvocation } from "./launcher-core/shell.mjs";
+import { resolveNextBin } from "./launcher-core/next-bin.mjs";
 
 const root = resolveRepoRoot();
 
@@ -81,7 +81,13 @@ process.stdout.write(
 // 这正是壳 3809 / dev server 3100 那类「永远对不上」的来源。不阻断启动（命令行是
 // 权威入口），但必须说出来，否则用户只能看到一个连不上的端口。
 const envPort = Number.parseInt(process.env[APP_PORT_ENV_KEY] ?? "", 10);
-if (explicit && Number.isInteger(envPort) && envPort >= 1 && envPort <= 65_535 && envPort !== port) {
+if (
+  explicit &&
+  Number.isInteger(envPort) &&
+  envPort >= 1 &&
+  envPort <= 65_535 &&
+  envPort !== port
+) {
   process.stderr.write(
     `[dev.mjs] ⚠ 环境变量 ${APP_PORT_ENV_KEY}=${envPort} 与本次实际监听端口 ${port} 不一致：\n` +
       "[dev.mjs]   命令行的 -p/--port 优先，本次以它为准；但请确认调用方算端口的口径\n" +
@@ -142,40 +148,32 @@ maybeSpawnExecutorHost({
   logLine: (message) => process.stdout.write(`[dev.mjs] ${message}\n`),
 });
 
-const nextArgs = ["exec", "next", "dev", "--turbo", "-p", String(port)];
+// next bin 直启（ISSUE #4155）：server 链不经 pnpm —— `pnpm exec` 那一跳是 Windows
+// shim 冷启（实测 1~1.5s），且会把「shim 形态坏了」（ISSUE #576 家族）这个失败类带进
+// 服务链。node 是本进程自己的运行时（`process.execPath`，整条链上最可靠的形态），
+// bin 路径经 next-bin.mjs 一处解析，不写死 pnpm-layout 里的落点。
+// pnpm 形态判据（shell.mjs）继续管**真正用 pnpm 的地方**（install / db-push / 探测）。
+const nextBin = resolveNextBin(root);
+if (!nextBin) {
+  process.stderr.write(
+    "[dev.mjs] ✗ 解析不到 next 的可执行入口（依赖没装好、被清空或损坏）。\n" +
+      "[dev.mjs]   先跑 `pnpm install` 补齐依赖再启动；解析判据见 scripts/launcher-core/next-bin.mjs。\n",
+  );
+  process.exit(1);
+}
+const nextArgs = ["dev", "--turbo", "-p", String(port)];
 // 显式指定监听地址时透传：Windows 上不固定 127.0.0.1 会被解析到 ::1（IPv6），
 // 导致按 127.0.0.1 做的健康检查失败（启动器传 -H 127.0.0.1 即为此）。
 if (hostname) {
   nextArgs.push("-H", hostname);
 }
 
-// pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）：Windows 上
-// 写死 `pnpm.cmd` 会选中 Node 起不来的批处理，spawnSync 于是「命令没起来」，
-// `status` 为 null —— 旧写法 `process.exit(result.status ?? 0)` 把它读成
-// 成功退出 0，dev server 静默消失，用户只看到「已启动」之后就没了（ISSUE #576）。
-const invocation = pnpmInvocation(nextArgs);
-if (!invocation) {
-  process.stderr.write(
-    "[dev.mjs] ✗ PATH 上找不到可用的 pnpm，无法启动 Next.js dev server。\n" +
-      "[dev.mjs]   先跑 `pnpm check:toolchain` 看选中的命令与探测结果；\n" +
-      "[dev.mjs]   若 PATH 上并存多个 pnpm 形态，让可执行的那个排在前面。\n",
-  );
-  process.exit(1);
-}
-if (invocation.viaHost) {
-  // 「探测过了、起服务又换一种方式」是同一类缺陷的两半：这里明确写出实际命令形态，
-  // 排查时不必再猜「到底跑的是哪个 pnpm」。
-  process.stdout.write(
-    `[dev.mjs] pnpm 形态：${invocation.candidate} 经宿主 ${invocation.command}\n`,
-  );
-}
-
 // 起服务之前先回显命令行：dev server 一起就接管终端输出，之后看不出跑的是哪条
 // （`>>> ` 与门禁脚本同一口径，一次运行的日志里 grep 得到全部命令行）。
-echoCommandLine(invocation.command, invocation.args);
+echoCommandLine(process.execPath, [nextBin, ...nextArgs]);
 
 // Next.js dev 读取 PORT 环境变量；显式透传给 next dev 子进程
-const result = spawnSync(invocation.command, invocation.args, {
+const result = spawnSync(process.execPath, [nextBin, ...nextArgs], {
   stdio: "inherit",
   env: { ...process.env, PORT: String(port) },
 });
@@ -186,13 +184,13 @@ if (result.error) {
    * （`code` 就是那一句「为什么起不来」的全部内容）。 */
   const spawnError = /** @type {NodeJS.ErrnoException} */ (result.error);
   process.stderr.write(
-    `[dev.mjs] ✗ 起 pnpm 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}\n` +
-      `[dev.mjs]   实际命令：${formatCommandLine(invocation.command, invocation.args)}\n`,
+    `[dev.mjs] ✗ 起 next 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}\n` +
+      `[dev.mjs]   实际命令：${formatCommandLine(process.execPath, [nextBin, ...nextArgs])}\n`,
   );
   process.exit(1);
 }
 if (result.status === null) {
-  process.stderr.write("[dev.mjs] ✗ pnpm 进程未正常结束（可能被信号终止），无退出码可报。\n");
+  process.stderr.write("[dev.mjs] ✗ next 进程未正常结束（可能被信号终止），无退出码可报。\n");
   process.exit(1);
 }
 process.exit(result.status);

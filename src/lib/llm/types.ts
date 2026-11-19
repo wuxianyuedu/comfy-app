@@ -2,6 +2,9 @@
 // 本地（Ollama / LM Studio / vLLM）与远程（OpenAI 兼容）两类提供商，
 // 都讲 OpenAI 的 /v1/chat/completions 协议。
 
+import { isRecord } from "~/lib/is-record";
+import type { LlmApiFormat, ModelOutputType } from "./provider-types";
+
 export type LLMProviderType = "local" | "remote";
 
 /** 已知的任务类型 key —— 用于按场景选择不同温度。
@@ -49,16 +52,48 @@ export const TASK_TYPES = {
 
 export type TaskType = keyof typeof TASK_TYPES;
 
-/** 远端模型的用途：对话（语言模型）/ 图片 / 视频。当前仅对话参与运行时，
- *  图片 / 视频模型先落配置，供后续远程生图 / 生视频接入。 */
+/** 远端模型的用途：文本（语言模型）/ 图像 / 视频。当前仅文本参与运行时，
+ *  图像 / 视频模型先落配置，供后续远程生图 / 生视频与「模型适配」页接入。
+ *  存储值（chat / image / video）保持历史不变 —— 改的只是界面词（#3577：
+ *  「对话/图片」改成行业通行的「文本/图像」，与模态口吻一致），换存储值等于
+ *  无谓的数据迁移。 */
 /* SAFETY: 类型断言已复核 */
 export const REMOTE_MODEL_KINDS = ["chat", "image", "video"] as const;
 export type RemoteModelKind = (typeof REMOTE_MODEL_KINDS)[number];
 export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
-  chat: "对话",
-  image: "图片",
+  chat: "文本",
+  image: "图像",
   video: "视频",
 };
+
+/** 按模型名推断用途（#3577 目录导入用）：名字带 video → video、带 image/img
+ *  → image，其余 → chat。只是「落库起点」，用户可在模型行上改用途。
+ *  通用命名规律，不针对特定厂商（gpt-image-* / *-video-* / veo-* 同样命中）。
+ *  住在本文件而不是 provider-types：它返回的是 kind 词表本身，放对面要回指
+ *  本文件（模块循环依赖硬闸 §12.7 断过一次的那类环）。 */
+export function inferRemoteKindFromName(modelId: string): RemoteModelKind {
+  const id = modelId.trim().toLowerCase();
+  if (/(?:^|[^a-z])video(?:[^a-z]|$)/.test(id)) {
+    return "video";
+  }
+  if (/(?:^|[^a-z])(?:image|img)(?:[^a-z]|$)/.test(id)) {
+    return "image";
+  }
+  return "chat";
+}
+
+/** 按模型名推断输出类型（#3577）：与 `inferRemoteKindFromName` 同一套命名规律，
+ *  但返回的是**输出**词表（video 名字的模型输出视频、image 名字的输出图像）。 */
+export function inferOutputTypesFromName(modelId: string): Array<ModelOutputType> {
+  const kind = inferRemoteKindFromName(modelId);
+  if (kind === "video") {
+    return ["video"];
+  }
+  if (kind === "image") {
+    return ["image"];
+  }
+  return ["text"];
+}
 
 /** 远端候选模型条目。
  *
@@ -74,11 +109,36 @@ export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
  * `hasApiKey` 是**只读视图字段**：服务端下发时逐条标「这条存过密钥」（与顶层同口径），
  * 供设置页显示「已配置」而不把明文送进浏览器；它不参与写入判定。 */
 export type RemoteModelEntry = {
+  /** 所属供应商的接口格式（#3501；服务端按它组装请求）。 */
+  apiFormat?: LlmApiFormat | null;
   apiKey?: string | null;
   baseUrl?: string | null;
+  /** 模型能力（#3501）：structured-output / native-web-search / system-messages。 */
+  capabilities?: Array<string> | null;
+  /** 上下文窗口（token，#3501）。 */
+  contextWindow?: number | null;
+  /** 是否启用（#3501；停用的模型不下发给工坊下拉）。 */
+  enabled?: boolean;
+  /** 额外请求体字段（#3626）：raw JSON 对象文本（如 `{"extra_body":{"response_format":{"type":"json_object"}}}`），
+   *  透传进请求 body 且覆盖运行时默认组装。空 = 未配置、不发送。 */
+  extraBody?: string | null;
   hasApiKey?: boolean;
+  /** 输入类型（#3501）：text / image / video / pdf。 */
+  inputTypes?: Array<string> | null;
   kind?: RemoteModelKind | null;
+  /** 最大输出 token（#3501）。 */
+  maxOutputTokens?: number | null;
   name: string;
+  /** 输出类型（#3577）：text / image / video。空 = 未标注（按 kind 推断）。 */
+  outputTypes?: Array<string> | null;
+  /** 所属供应商 id（#3501）；空 = 历史遗留条目。 */
+  providerId?: string | null;
+  /** 推理等级词表（#3501）。 */
+  reasoningLevels?: Array<string> | null;
+  /** 推理参数映射（#3501）：{ param, values }。 */
+  reasoningParamMapping?: unknown;
+  /** 「智能配置」开关（#3501）。 */
+  smartConfig?: boolean;
 };
 
 /** `apiKey` 的三态归一（唯一一份口径，`normalizeExtraModels` 与 `splitExtraModels`
@@ -100,6 +160,12 @@ export function normalizeEntryApiKey(rec: Record<string, unknown>): string | nul
 /** extraModels 的原始存储 / 传输形状：旧数据是纯名字字符串，新数据是条目对象。 */
 export type RawExtraModel = string | RemoteModelEntry;
 
+/** 运行期白名单判定：词表里有的字符串才收窄成 `RemoteModelKind`。 */
+function isRemoteModelKind(value: unknown): value is RemoteModelKind {
+  const kinds: ReadonlyArray<string> = REMOTE_MODEL_KINDS;
+  return typeof value === "string" && kinds.includes(value);
+}
+
 /**
  * 列表里**一枚对象**的容错归一（`normalizeExtraModels` 与 `splitExtraModels` 共用）。
  *
@@ -117,11 +183,10 @@ export type RawExtraModel = string | RemoteModelEntry;
  * 返回 `null` = 这一枚不是条目（不是对象、没有名字、名字全空白）。
  */
 function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
-  if (typeof item !== "object" || item === null) {
+  if (!isRecord(item)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const rec = item as Record<string, unknown>;
+  const rec = item;
   const name = typeof rec.name === "string" ? rec.name.trim() : "";
   if (name === "") {
     return null;
@@ -133,12 +198,7 @@ function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
     baseUrl: typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== "" ? rec.baseUrl : null,
     // 三态：`undefined` 时**不挂这个键**（「不提供意见」不能被写成「清空」）
     ...(apiKey === undefined ? {} : { apiKey }),
-    /* SAFETY: 类型断言已复核 */
-    kind:
-      /* SAFETY: 类型断言已复核 */
-      typeof kind === "string" && (REMOTE_MODEL_KINDS as ReadonlyArray<string>).includes(kind)
-        ? (kind as RemoteModelKind)
-        : null,
+    kind: isRemoteModelKind(kind) ? kind : null,
   };
 }
 
@@ -211,8 +271,9 @@ export function splitExtraModels(raw: unknown): ExtraModelSplit {
  * 判断目标服务是否为本地回环（localhost / 127.x / [::1]）—— 本地 Ollama 等
  * 回环服务；真远端模型不会用回环地址访问。与服务端 describeFetchFailure 的判定一致。
  */
-export function isLoopbackBaseUrl(url: string): boolean {
-  return /^(https?:\/\/)?(localhost|127\.|\[::1\])/i.test(String(url ?? "").trim());
+export function isLoopbackBaseUrl(url: unknown): boolean {
+  const value = typeof url === "string" ? url : "";
+  return /^(?:https?:\/\/)?(?:localhost|127\.|\[::1\])/i.test(value.trim());
 }
 
 /** 判定一个「远端条目」是否为误存的本地 ollama。
@@ -281,16 +342,14 @@ export function effectiveProviderType(
 export function resolveTaskTemperature(opts: {
   explicitTemperature?: number | null;
   fallback: number;
-  overrides?: Record<TaskType, number> | null;
+  overrides?: Partial<Record<TaskType, number>> | null;
   taskType?: TaskType;
 }): number {
   const { taskType, explicitTemperature, overrides, fallback } = opts;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (taskType && overrides?.[taskType] != null) {
+  if (taskType && overrides?.[taskType] !== null && overrides?.[taskType] !== undefined) {
     return overrides[taskType];
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (explicitTemperature != null) {
+  if (explicitTemperature !== null && explicitTemperature !== undefined) {
     return explicitTemperature;
   }
   if (taskType) {
@@ -300,11 +359,16 @@ export function resolveTaskTemperature(opts: {
 }
 
 export type LLMConfig = {
+  /** 上游接口格式（#3501）：由命中的供应商决定，缺省按 OpenAI 兼容处理。 */
+  apiFormat?: LlmApiFormat;
   /** remote 提供方的密钥；与 RemoteModelEntry.apiKey 一样只在服务端参与请求 */
   apiKey?: string | null;
   /** OpenAI-compatible base URL: 本机 Ollama 默认值见 `~/lib/endpoints`
    *  （`OLLAMA_DEFAULT_BASE_URL`），也可以指向任意远端 `https://…/v1`。 */
   baseUrl: string;
+  /** 额外请求体字段（#3626）：raw JSON 对象文本（命中远端模型条目时从条目带入，
+   *  运行期 `~/lib/llm/extra-body` 解析）；透传进请求 body 且覆盖运行时默认组装。 */
+  extraBody?: string | null;
   /** 候选模型（设置页可配置多个）：本地 Ollama 为纯名字；远端条目可带独立 baseUrl / apiKey */
   extraModels?: Array<RemoteModelEntry> | null;
   maxTokens: number;

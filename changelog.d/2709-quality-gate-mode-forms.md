@@ -4,7 +4,7 @@
   此前 `parseArgs` 只匹配 `argv[i] === "--mode"`，而循环对**不认识的参数一个字都不做** ——
   于是写成 `--mode=lint`（等号形式，命令行里最自然的写法之一）时，`mode` 保持初值 `"all"`，
   表现是「以为在重跑一档，实际把整套默认档跑完」。**当场读数**：立案那一跑
-  `node scripts/quality-gate.mjs --mode=nope` 跑了 10 分钟被我停掉，输出 1209 行
+  `node scripts/gates/quality-gate.mjs --mode=nope` 跑了 10 分钟被我停掉，输出 1209 行
   （里面含 `>>> …pnpm.mjs exec vitest run --coverage`），退出码一个都没拿到。
   贵的那一格不是「多跑了几秒」，而是**「没提要求」在这份入口里意味着最重的一档** ——
   拼错被读成「没提要求」，就把一次轻量的重跑换成一次全量。

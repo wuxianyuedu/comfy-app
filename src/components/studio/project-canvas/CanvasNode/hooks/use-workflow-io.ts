@@ -1,11 +1,9 @@
 "use client";
 
-/* CanvasNode 的workflow 节点的 IO 生命周期。
- *  负责共享的 wfList / modelTagLib 拉取（带模块级在途去重）、
- *  所选工作流的动态 IO 表 + 模式加载、
- *  ioKey 的渲染期重置、默认值播种 effect 与
- *  筛选失效 effect。节点数据对象与 `patch` 由父级
- *  显式传入。 */
+/* CanvasNode workflow 节点的 IO 生命周期。
+ * 负责共享 wfList / modelTagLib 拉取（模块级在途去重）、所选工作流的动态 IO 表与模式加载、
+ * ioKey 渲染期重置、默认值播种 effect 与筛选失效 effect。节点数据与 `patch` 由父级显式传入。
+ */
 import { useEffect, useRef, useState } from "react";
 import { reconcileInputValues, type WorkflowIOMap } from "~/components/studio/workflow-io";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
@@ -86,7 +84,6 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           vanillaApi.workflowModel.list.query(),
         ]);
         if (wfRes.status === "fulfilled") {
-          // oxlint-disable-next-line no-unnecessary-condition -- workflows 来自 tRPC workflow.list（外部数据），旧服务端可能缺该字段，?? [] 是运行时守卫
           data.wfList = wfRes.value.workflows ?? [];
         }
         if (
@@ -154,12 +151,10 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
         return;
       }
       setWfIOLoading(true);
-      /* `detailFull` 而非 `detail`：运行期表单与画布节点同样要的是**富化后**的
-       *  workflowIO（type / defaultValue / label / nodeTitle / classType 都由
-       *  服务端按 raw_inputs 回查补齐）。`detail` 直读 DB 原始列 —— 那里面只有
-       *  勾选那一刻写入的四个身份字段，type 缺失会让控件退化成单行文本框，
-       *  显示名也停留在机器名（ISSUE #349：编辑器里叫「尾帧图」，运行期还是
-       *  `image`）。两条链路必须吃同一份富化结果，否则又是「改了看着没生效」。 */
+      /* `detailFull` 而非 `detail`：运行期表单与画布节点都要**富化后**的 workflowIO
+       * （type / defaultValue / label / nodeTitle / classType 服务端按 raw_inputs 回查补齐）。
+       * `detail` 直读 DB 原始列，type 缺失会让控件退化成单行文本框、显示名停在机器名
+       * （ISSUE #349）。两条链路必须吃同一份富化结果，否则「改了看着没生效」。 */
       void vanillaApi.workflow.detailFull
         .query({ id: d.workflowId })
         .then((tpl) => {
@@ -167,23 +162,17 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           if (!alive || !tplReady) {
             return;
           }
-          // oxlint-disable-next-line no-unnecessary-condition -- workflowIO 来自 tRPC workflow.detailFull（外部数据），旧服务端可能缺该字段，?? null 是运行时守卫
           setWfIO(tpl.workflowIO ?? null);
           /* SAFETY: 类型断言已复核 */
-          // oxlint-disable-next-line no-unnecessary-condition -- paramMap 来自 tRPC workflow.detailFull（外部数据），强转只用于类型收口，?? null 是运行时守卫
           const paramMap = (tpl.paramMap as Record<string, unknown>) ?? null;
           setWfParamMap(paramMap);
           /* 一并写进节点数据：运行期（use-generate）不能依赖 hook 的异步
            *  状态，映射必须随节点一起持久化，否则刷新后运行会丢掉手工线。 */
-          // oxlint-disable-next-line no-unnecessary-condition -- paramMap 经上面的强转收窄为非空，运行时仍可能缺省；?? undefined 与 patch 的可空口径一致
           patch({ paramMap: paramMap ?? undefined });
-          /* 模式一致性：库卡片对 `taskType` 有 fallback（仅写
-           *  taskType 没声明 modes[] 的旧工作流也能展示单模式 chip），画布
-           *  也走完全相同的 fallback 避免「库显示文生图 / 画布显示未选」
-           *  的不一致。优先级：
-           *   1) DB 的 modes[] + defaultMode（用户通过 MultiModeSelect 声明的）
-           *   2) taskType 单模式兜底（向后兼容 之前的旧工作流）
-           *   3) 都为空才走「未选 + 该工作流没有声明可用模式」 */
+          /* 模式一致性：库卡片对 `taskType` 有 fallback，画布走同一套，避免
+           * 「库显示文生图 / 画布显示未选」。优先级：
+           *   1) DB 的 modes[] + defaultMode；2) taskType 单模式兜底（兼容旧工作流）；
+           *   3) 都为空才「未选 + 未声明可用模式」。 */
           const dbModes = parseModesJson(tpl.availableModes);
           const dbDefault = typeof tpl.defaultMode === "string" ? tpl.defaultMode : null;
           const inferredMode =
@@ -213,7 +202,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     /* patch 是把映射写回节点的唯一通道；它由 CanvasNode 的 useCallback(id,
      * setNodes) 定义，本 hook 里只需在 workflow 变化时用一次，故显式忽略其
      * 依赖（与下方 seededFor / 筛选 effect 同口径）。 */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [d.kind, d.workflowId]);
 
   /* IO 加载完成后用工作流的默认值给动态表单播种一次，好让
@@ -237,7 +226,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
      * 本 hook 每次渲染拿到的都是同一个引用；`seededFor` 也只在
      * 「workflowId 换了」那一刻放行，与上面那段同口径（规范 §13.4 的
      * 「规则静态盲区」——按 id 触发的意图，静态推不出来）。 */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [wfIO, d.kind, d.workflowId]);
 
   /* Issue 1: 当「模型标签 / 来源」筛选变化导致当前已选
@@ -298,7 +287,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     /* `patch` / `d` / `setTimeout` 之外还读了 `seededFor`（ref，稳定引用）——
      * 三个筛选条件的变化才是本 effect 的触发点；`d` 是渲染期新对象，
      * 挂进依赖会让每次节点数据变动都重跑一遍 `setTimeout(0)` 的重置。 */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [modelFilter, sourceFilter, wfList, d.kind, d.workflowId]);
 
   return {

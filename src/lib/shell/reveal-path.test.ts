@@ -19,7 +19,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Cb = (...args: Array<unknown>) => void;
 
-const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
+/** spawn 的实参形状：生产代码每次都传第三项选项。 */
+type SpawnOptions = { stdio?: string; windowsHide?: boolean };
+type SpawnCall = (cmd: string, args: Array<string>, options: SpawnOptions) => unknown;
+
+const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn<SpawnCall>() }));
+
+/** 取某次 spawn 调用的实参；没调用过时直接让用例失败（与断言失败同义）。 */
+function spawnCallAt(index = 0): [string, Array<string>, SpawnOptions] {
+  const call = spawnMock.mock.calls[index];
+  if (call === undefined) {
+    throw new Error(`spawn 未被调用（index=${index}）`);
+  }
+  return call;
+}
 
 vi.mock("child_process", () => ({ spawn: spawnMock }));
 
@@ -123,32 +136,28 @@ describe("命令与参数形态", () => {
     const result = await revealPathInFileManager(target, probeFor(target));
     expect(result.ok).toBe(true);
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    const [cmd, args] = spawnMock.mock.calls[0] as [string, Array<string>];
-    if (process.platform === "win32") {
-      expect(cmd).toMatch(/cmd(\.exe)?$/i);
-      /* `/select,"<路径>"` 必须是**一个**参数：拆成 `/select,` + 路径两个时，
-       * explorer 会把含空格的路径截断（打开了但没选中）。 */
-      expect(args.at(-1)).toBe(`/select,"${target}"`);
-    } else if (process.platform === "darwin") {
-      /* macOS：`open -R` 把**目标本身**交给 Finder（文件则选中它）。 */
-      expect(args).toEqual(["-R", target]);
-    } else {
-      /* Linux：没有统一的「选中」协议，退化为打开**父目录**（点一个日志文件的
-       * 意图是「到它那儿去」，用编辑器打开它不是）。 */
-      expect(args).toEqual(["/a b"]);
-    }
+    const [cmd, args] = spawnCallAt();
+    /* 三平台各有各的调用形状：win32 用 cmd /select 且 `/select,"<路径>"` 必须是
+     * **一个**参数（拆成 `/select,` + 路径两个时，explorer 会把含空格的路径截断，
+     * 打开了但没选中）；darwin 用 `open -R` 把**目标本身**交给 Finder（文件则选中它）；
+     * linux 没有统一的「选中」协议，退化为打开**父目录**（点一个日志文件的意图是
+     * 「到它那儿去」，用编辑器打开它不是）。平台分支收进期望值，断言无条件跑
+     * （no-conditional-expect）。 */
+    const isWin = process.platform === "win32";
+    const isDarwin = process.platform === "darwin";
+    expect(
+      isWin
+        ? /cmd(?:\.exe)?$/i.test(cmd) && args.at(-1) === `/select,"${target}"`
+        : isDarwin
+          ? JSON.stringify(args) === JSON.stringify(["-R", target])
+          : JSON.stringify(args) === JSON.stringify(["/a b"]),
+    ).toBe(true);
   });
 
   it("spawn 的是命令 + 参数数组，不是拼好的整串（不走 shell）", async () => {
     const target = "/var/log/app.log";
     await revealPathInFileManager(target, probeFor(target));
-    /* SAFETY: 类型断言已复核 */
-    const [, args, options] = spawnMock.mock.calls[0] as [
-      string,
-      Array<string>,
-      { stdio?: string },
-    ];
+    const [, args, options] = spawnCallAt();
     expect(Array.isArray(args)).toBe(true);
     expect(args.some((a) => a.includes(" "))).toBe(false);
     expect(options.stdio).toBe("ignore");
@@ -178,8 +187,7 @@ describe("命令与参数形态", () => {
     try {
       const result = await revealPathInFileManager(tmp, () => true);
       expect(result.ok).toBe(true);
-      /* SAFETY: 类型断言已复核 */
-      const [, args] = spawnMock.mock.calls[0] as [string, Array<string>];
+      const [, args] = spawnCallAt();
       /* 目录不加 `/select`：否则窗口停在父层、只选中该文件夹，看不到里面产物。 */
       expect(args.at(-1)).toBe(tmp);
       expect(args.at(-1)).not.toContain("/select");

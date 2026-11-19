@@ -141,7 +141,8 @@ function isInstanceIdSource(file: string): boolean {
   return /\.comfyui-desktop-\d+$/.test(path.basename(file));
 }
 
-/** 设置页要的安装形态视图（只有这三件事，多一项就是没人消费的字段）。 */
+/** 设置页要的安装形态视图（每一项都要有消费方：pathExists 供「路径无效」的
+ *  行内提示用，ISSUE #4138）。 */
 export type ComfyInstanceView = {
   /** 桌面实例且能读到实例 ID → 端口/启动参数由 Comfy Desktop 元数据决定。 */
   desktopManaged: boolean;
@@ -149,6 +150,9 @@ export type ComfyInstanceView = {
   instanceType: Exclude<ComfyInstallKind, "unknown"> | null;
   /** 配置里是否填了路径。与形态同源：它也是**设置行**的事实，不该等运行态探测。 */
   pathConfigured: boolean;
+  /** 已填路径指向的目录在磁盘上是否存在。与 instanceType=null 组合可区分
+   *  「目录不存在」与「目录在但不是 ComfyUI 安装」两种填错形态。 */
+  pathExists: boolean;
 };
 
 /**
@@ -167,12 +171,19 @@ export function describeComfyInstance(
 ): ComfyInstanceView {
   const dir = (installDir ?? "").trim();
   if (!dir) {
-    return { pathConfigured: false, instanceType: null, desktopManaged: false };
+    return {
+      pathConfigured: false,
+      instanceType: null,
+      desktopManaged: false,
+      pathExists: false,
+    };
   }
   const c = classifyComfyInstall(dir, exists);
   return {
     pathConfigured: true,
     instanceType: c.kind === "unknown" ? null : c.kind,
     desktopManaged: c.kind === "desktop" && Boolean(c.instanceIdFile),
+    // 与 classifyComfyInstall 的 resolve 口径一致：判的就是那个目录本身。
+    pathExists: exists(/*turbopackIgnore: true*/ path.resolve(dir)),
   };
 }

@@ -1,23 +1,16 @@
 "use client";
 
 /**
- * WorkflowLibrary 的业务逻辑层（规范 17 §17.2 第②层）。
- *
- * 承载：列表/标签查询与同步、三级筛选 + 搜索的选择状态、删除/下载/同步/载入
- * 四个动作的编排（复用 `useWorkflowActions`）、导入面板状态（复用
- * `useWorkflowImport`）、画布编辑器与模型管理弹层的开关。
- *
- * 视图（`WorkflowLibrary.tsx`）只消费这里返回的 controller：不碰 tRPC、
- * 不算筛选规则、不持有任何业务状态。对外 props（`onUse`）保持不变。
- *
- * 错误通道按 §17.5.4 拆两条：动作错误（`actionError`，只有用户重试才清）
- * 与加载错误（`loadError`，重新拉取成功即消失）。
+ * WorkflowLibrary 的业务逻辑层（规范 17 §17.2 第②层）：列表/标签查询与同步、三级筛选 + 搜索、删除/下载/同步/载入四个动作（复用 `useWorkflowActions`）、导入面板
+ * 状态（复用 `useWorkflowImport`）、编辑器与模型管理弹层开关。视图只消费 controller
+ * （不碰 tRPC、不算规则）。错误通道按 §17.5.4 分 `actionError`（用户重试才清）与`loadError`（重新拉取成功即消）。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { errorMessage, errorText } from "~/lib/error-message";
+import type { ModelTagSummary } from "~/lib/workflow/workflow-list-types";
 import { useTRPC } from "~/trpc/react";
 import { useItemAction } from "~/components/ui/use-item-action";
 
@@ -51,6 +44,8 @@ export type WorkflowLibraryController = {
   deleting: boolean;
   /* 弹层开关 */
   editingId: string | null;
+  /** 本地工作流一键转在线（ISSUE #4372）：解除磁盘跟踪，原文件变未载入。 */
+  handleConvertToOnline: (id: string, name: string) => Promise<void>;
   handleDeleteClick: (id: string, name: string) => void;
   handleDownload: (id: string, name: string) => Promise<void>;
   handleEdit: (id: string) => void;
@@ -61,6 +56,7 @@ export type WorkflowLibraryController = {
   handleUse: (id: string, meta?: { name: string; taskType: string }) => void;
   importState: ReturnType<typeof useWorkflowImport>;
   isBundleBusy: (id: string) => boolean;
+  isConvertBusy: (id: string) => boolean;
   isResyncBusy: (id: string) => boolean;
   /* 动作 */
   load: () => void;
@@ -80,10 +76,10 @@ export type WorkflowLibraryController = {
    * 于是空态只能说「还没有工作流」——用户看到的是「工作流全没了」。 */
   localRootsHint: string | null;
   modelFilter: string;
-  /** 模型标签（用于模型筛选页签）。 */
-  modelTags: Array<{ count: number; id: string; name: string }>;
-  /** 持久化模型标签绑定。 */
-  patchModelTags: (id: string, names: Array<string>) => Promise<void>;
+  /** 模型标签（用于模型筛选页签；含模式占用明细，ISSUE #4102）。 */
+  modelTags: Array<ModelTagSummary>;
+  /** 持久化模型标签绑定。返回 `null` = 成功，否则为失败文案（弹窗就地展示）。 */
+  patchModelTags: (id: string, names: Array<string>) => Promise<string | null>;
   /** 持久化工作流类型（modes + defaultMode，defaultMode 回写 taskType）。 */
   patchModes: (id: string, modes: Array<string>, defaultMode: string) => Promise<void>;
   /** 整体落库 paramMap（详情预览拖线改对外参数落点）。 */
@@ -145,6 +141,7 @@ export function useWorkflowLibrary(
   const updateMut = useMutation(trpc.workflow.update.mutationOptions());
   const deleteMut = useMutation(trpc.workflow.delete.mutationOptions());
   const resyncMut = useMutation(trpc.workflow.resync.mutationOptions());
+  const convertMut = useMutation(trpc.workflow.convertToOnline.mutationOptions());
 
   const [workflows, setWorkflows] = useState<Array<WorkflowRow>>([]);
   const [localPending, setLocalPending] = useState<Array<PendingRow>>([]);
@@ -196,20 +193,11 @@ export function useWorkflowLibrary(
     loadModelTagsRef.current();
   }, []);
 
-  /* ── 首次拉取的「卡住」判定 ───────────────────────────────────────────
-   * 场景（用户反馈）：断开应用（关掉桌面窗口 / 重开桌面壳）后
-   * 再打开工作流库，界面上只剩一句「未找到匹配的工作流 / 共 0 个工作流」，
-   * 看起来像工作流全没了。实际是列表查询迟迟不 resolve——react-query 的
-   * `isLoading` 为真时真实数据一行都没渲染，而空态文案恰好长得和「真的
-   * 没有工作流」一模一样，用户无从区分。
-   *
-   * 这里给首次拉取加一条**只读**的超时探针：超时只表示「还没拿到数据」，
-   * 不推断失败原因（服务在编译 / 数据库在迁移 / 进程刚重启都可能），因此
-   * 视图给的是「重试 + 打开日志面板」而不是断言某个根因。拿到数据或查询
-   * 报错（走 loadError 通道）即自动退出该状态。
-   *
-   * 计时器必须自己收：查询 resolve 之后挂着的 setTimeout 会让定时器
-   * 在组件树里空转，也拖慢测试里的假时钟推进。 */
+  /* ── 首次拉取的「卡住」判定 ──
+   * 断开应用后再打开工作流库，界面只剩「未找到匹配的工作流」，像是工作流全没了；
+   * 实际是列表查询迟迟不 resolve，而空态文案与真的没有工作流一模一样。
+   * 这里给首次拉取加一条**只读**超时探针：只表示「还没拿到数据」，不推断根因，
+   * 视图给「重试 + 打开日志面板」。拿到数据或报错即退出；计时器必须自己收。 */
   const [loadStalled, setLoadStalled] = useState(false);
   const awaitingData = listQ.isLoading || listQ.isFetching;
   useEffect(() => {
@@ -247,24 +235,18 @@ export function useWorkflowLibrary(
       return;
     }
     const snapshot = JSON.stringify({
-      // oxlint-disable-next-line no-unnecessary-condition -- listQ.data 来自 tRPC workflow.list 响应，旧服务端可能缺 workflows
       wf: listQ.data.workflows ?? [],
-      // oxlint-disable-next-line no-unnecessary-condition -- 同上：旧服务端可能缺 localPending
       pend: listQ.data.localPending ?? [],
     });
     if (snapshot === lastSyncedRef.current) {
       return;
     }
     lastSyncedRef.current = snapshot;
-    // oxlint-disable-next-line no-unnecessary-condition -- 同上：落本地 state 时保留兜底
     setWorkflows(listQ.data.workflows ?? []);
-    // oxlint-disable-next-line no-unnecessary-condition -- 同上：落本地 state 时保留兜底
     setLocalPending(listQ.data.localPending ?? []);
-    // oxlint-disable-next-line no-unnecessary-condition -- 同上：遍历前保留兜底
     for (const workflow of listQ.data.workflows ?? []) {
       if (
         workflow.diskRenamed &&
-        // oxlint-disable-next-line no-unnecessary-condition -- diskRenamedTo 来自 tRPC 响应，undefined 判定留作旧行防御
         workflow.diskRenamedTo !== undefined &&
         workflow.diskRenamedTo !== null &&
         workflow.diskRenamedTo !== ""
@@ -281,16 +263,7 @@ export function useWorkflowLibrary(
     [listQ.data],
   );
 
-  const modelTags = useMemo(
-    /* SAFETY: 类型断言已复核 */
-    () =>
-      (tagsQ.data?.tags ?? []) as Array<{
-        count: number;
-        id: string;
-        name: string;
-      }>,
-    [tagsQ.data],
-  );
+  const modelTags = useMemo(() => (tagsQ.data?.tags ?? []) as Array<ModelTagSummary>, [tagsQ.data]);
 
   const filteredWorkflows = useMemo(
     () =>
@@ -327,6 +300,7 @@ export function useWorkflowLibrary(
    * 两下读不出来）。出口的 `run` 一次给全「忙标记 + 判重入 + finally 清理」。 */
   const bundleAction = useItemAction();
   const resyncAction = useItemAction();
+  const convertAction = useItemAction();
   /* 只写不读：载入中的标志目前只由 `useWorkflowActions` 的 finally 清理，
    * 视图尚未渲染它（保持本次「只搬不改」）。保留是为了不丢掉这条状态通道。 */
   const [pendingLoading, setPendingLoading] = useState<Record<string, boolean>>({});
@@ -337,6 +311,7 @@ export function useWorkflowLibrary(
     setActionError,
     runBundle: bundleAction.run,
     runResync: resyncAction.run,
+    runConvert: convertAction.run,
     setPendingLoading,
     setWorkflows,
     load,
@@ -344,9 +319,24 @@ export function useWorkflowLibrary(
     deleteMut,
     resyncMut,
     createMut,
+    convertMut,
   });
 
   const importState = useWorkflowImport({ createMut, load });
+
+  /* 绑定保存后同批刷新标签库清单（ISSUE #4102）：绑定 / 解绑会改变标签的
+   * 模式占用明细与计数，标签库弹窗与「全部模型」筛选读的是同一条
+   * `workflowModel.list` —— 不刷新的话刚绑完再看标签库还是旧账
+   * （实测：绑定成功后弹窗里仍显示「未绑定」）。失败也刷新：列表已回滚，
+   * 刷一次把计数对回真值。 */
+  const patchModelTagsAndRefreshTags = useCallback(
+    async (id: string, names: Array<string>): Promise<string | null> => {
+      const failure = await actions.patchModelTags(id, names);
+      void tagsQ.refetch();
+      return failure;
+    },
+    [actions, tagsQ],
+  );
 
   /** 重试：由发起动作的一方清 actionError（§17.5.4）。 */
   const refresh = useCallback(() => {
@@ -428,6 +418,7 @@ export function useWorkflowLibrary(
     resyncBusy: resyncAction.busyId,
     isBundleBusy: bundleAction.isBusy,
     isResyncBusy: resyncAction.isBusy,
+    isConvertBusy: convertAction.isBusy,
     pendingLoading,
     actionError,
     loadError: listQ.error
@@ -435,7 +426,6 @@ export function useWorkflowLibrary(
       : tagsQ.error
         ? errorText(tagsQ.error, "模型标签库加载失败")
         : null,
-    // oxlint-disable-next-line no-unnecessary-condition -- react-query 的 data 在首次加载期为 undefined，类型上收窄成非空，保留判空区分首次加载
     loading: listQ.isLoading && listQ.data === undefined && !listQ.isError,
     loadStalled,
     localRootsHint,
@@ -446,11 +436,12 @@ export function useWorkflowLibrary(
     handleDeleteClick,
     handleDownload: actions.downloadJson,
     handleResync: actions.resyncWorkflow,
+    handleConvertToOnline: actions.handleConvertToOnline,
     handleLoadPending: actions.handleLoadPending,
     handleEdit,
     handleEditorClose,
     patchModes: actions.patchModes,
-    patchModelTags: actions.patchModelTags,
+    patchModelTags: patchModelTagsAndRefreshTags,
     patchWorkflowIO: actions.patchWorkflowIO,
     patchParamMap: actions.patchParamMap,
   };

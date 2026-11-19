@@ -1,15 +1,9 @@
 "use client";
 
 /**
- * debug-store — 全局画布调试模式开关单例（Zustand）。
- *
- * 多个画布共用同一开关：
- *  - workflow-* 工作流画布（WorkflowNode，src/components/studio/workflow-*）
- *  - project-canvas/ 项目画布（CanvasNode，ProjectCanvas + project-canvas/*）
- *  - workflow-canvas 节点画布（ComfyNode）
- *
- * 打开后，各画布节点卡片底部叠加显示「渲染链路模块标签」，
- * 便于开发时快速定位某个节点卡片对应本项目哪些代码模块。
+ * debug-store — 全局画布调试模式开关单例（Zustand）。三类画布共用同一开关：
+ * workflow-* 工作流画布、project-canvas 项目画布、workflow-canvas 节点画布。
+ * 打开后节点卡片底部叠加「渲染链路模块标签」，便于定位节点对应的代码模块。
  */
 
 import { create } from "zustand";

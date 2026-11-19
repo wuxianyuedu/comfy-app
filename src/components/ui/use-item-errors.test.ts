@@ -1,11 +1,7 @@
 // @vitest-environment jsdom
 /**
  * 「每一条各自挂错误」（规范 16 §16.2.4.33）。
- *
- * 钉住三件事：
- * 1. 错误**属于某一条**，改别处不把它盖掉（这正是收口前那两处的缺陷）；
- * 2. 成功清该条、删掉条目后它的错误随之消失（生命周期收敛）；
- * 3. 「无 key」那档承载整表错误，且不被条目收敛影响。
+ * 钉三件事：错误属于某一条，改别处不盖掉；成功清该条、删条目后错误消失；「无 key」那档承载整表错误且不被条目收敛影响。
  */
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";

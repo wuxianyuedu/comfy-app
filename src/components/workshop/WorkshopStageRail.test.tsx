@@ -1,9 +1,7 @@
-// 竖向阶段轨道的结构基线：六段、逐项占位、当前段的 aria 与配色、徽章三态、
-// 小字来源。横向换竖向最容易悄悄少一个类或丢一个 aria，肉眼又只在看的时候发现。
-//
+// 竖向阶段轨道的结构基线：六段、逐项占位、当前段的 aria 与配色、徽章三态、小字来源。
 // 另一半（懒加载边界与「不出现第二个阶段切换入口」）在
-// `workshop-stage-rail-boundary.test.ts` —— 那边按源码读，不需要 DOM，也就必须
-// 留在 node 环境：jsdom 下 `import.meta.url` 不是 file: 协议，读文件会直接抛错。
+// `workshop-stage-rail-boundary.test.ts` —— 那边按源码读、必须留在 node 环境：
+// jsdom 下 `import.meta.url` 不是 file: 协议，读文件会直接抛错。
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 

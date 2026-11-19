@@ -1,36 +1,40 @@
 /**
- * 宿主的产物化判据（P3 §5 ADR §13 的 3-E1，ISSUE #1169）。
- *
- * 这一刀做的事：把宿主运行时图从「tsx 加载 src/lib/** 的 TS 源」换成「构建期预编译
- * 一个文件，运行期按内容决定用哪份图」。判据分两层——
- *   ① 配置/形态层（永远跑）：构建链顺序、external 清单、`require` 垫片、入口的加载
- *      判据。这几条各对应一次实测踩到的坑，缺任何一条的表现都是「产物里设 host 起
- *      不来」，而构建期一声不响。
- *   ② 真产物层（有 `.next/standalone` 才跑）：真在产物目录里起一次宿主进程。
- *
- * 为什么不止靠 ②：`pnpm build` 不在 pre-commit 也不在 CI（CI 只跑 lint/tsc/test），
- * 只留真产物那一条就等于「改了构建链没人立刻知道」；而 ① 里的每一条都是从 ② 抓不
- * 到的方向（顺序写反、垫片被删、入口长出第二条加载路径）先在源码上就红。
+ * 宿主产物化判据（P3 §5 ADR §13 的 3-E1，ISSUE #1169）：把运行时图从「tsx 加载 TS 源」换成「构建期预编译一份，
+ * 运行期按内容选用」。①配置/形态层永远跑（构建链顺序、external 清单、`require` 垫片、入口加载判据）；
+ * ②真产物层（有 `.next/standalone` 才跑）。只靠②不行：`pnpm build` 不在 pre-commit/CI（CI 只跑 lint/tsc/test），①各条正是②抓不到的方向。
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
-const buildScript = read("scripts/build-executor-host.mjs");
-const smokeScript = read("scripts/smoke-executor-host-standalone.mjs");
+const buildScript = read("scripts/build/build-executor-host.mjs");
+const smokeScript = read("scripts/devtools/smoke-executor-host-standalone.mjs");
 const hostEntry = read("scripts/executor-host.mjs");
 const runtimeGraph = read("src/lib/comfyui/host-runtime.ts");
 const privateInputs = read("scripts/standalone-private-inputs.mjs");
+const devArtifacts = read("scripts/build/standalone-dev-artifacts.mjs");
 const buildDesktop = read("scripts/build-desktop.mjs");
-/* SAFETY: 类型断言已复核 */
-const pkg = JSON.parse(read("package.json")) as {
+/* package.json 的相关段：JSON.parse 的 any 用运行时守卫收窄（B5 清账，不走 as）。 */
+function isPackageJson(value: unknown): value is {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   scripts: Record<string, string>;
-};
+} {
+  if (!isRecord(value) || !isRecord(value.scripts)) {
+    return false;
+  }
+  return Object.values(value.scripts).every((line) => typeof line === "string");
+}
+
+const pkg: unknown = JSON.parse(read("package.json"));
+if (!isPackageJson(pkg)) {
+  throw new Error("package.json 形状不对（缺 scripts）");
+}
 
 describe("构建链顺序：预编译 → 剪枝 → 冒烟", () => {
   const steps = (pkg.scripts.build ?? "").split("&&").map((s) => s.trim());
@@ -64,18 +68,21 @@ describe("构建链顺序：预编译 → 剪枝 → 冒烟", () => {
 });
 
 describe("预编译的形态判据", () => {
-  /** 只留三类件 external：带原生/可选二进制的、以及必须与 server 同实例的。
+  /** 只留两类件 external：带可选二进制的、以及必须与 server 同实例的。
    *  反过来 `drizzle-orm` / `zod` / `@paralleldrive/cuid2` 是纯 JS，但 standalone
    *  的 node_modules 顶层**没有**它们（Next 把它们编进 server chunk 了），留
-   *  external 就是运行期 ERR_MODULE_NOT_FOUND —— 实测数过产物目录才定下的清单。 */
+   *  external 就是运行期 ERR_MODULE_NOT_FOUND —— 实测数过产物目录才定下的清单。
+   *  `@libsql/client` 也不该回来：运行时已迁到 Node 内置的 node:sqlite（#3171），
+   *  `node:*` 那条通配负责放行，留一个不再被任何代码 import 的原生件只会是死重量。 */
   it("外部件清单是显式白名单，且不含纯 JS 的那三个", () => {
-    const externals = /const EXTERNAL_PACKAGES = \[([\s\S]*?)\];/.exec(buildScript)?.[1];
+    const externals = /const EXTERNAL_PACKAGES = \[(?<body>[\s\S]*?)\];/.exec(buildScript)?.groups
+      ?.body;
     expect(externals, "找不到 EXTERNAL_PACKAGES").toBeTruthy();
-    for (const keep of ["@libsql/client", "ws", "pino"]) {
+    for (const keep of ["ws", "pino"]) {
       expect(externals).toContain(keep);
     }
-    for (const pure of ["drizzle-orm", "zod", "@paralleldrive/cuid2"]) {
-      expect(externals).not.toContain(pure);
+    for (const gone of ["@libsql/client", "drizzle-orm", "zod", "@paralleldrive/cuid2"]) {
+      expect(externals).not.toContain(gone);
     }
   });
 
@@ -93,7 +100,8 @@ describe("预编译的形态判据", () => {
   it("server-only 走内联抛错桩，且不在外部件清单里", () => {
     expect(buildScript).toMatch(/filter:\s*\/\^server-only\$\//);
     expect(buildScript).toContain("SERVER_ONLY_STUB");
-    const externals = /const EXTERNAL_PACKAGES = \[([\s\S]*?)\];/.exec(buildScript)?.[1];
+    const externals = /const EXTERNAL_PACKAGES = \[(?<body>[\s\S]*?)\];/.exec(buildScript)?.groups
+      ?.body;
     expect(externals).not.toContain("server-only");
   });
 
@@ -130,13 +138,17 @@ describe("宿主入口的加载判据（内容，不是 env）", () => {
 
 describe("白名单两侧与桌包断言", () => {
   it("BUILT_RUNTIME_SCRIPTS 是 RUNTIME_SCRIPTS 的子集（否则剪枝照删）", () => {
-    const runtime = privateInputs.slice(
-      privateInputs.indexOf("export const RUNTIME_SCRIPTS"),
-      privateInputs.indexOf("export const BUILT_RUNTIME_SCRIPTS"),
-    );
-    const built = /export const BUILT_RUNTIME_SCRIPTS = \[([\s\S]*?)\];/.exec(privateInputs)?.[1];
+    // 实现从 standalone-private-inputs.mjs 拆到 standalone-dev-artifacts.mjs（#3646 收尾拆分）：
+    // RUNTIME_SCRIPTS 仍在减法主入口，BUILT_RUNTIME_SCRIPTS 在剔除实现侧定义并由主入口转出。
+    const runtimeStart = privateInputs.indexOf("export const RUNTIME_SCRIPTS");
+    const runtimeEnd = privateInputs.indexOf("export const STATIC_ALLOWED_TOPLEVEL");
+    expect(runtimeStart, "找不到 RUNTIME_SCRIPTS").toBeGreaterThan(-1);
+    expect(runtimeEnd, "找不到 STATIC_ALLOWED_TOPLEVEL").toBeGreaterThan(runtimeStart);
+    const runtime = privateInputs.slice(runtimeStart, runtimeEnd);
+    const built = /export const BUILT_RUNTIME_SCRIPTS = \[(?<body>[\s\S]*?)\];/.exec(devArtifacts)
+      ?.groups?.body;
     expect(built, "找不到 BUILT_RUNTIME_SCRIPTS").toBeTruthy();
-    for (const name of [...built!.matchAll(/"([^"]+)"/g)].map((m) => m[1])) {
+    for (const name of [...built!.matchAll(/"(?<name>[^"]+)"/g)].map((m) => m.groups?.name)) {
       expect(runtime, `产物件 ${name} 没登记进 RUNTIME_SCRIPTS，会被剪枝删掉`).toContain(name);
     }
   });
@@ -152,11 +164,44 @@ describe("冒烟判据本身有效", () => {
    *  这条不需要真产物，所以它总是跑。 */
   it("目录里没有 server.js 时报错，而不是当成通过", async () => {
     const { smokeExecutorHostArtifact } =
-      await import("../scripts/smoke-executor-host-standalone.mjs");
+      await import("../scripts/devtools/smoke-executor-host-standalone.mjs");
     const empty = join((await import("node:os")).tmpdir(), `comfyapp-empty-${Date.now()}`);
     const result = smokeExecutorHostArtifact(empty);
     expect(result.ok).toBe(false);
     expect(result.problems.join(" ")).toContain("server.js");
+  });
+
+  /** ISSUE #4167 的现场：三件宿主文件在场、但追踪没把 `scripts/devtools/**` 带进产物。
+   *  冒烟必须先逐件核对 RUNTIME_SCRIPTS 并一次报全缺件清单，而不是等 spawn 出
+   *  ERR_MODULE_NOT_FOUND 再让调用方反推缺了哪件。 */
+  it("RUNTIME_SCRIPTS 有缺件时报缺件清单，而不是照常起进程", async () => {
+    const { smokeExecutorHostArtifact } =
+      await import("../scripts/devtools/smoke-executor-host-standalone.mjs");
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "comfyapp-smoke-missing-"));
+    try {
+      fs.writeFileSync(path.join(dir, "server.js"), "");
+      fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+      for (const [name, body] of [
+        ["executor-host.mjs", ""],
+        ["executor-host.runtime.mjs", ""],
+        ["executor-host.build.json", '{"externals":[]}'],
+      ] as const) {
+        fs.writeFileSync(path.join(dir, "scripts", name), body);
+      }
+      const result = smokeExecutorHostArtifact(dir);
+      expect(result.ok).toBe(false);
+      const problem = result.problems.join("\n");
+      expect(problem).toContain("runtime scripts missing");
+      // #4167 缺的那一件必须被点名
+      expect(problem).toContain("devtools/env-preflight.mjs");
+      // 缺件档先返回，不往下起进程（externals / boot 不在这一次的诊断里）
+      expect(problem).not.toContain("externals");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("冒烟读的是构建清单里的 externals，而不是再猜一份", () => {
@@ -177,7 +222,7 @@ describe("产物里真的起得来宿主", () => {
     "在 .next/standalone 内跑 executor-host --once：exit 0 且注入链完成",
     async () => {
       const { smokeExecutorHostArtifact } =
-        await import("../scripts/smoke-executor-host-standalone.mjs");
+        await import("../scripts/devtools/smoke-executor-host-standalone.mjs");
       const result = smokeExecutorHostArtifact(ARTIFACT);
       expect(
         result,

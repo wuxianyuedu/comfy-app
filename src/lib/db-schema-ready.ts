@@ -26,9 +26,11 @@
  *
  * Design
  * ------
- * - The probe is **read-only** and **runs at most once** (cached): it queries
- *   `sqlite_master` for a sentinel table, which is negligible and has no write
- *   side effect (`drizzle-kit push` is the only thing that creates tables);
+ * - The probe is **read-only** and **cheap**: it queries `sqlite_master` for a
+ *   sentinel table, which is negligible and has no write side effect
+ *   (`drizzle-kit push` is the only thing that creates tables). A positive
+ *   result is cached; a negative one is re-probed on the next call (see
+ *   `isSchemaReady`);
  * - The result is three-state (`ready` / `missing` / `unknown`) so callers own
  *   the semantics instead of this module swallowing everything: "DB is broken"
  *   and "tables do not exist yet" are different problems and only the latter
@@ -48,8 +50,8 @@
 // Section 18.4 form 3 (P3 lib-foundation batch, last-mile for reaper): this
 // module intentionally drops `import "server-only"` and is registered in
 // `tests/lib-node-only-declarations.test.ts` under `PURE_NODE_HOSTS`. It uses
-// `node:sqlite` DatabaseSync (native in Node 22+), `node:path`, and pure
-// `~/lib/shell/tracing-ignore` -- no server-only chain. The ComfyUI reaper
+// `node:sqlite` DatabaseSync (native in Node 22+), `node:path` -- no server-only
+// chain. The ComfyUI reaper
 // imports `isSchemaReady()` statically; without this change, a pure Node
 // executor host (P3 phase 2 `scripts/executor-host.mjs`) loading `reaper`
 // would crash here at the `import "server-only"` throw before ever reaching
@@ -58,14 +60,11 @@
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 
-import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
-
 /** Table readiness state. */
 export type SchemaReadiness = "ready" | "missing" | "unknown";
 
-/** Probe result cache: at most one probe per process. A schema cannot appear
- *  from nothing twice within a single process lifetime in a way we care about,
- *  and repeating the query on every sweep would be pure overhead. */
+/** Probe result cache: a positive ("ready") probe is cached for the process
+ *  lifetime; a negative one is never cached (see `isSchemaReady`). */
 let cached: SchemaReadiness | null = null;
 
 /** Sentinel table. `task` is the first table the reaper touches and the one
@@ -83,7 +82,7 @@ const SENTINEL_TABLE = "task";
 export function resolveSqlitePath(databaseUrl?: string): string {
   const url = databaseUrl ?? process.env.DATABASE_URL ?? "file:./db.sqlite";
   const raw = url.startsWith("file:") ? url.slice("file:".length) : url;
-  return path.resolve(...tracingIgnoreArgs(), process.cwd(), raw);
+  return path.resolve(/*turbopackIgnore: true*/ process.cwd(), raw);
 }
 
 /**
@@ -103,9 +102,7 @@ export function probeSchemaSync(databaseUrl?: string): SchemaReadiness {
     });
     try {
       const row = db
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
-        )
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?")
         .get(SENTINEL_TABLE);
       return row ? "ready" : "missing";
     } finally {
@@ -121,13 +118,27 @@ export function probeSchemaSync(databaseUrl?: string): SchemaReadiness {
 /**
  * Cached readiness check, meant for module-level side effects.
  *
+ * Only a **positive** result is sticky. A `missing`/`unknown` probe must not be
+ * cached for the process lifetime: tables can legitimately appear later
+ * (`pnpm db:push` after the server has started) and an `unknown` can be a
+ * transient `SQLITE_BUSY` while concurrent workers flip WAL. Caching a negative
+ * answer here would silently disable every DB-side side effect gated on this
+ * check (e.g. the reaper) until restart. The probe is a single read-only
+ * `sqlite_master` lookup, so re-probing while not ready is negligible.
+ *
  * @returns `true` when the tables exist and it is safe to read the DB.
  *   Otherwise the caller must **skip** this round; the next interval tick (or
  *   the next run after `pnpm install` / creating the tables) will pick it up.
  */
 export function isSchemaReady(databaseUrl?: string): boolean {
-  cached ??= probeSchemaSync(databaseUrl);
-  return cached === "ready";
+  if (cached === "ready") {
+    return true;
+  }
+  const next = probeSchemaSync(databaseUrl);
+  if (next === "ready") {
+    cached = next;
+  }
+  return next === "ready";
 }
 
 /** Clear the cache. Test-only helper so one vitest process can build both a

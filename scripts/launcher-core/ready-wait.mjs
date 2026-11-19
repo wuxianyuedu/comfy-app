@@ -59,6 +59,7 @@ export async function waitForDevReady(ctx, target) {
     if (devExited()) {
       break;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const state = await classifyProbe({ port, host });
     lastProbeState = state;
     if (state === "ready") {
@@ -75,6 +76,7 @@ export async function waitForDevReady(ctx, target) {
           "WARN",
         );
         status("dev-server-starting", 0.35, "检测到路由表不一致，清缓存重启中…", { staleShell });
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
         await respawnDev("stale-route-table");
         log("dev server 已重启（清缓存后由编排器重新拉起）", "OK");
       }
@@ -119,6 +121,7 @@ export async function waitForDevReady(ctx, target) {
      * 写的纯浪费；就绪感知延迟只出现在冷启动后段（用户本来就在等编译）。
      * 总超时是墙钟 deadline（Date.now()），退避不会缩短它。 */
     pollCount += 1;
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await new Promise((r) => setTimeout(r, pollCount < 10 ? 1000 : pollCount < 30 ? 2000 : 3000));
   }
   if (ready) {

@@ -1,0 +1,3 @@
+## Added
+
+- **`pnpm ship --gh-logs pr:<号>` 一条命令就能拿到判绿按需日志（ISSUE #3696 / #3667 后续）**：过去判绿的 run 在 CNB 侧没有 relay 评论时，每次都要先手工敲一遍 `cnb build start-build --event api_trigger_ga_logs --env GA_LOG_PR_NUMBER=<号> --sync false` 再等 GA 搬运，才能站内读回。按 §12.20「同一串手工命令第二次就收成入口」，现在 `--gh-logs` 的 `pr:` 形态在 CNB 侧连 marker 都没有时自己代发触发（`ship-ga-logs-on-demand.mjs`，复用 `buildSnFromOutput` 认 `sn`、stdout/stderr 完整转述），再轮询等一条 `scope=all` 的新 relay 评论，命中后交给既有 `readRelayLogs` / `renderRelayLogs` 呈现。`--dry-run` 只念计划不发写动作；`run:` 形态、判红自动回读、已有 marker 但附件读不回的情形一律不伸手；等回读超预算只给「没结论」，退回原 GitHub 快速回退链路，不改三态与退码。判据 `tests/ship-ga-logs-on-demand.test.ts` + `tests/ship-gh-logs.test.ts` ⑥ 组，文档 §13.10.13 / §13.5.33.10 / ship Skill 同批。

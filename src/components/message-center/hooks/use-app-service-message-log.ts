@@ -1,60 +1,10 @@
 "use client";
 
 /* ── 把「应用服务断开 / 启动 / 路由异常」写进消息中心（规范 17 §17.2 第②层）──
- *
- * 唯一职责：把 `useDevServerStatus()` 给的四态与进程标识，翻成消息中心里的
- * 「断开」「启动 / 恢复」与「路由异常」三条记录（**时间 + 原因 + 该做什么**）。
- *
- * ## 为什么需要它（此前这里什么出口都没有）
- *
- * 状态栏那一格翻成「应用服务已断开」之后，用户能看到的只有四个字：什么时候断的
- * （要靠猜）、因为什么断的（问不到）、恢复了没有（要看颜色变回去）。曾经
- * `CodeUpdateWatcher` 记过一条「应用服务已重启」，但那**只是重启**、没有断开、
- * 也没有时间与原因，而且它由 30 秒一拍的构建标识轮询驱动——服务断开期间那一路
- * 直接取不到任何标识（见 `code-update-since-load` 的 catch 分支），于是故障窗口
- * 里它一声不吭。这条链路是唯一的常驻记录口。
- *
- * ## 为什么事实由外部递进来
- *
- * 探活循环全应用只有一条（`useDevServerLiveness` 在 `useDevServerStatus` 里，
- * 而后者只有底部状态栏一个消费方）。本 hook **不自己起第二条循环**，而是接状态栏
- * 已经在算的那份事实（`state` / `bootId`）——否则同一个 `/api/dev/server-id`
- * 会每两秒被打两次，探活一旦变慢，两边一起变慢。
- *
- * ## 原因为什么在这里现读，而不是等上游送到
- *
- * 成因由启动编排在进程结束那一刻写进 `run/app-service-exit.json`。这条读取正好发生
- * 在「边沿已判定、消息还没写」的当口，于是由本 hook 在 push 之前现取一次：判据
- * （纯，见 `~/lib/shell/app-service-message`）与取数（IO）各自待在该待的层，两边
- * 不互相依赖，也就不存在「等上游把原因递下来，而上游也在等」的环。
- *
- * **两条边沿各走各的通道**（ISSUE #1915 把这一点补全）：
- *
- * · **断开**：这一刻应用服务已经不在了，经 HTTP 读（`GET /api/dev/last-exit`）必然
- *   不通 —— 但记录早就在盘上，壳进程（用户看到的「窗口还在、页面连不上」里活着的
- *   那一方）读它不经过任何应用服务。于是断开这条走壳的 IPC
- *   （`fetchCurrentDisconnectExit`），**当场上原因**。
- * · **启动 / 恢复**：服务已经能应答，两条通道都在，走 HTTP 那条把「上一次为什么
- *   结束」读回来。
- *
- * 取不到就按「没有原因可讲」发（文案里说明为什么读不到）——**不编一个原因**，
- * 也不因为取不到就把这条消息整个吞掉：时间本身已经是事实。
- *
- * ## 每条消息盖一个「启动戳」
- *
- * 手验反馈：消息中心里**多次启动的记录混在了一起**，用户分不清哪几条属于同一次
- * 启动——而这个面板记的恰恰是故障，分不清批次等于分不清故障次数。于是每条消息都
- * 带上 `runId`（launcher 单点产出的启动标识，与 `log/runs/<…>-<runId>` 同源），
- * 面板按它分组（判据见 `~/lib/shell/message-run-groups`）。
- *
- * 两个时刻各归各的组：**断开**发生在旧一次启动里（盖旧 runId——服务已经死了，
- * 端点问不到，用的是探活链路留住的那一个），**恢复**发生在新一次启动里（盖新
- * runId，与 `setProbeOk` 同一批落，见 `use-dev-server-liveness`）。
- *
- * 本 hook 还负责把 `currentRunId` 写进 store：`push` 的 runId 缺省盖它，于是**所有**
- * 生产方（应用服务、代码更新、版本更新）都自动按启动分组，不需要每一个都去接一次
- * 探活链路。
- */
+ * 把 `useDevServerStatus()` 给的四态翻成消息记录；事实由外部递进（探活循环全应用
+ * 只有一条），原因在 push 前现读——断开走壳的 IPC（服务已死、HTTP 不通、记录早在
+ * 盘上），恢复走 HTTP，取不到照实说不编原因（ISSUE #1915）。每条盖 runId 供分组
+ *（断开盖旧、恢复盖新），并把 `currentRunId` 写进 store 作缺省戳。 */
 
 import { useEffect, useRef } from "react";
 
@@ -64,6 +14,8 @@ import {
   fetchCurrentDisconnectExit,
   isPreviousRunExit,
 } from "~/lib/shell/app-service-exit";
+import { isRecord } from "~/lib/is-record";
+import { fetchLoopBlockForOffline } from "~/lib/shell/app-service-loop-blocks";
 import type { DevServerState } from "~/lib/shell/dev-server-status";
 import {
   deriveAppServiceEvent,
@@ -76,6 +28,7 @@ import {
 } from "~/lib/shell/app-service-message";
 
 import { useMessageCenterStore, type NewMessage } from "../message-center-store";
+import { useInterval } from "~/components/ui/use-interval";
 
 export type AppServiceMessageLogInput = {
   /** 当前是哪一次启动（runId）；null = 拿不到（手工 `pnpm dev` 等）。 */
@@ -86,11 +39,8 @@ export type AppServiceMessageLogInput = {
   state: DevServerState;
   /**
    * 最后一拍之前**没人在探测**的那一段（毫秒，0 = 紧接上一拍）。
-   *
-   * 从 `useDevServerStatus()` 递进来（它是探活循环的唯一消费方）：探活因窗口
-   * 失焦 / 页面进后台而暂停时墙钟照走，于是「断开持续了多久」里混着一段没人
-   * 问过服务的时间。本 hook 只把它作为事实转给判据，**不在这一层算**（见
-   * `~/lib/shell/app-service-message` 的 `unprobedMs`）。
+   * 探活因窗口失焦/进后台而暂停时墙钟照走，「断开持续了多久」会混进没人问过
+   * 服务的时间。本 hook 只转给判据，**不在这一层算**（`~/lib/shell/app-service-message`）。
    */
   unprobedMs: number;
 };
@@ -130,9 +80,15 @@ async function recordStart(
   stopped: StoppedFlag,
   runId: string | null,
 ): Promise<void> {
-  /* 全程不抛（`fetchAppServiceExit` 自带兜底）：这一刻刚出过一次故障，
-   * 任何异常都只会让现场更难查。 */
-  const probe = await fetchAppServiceExit();
+  /* 全程不抛（`fetchAppServiceExit` / `fetchLoopBlockForOffline` 自带兜底）：这一刻
+   * 刚出过一次故障，任何异常都只会让现场更难查。两个读回都只在**恢复**场景有意义
+   * （冷启动没有「刚才为什么断」可讲），断开窗口用不上就都回 null，这里不重复判。 */
+  const offlineAt = event.offlineAt;
+  const recovered = offlineAt !== null;
+  const [probe, loopBlock] = await Promise.all([
+    fetchAppServiceExit(),
+    recovered ? fetchLoopBlockForOffline(offlineAt, event.at) : Promise.resolve(null),
+  ]);
   if (stopped.current) {
     return;
   }
@@ -147,12 +103,81 @@ async function recordStart(
     offlineAt: event.offlineAt,
     exitAt: record === null ? null : Date.parse(record.at) || null,
     notice: record === null ? null : describeAppServiceExit(record),
+    /* 与断开窗口重叠的事件循环阻塞（ISSUE #3369）：读到就把恢复消息里的
+     * 「多半是短暂无响应」换成事实读数。 */
+    loopBlock,
     /* 停表那一段随事件走（判据在纯函数层决定「多长才值得标一行」）。 */
     unprobedMs: event.unprobedMs,
   });
   /* 带上**事件时刻**而不是让 store 记 push 时刻：这条要先把原因读回来，push 天然
    * 比事件晚一个往返，而「断开 → 恢复」的先后必须由事情发生的顺序决定。 */
   push({ kind: "restart", title, body, runId, time: event.at });
+}
+
+/** 后台启动分支失败的用户可见文案（ISSUE #4257）：按分支给后果与出路；
+ *  未知分支给通用文案。导出仅为可测。 */
+export function bootBranchNotice(name: string): { body: string; title: string } {
+  switch (name) {
+    case "dispatch": {
+      return {
+        body:
+          "后台的任务派发循环没能启动，排队中的任务不会被自动执行（重启应用通常可恢复；" +
+          "若反复出现，请到控制台反馈并附应用日志）。",
+        title: "应用服务：任务自动派发未启动",
+      };
+    }
+    case "reaper": {
+      return {
+        body:
+          "后台的回收循环没能启动，失败或超时的任务可能停留在「生成中」。" + "重启应用通常可恢复。",
+        title: "应用服务：孤儿任务回收未启动",
+      };
+    }
+    case "film-resume": {
+      return {
+        body: "重启前中断的影片可能停留在「生成中」，不会自动续跑。重启应用通常可恢复。",
+        title: "应用服务：成片监看恢复未启动",
+      };
+    }
+    default: {
+      return {
+        body: "一个后台功能没能启动，相关能力可能不可用。重启应用通常可恢复。",
+        title: `应用服务：后台功能「${name}」未启动`,
+      };
+    }
+  }
+}
+
+/** 启动分支结果的轮询间隔：就绪后先查一次，之后每分钟对账一次。 */
+const BOOT_BRANCH_POLL_MS = 60_000;
+
+/** 拉一次启动分支失败清单并记进消息中心；全程不抛——这一刻若服务不健康，
+ *  拉不到是常态，分支失败本身已有 boot 日志兜底。 */
+async function checkBootBranches(runId: string, stopped: StoppedFlag): Promise<void> {
+  try {
+    const res = await fetch("/api/dev/boot-branches");
+    const raw: unknown = await res.json();
+    /* 卸载后再回来的一拍不再写消息（stopped 由 hook 的卸载守卫翻转）。 */
+    if (stopped.current || !isRecord(raw) || !Array.isArray(raw.branches)) {
+      return;
+    }
+    for (const branch of raw.branches) {
+      if (!isRecord(branch) || branch.ok !== false || typeof branch.name !== "string") {
+        continue;
+      }
+      const notice = bootBranchNotice(branch.name);
+      push({
+        kind: "info",
+        id: `boot-branch-${runId}-${branch.name}`,
+        title: notice.title,
+        body: notice.body,
+        runId,
+        time: Date.now(),
+      });
+    }
+  } catch {
+    /* 拉不到就算了：分支失败本身已有 boot 日志兜底 */
+  }
 }
 
 export function useAppServiceMessageLog({
@@ -195,13 +220,10 @@ export function useAppServiceMessageLog({
       return;
     }
     if (event.type === "disconnect") {
-      /* 断开那一刻就**尽量**把原因带上（ISSUE #1915）：记录早就在进程结束那一刻
-       * 落在盘上了，只是经 HTTP 读不到（那条通道正是没了的服务自己在应答）。壳内
-       * 走 IPC 读同一个文件即可 —— 拿不到时 `describeAppServiceDisconnect` 会说
-       * 清「这一刻拿不到」，而不是编一个「未知原因」。
-       *
-       * 断开那一刻盖的是**本次启动**的 runId，判据也相应换成
-       * `isCurrentDisconnectExit`（记录说的正是刚刚没了的这一份）。 */
+      /* 断开那一刻就**尽量**把原因带上（ISSUE #1915）：记录早在进程结束时落盘，
+       * HTTP 读不到（没了的服务自己在应答），壳内走 IPC 读同一文件；拿不到时
+       * `describeAppServiceDisconnect` 照实说「这一刻拿不到」，不编「未知原因」。
+       * 盖的是**本次启动**的 runId，判据相应为 `isCurrentDisconnectExit`。 */
       void recordDisconnect(event.at, stoppedRef, currentRunId);
       return;
     }
@@ -214,4 +236,20 @@ export function useAppServiceMessageLog({
     }
     void recordStart(event, stoppedRef, currentRunId);
   }, [state, processIsNew, currentRunId, unprobedMs]);
+
+  /* 后台启动分支的失败提示（ISSUE #4257）：新进程就绪后（以及此后每分钟）
+   * 问一次 /api/dev/boot-branches，把仍失败的功能分支记进消息中心——
+   * dispatch / reaper / film-resume 静默失效时，用户能看见「为什么任务不动」。
+   * 消息 id 按 runId + 分支名确定 ⇒ 刷新与重复轮询由 store 的幂等去重吸收。
+   * 轮询走 `useInterval`（视图层定时器的唯一出口，P12）：就绪即查一次，
+   * 后台标签页自动暂停、回前台补跑一次——手写 setInterval 会空转白拉。 */
+  useInterval(
+    () => {
+      if (currentRunId === null) {
+        return;
+      }
+      void checkBootBranches(currentRunId, stoppedRef);
+    },
+    { ms: processIsNew && currentRunId !== null ? BOOT_BRANCH_POLL_MS : null },
+  );
 }

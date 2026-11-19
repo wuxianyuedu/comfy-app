@@ -81,12 +81,14 @@ export async function waitForComfyReady(opts: WaitForComfyReadyOpts): Promise<Wa
       return exit;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const dead = await opts.isDead();
     if (dead !== null) {
       opts.onDead?.(dead);
       return { ok: false, base: null, detail: dead };
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const base = await opts.probe();
     if (base !== null) {
       opts.onReady?.(base);
@@ -100,6 +102,7 @@ export async function waitForComfyReady(opts: WaitForComfyReadyOpts): Promise<Wa
     if (opts.deadline !== null && Date.now() >= opts.deadline) {
       break;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(interval);
   }
   return { ok: false, base: null, detail: opts.timeoutDetail };

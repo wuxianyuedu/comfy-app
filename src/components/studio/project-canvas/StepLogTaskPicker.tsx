@@ -2,11 +2,8 @@
 
 /**
  * StepLogTaskPicker —— 步骤日志弹窗里「切换查看的任务」下拉框。
- *
- * 单独成组件是为了把 `useNodes()` 的订阅关在最小范围里：画布拖拽 / 平移每帧都会
- * 换一份节点数组引用，订阅若挂在面板顶层，面板即使已经 `return null`（未打开）
- * 也会被每帧带着重渲染一遍；而序号只在这个下拉框里用得到，面板未打开时它根本
- * 不挂载，订阅随之消失。
+ * 单独成组件是为把 `useNodes()` 订阅关在最小范围：画布拖拽/平移每帧都换节点数组引用，
+ * 订阅挂在面板顶层会让未打开的面板也被带着重渲染；序号只在这里用，面板未打开时下拉不挂载。
  */
 
 import { memo, useMemo } from "react";
@@ -15,6 +12,7 @@ import { nodeSeqOf } from "./node-seq";
 import { loadStepLogPanelState } from "./stepLogCache";
 import { getNodeIdByTaskId } from "./activeTask";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { Hint } from "~/components/ui/hint";
 
 export const StepLogTaskPicker = memo(function StepLogTaskPicker({
   cachedIds,
@@ -53,15 +51,14 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
           const seq = seqByTaskId.get(id);
           const wn = meta?.workflowName?.trim();
           const st = meta?.status ?? "?";
-          // oxlint-disable-next-line no-unnecessary-condition -- seqByTaskId 只在 seq 非空时写入，Map.get 读到的值恒为 number；保留 null 判定作缺值防御
           const seqLabel = seq === null ? null : `#${seq}`;
           const titleParts = [seqLabel, wn, st, id].filter(Boolean);
           const displayParts = [seqLabel, wn ?? `task ${id.slice(0, 8)}`, st].filter(Boolean);
           return [
             id,
-            <span key={id} title={titleParts.join(" ·")}>
-              {displayParts.join(" ·")}
-            </span>,
+            <Hint key={id} label={titleParts.join(" ·")}>
+              <span>{displayParts.join(" ·")}</span>
+            </Hint>,
           ];
         }),
       )}

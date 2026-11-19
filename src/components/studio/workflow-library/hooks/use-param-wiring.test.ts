@@ -1,10 +1,8 @@
 /* `useParamWiring` 的本地 overlay 覆盖范围 —— 回归：右列（输出落点）也曾延迟。
- *
- * 左列（`source`）一直有 overlay：拖完线立刻画出来。右列的输出落点写在
- * `output` 命名空间，但 `mergeParamMaps` 只合并 `source`，且输出侧此前直接
- * `onPatchParamMap` 落库 —— 于是输出线要等一次 PATCH + 查询重拉（约 2s）才出现。
- * 这里钉住修复后的口径：`commitParamMap` 提交后，`effectiveParamMap` **立刻**
- * 含 output 改动（不等落库回调返回）。 */
+ * 左列一直有 overlay（拖完立刻画线）；右列写在 `output` 命名空间，但
+ * `mergeParamMaps` 只合并 `source`，且输出侧此前直接落库，于是要等 PATCH + 查询
+ * 重拉（约 2s）。这里钉住：`commitParamMap` 提交后 `effectiveParamMap` **立刻**
+ * 含 output 改动，不等落库回调返回。 */
 
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";

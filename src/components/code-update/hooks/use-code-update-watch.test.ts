@@ -1,9 +1,7 @@
-// 观测器的接线契约：把「构建标识的两类变化 + 进程重启 + 依赖面陈旧」折叠成对外
-// 可见的出口——
-// ① 源码 mtime 变 → 上报一次代码更新；② bootId 变（进程真的重启）→ 回调
-//    onDevServerRestart(reason, detail)；③ 首探即带 restartReason（启动器自愈重启）
-//    → 也回调一次，且同一 bootId 跨刷新只提示一次；④ 依赖面陈旧（depsStale）→
-//    onDepsStale(state)，同一形态跨刷新只提示一次、判定为新鲜时清掉记录。
+// 观测器的接线契约：① 源码 mtime 变 → 上报一次代码更新；② bootId 变（进程
+// 真的重启）→ 回调 onDevServerRestart(reason, detail)；③ 首探即带 restartReason
+// → 也回调一次，且同一 bootId 跨刷新只提示一次；④ 依赖面陈旧 →
+// onDepsStale(state)，同一形态跨刷新只提示一次、判定为新鲜时清掉记录。
 // 取不到标识时既不误报也不抛错。
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

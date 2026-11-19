@@ -1,36 +1,25 @@
 "use client";
 
-// ── 工作流库详情「工坊封装」页签（规范 §17.2 第③层：只渲染 + 上抛）────────
-// 替代旧的「可配置参数」草稿表单：工坊不把工作流的全部参数摊给用户，这里
-// 展示的是**工坊会用哪些控件驱动这条工作流**（提示词 / 尺寸【宽高比+百万像素】/
-// 负向提示词 / 参考图…），每个口落到哪个 IO 端口，缺落点时只在「必填口」上
-// 立一个状态徽标（可选口没落点是常态，不是状态，见 entryStateBadge）。
-//
-// 三件事必须显式：
-// · **必填 / 可选**（随模式契约，`ModeContract.required`）——「能不能跑」只认
-// 必填口；可选口不必连到工作流，缺的值由工作流图内的默认值兜底；
-// · **模式可切换**：多模式工作流（文生图 / 图生图…）在这里逐个换模式跑测试，
-// 只测默认模式验不全另一条链路。切模式只改「看/测哪个模式」，不动默认模式；
-// · 「流程测试」按封装口径真实跑一次生成（提示词 + 尺寸 → ComfyUI），验证它在
-// 工坊里的可用性 —— 与定妆照 / 镜头生图同一条 buildLibraryWorkflowInput 链路。
+// ── 工作流库详情「工坊封装」页签（规范 §17.2 第③层：只渲染 + 上抛）──
+// 展示工坊会用哪些控件驱动这条工作流（提示词 / 尺寸 / 负向 / 参考图…），每个口
+// 落到哪个 IO 端口；缺落点只在必填口上立状态徽标（可选口没落点是常态）。三件事
+// 显式：必填/可选随模式契约（`ModeContract.required`，能不能跑只认必填口）；
+// 模式可切换（只改「看/测哪个模式」，不动默认模式）；流程测试按封装口径真实跑一次。
 
-import { upperToken } from "~/lib/upper-token";
 import React, { useMemo, useState } from "react";
 
 import { Badge } from "~/components/ui/badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { SelectMenu } from "~/components/ui/select-menu";
-import {
-  deriveEncapsulationStatus,
-  type EncapsulationEntryStatus,
-} from "~/lib/workshop/workshop-encapsulation-status";
-import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
-import { modeContractEntries, requiredInputsFor } from "~/lib/workshop/model-mode-contract";
+import { Hint } from "~/components/ui/hint";
+import type { EncapsulationEntryStatus } from "~/lib/workshop/workshop-encapsulation-status";
+import { ContractRequiredBadge } from "~/components/workshop/mode-contract/ContractRequiredBadge";
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
 import { modeLabel } from "../workflow-library-config";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import { useWorkflowEncapsulation } from "../hooks/use-workflow-encapsulation";
 import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
 import { WorkflowRunLogButton } from "../WorkflowRunLogButton";
 import { latestRunForWorkflow } from "~/lib/workflow/workflow-run-store";
@@ -38,11 +27,12 @@ import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulatio
 import { displayValue } from "~/lib/display-value";
 import { EncapsulationTestForm } from "./EncapsulationTestForm";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { ReferenceLoaderBindingSection } from "../reference-loader/ReferenceLoaderBindingSection";
 
 /* 运行日志弹窗按需拉（规范 §12.19）：它下面挂着 `ui/json-viewer`
  * → `react18-json-view`，而本面板只在**真的点开日志**时才需要它。此前那条静态边
  * 会一路传进工作流库 → `components/studio/index.ts` → 入口（实测链见
- * `scripts/check-barrel-heavy-deps.cjs` 的报告）。 */
+ * `scripts/gates/check-barrel-heavy-deps.cjs` 的报告）。 */
 const LazyWorkflowRunLogModal = React.lazy(() =>
   import("../WorkflowRunLogModal").then((m) => ({
     default: m.WorkflowRunLogModal,
@@ -60,6 +50,8 @@ type WorkshopEncapsulationPanelProps = {
    * 模式跑一次流程测试 —— 文生图 / 图生图两条链路的封装口往往不同，只看默认
    * 模式测不出另一条能不能用。 */
   onModeChange?: (mode: string) => void;
+  /** 整份 paramMap 的写回口（参考图装载绑定落 `referenceLoaders` 命名空间）。 */
+  onPatchParamMap?: (next: Record<string, unknown>) => Promise<void> | void;
   paramMap: Record<string, unknown> | null;
   workflowId: string;
   workflowIO: WorkflowIOMap | null;
@@ -73,19 +65,9 @@ const RESOLVED_BADGE_CLASS = "bg-success/15 text-success-strong";
 const MISSING_REQUIRED_BADGE_CLASS = "bg-destructive/15 text-destructive";
 
 /** 落点状态 → 徽标：**已落点才给徽标**，没落点返回 null。
- *
- * 为什么「没落点」不再单独出一个徽标（ISSUE #720）：那一列里已经有
- * 「必填 / 可选」标签，而它读的正是「没落点会不会挡住运行」这同一份事实
- * （`ModeContract.required`）——再挂一个「可选 · 未落点」，是把**已经说过的
- * 话**换个说法再说一遍，还占着一列的视觉重量。实测截图里那一行三个胶囊：
- *`可选``可选 · 未落点``负向提示词`，前两个是同义反复。
- *
- * 留白只有一种例外：**必填口没落点**。那不是复述，是**状态**（缺了它这条
- * 工作流跑不了）——它必须一眼看得出来，且它在「必填」标签上读不出来（必填
- * 口照样可能已经落好点）。所以只保留这一个红色缺口徽标。
- *
- * 琥珀在这里刻意不用：没落点且必填 = 缺件，是问题状态（同「未配置」总览的
- * 红系），不是「待办提示」。 */
+ *  没落点不再单独出徽标（ISSUE #720）：旁边的「必填/可选」标签读的正是同一份
+ *  事实，再挂「可选 · 未落点」是同义反复。唯一例外是**必填口没落点** —— 那是
+ *  缺件状态，必须一眼可见；用红系而非琥珀。 */
 function entryStateBadge(entry: EncapsulationEntryStatus): {
   className: string;
   label: string;
@@ -107,44 +89,16 @@ export function WorkshopEncapsulationPanel({
   mode,
   modes,
   onModeChange,
+  onPatchParamMap,
 }: WorkshopEncapsulationPanelProps) {
-  /* 模式契约注册表：用户改过的模式用自定义口径，未改过的用内置默认 ——
-   * 封装视图与远端适配器、实际生成链路同说一套话。清单本身经
-   *`modeContractEntries` 取，与「画布节点」页签的卡片列**同一份**
-   * （ISSUE #596：两个页签各读各的，口径就对不上了）。 */
-  const { contracts: storedContracts } = useModeContracts();
-  /* 该模式生效的契约口清单（含作者自定义的口）。下方三处**同一份**：必备口判据、
-   * 封装状态派生、流程测试组载荷 —— 各取一份会让「界面列出的口」与「测试能填的
-   * 口」走散。 */
-  const contractEntries = React.useMemo(
-    () => modeContractEntries(mode, storedContracts),
-    [mode, storedContracts],
-  );
-  const contractIds = React.useMemo(
-    () => contractEntries.map((entry) => entry.id),
-    [contractEntries],
-  );
-  /* 必备口来自模式契约（可配置，「模式契约」编辑器里勾选的那个勾）——本页的
-   * 「能不能用」判据读它，不再写死「提示词」。 */
-  const requiredInputs = React.useMemo(
-    () =>
-      requiredInputsFor({
-        inputs: contractIds,
-        required: storedContracts.find((c) => c.mode === upperToken(mode))?.required,
-      }),
-    [contractIds, mode, storedContracts],
-  );
-  const status = React.useMemo(
-    () =>
-      deriveEncapsulationStatus({
-        io: workflowIO,
-        paramMap,
-        mode: mode ?? null,
-        contractEntries,
-        requiredInputs,
-      }),
-    [workflowIO, paramMap, mode, contractEntries, requiredInputs],
-  );
+  /* 模式契约注册表：契约口清单、必备口与封装状态都经 `useWorkflowEncapsulation`
+   * 取生效注册表（本机覆盖逐模式压过项目默认）—— 与模式契约编辑器、列表行徽标、
+   * 远端适配器、实际生成链路同说一套话（ISSUE #596 / #4113）。 */
+  const { contractIds, status } = useWorkflowEncapsulation({
+    mode,
+    io: workflowIO,
+    paramMap,
+  });
 
   /* 流程测试的运行编排（规范 §17.2 第②层）：与画布节点那次运行共用同一份
    * 运行登记表与日志弹窗，只是带自己的来源标记。视图这里只消费 controller。 */
@@ -216,9 +170,19 @@ export function WorkshopEncapsulationPanel({
             value={mode ?? modes.at(0) ?? ""}
           />
         )}
-        <span className="text-muted-foreground text-2xs">
-          {status.resolvedCount}/{status.entries.length} 个对外口已落到端口
-        </span>
+        {/* 计数写明「数的是什么」（ISSUE #4102）：分母 = 该模式契约口总数
+         *（含可选与自定义口），分子 = 已连到工作流端口的口数。 */}
+        <Hint
+          label={
+            `该模式共 ${status.entries.length} 个契约口（含可选口与自定义口），` +
+            `其中 ${status.resolvedCount} 个已连到工作流端口。可选口未连不阻碍工坊运行；` +
+            `必备口未连会标红并阻止流程测试。`
+          }
+        >
+          <span className="text-muted-foreground text-2xs">
+            已落点 {status.resolvedCount}/{status.entries.length} 个契约口
+          </span>
+        </Hint>
       </div>
       {!status.ready && (
         <p className="bg-warning/10 text-warning-strong text-2xs rounded-lg px-3 py-2">
@@ -254,16 +218,10 @@ export function WorkshopEncapsulationPanel({
                   key: (
                     <>
                       {/* 必备 / 可选由**模式契约**判定（`ModeContract.required`），
- 不是写死的口名 —— 与「能不能跑」的判据同一份事实。 */}
-                      <span
-                        className={`text-3xs shrink-0 rounded px-1.5 py-0.5 font-medium ${
-                          entry.required
-                            ? "bg-destructive/15 text-destructive"
-                            : "bg-subtle text-muted-foreground/80 border-border-strong border"
-                        }`}
-                      >
-                        {entry.required ? "必填" : "可选"}
-                      </span>
+                          不是写死的口名 —— 与「能不能跑」的判据同一份事实。形态与
+                          「模式契约」编辑器里那一枚同源（共用
+                          `ContractRequiredBadge`，ISSUE #4072）。 */}
+                      <ContractRequiredBadge required={entry.required} />
                       {badge && (
                         <span
                           className={`text-3xs shrink-0 rounded px-1.5 py-0.5 font-medium ${badge.className}`}
@@ -282,6 +240,8 @@ export function WorkshopEncapsulationPanel({
                     </>
                   ),
                   value: displayValue(entry.targetIoKey),
+                  /* 悬停看全文：值是 IO 口标识符（`ckpt_name_2` / 中文 pin 名），窄列会截成省略号。 */
+                  title: displayValue(entry.targetIoKey),
                 },
               ]}
               key={entry.id}
@@ -291,6 +251,18 @@ export function WorkshopEncapsulationPanel({
           );
         })}
       </div>
+
+      {/* 参考图装载绑定（#4376）：有参考图槽位时给出「装载预设 + 追加端口」配置。
+       *  写回 paramMap 的 referenceLoaders 命名空间，生成时变成执行期装载计划。 */}
+      {onPatchParamMap && mode !== null && mode !== undefined && mode !== "" && (
+        <ReferenceLoaderBindingSection
+          entries={status.entries}
+          io={workflowIO}
+          mode={mode}
+          onPatchParamMap={onPatchParamMap}
+          paramMap={paramMap}
+        />
+      )}
 
       {/* 流程测试：按封装口径真实跑一次（提示词 / 负向 / 尺寸 / 图片 / 时长 → ComfyUI） */}
       <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">

@@ -1,15 +1,8 @@
 // @vitest-environment jsdom
 /**
- * `useScrollFollow` —— 「让一段滚动内容跟随底部」的唯一实现
- * （规范 16 §16.2.4.24）。
- *
- * 三件事必须逐一钉住（它们是收口前四处实现**判据不一致**的地方）：
- *  ① 内容变化时贴底；
- *  ② 用户上滚**退出跟随**（此前 `AgentOverlay` 会把人按回底部）；
- *  ③ 跟随态是**输出**且能跨实例共享（受控模式）。
- *
- * jsdom 里 `scrollHeight` / `clientHeight` 恒为 0，所以本文件直接给容器
- * 定义这两个属性 —— 量测口径才是这条账的实质，不量它等于没测。
+ * `useScrollFollow` —— 「让一段滚动内容跟随底部」的唯一实现（规范 16 §16.2.4.24）。
+ * 钉三件事（收口前四处实现判据不一致的地方）：① 内容变化时贴底；② 用户上滚退出跟随（此前 `AgentOverlay` 会把人按回底部）；③ 跟随态是输出且能跨实例共享（受控模式）。
+ * jsdom 里 `scrollHeight` / `clientHeight` 恒为 0，本文件直接给容器定义这两个属性 —— 量测口径才是这条账的实质。
  */
 import { act, renderHook } from "@testing-library/react";
 import type React from "react";

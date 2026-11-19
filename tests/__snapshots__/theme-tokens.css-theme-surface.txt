@@ -70,7 +70,9 @@
 --color-node-accent
 --color-node-mix-base
 --color-note-tint-base
+--color-on-accent-soft
 --color-on-brand
+--color-on-success
 --color-overlay-accent-surface
 --color-panel
 --color-panel-deep
@@ -114,6 +116,7 @@
 --color-surface-0
 --color-surface-1
 --color-surface-2
+--color-surface-row
 --color-warning
 --color-warning-soft
 --color-warning-strong
@@ -122,6 +125,7 @@
 --container-medium
 --container-narrow
 --container-wide
+--font-code
 --font-heading
 --font-mono
 --font-sans

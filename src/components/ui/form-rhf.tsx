@@ -1,20 +1,8 @@
 "use client";
 
 /**
- * `form-rhf.tsx` —— react-hook-form（RHF）绑定层 · shadcn `form.tsx` 改名而来。
- *
- * **为何改名**：shadcn 官方装过来时叫 `ui/form.tsx` · 但项目早在本仓库自立的
- * `ui/form-field.tsx` 已经导出了一个同名的 `FormField`（是 `ui/field` 的薄
- * 封装 · 补 `htmlFor` / `aria-describedby` / 错误行三件套 · 见 §16.2.4.26）。
- * 两个 `FormField` 撞名 · 只要有人 import 错模块就会静默用错实现。改名
- * `form-rhf.tsx` 消除遮蔽风险 · 也一眼看出"这是 RHF 那一族"。
- *
- * **为何不删**：`docs/standards/16-shadcn-ui与表单校验.md` §16.2.4.8 与 §16.5
- * 已经把"不接入 RHF · 字段级校验住 `src/lib/<domain>/*-schema.ts` · 集合级
- * 留 controller"作为决策登记 · 并把这份 `form.tsx` 记为"已装、代码保留以便
- * 未来若接入 RHF 时不用重新装"的状态。当前 src 内 **0 消费点**（本会话
- * 摸底确认 · `grep -rn 'ui/form"' src tests` 空返回）· 是**为将来预留**、
- * 不是死代码。真接入 RHF 那天 · 从这里起手 · §16.2.4.8 的叙事也随之更新。
+ * `form-rhf.tsx` —— react-hook-form（RHF）绑定层 · shadcn `form.tsx` 改名而来。为何改名：项目早有自立的 `ui/form-field.tsx` 导出同名 `FormField`（`ui/field` 薄封装，补 `htmlFor` / `aria-describedby` / 错误行三件套，见 §16.2.4.26），两个同名只要 import 错模块就会静默用错实现。
+ * 为何不删：`docs/standards/16-shadcn-ui与表单校验.md` §16.2.4.8 与 §16.5 已把「不接入 RHF · 字段级校验住 `src/lib/<domain>/*-schema.ts` · 集合级留 controller」作为决策登记，并把这份 `form.tsx` 记为「已装、代码保留以便未来接入 RHF 时不用重新装」；当前 src 内 **0 消费点**，是为将来预留、不是死代码。
  */
 import * as React from "react";
 import {
@@ -38,8 +26,7 @@ type FormFieldContextValue<
   name: TName;
 };
 
-/* SAFETY: 类型断言已复核 */
-const FormFieldContext = React.createContext<FormFieldContextValue>({} as FormFieldContextValue);
+const FormFieldContext = React.createContext<FormFieldContextValue | null>(null);
 
 function FormField<
   TFieldValues extends FieldValues = FieldValues,
@@ -56,20 +43,21 @@ type FormItemContextValue = {
   id: string;
 };
 
-/* SAFETY: 类型断言已复核 */
-const FormItemContext = React.createContext<FormItemContextValue>({} as FormItemContextValue);
+const FormItemContext = React.createContext<FormItemContextValue | null>(null);
 
 function useFormField() {
   const fieldContext = React.useContext(FormFieldContext);
   const itemContext = React.useContext(FormItemContext);
   const { getFieldState, formState } = useFormContext();
 
-  const fieldState = getFieldState(fieldContext.name, formState);
-
-  const hasFieldContext = Boolean(fieldContext);
-  if (!hasFieldContext) {
+  if (fieldContext === null) {
     throw new Error("useFormField should be used within <FormField>");
   }
+  if (itemContext === null) {
+    throw new Error("useFormField should be used within <FormItem>");
+  }
+
+  const fieldState = getFieldState(fieldContext.name, formState);
 
   const { id } = itemContext;
 
@@ -109,8 +97,10 @@ function FormLabel({ className, ...props }: React.ComponentProps<typeof Label>) 
 function FormControl(props: React.PropsWithChildren) {
   const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
 
-  /* SAFETY: 类型断言已复核 */
-  const child = React.Children.only(props.children) as React.ReactElement<Record<string, unknown>>;
+  const child = React.Children.only(props.children);
+  if (!React.isValidElement<Record<string, unknown>>(child)) {
+    throw new Error("FormControl 需要一个 React 元素子节点");
+  }
   return React.cloneElement(child, {
     id: formItemId,
     "aria-describedby": error ? `${formDescriptionId} ${formMessageId}` : formDescriptionId,

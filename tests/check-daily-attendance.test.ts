@@ -1,32 +1,7 @@
 /**
- * `scripts/check-daily-attendance.mjs` —— 「每日那一跑到底有没有执行」那条判据的判断面
- * （ISSUE #2114 出路 1；口径在规范 §13.5.23 末节）。
- *
- * ## 它守的是什么
- *
- * 三档重档与 `ESLint 零警告` 的唯一执行者是平台上的每日那一跑，而「唯一执行者」这件事
- * 此前只有**在册**那一半有人判（`no-platform-ci-config` 数的是格名在不在清单里）。
- * 五派发零跑完的那四天里账面全绿 —— 于是那几档的本地豁免挂在一个没有任何判据在守的事实上。
- * 本文件判的是补上之后的那一半：**结论必须跟着读数走，而不是跟着「配置里有这格」走**。
- *
- * ## 这里能判什么、不能判什么
- *
- * **不能**判「平台今天有没有把那一跑派出来」—— 那要网络，而判据自身不做网络请求
- * （§13.5.13 同口径）。所以这里全部用**注入的读数**：真实命令的那一跳由
- * `--from` 那条用例真起一次进程（读一份落盘的 JSON，不碰网络），
- * 剩下的形状判断都在纯函数上做。
- *
- * **能**判的五件：
- *   ① 绿的一次派发 = 出勤；
- *   ② 四种「没跑成」的死法各自落到**正确的档**（真失败 1 / 被取消 2 / 没有派发 1 /
- *     取不到逐格 2）—— 尤其「被取消」不许落在 1：那一跑没验证过任何产物，
- *     说它红就是替平台编一个不存在的产物问题（同 `ci-build-readout.mjs` 那条口径）；
- *   ③ 绿的但超出窗口 = 缺勤（这是「每天一次」这件事本身的账）；
- *   ④ **哪些事件算每日派发**：按 `crontab:` 前缀认（时刻 10-22 一天换过两次，
- *     写死钟点的判据第二天就会自己漂），三条触发口都算，而
- *     `pull_request` / `push` / 单跑口**都不算** —— 否则「有人手点过一次单跑构建」
- *     会被读成「每日档出勤了」，那正是本判据要拦的那种假绿；
- *   ⑤ 逐格判定住在他处（`ci-build-readout`），这里不重抄一份。
+ * `scripts/gates/check-daily-attendance.mjs` 的判据面（ISSUE #2114，§13.5.23）：结论必须跟着读数走，不是「配置里有这格」；
+ * 三档重档的唯一执行者是平台每日那一跑，而五派发零跑完的四天里账面全绿。不碰网络（§13.5.13），用注入读数：
+ * 绿派发 = 出勤、超窗 = 缺勤、被取消落 2 不落 1（那跑没验证过产物）；按 `crontab:` 前缀认派发（时刻会漂，PR/push/单跑不算）。
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -35,6 +10,7 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
   CODE,
+  DAILY_ATTENDANCE_LANES,
   DAILY_LANE_PIPELINES,
   DEFAULT_WINDOW_HOURS,
   FETCH_MAX_PAGES,
@@ -47,10 +23,18 @@ import {
   main,
   pickDailySubject,
   readOffline,
-} from "../scripts/check-daily-attendance.mjs";
+} from "../scripts/gates/check-daily-attendance.mjs";
+
+/**
+ * 外来值（子进程 stdout 的 JSON / 平台列表原样）一律先落 `unknown`：
+ * 过这道守卫拿到宽松对象视图，再逐字段 `typeof` 收窄才使用，不用类型断言。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const SCRIPT = path.join(ROOT, "scripts/check-daily-attendance.mjs");
+const SCRIPT = path.join(ROOT, "scripts/gates/check-daily-attendance.mjs");
 
 /** 2026-10-23 00:00 那一跑的真形状（第一次 `0 0` 派发，11 格全 success）。 */
 const GREEN_STAGES = [
@@ -78,23 +62,22 @@ type StageFixture = {
 };
 
 /**
- * 造一份「sn + `get-build-status -v` 那个形状」的配对（判据吃的就是这一形）。
- *
- * `id` 按平台真那份补上（`stage-0` / `stage-1` …，平台自带的 `Prepare` / `BeforeEnd` /
- * `End` / `DebugDetection` 没有这个形状）—— `classifyStages` 只把 `stage-N` 那一族算成
- * 「本仓的格」，所以不给 id 的夹具走的是它「认不出形状就全收」的兜底支，两条路都得有样本。
+ * 造一份「sn + `get-build-status -v` 那个形状」的配对（判据吃的就是这一形）。`id` 按平台真那份补上
+ * （`stage-0` / `stage-1` …；平台自带的 `Prepare` / `BeforeEnd` / `End` / `DebugDetection` 没这个形状）
+ * —— `classifyStages` 只把 `stage-N` 算本仓的格，不给 id 的夹具走「认不出就全收」兜底，两条路都要样本。
  */
 function detail(
   sn: string,
   event: string,
   createTime: string,
   stages: Array<StageFixture>,
-  pipelineStatus = "success",
-  pipelineName = "每日生产构建",
+  opts: { pipelineName?: string; pipelineStatus?: string } = {},
 ) {
+  const pipelineStatus = opts.pipelineStatus ?? "success";
+  const pipelineName = opts.pipelineName ?? "每日生产构建";
   let seq = 0;
   const withIds = stages.map((s: StageFixture) => {
-    const mine = /^(每日|单跑)/.test(String(s.name));
+    const mine = /^(?:每日|单跑)/.test(String(s.name));
     return {
       ...s,
       id: mine ? `stage-${(seq += 1) - 1}` : String(s.name).toLowerCase(),
@@ -171,7 +154,11 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
     ];
     const got = judgeAttendance({
       builds: [listed("cnb-lm1-1k5h1otqt", "crontab: 0 0 * * *", RECENT, "error")],
-      details: [detail("cnb-lm1-1k5h1otqt", "crontab: 0 0 * * *", RECENT, stages, "cancel")],
+      details: [
+        detail("cnb-lm1-1k5h1otqt", "crontab: 0 0 * * *", RECENT, stages, {
+          pipelineStatus: "cancel",
+        }),
+      ],
       now: NOW,
     });
     expect(got.code, got.headline).toBe(CODE.NO_VERDICT);
@@ -189,7 +176,11 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
     ];
     const got = judgeAttendance({
       builds: [listed("cnb-7kr-1k5as018h", "crontab: 0 4 * * *", RECENT, "error")],
-      details: [detail("cnb-7kr-1k5as018h", "crontab: 0 4 * * *", RECENT, stages, "error")],
+      details: [
+        detail("cnb-7kr-1k5as018h", "crontab: 0 4 * * *", RECENT, stages, {
+          pipelineStatus: "error",
+        }),
+      ],
       now: NOW,
     });
     expect(got.code, got.headline).toBe(CODE.ABSENT);
@@ -217,10 +208,8 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
   });
 
   /**
-   * 认事件的这一半单独钉：它决定这条判据会不会自己漂。
-   *
-   * `crontab` 的事件名**含小时**，而 2026-10-22 一天里换了两次（`0 4` → `0 2` → `0 0`）——
-   * 任何按整串名字写的判据在第二次换时刻时就会静默变成「永远读不到派发」。
+   * 认事件的这一半单独钉：它决定这条判据会不会自己漂。`crontab` 的事件名**含小时**，2026-10-22 一天
+   * 换了两次（`0 4` → `0 2` → `0 0`）—— 按整串名字写的判据在第二次换时刻时会静默变成「永远读不到派发」。
    */
   it("按前缀认每日派发；单跑与 PR 跑绿都不算出勤", () => {
     for (const event of [
@@ -242,26 +231,20 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
       expect(isDailyDispatch({ event }), event).toBe(false);
     }
     /* 多条里挑最近的那一条 —— 拿旧的当「上一次」会把缺勤读成出勤。 */
-    /* SAFETY: 类型断言已复核 */
-    const picked = latestDailyDispatch([
+    const picked: unknown = latestDailyDispatch([
       listed("old", "crontab: 0 4 * * *", "2026-10-20T16:00:00.000Z"),
       listed("new", "crontab: 0 0 * * *", RECENT),
       listed("pr", "pull_request", "2026-10-23T01:00:00.000Z"),
-    ]) as { sn: string } | null;
-    expect(picked?.sn).toBe("new");
+    ]);
+    expect(isRecord(picked) ? picked.sn : undefined).toBe("new");
   });
 });
 
 /* ── 档身份那一格（ISSUE #2873）───────────────────────────────────────────────
- *
- * 为什么这一组单独存在：`isDailyDispatch` 按 `crontab:` **前缀**认候选是刻意的（小时会漂），
- * 而本仓从 #2503 / #2611 起有**两条**定时档 —— `crontab: 0 1 * * *` 是每日那一跑、
- * `crontab: 0 3 * * *` 是桌面成品包。只按前缀挑「最近一次」，别档的死法就会被念成这一档的
- * 缺勤。现场（2026-10-31 本机原样读数）：桌包 `cnb-uuu-1k672u3j6` 整条只跑到平台 `Prepare`
- * （`runner … not connected`），旧那一版念出的是「最近一次每日派发：cnb-uuu… · 事件
- * `crontab: 0 3 * * *` · 真失败 Prepare」，把五格 `打包·*` 一起算给了每日档。
- * 认法取平台自己写的流水线名（与 `ci-daily-failure-issue.mjs` 的 `--lane` 同一条，#2595）。
- */
+ * `isDailyDispatch` 按 `crontab:` **前缀**认候选是刻意的（小时会漂），而本仓从 #2503/#2611 起有**两条**
+ * 定时档：`0 1` 是每日那一跑、`0 3` 是桌面成品包。只按前缀挑最近一次，别档的死法会被念成这档缺勤
+ * （2026-10-31 现场：桌包只跑到平台 `Prepare`，旧版把五格 `打包·*` 算给每日档）。认法取平台流水线名（与
+ * `ci-daily-failure-issue.mjs` 的 `--lane` 同一条，#2595）。 */
 describe("daily-attendance：两条定时档交错时，判的是每日那一档", () => {
   /** 桌包那一档 10-30 那跑的真形状（Prepare 即败，后面五格整片 skipped）。 */
   const PACKAGE_STAGES = [
@@ -277,14 +260,10 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
         listed("cnb-hk7-1k5i5euak", "crontab: 0 1 * * *", "2026-10-22T14:00:17.000Z"),
       ],
       details: [
-        detail(
-          "cnb-uuu-1k672u3j6",
-          "crontab: 0 3 * * *",
-          RECENT,
-          PACKAGE_STAGES,
-          "error",
-          "桌面成品包",
-        ),
+        detail("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, PACKAGE_STAGES, {
+          pipelineStatus: "error",
+          pipelineName: "桌面成品包",
+        }),
         detail("cnb-hk7-1k5i5euak", "crontab: 0 1 * * *", "2026-10-22T14:00:17.000Z", GREEN_STAGES),
       ],
       now: NOW,
@@ -308,14 +287,10 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
     const got = judgeAttendance({
       builds: [listed("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, "error")],
       details: [
-        detail(
-          "cnb-uuu-1k672u3j6",
-          "crontab: 0 3 * * *",
-          RECENT,
-          PACKAGE_STAGES,
-          "error",
-          "桌面成品包",
-        ),
+        detail("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, PACKAGE_STAGES, {
+          pipelineStatus: "error",
+          pipelineName: "桌面成品包",
+        }),
       ],
       now: NOW,
     });
@@ -344,9 +319,13 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
 
   it("每日那一档的三个触发口都算本档（定时 / 手点 / API）", () => {
     const rows = [
-      detail("cnb-a", "crontab: 0 1 * * *", RECENT, GREEN_STAGES, "success", "每日生产构建"),
-      detail("cnb-b", "web_trigger_daily", RECENT, GREEN_STAGES, "success", "每日档（手动触发）"),
-      detail("cnb-c", "api_trigger_daily", RECENT, GREEN_STAGES, "success", "每日档（API 触发）"),
+      detail("cnb-a", "crontab: 0 1 * * *", RECENT, GREEN_STAGES, { pipelineName: "每日生产构建" }),
+      detail("cnb-b", "web_trigger_daily", RECENT, GREEN_STAGES, {
+        pipelineName: "每日档（手动触发）",
+      }),
+      detail("cnb-c", "api_trigger_daily", RECENT, GREEN_STAGES, {
+        pipelineName: "每日档（API 触发）",
+      }),
     ];
     for (const row of rows) {
       const got = judgeAttendance({
@@ -357,9 +336,13 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
       expect(got.code, got.headline).toBe(CODE.PRESENT);
       expect(got.sn).toBe(row.sn);
     }
-    /* 名单本身就是这三个（配置里跑 `*daily_gates` 的三个触发口）；对账由
-     * `tests/no-platform-ci-config.test.ts` 判，这里只钉住「名单不是只有一条」。 */
-    expect(DAILY_LANE_PIPELINES).toHaveLength(3);
+    /* 现役名单就是这两个（配置里跑 `*daily_gates` 的手点 / API 触发口；定时口已迁
+     * GitHub Actions）；与配置的双向对账由 `tests/no-platform-ci-config.test.ts` 判。
+     * ⚠️ 判决用的不是这份、是 `DAILY_ATTENDANCE_LANES` —— 它还要认迁移前的历史
+     * 流水线名，否则窗口跨过迁移点会念出一次假缺勤。两边都不许退化成只剩一条。 */
+    expect(DAILY_LANE_PIPELINES).toHaveLength(2);
+    expect(DAILY_ATTENDANCE_LANES.length).toBeGreaterThan(DAILY_LANE_PIPELINES.length);
+    expect(DAILY_ATTENDANCE_LANES).toContain("每日生产构建");
   });
 
   it("过滤用的是名单而不是硬编码那一条：把桌包名注进去，同一次派发就成了本档", () => {
@@ -367,21 +350,17 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
      * 而前者才是这一格的口径（加一档时改名单，不改判决）。 */
     const builds = [listed("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, "error")];
     const details = [
-      detail(
-        "cnb-uuu-1k672u3j6",
-        "crontab: 0 3 * * *",
-        RECENT,
-        PACKAGE_STAGES,
-        "error",
-        "桌面成品包",
-      ),
+      detail("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, PACKAGE_STAGES, {
+        pipelineStatus: "error",
+        pipelineName: "桌面成品包",
+      }),
     ];
     const asOwn = pickDailySubject({ builds, details, lanes: ["桌面成品包"] });
     /* `found` 是那一族的判别式：两支的形状不同，`build` 只在 `found: true` 那一支上有意义，
-     * 而它是 `any`（平台列表原样）—— 直接点 `.sn` 会被 lint 判成不安全成员访问，
-     * 这里要的是「挑到了哪一跑」这句话，所以显式收窄成 `{ sn }` 再读。 */
+     * 而它是平台列表原样（`unknown`）—— 先过对象守卫收窄，再读 `sn`，不用类型断言。 */
     expect(asOwn.found).toBe(true);
-    expect(asOwn.found ? (asOwn.build as { sn: string }).sn : "").toBe("cnb-uuu-1k672u3j6");
+    const ownBuild: unknown = asOwn.found ? asOwn.build : null;
+    expect(isRecord(ownBuild) ? ownBuild.sn : "").toBe("cnb-uuu-1k672u3j6");
     const asDaily = pickDailySubject({ builds, details });
     expect(asDaily.found).toBe(false);
     /* `strays` 两支都有，所以它不需要判别就能读 —— 这一句才是「让开了而不是没收到」。 */
@@ -392,7 +371,9 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
   });
 
   it("平台没给流水线名时不让它当本档（空名不凑形状）", () => {
-    const nameless = detail("cnb-x9", "crontab: 0 1 * * *", RECENT, GREEN_STAGES, "success", "   ");
+    const nameless = detail("cnb-x9", "crontab: 0 1 * * *", RECENT, GREEN_STAGES, {
+      pipelineName: "   ",
+    });
     const got = pickDailySubject({
       builds: [listed("cnb-x9", "crontab: 0 1 * * *", RECENT)],
       details: [nameless],
@@ -409,12 +390,9 @@ describe("daily-attendance：命令行那一跳", () => {
   function runCli(
     args: Array<string>,
     files?: Record<string, string>,
-    /* 「现在」默认钉在 NOW 上：夹具里的派发时刻是**绝对时刻**，而窗口比的是「距现在多久」
-     * ⇒ 不钉住，这条离线用例会随真实时间推移自己变红（2026-10-24 现场：真实时间到
-     * 10-24 08:21Z 时夹具的 10-22 16:00Z 已隔 40.4h > 36h ⇒ 判成「每日缺勤」，于是
-     * 这一档从「离线单测」变成「随时间漂移的平台状态判据」，并把每个把它拉进受影响
-     * 面的 PR 一起判红）。判据自己不该去摸真实时间（§13.5.13：什么时候算现在，是
-     * 调用者的事）—— 与 `--from` 同一族。传 null 表示「故意不给」，用来钉那条防线。 */
+    /* 「现在」默认钉在 NOW：夹具的派发时刻是**绝对时刻**，窗口比的是「距现在多久」⇒ 不钉住会随真实时间
+     * 推移自己变红（2026-10-24：真实时间到 08:21Z 时夹具的 10-22 16:00Z 已隔 40.4h > 36h ⇒ 判成缺勤）。
+     * 判据自己不该摸真实时间（§13.5.13）；传 null 表示「故意不给」，用来钉那条防线。 */
     now: string | null = String(NOW),
   ): { code: number | null; out: string } {
     const dir = mkdtempSync(path.join(tmpdir(), "daily-attendance-"));
@@ -459,8 +437,8 @@ describe("daily-attendance：命令行那一跳", () => {
       ),
     });
     expect(detailFile.code, detailFile.out).toBe(CODE.PRESENT);
-    /* SAFETY: 类型断言已复核 */
-    expect((JSON.parse(detailFile.out) as { verdict: string }).verdict).toBe("present");
+    const payload: unknown = JSON.parse(detailFile.out);
+    expect(isRecord(payload) ? payload.verdict : undefined).toBe("present");
 
     /* **真**那份 `get-build-status -v` 只有 `status` + `pipelinesStatus`（实测），
      * 认不出它是哪一类派发、也认不出它是什么时候落的 ⇒ 必须落到「未校验」，
@@ -519,12 +497,9 @@ type PageRow = {
 };
 
 /**
- * 取数按**时间窗**翻页，不按条数翻页（ISSUE #2392）。
- *
- * 这一族的形状是「判据声明 36h，而取数只拿最近 60 条」—— 60 条折算多久**由当天多忙
- * 决定**：实测会话密集的一天里它只回到约 7.5 小时，于是列表里唯一的每日类派发就是
- * **正在跑的这一跑**，`latestDailyDispatch()` 拿到空 ⇒ 判据念出「缺勤」，而那一跑其实
- * 出勤了。本组用例把两侧都钉住：盖住了才许判，盖不住必须落在「未校验」而不是「缺勤」。
+ * 取数按**时间窗**翻页，不按条数（ISSUE #2392）：判据声明 36h 而只拿最近 60 条，60 条折算多久由当天
+ * 多忙决定（实测会话密集的一天只回到约 7.5h），于是唯一的每日类派发就是正在跑的这一跑 ⇒ 判「缺勤」。
+ * 两侧都钉住：盖住了才许判，盖不住必须落在「未校验」而非「缺勤」。
  */
 describe("daily-attendance：取数按时间窗翻，不按条数翻", () => {
   /** 造一整页（新→旧）：第一条在 `newestH` 小时前，最后一条在 `oldestH` 小时前。 */

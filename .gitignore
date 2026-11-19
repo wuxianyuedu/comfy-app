@@ -69,6 +69,8 @@ build_log*.txt
 # generated & temp
 /generated/
 /public/generated/
+# 文档生成态镜像（#3586：谁需要谁本地生成 —— `pnpm doc:render`；不再进 git）
+/docs/generated/
 /temp/
 /temp/comfy-cli/
 # 全量单测分文件耗时读数的 junit 落点（ISSUE #2697）：仓库内、非链接、不入库。
@@ -112,7 +114,7 @@ playwright-report/
 # Storybook 静态产物（`pnpm storybook:build` 生成，不入库）
 /storybook-static/
 
-# Storybook 开发期资源与生成件（`scripts/storybook-assets.mjs` 现生成，不入库）：
+# Storybook 开发期资源与生成件（`scripts/devtools/storybook-assets.mjs` 现生成，不入库）：
 # 二进制/矢量夹具进 git 会让「改一张测试图」变成一次无法 diff 的提交；
 # `generated/` 里是**本检出**的解析链端口，入库必然与别人的 checkout 不符。
 /.storybook/assets/
@@ -137,9 +139,11 @@ playwright-report/
 
 # agent 工具链本地产物（IDE 会话记忆 / temp / tmp，不入版本库）
 .workbuddy/
+# issue 抓取材料（`pnpm ship --fetch-issue` 的落点，按号分目录，不入版本库）
+.tmp/
 # 代理 / 编辑器的工作区临时目录（`_tmp_<pid>_<hash>` 一族，实测在本检出里出现过）。
 # **生产者不在本仓**：它是外部工具在仓库根建的中间工作目录，用完自己清理 ——
-# 于是「扫描期间被删」是一个稳定存在的窗口（`scripts/gate-scan-read.cjs` 的文件头
+# 于是「扫描期间被删」是一个稳定存在的窗口（`scripts/gates/gate-scan-read.cjs` 的文件头
 # 讲的就是它），而这里只负责让它别落进 `git status`（根目录看着像有未跟踪改动）。
 # 注意：忽略**不解决**那个窗口 —— 遍历照样会看到它、照样可能撞上删除，
 # 消费者侧的容错是另一件事，两者都要有。
@@ -148,21 +152,29 @@ _tmp_*/
 .zcode/
 # Qoder 项目本地工作区：默认忽略其内容（Better Harness 评审 canvas/findings/run 产物、
 # 每开发者机器各自生成的 IDE 会话/索引/配置），但放行可提交的 project agent 资产
-# skills/commands（它们是共享配置，等同 AGENTS.md，应入库）。
+# skills/commands/settings.json（它们是共享配置，等同 AGENTS.md，应入库）。
 .qoder/*
 !.qoder/skills/
 !.qoder/commands/
+!.qoder/settings.json
 
 # pnpm 本地 store（本环境 store-dir 落在仓库内，不入库）
 /.pnpm-store/
 
 # Tauri 构建产物（本地 cargo build / build-desktop.mjs 后生成，不入库）
-# Cargo.lock 由每次构建自动更新（依赖图内嵌 sha/时间戳），保持当前入库版本不动
-/src-tauri/Cargo.lock
+# 例外：Cargo.lock **入库**（#4354）—— shell-gate 的 cargo test 带 --locked
+# （#4317），锁不入库则平台全新 clone 无锁可依、该格必红；应用类 crate 的
+# 标准做法也是提交锁文件（构建产物指的是 target/，不是锁）。
 # build.rs 声明 AppManifest 命令后由 tauri-build 自动生成的 ACL 权限文件
 /src-tauri/permissions/
 
-# 工具链自证在本机装出来的 Python（embed 包解压的落点，见 scripts/ci-toolchain-python.mjs
+# 工具链自证在本机装出来的 Python（embed 包解压的落点，见 scripts/ci/ci-toolchain-python.mjs
 # 的 viaEmbed）——它是**这台机器**的产物，不是仓库内容：进了 git 就等于把「谁在哪台机上
 # 装过什么」当成事实分发出去。装了就不再下第二遍的判据读的是盘上有没有它，与 git 无关。
 /python-embeded/
+
+# 门禁自证的临时探针（tests/__tmp-*，跑完当场删；强杀残留不进库、不进收集面统计）
+/tests/__tmp-*/
+
+# 门禁自证的临时探针（tests/__tmp-*.test.ts，跑完当场删；强杀残留不进库）
+/tests/__tmp-*

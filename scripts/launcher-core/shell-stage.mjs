@@ -23,6 +23,8 @@ import process from "node:process";
  * @param {object} ctx
  * @param {(m: string, l?: import("./log.mjs").LogLevel) => void} ctx.log 日志出口
  * @param {string} ctx.root 检出根
+ * @param {import("./timeline.mjs").LaunchTimeline} [ctx.timeline]
+ *   启动耗时时间线（ISSUE #4185）；测试夹具可不传。
  * @param {(msg: string) => void} ctx.appendRuntimeWarning 把壳提醒补进 app-runtime 通道
  * @param {() => string | null} ctx.defaultShellExe 解析预编译壳路径
  * @param {(msg: string) => void} ctx.ensureSplashResource 同步启动页资源
@@ -37,46 +39,50 @@ import process from "node:process";
  * @returns {{ ok: false, error: string } | { ok: true, shell: import("node:child_process").ChildProcess | null, staleShell: string | null }}
  */
 export function startShellStage(ctx, target) {
-  const { log, root, appendRuntimeWarning } = ctx;
+  const { log, root, appendRuntimeWarning, timeline } = ctx;
   const { mode, shellExe: explicitExe, coldStart, port } = target;
   // 自编排标记：壳拉起本编排器时注入（`shell_launch.rs` 的 `spawn_orchestrator`）。
   // 它回答「本次编排是谁拉起的」，只有壳自编排链路（§1.5）里的 prebuilt 会带。
-  const launchedByShell =
-    process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1" && mode === "prebuilt";
+  const launchedByShell = process.env.COMFYAPP_SHELL_SELF_LAUNCH === "1" && mode === "prebuilt";
   if (mode !== "prebuilt") {
     return { ok: true, shell: null, staleShell: null };
   }
-  const shellExe = explicitExe ?? process.env.COMFYAPP_PREBUILT_SHELL ?? ctx.defaultShellExe();
-  if (!shellExe || !fs.existsSync(shellExe)) {
-    return {
-      ok: false,
-      error:
-        "找不到预编译 Tauri 壳（src-tauri/target/{release,debug}/app[.exe]）。" +
-        "请先执行 cargo build --release --features custom-protocol 或 pnpm tauri build。",
-    };
+  timeline?.begin("shell-spawn", "桌面壳拉起");
+  try {
+    const shellExe = explicitExe ?? process.env.COMFYAPP_PREBUILT_SHELL ?? ctx.defaultShellExe();
+    if (!shellExe || !fs.existsSync(shellExe)) {
+      return {
+        ok: false,
+        error:
+          "找不到预编译 Tauri 壳（src-tauri/target/{release,debug}/app[.exe]）。" +
+          "请先执行 cargo build --release --features custom-protocol 或 pnpm tauri build。",
+      };
+    }
+    let staleShell = ctx.shellStaleWarning(shellExe, root);
+    if (staleShell) {
+      log(staleShell, "WARN");
+      appendRuntimeWarning(staleShell);
+    }
+    ctx.resetShellPidFile(root);
+    if (launchedByShell) {
+      /* 双击壳的自编排链路（§1.5）里，拉起本编排器的那只壳**就是**本次启动唯一
+       * 的应用宿主：启动页与主窗都是 tauri.conf.json 的声明式窗口，每个壳进程
+       * 各建一份。这里若再 spawn 一只壳，同一次启动就有两个壳——用户会看到两个
+       * 一模一样的启动窗口（PR #1712 的回归），两只壳的回收链还互相纠缠（关掉
+       * 任意一只都会把编排器连同另一只一起收走）。所以自编排那次**只编排、
+       * 不起壳**：壳已经在跑，把本地服务起起来就好。 */
+      log("本次编排由桌面壳亲自拉起：壳已在运行，不再起第二个壳。", "INFO");
+      return { ok: true, shell: null, staleShell };
+    }
+    ctx.ensureSplashResource(root);
+    const shell = ctx.spawnShell(shellExe, port, {
+      root,
+      foreground: coldStart ? "1" : null,
+    });
+    log(`预编译 Tauri 壳已启动（PID ${shell.pid}）：${shellExe}`, "OK");
+    log("Tauri 桌面壳已启动，正在启动本地服务…", "STEP");
+    return { ok: true, shell, staleShell };
+  } finally {
+    timeline?.end("shell-spawn");
   }
-  let staleShell = ctx.shellStaleWarning(shellExe, root);
-  if (staleShell) {
-    log(staleShell, "WARN");
-    appendRuntimeWarning(staleShell);
-  }
-  ctx.resetShellPidFile(root);
-  if (launchedByShell) {
-    /* 双击壳的自编排链路（§1.5）里，拉起本编排器的那只壳**就是**本次启动唯一
-     * 的应用宿主：启动页与主窗都是 tauri.conf.json 的声明式窗口，每个壳进程
-     * 各建一份。这里若再 spawn 一只壳，同一次启动就有两个壳——用户会看到两个
-     * 一模一样的启动窗口（PR #1712 的回归），两只壳的回收链还互相纠缠（关掉
-     * 任意一只都会把编排器连同另一只一起收走）。所以自编排那次**只编排、
-     * 不起壳**：壳已经在跑，把本地服务起起来就好。 */
-    log("本次编排由桌面壳亲自拉起：壳已在运行，不再起第二个壳。", "INFO");
-    return { ok: true, shell: null, staleShell };
-  }
-  ctx.ensureSplashResource(root);
-  const shell = ctx.spawnShell(shellExe, port, {
-    root,
-    foreground: coldStart ? "1" : null,
-  });
-  log(`预编译 Tauri 壳已启动（PID ${shell.pid}）：${shellExe}`, "OK");
-  log("Tauri 桌面壳已启动，正在启动本地服务…", "STEP");
-  return { ok: true, shell, staleShell };
 }

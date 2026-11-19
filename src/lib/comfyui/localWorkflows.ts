@@ -22,6 +22,7 @@ import "server-only";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { isRecord } from "~/lib/is-record";
 import { normalizeSlashes } from "~/lib/path-display";
 
 import { compareText, uniqueBy } from "~/lib/ordered-set";
@@ -98,6 +99,7 @@ async function statMany(paths: Array<string>): Promise<Array<fs.Stats | null>> {
         continue;
       }
       try {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         out[index] = await fs.promises.stat(target);
       } catch {
         /* 单个条目读不到就跳过 —— 不中断整趟扫描 */
@@ -130,17 +132,14 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
 
   let rootStat: fs.Stats;
   try {
-    rootStat = await fs.promises.stat(abs);
+    rootStat = await fs.promises.stat(/*turbopackIgnore: true*/ abs);
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    const code = isRecord(error) ? error.code : undefined;
     if (code === "ENOENT") {
       return { rawPath: rawDir, absPath: abs, exists: false, files: [] };
     }
-    // e 为 unknown：`(e as Error)?.message ?? String(e)` 与旧 `e?.message ?? String(e)`
-    // 的运行时语义逐字一致（node fs 抛的都是 Error 实例）。
-    /* SAFETY: 类型断言已复核 */
-    const msg = (error as Error | undefined)?.message ?? String(error);
+    // node fs 抛的都是 Error 实例；非 Error 的抛出值退回字符串形式。
+    const msg = error instanceof Error ? error.message : String(error);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -185,6 +184,7 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
       const fullPath = path.join(dir, ent.name);
       if (ent.isDirectory()) {
         if (recursive) {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           await visit(fullPath);
         }
         continue;
@@ -192,7 +192,7 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
       if (!ent.isFile()) {
         continue;
       }
-      if (!/\.(json|workflow)$/i.test(ent.name)) {
+      if (!/\.(?:json|workflow)$/i.test(ent.name)) {
         continue;
       }
       pending.push(fullPath);
@@ -218,8 +218,7 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
   try {
     await visit(abs);
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const msg = (error as Error | undefined)?.message ?? String(error);
+    const msg = error instanceof Error ? error.message : String(error);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -360,8 +359,9 @@ function checksumOfFile(
     try {
       const hash = createHash("sha1");
       const stream = fs.createReadStream(absPath, { encoding: "utf8" });
-      /* SAFETY: 类型断言已复核 */
-      stream.on("data", (chunk) => hash.update(chunk as string));
+      stream.on("data", (chunk) => {
+        hash.update(chunk);
+      });
       stream.on("error", () => {
         resolve(null);
       });
@@ -389,8 +389,11 @@ export function resetLocalWorkflowChecksumCache(): void {
  *  这是「轮询里同一份数据反复出现」的常规场景（见 `checksumCache`）。 */
 export async function scanLocalWorkflowChecksums(
   rawPaths: Array<string>,
+  opts: { recursive?: boolean } = {},
 ): Promise<Array<LocalChecksumEntry>> {
-  const { allFiles } = await scanLocalWorkflowRoots(rawPaths);
+  /* recursive 透传（#4415）：workflows/ 会分子目录，主扫描带递归而这条不带时，
+   * 子目录里的改名文件进不了 checksum 索引，重关联永远不命中。 */
+  const { allFiles } = await scanLocalWorkflowRoots(rawPaths, opts);
   const out: Array<LocalChecksumEntry> = [];
   // 并发上限：一次扫 200 个文件不会同时开 200 条流。
   const MAX_PARALLEL = 8;
@@ -404,6 +407,7 @@ export async function scanLocalWorkflowChecksums(
         continue;
       }
 
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const result = await checksumOfFile(file.absPath, file.size, file.mtimeMs);
 
       if (result) {

@@ -1,17 +1,11 @@
 "use client";
 
 // ── 项目优先闸门（Phase 1）─────────────────────────────────────────────
-// 进入项目级创作视图（画布 / 工坊 / 成片）前必须先有一个项目。此前画布会
-// 自动落到一张隐式草稿，用户「没建项目就开始操作」，也让画布/工坊/成片的
-// 项目边界模糊。本闸门把「先创建或选择一个项目」变成进入这些视图的前置步骤。
-//
-// 逻辑很薄：新建走 canvas-store 的 createProject（真实 proj_*，落库 + 设为
-// 活跃），选择已有走 setActive；两者完成后回调 onEnter 让上层刷新活跃项目并
-// 渲染真正的视图。这里不碰网络（createProject 内部的服务端同步属 lib 层）。
-// 受控输入 / Enter 提交 / 按钮一律走既有原语（textHandler / enterCommit / Button）。
+// 进入项目级创作视图（画布 / 工坊 / 成片）前必须先有一个项目：此前画布会自动落到一张隐式草稿，用户「没建项目就开始操作」，也让这几个视图的项目边界模糊。本闸门把「先创建或选择一个项目」变成前置步骤：新建走 `createProject`（真实 proj_*，落库 + 设为活跃），选择已有走 `setActive`，完成后回调 `onEnter`；这里不碰网络（服务端同步属 lib 层），输入 / Enter / 按钮走既有原语。
 
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { textHandler } from "~/lib/form-props";
 import { createProject, listProjects, setActive } from "~/lib/project-canvas/canvas-store";
@@ -52,7 +46,7 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
             className="border-border bg-canvas-deep text-ink placeholder:text-ink-fainter focus:border-border-strong min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
             placeholder="项目名称（可留空，默认「未命名」）"
           />
-          <Button onClick={handleCreate} variant="gradient">
+          <Button onClick={handleCreate} variant="primary-solid">
             新建并进入
           </Button>
         </div>
@@ -62,7 +56,6 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
             <p className="text-ink-faint mb-2 text-xs font-semibold">或打开已有项目</p>
             <ul className="border-border-subtle flex max-h-56 flex-col gap-1 overflow-y-auto">
               {projects.map((project) => {
-                // oxlint-disable-next-line no-unnecessary-condition -- listProjects 读自 localStorage 的 JSON.parse(as 断言)，旧版本索引可能缺 nodes
                 const nodeCount = project.nodes?.length ?? 0;
                 return (
                   <li key={project.id}>
@@ -74,7 +67,9 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
                       }}
                       variant="ghost"
                     >
-                      <span className="truncate">{project.name || "未命名项目"}</span>
+                      <TruncatedText className="truncate">
+                        {project.name || "未命名项目"}
+                      </TruncatedText>
                       <span className="text-ink-fainter shrink-0 text-xs">
                         {nodeCount > 0 ? `${nodeCount} 节点` : "空"}
                       </span>

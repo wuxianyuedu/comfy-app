@@ -1,14 +1,9 @@
 "use client";
 
 /** 画布的右键上下文菜单（规范 16 §16.2.4.6 第一档：接 `ui/dropdown-menu`）。
- *
- *  此前是自绘外壳：一层 `fixed` 手定位面板 + 一层自绘遮罩负责关闭，Esc /
- *  方向键 / `role="menu"` 全都没有。现在这些语义由 base-ui 的 `Menu` 给，
- *  **调用处那份手写语义随之删掉**（只换容器会留下两套关闭路径）。
- *
- *  唯一需要自己想清楚的一处：菜单要开在**右键那个点**上，而 base-ui 的
- *  定位需要一个 trigger 元素 —— 所以这里渲染一个 `fixed` 的零尺寸 trigger
- *  放在 (x, y)，让 Positioner 锚定它。`open` 由父级持有的 `menu` 状态决定。
+ *  此前是自绘 fixed 手定位 + 自绘遮罩关闭，Esc / 方向键 / role="menu" 全没有；
+ *  现在由 base-ui `Menu` 给，调用处那份手写语义随之删掉（只换容器会留两套关闭路径）。
+ *  菜单要开在右键那个点上：渲染 fixed 零尺寸 trigger 放在 (x, y) 让 Positioner 锚定。
  */
 import { Icon } from "~/components/ui/icon";
 import {
@@ -82,25 +77,27 @@ export function CanvasContextMenu({ x, y, onPick, onPickTest, onClose }: CanvasC
           <DropdownMenuLabel className="text-ink-muted text-3xs px-2 py-1 tracking-wider uppercase">
             创建节点
           </DropdownMenuLabel>
-          {(Object.keys(NODE_META) as Array<NodeKind>).map((kind) => {
-            const meta = NODE_META[kind];
-            return (
-              <DropdownMenuItem
-                className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
-                data-canvas-node-kind={kind}
-                key={kind}
-                onClick={() => {
-                  onPick(kind);
-                }}
-              >
-                <Icon className="text-primary-strong" name={meta.icon} size={15} />
-                <span className="flex flex-col">
-                  <span className="font-medium">{meta.label}</span>
-                  <span className="text-ink-muted text-3xs">{meta.desc}</span>
-                </span>
-              </DropdownMenuItem>
-            );
-          })}
+          {Object.keys(NODE_META)
+            .filter((k): k is NodeKind => Object.hasOwn(NODE_META, k))
+            .map((kind) => {
+              const meta = NODE_META[kind];
+              return (
+                <DropdownMenuItem
+                  className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
+                  data-canvas-node-kind={kind}
+                  key={kind}
+                  onClick={() => {
+                    onPick(kind);
+                  }}
+                >
+                  <Icon className="text-primary-strong" name={meta.icon} size={15} />
+                  <span className="flex flex-col">
+                    <span className="font-medium">{meta.label}</span>
+                    <span className="text-ink-muted text-3xs">{meta.desc}</span>
+                  </span>
+                </DropdownMenuItem>
+              );
+            })}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

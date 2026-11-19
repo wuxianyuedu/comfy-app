@@ -24,7 +24,13 @@
  * 无 React、无 IO（规范 §17.2 第②层），因此可直接单测。
  */
 
-import { normalizeSizeSpec, sceneFromMode, sizeSpecToWxH } from "~/lib/media/size-presets";
+import {
+  DEFAULT_SIZE_PRESET_TABLE,
+  normalizeSizeSpec,
+  sceneFromMode,
+  sizeSpecToWxH,
+  type SizePresetTable,
+} from "~/lib/media/size-presets";
 import {
   applyParamMapping,
   buildParamEntries,
@@ -102,6 +108,9 @@ export type SizeSpecValue = {
 
 /** 一次封装的结果。 */
 export type EncapsulatedInputs = {
+  /** 契约槽位 id → 主落点 ioKey（resolveMapping 的结果；null = 未连线）。
+   *  参考图装载计划（#4376）据此把文件名扇出到追加端口。 */
+  resolved: Record<string, string | null>;
   /** 用户给了值、但落不到任何端口的口（未连线 / 作者显式断开 / 端口已消失）。
    *  以前这里会按名字猜一个端口兜住，现在如实上报 —— 没连线就是「未配置」。 */
   unmatched: Array<string>;
@@ -195,9 +204,11 @@ function toContractValues(args: {
   io: WorkflowIOMap;
   mode: string | null;
   resolved: Record<string, string | null>;
+  /** 生效的尺寸表（ISSUE #3972）：宽高按它查，不再用编译进包的默认快照。 */
+  table: SizePresetTable;
   values: WorkshopExposedValues;
 }): Record<string, unknown> {
-  const { io, mode, values, resolved, entries } = args;
+  const { io, mode, values, resolved, entries, table } = args;
   const out: Record<string, unknown> = {};
 
   if (values.prompt !== undefined) {
@@ -209,9 +220,11 @@ function toContractValues(args: {
 
   /* 尺寸：工坊给的是「比例 + 档位（+ 倍数）」，映射层按**落点子口身份**派成各自
    *  认的形状（宽 / 高 / 比例标签 / 像素量 / 分辨率档 / 倍数）—— 换算只此一处，
-   *  写成 "WxH" 是为了让两边的口径完全一致（映射层只吃这一种尺寸串）。 */
+   *  写成 "WxH" 是为了让两边的口径完全一致（映射层只吃这一种尺寸串）。
+   *  查表用**生效的那份**（ISSUE #3972）：客户端传水合后的 store 表，服务端传
+   *  `loadSizePresetTable()` 现读的那份 —— 设置里改过的表在出图链路真的生效。 */
   if (values.size !== undefined) {
-    out.size = sizeSpecToWxH(normalizeSizeSpec(values.size), sceneFromMode(mode));
+    out.size = sizeSpecToWxH(normalizeSizeSpec(values.size), sceneFromMode(mode), table);
   }
 
   /* 图片：契约口 `first-frame` / `last-frame` / `reference-image(-n)` 各自落哪一行
@@ -271,16 +284,16 @@ function toContractValues(args: {
 }
 
 /** 契约口 id → 对外值里对应的参考图槽位（`reference-image` = 0，`-2` = 1…）。
- *  非参考图口返回 -1。 */
-function referenceSlotOf(id: string): number {
+ *  非参考图口返回 -1。装载绑定 / 装载计划（#4376）用它识别参考图槽位。 */
+export function referenceSlotOf(id: string): number {
   if (id === "reference-image") {
     return 0;
   }
-  const matched = /^reference-image-(\d+)$/.exec(id);
+  const matched = /^reference-image-(?<index>\d+)$/.exec(id);
   if (!matched) {
     return -1;
   }
-  return Math.max(0, Number(matched[1]) - 1);
+  return Math.max(0, Number(matched.groups?.index) - 1);
 }
 
 /** 读某个**契约口**在对外值里的当前内容（图片口是文件名，文本口是文本）。
@@ -443,6 +456,9 @@ export function pruneEmptyExposedValues(values: WorkshopExposedValues): Workshop
  *    · `paramMap` 作者的连线表（`paramMap` 原始形状，内部走 `parseParamMapping`）；
  *    · `mode` 当前模式码；连线按模式分开存放，未开启模式传 null；
  *    · `values` 工坊这次要落下去的对外参数；
+ *    · `table` 生效的尺寸表（ISSUE #3972）：宽高换算按它查。缺省 = 编译进包的
+ *      项目默认快照 —— 调用方应传自己那一侧的生效表（客户端 `getSizePresetTable()`、
+ *      服务端 `loadSizePresetTable()`），否则设置里改过的表不生效；
  *    · `contractIds` 该模式**生效的契约口清单**（含作者自定义的口）。不传 =
  *      内置默认契约：自定义口不在其中，作者给它的值就落不下去（会如实进
  *      `unmatched`，不会静默丢）。有契约注册表的调用方必须传。
@@ -452,11 +468,13 @@ export function buildEncapsulatedInputs(args: {
   io: WorkflowIOMap | null | undefined;
   mode: string | null | undefined;
   paramMap: unknown;
+  /** 生效的尺寸表（ISSUE #3972）：宽高换算按它查。缺省 = 编译进包的默认快照。 */
+  table?: SizePresetTable;
   values: WorkshopExposedValues;
 }): EncapsulatedInputs {
-  const { io, paramMap, mode, values, contractIds } = args;
+  const { io, paramMap, mode, values, contractIds, table = DEFAULT_SIZE_PRESET_TABLE } = args;
   if (!io || typeof io !== "object") {
-    return { workflowInputs: [], unmatched: [] };
+    return { workflowInputs: [], unmatched: [], resolved: {} };
   }
   const effectiveMode = mode ?? null;
   const entries = buildParamEntries(io, undefined, {
@@ -469,14 +487,17 @@ export function buildEncapsulatedInputs(args: {
     io,
     entries,
     mapping,
+    mode: effectiveMode,
+    /* 档位反解与正向换算同源：同一份生效表（ISSUE #4099）。 */
+    table,
     values: toContractValues({
       io,
       mode: effectiveMode,
       values,
       resolved,
       entries,
+      table,
     }),
-    mode: effectiveMode,
   });
   /* 「这个模式压根不暴露这个口」映射层看不见（它只遍历契约条目）：工坊给了图片 /
    *  时长这类值、而契约里没有对应口时在这里补报 —— 否则用户会以为值已经下发下去
@@ -513,7 +534,7 @@ export function buildEncapsulatedInputs(args: {
       reported.add(id);
     }
   }
-  return { workflowInputs: inputs, unmatched: [...reported] };
+  return { workflowInputs: inputs, unmatched: [...reported], resolved };
 }
 
 /* ── unmatched 的用户口径 ──────────────────────────────────────────────

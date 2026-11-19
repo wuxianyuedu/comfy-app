@@ -16,6 +16,8 @@
 //
 // 无 React、无 IO（规范 §17.2 第②层），可直接单测。
 
+import { isRecord } from "~/lib/is-record";
+
 /** UI 格式里主模型所在的节点类型 → `widgets_values` 下标。
  *
  *  下标固定是 0：这几个类的**第一个 widget** 就是模型文件名（字段名见
@@ -61,7 +63,7 @@ function scan(
   pick: (record: Record<string, unknown>) => string | null,
   depth: number,
 ): string | null {
-  if (depth > MAX_DEPTH || node === null || typeof node !== "object") {
+  if (depth > MAX_DEPTH || !isRecord(node)) {
     return null;
   }
 
@@ -75,13 +77,11 @@ function scan(
     return null;
   }
 
-  /* SAFETY: 类型断言已复核 */
-  const record = node as Record<string, unknown>;
-  const direct = pick(record);
+  const direct = pick(node);
   if (direct !== null) {
     return direct;
   }
-  for (const value of Object.values(record)) {
+  for (const value of Object.values(node)) {
     const found = scan(value, pick, depth + 1);
     if (found !== null) {
       return found;
@@ -93,11 +93,10 @@ function scan(
 /** API 格式：`inputs.<key>` 是模型文件名。 */
 function apiInput(record: Record<string, unknown>, key: string): string | null {
   const inputs = record.inputs;
-  if (inputs === null || typeof inputs !== "object") {
+  if (!isRecord(inputs)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  return asFileName((inputs as Record<string, unknown>)[key]);
+  return asFileName(inputs[key]);
 }
 
 /** UI 格式：节点类型在表里时取 `widgets_values[下标]`。 */

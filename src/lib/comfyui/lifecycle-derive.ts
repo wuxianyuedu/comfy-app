@@ -103,7 +103,6 @@ export type SpawnArgsFacts = {
  */
 export function buildSpawnArgs(facts: SpawnArgsFacts): Array<string> {
   const port =
-    // oxlint-disable-next-line strict-boolean-expressions -- 「0 = 未配置」端口契约判据（scripts/check-comfyui-port-contract.cjs）钉死此形状：0 与 undefined 同为「未配置」，都落 defaultPort
     facts.effectivePort && facts.effectivePort > 0 ? facts.effectivePort : facts.defaultPort;
   const args = [...facts.baseArgs];
   if (port !== facts.defaultPort) {
@@ -151,8 +150,8 @@ export function isKeepAliveDead(missCount: number): boolean {
 
 /** 进程秒退时从输出里提取缺失依赖的可行动报错。 */
 export function extractMissingModule(outputLines: Array<string>): string | null {
-  const m = /No module named '([^']+)'/.exec(outputLines.join("\n"));
-  return m?.[1] ?? null;
+  const m = /No module named '(?<module>[^']+)'/.exec(outputLines.join("\n"));
+  return m?.groups?.module ?? null;
 }
 
 /**

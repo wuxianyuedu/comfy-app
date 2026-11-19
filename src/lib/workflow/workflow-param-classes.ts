@@ -171,8 +171,10 @@ export function sizeGroupIds(id: string | null | undefined): ReadonlyArray<Param
   if (id === undefined || id === null) {
     return [];
   }
-  /* SAFETY: 类型断言已复核 */
-  return id === "size" ? SIZE_SUB_IDS : [id as ParamClass];
+  if (id === "size") {
+    return SIZE_SUB_IDS;
+  }
+  return isParamClass(id) ? [id] : [];
 }
 
 /* ── 端口分类：只看**声明类型** ──
@@ -199,12 +201,24 @@ const TEXT_TYPES = new Set(["STRING", "TEXT"]);
 const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
 const NUMBER_TYPES = new Set(["INT", "FLOAT", "NUMBER", "COMBO", "*"]);
 
-/** 端口按声明类型归族（`null` = 不能当任何对外参数的落点：连线型端口、输出口）。 */
+/** 端口按声明类型归族（`null` = 不能当任何对外参数的落点：连线型端口、输出口）。
+ *
+ *  例外（#4355）：**张量型图片入口**（`kind: "param"` 且声明类型 IMAGE/MASK，
+ *  例如 MiniMaxH3ImageConditioning 的 `images.image_1..4`）也纳入图片族候选 ——
+ *  这类端口没有 widget，作者连上参考图槽后，执行期由图增强补 LoadImage 供给
+ *  （见 `src/lib/comfyui/reference-loader-augment.ts`）。其余连线型端口（文本 /
+ *  数值）没有等价机制，仍不作候选。 */
 export function pinFamily(e: WorkflowIOEntry | null | undefined): PinFamily | null {
-  if (e?.direction !== "input" || e.kind !== "widget") {
+  if (e?.direction !== "input") {
     return null;
   }
   const type = (e.type ?? "*").toUpperCase();
+  if (e.kind === "param") {
+    return IMAGE_TYPES.has(type) ? "image" : null;
+  }
+  if (e.kind !== "widget") {
+    return null;
+  }
   if (TEXT_TYPES.has(type)) {
     return "text";
   }
@@ -240,6 +254,11 @@ export const CLASS_FAMILY: Record<ParamClass, PinFamily | null> = {
   "lora-strength": "number",
   other: null,
 };
+
+/** 分类键的运行时判据（id 来自持久化 / 契约字符串，可能是历史遗留的未知值）。 */
+function isParamClass(value: string): value is ParamClass {
+  return Object.hasOwn(CLASS_FAMILY, value);
+}
 
 /** 某个对外参数类接受的端口族（`null` = 不接受任何端口）。 */
 export function familyOfClass(cls: ParamClass): PinFamily | null {

@@ -17,6 +17,7 @@
 import "server-only";
 import { hash } from "node:crypto";
 import { errorText } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 import { promises as fs } from "node:fs";
 import { z } from "zod";
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
@@ -78,7 +79,7 @@ export function checksum(text: string): string {
  * 与 POST /api/workflows 的流水线保持一致，让「首次导入」与「实时重新导入」
  * behave identically.
  */
-export async function parseWorkflowContent(
+export function parseWorkflowContent(
   content: string,
   opts: {
     defaultName?: string;
@@ -128,7 +129,7 @@ export async function parseWorkflowContent(
     logger.info(`[importSource] Unknown taskType "${taskType}", allowing as custom type`);
   }
 
-  return { rawJson, positions, taskType, warnings, format: "raw" };
+  return Promise.resolve({ rawJson, positions, taskType, warnings, format: "raw" });
 }
 
 export type ImportedFromFile = {
@@ -202,11 +203,8 @@ export async function reimportFromSource(tpl: {
   try {
     stat = await fs.stat(tpl.sourcePath);
   } catch (error: unknown) {
-    /* SAFETY: 类型断言已复核 */
-    const err = error as {
-      code?: string;
-    } | null;
-    if (err?.code === "ENOENT") {
+    const code = isRecord(error) ? error.code : undefined;
+    if (code === "ENOENT") {
       return { missing: true };
     }
     return { missing: true };
@@ -214,8 +212,7 @@ export async function reimportFromSource(tpl: {
 
   const mtimeSec = Math.floor(stat.mtimeMs / 1000);
   // 快路径：mtime（秒）没变 → 内容几乎可以肯定也没变。
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (tpl.sourceMtime != null && mtimeSec === tpl.sourceMtime) {
+  if (tpl.sourceMtime !== null && tpl.sourceMtime !== undefined && mtimeSec === tpl.sourceMtime) {
     return { unchanged: true };
   }
 

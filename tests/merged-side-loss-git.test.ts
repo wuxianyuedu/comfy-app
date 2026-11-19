@@ -1,30 +1,12 @@
 /**
- * `scripts/merged-side-loss-git.mjs` 的单测 —— 「整份退回」这一族的 git 取证层
- * （规范 §11.23.5 / §11.23.6）。
- *
- * ── 为什么这一份要单独测 ──────────────────────────────────────────────
- *
- * 两个执行者（事后复算档 / 提交前档）的自测跑的是「真脚本 + 真 git 临时仓库」，
- * 那种形态**测不出取证次数**：进程在子进程里起，看不见里面 spawn 了几条 git。
- * 而这条判据恰恰坏在次数上 —— 旧写法是「变更文件数 ×（1 + 该文件历史条目数）」次
- * spawn，实测约 2–3s/文件（48 文件的分支要 133–218s），于是
- * `tests/premerge-check.test.ts` 等这一段的两条用例在任何稍大的分支上恒超时红，
- * 挂在 `prepare-commit-msg` 的提交前档则让一次大合并把 `git commit` 挂几分钟。
- * 所以这里用**注入的假 run** 把两件事钉住：① 每个函数各只起一条 git；
- * ② 读不懂的输出一律判「没跑起来」，不部分采信、不猜。
- *
- * 覆盖：
- *   ① resolveBlobs：正常/缺失/去重/空清单不起进程；
- *   ② resolveBlobs：run 失败、行数对不上、行读不懂 ⇒ 都返回 null；
- *   ③ historyByFile：候选序与清单内容（只收被关心的路径）；
- *   ④ historyByFile：run 失败 ⇒ null；空文件清单不起进程；
- *   ⑤ 路径里带空格、名字长得像提交标记这两种形状不会静默出错；
- *   ⑥ 两个执行者的源码必须经这一层取证（不再自己拼 `<rev>:<path>` 去逐条 rev-parse）。
+ * `scripts/base-check/merged-side-loss-git.mjs` 取证层单测（规范 §11.23.5 / §11.23.6）：真脚本+真仓库测不出 spawn 次数（旧写法变更文件×历史条目，约 2–3s/文件，premerge 与提交前档恒超时），故用注入的假 run 钉住：①每个函数各只起一条 git；②读不懂的输出一律判「没跑起来」，不部分采信、不猜。
+ * 覆盖 resolveBlobs（正常/缺失/去重/失败/行数或格式不符⇒null）、historyByFile（候选序与路径过滤/失败⇒null）、空格与类提交标记的路径。
+ * 两个执行者的源码必须经这一层取证（不再自拼 `<rev>:<path>` 逐条 rev-parse）。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test, vi } from "vitest";
-import { historyByFile, resolveBlobs } from "../scripts/merged-side-loss-git.mjs";
+import { historyByFile, resolveBlobs } from "../scripts/base-check/merged-side-loss-git.mjs";
 
 /* 这些用例全是纯函数 + 假 run，最贵的一条是拼字符串；30s 的全局预算用不到，
  * 但本文件的夹具仓库类兄弟文件都显式钉过，这里同样就地钉死，避免随全局漂移。 */
@@ -170,19 +152,19 @@ describe("两个执行者必须经这一层取证", () => {
    * 超线性成本来源（次数 = 文件数 × 历史条目数）。谁把它抄回执行者里，
    * 上面那些用例看不见，这条能看见。 */
   for (const script of [
-    "scripts/check-merged-side-loss.mjs",
-    "scripts/check-pending-merge-loss.mjs",
+    "scripts/gates/check-merged-side-loss.mjs",
+    "scripts/gates/check-pending-merge-loss.mjs",
   ]) {
     test(`${script} 的取证只走 merged-side-loss-git`, () => {
       const src = readFileSync(join(process.cwd(), script), "utf8");
-      expect(src).toContain("./merged-side-loss-git.mjs");
+      expect(src).toContain("../base-check/merged-side-loss-git.mjs");
       expect(src).toMatch(/resolveBlobs\(/);
       expect(src).toMatch(/historyByFile\(/);
       /* 逐条取 blob / 逐文件取历史的写法不许留在执行者里。
        * 注意这里只拦**实现形态**（把 `cat-file` 当 git 参数传、把路径当 pathspec 逐文件传），
        * 放行话术里对这条通道的点名说明 —— 报错文案要能指出「是哪一层没跑起来」。 */
       expect(src).not.toMatch(/rev-parse",\s*`\$\{/);
-      expect(src).not.toMatch(/"--",\s*(file|f)\b/);
+      expect(src).not.toMatch(/"--",\s*(?:file|f)\b/);
       expect(src).not.toMatch(/\[\s*"cat-file"/);
     });
   }

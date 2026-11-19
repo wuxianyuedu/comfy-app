@@ -1,12 +1,8 @@
 //
-// 工坊「失联任务恢复 + 30 分钟安全阀」回归测试。
-//
-// 草稿把 status=running 与 taskId 一起持久化，但 SSE 观察循环活在内存里：
-// 刷新 / 切页签重挂载后镜头会永远停在「生成中」（历史欠缺）。恢复逻辑先查
-// task 表真值（fetchTaskSnapshot）再决定「直接回写产物」还是「重订阅 SSE」
-// —— SSE 对「订阅前已终态」的任务只回放日志与一条 state 帧（成功终态不带
-// 产物、不发 done 帧），无脑重订阅会把已成功的任务判成「连接中断」。
-// 本文件逐条钉死恢复的四种分支，以及 generateShot 的超时阀与 unmatched 提示。
+// 工坊「失联任务恢复 + 30 分钟安全阀」回归测试。恢复逻辑先查 task 表真值
+//（fetchTaskSnapshot）再决定「直接回写产物」还是「重订阅 SSE」—— SSE 对
+//「订阅前已终态」的任务只回放日志与一条 state 帧（成功终态不带产物、不发 done
+// 帧），无脑重订阅会把已成功的任务判成「连接中断」。
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, cleanup } from "@testing-library/react";
@@ -42,8 +38,8 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
     startLocalGenerate: vi.fn(),
     cancelLocalTask: vi.fn(),
     buildLibraryWorkflowInput: vi.fn(),
-    fetchApiChannels: vi.fn(async () => null),
-    fetchWorkshopWorkflows: vi.fn(async () => []),
+    fetchApiChannels: vi.fn(() => Promise.resolve(null)),
+    fetchWorkshopWorkflows: vi.fn(() => Promise.resolve([])),
   };
 });
 
@@ -99,12 +95,13 @@ beforeEach(() => {
   watchTaskMock.mockReset();
   fetchTaskSnapshotMock.mockReset();
   vi.mocked(cancelLocalTask).mockReset();
-  globalThis.fetch = vi.fn(
-    async () =>
+  globalThis.fetch = vi.fn(() =>
+    Promise.resolve(
       new Response(JSON.stringify({ skills: [], models: [] }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),
+    ),
   );
 });
 
@@ -204,13 +201,13 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     const [calledTaskId, handler] = watchTaskMock.mock.calls[0]!;
     expect(calledTaskId).toBe("task-live");
     expect(typeof handler.onSettled).toBe("function");
-    await act(async () => {
+    act(() => {
       settle({ ok: true });
     });
     expect(result.current.shots[0]!.status).toBe("done");
   });
 
-  it("恢复是异步的：期间用户重新发起（taskId 已换），旧恢复不覆盖新任务的状态", async () => {
+  it("恢复是异步的：期间用户重新发起（taskId 已换），旧恢复不覆盖新任务的状态", () => {
     const project = createProject();
     seedDraft(project.id, [makeShot({ status: "running", taskId: "task-old" })]);
     let resolveSnapshot!: (v: unknown) => void;
@@ -228,7 +225,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
       );
     });
     /* 然后恢复结果才到达 —— 归属核对（taskId 已换）必须拦下这次回写。 */
-    await act(async () => {
+    act(() => {
       resolveSnapshot({
         status: "SUCCEEDED",
         outputs: [{ url: "/api/generated/old.png", kind: "image" }],
@@ -303,7 +300,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     expect(result.current.shots[0]!.clipStatus).toBe("done");
   });
 
-  it("刷新恢复（视频）：恢复期间重新发起片段（clipTaskId 已换），旧恢复不覆盖", async () => {
+  it("刷新恢复（视频）：恢复期间重新发起片段（clipTaskId 已换），旧恢复不覆盖", () => {
     const project = createProject();
     seedDraft(project.id, [makeShot({ clipStatus: "running", clipTaskId: "clip-old" })]);
     let resolveSnapshot!: (v: unknown) => void;
@@ -319,7 +316,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
         prev.map((item) => (item.id === "shot-1" ? { ...item, clipTaskId: "clip-new" } : item)),
       );
     });
-    await act(async () => {
+    act(() => {
       resolveSnapshot({
         status: "SUCCEEDED",
         outputs: [{ url: "/api/generated/old.mp4", kind: "video" }],

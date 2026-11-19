@@ -1,15 +1,6 @@
-/**
- * 锚定浮层的碰撞边界（`useOverlayBoundary`）。
- *
- * 用例钉的是**让位这件事有没有真的发生**，而不是某个像素值：
- *   · 壳态（`isDesktopShell()` 为真）下可用区域从标题行下沿起算 —— 这是气泡被
- *     标题行盖掉半个身子的修法（`side="top"` 的气泡不再往 chrome 里摆）；
- *   · 非壳态（浏览器 / dev）下可用区域就是整视口，行为一字不变；
- *   · 首帧量不到视口时给 `null`（不拿假矩形摆位）。
- *
- * 四边是否真的落在视口内由真实浏览器验（`e2e/` 的锚定浮层用例）——
- * jsdom 不做布局，断言算出来的像素位置只会锁死实现。
- */
+/** 锚定浮层的碰撞边界（`useOverlayBoundary`），钉的是**让位有没有真的发生**而非像素值：壳态（`isDesktopShell()` 为真）
+ * 可用区域从标题行下沿起算（`side="top"` 的气泡不再往 chrome 里摆）；非壳态可用区域就是整视口，行为一字不变；
+ * 首帧量不到视口时给 `null`。四边是否真落在视口内由 `e2e/` 的真实浏览器验 —— jsdom 不做布局，断言像素位置只会锁死实现。 */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
@@ -19,8 +10,7 @@ import { useOverlayBoundary } from "./use-overlay-boundary";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  /* SAFETY: 类型断言已复核 */
-  delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+  Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
 });
 
 /* 「在不在壳里」的判据就是 `isDesktopShell()` 读的那个全局标记（`desktop-shell-client`）。
@@ -30,11 +20,10 @@ function setShell(on: boolean) {
   if (on) {
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
-      value: { invoke: async () => null, transformCallback: () => 0 },
+      value: { invoke: () => null, transformCallback: () => 0 },
     });
   } else {
-    /* SAFETY: 类型断言已复核 */
-    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
   }
 }
 

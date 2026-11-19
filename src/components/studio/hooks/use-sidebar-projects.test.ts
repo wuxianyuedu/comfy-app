@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
 // 侧栏「项目」分组取数的装配判据（ISSUE #1874）。
-//
-// 现场：用户对着「所有项目」屏里明摆着三条项目，侧栏「项目」分组下一条都没有
-// —— 因为侧栏此前读的是**本地索引**（`listProjects()`），而那一屏读的是
-// 「本地索引 ∪ 服务端」的并集（ISSUE #1522）。画布页没打开过就没有
-// `hydrateFromServer` 那次对账，于是「服务端有一行、索引里没有」的项目
-// 在侧栏彻底不可见。
-//
-// 这里判的就是那条分叉：**服务端独有的一行必须出现在侧栏列表里**。
+// 侧栏此前只读本地索引，而「所有项目」屏读并集（ISSUE #1522）；画布页没打开过
+// 就没有 hydrate 对账，服务端独有的项目在侧栏彻底不可见。这里判那条分叉。
 // 反向验证过：把并集换回「只列本地索引」，第一条必红。
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";

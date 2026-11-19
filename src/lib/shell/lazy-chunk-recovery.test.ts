@@ -11,10 +11,7 @@
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-import {
-  isChunkLoadFailure,
-  reloadOnceForChunkError,
-} from "./lazy-chunk-recovery";
+import { isChunkLoadFailure, reloadOnceForChunkError } from "./lazy-chunk-recovery";
 
 /** 一个可控的 `window.location.reload` 替身（jsdom 的 reload 未实现，会抛）。 */
 function stubReload(): ReturnType<typeof vi.fn> {
@@ -47,16 +44,12 @@ describe("isChunkLoadFailure — 辨认分块加载失败", () => {
 
   it("认出 webpack 的 Loading chunk N failed / CSS chunk 两种形态", () => {
     expect(isChunkLoadFailure(new Error("Loading chunk 7 failed."))).toBe(true);
-    expect(isChunkLoadFailure(new Error("Loading CSS chunk 3 failed."))).toBe(
-      true,
-    );
+    expect(isChunkLoadFailure(new Error("Loading CSS chunk 3 failed."))).toBe(true);
   });
 
   it("认出浏览器原生 ESM 形态（Firefox / Safari）", () => {
     expect(
-      isChunkLoadFailure(
-        new Error("Failed to fetch dynamically imported module: /x.js"),
-      ),
+      isChunkLoadFailure(new Error("Failed to fetch dynamically imported module: /x.js")),
     ).toBe(true);
   });
 
@@ -88,13 +81,9 @@ describe("reloadOnceForChunkError — 命中时整页刷新一次", () => {
   it("同一轮里没有第二次：刷过之后再来一条分块失败不再刷（防刷新死循环）", () => {
     vi.useFakeTimers();
     const reload = stubReload();
-    expect(
-      reloadOnceForChunkError(new Error("Failed to load chunk /a.js")),
-    ).toBe(true);
+    expect(reloadOnceForChunkError(new Error("Failed to load chunk /a.js"))).toBe(true);
     vi.advanceTimersByTime(59_000);
-    expect(
-      reloadOnceForChunkError(new Error("Failed to load chunk /b.js")),
-    ).toBe(false);
+    expect(reloadOnceForChunkError(new Error("Failed to load chunk /b.js"))).toBe(false);
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
@@ -104,13 +93,9 @@ describe("reloadOnceForChunkError — 命中时整页刷新一次", () => {
   it("冷却窗口之外是新的一轮：隔得更久再撞一次仍会刷", () => {
     vi.useFakeTimers();
     const reload = stubReload();
-    expect(
-      reloadOnceForChunkError(new Error("Failed to load chunk /a.js")),
-    ).toBe(true);
+    expect(reloadOnceForChunkError(new Error("Failed to load chunk /a.js"))).toBe(true);
     vi.advanceTimersByTime(61_000);
-    expect(
-      reloadOnceForChunkError(new Error("Failed to load chunk /c.js")),
-    ).toBe(true);
+    expect(reloadOnceForChunkError(new Error("Failed to load chunk /c.js"))).toBe(true);
     expect(reload).toHaveBeenCalledTimes(2);
   });
 
@@ -123,9 +108,7 @@ describe("reloadOnceForChunkError — 命中时整页刷新一次", () => {
   it("生产构建不刷：那条路径该走「产物缺件」的显式暴露，不该被刷新掩盖", () => {
     const reload = stubReload();
     vi.stubEnv("NODE_ENV", "production");
-    expect(
-      reloadOnceForChunkError(new Error("Failed to load chunk /a.js")),
-    ).toBe(false);
+    expect(reloadOnceForChunkError(new Error("Failed to load chunk /a.js"))).toBe(false);
     expect(reload).not.toHaveBeenCalled();
   });
 

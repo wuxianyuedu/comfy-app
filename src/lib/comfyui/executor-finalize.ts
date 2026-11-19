@@ -31,6 +31,7 @@ import path from "node:path";
 import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 import { friendlyError } from "./executor-errors";
 import { taskOutputDir, taskOutputUrl } from "~/lib/media/output-paths";
+import { isRecord } from "~/lib/is-record";
 import { fetchHistoryEntry, traceComfyQueue, type ComfyHistoryEntry } from "./executor-history";
 import { historyTraceSummary, historyOutputKeys, trace } from "./trace";
 import { kickQueue } from "./executor-continuation";
@@ -58,12 +59,15 @@ export async function loadRealTaskRepo() {
 }
 export type TaskRepoLike = Pick<
   Awaited<ReturnType<typeof loadRealTaskRepo>>,
-  "findExecutionMeta" | "finalizeSuccess" | "createImages" | "finalizeFailure"
+  "findExecutionMeta" | "finalizeSuccessWithImages" | "finalizeFailure"
 >;
 export type GetViewLike = (filename: string, subfolder: string, type: string) => Promise<Buffer>;
 export type RuntimeLoggerLike = {
   error(msg: string, ctx?: unknown): void;
   info(msg: string, ctx?: unknown): void;
+  /** 真实运行日志器（app-runtime-log）本就有 warn 档；此前类型漏了它，
+   *  导致「该用 warn 的失败」只能降级成 info 或错用 error（ISSUE #4270）。 */
+  warn(msg: string, ctx?: unknown): void;
 };
 export type ExecutorFinalizeDeps = {
   getView: GetViewLike;
@@ -124,11 +128,13 @@ function executionErrorMessageOf(msg: unknown): unknown {
   if (!Array.isArray(msg)) {
     return undefined;
   }
-  // Array.isArray 把 unknown 收窄为 any[]，索引取值后立即断言收口。
-  /* SAFETY: 类型断言已复核 */
-  const payload = msg[1] as Record<string, unknown> | null | undefined;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  return payload != null && typeof payload === "object" ? payload.exception_message : undefined;
+  const payload: unknown = msg[1];
+  return isRecord(payload) ? payload.exception_message : undefined;
+}
+
+/** 只收字符串数组；不是数组（或含非字符串元素）时回落空数组。 */
+function isStringArray(v: unknown): v is Array<string> {
+  return Array.isArray(v) && v.every((s) => typeof s === "string");
 }
 
 /** runner-state 的 `executedWorkflow` 是 `Map<string, unknown>`（不在本次 8 文件
@@ -150,12 +156,8 @@ export async function complete(taskId: string, promptId: string) {
     await completeInner(taskId, promptId, executedWorkflow);
   } catch (error) {
     // 下载 / 落盘 / 写库任何一步炸了，都必须把任务收口，否则队列同样会卡死。
-    /* SAFETY: 类型断言已复核 */
-    await finalizeFailure(
-      taskId,
-      promptId,
-      (error as { message?: unknown } | null | undefined)?.message ?? "结果处理失败",
-    );
+    const failureMessage = isRecord(error) ? error.message : undefined;
+    await finalizeFailure(taskId, promptId, failureMessage ?? "结果处理失败");
   }
 }
 
@@ -174,18 +176,18 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // 复现元数据。projectId 为 localStorage 的 CanvasProject.id（client 侧字符串）。
   const taskRow = await taskRepository.findExecutionMeta(taskId);
   const projectId: string | null = taskRow?.projectId ?? null;
-  /* SAFETY: 类型断言已复核 */
-  const taskParams = (taskRow?.params as Record<string, unknown> | null) ?? {};
+  const paramsRaw: unknown = taskRow?.params;
+  const taskParams: Record<string, unknown> = isRecord(paramsRaw) ? paramsRaw : {};
   const reqSeed =
     typeof taskParams.seed === "number" || typeof taskParams.seed === "string"
       ? String(taskParams.seed)
       : undefined;
   let reqW: number | undefined, reqH: number | undefined;
   const sizeStr = typeof taskParams.size === "string" ? taskParams.size : "";
-  const sizeMatch = /(\d+)\s*[x×]\s*(\d+)/i.exec(sizeStr);
+  const sizeMatch = /(?<width>\d+)\s*[x×]\s*(?<height>\d+)/i.exec(sizeStr);
   if (sizeMatch) {
-    reqW = Number(sizeMatch[1]);
-    reqH = Number(sizeMatch[2]);
+    reqW = Number(sizeMatch.groups?.width);
+    reqH = Number(sizeMatch.groups?.height);
   }
   /* 产物地址前缀与磁盘目录同一份布局（`~/lib/media/output-paths`）：这一句
    * 写进 TaskImage.localPath，删除侧要按它把整个目录删掉 —— 两处各拼一遍就
@@ -329,36 +331,44 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
    * 文件命名与日志序号。 */
   // Images
   for (const [i, im] of images.entries()) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const buf = await getView(im.filename, im.subfolder ?? "", im.type ?? "");
     const ext = path.extname(im.filename) || ".png";
     const fname = `img_${i}${ext}`;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await fs.writeFile(path.join(dir, fname), buf);
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "image" });
     log(taskId, "info", `下载第 ${i + 1} 张图像`);
   }
   // 视频（mp4 / gif / webm）
   for (const [i, v] of videos.entries()) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const buf = await getView(v.filename, v.subfolder ?? "", v.type ?? "");
     const ext = path.extname(v.filename) || ".mp4";
     const fname = `vid_${i}${ext}`;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await fs.writeFile(path.join(dir, fname), buf);
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "video" });
     log(taskId, "info", `下载第 ${i + 1} 个视频`);
   }
   // 音频（SaveAudio / AudioComposite）
   for (const [i, a] of audios.entries()) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const buf = await getView(a.filename, a.subfolder ?? "", a.type ?? "");
     const ext = path.extname(a.filename) || ".wav";
     const fname = `aud_${i}${ext}`;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await fs.writeFile(path.join(dir, fname), buf);
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "audio" });
     log(taskId, "info", `下载第 ${i + 1} 个音频`);
   }
   // 通用 3D / 未知文件产物（mesh、gltf、obj …）
   for (const [i, o] of others.entries()) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const buf = await getView(o.filename, o.subfolder ?? "", o.type ?? "");
     const ext = path.extname(o.filename) || ".bin";
     const fname = `file_${i}${ext}`;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await fs.writeFile(path.join(dir, fname), buf);
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "other" });
     log(taskId, "info", `下载第 ${i + 1} 个文件`);
@@ -366,6 +376,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // 文本产物（ShowText）：存成 .txt，结果可读可查。
   for (const [i, text] of texts.entries()) {
     const fname = `txt_${i}.txt`;
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await fs.writeFile(path.join(dir, fname), text, "utf8");
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "text" });
     log(taskId, "info", `保存第 ${i + 1} 段文本`);
@@ -402,8 +413,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // workflow 一并写进 Task.workflowSnapshot，使「任务」与「模板当前版本」彻底
   // 解耦、可独立复现。`source: "execution"` 标记这是执行时自动捕获的独立副本。
   const workflowSnapshot =
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    executedWorkflow == null
+    executedWorkflow === null || executedWorkflow === undefined
       ? undefined
       : {
           workflow: executedWorkflow,
@@ -420,12 +430,28 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     kickQueue();
     return;
   }
+  /* 成功收口与产物行同事务（ISSUE #3881）：原先 finalizeSuccess 提交后
+   * createImages 失败会留下「SUCCEEDED 但 0 行产物」的半态；两写同为同连接
+   * 纯 DB 写，收进一个 immediate 事务，失败整体回滚（任务保持 RUNNING，
+   * 回收器下一轮对账）。重试预算仍只罩这一整段（writeTerminal 的口径不变）。 */
   const outcome = await writeTerminal(taskId, "成功收口", () =>
-    taskRepository.finalizeSuccess(taskId, {
-      resultImages: saved,
-      params: taskParamsPatched,
-      ...(workflowSnapshot ? { workflowSnapshot } : {}),
-    }),
+    taskRepository.finalizeSuccessWithImages(
+      taskId,
+      {
+        resultImages: saved,
+        params: taskParamsPatched,
+        ...(workflowSnapshot ? { workflowSnapshot } : {}),
+      },
+      saved.map((s2, i) => ({
+        localPath: s2.localPath,
+        sortIndex: i,
+        isCover: i === 0,
+        mediaType: s2.mediaType,
+        seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
+        width: s2.mediaType === "image" ? (reqW ?? null) : null,
+        height: s2.mediaType === "image" ? (reqH ?? null) : null,
+      })),
+    ),
   );
   /* 只把「状态那一次写」纳入重试预算：下面的产物行与日志刷盘若失败，行已经是
    * SUCCEEDED（用户看得见终态），属于另一种坏法（少几行产物），不在 #1250 这条上。 */
@@ -442,20 +468,12 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     kickQueue();
     return;
   }
-  await taskRepository.createImages(
-    taskId,
-    saved.map((s2, i) => ({
-      localPath: s2.localPath,
-      sortIndex: i,
-      isCover: i === 0,
-      mediaType: s2.mediaType,
-      seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
-      width: s2.mediaType === "image" ? (reqW ?? null) : null,
-      height: s2.mediaType === "image" ? (reqH ?? null) : null,
-    })),
-  );
 
   // 项目级产出：写一份可复现的 manifest，便于「按项目归档 + 一键还原」。
+  const referenceImagesRaw: unknown = taskRow?.referenceImages;
+  const referenceImages: Array<string> = isStringArray(referenceImagesRaw)
+    ? referenceImagesRaw
+    : [];
   const manifest = {
     taskId,
     projectId,
@@ -464,25 +482,35 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     negativePrompt: taskRow?.negativePrompt ?? null,
     seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
     size: sizeStr || null,
-    /* SAFETY: 类型断言已复核 */
-    referenceImages: (taskRow?.referenceImages as Array<string> | null) ?? [],
+    referenceImages,
     params: taskParams,
     createdAt: taskRow?.createdAt ?? null,
     files: saved,
   };
   await fs
     .writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8")
-    .catch(() => undefined);
+    .catch((writeError: unknown) => {
+      /* 复现产物落盘失败要看得见（ISSUE #4270）：DB 说有产物、盘上没有的那类
+       * 「磁盘状态对不上」故障，没有这条 warn 就只能靠人肉对账发现。 */
+      taskRuntimeLog?.warn(
+        `[finalize] manifest.json 落盘失败（dir=${dir}）：${friendlyError(writeError)}`,
+      );
+    });
 
   // 落盘本次执行实际用到的 workflow.json。种子等已在
   // manifest.seed + TaskImage.seed 持久化，工作流模板后续改动时凭这份快照即可
   // 完整复现本次生成结果。raw 路径为 liblib subgraph 格式（未展开），api 路径为
   // 已展开 graph。
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (executedWorkflow != null) {
+  if (executedWorkflow !== null && executedWorkflow !== undefined) {
     await fs
       .writeFile(path.join(dir, "workflow.json"), JSON.stringify(executedWorkflow, null, 2), "utf8")
-      .catch(() => undefined);
+      .catch((writeError: unknown) => {
+        /* 同上（ISSUE #4270）：工作流快照落盘失败也要留痕，否则后续模板改动
+         * 时这份「本次实际用到的图」就无声缺失、无法复现。 */
+        taskRuntimeLog?.warn(
+          `[finalize] workflow.json 落盘失败（dir=${dir}）：${friendlyError(writeError)}`,
+        );
+      });
   }
 
   await persistLogs(taskId);

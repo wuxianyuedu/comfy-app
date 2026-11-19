@@ -26,7 +26,9 @@ export function FilmStudioTopBar({
       {/* 项目名 —— 它本身就是这一屏的标题。此前右侧还挂一个「· 视频成片工作室」：
           与侧栏 / 页签那一项（`NAV_ITEMS` 的 `film` → 「成片」）指同一件事，
           只是换了套说法，既挤宽度又没多给信息（ISSUE #1423）。 */}
-      <h1 className="font-title u-title-page min-w-0 truncate">{c.title}</h1>
+      <Hint label={c.title}>
+        <h1 className="font-title u-title-page min-w-0 truncate">{c.title}</h1>
+      </Hint>
 
       <div className="bg-surface-2 h-5 w-px" />
 
@@ -100,8 +102,9 @@ export function FilmStudioTopBar({
           (c.shotSource === "project" &&
             (c.activeProjectId === null || c.activeProjectId === "" || c.projectShotCount === 0))
         }
-        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-        onClick={() => void (c.shotSource === "project" ? c.createFromProject() : c.create())}
+        onClick={() => {
+          void (c.shotSource === "project" ? c.createFromProject() : c.create());
+        }}
         size="sm"
         variant="primary"
       >
@@ -112,8 +115,9 @@ export function FilmStudioTopBar({
       {c.film && c.running && (
         <Button
           className="border-border text-ink-strong hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
-          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-          onClick={() => void c.cancel()}
+          onClick={() => {
+            void c.cancel();
+          }}
           size="xs"
           variant="outline"
         >

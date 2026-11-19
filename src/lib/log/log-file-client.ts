@@ -7,9 +7,11 @@
  * `offset` 是**本次返回内容的起点**（服务端在需要重读整文件时会把它回落到 0）。
  */
 
+import { isRecord } from "~/lib/is-record";
 import { withQuery } from "~/lib/query-string";
 import { LOG_SLICE_ENDPOINT } from "./panel-self-poll";
 import type { LogSessionsPayload } from "./log-sessions";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 export type FileLogSlice = {
   /**
@@ -31,6 +33,16 @@ export type FileLogSlice = {
   size: number;
 };
 
+/** 运行期收窄 `/api/logs/current` 的响应体；只校验客户端真正读取的必填字段。 */
+function isFileLogSlice(value: unknown): value is FileLogSlice {
+  return (
+    isRecord(value) &&
+    typeof value.content === "string" &&
+    typeof value.offset === "number" &&
+    typeof value.size === "number"
+  );
+}
+
 export type LogSourceKind =
   | "dev"
   | "launcher"
@@ -41,7 +53,7 @@ export type LogSourceKind =
   | "app-runtime"
   /** 壳自持日志（log/shell/shell.log，双击启动链路最早的一段现场）。 */
   | "shell"
-  /** 壳侧编排链路（log/launcher/shell-launch.log）。 */
+  /** 壳侧编排链路（log/current/launcher/shell-launch.log）。 */
   | "shell-launch";
 
 /** source 参数 → /api/logs/current 的 source 查询值。 */
@@ -63,7 +75,7 @@ export async function fetchFileLogSlice(
   offset: number,
   bootId?: string,
 ): Promise<FileLogSlice | null> {
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     withQuery(LOG_SLICE_ENDPOINT, {
       source: sourceQuery(source),
       /* `offset` 是**游标**：`0` 表示「从头上读」，是真实的值不是缺值
@@ -76,8 +88,11 @@ export async function fetchFileLogSlice(
   if (!res.ok) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  return (await res.json()) as FileLogSlice;
+  const data: unknown = await res.json();
+  if (!isFileLogSlice(data)) {
+    throw new TypeError("日志切片响应形状不合法");
+  }
+  return data;
 }
 
 /* ── 常驻服务 runtime 日志的「每一次启动」（设置页启动日志）─────────────
@@ -94,6 +109,20 @@ export async function fetchFileLogSlice(
  */
 export type RuntimeLogSourceKind = "comfyui-runtime" | "drizzle-studio-runtime" | "ollama-runtime";
 
+/** 运行期收窄 `/api/logs/sessions` 的响应体；形状不符按「这一次没读成功」回落 null。 */
+function isLogSessionsPayload(value: unknown): value is LogSessionsPayload {
+  return (
+    isRecord(value) &&
+    typeof value.content === "string" &&
+    (value.selectedId === null || typeof value.selectedId === "string") &&
+    Array.isArray(value.sessions) &&
+    typeof value.size === "number" &&
+    typeof value.total === "number" &&
+    typeof value.truncated === "boolean" &&
+    typeof value.windowed === "boolean"
+  );
+}
+
 /**
  * 拉取某来源的启动列表 + 指定一次（缺省取最新那一份）的正文。
  *
@@ -107,12 +136,14 @@ export async function fetchLogSessions(
 ): Promise<LogSessionsPayload | null> {
   try {
     /* 会话 id 可选：空值由出口省略（不再自己 `if` 一次再 `set`）。 */
-    const res = await fetch(withQuery("/api/logs/sessions", { source, session: sessionId }));
+    const res = await fetchWithTimeout(
+      withQuery("/api/logs/sessions", { source, session: sessionId }),
+    );
     if (!res.ok) {
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    return (await res.json()) as LogSessionsPayload;
+    const data: unknown = await res.json();
+    return isLogSessionsPayload(data) ? data : null;
   } catch {
     return null;
   }
@@ -140,6 +171,11 @@ export type SavedLogExport = {
   relativePath?: string;
 };
 
+/** 运行期收窄导出/诊断端点的回执；`ok` 是两端共同依赖的唯一必填字段。 */
+function isSavedLogExport(value: unknown): value is SavedLogExport {
+  return isRecord(value) && typeof value.ok === "boolean";
+}
+
 /**
  * 把一段日志文本保存到本机 `log/exports/`。
  *
@@ -149,14 +185,13 @@ export type SavedLogExport = {
  */
 export async function saveLogExport(label: string, content: string): Promise<SavedLogExport> {
   try {
-    const res = await fetch("/api/logs/export", {
+    const res = await fetchWithTimeout("/api/logs/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label, content }),
     });
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as SavedLogExport;
-    return data;
+    const data: unknown = await res.json();
+    return isSavedLogExport(data) ? data : { ok: false, error: "响应形状不合法" };
   } catch (error) {
     return {
       ok: false,
@@ -179,9 +214,9 @@ export async function saveLogExport(label: string, content: string): Promise<Sav
  */
 export async function saveDiagnosticsPackage(): Promise<SavedLogExport> {
   try {
-    const res = await fetch("/api/logs/diagnostics", { method: "POST" });
-    /* SAFETY: 类型断言已复核 */
-    return (await res.json()) as SavedLogExport;
+    const res = await fetchWithTimeout("/api/logs/diagnostics", { method: "POST" });
+    const data: unknown = await res.json();
+    return isSavedLogExport(data) ? data : { ok: false, error: "响应形状不合法" };
   } catch (error) {
     return {
       ok: false,
@@ -215,7 +250,7 @@ export async function postAppRuntimeLog(
   fields?: Record<string, unknown>,
 ): Promise<void> {
   try {
-    await fetch("/api/logs/app-runtime", {
+    await fetchWithTimeout("/api/logs/app-runtime", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ns, level, msg, fields }),

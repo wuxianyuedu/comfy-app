@@ -1,0 +1,616 @@
+#!/usr/bin/env node
+// @ts-nocheck
+/**
+ * doc-facts.cjs — 文档引用事实提取共享模块（供 doc:check / doc:render 复用）
+ *
+ * 单一事实原则：真实值只存在于源码/配置，本模块运行时从权威源动态提取。
+ * scripts/gates/check-doc-references.cjs（doc:check）与 scripts/docs/render-doc-placeholders.cjs
+ * （doc:render）都从这里取同一份 FACTS —— 避免出现"第二事实"。
+ * 人类可读映射见 docs/reference-facts.md，本文件 FACTS 与其 key 一一对应。
+ */
+const fs = require("node:fs");
+const path = require("node:path");
+
+const ROOT = path.resolve(__dirname, "..", "..");
+// 纳入「单一事实引用校验」的文档集合（只维护编辑态；生成态 doc:render 出原文、不入库）。
+// 范围：standards 规范正文（01~17 章）+ guides 规范指南 + 启动链路/含值类文档，全量纳入。
+
+const SCOPED_DOCS = [
+  // 试点：启动链路类（首批纳入）
+  "docs/standards/launch-and-build.md",
+  "docs/startup-hotreload.md",
+  "docs/guide-non-developer.md",
+  "docs/guide-stale-code.md",
+  // 扩展：含值类引用的文档
+  "docs/standards/Comfy-APP-T3-项目开发规范.md",
+  "docs/standards/16-shadcn-ui与表单校验.md",
+  "docs/workshop-mcp.md",
+  // 全量：standards 规范正文（01~18 章，除已纳入的 16）
+  "docs/standards/01-架构与状态管理.md",
+  "docs/standards/02-性能规范.md",
+  "docs/standards/03-样式与-tailwind.md",
+  "docs/standards/04-组件设计.md",
+  "docs/standards/05-类型安全.md",
+  "docs/standards/06-无障碍访问-a11y.md",
+  "docs/standards/07-日志系统.md",
+  "docs/standards/08-异步与副作用.md",
+  "docs/standards/09-路由与导航.md",
+  "docs/standards/10-错误处理与降级.md",
+  "docs/standards/11-测试与可观测性.md",
+  "docs/standards/12-代码组织与文件结构.md",
+  "docs/standards/13-提交与-code-review.md",
+  "docs/standards/14-反模式速查表.md",
+  "docs/standards/15-附录.md",
+  "docs/standards/17-UI与逻辑分离.md",
+  "docs/standards/18-lib层规范.md",
+  // 全量：guides 规范指南（不含 reviews 评审归档、api 自动生成、superpowers 设计归档、audits 过程文件）
+  // 功能流程图：与规范同样纳入，保证图里引用的路径 / 值不会随源码静默过期。
+  "docs/guides/feature-workshop-flow.md",
+  "docs/guides/feature-workflow-library-flow.md",
+  "docs/guides/DEV-QUERIES.md",
+  "docs/guides/PRODUCTION-GAPS.md",
+  "docs/guides/TESTING.md",
+  "docs/guides/sync-after-pull.md",
+  /* 节点镜像的操作指南：它引用的四件落点（Playwright 的浏览器路径）与两条环境变量名
+   * 都来自源码，漂了就会指着一个不存在的位置 —— 与 `sync-after-pull.md` 同类，纳入校验。 */
+  "docs/guides/ci-node-image.md",
+  /* 开发盘（ReFS / Dev Drive）红利指南：它引用的落点（pnpm store、四个缓存目录名、
+   * Defender 排除项的命令形态）都来自机器配置，漂了就会指着一个不存在的位置 ——
+   * 与 `sync-after-pull.md` 同类，纳入校验。 */
+  "docs/guides/dev-drive-refs.md",
+  /* 提交身份指南：里面的命令形态（--show-origin / includeIf）与「author 与 committer
+   * 谁会被平台流程改写」都是从 git 与平台行为实测来的，写错了不会报错、只会照着
+   * 一个失效的配置去配 —— 与 `sync-after-pull.md` 同类，纳入校验。 */
+  "docs/guides/git-identity.md",
+  /* GA 侧适配清单：逐条写着 `.github/workflows/*` 的落点与「CNB 侧不动」的边界，
+   * 条目状态还挂着 PR 号 —— 漂了就会指着一个不存在的 PR 或已改名的 workflow 说
+   * 「已完成」，与 `sync-after-pull.md` 同类，纳入校验。 */
+  "docs/guides/ga-migration-checklist.md",
+  /* UI 改动截图指南（ISSUE #3780）：里面写着的入口（`pnpm screenshot`）、落点
+   * （`log/screenshots/`）、浏览器安装命令与主题持久化键都来自源码，漂了就会
+   * 指着一条不存在的命令说「照这个截」—— 与 `sync-after-pull.md` 同类，纳入校验。 */
+  "docs/guides/ui-screenshot.md",
+  /* 性能取证指南（ISSUE #3843）：里面写着的入口（`pnpm profile`）、落点
+   * （`log/profiles/`）、录制类别与浏览器安装前提都来自源码，漂了就会指着一个
+   * 不存在的命令说「照这个录」—— 与 `ui-screenshot.md` 同类，纳入校验。 */
+  "docs/guides/perf-trace.md",
+  /* comfy-cli 执行排障指南（ISSUE #4189）：里面写着的 setup 入口、执行链落点
+   * （executor-cli / executor-cli-stream）、run 状态与日志文件名都来自源码，
+   * 漂了就会指着一个不存在的文件排障 —— 与 `sync-after-pull.md` 同类，纳入校验。 */
+  "docs/guides/comfy-cli-debug.md",
+  /* 产品需求文档（ISSUE #2421）：产品功能与需求的唯一口径。里面大量引用代码落点
+   * （router / 组件 / 表名）与功能状态，漂了就会指着一个不存在的实现说需求 ——
+   * 与功能流程图同类，纳入校验。 */
+  "docs/product/README.md",
+  "docs/product/overview.md",
+  "docs/product/feature-catalog.md",
+  "docs/product/feature-specs.md",
+  /* 六阶段规格（ISSUE #2473）：创作主链路的验收基准。里面逐阶段写死代码落点与现状
+   * 判断（角色/分镜是 JSON 列、工坊阶段⑥不产 MP4），漂了就会指着一个不存在的实现说需求。 */
+  "docs/product/pipeline-stages.md",
+];
+function readJson(p) {
+  return JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));
+}
+function readText(p) {
+  return fs.readFileSync(path.join(ROOT, p), "utf8");
+}
+function exists(p) {
+  return fs.existsSync(path.join(ROOT, p));
+}
+function splitHostPort(url) {
+  const m = url.match(/\/\/(?<host>[^:/]+):(?<port>\d+)/);
+  if (!m) {
+    throw new Error(`无法从 URL 提取 host:port: ${url}`);
+  }
+  return { host: m.groups?.host ?? "", port: Number(m.groups?.port) };
+}
+
+// ---- 权威值提取（运行时从源码/配置动态读取） ----
+function extractDevHostPort() {
+  const conf = readJson("src-tauri/tauri.conf.json");
+  const { host, port } = splitHostPort(conf.build.devUrl);
+  // 端口演进：dev-launcher.ps1 现已从 .env 的 COMFYAPP_PORT 读取（默认 3100），
+  // 仓库内唯一权威源是 tauri.conf.json 的 build.devUrl。交叉核对提交的
+  // .env.example 里 COMFYAPP_PORT 是否与 devUrl 一致（.env 为本地可覆盖变体）。
+  // .env.example 的 COMFYAPP_PORT 在示例里是**注释行**（「需要固定端口时取消注释」），
+  // 读取前必须先剔除注释行——否则「取消注释把示例改成某个具体端口」这种再正常不过的
+  // 改动会被当成权威源冲突，把 doc:check 变成误报机器（ISSUE #489）。
+  if (exists(".env.example")) {
+    const m = readText(".env.example")
+      .split(/\r?\n/)
+      .filter((l) => !/^\s*#/.test(l))
+      .join("\n")
+      .match(/COMFYAPP_PORT\s*=\s*["']?(?<port>[0-9]+)["']?/);
+    if (m && Number(m.groups?.port) !== port) {
+      throw new Error(
+        `端口权威源冲突：tauri.conf.json devUrl=${port} 但 .env.example COMFYAPP_PORT=${m.groups?.port}`,
+      );
+    }
+  }
+  return { host, port };
+}
+function extractFallbackPorts() {
+  // fallback 端口由 dev-launcher.ps1 运行时基于 appPort 推导（\$scanPorts = appPort/+1/+2），
+  // 源码无字面量可读；据其逻辑按主端口推导返回。见 scripts/dev-launcher.ps1 的 scanPorts。
+  const { port: mainPort } = extractDevHostPort();
+  return [mainPort + 1, mainPort + 2].map(String);
+}
+/**
+ * 「按检出路径推导的端口族」（3200~3999）——作者本机 `pnpm dev` 实际会拿到的端口。
+ *
+ * 与 `extractDevHostPort()` 的区别（这正是 ISSUE #489 的根因）：
+ *   - `tauri.conf.json` 的 `devUrl` **不参与主导航**，它是 Windows 启动器链路与
+ *     编译期兜底值；`pnpm dev` 走的是 `scripts/app-port.mjs` 的解析（.env → 路径
+ *     推导 → 兜底 3100），在 `.env` 未固定端口时**永远落不到那条静态值上**。
+ *   - 于是「用静态 devUrl 值去核对 pnpm dev 语境下的文档」= 拿一个与事实无关的
+ *     oracle 做校验：实测本工作区路径推导结果是 3311，而 README / 新手指南写的
+ *     `localhost:3100` 在 doc:check 眼里永远是「一致」的（静态值也是 3100），
+ *     照文档打开 3100 就是 ERR_CONNECTION_REFUSED。
+ *
+ * 因此端口事实按**链路**拆成两条，各自用自己的 oracle：
+ *   静态链（启动器 / 壳 / 兜底）：`dev.port`        ← tauri.conf.json devUrl
+ *   解析链（pnpm dev / start / Playwright）：`dev.port.derived` ← scripts/app-port.mjs
+ *
+ * 提取方式直接复用 `scripts/app-port.mjs`（唯一事实源）在本工作区路径上的解析结果，
+ * 而不是再实现一遍算法——算法本体已有四语言实现，第五份必然是漂移源。
+ */
+function extractDerivedAppPort() {
+  const { createRequire } = require("node:module");
+  const req = createRequire(__filename);
+  const port = req(path.join(ROOT, "scripts", "app-port.mjs")).resolveAppPort(ROOT);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error(`无法从 scripts/app-port.mjs 解析本检出端口：${port}`);
+  }
+  return String(port);
+}
+
+/** 桌面壳的 exe 名（**唯一**的启动入口）。
+ *
+ *  **权威源是编排器里那份「壳在哪」的判据**（`defaultShellExe` 的候选路径），
+ *  而不是 tauri.conf.json 里的某个名字：`productName` 是 `ComfyAPP`、
+ *  `bundle.externalBin` 指的是 Node **sidecar**，两者都不是这个 exe 的名字。
+ *  Python 启动器与它的 `LAUNCHER_NAME` 打包链已随 ISSUE #784 移除，壳的产物名
+ *  现在只由 cargo / tauri 的目标名（crate 名 `app`）决定。
+ *
+ *  **读的是实现所在的那一份**：`defaultShellExe` 随编排器拆分搬到
+ *  `launcher-core/shell-ops.mjs`（ISSUE #1811），主文件只剩同名薄包装 ——
+ *  锚在主文件上时那个正则一条都不命中，而报错会说「无法提取」，看着像
+ *  「壳的产物名没了」。 */
+function extractShellAppExe() {
+  const src = readText("scripts/launcher-core/shell-ops.mjs");
+  const m = src.match(/"(?:src-tauri\/target\/release\/(?<file>[^"/]+))\.exe"/);
+  if (!m) {
+    throw new Error("无法从 scripts/launcher-core/shell-ops.mjs 的 defaultShellExe 提取壳文件名");
+  }
+  return `${m.groups?.file}.exe`;
+}
+function extractSplash() {
+  // 权威源随 #4412 挪进代码：splash 由 src-tauri/src/lib.rs 的 create_splash_window
+  // 程序化创建（tauri.conf.json 的 app.windows 已清空——声明式建窗失败直达框架
+  // panic，无声崩溃）。从建窗调用里提取 WebviewUrl::App 的 URL 值。
+  const t = readText("src-tauri/src/lib.rs");
+  const m = t.match(/WebviewUrl::App\("(?<splash>[^"]+)"\.into\(\)\)/);
+  if (!m) {
+    throw new Error(
+      "无法从 src-tauri/src/lib.rs 提取 splash（create_splash_window 的 WebviewUrl::App）",
+    );
+  }
+  return m.groups?.splash;
+}
+
+// ---- 扩展：项目自身"值类"端口（独立单值，非 dev 端口族） ----
+function extractRegistryPort() {
+  // shadcn 团队 Registry 服务端口，权威源 tools/scripts/start-shadcn-registry.ps1 的 $Port = <n>。
+  const t = readText("tools/scripts/start-shadcn-registry.ps1");
+  const m = t.match(/\$Port\s*=\s*(?<port>\d+)/);
+  if (!m) {
+    throw new Error("无法从 tools/scripts/start-shadcn-registry.ps1 提取 Port");
+  }
+  return m.groups?.port;
+}
+function extractRegistryDir() {
+  // shadcn 团队 Registry 的**内容目录**（在仓库外，本机自建），权威源同上脚本的
+  // $RegistryDir。它此前没有事实登记：文档里直接抄了开发机的绝对路径
+  // `D:/dev/Comfy-APP-T3/registry`，换机器 / 换用户即失真（ISSUE #1926）。
+  const t = readText("tools/scripts/start-shadcn-registry.ps1");
+  const m = t.match(/\$RegistryDir\s*=\s*"(?<dir>[^"]+)"/);
+  if (!m) {
+    throw new Error("无法从 tools/scripts/start-shadcn-registry.ps1 提取 RegistryDir");
+  }
+  return m.groups?.dir;
+}
+function extractMcpHttpPort() {
+  // Workshop MCP HTTP 服务端口，权威源 tools/workshop-mcp-http.ts 的 MCP_HTTP_PORT ?? 4300。
+  const t = readText("tools/workshop-mcp-http.ts");
+  const m = t.match(/MCP_HTTP_PORT\s*\?\?\s*(?<port>\d+)/);
+  if (!m) {
+    throw new Error("无法从 tools/workshop-mcp-http.ts 提取 MCP_HTTP_PORT 默认值");
+  }
+  return m.groups?.port;
+}
+/**
+ * 产品版本号：权威源是 `package.json` 的 `version`（D7 / 规范 launch-and-build §7.1.1）。
+ *
+ * 另两处（`src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`）由
+ * `scripts/gates/check-app-version.cjs` 守着与它逐字相等 —— 所以这里只读一处，
+ * 不在校验脚本里再写一遍「三处怎么比」。
+ */
+function extractAppVersion() {
+  const t = readText("package.json");
+  const m = /^\s*"version"\s*:\s*"(?<version>[^"]*)"/m.exec(t);
+  if (!m) {
+    throw new Error("无法从 package.json 提取 version");
+  }
+  return m.groups?.version;
+}
+
+function extractComfyUIPort() {
+  /* ComfyUI 默认监听端口的权威源是 `src/lib/endpoints.ts` 的常量
+   * `COMFYUI_DEFAULT_PORT`（ISSUE #536 P3 之前它散落在 5 个文件里，client.ts
+   * 只是其中一处；#534 P1 又把定义从 app-settings.ts 搬到了零依赖的常量层，
+   * 因为设置页视图也要读它，而 app-settings.ts 顶层 import fs 会让浏览器图
+   * 整页 500）。app-settings.ts 只再导出同名，因此这里必须读**定义处**。 */
+  const t = readText("src/lib/endpoints.ts");
+  const m = t.match(/export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*(?<port>\d+)/);
+  if (!m) {
+    throw new Error("无法从 src/lib/endpoints.ts 的 COMFYUI_DEFAULT_PORT 提取 ComfyUI 默认端口");
+  }
+
+  return m.groups?.port;
+}
+
+/**
+ * 产品需求总表的两个计数（ISSUE #3649）：**功能域数**与**编号化需求条数**。
+ *
+ * 权威源是 `docs/product/feature-catalog.md` 的总表本身：
+ *   · 功能域 = §2「分域需求总表」下的分节小节（`### 2.x`）；
+ *   · 编号化需求 = 总表里以 `FR-` 开头的行。
+ *
+ * 这两个数从前只以**手抄**形式出现在两份索引文档里（`docs/README.md` /
+ * `docs/product/README.md`），抄错了没有任何判据会发现（#3649 的现场：一边写
+ * 「14 个功能域 76 条」、另一边写「17 个功能域」）。现在由本函数现场提取，
+ * 文档侧的数字交给 `pnpm doc:check` 核对（事实 kind = "count"）。
+ */
+function extractProductCatalogCounts() {
+  const text = readText("docs/product/feature-catalog.md");
+  const domains = [...text.matchAll(/^### 2\.\d+\s/gm)].length;
+  const requirements = [...text.matchAll(/^\|\s*FR-[A-Z]+-\d+/gm)].length;
+  /* 计数为 0 说明总表的结构变了（标题层级或表格形态）—— 那时「现场计数」是假的，
+   * 静默返回 0 会让文档侧的数字对着 0 核对 = 恒绿（§12.16 的同款教训：判据自己
+   * 失效时必须当场报错，而不是判「通过」）。 */
+  if (!domains || !requirements) {
+    throw new Error(
+      `无法从 docs/product/feature-catalog.md 提取计数（功能域 ${domains} / 需求 ${requirements}）—— 总表结构变了？`,
+    );
+  }
+  return { domains, requirements };
+}
+
+// --------------------------------------------------------------------------
+
+/* ── 注释语言的「纯 ASCII 模块」白名单（ISSUE #678 / 规范 12 §12.4.6）────
+ * 口径：注释一律中文；只有「会被 `next-code-frame` 渲染到」的构建期模块写英文，
+ * 且必须保持纯 ASCII —— Next 的 code frame 按**字节**切串，高亮区间端点落在
+ * 多字节字符内部时 Rust 侧直接 panic，整个 `next build` 被一个与业务无关的错误
+ * 带走（规范 launch-and-build §5）。
+ *
+ * 这份名单必须**只定义一次**：文档（docs/reference-facts.md / 规范 12 §12.4.6 /
+ * launch-and-build §9.6）写的与脚本读的如果各存一份，两边必然各自漂移 ——
+ * 表现是「文档说允许、判据说违规」而没人知道该信哪个。因此这里刻意**反向读文档**：
+ * 白名单在 reference-facts 的那一行里以 `path（判定符号）` 列表登记，本函数解析它。
+ * 与 §1.x 的值类事实相反，这里没有「第二个事实源」——路径清单本身就是权威定义，
+ * 解析出来的结果直接喂给判据。
+ */
+const ASCII_ONLY_FACT_DOCS = ["docs/reference-facts.md"];
+
+/** 解析 reference-facts 里 `comment.language.asciiOnly` 那一行登记的模块路径。 */
+function extractAsciiOnlyModules() {
+  for (const doc of ASCII_ONLY_FACT_DOCS) {
+    if (!exists(doc)) {
+      continue;
+    }
+    const text = readText(doc);
+    // 取登记行：`| comment.language.asciiOnly | <路径清单> | ... |`
+    const line = text.split("\n").find((l) => l.includes("comment.language.asciiOnly"));
+    if (!line) {
+      continue;
+    }
+    // 取「名单」那一格（第 2 列），逐项提取反引号包裹的模块路径。
+    // 括号里的理由（「构建期被加载」这类）写在路径的**同一对反引号之外**，
+    // 因此 `[^`]+?` 天然不会把它吃进来 —— 不需要按「（」二次切分。
+    const cell = line.split("|")[2] ?? "";
+    const paths = [
+      ...cell.matchAll(/`(?<path>(?:src|scripts|e2e|tests)\/[^`]+?\.(?:ts|tsx|mjs|cjs))`/g),
+    ].map((m) => m.groups?.path ?? "");
+    // 名单可以为**空**（棘轮基线归零是这条规则的目标形态），但「读不到登记行」
+    // 必须报错：一个永远返回空数组的解析器会让所有断言全绿（§12.16 的同款教训）。
+    // 判据因此落在「登记行在不在」上，而不是「解析出几项」。
+    if (line) {
+      return paths;
+    }
+  }
+  throw new Error("docs/reference-facts.md 里读不到 comment.language.asciiOnly 的登记行");
+}
+
+/* ── 「声明依赖解析得到吗」的探针清单（ISSUE #1721）─────────────────────
+ * 口径与 §1.5 的 ASCII 白名单同一手法：**清单只定义一次**，写在
+ * `docs/reference-facts.md` 的 `deps.resolveProbes` 那一行里，这里反向解析它。
+ * 判据的 `RESOLVE_PROBES`（`scripts/launcher-core/worktree.mjs`）与它逐项同源，
+ * 由 `tests/deps-freshness-gate.test.ts` 核对 —— 两处各记一份必然分叉，
+ * 分叉之后「哪一份是真的」没有判据能回答。
+ */
+const RESOLVE_PROBES_FACT_DOCS = ["docs/reference-facts.md"];
+
+/** 解析 reference-facts 里 `deps.resolveProbes` 那一行登记的包名。 */
+function extractResolveProbes() {
+  for (const doc of RESOLVE_PROBES_FACT_DOCS) {
+    if (!exists(doc)) {
+      continue;
+    }
+    const line = readText(doc)
+      .split("\n")
+      .find((l) => l.includes("deps.resolveProbes"));
+    if (!line) {
+      continue;
+    }
+    // 取「探针」那一格（第 2 列），逐项提取反引号包裹的包名。括号里的说明
+    // （「跑门禁时无论如何都会解析到」这类）写在反引号之外，天然不被吃进来。
+    const cell = line.split("|")[2] ?? "";
+    const names = [...cell.matchAll(/`(?<name>[^`]+?)`/g)].map((m) => m.groups?.name ?? "");
+    // 与 §1.5 同一条口径：名单可以为空不是目标形态，但**读不到登记行**必须报错 ——
+    // 一个永远返回空数组的解析器会让「探针清单没人守」这件事静默通过。
+    if (names.length) {
+      return names;
+    }
+  }
+  throw new Error(
+    "docs/reference-facts.md 里读不到 deps.resolveProbes 的登记行（或它没有列出任何包名）",
+  );
+}
+
+// FACTS：机器可读事实定义（与 docs/reference-facts.md 的 key 一一对应）
+//   placeholder 类：文档用占位符替代裸值，doc:check 发现裸值即报错，
+//                    doc:render 把占位符替换成真实值。
+//   verify 类：文档保留直观值，doc:check 核对权威源当前端口族。
+//   count 类：文档保留直观数字，doc:check 核对它等于权威源的现场计数。
+//   path 类：核对路径指向的文件存在。
+// --------------------------------------------------------------------------
+const FACTS = [
+  // 占位符类：文档用占位符替代裸值
+  // 桌面壳的 exe 名：**唯一**的启动入口（Python 启动器与它的三个 LAUNCHER_NAME
+  // 产物已随 ISSUE #784 移除，只剩这一条事实）。
+  {
+    key: "shell.app.exe",
+    placeholder: "{{shell.app.exe}}",
+    kind: "placeholder",
+    extract: extractShellAppExe,
+  },
+  {
+    key: "shell.splash",
+    placeholder: "{{shell.splash}}",
+    kind: "placeholder",
+    extract: extractSplash,
+  },
+  // 核对类：文档保留直观值，脚本核对权威源当前端口族
+  { key: "dev.host", kind: "verify", extract: () => extractDevHostPort().host },
+  // dev 端口族仅对描述 dev 启动链路的文档校验；workshop-mcp.md 的 4300 是 MCP HTTP
+  // 端口（非 dev 回落），若参与 verify 会误判「缺 dev 主端口 3100」，故排除该文档。
+  // 静态链端口（tauri.conf.json devUrl）：只对**描述启动器 / 壳 / 兜底**的文档适用。
+  {
+    key: "dev.port",
+    kind: "verify",
+    extract: () => String(extractDevHostPort().port),
+    excludeDocs: ["docs/workshop-mcp.md"],
+  },
+  // 解析链端口（scripts/app-port.mjs）：对**描述 pnpm dev / start 的文档**适用。
+  // 与静态链互斥：同一篇文档里不能同时把两条链路的端口都写成裸值，否则两条事实
+  // 会互相打架（见上方 extractDerivedAppPort 的说明）。
+  {
+    key: "dev.port.derived",
+    kind: "verify",
+    extract: extractDerivedAppPort,
+    // 新手指南只讲「浏览器模式 / Windows 启动器」两条起点，两条都经 dev.mjs 解析端口
+    //（start-web.ps1 → dev-launcher.ps1 → pnpm dev），故适用解析链。
+    onlyDocs: ["docs/guide-non-developer.md"],
+  },
+  {
+    key: "dev.port.fallback",
+    kind: "verify",
+    extract: extractFallbackPorts,
+    excludeDocs: ["docs/workshop-mcp.md"],
+  },
+  // 独立单值端口（非 dev 端口族）。workshop-mcp.md 的端口（MCP 4300 / ComfyUI 8188）
+  // 属独立语义，用占位符替代裸值，doc:render 替换成真实值。
+  {
+    key: "registry.port",
+    placeholder: "{{registry.port}}",
+    kind: "placeholder",
+    extract: extractRegistryPort,
+  },
+  {
+    key: "registry.dir",
+    placeholder: "{{registry.dir}}",
+    kind: "placeholder",
+    extract: extractRegistryDir,
+  },
+  // MCP / ComfyUI 端口是「独立单值」；MCP 默认端口已取在 dev 回落族之外（4300），
+  // 但为明确语义仍用占位符，并限定仅在 workshop-mcp.md 校验避免跨文档误判。
+  {
+    key: "mcp.http.port",
+    placeholder: "{{mcp.http.port}}",
+    kind: "placeholder",
+    extract: extractMcpHttpPort,
+    onlyDocs: ["docs/workshop-mcp.md"],
+  },
+  // otherDocs：该值在别的文档里的「引用点」不是无括号端口形态（如主规范的
+  //          `localhost:3100` / `:8188` 并列行），须在另一套文档里也防裸值回潮。
+  {
+    key: "comfyui.port",
+    placeholder: "{{comfyui.port}}",
+    kind: "placeholder",
+    extract: extractComfyUIPort,
+    onlyDocs: ["docs/workshop-mcp.md"],
+    otherDocs: ["docs/standards/Comfy-APP-T3-项目开发规范.md"],
+  },
+  // 产品版本号（ISSUE #1611 阶段三 D7 / 规范 launch-and-build §7.1.1）：
+  // 同一个版本号写在三个文件里（package.json / src-tauri/tauri.conf.json /
+  // src-tauri/Cargo.toml），三处相等由 scripts/gates/check-app-version.cjs 守；
+  // 这里守的是**第四种抄法**——在**文档里**再写一遍具体版本号（写死 `0.1.0`
+  // 的那种介绍文字），它会在下一次升版本时静默过期。文档要提版本时写「读
+  // package.json 的 version」或占位符，别写字面量。
+  // 适用面刻意收在「引用产品版本」的那几篇（maintainer 指南与变更规范），
+  // 不放全量：被扫描的文档里允许出现**别的**版本号（依赖 / Node / Rust 版本），
+  // 它们与产品版本无关，把全量文档都判成「提到 0.1.0 就红」会误报一片。
+  {
+    key: "app.version",
+    placeholder: "{{app.version}}",
+    kind: "placeholder",
+    extract: extractAppVersion,
+    onlyDocs: ["docs/guides/PRODUCTION-GAPS.md", "docs/standards/Comfy-APP-T3-项目开发规范.md"],
+  },
+  /* 计数类（ISSUE #3649）：文档**保留直观数字**（"17 个功能域 100 条编号化需求"
+   * 这种最可读的形态），脚本从权威源现场提取计数并核对 —— 与上面 `dev.port` 那族
+   * 「直观值核对类」同一条思路。不改成占位符：这两个数字恰恰是读者第一眼想知道的，
+   * 换成 `{{…}}` 只会更难读；留在文档里、漂了由判据拦下。
+   *
+   * 适用文档按 `onlyDocs` 声明（两份索引文档各写一次同样的数字，判据逐处核对，
+   * 于是「两处口径统一」不再靠人记得两处一起改）。 */
+  {
+    key: "product.domains.count",
+    kind: "count",
+    label: "功能域数",
+    pattern: /(?<count>\d+)\s*个功能域/g,
+    extract: () => extractProductCatalogCounts().domains,
+    onlyDocs: ["docs/README.md", "docs/product/README.md"],
+  },
+  {
+    key: "product.requirements.count",
+    kind: "count",
+    label: "编号化需求条数",
+    pattern: /(?<count>\d+)\s*条编号化需求/g,
+    extract: () => extractProductCatalogCounts().requirements,
+    onlyDocs: ["docs/README.md", "docs/product/README.md"],
+  },
+  // 注释语言白名单（ISSUE #678 / 规范 12 §12.4.6）：名单本身是权威定义，
+  // 由 reference-facts 的一行承载，脚本解析它 —— 两侧只有一份清单。
+  {
+    key: "comment.language.asciiOnly",
+    kind: "list",
+    extract: extractAsciiOnlyModules,
+  },
+  // 声明依赖的解析探针（ISSUE #1721）：与上一条同形 —— 名单本身就是权威定义，
+  // 判据的 RESOLVE_PROBES 与它逐项同源（回归测试核对）。
+  {
+    key: "deps.resolveProbes",
+    kind: "list",
+    extract: extractResolveProbes,
+  },
+  // 路径类：核对文件存在
+  { key: "path.tauri.conf", kind: "path", source: "src-tauri/tauri.conf.json" },
+  { key: "path.lib.rs", kind: "path", source: "src-tauri/src/lib.rs" },
+  {
+    key: "path.dev-launcher",
+    kind: "path",
+    source: "scripts/dev-launcher.ps1",
+  },
+  {
+    key: "path.shell-launch-rs",
+    kind: "path",
+    source: "src-tauri/src/shell_launch.rs",
+  },
+  {
+    key: "path.start-entry",
+    kind: "path",
+    source: "tools/start/start-tauri.ps1",
+  },
+  {
+    key: "path.start-entry-dev",
+    kind: "path",
+    source: "tools/start/start-tauri-dev.ps1",
+  },
+  {
+    key: "path.build-desktop",
+    kind: "path",
+    source: "scripts/build-desktop.mjs",
+  },
+  {
+    key: "path.rebuild-static",
+    kind: "path",
+    source: "tools/build/rebuild-static.ps1",
+  },
+  {
+    key: "path.build-tauri-release",
+    kind: "path",
+    source: "tools/build/build-tauri-release.ps1",
+  },
+  { key: "path.nvmrc", kind: "path", source: ".nvmrc" },
+  // 平台侧 CI 配置（.cnb.yml）**重新启用**（ISSUE #1959：跑在根组织自托管节点上，
+  // 不参与核时计费，故 #623 那条「用不起」的前提不再成立）。path 类事实的语义是
+  // 「文档里指向的文件必须存在」，它现在真的存在，所以**必须**登记——否则文档里
+  // 引用它会被判成指向不存在的文件。形态由 tests/no-platform-ci-config.test.ts 守。
+  { key: "path.cnb-yml", kind: "path", source: ".cnb.yml" },
+];
+
+/* ── 校验范围守卫（ISSUE #316）─────────────────────────────────────────
+ * `doc:check` 只校验 SCOPED_DOCS 里的文档。**未登记的文档会被静默跳过**——
+ * 文档里写死过期值也没人报错，于是「全量纳管」只是人工承诺，不是机器事实。
+ * 以下两张表把这件事变成可判定的：
+ *   - 规范文档目录：新文件默认**必须在 SCOPED_DOCS 里**，否则报错；
+ *   - 豁免名单：确实不该纳入校验的文档，必须**显式列在这里并写清理由**，
+ *     不允许靠「没登记」沉默跳过。
+ * 新增文档时的动作因此只有两种：登记进 SCOPED_DOCS，或写进豁免名单附理由。
+ */
+
+/** 规范文档目录：其中的 .md 默认全部纳入校验（产品需求文档同批纳入，ISSUE #2421）。 */
+const SCOPED_DOC_DIRS = ["docs/standards", "docs/guides", "docs/product"];
+
+/**
+ * 豁免名单：不纳入 doc:check 的规范目录文档，key 为相对路径，value 为理由。
+ * 每一条都必须是「纳入会造成误报或本就非规范正文」这类可核验的理由。
+ */
+const SCOPED_DOC_EXEMPTIONS = {
+  // 文档集索引：只有导航与关系说明，不含值类裸值或可失效的路径引用。
+  "docs/standards/README.md": "文档集索引（导航与章节映射），不含被校验的值类引用",
+  // 评审归档：记录一次性的审查结论与处置，历史快照，不随源码演进。
+  "docs/guides/reviews/2026-08-30-canvasnode-review.md": "代码审查归档，历史快照，不随源码演进",
+};
+
+/** 生成文档输出目录（相对 ROOT） */
+const GENERATED_DOCS_DIR = "docs/generated";
+
+/**
+ * 源文档 → 生成态镜像的落点。**这条映射只有这一处**：
+ * `render-doc-placeholders.cjs` 按它写与判；#3586 前 `check-doc-mirror-pairing.cjs`
+ * 还按它判「改了源有没有同批带上镜像」，那位消费者随镜像退出入库产物一并退役。
+ * 落点仍只在这里定义一份 —— 各写一遍（`path.join(GENERATED_DOCS_DIR, basename)`）
+ * 早晚会在「两份源映射到同一个产物名」那类形状上分叉。
+ *
+ * @param {string} docRel 源文档的仓库相对路径（`SCOPED_DOCS` 里的那种正斜杠形式）
+ * @returns {string} 镜像的相对路径（带平台分隔符，比较前需归一）
+ */
+function generatedPathFor(docRel) {
+  return path.join(GENERATED_DOCS_DIR, path.basename(docRel));
+}
+
+module.exports = {
+  ROOT,
+  SCOPED_DOCS,
+  SCOPED_DOC_DIRS,
+  SCOPED_DOC_EXEMPTIONS,
+  FACTS,
+  GENERATED_DOCS_DIR,
+  generatedPathFor,
+  readJson,
+  readText,
+  exists,
+  extractDevHostPort,
+  extractFallbackPorts,
+  extractShellAppExe,
+  extractSplash,
+  extractRegistryPort,
+  extractMcpHttpPort,
+  extractAsciiOnlyModules,
+  extractResolveProbes,
+  extractProductCatalogCounts,
+};

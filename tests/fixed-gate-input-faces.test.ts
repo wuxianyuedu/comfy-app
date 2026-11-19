@@ -1,24 +1,7 @@
 /**
- * 固定清单的输入面登记（ISSUE #2022）——「最贵的几条重档判据凭什么可以不跑」。
- *
- * 背景：本地 pre-commit 超过 5 分钟的实际后果是 `--no-verify`，而「钩子拦得住」是 §13.6
- * 整节的前提。实测一次只改 14 个文件（0 个 `src/**`）的提交：组 C 545.4s，其中四条
- * **工具行为自检**（在临时工作区里现拷夹具跑被测工具）合计约 260s 的分文件耗时 ——
- * 它们每次都跑，可业务代码怎么改都不会让它们的判决漂。机制沿用平台侧那 13 条
- * `ifModify` 的口径（§13.5.20：触发面由判据自己导出），这里接到钩子这一层。
- *
- * 这一档最危险的失效形态是**悄悄不跑**：面写窄一条、或路径打错一个字母，那条判据就
- * 永久缺席，而日志上它与「这次真的不需要跑」逐字同形。所以本文件的用例全部朝那个方向设：
- *
- *   ① 登记的每一条必须**真的在固定清单里** —— 给一条本来就走 import 图的判据写面，
- *      写出来的是一条永不生效的死面；
- *   ② 每个模式必须**至少命中仓库里一个被跟踪的路径** —— 这一条直接判死拼写错误；
- *      并且**不能整条落在宽面触发上**（宽面一命中整档就退回全跑，这一层轮不到问）；
- *   ③ 名单封闭 —— 加一条是一次签字，不是这一层代码能自己扩张的；
- *   ④ 两向都测：面没命中 ⇒ 缺席**且被点名**；命中 ⇒ 在场；
- *   ⑤ 放弃收窄那一档（`wide`）**完全不过筛** —— 那一刻的前提就是「不能信筛出来的结果」；
- *   ⑥ 用例**直接 import** 的每一份仓库文件都必须在它自己的面里 —— 面自称「它读什么」，
- *     少写一份共享夹具，那句自称就有一处是假的（#2802 抓到两条）。
+ * 固定清单的输入面登记（ISSUE #2022）：pre-commit 超 5 分钟的实际后果是 `--no-verify`。实测只改 14 个文件的提交组 C
+ * 545.4s，四条工具自检约 260s 且不随业务代码漂；机制沿用平台侧 `ifModify`（§13.5.20）。最危险是**悄悄不跑** —— 面写窄
+ * 或路径打错就永久缺席，日志与「这次不需要跑」同形；用例设防：登记必在清单、模式真命中被跟踪路径、名单封闭、两向都测（#2802）。
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -26,14 +9,14 @@ import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-import { resolveAffectedTests, wideReasonFor } from "../scripts/affected-tests.mjs";
-import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
+import { resolveAffectedTests, wideReasonFor } from "../scripts/affected-tests/affected-tests.mjs";
+import { FIXED_STRUCTURAL_TESTS } from "../scripts/affected-tests/fixed-structural-tests.mjs";
 import {
   INPUT_FACES,
   faceHits,
   faceMatches,
   selectFixedByFace,
-} from "../scripts/fixed-gate-input-faces.mjs";
+} from "../scripts/gates/fixed-gate-input-faces.mjs";
 
 /** 被跟踪路径的全集 —— ② 那一条的事实来源（本地 `git ls-files`，不走网络）。 */
 function trackedPaths(): Array<string> {
@@ -60,10 +43,8 @@ const MODULE_EXTS = [
 
 /**
  * 一份用例里**真正的**静态 `import` / `export … from` 说明符。
- *
- * 为什么走语法树而不是正则：用例的夹具文本里本来就会写 `import x from "./…"`
- * （`tests/storybook-tsc-input.test.ts` 的模块标识符常量就是），而那是被测输入、
- * 不是本文件自己的依赖。正则分不开这两种形状，语法树里只有前者是 ImportDeclaration。
+ * 为什么走语法树而不是正则：夹具文本里本来就会写 `import x from "./…"`（如 `tests/storybook-tsc-input.test.ts`
+ * 的模块标识符常量），那是被测输入而非本文件依赖；正则分不开这两种形状，语法树里只有前者是 ImportDeclaration。
  */
 function importSpecifiersOf(rel: string): Array<string> {
   const text = readFileSync(path.join(ROOT, rel), "utf8");
@@ -202,8 +183,8 @@ describe("输入面登记的形状", () => {
 
 describe("模式匹配的三种形状", () => {
   it("精确路径、目录前缀、同段通配各自的行为", () => {
-    expect(faceMatches("eslint.config.js", "eslint.config.js")).toBe(true);
-    expect(faceMatches("src/App.tsx", "eslint.config.js")).toBe(false);
+    expect(faceMatches("oxlint.parity.config.mjs", "oxlint.parity.config.mjs")).toBe(true);
+    expect(faceMatches("src/App.tsx", "oxlint.parity.config.mjs")).toBe(false);
     expect(faceMatches(".githooks/pre-commit", ".githooks/**")).toBe(true);
     expect(faceMatches(".githooks/x/y", ".githooks/**")).toBe(true);
     /* 目录前缀不许吞同名兄弟：`scripts/x/**` 不匹配 `scripts/x2/y` —— 那种漂法会把
@@ -242,7 +223,7 @@ describe("切分与接线", () => {
   });
 
   it("改了被测工具 ⇒ 那一条回到清单里", () => {
-    const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, ["scripts/base-check.mjs"]);
+    const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, ["scripts/gates/base-check.mjs"]);
     expect(got.keep).toContain("tests/base-check.test.ts");
     expect(got.skipped.map((s) => s.test)).not.toContain("tests/base-check.test.ts");
     /* 其余三条不该被它带起来：面是各判各的。 */
@@ -251,9 +232,9 @@ describe("切分与接线", () => {
 
   it("后补面的四条各按自己的触发面回来，且不互相带起（#2793）", () => {
     const cases: Array<[string, string]> = [
-      ["eslint.config.js", "tests/eslint-gate-canary.test.ts"],
-      ["scripts/check-commit-claims.mjs", "tests/check-commit-claims.test.ts"],
-      ["scripts/changed-scope.mjs", "tests/changed-scope.test.ts"],
+      ["oxlint.parity.config.mjs", "tests/eslint-gate-canary.test.ts"],
+      ["scripts/gates/check-commit-claims.mjs", "tests/check-commit-claims.test.ts"],
+      ["scripts/lib/changed-scope.mjs", "tests/changed-scope.test.ts"],
       ["src/components/ui/button.tsx", "tests/a11y-axe-stories.test.ts"],
     ];
     for (const [changed, test] of cases) {
@@ -273,15 +254,15 @@ describe("切分与接线", () => {
   it("这一批九条各按自己的触发面回来，且不把四条业务自检带进来（#2798）", () => {
     const cases: Array<[string, string]> = [
       ["scripts/base-check/verdict.mjs", "tests/base-check.test.ts"],
-      ["scripts/quality-gate.mjs", "tests/gate-executors.test.ts"],
-      ["scripts/check-merge-parents.mjs", "tests/check-merge-parents.test.ts"],
-      ["scripts/merge-changelog-fragments.mjs", "tests/merge-changelog-anchor.test.ts"],
+      ["scripts/gates/quality-gate.mjs", "tests/gate-executors.test.ts"],
+      ["scripts/gates/check-merge-parents.mjs", "tests/check-merge-parents.test.ts"],
+      ["scripts/docs/merge-changelog-fragments.mjs", "tests/merge-changelog-anchor.test.ts"],
       [".storybook/preview.tsx", "tests/storybook-tsc-input.test.ts"],
-      ["scripts/check-eslint-exemptions.cjs", "tests/eslint-exemption-staleness.test.ts"],
-      ["scripts/check-scripts-typecheck.cjs", "tests/scripts-typecheck-ratchet.test.ts"],
-      ["scripts/precommit-timing.mjs", "tests/precommit-timing.test.ts"],
+      ["scripts/gates/check-eslint-exemptions.cjs", "tests/eslint-exemption-staleness.test.ts"],
+      ["scripts/gates/check-scripts-typecheck.cjs", "tests/scripts-typecheck-ratchet.test.ts"],
+      ["scripts/gates/precommit-timing.mjs", "tests/precommit-timing.test.ts"],
       [".cnb.yml", "tests/ci-env-probe.test.ts"],
-      ["scripts/check-changelog-versions.cjs", "tests/changelog-versions-gate.test.ts"],
+      ["scripts/gates/check-changelog-versions.cjs", "tests/changelog-versions-gate.test.ts"],
     ];
     const untouchable = [
       "tests/a11y-axe-stories.test.ts",

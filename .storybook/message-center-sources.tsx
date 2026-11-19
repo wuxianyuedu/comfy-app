@@ -55,7 +55,7 @@
  *    由装饰器在**渲染期**写进 store（同 `withStoreScene`：子组件首帧就要读到它）。
  */
 
-import type { Decorator } from "@storybook/nextjs";
+import type { Decorator } from "@storybook/nextjs-vite";
 
 import {
   describeDevServerRestart,
@@ -333,8 +333,8 @@ export function sceneMessages(name: string): Array<{
   kind: string;
   title: string;
 }> {
-  /* SAFETY: 类型断言已复核 */
-  const scene: MessageScene | undefined = MESSAGE_SCENES[name as SceneName];
+  const registry: Record<string, MessageScene> = MESSAGE_SCENES;
+  const scene: MessageScene | undefined = registry[name];
   if (scene === undefined) {
     throw new Error(
       `消息场景里没有叫「${name}」的那种。现有的：${MESSAGE_SCENE_NAMES.join(" / ")}`,
@@ -354,8 +354,8 @@ export function sceneMessages(name: string): Array<{
  * 幂等：`clear()` 先跑，所以 StrictMode 的双调用得到同一个末态。
  */
 function seedMessageScene(name: string): MessageScene {
-  /* SAFETY: 类型断言已复核 */
-  const scene: MessageScene | undefined = MESSAGE_SCENES[name as SceneName];
+  const registry: Record<string, MessageScene> = MESSAGE_SCENES;
+  const scene: MessageScene | undefined = registry[name];
   if (scene === undefined) {
     throw new Error(
       `消息场景里没有叫「${name}」的那种。现有的：${MESSAGE_SCENE_NAMES.join(" / ")}`,

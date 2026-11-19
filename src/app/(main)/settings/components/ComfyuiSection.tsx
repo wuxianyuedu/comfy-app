@@ -1,16 +1,9 @@
 "use client";
 
 /**
- * 创作后端（ComfyUI）分区（规范 17 §17.2 第③层）—— **只配置路径**。
- *
- * 自 ISSUE #1900 起这一分区只答一件事：ComfyUI 装在哪、用什么解释器提交、
- * 端口与启动参数是什么、要不要自动拉起。**启动 / 关闭 / 打开与启动日志整块
- * 搬去了侧栏「ComfyUI」页**（`~/components/studio/comfyui`）—— 两件事各有
- * 自己的屏之后，改路径的人不必先等一遍秒级运行态探测，看日志的人不必滚过
- * 一屏输入框。
- *
- * 因此本分区不再持任何运行态：controller 只给配置草稿与两份只读派生
- *（安装形态 / 桌面实例的存储目录）。
+ * 创作后端（ComfyUI）分区（规范 17 §17.2 第③层）—— 只配置路径。
+ * 自 ISSUE #1900 起启动/关闭/打开与启动日志整块搬去侧栏「ComfyUI」页（`~/components/studio/comfyui`），
+ * 本分区不再持运行态：controller 只给配置草稿与两份只读派生（安装形态 / 桌面实例存储目录）。
  */
 
 import { ArrowRight } from "lucide-react";
@@ -18,9 +11,8 @@ import { ArrowRight } from "lucide-react";
 import { emitAppEvent } from "~/lib/app-events";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
-import { StatusButton } from "~/components/ui/service-status-row";
 
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { Field } from "./SettingsPrimitives";
 import { FieldLabel } from "~/components/ui/field";
 import { ComfyuiStoragePaths } from "./ComfyuiStoragePaths";
@@ -41,10 +33,35 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
   const instanceType = c.comfyInstance?.instanceType ?? null;
   const desktopManaged = c.comfyInstance?.desktopManaged === true;
 
+  /* 路径填了无效内容时的行内提示（ISSUE #4138）：判据是**已保存**路径的 fs 结论
+   * （comfyInstance 是它的函数，失焦保存即 refetch 重判）。「填了但判不出形态」
+   * 按 pathExists 分两种说法——目录不存在去查盘符与目录名；目录在但不是
+   * ComfyUI 安装，对照下面那句安装形态说明自查。 */
+  const instance = c.comfyInstance;
+  const pathInvalidHint =
+    instance?.pathConfigured === true && instance.instanceType === null
+      ? instance.pathExists
+        ? "ComfyUI 路径无效：这里不是有效的 ComfyUI 安装（需要含 main.py 的源码根，或含 ComfyUI/ 子目录的桌面版实例根）。"
+        : "ComfyUI 路径无效：磁盘上找不到这个目录，请检查盘符与目录名。"
+      : null;
+
+  /* comfy-cli 解释器的行内提示（ISSUE #4164，与 #4138 同形）：判据是**已保存**
+   * 路径的 fs 结论（comfyInstance.interpreter，失焦保存即 refetch 重判）。
+   * 留空是合法语义（退回默认落点）——只有「填了但文件不存在」才提示。 */
+  const interpreter = c.comfyInstance?.interpreter ?? null;
+  const interpreterInvalidHint =
+    interpreter?.configured === true && interpreter.exists === false
+      ? "comfy-cli 解释器无效：磁盘上找不到这个文件，请检查盘符与路径。"
+      : null;
+
   return (
-    <SettingsCard title="创作后端（ComfyUI）">
+    <SettingsCard>
       <Field
+        error={pathInvalidHint}
         label="ComfyUI 路径（源码根或桌面版实例根）"
+        onBlur={() => {
+          void c.savePrefs();
+        }}
         onChange={(value) => {
           c.patchSettings({ comfyuiPath: value });
         }}
@@ -55,12 +72,16 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         桌面版（ComfyUI Desktop）请直接配置实例根目录（含 ComfyUI/ 子目录与
         standalone-env/），便携版配置含 main.py 的源码根。自动识别 python_embeded / standalone-env /
         .venv 解释器，多个环境并存时优先选用装了依赖（torch）的那个。
-        {c.comfyInstance?.pathConfigured === true
+        {c.comfyInstance?.pathConfigured === true && instanceType !== null
           ? "已配置——这里只管路径；启动 / 关闭与启动日志在侧栏「ComfyUI」页。"
           : "未配置——ComfyUI 未运行时任务会失败，侧栏「ComfyUI」页也启动不了它。"}
       </p>
       <Field
+        error={interpreterInvalidHint}
         label="comfy-cli 解释器（Python 绝对路径）"
+        onBlur={() => {
+          void c.savePrefs();
+        }}
         onChange={(value) => {
           c.patchSettings({ comfyCliPython: value });
         }}
@@ -72,7 +93,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         解释器。桌面版不随包 Python：请自备后把解释器的绝对路径填在这里；留空则退回 项目目录下的
         python-venv/comfy-cli（开发检出的默认落点）。
         {c.drafts.settings.comfyCliPython.trim()
-          ? "已配置——执行链会用这个解释器。"
+          ? interpreterInvalidHint
+            ? "已配置——但这个解释器文件不存在，执行链会失败。"
+            : "已配置——执行链会用这个解释器。"
           : "未配置——开发检出里若已有 python-venv/comfy-cli 可留空，桌面版任务会失败。"}
       </p>
       {instanceType && (
@@ -96,6 +119,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         <>
           <Field
             label="ComfyUI 端口"
+            onBlur={() => {
+              void c.savePrefs();
+            }}
             onChange={(value) => {
               c.patchSettings({
                 comfyuiPort: Math.max(0, Number(value) || 0),
@@ -111,6 +137,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           </p>
           <Field
             label="ComfyUI 启动参数（可选）"
+            onBlur={() => {
+              void c.savePrefs();
+            }}
             onChange={(value) => {
               c.patchSettings({ comfyuiExtraArgs: value });
             }}
@@ -133,7 +162,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           checked={c.drafts.settings.comfyuiAutoStart}
           id="comfyui-autostart"
           onCheckedChange={(next) => {
-            c.patchSettings({ comfyuiAutoStart: next === true });
+            void c.commitPrefs({ comfyuiAutoStart: next === true });
           }}
         />
         <FieldLabel className="text-ink/80 text-sm" htmlFor="comfyui-autostart">
@@ -145,7 +174,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           checked={c.drafts.settings.autoSyncLocalWorkflow}
           id="auto-sync-local-workflow"
           onCheckedChange={(next) => {
-            c.patchSettings({ autoSyncLocalWorkflow: next === true });
+            void c.commitPrefs({ autoSyncLocalWorkflow: next === true });
           }}
         />
         <FieldLabel className="text-ink/80 text-sm" htmlFor="auto-sync-local-workflow">
@@ -161,7 +190,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           按钮 + 日志框」，它让「改路径」这件小事要穿过一屏运行操作。现在这里只
           留一句指路 —— 它不是装饰，是这一分区撤掉四个动作之后**必须**给的出口
           （用户按老位置找「启动 ComfyUI」时会先看到这句，而不是以为功能没了）。 */}
-      <div className="border-border bg-surface-1 mb-4 rounded-lg border px-3 py-2">
+      <div className={`${SETTINGS_ROW_CLASS} mb-4`}>
         <p className="text-ink-muted text-xs leading-relaxed">
           路径配好并保存之后，到侧栏的「ComfyUI」页启动它 —— 那里有运行状态、启动 /
           关闭、打开查看，以及每一次启动的日志。
@@ -178,15 +207,6 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           <ArrowRight aria-hidden className="size-3" data-icon="inline-end" />
         </Button>
       </div>
-      <StatusButton
-        disabled={c.saving}
-        onClick={() => {
-          void c.savePrefs();
-        }}
-        variant="primary-solid"
-      >
-        保存偏好
-      </StatusButton>
     </SettingsCard>
   );
 }

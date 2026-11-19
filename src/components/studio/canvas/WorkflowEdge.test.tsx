@@ -5,7 +5,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
-import type { EdgeProps, Position } from "@xyflow/react";
+import { Position, type EdgeProps } from "@xyflow/react";
 import { WorkflowEdge } from "./WorkflowEdge";
 import { EDGE_FOCUS_ACTIVE_KEY, EDGE_FOCUS_DATA_KEY } from "./hooks/use-related-edges-highlight";
 
@@ -20,10 +20,8 @@ function makeProps(data: Record<string, unknown> | undefined): EdgeProps {
     sourceY: 0,
     targetX: 200,
     targetY: 0,
-    /* SAFETY: 类型断言已复核 */
-    sourcePosition: "right" as Position,
-    /* SAFETY: 类型断言已复核 */
-    targetPosition: "left" as Position,
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
     data,
   };
 }
@@ -42,8 +40,8 @@ function wireStyles(data: Record<string, unknown> | undefined) {
   return painted.map((path) => {
     const style = path.getAttribute("style") ?? "";
     return {
-      width: Number(/stroke-width:\s*([\d.]+)/.exec(style)?.[1]),
-      opacity: Number(/(?:^|;)\s*opacity:\s*([\d.]+)/.exec(style)?.[1]),
+      width: Number(/stroke-width:\s*(?<width>[\d.]+)/.exec(style)?.groups?.width),
+      opacity: Number(/(?:^|;)\s*opacity:\s*(?<opacity>[\d.]+)/.exec(style)?.groups?.opacity),
     };
   });
 }
@@ -98,10 +96,12 @@ describe("WorkflowEdge 选中态样式", () => {
     const stroke = painted.at(-1)!.getAttribute("style") ?? "";
     /* 提亮公式把 #10b981 推向白色 —— 亮度升上去，但仍是绿系（G 分量最大），
      * 用户依然能凭颜色读出这条线上流的是 IMAGE。 */
-    const rgbPart = /rgb\(([^)]+)\)/.exec(stroke)?.[1];
+    const rgbPart = /rgb\((?<rgb>[^)]+)\)/.exec(stroke)?.groups?.rgb;
     expect(rgbPart).toBeTruthy();
-    /* SAFETY: 类型断言已复核 */
-    const [r, g, b] = rgbPart!.split(",").map(Number) as [number, number, number];
+    if (rgbPart === undefined) {
+      throw new Error(`描边不是 rgb() 形式：${stroke}`);
+    }
+    const [r = Number.NaN, g = Number.NaN, b = Number.NaN] = rgbPart.split(",").map(Number);
     expect(g).toBeGreaterThan(r);
     expect(g).toBeGreaterThan(b);
     /* 确实被提亮了：比原色 #10b981（16,185,129）更亮。 */

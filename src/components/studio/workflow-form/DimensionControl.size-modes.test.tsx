@@ -1,10 +1,6 @@
-/* 尺寸控件里的两类尺寸表达（用户口径）：
- *
- *   · 「像素」大类下分「分辨率」（1k/2k/4k，按场景尺寸表取宽高）与
- *     「百万像素」（1M/2M/4M，总像素预算）两个子类；
- *   · 选中百万像素档时，「倍数」（8/16/32/64）必须出现 —— 百万像素只有配上
- *     对齐倍数才定得下具体宽高，藏起来用户就不知道宽高从哪来。
- */
+/* 尺寸控件的两类尺寸表达（用户口径）：「像素」大类下分「分辨率」（1k/2k/4k，按场景尺寸表取宽高）
+ * 与「百万像素」（1M/2M/4M，总像素预算）两个子类。
+ * 选中百万像素档时「倍数」（8/16/32/64）必须出现 —— 只有配上对齐倍数才定得下具体宽高。 */
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -52,13 +48,10 @@ function renderSize(width: number, height: number) {
     />,
   );
   fireEvent.click(container.querySelector('[aria-label="选择比例与像素"]')!);
-  /* 段内选项从手拼 `<Button role="option">` 迁到 base-ui ToggleGroup 之后,
-   * 每行是 `<ToggleGroupItem>`(base-ui Toggle 只写 `aria-pressed`、默认
-   * role=button,不再挂 role=option)。shadcn 的 `ui/toggle-group.tsx` 给
-   * 每个 item 显式挂 `data-slot="toggle-group-item"`,拿它做 selector 比
-   * role 更稳、也不被未来 base-ui 语义微调打断。
-   * 注意:PopoverContent 走 Portal 挂到 `document.body`、不在 `container`
-   * 里 —— 必须从 document 或 `screen` 拿,与旧 `screen.queryAllByRole` 等价。 */
+  /* 段内选项从手拼 Button role="option" 迁到 base-ui ToggleGroup 后，每行是 ToggleGroupItem
+   *（base-ui Toggle 只写 aria-pressed、role=button，不再挂 role=option）。shadcn ui/toggle-group
+   * 给每个 item 挂 data-slot="toggle-group-item"，拿它做 selector 比 role 更稳。
+   * PopoverContent 走 Portal 挂到 document.body、不在 container 里 —— 必须从 document 或 screen 拿。 */
   return [...document.querySelectorAll<HTMLElement>("[data-slot=toggle-group-item]")].map(
     (el) => el.textContent ?? "",
   );

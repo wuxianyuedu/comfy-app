@@ -100,9 +100,7 @@ describe("formatLocalStamp（本地时间戳，§16.2.4.50）", () => {
   });
 
   it("millis 档带 .mmm", () => {
-    expect(formatLocalStamp(d, { millis: true })).toBe(
-      "2026-09-05 08:05:03.250",
-    );
+    expect(formatLocalStamp(d, { millis: true })).toBe("2026-09-05 08:05:03.250");
   });
 
   it("与 formatDate / formatClock 的关系：日期部分 + 时刻部分", () => {

@@ -1,17 +1,8 @@
 /**
- * ComfyUI 运行页（侧栏全局页签「ComfyUI」）的**纯派生与常量**
- * （规范 17 §17.2 第①层：常量 + 纯派生，无 React、无副作用）。
- *
- * 为什么单独成模块：这一屏的「状态文字」「圆点语义」「按钮该不该禁用」全是
- * **同一份状态的四五个投影**，而它们此前散在设置页 `ComfyuiSection` 的 JSX
- * 里（多行三元嵌套）。视图里留一行 `comfyStatusText(c)` 与一枚
- * `comfyDotState(c)`，改文案不必穿过 JSX。
- *
- * ⚠️ 这里**不下**「ComfyUI 到底在不在跑」的结论 —— 那是
- * `setting.comfyStatus` 的职责（服务端已把四态判完）。本模块只做「四态 →
- * 文案 / 圆点 / 按钮禁用」的投影，不引 `~/lib/comfyui/lifecycle-notice`
- * 那套判据（同一件事第二个判据必然漂，见该模块文件头）。
- */
+ * ComfyUI 运行页的纯派生与常量（规范 17 §17.2 第①层：无 React、无副作用）。
+ * 「状态文字 / 圆点语义 / 按钮禁用」是同一份状态的四五个投影，收在这里避免散进 JSX 多行三元。
+ * 不下「到底在不在跑」的结论 —— 那是 setting.comfyStatus 的职责（服务端已判四态），
+ * 本模块只做四态→文案/圆点/禁用投影，不引 lifecycle-notice 的第二套判据。 */
 
 import type { StatusDotState } from "~/components/ui/status-dot";
 
@@ -46,10 +37,8 @@ export function isComfyBusy(
 }
 
 /**
- * 运行状态 → 圆点语义（纯派生，无 React 状态）。
- *
- * 顺序是载荷：**「过渡态」优先于「探测中」**，因为启动 / 关闭过程中状态查询
- * 也会返回 probing 类似的形态；先把过渡态认下，圆点才不会是「未运行」的红。
+ * 运行状态 → 圆点语义（纯派生）。顺序是载荷：「过渡态」优先于「探测中」——
+ * 启动/关闭过程中状态查询也会返回类似 probing 的形态，先认过渡态才不会误显示「未运行」红点。
  */
 export function comfyDotState(
   status: ComfyRuntimeStatus | null,
@@ -68,10 +57,8 @@ export function comfyDotState(
 }
 
 /**
- * 状态行那句话（读屏与肉眼同一句）。
- *
- * 运行中把**地址与启动方式**一并写进来：同一个端口上可能跑着外部实例，
- * 「谁拉起来的」是用户排查时第一件想知道的事（`via` 非空即来自服务端探测）。
+ * 状态行文案（读屏与肉眼同一句）。运行中一并写地址与启动方式：
+ * 同端口可能跑着外部实例，「谁拉起来的」是排查第一件事（via 非空即服务端探测）。
  */
 export function comfyStatusText(
   status: ComfyRuntimeStatus | null,
@@ -95,10 +82,8 @@ export function comfyStatusText(
 }
 
 /**
- * 圆点 `title`（悬停说明）。
- *
- * 只在**明确运行中**时给地址：探测中 / 未运行时给一个空 title 或半截结论，
- * 都比不给更坏（悬停出来的东西看起来就是权威结论）。
+ * 圆点 `title`（悬停说明）。只在明确运行中时给地址 ——
+ * 探测中/未运行时的空 title 或半截结论都比不给更坏（悬停内容会被当作权威）。
  */
 export function comfyDotTitle(status: ComfyRuntimeStatus | null): string | undefined {
   if (status?.up !== true) {
@@ -121,15 +106,9 @@ export function instanceKindLabel(kind: "desktop" | "portable" | "venv" | null):
 }
 
 /**
- * 「这一点下去会按哪条路径启动」那句话（纯派生）。
- *
- * 为什么要明写：启动动作读的是**库里已保存**的 `settings.comfyuiPath`（本页没有
- * 草稿）。用户若刚在「设置 → 创作后端」改了路径**却没点保存**，这一点下去跑的仍是
- * 旧路径 —— 把那条旧路径写在页上，「改了没保存」就是一眼可见的事，不必为它跨屏
- * 共享草稿（见本页文件头）。
- *
- * 空路径不给「按空路径启动」这种废话：那时 `comfyConfigHint` 已经给了出口，
- * 这里明说「尚未保存路径」即可。
+ * 「这一点下去会按哪条路径启动」（纯派生）。启动读的是库里已保存的 `settings.comfyuiPath`，
+ * 本页无草稿：用户刚在设置页改路径却没保存时，这一点下去跑的仍是旧路径 —— 写出来即一眼可见。
+ * 空路径不写「按空路径启动」，只说「尚未保存路径」（出口由 `comfyConfigHint` 给）。
  */
 export function comfyStartPathText(status: ComfyRuntimeStatus | null): string {
   const path = status?.path.trim() ?? "";
@@ -139,11 +118,9 @@ export function comfyStartPathText(status: ComfyRuntimeStatus | null): string {
 }
 
 /**
- * 「这一屏为什么还没准备好」的一句话；配置齐了返回 null。
- *
- * 与设置页那边的关系：路径 / 解释器在「设置 → 创作后端」里配，这里**只**读
- * 结论、只给出口 —— 不在本页重开一组输入框（同一份配置两个编辑入口必然打架，
- * 而保存路径会重写 `setting` 表里那一行）。
+ * 「这一屏为什么还没准备好」一句话；配置齐了返回 null。
+ * 路径/解释器在「设置 → 创作后端」配，这里只读结论、只给出口，不重开输入框
+ *（同一份配置两个编辑入口必然打架，保存会重写 setting 表那一行）。
  */
 export function comfyConfigHint(
   instance: {

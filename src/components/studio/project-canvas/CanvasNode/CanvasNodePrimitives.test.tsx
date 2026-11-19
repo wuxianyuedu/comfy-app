@@ -48,8 +48,10 @@ describe("Field", () => {
 describe("StatusDot", () => {
   it.for(STATUSES)("status=%s 渲染对应渐变与发光", (status) => {
     const { container } = render(<StatusDot status={status} />);
-    /* SAFETY: 类型断言已复核 */
-    const dot = container.firstElementChild as HTMLElement;
+    const dot = container.firstElementChild;
+    if (dot === null) {
+      throw new Error("StatusDot 未渲染任何元素");
+    }
     expect(dot.tagName).toBe("SPAN");
     /* `size-2.5` 而非 ` size-2.5`：P80 把「宽高同值」统一成 size-*（硬闸），
      * 迁移时这份断言没跟着重算。 */

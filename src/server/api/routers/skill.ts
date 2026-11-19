@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { skillRepository } from "~/lib/core/repository";
+import { isSqliteUniqueViolation } from "~/lib/sqlite-error";
 import { BUILTIN_SKILLS, CATEGORY_LABELS } from "~/lib/skills-seed";
 
 export const skillRouter = createTRPCRouter({
@@ -24,16 +25,15 @@ export const skillRouter = createTRPCRouter({
         includeInactive: input?.all === true,
       });
       const parsed = skills.map((skill) => {
-        /* SAFETY: 类型断言已复核 */
-        const obj = skill as unknown as Record<string, unknown>;
+        /* tags 列存的是 JSON 字符串（仓储侧 `like` 直接对列做模糊匹配），出口解回值；
+         * 行本身已是 typed 对象，直接 spread，不再经 Record 断言绕行。 */
         let tags: unknown;
         try {
-          /* SAFETY: 类型断言已复核 */
-          tags = JSON.parse((obj.tags as string) ?? "[]");
+          tags = JSON.parse(skill.tags ?? "[]");
         } catch {
           tags = [];
         }
-        return { ...obj, tags };
+        return { ...skill, tags };
       });
       const categories = await skillRepository.groupByActiveCategory();
       return {
@@ -76,20 +76,34 @@ export const skillRouter = createTRPCRouter({
           message: "该 slug 已存在，换一个名字",
         });
       }
-      const skill = await skillRepository.createUserSkill({
-        name: input.name,
-        slug: input.slug,
-        description: input.description,
-        icon: input.icon,
-        category: input.category,
-        promptTemplate: input.promptTemplate,
-        negativePrompt: input.negativePrompt,
-        defaultParams: input.defaultParams,
-        recommendedModel: input.recommendedModel,
-        coverUrl: input.coverUrl,
-        sortOrder: input.sortOrder,
-        tags: input.tags,
-      });
+      /* 并发同 slug（ISSUE #3866）：上方查重与插入之间没有原子边界，两个请求
+       * 同时通过检查时后到者撞 `skill.slug` 唯一索引。捕获约束冲突转成既定的
+       * CONFLICT 语义，不漏裸 500。 */
+      let skill;
+      try {
+        skill = await skillRepository.createUserSkill({
+          name: input.name,
+          slug: input.slug,
+          description: input.description,
+          icon: input.icon,
+          category: input.category,
+          promptTemplate: input.promptTemplate,
+          negativePrompt: input.negativePrompt,
+          defaultParams: input.defaultParams,
+          recommendedModel: input.recommendedModel,
+          coverUrl: input.coverUrl,
+          sortOrder: input.sortOrder,
+          tags: input.tags,
+        });
+      } catch (error) {
+        if (isSqliteUniqueViolation(error)) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "该 slug 已存在，换一个名字",
+          });
+        }
+        throw error;
+      }
       return { skill };
     }),
 });

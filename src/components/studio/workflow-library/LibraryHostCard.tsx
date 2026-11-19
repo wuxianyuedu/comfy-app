@@ -1,17 +1,8 @@
 "use client";
 
-/* 工作流库「画布节点」预览的**宿主运行卡片**（三列里的中间那个节点）。
- *
- * 它是 `WorkflowCanvasNodePreview` 的主体：与项目画布节点同构的头（状态胶囊）、
- * chips 双行（来源 / 模型 / 工作流 / 模式）、参数表单、输出行、生成按钮。
- *
- * 为什么单独成文件：它现在跑在 React Flow 的**节点**里（ISSUE #529），而节点
- * 需要一眼看清「哪一段是卡片本体、哪一段是端点」—— 表单与输出行的端点由表单层
- * 自己渲染 `<Handle>`（`withHandle` 口径），这个文件只负责组装结构。
- *
- * 刻意不接 `@xyflow/react`：卡片本体与端点注入解耦，端点长什么样由
- * `DynamicWorkflowForm` / `WorkflowNodeParts` 决定（与项目画布同一份）。
- */
+/* 工作流库画布节点的宿主运行卡片（三列中列）：与项目画布节点同构的头、chips、
+ * 参数表单、输出行与生成按钮。单独成文件便于区分卡片本体与端点（ISSUE #529）；
+ * 刻意不接 `@xyflow/react`，端点由表单层的 `<Handle>` 注入。 */
 
 import type { RefObject } from "react";
 import { displayValue } from "~/lib/display-value";

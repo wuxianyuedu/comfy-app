@@ -51,16 +51,12 @@ describe("clampText", () => {
     /* 日志会话这类「最新的在最后」的内容必须保留尾部 —— 保留头部截出来的
      * 全是无关的上古内容。两者在界面上看不出差别，只有这里能钉住。 */
     /* 13 字符、上限 10、标记占 1 → 正文 9 → 保留最后 9 个。 */
-    expect(
-      clampText("0123456789abc", { maxLength: 10, direction: "tail" }),
-    ).toBe("…456789abc");
+    expect(clampText("0123456789abc", { maxLength: 10, direction: "tail" })).toBe("…456789abc");
   });
 
   it('marker: "" 表示不标记（保留既有行为）', () => {
     /* 用于「截断后仍是完整单元」的场景（如按行取整）。 */
-    expect(clampText("0123456789abc", { maxLength: 10, marker: "" })).toBe(
-      "0123456789",
-    );
+    expect(clampText("0123456789abc", { maxLength: 10, marker: "" })).toBe("0123456789");
   });
 
   it("annotation 拼成 `…(内容)`，供诊断通道带上「被切了多少」", () => {
@@ -87,9 +83,7 @@ describe("clampText", () => {
     });
     expect(out2.endsWith("…(truncated, 原始 20 字符)")).toBe(false);
     /* maxLength 大于正文时**不截断**，annotation 自然不出现。 */
-    expect(clampText("短", { maxLength: 30, annotation: "truncated" })).toBe(
-      "短",
-    );
+    expect(clampText("短", { maxLength: 30, annotation: "truncated" })).toBe("短");
   });
 
   it("病态输入不返回更长的串", () => {

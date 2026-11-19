@@ -1,12 +1,7 @@
 // @vitest-environment jsdom
 /**
- * 「一张图当前该按多大显示」的数值侧契约（图片查看器的另一半，见
- * `image-viewer.tsx` 与 `~/components/ui/image-viewer` 的文件头）。
- *
- * 三个语义决定**只在边界上看得出来**，所以用例都压在边界上：
- *   ① 适应窗口不放大超过 100%（小图不该被拉伸）；
- *   ② 量不到尺寸 / 视口时按 100% 显示，而不是按 0；
- *   ③ 倍数一律夹取（滚轮连滚能算出 0.005 与 3761 倍）。
+ * 「一张图当前该按多大显示」的数值侧契约（另一半见 `image-viewer` 的文件头）。
+ * 三个语义决定只在边界上看得出来：① 适应窗口不放大超过 100%；② 量不到尺寸/视口时按 100%（不是 0）；③ 倍数一律夹取（连滚能算出 0.005 与 3761 倍）。
  */
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";

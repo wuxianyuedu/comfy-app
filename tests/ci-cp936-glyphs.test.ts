@@ -1,16 +1,7 @@
 /**
- * CP936 字形归一化的契约（平台日志里「本来是符号」却显示成问号那一族）。
- *
- * ## 它守的是什么
- *
- * 平台抓 stage 输出那一跳读的是 **CP936**；CP936 只有两万多个字形，落在字表之外的
- * 字符会被 .NET 的编码器写成**一个问号**（单字节 `0x3F`），而那个问号与「原文里本来
- * 就有的问号」逐字同形。
- *
- * 被吃掉的往往不是装饰，是判决 —— vitest 的**绿色通过标记** `✓` 正在这一列
- * （红色失败标记 `×` 有字形、活得好好的），于是「这一条过了」在日志上打印成问号。
- *
- * `scripts/ci-cp936-glyphs.mjs` 是这一层的实现；本文件判它的**行为契约**。
+ * CP936 字形归一化的行为契约：平台抓 stage 输出读 **CP936**，字表外字符被 .NET 写成单字节 `0x3F` 问号，
+ * 与原文里本来有的问号逐字同形；被吃掉的往往是判决（vitest 绿色 `✓` 正在这一列，红色 `×` 有字形）。
+ * 实现是 `scripts/ci/ci-cp936-glyphs.mjs`；本文件判它的行为契约。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -24,7 +15,7 @@ import {
   GLYPH_REPLACEMENTS,
   isCp936Encodable,
   normalizeCp936Glyphs,
-} from "../scripts/ci-cp936-glyphs.mjs";
+} from "../scripts/ci/ci-cp936-glyphs.mjs";
 
 import { normalizeControlFlow } from "./helpers/source-shape";
 
@@ -143,11 +134,9 @@ describe("字形归一化：幂等与读数", () => {
   });
 
   /**
-   * 出声的条件（ISSUE #2326，业主口径）：**登记表里有的那些不再逐次报**。
-   *
-   * 这一条钉的不是措辞，是「谁需要看这行日志」：登记过的替换在日志里本来就读得出来
-   * （`✓→√`、`⇒→→`、零宽类删掉），每跑念一次只会教读者忽略它 —— 而它唯一的对象是
-   * 「只能记成 `\uXXXX`、需要人去看一眼」那一类。
+   * 出声的条件（ISSUE #2326，业主口径）：登记表里有的那些不再逐次报 —— 它们在日志里本来就读得出来
+   * （`✓→√`、`⇒→→`、零宽类删掉），每跑念一次只会教读者忽略它。
+   * 唯一对象是「只能记成 `\uXXXX`、需要人去看一眼」那一类。
    */
   it("全批都在登记表里 ⇒ 这一行整条不发（不是发一行「按设计办完了」）", () => {
     const out = normalizeCp936Glyphs("✓✓ ✓ ⇒ ⚠ ✗ ​");
@@ -212,7 +201,7 @@ describe("转码外壳：接上了归一化", () => {
   it("`ci-cp936-exit.mjs` 在转码**之前**做了归一化", () => {
     /* 形状判据：归一化必须发生在交给转码之前 —— 放在之后已经晚了
      * （.NET 那一步在编码时就把字符写成问号了）。 */
-    const source = read("scripts/ci-cp936-exit.mjs");
+    const source = read("scripts/ci/ci-cp936-exit.mjs");
     expect(source).toContain("normalizeCp936Glyphs");
     const normalizeAt = source.indexOf("normalizeCp936Glyphs(text)");
     const writeAt = source.indexOf("write(normalized.text");
@@ -227,7 +216,7 @@ describe("转码外壳：接上了归一化", () => {
      * 而「空串不发」是 ISSUE #2326 那一刀的落点：判据在 `describeGlyphReplacements` 里，
      * **两处调用点都得尊重它** —— 只改一处会出现「逐块安静、收尾照吵」，
      * 那种半静默比原来更糟（读者以为它不报了）。 */
-    const source = read("scripts/ci-cp936-exit.mjs");
+    const source = read("scripts/ci/ci-cp936-exit.mjs");
     expect(source).toContain("describeGlyphReplacements");
     const guards = source.match(/if \(said !== ""\)/g) ?? [];
     expect(guards.length, "两处调用点各要有一个「空串就不发」").toBe(2);

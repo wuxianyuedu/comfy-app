@@ -1,11 +1,8 @@
 "use client";
 
 // ── 工坊 Agent 指挥助手：逻辑层 hook ─────────────────────
-// 状态：对话消息、输入、busy、错误、工具执行日志
-// 职责：
-//   1. 把用户消息 + 当前项目快照发给服务端 /api/agent/chat
-//   2. 收到 tool_calls 后在本模块里逐条执行（调用 controller 回调）
-//   3. 把工具结果回灌模型，继续循环直至模型直接回复用户
+// 职责：把用户消息 + 项目快照发给 /api/agent/chat；收到 tool_calls 后逐条执行
+//（调 controller 回调）并把结果回灌模型，循环直至模型直接回复。
 // 视图层（AgentOverlay.tsx）只消费本 hook 返回的 controller。
 import React from "react";
 import { runAsyncAction } from "~/lib/async-action";
@@ -186,6 +183,7 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
       const maxRounds = 10;
 
       for (let round = 0; round < maxRounds; round++) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const response: AgentChatResponse = await sendAgentMessage({
           messages: currentMessages,
           draft: handlersRef.current.getDraft(),
@@ -226,6 +224,7 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
           ];
           const toolMessages: Array<AgentMessageLike> = [];
           for (const call of response.tool_calls) {
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
             const toolMsg = await executeOneTool(call);
             toolMessages.push(toolMsg);
           }
@@ -237,6 +236,7 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
         if (response.fallback_instruction) {
           const instr = response.fallback_instruction;
           const action = typeof instr.action === "string" ? instr.action : "";
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const toolMsg = await executeOneTool({
             id: `fallback-${toolRunId()}`,
             name: action,

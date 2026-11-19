@@ -1,19 +1,9 @@
 "use client";
 
 /**
- * 设置页的纯展示视图（规范 17 §17.2 第③层）。
- *
- * 只做「外壳 + 分区正文 + 提示条」：把**每个分区**的正文交给外壳，由外壳铺在
- * 同一根滚动条里（ISSUE #1722 —— 一页到底，导航退回到「目录」的角色）。
- * 自身不再持任何业务状态。分区视图在 `components/`，弹窗交互状态在
- * `hooks/use-remote-model-dialogs.ts`（第②层），提交校验与网络都在 controller。
- *
- * 为什么是**一份映射**而不是「按 `c.section` 条件渲染」：外壳现在同时挂载全部
- * 分区（滚动跟随要靠它们都在文档里），少一项就是正文里凭空缺一段。映射的类型是
- * `Record<Section, ReactNode>`，漏项在 `tsc` 就红 —— 这比运行时判据直接。
- *
- * 注意：外壳的 `section` **不再决定渲染什么**，它只剩「导航高亮落在哪一项」这一个
- * 用途 —— 渲染与选中从此是两条方向：点击 / 滚动改选中，全部正文一直都在。
+ * 设置页纯展示视图（规范 17 §17.2 第③层）：只做「外壳 + 分区正文 + 提示条」，自身不持业务状态。
+ * 外壳同时挂载全部分区在同一根滚动条里（ISSUE #1722），故分区用一份 `Record<Section, ReactNode>`
+ * 映射而非条件渲染 —— 漏项在 `tsc` 就红。外壳的 `section` 只剩「导航高亮」用途，不再决定渲染。
  */
 
 import { useMemo } from "react";
@@ -21,6 +11,7 @@ import { useMemo } from "react";
 import { SettingsShell } from "~/components/settings/SettingsShell";
 import { Button } from "~/components/ui/button";
 import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import type { Section, ReadySettingsPageController } from "./hooks/use-settings-page";
 
 import { AppUpdateSection } from "./components/AppUpdateSection";
@@ -28,12 +19,14 @@ import { BackupSection } from "./components/BackupSection";
 import { AppearanceSection } from "./components/AppearanceSection";
 import { ComfyuiSection } from "./components/ComfyuiSection";
 import { DatabaseSection } from "./components/DatabaseSection";
+import { DataLocationSection } from "./components/DataLocationSection";
 import { ExitSection } from "./components/ExitSection";
 import { LogCategorySection } from "./components/LogCategorySection";
 import { LlmLocalSection } from "./components/LlmLocalSection";
 import { LlmRemoteSection } from "./components/LlmRemoteSection";
+import { SidebarTabSection } from "./components/SidebarTabSection";
+import { SizePresetSection } from "./components/SizePresetSection";
 import { UpdateCheckSection } from "./components/UpdateCheckSection";
-import { useRemoteModelDialogs } from "./hooks/use-remote-model-dialogs";
 
 export function SettingsPageView({
   c,
@@ -46,31 +39,58 @@ export function SettingsPageView({
   /** 屏级可见标题；页签（或顶栏）已在说屏名时不传（ISSUE #1872，见外壳文档）。 */
   title?: string;
 }) {
-  /* 远程模型的弹窗交互状态集中在第②层 hook：视图只消费字段、只渲染 JSX。 */
-  const remoteModelDialogs = useRemoteModelDialogs(c);
-
   /* 分区正文：**每个分区一项，全都在**（外壳铺在同一根滚动条里）。分区组件的
    * props 全是 `c`（或 `c` + 弹窗状态），所以这里只是一张「分区 → 组件」的表。 */
   const sections = useMemo(
     () =>
       ({
-        appearance: (
+        appearance: <AppearanceSection c={c} />,
+        /* 界面页签的行为（ISSUE #3623 / #3798）：独立标签页 / 共享标签页，按项配置；
+           清单含设置与「UI 控件总览」这类不进侧栏的界面。它自己取数（配置面只有
+           这一处读），故不吃 `c`。 */
+        sidebar: <SidebarTabSection />,
+        appUpdate: (
           <>
-            <AppearanceSection c={c} />
-            {/* 本地更新检测（纯前端偏好：不写入后端设置，存 localStorage） */}
+            <AppUpdateSection c={c} />
+            {/* 本地更新检测（纯前端偏好：不写入后端设置，存 localStorage）——
+                它讲的是「改完要不要重启」，那是**应用更新**的事，原先挂在「外观」下
+                （ISSUE #3547）。 */}
             <UpdateCheckSection />
           </>
         ),
-        appUpdate: <AppUpdateSection c={c} />,
         llmLocal: <LlmLocalSection c={c} />,
-        llmRemote: <LlmRemoteSection c={c} d={remoteModelDialogs} />,
+        llmRemote: <LlmRemoteSection c={c} />,
         comfyui: <ComfyuiSection c={c} />,
         database: <DatabaseSection c={c} />,
         backup: <BackupSection c={c} />,
+        dataLocation: <DataLocationSection />,
+        sizePresets: <SizePresetSection />,
         exit: <ExitSection c={c} />,
         logs: <LogCategorySection />,
       }) satisfies Record<Section, React.ReactNode>,
-    [c, remoteModelDialogs],
+    [c],
+  );
+
+  /* 分区标题行右侧的存放位置徽标（ISSUE #3724）：卡片自身没有标题可挂的
+   * （整节一张无标题卡），徽标上移到大标题（`.u-title-stage`）行右侧，
+   * 不再为一张图标独占卡片头的一行。卡片自带标题的（备份 / 本地更新检测 /
+   * 远程模型）仍挂在卡片标题行。 */
+  const sectionTitleExtra = useMemo(
+    () =>
+      ({
+        appearance: <DataLocationBadge id="appearance" />,
+        comfyui: <DataLocationBadge id="app-settings" />,
+        llmLocal: <DataLocationBadge id="llm-config" />,
+        llmRemote: <DataLocationBadge id="remote-model" />,
+        logs: <DataLocationBadge id="log-categories" />,
+        sidebar: (
+          <span className="flex items-center gap-1.5">
+            <DataLocationBadge id="sidebar-tab-local" />
+            <DataLocationBadge id="sidebar-tab-project" />
+          </span>
+        ),
+      }) satisfies Partial<Record<Section, React.ReactNode>>,
+    [],
   );
 
   return (
@@ -119,6 +139,7 @@ export function SettingsPageView({
       jumpSection={c.pendingJump}
       onJumpApplied={c.ackJumpSection}
       sections={sections}
+      sectionTitleExtra={sectionTitleExtra}
     />
   );
 }

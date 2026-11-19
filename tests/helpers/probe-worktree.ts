@@ -1,38 +1,7 @@
 /**
- * 「探针要改真实入库文档」那一族的**隔离**口径 —— 一次性的 `git worktree` 克隆（ISSUE #2665）。
- *
- * ## 它补的是哪一格（与 `probe-restore.ts` 的分工）
- *
- * ISSUE #2593 把**还原**那一半修好了：还原只认「进本文件那一刻的字节快照」，不再拿
- * `git status` 当「探针留脏了」的证据去 `git checkout --`（那吃过两次未提交的文档改动）。
- * 但**读的那一侧仍然敞着**：这类用例的现场是「往真实入库文档改一笔 → 起子进程跑判据 → 还原」，
- * 于是从写入到还原之间，任何**并发读者**读到的都是探针那一笔，不是仓库事实。
- * vitest 按文件并行，而本仓已确认在场的读者不止一位：
- *
- * - `tests/comment-language.test.ts` 直读 `docs/reference-facts.md`（逐行找
- *   `comment.language.asciiOnly` 那一行，与解析结果逐项对）—— 而那份文件正在写探针的名单里；
- * - `tests/check-doc-references.test.ts` 自己每组探针都开着这么一段窗口，一次跑测十几组。
- *
- * 窗口长度当场量过：一次 `node scripts/check-doc-references.cjs` = **252ms / 242ms**
- * （同进程连跑两次，本机 ReFS）。这不是「偶尔撞上」的形状，是**每次都留着的那道口子**。
- *
- * ## 本件的做法
- *
- * 把探针整体搬进一份**一次性工作树克隆**：`git worktree add --detach <临时目录> HEAD`
- * 出一份干净快照，再把**当前工作树里脏的那几份**（含未跟踪、含已删除）覆盖进去 ——
- * 于是克隆是「此刻工作树的忠实副本」，判据在里面看到的与在真实树里看到的一样，
- * 而真实树**一次都不被写**。代价当场量：worktree add = **4.81s**（本机，3156 份文件），
- * 每个用例文件一次（不是每组探针一次），跑完 `worktree remove --force`。
- *
- * ⚠️ 两条边界，写在拿它的人眼前：
- * 1. **不许静默退回真实树**。建不出来就抛 —— 退回真实树等于把本件存在的全部理由关掉，
- *    而账面照样绿（用例本来就是这么过的）。
- * 2. 本件**不建 `node_modules` 的 junction**：判据与被测脚本只要 `node:` 内建 + 本地 `.cjs`
- *    （`check-doc-references.cjs` / `render-doc-placeholders.cjs` / `doc-facts.cjs` 三个的
- *    `require` 面当场看过，无第三方件），实测在裸工作树里都跑得起来。将来若真要在克隆里
- *    跑需要依赖的件，先读 `scripts/base-check.mjs` 文件头那段
- *    「**必须先摘 junction 再删 worktree**」—— 少那一步，`worktree remove` 会顺着链接
- *    删进调用者的 `node_modules`。
+ * 探针要改真实入库文档 ⇒ 搬进一次性 `git worktree` 克隆隔离（ISSUE #2665），真实树一次不被写。vitest 按文件
+ * 并行，`comment-language.test.ts` 等并发读者会读到探针中间态（#2593 只修好还原一侧）。建不出来必须抛，不许
+ * 静默退回真实树；不建 node_modules junction，带依赖件先读 base-check.mjs 的「先摘 junction 再删 worktree」。
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -63,12 +32,9 @@ type StatusEntry = {
 };
 
 /**
- * 解析 `-z` 形的工作树状态。
- *
- * 只认这一形、不认人读形：路径带空格或中文时人读形要靠猜引号，而 `-z` 是 NUL 分隔、
- * 无引号无转义。重命名/复制（`R`/`C`）会额外多出一个 NUL 分隔的**源**路径 —— 本件只要
- * 目的路径，所以按状态码决定要不要吞掉那一格（不吞就会把源路径当成又一条记录去复制，
- * 而那个源多半已经不存在）。
+ * 解析 `-z` 形的工作树状态：NUL 分隔、无引号，路径带空格/中文时比人读形可靠。
+ * 重命名/复制（`R`/`C`）多出一个 NUL 分隔的源路径，本件只要目的路径 —— 按状态码
+ * 决定要不要吞掉那一格（不吞会把已不存在的源当成又一条记录）。
  */
 function parseStatusZ(out: string): Array<StatusEntry> {
   const fields = out.split("\0");
@@ -113,12 +79,9 @@ function git(cwd: string, args: Array<string>): string {
 }
 
 /**
- * 落盘注入口。
- *
- * 只开 `copyFile` 一格，而它存在的理由是一条**必须能红**的性质：
- * 「`add` 成功之后中途抛错时，那条 worktree 登记有没有被注销」。不注入就只能靠真的
- * 把磁盘弄坏去测，那不可重复 —— 而这一格恰恰是本次改动里最容易悄悄漏掉的一条
- * （现场：第一版的 `sep` 写错，拷贝那一步当场抛，登记就留在了仓库上）。
+ * 落盘注入口，只为一条必须能红的性质：`add` 成功后中途抛错时 worktree 登记有没有被注销。
+ * 不注入就只能真把磁盘弄坏去测，不可重复；这一格最易悄悄漏（首版 `sep` 写错，拷贝当场抛，
+ * 登记就留在仓库上）。
  */
 export type ProbeTreeIo = {
   copyFile: (src: string, dst: string) => void;
@@ -145,9 +108,8 @@ function copyInto(treeDir: string, dst: string, src: string, io: ProbeTreeIo): v
 
 /**
  * 出一份一次性克隆（HEAD + 当前工作树里脏的那几份）。
- *
  * @param realRoot 真实仓库根（绝对路径）
- * @param io 落盘注入口（见 `ProbeTreeIo` 那段，只服务于「中途抛错要不要注销登记」那条）
+ * @param io 落盘注入口（见 `ProbeTreeIo`，只服务于「中途抛错要不要注销登记」）
  */
 export function createProbeTree(realRoot: string, io: ProbeTreeIo = realIo): ProbeTree {
   const parent = mkdtempSync(join(tmpdir(), "doc-probe-tree-"));

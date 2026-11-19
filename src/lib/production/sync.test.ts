@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
 import type { Shot } from "~/lib/workshop/types";
 import {
   applyReprompt,
@@ -16,6 +17,15 @@ import {
   shotStatusToNodeStatus,
   shotToNodePatch,
 } from "./sync";
+
+/** 按对象读数组第 `index` 项；不是对象即判失败（调用用例对此有前提）。 */
+function recordAt(items: Array<unknown>, index: number): Record<string, unknown> {
+  const item = items[index];
+  if (!isRecord(item)) {
+    throw new TypeError(`第 ${index} 项不是对象`);
+  }
+  return item;
+}
 
 function makeShot(over: Partial<Shot> = {}): Shot {
   return {
@@ -204,8 +214,7 @@ describe("applyShotRedo", () => {
       { id: "b", imageUrl: "/z.png" },
     ];
     const out = applyShotRedo(shots, "a");
-    /* SAFETY: 类型断言已复核 */
-    const a = out[0] as Record<string, unknown>;
+    const a = recordAt(out, 0);
     expect(a.imageUrl).toBeUndefined();
     expect(a.clipUrl).toBeUndefined();
     expect(a.status).toBe("idle");
@@ -216,9 +225,8 @@ describe("applyShotRedo", () => {
   });
 
   it("无 rev 的镜头按 0 起，退回后置 1", () => {
-    /* SAFETY: 类型断言已复核 */
-    const out = applyShotRedo([{ id: "a", imageUrl: "/x" }], "a") as Array<Record<string, unknown>>;
-    expect(out[0]!.rev).toBe(1);
+    const out = applyShotRedo([{ id: "a", imageUrl: "/x" }], "a");
+    expect(recordAt(out, 0).rev).toBe(1);
   });
 
   it("非记录项 / 无命中 → 原样返回入参引用", () => {
@@ -240,13 +248,13 @@ describe("applyReprompt", () => {
       },
       { id: "b", prompt: "别的" },
     ];
-    /* SAFETY: 类型断言已复核 */
-    const out = applyReprompt(shots, "a", "新提示词") as Array<Record<string, unknown>>;
-    expect(out[0]!.prompt).toBe("新提示词");
-    expect(out[0]!.imageUrl).toBeUndefined();
-    expect(out[0]!.clipUrl).toBeUndefined();
-    expect(out[0]!.status).toBe("idle");
-    expect(out[0]!.rev).toBe(3);
+    const out = applyReprompt(shots, "a", "新提示词");
+    const a = recordAt(out, 0);
+    expect(a.prompt).toBe("新提示词");
+    expect(a.imageUrl).toBeUndefined();
+    expect(a.clipUrl).toBeUndefined();
+    expect(a.status).toBe("idle");
+    expect(a.rev).toBe(3);
     // 未命中镜头保持原引用（不被连带改写）
     expect(out[1]).toBe(shots[1]);
   });
@@ -259,10 +267,10 @@ describe("applyReprompt", () => {
 
   it("非记录项被跳过（只认带 id 的对象）", () => {
     const shots = ["字符串项", { id: "b", prompt: "p" }];
-    /* SAFETY: 类型断言已复核 */
-    const out = applyReprompt(shots, "b", "改后") as Array<Record<string, unknown>>;
+    const out = applyReprompt(shots, "b", "改后");
+    const b = recordAt(out, 1);
     expect(out[0]).toBe("字符串项");
-    expect(out[1]!.prompt).toBe("改后");
-    expect(out[1]!.rev).toBe(1);
+    expect(b.prompt).toBe("改后");
+    expect(b.rev).toBe(1);
   });
 });

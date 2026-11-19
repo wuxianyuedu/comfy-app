@@ -3,12 +3,8 @@
 import React from "react";
 
 /**
- * ErrorBoundary — 客户端错误边界。
- *
- * 包在业务子树外层，捕获渲染期异常并展示降级 UI，
- * 避免整页白屏。与 app/error.tsx 互补：
- * - app/error.tsx 处理 Next 路由层错误
- * - 本组件处理页面内局部组件的渲染错误
+ * ErrorBoundary — 客户端错误边界：包在业务子树外层，捕获渲染期异常并展示降级 UI，避免整页白屏。
+ * 与 app/error.tsx 互补：app/error.tsx 处理 Next 路由层错误，本组件处理页面内局部组件的渲染错误。
  */
 export class ErrorBoundary extends React.Component<
   {

@@ -1,15 +1,8 @@
 "use client";
-/* 折叠态句柄锚点：节点折叠时卡片体隐藏，但连线仍需锚点。每侧
- * 塌缩成一根装饰性「圆柱」（一颗高药丸）；
- * 底下保留逐端口 <Handle> 栈作为极小的不可见
- * 锚点，好让每条线的 id 绑到各自的锚点，切换时
- * 边永不脱落。
- *
- * 本文件同时输出两个共享原语（<CollapsedAnchorCylinder> /
- * <CollapsedPortHandles>）：子图封装节点的折叠锚点
- * （SubgraphCollapsedAnchors）与 WorkflowNode 用的是**同一套视觉契约**
- * （圆柱 + 不可见逐端口 Handle），差别只在「哪些端口算已接线」的
- * 数据模型 —— 原语收口一处，两边不再各画一份。 */
+/* 折叠态句柄锚点：卡片体隐藏但连线仍需锚点 —— 每侧一根装饰「圆柱」，
+ * 底下保留逐端口不可见 <Handle> 栈，让每条边的 id 绑到各自锚点，切换时不脱线。
+ * <CollapsedAnchorCylinder> / <CollapsedPortHandles> 与子图折叠锚点共用同一视觉契约，
+ * 差别只在「哪些端口算已接线」的数据模型。 */
 import { clamp } from "~/lib/clamp";
 import { Handle, Position } from "@xyflow/react";
 import { useTheme } from "next-themes";

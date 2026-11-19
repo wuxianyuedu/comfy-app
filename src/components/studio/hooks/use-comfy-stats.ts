@@ -1,13 +1,9 @@
 "use client";
 
-// ── 系统指标（显存 / 内存）读数的组件侧外壳（规范 17 §17.2 第②层）─────
-//
-// 观测本体与轮询节奏在 `~/lib/comfy/comfy-stats-store`：状态栏那格与首页算力总览读
-// 的是**同一条轮询** —— 各挂一份 hook 会把同一个 `/api/comfy/stats` 拉成两路，
-// 两份「前台/后台暂停」也各走各的（见 store 文件头）。
-//
-// 本文件只做三件事：订阅快照、给一个主动刷新出口、把「在线 + 迟滞容忍期」折叠成
-// 视图好用的形状。BrowserStatusBar 等视图仍只读字段，不直接发请求（硬规则 10）。
+// ── 系统指标（显存 / 内存）读数的组件侧外壳（规范 17 §17.2 第②层）
+// 观测本体与轮询节奏在 `~/lib/comfy/comfy-stats-store`：状态栏与首页算力总览读**同一条**
+// 轮询 —— 各挂一份 hook 会把 `/api/comfy/stats` 拉成两路，前台/后台暂停也各走各的。
+// 本文件只做三件事：订阅快照、主动刷新出口、把「在线 + 迟滞容忍期」折叠成视图好用的形状。
 
 import { useCallback, useSyncExternalStore } from "react";
 
@@ -35,10 +31,8 @@ export type ComfyStatsController = {
 };
 
 /**
- * 读同一份系统指标快照。
- *
- * 快照身份由 store 保证稳定（三个字段没变就复用旧对象），所以不会因
- * `useSyncExternalStore` 判等而反复重渲染；订阅者归零时 store 会停表。
+ * 读同一份系统指标快照。快照身份由 store 保证稳定（三个字段没变就复用旧对象），
+ * 所以不会因 useSyncExternalStore 判等而反复重渲染；订阅者归零时 store 会停表。
  */
 export function useComfyStats(): ComfyStatsController {
   const snapshot = useSyncExternalStore(

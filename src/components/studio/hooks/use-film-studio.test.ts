@@ -35,7 +35,7 @@ vi.mock("~/lib/film/bgm-client", () => ({
  * （回落剧本模式，既有 create() 用例行为不变）；来源相关用例在用例内改写返回值。 */
 const getActiveIdMock = vi.hoisted(() => vi.fn<() => string | null>(() => null));
 const fetchProductionMock = vi.hoisted(() =>
-  vi.fn<(id: string) => Promise<unknown>>(async () => null),
+  vi.fn<(id: string) => Promise<unknown>>(() => Promise.resolve(null)),
 );
 vi.mock("~/lib/project-canvas/canvas-store", () => ({
   getActiveId: getActiveIdMock,
@@ -62,9 +62,17 @@ vi.mock("~/trpc/vanilla", () => ({
 const mockedUpload = vi.mocked(uploadBgm);
 
 /* tRPC 的 resolver 类型是 Resolver<...>（不是 vi.Mock），测试里按 Mock 取用。
- * 收敛成一个 helper，避免每处都写一次双重断言。 */
-/* SAFETY: 类型断言已复核 */
-const mockOf = (fn: unknown) => fn as Mock;
+ * 模块工厂已用 vi.fn() 替换该客户端；这里先按运行期判据确认拿到的是 mock，再收窄成 Mock。 */
+function isMock(fn: unknown): fn is Mock {
+  return typeof fn === "function" && "mock" in fn;
+}
+
+const mockOf = (fn: unknown): Mock => {
+  if (!isMock(fn)) {
+    throw new Error("vanillaApi 的出口应已被 vi.mock 替换成 vi mock");
+  }
+  return fn;
+};
 
 const vanilla = {
   skill: { list: { query: mockOf(vanillaApi.skill.list.query) } },
@@ -106,7 +114,7 @@ function runningFilm(id = "f-1") {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.clearAllTimers?.();
+  vi.clearAllTimers();
   // 默认无活跃项目 → 回落剧本模式（既有 create() 用例不受来源逻辑影响）。
   getActiveIdMock.mockReturnValue(null);
   fetchProductionMock.mockResolvedValue(null);
@@ -203,7 +211,7 @@ describe("useFilmStudio", () => {
       expect(result.current.running).toBe(true);
 
       // 推进一次轮询周期：详情回包变成 DONE → 停止轮询
-      await act(async () => {
+      act(() => {
         vi.advanceTimersByTime(3100);
       });
       await waitFor(() => {
@@ -211,7 +219,7 @@ describe("useFilmStudio", () => {
       });
 
       const callsAfterDone = vanilla.film.detail.query.mock.calls.length;
-      await act(async () => {
+      act(() => {
         vi.advanceTimersByTime(9000);
       });
       // 停止后不再继续拉详情

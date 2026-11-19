@@ -6,17 +6,23 @@
  * 模式全是**用户可感知的**：密钥解析错 → 401 却说「网络问题」；错误文案分裂
  * → 同一个故障两条提示。
  *
- * mock 边界只有两处：
+ * mock 边界只有三处：
  *   · `~/lib/llm/server` 的 `getLLMConfig`（配置分层已在 server.test.ts 覆盖）；
+ *   · `~/lib/core/repository` 的两条仓储（#3577 供应商链直查：见 resolveUpstream）；
  *   · 全局 `fetch`（断言上行 URL / 鉴权头 / 超时与回包处置）。
  * `api-channel-shared` 的抽取器与 `usage-test-config` 的纯函数走真实实现。
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import { REMOTE_MODEL_KINDS } from "~/lib/llm/types";
+import { asRecord } from "~/lib/is-record";
+
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(() => Promise.resolve([{ address: "93.184.216.34", family: 4 }])),
+}));
 
 vi.mock("~/lib/llm/server", () => ({
-  getLLMConfig: vi.fn(async () => ({
+  getLLMConfig: vi.fn(() => ({
     provider: "remote",
     baseUrl: "https://global/v1",
     model: "m",
@@ -34,6 +40,28 @@ vi.mock("~/lib/llm/server", () => ({
   })),
 }));
 
+/* 供应商链直查的桩（#3577）：只声明被测代码真正读的字段（本地最小类型，与
+ * route.test.ts 的 mock 形状同款），避免为凑齐整行而断言（no-unsafe-type-assertion）。
+ * vi.hoisted 声明必须在 vi.mock 引用它之前（no-use-before-define）。 */
+const { findByName, findById } = vi.hoisted(() => ({
+  findByName: vi.fn<
+    (name: string) => Promise<{
+      extraBody?: string | null;
+      name: string;
+      providerId: string | null;
+    } | null>
+  >(),
+  findById:
+    vi.fn<
+      (id: string) => Promise<{ apiKey: string | null; baseUrl: string; name: string } | null>
+    >(),
+}));
+
+vi.mock("~/lib/core/repository", () => ({
+  remoteModelRepository: { findByName: (name: string) => findByName(name) },
+  llmProviderRepository: { findById: (id: string) => findById(id) },
+}));
+
 import {
   CHAT_TIMEOUT_MS,
   MEDIA_TIMEOUT_MS,
@@ -44,7 +72,6 @@ import {
   resolveUpstream,
   readUsageTestPrologue,
   readPayload,
-  httpFailureDetail,
   parseExtraJson,
   chatTextFrom,
   callChat,
@@ -65,44 +92,46 @@ function callAt(n = 0): { init: RequestInit; url: string } {
   // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
   const arg: unknown = call[0];
-  /* SAFETY: 类型断言已复核 */
-  const url = typeof arg === "string" ? arg : (arg as Request).url;
+  let url = "";
+  if (typeof arg === "string") {
+    url = arg;
+  } else if (arg instanceof Request) {
+    url = arg.url;
+  }
   return { url, init: call[1] ?? {} };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
 function sentBody(n = 0): Record<string, unknown> {
   const raw = callAt(n).init.body;
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<string, unknown>;
+  const parsed: unknown = JSON.parse(typeof raw === "string" ? raw : "{}");
+  return asRecord(parsed) ?? {};
 }
 
 /** 一次性响应替身（`json()` / `text()` 都可用）。 */
 function jsonResponse(body: unknown, status = 200): Response {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-    text: async () => JSON.stringify(body),
-  } as unknown as Response;
+  return new Response(JSON.stringify(body), { status });
 }
 
 /** 构造一个 Request 替身（只用到 `.json()`）。 */
 function reqOf(body: unknown, opts: { throw?: boolean } = {}): Request {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    json: async () => {
-      if (opts.throw === true) {
-        throw new Error("bad json");
-      }
-      return body;
-    },
-  } as unknown as Request;
+  const raw = opts.throw === true ? "bad json" : JSON.stringify(body);
+  return new Request("https://usage-test.local/", { method: "POST", body: raw });
+}
+
+/** `expect.stringContaining` 的返回类型是 `any`；显式收成 `unknown` 再交给对象判据，
+ *  避免 unsafe-assignment（运行期仍是同一个非对称匹配器）。 */
+function containsText(text: string): unknown {
+  const matcher: unknown = expect.stringContaining(text);
+  return matcher;
 }
 
 beforeEach(() => {
   fetchMock.mockReset();
+  findByName.mockReset();
+  findByName.mockResolvedValue(null);
+  findById.mockReset();
+  findById.mockResolvedValue(null);
   vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -145,6 +174,7 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
     await expect(resolveUpstream("entry", "", "", "")).resolves.toEqual({
       base: "https://entry/v1",
       path: "",
+      url: "https://entry/v1",
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer sk-entry",
@@ -155,6 +185,7 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
     await expect(resolveUpstream("entry", "https://typed/v1/", "sk-typed", "x")).resolves.toEqual({
       base: "https://typed/v1",
       path: "/x",
+      url: "https://typed/v1/x",
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer sk-typed",
@@ -164,10 +195,9 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
     // 名字不在条目里 → 全局
     const global = await resolveUpstream("unknown", "", "", "/chat");
     expect(global).toMatchObject({ base: "https://global/v1", path: "/chat" });
-    /* SAFETY: 类型断言已复核 */
-    expect((global as { headers: Record<string, string> }).headers.Authorization).toBe(
-      "Bearer sk-global",
-    );
+    expect(global).toMatchObject({
+      headers: { Authorization: "Bearer sk-global" },
+    });
   });
 
   it("没有任何可用地址 → 返回可修正的错误文案而不是抛错", async () => {
@@ -198,8 +228,68 @@ describe("resolveUpstream（两个路由同一口径的连接参数解析）", (
       maxTokens: 2048,
     });
     const up = await resolveUpstream("x", "", "", "");
-    /* SAFETY: 类型断言已复核 */
-    expect((up as { headers: Record<string, string> }).headers.Authorization).toBeUndefined();
+    expect(up).not.toHaveProperty("headers.Authorization");
+  });
+
+  it("供应商链直查（#3577）：entry 缺席（getLLMConfig 读库失败回落空）也能从供应商行补回地址与密钥", async () => {
+    const { getLLMConfig } = await import("~/lib/llm/server");
+    vi.mocked(getLLMConfig).mockResolvedValueOnce({
+      provider: "remote",
+      baseUrl: "https://global/v1",
+      model: "m",
+      extraModels: [],
+      apiKey: null,
+      temperature: 0.7,
+      maxTokens: 2048,
+    });
+    findByName.mockResolvedValueOnce({ name: "agnes-3.0-flash", providerId: "p1" });
+    findById.mockResolvedValueOnce({
+      apiKey: "sk-provider",
+      baseUrl: "https://apihub.agnes-ai.com/v1",
+      name: "agnes",
+    });
+    /* typedBase 模拟弹窗带来的供应商地址（它不依赖读库，所以 401 现场地址是对的）；
+     * 密钥则由直查补回 —— 这正是「地址对、密钥丢」那一形 repaired 后的样子。 */
+    await expect(
+      resolveUpstream("agnes-3.0-flash", "https://apihub.agnes-ai.com/v1", "", ""),
+    ).resolves.toEqual({
+      base: "https://apihub.agnes-ai.com/v1",
+      path: "",
+      url: "https://apihub.agnes-ai.com/v1",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer sk-provider",
+      },
+    });
+  });
+
+  it("供应商存在但没配密钥 → 可读报错，不再静默裸发让上游 401 说谜语（#3577）", async () => {
+    /* 全局密钥置空：它仍是最后一档回落（历史行为），但「模型挂在供应商下、
+     * 供应商没配密钥」的缺口不该被一把不相干的全局钥匙掩盖。 */
+    const { getLLMConfig } = await import("~/lib/llm/server");
+    vi.mocked(getLLMConfig).mockResolvedValueOnce({
+      provider: "remote",
+      baseUrl: "https://global/v1",
+      model: "m",
+      extraModels: [],
+      apiKey: null,
+      temperature: 0.7,
+      maxTokens: 2048,
+    });
+    findByName.mockResolvedValueOnce({ name: "agnes-3.0-flash", providerId: "p1" });
+    /* 供应商行没有密钥 */
+    findById.mockResolvedValueOnce({
+      apiKey: null,
+      baseUrl: "https://apihub.agnes-ai.com/v1",
+      name: "agnes",
+    });
+    const out = await resolveUpstream("agnes-3.0-flash", "https://apihub.agnes-ai.com/v1", "", "");
+    /* 单条断言同时钉住两件事：返回的是 error 形（不是 = 静默放行了无密钥请求，
+     * 当场红），且文案里点到了供应商名与「未配置 API 密钥」。
+     * 刻意不用 if 收窄 + expect —— no-conditional-expect 不许条件内断言；
+     * 匹配器先收成 unknown 再进对象 —— 本文件 containsText 的同一手法。 */
+    const matcher: unknown = expect.stringMatching(/agnes.*未配置 API 密钥/s);
+    expect(out).toEqual({ error: matcher });
   });
 });
 
@@ -235,8 +325,7 @@ describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
     });
     const failed = await readUsageTestPrologue(reqOf({ name: "x" }));
     expect(failed.ok).toBe(false);
-    /* SAFETY: 类型断言已复核 */
-    expect((failed as { detail: string }).detail).toContain("接口地址为空");
+    expect(failed).toMatchObject({ detail: containsText("接口地址为空") });
   });
 
   it("成功时回 name / 原 body / 解析好的连接参数", async () => {
@@ -247,43 +336,37 @@ describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
       ok: true,
       name: "entry",
       up: { base: "https://entry/v1", path: "/v1/chat/completions" },
+      rec: { prompt: "hi" },
     });
-    // `rec` 是透传的原始 body（类型为 Record<string, unknown>）：用判据取值，
-    // 不用 `as` 断言 —— 断言会掩盖「字段名写错」这类失败
-    /* SAFETY: 类型断言已复核 */
-    const rec = (out as { rec: Record<string, unknown> }).rec;
-    expect(rec.prompt).toBe("hi");
+  });
+
+  it("模型级透传字段（#3626）：库里配了 `extraBody` 解析进 modelExtra；坏行按未配置", async () => {
+    findByName.mockResolvedValue({
+      name: "entry",
+      providerId: null,
+      extraBody: '{"extra_body":{"response_format":{"type":"json_object"}}}',
+    });
+    const out = await readUsageTestPrologue(reqOf({ name: "entry", prompt: "hi" }));
+    expect(out).toMatchObject({
+      ok: true,
+      modelExtra: { extra_body: { response_format: { type: "json_object" } } },
+    });
+
+    findByName.mockResolvedValue({ name: "entry", providerId: null, extraBody: "{" });
+    const broken = await readUsageTestPrologue(reqOf({ name: "entry", prompt: "hi" }));
+    expect(broken).toMatchObject({ ok: true, modelExtra: {} });
+
+    findByName.mockResolvedValue({ name: "entry", providerId: null, extraBody: null });
+    const empty = await readUsageTestPrologue(reqOf({ name: "entry", prompt: "hi" }));
+    expect(empty).toMatchObject({ ok: true, modelExtra: {} });
   });
 });
 
-describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () => {
+describe("readPayload / parseExtraJson / chatTextFrom", () => {
   it("readPayload：非 JSON 响应体给 null（调用方按状态给文案）", async () => {
     expect(await readPayload(jsonResponse({ a: 1 }))).toEqual({ a: 1 });
-    /* SAFETY: 类型断言已复核 */
-    const html = {
-      ok: false,
-      status: 502,
-      json: async () => {
-        throw new Error("not json");
-      },
-    } as unknown as Response;
+    const html = new Response("not json", { status: 502 });
     expect(await readPayload(html)).toBeNull();
-  });
-
-  it("httpFailureDetail：对象体走 JSON、非 JSON 体带原始文本、都截断到 240 字符", () => {
-    expect(httpFailureDetail(500, { a: "x" })).toBe('HTTP 500：{"a":"x"}');
-    // 非 JSON 体（网关 HTML 错误页）此前拼出的是重复状态码 `HTTP 503：HTTP 503`，
-    // 上游写的真实原因一个字都看不到
-    expect(httpFailureDetail(503, null, "<html>upstream boom</html>")).toBe(
-      "HTTP 503：<html>upstream boom</html>",
-    );
-    expect(httpFailureDetail(503, null, "   ")).toBe("HTTP 503");
-    expect(httpFailureDetail(503, null)).toBe("HTTP 503");
-    const long = httpFailureDetail(500, { a: "y".repeat(500) });
-    expect(long.length).toBeLessThanOrEqual("HTTP 500：".length + 240);
-    expect(httpFailureDetail(500, null, "z".repeat(500)).length).toBeLessThanOrEqual(
-      "HTTP 500：".length + 240,
-    );
   });
 
   it("parseExtraJson：空串=无额外参数，非对象 / 坏 JSON 给可读文案", () => {
@@ -292,11 +375,10 @@ describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () =
     // 数组是 typeof "object"：isRecord 认它，调用方另有 Array 判断 —— 这里钉住
     // 现状（数组会被当合法「对象」合并），而不是按想象断言它会失败
     expect(parseExtraJson("[1]")).toEqual({ ok: true, extra: [1] });
-    expect(parseExtraJson("{")).toMatchObject({ ok: false });
-    /* SAFETY: 类型断言已复核 */
-    expect((parseExtraJson("{") as { detail: string }).detail).toContain(
-      "额外参数不是有效的 JSON 对象",
-    );
+    expect(parseExtraJson("{")).toMatchObject({
+      ok: false,
+      detail: containsText("额外参数不是有效的 JSON 对象"),
+    });
   });
 
   it("chatTextFrom：认 OpenAI 的 string 与分片数组两种形态", () => {
@@ -325,6 +407,7 @@ describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () =
 const UP = {
   base: "https://u/v1",
   path: "/chat/completions",
+  url: "https://u/v1/chat/completions",
   headers: { "Content-Type": "application/json", Authorization: "Bearer sk" },
 };
 
@@ -343,29 +426,36 @@ describe("callChat", () => {
     expect(callAt().init.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("非 2xx → HTTP 状态 + 响应片段", async () => {
+  it("非 2xx → HTTP 状态 + 地址 + 响应片段", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: "bad" }, 500));
     await expect(callChat(UP, "m", "q", {})).resolves.toEqual({
       ok: false,
-      detail: 'HTTP 500：{"error":"bad"}',
+      detail: 'HTTP 500（https://u/v1/chat/completions）：{"error":"bad"}',
+    });
+  });
+
+  it("非 2xx 且响应体是 HTML 页面 → 指出「不是接口响应」，不灌标记（#3517）", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("<!DOCTYPE html><html><body>404</body></html>", { status: 404 }),
+    );
+    const out = await callChat(UP, "m", "q", {});
+    expect(out).toMatchObject({
+      ok: false,
+      detail: containsText("返回的是网页（HTML）而不是接口响应"),
     });
   });
 
   it("2xx 但没有可解析文本 → 明确报「未解析到回复文本」", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ choices: [] }));
     const out = await callChat(UP, "m", "q", {});
-    expect(out).toMatchObject({ ok: false });
-    /* SAFETY: 类型断言已复核 */
-    expect((out as { detail: string }).detail).toContain("未解析到回复文本");
+    expect(out).toMatchObject({
+      ok: false,
+      detail: containsText("未解析到回复文本"),
+    });
   });
 
   it("2xx 但响应体不是对象 → 同样归为失败", async () => {
-    /* SAFETY: 类型断言已复核 */
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => "纯文本",
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(new Response("纯文本", { status: 200 }));
     await expect(callChat(UP, "m", "q", {})).resolves.toMatchObject({
       ok: false,
     });
@@ -383,8 +473,7 @@ describe("callImage", () => {
 
     fetchMock.mockResolvedValue(jsonResponse({ data: [{ b64_json: "AAAA" }] }));
     const inline = await callImage(UP, "m", "p", "", {});
-    /* SAFETY: 类型断言已复核 */
-    expect((inline as { url: string }).url).toContain("data:image");
+    expect(inline).toMatchObject({ url: containsText("data:image") });
 
     // size 为空串时不塞进请求体（否则上游会按空尺寸参数报错）
     expect(sentBody(1)).not.toHaveProperty("size");
@@ -394,13 +483,12 @@ describe("callImage", () => {
     fetchMock.mockResolvedValue(jsonResponse({}, 429));
     await expect(callImage(UP, "m", "p", "", {})).resolves.toEqual({
       ok: false,
-      detail: "HTTP 429：{}",
+      detail: "HTTP 429（https://u/v1/chat/completions）：{}",
     });
 
     fetchMock.mockResolvedValue(jsonResponse({ data: [] }));
     const out = await callImage(UP, "m", "p", "", {});
-    /* SAFETY: 类型断言已复核 */
-    expect((out as { detail: string }).detail).toContain("未解析到图片 URL");
+    expect(out).toMatchObject({ detail: containsText("未解析到图片 URL") });
   });
 });
 
@@ -446,16 +534,17 @@ describe("callVideo（提交 + 内置一轮轮询）", () => {
   it("既没有视频也没有任务 ID → error，文案指出上游可能改了字段名", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ weird: true }));
     const out = await callVideo(UP, "m", "p", {});
-    expect(out).toMatchObject({ status: "error" });
-    /* SAFETY: 类型断言已复核 */
-    expect((out as { detail: string }).detail).toContain("未找到视频 URL 或任务 ID");
+    expect(out).toMatchObject({
+      status: "error",
+      detail: containsText("未找到视频 URL 或任务 ID"),
+    });
   });
 
   it("提交非 2xx → error 带 HTTP 文案", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ m: "x" }, 400));
     await expect(callVideo(UP, "m", "p", {})).resolves.toEqual({
       status: "error",
-      detail: 'HTTP 400：{"m":"x"}',
+      detail: 'HTTP 400（https://u/v1/chat/completions）：{"m":"x"}',
     });
   });
 });

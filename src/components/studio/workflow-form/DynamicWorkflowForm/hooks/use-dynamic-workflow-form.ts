@@ -4,9 +4,10 @@
 // 值写入。视图层只消费这里返回的 controller，不持有任何业务规则。
 
 import { useFilePicker } from "~/components/ui/file-picker";
+import type { FilePicker } from "~/components/ui/file-picker";
 import { errorMessage } from "~/lib/error-message";
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { ComponentType, DragEvent } from "react";
+import type { ComponentProps, DragEvent } from "react";
 
 import { uploadImageFile } from "~/lib/project-canvas/canvas-api";
 import { readFileAsDataUrl } from "~/lib/file-io";
@@ -30,7 +31,6 @@ const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]
  *  指示线画在实际插入位置，落点即所见。取不到几何信息（测试桩 / 理论上
  *  的分离节点）时退回 before。 */
 const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
-  // oxlint-disable-next-line no-unnecessary-condition -- 合成/测试事件可能缺 currentTarget，? 保留为运行时守卫
   const rect = event.currentTarget?.getBoundingClientRect?.();
   const rectPresent = Boolean(rect);
   if (!rectPresent || rect.height <= 0) {
@@ -46,7 +46,12 @@ const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition =>
 export type RowDragHandlers = {
   onDragEnd: () => void;
   onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
-  onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
+  /** `fromKeys` 只在拖动组合参数块时给出（尺寸 / 视频块压着多个 ioKey），
+   *  普通行不传。落点键仍是渲染那一层的锚点 ioKey。 */
+  onDragStart: (
+    ioKey: string,
+    fromKeys?: Array<string>,
+  ) => (event: DragEvent<HTMLDivElement>) => void;
   onDrop: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
 };
 
@@ -62,8 +67,13 @@ export type DynamicWorkflowFormController = {
    *  `position` 同源，指示线永远画在实际插入位置。 */
   dropPosition: WorkflowIODropPosition;
   endDrag: () => void;
-  /** 隐藏图片选择 input 的挂载点（`ui/file-picker`）。 */
-  FileInput: ComponentType;
+  /** 隐藏图片选择 input 的 props（渲染成 `<FilePicker {...fileInputProps} />`，#3692）。 */
+  fileInputProps: ComponentProps<typeof FilePicker>;
+  /** `groupedDragKeys` 的第一项：组合块参与拖拽 / 接收落点时用的锚点 ioKey。 */
+  groupAnchorKey: string | null;
+  /** 组合参数（尺寸 / 视频）在视觉上只是一块，底下压着多个 ioKey。拖动这块时
+   *  把它们当作一个整体搬移，顺序 = 当前 displayOrder（`widgetInputs` 已排好）。 */
+  groupedDragKeys: Array<string>;
   groups: ReturnType<typeof inferGroups>;
   /** 全量输入（wire + widget），按 displayOrder 稳定排序。 */
   inputs: Array<EnrichedWidget>;
@@ -103,16 +113,9 @@ export function useDynamicWorkflowForm(
   const { onUploadError, onUploadProgress } = props;
   const { io, values, onChange, onReorder, mode } = props;
 
-  /* IO-edit 作者态：行内提供了「必填 / 可选」切换或 👁 可见性等编辑回调。
-   *  此时数值类参数（seed/steps/cfg…）也要渲染成完整参数行，让作者能在
-   *  预览里调它们的必填与可见——否则它们被按端口行版式压缩成单行，那套版式
-   *  从不渲染必填/👁，作者永远碰不到（seed 挤没的历史根因）。
-   *  CreatePanel / 画布 workflow 节点等运行期只读表单不带这些回调，数值行
-   *  仍保持原有紧凑端口行 + SeedMode 的布局。
-   *
-   *  `rowTrailing` 同样按「作者态」处理：行尾徽标只有完整参数行才渲染得出，
-   *  数值行若留在端口行版式里就永远标不上（工作流库的行归属徽标会漏掉
-   *  seed/steps 这类数值参数）。 */
+  /* IO-edit 作者态（含 rowTrailing）：数值参数也必须渲染成完整参数行，
+   *  否则必填 / 👁 / 行尾徽标永远不渲染（seed 曾因此被挤没）；
+   *  无这些回调的运行期只读表单（CreatePanel / 画布节点）仍走紧凑端口行 + SeedMode。 */
   const isAuthoringEdit = !!(
     props.onRequiredChange ??
     props.onLabelChange ??
@@ -123,12 +126,9 @@ export function useDynamicWorkflowForm(
 
   const { wireInputs, widgetInputs, outputs } = useMemo(() => splitWorkflowIO(io), [io]);
 
-  /* 多模式：按当前模式过滤掉 `visible === false` 的行。
-   *  只是展示层过滤——被隐藏的参数仍留在 values 里（调用方用
-   *  defaultInputValues(io, mode) 给它播种了模式默认值），所以提交给
-   *  ComfyUI 的 payload 不会因为「当前模式不显示」就缺字段。
-   *  `showHiddenInMode`（IO 编辑预览）不过滤：隐藏行置灰呈现，作者靠
-   *  行内 👁 恢复显示——否则隐藏后眼睛跟着消失，永远改不回来。 */
+  /* 多模式：只做展示层过滤，隐藏参数仍在 values 里（调用方已用
+   *  defaultInputValues(io, mode) 播种），提交给 ComfyUI 的 payload 不会缺字段。
+   *  `showHiddenInMode`（IO 编辑预览）不过滤：隐藏行置灰，作者靠行内 👁 恢复显示。 */
   const visibilityFilterMode = props.showHiddenInMode === true ? null : mode;
   const shownWireInputs = useMemo(
     () => filterVisibleInMode(wireInputs, visibilityFilterMode),
@@ -155,12 +155,18 @@ export function useDynamicWorkflowForm(
   const groups = useMemo(() => inferGroups(shownWidgetInputs), [shownWidgetInputs]);
   const { groupedKeys } = groups;
 
-  /* 端口行 = 连线输入 + 数值 widget（seed/steps/cfg …）。数值
-   * widget 并入它们以继承可连接的单行布局。
-   * 已分组的针脚排除在外，好让它们永不重复渲染（一次这里，一次
-   * 在 GroupedControls 里）。
-   *   IO 编辑作者态（isAuthoringEdit）下数值 widget 不再并入端口行 —— 改由
-   *   widgetSectionEntries 渲染成完整参数行，否则必填 / 👁 无从编辑。 */
+  /* 组合块的整体拖拽键：以当前展示序（shownWidgetInputs 已按 displayOrder 排好）
+   *  为准，锚点取第一项。视图层用它给 GroupedControls 包 draggable + ⋮⋮，
+   *  并把整组 key 随 onReorder 上抛 —— 不能只挪一个代表键。 */
+  const groupedDragKeys = useMemo(
+    () => shownWidgetInputs.filter((widget) => groupedKeys.has(widget.ioKey)).map((w) => w.ioKey),
+    [shownWidgetInputs, groupedKeys],
+  );
+  const groupAnchorKey = groupedDragKeys[0] ?? null;
+
+  /* 端口行 = 连线输入 + 数值 widget（seed/steps/cfg），共用可连接的单行布局；
+   *  已分组的针脚排除在外，避免与 GroupedControls 重复渲染。
+   *  IO 编辑作者态下数值 widget 改由 widgetSectionEntries 渲染成完整参数行，否则必填 / 👁 无从编辑。 */
   const portEntries = useMemo(
     () => [
       ...shownWireInputs,
@@ -181,32 +187,27 @@ export function useDynamicWorkflowForm(
     [shownWidgetInputs, groupedKeys, isAuthoringEdit],
   );
 
-  /* 拖拽状态刻意留在组件本地（不进 workflow-io.ts 或任何
-   * context），好让某个界面上的重排不会抢走同页另一个
-   * 表单的拖拽焦点。`draggingKey` 是用户拎起的 ioKey；
-   * `dragOverKey` 是光标当前所在的行（画
-   * 插入线）。两者都在 drop / dragend 时清掉，好让落下的行
-   * 永不留下陈旧高亮。
-   *
-   *  **被拿起的键同时记在 ref 上**：一次原生拖拽横跨多个 task（dragstart →
-   *  dragover… → drop），`drop` 拿到的处理器闭包可能来自**另一次渲染**，
-   *  它读到的 `draggingKey` 是那一刻的 state 而不是起手时写入的值。ref 在
-   *  dragstart 现场立刻写好，drop 一律以它为准 —— 否则「拖完什么都没发生」
-   *（ISSUE #349：编辑 IO 里拖拽调整参数顺序失效）。
-   *  state 仍保留：插入指示线 / 半透明行都靠它触发重渲。 */
+  /* 拖拽状态留在组件本地（不进 workflow-io.ts 或任何 context），免得抢走同页另一个表单的拖拽焦点；
+   *  起手键同时记在 ref：原生拖拽横跨多个 task，drop 闭包可能来自另一次渲染，
+   *  ref 于 dragstart 现场写入、drop 一律以它为准（ISSUE #349）。state 保留用于重渲指示线，drop / dragend 清空。 */
   const dragFromRef = useRef<string | null>(null);
+  /* 组合块拖动时整组的 key 也记在 ref：原生拖拽横跨多个 task，drop 闭包可能
+   *  来自另一次渲染，与 fromKey 一样必须在起手现场记下。 */
+  const dragFromKeysRef = useRef<Array<string> | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [dropPosition, setDropPosition] = useState<WorkflowIODropPosition>("before");
 
-  const beginDrag = useCallback((ioKey: string) => {
+  const beginDrag = useCallback((ioKey: string, fromKeys?: Array<string>) => {
     dragFromRef.current = ioKey;
+    dragFromKeysRef.current = fromKeys ?? null;
     setDraggingKey(ioKey);
     setDragOverKey(ioKey);
   }, []);
 
   const endDrag = useCallback(() => {
     dragFromRef.current = null;
+    dragFromKeysRef.current = null;
     setDraggingKey(null);
     setDragOverKey(null);
     setDropPosition("before");
@@ -228,29 +229,29 @@ export function useDynamicWorkflowForm(
       return null;
     }
     return {
-      onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
-        /* 输入框 / 下拉 / 按钮上起手不拖（用户口径：只能从不可编辑区域拖动）
-         *  —— preventDefault 直接取消这次拖拽。 */
-        /* SAFETY: 类型断言已复核 */
-        const target = event.target as HTMLElement | null;
-        if (target?.closest(DRAG_CANCEL_SELECTOR)) {
-          event.preventDefault();
-          return;
-        }
-        /* 起手行以**事件目标所在的那一行**为准：行级 draggable 下目标通常是
-         *  行内子元素（标签按钮），bind 进来的 ioKey 是渲染时那一次的闭包值，
-         *  可能与用户实际抓住的行不一致。取不到才退回 bind 值。 */
-        beginDrag(rowKeyOf(event.target) ?? ioKey);
-        /* Firefox 不调 dataTransfer.setData 就拒绝开始拖拽。
-         * Payload 只给原生拖拽一个「有内容」的凭据 —— 真正的来源键
-         * 以上面的 ref 为准（见 dragFromRef 注释）。 */
-        try {
-          event.dataTransfer.setData("text/plain", ioKey);
-          event.dataTransfer.effectAllowed = "move";
-        } catch {
-          /* 有些浏览器在用户手势之外调 setData 会抛异常；忽略即可。 */
-        }
-      },
+      onDragStart:
+        (ioKey: string, fromKeys?: Array<string>) => (event: DragEvent<HTMLDivElement>) => {
+          /* 输入框 / 下拉 / 按钮上起手不拖（用户口径：只能从不可编辑区域拖动）
+           *  —— preventDefault 直接取消这次拖拽。 */
+          const target = event.target instanceof HTMLElement ? event.target : null;
+          if (target?.closest(DRAG_CANCEL_SELECTOR)) {
+            event.preventDefault();
+            return;
+          }
+          /* 起手行以**事件目标所在的那一行**为准：行级 draggable 下目标通常是
+           *  行内子元素（标签按钮），bind 进来的 ioKey 是渲染时那一次的闭包值，
+           *  可能与用户实际抓住的行不一致。取不到才退回 bind 值。 */
+          beginDrag(rowKeyOf(event.target) ?? ioKey, fromKeys);
+          /* Firefox 不调 dataTransfer.setData 就拒绝开始拖拽。
+           * Payload 只给原生拖拽一个「有内容」的凭据 —— 真正的来源键
+           * 以上面的 ref 为准（见 dragFromRef 注释）。 */
+          try {
+            event.dataTransfer.setData("text/plain", ioKey);
+            event.dataTransfer.effectAllowed = "move";
+          } catch {
+            /* 有些浏览器在用户手势之外调 setData 会抛异常；忽略即可。 */
+          }
+        },
       onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         const fromKey = dragFromRef.current;
         if (fromKey === null || fromKey === "" || fromKey === ioKey) {
@@ -272,13 +273,20 @@ export function useDynamicWorkflowForm(
          *  两者相同即「拖回原地」，不动数据。插入点以松手时指针所在的
          *  半区为准，与指示线一致。 */
         const fromKey = dragFromRef.current;
+        const fromKeys = dragFromKeysRef.current;
         const toKey = rowKeyOf(event.target) ?? ioKey;
         const pos = positionOf(event);
         endDrag();
         if (fromKey === null || fromKey === "" || fromKey === toKey) {
           return;
         }
-        onReorder(fromKey, toKey, pos);
+        /* 普通行保持三参调用形状（不塞一个 undefined 第四参），避免让既有
+         * 只签三参的回调/判据误以为发生了组合块拖动；整组拖动才带第 4 参。 */
+        if (fromKeys === null) {
+          onReorder(fromKey, toKey, pos);
+        } else {
+          onReorder(fromKey, toKey, pos, fromKeys);
+        }
       },
       onDragEnd: endDrag,
     };
@@ -299,8 +307,7 @@ export function useDynamicWorkflowForm(
   const set = useCallback(
     (ioKey: string, value: unknown) => {
       /* 清空某格 → 撤掉它的本地预览，避免「值已空却还显示旧图」。 */
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      if (value === "" || value == null) {
+      if (value === "" || value === null || value === undefined) {
         setPreviews((prev) => {
           if (prev[ioKey] === undefined) {
             return prev;
@@ -313,23 +320,6 @@ export function useDynamicWorkflowForm(
       onChange({ ...values, [ioKey]: value });
     },
     [values, onChange],
-  );
-
-  /* 图片输入选择器：隐藏 input、「点谁去触发」与「选完复位 value」收进
-   *  `ui/file-picker` —— 此前本 hook 自己持 ref、自己 click、自己在
-   *  onChange 里复位 `event.target.value`（同一套样板全库 9 份）。 */
-  const uploadPicker = useFilePicker({
-    accept: "image/*",
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    onPick: (file) => void onFile(file),
-  });
-
-  const pickFile = useCallback(
-    (ioKey: string) => {
-      setUploadTarget(ioKey);
-      uploadPicker.open();
-    },
-    [uploadPicker],
   );
 
   const onFile = useCallback(
@@ -368,6 +358,24 @@ export function useDynamicWorkflowForm(
     [uploadTarget, set, onUploadError, onUploadProgress],
   );
 
+  /* 图片输入选择器：隐藏 input、「点谁去触发」与「选完复位 value」收进
+   *  `ui/file-picker` —— 此前本 hook 自己持 ref、自己 click、自己在
+   *  onChange 里复位 `event.target.value`（同一套样板全库 9 份）。 */
+  const uploadPicker = useFilePicker({
+    accept: "image/*",
+    onPick: (file) => {
+      void onFile(file);
+    },
+  });
+
+  const pickFile = useCallback(
+    (ioKey: string) => {
+      setUploadTarget(ioKey);
+      uploadPicker.open();
+    },
+    [uploadPicker],
+  );
+
   /* 本地预览地址（仅当用户刚选过这张图时有值）；没有则回退到按值算出的
    * ComfyUI 代理地址（见 WidgetControl 的 previewSrc ?? mediaPreviewUrl）。 */
   const localPreviewUrl = useCallback(
@@ -388,7 +396,7 @@ export function useDynamicWorkflowForm(
     isEmpty: inputs.length === 0 && shownOutputs.length === 0,
     uploading,
     uploadTarget,
-    FileInput: uploadPicker.Input,
+    fileInputProps: uploadPicker.inputProps,
     pickFile,
     localPreviewUrl,
     uploadError,
@@ -398,6 +406,8 @@ export function useDynamicWorkflowForm(
     draggingKey,
     dragOverKey,
     dropPosition,
+    groupedDragKeys,
+    groupAnchorKey,
     beginPortDrag,
     endDrag,
   };

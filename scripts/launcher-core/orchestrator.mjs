@@ -20,6 +20,8 @@ import path from "node:path";
  * @property {string | null} [staleShell]
  * @property {string | null} [pnpmMismatch]
  * @property {number | null} [startedAt]
+ * @property {import("./timeline.mjs").LaunchTimingSpan[] | null} [timings] 各阶段耗时
+ *   （ISSUE #4185）：编排器传入，启动页据此画耗时条；壳侧兜底快照不写它。
  */
 
 /**
@@ -42,6 +44,7 @@ export function writeLaunchStatus(
     staleShell = null,
     pnpmMismatch = null,
     startedAt = null,
+    timings = null,
   },
 ) {
   const elapsed = startedAt ? Math.round((Date.now() - startedAt) / 100) / 10 : 0;
@@ -56,6 +59,9 @@ export function writeLaunchStatus(
     stale_shell: staleShell,
     pnpm_mismatch: pnpmMismatch,
     updated_at: new Date().toISOString(),
+    /* 耗时明细只在编排器给出来时带上：壳侧兜底快照 / 退出定性那两处不传，
+     * 启动页按「字段缺席」跳过渲染，不画空条。 */
+    ...(Array.isArray(timings) ? { timings } : {}),
   };
   try {
     const dir = path.join(root, "run");
@@ -66,6 +72,12 @@ export function writeLaunchStatus(
     return false;
   }
 }
+
+/** 单次探测的超时预算（#4006）：半死形态（端口在听、HTTP 不应答）下，无预算的
+ *  fetch 会挂到 undici 默认 300s 才返回——外层 180s deadline 只在两拍之间检查，
+ *  罩不住一次挂起的单跳。探活是轻请求，2.5s 与 comfy 探活同量级；到点 fetch
+ *  抛错、落 `not-up`，由上层按节拍重试。 */
+export const PROBE_TIMEOUT_MS = 2500;
 
 /**
  * `/api/health` 的 503 里，只有这几种 `db` 值才算「表还没建」。
@@ -99,6 +111,9 @@ export async function classifyProbe({ port, host = "127.0.0.1", path: probePath 
   try {
     const res = await fetch(`http://${host}:${port}${probePath}`, {
       cache: "no-store",
+      /* 单跳预算（#4006）：到点抛错落 `not-up`，上层按节拍重试——
+       * 不许一次挂起的单跳击穿外层 deadline。 */
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
     if (res.ok) {
       return "ready";
@@ -170,27 +185,55 @@ export async function waitForReady({
     if (isAlive && !isAlive()) {
       return false;
     }
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     if ((await classifyProbe({ port, host, path: probePath })) === "ready") {
       return true;
     }
     if (onTick) {
       onTick(Math.round((deadline - Date.now()) / 1000));
     }
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await new Promise((r) => setTimeout(r, 1000));
   }
   return false;
 }
 
-/** 读文件尾部（失败诊断用；文件不存在返回空串）。 */
-/**
- * @param {string} file @param {number} [lines] @returns {string}
+/** 尾部读取的字节预算（#4424）：dev server 的 stdout/stderr 按次命名、只按份数
+ *  轮转（保留 5 份）**不按大小截断**，长会话可达几十至几百 MB —— 整文件
+ *  readFileSync 会在收尾诊断（发生在整树回收**之前**）拖出秒级延迟与数百 MB 的
+ *  瞬时内存。256KB 对「最后 20 行」是天文数字级的余量；单行超过预算的病态文件
+ *  会返回预算内的截断片段，诊断价值足够、代价有界。 */
+const TAIL_BUDGET_BYTES = 256 * 1024;
+
+/** 读文件尾部（失败诊断用；文件不存在返回空串）。
+ *
+ *  只读末尾 min(文件大小, TAIL_BUDGET_BYTES)（#4424），凑够 lines 行的语义与
+ *  整文件读法一致——20 行几乎不可能超出 256KB；文件小于预算时行为逐字节同旧。
+ *  @param {string} file @param {number} [lines] @returns {string}
  */
 export function readTail(file, lines = 20) {
+  let buf;
   try {
-    return fs.readFileSync(file, "utf8").split("\n").slice(-lines).join("\n").trim();
+    const size = fs.statSync(file).size;
+    const budget = Math.min(size, TAIL_BUDGET_BYTES);
+    buf = Buffer.alloc(budget);
+    const fd = fs.openSync(file, "r");
+    try {
+      fs.readSync(fd, buf, 0, budget, size - budget);
+    } finally {
+      fs.closeSync(fd);
+    }
   } catch {
     return "";
   }
+  /* 预算起点可能切在 UTF-8 多字节字符中间：解码成 U+FFFD 只影响边界那一行，
+   * 诊断用途可接受（不按行预算逐块读，是为了不在这里造第二个无界循环）。 */
+  const text = buf.toString("utf8");
+  const rows = text.split("\n");
+  if (rows.length > lines) {
+    rows.splice(0, rows.length - lines);
+  }
+  return rows.join("\n").trim();
 }
 
 /**
@@ -303,7 +346,7 @@ export const PORT_OWNERSHIP = {
  * **只回收属于本检出的实例**：别的检出的 dev server、用户自己的程序占着端口时
  * 一律不碰 —— 判据不清时「猜着杀」比「说清楚怎么办」危险得多。
  * @param {number} port
- * @param {{ listenPids: (port: number) => Promise<number[]>,
+ * @param {{ listenPids: (port: number) => number[] | Promise<number[]>,
  *           belongsToRoot: (pid: number, root: string) => Promise<boolean>,
  *           root: string }} deps
  * @returns {Promise<{ ownership: string, pids: number[], ownPids: number[], foreignPids: number[] }>}
@@ -321,6 +364,7 @@ export async function inspectPort(port, { listenPids, belongsToRoot, root }) {
   const ownPids = [];
   const foreignPids = [];
   for (const pid of pids) {
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     if (await belongsToRoot(pid, root)) {
       ownPids.push(pid);
     } else {
@@ -344,7 +388,7 @@ export async function inspectPort(port, { listenPids, belongsToRoot, root }) {
  * @returns {boolean}
  */
 export function usesExplicitPort(portOrNull) {
-  return Number.isInteger(portOrNull) && /** @type {number} */ (portOrNull) > 0;
+  return typeof portOrNull === "number" && Number.isInteger(portOrNull) && portOrNull > 0;
 }
 
 /** 应用服务自证身份用的探针（`pnpm dev` / `pnpm start` / `next dev` 都带它）。 */
@@ -371,7 +415,7 @@ export const APP_START_SCRIPT_MARKER = "start.mjs";
  *
  * @param {{ requestedPort: number | null,
  *           verdict: { ownership: string, ownPids?: number[], foreignPids?: number[] },
- *           cmdlineOf: (pid: number) => Promise<string>,
+ *           cmdlineOf: (pid: number) => string | Promise<string>,
  *           isAppProcess: (pid: number, cmdline: string) => boolean }} deps
  * @returns {Promise<{ ownership: string, ownPids: number[], foreignPids: number[], reclaimed: boolean }>}
  */
@@ -409,6 +453,7 @@ export async function portOwnershipVerdict({ requestedPort, verdict, cmdlineOf, 
   const appPids = [];
   const restPids = [];
   for (const pid of verdict.foreignPids ?? []) {
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const cmdline = await cmdlineOf(pid);
     if (cmdline && isAppProcess(pid, cmdline)) {
       appPids.push(pid);

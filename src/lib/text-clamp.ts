@@ -102,6 +102,10 @@ export const TRACE_LINE_MAX = 8000;
 /** 落盘运行日志的单条消息上限：受**日志文件体积**约束。 */
 export const RUNTIME_LOG_MESSAGE_MAX = 2000;
 
+/** 落盘运行日志的 fields 序列化上限：同受**日志文件体积**约束（app-runtime 只追加不轮转，
+ * 超限整段替换为截断标记，日志行体积有界，ISSUE #4051）。 */
+export const RUNTIME_LOG_FIELDS_MAX = 4000;
+
 /** 界面上一句反馈里嵌的片段（上游响应体 / stderr）：**文案预算**（一行）。 */
 export const INLINE_SNIPPET_MAX = 200;
 

@@ -23,11 +23,7 @@ if (process.env.NEXT_RUNTIME !== "edge" && !process.env.SKIP_ENV_VALIDATION) {
   // `join(undefined, …)` 直接死在 collect page data 上（ISSUE #2599）。
   // `scripts/**` 里用 `import.meta.dirname` 是对的（纯 Node 宿主，不进打包图），
   // 这条边界由 `tests/env-import-meta-shape.test.ts` 钉着。
-  const envFilePath = join(
-    dirname(fileURLToPath(import.meta.url)),
-    "..",
-    ".env",
-  );
+  const envFilePath = join(dirname(fileURLToPath(import.meta.url)), "..", ".env");
   if (!existsSync(envFilePath)) {
     // 提示必须跨平台（ISSUE #489）：这里原本指着「双击 tools/start/run-local.ps1」，
     // 而那是 Windows 专属入口 —— Linux / macOS / CI 上并不存在（规范 §9 的
@@ -61,20 +57,14 @@ export const env = createEnv({
    */
   server: {
     BETTER_AUTH_SECRET:
-      process.env.NODE_ENV === "production"
-        ? z.string().min(32)
-        : z.string().min(32).optional(),
+      process.env.NODE_ENV === "production" ? z.string().min(32) : z.string().min(32).optional(),
     BETTER_AUTH_URL: z.url().optional(),
     BETTER_AUTH_GITHUB_CLIENT_ID: z.string(),
     BETTER_AUTH_GITHUB_CLIENT_SECRET: z.string(),
     DATABASE_URL: z.url(),
-    NODE_ENV: z
-      .enum(["development", "test", "production"])
-      .default("development"),
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     // 可观测性：日志级别（pino）；SENTRY_DSN 仅生产接入错误追踪时配置
-    LOG_LEVEL: z
-      .enum(["debug", "info", "warn", "error", "fatal"])
-      .default("info"),
+    LOG_LEVEL: z.enum(["debug", "info", "warn", "error", "fatal"]).default("info"),
     SENTRY_DSN: z.url().optional(),
   },
 
@@ -95,8 +85,7 @@ export const env = createEnv({
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
     BETTER_AUTH_GITHUB_CLIENT_ID: process.env.BETTER_AUTH_GITHUB_CLIENT_ID,
-    BETTER_AUTH_GITHUB_CLIENT_SECRET:
-      process.env.BETTER_AUTH_GITHUB_CLIENT_SECRET,
+    BETTER_AUTH_GITHUB_CLIENT_SECRET: process.env.BETTER_AUTH_GITHUB_CLIENT_SECRET,
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
     LOG_LEVEL: process.env.LOG_LEVEL,

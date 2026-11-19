@@ -34,9 +34,9 @@ const SHARED_YAML = [
 function baseDeps(overrides: Record<string, unknown> = {}) {
   return {
     exists: existsOf(DESKTOP_DIRS),
-    readFile: async () => SHARED_YAML,
+    readFile: () => Promise.resolve(SHARED_YAML),
     /* SAFETY: 类型断言已复核 */
-    resolveArgs: async () => [] as Array<string>,
+    resolveArgs: () => Promise.resolve([] as Array<string>),
     ...overrides,
   };
 }
@@ -50,8 +50,8 @@ describe("resolveDesktopStoragePaths", () => {
     expect(
       await resolveDesktopStoragePaths(path.resolve("/plain"), {
         exists: portable,
-        readFile: async () => "",
-        resolveArgs: async () => [],
+        readFile: () => Promise.resolve(""),
+        resolveArgs: () => Promise.resolve([]),
       }),
     ).toBeNull();
   });
@@ -94,7 +94,7 @@ describe("resolveDesktopStoragePaths", () => {
     const result = await resolveDesktopStoragePaths(
       DESKTOP_ROOT,
       baseDeps({
-        readFile: async (target: string) => {
+        readFile: (target: string) => {
           // ComfyUI 从自己的 cwd（base 目录）读这份文件；那里没有才退实例根。
           if (path.resolve(target) !== path.resolve(rootYaml)) {
             throw new Error("ENOENT");
@@ -111,7 +111,7 @@ describe("resolveDesktopStoragePaths", () => {
     const result = await resolveDesktopStoragePaths(
       DESKTOP_ROOT,
       baseDeps({
-        readFile: async () => {
+        readFile: () => {
           throw new Error("ENOENT");
         },
       }),
@@ -132,7 +132,7 @@ describe("resolveDesktopStoragePaths", () => {
           path.join(customBase, "input"),
           path.join(customBase, "output"),
         ]),
-        resolveArgs: async () => [
+        resolveArgs: () => [
           "--enable-manager",
           "--base-directory",
           customBase,
@@ -163,7 +163,7 @@ describe("resolveDesktopStoragePaths", () => {
     const result = await resolveDesktopStoragePaths(
       DESKTOP_ROOT,
       baseDeps({
-        readFile: async () => `base_path: ${yamlBase}\n`,
+        readFile: () => `base_path: ${yamlBase}\n`,
       }),
     );
     expect(result?.modelDir).toEqual({
@@ -178,7 +178,7 @@ describe("resolveDesktopStoragePaths", () => {
     const result = await resolveDesktopStoragePaths(
       DESKTOP_ROOT,
       baseDeps({
-        readFile: async () => `self:\n  base_path: ${base}\n  paths:\n    - models\n    - input\n`,
+        readFile: () => `self:\n  base_path: ${base}\n  paths:\n    - models\n    - input\n`,
       }),
     );
     expect(result?.sharedModelDirs).toEqual([]);
@@ -189,7 +189,7 @@ describe("resolveDesktopStoragePaths", () => {
     const result = await resolveDesktopStoragePaths(
       DESKTOP_ROOT,
       baseDeps({
-        readFile: async () =>
+        readFile: () =>
           [
             `first:\n  base_path: ${SHARED_ROOT}\n  paths:\n    - models\n`,
             `second:\n  base_path: ${SHARED_ROOT}/\n  paths:\n    - models/\n`,
@@ -231,8 +231,8 @@ describe("resolveDesktopStoragePaths", () => {
     const result = await resolveDesktopStoragePaths(
       DESKTOP_ROOT,
       baseDeps({
-        resolveArgs: async () => ["--extra-model-paths-config", configPath],
-        readFile: async (target: string) => {
+        resolveArgs: () => ["--extra-model-paths-config", configPath],
+        readFile: (target: string) => {
           const t = path.resolve(target);
           if (t === configPath) {
             return configYaml;

@@ -5,19 +5,9 @@ import { SelectChip } from "./select-chip";
 
 afterEach(cleanup);
 
-/**
- * `SelectChip` 的判据（ISSUE #1423 / 规范 16 §16.2.4）。
- *
- * 这组用例钉的是**一个只在浏览器里看得见的 bug**：`Button variant="outline"`
- * 自带 `hover:text-foreground`，而收口前各处手写的选中分支只给了
- * `border-primary text-primary bg-primary/10` —— 于是划到**已选中**的那一枚上，
- * 字色翻白、底色翻灰（用户原话「按钮的选中状态悬浮和非悬浮一个紫色，一个白色」）。
- *
- * jsdom 不算 `:hover`，所以这里**判不了像素**；判的是那个真正决定成败的形态：
- * 选中档必须**自带**与常态同值的 `hover:` 覆盖。少了它，浏览器里的悬停就会
- * 落回 `buttonVariants` 的默认悬停档。真浏览器的计算值读数见 PR 描述
- * （选中·悬浮 = 选中·非悬浮）。
- */
+/** `SelectChip` 的判据（ISSUE #1423 / 规范 16 §16.2.4）。
+ * 这组用例钉的是一个只在浏览器里看得见的 bug：`Button variant="outline"` 自带 `hover:text-foreground`，而收口前各处手写的选中分支只给了 `border-primary text-primary bg-primary/10` —— 于是划到已选中那一枚上，字色翻白、底色翻灰（用户原话「按钮的选中状态悬浮和非悬浮一个紫色，一个白色」）。
+ * jsdom 不算 `:hover`，所以这里判不了像素；判的是那个真正决定成败的形态：选中档必须自带与常态同值的 `hover:` 覆盖。少了它，浏览器里的悬停就会落回 `buttonVariants` 的默认悬停档。真浏览器的计算值读数见 PR 描述（选中·悬浮 = 选中·非悬浮）。 */
 function classesOf(el: HTMLElement): string {
   return el.className;
 }

@@ -1,17 +1,8 @@
-/* ── 画布设置 —— 用户可以调的「工作流编辑器画布」偏好 ──
- *
- * 按浏览器持久化到 localStorage（读写与订阅见 `hooks/use-canvas-settings.ts`），
- * 因此用户的选择（网格透明度、标尺显隐等）在刷新后仍在，
- * 并在打开新工作流时立刻生效。三件小功能：
- * • 网格线的透明度 / 线宽 / 间距（默认格线太抢眼），
- * • 标尺与小地图的显隐，
- * • 最大缩放的限幅。
- *
- * 所有设置放在同一个扁平对象里，好让单个 `useCanvasSettings()` hook
- * 一次往返就能改任意子集。渲染出口有两个：
- * • <CanvasSettingsButton> —— 画布右上角的齿轮图标，
- * • <CanvasSettingsPanel> —— 由该按钮打开的右侧抽屉。
- */
+/* 画布设置 —— 用户可调的「工作流编辑器画布」偏好，持久化到 localStorage
+ *（读写/订阅见 hooks/use-canvas-settings.ts），刷新后仍在、打开新工作流立刻生效。
+ * 含网格线透明度/线宽/间距、标尺与小地图显隐、最大缩放限幅。
+ * 全部放在同一个扁平对象里，单个 `useCanvasSettings()` 一次往返即可改任意子集；
+ * 渲染出口：<CanvasSettingsButton>（右上角齿轮）与 <CanvasSettingsPanel>（右侧抽屉）。 */
 
 export type CanvasSettings = {
   /** 调试 —— 统一的「调试模式」开关。

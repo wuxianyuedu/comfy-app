@@ -1,18 +1,7 @@
-// 前端「需要 ComfyUI」的动作（上传素材等）的统一入口：不可达时按配置拉起实例，
-// 并在还不能用时给出**可行动**的状态，而不是让调用方各自去猜一句
-// 「Configured ComfyUI instance is not running」。
-//
-// 背景（ISSUE #345）：工作流库里选一张图上传，服务端 `resolveComfyBase()` 判定
-// 「配置路径的实例没在运行」就直接抛错，前端只看到一行原文——上传位没有错误出口，
-// 用户不知道是「没启动」还是「启动中」，也不知道该点什么。任务提交路径
-// （executor-ws）早就会自动拉起并等就绪，上传这条路径此前完全没有接上。
-//
-// 契约（前端 `ensureComfyReady` 依赖这个形状）：
-//   200 { ok: true }                        → 现在就能用，重试上传即可成功
-//   202 { ok: false, pending: true, ... }   → 正在启动（或已被用户关闭 / 未开自动
-//                                             启动），前端稍后重试；`detail` 直接
-//                                             给用户看
-//   503 { ok: false, pending: false, ... }  → 启动失败或本进程不可探活
+// 前端「需要 ComfyUI」动作的统一入口：不可达时按配置拉起实例，并给调用方可行动的状态而非各自去猜一行报错（ISSUE #345）。
+// 契约（前端 `ensureComfyReady` 依赖这个形状）：200 { ok:true } 现在就能用，重试上传即可成功；
+// 202 { ok:false, pending:true, detail } 正在启动（或已被用户关闭 / 未开自动启动），前端稍后重试；
+// 503 { ok:false, pending:false, ... } 启动失败或本进程不可探活。
 import { NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";

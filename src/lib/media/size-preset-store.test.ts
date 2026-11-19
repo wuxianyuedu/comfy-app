@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SIZE_PRESET_STORAGE_KEY } from "./size-preset-store";
-import type { SizeDims, SizePresetTable, SizeScene } from "./size-presets";
+import {
+  DEFAULT_SIZE_PRESET_TABLE,
+  mergeSizePresetTable,
+  type SizePresetTable,
+} from "./size-presets";
+import { SIZE_PRESET_LEGACY_STORAGE_KEY } from "./size-preset-store";
 
-/** 每个用例都重新加载模块：快照在模块顶层从 localStorage 读一次。 */
+/** 每个用例都重新加载模块：快照与水合进度在模块顶层各初始化一次。 */
 async function loadStore() {
   vi.resetModules();
   return import("./size-preset-store");
@@ -13,73 +17,118 @@ async function loadStore() {
 /** 取一格（表是 `Record<string, …>`，索引访问在 strict 下是可选值）。 */
 function cell(
   table: SizePresetTable,
-  scene: SizeScene,
+  scene: "image" | "video",
   ratio: string,
   tier: "1k" | "2k" | "4k",
-): SizeDims {
+) {
   return table[scene][ratio]![tier];
 }
 
-beforeEach(() => {
-  window.localStorage.clear();
-});
+/** 把 fetch 桩记下的未知形状归一成合法表（避免用例里写类型断言）。 */
+function asTable(value: unknown): SizePresetTable {
+  return mergeSizePresetTable(value);
+}
 
-describe("size-preset-store", () => {
-  it("无存储内容时给出默认表", async () => {
-    const store = await loadStore();
-    const table = store.getSizePresetTable();
-    expect(cell(table, "image", "16:9 横屏", "1k")).toEqual({
-      width: 1024,
-      height: 576,
-    });
-    expect(cell(table, "video", "16:9 横屏", "1k")).toEqual({
-      width: 1280,
-      height: 720,
-    });
+/** 服务端 GET 现在回**两层**（ISSUE #3948）：项目默认 + 生效表 + 那个开关。 */
+type ServerPayload = {
+  defaults?: SizePresetTable;
+  projectDefaultEditable?: boolean;
+  table?: SizePresetTable;
+} | null;
+
+function mockFetch(payload: ServerPayload) {
+  const puts: Array<unknown> = [];
+  const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (method === "PUT") {
+      const raw = init?.body;
+      const bodyText = typeof raw === "string" ? raw : "null";
+      const body = JSON.parse(bodyText) as unknown;
+      puts.push(body);
+      return Promise.resolve(new Response(bodyText, { status: 200 }));
+    }
+    return Promise.resolve(
+      new Response(payload === null ? "null" : JSON.stringify(payload), { status: 200 }),
+    );
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return puts;
+}
+
+/** 造一份服务端回的两层（默认那份 + 生效表）。 */
+function serverPayload(table?: SizePresetTable, defaults?: SizePresetTable) {
+  return {
+    defaults: defaults ?? DEFAULT_SIZE_PRESET_TABLE,
+    projectDefaultEditable: false,
+    table: table ?? DEFAULT_SIZE_PRESET_TABLE,
+  };
+}
+
+describe("size-preset-store（ISSUE #3788：应用数据 + 项目默认两层）", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.unstubAllGlobals();
   });
 
-  it("改一格：快照换新值、落盘、并通知订阅者", async () => {
+  it("无服务端覆盖、无旧键时给出默认表", async () => {
+    mockFetch(null);
     const store = await loadStore();
-    const listener = vi.fn();
-    const unsubscribe = store.subscribeSizePresetTable(listener);
+    await store.hydrateSizePresetsFromServer();
+    const table = store.getSizePresetTable();
+    expect(cell(table, "image", "16:9 横屏", "1k")).toEqual({ width: 1024, height: 576 });
+    expect(cell(table, "video", "16:9 横屏", "1k")).toEqual({ width: 1280, height: 720 });
+  });
 
-    store.setSizePresetDims("image", "16:9 横屏", "1k", {
-      width: 1280,
-      height: 720,
+  it("水合：服务端的本机覆盖逐格生效；改一格落盘到应用数据", async () => {
+    const custom = mergeSizePresetTable({
+      image: { "16:9 横屏": { "1k": { width: 1280, height: 720 } } },
     });
-
+    const puts = mockFetch(serverPayload(custom));
+    const store = await loadStore();
+    await store.hydrateSizePresetsFromServer();
     expect(cell(store.getSizePresetTable(), "image", "16:9 横屏", "1k")).toEqual({
       width: 1280,
       height: 720,
     });
-    expect(listener).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    const persisted = JSON.parse(
-      window.localStorage.getItem(SIZE_PRESET_STORAGE_KEY) ?? "null",
-    ) as { image?: Record<string, Record<string, unknown>> } | null;
-    expect(persisted?.image?.["16:9 横屏"]?.["1k"]).toEqual({
-      width: 1280,
-      height: 720,
-    });
 
-    unsubscribe();
-    store.setSizePresetDims("image", "16:9 横屏", "1k", {
-      width: 1024,
-      height: 576,
+    store.setSizePresetDims("image", "16:9 横屏", "2k", { width: 1111, height: 222 });
+    expect(cell(store.getSizePresetTable(), "image", "16:9 横屏", "2k")).toEqual({
+      width: 1111,
+      height: 222,
     });
-    expect(listener).toHaveBeenCalledTimes(1);
+    /* 水合的 commit 与这一格各落盘一次；最后一份是本格改动后的表 */
+    expect(puts.length).toBeGreaterThanOrEqual(2);
+    const persisted = asTable(puts.at(-1));
+    expect(cell(persisted, "image", "16:9 横屏", "2k")).toEqual({ width: 1111, height: 222 });
   });
 
-  it("恢复默认只影响当前场景", async () => {
+  it("旧 localStorage 键一次性迁移到应用数据（旧键随后清除）", async () => {
+    const legacy = mergeSizePresetTable({
+      video: { "16:9 横屏": { "1k": { width: 640, height: 360 } } },
+    });
+    const puts = mockFetch(serverPayload());
+    window.localStorage.setItem(SIZE_PRESET_LEGACY_STORAGE_KEY, JSON.stringify(legacy));
     const store = await loadStore();
-    store.setSizePresetDims("image", "1:1 正方", "2k", {
-      width: 1024,
-      height: 1024,
+    await store.hydrateSizePresetsFromServer();
+    expect(cell(store.getSizePresetTable(), "video", "16:9 横屏", "1k")).toEqual({
+      width: 640,
+      height: 360,
     });
-    store.setSizePresetDims("video", "1:1 正方", "2k", {
-      width: 1024,
-      height: 1024,
+    expect(window.localStorage.getItem(SIZE_PRESET_LEGACY_STORAGE_KEY)).toBeNull();
+    /* 迁移的表也落到了服务端 */
+    expect(puts).toHaveLength(1);
+    expect(cell(asTable(puts[0]), "video", "16:9 横屏", "1k")).toEqual({
+      width: 640,
+      height: 360,
     });
+  });
+
+  it("恢复默认只影响当前场景，且落盘", async () => {
+    const puts = mockFetch(serverPayload());
+    const store = await loadStore();
+    await store.hydrateSizePresetsFromServer();
+    store.setSizePresetDims("image", "1:1 正方", "2k", { width: 1024, height: 1024 });
+    store.setSizePresetDims("video", "1:1 正方", "2k", { width: 1024, height: 1024 });
 
     store.resetSizePresetScene("image");
 
@@ -91,48 +140,46 @@ describe("size-preset-store", () => {
       width: 1024,
       height: 1024,
     });
+    /* 最后一次落盘里 image 已回默认、video 仍是改过的值 */
+    const lastPut = asTable(puts.at(-1));
+    expect(cell(lastPut, "image", "1:1 正方", "2k")).toEqual({ width: 2048, height: 2048 });
+    expect(cell(lastPut, "video", "1:1 正方", "2k")).toEqual({ width: 1024, height: 1024 });
   });
 
-  it("损坏 / 越界的存储值逐格回退默认，不影响其它格子", async () => {
-    window.localStorage.setItem(
-      SIZE_PRESET_STORAGE_KEY,
-      JSON.stringify({
-        image: {
-          "1:1 正方": {
-            "1k": { width: -1, height: 0 },
-            "2k": { width: 4096, height: 4096 },
-          },
-        },
-        video: "not-an-object",
-      }),
-    );
+  it("水合前的改动在水合后补传（不丢）", async () => {
+    const puts = mockFetch(serverPayload());
     const store = await loadStore();
-    const table = store.getSizePresetTable();
+    /* 水合还没跑就改一格（早于引导水合的极端窗口） */
+    store.setSizePresetDims("image", "16:9 横屏", "1k", { width: 1280, height: 720 });
+    await store.hydrateSizePresetsFromServer();
+    expect(puts.length).toBeGreaterThan(0);
+    const lastPut = asTable(puts.at(-1));
+    expect(cell(lastPut, "image", "16:9 横屏", "1k")).toEqual({ width: 1280, height: 720 });
+  });
 
-    expect(cell(table, "image", "1:1 正方", "1k")).toEqual({
-      width: 1024,
-      height: 1024,
+  /* ISSUE #3948：项目默认能被「保存到项目代码库」改过 —— 还原的基准必须是**那份**
+   * （服务端下发的项目默认），而不是编译进包的旧快照。 */
+  it("还原到服务端下发的项目默认（不是编译进包的旧快照）", async () => {
+    const newDefaults = mergeSizePresetTable({
+      image: { "1:1 正方": { "2k": { width: 3000, height: 3000 } } },
     });
-    expect(cell(table, "image", "1:1 正方", "2k")).toEqual({
-      width: 4096,
-      height: 4096,
-    });
-    expect(cell(table, "image", "1:1 正方", "4k")).toEqual({
-      width: 3840,
-      height: 3840,
-    });
-    expect(cell(table, "video", "16:9 横屏", "1k")).toEqual({
-      width: 1280,
-      height: 720,
+    mockFetch(serverPayload(DEFAULT_SIZE_PRESET_TABLE, newDefaults));
+    const store = await loadStore();
+    await store.hydrateSizePresetsFromServer();
+    store.setSizePresetDims("image", "1:1 正方", "2k", { width: 1024, height: 1024 });
+
+    store.resetSizePresetScene("image");
+
+    expect(cell(store.getSizePresetTable(), "image", "1:1 正方", "2k")).toEqual({
+      width: 3000,
+      height: 3000,
     });
   });
 
-  it("JSON 解析失败时回退默认表而不是抛错", async () => {
-    window.localStorage.setItem(SIZE_PRESET_STORAGE_KEY, "{ not json");
+  it("「保存到项目代码库」那个开关跟着服务端那份读数走", async () => {
+    mockFetch({ ...serverPayload(), projectDefaultEditable: true });
     const store = await loadStore();
-    expect(cell(store.getSizePresetTable(), "image", "1:1 正方", "1k")).toEqual({
-      width: 1024,
-      height: 1024,
-    });
+    await store.hydrateSizePresetsFromServer();
+    expect(store.getSizePresetProjectDefaultEditable()).toBe(true);
   });
 });

@@ -1,17 +1,7 @@
 // @vitest-environment jsdom
 /**
- * 「一棵树的展开 / 收起」状态出口的判据（规范 16 §16.2.4.17）。
- *
- * 这条账的形状是**状态管理没有出口**，不是「重复代码」：`NodesTab` 一棵树用了
- * 三份 `Record<string, boolean>`，三处 `!!map[key]` 读法、三处
- * `setX((prev) => ({ ...prev, [k]: !prev[k] }))` 写法，以及一段**逐字抄两遍**的
- * 「补默认展开」。所以用例重点是这套状态自己欠的语义，而不是「对象怎么合并」：
- *
- *   1. 缺键 = 未表态（`isExpanded` 假），且 **`hasKey` 必须能区分**
- *      「用户手动收起过」与「从没碰过」—— 这是 `in` 与取值两种判据；
- *   2. `seedDefaults` **不覆盖已有表态**（正是那段抄两遍的代码承载的语义）；
- *   3. `seedDefaults` 无变化时返回原引用（它在 effect 里被调，白渲染是可观测的）；
- *   4. 连点两次回到原态（函数式 updater，不吃闭包里的旧值）。
+ * 「一棵树的展开 / 收起」状态出口的判据（规范 16 §16.2.4.17）：`NodesTab` 一棵树曾用三份 `Record<string, boolean>`、三处 `!!map[key]`、三处函数式 updater，以及一段**逐字抄两遍**的「补默认展开」；重点是这套状态自己欠的语义。
+ * 四条：缺键 = 未表态（`isExpanded` 假）且 `hasKey` 必须能区分「用户手动收起过」与「从没碰过」；`seedDefaults` **不覆盖已有表态**；无变化时返回原引用（它在 effect 里被调，白渲染可观测）；连点两次回到原态（函数式 updater，不吃闭包里的旧值）。
  */
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";

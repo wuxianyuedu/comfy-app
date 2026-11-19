@@ -1,19 +1,7 @@
 /**
- * 工坊 ComfyUI 通道两份进程内 memo 的**失效语义**（ISSUE #2194）。
- *
- * 此前的形状是「首读即定终身」：`settingsCache` 只在同进程写路径（save）里更新 ——
- * 而本模块的失败话术**指名让用户手改** `data/workshop-comfy-settings.json`，
- * 提示与缓存互相推翻；`resolvedBase` 则把「探测全落空」的缺省地址也缓存，
- * ComfyUI 重启换端口后整个进程生命周期钉死在死端口上（同维度的
- * `client.ts` 那一侧早有 `resetComfyBase()`，理由写的就是这件事）。
- *
- * 本文件钉住三条新语义：
- *   ① settings 缓存按 **size+mtime 指纹**比对 —— 手改文件的下一次读取必然
- *      miss（执行者 = 手改这个动作本身）；
- *   ② base 缓存在**网络层失败**时复位（执行者 = 本模块自己的 fetch 失败路径），
- *      而 **HTTP 状态失败不复位** —— 连上即存活（#685），GPU OOM 的 500 也是活实例；
- *   ③ 探测全落空**不缓存** —— 与 client.ts 同一句：「谁都没应答」不缓存，
- *      实例随时可能起来。
+ * 工坊 ComfyUI 通道两份进程内 memo 的失效语义（ISSUE #2194）。旧形状「首读即定终身」：失败话术让用户手改 `data/workshop-comfy-settings.json`，
+ * 缓存却只在同进程 save 更新；`resolvedBase` 连「探测全落空」的缺省地址也缓存，换端口后整个进程钉死（`client.ts` 早有 `resetComfyBase()`）。
+ * 钉三条：① settings 按 size+mtime 指纹比对，手改后必 miss；② base 仅网络层失败复位、HTTP 状态失败不复位（#685，OOM 的 500 也是活实例）；③ 探测全落空不缓存。
  */
 import {
   mkdtempSync,
@@ -26,12 +14,29 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { asRecord } from "~/lib/is-record";
+import { mergeSizePresetTable } from "~/lib/media/size-presets";
 import {
+  buildTxt2ImgWorkflow,
   createSettingsFileMemo,
+  generateImageViaComfyUI,
   postComfyPrompt,
   resetWorkshopComfyBase,
   resolveComfyBase,
+  sizeDimsForImage,
+  substitutePlaceholders,
 } from "./comfyui";
+
+/* 生效表换桩（ISSUE #3972）：把 image 场景 16:9 / 1k 改成 1280×720（项目默认
+ * 1024×576）。出图链路的宽高换算必须读这份现读的生效表，而不是编译进包的
+ * 默认快照 —— 本文件里凡走到换算的用例都经这份桩拿表。 */
+vi.mock("~/lib/media/size-preset-fs.server", async () => {
+  const { mergeSizePresetTable: merge } = await import("~/lib/media/size-presets");
+  return {
+    loadSizePresetTable: () =>
+      Promise.resolve(merge({ image: { "16:9 横屏": { "1k": { width: 1280, height: 720 } } } })),
+  };
+});
 
 const tmpDirs: Array<string> = [];
 afterEach(() => {
@@ -80,7 +85,7 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
     expect(memo.load().checkpoint).toBe("hand_edited.safetensors");
   });
 
-  it("文件被删 ⇒ 缓存失效，load 回到空对象；仍不存在时不再反复重读", async () => {
+  it("文件被删 ⇒ 缓存失效，load 回到空对象；仍不存在时不再反复重读", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "comfy-memo-"));
     tmpDirs.push(dir);
     const file = path.join(dir, "workshop-comfy-settings.json");
@@ -99,8 +104,9 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
           return null;
         }
       },
-      write: async (f, content) => {
+      write: (f, content) => {
         writeFileSync(f, content, "utf8");
+        return Promise.resolve();
       },
     });
     expect(memo.load().checkpoint).toBe("a.safetensors");
@@ -122,8 +128,9 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
         return readFileSyncSync(f, "utf8");
       },
       fingerprint: () => null,
-      write: async (f, content) => {
+      write: (f, content) => {
         writeFileSync(f, content, "utf8");
+        return Promise.resolve();
       },
     });
     await memo.save({ checkpoint: "a.safetensors" });
@@ -193,5 +200,103 @@ describe("base 缓存的失效语义（网络失败复位 / HTTP 失败不复位
     expect(probesAfterFirst).toBeGreaterThanOrEqual(6); // 配置端口起连扫 6 个偏移
     await resolveComfyBase();
     expect(counts.probe).toBeGreaterThanOrEqual(probesAfterFirst + 6);
+  });
+});
+
+/* ── 尺寸换算按生效表（ISSUE #3972）────────────────────────────── */
+
+describe("尺寸换算按生效表（ISSUE #3972）", () => {
+  const size169 = { ratio: "16:9 横屏", clarity: "1k", multiple: 64 } as const;
+  /** 与顶部桩同源的生效表（image 16:9 / 1k = 1280×720）。 */
+  const effectiveTable = () =>
+    mergeSizePresetTable({ image: { "16:9 横屏": { "1k": { width: 1280, height: 720 } } } });
+
+  it("sizeDimsForImage：显式传表按表算；缺省回落编译进包的项目默认", () => {
+    expect(sizeDimsForImage(size169, effectiveTable())).toEqual({ width: 1280, height: 720 });
+    expect(sizeDimsForImage(size169)).toEqual({ width: 1024, height: 576 });
+  });
+
+  it("buildTxt2ImgWorkflow：EmptyLatentImage 的宽高按生效表算", () => {
+    const wf = asRecord(
+      buildTxt2ImgWorkflow({ prompt: "x", size: size169, table: effectiveTable() }),
+    );
+    const latent = Object.values(wf ?? {}).find(
+      (node) => asRecord(node)?.class_type === "EmptyLatentImage",
+    );
+    expect(asRecord(asRecord(latent)?.inputs)?.width).toBe(1280);
+    expect(asRecord(asRecord(latent)?.inputs)?.height).toBe(720);
+  });
+
+  it("generateImageViaComfyUI：先现读生效表，再按它算宽高", async () => {
+    resetWorkshopComfyBase();
+    let posted: unknown = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        );
+        if (url.pathname === "/system_stats") {
+          return new Response("{}", { status: 200 });
+        }
+        if (url.pathname === "/api/prompt") {
+          /* 捕获提交的工作流；应答不带 prompt_id ⇒ 链路在校验处止步，不写任何输出文件。 */
+          posted = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+          return new Response("{}", { status: 200 });
+        }
+        return new Response("not found", { status: 404 });
+      }),
+    );
+    await expect(generateImageViaComfyUI({ prompt: "x", size: size169 })).rejects.toThrow(
+      /prompt_id/,
+    );
+    const workflow = asRecord(asRecord(posted)?.prompt);
+    const latent = Object.values(workflow ?? {}).find(
+      (node) => asRecord(node)?.class_type === "EmptyLatentImage",
+    );
+    /* 桩里的生效表把 16:9 / 1k 改成了 1280×720 —— 下发给 ComfyUI 的必须是它。 */
+    expect(asRecord(asRecord(latent)?.inputs)?.width).toBe(1280);
+    expect(asRecord(asRecord(latent)?.inputs)?.height).toBe(720);
+  });
+});
+
+describe("substitutePlaceholders（#4414）", () => {
+  const template = {
+    nodes: {
+      "1": { class_type: "KSampler", inputs: { text: "{{prompt}}", neg: "{{negative}}" } },
+      "2": { class_type: "LoadImage", inputs: { image: "{{image}}" } },
+    },
+  };
+
+  it("提示词含引号/反斜杠/换行：按值替换，不再炸 JSON 解析", () => {
+    const prompt = 'a "quoted" scene \\ with\nnewlines 和中文';
+    const out = asRecord(substitutePlaceholders(template, { prompt, negative: 'neg "x"' }))!;
+    const node1 = asRecord(asRecord(out.nodes)?.["1"])!;
+    const inputs1 = asRecord(node1.inputs)!;
+    expect(inputs1.text).toBe(prompt);
+    expect(inputs1.neg).toBe('neg "x"');
+  });
+
+  it("缺省的 negative / image 替换为空串；非字符串字段原样保留", () => {
+    const out = asRecord(substitutePlaceholders(template, { prompt: "p" }))!;
+    const node1 = asRecord(asRecord(out.nodes)?.["1"])!;
+    const node2 = asRecord(asRecord(out.nodes)?.["2"])!;
+    const inputs1 = asRecord(node1.inputs)!;
+    const inputs2 = asRecord(node2.inputs)!;
+    expect(inputs1.neg).toBe("");
+    expect(inputs2.image).toBe("");
+    expect(node2.class_type).toBe("LoadImage");
+  });
+
+  it("字符串形态的模板：先解析再替换", () => {
+    const out = asRecord(substitutePlaceholders(JSON.stringify(template), { prompt: "p" }))!;
+    const node1 = asRecord(asRecord(out.nodes)?.["1"])!;
+    expect(asRecord(node1.inputs)!.text).toBe("p");
+  });
+
+  it("非法 JSON 字符串模板：给可读错误，不抛裸 SyntaxError", () => {
+    expect(() => substitutePlaceholders("{not-json", { prompt: "p" })).toThrow(
+      /工作流模板不是合法 JSON/,
+    );
   });
 });

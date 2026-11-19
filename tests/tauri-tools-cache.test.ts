@@ -1,16 +1,7 @@
 /**
- * NSIS 工具镜像那一格的判据（ISSUE #2525）。
- *
- * 这一档钉的不是「能不能下载」，而是**三态分得开**与**不许覆盖**：
- *  ① 已在场 ⇒ 一个字都不动（否则每次作业都在重搓一棵正在被 bundler 用的树）；
- *  ② 不在场而镜像在 ⇒ 拷过去并逐件复算哈希（镜像坏了必须红，不许留半棵树继续打包）；
- *  ③ 两边都没有 ⇒ **退 2「没有结论」**并念出出口，而不是让 bundler 去撞那条 22–23s 的预算。
- *
- * `--seed` 那一侧再加两条：**种源不齐不种**（把缺陷钉成事实比不种更坏），
- * **同版本不覆盖**（覆盖之后「常驻根里这份是哪一天的」没有可读的来源）。
- *
- * 夹具用一份**可注入的 plan**：真件的 sha256 钉在生产常量 `NSIS_PLAN` 里，合成树造不出那个哈希，
- * 所以哈希这一族判据在夹具上跑、生产常量由「形状」那几条守着。
+ * NSIS 工具镜像的判据（ISSUE #2525）：钉的不是能否下载，而是三态分得开且不覆盖 —— ①已在场一字不动（否则重搓正被
+ * bundler 用的树）；②不在场而镜像在 ⇒ 拷贝并逐件复算哈希（坏了必须红）；③两边都没有 ⇒ 退 2 并念出出口，别撞 22–23s 预算。
+ * `--seed` 另钉：种源不齐不种、同版本不覆盖。真件 sha256 在 `NSIS_PLAN`，合成树造不出，故哈希族判据跑夹具、生产常量由形状守着。
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -19,12 +10,13 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import {
   TOOLS_ROOT_ENV,
   resolveBuildCacheRoot,
-  resolveCacheRoot,
   resolveToolRoot,
-} from "../scripts/ci-cache-slot.mjs";
+} from "../scripts/ci/ci-cache-slot.mjs";
 import {
   NSIS_PLAN,
   TOOLS_MANIFEST_FILE,
@@ -35,10 +27,25 @@ import {
   missingRequired,
   resolveTauriCacheRoot,
   seed,
-} from "../scripts/tauri-tools-cache.mjs";
+} from "../scripts/build/tauri-tools-cache.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const made: Array<string> = [];
+
+/** 工具清单的消费形状守卫（B5 清账）：version + files（path/sha256 都是串），downloadedAt 可缺席。 */
+function isToolsManifest(value: unknown): value is {
+  downloadedAt?: string;
+  files: Array<{ path: string; sha256: string }>;
+  version: string;
+} {
+  if (!isRecord(value) || typeof value.version !== "string" || !isUnknownArray(value.files)) {
+    return false;
+  }
+  const filesOk = value.files.every(
+    (file) => isRecord(file) && typeof file.path === "string" && typeof file.sha256 === "string",
+  );
+  return filesOk && (value.downloadedAt === undefined || typeof value.downloadedAt === "string");
+}
 
 function tmpDir(tag: string): string {
   const onRepoVolume = path.join(path.parse(ROOT).root, `comfy-tools-${tag}`);
@@ -77,7 +84,6 @@ function fixturePlan(dllContent: string) {
 
 /**
  * 造一棵「bundler 已经下好」的缓存树。
- *
  * @param {string} tauriRoot 传给 seed/ensure 的 `cacheDir`（生产里它 = `LOCALAPPDATA\tauri`）
  * @param {{dllContent?: string, drop?: string[]}} [opts] `drop` = 故意缺哪几件
  */
@@ -121,17 +127,14 @@ describe("落点与根", () => {
     /* store 落在**本机真实存在的卷根**上（`path.parse` 认宿主平台，盘符写死会解析不出卷根）。 */
     const volumeRoot = path.parse(ROOT).root;
     const run = () => ({ status: 0, stdout: path.join(volumeRoot, ".pnpm-store", "v11") });
-    /* SAFETY: 类型断言已复核 */
-    const pkgName = String(
-      (JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as { name?: string })
-        .name,
-    ).toLowerCase();
+    const pkgParsed: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const pkgName = String(isRecord(pkgParsed) ? pkgParsed.name : "").toLowerCase();
     expect(resolveToolRoot({ cwd: ROOT, env: {}, run }).root).toBe(
       path.join(volumeRoot, "ci-tools", pkgName),
     );
     /* 不许住在两份槽根之下：那边的淘汰器按 TTL 删键位，而这一份删了今天就没包。 */
     const roots = {
-      deps: resolveCacheRoot({ cwd: ROOT, env: {}, run }).root ?? "",
+      deps: resolveBuildCacheRoot({ cwd: ROOT, env: {}, run }).root ?? "",
       build: resolveBuildCacheRoot({ cwd: ROOT, env: {}, run }).root ?? "",
       tools: resolveToolRoot({ cwd: ROOT, env: {}, run }).root ?? "",
     };
@@ -170,10 +173,13 @@ describe("--seed", () => {
     const lines: Array<string> = [];
     const log = (line: string) => lines.push(line);
     expect(seed({ cacheDir: la, mirror, dryRun: false, log, plan })).toBe(0);
-    /* SAFETY: 类型断言已复核 */
-    const manifest = JSON.parse(
+    const manifestParsed: unknown = JSON.parse(
       fs.readFileSync(path.join(mirror, TOOLS_MANIFEST_FILE), "utf8"),
-    ) as { files: Array<{ path: string; sha256: string }>; version: string };
+    );
+    if (!isToolsManifest(manifestParsed)) {
+      throw new Error("工具清单形状不对：缺 version 或 files（path/sha256）");
+    }
+    const manifest = manifestParsed;
     expect(manifest.version).toBe(plan.version);
     expect(manifest.files.map((f) => f.path)).toContain(plan.dllRel);
     /* 清单里的哈希必须真能对上盘上的内容 —— 否则 ensure 那侧的复算就是走过场。 */
@@ -390,16 +396,17 @@ describe("--download（即弃机那一族：从被钉的公开资产直接建镜
     const mirror = mirrorDir(tools, plan);
     const { calls, run } = fakeDownloadRun();
     const lines: Array<string> = [];
-    expect(
-      download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run }),
-    ).toBe(0);
+    expect(download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run })).toBe(0);
     /* curl×2（zip + dll）+ tar×1，顺序也是这个顺序。 */
     expect(calls.map((c) => c.cmd)).toEqual(["curl", "tar", "curl"]);
     expect(missingRequired(mirror, plan.required)).toEqual([]);
-    /* SAFETY: 类型断言已复核 */
-    const manifest = JSON.parse(
+    const manifestParsed: unknown = JSON.parse(
       fs.readFileSync(path.join(mirror, TOOLS_MANIFEST_FILE), "utf8"),
-    ) as { downloadedAt?: string; files: Array<{ path: string; sha256: string }>; version: string };
+    );
+    if (!isToolsManifest(manifestParsed)) {
+      throw new Error("工具清单形状不对：缺 version 或 files（path/sha256）");
+    }
+    const manifest = manifestParsed;
     expect(manifest.version).toBe(plan.version);
     expect(manifest.downloadedAt).toBeTruthy();
     expect(manifest.files.map((f) => f.path)).toContain(plan.dllRel);
@@ -433,7 +440,13 @@ describe("--download（即弃机那一族：从被钉的公开资产直接建镜
     const mirror = mirrorDir(tools, plan);
     const lines: Array<string> = [];
     expect(
-      download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run: fakeDownloadRun().run }),
+      download({
+        dryRun: false,
+        log: (l) => lines.push(l),
+        mirror,
+        plan,
+        run: fakeDownloadRun().run,
+      }),
     ).toBe(1);
     expect(lines.join("\n")).toContain("与被钉的那件对不上");
     expect(fs.existsSync(mirror)).toBe(false);
@@ -467,9 +480,7 @@ describe("--download（即弃机那一族：从被钉的公开资产直接建镜
     fs.writeFileSync(path.join(mirror, "stray.txt"), "半棵树");
     const { calls, run } = fakeDownloadRun();
     const lines: Array<string> = [];
-    expect(
-      download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run }),
-    ).toBe(1);
+    expect(download({ dryRun: false, log: (l) => lines.push(l), mirror, plan, run })).toBe(1);
     expect(calls).toHaveLength(0);
     expect(lines.join("\n")).toContain("残缺镜像");
     expect(fs.existsSync(path.join(mirror, "stray.txt"))).toBe(true);

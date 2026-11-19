@@ -79,6 +79,20 @@ describe("calibrateFromShots（#2480 校准读数）", () => {
     ]);
   });
 
+  it("有视觉判定但没有维度分 → 不进样本（均分算不出来，不按 0 分硬算）", () => {
+    /* `reviewScoreMean` 回 null 的那一支：旧判定（P8-1a 时代没有 scores 层）
+       与「模型没给分」都走这里 —— 拿它们算校准等于把「没评」当成「评了 0 分」。 */
+    const report = calibrateFromShots([
+      {
+        id: "old",
+        imageReview: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
+        humanRating: 5,
+      },
+      shot("ok", { aiPass: true, aiMean: 4, human: 4 }),
+    ]);
+    expect(report.samples).toBe(1);
+  });
+
   it("畸形记录（非对象 / 判定缺 pass）跳过，不抛", () => {
     const report = calibrateFromShots([
       "垃圾",

@@ -89,12 +89,12 @@ describe("configureReaper 接缝", () => {
   it("接受 Partial<ReaperDeps>、两次调用是合并语义", async () => {
     const mod = await import("./reaper");
     const fakeRepo = {
-      listStaleUnownedQueued: async () => [],
-      listStaleRunning: async () => [],
+      listStaleUnownedQueued: () => Promise.resolve([]),
+      listStaleRunning: () => Promise.resolve([]),
       /* SAFETY: 类型断言已复核 */
-      finalizeFailure: async () => "written" as const,
+      finalizeFailure: () => Promise.resolve("written" as const),
       /* SAFETY: 类型断言已复核 */
-      finalizeFromReaper: async () => "written" as const,
+      finalizeFromReaper: () => Promise.resolve("written" as const),
     };
     expect(() => {
       mod.configureReaper({ taskRepo: fakeRepo });

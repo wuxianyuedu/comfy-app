@@ -19,37 +19,34 @@ import { workshopOpenAITools } from "./tools";
 
 /** 把 messages 数组窄化为 LLMMessage 形状并透传 tool_calls / tool_call_id。 */
 function narrowMessages(raw: AgentChatRequest["messages"]): Array<LLMMessage> {
-  return (
-    raw
-      // oxlint-disable-next-line strict-boolean-expressions -- 请求体 messages 未过 zod 校验（route.ts 直接断言），元素运行期可为 null，类型收窄不覆盖外部 JSON，保留防御判空
-      .filter((m) => m && typeof m === "object")
-      .map((m) => {
-        const role = m.role;
-        if (role !== "assistant" && role !== "user" && role !== "tool") {
-          return null;
-        }
-        const msg: LLMMessage = {
-          role,
-          content: typeof m.content === "string" ? m.content : "",
-        };
-        if (role === "assistant" && Array.isArray(m.tool_calls)) {
-          msg.tool_calls = m.tool_calls.map((call) => ({
-            id: call.id,
-            /* SAFETY: 类型断言已复核 */
-            type: "function" as const,
-            function: {
-              name: call.name,
-              arguments: call.arguments,
-            },
-          }));
-        }
-        if (role === "tool" && typeof m.tool_call_id === "string") {
-          msg.tool_call_id = m.tool_call_id;
-        }
-        return msg;
-      })
-      .filter((m): m is LLMMessage => m !== null)
-  );
+  return raw
+    .filter((m) => m && typeof m === "object")
+    .map((m) => {
+      const role = m.role;
+      if (role !== "assistant" && role !== "user" && role !== "tool") {
+        return null;
+      }
+      const msg: LLMMessage = {
+        role,
+        content: typeof m.content === "string" ? m.content : "",
+      };
+      if (role === "assistant" && Array.isArray(m.tool_calls)) {
+        msg.tool_calls = m.tool_calls.map((call) => ({
+          id: call.id,
+          /* SAFETY: 类型断言已复核 */
+          type: "function" as const,
+          function: {
+            name: call.name,
+            arguments: call.arguments,
+          },
+        }));
+      }
+      if (role === "tool" && typeof m.tool_call_id === "string") {
+        msg.tool_call_id = m.tool_call_id;
+      }
+      return msg;
+    })
+    .filter((m): m is LLMMessage => m !== null);
 }
 
 /** 走 OpenAI 兼容 tools 协议调用模型，返回 content 与 tool_calls。 */
@@ -131,31 +128,18 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
   }
 
   // 指令对象可能是 {reply: ...} / {action: ...} / {done: true, reply: ...}
-  const hasReply = typeof instruction.reply === "string";
-  const hasAction = typeof instruction.action === "string";
   const validNames = new Set(workshopOpenAITools().map((t) => t.function.name));
-  if (hasReply && !hasAction) {
-    return {
-      /* SAFETY: 类型断言已复核 */
-      reply: instruction.reply as string,
-    };
+  if (typeof instruction.reply === "string" && typeof instruction.action !== "string") {
+    return { reply: instruction.reply };
   }
-  /* SAFETY: 类型断言已复核 */
-  if (hasAction && validNames.has(instruction.action as string)) {
+  if (typeof instruction.action === "string" && validNames.has(instruction.action)) {
     return { fallback_instruction: instruction };
   }
-  if (instruction.done === true && hasReply) {
-    return {
-      /* SAFETY: 类型断言已复核 */
-      reply: instruction.reply as string,
-      done: true,
-    };
+  if (instruction.done === true && typeof instruction.reply === "string") {
+    return { reply: instruction.reply, done: true };
   }
-  if (hasReply) {
-    return {
-      /* SAFETY: 类型断言已复核 */
-      reply: instruction.reply as string,
-    };
+  if (typeof instruction.reply === "string") {
+    return { reply: instruction.reply };
   }
   return {
     reply: content.trim() || "我已收到你的请求，但暂时无法处理。",

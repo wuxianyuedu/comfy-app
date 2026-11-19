@@ -33,7 +33,7 @@ const getQueryClient = () => {
  *   · 失效 `queryClient.invalidateQueries(trpc.x.y.queryFilter(input))`
  *
  * ⚠️ 视图层因此不再出现 `api.x.y.useQuery` 这种字样，而硬规则 10 的判据
- * （`scripts/check-ui-logic-separation.cjs` 的 S3）**原本只认那种字样**。
+ * （`scripts/gates/check-ui-logic-separation.cjs` 的 S3）**原本只认那种字样**。
  * 迁移同批必须把 S3 改成认 `queryOptions(` / `mutationOptions(`，否则「视图层
  * 新增 IO」这条闸会静默失明——判据跟着调用形状走，形状换了判据就得换。
  */

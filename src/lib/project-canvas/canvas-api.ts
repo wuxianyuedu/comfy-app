@@ -16,6 +16,7 @@ import { comfyImageUrl } from "~/lib/media/media-url";
 import { parseValidationErrorsJson, type ValidationError } from "~/lib/comfyui/validation";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { GenerateInput } from "~/lib/workflow/workflow-generate-input";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 /** 单次 /api/upload 的结果：成功给出文件名，失败给出可读原因与可否重试。 */
 type UploadAttempt =
@@ -28,7 +29,7 @@ async function postUpload(file: File): Promise<UploadAttempt> {
   fd.append("image", file);
   let res: Response;
   try {
-    res = await fetch("/api/upload", { method: "POST", body: fd });
+    res = await fetchWithTimeout("/api/upload", { method: "POST", body: fd });
   } catch {
     // 网络层失败（应用服务重启窗口）：按可重试处理，不把 fetch 原文抛给用户。
     return {
@@ -101,8 +102,12 @@ export async function uploadImageFile(
 
 /* 把已生成的产物（经 /outputs/... 提供）重新上传回 ComfyUI 的 input 目录，
  * 供下游节点当作 `inputImage` 消费。按源路径缓存，避免同一个文件为多个目标
- * 重复上传。 */
+ * 重复上传。缓存有上限（对齐 generation-api-client 的 referenceUploadCache，
+ * ISSUE #4397）：超过就整表清掉——条目只是「路径 → 文件名」的复用加速，
+ * 清空只会多传一次，不会错。 */
 const importCache = new Map<string, string>();
+/** 缓存上限：超过就整表清掉（单次会话的回灌次数有限，正常到不了）。 */
+const IMPORT_CACHE_MAX = 32;
 
 export async function importOutputAsInput(localPath: string): Promise<string> {
   const cached = importCache.get(localPath);
@@ -110,7 +115,7 @@ export async function importOutputAsInput(localPath: string): Promise<string> {
     return cached;
   }
   const abs = localPath.startsWith("/") ? localPath : `/${localPath}`;
-  const res = await fetch(abs);
+  const res = await fetchWithTimeout(abs);
   if (!res.ok) {
     throw new Error("读取上游输出失败");
   }
@@ -118,6 +123,9 @@ export async function importOutputAsInput(localPath: string): Promise<string> {
   const fname = lastSegments(localPath, 1) || "input.png";
   const file = new File([blob], fname, { type: blob.type || "image/png" });
   const name = await uploadImageFile(file);
+  if (importCache.size >= IMPORT_CACHE_MAX) {
+    importCache.clear();
+  }
   importCache.set(localPath, name);
   return name;
 }
@@ -195,6 +203,7 @@ export async function pollTask(
       };
     }
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const task = await vanillaApi.task.detail.query({ id: taskId });
       /* 把 0..100 的进度透到画布上。
        * 此前被丢掉了 —— pollTask 只读 status 与 images，于是画布的图片/影片预览
@@ -212,7 +221,6 @@ export async function pollTask(
           return { taskId, localPath: v.localPath, mediaType: v.mediaType };
         }
       }
-      /* SAFETY: 类型断言已复核 */
       const st = task?.status as string | undefined;
       if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
         /* 防御性归一：`task.error` 在库里是可空文本列，
@@ -224,8 +232,7 @@ export async function pollTask(
         const peeled =
           typeof rawErr === "string"
             ? rawErr
-            : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-              rawErr != null && typeof rawErr === "object"
+            : rawErr !== null && rawErr !== undefined && typeof rawErr === "object"
               ? (() => {
                   try {
                     return JSON.stringify(rawErr);
@@ -256,6 +263,7 @@ export async function pollTask(
     } catch {
       /* 暂时性失败 —— 继续轮询 */
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     await sleep(2000);
   }
 }
@@ -263,6 +271,5 @@ export async function pollTask(
 /* 成功分支的类型守卫 —— 让既有的 `if (result)` 调用点语义不变
  *（填充过的 TaskResult 依旧是真值），同时让失败分支有类型安全。 */
 export function isTaskSuccess(r: TaskResult | TaskFailure): r is TaskResult {
-  /* SAFETY: 类型断言已复核 */
-  return typeof (r as TaskResult).localPath === "string";
+  return typeof asRecord(r)?.localPath === "string";
 }

@@ -23,6 +23,7 @@ import {
   type RawSubgraphDef,
   type RawWorkflow,
 } from "~/lib/comfyui/raw";
+import { isRecord } from "~/lib/is-record";
 import { inferInputType, inferIsMultiline } from "~/lib/comfyui/types";
 import type { RawInputEntry } from "./workflow-detail-raw-types";
 
@@ -99,10 +100,8 @@ function collectProxyWidgetPairs(raw: unknown): Array<{ slot?: string; target: [
     }
     return pairs;
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (raw != null && typeof raw === "object") {
-    /* SAFETY: 类型断言已复核 */
-    for (const [slot, value] of Object.entries(raw as Record<string, unknown>)) {
+  if (isRecord(raw)) {
+    for (const [slot, value] of Object.entries(raw)) {
       const target = asTarget(value);
       if (target) {
         pairs.push({ slot, target });
@@ -170,8 +169,7 @@ async function enrichSubgraphProxyWidgets(input: {
 
       if (Array.isArray(subDef?.nodes)) {
         for (const inN of subDef.nodes) {
-          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-          if (inN?.id != null) {
+          if (inN?.id !== null && inN?.id !== undefined) {
             map.set(String(inN.id), inN);
           }
         }
@@ -285,7 +283,7 @@ async function enrichSubgraphProxyWidgets(input: {
       }
 
       const subNodeType =
-        typeof resolved.def?.name === "string" && resolved.def.name.trim()
+        typeof resolved.def.name === "string" && resolved.def.name.trim()
           ? resolved.def.name
           : classType;
 
@@ -370,6 +368,7 @@ async function enrichSubgraphProxyWidgets(input: {
         if (e.type !== "STRING" || e.multiline === true) {
           continue;
         }
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const declared = await multilineForClassField(
           e.__comboClass ?? subNodeType,
           e.__comboField ?? e.name,
@@ -384,6 +383,7 @@ async function enrichSubgraphProxyWidgets(input: {
        *  消费方回落到普通文本控件。 */
       for (const e of updatedList) {
         if (e.type === "COMBO" && Boolean(e.__comboClass)) {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const opts = await comboOptionsForClassField(e.__comboClass, e.__comboField ?? "");
           if (opts) {
             e.comboOptions = opts;
@@ -428,19 +428,16 @@ function subgraphAuthorLabelsByUid(
       ])
     : Object.entries(subgraphs);
   for (const [key, subDef] of subgraphEntries) {
-    // oxlint-disable-next-line strict-boolean-expressions -- subDef 来自外部 JSON（数组元素类型收窄不保证运行期非 null），防御性判空
     if (!subDef || !Array.isArray(subDef.inputs)) {
       continue;
     }
     const table: Record<string, string> = {};
     for (const pinRaw of subDef.inputs) {
-      if (typeof pinRaw !== "object" || pinRaw === null) {
+      if (!isRecord(pinRaw)) {
         continue;
       }
-      /* SAFETY: 类型断言已复核 */
-      const pin = pinRaw as Record<string, unknown>;
-      const slot = typeof pin.name === "string" ? pin.name.trim() : "";
-      const label = typeof pin.label === "string" ? pin.label.trim() : "";
+      const slot = typeof pinRaw.name === "string" ? pinRaw.name.trim() : "";
+      const label = typeof pinRaw.label === "string" ? pinRaw.label.trim() : "";
       if (!slot || !label || slot === label) {
         continue;
       }
@@ -500,7 +497,6 @@ export async function buildRawInputs(
   const subgraphAuthorLabels = subgraphAuthorLabelsByUid(raw);
   if (raw && Array.isArray(raw.nodes)) {
     for (const rn of raw.nodes) {
-      // oxlint-disable-next-line strict-boolean-expressions -- nodes 元素来自外部 JSON，运行期可能是 null/undefined（类型收窄不覆盖），防御性判空
       if (!rn) {
         continue;
       }
@@ -526,7 +522,6 @@ export async function buildRawInputs(
       const legacyByName = new Map<string, unknown>();
       let widgetCounter = 0;
       for (const inp of rn.inputs) {
-        // oxlint-disable-next-line strict-boolean-expressions -- inputs 元素来自外部 JSON，运行期可能是 null/undefined（类型收窄不覆盖），防御性判空
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
@@ -553,6 +548,7 @@ export async function buildRawInputs(
        *  不到任何参数。这里改用与 convertRawToApi 同源的控件顺序表反查下标。 */
       let byOrder: Array<{ name: string; value: unknown }> | null = null;
       if (rnWidgets.length > 0 && (widgetCounter < rnWidgets.length || legacyByName.size === 0)) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         const table = await ensureWidgetOrderTable();
         byOrder = mapWidgetValuesByOrder(table[rnClassType], rnWidgets);
       }
@@ -571,12 +567,10 @@ export async function buildRawInputs(
       const usedWidgetNames = new Set<string>();
 
       for (const inp of rn.inputs) {
-        // oxlint-disable-next-line strict-boolean-expressions -- inputs 元素来自外部 JSON，运行期可能是 null/undefined（类型收窄不覆盖），防御性判空
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        const isConn = inp.link != null;
+        const isConn = inp.link !== null && inp.link !== undefined;
         /* ComfyUI 在「被暴露的 widget 代理」输入上，把 widget 把手烤成
          *  `{ widget: { name: "…" } }` —— 值存在 `widgets_values` 里，
          * 下标是「按 inputs[] 顺序数到该行时已见到的 widget 个数」。
@@ -630,6 +624,7 @@ export async function buildRawInputs(
         if (typeof inp.type === "string" && inp.type === "STRING") {
           if (
             inferIsMultiline(
+              // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
               await multilineForClassField(
                 typeof rn.type === "string" ? rn.type : undefined,
                 inp.name,
@@ -664,6 +659,7 @@ export async function buildRawInputs(
             widget: { name: w.name },
             widgetValue: w.value,
             ...(type === "STRING" &&
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
             inferIsMultiline(await multilineForClassField(rnClassType, w.name), w.value)
               ? {
                   /* SAFETY: 类型断言已复核 */

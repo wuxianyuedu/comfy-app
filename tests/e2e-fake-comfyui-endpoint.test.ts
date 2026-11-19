@@ -1,19 +1,8 @@
-/**
- * 假 ComfyUI 的**端点事实**与「谁在替身端口上」的判决 —— ISSUE #1756。
- *
- * 立案现场：`playwright.config.ts` 把替身钉在 8188（= 产品自己拉起真 ComfyUI 的
- * 固定默认端口），配上本地 `reuseExistingServer: true`，本机一开着真件，
- * Playwright 探测到 200 就**静默复用真件** —— 替身一行没跑，而依赖它脚本化收口的
- * 用例全红，报告读起来像功能红。
- *
- * 这条判据分三头，缺一条这套修法就退化成一句好看的话：
- *   ① **端口真的分开了**：替身端口不在 ComfyUI 的探测窗口里，也不等于默认端口
- *      ——「不必停真件」这句话的机器形态；
- *   ② **形状认得出来**：真件（带 `comfyui_version`）与替身（`ram_total: 1` +
- *      空 `devices`）两个指纹互不误判，且四种观测各归各的判决；
- *   ③ **接线在位**：`playwright.config.ts` / 假服务 / 假 comfy-cli 三处都读同一份
- *      端点事实（哪一处自写一份就会漂），且 globalSetup 真的挂上了。
- */
+/** 假 ComfyUI 的**端点事实**与「谁在替身端口上」的判决 —— ISSUE #1756。立案现场：`playwright.config.ts`
+ * 把替身钉在 8188（= 产品默认端口），配 `reuseExistingServer: true`；本机开着真件时 Playwright 探到 200
+ * 就**静默复用真件**，替身一行没跑而依赖它的用例全红，报告读起来像功能红。判据分三头，缺一条修法就退化：
+ * ① 端口真的分开（不在探测窗口、不等于默认端口）；② 形状认得出（`comfyui_version` vs `ram_total:1` +
+ * 空 `devices` 互不误判）；③ 接线在位（config / 假服务 / 假 comfy-cli 读同一份端点事实，globalSetup 真挂上）。 */
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { createServer as createTcpServer } from "node:net";
@@ -37,7 +26,7 @@ import {
   isRealComfyuiPayload,
   resolveFakeComfyuiPort,
 } from "../e2e/support/fake-comfyui-endpoint.mjs";
-import { resolvePlaywrightFile } from "../scripts/e2e-run.mjs";
+import { resolvePlaywrightFile } from "../scripts/e2e/e2e-run.mjs";
 import {
   probeFakeComfySlot,
   readAppServerPreflight,
@@ -95,9 +84,9 @@ describe("替身与真件分居两个端口（ISSUE #1756 的修复取向）", (
     /* 这条是「别写死两处」的机器形态：窗口数值登记在 `.mjs`（假服务器是纯 Node
      * 入口，不引 TS），真源在 `endpoints.ts` / `client.ts`。两边对不上就红。 */
     const clientSrc = readText("src/lib/comfyui/client.ts");
-    const rangeMatch = /const PROBE_RANGE = (\d+);/.exec(clientSrc);
+    const rangeMatch = /const PROBE_RANGE = (?<range>\d+);/.exec(clientSrc);
     expect(rangeMatch, "client.ts 里找不到 PROBE_RANGE").not.toBeNull();
-    const probeRange = Number(rangeMatch?.[1]);
+    const probeRange = Number(rangeMatch?.groups?.range);
 
     const ports = comfyProbeWindowPorts();
     expect(ports).toEqual(
@@ -160,12 +149,10 @@ describe("两个形状互不误判（真件指纹 vs 替身指纹）", () => {
   });
 
   it("替身回的形状不会把自己送进「真件」那一支", () => {
-    /* 替身若某天开始回 `comfyui_version`，`isRealComfyuiPayload` 会把它认成真件
-     * ⇒ 每次跑 e2e 都 fail fast（探针把替身判成 real）。所以这条把替身**真回什么**
-     * 与判据对一遍，而不是只看常量夹具。
-     *
-     * 判据的输入是真件那条响应（`comfyui_version` 是 ComfyUI `/system_stats`
-     * 固定填的字段，本应用不读它 —— 它在这里只做**身份指纹**）。 */
+    /* 替身若某天开始回 `comfyui_version`，`isRealComfyuiPayload` 会把它认成真件 ⇒ 每次 e2e fail fast
+     * （探针把替身判成 real）。所以这条把替身**真回什么**与判据对一遍，而不是只看常量夹具。
+     * 判据的输入是真件那条响应（`comfyui_version` 是 `/system_stats` 固定填的字段，本应用不读它，
+     * 这里只做**身份指纹**）。 */
     const serverSrc = readText("e2e/support/fake-comfyui-server.mjs");
     expect(serverSrc).toContain('system: { os: "nt", ram_total: 1, ram_free: 1 }');
     expect(serverSrc).not.toContain("comfyui_version");
@@ -213,7 +200,7 @@ describe("跑前那一探的判决（四态各归各的出口）", () => {
     const text = describeSlotConflict({ verdict: "real", status: 200 });
     expect(text).toContain(FAKE_COMFY_PORT_ENV_KEY);
     expect(text).toContain("pnpm test:e2e");
-    expect(text).not.toMatch(/停掉.{0,6}(8188|真 ?ComfyUI).{0,10}再跑/);
+    expect(text).not.toMatch(/停掉.{0,6}(?:8188|真 ?ComfyUI).{0,10}再跑/);
     // 真件那一支要点名是真件（两种阻断给不同的话，人才知道该改哪儿）。
     expect(text).toContain("comfyui_version");
     const unknown = describeSlotConflict({ verdict: "unknown", status: 403 });
@@ -277,13 +264,9 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
     expect(classifyFakeSlot(realObserved).verdict).toBe("real");
   });
 
-  /**
-   * 「没人」与「没等到」必须分开（ISSUE #1961）。
-   *
-   * CI 实测：这一步在自托管节点上判出 `free`（`status 0`），而端口上明明坐着服务 ——
-   * 它是**超时**，不是「连接被拒」。两者此前都翻成 `status: 0` ⇒ `free` ⇒
-   * `assertFakeSlotFree()` 放行，于是「真件坐在替身端口上」这条判据在负载高的时候
-   * **静默关掉**。代价不对称，所以这一格按 `err.cause.code` 分岔。
+  /** 「没人」与「没等到」必须分开（ISSUE #1961）。CI 实测：自托管节点上判出 `free`（status 0），而端口上
+   * 明明坐着服务 —— 它是**超时**，不是「连接被拒」。两者此前都翻成 status 0 ⇒ free ⇒ `assertFakeSlotFree()`
+   * 放行，「真件坐替身端口上」这条判据在高负载下**静默关掉**。代价不对称，所以按 `err.cause.code` 分岔。
    */
   it("连接被拒 ⇒ free（端口真的空着）", async () => {
     /* 拿一个**刚刚关掉**的真端口：连接会被拒，而不是「非法端口」那类别的错
@@ -441,12 +424,9 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
 
 describe("探测时机：判「起之前有没有别人」就不能挂在 globalSetup 上（ISSUE #1766）", () => {
   it("真实顺序是「起 webServer 并等它可访问」→「跑 globalSetup」", () => {
-    /* 这条是**根因**的机器形态，不是复述文档：上游 `runGlobalSetup()` 把任务按
-     * `createGlobalSetupTasks()` 的顺序跑，webServer 是其中的 **plugin setup**
-     * 且排在 `globalSetup` 之前。
-     *
-     * 判据拿的是真实源码（不是一份抄过来的顺序表）——上游改了这个顺序时，
-     * 「探测为什么不能挂在 globalSetup 上」这个前提就要重新量，这条会红。 */
+    /* 这条是**根因**的机器形态，不是复述文档：上游 `runGlobalSetup()` 把任务按 `createGlobalSetupTasks()`
+     * 的顺序跑，webServer 是其中的 **plugin setup** 且排在 `globalSetup` 之前。判据拿真实源码（不是
+     * 抄来的顺序表）—— 上游改这个顺序时「探测为什么不能挂在 globalSetup 上」的前提要重新量，这条会红。 */
     const runner = readFileSync(resolvePlaywrightFile("lib/runner/index.js"), "utf8");
     /* 取整个函数体：靠**配平花括号**而不是找第一个 `}` —— 后者会切在数组元素
      * 的花括号上（`createRemoveOutputDirsTask()` 后面并没有 `}`），于是
@@ -520,11 +500,11 @@ describe("探测时机：判「起之前有没有别人」就不能挂在 global
     expect(setup).toContain("readFakeSlotPreflight");
   });
 
-  it("pre-flight 真的在 `spawn` Playwright **之前**跑（时机是全部意义）", async () => {
-    /* 判据判「接线在不在」：`scripts/e2e-run.mjs` 里 `runPreflight(...)` 必须出现在
+  it("pre-flight 真的在 `spawn` Playwright **之前**跑（时机是全部意义）", () => {
+    /* 判据判「接线在不在」：`scripts/e2e/e2e-run.mjs` 里 `runPreflight(...)` 必须出现在
      * 起 Playwright 那一跳之前 —— 反过来的话它探到的就是本轮自己起的服务，
      * 与挂在 `globalSetup` 上没有区别。 */
-    const run = readText("scripts/e2e-run.mjs");
+    const run = readText("scripts/e2e/e2e-run.mjs");
     const preflightAt = run.indexOf("await runPreflight(");
     /* 「起 Playwright」那一跳的落点：ISSUE #1998 起是 `runChild(invocation)`
      * （`spawnSync` 会把输出攒进 `res.stdout`，见 `resolvePlaywrightInvocation` 的
@@ -560,8 +540,8 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     /* Python 侧引不了 `.mjs`，所以它的兜底值是**唯一**允许的第二处字面量
      * —— 这里把它与模块导出对一遍，漂了就红。 */
     const cliSrc = readText("e2e/support/fake-comfyui/comfy_cli/cli.py");
-    const defaults = [...cliSrc.matchAll(/E2E_FAKE_COMFY_PORT", "(\d+)"/g)].map((m) =>
-      Number(m[1]),
+    const defaults = [...cliSrc.matchAll(/E2E_FAKE_COMFY_PORT", "(?<port>\d+)"/g)].map((m) =>
+      Number(m.groups?.port),
     );
     expect(defaults.length).toBeGreaterThan(0);
     for (const d of defaults) {
