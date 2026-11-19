@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { stripComments } from "../../../../tests/helpers/strip-comments";
 import type { WorkflowRow } from "./workflow-library-config";
@@ -65,25 +65,37 @@ function headerRow(over: Partial<WorkflowRow> = {}): WorkflowRow {
   };
 }
 
-function renderHeader() {
+function renderHeader(args: { source?: "local" | "online" } = {}) {
+  const row = headerRow({ source: args.source ?? "local" });
+  const onUpdateJson = vi.fn();
+  const onConvert = vi.fn();
   render(
     <DetailHeader
+      busyConvert={false}
       busyDownload={false}
       busyResync={false}
+      busyUpdateJson={false}
+      /* 与详情 hook 同一判据（workflow.source === "local"）：本文件只测头部
+         渲染对 canConvert 的响应，判据本身在 hook 侧。 */
+      canConvert={row.source === "local"}
       canResync={false}
       isTechnical={false}
       meta={meta}
       missing={false}
+      onConvert={onConvert}
       onDelete={vi.fn()}
       onDownload={vi.fn()}
       onEdit={vi.fn()}
       onOpenSource={vi.fn()}
       onResync={vi.fn()}
+      onUpdateJson={onUpdateJson}
       onUse={vi.fn()}
+      showUpdateJson={row.source === "online"}
       usable
-      workflow={headerRow()}
+      workflow={row}
     />,
   );
+  return { onConvert, onUpdateJson };
 }
 
 describe("详情头部：窄屏不丢按钮", () => {
@@ -105,6 +117,63 @@ describe("详情头部：窄屏不丢按钮", () => {
   it("标题区有可读下限（压缩压力交给它，标题截断而不是把按钮挤出去）", () => {
     renderHeader();
     expect(screen.getByTestId("detail-title-block").className).toContain("min-w-45");
+  });
+});
+
+describe("详情头部：在线工作流的「更新」入口（#4377）", () => {
+  it("在线工作流显示「更新」按钮，点击打开更新弹窗", () => {
+    const { onUpdateJson } = renderHeader({ source: "online" });
+    fireEvent.click(screen.getByRole("button", { name: "更新" }));
+    expect(onUpdateJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("本地工作流不显示「更新」按钮（本地走「同步」）", () => {
+    renderHeader({ source: "local" });
+    expect(screen.queryByRole("button", { name: "更新" })).toBeNull();
+  });
+});
+
+describe("详情头部：本地工作流一键转在线（ISSUE #4372）", () => {
+  it("本地行显示「转为在线」按钮，点击触发转换回调", () => {
+    const { onConvert } = renderHeader({ source: "local" });
+    fireEvent.click(screen.getByRole("button", { name: "转为在线" }));
+    expect(onConvert).toHaveBeenCalledTimes(1);
+  });
+
+  it("在线行不渲染「转为在线」按钮", () => {
+    renderHeader({ source: "online" });
+    expect(screen.queryByRole("button", { name: "转为在线" })).toBeNull();
+  });
+
+  it("转换进行中按钮禁用并显示「转换中」（防重复提交）", () => {
+    const row = headerRow({ source: "local" });
+    render(
+      <DetailHeader
+        busyConvert
+        busyDownload={false}
+        busyResync={false}
+        busyUpdateJson={false}
+        canConvert
+        canResync={false}
+        isTechnical={false}
+        meta={meta}
+        missing={false}
+        onConvert={vi.fn()}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onEdit={vi.fn()}
+        onOpenSource={vi.fn()}
+        onResync={vi.fn()}
+        onUpdateJson={vi.fn()}
+        onUse={vi.fn()}
+        showUpdateJson={false}
+        usable
+        workflow={row}
+      />,
+    );
+    /* Spinner 自带「Loading」可访问文本，按钮名是「Loading 转换中」——
+       按子串匹配文案本身，不钉死拼接顺序。 */
+    expect(screen.getByRole("button", { name: /转换中/ })).toBeDisabled();
   });
 });
 

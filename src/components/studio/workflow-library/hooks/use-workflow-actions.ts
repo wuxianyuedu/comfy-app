@@ -22,6 +22,10 @@ export type MutateAsyncLike<TInput, TOutput> = {
 };
 
 export type UseWorkflowActionsArgs = {
+  convertMut: MutateAsyncLike<
+    RouterInputs["workflow"]["convertToOnline"],
+    RouterOutputs["workflow"]["convertToOnline"]
+  >;
   createMut: MutateAsyncLike<
     RouterInputs["workflow"]["create"],
     RouterOutputs["workflow"]["create"]
@@ -38,6 +42,7 @@ export type UseWorkflowActionsArgs = {
   /** 「哪一条在下载 / 在同步」的执行态由 `~/components/ui/use-item-action` 给
    *  （规范 16 §16.2.4.40）—— 这里只拿它的 `run`（忙标记 + 同步判重入一次给全）。 */
   runBundle: <T>(id: string, action: () => Promise<T>) => Promise<T | undefined>;
+  runConvert: <T>(id: string, action: () => Promise<T>) => Promise<T | undefined>;
   runResync: <T>(id: string, action: () => Promise<T>) => Promise<T | undefined>;
   setActionError: (v: string) => void;
   setDeleting: (v: boolean) => void;
@@ -56,6 +61,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     setPendingDelete,
     setActionError,
     runBundle,
+    runConvert,
     runResync,
     setPendingLoading,
     setWorkflows,
@@ -64,6 +70,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     deleteMut,
     resyncMut,
     createMut,
+    convertMut,
   } = args;
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -247,6 +254,14 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
               toast.info("磁盘文件未变化", name);
             } else if (d?.updated === true) {
               toast.success("已同步磁盘内容", name);
+              /* #4377：同步后新版本里断掉的 IO 连线要提示重新配置。 */
+              const broken = d.broken ?? [];
+              if (broken.length > 0) {
+                toast.error(
+                  `同步完成，但 ${broken.length} 条 IO 连线已断开，请重新配置`,
+                  broken.map((wire) => `${wire.entryId} ⇢ ${wire.ioKey}`).join("；"),
+                );
+              }
               await load();
             }
             return true;
@@ -256,6 +271,24 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       });
     },
     [toast, load, runResync, resyncMut, report],
+  );
+
+  /** 本地工作流一键转在线（ISSUE #4372）：解除磁盘跟踪，内容以库中当前版本
+   *  为准；成功后刷新列表 —— 徽标翻「在线」，磁盘原文件落入「未载入」区。 */
+  const handleConvertToOnline = useCallback(
+    async (id: string, name: string) => {
+      await runConvert(id, async () => {
+        const result = await runAsyncAction(() => convertMut.mutateAsync({ id }), {
+          report,
+          failureText: "转换失败",
+          successText: `已转为在线工作流：${name}`,
+        });
+        if (result.ok) {
+          void load();
+        }
+      });
+    },
+    [runConvert, convertMut, report, load],
   );
 
   /** 把磁盘上发现的一个文件经单文件导入
@@ -295,6 +328,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     patchWorkflowIO,
     downloadJson,
     resyncWorkflow,
+    handleConvertToOnline,
     handleLoadPending,
   };
 }

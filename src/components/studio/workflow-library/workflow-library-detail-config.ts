@@ -31,10 +31,13 @@ export const DEFAULT_DETAIL_TAB: DetailTab = DETAIL_TABS[0].key;
 export type WorkflowLibraryDetailProps = {
   /** 用户级全局模型标签库（用于类型/模型编辑器）。 */
   allModelTags?: Array<ModelTagSummary>;
-  /** 「这一条在下载 / 在同步吗」的判据（由父级的 `useItemAction` 给，
+  /** 「这一条在下载 / 在同步 / 在转在线吗」的判据（由父级的 `useItemAction` 给，
    *  规范 16 §16.2.4.40）—— 详情面板不再自己拿 id 去比。 */
   isBundleBusy: (id: string) => boolean;
+  isConvertBusy: (id: string) => boolean;
   isResyncBusy: (id: string) => boolean;
+  /** 本地工作流一键转在线（ISSUE #4372）。 */
+  onConvertToOnline: (id: string, name: string) => void;
   onDelete: (id: string, name: string) => void;
   onDownload: (id: string, name: string) => void;
   onEdit: (id: string) => void;

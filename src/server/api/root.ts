@@ -13,6 +13,7 @@ import { runRouter } from "~/server/api/routers/run";
 import { seriesRouter } from "~/server/api/routers/series";
 import { seriesGenerationRouter } from "~/server/api/routers/series-generation";
 import { sidebarRouter } from "~/server/api/routers/sidebar";
+import { referenceLoaderRouter } from "~/server/api/routers/reference-loader";
 
 /**
  * 服务端主路由：`/api/routers` 新增路由须在此手工登记，登记即欠「执行者」（测试能真调用，E3 照出
@@ -34,6 +35,7 @@ export const appRouter = createTRPCRouter({
   series: seriesRouter,
   seriesGeneration: seriesGenerationRouter,
   sidebar: sidebarRouter,
+  referenceLoader: referenceLoaderRouter,
 });
 
 // 对外导出 API 的类型定义

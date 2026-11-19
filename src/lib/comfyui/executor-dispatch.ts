@@ -242,6 +242,20 @@ async function claimAndDispatchOnceInner(options?: {
 
     const paramsRaw = row.params;
     const overridesRaw = isRecord(paramsRaw) ? paramsRaw.workflowInputs : undefined;
+    /* 参考图装载计划（#4376）：提交口已按 schema 收窄（端点 → 预设全量定义），
+     * 这里只做库列的形状兜底——`params` 是 JSON 列，旧行 / 异常行形状不作保证；
+     * 每个值须是带 steps 数组的对象，脏键丢弃（执行期该端点回落裸 LoadImage）。 */
+    let loaderPlan: NonNullable<Job["loaderPlan"]> | undefined;
+    const planRaw = isRecord(paramsRaw) ? paramsRaw.referenceLoaderPlan : undefined;
+    if (isRecord(planRaw)) {
+      for (const [key, value] of Object.entries(planRaw)) {
+        if (isRecord(value) && Array.isArray(value.steps)) {
+          /* 形状已粗检（对象 + steps 数组）；权威判据在提交口的 zod schema。 */
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          (loaderPlan ??= {})[key] = value as NonNullable<Job["loaderPlan"]>[string];
+        }
+      }
+    }
     /* 部分执行目标（调试，comfy-cli `--output-node-ids`）：schema 在提交口已收窄成
      * string[]，这里再过一次清洗 —— `params` 是库里的一列 JSON，旧行 / 异常行形状
      * 不作保证；清完为空等价于「不传」= 整图执行。 */
@@ -253,6 +267,7 @@ async function claimAndDispatchOnceInner(options?: {
       workflowName: row.workflowName,
       rawJson: row.execPayload,
       overrides: Array.isArray(overridesRaw) ? overridesRaw : undefined,
+      ...(loaderPlan === undefined ? {} : { loaderPlan }),
       ...(outputNodeIds === undefined ? {} : { outputNodeIds }),
     };
 

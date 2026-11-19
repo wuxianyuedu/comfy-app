@@ -102,8 +102,12 @@ export async function uploadImageFile(
 
 /* 把已生成的产物（经 /outputs/... 提供）重新上传回 ComfyUI 的 input 目录，
  * 供下游节点当作 `inputImage` 消费。按源路径缓存，避免同一个文件为多个目标
- * 重复上传。 */
+ * 重复上传。缓存有上限（对齐 generation-api-client 的 referenceUploadCache，
+ * ISSUE #4397）：超过就整表清掉——条目只是「路径 → 文件名」的复用加速，
+ * 清空只会多传一次，不会错。 */
 const importCache = new Map<string, string>();
+/** 缓存上限：超过就整表清掉（单次会话的回灌次数有限，正常到不了）。 */
+const IMPORT_CACHE_MAX = 32;
 
 export async function importOutputAsInput(localPath: string): Promise<string> {
   const cached = importCache.get(localPath);
@@ -119,6 +123,9 @@ export async function importOutputAsInput(localPath: string): Promise<string> {
   const fname = lastSegments(localPath, 1) || "input.png";
   const file = new File([blob], fname, { type: blob.type || "image/png" });
   const name = await uploadImageFile(file);
+  if (importCache.size >= IMPORT_CACHE_MAX) {
+    importCache.clear();
+  }
   importCache.set(localPath, name);
   return name;
 }

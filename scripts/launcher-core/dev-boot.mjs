@@ -21,6 +21,7 @@ import process from "node:process";
  * @param {(phase: string, progress: number, message: string, extra?: object) => void} ctx.status 进度快照
  * @param {import("./timeline.mjs").LaunchTimeline} [ctx.timeline]
  *   启动耗时时间线（ISSUE #4185）；测试夹具可不传 —— 各埋点都是可选调用。
+ * @param {import("node:child_process").ChildProcess[]} ctx.spawned 本次会话的子进程回收账本（退出时 reapAll 只收这里登记过的）
  * @param {() => import("node:child_process").ChildProcess[]} ctx.spawnedChildren 本次会话的子进程账本
  * @param {(msg: string) => void} ctx.appendRuntimeWarning 把 pnpm 提醒补进 app-runtime 通道
  * @param {(root: string, env: Record<string, string | undefined>, fingerprint?: { hash: string, files: Record<string, string> }) => { cleaned: boolean, reason: string }} ctx.syncNextCache .next 缓存策略
@@ -33,7 +34,7 @@ import process from "node:process";
  * @param {() => { mode: string, unknown: string | null }} ctx.resolveExecutorMode 执行器模式判据
  * @param {(root: string, session: import("../dev-launcher-session.mjs").LauncherSession) => void} ctx.writeSession 写会话锚点
  * @param {(root: string, at?: number) => void} ctx.touchHeartbeat 更新心跳
- * @param {(root: string) => { started: boolean, reason?: string }} ctx.spawnSchemaSync 后台 schema 同步
+ * @param {(root: string) => { started: boolean, child?: import("node:child_process").ChildProcess, reason?: string }} ctx.spawnSchemaSync 后台 schema 同步
  * @param {object} target
  * @param {number} target.port
  * @param {string} target.host
@@ -146,6 +147,12 @@ export function bootDevServerStage(ctx, target) {
   timeline?.begin("schema-sync", "后台建表");
   const schema = ctx.spawnSchemaSync(root);
   timeline?.end("schema-sync");
+  /* schema 同步子进程入回收账本（ISSUE #4344）：web 模式（无 Job Object）下
+   * launcher 退出靠 `spawned` 账本收尾——不入账 = drizzle 孤儿握着 db.sqlite，
+   * 期间对该检出的依赖补装 EPERM、两次 schema 同步并发写同一个库。 */
+  if (schema.child) {
+    ctx.spawned.push(schema.child);
+  }
   if (schema.started) {
     log("数据库结构核对已在后台开始（不一致时自动同步，页面会提示刷新）", "INFO");
   } else {

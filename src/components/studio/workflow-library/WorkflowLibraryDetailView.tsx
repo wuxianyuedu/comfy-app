@@ -3,13 +3,15 @@
 // WorkflowLibraryDetail 的纯展示视图：只消费 controller，不发请求、不算业务
 // 规则，交互一律通过 controller.actions 上抛。
 
-import React from "react";
+import React, { useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { ErrorBoundary } from "~/components/ui/error-boundary";
 import { useLazyChunkFallback } from "~/components/ui/use-lazy-chunk-fallback";
 
 import { SourceModal } from "~/components/studio/SourceModal";
 import type { WorkflowLibraryDetailController } from "./hooks/use-workflow-library-detail";
+import { useWorkflowUpdateFromJson } from "./hooks/use-workflow-update-from-json";
+import { UpdateJsonModal } from "./UpdateJsonModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { DETAIL_TABS, type DetailTab } from "./workflow-library-detail-config";
 import { DetailBody, TabContentLoading } from "./sections/DetailBody";
@@ -56,14 +58,20 @@ export function WorkflowLibraryDetailView({
     patchWorkflowIO,
     usable,
     canResync,
+    canConvert,
     missing,
     isTechnical,
     busyDownload,
     busyResync,
+    busyConvert,
     actions,
   } = controller;
   /* dev server 重建后懒分块可能已被换掉，这一块自己给出路（与画布预览同款）。 */
   const ioChunkFallback = useLazyChunkFallback("IO 预览");
+
+  /* 在线工作流的「从 JSON 更新」（#4377）：弹窗开关 + 提交 / 断线报告。 */
+  const updateJson = useWorkflowUpdateFromJson();
+  const [updateJsonOpen, setUpdateJsonOpen] = useState(false);
 
   if (!workflow) {
     return (
@@ -80,18 +88,26 @@ export function WorkflowLibraryDetailView({
     /* SAFETY: 类型断言已复核 */
     <div className="bg-panel-deep flex h-full flex-col overflow-hidden">
       <DetailHeader
+        busyConvert={busyConvert}
         busyDownload={busyDownload}
         busyResync={busyResync}
+        busyUpdateJson={updateJson.submitting}
+        canConvert={canConvert}
         canResync={canResync}
         isTechnical={isTechnical}
         meta={metaEditor}
         missing={missing}
+        onConvert={actions.convert}
         onDelete={actions.remove}
         onDownload={actions.download}
         onEdit={actions.edit}
         onOpenSource={openSource}
         onResync={actions.resync}
+        onUpdateJson={() => {
+          setUpdateJsonOpen(true);
+        }}
         onUse={actions.use}
+        showUpdateJson={workflow.source === "online"}
         usable={usable}
         workflow={workflow}
       />
@@ -231,6 +247,29 @@ export function WorkflowLibraryDetailView({
           onClose={closeSource}
         />
       )}
+
+      {/* 在线工作流「从 JSON 更新」（#4377）：提交后断线报告就地展示（全部保持
+       *  时自动关闭）。 */}
+      <UpdateJsonModal
+        onClose={() => {
+          setUpdateJsonOpen(false);
+        }}
+        onSubmit={(raw) => {
+          void updateJson.submit(workflow.id, raw).then((report) => {
+            if (
+              report !== null &&
+              report.broken.length === 0 &&
+              report.droppedIOKeys.length === 0
+            ) {
+              setUpdateJsonOpen(false);
+            }
+          });
+        }}
+        open={updateJsonOpen}
+        report={updateJson.report}
+        submitting={updateJson.submitting}
+        workflowName={workflow.name}
+      />
     </div>
   );
 }

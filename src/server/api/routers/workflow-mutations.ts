@@ -27,6 +27,7 @@ import {
 } from "~/lib/workflow/workflow-types";
 import { parseWorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import { workflowParamMapInputSchema } from "~/lib/workflow/workflow-param-map";
+import { remapForUpdate } from "~/lib/workflow/workflow-update-remap";
 import { isPlainRecord, isUnknownArray } from "~/lib/is-record";
 import path from "node:path";
 
@@ -497,10 +498,18 @@ export const workflowMutationProcedures = {
     if (!result.update) {
       return { unchanged: true };
     }
-    // 把重新导入的内容落回模板
+    /* 把重新导入的内容落回模板；作者的 IO 连线尽量保持（新版本里仍存在的
+     * 端口原样保留），消失的摘除并随响应上报（#4377）。 */
+    const remap = remapForUpdate({
+      paramMap: existing.paramMap,
+      workflowIO: existing.workflowIO,
+      oldRawJson: existing.rawJson,
+      newRawJson: result.update.rawJson,
+    });
     const updated = await workflowTemplateRepository.update(existing.id, {
       rawJson: result.update.rawJson ?? existing.rawJson,
-      paramMap: result.update.paramMap ?? existing.paramMap,
+      paramMap: remap.paramMap,
+      workflowIO: remap.workflowIO,
       positions: result.update.positions ?? existing.positions,
       sourceMtime: result.update.sourceMtime,
       sourceChecksum: result.update.sourceChecksum,
@@ -510,6 +519,91 @@ export const workflowMutationProcedures = {
      * 而磁盘标记已经翻回「无更新」—— 那是最难解释的一种自相矛盾。
      * （这是**唯一**会写回磁盘内容的入口，缓存失效也就只在这一处需要。） */
     invalidateWorkflowDetailCache(ctx.user.id, existing.id);
-    return { updated: true, template: updated };
+    return {
+      updated: true,
+      broken: remap.broken,
+      droppedIOKeys: remap.droppedIOKeys,
+      template: updated,
+    };
   }),
+
+  /* POST /api/workflows/[id]/update-from-json —— 在线工作流从新 JSON 更新（#4377）。
+   * 仅用于**在线**工作流（无磁盘跟踪）：本地工作流的更新入口是「同步」。
+   * 更新时作者的 IO 连线尽量保持（新图里仍存在的端口原样保留），新图里
+   * 消失的端口摘除并随响应上报，由前端提示重新配置。 */
+  updateFromJson: authedProcedure
+    .input(z.object({ id: z.string(), raw: z.unknown() }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.id);
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workflow not found",
+        });
+      }
+      if (existing.sourcePath !== null) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "本地工作流请用「同步」从磁盘更新；从 JSON 更新仅用于在线工作流",
+        });
+      }
+      let parsed: Awaited<ReturnType<typeof parseWorkflowContent>>;
+      try {
+        parsed = await parseWorkflowContent(JSON.stringify(input.raw ?? null));
+      } catch (error: unknown) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: errorMessage(error, "工作流解析失败"),
+        });
+      }
+      /* 连线保持：新图里仍存在的端口原样保留，消失的摘除并上报（#4377）。 */
+      const remap = remapForUpdate({
+        paramMap: existing.paramMap,
+        workflowIO: existing.workflowIO,
+        oldRawJson: existing.rawJson,
+        newRawJson: parsed.rawJson,
+      });
+      const updated = await workflowTemplateRepository.update(existing.id, {
+        rawJson: parsed.rawJson,
+        paramMap: remap.paramMap,
+        workflowIO: remap.workflowIO,
+      });
+      invalidateWorkflowDetailCache(ctx.user.id, existing.id);
+      return {
+        updated: true,
+        broken: remap.broken,
+        droppedIOKeys: remap.droppedIOKeys,
+        template: updated,
+      };
+    }),
+
+  /* POST /api/workflows/[id]/convert-to-online —— 本地工作流一键转在线（ISSUE #4372）。
+   * 只做「解除磁盘跟踪」这一件事：sourcePath / sourceMtime / sourceChecksum 置空。
+   * list 出口按 `sourcePath === null` 判在线，该行随即归为在线；磁盘文件不再被
+   * 任何行引用，自动落入 localPending（未载入池），再次载入即可找回。
+   * 内容以库中当前版本为准，**不重读磁盘**：rawJson 里含用户在编辑器追加的
+   * 分组 / 便签 / 坐标，重读会把这些编辑丢掉（「同步」才是以文件为事实源的入口）。 */
+  convertToOnline: authedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.id);
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workflow not found",
+        });
+      }
+      /* 已是在线（没有绑磁盘文件）时幂等返回，不写库。 */
+      if (existing.sourcePath === null) {
+        return { ok: true, converted: false };
+      }
+      await workflowTemplateRepository.update(existing.id, {
+        sourcePath: null,
+        sourceMtime: null,
+        sourceChecksum: null,
+      });
+      /* 详情缓存 TTL 30s：不清的话转换后进详情仍会吃到按「本地」算的旧缓存。 */
+      invalidateWorkflowDetailCache(ctx.user.id, existing.id);
+      return { ok: true, converted: true };
+    }),
 };
