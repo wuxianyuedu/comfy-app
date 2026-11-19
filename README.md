@@ -422,6 +422,7 @@ pnpm storybook    # 起组件工作台（http://127.0.0.1:6006）
 pnpm db:push      # 同步 Drizzle schema 到 db.sqlite（非交互、复核建表结果）
 pnpm env:init     # 生成/补齐本地 .env（随机密钥 + 本地 OAuth 占位值）
 pnpm deps:prune   # 清掉 node_modules/.pnpm 里不在当前依赖图的残留条目（--dry-run 只看清单；pnpm store prune 管不到这一层）
+pnpm target:prune # 清 src-tauri/target 构建产物（默认清 incremental；--release / --all 分档；cargo 撞「磁盘空间不足 os error 112」时先跑它腾地方）
 pnpm qoder:ignore # 写/刷新 .qoderignore（代码索引排除表；改完要重启 Qoder CN 才生效）
 ```
 
