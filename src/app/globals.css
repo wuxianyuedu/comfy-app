@@ -803,6 +803,7 @@ body {
      设置页与消息中心）。thumb 取强边框色、hover 再深一档，弱底上看得见。
    · `.soft-scrollbar` —— 文字编辑区（剧本 Markdown 编辑器与工坊舞台正文）。
      与上一档同宽不同档：thumb 同色、hover 取弱文字色，长时间编辑不抢视线。
+   · `.scrollbar-none` —— 只滚动不显示滚动条（tooltip 气泡，#4512）。
    · `textarea::-webkit-scrollbar`（下方）—— 画布节点文本框**只滚动不显示**
      滚动条，保住面板右缘干净（滚轮 / PgDn / 方向键照常可用）。
    `ui/scroll-area` 另有一套 base-ui 自绘滚动条，口径见规范 16 §16.2.4.6 第三档。 */
@@ -1237,6 +1238,19 @@ textarea::-webkit-scrollbar {
 }
 .soft-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--color-ink-muted);
+}
+
+/* 只滚动、不显示滚动条：tooltip 气泡（#4512）。气泡限高交给 `--available-height`、
+   内容超限仍可滚（#4188），但滚动条只会在气泡出现的瞬间闪现一道 —— 定位器首帧
+   把箭头穿出盒子的那一半算进了可滚动溢出，随后二次定位才收回去。滚动条本就不该
+   可见；滚轮 / 触摸照常可用。 */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  background: transparent;
 }
 
 /* ── shadcn 工具类桥（别名 → Tailwind color 命名空间） ──────────────
