@@ -220,6 +220,8 @@ export function WorkflowCanvasNodePreview({
     mode: effectiveMode,
     onPatchParamMap: handlePatchParamMap,
   });
+  /* 重置回调只依赖这个稳定的方法引用（#4467：内联箭头会击穿画布层 memo）。 */
+  const { resetMany: resetParamWires } = wiring;
   /* 本地 overlay 已经并入 wiring 内部的生效 paramMap，但卡片列与连线要读的
    * 是同一份 —— 故把 overlay 之后的 paramMap 回传给派生。`reportParamMap`
    * 让 hook 把「生效的那一份」吐出来（见 useParamWiring 的 effectiveParamMap）。 */
@@ -265,6 +267,40 @@ export function WorkflowCanvasNodePreview({
     commitParamMap: wiring.commitParamMap,
   });
 
+  /* 契约条目表（#4467）：连线闸门与自动落点按它判 —— 与 paramCards /
+   * outputCards 一样是同源派生，收进 useMemo；否则宿主表单每敲一个字都
+   * 整表现算一遍（端口多的工作流输入时可感知卡顿）。 */
+  const paramEntries = useMemo(
+    () =>
+      buildParamEntries(workflowIO ?? null, undefined, {
+        mode: effectiveMode,
+        contractIds: contractEntries.map((item) => item.id),
+      }),
+    [workflowIO, effectiveMode, contractEntries],
+  );
+
+  /* 选中互斥与落点重置的回调收口（#4467）：内联箭头会让画布层的三个内容对象
+   * 每帧都是新引用 → Context value 每帧新建 → 三列节点虽 memo 也被击穿重渲。
+   * 依赖里的 wiring 方法与 setState 都是稳定引用。 */
+  const handleResetParam = useCallback(
+    (id: string) => {
+      resetParamWires(sizeGroupIds(id));
+    },
+    [resetParamWires],
+  );
+  const handleSelectOutput = useCallback((id: string | null) => {
+    setSelectedOutputId(id);
+    if (id !== null) {
+      setSelectedParamId(null);
+    }
+  }, []);
+  const handleSelectParam = useCallback((id: string | null) => {
+    setSelectedParamId(id);
+    if (id !== null) {
+      setSelectedOutputId(null);
+    }
+  }, []);
+
   /** 提交到本机生成并等待落定（相位与 SSE 订阅在 use-generation-runner）。 */
   function run() {
     if (!canRun) {
@@ -302,10 +338,7 @@ export function WorkflowCanvasNodePreview({
           /* 闸门（`isValidConnection`）按它判类型 —— 必须与卡片列**同一份**
              契约（含作者自定义的口），否则自定义口的圆点拖到宿主行上会被判成
              「这一行不收这个口子」，而卡片列明明画着它。 */
-          entries={buildParamEntries(workflowIO ?? null, undefined, {
-            mode: effectiveMode,
-            contractIds: contractEntries.map((item) => item.id),
-          })}
+          entries={paramEntries}
           host={
             <LibraryHostCard
               actions={
@@ -368,21 +401,9 @@ export function WorkflowCanvasNodePreview({
               : undefined
           }
           onResetOutput={outputWiring.reset}
-          onResetParam={(id) => {
-            wiring.resetMany(sizeGroupIds(id));
-          }}
-          onSelectOutput={(id) => {
-            setSelectedOutputId(id);
-            if (id !== null) {
-              setSelectedParamId(null);
-            }
-          }}
-          onSelectParam={(id) => {
-            setSelectedParamId(id);
-            if (id !== null) {
-              setSelectedOutputId(null);
-            }
-          }}
+          onResetParam={handleResetParam}
+          onSelectOutput={handleSelectOutput}
+          onSelectParam={handleSelectParam}
           outputCards={outputCards}
           paramCards={paramCards}
           selectedEntryId={selectedParamId}

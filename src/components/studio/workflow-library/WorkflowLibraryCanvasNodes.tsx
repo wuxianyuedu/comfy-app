@@ -17,11 +17,27 @@ import { PortHandle } from "~/components/studio/workflow-form/WorkflowPortHandle
 /** 三列节点的渲染内容（类型收在纯 `.ts` 里，hooks 层也要引用它）。 */
 export type { LibraryNodeContent };
 
-export const LibraryNodeContentContext = createContext<LibraryNodeContent | null>(null);
+/** 三列的渲染内容各自一条 Context（#4467）：宿主内容里是**整张表单**，
+ *  keystroke 之间必然变化 —— 单一 context 会让左 / 右两列虽 memo 也被击穿
+ *  （每敲一个字整棵重渲）。拆开后左 / 右两列的 context value 在 keystroke 间
+ *  引用稳定，memo 才真正生效。 */
+export const LibraryParamsContentContext = createContext<LibraryNodeContent["params"] | null>(null);
+export const LibraryHostContentContext = createContext<LibraryNodeContent["host"] | null>(null);
+export const LibraryOutputsContentContext = createContext<LibraryNodeContent["outputs"] | null>(
+  null,
+);
 
-/** 取三列的渲染内容；不在画布里（直接单测某个节点）时返回 null。 */
-function useLibraryNodeContent(): LibraryNodeContent | null {
-  return useContext(LibraryNodeContentContext);
+/** 取所在列的渲染内容；不在画布里（直接单测某个节点）时返回 null。 */
+function useParamsNodeContent(): LibraryNodeContent["params"] | null {
+  return useContext(LibraryParamsContentContext);
+}
+
+function useHostNodeContent(): LibraryNodeContent["host"] | null {
+  return useContext(LibraryHostContentContext);
+}
+
+function useOutputsNodeContent(): LibraryNodeContent["outputs"] | null {
+  return useContext(LibraryOutputsContentContext);
 }
 
 /** 左列：对外参数卡片。
@@ -30,7 +46,7 @@ function useLibraryNodeContent(): LibraryNodeContent | null {
  *  宿主卡片的某一行」。handle id 取端口的 handle id（库里按端口名给圆点定位，
  *  一个候选一颗点），闸门据此反查契约条目。 */
 export const LibraryParamsNode = memo(function LibraryParamsNode(_props: NodeProps) {
-  const content = useLibraryNodeContent()?.params;
+  const content = useParamsNodeContent();
   if (!content) {
     return null;
   }
@@ -69,7 +85,7 @@ export const LibraryParamsNode = memo(function LibraryParamsNode(_props: NodePro
 /** 右列：对外输出参数卡片。每张卡片左缘一颗 **target** handle —— 宿主输出行的
  *  连线收在这里（方向的合法性由 `isValidConnection` 判）。 */
 export const LibraryOutputsNode = memo(function LibraryOutputsNode(_props: NodeProps) {
-  const content = useLibraryNodeContent()?.outputs;
+  const content = useOutputsNodeContent();
   if (!content) {
     return null;
   }
@@ -103,7 +119,7 @@ export const LibraryOutputsNode = memo(function LibraryOutputsNode(_props: NodeP
 
 /** 中间：宿主运行卡片（表单与输出行的端点由它自己渲染）。 */
 export const LibraryHostNode = memo(function LibraryHostNode(_props: NodeProps) {
-  const content = useLibraryNodeContent()?.host;
+  const content = useHostNodeContent();
   if (!content) {
     return null;
   }
