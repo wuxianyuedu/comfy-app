@@ -13,8 +13,6 @@ import {
   type Connection,
   type Node,
   type Edge,
-  type OnNodesChange,
-  type OnEdgesChange,
 } from "@xyflow/react";
 import { CanvasGrid, ZoomIndicator, CanvasRulers } from "../WorkflowCanvasDecorations";
 import { CanvasSettingsButton } from "../canvas/CanvasSettingsButton";
@@ -79,35 +77,31 @@ const DEFAULT_EDGE_OPTIONS = {
 export type WorkflowEditorCanvasProps = {
   canvasSettings: CanvasSettings;
   canvasSettingsHydrated: boolean;
-  edges: Array<Edge>;
+  /** 挂载初值（非受控画布）：画布挂载时 detail 已就绪，这里拿到的是当帧派生图；
+   *  此后的图同步由父层 effect 经 `rf.setNodes` / `rf.setEdges` 下发（#4536）。 */
+  defaultNodes: Array<Node>;
   /** 连线合法性闸门：无模式 / 落点不是宿主节点端口一律拒绝。 */
   isValidConnection?: (connection: Connection | Edge) => boolean;
-  nodes: Array<Node>;
   /** 画布上新增一条连线（对外参数卡片 → 宿主节点端口）。 */
   onConnect?: (connection: Connection) => void;
   /** 惰性激活被点击边的 deletable/reconnectable（见
    *  下面的 defaultEdgeOptions）。 */
   onEdgeClick?: (event: React.MouseEvent, edge: Edge) => void;
-  onEdgesChange: OnEdgesChange;
-  /** 删除连线（映射线 = 该对外参数在当前模式下断开）。 */
-  onEdgesDelete?: (edges: Array<Edge>) => void;
   onMiniMapJump: (event: React.MouseEvent, position: { x: number; y: number }) => void;
   onNodeDragStop: (e: unknown, node: Node) => void;
-  onNodesChange: OnNodesChange;
   onOpenSettings: () => void;
   /** 「重新居中」：把视口移回有节点的位置（纯视口动作，不改节点布局）。 */
   onRecenter: () => void;
-  /** 写回连线表：选中节点后由本画布把「相关连线」标记写进 edges（见 hook 注释）。 */
+  /** 写回连线表：选中节点后由本画布把「相关连线」标记写进 edges（见 hook 注释）。
+   *  走 React Flow store（`rf.setEdges`），不再经父层受控 state。 */
   setEdges: (updater: (edges: Array<Edge>) => Array<Edge>) => void;
-  /** 写回节点表：同一帧里把「相关端口行」标记写进节点 data（见 hook 注释）。 */
+  /** 写回节点表：同一帧里把「相关端口行」标记写进节点 data（见 hook 注释）。
+   *  走 React Flow store（`rf.setNodes`），不再经父层受控 state。 */
   setNodes: (updater: (nodes: Array<Node>) => Array<Node>) => void;
 };
 
 export function WorkflowEditorCanvas({
-  nodes,
-  edges,
-  onNodesChange,
-  onEdgesChange,
+  defaultNodes,
   onNodeDragStop,
   canvasSettings,
   canvasSettingsHydrated,
@@ -117,7 +111,6 @@ export function WorkflowEditorCanvas({
   onEdgeClick,
   onConnect,
   isValidConnection,
-  onEdgesDelete,
   setEdges,
   setNodes,
 }: WorkflowEditorCanvasProps) {
@@ -175,21 +168,21 @@ export function WorkflowEditorCanvas({
   return (
     <ReactFlow
       defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
-      edges={edges}
+      /* 非受控画布（#4536）：节点/连线状态住 React Flow store，拖拽的逐帧位置
+       * 更新不再经父层 setState 重渲染整棵编辑器树。图同步走父层的
+       * `rf.setNodes` / `rf.setEdges`。 */
+      defaultNodes={defaultNodes}
       edgeTypes={workflowEdgeTypes}
       isValidConnection={isValidConnection}
       maxZoom={canvasSettingsHydrated ? canvasSettings.maxZoom : 2}
       /* 这里**故意不设** `fitView`：初始视口由下面的 useEffect 自己驱动，才能强制
-       *  最小缩放 0.35。没有这个下限，DaSiWa Wan 2.2 模板（130 节点，包围盒约
-       *  7000px 宽）会 fitView 到约 0.15x，每个备注都读不清。padding 0.3 与紧凑
-       *  的 0.10 + 0.35 下限见上面的 useEffect。 */
+       * 最小缩放 0.35。没有这个下限，DaSiWa Wan 2.2 模板（130 节点，包围盒约
+       * 7000px 宽）会 fitView 到约 0.15x，每个备注都读不清。padding 0.3 与紧凑
+       * 的 0.10 + 0.35 下限见上面的 useEffect。 */
       minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
-      nodes={nodes}
       nodeTypes={workflowNodeTypes}
       onConnect={onConnect}
       onEdgeClick={onEdgeClick}
-      onEdgesChange={onEdgesChange}
-      onEdgesDelete={onEdgesDelete}
       /* 过滤视口裁剪造成的 error#008 假告警（ISSUE #374）—— 见 handleError。 */
       onError={handleError}
       /* 商业级性能 —— 只挂载与视口相交的节点 / 边。DaSiWa Wan 2.2 模板有 130 个
@@ -199,7 +192,6 @@ export function WorkflowEditorCanvas({
        *  的实测尺寸，故初始 fit 不受影响。 */
       onlyRenderVisibleElements
       onNodeDragStop={onNodeDragStop}
-      onNodesChange={onNodesChange}
       proOptions={{ hideAttribution: true }}
     >
       {/* 网格底纹 —— 20px 小格，每 10 格一条更重的线。
