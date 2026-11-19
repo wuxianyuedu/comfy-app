@@ -190,9 +190,15 @@ POSIX 上 `python3 -m venv` 缺 `ensurepip`（Debian/Ubuntu 系在单独的 `pyt
 
 | 环境状态                         | 动作                                                      |
 | -------------------------------- | --------------------------------------------------------- |
-| venv 缺失 / `comfy_cli` 不可导入 | 建 venv → 升 pip → 装 comfy-cli                           |
+| venv 缺失 / `comfy_cli` 不可导入 | 建 venv → 升 pip → 装 comfy-cli + comfy-mcp               |
+| 已就绪，`comfy_mcp` 不可导入     | 补装 `comfy-mcp`（工作区 MCP 用；失败只记日志不阻断，#4521） |
 | 已就绪，版本落后 PyPI            | `pip install --upgrade comfy-cli`，状态写 `phase=upgrade` |
 | 已就绪且已是最新                 | 只记日志，零副作用                                        |
+
+`comfy-mcp`（PyPI 包，工作区 MCP 服务器 `comfy-mcp` 的入口 exe 由它提供，ISSUE #4521）
+随同一 venv 引导就位：venv 首建时与 comfy-cli 同批安装，旧检出的 venv 缺 `comfy_mcp`
+时在「已就绪」路径自动补装；它只服务 MCP，安装失败不阻断启动，仅记日志并给出手工
+补装命令。
 
 硬约束（改这条链路前必读）：
 
