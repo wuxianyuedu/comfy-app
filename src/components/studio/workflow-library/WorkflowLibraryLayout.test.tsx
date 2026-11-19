@@ -477,3 +477,20 @@ describe("详情头部：「全部模式」浮层收起（ISSUE #4468）", () =>
     expect(secondModeRow()).toBeNull();
   });
 });
+
+describe("加载态占位的可访问名可区分（ISSUE #4516）", () => {
+  const ROOT = path.resolve(__dirname);
+  const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
+
+  /* #4511 给右栏加骨架时沿用了列表骨架的 aria-label：首载时两块占位同屏同名，
+   * 读屏会听到两遍「正在加载工作流」、或把两者当同一块区域。两处名必须可区分
+   * （列表 = 「正在加载工作流列表」，右栏 = 「正在加载工作流详情」）。 */
+  it("列表骨架与右栏详情骨架的 aria-label 不同名", () => {
+    expect(read("WorkflowLibraryList.tsx")).toContain('aria-label="正在加载工作流列表"');
+    expect(read("WorkflowLibrary.tsx")).toContain('aria-label="正在加载工作流详情"');
+    /* 旧的共用名不许再以「整串 aria-label」的形态回来（新名是它的前缀扩展，
+     * 这里按带收尾引号的整串比对，不会误伤新名）。 */
+    expect(read("WorkflowLibraryList.tsx")).not.toContain('aria-label="正在加载工作流"');
+    expect(read("WorkflowLibrary.tsx")).not.toContain('aria-label="正在加载工作流"');
+  });
+});
