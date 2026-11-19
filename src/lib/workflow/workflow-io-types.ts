@@ -91,7 +91,6 @@ const WorkflowIOEntrySchema = z.looseObject({
   nodeId: z.string(),
   name: z.string(),
 });
-const WorkflowIOMapSchema = z.record(z.string(), WorkflowIOEntrySchema);
 
 /** 一条模式覆盖项吗（宽松判据：只校验已知字段的类型，未知字段原样保留）。 */
 function isModeOverride(value: unknown): value is WorkflowIOModeOverride {
@@ -113,7 +112,9 @@ function isModeOverrideMap(value: unknown): value is Record<string, WorkflowIOMo
   return isPlainRecord(value) && Object.values(value).every(isModeOverride);
 }
 
-/** 解析 workflowIO 列（DB JSON 列）；非对象 / 形状不符 → 空表。
+/** 解析 workflowIO 列（DB JSON 列）；非对象 → 空表，形状不符的**条目**丢弃、
+ *  好条目原样保留（#4459：此前 `z.record` 整表一票否决，混进一条坏条目会把
+ *  作者的全部 IO 配置静默清空 —— 与上面注释自述的「条目丢弃」口径相悖）。
  *
  *  列里可能留着把模式覆盖层写作 `modes` 键的行（该键与工作流级的
  *  `WorkflowTemplate.modes` 同名、含义完全不同，是同一列里的两种读法）。
@@ -121,16 +122,17 @@ function isModeOverrideMap(value: unknown): value is Record<string, WorkflowIOMo
  *（isVisibleInMode / resolveEntryDefault …）与消费方只读那一个名字。
  *  回退只在新键缺失时生效，不覆盖已经用新键落库的数据。 */
 export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
-  const parsed = WorkflowIOMapSchema.safeParse(value);
-  if (!parsed.success) {
+  if (!isPlainRecord(value)) {
     return {};
   }
-  const data = parsed.data;
-  for (const entry of Object.values(data)) {
-    if (!entry || typeof entry !== "object") {
+  const data: WorkflowIOMap = {};
+  for (const [key, raw] of Object.entries(value)) {
+    const parsed = WorkflowIOEntrySchema.safeParse(raw);
+    if (!parsed.success) {
       continue;
     }
-    /* SAFETY: 类型断言已复核 */
+    const entry = parsed.data;
+    /* SAFETY: 类型断言已复核（looseObject 保留未知键，删旧键 / 落新键都要动它） */
     const rec = entry as Record<string, unknown>;
     /* 旧键先删掉、再按需落新键：留着它等于让同一份覆盖层以两个名字在本列里
      * 往返 —— 下游读哪个都能读通，于是「谁是权威」永远说不清（而 `.loose()`
@@ -140,6 +142,7 @@ export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
     if (entry.modeOverrides === undefined && isModeOverrideMap(legacy)) {
       entry.modeOverrides = legacy;
     }
+    data[key] = entry;
   }
   return data;
 }

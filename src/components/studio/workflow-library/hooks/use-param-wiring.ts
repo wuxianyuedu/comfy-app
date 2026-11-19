@@ -6,7 +6,7 @@
  * paramMap），本地叠加 overlay 立即回读；③「恢复默认」清掉该参数在当前模式下的
  * 手工线。落库形状来自 `~/lib/workflow/workflow-param-wiring`；视图不碰 tRPC。 */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { isPlainRecord } from "~/lib/is-record";
 import {
@@ -64,6 +64,21 @@ export function useParamWiring({
   /* 本地 overlay：库里改一条线不必等一次 PATCH 往返才看得见结果。
    * 它按「模式 → 条目 → 目标」与落库键空间同构，故 `hasWireEdit` 只查它一份。 */
   const [overlay, setOverlay] = useState<Record<string, unknown>>({});
+  /* #4458：paramMap 是服务端事实源（DB 列）。「从 JSON 更新」/「同步」会重映射
+   * 连线并失效详情缓存，refetch 把 paramMap 刷成新事实 —— 本地 overlay 若
+   * 永不清除，会逐键压过新值，刚报告「已断开 / 已摘除」的线被旧 overlay 复活。
+   * 按**内容**快照判外部变化：变了就清 overlay。自家 commit → PATCH → 重拉
+   * 也会走到这里（落库值已含本轮编辑，清掉等价回读）；两笔编辑夹一次重拉时
+   * 第二笔短暂回退、随第二笔 PATCH 落库自愈。 */
+  const paramMapSnapshot = useMemo(() => JSON.stringify(paramMap ?? {}), [paramMap]);
+  const overlayBaseRef = useRef(paramMapSnapshot);
+  useEffect(() => {
+    if (overlayBaseRef.current === paramMapSnapshot) {
+      return;
+    }
+    overlayBaseRef.current = paramMapSnapshot;
+    setOverlay({});
+  }, [paramMapSnapshot]);
   /* 生效映射 = 已落库的那一份叠上本轮本地改动。 */
   const effective = useMemo(() => mergeParamMaps(paramMap, overlay), [paramMap, overlay]);
 

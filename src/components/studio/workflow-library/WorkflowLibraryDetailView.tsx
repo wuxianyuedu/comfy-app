@@ -3,7 +3,7 @@
 // WorkflowLibraryDetail 的纯展示视图：只消费 controller，不发请求、不算业务
 // 规则，交互一律通过 controller.actions 上抛。
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { ErrorBoundary } from "~/components/ui/error-boundary";
 import { useLazyChunkFallback } from "~/components/ui/use-lazy-chunk-fallback";
@@ -72,6 +72,14 @@ export function WorkflowLibraryDetailView({
   /* 在线工作流的「从 JSON 更新」（#4377）：弹窗开关 + 提交 / 断线报告。 */
   const updateJson = useWorkflowUpdateFromJson();
   const [updateJsonOpen, setUpdateJsonOpen] = useState(false);
+
+  /* #4463：断线报告属于「那一次更新」，不属于工作流 —— 切换选中工作流时
+   * 清掉上一条的报告，B 的弹窗不再一打开就显示 A 的断线清单。 */
+  const workflowIdForReport = workflow?.id ?? null;
+  const clearUpdateJsonReport = updateJson.clearReport;
+  useEffect(() => {
+    clearUpdateJsonReport();
+  }, [workflowIdForReport, clearUpdateJsonReport]);
 
   if (!workflow) {
     return (
@@ -249,8 +257,10 @@ export function WorkflowLibraryDetailView({
       )}
 
       {/* 在线工作流「从 JSON 更新」（#4377）：提交后断线报告就地展示（全部保持
-       *  时自动关闭）。 */}
+       *  时自动关闭）。按 workflow.id 重建（#4463）：输入草稿 / 行内错误随工作流
+       *  切换强制重置，不靠组件状态自己「记得」上一次。 */}
       <UpdateJsonModal
+        key={workflow.id}
         onClose={() => {
           setUpdateJsonOpen(false);
         }}

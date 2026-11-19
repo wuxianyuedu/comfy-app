@@ -9,7 +9,7 @@
  * defaultValue / options），**落库**以模板的原始 DB 列为底稿 —— 富化字段是
  * 派生结果，原样写回会把图内读出的当前值固化进库。每次编辑即时经
  * onPatchWorkflowIO 落库，不设「保存」按钮（用户只是改个显隐 / 默认值）。 */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 import {
@@ -92,6 +92,21 @@ export function WorkflowLibraryIoPanel({
    * 落库。detailFull 的富化链会把草稿里作者写过的 modeOverrides / label /
    * required 原样透传回来，重拉后草稿与服务端一致。 */
   const [draft, setDraft] = useState<WorkflowIOMap>(() => asIOMap(storedIO));
+
+  /* #4458：storedIO 是服务端事实源（原始 DB 列）。「从 JSON 更新」/「同步」会
+   * 摘除 / 重映射 IO 口并失效详情缓存，refetch 把 storedIO 刷成新事实 —— 草稿
+   * 若只在上次挂载时播种，作者本地旧态会在下一次编辑时**整份写回**，刚报告
+   * 「已摘除」的口复活。按**内容**快照判外部变化：变了就重播种。自家
+   * commit → PATCH → 重拉也会经过这里（服务端保留作者编辑，重播种等价回读）。 */
+  const storedIOSnapshot = useMemo(() => JSON.stringify(storedIO ?? {}), [storedIO]);
+  const draftBaseRef = useRef(storedIOSnapshot);
+  useEffect(() => {
+    if (draftBaseRef.current === storedIOSnapshot) {
+      return;
+    }
+    draftBaseRef.current = storedIOSnapshot;
+    setDraft(asIOMap(storedIO));
+  }, [storedIOSnapshot, storedIO]);
 
   /* 生效模式：当前模式必须是工作流模式之一，否则回退到第一个（与编辑器
    * IO 预览、画布节点同一口径）。没有模式时表单禁用。 */

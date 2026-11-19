@@ -275,3 +275,32 @@ describe("列表项：名称限长 + 对外参数精简显示", () => {
     expect(screen.getByText("无可执行内容")).toBeInTheDocument();
   });
 });
+
+/* #4464：列表查询硬失败（服务 500 等）是第四态 —— 不能落进「还没有工作流」
+ * 的空态（像是工作流全没了），要给失败原因与重试入口。 */
+describe("WorkflowLibraryList 查询失败态（#4464）", () => {
+  it("列表为空且查询失败：显示「加载失败」+ 重试按钮，不显示「还没有工作流」", () => {
+    const onRefresh = vi.fn();
+    renderList({ loadError: "服务暂时不可用（500）", onRefresh });
+
+    expect(screen.getByText("工作流列表加载失败")).toBeInTheDocument();
+    expect(screen.getByText(/服务暂时不可用/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+    expect(screen.queryByText("还没有工作流")).toBeNull();
+  });
+
+  it("点击重试触发 onRefresh", () => {
+    const onRefresh = vi.fn();
+    renderList({ loadError: "服务暂时不可用（500）", onRefresh });
+
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("查询失败但列表里还有数据（后台刷新失败）：照常显示数据行", () => {
+    renderList({ loadError: "服务暂时不可用（500）", workflows: [row()], onRefresh: vi.fn() });
+
+    expect(screen.getByText("演示工作流")).toBeInTheDocument();
+    expect(screen.queryByText("工作流列表加载失败")).toBeNull();
+  });
+});
