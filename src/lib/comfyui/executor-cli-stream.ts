@@ -50,6 +50,11 @@ export const STDERR_MAX_LINES = 60;
 /** comfy-cli 返回的原始 JSON 行进入面板的上限（envelope 可能很大，且事件行
  *  数随节点数走；设上限防止一次失控的执行把日志面板刷成瀑布）。 */
 export const MAX_RAW_JSON_LINES = 300;
+/** stderr 原文缓冲的尾部窗口（#4418）：消费点只要末尾十几行，全文累积会随
+ *  失控任务刷屏线性增长。 */
+export const STDERR_RAW_CAP_CHARS = 256 * 1024;
+/** stdout 单行（无换行）聚合缓冲的硬上限（#4418）：与 stderr 原文窗口同族。 */
+export const STDOUT_LINE_CAP_CHARS = 256 * 1024;
 
 /**
  * 在任意嵌套对象/数组里深搜 `node_errors`（dict 或非空 list）。
@@ -408,6 +413,13 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
        * 出现「没找到生成结果」时唯一能回答「ComfyUI 到底回了什么」的就是这里。 */
       doTrace("cli", taskId, "stdout 原始输出", { chunk: String(chunk) });
       buf += String(chunk);
+      if (buf.length > STDOUT_LINE_CAP_CHARS) {
+        /* 单行无换行的巨型输出按预算截断（#4418）：与 stderr 原文缓冲同一族——
+         * 失控的自定义节点可以产出无换行的巨量输出，不封顶就把常驻进程内存
+         * 撑到任务时长线性增长。截断点落 trace，行内容按截断后处理。 */
+        doTrace("cli", taskId, "stdout 单行超预算截断", { cappedAt: buf.length });
+        buf = buf.slice(0, STDOUT_LINE_CAP_CHARS);
+      }
       let idx: number;
       while ((idx = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, idx).trim();
@@ -455,6 +467,12 @@ export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
      * traceback 尾部（异常类 + 行号）必须完整可查。 */
     doTrace("cli", taskId, "stderr 原始输出", { chunk: d });
     errBuf += d;
+    if (errBuf.length > STDERR_RAW_CAP_CHARS) {
+      /* 尾部窗口（#4418）：消费点（close 时的 tail）只要末尾十几行，超限从头部
+       * 截——失控的自定义节点/comfy-cli 插件在最长 25 分钟里持续刷屏（含 tqdm
+       * 的 \r 反复重绘）时，内存不再随任务时长线性增长。 */
+      errBuf = errBuf.slice(errBuf.length - STDERR_RAW_CAP_CHARS);
+    }
     for (const line of d.split(/\r?\n/)) {
       const trimmed = line.trim();
       if (!trimmed) {

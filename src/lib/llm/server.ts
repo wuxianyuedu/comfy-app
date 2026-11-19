@@ -1,4 +1,5 @@
-import { errorMessage } from "~/lib/error-message";
+import { errorMessage, errorText } from "~/lib/error-message";
+import { logger } from "~/lib/core/logger";
 
 import "server-only";
 import type { ZodType } from "zod";
@@ -191,8 +192,11 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
         cfg.maxTokens = row.maxTokens;
       }
     }
-  } catch {
-    // 数据库不可用 —— 回落到环境变量里的默认值
+  } catch (error) {
+    // 数据库不可用 —— 回落到环境变量里的默认值。回落语义保留，但**故障必须可见**
+    // （#4419 / 硬规则 4）：此前静默吞掉，用户配置好的远程模型/密钥无声失效，
+    // 报的是「尚未配置生效模型」这种与真实原因完全无关的错，日志里找不到 DB 故障。
+    logger.warn(errorText(error, "[llm] 配置行读取失败，本次请求按 env 默认配置执行"));
   }
 
   if (override) {

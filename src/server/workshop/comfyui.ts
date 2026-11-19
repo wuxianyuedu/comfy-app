@@ -449,20 +449,47 @@ export function buildTxt2ImgWorkflow(input: {
   };
 }
 
-/** 把模板里的 {{prompt}}/{{negative}}/{{image}} 替换为实际值。 */
+/** 把模板里的 {{prompt}}/{{negative}}/{{image}} 替换为实际值。
+ *
+ *  先解析成结构、再对**字符串值**做替换（#4414）：此前在 JSON.stringify 的文本上
+ *  做裸字符串手术——prompt / negative 里带 `"`、`\` 或换行（图像提示词里极常见）
+ *  时，替换结果是非法 JSON，JSON.parse 抛 SyntaxError，整次生成失败。占位符
+ *  位于 ComfyUI API 图节点的字符串字段内，按值遍历替换与原口径同范围（整树），
+ *  但值本身不再需要是合法 JSON 片段。 */
 export function substitutePlaceholders(
   template: unknown,
   vars: { image?: string; negative?: string; prompt: string },
 ): unknown {
-  const json = JSON.stringify(template)
-    .split("{{prompt}}")
-    .join(vars.prompt)
-    .split("{{negative}}")
-    .join(vars.negative ?? "")
-    .split("{{image}}")
-    .join(vars.image ?? "");
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(json) as unknown;
+  let parsed: unknown = template;
+  if (typeof template === "string") {
+    try {
+      parsed = JSON.parse(template);
+    } catch {
+      throw new Error("工作流模板不是合法 JSON：请重新导入该模板");
+    }
+  }
+  return substituteInValue(parsed, vars);
+}
+
+/** 深度遍历：字符串值做占位替换，数组 / 对象递归，其余原样返回。 */
+function substituteInValue(
+  value: unknown,
+  vars: { image?: string; negative?: string; prompt: string },
+): unknown {
+  if (typeof value === "string") {
+    let out = value.split("{{prompt}}").join(vars.prompt);
+    out = out.split("{{negative}}").join(vars.negative ?? "");
+    return out.split("{{image}}").join(vars.image ?? "");
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => substituteInValue(item, vars));
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, substituteInValue(item, vars)]),
+    );
+  }
+  return value;
 }
 
 export type ComfyRunResult = {

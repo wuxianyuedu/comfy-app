@@ -389,8 +389,11 @@ export function resetLocalWorkflowChecksumCache(): void {
  *  这是「轮询里同一份数据反复出现」的常规场景（见 `checksumCache`）。 */
 export async function scanLocalWorkflowChecksums(
   rawPaths: Array<string>,
+  opts: { recursive?: boolean } = {},
 ): Promise<Array<LocalChecksumEntry>> {
-  const { allFiles } = await scanLocalWorkflowRoots(rawPaths);
+  /* recursive 透传（#4415）：workflows/ 会分子目录，主扫描带递归而这条不带时，
+   * 子目录里的改名文件进不了 checksum 索引，重关联永远不命中。 */
+  const { allFiles } = await scanLocalWorkflowRoots(rawPaths, opts);
   const out: Array<LocalChecksumEntry> = [];
   // 并发上限：一次扫 200 个文件不会同时开 200 条流。
   const MAX_PARALLEL = 8;

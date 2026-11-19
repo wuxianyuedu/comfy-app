@@ -1,6 +1,6 @@
 // ── Workshop MCP 会话持久化（repository）───────────────────────
 // 纯函数 rowToState / stateToRow 不触碰 DB，便于单测；CRUD 走 workshopDb。
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { asRecord } from "~/lib/is-record";
 import { isProjectType } from "~/lib/workshop/types";
@@ -120,26 +120,6 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
   };
 }
 
-function summarize(row: WorkshopSession): WorkshopSessionSummary {
-  return {
-    id: row.id,
-    userId: row.userId,
-    projectId: row.projectId ?? null,
-    title: row.title,
-    type: row.type,
-    tone: row.tone,
-    logline: row.logline,
-    stage: isStage(row.stage) ? row.stage : "script",
-    ideaLength: row.idea.length,
-    scriptLength: row.scriptMarkdown.length,
-    sceneCount: Array.isArray(row.scenes) ? row.scenes.length : 0,
-    characterCount: Array.isArray(row.characters) ? row.characters.length : 0,
-    shotCount: Array.isArray(row.shots) ? row.shots.length : 0,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
-}
-
 export type CreateSessionInput = {
   idea?: string;
   logline?: string;
@@ -199,11 +179,47 @@ export async function getSession(id: string): Promise<WorkshopSessionState | nul
 }
 
 export async function listSessions(): Promise<Array<WorkshopSessionSummary>> {
+  /* #4421：列表只要摘要（summarize 只消费 id/title/长度/计数），内容 JSON 列
+   * （idea / scriptMarkdown / scenes / characters / shots）整批拉回内存只留摘要
+   * ——会话表没有清理路径、只增不减，列表随历史长度线性变慢。投影改按需取
+   * 标量 + length() / json_array_length()；内容本体留给 getSession 的单行读。 */
   const rows = await workshopDb
-    .select()
+    .select({
+      id: workshopSession.id,
+      userId: workshopSession.userId,
+      projectId: workshopSession.projectId,
+      title: workshopSession.title,
+      type: workshopSession.type,
+      tone: workshopSession.tone,
+      logline: workshopSession.logline,
+      stage: workshopSession.stage,
+      ideaLength: sql<number>`length(${workshopSession.idea})`,
+      scriptLength: sql<number>`length(${workshopSession.scriptMarkdown})`,
+      sceneCount: sql<number>`json_array_length(${workshopSession.scenes})`,
+      characterCount: sql<number>`json_array_length(${workshopSession.characters})`,
+      shotCount: sql<number>`json_array_length(${workshopSession.shots})`,
+      createdAt: workshopSession.createdAt,
+      updatedAt: workshopSession.updatedAt,
+    })
     .from(workshopSession)
     .orderBy(desc(workshopSession.updatedAt));
-  return rows.map(summarize);
+  return rows.map((row) => ({
+    id: row.id,
+    userId: row.userId,
+    projectId: row.projectId ?? null,
+    title: row.title,
+    type: row.type,
+    tone: row.tone,
+    logline: row.logline,
+    stage: isStage(row.stage) ? row.stage : "script",
+    ideaLength: row.ideaLength ?? 0,
+    scriptLength: row.scriptLength ?? 0,
+    sceneCount: row.sceneCount ?? 0,
+    characterCount: row.characterCount ?? 0,
+    shotCount: row.shotCount ?? 0,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  }));
 }
 
 export async function updateState(id: string, state: WorkshopSessionState): Promise<void> {

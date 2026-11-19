@@ -3,7 +3,7 @@
  * 拆到独立子路由，避免 `series` 路由随功能增长越过文件行数上限（规范 §12.6）。
  */
 import { z } from "zod";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { episode, production, task } from "~/server/db/schema";
@@ -51,6 +51,46 @@ export const seriesGenerationRouter = createTRPCRouter({
         .where(eq(episode.seasonId, input.seasonId))
         .orderBy(asc(episode.episodeNumber));
 
+      /* 进度聚合改两趟批查（#4420）：此前每集各发 production.findFirst + task IN
+       * 查询，一次进度轮询是「集数×2」次往返——集与集之间并无顺序依赖。 */
+      const projectIds = [
+        ...new Set(
+          eps
+            .map((e) => e.projectId)
+            .filter((p): p is string => typeof p === "string" && p.length > 0),
+        ),
+      ];
+      const prodRows =
+        projectIds.length === 0
+          ? []
+          : await ctx.db.query.production.findMany({
+              where: inArray(production.id, projectIds),
+              columns: { id: true, shots: true },
+            });
+      const shotsByProject = new Map<string, Array<{ id?: string }>>();
+      for (const prod of prodRows) {
+        const rawShots: unknown = prod.shots;
+        shotsByProject.set(prod.id, isShotIdList(rawShots) ? rawShots : []);
+      }
+      const tasksByProject = new Map<string, Map<string, string>>();
+      if (projectIds.length > 0) {
+        const taskRows = await ctx.db
+          .select({ projectId: task.projectId, shotId: task.shotId, status: task.status })
+          .from(task)
+          .where(inArray(task.projectId, projectIds));
+        for (const t of taskRows) {
+          if (t.projectId === null || t.shotId === null) {
+            continue;
+          }
+          let byShot = tasksByProject.get(t.projectId);
+          if (!byShot) {
+            byShot = new Map<string, string>();
+            tasksByProject.set(t.projectId, byShot);
+          }
+          byShot.set(t.shotId, bestStatus(byShot.get(t.shotId), t.status));
+        }
+      }
+
       const rows: Array<{
         done: number;
         episodeId: string;
@@ -69,40 +109,24 @@ export const seriesGenerationRouter = createTRPCRouter({
         let running = 0;
         let pending = 0;
         if (ep.projectId !== null) {
-          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-          const prod = await ctx.db.query.production.findFirst({
-            where: eq(production.id, ep.projectId),
-          });
-          const rawShots: unknown = prod?.shots;
-          const shots = isShotIdList(rawShots) ? rawShots : [];
+          const shots = shotsByProject.get(ep.projectId) ?? [];
           total = shots.length;
-          const shotIds = shots
-            .map((s) => s.id)
-            .filter((id): id is string => typeof id === "string" && id.length > 0);
-          if (shotIds.length > 0) {
-            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-            const tasks = await ctx.db
-              .select({ shotId: task.shotId, status: task.status })
-              .from(task)
-              .where(and(eq(task.projectId, ep.projectId), inArray(task.shotId, shotIds)));
-            const statusByShot = new Map<string, string>();
-            for (const t of tasks) {
-              if (t.shotId === null) {
-                continue;
-              }
-              statusByShot.set(t.shotId, bestStatus(statusByShot.get(t.shotId), t.status));
+          const statusByShot = tasksByProject.get(ep.projectId) ?? new Map<string, string>();
+          for (const s of shots) {
+            const sid = s.id;
+            /* 坏镜头与旧口径一致：不计入任何桶（total 仍计入）。 */
+            if (typeof sid !== "string" || sid === "") {
+              continue;
             }
-            for (const sid of shotIds) {
-              const st = statusByShot.get(sid);
-              if (st === "SUCCEEDED") {
-                done++;
-              } else if (st === "RUNNING") {
-                running++;
-              } else if (st === "FAILED") {
-                failed++;
-              } else {
-                pending++;
-              }
+            const st = statusByShot.get(sid);
+            if (st === "SUCCEEDED") {
+              done++;
+            } else if (st === "RUNNING") {
+              running++;
+            } else if (st === "FAILED") {
+              failed++;
+            } else {
+              pending++;
             }
           }
         }
@@ -171,21 +195,34 @@ export const seriesGenerationRouter = createTRPCRouter({
           message: "工作流没有可执行内容（rawJson 为空）：请重新导入该工作流",
         });
       }
+      /* 集镜头清单一趟批查（#4420）：此前每集一个 production.findFirst，集与集
+       * 之间并无顺序依赖。逐镜入队保持 `createQueuedForShotIfNoActive` 的**逐镜
+       * 原子守卫**不变 —— 合并成整批事务会改变锁语义与失败粒度，刻意不做。 */
+      const prodRows =
+        projectIds.length === 0
+          ? []
+          : await ctx.db.query.production.findMany({
+              where: inArray(production.id, projectIds),
+              columns: { id: true, shots: true },
+            });
+      const shotsByProject = new Map<string, Array<{ id?: string }>>();
+      for (const prod of prodRows) {
+        const rawShots: unknown = prod.shots;
+        shotsByProject.set(prod.id, isShotIdList(rawShots) ? rawShots : []);
+      }
       const executorClaim = resolveExecutorClaim();
       let enqueued = 0;
       let skippedSucceeded = 0;
       let skippedActive = 0;
       let invalid = 0;
+      /* 集镜头清单一趟批查（#4420）：此前每集一个 production.findFirst，集与集
+       * 之间并无顺序依赖。逐镜入队保持 `createQueuedForShotIfNoActive` 的**逐镜
+       * 原子守卫**不变 —— 合并成整批事务会改变锁语义与失败粒度，刻意不做。 */
       for (const ep of eps) {
         if (ep.projectId === null) {
           continue;
         }
-        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        const prod = await ctx.db.query.production.findFirst({
-          where: eq(production.id, ep.projectId),
-        });
-        const rawShots: unknown = prod?.shots;
-        const shots = isShotIdList(rawShots) ? rawShots : [];
+        const shots = shotsByProject.get(ep.projectId) ?? [];
         for (const s of shots) {
           const sid = s.id;
           if (sid === undefined || sid === "") {

@@ -24,6 +24,7 @@ import {
   resetWorkshopComfyBase,
   resolveComfyBase,
   sizeDimsForImage,
+  substitutePlaceholders,
 } from "./comfyui";
 
 /* 生效表换桩（ISSUE #3972）：把 image 场景 16:9 / 1k 改成 1280×720（项目默认
@@ -256,5 +257,46 @@ describe("尺寸换算按生效表（ISSUE #3972）", () => {
     /* 桩里的生效表把 16:9 / 1k 改成了 1280×720 —— 下发给 ComfyUI 的必须是它。 */
     expect(asRecord(asRecord(latent)?.inputs)?.width).toBe(1280);
     expect(asRecord(asRecord(latent)?.inputs)?.height).toBe(720);
+  });
+});
+
+describe("substitutePlaceholders（#4414）", () => {
+  const template = {
+    nodes: {
+      "1": { class_type: "KSampler", inputs: { text: "{{prompt}}", neg: "{{negative}}" } },
+      "2": { class_type: "LoadImage", inputs: { image: "{{image}}" } },
+    },
+  };
+
+  it("提示词含引号/反斜杠/换行：按值替换，不再炸 JSON 解析", () => {
+    const prompt = 'a "quoted" scene \\ with\nnewlines 和中文';
+    const out = asRecord(substitutePlaceholders(template, { prompt, negative: 'neg "x"' }))!;
+    const node1 = asRecord(asRecord(out.nodes)?.["1"])!;
+    const inputs1 = asRecord(node1.inputs)!;
+    expect(inputs1.text).toBe(prompt);
+    expect(inputs1.neg).toBe('neg "x"');
+  });
+
+  it("缺省的 negative / image 替换为空串；非字符串字段原样保留", () => {
+    const out = asRecord(substitutePlaceholders(template, { prompt: "p" }))!;
+    const node1 = asRecord(asRecord(out.nodes)?.["1"])!;
+    const node2 = asRecord(asRecord(out.nodes)?.["2"])!;
+    const inputs1 = asRecord(node1.inputs)!;
+    const inputs2 = asRecord(node2.inputs)!;
+    expect(inputs1.neg).toBe("");
+    expect(inputs2.image).toBe("");
+    expect(node2.class_type).toBe("LoadImage");
+  });
+
+  it("字符串形态的模板：先解析再替换", () => {
+    const out = asRecord(substitutePlaceholders(JSON.stringify(template), { prompt: "p" }))!;
+    const node1 = asRecord(asRecord(out.nodes)?.["1"])!;
+    expect(asRecord(node1.inputs)!.text).toBe("p");
+  });
+
+  it("非法 JSON 字符串模板：给可读错误，不抛裸 SyntaxError", () => {
+    expect(() => substitutePlaceholders("{not-json", { prompt: "p" })).toThrow(
+      /工作流模板不是合法 JSON/,
+    );
   });
 });
