@@ -28,6 +28,7 @@ import {
   completeLLMTools,
   MAX_SSE_LINE_BUFFER_CHARS,
 } from "~/lib/llm/server";
+import { logger } from "~/lib/core/logger";
 import type { LLMConfig, LLMTool } from "~/lib/llm/types";
 import { isRecord } from "~/lib/is-record";
 import {
@@ -648,5 +649,22 @@ describe("completeLLMTools（tools 协议）", () => {
       content: "",
       toolCalls: [],
     });
+  });
+});
+
+describe("getLLMConfig 的配置行读取失败出口（#4419）", () => {
+  it("DB 读失败：留 warn 读数并回落 env 默认（故障可见，不冒充成功）", async () => {
+    const base = await getLLMConfig();
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    const spy = vi
+      .spyOn(llmConfigRepository, "findSingleton")
+      .mockRejectedValueOnce(new Error("db down"));
+
+    const cfg = await getLLMConfig();
+
+    expect(cfg).toEqual(base);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("配置行读取失败"));
+    spy.mockRestore();
+    warn.mockRestore();
   });
 });

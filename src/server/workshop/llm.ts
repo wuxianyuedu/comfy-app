@@ -4,6 +4,7 @@
 // 设置 UI 共享同一张表，复用 workshopDb 读取，不触碰 `~/env`）。
 import { decryptLlmKey } from "~/lib/llm/secrets";
 import { errorMessage } from "~/lib/error-message";
+import { logger } from "~/lib/core/logger";
 import type { LLMMessage } from "~/lib/llm/types";
 import { llmConfig } from "~/server/db/schema";
 import { workshopDb } from "./db";
@@ -52,8 +53,12 @@ export async function getWorkshopLLMConfig(): Promise<WorkshopLLMConfig> {
         cfg.maxTokens = row.maxTokens;
       }
     }
-  } catch {
-    // 表不存在 / 连接异常 → 使用 env 默认
+  } catch (error) {
+    // 表不存在 / 连接异常 → 使用 env 默认。回落保留，故障留读数（#4419 / 硬规则 4）：
+    // 此前静默吞掉，用户在设置页配好的模型无声失效且排障时无任何 DB 故障读数。
+    logger.warn(
+      `[workshop-llm] 配置行读取失败，本次请求按 env 默认配置执行：${errorMessage(error, "getWorkshopLLMConfig")}`,
+    );
   }
   return cfg;
 }

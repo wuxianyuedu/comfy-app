@@ -37,6 +37,11 @@ import {
   executionShapeOf,
 } from "./workflow-local-roots";
 
+/** 本地目录扫描的墙钟预算：主扫描与 checksum 重关联扫描同用一份（#4415）——
+ *  某些文件系统（网络驱动器 / WSL 路径 / 云盘占位符）会让 fs.promises 长时间
+ *  挂起而不抛错，没预算的请求一直不返回、前端无限转圈。 */
+const SCAN_TIMEOUT_MS = 30_000;
+
 export const workflowListProcedures = {
   list: authedProcedure
     .input(
@@ -120,10 +125,9 @@ export const workflowListProcedures = {
       let localAllFiles: Array<LocalWorkflowFile> = [];
       if (localRoots.length > 0) {
         /* 递归扫描：ComfyUI 的 workflows/ 与桌面版 user/default/workflows 都会分子目录（default/、image/…），
-         * 只扫一层会把它们全漏掉而界面只显示「还没有工作流」。加整体超时：某些文件系统（网络驱动器 /
-         * WSL 路径 / 云盘占位符）会让 `fs.promises` 长时间挂起而不抛错，请求一直不返回、前端无限转圈；
-         * 超时抛 `TimeoutError`，由 tRPC 转成可展示错误，用户至少能看到原因并重试。 */
-        const SCAN_TIMEOUT_MS = 30_000;
+         * 只扫一层会把它们全漏掉而界面只显示「还没有工作流」。整体超时见模块顶的
+         * SCAN_TIMEOUT_MS：超时抛 `TimeoutError`，由 tRPC 转成可展示错误，用户至少
+         * 能看到原因并重试。 */
         const { roots, allFiles } = await withTimeout(
           scanLocalWorkflowRoots(localRoots, { recursive: true }),
           SCAN_TIMEOUT_MS,
@@ -156,7 +160,13 @@ export const workflowListProcedures = {
       // ── 按内容寻址重新关联（本地文件被改名的情况） ──
       const renamedFromTo = new Map<string, string>();
       if (localAllFiles.length > 0) {
-        const checksumEntries = await scanLocalWorkflowChecksums(localRoots);
+        /* 与主扫描同口径：递归 + 整体超时（#4415——此前不递归，子目录改名文件
+         * 永远无法重连；且这一趟没有预算，网络盘挂起会让列表请求一直不返回）。 */
+        const checksumEntries = await withTimeout(
+          scanLocalWorkflowChecksums(localRoots, { recursive: true }),
+          SCAN_TIMEOUT_MS,
+          { label: "扫描本地工作流校验和" },
+        );
         const checksumIndex = new Map<string, { absPath: string; mtimeMs: number }>();
         for (const e of checksumEntries) {
           if (!e.checksum) {
