@@ -208,6 +208,15 @@ export type CanvasNodeType =
   | Node<CanvasNodeData, "canvasNode">
   | Node<CanvasNodeData, "workflowArdot">;
 
+/** 类型守卫：React Flow 的泛型 Node → 本画布节点类型。
+ *
+ *  项目画布只创建 `canvasNode` / `workflowArdot` 两种节点，守卫在实践中是
+ *  恒等过滤；非受控画布（#4541）起，从 React Flow store 回读的节点经它收回
+ *  `CanvasNodeType`（替代被门禁禁止的收窄字面断言）。 */
+export function isCanvasNodeType(node: Node): node is CanvasNodeType {
+  return node.type === "canvasNode" || node.type === "workflowArdot";
+}
+
 /** 类型守卫：是否是带 CanvasNodeData 的逻辑节点（排除 workflowArdot 纯视觉节点）。 */
 export function isCanvasNode(
   node: CanvasNodeType,

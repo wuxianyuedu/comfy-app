@@ -12,7 +12,7 @@
  *  `materializeProductionShots` 与它的两个收窄助手（`isShot` / `shotIdOfNode`）随
  *  编排一起搬进来：它们只服务这条水合链（原文件里无第二个消费方）。 */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Edge } from "@xyflow/react";
 import { errorText } from "~/lib/error-message";
 import { isPlainRecord } from "~/lib/is-record";
@@ -132,21 +132,18 @@ export function useCanvasHydration(deps: UseCanvasHydrationDeps): boolean {
   } = deps;
   const [hydrating, setHydrating] = useState(true);
   const toast = useToast();
-  /* 仅首挂载跑一次的闩锁（与抽出前的 loadedRef 同语义）：StrictMode 双执行时
-   * 第二轮直接退场，不重放整段水合。 */
-  const loadedRef = useRef(false);
 
   useEffect(() => {
-    if (loadedRef.current) {
-      return;
-    }
-    loadedRef.current = true;
-    /* 卸载守卫 + 失败收口（#4235）：水合中途任何一步抛错，原先的 `.catch(() => {})`
-     * 把错误吞掉——`setHydrating(false)` 永不执行，画布永久卡「加载中」且无任何
-     * 出口。这里改成：全部 setState 收进 stale 守卫（卸载后不落地），失败时复位
-     * loading + toast 留一条可行动的出口（§08 8.7 / §10.1），console 进 LogProvider
-     * 面板留痕。 */
+    /* StrictMode 双执行说明（#4541 取证）：dev 下 effect 会挂载即跑两轮 ——
+     * 第一轮的守卫被清理作废、第二轮重新起守卫。此前的 `loadedRef` 闩锁让
+     * 第二轮**直接退场**，而第一轮的写入又被清理作废 ⇒ `setHydrating(false)`
+     * 永不落地，项目画布在 dev 下永久卡「加载中」。水合本身是幂等读
+     * （localStorage + 服务端对账 + production 拉取），重放一轮只多两次
+     * dev-only 请求，换来两轮里**必有一轮活守卫**能把结果提交进界面。 */
     const guard = beginStaleRun();
+    /* 卸载守卫 + 失败收口（#4235）：水合中途任何一步抛错都不许被吞——
+     * 全部 setState 收进 stale 守卫（卸载后不落地），失败时复位 loading +
+     * toast 留一条可行动的出口（§08 8.7 / §10.1），console 进 LogProvider 留痕。 */
     void (async () => {
       try {
         // 在读取当前项目**之前**先把服务端项目对账进 localStorage，

@@ -27,6 +27,9 @@ vi.mock("~/lib/project-canvas/canvas-store", () => ({
   reapEmptyProject: vi.fn(),
 }));
 
+import { createElement, type ReactNode } from "react";
+import { ReactFlowProvider } from "@xyflow/react";
+
 import { recordSyncFailure } from "~/lib/project-canvas/sync-notice";
 import {
   clearActiveIfDraft,
@@ -35,11 +38,16 @@ import {
 } from "~/lib/project-canvas/canvas-store";
 import { useProjectPersistence } from "./use-project-persistence";
 
+/* 非受控画布（#4541）起，hook 内部经 useReactFlow / useStoreApi 读画布事实源，
+ * 必须住在 ReactFlowProvider 里。 */
+function FlowWrapper({ children }: { children: ReactNode }) {
+  /* 本文件是 .ts（非 .tsx），用 createElement 而不是 JSX。 */
+  return createElement(ReactFlowProvider, null, children);
+}
+
 function args() {
   return {
     projectId: "proj_toast",
-    nodes: [],
-    edges: [],
     projectName: "灵感板",
     loaded: true,
   };
@@ -79,7 +87,9 @@ describe("镜像被拒的提示", () => {
     /* 本仓库没有配 RTL 的自动 cleanup（`vitest.config.ts` 里没有），所以每个用例
      * 都要自己 `unmount()` —— 否则上一个用例的监听器还挂在 `window` 上，
      * 下一条拒收会被弹三次，而表现完全是「去重坏了」的样子。 */
-    const { unmount } = renderHook(() => useProjectPersistence(args()));
+    const { unmount } = renderHook(() => useProjectPersistence(args()), {
+      wrapper: FlowWrapper,
+    });
 
     const calls = errorCallsMentioning("甲板");
     expect(calls).toHaveLength(1);
@@ -97,7 +107,9 @@ describe("镜像被拒的提示", () => {
   });
 
   it("挂载之后新出现的拒收靠广播提示，同一条原因不重复刷屏", () => {
-    const { rerender, unmount } = renderHook(() => useProjectPersistence(args()));
+    const { rerender, unmount } = renderHook(() => useProjectPersistence(args()), {
+      wrapper: FlowWrapper,
+    });
     expect(errorCallsMentioning("乙板")).toHaveLength(0);
 
     refusal("proj_toast_b", "乙板", "该项目 id 已属于其他用户");
@@ -113,7 +125,9 @@ describe("镜像被拒的提示", () => {
   });
 
   it("说法变了要再说一次（同一条画布换了另一种拒收原因）", () => {
-    const { rerender, unmount } = renderHook(() => useProjectPersistence(args()));
+    const { rerender, unmount } = renderHook(() => useProjectPersistence(args()), {
+      wrapper: FlowWrapper,
+    });
     refusal("proj_toast_c", "丙板", "该项目 id 已属于其他用户");
     rerender();
     expect(errorCallsMentioning("丙板")).toHaveLength(1);
@@ -151,14 +165,14 @@ describe("空草稿回收：先问能不能收，再决定清不清 active", () 
   });
 
   function flushNow(projectId: string) {
-    const { result, unmount } = renderHook(() =>
-      useProjectPersistence({
-        projectId,
-        nodes: [],
-        edges: [],
-        projectName: "未命名",
-        loaded: true,
-      }),
+    const { result, unmount } = renderHook(
+      () =>
+        useProjectPersistence({
+          projectId,
+          projectName: "未命名",
+          loaded: true,
+        }),
+      { wrapper: FlowWrapper },
     );
     /* unmount 的清理里会立刻 flush 一次（防抖还没到点也要落盘）。 */
     unmount();
