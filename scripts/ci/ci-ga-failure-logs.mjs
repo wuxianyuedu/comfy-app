@@ -51,6 +51,7 @@ import {
   STAGE_WINDOW_MAX_BYTES,
 } from "./ci-github-verdict-logs.mjs";
 import { requestJson } from "./ci-github-verdict-request.mjs";
+import { assetLink } from "./ci-cnb-attachment.mjs";
 import { PULL_BODY_LIMIT } from "../ship/ship-pull-body.mjs";
 
 /** 正文里给日志读数的字节预算：平台硬上限的一半，剩下的留给症状 / 根因 / 出口。 */
@@ -173,10 +174,12 @@ export function failureLines(text, budget = WINDOW_BUDGET + ERROR_BUDGET) {
 /**
  * 把一次日志取数渲染成正文里的两节：**失败行** + **完整日志**。
  *
- * 三态必须分得开（用例逐形钉住）：
+ * 四态必须分得开（用例逐形钉住）：
  *   · `ok: false` ⇒ 取不到（带原因），绝不写成「日志里没有失败行」；
- *   · `ok: true` 但正文装不下 ⇒ 贴窗口 + 下载端点 + 可粘贴命令，明示截了多少；
- *   · `ok: true` 且装得下 ⇒ 窗口 + 整份完整日志，读者不用跳 GA 页面。
+ *   · `ok: true` 且给了 `attachment` ⇒ 贴窗口 + 附件链接：完整日志挂在 CNB 单子上
+ *     直接下载（ISSUE #4408），不内联、也不给 GitHub 下载端点；
+ *   · `ok: true` 但正文装不下且没有附件 ⇒ 贴窗口 + 下载端点 + 可粘贴命令，明示截了多少；
+ *   · `ok: true` 且装得下且没有附件 ⇒ 窗口 + 整份完整日志，读者不用跳 GA 页面。
  *
  * 脱敏是硬规则 17 的那一跳：`collectFailedJobLogs` 抹过一次，正文这一层再抹一次
  * （调用方可能从别的来源递正文进来），不把凭据带进单子。
@@ -189,9 +192,14 @@ export function failureLines(text, budget = WINDOW_BUDGET + ERROR_BUDGET) {
  *   runId: string,
  *   text: string,
  * }} reading 取数读数
+ * @param {{fileName: string, assetPath: string} | null} [attachment]
+ *   已传成的 CNB 附件（`uploadCnbTextFile` 的成功回执）；给空 ⇒ 走原来的两态。
  * @returns {string} Markdown 正文段
  */
-export function renderLogReadout({ ghRepo, jobs, ok, reason = "", runId, text }) {
+export function renderLogReadout(
+  { ghRepo, jobs, ok, reason = "", runId, text },
+  attachment = null,
+) {
   if (!ok) {
     return [
       "## 失败日志（平台原样摘录）",
@@ -217,8 +225,9 @@ export function renderLogReadout({ ghRepo, jobs, ok, reason = "", runId, text })
   const shaped = clampLongLines(text);
   const clean = redactSecrets(shaped, "");
   const bytes = Buffer.byteLength(clean, "utf8");
-  /** 完整日志自身装得下，且给红色窗口留得出余量，才整份内联。 */
-  const fit = bytes + 2 * 1024 <= LOG_BODY_BUDGET;
+  /** 完整日志自身装得下，且给红色窗口留得出余量，才整份内联。
+   * 有附件时不内联——附件本身就是完整日志，正文只留红色窗口与下载入口。 */
+  const fit = attachment === null && bytes + 2 * 1024 <= LOG_BODY_BUDGET;
   /** @param {number} redBudget 红色那一节可用的字节 @param {boolean} inline 是否内联完整日志 @returns {string} 整段读数 */
   const build = (redBudget, inline) => {
     const win = failureLines(clean, redBudget);
@@ -254,24 +263,33 @@ export function renderLogReadout({ ghRepo, jobs, ok, reason = "", runId, text })
     ];
     const tail = inline
       ? ["### 完整日志（装得下，整份贴在这里）", "", "```text", clean, "```"]
-      : [
-          "### 完整日志（超出正文预算，按窗口 + 下载端点）",
-          "",
-          `窗口外还有内容：完整日志 ${bytes} 字节，正文预算 ${String(LOG_BODY_BUDGET)} 字节。`,
-          "逐 job 的下载端点（需 `actions: read`）：",
-          "",
-          ...failed.map((j) =>
-            j.id === undefined || j.id === null
-              ? `- 「${String(j.name ?? "(未命名 job)")}」没有 job id ⇒ 给不出端点`
-              : `- \`${jobLogUrl(ghRepo, String(j.id))}\``,
-          ),
-          "",
-          "可粘贴命令：",
-          "",
-          "```bash",
-          `gh run view ${runId} --repo ${ghRepo} --log-failed`,
-          "```",
-        ];
+      : attachment === null
+        ? [
+            "### 完整日志（超出正文预算，按窗口 + 下载端点）",
+            "",
+            `窗口外还有内容：完整日志 ${bytes} 字节，正文预算 ${String(LOG_BODY_BUDGET)} 字节。`,
+            "逐 job 的下载端点（需 `actions: read`）：",
+            "",
+            ...failed.map((j) =>
+              j.id === undefined || j.id === null
+                ? `- 「${String(j.name ?? "(未命名 job)")}」没有 job id ⇒ 给不出端点`
+                : `- \`${jobLogUrl(ghRepo, String(j.id))}\``,
+            ),
+            "",
+            "可粘贴命令：",
+            "",
+            "```bash",
+            `gh run view ${runId} --repo ${ghRepo} --log-failed`,
+            "```",
+          ]
+        : [
+            "### 完整日志（已作为附件挂在本单，CNB 站内直接下载）",
+            "",
+            `- ${assetLink(attachment.fileName, attachment.assetPath)}`,
+            "",
+            "附件随本单发布后即可下载——**不需要出站 GitHub，也不需要 `gh`**；",
+            "正文里的红色窗口不变，完整正文以附件为准。",
+          ];
     return [...head, ...errors, ...windowLines, ...tail].join("\n");
   };
   /* 红色那一节按预算逐次收紧，直到整段读数落进 LOG_BODY_BUDGET：静默超界会让
@@ -333,7 +351,9 @@ export function failedJobsFromJson(json) {
  *   `jobsJson` 是调用方已经取到的 jobs 应答（立案那一跳复用它认红格）；
  *   缺省时本模块自己问一次，供独立入口 `ci-ga-failure-logs.mjs` 用。
  * @returns {Promise<{ghRepo:string, jobs:Array<{conclusion:string,id?:number|string,name?:string}>,
- *   ok:boolean, reason?:string, runId:string, text:string}>}
+ *   ok:boolean, reason?:string, runId:string, text:string, rawText?:string}>}
+ *   `text` 是做过单行形状归一的正文（渲染进正文用）；`rawText` 是同一份但**不做**单行
+ *   归一（两者都已在取数层脱敏）——附件上传用它，完整日志不丢「超长单行被截」的那部分。
  */
 export async function collectFailureLogReading(io) {
   const log =
@@ -373,8 +393,15 @@ export async function collectFailureLogReading(io) {
     };
   }
   /* 同一道形状归一也放在取数出口：正文可能从别的来源递进来（手工立案 / 用例），
-   * 渲染层再抹一次才不依赖调用方记得这件事。 */
-  return { ...ctx, jobs: listing.jobs, ok: true, text: clampLongLines(collected.text) };
+   * 渲染层再抹一次才不依赖调用方记得这件事。`rawText` 保留未归一的同一份（脱敏在
+   * `collectFailedJobLogs` 里已做）——附件要的是完整正文，长行不在这里截。 */
+  return {
+    ...ctx,
+    jobs: listing.jobs,
+    ok: true,
+    rawText: collected.text,
+    text: clampLongLines(collected.text),
+  };
 }
 
 /** 入口：把这一跑的失败日志读数打到 stdout（供本地复核 / 手工立案粘贴）。

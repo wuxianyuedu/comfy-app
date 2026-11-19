@@ -109,6 +109,11 @@ import { conclusionFromJobResults, verdictFromConclusion } from "./ci-ga-verdict
 import { gzipSync } from "node:zlib";
 import { jobLogUrl, redactSecrets, runJobsUrl } from "./ci-github-verdict-logs.mjs";
 import { requestJson, requestText } from "./ci-github-verdict-request.mjs";
+import { assetLink, cnbRequest, safeFileName, uploadCnbTextFile } from "./ci-cnb-attachment.mjs";
+
+/* `cnbRequest` 的唯一实现收在 `ci-cnb-attachment.mjs`；这里原样再导出，
+ * 让 `ci-ga-desktop-relay.mjs` 的既有 import 逐字不变（§12.18：一份实现，多个出口）。 */
+export { cnbRequest };
 
 /** 本地按 marker 认这条评论；版本号留着，将来换格式不会认错上一代。 */
 export const RELAY_MARKER = "GA_LOG_RELAY_V1";
@@ -132,9 +137,6 @@ export function relayScopeFromEnv(env) {
     ? RELAY_SCOPE.ALL
     : RELAY_SCOPE.FAILED;
 }
-
-/** 平台附件文件名里只许这些字符（sha 与 run id 都是数字/十六进制，够用）。 */
-const SAFE_NAME = /[^0-9A-Za-z._-]/gu;
 
 /** GA 侧判红结论词表（与 `ci-github-verdict-read.mjs` 同一族，不另抄一份）。
  * 导出给 `ci-ga-failure-logs.mjs` 认「哪些 job 要给下载端点」用 —— 两处同一个集合，
@@ -233,14 +235,6 @@ export function renderVerdictReadout(jobResults) {
   ].join("\n");
 }
 
-/** 附件链只拼一次，评论与 PR 描述镜像共用（§12.18）。
- * @param {{fileName:string, assetPath:string}} c
- * @returns {string} Markdown 附件链
- */
-function relayAssetLink(c) {
-  return `[${c.fileName}](/-/files/${c.assetPath})`;
-}
-
 /** 身份读数那一行（marker），评论与镜像共用同一形状。
  * @param {{pr:string, runId:string, sha:string, jobs:number, bytes:number, scope?:string}} c
  * @returns {string} 一行 HTML 注释 marker
@@ -279,7 +273,7 @@ export function renderRelayDescriptionBlock(c) {
     "",
     what,
     "",
-    `- ${relayAssetLink(c)}`,
+    `- ${assetLink(c.fileName, c.assetPath)}`,
     "",
     `本地取回：\`pnpm ship --gh-logs pr:${c.pr}\`（评论列表是权威读源；PR 本体这份是最新镜像）。`,
     "",
@@ -342,7 +336,7 @@ export function relayCommentBody(c) {
     ...(readout ? ["", readout] : []),
     `本地取回：\`pnpm ship --gh-logs pr:${c.pr}\`（优先读本评论的附件，无需出站 github.com）。`,
     "",
-    relayAssetLink(c),
+    assetLink(c.fileName, c.assetPath),
   ].join("\n");
 }
 
@@ -455,50 +449,6 @@ export async function collectFailedJobLogs(io) {
 }
 
 /**
- * 发一次 CNB 调用（写一律不重试：一次重发就可能多一条评论）。
- *
- * @param {{ctx:{endpoint:string,repo:string,token:string}, fetchImpl:typeof fetch}} io
- * @param {"POST"|"PUT"|"PATCH"|"GET"} method 方法
- * @param {string} target 完整 URL
- * @param {{json?:unknown, text?:string, contentType?:string}} [body] 请求体
- * @returns {Promise<{ok:true, status:number, json:unknown, text:string} | {ok:false, status:number, detail:string}>}
- */
-export async function cnbRequest(io, method, target, body = {}) {
-  try {
-    /** @type {Record<string,string>} */
-    const headers = { Accept: "application/json", Authorization: `Bearer ${io.ctx.token}` };
-    /** @type {string | undefined} */
-    let payload;
-    if (body.json !== undefined) {
-      headers["Content-Type"] = "application/json";
-      payload = JSON.stringify(body.json);
-    } else if (body.text !== undefined) {
-      headers["Content-Type"] = body.contentType ?? "text/plain";
-      headers["Content-Length"] = String(Buffer.byteLength(body.text, "utf8"));
-      payload = body.text;
-    }
-    const res = await io.fetchImpl(target, {
-      body: payload,
-      headers,
-      method,
-      signal: AbortSignal.timeout(30_000),
-    });
-    const text = await res.text();
-    let json = null;
-    try {
-      json = text === "" ? null : JSON.parse(text);
-    } catch {
-      /* 2xx 但不是 JSON：PUT 上传、GET 附件正文都走这一档。 */
-    }
-    return res.ok
-      ? { json, ok: true, status: res.status, text }
-      : { detail: text.slice(0, 300), ok: false, status: res.status };
-  } catch (error) {
-    return { detail: String(error), ok: false, status: -1 };
-  }
-}
-
-/**
  * 把同一份附件链镜像进 **PR 描述**（ISSUE #3454）：读-改-写，只替换自己那块。
  *
  * 这一跳与评论通道**解耦**：先发评论（附件「发布」这一跳，是 `GET /-/files/` 可读的
@@ -557,11 +507,9 @@ export async function relayLogs(io, collected) {
   const { ctx, fetchImpl, log } = io;
   const gz = io.gzipSync(Buffer.from(collected.text, "utf8"));
   const payload = Buffer.from(gz).toString("base64");
-  const fileName =
-    `ga-logs-${ctx.runId}-${ctx.sha.slice(0, 8) || "noid"}${RELAY_FILE_SUFFIX}`.replaceAll(
-      SAFE_NAME,
-      "_",
-    );
+  const fileName = safeFileName(
+    `ga-logs-${ctx.runId}-${ctx.sha.slice(0, 8) || "noid"}${RELAY_FILE_SUFFIX}`,
+  );
   const api = `${ctx.endpoint}/${ctx.repo}`;
   /* 同 run 去重（ISSUE #3858）：GA 收尾 job 被 re-run 时，同一 runId+sha 不再
    * 重复上传附件 / 重复发评论 —— 先扫 PR 评论里是否已有本 run 的 relay marker
@@ -589,34 +537,22 @@ export async function relayLogs(io, collected) {
       return CODE.OK;
     }
   }
-  const up = await cnbRequest({ ctx, fetchImpl }, "POST", `${api}/-/upload/files`, {
-    json: { name: fileName, size: Buffer.byteLength(payload, "utf8") },
+  const up = await uploadCnbTextFile({
+    endpoint: ctx.endpoint,
+    fetchImpl,
+    fileName,
+    repo: ctx.repo,
+    text: payload,
+    token: ctx.token,
   });
   if (!up.ok) {
-    log(`[ga-logs-relay] 上传链接取不到（HTTP ${String(up.status)}）⇒ 跳过（缺的只是日志）`);
-    return CODE.NO_FACT;
-  }
-  const data = isRecord(up.json) ? (isRecord(up.json.data) ? up.json.data : up.json) : null;
-  const uploadUrl = String(data?.upload_url ?? "");
-  const rawPath = String((isRecord(data?.assets) ? data.assets.path : "") ?? "");
-  const tail = /\/-\/files\/(?<path>.+)$/u.exec(rawPath);
-  const assetPath = tail?.groups?.path ?? rawPath.replace(/^\/+/u, "");
-  if (!uploadUrl || !assetPath) {
-    log("[ga-logs-relay] 上传应答缺 upload_url / assets.path ⇒ 跳过（缺的只是日志）");
-    return CODE.NO_FACT;
-  }
-  const put = await cnbRequest({ ctx, fetchImpl }, "PUT", uploadUrl, {
-    contentType: "text/plain",
-    text: payload,
-  });
-  if (!put.ok) {
-    log(`[ga-logs-relay] PUT 正文失败（HTTP ${String(put.status)}）⇒ 跳过（缺的只是日志）`);
+    log(`[ga-logs-relay] ${up.detail} ⇒ 跳过（缺的只是日志）`);
     return CODE.NO_FACT;
   }
   const meta = {
-    assetPath,
+    assetPath: up.assetPath,
     bytes: gz.length,
-    fileName,
+    fileName: up.fileName,
     jobs: collected.jobs,
     pr: ctx.pr,
     runId: ctx.runId,
