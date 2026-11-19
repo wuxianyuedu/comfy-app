@@ -223,6 +223,7 @@ describe("workflow 写入口的 keyed mutex（#4460）", () => {
       events.push("write:start");
       if (!delayed) {
         delayed = true;
+        // sleep-ok: mock 的内部延迟，不是赌时间——把第一笔写的临界区人为拉宽 50ms，制造「不持锁必输」的竞态窗口；断言的是其后的事件顺序，expect.poll 等不了桩内部的计时器。
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
       /* SAFETY: 透传同一签名（id, patch, tx?） */
