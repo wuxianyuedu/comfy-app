@@ -132,7 +132,6 @@ export function ReferenceLoaderBindingSection({
           <span className="text-muted-foreground text-3xs shrink-0">参考图上限</span>
           <SelectMenu
             aria-label="参考图上限"
-            autoFitFromOptions={false}
             className="text-3xs h-7"
             labels={CAP_LABELS}
             onChange={(next) => {
