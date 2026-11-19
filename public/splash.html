@@ -136,11 +136,12 @@
       transition: width 0.35s ease;
       box-shadow: 0 0 12px var(--violet-dim);
     }
-    /* 启动耗时分解（ISSUE #4185 立项 / #4327 改逐行）：每行一个阶段
-       「阶段名 + 比例条 + 秒数 · 占比」。此前的 12 色密彩条颜色不承载语义、
-       段又密得认不出谁是谁，换成逐行可读形态（与应用内日志面板的「启动耗时
-       分解」卡同一取向）。数据来自 launch-status.json 的 timings（编排器随
-       每次进度快照写入），启动过程中就边等边刷新。 */
+    /* 启动耗时分解（ISSUE #4185 立项 / #4327 改逐行 / #4504 改全量时间线）：
+       每行一个阶段「状态 + 阶段名 + 时间线条 + 秒数 · 占比」。此前的 12 色密
+       彩条颜色不承载语义、段又密得认不出谁是谁，#4327 换成逐行可读形态；
+       #4504 起不再按耗时降序只点名前 3 行——全部阶段按时间线序铺开，先做了
+       什么、正在做什么、还剩什么一眼可读。数据来自 launch-status.json 的
+       timings（编排器随每次进度快照写入），启动过程中就边等边刷新。 */
     .timings {
       margin: 0 0 6px;
       flex-shrink: 0;
@@ -181,6 +182,21 @@
       min-width: 2px;
       background: linear-gradient(90deg, var(--violet), #9F7CFF);
       border-radius: 999px;
+    }
+    /* #4504：条改甘特式——左缘按该段起点占合计的比例、宽度按该段时长占合计
+       的比例（margin-left / width 由脚本按读数算），先后顺序与并行段在轨道上
+       直接可读；min-width 保证极短段仍留一线痕迹。 */
+    .timing-state {
+      flex: 0 0 auto;
+      width: 14px;
+      text-align: center;
+      color: var(--muted);
+    }
+    .timing-state .spinner {
+      width: 8px;
+      height: 8px;
+      border-width: 1px;
+      margin-right: 0;
     }
     .timing-val {
       flex: 0 0 auto;
@@ -495,10 +511,10 @@
     // 三条都不可用时消息区给出可见提示（不再「点了没反应」）。
     // 紧凑档尺寸：**只**在壳命令 set_splash_compact 调不动（壳过旧 / 纯 Web）
     // 时的兜底值，与壳侧 SPLASH_WINDOW_SIZE 同值。正常路径下尺寸一律由壳算，
-    // 页面不参与（见 applyCompact）。高度按「逐行耗时分解（最多 3 行 + 其余
-    // 段 1 行）铺开后的内容高度」给（#4327：耗时分解读得清，窗口跟着长高），
-    // #4431 起另含「服务端动态」一行。
-    const COMPACT_SIZE = { width: 744, height: 288 };
+    // 页面不参与（见 applyCompact）。高度按「逐行耗时时间线（最多 15 段 + 收拢
+    // 行）铺开后的内容高度」给（#4327：耗时分解读得清，窗口跟着长高；#4431
+    // 起另含「服务端动态」一行；#4504 起全量时间线不再只点名 3 行，上界到 512）。
+    const COMPACT_SIZE = { width: 744, height: 512 };
     const subtitleEl = $('subtitle');
 
     /** 正在执行的窗口动作（'' 表示空闲）——onclick 与监听两条路的去重。 */
@@ -771,10 +787,10 @@
     let updateFromShellFallback = false;
 
     /** 阶段段配色（循环取用）：段数 ≤12，颜色在深底上相互可分。 */
-    /** 逐行耗时分解的行数与点名门槛：窗口紧凑放不下全部阶段，按耗时降序
-     *  只点名 ≥0.1s 的前 3 行（与应用内日志面板同一阅读形态），其余段收进
-     *  末行「其余 N 段共 X s」。0.1s 这条线沿用旧文字行的口径。 */
-    const TIMING_ROW_LIMIT = 3;
+    /** 逐行耗时时间线的点名门槛（#4504）：全部阶段按时间线序逐行铺开，不再设
+     *  「按耗时降序前 3 行」的上限；只有**已完成且不足 0.1s**的微小段收进末行
+     *  「其余 N 段共 X s」（噪声控制）——进行中的段永远单独成行。0.1s 这条线
+     *  沿用旧文字行的口径。 */
     const TIMING_ROW_MIN_MS = 100;
 
     function fmtSec(ms) {
@@ -787,13 +803,15 @@
       return (Math.round((ms / totalMs) * 1000) / 10).toFixed(1) + '%';
     }
 
-    /** 画启动耗时分解（ISSUE #4185 立项 / #4327 改逐行）：timings 为空 / 缺席时
-     *  整块隐藏。12 色密彩条颜色不承载语义、段密得认不出谁是谁，换成逐行
-     *  「阶段名 + 比例条 + 秒数 · 占比」：按耗时降序取 ≥0.1s 的前 3 行，条宽
-     *  按「该段 / 最长段」画（最长的一段占满轨道；最长段必在行内，口径与
-     *  应用内卡一致），其余段收进末行「其余 N 段共 X s」——0.0s 的噪声段不再
-     *  各占一条细线，也占不掉行数。合计取墙钟（最后一刻 − 最早一刻），并行段
-     *  不求和；endMs 为 null 的段是进行中段（durationMs 已是截至当下的耗时），
+    /** 画启动耗时时间线（ISSUE #4185 立项 / #4327 改逐行 / #4504 改全量时间线）：
+     *  timings 为空 / 缺席时整块隐藏。全部阶段按**开始顺序**逐行铺开——先做了
+     *  什么、正在做什么、还剩什么一眼可读，不再按耗时降序只点名前 3 行（那两段
+     *  最早的预检长期占着画面，正在发生的事反而看不见）。行首是状态：已完成 ✓、
+     *  进行中转圈；条改甘特式，左缘 = 该段起点占合计的比例、宽 = 该段时长占合计
+     *  的比例——先后顺序与并行段（后台建表 / 执行器宿主 vs 等待就绪）在轨道上
+     *  直接可读。已完成且不足 0.1s 的微小段收进末行「其余 N 段共 X s」（0.0s 的
+     *  噪声段不各占一行）；进行中的段永不收拢。合计取墙钟（最后一刻 − 最早一刻），
+     *  并行段不求和；endMs 为 null 的段是进行中段（durationMs 已是截至当下的耗时），
      *  行尾标注「（进行中）」。 */
     function renderTimings(timings) {
       const wrap = $('timings');
@@ -804,25 +822,35 @@
         rows.innerHTML = '';
         return;
       }
+      const isRunning = (t) => t.endMs === null || t.endMs === undefined;
       const lastEnd = timings.reduce(
-        (acc, t) => Math.max(acc, (t.endMs === null || t.endMs === undefined) ? t.startMs + t.durationMs : t.endMs),
+        (acc, t) => Math.max(acc, isRunning(t) ? t.startMs + t.durationMs : t.endMs),
         0,
       );
       const firstStart = timings.reduce((acc, t) => Math.min(acc, t.startMs || 0), Infinity);
       const totalMs = Math.max(0, lastEnd - firstStart);
-      const ordered = [...timings].sort(
-        (a, b) => (Number(b.durationMs) || 0) - (Number(a.durationMs) || 0) || (a.startMs || 0) - (b.startMs || 0),
+      // 时间线序：按起点升序；同起点保持编排器的记录顺序（sort 稳定）。
+      const ordered = [...timings].sort((a, b) => (a.startMs || 0) - (b.startMs || 0));
+      const shown = ordered.filter(
+        (t) => isRunning(t) || (Number(t.durationMs) || 0) >= TIMING_ROW_MIN_MS,
       );
-      const shown = ordered
-        .filter((t) => (Number(t.durationMs) || 0) >= TIMING_ROW_MIN_MS)
-        .slice(0, TIMING_ROW_LIMIT);
-      const shownKeys = new Set(shown);
-      const rest = ordered.filter((t) => !shownKeys.has(t));
-      const maxMs = Math.max(...ordered.map((t) => Number(t.durationMs) || 0), 1);
+      const shownSet = new Set(shown);
+      const rest = ordered.filter((t) => !shownSet.has(t));
+      const scaleMs = Math.max(totalMs, 1);
       rows.innerHTML = '';
       shown.forEach((t) => {
         const row = document.createElement('div');
         row.className = 'timing-row';
+        const running = isRunning(t);
+        const state = document.createElement('span');
+        state.className = 'timing-state';
+        if (running) {
+          const spin = document.createElement('span');
+          spin.className = 'spinner';
+          state.appendChild(spin);
+        } else {
+          state.textContent = '✓';
+        }
         const label = document.createElement('span');
         label.className = 'timing-label';
         label.textContent = t.label;
@@ -830,15 +858,16 @@
         track.className = 'timing-track';
         const fill = document.createElement('span');
         fill.className = 'timing-fill';
-        fill.style.width = (((Number(t.durationMs) || 0) / maxMs) * 100).toFixed(2) + '%';
+        const durationMs = Number(t.durationMs) || 0;
+        fill.style.marginLeft = `${(((t.startMs || 0) / scaleMs) * 100).toFixed(2)}%`;
+        fill.style.width = `${Math.max((durationMs / scaleMs) * 100, 0.5).toFixed(2)}%`;
         track.appendChild(fill);
         const val = document.createElement('span');
         val.className = 'timing-val';
-        const running = t.endMs === null || t.endMs === undefined;
         val.textContent =
-          `${fmtSec(t.durationMs)} · ${fmtPct(t.durationMs, totalMs)}${running ? '（进行中）' : ''}`;
-        row.title = `${t.label} ${fmtSec(t.durationMs)}${running ? '（进行中）' : ''}`;
-        row.append(label, track, val);
+          `${fmtSec(durationMs)} · ${fmtPct(durationMs, totalMs)}${running ? '（进行中）' : ''}`;
+        row.title = `${t.label} ${fmtSec(durationMs)}${running ? '（进行中）' : ''}`;
+        row.append(state, label, track, val);
         rows.appendChild(row);
       });
       const restLine = document.createElement('div');
