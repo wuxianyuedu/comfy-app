@@ -86,3 +86,38 @@ describe("AppContextMenu：应用内右键菜单（ISSUE #4132）", () => {
     expect(menuEl()).toBeNull();
   });
 });
+
+describe("AppContextMenu 菜单项可点（#4417）", () => {
+  it("菜单项上的 pointerdown 不卸载菜单：随后的 click 照常执行动作", () => {
+    const reload = vi.fn();
+    vi.stubGlobal("location", { reload });
+    render(<AppContextMenu />);
+    act(() => {
+      contextmenuAt(10, 10);
+    });
+    const item = screen.getByRole("menuitem", { name: "刷新页面" });
+    act(() => {
+      /* 真实浏览器事件序：菜单项上先 pointerdown、后 click。修缺陷前
+       * pointerdown 把菜单卸了，click 派发时按钮已不在 DOM——动作永远不执行。 */
+      item.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    });
+    expect(menuEl()).not.toBeNull();
+    act(() => {
+      item.click();
+    });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(menuEl()).toBeNull();
+  });
+
+  it("菜单之外的 pointerdown 仍收起菜单（关闭纪律不变）", () => {
+    render(<AppContextMenu />);
+    act(() => {
+      contextmenuAt(10, 10);
+    });
+    expect(menuEl()).not.toBeNull();
+    act(() => {
+      window.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    });
+    expect(menuEl()).toBeNull();
+  });
+});
