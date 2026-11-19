@@ -44,6 +44,8 @@ export type WorkflowLibraryController = {
   deleting: boolean;
   /* 弹层开关 */
   editingId: string | null;
+  /** 本地工作流一键转在线（ISSUE #4372）：解除磁盘跟踪，原文件变未载入。 */
+  handleConvertToOnline: (id: string, name: string) => Promise<void>;
   handleDeleteClick: (id: string, name: string) => void;
   handleDownload: (id: string, name: string) => Promise<void>;
   handleEdit: (id: string) => void;
@@ -54,6 +56,7 @@ export type WorkflowLibraryController = {
   handleUse: (id: string, meta?: { name: string; taskType: string }) => void;
   importState: ReturnType<typeof useWorkflowImport>;
   isBundleBusy: (id: string) => boolean;
+  isConvertBusy: (id: string) => boolean;
   isResyncBusy: (id: string) => boolean;
   /* 动作 */
   load: () => void;
@@ -138,6 +141,7 @@ export function useWorkflowLibrary(
   const updateMut = useMutation(trpc.workflow.update.mutationOptions());
   const deleteMut = useMutation(trpc.workflow.delete.mutationOptions());
   const resyncMut = useMutation(trpc.workflow.resync.mutationOptions());
+  const convertMut = useMutation(trpc.workflow.convertToOnline.mutationOptions());
 
   const [workflows, setWorkflows] = useState<Array<WorkflowRow>>([]);
   const [localPending, setLocalPending] = useState<Array<PendingRow>>([]);
@@ -296,6 +300,7 @@ export function useWorkflowLibrary(
    * 两下读不出来）。出口的 `run` 一次给全「忙标记 + 判重入 + finally 清理」。 */
   const bundleAction = useItemAction();
   const resyncAction = useItemAction();
+  const convertAction = useItemAction();
   /* 只写不读：载入中的标志目前只由 `useWorkflowActions` 的 finally 清理，
    * 视图尚未渲染它（保持本次「只搬不改」）。保留是为了不丢掉这条状态通道。 */
   const [pendingLoading, setPendingLoading] = useState<Record<string, boolean>>({});
@@ -306,6 +311,7 @@ export function useWorkflowLibrary(
     setActionError,
     runBundle: bundleAction.run,
     runResync: resyncAction.run,
+    runConvert: convertAction.run,
     setPendingLoading,
     setWorkflows,
     load,
@@ -313,6 +319,7 @@ export function useWorkflowLibrary(
     deleteMut,
     resyncMut,
     createMut,
+    convertMut,
   });
 
   const importState = useWorkflowImport({ createMut, load });
@@ -411,6 +418,7 @@ export function useWorkflowLibrary(
     resyncBusy: resyncAction.busyId,
     isBundleBusy: bundleAction.isBusy,
     isResyncBusy: resyncAction.isBusy,
+    isConvertBusy: convertAction.isBusy,
     pendingLoading,
     actionError,
     loadError: listQ.error
@@ -428,6 +436,7 @@ export function useWorkflowLibrary(
     handleDeleteClick,
     handleDownload: actions.downloadJson,
     handleResync: actions.resyncWorkflow,
+    handleConvertToOnline: actions.handleConvertToOnline,
     handleLoadPending: actions.handleLoadPending,
     handleEdit,
     handleEditorClose,

@@ -4,7 +4,16 @@
 // 纯展示；「导入画布」与右上角按钮同款式。
 
 import { useState } from "react";
-import { Download, Edit3, FileJson, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
+import {
+  CloudUpload,
+  Download,
+  Edit3,
+  FileJson,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Upload,
+} from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
@@ -19,15 +28,20 @@ import type { MetaEditorController } from "../hooks/use-workflow-library-detail"
 import { zClass } from "~/lib/shell/overlay-z";
 
 type DetailHeaderProps = {
+  /** 「转为在线」进行中（本条工作流的转换请求在飞）。 */
+  busyConvert: boolean;
   busyDownload: boolean;
   busyResync: boolean;
   /** 「从 JSON 更新」进行中（仅在线工作流有该入口）。 */
   busyUpdateJson: boolean;
+  /** 仅本地工作流可转在线；在线 / 未载入占位行不渲染该按钮。 */
+  canConvert: boolean;
   canResync: boolean;
   isTechnical: boolean;
   /** 类型 / 模型编辑器（含多模式与模型标签），渲染在头部内。 */
   meta: MetaEditorController;
   missing: boolean;
+  onConvert: () => void;
   onDelete: () => void;
   onDownload: () => void;
   onEdit: () => void;
@@ -44,10 +58,12 @@ type DetailHeaderProps = {
 export function DetailHeader({
   workflow,
   usable,
+  canConvert,
   canResync,
   showUpdateJson,
   missing,
   isTechnical,
+  busyConvert,
   busyDownload,
   busyResync,
   busyUpdateJson,
@@ -57,6 +73,7 @@ export function DetailHeader({
   onDownload,
   onDelete,
   onOpenSource,
+  onConvert,
   onUpdateJson,
   onUse,
 }: DetailHeaderProps) {
@@ -213,6 +230,23 @@ export function DetailHeader({
               }
               label={busyResync ? "同步中" : "同步"}
               onClick={onResync}
+            />
+          )}
+          {/* 本地工作流一键转在线（ISSUE #4372）：解除磁盘跟踪，内容以库中当前
+              版本为准；磁盘原文件随之落入「未载入的本地工作流」区，可再次载入。 */}
+          {canConvert && (
+            <ActionButton
+              disabled={busyConvert}
+              icon={
+                busyConvert ? (
+                  <Spinner className="size-3.5" />
+                ) : (
+                  <CloudUpload className="size-3.5" />
+                )
+              }
+              label={busyConvert ? "转换中" : "转为在线"}
+              onClick={onConvert}
+              title="转为在线工作流：不再跟踪磁盘文件，原文件变为未载入状态"
             />
           )}
           <ActionButton
