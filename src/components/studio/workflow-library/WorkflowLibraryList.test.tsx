@@ -53,9 +53,10 @@ describe("WorkflowLibraryList 三态区分", () => {
   it("仍在加载：列表呈骨架行，不冒充「未找到匹配的工作流」（ISSUE #4073：转圈交给右侧详情区）", () => {
     renderList({ loading: true });
 
-    /* 加载态收成骨架行（aria 标签仍念「正在加载工作流」），不再用带转圈的
+    /* 加载态收成骨架行（aria 标签念「正在加载工作流列表」——与右栏详情骨架
+     * 的「正在加载工作流详情」可区分，ISSUE #4516），不再用带转圈的
      * 整块加载界面占住列表列。 */
-    expect(screen.getByLabelText("正在加载工作流")).toBeInTheDocument();
+    expect(screen.getByLabelText("正在加载工作流列表")).toBeInTheDocument();
     expect(screen.queryByText("未找到匹配的工作流")).toBeNull();
     expect(screen.queryByText("还没有工作流")).toBeNull();
   });

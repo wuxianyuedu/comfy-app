@@ -165,7 +165,7 @@ export function WorkflowLibrary({
                 形状与路由级加载态的右栏一致），不再整屏转圈。 */}
             {c.loading && c.workflows.length === 0 && c.pendingRows.length === 0 ? (
               <div
-                aria-label="正在加载工作流"
+                aria-label="正在加载工作流详情"
                 className="flex h-full flex-col gap-3 p-4"
                 role="status"
               >
