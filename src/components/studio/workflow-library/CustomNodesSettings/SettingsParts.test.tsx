@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactNode } from "react";
+import { createRef, type ReactNode } from "react";
 import {
   ManifestSummary,
+  ParseConsole,
   ParseProgressBanner,
   PortRow,
   ReportCards,
@@ -313,5 +314,31 @@ describe("ReportCards", () => {
     render(<ReportCards report={REPORT} />);
     expect(screen.getByText("最近解析结果")).toBeInTheDocument();
     expect(screen.getByText("3 个目录 · 12 个节点")).toBeInTheDocument();
+  });
+});
+
+/* 解析控制台的日志行（ISSUE #4470）：memo 行组件 + 稳定 id key，让流式追加时
+ * 已有行不重渲；error 行样式与自动滚动依赖的 data-log-row 标记必须保留。 */
+describe("ParseConsole 日志行", () => {
+  it("按 log.id 渲染每一行，error 行保留 data-log-row 标记", () => {
+    const logs = [
+      { id: 7, level: "info", msg: "第一行" },
+      { id: 8, level: "error", msg: "出错啦" },
+    ];
+    render(
+      <ParseConsole consoleRef={createRef()} logs={logs} logsRef={createRef()} parsing={false} />,
+    );
+    expect(screen.getByText("第一行")).toBeInTheDocument();
+    const errorRow = screen.getByText("出错啦");
+    expect(errorRow).toHaveAttribute("data-log-row");
+    expect(errorRow.className).toContain("text-destructive");
+    expect(document.querySelectorAll("[data-log-row]")).toHaveLength(2);
+  });
+
+  it("无日志且未在解析时给可行动提示", () => {
+    render(
+      <ParseConsole consoleRef={createRef()} logs={[]} logsRef={createRef()} parsing={false} />,
+    );
+    expect(screen.getByText(/点击「解析全部」/)).toBeInTheDocument();
   });
 });

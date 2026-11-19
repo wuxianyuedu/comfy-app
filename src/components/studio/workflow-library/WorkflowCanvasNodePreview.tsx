@@ -33,7 +33,8 @@ import { LibraryHostCard } from "./LibraryHostCard";
 import { WorkflowPreviewUsePanel } from "./WorkflowPreviewUsePanel";
 import { WorkflowPreviewRunFeedback } from "./WorkflowPreviewRunFeedback";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
-import { latestRunForWorkflow } from "~/lib/workflow/workflow-run-store";
+import { useCanvasSelection } from "./hooks/use-canvas-selection";
+import { useRunLogView } from "./hooks/use-run-log-view";
 
 type Props = {
   defaultMode?: string;
@@ -86,11 +87,13 @@ export function WorkflowCanvasNodePreview({
   /* 素材上传的可见出口：ComfyUI 未运行 / 正在启动 / 启动超时都落在这里。
    * 上传位自身没有错误区，只记 console 用户看不到任何原因（ISSUE #345）。 */
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
-  /* 选中的对外参数（点卡片或点它那条线）—— 选中后按 ⌫ 断开，或按卡片头 ↺ 恢复默认。 */
-  const [selectedParamId, setSelectedParamId] = useState<string | null>(null);
-  /* 右列选中的对外输出口 —— 与左列的选中互斥（同一时刻只有一处被选，否则
-   *  「按 ⌫ 断的是哪一根」说不清）。 */
-  const [selectedOutputId, setSelectedOutputId] = useState<string | null>(null);
+  /* 画布选中态（左列卡片 / 右列输出口，互斥；回调引用稳定，#4467）。 */
+  const {
+    selectOutput: handleSelectOutput,
+    selectParam: handleSelectParam,
+    selectedOutputId,
+    selectedParamId,
+  } = useCanvasSelection();
   /* 调试用的部分执行目标（comfy-cli v1.24.0 `--output-node-ids`）：勾选的输出
    *  节点（cli 展开后 id）。空 = 整图执行，与旧行为一致。 */
   const [debugOutputIds, setDebugOutputIds] = useState<Array<string>>([]);
@@ -183,13 +186,7 @@ export function WorkflowCanvasNodePreview({
 
   /* 本页签独立的「执行日志」入口：按钮带 canvas-node 来源过滤，弹窗同理，
    * 与「工坊封装」页签各自一处（ISSUE #611 旧形态：两个页签各写各的）。 */
-  const [logOpen, setLogOpen] = useState(false);
-  const [logTaskId, setLogTaskId] = useState<string | null>(null);
-  const latestLogTaskId = useMemo(
-    () => latestRunForWorkflow(workflowId, "canvas-node")?.taskId ?? null,
-    [workflowId],
-  );
-  const logViewTaskId = logTaskId ?? latestLogTaskId;
+  const logView = useRunLogView(workflowId, "canvas-node");
 
   const statusLabel = phase.kind === "running" ? `生成中 ${phase.pct}%` : STATUS_LABEL[phase.kind];
   const pct = phase.kind === "running" ? phase.pct : 0;
@@ -221,6 +218,8 @@ export function WorkflowCanvasNodePreview({
     mode: effectiveMode,
     onPatchParamMap: handlePatchParamMap,
   });
+  /* 重置回调只依赖这个稳定的方法引用（#4467：内联箭头会击穿画布层 memo）。 */
+  const { resetMany: resetParamWires } = wiring;
   /* 本地 overlay 已经并入 wiring 内部的生效 paramMap，但卡片列与连线要读的
    * 是同一份 —— 故把 overlay 之后的 paramMap 回传给派生。`reportParamMap`
    * 让 hook 把「生效的那一份」吐出来（见 useParamWiring 的 effectiveParamMap）。 */
@@ -266,6 +265,28 @@ export function WorkflowCanvasNodePreview({
     commitParamMap: wiring.commitParamMap,
   });
 
+  /* 契约条目表（#4467）：连线闸门与自动落点按它判 —— 与 paramCards /
+   * outputCards 一样是同源派生，收进 useMemo；否则宿主表单每敲一个字都
+   * 整表现算一遍（端口多的工作流输入时可感知卡顿）。 */
+  const paramEntries = useMemo(
+    () =>
+      buildParamEntries(workflowIO ?? null, undefined, {
+        mode: effectiveMode,
+        contractIds: contractEntries.map((item) => item.id),
+      }),
+    [workflowIO, effectiveMode, contractEntries],
+  );
+
+  /* 选中互斥与落点重置的回调收口（#4467）：内联箭头会让画布层的三个内容对象
+   * 每帧都是新引用 → Context value 每帧新建 → 三列节点虽 memo 也被击穿重渲。
+   * 依赖里的 wiring 方法与 setState 都是稳定引用。 */
+  const handleResetParam = useCallback(
+    (id: string) => {
+      resetParamWires(sizeGroupIds(id));
+    },
+    [resetParamWires],
+  );
+
   /** 提交到本机生成并等待落定（相位与 SSE 订阅在 use-generation-runner）。 */
   function run() {
     if (!canRun) {
@@ -303,10 +324,7 @@ export function WorkflowCanvasNodePreview({
           /* 闸门（`isValidConnection`）按它判类型 —— 必须与卡片列**同一份**
              契约（含作者自定义的口），否则自定义口的圆点拖到宿主行上会被判成
              「这一行不收这个口子」，而卡片列明明画着它。 */
-          entries={buildParamEntries(workflowIO ?? null, undefined, {
-            mode: effectiveMode,
-            contractIds: contractEntries.map((item) => item.id),
-          })}
+          entries={paramEntries}
           host={
             <LibraryHostCard
               actions={
@@ -369,21 +387,9 @@ export function WorkflowCanvasNodePreview({
               : undefined
           }
           onResetOutput={outputWiring.reset}
-          onResetParam={(id) => {
-            wiring.resetMany(sizeGroupIds(id));
-          }}
-          onSelectOutput={(id) => {
-            setSelectedOutputId(id);
-            if (id !== null) {
-              setSelectedParamId(null);
-            }
-          }}
-          onSelectParam={(id) => {
-            setSelectedParamId(id);
-            if (id !== null) {
-              setSelectedOutputId(null);
-            }
-          }}
+          onResetParam={handleResetParam}
+          onSelectOutput={handleSelectOutput}
+          onSelectParam={handleSelectParam}
           outputCards={outputCards}
           paramCards={paramCards}
           selectedEntryId={selectedParamId}
@@ -398,14 +404,12 @@ export function WorkflowCanvasNodePreview({
           debugOutputIds={debugOutputIds}
           effectiveMode={effectiveMode}
           effectiveModeLabel={effectiveModeLabel}
-          logViewTaskId={logViewTaskId}
+          logViewTaskId={logView.viewTaskId}
           missingLabels={missingLabels}
           modes={modes}
           onDebugOutputIdsChange={setDebugOutputIds}
           onModeChange={onModeChange}
-          onOpenLog={() => {
-            setLogOpen(true);
-          }}
+          onOpenLog={logView.openLog}
           onSeedModeChange={onSeedModeChange}
           onUploadNotice={setUploadNotice}
           onValuesChange={setValuesAndClearFailure}
@@ -437,13 +441,11 @@ export function WorkflowCanvasNodePreview({
         workflowName={workflowName}
       />
       <WorkflowRunLogModal
-        onClose={() => {
-          setLogOpen(false);
-        }}
-        onViewTaskIdChange={setLogTaskId}
-        open={logOpen}
+        onClose={logView.closeLog}
+        onViewTaskIdChange={logView.setViewTaskId}
+        open={logView.open}
         source="canvas-node"
-        viewTaskId={logViewTaskId}
+        viewTaskId={logView.viewTaskId}
         workflowId={workflowId}
       />
     </div>

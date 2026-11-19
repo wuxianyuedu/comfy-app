@@ -277,8 +277,14 @@ export function useWorkflowLibrary(
   );
 
   const pendingRows = useMemo(
-    () => filterPending(localPending, { source: sourceFilter, search }),
-    [localPending, sourceFilter, search],
+    () =>
+      filterPending(localPending, {
+        model: modelFilter,
+        search,
+        source: sourceFilter,
+        type: typeFilter,
+      }),
+    [localPending, modelFilter, search, sourceFilter, typeFilter],
   );
 
   const sourceCounts = useMemo(

@@ -28,6 +28,7 @@ import { onNextFrame } from "~/lib/next-frame";
 import { useExpansionSet, type ExpansionSet } from "~/components/ui/expansion-set";
 import type {
   DiscoveredSubpkg,
+  ParseLogEntry,
   ParseProgress,
   ParseReport,
   ParseStreamEvent,
@@ -68,7 +69,7 @@ export type CustomNodesSettingsController = {
   consoleRef: RefObject<HTMLDivElement | null>;
   discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
   loading: boolean;
-  logs: Array<{ level: string; msg: string }>;
+  logs: Array<ParseLogEntry>;
   logsRef: RefObject<HTMLDivElement | null>;
   manifestByNode: Record<string, ManifestNodeRaw>;
   /** 节点预览卡展开集合。 */
@@ -340,6 +341,119 @@ async function consumeSettingsStream(
   return { paths, summary, lastReport, byPath, discoveredByParent };
 }
 
+/** 解析 NDJSON 日志流的可中止消费器（§12.13；ISSUE #4470）。
+ *
+ *  此前这段逻辑内联在 hook 的 `readNdjson` 里，`fetchWithTimeout` 不传 signal、
+ *  循环不判活：离开页面后流会一直读到服务端结束，继续写 logs / 发收尾请求。
+ *  现在把消费器提到模块级（与 `consumeSettingsStream` 同形），`signal` 贯穿每一拍：
+ *   - 循环每次迭代开头、`read()` 之后、每行处理前都判 `signal.aborted`；
+ *   - 中止时 `reader.cancel()` 主动关流，让服务端尽早停止产出；
+ *   - 中止后不再回调任何 sink（logs / done / error）—— 卸载不再写回。
+ *  纯函数、不读 ref / 不碰 React state，便于直接单测中止时序。 */
+export async function consumeParseStream(
+  res: Response,
+  signal: AbortSignal,
+  sinks: {
+    onDone: (report: ParseReport | null, ok: boolean) => Promise<void> | void;
+    onError: (msg: string) => void;
+    onLog: (level: string, msg: string) => void;
+  },
+): Promise<void> {
+  if (!res.body) {
+    sinks.onError("服务器未返回流式日志");
+    return;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  const cancelReader = () => {
+    // abort 后 read() 可能已 reject；cancel 也可能抛（流已关闭），一律吞掉 —— 中止路径不该冒泡。
+    void reader.cancel().catch(() => undefined);
+  };
+  while (true) {
+    if (signal.aborted) {
+      cancelReader();
+      return;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+    const { done, value } = await reader.read();
+    if (signal.aborted) {
+      cancelReader();
+      return;
+    }
+    if (done) {
+      break;
+    }
+    buf += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      if (signal.aborted) {
+        cancelReader();
+        return;
+      }
+      const line = buf.slice(0, nl);
+      buf = buf.slice(nl + 1);
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        const payload: unknown = JSON.parse(line);
+        if (!isParseStreamEvent(payload)) {
+          continue;
+        }
+        const obj = payload;
+        if (obj.type === "log") {
+          sinks.onLog(obj.level ?? "info", obj.msg ?? "");
+        } else if (obj.type === "done") {
+          // 收尾链（refresh + reload）可能很长，abort 后不许再发。
+          if (signal.aborted) {
+            cancelReader();
+            return;
+          }
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：done 的收尾必须在本条流消费完之前跑，且 ndjson 的 done 是终止事件（至多一次）
+          await sinks.onDone(obj.report ?? null, obj.ok === true);
+        }
+      } catch {
+        // 忽略非 JSON 行
+      }
+    }
+  }
+}
+
+/** 按父目录分组子包并统计各状态数（§12.13 纯派生，从 hook 体移出以守住函数长度硬闸）。
+ *  一个顶层包即便用户输入的是父路径也只显示一次 —— 不渲染父卡片本身。 */
+function deriveParentBlocks(
+  savedPaths: Array<string>,
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>,
+  byPath: Record<string, SummaryPkg>,
+): Array<ParentBlock> {
+  return savedPaths.map((parent) => {
+    const subs = discoveredByParent[parent] ?? [];
+    const enriched = subs.map((sub) => {
+      const saved = byPath[pathKey(sub.path)];
+      return { sub, saved, state: deriveRowState(sub, saved) };
+    });
+    const cnt = { loaded: 0, outdated: 0, unimported: 0, error: 0, missing: 0, empty: 0 };
+    for (const e of enriched) {
+      cnt[e.state.kind] += 1;
+    }
+    return { parent, subs: enriched, cnt, total: enriched.length };
+  });
+}
+
+/** 跨所有父目录的四项合计（loaded / outdated / unimported / total）。 */
+function deriveTotals(blocks: Array<ParentBlock>) {
+  return blocks.reduce(
+    (acc, b) => ({
+      loaded: acc.loaded + b.cnt.loaded,
+      outdated: acc.outdated + b.cnt.outdated,
+      unimported: acc.unimported + b.cnt.unimported,
+      total: acc.total + b.total,
+    }),
+    { loaded: 0, outdated: 0, unimported: 0, total: 0 },
+  );
+}
+
 /** 延迟一拍 fire-and-forget 地拉一次数据，返回清定时器的 cleanup（三处 useEffect 共用）。
  *  cleanup 时同时 abort 在途请求（ISSUE #4288）：卸载/依赖变化后，响应不再写回界面。 */
 function scheduleDeferredRefresh(run: (signal: AbortSignal) => Promise<unknown>): () => void {
@@ -386,7 +500,10 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    * `useCallback` 每轮重建，那正是它此前 `[]` 想避免的事。 */
   const { seedDefaults: seedParentDefaults } = parentExpansion;
 
-  const [logs, setLogs] = useState<Array<{ level: string; msg: string }>>([]);
+  const [logs, setLogs] = useState<Array<ParseLogEntry>>([]);
+  /* 日志行的稳定序号：尾部窗口滚动时旧行被移出，每行靠 id 做 key 才能让
+   * memo 行组件跳过重渲（ISSUE #4470）。ref 避免把序号塞进 state 触发额外渲染。 */
+  const logSeqRef = useRef(0);
   const consoleRef = useRef<HTMLDivElement>(null);
   const logsRef = useRef<HTMLDivElement>(null);
   /* 卸载标记：见 fetchSettings 的 finally —— 那里有一个「让完成后提示停留
@@ -395,11 +512,16 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    * `ReferenceError: window is not defined`，`pnpm test` 因此随机非零退出，
    * 而用例层面全绿）。ISSUE #489。 */
   const progressHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* 在途解析的中止句柄（ISSUE #4470）：runParse 每次开始新建 controller 写进来，
+   * 卸载时 abort —— 之后的 read() 判活失败、reader.cancel()、收尾请求不再发。
+   * 与 progressHideTimerRef 同一条「脱离组件生命周期的链路」清理出口。 */
+  const parseAbortRef = useRef<AbortController | null>(null);
   useEffect(() => {
     return () => {
       if (progressHideTimerRef.current) {
         clearTimeout(progressHideTimerRef.current);
       }
+      parseAbortRef.current?.abort();
     };
   }, []);
 
@@ -577,85 +699,91 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     return scheduleDeferredRefresh(fetchManifest);
   }, [report, fetchManifest]);
 
-  async function readNdjson(
-    res: Response,
-    onDone: (report: ParseReport | null, ok: boolean) => Promise<void> | void,
-  ) {
-    if (!res.body) {
-      void onDone(null, false);
-      setError_("服务器未返回流式日志");
-      return;
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-      buf += decoder.decode(value, { stream: true });
-      let nl: number;
-      while ((nl = buf.indexOf("\n")) >= 0) {
-        const line = buf.slice(0, nl);
-        buf = buf.slice(nl + 1);
-        if (!line.trim()) {
-          continue;
-        }
-        try {
-          const payload: unknown = JSON.parse(line);
-          if (!isParseStreamEvent(payload)) {
-            continue;
-          }
-          const obj = payload;
-          if (obj.type === "log") {
-            setLogs((prev) =>
-              tailWindowAppend(
-                prev,
-                { level: obj.level ?? "info", msg: obj.msg ?? "" },
-                PARSE_LOG_MAX,
-              ),
-            );
-          } else if (obj.type === "done") {
-            void onDone(obj.report ?? null, obj.ok === true);
-          }
-        } catch {
-          // 忽略非 JSON 行
-        }
-      }
-    }
-  }
-
-  function setError_(msg: string | null) {
+  const setError_ = useCallback((msg: string | null) => {
     setSaveErr(msg);
-  }
+  }, []);
+
+  /** 解析流 done 事件的收尾：落报告、刷新注册表、以服务端状态回填。
+   *  抽成独立 useCallback 既让 runParse 回到函数长度硬闸内（§12.13），
+   *  也让「收尾前判活」只在一处表达（abort 后不再发 reload 请求）。 */
+  const finalizeParse = useCallback(
+    async (record: ParseReport | null, ok: boolean, signal: AbortSignal) => {
+      if (signal.aborted) {
+        return;
+      }
+      if (ok && record) {
+        setReport(record);
+        await refreshCustomNodes();
+      }
+      if (!signal.aborted) {
+        await reloadFromServer();
+      }
+    },
+    [reloadFromServer],
+  );
 
   /** 「跑一轮解析并收尾」——三处入口（全部 / 单个父目录 / 单个子包）共用。
    *
-   *  收口前这段 fetch + NDJSON 流式消费在**三处逐字重复**，而忙碌位的复位各自
-   *  写在 `finally` 里；现在复位绑在忙碌位出口上（规范 16 §16.2.4.71），
-   *  「解析中」不会因为中途抛错永远留在界面上。 */
-  async function runParse(packages?: Array<string>) {
-    setError_(null);
-    setLogs([]);
-    try {
-      const res = await fetchWithTimeout("/api/custom-nodes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(packages ? { action: "parse", packages } : { action: "parse" }),
-      });
-      await readNdjson(res, async (record, ok) => {
-        if (ok && record) {
-          setReport(record);
-          await refreshCustomNodes();
+   *  AbortSignal 贯穿 fetch 与流消费（ISSUE #4470）：每次开始新建 controller 存进
+   *  `parseAbortRef`，卸载时 effect abort 它；`consumeParseStream` 每拍判活、中止
+   *  cancel reader 且不再回调。catch 里识别 abort 不当成「解析失败」写回界面。
+   *  忙碌位的复位绑在 `createParseActions` 的忙碌位出口上（规范 16 §16.2.4.71），
+   *  「解析中」不会因为中止 / 抛错永远留在界面上。 */
+  /* useCallback 包裹：runParse 被传给 createParseActions（render 期），体内读
+   * ref 必须落在 useCallback 里才过 react(refs) 规则 —— 与同文件 fetchSettings
+   * 用 signal 参数规避同类告警是同一条约束。 */
+  const runParse = useCallback(
+    async (packages?: Array<string>) => {
+      const abort = new AbortController();
+      parseAbortRef.current = abort;
+      const signal = abort.signal;
+      setError_(null);
+      setLogs([]);
+      try {
+        const res = await fetchWithTimeout(
+          "/api/custom-nodes",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(packages ? { action: "parse", packages } : { action: "parse" }),
+            signal,
+          },
+          // 解析是最长的一条链路（服务端遍历整个 custom_nodes 目录），15s 默认超时会
+          // 误杀大包；显式放宽预算。真正的中途退出由上面的 AbortSignal 负责。
+          120_000,
+        );
+        await consumeParseStream(res, signal, {
+          onDone: (record, ok) => finalizeParse(record, ok, signal),
+          onError: (msg) => {
+            if (!signal.aborted) {
+              setError_(msg);
+            }
+          },
+          onLog: (level, msg) => {
+            if (signal.aborted) {
+              return;
+            }
+            // id 在 updater 外生成：setLogs 的 updater 在严格模式下可能被重放，
+            // 把 ++ 放进 updater 会产生重复 / 跳号的 key。
+            const id = ++logSeqRef.current;
+            setLogs((prev) => tailWindowAppend(prev, { id, level, msg }, PARSE_LOG_MAX));
+          },
+        });
+      } catch (error) {
+        // 中止是正常退场（卸载 / 新一轮解析），不写「解析失败」——卸载后写回只会落到
+        // 已拆除的环境上。
+        if (!signal.aborted) {
+          setError_(errorText(error, "解析失败"));
         }
-        await reloadFromServer();
-      });
-    } catch (error) {
-      setError_(errorText(error, "解析失败"));
-    }
-  }
+      } finally {
+        // 只清自己这一轮的句柄：并发/重入时后一轮已覆盖了 ref，别误清它的 abort。
+        if (parseAbortRef.current === abort) {
+          parseAbortRef.current = null;
+        }
+      }
+    },
+    [finalizeParse, setError_],
+  );
 
   /** 撤下单条子包的解析中标记（按子包维度的忙碌位，见 `use-parse-actions.ts` 的
    *  `onParseSingle`）。留在本 hook 里而不是搬过去：它是个 `setState` 包装，
@@ -671,6 +799,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   /* 三个解析入口（全部 / 单条子包 / 单个父目录）在 `use-parse-actions.ts`：
    * 它们只读已配路径与已发现子包、写进度与错误，与本 hook 的状态编排是两件事
    * （拆分前它们是内联在这里的四段函数，见那个文件头注）。 */
+  /* oxlint-disable-next-line react/refs -- runParse/clearPerPkgParsing 体内读写 ref，但它们只在三个入口的事件回调里被调用（onParseAll 等由 onClick 触发），不在 render 期执行；与 use-cancel-task 的「ref 供异步回调读取」同一刻意模式。createParseActions 只在 render 期把它们收进返回对象，不调用。 */
   const { onParseAll, onParseSingle, onParseAllParent } = createParseActions({
     savedPaths,
     discoveredByParent,
@@ -686,39 +815,12 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   // 输入的是父 custom_nodes 路径也只显示一次 —— 不渲染父卡片本身。
   // 按父目录分组，使用户能独立折叠/展开每个源目录。每个子行通过对接到 manifest 的
   // byPath 映射携带自己的 state（loaded / outdated / unimported / error / missing）。
-  const parentBlocks = useMemo(() => {
-    return savedPaths.map((parent) => {
-      const subs = discoveredByParent[parent] ?? [];
-      const enriched = subs.map((sub) => {
-        const saved = byPath[pathKey(sub.path)];
-        return { sub, saved, state: deriveRowState(sub, saved) };
-      });
-      const cnt = {
-        loaded: 0,
-        outdated: 0,
-        unimported: 0,
-        error: 0,
-        missing: 0,
-        empty: 0,
-      };
-      for (const e of enriched) {
-        cnt[e.state.kind] += 1;
-      }
-      return { parent, subs: enriched, cnt, total: enriched.length };
-    });
-  }, [savedPaths, discoveredByParent, byPath]);
+  const parentBlocks = useMemo(
+    () => deriveParentBlocks(savedPaths, discoveredByParent, byPath),
+    [savedPaths, discoveredByParent, byPath],
+  );
 
-  const totalAcrossParents = useMemo(() => {
-    return parentBlocks.reduce(
-      (acc, b) => ({
-        loaded: acc.loaded + b.cnt.loaded,
-        outdated: acc.outdated + b.cnt.outdated,
-        unimported: acc.unimported + b.cnt.unimported,
-        total: acc.total + b.total,
-      }),
-      { loaded: 0, outdated: 0, unimported: 0, total: 0 },
-    );
-  }, [parentBlocks]);
+  const totalAcrossParents = useMemo(() => deriveTotals(parentBlocks), [parentBlocks]);
 
   return {
     open,

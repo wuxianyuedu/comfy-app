@@ -32,10 +32,11 @@
  * 用法：`pnpm deps:prune [--dry-run]`
  * 退出码：0 收干净 / 1 有事实是红的（删不掉、图读不到、判不准）/ 2 用法错或前置不成立。
  */
-import { existsSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import { parseLockfile } from "../lockfile/lock-diff.mjs";
+import { dirSize, humanSize, unknownDetail as detail } from "../lib/dir-size.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const LOCKFILE = path.join(ROOT, "pnpm-lock.yaml");
@@ -47,17 +48,6 @@ const EXIT = { OK: 0, RED: 1, NOT_RUN: 2 };
 const TAG = "[prune-virtual-store]";
 /** 清单最多逐条念多少行；其余只给总数，几百条残留时不把屏幕刷满。 */
 const LIST_LIMIT = 20;
-
-/**
- * unknown 抛值的可读详情（脚本层不引 `src/lib/error-message`，它是 TS 模块）。
- * @param {unknown} error
- */
-function detail(error) {
-  if (error !== null && typeof error === "object" && "message" in error) {
-    return String(error.message);
-  }
-  return String(error);
-}
 
 /** pnpm 12 把超长目录名截成 `…_<hash>`；这一类目录名本身不带可信身份。 */
 const HASHED_DIR_RE = /_[0-9a-f]{20,}$/;
@@ -252,50 +242,6 @@ function scan(graphIds) {
     stale.push({ name: entry.name, abs, id: identity.id });
   }
   return { stale, unsure, kept, total };
-}
-
-/**
- * 目录占盘字节数：只数普通文件，不穿符号链接（链接指向别处的内容不该算进来）。
- * @param {string} absDir
- */
-function dirSize(absDir) {
-  let total = 0;
-  let entries;
-  try {
-    entries = readdirSync(absDir, { withFileTypes: true });
-  } catch {
-    return 0;
-  }
-  for (const entry of entries) {
-    const full = path.join(absDir, entry.name);
-    if (entry.isSymbolicLink()) {
-      continue;
-    }
-    if (entry.isDirectory()) {
-      total += dirSize(full);
-      continue;
-    }
-    if (!entry.isFile()) {
-      continue;
-    }
-    try {
-      total += statSync(full).size;
-    } catch {
-      /* 扫描期间被并发移走：那一块量不到就少量一块，不影响判决 */
-    }
-  }
-  return total;
-}
-
-/**
- * 只给整数读数，不用精度 API（它与 `~/lib/number-format` 是同一条口径）。
- * @param {number} bytes
- */
-function humanSize(bytes) {
-  if (bytes < 1024 * 1024) {
-    return `${String(Math.max(1, Math.round(bytes / 1024)))} KB`;
-  }
-  return `${String(Math.round(bytes / (1024 * 1024)))} MB`;
 }
 
 function printUsage() {

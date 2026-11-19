@@ -6,7 +6,7 @@
 // 显式：必填/可选随模式契约（`ModeContract.required`，能不能跑只认必填口）；
 // 模式可切换（只改「看/测哪个模式」，不动默认模式）；流程测试按封装口径真实跑一次。
 
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 
 import { Badge } from "~/components/ui/badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
@@ -22,8 +22,8 @@ import type { WorkflowImageInputPort } from "~/lib/comfyui/workflow-detail-raw";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { useWorkflowEncapsulation } from "../hooks/use-workflow-encapsulation";
 import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
+import { useLatestRunTaskId } from "../hooks/use-latest-run-task-id";
 import { WorkflowRunLogButton } from "../WorkflowRunLogButton";
-import { latestRunForWorkflow } from "~/lib/workflow/workflow-run-store";
 import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
 import { displayValue } from "~/lib/display-value";
 import { EncapsulationTestForm } from "./EncapsulationTestForm";
@@ -127,10 +127,9 @@ export function WorkshopEncapsulationPanel({
    * 页签各自一处（ISSUE #611 旧形态：两个页签各写各的）。 */
   const [logOpen, setLogOpen] = useState(false);
   const [logTaskId, setLogTaskId] = useState<string | null>(null);
-  const latestLogTaskId = useMemo(
-    () => latestRunForWorkflow(workflowId, "encapsulation-test")?.taskId ?? null,
-    [workflowId],
-  );
+  /* 订阅运行登记表取最近一次（#4466）：此前 useMemo 依赖只有 workflowId，
+   * 登记表变化不重算，摘要指向旧一次运行。 */
+  const latestLogTaskId = useLatestRunTaskId(workflowId, "encapsulation-test");
   const logViewTaskId = logTaskId ?? latestLogTaskId;
 
   return (

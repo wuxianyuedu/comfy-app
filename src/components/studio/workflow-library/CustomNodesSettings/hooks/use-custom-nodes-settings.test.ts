@@ -12,7 +12,7 @@ vi.mock("~/config/custom-nodes", () => ({
 
 import { getCustomNodesManifest, refreshCustomNodes } from "~/config/custom-nodes";
 import { isPlainRecord } from "~/lib/is-record";
-import { useCustomNodesSettings } from "./use-custom-nodes-settings";
+import { consumeParseStream, useCustomNodesSettings } from "./use-custom-nodes-settings";
 
 const mockedManifest = vi.mocked(getCustomNodesManifest);
 const mockedRefresh = vi.mocked(refreshCustomNodes);
@@ -373,6 +373,85 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
 
     expect(result.current.saveErr).toBeTruthy();
     expect(result.current.parsing).toBe(false);
+  });
+
+  it("ISSUE #4470：卸载 abort 解析流 → cancel reader 且不再回调任何 sink", async () => {
+    /* 直接测模块级消费器（真实链路里 fetchWithTimeout 的 signal abort 会关闭 body，
+     * 这里用裸 Response + 受控流把那个时序显式化）。预置 aborted signal：进入循环
+     * 第一拍就判活失败 → reader.cancel() → 不读任何行、不写 logs、不发收尾请求。 */
+    let cancelCalls = 0;
+    const line = `${JSON.stringify({ type: "log", level: "info", msg: "不该出现" })}\n`;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(line));
+      },
+      cancel() {
+        cancelCalls += 1;
+      },
+    });
+    const res = new Response(stream, {
+      status: 200,
+      headers: { "content-type": "application/x-ndjson" },
+    });
+    const controller = new AbortController();
+    controller.abort(); // 模拟卸载：effect cleanup 已 abort
+    const onLog = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    await consumeParseStream(res, controller.signal, { onLog, onDone, onError });
+
+    expect(cancelCalls).toBe(1); // 主动关流，让服务端尽早停
+    expect(onLog).not.toHaveBeenCalled(); // 已入队的 line 也不读
+    expect(onDone).not.toHaveBeenCalled(); // 收尾请求不发
+    expect(onError).not.toHaveBeenCalled(); // 卸载后不写回
+  });
+
+  it("consumeParseStream：未中止时逐行回调，日志与 done 都生效", async () => {
+    const lines = [
+      { type: "log", level: "info", msg: "A" },
+      { type: "log", level: "error", msg: "B" },
+      { type: "done", ok: true, report: { ok: true } },
+    ];
+    const onLog = vi.fn();
+    const onDone = vi.fn();
+    await consumeParseStream(ndjson(lines), new AbortController().signal, {
+      onLog,
+      onDone,
+      onError: vi.fn(),
+    });
+    expect(onLog).toHaveBeenCalledTimes(2);
+    expect(onLog).toHaveBeenNthCalledWith(1, "info", "A");
+    expect(onLog).toHaveBeenNthCalledWith(2, "error", "B");
+    expect(onDone).toHaveBeenCalledWith({ ok: true }, true);
+  });
+
+  it("ISSUE #4470：每轮解析的日志行带稳定递增 id（供 memo 行组件做 key）", async () => {
+    fetchMock.mockImplementation((_i, init) =>
+      (init?.method ?? "GET").toUpperCase() === "POST"
+        ? Promise.resolve(
+            ndjson([
+              { type: "log", level: "info", msg: "A" },
+              { type: "log", level: "error", msg: "B" },
+              { type: "log", level: "info", msg: "C" },
+            ]),
+          )
+        : Promise.resolve(settingsBlob()),
+    );
+
+    const { result } = renderHook(() => useCustomNodesSettings());
+    act(() => {
+      result.current.setOpen(true);
+    });
+    await expect.poll(() => result.current.savedPaths.length).toBeGreaterThan(0);
+    await act(async () => {
+      await result.current.onParseAll();
+    });
+
+    const ids = result.current.logs.map((l) => l.id);
+    expect(ids).toHaveLength(3);
+    expect(new Set(ids).size).toBe(3); // 稳定且互异 —— 下标之外的身份标识
+    expect(result.current.logs.map((l) => l.msg)).toEqual(["A", "B", "C"]);
   });
 });
 
