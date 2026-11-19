@@ -15,8 +15,23 @@ import { launcherChainSource } from "./helpers/launcher-source";
 import { stripComments } from "./helpers/strip-comments";
 
 /**
- * 依赖 POSIX 执行语义的用例开关（shebang 被内核解析、chmod exec 位有效）。Windows 上 libuv 不解析 shebang、
- * chmodSync 不存执行位，这些 spawn 探测必然失败 —— 它们给 POSIX CI（原 .cnb.yml）钉契约；Windows 侧对应
+ * **反向**断言（「这写法必须已经没了」）的接收者要先剥注释再判 —— 唯一实现
+ * `./helpers/strip-comments`（`{trailing:true}` 连行尾一起去）。
+ *
+ * 为什么只管反向：本仓这些 `.mjs` / `.rs` 文件里**正当**写着反面举例（「旧写法：自己拼
+ * `pnpm -v` 探测」「别再写 `function checkNodeModules`」就是它们要求的注释形态，§12.4.2
+ * 要求说清「为什么改」）。拿原文去判 `not.toContain`，判据会红在那一句解释上 —— 而那一句
+ * 恰恰是仓库要求留下的东西（#1192 那一族，只是它当年只收了「整行注释」那一档）。
+ *
+ * **正向**断言刻意留在这里不动：它们此刻还带着「被注释喂饱 ⇒ 假绿」的另一半，而那一半要
+ * 逐针脚判「这个字面量现在到底住在哪」，不是同一个改动（留作下一批，别在这里顺手扩面）。
+ */
+const judgedCode = (text: string): string => stripComments(text, { trailing: true });
+
+/**
+ * 依赖 POSIX 执行语义的用例开关（shebang 能被内核解析、chmod 的 exec 位有效）。
+ * Windows 上 libuv 不解析 shebang、chmodSync 不存执行位，这些用例的 spawn
+ * 探测必然失败 —— 它们是给 POSIX CI（原 .cnb.yml）钉契约的；Windows 侧对应
  * 行为已由「.CMD 否决 / .ps1 回退」那组不依赖真实 spawn 的用例钉住。
  */
 const needsPosixExec = it.skipIf(process.platform === "win32");
@@ -492,7 +507,7 @@ describe("编排器与启动页的接线契约", () => {
       preflight.indexOf("export function reconcilePnpmVersion"),
     );
     expect(gate, "没取到实现体，断言会空转").toContain("orchestratePnpm(");
-    expect(gate, "旧写法：自己拼 pnpm -v 探测").not.toContain('["-v"]');
+    expect(judgedCode(gate), "旧写法：自己拼 pnpm -v 探测").not.toContain('["-v"]');
   });
 
   it("门禁失败时把多行提示交给启动页（message 只放一行结论）", () => {
@@ -545,7 +560,7 @@ describe("编排器与启动页的接线契约", () => {
     );
     // 薄壳：判据只能来自 corepack.mjs，不重写一遍探测。
     expect(selfCheck).toContain("orchestratePnpm");
-    expect(selfCheck).not.toContain("spawnSync");
+    expect(judgedCode(selfCheck)).not.toContain("spawnSync");
     const spec = fs.readFileSync(
       path.join(ROOT, "docs", "standards", "launch-and-build.md"),
       "utf8",
@@ -637,7 +652,7 @@ describe("pnpm check:toolchain 真跑", () => {
     expect(src).toContain("checkNodeModules");
     expect(src).toContain("launcher-core/worktree.mjs");
     // 不许在本文件里**再定义**一份 `checkNodeModules` 函数（注释里提到判据键没问题）。
-    expect(src).not.toMatch(/function\s+checkNodeModules/);
+    expect(judgedCode(src)).not.toMatch(/function\s+checkNodeModules/);
   });
 
   it("pnpm 不可用时非零退出，并给出含版本号的修复命令", () => {
@@ -1098,10 +1113,10 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
     const skipEnd = launcher.indexOf("return { ok: true, shell: null, staleShell };", skipStart);
     expect(skipEnd, "自编排分支要提前返回、不再往下走").toBeGreaterThan(-1);
     const skipBody = launcher.slice(skipStart, skipEnd);
-    expect(skipBody, "自编排分支不许再 spawn 壳").not.toContain("spawnShell(");
+    expect(judgedCode(skipBody), "自编排分支不许再 spawn 壳").not.toContain("spawnShell(");
     expect(skipBody, "要说清为什么不起壳").toContain("不再起第二个壳");
     // 标记不许再注入给任何壳 / dev server：不会再有「被编排器起的壳」。
-    expect(launcher).not.toContain('COMFYAPP_SHELL_SELF_LAUNCH: "1"');
+    expect(judgedCode(launcher)).not.toContain('COMFYAPP_SHELL_SELF_LAUNCH: "1"');
   });
 
   it("壳起编排器时注入自编排标记，键名与编排器侧同一处", () => {
@@ -1130,7 +1145,9 @@ describe("启动期重复判定的短路（ISSUE #1687）", () => {
       lib.indexOf("fn another_instance_owns_this_checkout") + 1500,
     );
     expect(body, "任何壳都照常判单实例").toContain("single_instance::another_instance_running()");
-    expect(lib, "「被编排器起的壳」形态已随第二个壳一起移除").not.toContain("is_shell_child");
+    expect(judgedCode(lib), "「被编排器起的壳」形态已随第二个壳一起移除").not.toContain(
+      "is_shell_child",
+    );
   });
 });
 
