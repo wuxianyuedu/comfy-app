@@ -5,7 +5,7 @@
  * use-workflow-viewport-fit（画布聚焦）、use-workflow-graph-derivation（detail →
  * 图节点）、use-io-modes-commit（IO 模式落库）；过渡屏与浮层在 Overlays。 */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNodesState, useEdgesState, useReactFlow, type Node, type Edge } from "@xyflow/react";
+import { useReactFlow, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "~/config/custom-nodes";
 import { SourceModal } from "../SourceModal";
@@ -257,88 +257,27 @@ function WorkflowEditorBody({
    * 页签。编辑器也不提供「恢复默认映射」，只把当前 `paramMap` **原样**保存回去
    * （见 useWorkflowPersistence），库内改过的落点不会被这里的一次保存抹掉。 */
 
-  /* useNodesState 只接受挂载首帧的初值；后续同步统一走下面的 effect（初始图节点
-   * 即为这一帧的初值，detail 就绪后才会补上）。 */
-  const [nodes, setNodes, onNodesChange] = useNodesState(graphNodes);
-  // 空数组会把类型参数推成 never[]，用显式类型的初值保住 Edge[]（省掉泛型参数仍等价）
-  const initialEdges: Edge[] = [];
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-
-  /* 画布上只有**工作流图**本身：图节点与图连线都来自工作流自身
-   * （`buildInitialNodes` / `buildEdges`）。对外参数卡片与其映射线已从编辑器移除
-   * —— 它们会浮在图节点之上挡掉一片，且落点编辑已收敛到工作流库的「画布节点」
-   * 页签（用户口径：「彻底不显示」）。 */
-  const initialNodes: Array<Node> = graphNodes;
-
-  /* 图或映射变化时同步节点与连线。useNodesState 只在挂载时取初始值，
-   * 所以工作流详情异步到达（或作者改了某条线）时，
-   * 必须由我们自己把刚派生出的节点推进流程状态。 */
-  useEffect(() => {
-    setNodes(initialNodes);
-    /* 连线只有一种来源：工作流图自身的 `buildEdges`。 */
-    setEdges(buildEdges(scopeDetail, graphNodes, outSlotNameById));
-  }, [initialNodes, graphNodes, scopeDetail, outSlotNameById, setNodes, setEdges]);
-
-  /* 视口贴合：自动聚焦的排程 / 收敛 / 「居中」出口收在
-   * use-workflow-viewport-fit（聚焦路径的容器尺寸口径判据也随迁到那里）。 */
-  const { fitToContent, recenterCanvas } = useWorkflowViewportFit({
-    rf,
-    canvasSettings,
-    fitKey: detail?.id ?? "__root__",
-    nodesCount: nodes.length,
-  });
-
-  /* 惰性连线交互。画布的 defaultEdgeOptions 把 deletable / reconnectable
-   *  都设成 false，未被动过的连线因此保持惰性；某条线第一次被点击时两个标志一起打开
-   *（之后再点幂等），于是用户仍能像以前一样删除 / 重连它，
-   * 而整张图不会为没人碰的连线白白付交互开销。 */
-  const onEdgeClick = useCallback(
-    (_event: React.MouseEvent, edge: Edge) => {
-      if (edge.deletable === true && edge.reconnectable === true) {
-        return;
-      }
-      setEdges((eds) =>
-        eds.map((e) => (e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e)),
-      );
+  /* ── 节点 / 连线状态住在 React Flow 自己的 store 里（非受控画布）──
+   *  拖拽/平移/缩放的逐帧位置更新只发生在 React Flow 内部 store（按节点订阅，
+   *  只有被拖的那个节点重渲染），**不再**经 `setNodes` 把整个编辑器树
+   *  （顶栏 / 浮层 / 画布外壳）每帧重渲染一遍 —— 那正是拖拽掉帧到 ~20fps
+   *  的根源（ISSUE #4536）。图数据的同步（detail 到达 / 切子图 / 重置布局）
+   *  走下方 effect 的 `rf.setNodes` / `rf.setEdges`；选中高亮等写回走同一对
+   *  rf 包装 setter（引用稳定，依赖 rf 实例）。
+   *  画布挂载发生在 detail 就绪之后（loading 档先返回），`defaultNodes` /
+   *  `defaultEdges` 拿到的就是当帧的派生图；此后同步全走 effect。 */
+  const rfSetNodes = useCallback(
+    (updater: (nodes: Array<Node>) => Array<Node>) => {
+      rf.setNodes(updater(rf.getNodes()));
     },
-    [setEdges],
+    [rf],
   );
-
-  /* 对外参数卡片的「已连线目标」高亮：卡片行上没有端点，靠宿主节点那一行
-   * 的自带端口体现；这里只需保证被映射到的端口所在行能拿到 targetHandle
-   * （WidgetInputRow 的 withHandle 已按 ioKey 挂 handle，无需额外标记）。 */
-
-  const { resetLayout, handleSave, onNodeDragStop } = useWorkflowPersistence({
-    workflowId,
-    detail,
-    setDetail,
-    setNodes,
-    paramMap,
-    workflowIO,
-    fitToContent,
-    savePatch,
-    onSave,
-    onClose,
-    setSaving,
-    setError,
-    /* 重置布局之后重新拉当前视图：服务端已经把坐标覆盖删掉，重拉拿到的就是
-     * 工作流自带的原始布局。 */
-    reloadView: () => {
-      forceReloadDetail(viewHostNodeId, true);
+  const rfSetEdges = useCallback(
+    (updater: (edges: Array<Edge>) => Array<Edge>) => {
+      rf.setEdges(updater(rf.getEdges()));
     },
-    /* 子图视图下把宿主链路传进去：内部节点 id 要拼成 `宿主:内部` 才与
-     *  `positions` 列里的键同口径（见 use-workflow-persistence 的说明）。 */
-    hostNodeId: viewHostNodeId,
-  });
-
-  /* IO 预览面板的「模式集合变更」落库（编排细节见 use-io-modes-commit）。 */
-  const handleModesChange = useIoModesCommit({
-    ioApi,
-    detail,
-    setDetail,
-    savePatch,
-    workflowId,
-  });
+    [rf],
+  );
 
   /* ── 参考图挂载编辑态（ISSUE #4534）──
    * 顶栏按钮进入 / 退出；编辑态里点击节点即标记 / 取消多参考图挂载点，标记
@@ -370,12 +309,88 @@ function WorkflowEditorBody({
   const decoratedNodes = useMemo(
     () =>
       mountedSet.size === 0
-        ? nodes
-        : nodes.map((node) =>
+        ? graphNodes
+        : graphNodes.map((node) =>
             mountedSet.has(node.id) ? { ...node, className: "ref-mount-node" } : node,
           ),
-    [nodes, mountedSet],
+    [graphNodes, mountedSet],
   );
+
+  /* 画布上只有**工作流图**本身：图节点与图连线都来自工作流自身
+   * （`buildInitialNodes` / `buildEdges`）。对外参数卡片与其映射线已从编辑器移除
+   * —— 它们会浮在图节点之上挡掉一片，且落点编辑已收敛到工作流库的「画布节点」
+   * 页签（用户口径：「彻底不显示」）。 */
+  /* 图或映射变化时同步节点与连线到 React Flow store。
+   * 拖拽期间这些依赖都不变，effect 不会打断进行中的拖拽。
+   * 节点走**装饰后**的列表（参考图挂载高亮，#4534）。 */
+  useEffect(() => {
+    rf.setNodes(decoratedNodes);
+    /* 连线只有一种来源：工作流图自身的 `buildEdges`。 */
+    rf.setEdges(buildEdges(scopeDetail, graphNodes, outSlotNameById));
+  }, [decoratedNodes, graphNodes, scopeDetail, outSlotNameById, rf]);
+
+  /* 视口贴合：自动聚焦的排程 / 收敛 / 「居中」出口收在
+   * use-workflow-viewport-fit（聚焦路径的容器尺寸口径判据也随迁到那里）。
+   * nodesCount 用派生图的长度：它在「图真的换了」的那一帧变化，触发重新聚焦；
+   * 拖拽不改变它，不会抢视角。 */
+  const { fitToContent, recenterCanvas } = useWorkflowViewportFit({
+    rf,
+    canvasSettings,
+    fitKey: detail?.id ?? "__root__",
+    nodesCount: graphNodes.length,
+  });
+
+  /* 惰性连线交互。画布的 defaultEdgeOptions 把 deletable / reconnectable
+   *  都设成 false，未被动过的连线因此保持惰性；某条线第一次被点击时两个标志一起打开
+   *（之后再点幂等），于是用户仍能像以前一样删除 / 重连它，
+   * 而整张图不会为没人碰的连线白白付交互开销。 */
+  const onEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      if (edge.deletable === true && edge.reconnectable === true) {
+        return;
+      }
+      rfSetEdges((eds) =>
+        eds.map((e) => (e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e)),
+      );
+    },
+    [rfSetEdges],
+  );
+
+  /* 对外参数卡片的「已连线目标」高亮：卡片行上没有端点，靠宿主节点那一行
+   * 的自带端口体现；这里只需保证被映射到的端口所在行能拿到 targetHandle
+   * （WidgetInputRow 的 withHandle 已按 ioKey 挂 handle，无需额外标记）。 */
+
+  const { resetLayout, handleSave, onNodeDragStop } = useWorkflowPersistence({
+    workflowId,
+    detail,
+    setDetail,
+    setNodes: rfSetNodes,
+    paramMap,
+    workflowIO,
+    fitToContent,
+    savePatch,
+    onSave,
+    onClose,
+    setSaving,
+    setError,
+    /* 重置布局之后重新拉当前视图：服务端已经把坐标覆盖删掉，重拉拿到的就是
+     * 工作流自带的原始布局。 */
+    reloadView: () => {
+      forceReloadDetail(viewHostNodeId, true);
+    },
+    /* 子图视图下把宿主链路传进去：内部节点 id 要拼成 `宿主:内部` 才与
+     *  `positions` 列里的键同口径（见 use-workflow-persistence 的说明）。 */
+    hostNodeId: viewHostNodeId,
+  });
+
+  /* IO 预览面板的「模式集合变更」落库（编排细节见 use-io-modes-commit）。 */
+  const handleModesChange = useIoModesCommit({
+    ioApi,
+    detail,
+    setDetail,
+    savePatch,
+    workflowId,
+  });
 
   /* Loading state */
   if (loading) {
@@ -445,22 +460,19 @@ function WorkflowEditorBody({
         <WorkflowEditorCanvas
           canvasSettings={canvasSettings}
           canvasSettingsHydrated={canvasSettingsHydrated}
-          edges={edges}
-          nodes={decoratedNodes}
+          defaultNodes={decoratedNodes}
           onEdgeClick={onEdgeClick}
-          onEdgesChange={onEdgesChange}
           onMiniMapJump={onMiniMapJump}
           onNodeClick={handleNodeClick}
           onNodeDragStop={onNodeDragStop}
-          onNodesChange={onNodesChange}
           onOpenSettings={() => {
             setCanvasSettingsOpen(true);
           }}
           onRecenter={recenterCanvas}
           /* 选中节点后由画布把「相关连线」与「相关端口行」标记分别写回 edges /
            * 节点 data（连线加粗提亮，落到的端口行同步提亮）。 */
-          setEdges={setEdges}
-          setNodes={setNodes}
+          setEdges={rfSetEdges}
+          setNodes={rfSetNodes}
         />
         <CanvasHintTooltip />
         {/* 右边缘画布设置抽屉。面板自己把内容 portal 到

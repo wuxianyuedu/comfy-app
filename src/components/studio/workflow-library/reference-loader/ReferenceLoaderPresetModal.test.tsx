@@ -5,6 +5,9 @@
 //  4) 换选后旧选项的子输入值被清掉（新选项的子输入以目录缺省呈现）；
 //  5) 选中项带连线型子输入时提示「生成时该端点回落裸装载」。
 // SelectMenu 的弹层定位口径由 ui/select-menu 自身的用例守，这里只驱动选项选择。
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -157,5 +160,18 @@ describe("ReferenceLoaderPresetModal 的 V3 控件（#4404）", () => {
 
     expect(screen.getByText(/要连线输入，装载链接不了 —— 生成时该端点回落裸装载/)).toBeDefined();
     expect(screen.queryByLabelText("resize_type.match")).toBeNull();
+  });
+
+  it("下拉浮层宽度按最长选项自适应，不再钉死 140px（ISSUE #4531）", () => {
+    /* 三处下拉（预设弹层的部件 COMBO、绑定位的「装载预设」/「追加端口」）都曾写
+     * autoFitFromOptions={false} + 小死宽 ⇒ 最长选项被截断（#4531 现场：
+     * "scale shorter dimension" 在 140px 死宽里看不全）。浮层自适应是 SelectMenu
+     * 的默认行为，且 happy-dom 解析不了 min() 宽度、行为断言做不通 —— 这里钉
+     * 「这三处不许再显式关掉自适应」。 */
+    for (const file of ["ReferenceLoaderPresetModal.tsx", "ReferenceLoaderBindingSection.tsx"]) {
+      expect(readFileSync(path.join(__dirname, file), "utf8")).not.toContain(
+        "autoFitFromOptions={false}",
+      );
+    }
   });
 });
