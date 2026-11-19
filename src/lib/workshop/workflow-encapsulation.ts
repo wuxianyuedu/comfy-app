@@ -318,6 +318,12 @@ export function exposedValueOf(values: WorkshopExposedValues, id: string): strin
   if (id === "seed") {
     return values.seed === undefined ? "" : String(values.seed);
   }
+  if (id === "lora-name") {
+    return values.loraName ?? "";
+  }
+  if (id === "lora-strength") {
+    return values.loraStrength === undefined ? "" : String(values.loraStrength);
+  }
   /* 自定义口：值按 id 收在 `custom` 里（界面按文本显示它的当前内容）。 */
   if (exposedCustomKindOf(id)) {
     return String(values.custom?.[id] ?? "");
@@ -369,6 +375,22 @@ export function withExposedValue(
     }
     const n = Number(t);
     return { ...values, seed: Number.isFinite(n) ? Math.trunc(n) : undefined };
+  }
+  /* 角色 LoRA：名字是文本；强度是数值口（0~1 浮点，不取整），空串 / 非数字
+   * → 清掉该值，回落工作流图内的 LoRA 配置。 */
+  if (id === "lora-name") {
+    return { ...values, loraName: text === "" ? undefined : text };
+  }
+  if (id === "lora-strength") {
+    if (typeof next === "number") {
+      return { ...values, loraStrength: Number.isFinite(next) ? next : undefined };
+    }
+    const t = next.trim();
+    if (t === "") {
+      return { ...values, loraStrength: undefined };
+    }
+    const n = Number(t);
+    return { ...values, loraStrength: Number.isFinite(n) ? n : undefined };
   }
   const slot = referenceSlotOf(id);
   if (slot < 0) {
@@ -422,6 +444,14 @@ export function pruneEmptyExposedValues(values: WorkshopExposedValues): Workshop
   /* 种子：数字，`0` 是有效值，不能按假值剪掉；只在给了的时候保留。 */
   if (values.seed !== undefined) {
     out.seed = values.seed;
+  }
+  /* 角色 LoRA：名字按文本剪空串；强度是数字，`0` 是有效值，只在给了的时候保留。 */
+  const loraName = text(values.loraName);
+  if (loraName !== undefined) {
+    out.loraName = loraName;
+  }
+  if (values.loraStrength !== undefined) {
+    out.loraStrength = values.loraStrength;
   }
   /* 自定义口：空串当「没给」（与上面几条同一口径）；数字原样保留 —— `0` 是
    *  一个有效值，不能按「假值」剪掉。 */

@@ -27,13 +27,16 @@ import {
 } from "~/lib/workflow/workflow-exposed-params";
 import {
   builtInRequiredInputs,
+  contractControlFor,
   isModeContractInputId,
   type ModeContractInputId,
 } from "./model-mode-contract";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 /** 工坊控件形态：尺寸在工坊里是「比例 + 分辨率 / 比例 + 百万像素 + 倍数」组合控件，
- *  时长是秒数选择。`number` 是自定义口的「数字」类型（普通数值输入框）。 */
+ *  时长是秒数选择。`number` 是数值输入框（自定义口的「数字」类型，以及 seed /
+ *  lora-strength 这类数值预制口）。控件形态的判定与模式契约编辑器同源
+ *  （`contractControlFor`，#4494 收口）。 */
 export type EncapsulationControl = "text" | "size" | "image" | "duration" | "number";
 
 export type EncapsulationEntryStatus = {
@@ -65,21 +68,6 @@ export type EncapsulationStatus = {
   ready: boolean;
   resolvedCount: number;
 };
-
-/** 契约口 → 工坊控件形态（没有生效契约时的回落路径；自定义口一律来自契约，
- *  所以这里只处理预制口）。 */
-function controlFor(id: string): EncapsulationControl {
-  if (id === "size") {
-    return "size";
-  }
-  if (id === "duration") {
-    return "duration";
-  }
-  if (id.startsWith("reference-image") || id === "first-frame" || id === "last-frame") {
-    return "image";
-  }
-  return "text";
-}
 
 /** 展示名：一律以契约 id 取**统一的那一份**展示名（`exposedParamDisplayLabel`），
  *  不认契约自带 label。
@@ -142,7 +130,8 @@ export function deriveEncapsulationStatus(args: {
     exposedParamsForMode(mode ?? null).map((d) => ({
       id: d.id,
       label: d.label,
-      control: controlFor(d.id),
+      /* 控件形态与模式契约编辑器同一份判定（#4494 收口，不再各写一套）。 */
+      control: contractControlFor(d.id),
     }));
   /* 「尺寸」在映射层是四个子口（宽 / 高 / 宽高比 / 像素量 / 分辨率档，见
    *  workflow-param-mapping 的 `SIZE_SUB_IDS`）：**能定出宽高**才算配置完成
