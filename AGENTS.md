@@ -507,6 +507,9 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
     终态（如后台 `pnpm ship` 出结论）⇒ 用**确定性等待组件** `pnpm ship:wait`
     （`scripts/ship/wait-for-ship.mjs`：短间隔 + 明确终止条件 + 总上限；坏消息立即返回，
     **不许只等成功、不等失败**），**不许**即兴编 `sleep 330 && grep 日志` 这类等待。
+    等的对象是**正在跑的那一跑**（ISSUE #4510）：见到 `status=running` 的落盘读数就
+    认准它的 `startedAt` 并在输出里念出「等的是哪一跑」；期间别的跑的结论（并发 ship
+    互相覆盖单文件快照）不冒充终态；没有在跑的才回落「最近结论」。
     机器执行者：PreToolUse 钩子（`scripts/agent-hooks/sleep-guard.mjs`）拦下单条 ≥60s
     的 sleep 命令并指向正确出口；钩子挂在本检出工作区 `.zcode/config.json` 的
     `hooks` 块（该目录不入库，换检出按同形重配，脚本在库内）。

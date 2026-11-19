@@ -10813,6 +10813,41 @@ describe("ship --result：状态 + 事件只读口（ISSUE #3923）", () => {
   });
 });
 
+/* ── 写侧快动作也不落盘（ISSUE #4510）──────────────────────────────────────
+ * 现场：流程长跑（--mode auto 等 CI）期间，一笔 --comment 快动作收口时把自己的
+ * 结论覆盖进 `.git/ship-result.json`，status=running 的活读数被掩掉 ⇒
+ * `pnpm ship:wait` 拿旧结论当终态、等错对象。单件动作（读的 + 写的）都不写，
+ * 这份文件只当「流程那一跑」的账。 */
+describe("写侧快动作不落盘（ISSUE #4510）", () => {
+  it("--comment 收口不改写 status=running 的活读数", async () => {
+    const gitDir = mkdtempSync(path.join(os.tmpdir(), "ship-4510-"));
+    try {
+      const sink = createShipResultSink({
+        root: process.cwd(),
+        resolve: () => gitDir,
+        args: ["--mode", "auto"],
+      });
+      sink.append("[ship] ▶ 等 CI | build=cnb-d4h-1k7phkuvk | pr=4468");
+      const file = path.join(gitDir, "ship-result.json");
+      const before = readFileSync(file, "utf8");
+
+      const log: Array<string> = [];
+      /* 缺 --body-file ⇒ --comment 在任何平台调用之前就退 2；这里只看落盘那一格。 */
+      await main({
+        args: ["--comment", "4468"],
+        log: (l: string) => log.push(l),
+        probeCnb: () => true,
+        root: process.cwd(),
+        resolveGitDir: () => gitDir,
+        shipResultResolve: () => gitDir,
+      });
+      expect(readFileSync(file, "utf8")).toBe(before);
+    } finally {
+      rmSync(gitDir, { recursive: true, force: true });
+    }
+  });
+});
+
 /* ── `pnpm ship --status`：每一格状态的只读统一查询口（ISSUE #3811）──────────
  * 判定本体全部复用既有执行者（classifyBuildOutcome / readPullVerdict / issues get），
  * 这一组用例钉三件事：退码映射只有一份、命令行形状只有一份、读面一次也不写平台。 */

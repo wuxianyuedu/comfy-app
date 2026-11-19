@@ -102,12 +102,45 @@ export async function waitForShip(io = {}) {
   const deadline = now() + timeoutMs;
   /** 上一次见到的阶段数：只在有新进展时念一行，不按固定节奏刷屏。 */
   let seenStages = -1;
+  /** 已认定要等的哪一跑（`startedAt`）：见过 `status=running` 就认准它（ISSUE #4510）——
+   * 同一检出并发跑 ship 时，单份落盘会被后收口的快跑覆盖，眼前出现「别的跑的结论」
+   * 不算等的那一跑出了终态。null = 还没见到在跑的（回落「最近结论」的口径）。 */
+  let waitedStartedAt = null;
+  /** 「眼前结论来自别的跑」那句只念一次，不每个轮询周期刷屏。 */
+  let interloperLogged = false;
   for (;;) {
     const reading = readShipResult(root, io.resolve);
     const r = reading.result;
+    /* 先认跑：见到 `status=running` 就把等待对象钉在它的 startedAt 上，并在输出里
+     * 念出「等的是哪一跑」（起始时间 / 阶段数）—— 等错对象要当场可见（#4510）。 */
+    if (reading.found && r?.status === "running") {
+      if (waitedStartedAt !== r.startedAt) {
+        waitedStartedAt = r.startedAt;
+        log(
+          `[wait-for-ship] 等的是这一跑：startedAt=${r.startedAt} · pid=${r.pid ?? "?"} · 已走到 ${r.stages.length} 格`,
+        );
+        seenStages = r.stages.length;
+      }
+    }
     /* 终止条件：快照离开 `running`（green / red / not-run / interrupted）。
      * interrupted 没有退码 ⇒ 2（没结论）；其余照抄快照里的 exitCode。 */
     if (reading.found && r && r.status !== "running") {
+      if (waitedStartedAt !== null && r.startedAt !== waitedStartedAt) {
+        /* 眼前的结论来自**别的跑**（并发 ship 互相覆盖落盘的单文件快照）——
+         * 等的那一跑还没收口，不认这份结论，继续等（到点仍走下面的总上限）。 */
+        if (!interloperLogged) {
+          interloperLogged = true;
+          log(
+            `[wait-for-ship] 眼前的结论来自别的跑（startedAt=${r.startedAt} · exit=${r.exitCode ?? "无"}）—— 继续等 startedAt=${waitedStartedAt} 的那一跑`,
+          );
+        }
+        if (now() >= deadline) {
+          return { code: CODE.CI_PENDING, timedOut: true, reading };
+        }
+        // oxlint-disable-next-line no-await-in-loop -- 同上：串行轮询，读完一眼才睡
+        await sleep(intervalMs);
+        continue;
+      }
       return { code: r.exitCode ?? CODE.NOT_RUN, timedOut: false, reading };
     }
     if (now() >= deadline) {
@@ -117,7 +150,7 @@ export async function waitForShip(io = {}) {
     if (stageCount !== seenStages) {
       seenStages = stageCount;
       log(
-        `[wait-for-ship] 已等 ${Math.round((now() - (deadline - timeoutMs)) / 1000)}s · status=${r?.status ?? "无快照"} · 走到 ${stageCount} 格${r?.status === "running" ? " · 继续等" : ""}`,
+        `[wait-for-ship] 已等 ${Math.round((now() - (deadline - timeoutMs)) / 1000)}s · status=${r?.status ?? "无快照"} · 走到 ${stageCount} 格${r?.status === "running" ? ` · 等的是 startedAt=${r.startedAt} 这一跑` : ""}`,
       );
     }
     // oxlint-disable-next-line no-await-in-loop -- 轮询的本质是串行等待：读完一眼才睡到下一眼，并行化没有意义
