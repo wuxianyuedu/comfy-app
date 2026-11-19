@@ -1761,6 +1761,26 @@ zustand 队列，而不是再加一个模块级单例。
 > `src/lib/log/capture-streams.server.ts`），进程起来之后才有内容；而 CLI 横幅与
 > 编译日志属于 Next 的**启动进程**，只有 `nextjs-stdout-*` 里有。
 
+#### 4.5.1.1 启动页紧凑档也要看到「服务端在做什么」（ISSUE #4431）
+
+日志面板（`get_launch_log`）要**展开**才看得到服务输出，而「等待服务就绪」是启动里
+最长的一段——紧凑档画面上只剩进度条与「进行中」。启动页因此常驻轮询壳命令
+`get_server_activity`：取**本次运行**最新一份 Next stdout/stderr 日志尾（与
+`get_launch_log` 的「服务输出」两段同一套 mtime 判据，`latest_prefixed_log`），
+从后往前挑**最近一条有信息量的行**摆到进度文案下面——`▲ Next.js` 横幅、
+`✓ Ready in …`、`[comfyui-lifecycle] ComfyUI 正在启动中，等待就绪…`、编译与报错行。
+
+两类**高频重复行**是噪声，判据（`shell_launch::is_server_noise_line`）把它们滤掉，
+答案轮不到它们：健康探活的访问日志（`GET /api/health …`，编排器每秒一拍）与
+ComfyUI 拉起期的逐拍轮询（`[comfyui] Configured instance … starting, port not
+bound yet`，约 1.5s 一条）。挑不出（全是噪声 / 服务还没输出 / 项目根推不出）回
+**空串**，启动页把这一行收起——不摆一句空话；壳过旧（命令未注册）该行整体退场，
+不逐轮重试。命令只读一份 8KB 日志尾，启动页按 1s 一拍轮询（状态轮询仍是 250ms）。
+
+窗口紧凑档高度随这一行 **264 → 288**：`SPLASH_WINDOW_SIZE`（lib.rs）、
+`tauri.conf.json` 的 splash `height`、启动页的 `COMPACT_SIZE` 兜底值三处同批，
+由壳内用例 `splash_config_size_matches_the_shell_constant` 钉住两两同值。
+
 #### 4.5.2 「断开」要抗抖动：连续失败到门槛才算数
 
 探活打的是应用服务自己的 HTTP（`/api/dev/server-id`）。它在**冷编译、按需编译某条
