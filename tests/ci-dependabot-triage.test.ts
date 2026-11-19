@@ -389,6 +389,24 @@ describe("失败姿态：读不全 / 认证 / 限流 ⇒ 红且零写入", () =>
     expect(yaml).not.toMatch(/^\s*security-events:\s*read\s*$/m);
   });
 
+  it("push 触发钉在依赖清单上（ISSUE #4432）：master 分支 + 四份清单路径", () => {
+    const yaml = readFileSync(
+      join(process.cwd(), ".github", "workflows", "dependabot-triage.yml"),
+      "utf8",
+    );
+    const trigger = yaml.slice(yaml.indexOf("\non:"), yaml.indexOf("\npermissions:"));
+    expect(trigger).toContain("push:");
+    expect(trigger).toMatch(/branches:\s*\[master\]/);
+    for (const manifest of [
+      "package.json",
+      "pnpm-lock.yaml",
+      "src-tauri/Cargo.toml",
+      "src-tauri/Cargo.lock",
+    ]) {
+      expect(trigger).toContain(`- ${manifest}`);
+    }
+  });
+
   it("403 + 配额 0 ⇒ 读成限流，不读成缺权限", () => {
     expect(classifyGithubFailure(403, "", "0").kind).toBe("rate-limit");
     expect(classifyGithubFailure(429, "", "12").kind).toBe("rate-limit");
