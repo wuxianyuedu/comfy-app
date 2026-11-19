@@ -2634,65 +2634,86 @@ pub fn run() {
     // 所有权**（`move`），否则 `expect_slow_first_paint` 这类按值传入的局部量会在
     // 闭包借用检查时直接编译不过（`closure may outlive the current function`）。
     .setup(move |app| {
-      // 模式在 `run()` 里就定了（必须早于启动页存在），但那一刻 **log 插件还没装上**：
-      // 插件是 Builder 链上 `.plugin(log_plugin)` 之后才生效的，`setup` 是最早的
-      // 安全点。这一行是「本次启动按哪种形态跑」在日志里唯一的落点，别删。
-      log::info!("[ComfyAPP] launch mode={launch_mode}");
-      // run() 只做装配，启动编排按职责拆成命名步骤（原先整段塞在 setup 闭包里，
-      // 单函数近 300 行，而 Rust 侧没有函数长度门禁——见 §12.13 / ISSUE #536 P4）。
-      // 顺序是契约：先建启动页（程序化，#4412）并定启动页尺寸，再建隐藏的 main
-      // 窗并挂其加载完成回调，接着挂「关启动页 = 放弃启动」与看门狗，最后才是
-      // 生产模式 sidecar 与托盘。残留回收与 sidecar 拉起这两段同步重活挪进后台
-      // 线程（#4416）：setup 在事件循环线程上执行，同步重活期间启动页的 IPC
-      // 轮询被同一阻塞消耗。
-      if let Err(e) = create_splash_window(app) {
-        report_window_setup_failure(app, &e.to_string());
-      }
-      setup_splash_window(app);
-
-      if self_launch {
-        // 残留回收（find_owned_orchestrator + reap_pid，最坏 REAPER_BUDGET(10s)
-        // + drain）是同步重活，挪到后台线程（#4416）。编排器在线程里按
-        // 「回收残留 → 起自己的」顺序推进，与窗口创建无顺序依赖。
-        let handle = app.handle().clone();
-        let project_root = project_root.clone();
-        std::thread::spawn(move || start_self_orchestration(&handle, &project_root));
-      }
-
-      // ── 方向 B：启动页与「应用」窗口分离 ──
-      // 装配失败（WebView2 初始化失败等，#4329）与下面 standalone 装配失败同理：
-      // Err 不能冒到 Builder::build 的 expect——那是无声崩溃。接住并写状态文件，
-      // 壳继续跑着显示失败态（详见 report_window_setup_failure）。
-      if let Err(e) = wire_startup_windows(app, expect_slow_first_paint) {
-        report_window_setup_failure(app, &e.to_string());
-      }
-
-      // standalone 载荷缺失/损坏（ISSUE #4214）：Err 不能冒到 Builder::build 的
-      // expect——那是无声崩溃（windows_subsystem 下无控制台、无启动页）。窗口此刻
-      // 已创建：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态。
-      // sidecar 拉起带固定的 grace 睡眠（成功路径 1.5s）与端口重试（4.5s），
-      // 同样是启动关键路径上的同步重活 —— 一并挪到后台线程（#4416）。
-      #[cfg(not(debug_assertions))]
-      {
-        let handle = app.handle().clone();
-        std::thread::spawn(move || {
-          if let Err(e) = setup_standalone_runtime(&handle) {
-            report_standalone_setup_failure(&handle, &e.to_string());
-          }
-        });
-      }
-
-      // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
-      // （缺图标资源 / 系统限制）只记 WARN，绝不能让整个应用起不来。
-      if let Err(e) = build_tray(app.handle()) {
-        log::warn!("[ComfyAPP] tray icon not created: {:?}", e);
-      }
+      startup_setup(
+        app,
+        &SetupParts {
+          expect_slow_first_paint,
+          launch_mode,
+          project_root,
+          self_launch,
+        },
+      );
       Ok(())
     })
     .build(tauri::generate_context!())
     .expect("error while building tauri application");
 
   app.run(handle_run_event);
+}
+
+/// setup 闭包捕获的运行期量（`move` 语义需要所有权，收成一个传递面）。
+struct SetupParts {
+  expect_slow_first_paint: bool,
+  launch_mode: String,
+  project_root: String,
+  self_launch: bool,
+}
+
+/// setup 闭包的本体（#4412/#4416 之后步骤增多，run() 越过 Rust 120 行硬闸——
+/// 收成命名步骤，闭包只保留装配）。
+///
+/// 顺序是契约：先建启动页（程序化，#4412）并定启动页尺寸，再建隐藏的 main
+/// 窗并挂其加载完成回调，接着挂「关启动页 = 放弃启动」与看门狗，最后才是
+/// 生产模式 sidecar 与托盘。残留回收与 sidecar 拉起这两段同步重活挪进后台
+/// 线程（#4416）：setup 在事件循环线程上执行，同步重活期间启动页的 IPC
+/// 轮询被同一阻塞消耗。
+fn startup_setup(app: &mut tauri::App, parts: &SetupParts) {
+  // 模式在 `run()` 里就定了（必须早于启动页存在），但那一刻 **log 插件还没装上**：
+  // 插件是 Builder 链上 `.plugin(log_plugin)` 之后才生效的，`setup` 是最早的
+  // 安全点。这一行是「本次启动按哪种形态跑」在日志里唯一的落点，别删。
+  log::info!("[ComfyAPP] launch mode={}", parts.launch_mode);
+  if let Err(e) = create_splash_window(app) {
+    report_window_setup_failure(app, &e.to_string());
+  }
+  setup_splash_window(app);
+
+  if parts.self_launch {
+    // 残留回收（find_owned_orchestrator + reap_pid，最坏 REAPER_BUDGET(10s)
+    // + drain）是同步重活，挪到后台线程（#4416）。编排器在线程里按
+    // 「回收残留 → 起自己的」顺序推进，与窗口创建无顺序依赖。
+    let handle = app.handle().clone();
+    let project_root = parts.project_root.clone();
+    std::thread::spawn(move || start_self_orchestration(&handle, &project_root));
+  }
+
+  // ── 方向 B：启动页与「应用」窗口分离 ──
+  // 装配失败（WebView2 初始化失败等，#4329）与下面 standalone 装配失败同理：
+  // Err 不能冒到 Builder::build 的 expect——那是无声崩溃。接住并写状态文件，
+  // 壳继续跑着显示失败态（详见 report_window_setup_failure）。
+  if let Err(e) = wire_startup_windows(app, parts.expect_slow_first_paint) {
+    report_window_setup_failure(app, &e.to_string());
+  }
+
+  // standalone 载荷缺失/损坏（ISSUE #4214）：Err 不能冒到 Builder::build 的
+  // expect——那是无声崩溃（windows_subsystem 下无控制台、无启动页）。窗口此刻
+  // 已创建：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态。
+  // sidecar 拉起带固定的 grace 睡眠（成功路径 1.5s）与端口重试（4.5s），
+  // 同样是启动关键路径上的同步重活 —— 一并挪到后台线程（#4416）。
+  #[cfg(not(debug_assertions))]
+  {
+    let handle = app.handle().clone();
+    std::thread::spawn(move || {
+      if let Err(e) = setup_standalone_runtime(&handle) {
+        report_standalone_setup_failure(&handle, &e.to_string());
+      }
+    });
+  }
+
+  // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
+  // （缺图标资源 / 系统限制）只记 WARN，绝不能让整个应用起不来。
+  if let Err(e) = build_tray(app.handle()) {
+    log::warn!("[ComfyAPP] tray icon not created: {:?}", e);
+  }
 }
 
 /// 启动页与「应用」主窗的装配（ISSUE #4214 顺带：`run()` 越过 Rust 函数长度
