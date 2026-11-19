@@ -4,11 +4,11 @@
  * / ReportCards 是从主组件 render 里提出来的低耦合 JSX 区块
  *（状态经 props 显式传入）。 */
 
-import type { RefObject } from "react";
+import { memo, type RefObject } from "react";
 import { OK_STATUS_STYLE, STATUS_STYLE } from "./constants";
 import { StatusDot } from "~/components/ui/status-dot";
 import { StatusBadge } from "~/components/ui/status-badge";
-import type { ParseProgress, ParseReport, SettingsResp } from "./types";
+import type { ParseLogEntry, ParseProgress, ParseReport, SettingsResp } from "./types";
 import { displayValue } from "~/lib/display-value";
 import { lastSegments } from "~/lib/path-display";
 import { ProgressBar } from "~/components/ui/progress-bar";
@@ -218,6 +218,22 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
   );
 }
 
+/** 单行解析日志（ISSUE #4470）。`memo` + 稳定 `id` key：流式解析每来一行
+ * `setLogs` 都会生成新数组，但已有行的 `log` 对象身份不变 → memo 命中、只渲染
+ * 新增的那一行，不再把最多 2000 行 div 全量 reconcile 一遍（大包解析可感知卡顿）。
+ * 用 `id` 而非数组下标做 key：尾部窗口滚动时下标会整体平移，稳定的 id 才能保证
+ * React 认出同一行、复用 DOM 与自动滚动的 `[data-log-row]` 定位。 */
+const ParseLogRow = memo(function ParseLogRow({ log }: { log: ParseLogEntry }) {
+  return (
+    <div
+      className={log.level === "error" ? "text-destructive" : "text-success-strong"}
+      data-log-row
+    >
+      {log.msg}
+    </div>
+  );
+});
+
 /** 实时解析控制台（日志列表）—— 从主组件的
  * 「nodes」页签 render 原样提出。两个滚动 ref 属于主组件的
  * 自动滚动 effect，原样透传。 */
@@ -228,7 +244,7 @@ export function ParseConsole({
   consoleRef,
 }: {
   consoleRef: RefObject<HTMLDivElement | null>;
-  logs: Array<{ level: string; msg: string }>;
+  logs: Array<ParseLogEntry>;
   logsRef: RefObject<HTMLDivElement | null>;
   parsing: boolean;
 }) {
@@ -252,14 +268,8 @@ export function ParseConsole({
           className="border-border text-2xs h-48 overflow-y-auto rounded-lg border bg-black/70 p-3 font-mono leading-relaxed"
           ref={consoleRef}
         >
-          {logs.map((log, idx) => (
-            <div
-              className={log.level === "error" ? "text-destructive" : "text-success-strong"}
-              data-log-row
-              key={`log-${idx}`}
-            >
-              {log.msg}
-            </div>
+          {logs.map((log) => (
+            <ParseLogRow key={log.id} log={log} />
           ))}
           {parsing && <div className="text-ink-muted">…</div>}
         </div>
