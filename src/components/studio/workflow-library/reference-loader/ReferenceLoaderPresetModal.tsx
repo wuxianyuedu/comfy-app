@@ -71,7 +71,6 @@ function WidgetField(props: {
     return (
       <SelectMenu
         aria-label={name}
-        autoFitFromOptions={false}
         className="text-3xs h-7 w-full"
         labels={Object.fromEntries(choices.map((choice) => [choice, choice]))}
         onChange={(next) => {
