@@ -239,9 +239,16 @@ export function useLibraryWireFlow({
     [showHint, io, entries],
   );
 
+  /* 三个内容对象收进一层 memo（#4467）：调用方各自 memo 之后，这里不再每次
+   *  调用都发新对象 —— Provider value 的引用才能在 keystroke 间保持稳定。 */
+  const nodeContent = useMemo(
+    () => ({ params: paramsNode, host: hostNode, outputs: outputsNode }),
+    [paramsNode, hostNode, outputsNode],
+  );
+
   return {
     defaultNodes,
-    nodeContent: { params: paramsNode, host: hostNode, outputs: outputsNode },
+    nodeContent,
     defaultEdges,
     isValidConnection,
     onConnect,
