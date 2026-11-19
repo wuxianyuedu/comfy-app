@@ -1863,26 +1863,58 @@ unsafe fn read_owned_env_from_process(
   if env_addr == 0 {
     return false;
   }
-  // 环境块是一串 NUL 结尾的 UTF-16 串，以空串（双 NUL）收尾。整块读一次，
-  // 截断风险由「读到空串为止」兜住：这里只做**包含**判定，不需要完整块。
-  const MAX_ENV_BYTES: usize = 64 * 1024;
-  let mut buf = vec![0u8; MAX_ENV_BYTES];
-  let mut read = 0usize;
-  if unsafe {
-    ReadProcessMemory(
-      handle,
-      env_addr as *const std::ffi::c_void,
-      buf.as_mut_ptr() as *mut std::ffi::c_void,
-      MAX_ENV_BYTES,
-      Some(&mut read),
-    )
+  // 环境块是一串 NUL 结尾的 UTF-16 串，以空串（双 NUL）收尾。**按块循环读**
+  // 直到读到双 NUL 终止符：开发机大 PATH + pnpm/corepack 注入的环境块轻松超
+  // 64KB，此前只读一次定长 64KB，两枚认亲针落在窗口之外时认亲判负 —— 启动前
+  // 对「上次强杀遗留的编排器」视而不见、不去回收，退化到会话锚点恢复
+  // （#4426）。上限 1MB：正常环境块到不了这个量级，顶到上限按「没读到终止符」
+  // 判负并落 WARN（宁可少回收，不误杀）。这里只做**包含**判定，不需要完整块。
+  const MAX_ENV_BYTES: usize = 1024 * 1024;
+  const CHUNK_BYTES: usize = 32 * 1024;
+  let mut raw: Vec<u8> = Vec::new();
+  let mut terminated = false;
+  for offset in (0..MAX_ENV_BYTES).step_by(CHUNK_BYTES) {
+    let mut chunk = vec![0u8; CHUNK_BYTES];
+    let mut read = 0usize;
+    if unsafe {
+      ReadProcessMemory(
+        handle,
+        (env_addr + offset) as *const std::ffi::c_void,
+        chunk.as_mut_ptr() as *mut std::ffi::c_void,
+        CHUNK_BYTES,
+        Some(&mut read),
+      )
+    }
+    .is_err()
+    {
+      return false;
+    }
+    if read == 0 {
+      break;
+    }
+    raw.extend_from_slice(&chunk[..read]);
+    /* 双 NUL 可能跨块边界，整块重扫（≤32 次迭代，成本可忽略）。 */
+    let units: Vec<u16> = raw
+      .chunks_exact(2)
+      .map(|c| u16::from_le_bytes([c[0], c[1]]))
+      .collect();
+    if units.windows(2).any(|w| w == [0, 0]) {
+      terminated = true;
+      break;
+    }
+    if read < CHUNK_BYTES {
+      break;
+    }
   }
-  .is_err()
-  {
+  if !terminated {
+    if raw.len() >= MAX_ENV_BYTES {
+      log::warn!(
+        "[ComfyAPP] 环境块认亲：读到 1MB 上限仍未见双 NUL 终止符，按「读不完整」判负（#4426）"
+      );
+    }
     return false;
   }
-  buf.truncate(read);
-  let units: Vec<u16> = buf
+  let units: Vec<u16> = raw
     .chunks_exact(2)
     .map(|c| u16::from_le_bytes([c[0], c[1]]))
     .collect();
