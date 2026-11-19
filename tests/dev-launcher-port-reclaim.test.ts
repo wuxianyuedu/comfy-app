@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 import { isRecord, isUnknownArray } from "~/lib/is-record";
-import { waitForPortsFree } from "../scripts/launcher-core/port-reap.mjs";
+import { cmdlineBelongsToRoot, waitForPortsFree } from "../scripts/launcher-core/port-reap.mjs";
 
 const LAUNCHER = JSON.stringify(
   pathToFileURL(join(process.cwd(), "scripts", "dev-launcher.mjs")).href,
@@ -217,5 +217,41 @@ describe("waitForPortsFree —— 回收与清缓存/起服务之间的有界同
     });
     expect(result.free).toBe(false);
     expect(logs.join("\n")).toContain("探测不可用");
+  });
+});
+
+describe("cmdlineBelongsToRoot 的路径边界（#4423）", () => {
+  const ROOT_DIR = "G:/ComfyAPP/comfy-app-t3-branch3";
+  const OTHER = "G:/ComfyAPP/comfy-app-t3-branch3-old";
+  /* 带尾斜杠的形态单列一个常量：模板字面量（no-unnecessary-template-expression）
+   * 与字符串拼接（prefer-template）两条清零规则在这里互相夹击。 */
+  const ROOT_DIR_TRAILING_SLASH = "G:/ComfyAPP/comfy-app-t3-branch3/";
+
+  it("检出内脚本路径：命中（既有语义不变）", () => {
+    expect(cmdlineBelongsToRoot(`node ${ROOT_DIR}/scripts/dev.mjs`, ROOT_DIR)).toBe(true);
+    /* 反斜杠归一后命中；大小写不敏感。 */
+    expect(
+      cmdlineBelongsToRoot("node G:/ComfyAPP/COMFY-APP-T3-BRANCH3/scripts/x.mjs", ROOT_DIR),
+    ).toBe(true);
+    expect(cmdlineBelongsToRoot(`node ${ROOT_DIR}\\scripts\\dev.mjs`, ROOT_DIR)).toBe(true);
+  });
+
+  it("前缀兄弟检出：不命中（裸子串会误判真，PID 复用时误杀整树）", () => {
+    expect(cmdlineBelongsToRoot(`node ${OTHER}/scripts/dev.mjs`, ROOT_DIR)).toBe(false);
+    /* 同一命令行里两个检出并存：兄弟那段不算数，本检出那段算。 */
+    expect(cmdlineBelongsToRoot(`node ${OTHER}/a.mjs --ref ${ROOT_DIR}/b.mjs`, ROOT_DIR)).toBe(
+      true,
+    );
+  });
+
+  it("base 后一位必须是结尾或路径分隔符：目录名恰为前缀的无关文件不命中", () => {
+    expect(cmdlineBelongsToRoot(`edit ${ROOT_DIR}-notes.txt`, ROOT_DIR)).toBe(false);
+    expect(cmdlineBelongsToRoot(ROOT_DIR_TRAILING_SLASH, ROOT_DIR)).toBe(true);
+    expect(cmdlineBelongsToRoot(ROOT_DIR, ROOT_DIR)).toBe(true);
+  });
+
+  it("空命令行 / 空根：不命中", () => {
+    expect(cmdlineBelongsToRoot("", ROOT_DIR)).toBe(false);
+    expect(cmdlineBelongsToRoot("node x.mjs", "")).toBe(false);
   });
 });

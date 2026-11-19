@@ -114,6 +114,42 @@ export async function waitForPidGone(
   }
 }
 
+/** taskkill / pkill 子进程的墙钟预算（#4422）：真树回收通常 1~2s 内完成；预算
+ *  罩住「taskkill / pkill 自己不退出」那一形——探活预算（waitForPidGone 的 3s）
+ *  只在它**退出之后**才生效，罩不住它自己；没有这一层，reapAll / shutdown 会
+ *  永不返回，Ctrl-C 收尾整个卡死。超时按「没量到结果」如实 ok:false，via 注明
+ *  超时，不冒充成功。 */
+const TREE_KILL_BUDGET_MS = 15_000;
+
+/** 预算读数（测试注入口，与 `COMFYAPP_TASKKILL` 同族）：默认 15s；测试用
+ *  `COMFYAPP_TREE_KILL_BUDGET_MS` 调小以驱动超时分支，不影响生产判据。 */
+export function treeKillBudgetMs(): number {
+  const override = Number(process.env.COMFYAPP_TREE_KILL_BUDGET_MS);
+  return Number.isFinite(override) && override > 0 ? override : TREE_KILL_BUDGET_MS;
+}
+
+/** spawn 的 `close` 事件 → 回收结果读数（#4422，纯函数）：signal 在场 = 超过预算
+ *  被平台收走，按「没量到结果」处理（ok:false），via 注明超时——不冒充成功；
+ *  pkill 的退出码 1 = 「没有匹配的进程」，对回收语义是成功（目标已经不在）。 */
+export function killCloseDispatch(
+  kind: "pkill" | "taskkill",
+  code: number | null,
+  signal: NodeJS.Signals | null,
+  via: string,
+): { code: number | null; ok: boolean; via: string } {
+  if (signal !== null) {
+    return { code, ok: false, via: `${via}（超过 ${treeKillBudgetMs()}ms 预算被收，没量到结果）` };
+  }
+  if (kind === "pkill") {
+    return { code, ok: code === 0 || code === 1, via: `${via}（exit=${code}）` };
+  }
+  return {
+    code,
+    ok: code === 0,
+    via: code === 0 ? via : `${via}（exit=${code}；目标可能已不在 / 被拦截 / 权限不足）`,
+  };
+}
+
 /**
  * 派发 taskkill 并**等到它退出**（#4332：退出码参与结果判定，不再只派发）。
  * spawn 同步抛错 / `error` 事件都收成 `ok:false`（模块承诺：回收失败不抛错）。
@@ -125,16 +161,16 @@ function dispatchTaskkillAwait(
   const via = `${exe} ${args.join(" ")}`;
   return new Promise((resolve) => {
     try {
-      const child = spawn(exe, args, { stdio: "ignore", windowsHide: true });
+      const child = spawn(exe, args, {
+        stdio: "ignore",
+        windowsHide: true,
+        timeout: treeKillBudgetMs(),
+      });
       child.on("error", () => {
         resolve({ code: null, ok: false, via: `${via}（taskkill 起不来）` });
       });
-      child.on("close", (code) => {
-        resolve({
-          code,
-          ok: code === 0,
-          via: code === 0 ? via : `${via}（exit=${code}；目标可能已不在 / 被拦截 / 权限不足）`,
-        });
+      child.on("close", (code, signal) => {
+        resolve(killCloseDispatch("taskkill", code, signal, via));
       });
     } catch {
       resolve({ code: null, ok: false, via: `${via}（taskkill 无法派发）` });
@@ -337,16 +373,18 @@ export async function killProcessTreeByImage(image: string): Promise<KillProcess
     };
   }
   return await new Promise<KillProcessTreeResult>((resolve) => {
-    const child = spawn("pkill", ["-x", image], { stdio: "ignore" });
-    // pkill 的退出码 1 = 「没有匹配的进程」，对回收语义来说是成功（目标已经不在）。
+    const child = spawn("pkill", ["-x", image], {
+      stdio: "ignore",
+      timeout: treeKillBudgetMs(),
+    });
     child.on("error", (error) => {
       resolve({ ok: false, via: `pkill -x ${image} 失败（${error.message}）` });
     });
-    child.on("close", (code) => {
-      resolve({
-        ok: code === 0 || code === 1,
-        via: `pkill -x ${image}（exit=${code}）`,
-      });
+    child.on("close", (code, signal) => {
+      /* pkill 的退出码 1 = 「没有匹配的进程」，对回收语义来说是成功（目标已经不在）——
+       * ok 映射与 signal 超时分支都在 killCloseDispatch（#4422）。 */
+      const dispatch = killCloseDispatch("pkill", code, signal, `pkill -x ${image}`);
+      resolve({ ok: dispatch.ok, via: dispatch.via });
     });
   });
 }

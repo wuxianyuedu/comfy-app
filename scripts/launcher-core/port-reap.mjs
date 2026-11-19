@@ -225,19 +225,37 @@ export async function reapStaleSession(root = process.cwd()) {
   return owned;
 }
 
-/** 命令行是否落在检出根内（#4330 的归属判据，模块内私有）。
+/** 命令行是否落在检出根内（#4330 的归属判据）。
  *
  *  与 `isAppDevServerCmdline` 的分工：那条回答「跑的是不是本仓库应用服务」
  *  （要求根路径 + dev/start/next 形状），这条只回答「这个进程是不是从本检出
  *  出去的」——锚点里的 PID 本就来自本检出的编排器，用它防「PID 复用误杀」
  *  足够，且能盖住 db-sync / executor-host 这类非 dev 形状的子进程。
+ *
+ *  子串命中后要求**路径边界**（#4423）：base 后一位必须是命令行结尾或 `/` `\`。
+ *  裸子串下，前缀兄弟检出（`…comfy-app-t3-branch3-old` 的命令行包含
+ *  `…comfy-app-t3-branch3`）与「命令行恰好带着本检出绝对路径的无关进程」都会
+ *  命中——PID 复用撞上锚点里的陈旧 PID 时会连同子树被误杀。形状判据保持放宽
+ *  （不要求 dev/start/next 形状），盖住 db-sync / executor-host 的语义不变。
+ *  导出给测试钉边界（兄弟目录 / 边界内 / 边界外三类）。
  *  @param {string} cmdline @param {string} root @returns {boolean} */
-function cmdlineBelongsToRoot(cmdline, root) {
+export function cmdlineBelongsToRoot(cmdline, root) {
   /** @param {string} value */
   const norm = (value) => value.replaceAll("\\", "/").toLowerCase();
   const text = norm(cmdline);
   const base = norm(root).replace(/\/+$/, "");
-  return Boolean(text) && Boolean(base) && text.includes(base);
+  if (!text || !base) {
+    return false;
+  }
+  let at = text.indexOf(base);
+  while (at !== -1) {
+    const next = text[at + base.length];
+    if (next === undefined || next === "/" || next === "\\") {
+      return true;
+    }
+    at = text.indexOf(base, at + 1);
+  }
+  return false;
 }
 
 /** 该 PID 的命令行（判「端口上的是不是本仓库的应用服务」，拿不到返回空串）。
