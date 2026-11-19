@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ReferenceChainCatalog } from "./reference-loader-catalog";
+import { buildReferenceChainCatalog } from "./reference-loader-catalog";
 import {
   applyReferenceLoaderChainsApi,
   applyReferenceLoaderChainsRaw,
@@ -228,18 +229,19 @@ describe("RAW 装载链生成", () => {
   });
 });
 
-describe("API 装载链生成", () => {
-  type ApiNode = { _meta: { title: string }; class_type: string; inputs: Record<string, unknown> };
-  function apiFixture(): Record<string, ApiNode> {
-    return {
-      "69": {
-        _meta: { title: "条件" },
-        class_type: "MiniMaxH3ImageConditioning",
-        inputs: { image_1: null, prompt: "猫" },
-      },
-    };
-  }
+/** API 图夹具（既有与 V3 两段用例共用同一目标形状）。 */
+type ApiNode = { _meta: { title: string }; class_type: string; inputs: Record<string, unknown> };
+function apiFixture(): Record<string, ApiNode> {
+  return {
+    "69": {
+      _meta: { title: "条件" },
+      class_type: "MiniMaxH3ImageConditioning",
+      inputs: { image_1: null, prompt: "猫" },
+    },
+  };
+}
 
+describe("API 装载链生成", () => {
   it("按预设实例化链并连到目标入口，文件名改写到新装载节点", () => {
     const graph = apiFixture();
     const overrides = [{ nodeId: "69", name: "image_1", value: "ref.png" }];
@@ -278,5 +280,151 @@ describe("API 装载链生成", () => {
 
     expect(result.added).toBe(0);
     expect(result.overrides).toEqual(overrides);
+  });
+});
+
+/* ─────────────── V3 输入形状（#4404）─────────────── */
+// 真实 ResizeImageMaskNode 的目录（COMFY_MATCHTYPE_V3 连线口 + COMFY_DYNAMICCOMBO_V3
+// 选择器 + V3 COMBO 候选在 options 键），夹具与 catalog 用例同源（object_info 实测）。
+const V3_CATALOG: ReferenceChainCatalog = buildReferenceChainCatalog({
+  ResizeImageMaskNode: {
+    input: {
+      required: {
+        input: [
+          "COMFY_MATCHTYPE_V3",
+          { template: { template_id: "input_type", allowed_types: "IMAGE,MASK" } },
+        ],
+        resize_type: [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            options: [
+              {
+                key: "scale dimensions",
+                inputs: { required: { width: ["INT", { default: 512 }] } },
+              },
+              {
+                key: "scale to multiple",
+                inputs: { required: { multiple: ["INT", { default: 8 }] } },
+              },
+              {
+                key: "match size",
+                inputs: { required: { match: ["IMAGE,MASK", {}] } },
+              },
+            ],
+          },
+        ],
+        scale_method: [
+          "COMBO",
+          { default: "area", options: ["nearest-exact", "bilinear", "area", "bicubic", "lanczos"] },
+        ],
+      },
+    },
+    input_order: { required: ["input", "resize_type", "scale_method"] },
+    output: ["COMFY_MATCHTYPE_V3"],
+    output_name: ["resized"],
+  },
+})!;
+
+const V3_PRESET: ReferenceLoaderPreset = {
+  id: "v3-align",
+  name: "缩放对齐（4MP → 32 倍数）",
+  steps: [
+    {
+      class: "ResizeImageMaskNode",
+      widgets: { resize_type: "scale to multiple", "resize_type.multiple": 32 },
+    },
+  ],
+};
+
+describe("V3 输入形状的装载链（#4404）", () => {
+  it("RAW：input 是连线口不占 widgets 位；动态 COMBO 摆「选择器 + 子输入」；V3 COMBO 出声明的缺省", () => {
+    const { graph: raw } = rawFixture();
+    const overrides = [{ nodeId: "69", name: "image_1", value: "ref.png" }];
+    const plan = { [referenceLoaderEndpointKey("69", "image_1")]: V3_PRESET };
+
+    const result = applyReferenceLoaderChainsRaw(raw, overrides, plan, V3_CATALOG);
+
+    expect(result.added).toBe(1);
+    const { nodes, links } = asGraph(result.graph);
+    const step = nodes.find((n) => n.type === "ResizeImageMaskNode");
+    expect(step?.widgets_values).toEqual(["scale to multiple", 32, "area"]);
+    /* input（MATCHTYPE）是连线口：占一条内部连线，没有 widget 标记。 */
+    const stepInput = step?.inputs.find((item) => item.name === "input");
+    expect(stepInput?.widget).toBeUndefined();
+    expect(links.some((l) => l[1] === 70 && l[3] === step?.id)).toBe(true);
+    expect(result.overrides).toEqual([{ nodeId: "70", name: "image", value: "ref.png" }]);
+  });
+
+  it("RAW：MASK 目标走 MATCHTYPE 节点 —— 首跳喂 LoadImage 的 MASK 口，链尾 MATCHTYPE 出口当 MASK", () => {
+    const { graph: raw, target } = rawFixture();
+    target.inputs.push({ name: "mask_0", type: "MASK", link: null });
+    const overrides = [{ nodeId: "69", name: "mask_0", value: "ref.png" }];
+    const plan = { [referenceLoaderEndpointKey("69", "mask_0")]: V3_PRESET };
+
+    const result = applyReferenceLoaderChainsRaw(raw, overrides, plan, V3_CATALOG);
+
+    expect(result.added).toBe(1);
+    const { nodes, links } = asGraph(result.graph);
+    const loader = nodes.find((n) => n.type === "LoadImage");
+    const step = nodes.find((n) => n.type === "ResizeImageMaskNode");
+    /* 首跳源槽 = 1（LoadImage 的 MASK 出口）—— 链全程携带 MASK。 */
+    const firstHop = links.find((l) => l[1] === loader!.id && l[3] === step!.id);
+    expect(firstHop?.[2]).toBe(1);
+    expect(firstHop?.[4]).toBe(0);
+    /* 链尾 → 目标：MATCHTYPE 出口（0 号槽）连到 MASK 入口。 */
+    const outlet = links.find((l) => l[1] === step!.id && l[3] === 69);
+    expect(outlet?.[2]).toBe(0);
+  });
+
+  it("API：动态 COMBO 子输入以「父名.子名」点号键随图提交（后端 finalize_prefix 的线格式）", () => {
+    const graph = apiFixture();
+    const overrides = [{ nodeId: "69", name: "image_1", value: "ref.png" }];
+    const plan = { [referenceLoaderEndpointKey("69", "image_1")]: V3_PRESET };
+
+    const result = applyReferenceLoaderChainsApi(graph, overrides, plan, V3_CATALOG);
+
+    expect(result.added).toBe(1);
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const root = result.graph as Record<string, ApiNode>;
+    expect(root["71"]!.inputs).toMatchObject({
+      input: ["70", 0],
+      resize_type: "scale to multiple",
+      "resize_type.multiple": 32,
+      scale_method: "area",
+    });
+    expect(root["69"]!.inputs.image_1).toEqual(["71", 0]);
+  });
+
+  it("选中项带连线型子输入（match size 的参考口）→ 整端点回落裸增强，不留半条链", () => {
+    const graph = apiFixture();
+    const brokenPreset: ReferenceLoaderPreset = {
+      id: "match",
+      name: "匹配尺寸",
+      steps: [{ class: "ResizeImageMaskNode", widgets: { resize_type: "match size" } }],
+    };
+    const overrides = [{ nodeId: "69", name: "image_1", value: "ref.png" }];
+    const plan = { [referenceLoaderEndpointKey("69", "image_1")]: brokenPreset };
+
+    const result = applyReferenceLoaderChainsApi(graph, overrides, plan, V3_CATALOG);
+
+    expect(result.added).toBe(0);
+    expect(Object.keys(graph)).toEqual(["69"]);
+    expect(result.overrides).toEqual(overrides);
+  });
+
+  it("RAW 侧同样回落：选中项要连线的预设不建链", () => {
+    const { graph: raw } = rawFixture();
+    const brokenPreset: ReferenceLoaderPreset = {
+      id: "match",
+      name: "匹配尺寸",
+      steps: [{ class: "ResizeImageMaskNode", widgets: { resize_type: "match size" } }],
+    };
+    const overrides = [{ nodeId: "69", name: "image_1", value: "ref.png" }];
+    const plan = { [referenceLoaderEndpointKey("69", "image_1")]: brokenPreset };
+
+    const result = applyReferenceLoaderChainsRaw(raw, overrides, plan, V3_CATALOG);
+
+    expect(result.added).toBe(0);
+    expect(asGraph(result.graph).nodes).toHaveLength(1);
   });
 });
