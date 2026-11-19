@@ -389,22 +389,15 @@ describe("失败姿态：读不全 / 认证 / 限流 ⇒ 红且零写入", () =>
     expect(yaml).not.toMatch(/^\s*security-events:\s*read\s*$/m);
   });
 
-  it("push 触发钉在依赖清单上（ISSUE #4432）：master 分支 + 四份清单路径", () => {
+  it("触发口只有每日定时 + 手动，刻意没有 push 触发（ISSUE #4444）", () => {
     const yaml = readFileSync(
       join(process.cwd(), ".github", "workflows", "dependabot-triage.yml"),
       "utf8",
     );
     const trigger = yaml.slice(yaml.indexOf("\non:"), yaml.indexOf("\npermissions:"));
-    expect(trigger).toContain("push:");
-    expect(trigger).toMatch(/branches:\s*\[master\]/);
-    for (const manifest of [
-      "package.json",
-      "pnpm-lock.yaml",
-      "src-tauri/Cargo.toml",
-      "src-tauri/Cargo.lock",
-    ]) {
-      expect(trigger).toContain(`- ${manifest}`);
-    }
+    expect(trigger).toMatch(/schedule:/);
+    expect(trigger).toMatch(/workflow_dispatch:/);
+    expect(trigger).not.toMatch(/^\s*push:/m);
   });
 
   it("403 + 配额 0 ⇒ 读成限流，不读成缺权限", () => {

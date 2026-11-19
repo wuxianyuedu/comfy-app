@@ -11,12 +11,12 @@
 # 排班：北京 03:00 = UTC 19:00 —— 与 02:00 的 code scanning 巡检错开一小时
 # （不抢同一夜的 runner），也避开 01:00 的每日单元测试那一档。
 #
-# 触发：每日定时 + 手动 + **push 命中依赖清单**（ISSUE #4432）。依赖清单一变
-# （升版 / 加依赖），镜像仓的 Dependabot 告警面当天就会变，只靠定时档最多要等
-# 24 小时才提单 —— 所以 push 到 master（CNB push 档的「GitHub master 镜像」格
-# 推过来的）命中下面四份清单时当场巡检一次。⚠️ 告警随依赖图**异步**刷新，push
-# 那一跑是尽力而为的快路径，新告警还没刷出来时由次日定时档兜底；改 Rust / TS
-# 源码不动清单，不触发 —— 没有新的告警面，跑了也是空转。
+# 触发：每日定时 + 手动，**刻意没有 push 触发**（ISSUE #4444，回退 #4433）。
+# 这一格是**每日对账口**，不是实时告警口：镜像仓的告警面由 GitHub 依赖图在
+# push 之后**异步**重算，Actions 起跑（checkout + setup-node）快于告警刷新，
+# push 那一跑多半读到旧面、新生告警读不到 ⇒ 加 push 触发只会多一串空转跑。
+# 每日 03:00 一趟已覆盖「有告警 → 变成 CNB 单」这条交接链，改依赖清单不必
+# 抢在当天。
 #
 # 权限只给两项：读代码（检出脚本）与读 Dependabot 告警。⚠️ 内置 GITHUB_TOKEN 的
 # `security-events: read` 只覆盖 code scanning；Dependabot alerts 要的是
@@ -32,13 +32,6 @@ on:
   schedule:
     - cron: "0 19 * * *"
   workflow_dispatch:
-  push:
-    branches: [master]
-    paths:
-      - package.json
-      - pnpm-lock.yaml
-      - src-tauri/Cargo.toml
-      - src-tauri/Cargo.lock
 
 permissions:
   contents: read
