@@ -58,6 +58,12 @@ const PURE_NODE_HOSTS = [
   // ⚠️ 传递闭包里 `./client`、`./executor-history`、`./executor-continuation` 仍静态引 server-only 侧，
   // 故登记**不是**「现在就能在纯 Node 里 import 本模块」的承诺，只是标迁移方向 + 消化 scanner 的 unguarded。
   "src/lib/comfyui/executor-finalize.ts",
+  // outbound-url-core.ts（#4452）：出网 SSRF 判据的唯一实现，须同时被 Next 服务端
+  // （经 `outbound-url.server.ts` 薄再导出）与**纯 Node 宿主**（MCP/stdio 通道的
+  // `api-channel.ts`）加载——server-only 入口会在宿主侧 throw，把宿主侧约束逼成
+  // 裸 fetch。只有 `node:dns/promises` / `node:net` 的 value import，不引
+  // server-only 侧模块，按第三类登记。
+  "src/lib/network/outbound-url-core.ts",
   // output-paths.ts：任务产物布局（落盘目录 / 产物 URL / 删除目标）的唯一一份定义，必须同时被落盘侧
   // （`executor-finalize.ts`）与读删侧（`src/server/api/routers/task.ts` 的 openFolder / delete）静态 import：
   // 布局分成两处就会出现「落盘认 `projects/<pid>/<tid>`、删除只认 `<tid>`」的分叉（本批修的就是它）。

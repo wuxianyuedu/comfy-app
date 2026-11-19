@@ -9,6 +9,7 @@ import path from "node:path";
 
 import { isInlineMedia, toDataUrl } from "~/lib/media/data-url";
 import { isPlainRecord } from "~/lib/is-record";
+import { safeFetch } from "~/lib/network/outbound-url-core";
 
 import {
   callImageGeneration,
@@ -151,7 +152,13 @@ export async function resolveMediaDataUrl(ref: string): Promise<string> {
   if (isInlineMedia(ref)) {
     return ref;
   }
-  const res = await fetch(ref, { signal: AbortSignal.timeout(30_000) });
+  /* 走与 Next 侧 safeFetch 同一份 SSRF 判据（#4452）：ref 会来自模型/客户端给的
+   * Shot.imageUrl，裸 fetch 等于让服务端代发对内网/云元数据的请求。scenario 用
+   * remote-media（只放行公网目标）；超时预算维持 30s。 */
+  const res = await safeFetch(ref, {
+    scenario: "remote-media",
+    signal: AbortSignal.timeout(30_000),
+  });
   if (!res.ok) {
     throw new Error(`解析媒体失败 (${res.status})`);
   }
