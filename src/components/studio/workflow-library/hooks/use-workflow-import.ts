@@ -116,6 +116,15 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
     }, 4000);
   }, []);
 
+  /* #4457：打开面板的动作点统一走这里。陈旧的告警 / 错误不跨次残留 ——
+   * 此前只有 handlePickedFile 与 handleImport 开头清，「再次点开导入面板」
+   * 这条路不清，用户看到的是上一次的告警。 */
+  const openImport = useCallback(() => {
+    setImportErr("");
+    setImportWarn([]);
+    setShowImport(true);
+  }, []);
+
   const handleImport = useCallback(async () => {
     setImportErr("");
     setImportWarn([]);
@@ -134,6 +143,15 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       setImportErr("不是有效的工作流 JSON（应为对象）");
       return;
     }
+    /* #4462：粘贴路径与文件入口（handlePickedFile）走**同一个 RAW 判据** ——
+     * 此前这里只查「是对象」，API 格式 JSON 会「成功」入库成一条
+     * 「无可执行内容」的记录，与拖入 / 选文件入口行为相反。 */
+    if (!isRawWorkflowJson(parsed)) {
+      setImportErr(
+        "不是 ComfyUI 的工作流(RAW) JSON（缺少 nodes[]）：请用「导出(工作流格式)」，API 格式不受支持",
+      );
+      return;
+    }
     /* 行内错误条（`setImportErr`）是这块的失败通道 —— 导入失败时用户往往
      * 要改 JSON 重试，需要一个留着不走的出口；成功静默（面板关闭即结果）。
      * 出口给「失败文案走 `errorMessage`」这一半。 */
@@ -146,8 +164,17 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
             defaultMode: importDefaultMode,
             raw: parsed,
           });
-          if (Array.isArray(d.warnings)) {
+          /* #4457：有解析告警时**保持面板打开**，让用户当场看到告警内容
+           * （此前同批 setShowImport(false) 把告警一起吞掉）；输入框照常清空，
+           * 防止「确认导入」再点一次把同一条重复入库。 */
+          if (Array.isArray(d.warnings) && d.warnings.length > 0) {
             setImportWarn(d.warnings);
+            setImportName("");
+            setImportJson("");
+            setImportModes([]);
+            setImportDefaultMode("");
+            void load();
+            return;
           }
           setShowImport(false);
           setImportName("");
@@ -212,14 +239,13 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       const baseName = file.name.replace(/\.(?:json|workflow)$/i, "").trim();
       setImportName(baseName || "未命名工作流");
       setImportJson(text);
-      setImportErr("");
-      setImportWarn([]);
-      setShowImport(true);
+      /* 打开面板走同一出口：陈旧的错误 / 告警不跨次残留（#4457）。 */
+      openImport();
       /* 模式不给默认（ISSUE #3759）：拖入 / 选文件只预填名称与 JSON，
        * 模式留给用户在面板里自己选 —— 此前按节点类型猜 T2I / I2I，
        * 猜错时用户还得先删掉再选。 */
     },
-    [showFileError],
+    [showFileError, openImport],
   );
 
   // 两个投放区共用同一套拖放交互与同一个文件漏斗：列表侧栏（工作流库整片区域）
@@ -230,6 +256,8 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   return {
     showImport,
     setShowImport,
+    /** 打开导入面板的唯一动作点：顺带清掉上一次的告警 / 错误（#4457）。 */
+    openImport,
     importName,
     setImportName,
     importModes,

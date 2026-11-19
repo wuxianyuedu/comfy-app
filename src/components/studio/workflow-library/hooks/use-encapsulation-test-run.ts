@@ -6,7 +6,7 @@
  * （切页签即丢、也不进登记表），两个页签像各占一个执行视角（ISSUE #611）。本 hook
  * 接进共享运行态：登记 → 累积日志 → 终态；差别只有 `source` 标记与载荷组装。 */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { runAsyncAction } from "~/lib/async-action";
 import { useThrottledProgress } from "~/components/ui/use-throttled-progress";
 import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
@@ -78,6 +78,18 @@ export function useEncapsulationTestRun({
   /* 重入闸门走唯一出口（规范 16 §16.2.4.69）——同步可见，`run` 在异步回调里
    * 判定时 state 还停在旧值，读它判不出重入。 */
   const lock = useReentrancyLock();
+
+  /* 发起路径在跑的 SSE 订阅 closer（#4461，与 use-generation-runner 的 #3912
+   * 修法同款）：watchWorkflowRun 返回的 closer 由此登记，组件卸载（切页签）
+   * 时撤掉，不再让 EventSource 存活到任务终态（持续打日志、占用同源连接）。
+   * 服务端会全量回放历史帧、store 按 (taskId, msg) 去重，撤销安全。 */
+  const activeCloserRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    return () => {
+      activeCloserRef.current?.();
+      activeCloserRef.current = null;
+    };
+  }, []);
 
   /* 切页签回来（`ui/tabs` 的 Panel 卸载后重新挂载）时恢复这次运行的视角：
    * 还在跑就回到「测试中」并重订阅，已完成直接恢复产物，已失败恢复原因。
@@ -156,8 +168,10 @@ export function useEncapsulationTestRun({
             await new Promise<void>((resolve) => {
               /* 订阅走 `watchWorkflowRun`（与恢复路径同一份）：它顺手把进度 /
                * 产物 / 终态写进运行登记表 —— 切到「画布节点」页签再切回来时，
-               * 这一页的运行视角才不会清零。 */
-              watchWorkflowRun(id, {
+               * 这一页的运行视角才不会清零。closer 登记进 ref，卸载即撤销
+               * （#4461）。 */
+              let settled = false;
+              const closer = watchWorkflowRun(id, {
                 onProgress: (_taskId, pct) => {
                   reportProgress(pct);
                 },
@@ -172,6 +186,8 @@ export function useEncapsulationTestRun({
                   setResultUrl(output.url);
                 },
                 onSettled: (_taskId, result) => {
+                  settled = true;
+                  activeCloserRef.current = null;
                   /* 落定写终值：节流窗口会在边界上吃掉最后一次读数。 */
                   flushProgress(result.ok ? 100 : 0);
                   if (!result.ok) {
@@ -180,6 +196,11 @@ export function useEncapsulationTestRun({
                   resolve();
                 },
               });
+              /* 已落定的订阅不登记回 ref（watchWorkflowRun 同步返回 closer，
+               * 终态可能在它返回前就已回调 —— 此时 ref 必须保持空）。 */
+              if (!settled) {
+                activeCloserRef.current = closer;
+              }
             });
           },
           {

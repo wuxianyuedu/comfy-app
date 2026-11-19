@@ -27,6 +27,9 @@ type WorkflowLibraryListProps = {
   dragActive?: boolean;
   /** 文件入口（拖入）失败的可读原因。 */
   fileErr?: string | null;
+  /** 列表查询**失败**的可读原因（服务 500 等，#4464）：空列表据此给
+   * 「加载失败 + 重试」的第四态，不再误显示成「还没有工作流」。 */
+  loadError?: string | null;
   /** 列表仍在拉取中；此时「一条都没有」不代表「没有工作流」。 */
   loading?: boolean;
   /** 本地工作流目录侧的可读原因（没解析到根 / 根不可访问 / 目录里没有文件）；
@@ -69,6 +72,7 @@ export function WorkflowLibraryList({
   stalled = false,
   onRefresh,
   localRootsHint = null,
+  loadError = null,
   dragActive = false,
   onDragOver,
   onDragEnter,
@@ -164,6 +168,26 @@ export function WorkflowLibraryList({
             icon={AlertTriangle}
             minHeightClass="min-h-40"
             title="工作流列表还没返回"
+            variant="error"
+          />
+        ) : empty && loadError ? (
+          /* #4464：查询硬失败（服务 500 等）是第四态 —— 不能落进「还没有工作流」
+           * 的空态（像是工作流全没了）。给失败原因 + 重试入口。 */
+          <EmptyState
+            action={
+              <Button
+                className="border-border text-muted-foreground hover:bg-subtle text-2xs h-auto rounded-lg px-3 py-1"
+                onClick={onRefresh}
+                size="sm"
+                variant="outline"
+              >
+                重试
+              </Button>
+            }
+            description={loadError}
+            icon={AlertTriangle}
+            minHeightClass="min-h-40"
+            title="工作流列表加载失败"
             variant="error"
           />
         ) : empty ? (

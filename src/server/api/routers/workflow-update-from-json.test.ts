@@ -26,6 +26,7 @@ vi.mock("~/lib/core/logger", () => ({
 
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 import { workflowMutationProcedures } from "~/server/api/routers/workflow-mutations";
+import { workflowTemplateRepository } from "~/lib/core/repository";
 import { getTestDb, seedUser, seedWorkflowTemplate } from "../../../../tests/helpers/test-db";
 import { makeCtx, errorEnvelope } from "../../../../tests/helpers/trpc";
 
@@ -46,6 +47,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await fs.rm(tmpDir, { recursive: true, force: true });
+  vi.restoreAllMocks();
 });
 
 /** 旧图：节点 1（KSampler）+ 节点 9（SaveImage，新版本里会被删）。 */
@@ -184,6 +186,9 @@ describe("workflow.resync 的断线报告（#4377）", () => {
     await fs.writeFile(sourcePath, JSON.stringify(NEW_RAW));
 
     const res = await caller().resync({ id: "wf-sync" });
+    if (!("updated" in res)) {
+      throw new Error("预期同步成功，实际返回 missing / unchanged");
+    }
     expect(res.updated).toBe(true);
     expect(res.broken).toEqual([
       { namespace: "mode:T2I", entryId: "images", ioKey: "9::param::images" },
@@ -194,5 +199,80 @@ describe("workflow.resync 的断线报告（#4377）", () => {
       source: { "mode:T2I": { seed: "1::widget::seed" } },
       output: { "mode:T2I": { latent: "1::output::LATENT" } },
     });
+  });
+});
+
+/* ── 并发防线（#4460）：resync / updateFromJson 的「重读 → remap → 落库」
+ * 与 update 共用同一把 keyed mutex。用**事件序**做确定性断言：把仓储的
+ * 读 / 打桩成记录事件、首次写延迟 50ms，若两笔并发调用的第二次「读」排在
+ * 第一次「写完」之前，即旧实现（不持锁）的丢更新现场。 ── */
+describe("workflow 写入口的 keyed mutex（#4460）", () => {
+  /** 给仓储读 / 写打事件桩；首次写延迟 `delayMs`（放大旧实现的竞态窗口）。 */
+  function spyRepositoryEvents(delayMs: number) {
+    const repo = workflowTemplateRepository;
+    const realFind = repo.findByIdForUser.bind(repo);
+    const realUpdate = repo.update.bind(repo);
+    const events: Array<string> = [];
+    let delayed = false;
+    vi.spyOn(repo, "findByIdForUser").mockImplementation(async (...args) => {
+      events.push("read");
+      /* SAFETY: 透传同一签名（id, userId） */
+      return realFind(...args);
+    });
+    vi.spyOn(repo, "update").mockImplementation(async (...args) => {
+      events.push("write:start");
+      if (!delayed) {
+        delayed = true;
+        // sleep-ok: mock 的内部延迟，不是赌时间——把第一笔写的临界区人为拉宽 50ms，制造「不持锁必输」的竞态窗口；断言的是其后的事件顺序，expect.poll 等不了桩内部的计时器。
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+      /* SAFETY: 透传同一签名（id, patch, tx?） */
+      const out = await realUpdate(...args);
+      events.push("write:end");
+      return out;
+    });
+    return events;
+  }
+
+  it("并发 updateFromJson：第二笔的重读排在第一笔落库之后（不丢更新）", async () => {
+    seedOnlineWorkflow("wf-mutex");
+    const events = spyRepositoryEvents(50);
+
+    await Promise.all([
+      caller().updateFromJson({ id: "wf-mutex", raw: NEW_RAW }),
+      caller().updateFromJson({ id: "wf-mutex", raw: NEW_RAW }),
+    ]);
+
+    expect(events.filter((e) => e === "read")).toHaveLength(2);
+    /* 旧实现（不持锁）两笔都在对方落库前读旧值：lastIndexOf("read") 会落在
+     * 第一笔 write:end 之前 —— 断言当场红。持锁后第二笔的读必然更晚。 */
+    expect(events.indexOf("write:end")).toBeLessThan(events.lastIndexOf("read"));
+  });
+
+  it("并发 resync：锁内重读与落库同样串行（慢 IO 留锁外）", async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), "wf-mutex-sync-"));
+    const sourcePath = path.join(dir, "wf.json");
+    await fs.writeFile(sourcePath, JSON.stringify(OLD_RAW));
+    seedWorkflowTemplate(tdb, {
+      id: "wf-mutex-sync",
+      userId: USER,
+      name: "并发同步",
+      rawJson: OLD_RAW,
+      paramMap: PARAM_MAP,
+      workflowIO: WORKFLOW_IO,
+      sourcePath,
+      sourceMtime: Math.floor(Date.now() / 1000) - 60,
+    });
+    await fs.writeFile(sourcePath, JSON.stringify(NEW_RAW));
+    const events = spyRepositoryEvents(50);
+
+    await Promise.all([
+      caller().resync({ id: "wf-mutex-sync" }),
+      caller().resync({ id: "wf-mutex-sync" }),
+    ]);
+
+    /* 快路径读（锁外）+ 锁内重读各两次。 */
+    expect(events.filter((e) => e === "read").length).toBeGreaterThanOrEqual(4);
+    expect(events.indexOf("write:end")).toBeLessThan(events.lastIndexOf("read"));
   });
 });

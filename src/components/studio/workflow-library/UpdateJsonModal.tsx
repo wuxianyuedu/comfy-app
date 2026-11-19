@@ -4,7 +4,7 @@
 // 粘贴新版本的工作流 JSON → 交给父级提交（解析与落库在服务端）。更新完成后
 // 若有断掉的 IO 连线，就地列出断线清单并提示到「编辑对外参数」重新配置。
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -34,6 +34,23 @@ export function UpdateJsonModal({
 }: Props) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  /* #4463：弹窗实例常驻（open 受控），输入草稿与行内错误若不在打开时清空，
+   * 会跨开关、跨工作流残留 —— 切到另一条工作流再点「从 JSON 更新」，
+   * 弹窗一打开就是上一次的内容。后置到 render 提交后执行
+   * （规范 08 §8.6 写法二：effect 体里同步 setState 会被拦下）。 */
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setText("");
+      setError(null);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [open]);
 
   const hasReport =
     report !== null && (report.broken.length > 0 || report.droppedIOKeys.length > 0);

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import type { WorkflowIOMap, WorkflowIOEntry } from "~/components/studio/workflow-io";
 import { isPlainRecord } from "~/lib/is-record";
 import { WorkflowLibraryIoPanel } from "./WorkflowLibraryIoPanel";
 
@@ -136,5 +136,89 @@ describe("IO 预览页签与编辑器同形（ISSUE #3800）", () => {
     expect(screen.getByRole("button", { name: "选择模式" })).toBeInTheDocument();
     /* 参数表单不渲染（旧兜底会拿 [taskType] 造一个空模式把表单摆出来）。 */
     expect(screen.queryByText("步数")).not.toBeInTheDocument();
+  });
+});
+
+/* #4458：storedIO 是服务端事实源（原始 DB 列）。「从 JSON 更新」/「同步」摘除
+ * IO 口并失效缓存后，草稿若只在上次挂载时播种，下一次编辑会把已摘除的口
+ * 整份写回（复活）。这里钉住：外部事实源变化 → 草稿重播种 → 已摘除的口
+ * 不随下一次编辑写回。 */
+describe("IO 预览草稿随服务端事实源重播种（#4458）", () => {
+  const stepsStored = { direction: "input", kind: "widget", nodeId: "7", name: "steps" };
+  const seedStored = { direction: "input", kind: "widget", nodeId: "9", name: "seed" };
+  const stepsEnriched: WorkflowIOEntry = {
+    ...stepsStored,
+    direction: "input",
+    label: "步数",
+    type: "INT",
+    defaultValue: 20,
+  };
+  const seedEnriched: WorkflowIOEntry = {
+    ...seedStored,
+    direction: "input",
+    label: "种子",
+    type: "INT",
+    defaultValue: 1,
+  };
+  const stepsKey = "7::widget::steps";
+  const seedKey = "9::widget::seed";
+
+  function renderPanel(props: { storedIO: Record<string, unknown>; workflowIO: WorkflowIOMap }) {
+    const onPatchWorkflowIO = vi.fn().mockResolvedValue(undefined);
+    const view = render(
+      <WorkflowLibraryIoPanel
+        activeMode="t2i"
+        defaultMode="t2i"
+        modes={["t2i"]}
+        onActiveModeChange={vi.fn()}
+        onModesChange={vi.fn()}
+        onPatchWorkflowIO={onPatchWorkflowIO}
+        storedIO={props.storedIO}
+        workflowIO={props.workflowIO}
+      />,
+    );
+    return { onPatchWorkflowIO, view };
+  }
+
+  it("服务端摘除的口：重播种后不再被下一次编辑写回", () => {
+    const { onPatchWorkflowIO, view } = renderPanel({
+      storedIO: { [stepsKey]: stepsStored, [seedKey]: seedStored },
+      workflowIO: { [stepsKey]: stepsEnriched, [seedKey]: seedEnriched },
+    });
+
+    /* 作者先改「步数」的必填 —— 草稿带上这条编辑。 */
+    fireEvent.click(screen.getAllByRole("button", { name: "可选" })[0]!);
+    expect(onPatchWorkflowIO).toHaveBeenCalledTimes(1);
+    const firstPayload: unknown = onPatchWorkflowIO.mock.calls[0]![0];
+    expect(isPlainRecord(firstPayload)).toBe(true);
+    if (!isPlainRecord(firstPayload)) {
+      throw new Error("落库载荷不是对象");
+    }
+    expect(Object.keys(firstPayload)).toContain(stepsKey);
+
+    /* 服务端更新 JSON：steps 口被摘除（事实源里只剩 seed）。 */
+    view.rerender(
+      <WorkflowLibraryIoPanel
+        activeMode="t2i"
+        defaultMode="t2i"
+        modes={["t2i"]}
+        onActiveModeChange={vi.fn()}
+        onModesChange={vi.fn()}
+        onPatchWorkflowIO={onPatchWorkflowIO}
+        storedIO={{ [seedKey]: seedStored }}
+        workflowIO={{ [seedKey]: seedEnriched }}
+      />,
+    );
+    expect(screen.queryByText("步数")).not.toBeInTheDocument();
+
+    /* 再编辑「种子」：落库载荷里不应再把已摘除的 steps 写回。 */
+    fireEvent.click(screen.getAllByRole("button", { name: "可选" })[0]!);
+    expect(onPatchWorkflowIO).toHaveBeenCalledTimes(2);
+    const secondPayload: unknown = onPatchWorkflowIO.mock.calls[1]![0];
+    expect(isPlainRecord(secondPayload)).toBe(true);
+    if (!isPlainRecord(secondPayload)) {
+      throw new Error("落库载荷不是对象");
+    }
+    expect(Object.keys(secondPayload)).toEqual([seedKey]);
   });
 });

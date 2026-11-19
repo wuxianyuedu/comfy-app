@@ -136,4 +136,42 @@ describe("parseWorkflowIOMap —— 列边界上的历史键归一", () => {
     expect(map.k?.modeOverrides).toBeUndefined();
     expect(parseWorkflowIOMap("not-an-object")).toEqual({});
   });
+
+  /* #4459：一条坏条目只丢自己，不能把作者的全部 IO 配置连坐清空
+   *（旧实现 z.record 整表一票否决，PATCH 混入一条坏条目 = 整列归零）。 */
+  it("混入一条坏条目 → 只丢那条，好条目全部保留", () => {
+    const good = {
+      direction: "input" as const,
+      kind: "widget",
+      nodeId: "7",
+      name: "seed",
+      label: "种子",
+    };
+    const map = parseWorkflowIOMap({
+      "7::widget::seed": good,
+      "9::widget::broken": { direction: "input", kind: "widget" /* 缺 nodeId / name */ },
+      "11::output::img": {
+        direction: "output",
+        kind: "output",
+        nodeId: "11",
+        name: "images",
+        modeOverrides: { T2I: { visible: false } },
+      },
+      "12::widget::bad-direction": {
+        direction: "sideways",
+        kind: "widget",
+        nodeId: "12",
+        name: "x",
+      },
+    });
+    expect(Object.keys(map).sort()).toEqual(["11::output::img", "7::widget::seed"]);
+    expect(map["7::widget::seed"]?.label).toBe("种子");
+    expect(map["11::output::img"]?.modeOverrides).toEqual({ T2I: { visible: false } });
+  });
+
+  it("非对象整体（null / 数组 / 字符串）仍归空表", () => {
+    expect(parseWorkflowIOMap(null)).toEqual({});
+    expect(parseWorkflowIOMap([{}])).toEqual({});
+    expect(parseWorkflowIOMap("x")).toEqual({});
+  });
 });
