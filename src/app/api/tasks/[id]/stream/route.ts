@@ -1,10 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "~/server/auth/request-user";
+import { NotFoundError } from "~/lib/core/errors";
 import { taskRepository } from "~/lib/core/repository";
 import { getLogs } from "~/lib/comfyui/enqueue";
 import { parseValidationErrors } from "~/lib/comfyui/validation";
 import { isTerminalTaskStatus } from "~/lib/task-state";
-import { unauthorizedResponse } from "~/server/lib/error-response";
+import { errorResponse, unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+
+  /* 归属校验（越权修复，与 tRPC task.detail/cancel 同判据）：任意登录主体不得凭
+   * 他人 taskId 建立执行日志/进度流——这条流会吐出提示词、执行日志与产物清单。
+   * 不命中按 NOT_FOUND 处理（与 tRPC 一致，不区分「不存在」与「不是你的」，避免
+   * 借状态码探得他人任务 id 的存在性）。连接建立前判一次即可，轮询期不必逐拍复核。 */
+  const owned = await taskRepository.findByIdForUser(user.id, id);
+  if (!owned) {
+    return errorResponse(new NotFoundError("任务不存在"));
   }
 
   const encoder = new TextEncoder();

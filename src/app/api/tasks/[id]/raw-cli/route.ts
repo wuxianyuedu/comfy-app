@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "~/server/auth/request-user";
+import { NotFoundError } from "~/lib/core/errors";
 import { taskRepository } from "~/lib/core/repository-task";
-import { unauthorizedResponse } from "~/server/lib/error-response";
+import { errorResponse, unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,13 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     return unauthorizedResponse();
   }
   const { id } = await ctx.params;
+  /* 归属校验（越权修复，与 tRPC task.detail 同判据）：comfy-cli 原始输出含完整
+   * 提示词、参数与内部路径，不得凭他人 taskId 读取。不命中按 NOT_FOUND 处理，
+   * 不区分「不存在」与「不是你的」，避免借状态码探得他人任务 id 的存在性。 */
+  const owned = await taskRepository.findByIdForUser(user.id, id);
+  if (!owned) {
+    return errorResponse(new NotFoundError("任务不存在"));
+  }
   const lines = await taskRepository.findRawCli(id);
   return NextResponse.json({ lines: lines ?? [] });
 }
