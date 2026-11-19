@@ -123,8 +123,12 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
   it("起第二份之前先回收上一次遗留的编排器（不再有「命中就跳过」的捷径）", () => {
     const lib = stripComments(read("src-tauri/src/lib.rs"));
     // 编排步骤体在命名函数里（Rust 侧函数长度阈值 120 行，见规范 §12.13），
-    // 调用点必须仍是安装期的一条：`if self_launch { … }`。
-    expect(lib).toMatch(/if self_launch \{\s*start_self_orchestration\(app, &project_root\);/);
+    // 调用点必须仍是安装期的一条：`if parts.self_launch { … }`。#4416 起残留
+    // 回收是同步重活，挪到后台线程执行（不阻塞事件循环线程上的启动页 IPC）。
+    expect(lib).toMatch(/if parts\.self_launch \{/);
+    expect(lib).toMatch(
+      /std::thread::spawn\(move \|\| start_self_orchestration\(&handle, &project_root\)\)/,
+    );
     const branch = sliceBetween(lib, "fn start_self_orchestration(", "fn start_own_orchestrator(");
     // 判据是环境块标记（不是「有没有 dev server」），命中即回收：
     // 「别人已经在编排」这条路在双击形态下不存在（编排器只可能是壳自己起的），
@@ -137,7 +141,7 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
     expect(shell).toContain("PROJECT_ROOT_ENV}={project_root}");
     expect(branch).toContain("shell_launch::reap_pid(");
     expect(branch).toContain("shell_launch::REAPER_BUDGET");
-    expect(branch).toContain("start_own_orchestrator(app.handle(), project_root)");
+    expect(branch).toContain("start_own_orchestrator(app, project_root)");
     // 命中残留要说清「先回收再启动」，别让它看起来像一次正常启动。
     expect(branch).toContain("先回收它再启动本次编排");
   });

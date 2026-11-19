@@ -11,22 +11,7 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "windows": [
-      {
-        "label": "splash",
-        "title": "Comfy APP 启动中",
-        "width": 744,
-        "height": 288,
-        "minWidth": 620,
-        "minHeight": 180,
-        "center": true,
-        "resizable": true,
-        "decorations": false,
-        "fullscreen": false,
-        "backgroundColor": "#0A0A0F",
-        "url": "splash.html"
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* ws://127.0.0.1:* http://localhost:* ws://localhost:* tauri://localhost https://tauri.localhost https:; frame-src 'self' http://127.0.0.1:* http://localhost:*; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     }

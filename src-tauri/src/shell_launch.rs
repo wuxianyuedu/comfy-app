@@ -1900,30 +1900,14 @@ unsafe fn read_owned_env_from_process(
   if env_addr == 0 {
     return false;
   }
-  // 环境块是一串 NUL 结尾的 UTF-16 串，以空串（双 NUL）收尾。整块读一次，
-  // 截断风险由「读到空串为止」兜住：这里只做**包含**判定，不需要完整块。
-  const MAX_ENV_BYTES: usize = 64 * 1024;
-  let mut buf = vec![0u8; MAX_ENV_BYTES];
-  let mut read = 0usize;
-  if unsafe {
-    ReadProcessMemory(
-      handle,
-      env_addr as *const std::ffi::c_void,
-      buf.as_mut_ptr() as *mut std::ffi::c_void,
-      MAX_ENV_BYTES,
-      Some(&mut read),
-    )
-  }
-  .is_err()
-  {
+  // 环境块是一串 NUL 结尾的 UTF-16 串，以空串（双 NUL）收尾。按块循环读直到
+  // 终止符（#4426：此前只读一次定长 64KB，开发机大 PATH + pnpm/corepack 注入的
+  // 环境块轻松超 64KB，两枚认亲针落在窗口之外时认亲判负——启动前对「上次强杀
+  // 遗留的编排器」视而不见、不去回收）。这里只做**包含**判定，不需要完整块。
+  let Some(raw) = (unsafe { read_env_block_until_terminator(handle, env_addr) }) else {
     return false;
-  }
-  buf.truncate(read);
-  let units: Vec<u16> = buf
-    .chunks_exact(2)
-    .map(|c| u16::from_le_bytes([c[0], c[1]]))
-    .collect();
-  let text = String::from_utf16_lossy(&units);
+  };
+  let text = env_block_text(&raw);
   /* 认亲双判据（ISSUE #3851）：「是某个壳起的」（OWNED_ENV）**且**「是本检出
    * 的壳起的」（PROJECT_ROOT_ENV 与当前根一致）。多检出并行时，只看前者会把
    * 别家正在跑的编排器当成自己的残留 —— 后果是误杀整树。 */
@@ -1931,6 +1915,71 @@ unsafe fn read_owned_env_from_process(
   let root_needle = format!("{PROJECT_ROOT_ENV}={project_root}");
   text.split('\0').any(|entry| entry.trim() == owned_needle)
     && text.split('\0').any(|entry| entry.trim() == root_needle)
+}
+
+/// 环境块读取的上限与块大小（#4426）：上限 1MB——正常环境块到不了这个量级，
+/// 顶到上限按「读不完整」判负并落 WARN（宁可少回收，不误杀）。
+const ENV_BLOCK_MAX_BYTES: usize = 1024 * 1024;
+const ENV_BLOCK_CHUNK_BYTES: usize = 32 * 1024;
+
+/// 按块读目标进程的环境块原始字节，直到双 NUL 终止符（#4426）。
+///
+/// 读失败 → None；顶到上限没读到终止符 → 落 WARN 后 None（认亲判负）。
+#[cfg(windows)]
+unsafe fn read_env_block_until_terminator(
+  handle: windows::Win32::Foundation::HANDLE,
+  env_addr: usize,
+) -> Option<Vec<u8>> {
+  use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
+  let mut raw: Vec<u8> = Vec::new();
+  for offset in (0..ENV_BLOCK_MAX_BYTES).step_by(ENV_BLOCK_CHUNK_BYTES) {
+    let mut chunk = vec![0u8; ENV_BLOCK_CHUNK_BYTES];
+    let mut read = 0usize;
+    if unsafe {
+      ReadProcessMemory(
+        handle,
+        (env_addr + offset) as *const std::ffi::c_void,
+        chunk.as_mut_ptr() as *mut std::ffi::c_void,
+        ENV_BLOCK_CHUNK_BYTES,
+        Some(&mut read),
+      )
+    }
+    .is_err()
+    {
+      return None;
+    }
+    if read == 0 {
+      break;
+    }
+    raw.extend_from_slice(&chunk[..read]);
+    /* 双 NUL 可能跨块边界，整块重扫（≤32 次迭代，成本可忽略）。 */
+    let units: Vec<u16> = raw
+      .chunks_exact(2)
+      .map(|c| u16::from_le_bytes([c[0], c[1]]))
+      .collect();
+    if units.windows(2).any(|w| w == [0, 0]) {
+      return Some(raw);
+    }
+    if read < ENV_BLOCK_CHUNK_BYTES {
+      break;
+    }
+  }
+  if raw.len() >= ENV_BLOCK_MAX_BYTES {
+    log::warn!(
+      "[ComfyAPP] 环境块认亲：读到 1MB 上限仍未见双 NUL 终止符，按「读不完整」判负（#4426）"
+    );
+  }
+  None
+}
+
+/// UTF-16 环境块字节 → 字符串（按 u16 LE 解码；奇数字节走 lossy 替换）。
+#[cfg(windows)]
+fn env_block_text(raw: &[u8]) -> String {
+  let units: Vec<u16> = raw
+    .chunks_exact(2)
+    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+    .collect();
+  String::from_utf16_lossy(&units)
 }
 
 /// 找到「已经在跑、且是本模块亲手起的」编排器进程号（找不到 = None）。

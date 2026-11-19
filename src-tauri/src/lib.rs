@@ -858,8 +858,13 @@ fn spawn_renavigate(handle: tauri::AppHandle, url: tauri::Url) {
       }
       if url_reachable(&url) {
         if let Some(m) = handle.get_webview_window("main") {
-          let _ = m.navigate(url.clone());
-          break;
+          /* 恢复成功才离开循环；失败留读数并留在循环里等下一拍重试（#4425）：
+           * 此前 `let _` 吞掉结果还 break，恢复动作失败后主窗停在错误页，
+           * 只能等安全网强制交接（可能交的还是错误页）。 */
+          match m.navigate(url.clone()) {
+            Ok(_) => break,
+            Err(e) => log::warn!("[ComfyAPP] 重导航失败，下一拍重试：{e}"),
+          }
         }
       }
     }
@@ -2678,48 +2683,86 @@ pub fn run() {
     // 所有权**（`move`），否则 `expect_slow_first_paint` 这类按值传入的局部量会在
     // 闭包借用检查时直接编译不过（`closure may outlive the current function`）。
     .setup(move |app| {
-      // 模式在 `run()` 里就定了（必须早于启动页存在），但那一刻 **log 插件还没装上**：
-      // 插件是 Builder 链上 `.plugin(log_plugin)` 之后才生效的，`setup` 是最早的
-      // 安全点。这一行是「本次启动按哪种形态跑」在日志里唯一的落点，别删。
-      log::info!("[ComfyAPP] launch mode={launch_mode}");
-      // run() 只做装配，启动编排按职责拆成命名步骤（原先整段塞在 setup 闭包里，
-      // 单函数近 300 行，而 Rust 侧没有函数长度门禁——见 §12.13 / ISSUE #536 P4）。
-      // 顺序是契约：先收二次启动事件并定启动页尺寸，再建隐藏的 main 窗并挂其加载
-      // 完成回调，接着挂「关启动页 = 放弃启动」与看门狗，最后才是生产模式
-      // sidecar 与托盘。
-      setup_splash_window(app);
-
-      if self_launch {
-        start_self_orchestration(app, &project_root);
-      }
-
-      // ── 方向 B：启动页与「应用」窗口分离 ──
-      // 装配失败（WebView2 初始化失败等，#4329）与下面 standalone 装配失败同理：
-      // Err 不能冒到 Builder::build 的 expect——那是无声崩溃。接住并写状态文件，
-      // 壳继续跑着显示失败态（详见 report_window_setup_failure）。
-      if let Err(e) = wire_startup_windows(app, expect_slow_first_paint) {
-        report_window_setup_failure(app, &e.to_string());
-      }
-
-      // standalone 载荷缺失/损坏（ISSUE #4214）：Err 不能冒到 Builder::build 的
-      // expect——那是无声崩溃（windows_subsystem 下无控制台、无启动页）。窗口此刻
-      // 已创建：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态。
-      #[cfg(not(debug_assertions))]
-      if let Err(e) = setup_standalone_runtime(app) {
-        report_standalone_setup_failure(app, &e.to_string());
-      }
-
-      // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
-      // （缺图标资源 / 系统限制）只记 WARN，绝不能让整个应用起不来。
-      if let Err(e) = build_tray(app.handle()) {
-        log::warn!("[ComfyAPP] tray icon not created: {:?}", e);
-      }
+      startup_setup(
+        app,
+        &SetupParts {
+          expect_slow_first_paint,
+          launch_mode,
+          project_root,
+          self_launch,
+        },
+      );
       Ok(())
     })
     .build(tauri::generate_context!())
     .expect("error while building tauri application");
 
   app.run(handle_run_event);
+}
+
+/// setup 闭包捕获的运行期量（`move` 语义需要所有权，收成一个传递面）。
+struct SetupParts {
+  expect_slow_first_paint: bool,
+  launch_mode: String,
+  project_root: String,
+  self_launch: bool,
+}
+
+/// setup 闭包的本体（#4412/#4416 之后步骤增多，run() 越过 Rust 120 行硬闸——
+/// 收成命名步骤，闭包只保留装配）。
+///
+/// 顺序是契约：先建启动页（程序化，#4412）并定启动页尺寸，再建隐藏的 main
+/// 窗并挂其加载完成回调，接着挂「关启动页 = 放弃启动」与看门狗，最后才是
+/// 生产模式 sidecar 与托盘。残留回收与 sidecar 拉起这两段同步重活挪进后台
+/// 线程（#4416）：setup 在事件循环线程上执行，同步重活期间启动页的 IPC
+/// 轮询被同一阻塞消耗。
+fn startup_setup(app: &mut tauri::App, parts: &SetupParts) {
+  // 模式在 `run()` 里就定了（必须早于启动页存在），但那一刻 **log 插件还没装上**：
+  // 插件是 Builder 链上 `.plugin(log_plugin)` 之后才生效的，`setup` 是最早的
+  // 安全点。这一行是「本次启动按哪种形态跑」在日志里唯一的落点，别删。
+  log::info!("[ComfyAPP] launch mode={}", parts.launch_mode);
+  if let Err(e) = create_splash_window(app) {
+    report_window_setup_failure(app, &e.to_string());
+  }
+  setup_splash_window(app);
+
+  if parts.self_launch {
+    // 残留回收（find_owned_orchestrator + reap_pid，最坏 REAPER_BUDGET(10s)
+    // + drain）是同步重活，挪到后台线程（#4416）。编排器在线程里按
+    // 「回收残留 → 起自己的」顺序推进，与窗口创建无顺序依赖。
+    let handle = app.handle().clone();
+    let project_root = parts.project_root.clone();
+    std::thread::spawn(move || start_self_orchestration(&handle, &project_root));
+  }
+
+  // ── 方向 B：启动页与「应用」窗口分离 ──
+  // 装配失败（WebView2 初始化失败等，#4329）与下面 standalone 装配失败同理：
+  // Err 不能冒到 Builder::build 的 expect——那是无声崩溃。接住并写状态文件，
+  // 壳继续跑着显示失败态（详见 report_window_setup_failure）。
+  if let Err(e) = wire_startup_windows(app, parts.expect_slow_first_paint) {
+    report_window_setup_failure(app, &e.to_string());
+  }
+
+  // standalone 载荷缺失/损坏（ISSUE #4214）：Err 不能冒到 Builder::build 的
+  // expect——那是无声崩溃（windows_subsystem 下无控制台、无启动页）。窗口此刻
+  // 已创建：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态。
+  // sidecar 拉起带固定的 grace 睡眠（成功路径 1.5s）与端口重试（4.5s），
+  // 同样是启动关键路径上的同步重活 —— 一并挪到后台线程（#4416）。
+  #[cfg(not(debug_assertions))]
+  {
+    let handle = app.handle().clone();
+    std::thread::spawn(move || {
+      if let Err(e) = setup_standalone_runtime(&handle) {
+        report_standalone_setup_failure(&handle, &e.to_string());
+      }
+    });
+  }
+
+  // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
+  // （缺图标资源 / 系统限制）只记 WARN，绝不能让整个应用起不来。
+  if let Err(e) = build_tray(app.handle()) {
+    log::warn!("[ComfyAPP] tray icon not created: {:?}", e);
+  }
 }
 
 /// 启动页与「应用」主窗的装配（ISSUE #4214 顺带：`run()` 越过 Rust 函数长度
@@ -2764,7 +2807,7 @@ fn report_window_setup_failure(app: &tauri::App, error: &str) {
 /// 的 expect——那是无声崩溃（`windows_subsystem` 下无控制台、无启动页）。窗口
 /// 此刻已创建：把原因与修法写进启动页轮询得到的状态文件，壳继续跑着显示失败态。
 #[cfg(not(debug_assertions))]
-fn report_standalone_setup_failure(app: &tauri::App, error: &str) {
+fn report_standalone_setup_failure(app: &tauri::AppHandle, error: &str) {
   log::error!("[ComfyAPP] standalone runtime setup failed: {error}");
   shell_launch::mark_launch_failed(
     &app.state::<AppState>().project_root(),
@@ -2791,7 +2834,9 @@ fn report_standalone_setup_failure(app: &tauri::App, error: &str) {
 ///      会占着端口 → 表现为双击没反应；
 ///   4. **最后起编排器**。**不留「命中的就跳过」的捷径**：两个 `app.exe` 同时
 ///      双击的场景已由 run() 早期的单实例判定拦下（第二个进程不建窗口就退出）。
-fn start_self_orchestration(app: &mut tauri::App, project_root: &str) {
+/// `&AppHandle`（#4416 起 setup 闭包把本函数挪进后台线程）：签名从 `&mut App`
+/// 收窄到句柄 —— 本函数只经 `start_own_orchestrator` 用到它。
+fn start_self_orchestration(app: &tauri::AppHandle, project_root: &str) {
   shell_launch::ensure_launch_mode(project_root);
   const PHASE_NOTE: &str = "壳已接手（双击 app.exe）";
   shell_launch::write_idle_status(
@@ -2821,7 +2866,7 @@ fn start_self_orchestration(app: &mut tauri::App, project_root: &str) {
       std::time::Instant::now() + shell_launch::REAPER_BUDGET,
     );
   }
-  start_own_orchestrator(app.handle(), project_root);
+  start_own_orchestrator(app, project_root);
 }
 
 /// 自编排：由壳自己起 dev-launcher.mjs，并把「服务就绪」这一步接到启动页那条
@@ -3012,6 +3057,32 @@ fn apply_saved_main_window_state(win: &tauri::WebviewWindow) {
 /// main 停在 about:blank，等启动页探测到后端就绪后经 navigate_to_app 导航；真正
 /// 导航到应用 URL 且加载完成（on_page_load Finished）时才显示 main、关闭 splash，
 /// 启动页因而会一直显示到应用首屏真正可见（不再出现「启动完成却还要等很久」）。
+/// 启动页窗口（#4412 起程序化创建）。
+///
+/// 为什么不再走 `tauri.conf.json` 的 `app.windows` 声明式创建：框架在 setup
+/// 处理里**先**建 config 窗口、**后**跑用户闭包，config 建窗的 Err 直达框架
+/// 内部的 `panic!("Failed to setup app")` —— `windows_subsystem` 下无控制台，
+/// WebView2 损坏（#4329 现场 HRESULT 0x80070057）时表现为双击后静默死亡，壳的
+/// 失败上报链一格都跑不到。程序化创建的 Err 由 setup 闭包接住
+/// （`report_window_setup_failure`），走与主窗同一条失败态出口。
+///
+/// 各项与原声明式配置逐项对齐；尺寸用 [`SPLASH_WINDOW_SIZE`]（不抄第二份，
+/// 见 `splash_window_size_matches_the_shell_constant` 那条判据）。
+fn create_splash_window(app: &mut tauri::App) -> tauri::Result<()> {
+  tauri::WebviewWindowBuilder::new(app, "splash", tauri::WebviewUrl::App("splash.html".into()))
+    .title("Comfy APP 启动中")
+    .inner_size(SPLASH_WINDOW_SIZE.0, SPLASH_WINDOW_SIZE.1)
+    .min_inner_size(620.0, 180.0)
+    .center()
+    .resizable(true)
+    .decorations(false)
+    .fullscreen(false)
+    // 原配置的 backgroundColor：深色底，避免建窗到首帧之间的白闪。
+    .background_color(tauri::window::Color(0x0A, 0x0A, 0x0F, 0xFF))
+    .build()?;
+  Ok(())
+}
+
 fn create_main_window(app: &mut tauri::App) -> tauri::Result<()> {
   let main_url: tauri::Url = "about:blank"
     .parse()
@@ -3228,7 +3299,9 @@ fn spawn_splash_watchdog(_app: &mut tauri::App) {}
 /// `COMFYAPP_LAUNCH_MODE` ⇒ 这里读到空串就「跳过 standalone sidecar，使用
 /// dev URL」，表现是**装完双击永远停在启动页**。
 #[cfg(not(debug_assertions))]
-fn setup_standalone_runtime(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+/// `&AppHandle`（#4416 起 setup 闭包把本函数挪进后台线程）：sidecar 拉起与
+/// splash 资产检查都经 Manager trait，句柄即可，不再需要 `&mut App`。
+fn setup_standalone_runtime(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
   // 启动模式的**唯一读取点**就在本函数里（原先由 run() 读一次再传进来，于是
   // 同一个环境变量在两处被解读，改一处判据就会悄悄分叉）。
   let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
@@ -3238,7 +3311,7 @@ fn setup_standalone_runtime(app: &mut tauri::App) -> Result<(), Box<dyn std::err
     // （ISSUE #1692）。standalone 下项目根可能就是空串（安装目录里没有检出），
     // 那种情况记录写不出去——写侧按静默处理，界面退回「没有原因可讲」。
     spawn_sidecar(
-      app.handle(),
+      app,
       &std::env::var("COMFYAPP_PROJECT_ROOT").unwrap_or_default(),
     )?;
   } else {
@@ -3257,7 +3330,7 @@ fn setup_standalone_runtime(app: &mut tauri::App) -> Result<(), Box<dyn std::err
   log::info!("[ComfyAPP] splash.html embedded: {}", has_splash);
   if !has_splash {
     log::warn!("[ComfyAPP] splash.html 未嵌入，启动页不可用，走「无启动页」兜底");
-    fallback_without_splash(app.handle());
+    fallback_without_splash(app);
   }
   Ok(())
 }
@@ -3716,22 +3789,30 @@ mod window_startup_tests {
   }
 
   #[test]
-  fn splash_config_size_matches_the_shell_constant() {
-    // 声明式窗口的尺寸与壳里的常量必须同值：壳只在「显示器上限把尺寸收窄了」
-    // 时才动窗口（见 setup_splash_window），两者一旦分叉，正常屏幕上就会变成
-    // 「建窗按配置、判断按常量」—— 每次启动都白走一次调整（= 挪一下）。
+  fn splash_window_size_matches_the_shell_constant() {
+    // splash 改为程序化创建（#4412）后，尺寸的钉子从 tauri.conf.json 挪到建窗
+    // 代码：SPLASH_WINDOW_SIZE 是「显示器上限把尺寸收窄了才动窗口」的判断基准
+    // （见 setup_splash_window），建窗尺寸与它分叉，正常屏幕上就会退化成
+    // 「每次启动都白走一次调整」（= 挪一下）。
+    let create = fn_body("fn create_splash_window");
+    assert!(
+      create.contains(".inner_size(SPLASH_WINDOW_SIZE.0, SPLASH_WINDOW_SIZE.1)"),
+      "启动页建窗必须直接用 SPLASH_WINDOW_SIZE，不许再抄第二份尺寸常量：{create}"
+    );
+    assert!(
+      create.contains(r#"WebviewUrl::App("splash.html".into())"#),
+      "启动页 URL 必须是内嵌资源 splash.html（与原声明式配置同语义）：{create}"
+    );
+
+    // 声明式窗口（app.windows）必须为空：config 建窗失败直达框架内部
+    // panic（无声崩溃），壳的失败上报链接不住它 —— splash 不得改回去（#4412）。
     let conf: String = include_str!("../tauri.conf.json")
       .chars()
       .filter(|c| !c.is_whitespace())
       .collect();
-    assert!(conf.contains(r#""label":"splash""#), "splash 窗口不见了：{conf}");
     assert!(
-      conf.contains(&format!(r#""width":{}"#, SPLASH_WINDOW_SIZE.0 as u32)),
-      "tauri.conf.json 的 splash 宽度必须等于 SPLASH_WINDOW_SIZE.0"
-    );
-    assert!(
-      conf.contains(&format!(r#""height":{}"#, SPLASH_WINDOW_SIZE.1 as u32)),
-      "tauri.conf.json 的 splash 高度必须等于 SPLASH_WINDOW_SIZE.1"
+      !conf.contains(r#""label":"splash""#),
+      "splash 不得再走声明式建窗（config 建窗失败 = 框架 panic，#4412）：{conf}"
     );
   }
 
