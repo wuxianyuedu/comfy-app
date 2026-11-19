@@ -488,6 +488,43 @@ pub fn latest_prefixed_log(dir: &std::path::Path, prefix: &str) -> Option<std::p
   best.map(|(_, path)| path)
 }
 
+/// 等待就绪窗口期里，服务输出中的两类**高频重复行**（ISSUE #4431）：
+///   · 健康探活的访问日志（`GET /api/health 200 in 24ms …`）—— 编排器每秒一拍；
+///   · ComfyUI 拉起期的逐拍轮询（`[comfyui] Configured instance (pid=…, via=…)
+///     starting, port not bound yet`）—— 约 1.5s 一条，同句反复刷屏。
+/// 它们都不是「服务此刻在做什么」的答案；真正的答案在同一段输出里的低频行：
+/// `▲ Next.js` 横幅、`✓ Ready in …`、`[comfyui-lifecycle] ComfyUI 正在启动中，
+/// 等待就绪…`、编译与报错行。
+pub fn is_server_noise_line(line: &str) -> bool {
+  let l = line.trim();
+  if l.is_empty() {
+    return true;
+  }
+  // 访问日志：HTTP 方法 + 空格 + “/” 路径开头（Next 的 request 日志行）。
+  for method in ["GET /", "POST /", "PUT /", "PATCH /", "DELETE /", "HEAD /", "OPTIONS /"] {
+    if l.starts_with(method) {
+      return true;
+    }
+  }
+  // ComfyUI 拉起期的逐拍轮询：同一句只换 pid / 时间地重复。
+  l.contains("Configured instance") && l.contains("starting, port not bound yet")
+}
+
+/// 从服务日志尾部文本里挑「最近一条有信息量的行」：从最后一行往前扫，
+/// 跳过噪声行（[`is_server_noise_line`]），命中即返回（去首尾空白）。
+///
+/// 纯函数（不碰文件系统），供 [`crate::collect_server_activity`] 与壳内用例共用。
+/// 全部是噪声 / 空文本时返回 `None`——调用方据此让启动页把「服务端」这一行收起，
+/// 而不是显示一句空话。
+pub fn latest_meaningful_server_line(tail: &str) -> Option<String> {
+  tail
+    .lines()
+    .rev()
+    .map(str::trim)
+    .find(|l| !is_server_noise_line(l))
+    .map(String::from)
+}
+
 /// 编排器自己行首的时间戳 + 级别前缀（`[YYYY-MM-DD HH:MM:SS.mmm] [LEVEL ]`）。
 ///
 /// dev-launcher.mjs 的 `createLogSink` 已经给每条日志写了「本地时间 + 级别」，
@@ -2329,6 +2366,63 @@ mod tests {
     assert_eq!(latest_prefixed_log(&dir, "no-such-prefix-"), None);
 
     std::fs::remove_dir_all(&dir).ok();
+  }
+
+  /// 服务端动态的噪声判据（ISSUE #4431）：两类高频重复行不算「在做什么」。
+  #[test]
+  fn server_noise_lines_are_recognized() {
+    // 健康探活的访问日志（编排器每秒一拍，行形取自真实 nextjs-stdout 日志）。
+    assert!(is_server_noise_line(
+      "GET /api/health 200 in 24ms (next.js: 6ms, proxy.ts: 6ms, application-code: 7ms)"
+    ));
+    assert!(is_server_noise_line("POST /api/health 200 in 5ms"));
+    // ComfyUI 拉起期的逐拍轮询（同一句只换 pid / 时刻地反复刷）。
+    assert!(is_server_noise_line(
+      "[01:54:20.180] INFO (101696): [comfyui] Configured instance (pid=101432, via=配置路径的实例) starting, port not bound yet"
+    ));
+    // 空行 / 纯空白。
+    assert!(is_server_noise_line(""));
+    assert!(is_server_noise_line("   "));
+    // 有信息量的行不算噪声。
+    assert!(!is_server_noise_line("▲ Next.js 16.4.3 (Turbopack)"));
+    assert!(!is_server_noise_line("✓ Ready in 485ms"));
+    assert!(!is_server_noise_line(
+      "[01:54:20.182] INFO (101696): [comfyui-lifecycle] ComfyUI 正在启动中，等待就绪…"
+    ));
+  }
+
+  /// 倒序挑行：尾部一串噪声行之下的「最近一条有信息量的行」才是答案——
+  /// 真实日志里 ComfyUI 拉起期每 1.5s 刷一条轮询行、每秒一条健康探活，
+  /// 直接取最后一行永远只会看到噪声。
+  #[test]
+  fn latest_meaningful_server_line_skips_trailing_noise() {
+    let tail = [
+      "[dev.mjs] COMFYAPP_PORT=3740 host=127.0.0.1（来源：命令行 -p/--port）",
+      "▲ Next.js 16.4.3 (Turbopack)",
+      "- Local:         http://127.0.0.1:3740",
+      "✓ Ready in 485ms",
+      "GET /api/health 200 in 592ms (next.js: 526ms)",
+      "[comfyui] Configured instance (pid=101432, via=配置路径的实例) starting, port not bound yet",
+      "[comfyui-lifecycle] ComfyUI 正在启动中，等待就绪…",
+      "[comfyui] Configured instance (pid=101432, via=配置路径的实例) starting, port not bound yet",
+      "GET /api/health 200 in 15ms (next.js: 4ms)",
+      "",
+    ]
+    .join("\n");
+    assert_eq!(
+      latest_meaningful_server_line(&tail).as_deref(),
+      Some("[comfyui-lifecycle] ComfyUI 正在启动中，等待就绪…")
+    );
+  }
+
+  /// 全噪声 / 空文本 ⇒ None：调用方（启动页）据此把「服务端」这一行收起，
+  /// 而不是摆一句空话。
+  #[test]
+  fn latest_meaningful_server_line_returns_none_for_all_noise() {
+    assert_eq!(latest_meaningful_server_line(""), None);
+    assert_eq!(latest_meaningful_server_line("\n\n"), None);
+    let noisy = "GET /api/health 200 in 24ms\n\nGET /api/health 200 in 21ms\n";
+    assert_eq!(latest_meaningful_server_line(noisy), None);
   }
 
   /// 会话锚点的路径与 `scripts/dev-launcher-session.mjs` 同源：壳要清理的

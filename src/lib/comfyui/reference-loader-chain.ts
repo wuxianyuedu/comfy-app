@@ -14,15 +14,21 @@
 // （`reference-loader-catalog.ts`）；目录不可用（ComfyUI 未就绪）→ 整份计划
 // 本轮不生效，全部回落裸 LoadImage，由调用方打一行日志。
 //
-// 串接口径：前一级的**第一个输出口** → 后一级的**第一个连线入口**；链尾按目标
-// 入口的类型挑出口（MASK 入口挑 MASK 出口，没有则整链回落裸增强）。
+// 串接口径：MASK 目标的首跳取 LoadImage 的 MASK 口、其余取 0 号图像口（链全程
+// 携带目标类型）；链内前一级的第一个输出口 → 后一级的第一个连线入口；链尾按
+// 目标入口的类型挑出口（MASK 入口挑 MASK 或 MATCHTYPE 出口——MATCHTYPE 跟随
+// 链入类型，#4404；没有则整链回落裸增强）。
 //
 // 纯函数、深拷贝、不碰原图（execPayload 每次执行都从原件起步，天然幂等）。
 // 无 React、无 IO（规范 §17.2 第①层），可直接单测。
 
 import { isRecord } from "~/lib/is-record";
 import type { ReferenceLoaderPreset } from "~/lib/workshop/reference-loader-preset";
-import type { ReferenceChainCatalog } from "./reference-loader-catalog";
+import {
+  chainWidgetsValues,
+  selectedComboOption,
+  type ReferenceChainCatalog,
+} from "./reference-loader-catalog";
 import type { AugmentedGraph, LoaderOverride } from "./reference-loader-augment";
 
 /** 装载计划：`${nodeId}::${入口名}` → 该端点用的装载预设。 */
@@ -36,6 +42,17 @@ export function referenceLoaderEndpointKey(nodeId: string, inputName: string): s
 /** 目标类型是纯 MASK（链的出口要挑 MASK 槽；其余一律取第一个输出口）。 */
 function isMaskType(type: unknown): boolean {
   return typeof type === "string" && type.toUpperCase().includes("MASK");
+}
+
+/** 出口能否当 MASK 用：纯 MASK，或 V3 MATCHTYPE（#4404：MATCHTYPE 跟随链入图
+ *  类型 —— 装载链给 MASK 目标喂的是 LoadImage 的 MASK 口，链入即 MASK，
+ *  出口也就出 MASK；不用再按输出表逐类猜）。 */
+function carriesMask(type: unknown): boolean {
+  if (typeof type !== "string") {
+    return false;
+  }
+  const upper = type.toUpperCase();
+  return upper.includes("MASK") || upper.includes("MATCHTYPE");
 }
 
 function asArray(value: unknown): Array<Record<string, unknown>> {
@@ -94,11 +111,11 @@ function chainApplies(args: {
   if (!maskTarget) {
     return true;
   }
-  /* MASK 目标要求链尾真有 MASK 出口（裸 LoadImage 恒有；链尾是处理节点时看它的
-   * 输出表）—— 没有就回落裸增强，别连出一条类型不符的线。 */
+  /* MASK 目标要求链尾真能出 MASK（裸 LoadImage 恒有；链尾是处理节点时看它的
+   * 输出表，MATCHTYPE 跟随链入也算）；没有就回落裸增强，别连出一条类型不符的线。 */
   const lastStep = preset.steps.at(-1);
   const lastDef = lastStep === undefined ? undefined : catalog[lastStep.class];
-  return (lastDef?.outputs ?? []).some((port) => isMaskType(port.type));
+  return (lastDef?.outputs ?? []).some((port) => carriesMask(port.type));
 }
 
 /* 建链节点的强类型（RAW UI 格式）。def 目录给出的端口形状在这里落成 ComfyUI
@@ -249,6 +266,13 @@ export function applyReferenceLoaderChainsRaw(
         chainOk = false;
         break;
       }
+      /* 控件值按 comfy-cli 转换器的配对口径摆位（连线口不占位、动态 COMBO 展开
+       * 选中项子输入）；摆不出合法值（选中项要连线）→ 整链回落裸增强。 */
+      const widgetsValues = chainWidgetsValues(def, step.widgets);
+      if (widgetsValues === null) {
+        chainOk = false;
+        break;
+      }
       chain.push({
         id: 0,
         type: step.class,
@@ -265,9 +289,7 @@ export function applyReferenceLoaderChainsRaw(
           links: null,
         })),
         properties: { "Node name for S&R": `${preset.name} · ${step.class}` },
-        widgets_values: def.widgetOrder.map(
-          (name) => step.widgets?.[name] ?? def.defaults[name] ?? null,
-        ),
+        widgets_values: widgetsValues,
       });
     }
     if (!chainOk) {
@@ -282,7 +304,9 @@ export function applyReferenceLoaderChainsRaw(
       nodes.push(node);
     }
 
-    /* ③ 串接：前一级第一个输出口 → 后一级第一个连线入口。 */
+    /* ③ 串接：前一级第一个输出口 → 后一级第一个连线入口。MASK 目标的首跳取
+     *    LoadImage 的 MASK 口（#4404：链全程携带 MASK，MATCHTYPE 处理节点才会
+     *    按 MASK 处理并出 MASK；IMAGE 目标维持 0 号图像口）。 */
     for (let i = 1; i < chain.length; i += 1) {
       const prev = chain[i - 1];
       const node = chain[i];
@@ -297,22 +321,29 @@ export function applyReferenceLoaderChainsRaw(
       if (wireInput === undefined) {
         break;
       }
+      const srcSlot = maskTarget && prev === loaderNode && prev.outputs[1] ? 1 : 0;
       nextLinkId += 1;
-      links.push([nextLinkId, prev.id, 0, node.id, wireIndex, wireInput.type]);
+      links.push([nextLinkId, prev.id, srcSlot, node.id, wireIndex, wireInput.type]);
       wireInput.link = nextLinkId;
-      const prevOutput = prev.outputs[0];
+      const prevOutput = prev.outputs[srcSlot];
       if (prevOutput) {
         prevOutput.links = [nextLinkId];
       }
     }
 
-    /* ④ 链尾 → 目标入口（出口槽按目标类型挑）。 */
+    /* ④ 链尾 → 目标入口（出口槽按目标类型挑；MATCHTYPE 跟随链入也算 MASK 口）。 */
     const last = chain.at(-1);
     if (last === undefined) {
       nextOverrides.push(ov);
       continue;
     }
-    const outletSlot = maskTarget ? last.outputs.findIndex((port) => isMaskType(port.type)) : 0;
+    const outletSlot = maskTarget ? last.outputs.findIndex((port) => carriesMask(port.type)) : 0;
+    if (outletSlot === -1) {
+      /* chainApplies 已验链尾有 MASK 口；这一格是防御性收口（目录与建链之间
+       * 不会换目录，真到 -1 说明状态被并发改过），回落裸增强不连错线。 */
+      nextOverrides.push(ov);
+      continue;
+    }
     nextLinkId += 1;
     links.push([
       nextLinkId,
@@ -396,11 +427,20 @@ export function applyReferenceLoaderChainsApi(
       inputs: { image: ov.value, upload: "image" },
       _meta: { title: chainNodeTitle(added, preset.name) },
     };
-    let prevId = loaderId;
+    /* 与 RAW 侧同一原子性：先按链序把各级节点摆好（含控件值合法性判据），再
+     * 一次性入图 —— 中途摆不出合法值（选中项要连线 / 类缺失）时整端点回落，
+     * 不留半条链。 */
+    const built: Array<{
+      classType: string;
+      id: string;
+      inputs: Record<string, unknown>;
+    }> = [];
+    let chainBroken = false;
+    let cursorId = loaderId;
     for (const step of preset.steps) {
       const def = catalog[step.class];
-      /* 不可达（chainResolvable 已验）；防御性收口。 */
-      if (def === undefined) {
+      if (def === undefined || chainWidgetsValues(def, step.widgets) === null) {
+        chainBroken = true;
         break;
       }
       nextNodeId += 1;
@@ -414,22 +454,43 @@ export function applyReferenceLoaderChainsApi(
           if (wired) {
             stepInputs[port.name] = null;
           } else {
-            stepInputs[port.name] = [prevId, 0];
+            stepInputs[port.name] = [cursorId, 0];
             wired = true;
           }
-        } else {
-          stepInputs[port.name] = step.widgets?.[port.name] ?? def.defaults[port.name] ?? null;
+          continue;
+        }
+        stepInputs[port.name] = step.widgets?.[port.name] ?? def.defaults[port.name] ?? null;
+        const option = selectedComboOption(def, port.name, stepInputs[port.name]);
+        if (!option) {
+          continue;
+        }
+        /* 动态 COMBO：子输入以「父名.子名」点号键随任务提交（后端
+         * `finalize_prefix` 的官方线格式）；合法性闸在 chainWidgetsValues，
+         * 这里只摆部件子输入。 */
+        for (const sub of option.subs) {
+          if (sub.wire) {
+            continue;
+          }
+          stepInputs[`${port.name}.${sub.name}`] =
+            step.widgets?.[`${port.name}.${sub.name}`] ?? sub.default ?? null;
         }
       }
-      root[nodeId] = {
-        class_type: step.class,
-        inputs: stepInputs,
-        _meta: { title: `${preset.name} · ${step.class}` },
+      built.push({ classType: step.class, id: nodeId, inputs: stepInputs });
+      cursorId = nodeId;
+    }
+    if (chainBroken) {
+      nextOverrides.push(ov);
+      continue;
+    }
+    for (const node of built) {
+      root[node.id] = {
+        class_type: node.classType,
+        inputs: node.inputs,
+        _meta: { title: `${preset.name} · ${node.classType}` },
       };
-      prevId = nodeId;
     }
     /* API 图的连线值不带类型，出口槽一律取第一个（与裸增强的 API 侧同口径）。 */
-    inputs[ov.name] = [prevId, 0];
+    inputs[ov.name] = [cursorId, 0];
 
     added += 1;
     nextOverrides.push({ nodeId: loaderId, name: "image", value: ov.value });

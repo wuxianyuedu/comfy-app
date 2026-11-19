@@ -119,8 +119,12 @@ function cliWarn(msg: string): void {
  * 清理（settle 时的删除 + reaper 的兜底扫描）都引用它，别处不重拼。 */
 const TEMP_WORKFLOW_DIR = path.join(process.cwd(), "temp", "comfy-cli");
 /** 崩溃孤儿的保留窗：进程在「写完」与「收口」之间崩掉时文件会留下，
- * 按 mtime 留一小时余量再删（收口即删是正常路径，这里只兜孤儿）。 */
-const TEMP_WORKFLOW_MAX_AGE_MS = 60 * 60_000;
+ * 按 mtime 留一小时余量再删（收口即删是正常路径，这里只兜孤儿）。
+ *
+ * 必须导出：它是公开签名 `pruneTempWorkflowFiles.maxAgeMs` 的缺省值，注释里的
+ * `{@linkcode}` 也指它——typedoc 只收「从入口可达且带 export」的符号，不导出
+ * 会让 API 文档自检报「resolved but is not included」（ISSUE #4407 / 先例 #2835）。 */
+export const TEMP_WORKFLOW_MAX_AGE_MS = 60 * 60_000;
 
 /**
  * 清理崩溃残留的临时工作流文件（#4225）：正常路径在任务收口（settle）时就删，

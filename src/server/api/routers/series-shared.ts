@@ -15,7 +15,10 @@ import type * as schema from "~/server/db/schema";
 import { character, episode, season, series } from "~/server/db/schema";
 
 /** tRPC ctx 的子集（仅取 router 需要的 db / user）。 */
-type Db = SqliteRemoteDatabase<typeof schema>;
+/** 必须导出：它在公开签名 `Ctx.db` 里被引用，typedoc 只收「从入口可达且带
+ *  export」的符号——不导出会让 API 文档自检报「referenced … but not
+ *  included」（ISSUE #4407 / 修法先例 #2835）。 */
+export type Db = SqliteRemoteDatabase<typeof schema>;
 export type Ctx = { db: Db; user: { id: string } };
 
 /** 生产数据里的角色卡（JSON 列，形状见 `src/lib/workshop/types.ts` 的 `Character`）。 */

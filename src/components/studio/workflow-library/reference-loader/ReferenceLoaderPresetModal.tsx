@@ -19,6 +19,7 @@ import { Input } from "~/components/ui/input";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { SelectMenu } from "~/components/ui/select-menu";
 import type { ReferenceChainClassDef } from "~/lib/comfyui/reference-loader-catalog";
+import { selectedComboOption } from "~/lib/comfyui/reference-loader-catalog";
 import type {
   ReferenceLoaderPreset,
   ReferenceLoaderStep,
@@ -55,18 +56,17 @@ function unknownToText(value: unknown): string {
   return "";
 }
 
-/** 部件值控件：COMBO 出下拉，数值出数字框，其余出文本框。 */
+/** 部件值控件：COMBO 出下拉，数值出数字框，其余出文本框。顶层部件与动态 COMBO
+ *  的子输入（#4404）共用这一份 —— 传各自的类型与候选即可。 */
 function WidgetField(props: {
-  def: ReferenceChainClassDef;
+  choices: Array<string>;
   name: string;
   onChange: (value: unknown) => void;
+  type: string;
   value: unknown;
 }) {
-  const { def, name, onChange, value } = props;
-  const port = def.inputs.find((input) => input.name === name);
-  const type = upperToken(port?.type);
-  const choices =
-    def.choices[name] ?? (type === "COMBO" && typeof value === "string" ? [value] : []);
+  const { choices, name, onChange, type, value } = props;
+  const normalizedType = upperToken(type);
   if (choices.length > 0) {
     return (
       <SelectMenu
@@ -83,7 +83,7 @@ function WidgetField(props: {
       />
     );
   }
-  if (type === "INT" || type === "FLOAT") {
+  if (normalizedType === "INT" || normalizedType === "FLOAT") {
     return (
       <Input
         aria-label={name}
@@ -113,6 +113,24 @@ function WidgetField(props: {
       value={value === null || value === undefined ? "" : unknownToText(value)}
     />
   );
+}
+
+/** 换动态 COMBO 的选中项：写新选择器值，并清掉上一项遗留的点号子输入值 ——
+ *  不同选项的子输入集不同，旧值留着既不生效还会在保存里越积越多。 */
+function widgetsAfterSelectorChange(
+  widgets: Record<string, unknown> | undefined,
+  name: string,
+  next: unknown,
+): Record<string, unknown> {
+  const prefix = `${name}.`;
+  const out: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(widgets ?? {})) {
+    if (!key.startsWith(prefix)) {
+      out[key] = val;
+    }
+  }
+  out[name] = next;
+  return out;
 }
 
 export function ReferenceLoaderPresetModal({ onClose, open }: Props) {
@@ -369,25 +387,79 @@ export function ReferenceLoaderPresetModal({ onClose, open }: Props) {
                             {def ? (
                               def.inputs
                                 .filter((port) => !port.wire)
-                                .map((port) => (
-                                  <div className="mb-1" key={port.name}>
-                                    <p className="text-muted-foreground/70 text-3xs truncate">
-                                      {port.name}
-                                    </p>
-                                    <WidgetField
-                                      def={def}
-                                      name={port.name}
-                                      onChange={(value) => {
-                                        patchStep(index, {
-                                          widgets: { ...step.widgets, [port.name]: value },
-                                        });
-                                      }}
-                                      value={
-                                        step.widgets?.[port.name] ?? def.defaults[port.name] ?? null
-                                      }
-                                    />
-                                  </div>
-                                ))
+                                .map((port) => {
+                                  const rawValue =
+                                    step.widgets?.[port.name] ?? def.defaults[port.name] ?? null;
+                                  const choices =
+                                    def.choices[port.name] ??
+                                    (upperToken(port.type) === "COMBO" &&
+                                    typeof rawValue === "string"
+                                      ? [rawValue]
+                                      : []);
+                                  /* 动态 COMBO：按选中项展开子输入（值存点号全名）。 */
+                                  const option = selectedComboOption(def, port.name, rawValue);
+                                  const wireSubs = option?.subs.filter((sub) => sub.wire) ?? [];
+                                  return (
+                                    <div className="mb-1" key={port.name}>
+                                      <p className="text-muted-foreground/70 text-3xs truncate">
+                                        {port.name}
+                                      </p>
+                                      <WidgetField
+                                        choices={choices}
+                                        name={port.name}
+                                        onChange={(value) => {
+                                          const patch = option
+                                            ? widgetsAfterSelectorChange(
+                                                step.widgets,
+                                                port.name,
+                                                value,
+                                              )
+                                            : { ...step.widgets, [port.name]: value };
+                                          patchStep(index, { widgets: patch });
+                                        }}
+                                        type={port.type}
+                                        value={rawValue}
+                                      />
+                                      {option && option.subs.some((sub) => !sub.wire) && (
+                                        <div className="border-border/50 mt-1 ml-2 border-l pl-2">
+                                          {option.subs
+                                            .filter((sub) => !sub.wire)
+                                            .map((sub) => (
+                                              <div className="mb-1" key={sub.name}>
+                                                <p className="text-muted-foreground/70 text-3xs truncate">
+                                                  {sub.name}
+                                                </p>
+                                                <WidgetField
+                                                  choices={sub.choices}
+                                                  name={`${port.name}.${sub.name}`}
+                                                  onChange={(value) => {
+                                                    patchStep(index, {
+                                                      widgets: {
+                                                        ...step.widgets,
+                                                        [`${port.name}.${sub.name}`]: value,
+                                                      },
+                                                    });
+                                                  }}
+                                                  type={sub.type}
+                                                  value={
+                                                    step.widgets?.[`${port.name}.${sub.name}`] ??
+                                                    sub.default ??
+                                                    null
+                                                  }
+                                                />
+                                              </div>
+                                            ))}
+                                        </div>
+                                      )}
+                                      {wireSubs.length > 0 && (
+                                        <p className="text-muted-foreground/60 text-3xs mt-1">
+                                          {wireSubs.map((sub) => sub.name).join("、")}{" "}
+                                          要连线输入，装载链接不了 —— 生成时该端点回落裸装载。
+                                        </p>
+                                      )}
+                                    </div>
+                                  );
+                                })
                             ) : (
                               <p className="text-destructive text-3xs">
                                 节点类定义不可用（ComfyUI 未在线或类名不存在）
