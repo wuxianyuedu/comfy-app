@@ -49,6 +49,13 @@ export function bootDevServerStage(ctx, target) {
   const { port, host, mode, runTimestamp, startedAt } = target;
   let staleShell = target.staleShell;
 
+  /* 启动长段的心跳续拍（#4413）：占坑时刻的心跳要撑到这一步之后的常驻 interval，
+   * 中间夹着清缓存这一段**无预算**的同步 rmSync（Turbopack 缓存数 GB / 数万文件时
+   * 轻松超 HEARTBEAT_STALE_MS(30s)）——心跳一陈旧，并发启动互斥（ISSUE #4345）
+   * 会把「启动中的编排器」当成死了的，第二个实例照样进来互抢端口。进桥段先拍
+   * 一次，缓存清完再拍一次。 */
+  ctx.touchHeartbeat(root);
+
   // 5) .next 缓存策略（与 .ps1 同一指纹口径）
   timeline?.begin("cache", "编译缓存");
   /* #4333：清缓存失败（典型：仍有进程持有 .next 文件句柄）不再把启动炸成
@@ -75,6 +82,8 @@ export function bootDevServerStage(ctx, target) {
   );
   const pnpm = ctx.reconcilePnpmVersion(root);
   timeline?.end("cache");
+  /* 清缓存（rmSync）刚结束：这是占坑 → 起服务之间最长的一段，续拍一拍（#4413）。 */
+  ctx.touchHeartbeat(root);
   if (pnpm?.tip) {
     ctx.appendRuntimeWarning(pnpm.tip);
     staleShell = staleShell ? `${staleShell}；${pnpm.tip}` : pnpm.tip;

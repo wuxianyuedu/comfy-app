@@ -198,16 +198,42 @@ export async function waitForReady({
   return false;
 }
 
-/** 读文件尾部（失败诊断用；文件不存在返回空串）。 */
-/**
- * @param {string} file @param {number} [lines] @returns {string}
+/** 尾部读取的字节预算（#4424）：dev server 的 stdout/stderr 按次命名、只按份数
+ *  轮转（保留 5 份）**不按大小截断**，长会话可达几十至几百 MB —— 整文件
+ *  readFileSync 会在收尾诊断（发生在整树回收**之前**）拖出秒级延迟与数百 MB 的
+ *  瞬时内存。256KB 对「最后 20 行」是天文数字级的余量；单行超过预算的病态文件
+ *  会返回预算内的截断片段，诊断价值足够、代价有界。 */
+const TAIL_BUDGET_BYTES = 256 * 1024;
+
+/** 读文件尾部（失败诊断用；文件不存在返回空串）。
+ *
+ *  只读末尾 min(文件大小, TAIL_BUDGET_BYTES)（#4424），凑够 lines 行的语义与
+ *  整文件读法一致——20 行几乎不可能超出 256KB；文件小于预算时行为逐字节同旧。
+ *  @param {string} file @param {number} [lines] @returns {string}
  */
 export function readTail(file, lines = 20) {
+  let buf;
   try {
-    return fs.readFileSync(file, "utf8").split("\n").slice(-lines).join("\n").trim();
+    const size = fs.statSync(file).size;
+    const budget = Math.min(size, TAIL_BUDGET_BYTES);
+    buf = Buffer.alloc(budget);
+    const fd = fs.openSync(file, "r");
+    try {
+      fs.readSync(fd, buf, 0, budget, size - budget);
+    } finally {
+      fs.closeSync(fd);
+    }
   } catch {
     return "";
   }
+  /* 预算起点可能切在 UTF-8 多字节字符中间：解码成 U+FFFD 只影响边界那一行，
+   * 诊断用途可接受（不按行预算逐块读，是为了不在这里造第二个无界循环）。 */
+  const text = buf.toString("utf8");
+  const rows = text.split("\n");
+  if (rows.length > lines) {
+    rows.splice(0, rows.length - lines);
+  }
+  return rows.join("\n").trim();
 }
 
 /**

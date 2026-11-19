@@ -480,6 +480,11 @@ export async function run(argv = process.argv.slice(2)) {
   }
   const port = gated.port;
   currentPort = port;
+  /* 占坑后续拍（#4413）：占坑那一刻的心跳要撑到起服务之后的常驻 interval，中间
+   * 夹着端口回收（逐 PID 验活）与 portsFree 等待，加起来可逼近 30s 阈值 —— 心跳
+   * 一陈旧，并发互斥（ISSUE #4345）会把「启动中的编排器」当成死了的，第二个
+   * 实例照样进来互抢。这里补一拍；清缓存那段由 dev-boot 桥段自己续拍。 */
+  touchHeartbeat(ROOT);
   // 3) 桌面壳（prebuilt 模式最先拉起：用户双击后第一件事是看见窗口）
   // 这一段在 `launcher-core/shell-stage.mjs`（ISSUE #1811 拆 R5 超限文件）；
   // 主文件只把壳层动作与日志出口注进去，并接「找不到壳」这个提前返回。
