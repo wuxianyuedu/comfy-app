@@ -9693,7 +9693,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
         const base = fake({ chain: true });
         const run = overrideRun(base, {
           "get-pull":
-            '{"status":200,"data":{"number":777,"mergeable_state":"mergeable","state":"open","title":"t"}}',
+            '{"status":200,"data":{"number":777,"mergeable_state":"mergeable","state":"open","title":"fix(ship): 阶段进度"}}',
         });
         const code = await main({
           root: tmpRoot,

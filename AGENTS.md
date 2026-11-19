@@ -423,7 +423,8 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
 
 28. **「分支 → 提交 → push → PR → 等 CI → 绿了合并」这条流程走 `pnpm ship`，不在外面手敲命令串**
     （§13.6 / 硬规则 27）：它只**编排**既有执行者（pre-commit、pre-push 的 `check:premerge`、
-    平台 build），一次也不自己判。用法全表与失败语义**只有一份出处**——project Skill
+    平台 build），一次也不自己判（唯一的自判是**输入形态**：PR 标题在建 / 并两跳前的
+    合规检查，见 §13.6 / ship Skill 边界 14）。用法全表与失败语义**只有一份出处**——project Skill
     [`.qoder/skills/ship/SKILL.md`](.qoder/skills/ship/SKILL.md) 与 `scripts/ship/ship.mjs` 文件头，
     本文件不抄旗标清单。四条红线每次都要成立：
     **① 显式动作不许被推断**：`--merge` / `--close-issue` / `--clean-branch` / `--reap` 都要人点名，
