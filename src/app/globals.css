@@ -803,7 +803,8 @@ body {
      设置页与消息中心）。thumb 取强边框色、hover 再深一档，弱底上看得见。
    · `.soft-scrollbar` —— 文字编辑区（剧本 Markdown 编辑器与工坊舞台正文）。
      与上一档同宽不同档：thumb 同色、hover 取弱文字色，长时间编辑不抢视线。
-   · `.scrollbar-none` —— 只滚动不显示滚动条（tooltip 气泡，#4512）。
+   · `.scrollbar-none` —— 只滚动不显示滚动条（tooltip 气泡 #4512；侧栏内容列与
+     命令面板列表 #4517 —— 两者曾用无定义的死类名，隐藏意图并未生效）。
    · `textarea::-webkit-scrollbar`（下方）—— 画布节点文本框**只滚动不显示**
      滚动条，保住面板右缘干净（滚轮 / PgDn / 方向键照常可用）。
    `ui/scroll-area` 另有一套 base-ui 自绘滚动条，口径见规范 16 §16.2.4.6 第三档。 */
