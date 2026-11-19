@@ -97,8 +97,22 @@ export function FlowNodeCollapsedAnchors({
   orderedEntries,
   outputs,
 }: FlowNodeCollapsedAnchorsProps) {
-  // 已连线的输入（连线元组 `[]`）与已连线的输出保持锚定。
-  const connectedInputs = orderedEntries.filter(([, v]) => Array.isArray(v));
+  // raw_inputs 按名字索引：widget 型输入即使被连线占用，条目值也是 **widget 值**
+  // （字符串/数字，见 allEntries 的装配），不会是连线元组 —— 只按 `Array.isArray`
+  // 挑「已连线」会把这些输入整批漏掉，折叠态下它们没有 Handle，落在这类输入上的
+  // 边被 React Flow 静默丢弃（error#008），画布上表现为「连线消失」（ISSUE #4548）。
+  const rawByName = new Map((data.rawInputs ?? []).map((raw) => [raw.name, raw]));
+  const connectedInputs = orderedEntries.filter(([k, v]) => {
+    if (Array.isArray(v)) {
+      return true;
+    }
+    const meta = rawByName.get(k);
+    return (
+      meta?.isConnection === true ||
+      meta?.isBoundary === true ||
+      data.boundaryInputs?.has(k) === true
+    );
+  });
   const connectedOutputs = outputs.filter(([n]) => data.connectedOutputs?.has(n) === true);
   /* 锚柱（收起时的端口载体）跟主题联动：浅色下白描白会让锚柱整个消失。 */
   const { resolvedTheme } = useTheme();
