@@ -1342,13 +1342,30 @@
 
 #### FR-SR-04 剧集级排期与批量（整季调度 / 断点续跑）
 
-- 状态：计划中
+- 状态：已上线（#2836 落地，#4009/#4043/#4088 演进）
 - 需求：能一次提交**整季 / 跨集**的生成任务，并能从断点继续。
-- 行为与验收：① 一次提交 N 集 × M 镜，失败只重跑失败项（已完成的不被动）；
-  ② 中断后重跑从断点继续，**不重复已完成镜**（以 `taskId` 幂等，不是靠记忆）；
-  ③ 进度可读到「第几集 第几镜」，不是只有一个总数。
-- 落点（现状）：项目内批量并发上限 2（`src/lib/workshop/generation-client.ts`），
-  只在单个项目内遍历 `Shot[]`，无跨集调度
+- 行为与验收：
+  - 一次提交 N 集 × M 镜：`seriesGeneration.batchGenerateSeason({ seasonId, workflowId })`
+    沿季 → 集 → `production.shots` 遍历，按 `(projectId, shotId)` 的 task 存在性
+    **幂等去重**——已 SUCCEEDED 的镜跳过、活跃（QUEUED/RUNNING）镜经
+    `createQueuedForShotIfNoActive` 原子防重（与单镜生成共用同一事务守卫，
+    跨入口不竞态重复入队），只入队失败 / 未生成的镜；返回
+    `{ enqueued, skippedSucceeded, skippedActive, invalid }`（坏镜头计 invalid，
+    不静默）。断点续跑不靠记忆：中断后重跑，已完成镜数量不变，只补未完成项。
+  - 进度按集粒度：`seriesGeneration.seasonGenerationProgress({ seasonId })`
+    返回每集 `{ episodeNumber, title, total, done, failed, running, pending }`，
+    可读到「第几集 第几镜」。
+  - 归属：两口都过 `assertSeasonOwner`（series-shared 共享版）。
+  - 前端：`SeriesOrganizer` 剧集面板「整季生成」按钮（选工作流后批量提交），
+    进度读 `seasonGenerationProgress`（`use-series-organizer.ts` 收口）。
+  - 已知边界：项目内的逐镜批量循环（ShotStudio / VideoStudio /
+    useStoryboardPlanner，并发上限 2）保留不动——它们是单项目模式；整季入口
+    不改它们的语义。
+- 落点：`src/server/api/routers/series-generation.ts`（两个 procedure）、
+  `src/server/api/root.ts`（挂载）、
+  `src/components/studio/project-home/SeriesOrganizer.tsx`（入口 UI）、
+  `src/components/studio/project-home/hooks/use-series-organizer.ts`（取数收口）、
+  `src/server/api/routers/series.test.ts`（行为用例）
 
 #### FR-SR-05 剧集元数据与导出（交付清单）
 
