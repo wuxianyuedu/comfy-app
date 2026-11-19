@@ -1,6 +1,7 @@
 "use client";
 
-import { Bug, ChevronDown, Moon, Search, Settings, Sun } from "lucide-react";
+import { useState } from "react";
+import { Bug, ChevronDown, Moon, Search, Settings, Sun, Timer } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { MessageCenterButton } from "~/components/message-center/MessageCenterButton";
@@ -19,6 +20,7 @@ import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Separator } from "~/components/ui/separator";
 import { SidebarTrigger } from "~/components/ui/sidebar";
 
+import { LaunchTimingsPanel } from "./logs/LaunchTimingsPanel";
 import { NAV_ITEMS, type WorkspaceView } from "./NavItems";
 import { useDevtoolsLauncher } from "./use-devtools-launcher";
 import { viewHelp } from "./ViewHelp";
@@ -47,6 +49,8 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
      快捷键（⌘/Ctrl+Shift+I 与 F12）由 useDevtoolsLauncher 一并注册，
      判据与按钮同源，详见该文件。 */
   const devtools = useDevtoolsLauncher();
+  /* 启动耗时时间线面板（#4522）：独立于日志面板的查看入口，从应用菜单打开。 */
+  const [timingsOpen, setTimingsOpen] = useState(false);
 
   /**
    * 一键翻深浅色。读 `resolvedTheme` 而非 `theme`：后者可能是 `"system"`，那样点一下会写成 system 而画面没变
@@ -57,99 +61,114 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
   };
 
   return (
-    <header className="border-border-subtle bg-canvas z-base flex h-12 shrink-0 items-center gap-2 border-b px-3">
-      <SidebarTrigger className="-ml-1" />
-      {/* 竖档基元默认 `data-vertical:self-stretch`，而 flexbox 规则里 stretch 在
+    <>
+      <header className="border-border-subtle bg-canvas z-base flex h-12 shrink-0 items-center gap-2 border-b px-3">
+        <SidebarTrigger className="-ml-1" />
+        {/* 竖档基元默认 `data-vertical:self-stretch`，而 flexbox 规则里 stretch 在
           交叉尺寸非 auto（这里给了 `h-4`）时退化为顶对齐 —— 这根短线会被钉在
           顶栏上沿成一截孤线（ISSUE #3587）。用**同形变体**声明居中：cn 合并时
           同组同变体会把基类的 self-stretch 挤掉，覆盖是确定性的；换成任意变体
           `data-[orientation=vertical]:` 的写法两类并存、要输给样式表顺序，别改。 */}
-      <Separator
-        className="data-vertical:self-center data-[orientation=vertical]:h-4"
-        orientation="vertical"
-      />
-      <Hint label={label}>
-        <span className="text-ink-strong min-w-0 truncate text-sm font-medium">{label}</span>
-      </Hint>
-      {/* 视图说明问号：挂在标题右侧（读者在「这一屏叫什么」的地方顺路看见「还有
+        <Separator
+          className="data-vertical:self-center data-[orientation=vertical]:h-4"
+          orientation="vertical"
+        />
+        <Hint label={label}>
+          <span className="text-ink-strong min-w-0 truncate text-sm font-medium">{label}</span>
+        </Hint>
+        {/* 视图说明问号：挂在标题右侧（读者在「这一屏叫什么」的地方顺路看见「还有
           一句解释」）。没有登记的视图不渲染 —— 「没有说明的不显示」。屏内页头不再
           放第二颗：那句话的单一出处是 `viewHelp()`。 */}
-      {help === undefined ? null : <HeaderHelp text={help} />}
+        {help === undefined ? null : <HeaderHelp text={help} />}
 
-      <div className="ml-auto flex min-w-0 items-center gap-1">
-        {/* 本屏动作的落点（`ViewActions`）。放在全局控件之前：本屏的动作与
+        <div className="ml-auto flex min-w-0 items-center gap-1">
+          {/* 本屏动作的落点（`ViewActions`）。放在全局控件之前：本屏的动作与
             「这一屏叫什么」挨着读，全局搜索 / 主题 / 消息 / 菜单始终在最右端，
             位置不随视图变。空槽不占宽度（`min-w-0` + 无子节点）。 */}
-        <ViewActionsHost />
-        <Hint label="全局搜索（⌘K）">
-          <Button
-            aria-label="全局搜索"
-            className="gap-1.5"
-            onClick={onOpenSearch}
-            size="sm"
-            variant="ghost"
-          >
-            <Search data-icon="inline-start" size={16} />
-            <span className="hidden md:inline">搜索</span>
-            <KbdGroup>
-              <Kbd>⌘</Kbd>
-              <Kbd>K</Kbd>
-            </KbdGroup>
-          </Button>
-        </Hint>
-        <Hint label="切换深浅色">
-          <Button aria-label="切换深浅色" onClick={toggleTheme} size="icon-sm" variant="ghost">
-            {/* 两枚都渲染、靠 `dark:` 决定可见性：`resolvedTheme` 在服务端与首帧是
-                undefined，按它条件渲染会让按钮在 hydration 后跳一下。 */}
-            <Sun className="dark:hidden" data-icon="inline-start" size={16} />
-            <Moon className="hidden dark:block" data-icon="inline-start" size={16} />
-          </Button>
-        </Hint>
-        <MessageCenterButton />
-
-        {/* 设置直达入口（ISSUE #3789）：顶栏右上角一键打开设置，不再「菜单 → 设置」
-            点两次。应用菜单里的「设置」项保留（菜单还在兜底）。 */}
-        <Hint label="设置">
-          <Button aria-label="设置" onClick={onOpenSettings} size="icon-sm" variant="ghost">
-            <Settings data-icon="inline-start" size={16} />
-          </Button>
-        </Hint>
-
-        <DropdownMenu>
-          {/* `render` 必须直接收那颗 `<Button>`：`DropdownMenuTrigger` 会把 menu 的触发属性（pointerdown / click / `aria-haspopup`）以 props 形式灌进它收到的元素，而 `Hint` 只吃 `label` / `side` / `accessibleName` / `wrap` / `children`、不转发任意 props —— 套在中间（`render={<Hint>…</Hint>}`）等于把这串 props 全丢掉，表现是**按钮点不开菜单**（ISSUE #1384）。
-              顺序只能是「`Hint` 在外、`DropdownMenuTrigger` 在内」：`TooltipTrigger` 与 `Menu.Trigger` 都是 `render` 接管同一个子元素，两层 props 会**合并**到那颗 `<Button>` 上，互不吞并。 */}
-          <Hint label="应用菜单">
-            <DropdownMenuTrigger
-              render={
-                <Button aria-label="应用菜单" size="icon-sm" variant="ghost">
-                  <ChevronDown data-icon="inline-start" />
-                </Button>
-              }
-            />
+          <ViewActionsHost />
+          <Hint label="全局搜索（⌘K）">
+            <Button
+              aria-label="全局搜索"
+              className="gap-1.5"
+              onClick={onOpenSearch}
+              size="sm"
+              variant="ghost"
+            >
+              <Search data-icon="inline-start" size={16} />
+              <span className="hidden md:inline">搜索</span>
+              <KbdGroup>
+                <Kbd>⌘</Kbd>
+                <Kbd>K</Kbd>
+              </KbdGroup>
+            </Button>
           </Hint>
-          <DropdownMenuContent align="end" className="w-44">
-            {/* base-ui 的 DropdownMenuLabel 实为 Menu.GroupLabel，必须包在
+          <Hint label="切换深浅色">
+            <Button aria-label="切换深浅色" onClick={toggleTheme} size="icon-sm" variant="ghost">
+              {/* 两枚都渲染、靠 `dark:` 决定可见性：`resolvedTheme` 在服务端与首帧是
+                undefined，按它条件渲染会让按钮在 hydration 后跳一下。 */}
+              <Sun className="dark:hidden" data-icon="inline-start" size={16} />
+              <Moon className="hidden dark:block" data-icon="inline-start" size={16} />
+            </Button>
+          </Hint>
+          <MessageCenterButton />
+
+          {/* 设置直达入口（ISSUE #3789）：顶栏右上角一键打开设置，不再「菜单 → 设置」
+            点两次。应用菜单里的「设置」项保留（菜单还在兜底）。 */}
+          <Hint label="设置">
+            <Button aria-label="设置" onClick={onOpenSettings} size="icon-sm" variant="ghost">
+              <Settings data-icon="inline-start" size={16} />
+            </Button>
+          </Hint>
+
+          <DropdownMenu>
+            {/* `render` 必须直接收那颗 `<Button>`：`DropdownMenuTrigger` 会把 menu 的触发属性（pointerdown / click / `aria-haspopup`）以 props 形式灌进它收到的元素，而 `Hint` 只吃 `label` / `side` / `accessibleName` / `wrap` / `children`、不转发任意 props —— 套在中间（`render={<Hint>…</Hint>}`）等于把这串 props 全丢掉，表现是**按钮点不开菜单**（ISSUE #1384）。
+              顺序只能是「`Hint` 在外、`DropdownMenuTrigger` 在内」：`TooltipTrigger` 与 `Menu.Trigger` 都是 `render` 接管同一个子元素，两层 props 会**合并**到那颗 `<Button>` 上，互不吞并。 */}
+            <Hint label="应用菜单">
+              <DropdownMenuTrigger
+                render={
+                  <Button aria-label="应用菜单" size="icon-sm" variant="ghost">
+                    <ChevronDown data-icon="inline-start" />
+                  </Button>
+                }
+              />
+            </Hint>
+            <DropdownMenuContent align="end" className="w-44">
+              {/* base-ui 的 DropdownMenuLabel 实为 Menu.GroupLabel，必须包在
                 DropdownMenuGroup（或 DropdownMenuRadioGroup）里；否则打开菜单会抛
                 "MenuGroupContext is missing"（与 CanvasContextMenu 同款约定）。 */}
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>应用</DropdownMenuLabel>
-              <DropdownMenuItem onClick={onOpenSettings}>
-                <Settings strokeWidth={1.8} />
-                设置
-              </DropdownMenuItem>
-              {/* 开发者工具：排查渲染 / 脚本性能用。判据是**编译期**有没有
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>应用</DropdownMenuLabel>
+                <DropdownMenuItem onClick={onOpenSettings}>
+                  <Settings strokeWidth={1.8} />
+                  设置
+                </DropdownMenuItem>
+                {/* 启动耗时时间线（#4522）：启动耗时的独立查看入口，不再挤在
+                  日志面板里影响看日志。 */}
+                <DropdownMenuItem
+                  onClick={() => {
+                    setTimingsOpen(true);
+                  }}
+                >
+                  <Timer strokeWidth={1.8} />
+                  启动耗时
+                </DropdownMenuItem>
+                {/* 开发者工具：排查渲染 / 脚本性能用。判据是**编译期**有没有
                   devtools feature，所以发布壳里这一项整个不渲染，而不是渲染出来
                   点一下报「未启用」。快捷键 ⌘/Ctrl+Shift+I 与 F12 同判据。 */}
-              {devtools.available ? (
-                <DropdownMenuItem onClick={devtools.open}>
-                  <Bug strokeWidth={1.8} />
-                  开发者工具
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </header>
+                {devtools.available ? (
+                  <DropdownMenuItem onClick={devtools.open}>
+                    <Bug strokeWidth={1.8} />
+                    开发者工具
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+      {/* 启动耗时时间线（#4522）：面板状态留在 TopBar（菜单是唯一入口），
+          弹窗经 Portal 挂 body，不随视图切换丢状态。 */}
+      <LaunchTimingsPanel onOpenChange={setTimingsOpen} open={timingsOpen} />
+    </>
   );
 }

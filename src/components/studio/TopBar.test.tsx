@@ -4,7 +4,8 @@
  * 承载信息，却白占一整条纵向空间）。所以这里既钉「标题在工具条上」，也钉「应用名
  * 已经不在侧栏头部了」—— 只钉前者的话，旧的名称行再多留一版也没人发现。 */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { SidebarProvider } from "~/components/ui/sidebar";
 
@@ -147,6 +148,23 @@ describe("TopBar", () => {
     expect(sun).toBeTruthy();
     expect(moon).toBeTruthy();
     expect(icons.length).toBeGreaterThanOrEqual(2);
+  });
+
+  /* 启动耗时时间线（#4522）：应用菜单里的「启动耗时」项点开**独立**面板，
+   * 不再挤在日志面板里。jsdom 没有启动读数（取数回落空态），这里判
+   * 「菜单项在场 + 点了面板真开」；时间线内容细节由 LaunchTimingsPanel.test.tsx 自判。 */
+  it("应用菜单里有「启动耗时」项，点开独立的启动耗时时间线面板", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ phases: null, totalMs: null }), { status: 200 }),
+    );
+    renderTopBar("home");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "应用菜单" }));
+    const item = await screen.findByRole("menuitem", { name: "启动耗时" });
+    await user.click(item);
+    await waitFor(() => {
+      expect(screen.getByText("暂无启动耗时读数")).toBeInTheDocument();
+    });
   });
 });
 
