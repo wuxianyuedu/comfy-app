@@ -285,7 +285,7 @@ function WorkflowEditorBody({
     toggleRefMountMode: handleToggleRefMountMode,
     handleNodeClick,
     decoratedNodes,
-  } = useReferenceMountMode({ workflowId, paramMap, graphNodes, savePatch });
+  } = useReferenceMountMode({ workflowId, paramMap, graphNodes, savePatch, setParamMap });
 
   /* 画布上只有**工作流图**本身：图节点与图连线都来自工作流自身
    * （`buildInitialNodes` / `buildEdges`）。对外参数卡片与其映射线已从编辑器移除

@@ -5,8 +5,15 @@
  * 提交同一口径，不依赖用户记得点「保存」）。装载计划按 image_0..N 规律把
  * 这些节点的图片口接成参考图落点（见 reference-loader-plan.ts）。
  * 被标记节点在画布上加主色描边高亮（样式见 globals.css 的 .ref-mount-node）。
+ *
+ * 连点多个节点要能累积（ISSUE #4547）：标记写入走「本地先定、服务端对账」
+ * 的乐观同步（与 useIoModesCommit 同一模式）——先 setParamMap 更新编辑器
+ * 本地 paramMap，再 savePatch 落库。只写服务端不更新本地时，下一次点击读到的
+ * 还是旧名单，前一次的标记会被覆盖（只剩最后点的那一个），高亮与计数徽标也
+ * 不会出现；顺带修掉「标记后点保存会以旧 paramMap 整份覆盖回库」的连带缺陷。
  */
 import { useCallback, useMemo, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import type { Node } from "@xyflow/react";
 
 import {
@@ -32,9 +39,11 @@ export function useReferenceMountMode(args: {
   graphNodes: Array<Node>;
   paramMap: Record<string, unknown>;
   savePatch: WorkflowSaver;
+  /** 编辑器本地 paramMap 的写回口：标记先同步到这里（乐观），随后落库。 */
+  setParamMap: Dispatch<SetStateAction<Record<string, unknown>>>;
   workflowId: string;
 }): ReferenceMountModeController {
-  const { workflowId, paramMap, graphNodes, savePatch } = args;
+  const { workflowId, paramMap, graphNodes, savePatch, setParamMap } = args;
   const [refMountMode, setRefMountMode] = useState(false);
   const mountedNodeIds = useMemo(() => referenceLoaderMountNodes(paramMap), [paramMap]);
   const toggleRefMountMode = useCallback(() => {
@@ -50,9 +59,11 @@ export function useReferenceMountMode(args: {
         ? current.filter((id) => id !== node.id)
         : [...current, node.id];
       const nextParamMap = withReferenceLoaderMountNodes({ paramMap, nodeIds: nextIds });
+      /* 本地先定（高亮 / 计数即时反映，下一次点击基于新名单累积），随后落库。 */
+      setParamMap(nextParamMap);
       savePatch.mutate({ id: workflowId, paramMap: nextParamMap });
     },
-    [refMountMode, paramMap, savePatch, workflowId],
+    [refMountMode, paramMap, setParamMap, savePatch, workflowId],
   );
   const mountedSet = useMemo(() => new Set(mountedNodeIds), [mountedNodeIds]);
   const decoratedNodes = useMemo(

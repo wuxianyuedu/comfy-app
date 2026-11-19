@@ -2,6 +2,8 @@
 //  1) 按模式取绑定表：只认 `mode:<模式>` 键，畸形数据按「没配」处理；
 //  2) 写入只动 `referenceLoaders` 命名空间，`source` / `output` 原样保留；
 //  3) 删除绑定 / 清空模式表 / 清空命名空间时连键一起摘掉，不留空壳。
+//  4) 追加端口已移除（#4547，扇出由挂载节点承担）：存量数据里的 extraTargets
+//     旧键读端按「没配」忽略，写入不再产出。
 // 参考图上限（#4537）：`maxReferences` 是命名空间级的工作流属性，读写同测。
 // 参考图挂载节点（#4534）：`mountNodeIds` 同为命名空间级属性，读写同测。
 import { describe, expect, it } from "vitest";
@@ -26,15 +28,31 @@ describe("referenceLoaderBindingsForMode", () => {
     const paramMap = {
       ...PARAM_MAP,
       referenceLoaders: {
-        "mode:T2I": { "reference-image": { presetId: "p1", extraTargets: ["9::param::image"] } },
+        "mode:T2I": { "reference-image": { presetId: "p1" } },
         "mode:I2I": { "reference-image": { presetId: "p2" } },
       },
     };
     expect(referenceLoaderBindingsForMode(paramMap, "T2I")).toEqual({
-      "reference-image": { presetId: "p1", extraTargets: ["9::param::image"] },
+      "reference-image": { presetId: "p1" },
     });
     expect(referenceLoaderBindingsForMode(paramMap, "I2I")).toEqual({
       "reference-image": { presetId: "p2" },
+    });
+  });
+
+  it("存量数据里的 extraTargets 旧键按「没配」忽略（#4547 起已移除）", () => {
+    const paramMap = {
+      ...PARAM_MAP,
+      referenceLoaders: {
+        "mode:T2I": {
+          "reference-image": { presetId: "p1", extraTargets: ["9::param::image"] },
+          "reference-image-2": { extraTargets: ["9::param::image"] },
+        },
+      },
+    };
+    /* 有预设的槽位只读出预设；只有追加端口的槽位整体按没配处理。 */
+    expect(referenceLoaderBindingsForMode(paramMap, "T2I")).toEqual({
+      "reference-image": { presetId: "p1" },
     });
   });
 

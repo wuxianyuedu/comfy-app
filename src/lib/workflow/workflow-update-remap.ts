@@ -154,50 +154,6 @@ function remapModeNamespace(
   return changed ? next : namespace;
 }
 
-/** 装载绑定的追加端口同样按存活过滤；绑定清空时连槽位一起摘掉。 */
-function remapReferenceLoaders(
-  namespace: unknown,
-  oldNodeIds: Set<string>,
-  newPorts: Set<string>,
-  broken: Array<BrokenWire>,
-): unknown {
-  if (!isRecord(namespace)) {
-    return namespace;
-  }
-  const next: Record<string, unknown> = {};
-  for (const [modeKey, table] of Object.entries(namespace)) {
-    if (!isRecord(table)) {
-      next[modeKey] = table;
-      continue;
-    }
-    const nextTable: Record<string, unknown> = {};
-    for (const [slotId, binding] of Object.entries(table)) {
-      if (!isRecord(binding)) {
-        continue;
-      }
-      const extraTargets = Array.isArray(binding.extraTargets) ? binding.extraTargets : [];
-      const kept: Array<string> = [];
-      for (const ioKey of extraTargets) {
-        if (typeof ioKey !== "string" || ioKey === "") {
-          continue;
-        }
-        if (ioKeySurvives(ioKey, oldNodeIds, newPorts)) {
-          kept.push(ioKey);
-        } else {
-          broken.push({ namespace: modeKey, entryId: slotId, ioKey });
-        }
-      }
-      const presetId = typeof binding.presetId === "string" ? binding.presetId : undefined;
-      if (presetId !== undefined || kept.length > 0) {
-        nextTable[slotId] =
-          presetId === undefined ? { extraTargets: kept } : { presetId, extraTargets: kept };
-      }
-    }
-    next[modeKey] = nextTable;
-  }
-  return next;
-}
-
 /** 更新工作流内容后，对 paramMap / workflowIO 做连线保持与断线摘除。 */
 export function remapForUpdate(args: {
   newRawJson: unknown;
@@ -210,17 +166,13 @@ export function remapForUpdate(args: {
   const broken: Array<BrokenWire> = [];
   const droppedIOKeys: Array<string> = [];
 
-  /* paramMap 的三个键空间分别清洗（source / output 是「槽位 → ioKey」表，
-   * referenceLoaders 是「槽位 → 绑定」表）；其余历史键原样透传。 */
+  /* paramMap 的键空间分别清洗：source / output 是「槽位 → ioKey」表，逐 ioKey
+   * 判存活；referenceLoaders 的绑定只含预设 id（#4547 起追加端口已移除），
+   * 不含任何图连线，不参与断线摘除 —— 整列原样透传（存量旧键由读取端忽略）。
+   * 其余历史键同样原样透传。 */
   const base = isRecord(args.paramMap) ? { ...args.paramMap } : {};
   base.source = remapModeNamespace(base.source, oldNodeIds, newPorts, broken);
   base.output = remapModeNamespace(base.output, oldNodeIds, newPorts, broken);
-  base.referenceLoaders = remapReferenceLoaders(
-    base.referenceLoaders,
-    oldNodeIds,
-    newPorts,
-    broken,
-  );
 
   /* workflowIO：逐口编辑按 ioKey 存活保留，新图里消失的摘掉并计数。 */
   let workflowIO = args.workflowIO;
