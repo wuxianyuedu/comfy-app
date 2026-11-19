@@ -5,6 +5,7 @@ import { Timer } from "lucide-react";
 
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { EmptyState } from "~/components/ui/empty-state";
+import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { fixed } from "~/lib/number-format";
 import {
   LAUNCH_SIDE_LABELS,
@@ -51,7 +52,7 @@ function TimingRow({
   return (
     <li className="flex items-center gap-2 text-xs" title={title}>
       <span
-        className={`w-10 shrink-0 rounded-sm px-1 py-px text-center text-[10px] leading-4 font-medium ${SIDE_BADGE_CLASS[side]}`}
+        className={`text-3xs w-10 shrink-0 rounded-sm px-1 py-px text-center leading-4 font-medium ${SIDE_BADGE_CLASS[side]}`}
       >
         {LAUNCH_SIDE_LABELS[side]}
       </span>
@@ -146,7 +147,9 @@ export function LaunchTimingsPanel({
               </span>
               <span className="text-ink-fainter">并行段分别累计，两侧之和可能大于合计</span>
             </div>
-            <ul className="flex max-h-[60vh] flex-col gap-1.5 overflow-y-auto pr-1">
+            <ul
+              className={`flex ${EMBEDDED_SCROLL_MAX_HEIGHT} flex-col gap-1.5 overflow-y-auto pr-1`}
+            >
               {phases.map((phase) => {
                 const running = phase.endMs === null;
                 return (
