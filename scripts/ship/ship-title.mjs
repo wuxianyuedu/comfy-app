@@ -11,8 +11,18 @@
  *
  * 本层只做取数与推导：不判绿不绿、不改调用方状态。推导本身仍是 `ship-core.mjs`
  * 的纯函数 `deriveTitle`，这里只负责把读数取出来并念出口。
+ *
+ * 唯一的例外是**标题形态合规**这一格（ISSUE #4527）：标题会原样落进 PR 页面与
+ * squash 提交历史，而 #号的**认领形态**写错时（如 `（#4519/#4520）` 斜杠分隔），
+ * 关单格会静默跳过 —— 合并完成、单子还开着。所以取数时顺手判形态
+ * （类型前缀 / 长度 / #号认领形态），不合规当场退 2 并给修法；这不是门禁绿红，
+ * 是「这份输入能不能用」。
  */
+import process from "node:process";
+
+import { claimNumbersFromTitle, issueNumbersFromText } from "./ship-close.mjs";
 import { deriveTitle } from "./ship-core.mjs";
+import { CODE } from "./ship-codes.mjs";
 
 /**
  * 标题的取数（PR 标题与 squash 那一行共用这一份），并把来源念出口。
@@ -52,7 +62,90 @@ export function pickTitle({ run, log, baseRef, explicit = null, platform = null 
       t.title || "(空)"
     }`,
   );
+  /* 空标题不进这格：那是「取数都取不到」的另一回事，由 ship-platform 既有的
+   * 「取不到标题 ⇒ 不建 PR」守卫负责（消息与退码都是它的）—— 这里只判
+   * 「取到了的标题形态合不合规」。 */
+  const violations = t.title ? titleLintViolations(t.title) : [];
+  if (violations.length > 0) {
+    for (const v of violations) {
+      log(`[ship] ✗ 标题不合规：${v}`);
+    }
+    log(
+      "[ship] 标题会原样落进 PR 页面与 squash 提交历史 —— 改分支第一笔的提交说明，" +
+        '或用 `--title "类型(范围): 描述（#单号）"` 重给一份合规的；ship 不代改标题。',
+    );
+    process.exit(CODE.NOT_RUN);
+  }
   return t;
+}
+
+// ── 标题形态合规（ISSUE #4527）──────────────────────────────────────────
+
+/** 标题长度硬上限（cnb-code-commit 技能「PR 规范 → 标题」：50 宜、72 硬上限）。 */
+const TITLE_MAX = 72;
+
+/** 认得的类型（cnb-code-commit 技能那一份 + 本仓 master 历史实际在用的 ci/style/revert/build）。 */
+const TITLE_TYPES = [
+  "feat",
+  "fix",
+  "refactor",
+  "docs",
+  "chore",
+  "perf",
+  "test",
+  "ci",
+  "style",
+  "revert",
+  "build",
+];
+
+/** `类型(范围): 描述`；`[WIP] ` 前缀（平台识别的草稿标记）允许出现在类型之前。 */
+const TITLE_SHAPE_RE = new RegExp(
+  `^(?:\\[WIP\\]\\s*)?(?:${TITLE_TYPES.join("|")})(?:\\([^)]*\\))?:\\s?\\S`,
+);
+
+/**
+ * 标题形态违规清单（**纯函数**：空数组 = 合规）。
+ *
+ * 判据与出处：
+ *   · 形态 `类型(范围): 描述` —— cnb-code-commit 技能「PR 规范 → 标题」；
+ *   · 长度 ≤ 72（同上，硬上限）；
+ *   · 每个 `#数字` 都要落在**关单逻辑认得的认领括号形态**里 —— 判定直接复用
+ *     `ship-close.mjs` 的 `issueNumbersFromText` / `claimNumbersFromTitle`
+ *     （同一份出处，不在这里另写一套括号正则：两套的漂移形态正是 #4524 那次
+ *     「斜杠分隔 ⇒ 关单格静默跳过」的根因）。
+ *
+ * @param {string} title
+ * @returns {string[]} 每条违规一句人话（含修法）；空数组 = 合规
+ */
+export function titleLintViolations(title) {
+  const t = String(title ?? "").trim();
+  if (t === "") {
+    return ["标题为空 —— 写「类型(范围): 描述」，如 feat(ship): 支持标题合规检查"];
+  }
+  /** @type {string[]} */
+  const out = [];
+  if (t.length > TITLE_MAX) {
+    out.push(`标题 ${t.length} 字符，超过 72 硬上限 —— 描述细节挪进 PR 正文`);
+  }
+  if (!TITLE_SHAPE_RE.test(t)) {
+    out.push(
+      "缺「类型(范围): 描述」前缀 —— 类型取 " +
+        `${TITLE_TYPES.join("/")}，范围可选，冒号后接描述（如 fix(cli): 修正参数解析）`,
+    );
+  }
+  /* 裸 `#号` 与斜杠分隔都不在认领形态里 —— 关单格只认括号内空格/逗号分隔的 `#号`
+   * （全半角括号都行）。这里只拦「写法会让关单静默跳过」的，不拦「不提单号」的。 */
+  const claimed = new Set(claimNumbersFromTitle(t));
+  for (const n of issueNumbersFromText(t)) {
+    if (!claimed.has(n)) {
+      out.push(
+        `#${n} 不在认领括号形态里 —— 关单格认的是 (#N) / （#N #M）（空格或逗号分隔，` +
+          "全半角括号都行）；裸写或斜杠分隔（（#A/#B））会被静默跳过",
+      );
+    }
+  }
+  return out;
 }
 
 /**
