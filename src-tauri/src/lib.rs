@@ -1207,6 +1207,50 @@ fn collect_launch_log(root: &str) -> Result<String, String> {
   Ok(sections.join("\n\n"))
 }
 
+/// 启动页「服务端动态」：等待服务就绪的窗口期里，**服务进程自己**正在做什么
+/// （ISSUE #4431）。进度条那一路（launch-status.json 的 phase / timings）只能给
+/// 「编排器走到哪一段」——最长的一段「等待服务就绪」里画面是空的，用户看到的
+/// 只有一句「等待服务就绪 12.7s（进行中）」。而服务此刻在做什么，答案在服务
+/// 自己的输出里（`▲ Next.js` 横幅、`✓ Ready in …`、`[comfyui-lifecycle] ComfyUI
+/// 正在启动中，等待就绪…`、编译与报错行）。
+///
+/// 取**本次运行**最新一份 Next stdout/stderr 日志尾部（与 `get_launch_log` 的
+/// 「服务输出」两段同源、同一套 mtime 判据），从后往前挑最近一条有信息量的行
+/// （噪声行判据在 [`shell_launch::latest_meaningful_server_line`]）。与日志面板
+/// 那条命令的差异：这里只读**一份**文件尾（8KB），启动页可以常驻轮询而不必
+/// 展开整个面板。
+///
+/// 一条有信息量的行都没有（服务还没产出输出 / 日志未落地 / 项目根推不出）时
+/// 回**空串**——启动页据此把这一行收起，而不是显示一句空话。
+#[tauri::command]
+async fn get_server_activity(state: tauri::State<'_, AppState>) -> Result<String, String> {
+  let root = state.project_root();
+  if root.is_empty() {
+    return Ok(String::new());
+  }
+  // 与 get_launch_log 同一条理由：阻塞 IO 挪进阻塞线程池，不占 tokio worker。
+  tauri::async_runtime::spawn_blocking(move || collect_server_activity(&root))
+    .await
+    .map_err(|e| format!("服务动态读取任务失败：{e}"))?
+}
+
+/// [`get_server_activity`] 的同步主体：逐份日志尾读 + 倒序挑行。
+/// stdout 里挑不出（全是噪声 / 为空）再试 stderr——报错行同样是「在做什么」。
+fn collect_server_activity(root: &str) -> Result<String, String> {
+  let nextjs_dir = shell_launch::nextjs_log_dir(root);
+  for prefix in ["nextjs-stdout-", "nextjs-stderr-"] {
+    let Some(path) = shell_launch::latest_prefixed_log(&nextjs_dir, prefix) else {
+      continue;
+    };
+    if let Some(tail) = tail_log_file(&path, 8 * 1024, 80) {
+      if let Some(line) = shell_launch::latest_meaningful_server_line(&tail) {
+        return Ok(line);
+      }
+    }
+  }
+  Ok(String::new())
+}
+
 /// 读回「应用服务为什么结束」这条记录（ISSUE #1915）。
 ///
 /// ## 为什么这条读取必须走壳的 IPC
@@ -2317,7 +2361,7 @@ fn build_tray(app: &tauri::AppHandle) -> Result<(), String> {
 ///   `min(100vw - 48px)` 同口径）：小屏不越界，尺寸不够时由页面继续收；
 /// - 展开日志后页面会把窗口调到 SPLASH_WINDOW_SIZE_EXPANDED，仍是「内容多大、
 ///   窗口多大」。
-const SPLASH_WINDOW_SIZE: (f64, f64) = (744.0, 264.0);
+const SPLASH_WINDOW_SIZE: (f64, f64) = (744.0, 288.0);
 
 /// 展开日志后的窗口尺寸（对应页面里「展开日志」那一档，见 splash.html）。
 const SPLASH_WINDOW_SIZE_EXPANDED: (f64, f64) = (1424.0, 788.0);
@@ -2552,14 +2596,18 @@ fn another_instance_owns_this_checkout() -> bool {
   false
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-  /* CLI 形态（保活拉起的中介）必须在**任何**壳初始化之前分叉出去：它只做一次
-   * CreateProcess 就退出，不该建窗口、不该认领单实例身份、也不该去拉编排器
-   * （见 `detached_spawn` 模块头）。 */
+/// CLI 形态（保活拉起的中介）必须在**任何**壳初始化之前分叉出去：它只做一次
+/// CreateProcess 就退出，不该建窗口、不该认领单实例身份、也不该去拉编排器
+/// （见 `detached_spawn` 模块头）。分叉了就整进程退出。
+fn exit_if_cli_detached() {
   if let Some(code) = detached_spawn::run_from_args() {
     std::process::exit(code);
   }
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+  exit_if_cli_detached();
   let (resolved_root, self_launch) = claim_project_root_env();
 
   /* 运行模式必须在**建启动页之前**定下来：启动页从建窗那一刻起每 250ms 问一次
@@ -2613,6 +2661,7 @@ pub fn run() {
       navigate_to_app,
       get_app_url,
       get_launch_log,
+      get_server_activity,
       get_app_service_exit,
       get_app_service_liveness,
       set_splash_compact,
