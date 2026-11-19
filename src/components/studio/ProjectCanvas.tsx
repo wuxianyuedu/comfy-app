@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState, type SetStateAction } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -8,8 +8,7 @@ import {
   BackgroundVariant,
   Controls,
   MiniMap,
-  useNodesState,
-  useEdgesState,
+  useStore,
   useReactFlow,
   type Edge,
   type Node as FlowNode,
@@ -21,7 +20,12 @@ import { isPlainRecord } from "~/lib/is-record";
 import { lastSegments } from "~/lib/path-display";
 import { CanvasNode } from "./project-canvas/CanvasNode";
 import { WorkflowNodeArdot } from "./project-canvas/WorkflowNodeArdot";
-import { type CanvasNodeType, NODE_META, type NodeKind } from "~/lib/project-canvas/canvas-types";
+import {
+  type CanvasNodeType,
+  isCanvasNodeType,
+  NODE_META,
+  type NodeKind,
+} from "~/lib/project-canvas/canvas-types";
 import { makeFitViewScheduler } from "~/lib/project-canvas/canvas-helpers";
 import type { ProductionProgress } from "~/lib/production/progress";
 import { CanvasProgressIndicator } from "./project-canvas/CanvasProgressIndicator";
@@ -92,10 +96,13 @@ const DEFAULT_EDGE_OPTIONS = {
 
 const PRO_OPTIONS = { hideAttribution: true };
 
-/** 回写器只保证 React Flow 的 `Node`；本画布的表恒为 CanvasNodeType —— 用守卫收回。 */
-function isCanvasNodeType(node: FlowNode): node is CanvasNodeType {
-  return node.type === "canvasNode" || node.type === "workflowArdot";
-}
+/* 非受控画布（#4541）的挂载初值：`defaultNodes` / `defaultEdges` 必须**在场**
+ * （空数组也算）—— React Flow 的 `rf.setNodes` / `rf.setEdges` 只在
+ * `hasDefaultNodes` / `hasDefaultEdges` 为真时才写 store，否则把更新丢进
+ * 队列后只回调受控模式的 `onNodesChange`（本画布没有）⇒ 水合与建节点的
+ * 写入全部落空。模块级常量保持引用稳定。 */
+const INITIAL_NODES: Array<FlowNode> = [];
+const INITIAL_EDGES: Array<Edge> = [];
 
 type ProjectCanvasProps = {
   onConsumePending?: () => void;
@@ -114,10 +121,6 @@ function CanvasInner({
   onConsumePending,
 }: ProjectCanvasProps) {
   const toast = useToast();
-  const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNodeType>([]);
-  // 空数组会把类型参数推成 never[]，用显式类型的初值保住 Edge[]（省掉泛型参数仍等价）
-  const initialEdges: Edge[] = [];
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("未命名");
@@ -134,6 +137,49 @@ function CanvasInner({
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const rf = useReactFlow();
   const { screenToFlowPosition, fitView } = rf;
+  /* ── 非受控画布（#4541，同 #4536 的编辑器画布）── 节点 / 连线状态住 React Flow
+   *  自身 store：拖拽的逐帧位置更新只发生在 store 里（按节点订阅，仅被拖节点
+   *  重渲染），不再经 setState 把整棵宿主树（工具栏 / 面板 / ReactFlow）逐帧
+   *  重渲染。各 hook 的写回走下面两个适配器（入参形状与原 setState 一致：
+   *  值或 updater）；响应式读数（空态提示）用 useStore 选择器，回读用
+   *  rf.getNodes() / rf.getEdges()。 */
+  const setCanvasNodes = useCallback(
+    (value: SetStateAction<Array<CanvasNodeType>>) => {
+      /* 类型守卫收回画布节点类型（禁新增字面断言）：本画布只创建 canvasNode /
+       * workflowArdot 两种节点，守卫在实践中是恒等过滤。 */
+      const current = rf.getNodes().filter(isCanvasNodeType);
+      rf.setNodes(typeof value === "function" ? value(current) : value);
+    },
+    [rf],
+  );
+  const setEdges = useCallback(
+    (value: SetStateAction<Array<Edge>>) => {
+      const current = rf.getEdges();
+      rf.setEdges(typeof value === "function" ? value(current) : value);
+    },
+    [rf],
+  );
+  /* 回调里读「最新节点 / 连线」的活引用：直接透传 React Flow store 的当前值，
+   * 不再镜像 React state（非受控后没有 state 可镜像）。getter 只读 ——
+   * 消费方（连线串联）只读不写。 */
+  const nodesRef = useMemo(
+    () => ({
+      get current() {
+        return rf.getNodes().filter(isCanvasNodeType);
+      },
+    }),
+    [rf],
+  );
+  const edgesRef = useMemo(
+    () => ({
+      get current() {
+        return rf.getEdges();
+      },
+    }),
+    [rf],
+  );
+  /* 空态提示的响应式读数：只在「空 ↔ 非空」翻转时重渲染。 */
+  const canvasEmpty = useStore((state) => state.nodes.length === 0);
   /* MiniMap → 主视口单击跳转。
    *  与下面 <MiniMap pannable zoomable onClick={onMiniMapJump} /> 配对。 */
   const onMiniMapJump = useMiniMapJump(rf);
@@ -162,32 +208,20 @@ function CanvasInner({
     screenToFlowPosition,
     seedNew,
     setEdges,
-    setNodes,
+    setNodes: setCanvasNodes,
     setProgress,
     setProjectId,
     setProjectName,
   });
 
-  /* 保存事件处理器 / flush 用的最新值的 ref */
-  const edgesRef = useRef(edges);
-  const nodesRef = useRef(nodes);
-  const projectIdRef = useRef(projectId);
-  const projectNameRef = useRef(projectName);
-  useEffect(() => {
-    edgesRef.current = edges;
-    nodesRef.current = nodes;
-    projectIdRef.current = projectId;
-    projectNameRef.current = projectName;
-  }, [edges, nodes, projectId, projectName]);
   /* ── 持久化三件套 → useProjectPersistence（CanvasInner 只留编排与 JSX）。
    *  连线分派 → useCanvasConnections；媒体落地 → useCanvasDrop；右键菜单 /
    *  工具栏 / 空状态 → 独立组件。
    *  Phase 2b：画布不再有自建项目管理（切换 / 新建 / 重命名 / 删除统一在首页），
-   *  故 useProjectManager 与项目切换器一并移除，这里只保留自动持久化。 ── */
+   *  故 useProjectManager 与项目切换器一并移除，这里只保留自动持久化。
+   *  非受控画布（#4541）起，持久化 hook 自己订阅 React Flow store。 ── */
   useProjectPersistence({
     projectId,
-    nodes,
-    edges,
     projectName,
     loaded: !hydrating,
   });
@@ -196,12 +230,12 @@ function CanvasInner({
   const { onConnect, onEdgeClick } = useCanvasConnections({
     nodesRef,
     edgesRef,
-    setNodes,
+    setNodes: setCanvasNodes,
     setEdges,
   });
   const { placeMediaNode, onCanvasDragOver, onCanvasDrop } = useCanvasDrop({
     screenToFlowPosition,
-    setNodes,
+    setNodes: setCanvasNodes,
   });
 
   /* 选中节点 → 相关连线高亮：把「上下游」标记写回 edges，由画布的
@@ -210,7 +244,7 @@ function CanvasInner({
     /* 写回器只声明 Node（不绑 data 形状），本画布的表恒为 CanvasNodeType ——
      *  回写结果经守卫收回画布节点类型，写入内容不变。 */
     setNodes: (updater) => {
-      setNodes((nodes) => updater(nodes).filter(isCanvasNodeType));
+      setCanvasNodes((nodes) => updater(nodes).filter(isCanvasNodeType));
     },
   });
 
@@ -233,28 +267,31 @@ function CanvasInner({
   const { onPaneContextMenu, createNode, createTestWorkflowNode, onNodeClick } = useCanvasMenu({
     menu,
     setMenu,
-    setNodes,
+    setNodes: setCanvasNodes,
     screenToFlowPosition,
   });
 
   const clearCanvas = useCallback(() => {
-    if (nodes.length === 0 && edges.length === 0) {
+    if (rf.getNodes().length === 0 && rf.getEdges().length === 0) {
       toast.info("画布已是空的", undefined);
       return;
     }
     setConfirmClear(true);
-  }, [nodes.length, edges.length, toast]);
+  }, [rf, toast]);
 
   /** 真正的 clearCanvas 动作 —— 由 ConfirmDialog 的确认按钮调用。 */
   const applyClearCanvas = useCallback(() => {
-    setNodes([]);
-    setEdges([]);
+    rf.setNodes([]);
+    rf.setEdges([]);
     setConfirmClear(false);
-  }, [setNodes, setEdges]);
+  }, [rf]);
 
   const exportJson = useCallback(() => {
-    downloadJson({ nodes, edges }, `${projectName || "comfy-canvas"}.json`);
-  }, [nodes, edges, projectName]);
+    downloadJson(
+      { nodes: rf.getNodes(), edges: rf.getEdges() },
+      `${projectName || "comfy-canvas"}.json`,
+    );
+  }, [rf, projectName]);
 
   return (
     <div
@@ -264,24 +301,22 @@ function CanvasInner({
     >
       <ReactFlow
         defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+        defaultEdges={INITIAL_EDGES}
+        defaultNodes={INITIAL_NODES}
         /* 选中节点后按 Backspace / Delete 删除（⌫ 工具栏按钮走 deleteSelf）。
          * React Flow 会自动忽略输入框 / textarea 聚焦时的按键，不会误删。 */
         deleteKeyCode={["Backspace", "Delete"]}
-        edges={edges}
         edgeTypes={edgeTypes}
         fitView
         maxZoom={2}
         minZoom={0.2}
-        nodes={nodes}
         nodeTypes={nodeTypes}
         onConnect={onConnect}
         onEdgeClick={onEdgeClick}
-        onEdgesChange={onEdgesChange}
         /* 商业级性能 —— 只挂载与视口相交的节点 / 边（与工作流画布同一处理）：此前含大量工作流 / 素材节点的项目图
          *  每帧都把**整张图**的 DOM 挂上；视口裁剪让 DOM 与可见内容成正比，拖拽 / 平移 / 缩放的开销保持一个小常数。 */
         onlyRenderVisibleElements
         onNodeClick={onNodeClick}
-        onNodesChange={onNodesChange}
         onPaneClick={() => {
           setMenu(null);
         }}
@@ -364,8 +399,8 @@ function CanvasInner({
       <GlobalStepLogPanel />
 
       {/* 空态提示 —— 加载中 / 右键引导（仅当项目确实无内容且已加载完成时展示） */}
-      {hydrating && nodes.length === 0 && <EmptyCanvasHint loading />}
-      {nodes.length === 0 && !hydrating && <EmptyCanvasHint loading={false} />}
+      {hydrating && canvasEmpty && <EmptyCanvasHint loading />}
+      {canvasEmpty && !hydrating && <EmptyCanvasHint loading={false} />}
 
       {menu && (
         <CanvasContextMenu
