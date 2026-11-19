@@ -3,14 +3,17 @@
 //  2) 写入只动 `referenceLoaders` 命名空间，`source` / `output` 原样保留；
 //  3) 删除绑定 / 清空模式表 / 清空命名空间时连键一起摘掉，不留空壳。
 // 参考图上限（#4537）：`maxReferences` 是命名空间级的工作流属性，读写同测。
+// 参考图挂载节点（#4534）：`mountNodeIds` 同为命名空间级属性，读写同测。
 import { describe, expect, it } from "vitest";
 
 import {
   referenceLoaderBindingsForMode,
   referenceLoaderMax,
+  referenceLoaderMountNodes,
   REFERENCE_LOADER_CAP_LIMIT,
   withReferenceLoaderBinding,
   withReferenceLoaderMax,
+  withReferenceLoaderMountNodes,
 } from "./reference-loader-binding";
 
 const PARAM_MAP = {
@@ -154,5 +157,44 @@ describe("referenceLoaderMax / withReferenceLoaderMax（参考图上限，#4537�
     expect(
       referenceLoaderMax(withReferenceLoaderMax({ paramMap: {}, max: REFERENCE_LOADER_CAP_LIMIT })),
     ).toBe(16);
+  });
+});
+
+describe("referenceLoaderMountNodes / withReferenceLoaderMountNodes（挂载节点，#4534）", () => {
+  it("读出挂载节点名单；未配置 / 畸形数据 → 空表", () => {
+    expect(referenceLoaderMountNodes({ referenceLoaders: { mountNodeIds: ["69", "34"] } })).toEqual(
+      ["69", "34"],
+    );
+    expect(referenceLoaderMountNodes(PARAM_MAP)).toEqual([]);
+    expect(referenceLoaderMountNodes(null)).toEqual([]);
+    expect(referenceLoaderMountNodes({ referenceLoaders: { mountNodeIds: "垃圾" } })).toEqual([]);
+    expect(referenceLoaderMountNodes({ referenceLoaders: { mountNodeIds: [1, ""] } })).toEqual([]);
+  });
+
+  it("写名单只动 referenceLoaders 命名空间；重复项去重；原始值不被修改", () => {
+    const snapshot = JSON.stringify(PARAM_MAP);
+    const next = withReferenceLoaderMountNodes({
+      paramMap: PARAM_MAP,
+      nodeIds: ["69", "69", "34"],
+    });
+    expect(next.source).toEqual(PARAM_MAP.source);
+    expect(next.referenceLoaders).toEqual({ mountNodeIds: ["69", "34"] });
+    expect(JSON.stringify(PARAM_MAP)).toBe(snapshot);
+  });
+
+  it("空名单 = 清除；命名空间里还有别的配置时保留命名空间", () => {
+    const withBinding = withReferenceLoaderBinding({
+      paramMap: PARAM_MAP,
+      mode: "T2I",
+      slotId: "reference-image",
+      binding: { presetId: "p1" },
+    });
+    const withMount = withReferenceLoaderMountNodes({ paramMap: withBinding, nodeIds: ["69"] });
+    expect(referenceLoaderMountNodes(withMount)).toEqual(["69"]);
+    const cleared = withReferenceLoaderMountNodes({ paramMap: withMount, nodeIds: [] });
+    expect(referenceLoaderMountNodes(cleared)).toEqual([]);
+    expect(referenceLoaderBindingsForMode(cleared, "T2I")).toEqual({
+      "reference-image": { presetId: "p1" },
+    });
   });
 });

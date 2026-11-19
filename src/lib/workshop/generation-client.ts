@@ -32,8 +32,12 @@ import {
 } from "~/lib/workflow/workflow-exposed-params";
 import { parseWorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import { buildEncapsulatedInputs, type WorkshopExposedValues } from "./workflow-encapsulation";
-import { referenceLoaderBindingsForMode, referenceLoaderMax } from "./reference-loader-binding";
-import { buildReferenceLoaderPlan } from "./reference-loader-plan";
+import {
+  referenceLoaderBindingsForMode,
+  referenceLoaderMax,
+  referenceLoaderMountNodes,
+} from "./reference-loader-binding";
+import { buildReferenceLoaderPlan, mountImagePortsForNodes } from "./reference-loader-plan";
 import { deriveEncapsulationStatus } from "./workshop-encapsulation-status";
 
 /* 本地（ComfyUI）生成 mutation 的 tRPC 传输契约。 */
@@ -355,7 +359,16 @@ export async function buildLibraryWorkflowInput(
     referenceCap === null
       ? (values.referenceImages ?? [])
       : (values.referenceImages ?? []).slice(0, referenceCap);
-  if (Object.keys(loaderBindings).length > 0 && cappedReferenceImages.length > 0) {
+  /* 参考图挂载节点（ISSUE #4534）：按 image_0..N 规律展开出的参考图口（按槽位
+   * 序）——作者没连线的槽位自动接线到这些口上，不必逐口手连。 */
+  const mountPorts = mountImagePortsForNodes({
+    graphImagePorts: detail?.imageInputPorts,
+    mountNodeIds: referenceLoaderMountNodes(detail?.paramMap),
+  });
+  if (
+    (Object.keys(loaderBindings).length > 0 || mountPorts.length > 0) &&
+    cappedReferenceImages.length > 0
+  ) {
     try {
       const { presets } = await vanillaApi.referenceLoader.presetsGet.query();
       const { plan, extraInputs } = buildReferenceLoaderPlan({
@@ -364,6 +377,7 @@ export async function buildLibraryWorkflowInput(
         /* 追加端口可以落在未暴露的张量口上（#4405）：目标定位要连同全图
          * 图片族连线口一起查，只看暴露面会把这类目标静默丢掉。 */
         graphImagePorts: detail?.imageInputPorts,
+        mountPorts,
         io,
         presets,
         resolved,

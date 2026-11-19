@@ -42,6 +42,11 @@ export type WorkflowEditorTopBarProps = {
   handleSave: () => void;
   onClose: () => void;
   onExitSubgraph: () => void;
+  /** 参考图挂载编辑态（ISSUE #4534）：激活时点击节点即标记 / 取消挂载。 */
+  onToggleRefMountMode: () => void;
+  /** 已标记的挂载节点数（按钮上的计数徽标）。 */
+  refMountCount: number;
+  refMountMode: boolean;
   resetLayout: () => void;
   rootWorkflowName: string;
   saving: boolean;
@@ -69,6 +74,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   handleSave,
   saving,
   error,
+  refMountMode,
+  refMountCount,
+  onToggleRefMountMode,
 }: WorkflowEditorTopBarProps) {
   const ioApi = useIOEditApi();
   const workflowIO = useIOEditStore(selectWorkflowIO);
@@ -303,6 +311,27 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           </Button>
         </Hint>
         {error && <span className="text-destructive text-xs">{error}</span>}
+        {/* 参考图挂载编辑态（ISSUE #4534）：只在顶层视图可用 —— 挂载节点是
+            工作流级配置，装载计划按顶层节点 id 解析，子图内部标记无法落库。 */}
+        {subgraphStack.length === 0 && (
+          <Hint
+            label="参考图挂载编辑：点击画布上的节点，把它标记为多参考图的挂载节点（其 image_0..N 图片口按序自动接线）；再次点击节点取消标记"
+            wrap
+          >
+            <Button
+              className={topBarButtonClass(refMountMode ? "ioOn" : "outline", "compact")}
+              onClick={onToggleRefMountMode}
+              variant="ghost"
+            >
+              {refMountMode ? "✓ 参考图挂载中" : "🔗 参考图挂载"}
+              {refMountCount > 0 && (
+                <span className="bg-primary-500/30 text-primary-strong text-2xs ml-1 rounded-full px-1.5 font-bold">
+                  {refMountCount}
+                </span>
+              )}
+            </Button>
+          </Hint>
+        )}
         {/* 「编辑 IO」/「预览 IO」在**两层**都可用：子图本身没有独立 IO 契约，但**父
             工作流**可以把参数暴露在子图内部的节点上（LoadImage `image`、PrimitiveInt
             `value`…），下钻后仍能勾选，勾选时带上 `IoRef.hostNodeId`，运行期据此把内部

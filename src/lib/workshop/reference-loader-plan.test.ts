@@ -5,7 +5,7 @@
 //  4) 预设已删 / 槽位没图 / 非参考图槽位 → 不产生计划项。
 import { describe, expect, it } from "vitest";
 
-import { buildReferenceLoaderPlan } from "./reference-loader-plan";
+import { buildReferenceLoaderPlan, mountImagePortsForNodes } from "./reference-loader-plan";
 import type { ReferenceLoaderPreset } from "./reference-loader-preset";
 
 const PRESET: ReferenceLoaderPreset = {
@@ -146,5 +146,100 @@ describe("buildReferenceLoaderPlan · 未暴露张量口（#4405）", () => {
       ],
     });
     expect(extraInputs).toEqual([{ nodeId: "69", name: "image_1", value: "a.png" }]);
+  });
+});
+
+/* ── 参考图挂载节点：image_0..N 规律自动接线（ISSUE #4534） ────────────── */
+
+describe("mountImagePortsForNodes", () => {
+  const GRAPH_PORTS = [
+    { ioKey: "69::param::images.image_0", label: "i0", name: "images.image_0", nodeId: "69" },
+    { ioKey: "69::param::images.image_1", label: "i1", name: "images.image_1", nodeId: "69" },
+    { ioKey: "69::param::images.image_2", label: "i2", name: "images.image_2", nodeId: "69" },
+    { ioKey: "34::param::images.image1", label: "j1", name: "images.image1", nodeId: "34" },
+    { ioKey: "12::param::image", label: "单数口", name: "image", nodeId: "12" },
+    { ioKey: "99::param::images.image_0", label: "未挂载", name: "images.image_0", nodeId: "99" },
+  ];
+
+  it("只取挂载节点的 image_0..N 口，按数字后缀排序", () => {
+    const ports = mountImagePortsForNodes({ graphImagePorts: GRAPH_PORTS, mountNodeIds: ["69"] });
+    expect(ports.map((port) => port.ioKey)).toEqual([
+      "69::param::images.image_0",
+      "69::param::images.image_1",
+      "69::param::images.image_2",
+    ]);
+  });
+
+  it("单数口（image，无数字后缀）与非挂载节点不参与", () => {
+    const ports = mountImagePortsForNodes({
+      graphImagePorts: GRAPH_PORTS,
+      mountNodeIds: ["12", "34"],
+    });
+    /* 34 的 image1 有数字后缀，参与；12 的单数口（image，无数字后缀）不是
+     * 多参考图展开点，不参与。 */
+    expect(ports.map((port) => port.ioKey)).toEqual(["34::param::images.image1"]);
+  });
+
+  it("没有挂载节点 → 空数组", () => {
+    expect(mountImagePortsForNodes({ graphImagePorts: GRAPH_PORTS, mountNodeIds: [] })).toEqual([]);
+    expect(mountImagePortsForNodes({ mountNodeIds: ["69"] })).toEqual([]);
+  });
+});
+
+describe("buildReferenceLoaderPlan · 挂载节点自动接线（#4534）", () => {
+  const MOUNT_PORTS = [
+    { ioKey: "69::param::images.image_0", label: "i0", name: "images.image_0", nodeId: "69" },
+    { ioKey: "69::param::images.image_1", label: "i1", name: "images.image_1", nodeId: "69" },
+    { ioKey: "69::param::images.image_2", label: "i2", name: "images.image_2", nodeId: "69" },
+  ];
+
+  it("没绑定的槽位按序自动接到挂载节点的模式口上（覆盖项下发）", () => {
+    const { plan, extraInputs } = buildReferenceLoaderPlan({
+      bindings: {},
+      filenames: ["a.png", "b.png", "c.png"],
+      io: IO,
+      presets: [PRESET],
+      resolved: {},
+      graphImagePorts: MOUNT_PORTS,
+      mountPorts: MOUNT_PORTS,
+    });
+    expect(plan).toEqual({});
+    expect(extraInputs).toEqual([
+      { nodeId: "69", name: "images.image_0", value: "a.png" },
+      { nodeId: "69", name: "images.image_1", value: "b.png" },
+      { nodeId: "69", name: "images.image_2", value: "c.png" },
+    ]);
+  });
+
+  it("作者连过线的槽位仍走原落点，其余槽位按序补位到挂载口", () => {
+    const { plan, extraInputs } = buildReferenceLoaderPlan({
+      bindings: { "reference-image": { presetId: "p1" } },
+      filenames: ["a.png", "b.png", "c.png"],
+      io: IO,
+      presets: [PRESET],
+      resolved: { "reference-image": "69::param::image_0" },
+      graphImagePorts: MOUNT_PORTS,
+      mountPorts: MOUNT_PORTS,
+    });
+    /* 槽位 0：作者连线 + 预设（原路径，映射层已发覆盖项，这里不重发）。 */
+    expect(plan).toEqual({ "69::image_0": PRESET });
+    /* 槽位 1 / 2：按序自动接到 image_1 / image_2。 */
+    expect(extraInputs).toEqual([
+      { nodeId: "69", name: "images.image_1", value: "b.png" },
+      { nodeId: "69", name: "images.image_2", value: "c.png" },
+    ]);
+  });
+
+  it("只有挂载节点、没有任何绑定时也构建计划（自动接线不依赖手动配置）", () => {
+    const { extraInputs } = buildReferenceLoaderPlan({
+      bindings: {},
+      filenames: ["a.png"],
+      io: IO,
+      presets: [],
+      resolved: {},
+      graphImagePorts: MOUNT_PORTS.slice(0, 1),
+      mountPorts: MOUNT_PORTS.slice(0, 1),
+    });
+    expect(extraInputs).toEqual([{ nodeId: "69", name: "images.image_0", value: "a.png" }]);
   });
 });

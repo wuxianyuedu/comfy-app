@@ -88,6 +88,8 @@ export type WorkflowEditorCanvasProps = {
    *  下面的 defaultEdgeOptions）。 */
   onEdgeClick?: (event: React.MouseEvent, edge: Edge) => void;
   onMiniMapJump: (event: React.MouseEvent, position: { x: number; y: number }) => void;
+  /** 节点单击（参考图挂载编辑态用它标记 / 取消挂载节点，ISSUE #4534）。 */
+  onNodeClick?: (event: React.MouseEvent, node: Node) => void;
   onNodeDragStop: (e: unknown, node: Node) => void;
   onOpenSettings: () => void;
   /** 「重新居中」：把视口移回有节点的位置（纯视口动作，不改节点布局）。 */
@@ -106,6 +108,7 @@ export function WorkflowEditorCanvas({
   canvasSettings,
   canvasSettingsHydrated,
   onMiniMapJump,
+  onNodeClick,
   onOpenSettings,
   onRecenter,
   onEdgeClick,
@@ -191,6 +194,7 @@ export function WorkflowEditorCanvas({
        *  初始 fitToContent 仍由父级驱动（最小缩放 0.35）：裁剪用各节点首次绘制后
        *  的实测尺寸，故初始 fit 不受影响。 */
       onlyRenderVisibleElements
+      onNodeClick={onNodeClick}
       onNodeDragStop={onNodeDragStop}
       proOptions={{ hideAttribution: true }}
     >
