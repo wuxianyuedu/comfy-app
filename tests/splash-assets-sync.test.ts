@@ -96,13 +96,22 @@ describe("真仓库：清单与目录内容对得上，且两个调用方都经�
       expect(src).toMatch(/syncSplashAssets\(|ensureSplashResource\(/);
     }
     /* 真正「调共享实现」这件事在链路里成立（主文件经 `shell-ops.mjs` 中转）。 */
-    expect(launcherChainSource()).toContain("syncSplashAssets(");
+    const chainForSplash = launcherChainSource();
+    expect(
+      chainForSplash.trim(),
+      "launcherChainSource 拼出空文 ⇒ 落在它身上的反向断言恒真（#2660）",
+    ).not.toHaveLength(0);
+    expect(chainForSplash).toContain("syncSplashAssets(");
     /**
      * **判的是「副本名清单只有一处」**，不是「某文件里不许出现这两个字符串」。ISSUE #1811 第四刀前它们同形，之后不同：
      * `shell-ops.mjs` 接线层有句「未找到 public/splash.html」——那是**源文件**名、命中不了清单。故判据取**清单形状**：整条链路
      * 列出副本名处只能有共享实现一处 —— 回潮形态是「接线层又手写一份只同步 `splash.html` 的清单」，正是立案现场。
      */
     const chain = launcherChainSource();
+    expect(
+      chain.trim(),
+      "launcherChainSource 拼出空文 ⇒ 落在它身上的反向断言恒真（#2660）",
+    ).not.toHaveLength(0);
     /* 清单形状 = `SPLASH_ASSET_NAMES` 那一行（两个名字同现）。数它出现几次：
      * 回潮的形态是「接线层又手写一份只同步 `splash.html` 的清单」，那时这里会 >1。 */
     const listLines = chain.split("\n").filter((line) => /"(?:splash|index)\.html"/.test(line));
