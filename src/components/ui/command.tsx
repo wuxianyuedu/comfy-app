@@ -92,7 +92,7 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
   return (
     <CommandPrimitive.List
       className={cn(
-        "no-scrollbar max-h-72 scroll-py-1 overflow-x-hidden overflow-y-auto outline-none",
+        "scrollbar-none max-h-72 scroll-py-1 overflow-x-hidden overflow-y-auto outline-none",
         className,
       )}
       data-slot="command-list"
