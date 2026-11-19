@@ -1,8 +1,9 @@
 // 工作流更新时 IO 连线保持 / 断线报告的契约（#4377）：
 //  1) 新图里仍存在的端口：连线与逐口编辑原样保留；
-//  2) 新图里消失的端口：连线摘除并逐条上报（source / output / 装载追加端口）；
+//  2) 新图里消失的端口：连线摘除并逐条上报（source / output）；
 //  3) 作者显式断开（null）保持原样；子图内部口（旧图顶层没有的节点）不误报；
-//  4) 其余历史键空间原样透传。
+//  4) 其余历史键空间原样透传 —— 装载绑定只含预设 id、不含图连线（#4547 起
+//     追加端口已移除），整列不参与断线摘除，存量旧键原样保留。
 import { describe, expect, it } from "vitest";
 
 import { isRecord } from "~/lib/is-record";
@@ -96,7 +97,7 @@ describe("remapForUpdate", () => {
       oldRawJson: OLD_RAW,
       newRawJson: NEW_RAW,
     });
-    /* 存活的 seed 线保留；断掉的 model 线摘除并上报（source / 装载追加端口）。 */
+    /* 存活的 seed 线保留；断掉的 model 线摘除并上报（source）。 */
     const source = asRecord(asRecord(res.paramMap).source);
     const t2i = asRecord(source["mode:T2I"]);
     expect(t2i.seed).toBe("1::widget::seed");
@@ -104,8 +105,10 @@ describe("remapForUpdate", () => {
     expect("prompt" in t2i).toBe(false);
     expect(res.broken).toEqual([
       { namespace: "mode:T2I", entryId: "prompt", ioKey: "1::param::model" },
-      { namespace: "mode:T2I", entryId: "reference-image", ioKey: "1::param::model" },
     ]);
+    /* 装载绑定不含图连线（#4547 起追加端口已移除）：整列原样透传，
+     * 存量 extraTargets 旧键保留（读取端按「没配」忽略）。 */
+    expect(asRecord(res.paramMap).referenceLoaders).toEqual(PARAM_MAP.referenceLoaders);
     /* workflowIO：存活保留，消失的摘掉并计数。 */
     expect(Object.keys(asRecord(res.workflowIO))).toEqual(["1::widget::seed"]);
     expect(res.droppedIOKeys).toEqual(["1::param::model", "9::widget::gone"]);

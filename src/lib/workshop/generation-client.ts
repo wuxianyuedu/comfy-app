@@ -374,9 +374,8 @@ export async function buildLibraryWorkflowInput(
       const { plan, extraInputs } = buildReferenceLoaderPlan({
         bindings: loaderBindings,
         filenames: cappedReferenceImages,
-        /* 追加端口可以落在未暴露的张量口上（#4405）：目标定位要连同全图
-         * 图片族连线口一起查，只看暴露面会把这类目标静默丢掉。 */
-        graphImagePorts: detail?.imageInputPorts,
+        /* 挂载口常落在未暴露的张量口上（#4405）：mountImagePortsForNodes
+         * 已按全图图片族连线口现收，按对象传入，本层不再查暴露面。 */
         mountPorts,
         io,
         presets,

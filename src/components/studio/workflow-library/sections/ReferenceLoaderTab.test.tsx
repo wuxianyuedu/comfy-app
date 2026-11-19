@@ -1,9 +1,9 @@
 // 「参考图装载」独立页签（ISSUE #4526）。
 //
-// 此前参考图槽位的「装载预设 + 追加端口」配置混在「工坊封装」页签里，多参考图
-// 工作流的装载配置与契约口清单挤在一屏。拆分后：DetailBody 的 reference 分支
-// 渲染本组件，工坊封装面板不再含装载配置。行为判据：有参考图槽位 → 渲染装载
-// 配置区；没有槽位 / 没有模式语境 → 给出对应空态，不渲染配置区。
+// 此前参考图槽位的「装载预设」配置混在「工坊封装」页签里，多参考图工作流的
+// 装载配置与契约口清单挤在一屏。拆分后：DetailBody 的 reference 分支渲染本
+// 组件，工坊封装面板不再含装载配置。行为判据：有参考图槽位 → 渲染装载配置区；
+// 没有槽位 / 没有模式语境 → 给出对应空态，不渲染配置区。
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -50,7 +50,6 @@ function renderTab(over: Partial<Parameters<typeof ReferenceLoaderTab>[0]> = {})
   return render(
     <ReferenceLoaderTab
       activeMode="T2I"
-      graphImagePorts={[]}
       io={null}
       onPatchParamMap={vi.fn()}
       paramMap={{}}

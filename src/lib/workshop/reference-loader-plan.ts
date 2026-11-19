@@ -1,6 +1,6 @@
 // ── 参考图装载计划构造（#4376，纯模块，规范 §17.2 第①层）──────────────────
 //
-// 工坊载荷构造的最后一步：把「槽位绑定（预设 + 追加端口）」落到执行期计划。
+// 工坊载荷构造的最后一步：把「槽位绑定（预设）」落到执行期计划。
 // 输入是四份既有事实：
 //   · bindings   —— 作者在工作流库配的绑定（`reference-loader-binding.ts`）；
 //   · resolved   —— 契约槽位 → 主落点 ioKey（映射层 resolveMapping 的结果）；
@@ -10,12 +10,13 @@
 //   · plan       —— `${nodeId}::${入口名}` → 预设定义（generate.referenceLoaderPlan）；
 //   · extraInputs —— 追加端口的同值覆盖项（主落点的覆盖项由映射层已发，不重发）。
 //
-// 主落点没连线（作者只配了追加端口）时，追加端口就是全部落点，照常发覆盖项；
-// 连绑定都没有的槽位，若挂载节点展开出了对应序号的模式口，则自动接线到那一口
+// 主落点没连线时，若挂载节点展开出了对应序号的模式口，则自动接线到那一口
 //（#4534：多参考图工作流的消费口原本至少连一张，其余口留空等待装载）。
+// 挂载口通常落在未暴露的张量口上（#4405 的候选口径），nodeId / name 由
+// `mountImagePortsForNodes` 从全图图片族连线口现收后按对象传入，不必在本层再查暴露面。
 
-import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { WorkflowImageInputPort } from "~/lib/comfyui/workflow-detail-raw";
+import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import { runtimeNodeId } from "~/lib/workflow/workflow-param-mapping";
 import { findReferenceLoaderPreset, type ReferenceLoaderPreset } from "./reference-loader-preset";
 import type { ReferenceLoaderBindingTable } from "./reference-loader-binding";
@@ -58,10 +59,6 @@ export function buildReferenceLoaderPlan(args: {
   bindings: ReferenceLoaderBindingTable;
   /** 参考图文件名（按槽位序；`reference-image` = 0，`reference-image-2` = 1…）。 */
   filenames: ReadonlyArray<string>;
-  /** 全图图片族连线口（#4405）：追加端口允许落在**未暴露**的张量口上
-   *  （多参考图工作流的消费口通常没被勾选暴露进 workflowIO）——那些口的
-   *  nodeId / name 从这里取，不能在 `io` 暴露面里查（查不到会被静默丢）。 */
-  graphImagePorts?: ReadonlyArray<WorkflowImageInputPort>;
   io: WorkflowIOMap | null;
   /** 挂载节点展开出的参考图口（#4534，按槽位序）：作者没给落点的槽位自动
    *  接到对应序号的口上。 */
@@ -72,19 +69,14 @@ export function buildReferenceLoaderPlan(args: {
 }): ReferenceLoaderPlanResult {
   const plan: Record<string, ReferenceLoaderPreset> = {};
   const extraInputs: Array<{ name: string; nodeId: string; value: string }> = [];
-  const { bindings, filenames, io, presets, resolved, graphImagePorts, mountPorts } = args;
+  const { bindings, filenames, io, presets, resolved, mountPorts } = args;
   if (!io || (Object.keys(bindings).length === 0 && (mountPorts?.length ?? 0) === 0)) {
     return { plan, extraInputs };
   }
-  /* 目标 ioKey → 端口定位：暴露面优先，未暴露的张量口由全图候选补齐。 */
+  /* 目标 ioKey → 端口定位：主落点走暴露面；挂载口已带 nodeId / name 按对象直取。 */
   const portById = new Map<string, { name: string; nodeId: string }>();
   for (const [ioKey, raw] of Object.entries(io)) {
     portById.set(ioKey, { name: raw.name, nodeId: runtimeNodeId(raw) });
-  }
-  for (const port of graphImagePorts ?? []) {
-    if (!portById.has(port.ioKey)) {
-      portById.set(port.ioKey, { name: port.name, nodeId: port.nodeId });
-    }
   }
   filenames.forEach((filename, slot) => {
     if (filename === undefined || filename === "") {
@@ -98,9 +90,6 @@ export function buildReferenceLoaderPlan(args: {
     if (typeof primary === "string" && primary !== "") {
       targets.add(primary);
     }
-    for (const target of binding?.extraTargets ?? []) {
-      targets.add(target);
-    }
     /* 挂载节点自动接线（#4534）：作者没给这个槽位任何落点时，按序落到挂载
      * 节点展开出的 image_0..N 模式口上——这类工作流原本至少连了一张参考图，
      * 其余口留空等待装载，不必逐口手连。 */
@@ -111,7 +100,7 @@ export function buildReferenceLoaderPlan(args: {
       }
     }
     for (const ioKey of targets) {
-      const port = portById.get(ioKey);
+      const port = portById.get(ioKey) ?? mountPorts?.find((p) => p.ioKey === ioKey);
       if (!port) {
         continue;
       }

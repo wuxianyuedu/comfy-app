@@ -42,14 +42,13 @@ const modeTableSchema = z.record(z.string(), z.union([z.string(), z.null()]));
  *  两处各写一份判据正是要消掉的东西）。 */
 const modeTableNamespaceSchema = z.record(z.string(), modeTableSchema);
 
-/** 参考图装载绑定（#4376）：某个参考图槽位在某个模式下用哪条装载预设、
- *  除已连线端口外再额外喂给哪些端口（扇出）。读写执行者见
- *  `~/lib/workshop/reference-loader-binding`。 */
+/** 参考图装载绑定（#4376）：某个参考图槽位在某个模式下用哪条装载预设。
+ *  读写执行者见 `~/lib/workshop/reference-loader-binding`；扇出到多个端口
+ *  由参考图挂载节点承担（#4547 起，原追加端口字段已移除——存量数据里的
+ *  旧键在读取端按「没配」忽略，z.object 默认剥未知键，校验不受影响）。 */
 const referenceLoaderBindingSchema = z.object({
   /** 装载预设 id；缺省 / 预设已删 = 裸 LoadImage 直连（#4355 行为）。 */
   presetId: z.string().optional(),
-  /** 追加的喂给端口（ioKey 列表）：同一张参考图除了主落点外还要到达的端口。 */
-  extraTargets: z.array(z.string()).optional(),
 });
 
 const referenceLoaderNamespaceSchema = z
