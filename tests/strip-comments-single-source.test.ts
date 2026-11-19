@@ -56,7 +56,8 @@ const LEDGER: Array<string> = [
   "tests/cross-platform-launcher.test.ts",
   "tests/lib-server-imports.test.ts",
   "tests/repository-base-purity.test.ts",
-  "tests/single-logger-channel.test.ts",
+  // 旧条目：`tests/single-logger-channel.test.ts` —— 它的具名本地副本已换成 import
+  // 共享件（ISSUE #2969 / #2660 批 8），按这条判据「少一处 = 收紧台账」删掉。
   // —— 连行尾注释一起去：换 import 会改变该判据看到的文本，要那条线自己确认 ——
   "tests/gate-hint-targets-exist.test.ts",
   "tests/test-mock-targets.test.ts",
