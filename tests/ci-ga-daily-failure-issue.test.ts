@@ -604,6 +604,164 @@ describe("main：该写就写", () => {
   });
 });
 
+describe("main：完整日志作为 CNB 附件挂在本单（ISSUE #4408）", () => {
+  const RAW_LOG = "##[error]FAIL  tests/full-suite-run.test.ts\n2026-11-18 line two\n";
+
+  /**
+   * CNB 侧假件：附件两步（POST 取链接 + PUT 正文）与建单三步全通，
+   * 并记下 PUT 收到的正文——附件要逐字可下载，PUT 的就是完整日志原文。
+   */
+  function cnbWithAttachment(seen: { posted?: Record<string, string | undefined>; put?: string }) {
+    return (method: string, path: string, init: Init): ResponseLike => {
+      if (method === "POST" && path === `/${SLUG}/-/upload/files`) {
+        return res(200, {
+          assets: { path: `/${SLUG}/-/files/u/key/ga-daily.log` },
+          token: "tk",
+          upload_url: "https://asset.cnb.cool/put",
+        });
+      }
+      if (method === "PUT") {
+        seen.put = init?.body;
+        return res(200, "");
+      }
+      if (method === "GET" && path.startsWith(`/${SLUG}/-/labels`)) {
+        return res(200, [{ name: "提单人:ci-ga-daily" }]);
+      }
+      if (method === "GET" && path === `/${SLUG}/-/issues/3500`) {
+        return res(200, {
+          labels: [{ name: "提单人:ci-ga-daily" }],
+          number: 3500,
+          title: seen.posted?.title ?? "",
+        });
+      }
+      if (method === "GET" && path.startsWith(`/${SLUG}/-/issues`)) return res(200, []);
+      if (method === "POST" && path === `/${SLUG}/-/issues`) return res(201, { number: 3500 });
+      if (method === "POST" && path.endsWith("/labels")) return res(200, {});
+      return res(404, { message: `${method} ${path}` });
+    };
+  }
+
+  it("日志传成 CNB 附件：正文带 /-/files/ 链接，不再给 api.github.com 下载端点", async () => {
+    const seen: { posted?: Record<string, string | undefined>; put?: string } = {};
+    const { calls, ghFetch, cnbFetch } = fakeFetch({
+      gh: () => res(200, jobsJson([{ name: "全量E2E", conclusion: "failure" }])),
+      cnb: cnbWithAttachment(seen),
+    });
+    const wrapped: FetchLike = (url, init) => {
+      if ((init?.method ?? "").toUpperCase() === "POST" && url.endsWith("/issues")) {
+        seen.posted = readFields(init?.body, ["body", "title"]);
+      }
+      return cnbFetch(url, init);
+    };
+    const { lines, log } = logs();
+    const code = await main({
+      argv: [],
+      env: env(),
+      ghFetch,
+      cnbFetch: wrapped,
+      log,
+      logReading: {
+        ghRepo: GH_REPO,
+        jobs: [{ conclusion: "failure", id: 9, name: "daily" }],
+        ok: true,
+        rawText: RAW_LOG,
+        runId: RUN_ID,
+        text: RAW_LOG,
+      },
+    });
+    expect(code).toBe(CODE.DONE);
+    const body = seen.posted?.body ?? "";
+    /* 附件链接进正文：CNB 站内相对链接，本地直接下载。 */
+    expect(body).toContain("已作为附件挂在本单");
+    expect(body).toContain("(/-/files/u/key/ga-daily.log)");
+    /* 反面锚（#4408 的诉求）：附件在场时不再给 GitHub 的逐 job 下载端点。
+     * run 页面链接（github.com/.../actions/runs/...）仍保留——那是「哪一跑」的出处。 */
+    expect(body).not.toContain("api.github.com");
+    expect(body).toContain(`https://github.com/${GH_REPO}/actions/runs/${RUN_ID}`);
+    /* PUT 的就是完整日志原文（逐字可下载），且上传发生在建单之前（正文引用它才发布）。 */
+    expect(seen.put ?? "").toContain("##[error]FAIL  tests/full-suite-run.test.ts");
+    const uploadAt = calls.indexOf(`CNB POST /${SLUG}/-/upload/files`);
+    const issueAt = calls.indexOf(`CNB POST /${SLUG}/-/issues`);
+    expect(uploadAt).toBeGreaterThanOrEqual(0);
+    expect(issueAt).toBeGreaterThan(uploadAt);
+    expect(lines.join("\n")).toContain("完整日志已传成 CNB 附件");
+  });
+
+  it("附件传不成 ⇒ 退回「窗口 + 下载端点」旧形状，立案照写（附件不参与写不写）", async () => {
+    const seen: { posted?: Record<string, string | undefined> } = {};
+    const { ghFetch, cnbFetch } = fakeFetch({
+      gh: () => res(200, jobsJson([{ name: "全量E2E", conclusion: "failure" }])),
+      cnb: cnbWithAttachment(seen),
+    });
+    const wrapped: FetchLike = (url, init) => {
+      if ((init?.method ?? "").toUpperCase() === "POST" && url.endsWith("/issues")) {
+        seen.posted = readFields(init?.body, ["body", "title"]);
+      }
+      /* 上传那两步强制失败：链接拿不到 ⇒ 走旧形状。 */
+      if ((init?.method ?? "").toUpperCase() === "POST" && url.endsWith("/-/upload/files")) {
+        return Promise.resolve(res(403, { message: "forbidden" }));
+      }
+      return cnbFetch(url, init);
+    };
+    const { lines, log } = logs();
+    /* 大日志：正文预算装不下 ⇒ 旧形状是「窗口 + GitHub 下载端点」——那正是 #4408
+     * 要绕开的出站读取；附件传不成时它仍是退路。 */
+    const big = [
+      RAW_LOG,
+      ...Array.from({ length: 4000 }, (_, i) => `line ${String(i)} padding padding padding`),
+    ].join("\n");
+    const code = await main({
+      argv: [],
+      env: env(),
+      ghFetch,
+      cnbFetch: wrapped,
+      log,
+      logReading: {
+        ghRepo: GH_REPO,
+        jobs: [{ conclusion: "failure", id: 9, name: "daily" }],
+        ok: true,
+        rawText: big,
+        runId: RUN_ID,
+        text: big,
+      },
+    });
+    expect(code).toBe(CODE.DONE);
+    const body = seen.posted?.body ?? "";
+    expect(body).toContain("超出正文预算");
+    expect(body).toContain("api.github.com");
+    expect(body).not.toContain("/-/files/");
+    expect(lines.join("\n")).toContain("日志附件没传成");
+  });
+
+  it("--dry-run ⇒ 附件也不传（一条网络都不发），正文不出现附件链接", async () => {
+    const seen: { posted?: Record<string, string | undefined> } = {};
+    const { calls, ghFetch, cnbFetch } = fakeFetch({
+      gh: () => res(200, jobsJson([{ name: "全量E2E", conclusion: "failure" }])),
+      cnb: cnbWithAttachment(seen),
+    });
+    const { lines, log } = logs();
+    const code = await main({
+      argv: ["--dry-run"],
+      env: env(),
+      ghFetch,
+      cnbFetch,
+      log,
+      logReading: {
+        ghRepo: GH_REPO,
+        jobs: [{ conclusion: "failure", id: 9, name: "daily" }],
+        ok: true,
+        rawText: RAW_LOG,
+        runId: RUN_ID,
+        text: RAW_LOG,
+      },
+    });
+    expect(code).toBe(CODE.DONE);
+    expect(calls.some((c) => c.includes("/-/upload/files"))).toBe(false);
+    expect(calls.some((c) => c.startsWith("CNB POST"))).toBe(false);
+    expect(lines.join("\n")).toContain("DRY-RUN");
+  });
+});
+
 describe("main：--no-block 只改退码，不改话术", () => {
   it("jobs 取不到时退 0，但红话与手工出口原样打出来（不许静默 return）", async () => {
     const { ghFetch, cnbFetch } = fakeFetch({ gh: () => res(500, {}) });

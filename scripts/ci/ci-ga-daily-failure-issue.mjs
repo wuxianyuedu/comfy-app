@@ -52,8 +52,10 @@
  * ## 机器建单只报事实，不代写因果
  *
  * 正文 = 症状 + 当场读数（run URL / sha）+ **失败日志摘录** + 「根因：未判定」+ 既有定性出口。
- * 日志摘录由 `ci-ga-failure-logs.mjs` 给：红色失败窗口（注解 + 失败 step 原始行）优先，
- * 完整日志装得下就整份贴、装不下就给窗口 + 下载端点；取不到日志如实写「取不到」并给出口，
+ * 日志摘录由 `ci-ga-failure-logs.mjs` 给：红色失败窗口（注解 + 失败 step 原始行）优先；
+ * **完整日志作为 CNB 附件挂在本单**（ISSUE #4408，上传链在 `ci-cnb-attachment.mjs`）——
+ * 本地从 CNB 站内直接下载，不出站 `api.github.com`、不靠 `gh`；附件传不成就退回
+ * 「窗口 + 下载端点」的旧形状。取不到日志如实写「取不到」并给出口，
  * 绝不写成「日志里没有失败行」。署名走
  * `machineHandle("ci-ga-daily")`（`ci-ga-daily` 打头，**不取**平台账号昵称 —— 那是人的名字）。
  *
@@ -92,6 +94,7 @@ import {
 import { collectFailureLogReading, renderLogReadout } from "./ci-ga-failure-logs.mjs";
 import { judgeBundleEscalation, readBundleAccount } from "./ci-bundle-escalation-core.mjs";
 import { fetchGaBundleRedStreak, stripAnsi } from "./ci-ga-daily-bundle-escalation.mjs";
+import { uploadCnbTextFile } from "./ci-cnb-attachment.mjs";
 import { machineHandle } from "../platform/dev-handle.mjs";
 import { commentHeader } from "../ship/ship-ticket.mjs";
 
@@ -457,18 +460,53 @@ export async function main(io = {}) {
       return null;
     });
   }
-  const logReadout = reading
-    ? renderLogReadout(reading)
-    : renderLogReadout({
-        ghRepo,
-        jobs: [],
-        ok: false,
-        reason: "日志取数这一跳异常退出",
-        runId,
-        text: "",
+  /* 完整日志作为 CNB 附件挂进单子（ISSUE #4408）：本地从 CNB 站内直接下载，
+   * 不再出站 `api.github.com`。附件传不成就退回「窗口 + 下载端点」的旧形状——
+   * 立案的价值是「红了看得见」，附件只是让它更好取，**不参与写不写的判定**。
+   * `--dry-run` 一条网络都不发，附件也跳过。正文用 `rawText`（未做单行归一的
+   * 完整正文）；它在 `collectFailedJobLogs` 里已按硬规则 17 脱敏，这里不再过第二遍
+   * （对「几 MB 单行」的重正则是平方级，重复抹一遍只多花一倍时间、抓不到新形状）。 */
+  let attachment = null;
+  if (!dryRun && reading?.ok === true) {
+    const attachText = String(reading.rawText ?? reading.text ?? "");
+    if (attachText.trim() !== "") {
+      const up = await uploadCnbTextFile({
+        endpoint: cnbBase,
+        fetchImpl: cnbFetch,
+        fileName: `ga-daily-${runId}-${sha.slice(0, 8) || "noid"}.log`,
+        repo: cnbSlug,
+        text: attachText,
+        token: cnbToken,
       });
+      if (up.ok) {
+        attachment = { assetPath: up.assetPath, fileName: up.fileName };
+        log(
+          `[ga-daily-failure] 完整日志已传成 CNB 附件：${up.fileName}（${String(up.bytes)} 字节）⇒ 链接进单子正文，本地直接下载、无需 gh。`,
+        );
+      } else {
+        log(
+          `[ga-daily-failure] 日志附件没传成（${up.detail}）⇒ 正文退回「窗口 + 下载端点」，立案照写。`,
+        );
+      }
+    }
+  }
+  const logReadout = renderLogReadout(
+    reading ?? {
+      ghRepo,
+      jobs: [],
+      ok: false,
+      reason: "日志取数这一跳异常退出",
+      runId,
+      text: "",
+    },
+    attachment,
+  );
   if (reading?.ok === true) {
-    log(`[ga-daily-failure] 日志正文已取到 ⇒ 红色失败窗口（完整日志按预算贴）进单子正文。`);
+    log(
+      attachment
+        ? "[ga-daily-failure] 日志正文已取到 ⇒ 红色失败窗口进正文，完整日志以附件挂在本单。"
+        : "[ga-daily-failure] 日志正文已取到 ⇒ 红色失败窗口（完整日志按预算贴）进单子正文。",
+    );
   } else {
     log(`[ga-daily-failure] 日志正文没取到 ⇒ 正文只多一节「取不到 + 出口」，立案照写。`);
   }
