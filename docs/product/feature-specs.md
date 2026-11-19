@@ -604,8 +604,10 @@
 - 行为与验收：节点的 widget 参数行 = 左侧参数名 + 右侧值槽；值槽是深底、
   细描边、圆角的「凹陷井」，铺满标签列之后的整格，文字在槽内**左对齐**、
   超长省略（完整值悬停可见）；标签列固定占比，各行值槽共享同一起点 x；
-  已连线的行值槽照常显示（文字按连线态调暗）；STRING 多行参数维持既有的
-  堆叠文本框形态。与子图节点（SubgraphWidgetRow）的值框同一套视觉。
+  **已连线（含边界连线）的行不再渲染值槽 / textarea** —— 数值由连线传递，
+  本地 `widgets_values` 只是过期的默认值，显示出来会误导（ISSUE #4548），
+  该行退化为「标签 + 端点」的连接行；未连线的行保留值槽，STRING 多行参数
+  维持既有的堆叠文本框形态。与子图节点（SubgraphWidgetRow）的值框同一套视觉。
 - 落点：`src/components/studio/canvas/FlowNodeWidgetRows.tsx`（widget 行）、
   `src/components/studio/canvas/SubgraphWidgetRow.tsx`（子图行，既有形态基准）
 

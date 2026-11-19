@@ -224,7 +224,10 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
         </div>
       )}
       <div
-        className="wf-markdown text-2xs min-h-0 flex-1 overflow-auto p-2"
+        /* 滚动条走 `.custom-scrollbar` 档（thumb = 强边框色，hover 深一档）：
+         *  此前落到全局兜底档（thumb = `--color-border`），在便签自己的浅底上
+         *  几乎看不见，用户报「滚动条看不清」（ISSUE #4548）。 */
+        className="wf-markdown custom-scrollbar text-2xs min-h-0 flex-1 overflow-auto p-2"
         dangerouslySetInnerHTML={{ __html: html }}
         style={{ color: "var(--color-ink-bright)", lineHeight: 1.5 }}
       />
