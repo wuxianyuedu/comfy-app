@@ -32,7 +32,7 @@ import {
 } from "~/lib/workflow/workflow-exposed-params";
 import { parseWorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import { buildEncapsulatedInputs, type WorkshopExposedValues } from "./workflow-encapsulation";
-import { referenceLoaderBindingsForMode } from "./reference-loader-binding";
+import { referenceLoaderBindingsForMode, referenceLoaderMax } from "./reference-loader-binding";
 import { buildReferenceLoaderPlan } from "./reference-loader-plan";
 import { deriveEncapsulationStatus } from "./workshop-encapsulation-status";
 
@@ -348,12 +348,19 @@ export async function buildLibraryWorkflowInput(
   let finalInputs = workflowInputs;
   let referenceLoaderPlan: GenerateInput["referenceLoaderPlan"];
   const loaderBindings = referenceLoaderBindingsForMode(detail?.paramMap, mode);
-  if (Object.keys(loaderBindings).length > 0 && (values.referenceImages?.length ?? 0) > 0) {
+  /* 参考图上限（ISSUE #4537）：装载计划的文件名与组载荷同一份截断口径——
+   * 超出上限的参考图不参与装载。 */
+  const referenceCap = referenceLoaderMax(detail?.paramMap);
+  const cappedReferenceImages =
+    referenceCap === null
+      ? (values.referenceImages ?? [])
+      : (values.referenceImages ?? []).slice(0, referenceCap);
+  if (Object.keys(loaderBindings).length > 0 && cappedReferenceImages.length > 0) {
     try {
       const { presets } = await vanillaApi.referenceLoader.presetsGet.query();
       const { plan, extraInputs } = buildReferenceLoaderPlan({
         bindings: loaderBindings,
-        filenames: values.referenceImages ?? [],
+        filenames: cappedReferenceImages,
         /* 追加端口可以落在未暴露的张量口上（#4405）：目标定位要连同全图
          * 图片族连线口一起查，只看暴露面会把这类目标静默丢掉。 */
         graphImagePorts: detail?.imageInputPorts,

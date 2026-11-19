@@ -142,6 +142,30 @@ describe("参考图装载绑定区（#4376）", () => {
   });
 });
 
+describe("参考图上限（#4537）", () => {
+  it("触发器显示当前配置：未配置 = 跟随模式契约", () => {
+    renderSection();
+    expect(screen.getByLabelText("参考图上限").textContent).toContain("跟随模式契约");
+  });
+
+  it("触发器显示已配置的上限张数", () => {
+    renderSection({ paramMap: { ...PARAM_MAP, referenceLoaders: { maxReferences: 1 } } });
+    expect(screen.getByLabelText("参考图上限").textContent).toContain("1 张");
+  });
+
+  it("序号超过上限的槽位不渲染（工坊喂图只有前 N 张生效）", () => {
+    renderSection({ paramMap: { ...PARAM_MAP, referenceLoaders: { maxReferences: 1 } } });
+    expect(screen.getByText("参考图 1")).toBeDefined();
+    expect(screen.queryByText("参考图 2")).toBeNull();
+  });
+
+  it("上限未配置时全部契约槽位都渲染", () => {
+    renderSection();
+    expect(screen.getByText("参考图 1")).toBeDefined();
+    expect(screen.getByText("参考图 2")).toBeDefined();
+  });
+});
+
 describe("参考图装载绑定区 · 扇出候选（#4405）", () => {
   const GRAPH_PORTS = [
     {

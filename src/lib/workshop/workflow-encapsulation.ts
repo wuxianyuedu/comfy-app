@@ -39,6 +39,7 @@ import {
 } from "~/lib/workflow/workflow-param-mapping";
 import { exposedCustomKindOf } from "~/lib/workflow/workflow-exposed-params";
 import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import { referenceLoaderMax } from "./reference-loader-binding";
 
 /** 工坊这一次生成要落下去的对外参数（全部可选）。
  *
@@ -506,6 +507,14 @@ export function buildEncapsulatedInputs(args: {
   if (!io || typeof io !== "object") {
     return { workflowInputs: [], unmatched: [], resolved: {} };
   }
+  /* 参考图上限（ISSUE #4537）：这条工作流实际最多使用 N 张参考图。组载荷前先把
+   * 工坊喂来的图片截断到上限（未配置 = 不设限，跟随模式契约槽位）——落点映射与
+   * 装载计划都吃这一份截断后的值，超出部分不再参与装载。 */
+  const referenceCap = referenceLoaderMax(paramMap);
+  const effectiveValues =
+    referenceCap !== null && (values.referenceImages?.length ?? 0) > referenceCap
+      ? { ...values, referenceImages: (values.referenceImages ?? []).slice(0, referenceCap) }
+      : values;
   const effectiveMode = mode ?? null;
   const entries = buildParamEntries(io, {
     mode: effectiveMode,
@@ -523,7 +532,7 @@ export function buildEncapsulatedInputs(args: {
     values: toContractValues({
       io,
       mode: effectiveMode,
-      values,
+      values: effectiveValues,
       resolved,
       entries,
       table,
@@ -534,7 +543,7 @@ export function buildEncapsulatedInputs(args: {
    *  了（T2I 收到一张参考图就是这种情形）。 */
   const reported = new Set(unmatched);
   const hasEntry = (id: string) => entries.some((entry) => entry.id === id);
-  const refs = values.referenceImages ?? [];
+  const refs = effectiveValues.referenceImages ?? [];
   if ((values.firstFrame !== undefined || refs.length > 0) && !hasEntry("first-frame")) {
     reported.add("first-frame");
   }
