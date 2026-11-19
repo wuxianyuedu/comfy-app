@@ -29,6 +29,15 @@ export type RowState =
   | { kind: "missing" }
   | { kind: "empty" };
 
+/** 解析控制台的一行日志。`id` 是稳定的行标识（递增序号）——
+ *  列表按尾部窗口滚动时旧行被移出，只有稳定 key 才能让 `memo` 行组件跳过重渲
+ *  （ISSUE #4470）。 */
+export type ParseLogEntry = {
+  id: number;
+  level: string;
+  msg: string;
+};
+
 /** 两阶段解析进度，以**包**计数表示（**不是**文件数）：
  *   扫描阶段 → discovered 增长；文件遍历结束前总数未知。
  *   哈希阶段 → 已处理 / 总包数。
