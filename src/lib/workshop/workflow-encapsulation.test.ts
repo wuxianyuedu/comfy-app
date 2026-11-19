@@ -941,3 +941,33 @@ describe("尺寸换算按生效表：设置里改过的表在封装层真的生�
     expect(valueOf(withDefault.workflowInputs, "resolution")).toBe("1k");
   });
 });
+
+describe("LoRA 契约口的控件值读写（#4494）", () => {
+  it("exposedValueOf / withExposedValue 对 lora-name 按文本读写；空串清掉", () => {
+    const next = withExposedValue({}, "lora-name", "某角色v2");
+    expect(next.loraName).toBe("某角色v2");
+    expect(exposedValueOf(next, "lora-name")).toBe("某角色v2");
+    expect(exposedValueOf({}, "lora-name")).toBe("");
+    expect(withExposedValue({ loraName: "某角色v2" }, "lora-name", "").loraName).toBeUndefined();
+  });
+
+  it("lora-strength 按数字读写（浮点不取整）；空串 / 非数字清掉", () => {
+    const next = withExposedValue({}, "lora-strength", 0.8);
+    expect(next.loraStrength).toBe(0.8);
+    expect(exposedValueOf(next, "lora-strength")).toBe("0.8");
+    expect(withExposedValue({}, "lora-strength", "0.65").loraStrength).toBe(0.65);
+    expect(
+      withExposedValue({ loraStrength: 0.8 }, "lora-strength", "").loraStrength,
+    ).toBeUndefined();
+    expect(withExposedValue({}, "lora-strength", "abc").loraStrength).toBeUndefined();
+    expect(exposedValueOf({}, "lora-strength")).toBe("");
+  });
+
+  it("pruneEmpty 保留 loraName / loraStrength（含 0 这个有效值），空串剪掉", () => {
+    const pruned = pruneEmptyExposedValues({ loraName: "某角色", loraStrength: 0 });
+    expect(pruned.loraName).toBe("某角色");
+    expect(pruned.loraStrength).toBe(0);
+    expect(pruneEmptyExposedValues({ loraName: "  " }).loraName).toBeUndefined();
+    expect(pruneEmptyExposedValues({}).loraStrength).toBeUndefined();
+  });
+});

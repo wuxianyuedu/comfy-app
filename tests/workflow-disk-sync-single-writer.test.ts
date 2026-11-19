@@ -118,17 +118,20 @@ describe("本地文件工作流 · 自动同步设置", () => {
 });
 
 describe("resync 是写回磁盘内容的唯一入口", () => {
-  /* resync 自 workflow.ts 按子域拆分后落在 workflow-mutations.ts（key 逐字不变）。 */
+  /* resync 自 workflow.ts 按子域拆分后落在 workflow-mutations.ts（key 逐字不变）。
+   * #4460 起 resync 的「重读 → remap → 落库」段收进 keyed mutex：锁内重读命名
+   * 为 latest（与锁外那次旧读数区分），函数体因此变长——接线断言的窗口随
+   * 实际形态放宽。 */
   const src = read("src/server/api/routers/workflow-mutations.ts");
 
   it("它才做「重新导入 + 落库」", () => {
     expect(src).toMatch(/resync:[\s\S]{0,2000}?reimportFromSource/);
-    expect(src).toMatch(/sourceMtime: result\.update\.sourceMtime/);
+    expect(src).toMatch(/sourceMtime: update\.sourceMtime/);
   });
 
   it("写回后清掉详情缓存（否则点完同步、详情还是旧内容）", () => {
     expect(src).toMatch(
-      /resync:[\s\S]{0,2000}?invalidateWorkflowDetailCache\(ctx\.user\.id, existing\.id\)/,
+      /resync:[\s\S]{0,4000}?invalidateWorkflowDetailCache\(ctx\.user\.id, latest\.id\)/,
     );
   });
 });

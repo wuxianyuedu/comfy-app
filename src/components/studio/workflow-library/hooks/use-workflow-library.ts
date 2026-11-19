@@ -345,7 +345,12 @@ export function useWorkflowLibrary(
   }, [load]);
 
   const toggleImport = useCallback(() => {
-    importState.setShowImport((value) => !value);
+    /* 打开走 openImport（清陈旧告警 / 错误，#4457）；关闭保持原语义。 */
+    if (importState.showImport) {
+      importState.setShowImport(false);
+      return;
+    }
+    importState.openImport();
   }, [importState]);
   const closeImport = useCallback(() => {
     importState.setShowImport(false);

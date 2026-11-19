@@ -248,11 +248,12 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         await runAsyncAction(
           async () => {
             const d = await resyncMut.mutateAsync({ id });
-            if (d?.missing === true) {
+            /* 三个结果分支是判别联合，按成员键收窄后再读各自字段。 */
+            if (d && "missing" in d && d.missing === true) {
               toast.error("同步失败", "磁盘文件已不存在，无法同步（请检查路径或重新载入）");
-            } else if (d?.unchanged === true) {
+            } else if (d && "unchanged" in d && d.unchanged === true) {
               toast.info("磁盘文件未变化", name);
-            } else if (d?.updated === true) {
+            } else if (d && "updated" in d && d.updated === true) {
               toast.success("已同步磁盘内容", name);
               /* #4377：同步后新版本里断掉的 IO 连线要提示重新配置。 */
               const broken = d.broken ?? [];
