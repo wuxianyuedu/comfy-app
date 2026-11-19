@@ -17,6 +17,7 @@ import {
 
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { Spinner } from "~/components/ui/spinner";
 import { SourceTag } from "~/components/ui/source-tag";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
@@ -25,7 +26,6 @@ import type { WorkflowRow } from "../workflow-library-config";
 import { ActionButton } from "./DetailControls";
 import { ModelTagPicker } from "./MetaEditor";
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
-import { zClass } from "~/lib/shell/overlay-z";
 
 type DetailHeaderProps = {
   /** 「转为在线」进行中（本条工作流的转换请求在飞）。 */
@@ -110,35 +110,38 @@ export function DetailHeader({
               对齐」。行高统一到 1 之后，三者都由自己的字号（10px）决定。 */}
           <div className="mt-2 flex flex-wrap items-center gap-2 leading-none">
             <span className="relative">
-              <Hint
-                accessibleName
-                label={
-                  modes.length > 1
-                    ? "该工作流支持多种模式，点击查看全部"
-                    : modes[0] !== undefined && modes[0] !== ""
-                      ? `${modeLabel(modes[0])}（${modes[0]}）`
-                      : undefined
-                }
-                wrap
-              >
-                <Button
-                  className={`h-auto gap-0 p-0 disabled:opacity-100 ${
-                    modes.length > 1 ? "cursor-pointer" : "cursor-default"
-                  }`}
-                  disabled={modes.length <= 1}
-                  onClick={() => {
-                    if (modes.length > 1) {
-                      setShowAllModes((value) => !value);
-                    }
-                  }}
-                  variant="ghost"
+              {/* 「全部模式」浮层走 ui/popover 基元（#4468）：点击外部 / Escape
+                  收起由基元自带 —— 手写 absolute 浮层只能靠再点一次徽标收起，
+                  会一直悬在标题上方遮挡内容。Trigger 在内、Hint 在外（#1384）。 */}
+              <Popover onOpenChange={setShowAllModes} open={showAllModes && modes.length > 1}>
+                <Hint
+                  accessibleName
+                  label={
+                    modes.length > 1
+                      ? "该工作流支持多种模式，点击查看全部"
+                      : modes[0] !== undefined && modes[0] !== ""
+                        ? `${modeLabel(modes[0])}（${modes[0]}）`
+                        : undefined
+                  }
+                  wrap
                 >
-                  <TaskTypeChip taskType={workflow.taskType} />
-                </Button>
-              </Hint>
-              {showAllModes && modes.length > 1 && (
-                <div
-                  className={`border-border bg-panel absolute top-full left-0 ${zClass("popup")} mt-1 flex min-w-35 flex-col gap-0.5 rounded-lg border p-1.5 shadow-xl`}
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        className={`h-auto gap-0 p-0 disabled:opacity-100 ${
+                          modes.length > 1 ? "cursor-pointer" : "cursor-default"
+                        }`}
+                        disabled={modes.length <= 1}
+                        variant="ghost"
+                      />
+                    }
+                  >
+                    <TaskTypeChip taskType={workflow.taskType} />
+                  </PopoverTrigger>
+                </Hint>
+                <PopoverContent
+                  align="start"
+                  className="bg-panel w-auto min-w-35 gap-0.5 p-1.5 shadow-xl"
                 >
                   {modes.map((code) => (
                     <span
@@ -153,8 +156,8 @@ export function DetailHeader({
                       {code === workflow.defaultMode ? "（默认）" : ""}
                     </span>
                   ))}
-                </div>
-              )}
+                </PopoverContent>
+              </Popover>
             </span>
             <SourceTag source={workflow.source} />
             {(workflow.modelTags ?? []).map((tag) => (

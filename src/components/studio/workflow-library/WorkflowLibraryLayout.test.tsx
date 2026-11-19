@@ -6,6 +6,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { stripComments } from "../../../../tests/helpers/strip-comments";
@@ -65,8 +66,11 @@ function headerRow(over: Partial<WorkflowRow> = {}): WorkflowRow {
   };
 }
 
-function renderHeader(args: { source?: "local" | "online" } = {}) {
+function renderHeader(args: { modes?: Array<string>; source?: "local" | "online" } = {}) {
   const row = headerRow({ source: args.source ?? "local" });
+  if (args.modes !== undefined) {
+    row.modes = args.modes;
+  }
   const onUpdateJson = vi.fn();
   const onConvert = vi.fn();
   render(
@@ -423,5 +427,53 @@ describe("局部加载不许用整列加载界面", () => {
     expect(hook).toMatch(
       /if \(isCanvasTab\(tab\) && workflow\) setCanvasVisitedFor\(workflow\.id\)/,
     );
+  });
+});
+
+describe("详情头部：「全部模式」浮层收起（ISSUE #4468）", () => {
+  /** 触发器带 Hint 的 accessibleName：aria-label 是「点击查看全部」那句。 */
+  const trigger = () => screen.getByRole("button", { name: /点击查看全部/ });
+  /** 浮层里第二个模式的行（modeLabel 或原始码，取其一）。 */
+  const secondModeRow = () => screen.queryByText(/图生图|I2I/);
+
+  it("多模式点徽标展开全部模式；Escape 收起", async () => {
+    const user = userEvent.setup();
+    renderHeader({ modes: ["T2I", "I2I"] });
+
+    await user.click(trigger());
+    expect(secondModeRow()).not.toBeNull();
+
+    await user.keyboard("{Escape}");
+    expect(secondModeRow()).toBeNull();
+  });
+
+  it("点击浮层外部收起（此前只能再点一次徽标，浮层一直悬着挡内容）", async () => {
+    const user = userEvent.setup();
+    renderHeader({ modes: ["T2I", "I2I"] });
+
+    await user.click(trigger());
+    expect(secondModeRow()).not.toBeNull();
+
+    await user.click(document.body);
+    expect(secondModeRow()).toBeNull();
+  });
+
+  it("再点一次徽标仍可收起（原有路径保留）", async () => {
+    const user = userEvent.setup();
+    renderHeader({ modes: ["T2I", "I2I"] });
+
+    await user.click(trigger());
+    expect(secondModeRow()).not.toBeNull();
+    await user.click(trigger());
+    expect(secondModeRow()).toBeNull();
+  });
+
+  it("单模式徽标禁用，不展开浮层", async () => {
+    const user = userEvent.setup();
+    renderHeader({ modes: ["T2I"] });
+
+    /* 单模式时 Hint 的名是「文生图（T2I）」，不是「点击查看全部」。 */
+    await user.click(screen.getByRole("button", { name: "文生图（T2I）" }));
+    expect(secondModeRow()).toBeNull();
   });
 });
