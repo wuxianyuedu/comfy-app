@@ -1,6 +1,6 @@
 /**
  * pre-commit 耗时账（§13.5.8.3）的在位判据。这一族失效是**静默**的：少记一条 / 记错刻度 / 钩子没调用，都不让提交红，
- * 所以判形态：① 记账读账往返 ② 落点 `.git/` 不入库（写进版本库会污染并行检出）③ 钩子接线（三处 source、`run()` 只定义一份且走 `timed_step`）
+ * 所以判形态：① 记账读账往返 ② 落点 `.tmp/timing/` 不入库（写进版本库会污染并行检出）③ 钩子接线（三处 source、`run()` 只定义一份且走 `timed_step`）
  * ④ 记账不改退出码 —— 喂一份读不出的账本，失败仍退 0（不真跑完整 pre-commit，那是分钟级且要装齐依赖）。
  */
 import { execFileSync, spawnSync } from "node:child_process";
@@ -75,7 +75,7 @@ function firstRun(result: { out: string }): LedgerRun {
   return run;
 }
 
-/** 临时仓库（真的 `git init`）—— 账本落点由 `git rev-parse --absolute-git-dir` 定。 */
+/** 临时仓库（真的 `git init`）—— 账本落点由 `git rev-parse --show-toplevel` 定（`.tmp/timing/`，规范 §12.8.7）。 */
 const tmpDirs: Array<string> = [];
 afterEach(() => {
   for (const dir of tmpDirs.splice(0)) {
@@ -114,10 +114,11 @@ describe("pre-commit 耗时账：记账与读账", () => {
     );
     expect(wrote.code).toBe(0);
     expect(wrote.out).toContain("已记录本次耗时");
-    /* 账本**在 `.git/` 下**，不是仓库根 —— 这是「不入库 + 不跨检出污染」的落点判据。 */
-    const ledger = join(repo, ".git", "comfy-precommit-timing.jsonl");
+    /* 账本**在 `.tmp/timing/` 下**，不在仓库根、也不在 `.git/` —— 「不入库 + 不跨检出污染」的落点判据（规范 §12.8.7）。 */
+    const ledger = join(repo, ".tmp", "timing", "comfy-precommit-timing.jsonl");
     expect(existsSync(ledger)).toBe(true);
     expect(existsSync(join(repo, "comfy-precommit-timing.jsonl"))).toBe(false);
+    expect(existsSync(join(repo, ".git", "comfy-precommit-timing.jsonl"))).toBe(false);
 
     const view = run(["--json"], repo);
     expect(view.code).toBe(0);
@@ -215,7 +216,7 @@ describe("pre-commit 耗时账：记账与读账", () => {
   it("--clear 清空账本（且裸开关不带值时也认）", () => {
     const repo = makeRepo();
     run(["record", "--total-ms", "1000", "--exit", "0"], repo);
-    expect(existsSync(join(repo, ".git", "comfy-precommit-timing.jsonl"))).toBe(true);
+    expect(existsSync(join(repo, ".tmp", "timing", "comfy-precommit-timing.jsonl"))).toBe(true);
     const cleared = run(["--clear"], repo);
     expect(cleared.code).toBe(0);
     expect(cleared.out).toContain("已清空");
@@ -225,7 +226,7 @@ describe("pre-commit 耗时账：记账与读账", () => {
   it("半截行（上次写入被打断）不构成记录，也不让读账崩掉", () => {
     const repo = makeRepo();
     run(["record", "--total-ms", "1000", "--exit", "0"], repo);
-    const ledger = join(repo, ".git", "comfy-precommit-timing.jsonl");
+    const ledger = join(repo, ".tmp", "timing", "comfy-precommit-timing.jsonl");
     writeFileSync(ledger, `${readFileSync(ledger, "utf8")}{"totalMs": 4242`, "utf8");
     const runs = readLedger(run(["--json"], repo));
     expect(runs).toHaveLength(1);

@@ -91,12 +91,38 @@ export function resolveGitDir(cwd = process.cwd()) {
 }
 
 /**
+ * 本检出**工作树根**（仓库根）的绝对路径；不在检出里时返回 `null`。
+ *
+ * 与 `resolveGitDir` 同一条 null 契约（读不出不猜路径）。走 git 而不是从脚本位置
+ * 往上找：`--show-toplevel` 给出的是**当前 cwd 所在**那份工作树的根 —— worktree 里
+ * 「脚本安装在主检出」与「这份账属于哪份工作树」是两回事，后者才是要的答案。
+ * `.tmp/`（本机作业目录，规范 §12.8.7）下的落点由它算：耗时账记的是这份工作树的
+ * 钩子/门禁耗时，不跟着脚本安装位置走。
+ *
+ * @param {string} [cwd] 检出内任一路径
+ * @returns {string | null} 工作树根绝对路径，或 `null`（裸仓库 / 不在检出里）
+ */
+export function resolveRepoRoot(cwd = process.cwd()) {
+  const r = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  if (r.status !== 0) {
+    return null;
+  }
+  const dir = String(r.stdout ?? "").trim();
+  return dir || null;
+}
+
+/**
  * 「机器本地、不入库」的那个文件该落在哪 —— 统一落在 git 目录里。
  *
- * 本仓已经有两户住在这儿（`comfy-premerge-proof.json` / `comfy-precommit-timing.jsonl`），
- * 理由同一条：**它描述的是这台检出的状态，不是项目的内容**，所以既不该进 `git status`、
- * 也不该被并行检出共享（A 的证据给 B 作证 = 假绿）。`log/` 不是替代落点 ——
- * 那是应用运行期的日志布局（规范 §4），与开发者机器上的钩子状态不是一件事。
+ * 本仓还剩一户住在这儿（`comfy-premerge-proof.json`；两份耗时账已迁 `.tmp/timing/`，
+ * 规范 §12.8.7），理由同一条：**它描述的是这台检出的状态，不是项目的内容**，
+ * 所以既不该进 `git status`、也不该被并行检出共享（A 的证据给 B 作证 = 假绿）。
+ * `log/` 不是替代落点 —— 那是应用运行期的日志布局（规范 §4），与开发者机器上的
+ * 钩子状态不是一件事。
  *
  * git 目录取不到时回 `null`（⇒ 调用方**跳过**这次写，而不是猜一个路径写出去）。
  *

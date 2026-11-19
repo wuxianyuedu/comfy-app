@@ -446,9 +446,10 @@ function isBaseCheckReport(v) {
 /**
  * @param {string} script
  * @param {string[]} args
+ * @param {Record<string, string>} [extraEnv] 追加给子进程的环境变量（继承本进程环境再叠加）
  * @returns {{status: number, stdout: string}}
  */
-function runQuiet(script, args) {
+function runQuiet(script, args, extraEnv) {
   const r = spawnSync(process.execPath, [path.join(HERE, script), ...args], {
     cwd: ROOT,
     encoding: "utf8",
@@ -456,6 +457,7 @@ function runQuiet(script, args) {
     /* 预算（#4448）：门禁脚本挂死时的兜底上限——给足重档门禁的合理墙钟
      * （eslint 70s 级），只封「无限挂死」那一形，不改正常判决。 */
     timeout: 600_000,
+    ...(extraEnv ? { env: { ...process.env, ...extraEnv } } : {}),
   });
   /* `r.stdout` 是 `spawnSync` 出参：子进程起不来时实测 undefined（`@types/node` 按泛型
    * 声明非空）。这里 `?? ""` 的语义是「没读到输出」—— 与 `status` 那一格同一件事。 */
@@ -555,8 +557,12 @@ export function runFromStdin(stdinText, pushUrl = null) {
       `[pre-push]   「受影响用例」一格（scripts/ci/ci-affected-tests.mjs → run-affected-tests.mjs）。\n`,
   );
   /* `--json` 拿逐段码：只有 base 段红时才再问一次归属（那是一批全仓判据的量级，放在稀有
-   * 路径上付；绿的那条路径仍然只跑一次）。 */
-  const run = runQuiet("premerge-check.mjs", ["--json"]);
+   * 路径上付；绿的那条路径仍然只跑一次）。
+   * `COMFY_PREMERGE_TRIGGER=pre-push`（ISSUE #4520）：让耗时账分得清「push 自动触发的
+   * 复算」与「手工跑的那次」—— 两者的负载与可比性不同，账上不分就会被混着比。 */
+  const run = runQuiet("premerge-check.mjs", ["--json"], {
+    COMFY_PREMERGE_TRIGGER: "pre-push",
+  });
   const parsedReport = parseJson(run.stdout);
   const report = isPremergeReport(parsedReport) ? parsedReport : null;
   const segments = Array.isArray(report?.segments) ? report.segments : null;

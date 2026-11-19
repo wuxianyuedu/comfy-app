@@ -436,6 +436,9 @@ function main(argv) {
    * CI 每 15 秒一行心跳。这一跳用的是**跨进程**版本 —— 底下 `spawnSync` 一阻塞，
    * 进程内定时器整段不跳。它只写 stderr，`--json` 的 stdout 一个字不受影响。 */
   const progress = startProgressSync({ label: "premerge", total: wanted.length });
+  /* 总墙钟（ISSUE #4520）：逐格读数之间有并发（本检出与快照两侧、各段彼此），
+   * 相加不是墙钟 —— 账里同时记一格真的墙钟，「这次复算一共跑了多久」才有出处。 */
+  const runT0 = performance.now();
   for (const [key, seg] of wanted) {
     progress.step(seg.label);
     /* `seg` 的联合类型由 `SEGMENTS` 的 JSDoc 给出；两处用法各自收窄（见下）。 */
@@ -619,6 +622,8 @@ function main(argv) {
   const timingOk = recordTimingLedger({
     at: new Date().toISOString(),
     ref: ledgerRef,
+    totalMs: performance.now() - runT0,
+    trigger: process.env.COMFY_PREMERGE_TRIGGER === "pre-push" ? "pre-push" : "manual",
     entries: gateTimings,
   });
   if (timingOk) {

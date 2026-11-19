@@ -18,13 +18,14 @@
  *
  * ── 为什么不入库、也不放 `log/` ──────────────────────────────────────────
  *
- * 与 `scripts/gates/premerge-proof.mjs` 的 `comfy-premerge-proof.json` **同一个理由**：
  * 它记的是「**这台检出**这一次提交的耗时」。写进版本库的话，同仓的并行检出会互相
  * 污染（A 的读数变成 B 的账），而「哪次慢」这个问题本来就只有问本机才有意义。
  * 也不放 `log/`：那是**应用运行期**的日志布局（§4「固定写点 + 一次一包」，
  * 归启动编排者），与开发者机器上的钩子耗时不是同一件事。
  *
- * 落在 `.git/comfy-precommit-timing.jsonl`（JSONL，一次一行，追加写）。
+ * 落在 `<检出根>/.tmp/timing/comfy-precommit-timing.jsonl`（JSONL，一次一行，追加写）。
+ * `.tmp/` 是本机作业目录（`.gitignore`、规范 §12.8.7），`timing/` 归钩子/门禁耗时账
+ * —— 与 premerge 那份账（`premerge-timing.mjs`）同一个子目录。
  *
  * ── 它不是门禁 ───────────────────────────────────────────────────────────
  *
@@ -47,7 +48,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { resolveGitDir } from "../lib/git-dir.mjs";
+import { resolveRepoRoot } from "../lib/git-dir.mjs";
 
 /**
  * 读目录时用到的那两个 fs 动作（薄壳，不是 `typeof fs`）。
@@ -103,17 +104,28 @@ export function cFileXmlName(dir, chunkId, attempt) {
 
 // ── 账本位置 ────────────────────────────────────────────────────────────
 
-/* 「本检出的 `.git` 在哪」不在这里实现了 —— 那份正确的（走
- * `rev-parse --absolute-git-dir`，覆盖 worktree 指针 / `GIT_DIR` / 裸仓库三种形态）
- * 已收进 `scripts/lib/git-dir.mjs`，本文件按它真实的落点 import。
+/* 「本检出的工作树根在哪」不在这里实现了 —— 那份正确的（走
+ * `rev-parse --show-toplevel`，与 `resolveGitDir` 同一条 null 契约）已收进
+ * `scripts/lib/git-dir.mjs`，本文件按它真实的落点 import。
  * 原处不留转口：留一个「看起来还在这儿」的再导出，下一次就有人 import 那一层空的。 */
 
 /**
- * @param {string | null} gitDir
+ * 账本目录：`<检出根>/.tmp/timing/`（本机作业目录，规范 §12.8.7：按生产者分目录）。
+ *
+ * @param {string | null} repoRoot
  * @returns {string | null}
  */
-function ledgerPath(gitDir) {
-  return gitDir ? path.join(gitDir, LEDGER_NAME) : null;
+function timingDir(repoRoot) {
+  return repoRoot ? path.join(repoRoot, ".tmp", "timing") : null;
+}
+
+/**
+ * @param {string | null} repoRoot
+ * @returns {string | null}
+ */
+function ledgerPath(repoRoot) {
+  const dir = timingDir(repoRoot);
+  return dir ? path.join(dir, LEDGER_NAME) : null;
 }
 
 // ── 记账 ────────────────────────────────────────────────────────────────
@@ -150,15 +162,17 @@ export function parseTimings(pairs) {
  * 追加一条记录。**只追加，不改写历史** —— 账本的价值全在「多次之间的比较」，
  * 一次写入把前面的挤掉等于让它退化成「只有最后一次」。
  *
- * @param {{gitDir: string | null, record: Record<string, unknown>}} input
+ * @param {{repoRoot: string | null, record: Record<string, unknown>}} input
  * @returns {{ok: boolean, reason?: string}}
  */
-export function appendRun({ gitDir, record }) {
-  const file = ledgerPath(gitDir);
+export function appendRun({ repoRoot, record }) {
+  const file = ledgerPath(repoRoot);
   if (!file) {
     return { ok: false, reason: "不在 git 检出里" };
   }
   try {
+    /* `.tmp/timing/` 可能还不存在（首次记账）—— mkdir recursive 幂等。 */
+    fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.appendFileSync(file, `${JSON.stringify(record)}\n`, "utf8");
     return { ok: true };
   } catch (error) {
@@ -170,11 +184,11 @@ export function appendRun({ gitDir, record }) {
 }
 
 /**
- * @param {string | null} gitDir
+ * @param {string | null} repoRoot
  * @returns {Record<string, unknown>[]} 读不出 / 半截行一律跳过（账本的失败代价只是少一行）
  */
-export function readRuns(gitDir) {
-  const file = ledgerPath(gitDir);
+export function readRuns(repoRoot) {
+  const file = ledgerPath(repoRoot);
   if (!file) {
     return [];
   }
@@ -478,7 +492,7 @@ function secs(ms) {
 export function formatReport(runs, opts = {}) {
   const last = opts.last ?? DEFAULT_LAST;
   if (runs.length === 0) {
-    return "[precommit-timing] 还没有记录 —— 提交一次就会有一条（账本在 .git/，本机、不入库）。\n";
+    return "[precommit-timing] 还没有记录 —— 提交一次就会有一条（账本在 .tmp/timing/，本机、不入库）。\n";
   }
   const shown = runs.slice(-last);
   const lines = [
@@ -740,7 +754,7 @@ function flag(argv, name) {
  * @returns {number}
  */
 export function recordRun(argv, cwd = process.cwd()) {
-  const gitDir = resolveGitDir(cwd);
+  const repoRoot = resolveRepoRoot(cwd);
   const groups = parseTimings(collect(argv, "--group"));
   const steps = parseTimings(collect(argv, "--step"));
   const declared = collect(argv, "--group").length + collect(argv, "--step").length;
@@ -768,7 +782,7 @@ export function recordRun(argv, cwd = process.cwd()) {
      * 读侧只在 >0 时念。 */
     filesDeduped: cRead.deduped,
   };
-  const { ok, reason } = appendRun({ gitDir, record });
+  const { ok, reason } = appendRun({ repoRoot, record });
   if (!ok) {
     /* 记账失败**只是少一行账**，不是提交失败。往 stderr 说一句就够。 */
     process.stderr.write(`[precommit-timing] 本次耗时没能落盘（${reason}）—— 不影响提交。\n`);
@@ -796,9 +810,9 @@ export function recordRun(argv, cwd = process.cwd()) {
  * @returns {number}
  */
 function viewRun(argv) {
-  const gitDir = resolveGitDir(process.cwd());
+  const repoRoot = resolveRepoRoot(process.cwd());
   if (flag(argv, "--clear")) {
-    const file = ledgerPath(gitDir);
+    const file = ledgerPath(repoRoot);
     if (!file) {
       process.stderr.write("[precommit-timing] 不在 git 检出里，没有账本可清。\n");
       return 0;
@@ -811,7 +825,7 @@ function viewRun(argv) {
     }
     return 0;
   }
-  const runs = readRuns(gitDir);
+  const runs = readRuns(repoRoot);
   if (flag(argv, "--files")) {
     /* `--files`（ISSUE #2769）：打某一次的**全量**逐份排名。`--last` 在这一档里
      * 的语义从「看最近 N 次的汇总」变成「取从末尾数的第 N 次」—— 同一个旗标
