@@ -245,6 +245,7 @@ type CheckerExports = {
   REQUIRED_PAYLOAD_FILES: Array<string>;
   REQUIRED_RUNTIME_FILES: Array<string>;
   RUNTIME_DIR: string;
+  staleScriptPaths: (artifactPaths: Array<string>) => Array<string>;
   STANDALONE_ALLOWED_TOPLEVEL: Array<string>;
   STATIC_ALLOWED_TOPLEVEL: Array<string>;
 };
@@ -360,6 +361,43 @@ describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () 
     // 缺 app-route-turbo 的表现是所有 API 路由 500，构建期却毫无提示。
     expect(checker).toContain("REQUIRED_RUNTIME_FILES");
     expect(checker).toContain("app-route-turbo.runtime.prod.js");
+  });
+
+  /**
+   * 陈旧产物诊断（ISSUE #4553）：build-desktop 只拷贝源码里存在的路径，所以
+   * 「产物里有、源码里没有」= 这一层早于脚本的移动/改名。此时应指向「重建 static」，
+   * 而不是按通用指引去登记白名单（给源码里已不存在的路径登记 = 给旧布局发通行证）。
+   */
+  it("陈旧产物诊断：产物里的脚本路径在源码里已不存在时判为陈旧", () => {
+    const { staleScriptPaths } = checkerExports();
+    // 源码里真实存在的脚本 → 不是陈旧信号
+    expect(staleScriptPaths(["scripts/dev-launcher.mjs"])).toEqual([]);
+    // 合成的、源码里绝不存在的路径 → 陈旧信号
+    expect(staleScriptPaths(["scripts/__no-such-script__.mjs"])).toEqual([
+      "scripts/__no-such-script__.mjs",
+    ]);
+    // 本次事故的真实旧路径：脚本已移入 db/、devtools/、lib/ 子目录，拍平路径已不存在
+    expect(
+      staleScriptPaths([
+        "scripts/db-backup-core.mjs",
+        "scripts/db-push-core.mjs",
+        "scripts/db-schema-state.mjs",
+        "scripts/env-preflight.mjs",
+        "scripts/git-dir.mjs",
+        "scripts/install-comfyapp-helper.ps1",
+      ]),
+    ).toEqual([
+      "scripts/db-backup-core.mjs",
+      "scripts/db-push-core.mjs",
+      "scripts/db-schema-state.mjs",
+      "scripts/env-preflight.mjs",
+      "scripts/git-dir.mjs",
+      "scripts/install-comfyapp-helper.ps1",
+    ]);
+    // 混合：只挑出源码里已不存在的那部分，存在的不误伤
+    expect(staleScriptPaths(["scripts/dev-launcher.mjs", "scripts/git-dir.mjs"])).toEqual([
+      "scripts/git-dir.mjs",
+    ]);
   });
 
   it("开发期文件的判据锚在产物根，不误伤 node_modules 里的同名文件", () => {
