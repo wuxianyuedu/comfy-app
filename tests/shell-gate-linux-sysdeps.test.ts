@@ -406,6 +406,70 @@ describe("apt 只在真碰了壳输入时才跑（#4309）", () => {
   });
 });
 
+/* ── apt 包档跨跑缓存（#4480）──────────────────────────────────────────
+ *
+ * 现场：慢镜像时段这批 deb（63.5MB）下载 13min27s（78.6 kB/s），15 分钟步级
+ * 超时随时被击穿；而 deb 装完即清 ⇒ 每个碰壳的 PR 都从零下载同一批包。
+ * 本组用例钉缓存的三件形状：restore 在装依赖之前 / save 在装依赖之后且失败也
+ * 落档 / install 显式留档（不留档 deb 装完即清，缓存永远空）。
+ */
+
+describe("apt 包档跨跑缓存（#4480）", () => {
+  const workflow = read(PR_GATE);
+
+  function stepByName(name: string): string {
+    const start = workflow.indexOf(`- name: ${name}`);
+    expect(start).toBeGreaterThan(-1);
+    const rest = workflow.slice(start);
+    const next = rest.indexOf("\n      - name:", 1);
+    return next === -1 ? rest : rest.slice(0, next);
+  }
+
+  it("restore 在装依赖之前、save 在装依赖之后 —— 缓存包住 install", () => {
+    const restoreAt = workflow.indexOf("- name: 恢复 Tauri 的 Linux 系统依赖 deb 缓存");
+    const installAt = workflow.indexOf("- name: 装 Tauri 的 Linux 系统依赖");
+    const saveAt = workflow.indexOf("- name: 保存 Tauri 的 Linux 系统依赖 deb 缓存");
+    expect(restoreAt).toBeGreaterThan(-1);
+    expect(installAt).toBeGreaterThan(restoreAt);
+    expect(saveAt).toBeGreaterThan(installAt);
+  });
+
+  it("deb 档目录先 chown 给 runner 用户 —— cache action 以 runner 身份 restore，root 目录写不进去", () => {
+    const chownAt = workflow.indexOf("- name: deb 档目录交给缓存步");
+    const restoreAt = workflow.indexOf("- name: 恢复 Tauri 的 Linux 系统依赖 deb 缓存");
+    expect(chownAt).toBeGreaterThan(-1);
+    expect(restoreAt).toBeGreaterThan(chownAt);
+    const step = stepByName("deb 档目录交给缓存步");
+    expect(step).toContain("sudo chown -R");
+    expect(step).toContain("/var/cache/apt/archives");
+  });
+
+  it("两枚缓存步都指 /var/cache/apt/archives，key 一致（apt 按校验和认 deb，缓存里的旧版不会装错）", () => {
+    const restore = stepByName("恢复 Tauri 的 Linux 系统依赖 deb 缓存");
+    const save = stepByName("保存 Tauri 的 Linux 系统依赖 deb 缓存");
+    expect(restore).toContain("actions/cache/restore@");
+    expect(save).toContain("actions/cache/save@");
+    for (const step of [restore, save]) {
+      expect(step).toContain("path: /var/cache/apt/archives");
+      expect(step).toContain("key: tauri-linux-apt-archives-v1");
+    }
+  });
+
+  it("install 显式留档（Keep-Downloaded-Packages）—— 不留档 deb 装完即清，缓存永远空", () => {
+    const step = stepByName("装 Tauri 的 Linux 系统依赖");
+    const install = step.split("\n").find((l) => l.includes("apt-get install")) ?? "";
+    expect(install).toContain("APT::Keep-Downloaded-Packages=true");
+  });
+
+  it("缓存步与装依赖同一条 fail-open 条件；save 失败也落档（!cancelled()，被取消的那跑不抢上传）", () => {
+    const restore = stepByName("恢复 Tauri 的 Linux 系统依赖 deb 缓存");
+    const save = stepByName("保存 Tauri 的 Linux 系统依赖 deb 缓存");
+    expect(restore).toContain("if: steps.shell-face.outputs.shell != 'false'");
+    expect(save).toContain("!cancelled()");
+    expect(save).toContain("steps.shell-face.outputs.shell != 'false'");
+  });
+});
+
 describe("cargo 缓存与 --locked（#4317）", () => {
   const workflow = read(PR_GATE);
 

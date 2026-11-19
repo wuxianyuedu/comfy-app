@@ -347,6 +347,10 @@ const PR_GATE_YML = ".github/workflows/pr-gate.yml" as const;
  *     判这次 PR 要不要装那批 apt 包，恒退 0、一步也不判红（fail-open，读数拿不到
  *     一律按「要装」）。判定面与壳门禁同源（changed-scope + `SHELL_INPUT_RE`），
  *     误跳只会让壳门禁红在缺库上，不会静默放行。
+ *   · `deb 档目录交给缓存步（#4480）` / `恢复 Tauri 的 Linux 系统依赖 deb 缓存（#4480）` /
+ *     `保存 Tauri 的 Linux 系统依赖 deb 缓存（#4480）` —— 上一格的**缓存三件套**（#4480）：
+ *     chown 是 restore 能写进 root 目录的功能前提；restore/save 只搬 deb 档，
+ *     恒不判红（save 带 `!cancelled()`，落不进只影响下一跑的速度，不影响本跑结论）。
  *   · `安装依赖`（3 个 job）与 `安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）`
  *     （1 个 job）—— **每个 job 自己装一次**的前提设施：装不上 ⇒ 那个 job 红，
  *     读数已经在账上（daily 段那一条 `安装依赖（…）` 是**整跑一次**的安装 ⇒ 是门格）。
@@ -370,6 +374,9 @@ const GA_PR_INFRA_STEPS: ReadonlyArray<string> = [
   "装 Node（engines 下限 26.12.1；脚本只吃 node:*）",
   "装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）",
   "这次改没改壳输入（没改就不白付 apt，#4309）",
+  "deb 档目录交给缓存步（#4480）",
+  "恢复 Tauri 的 Linux 系统依赖 deb 缓存（#4480）",
+  "保存 Tauri 的 Linux 系统依赖 deb 缓存（#4480）",
   "cargo 缓存",
   "恢复 node_modules 缓存（灰度）",
   "安装依赖",
