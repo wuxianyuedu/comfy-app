@@ -322,16 +322,23 @@ export function WorkshopEncapsulationPanel({
           </p>
         </div>
       </div>
-      <LazyWorkflowRunLogModal
-        onClose={() => {
-          setLogOpen(false);
-        }}
-        onViewTaskIdChange={setLogTaskId}
-        open={logOpen}
-        source="encapsulation-test"
-        viewTaskId={logViewTaskId}
-        workflowId={workflowId}
-      />
+      {/* 懒分块的边界必须**就地**：本面板在「选中一条工作流」的同步更新里挂载，
+          首帧渲染就会触发这份 import()；没有局部 Suspense 时 suspend 会一路冒到
+          路由级 fallback（app/workspace/loading.tsx），把顶栏标题、左侧列表与侧栏
+          选中态整屏顶成加载骨架（ISSUE #4525）。弹窗默认关闭，fallback 给 null
+          即可 —— 分块在后台下载，其余内容照常显示。 */}
+      <React.Suspense fallback={null}>
+        <LazyWorkflowRunLogModal
+          onClose={() => {
+            setLogOpen(false);
+          }}
+          onViewTaskIdChange={setLogTaskId}
+          open={logOpen}
+          source="encapsulation-test"
+          viewTaskId={logViewTaskId}
+          workflowId={workflowId}
+        />
+      </React.Suspense>
     </div>
   );
 }
