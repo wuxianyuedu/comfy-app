@@ -17,6 +17,14 @@
       "command": "pnpm",
       "args": ["dlx", "@upstash/context7-mcp@4.3.0"],
       "description": "第三方库「当前版本」官方文档检索：按 libraryId + 主题拉取版本特定文档与代码示例，治模型训练数据滞后于 Next 16 / React 19 / drizzle 0.45 / tRPC 11 / better-auth 1.7 / Tauri 2 的 API 漂移。只回答「这个版本的 API 长什么样」，不回答「本仓的判据是什么」——判据仍只在 scripts/check-*.cjs 与 .githooks/pre-commit。"
+    },
+    "comfy-mcp": {
+      "type": "stdio",
+      "command": "python-venv/comfy-cli/Scripts/comfy-mcp.exe",
+      "env": {
+        "COMFY_BIN": "python-venv/comfy-cli/Scripts/comfy.exe"
+      },
+      "description": "ComfyUI 本地 MCP（PyPI comfy-mcp，comfy-cli 的薄封装；ISSUE #4488）：搜模型 / 节点 / 模板、读已有工作流、改插槽、跑图取产物——驱动用户自跑的本机 ComfyUI（默认 127.0.0.1:8188），工具调用执行 comfy --where local --json。用之前先 server_info 确认 ComfyUI 在跑；POSIX 检出把两处路径换成 python-venv/comfy-cli/bin/。"
     }
   }
 }
