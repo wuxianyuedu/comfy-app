@@ -2,7 +2,7 @@
 // ② 导出合成清单（产物字段与镜头顺序、onRendered 完成记账）；③ 逐镜编辑（时长 1~20 钳取写回 onShotsChange）；④ 门禁与完成态。
 // `downloadJson` 是唯一需要替身的边界（真会触发浏览器下载），其余全走真组件。
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { FinalComposer } from "./FinalComposer";
@@ -180,5 +180,34 @@ describe("FinalComposer 逐镜编辑", () => {
     await user.clear(input);
     const patches = onShotsChange.mock.calls.map((call) => call[0][0]?.duration);
     expect(patches.at(-1)).toBe(4);
+  });
+});
+
+describe("FinalComposer 串播预览（#4428）", () => {
+  it("无画面镜头也按 duration 推进：时间线走得完，不永久卡住", async () => {
+    vi.useFakeTimers();
+    try {
+      renderComposer([
+        makeShot({ id: "s1", index: 1, duration: 2, imageUrl: "/api/generated/1.png" }),
+        makeShot({ id: "s2", index: 2, duration: 3 }),
+      ]);
+      fireEvent.click(screen.getByRole("button", { name: /串播预览/ }));
+      expect(screen.getByText(/镜 01/)).toBeTruthy();
+
+      /* 第 1 镜有图无片段：按 2s 静帧推进。 */
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(screen.getByText(/镜 02/)).toBeTruthy();
+      expect(screen.getByText(/该镜头缺少画面，已跳过/)).toBeTruthy();
+
+      /* 第 2 镜无画面：修缺陷前两个推进源都缺席，播放器永久停在这里。 */
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.getByRole("button", { name: /串播预览/ })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

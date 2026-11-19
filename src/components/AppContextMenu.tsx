@@ -19,6 +19,7 @@ type MenuPosition = { x: number; y: number };
 
 export function AppContextMenu() {
   const [menu, setMenu] = useState<MenuPosition | null>(null);
+  const menuRef = React.useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const onContextMenu = (event: MouseEvent) => {
@@ -36,12 +37,19 @@ export function AppContextMenu() {
   }, []);
 
   /* 关闭纪律与画布菜单同款：下一次 pointerdown（任意处）即收起；
-   * 窗口失焦（切去别的应用）也收起，避免一个悬空菜单跨焦点存活。 */
+   * 窗口失焦（切去别的应用）也收起，避免一个悬空菜单跨焦点存活。
+   * **菜单自身的 pointerdown 不算**（#4417）：菜单项的动作挂在 onClick 上，
+   * 浏览器事件序是 pointerdown → … → click——pointerdown 里把菜单卸了，
+   * click 派发时按钮已不在 DOM，三个菜单项永远点不到。 */
   useEffect(() => {
     if (!menu) {
       return;
     }
-    const closeOnNext = () => {
+    const closeOnNext = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Node && menuRef.current?.contains(target)) {
+        return;
+      }
       setMenu(null);
     };
     window.addEventListener("pointerdown", closeOnNext, { once: true });
@@ -77,6 +85,7 @@ export function AppContextMenu() {
   return (
     <div
       className={`fixed min-w-[220px] rounded-lg border border-black/10 bg-[#f3f3f3] py-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.25)] ${zClass("popup")}`}
+      ref={menuRef}
       role="menu"
       style={{
         left: menu.x,
