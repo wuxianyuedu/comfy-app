@@ -3,7 +3,9 @@ import {
   deriveFormatFlags,
   deriveLocalRootsHint,
   deriveSyncFlags,
+  filterPending,
   isTechnicalName,
+  type PendingRow,
   type WorkflowRow,
 } from "./workflow-library-config";
 
@@ -155,5 +157,32 @@ describe("isTechnicalName 技术文件名识别", () => {
   it("长度 38 以内且全小写视为技术名,超过 38 视为描述性名称", () => {
     expect(isTechnicalName("a".repeat(38))).toBe(true);
     expect(isTechnicalName("a".repeat(39))).toBe(false);
+  });
+});
+
+describe("filterPending 待载入行筛选（#4465）", () => {
+  const pending: Array<PendingRow> = [
+    { id: "p-1", name: "alpha", sourcePath: "D:/w/alpha.json" },
+    { id: "p-2", name: "beta", sourcePath: "D:/w/beta.json" },
+  ];
+  const base = { model: "all", search: "", source: "all", type: "all" } as const;
+
+  it("无筛选时全量返回；搜索按名称匹配", () => {
+    expect(filterPending(pending, base)).toEqual(pending);
+    expect(filterPending(pending, { ...base, search: "alp" })).toEqual([pending[0]!]);
+  });
+
+  it("切到「在线工作流」→ 本地待载入项整块隐藏（既有口径）", () => {
+    expect(filterPending(pending, { ...base, source: "online" })).toEqual([]);
+  });
+
+  it("类型 / 模型筛选激活 → 待载入项隐藏（与计数口径一致：不进具体分类）", () => {
+    expect(filterPending(pending, { ...base, type: "video" })).toEqual([]);
+    expect(filterPending(pending, { ...base, type: "image" })).toEqual([]);
+    expect(filterPending(pending, { ...base, model: "z-Image" })).toEqual([]);
+  });
+
+  it("来源=local 时待载入项保留（它们本来就来自磁盘）", () => {
+    expect(filterPending(pending, { ...base, source: "local" })).toEqual(pending);
   });
 });

@@ -222,12 +222,15 @@ export function filterWorkflows(
   });
 }
 
-/** 待载入行：切到「在线工作流」时不该出现本地待载入项。 */
+/** 待载入行：切到「在线工作流」时不该出现本地待载入项；**类型 / 模型筛选激活时
+ *  同样隐藏**（#4465）—— 待载入项还没载入，没有 taskType / 模型标签，匹配不了
+ *  具体分类（与计数口径同一套约定：`countBySource` 把它们计入 local、
+ *  `countByType` 只计入 all 不进具体类型页签）。列表与计数从此不打架。 */
 export function filterPending(
   pending: Array<PendingRow>,
-  filters: { search: string; source: SourceFilter },
+  filters: { model: string; search: string; source: SourceFilter; type: TypeFilter },
 ): Array<PendingRow> {
-  if (filters.source === "online") {
+  if (filters.source === "online" || filters.type !== "all" || filters.model !== "all") {
     return [];
   }
   const needle = normalizeNeedle(filters.search);
