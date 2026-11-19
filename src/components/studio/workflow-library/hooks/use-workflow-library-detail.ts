@@ -25,6 +25,7 @@ import {
 } from "../workflow-library-config";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 import type { ModelTagSummary } from "~/lib/workflow/workflow-list-types";
+import type { WorkflowImageInputPort } from "~/lib/comfyui/workflow-detail-raw";
 import { isPlainRecord } from "~/lib/is-record";
 
 export type WorkflowLibraryDetailActions = {
@@ -81,6 +82,9 @@ export type WorkflowLibraryDetailController = {
   canvasMounted: boolean;
   closeSource: () => void;
   errorMessage: string | undefined;
+  /** 图里全部 IMAGE / MASK 连线输入口（含未暴露的张量口，#4405）——
+   *  参考图装载「追加端口」的候选。详情未排空时为空数组。 */
+  imageInputPorts: Array<WorkflowImageInputPort>;
   isLoading: boolean;
   /** 名字是 ComfyUI 默认技术名（纯小写 + 下划线），改用等宽字体更易读。 */
   isTechnical: boolean;
@@ -263,6 +267,13 @@ export function useWorkflowLibraryDetail(
     return isPlainRecord(raw) ? raw : {};
   }, [template]);
 
+  /* 参考图装载「追加端口」的候选（#4405）：detailFull 从 rawJson 现算的
+   * 全图图片族连线口；详情未到 / 旧缓存没有该字段时按空处理。 */
+  const imageInputPorts = useMemo<Array<WorkflowImageInputPort>>(
+    () => enrichedQuery.data?.imageInputPorts ?? [],
+    [enrichedQuery.data],
+  );
+
   /* IO 预览页签的落库底稿：与 paramMap 同源（轻量 template 直读 DB 列）。
    * 富化后的 workflowIO 只用于显示，不能拿去整列写回（见 storedIO 类型说明）。 */
   const storedIO = useMemo<Record<string, unknown>>(() => {
@@ -413,6 +424,7 @@ export function useWorkflowLibraryDetail(
     workflowIO,
     storedIO,
     paramMap,
+    imageInputPorts,
     sourceData,
     usable: formatFlags.usable,
     canResync: syncFlags.canResync,

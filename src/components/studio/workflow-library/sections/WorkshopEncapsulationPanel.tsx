@@ -18,6 +18,7 @@ import { ContractRequiredBadge } from "~/components/workshop/mode-contract/Contr
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
 import { modeLabel } from "../workflow-library-config";
 import { sceneFromMode } from "~/lib/media/size-presets";
+import type { WorkflowImageInputPort } from "~/lib/comfyui/workflow-detail-raw";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { useWorkflowEncapsulation } from "../hooks/use-workflow-encapsulation";
 import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
@@ -42,6 +43,9 @@ const LazyWorkflowRunLogModal = React.lazy(() =>
 type WorkshopEncapsulationPanelProps = {
   /** 工坊下拉/徽标展示名（模型标签优先；仅用于文案）。 */
   displayName: string;
+  /** 图里全部 IMAGE / MASK 连线输入口（含未暴露的张量口，#4405）——
+   *  参考图装载「追加端口」的候选。 */
+  imageInputPorts?: Array<WorkflowImageInputPort>;
   /** 当前模式（详情层持有，与「画布节点」页签同一份）。 */
   mode: string | null | undefined;
   /** 该工作流可跑的模式码（多于一个时渲染模式下拉）。 */
@@ -90,6 +94,7 @@ export function WorkshopEncapsulationPanel({
   modes,
   onModeChange,
   onPatchParamMap,
+  imageInputPorts,
 }: WorkshopEncapsulationPanelProps) {
   /* 模式契约注册表：契约口清单、必备口与封装状态都经 `useWorkflowEncapsulation`
    * 取生效注册表（本机覆盖逐模式压过项目默认）—— 与模式契约编辑器、列表行徽标、
@@ -257,6 +262,7 @@ export function WorkshopEncapsulationPanel({
       {onPatchParamMap && mode !== null && mode !== undefined && mode !== "" && (
         <ReferenceLoaderBindingSection
           entries={status.entries}
+          graphImagePorts={imageInputPorts}
           io={workflowIO}
           mode={mode}
           onPatchParamMap={onPatchParamMap}

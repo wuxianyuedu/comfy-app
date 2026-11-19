@@ -40,9 +40,11 @@ import {
   buildNodeTypeMap,
   buildInnerNodeInputs,
   buildRawView,
+  collectGraphImageInputs,
   type DetailNodeView,
   type RawNodeMeta,
   type RawViewPacket,
+  type WorkflowImageInputPort,
 } from "~/lib/comfyui/workflow-detail-raw";
 import { hasExecutableWorkflow, hasRawContent } from "~/lib/comfyui/execution-shape";
 import { buildRawViewGraph } from "~/lib/comfyui/raw-view-graph";
@@ -121,6 +123,10 @@ export type WorkflowDetailFull = {
   groups: Array<WorkflowDetailGroup>;
   hasRaw?: boolean;
   id: string;
+  /** 图里全部 IMAGE / MASK 连线输入口（含**未暴露**的张量口，#4405）——
+   *  参考图装载「追加端口」的候选。30s 服务端缓存里的旧条目可能没有这个
+   *  字段，消费方按空处理（候选回落已暴露的 workflowIO 图片口）。 */
+  imageInputPorts?: Array<WorkflowImageInputPort>;
   name: string;
   nodes: Array<DetailNodeView>;
   notes: Array<WorkflowDetailNote>;
@@ -365,6 +371,11 @@ async function buildWorkflowDetailJson(input: {
     nodeTitleById[n.id] = n.title;
   }
 
+  /* 参考图装载「追加端口」的候选（#4405）：全图 IMAGE / MASK 连线输入口，
+   * 不依赖作者有没有把它们勾选暴露进 workflowIO（MiniMax 这类多参考图
+   * 工作流的消费口是未暴露的张量口，只看暴露面时扇出下拉会是空的）。 */
+  const imageInputPorts = collectGraphImageInputs(rawInputsById);
+
   /* ── workflowIO ENRICHMENT ──
    * 落库的勾选只记录「哪个 pin 被暴露」（`direction` / `kind` / `nodeId` /
    * `name`）。而 `kind` 是**语义**分桶（"param" | "widget" | "output"），
@@ -468,6 +479,7 @@ async function buildWorkflowDetailJson(input: {
   return JSON.stringify({
     id: tpl.id,
     name: tpl.name,
+    imageInputPorts,
     taskType: tpl.taskType,
     /** 多模式支持。`availableModes` 是该工作流可运行的全部模式码（在这里解析
      *  JSON 字符串列）；`defaultMode` 是规范默认值（写入时与 `taskType`

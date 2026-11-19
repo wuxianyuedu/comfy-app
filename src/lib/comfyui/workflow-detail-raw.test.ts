@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildRawInputs, buildInnerNodeInputs } from "~/lib/comfyui/workflow-detail-raw";
+import {
+  buildRawInputs,
+  buildInnerNodeInputs,
+  collectGraphImageInputs,
+} from "~/lib/comfyui/workflow-detail-raw";
 import { asRawWorkflow, type RawWorkflow } from "~/lib/comfyui/raw";
 
 const WRAPPER = "aaaaaaaa-1111-2222-3333-444444444444";
@@ -357,5 +361,59 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
     const entries = rawInputsById["1"]!;
     expect(entries[0]!.proxyField).toBeUndefined();
     expect(entries[0]!.name).toBe("value_1");
+  });
+});
+
+describe("collectGraphImageInputs — 参考图扇出候选（#4405）", () => {
+  /** MiniMax 现场形状：图片族消费口是**没勾选暴露**的张量连线口，
+   *  LoadImage 的 upload 是部件口（不该进候选）。 */
+  const inputsById = {
+    "69": [
+      { name: "clip", type: "CLIP", isConnection: true },
+      { name: "images.image_0", type: "IMAGE", isConnection: true },
+      { name: "images.image_1", type: "IMAGE", isConnection: false },
+      { name: "mask", type: "MASK", isConnection: false },
+      { name: "width", type: "INT", isConnection: false, widget: { name: "width" } },
+    ],
+    "45": [
+      { name: "image", type: "COMBO", isConnection: false, widget: { name: "image" } },
+      { name: "upload", type: "IMAGEUPLOAD", isConnection: false, widget: { name: "upload" } },
+    ],
+    "34": [
+      { name: "images.image1", type: "IMAGE", isConnection: true },
+      { name: "images.image2", type: "image", isConnection: false },
+      { name: "audios.audio1", type: "AUDIO", isConnection: false },
+    ],
+  };
+
+  it("收全图 IMAGE/MASK 连线口（含未连线），部件口与其它类型不进候选", () => {
+    const ports = collectGraphImageInputs(inputsById);
+    expect(ports.map((port) => port.ioKey)).toEqual([
+      "34::param::images.image1",
+      "34::param::images.image2",
+      "69::param::images.image_0",
+      "69::param::images.image_1",
+      "69::param::mask",
+    ]);
+    expect(ports[0]).toEqual({
+      ioKey: "34::param::images.image1",
+      label: "images.image1（34）",
+      name: "images.image1",
+      nodeId: "34",
+    });
+  });
+
+  it("子图哨兵口（isBoundary）不进候选", () => {
+    const ports = collectGraphImageInputs({
+      "9": [{ name: "images", type: "IMAGE", isConnection: true, isBoundary: true }],
+    });
+    expect(ports).toEqual([]);
+  });
+
+  it("空图 / 无图片口时返回空数组", () => {
+    expect(collectGraphImageInputs({})).toEqual([]);
+    expect(
+      collectGraphImageInputs({ "1": [{ name: "seed", type: "INT", isConnection: false }] }),
+    ).toEqual([]);
   });
 });
