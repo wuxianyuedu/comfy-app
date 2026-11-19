@@ -167,9 +167,11 @@ export function FlowNodeWidgetRows({
                 )}
                 <Hint label={k}>
                   <span
-                    className="text-2xs min-w-0 shrink text-left wrap-break-word whitespace-normal"
+                    className="text-2xs min-w-0 text-left wrap-break-word whitespace-normal"
                     style={{
-                      flex: "0 1 auto",
+                      /* 标签固定占 40%：值框（第 2 列）因此共享同一起点 x，
+                       * 不随各行标签长短漂移（#4533，与子图 widget 行同款）。 */
+                      flex: "0 0 40%",
                       color:
                         tone.background !== undefined && tone.background !== ""
                           ? tone.labelColor
@@ -183,14 +185,18 @@ export function FlowNodeWidgetRows({
                   </span>
                 </Hint>
 
-                {/* 同时带线的 widget 输入仍显示控件取值（ComfyUI 从不隐藏），只是调暗，
-                     让人看出活值来自连线。版式对齐 ComfyUI：标签与取值之间不画分隔线，
-                     值紧接标签左对齐。 */}
+                {/* widget 取值渲染成「凹陷井」：深底 + 细描边 + 圆角，铺满
+                 *  标签列之后的整格，文本左对齐、超长省略（完整值走 <Hint>）。
+                 *  已连线的行仍显示取值（ComfyUI 从不隐藏），只是文字调暗。
+                 *  形态与 SubgraphWidgetRow 的值框同一套（#4533）。 */}
                 <Hint label={String(v)}>
                   <span
-                    className="text-2xs min-w-0 truncate text-left tabular-nums"
+                    className="text-2xs bg-canvas-deep border-border-subtle min-w-0 truncate rounded-[5px] border px-1.5 text-left tabular-nums"
                     style={{
                       flex: "1 1 0",
+                      display: "flex",
+                      alignItems: "center",
+                      minHeight: 18,
                       color: valueCellColor(v, isConn),
                     }}
                   >
