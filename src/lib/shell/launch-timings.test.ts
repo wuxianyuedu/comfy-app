@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseLaunchStatusText, parseLaunchTimings } from "./launch-timings";
+import { launchSpanSide, parseLaunchStatusText, parseLaunchTimings } from "./launch-timings";
 
 /** 编排器 timeline 的最小夹具：两段串行 + 一段并行（后台建表与就绪等待重叠）。 */
 const fixture = {
@@ -71,5 +71,35 @@ describe("parseLaunchTimings（#4327 应用内启动耗时分解）", () => {
         timings: [{ key: "a", label: "A", startMs: "x", endMs: 1, durationMs: 1 }],
       }),
     ).toBeNull();
+  });
+});
+
+describe("launchSpanSide（#4522 前后端侧别归类）", () => {
+  it("首页编译归前端侧——它是用户等的那一屏页面", () => {
+    expect(launchSpanSide("first-page")).toBe("frontend");
+  });
+
+  it("编排器 / 服务进程侧的存量阶段一律归后端", () => {
+    for (const key of [
+      "stale-reap",
+      "env-toolchain",
+      "deps-sync",
+      "db-restore",
+      "port-resolve",
+      "session-claim",
+      "shell-spawn",
+      "port-reclaim",
+      "cache",
+      "dev-spawn",
+      "schema-sync",
+      "ready-wait",
+      "next-boot",
+    ]) {
+      expect(launchSpanSide(key), key).toBe("backend");
+    }
+  });
+
+  it("未登记的新键按后端兜底，不误标成前端", () => {
+    expect(launchSpanSide("something-new")).toBe("backend");
   });
 });

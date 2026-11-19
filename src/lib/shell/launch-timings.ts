@@ -48,6 +48,30 @@ export type LaunchTimings = {
   totalMs: number;
 };
 
+/** 阶段侧别（#4522）：把「启动时间花在哪」按前后端分开读——
+ * `frontend` = 用户等到首帧的页面侧工作；`backend` = 编排器与服务进程侧工作。 */
+export type LaunchSpanSide = "frontend" | "backend";
+
+/**
+ * 前端侧的阶段键。目前只有「首页编译」：它由 Next 服务端的 Turbopack 执行，
+ * 但产出的正是用户等的那一屏前端页面——与「拉起进程 / 建表 / 等就绪」这类
+ * 纯后端工作分开配色。编排器后续若新增前端侧阶段（如前端水合耗时），把键
+ * 加进这里即可，展示层不用再改。
+ */
+const FRONTEND_SPAN_KEYS: ReadonlySet<string> = new Set(["first-page"]);
+
+/** 阶段键 → 侧别。未登记的键一律归后端：时间线的存量阶段绝大多数是
+ * 编排器 / 服务进程侧，新键先按后端展示，等确认了再收进前端清单。 */
+export function launchSpanSide(key: string): LaunchSpanSide {
+  return FRONTEND_SPAN_KEYS.has(key) ? "frontend" : "backend";
+}
+
+/** 侧别的展示名（图例与行首徽标共用同一份，避免两处叫法漂移）。 */
+export const LAUNCH_SIDE_LABELS: Record<LaunchSpanSide, string> = {
+  frontend: "前端",
+  backend: "后端",
+};
+
 /**
  * 从已解析的 launch-status JSON 里取耗时分解。
  *
