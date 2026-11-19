@@ -271,6 +271,10 @@ describe("四个启动入口都接线（回归到「没人起宿主」的那道�
      * R5 拆分后「入口那一层转发、实现住 `downstream.mjs`」才是形态，
      * 只读主文件时 `maybeSpawnExecutorHost` 在这两处分散着、断言看不出全貌。 */
     const source = launcherChainSource();
+    expect(
+      source.trim(),
+      "launcherChainSource 拼出空文 ⇒ 落在它身上的反向断言恒真（#2660）",
+    ).not.toHaveLength(0);
     expect(source).toContain("maybeSpawnExecutorHost");
     /* **入口那一层**不许再拼一次 spawnInGroup：两份实现并存就是本判据要防的
      * 形态（改成「两边一起改」靠的是纪律，不是机制）。实现那一份里出现

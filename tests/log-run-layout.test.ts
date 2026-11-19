@@ -553,6 +553,10 @@ describe("旧归档机制已移除（只留一处归档实现）", () => {
      * 收尾那一段随 R5 拆分搬进了 `launcher-core/misc-ops.mjs`，只读主文件时
      * `toContain` 会对着空串报红、`not.toContain` 则**静默恒真**。 */
     const src = launcherChainSource();
+    expect(
+      src.trim(),
+      "launcherChainSource 拼出空文 ⇒ 落在它身上的反向断言恒真（#2660）",
+    ).not.toHaveLength(0);
     // 旧实现把 dev-launcher.log append 进 log/archive/<yyyy-MM>/，与新布局的
     // 「整目录复制」是两条互不相干的归档通道 —— 留着它 = 同一件事两个口径。
     expect(src).not.toContain("archiveRunLog");

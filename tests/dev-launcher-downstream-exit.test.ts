@@ -21,6 +21,10 @@ const CRITERIA = join(process.cwd(), "scripts", "launcher-core", "downstream-exi
  * `launcher-core/downstream.mjs`，只读入口时 `indexOf` 落空 ⇒ `slice` 拿到空串 ⇒
  * `not.toContain("throw")` 一类断言**静默恒真**。 */
 const launcher = launcherChainSource();
+expect(
+  launcher.trim(),
+  "launcherChainSource 拼出空文 ⇒ 落在它身上的反向断言恒真（#2660）",
+).not.toHaveLength(0);
 /** 判据与文案的**唯一实现处**（入口文件只是再导出，不许有第二份要同步）。 */
 const criteria = readFileSync(CRITERIA, "utf8");
 const SHELL = join(process.cwd(), "src-tauri", "src", "lib.rs");
