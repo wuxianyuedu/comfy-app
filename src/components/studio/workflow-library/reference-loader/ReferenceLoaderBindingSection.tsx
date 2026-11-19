@@ -16,7 +16,10 @@ import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { WorkflowImageInputPort } from "~/lib/comfyui/workflow-detail-raw";
 import {
   referenceLoaderBindingsForMode,
+  referenceLoaderMax,
+  REFERENCE_LOADER_CAP_LIMIT,
   withReferenceLoaderBinding,
+  withReferenceLoaderMax,
   type ReferenceLoaderBinding,
 } from "~/lib/workshop/reference-loader-binding";
 import { referenceSlotOf } from "~/lib/workshop/workflow-encapsulation";
@@ -24,6 +27,16 @@ import { upperToken } from "~/lib/upper-token";
 
 import { useReferenceLoaderPresets } from "../hooks/use-reference-loader-presets";
 import { ReferenceLoaderPresetModal } from "./ReferenceLoaderPresetModal";
+
+/** 上限候选：不设限（跟随模式契约）+ 1~16（与工坊喂图侧全局上限一致）。 */
+const CAP_OPTIONS = [
+  "",
+  ...Array.from({ length: REFERENCE_LOADER_CAP_LIMIT }, (_, index) => String(index + 1)),
+];
+const CAP_LABELS: Record<string, string> = { "": "跟随模式契约" };
+for (let value = 1; value <= REFERENCE_LOADER_CAP_LIMIT; value++) {
+  CAP_LABELS[String(value)] = `${value} 张`;
+}
 
 type Props = {
   /** 该模式的契约口状态（只取参考图槽位）。 */
@@ -58,7 +71,18 @@ export function ReferenceLoaderBindingSection({
     }
     return labels;
   }, [presets]);
-  const slots = useMemo(() => entries.filter((entry) => referenceSlotOf(entry.id) >= 0), [entries]);
+  /* 参考图上限（ISSUE #4537）：这条工作流实际最多使用几张参考图（工作流级）。
+   * null = 未配置，跟随模式契约的槽位数。 */
+  const cap = referenceLoaderMax(paramMap);
+  /* 只渲染参考图槽位，且序号超过上限的槽位不出现（上限未配置 = 全部契约槽位）。 */
+  const slots = useMemo(
+    () =>
+      entries.filter(
+        (entry) =>
+          referenceSlotOf(entry.id) >= 0 && (cap === null || referenceSlotOf(entry.id) < cap),
+      ),
+    [entries, cap],
+  );
   /* 候选端口：工作流里图族的输入口（IMAGE / MASK）。两个来源按 ioKey 去重：
    * ① 已暴露的 workflowIO 图片口；② 全图图片族连线口（#4405，含未暴露的
    * 张量口 —— 多参考图工作流的消费口通常没被勾选暴露）。 */
@@ -102,15 +126,35 @@ export function ReferenceLoaderBindingSection({
             追加端口让同一张图喂到多处。不配预设 = 裸 LoadImage 直连。
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setPresetModalOpen(true);
-          }}
-          size="sm"
-          variant="outline"
-        >
-          <Settings2 className="size-3.5" data-icon="inline-start" /> 管理预设
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* 参考图上限（ISSUE #4537）：这条工作流实际最多使用几张参考图。
+              空档 = 跟随模式契约；工坊喂图超出上限时只有前 N 张参与装载。 */}
+          <span className="text-muted-foreground text-3xs shrink-0">参考图上限</span>
+          <SelectMenu
+            aria-label="参考图上限"
+            autoFitFromOptions={false}
+            className="text-3xs h-7"
+            labels={CAP_LABELS}
+            onChange={(next) => {
+              onPatchParamMap(
+                withReferenceLoaderMax({ paramMap, max: next === "" ? null : Number(next) }),
+              );
+            }}
+            options={CAP_OPTIONS}
+            placeholder="跟随模式契约"
+            popoverMinWidth={170}
+            value={cap === null ? "" : String(cap)}
+          />
+          <Button
+            onClick={() => {
+              setPresetModalOpen(true);
+            }}
+            size="sm"
+            variant="outline"
+          >
+            <Settings2 className="size-3.5" data-icon="inline-start" /> 管理预设
+          </Button>
+        </div>
       </div>
       <div className="flex flex-col gap-2">
         {slots.map((slot) => {

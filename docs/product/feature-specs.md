@@ -523,6 +523,11 @@
     可配**装载预设**（缺省 = 裸 LoadImage 直连，
     即 #4355 行为）与**追加端口**（同一张图除主落点外再喂给的端口，扇出）；
     绑定随模式存放，写回 `paramMap` 的 `referenceLoaders` 命名空间。
+  - **参考图上限**（#4537）：页签内可按工作流配置「参考图上限」N（1~16，空 =
+    跟随模式契约槽位数），存 `paramMap.referenceLoaders.maxReferences`（工作流级，
+    跨模式生效）。生效后：工坊喂图超出 N 张时只有前 N 张参与装载（组载荷与装载
+    计划同一份截断口径）；参考图装载页签、工坊封装一览与流程测试表单的参考图
+    槽位收敛到前 N 个。不配置时行为与现状一致。
   - **追加端口的候选是全图的图片族连线口**（#4405）：不要求作者先把端口勾选
     暴露进 workflowIO —— 多参考图工作流的消费口（如 MiniMax H3 的
     `images.image_0..4`）通常是未暴露的张量连线口，只看暴露面时扇出下拉会是
@@ -580,6 +585,20 @@
   `src/server/api/routers/workflow-mutations.ts`（`updateFromJson` / `resync`）、
   `src/components/studio/workflow-library/UpdateJsonModal.tsx`（更新弹窗）、
   `src/components/studio/workflow-library/hooks/use-workflow-update-from-json.ts`
+
+#### FR-WF-14 工作流编辑器画布（节点参数值按 widget 槽展示）
+
+- 状态：已上线
+- 需求：工作流编辑器画布上，ComfyUI 节点的标量 / 枚举参数取值要像 ComfyUI
+  原生 widget 一样有**独立的值槽背景**，且各行的值槽**左缘对齐**（不随标签
+  长短漂移），让人一眼扫出一列参数值（ISSUE #4533）。
+- 行为与验收：节点的 widget 参数行 = 左侧参数名 + 右侧值槽；值槽是深底、
+  细描边、圆角的「凹陷井」，铺满标签列之后的整格，文字在槽内**左对齐**、
+  超长省略（完整值悬停可见）；标签列固定占比，各行值槽共享同一起点 x；
+  已连线的行值槽照常显示（文字按连线态调暗）；STRING 多行参数维持既有的
+  堆叠文本框形态。与子图节点（SubgraphWidgetRow）的值框同一套视觉。
+- 落点：`src/components/studio/canvas/FlowNodeWidgetRows.tsx`（widget 行）、
+  `src/components/studio/canvas/SubgraphWidgetRow.tsx`（子图行，既有形态基准）
 
 ---
 

@@ -40,7 +40,10 @@ export type WorkflowPersistenceArgs = {
   savePatch: WorkflowSaver;
   setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
   setError: Dispatch<SetStateAction<string>>;
-  setNodes: Dispatch<SetStateAction<Array<Node>>>;
+  /** 写回节点表（#4536 起走 React Flow store 的 `rf.setNodes` 包装）：
+   *  只收 updater 形态 —— 本 hook 的唯一调用点（paramMap 同步 assignedRole）
+   *  本就只传函数。 */
+  setNodes: (updater: (nodes: Array<Node>) => Array<Node>) => void;
   setSaving: Dispatch<SetStateAction<boolean>>;
   workflowId: string;
   workflowIO: Record<string, WorkflowIOParam>;
