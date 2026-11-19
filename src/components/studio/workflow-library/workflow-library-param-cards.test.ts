@@ -54,7 +54,7 @@ const io: WorkflowIOMap = {
 /* 库内卡片列与编辑器同一份契约条目（按模式），故这里也带上模式。
  * 「尺寸」在映射层是六个子口（见 `SIZE_SUB_IDS`），这里挑「宽度」那个当代表 ——
  * 形态由子口身份给出，一个子口只连它自己那一行。 */
-const entries = buildParamEntries(io, undefined, { mode: "T2I" });
+const entries = buildParamEntries(io, { mode: "T2I" });
 const promptEntry = entries.find((entry) => entry.id === "prompt")!;
 const sizeEntry = entries.find((entry) => entry.id === "size-width")!;
 

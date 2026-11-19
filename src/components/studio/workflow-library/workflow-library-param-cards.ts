@@ -88,7 +88,7 @@ export function deriveLibraryParamCards(args: {
   /* 卡片列 = 该模式统一对外暴露的参数（提示词 / 负向提示词 / 尺寸 / 首帧…），
    * **契约口一律常驻**：显示与否只由契约决定，与工作流内部长什么样无关；工作流
    * 只决定每张卡落到哪一行端口，落不到就如实显示成「未配置」。 */
-  const entries = buildParamEntries(io, undefined, {
+  const entries = buildParamEntries(io, {
     mode: mode ?? null,
     contractIds,
   });

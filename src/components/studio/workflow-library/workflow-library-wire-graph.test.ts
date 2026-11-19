@@ -58,7 +58,7 @@ const io: WorkflowIOMap = {
   },
 };
 
-const entries = buildParamEntries(io, undefined, { mode: "T2I" });
+const entries = buildParamEntries(io, { mode: "T2I" });
 
 describe("边的身份（libraryEdgeId / libraryEdgeOwner）", () => {
   it("带 handle 的 id 可反查出「点的是哪个口的哪颗圆点」", () => {

@@ -48,7 +48,7 @@ export function buildCanvasGeneratePayload({
   const mapped = wfIO
     ? applyParamMapping({
         io: wfIO,
-        entries: buildParamEntries(wfIO, undefined, { mode }),
+        entries: buildParamEntries(wfIO, { mode }),
         mapping: parseParamMapping(wfParamMap ?? d.paramMap),
         mode,
         /* 档位反解与正向换算同源：同一份本机生效表（ISSUE #4099）。 */

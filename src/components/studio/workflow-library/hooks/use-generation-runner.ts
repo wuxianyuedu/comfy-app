@@ -88,7 +88,7 @@ async function executeRun(
     const mapped = workflowIO
       ? applyParamMapping({
           io: workflowIO,
-          entries: buildParamEntries(workflowIO, undefined, {
+          entries: buildParamEntries(workflowIO, {
             mode: effectiveMode,
           }),
           mapping: parseParamMapping(effectiveParamMap),

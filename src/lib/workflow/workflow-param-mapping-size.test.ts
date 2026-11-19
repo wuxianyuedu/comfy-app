@@ -80,7 +80,7 @@ const io: WorkflowIOMap = {
 
 /** 尺寸子口全在（契约口常驻），形态由子口身份给出。 */
 function sizeEntries() {
-  const entries = buildParamEntries(io, undefined, { mode: "T2I" });
+  const entries = buildParamEntries(io, { mode: "T2I" });
   for (const id of SIZE_SUB_IDS) {
     expect(
       entries.some((entry) => entry.id === id),
@@ -160,7 +160,7 @@ describe("尺寸子口派值 — 形状由子口身份给出", () => {
     };
     const { inputs, unmatched } = applyParamMapping({
       io: narrow,
-      entries: buildParamEntries(narrow, undefined, { mode: "T2I" }),
+      entries: buildParamEntries(narrow, { mode: "T2I" }),
       mapping: {
         manualByMode: { T2I: { "size-resolution": "5::widget::resolution" } },
       },
