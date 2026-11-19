@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import { isDetailLoadingFor } from "./workflow-library-detail-config";
-import { resolveActiveMode } from "./hooks/use-workflow-library-detail";
+import { resolveActiveMode, resolveCanvasMounted } from "./hooks/use-workflow-library-detail";
 
 describe("isDetailLoadingFor", () => {
   it("未选中工作流不算加载（空态由视图渲染）", () => {
@@ -52,5 +52,38 @@ describe("resolveActiveMode", () => {
 
   it("切过但模式为空（没有模式语境）→ 如实返回 null", () => {
     expect(resolveActiveMode({ workflowId: "wf-1", mode: null }, "wf-1", "T2I")).toBeNull();
+  });
+});
+
+/* 画布常驻实例是否挂载（ISSUE #4406 第 1 条：切工作流后内容空白）。
+ * 关键不变量：**当前显示的页签必有内容** —— 停在画布页签时无论 canvasVisitedFor
+ * 记的是谁都必须挂载；别的页签才按「本工作流访问过画布」保持挂载以保住表单态。 */
+describe("resolveCanvasMounted", () => {
+  it("未选中工作流 → 不挂载", () => {
+    expect(resolveCanvasMounted("canvas", null, null)).toBe(false);
+    expect(resolveCanvasMounted("params", "wf-1", null)).toBe(false);
+  });
+
+  it("默认页签 + 没访问过画布 → 不挂载（画布引擎不进首屏）", () => {
+    expect(resolveCanvasMounted("params", null, "wf-1")).toBe(false);
+  });
+
+  it("首次切到画布页签 → 挂载", () => {
+    expect(resolveCanvasMounted("canvas", null, "wf-1")).toBe(true);
+    expect(resolveCanvasMounted("use", null, "wf-1")).toBe(true);
+  });
+
+  it("本工作流访问过画布、现在切到工坊封装 → 保持挂载（保住表单值）", () => {
+    expect(resolveCanvasMounted("params", "wf-1", "wf-1")).toBe(true);
+  });
+
+  it("ISSUE #4406 复现：停在画布页签换工作流，即使从没访问过也要挂载", () => {
+    // 旧实现只判 canvasVisitedFor === workflow.id → 这里为 false → 内容空白。
+    expect(resolveCanvasMounted("canvas", "wf-1", "wf-2")).toBe(true);
+    expect(resolveCanvasMounted("use", "wf-1", "wf-2")).toBe(true);
+  });
+
+  it("别的页签 + 访问记录属于另一条工作流 → 不挂载", () => {
+    expect(resolveCanvasMounted("source", "wf-1", "wf-2")).toBe(false);
   });
 });
