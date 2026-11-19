@@ -18,15 +18,19 @@ import {
   DEFAULT_API_ENDPOINT,
   DEFAULT_ASSET,
   DEFAULT_OUT,
+  RENAME_RETRY_DELAYS_MS,
   buildDownloadUrl,
   describeBuildInfo,
+  describeRenameFailure,
   downloadToBuffer,
+  findRunningProcessesByImage,
   MISSING_TOKEN_HINT,
   main,
   parseArgs,
   resolveEndpoint,
   resolveToken,
   usage,
+  writeFileAtomic,
   writeTokenConfigFile,
 } from "../scripts/devtools/fetch-daily-shell.mjs";
 
@@ -52,6 +56,8 @@ async function captureMain(io: {
   env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
   platform?: NodeJS.Platform;
+  /** 注入落盘实现：用于让「下载成功但写不进去」在用例里确定性地发生。 */
+  writeFile?: typeof writeFileAtomic;
 }): Promise<{ code: number; err: string; out: string }> {
   const outChunks: Array<string> = [];
   const errChunks: Array<string> = [];
@@ -441,5 +447,191 @@ describe("构建信息：取壳时同取、展示并对账（ISSUE #4056）", ()
     expect(bad.warn).toBe("");
     const empty = describeBuildInfo(Buffer.from("{}"), actual);
     expect(empty.info).toContain("没有可读字段");
+  });
+});
+
+/**
+ * 落盘被占用（ISSUE #4484）：Windows 上目标 app.exe 被运行中的进程或杀软扫描锁住时，
+ * rename 以 EPERM 失败、临时文件残留在 target 里。这里钉住三层行为：退避重试能跨过
+ * 短暂占用；耗尽后清临时文件并给出「先关应用」的可执行提示；main 把它转成退码 1。
+ */
+describe("落盘被占用：退避重试与可执行提示（ISSUE #4484）", () => {
+  const mkOut = (dir: string): string =>
+    path.join(dir, "src-tauri", "target", "release", "app.exe");
+
+  /** 造一个带指定 code 的 rename 失败。 */
+  function renameError(code: string): Error {
+    return Object.assign(new Error(`${code}: operation not permitted, rename`), { code });
+  }
+
+  /** 断言目录里没有 `.tmp-` 残留（残留会一直躺在 target/release 里）。 */
+  function expectNoTempLeft(dir: string): void {
+    const targetDir = path.join(dir, "src-tauri", "target", "release");
+    const leftovers = fs.readdirSync(targetDir).filter((f) => f.includes(".tmp-"));
+    expect(leftovers).toEqual([]);
+  }
+
+  it("rename 被占用（EPERM）时按退避间隔重试，恢复后落位成功且覆盖旧文件", async () => {
+    const dir = makeTmpDir();
+    const out = mkOut(dir);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, "old-shell");
+    const realRename = fs.renameSync.bind(fs);
+    let calls = 0;
+    const renameSpy = vi.spyOn(fs, "renameSync").mockImplementation((from, to) => {
+      calls += 1;
+      if (calls <= 2) {
+        throw renameError("EPERM");
+      }
+      realRename(from, to);
+    });
+    const delays: number[] = [];
+    await writeFileAtomic(out, Buffer.from("new-shell"), {
+      sleep: (ms) => {
+        delays.push(ms);
+        return Promise.resolve();
+      },
+    });
+    renameSpy.mockRestore();
+    expect(fs.readFileSync(out, "utf8")).toBe("new-shell");
+    expect(delays).toEqual(RENAME_RETRY_DELAYS_MS.slice(0, 2));
+    expectNoTempLeft(dir);
+  });
+
+  it("重试耗尽：清掉临时文件，抛出带占用提示的错误并保留原始错误为 cause", async () => {
+    const dir = makeTmpDir();
+    const out = mkOut(dir);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    const renameSpy = vi.spyOn(fs, "renameSync").mockImplementation(() => {
+      throw renameError("EPERM");
+    });
+    const sleeps: number[] = [];
+    const spawnStub = () => ({
+      status: 0,
+      stdout: '"app.exe","4242","Console","1","4096"\r\n',
+    });
+    const err = await writeFileAtomic(out, Buffer.from("x"), {
+      sleep: (ms) => {
+        sleeps.push(ms);
+        return Promise.resolve();
+      },
+      platform: "win32",
+      spawnImpl: spawnStub,
+    }).then(
+      () => null,
+      (error: Error) => error,
+    );
+    renameSpy.mockRestore();
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain("无法把下载的壳落位到");
+    expect(err?.message).toContain("检测到同名进程正在运行");
+    expect(err?.message).toContain("app.exe(PID 4242)");
+    expect(err?.message).toContain("先退出 Comfy APP");
+    expect(err).toHaveProperty("cause.code", "EPERM");
+    expect(sleeps).toEqual(RENAME_RETRY_DELAYS_MS);
+    expectNoTempLeft(dir);
+  });
+
+  it("查不到同名进程：提示关应用 / 杀软扫描，而不是一行裸 EPERM", async () => {
+    const dir = makeTmpDir();
+    const out = mkOut(dir);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    const renameSpy = vi.spyOn(fs, "renameSync").mockImplementation(() => {
+      throw renameError("EPERM");
+    });
+    const spawnStub = () => ({
+      status: 0,
+      stdout: "INFO: No tasks are running which match the specified criteria.\r\n",
+    });
+    const err = await writeFileAtomic(out, Buffer.from("x"), {
+      sleep: () => Promise.resolve(),
+      platform: "win32",
+      spawnImpl: spawnStub,
+    }).then(
+      () => null,
+      (error: Error) => error,
+    );
+    renameSpy.mockRestore();
+    expect(err?.message).toContain("先关闭应用");
+    expect(err?.message).toContain("杀毒软件");
+    expectNoTempLeft(dir);
+  });
+
+  it("非占用类错误（EIO）不重试、不包装占用提示，清理临时文件后原样抛出", async () => {
+    const dir = makeTmpDir();
+    const out = mkOut(dir);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    const renameSpy = vi.spyOn(fs, "renameSync").mockImplementation(() => {
+      throw renameError("EIO");
+    });
+    let sleeps = 0;
+    const err = await writeFileAtomic(out, Buffer.from("x"), {
+      sleep: () => {
+        sleeps += 1;
+        return Promise.resolve();
+      },
+    }).then(
+      () => null,
+      (error: Error) => error,
+    );
+    renameSpy.mockRestore();
+    expect(err?.message).toContain("EIO");
+    expect(err?.message).not.toContain("先关闭应用");
+    expect(sleeps).toBe(0);
+    expectNoTempLeft(dir);
+  });
+
+  it("findRunningProcessesByImage：解析 CSV 行、大小写不敏感；非 win32 与失败都返回空", () => {
+    const rows =
+      '"app.exe","123","Console","1","4096"\r\n"Other.exe","456","Console","1","4096"\r\n';
+    const ok = () => ({ status: 0, stdout: rows });
+    expect(findRunningProcessesByImage("APP.exe", { platform: "win32", spawnImpl: ok })).toEqual([
+      { name: "app.exe", pid: 123 },
+    ]);
+    const noSpawn = vi.fn();
+    expect(
+      findRunningProcessesByImage("app.exe", { platform: "linux", spawnImpl: noSpawn }),
+    ).toEqual([]);
+    expect(noSpawn).not.toHaveBeenCalled();
+    const throwing = () => {
+      throw new Error("no tasklist");
+    };
+    expect(
+      findRunningProcessesByImage("app.exe", { platform: "win32", spawnImpl: throwing }),
+    ).toEqual([]);
+    const failed = () => ({ status: 1, stdout: "" });
+    expect(
+      findRunningProcessesByImage("app.exe", { platform: "win32", spawnImpl: failed }),
+    ).toEqual([]);
+  });
+
+  it("describeRenameFailure：把原始错误与下一步提示拼成一段", () => {
+    const target = String.raw`X:\out\app.exe`;
+    const msg = describeRenameFailure(renameError("EPERM"), target, {
+      platform: "linux",
+    });
+    expect(msg).toContain(target);
+    expect(msg).toContain("（EPERM）");
+    expect(msg).toContain("先关闭应用");
+  });
+
+  it("main：落盘失败退 1，stderr 念出提示与原始堆栈，且不再往下补快捷方式", async () => {
+    const dir = makeTmpDir();
+    const boom = new Error("无法把下载的壳落位到位（EPERM）。请先关闭应用。");
+    boom.cause = renameError("EPERM");
+    const result = await captureMain({
+      argv: [],
+      cwd: dir,
+      env: { NODE_ENV: "test" },
+      fetchImpl: () => Promise.resolve(respond(200, "shell-bytes")),
+      platform: "linux",
+      writeFile: () => Promise.reject(boom),
+    });
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("写入落点失败");
+    expect(result.err).toContain("请先关闭应用");
+    expect(result.err).toContain("EPERM: operation not permitted, rename");
+    expect(result.out).not.toContain("快捷方式");
+    expect(fs.existsSync(path.join(dir, DEFAULT_OUT))).toBe(false);
   });
 });
