@@ -420,6 +420,40 @@ export async function consumeParseStream(
   }
 }
 
+/** 按父目录分组子包并统计各状态数（§12.13 纯派生，从 hook 体移出以守住函数长度硬闸）。
+ *  一个顶层包即便用户输入的是父路径也只显示一次 —— 不渲染父卡片本身。 */
+function deriveParentBlocks(
+  savedPaths: Array<string>,
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>,
+  byPath: Record<string, SummaryPkg>,
+): Array<ParentBlock> {
+  return savedPaths.map((parent) => {
+    const subs = discoveredByParent[parent] ?? [];
+    const enriched = subs.map((sub) => {
+      const saved = byPath[pathKey(sub.path)];
+      return { sub, saved, state: deriveRowState(sub, saved) };
+    });
+    const cnt = { loaded: 0, outdated: 0, unimported: 0, error: 0, missing: 0, empty: 0 };
+    for (const e of enriched) {
+      cnt[e.state.kind] += 1;
+    }
+    return { parent, subs: enriched, cnt, total: enriched.length };
+  });
+}
+
+/** 跨所有父目录的四项合计（loaded / outdated / unimported / total）。 */
+function deriveTotals(blocks: Array<ParentBlock>) {
+  return blocks.reduce(
+    (acc, b) => ({
+      loaded: acc.loaded + b.cnt.loaded,
+      outdated: acc.outdated + b.cnt.outdated,
+      unimported: acc.unimported + b.cnt.unimported,
+      total: acc.total + b.total,
+    }),
+    { loaded: 0, outdated: 0, unimported: 0, total: 0 },
+  );
+}
+
 /** 延迟一拍 fire-and-forget 地拉一次数据，返回清定时器的 cleanup（三处 useEffect 共用）。
  *  cleanup 时同时 abort 在途请求（ISSUE #4288）：卸载/依赖变化后，响应不再写回界面。 */
 function scheduleDeferredRefresh(run: (signal: AbortSignal) => Promise<unknown>): () => void {
@@ -669,6 +703,25 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     setSaveErr(msg);
   }, []);
 
+  /** 解析流 done 事件的收尾：落报告、刷新注册表、以服务端状态回填。
+   *  抽成独立 useCallback 既让 runParse 回到函数长度硬闸内（§12.13），
+   *  也让「收尾前判活」只在一处表达（abort 后不再发 reload 请求）。 */
+  const finalizeParse = useCallback(
+    async (record: ParseReport | null, ok: boolean, signal: AbortSignal) => {
+      if (signal.aborted) {
+        return;
+      }
+      if (ok && record) {
+        setReport(record);
+        await refreshCustomNodes();
+      }
+      if (!signal.aborted) {
+        await reloadFromServer();
+      }
+    },
+    [reloadFromServer],
+  );
+
   /** 「跑一轮解析并收尾」——三处入口（全部 / 单个父目录 / 单个子包）共用。
    *
    *  AbortSignal 贯穿 fetch 与流消费（ISSUE #4470）：每次开始新建 controller 存进
@@ -700,19 +753,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
           120_000,
         );
         await consumeParseStream(res, signal, {
-          onDone: async (record, ok) => {
-            if (signal.aborted) {
-              return;
-            }
-            if (ok && record) {
-              setReport(record);
-              await refreshCustomNodes();
-            }
-            if (signal.aborted) {
-              return;
-            }
-            await reloadFromServer();
-          },
+          onDone: (record, ok) => finalizeParse(record, ok, signal),
           onError: (msg) => {
             if (!signal.aborted) {
               setError_(msg);
@@ -741,7 +782,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         }
       }
     },
-    [reloadFromServer, setError_],
+    [finalizeParse, setError_],
   );
 
   /** 撤下单条子包的解析中标记（按子包维度的忙碌位，见 `use-parse-actions.ts` 的
@@ -774,39 +815,12 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   // 输入的是父 custom_nodes 路径也只显示一次 —— 不渲染父卡片本身。
   // 按父目录分组，使用户能独立折叠/展开每个源目录。每个子行通过对接到 manifest 的
   // byPath 映射携带自己的 state（loaded / outdated / unimported / error / missing）。
-  const parentBlocks = useMemo(() => {
-    return savedPaths.map((parent) => {
-      const subs = discoveredByParent[parent] ?? [];
-      const enriched = subs.map((sub) => {
-        const saved = byPath[pathKey(sub.path)];
-        return { sub, saved, state: deriveRowState(sub, saved) };
-      });
-      const cnt = {
-        loaded: 0,
-        outdated: 0,
-        unimported: 0,
-        error: 0,
-        missing: 0,
-        empty: 0,
-      };
-      for (const e of enriched) {
-        cnt[e.state.kind] += 1;
-      }
-      return { parent, subs: enriched, cnt, total: enriched.length };
-    });
-  }, [savedPaths, discoveredByParent, byPath]);
+  const parentBlocks = useMemo(
+    () => deriveParentBlocks(savedPaths, discoveredByParent, byPath),
+    [savedPaths, discoveredByParent, byPath],
+  );
 
-  const totalAcrossParents = useMemo(() => {
-    return parentBlocks.reduce(
-      (acc, b) => ({
-        loaded: acc.loaded + b.cnt.loaded,
-        outdated: acc.outdated + b.cnt.outdated,
-        unimported: acc.unimported + b.cnt.unimported,
-        total: acc.total + b.total,
-      }),
-      { loaded: 0, outdated: 0, unimported: 0, total: 0 },
-    );
-  }, [parentBlocks]);
+  const totalAcrossParents = useMemo(() => deriveTotals(parentBlocks), [parentBlocks]);
 
   return {
     open,
