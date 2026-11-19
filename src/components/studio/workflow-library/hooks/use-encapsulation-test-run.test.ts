@@ -12,6 +12,12 @@ const watchSettle = {
   /* SAFETY: 类型断言已复核 */
   message: undefined as string | undefined,
 };
+/* watchTask 桩的可控行为：hold = 终态暂不回调（模拟生成中）；
+ * closers = 每次订阅返回的退订函数（断言卸载时被撤销，#4461）。 */
+const watchControl = {
+  hold: false,
+  closers: [] as Array<ReturnType<typeof vi.fn>>,
+};
 
 vi.mock("~/lib/workshop/generation-client", () => ({
   buildLibraryWorkflowInput: vi.fn().mockResolvedValue({
@@ -35,8 +41,12 @@ vi.mock("~/lib/workshop/generation-client", () => ({
     ) => {
       h.onLog?.({ t: 1, level: "info", msg: "开始执行" });
       h.onOutput?.({ kind: "image", url: "/generated/a.png" });
-      h.onSettled({ ok: watchSettle.ok, message: watchSettle.message });
-      return () => undefined;
+      if (!watchControl.hold) {
+        h.onSettled({ ok: watchSettle.ok, message: watchSettle.message });
+      }
+      const closer = vi.fn();
+      watchControl.closers.push(closer);
+      return closer;
     },
   ),
 }));
@@ -50,6 +60,8 @@ afterEach(() => {
   vi.clearAllMocks();
   watchSettle.ok = true;
   watchSettle.message = undefined;
+  watchControl.hold = false;
+  watchControl.closers.length = 0;
 });
 
 describe("useEncapsulationTestRun", () => {
@@ -116,5 +128,38 @@ describe("useEncapsulationTestRun", () => {
     expect(vi.mocked(prepareLocalInputImage)).toHaveBeenCalledWith(
       expect.stringContaining("data:"),
     );
+  });
+
+  /* #4461：生成中切走页签（组件卸载）时，发起路径的 SSE 订阅要随卸载撤销，
+   * 不再存活到任务终态（持续打日志、占用同源连接）；切回时由恢复路径重订。 */
+  it("生成中卸载（切页签）：SSE 订阅随卸载撤销", async () => {
+    watchControl.hold = true;
+    const { result, unmount } = renderHook(() =>
+      useEncapsulationTestRun({
+        workflowId: "wf1",
+        workflowName: "文生图",
+        mode: "t2i",
+      }),
+    );
+    result.current.run({ prompt: "一只猫" });
+    await expect.poll(() => watchControl.closers.length).toBe(1);
+
+    unmount();
+    expect(watchControl.closers[0]).toHaveBeenCalledTimes(1);
+  });
+
+  it("任务落定后 closer 已清：随后卸载不再重复退订", async () => {
+    const { result, unmount } = renderHook(() =>
+      useEncapsulationTestRun({
+        workflowId: "wf1",
+        workflowName: "文生图",
+        mode: "t2i",
+      }),
+    );
+    result.current.run({});
+    await expect.poll(() => result.current.running).toBe(false);
+    unmount();
+    /* onSettled 已把 activeCloserRef 清空：卸载时不应再调一次退订。 */
+    expect(watchControl.closers[0]).not.toHaveBeenCalled();
   });
 });

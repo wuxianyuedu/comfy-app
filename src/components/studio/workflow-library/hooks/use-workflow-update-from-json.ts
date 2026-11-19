@@ -27,11 +27,19 @@ export function useWorkflowUpdateFromJson() {
   const [submitting, setSubmitting] = useState(false);
   const [report, setReport] = useState<UpdateJsonReport | null>(null);
 
+  /* #4463：报告属于「那一次更新」，不属于工作流本身 —— 换工作流 / 重新打开
+   * 弹窗时由视图调用，避免上一条工作流的断线清单残留到下一条。 */
+  const clearReport = useCallback(() => {
+    setReport(null);
+  }, []);
+
   /** 提交新 JSON。成功返回断线报告（可能为空），失败（解析 / 网络 / 服务端
    *  校验）返回 null 并给用户可见出口。 */
   const submit = useCallback(
     async (id: string, raw: unknown): Promise<UpdateJsonReport | null> => {
       setSubmitting(true);
+      /* 新一次提交开始：上一份报告即刻作废（#4463），本次结果回来再摆新的。 */
+      setReport(null);
       try {
         /* 反馈通道：失败走 toast（#4377 的断线报告由视图就地展示）。 */
         const report: ActionReport = (kind, detail) => {
@@ -72,5 +80,5 @@ export function useWorkflowUpdateFromJson() {
     [updateMut, queryClient, trpc, toast],
   );
 
-  return { submit, submitting, report };
+  return { submit, submitting, report, clearReport };
 }

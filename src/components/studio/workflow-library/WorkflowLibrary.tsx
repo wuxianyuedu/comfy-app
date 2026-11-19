@@ -104,6 +104,16 @@ export function WorkflowLibrary({
           <div className="border-warning/25 bg-warning/8 text-warning-strong flex items-start gap-2 border-b px-5 py-2.5 text-xs">
             <span className="font-semibold">⚠</span>
             <span className="min-w-0 flex-1">{c.loadError}</span>
+            {/* #4464：加载失败横幅同样给重试入口（列表非空时的后台刷新失败，
+             *  走不到列表那个「空态 + 重试」）。 */}
+            <Button
+              className="text-2xs h-auto shrink-0 rounded-md px-2 py-0.5"
+              onClick={c.refresh}
+              size="xs"
+              variant="warning"
+            >
+              重试
+            </Button>
           </div>
         )}
 
@@ -115,6 +125,7 @@ export function WorkflowLibrary({
             /* 拖入 JSON 导入：整片列表侧栏就是投放区（与导入面板同一漏斗）。 */
             dragActive={c.importState.listDragActive}
             fileErr={c.importState.dropErr}
+            loadError={c.loadError}
             loading={c.loading}
             localRootsHint={c.localRootsHint}
             onDragEnter={c.importState.onListDragEnter}
