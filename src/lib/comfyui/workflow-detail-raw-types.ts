@@ -54,6 +54,17 @@ export type RawOutputEntry = {
   type: string;
 };
 
+/** 图里一个 IMAGE / MASK 连线输入口的候选条目（#4405）。
+ *  参考图装载「追加端口」的下拉候选；`ioKey` 与 workflowIO 同一键空间
+ *  （`<nodeId>::param::<name>`），`label` 供下拉与胶囊直接显示；
+ *  `nodeId` / `name` 供装载计划构造覆盖项（暴露面查不到的口从这里取）。 */
+export type WorkflowImageInputPort = {
+  ioKey: string;
+  label: string;
+  name: string;
+  nodeId: string;
+};
+
 /** sparse raw-node 元数据（detail.rawNodes / subgraph rawNodeMeta）。 */
 export type RawNodeMeta = {
   flags: Record<string, unknown>;

@@ -52,6 +52,7 @@ export function WorkflowLibraryDetailView({
     errorMessage,
     workflowIO,
     storedIO,
+    imageInputPorts,
     workflowModes,
     paramMap,
     sourceData,
@@ -148,6 +149,7 @@ export function WorkflowLibraryDetailView({
           >
             <DetailBody
               activeMode={activeMode}
+              imageInputPorts={imageInputPorts}
               isLoading={isLoading}
               meta={{
                 modes: metaEditor.modes,
@@ -213,6 +215,7 @@ export function WorkflowLibraryDetailView({
           <TabsContent className="min-h-0 flex-1 overflow-y-auto p-5" key={tab} value={tab}>
             <DetailBody
               activeMode={activeMode}
+              imageInputPorts={imageInputPorts}
               isLoading={isLoading}
               meta={{
                 modes: metaEditor.modes,

@@ -141,3 +141,59 @@ describe("参考图装载绑定区（#4376）", () => {
     expect(onPatchParamMap).not.toHaveBeenCalled();
   });
 });
+
+describe("参考图装载绑定区 · 扇出候选（#4405）", () => {
+  const GRAPH_PORTS = [
+    {
+      ioKey: "69::param::images.image_1",
+      label: "images.image_1（69）",
+      name: "images.image_1",
+      nodeId: "69",
+    },
+    {
+      ioKey: "34::param::images.image2",
+      label: "images.image2（34）",
+      name: "images.image2",
+      nodeId: "34",
+    },
+  ];
+
+  it("暴露面没有图片口时，追加端口候选由全图图片族连线口补上", () => {
+    /* MiniMax 现场：workflowIO 只勾了 LoadImage 的 upload 部件口（非 IMAGE/MASK），
+     * 只看暴露面时扇出下拉整格不渲染 —— 用户没有地方配「这张图还要喂到哪」。 */
+    render(
+      <ReferenceLoaderBindingSection
+        entries={ENTRIES}
+        graphImagePorts={GRAPH_PORTS}
+        io={{
+          "45::widget::upload": {
+            nodeId: "45",
+            name: "upload",
+            kind: "widget",
+            direction: "input",
+            type: "IMAGEUPLOAD",
+          },
+        }}
+        mode="I2I"
+        onPatchParamMap={vi.fn()}
+        paramMap={PARAM_MAP}
+      />,
+    );
+    expect(screen.getByLabelText("参考图 1 追加端口")).toBeDefined();
+    expect(screen.getByLabelText("参考图 2 追加端口")).toBeDefined();
+  });
+
+  it("全图候选与已暴露图片口同键时去重，不重复出选项", () => {
+    render(
+      <ReferenceLoaderBindingSection
+        entries={ENTRIES}
+        graphImagePorts={GRAPH_PORTS}
+        io={IO}
+        mode="I2I"
+        onPatchParamMap={vi.fn()}
+        paramMap={PARAM_MAP}
+      />,
+    );
+    expect(screen.getByLabelText("参考图 1 追加端口")).toBeDefined();
+  });
+});

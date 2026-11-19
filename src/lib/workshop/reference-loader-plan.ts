@@ -12,6 +12,7 @@
 // 主落点没连线（作者只配了追加端口）时，追加端口就是全部落点，照常发覆盖项。
 
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import type { WorkflowImageInputPort } from "~/lib/comfyui/workflow-detail-raw";
 import { runtimeNodeId } from "~/lib/workflow/workflow-param-mapping";
 import { referenceSlotOf } from "./workflow-encapsulation";
 import { findReferenceLoaderPreset, type ReferenceLoaderPreset } from "./reference-loader-preset";
@@ -28,6 +29,10 @@ export function buildReferenceLoaderPlan(args: {
   bindings: ReferenceLoaderBindingTable;
   /** 参考图文件名（按槽位序；`reference-image` = 0，`reference-image-2` = 1…）。 */
   filenames: ReadonlyArray<string>;
+  /** 全图图片族连线口（#4405）：追加端口允许落在**未暴露**的张量口上
+   *  （多参考图工作流的消费口通常没被勾选暴露进 workflowIO）——那些口的
+   *  nodeId / name 从这里取，不能在 `io` 暴露面里查（查不到会被静默丢）。 */
+  graphImagePorts?: ReadonlyArray<WorkflowImageInputPort>;
   io: WorkflowIOMap | null;
   presets: ReadonlyArray<ReferenceLoaderPreset>;
   /** 契约槽位 id → 主落点 ioKey（null = 该槽位没连线）。 */
@@ -35,9 +40,19 @@ export function buildReferenceLoaderPlan(args: {
 }): ReferenceLoaderPlanResult {
   const plan: Record<string, ReferenceLoaderPreset> = {};
   const extraInputs: Array<{ name: string; nodeId: string; value: string }> = [];
-  const { bindings, filenames, io, presets, resolved } = args;
+  const { bindings, filenames, io, presets, resolved, graphImagePorts } = args;
   if (!io || Object.keys(bindings).length === 0) {
     return { plan, extraInputs };
+  }
+  /* 目标 ioKey → 端口定位：暴露面优先，未暴露的张量口由全图候选补齐。 */
+  const portById = new Map<string, { name: string; nodeId: string }>();
+  for (const [ioKey, raw] of Object.entries(io)) {
+    portById.set(ioKey, { name: raw.name, nodeId: runtimeNodeId(raw) });
+  }
+  for (const port of graphImagePorts ?? []) {
+    if (!portById.has(port.ioKey)) {
+      portById.set(port.ioKey, { name: port.name, nodeId: port.nodeId });
+    }
   }
   for (const [slotId, binding] of Object.entries(bindings)) {
     const slot = referenceSlotOf(slotId);
@@ -58,17 +73,15 @@ export function buildReferenceLoaderPlan(args: {
       targets.add(target);
     }
     for (const ioKey of targets) {
-      const raw = io[ioKey];
-      if (!raw) {
+      const port = portById.get(ioKey);
+      if (!port) {
         continue;
       }
-      const nodeId = runtimeNodeId(raw);
-      const name = raw.name;
       if (preset) {
-        plan[`${nodeId}::${name}`] = preset;
+        plan[`${port.nodeId}::${port.name}`] = preset;
       }
       if (ioKey !== primary) {
-        extraInputs.push({ nodeId, name, value: filename });
+        extraInputs.push({ name: port.name, nodeId: port.nodeId, value: filename });
       }
     }
   }
