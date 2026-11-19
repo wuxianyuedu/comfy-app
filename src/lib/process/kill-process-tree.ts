@@ -130,14 +130,16 @@ export function treeKillBudgetMs(): number {
 
 /** spawn 的 `close` 事件 → 回收结果读数（#4422，纯函数）：signal 在场 = 超过预算
  *  被平台收走，按「没量到结果」处理（ok:false），via 注明超时——不冒充成功；
- *  pkill 的退出码 1 = 「没有匹配的进程」，对回收语义是成功（目标已经不在）。 */
+ *  pkill 的退出码 1 = 「没有匹配的进程」，对回收语义是成功（目标已经不在）。
+ *  signal 用**真值**判断：正常退出时 Node 传 null、测试桩可能只传 code（undefined）
+ *  ——两者都不是「被信号收走」。 */
 export function killCloseDispatch(
   kind: "pkill" | "taskkill",
   code: number | null,
-  signal: NodeJS.Signals | null,
+  signal: NodeJS.Signals | null | undefined,
   via: string,
 ): { code: number | null; ok: boolean; via: string } {
-  if (signal !== null) {
+  if (signal) {
     return { code, ok: false, via: `${via}（超过 ${treeKillBudgetMs()}ms 预算被收，没量到结果）` };
   }
   if (kind === "pkill") {
