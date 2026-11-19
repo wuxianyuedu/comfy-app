@@ -10,16 +10,23 @@ import {
   SIZE_RATIO_PRESETS,
   clarityKindOfLabel,
   megapixelDims,
+  megapixelLabel,
   megapixelTierOfLabel,
   normalizeAlignMultiple,
+  nearestRatioPreset,
   parseMegapixelLabel,
   resolutionDims,
   resolutionTierOfLabel,
+  sizeSpecFromDims,
   type ClarityKind,
   type SizePresetTable,
   type SizeScene,
+  type SizeSpec,
 } from "~/lib/media/size-presets";
-import type { WorkflowIOEntry } from "~/lib/workflow/workflow-io-types";
+import { isRecord } from "~/lib/is-record";
+import { resolveEntryDefault } from "~/lib/workflow/workflow-io-types";
+import { widgetSlot } from "~/lib/comfyui/raw-overrides";
+import type { WorkflowIOMap, WorkflowIOEntry } from "~/lib/workflow/workflow-io-types";
 import type { ControlKind } from "./workflow-io-controls";
 import {
   isDimAspect,
@@ -367,4 +374,188 @@ export function inferGroups(widgets: Array<EnrichedWidget>): {
     }
   }
   return { dimension, video, groupedKeys };
+}
+
+/** 这条工作流的**图内默认尺寸** → 工坊 `SizeSpec`（ISSUE #4550）。
+ *
+ *  两级取数：① 暴露面（`io` 的 widget 条目）—— 作者暴露了尺寸口时，模式覆盖
+ *  与图内 defaultValue 都在这里（分组判据与 `inferDimensionGroup` **同一份**，
+ *  另算一遍必然漂移）；② 暴露面没给尺寸口时（多数工作流没暴露），从 RAW 图
+ *  直读节点的 `widgets_values` —— 名字判据同源（`isDim*`），槽位序与
+ *  raw-overrides 的 `widgetSlot` 同一口径。
+ *
+ *  认不出（没有尺寸组 / 关键值缺失或非法）返回 `null` —— 调用方回退
+ *  `DEFAULT_SHOT_SIZE`，不冒充「工作流配了默认尺寸」。 */
+export function workflowDefaultSizeSpec(args: {
+  /** 暴露面（`detail.workflowIO` 富化列）；作者暴露了尺寸口时优先走这里。 */
+  io?: WorkflowIOMap | null;
+  mode?: string | null;
+  /** RAW（UI 格式）工作流 JSON；暴露面没有尺寸口时从这里直读图内默认。 */
+  rawJson?: unknown;
+}): SizeSpec | null {
+  /* ── ① 暴露面 ── */
+  const fromIo = sizeSpecFromIoEntries(args.io, args.mode);
+  if (fromIo !== null) {
+    return fromIo;
+  }
+  /* ── ② RAW 图直读 ── */
+  return args.rawJson === undefined ? null : sizeSpecFromRawJson(args.rawJson);
+}
+
+/** 把暴露面 widget 条目喂给分组判据（`splitWorkflowIO` 的 widgetInputs 同形；
+ *  本模块不回指主模块（§12.7），这里只做最小收窄：width/height 分支消费
+ *  `int` / `float` 两档 control，按**声明的类型**映射（inferDimensionGroup 的
+ *  判据口径），aspect-mp 分支只看名字判据不受影响。 */
+function ioToWidgets(io: WorkflowIOMap | null | undefined): Array<EnrichedWidget> {
+  const out: Array<EnrichedWidget> = [];
+  for (const [ioKey, entry] of Object.entries(io ?? {})) {
+    if (entry.direction !== "input" || entry.kind === "output") {
+      continue;
+    }
+    const declared = typeof entry.type === "string" ? entry.type.toUpperCase() : "";
+    out.push({
+      ...entry,
+      control: declared === "INT" ? "int" : declared === "FLOAT" ? "float" : "text",
+      ioKey,
+    });
+  }
+  return out;
+}
+
+/** 暴露面路径：widget 条目 → 尺寸组 → SizeSpec。 */
+function sizeSpecFromIoEntries(
+  io: WorkflowIOMap | null | undefined,
+  mode?: string | null,
+): SizeSpec | null {
+  const group = inferDimensionGroup(ioToWidgets(io));
+  if (group === null) {
+    return null;
+  }
+  if (group.width !== undefined && group.height !== undefined) {
+    const width = Number(resolveEntryDefault(group.width, mode));
+    const height = Number(resolveEntryDefault(group.height, mode));
+    if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+      return sizeSpecFromDims(width, height);
+    }
+    return null;
+  }
+  if (group.aspect !== undefined && group.megapixels !== undefined) {
+    return specFromAspectValues({
+      aspectValue: resolveEntryDefault(group.aspect, mode),
+      megapixelsValue: resolveEntryDefault(group.megapixels, mode),
+      multipleValue: group.multiple ? resolveEntryDefault(group.multiple, mode) : undefined,
+    });
+  }
+  return null;
+}
+
+/** aspect 标签 + 像素值 (+ 倍数) → SizeSpec；关键值非法 → null。 */
+function specFromAspectValues(args: {
+  aspectValue: unknown;
+  megapixelsValue: unknown;
+  multipleValue?: unknown;
+}): SizeSpec | null {
+  const aspectLabel = typeof args.aspectValue === "string" ? args.aspectValue : "";
+  const ratio = aspectLabel === "" ? null : parseRatioFromLabel(aspectLabel);
+  const megapixels = Number(args.megapixelsValue);
+  if (ratio === null || !(megapixels > 0)) {
+    return null;
+  }
+  const multipleRaw = Number(args.multipleValue);
+  return {
+    clarity: megapixelLabel(megapixels),
+    multiple: Number.isFinite(multipleRaw)
+      ? normalizeAlignMultiple(multipleRaw)
+      : DEFAULT_ALIGN_MULTIPLE,
+    ratio: nearestRatioPreset(ratio).label,
+  };
+}
+
+/** 守卫式收窄：RAW 图节点 → 控件槽位读取的最小视图。
+ *  inputs 只保留具名控件（name 非空字符串），不收连线输入的杂项形状。 */
+function asNodeSlotView(value: unknown): {
+  inputs: Array<{ name: string; widget?: unknown }>;
+  widgets: Array<unknown>;
+} | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const rawInputs = value.inputs;
+  const rawWidgets = value.widgets_values;
+  if (!Array.isArray(rawInputs) || !Array.isArray(rawWidgets)) {
+    return null;
+  }
+  const inputs: Array<{ name: string; widget?: unknown }> = [];
+  for (const item of rawInputs) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const name = item.name;
+    if (typeof name !== "string" || name === "") {
+      continue;
+    }
+    inputs.push({ name, widget: item.widget });
+  }
+  return { inputs, widgets: rawWidgets };
+}
+
+/** RAW 图直读：扫顶层节点的控件输入，认出尺寸组并取图内值（#4550）。
+ *
+ *  槽位序与 `raw-overrides` 的 `widgetSlot` 同一口径（带 `widget` 标记的输入
+ *  顺序）；名字判据就是 `isDim*` 这一份 —— 与暴露面路径、画布组合控件三方
+ *  同源。取第一个命中的节点（与 `inferDimensionGroup` 取 `[0]` 的语义一致）。 */
+function sizeSpecFromRawJson(rawJson: unknown): SizeSpec | null {
+  if (!isRecord(rawJson)) {
+    return null;
+  }
+  const nodes = rawJson.nodes;
+  if (!Array.isArray(nodes)) {
+    return null;
+  }
+  for (const raw of nodes) {
+    const view = asNodeSlotView(raw);
+    if (view === null) {
+      continue;
+    }
+    const findValue = (match: (entry: { name?: string }) => boolean): unknown => {
+      for (const input of view.inputs) {
+        if (!match(input)) {
+          continue;
+        }
+        const slot = widgetSlot(view, input.name);
+        if (slot < 0) {
+          continue;
+        }
+        const value = view.widgets[slot];
+        if (value !== undefined && value !== null && value !== "") {
+          return value;
+        }
+      }
+      return undefined;
+    };
+    const width = findValue(isDimWidth);
+    const height = findValue(isDimHeight);
+    if (width !== undefined && height !== undefined) {
+      const w = Number(width);
+      const h = Number(height);
+      if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+        return sizeSpecFromDims(w, h);
+      }
+      continue;
+    }
+    const aspect = findValue(isDimAspect);
+    const megapixels = findValue(isDimMegapixels);
+    if (aspect === undefined || megapixels === undefined) {
+      continue;
+    }
+    const spec = specFromAspectValues({
+      aspectValue: aspect,
+      megapixelsValue: megapixels,
+      multipleValue: findValue(isDimMultiple),
+    });
+    if (spec !== null) {
+      return spec;
+    }
+  }
+  return null;
 }
