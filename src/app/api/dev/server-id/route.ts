@@ -5,27 +5,82 @@ import { getServerBootId, getServerRunId } from "~/lib/shell/dev-server-id";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** 环回主机名：探活跨源放行的白名单（#4195，来源构造见
+ * `~/lib/shell/dev-server-probe-url`——页面在 localhost / ::1 上时探活改打
+ * 127.0.0.1，对浏览器是跨源 fetch，必须回显 Origin 才能读到响应体）。 */
+const LOOPBACK_HOSTNAMES: ReadonlySet<string> = new Set(["localhost", "127.0.0.1", "::1"]);
+
 /**
- * 端点：GET /api/dev/server-id
- * 返回当前 dev server 进程的 bootId，以及**本次启动**的 runId。
+ * 环回同端口来源的 CORS 回显头。
  *
- * `bootId` 是「真正重启」判定的权威信号：进程每次冷启动重新生成一个 bootId，
- * 只要进程没重启它就不变。前端借此把「网络瞬时抖动导致的探测失败」与
- * 「dev server 进程真的重启」区分开，排除误报。
- *
- * `runId` 是 launcher 单点产出的启动标识（同一次启动里所有子进程共享），消息中心
- * 用它把历史消息按「每一次启动」分组——**多次启动的记录混在一起时，用户分不清
- * 哪几条属于同一次**（手验反馈）。它与 bootId 在**同一次探测**里回来是必然的：
- * 分成两次请求，会在「服务刚恢复」那一刻还拿着旧 runId，把恢复那条消息盖错组。
- *
- * 拿不到 runId 时给 null（纯手工 `pnpm dev` 没走 launcher），调用方按「未标记
- * 启动」处理，不编一个值。
- *
- * `dynamic = "force-dynamic"` 确保每次都读到进程当前的值，不做缓存。
+ * 只放行「回环主机 + 与本服务同端口」的来源：本应用是单用户本机服务，
+ * bootId / runId 是诊断读数，但也不必对任意网页开放——局域网来源、其它
+ * 端口的来源一律不带 CORS 头（浏览器按同源策略拦下，不影响既有的同源
+ * 调用方）。`serverPort` 由调用方从请求的 Host 头解出后注入，判据纯函数化
+ * 便于直接断言。
  */
-export async function GET() {
-  return NextResponse.json({
-    bootId: getServerBootId(),
-    runId: getServerRunId(),
-  });
+export function loopbackCorsHeaders(
+  origin: string | null,
+  serverPort: string,
+): Record<string, string> {
+  if (origin === null || origin === "") {
+    return {};
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return {};
+  }
+  const hostname = parsed.hostname.replace(/^\[/, "").replace(/\]$/, "");
+  if (!LOOPBACK_HOSTNAMES.has(hostname)) {
+    return {};
+  }
+  if (parsed.port !== serverPort) {
+    return {};
+  }
+  return { "Access-Control-Allow-Origin": origin, Vary: "Origin" };
+}
+
+/** 从 Host 头解出服务端口（无端口 / 解析不了回空串 ⇒ 上面的端口比对不放行）。 */
+function serverPortOf(hostHeader: string | null): string {
+  if (hostHeader === null || hostHeader === "") {
+    return "";
+  }
+  try {
+    return new URL(`http://${hostHeader}`).port;
+  } catch {
+    return "";
+  }
+}
+
+/** 本服务端口的取值：优先 Host 头；测试桩 / 个别运行时拿不到 Host 时退回请求
+ *  URL 上的端口（两者在真实链路里恒等）。 */
+function requestServerPort(request: Request): string {
+  const fromHost = serverPortOf(request.headers.get("host"));
+  if (fromHost !== "") {
+    return fromHost;
+  }
+  try {
+    return new URL(request.url).port;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * 端点：GET /api/dev/server-id —— 回 bootId（「真正重启」的权威信号，区分网络抖动与真重启）
+ * 与本次启动 runId（launcher 产出，消息中心按「每一次启动」分组；须与 bootId 同一次探测回来，
+ * 否则刚恢复时会拿旧 runId 盖错组）。拿不到 runId 给 null（没走 launcher），不编值。
+ */
+export function GET(request: Request) {
+  return NextResponse.json(
+    {
+      bootId: getServerBootId(),
+      runId: getServerRunId(),
+    },
+    {
+      headers: loopbackCorsHeaders(request.headers.get("origin"), requestServerPort(request)),
+    },
+  );
 }

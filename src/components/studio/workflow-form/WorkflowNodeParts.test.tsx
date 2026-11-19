@@ -1,19 +1,8 @@
-/**
- * 底部那枚「▶ 用此工作流生成」—— 画布功能版、画布视觉稿、库内卡片预览与
- * 「实际使用」面板此前各写一份，收进这里之后只许有一个出处
- * （形状本身由 `tests/design-md-contract-sync.test.ts` 的第七族按标记集合钉着；
- * 本文件钉的是**抽取会不会改变渲染**）。
- *
- * 判的四件事：
- *   · 基础形状（全宽渐变 + 跟品牌走的投影 + h-10.75）与 `nodrag nopan` 一直在，
- *     不随 `corner` / `hint` 分叉 —— 这四枚调用点此前分歧的正是这些；
- *   · `corner` 只改圆角这一段：`own` 自带下沿圆角并把顶角收成直角（否则基元的
- *     `rounded-lg` 会在按钮上沿留出缺口），`clipped` 把四角全部交还给卡片；
- *   · `hint` 传与不传**决定有没有那层 `inline-flex` 锚点**，而锚点会让内部的
- *     `w-full` 按内容宽定尺寸 —— 所以没文案时必须是裸按钮，否则同一枚按钮在两态
- *     里是两种宽度（这正是抽取前「实际使用」面板的形态）；
- *   · `disabled` 与 `onClick` 落在原生 button 上（运行态那两枚靠它）。
- */
+/** 底部「▶ 用此工作流生成」—— 画布功能版/视觉稿、库内卡片预览与「实际使用」面板此前各写一份，收进这里后只许一个出处
+ *（形状由 design-md-contract-sync.test.ts 第七族按标记集合钉着；本文件钉「抽取会不会改变渲染」）。
+ * 四件事：基础形状（全宽渐变 + 品牌投影 + h-10.75）与 nodrag nopan 不随 corner/hint 分叉；
+ * corner 只改圆角（own 自带下沿圆角、顶角收直角；clipped 四角交还卡片）；
+ * hint 决定是否有 inline-flex 锚点（锚点会让内部 w-full 按内容宽定尺寸，故无文案时必须裸按钮）；disabled/onClick 落原生 button。 */
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";

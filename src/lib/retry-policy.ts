@@ -24,6 +24,8 @@
 // 判据是「同一件事的定义只有一处」，而不是「把三处改成同一种策略」
 // —— 策略**本就该不同**，本条账要的是把「为什么不同」写下来。
 
+import { clamp } from "~/lib/clamp";
+
 /** 退避策略的两种形状。 */
 export type BackoffShape =
   /** 固定间隔：适合「对端一定就绪、只是慢一拍」。 */
@@ -31,9 +33,26 @@ export type BackoffShape =
   /** 指数退避 + 上限：适合「对端可能长时间不可用，别一直砸它」。 */
   | "exponential";
 
+/**
+ * 抖动形状（ISSUE #3888）：给等待时长加随机量，错开多个客户端的同拍重试。
+ *
+ * - `none`（缺省）：不加随机量 —— 既有取值一字不变；单客户端对单服务的重试不需要它。
+ * - `full`：在 `[0, delay]` 内均匀取值 —— 竞争者多、谁先试都行的场景。
+ * - `equal`：在 `[delay/2, delay]` 内均匀取值 —— 保留一半底噪，避免抖出近乎 0
+ *   的等待把刚失败的操作立刻又打回去。
+ *
+ * 什么时候该开：**多个进程 / 多个客户端会同时撞同一个资源**的重试（典型：一群
+ * worker 同时对同一份库切 WAL、抢写锁）。单客户端的指数退避本身已经错峰，不必开。
+ */
+export type JitterShape = "none" | "full" | "equal";
+
 export type BackoffShapeOptions = {
   /** `fixed` 的间隔，或 `exponential` 的基数（毫秒）。 */
   baseMs: number;
+  /**
+   * 抖动形状（缺省 `none` = 不加随机量，既有取值不变）。语义见 {@link JitterShape}。
+   */
+  jitter?: JitterShape;
   /**
    * 指数退避里 `attempt` 的封顶（默认无）。
    *
@@ -60,15 +79,28 @@ export type BackoffOptions = {
  * 就绪轮询每轮要探一个具体的服务），硬塞进一个通用 `retryAsync` 只会把这些
  * 差异挤进回调里，读起来比现在更绕。本出口负责的是**唯一不该各处写一遍的
  * 那一半**：delay 的算法。
+ *
+ * `rand` 是随机源注入口（测试喂定值）；缺省 `Math.random`。只在 `jitter`
+ * 非 `none` 时被调用 —— 缺省形状下连随机源都不碰，既有取值逐位不变。
  */
-export function backoffDelayMs(opts: BackoffOptions): number {
-  const { attempt, baseMs, shape, maxMs, maxAttempt } = opts;
+export function backoffDelayMs(opts: BackoffOptions, rand: () => number = Math.random): number {
+  const { attempt, baseMs, shape, maxMs, maxAttempt, jitter = "none" } = opts;
   const n = Math.max(0, attempt);
-  if (shape === "fixed") {
-    return baseMs;
+  const delay =
+    shape === "fixed"
+      ? baseMs
+      : Math.min(
+          baseMs * 2 ** (maxAttempt === undefined ? n : Math.min(n, maxAttempt)),
+          maxMs ?? Number.POSITIVE_INFINITY,
+        );
+  if (jitter === "none") {
+    return delay;
   }
-  const capped = maxAttempt === undefined ? n : Math.min(n, maxAttempt);
-  return Math.min(baseMs * 2 ** capped, maxMs ?? Number.POSITIVE_INFINITY);
+  /* rand 越界（调用方给了野值）夹回 [0,1]：抖动只改变时机，不许越过 delay
+   * （也就不越过 maxMs）—— 那是「错峰」，不是「再赌一把更大的」。 */
+  const r = clamp(rand(), 0, 1);
+  const scaled = jitter === "full" ? delay * r : delay / 2 + (delay / 2) * r;
+  return Math.round(scaled);
 }
 
 /* ── 具名策略：每个数都注明了它被什么约束 ──────────────────────────────────
@@ -142,6 +174,22 @@ export const OLLAMA_STOP_PROBE = {
 } as const;
 
 /**
+ * comfy 状态长轮询的**失败**退避（#4234）：健康路径的「等」在服务端（25s 长轮询），
+ * 客户端立即重发；一旦请求失败，对端可能长时间不可用（dev server 重编译 / 进程退出 /
+ * 端口被占），毫秒级失败重发会变成失败请求热循环——按 §08 8.10② 选 exponential。
+ * 多标签页会同时撞同一个后端，8.10③ 默认开 equal 抖动错峰。基数 500ms：单次失败后
+ * 先给一小拍冷却；封顶 15s 对齐 `WS_RECONNECT`（对端恢复后最多半分钟内接上）；
+ * maxAttempt 5（500×32 已过封顶，再涨无意义）。
+ */
+export const COMFY_STATE_POLL_BACKOFF = {
+  shape: "exponential",
+  baseMs: 500,
+  maxMs: 15_000,
+  maxAttempt: 5,
+  jitter: "equal",
+} as const satisfies BackoffShapeOptions;
+
+/**
  * 终态那一次库写：最多 4 次写、指数退避基数 40ms、封顶 300ms（累计等待 40+80+160 = 280ms）。
  *
  * 场景与 `WS_RECONNECT` **不同**，所以不复用它的形状：对手不是「可能长时间不可用的服务」，
@@ -178,12 +226,17 @@ export const TERMINAL_DB_WRITE = {
  *
  * 形状仍是**有界**的：穷尽后如实抛出（不吞），因为「切 WAL 切不掉」也可能是只读挂载 /
  * 磁盘满一类真故障，那类必须让构建或启动失败得看得见。
+ *
+ * **抖动开着**（`equal`，ISSUE #3954）：这正是 §8.10 第③条点名的「一群进程同时撞
+ * 同一资源」——7 个 worker 的重试拍原本同步落下，实测 3/8 首轮即撞 `SQLITE_BUSY`；
+ * 抖动把各进程的重试拍错开，保留一半底噪（不抖出 0ms 立即重打）。
  */
 /* SAFETY: 类型断言已复核 */
 export const SQLITE_PRAGMA_BOOT = {
   shape: "exponential",
   baseMs: 25,
   maxMs: 200,
+  jitter: "equal",
   /** 含首次尝试的总次数（循环边界写在这里，退避算法仍在调用处）。 */
   maxAttempts: 5,
 } as const;
@@ -193,8 +246,8 @@ export const SQLITE_PRAGMA_BOOT = {
  * （累计等待 40 + 80 = 120ms）。
  *
  * 对手是**另一个正占着写锁的事务**：`BEGIN IMMEDIATE` 撞锁时是**立刻**抛
- * `SQLITE_BUSY`（不是「等一会儿再抛」），因为 Next 侧刻意不给 `createClient({ timeout })`
- * —— libsql 的语句执行是同步的，等锁多少毫秒就是本进程停摆多少毫秒（实测与理由见
+ * `SQLITE_BUSY`（不是「等一会儿再抛」），因为 Next 侧刻意不给 `PRAGMA busy_timeout`
+ * —— node:sqlite 的语句执行是同步的（libsql 也一样），等锁多少毫秒就是本进程停摆多少毫秒（实测与理由见
  * 规范 §7.6 与 `sqlite-pragmas` 文件头）。所以这一族的等待预算只能落在重试这一层。
  *
  * 比 `TERMINAL_DB_WRITE` 少一次（3 vs 4）：那一族收的是「一行任务的终态」，拖在库里
@@ -208,4 +261,25 @@ export const SETTINGS_DB_WRITE = {
   maxMs: 200,
   /** 含首次尝试的总次数（循环边界写在这里，退避算法仍在调用处）。 */
   maxAttempts: 3,
+} as const;
+
+/**
+ * LLM 密钥文件的并发首启重读：5 次 × 固定 25ms（共 125ms）。
+ *
+ * 场景（ISSUE #3877 立的完整性校验 / #3956 收口取值）：Next server 与 Workshop MCP
+ * 两进程同时首启时，`wx` 独占创建保证盘上只有一份密钥文件，但**后到者**可能在对方
+ * write→close 的窄窗口里读到半截内容。与 `HISTORY_READ` 同为「对端一定就绪、只是
+ * 慢一拍」的固定间隔族 —— 总共只等 125ms，指数退避只会更晚拿到完整口令。
+ *
+ * **刻意保持同步形态**（调用处用 `Atomics.wait` 短眠，不是异步 sleep）：取值发生在
+ * `encryptLlmKey` / `decryptLlmKey` 的**同步签名**里，调用方（`repository-user` 的
+ * 行映射、Workshop MCP 的 `workshop/llm`）是同步上下文，async 化会把整条加解密链
+ * 传染成 Promise。窄窗口最坏阻塞 125ms、且每进程至多发生一次（`cachedKey` 之后恒
+ * 命中）—— 用同步短眠换接口形状稳定是划算的，理由就地记录在 `llm/secrets.ts` 的
+ * 循环处。
+ */
+export const KEY_FILE_READ = {
+  shape: "fixed",
+  baseMs: 25,
+  maxAttempts: 5,
 } as const;

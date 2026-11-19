@@ -1,23 +1,12 @@
 "use client";
 
-/** 镜头生图尺寸选择器（比例 + 像素 [+ 倍数]）。
- *
- *  与画布 / 库里的尺寸控件同一套口径（见 `studio/shared/DimensionControl`）：
- *    · 「比例」一段；
- *    · 「像素」一段，下分「分辨率」（1k/2k/4k，宽高按场景查尺寸表）与
- *      「百万像素」（1M/2M/4M）两个子类；
- *    · 选中百万像素时追加「倍数」一段（8/16/32/64）—— 宽高由总像素预算
- *      与这个对齐倍数共同决定，因此它在百万像素档是必选项，不能藏起来。
- *
- *  「百万像素」那一组下面还有一条「自定义」步进器（`MegapixelStepper`）——
- *  百万像素在端口上是 FLOAT，档位（1M/2M/4M）之外还要能填 2.5 这类任意值。
- *
- *  弹层脚注给出尺寸表入口（可查看 / 修改各场景 1k/2k/4k 的具体宽高）。
- *
- *  换算与摘要逻辑全部在 shot-size-config.ts（纯函数），本组件只做
- *  props → 弹层段落 的映射与选中态回显。 */
+/** 镜头生图尺寸选择器（比例 + 像素 [+ 倍数]），与 `studio/shared/DimensionControl`
+ *  同一套口径：比例段 + 像素段（分辨率 1k/2k/4k 按场景查表，或百万像素 1M/2M/4M
+ *  + 自定义 `MegapixelStepper`，端口是 FLOAT 要能填 2.5）；选中百万像素时追加
+ * 「倍数」段（必选项，宽高由总像素预算与对齐倍数共定）。弹层脚注给尺寸表入口。
+ *  换算与摘要全在 shot-size-config.ts（纯函数），本组件只做 props → 弹层映射。 */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 
 import {
   ALIGN_MULTIPLE_OPTIONS,
@@ -29,9 +18,15 @@ import {
   megapixelLabel,
   megapixelTierOfLabel,
   normalizeAlignMultiple,
+  sizeSpecDims,
   sizeSpecMegapixels,
   type SizeScene,
 } from "~/lib/media/size-presets";
+import {
+  getSizePresetServerSnapshot,
+  getSizePresetTable,
+  subscribeSizePresetTable,
+} from "~/lib/media/size-preset-store";
 import {
   MultiSegmentPopover,
   RatioIcon,
@@ -67,6 +62,19 @@ export function ShotSizePicker({
     [state, scene],
   );
 
+  /* 当前选择在本机尺寸配置（项目默认 + data/size-presets.json 覆盖，逐格合并）
+   * 下换算出的实际宽高（#3949 需求 2）：随选择实时显示在弹层里，不再让用户
+   * 自己查尺寸表。 */
+  const presetTable = useSyncExternalStore(
+    subscribeSizePresetTable,
+    getSizePresetTable,
+    getSizePresetServerSnapshot,
+  );
+  const actualDims = useMemo(
+    () => sizeSpecDims(state, scene, presetTable),
+    [state, scene, presetTable],
+  );
+
   const sections = useMemo<Array<SegmentSection>>(() => {
     const list: Array<SegmentSection> = [
       {
@@ -77,7 +85,9 @@ export function ShotSizePicker({
           label: shortRatioLabel(preset.label),
           render: <RatioIcon ratio={preset.ratio} />,
         })),
-        onChange: (ratio) => onChange({ ...state, ratio }),
+        onChange: (ratio) => {
+          onChange({ ...state, ratio });
+        },
       },
       {
         label: "像素",
@@ -88,14 +98,18 @@ export function ShotSizePicker({
           label: preset.label,
           subgroup: CLARITY_SUBGROUP_LABELS[preset.kind],
         })),
-        onChange: (clarity) => onChange({ ...state, clarity }),
+        onChange: (clarity) => {
+          onChange({ ...state, clarity });
+        },
         /* 百万像素是连续量：档位之外再给一个能填任意值的步进器（挨着它的选项
          *  渲染，属于「百万像素」这一组）。写出去的 label 与档位同形（"2.5M"），
          *  所以换算 / 摘要 / 下发都不需要为「自由值」多认一种形状。 */
         extra: (
           <MegapixelStepper
             disabled={disabled}
-            onChange={(megapixels) => onChange({ ...state, clarity: megapixelLabel(megapixels) })}
+            onChange={(megapixels) => {
+              onChange({ ...state, clarity: megapixelLabel(megapixels) });
+            }}
             value={currentMegapixels}
           />
         ),
@@ -110,11 +124,12 @@ export function ShotSizePicker({
           value: String(option),
           label: String(option),
         })),
-        onChange: (multiple) =>
+        onChange: (multiple) => {
           onChange({
             ...state,
             multiple: normalizeAlignMultiple(Number(multiple)),
-          }),
+          });
+        },
       });
     }
     return list;
@@ -130,7 +145,9 @@ export function ShotSizePicker({
           <div className="flex items-center gap-2">
             <Button
               className="border-border-strong text-ink-muted hover:bg-subtle hover:text-ink-bright text-3xs h-auto rounded-md px-2 py-1"
-              onClick={() => setTableOpen(true)}
+              onClick={() => {
+                setTableOpen(true);
+              }}
               size="xs"
               variant="outline"
             >
@@ -139,12 +156,22 @@ export function ShotSizePicker({
             <span className="text-ink-faint text-3xs">
               {clarityKind === "megapixel" ? "总像素预算，宽高按倍数对齐" : "宽高按场景尺寸表取值"}
             </span>
+            <span className="text-ink text-3xs tabular-nums">
+              本机实际尺寸：{actualDims.width}×{actualDims.height}
+            </span>
           </div>
         }
         sections={sections}
         triggerContent={shotSizeSummary(state)}
       />
-      {tableOpen && <SizePresetTableModal onClose={() => setTableOpen(false)} scene={scene} />}
+      {tableOpen && (
+        <SizePresetTableModal
+          onClose={() => {
+            setTableOpen(false);
+          }}
+          scene={scene}
+        />
+      )}
     </>
   );
 }

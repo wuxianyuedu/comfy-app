@@ -1,22 +1,7 @@
 /**
- * `scripts/executor-host.mjs` 的两组契约：
- *   1. **骨架形态**（2-B 三条，**显式** `COMFY_EXECUTOR=inline`）：`--once` 起落、
- *      常驻 + SIGTERM、日志路径——骨架必须**不碰 DB**，这三条钉的就是它的极简性。
- *      为什么要显式给值而不是「不设」：判据自 4-A4（ADR §14 D5）起会回读仓库
- *      `.env`，而开发机那份完全可能写着 `COMFY_EXECUTOR=host`（4-A4 实测就是这种
- *      机器）——让本地配置决定用例结论，得到的不是绿就是假绿。进程 env 优先于
- *      `.env`，给一个 `inline` 就把这一组钉住了。
- *      常驻模式的 POSIX 细节：能收终止信号并落盘；Windows 上 Node 控制台
- *      SIGTERM 语义与 POSIX 不同（`child.kill("SIGTERM")` 实际走
- *      TerminateProcess、handler 不跑），只断「进程真的终止了 + 之前的
- *      boot/heartbeat 都落了盘」。真正的整树回收由 `cross-platform-launcher.test.ts`
- *      与 `kill-process-tree.windows.test.ts` 那族覆盖。
- *   2. **运行时注入链**（3-B0 两条，`COMFY_EXECUTOR=host`）：golden 跨片不误杀
- *      （inline 片的排队行在 host boot 后原样 QUEUED、零误杀）+ 库不可达时大声退出 1。
- *   日志文件一律落各用例自己 mkdtemp 的临时目录、绝不落到仓库 `log/`。
- *
- * 反证：把脚本里的 `writeLine` 换成 no-op，用例 1/2/3 都会红；去掉 reaper 的
- * owner 分片，golden 那条会红（host Q2 数到并试图回收 inline 的行）。
+ * `scripts/executor-host.mjs` 两组契约。①骨架形态（2-B 三条，**显式** `COMFY_EXECUTOR=inline`）：`--once` 起落、常驻+SIGTERM、日志路径，必须不碰 DB。
+ * 显式给值而非「不设」：判据回读仓库 `.env`（4-A4/ADR §14 D5，实测有机器写 `host`），进程 env 优先；Windows 的 `kill("SIGTERM")` 走 TerminateProcess，只断进程终止 + 先前 boot/heartbeat 落盘（整树回收另测）。
+ * ②运行时注入链（3-B0，`COMFY_EXECUTOR=host`）：golden 跨片不误杀 + 库不可达退 1。反证：`writeLine` 换 no-op 则 1/2/3 红；去掉 reaper owner 分片 golden 红。
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -39,7 +24,7 @@ function mkTmp() {
 afterEach(() => {
   while (tmpDirs.length) {
     const d = tmpDirs.pop();
-    if (d) {
+    if (d !== undefined && d !== "") {
       fs.rmSync(d, { recursive: true, force: true });
     }
   }
@@ -61,16 +46,16 @@ function runHost(args: Array<string>, logPath: string) {
     child.stderr.on("data", (b: Buffer) => {
       stderr += b.toString("utf8");
     });
-    child.on("exit", (code) => resolve({ code, stderr }));
+    child.on("exit", (code) => {
+      resolve({ code, stderr });
+    });
   });
 }
 
 /**
- * 轮询直到谓词为真 —— 用 `expect.poll` 而不是手搓 `while + await setTimeout`（规范 §11.14）。
- *
- * 手搓版本失败时只留一句「waitFor 超时」、拿不到现场；`expect.poll` 会把
- * **最后一次尝试的实际值**打出来（这里的谓词读的是日志文件，现场就是它当时的内容
- * —— 那正是「为什么没等到 heartbeat」要看的东西），且条件成立即返回、不必等满预算。
+ * 轮询直到谓词为真 —— 用 `expect.poll` 而非手搓 `while + await setTimeout`（规范 §11.14）。
+ * 手搓版失败只留「waitFor 超时」、拿不到现场；`expect.poll` 会打出**最后一次尝试的实际值**（谓词读日志文件，
+ * 现场就是它当时的内容 —— 正是「为什么没等到 heartbeat」要看的），且条件成立即返回、不必等满预算。
  */
 async function waitFor(
   predicate: () => boolean,
@@ -114,19 +99,20 @@ describe("scripts/executor-host.mjs 骨架", () => {
       );
       child.kill("SIGTERM");
       const exitCode = await new Promise<number | null>((resolve) => {
-        child.on("exit", (c) => resolve(c));
+        child.on("exit", (c) => {
+          resolve(c);
+        });
       });
       const text = fs.readFileSync(logPath, "utf8");
       expect(text).toContain("boot pid=");
       expect(text).toContain("heartbeat bootId=");
-      if (process.platform === "win32") {
-        // Windows Node 控制台 SIGTERM 走 TerminateProcess：handler 不跑、
-        // exit code 是 null；这只算「进程确实终止了」。
-        expect(exitCode === 0 || exitCode === null).toBe(true);
-      } else {
-        expect(exitCode).toBe(0);
-        expect(text).toContain("shutdown sig=SIGTERM");
-      }
+      // 平台分支收进期望值（no-conditional-expect）：Windows Node 控制台 SIGTERM 走
+      // TerminateProcess —— handler 不跑、exit code 可 null，只算「进程确实终止了」；
+      // POSIX 走 handler：exit 0 且打点。
+      expect(exitCode === 0 || exitCode === null || process.platform !== "win32").toBe(true);
+      expect(
+        process.platform === "win32" || (exitCode === 0 && text.includes("shutdown sig=SIGTERM")),
+      ).toBe(true);
     } finally {
       if (!child.killed) {
         child.kill("SIGKILL");
@@ -134,7 +120,7 @@ describe("scripts/executor-host.mjs 骨架", () => {
     }
   }, 20_000);
 
-  it("未设 COMFYAPP_HOST_LOG 时默认路径写到 `log/current/services/`（不做写入、只测路径拼装）", async () => {
+  it("未设 COMFYAPP_HOST_LOG 时默认路径写到 `log/current/services/`（不做写入、只测路径拼装）", () => {
     // 骨架阶段不测「真的落到仓库 log/」——那条测试会污染仓库；直接读源码
     // 断默认分支即可（保持脚本文件与规范 §4「current/ 分区」契约一致）。
     const src = fs.readFileSync(HOST_SCRIPT, "utf8");
@@ -217,7 +203,9 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
       child.stderr.on("data", (b: Buffer) => {
         err += b.toString("utf8");
       });
-      child.on("exit", (c) => resolve({ code: c, stderr: err }));
+      child.on("exit", (c) => {
+        resolve({ code: c, stderr: err });
+      });
     });
     const text = fs.readFileSync(logPath, "utf8");
     expect(code, `stderr: ${stderr}\nlog:\n${text}`).toBe(0);
@@ -246,7 +234,9 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
         },
         stdio: ["ignore", "pipe", "pipe"],
       });
-      child.on("exit", (c) => resolve({ code: c }));
+      child.on("exit", (c) => {
+        resolve({ code: c });
+      });
     });
     expect(code).toBe(1);
     expect(fs.readFileSync(logPath, "utf8")).toContain("runtime boot FAILED");
@@ -268,7 +258,9 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
       child.stderr.on("data", (b: Buffer) => {
         err += b.toString("utf8");
       });
-      child.on("exit", (c) => resolve({ code: c, stderr: err }));
+      child.on("exit", (c) => {
+        resolve({ code: c, stderr: err });
+      });
     });
   }
 

@@ -3,6 +3,8 @@
 // 一次生图往往不满意，故同一角色允许累积多张候选（本机 / 远端 / 外部导入），
 // 由用户挑一张定为定妆照。这里只有纯函数与常量，可直接单测。
 
+import { isRecord } from "~/lib/is-record";
+import { tailWindowAppendUnique } from "~/lib/page-window";
 import type { Character, CharacterPortrait, PortraitSource } from "./types";
 
 /** 单角色保留的候选上限：超出丢最旧，避免草稿随每次生成无限膨胀
@@ -31,13 +33,12 @@ export function makePortraitLog(level: PortraitLogEntry["level"], text: string):
   return { ts: Date.now(), level, text };
 }
 
-/** 追加一条日志；超上限丢最旧的一条。 */
+/** 追加一条日志；重复帧（SSE 重连全量回放，ISSUE #3896）丢弃，超上限丢最旧。 */
 export function appendPortraitLog(
   list: Array<PortraitLogEntry>,
   entry: PortraitLogEntry,
 ): Array<PortraitLogEntry> {
-  const next = [...list, entry];
-  return next.length > MAX_PORTRAIT_LOG ? next.slice(next.length - MAX_PORTRAIT_LOG) : next;
+  return tailWindowAppendUnique(list, entry, MAX_PORTRAIT_LOG, (e) => `${e.ts}|${e.text}`);
 }
 
 function isPortraitSource(value: unknown): value is PortraitSource {
@@ -47,11 +48,10 @@ function isPortraitSource(value: unknown): value is PortraitSource {
 /** 单条候选的归一化：形状不合法（没有可用 url）时返回 null，
  *  使一张坏数据不会炸掉整块界面。旧草稿缺字段按导入来源兜底。 */
 export function normalizePortrait(raw: unknown): CharacterPortrait | null {
-  if (typeof raw !== "object" || raw === null) {
+  if (!isRecord(raw)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const candidate = raw as Record<string, unknown>;
+  const candidate = raw;
   const url = candidate.url;
   if (typeof url !== "string" || !url) {
     return null;
@@ -112,7 +112,7 @@ export function withoutPortraitCandidate(character: Character, url: string): Cha
   const portraits = portraitCandidates(character).filter((item) => item.url !== url);
   const next = { ...character, portraits };
   const portraitUrl = character.portraitUrl === url ? portraits[0]?.url : character.portraitUrl;
-  if (portraitUrl) {
+  if (portraitUrl !== undefined && portraitUrl !== "") {
     next.portraitUrl = portraitUrl;
   } else {
     delete next.portraitUrl;

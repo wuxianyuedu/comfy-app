@@ -42,8 +42,11 @@ function safeParseJson(json: string): Record<string, unknown> {
 /** 把未知参数串转成人类可读摘要。 */
 function summarizeArgs(argsJson: string, maxLen = 200): string {
   try {
-    /* SAFETY: 类型断言已复核 */
-    const obj = JSON.parse(argsJson) as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(argsJson);
+    if (!isRecord(parsed)) {
+      return argsJson.slice(0, maxLen) || "(空参数)";
+    }
+    const obj = parsed;
     const keys = Object.entries(obj)
       .filter(([, v]) => typeof v === "string" || typeof v === "number" || typeof v === "boolean")
       .map(([k, v]) => `${k}=${String(v).slice(0, 60)}`)
@@ -64,10 +67,8 @@ function parseCharactersFromJson(text: string): Array<{
   try {
     const arr = extractJsonArray(text);
     return arr
-      .filter((item) => typeof item === "object" && item !== null)
-      .map((item) => {
-        /* SAFETY: 类型断言已复核 */
-        const rec = item as Record<string, unknown>;
+      .filter(isRecord)
+      .map((rec) => {
         return {
           name: typeof rec.name === "string" ? rec.name : "",
           appearance: typeof rec.appearance === "string" ? rec.appearance : "",
@@ -115,10 +116,8 @@ function parseShotsFromJson(text: string): Array<{
   try {
     const arr = extractJsonArray(text);
     return arr
-      .filter((item) => typeof item === "object" && item !== null)
-      .map((item) => {
-        /* SAFETY: 类型断言已复核 */
-        const rec = item as Record<string, unknown>;
+      .filter(isRecord)
+      .map((rec) => {
         return {
           sceneHeading:
             typeof rec.sceneHeading === "string"
@@ -128,8 +127,9 @@ function parseShotsFromJson(text: string): Array<{
                 : "",
           description: typeof rec.description === "string" ? rec.description : "",
           shotType: normalizeShotType(rec.shotType),
+          /* SAFETY: 类型断言已复核 */
           characterNames: Array.isArray(rec.characterNames)
-            ? /* SAFETY: 类型断言已复核 */ (rec.characterNames as Array<unknown>).map(String)
+            ? (rec.characterNames as Array<unknown>).map(String)
             : [],
         };
       })
@@ -155,18 +155,19 @@ export function resolveAgentTool(
         toolName: name,
         summary: "查看项目当前状态",
         argSummary,
-        execute: async () => ({
-          ok: true,
-          summary: `项目「${draft.meta.title}」：剧本${draft.scriptMarkdown ? "已就绪" : "待生成"}，角色卡 ${draft.characters.length} 个，镜头 ${draft.shots.length} 个（图 ${draft.shots.filter((s) => !!s.imageUrl).length} / 视频 ${draft.shots.filter((s) => !!s.clipUrl).length}）。`,
-          detail: JSON.stringify({
-            meta: draft.meta,
-            hasScript: !!draft.scriptMarkdown,
-            characterCount: draft.characters.length,
-            shotCount: draft.shots.length,
-            imageDone: draft.shots.filter((s) => !!s.imageUrl).length,
-            clipDone: draft.shots.filter((s) => !!s.clipUrl).length,
+        execute: () =>
+          Promise.resolve({
+            ok: true,
+            summary: `项目「${draft.meta.title}」：剧本${draft.scriptMarkdown ? "已就绪" : "待生成"}，角色卡 ${draft.characters.length} 个，镜头 ${draft.shots.length} 个（图 ${draft.shots.filter((s) => Boolean(s.imageUrl)).length} / 视频 ${draft.shots.filter((s) => Boolean(s.clipUrl)).length}）。`,
+            detail: JSON.stringify({
+              meta: draft.meta,
+              hasScript: !!draft.scriptMarkdown,
+              characterCount: draft.characters.length,
+              shotCount: draft.shots.length,
+              imageDone: draft.shots.filter((s) => Boolean(s.imageUrl)).length,
+              clipDone: draft.shots.filter((s) => Boolean(s.clipUrl)).length,
+            }),
           }),
-        }),
       };
     }
 
@@ -183,10 +184,17 @@ export function resolveAgentTool(
         patch.logline = args.logline;
       }
       if (typeof args.type === "string") {
-        const valid = ["short_video", "micro_film", "animation", "ad", "comic", "other"];
-        if (valid.includes(args.type)) {
-          /* SAFETY: 类型断言已复核 */
-          patch.type = args.type as WorkshopDraftDto["meta"]["type"];
+        const validTypes: ReadonlyArray<WorkshopDraftDto["meta"]["type"]> = [
+          "short_video",
+          "micro_film",
+          "animation",
+          "ad",
+          "comic",
+          "other",
+        ];
+        const type = validTypes.find((t) => t === args.type);
+        if (type) {
+          patch.type = type;
         }
       }
       const keys = Object.keys(patch).join("、") || "(无字段)";
@@ -194,9 +202,9 @@ export function resolveAgentTool(
         toolName: name,
         summary: `更新项目元信息：${argSummary}`,
         argSummary,
-        execute: async () => {
+        execute: () => {
           hd.setMeta(patch);
-          return { ok: true, summary: `已更新项目信息（${keys}）` };
+          return Promise.resolve({ ok: true, summary: `已更新项目信息（${keys}）` });
         },
       };
     }
@@ -434,11 +442,12 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
         toolName: name,
         summary: "生成镜头图片",
         argSummary,
-        execute: async () => ({
-          ok: false,
-          summary: "生图需在「镜头生图」页手动触发",
-          detail: "Agent MVP 暂不直接触发 ComfyUI 生图，请使用页面上的生图按钮",
-        }),
+        execute: () =>
+          Promise.resolve({
+            ok: false,
+            summary: "生图需在「镜头生图」页手动触发",
+            detail: "Agent MVP 暂不直接触发 ComfyUI 生图，请使用页面上的生图按钮",
+          }),
       };
     }
 
@@ -465,10 +474,11 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
         toolName: name,
         summary: `未知工具：${name}`,
         argSummary,
-        execute: async () => ({
-          ok: false,
-          summary: `未知工具「${name}」`,
-        }),
+        execute: () =>
+          Promise.resolve({
+            ok: false,
+            summary: `未知工具「${name}」`,
+          }),
       };
     }
   }

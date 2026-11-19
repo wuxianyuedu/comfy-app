@@ -1,17 +1,8 @@
 "use client";
-/* ════════════════════════════════════════════════════════════════════════
- *  IOEditContext.tsx — io 风格 API 的单一出口 + 可复用消费型组件
- * ────────────────────────────────────────────────────────────────────────
- *  状态与动作住在 `workflow-editor/WorkflowStores.tsx`（createStore 工厂 +
- *  WFStoresContext 载体），节点 JSON 弹层也在同一支 store 里（`useNodeJsonViewer`）。
- *  本文件只保留可复用的消费型组件 IoCheckbox / NodeIdChip（经 store hook 读取），
- *  并把 store 的 hook / 选择器 / Provider 再导出一次，让 WorkflowNode /
- *  WorkflowSubgraphNode 等消费方从同一文件取「io 风格」API。
- *
- *  文件名保留 `IOEditContext` 是有意的：它是 store 状态迁移**之前**的旧名字，
- *  而 `useIOEditContext()` 这个组合 hook 至今是画布内多处的入口 —— 改名会牵动
- *  一片调用点，收益只是「名字更贴现状」。真正的单一出口是上方那句再导出。
- * ════════════════════════════════════════════════════════════════════════ */
+/* IOEditContext.tsx — io 风格 API 的单一出口。
+ * 状态与动作住在 workflow-editor/WorkflowStores.tsx（createStore 工厂 + WFStoresContext）；
+ * 本文件只保留可复用消费型组件 IoCheckbox / NodeIdChip，并再导出 store 的 hook/选择器/Provider。
+ * 文件名沿用旧名：`useIOEditContext()` 仍是画布内多处入口，改名牵动一片调用点。 */
 import React from "react";
 import type { IoRef } from "../workflow-types";
 import { Button } from "~/components/ui/button";
@@ -83,8 +74,10 @@ export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node
 
   const handleOpen = (e: React.SyntheticEvent) => {
     e.stopPropagation();
-    /* SAFETY: 类型断言已复核 */
-    const el = e.currentTarget as HTMLElement;
+    const el = e.currentTarget;
+    if (!(el instanceof HTMLElement)) {
+      return;
+    }
     requestShow(el, nodeId, variant);
   };
 
@@ -100,9 +93,15 @@ export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node
         data-node-id-chip={nodeId}
         data-variant={variant}
         onClick={handleOpen}
-        onDoubleClick={(event) => event.stopPropagation()}
-        onMouseDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+        }}
+        onMouseDown={(event) => {
+          event.stopPropagation();
+        }}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
         ref={ref}
         variant="outline"
       >
@@ -125,9 +124,15 @@ export function IoCheckbox({ ioRef, io }: { io: IOEditContextValue; ioRef: IoRef
     <Checkbox
       checked={checked}
       className="size-3.5"
-      onCheckedChange={() => io.toggleIO(ioRef)}
-      onClick={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
+      onCheckedChange={() => {
+        io.toggleIO(ioRef);
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+      }}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+      }}
       style={{
         width: 13,
         height: 13,

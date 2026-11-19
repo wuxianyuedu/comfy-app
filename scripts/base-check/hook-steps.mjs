@@ -20,7 +20,7 @@ import { cleanGitEnv, git, HOOK, resolveMergeBaseRef, ROOT } from "./git-ref.mjs
  * 接受三种写法（都在 §13.6.2 的现场出现过）：
  *   · 钩子标签：`check-ui-primitives`（唯一命中 `.githooks/pre-commit` 的
  *     `run "<标签>" <命令>` 那一行，命令从钩子里取，不抄第二份）；
- *   · 裸脚本名：`scripts/check-ui-primitives.cjs`（补 `node` 前缀）；
+ *   · 裸脚本名：`scripts/gates/check-ui-primitives.cjs`（补 `node` 前缀）；
  *   · 完整命令：`node scripts/x.cjs --strict` / `pnpm exec vitest run …`（原样）。
  *
  * 标签匹配**必须唯一** —— 命中 0 条或多条都判失败并列出候选，别猜。
@@ -72,7 +72,7 @@ export function resolveGateCommand(input, hookPath = HOOK) {
     if (words.length > 1) {
       return { ok: true, label: first, argv: words };
     }
-    if (/\.(cjs|mjs|js)$/.test(first)) {
+    if (/\.(?:cjs|mjs|js)$/.test(first)) {
       return { ok: true, label: first, argv: ["node", first] };
     }
   }
@@ -156,7 +156,7 @@ export function resolveMergeBatch(input = [], hookPath = HOOK) {
  *
  * 为什么这一族不能由 `readHookSteps` 收上来：它们**天然进不了钩子**，而理由与
  * 「代价高」无关 —— 是**本地看不到那个形态**。首发成员是
- * `scripts/check-commit-claims.mjs`（「提交信息里的声明 ⇄ 那次提交的事实」）：
+ * `scripts/gates/check-commit-claims.mjs`（「提交信息里的声明 ⇄ 那次提交的事实」）：
  *
  *   · 声明说的是**某一次提交**的树（「§x.y 照旧保留」），核对必须手上有那次提交的
  *     事实；而丢失发生在**平台侧 squash** 那一刻，本地钩子跑的时候那次提交还没诞生
@@ -204,10 +204,10 @@ export function groupSteps(hookPath = HOOK) {
   }
   const out = [];
   /* `run_group <id> "<说明>" sh -c '<命令>'` —— 只认整行闭合的单引号，多行脚本不匹配。 */
-  const re = /^run_group\s+\S+\s+"([^"]+)"\s+sh -c '([^'\n]+)'\s*$/gm;
+  const re = /^run_group\s+\S+\s+"(?<label>[^"]+)"\s+sh -c '(?<command>[^'\n]+)'\s*$/gm;
   for (const m of text.matchAll(re)) {
-    const label = m[1];
-    const command = m[2];
+    const label = m.groups?.label;
+    const command = m.groups?.command;
     if (!label || !command) {
       continue;
     }
@@ -227,37 +227,34 @@ export function groupSteps(hookPath = HOOK) {
  *
  * ⇒ 名单在此导出，因为**两处都要用同一个问法**：「这一步的判决面是不是只存在于
  * 「本次改动」上」—— 合并前复算据此**不收**它（`mayDecideOnCleanSnapshot`），
- * 平台复合档据此**换判决面**或**单列成没判**（`scripts/ci-heavy-gates.mjs`）。
+ * 平台复合档据此**换判决面**或**单列成没判**（`scripts/ci/ci-heavy-gates.mjs`）。
  * 两处各写一份名单就会漂开，而漂开的形态是「一处判了、另一处没判」。
  *
  * ⚠️ **这一族是「按参数形态识别」抓不到的那一半**（ISSUE #2265 的现场）：
  *   · `shell-gate` —— 钩子行里**连 `--staged` 都没有**，它自己读暂存区；
- *   · `check-doc-mirror-pairing.cjs` —— 带 `--staged`，但**剥掉那个旗标之后它判的
- *     仍是暂存集**（它自己的文件头写着「不带它判的也是暂存集」：镜像与源是否**同批**
- *     是提交的属性，不是仓库的属性）⇒ 剥旗标这一手对它**无效**；
+ *   · （`check-doc-mirror-pairing.cjs` 曾在这一族里，#3586 随镜像退役一并退出。）
  *   · `known-failed-selftest-gate.mjs` —— 同样**连旗标都没有**（钩子行是
- *     `node scripts/known-failed-selftest-gate.mjs`），它自己读暂存区；
- *   · `check-reformat-only.cjs` —— **带了 `--staged`，但那个旗标不是可剥的**（ISSUE #3032）。
- *     它在钩子行上的 `--staged` 同时是「输入面跳过」的开关与「判哪一份面」的开关：剥掉
- *     之后判据回落到 `HEAD~1..HEAD`，而平台上是合并预览（HEAD 是合并提交、`HEAD~1` 是
- *     它第一父）⇒ 那个区间就是**整个 PR**，于是「重排独占一条」这种正确形态被自己的
- *     逐提交护栏（护栏 ②）判成夹带，红得与本次改动是什么无关（现场：PR #2990 的
- *     `cnb-kf6-1k6bvdese`：162 份源文件里 120 份被判纯格式化）。它认的是
- *     `--range <基线>..HEAD`，与 `shell-gate` 的 `--base <ref>` 是同一件事的两种旗标。
+ *     `node scripts/gates/known-failed-selftest-gate.mjs`），它自己读暂存区。
  *
- * 后三条在平台那一格（干净快照、没有暂存区）上**恒绿**：
- *   · 第一条自认「暂存区是空的 —— 没有什么可判（这不是「已通过」）」并退 0；
- *   · 第二条**一个字都不打**就退 0；
- *   · 第三条落到 `HEAD~1..HEAD` 那一支 —— 判的是**另一个区间**，读数与本次改动的形态无关。
- * ⇒ 三条都登记进来，让复合档给它们换判决面（`--base <ref>` / `--range <基线>..HEAD`），
+ * `check-reformat-only.cjs` 曾也在这一族里（ISSUE #3032），**现已退出**（ISSUE #3035）：
+ * 它钩子行上的 `--staged` 是可剥的 —— 剥掉之后落到「判 `HEAD` 这一次提交」那一支，
+ * 而那一支自己认得平台合并预览（`headRangeEnds()`：区间两端都取自合成提交的父关系，
+ * 不是 `HEAD~1`）⇒ 判决面本就是「这个 PR 带来的那批提交」。#3032 让复合档给它换发
+ * `--range <基线>..HEAD`，在平台上连红三轮，根因是**平台拼法不保证把本分支放在第一父**
+ * （实测第二父那一侧才是本 PR）：区间整段跨过主干，逐提交护栏把「重排独占一条」读成
+ * 夹带（现场 `cnb-kf6-1k6bvdese` 120/162、`cnb-3lk-1k6d2lm2l` 118/164）。
+ * 同一个问题在 #3035 一并收口到判据那一侧，`--range` 形态因此没有调用方。
+ *
+ * 这两条在平台那一格（干净快照、没有暂存区）上**恒绿**：
+ *   · 前者自认「暂存区是空的 —— 没有什么可判（这不是「已通过」）」并退 0；
+ *   · 后者**一个字都不打**就退 0。
+ * ⇒ 两条都登记进来，让复合档给它们 `--base <ref>`（换判决面），
  * 也让合并前复算**不收**它们（`mayDecideOnCleanSnapshot`）—— 那条复算在干净快照上
  * 同样没有暂存区，收进去只会多一行恒绿。
  */
 export const CHANGED_SCOPED = [
-  "scripts/shell-gate.mjs",
-  "scripts/check-doc-mirror-pairing.cjs",
-  "scripts/known-failed-selftest-gate.mjs",
-  "scripts/check-reformat-only.cjs",
+  "scripts/gates/shell-gate.mjs",
+  "scripts/gates/known-failed-selftest-gate.mjs",
 ];
 
 /**
@@ -309,12 +306,12 @@ export function readHookSteps(hookPath = HOOK) {
   }
   const steps = [];
   for (const line of text.split("\n")) {
-    const m = line.match(/^\s*run\s+"([^"]+)"\s+(.+?)\s*$/);
+    const m = line.match(/^\s*run\s+"(?<label>[^"]+)"\s+(?<command>.+?)\s*$/);
     if (!m) {
       continue;
     }
-    const label = m[1];
-    const command = m[2];
+    const label = m.groups?.label;
+    const command = m.groups?.command;
     if (label === undefined || command === undefined) {
       continue;
     }
@@ -334,7 +331,7 @@ export function readHookSteps(hookPath = HOOK) {
  * 只认**步骤行**，块边界就是 `run_group D0` 那一行到它 `sh -c '` 的收尾引号。
  *
  * 消费方：`.githooks/pre-commit` 的档位开关（默认只跑这一档）与
- * `scripts/premerge-check.mjs`（合并前那一跳**默认就跑全套**，`--light` 才减到这一档）。
+ * `scripts/gates/premerge-check.mjs`（合并前那一跳**默认就跑全套**，`--light` 才减到这一档）。
  *
  * @param {string} hookPath @returns {Set<string>}
  */
@@ -356,9 +353,10 @@ export function localTierLabels(hookPath = HOOK) {
     if (line.startsWith("'")) {
       break;
     } // D0 那个 `sh -c '…'` 的收尾引号
-    const m = line.match(/^\s*run\s+"([^"]+)"/);
-    if (m?.[1] !== undefined) {
-      out.add(m[1]);
+    const m = line.match(/^\s*run\s+"(?<label>[^"]+)"/);
+    const label = m?.groups?.label;
+    if (label !== undefined) {
+      out.add(label);
     }
   }
   return out;
@@ -470,7 +468,6 @@ export function commandTargetState(argv, cwd) {
  */
 function resolveGateInvocation(argv) {
   const [cmd, ...rest] = argv;
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 空 argv 时解构出的 cmd 是 undefined，规则没建模 noUncheckedIndexedAccess
   if (cmd === undefined) {
     return null;
   }

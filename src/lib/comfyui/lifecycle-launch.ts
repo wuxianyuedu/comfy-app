@@ -27,8 +27,11 @@ import { COMFYUI_DEFAULT_PORT, comfyUiBaseUrl } from "../endpoints";
 import { INLINE_STDERR_MAX, clampText } from "../text-clamp";
 import type { getSettingsSync } from "../app-settings/app-settings.server";
 import { resolveComfyLaunchPlan } from "./launch-path";
+import { buildDepDriftWarning, checkComfyDepDrift } from "./dep-drift";
+import { findLatestKeepAliveLogs, pruneKeepAliveLogs } from "./keepalive-logs";
 import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
+import { probeComfyAtPort } from "./probe";
 import { spawnManaged, waitForDetachMediator } from "~/lib/process/process-launch";
 import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 import {
@@ -106,6 +109,9 @@ export type LaunchHost = {
 type EnsureCtx = {
   /** 最终启动参数（已含 --port / --enable-cors-header / 额外参数）。 */
   args: Array<string>;
+  /** 配置端口（0 / 未配置已按平台默认解析成最终值）：保活退出监督器的便宜
+   *  先导探测用它（ISSUE #4197），两条保活装配路径共用同一个口径。 */
+  configuredPort: number;
   /** 生效的 CPU 档位（ISSUE #1959）。在拉起前解析一次、两条路径共用 ——
    *  「哪一档」是用户设置，与「怎么起」无关，不该在两条路径里各判一遍。 */
   cpuLimitMode: CpuLimitMode;
@@ -184,10 +190,12 @@ async function resolveAndApplyCpuLimitForKeepAlive(input: {
   }
   for (let attempt = 0; attempt < KEEPALIVE_CPU_PID_ATTEMPTS; attempt++) {
     if (attempt > 0) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await new Promise((r) => setTimeout(r, KEEPALIVE_CPU_PID_INTERVAL_MS));
     }
     let pid: number | null;
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       pid = (await findPidForMainPyDetailed(input.mainPy)).pid;
     } catch {
       /* 查询本身抛错（极罕见）：当作这一轮没查到，下一轮再试。 */
@@ -226,6 +234,17 @@ export async function runEnsureLaunch(input: {
       `提示：所选解释器（${plan.cmd}）的 site-packages 里没有 torch，启动大概率会失败——请检查 ComfyUI 环境`,
     );
   }
+  /* 源码 ↔ 环境依赖脱节核对（ISSUE #4192）：源码被升级而运行环境的 Python 依赖
+   * 没跟上时，ComfyUI 照常能拉起，脱节要等到节点执行期才爆出难懂的 Python
+   * TypeError（实测：comfy-aimdo 源码侧要 0.6.0、环境里还是 0.5.6，CLIPTextEncode
+   * 报 ModelVBAR ... unexpected keyword argument 'pageout_callback'）。在 spawn
+   * 之前做一次只读核对，把 `==` 锁包的差异面提前点名并给出修法。只预警不阻断：
+   * 判「能不能拉起」仍归上面的既有链路。checkComfyDepDrift 内部吞掉一切读取
+   * 失败（返回 null 即无从核对），预警通道绝不把启动带崩。 */
+  const depDriftReport = checkComfyDepDrift(plan.cwd, plan.cmd);
+  if (depDriftReport !== null && depDriftReport.drift.length > 0) {
+    note(buildDepDriftWarning(depDriftReport));
+  }
 
   // 有效端口/额外参数：桌面实例读 Comfy Desktop 元数据（launchArgs→headless
   // 映射），便携/venv 走设置里的 comfyuiPort / comfyuiExtraArgs。非默认端口
@@ -259,14 +278,20 @@ export async function runEnsureLaunch(input: {
     note,
     plan,
     args,
+    configuredPort:
+      settings.comfyuiPort && settings.comfyuiPort > 0
+        ? settings.comfyuiPort
+        : COMFYUI_DEFAULT_PORT,
     stdioEnv: {
       ...process.env,
       ...eff.envVars,
       PYTHONIOENCODING: "utf8",
       PYTHONUTF8: "1",
     },
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    deadline: input.timeoutMs == null ? null : Date.now() + input.timeoutMs,
+    deadline:
+      input.timeoutMs === null || input.timeoutMs === undefined
+        ? null
+        : Date.now() + input.timeoutMs,
     timeoutDetail: `ComfyUI 启动超过 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/services/comfyui-runtime.log`,
     cpuLimitMode: resolveCpuLimitMode({
       mode: settings.comfyuiCpuLimit,
@@ -322,8 +347,10 @@ export async function waitForExistingInstanceReady(input: {
   const { host, settings, note } = input;
   let goneStreak = 0;
   const result = await waitForComfyReady({
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    deadline: input.timeoutMs == null ? null : Date.now() + input.timeoutMs,
+    deadline:
+      input.timeoutMs === null || input.timeoutMs === undefined
+        ? null
+        : Date.now() + input.timeoutMs,
     timeoutDetail: `已有 ComfyUI 实例持续未响应（等待 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 后放弃）；可能正忙或已卡死，详见 log/services/comfyui-runtime.log`,
     readyDetail: "ComfyUI 已就绪（接管已在运行的实例）",
     onReady: (base) => {
@@ -381,10 +408,10 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
     const lines: Array<string> = [];
     for (const file of [kaErrLog, kaOutLog]) {
       try {
-        if (!fs.existsSync(file)) {
+        if (!fs.existsSync(/*turbopackIgnore: true*/ file)) {
           continue;
         }
-        lines.push(...fs.readFileSync(file, "utf8").split(/\r?\n/));
+        lines.push(...fs.readFileSync(/*turbopackIgnore: true*/ file, "utf8").split(/\r?\n/));
       } catch {
         /* 读不到就当没有这一份证据，不影响判死本身 */
       }
@@ -404,8 +431,8 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
     redirectStdoutFile: kaOutLog,
     redirectStderrFile: kaErrLog,
   });
-  if (launched.child === undefined || launched.error !== undefined) {
-    const detail = `启动 ComfyUI 失败：${launched.error ?? "未知错误"}`;
+  if (launched.child === undefined) {
+    const detail = `启动 ComfyUI 失败：${launched.error}`;
     note(detail);
     return { ok: false, base: null, detail };
   }
@@ -487,8 +514,11 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
       const len = stat.size - kaOffsets[key];
       const buf = Buffer.alloc(len);
       const fd = fs.openSync(file, "r");
-      fs.readSync(fd, buf, 0, len, kaOffsets[key]);
-      fs.closeSync(fd);
+      try {
+        fs.readSync(fd, buf, 0, len, kaOffsets[key]);
+      } finally {
+        fs.closeSync(fd);
+      }
       kaOffsets[key] = stat.size;
       /* 拼回上一轮的残余再解：切在多字节字符中间时，那个字符整个留到下一轮
        * （见文件头）。**先取新残余再切片** —— 改回 `buf.toString("utf-8")`
@@ -608,6 +638,7 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
   startKeepAliveWatch({
     host,
     mainPy: plan.mainPy,
+    configuredPort: ctx.configuredPort,
     logs: { out: kaOutLog, err: kaErrLog },
     isStopped: () => st.stopRequested === true,
     note,
@@ -615,8 +646,22 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
   return result;
 }
 
-/** 当前保活会话的退出监督器（同一时刻最多一个，重新拉起前会被停掉）。 */
-let keepAliveExitWatcher: { stop: () => void } | null = null;
+/* 当前保活会话的退出监督器（同一时刻最多一个，重新拉起前会被停掉）。
+ * 挂 globalThis（#4230）：同文件其它跨 HMR 单例同款——模块级变量在 dev 热重载
+ * 后换新、旧监督器的 interval 还活着（unref 后可活到事件循环结束），新实例看到
+ * null 会再挂一个 → 双监督器并存、退出横幅可能双发。键名带版本号是既定坑位写法
+ * （`??=` 只认键名，不给旧单例补字段）。 */
+declare global {
+  var __comfyKeepAliveWatch_v1: { stop: () => void } | null | undefined;
+}
+
+function currentKeepAliveWatch(): { stop: () => void } | null {
+  return globalThis.__comfyKeepAliveWatch_v1 ?? null;
+}
+
+function setKeepAliveWatch(watch: { stop: () => void } | null): void {
+  globalThis.__comfyKeepAliveWatch_v1 = watch;
+}
 
 /**
  * 保活退出监督的统一装配入口：「本次会话拉起」与「重启后接管」两条路径共用。
@@ -624,6 +669,8 @@ let keepAliveExitWatcher: { stop: () => void } | null = null;
  * 会话、把新进程当成「旧的那个回来了」。
  */
 function startKeepAliveWatch(params: {
+  /** 配置端口（已解析成最终值）：退出监督的便宜先导探测用（ISSUE #4197）。 */
+  configuredPort: number;
   host: LaunchHost;
   isStopped: () => boolean;
   /** 崩溃尾部来源（本次拉起的重定向文件；接管场景给不出来时留空 ——
@@ -632,97 +679,32 @@ function startKeepAliveWatch(params: {
   mainPy: string;
   note: (msg: string) => void;
 }): void {
-  keepAliveExitWatcher?.stop();
-  keepAliveExitWatcher = startComfyExitWatcher({
-    findPid: () => findPidForMainPyDetailed(params.mainPy),
-    isStopped: params.isStopped,
-    onExit: (facts) => {
-      const report = reportKeepAliveExit({
-        facts,
-        stopRequested: params.isStopped(),
-        appendRuntimeLog: params.host.appendRuntimeLog,
-        log: params.note,
-        keepAliveLogs: params.logs,
-      });
-      params.host.markSessionEnd(report);
-      /* 监督器已自停：清掉引用，之后若这个实例又活了（外部/别处拉起），
-       * 「接管」路径能重新挂上监督。 */
-      keepAliveExitWatcher = null;
-    },
-  });
-}
-
-/**
- * 找 SERVICES_LOG_DIR 里最新的一对 `comfyui-keepalive-*.{out,err}.log`。
- *
- * 用于「接管」场景：那个实例不是本进程拉起的，拿不到它当次的重定向文件路径，
- * 只能按 mtime 取最近被写入的那份（还在跑的实例还在写，基本就是它）。
- * 取不到就返回空对象 —— 退出时带不出尾部，但监督本身照常。
- */
-function findLatestKeepAliveLogs(): { err?: string; out?: string } {
-  try {
-    if (!fs.existsSync(SERVICES_LOG_DIR)) {
-      return {};
-    }
-    const pick = (suffix: string): string | undefined => {
-      const newest = fs
-        .readdirSync(SERVICES_LOG_DIR)
-        .filter((name) => name.startsWith("comfyui-keepalive-") && name.endsWith(suffix))
-        .map((name) => ({
-          name,
-          mtime: fs.statSync(path.join(SERVICES_LOG_DIR, name)).mtimeMs,
-        }))
-        .sort((a, b) => b.mtime - a.mtime)[0];
-      if (!newest) {
-        return undefined;
-      }
-      return path.join(SERVICES_LOG_DIR, newest.name);
-    };
-    return { out: pick(".out.log"), err: pick(".err.log") };
-  } catch {
-    return {};
-  }
-}
-
-/** 保活重定向日志的保留份数（一次拉起 = out + err 两个文件）。 */
-const KEEPALIVE_LOG_KEEP_LAUNCHES = 10;
-
-/**
- * 只保留最近 N 次保活拉起的重定向日志，删掉更老的。
- *
- * 这些文件是**按次命名**的（`comfyui-keepalive-<时间戳>.{out,err}.log`）：好处
- * 是不会被长持句柄锁死、不会互相覆盖，代价是**只建不删**——每次拉起都新增两个，
- * 长期用会在 `log/services/` 里一直堆积（AGENTS 硬规则 4 要的就是这种产物
- * 「按次命名 + 轮转」，光有命名没有轮转仍会堆积）。
- *
- * 每次新拉起顺手清一次最老的：保留的是 mtime 最新的那些，因此
- *   - 本次刚建的（最新）不会被自己删掉；
- *   - 仍在运行、还在被写入的实例（mtime 靠前）也不会被删。
- * 清理失败不该影响启动本身，故整体吞掉异常。
- */
-export function pruneKeepAliveLogs(): void {
-  try {
-    if (!fs.existsSync(SERVICES_LOG_DIR)) {
-      return;
-    }
-    const files = fs
-      .readdirSync(SERVICES_LOG_DIR)
-      .filter(
-        (name) =>
-          name.startsWith("comfyui-keepalive-") &&
-          (name.endsWith(".out.log") || name.endsWith(".err.log")),
-      )
-      .map((name) => ({
-        name,
-        mtime: fs.statSync(path.join(SERVICES_LOG_DIR, name)).mtimeMs,
-      }))
-      .sort((a, b) => b.mtime - a.mtime);
-    for (const old of files.slice(KEEPALIVE_LOG_KEEP_LAUNCHES * 2)) {
-      fs.unlinkSync(path.join(SERVICES_LOG_DIR, old.name));
-    }
-  } catch {
-    /* 清理失败不影响启动 */
-  }
+  currentKeepAliveWatch()?.stop();
+  setKeepAliveWatch(
+    startComfyExitWatcher({
+      findPid: () => findPidForMainPyDetailed(params.mainPy),
+      /* 便宜先导信号（ISSUE #4197）：每拍先探配置端口（环回 HTTP 毫秒级），
+       * 应答 = 实例活着、不再起 PowerShell 进程表枚举——否则实例在跑多久，
+       * WMI 查询就每 10s 陪跑多久。端口不应答（加载中 / 偏移端口 / 抖动）
+       * 才落到 findPid 确认，判死判据不变。COMFYUI_BASE（远端实例）时
+       * probeComfyAtPort 恒回 null ⇒ 每拍都走进程表，与旧行为一致。 */
+      probeAlive: () => probeComfyAtPort(params.configuredPort).then((base) => base !== null),
+      isStopped: params.isStopped,
+      onExit: (facts) => {
+        const report = reportKeepAliveExit({
+          facts,
+          stopRequested: params.isStopped(),
+          appendRuntimeLog: params.host.appendRuntimeLog,
+          log: params.note,
+          keepAliveLogs: params.logs,
+        });
+        params.host.markSessionEnd(report);
+        /* 监督器已自停：清掉引用，之后若这个实例又活了（外部/别处拉起），
+         * 「接管」路径能重新挂上监督。 */
+        setKeepAliveWatch(null);
+      },
+    }),
+  );
 }
 
 /**
@@ -744,7 +726,7 @@ export function ensureKeepAliveWatchOnAdoption(input: {
   if (resolveLaunchPolicy(getExitPolicy().exitKillComfyui) !== "keepAlive") {
     return;
   }
-  if (keepAliveExitWatcher !== null) {
+  if (currentKeepAliveWatch() !== null) {
     return;
   }
   const plan = resolveComfyLaunchPlan(settings.comfyuiPath);
@@ -754,6 +736,10 @@ export function ensureKeepAliveWatchOnAdoption(input: {
   startKeepAliveWatch({
     host,
     mainPy: plan.mainPy,
+    configuredPort:
+      settings.comfyuiPort && settings.comfyuiPort > 0
+        ? settings.comfyuiPort
+        : COMFYUI_DEFAULT_PORT,
     logs: findLatestKeepAliveLogs(),
     isStopped: () => host.st.stopRequested === true,
     note,
@@ -813,30 +799,37 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
   child.stderr?.on("data", outSink);
   /* 会话起点：存活时长基于它算（「跑了 3 分钟就死」与「刚起就死」是两种问题）。 */
   const spawnedAt = Date.now();
-  child.on(
-    "exit",
-    createChildExitHandler({
-      /* 横幅直接写「为什么退出」：此前只有 `code=...`，而用户的问题是
-       * 「它是由什么退出的」—— 结论该出现在日志里，不该留给读者去推。 */
-      subject: "ComfyUI",
-      appendRuntimeLog,
-      log: note,
-      clearChild: () => {
-        if (st.child === child) {
-          st.child = undefined;
-        }
-      },
-      context: () => ({
-        pid: child.pid ?? null,
-        uptimeMs: Date.now() - spawnedAt,
-        stopRequested: st.stopRequested === true,
-        mode: "bound",
-      }),
-      onExitReport: (report) => {
-        host.markSessionEnd(report);
-      },
+  const onChildGone = createChildExitHandler({
+    /* 横幅直接写「为什么退出」：此前只有 `code=...`，而用户的问题是
+     * 「它是由什么退出的」—— 结论该出现在日志里，不该留给读者去推。 */
+    subject: "ComfyUI",
+    appendRuntimeLog,
+    log: note,
+    clearChild: () => {
+      if (st.child === child) {
+        st.child = undefined;
+      }
+    },
+    context: () => ({
+      pid: child.pid ?? null,
+      uptimeMs: Date.now() - spawnedAt,
+      stopRequested: st.stopRequested === true,
+      mode: "bound",
     }),
-  );
+    onExitReport: (report) => {
+      host.markSessionEnd(report);
+    },
+  });
+  child.on("exit", onChildGone);
+  /* 异步 spawn 失败（EACCES / 被安全软件拦截 / existsSync 校验与真正 spawn
+   * 之间的竞态）走的是 **error 事件**而不是同步抛错，且 `exit` 不会发——
+   * 不接住就是 uncaughtException 打挂应用服务，而上面的等待循环拿不到任何
+   * 信号、会一直空转到 deadline（设置页手动启动没有 deadline）。按「进程
+   * 没了」同形收口：清句柄（isDead 随之判死、用留底给出口）+ 落账（ISSUE #4202）。 */
+  child.on("error", (err: Error) => {
+    appendRuntimeLog(`[spawn] ComfyUI 子进程启动失败：${err.message}`);
+    onChildGone(null, null);
+  });
 
   /* 等待循环：deadline 为 null（设置页手动启动）时不设硬超时，一直等到
    * 就绪、进程退出或用户手动关闭；显式传 timeoutMs 的调用方（任务自动
@@ -856,7 +849,7 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
         : null,
     probe: () => probeChildReady(child),
     /* 子进程句柄被清掉（= 进程已退出）→ 用留底给出可行动的报错。 */
-    isDead: async () => (st.child === child ? null : buildEarlyExitDetail(ledger.lines)),
+    isDead: () => Promise.resolve(st.child === child ? null : buildEarlyExitDetail(ledger.lines)),
   });
   if (!result.ok) {
     note(result.detail);
@@ -865,28 +858,26 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
 }
 
 /**
- * bound 模式的一次就绪探测：用已知子进程 PID 查它实际监听的端口——不依赖
- * 端口探测猜哪个 ComfyUI 是我们的实例（别的实例可能占着配置端口导致自动
- * +1）。用「特定 PID 的监听端口 + /system_stats 响应」双重确认，避免把同
- * 网段上另一个 ComfyUI 实例误认作刚启动的配置实例。
+ * bound 模式的一次就绪探测：用子进程 PID 查实际监听端口（不靠端口猜测），
+ * 再以 `/system_stats` 确认，避免误认同机其他 ComfyUI 实例。
  */
 export async function probeChildReady(child: ReturnType<typeof spawn>): Promise<string | null> {
   const childPid = child.pid;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  const listenPort = childPid == null ? null : await findPidListeningPort(childPid);
+  if (childPid === null || childPid === undefined) {
+    return null;
+  }
+  const listenPort = await findPidListeningPort(childPid);
   if (listenPort === null) {
     return null;
   }
   const base = comfyUiBaseUrl(listenPort);
   try {
-    const r = await fetch(`${base}/system_stats`, {
-      signal: AbortSignal.timeout(2000),
-    });
+    const r = await fetch(`${base}/system_stats`, { signal: AbortSignal.timeout(2000) });
     if (r.ok) {
       return base;
     }
   } catch {
-    /* HTTP 探测失败——进程在但 /system_stats 还没响应，继续等 */
+    /* HTTP 探测失败：进程在但 /system_stats 还没响应，继续等 */
   }
   return null;
 }

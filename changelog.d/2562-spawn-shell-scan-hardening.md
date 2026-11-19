@@ -6,11 +6,11 @@
 0 命中只证明「此刻没有违规」，不能证明「闸能拦下违规」。**一个从没响过的烟雾探测器，
 你不能说它工作正常。** 这一轮把缺口补上：
 
-- **缺口 1（阳性对照 / canary）**：新增一条直接跑 `node scripts/spawn-shell-scan.mjs`
+- **缺口 1（阳性对照 / canary）**：新增一条直接跑 `node scripts/gates/spawn-shell-scan.mjs`
   （`pnpm run scan:spawn-shell`）的测试 —— 在临时树里放一个已知 `shell: true` 违例，
   断言脚本**退出码非 0**且把违例点名出来。绿了（没报错）才算闸在工作；那段若也能过，
   那 0 命中只是「从没触发过」。同时确认它**进了 CI 且是 blocking step**：用例在
-  `scripts/fixed-structural-tests.mjs` 固定清单里，每个 PR 都跑（不是本地脚本、也不是
+  `scripts/affected-tests/fixed-structural-tests.mjs` 固定清单里，每个 PR 都跑（不是本地脚本、也不是
   只活在注释里）。覆盖面的三件事逐项验过：退出码非 0 ✓、进了固定清单 blocking ✓、
   扫 `scripts/` `tools/` `.storybook/` `e2e/` 而不只是 `src/`（`src/**` 仍不扫，那侧归
   硬规则 3 的 `kill-process-tree` 族，另有判据，把两边扫描面并到一起只会互相污染）。

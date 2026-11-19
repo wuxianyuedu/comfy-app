@@ -1,16 +1,8 @@
 // @vitest-environment jsdom
 /**
  * 「按一下就亮、过一会儿自己复位」的反馈状态（规范 16 §16.2.4）。
- *
- * 这条账的形状是**时间线**，不是某个组件：全库 6 个落点各写一份
- * 「亮起 → `setTimeout` 复位」，其中 4 处裸 `setTimeout`（连卸载都不管）、
- * 2 处手写 `timerRef`。两类缺陷在各自的调用点都看不出来，只有把时间线
- * 拿出来单测才验得了：
- *  ① 卸载后仍然 `setState`；
- *  ② 连点时旧定时器没清 —— 第一次的复位提前抹掉第二次的亮起。
- *
- * 用假定时器把时间轴控制住，而不是 `await sleep(1500)`：真实等待会让
- * 用例慢且不稳，而且无法验证「第二下是否被第一下的复位打断」。
+ * 全库 6 个落点各写一份「亮起 → setTimeout 复位」：4 处裸 setTimeout（连卸载都不管）、2 处手写 timerRef。缺陷只有把时间线单测才验得了：① 卸载后仍 setState；② 连点时旧定时器没清，第一次的复位提前抹掉第二次的亮起。
+ * 用假定时器控制时间轴，而不是 `await sleep(1500)`：真实等待慢且不稳，也无法验证「第二下是否被第一下的复位打断」。
  */
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,7 +21,9 @@ describe("useFlashState", () => {
     const { result } = renderHook(() => useFlashState());
     expect(result.current.on).toBe(false);
 
-    act(() => result.current.flash());
+    act(() => {
+      result.current.flash();
+    });
     expect(result.current.on).toBe(true);
 
     await act(async () => {
@@ -46,11 +40,15 @@ describe("useFlashState", () => {
   it("连点时以最后一次为准：第一下的复位不打断第二下", async () => {
     const { result } = renderHook(() => useFlashState(1000));
 
-    act(() => result.current.flash());
+    act(() => {
+      result.current.flash();
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(800);
     });
-    act(() => result.current.flash()); // 第二下
+    act(() => {
+      result.current.flash();
+    }); // 第二下
 
     /* 若旧定时器没被清，200ms 后就会被第一次的复位抹掉。 */
     await act(async () => {
@@ -68,7 +66,9 @@ describe("useFlashState", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { result, unmount } = renderHook(() => useFlashState(1000));
 
-    act(() => result.current.flash());
+    act(() => {
+      result.current.flash();
+    });
     unmount();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000);
@@ -79,16 +79,22 @@ describe("useFlashState", () => {
     error.mockRestore();
   });
 
-  it("reset 立即复位，不等定时器", async () => {
+  it("reset 立即复位，不等定时器", () => {
     const { result } = renderHook(() => useFlashState(1000));
-    act(() => result.current.flash());
-    act(() => result.current.reset());
+    act(() => {
+      result.current.flash();
+    });
+    act(() => {
+      result.current.reset();
+    });
     expect(result.current.on).toBe(false);
   });
 
   it("显式时长覆盖默认（logs 的保存回执要留 8s）", async () => {
     const { result } = renderHook(() => useFlashState(8000));
-    act(() => result.current.flash());
+    act(() => {
+      result.current.flash();
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(DEFAULT_FLASH_MS);
     });
@@ -110,7 +116,9 @@ describe("useFlashLatch", () => {
   it("载荷与亮起同生共死：一次动作的两个可见值一起过期", async () => {
     const { result } = renderHook(() => useFlashLatch(1000, EMPTY));
 
-    act(() => result.current.flash({ path: "log/exports/a.txt", failed: false }));
+    act(() => {
+      result.current.flash({ path: "log/exports/a.txt", failed: false });
+    });
     expect(result.current.value).toEqual({
       path: "log/exports/a.txt",
       failed: false,
@@ -124,8 +132,12 @@ describe("useFlashLatch", () => {
 
   it("reset 立即清空载荷，不等定时器", async () => {
     const { result } = renderHook(() => useFlashLatch(1000, EMPTY));
-    act(() => result.current.flash({ path: "a.txt", failed: false }));
-    act(() => result.current.reset());
+    act(() => {
+      result.current.flash({ path: "a.txt", failed: false });
+    });
+    act(() => {
+      result.current.reset();
+    });
     expect(result.current.value).toEqual(EMPTY);
     /* 复位后旧定时器不该再动状态。 */
     await act(async () => {
@@ -137,11 +149,15 @@ describe("useFlashLatch", () => {
   it("连点时旧定时器被清（第二个载荷不被第一个的复位抹掉）", async () => {
     const { result } = renderHook(() => useFlashLatch(1000, EMPTY));
 
-    act(() => result.current.flash({ path: "a.txt", failed: false }));
+    act(() => {
+      result.current.flash({ path: "a.txt", failed: false });
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(800);
     });
-    act(() => result.current.flash({ path: null, failed: true }));
+    act(() => {
+      result.current.flash({ path: null, failed: true });
+    });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(200);

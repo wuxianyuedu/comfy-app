@@ -3,25 +3,22 @@
 
 import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import { isPlainRecord } from "~/lib/is-record";
+import type { ModelTagSummary } from "~/lib/workflow/workflow-list-types";
 import type { WorkflowRow } from "./workflow-library-config";
 
-/** 详情面板的四个页签 —— 数组顺序即渲染顺序，**第一项也是默认页签**。
- *
- *  「编辑对外参数 / 实际使用」原先是「画布节点」页签内部的子页签，二者内容
- *  基本独立（前者是参数落点编辑画布，后者是填表运行），拆成顶层页签少一层
- *  嵌套。两者共用同一个常驻实例（见 `WorkflowLibraryDetailView`）：切页签
- *  只切视图模式，表单值与运行态不丢。
- *
- *  **默认页签取最轻的那个（工坊封装）**：打开一条工作流时先落在这里 —— 它是
- *  一张纯文字的口 / 落点清单，不牵画布引擎（`@xyflow/react`）、也不牵 JSON 树
- *  渲染器。默认落重型页签（画布预览）的代价是**每打开一条工作流就把画布引擎
- *  拉起来**，而多数时候用户只是想看一眼「工坊会怎么驱动它」。
- *  「编辑对外参数 / 实际使用」那一份常驻实例另见视图层的**首次访问才挂载**
- *  （`WorkflowLibraryDetailView`）：切这两页时只下载一次，之后常驻不重建。 */
+/** 详情面板的页签 —— 数组顺序即渲染顺序，**第一项也是默认页签**。
+ *  「编辑对外参数 / 实际使用」原是「画布节点」内的子页签，拆成顶层页签少一层嵌套；
+ *  两者共用同一个常驻实例（见 `WorkflowLibraryDetailView`），切页签只切视图模式，
+ *  表单值与运行态不丢。默认页签取最轻的「工坊封装」：纯文字清单，不牵画布引擎与
+ *  JSON 树渲染器；否则每打开一条工作流就把画布引擎拉起来。 */
 /* SAFETY: 类型断言已复核 */
 export const DETAIL_TABS = [
   { key: "params", label: "工坊封装" },
   { key: "canvas", label: "编辑对外参数" },
+  /* IO 预览：不进编辑器就能改显隐 / 默认值 / 必填 / 显示名（ISSUE #3632）。
+   * 与「编辑对外参数」相邻 —— 两者都是对外参数配置，只是后者要拉画布引擎。 */
+  { key: "io", label: "IO 预览" },
   { key: "use", label: "实际使用" },
   { key: "source", label: "源文件" },
 ] as const;
@@ -33,16 +30,20 @@ export const DEFAULT_DETAIL_TAB: DetailTab = DETAIL_TABS[0].key;
 
 export type WorkflowLibraryDetailProps = {
   /** 用户级全局模型标签库（用于类型/模型编辑器）。 */
-  allModelTags?: Array<{ count: number; id: string; name: string }>;
-  /** 「这一条在下载 / 在同步吗」的判据（由父级的 `useItemAction` 给，
+  allModelTags?: Array<ModelTagSummary>;
+  /** 「这一条在下载 / 在同步 / 在转在线吗」的判据（由父级的 `useItemAction` 给，
    *  规范 16 §16.2.4.40）—— 详情面板不再自己拿 id 去比。 */
   isBundleBusy: (id: string) => boolean;
+  isConvertBusy: (id: string) => boolean;
   isResyncBusy: (id: string) => boolean;
+  /** 本地工作流一键转在线（ISSUE #4372）。 */
+  onConvertToOnline: (id: string, name: string) => void;
   onDelete: (id: string, name: string) => void;
   onDownload: (id: string, name: string) => void;
   onEdit: (id: string) => void;
-  /** 持久化模型标签绑定。 */
-  onPatchModelTags?: (id: string, names: Array<string>) => Promise<void>;
+  /** 持久化模型标签绑定。返回 `null` = 成功；否则为失败文案（唯一性冲突原因，
+   *  ISSUE #4102），绑定弹窗就地展示。 */
+  onPatchModelTags?: (id: string, names: Array<string>) => Promise<string | null>;
   /** 持久化类型（modes + defaultMode）。 */
   onPatchModes?: (id: string, modes: Array<string>, defaultMode: string) => Promise<void>;
   /** 整体落库 paramMap（预览面板拖圆点改对外参数落点）。 */
@@ -63,13 +64,14 @@ export type DetailTemplate = {
   workflowIO?: unknown;
 };
 
+/** 表内每个值都应是条目对象（旧数据里可能混进数组 / 非对象）。 */
+function isWorkflowIOMap(value: unknown): value is WorkflowIOMap {
+  return isPlainRecord(value) && Object.values(value).every(isPlainRecord);
+}
+
 /** workflowIO 在旧数据里可能存成数组或非对象，这里收紧成 Map 或 null。 */
 export function normalizeWorkflowIO(raw: unknown): WorkflowIOMap | null {
-  if (!raw || Array.isArray(raw) || typeof raw !== "object") {
-    return null;
-  }
-  /* SAFETY: 类型断言已复核 */
-  return raw as WorkflowIOMap;
+  return isWorkflowIOMap(raw) ? raw : null;
 }
 
 /** 「源文件」展示磁盘上的原始导入 JSON（用户当初导入的那个文件）：库里的
@@ -88,16 +90,12 @@ export function buildSourceData(
 }
 
 /** 详情请求是否对**当前渲染的**工作流就绪。
- *
- *  换工作流时 `useQuery({id})` 的 data 会短暂悬空（新 key 首次拉取），但
- *  `workflow` 行数据是同步就位的 —— 此时若把「选中行有值 + 查询在飞」当成
- *  加载态，右侧会先闪一屏「加载详情中…」再被真实内容顶掉，连带整页布局
- *  跳一下。判据因此收紧为「当前 workflow 的键还没到过数据」，而不是
- *  `isLoading`（它在换 key 与后台 refetch 时为真，二者都不该出现占位）。
- *
- *  未选中工作流时不算加载（空态由视图渲染）。 */
+ *  换工作流时 `useQuery({id})` 的 data 会短暂悬空，但 `workflow` 行数据同步就位；
+ *  若把「选中行有值 + 查询在飞」当加载态，右侧会先闪一屏「加载详情中…」再被顶掉，
+ *  整页布局跳一下。判据收紧为「当前 workflow 的键还没到过数据」，而不是
+ *  `isLoading`（换 key 与后台 refetch 都为真）。未选中工作流时不算加载。 */
 export function isDetailLoadingFor(workflowId: string | null, settledId: string | null): boolean {
-  if (!workflowId) {
+  if (workflowId === null || workflowId === "") {
     return false;
   }
   return settledId !== workflowId;

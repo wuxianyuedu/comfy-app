@@ -1,29 +1,10 @@
 /**
- * 提交门槛自检:把 scripts/check-branch-guard.cjs 当黑盒跑在临时仓库上,验证
- * 「不在 master 上直接提交」这条硬规则(规范 13.6 / ISSUE #492)真的会阻断提交,
- * 而不是只写在文档里。
- *
- * 为什么用临时 git 仓库而不是 mock git 调用:
- *   判据本身依赖三条 git 事实(当前分支名、HEAD 父提交数、工作树定位),在内存里
- *   假装这些事实恰好等于把规则重新实现一遍;真的建仓库、真的 commit 才等价于
- *   pre-commit 被触发时的处境(这也正是历史事故的来源:规则写得对,但没在真实
- *   提交路径上跑过)。
- *
- * 覆盖三类场景:
- *   - 分支上提交          → 放行
- *   - master 上直接提交    → 阻断,且提示里给出「怎么把提交搬走」
- *   - master 上合并提交    → 放行(PR 合并在平台侧完成,不该被本地门槛二次阻挡)
- *
- * 另覆盖服务端复核(`--pr-check`)。它的判据**不能**复用「分支名」:CNB 在
- * pull_request 事件上 checkout 的是**预合并提交**,容器里 `symbolic-ref HEAD` 恒等于
- * 目标分支——照搬「HEAD 在 master 上就是直连主干」会把每一条正常 PR 都拦死
- * (PR #633 第一次跑就是这么红的)。所以这里用真仓库把三种拓扑都跑一遍:
- *   - 源分支领先目标分支            → 放行
- *   - 源分支归并过目标分支(预合并)   → 放行
- *   - 源分支与目标分支完全同步       → 阻断(平台允许创建 source=master 的 PR)
+ * 提交门槛自检（规范 13.6 / ISSUE #492）：把 `scripts/gates/check-branch-guard.cjs` 当黑盒跑在临时仓库上，验证「不在 master
+ * 上直接提交」真会阻断。必须用真仓库而非 mock：判据依赖分支名 / HEAD 父提交数 / 工作树定位，mock 等于重写规则；
+ * 覆盖三类提交场景。`--pr-check` 另有三种拓扑，且不能复用分支名（CNB 在 PR 上 checkout 预合并提交，`symbolic-ref HEAD` 恒等目标分支，PR #633 即因此全红）。
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
@@ -34,10 +15,10 @@ import { vi } from "vitest";
  * 不够（实测单条 7~16s）—— 文件级放宽到 30s，只影响本文件。 */
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
-const SCRIPT = join(process.cwd(), "scripts", "check-branch-guard.cjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates/check-branch-guard.cjs");
 
 const { test, expect } = defineGateRepo({
-  script: "check-branch-guard.cjs",
+  script: "gates/check-branch-guard.cjs",
   /* 脚本用 `process.cwd()` 定位扫描根 —— 落哪都一样，选 root。 */
   dir: "root",
   /* 夹具就绪后 `git init` 一个「master 上已有一个提交」的仓库：本判据的
@@ -69,9 +50,7 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     expect(output).toContain("[branch-guard] OK");
   });
 
-  test("master 上的合并提交 → 放行(PR 合并不被本地门槛二次阻挡)", ({
-    repo,
-  }) => {
+  test("master 上的合并提交 → 放行(PR 合并不被本地门槛二次阻挡)", ({ repo }) => {
     repo.git("checkout", "-q", "-b", "feat/merge-me");
     repo.write("feature.txt", "feature\n");
     repo.git("add", ".");
@@ -95,11 +74,15 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
      * 会 init 一个仓库）—— 自己造一个裸目录，与「这条要验的形态」一一对应。 */
     const bare = mkdtempSync(join(tmpdir(), "branch-guard-nogit-"));
     try {
-      copyFileSync(SCRIPT, join(bare, "check-branch-guard.cjs"));
+      mkdirSync(join(bare, "scripts", "gates"), { recursive: true });
+      copyFileSync(SCRIPT, join(bare, "scripts", "gates", "check-branch-guard.cjs"));
       const output = execFileSync(
         process.execPath,
-        [join(bare, "check-branch-guard.cjs")],
-        { cwd: bare, encoding: "utf8" },
+        [join(bare, "scripts", "gates", "check-branch-guard.cjs")],
+        {
+          cwd: bare,
+          encoding: "utf8",
+        },
       );
       // 取不到分支名(空) ≠ master,判据无从命中,放行而非报错
       expect(output).toContain("[branch-guard] OK");
@@ -120,9 +103,7 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     expect(output).toContain("不在 master 上");
   });
 
-  test("--pr-check:目标分支还在推进、源分支已归并它(CNB 预合并形态)→ 放行", ({
-    repo,
-  }) => {
+  test("--pr-check:目标分支还在推进、源分支已归并它(CNB 预合并形态)→ 放行", ({ repo }) => {
     repo.git("checkout", "-q", "-b", "feat/pr");
     repo.write("feature.txt", "feature\n");
     repo.git("add", ".");
@@ -138,9 +119,7 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     expect(output).toContain("[branch-guard] OK");
   });
 
-  test("--pr-check:源分支没有任何超出目标分支的提交 → 阻断(源分支就是 master)", ({
-    repo,
-  }) => {
+  test("--pr-check:源分支没有任何超出目标分支的提交 → 阻断(源分支就是 master)", ({ repo }) => {
     // 平台允许创建 source=master 的 PR,这正是本条要拦的场景。
     repo.git("checkout", "-q", "-b", "sync-with-master");
     const { code, output } = repo.run(["--pr-check", "--target", "master"]);
@@ -149,19 +128,38 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     expect(output).toContain("git checkout -b");
   });
 
+  /* ── 手动派发形态（ISSUE #3102）:同一拓扑，两种结论 ──────────────────── */
+
+  test("--manual-dispatch:同拓扑显式「不判」(exit 2),不是红也不是绿", ({ repo }) => {
+    /* 与上一条**同一份拓扑**，只多一个旗标 —— 这就是「手动派发形态下源分支=目标分支
+     * 是派发形态本身」的那一档。判据没有放宽：结论是 exit 2（没判），标记行供 GitHub
+     * 外壳折算成非红；措辞里必须写明「PR 形态下仍会红」。 */
+    repo.git("checkout", "-q", "-b", "sync-with-master");
+    const { code, output } = repo.run(["--pr-check", "--target", "master", "--manual-dispatch"]);
+    expect(code).toBe(2);
+    expect(output).toContain("[branch-guard] 结论：不判");
+    expect(output).toContain("workflow_dispatch");
+    expect(output).toContain("PR 形态");
+  });
+
+  test("--manual-dispatch 不是无条件跳过:真有超出目标分支的提交照样放行", ({ repo }) => {
+    /* 锁住反方向：旗标只影响「源分支=目标分支」那一档，不能变成「手动派发就永不红」。 */
+    repo.git("checkout", "-q", "-b", "feat/pr");
+    repo.write("feature.txt", "feature\n");
+    repo.git("add", ".");
+    repo.git("commit", "-qm", "feat: feature");
+    const { code, output } = repo.run(["--pr-check", "--target", "master", "--manual-dispatch"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("结论：不判");
+  });
+
   test("--pr-check:取不到目标分支 → 保守放行,不误报", ({ repo }) => {
-    const { code, output } = repo.run([
-      "--pr-check",
-      "--target",
-      "release/nope",
-    ]);
+    const { code, output } = repo.run(["--pr-check", "--target", "release/nope"]);
     expect(code).toBe(0);
     expect(output).toContain("保守放行");
   });
 
-  test("--pr-check 缺省目标分支是 master(不靠环境变量,参数缺省也判得动)", ({
-    repo,
-  }) => {
+  test("--pr-check 缺省目标分支是 master(不靠环境变量,参数缺省也判得动)", ({ repo }) => {
     repo.git("checkout", "-q", "-b", "feat/pr");
     repo.write("feature.txt", "feature\n");
     repo.git("add", ".");
@@ -173,9 +171,7 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
 
   /* ── --merge-commit:master 的 push 事件复核 ───────────────────────── */
 
-  test("--merge-commit:master 上的合并提交 → 放行(push 事件上 HEAD 就是合并提交)", ({
-    repo,
-  }) => {
+  test("--merge-commit:master 上的合并提交 → 放行(push 事件上 HEAD 就是合并提交)", ({ repo }) => {
     repo.git("checkout", "-q", "-b", "feat/merge-me");
     repo.write("feature.txt", "feature\n");
     repo.git("add", ".");
@@ -206,9 +202,7 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     expect(output).toContain("PR 关联");
   });
 
-  test("--merge-commit:单父且无 PR 关联 → 保守放行(不误报,直推拦截在平台分支保护)", ({
-    repo,
-  }) => {
+  test("--merge-commit:单父且无 PR 关联 → 保守放行(不误报,直推拦截在平台分支保护)", ({ repo }) => {
     // 拓扑同形时判据无从命中,按「保守放行」处理 —— 与 --pr-check 的
     // 「取不到目标分支 → 保守放行」同一口径。真正拦直推的是平台分支保护
     // (规范 §13.6.1),这里不再叠加一条会误报的判据。

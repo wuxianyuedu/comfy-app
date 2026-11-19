@@ -1,13 +1,27 @@
 // 左侧列表的三态区分（规范 11.2 行为测试）：用户反馈的核心是「加载没拿到
 // 数据」与「真的没有工作流」长得一模一样——这里锁住两者不再可混淆。
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { WorkflowLibraryList } from "./WorkflowLibraryList";
+import { TooltipProvider } from "~/components/ui/tooltip";
+import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 import type { PendingRow, WorkflowRow } from "./workflow-library-config";
 
+/* 列表行的封装状态读「模式契约生效注册表」（本机覆盖优先，ISSUE #4113）。
+ * 这里用可变桩代替真查询，逐格写入要模拟的覆盖。 */
+const modeContractsStub = vi.hoisted(() => ({ contracts: [] as Array<ModeContract> }));
+vi.mock("~/components/workshop/mode-contract/hooks/use-mode-contracts", () => ({
+  useModeContracts: () => modeContractsStub,
+}));
+
 afterEach(cleanup);
+
+beforeEach(() => {
+  modeContractsStub.contracts = [];
+});
 
 function row(over: Partial<WorkflowRow> = {}): WorkflowRow {
   return {
@@ -20,22 +34,28 @@ function row(over: Partial<WorkflowRow> = {}): WorkflowRow {
 }
 
 function renderList(props: Partial<Parameters<typeof WorkflowLibraryList>[0]>) {
+  /* `Hint` 的浮层要 `TooltipProvider`（应用里挂在根布局上）；`delay={0}` 让
+   * 悬停断言不必干等。 */
   return render(
-    <WorkflowLibraryList
-      onSearchChange={() => undefined}
-      onSelect={() => undefined}
-      search=""
-      workflows={[]}
-      {...props}
-    />,
+    <TooltipProvider delay={0}>
+      <WorkflowLibraryList
+        onSearchChange={() => undefined}
+        onSelect={() => undefined}
+        search=""
+        workflows={[]}
+        {...props}
+      />
+    </TooltipProvider>,
   );
 }
 
 describe("WorkflowLibraryList 三态区分", () => {
-  it("仍在加载：显示加载进度，不冒充「未找到匹配的工作流」", () => {
+  it("仍在加载：列表呈骨架行，不冒充「未找到匹配的工作流」（ISSUE #4073：转圈交给右侧详情区）", () => {
     renderList({ loading: true });
 
-    expect(screen.getByText("正在加载工作流…")).toBeInTheDocument();
+    /* 加载态收成骨架行（aria 标签仍念「正在加载工作流」），不再用带转圈的
+     * 整块加载界面占住列表列。 */
+    expect(screen.getByLabelText("正在加载工作流")).toBeInTheDocument();
     expect(screen.queryByText("未找到匹配的工作流")).toBeNull();
     expect(screen.queryByText("还没有工作流")).toBeNull();
   });
@@ -131,25 +151,27 @@ describe("列表侧栏的拖入导入提示", () => {
   });
 });
 
-// 列表项的空间预算（ISSUE #716）：名称 + 徽标必须排在一行里，且每个徽标
-// 都对应用户要看的那个事实。
-//
-// 现场是「名称太长 + 徽标带一整句中文」两件事同时发生：名称把整行撑破，
-// 右侧的「对外参数未配置」「本地」被侧栏的 `overflow-hidden` 裁掉 ——
-// 用户看到的是「列表内容超框」。判据因此分两条：
-//   ① 名称有显式最大宽度（可截断的那块有下限，徽标一律不被压）；
-//   ② 对外参数只留 1 字状态标记，完整口径在 `title` 里。
+// 列表项的空间预算（ISSUE #716）：名称 + 徽标必须排在一行，且每个徽标都对应
+// 用户要看的那个事实。名称过长会撑破行、徽标被侧栏 `overflow-hidden` 裁掉。
+// 判据两条：① 名称有显式最大宽度（可截断块有下限，徽标不被压）；② 对外参数
+// 只留 1 字状态标记，完整口径在 `title` 里。
 describe("列表项：名称限长 + 对外参数精简显示", () => {
   const longName = "22WorkflowsI2VSVI2_fastfidelityCAIoV88";
 
-  it("名称有显式最大宽度，不会把右侧徽标挤出侧栏", () => {
+  it("名称有显式最大宽度，不会把右侧徽标挤出侧栏", async () => {
+    const user = userEvent.setup();
     renderList({ workflows: [row({ name: longName })] });
 
     const name = screen.getByText(longName);
     expect(name.className).toContain("truncate");
     expect(name.className).toMatch(/\bmax-w-\d/);
-    /* 完整名称仍可从 title 读到（截断只发生在视觉上）。 */
-    expect(name.getAttribute("title")).toBe(longName);
+    /* 原生 title= 撤干净：完整名称走 <Hint>，悬停出完整名。 */
+    expect(name).not.toHaveAttribute("title");
+    await user.hover(name);
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toBe(longName);
   });
 
   it("对外参数收成一枚 1 字标记，完整说明在 title 里", () => {
@@ -223,6 +245,26 @@ describe("列表项：名称限长 + 对外参数精简显示", () => {
 
     const mark = screen.getByTitle(/对外参数未配置/);
     expect(mark.textContent).toBe("！");
+  });
+
+  it("列表行徽标按本机契约覆盖列缺口，不回落内置 6 口（ISSUE #4113）", () => {
+    /* 用户把文生图契约改成 4 口（必备 = 提示词 + 尺寸）后，列表行的缺口
+     * 清单必须跟着这份覆盖走——不再列出未加入契约的角色 LoRA / LoRA 强度。 */
+    modeContractsStub.contracts = [
+      {
+        mode: "T2I",
+        inputs: ["prompt", "negative", "size", "seed"],
+        required: ["prompt", "size"],
+      },
+    ];
+    renderList({
+      workflows: [row({ name: "image_z_image_int8_t2i", taskType: "T2I", defaultMode: "T2I" })],
+    });
+
+    const mark = screen.getByTitle(/对外参数未配置/);
+    expect(mark.getAttribute("title")).toContain("种子");
+    expect(mark.getAttribute("title")).not.toContain("角色 LoRA");
+    expect(mark.getAttribute("title")).not.toContain("LoRA 强度");
   });
 
   it("不可执行的工作流仍显示「无可执行内容」（这条是闸门，不是元信息）", () => {

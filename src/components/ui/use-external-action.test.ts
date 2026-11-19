@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
 /**
- * `useExternalAction` —— 「触发一次外部动作」的执行态样板
- * （规范 16 §16.2.4.25）。
- *
- * 用例钉四处收口前**各判各的**地方：
- *  ① 结果字段差异（`ok` / `triggered`）不该漏到调用处；
- *  ② 空目标**在发起 IO 之前**拦下（不是把空串发给服务端吃 zod 的英文报错）；
- *  ③ 失败路径用 `errorMessage` 兜底成可读文案（硬规则 4）；
- *  ④ 连点两下**只发一次**（`busy` 是同步 ref，状态提交晚一拍挡不住）。
+ * `useExternalAction` —— 「触发一次外部动作」的执行态样板（规范 16 §16.2.4.25）。
+ * 用例钉四处收口前各判各的：结果字段差异（`ok` / `triggered`）不漏到调用处；空目标在发起 IO 前拦下；失败用 `errorMessage` 兜底成可读文案（硬规则 4）；连点只发一次（`busy` 是同步 ref）。
  */
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -19,7 +13,7 @@ describe("useExternalAction", () => {
     const report = vi.fn();
     const { result } = renderHook(() => useExternalAction({ target: "browser", report }));
     await act(async () => {
-      await result.current.run(async () => ({ ok: true, detail: "已打开" }));
+      await result.current.run(() => Promise.resolve({ ok: true, detail: "已打开" }));
     });
     expect(report).toHaveBeenCalledWith("ok", "已打开");
     expect(result.current.busy).toBe(false);
@@ -29,21 +23,23 @@ describe("useExternalAction", () => {
     const report = vi.fn();
     const { result } = renderHook(() => useExternalAction({ target: "update", report }));
     await act(async () => {
-      await result.current.run(async () => ({ triggered: true }));
+      await result.current.run(() => Promise.resolve({ triggered: true }));
     });
     expect(report.mock.calls[0]?.[0]).toBe("ok");
   });
 
   it("动作抛错时用 errorMessage 兜底（失败路径必须有可读文案）", async () => {
-    const report = vi.fn();
+    const report = vi.fn<(kind: "ok" | "err", detail: string) => void>();
     const { result } = renderHook(() => useExternalAction({ target: "folder", report }));
     await act(async () => {
-      await result.current.run(async () => {
+      await result.current.run(() => {
         throw new Error("ECONNREFUSED");
       });
     });
-    /* SAFETY: 类型断言已复核 */
-    const first = report.mock.calls[0] as [string, string];
+    const first = report.mock.calls[0];
+    if (!first) {
+      throw new Error("report 未被调用");
+    }
     expect(first[0]).toBe("err");
     expect(first[1]).toContain("应用服务");
   });
@@ -54,7 +50,7 @@ describe("useExternalAction", () => {
     const report = vi.fn();
     const { result } = renderHook(() => useExternalAction({ target: "folder", report }));
     await act(async () => {
-      await result.current.run(async () => {
+      await result.current.run(() => {
         throw new Error("");
       });
     });
@@ -75,7 +71,7 @@ describe("useExternalAction", () => {
 
   it("runWithTarget：有目标时把目标交给 action", async () => {
     const report = vi.fn();
-    const action = vi.fn(async () => ({ ok: true, detail: "ok" }));
+    const action = vi.fn(() => Promise.resolve({ ok: true, detail: "ok" }));
     const { result } = renderHook(() => useExternalAction({ target: "browser", report }));
     await act(async () => {
       await result.current.runWithTarget("https://x", action);
@@ -113,7 +109,7 @@ describe("useExternalAction", () => {
     const action = vi.fn();
     const { result } = renderHook(() => useExternalAction({ target: "browser", report }));
     await act(async () => {
-      await result.current.run(action, async () => false);
+      await result.current.run(action, () => Promise.resolve(false));
     });
     expect(action).not.toHaveBeenCalled();
     expect(report).not.toHaveBeenCalled();

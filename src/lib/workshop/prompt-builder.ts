@@ -23,7 +23,7 @@ export function buildCharacterPrompt(c: Character, style?: StyleRef): string {
   }
 
   // 关联的技能模板（充当美术指导的外包装）
-  if (style?.promptTemplate) {
+  if (style !== undefined && style.promptTemplate !== "") {
     parts.push(style.promptTemplate);
   }
 
@@ -41,13 +41,25 @@ export function buildCharacterNegative(_c: Character, style?: StyleRef): string 
     "watermark",
     "text",
   ];
-  if (style?.negativePrompt) {
-    base.push(style.negativePrompt);
+  const styleNegative = style?.negativePrompt;
+  if (styleNegative !== undefined && styleNegative !== "") {
+    base.push(styleNegative);
   }
   return base.join(", ");
 }
 
 /* 依据场景 + 角色 + 风格，拼出分镜镜头的提示词。 */
+const SHOT_KEYWORDS: Record<string, string> = {
+  extreme_wide: "extreme wide shot, vast landscape, epic scale",
+  wide: "wide shot, full environment",
+  full: "full body shot",
+  medium: "medium shot, waist-up",
+  close: "close-up shot",
+  extreme_close: "extreme close-up, detailed face",
+  poi: "low angle shot, looking up",
+  pod: "high angle shot, looking down",
+};
+
 export function buildShotPrompt(
   shot: Pick<Shot, "description" | "shotType">,
   scene: Scene | undefined,
@@ -84,7 +96,7 @@ export function buildShotPrompt(
   }
 
   // Style wrapper
-  if (style?.promptTemplate) {
+  if (style !== undefined && style.promptTemplate !== "") {
     parts.push(style.promptTemplate);
   }
 
@@ -107,22 +119,12 @@ export function buildShotNegative(characters: Array<Character>, style?: StyleRef
       neg.push(character.negativePrompt);
     }
   });
-  if (style?.negativePrompt) {
-    neg.push(style.negativePrompt);
+  const styleNegative = style?.negativePrompt;
+  if (styleNegative !== undefined && styleNegative !== "") {
+    neg.push(styleNegative);
   }
   return [...new Set(neg)].join(", ");
 }
-
-const SHOT_KEYWORDS: Record<string, string> = {
-  extreme_wide: "extreme wide shot, vast landscape, epic scale",
-  wide: "wide shot, full environment",
-  full: "full body shot",
-  medium: "medium shot, waist-up",
-  close: "close-up shot",
-  extreme_close: "extreme close-up, detailed face",
-  poi: "low angle shot, looking up",
-  pod: "high angle shot, looking down",
-};
 
 /* 合并风格与角色各自的推荐参数；冲突时以角色为准。 */
 export function mergeParams(style?: StyleRef, character?: Character): Record<string, unknown> {

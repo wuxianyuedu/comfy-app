@@ -24,8 +24,11 @@ import {
   type WorkflowRow,
 } from "../workflow-library-config";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
+import type { ModelTagSummary } from "~/lib/workflow/workflow-list-types";
+import { isPlainRecord } from "~/lib/is-record";
 
 export type WorkflowLibraryDetailActions = {
+  convert: () => void;
   download: () => void;
   edit: () => void;
   remove: () => void;
@@ -35,15 +38,17 @@ export type WorkflowLibraryDetailActions = {
 
 /** 类型 / 模型编辑器的派生数据与动作（规范 17 §17.2 第②层）。 */
 export type MetaEditorController = {
-  /** 全部可选模型标签。 */
-  allModelTags: Array<{ count: number; id: string; name: string }>;
+  /** 全部可选模型标签（含模式占用明细，ISSUE #4102）。 */
+  allModelTags: Array<ModelTagSummary>;
   busy: boolean;
   defaultMode: string;
-  /** 已绑定的模型标签名。 */
+  /** 已绑定的模型标签名（至多一个；历史数据可能残留多个，展示侧收敛为首项）。 */
   modelTags: Array<string>;
   /** 当前生效的 mode 集合（缺省回退 [taskType]，兼容旧行）。 */
   modes: Array<string>;
-  patchModelTags: (names: Array<string>) => Promise<void>;
+  /** 绑定模型标签。返回 `null` = 成功；否则为失败文案（唯一性冲突原因，
+   *  ISSUE #4102），弹窗就地展示。 */
+  patchModelTags: (names: Array<string>) => Promise<string | null>;
   patchModes: (modes: Array<string>, defaultMode: string) => Promise<void>;
   /** 持久化对外参数落点（预览面板拖圆点改落点 / 断开 / 恢复默认）。
    *  整列写回 `paramMap.source.mode:<模式>`，与编辑器画布同一份形状。 */
@@ -56,17 +61,17 @@ export type MetaEditorController = {
 export type WorkflowLibraryDetailController = {
   actions: WorkflowLibraryDetailActions;
   /** **两个页签共用的当前模式**（画布节点卡片列与工坊封装都按它渲染）。
-   *
-   *  初值取工作流的默认模式（`resolveWorkflowMode`：defaultMode → modes[0] →
-   *  taskType）。详情页原来的口径是「每个页签各算一次当前模式」——工坊封装页签
-   *  写死默认模式、画布页签自己解析，于是多模式工作流在封装页**没法换模式测试**
-   *  （ISSUE #720 第 3 条）。收成一处后两页签同说一个模式。
-   *
-   *  换工作流时重置回该工作流的默认模式（不把上一条工作流的查看模式带过来）。 */
+   *  初值取默认模式（`resolveWorkflowMode`：defaultMode → modes[0] → taskType）。
+   *  此前两个页签各算一次（封装页写死默认模式），多模式工作流在封装页没法换模式
+   *  测试（ISSUE #720 第 3 条）。换工作流时重置回该工作流的默认模式。 */
   activeMode: string | null;
   activeTab: DetailTab;
+  /** 「转为在线」进行中（按当前选中行判）。 */
+  busyConvert: boolean;
   busyDownload: boolean;
   busyResync: boolean;
+  /** 仅本地工作流可转在线（在线 / 未载入占位行不可）。 */
+  canConvert: boolean;
   canResync: boolean;
   /** 画布预览那一份常驻实例是否该挂载（首次访问画布页签之后才为真）。
    *
@@ -86,6 +91,8 @@ export type WorkflowLibraryDetailController = {
   /** 模板 paramMap（`source.mode:<模式>` 的对外参数落点），画布节点页签据此
    *  标出每个对外参数与它落到的那一行。 */
   paramMap: Record<string, unknown>;
+  /** IO 预览页签的整列落库（PATCH workflowIO + 失效 detail / detailFull 缓存）。 */
+  patchWorkflowIO: (next: Record<string, unknown>) => Promise<void>;
   /** 切换当前模式（**只改查看/测试语境，不落库**）。
    *
    *  落「默认模式」是另一件事（画布节点卡片的模式下拉走 `patchModes`）：用户
@@ -94,26 +101,32 @@ export type WorkflowLibraryDetailController = {
   setActiveTab: (tab: DetailTab) => void;
   sourceData: SourceModalData | null;
   sourceOpen: boolean;
+  /** 模板 workflowIO **原始 DB 列**（未经服务端富化）——工作流库 IO 预览页签
+   *  以它为落库底稿，避免把富化出来的 label / type / defaultValue 写回库。 */
+  storedIO: Record<string, unknown>;
   /** 有可执行图 —— 决定主 CTA 是否可点。 */
   usable: boolean;
   /** null = 左侧未选中工作流，视图据此渲染空态。 */
   workflow: WorkflowRow | null;
   workflowIO: WorkflowIOMap | null;
+  /** 工作流**真实声明**的模式（不做 `[taskType]` 兜底）—— IO 预览页签与编辑器
+   *  IO 面板同一口径：没配就是没配，如实显示「还没有配置模式」并给就地选模式
+   *  的入口（ISSUE #3800）。兜底后的展示值仍走 `metaEditor.modes`（画布卡片 /
+   *  封装面板等旧消费方不变）。 */
+  workflowModes: Array<string>;
 };
 
 /** 生效模式：用户在这条工作流上切过就用切过的，否则用默认模式解析值。
- *
- *  抽成纯函数（而不是组件里一个三元表达式）的两个理由：
- *   · **判空顺序**：没选中工作流时 `modeOverride` 与 `workflow.id` 都为空，
- *     写成 `modeOverride?.workflowId === workflow?.id` 会让两者相等
- *     （`undefined === undefined`）从而去读一个空的 `modeOverride` —— 直接抛错；
- *   · 分支（切过 / 没切过 / 换过工作流）可以单测，不必挂载整个详情面板。 */
+ *  抽成纯函数而不是三元表达式的两个理由：① 判空顺序 —— 没选中时 `modeOverride`
+ *  与 `workflow.id` 都为空，`modeOverride?.workflowId === workflow?.id` 会是
+ *  `undefined === undefined`，从而去读空的 `modeOverride` 直接抛错；② 分支可单测，
+ *  不必挂载整个详情面板。 */
 export function resolveActiveMode(
   override: { mode: string | null; workflowId: string } | null,
   workflowId: string | null,
   defaultMode: string | null,
 ): string | null {
-  if (!workflowId || !override) {
+  if (workflowId === null || workflowId === "" || !override) {
     return defaultMode;
   }
   return override.workflowId === workflowId ? override.mode : defaultMode;
@@ -131,12 +144,14 @@ export function useWorkflowLibraryDetail(
     onPatchWorkflowIO,
     onPatchParamMap,
     isBundleBusy,
+    isConvertBusy,
     isResyncBusy,
     onUse,
     onEdit,
     onDelete,
     onDownload,
     onResync,
+    onConvertToOnline,
   } = props;
 
   const [sourceOpen, setSourceOpen] = useState(false);
@@ -144,18 +159,11 @@ export function useWorkflowLibraryDetail(
    *  那张表里写一次，这里不另抄一个页签键，否则重排页签时默认值会偷偷留在旧档
    *  （见 `DETAIL_TABS` 的说明：默认落重型页签会让打开工作流就拉起画布引擎）。 */
   const [activeTab, setActiveTab] = useState<DetailTab>(DEFAULT_DETAIL_TAB);
-  /* 「画布预览那一份常驻实例该不该挂载」的判据 —— 值为**已经访问过画布页签的
-   *  工作流 id**（`null` = 还没在任何工作流上访问过）。
-   *
-   *  为什么需要一个「记着」的位：编辑对外参数 / 实际使用两页共用同一个常驻实例
-   *  （切页签不重建，表单值不丢），但这份实例**不该在默认页签（工坊封装）上就
-   *  挂载** —— 它下面挂着整个画布引擎 `@xyflow/react`，打开一条只想看封装口径的
-   *  工作流就等于把它整包拉起来。所以「首次真的切到画布页签」才挂载，之后常驻。
-   *
-   *  维护点在 `setActiveTab`（唯一的切换入口）而不是 effect：状态变化只由用户
-   *  点页签触发，一条事件路径一个写点，也就不存在「effect 里 setState」那一类
-   *  循环风险。`selectTab` 是把两件事（切页签 + 记下画布已被访问）合成一个动作
-   *  的出口，视图仍然只调 `setActiveTab`。 */
+  /* 「画布预览那一份常驻实例该不该挂载」的判据：值为**已经访问过画布页签**的
+   *  工作流 id（`null` = 还没访问过）。两页共用常驻实例（切页签不重建），但不该
+   *  在默认页签（工坊封装）就挂载 —— 它下面挂着整个画布引擎。维护点在
+   *  `setActiveTab`（唯一入口）：状态只由用户点页签触发，避免 effect 里 setState
+   *  的循环风险；`selectTab` 把「切页签 + 记录访问」合成一个动作。 */
   const [canvasVisitedFor, setCanvasVisitedFor] = useState<string | null>(null);
   const isCanvasTab = (tab: DetailTab) => tab === "canvas" || tab === "use";
   const handleTabChange = useCallback(
@@ -184,8 +192,25 @@ export function useWorkflowLibraryDetail(
     [workflow],
   );
 
-  const openSource = useCallback(() => setSourceOpen(true), []);
-  const closeSource = useCallback(() => setSourceOpen(false), []);
+  /* IO 预览页签的落库动作：整列写回，失败由 use-workflow-actions 的出口报出。
+   * 与 metaEditor.patchSeedMode 走同一条 PATCH 通道（后者只改一个条目的
+   * seedMode，这里整表下发）。 */
+  const patchWorkflowIO = useCallback(
+    async (next: Record<string, unknown>) => {
+      if (!workflow || !onPatchWorkflowIO) {
+        return;
+      }
+      await onPatchWorkflowIO(workflow.id, next);
+    },
+    [workflow, onPatchWorkflowIO],
+  );
+
+  const openSource = useCallback(() => {
+    setSourceOpen(true);
+  }, []);
+  const closeSource = useCallback(() => {
+    setSourceOpen(false);
+  }, []);
 
   /* 未选中工作流时不发请求（enabled:false）。hooks 顺序必须稳定，因此这里不
    * 做 early return —— 空态交给视图渲染。 */
@@ -235,10 +260,14 @@ export function useWorkflowLibraryDetail(
    * 稿（它直读 DB 列，没有富化改写），缺省空对象。 */
   const paramMap = useMemo<Record<string, unknown>>(() => {
     const raw = template?.paramMap;
-    /* SAFETY: 类型断言已复核 */
-    return raw && typeof raw === "object" && !Array.isArray(raw)
-      ? (raw as Record<string, unknown>)
-      : {};
+    return isPlainRecord(raw) ? raw : {};
+  }, [template]);
+
+  /* IO 预览页签的落库底稿：与 paramMap 同源（轻量 template 直读 DB 列）。
+   * 富化后的 workflowIO 只用于显示，不能拿去整列写回（见 storedIO 类型说明）。 */
+  const storedIO = useMemo<Record<string, unknown>>(() => {
+    const raw = template?.workflowIO;
+    return isPlainRecord(raw) ? raw : {};
   }, [template]);
 
   const formatFlags = useMemo(
@@ -283,8 +312,13 @@ export function useWorkflowLibraryDetail(
           onResync(workflow.id, workflow.name);
         }
       },
+      convert: () => {
+        if (workflow) {
+          onConvertToOnline(workflow.id, workflow.name);
+        }
+      },
     }),
-    [workflow, onUse, onEdit, onDelete, onDownload, onResync],
+    [workflow, onUse, onEdit, onDelete, onDownload, onResync, onConvertToOnline],
   );
 
   const metaEditor = useMemo<MetaEditorController>(
@@ -307,9 +341,9 @@ export function useWorkflowLibraryDetail(
       },
       patchModelTags: async (names) => {
         if (!workflow || !onPatchModelTags) {
-          return;
+          return null;
         }
-        await onPatchModelTags(workflow.id, names);
+        return onPatchModelTags(workflow.id, names);
       },
       patchParamMap: async (next) => {
         if (!workflow || !onPatchParamMap) {
@@ -323,11 +357,12 @@ export function useWorkflowLibraryDetail(
         }
         /* 在模板原始 workflowIO 上只改目标条目的 seedMode，整体落库；
          * 其余字段原样透传，避免用富化视图覆盖原始数据。 */
-        /* SAFETY: 类型断言已复核 */
-        const raw = (template?.workflowIO ?? {}) as Record<string, Record<string, unknown>>;
+        const stored = template?.workflowIO;
+        const raw: Record<string, unknown> = isPlainRecord(stored) ? stored : {};
+        const current = raw[ioKey];
         const next: Record<string, unknown> = {
           ...raw,
-          [ioKey]: { ...raw[ioKey], seedMode: mode },
+          [ioKey]: { ...(isPlainRecord(current) ? current : {}), seedMode: mode },
         };
         await onPatchWorkflowIO(workflow.id, next);
       },
@@ -364,6 +399,7 @@ export function useWorkflowLibraryDetail(
     metaEditor,
     activeTab,
     setActiveTab: handleTabChange,
+    patchWorkflowIO,
     /* 画布预览那一份常驻实例该不该挂载：当前工作流被访问过画布页签就挂载
      *  （切回工坊封装也不卸载 —— 卸载会丢表单值 / 运行态，见上面的说明）。 */
     canvasMounted: !!workflow && canvasVisitedFor === workflow.id,
@@ -375,14 +411,19 @@ export function useWorkflowLibraryDetail(
     isLoading: isDetailLoading,
     errorMessage: detailQuery.error?.message,
     workflowIO,
+    storedIO,
     paramMap,
     sourceData,
     usable: formatFlags.usable,
     canResync: syncFlags.canResync,
+    canConvert: workflow?.source === "local",
     missing: syncFlags.missing,
     isTechnical: !!workflow && isTechnicalName(workflow.name),
+    /* 真实声明的模式，不做兜底 —— 消费方与口径见 controller 类型上的说明。 */
+    workflowModes: workflow?.modes ?? [],
     busyDownload: !!workflow && isBundleBusy(workflow.id),
     busyResync: !!workflow && isResyncBusy(workflow.id),
+    busyConvert: !!workflow && isConvertBusy(workflow.id),
     actions,
   };
 }

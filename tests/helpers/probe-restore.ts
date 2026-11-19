@@ -1,31 +1,7 @@
 /**
- * 「用例会改真实入库文件」那一族的还原口径 —— **快照原字节，不回 git 索引**（ISSUE #2593）。
- *
- * ## 立案现场
- *
- * `tests/check-doc-references.test.ts` 的收尾网长这样：`git status --porcelain` 说这四份
- * 入库文件里哪一份脏了，就对那一份执行 `git checkout -- <文件>`。它的**前提**写在注释里：
- * 「脏 = 探针留脏了」。但 `git status` 分不出「探针留下的脏」与「这条分支上本来就在做的
- * 未提交工作」—— 处置却逐字相同。于是同一分支上正在写的文档，被一次跑测整档退回 HEAD：
- *
- * ```
- * $ pnpm exec vitest run tests/check-doc-references.test.ts …（同一棵未提交的工作区）
- * Test Files  3 failed | 1 passed      ← 红的还是「doc:check 说清单缺一格」这类自证格
- * $ git status --porcelain -- docs/
- *  M docs/generated/13-提交与-code-review.md      ← 镜像还在
- * （docs/standards/13-提交与-code-review.md 不见了 —— 92 行新增被抹掉）
- * ```
- *
- * 后果不对称：探针没还原 = 工作区脏（可修）；把工作区当探针还原 = **未提交的工作没了**
- * （只能重放）。所以这一族唯一的还原凭据必须是「**进本文件那一刻的字节**」，
- * 而不是索引 —— 索引之上的那一层正是人的工作所在。
- *
- * ## 口径（一句话）
- *
- * **用例不许用 `git checkout --` / `git restore` 清理工作区**；要还原就还原成自己拍下的
- * 那份快照。判据那一半见 `tests/probe-restore.test.ts`（数组形 / `checkout HEAD -- <路径>`
- * 字符串形 / `restore --` 三种形状各自命中），
- * 口径全文见规范 §11.16.2。
+ * 「用例会改真实入库文件」那一族的还原口径：**快照原字节，不回 git 索引**（ISSUE #2593）。`git status` 分不出「探针留脏」与
+ * 「本分支正在做的未提交工作」，而 `git checkout -- <文件>` 对两者一样处置 —— 实测抹掉 92 行新增。后果不对称：漏还原只是工作区脏（可修），
+ * 把人的工作当探针还原则只能重放。口径：用例不许用 `git checkout --` / `git restore` 清理工作区，要还原就还原成自己拍下的快照；判据见 `tests/probe-restore.test.ts`，全文见规范 §11.16.2。
  */
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
@@ -46,6 +22,11 @@ export type ProbeIo = {
 /** Windows 上刚被子进程读过的文件会短暂占用，实测 `writeFileSync` 会连抛 `UNKNOWN`。 */
 const WRITE_ATTEMPTS = 8;
 
+/** 失败原因取正文（B5 清账）：Error 用 message，其余 String 兜底。 */
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export const realProbeIo: ProbeIo = {
   read: (abs) => (existsSync(abs) ? readFileSync(abs) : null),
   write: (abs, bytes) => {
@@ -58,13 +39,14 @@ export const realProbeIo: ProbeIo = {
         }
         last = "写回后读回的内容与快照不一致";
       } catch (error) {
-        /* SAFETY: 类型断言已复核 */
-        last = (error as Error).message;
+        last = errorText(error);
       }
     }
     throw new Error(`还原写不进去（${WRITE_ATTEMPTS} 次仍失败）：${last}`);
   },
-  remove: (abs) => rmSync(abs, { force: true }),
+  remove: (abs) => {
+    rmSync(abs, { force: true });
+  },
 };
 
 /** 拍下这些路径**此刻**的字节（不存在记成 `null`）。在任何探针动手之前调用。 */
@@ -80,14 +62,9 @@ export function snapshotPaths(
 }
 
 /**
- * 把每份文件还原成**快照里的那一份**。
- *
- * 与 `git checkout --` 的差别就是本单的全部内容：快照是脏的（这条分支上正在做的活），
- * 还原之后**仍然是那份脏**；只有探针动过的那几格会被写回去。返回的 `failed` 由调用方
- * 判红 —— 红里要点名「是哪一份、为什么」，不能只说「工作区不干净」。
- *
- * @returns `restored` 真的被改回去的路径；`unchanged` 当前已经等于快照的（多数情况）；
- *          `failed` 还原没做成的人必须去看的路径 + 原因。
+ * 把每份文件还原成**快照里的那一份**：快照是脏的（本分支正在做的活），与 `git checkout --` 的差别正是还原后**仍是那份脏**，只有探针动过的几格被写回。
+ * 返回的 `failed` 由调用方判红 —— 红里要点名「是哪一份、为什么」，不能只说「工作区不干净」。
+ * @returns `restored` 真被改回去的路径；`unchanged` 当前已等于快照的（多数情况）；`failed` 还原没做成、人必须去看的路径 + 原因。
  */
 export function restoreToSnapshot(
   snapshot: ReadonlyMap<string, SnapshotEntry>,
@@ -107,7 +84,7 @@ export function restoreToSnapshot(
     } catch (error) {
       failed.push({
         abs,
-        why: `读不到当前内容：${/* SAFETY: 类型断言已复核 */ (error as Error).message}`,
+        why: `读不到当前内容：${errorText(error)}`,
       });
       continue;
     }
@@ -123,7 +100,7 @@ export function restoreToSnapshot(
       }
       restored.push(abs);
     } catch (error) {
-      failed.push({ abs, why: /* SAFETY: 类型断言已复核 */ (error as Error).message });
+      failed.push({ abs, why: errorText(error) });
     }
   }
   return { restored, unchanged, failed };

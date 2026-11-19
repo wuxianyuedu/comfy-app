@@ -11,6 +11,7 @@ import { useBusyAction } from "~/components/ui/use-busy-action";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FormField } from "~/components/ui/form-field";
 import { SelectChip } from "~/components/ui/select-chip";
+import { TruncatedText } from "~/components/ui/truncated-text";
 
 type LLMContextValue = {
   closeSettings: () => void;
@@ -56,8 +57,12 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       remoteImageModels,
       loading,
       settingsOpen,
-      openSettings: () => setSettingsOpen(true),
-      closeSettings: () => setSettingsOpen(false),
+      openSettings: () => {
+        setSettingsOpen(true);
+      },
+      closeSettings: () => {
+        setSettingsOpen(false);
+      },
       refresh,
     }),
     [config, localModels, remoteModels, remoteImageModels, loading, settingsOpen, refresh],
@@ -69,7 +74,9 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       {settingsOpen && (
         <LLMSettingsModal
           initial={config}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettingsOpen(false);
+          }}
           onSaved={() => {
             refresh();
             setSettingsOpen(false);
@@ -127,12 +134,17 @@ function LLMSettingsModal({
   /* 候选列表 = 已配置的 extraModels + 当前生效模型（保证至少一项可选） */
   const candidates = React.useMemo(() => {
     const list = initial?.extraModels ?? [];
-    return initial?.model && !list.includes(initial.model) ? [initial.model, ...list] : list;
+    const initialModel = initial?.model;
+    return initialModel !== undefined && initialModel !== "" && !list.includes(initialModel)
+      ? [initialModel, ...list]
+      : list;
   }, [initial]);
 
   async function handleSave() {
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (draftModel == null && draftProvider == null) {
+    if (
+      (draftModel === null || draftModel === undefined) &&
+      (draftProvider === null || draftProvider === undefined)
+    ) {
       onClose();
       return;
     }
@@ -148,7 +160,9 @@ function LLMSettingsModal({
         onSaved(cfg);
       },
       {
-        report: (kind, detail) => setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
+        report: (kind, detail) => {
+          setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail });
+        },
         failureText: "保存失败",
       },
     );
@@ -182,7 +196,9 @@ function LLMSettingsModal({
           /* 成功文案是**动作结果**的函数（回显模型的前 60 个字符）——
            *`successText` 支持函数形式正是为这类落点（同`use-external-action`
            * 的`detail` 由端点给）。 */
-          report: (kind, detail) => setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
+          report: (kind, detail) => {
+            setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail });
+          },
           failureText: "连接失败",
           successText: (result) => `连接成功：${result.detail}`,
         },
@@ -193,7 +209,13 @@ function LLMSettingsModal({
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写`onClick` 关闭，Esc 没接、焦点不锁也不归还。 */
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    /* SAFETY: 类型断言已复核 */
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="模型选择"
         className="bg-transparent p-0 ring-0"
@@ -232,18 +254,18 @@ function LLMSettingsModal({
           <FormField className="mb-3" label="提供方">
             {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。 */}
             <div aria-label="提供方" className="flex gap-2" role="radiogroup">
-              {
-                /* SAFETY: 类型断言已复核 */ (["local", "remote"] as const).map((p) => (
-                  <SelectChip
-                    key={p}
-                    onClick={() => setDraftProvider(p)}
-                    selected={provider === p}
-                    shape="segment"
-                  >
-                    {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
-                  </SelectChip>
-                ))
-              }
+              {(["local", "remote"] as const).map((p) => (
+                <SelectChip
+                  key={p}
+                  onClick={() => {
+                    setDraftProvider(p);
+                  }}
+                  selected={provider === p}
+                  shape="segment"
+                >
+                  {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
+                </SelectChip>
+              ))}
             </div>
           </FormField>
 
@@ -255,7 +277,9 @@ function LLMSettingsModal({
                 <SelectChip
                   className="w-full justify-start gap-2 px-3 py-2 text-left text-sm"
                   key={name}
-                  onClick={() => setDraftModel(name)}
+                  onClick={() => {
+                    setDraftModel(name);
+                  }}
                   selected={activeModel === name}
                   shape="compact"
                 >
@@ -264,7 +288,7 @@ function LLMSettingsModal({
                       activeModel === name ? "bg-primary" : "bg-surface-2"
                     }`}
                   />
-                  <span className="flex-1 truncate">{name}</span>
+                  <TruncatedText className="flex-1 truncate">{name}</TruncatedText>
                   {provider === "local" && (
                     <span className="text-muted-foreground text-3xs">本地</span>
                   )}
@@ -300,15 +324,18 @@ function LLMSettingsModal({
             </Button>
             <Button
               className="h-auto flex-1 rounded-lg px-4 py-2 text-sm"
-              // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-              disabled={saving || (draftModel == null && draftProvider == null)}
+              disabled={
+                saving ||
+                ((draftModel === null || draftModel === undefined) &&
+                  (draftProvider === null || draftProvider === undefined))
+              }
               onClick={handleSave}
               variant="primary-solid"
             >
               {saving
                 ? "保存中…"
-                : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-                  draftModel == null && draftProvider == null
+                : (draftModel === null || draftModel === undefined) &&
+                    (draftProvider === null || draftProvider === undefined)
                   ? "使用当前配置"
                   : "保存并生效"}
             </Button>

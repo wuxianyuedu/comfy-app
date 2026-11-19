@@ -1,14 +1,13 @@
 /**
- * 「一次运行一包」日志布局的判据（ISSUE #1326）。
- *
- * 这些用例钉死的是**布局契约**，不是实现细节：目录名形状、归档后 current/
- * 仍在、崩溃标记、保留策略、zip 包结构、根目录只许那几样。改布局前先读
- * 规范 §4 —— 它们红了就是布局变了。
+ * 「一次运行一包」日志布局的判据（ISSUE #1326）：钉的是**布局契约**而非实现细节 —— 目录名形状、归档后 current/
+ * 仍在、崩溃标记、保留策略、zip 包结构、根目录只许那几样。改布局前先读规范 §4，它们红了就是布局变了。
  */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 import { hasPython, runPython } from "./helpers/python-exe";
 
@@ -32,6 +31,7 @@ import {
   zipDirectory,
 } from "../scripts/launcher-core/run.mjs";
 import { launcherChainSource } from "./helpers/launcher-source";
+import { stripComments } from "./helpers/strip-comments";
 
 /** run.json 的形态（判据只读这几个字段）。 */
 type RunMeta = {
@@ -68,16 +68,27 @@ function runs(): string {
   return path.join(root, "log", "runs");
 }
 
+/** run.json 的消费形状守卫（B5 清账）：字段全可选，是对象即认。 */
+function isRunMeta(value: unknown): value is RunMeta {
+  return isRecord(value);
+}
+
 /** 当前这份 run.json（判据都建立在「它一定写出来了」之上）。 */
 function meta(): RunMeta {
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(fs.readFileSync(path.join(cur(), LOG_LAYOUT.runJson), "utf8")) as RunMeta;
+  const parsed: unknown = JSON.parse(fs.readFileSync(path.join(cur(), LOG_LAYOUT.runJson), "utf8"));
+  if (!isRunMeta(parsed)) {
+    throw new Error("run.json 不是对象 —— 日志布局或写入方漂移了");
+  }
+  return parsed;
 }
 
 /** 指定目录下的 run.json（归档包里那份）。 */
 function metaAt(dir: string): RunMeta {
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8")) as RunMeta;
+  const parsed: unknown = JSON.parse(fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8"));
+  if (!isRunMeta(parsed)) {
+    throw new Error("run.json 不是对象 —— 日志布局或写入方漂移了");
+  }
+  return parsed;
 }
 
 /** 写一份 current/ 下的日志文件（模拟各写方）。 */
@@ -184,6 +195,26 @@ describe("current/ 与 run.json", () => {
     const m = meta();
     expect(m.runId).toBe("a1b2c3");
     expect(m.exitCode).toBe(0);
+  });
+
+  /* 回归（#3663）：临时文件名若固定成 `run.json.tmp`，两个进程并发写就会互相
+   * 抢同一份临时文件 —— 先 rename 的把它移走，后到的 rename 当场 ENOENT。
+   * 现场是 CI 的「受影响用例」：两个用例文件被两个 worker 同时加载，而它们
+   * import 的 `dev-launcher.mjs` 在模块顶层就 `startRun(ROOT)`。
+   *
+   * 判据取**确定性的那一面**：先放一份「别人的固定名临时文件」在场上，本进程
+   * 写完之后它必须原样还在 —— 有 pid 后缀就不会去动它；固定名则会被覆盖并
+   * rename 走（那一份正是「被并发方抢走」的同一件事）。并起两个真进程的写法
+   * 在这里只有 2/4 命中（本机实测），不能当回归判据。 */
+  it("临时文件名带进程区分：场上那份固定名 .tmp 不被本进程吞掉", () => {
+    const foreign = path.join(cur(), `${LOG_LAYOUT.runJson}.tmp`);
+    fs.mkdirSync(cur(), { recursive: true });
+    fs.writeFileSync(foreign, "别的进程写到一半的那份", "utf8");
+
+    startRun(root, { runId: "a1b2c3" });
+
+    expect(fs.readFileSync(foreign, "utf8")).toBe("别的进程写到一半的那份");
+    expect(meta().runId).toBe("a1b2c3");
   });
 });
 
@@ -407,8 +438,8 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
     const paths = await import("../src/lib/log/log-paths.ts");
     expect(path.basename(path.dirname(paths.SCHEMA_SYNC_STATUS_FILE))).toBe("tools");
     expect(path.dirname(paths.SCHEMA_SYNC_STATUS_FILE)).toBe(paths.TOOLS_LOG_DIR);
-    // 与 scripts/db-schema-state.mjs 的相对路径同形（写方在那边、读方在这边）
-    const { SCHEMA_SYNC_STATUS_FILE } = await import("../scripts/db-schema-state.mjs");
+    // 与 scripts/db/db-schema-state.mjs 的相对路径同形（写方在那边、读方在这边）
+    const { SCHEMA_SYNC_STATUS_FILE } = await import("../scripts/db/db-schema-state.mjs");
     expect(SCHEMA_SYNC_STATUS_FILE.split(path.sep)).toEqual([
       "log",
       "current",
@@ -423,14 +454,14 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
       "scripts/dev-launcher.mjs",
       "scripts/executor-host.mjs",
       "scripts/standalone-runtime.mjs",
-      "scripts/db-schema-state.mjs",
+      "scripts/db/db-schema-state.mjs",
     ];
     for (const rel of files) {
       const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
       const offenders = src
         .split("\n")
         .filter((line) =>
-          /"log",\s*"(launcher|nextjs|services|shell|tools|comfyui|workshop)"/.test(line),
+          /"log",\s*"(?:launcher|nextjs|services|shell|tools|comfyui|workshop)"/.test(line),
         );
       expect(offenders, `${rel} 里仍有绕过 current/ 的日志路径`).toEqual([]);
     }
@@ -475,13 +506,12 @@ describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", ()
     }
   });
 
-  /** 源码里的**代码**部分（剥掉注释）：判据只看「还在不在用」，不看解释文字。
-   *
-   * 不剥注释的话，一段「这里曾经有 X、现在没有」的迁移说明会把判据判红 ——
-   * 而那正是本仓库要求写的东西（§12.4.2 禁止的是日期/编号式的历史流水，不是
-   * 「为什么改」）。 */
+  /** 源码里的**代码**部分（剥注释）：判据只看「还在不在用」，不看解释文字 —— 不剥的话，一段「这里曾经有 X、现在没有」
+   * 的迁移说明会把判据判红，而那正是本仓库要求写的（§12.4.2 禁的是日期/编号式历史流水，不是「为什么改」）。
+   * 用唯一实现 `./helpers/strip-comments` 而非本地无锚行跳：旧形从字符串里第一个双斜杠吃到行尾，实测把
+   * `lifecycle.ts` 的 `DRIZZLE_STUDIO_HOST = "https://…"` 削成半行，于是 `includes(…) === false` 对「引号后又写回旧写法」是瞎的（ISSUE #2969）。 */
   function code(name: string): string {
-    return name.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/.*$/gm, "");
+    return stripComments(name, { trailing: true });
   }
 
   it("log-paths 里不再有那四个固定名常量（一次启动一份，没有单一文件可指）", () => {
@@ -523,6 +553,10 @@ describe("旧归档机制已移除（只留一处归档实现）", () => {
      * 收尾那一段随 R5 拆分搬进了 `launcher-core/misc-ops.mjs`，只读主文件时
      * `toContain` 会对着空串报红、`not.toContain` 则**静默恒真**。 */
     const src = launcherChainSource();
+    expect(
+      src.trim(),
+      "launcherChainSource 拼出空文 ⇒ 落在它身上的反向断言恒真（#2660）",
+    ).not.toHaveLength(0);
     // 旧实现把 dev-launcher.log append 进 log/archive/<yyyy-MM>/，与新布局的
     // 「整目录复制」是两条互不相干的归档通道 —— 留着它 = 同一件事两个口径。
     expect(src).not.toContain("archiveRunLog");

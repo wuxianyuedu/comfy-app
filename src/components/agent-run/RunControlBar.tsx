@@ -71,6 +71,11 @@ const APPROVAL_OPTIONS: Array<{ label: string; value: ApprovalMode }> = [
   { value: "auto", label: "全自动跑完" },
 ];
 
+/** 下拉框给回的是 string；只认选项里列出的档位（与上面同一份白名单）。 */
+function isApprovalMode(v: string): v is ApprovalMode {
+  return APPROVAL_OPTIONS.some((o) => o.value === v);
+}
+
 /** 日志时间戳 → 本地时分秒；解析失败给空串。 */
 function formatStepTime(ts: string): string {
   const d = new Date(ts);
@@ -138,7 +143,11 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
             <span className="text-ink-faint">确认粒度</span>
             <SelectMenu
               labels={Object.fromEntries(APPROVAL_OPTIONS.map((o) => [o.value, o.label]))}
-              onChange={(v) => c.setApprovalMode(/* SAFETY: 类型断言已复核 */ v as ApprovalMode)}
+              onChange={(v) => {
+                if (isApprovalMode(v)) {
+                  c.setApprovalMode(v);
+                }
+              }}
               options={APPROVAL_OPTIONS.map((o) => o.value)}
               value={c.approvalMode}
             />
@@ -146,7 +155,9 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
           <FieldLabel className="border-border bg-subtle text-ink-field flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs">
             <Checkbox
               checked={c.autoReview}
-              onCheckedChange={(checked) => c.setAutoReview(checked === true)}
+              onCheckedChange={(checked) => {
+                c.setAutoReview(checked === true);
+              }}
             />
             <span>生图后自动评审</span>
           </FieldLabel>
@@ -254,7 +265,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
         </div>
       )}
 
-      {run.status === "failed" && run.error ? (
+      {run.status === "failed" && run.error !== null && run.error !== "" ? (
         <p className="text-destructive text-xs">{run.error}</p>
       ) : null}
       {c.error ? <p className="text-destructive text-xs">{c.error}</p> : null}

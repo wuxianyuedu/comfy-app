@@ -1,27 +1,7 @@
 /**
- * 「备份 / 恢复真的被接到了该接的地方」—— 判据全部落在**接线**上。
- *
- * `tests/db-backup.test.ts` 验的是核心实现本身对不对；本文件验的是它在启动链路
- * 上有没有执行者。这一族判据在本仓库血泪史里是必需的：`scripts/**` 里一个正确
- * 的函数**没有任何人调用**，形态上与「功能已经做完」长得一模一样（台账里那批
- * 「判据在场但没有执行者」正是这个形态）。
- *
- * 三条接线，缺一条这个功能就等于不存在：
- *
- *   1. **`db-sync.mjs --force` 之前必须备份**（D6 的建议默认①）—— `--force` 是
- *      唯一会跑删列 / 重建表的那条路，也是唯一一次失误不可逆的时刻；
- *   2. **非 `--force` 那一路不许备份** —— 它按白名单只认建表 / 建索引 / 加列，
- *      每次都备份会让 3 份保留量被「一次正常启动」挤掉真正有价值的那些；
- *   3. **三个启动入口都要在起服务之前应用待恢复**（建议默认③）—— 换文件必须在
- *      「应用没在跑」的那一刻，而那三个入口是唯一能保证这一点的位置。
- *
- * 判据取源码文本 + 真跑一次 `db-sync.mjs`（用一个假 `ensureSchemaCurrent` 太远，
- * 而它真的会起 drizzle —— 所以这里只钉「备份那一步发生了」与「顺序对」，
- * 用 `--force` 跑在一个临时根上、`scripts/` 指不过去就跳过真实同步那半）。
- *
- * 顺序判据用「行号」：源码里 `createBackup` 必须出现在 `ensureSchemaCurrent`
- * **之前**。这比断言某个字符串存在强，也比抄一份实现弱 —— 它是「这两件事的
- * 先后」这件事本身。
+ * 「备份 / 恢复真的被接到了该接的地方」——判据全落在**接线**上：`scripts/**` 里一个正确的函数没人调用，形态与「功能已做完」一样
+ * （台账里「判据在场但无执行者」正是此形态）。三条缺一不可：`--force` 前必须备份（唯一删列/重建表、失误不可逆）；非 `--force`
+ * 不许备份（否则 3 份保留量被一次正常启动挤掉）；三入口在起服务前应用待恢复。判据取源码文本 + 行号顺序（`createBackup` 先于 `ensureSchemaCurrent`）。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -42,14 +22,12 @@ function lineOf(source: string, needle: string): number {
 
 describe("db-sync.mjs：--force 之前必须备份", () => {
   it("createBackup 出现在 ensureSchemaCurrent **之前**", () => {
-    const src = read("scripts/db-sync.mjs");
-    expect(lineOf(src, "createBackup(")).toBeLessThan(
-      lineOf(src, "ensureSchemaCurrent("),
-    );
+    const src = read("scripts/db/db-sync.mjs");
+    expect(lineOf(src, "createBackup(")).toBeLessThan(lineOf(src, "ensureSchemaCurrent("));
   });
 
   it("备份挂在 `force` 这一支下（非 --force 的自动同步不备份）", () => {
-    const src = read("scripts/db-sync.mjs");
+    const src = read("scripts/db/db-sync.mjs");
     /* 判据是「`if (force)` 与 `createBackup(` 之间除了条件那行没有别的控制流」：
      * 抄一份实现会漂，这里只要证明那一步在 force 的射程内。 */
     const backupLine = lineOf(src, "createBackup(");
@@ -64,7 +42,7 @@ describe("db-sync.mjs：--force 之前必须备份", () => {
   });
 
   it("备份结果必落一句提示（成功说了哪一份、失败说了为什么）", () => {
-    const src = read("scripts/db-sync.mjs");
+    const src = read("scripts/db/db-sync.mjs");
     /* 走 `backupNotice` 这个唯一出口 —— 直接写文案的话，成功 / 失败会各写一半，
      * 而失败那一半恰恰是「这次变更万一丢了数据、没有退路」那句话的落点。 */
     expect(src).toContain("backupNotice(");
@@ -103,24 +81,22 @@ describe("启动链：换文件必须排在起服务之前", () => {
     for (const file of ["scripts/dev.mjs", "scripts/start.mjs"]) {
       const src = read(file);
       const restore = lineOf(src, "applyPendingRestoreAtBoot(");
-      /* 同步会打开数据库 → 换文件必须在它之前；起 Next 同理。 */
+      /* 同步会打开数据库 → 换文件必须在它之前；起 Next 同理。
+       * #4155 起 server 链直启 next bin，起服务的锚随之换成 spawnSync 那一行。 */
       expect(restore, `${file}: 换文件必须在 schema 同步之前`).toBeLessThan(
         lineOf(src, "spawnSchemaSync("),
       );
       expect(restore, `${file}: 换文件必须在起 Next 之前`).toBeLessThan(
-        lineOf(src, "pnpmInvocation("),
+        lineOf(src, "spawnSync(process.execPath, [nextBin"),
       );
     }
   });
 
   it("编排器里它排在 spawnSchemaSync 与 spawnDevServer 之前", () => {
-    /* 用**调用点**而不是「某个名字第一次出现的行」：R5 拆分之后入口文件把
-     * `spawnDevServer` 做成了一层再导出的薄包装（它写在主流程**之前**），
-     * 拿「第一次出现」会指到那个包装上，断言就成了「换文件排在包装定义之前」——
-     * 那是文件排版，不是契约。契约是「换文件排在**真的起服务**之前」，而这两处
-     * 调用点在拆分后分居两份（换文件在 `startup-gates.mjs`，起服务在
-     * `dev-boot.mjs`），所以顺序判据落在**执行顺序**上：编排名按 0~2 → 3 → … →
-     * 5~8 排，换文件在 5~8 之前由下面的「先于起服务」直接证明。 */
+    /* 用**调用点**而不是「某个名字第一次出现的行」：R5 拆分后入口文件把 `spawnDevServer` 做成一层再导出的薄包装
+     * （写在主流程之前），「第一次出现」会指到包装上，断言就变成「换文件排在包装定义之前」—— 那是排版不是契约。
+     * 契约是「换文件排在**真的起服务**之前」，而两处调用点已分居 `startup-gates.mjs` / `dev-boot.mjs`，
+     * 故顺序判据落在执行顺序（编排 0~2 → 3 → … → 5~8）上，由下面「先于起服务」直接证明。 */
     const gates = read("scripts/launcher-core/startup-gates.mjs");
     expect(
       lineOf(gates, "applyPendingRestoreAtBoot("),
@@ -134,9 +110,7 @@ describe("启动链：换文件必须排在起服务之前", () => {
     ).toBe(false);
     // 编排器的执行顺序：预检桥段在任何起服务动作之前。
     const src = read("scripts/dev-launcher.mjs");
-    expect(lineOf(src, "await runStartupGates(")).toBeLessThan(
-      lineOf(src, "bootDevServerStage("),
-    );
+    expect(lineOf(src, "await runStartupGates(")).toBeLessThan(lineOf(src, "bootDevServerStage("));
   });
 
   it("三个入口排在任何会开库的东西之前：不得出现在 spawnSchemaSync 之后", () => {
@@ -144,21 +118,16 @@ describe("启动链：换文件必须排在起服务之前", () => {
      * 都会有一处红 —— 那样换文件就发生在有进程持有这个库的时刻了。 */
     for (const { file, label } of entries) {
       const src = read(file);
-      if (!src.includes("spawnSchemaSync(")) {
-        /* 编排器的 schema 同步随起服务桥段搬进了 `dev-boot.mjs`：那一份里
-         * **不许**出现换文件（正面那条已断），这里只断「它不在换文件之前」。 */
-        expect(
-          read("scripts/launcher-core/dev-boot.mjs").includes(
-            "applyPendingRestoreAtBoot",
-          ),
-          `${label}: 换文件不许排在 schema 同步之后`,
-        ).toBe(false);
-        continue;
-      }
+      /* 两类入口判据不同：编排器的 schema 同步随起服务桥段搬进了 `dev-boot.mjs`
+       * （桥接档：那一份里**不许**出现换文件——正面那条已断，这里只断「它不在换文件
+       * 之前」）；直连档判换文件行在同步之前。条件收进取值，断言本体无条件跑。 */
+      const bridgesViaDevBoot = !src.includes("spawnSchemaSync(");
       expect(
-        lineOf(src, "applyPendingRestoreAtBoot("),
+        bridgesViaDevBoot
+          ? !read("scripts/launcher-core/dev-boot.mjs").includes("applyPendingRestoreAtBoot")
+          : lineOf(src, "applyPendingRestoreAtBoot(") < lineOf(src, "spawnSchemaSync("),
         `${label}: 换文件不许排在 schema 同步之后`,
-      ).toBeLessThan(lineOf(src, "spawnSchemaSync("));
+      ).toBe(true);
     }
   });
 });
@@ -173,7 +142,7 @@ describe("路径收口：应用根只有一处锚点", () => {
 
   it("服务端取用面只 import 那一份 .mjs 实现（不自己再造一份）", () => {
     const src = read("src/lib/db-backup/backup.ts");
-    expect(src).toContain("scripts/db-backup-core.mjs");
+    expect(src).toContain("scripts/db/db-backup-core.mjs");
     /* 不许直接引驱动去自己写一份备份 —— 那是第二个轮子（§12.12）。 */
     expect(src).not.toContain("@libsql/client");
     expect(src).not.toContain("VACUUM INTO");
@@ -194,9 +163,7 @@ describe("设置页接线", () => {
   });
 
   it("恢复**不是**「点完就换文件」：界面说的下一步是重启", () => {
-    const section = read(
-      "src/app/(main)/settings/components/BackupSection.tsx",
-    );
+    const section = read("src/app/(main)/settings/components/BackupSection.tsx");
     expect(section).toContain("重新启动应用后生效");
     /* 反向：不许出现「恢复成功」这类把人骗去刷新页面的文案。 */
     expect(section).not.toContain("已恢复");

@@ -1,21 +1,12 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { Button } from "~/components/ui/button";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "~/components/ui/hover-card";
 
 /**
- * `ui/hover-card` 是 base-ui PreviewCard 的封装（**悬停展开的富信息卡片**）。
- *
- * 与 `tooltip` 的差别不是「谁更好看」，而是**职责**：
- * - `tooltip` 是**简短解释**（一行文案 + 快捷键），不需要交互；
- * - 本件是**可交互的富内容**（里面的链接能点、能停住鼠标读），
- *   所以它有 `openDelay` / `closeDelay` 的语义、且**在 hover 卡片内部时
- *   不会关闭**（否则鼠标一挪进去卡片就没了）。
- *
- * 定位那一层读 `useOverlayBoundary()`：可用区域 = 视口减去应用级标题行
- * （壳态才有标题行）。`align` / `side` / `sideOffset` 与 popover 同族。
- *
- * ⚠️ 要**悬停**触发项才出现，而且要停一会儿（有 delay）。
+ * `ui/hover-card` 是 base-ui PreviewCard 的封装（可交互的富内容卡片）。与 tooltip 的分工：
+ * tooltip 是简短解释；本件内的链接可点、鼠标移入不关闭（有 `openDelay` / `closeDelay`）。
+ * 定位读 `useOverlayBoundary()`：可用区域 = 视口减去应用级标题行（壳态才有）。⚠️ 需悬停且有延迟。
  */
 const meta = {
   title: "UI/HoverCard",
@@ -68,19 +59,18 @@ export const InteractiveContent: Story = {
  *  —— 四条并排同时悬停很难，逐条试更实际。 */
 export const Sides: Story = {
   render: () => (
+    /* SAFETY: 类型断言已复核 */
     <div className="flex items-center gap-4">
-      {
-        /* SAFETY: 类型断言已复核 */ (["top", "right", "bottom", "left"] as const).map((side) => (
-          <HoverCard key={side}>
-            <HoverCardTrigger render={<Button size="sm" variant="outline" />}>
-              side={side}
-            </HoverCardTrigger>
-            <HoverCardContent side={side}>
-              <p className="text-sm">开在 {side} 这一侧</p>
-            </HoverCardContent>
-          </HoverCard>
-        ))
-      }
+      {(["top", "right", "bottom", "left"] as const).map((side) => (
+        <HoverCard key={side}>
+          <HoverCardTrigger render={<Button size="sm" variant="outline" />}>
+            side={side}
+          </HoverCardTrigger>
+          <HoverCardContent side={side}>
+            <p className="text-sm">开在 {side} 这一侧</p>
+          </HoverCardContent>
+        </HoverCard>
+      ))}
     </div>
   ),
 };

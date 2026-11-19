@@ -11,9 +11,9 @@ import {
   parseArgs,
   parseSuperjsonEnvelope,
   validateArgs,
-} from "../scripts/agent-film.mjs";
+} from "../scripts/platform/agent-film.mjs";
 
-const noopSleep = async () => undefined;
+const noopSleep = () => Promise.resolve(undefined);
 
 describe("parseArgs", () => {
   it("默认值：approval=auto、url 兜底、dry-run=false", () => {
@@ -144,7 +144,7 @@ describe("driveFilmRun（假 request 驱动轮询状态机）", () => {
       kind: string;
       ok: boolean;
       ts: string;
-    }
+    };
     const withLog = (status: string, log: Array<Step>) => ({
       run: { status, log },
       action: { kind: "idle" },

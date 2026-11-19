@@ -12,6 +12,7 @@ import { isRecord } from "~/lib/is-record";
 import { artifactDiskPath } from "~/lib/media/output-paths";
 import { isInlineMedia, parseDataUrl, toDataUrl } from "~/lib/media/data-url";
 import { DEFAULT_IMAGE_MIME, extOfPath, mimeForExt } from "~/lib/media/mime-ext";
+import { isUnsafeOutboundUrlError, safeFetch } from "~/lib/network/outbound-url.server";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 const MAX_BYTES = 24 * 1024 * 1024;
@@ -52,7 +53,7 @@ export async function resolveMediaBytes(src: string, _origin: string): Promise<R
 
   if (src.startsWith("/")) {
     const abs = localPathFor(src);
-    if (!abs) {
+    if (abs === null) {
       throw new Error(`无法定位本地生成文件: ${src}`);
     }
     const buffer = await fs.readFile(abs);
@@ -68,23 +69,73 @@ export async function resolveMediaBytes(src: string, _origin: string): Promise<R
   if (/^https?:\/\//.test(src)) {
     let res: Response;
     try {
-      res = await fetch(src, { signal: AbortSignal.timeout(30_000) });
+      res = await safeFetch(src, {
+        signal: AbortSignal.timeout(30_000),
+        scenario: "remote-media",
+      });
     } catch (error) {
-      throw new Error(errorText(error, "拉取参考图失败"), { cause: error });
+      const detail = isUnsafeOutboundUrlError(error)
+        ? error.message
+        : errorText(error, "拉取参考图失败").replace(/^拉取参考图失败：/u, "");
+      throw new Error(`拉取参考图失败：${detail}`, { cause: error });
     }
     if (!res.ok) {
       throw new Error(`拉取参考图失败 (${res.status})`);
     }
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.byteLength > MAX_BYTES) {
-      throw new Error("图片超过 24MB 上限");
+    const len = res.headers.get("content-length");
+    if (len !== null) {
+      const n = Number(len);
+      if (Number.isFinite(n) && n > MAX_BYTES) {
+        throw new Error("图片超过 24MB 上限");
+      }
+    }
+    let buffer: Buffer;
+    if (res.body) {
+      const reader = res.body.getReader();
+      const chunks: Array<Uint8Array> = [];
+      let total = 0;
+      try {
+        for (;;) {
+          // oxlint-disable-next-line eslint/no-await-in-loop -- 流式读取必须逐块等待，无法并行
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+          if (value) {
+            total += value.byteLength;
+            if (total > MAX_BYTES) {
+              throw new Error("图片超过 24MB 上限");
+            }
+            chunks.push(value);
+          }
+        }
+      } finally {
+        /* 超限抛出时取消流：releaseLock 不停上游（ISSUE #4218，与 safeFetch
+         * 的 body.cancel 同一口径）；正常读完时 cancel 是无操作。
+         * cancel/close 都做兜底——测试桩与旧环境可能没有这些方法。 */
+        try {
+          void Promise.resolve(reader.cancel?.()).catch(() => undefined);
+        } catch {
+          /* cancel 不可用时不影响既有的收尾 */
+        }
+        reader.releaseLock();
+      }
+      buffer = Buffer.concat(chunks, total);
+    } else {
+      buffer = Buffer.from(await res.arrayBuffer());
+      if (buffer.byteLength > MAX_BYTES) {
+        throw new Error("图片超过 24MB 上限");
+      }
     }
     const mime = res.headers.get("content-type")?.split(";")[0] ?? undefined;
     return {
       buffer,
       /* 类型头说不是图（网关错误页的 text/html、空类型头）时按 URL 的扩展名回落 ——
        * 同样要先取扩展名再查表，见上面本地分支那条注释。 */
-      mime: mime?.startsWith("image/") ? mime : (mimeForExt(extOfPath(src)) ?? DEFAULT_IMAGE_MIME),
+      mime:
+        mime?.startsWith("image/") === true
+          ? mime
+          : (mimeForExt(extOfPath(src)) ?? DEFAULT_IMAGE_MIME),
     };
   }
 

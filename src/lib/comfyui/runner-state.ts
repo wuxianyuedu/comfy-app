@@ -33,6 +33,7 @@
 //
 
 import { errorText } from "~/lib/error-message";
+import { fireAndForget } from "~/lib/async-action";
 import { HISTORY_READ } from "../retry-policy";
 import { lastSegments } from "~/lib/path-display";
 import { createEmptyState, type LogEntry, type RunnerState } from "./runner-state-shape";
@@ -106,23 +107,23 @@ function callerLoc(): string {
 
     // 栈的形状：lines[0] 是 "Error"，lines[1] 是 " at log (…)"，lines[2] 才是真正的调用方。
 
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-    const frame = lines[2] || lines[1] || ""; // oxlint-disable-line strict-boolean-expressions -- 取第一个非空栈帧：空串与 undefined 同义，这里必须保留「真值回退」，不能换成 ??
+    // oxlint-disable-next-line typescript/prefer-nullish-coalescing
+    const frame = lines[2] || lines[1] || "";
 
-    const match = /\(([^():]+):(\d+):(\d+)\)/.exec(frame);
+    const match = /\((?<file>[^():]+):(?<line>\d+):(?<col>\d+)\)/.exec(frame);
 
     if (match) {
-      const file = lastSegments(match[1], 1) || match[1];
+      const file = lastSegments(match.groups?.file, 1) || match.groups?.file;
 
-      return `${file}:${match[2]}`;
+      return `${file}:${match.groups?.line}`;
     }
 
-    const m2 = /at\s+(\S+):(\d+):(\d+)/.exec(frame);
+    const m2 = /at\s+(?<file>\S+):(?<line>\d+):(?<col>\d+)/.exec(frame);
 
     if (m2) {
-      const file = lastSegments(m2[1], 1) || m2[1];
+      const file = lastSegments(m2.groups?.file, 1) || m2.groups?.file;
 
-      return `${file}:${m2[2]}`;
+      return `${file}:${m2.groups?.line}`;
     }
 
     return "";
@@ -170,20 +171,64 @@ function callerLoc(): string {
  *  - `LOGS_MAX_LINES`：单个任务的行数，超出丢最旧的（保留最新一段）；
  *  - `LOGS_MAX_TASKS`：同时驻留的任务数，超出按「最久没写过」淘汰。
  * 只限行数，Map 的键仍随执行过的任务数单调增长；只限任务数，一个失控任务
- * 照样能把内存撑爆。淘汰不丢数据：日志已由 `persistLogs` 落库，SSE 回放
- * 读不到内存时会回落 DB 列（见 stream route 的 `replaySrc`）。 */
+ * 照样能把内存撑爆。淘汰不丢数据：**还有 pending 落库定时器的任务不淘汰**
+ * （见下方 `touchAndEvict` 的 `skip`，#4021），日志必然先落库再退出驻留；
+ * SSE 回放读不到内存时会回落 DB 列（见 stream route 的 `replaySrc`）。 */
 export const LOGS_MAX_LINES = 5000;
 
 export const LOGS_MAX_TASKS = 64;
 
+// 每个 taskId 一个防抖落库器。一个任务最多只有一次待写；
+
+// 防抖窗口内后续的 `log()` 调用会重置计时器。
+
+// 「最长延迟」看门狗保证持续输出（例如按节点 ▶/✔ 的突发）
+
+// 仍能在约 1.5s 内落库，SSE 重放因此能及时拿到。
+
+// （每条都写会把数据库写爆，所以必须合并。）
+
+const PERSIST_DEBOUNCE_MS = 200;
+
+const PERSIST_MAX_DELAY_MS = 1500;
+
+const persistTimers = new Map<
+  string,
+  {
+    debounce: ReturnType<typeof setTimeout>;
+    maxDelay: ReturnType<typeof setTimeout>;
+  }
+>();
+
 /** 写入并把该任务标记为「最近使用」，再淘汰超出 `maxTasks` 的最久未用项。
  *  Map 的迭代序是插入序、对已存在的键 `set` 不改变位置 —— 所以标记最近
- *  使用要 delete 后再 set，淘汰时取迭代器的第一个键即得最旧项。 */
-function touchAndEvict<V>(map: Map<string, V>, taskId: string, value: V, maxTasks: number): void {
+ *  使用要 delete 后再 set，淘汰时取迭代器的第一个键即得最旧项。
+ *
+ *  `skip`：命中即**跳过本轮淘汰**（#4021）。日志 Map 传「还有 pending 落库
+ *  定时器」——被淘汰任务的 pending `persistLogs` 会以空数组 `replaceLogs`
+ *  抹掉 DB 里已落库的日志；「日志已落库才可淘汰」这条不变式靠它守住。
+ *  全部键都被 skip 时允许暂时超限（ bounded：最迟 1.5s 的兜底 flush 后回落）。
+ *
+ *  同一形态的第二处消费（ISSUE #4351）：`executor-dispatch` 的 `wsWaitLogged`
+ *  提示去重表也用它封顶。新需求要「有界去重 / 驻留」时直接复用本函数，
+ *  别再抄第四份淘汰循环（此前 instrumentation 与画布各有一份同形内联）。 */
+export function touchAndEvict<V>(
+  map: Map<string, V>,
+  taskId: string,
+  value: V,
+  maxTasks: number,
+  skip?: (taskId: string) => boolean,
+): void {
   map.delete(taskId);
   map.set(taskId, value);
   while (map.size > maxTasks) {
-    const oldest = map.keys().next().value;
+    let oldest: string | undefined;
+    for (const key of map.keys()) {
+      if (skip?.(key) !== true) {
+        oldest = key;
+        break;
+      }
+    }
     if (oldest === undefined) {
       break;
     }
@@ -204,7 +249,8 @@ export function log(taskId: string, level: LogEntry["level"], msg: string): LogE
     arr.splice(0, arr.length - LOGS_MAX_LINES);
   }
 
-  touchAndEvict(store.logs, taskId, arr, LOGS_MAX_TASKS);
+  /* 淘汰跳过「还有 pending 落库」的任务（#4021）：先落库、再淘汰，顺序不能反。 */
+  touchAndEvict(store.logs, taskId, arr, LOGS_MAX_TASKS, (id) => persistTimers.has(id));
 
   schedulePersistLogs(taskId);
 
@@ -248,28 +294,6 @@ export function takeQueuedEntries(taskId: string): Array<LogEntry> {
   return kept;
 }
 
-// 每个 taskId 一个防抖落库器。一个任务最多只有一次待写；
-
-// 防抖窗口内后续的 `log()` 调用会重置计时器。
-
-// 「最长延迟」看门狗保证持续输出（例如按节点 ▶/✔ 的突发）
-
-// 仍能在约 1.5s 内落库，SSE 重放因此能及时拿到。
-
-// （每条都写会把数据库写爆，所以必须合并。）
-
-const PERSIST_DEBOUNCE_MS = 200;
-
-const PERSIST_MAX_DELAY_MS = 1500;
-
-const persistTimers = new Map<
-  string,
-  {
-    debounce: ReturnType<typeof setTimeout>;
-    maxDelay: ReturnType<typeof setTimeout>;
-  }
->();
-
 /** 取消某个任务的「日志落库」防抖定时器（若存在）。
  *
  *  为什么公共 API 需要它：`schedulePersistLogs` 排的是**游离定时器** —— 它不属于
@@ -296,6 +320,18 @@ export function cancelPersistLogs(taskId: string): void {
   persistTimers.delete(taskId);
 }
 
+/* 防抖/看门狗定时器回调里的最后兜底（#4221）：persistLogs 的双重失败（落库失败 +
+ * logger 也起不来）会 re-throw。`await persistLogs(...)` 的调用方自己接那个 throw；
+ * 这三个定时器回调原本写的是 `void persistLogs(...)`——没人接，rejection 直接走
+ * unhandledRejection，Node ≥15 默认即退出整个进程。这里显式接住：logger 既已不可用，
+ * stderr 是两宿主（Next / executor host）都被启动链捕获落日志的最后通道；语义从
+ * 「意外崩进程」改为「响亮留痕 + 继续跑」。 */
+function onPersistLogsFailure(error: unknown): void {
+  process.stderr.write(
+    `[comfyui] persistLogs 双重失败（落库与 logger 均不可用）：${errorText(error, "unknown")}\n`,
+  );
+}
+
 export function schedulePersistLogs(taskId: string) {
   if (!taskId) {
     return;
@@ -317,7 +353,7 @@ export function schedulePersistLogs(taskId: string) {
         persistTimers.delete(taskId);
       }
 
-      void persistLogs(taskId);
+      fireAndForget(persistLogs(taskId), onPersistLogsFailure);
     }, PERSIST_DEBOUNCE_MS);
 
     return;
@@ -332,7 +368,7 @@ export function schedulePersistLogs(taskId: string) {
       persistTimers.delete(taskId);
     }
 
-    void persistLogs(taskId);
+    fireAndForget(persistLogs(taskId), onPersistLogsFailure);
   }, PERSIST_DEBOUNCE_MS);
 
   const maxDelay = setTimeout(() => {
@@ -344,10 +380,29 @@ export function schedulePersistLogs(taskId: string) {
       persistTimers.delete(taskId);
     }
 
-    void persistLogs(taskId);
+    fireAndForget(persistLogs(taskId), onPersistLogsFailure);
   }, PERSIST_MAX_DELAY_MS);
 
   persistTimers.set(taskId, { debounce, maxDelay });
+}
+
+/** 终态去重标记的有界保留上限（ISSUE #3961 / #3850）：`settled`/`finalized` 只需
+ *  挡住同一任务在“可见时间窗”内的重复收口；终态落库后 DB 自身也有终态守卫。
+ *  无上限会让已完成 taskId 在长生命周期进程中单调增长，这里按插入序淘汰最旧项。 */
+const TERMINAL_MARK_MAX = 4096;
+
+function rememberTerminalMark(set: Set<string>, taskId: string): void {
+  if (set.has(taskId)) {
+    set.delete(taskId);
+  }
+  set.add(taskId);
+  while (set.size > TERMINAL_MARK_MAX) {
+    const oldest = set.values().next().value;
+    if (oldest === undefined) {
+      break;
+    }
+    set.delete(oldest);
+  }
 }
 
 /**
@@ -366,7 +421,7 @@ export function claimSettle(taskId: string): boolean {
   if (s.settled.has(taskId)) {
     return false;
   }
-  s.settled.add(taskId);
+  rememberTerminalMark(s.settled, taskId);
   const t = s.timers.get(taskId);
   if (t) {
     clearTimeout(t);
@@ -383,7 +438,7 @@ export function claimFinalize(taskId: string): boolean {
   if (s.finalized.has(taskId)) {
     return false;
   }
-  s.finalized.add(taskId);
+  rememberTerminalMark(s.finalized, taskId);
   return true;
 }
 
@@ -543,8 +598,8 @@ export async function persistLogs(taskId: string) {
   const arr = state().logs.get(taskId) ?? [];
 
   // 内部把 DB 落库的失败咽下——理由与旧行为不匹配：
-  //   · caller 有 3 处写 `void persistLogs(...)`（防抖回调里），
-  //     不 catch 就直接变成 unhandledRejection，进程级噪声；
+  //   · 防抖/看门狗定时器回调里的 3 处经 fireAndForget 接到 onPersistLogsFailure
+  //     （stderr 最后通道），rejection 不再走 unhandledRejection；
   //   · 另外几处 `await persistLogs(...)`
   //     （enqueue / executor-finalize / reaper），若这里抛错会让 finalize 链路整段回滚，
   //     表现比「一份日志没落库」严重得多。
@@ -566,8 +621,9 @@ export async function persistLogs(taskId: string) {
       const { log } = await resolveDeps();
       log.warn(message);
     } catch {
-      // 完全无法落库 + 无法 warn：让 caller 通过 unhandled rejection 感知，
-      // 不吞掉。
+      // 完全无法落库 + 无法 warn：对 `await persistLogs(...)` 的调用方照抛（它们有自己的
+      // try/catch）；定时器回调那三处走 fireAndForget 的 stderr 兜底（onPersistLogsFailure），
+      // 不再借 unhandledRejection 当信号通道（那等于崩进程）。
       throw error;
     }
   }

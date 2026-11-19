@@ -1,25 +1,14 @@
 /**
- * 产品版本号三处同步判据的自检（ISSUE #1611 阶段三 D7，规范 launch-and-build §7.1.1）。
- *
- * 立案现场：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`
- * 三处手写同一个版本号（**当时恰好相等**），而**没有任何一处判据认识它**。这不是
- * 「改名要去三个地方」的麻烦 —— `tauri.conf.json` 的版本在编译期内嵌进壳，也是
- * `tauri-plugin-updater` 判「更新新旧」的基准：只升 `package.json` 时安装包与更新
- * 判定还停在旧版本，用户点「检测更新」看到「已是最新」，而实际发布的已经是新构建。
- *
- * 四头判据，缺一头这层就退化：
- *   ① **拦得住**：三处不一致即红；
- *   ② **读不出也红**：某处字段被改名 / 挪段（`[workspace.package]`）时不许静默放行；
- *   ③ **不误伤**：`Cargo.toml` 别的段里的 `version = "…"`（依赖表内联表）不算产品版本；
- *   ④ **接线在**：`package.json` 有入口、钩子 D 组真跑它（判据写在文件里没人跑 =
- *      §13.5.12 那个「判据自称在跑」的形态）。
+ * 产品版本号三处同步判据的自检（ISSUE #1611 阶段三 D7，规范 launch-and-build §7.1.1）。立案现场：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml` 三处手写同一版本且当时恰好相等，却没有任何判据认识它。
+ * `tauri.conf.json` 的版本编译期内嵌进壳，也是 `tauri-plugin-updater` 判更新新旧时的基准：只升 `package.json` 时安装包与更新判定停在旧版本，用户点「检测更新」见「已是最新」而实际已发新构建。
+ * 四头判据：① 三处不一致即红；② 某处字段被改名 / 挪段（如 `[workspace.package]`）不许静默放行；③ `Cargo.toml` 别的段里的 `version = "…"` 不算产品版本；④ `package.json` 有入口且钩子 D 组真跑（§13.5.12）。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-app-version.cjs",
+  script: "gates/check-app-version.cjs",
   /* 三处都在仓库根之外的子目录里，脚本用 `__dirname/..` 定根 —— 落 `scripts/`。 */
   workdir: "app-version-gate",
 });
@@ -131,21 +120,28 @@ describe("产品版本号三处同步（D7）", () => {
   });
 
   test("④ `package.json` 有 `check:app-version` 入口（判据有执行者）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(readFileSync(path.join(REPO_ROOT, "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    expect(pkg.scripts["check:app-version"]).toBe("node scripts/check-app-version.cjs");
+    /** package.json 的只读形状：外来 JSON 先落 unknown，再校验 scripts 是对象。 */
+    function isPackageJson(v: unknown): v is { scripts: Record<string, unknown> } {
+      if (typeof v !== "object" || v === null || !("scripts" in v)) return false;
+      const scripts: unknown = v.scripts;
+      return typeof scripts === "object" && scripts !== null && !Array.isArray(scripts);
+    }
+
+    const parsed: unknown = JSON.parse(readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"));
+    if (!isPackageJson(parsed)) {
+      throw new Error("package.json 的 scripts 不是对象");
+    }
+    expect(parsed.scripts["check:app-version"]).toBe("node scripts/gates/check-app-version.cjs");
   });
 
   test("④ pre-commit 的 D 组真跑这一步（写在文件里没人跑 = 没有等价）", () => {
     const hook = readFileSync(path.join(REPO_ROOT, ".githooks", "pre-commit"), "utf8");
-    const steps = [...hook.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
-      label: m[1] ?? "",
-      cmd: m[2] ?? "",
+    const steps = [...hook.matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm)].map((m) => ({
+      label: m.groups?.label ?? "",
+      cmd: m.groups?.cmd ?? "",
     }));
     const hit = steps.find((s) => s.cmd.includes("check-app-version.cjs"));
     expect(hit, `D 组 ${steps.length} 步里没有版本号同步判据`).toBeDefined();
-    expect(hit?.cmd).toBe("node scripts/check-app-version.cjs");
+    expect(hit?.cmd).toBe("node scripts/gates/check-app-version.cjs");
   });
 });

@@ -2,7 +2,7 @@
 
 - **§13.1 清单补回 `check-eslint-exemptions.cjs` 那一步**（不是本 PR 引入的红）：
   `pnpm doc:check` 在 `origin/master` @ `fa73d1f8` 上就已经红 ——
-  `node scripts/base-check.mjs "node scripts/check-doc-references.cjs"` 的结论是
+  `node scripts/gates/base-check.mjs "node scripts/check-doc-references.cjs"` 的结论是
   `baseline-red（本检出 1，origin/master @ fa73d1f8 1）`，两边逐字同一条：
   「`.githooks/pre-commit` 这一步真的在跑 `node scripts/check-eslint-exemptions.cjs`，但
   §13.1 清单里没有这条」。钩子在 #2607 第 3 条加了那一步、§13.5.31 写了它的口径，

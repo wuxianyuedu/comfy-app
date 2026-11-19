@@ -9,6 +9,7 @@ import path from "node:path";
 
 import { ViewTabStrip, viewTabLabel } from "./ViewTabStrip";
 import { HOME_VIEW, initialWorkspaceTabs, openViewTab } from "./workspace-tabs";
+import { stripComments } from "../../../tests/helpers/strip-comments";
 
 afterEach(() => {
   cleanup();
@@ -45,8 +46,10 @@ describe("viewTabLabel", () => {
   });
 
   it("未知视图原样回显，不套一个最近的标签", () => {
-    /* SAFETY: 类型断言已复核 */
-    expect(viewTabLabel("nope" as never)).toBe("nope");
+    /* 签名只收 `WorkspaceView`，而 `?? view` 那条兜底恰恰是给签名之外的运行期输入写的：
+     * 把未知字符串从 `unknown` 那侧原样转发进去，由函数自己的兜底分支作答。 */
+    const unknownView: unknown = "nope";
+    expect(Reflect.apply(viewTabLabel, undefined, [unknownView])).toBe("nope");
   });
 });
 
@@ -112,27 +115,24 @@ describe("ViewTabStrip", () => {
 });
 
 /**
- * 选中态的源码级判据。
- *
- * 为什么落在源码而不是渲染：壳里那条标题行形态（`inTitleBar` 与 iframe 页签）在
- * 浏览器/dev 下**不存在**，e2e 走不到；而当初的缺陷恰好只在那条路径上 —— 选中态给
- * `bg-canvas/70`（#0a0a0f），压在 #0f0f16 的标题行上**比底还暗**，与未选中只差一档
- * 文字色，肉眼读不出当前页。渲染判据管不到的那一半，至少要有人钉住形状。
+ * 选中态的源码级判据。为何落在源码而非渲染：壳里那条标题行形态（`inTitleBar` 与 iframe 页签）在浏览器/dev 下**不存在**，e2e 走不到；而当初的缺陷恰在那条路径上 —— `bg-canvas/70`（#0a0a0f）压在 #0f0f16 的标题行上**比底还暗**，与未选中只差一档文字色，肉眼读不出当前页。
+ * 渲染判据管不到的那一半，至少要有人钉住形状。
  */
 const ROOT = path.resolve(__dirname, "../../..");
 
-/** 剥块注释再判：说明文字里提到 `bg-canvas` 不算有人这么写。 */
+/** 剥注释再判：说明文字里提到 `bg-canvas` 不算有人这么写（唯一实现 `tests/helpers/strip-comments`）。
+ * 旧形那条不跟引号状态的块注释正则，会把串里的斜杠紧跟星号当成注释起点一路吃到下一个闭合：
+ * 本判据两份接收者里 `TitleBarTabs.tsx` 实测有 2 行就是这么消失的，另一份没有（ISSUE #2969）。 */
 function codeOf(rel: string): string {
-  return readFileSync(path.join(ROOT, rel), "utf8").replaceAll(/\/\*[\s\S]*?\*\//g, "");
+  return stripComments(readFileSync(path.join(ROOT, rel), "utf8"));
 }
 
 describe("两类页签共用一套选中态（壳内形态 e2e 到不了）", () => {
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      "src/components/studio/ViewTabStrip.tsx",
-      "src/components/studio/TitleBarTabs.tsx",
-    ] as const,
-  )("%s 的 active 分支只走 u-tab-active，不自己写背景", (rel) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    "src/components/studio/ViewTabStrip.tsx",
+    "src/components/studio/TitleBarTabs.tsx",
+  ] as const)("%s 的 active 分支只走 u-tab-active，不自己写背景", (rel) => {
     const code = codeOf(rel);
     expect(
       /active\s*\?\s*"[^"]*u-tab-active[^"]*"/.test(code),
@@ -144,8 +144,8 @@ describe("两类页签共用一套选中态（壳内形态 e2e 到不了）", ()
 
   it(".u-tab-active 不是空类：给了更亮的表面，也给了一条品牌色条", () => {
     const css = codeOf("src/app/globals.css");
-    const block = /\.u-tab-active\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-    const bar = /\.u-tab-active::after\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    const block = /\.u-tab-active\s*\{(?<block>[^}]*)\}/.exec(css)?.groups?.block ?? "";
+    const bar = /\.u-tab-active::after\s*\{(?<bar>[^}]*)\}/.exec(css)?.groups?.bar ?? "";
     expect(block, "缺背景（或没取 surface token）").toContain("var(--color-surface)");
     expect(bar, "缺顶部色条的高度").toContain("height: 2px");
     expect(bar, "色条没取品牌渐变 token").toContain("var(--gradient-brand)");

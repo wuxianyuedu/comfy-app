@@ -1,10 +1,7 @@
 "use client";
-/* 顶部针脚区 —— 纯连接型输入与输出配对在同一
- * 行上（改版）。
- * 输入（左侧目标 Handle）与输出（右侧源 Handle）按位置拉在一起
- * 让一行 22px 同时装下两者；较长一侧多出的部分继续
- * 独占后续行。句柄**始终**渲染，无论
- * 连线状态如何（「圆点常显」规则）。 */
+/* 顶部针脚区：纯连接型输入（左）与输出（右）按位置配对到同一行，
+ * 一行 22px 同时装下两者，较长一侧多出的部分独占后续行。
+ * 句柄始终渲染，无论连线状态（「圆点常显」）。 */
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
 import { friendlyInputName } from "~/lib/comfyui/node-titles";
@@ -19,6 +16,7 @@ import {
   type PortRowTone,
 } from "./flow-focus-endpoints";
 import { NODE_PORT_FOCUS_ACTIVE_KEY, readPortFocusRole } from "./hooks/use-related-edges-highlight";
+import { Hint } from "~/components/ui/hint";
 
 type FlowNodePinRowsProps = {
   data: WorkflowNodeData;
@@ -38,13 +36,11 @@ export function FlowNodePinRows({
   /* 选中节点时端口行跟着连线一起变：有连线落到的那一行提亮、端口圆点放大，
    *  没有连线落到的行压暗。级别由 `useRelatedEdgesHighlight` 写在本节点 data 上
    *  （与连线标记同一帧算出），行渲染层只读。 */
-  /* SAFETY: 类型断言已复核 */
-  const nodeData = data as unknown as Record<string, unknown>;
-  const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
+  const portFocusActive = data[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
   /* 一行两端的 Handle id 不同（输入名 / `out:<输出名>`），但观感要一致：两端的
    * 级别合成一档 —— focused > related > 「都无关」压暗。 */
   const toneOf = (...handles: Array<string | undefined>): PortRowTone => {
-    const roles = handles.map((handle) => readPortFocusRole(nodeData, handle));
+    const roles = handles.map((handle) => readPortFocusRole(data, handle));
     for (const role of roles) {
       const tone = resolvePortRowTone({ role, hasSelection: true });
       if (tone === "focused" || tone === "related") {
@@ -69,27 +65,34 @@ export function FlowNodePinRows({
 
         // 输入侧 —— 按声明的槽位类型着色，标签走与 widget 行
         // 相同的 label / zh-CN / 友好名链（作者 label 优先）。
-        const inMeta = inName ? rawMeta[inName] : undefined;
+        const inMeta = inName !== undefined && inName !== "" ? rawMeta[inName] : undefined;
         const inType = inMeta?.type ?? "*";
         const inCol = portColor(inType);
-        const inLabel = inName
-          ? sanitizeComboLabel(inMeta?.label) ||
-            sanitizeComboLabel(inMeta?.localized) ||
-            friendlyInputName(inName)
-          : "";
+        const inLabel =
+          inName !== undefined && inName !== ""
+            ? sanitizeComboLabel(inMeta?.label) ||
+              sanitizeComboLabel(inMeta?.localized) ||
+              friendlyInputName(inName)
+            : "";
 
         // 输出侧 —— 按 `outputs[i][1]` 着色，标签优先取 rawOutputs 的
         // `localized`（中文），否则用原始 key。
-        const outCol = outType ? portColor(outType) : undefined;
-        const outRaw = outName
-          ? data.rawOutputs?.find((output) => output.name === outName)
-          : undefined;
+        const outCol = outType !== undefined && outType !== "" ? portColor(outType) : undefined;
+        const outRaw =
+          outName !== undefined && outName !== ""
+            ? data.rawOutputs?.find((output) => output.name === outName)
+            : undefined;
         const outDisplay = outRaw?.localized ?? outName;
 
         /* 端口行的观感：两端取一致的一档（见 toneOf）。 */
         const tone =
           PORT_ROW_TONES[
-            toneOf(inName, outName ? `${OUTPUT_PORT_HANDLE_PREFIX}${outName}` : undefined)
+            toneOf(
+              inName,
+              outName !== undefined && outName !== ""
+                ? `${OUTPUT_PORT_HANDLE_PREFIX}${outName}`
+                : undefined,
+            )
           ];
 
         return (
@@ -127,54 +130,50 @@ export function FlowNodePinRows({
                 {/* 顶部针脚区**未连线**输入的 IO 复选框 ——
                  * 已连线的槽位取值来自上游，把它
                  * 暴露成工作流输入没有意义。 */}
-                {io?.ioEditMode && inMeta && !inMeta.isConnection && !inMeta.isBoundary && (
-                  <IoCheckbox
-                    io={io}
-                    ioRef={{
-                      nodeId: data.nodeId,
-                      hostNodeId: data.hostNodeId,
-                      name: inName ?? "",
-                      kind: "param",
-                      direction: "input",
+                {io?.ioEditMode === true &&
+                  inMeta &&
+                  !inMeta.isConnection &&
+                  inMeta.isBoundary !== true && (
+                    <IoCheckbox
+                      io={io}
+                      ioRef={{
+                        nodeId: data.nodeId,
+                        hostNodeId: data.hostNodeId,
+                        name: inName ?? "",
+                        kind: "param",
+                        direction: "input",
+                      }}
+                    />
+                  )}
+                <Hint label={String(inName)}>
+                  <span
+                    className="text-2xs min-w-0 flex-1 truncate text-left"
+                    style={{
+                      color: tone.labelColor,
+                      fontWeight: tone.labelWeight,
                     }}
-                  />
-                )}
-                <span
-                  className="text-2xs min-w-0 flex-1 truncate text-left"
-                  style={{
-                    color: tone.labelColor,
-                    fontWeight: tone.labelWeight,
-                  }}
-                  title={String(inName)}
-                >
-                  {inLabel}
-                </span>
+                  >
+                    {inLabel}
+                  </span>
+                </Hint>
               </>
             )}
             {outEntry && (
               <>
-                <span
-                  className="text-2xs min-w-0 flex-1 truncate text-right"
-                  style={{
-                    color: tone.labelColor,
-                    fontWeight: tone.labelWeight,
-                  }}
-                  title={`${outName} (${outType})`}
-                >
-                  {outDisplay}
-                </span>
-                {/* Output source Handle —— **任何视图模式下都必须挂载**。
-                 *
-                 * 它不只是「拖线的入口」，更是下游那些 `out:<name>` 边的
-                 * 锚点：React Flow 在 handleBounds 里找不到边引用的 handle id 时，
-                 * 会丢弃整条边并打 error#008 —— 用户看到的就是「这条输出没有
-                 * 连线」。IO 编辑模式下曾整个不渲染它（理由：输出按节点勾选，
-                 * 端口圆点是多余的视觉噪声），结果切进 IO 编辑那一刻，该节点
-                 * 所有下游连线集体消失。
-                 *
-                 * 保留「不误导作者去连输出口」的原意改为**视觉降级**：IO 编辑
-                 * 模式下圆点缩到几乎不可见（只留一点色晕锚点），作者看不到可
-                 * 拖的端口，线却照样画得出来。 */}
+                <Hint label={`${outName} (${outType})`}>
+                  <span
+                    className="text-2xs min-w-0 flex-1 truncate text-right"
+                    style={{
+                      color: tone.labelColor,
+                      fontWeight: tone.labelWeight,
+                    }}
+                  >
+                    {outDisplay}
+                  </span>
+                </Hint>
+                {/* Output source Handle 任何视图模式都必须挂载：它是下游 `out:<name>` 边的锚点，
+                     React Flow 在 handleBounds 找不到引用的 handle id 时会丢弃整条边并打 error#008；
+                     IO 编辑模式改为视觉降级（圆点近乎不可见）而非不渲染。 */}
                 <Handle
                   className="border-port-surface! rounded-full! border!"
                   id={`out:${outName}`}
@@ -184,7 +183,7 @@ export function FlowNodePinRows({
                     right: 5,
                     background: outCol,
                     boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
-                    ...(io?.ioEditMode
+                    ...(io?.ioEditMode === true
                       ? {
                           /* IO 编辑模式下端点整体缩到几乎不可见（不误导作者去连
                            * 输出口），提亮档只放大 1px 保持「这是同一个锚点」。 */

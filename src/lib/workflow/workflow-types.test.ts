@@ -11,11 +11,7 @@ import {
 
 describe("workflow-types taxonomy", () => {
   it("合并列表与三大分类数量一致", () => {
-    const union = [
-      ...IMAGE_WORKFLOW_TYPES,
-      ...VIDEO_WORKFLOW_TYPES,
-      ...AUDIO_WORKFLOW_TYPES,
-    ];
+    const union = [...IMAGE_WORKFLOW_TYPES, ...VIDEO_WORKFLOW_TYPES, ...AUDIO_WORKFLOW_TYPES];
     expect(union.length).toBe(ALL_WORKFLOW_TYPES.length);
     expect(ALL_WORKFLOW_TYPES.length).toBeGreaterThan(0);
   });
@@ -46,9 +42,7 @@ describe("workflow-types taxonomy", () => {
   });
 
   it("首尾帧只保留 FLF2V，旧 FL2V 不再作为模式出现", () => {
-    const firstLast = ALL_WORKFLOW_TYPES.filter(
-      (t) => t.label === "首尾帧生视频",
-    );
+    const firstLast = ALL_WORKFLOW_TYPES.filter((t) => t.label === "首尾帧生视频");
     expect(firstLast.map((t) => t.code)).toEqual(["FLF2V"]);
     expect(getWorkflowType("FL2V")).toBeUndefined();
   });

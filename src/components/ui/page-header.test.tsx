@@ -1,11 +1,6 @@
-// 屏级页头的形状判据（规范 11.2：断言读者看得见的结构，不测内部实现细节）。
-//
-// 收口这件事的收益全在「各屏不许再各写一套」上，所以用例守的是**收口本身**：
-//   · 标题必须走 `.u-title-page` 字阶档（P83 管住的那条，这里从 DOM 侧再钉一次）；
-//   · **不传 `description` 就不渲染第二行** —— 这是 ISSUE #1423 那条「标题区过大」
-//     在代码里的落点：同一件事写两个名字时，其中一个必然以副说明的形式存在；
-//   · 标题右侧的补充文本与动作组各自的位置（动作组不收缩、标题可截断）；
-//   · `as` 换标签名时仍是同一个结构（不因换标签丢字阶档）。
+// 屏级页头的形状判据（规范 11.2：断言读者看得见的结构，不测内部实现细节）。守的是收口本身：
+// 标题必须走 `.u-title-page` 字阶档；不传 `description` 就不渲染第二行（ISSUE #1423 标题区过大）；
+// 右侧补充文本与动作组的位置（动作组不收缩、标题可截断）；`as` 换标签名时结构不变。
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
@@ -41,8 +36,10 @@ describe("PageHeader（屏级页头）", () => {
       <PageHeader actions={<button type="button">刷新</button>} title="队列" />,
     );
     const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
-    /* SAFETY: 类型断言已复核 */
-    const group = header?.lastElementChild as HTMLElement;
+    const group = header?.lastElementChild;
+    if (!(group instanceof HTMLElement)) {
+      throw new Error("页头应当渲染出动作组");
+    }
     expect(group.className).toContain("shrink-0");
     expect(header?.children).toHaveLength(2);
 
@@ -95,8 +92,10 @@ describe("PageHeader（屏级页头）", () => {
     const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
     /* 两个子元素：`sr-only` 的 h1 + 动作组（说明钮在动作组里）。 */
     expect(header?.children).toHaveLength(2);
-    /* SAFETY: 类型断言已复核 */
-    const group = header?.lastElementChild as HTMLElement;
+    const group = header?.lastElementChild;
+    if (!(group instanceof HTMLElement)) {
+      throw new Error("页头应当渲染出动作组");
+    }
     expect(group.className).toContain("ml-auto");
     expect(group.contains(screen.getByRole("button", { name: "说明" }))).toBe(true);
   });
@@ -106,8 +105,10 @@ describe("PageHeader（屏级页头）", () => {
     const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
     /* 只有一个子元素（标题那一列），说明钮在它里面。 */
     expect(header?.children).toHaveLength(1);
-    /* SAFETY: 类型断言已复核 */
-    const column = header?.firstElementChild as HTMLElement;
+    const column = header?.firstElementChild;
+    if (!(column instanceof HTMLElement)) {
+      throw new Error("页头应当渲染出标题列");
+    }
     expect(column.contains(screen.getByRole("button", { name: "说明" }))).toBe(true);
   });
 

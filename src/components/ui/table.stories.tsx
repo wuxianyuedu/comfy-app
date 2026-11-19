@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -14,19 +14,24 @@ import {
 } from "~/components/ui/table";
 
 /**
- * `ui/table` 是「真 `<table>` + 统一排版」的基元：它自己不产数据、不做排序、
- * 不做分页 —— 那三件事归调用处的状态与 `~/components/ui/pagination`。
- *
- * 本件此前没有 story 的原因不是「有数据依赖」，而是**整族没被用过**
- * （全库零消费点，`~/.components/ui/table` 一次都没被 import）—— 也就是说它
- * 是一个「装了但没人看」的基元。这恰好是 story 该补的那一格：**形态先定下来**，
- * 真要用时不必从零试 class。
- *
- * 下面按真实落点给：历史任务的参数表（`rows` 形态）、模型清单（长内容截断）、
- * 空表（`TableBody` 只有一行空态）。
+ * `ui/table` 是「真 `<table>` + 统一排版」的基元：自己不产数据、不做排序、不做分页，那三件事归调用处的状态与 `ui/pagination`。本件此前没有 story 不是「有数据依赖」，而是整族零消费点（装了没人看）—— story 先把形态定下来。
+ * 按真实落点给：历史任务参数表（`rows` 形态）、模型清单（长内容截断）、空表（`TableBody` 只有一行空态）。
  */
 /** 语义色档的类型从 `Badge` 的 props 派生（不手抄一份字面量）。 */
 type BadgeTone = NonNullable<React.ComponentProps<typeof Badge>["tone"]>;
+
+/** `tone` 白名单：故事数据里的字符串必须过运行时校验才交给 `Badge`。 */
+const BADGE_TONES: Record<BadgeTone, true> = {
+  danger: true,
+  neutral: true,
+  primary: true,
+  success: true,
+  warning: true,
+};
+
+function isBadgeTone(value: unknown): value is BadgeTone {
+  return typeof value === "string" && Object.hasOwn(BADGE_TONES, value);
+}
 
 const meta = {
   title: "UI/Table",
@@ -94,7 +99,7 @@ export const WithStatusColumn: Story = {
           <TableRow key={name}>
             <TableCell className="font-mono text-xs">{name}</TableCell>
             <TableCell>
-              <Badge tone={/* SAFETY: 类型断言已复核 */ tone as BadgeTone}>{status}</Badge>
+              <Badge tone={isBadgeTone(tone) ? tone : "neutral"}>{status}</Badge>
             </TableCell>
             <TableCell className="text-right">
               <Button size="xs" variant="ghost">

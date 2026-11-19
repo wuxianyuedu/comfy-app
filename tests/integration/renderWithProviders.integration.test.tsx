@@ -1,14 +1,7 @@
 /**
- * 前端集成层自检：验证「MSW 拦截 /api/trpc → 测试 router」能驱动真实 tRPC client
- * 走完整数据态流转，而非「永不 resolve」桩。用自建 tRPC React 实例 + 自建 router +
- * `createTestQueryClient()`（renderWithProviders 同款隔离 QueryClient），跑通三种流转：
- *  1) loading→data
- *  2) loading→error（router 抛 TRPCError）
- *  3) mutation 成功→invalidate→列表自动新增（缓存失效）
- *
- * 说明：真组件集成测试（ModelLibrary.integration.test.tsx）直接用 renderWithProviders
- * 消费 `~/trpc/react` 的真实 api 路由；本文件用局部 `createTRPCContext` 实例通用地验证
- * 「MSW + QueryClient + tRPC client」这套集成层本身可驱动数据态流转。
+ * 前端集成层自检：验证「MSW 拦截 `/api/trpc` → 测试 router」能驱动真实 tRPC client 走完整数据态，
+ * 而非「永不 resolve」桩（loading→data、loading→error(TRPCError)、mutation 成功→invalidate 后列表自动新增）。
+ * 真组件用例直接消费 `~/trpc/react`（见 ModelLibrary.integration.test.tsx）；本文件用局部 `createTRPCContext` 通用验证这套层本身。
  */
 import { useState, type ReactElement } from "react";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
@@ -29,26 +22,26 @@ type Behavior = {
   delayMs?: number;
   listError?: string;
   tags: Array<string>;
-}
+};
 let behavior: Behavior = { tags: [] };
 
 const t = createTestTRPC();
 const mockRouter = t.router({
   tag: t.router({
     list: t.procedure.query(async () => {
-      if (behavior.listError) {
+      if (behavior.listError !== undefined && behavior.listError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.listError,
         });
       }
       // sleep-ok: mock 内部延迟：tRPC mock 的 delayMs 是给用例制造「接口慢一拍」的现场（行为开关），不是等条件。
-      if (behavior.delayMs) {
+      if (behavior.delayMs !== undefined && behavior.delayMs !== 0) {
         await new Promise((r) => setTimeout(r, behavior.delayMs));
       }
       return { tags: behavior.tags };
     }),
-    add: t.procedure.input(z.object({ name: z.string().min(1) })).mutation(async ({ input }) => {
+    add: t.procedure.input(z.object({ name: z.string().min(1) })).mutation(({ input }) => {
       behavior.tags = [...behavior.tags, input.name];
       return { tags: behavior.tags };
     }),
@@ -80,13 +73,17 @@ function renderTagDemo(ui: ReactElement) {
   );
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
 afterEach(() => {
   cleanup();
   behavior = { tags: [] };
   server.resetHandlers();
 });
-afterAll(() => server.close());
+afterAll(() => {
+  server.close();
+});
 
 /* ---------- 本地 harness：消费 trpc.tag.list / .add（新集成：options 工厂） ---------- */
 function TagDemo() {
@@ -111,11 +108,9 @@ function TagDemo() {
       <h1>标签库</h1>
       {listQ.isLoading && <div data-testid="loading">加载中…</div>}
       {listQ.isError && (
+        /* SAFETY: 类型断言已复核 */
         <div data-testid="error">
-          {
-            /* SAFETY: 类型断言已复核 */ (listQ.error as { message?: string } | null)?.message ??
-              "加载失败"
-          }
+          {(listQ.error as { message?: string } | null)?.message ?? "加载失败"}
         </div>
       )}
       {listQ.data && (
@@ -128,7 +123,7 @@ function TagDemo() {
         </ul>
       )}
       <button onClick={add}>新增 fresh</button>
-      {err && <div data-testid="adderr">{err}</div>}
+      {err !== null && err !== "" && <div data-testid="adderr">{err}</div>}
     </div>
   );
 }

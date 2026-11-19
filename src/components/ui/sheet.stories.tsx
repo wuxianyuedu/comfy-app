@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -13,21 +13,8 @@ import {
 } from "~/components/ui/sheet";
 
 /**
- * `ui/sheet` 是**侧边抽屉**（从四边之一滑出的面板），与 `ui/dialog` 是同一族
- * 但形态不同：dialog 居中，sheet 贴边并铺满那一边。
- *
- * 本仓在这一层做过**有意改动**（`ui-customized` 标记，规范 16 §16.8），
- * story 要盯的正是这几处：
- *
- * 1. **`side` 四档**：`top` / `right` / `bottom` / `left`，靠
- *    `data-[side=*]:` 变体给 `inset-y-0` / `w-3/4` / 位移动画。四档的
- *    滑入方向各不相同，只有排开看才知道哪一档写错了。
- * 2. **`SheetContent` 自带 `Portal`**：base-ui 的 `Dialog.Popup` 缺 `Portal`
- *    祖先会直接抛 `Base UI: <Dialog.Portal> is missing.`，把整棵树打崩
- *    （面板连同关闭按钮一起消失）。这一处曾漏过，所以 story 里每组都真打开一次。
- * 3. **遮罩与 dialog 共用一份**（`dialog-overlay.ts`）—— 因此同样要满足
- *    「让出应用级标题行」的硬判据（ISSUE #310）。
- * 4. **`showCloseButton`** 与 dialog 同款语义：自绘 header 时传 `false`。
+ * `ui/sheet` 是侧边抽屉（从四边之一滑出），与 `ui/dialog` 同族但形态不同：dialog 居中，sheet 贴边铺满。本仓在这一层有过有意改动（`ui-customized`，规范 16 §16.8）：
+ * ① `side` 四档靠 `data-[side=*]:` 给 `inset-y-0` / `w-3/4` / 位移动画；② `SheetContent` 自带 `Portal`（缺祖先会抛 `Base UI: <Dialog.Portal> is missing.` 打崩整树）；③ 遮罩共用 `dialog-overlay.ts`、须让出标题行（ISSUE #310）；④ `showCloseButton` 自绘 header 时传 `false`。
  */
 const meta = {
   title: "UI/Sheet",
@@ -63,27 +50,26 @@ export const Default: Story = {
  */
 export const Sides: Story = {
   render: () => (
+    /* SAFETY: 类型断言已复核 */
     <div className="flex flex-wrap gap-3">
-      {
-        /* SAFETY: 类型断言已复核 */ (["top", "right", "bottom", "left"] as const).map((side) => (
-          <Sheet key={side}>
-            <SheetTrigger render={<Button variant="outline" />}>side={side}</SheetTrigger>
-            <SheetContent side={side}>
-              <SheetHeader>
-                <SheetTitle>side={side}</SheetTitle>
-                <SheetDescription>
-                  {side === "top" || side === "bottom"
-                    ? "横条：铺满宽度、max-h-3/4"
-                    : "竖条：铺满高度、w-3/4"}
-                </SheetDescription>
-              </SheetHeader>
-              <div className="p-4">
-                <SheetClose render={<Button variant="ghost" />}>关闭</SheetClose>
-              </div>
-            </SheetContent>
-          </Sheet>
-        ))
-      }
+      {(["top", "right", "bottom", "left"] as const).map((side) => (
+        <Sheet key={side}>
+          <SheetTrigger render={<Button variant="outline" />}>side={side}</SheetTrigger>
+          <SheetContent side={side}>
+            <SheetHeader>
+              <SheetTitle>side={side}</SheetTitle>
+              <SheetDescription>
+                {side === "top" || side === "bottom"
+                  ? "横条：铺满宽度、max-h-3/4"
+                  : "竖条：铺满高度、w-3/4"}
+              </SheetDescription>
+            </SheetHeader>
+            <div className="p-4">
+              <SheetClose render={<Button variant="ghost" />}>关闭</SheetClose>
+            </div>
+          </SheetContent>
+        </Sheet>
+      ))}
     </div>
   ),
 };
@@ -115,7 +101,12 @@ function ControlledDemo() {
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button onClick={() => setOpen(true)} variant="outline">
+      <Button
+        onClick={() => {
+          setOpen(true);
+        }}
+        variant="outline"
+      >
         受控打开（右侧）
       </Button>
       <Sheet onOpenChange={setOpen} open={open}>

@@ -13,6 +13,7 @@ import { displayValue } from "~/lib/display-value";
 import { lastSegments } from "~/lib/path-display";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { toPct } from "~/lib/progress";
+import { Hint } from "~/components/ui/hint";
 
 /** 类型端口区的一行 —— 小彩点 + 大写类型章
  * + 端口名。ComfyUI 真实节点把圆点放在画布边缘、
@@ -50,15 +51,16 @@ export function PortRow({
       >
         {type}
       </span>
-      <span
-        className={`text-ink-soft text-2xs min-w-0 truncate font-semibold ${
-          isOut ? "text-right" : ""
-        }`}
-        style={isOut ? { textAlign: "right" } : undefined}
-        title={name}
-      >
-        {name}
-      </span>
+      <Hint label={name}>
+        <span
+          className={`text-ink-soft text-2xs min-w-0 truncate font-semibold ${
+            isOut ? "text-right" : ""
+          }`}
+          style={isOut ? { textAlign: "right" } : undefined}
+        >
+          {name}
+        </span>
+      </Hint>
     </div>
   );
 }
@@ -73,8 +75,7 @@ export function PortRow({
  * 「空值显示什么」由调用处经`displayValue` 决定 —— 这里只负责「有值时
  * 怎么成文本」，返回空串即表示「没值」。 */
 function widgetValueToText(v: unknown): string {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (v == null) {
+  if (v === null || v === undefined) {
     return "";
   }
   if (typeof v === "object") {
@@ -116,32 +117,29 @@ export function WidgetValueChip({ widget, value }: { value: unknown; widget: str
   }
   if (widget === "select") {
     return (
-      <span
-        className="bg-primary/18 text-primary-strong text-3xs max-w-25 truncate rounded px-1.5 py-px font-mono font-semibold"
-        title={widgetValueToText(value)}
-      >
-        {displayValue(widgetValueToText(value))}
-      </span>
+      <Hint label={widgetValueToText(value)}>
+        <span className="bg-primary/18 text-primary-strong text-3xs max-w-25 truncate rounded px-1.5 py-px font-mono font-semibold">
+          {displayValue(widgetValueToText(value))}
+        </span>
+      </Hint>
     );
   }
   if (widget === "number") {
     return (
-      <span
-        className="bg-warning/18 text-warning text-3xs max-w-25 truncate rounded px-1.5 py-px font-mono font-semibold"
-        title={widgetValueToText(value)}
-      >
-        {displayValue(widgetValueToText(value))}
-      </span>
+      <Hint label={widgetValueToText(value)}>
+        <span className="bg-warning/18 text-warning text-3xs max-w-25 truncate rounded px-1.5 py-px font-mono font-semibold">
+          {displayValue(widgetValueToText(value))}
+        </span>
+      </Hint>
     );
   }
   // 字符串 / 文本 / 图片 / latent / 未知
   return (
-    <span
-      className="bg-canvas-deep text-ink-soft text-3xs max-w-35 truncate rounded px-1.5 py-px font-mono"
-      title={widgetValueToText(value)}
-    >
-      {displayValue(widgetValueToText(value))}
-    </span>
+    <Hint label={widgetValueToText(value)}>
+      <span className="bg-canvas-deep text-ink-soft text-3xs max-w-35 truncate rounded px-1.5 py-px font-mono">
+        {displayValue(widgetValueToText(value))}
+      </span>
+    </Hint>
   );
 }
 
@@ -151,7 +149,9 @@ export function ManifestSummary({ summary }: { summary: NonNullable<SettingsResp
   return (
     <div className="border-border bg-bg text-muted-foreground mb-4 rounded-lg border px-3 py-2 text-xs">
       当前清单：共 <b className="text-ink">{summary.totalNodes}</b> 个节点类型
-      {summary.generatedAt ? ` · 生成于 ${summary.generatedAt}` : ""}
+      {summary.generatedAt !== null && summary.generatedAt !== ""
+        ? ` · 生成于 ${summary.generatedAt}`
+        : ""}
       {summary.missingPaths?.length ? ` · ⚠️ ${summary.missingPaths.length} 个目录未找到` : ""}
     </div>
   );
@@ -175,12 +175,11 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
             </span>
             个节点包
             {progress.parent && (
-              <span
-                className="text-muted-foreground text-2xs ml-2 truncate font-mono"
-                title={progress.parent}
-              >
-                · {lastSegments(progress.parent, 2)}
-              </span>
+              <Hint label={progress.parent}>
+                <span className="text-muted-foreground text-2xs ml-2 truncate font-mono">
+                  · {lastSegments(progress.parent, 2)}
+                </span>
+              </Hint>
             )}
           </span>
         ) : progress.phase === "scan" && progress.discovered > 0 ? (
@@ -209,12 +208,11 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
         }
       />
       {progress.msg && (
-        <div
-          className="text-muted-foreground text-3xs mt-1.5 truncate font-mono"
-          title={progress.msg}
-        >
-          {progress.msg}
-        </div>
+        <Hint label={progress.msg}>
+          <div className="text-muted-foreground text-3xs mt-1.5 truncate font-mono">
+            {progress.msg}
+          </div>
+        </Hint>
       )}
     </div>
   );
@@ -300,14 +298,13 @@ export function ReportCards({ report }: { report: ParseReport }) {
                       status={pkg.status === "ok" ? "SUCCEEDED" : pkg.status}
                     />
                   </div>
-                  <div
-                    className="text-muted-foreground text-2xs truncate font-mono"
-                    title={pkg.path}
-                  >
-                    {/* 绝对路径的**语义在尾部**（哪个目录下的包）—— CSS`truncate`
+                  <Hint label={pkg.path}>
+                    <div className="text-muted-foreground text-2xs truncate font-mono">
+                      {/* 绝对路径的**语义在尾部**（哪个目录下的包）—— CSS`truncate`
  只留头部，恰好把它切掉，故这里显式取末几段。 */}
-                    {lastSegments(pkg.path, 3)}
-                  </div>
+                      {lastSegments(pkg.path, 3)}
+                    </div>
+                  </Hint>
                 </div>
                 <div className="shrink-0 text-right">
                   <div className="text-ink-bright text-lg font-semibold">{pkg.nodeCount}</div>

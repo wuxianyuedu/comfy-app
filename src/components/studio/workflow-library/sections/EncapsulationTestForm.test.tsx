@@ -1,11 +1,8 @@
-/* 工坊封装页签「流程测试」表单 —— 输入口 = 该模式的**全部**契约口
- *
- * 这里锁的是一条用户口径（ISSUE #720 后续）：**测试表单直接摆出工坊实际可编辑
- * 的全部参数，不看工作流有没有连线**。此前的实现在视图里按 `targetIoKey` 过滤
- * 且只硬编码提示词 / 负向 / 尺寸三格，于是：
- *   · 负向提示词在上一行写着名字、下面却没有输入框（名字暴露了却填不了）；
- *   · 图生视频这类模式尺寸口没落点，连尺寸都选不了。
- * 表单与上方「工坊对外口一览」现在读的是同一份 `entries`，逐口渲染。 */
+/* 工坊封装页签「流程测试」表单 —— 输入口 = 该模式的**全部**契约口。
+ * 用户口径（ISSUE #720 后续）：测试表单直接摆出工坊实际可编辑的全部参数，不看
+ * 工作流有没有连线。此前按 `targetIoKey` 过滤且硬编码提示词/负向/尺寸三格，导致
+ * 负向提示词只有名字没有输入框、图生视频模式尺寸口没落点连尺寸都选不了。表单与
+ * 上方「工坊对外口一览」现在读同一份 `entries`，逐口渲染。 */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -79,8 +76,7 @@ describe("EncapsulationTestForm", () => {
     expect(negative).toBeTruthy();
     /* 没连到工作流的口给一句说明，但**不禁用**：值仍可填。 */
     expect(screen.getByText("未连到端口，用工作流默认值")).toBeTruthy();
-    /* SAFETY: 类型断言已复核 */
-    expect((negative as HTMLTextAreaElement).disabled).toBe(false);
+    expect(negative).not.toBeDisabled();
   });
 
   it("视频模式的尺寸口没落点也渲染尺寸控件（不再连尺寸都选不了）", () => {
@@ -141,7 +137,7 @@ describe("EncapsulationTestForm", () => {
   it("图片口选完立刻本地预览（上传失败 / ComfyUI 未启动也看得见所选图）", async () => {
     renderForm(I2V_ENTRIES, {
       scene: "video",
-      uploadImage: vi.fn(async () => {
+      uploadImage: vi.fn(() => {
         throw new Error("ComfyUI 未启动");
       }),
     });

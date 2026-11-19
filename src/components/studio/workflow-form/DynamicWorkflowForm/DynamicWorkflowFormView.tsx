@@ -6,6 +6,7 @@
 import type { ReactNode } from "react";
 
 import { Button } from "~/components/ui/button";
+import { FilePicker } from "~/components/ui/file-picker";
 
 import { GroupedControls } from "~/components/studio/workflow-form/GroupedControls";
 import { WirePortRows } from "~/components/studio/workflow-form/WorkflowFormControls";
@@ -14,7 +15,7 @@ import {
   resolveEntrySeedMode,
   type EnrichedWidget,
 } from "~/components/studio/workflow-io";
-import type { WorkflowIODropPosition } from "~/components/studio/workflow-types";
+import type { WorkflowIOReorderHandler } from "./dynamic-workflow-form-config";
 import type { DynamicWorkflowFormController } from "./hooks/use-dynamic-workflow-form";
 import { SectionHeader } from "./SectionHeader";
 import { EmptyStateHint } from "./sections/EmptyStateHint";
@@ -35,7 +36,7 @@ type DynamicWorkflowFormViewProps = {
    * seed 递增递减显示的是该模式的覆盖值。不传 = 按条目全局值（兼容旧场景）。 */
   mode?: string | null;
   onLabelChange?: (ioKey: string, label: string) => void;
-  onReorder?: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
+  onReorder?: WorkflowIOReorderHandler;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
   onSeedModeChange?: (ioKey: string, mode: string) => void;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
@@ -79,6 +80,7 @@ export function DynamicWorkflowFormView({
     inputs,
     outputs,
     wireInputs,
+    widgetInputs,
     groups,
     portEntries,
     widgetSectionEntries,
@@ -93,9 +95,11 @@ export function DynamicWorkflowFormView({
     draggingKey,
     dragOverKey,
     dropPosition,
+    groupedDragKeys,
+    groupAnchorKey,
     beginPortDrag,
     endDrag,
-    FileInput,
+    fileInputProps,
   } = controller;
 
   /* ioLabel() 需要全量 pin 才能在标签撞名时回退到原始 name。 */
@@ -105,7 +109,9 @@ export function DynamicWorkflowFormView({
     /* 多模式：行内「必填 / 可选」与 seed「控件后行为」按当前 mode 解析，
      * 显示模式覆盖值而非条目全局值。mode 为空时 rowEntry === entry（旧行为）。 */
     const rowEntry: EnrichedWidget =
-      mode &&
+      mode !== undefined &&
+      mode !== null &&
+      mode !== "" &&
       (entry.modeOverrides?.[mode]?.required !== undefined ||
         entry.modeOverrides?.[mode]?.seedMode !== undefined)
         ? {
@@ -118,7 +124,12 @@ export function DynamicWorkflowFormView({
       <WidgetInputRow
         allPins={allPins}
         compact={compact}
-        dimmed={!!visibilityMode && rowEntry.modeOverrides?.[visibilityMode]?.visible === false}
+        dimmed={
+          visibilityMode !== undefined &&
+          visibilityMode !== null &&
+          visibilityMode !== "" &&
+          rowEntry.modeOverrides?.[visibilityMode]?.visible === false
+        }
         disabled={disabled}
         entry={rowEntry}
         /* 画布上 handle id 必须唯一：同一个 pin 名可能同时出现在两个节点上（自定义
@@ -127,21 +138,40 @@ export function DynamicWorkflowFormView({
         handleId={entry.ioKey}
         key={rowEntry.ioKey}
         onLabelChange={
-          onLabelChange ? (label: string) => onLabelChange(entry.ioKey, label) : undefined
+          onLabelChange
+            ? (label: string) => {
+                onLabelChange(entry.ioKey, label);
+              }
+            : undefined
         }
-        onPickFile={() => pickFile(entry.ioKey)}
+        onPickFile={() => {
+          pickFile(entry.ioKey);
+        }}
         onRequiredChange={
           onRequiredChange
-            ? (required: boolean) => onRequiredChange(entry.ioKey, required)
+            ? (required: boolean) => {
+                onRequiredChange(entry.ioKey, required);
+              }
             : undefined
         }
         onSeedModeChange={
-          onSeedModeChange ? (mode: string) => onSeedModeChange(entry.ioKey, mode) : undefined
+          onSeedModeChange
+            ? (mode: string) => {
+                onSeedModeChange(entry.ioKey, mode);
+              }
+            : undefined
         }
-        onValueChange={(next: unknown) => set(entry.ioKey, next)}
+        onValueChange={(next: unknown) => {
+          set(entry.ioKey, next);
+        }}
         onVisibilityChange={
-          onVisibilityChange && visibilityMode
-            ? (visible: boolean) => onVisibilityChange(entry.ioKey, visible)
+          onVisibilityChange !== undefined &&
+          visibilityMode !== undefined &&
+          visibilityMode !== null &&
+          visibilityMode !== ""
+            ? (visible: boolean) => {
+                onVisibilityChange(entry.ioKey, visible);
+              }
             : undefined
         }
         previewSrc={localPreviewUrl(entry.ioKey)}
@@ -150,84 +180,121 @@ export function DynamicWorkflowFormView({
         uploading={uploading && uploadTarget === entry.ioKey}
         value={values[entry.ioKey]}
         visible={
-          visibilityMode ? (entry.modeOverrides?.[visibilityMode]?.visible ?? true) : undefined
+          visibilityMode !== undefined && visibilityMode !== null && visibilityMode !== ""
+            ? (entry.modeOverrides?.[visibilityMode]?.visible ?? true)
+            : undefined
         }
         withHandle={withHandle}
       />
     );
   };
 
-  return (
-    <div className={compact ? "" : "flex-col gap-3"}>
-      <FileInput />
+  /* 参数行的拖拽外壳：普通行与组合参数块共用同一套手柄 / 插入线，不让任何
+   * 一段参数「能看不能拖」（ISSUE #4073 复审第 5 条）。 */
+  const renderDraggableRow = (entry: EnrichedWidget) => {
+    const row = renderRow(entry, true);
+    if (!dragHandlers) {
+      return row;
+    }
 
-      {/* 上传失败的可读出口：ComfyUI 未运行 / 启动超时 / 素材不合规时给出原因，
- 用户才知道该重试还是该去设置页启动（ISSUE #345）。 */}
-      {uploadError && (
-        <div className="border-destructive/30 bg-destructive/10 text-destructive text-2xs flex items-start justify-between gap-2 rounded-md border px-2.5 py-2 leading-relaxed">
-          <span className="min-w-0 flex-1">上传失败：{uploadError}</span>
-          <Button
-            aria-label="关闭上传错误提示"
-            className="nodrag nopan text-danger-strong hover:text-danger-strong h-auto shrink-0 rounded px-1"
-            onClick={dismissUploadError}
-            variant="ghost"
+    const isDragging = draggingKey === entry.ioKey;
+    const isDropTarget =
+      dragOverKey === entry.ioKey &&
+      draggingKey !== null &&
+      draggingKey !== "" &&
+      draggingKey !== entry.ioKey;
+
+    return (
+      <div
+        className={`relative ${isDragging ? "opacity-50" : ""}`}
+        draggable
+        key={entry.ioKey}
+        onDragEnd={dragHandlers.onDragEnd}
+        onDragOver={dragHandlers.onDragOver(entry.ioKey)}
+        onDragStart={dragHandlers.onDragStart(entry.ioKey)}
+        onDrop={dragHandlers.onDrop(entry.ioKey)}
+      >
+        {/* 插入指示线画在**实际插入位置**：指针在目标行上半区 = 行顶、
+         * 下半区 = 行底，与 reorderIO 收到的 position 同源 —— 若整段
+         * 都画会造成频闪。 */}
+        {isDropTarget && (
+          <div
+            className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_color-mix(in_srgb,var(--color-primary)_60%,transparent)] ${dropPosition === "before" ? "-top-px" : "-bottom-px"}`}
+          />
+        )}
+        {/* 手柄只是视觉提示（真正可拖来自父层的 draggable，且从输入框 /
+         * 下拉上起手会在 dragstart 里被取消）；它自身 pointer-events-none，
+         * 点击会落到下面的输入框上。 */}
+        <div
+          aria-hidden
+          className="z-base text-3xs pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 leading-1.5 text-white/30 select-none"
+        >
+          ⋮⋮
+        </div>
+        {row}
+      </div>
+    );
+  };
+
+  /* 组合块在参数序列里的落点：按其锚点键的 displayOrder 把普通行切成前后两段。
+   * 没有 displayOrder 的既有工作流（稳定排序保住键序）沿用旧版式 —— 组合块仍在
+   * 所有普通行之后，避免一次升级把老工作流的表单顺序整体挪位。 */
+  const groupAnchorOrder =
+    groupAnchorKey === null
+      ? undefined
+      : widgetInputs.find((entry) => entry.ioKey === groupAnchorKey)?.displayOrder;
+  const beforeGroupRows =
+    groupAnchorOrder === undefined
+      ? widgetSectionEntries
+      : widgetSectionEntries.filter(
+          (entry) => (entry.displayOrder ?? Number.POSITIVE_INFINITY) < groupAnchorOrder,
+        );
+  const afterGroupRows =
+    groupAnchorOrder === undefined
+      ? []
+      : widgetSectionEntries.filter((entry) => !beforeGroupRows.includes(entry));
+
+  const groupIsDropTarget =
+    groupAnchorKey !== null &&
+    dragOverKey === groupAnchorKey &&
+    draggingKey !== null &&
+    draggingKey !== "" &&
+    draggingKey !== groupAnchorKey;
+
+  /* 组合参数：dimension / video 组用单一下拉切换录入范式，避免 width/height、
+   * 时长/画质/比例散落成多个独立框。compact 时整块也可拖 —— 拖的是**整组**
+   * ioKey（尺寸块底下压着宽/高或比例/像素/倍数），不是只挪一个代表键。 */
+  const groupedBlock =
+    groups.dimension === null && groups.video === null ? null : (
+      <div
+        className={`relative ${draggingKey !== null && groupedDragKeys.includes(draggingKey) ? "opacity-50" : ""}`}
+        data-io-key={dragHandlers === null ? undefined : (groupAnchorKey ?? undefined)}
+        draggable={dragHandlers !== null && groupAnchorKey !== null}
+        key="grouped-controls"
+        onDragEnd={dragHandlers?.onDragEnd}
+        onDragOver={groupAnchorKey === null ? undefined : dragHandlers?.onDragOver(groupAnchorKey)}
+        onDragStart={
+          groupAnchorKey === null || groupedDragKeys.length === 0
+            ? undefined
+            : dragHandlers?.onDragStart(groupAnchorKey, groupedDragKeys)
+        }
+        onDrop={groupAnchorKey === null ? undefined : dragHandlers?.onDrop(groupAnchorKey)}
+      >
+        {groupIsDropTarget && (
+          <div
+            className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_color-mix(in_srgb,var(--color-primary)_60%,transparent)] ${dropPosition === "before" ? "-top-px" : "-bottom-px"}`}
+          />
+        )}
+        {dragHandlers !== null && groupAnchorKey !== null && (
+          /* 组合控件内部几乎全是 input / select / button（dragstart 会在那些
+           * 控件上被取消），所以这一枚手柄要自己可命中：用户从它起手拖整块。 */
+          <div
+            aria-hidden
+            className="z-base text-3xs absolute top-0.5 right-0.5 cursor-grab leading-1.5 text-white/30 select-none"
           >
-            ✕
-          </Button>
-        </div>
-      )}
-
-      {/* 可编辑参数（compact）：排在端口行之前，让所有输入行都压在输出之上。
-       * 画布节点上去掉段头，避免引入节点稿之外的视觉噪音。 */}
-      {compact && widgetSectionEntries.length > 0 && (
-        <div className="">
-          {widgetSectionEntries.map((entry) => {
-            const row = renderRow(entry, true);
-            if (!dragHandlers) {
-              return row;
-            }
-
-            const isDragging = draggingKey === entry.ioKey;
-            const isDropTarget =
-              dragOverKey === entry.ioKey && !!draggingKey && draggingKey !== entry.ioKey;
-
-            return (
-              <div
-                className={`relative ${isDragging ? "opacity-50" : ""}`}
-                draggable
-                key={entry.ioKey}
-                onDragEnd={dragHandlers.onDragEnd}
-                onDragOver={dragHandlers.onDragOver(entry.ioKey)}
-                onDragStart={dragHandlers.onDragStart(entry.ioKey)}
-                onDrop={dragHandlers.onDrop(entry.ioKey)}
-              >
-                {/* 插入指示线画在**实际插入位置**：指针在目标行上半区 = 行顶、
-                 * 下半区 = 行底，与 reorderIO 收到的 position 同源 —— 若整段
-                 * 都画会造成频闪。 */}
-                {isDropTarget && (
-                  <div
-                    className={`z-base bg-primary pointer-events-none absolute inset-x-0 h-0.5 shadow-[0_0_8px_color-mix(in_srgb,var(--color-primary)_60%,transparent)] ${dropPosition === "before" ? "-top-px" : "-bottom-px"}`}
-                  />
-                )}
-                {/* 手柄只是视觉提示（真正可拖来自父层的 draggable，且从输入框 /
-                 * 下拉上起手会在 dragstart 里被取消）；它自身 pointer-events-none，
-                 * 点击会落到下面的输入框上。 */}
-                <div
-                  aria-hidden
-                  className="z-base text-3xs pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 leading-1.5 text-white/30 select-none"
-                >
-                  ⋮⋮
-                </div>
-                {row}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* 组合参数：dimension / video 组用单一下拉切换录入范式，避免
-       * width/height、时长/画质/比例 散落成多个独立框。 */}
-      {(groups.dimension ?? groups.video) && (
+            ⋮⋮
+          </div>
+        )}
         <GroupedControls
           /* 画布 / 库内把组合控件收窄成一块（宽度按内容走，仍是那块带下拉的
            * 控件）：不再摊成逐行参数清单。宽版表单不收窄 —— 作者在那里要的是
@@ -245,7 +312,42 @@ export function DynamicWorkflowFormView({
           visibilityMode={visibilityMode}
           workflowId={workflowId}
         />
+      </div>
+    );
+
+  return (
+    <div className={compact ? "" : "flex-col gap-3"}>
+      <FilePicker {...fileInputProps} />
+
+      {/* 上传失败的可读出口：ComfyUI 未运行 / 启动超时 / 素材不合规时给出原因，
+ 用户才知道该重试还是该去设置页启动（ISSUE #345）。 */}
+      {uploadError !== null && uploadError !== "" && (
+        <div className="border-destructive/30 bg-destructive/10 text-destructive text-2xs flex items-start justify-between gap-2 rounded-md border px-2.5 py-2 leading-relaxed">
+          <span className="min-w-0 flex-1">上传失败：{uploadError}</span>
+          <Button
+            aria-label="关闭上传错误提示"
+            className="nodrag nopan text-danger-strong hover:text-danger-strong h-auto shrink-0 rounded px-1"
+            onClick={dismissUploadError}
+            variant="ghost"
+          >
+            ✕
+          </Button>
+        </div>
       )}
+
+      {/* 可编辑参数（compact）：排在端口行之前，让所有输入行都压在输出之上。
+       * 画布节点上去掉段头，避免引入节点稿之外的视觉噪音。
+       * 组合参数块按锚点的 displayOrder 夹在前后两段普通行之间 —— 拖动后的
+       * 新顺序才看得见（ISSUE #4073 复审第 4 / 5 条）。 */}
+      {compact && beforeGroupRows.length > 0 && (
+        <div className="">{beforeGroupRows.map(renderDraggableRow)}</div>
+      )}
+      {compact && groupedBlock}
+      {compact && afterGroupRows.length > 0 && (
+        <div className="">{afterGroupRows.map(renderDraggableRow)}</div>
+      )}
+      {/* 宽版表单（CreatePanel）不走拖拽：组合块保持在端口行之前的原有位置。 */}
+      {!compact && groupedBlock}
 
       {/* I/O 端点：wire inputs（必须连线）+ outputs（供外部连线）。 */}
       {(portEntries.length > 0 || (showOutputs && outputs.length > 0)) && (

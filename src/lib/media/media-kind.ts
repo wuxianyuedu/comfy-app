@@ -30,7 +30,7 @@
 export type MediaKind = "image" | "video" | "audio" | "doc";
 
 /** 图片扩展名（**不含 `gif`**：GIF 是动画图片，但见下方 `VIDEO_EXT` 的说明）。 */
-const IMAGE_EXT = /\.(png|jpe?g|webp|gif|bmp|avif|svg)$/i;
+const IMAGE_EXT = /\.(?:png|jpe?g|webp|gif|bmp|avif|svg)$/i;
 
 /** 视频扩展名。
  *
@@ -43,10 +43,10 @@ const IMAGE_EXT = /\.(png|jpe?g|webp|gif|bmp|avif|svg)$/i;
  *  **不含 `gif`**：`<video>` 无法解码 GIF，判成视频会渲染成黑屏。这条是
  *  `media.ts` 原本的明确注释，也是本模块存在的直接原因（task router 曾把
  *  gif 算成视频）。GIF 归 `image`，走 `<img>` 渲染。 */
-const VIDEO_EXT = /\.(mp4|webm|ogg|m4v|mov|mkv|avi)$/i;
+const VIDEO_EXT = /\.(?:mp4|webm|ogg|m4v|mov|mkv|avi)$/i;
 
 /** 音频扩展名。 */
-const AUDIO_EXT = /\.(wav|mp3|flac|ogg|m4a|aac)$/i;
+const AUDIO_EXT = /\.(?:wav|mp3|flac|ogg|m4a|aac)$/i;
 
 /**
  * 从文件名 / 路径 / URL 推导媒体种类。
@@ -59,7 +59,7 @@ const AUDIO_EXT = /\.(wav|mp3|flac|ogg|m4a|aac)$/i;
  * 先图片、再视频、最后音频，故 `ogg` → `video`（与历史 `media.ts` 一致）。
  */
 export function kindOf(src?: string | null): MediaKind {
-  if (!src) {
+  if (src === undefined || src === null || src === "") {
     return "doc";
   }
   if (IMAGE_EXT.test(src)) {

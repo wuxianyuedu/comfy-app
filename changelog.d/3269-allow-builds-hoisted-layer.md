@@ -1,0 +1,12 @@
+## Fixed
+
+- `scripts/check-allow-builds.cjs` 的 `collectInstalledPackages()` 此前把 `node_modules/.pnpm` 下**每个**目录都当成一条 `<name>@<ver>` store 条目。但 `.pnpm/node_modules` 是 pnpm 的 hoisted 虚拟目录：里面全是指向真实条目的符号链接，而且从安装完成起就没有自己的 `node_modules` 子目录 ⇒ 对它读 `<它>/node_modules` 必然 ENOENT ⇒ 每跑一次稳定 `vanished += 1`，被 `vanishedNote()` 念成「另有 1 个条目在扫描期间消失（工作区并发变更）」。实测本检出工作区完全静止、连跑两次读数相同：`✅ …（扫了 1438 个安装条目）` + ⚠️ 消失 1 条 + `exit 0`。现在按名字显式跳过这一层（它不是 store 条目；真包在各自条目下已被数过一遍），修后本机真跑是 `✅ …（扫了 1438 个安装条目）`、`exit 0`、无消失注（ISSUE #3269）。
+- 更要紧的是那一格的**判据语义**：`unread` 此前只进结论行、不参与退码 —— 判据自己写着「本轮未读」，却照旧输出 `✅ 覆盖了全部带构建脚本的依赖` 并 `exit 0`。排掉 hoisted 层之后，`unread > 0` 只剩「这一轮真有包目录 / `package.json` 没读到」这一种形状，少读一份就可能正好少读一个带 `postinstall` 的包，那句「覆盖了全部」是伪证。按 §13.6.3「判据读不到 ≠ 判过了且没问题」改为 `exit 2` 不给结论：既不判绿也不判红、不冒充「已覆盖」，并给出口（重跑 / `pnpm install --frozen-lockfile`）；已经读到的违规事实仍照旧列出，不因为「没读全」被吞掉（`exit 2` 与 `exit 1` 一样挡提交）。
+
+## Changed
+
+- 收紧只落在本判据身上：**不改**共用件 `gate-scan-read.cjs`、**不改** `vanishedNote()` 的话术、不改其他判据的读数 —— 共用件那句「条目已不在、不可能承载违规」对源码文件成立，但本判据的输入面是枚举出来的包目录，一个目录读不到与「一份源码被删」不同形。也不改 `pnpm-workspace.yaml`、不改 `allowBuilds` 名单、不改钩子接线与 `--staged` 触发条件。规范 §13.5.15 那句「条目在扫描期间消失要计数并进结论行，不能崩、也不能静默跳过」口径未变（本修法仍计数、仍打印、且更严），故不改规范文档、不拉入 `docs/generated/**` 镜像同步链。
+- 顺带把 `scriptBearingPackage()` 文件头一句与实现不符的注释改诚实：`package.json` 读到了字节却 `JSON.parse` 失败时，实现是按「没有站点」跳过，**不会**计进 `unread`（只有 `readForScan()` 的 ENOENT 才计）。行为未改；这一支仍属「读到了但读不成也判绿」的同族剩余缺口，按「一条诉求一张单」另案记录，不在本 PR 里顺手改。
+- `tests/check-allow-builds.test.ts` 新增 4 条行为用例 + 1 条静态契约：hoisted 层在场不报消失且判绿；固有结构与真消失同时在场 ⇒ `exit 2` 且点名 1 条；包目录在、`package.json` 读不到（文件级 ENOENT）⇒ 同样 `exit 2`；没读全时已读到的漏登记事实仍列出；钉住 `HOISTED_DIR` 跳过与 `unread > 0 ⇒ exit 2` 两处都在。⚠️ 该 suite 用 `defineGateRepo()`，win32 走 `SANDBOX_POSIX_ONLY` 整块 skip，本机读数 `4 passed | 19 skipped` 按三态是「没给结论」不是通过；平台 Linux 会跑到新增行为用例。
+- 本机可执行判面 `temp/verify-3269.mjs`（独立临时目录、真判据 + 两个同目录依赖、不入库）**9/9**：A 正常布局 `0` / B 加 hoisted 层 `0` 且无消失注 / C 真消失条目 `2` / D 文件级消失 `2` / E 没读全 + 已读到的违规仍列出 `2`。**反向验证**三刀：只摘 hoisted 跳过 ⇒ 稳定误报被 fail-closed 挡成 `exit 2`；两处都摘 ⇒ 精确复现修前原状（`exit 0` + `✅ 覆盖了全部` + ⚠️ 消失 1 条）；只摘 `unread` 的 `exit 2` ⇒ 真没读全也判绿（fail-open 回潮）。恢复后脚本 sha256 逐字一致。
+- 判决面：`pnpm check:deps-freshness` OK；`pnpm format:check` `exit 0`；`node scripts/check-infra-file-size.cjs` 376 份、`超 900 行 0 个`（判据 408 行）；全库 `pnpm run lint` `0 warnings 0 errors`；`pnpm run check:premerge` 43 条判据红 0、`current-green`；定向 `vitest run tests/check-allow-builds.test.ts` `4 passed | 19 skipped`（win32 skip，见上）。

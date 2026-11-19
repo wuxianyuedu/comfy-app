@@ -1,18 +1,10 @@
 "use client";
 
 /**
- * DebugChainFooter — 通用「渲染链路模块标签」组件。
- *
- * 订阅全局 debug-store；仅在调试模式开启时渲染。
- * 每个标签对应一个本项目代码模块：
- *  - 点击：弹出源码查看弹窗（GET /api/debug/source?file=... 读取该模块源码）
- *  - 弹窗内可复制完整相对路径 / 复制源码
- *  - hover title：显示完整相对路径
- *  - 防拖拽：阻断 pointer/mouse 事件冒泡，避免触发 ReactFlow 节点拖动
- *
- * 用法：
- *   用法：把 modules 传成 getWorkflowRenderChainModules(classType) 的结果
- */
+ * DebugChainFooter — 通用「渲染链路模块标签」组件，订阅全局 debug-store，仅调试模式渲染。
+ * 每个标签对应一个本项目模块：点击弹源码查看（GET /api/debug/source?file=...），
+ * 弹窗可复制路径/源码，hover title 显示完整相对路径；阻断 pointer/mouse 冒泡以免触发节点拖动。
+ * `modules` 传 getWorkflowRenderChainModules(classType) 的结果。 */
 
 import { useCallback, useState, type CSSProperties } from "react";
 import { CodeBlock, extToLanguage } from "~/components/ui/code-block";
@@ -109,7 +101,9 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
       setCopyFailed(false);
       copyOutcome.flash();
     },
-    onFailure: () => setCopyFailed(true),
+    onFailure: () => {
+      setCopyFailed(true);
+    },
   });
 
   /* 弹窗内容只在 openFile 非空时渲染；提起为局部常量让内部的类型收窄
@@ -181,7 +175,9 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
           <Hint key={module.file} label={`${module.file}（点击查看源码）`}>
             <Button
               className="h-auto gap-0 px-0 font-normal hover:bg-transparent"
-              onClick={(event) => pillClick(event, module)}
+              onClick={(event) => {
+                pillClick(event, module);
+              }}
               style={PILL_STYLE}
               variant="ghost"
             >
@@ -197,11 +193,17 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
     <>
       {/* `onPointerDown` / `onMouseDown` / `onDragStart` 都是
           `stopPropagation` / `preventDefault` **守卫**，不是交互。 */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- 三个都是守卫，不是交互 */}
+      {/* oxlint-disable-next-line jsx_a11y/no-static-element-interactions -- 三个都是守卫，不是交互 */}
       <div
-        onDragStart={(event) => event.preventDefault()}
-        onMouseDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
+        onDragStart={(event) => {
+          event.preventDefault();
+        }}
+        onMouseDown={(event) => {
+          event.stopPropagation();
+        }}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
         style={{
           display: "flex",
           flexDirection: "column",
@@ -215,12 +217,21 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
         {renderGroup("节点级", nodeModules)}
       </div>
 
-      <Dialog onOpenChange={(next) => !next && closeModal()} open={openFile !== null}>
+      <Dialog
+        onOpenChange={(next) => {
+          if (!next) closeModal();
+        }}
+        open={openFile !== null}
+      >
         <DialogContent
           className="border-border-strong bg-panel w-[min(860px,92vw)] gap-0 p-0"
-          onMouseDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
           // 调试弹窗挂在 ReactFlow 节点内，需阻断指针事件冒泡以免触发节点拖拽。
-          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
           popupClassName={`flex ${OVERLAY_MAX_HEIGHT} flex-col overflow-hidden rounded-2xl`}
           showCloseButton={false}
         >
@@ -234,18 +245,22 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
               <span aria-hidden className="text-warning-strong/90 text-sm">
                 ◈
               </span>
-              <code className="text-ink-bright truncate font-mono text-xs" title={viewedFile}>
-                {/* 路径的语义在尾部（哪个文件）—— CSS `truncate` 只留头部，
+              <Hint label={viewedFile}>
+                <code className="text-ink-bright truncate font-mono text-xs">
+                  {/* 路径的语义在尾部（哪个文件）—— CSS `truncate` 只留头部，
                     恰好把它切掉，故显式取末几段。 */}
-                {lastSegments(viewedFile, 3)}
-              </code>
+                  {lastSegments(viewedFile, 3)}
+                </code>
+              </Hint>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <Hint label="在 Visual Studio Code 中打开该文件（需已安装 VSCode）" wrap>
                 <Button
                   className="h-auto rounded-md px-2.5 py-1"
                   disabled={!source}
-                  onClick={() => source && openInVscode(source.absolutePath)}
+                  onClick={() => {
+                    if (source) openInVscode(source.absolutePath);
+                  }}
                   size="xs"
                   variant="info"
                 >
@@ -259,7 +274,9 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
                       ? "border-destructive/40 text-danger-strong"
                       : "border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
                   }`}
-                  onClick={() => onCopyText(viewedFile)}
+                  onClick={() => {
+                    onCopyText(viewedFile);
+                  }}
                   size="xs"
                   variant="outline"
                 >
@@ -270,7 +287,9 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
                 <Button
                   className="h-auto rounded-md px-2.5 py-1"
                   disabled={!source}
-                  onClick={() => source && onCopyText(source.content)}
+                  onClick={() => {
+                    if (source) onCopyText(source.content);
+                  }}
                   size="xs"
                   variant="warning"
                 >
@@ -291,7 +310,7 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
           {/* 内容区 */}
           <div className="bg-canvas-deep min-h-0 flex-1 overflow-auto p-0">
             {sourceBusy.busy && <PageLoading className="py-10 text-xs" label="正在读取源码…" />}
-            {!sourceBusy.busy && loadError && (
+            {!sourceBusy.busy && loadError !== null && loadError !== "" && (
               <div className="text-destructive px-4 py-6 text-xs">读取失败：{loadError}</div>
             )}
             {!sourceBusy.busy && source && (

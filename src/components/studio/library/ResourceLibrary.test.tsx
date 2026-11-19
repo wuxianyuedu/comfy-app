@@ -13,7 +13,7 @@ function mockFetch(body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
-    json: async () => body,
+    json: () => body,
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -36,7 +36,7 @@ describe("ResourceLibrary", () => {
     window.localStorage.clear();
   });
 
-  it("页头不再重复一次可见标题；那句解释收进悬浮「说明」（屏名取自导航注册表）", async () => {
+  it("页头不再重复一次可见标题；那句解释收进悬浮「说明」（屏名取自导航注册表）", () => {
     mockFetch(BODY);
     render(<ResourceLibrary />);
     /* 屏名仍在 DOM 里（`sr-only`，读屏与 `h1` 判据都靠它），只是不占视觉空间 ——

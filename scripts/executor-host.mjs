@@ -7,8 +7,8 @@
 //   inline/未设 → **骨架形态（2-B 原样）**：boot + 心跳 + SIGTERM 干净收尾，
 //     不碰 DB、不 import 任何 TS。2-B 的三条契约测钉的就是这个形态。
 //   host → **运行时形态（3-B0 地基 / 3-B1 接流量）**：boot 跑注入链——
-//     tsx 加载 TS → libsql file 客户端（与 `src/server/db.ts` 同一锚点规则）→
-//     `createTaskRepoImpl(drizzle(client))` → **七条 seam 全注入**（deps 复用
+//     tsx 加载 TS → node:sqlite 文件库（与 `src/server/db.ts` 同一锚点规则）→
+//     `createTaskRepoImpl(drizzle(proxy))` → **七条 seam 全注入**（deps 复用
 //     Next 侧同一份实现，理由见 `bootRuntime` 文件头注释）→ Q2 首扫（只扫
 //     host 片）→ 主循环每 `CLAIM_TICK_MS` 领一行（`claimNextQueued("host",1)`
 //     → 由 `execPayload` 重建 Job → 与 Next 共用 `executor-dispatch.ts` 那一条 pull）
@@ -52,7 +52,7 @@ import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-import { parseEnvFile } from "./env-preflight.mjs";
+import { parseEnvFile } from "./devtools/env-preflight.mjs";
 import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -105,6 +105,31 @@ function writeLine(msg) {
 // 项目根的锚点：与 launcher-core/log.mjs 的写入方式对齐（相对 ROOT 定位、
 // 不假设 CWD 与脚本目录一致）。这样未来 launcher 从其它工作目录拉起也不飘。
 process.chdir(ROOT);
+
+// 进程级兜底（ISSUE #4216）：与 Next 侧 instrumentation 同款——只记日志、不退出。
+// 本宿主进程没有 Sentry 那层隐式副作用，一条后台循环的 rejection 不该打挂常驻宿主。
+// 洪水防护（ISSUE #4256）：同一 message 只记首 3 条、之后每 50 条记一条——
+// 周期循环里的每拍异常不再把日志文件灌满。
+const safetyNetCounts = new Map();
+/**
+ * @param {string} kind
+ * @param {unknown} reason
+ * @returns {void}
+ */
+function reportSafetyNet(kind, reason) {
+  const text = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+  const count = (safetyNetCounts.get(text) ?? 0) + 1;
+  safetyNetCounts.set(text, count);
+  if (count <= 3 || count % 50 === 0) {
+    writeLine(`${kind}#${count}：${text}`);
+  }
+}
+process.on("unhandledRejection", (reason) => {
+  reportSafetyNet("unhandledRejection", reason);
+});
+process.on("uncaughtException", (error) => {
+  reportSafetyNet("uncaughtException", error);
+});
 
 const bootId = process.env.COMFYAPP_HOST_BOOT_ID ?? Date.now().toString(36);
 
@@ -213,9 +238,10 @@ async function reconcileCancelled(runtime) {
   /* 快照迭代是**刻意的**：循环体内会 `cliProcs.delete(taskId)`，直接迭代活的
    * Map 会在删除时跳键。unicorn/no-useless-spread 不看循环体的突变，属误报，
    * 禁用一行（台账：全仓此形态仅本处）。 */
-  // eslint-disable-next-line unicorn/no-useless-spread -- 快照，见上
+  // oxlint-disable-next-line unicorn/no-useless-spread -- 快照，见上
   for (const taskId of [...cliProcs.keys()]) {
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
       const st = await hostRepo.findStatusAndPromptById(taskId);
       if (st?.status !== "CANCELLED") {
         continue;
@@ -236,6 +262,7 @@ async function reconcileCancelled(runtime) {
        * 就会「取消后继续出图」。失败不致命：状态已经是 CANCELLED。 */
       let interruptState = "sent";
       try {
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
         await runtime.interrupt();
       } catch (error) {
         /* 同一个文件里另一处 catch（`claim-tick 异常` 那一句）用的就是这条判据，
@@ -256,7 +283,7 @@ async function reconcileCancelled(runtime) {
  *     （devDependency）也不指望 `src/lib/**` 的 TS 源，所以这条分支必须存在。
  *     反向的缺件形态不会静默：产物少了预编译件就退回 dev 分支、以
  *     `Cannot find package 'tsx'` 大声 exit 1，而「产物里到底起不起得来」由
- *     `pnpm build` 收尾的冒烟拦下（scripts/smoke-executor-host-standalone.mjs）。
+ *     `pnpm build` 收尾的冒烟拦下（scripts/devtools/smoke-executor-host-standalone.mjs）。
  *
  * 图本体在 `src/lib/comfyui/host-runtime.ts`——只管「宿主需要哪些模块」；进程外壳
  * 职责（env 解析 / 日志通道 / 心跳 / argv 钩子 / 领取节拍）全留在本文件，两种形态共用。 */
@@ -397,7 +424,9 @@ let claimHandle = null;
 if (runtimeMode) {
   claimHandle = setInterval(() => {
     claimTickOnce().catch((error) => {
-      writeLine(`claim-tick 异常（下轮重试）：${error instanceof Error ? error.message : String(error)}`);
+      writeLine(
+        `claim-tick 异常（下轮重试）：${error instanceof Error ? error.message : String(error)}`,
+      );
     });
   }, CLAIM_TICK_MS);
 }
@@ -416,5 +445,9 @@ function shutdown(sig) {
   process.exit(0);
 }
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => {
+  shutdown("SIGTERM");
+});
+process.on("SIGINT", () => {
+  shutdown("SIGINT");
+});

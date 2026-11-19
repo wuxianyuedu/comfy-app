@@ -1,16 +1,6 @@
 /**
- * 回归护栏：**跨平台动作对照表与单点定义**（规范 launch-and-build.md §9.5）。
- *
- * 背景：Windows 入口一律 `.ps1`（规范 §8），而 Linux / macOS / CI 上跑不了 `.ps1`。
- * 于是同一个动作在两侧各有一份实现 —— 这正是启动编排踩过的坑：Windows 一条 `.ps1`
- * 链、POSIX 一条 `.mjs` 链各自演进，最终 Windows 侧的端口口径、端口占用回收、
- * 就绪等待与收尾命名四项都与 POSIX 侧不同，而「记得同步另一侧」全靠自觉。
- *
- * 本条把`新增动作必须两侧都在`机器化，另加一条：会「静默失效」的清单标记
- * （`KNOWN_FAILED_FILES`）不许各写一份 —— 此前它定义在 `quality-gate.ps1` 里、
- * 由 `run-tests.ps1` 正则解析 `.ps1` 源码，改一次写法就静默返回空数组，
- * 而「排除项悄悄为空」看起来就像「本来就没有基线失败」（红/绿不再可归因）。
- *
+ * 回归护栏：**跨平台动作对照表与单点定义**（规范 launch-and-build.md §9.5）。Windows 入口一律 `.ps1`，POSIX/CI 跑不了，于是同一动作两侧各一份实现 —— 历次启动编排踩的就是「靠自觉同步」：端口口径、占用回收、就绪等待、收尾命名四项都曾分叉。
+ * 本条机器化「新增动作必须两侧都在」，并钉会「静默失效」的 `KNOWN_FAILED_FILES` 不许各写一份：它曾在 `quality-gate.ps1` 里由 `run-tests.ps1` 正则解析，改写法即静默返回空数组，看起来像「本来没有基线失败」。
  * 两种验证都做：正向（真仓库通过）+ 反向（临时仓库改坏后必失败）。
  */
 import { execFileSync } from "node:child_process";
@@ -19,9 +9,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { parseMjsGates, parsePs1Gates } from "./helpers/quality-gate-gates";
 
-const GUARD = path.join(process.cwd(), "scripts", "check-ps1-consistency.mjs");
+const GUARD = path.join(process.cwd(), "scripts", "gates/check-ps1-consistency.mjs");
 const SPEC = path.join("docs", "standards", "launch-and-build.md");
 
 /** 入口清单的两份权威（判据 ③）：README 的入口表 + `tools/README.md` 的全目录视图。 */
@@ -29,11 +21,9 @@ const README = "README.md";
 const TOOLS_INDEX = path.join("tools", "README.md");
 
 /**
- * 真实仓库里 `tools/**` 下的双击入口（相对路径）。
- *
- * 为什么临时仓库要照抄这份清单：判据 ③ 的「磁盘 → 清单」那一半要枚举入口，
- * 而临时仓库里若一个入口都没有，那半边就恒为空、**永远不响** —— 正是这道判据
- * 要防的「静默失效」。所以从真仓库现读，而不是在用例里手抄一份。
+ * 真实仓库里 `tools/**` 下的双击入口（相对路径）。为什么临时仓库要照抄这份清单：判据 ③ 的「磁盘 →
+ * 清单」那一半要枚举入口，临时仓库若一个入口都没有，那半边恒为空、**永远不响** —— 正是要防的
+ * 「静默失效」。所以从真仓库现读，而不是在用例里手抄一份。
  */
 function realEntryPaths(): Array<string> {
   const tools = path.join(process.cwd(), "tools");
@@ -60,6 +50,13 @@ function realEntryPaths(): Array<string> {
   return out;
 }
 
+const cleanup: Array<string> = [];
+afterEach(() => {
+  for (const dir of cleanup.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 /** 在临时仓库里跑门禁（只需要被它读的那几个文件）。 */
 function runGuard(overrides: Record<string, string | null>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ps1-consistency-"));
@@ -68,9 +65,9 @@ function runGuard(overrides: Record<string, string | null>): string {
   // 真实文件先整体拷过去，再按 overrides 覆盖 / 删除。
   const files = [
     SPEC,
-    path.join("scripts", "quality-gate-shared.mjs"),
-    path.join("scripts", "quality-gate.ps1"),
-    path.join("scripts", "run-tests.ps1"),
+    path.join("scripts", "gates", "quality-gate-shared.mjs"),
+    path.join("scripts", "gates", "quality-gate.ps1"),
+    path.join("scripts", "affected-tests", "run-tests.ps1"),
   ];
   for (const rel of files) {
     const src = path.join(process.cwd(), rel);
@@ -78,8 +75,8 @@ function runGuard(overrides: Record<string, string | null>): string {
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.copyFileSync(src, dst);
   }
-  fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
-  fs.copyFileSync(GUARD, path.join(dir, "scripts", "check-ps1-consistency.mjs"));
+  fs.mkdirSync(path.join(dir, "scripts", "gates"), { recursive: true });
+  fs.copyFileSync(GUARD, path.join(dir, "scripts", "gates/check-ps1-consistency.mjs"));
   // ── 入口清单那一段（判据 ③）要读的三份文件 ──────────────────────────
   // 真实文件整体拷过去：判据按「README 的入口表 ⇄ tools/README.md 的全目录视图
   // ⇄ 磁盘」三向核对，抽掉任何一份都会让那一段变成另一种失败（而不是被测的那一种）。
@@ -100,17 +97,17 @@ function runGuard(overrides: Record<string, string | null>): string {
   for (const rel of [
     "scripts/dev-launcher.ps1",
     "scripts/dev-launcher.mjs",
-    "scripts/quality-gate.ps1",
-    "scripts/quality-gate.mjs",
-    "scripts/run-tests.ps1",
-    "scripts/run-tests.mjs",
-    "scripts/generate-docs.ps1",
-    "scripts/generate-docs.mjs",
-    "scripts/check-app-port-vectors.ps1",
-    "scripts/check-app-port-vectors.cjs",
-    "scripts/prepare-local-run.ps1",
-    "scripts/env-init.mjs",
-    "scripts/db-push.mjs",
+    "scripts/gates/quality-gate.ps1",
+    "scripts/gates/quality-gate.mjs",
+    "scripts/affected-tests/run-tests.ps1",
+    "scripts/affected-tests/run-tests.mjs",
+    "scripts/docs/generate-docs.ps1",
+    "scripts/docs/generate-docs.mjs",
+    "scripts/gates/check-app-port-vectors.ps1",
+    "scripts/gates/check-app-port-vectors.cjs",
+    "scripts/devtools/prepare-local-run.ps1",
+    "scripts/devtools/env-init.mjs",
+    "scripts/db/db-push.mjs",
   ]) {
     const dst = path.join(dir, rel);
     if (fs.existsSync(dst)) {
@@ -131,29 +128,21 @@ function runGuard(overrides: Record<string, string | null>): string {
   }
 
   try {
-    execFileSync(process.execPath, [path.join(dir, "scripts", "check-ps1-consistency.mjs")], {
+    execFileSync(process.execPath, [path.join(dir, "scripts", "gates/check-ps1-consistency.mjs")], {
       cwd: dir,
       encoding: "utf8",
       stdio: "pipe",
     });
     return "CODE=0";
   } catch (error: unknown) {
-    /* SAFETY: 类型断言已复核 */
-    const err = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
-    return `CODE=${err.status ?? 1}\n${err.stdout ?? ""}${err.stderr ?? ""}`;
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const err: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
+    return `CODE=${typeof err.status === "number" ? err.status : 1}\n${
+      typeof err.stdout === "string" ? err.stdout : ""
+    }${typeof err.stderr === "string" ? err.stderr : ""}`;
   }
 }
-
-const cleanup: Array<string> = [];
-afterEach(() => {
-  for (const dir of cleanup.splice(0)) {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
 
 describe("跨平台动作对照表（规范 §9.5）", () => {
   it("真仓库通过（对照表两侧齐全、脚本都存在、清单单点定义）", () => {
@@ -166,7 +155,7 @@ describe("跨平台动作对照表（规范 §9.5）", () => {
 
   it("对照表里登记不存在的脚本 → 失败（登记漂移会被发现）", () => {
     const spec = fs.readFileSync(path.join(process.cwd(), SPEC), "utf8");
-    const broken = spec.replace("scripts/generate-docs.mjs", "scripts/does-not-exist.mjs");
+    const broken = spec.replace("scripts/docs/generate-docs.mjs", "scripts/does-not-exist.mjs");
     expect(broken).not.toBe(spec);
     const out = runGuard({ [SPEC]: broken });
     expect(out).toContain("CODE=1");
@@ -184,7 +173,7 @@ describe("跨平台动作对照表（规范 §9.5）", () => {
       (l) => l.includes("端口推导跨语言自检") && l.includes("check-app-port-vectors.cjs"),
     );
     expect(idx, "找不到端口推导自检那一行（对照表漂移了？）").toBeGreaterThanOrEqual(0);
-    lines[idx] = "| 端口推导跨语言自检 | `scripts/check-app-port-vectors.ps1` | — |";
+    lines[idx] = "| 端口推导跨语言自检 | `scripts/gates/check-app-port-vectors.ps1` | — |";
     const broken = lines.join("\n");
     expect(broken).not.toBe(spec);
     const out = runGuard({ [SPEC]: broken });
@@ -203,14 +192,14 @@ describe("跨平台动作对照表（规范 §9.5）", () => {
 describe("KNOWN_FAILED_FILES 的单点定义（规范 §9.5）", () => {
   it("共享模块导出该常量（单点定义存在）", () => {
     const shared = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "quality-gate-shared.mjs"),
+      path.join(process.cwd(), "scripts", "gates", "quality-gate-shared.mjs"),
       "utf8",
     );
     expect(shared).toMatch(/export\s+const\s+KNOWN_FAILED_FILES\s*=/);
   });
 
   it("两侧的门禁脚本只是**读取**它，不各自再定义一份", () => {
-    for (const rel of ["scripts/quality-gate.ps1", "scripts/run-tests.ps1"]) {
+    for (const rel of ["scripts/gates/quality-gate.ps1", "scripts/affected-tests/run-tests.ps1"]) {
       const text = fs.readFileSync(path.join(process.cwd(), rel), "utf8");
       // 读取形态：从共享模块解析（不写死清单字面量）
       expect(text).toContain("quality-gate-shared.mjs");
@@ -220,35 +209,44 @@ describe("KNOWN_FAILED_FILES 的单点定义（规范 §9.5）", () => {
   });
 
   it("在 .ps1 里再定义一份字面量清单 → 失败（漏改一处就红/绿不可归因）", () => {
-    const gate = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.ps1"), "utf8");
+    const gate = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "gates", "quality-gate.ps1"),
+      "utf8",
+    );
     const broken = `${gate}\n$KNOWN_FAILED_FILES = @("src/lib/media.test.ts")\n`;
     const out = runGuard({
-      [path.join("scripts", "quality-gate.ps1")]: broken,
+      [path.join("scripts", "gates", "quality-gate.ps1")]: broken,
     });
     expect(out).toContain("CODE=1");
     expect(out).toContain("又定义了一份 KNOWN_FAILED_FILES");
   });
 
   it("Node 侧门禁与共享模块读同一份清单（不许各写一套排除项）", () => {
-    const mjs = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.mjs"), "utf8");
+    const mjs = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "gates", "quality-gate.mjs"),
+      "utf8",
+    );
     expect(mjs).toContain('from "./quality-gate-shared.mjs"');
-    const runner = fs.readFileSync(path.join(process.cwd(), "scripts", "run-tests.mjs"), "utf8");
-    expect(runner).toContain('from "./quality-gate-shared.mjs"');
+    const runner = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "affected-tests", "run-tests.mjs"),
+      "utf8",
+    );
+    expect(runner).toContain('from "../gates/quality-gate-shared.mjs"');
   });
 });
 
 describe("跨平台动作的实现契约", () => {
   it("Node 侧门禁只用 Node 内建与本仓库模块（不引第三方依赖）", () => {
     for (const rel of [
-      "scripts/quality-gate.mjs",
-      "scripts/run-tests.mjs",
-      "scripts/generate-docs.mjs",
+      "scripts/gates/quality-gate.mjs",
+      "scripts/affected-tests/run-tests.mjs",
+      "scripts/docs/generate-docs.mjs",
     ]) {
       const text = fs.readFileSync(path.join(process.cwd(), rel), "utf8");
       // 只允许 node: 内建与相对路径（本仓库模块）—— 门禁要在「装好依赖之前」
       // 也能跑，引第三方包会让它在干净检出上直接失败。
-      for (const m of text.matchAll(/from\s+"([^"]+)"/g)) {
-        const spec = m[1] ?? "";
+      for (const m of text.matchAll(/from\s+"(?<spec>[^"]+)"/g)) {
+        const spec = m.groups?.spec ?? "";
         expect(
           spec.startsWith("node:") || spec.startsWith("./") || spec.startsWith("../"),
           `${rel} 引入了非内建依赖：${spec}`,
@@ -258,8 +256,14 @@ describe("跨平台动作的实现契约", () => {
   });
 
   it("质量门禁的三项与 .ps1 侧同命令（两侧不许各写一套门禁清单）", () => {
-    const ps1 = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.ps1"), "utf8");
-    const mjs = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.mjs"), "utf8");
+    const ps1 = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "gates", "quality-gate.ps1"),
+      "utf8",
+    );
+    const mjs = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "gates", "quality-gate.mjs"),
+      "utf8",
+    );
     const squash = (t: string) => t.replaceAll(/\s+/g, " ");
     // 注意：lint 的扫描范围与 `--max-warnings 0` 等参数已按防漂移原则收进
     // package.json 的 `lint` 脚本，两侧门禁脚本只是 `pnpm run lint` 的委托方，
@@ -271,16 +275,27 @@ describe("跨平台动作的实现契约", () => {
       expect.soft(squash(ps1), `quality-gate.ps1 缺 ${needle}`).toContain(needle);
       expect.soft(squash(mjs), `quality-gate.mjs 缺 ${needle}`).toContain(needle);
     }
-    // lint 的 `--max-warnings` 唯一真源在 package.json，别让它静默丢失（否则
-    // 零警告门禁形同虚设却没人发现）。
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
-      scripts?: Record<string, string>;
-    };
+    // lint 的零警告语义由 oxlint `--deny-warnings` 承担，唯一真源在 package.json，
+    // 别让它静默丢失（否则零警告门禁形同虚设却没人发现）。
+    /* package.json 的 scripts 段用运行时守卫收窄（B5 清账，不走 as 断言）。 */
+    const pkgRaw: unknown = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+    );
+    const scripts: Record<string, string> = {};
+    if (isRecord(pkgRaw) && isRecord(pkgRaw.scripts)) {
+      for (const [key, value] of Object.entries(pkgRaw.scripts)) {
+        if (typeof value === "string") {
+          scripts[key] = value;
+        }
+      }
+    }
+    expect(scripts.lint, "package.json 的 lint 必须委托给 lint:oxlint").toBe(
+      "pnpm run lint:oxlint",
+    );
     expect(
-      pkg.scripts?.lint ?? "",
-      "package.json 的 lint 脚本缺 --max-warnings（零警告门槛丢失）",
-    ).toContain("--max-warnings");
+      scripts["lint:oxlint"] ?? "",
+      "package.json 的 lint:oxlint 缺 --deny-warnings（零警告门槛丢失）",
+    ).toContain("--deny-warnings");
     // 两侧的三项门禁名必须一致（增减门禁时只改一侧 = 两个平台给出不同结论）
     for (const key of ["typecheck", "lint", "test"]) {
       expect.soft(mjs).toContain(`${key}:`);
@@ -293,8 +308,14 @@ describe("跨平台动作的实现契约", () => {
     // Linux 上 `pnpm check:all` 悄悄多跑了一档、Windows 上双击入口按同样的名字报
     // 「参数不在可选集合内」，而两侧谁都没有任何东西会红。
     // 这里按两侧各自的结构取出**全量**名字再比 —— 不写死清单，增减门禁自然被跟上。
-    const ps1 = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.ps1"), "utf8");
-    const mjs = fs.readFileSync(path.join(process.cwd(), "scripts", "quality-gate.mjs"), "utf8");
+    const ps1 = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "gates", "quality-gate.ps1"),
+      "utf8",
+    );
+    const mjs = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "gates", "quality-gate.mjs"),
+      "utf8",
+    );
     // 解析器是共享件（`tests/helpers/quality-gate-gates`）：同一条 `$Blocks` / `GATES`
     // 形状在本文件与 `tests/daily-tracks.test.ts` 等处都要读，各写一份会在
     // 「换行 / 注释 / 块尾形态」上漂成两个口径（§12.18）。
@@ -321,16 +342,9 @@ describe("跨平台动作的实现契约", () => {
 });
 
 /**
- * 入口清单的判据（判据 ③）——README 那张表此前**一个字都没有判据**。
- *
- * 立案的形态：R9 把「根目录不许散落 `.ps1`」机器化了，理由写在它的注释里 ——
- * 入口一律归 `tools/<分类>/`，**根入口的 discoverability 由 README 的入口清单承担**。
- * 于是「新加一个入口」有两条腿：放对目录（R9 管）、登记进清单（没人管）。第二条腿
- * 有三种**都不报错**的失效形态，正是这里要逐个钉住的：
- *   · 入口改名 / 搬目录后，表里留着旧路径 —— 用户照着双击才发现那里什么都没有；
- *   · 跨平台表里的 `pnpm xxx` 在 `package.json` 里已经不存在 —— 读起来像一条能跑的命令；
- *   · 新入口默默可用而**没人知道它存在** —— 与 R9 否掉「铺在根目录第一眼看见」之后
- *     所依赖的那条承诺正好相反。
+ * 入口清单的判据（判据 ③）——README 那张表此前**一个字都没有判据**。R9 把「根目录不许散落 `.ps1`」机器化了：入口一律归 `tools/<分类>/`，根的 discoverability 由 README 入口清单承担；「新加入口」于是有两条腿：放对目录（R9 管）、登记进清单（此前没人管）。
+ * 后者有三种都不报错的失效形态：改名/搬目录后表里留旧路径（照着双击才发现什么都没有）、`pnpm xxx` 在 `package.json` 已不存在（读起来像能跑的命令）、新入口默默可用而没人知道它存在。
+ * 最后一条与 R9 否掉「铺根目录第一眼看见」之后所依赖的承诺正好相反。
  */
 describe("入口清单（README 的「双击入口速查」⇄ tools/README.md 的全目录视图 ⇄ 磁盘）", () => {
   it("真仓库通过（三向对齐）", () => {

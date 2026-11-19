@@ -11,7 +11,8 @@
 > **占位符约定**：本文中 `{{...}}` 形式的占位符代表文档引用的真实值，由
 > `pnpm doc:check` 运行时从源码/配置动态提取核对；语义见
 > [`docs/reference-facts.md`](../reference-facts.md)。改动上游源码后运行
-> `pnpm doc:gen` 同步 `docs/generated/`。
+> 改本文档由 `pnpm doc:check` 把关引用；`docs/generated/` 不入库（#3586），
+> 谁需要带真实值的原文谁本地 `pnpm doc:gen` 自己生成。
 
 ---
 
@@ -143,7 +144,7 @@ flowchart TD
 | 执行日志为什么留得住 | 控制器常驻保存最近一次日志 + 异步落盘 `log/workshop/`（按环节 `character` / `storyboard`） |
 | 候选上限 | 单角色 12 张（超出丢最旧），日志 200 条 | 
 | 第一张候选是否自动成为定妆照 | 是（`withPortraitCandidate` 在 `portraitUrl` 为空时顶上） |
-| 定妆照的用途 | 作为后续分镜图的参考图基准（下游消费，角色阶段不消费下游任何东西）——镜头生图本地通道经 `preparePortraitReferences` 把它上传进 ComfyUI 输入目录后随 `referenceImages` 下发，落点仍是作者连的参考图口 |
+| 定妆照的用途 | 作为后续分镜图的参考图**回落来源**（下游消费，角色阶段不消费下游任何东西）——镜头生图本地通道经 `prepareShotReferences` 把它上传进 ComfyUI 输入目录后随 `referenceImages` 下发，落点仍是作者连的参考图口。镜头级多选参考图（首张为主图）优先，留空才回落定妆照（#4355） |
 
 **红线**：候选与定妆照**写在角色对象上**（随草稿一起持久化），不另建表 —— 新增字段无需迁移。
 其余进程态（busy / 进度 / 日志）**不进草稿**，只留会话与 `log/workshop/`。
@@ -208,6 +209,7 @@ flowchart TD
 |---|---|
 | 本地通道的**唯一**可执行来源 | 工作流库里的工作流（按内容类别 `image` 过滤后供选择） |
 | 工坊对外暴露哪些参数 | 提示词 / 负向提示词 / 尺寸 / 参考图 —— 其余全部用工作流默认值 |
+| 镜头参考图怎么给（#4355） | 镜头卡片上多选（**首张为主图**，最多 16 张），逐张上传进 ComfyUI 输入目录后以文件名随 `referenceImages` 下发；留空回落出场角色的定妆照。落点仍是作者连的参考图口（默认 16 槽）；张量图片入口（无 widget）由执行期图增强自动补 LoadImage 装载节点（`reference-loader-augment`），不必在画布里逐个手工加节点 |
 | 尺寸怎么表达 | 只有两种：比例 + 分辨率，或比例 + 百万像素 + 倍数（宽高由尺寸表按场景现算） |
 | 批量生成的循环会不会被卡死 | 单镜有 30 分钟无响应超时保险，超时按失败收尾并继续下一镜 |
 | 未落到端口的输入会不会静默丢 | 不会：发起前提示条列出「本次未生效」的口（`describeUnmatchedInputs`），引导去工作流库连线 |
@@ -358,7 +360,7 @@ flowchart LR
 - [ ] 改草稿结构 → 服务端 DTO（`draft-sync-shared.ts`）与本文第 9 节同步
 - [ ] 改动任何 `src/lib/**` → 先读 [规范 18](../standards/18-lib层规范.md)（Node-only 三选一、
       分层 element、文件/函数长度棘轮）
-- [ ] 文档改动后跑 `pnpm doc:gen`（先 `doc:check` 后 `doc:render`）
+- [ ] 文档改动后跑 `pnpm doc:check`（镜像不入库，无需同批重渲染）
 
 ---
 

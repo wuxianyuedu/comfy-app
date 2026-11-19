@@ -1,3 +1,4 @@
+import { asRecord } from "~/lib/is-record";
 import {
   SHOT_TYPES,
   normalizeShotType,
@@ -76,11 +77,13 @@ export function buildCharacterMessages(c: {
 }): Array<LLMMessage> {
   const brief = [
     c.name ? `名字：${c.name}` : "",
-    c.appearance ? `已有外貌：${c.appearance}` : "",
-    c.costume ? `已有服装：${c.costume}` : "",
-    c.personality ? `已有性格：${c.personality}` : "",
-    c.styleTags?.length ? `风格标签：${c.styleTags.join("、")}` : "",
-    c.skillName ? `艺术风格：${c.skillName}` : "",
+    c.appearance !== undefined && c.appearance !== "" ? `已有外貌：${c.appearance}` : "",
+    c.costume !== undefined && c.costume !== "" ? `已有服装：${c.costume}` : "",
+    c.personality !== undefined && c.personality !== "" ? `已有性格：${c.personality}` : "",
+    c.styleTags !== undefined && c.styleTags.length > 0
+      ? `风格标签：${c.styleTags.join("、")}`
+      : "",
+    c.skillName !== undefined && c.skillName !== "" ? `艺术风格：${c.skillName}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -97,7 +100,8 @@ export type RawCharacter = {
 };
 
 export function parseCharacter(text: string): RawCharacter {
-  const obj = /* SAFETY: 类型断言已复核 */ (extractJson(text) as Record<string, unknown>) ?? {};
+  // extractJson 走 JSON.parse，回复是字面量 null / 非对象时 asRecord 给出 null，`?? {}` 是唯一防线
+  const obj = asRecord(extractJson(text)) ?? {};
 
   return {
     appearance: asText(obj.appearance),
@@ -126,7 +130,8 @@ export type RawCharacterFull = {
 } & RawCharacter;
 
 export function parseCharacterFull(text: string): RawCharacterFull {
-  const obj = /* SAFETY: 类型断言已复核 */ (extractJson(text) as Record<string, unknown>) ?? {};
+  // 同上：extractJson 遇 JSON 字面量 null / 非对象时 asRecord 给出 null，`?? {}` 是唯一防线
+  const obj = asRecord(extractJson(text)) ?? {};
 
   return {
     name: asText(obj.name, "未命名角色"),
@@ -176,16 +181,15 @@ export type RawShot = {
 export function parseStoryboard(text: string): Array<RawShot> {
   const data = extractJsonArray(text);
   return data.map((datum) => {
-    const obj = /* SAFETY: 类型断言已复核 */ (datum ?? {}) as Record<string, unknown>;
+    const obj = asRecord(datum) ?? {};
+    const rawNames: unknown = obj.characterNames;
 
     return {
       shotType: normalizeShotType(obj.shotType),
 
       description: asText(obj.description, ""),
 
-      characterNames: Array.isArray(obj.characterNames)
-        ? /* SAFETY: 类型断言已复核 */ (obj.characterNames as Array<unknown>).map(String)
-        : [],
+      characterNames: Array.isArray(rawNames) ? rawNames.map((n: unknown) => String(n)) : [],
     };
   });
 }
@@ -416,7 +420,8 @@ export function buildShotImageReviewMessages(
     ...input.portraitUrls
       .filter((url) => url.trim() !== "")
       .map((url) => ({
-        type: /* SAFETY: 类型断言已复核 */ "image_url" as const,
+        /* SAFETY: 类型断言已复核 */
+        type: "image_url" as const,
         image_url: { url },
       })),
   ];

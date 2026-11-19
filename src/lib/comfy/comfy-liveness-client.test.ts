@@ -20,15 +20,10 @@ class FakeEventSource {
     FakeEventSource.instances.push(this);
   }
   emit(payload: unknown): void {
-    this.onmessage?.(
-      /* SAFETY: 类型断言已复核 */ {
-        data: JSON.stringify(payload),
-      } as MessageEvent<string>,
-    );
+    this.onmessage?.(new MessageEvent<string>("message", { data: JSON.stringify(payload) }));
   }
   emitRaw(data: string): void {
-    /* SAFETY: 类型断言已复核 */
-    this.onmessage?.({ data } as MessageEvent<string>);
+    this.onmessage?.(new MessageEvent<string>("message", { data }));
   }
   close(): void {
     this.closed = true;

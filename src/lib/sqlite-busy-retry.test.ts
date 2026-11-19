@@ -12,9 +12,10 @@ const POLICY: SqliteBusyRetryPolicy = {
 };
 
 /** drizzle 的真实包法：驱动错误挂在 `cause` 上（同 `sqlite-error.test.ts`）。 */
+/* SAFETY: 类型断言已复核 */
 function busy(overrides?: Record<string, unknown>): Error {
   const e = new Error("Failed query: begin");
-  /* SAFETY: 类型断言已复核 */ (e as { cause?: unknown }).cause = {
+  (e as { cause?: unknown }).cause = {
     code: "SQLITE_BUSY",
     message: "database is locked",
     ...overrides,
@@ -25,7 +26,7 @@ function busy(overrides?: Record<string, unknown>): Error {
 describe("runWithSqliteBusyRetry", () => {
   it("首次就成 ⇒ 一次也不重试，也不念 onBusy", async () => {
     const onBusy = vi.fn();
-    const op = vi.fn(async () => "ok");
+    const op = vi.fn(() => Promise.resolve("ok"));
     await expect(runWithSqliteBusyRetry(op, { policy: POLICY, onBusy })).resolves.toBe("ok");
     expect(op).toHaveBeenCalledTimes(1);
     expect(onBusy).not.toHaveBeenCalled();
@@ -35,15 +36,19 @@ describe("runWithSqliteBusyRetry", () => {
     const seen: Array<number> = [];
     let calls = 0;
     const result = await runWithSqliteBusyRetry(
-      async () => {
+      () => {
         calls += 1;
         if (calls <= 2) {
           throw busy();
         }
-        return calls;
+        return Promise.resolve(calls);
       },
-      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-      { policy: POLICY, onBusy: (attempt) => void seen.push(attempt) },
+      {
+        policy: POLICY,
+        onBusy: (attempt) => {
+          void seen.push(attempt);
+        },
+      },
     );
     expect(result).toBe(3);
     expect(seen).toEqual([0, 1]);
@@ -51,7 +56,7 @@ describe("runWithSqliteBusyRetry", () => {
 
   it("非锁族错误 ⇒ 只试一次、原样抛出、onGiveUp 收到 tries=1", async () => {
     const boom = new Error('no such table: "remoteModel"');
-    const op = vi.fn(async () => {
+    const op = vi.fn(() => {
       throw boom;
     });
     const onGiveUp = vi.fn();
@@ -63,7 +68,7 @@ describe("runWithSqliteBusyRetry", () => {
 
   it("撞锁穷尽 ⇒ 试满 maxAttempts，抛出的是**原对象**（不许在这里改写文案）", async () => {
     const boom = busy();
-    const op = vi.fn(async () => {
+    const op = vi.fn(() => {
       throw boom;
     });
     const onGiveUp = vi.fn();
@@ -74,7 +79,7 @@ describe("runWithSqliteBusyRetry", () => {
 
   it("maxAttempts=1 时撞锁也不重试（预算就是「让路」而不是「等」）", async () => {
     const boom = busy();
-    const op = vi.fn(async () => {
+    const op = vi.fn(() => {
       throw boom;
     });
     await expect(
@@ -83,20 +88,19 @@ describe("runWithSqliteBusyRetry", () => {
     expect(op).toHaveBeenCalledTimes(1);
   });
 
+  /* SAFETY: 类型断言已复核 */
   it("消息形态的那种锁（没有 code、只有 database is locked）也算可重试", async () => {
     const phraseOnly = new Error("Failed query: begin");
-    /* SAFETY: 类型断言已复核 */ (phraseOnly as { cause?: unknown }).cause = new Error(
-      "database is locked",
-    );
+    (phraseOnly as { cause?: unknown }).cause = new Error("database is locked");
     let calls = 0;
     await expect(
       runWithSqliteBusyRetry(
-        async () => {
+        () => {
           calls += 1;
           if (calls === 1) {
             throw phraseOnly;
           }
-          return calls;
+          return Promise.resolve(calls);
         },
         { policy: POLICY },
       ),
@@ -108,7 +112,7 @@ describe("runWithSqliteBusyRetry", () => {
     // 那个新错误而不是库的错误。这里保持同形并把代价写明白：**回调只许念话**，
     // 往里塞会抛的逻辑就是把判决盖掉。
     const boom = busy();
-    const op = vi.fn(async () => {
+    const op = vi.fn(() => {
       throw boom;
     });
     const logBoom = new Error("日志通道自己炸了");

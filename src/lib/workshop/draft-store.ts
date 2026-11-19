@@ -7,7 +7,9 @@
 //
 // 纯浏览器侧：读写都经 ~/lib/browser-storage（SSR / 隐私模式读不到即当空草稿）。
 import { readStorageItem, writeStorageJson } from "~/lib/browser-storage";
+import { isRecord } from "~/lib/is-record";
 import { emptyProject } from "~/lib/workshop/script-parser";
+import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 
 /** 默认项目元信息的唯一出处（`emptyProject()`），别处不得再抄一份（§12.14）。 */
@@ -20,6 +22,9 @@ export type WorkshopDraft = {
   scenes: Array<Scene>;
   scriptMarkdown: string;
   shots: Array<Shot>;
+  /** 最近一次写入时刻（epoch ms，#4023）：与服务端镜像做版本对账
+   *  （恢复时取较新的一侧）。缺省 = 旧数据，不参与对账。 */
+  updatedAt?: number;
   /** 工坊「视频」阶段选定的「工作流库工作流」id。
    *  字段与生图分开 —— 两类工作流的对外参数口径不同（生图无首帧、视频有），
    *  共用一个 id 会互相串味。 */
@@ -46,6 +51,24 @@ function draftKeyFor(id: string): string {
   return `comfyapp.workshop.draft.${id}.v1`;
 }
 
+/* meta 只判「是不是对象」这一层；三类元素只判「是不是数组」——
+ *  形状问题由 `~/lib/workshop/draft-integrity` 在读侧判，与 canvas-store 同口径。 */
+function isProjectMeta(v: unknown): v is ProjectMeta {
+  return isRecord(v);
+}
+
+function isSceneList(v: unknown): v is Array<Scene> {
+  return Array.isArray(v);
+}
+
+function isCharacterList(v: unknown): v is Array<Character> {
+  return Array.isArray(v);
+}
+
+function isShotList(v: unknown): v is Array<Shot> {
+  return Array.isArray(v);
+}
+
 /** 解析并补全一份草稿：逐字段校验类型，损坏则回退成空草稿。
  *
  *  与 `~/lib/workshop/draft-sync-shared` 的 `parseDraftDto` 同一条口径：**三类元素
@@ -53,20 +76,24 @@ function draftKeyFor(id: string): string {
  *  `~/lib/workshop/draft-integrity` 的 `auditDraftElements` 在消费侧判、在工坊界面
  *  报（台账 F13″）—— 这一扇门与那扇门共用一份判据，不各写一遍。 */
 function parseDraft(raw: string | null): WorkshopDraft {
-  if (!raw) {
+  if (raw === null) {
     return emptyWorkshopDraft();
   }
   try {
-    /* SAFETY: 类型断言已复核 */
-    const draft = JSON.parse(raw) as Partial<WorkshopDraft>;
+    const parsed: unknown = JSON.parse(raw);
+    const draft = isRecord(parsed) ? parsed : {};
     return {
-      meta: draft.meta ?? DEFAULT_META,
+      meta: isProjectMeta(draft.meta) ? draft.meta : DEFAULT_META,
       scriptMarkdown: typeof draft.scriptMarkdown === "string" ? draft.scriptMarkdown : "",
-      scenes: Array.isArray(draft.scenes) ? draft.scenes : [],
-      characters: Array.isArray(draft.characters) ? draft.characters : [],
-      shots: Array.isArray(draft.shots) ? draft.shots : [],
+      scenes: isSceneList(draft.scenes) ? draft.scenes : [],
+      characters: isCharacterList(draft.characters) ? draft.characters : [],
+      shots: isShotList(draft.shots) ? draft.shots : [],
       workflowId: typeof draft.workflowId === "string" ? draft.workflowId : "",
       videoWorkflowId: typeof draft.videoWorkflowId === "string" ? draft.videoWorkflowId : "",
+      updatedAt:
+        typeof draft.updatedAt === "number" && Number.isFinite(draft.updatedAt)
+          ? draft.updatedAt
+          : undefined,
     };
   } catch {
     return emptyWorkshopDraft();
@@ -81,4 +108,29 @@ export function readWorkshopDraft(id: string): WorkshopDraft {
 /** 写某项目的工坊草稿。存储满 / 隐私模式：静默失败，不影响编辑。 */
 export function writeWorkshopDraft(id: string, draft: WorkshopDraft): void {
   writeStorageJson(draftKeyFor(id), { v: 1, ...draft });
+}
+
+/** 服务端镜像 DTO → 内部草稿（字段同构；本地专有的 workflowId / videoWorkflowId
+ *  不在镜像里，回落空串——它们只活在浏览器侧）。 */
+export function dtoToDraft(dto: WorkshopDraftDto): WorkshopDraft {
+  return {
+    meta: dto.meta,
+    scriptMarkdown: dto.scriptMarkdown ?? "",
+    scenes: dto.scenes ?? [],
+    characters: dto.characters ?? [],
+    shots: dto.shots ?? [],
+    workflowId: "",
+    videoWorkflowId: "",
+    updatedAt: dto.updatedAt,
+  };
+}
+
+/** 内部草稿是否为「空」——仅空时才值得用服务端镜像覆盖（避免覆盖进行中的编辑）。 */
+export function draftIsEmpty(draft: WorkshopDraft): boolean {
+  return (
+    !draft.scriptMarkdown &&
+    draft.scenes.length === 0 &&
+    draft.characters.length === 0 &&
+    draft.shots.length === 0
+  );
 }

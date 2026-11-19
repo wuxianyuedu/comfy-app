@@ -17,7 +17,10 @@ import { afterNextPaint, onNextFrame } from "./next-frame";
 let frames: Array<FrameRequestCallback> = [];
 let nextId = 1;
 
+let cancelled = new Set<number>();
+
 beforeEach(() => {
+  cancelled = new Set();
   frames = [];
   nextId = 1;
   vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
@@ -29,11 +32,6 @@ beforeEach(() => {
      * 真浏览器里取消后回调也不再执行，这里的语义必须一致。 */
     cancelled.add(id);
   });
-});
-
-let cancelled = new Set<number>();
-beforeEach(() => {
-  cancelled = new Set();
 });
 
 afterEach(() => {

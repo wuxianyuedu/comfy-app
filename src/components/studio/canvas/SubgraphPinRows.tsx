@@ -1,15 +1,12 @@
 "use client";
-/* 子图封装节点的顶部针脚区 —— FlowNodePinRows 的同型件：
- * 纯连接型输入端口（左圆点）与暴露出的输出端口（右圆点）
- * 拉在一行，与普通 WorkflowNode 完全一致。每个声明过的针脚
- * 都常显圆点（always-on），未连线的端口也看得见。
- * 与 FlowNodePinRows 的差异：行不带端口聚焦提亮（子图卡片
- * 不接 useRelatedEdgesHighlight 的级别账），行标签换行不截断
- * （长边界端口标签换多行，完整文本从原生 title 看）。 */
+/* 子图封装节点顶部针脚区，FlowNodePinRows 的同型件：纯连接型输入（左）与暴露输出（右）拉成一行；
+ * 每个声明过的针脚常显圆点（未接线也可见）。差异：行不带端口聚焦提亮（子图卡片不接该级别账），
+ * 标签换行不截断（完整文本见 title）。 */
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { RawInputMeta, RawOutputMeta } from "../workflow-types";
+import { Hint } from "~/components/ui/hint";
 
 type SubgraphPinRowsProps = {
   connInputs: Array<{ inp: RawInputMeta; label: string }>;
@@ -80,39 +77,45 @@ export function SubgraphPinRows({
                  *  就是哨兵边界连线）取值来自上游 —— 它们
                  *  不能被暴露成工作流输入。已连线的槽位
                  *  跳过复选框。 */}
-                {io?.ioEditMode && inName && !inInp?.isConnection && !inInp?.isBoundary && (
-                  <IoCheckbox
-                    io={io}
-                    ioRef={{
-                      nodeId: String(nodeId),
-                      hostNodeId,
-                      name: inName,
-                      kind: "param",
-                      direction: "input",
-                    }}
-                  />
-                )}
-                <span
-                  /* 去掉 `truncate`：让长的边界端口标签
-                   *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors
-                   *  | False = 🟣 GGUF` BOOLEAN widget）换成多行，
-                   *  而不是被裁掉。完整文本仍能从原生 `title` tooltip 看到。 */
-                  className="text-ink-bright text-2xs min-w-0 flex-1 text-left wrap-break-word whitespace-normal"
-                  title={`${inLabel} (${inType})`}
-                >
-                  {inLabel}
-                </span>
+                {io?.ioEditMode === true &&
+                  inName !== undefined &&
+                  inName !== "" &&
+                  inInp?.isConnection !== true &&
+                  inInp?.isBoundary !== true && (
+                    <IoCheckbox
+                      io={io}
+                      ioRef={{
+                        nodeId: String(nodeId),
+                        hostNodeId,
+                        name: inName,
+                        kind: "param",
+                        direction: "input",
+                      }}
+                    />
+                  )}
+                <Hint label={`${inLabel} (${inType})`}>
+                  <span
+                    /* 去掉 `truncate`：让长的边界端口标签
+                     *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors
+                     *  | False = 🟣 GGUF` BOOLEAN widget）换成多行，
+                     *  而不是被裁掉。完整文本仍能从原生 `title` tooltip 看到。 */
+                    className="text-ink-bright text-2xs min-w-0 flex-1 text-left wrap-break-word whitespace-normal"
+                  >
+                    {inLabel}
+                  </span>
+                </Hint>
               </>
             )}
             {outEntry && (
               <>
-                <span
-                  /* 与上面边界输入分支同款换行修正。 */
-                  className="text-ink-bright text-2xs min-w-0 flex-1 text-right wrap-break-word whitespace-normal"
-                  title={`${outDisplay} (${outType})`}
-                >
-                  {outDisplay}
-                </span>
+                <Hint label={`${outDisplay} (${outType})`}>
+                  <span
+                    /* 与上面边界输入分支同款换行修正。 */
+                    className="text-ink-bright text-2xs min-w-0 flex-1 text-right wrap-break-word whitespace-normal"
+                  >
+                    {outDisplay}
+                  </span>
+                </Hint>
                 {/* 每端口输出复选框已移除；
                  *  工作流输出按节点标识。按节点的输出
                  *  复选框现在住在子图节点的头部。 */}
@@ -132,7 +135,7 @@ export function SubgraphPinRows({
                     /* 默认右偏 5px，与左端口那颗的 `left: 5` 对称；IO 编辑模式缩到 4px
                      *  并贴住右边缘（`right: 0`）。**别把 `right` 提到 spread 之前**：
                      *  同一属性会被指定两次，TS 报 2783「此扩张将始终覆盖此属性」。 */
-                    ...(io?.ioEditMode
+                    ...(io?.ioEditMode === true
                       ? { width: 4, height: 4, opacity: 0.35, right: 0 }
                       : { width: 10, height: 10, right: 5 }),
                   }}

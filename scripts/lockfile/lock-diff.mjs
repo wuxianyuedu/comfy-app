@@ -10,7 +10,7 @@
  *   [3] 解析结果   packages / snapshots 的条目增删
  *
  * 只依赖 Node 内置能力（无 yaml 依赖，standalone 产物里也不带第三方解析器）。
- * 命令行入口（tools/start/run-local.ps1 与 scripts/quality-gate.ps1 都经它输出）：
+ * 命令行入口（tools/start/run-local.ps1 与 scripts/gates/quality-gate.ps1 都经它输出）：
  *
  * 用法示例：node scripts/lockfile/lock-diff.mjs --installed <路径> --root <路径>
  */
@@ -106,7 +106,7 @@ export function stripBundledSection(text) {
 }
 
 /** 顶层段落标记：只有行首、无缩进的 `key:` 才算段落起点。 */
-const SECTION_RE = /^([A-Za-z][A-Za-z0-9_-]*):\s*$/;
+const SECTION_RE = /^(?<section>[A-Za-z][A-Za-z0-9_-]*):\s*$/;
 
 /**
  * 把 lockfile 文本切成顶层段落 → 行数组。
@@ -124,7 +124,7 @@ export function splitTopSections(text) {
   for (const line of stripBundledSection(text).split(/\r?\n/)) {
     const m = SECTION_RE.exec(line);
     if (m) {
-      const [, name = ""] = m;
+      const name = m.groups?.section ?? "";
       if (sections.has(name)) {
         if (!duplicates.includes(name)) {
           duplicates.push(name);
@@ -176,7 +176,7 @@ function unquote(s) {
 }
 
 /** 段落体的一级键（YAML 键，可被引号包裹，如 `'@pnpm/exe.win32-x64@12.4.1'`）。 */
-const KEY_RE = /^(["']?)([^:'"]*\S)\1:\s*(.*)$/;
+const KEY_RE = /^(?<quote>["']?)(?<key>[^:'"]*\S)\k<quote>:\s*(?:.*)$/;
 
 /**
  * 段落缓冲区 → 一级键 → 行数组。
@@ -224,7 +224,7 @@ export function splitTopKeys(lines) {
     const ind = indentOf(line);
     if (ind === minIndent) {
       const m = KEY_RE.exec(line.trim());
-      const name = unquote(m ? (m[2] ?? "") : line.trim());
+      const name = unquote(m ? (m.groups?.key ?? "") : line.trim());
       if (!entries.has(name)) {
         entries.set(name, []);
       }
@@ -251,11 +251,12 @@ export function flatEntries(lines) {
   /** @type {Map<string, string>} */
   const out = new Map();
   for (const line of lines) {
-    const m = /^\s*([^\s:#][^:]*):\s*(.*?)\s*$/.exec(line);
+    const m = /^\s*(?<key>[^\s:#][^:]*):\s*(?<value>.*?)\s*$/.exec(line);
     if (!m) {
       continue;
     }
-    const [, rawKey = "", rawVal = ""] = m;
+    const rawKey = m.groups?.key ?? "";
+    const rawVal = m.groups?.value ?? "";
     const key = unquote(rawKey.trim());
     if (!rawVal) {
       continue;
@@ -317,12 +318,13 @@ export function parseDependencyTable(lines) {
     if (!name) {
       continue;
     }
-    const m = /^(specifier|version):\s*(.*)$/.exec(body);
+    const m = /^(?<field>specifier|version):\s*(?<value>.*)$/.exec(body);
     const entry = out.get(name);
     if (!m || !entry) {
       continue;
     }
-    const [, field, value = ""] = m;
+    const field = m.groups?.field ?? "";
+    const value = m.groups?.value ?? "";
     /* 正则那两个分支就是键名的全部取值，这里显式收窄 —— 原来那句
      * `out.get(name)[m[1]] = …` 是拿一个 `string` 去索引 `{specifier, version}`，
      * 类型面收进来之后它报的正是「这一格本来就是错的」那一类（行为逐字不变）。 */

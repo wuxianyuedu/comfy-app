@@ -12,8 +12,9 @@ import { vanillaApi } from "~/trpc/vanilla";
 export type OpenFolderResult = {
   absolutePath?: string | null;
   comfyappUrl?: string | null;
-  error?: string | null;
   opened: boolean;
+  /** 未打开时的原因（中文，可直接展示；#4048 起不再借用失败语义的 `error` 键）。 */
+  reason?: string | null;
 };
 
 /** 打开任务输出目录：失败路径分「目录未生成」与其它错误两种，由 hook 决定提示文案。 */
@@ -36,13 +37,15 @@ export async function openTaskFolder(taskId: string): Promise<OpenFolderResult> 
  */
 export async function revealTaskFolder(taskId: string): Promise<{ detail: string; ok: boolean }> {
   const folder = await openTaskFolder(taskId);
-  if (!folder.opened || !folder.absolutePath) {
+  if (
+    !folder.opened ||
+    folder.absolutePath === undefined ||
+    folder.absolutePath === null ||
+    folder.absolutePath === ""
+  ) {
     return {
       ok: false,
-      detail:
-        folder.error === "directory missing"
-          ? "该任务尚未生成文件目录"
-          : (folder.error ?? "未能打开输出目录，可在任务详情里复制文件路径"),
+      detail: folder.reason ?? "未能打开输出目录，可在任务详情里复制文件路径",
     };
   }
   const revealed = await vanillaApi.setting.revealPath.mutate({

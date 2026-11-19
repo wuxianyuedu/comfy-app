@@ -14,7 +14,10 @@ import {
   envelopeErrorMessage,
   findNodeErrorsCarrier,
   MAX_NON_JSON_LINES,
+  STDERR_RAW_CAP_CHARS,
+  STDOUT_LINE_CAP_CHARS,
   translateWorkflowUnknownNodesError,
+  type LogFn,
 } from "./executor-cli-stream";
 
 /** 静默 trace / log（默认实现会写盘或拖 DB，测试用自己的收集器）。 */
@@ -409,5 +412,83 @@ describe("createCliFinisher（完成 / 失败收口）", () => {
     f(true, { type: "envelope", ok: true });
     f(true, { type: "envelope", ok: true });
     expect(complete).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("部分执行回执事件（#4189，comfy-cli v1.24.0 --output-node-ids）", () => {
+  const feed = (line: string, log: LogFn = noLog) => {
+    const finish = vi.fn();
+    const p = createCliEnvelopeParser({
+      taskId: "t1",
+      log,
+      finish,
+      onPromptId: vi.fn(),
+      onProgress: vi.fn(),
+      trace: noTrace,
+    });
+    p.sink(`${line}\n`);
+    return { finish };
+  };
+
+  it("partial_execution 落 info 定性行；envelope 照常收口", () => {
+    const lines: Array<string> = [];
+    const { finish } = feed(
+      '{"type":"partial_execution","message":"3 target node(s)"}\n',
+      (_t, _lv, msg) => {
+        lines.push(msg);
+      },
+    );
+    expect(lines.some((m) => m.includes("部分执行回执") && m.includes("3 target node(s)"))).toBe(
+      true,
+    );
+    expect(finish).not.toHaveBeenCalled();
+  });
+
+  it("partial_execution_targets_ignored 落 warn（服务端按全图执行必须被看见）", () => {
+    const levels: Array<string> = [];
+    const msgs: Array<string> = [];
+    feed(
+      '{"type":"partial_execution_targets_ignored","message":"server ignored targets"}\n',
+      (_t, level, msg) => {
+        levels.push(level);
+        msgs.push(msg);
+      },
+    );
+    expect(levels).toContain("warn");
+    expect(msgs.some((m) => m.includes("被服务端忽略"))).toBe(true);
+  });
+
+  it("事件不带 message 时用 data 的 JSON 兜底，不留空行", () => {
+    const msgs: Array<string> = [];
+    feed('{"type":"partial_execution","data":{"targets":["9"]}}\n', (_t, _lv, msg) => {
+      msgs.push(msg);
+    });
+    expect(msgs.some((m) => m.includes("9"))).toBe(true);
+  });
+});
+
+describe("缓冲上限（#4418）", () => {
+  it("stderr 原文缓冲封顶：raw() 只保留尾部窗口，不再随失控刷屏线性增长", () => {
+    const s = createCliStderrSink({ taskId: "t1", log: noLog, trace: noTrace });
+    const chunk = `${"e".repeat(200 * 1024)}-0\n`;
+    s.sink(chunk);
+    s.sink(chunk.replace("-0", "-1"));
+    s.sink(chunk.replace("-0", "-2"));
+    expect(s.raw().length).toBeLessThanOrEqual(STDERR_RAW_CAP_CHARS + 16);
+    /* 尾部（最后一块）必须仍在：tail 消费要的就是它。 */
+    expect(s.raw()).toContain("-2");
+  });
+
+  it("stdout 单行无换行的巨型输出：聚合缓冲封顶（leftover 有界）", () => {
+    const p = createCliEnvelopeParser({
+      taskId: "t1",
+      log: noLog,
+      finish: vi.fn(),
+      onPromptId: vi.fn(),
+      onProgress: vi.fn(),
+      trace: noTrace,
+    });
+    p.sink("x".repeat(400 * 1024));
+    expect(p.leftover().length).toBeLessThanOrEqual(STDOUT_LINE_CAP_CHARS);
   });
 });

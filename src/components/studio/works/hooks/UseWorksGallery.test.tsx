@@ -1,13 +1,7 @@
-/* 「所有项目」屏逻辑层单测（ISSUE #1522）。
- *
- * 守两句新承诺：
- *   · 列表是**并集**（服务端独有行也看得见，且标出出处）；
- *   · 删除对「索引里没有、只在服务端」的行也有行为（这正是此前缺的那个口子）。
- *
- * 取数与删除都在 `~/lib/project-canvas/canvas-store` 里，这里整体替换该模块 ——
- * 断言的是**编排**（什么时候重取、失败降级说什么、确认流的两步），
- * 以及那一层的实现细节（并集口径、两侧一起删）由 `canvas-store.test.ts` 守。
- */
+/* 「所有项目」屏逻辑层单测（ISSUE #1522）。守两句新承诺：列表是并集（服务端独有行也看得见并标出处）；
+ * 删除对「索引里没有、只在服务端」的行也有行为（此前缺的口子）。
+ * 取数与删除在 ~/lib/project-canvas/canvas-store，这里整体替换该模块 —— 断言编排
+ *（何时重取、失败降级说什么、确认流两步）；并集口径与两侧一起删由 canvas-store.test.ts 守。 */
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -35,7 +29,9 @@ vi.mock("../../project-canvas/hooks/use-sync-refusal-notice", () => ({
 
 vi.mock("~/lib/project-canvas/canvas-store", () => ({
   listProjectsWithServer: () => listProjectsWithServerMock(),
-  deleteProjectEverywhere: (id: string, name?: string) => deleteProjectEverywhereMock(id, name),
+  deleteProjectEverywhere: (id: string, name?: string) => {
+    deleteProjectEverywhereMock(id, name);
+  },
   reapAllEmptyDrafts: () => reapAllEmptyDraftsMock(),
 }));
 
@@ -93,7 +89,9 @@ describe("useWorksGallery", () => {
     const { result } = renderHook(() => useWorksGallery());
     await expect.poll(() => result.current.loading).toBe(false);
 
-    act(() => result.current.requestDelete("proj_orphan"));
+    act(() => {
+      result.current.requestDelete("proj_orphan");
+    });
     expect(result.current.pendingDelete?.id).toBe("proj_orphan");
 
     let name: string | null = null;
@@ -116,8 +114,12 @@ describe("useWorksGallery", () => {
     const { result } = renderHook(() => useWorksGallery());
     await expect.poll(() => result.current.loading).toBe(false);
 
-    act(() => result.current.requestDelete("proj_a"));
-    act(() => result.current.cancelDelete());
+    act(() => {
+      result.current.requestDelete("proj_a");
+    });
+    act(() => {
+      result.current.cancelDelete();
+    });
     expect(result.current.pendingDelete).toBeNull();
     expect(deleteProjectEverywhereMock).not.toHaveBeenCalled();
   });
@@ -127,7 +129,29 @@ describe("useWorksGallery", () => {
     const { result } = renderHook(() => useWorksGallery());
     await expect.poll(() => result.current.loading).toBe(false);
     expect(listProjectsWithServerMock).toHaveBeenCalledTimes(1);
-    act(() => result.current.refresh());
+    act(() => {
+      result.current.refresh();
+    });
     await expect.poll(() => listProjectsWithServerMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("useWorksGallery 的卸载守卫（#4239）", () => {
+  it("卸载后回包不落地：projects 保持空、loading 不翻转", async () => {
+    let release!: (value: { entries: Array<EntryRow>; ok: boolean }) => void;
+    const gated = new Promise<{ entries: Array<EntryRow>; ok: boolean }>((resolve) => {
+      release = resolve;
+    });
+    listProjectsWithServerMock.mockReturnValue(gated);
+
+    const { result, unmount } = renderHook(() => useWorksGallery());
+    unmount();
+    release({ entries: [entry()], ok: true });
+    await act(async () => {
+      await gated;
+    });
+
+    expect(result.current.projects).toEqual([]);
+    expect(result.current.loading).toBe(true);
   });
 });

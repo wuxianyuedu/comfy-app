@@ -1,18 +1,7 @@
 /**
- * `COMFY_EXECUTOR` 判据的跨宿主一致性门禁（P3 §5 ADR §14 D5 · Phase 4-A4）。
- *
- * 为什么需要它：同一个开关此前有三处各自实现（Next 侧 TS、launcher、executor-host
- * 脚本）。前两份规则一致，host 那份**漏了 `trim()` 与 `.env` 回读**，于是：
- *   · `COMFY_EXECUTOR=" host "` → Next 把行写成 `claimedBy='host'`、host 起着骨架
- *     ⇒ 任务永远停在队列里等回收器判失败，界面上看不出为什么；
- *   · 只在 `.env` 里写开关 + 手工起 host → 同样静默跑成骨架。
- * 这类漂移没有任何既有用例能发现（各测各的），所以本文件把「三处同值」变成可失败
- * 断言，形态沿用 `tests/app-port-cross-language.test.ts`：**一份共享向量 + 两侧真跑**。
- *
- * 为什么两侧不能合成一份：跨层共享要么给 launcher（纯 Node、且它拉起的正是 tsx
- * 本身）引入 TS 运行时，要么让 `src/lib` 去 import `scripts/`（撞 §18.4 分层与
- * scanner 判据）。因此**同一层内**（launcher 与 host 两个纯 Node 宿主）收成一份
- * `scripts/launcher-core/executor-mode.mjs`，跨层那份（TS）留在原处，由本文件比对。
+ * `COMFY_EXECUTOR` 跨宿主一致性门禁（P3 §5 ADR §14 D5 · Phase 4-A4）：三处实现中 host 那份漏了 `trim()` 与 `.env` 回读，
+ * 于是 `COMFY_EXECUTOR=" host "` 或只写 `.env` 时静默跑成骨架（任务停在队列等回收器判失败）。本文件把「三处同值」变成
+ * 可失败断言（共享向量 + 两侧真跑，同 `tests/app-port-cross-language.test.ts`）；同层收进 `scripts/launcher-core/executor-mode.mjs`，跨层 TS 留原处比对（§18.4 分层）。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -23,6 +12,8 @@ const { warnMock } = vi.hoisted(() => ({ warnMock: vi.fn() }));
 vi.mock("~/lib/core/logger", () => ({
   logger: { warn: warnMock, info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+
+import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 import {
   EXECUTOR_ENV_KEY,
@@ -41,12 +32,23 @@ const LAUNCHER = path.join(ROOT, "scripts", "dev-launcher.mjs");
 const HOST = path.join(ROOT, "scripts", "executor-host.mjs");
 const TS_SIDE = path.join(ROOT, "src", "lib", "comfyui", "executor-mode.ts");
 
-/* SAFETY: 类型断言已复核 */
-const vectors = (
-  JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS_FILE), "utf8")) as {
-    vectors: Array<{ mode: string; raw: string; unknown: string | null }>;
+/** 共享向量文件的形状守卫（B5 清账，不走 as 断言）。 */
+function isVectorsFile(value: unknown): value is {
+  vectors: Array<{ mode: string; raw: string; unknown: string | null }>;
+} {
+  if (!isRecord(value) || !isUnknownArray(value.vectors)) {
+    return false;
   }
-).vectors;
+  return value.vectors.every(
+    (entry) => isRecord(entry) && typeof entry.mode === "string" && typeof entry.raw === "string",
+  );
+}
+
+const parsedVectors: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS_FILE), "utf8"));
+if (!isVectorsFile(parsedVectors)) {
+  throw new Error("executor-mode 共享向量文件形状不对");
+}
+const vectors = parsedVectors.vectors;
 
 const original = process.env[EXECUTOR_ENV_KEY];
 const tmpDirs: Array<string> = [];
@@ -143,7 +145,8 @@ describe("两个纯 Node 宿主不许再各写一份归一化", () => {
   /* 「编排器」这一侧读**现算的链路闭包**而不是主文件：R5 拆刀（ISSUE #1811）后
    * 门控那一段住 `launcher-core/dev-boot.mjs`，只读主文件会让 `toContain` 落空
    * 而 `not.toMatch` 对着空串恒真 —— 那正是这条判据要防的形态。 */
-  for (const [label, file] of /* SAFETY: 类型断言已复核 */ [
+  /* SAFETY: 类型断言已复核 */
+  for (const [label, file] of [
     ["dev-launcher.mjs", LAUNCHER],
     ["executor-host.mjs", HOST],
   ] as const) {

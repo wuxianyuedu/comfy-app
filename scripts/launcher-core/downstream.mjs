@@ -10,17 +10,12 @@
  * `ctx.shutdown`（收尾入口，住在主文件）。
  */
 import process from "node:process";
+import fs from "node:fs";
 import path from "node:path";
 
-import { SKIP_SCHEMA_SYNC_ENV } from "../db-schema-state.mjs";
-import { maybeSpawnExecutorHost } from "./executor-host-spawn.mjs";
-import {
-  commandInvocation,
-  pnpmInvocation,
-  runSync,
-  spawnInGroup,
-  whichCommand,
-} from "./shell.mjs";
+import { SKIP_SCHEMA_SYNC_ENV } from "../db/db-schema-state.mjs";
+import { maybeSpawnExecutorHost, SKIP_EXECUTOR_HOST_ENV } from "./executor-host-spawn.mjs";
+import { pnpmInvocation, runSync, spawnInGroup } from "./shell.mjs";
 import { lockfileDrift, verifyInstall } from "./worktree.mjs";
 import { runningAppInstances } from "./port-reap.mjs";
 import { writeLaunchStatus } from "./orchestrator.mjs";
@@ -104,7 +99,18 @@ export async function syncDependencies(ctx, root, deps = {}) {
    * 也起不来」，排查方向还被指错（按 §13.6.3 会被读成「本机跑不了门禁」）。
    * 判据按**归属**而不是按端口有没有人：隔壁检出占着同一个端口不会锁本检出的
    * `node_modules`，拿「端口被占」当拦截条件会在多检出并行下天天误拦。 */
-  const live = await runningAppInstances(root);
+  let live;
+  try {
+    live = await runningAppInstances(root);
+  } catch (error) {
+    /* 端口 / 进程探测没跑起来 ⇒ 这一格**没有结论**，绝不能当成「没有实例在跑」
+     * 而继续 `pnpm install`（那正是硬规则 9 的 fail-open，§13.6.3）。 */
+    return (
+      `归属判据没量到（${error instanceof Error ? error.message : String(error)}）：` +
+      "端口 / 进程探测命令没跑起来，既不是「没有实例在跑」，也不是「判到有实例在跑」。\n" +
+      "已停止补装依赖。出口：复跑启动器让判据给出结论；在拿到结论之前不要手工执行 pnpm install。"
+    );
+  }
   if (live.running) {
     return (
       `本检出的应用服务正在运行（PID ${live.pids.join(", ") || "见 run/launcher-session.json"}），` +
@@ -157,32 +163,31 @@ export async function syncDependencies(ctx, root, deps = {}) {
   return null;
 }
 
-/** 起 dev server：`pnpm dev -p <port> -H <host>`（端口由 app-port.mjs 解析后显式传入，
+/** 起 dev server：`node scripts/dev.mjs -p <port> -H <host>`（端口由 app-port.mjs 解析后显式传入，
  *  不靠环境变量兜底 —— 裸 `next dev` 会落 Next 默认 3000，与 .env / 壳 / e2e 对不上）。 */
 /**
  * 起子进程并把它接到日志文件。
- * @param {number} port 应用端口
  * @param {{ spawned: import("node:child_process").ChildProcess[], root: string }} ctx 子进程账本与检出根
- * @param {number} port 应用端口
- * @param {string} host 绑定主机
- * @param {string} outFile stdout 落盘路径
- * @param {string} errFile stderr 落盘路径
- * @param {Record<string, string>} [extraEnv] 追加环境变量
+ * @param {{port: number, host: string, outFile: string, errFile: string, extraEnv?: Record<string, string>}} opts
+ *   `port` 应用端口；`host` 绑定主机；`outFile` / `errFile` 是 stdout / stderr 落盘路径；
+ *   `extraEnv` 追加环境变量。
  */
-export function spawnDevServer(ctx, port, host, outFile, errFile, extraEnv = {}) {
-  // 起服务用的是**门禁验过的那个命令形态**（`commandInvocation`）：
-  // `pnpm` 在 Windows 上常常只有 shebang shim 而 shim 起不来，此时真正能用的是
-  // 同目录的 `pnpm.ps1`（经 PowerShell 宿主）。门禁选出来的形态必须在起服务这一
-  // 步复用同一个实现，否则「探测过了、起服务却用另一种方式又失败一次」。
-  // 判据只在 shell.mjs 一处（规范 §9.5），这里不自己拼可执行名。
-  const candidate = whichCommand("pnpm");
-  if (!candidate) {
-    throw new Error("pnpm 不在 PATH 上，无法启动 dev server");
+export function spawnDevServer(ctx, opts) {
+  const { port, host, outFile, errFile, extraEnv = {} } = opts;
+  // 直启 dev.mjs（ISSUE #4155）：`pnpm dev` 只是把「node scripts/dev.mjs」包进一层
+  // Windows pnpm shim（实测 1~1.5s 冷启），而 `tauri.conf.json` 的 beforeDevCommand
+  // 本来就是 `node scripts/dev.mjs` —— 编排器统一成同一形态，也把「shim 形态坏了
+  // 服务起不来」（ISSUE #576 家族）这个失败类从 server 链摘掉。pnpm 形态判据
+  // （shell.mjs）继续管**真正用 pnpm 的地方**（install / db-push / 探测）。
+  // 进程归属不受影响：命令行含检出根 + scripts/dev.mjs，isAppDevServerCmdline 的
+  // 第一种形状照常命中（§1.4「只回收自己的」判据不变）。
+  const devEntry = path.join(ctx.root, "scripts", "dev.mjs");
+  if (!fs.existsSync(devEntry)) {
+    throw new Error("找不到 scripts/dev.mjs，无法启动 dev server（检出不完整？）");
   }
-  const invocation = commandInvocation(candidate, ["-v"]);
   const child = spawnInGroup({
-    command: invocation.command,
-    args: [...invocation.prefixArgs, "dev", "-p", String(port), "-H", host],
+    command: process.execPath,
+    args: [devEntry, "-p", String(port), "-H", host],
     cwd: ctx.root,
     env: {
       ...process.env,
@@ -191,6 +196,9 @@ export function spawnDevServer(ctx, port, host, outFile, errFile, extraEnv = {})
       /* 编排器已起过一份 schema 同步（本文件 950 行附近），通知 dev.mjs
        * 跳过它自己的那份 —— 否则一次启动两份 drizzle 并发写同一个库。 */
       [SKIP_SCHEMA_SYNC_ENV]: "1",
+      /* 同理（ISSUE #3830）：编排器 6.5 步已起过一份 executor host，通知
+       * dev.mjs 跳过它自己的那份 —— 否则 host 模式下一次启动确定性双宿主。 */
+      [SKIP_EXECUTOR_HOST_ENV]: "1",
       ...extraEnv,
     },
     stdoutFile: outFile,
@@ -223,7 +231,9 @@ export function spawnExecutorHost(ctx) {
   const result = maybeSpawnExecutorHost({
     root: ctx.root,
     runTimestamp: ctx.runTimestamp,
-    logLine: (message, level = "INFO") => ctx.log(message, level),
+    logLine: (message, level = "INFO") => {
+      ctx.log(message, level);
+    },
   });
   if (!result) {
     return null;

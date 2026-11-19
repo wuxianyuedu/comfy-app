@@ -1,28 +1,19 @@
 /**
- * `check-tsc-artifact-hint.cjs` 的判据（ISSUE #1182 的方案 3）。
- *
- * 这条判据的价值全在**不误报**上：组 A 也会因别的原因红（真类型错、OOM、参数错），
- * 那时还给「删掉 .next 重跑」就是把人往错方向带 —— 哭一次狼，之后这条提示就没人信了。
- * 所以正反两向都要有用例，且正向用**真实的 tsc 输出**：
- * ① 现场原文（#1182 的两行，含 Windows 反斜杠形态）；
- * ② 本地复演读数 —— 把 `.next/dev/types/validator.ts` 复制一份、在第 79 行的
- *    `type __IsExpected<Specific extends AppPageConfig` 处截断，`pnpm exec tsc --noEmit
- *    --incremental false` 给出的是单行 `.next/dev/types/validator.ts(79,51): error
- *    TS1005: '>' expected.`（exit 1）。
- *
- * 顺带把提示里那条处置命令的前提也钉住：整目录删除**不会**引出新的红 —— 同一份截断件
- * 在 `.next/dev/types` 整目录不存在时 tsc 为 exit 0，`next-env.d.ts` 虽然 import 了
- * 同目录的 `routes.d.ts`，缺生成目录并不报错（所以脚本才敢把 `rm -rf` 印给用户）。
+ * `check-tsc-artifact-hint.cjs` 的判据（ISSUE #1182 方案 3）：价值全在**不误报** —— 组 A 会因真类型错 / OOM /
+ * 参数错变红，此时再叫人「删 .next 重跑」就是哭狼。故正反两向都有用例，正向用真实 tsc 输出：① #1182 现场两行（含反斜杠）；
+ * ② 截断 `validator.ts` 第 79 行得 `(79,51): error TS1005`；整目录删除不引出新红（故 `rm -rf` 才敢印）。
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-// 判据脚本是 CJS（与 scripts/check-*.cjs 同族，`@ts-nocheck` 后经 require 进来是 any），
-// 按仓库惯例给 mod 显式标注返回形状。
-/* SAFETY: 类型断言已复核 */
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const mod = require("../scripts/check-tsc-artifact-hint.cjs") as {
+/** 外来值是不是普通对象（数组不算）：本文件收窄判据导出面的统一入口。 */
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** 判据导出面：三个导出逐个核过（函数各就各位）才算形状对。 */
+function isArtifactHintModule(v: unknown): v is {
   buildHint: (v: unknown) => string;
   classifyTscErrors: (text: string) => {
     artifactFiles: Array<string>;
@@ -32,7 +23,24 @@ const mod = require("../scripts/check-tsc-artifact-hint.cjs") as {
     total: number;
   };
   isArtifact: (filePath: string) => boolean;
-};
+} {
+  return (
+    isPlainRecord(v) &&
+    typeof v.buildHint === "function" &&
+    typeof v.classifyTscErrors === "function" &&
+    typeof v.isArtifact === "function"
+  );
+}
+
+// 判据脚本是 CJS（与 scripts/check-*.cjs 同族，`@ts-nocheck` 后经 require 进来是 any），
+// 按仓库惯例给 mod 显式标注返回形状 —— 标注靠上面的类型守卫逐个导出核对，不靠断言。
+// oxlint-disable-next-line typescript/no-require-imports
+const required: unknown = require("../scripts/gates/check-tsc-artifact-hint.cjs");
+
+if (!isArtifactHintModule(required)) {
+  throw new Error("check-tsc-artifact-hint.cjs 的导出面不对");
+}
+const mod = required;
 
 const { classifyTscErrors, buildHint, isArtifact } = mod;
 
@@ -157,7 +165,7 @@ describe("tsc 生成物报错的点破（#1182）", () => {
   it("CLI 读到不可读的日志时安静退出（附属信息不该制造第二种失败）", () => {
     const r = spawnSync(
       process.execPath,
-      ["scripts/check-tsc-artifact-hint.cjs", "--file", "does-not-exist.log"],
+      ["scripts/gates/check-tsc-artifact-hint.cjs", "--file", "does-not-exist.log"],
       { encoding: "utf8" },
     );
     expect(r.status).toBe(0);

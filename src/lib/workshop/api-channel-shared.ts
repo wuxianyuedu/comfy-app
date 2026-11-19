@@ -9,6 +9,7 @@
 /* 某个 API 通道服务哪个生成阶段。 */
 import { isDataUrl, wrapBase64 } from "~/lib/media/data-url";
 import { isRecord } from "~/lib/is-record";
+import { joinApiUrl } from "~/lib/llm/provider-types";
 
 export type ApiChannelKind = "image" | "video";
 
@@ -60,7 +61,7 @@ export function findStringUnderKeys(value: unknown, keys: Array<string>, depth =
   if (Array.isArray(value)) {
     for (const item of value) {
       const hit = findStringUnderKeys(item, keys, depth + 1);
-      if (hit) {
+      if (hit !== null) {
         return hit;
       }
     }
@@ -78,7 +79,7 @@ export function findStringUnderKeys(value: unknown, keys: Array<string>, depth =
   for (const v of Object.values(value)) {
     if (isRecord(v) || Array.isArray(v)) {
       const hit = findStringUnderKeys(v, keys, depth + 1);
-      if (hit) {
+      if (hit !== null) {
         return hit;
       }
     }
@@ -103,8 +104,20 @@ const MEDIA_URL_KEYS = [
   "resultUrl",
 ];
 
-/* 生成响应里常见「放异步任务标识」的键名。 */
-const TASK_ID_KEYS = ["id", "task_id", "taskId", "job_id", "jobId", "request_id", "requestId"];
+/* 生成响应里常见「放异步任务标识」的键名。`video_id` 是 Agnes 视频接口的
+ * 原生任务键（#3577：提交响应里 `id` 虽然同值，但点名原生键免得依赖
+ * 「恰好也有 id」这一巧合）。 */
+const TASK_ID_KEYS = [
+  "id",
+  "task_id",
+  "taskId",
+  "video_id",
+  "videoId",
+  "job_id",
+  "jobId",
+  "request_id",
+  "requestId",
+];
 
 /* 常见「放 base64 载荷」的键名（例如 OpenAI 图片的 b64_json）。 */
 const B64_KEYS = ["b64_json", "b64Json", "image_base64", "base64"];
@@ -125,7 +138,7 @@ export function extractRemoteTaskId(payload: unknown): string | null {
 /* 取出 base64 媒体载荷并包装成 data URL；取不到则为 null。 */
 export function extractBase64DataUrl(payload: unknown, mime = "image/png"): string | null {
   const b64 = findStringUnderKeys(payload, B64_KEYS, 2);
-  if (!b64) {
+  if (b64 === null) {
     return null;
   }
   /* 有些上游直接内联一个 data URL。 */
@@ -138,10 +151,10 @@ export function extractBase64DataUrl(payload: unknown, mime = "image/png"): stri
 
 /* 按文件路径 / URL 的扩展名猜媒体类型（SSE 输出里两种都有）。 */
 export function guessMediaKind(pathOrUrl: string): "image" | "video" | "other" {
-  if (/\.(mp4|webm|mov|mkv|avi|gif)(\?.*)?$/i.test(pathOrUrl)) {
+  if (/\.(?:mp4|webm|mov|mkv|avi|gif)(?:\?.*)?$/i.test(pathOrUrl)) {
     return "video";
   }
-  if (/\.(png|jpe?g|webp|bmp|avif)(\?.*)?$/i.test(pathOrUrl)) {
+  if (/\.(?:png|jpe?g|webp|bmp|avif)(?:\?.*)?$/i.test(pathOrUrl)) {
     return "image";
   }
   return "other";
@@ -183,22 +196,41 @@ export function extractSavedOutputs(value: unknown): Array<SavedOutput> {
   return out;
 }
 
+/** Base URL 末段的资源段归一：…/images、…/videos 这类「用户把资源段填进了
+ *  base」的历史形态剥掉，动作段交给 `joinApiUrl` 统一拼（#3656）。
+ *  完整动作段（…/images/generations）不以这两段结尾，不受影响。 */
+function stripTrailingResourceSegment(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, "").replace(/\/(?:images|videos)$/i, "");
+}
+
 /** 由远端模型条目的 Base URL 解析「生图」端点（OpenAI 兼容 images/generations）。
- *  用户在设置页填的 Base URL 三种形态都兼容：
+ *  显式的模型级端点路径（`RemoteModelAdaptersDoc.endpointPath`，#3622/#3656）
+ *  由调用方经 `joinApiUrl` 拼，不在这里兜；Base URL 按这几种形态兼容：
  *    已含完整动作段（…/v1/images/generations）→ 原样使用；
- *    只到资源段（…/v1/images）→ 只补动作段 /generations；
- *    只到根（…/v1）→ 补全 /images/generations。
+ *    只到资源段（…/v1/images 或 …/images）→ 归一后补动作段；
+ *    只到根（…/v1 或裸域，#3656 新口径）→ 补全 /v1/images/generations。
  *  历史事故：条目里填了完整端点仍被无条件再拼一次，请求打到
  *  /v1/images/images/generations 而 404。纯字符串拼装，可单测。 */
 export function resolveImagesGenerationsEndpoint(baseUrl: string): string {
-  const base = String(baseUrl ?? "")
-    .trim()
-    .replace(/\/+$/, "");
+  const base = stripTrailingResourceSegment(String(baseUrl).trim());
   if (/\/images\/generations$/i.test(base)) {
     return base;
   }
-  if (/\/images$/i.test(base)) {
-    return `${base}/generations`;
+  return joinApiUrl(base, "/images/generations");
+}
+
+/** 由远端模型条目的 Base URL 解析「生视频」端点（与生图同一套三形态兼容，
+ *  动作段换成 OpenAI 兼容视频惯例 /videos/generations）。
+ *
+ *  为什么与生图成对而不是复用：两张表的资源名（images / videos）与动作段
+ *  是同一套惯例的两份实例，参数化（资源名进参）会让调用点读不出「这是哪条
+ *  通道的端点」，镜像两份各自贴着各自的资源名更直白（与 api-channel.server
+ *  里图 / 视频两份 resolveTarget 的拆分同一取舍）。#3656 起版本段缺省由
+ *  `joinApiUrl` 统一补（Base 只到裸域时不再发一个注定 404 的地址）。 */
+export function resolveVideosGenerationsEndpoint(baseUrl: string): string {
+  const base = stripTrailingResourceSegment(String(baseUrl).trim());
+  if (/\/videos\/generations$/i.test(base)) {
+    return base;
   }
-  return `${base}/images/generations`;
+  return joinApiUrl(base, "/videos/generations");
 }

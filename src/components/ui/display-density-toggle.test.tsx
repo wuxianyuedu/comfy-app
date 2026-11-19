@@ -1,15 +1,7 @@
 /**
- * `DisplayDensityToggle` 的判据（ISSUE #1925 / 规范 16 §16.2.4.75）。
- *
- * 收口前「网格 / 列表」这一排全库有**三份逐字相同**的手搓实现
- * （画布历史抽屉 / 画布素材抽屉 / 素材库）。它们坏在同一个**看不见的接缝**：
- * 选中档只写了底色 `bg-surface-2`，**没钉字色悬停** —— `ghost` 变体自带的
- * `hover:text-foreground` 会在划过已选中那枚时把字色翻掉，看着像「未选中」；
- * 而 `bg-surface-2` 在浅色主题下与行头底色近值，本来就弱。
- *
- * 这组用例钉三件事：语义是**单选**（不是 `aria-pressed` 开关）、两枚的
- * `aria-checked` 由 `value` 一处驱动、以及**基元自己带**与常态同值的
- * 选中档悬停（少了它浏览器里的悬停会落回 `buttonVariants` 的默认档）。
+ * `DisplayDensityToggle` 的判据（ISSUE #1925 / 规范 16 §16.2.4.75）：语义是单选
+ * （`role="radio"` + `aria-checked`，不是 `aria-pressed`），两枚由 `value` 一处驱动；
+ * 选中档悬停必须与常态同值，否则 `ghost` 的 `hover:text-foreground` 会把已选中那枚翻色。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";

@@ -25,7 +25,7 @@ const SCRIPT_SRC = IS_DEV
   : "script-src 'self' 'unsafe-inline'";
 
 /**
- * 依赖缓存槽的根目录（与 `scripts/ci-cache-slot.mjs` 的 `resolveCacheRoot` 同源）：
+ * 依赖缓存槽的根目录（与 `scripts/ci/ci-cache-slot.mjs` 的 `resolveCacheRoot` 同源）：
  * `<store 卷>/ci-cache/<包名小写>`。Turbopack 需要它作为附加根，是因为接槽后作业的
  * `node_modules` 是**指向该根之下某个指纹键目录的 junction**（出项目根），不登记
  * Turbopack 会硬拒 `next build`（见 changelog.d/2081-* 与 issue #2521）。
@@ -45,6 +45,7 @@ function resolveCiSlotCacheRoot() {
       cwd: process.cwd(),
       encoding: "utf8",
     });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 出参：起不来 / 无输出时 stdout 实测为 null，@types/node 按非空标，保留空串兜底
     const store = String(res.stdout ?? "").trim();
     if (res.status !== 0 || !store) {
       return null;
@@ -94,6 +95,11 @@ const CSP = [
 
 /** @type {import("next").NextConfig} */
 const config = {
+  // Next 16 默认在 `next dev` 时往仓库根的 AGENTS.md 追加 `nextjs-agent-rules` 块
+  //（「给 AI 代理看的 Next 版本提示」）。本仓的 AGENTS.md 是协作规范本体且已入库，
+  // 这段追加只会制造一处与工作无关的稳定脏改动（每次 dev 都重写一遍，删了又回来，
+  // ISSUE #3669）⇒ 明确关闭，不让 Next 碰本仓的规范文件。
+  agentRules: false,
   // Tauri 桌面壳生产链路：输出 standalone（server.js + 裁剪版 node_modules），
   // 由 scripts/build-desktop.mjs 组装进 src-tauri/static，并以 Node sidecar 运行
   output: "standalone",
@@ -110,6 +116,25 @@ const config = {
   // lib/typescript.js API）；类型正确性仍由独立 `tsc --noEmit`（TS7 native）门禁保证。
   experimental: {
     useTypeScriptCli: false,
+    // ⚠️ Turbopack dev 持久缓存必须关闭（Next 16.4.3 默认 true，config-shared.js L293）。
+    // 为什么：16.4 起持久缓存跨会话存活 + turbopack-subscribe 的 hmrVersion 校验
+    // （上游 #97966 引入）组合出「整页 reload 死循环」——每次页面加载，主 client 入口
+    // 的 chunk list 首条消息是 restart，经 subscribeToClientHmrEvents 推送后
+    // clientHmrVersion 自增；页面随后发出的 turbopack-subscribe 携带构建时刻的旧版本，
+    // 服务端判 mismatch 直接回 RELOAD_PAGE（hot-reloader-turbopack.js 的
+    // turbopack-subscribe 分支），客户端静默 window.location.reload()。新页面自己的
+    // 路由请求又 bump 版本 → 下一轮订阅再次过期 → 无限循环。现场特征：整页每 ~2.3s
+    // 重载一次（dev server 每 cycle 打一条 GET /workspace 200 + ✓ Compiled）、浏览器
+    // console 零报错、无 CSP/ChunkLoadError，任务栏图标随 on_page_load 反复闪烁
+    // （CNB issue #3559「启动后界面不断切换」的真实根因）。
+    // 上游复现与记录：vercel/next.js #100267（16.4.1 起，16.3.8 不复现；
+    // 「plain restart on a cache the previous session had just built looped 3 of 3」
+    // —— 与本项目每次启动都命中上一次会话留下的 .next/dev/cache 的场景一致）。
+    // 官方记录的规避手段就是关掉它（issue 原文：the loop goes away if you …
+    // set experimental.turbopackFileSystemCacheForDev: false）。
+    // 代价：放弃 dev 暖启动的编译缓存（冷启动变慢）；等上游修复（跟踪 #100267）
+    // 后删掉这一行即可回退。
+    turbopackFileSystemCacheForDev: false,
     // #2542 第一格：Turbopack 插件运行时从默认的 childProcesses 换成 workerThreads
     // （Next 16.4.3 config-shared.d.ts L691：'workerThreads' | 'childProcesses' |
     // 'forceWorkerThreads'，默认 childProcesses）。动机是子进程冷启开销：每个插件
@@ -143,7 +168,7 @@ const config = {
   // 一条都没减掉（`./changelog.d/**`、`./src/**/*.test.ts`、`./src-tauri/**` 都写在
   // 下面，产物里对应的那些真文件一个没少）。把文件真正拿掉的是产物层显式删除
   // （`scripts/standalone-private-inputs.mjs`），判据是数产物的
-  // `scripts/check-standalone-contents.cjs` —— 别在这里补一条就当修好了，
+  // `scripts/gates/check-standalone-contents.cjs` —— 别在这里补一条就当修好了，
   // 下面 `.env` 那条注释记的是同一个坑。规范 §7.2。
   outputFileTracingExcludes: {
     "/**": [
@@ -156,7 +181,7 @@ const config = {
       // 注意 `.env` 这一项只是尽力而为：Next standalone 的环境加载是**无条件
       // 复制**的（实测写 `./.env` / `./**/.env` 都删不掉），所以真正的兜底是
       // `scripts/build-desktop.mjs` 的「分发卫生」显式删除 +
-      // `scripts/check-standalone-contents.cjs` 的产物层检查。
+      // `scripts/gates/check-standalone-contents.cjs` 的产物层检查。
       "./db.sqlite",
       "./db.sqlite-wal",
       "./db.sqlite-shm",
@@ -202,7 +227,7 @@ const config = {
   // `collect-build-traces`。真实原因是**重叠**：每路由清单已经自带整份目录（连这颗
   // glob 给不出的 `*.runtime.prod.js.map` 都在），所以它要补的东西原生追踪都补过了。
   //
-  // ⇒ 承重的是**产物层那两处**：`scripts/check-standalone-contents.cjs` 的
+  // ⇒ 承重的是**产物层那两处**：`scripts/gates/check-standalone-contents.cjs` 的
   // `REQUIRED_RUNTIME_FILES` 反向数产物，与 `tests/standalone-runtime-completeness.test.ts`
   // 的产物探针。别把「往这里补一条」当成修好了缺件，也别因为「摘掉它产物没变」就判
   // 那份数产物的检查失效 —— 承重的从来是数产物。定位手法见规范 launch-and-build.md §7.4。
@@ -216,6 +241,17 @@ const config = {
       // check-daily-attendance 一起红）。显式把该变体目录（含其私有 node_modules）收进产物。
       // 见仓库独立 issue（standalone 构建回归）。
       "./node_modules/.pnpm/styled-jsx@*/node_modules/**",
+      // 这两份是 RUNTIME_SCRIPTS 白名单里的运行期脚本，但住在 `scripts/devtools/` 下。
+      // Linux runner（路径用正斜杠）上，上面 outputFileTracingExcludes 的
+      // `./tools/**` / `./tests/**` 等条目按 contains（子串）语义匹配整条路径：
+      // "devtools/" 含子串 "tools/"、"affected-tests/" 含 "tests/" ⇒ 整棵子树被
+      // 排除出全项目追踪，白名单「保留在场文件」的前提落空，产物里静默缺件
+      // （ISSUE #4167：执行器宿主冒烟报 ERR_MODULE_NOT_FOUND）。Windows 路径用
+      // 反斜杠，子串匹配打不中，所以本地构建一直是绿的、测不出这一类缺件。
+      // 补法即本键的职责（§7.5.1：excludes 只做减法，缺件只能由 includes 加回）；
+      // 白名单里再有多少件搬进被误伤的子树，由冒烟那一步的逐件在场检查兜底。
+      "./scripts/devtools/env-preflight.mjs",
+      "./scripts/devtools/install-comfyapp-helper.ps1",
     ],
   },
   // ── dev 期回环两种拼法都要放行（Next 16 的 dev 资源跨源闸门）────────

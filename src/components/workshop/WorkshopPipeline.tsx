@@ -1,12 +1,8 @@
 "use client";
 
-// 工坊管线 —— 薄容器。
-//
-// 分层（见 docs/standards/16-shadcn-ui与表单校验.md §16.2「工具建界面，前端只写逻辑」）：
-//   • hooks/use-workshop-pipeline.ts  全部业务逻辑（状态/持久化/拉取/生图/派生进度）
-//   • stage-config.ts                 阶段常量与派生展示数据（纯函数，无 React）
-//   • Workshop{Header,StageNav,StageBody,Aside}.tsx  纯展示，只消费 controller
-//   • ui/                             shadcn 原语，归工具生成，业务侧不手改
+// 工坊管线 —— 薄容器（规范 16 §16.2「工具建界面，前端只写逻辑」分层）：
+// hooks/use-workshop-pipeline.ts 全部业务逻辑；stage-config.ts 阶段常量与派生
+//（纯函数）；Workshop{Header,StageNav,StageBody,Aside}.tsx 纯展示。
 // 本文件只做：取 controller → 组合视图 → 挂载弹层。
 
 import { AgentFab, AgentOverlay } from "~/components/workshop/AgentOverlay";
@@ -44,13 +40,21 @@ export function WorkshopPipeline() {
       shots: controller.shots,
     }),
     getMeta: () => controller.meta,
-    setMeta: (patch) => controller.setMeta((prev) => ({ ...prev, ...patch })),
-    setScriptMarkdown: (markdown) => controller.setScriptMarkdown(markdown),
+    setMeta: (patch) => {
+      controller.setMeta((prev) => ({ ...prev, ...patch }));
+    },
+    setScriptMarkdown: (markdown) => {
+      controller.setScriptMarkdown(markdown);
+    },
     getScriptMarkdown: () => controller.scriptMarkdown,
     getCharacters: () => controller.characters,
-    setCharacters: (characters) => controller.setCharacters(characters),
+    setCharacters: (characters) => {
+      controller.setCharacters(characters);
+    },
     getShots: () => controller.shots,
-    setShots: (shots) => controller.setShots(shots),
+    setShots: (shots) => {
+      controller.setShots(shots);
+    },
     // Phase 5：Agent 用当前项目镜头一键成片（走服务端成片管线，含逐镜视频 + 合成 + 回写）。
     renderFilm: () =>
       renderProjectFilm({
@@ -102,7 +106,9 @@ export function WorkshopPipeline() {
               clipDoneCount={controller.clipDoneCount}
               imageDoneCount={controller.imageDoneCount}
               missing={controller.missing}
-              onGoScript={() => controller.setTab("script")}
+              onGoScript={() => {
+                controller.setTab("script");
+              }}
               onVideoWorkflowChange={controller.setVideoWorkflowId}
               onWorkflowChange={controller.setWorkflowId}
               videoWorkflowId={controller.videoWorkflowId}

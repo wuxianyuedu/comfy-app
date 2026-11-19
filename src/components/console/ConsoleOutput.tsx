@@ -1,15 +1,9 @@
 "use client";
 
-// 控制台输出区（视图第③层，纯展示）。
-//
-// 为什么把「输出」单独一个文件：它是**要跟着输出长**的那一块，贴底、滚动、
-// 着色三件事都要在这一块里定；把它们和输入框、预设列表混在一个文件里，
-// 改「贴底」时得在一屏 300 行 JSX 里找那三行。
-//
-// 着色口径（与真实终端一致，且是**唯一**一处判据）：整体的 stdout 用
-// `text-ink-strong`，stderr 不单独染色（stderr 不等于错误 —— `pnpm` 的进度条、
-// Python 的 warning 全走 stderr，整段染红会让「真的报错」淹在红里）。
-// 真正的失败信号是最后那行 `[进程已退出，退出码 N]` 与结论条，它们由调用方给。
+// 控制台输出区（视图第③层，纯展示）：贴底、滚动、着色都在这一块里定。
+// 着色口径（与真实终端一致，唯一判据）：stdout 用 `text-ink-strong`，stderr
+// 不单独染色（stderr ≠ 错误——pnpm 进度条、Python warning 全走 stderr，整段
+// 染红会淹没真报错）；真正的失败信号是末行 `[进程已退出，退出码 N]` 与结论条。
 
 import { useRef } from "react";
 import { AlertTriangle, CheckCircle2, Terminal } from "lucide-react";
@@ -18,6 +12,7 @@ import { EmptyState } from "~/components/ui/empty-state";
 import { Spinner } from "~/components/ui/spinner";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { cn } from "~/lib/utils";
+import { TruncatedText } from "~/components/ui/truncated-text";
 
 export type ConsoleOutputProps = {
   /** 空态提示。 */
@@ -78,7 +73,7 @@ export function ConsoleOutput({
       {/* 结论条：跑完 / 被停才有。它是「这次到底成没成」的唯一出口
           （硬规则 4：失败路径必须有用户可见出口）—— 只看输出末尾几行
           是判不出成败的。 */}
-      {verdict && (
+      {verdict !== null && verdict !== "" && (
         <div
           className={cn(
             "flex shrink-0 items-center gap-2 border-t px-4 py-2 text-[12.5px]",
@@ -97,9 +92,7 @@ export function ConsoleOutput({
           ) : (
             <AlertTriangle size={14} />
           )}
-          <span className="min-w-0 truncate" title={verdict}>
-            {verdict}
-          </span>
+          <TruncatedText className="min-w-0 truncate">{verdict}</TruncatedText>
         </div>
       )}
     </div>

@@ -39,7 +39,7 @@ const { owners, findById } = vi.hoisted(() => {
   const owners = new Map<string, string>();
   return {
     owners,
-    findById: async (scope: string) => (owners.has(scope) ? { userId: owners.get(scope)! } : null),
+    findById: (scope: string) => (owners.has(scope) ? { userId: owners.get(scope)! } : null),
   };
 });
 vi.mock("~/lib/core/repository-project", () => ({
@@ -70,7 +70,7 @@ function put(
   const dir = path.join(root, scope, folder);
   fs.mkdirSync(dir, { recursive: true });
   const target = path.join(dir, name);
-  if (opts.asDir) {
+  if (opts.asDir === true) {
     fs.mkdirSync(target, { recursive: true });
   } else {
     fs.writeFileSync(target, "x");

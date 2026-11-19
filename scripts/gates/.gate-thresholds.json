@@ -1,0 +1,464 @@
+{
+  "$comment": "判据自身的承重数值账 —— 详见 scripts/gates/check-gate-thresholds.cjs 的文件头。方向逐条记，不按全局符号推：kind=threshold 的阻断阈值有大有小两种方向（R5 的 900 越大越松，孪生的 MIN_LINES 越大越严），kind=floor 的地板越小越危险，kind=report 只报不拦。",
+  "entries": [
+    {
+      "file": "scripts/gates/check-file-structure.cjs",
+      "const": "SPLIT_HINT_LINES",
+      "value": 900,
+      "unit": "行",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "group": "r5-split-lines",
+      "why": "R5 文件长度硬闸（AGENTS 硬规则 22）：超过即阻断，无基线、无 --update。"
+    },
+    {
+      "file": "scripts/gates/check-infra-file-size.cjs",
+      "const": "SPLIT_HINT_LINES",
+      "value": 900,
+      "unit": "行",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "group": "r5-split-lines",
+      "why": "基础设施层（scripts/tools）同维度硬闸，与 R5 同一把尺子（组内必须同数）。"
+    },
+    {
+      "file": "scripts/gates/check-function-length.cjs",
+      "const": "HINT_LINES",
+      "value": 400,
+      "unit": "行",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "函数长度硬闸（§12.13 / 硬规则 21）。注释里记着「降到 200 会让 40 个函数一起亮」——放宽容易，收紧是另一笔账。"
+    },
+    {
+      "file": "scripts/gates/check-rust-function-length.cjs",
+      "const": "HINT_LINES",
+      "value": 120,
+      "unit": "行",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "Rust 壳同维度阈值 120（硬规则 21）：与 TS 那 400 是两把不同的尺子，不可互相替代。"
+    },
+    {
+      "file": "scripts/gates/check-code-duplication.cjs",
+      "const": "MIN_LINES",
+      "value": 60,
+      "unit": "行",
+      "kind": "threshold",
+      "strictness": "larger-is-stricter",
+      "pair": "MIN_SIMILARITY",
+      "why": "孪生对判据的两个门槛之一（§12.12 / 硬规则 20）：两个数**同时**决定命中面，只动其中一个也算放宽。"
+    },
+    {
+      "file": "scripts/gates/check-code-duplication.cjs",
+      "const": "MIN_SIMILARITY",
+      "value": 0.75,
+      "unit": "比例",
+      "kind": "threshold",
+      "strictness": "larger-is-stricter",
+      "pair": "MIN_LINES",
+      "why": "逐行重合比例下限；注释记着「碰巧都用 zod 校验」这类结构相似只有 0.2~0.3。"
+    },
+    {
+      "file": "scripts/gates/check-comment-language.cjs",
+      "const": "ENGLISH_WORDS_THRESHOLD",
+      "value": 3,
+      "unit": "个连续英文词",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "中文注释硬判据（§12.4.6 / 硬规则 23）：达到这个数才算「英文写的」。"
+    },
+    {
+      "file": "scripts/gates/check-reformat-only.cjs",
+      "const": "LIMIT",
+      "value": 10,
+      "unit": "个纯格式化文件",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "「整文件重排混进功能提交」的触发下限：1 会变成噪声源，所以不在 1 阻断。"
+    },
+    {
+      "file": "scripts/gates/check-tracked-secrets.cjs",
+      "const": "MIN_VALUE_LEN",
+      "value": 24,
+      "unit": "个字符",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "赋值式凭据的值长下限（ISSUE #2157）：调大 = 更少的行算凭据 = 放宽这条硬闸，所以它进账而不是留在正则里。"
+    },
+    {
+      "file": "scripts/gates/check-tracked-secrets.cjs",
+      "const": "MIN_VALUE_CLASSES",
+      "value": 3,
+      "unit": "个字符类别",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "熵代理的类别数：全小写 + 连字符的 CI 占位值只有两类，靠这一道自然排除。调大它等于放行更多「看着像 key」的值 —— 是放宽，不是收紧。"
+    },
+    {
+      "file": "scripts/gates/check-tracked-secrets.cjs",
+      "const": "PEM_ENTITY_MIN",
+      "value": 64,
+      "unit": "个连续 base64 字符",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "PEM 头之后要跟这么长一段实体才算私钥 —— 这条限定是判据能存在的前提（redaction 的假夹具就是靠它不命中），调大它会把真私钥也放过去。"
+    },
+    {
+      "file": "scripts/gates/check-tracked-secrets.cjs",
+      "const": "MIN_URL_PASS_LEN",
+      "value": 6,
+      "unit": "个字符",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "URL 内嵌口令的下限：短于它的按 `user:pass@host` 那种教学写法放过。与上一条同族 —— 都是「命中面」的下限，越大越松。"
+    },
+    {
+      "file": "scripts/gates/check-ui-customizations.cjs",
+      "const": "MARKER_MAX_LINE",
+      "value": 3,
+      "unit": "行",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "ui/ 定制标记的行号窗口（§16.8）：改它动的是命中面，不是「严/松」那一维。"
+    },
+    {
+      "file": "scripts/gates/check-on-demand-duties.cjs",
+      "const": "MIN_DUTIES",
+      "value": 5,
+      "unit": "条登记",
+      "kind": "floor",
+      "strictness": "smaller-is-looser",
+      "why": "B 档地板：解析失灵时最容易退化成「0 行、全绿」。低于这个数就是「提取坏了」，不是「 duties 变少了」。"
+    },
+    {
+      "file": "scripts/gates/check-tsc-diagnostic-executors.cjs",
+      "const": "MIN_ENTRIES",
+      "value": 1,
+      "unit": "条执行者",
+      "kind": "floor",
+      "strictness": "smaller-is-looser",
+      "why": "同上：一条都没有 ⇒ 这条判据什么都没看到，必须红而不是绿。"
+    },
+    {
+      "file": "scripts/gates/check-bundle-budget.cjs",
+      "const": "MIN_CHUNKS",
+      "value": 20,
+      "unit": "个 chunk",
+      "kind": "floor",
+      "strictness": "smaller-is-looser",
+      "why": "产物 chunk 数地板：解析面缩小通常意味着构建没跑全，而不是「包变瘦了」。"
+    },
+    {
+      "file": "scripts/gates/check-test-inventory.cjs",
+      "const": "EXPECTED_TIERS",
+      "value": 2,
+      "unit": "个 project",
+      "kind": "floor",
+      "strictness": "smaller-is-looser",
+      "why": "收集面档位数量（node / DOM 两档）：少一档就是一片用例静默不进任何 project。"
+    },
+    {
+      "file": "scripts/gates/check-declaration-readers.cjs",
+      "const": "MIN_CARRIERS",
+      "value": 8,
+      "unit": "个承载文件",
+      "kind": "floor",
+      "strictness": "smaller-is-looser",
+      "why": "声明 ⇄ 读者判据的承载面地板，同族失效形态。"
+    },
+    {
+      "file": "scripts/gates/check-gate-thresholds.cjs",
+      "const": "MIN_ENTRIES",
+      "value": 15,
+      "unit": "条账",
+      "kind": "floor",
+      "strictness": "smaller-is-looser",
+      "why": "这条判据自己的自证下限：账被清空或判据文件被搬走时，「比对了 0 条」与「全部一致」长得一样。把它调小等于关掉那一判 —— 所以它也在自己的扫描面里，不设例外。"
+    },
+    {
+      "file": "scripts/gates/check-app-port-vectors.cjs",
+      "const": "PROBE_TIMEOUT_MS",
+      "value": 10000,
+      "unit": "毫秒（源码写 10_000）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "命令可用性探测预算：改它动的是「拿不到读数」那一档（不是红/绿），所以只报不拦。"
+    },
+    {
+      "file": "scripts/gates/check-app-port-vectors.cjs",
+      "const": "PY_TIMEOUT_MS",
+      "value": 30000,
+      "unit": "毫秒（源码写 30_000）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "Python 侧真跑预算，同上。话术里的秒数跟着它走。"
+    },
+    {
+      "file": "scripts/gates/check-test-sleep.cjs",
+      "const": "AWAIT_LOOKBEHIND",
+      "value": 24,
+      "unit": "字符",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "往回找 await/return 的前缀窗口：误报控制量，不是松紧阈值。"
+    },
+    {
+      "file": "scripts/gates/check-test-sleep.cjs",
+      "const": "WINDOW_MAX",
+      "value": 300,
+      "unit": "字符",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "new Promise( 之后的搜索窗口上限（防跨大段代码误配）。"
+    },
+    {
+      "file": "scripts/gates/check-test-waitfor.cjs",
+      "const": "WINDOW_MAX",
+      "value": 600,
+      "unit": "字符",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "站点回调的搜索窗口上限，同上一家。"
+    },
+    {
+      "file": "scripts/gates/check-void-floats.cjs",
+      "const": "RULE_VERSION",
+      "value": 1,
+      "unit": "版本戳",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "账本格式的版本戳，不是判红阈值；入账只为「别处新增承重数值时这格不装看不见」。"
+    },
+    {
+      "file": "scripts/gates/check-scripts-typecheck.cjs",
+      "const": "RULE_VERSION",
+      "value": 1,
+      "unit": "版本戳",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "脚本档棘轮账本（按 (文件, TS 码) 记账）的格式版本戳，不是判红阈值；入账只为「别处新增承重数值时这格不装看不见」。"
+    },
+    {
+      "file": "scripts/ship/ship-poll.mjs",
+      "const": "POLL_STALLED_MINUTES",
+      "value": 10,
+      "unit": "分钟",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "停摆读数的告警阈值（ISSUE #2901）：一格 `start` 且 `endTime<=startTime` 超过这么多分钟，就念「疑似 runner 失联」并给出口。它不是判据松紧 —— 退码与断流那一判（签名不变 + 没有一格在飞）一个字都不随它变；调它只决定「多早把『等 2h24m 兜底超时』这件事说出来」。与 DIAGNOSE_STALL_MINUTES 同数（都是 10）是刻意的：两个读者面说同一件事。"
+    },
+    {
+      "file": "scripts/ship/ship-poll.mjs",
+      "const": "POLL_STALL_MAX",
+      "value": 10,
+      "unit": "眼（每眼 20 秒）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "轮询的耐心预算，不是松紧量：调大它只是把误掐概率换小，「一格都没起来」与「一格跑很久」仍然分不开（ISSUE #2184 定的就是这一点，别拿这一格当出路）。真正的判据是「签名不变 且 inFlightStages() 为 0」。"
+    },
+    {
+      "file": "scripts/affected-tests/affected-launch-per-file-rerun.mjs",
+      "const": "PER_FILE_RERUN_MAX",
+      "value": 8,
+      "unit": "份",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "「第 2 遍分不出哪份是超时」时逐文件补跑的上限（ISSUE #2225）。不是松紧量：调它只决定要不要多花几十秒拿回判决粒度，任何一条断言的判定都不随它变 —— 调大也不会让真红变绿。"
+    },
+    {
+      "file": "scripts/affected-tests/affected-launch-scope-advice.mjs",
+      "const": "SCOPE_ADVICE_MIN",
+      "value": 60,
+      "unit": "份",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "受影响面大到某个份数才补一句「这一刀能不能拆小」的话术阈值（60 = 本仓库自己实测的分界，见该常量的文档）。纯话术门槛，不参与判定，也不参与退出码。"
+    },
+    {
+      "file": "scripts/affected-tests/run-affected-tests.mjs",
+      "const": "SAFE_ARGV_BUDGET",
+      "value": 24000,
+      "unit": "字符",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "一次 spawn 的命令行预算（Win32 上限 32767 留出余量）。它只决定「分几块跑」，不决定任何一条用例的判定 —— 调小是多次启动、调大是顶穿风险，两边都不放宽判据。"
+    },
+    {
+      "file": "scripts/ship/ship-pull-body.mjs",
+      "const": "PULL_BODY_LIMIT",
+      "value": 65535,
+      "unit": "字节",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "平台对 PR 正文的硬上限，取自它自己的拒绝原文（errcode 2000003「body length exceeded the limit 65,535」，ISSUE #2248）。外部的量纲、不是可调松紧的阈值：改它不改变任何一次判决，只会让本地那一格与平台不一致。"
+    },
+    {
+      "file": "scripts/ship/ship-pull-body.mjs",
+      "const": "DIFFSTAT_SAMPLE_MAX",
+      "value": 40,
+      "unit": "条（逐行明细样本）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "PR 正文里 diffstat 逐行明细的样本数。它只决定「摘要长多少行」，不决定任何一条判定；正文总长超上限时这个数还会自己减半（ISSUE #2248），所以它是起始值而不是保证值。"
+    },
+    {
+      "file": "scripts/ship/ship-pull-body.mjs",
+      "const": "FRAGMENT_BODY_BUDGET",
+      "value": 48000,
+      "unit": "字节（UTF-8）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "PR 正文里碎片原文（changelog.d 去掉首行后的内容）占的字节预算，ISSUE #3360。它只决定「贴几份完整碎片」：超预算按整份逐份贴满、装不下的省略并念出份数，不决定任何一条判定；调大只会让正文更接近平台硬上限，调小只是少贴几份。"
+    },
+    {
+      "file": "scripts/affected-tests/affected-launch-wallclock.mjs",
+      "const": "STAGE_WALL_CLOCK_MS",
+      "value": 25,
+      "unit": "分钟（源码字面写 `25 * 60 * 1000`，判据按字面取值）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "整次一份、跨块共享，只决定「还开不开下一遍 / 下一份补跑」，不改变任何一条断言的判定。取 25 分钟的两个夹逼读数：要盖得住首遍 + 一遍串行复跑的实测最坏形状（9.2 + 13.6 = 22.8 分钟），又必须明显低于平台那一刀（3240105ms）—— 界在掐点之上就等于这条判点从没机会说话（ISSUE #2364）。"
+    },
+    {
+      "file": "scripts/affected-tests/affected-launch-wallclock.mjs",
+      "const": "FIRST_PASS_TIMEOUT_RESERVE_MS",
+      "value": 30000,
+      "unit": "毫秒（源码字面写 `30_000`，判据按字面取值）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "第 1 遍被掐断之后给收尾（日志回吐 / 记账 / BeforeEnd）留的余量。不是判据：它只决定「提交给 vitest 的 timeout」与「还剩多少」之间差多少，两边都由 firstPassLimit() 一处算 —— 此前两处各算一遍，念出来的数比真实掐点还大（cnb-pl9-1k6b45aqm 的 stage-9）。留 0 会让掐断与收尾撞在同一个 deadline 上，那一屏只剩半句。"
+    },
+    {
+      "file": "scripts/affected-tests/affected-launch-wallclock.mjs",
+      "const": "PLATFORM_STAGE_KILL_MS",
+      "value": 3240000,
+      "unit": "毫秒（平台那一刀的名义落点）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "外部的量纲，不是本仓算出来的旋钮：平台给的原因原文 `timeout of 3240000ms exceeded`，回读该格 duration 是 3240105ms（build cnb-q1c-1k5ora37n）。只用来当上界。注意 .cnb.yml 那一格声明的 `timeout: 45m` **没有承重**（实测掐在 54.0 分钟），所以预算不从声明推、从这个读数推。"
+    },
+    {
+      "file": "scripts/affected-tests/affected-launch-wallclock.mjs",
+      "const": "SERIAL_RERUN_FACTOR",
+      "value": 2,
+      "unit": "倍（相对第 1 遍的真实墙钟）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "串行复跑的成本系数。不按「失败了几份」的比例估 —— 实测第 2 遍只跑 2/98 份却比首遍更慢（13.6m vs 9.2m = 1.48 倍，串行去掉了并发优势）。取 2 是往「更早落界」那一侧保守，估高只会少跑一遍，不会把还有希望的一遍拦掉。"
+    },
+    {
+      "file": "scripts/gates/check-daily-attendance.mjs",
+      "const": "DEFAULT_WINDOW_HOURS",
+      "value": 36,
+      "unit": "小时",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "「每天一次 + 半天余量」那把唯一的尺子（#2114 立的档）。放宽它 = 隔更久还算出勤；收紧 = 更容易报缺勤。**取数的覆盖也按它判**（ISSUE #2392）：这一处改小会同时缩短翻页要盖到的地平线，所以两个消费点（出勤档 / 每日失败立案）共用同一个数，不各写一份。"
+    },
+    {
+      "file": "scripts/gates/check-daily-attendance.mjs",
+      "const": "FETCH_PAGE_SIZE",
+      "value": 60,
+      "unit": "条（一页）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "翻页的单位，**不是窗口**：它只决定一次问平台要多少行。实测忙的一天 60 条只回到约 7.5 小时，所以「取最近 N 条」从来盖不住 36h —— 覆盖由 FETCH_MAX_PAGES 那侧翻页达成，改这里动的是往返次数，不是结论。"
+    },
+    {
+      "file": "scripts/gates/check-daily-attendance.mjs",
+      "const": "FETCH_MAX_PAGES",
+      "value": 8,
+      "unit": "页",
+      "kind": "threshold",
+      "strictness": "larger-is-stricter",
+      "why": "翻页上界。撞不到它才算「取满了窗口」；收紧到盖不住 36h，两个消费点就都落成「没结论」（不是绿、也不是缺勤）—— 那条形状是 ISSUE #2392 修的假缺勤的反面，所以按承重入账。"
+    },
+    {
+      "file": "scripts/gates/check-dependency-audit.mjs",
+      "const": "RULE_VERSION",
+      "value": 1,
+      "unit": "版本戳",
+      "kind": "report",
+      "why": "审计台账的规则版本号：收窄规则时 +1，让旧账与新规则可分（#2383 扩扫描根后入账，入账动作本身就是那次判断）。"
+    },
+    {
+      "file": "scripts/gates/check-deps-freshness.mjs",
+      "const": "REMOTE_REF_GRACE_MS",
+      "value": 7,
+      "unit": "天（源码字面写 `7 * 24 * 60 * 60 * 1000`，判据按字面取头数）",
+      "kind": "report",
+      "why": "远端引用陈旧的宽限窗：超过它才打 [未校验] 而不是判红（#2383 扩扫描根后入账，入账动作本身就是那次判断）。"
+    },
+    {
+      "file": "scripts/ci/ci-bundle-escalation-core.mjs",
+      "const": "BUNDLE_BASELINE_STALE_COMMITS",
+      "value": 15,
+      "unit": "次提交",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "预算账陈旧度门限（ISSUE #2639）：基线之后又过去这么多次提交、还没人认账或压回 ⇒ 每日失败立案在正文里点名「该有人出面」。放宽（调大）= 账挂更久才催；收紧 = 更容易催。业主改这一条即可。"
+    },
+    {
+      "file": "scripts/ci/ci-bundle-escalation-core.mjs",
+      "const": "BUNDLE_GATE_RED_STREAK_DAYS",
+      "value": 2,
+      "unit": "天",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "预算闸连续判红的天数门限（ISSUE #2639）：治的是「每次都被重新签过账、但同一格同类账反复出现」那一形（#2639 那六次）。放宽（调大）= 要连续红更久才催；与陈旧度各判各的（2 就是「昨天 + 今天」）。"
+    },
+    {
+      "file": "scripts/affected-tests/affected-launch-segments.mjs",
+      "const": "FIXED_CHUNK_FILES",
+      "value": 24,
+      "unit": "份",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "固定段单块的最大份数（ISSUE #2863）：fixed 段是静态大清单（实测 106 份），argv 预算装得下 ⇒ 只切一块，任何一份带超时指纹判决链都以整块为粒度（cnb-bo5-1k68vik3o 实测一份 30s 超时 ⇒ 整块进复跑链）。24 把复跑粒度降一个量级，代价是多几次 vitest 冷启。不是松紧量：调它不改变任何断言判定。"
+    },
+    {
+      "file": "scripts/gates/check-mirror-attendance.mjs",
+      "const": "DEFAULT_WINDOW_HOURS",
+      "value": 24,
+      "unit": "小时",
+      "kind": "threshold",
+      "strictness": "larger-is-looser",
+      "why": "镜像出勤的判据窗口（ISSUE #3046）。放宽它 = 更久以前的那次「已推 · 已派发」还算出勤；收紧 = 更容易报缺勤。它同时是取数翻页要盖到的地平线（沿用 check-daily-attendance.mjs 那个同名量的纪律：#2392 —— 没盖住窗口就落「没结论」，不落缺勤），所以两处消费共用这一个数、不各写一份。"
+    },
+    {
+      "file": "scripts/gates/check-mirror-attendance.mjs",
+      "const": "DEFAULT_DETAIL_LIMIT",
+      "value": 8,
+      "unit": "跑",
+      "kind": "threshold",
+      "strictness": "larger-is-stricter",
+      "why": "逐跑取正文的上界（与 check-daily-attendance.mjs 的 FETCH_MAX_PAGES 同族：它决定**读到几跑**，不是松紧本身）。收紧 ⇒ 读到的样本变小，而这一档的结论主语就是「读到的那几跑」（headline 明写「最近读的 N 跑里…、未逐跑读 M 跑」，正是为了不把「我没读」念成「它没推」，#2392 那一族）；放宽 ⇒ 更容易在历史里撞到一次 present。"
+    },
+    {
+      "file": "scripts/gates/check-file-structure.cjs",
+      "const": "PROXIMITY_WARN_LINES",
+      "value": 800,
+      "unit": "行",
+      "kind": "report",
+      "strictness": "n/a",
+      "group": "r5-proximity-lines",
+      "why": "R5 的临近拆分提醒线（#3473）：≥800 进「规划拆分」读数、不阻断 —— 调它动的是提醒时机，不是闸的松紧；与 infra 侧那份组内必须同数。"
+    },
+    {
+      "file": "scripts/gates/check-infra-file-size.cjs",
+      "const": "PROXIMITY_WARN_LINES",
+      "value": 800,
+      "unit": "行",
+      "kind": "report",
+      "strictness": "n/a",
+      "group": "r5-proximity-lines",
+      "why": "基础设施档同一把提醒尺（#3473），与 R5 侧组内同数；--staged 档只念本次暂存触碰的文件。"
+    }
+  ],
+  "$notCovered": {
+    "vitest-config-thresholds": "vitest.config.ts 里那一大片覆盖率门槛项由 scripts/ci/ci-coverage-report.mjs 从实测生成，再抄一份进这本账必然脱钩（规范 §11.7 那条棘轮有自己的账）。条数随文件变，所以这里也不写死它。",
+    "unnamed-inline-numbers": "写进表达式里的内联数值（如 check-theme-colors.cjs 判短写法 hex 的 `v.length <= 5`）本判据扫不到 —— 它只认顶层具名常量。把它们先提成具名常量属于改判据本身，另案；不写「约 N 处」这种数，因为没有任何一格会随它过期而红。",
+    "scan-root-not-cnb-yml": "扫描根自 #2383 起是「门禁链按名字调起的判定脚本（gate-chain-scripts.cjs，与 check-gate-executors.cjs 共用一份实现）∪ check-*.cjs 名字族兜底」。仍在链外的两类是**口径**不是漏：① 只在平台档（.cnb.yml）调起的 ci-*.mjs —— 门禁链口径刻意不读 .cnb.yml（AGENTS 硬规则 7，平台清单与本地钩子不是同一份），与执行者台账同一条边界；② 编排器与流程件（quality-gate.mjs / ship-*.mjs）—— 不是判据，没有自己「什么算违规」的数值。账上点名链外文件的条目照样逐判核（被点名的数不因扫描根而免检）。"
+  }
+}

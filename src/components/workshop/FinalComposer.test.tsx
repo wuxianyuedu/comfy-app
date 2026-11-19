@@ -1,15 +1,8 @@
-//
-// FinalComposer 行为测试：纯客户端合成 stage 的用户可见契约。
-//
-// 钉死的四组行为：
-//   ① 时间线的真实呈现 —— 每镜时长缺省 4s、片段计数、缺片段时的静帧占位提示；
-//   ② 导出合成清单 —— 产物字段与镜头顺序、onRendered 的完成记账；
-//   ③ 逐镜编辑 —— 时长输入的 1~20 钳取写回 onShotsChange；
-//   ④ 门禁与完成态 —— 空镜头列表的引导空态、rendered 的完成横幅。
-//
-// `downloadJson` 是唯一需要替身的边界（它真会触发浏览器下载），其余全走真组件。
+// FinalComposer 行为测试：纯客户端合成 stage 的用户可见契约。钉死四组：① 时间线真实呈现（每镜缺省 4s、片段计数、缺片段静帧占位提示）；
+// ② 导出合成清单（产物字段与镜头顺序、onRendered 完成记账）；③ 逐镜编辑（时长 1~20 钳取写回 onShotsChange）；④ 门禁与完成态。
+// `downloadJson` 是唯一需要替身的边界（真会触发浏览器下载），其余全走真组件。
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { FinalComposer } from "./FinalComposer";
@@ -36,7 +29,7 @@ function makeShot(patch: Partial<Shot> = {}): Shot {
 }
 
 function renderComposer(shots: Array<Shot>, rendered = false) {
-  const onShotsChange = vi.fn();
+  const onShotsChange = vi.fn<(shots: Array<Shot>) => void>();
   const onRendered = vi.fn();
   render(
     <FinalComposer
@@ -54,7 +47,9 @@ beforeEach(() => {
   vi.mocked(downloadJson).mockClear();
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+});
 
 describe("FinalComposer 时间线呈现", () => {
   it("空镜头列表：给引导空态而不是空面板", () => {
@@ -173,10 +168,7 @@ describe("FinalComposer 逐镜编辑", () => {
     await user.clear(input);
     await user.type(input, "99");
     /* 每次键入都会 updateShot；最后一条 patch 应是钳取后的 20。 */
-    const patches = vi
-      .mocked(onShotsChange)
-      /* SAFETY: 类型断言已复核 */
-      .mock.calls.map((call) => (call[0] as Array<Shot>)[0]!.duration);
+    const patches = onShotsChange.mock.calls.map((call) => call[0][0]?.duration);
     expect(patches.at(-1)).toBe(20);
   });
 
@@ -186,10 +178,36 @@ describe("FinalComposer 逐镜编辑", () => {
 
     const input = screen.getByDisplayValue("5");
     await user.clear(input);
-    const patches = vi
-      .mocked(onShotsChange)
-      /* SAFETY: 类型断言已复核 */
-      .mock.calls.map((call) => (call[0] as Array<Shot>)[0]!.duration);
+    const patches = onShotsChange.mock.calls.map((call) => call[0][0]?.duration);
     expect(patches.at(-1)).toBe(4);
+  });
+});
+
+describe("FinalComposer 串播预览（#4428）", () => {
+  it("无画面镜头也按 duration 推进：时间线走得完，不永久卡住", async () => {
+    vi.useFakeTimers();
+    try {
+      renderComposer([
+        makeShot({ id: "s1", index: 1, duration: 2, imageUrl: "/api/generated/1.png" }),
+        makeShot({ id: "s2", index: 2, duration: 3 }),
+      ]);
+      fireEvent.click(screen.getByRole("button", { name: /串播预览/ }));
+      expect(screen.getByText(/镜 01/)).toBeTruthy();
+
+      /* 第 1 镜有图无片段：按 2s 静帧推进。 */
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(screen.getByText(/镜 02/)).toBeTruthy();
+      expect(screen.getByText(/该镜头缺少画面，已跳过/)).toBeTruthy();
+
+      /* 第 2 镜无画面：修缺陷前两个推进源都缺席，播放器永久停在这里。 */
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.getByRole("button", { name: /串播预览/ })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

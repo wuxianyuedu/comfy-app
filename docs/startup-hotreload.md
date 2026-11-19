@@ -75,7 +75,7 @@
 
 原痛点：`--tauri-dev` 带参数在「双击 / 发给他人」场景不便；dev 入口原本只有 `.vbs`
 （2026-09-04 起该入口改为 `tools/start/start-tauri-dev.ps1`，双击关联见
-`scripts\enable-ps1-double-click.ps1`）。
+`scripts\devtools\enable-ps1-double-click.ps1`）。
 
 **曾经**的形态是「一份 Python launcher 源码打包出三个独立 exe」（prebuilt / dev /
 standalone），双击即用、无需记参数。**现在这三个 exe 都已删除** —— 它们带来的是
@@ -118,7 +118,7 @@ dev server HMR 自动生效，无需打扰；但上表第 2 列那批「**改完
   运行期被改过。dev server 重启后基线自然重置，重启后不再误报。
 - **触发**：运行时轮询（默认开启，可关）+ 快捷键 `Ctrl+Shift+U` 手动检测一次。
 - **形态**：应用内 toast（走项目 `ToastProvider`），安静、不抢焦点，不做系统级弹窗。
-- **开关**：设置页「外观主题 → 本地更新检测」卡片，纯前端偏好，存 `localStorage`。
+- **开关**：设置页「应用更新 → 本地更新检测」卡片，纯前端偏好，存 `localStorage`。
 - **实现**：后端路由 `src/app/api/update-check/route.ts`；前端网络收口
   `src/lib/update-check-client.ts`；控制器
   `src/components/update-check/hooks/use-update-check.ts`；挂载

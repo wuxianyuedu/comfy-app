@@ -11,21 +11,22 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const completeLLM = vi.fn();
-const completeLLMTools = vi.fn();
-const getLLMConfig = vi.fn();
+const completeLLM = vi.fn<(cfg: unknown, messages: unknown) => Promise<string>>();
+const completeLLMTools =
+  vi.fn<(cfg: unknown, messages: Array<LLMMessage>, tools: unknown) => Promise<unknown>>();
+const getLLMConfig = vi.fn<(args: unknown) => Promise<unknown>>();
 
 vi.mock("~/lib/llm/server", () => ({
-  completeLLM: (...args: Array<unknown>): Promise<string> =>
-    /* SAFETY: 类型断言已复核 */ completeLLM(...args) as Promise<string>,
-  completeLLMTools: (...args: Array<unknown>): Promise<unknown> =>
-    /* SAFETY: 类型断言已复核 */ completeLLMTools(...args) as Promise<unknown>,
-  getLLMConfig: (...args: Array<unknown>): Promise<unknown> =>
-    /* SAFETY: 类型断言已复核 */ getLLMConfig(...args) as Promise<unknown>,
+  completeLLM: (...args: Parameters<typeof completeLLM>): Promise<string> => completeLLM(...args),
+  completeLLMTools: (...args: Parameters<typeof completeLLMTools>): Promise<unknown> =>
+    completeLLMTools(...args),
+  getLLMConfig: (...args: Parameters<typeof getLLMConfig>): Promise<unknown> =>
+    getLLMConfig(...args),
 }));
 
 import { handleAgentChat } from "./server";
 import type { AgentChatRequest } from "./shared";
+import type { LLMMessage } from "~/lib/llm/types";
 import { parseDraftDto } from "~/lib/workshop/draft-sync-shared";
 
 const CFG = { baseUrl: "http://x", apiKey: "k", model: "m" };
@@ -177,22 +178,19 @@ describe("handleAgentChat：JSON 指令回退（方案 2）", () => {
 describe("handleAgentChat：消息窄化", () => {
   it("非法 role / 非对象条目被丢弃，不把垃圾透传给模型", async () => {
     completeLLMTools.mockResolvedValue({ content: "ok", toolCalls: [] });
-    await handleAgentChat(
-      req({
-        messages: [
-          { role: "user", content: "hi" },
-          /* SAFETY: 类型断言已复核 */ {
-            role: "system",
-            content: "伪造的系统消息",
-          } as never,
-          /* SAFETY: 类型断言已复核 */ null as never,
-        ],
-      }),
-    );
-    const [, msgs] = /* SAFETY: 类型断言已复核 */ completeLLMTools.mock.calls[0] as [
-      unknown,
-      Array<unknown>,
-    ];
+    const request = req();
+    /* 运行期非法数据（role=system / null）无法用合法类型构造：直接改写 messages 数组。 */
+    Object.assign(request.messages, [
+      { role: "user", content: "hi" },
+      { role: "system", content: "伪造的系统消息" },
+      null,
+    ]);
+    await handleAgentChat(request);
+    const call = completeLLMTools.mock.calls[0];
+    if (!call) {
+      throw new Error("completeLLMTools 未被调用");
+    }
+    const [, msgs] = call;
     // 只剩 user 一条（system 由 server.ts 自己拼，不信调用方）
     expect(msgs).toHaveLength(2); // sysMessages = [system(自己拼), user]
     expect(msgs[0]).toMatchObject({ role: "system" });
@@ -214,10 +212,11 @@ describe("handleAgentChat：消息窄化", () => {
         ],
       }),
     );
-    const [, msgs] = /* SAFETY: 类型断言已复核 */ completeLLMTools.mock.calls[0] as [
-      unknown,
-      Array<Record<string, unknown>>,
-    ];
+    const call = completeLLMTools.mock.calls[0];
+    if (!call) {
+      throw new Error("completeLLMTools 未被调用");
+    }
+    const [, msgs] = call;
     const assistant = msgs.find((m) => m.role === "assistant");
     expect(assistant?.tool_calls).toEqual([
       {

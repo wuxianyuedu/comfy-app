@@ -120,14 +120,17 @@ const REFUSAL_PHRASES: Partial<Record<TRPC_ERROR_CODE_KEY, string>> = {
   PAYLOAD_TOO_LARGE: "这份画布太大，服务端不收",
 };
 
+/** 这条码是否在「按码翻人话」的表里（表键本身就是合法的 tRPC 码）。 */
+function isRefusalCode(code: string): code is TRPC_ERROR_CODE_KEY {
+  return Object.hasOwn(REFUSAL_PHRASES, code);
+}
+
 /** 界面上那一句：能按码翻成人话的翻，翻不出的一律走已翻译的原文。 */
 function refusalDetail(action: string, e: unknown): string {
   const code = errorCode(e);
-  const phrase =
-    code === null
-      ? undefined
-      : REFUSAL_PHRASES[/* SAFETY: 类型断言已复核 */ code as TRPC_ERROR_CODE_KEY];
-  return phrase ? `${action}：${phrase}` : errorText(e, action);
+  const phrase = code === null || !isRefusalCode(code) ? undefined : REFUSAL_PHRASES[code];
+  /* 短语表里的词条都不是空串，缺省只看 undefined */
+  return phrase === undefined ? errorText(e, action) : `${action}：${phrase}`;
 }
 
 /**

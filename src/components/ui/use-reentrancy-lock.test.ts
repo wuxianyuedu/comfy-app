@@ -1,12 +1,7 @@
 // @vitest-environment jsdom
-/**
- * `~/components/ui/use-reentrancy-lock` 的契约（ISSUE #672 / 规范 16 §16.2.4.69）。
- *
- * 这条账的实质是「同一时刻只跑一件」的重入判据各写一份，而多数落点
- * **靠读 React state 判**（`if (busy) return;`）—— 那是异步的，同一次
- * 事件循环里的两次点击都读到 `false`。用例因此按**同步可见性**写：
- * `tryEnter` 在 `exit` 之前一律给 `false`，且与 React 的渲染节奏无关。
- */
+/** `~/components/ui/use-reentrancy-lock` 的契约（ISSUE #672 / 规范 16 §16.2.4.69）。实质是「同一时刻只跑一件」的重入判据各写一份，
+ * 而多数落点靠读 React state 判（`if (busy) return;`）—— 那是异步的，同一次事件循环里的两次点击都读到 `false`。
+ * 用例按**同步可见性**写：`tryEnter` 在 `exit` 之前一律给 `false`，与渲染节奏无关。 */
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { createReentrancyLock, useReentrancyLock } from "./use-reentrancy-lock";

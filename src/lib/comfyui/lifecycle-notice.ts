@@ -35,8 +35,5 @@ export function noteComfyLaunchSettled(ok: boolean): void {
 /** 用户点了「关闭 ComfyUI」。`ok` 为假 = 关不干净，但那同样是一次状态变化
  *  （状态行会从「关闭中…」落到别的结论上），所以两条分支都要通知。 */
 export function noteComfyStopRequested(ok: boolean): void {
-  noteComfyStateChange(
-    "stop",
-    ok ? "用户关闭了 ComfyUI" : "关闭命令已发送，实例仍在响应",
-  );
+  noteComfyStateChange("stop", ok ? "用户关闭了 ComfyUI" : "关闭命令已发送，实例仍在响应");
 }

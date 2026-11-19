@@ -2,6 +2,7 @@
 
 import React from "react";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { beginStaleRun } from "~/lib/stale-run";
 import { fetchLocalModels, fetchRemoteModels } from "~/lib/llm/model-catalog-client";
 import { useLLM } from "~/components/workshop/LLMContext";
@@ -11,7 +12,7 @@ import { parseChannelOption } from "~/lib/workshop/channel-options";
 function optionLabel(name: string, badge: string): React.ReactNode {
   return (
     <span className="flex w-full items-center">
-      <span className="min-w-0 flex-1 truncate">{name}</span>
+      <TruncatedText className="min-w-0 flex-1 truncate">{name}</TruncatedText>
       <span className="text-muted-foreground text-3xs ml-2 shrink-0">{badge}</span>
     </span>
   );
@@ -41,10 +42,10 @@ export function ExtractModelSelect({
   const probeStarted = React.useRef<Record<string, boolean>>({});
 
   React.useEffect(() => {
-    if (!selKey) {
+    if (selKey === "") {
       return;
     }
-    if (probeStarted.current[selKey]) {
+    if (probeStarted.current[selKey] === true) {
       return;
     }
     probeStarted.current[selKey] = true;
@@ -55,14 +56,16 @@ export function ExtractModelSelect({
     // 服务端会用它探测（而不是拿全局 Base URL 探，避免误报 fetch failed）。
     const probe = channel === "local" ? () => fetchLocalModels() : () => fetchRemoteModels(model);
     void probe().then((res) => {
-      guard.commit(() =>
+      guard.commit(() => {
         setAvailByKey((prev) => ({
           ...prev,
           [selKey]: res.ok ? { kind: "ok" } : { kind: "err", detail: res.detail },
-        })),
-      );
+        }));
+      });
     });
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [selKey, channel, model]);
 
   const options = React.useMemo(() => {

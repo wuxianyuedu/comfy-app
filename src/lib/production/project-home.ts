@@ -103,7 +103,8 @@ export type ProjectOverview = {
   imageDoneCount: number;
   /** 第一个未完成的阶段；全部完成时为 null。 */
   nextStage: ProductionStage | null;
-  /** 完成度 0..100（等权平均，与工坊 `computeProgressPct` 同口径）。 */
+  /** 完成度 0..100（与工坊 `computeProgressPct` 同一份公式，逐位一致——
+   *  帕里蒂由 `tests/production-progress-parity.test.ts` 钉住，#4025）。 */
   progressPct: number;
   /** 镜头口径的计数（主页状态卡直接显示）。 */
   shotCount: number;
@@ -141,7 +142,7 @@ export function deriveProjectOverview(
     stages: rows,
     doneCount,
     totalCount: rows.length,
-    progressPct: Math.round((doneCount / rows.length) * 100),
+    progressPct: workshopProgressPct(view),
     nextStage: next?.id ?? null,
     shotCount: view.shots.length,
     imageDoneCount: view.shots.filter((s) => s.hasImage).length,
@@ -150,6 +151,32 @@ export function deriveProjectOverview(
     hasScript: view.hasScript,
     filmRendered: view.filmRendered,
   };
+}
+
+/**
+ * 主页「内容完成度」——与工坊页顶同一份公式（#4025）。
+ *
+ * 此前这里是 `doneCount / 6` 的**二值**比例，与工坊 `computeStageRatios` 的
+ * **分数比例**（镜头按 `imageDoneCount/shotCount` 计、合成未完成给半分 0.5）
+ * 算出两个不同的百分数（2 镜完成 1 镜：58% vs 50%），旧注释却声称「同口径」。
+ * 现在按工坊同一公式在 lib 侧重算（lib 不得 import components，故此处是
+ * 同式重写而非直接调用；`tests/production-progress-parity.test.ts` 钉住两边
+ * 逐位一致，改任一侧都要同步另一侧）。
+ */
+function workshopProgressPct(view: ProductionRunView): number {
+  const shotCount = view.shots.length;
+  const imageDoneCount = view.shots.filter((s) => s.hasImage).length;
+  const clipDoneCount = view.shots.filter((s) => s.hasClip).length;
+  const ratios = {
+    script: view.hasScript ? 1 : 0,
+    character: view.characterCount > 0 ? 1 : 0,
+    storyboard: shotCount > 0 ? 1 : 0,
+    shots: shotCount > 0 ? imageDoneCount / shotCount : 0,
+    video: shotCount > 0 ? clipDoneCount / shotCount : 0,
+    render: view.filmRendered ? 1 : shotCount > 0 ? 0.5 : 0,
+  };
+  const sum = Object.values(ratios).reduce((acc, ratio) => acc + ratio, 0);
+  return Math.round((sum / PRODUCTION_STAGES.length) * 100);
 }
 
 /**

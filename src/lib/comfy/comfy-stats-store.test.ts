@@ -21,10 +21,8 @@ vi.mock("~/lib/comfy/comfy-stats-client", () => ({
 /* 进程退出事件的订阅回调（`subscribeComfyCrashes` 的替身）：jsdom 里没有
    `EventSource`，直接驱动 store 注册进来的那一个回调比造一条假连接确定。 */
 const crashListeners = vi.hoisted(
-  () =>
-    /* SAFETY: 类型断言已复核 */ [] as Array<
-      (s: { at: number; reason: string; seq: number; userStopped: boolean }) => void
-    >,
+  /* SAFETY: 类型断言已复核 */
+  () => [] as Array<(s: { at: number; reason: string; seq: number; userStopped: boolean }) => void>,
 );
 vi.mock("~/lib/comfy/comfy-liveness-client", () => ({
   subscribeComfyCrashes: (l: (typeof crashListeners)[number]) => {
@@ -38,12 +36,13 @@ vi.mock("~/lib/comfy/comfy-liveness-client", () => ({
   },
 }));
 
+const busyFlag = vi.hoisted(() => ({ value: false }));
+
 /* 「忙不忙」的单点也桩掉：本文件测的是系统指标持有者的行为，不是那条账的语义
    （它自己的用例在 comfy-busy-store.test.ts）。 */
 vi.mock("~/lib/comfy/comfy-busy-store", () => ({
   getComfyBusy: () => busyFlag.value,
 }));
-const busyFlag = vi.hoisted(() => ({ value: false }));
 
 /* 记录 startPollTimer 的调用与每次返回的「停表」函数：轮询该不该起、起几条、
    什么时候停，全看这里。 */
@@ -200,7 +199,7 @@ describe("快照与背压", () => {
             deferred.resolve = resolve;
           }),
       )
-      .mockImplementationOnce(async () => second);
+      .mockImplementationOnce(() => second);
 
     const firstCall = refreshComfyStats();
     const secondCall = refreshComfyStats();
@@ -281,6 +280,7 @@ describe("进程级判活（与 /api/comfy/queue 同口径）", () => {
 
     fetchMock.mockResolvedValue(ALIVE_BUT_NO_ANSWER);
     for (let i = 0; i < 5; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await refreshComfyStats();
     } // 远超离线阈值也不该翻
 
@@ -294,6 +294,7 @@ describe("进程级判活（与 /api/comfy/queue 同口径）", () => {
     subscribeComfyStats(noop);
     fetchMock.mockResolvedValue(ALIVE_BUT_NO_ANSWER);
     for (let i = 0; i < 5; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await refreshComfyStats();
     }
 

@@ -1,21 +1,7 @@
 /**
- * 「每天首次自证」从一档扩到三档（ISSUE #1282 的续）—— 规范 §11.8 / §13.5.4 / §13.5.12。
- *
- * 立案现场：平台流水线删掉（ISSUE #623）之后，`§13.5.3` 的欠账表里列着几条「**无自动执行者**」
- * 的判定档，其中两条此前唯一的执行者是文档里那句「按需手动跑」—— 而那句话没有任何东西在守：
- *   · **全量单测 + 覆盖率门槛**（`pnpm run test:coverage`，3000+ 用例 + 几十条按实测定的
- *     `coverage.thresholds`）—— 增量层（固定清单 + 受影响用例，2026-10-20 起归平台 PR 流水线的
- *     `受影响用例` 一格）**不跑覆盖率**，也判不了门槛；
- *   · **产物级护栏**（`pnpm run build` + `check-standalone-contents.cjs`）—— 它的失效形态
- *     恰好是「页面全 200、接口全 500」（硬规则 18）与「密钥明文进产物」（硬规则 17），
- *     两者都只在**真构建过一次**时才有结论。
- *
- * 判据分四头，缺一头这层就退化成一句好看的话：
- *   ① **档与档的区别是数据**：`FRESHNESS_TRACKS` 的三档都在，都按日历日判；
- *   ② **「改了就当天跑」**（`dirty` / `graceMs`）：三档「每天首次」的代价各不相同，
- *      十分钟量级的两档没必要每天都跑 —— 动过输入面就必须今天自证，没动过以宽限判；
- *   ③ **两条出路（`--skip` / `--dirty`）都留下能复核的事实**，占位理由一律被拦；
- *   ④ **接线在位**：各档的跑法脚本走同一份记账内核，钩子那一步真判了它们。
+ * 「每天首次自证」从一档扩到三档（ISSUE #1282 续）—— 规范 §11.8 / §13.5.4 / §13.5.12。立案现场：平台流水线删除（#623）后，
+ * 欠账表里两条「无自动执行者」的档只剩文档那句「按需手动跑」而无人守（全量单测+覆盖率门槛的增量层不跑覆盖率；产物级护栏只在真构建时才有结论）。
+ * 判据四头：① 三档都按日历日判；② 改了当天跑（`dirty`/`graceMs`）；③ 两条出路（`--skip`/`--dirty`）留可复核事实、占位理由一律拦；④ 接线在位。
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -23,11 +9,11 @@ import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { parseLedgerFlag } from "../scripts/daily-run.mjs";
+import { parseLedgerFlag } from "../scripts/affected-tests/daily-run.mjs";
 import {
   shouldRecord as artifactRecords,
   planRun as artifactPlan,
-} from "../scripts/artifact-run.mjs";
+} from "../scripts/build/artifact-run.mjs";
 import {
   FULL_SUITE_TIMEOUT_MS,
   RERUN_TIMEOUT_MS,
@@ -43,7 +29,7 @@ import {
   suiteRanking,
   suitePhaseTax,
   toTransportSafePath,
-} from "../scripts/full-suite-run.mjs";
+} from "../scripts/affected-tests/full-suite-run.mjs";
 import { abortedAdvice, classifyOutcome, hostUnsafeArgs } from "../scripts/launcher-core/shell.mjs";
 import {
   FRESHNESS_TRACKS,
@@ -53,13 +39,32 @@ import {
   freshnessVerdict,
   gitUser,
   gitUserCandidates,
-} from "../scripts/freshness-ledger.mjs";
-import { dirtySinceToday, runGate, trackScopes } from "../scripts/freshness-gate.mjs";
+} from "../scripts/freshness/freshness-ledger.mjs";
+import { dirtySinceToday, runGate, trackScopes } from "../scripts/freshness/freshness-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 function readText(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8");
+}
+
+/** package.json 的 scripts 段：`JSON.parse` 的 `any` 用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+function packageScripts(): Record<string, string> | undefined {
+  const parsed: unknown = JSON.parse(readText("package.json"));
+  if (typeof parsed !== "object" || parsed === null || !("scripts" in parsed)) {
+    return undefined;
+  }
+  const scripts: unknown = parsed.scripts;
+  if (typeof scripts !== "object" || scripts === null) {
+    return undefined;
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(scripts)) {
+    if (typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return out;
 }
 
 /** 一条写得全的记录（各条用例只改它要测的那一栏）。 */
@@ -74,13 +79,9 @@ const GOOD = freshnessRecord({
 const SAME_DAY = new Date("2026-10-09T06:00:00.000Z");
 
 /**
- * 「今天」与「两天前」两个时刻，都从 `SAME_DAY` **推算**而不是写死日历日。
- *
- * 判据比的是 `isSameLocalDay`（**本地**日），而 `SAME_DAY` 是一个 UTC 瞬时：
- * 写死 `"2026-10-08T23:30:00.000Z"` 在 UTC+8 机器上落成本地 10-09 07:30 ——
- * 那**就是今天**，「昨天的豁免」这条用例会因为换台机器而结论翻转。
- * 偏移 -48h 在任何时区都至少跨过一个本地日界，而 +3d 之内仍在那两档的 7 天宽限里。
- * （这一族是本仓库的老对手：判据与平台/机器绑定、在别处测不出来。）
+ * 「今天」与「两天前」都从 `SAME_DAY` **推算**而非写死日历日：判据比 `isSameLocalDay`（**本地**日），而 `SAME_DAY` 是
+ * UTC 瞬时 —— 写死 `2026-10-08T23:30:00.000Z` 在 UTC+8 落成本地 10-09 07:30，那**就是今天**，「昨天的豁免」会因换
+ * 台机器翻转结论。偏移 -48h 任何时区都跨过本地日界，+3d 仍在那两档的 7 天宽限里。
  */
 const TODAY_AT = SAME_DAY.toISOString();
 const TWO_DAYS_AGO = new Date(SAME_DAY.getTime() - 48 * 3_600_000).toISOString();
@@ -96,13 +97,9 @@ afterEach(() => {
 });
 
 /**
- * 判一档：省去各处重复的「平台就是它自己的 key」那句。
- *
- * ⚠️ 它判的是**本地拦截那一套口径**（`track: localTrack(kind)`，把 `ciStage` 清空）。
- * 三档从 2026-10-19 起都登记了平台侧执行者，按当前登记跑时「今天必须有凭证」那几支
- * 根本不会触发 —— 那样这里那批「⇒ 拦」的用例就会**因为走不到分支而恒绿**（恒绿与放行
- * 在断言上一模一样，但它是 §11.23 那一族「写了没有读者」的形状）。
- * 按当前登记判的那一档叫 `asRegistered()`，它判的正是「本地不拦」这一条新事实。
+ * 判一档：省去各处重复的「平台就是它自己的 key」那句。⚠️ 它判的是**本地拦截那一套口径**（`localTrack(kind)`，
+ * 清空 `ciStage`）。三档 2026-10-19 起都登记了平台侧执行者，按当前登记跑时「今天必须有凭证」那几支不会触发 ⇒
+ * 「⇒ 拦」的用例因走不到分支而恒绿（与放行在断言上一模一样，属 §11.23「写了没有读者」）。按当前登记判的叫 `asRegistered()`。
  */
 function gate(kind: string, ledger: Record<string, unknown>, extra = {}) {
   return runGate({
@@ -127,14 +124,9 @@ function asRegistered(kind: string, ledger: Record<string, unknown>, extra = {})
 }
 
 /**
- * 把一档读成「**平台侧没有执行者**」的那一档。
- *
- * 为什么判据需要它：三档从 2026-10-19 起都登记了 `ciStage`（执行者 = 每日那一格），
- * 于是「今天动过面而账停在改动之前 ⇒ 拦」「过期 ⇒ 拦」「豁免过期 ⇒ 拦」这几支
- * 在真实档上再也走不到。它们不是废弃分支 —— 任何一档将来失去平台侧执行者时，
- * 清空 `ciStage` 就回到本地拦截的口径，而那时唯一还能证明「这支是活的」的东西
- * 就是这几条用例。拿合成档打它，与拿合成空面档打「dirty 为空必须忽略 dirtySince」
- * 是同一条理由（见上面那格）：**判据要能对当前登记之外的那种形状继续响**。
+ * 把一档读成「**平台侧没有执行者**」的那一档。三档 2026-10-19 起都登记了 `ciStage` ⇒「今天动过面而账停在改动之前 /
+ * 过期 / 豁免过期」这几支在真实档上走不到；它们不是废弃分支 —— 某档将来失去平台侧执行者时清空 `ciStage` 就回到本地
+ * 拦截口径，那时唯一能证明「这支是活的」的就是这几条用例。拿合成档打它与「dirty 为空须忽略 dirtySince」同理：判据要能对当前登记之外的形状继续响。
  */
 function localTrack(kind: string) {
   return { ...freshnessTrack(kind), ciStage: "" };
@@ -154,19 +146,13 @@ describe("三档的登记形状（§11.8）", () => {
   });
 
   it("每一档都登记了主体（判据主体分权）：只认 pr / master，且主体=master 的执行者落在每日档", () => {
-    /* 主体答的是「**这一次是谁在判**」：`"pr"` = 本 PR（工作树那份账；PR 流水线与本地钩子
-     * 都是它），`"master"` = 主干（每日档在 master HEAD 上跑出来的那一份；机器分支
-     * `ci/freshness-ledger` 上是它的权威副本）。
-     *
-     * ⚠️ **主体=master ⇒ 那一档的账是主干的账** ⇒ 它的执行者必须落在**每日档**上：
-     * 主干的账由每天 00:00 那一跑刷新，PR 流水线里没有、也不该有它的执行者。
-     *
-     * 这一条只判**登记层**（主体记对了没）；「那一格在不在每日清单里」由
-     * `tests/no-platform-ci-config.test.ts` 的 `PR_MOVED_TO_DAILY` 那条与
-     * `tests/doc-check-hook-wiring.test.ts` 的「每日侧有『每日新鲜度账』这一步」那条判
-     * —— 三处各管一段，不在这里抄第二份清单解析器（§12.12 / §12.18）。 */
+    /* 主体答的是「**这一次是谁在判**」：`"pr"` = 本 PR（工作树那份账，PR 流水线与本地钩子都是它），`"master"` =
+     * 主干（每日档在 master HEAD 上跑出来的那一份；`ci/freshness-ledger` 是权威副本）。⚠️ 主体=master ⇒ 那一档的
+     * 账是主干的账 ⇒ 执行者必须落在**每日档**上（PR 流水线里没有、也不该有）。这一条只判**登记层**；「那一格在不在
+     * 每日清单里」由 `no-platform-ci-config.test.ts` 的 `PR_MOVED_TO_DAILY` 与 `doc-check-hook-wiring.test.ts`
+     * 的每日那一步判 —— 三处各管一段，不在这里抄第二份清单解析器（§12.12 / §12.18）。 */
     for (const [kind, track] of Object.entries(FRESHNESS_TRACKS)) {
-      const subject = String(track.subject ?? "").trim();
+      const subject = String(track.subject).trim();
       expect(
         ["pr", "master"],
         `${kind}.subject 写成了「${subject}」—— 只认 pr / master（主体答的是「这一次是谁在判」）`,
@@ -175,9 +161,7 @@ describe("三档的登记形状（§11.8）", () => {
         continue;
       }
       expect(
-        String(track.ciStage ?? "")
-          .trim()
-          .startsWith("每日"),
+        String(track.ciStage).trim().startsWith("每日"),
         `${kind}（主体=master）的执行者 ${track.ciStage} 不在每日档上 —— 主干的账只能由` +
           "每日那一跑刷新与判读",
       ).toBe(true);
@@ -272,13 +256,9 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
   });
 
   /**
-   * 全量 e2e 现在也吃输入面（钩子重构 4）。
-   *
-   * 立案现场：本检出最近 17 次提交里 6 次红，有 **3 次**是这条判据拦下的，而那三次改的
-   * 都不是 `src/`（一笔只动 `.githooks/` 的编排改动、两笔文档/账）。旧口径「按本地日历日、
-   * 不看面」让那些提交也欠一次全量 e2e 凭证，而**那次跑与不跑，被测链路的结论都不变** ——
-   * 「同一份 spec 在任何改动上都该绿」这句话对改动本身成立，对「这一笔是不是那个改动」不成立。
-   * 现在它与另两档同形：动了面 ⇒ 当天证；没动 ⇒ 7 天宽限。
+   * 全量 e2e 现在也吃输入面（钩子重构 4）。立案：最近 17 次提交里 6 次红，有 **3 次**是这条判据拦下的，而那三次
+   * 改的都不是 `src/`（一笔只动 `.githooks/` 的编排改动、两笔文档/账）。旧口径「按本地日历日、不看面」让那些提交也
+   * 欠一次全量 e2e 凭证，而那次跑与不跑被测链路结论都不变。现在与另两档同形：动了面 ⇒ 当天证；没动 ⇒ 7 天宽限。
    */
   it("`--ledger`（= `pnpm check:freshness`）把「欠不欠」一起打出来，但**不阻断**", () => {
     /* 这一档改过一次用途：它原本只印账面（时刻 / 距今 / 谁 + 命令）就 `continue`，
@@ -286,7 +266,7 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
      * **按今天这笔要提交的改动，我欠不欠一次自证** —— 而那正是这一眼要看的东西。
      * 现在它把同一份判决作为**待办**打出来（措辞是「欠」不是「✗」），退出码仍为 0：
      * 阻断的那一份在钩子里，两个读者各有各的出口（§13.5.12：别让一条读数线变成必经之路）。 */
-    const src = readText("scripts/freshness-gate.mjs");
+    const src = readText("scripts/freshness/freshness-gate.mjs");
     const ledgerBranch = /if \(ledgerOnly\) \{[\s\S]*?\n {4}\}/.exec(src)?.[0] ?? "";
     expect(ledgerBranch, "读不出 --ledger 那一支").not.toBe("");
     // ① 判决要进去（`result.exitCode` 或 `problems` 被读出来才算「欠不欠」）
@@ -297,7 +277,7 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
     expect(ledgerBranch).not.toContain("failed");
     // ③ 入口要在 package.json 里挂着，否则这句话没人能找到
     expect(readText("package.json")).toMatch(
-      /"check:freshness":\s*"node scripts\/freshness-gate\.mjs --ledger"/,
+      /"check:freshness":\s*"node scripts\/freshness\/freshness-gate\.mjs --ledger"/,
     );
   });
 
@@ -357,7 +337,7 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
     for (const miss of [
       "docs/standards/13-提交与-code-review.md",
       "tests/hook-affected-launch.test.ts",
-      "scripts/freshness-gate.mjs",
+      "scripts/freshness/freshness-gate.mjs",
       ".githooks/pre-commit",
       "AGENTS.md",
       "changelog.d/0-x.md",
@@ -422,25 +402,14 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
 });
 
 /**
- * `ciStage` —— 执行者挪到平台侧之后，本地那一层拦什么、不拦什么（2026-10-19 的口径）。
- *
- * 立案：用户那句是「新鲜度都不要本地跑，都 ci 跑」。这句话成立的前提是**平台侧真的有人跑**，
- * 而它一旦被满足，本地再要求「当天自证一次」就是同一条判据收两次钱，第二次的代价是
- * 10~25 分钟墙钟（本仓实测：组 C 中位 1108s、全量 e2e 十几分钟、`next build` 冷节点上
- * 比 118s 慢得多）。这一组判的四格缺一格都会漂：
- *   ① 三档都登记了 `ciStage`（否则「本地不拦」是一句没有主语的话）；
- *   ② 同一份「今天动过面而账停在改动之前」的输入，按当前登记判 ⇒ **不拦**；
- *      把 `ciStage` 清空 ⇒ 立刻回到拦（证明那条豁免是数据在起作用，不是判据被删）；
- *   ③ 豁免只豁免「今天必须有凭证」这一层：**账面的形状照旧判** —— 一条把 `trackedBy`
- *      抄混的记录仍然红。撤的是要求，不是让读数可以假；
- *   ④ 没有平台侧执行者时不许留空：`ciStage` 指向的那一格必须在
- *      `COMFYAPP_CI_DAILY_GATES` 里（那条判据写在 `tests/no-platform-ci-config.test.ts`，
- *      它判的是配置文件，这里只判判决）。
+ * `ciStage`（2026-10-19 口径）：用户那句「新鲜度都不要本地跑，都 ci 跑」成立的前提是平台侧真有人跑；一旦满足，本地再
+ * 要求「当天自证」就是同一判据收两次钱（10~25 分钟墙钟）。四格：① 三档都登记 `ciStage`；② 按当前登记判 ⇒ 不拦、清空即
+ * 回到拦；③ 豁免只免「今天必须有凭证」，账面形状照旧判；④ 那格必在 `COMFYAPP_CI_DAILY_GATES`（判据在 `no-platform-ci-config.test.ts`）。
  */
 describe("ciStage：执行者在平台侧的那些档（§11.8 / §13.5.23）", () => {
   it("① 三档都登记了非空 `ciStage`，且判决把它带回来给调用方", () => {
     for (const kind of ["e2e", "full", "artifact"]) {
-      const stage = String(freshnessTrack(kind).ciStage ?? "").trim();
+      const stage = String(freshnessTrack(kind).ciStage).trim();
       expect(stage, `${kind} 没有登记平台侧执行者`).toBeTruthy();
       expect(
         asRegistered(kind, {}, {}).ciStage,
@@ -586,7 +555,7 @@ describe("两条出路：豁免与非输入面（§11.8 豁免不是绕过）", 
     ).toBe(0);
   });
   it("**昨天的豁免不再为今天作证**（豁免是一条关于某一天的话）", () => {
-    /* 立案现场：`scripts/.e2e-freshness.json` 挂着一条 2026-10-08 的 `skippedReason`，
+    /* 立案现场：`scripts/freshness/.e2e-freshness.json` 挂着一条 2026-10-08 的 `skippedReason`，
      * 而判据在这一支从不比 `verifiedAt` —— 一条理由一旦写下就替未来每一天作证，
      * 「每日自证」在没人跑的日子里一直是绿的。写入侧本来就是把 `verifiedAt` 戳成
      * 「此刻」（`writeSkipRecord`），`--skip` 的用法原文也写着「**今天**不跑」。 */
@@ -655,7 +624,7 @@ describe("两条出路：豁免与非输入面（§11.8 豁免不是绕过）", 
 describe("跑法各自的命令核（§12.12：同形而不同命令）", () => {
   it("全量单测那一档跑的是 `test:coverage`（覆盖率门槛只在这一档判，§11.7）", () => {
     /* 并发是本档**自己**加的（`--maxWorkers`，ISSUE #1993 / §13.5.21）：
-     * 位置固定在第 3 个参数、值由 `scripts/ci-load.mjs` 按现场核数给 —— 这里钉形状，
+     * 位置固定在第 3 个参数、值由 `scripts/ci/ci-load.mjs` 按现场核数给 —— 这里钉形状，
      * 不钉数字（核数会变，钉死它等于把「按事实降载」又写回一个常数）。 */
     const args = suitePlan().args;
     expect(args.slice(0, 2)).toEqual(["run", "test:coverage"]);
@@ -665,17 +634,14 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
     expect(suiteRecords({ exitCode: 0, dryRun: false, extra: [] })).toBe(true);
     expect(SUITE_TRACK.run).toBe("pnpm run test:coverage");
     // 红的定性那句必须给出「跑过 ≠ 跑绿过」—— 记账语义靠它有据可依。
-    expect(readText("scripts/full-suite-run.mjs")).toContain("不记账");
+    expect(readText("scripts/affected-tests/full-suite-run.mjs")).toContain("不记账");
   });
 
   it("产物级护栏那一档走的是 `build` 那一行（两步都在里面，不另拼一遍）", () => {
     // 另拼一遍 = 两处各写一条产物链，漏掉「剥私有输入」那一步的表现是构建绿了、
     // 产物里那把刀却没跑（硬规则 17 判过的形态）。
     expect(artifactPlan().args).toEqual(["run", "build"]);
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(readText("package.json")) as {
-      scripts?: Record<string, string>;
-    };
+    const pkg = { scripts: packageScripts() };
     const build = pkg.scripts?.build ?? "";
     for (const step of [
       "next build",
@@ -716,9 +682,9 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
      * 下一个人会去查一条根本不存在的失败。所以它必须走 `notWholeTrackNotice`，
      * 且那条分支要显式判「退出码 0」（否则红的形态会误用话术、把真红说成没跑整档）。 */
     for (const rel of [
-      "scripts/e2e-run.mjs",
-      "scripts/full-suite-run.mjs",
-      "scripts/artifact-run.mjs",
+      "scripts/e2e/e2e-run.mjs",
+      "scripts/affected-tests/full-suite-run.mjs",
+      "scripts/build/artifact-run.mjs",
     ]) {
       const text = readText(rel);
       expect(text, `${rel} 没接上三档共用的话术`).toContain("notWholeTrackNotice");
@@ -747,12 +713,14 @@ describe("墙钟预算：**测量没发生**与「判据红」必须分得开（
   it("本档显式给了预算，且大于「实测 10 分钟量级」的并发余量", () => {
     expect(FULL_SUITE_TIMEOUT_MS).toBeGreaterThan(600_000);
     // 读的是**实际传给子进程**的那个数（不是只在常量上写一遍）。
-    expect(readText("scripts/full-suite-run.mjs")).toContain("timeoutMs: FULL_SUITE_TIMEOUT_MS");
+    expect(readText("scripts/affected-tests/full-suite-run.mjs")).toContain(
+      "timeoutMs: FULL_SUITE_TIMEOUT_MS",
+    );
   });
 
   it("产物档走同一条分流（同源同病：缺省 600_000）", () => {
-    expect(readText("scripts/artifact-run.mjs")).toContain("timeoutMs: ARTIFACT_TIMEOUT_MS");
-    expect(readText("scripts/artifact-run.mjs")).toContain("classifyOutcome");
+    expect(readText("scripts/build/artifact-run.mjs")).toContain("timeoutMs: ARTIFACT_TIMEOUT_MS");
+    expect(readText("scripts/build/artifact-run.mjs")).toContain("classifyOutcome");
   });
 
   it("两档的红话术**不一样**：被砍时不许说「未通过 … 不记账」那一套", () => {
@@ -766,28 +734,76 @@ describe("墙钟预算：**测量没发生**与「判据红」必须分得开（
     expect(advice).toContain("要修的不是用例");
     expect(advice).not.toContain("不记账");
   });
+
+  it("aborted 的话术按成因分三态：信号杀不许冒充「预算砍」（ISSUE #3332）", () => {
+    /* 立案现场：GA Daily run 42364056027 —— 子进程只活了 3m07s（30 分钟预算从未到），
+     * 死前 3793 条用例全绿、死在覆盖率报告收尾段，读数 `退出码 信号，error=无`。
+     * 旧话术对一切 aborted 都念「在墙钟预算处被砍」，把人引去「让开再跑一次」；
+     * 而真预算砍会带 error=ETIMEDOUT，源头上分得开。 */
+    const killed = abortedAdvice({
+      label: "全量单测 + 覆盖率",
+      timeoutMs: FULL_SUITE_TIMEOUT_MS,
+      signal: "SIGKILL",
+      errorCode: null,
+    });
+    expect(killed).toContain("被信号打死");
+    expect(killed).toContain("SIGKILL");
+    expect(killed).toContain("测量没发生");
+    expect(killed, "信号杀不是预算砍，不许念预算那一句").not.toContain("在墙钟预算处被砍");
+    expect(killed, "下一动作要对：先定性（内核证据）再复跑").toContain("dmesg");
+    // 真预算砍（ETIMEDOUT；spawnSync 超时会连 signal 一起给 SIGTERM）—— 原句保留
+    const timedOut = abortedAdvice({
+      label: "全量单测 + 覆盖率",
+      timeoutMs: FULL_SUITE_TIMEOUT_MS,
+      signal: "SIGTERM",
+      errorCode: "ETIMEDOUT",
+    });
+    expect(timedOut).toContain("在墙钟预算处被砍");
+    expect(timedOut).toContain("要修的不是用例");
+    // 第三态：命令压根没起来（ENOENT / EINVAL），也各有各的下一动作
+    const notStarted = abortedAdvice({
+      label: "全量单测 + 覆盖率",
+      timeoutMs: FULL_SUITE_TIMEOUT_MS,
+      errorCode: "ENOENT",
+    });
+    expect(notStarted).toContain("压根没起来");
+    expect(notStarted).not.toContain("在墙钟预算处被砍");
+  });
+
+  it("两个消费方把 signal / errorCode 原值带进话术，`runPnpmSync` 不再丢 signal", () => {
+    /* `runPnpmSync` 丢弃 `result.signal` 是 #3332 定性的直接障碍：读数只剩一个
+     * 「信号」字样，分不出 SIGTERM（预算砍）与 SIGKILL（外击）。 */
+    expect(readText("scripts/launcher-core/shell.mjs")).toContain("signal: result.signal ?? null");
+    for (const rel of [
+      "scripts/affected-tests/full-suite-run.mjs",
+      "scripts/build/artifact-run.mjs",
+    ]) {
+      const text = readText(rel);
+      expect(text, rel).toContain("signal: res.signal ?? null");
+      expect(text, rel).toContain("errorCode: res.error?.code ?? null");
+    }
+  });
 });
 
 describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("`package.json` 的入口真的走这层通道（否则记账这一步没有执行者）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(readText("package.json")) as {
-      scripts?: Record<string, string>;
-    };
+    const pkg = { scripts: packageScripts() };
     // 按**入口**判而不是按命令长得像什么：裸 `vitest run --coverage` 也能跑出同样的用例，
     // 只有走这一层才会记账 —— 而「账上有没有日期」正是这一档存在的全部意义。
-    expect(pkg.scripts?.["test:coverage:tracked"]).toContain("scripts/full-suite-run.mjs");
-    expect(pkg.scripts?.["build:tracked"]).toContain("scripts/artifact-run.mjs");
+    expect(pkg.scripts?.["test:coverage:tracked"]).toContain(
+      "scripts/affected-tests/full-suite-run.mjs",
+    );
+    expect(pkg.scripts?.["build:tracked"]).toContain("scripts/build/artifact-run.mjs");
     expect(pkg.scripts?.["test:coverage:dry"]).toContain("--dry-run");
     expect(pkg.scripts?.["build:tracked:dry"]).toContain("--dry-run");
   });
 
   it("钩子那一步真判了这几档（标签要点名 e2e，否则红出来会读成别人的事）", () => {
-    const steps = [...readText(".githooks/pre-commit").matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map(
-      (m) => ({ label: m[1] ?? "", cmd: m[2] ?? "" }),
-    );
-    const hit = steps.find((s) => s.cmd.includes("scripts/freshness-gate.mjs"));
-    expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
+    const steps = [
+      ...readText(".githooks/pre-commit").matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm),
+    ].map((m) => ({ label: m.groups?.label ?? "", cmd: m.groups?.cmd ?? "" }));
+    const hit = steps.find((s) => s.cmd.includes("scripts/freshness/freshness-gate.mjs"));
+    expect(hit?.cmd).toBe("node scripts/freshness/freshness-gate.mjs");
     expect(hit?.label).toContain("e2e");
     // 标签要说清它现在判的是哪几档 —— 只写其中一档时，另一档红出来会被读成别人的事。
     expect(hit?.label).toContain("自证");
@@ -797,36 +813,35 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     // 「绿才记」「豁免下限」「账的形状」三条各被一条用例钉住，抄一份就多一处能悄悄漂的地方，
     // 而漂了不会红（账面上仍是合法的日期 + 人名 + 命令）。
     for (const rel of [
-      "scripts/e2e-run.mjs",
-      "scripts/full-suite-run.mjs",
-      "scripts/artifact-run.mjs",
+      "scripts/e2e/e2e-run.mjs",
+      "scripts/affected-tests/full-suite-run.mjs",
+      "scripts/build/artifact-run.mjs",
     ]) {
       expect(readText(rel), rel).toContain("daily-run.mjs");
     }
-    expect(readText("scripts/daily-run.mjs")).toContain("writeSkipRecord");
+    expect(readText("scripts/affected-tests/daily-run.mjs")).toContain("writeSkipRecord");
     // `--dirty` 这条出路也必须走共用内核，不是各写一份。
-    expect(readText("scripts/daily-run.mjs")).toContain("--dirty");
+    expect(readText("scripts/affected-tests/daily-run.mjs")).toContain("--dirty");
   });
 
   it("记账要用的人名推导只有一份（`gitUser`，各档共用）", () => {
     // 各写一套时会出现「这一档记的是环境变量、那一档记的是 git config」，
     // 于是同一个人的几条记录名字不一样。
     expect(typeof gitUser("full")).toBe("string");
-    for (const rel of ["scripts/full-suite-run.mjs", "scripts/artifact-run.mjs"]) {
+    for (const rel of [
+      "scripts/affected-tests/full-suite-run.mjs",
+      "scripts/build/artifact-run.mjs",
+    ]) {
       expect(readText(rel), rel).toContain("gitUser");
     }
   });
 
   it("`who` 那栏在平台侧有人名可读 —— CNB 的内置变量排在 `git config` **之前**", () => {
-    /* 平台侧的工作区是只读检出，`git config user.name` 要么是空的、要么是检出器留下的
-     * 占位 —— 而 `who` 是这条账存在的意义（「谁、什么时候、按哪条命令」里那个「谁」），
-     * 记成占位等于没记。所以平台侧那三个内置变量（官方「默认环境变量」文档：
-     * `CNB_BUILD_USER_NICKNAME` / `CNB_BUILD_USER` / `CNB_COMMITTER`）必须排在
-     * `git config user.name` **之前**，而 `GIT_AUTHOR_NAME` 仍排在最前
-     * （它是「这一次是谁在写」这句话本身，不是从环境里猜的）。
-     *
-     * 用**注入环境**真跑一遍而不是读文本：候选清单是一份有序数组，而「顺序」正是
-     * 这条判据要守的东西 —— 只 grep 有没有那几个名字，顺序反了照样绿。 */
+    /* 平台侧的工作区是只读检出，`git config user.name` 要么空、要么是检出器留下的占位 —— 而 `who` 是这条账存在的
+     * 意义（「谁、什么时候、按哪条命令」里那个「谁」），记成占位等于没记。所以平台侧那三个内置变量
+     * （`CNB_BUILD_USER_NICKNAME` / `CNB_BUILD_USER` / `CNB_COMMITTER`）必须排在 `git config user.name` **之前**，
+     * 而 `GIT_AUTHOR_NAME` 仍排最前（它是「这一次是谁在写」本身，不是从环境里猜的）。用**注入环境**真跑一遍而不是
+     * 读文本：候选是一份有序数组，而「顺序」正是要守的东西 —— 只 grep 名字，顺序反了照样绿。 */
     const saved = { ...process.env };
     try {
       process.env.GIT_AUTHOR_NAME = "显式身份";
@@ -865,13 +880,10 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
   });
 
   it("**空行分隔的是「时刻与它的文件清单」**，不是两次提交（实测撞出来的一个静默失效）", () => {
-    /* `git log --format=%cI --name-only` 的实际输出是 `…T14:10:05+08:00\n\nsrc/a.ts\n…`：
-     * 空行夹在**时刻与文件之间**。第一版实现「遇空行就收段」，于是 `stamp` 会在文件行到达
-     * **之前**被清掉 —— 判据**每一次**都判成「今天没动过这一档」，而话术里一个字都不会提
-     * （正是 §13.5.12 那一族：判据在场、结论恒放行）。所以这里用**真 git 输出**的形状钉住它。
-     *
-     * 用临时仓库造现场（不是读本仓库的提交历史）：本仓库今天动过什么随提交变化，
-     * 拿它当夹具的用例会在某个平常的提交上自己变红。 */
+    /* `git log --format=%cI --name-only` 的实际输出里空行夹在**时刻与文件之间**。第一版实现「遇空行就收段」，于是
+     * `stamp` 会在文件行到达**之前**被清掉 —— 判据**每一次**都判成「今天没动过这一档」而话术一个字都不提
+     * （§13.5.12 那一族：判据在场、结论恒放行）。所以这里用**真 git 输出**的形状钉住它。用临时仓库造现场（不是读
+     * 本仓库提交历史）：本仓库今天动过什么随提交变化，拿它当夹具的用例会在某个平常提交上自己变红。 */
     const dir = mkdtempSync(join(tmpdir(), "dirty-since-"));
     workdir = dir;
     const git = (...args: Array<string>) =>
@@ -901,7 +913,7 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
       let stamp: string | null = null;
       let hit = false;
       const flush = () => {
-        if (hit && stamp) {
+        if (hit && stamp !== null && stamp !== "") {
           const at = new Date(stamp);
           if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest)) {
             earliest = at;
@@ -929,13 +941,10 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
       /* SAFETY: 类型断言已复核 */
       return earliest as Date | null;
     };
-    /* 两个提交各自命中自己那一行、各自解出一个时刻。
-     * ⚠️ **不许拿「两者相等」当判据**：夹具是背靠背两次提交，而 `%cI` 的精度是
-     * **秒** —— 它们只在**恰好落在同一秒**时才相等，跨秒就红（实测：全量并行档
-     * 偶发，隔离重跑必绿）。那量的是机器的调度，不是状态机。
-     * 这里改判**顺序关系**（`src/` 先提交 ⇒ 不晚于 `scripts/`），它不依赖两笔
-     * 提交是否同秒 —— 而「空行没把 stamp 提前清掉」这件事照样被钉住：
-     * 若 stamp 在文件行到达前被清，两边都会是 null。 */
+    /* 两个提交各自命中自己那一行、各自解出一个时刻。⚠️ **不许拿「两者相等」当判据**：夹具是背靠背两次提交，而 `%cI`
+     * 的精度是**秒** —— 只在**恰好同一秒**时才相等，跨秒就红（实测全量并行档偶发、隔离重跑必绿）。那量的是机器的
+     * 调度，不是状态机。改判**顺序关系**（`src/` 先提交 ⇒ 不晚于 `scripts/`），它不依赖是否同秒，而「空行没把 stamp
+     * 提前清掉」照样被钉住：若 stamp 在文件行到达前被清，两边都会是 null。 */
     const srcAt = sinceFor(["src/"]);
     const scriptsAt = sinceFor(["scripts/"]);
     expect(srcAt).not.toBeNull();
@@ -950,24 +959,19 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
      * 且不晚于现在。它同时是「实现没在真实仓库上抛异常」的执行者 —— 而这一路
      * （`git log --since` 的输出解析）是纯文本状态机，最容易在真实输出上崩。 */
     const at = dirtySinceToday(freshnessTrack("full"));
-    if (at !== null) {
-      expect(at instanceof Date).toBe(true);
-      expect(Number.isNaN(at.getTime())).toBe(false);
-      expect(at.getTime()).toBeLessThanOrEqual(Date.now());
-    }
+    /* 返回可空（今天没动过是合法态，本条不问「动没动过」）：非空时必是解得开的
+     * 过去时刻 —— 可空分支收进合取式，断言本体无条件跑（no-conditional-expect）。 */
+    expect(
+      at === null ||
+        (at instanceof Date && !Number.isNaN(at.getTime()) && at.getTime() <= Date.now()),
+    ).toBe(true);
   });
 });
 
 /**
- * 「每日单元测试」那一档在 CI 上打的**分文件耗时榜**。
- *
- * 这一组判的几件事各自都会静默失效，所以不能只测 happy path：
- *  · 读数参数被塞进 `extra` ⇒ `isWholeTrackRun` 把每一次跑判成「不是整档」⇒ 记账通道关掉；
- *  · junit 没落盘时打「0 份」而不是「没有」⇒ 与「跑完了但一份都没计时」逐字同形；
- *  · 明细不限行数 ⇒ 平台单次构建日志硬上限 102400 字节，会把**后面所有 stage** 的日志挤掉；
- *  · 拼出来的 `--outputFile.junit=…` 里带冒号 ⇒ PowerShell 宿主在第一个冒号处把它切成两个
- *    参数，剩下一截变成 vitest 的位置过滤器，整跑以「No test files found」收场
- *    （CI 首跑 `cnb-2in-1k589j0kp`，边界表在 `launcher-core/shell.mjs`）。
+ * 「每日单元测试」那一档在 CI 上打的**分文件耗时榜**（现场 `cnb-2in-1k589j0kp`）。这一组判的几件事各自都会静默失效：
+ * 读数参数被塞进 `extra` ⇒ `isWholeTrackRun` 把每次跑判成「不是整档」⇒ 记账通道关掉；明细不限行数 ⇒ 平台单次构建日志
+ * 上限 102400 字节，会把后续 stage 日志挤掉；`--outputFile.junit=…` 带冒号 ⇒ PowerShell 冒号处切开、余下成位置过滤器 ⇒「No test files found」。
  */
 describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）", () => {
   const JUNIT = [
@@ -1100,13 +1104,10 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
   });
 
   /* ── 第二份榜：断言之外的「装载税」 ─────────────────────────────
-   * vitest 收尾自报的相位分解，三次独立读数都是 `tests 46–51%, setup 23–24%,
-   * environment 13–14%, import 12–13%`（`cnb-b0l-1k59op66t` 2442.43s /
-   * `cnb-r0d-1k5a0348r` 2729.89s / 本地 1609.51s）—— 也就是这个 stage 只有一半时间在跑断言。
-   * ⚠️ 但那份税**不在 junit 里**：本地对账量到「Σ文件总时长 2793.6s = 断言 2724.0s + 69.6s」，
-   * 即 `<testsuite time>` 只含断言与文件内钩子，不含每文件各交一次的 environment / import。
-   * 所以这一组判的是「文件内可见的那一份税」，它**不回答**「那 50% 归谁」—— 话术里必须
-   * 这么写着，否则这份榜会被当成整笔税的分解。下面五格各钉一条会让它静默失效的边界。 */
+   * vitest 收尾自报的相位分解，三次读数都是 `tests 46–51%, setup 23–24%, environment 13–14%, import 12–13%`
+   * （`cnb-b0l-1k59op66t` 2442.43s / `cnb-r0d-1k5a0348r` 2729.89s / 本地 1609.51s）—— 这个 stage 只有一半时间在跑断言。
+   * ⚠️ 但那份税**不在 junit 里**：Σ文件总时长 2793.6s = 断言 2724.0s + 69.6s，`<testsuite time>` 不含每文件各交一次
+   * 的 environment / import。所以这组判「文件内可见的那一份税」，**不回答**「那 50% 归谁」—— 否则会被当成整笔税。 */
   const JUNIT_WITH_CASES = [
     '<?xml version="1.0" encoding="UTF-8" ?>',
     '<testsuites name="vitest tests">',
@@ -1181,11 +1182,9 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
 });
 
 /* ── 每日那一跑的「超时指纹 → 隔离复跑」（§13.6.4 / §13.6.4.1）────────────
- * 触发事实：`cnb-b0l-1k59op66t` —— `每日单元测试` 里只有
- * `tests/deps-freshness-gate.test.ts:166` 一条 `Test timed out in 30000ms`
- * （没有任何断言报错），就把后面的 `每日生产构建` / `每日浏览器安装` /
- * `每日全量E2E` 三格全部 skip。组 C 有这一档而每日档没有，
- * 于是「排不上调度」在每日链上长得和「代码回归了」一模一样。 */
+ * 触发事实：`cnb-b0l-1k59op66t` —— `每日单元测试` 里只有 `tests/deps-freshness-gate.test.ts:166` 一条
+ * `Test timed out in 30000ms`（无任何断言报错），就把后面的 `每日生产构建` / `每日浏览器安装` / `每日全量E2E`
+ * 三格全部 skip。组 C 有这一档而每日档没有 ⇒「排不上调度」在每日链上长得和「代码回归了」一模一样。 */
 describe("每日全量档的超时指纹复跑（档位表与组 C 同一条判决链）", () => {
   const TIMEOUT_JUNIT = [
     '<testsuites name="vitest tests" tests="2" failures="1">',
@@ -1263,7 +1262,7 @@ describe("每日全量档的超时指纹复跑（档位表与组 C 同一条判�
   });
 
   it("这一档不重写指纹清单：脚本里不许出现第二份超时正则", () => {
-    const src = readFileSync(path.join(ROOT, "scripts/full-suite-run.mjs"), "utf8");
+    const src = readFileSync(path.join(ROOT, "scripts/affected-tests/full-suite-run.mjs"), "utf8");
     expect(src).toContain('from "./affected-launch-load-retry.mjs"');
     /* 「Test timed out」在本仓只能是**被引用**的话术，不该在这里被重新定义成一份正则。
        两份清单漂移的代价由 `tests/hook-affected-launch.test.ts` 钉在组 C 那一侧。 */
@@ -1272,20 +1271,18 @@ describe("每日全量档的超时指纹复跑（档位表与组 C 同一条判�
 });
 
 /**
- * 覆盖率门槛：**判定是开关，登记是账**（ISSUE #2669，业主口径）。
- *
- * 背景读数：每日那一格天天红而用例一条没红，红在两维目录级门槛上
- * （`production 93.33 < 95` / `process 94.73 < 96`，`cnb-040-1k62o8qa1`）。
- * 那种红不产生可执行结论，还把整档凭证永久卡在「不记账」上。裁决是
- * 「整体覆盖率只上报，不要让 CI 红；该红的是 patch coverage；趋势用棘轮不当门禁」。
- *
- * 落地形态刻意选「开关 + 登记处不挪」，所以这几条判的都是**形状**：
- * 谁在念档位、旗标有没有漏进 `extra`（漏了就会「绿了不记账」——自我拆账）、
- * 以及门槛那份登记处还剩谁在算（没执行者就退回「写在配置里、没人判」那个原病）。
+ * 覆盖率门槛：**判定是开关，登记是账**（ISSUE #2669，业主口径）。背景读数：每日那格天天红而用例一条没红，红在两维
+ * 目录级门槛（`production 93.33 < 95` / `process 94.73 < 96`，`cnb-040-1k62o8qa1`），不产生可执行结论还把整档凭证
+ * 卡在「不记账」。裁决：整体覆盖率只上报、该红的是 patch coverage、趋势用棘轮不当门禁。所以只判形状：谁念档位、旗标有没有漏进 `extra`（漏了就「绿了不记账」）、门槛登记处还剩谁在算。
  */
 describe("覆盖率门槛的档位与接线（ISSUE #2669）", () => {
   it("默认档念的是「没判」并给出硬档出口，而不是冒充「已通过」", () => {
-    const gate = coverageGate([]);
+    /* 环境**显式给空**（ISSUE #4014）：`coverageGate()` 的第二参缺省是 `process.env`，
+     * 而 `pnpm check:all` 恰好会给 `test` 这一档的子进程注入 `COMFY_COVERAGE_ENFORCE=1`
+     * （`quality-gate.mjs` 的 `runGate`）—— 用缺省值判「默认档」，在它就是唯一执行者的
+     * 那一跑里恒红。这一格要的是「没旗标也没环境变量」的读数，那就把那件事写出来，
+     * 不靠「跑它的进程恰好没设它」这个隐含前提。 */
+    const gate = coverageGate([], {});
     expect(gate.enforce).toBe(false);
     expect(gate.reading).toContain("没判");
     /* 下一动作必须在话术里（§13.5.3.5.1）：只说「没判」而不说怎么判，
@@ -1314,7 +1311,7 @@ describe("覆盖率门槛的档位与接线（ISSUE #2669）", () => {
        比读源码里的 filter 一行更硬：拼错、漏摘、被 `planRun` 二次注入都当场红。 */
     const out = execFileSync(
       process.execPath,
-      ["scripts/full-suite-run.mjs", "--dry-run", "--enforce-coverage"],
+      ["scripts/affected-tests/full-suite-run.mjs", "--dry-run", "--enforce-coverage"],
       { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
     expect(out).toContain("覆盖率门槛：**判**");
@@ -1329,11 +1326,11 @@ describe("覆盖率门槛的档位与接线（ISSUE #2669）", () => {
        `quality-gate.mjs` 的 `test` 条目（`pnpm check:all`，本地按需完整验证档）。
        两处都只**引用**那一个判点（`coverageGate` / 同一个环境变量名），
        不在调用点重抄一份判定（§12.18）。 */
-    const suite = readFileSync(join(ROOT, "scripts/full-suite-run.mjs"), "utf8");
+    const suite = readFileSync(join(ROOT, "scripts/affected-tests/full-suite-run.mjs"), "utf8");
     expect(suite).toContain('env.COMFY_COVERAGE_ENFORCE === "1"');
     expect(suite).toContain('COMFY_COVERAGE_ENFORCE: "1"');
     expect(suite).toContain("env: gate.enforce");
-    const gate = readFileSync(join(ROOT, "scripts/quality-gate.mjs"), "utf8");
+    const gate = readFileSync(join(ROOT, "scripts/gates/quality-gate.mjs"), "utf8");
     expect(gate).toMatch(/key === "test"[\s\S]{0,120}COMFY_COVERAGE_ENFORCE: "1"/);
     /* 反向：CI 的清单里**不许**有人顺手把硬档写进 `.cnb.yml` —— 那会把本单修掉的
        那个红灯原样装回去。 */

@@ -1,21 +1,7 @@
 /**
  * canvas-render-chain — 项目画布（ProjectCanvas + canvas/*）的「渲染链路模块」规则。
- *
- * 为 CanvasNode（项目画布节点卡片）列出该节点卡片对应的本项目代码模块，
- * 并按节点 kind 区分链路：
- *  - 公共链路（所有节点）：ProjectCanvas.tsx（画布容器）、CanvasNode/CanvasNode.tsx
- *    （节点渲染器）、src/lib/project-canvas/canvas-types.ts（节点类型/元数据）、
- *    src/lib/project-canvas/canvas-store.ts（项目数据持久化）
- *  - workflow：追加 WorkflowNode.tsx + shared/workflow-io.ts
- *  - image / video：追加 ImageGenerationPanel.tsx +
- *    src/lib/project-canvas/canvas-helpers.ts（startGenerate / pollTask）
- *  - script：追加 src/lib/project-canvas/canvas-helpers.ts（runScript）
- *  - agent：追加 src/lib/agent/agentic.ts +
- *  例如 src/lib/project-canvas/canvas-helpers.ts
- *  - text / picture / movie：追加 ContentAssetNode.tsx
- *  - 未知 kind：只显示公共链路
- *
- * 供 DebugChainFooter 渲染调试标签：点击复制完整相对路径、title 显示完整路径。
+ * 公共链路所有节点共用（ProjectCanvas / CanvasNode / canvas-types / canvas-store）；各 kind 追加 workflow / image-video / script / agent / text-picture-movie 模块，未知 kind 只显示公共链路；
+ * 供 DebugChainFooter 渲染调试标签。
  */
 
 import type { RenderChainModule } from "../debug/DebugChainFooter";
@@ -84,13 +70,10 @@ const KIND_CHAIN: Record<NodeKind, Array<RenderChainModule>> = {
       label: "canvas-helpers",
     },
   ],
-  agent: [
-    { file: "src/lib/agent/agentic.ts", label: "agentic" },
-    {
-      file: "src/lib/project-canvas/canvas-helpers.ts",
-      label: "canvas-helpers",
-    },
-  ],
+  /* agent 节点当前无专属渲染链模块：原 agentic 链路已随 #4100 退役（零生产
+   * 消费方，Agent 对话改走 /api/agent/chat 的 server.ts 链路），这里留空 =
+   * 只显示公共链路。kind 本身保留（ResultCard 仍防御性处理 agent 分支）。 */
+  agent: [],
   text: [
     {
       file: "src/components/studio/project-canvas/ContentAssetNode.tsx",
@@ -117,7 +100,9 @@ const KIND_CHAIN: Record<NodeKind, Array<RenderChainModule>> = {
  */
 export function getProjectCanvasRenderChain(kind: NodeKind): Array<RenderChainModule> {
   const extra = KIND_CHAIN[kind];
-  if (!extra) {
+  /* 运行期防御：kind 可能来自外部 JSON，落在 NodeKind 联合之外时
+   * 索引结果为 undefined（类型层面不可达，但保留既有兜底语义）。 */
+  if (extra === undefined) {
     return [...CANVAS_COMMON];
   }
   return [...CANVAS_COMMON, ...extra];

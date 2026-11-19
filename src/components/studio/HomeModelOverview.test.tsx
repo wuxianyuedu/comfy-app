@@ -73,16 +73,12 @@ describe("HomeModelOverview", () => {
       state({ groups: [], total: 0, emptyFolderCount: 0, loading: true }),
     );
     const { container } = render(<HomeModelOverview />);
-    expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(
-      3,
-    );
+    expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(3);
     expect(screen.queryByText(/读不到|还没有同步到/)).toBeNull();
   });
 
   it("取数失败给一句说明，并保留去模型库这个出口（用户还能自己去重试）", () => {
-    overviewMock.mockReturnValue(
-      state({ groups: [], total: 0, error: "模型计数暂时读不到" }),
-    );
+    overviewMock.mockReturnValue(state({ groups: [], total: 0, error: "模型计数暂时读不到" }));
     render(<HomeModelOverview />);
     expect(screen.getByText("模型计数暂时读不到")).toBeTruthy();
     expect(screen.getByRole("link", { name: "去模型库" })).toBeTruthy();

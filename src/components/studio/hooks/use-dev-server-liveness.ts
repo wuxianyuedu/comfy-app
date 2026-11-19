@@ -1,41 +1,20 @@
 "use client";
 
-// ── dev server 存活与「真正重启」探测（底部状态栏重启标记的数据源）──────────
-//
-// 背景（ISSUE #236）：旧实现把「探测失败」当成 dev server 重启信号——
-// dev server 重启期间浏览器对该进程的所有 /api 请求会网络层失败；ComfyUI
-// 离线时请求仍能到达 dev server（应用层返回 online:false）。二者据此区分。
-// 但显示器关闭 / 浏览器后台节流 / 瞬时断网同样会导致网络层探测失败，被当成
-// 重启 → 误报。用户「没改代码、只关了显示器」就看到「重启」标记。
-//
-// 本实现改用「进程启动标识 bootId」作为**真正重启**的权威信号：
-//   - dev server 每次冷启动重新生成一个 bootId（见 src/lib/dev-server-id.ts）；
-//   - 只要进程没重启，bootId 恒定不变；
-//   - 进程重启后，前端恢复探测到的新 bootId 与上次不同 → 判定为真正重启。
-//
-// 判定规则：
-//   - 探测**成功**且 bootId 与上次记录**不同** → 真正重启，记录真正重启时间。
-//   - 探测**失败**（网络瞬时抖动 / 显示器关闭 / 后台节流）→ **不**判定重启，
-//     不更新重启时间（这是本次排除的误报）。
-//
-// 「断开」这一档同样要抗抖动：探活打的是应用服务自己的 HTTP，它在冷编译 /
-// 按需编译 / Turbopack 抢锁时都可能超过探活超时，单拍失败就被当成断开的话，
-// 界面会在服务好好的情况下翻成「应用服务已断开」并往消息中心写两条消息。
-// 连续失败到 {@link OFFLINE_CONFIRM_FAILURES} 拍才算断开（见该常量注释）。
-//
-// 持久化（sessionStorage）：
-//   - 保留上次 bootId 作为对比基准：dev server 真重启会触发整页刷新，刷新后
-//     React 内存里的基准丢失，靠 sessionStorage 恢复旧 bootId 才能识别出新
-//     bootId 变化。
-//   - 保留上次重启时间，刷新后标记仍可弱化展示「上次重启于 XX:XX」。
-//
-// 注意：本探测同时用于「dev server 是否在线」的展示——探测失败仍表示进程
-// 当前不可达（restarting 字段的旧语义被改掉，详情见下）。
+// ── dev server 存活与「真正重启」探测（底部状态栏重启标记的数据源）
+// 旧实现把「探测失败」当重启信号，但显示器关闭 / 后台节流 / 瞬时断网也会网络层失败 → 误报。
+// 现改用 bootId 作权威：进程每次冷启动重新生成，没重启则恒定；新 bootId ≠ 上次即真重启。
+// 断开侧抗抖动：连续失败到 OFFLINE_CONFIRM_FAILURES 拍才算（单拍超时可能只是冷编译 / Turbopack 抢锁）。
+// sessionStorage 保留上次 bootId 与重启时间：真重启会整页刷新、内存基准丢失，刷新后靠它识别。
+// 双信号（ISSUE #4146）：探活失败时再问壳一句「进程还在吗」（进程外信号，见
+// readAppServiceProcessAlive）——进程在 = 暂时无响应（软状态），进程没了 = 真断开。
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
-import { SERVER_ID_ENDPOINT } from "~/lib/log/panel-self-poll";
+import { devServerProbeUrl } from "~/lib/shell/dev-server-probe-url";
+import { isPlainRecord } from "~/lib/is-record";
+import { withTimeoutResult } from "~/lib/with-timeout";
+import { readAppServiceProcessAlive } from "~/lib/shell/desktop-shell-client";
 import {
   describeAppServiceExit,
   fetchAppServiceExit,
@@ -46,19 +25,22 @@ import {
 export const DEV_SERVER_PROBE_MS = 2000;
 
 /**
- * 「连续失败几拍才认断开」的门槛。
- *
- * **为什么单拍失败不算断开**：`/api/dev/server-id` 是应用服务自己的 HTTP，而它在
- * 冷编译、按需编译某条路由、或 Turbopack 抢锁时都可能超过探活的 2.5s 超时。
- * 把它当成「断开」，界面会在**服务好好的**情况下翻成「应用服务已断开」，并往
- * 消息中心写「已断开 + 已恢复」两条 —— 手验现场就是这一档：断开 15:00:28、
- * 恢复 15:00:31（持续 2 秒），而那两秒里服务一直在应答。
- *
- * 取 2 而不是「立即」也不是「很多拍」：两拍 ≈ 4 秒，真实断开（进程没了）在
- * 界面上晚 4 秒出现完全可以接受，而抖动一次就写两条消息不可以。
- *
- * **恢复侧不需要门槛**：抖动期间状态一直没翻成 offline，恢复边沿就不成立
- * （判据见 `~/lib/shell/app-service-message`），因此这里只管「认不认断开」。
+ * 单拍探测超时。取 5s（ISSUE #4140）：进程**真死**时 TCP 立即被拒（ECONNREFUSED），
+ * 探测瞬间失败、不走这条超时——真实断开的检出速度由「连拍门槛」决定，与这个数无关。
+ * 会走满超时的只有「进程活着但一时答不上」：ComfyUI 同进程启动、冷编译、按需编译、
+ * Turbopack 抢锁那类重载窗口。此前取 2.5s，这类窗口里连续两拍超时（≈4.5s）就把
+ * 好好地在跑的服务翻成「应用服务已断开」（用户现场：ComfyUI 启动的 70s 窗口内
+ * 「莫名」断开，服务与页面全程正常）；放宽到 5s 后，要**连续约 7s** 无应答才判断
+ * 开——那种程度的无响应本来就值得报。
+ */
+export const PROBE_TIMEOUT_MS = 5000;
+
+/**
+ * 「连续失败几拍才认断开」的门槛。单拍失败不算：`/api/dev/server-id` 是应用服务自己的
+ * HTTP，冷编译 / 按需编译 / Turbopack 抢锁时都可能超过单拍超时，当断开会让服务好好的
+ * 界面翻成「已断开」并写两条消息。取 2（两拍）；配合 {@link PROBE_TIMEOUT_MS}：
+ * 真死（立即拒连）约 2~4 秒判出，纯超时（进程活着、无应答）要连续约 7 秒。
+ * 恢复侧不需要门槛。
  */
 export const OFFLINE_CONFIRM_FAILURES = 2;
 
@@ -73,14 +55,8 @@ export type DevServerLiveness = {
   consecutiveFailures: number;
   /**
    * 当前是哪一次**启动**（launcher 的 runId）；null = 拿不到（纯手工 `pnpm dev`、
-   * 端点还没答过、或这次启动没走 launcher）。
-   *
-   * 消息中心按它把历史消息分成「每一次启动」一组（多次启动混在一起时用户分不清
-   * 哪几条属于同一次，见 `~/lib/shell/message-run-groups`）。
-   *
-   * **只在探测成功时更新**：断开的那一刻要的正是「正在死的这次启动」的 id（用来
-   * 给「应用服务已断开」那条盖戳），那时服务已经不在了、端点问不到，必须留住上
-   * 一次成功读到的值。
+   * 端点还没答过、或这次启动没走 launcher）。消息中心按它把历史消息分成「每一次启动」一组。
+   * **只在探测成功时更新**：断开那一刻要「正在死的这次启动」id，那时问不到，须留住上次值。
    */
   currentRunId: string | null;
   /** 本会话是否曾成功探到过该进程：用于把「还没探通」与「曾经通、现在断」
@@ -98,58 +74,48 @@ export type DevServerLiveness = {
   /** 最近一次探测成功（进程可达）。首帧（尚未探过）为 false。 */
   probeOk: boolean;
   /**
-   * **这一份进程对本次页面会话来说是新的**（冷启动或真重启）。
-   *
-   * 与 `restarting` 的差别是「10 秒高亮」与「本次会话的既成事实」：那个会自己
-   * 复位，这个不会。它存在的理由是有一条判据只有它能给 ——「进程换了一个」不能
-   * 看探活失败（显示器关闭 / 后台节流 / 瞬时断网都会失败，那几条已明确不判定
-   * 重启），而整页刷新**不算**进程换新（同一份进程还在服务，刷新只是页面重来）。
-   * 消息中心「应用服务已启动 / 已恢复」那条记录就建在它上面
-   * （见 `~/lib/shell/app-service-message`）。
+   * **进程外信号**：应用服务的进程还活着吗（ISSUE #4146，判据在壳侧
+   * `shell_launch::read_app_service_liveness`）。探活失败的那几拍由壳读编排器的
+   * 进程树名单逐个查 PID 得出，不经过被测进程——HTTP 探活永远带着它的忙闲，
+   * 「死没死」要问旁证人。三态：`true` = 进程在（一时答不上 → 软状态
+   * `unresponsive`）；`false` = 进程没了（真断开）；`null` = 没有进程外信号
+   * （浏览器 / 旧壳 / 手工 `pnpm dev`）→ 判据退回纯 HTTP 行为。探活成功即清回
+   * `null`：答案只在失败窗口里有意义，旧读数不该在下一轮判断里冒充现在的事实。
+   */
+  processAlive: boolean | null;
+  /**
+   * **这一份进程对本次页面会话来说是新的**（冷启动或真重启）。与 `restarting` 的差别：
+   * 那个 10 秒后自行复位，这个不会。「进程换了一个」不能看探活失败（显示器关闭 / 后台节流 /
+   * 断网都会失败），而整页刷新**不算**进程换新。消息中心「已启动 / 已恢复」建在它上面。
    */
   processIsNew: boolean;
   /**
    * **抗抖动后的可达性**（喂给 `deriveDevServerStatus` 的那个事实）。
-   *
-   * 与 `probeOk` 的差别正是 {@link OFFLINE_CONFIRM_FAILURES}：单拍失败不把
-   * 「可达」翻成 false，连续失败到门槛才算。状态栏与消息中心都只看这个值——
-   * 它们要回答的是「服务现在能不能应答」，而不是「刚才那一拍有没有应答」。
+   * 与 `probeOk` 的差别正是 `OFFLINE_CONFIRM_FAILURES`：单拍失败不翻 false，连续失败到门槛才算。
+   * 状态栏与消息中心都只看这个值 —— 它们要回答「服务现在能不能应答」，不是「刚才那一拍」。
    */
   reachable: boolean;
   /** true = 本会话刚检测到一次**真正**重启（bootId 变化），短暂高亮。 */
   restarting: boolean;
   /**
-   * 最近一次探测**得到了 404**：进程在应答，但这条探活端点不在编译图里
-   * （陈旧路由表 / Turbopack 会话级路由失效）。
-   *
-   * 与 `probeOk` 的区别是「答了、只是答的是 404」与「没答」——用户能做的动作
-   * 因此不同（重启应用 vs 等它起来），状态栏必须分得开，不能再拿一句
-   * 「连接中」把两者盖成同一件事。
+   * 最近一次探测**得到了 404**：进程在应答，但这条探活端点不在编译图里（陈旧路由表 /
+   * Turbopack 会话级路由失效）。与 `probeOk` 的区别是「答了、只是答的是 404」与「没答」——
+   * 用户能做的动作不同（重启应用 vs 等它起来），状态栏必须分得开。
    */
   routeTableStale: boolean;
   /**
-   * 这一拍之前有多少毫秒**没人在探测**（0 = 紧接上一拍）。
-   *
-   * 为什么要有这个事实：探活会因窗口失焦 / 页面进后台而**暂停**（本 hook 用
-   * `useInterval` 的默认值：`pauseWhenHidden` 为真，桌面壳里 `pauseWhenUnfocused`
-   * 也为真），后台被节流时定时器还可能拖到分钟级才响一次 —— 而停表期间墙钟照走。
-   * 于是「断开 → 恢复」两个时刻相减得到的时长里混着一段**根本没人问过服务**的
-   * 时间（那段时间服务可能早就恢复了，恢复点无从知道）。消息中心拿这个数把那段
-   * 如实标注出来，判据与文案在 `~/lib/shell/app-service-message` —— 本 hook 只供
-   * 事实，不替它决定「多长才值得说」。
+   * 这一拍之前有多少毫秒**没人在探测**（0 = 紧接上一拍）。探活会因窗口失焦 / 页面进后台而
+   * **暂停**（`useInterval` 默认 pauseWhenHidden），后台节流时定时器还可能拖到分钟级，
+   * 停表期间墙钟照走。消息中心拿这个数把「断开 → 恢复」里那段无人问过的时间如实标注。
    */
   unprobedMs: number;
 };
 
 /**
- * 「上一拍发起 → 这一拍发起」之间有多少毫秒是**没人在探测**的。
- *
- * 扣掉 {@link DEV_SERVER_PROBE_MS}：那一拍本来就该走完（正常连拍算下来是 0），
- * 只有**超出**它的部分才是停表。clamp 到 ≥0 —— 首拍（`previousStartedAt` 为 null）
- * 与时钟回拨都不该算出「负的停表时间」。
- *
- * 用**发起**时刻而不是应答时刻做基准：探活有 2.5s 超时，拿应答时刻算会把「这一拍
- * 慢了」记成停表（超时那一拍尤其明显）。发起时刻与定时器的节拍是同一件事。
+ * 「上一拍发起 → 这一拍发起」之间有多少毫秒是**没人在探测**的。扣掉 `DEV_SERVER_PROBE_MS`：
+ * 那一拍本来就该走完（正常连拍为 0），超出部分才是停表；clamp 到 ≥0，首拍与时钟回拨都不该为负。
+ * 用**发起**时刻而非应答时刻：探活有单拍超时（`PROBE_TIMEOUT_MS`），拿应答算会把
+ * 「这一拍慢了」记成停表。
  */
 export function probeGapMs(previousStartedAt: number | null, startedAt: number): number {
   if (previousStartedAt === null) {
@@ -192,27 +158,24 @@ type ProbeResult =
   /** 网络层失败 / 非 404 的错误码：服务此刻不可达（或答不上来）。 */
   | { bootId: null; ok: false; routeTableStale: false; runId: null };
 
-/** 单次探测：读取 dev server 当前 bootId 与**本次启动**的 runId。
- *
- *  三种结局分得开，因为用户能做的动作完全不同：
- *  · 2xx —— 进程在，拿到 bootId / runId；
- *  · **404** —— 进程在，但这条端点没进路由表（陈旧路由表 / Turbopack 会话级
- *    路由失效）。此时用户看到的是一个被正常服务的页面配一句「连接中」，
- *    而正解是重启应用，不是「再等等」；
- *  · 抛异常 / 其它错误码 —— 进程不可达。
- *
- *  404 单独成一档而不是并进「不可达」：`everOnline` 永远为假会让状态栏**永久**
- *  停在「连接中」，而那条文案在「页面明明被同一个进程服务着」时是一句谎话
- *  （见 `dev-server-status` 的 stale 分支）。
- *
- *  `runId` 与 `bootId` 在同一次请求里回来是刻意的（见 `server-id` 路由的说明）：
- *  分成两次请求会在「服务刚恢复」那一刻还拿着旧 runId，把恢复那条消息盖错启动组。 */
+/** 单次探测：读取 dev server 当前 bootId 与**本次启动**的 runId。三种结局分得开：
+ * 2xx = 进程在；404 = 进程在但端点没进路由表（陈旧路由表 / Turbopack 会话级失效，正解是重启）；
+ * 抛异常 / 其它错误码 = 不可达。404 单独成一档，否则 `everOnline` 永远为假、状态栏永久停在
+ * 「连接中」，而页面明明被同一进程服务着。`runId` 与 `bootId` 同一次请求回来是刻意的
+ *（分两次会在「服务刚恢复」那一刻拿着旧 runId，把恢复消息盖错启动组）。 */
 async function probeBootId(): Promise<ProbeResult> {
   try {
-    const res = await fetch(SERVER_ID_ENDPOINT, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(2500),
-    });
+    /* 探活地址走「另一张环回卡」（#4195）：页面在 localhost / ::1 上时改打
+     * 127.0.0.1，与业务轮询分桶连接池——重载窗口里自家慢请求占满同源池时，
+     * 探活不再跟着排队超时。其余形态（页面本就在 127.0.0.1 / 非环回来源 /
+     * 无 location）返回同源相对地址，行为与旧版一致。 */
+    const res = await fetch(
+      devServerProbeUrl(typeof location === "undefined" ? undefined : location.origin),
+      {
+        cache: "no-store",
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      },
+    );
     if (!res.ok) {
       return {
         ok: false,
@@ -221,11 +184,10 @@ async function probeBootId(): Promise<ProbeResult> {
         routeTableStale: res.status === 404,
       };
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      bootId?: unknown;
-      runId?: unknown;
-    };
+    /* 响应体是外部 JSON：先确认是对象再读 bootId / runId；非对象按「没有字段」
+     *  处理（与旧代码读到 undefined 的回包结局一致）。 */
+    const payload: unknown = await res.json();
+    const data: Record<string, unknown> = isPlainRecord(payload) ? payload : {};
     const runId = typeof data.runId === "string" && data.runId.length > 0 ? data.runId : null;
     return typeof data.bootId === "string" && data.bootId.length > 0
       ? { ok: true, bootId: data.bootId, runId }
@@ -249,6 +211,9 @@ export function useDevServerLiveness(): DevServerLiveness {
   /* 「探活端点本身 404」这一档。与连通性分开存：它描述的不是「服务在不在」，
    * 而是「服务答的这条路通不通」，两者可以同时为假、也可以各自单独为真。 */
   const [routeTableStale, setRouteTableStale] = useState(false);
+  /* 进程外信号（见 DevServerLiveness.processAlive）。初值 null = 还没问过 /
+   * 没有这条通道；探活成功即清回 null。 */
+  const [processAlive, setProcessAlive] = useState<boolean | null>(null);
   const [everOnline, setEverOnline] = useState(false);
   /* 「这份进程对本次页面会话来说是新的」（见 `DevServerLiveness.processIsNew`）。
    * 初值 false：首帧还没探过，谈不上新旧。 */
@@ -284,6 +249,25 @@ export function useDevServerLiveness(): DevServerLiveness {
    * （规范 16 §16.2.4.15）。 */
   const stoppedRef = useRef(false);
   const probe = useCallback(async () => {
+    /* 问壳「进程还在吗」（ISSUE #4146 / #4151，判据在壳侧：编排器会话名单或
+     * 它持有的 sidecar 句柄）。
+     * 每个失败拍都问：IPC 是读一份小文件 + 查几个 PID，毫秒级；而失败窗口正是
+     * 进程状态可能变化（死 / 被重启）的时段，不去重。答案只在本拍之后、恢复
+     * 之前被消费。超时走 withTimeoutResult 的统一出口（超时回 null = 「这一拍
+     * 没问到」），壳拿不到（浏览器 / 旧壳 / 两档都答不上）也是 null——判据按
+     * 「没有进程外信号」退回原行为，一次也不编答案。 */
+    const askShellWhetherProcessAlive = async (): Promise<void> => {
+      try {
+        const answer = await withTimeoutResult(readAppServiceProcessAlive(), 2500, null);
+        if (!stoppedRef.current) {
+          setProcessAlive(answer);
+        }
+      } catch {
+        if (!stoppedRef.current) {
+          setProcessAlive(null);
+        }
+      }
+    };
     /* 首次探测前补读持久化的上次 bootId，作为真正重启的对比基准。
      * （hydrate 阶段 sessionStorage 读不到，此处手动恢复。） */
     lastBootIdRef.current ??= readSessionString(LAST_BOOT_ID_KEY);
@@ -304,6 +288,13 @@ export function useDevServerLiveness(): DevServerLiveness {
     setConsecutiveFailures(result.ok ? 0 : (n) => n + 1);
     if (result.ok) {
       setEverOnline(true);
+    }
+    /* 进程外信号：失败才需要旁证人（成功那一拍进程必然活着，把旧答案清掉，
+     * 免得它在之后的判断里冒充现在的事实）。 */
+    if (result.ok) {
+      setProcessAlive(null);
+    } else {
+      void askShellWhetherProcessAlive();
     }
     /* 启动标识只认成功那一拍：与 `setProbeOk` 同一批落，于是「服务刚恢复」的
      * 下一个渲染里拿到的已经是**新一次启动**的 runId —— 恢复那条消息因此盖在
@@ -344,12 +335,9 @@ export function useDevServerLiveness(): DevServerLiveness {
       lastBootIdRef.current = bootId;
       writeSession(LAST_BOOT_ID_KEY, bootId);
 
-      /* 就这个 bootId 取一次「上一次为什么结束」（ISSUE #1692）。放在成功探测
-       * 之后是必然的：探活走的正是应用服务自己的 HTTP，服务不在时这条端点也
-       * 不通——记录只能在**它恢复应答之后**读回。
-       *
-       * 每个 bootId 只取一次：轮询 2s 一拍，不按 bootId 去重等于每拍都打一次
-       * 这个端点，而答案在整个进程生命周期里不会变。 */
+      /* 就这个 bootId 取一次「上一次为什么结束」（ISSUE #1692）。放在成功探测之后是必然的：
+       * 探活走的正是应用服务自己的 HTTP，服务不在时这条端点也不通 —— 记录只能在它恢复应答后读回。
+       * 每个 bootId 只取一次：轮询 2s 一拍，不去重等于每拍都打一次，而答案整个进程生命周期不变。 */
       if (exitFetchedForBootIdRef.current !== bootId) {
         exitFetchedForBootIdRef.current = bootId;
         const probe = await fetchAppServiceExit();
@@ -399,6 +387,7 @@ export function useDevServerLiveness(): DevServerLiveness {
     lastExitAt,
     probeOk,
     routeTableStale,
+    processAlive,
     /* 抗抖动后的可达性：还没到门槛的失败仍算可达（单拍抖动不是断开）。
      * `consecutiveFailures` 达门槛那一刻这一项翻 false，状态栏与消息中心
      * 随之各记一条（断开 / 恢复），而抖动期间它们什么都不记。 */

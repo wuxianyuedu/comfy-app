@@ -1,14 +1,8 @@
 "use client";
 
 /**
- * 启动日志正文的 ANSI 着色渲染（`log/services/*-runtime.log` 里落的是子进程的
- * 原始输出，含 SGR 颜色序列）。
- *
- * 为什么单独立一件：它是「样式键 → class」的**纯映射**，与任何业务无关；此前
- * 它嵌在设置页的展示原语集合（`SettingsPrimitives`）里，于是「运行日志框」
- * 这个跨屏共用的部件反过来依赖设置页的模块。搬到 logs 这一侧之后，
- * `RuntimeLogBox`（设置页三段 + 侧栏 ComfyUI 页共用）只依赖本模块。
- *
+ * 启动日志正文的 ANSI 着色渲染（落盘的是子进程原始输出，含 SGR 颜色序列）。它是「样式键 → class」
+ * 的纯映射；此前嵌在设置页展示原语里，导致跨屏共用的 `RuntimeLogBox` 反向依赖设置页模块。
  * 未映射的样式键回退默认色：新增键不会渲染成透明文本。
  */
 import type { AnsiSegment, AnsiStyleKey } from "~/lib/log/log-ansi";

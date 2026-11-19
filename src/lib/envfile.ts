@@ -29,10 +29,11 @@ export function readEnvVar(key: string): string | null {
     const text = fs.readFileSync(fullPath, "utf8");
 
     for (const line of text.split("\n")) {
-      const match = /^\s*([\w.-]+)\s*=\s*(.*?)\s*$/.exec(line);
+      const match = /^\s*(?<key>[\w.-]+)\s*=\s*(?<value>.*?)\s*$/.exec(line);
 
-      if (match?.[1] === key) {
-        let value = match[2]!;
+      const groups = match?.groups;
+      if (groups?.key === key && groups.value !== undefined) {
+        let value = groups.value;
 
         if (
           (value.startsWith('"') && value.endsWith('"')) ||

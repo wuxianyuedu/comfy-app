@@ -52,7 +52,7 @@ const appOrigin = `http://localhost:${appPort}`;
  * start」上暴露，而平台侧 E2E 正是那一档。
  *
  * 解析这件事的判据不在这里（它在 `src/lib/process/python-*` + `whichCommand`），
- * 本文件只**读** `scripts/e2e-run.mjs` 起 Playwright 之前算好的那份判决 —— 同
+ * 本文件只**读** `scripts/e2e/e2e-run.mjs` 起 Playwright 之前算好的那份判决 —— 同
  * `globalSetup` 读 pre-flight 端口结论的口径（ISSUE #1766）。读不到时退回裸名字：
  * 那一格是「不知道」而不是「没有」，别把手工 `pnpm exec playwright test` 弄崩。 */
 const pythonPreflight = decodePythonPreflight(process.env[PYTHON_PREFLIGHT_ENV_KEY]);
@@ -89,13 +89,13 @@ if (pythonPreflight?.interpreter && executorEnv[COMFY_CLI_PYTHON_KEY]) {
  *
  * 所以判据改成「**跑生产构建时并发按现场核数算，且不高于 2**」：
  *
- *   · 核数是**事实**（`CNB_CPUS` → `os.availableParallelism()`，与 `scripts/ci-load.mjs`
+ *   · 核数是**事实**（`CNB_CPUS` → `os.availableParallelism()`，与 `scripts/ci/ci-load.mjs`
  *     同一条口径，唯一出处不在这里）—— 小机器上不该开 2；
  *   · 上界 2 是**实测档**（#1834 的同一批读数：4 仍有争用形态的红）—— 大机器上不该
  *     因为核多就铺开，e2e 的用例里有大量**真起子进程**的环节（假 comfy-cli、Next 的
  *     服务端执行器），超订的代价是「等子进程」而不是「等 CPU」。
  *
- * 与 `.cnb.yml` 里 `生产构建` 那一格的 `scripts/ci-load.mjs` 是同一条取向（#1993）：
+ * 与 `.cnb.yml` 里 `生产构建` 那一格的 `scripts/ci/ci-load.mjs` 是同一条取向（#1993）：
  * **降负载的杠杆是并发，不是预算**。`timeout: 60_000` 一个字不动。
  *
  * 取 `cpus - 1` 而不是 `cpus` 是 Playwright 自己的默认算法，这里沿用 —— 把那一块
@@ -111,7 +111,8 @@ const COLD_COMPILE_WORKERS = 2;
  * 交给 webServer 起，在那一档上必然失败，而且报出来的是「webServer 超时」
  * （180s），指不到「PATH 上没有 pnpm」。
  */
-export const E2E_SERVER_ARGS = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+export const E2E_SERVER_ARGS = {
   dev: ["dev"],
   start: ["start"],
 } as const;
@@ -119,7 +120,7 @@ export const E2E_SERVER_ARGS = /* SAFETY: 类型断言已复核 */ {
 /**
  * 一条 webServer 命令：`<解析出来的 pnpm> dev|start`。
  *
- * 解析只看 `COMFY_E2E_PNPM`（由 `scripts/e2e-run.mjs` 的 `pnpmCli()` 写进子进程环境）：
+ * 解析只看 `COMFY_E2E_PNPM`（由 `scripts/e2e/e2e-run.mjs` 的 `pnpmCli()` 写进子进程环境）：
  * **本文件不自己去扫盘** —— 那是 `ci-install-deps.mjs` 的 `ensurePnpmOnPath()` 一份实现，
  * 而本文件是 Playwright 的入口，加载它只为了拿一条路径会把「怎么找 pnpm」变成两份
  * （与下面 `resolveWebServerCommand` 那段「两处刻意不互相 import」同一条理由）。
@@ -145,15 +146,18 @@ export function pnpmWebServerCommand(
  * 保留它是因为它一直是别人 import 的入口（`tests/e2e-runtime-budget.test.ts` 拿它做
  * 两份实现的对账）；对账比的是**参数部分**，可执行名由 {@link pnpmWebServerCommand} 决定。
  */
-export const E2E_SERVER_COMMANDS = /* SAFETY: 类型断言已复核 */ {
-  dev: pnpmWebServerCommand("dev", /* SAFETY: 类型断言已复核 */ {} as NodeJS.ProcessEnv),
-  start: pnpmWebServerCommand("start", /* SAFETY: 类型断言已复核 */ {} as NodeJS.ProcessEnv),
+/* SAFETY: 类型断言已复核 */
+export const E2E_SERVER_COMMANDS = {
+  /* SAFETY: 类型断言已复核 */
+  dev: pnpmWebServerCommand("dev", {} as NodeJS.ProcessEnv),
+  /* SAFETY: 类型断言已复核 */
+  start: pnpmWebServerCommand("start", {} as NodeJS.ProcessEnv),
 } as const;
 
 /**
  * 「这一趟 webServer 起的是哪一档」的**唯一出处**。
  *
- * `scripts/e2e-run.mjs` 的 `resolveServerMode()` 判的是同一件事，两处**刻意不互相
+ * `scripts/e2e/e2e-run.mjs` 的 `resolveServerMode()` 判的是同一件事，两处**刻意不互相
  * import**（本文件是 Playwright 的入口，由它自己加载 —— 拿配置当纯函数库引进来等于让
  * 跑法脚本依赖一个它本来不认识的模块），一致性由 `tests/e2e-runtime-budget.test.ts` 钉，
  * 与 {@link resolveE2eWorkers} 那条同一个理由。
@@ -235,7 +239,7 @@ export function resolveWebServerCommand(
  *     （`cnb-m0t-1k54oljem` 的 36 分钟，见文件头那段）。
  *
  * 既然两档都收敛，这个函数还成立的理由只剩一条：**核数要按现场算**（小机器上不该
- * 开 2）。所以它读 `CNB_CPUS` / `os.availableParallelism()` —— 与 `scripts/ci-load.mjs`
+ * 开 2）。所以它读 `CNB_CPUS` / `os.availableParallelism()` —— 与 `scripts/ci/ci-load.mjs`
  * 同一条口径，但**刻意不 import 它**：那份模块是 `.mjs`（给 CI 脚本用的），本文件由
  * Playwright 自己加载，两边一致由 `tests/e2e-runtime-budget.test.ts` 钉住（它读两侧
  * 源码比对），而不是靠一条跨模块的 import 把配置图拉长。
@@ -262,7 +266,7 @@ export function resolveE2eWorkers(env: NodeJS.ProcessEnv, cpus = resolveLocalCpu
 /**
  * 现场逻辑核数 —— `CNB_CPUS`（平台读数）优先，读不到落本机。
  *
- * 与 `scripts/ci-load.mjs` 的 `resolveCores()` 同序、同一条理由（平台池 / cgroup
+ * 与 `scripts/ci/ci-load.mjs` 的 `resolveCores()` 同序、同一条理由（平台池 / cgroup
  * 限额下 `availableParallelism` 会照宿主机报）。**不合法值不静默变成 0**：
  * 非正整数就往后落，两条都拿不到才回 `0`（`resolveE2eWorkers` 把它当「不知道」，
  * 只用上界 —— 猜核数比不猜更危险）。

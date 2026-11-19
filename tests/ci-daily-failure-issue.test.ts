@@ -1,14 +1,7 @@
 /**
- * `scripts/ci-daily-failure-issue.mjs` 的契约（ISSUE #2274）。
- *
- * 这一格是「**每天那一跑红了 ⇒ 自动变成一张单**」的执行者。它最危险的失效形态有两种，
- * 本文件各有一组用例对着：
- *
- *   ① **把没结论写成红**（被取消 / 取不到读数 / 认不出哪一格 ⇒ 不该写一个字）；
- *   ② **把红写成静默**（`--no-block` 只允许改变退码，不允许改变「那句话有没有被打出来」）。
- *
- * 判据与定性都不在这里重写：喂进去的 `details` 就是 `classifyBuildOutcome()` 认的那份平台形状
- * （`data.status` + `pipelinesStatus.<id>.stages[]`），所以断言测的是接线，不是第二份判决。
+ * `scripts/ci/ci-daily-failure-issue.mjs` 的契约（ISSUE #2274）：每日那一跑红了 ⇒ 自动变成一张单。
+ * 两种危险失效各有一组用例：① 把没结论写成红（被取消/取不到读数/认不出哪格 ⇒ 不该写一个字）；② 把红
+ * 写成静默（`--no-block` 只许改退码，不许改「那句话有没有被打出来」）。判决不在这重写：`details` 是平台形状。
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -26,7 +19,7 @@ import {
   main,
   pickPreviousDaily,
   titleKey,
-} from "../scripts/ci-daily-failure-issue.mjs";
+} from "../scripts/ci/ci-daily-failure-issue.mjs";
 import {
   BUNDLE_BASELINE_STALE_COMMITS,
   BUNDLE_GATE_MARKERS,
@@ -36,10 +29,10 @@ import {
   fetchBundleRedStreak,
   judgeBundleEscalation,
   readBundleAccount,
-} from "../scripts/ci-daily-bundle-escalation.mjs";
+} from "../scripts/ci/ci-daily-bundle-escalation.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
-const ENTRY = path.join(ROOT, "scripts", "ci-daily-failure-issue.mjs");
+const ENTRY = path.join(ROOT, "scripts", "ci/ci-daily-failure-issue.mjs");
 
 /** 构建列表那一项（这一层只用得到四个字段）。 */
 type ListBuild = { createTime: string; event: string; sn: string; status: string };
@@ -61,11 +54,34 @@ type Verdict = "green" | "failed" | "cancelled" | "running";
 
 /**
  * `pickPreviousDaily()` 的返回是判别联合（要么挑到、要么给一句为什么挑不到）。
- * 这里要的只是「读哪个字段」的形状，不是再写一套判决 —— 一次 `as`，字段全在这。
+ * 这里要的只是「读哪个字段」的形状，不是再写一套判决 —— 一次守卫，字段全在这。
  */
 type PickedLike = { none?: string; outcome?: { state: string }; sn?: string };
-/* SAFETY: 类型断言已复核 */
-const asPicked = (p: unknown): PickedLike => p as PickedLike;
+
+/** 对象视图：外来值先落 `unknown`，过这道守卫才谈读字段。 */
+function isRecordOf(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** `outcome` 那一格：只有 `state` 是字符串才算数。 */
+function isOutcome(v: unknown): v is { state: string } {
+  return isRecordOf(v) && typeof v.state === "string";
+}
+
+/**
+ * 把「挑到 / 挑不到」的返回读成那三格：读不出的字段就是没有，不替它猜。
+ */
+const readPicked = (p: unknown): PickedLike => {
+  if (!isRecordOf(p)) return {};
+  const none = p.none;
+  const sn = p.sn;
+  const outcome = p.outcome;
+  return {
+    none: typeof none === "string" ? none : undefined,
+    sn: typeof sn === "string" ? sn : undefined,
+    outcome: isOutcome(outcome) ? { state: outcome.state } : undefined,
+  };
+};
 
 /** 建单标题（去重键只认格名那一段，构建号 / 事件 / 时刻只给读者看 — ISSUE #2399）。 */
 const titleOf = (stage: string, sn = "sn-t", at = "2026-10-24T11:40:05.000Z") =>
@@ -80,11 +96,9 @@ const build = (sn: string, event = "crontab: 0 0 * * *"): ListBuild => ({
 });
 
 /**
- * 逐格详情那份读数。
- *
- * ⚠️ 状态词用的是平台原话：`error` / `cancel` / `skipped` / `start`（格在跑），构建级在跑是
- * `pending` —— 换掉任何一个词，`classifyBuildOutcome()` 就读成别的档，用例会在「判决变了」
- * 这件事上红，而不是在「夹具写错了」上红。
+ * 逐格详情那份读数。⚠️ 状态词用平台原话：`error` / `cancel` / `skipped` / `start`（格在跑），
+ * 构建级在跑是 `pending` —— 换掉任何一个词，`classifyBuildOutcome()` 就读成别的档，用例会红在
+ * 「判决变了」而不是「夹具写错了」。
  */
 function detail(state: Verdict): DetailJson {
   const stages: Array<StageRow> =
@@ -124,7 +138,7 @@ const d = (sn: string, state: Verdict) => ({ sn, json: detail(state) });
 
 describe("挑「上一跑」：正在跑的那一跑不能当对象", () => {
   it("最新一条在跑 ⇒ 取它之前最近那条有终态的", () => {
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [build("sn-running"), build("sn-previous")],
         details: [d("sn-running", "running"), d("sn-previous", "failed")],
@@ -135,7 +149,7 @@ describe("挑「上一跑」：正在跑的那一跑不能当对象", () => {
   });
 
   it("全是「在跑」⇒ 不给结论，而不是判成绿或判成红", () => {
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [build("sn-running")],
         details: [d("sn-running", "running")],
@@ -145,12 +159,12 @@ describe("挑「上一跑」：正在跑的那一跑不能当对象", () => {
   });
 
   it("详情取不到的那一跑不算「跑坏了」，也不能拿来立案", () => {
-    const picked = asPicked(pickPreviousDaily({ list: [build("sn-x")], details: [] }));
+    const picked = readPicked(pickPreviousDaily({ list: [build("sn-x")], details: [] }));
     expect(picked.none).toContain("拿得到");
   });
 
   it("列表里没有每日类派发（PR 事件不算）⇒ 一句原因，不猜", () => {
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [build("x", "pull_request")],
         details: [d("x", "failed")],
@@ -187,7 +201,7 @@ describe("按流水线名认「这一跑是不是这一档的」", () => {
 
   it("桌包那一跑的事件名同样是 `crontab:` ⇒ 不按档过滤时会误挑它（现场形状）", () => {
     const pkg = build("cnb-7g8", "crontab: 0 2 * * *");
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [pkg],
         details: [{ sn: "cnb-7g8", json: packageDetail() }],
@@ -199,7 +213,7 @@ describe("按流水线名认「这一跑是不是这一档的」", () => {
 
   it("给了 lane ⇒ 桌包那一跑不算，且那句是「别的档」，不是「没有红」", () => {
     const pkg = build("cnb-7g8", "crontab: 0 2 * * *");
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [pkg],
         details: [{ sn: "cnb-7g8", json: packageDetail() }],
@@ -212,7 +226,7 @@ describe("按流水线名认「这一跑是不是这一档的」", () => {
   });
 
   it("每日档那一跑照旧被认出来（正路没被过滤掉）", () => {
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [build("sn-previous")],
         details: [d("sn-previous", "failed")],
@@ -223,7 +237,7 @@ describe("按流水线名认「这一跑是不是这一档的」", () => {
   });
 
   it("两跑都在 ⇒ 只挑本档的那一跑，不挑更新的那条别人的", () => {
-    const picked = asPicked(
+    const picked = readPicked(
       pickPreviousDaily({
         list: [build("cnb-pkg", "crontab: 0 2 * * *"), build("cnb-daily", "crontab: 0 0 * * *")],
         details: [{ sn: "cnb-pkg", json: packageDetail() }, d("cnb-daily", "failed")],
@@ -451,11 +465,9 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
   });
 
   /**
-   * 生产网络路径的**默认出口**：注入一台会应答的假执行者，走的是与平台那一跳同一条链
-   * （列表 → 逐格详情 → 逐格日志 → 开着的单），断言 `--dry-run` 那一支一个写命令都不发。
-   *
-   * 为什么不用 `--from` 代替这条：离线档压根不查「开着的单」，它证明不了
-   * 「查到了已有单 ⇒ 只追加不新建」这条真实路径上的接线（注入式用例最容易漏的就是默认出口）。
+   * 生产网络路径的**默认出口**：注入会应答的假执行者，走与平台那一跳同一条链（列表 → 逐格详情 →
+   * 逐格日志 → 开着的单），断言 `--dry-run` 一个写命令都不发。不用 `--from` 代替：离线档不查
+   * 「开着的单」，证不了「查到已有单 ⇒ 只追加不新建」这条真实接线（注入式用例最易漏默认出口）。
    */
   it("--dry-run 走完整条读链，一次 create-issue / post-issue-comment 都不发", () => {
     /** @type {string[]} */
@@ -501,12 +513,9 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
 });
 
 /**
- * 取数按时间窗翻页 —— 「上一跑真红」必须被捞回来（ISSUE #2392）。
- *
- * 今晚的现场：60 条那一页里唯一的每日类派发就是**正在跑的这一跑**，排除之后得到
- * 「有 1 条、无一终态」⇒ 什么都没写，而那一格带 `--no-block`，平台读数是一格 success。
- * 这两条用例一根正路（翻页把红的那一跑捞回来 ⇒ 写通道被真的走到），一根负控制
- * （盖不住窗口 ⇒ 一个字都不写，且不许把「没写」读成「没有红」）。
+ * 取数按时间窗翻页 —— 「上一跑真红」必须被捞回来（ISSUE #2392）。现场：60 条那一页里唯一的每日类派发
+ * 就是**正在跑的这一跑**，排除后得「有 1 条、无一终态」⇒ 什么都没写，而平台读数是一格 success。
+ * 一组正路（翻页把红的那跑捞回来 ⇒ 写通道真被走到），一组负控制（盖不住窗口 ⇒ 一个字都不写，不许读成「没有红」）。
  */
 describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
   /** 若干小时前的 ISO 时刻。 */
@@ -639,10 +648,9 @@ describe("取数窗口：翻页盖住时间窗，立案才有输入", () => {
 });
 
 /**
- * 预算账陈旧度触发器（ISSUE #2639）：只认判据自己打的那两句判决行。
- *
- * 这一格最危险的失效形态是「把没测读成没事」—— 暂撤（#2634）、正文取不到、归因行读不出，
- * 三种都必须落在「不升级」，且**各说各的**：混成一句，读的人就分不出「没事」与「没测」。
+ * 预算账陈旧度触发器（ISSUE #2639）：只认判据自己打的那两句判决行。最危险的失效是「把没测读成
+ * 没事」—— 暂撤（#2634）、正文取不到、归因行读不出，三种都必须落在「不升级」，且**各说各的**：
+ * 混成一句，读的人就分不出「没事」与「没测」。
  */
 describe("读预算账：只认判据自己的判决行", () => {
   /** 判据现场那一形（`check-bundle-budget.cjs` 的归因行）。 */
@@ -834,7 +842,10 @@ describe("正文里的升级段：两种归因都要念成人话", () => {
 
 describe("判决行与判据那一侧对账（改词要两边一起改）", () => {
   it("BUNDLE_GATE_MARKERS 的两句都能在 check-bundle-budget.cjs 的源码里找到", () => {
-    const src = fs.readFileSync(path.join(ROOT, "scripts", "check-bundle-budget.cjs"), "utf8");
+    const src = fs.readFileSync(
+      path.join(ROOT, "scripts", "gates/check-bundle-budget.cjs"),
+      "utf8",
+    );
     for (const marker of Object.values(BUNDLE_GATE_MARKERS)) {
       expect(src, `判据那侧没有这句判决行：${marker}`).toContain(marker);
     }
@@ -842,10 +853,8 @@ describe("判决行与判据那一侧对账（改词要两边一起改）", () =
 });
 
 /**
- * 连续红天数：逐日回看，**读不出不是 0**。
- *
- * 这一格与主取数共用 `fetchBuildsCoveringWindow()`（窗口按门限天数算）——
- * 用例喂的是同一份平台形状，测的是「哪几跑算看过」与「什么时候必须放弃结论」。
+ * 连续红天数：逐日回看，**读不出不是 0**。与主取数共用 `fetchBuildsCoveringWindow()`（窗口按门限
+ * 天数算）—— 用例喂同一份平台形状，测的是「哪几跑算看过」与「什么时候必须放弃结论」。
  */
 describe("连续红天数：逐日回看，读不出不是 0", () => {
   type FakeDay = { status?: string; text: string };

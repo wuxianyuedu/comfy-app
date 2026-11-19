@@ -94,7 +94,7 @@ const NON_SGR_RE = /\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?|\u001b\[?[0-9;]
  */
 
 /** 完整 SGR 序列（含转义符）。带 `g`：`replace` 要一次剥干净。 */
-const SGR_RE = /\u001b\[([0-9;:]*)m/g;
+const SGR_RE = /\u001b\[(?<param>[0-9;:]*)m/g;
 
 /**
  * 残缺颜色码：转义符丢失、只剩 `[90m` / `[0m` 这类尾巴。
@@ -181,7 +181,7 @@ export function parseAnsiSegments(text: string): Array<AnsiSegment> {
     /* 先结算上一段（携带的是旧样式），再应用本次序列 */
     flush();
     applySgr(
-      match[1] ?? "",
+      match.groups?.param ?? "",
       (s) => {
         bold = s.bold;
         dim = s.dim;
@@ -296,7 +296,7 @@ function applySgr(codes: string, set: (state: SgrState) => void, get: () => SgrS
  * 这里按行内 level= 字段语义上色：时间戳与写入前缀调暗，level 着
  * INFO 绿 / WARN 黄 / ERROR、FATAL 红 / DEBUG、TRACE 灰。 */
 
-const LOGRUS_LEVEL_RE = /\blevel=(INFO|WARN|ERROR|FATAL|DEBUG|TRACE)\b/;
+const LOGRUS_LEVEL_RE = /\blevel=(?<level>INFO|WARN|ERROR|FATAL|DEBUG|TRACE)\b/;
 const LOGRUS_LEVEL_STYLE: Record<string, AnsiStyleKey> = {
   INFO: "green",
   WARN: "yellow",
@@ -306,7 +306,7 @@ const LOGRUS_LEVEL_STYLE: Record<string, AnsiStyleKey> = {
   TRACE: "gray",
 };
 /** 行首的 runtime 写入前缀（[时间戳] [流]）与 logrus time=… 字段，统一调暗 */
-const LOGRUS_DIM_PREFIX_RE = /^(\[[^\]]*\]\s*)*(time=\S+\s+)?/;
+const LOGRUS_DIM_PREFIX_RE = /^(?:\[[^\]]*\]\s*)*(?:time=\S+\s+)?/;
 
 /** 单行 logrus 文本 → 带样式片段；行内没有 level= 字段时返回 null（交回 ANSI 解析）。 */
 export function colorizeLogrusLine(line: string): Array<AnsiSegment> | null {
@@ -314,7 +314,7 @@ export function colorizeLogrusLine(line: string): Array<AnsiSegment> | null {
   if (!matched) {
     return null;
   }
-  const levelToken = `level=${matched[1]}`;
+  const levelToken = `level=${matched.groups?.level}`;
   const levelIdx = line.indexOf(levelToken);
   const head = line.slice(0, levelIdx);
   const segments: Array<AnsiSegment> = [];
@@ -327,7 +327,7 @@ export function colorizeLogrusLine(line: string): Array<AnsiSegment> | null {
   }
   segments.push({
     text: levelToken,
-    styles: [LOGRUS_LEVEL_STYLE[matched[1] ?? "INFO"] ?? "green"],
+    styles: [LOGRUS_LEVEL_STYLE[matched.groups?.level ?? "INFO"] ?? "green"],
   });
   const tail = line.slice(levelIdx + levelToken.length);
   if (tail) {

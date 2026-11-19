@@ -23,86 +23,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   const stream = new ReadableStream({
     start(controller) {
-      const send = (obj: unknown) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
-      };
-
-      /* 下面「初始回放」与「数据库轮询」两处共用同一组游标。
-       * `lastSent`：已发出的状态快照（相同则不重发 state 帧）。
-       * `sentLogCount`：已发出的日志条数——日志是**追加数组**，轮询按它做
-       * 增量 diff 发 log 帧（P3 §5 ADR §13-3C：SSE 单源化，log/state 都以
-       * DB 为准；初始回放读内存是为了接住 persistLogs 200ms 防抖窗口）。 */
-      const lastSent: { nodeKey: string; progress: number; status: string } = {
-        status: "",
-        progress: 0,
-        nodeKey: "",
-      };
-      let sentLogCount = 0;
-
-      // 初始状态（覆盖「订阅之前任务就已经结束」的情形）。
-      taskRepository
-        .findById(id)
-        .then((task) => {
-          if (task) {
-            // logs 是任务表的 JSON 列(运行时为 LogEntry[];send 收 unknown,无需断言)。
-            const existing: Array<unknown> = Array.isArray(task.logs) ? task.logs : [];
-            // 优先回放 runner 内存日志（state().logs），它是每次 log() 写入的完整
-            // 现场、也是持久化到 DB 的源，恒为 DB 日志的超集。提交与领取
-            // （`kickQueue` → `claimAndDispatchOnce`）在 startGenerate 返回前、
-            // 前端 EventSource 尚未订阅时就会输出「任务已从队列领取」
-            // 「输入参数（workflowInputs，N 项）」等行；这些行落库走 200ms 防抖，
-            // 若 SSE 在防抖窗口内连接，只读 DB 会漏掉它们，
-            // 表现为「第二次执行（WS 已开、领取同步发日志）没有显示执行参数」。
-            // 这里改读内存日志兜底：内存为空（服务器重启）时回落 DB 日志。内存那份
-            // 只是整包落库前的草稿，两者内容同源，不会互相矛盾（ISSUE #1206）。
-            const inMemory = getLogs(id);
-            const replaySrc = inMemory.length > 0 ? inMemory : existing;
-            // 回放顺序必须「先日志、后终态 state」：前端 watchTask 在处理 state 的
-            // 终态（FAILED/CANCELLED/ERROR）分支时会立即 settle 并关闭 EventSource，
-            // 若把 state 排在日志前面，后续 log 帧会被丢弃，用户只看到「等待日志…」
-            // 而看不到失败原因（任务在 SSE 建立前就已终态时必现）。
-            replaySrc.forEach((entry) => {
-              send({ type: "log", entry });
-            });
-            sentLogCount = replaySrc.length;
-            // 把结构化校验错误透出去，好让消费方（CreatePanel）
-            // 渲染出精确到字段的列表，而不是 `error` 里那句英文摘要。
-            send({
-              type: "state",
-              status: task.status,
-              progress: task.progress,
-              error: task.error,
-              validationErrors: parseValidationErrors(task.validationErrors),
-              /* 把 workflowName 透出去，好让 GlobalStepLogPanel 的任务切换器
-               * 用「<名称> · 状态」给条目打标签，而不是一个光秃秃的 14 字符 id。 */
-              workflowName: task.workflowName,
-              // 当前执行节点（3-C D1：画布「当前节点+步数」随快照走 DB）
-              node: task.progressNode,
-              /*  成功终态必须带产出清单：客户端拿这一份 images 收口成功态
-               * （P3 §5 ADR §13-3B1 手工端到端抓到的「完成不落定」）。done 帧
-               * 那条进程内通道已随 §14 D1 退役，inline 与 host 因此同形。 */
-              images: task.resultImages,
-            });
-            lastSent.status = task.status;
-            lastSent.progress = task.progress ?? 0;
-            lastSent.nodeKey = JSON.stringify(task.progressNode ?? null);
-            /*  回放之前任务就已终态：轮询那条「与上次发出的快照不同才动作」的判据
-             * 刚被这次回放喂成了恒假，于是再没有别的退出路径 —— 只能在这里收口
-             * （日志与终态 state 都已回放完毕，此时关闭不丢数据）。 */
-            if (isTerminalTaskStatus(task.status)) {
-              cleanup();
-            }
-          }
-        })
-        .catch(() => {
-          /* 初始回放失败可忽略 — 订阅与轮询随后仍会推送状态 */
-        });
-
-      /* 两条退出路径 —— 轮询读到终态、客户端 abort —— 必须收进同一个
-       * cleanup：只清一条，剩下的那条会让 3s 的 DB 轮询在流关闭之后继续跑
-       * （3-C 前还有 emitter 终态这条，订阅通道已随单源化退役）。
-       * 句柄收在一个可变对象里：cleanup 既被定时器回调调用、也被 `send`
-       * 抛错路径调用，`const` 各自声明会踩 TDZ（历史注释保留原委）。 */
+      /* 两条退出路径 —— 轮询读到终态、客户端 abort —— 必须收进同一个 cleanup。 */
       const handles: {
         heartbeat?: ReturnType<typeof setInterval>;
         poll?: ReturnType<typeof setInterval>;
@@ -125,36 +46,42 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
           /* 流已经关了 —— 忽略 */
         }
       };
-
-      /* SSE 心跳。若长时间没有字节流动，操作系统 / 负载均衡 / 代理会在看似空闲
-       * 30–60s 后悄悄掐掉这个 socket（QUEUED 中的任务很常见：可能几分钟都没有
-       * `log` 事件），随后浏览器侧的 EventSource 会自动重连 ——
-       * 于是界面被「📡 / ⚪ 已订阅 / 任务状态」这类客户端日志刷屏，
-       * 而实际上什么都没变。SSE 注释行 `: hb\n\n` 对 EventSource 的
-       * onmessage 处理器不可见，却能刷新内核的 TCP 空闲计时器。
-       * 15s 远小于多数代理的空闲超时（通常 30–60s）。abort 时清除。 */
-      handles.heartbeat = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(`: hb ${Date.now()}\n\n`));
-        } catch {
-          /* controller 已关闭 —— 清掉定时器并退出 */
-          if (handles.heartbeat !== undefined) {
-            clearInterval(handles.heartbeat);
-          }
+      const send = (obj: unknown) => {
+        if (closed) {
+          return;
         }
-      }, 15_000);
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+        } catch {
+          /* 流已关/客户端已断开：统一走 cleanup，避免轮询与心跳残留。 */
+          cleanup();
+        }
+      };
+
+      /* 下面「初始回放」与「数据库轮询」两处共用同一组游标。
+       * `lastSent`：已发出的状态快照（相同则不重发 state 帧）。
+       * `sentLogCount`：已发出的日志条数——日志是**追加数组**，轮询按它做
+       * 增量 diff 发 log 帧（P3 §5 ADR §13-3C：SSE 单源化，log/state 都以
+       * DB 为准；初始回放读内存是为了接住 persistLogs 200ms 防抖窗口）。 */
+      const lastSent: { nodeKey: string; progress: number; status: string } = {
+        status: "",
+        progress: 0,
+        nodeKey: "",
+      };
+      let sentLogCount = 0;
 
       /* 数据库轮询 = SSE 的唯一事件源（P3 §5 ADR §13-3C，D2 定 3s）。
-       * 此前它是「emitter 之外的兜底」（取消只写库、外部对账改状态等路径
-       * 到不了订阅方），进程内 emitter 负责实时 log/progress/done；
-       * host 执行（Phase 3-B1）让 emitter 只覆盖 inline 一半流量，两模式
-       * 契约分裂——#1151 先补了终态收口，这一步把 log 增量与节点进度也
-       * 统一走 DB：单一来源、无重复帧、inline/host 同一观感（代价是
-       * ≤3s 延迟与 persistLogs 的 200ms 防抖）。
-       * `findSseSnapshot` 是窄投影（不含 workflowSnapshot 大列）；
-       * 同时最多一次轮询在途，abort 时关闭。 */
+       * 进程内 emitter 只覆盖 inline 一半流量（host 执行到不了），两模式契约曾分裂；
+       * log 增量与节点进度统一走 DB：单一来源、inline/host 同一观感（代价 ≤3s 延迟 + 200ms 落库防抖）。
+       * `findSseSnapshot` 是窄投影（不含 workflowSnapshot 大列）；同时最多一次轮询在途。 */
       let polling = false;
-      handles.poll = setInterval(() => {
+      /* 任务消失的连击计数（#4453）：任务被删除（task.delete 是在册用户动作）或
+       * id 从未存在时，快照永远读不到——原先直接 return，轮询与心跳随连接期泄漏，
+       * EventSource 自动重连还会再起一套。连续两拍读不到（避开删除瞬间与 DB 抖动
+       * 的单拍误判）就发一帧 NOT_FOUND 终态并收口；客户端 onerror 本就 close 不
+       * 重连，流到此确定终止。 */
+      let notFoundStreak = 0;
+      const pollTick = () => {
         if (polling) {
           return;
         }
@@ -163,8 +90,19 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
           .findSseSnapshot(id)
           .then((cur) => {
             if (!cur) {
+              notFoundStreak += 1;
+              if (notFoundStreak >= 2) {
+                send({
+                  type: "state",
+                  status: "NOT_FOUND",
+                  progress: 0,
+                  error: "任务不存在或已被删除",
+                });
+                cleanup();
+              }
               return;
             }
+            notFoundStreak = 0;
             // 日志是 unknown 列：Array.isArray 收窄到 any[] 会踩
             // no-unsafe-assignment，标注成 unknown[] 保住类型纪律。
             const logs: Array<unknown> = Array.isArray(cur.logs) ? cur.logs : [];
@@ -186,12 +124,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
               sentLogCount = Math.max(sentLogCount, logs.length);
               if (changed) {
                 lastSent.status = cur.status;
-                lastSent.progress = cur.progress ?? 0;
+                lastSent.progress = cur.progress;
                 lastSent.nodeKey = nodeKey;
                 send({
                   type: "state",
                   status: cur.status,
-                  progress: cur.progress ?? 0,
+                  progress: cur.progress,
                   error: cur.error,
                   validationErrors: parseValidationErrors(cur.validationErrors),
                   workflowName: cur.workflowName,
@@ -219,7 +157,103 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
           .finally(() => {
             polling = false;
           });
-      }, 3000);
+      };
+      /* 轮询在**回放落定后**才起（ISSUE #3896）：轮询若先于回放启动，回放耗时
+       * 超过一个 tick（SQLite 繁忙 / 冷启动）时，首个 tick 会以 sentLogCount=0
+       * 全量推一遍、回放完成后再全量重发。迟到起跑不漏状态 —— 回放已把当前
+       * 快照发出、游标也已对齐。客户端 abort 先到（closed）就不再起。 */
+      const startPolling = () => {
+        if (!closed && handles.poll === undefined) {
+          handles.poll = setInterval(pollTick, 3000);
+        }
+      };
+
+      // 初始状态（覆盖「订阅之前任务就已经结束」的情形）。
+      taskRepository
+        .findById(id)
+        .then((task) => {
+          if (!task || closed) {
+            return;
+          }
+          try {
+            // logs 是任务表的 JSON 列(运行时为 LogEntry[];send 收 unknown,无需断言)。
+            const existing: Array<unknown> = Array.isArray(task.logs) ? task.logs : [];
+            // 优先回放 runner 内存日志（getLogs），恒为 DB 日志超集：提交与领取在 EventSource
+            // 订阅前就会输出「已从队列领取」「输入参数」等行，而落库走 200ms 防抖，
+            // SSE 在防抖窗口内连接时只读 DB 会漏掉它们（ISSUE #1206）。
+            // 内存为空（服务器重启）时回落 DB 日志；两者同源，不会矛盾。
+            const inMemory = getLogs(id);
+            const replaySrc = inMemory.length > 0 ? inMemory : existing;
+            // 回放顺序必须「先日志、后终态 state」：前端 watchTask 在处理 state 的
+            // 终态（FAILED/CANCELLED/ERROR）分支时会立即 settle 并关闭 EventSource，
+            // 若把 state 排在日志前面，后续 log 帧会被丢弃，用户只看到「等待日志…」
+            // 而看不到失败原因（任务在 SSE 建立前就已终态时必现）。
+            replaySrc.forEach((entry) => {
+              send({ type: "log", entry });
+            });
+            if (closed) {
+              return;
+            }
+            sentLogCount = replaySrc.length;
+            // 把结构化校验错误透出去，好让消费方（CreatePanel）
+            // 渲染出精确到字段的列表，而不是 `error` 里那句英文摘要。
+            send({
+              type: "state",
+              status: task.status,
+              progress: task.progress,
+              error: task.error,
+              validationErrors: parseValidationErrors(task.validationErrors),
+              /* 把 workflowName 透出去，好让 GlobalStepLogPanel 的任务切换器
+               * 用「<名称> · 状态」给条目打标签，而不是一个光秃秃的 14 字符 id。 */
+              workflowName: task.workflowName,
+              // 当前执行节点（3-C D1：画布「当前节点+步数」随快照走 DB）
+              node: task.progressNode,
+              /*  成功终态必须带产出清单：客户端拿这一份 images 收口成功态
+               * （P3 §5 ADR §13-3B1 手工端到端抓到的「完成不落定」）。done 帧
+               * 那条进程内通道已随 §14 D1 退役，inline 与 host 因此同形。 */
+              images: task.resultImages,
+            });
+            if (closed) {
+              return;
+            }
+            lastSent.status = task.status;
+            lastSent.progress = task.progress;
+            lastSent.nodeKey = JSON.stringify(task.progressNode ?? null);
+
+            /*  回放之前任务就已终态：轮询那条「与上次发出的快照不同才动作」的判据
+             * 刚被这次回放喂成了恒假，于是再没有别的退出路径 —— 只能在这里收口
+             * （日志与终态 state 都已回放完毕，此时关闭不丢数据）。 */
+            if (isTerminalTaskStatus(task.status)) {
+              cleanup();
+            }
+          } catch {
+            /* 回放中途流已断开：收口避免轮询/心跳残留。 */
+            cleanup();
+          }
+        })
+        .catch(() => {
+          /* 初始回放失败可忽略 — 订阅与轮询随后仍会推送状态 */
+        })
+        .finally(() => {
+          if (!closed) {
+            startPolling();
+          }
+        });
+
+      /* SSE 心跳：空闲 30–60s 后 OS/代理会悄悄掐掉 socket，EventSource 自动重连会刷屏。
+       * 注释行 `: hb\n\n` 对 onmessage 不可见但能刷新 TCP 空闲计时器；
+       * 15s 远小于多数代理空闲超时。abort 时清除。 */
+      handles.heartbeat = setInterval(() => {
+        if (closed) {
+          return;
+        }
+        try {
+          controller.enqueue(encoder.encode(`: hb ${Date.now()}\n\n`));
+        } catch {
+          /* controller 已关闭：走完整 cleanup，避免轮询残留。 */
+          cleanup();
+        }
+      }, 15_000);
 
       req.signal.addEventListener("abort", () => {
         cleanup();
@@ -229,9 +263,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   return new NextResponse(stream, {
     headers: {
-      "Content-Type": "text/event-stream",
+      "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      /* 与公共 SSE 边缘（sse-stream.ts 的 SSE_HEADERS）同一形状（#4047）：
+       * 反代按它关缓冲，否则帧会攒到连接关闭才到客户端。 */
+      "X-Accel-Buffering": "no",
     },
   });
 }

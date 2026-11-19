@@ -1,14 +1,7 @@
 /**
- * `scripts/check-tracked-secrets.cjs` 的判据（ISSUE #2157）。
- *
- * 这一族用例有两个方向，缺一不可：
- *   · **真命中**必须用拼接构造样本 —— 否则「测试文件里写着凭据形状」会先被自己扫出来
- *     （那条自指面在脚本文件头里写着，它是这条判据能存在的前提，不是可选的收紧）；
- *   · **负控制**才是这条判据的主体：`Bearer <token>`、PEM 头 + 短正文、CI 占位值、
- *     `user:pass@host` 那四类「看着像」的，今天全仓都在，任何一类误报的下一动作都是
- *     有人给这格加旁路，而旁路比没有判据更坏。
- * 最后一条判的是出口本身：命中时只许点名「哪儿 + 哪一类」，**不许回显内容** ——
- * 把密钥抄进输出就是第二次泄漏，而这件事只能被测出来一次才算数。
+ * `scripts/gates/check-tracked-secrets.cjs` 的判据（ISSUE #2157）。真命中必须用拼接构造样本，否则「测试文件写着凭据形状」会被自己扫出（自指面
+ * 写在脚本文件头，是判据存在的前提）。负控制才是主体：`Bearer <token>`、PEM 头 + 短正文、CI 占位值、`user:pass@host` 四类今天全仓都在，
+ * 任何误报的下一动作都是加旁路，而旁路比没有判据更坏。末条判出口：只许点名「哪儿 + 哪一类」，**不许回显内容**（抄进输出即第二次泄漏）。
  */
 import { describe, expect, it } from "vitest";
 
@@ -21,7 +14,7 @@ import {
   scanText,
   toUnits,
   trackedTexts,
-} from "../scripts/check-tracked-secrets.cjs";
+} from "../scripts/gates/check-tracked-secrets.cjs";
 
 /** 拼接出来的假凭据：文件文本里不存在任何一段完整的实体。 */
 const FAKE_GHP = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8";
@@ -53,9 +46,7 @@ describe("前缀锚定类：出现即红（不看熵）", () => {
 
   it("形状清单不会命中写它自己的那行源码（自指面）", () => {
     // 脚本与用例文件里都有这些字面正则；`--all` 那档要能扫过它们自己。
-    expect(
-      shapesOf("const PEM_BLOCK_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;"),
-    ).toEqual([]);
+    expect(shapesOf("const PEM_BLOCK_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;")).toEqual([]);
     expect(shapesOf(String.raw`re: /\bghp_[0-9A-Za-z]{36,}\b/g`)).toEqual([]);
   });
 });
@@ -68,17 +59,13 @@ describe("PEM：头 + 足够长的实体才算私钥", () => {
 
   it("负控制：redaction 自己的假夹具（正文 6 字符）⇒ 不红", () => {
     expect(
-      shapesOf(
-        "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----",
-      ),
+      shapesOf("-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----"),
     ).toEqual([]);
   });
 
   it("负控制：中文占位正文 ⇒ 不红", () => {
     expect(
-      shapesOf(
-        "-----BEGIN PRIVATE KEY-----\n<示例私钥内容>\n-----END PRIVATE KEY-----",
-      ),
+      shapesOf("-----BEGIN PRIVATE KEY-----\n<示例私钥内容>\n-----END PRIVATE KEY-----"),
     ).toEqual([]);
   });
 
@@ -110,11 +97,10 @@ describe("赋值式：长度与字符类别两道都要过", () => {
   });
 
   it("负控制：CI 占位值（全小写 + 连字符 = 只有两类）⇒ 不红", () => {
-    const line =
-      'BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"';
-    expect(
-      charClasses("ci-placeholder-secret-not-for-production-use"),
-    ).toBeLessThan(MIN_VALUE_CLASSES);
+    const line = 'BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"';
+    expect(charClasses("ci-placeholder-secret-not-for-production-use")).toBeLessThan(
+      MIN_VALUE_CLASSES,
+    );
     expect(shapesOf(line)).toEqual([]);
   });
 
@@ -129,11 +115,9 @@ describe("赋值式：长度与字符类别两道都要过", () => {
 
 describe("URL 内嵌凭据", () => {
   it("真口令 ⇒ 命中", () => {
-    expect(
-      shapesOf(
-        `endpoint: https://admin:${FAKE_URL_PASS}@10.0.0.5:8188/history`,
-      ),
-    ).toContain("URL 内嵌凭据");
+    expect(shapesOf(`endpoint: https://admin:${FAKE_URL_PASS}@10.0.0.5:8188/history`)).toContain(
+      "URL 内嵌凭据",
+    );
   });
 
   it("负控制：教学写法（user:pass@host / user:password@host）⇒ 不红", () => {
@@ -146,9 +130,7 @@ describe("URL 内嵌凭据", () => {
   });
 
   it("负控制：模板形态的口令（`${TOKEN}` / `{{ token }}`）⇒ 不红 —— 真泄漏落的是展开后的值", () => {
-    expect(
-      shapesOf("url = `https://admin:${DATABASE_PASSWORD}@db.internal:3306`"),
-    ).toEqual([]);
+    expect(shapesOf("url = `https://admin:${DATABASE_PASSWORD}@db.internal:3306`")).toEqual([]);
     expect(shapesOf("endpoint: https://user:{{ token }}@host/x")).toEqual([]);
   });
 });
@@ -183,9 +165,7 @@ describe("出口：只点名位置与形状，绝不回显内容", () => {
 
   it("scanText 的返回形状里没有内容（偏移 + 形状名而已）", () => {
     const hits = scanText(`x = "${FAKE_GHP}"`);
-    expect(JSON.stringify(hits)).not.toContain(
-      "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8",
-    );
+    expect(JSON.stringify(hits)).not.toContain("A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8");
     expect(hits[0]).toHaveProperty("shape");
     expect(hits[0]).not.toHaveProperty("text");
     expect(hits[0]).not.toHaveProperty("matched");
@@ -194,8 +174,7 @@ describe("出口：只点名位置与形状，绝不回显内容", () => {
   it("出路那段只教「怎么写占位」，不含任何跳过旗标", () => {
     let out = "";
     main(["--staged"], {
-      stagedLines: () =>
-        new Map([["a.md", [{ line: 1, text: `key: ${FAKE_SK}` }]]]),
+      stagedLines: () => new Map([["a.md", [{ line: 1, text: `key: ${FAKE_SK}` }]]]),
       write: (s: string) => {
         out += s;
       },
@@ -283,9 +262,7 @@ describe("真仓自证：今天的存量与那个分母", () => {
   it("全仓被跟踪文本 0 命中，且分母不是空（排除名单没把整个仓排掉）", () => {
     const { texts } = trackedTexts();
     expect(
-      scanInputs(
-        texts.map((t) => ({ file: t.file, rows: rowsOfText(t.text) })),
-      ),
+      scanInputs(texts.map((t) => ({ file: t.file, rows: rowsOfText(t.text) }))),
       "今天全仓有命中 —— 这条判据「0 命中的存量」前提已经变了，先立案再改判据（§13.10.9）",
     ).toEqual([]);
     expect(texts.length).toBeGreaterThan(2000);

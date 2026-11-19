@@ -1,27 +1,15 @@
 /**
- * 「**合并前的固定动作**」的唯一入口（规范 §13.6.2 + §13.5.4；ISSUE #1611 拍板）。
- *
- * 这条东西的存在理由只有一个：**把「记住跑全三件事」从纪律变成一条命令**。
- * 平台侧 squash 合并**不跑本地钩子**、#623 之后**也无 CI 兜底**，所以
- * 「我的分支绿 → master 绿」那一跳的三条判据**都天然跑不进 pre-commit** ——
- * 它们唯一的执行者就是「合并前敲一次」这个人的动作。而纪律的三种漏法
- * （漏跑一步 / 顺序反了 / 只跑了自己记得的那条）**都不报错**。
- *
- * 所以本文件判的是**编排**那几件容易静默失效的事：
- *   ① 每一段各自在、且**不发明第二套实现**（`base` 段走 `base-check.mjs` 的既有
- *      `baseCheckMany`，其余段走既有脚本 —— 抄一份就会漂，§12.18 / §12.12）；
- *   ② 总码的合成口径：**「没跑起来」(2) 压过「红了」(1)** —— 拿一个无法归因的
- *      读数下判决是把人往错方向送（§13.6.2）；
- *   ③ `base` 段的四态 ⇄ 退出码的折算只在**一处**（`current-green`=0、
- *      `yours`/`baseline-red`=1、`inconclusive`=2）；
- *   ④ `--only` / `--skip-*` 开关真的在筛段，且**筛空 = 2**（不许「各段全跳过」
- *      却报全绿 —— 那是本仓库最怕的那种静默）。跳过清单按 `SEGMENTS` 推，不硬写段数。
+ * 「**合并前的固定动作**」的唯一入口（规范 §13.6.2 + §13.5.4；ISSUE #1611 拍板）。存在理由只有一个：**把「记住跑全三件事」从纪律变成一条命令** —— 平台侧 squash 合并**不跑本地钩子**、#623 之后**也无 CI 兜底**，「我的分支绿 → master 绿」那一跳的三条判据都天然跑不进 pre-commit，唯一执行者是「合并前敲一次」的人，而三种漏法（漏跑 / 顺序反 / 只跑记得那条）都不报错。
+ * 所以本文件判**编排**那几件容易静默失效的事：①每段各自在、且**不发明第二套实现**（`base` 走 `baseCheckMany`，其余走既有脚本 —— 抄一份就会漂，§12.18 / §12.12）；②总码「没跑起来」(2) 压过「红了」(1)（拿无法归因的读数下判决是把人往错方向送，§13.6.2）。
+ * ③ `base` 段的四态 ⇄ 退出码折算只在**一处**（`current-green`=0、`yours`/`baseline-red`=1、`inconclusive`=2）；④ `--only` / `--skip-*` 开关真的在筛段，且**筛空 = 2**（不许「各段全跳过」却报全绿）；跳过清单按 `SEGMENTS` 推，不硬写段数。
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+
+import { isRecord, isUnknownArray } from "~/lib/is-record";
 
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
@@ -30,25 +18,14 @@ import {
   lastSummary,
   SEGMENTS,
   scriptsInCommands,
-} from "../scripts/premerge-check.mjs";
+} from "../scripts/gates/premerge-check.mjs";
 
-const SCRIPT = join(process.cwd(), "scripts", "premerge-check.mjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates", "premerge-check.mjs");
 
 /**
-/**
- * 本检出 `HEAD` 的 sha —— 当**显式**的改动面基线（ISSUE #2799）。
- *
- * 为什么还要这一层（`run()` 已经过 `gitSandboxEnv()` 剥过平台那一族了，见下）：
- * 剥完之后「哪一条是基线」就只剩「宿主有没有 `master` 引用」这一个来源 —— 那是**这台
- * 机器的事实**，不是被测行为。平台节点只 fetch 协商后的单 ref（`.cnb.yml` 里那句注释
- * 写得很清楚），于是本机绿、平台上整组红成 `expected 2 to be 0`（PR #2784 现场）。
- *
- * 传给 `HEAD` 的 sha 是刻意的：分叉点 == HEAD ⇒ 待审那一批为空 ⇒
- * `check-commit-claims.mjs` 说「无可审，不是判过」并退 0（本仓对这一档的定义），
- * 于是这一组判的是**编排**（筛段 / JSON / 旗标），不掺任何宿主状态。
- *
- * 判据行为一个字没动：取不到基线仍然退 2（「没判 ≠ 绿」，§13.6.2）—— 那条由
- * 「算不出锚点时**退 2 并说明**」守着，两种机器上都照旧。
+ * 本检出 `HEAD` 的 sha —— 当**显式**的改动面基线（ISSUE #2799）。`run()` 已用 `gitSandboxEnv()` 剥过平台那一族，剥完后「哪一条是基线」只剩「宿主有没有 `master` 引用」—— 那是这台机器的事实，不是被测行为；平台节点只 fetch 协商后的单 ref（`.cnb.yml` 注释），于是本机绿、平台整组红成 `expected 2 to be 0`（PR #2784 现场）。
+ * 显式传 `HEAD` 的 sha 是刻意的：分叉点 == HEAD ⇒ 待审那一批为空 ⇒ `check-commit-claims.mjs` 说「无可审，不是判过」并退 0（本仓对这一档的定义），于是这一组判的是**编排**（筛段 / JSON / 旗标），不掺任何宿主状态。
+ * 判据行为一个字没动：取不到基线仍然退 2（「没判 ≠ 绿」，§13.6.2）—— 那条由「算不出锚点时**退 2 并说明**」守着，两种机器上都照旧。
  */
 function headBaseline(): string {
   return execFileSync("git", ["rev-parse", "HEAD"], {
@@ -58,29 +35,9 @@ function headBaseline(): string {
 }
 
 /**
- * 跑一次入口脚本 —— **子进程里跑**，但不是「裸」跑。
- *
- * 这一份用例的每一段都在**真检出**上敲 git（`resolveForkBaseline` 与两段各自起的
- * `check-commit-claims.mjs` / `check-merged-side-loss.mjs`），所以它对这个仓库的
- * **位置**极其敏感，而继承来的环境会把它指到别处去：
- *
- *   · `GIT_DIR` / `GIT_INDEX_FILE` 一族 —— git 导给它自己起的钩子，pre-commit 里跑的
- *     vitest 一路继承（机制与现场见 `git-sandbox-env.ts` 文件头）；
- *   · `CNB_PULL_REQUEST_TARGET_SHA` / `CNB_COMMIT` / `CNB_PULL_REQUEST_MERGE_SHA` ——
- *     **平台那一跑**的改动面读数（ISSUE #2787）。PR 流水线里它们同样继承进用例 spawn
- *     的每一个子进程，于是「分叉点是哪一条」在本地与平台上**不是同一个问题**：
- *     本机问的是 `origin/master` 的分叉点，平台上问的是那一跑的 sha。
- *
- * `tests/setup.ts` 已经在 worker 启动时剥过一次（那一条盖住 `runScript` 往下那一层），
- * 但夹具**自己**起的这一次不该指望上游清理过 —— 与 `gate-repo.ts` 那句「共享夹具要自带
- * 隔离」同一条口径。剥法复用 `gitSandboxEnv()`（唯一一份清单，§12.18），顺带把「禁签名
- * + 身份」也注入进去。
- *
- * 基线与平台变量**一律显式给**：剥干净之后它们只剩「宿主恰好有什么」这一个来源，
- * 而那正是 #2799 的症状。
- *
- * @param args 交给入口的旗标
- * @param baseline 这一次的改动面基线（默认本检出 HEAD 的 sha）
+ * 跑一次入口脚本 —— **子进程里跑**，但不是「裸」跑。每段都在**真检出**上敲 git（`resolveForkBaseline` 与两段各自起的 `check-commit-claims.mjs` / `check-merged-side-loss.mjs`），所以它对仓库**位置**极其敏感，而继承环境会把它指到别处：`GIT_DIR` / `GIT_INDEX_FILE` 一族（git 导给钩子，pre-commit 里的 vitest 一路继承，见 `git-sandbox-env.ts` 文件头）；`CNB_PULL_REQUEST_TARGET_SHA` / `CNB_COMMIT` / `CNB_PULL_REQUEST_MERGE_SHA`（平台那一跑的改动面读数，ISSUE #2787）—— 于是「分叉点是哪一条」本地与平台上**不是同一个问题**。
+ * `tests/setup.ts` 已在 worker 启动时剥过一次，但夹具**自己**起的这一次不该指望上游清理（与 `gate-repo.ts`「共享夹具要自带隔离」同一条口径）。剥法复用 `gitSandboxEnv()`（唯一一份清单，§12.18），顺带注入「禁签名 + 身份」；基线与平台变量**一律显式给** —— 剥干净后只剩「宿主恰好有什么」，那正是 #2799 的症状。
+ * @param args 交给入口的旗标 @param baseline 这一次的改动面基线（默认本检出 HEAD 的 sha）
  */
 function run(args: Array<string> = [], baseline: string = headBaseline()) {
   try {
@@ -92,41 +49,22 @@ function run(args: Array<string> = [], baseline: string = headBaseline()) {
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const e: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
     return {
       code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      output: `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`,
     };
   }
 }
 
 /**
- * 「这一段没有结论」不是「这条判据红了」—— **锚点取不到**时的统一读法（PR #2784 现场）。
- *
- * `claims` / `mergeLoss` 两段的锚点是 `git merge-base(<要并进去的那条>, HEAD)`。
- * 而这个入口跑在**真检出**上，所以有两件事与题面无关、却会决定那个锚点算不算得出来：
- *
- *   · 仓库冻结在合并态（`MERGE_HEAD` 在场、合并未落地）：`git merge-base` 退 1、
- *     stdout 为空 ⇒ 分叉点算不出；
- *   · 要并进去的那条在这个检出里根本不存在（平台节点只 fetch 协商后的单 ref，
- *     `origin/master` / 本地 `master` 都可能不在）。
- *
- * 两种情形下入口都如实记 **2（没跑起来）**，那是**正确的读数** —— 分叉点确实不可知。
- * 错的是下面这三条用例：它们问的是「`--only` / `--json` / `--full` 有没有生效」，
- * 却用字面 `0` 钉死，把这个与题面无关的前提一起钉住了 —— 本机绿（锚点算得出）、
- * 平台红，而报错只说得出一句 `expected 2 to be +0`。
- *
- * 所以豁免的只有**一格**：读数必须是 2 **且**输出里那句正是「取不到 / 算不出锚点」。
- * 别的 2（参数不认识、段名不存在……）照旧红。「锚点算不出时不许折成 0」另有
- * `anchorMissed` 那条用例钉着，它不经过本入口、不受这一态影响。
- *
- * @param code 入口的退出码
- * @param output 入口的输出（两流合并）
+ * 「这一段没有结论」不是「这条判据红了」—— **锚点取不到**时的统一读法（PR #2784 现场）。`claims` / `mergeLoss` 两段的锚点是 `git merge-base(<要并进去的那条>, HEAD)`，而入口跑在**真检出**上：仓库冻结在合并态（`MERGE_HEAD` 在场、合并未落地）时 `merge-base` 退 1、stdout 空；要并进去的那条不在（平台节点只 fetch 协商后的单 ref）也算不出。
+ * 两种情形下入口都如实记 **2（没跑起来）**，那是**正确的读数** —— 分叉点确实不可知。错的是下面三条用例：它们问的是「`--only` / `--json` / `--full` 有没有生效」，却用字面 `0` 钉死，把这个与题面无关的前提一起钉住 —— 本机绿、平台红，报错只说得出一句 `expected 2 to be +0`。
+ * 所以豁免只有**一格**：读数必须是 2 **且**输出里那句正是「取不到 / 算不出锚点」；别的 2（参数不认识、段名不存在……）照旧红。@param code 入口的退出码 @param output 入口的输出（两流合并）
  */
 function expectAnchorMissRead(code: number, output: string): void {
   const merged = existsSync(join(process.cwd(), ".git", "MERGE_HEAD"));
@@ -191,13 +129,8 @@ describe("premerge-check —— 从 base-check 的报告里读回结论词", () 
 
 describe("premerge-check —— 段的筛选", () => {
   test("各段全被跳过 ⇒ 退 2，**不许**报全绿", () => {
-    /* 「什么都没复算」与「复算过且全绿」必须分开 —— 同 §11.23.1 那条：
-     * 静默的绿比没有更坏（它让人以为这件事有人管）。
-     *
-     * ⚠️ 跳过清单**从 `SEGMENTS` 推**，不硬写。硬写的那一版在 #2022 加出 `unitTests`
-     * 段之后变成一条环境依赖的用例：它跳了 3 / 4 段，剩下那段的「没跑起来」把结论词
-     * 从「各段全被跳过」换成「有段没跑起来」，于是**在能算出改动清单的检出上绿、
-     * 在算不出的检出上红**（节点那一跑红的就是这个，而报错一个字都不指向漏跳的那一段）。
+    /* 「什么都没复算」与「复算过且全绿」必须分开 —— 同 §11.23.1：静默的绿比没有更坏（它让人以为这件事有人管）。⚠️ 跳过清单**从 `SEGMENTS` 推**，不硬写。
+     * 硬写那版在 #2022 加出 `unitTests` 段后变成环境依赖的用例：它跳了 3/4 段，剩下那段的「没跑起来」把结论词从「各段全被跳过」换成「有段没跑起来」，于是能算出改动清单的检出绿、算不出的红。
      * 从段表推 ⇒ 以后加一段，这里不跟着处理就当场红。 */
     const allSkips = Object.keys(SEGMENTS).flatMap((key) => [`--skip-${key}`]);
     expect(
@@ -227,14 +160,16 @@ describe("premerge-check —— 段的筛选", () => {
     const { code, output } = run(["--only=claims", "--json"]);
     expectAnchorMissRead(code, output);
     expect(code).toBe(0);
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(output) as {
-      code: number;
-      segments: Array<{ code: number; key: string }>;
-    };
+    const parsed: unknown = JSON.parse(output);
+    if (!isRecord(parsed) || !isUnknownArray(parsed.segments)) {
+      throw new Error("--json 输出形状不对（缺 segments 数组）");
+    }
     expect(parsed.code).toBe(0);
     expect(parsed.segments).toHaveLength(1);
-    expect(parsed.segments[0]!.key).toBe("claims");
+    const firstSegment = parsed.segments[0];
+    if (!isRecord(firstSegment) || firstSegment.key !== "claims") {
+      throw new Error("--json 的第一段不是 claims");
+    }
   });
 });
 
@@ -312,20 +247,15 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
     /* 它要么绿（0）、要么真报「需要人工看」（1）；「没跑起来」（2）只允许由
      * 取不到 merge target / 浅克隆这一族原因给出，且必须在输出里说清原因。 */
     expect([0, 1, 2]).toContain(code);
-    if (code === 2) {
-      expect(output).toContain("[premerge] ");
-    }
+    /* 「没跑起来」（2）必须说清原因 —— 条件收进合取式（非 2 即恒真），
+     * 断言本体无条件跑（no-conditional-expect）。 */
+    expect(code !== 2 || output.includes("[premerge] ")).toBe(true);
   });
 
   test("`claims` 段的扫描面是**这批**，不是「最新那一笔」（ISSUE #2070）", () => {
-    /* 立案形状：`SEGMENTS.claims` 此前是裸 `script` + `args: []`，而
-     * `check-commit-claims.mjs` 不带参数时**只审 HEAD** —— 于是批次里较早那笔的
-     * 假声明在推送那一刻没人看，合并之后 HEAD 前进，就再没有第二个执行者重放它
-     * （`ad81a912` 就是这么进的主干）。判据本体一字未改，改的是**取哪些提交**：
-     * 同一个分叉点锚，交出去的是 `<分叉点>..HEAD`。
-     *
-     * 这里判的是**编排**那一半（取数形状）；行为那一半在
-     * `tests/check-commit-claims.test.ts` 的 ①b 那组（同一夹具里「较早那笔说谎」）。 */
+    /* 立案形状：`SEGMENTS.claims` 此前是裸 `script` + `args: []`，而 `check-commit-claims.mjs` 不带参数时**只审 HEAD** —— 批次里较早那笔的假声明在推送那一刻没人看，合并之后 HEAD 前进，就再没有第二个执行者重放它（`ad81a912` 就是这么进的主干）。
+     * 判据本体一字未改，改的是**取哪些提交**：同一个分叉点锚，交出去的是 `<分叉点>..HEAD`。这里判的是**编排**那一半（取数形状）；行为那一半在 `tests/check-commit-claims.test.ts` 的 ①b 那组。
+     */
     /* 段表是 `Record<string, 联合>`，取数形状那一格在各成员上键不同 —— 这里按判据
      * 要问的三样取一个视图，而不是往生产类型里塞可选键。 */
     const claims: { args?: Array<string>; kind: string; shape?: string } = SEGMENTS.claims!;
@@ -336,26 +266,23 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
   });
 
   test("同一次跑里不判两遍：`base` 段跑过的那份脚本不再单跑（#2070 的连带）", () => {
-    /* 事实纠正（本单动手时查实）：批次面**早就有执行者** ——
-     * `resolveMergeBatch` 的第二个来源（`base-check/chained-steps.mjs`）已经把
-     * `check-commit-claims.mjs --range <base>..HEAD` 收进 base 段那一批。
-     * 真正漏的是两处：`--light` 会把那条筛掉（本地档那一串里没有它（条数以 `localTierLabels()` 现取）），
-     * 以及本文件自己那格 `claims` 只审 HEAD。改成审同一批之后，
-     * 全档那一跑就可能出现**两遍同样的核对**（带声明的提交单条约 49 秒）。 */
+    /* 事实纠正（本单动手时查实）：批次面**早就有执行者** —— `resolveMergeBatch` 的第二个来源（`base-check/chained-steps.mjs`）已经把 `check-commit-claims.mjs --range <base>..HEAD` 收进 base 段那一批。
+     * 真正漏的是两处：`--light` 会把那条筛掉（本地档那一串里没有它），以及本文件自己那格 `claims` 只审 HEAD。改成审同一批之后，全档那一跑就可能出现**两遍同样的核对**（带声明的提交单条约 49 秒）。
+     */
     const chained = [
       {
-        argv: ["node", "scripts/check-commit-claims.mjs", "--range", "x..HEAD"],
+        argv: ["node", "scripts/gates/check-commit-claims.mjs", "--range", "x..HEAD"],
       },
-      { argv: ["node", "scripts/check-file-structure.cjs"] },
+      { argv: ["node", "scripts/gates/check-file-structure.cjs"] },
     ];
     const seen = scriptsInCommands(chained);
-    expect(seen.has("scripts/check-commit-claims.mjs")).toBe(true);
-    expect(seen.has("scripts/check-file-structure.cjs")).toBe(true);
+    expect(seen.has("scripts/gates/check-commit-claims.mjs")).toBe(true);
+    expect(seen.has("scripts/gates/check-file-structure.cjs")).toBe(true);
 
     /* `--light` 筛过之后那一批里**没有**它 —— 这时去重必须不生效，
      * 否则「light 档没跑」会被读成「base 段跑过了」，那正是假绿的形状。 */
-    const light = [{ argv: ["node", "scripts/check-file-structure.cjs"] }];
-    expect(scriptsInCommands(light).has("scripts/check-commit-claims.mjs")).toBe(false);
+    const light = [{ argv: ["node", "scripts/gates/check-file-structure.cjs"] }];
+    expect(scriptsInCommands(light).has("scripts/gates/check-commit-claims.mjs")).toBe(false);
 
     /* 非脚本项（`pnpm run lint` 那一族）不该被当成「跑过某个 .mjs」。 */
     expect(scriptsInCommands([{ argv: ["pnpm", "run", "lint"] }]).size).toBe(0);
@@ -369,23 +296,16 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
     const { code, output } = run(["--only=claims"]);
     expect(output).not.toContain("取不到要审的提交");
     expect([0, 1, 2]).toContain(code);
-    if (code === 2) {
-      expect(output).toContain("[premerge] ");
-    }
-    /* 走到「审了几笔」这一层：绿的那一支必须说得出条数，或说得出「无可审」。 */
-    if (code === 0) {
-      expect(output).toMatch(/次提交|无可审/);
-    }
+    /* 两支条件读数收进合取式：2 必须说「没跑起来」的原因、0 必须报得出条数或
+     * 「无可审」—— 断言本体无条件跑（no-conditional-expect）。 */
+    expect(code !== 2 || output.includes("[premerge] ")).toBe(true);
+    expect(code !== 0 || /次提交|无可审/.test(output)).toBe(true);
   });
 
   test("锚点 = **分叉点**（`merge-base` 要并进去的那条 vs HEAD），不是上游的尖端", async () => {
-    /* 为什么必须是分叉点：判据说的是「结果版退回了**基线之前**的某一版」。
-     * 拿上游的**尖端**当基线，会把分支侧自己的正当改动整片读成差异 ——
-     * 而那个方向上的误报会让这条判据被学会绕开。
-     *
-     * **必须在真的分叉仓库里判**：本检出的 `merge-base(master, HEAD)` 恰好等于
-     * `origin/master`（HEAD 直接长在它上面），拿它当夹具的话「取尖端」这个变异
-     * 也能通过 —— 那是一条**看起来在判、实际判不出**的用例。 */
+    /* 为什么必须是分叉点：判据说的是「结果版退回了**基线之前**的某一版」。拿上游的**尖端**当基线，会把分支侧自己的正当改动整片读成差异 —— 而那个方向上的误报会让这条判据被学会绕开。
+     * **必须在真的分叉仓库里判**：本检出的 `merge-base(master, HEAD)` 恰好等于 `origin/master`（HEAD 直接长在它上面），拿它当夹具的话「取尖端」这个变异也能通过 —— 那是一条**看起来在判、实际判不出**的用例。
+     */
     const repo = mkdtempSync(join(tmpdir(), "premerge-anchor-"));
     try {
       const g = (...args: Array<string>) =>
@@ -429,7 +349,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       const tip = g("rev-parse", "master");
       g("checkout", "-q", "work");
 
-      const { resolveForkBaseline } = await import("../scripts/premerge-check.mjs");
+      const { resolveForkBaseline } = await import("../scripts/gates/premerge-check.mjs");
       const got = resolveForkBaseline(repo);
       expect(got.ok).toBe(true);
       if (!got.ok) {
@@ -469,7 +389,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       g("add", "-A");
       g("commit", "-qm", "mine");
 
-      const { resolveForkBaseline } = await import("../scripts/premerge-check.mjs");
+      const { resolveForkBaseline } = await import("../scripts/gates/premerge-check.mjs");
 
       /* ① 没有 env：这条路在平台上就是取不到，必须**照实说取不到**（不是编一个基线）。 */
       const without = resolveForkBaseline(repo, {});
@@ -502,9 +422,8 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
         CNB_PULL_REQUEST_TARGET_SHA: "f".repeat(40),
       });
       expect(bogus.ok).toBe(false);
-      if (!bogus.ok) {
-        expect(bogus.reason).toContain("CNB_PULL_REQUEST_TARGET_SHA");
-      }
+      if (bogus.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+      expect(bogus.reason).toContain("CNB_PULL_REQUEST_TARGET_SHA");
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
@@ -528,10 +447,12 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       g("add", "-A");
       g("commit", "-qm", "c1");
       /* 没有 `origin/master`、也没有本地 `master` ⇒ `resolveMergeBaseRef` 给 null。 */
-      const { anchorMissed, resolveForkBaseline } = await import("../scripts/premerge-check.mjs");
+      const { anchorMissed, resolveForkBaseline } =
+        await import("../scripts/gates/premerge-check.mjs");
       const got = resolveForkBaseline(repo);
       expect(got.ok).toBe(false);
-      if (!got.ok) {
+      if (got.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+      {
         expect(got.reason).toContain("取不到要并进去的那条");
         /* **编排那一半也要判**：这一段此前把 `ok:false` 折成 `code: 0` —— 函数契约
          * 对了、接线错了，于是「取不到分叉点」在总读数里是**绿**。`anchorMissed` 是
@@ -551,17 +472,9 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
   });
 
   test("平台那一格：目标 sha 只在 env 里时，`claims` 审的是**这批**而不是 `HEAD`（ISSUE #2788）", () => {
-    /* 立案现场（第 2784 号 PR 的「提交声明核对」那一格，三轮都 0.5 秒红）：
-     * 这一段此前把 `<分叉点>..HEAD` 当**位置参数**交给 `check-commit-claims.mjs`，
-     * 而那份脚本只从 **`--range`** 认区间 —— 位置参数被它当成「审这一个 rev」，
-     * 于是 `git log <sha>..HEAD` 被读成一次提交查询 ⇒ `取不到要审的提交` ⇒ 退 2。
-     * 本机绿是因为那份脚本的 `--commit <rev>` 兜底读到了 env 里的
-     * `CNB_PULL_REQUEST_TARGET_SHA`；而平台**节点不 fetch `origin/master`**，
-     * 本文件算锚点走的是 env，子进程却拿不到同一个来源 —— 两个来源不一致。
-     * 修法：锚点由本文件算、按 `--range` 显式交出去（区间端点与 HEAD 同库）。
-     *
-     * 判的是**调用形状**那一半（子进程确实收到 `--range <分叉点>..HEAD`）；
-     * 「审了几笔」那一半由 `tests/check-commit-claims.test.ts` 的区间那组兜着。 */
+    /* 立案现场（第 2784 号 PR 的「提交声明核对」那一格，三轮都 0.5 秒红）：这段此前把 `<分叉点>..HEAD` 当**位置参数**交给 `check-commit-claims.mjs`，而那份脚本只从 **`--range`** 认区间 —— 位置参数被它当成「审这一个 rev」，于是 `git log <sha>..HEAD` 被读成一次提交查询 ⇒ `取不到要审的提交` ⇒ 退 2。
+     * 本机绿是因为那份脚本的 `--commit <rev>` 兜底读到了 env 里的 `CNB_PULL_REQUEST_TARGET_SHA`；而平台**节点不 fetch `origin/master`**，本文件算锚点走的是 env，子进程却拿不到同一个来源 —— 两个来源不一致。修法：锚点由本文件算、按 `--range` 显式交出去（区间端点与 HEAD 同库）。
+     * 判的是**调用形状**那一半（子进程确实收到 `--range <分叉点>..HEAD`）；「审了几笔」那一半由 `tests/check-commit-claims.test.ts` 的区间那组兜着。 */
     const repo = mkdtempSync(join(tmpdir(), "premerge-claims-args-"));
     try {
       const g = (...args: Array<string>) =>
@@ -585,7 +498,7 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
       const env = { ...gitSandboxEnv(), CNB_PULL_REQUEST_TARGET_SHA: target };
       execFileSync(
         process.execPath,
-        [join(process.cwd(), "scripts", "premerge-check.mjs"), "--only=claims"],
+        [join(process.cwd(), "scripts", "gates", "premerge-check.mjs"), "--only=claims"],
         {
           cwd: repo,
           encoding: "utf8",
@@ -598,7 +511,11 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
        * 这一批、一笔不多一笔不少」—— 只判退出码会让「审了 0 笔却报绿」也通过。 */
       const claims = execFileSync(
         process.execPath,
-        [join(process.cwd(), "scripts", "check-commit-claims.mjs"), "--range", `${target}..HEAD`],
+        [
+          join(process.cwd(), "scripts", "gates/check-commit-claims.mjs"),
+          "--range",
+          `${target}..HEAD`,
+        ],
         { cwd: repo, encoding: "utf8", env: gitSandboxEnv() },
       );
       expect(claims).toContain("1 次提交");
@@ -608,12 +525,8 @@ describe("premerge-check —— 带锚点的那两段真的在跑（不许恒退
   });
 
   test("整跑时 `mergeLoss` 段不是「没跑起来」", () => {
-    /* 上一条判的是单段；这条判的是**编排**那一半：多段一起跑时 `mergeLoss` 也得真跑
-     * （按段名说、不按第几段说 —— 段序在 #2022 加出 `unitTests` 那一档时已经挪过一次，
-     * 2026-10-20 那一档又撤了，按位置说下次还会错）。
-     *
-     * ⚠️ 这里跳掉 `base` 就够：`unitTests` 段撤了之后，剩下的段全是廉价的纯 git /
-     * 文本复查（`claims` / `mergeLoss`），没有哪一段的耗时取决于宿主检出的分支拓扑。 */
+    /* 上一条判的是单段；这条判的是**编排**那一半：多段一起跑时 `mergeLoss` 也得真跑（按段名说、不按第几段说 —— 段序在 #2022 加出 `unitTests` 那一档时已经挪过一次，2026-10-20 那一档又撤了，按位置说下次还会错）。
+     * ⚠️ 这里跳掉 `base` 就够：`unitTests` 段撤了之后，剩下的段全是廉价的纯 git / 文本复查（`claims` / `mergeLoss`），没有哪一段的耗时取决于宿主检出的分支拓扑。 */
     const { output } = run(["--skip-base"]);
     expect(output).toContain("合并有没有把一侧整份覆盖掉");
     expect(output).not.toContain("缺少 --baseline");

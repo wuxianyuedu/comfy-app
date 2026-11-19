@@ -1,14 +1,8 @@
-/* 工作流库画布预览的**连线图派生**与**类型闸门** —— ISSUE #529
- *
- * 库里那三列现在是 React Flow 画布：连线是真正的 edge、端点是真正的 <Handle>，
- * 于是「这条线连的是哪两口」「这一行收不收这个口子」第一次成为**可直接断言的
- * 纯函数**（旧实现里它们埋在量 rect 的手势层，只能靠打桩几何来测）。
- *
- * 这里断言两件事：
- *   ① 边的两端与 handle 取值（两个键空间不能混，混了边就量不到 handleBounds）；
- *   ② 闸门与自动落点同一份判据（`pinAcceptsEntry`）—— 不过闸门就会连出
- *      「提示词 → 宽高比」这种运行期取不到值的假线。
- */
+/* 工作流库画布预览的**连线图派生**与**类型闸门** —— ISSUE #529。
+ * 三列现在是 React Flow 画布：连线是真 edge、端点是真 `<Handle>`，于是「这条线连哪
+ * 两口」「这一行收不收这个口子」第一次成为可直测的纯函数（旧实现埋在量 rect 的手势
+ * 层）。断言：① 边两端与 handle 取值（两个键空间不能混，混了量不到 handleBounds）；
+ * ② 闸门与自动落点同一份判据（`pinAcceptsEntry`），否则会连出假线。 */
 
 import { describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
@@ -141,9 +135,7 @@ describe("边的两端与 handle 取值", () => {
     /* 用户口径：这里是编辑对外参数的界面，「未连过就不要连」—— 所以库里没有
      *  「默认线」这一档样式，两条边都按实线画。 */
     for (const edge of [buildInputEdge(inputWire, true), buildOutputEdge(outputWire, true)]) {
-      expect(
-        /* SAFETY: 类型断言已复核 */ (edge.style as { strokeDasharray?: string }).strokeDasharray,
-      ).toBeUndefined();
+      expect(edge.style).not.toHaveProperty("strokeDasharray");
       expect(edge.style).toMatchObject({ strokeWidth: 2.5, opacity: 1 });
     }
   });
@@ -331,6 +323,22 @@ describe("handle id 就是条目 id（拖线落库的那条链）", () => {
   });
 });
 
+/* 背景板尺寸 —— ISSUE #596「全屏时，下方区域有空白却不是画布」。
+ * fitView 按节点包围盒缩放：内容比视口矮时只放大到内容高度，画布底边以下落回面板
+ * 底色。背景板把包围盒撑到「视口与内容取大」，最优缩放永远是「等比铺满视口」。
+ * 两个方向都要取大：只按内容算高 → 面板高时下方留白；只按内容算宽 → 面板窄时右列
+ * （对外输出参数）被挤出视野。 */
+const SIZING = {
+  paramsWidth: 220,
+  outputsWidth: 200,
+  hostWidth: 380,
+  columnGap: 96,
+  originX: 0,
+  originY: 0,
+  envelopeHeight: 720,
+  fillHeight: 720,
+};
+
 describe("三列布局", () => {
   it("左 → 宿主 → 右依次排开，列间留出走线的空间", () => {
     const at = layoutLibraryNodes({
@@ -356,26 +364,6 @@ describe("三列布局", () => {
     expect(at[LIB_NODE_BACKDROP]).toEqual(at[LIB_NODE_PARAMS]);
   });
 });
-
-/* 背景板尺寸 —— ISSUE #596「全屏时，下方区域有空白却不是画布」。
- *
- * 画布的缩放由 `fitView` 按节点包围盒算：内容比视口矮时它只会放大到内容高度，
- * 画布底边以下就落回面板底色。背景板把包围盒撑到「视口与内容取大」，于是最优
- * 缩放永远是「等比铺满视口」的那个值。
- *
- * 两个方向都要取大，缺一都会退回某种「没铺满」：
- *   · 只按内容算高 → 面板高时下方留白（用户报的就是这个）；
- *   · 只按内容算宽 → 面板窄时右列（对外输出参数）被挤出视野。 */
-const SIZING = {
-  paramsWidth: 220,
-  outputsWidth: 200,
-  hostWidth: 380,
-  columnGap: 96,
-  originX: 0,
-  originY: 0,
-  envelopeHeight: 720,
-  fillHeight: 720,
-};
 
 describe("背景板尺寸：视口与内容取大", () => {
   it("面板比内容高时按视口给高（这才是不留白的那一条）", () => {
@@ -404,16 +392,10 @@ describe("背景板尺寸：视口与内容取大", () => {
   });
 });
 
-/* 首帧 fitView 的包围盒 —— ISSUE #720 第 4 条「切到这个页签整块画布闪一下」。
- *
- * 闪的成因有两条，缺一条都还在闪：
- *   ① `<ReactFlow fitView>` 的默认口径按**全部节点**缩放，背景板（视口与内容取大）
- *      把缩放钉在「铺满背景板」上，三列缩成中间一小团 —— 与定向 fitView 的结果
- *      是两个不同的缩放，首帧画错、下一帧跳正；
- *   ② fitView 要等容器测量值，无法在首帧前算出 —— 所以画布在 fit 落地前不可见
- *      （见 `WorkflowLibraryCanvas` 的 `fitted`）。
- *
- * 这里锁住 ①：定向 fitView 的节点集合恰好是三列内容，**不含背景板**。 */
+/* 首帧 fitView 的包围盒 —— ISSUE #720 第 4 条「切到这个页签整块画布闪一下」：
+ * 只因 `<ReactFlow fitView>` 默认按全部节点（含背景板）缩放，与定向 fitView 的
+ * 结果不同，首帧画错、下一帧跳正；且 fit 要等容器测量，落地前画布不可见
+ * （见 `WorkflowLibraryCanvas` 的 `fitted`）。这里锁住定向集合不含背景板。 */
 describe("首帧 fitView 只按三列内容缩放", () => {
   it("节点集合 = 三列内容（背景板不在里面）", () => {
     const options = libraryFitViewOptions();

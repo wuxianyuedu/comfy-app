@@ -1,27 +1,16 @@
 "use client";
 
 /**
- * CodeBlock — shiki（VSCode 同款语法高亮引擎）驱动的源码展示块。
- *
- * 实现要点（重构，修复「行号不显示」+「大文件高亮卡死 UI」）：
- *  1. 行号可靠性：不再对 shiki 的 HTML 字符串做正则注入，改用
- *     codeToTokensBase 拿结构化 token 后由 React 直接渲染，每行固定
- *     「行号列 + 代码列」两段 span，样式由本组件自己的 CSS 类控制，
- *     不依赖 shiki 输出的 DOM 结构，行号 100% 可见。
- *  2. 不阻塞主线程：按 CHUNK_LINES 行分片高亮，片间 setTimeout 让出
- *     主线程；首帧先渲染纯文本行号，高亮完成后再整体替换。打开
- *     38KB 级源码文件时 UI 始终保持响应，不再出现「点不动」。
- *  3. 超大文件阈值：超过 MAX_HIGHLIGHT_CHARS 直接走纯文本行号渲染，
- *     避免 shiki 高亮数万字符白耗主线程。
- *
- * 按需懒加载：首次打开时动态 import shiki 的 web bundle，之后缓存单例
- * highlighter，避免重复初始化。
+ * CodeBlock — shiki（VSCode 同款语法高亮引擎）驱动的源码展示块。行号不再对 shiki HTML 做正则注入，而用 codeToTokensBase 的结构化 token 由 React 渲染（每行「行号列 + 代码列」两段 span，样式自管、不依赖 shiki DOM），行号 100% 可见。
+ * 按 CHUNK_LINES 分片高亮，片间 setTimeout 让出主线程，首帧先渲染纯文本行号；超过 MAX_HIGHLIGHT_CHARS 直接走纯文本行号，避免数万字符白耗主线程。
+ * 首次打开时动态 import shiki 的 web bundle，之后缓存单例 highlighter，避免重复初始化。
  */
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { chunkRange } from "~/lib/page-window";
 import { useTheme } from "next-themes";
 import { errorMessage } from "~/lib/error-message";
+import { isPlainRecord } from "~/lib/is-record";
 import { beginStaleRun } from "~/lib/stale-run";
 
 const EXT_TO_LANG: Record<string, string> = {
@@ -67,16 +56,24 @@ type ShikiHighlighter = {
 
 let highlighterPromise: Promise<ShikiHighlighter> | null = null;
 
+type ShikiBundle = {
+  createHighlighter: (options: {
+    langs: Array<string>;
+    themes: Array<string>;
+  }) => Promise<ShikiHighlighter>;
+};
+
+function isShikiBundle(v: unknown): v is ShikiBundle {
+  return isPlainRecord(v) && typeof v.createHighlighter === "function";
+}
+
 function getHighlighter(): Promise<ShikiHighlighter> {
   highlighterPromise ??= (async () => {
-    /* SAFETY: 类型断言已复核 */
-    const shiki = (await import("shiki/dist/bundle-web.mjs")) as {
-      createHighlighter: (options: {
-        langs: Array<string>;
-        themes: Array<string>;
-      }) => Promise<ShikiHighlighter>;
-    };
-    return shiki.createHighlighter({
+    const shikiModule: unknown = await import("shiki/dist/bundle-web.mjs");
+    if (!isShikiBundle(shikiModule)) {
+      throw new Error("shiki bundle 缺少 createHighlighter");
+    }
+    return shikiModule.createHighlighter({
       themes: ["one-dark-pro", "github-light"],
       langs: [
         "typescript",
@@ -89,6 +86,7 @@ function getHighlighter(): Promise<ShikiHighlighter> {
         "markdown",
         "yaml",
         "html",
+        "bash",
         "plaintext",
       ],
     });
@@ -106,11 +104,10 @@ const CHUNK_LINES = 400;
 /** token 的 fontStyle 位掩码：1=italic，2=bold（shiki 约定） */
 function tokenInlineStyle(tok: ShikiToken): CSSProperties {
   const style: CSSProperties = {};
-  if (tok.color) {
+  if (tok.color !== undefined && tok.color !== "") {
     style.color = tok.color;
   }
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (tok.fontStyle != null) {
+  if (tok.fontStyle !== null && tok.fontStyle !== undefined) {
     if ((tok.fontStyle & 1) !== 0) {
       style.fontStyle = "italic";
     }
@@ -164,6 +161,19 @@ export function CodeBlock({ code, language }: { code: string; language: string }
         return;
       }
 
+      /* 高亮失败是**非致命降级**：保持纯文本行号，所以这里不弹 toast。
+       * 失败文案走 `errorMessage`（同一枚口径，规范 16 §16.2.4.30）——
+       * 收口前这里是自己拼的 `err instanceof Error ? err.message : String(err)`，
+       * 抛出的值不是 Error 时会渲染成 `[object Object]`。
+       * 分片回调由 setTimeout 排在 try 块退出之后，异常不会自动冒泡回这里的
+       * catch；两处共用这一个出口，shiki 抛错才不会变成未捕获异常。 */
+      const failHighlight = (error_: unknown) => {
+        guard.commit(() => {
+          setTokens(null);
+          setError(errorMessage(error_, "代码高亮失败"));
+        });
+      };
+
       try {
         const hl = await getHighlighter();
         if (guard.isStale()) {
@@ -181,38 +191,39 @@ export function CodeBlock({ code, language }: { code: string; language: string }
           if (guard.isStale()) {
             return;
           }
-          const range = chunkRange(allLines.length, CHUNK_LINES, chunkIndex);
-          const slice = allLines.slice(range.start, range.end);
-          const chunkTokens = hl.codeToTokensBase(slice.join("\n"), {
-            lang: language,
-            theme: shikiTheme,
-          });
-          acc.push(...chunkTokens);
-          chunkIndex += 1;
-          if (chunkIndex < totalChunks) {
-            /* 让出主线程一帧，长文件高亮期间 UI 保持可点 */
-            setTimeout(processChunk, 0);
-          } else {
-            guard.commit(() => setTokens(acc));
+          try {
+            const range = chunkRange(allLines.length, CHUNK_LINES, chunkIndex);
+            const slice = allLines.slice(range.start, range.end);
+            const chunkTokens = hl.codeToTokensBase(slice.join("\n"), {
+              lang: language,
+              theme: shikiTheme,
+            });
+            acc.push(...chunkTokens);
+            chunkIndex += 1;
+            if (chunkIndex < totalChunks) {
+              /* 让出主线程一帧，长文件高亮期间 UI 保持可点 */
+              setTimeout(processChunk, 0);
+            } else {
+              guard.commit(() => {
+                setTokens(acc);
+              });
+            }
+          } catch (error_: unknown) {
+            failHighlight(error_);
           }
         };
 
         setTimeout(processChunk, 0);
       } catch (error_: unknown) {
-        guard.commit(() => {
-          setTokens(null);
-          /* 失败文案走 `errorMessage`（同一枚口径，规范 16 §16.2.4.30）——
-           * 收口前这里是自己拼的 `err instanceof Error ? err.message : String(err)`，
-           * 抛出的值不是 Error 时会渲染成 `[object Object]`。
-           * 高亮失败是**非致命降级**：保持纯文本行号，所以这里不弹 toast。 */
-          setError(errorMessage(error_, "代码高亮失败"));
-        });
+        failHighlight(error_);
       }
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [code, language, shikiTheme]);
 
-  if (error) {
+  if (error !== null && error !== "") {
     return (
       <div className="cb-code-block">
         <div className="cb-line">

@@ -1,20 +1,15 @@
-// ── 队列与运行 · 第①层（纯派生，无 React / 无 IO）─────────────────────────
-//
-// 这一屏的存在理由：`/api/comfy/queue` 把排队回答成**两个计数**，而用户问的两句是
-// 「还要多久」和「下一条是不是我的」—— 后者要逐条的名称与顺序，计数回答不了。
-//
-// 判据按规范 17 §17.1：删掉 JSX 还能不能跑测试。这里全部能，所以屏面上每个数字
-// 都必须能落到下面某个函数的入参上，并可在 node 环境直接断言。
+// ── 队列与运行 · 第①层（纯派生，无 React / 无 IO）──
+// 这一屏存在理由：/api/comfy/queue 把排队回答成两个计数，而用户问「还要多久」「下一条是不是我的」——
+// 后者要逐条名称与顺序，计数答不了。判据按规范 17 §17.1：删掉 JSX 仍能跑测试，
+// 故屏面每个数字都必须落到下面某个函数入参，可在 node 环境直接断言。
 
 import { formatElapsed } from "~/components/studio/hooks/use-comfy-queue";
 import { isTerminalTaskStatus } from "~/lib/task-state";
 import type { RouterOutputs } from "~/trpc/react";
 
 /**
- * 队列条目 = `task.list` 返回的一行。
- *
- * 刻意不自己重写字段：那份投影由服务端 router 定义，重写一份就是「两处表达同一件
- * 事」，router 加字段时这里只会静默落后。
+ * 队列条目 = task.list 返回的一行。刻意不重写字段：投影由服务端 router 定义，
+ * 重写一份就是两处表达同一件事，router 加字段时这里只会静默落后。
  */
 export type QueueRow = RouterOutputs["task"]["list"]["tasks"][number];
 
@@ -31,13 +26,9 @@ export type QueueBuckets = {
 };
 
 /**
- * 按状态分桶。
- *
- * 判据只走 `~/lib/task-state` 那三条（终态 / 进行中），不在这里重抄状态字面量 ——
- * 终态判据曾经散在四处，每一处写漏的表现都是「已经结束的任务还被当成在跑」。
- *
- * 「跑动中」保留成数组而不是取第一条：今天执行器是单并发，写死一条的代价是将来
- * 放开并行时界面**静默少显示**，而分桶本身不需要这个假设。
+ * 按状态分桶。判据只走 ~/lib/task-state 的三条（终态/进行中），不重抄状态字面量 ——
+ * 终态判据曾散在四处，写漏即「已结束仍当成在跑」。
+ * 「跑动中」保留成数组而非取第一条：今天单并发，写死一条会在将来并行时静默少显示。
  */
 export function bucketQueueRows(rows: ReadonlyArray<QueueRow>): QueueBuckets {
   const running: Array<QueueRow> = [];
@@ -53,13 +44,9 @@ export function bucketQueueRows(rows: ReadonlyArray<QueueRow>): QueueBuckets {
       continue;
     }
     /**
-     * 剩下的都算「还没轮到」：`QUEUED` 是最常见的一种，但**不认识的脏状态 /
-     * 将来新增的状态也走这里**。
-     *
-     * 为什么不让它继续往下掉进「最近结果」，也不许它三个桶都不命中：
-     * 后者会让一行任务从屏面上静默消失 —— 用户看到「没有在排的任务」，而它其实
-     * 卡在某个后端认识的中间态里。归进等待堆、状态标签原样回显（`taskStatusLabel`
-     * 对未知值就是回显原文），最差也只是「归类保守」，不会是「看不见」。
+     * 剩下的都算「还没轮到」：QUEUED 最常见，但不认识的脏状态 / 未来新增状态也走这里。
+     * 不能掉进「最近结果」，也不许三桶都不命中 —— 后者会让任务从屏面静默消失；
+     * 归进等待堆、状态标签原样回显（taskStatusLabel 对未知值即回显原文），最差只是归类保守。
      */
     queued.push(row);
   }
@@ -67,11 +54,9 @@ export function bucketQueueRows(rows: ReadonlyArray<QueueRow>): QueueBuckets {
 }
 
 /**
- * 排队位次（第 1 位 = 下一个开跑）。
- *
- * 为什么要显式反一次：`task.list` 一律按 `createdAt` **倒序**返回（仓储层四条分支
- * 都是同一句倒序，且不暴露排序参数），而执行器排队是先入先出 —— 提交最早的那条
- * 先跑。直接拿倒序数组的下标当位次，会把最后一个排队的显示成「第 1 位」。
+ * 排队位次（第 1 位 = 下一个开跑）。必须显式反一次：task.list 一律按 createdAt 倒序返回
+ *（仓储四条分支同一句倒序、不暴露排序参数），而执行器先入先出 —— 直接拿倒序下标当位次，
+ * 会把最后提交的显示成「第 1 位」。
  */
 export function queuedWithPosition(
   queued: ReadonlyArray<QueueRow>,
@@ -89,12 +74,9 @@ export function recentWithin(rows: ReadonlyArray<QueueRow>): Array<QueueRow> {
 }
 
 /**
- * 剩余时间估算（毫秒）。返回 null = 现在算不出来，屏面写「估算中」。
- *
- * 两种情况**必须**给 null 而不是给个数：
- *   · 进度还是 0 —— 分母为 0，任何数都是编的；
- *   · 进度已经 100 —— 它在收尾，报「剩余 0 秒」只是噪声。
- * 宁缺毋滥：这一屏的数字是用户决定「要不要再提交一条」的依据。
+ * 剩余时间估算（毫秒）；null = 现在算不出来，屏面写「估算中」。
+ * 进度为 0（分母 0）或已 100（收尾）必须给 null 而非数字 —— 这一屏数字是用户决定
+ * 「要不要再提交一条」的依据，宁缺毋滥。
  */
 export function estimateRemainingMs(elapsedMs: number, progressPct: number): number | null {
   if (progressPct <= 0 || progressPct >= 100) {
@@ -113,10 +95,8 @@ export function remainingText(remainingMs: number | null): string {
 }
 
 /**
- * 「已跑」那一格。
- *
- * `elapsedMs` 为 null 的含义是**没有在跑的任务**，不是「0 秒」—— 把 null 渲染成
- * `00:00` 会让人以为刚开跑，那是两种完全不同的状态。
+ * 「已跑」那一格。`elapsedMs` 为 null 表示没有在跑的任务，不是「0 秒」——
+ * 渲染成 00:00 会让人以为刚开跑，那是两种完全不同的状态。
  */
 export function runningElapsedText(elapsedMs: number | null): string {
   if (elapsedMs === null) {
@@ -126,11 +106,9 @@ export function runningElapsedText(elapsedMs: number | null): string {
 }
 
 /**
- * 「ComfyUI 未连接且一条任务都没有」的整页空态。
- *
- * 「没在跑」有两种原因（队列真的空 / 后端没连上），合成一句会让用户以为任务丢了。
- * 离线但列表里还有任务时不说这句 —— 那种情形列表照常铺开，只在顶部放一条横幅
- * （见 `offlineBannerText`），整页被空态替换正是「状态闪一下」观感的放大器。
+ * 「ComfyUI 未连接且一条任务都没有」的整页空态。「没在跑」有两种原因（队列真空 / 后端没连上），
+ * 合成一句会让人以为任务丢了。离线但列表还有任务时不说这句 —— 列表照常铺开，只在顶部放横幅
+ *（见 offlineBannerText），整页空态正是「状态闪一下」的放大器。
  */
 export function offlineEmptyText(): { description: string; title: string } {
   return {
@@ -151,11 +129,8 @@ export function offlineBannerText(): { description: string; title: string } {
 }
 
 /**
- * 「跑动中」段的空位文案（这一段没有卡可显示时）。
- *
- * 在线时的两种话术沿用原 `emptyStateText` 的口径（刚跑完有排队 / 完全没任务）；
- * 离线时不再说「上一条刚跑完」（离线时根本没跑完任何东西），也不重复横幅的
- * 「未连接」——上面已经说过一遍，这里只答「这一段为什么空」。
+ * 「跑动中」段空位文案。在线两句话术（刚跑完有排队 / 完全没任务）；离线不说「上一条刚跑完」
+ *（离线根本没跑完东西），也不重复横幅的「未连接」—— 上面说过，这里只答「这一段为什么空」。
  */
 export function runningHintText(
   online: boolean,
@@ -186,14 +161,9 @@ export function offlineRunningCardNote(): string {
 }
 
 /**
- * 「复制去重投」的载荷。
- *
- * 为什么这个动作不叫「重试」：后端**没有** retry 端点（那个 REST 路径从未实现过），
- * 真实语义就是「把这次提交的输入交回画布再投一遍」。所以这里不摆一个点了必然失败
- * 的按钮，只把内容送到剪贴板。
- *
- * 载荷刻意只放 `task.list` 真有的字段（提示词 / 工作流 / 类型）—— 参数表要详情接口
- * 才给，为凑一句「已复制全部参数」多发一次查询，且文案仍然对不上，不值得。
+ * 「复制去重投」的载荷。动作不叫「重试」：后端没有 retry 端点（REST 路径从未实现），
+ * 真实语义是把这次提交的输入交回画布再投一遍 —— 所以不摆点了必然失败的按钮，只送剪贴板。
+ * 载荷只放 task.list 真有的字段（提示词/工作流/类型）；参数表要详情接口才有。
  */
 export function reprintText(row: QueueRow): string {
   return [`提示词：${row.prompt}`, `工作流：${row.workflowName}`, `类型：${row.type}`].join("\n");

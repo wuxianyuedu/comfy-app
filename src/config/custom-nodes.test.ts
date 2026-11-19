@@ -60,7 +60,7 @@ function fetchReturns(status: number, body?: unknown): void {
   vi.stubGlobal(
     "fetch",
     vi.fn(
-      async () =>
+      () =>
         new Response(body === undefined ? "" : JSON.stringify(body), {
           status,
         }),
@@ -72,7 +72,7 @@ function fetchReturns(status: number, body?: unknown): void {
 function fetchReturnsText(status: number, text: string): void {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => new Response(text, { status })),
+    vi.fn(() => new Response(text, { status })),
   );
 }
 
@@ -80,7 +80,7 @@ function fetchReturnsText(status: number, text: string): void {
 function fetchRejects(error: Error): void {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => {
+    vi.fn(() => {
       throw error;
     }),
   );
@@ -188,6 +188,7 @@ describe("失败三相：哪一档该说话", () => {
   it("401 / 403（未登录）→ 必须留痕：这一档用户能自己修", async () => {
     for (const status of [401, 403]) {
       fetchReturns(status);
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await refreshCustomNodes();
       expect(getCustomNodesRegistryState().detail).toContain("未登录");
     }
@@ -437,7 +438,7 @@ describe("地址与载荷形状", () => {
     const seen: Array<string> = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown) => {
+      vi.fn((input: unknown) => {
         seen.push(String(input));
         return new Response(JSON.stringify(EMPTY_MANIFEST), { status: 200 });
       }),
@@ -451,7 +452,7 @@ describe("地址与载荷形状", () => {
     const seen: Array<string> = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown) => {
+      vi.fn((input: unknown) => {
         seen.push(String(input));
         return new Response(JSON.stringify(EMPTY_MANIFEST), { status: 200 });
       }),

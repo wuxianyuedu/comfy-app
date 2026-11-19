@@ -43,30 +43,17 @@ function CardRow({
       data={manifestByNode[ct]}
       expanded={nodeCardExpansion.isExpanded(ct)}
       fallbackName={ct}
-      onToggle={() => nodeCardExpansion.toggle(ct)}
+      onToggle={() => {
+        nodeCardExpansion.toggle(ct);
+      }}
     />
   );
 }
 
 /**
- * 单包节点卡的**窗口化列表**（ISSUE #2191，audit §C.1 F4b 剩下的那一格）。
- *
- * 现场数量级（本机真实节点包目录 D:/Comfy-Desktop/ComfyUI-CustomNode 实测）：15 个
- * 子包、最大单包 233 个节点类型、全开合计 ~503 张卡。三层里前两层已门控
- * （展开才挂载），这一层是最后一处「点开就全量 map」—— 大包一开就是两三百张
- * 交互卡（每张还是自己的 Disclosure）。
- *
- * 形态与取舍：
- *   · **窗口化用独立滚动容器**（`max-h-120 overflow-y-auto`），不用
- *     ModelLibrary / ProjectOutputs 那种「文档滚动锚 + scrollMargin」—— 那份
- *     模式适合页面顶层的单列表；这里列表嵌在树面板里、多包可**同时**展开，
- *     各自的 offsetTop 随其它面板开合漂移，页面锚方案要做跨列表的 margin 对账。
- *     容器内滚的代价是「长列表在这一格内部滚」——对嵌在树里的清单这反而更可扫读。
- *   · **`TreeChildren` 原样保留**（P36 硬闸的完整样本）：窗口化视口是它的
- *     **子内容**，不替换行容器，也不新增手写缩进 / 引导线。
- *   · 未量测环境（jsdom：clientHeight 恒 0）⇒ **全量渲染兜底**，与
- *     ModelLibrary / ProjectOutputs 的 `measured` 守卫同一条形状 —— 虚拟器在
- *     无读数环境里 `getVirtualItems()` 为空，直接用会把清单渲染成一片空白。
+ * 单包节点卡的窗口化列表（ISSUE #2191）。用独立滚动容器而非文档滚动锚：
+ * 多包可同时展开，offsetTop 会随其它面板开合漂移。TreeChildren 仍是行容器；
+ * 未量测环境（jsdom clientHeight 恒 0）退化为全量渲染，否则清单变空白。
  */
 function NodeCardList({
   nodeTypeList,
@@ -80,7 +67,7 @@ function NodeCardList({
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   // 与 ModelLibrary / ProjectOutputs 同一条误报豁免：virtualizer 的读数只在
   // 本组件 render 内消费，不外传给被 memo 的子组件。
-  // eslint-disable-next-line react-hooks/incompatible-library
+  // oxlint-disable-next-line react/incompatible-library
   const virtualizer = useVirtualizer({
     count: nodeTypeList.length,
     getScrollElement: () => scrollEl,
@@ -187,13 +174,11 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         {savedPaths.length > 0 ? (
           <div className="flex flex-col gap-1">
             {savedPaths.map((path) => (
-              <div
-                className="border-border bg-surface text-ink truncate rounded-lg border px-3 py-2 font-mono text-xs"
-                key={path}
-                title={path}
-              >
-                {path}
-              </div>
+              <Hint key={path} label={path}>
+                <div className="border-border bg-surface text-ink truncate rounded-lg border px-3 py-2 font-mono text-xs">
+                  {path}
+                </div>
+              </Hint>
             ))}
           </div>
         ) : (
@@ -204,7 +189,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         )}
         <div className="mt-3 flex items-center justify-between text-xs">
           <div className="text-muted-foreground flex flex-wrap items-center gap-2">
-            {saveErr && <span className="text-destructive">⚠ {saveErr}</span>}
+            {saveErr !== null && saveErr !== "" && (
+              <span className="text-destructive">⚠ {saveErr}</span>
+            )}
             {/* 目录总览章 —— 检测到任何子包时显示总数 + 过期数。 */}
             {totalAcrossParents.total > 0 && (
               <>
@@ -223,7 +210,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                 )}
               </>
             )}
-            {!saveErr && loading && (
+            {(saveErr === null || saveErr === "") && loading && (
               <span className="text-muted-foreground flex items-center gap-1.5">
                 <Spinner className="size-3" />
                 加载中…
@@ -275,16 +262,15 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
             const parentParsed = total > 0 && cnt.unimported + cnt.missing + cnt.empty === 0;
             return (
               <div className="border-border bg-bg rounded-xl border" key={parent}>
-                {/* 父级头 —— 可点击切换。`▸/▾`、`role`、`tabIndex`、
- Enter/Space 全交给`Disclosure`（规范 16 §16.2.4.13）——
- 此前是自绘的`role="button"` div，注释里写着「不能用原生
- button 因为嵌 button 非法」，而那个嵌进去的按钮正是右侧的
- 「解析本目录」：改走基元的`trailing` 后，它不再被嵌在
- 触发按钮里。面板 = 子包列表（见下方`subs.map`）。 */}
+                {/* 父级头：`▸/▾`、role、tabIndex、Enter/Space 全交给 `Disclosure`
+                    （规范 16 §16.2.4.13）；「解析本目录」已改走 `trailing`，
+                    不再嵌在触发按钮里。 */}
                 <Disclosure
                   className="hover:bg-subtle w-auto flex-1 justify-between gap-2 rounded-xl px-3 py-2.5"
                   marker="caret"
-                  onOpenChange={() => parentExpansion.toggle(parent)}
+                  onOpenChange={() => {
+                    parentExpansion.toggle(parent);
+                  }}
                   open={isOpen}
                   panelClassName="contents"
                   /* 整排的排布在 Root 上（`rootClassName`）：触发开关与右侧的
@@ -303,8 +289,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                       <Button
                         className="border-border bg-bg text-ink hover:bg-subtle text-2xs h-auto shrink-0 rounded-lg px-3 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-50"
                         disabled={!!parsing || total === 0 || (parentParsed && cnt.outdated === 0)}
-                        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                        onClick={() => void onParseAllParent(parent)}
+                        onClick={() => {
+                          void onParseAllParent(parent);
+                        }}
                         variant="outline"
                       >
                         {parsing ? "…" : "解析本目录"}
@@ -315,9 +302,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-ink font-medium">📁</span>
-                        <span className="text-ink truncate font-mono text-xs" title={parent}>
-                          {parent}
-                        </span>
+                        <Hint label={parent}>
+                          <span className="text-ink truncate font-mono text-xs">{parent}</span>
+                        </Hint>
                       </div>
                       <div className="text-muted-foreground text-3xs mt-0.5 flex flex-wrap items-center gap-1.5">
                         <span>{total} 个子包</span>
@@ -378,91 +365,94 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                       const nodeTypeList = saved?.nodeTypes ?? [];
                       return (
                         <div key={sub.path}>
-                          <div
-                            className={cn(
-                              "flex items-center justify-between gap-2 rounded-lg border p-2 pl-3",
-                              preset.rowCls,
-                            )}
-                            title={toolTip}
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-ink font-medium">{sub.name}</span>
-                                <StatusBadge
-                                  className="text-3xs px-2 py-0.5"
-                                  dot={false}
-                                  label={
-                                    state.kind === "loaded" && saved?.parsedAt
-                                      ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}`
-                                      : preset.label
-                                  }
-                                  status={preset.status}
-                                />
-                              </div>
-                              <div
-                                className="text-muted-foreground text-3xs truncate font-mono"
-                                title={sub.path}
-                              >
-                                {/* 同 SettingsParts：路径的语义在尾部，显式取末几段。 */}
-                                {lastSegments(sub.path, 3)}
-                              </div>
-                            </div>
-                            <div className="text-muted-foreground flex shrink-0 items-center gap-3 text-xs">
-                              {nodesAreLoaded ? (
-                                /* 「节点计数」单元是一个折叠开关：点开看该包
- 已加载的节点清单。此前是自绘的
-`role="button"` +`tabIndex` + 手写
- Enter/Space 处理（规范 16 §16.2.4.13）——
- 基元把这些语义一次给全。`panelClassName`
- 留空：面板是下面那个 rail（由外面的条件渲染
- 承担），此处的`Disclosure` 只接管这一行。 */
-                                <Disclosure
-                                  className="hover:bg-subtle flex-row-reverse items-end justify-end gap-1 rounded-md px-1.5 py-1 text-right"
-                                  marker="caret"
-                                  onOpenChange={() => nodeListExpansion.toggle(sub.path)}
-                                  open={nodeListOpen}
-                                  panelClassName="hidden"
-                                  trigger={
-                                    <div
-                                      title={
-                                        nodeListOpen
-                                          ? "收起节点列表"
-                                          : `点击查看已加载的 ${nodeCount} 个节点`
-                                      }
-                                    >
-                                      <div className="text-ink font-mono text-sm font-semibold">
-                                        {nodeCount}
-                                      </div>
-                                      <div className="text-3xs">节点</div>
-                                    </div>
-                                  }
-                                />
-                              ) : (
-                                <div className="text-right">
-                                  <div className="text-ink font-mono text-sm font-semibold">
-                                    {nodeCount}
-                                  </div>
-                                  <div className="text-3xs">映射文件</div>
-                                </div>
+                          <Hint label={toolTip}>
+                            <div
+                              className={cn(
+                                "flex items-center justify-between gap-2 rounded-lg border p-2 pl-3",
+                                preset.rowCls,
                               )}
-                              <Button
-                                className={cn(
-                                  "h-auto rounded-md px-3 py-1.5 text-xs font-medium",
-                                  preset.btn,
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-ink font-medium">{sub.name}</span>
+                                  <StatusBadge
+                                    className="text-3xs px-2 py-0.5"
+                                    dot={false}
+                                    label={
+                                      state.kind === "loaded" &&
+                                      saved?.parsedAt !== undefined &&
+                                      saved?.parsedAt !== null &&
+                                      saved.parsedAt !== ""
+                                        ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}`
+                                        : preset.label
+                                    }
+                                    status={preset.status}
+                                  />
+                                </div>
+                                <Hint label={sub.path}>
+                                  <div className="text-muted-foreground text-3xs truncate font-mono">
+                                    {/* 同 SettingsParts：路径的语义在尾部，显式取末几段。 */}
+                                    {lastSegments(sub.path, 3)}
+                                  </div>
+                                </Hint>
+                              </div>
+                              <div className="text-muted-foreground flex shrink-0 items-center gap-3 text-xs">
+                                {nodesAreLoaded ? (
+                                  /* 「节点计数」是折叠开关，语义由 `Disclosure` 提供
+                                   （规范 16 §16.2.4.13）；`panelClassName` 留空，
+                                   面板是下面那个 rail。 */
+                                  <Disclosure
+                                    className="hover:bg-subtle flex-row-reverse items-end justify-end gap-1 rounded-md px-1.5 py-1 text-right"
+                                    marker="caret"
+                                    onOpenChange={() => {
+                                      nodeListExpansion.toggle(sub.path);
+                                    }}
+                                    open={nodeListOpen}
+                                    panelClassName="hidden"
+                                    trigger={
+                                      <Hint
+                                        label={
+                                          nodeListOpen
+                                            ? "收起节点列表"
+                                            : `点击查看已加载的 ${nodeCount} 个节点`
+                                        }
+                                      >
+                                        <div>
+                                          <div className="text-ink font-mono text-sm font-semibold">
+                                            {nodeCount}
+                                          </div>
+                                          <div className="text-3xs">节点</div>
+                                        </div>
+                                      </Hint>
+                                    }
+                                  />
+                                ) : (
+                                  <div className="text-right">
+                                    <div className="text-ink font-mono text-sm font-semibold">
+                                      {nodeCount}
+                                    </div>
+                                    <div className="text-3xs">映射文件</div>
+                                  </div>
                                 )}
-                                disabled={
-                                  !!perPkgParsing[sub.path] ||
-                                  parsing ||
-                                  state.kind === "missing" ||
-                                  state.kind === "empty"
-                                }
-                                onClick={() => onParseSingle(sub.path)}
-                                variant="ghost"
-                              >
-                                {perPkgParsing[sub.path] ? "解析中…" : preset.btnLabel}
-                              </Button>
+                                <Button
+                                  className={cn(
+                                    "h-auto rounded-md px-3 py-1.5 text-xs font-medium",
+                                    preset.btn,
+                                  )}
+                                  disabled={
+                                    perPkgParsing[sub.path] === true ||
+                                    parsing ||
+                                    state.kind === "missing" ||
+                                    state.kind === "empty"
+                                  }
+                                  onClick={() => onParseSingle(sub.path)}
+                                  variant="ghost"
+                                >
+                                  {perPkgParsing[sub.path] === true ? "解析中…" : preset.btnLabel}
+                                </Button>
+                              </div>
                             </div>
-                          </div>
+                          </Hint>
                           {/* 可展开的 ComfyUI 风节点预览。只在
  用户点击计数单元时渲染。
  每张卡片都是自己的收起 / 展开目标；卡多时由

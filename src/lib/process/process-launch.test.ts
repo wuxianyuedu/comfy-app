@@ -20,7 +20,10 @@ import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { spawnMock, openSyncMock, closeSyncMock, warnMock, spawned } = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
+  spawnMock:
+    vi.fn<
+      (command: string, args: Array<string>, options: Record<string, unknown>) => EmitterChild
+    >(),
   openSyncMock: vi.fn<(file: string, flags: string) => number>(() => 42),
   closeSyncMock: vi.fn<(fd: number) => void>(),
   warnMock: vi.fn<(message: string) => void>(),
@@ -78,10 +81,7 @@ function fakeChild(): EmitterChild {
 
 /** 最近一次 `spawn` 的三元参数（命令 / 参数 / 选项）。 */
 function lastSpawn(): [string, Array<string>, Record<string, unknown>] {
-  /* SAFETY: 类型断言已复核 */
-  const call = spawnMock.mock.calls.at(-1) as
-    | [string, Array<string>, Record<string, unknown>]
-    | undefined;
+  const call = spawnMock.mock.calls.at(-1);
   if (!call) {
     throw new Error("这一条用例没有调到 spawn —— 判据落空，先查分支");
   }
@@ -297,10 +297,11 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
       },
     ];
     for (const path of paths) {
-      if (path.shellExe) {
-        process.env.COMFYAPP_SHELL_EXE = path.shellExe;
-      } else {
+      /* 夹具里的 shellExe 要么缺省要么是真实路径，只判缺省 */
+      if (path.shellExe === undefined) {
         delete process.env.COMFYAPP_SHELL_EXE;
+      } else {
+        process.env.COMFYAPP_SHELL_EXE = path.shellExe;
       }
       spawnMock.mockImplementationOnce(() => hostileThrow(`${path.name} 抛的字符串`));
       expect(path.run(), path.name).toBe(`${path.name} 抛的字符串`);
@@ -590,6 +591,27 @@ describe("waitForDetachMediator —— 中介的退出码与 stderr", () => {
     const outcome = await p;
     expect(outcome.code).toBeNull();
     expect(outcome.stderr).toBe("还在等");
+  });
+
+  it("超时那一刻回收中介：kill 被调用，不留挂死的中介进程（#4349）", async () => {
+    const child = fakeChild();
+    const kill = vi.fn<() => boolean>(() => true);
+    Object.assign(child, { kill });
+    const p = waitForDetachMediator(child, 20);
+    /* 不 emit exit：让超时赢这一轮赛跑——超时那一刻必须把中介收掉，
+     * 否则每次失败拉起都在进程表里漏一个 PowerShell 中介。 */
+    await p;
+    expect(kill).toHaveBeenCalledTimes(1);
+  });
+
+  it("拉起失败走 error 事件（不发 exit）：按中介失败收场，原因并进 stderr（#4396）", async () => {
+    const child = fakeChild();
+    const p = waitForDetachMediator(child, 1000);
+    child.emit("error", new Error("ENOENT: no such file"));
+    const outcome = await p;
+    expect(outcome.code).toBe(-1);
+    expect(outcome.stderr).toContain("中介拉起");
+    expect(outcome.stderr).toContain("ENOENT");
   });
 
   it("没有 stderr 管道（stdio 全 ignore）时不崩，照样回退出码", async () => {

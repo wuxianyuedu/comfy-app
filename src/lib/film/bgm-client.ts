@@ -4,6 +4,7 @@
 
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { asRecord } from "~/lib/is-record";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 const ENDPOINT = "/api/film/bgm";
 
@@ -16,7 +17,7 @@ const ENDPOINT = "/api/film/bgm";
 export async function uploadBgm(file: File): Promise<string> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(ENDPOINT, { method: "POST", body: form });
+  const res = await fetchWithTimeout(ENDPOINT, { method: "POST", body: form });
   const body = await readJsonBody(res);
   if (!res.ok) {
     throw new Error(readApiError(body) ?? "BGM 上传失败");

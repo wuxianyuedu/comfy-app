@@ -34,6 +34,7 @@ describe("施加 CPU 档位（ISSUE #1959）", () => {
   it("PID 拿不到时不施加，但**不算失败**（keepAlive 的孙进程要靠 main.py 反查，调用方随后补一次）", async () => {
     const r = recorder();
     for (const pid of [null, 0, -1]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const outcome = await applyComfyCpuLimit({
         pid,
         mode: "yield",

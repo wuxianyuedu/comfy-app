@@ -1,18 +1,14 @@
 /**
- * /api/custom-nodes 路由
- *
- * GET  → 返回设置（paths）、清单摘要与上次解析报告。
- * POST → { action: "saveSettings" } 已废弃：路径现在从 ComfyUI 安装根自动推导；
- *        { action: "parse" } 跑只读的 AST 解析器，返回按包分组的报告。
- *
- * 解析器**绝不**改动已配置的 custom_nodes 路径下的任何东西 ——
- * 它只读源码文本，只写生成出来的 manifest 与报告。
+ * /api/custom-nodes 路由：GET 返回设置（paths）、清单摘要与上次解析报告；POST
+ * { action: "parse" } 跑只读 AST 解析器（saveSettings 已废弃，路径从 ComfyUI 安装根自动推导）。
+ * 解析器绝不改动 custom_nodes 路径下的东西——只读源码文本，只写生成的 manifest 与报告。
  */
 import { type NextRequest, NextResponse } from "next/server";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeSlashes } from "~/lib/path-display";
+import { createStreamChildGuard, safeSpawnArg, spawnCapture } from "./python-child";
 import {
   customNodesManifestPath,
   customNodesManifestStamp,
@@ -32,17 +28,26 @@ import {
 } from "~/lib/process/python-run";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { AppError } from "~/lib/core/errors";
-import { isPlainRecord, isRecord } from "~/lib/is-record";
+import { isPlainRecord } from "~/lib/is-record";
 import type {
   DiscoveredSubpkg,
   ParseReport,
   ParseStreamEvent,
-  SettingsResp,
   SettingsStreamEvent,
 } from "~/lib/comfyui/custom-nodes-stream";
+import {
+  isNumberValue,
+  isParseErrorArray,
+  isParseReport,
+  isStringArray,
+  isStringOrNull,
+  isStringValue,
+  isUnknownArray,
+  readDiscoveredPackages,
+  type ParseErrorEntry,
+} from "./parse-guards";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { apiErrorDetail } from "~/lib/api-error";
-import { withTimeoutResult } from "~/lib/with-timeout";
 import { errorResponse, unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
@@ -51,18 +56,15 @@ export const dynamic = "force-dynamic";
 const MANIFEST = customNodesManifestPath();
 const REPORT = path.join(process.cwd(), "src/generated/customNodes.report.json");
 
-/* ── 外部 JSON 的窄化工具(替代原 any)───────────────────────────
- * manifest / report / python stdout 都是外部输入,统一 unknown 进、守卫窄化读;
- * 字段值仅在非 nullish 时原样透传,回退语义与原 `?.` + `??` 完全一致。 */
-/** 等价原 `src?.[key] ?? fallback`:值非 null/undefined 时原样返回,类型由调用处声明。 */
+/** 等价原 `src?.[key] ?? fallback`:值通过类型谓词后才采用,否则走兜底。 */
 function jsonField<T>(
   src: Record<string, unknown> | null | undefined,
   key: string,
   fallback: T,
+  isT: (v: unknown) => v is T,
 ): T {
   const v: unknown = src?.[key];
-  /* SAFETY: 类型断言已复核 */
-  return (v ?? fallback) as T;
+  return isT(v) ? v : fallback;
 }
 
 /** manifest 里单个已解析包的摘要形状(与前端 SummaryPkg 消费契约一致)。 */
@@ -88,7 +90,7 @@ function getPaths(): Array<string> {
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
-  return derived ? [derived, ...extra] : extra;
+  return derived !== null && derived !== "" ? [derived, ...extra] : extra;
 }
 
 /* 本地工作流扫描器的「伴随根目录」—— 即工作流文件从哪些目录加载。
@@ -102,7 +104,7 @@ function getLocalWorkflowPaths(): Array<string> {
     .split(/[\n,]/)
     .map((part) => part.trim())
     .filter(Boolean);
-  return derived ? [derived, ...extra] : extra;
+  return derived !== null && derived !== "" ? [derived, ...extra] : extra;
 }
 
 /* manifest 摘要的短路缓存：GET 每次都读 + 解析整份 manifest（自定义节点包一多
@@ -112,7 +114,7 @@ type ManifestSummary = {
   generatedAt: string | null;
   missingPaths: Array<string>;
   packages: Array<ManifestPackageSummary>;
-  parseErrors: Array<unknown>;
+  parseErrors: Array<ParseErrorEntry>;
   sources: Array<string>;
   totalNodes: number;
 };
@@ -132,7 +134,7 @@ function manifestStamp() {
  */
 function readManifestSummary() {
   const stamp = manifestStamp();
-  if (stamp && manifestSummaryCache?.stamp === stamp) {
+  if (stamp !== null && stamp !== "" && manifestSummaryCache?.stamp === stamp) {
     return manifestSummaryCache.summary;
   }
   if (!fs.existsSync(MANIFEST)) {
@@ -154,26 +156,26 @@ function readManifestSummary() {
       const fields: Record<string, unknown> | undefined = isPlainRecord(info) ? info : undefined;
       pkgs.push({
         name,
-        path: jsonField(fields, "path", ""),
-        nodeCount: jsonField(fields, "nodeCount", 0),
-        nodeTypes: jsonField<Array<string>>(fields, "nodeTypes", []),
-        status: jsonField(fields, "status", "ok"),
-        errors: jsonField<Array<unknown>>(fields, "errors", []),
-        contentHash: jsonField(fields, "contentHash", ""),
-        parsedAt: jsonField<string | null>(fields, "parsedAt", null),
-        parsedFileCount: jsonField(fields, "parsedFileCount", 0),
-        generatedAt: jsonField<string | null>(m, "generatedAt", null),
+        path: jsonField(fields, "path", "", isStringValue),
+        nodeCount: jsonField(fields, "nodeCount", 0, isNumberValue),
+        nodeTypes: jsonField<Array<string>>(fields, "nodeTypes", [], isStringArray),
+        status: jsonField(fields, "status", "ok", isStringValue),
+        errors: jsonField<Array<unknown>>(fields, "errors", [], isUnknownArray),
+        contentHash: jsonField(fields, "contentHash", "", isStringValue),
+        parsedAt: jsonField<string | null>(fields, "parsedAt", null, isStringOrNull),
+        parsedFileCount: jsonField(fields, "parsedFileCount", 0, isNumberValue),
+        generatedAt: jsonField<string | null>(m, "generatedAt", null, isStringOrNull),
       });
     }
-    const sources: Array<string> = jsonField<Array<string>>(m, "sources", []);
-    const nodes: unknown = jsonField(m, "nodes", null);
+    const sources: Array<string> = jsonField<Array<string>>(m, "sources", [], isStringArray);
+    const nodes: unknown = m.nodes ?? null;
     const summary = {
-      generatedAt: jsonField<string | null>(m, "generatedAt", null),
+      generatedAt: jsonField<string | null>(m, "generatedAt", null, isStringOrNull),
       totalNodes: isPlainRecord(nodes) ? Object.keys(nodes).length : 0,
       packages: pkgs,
       /* SAFETY: 类型断言已复核 */
       missingPaths: [] as Array<string>,
-      parseErrors: jsonField<Array<unknown>>(m, "parseErrors", []),
+      parseErrors: jsonField<Array<ParseErrorEntry>>(m, "parseErrors", [], isParseErrorArray),
       sources,
     };
     // stat 失败（极罕见）时 stamp 为 null：返回结果但不缓存。
@@ -237,82 +239,29 @@ function rememberDiscover(key: string, result: Array<DiscoveredSubpkg>): void {
   }
 }
 
-/** 单个 `discover` 进程的最长等待。解析器要扫完父目录再算一遍 hash，
- *  目录大时能到分钟级 —— 但再久也不能让请求挂到客户端超时，超时即放弃
- *  （resolve 成 null，调用方换下一个解释器 / 返回空列表）。 */
-const DISCOVER_TIMEOUT_MS = 60_000;
-
-/** 异步跑一次解析器并收集 stdout。
- *
- *  **不用 `spawnSync`**：它是同步的，会把整个 Node 事件循环连同所有并发请求
- *  一起堵住 —— 而这一步正是本路由最慢的一段。启动失败 / 非零退出 / 超时一律
- *  resolve 成 `null`，由调用方决定换解释器还是放弃。 */
-function spawnCapture(command: string, args: Array<string>): Promise<string | null> {
-  let killChild: (() => void) | undefined;
-
-  /* 起进程并收集 stdout：启动失败 / 非零退出 / 空输出都 resolve 成 null
-   *（调用方据此换下一个解释器）。 */
-  const collect = new Promise<string | null>((resolve) => {
-    let child: ReturnType<typeof spawn>;
-    try {
-      child = spawn(command, args, { cwd: process.cwd(), env: process.env });
-    } catch {
-      // 解释器根本不存在
-      resolve(null);
-      return;
-    }
-
-    /* 超时由 `withTimeoutResult` 判：它赢下赛跑后经 `onTimeout` 把进程杀掉 ——
-     * 否则放弃等待之后进程还在后台占着 CPU 扫目录。 */
-    killChild = () => child.kill();
-
-    let stdout = "";
-    child.stdout?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk: string) => {
-      stdout += chunk;
-    });
-    child.on("error", () => {
-      resolve(null);
-    });
-    child.on("close", (code) => {
-      resolve(code === 0 && stdout.length > 0 ? stdout : null);
-    });
-  });
-
-  return withTimeoutResult(collect, DISCOVER_TIMEOUT_MS, null, {
-    onTimeout: () => killChild?.(),
-  });
-}
-
-async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<unknown>> {
+async function runDiscover(parentDirs: ReadonlyArray<string>): Promise<Array<unknown>> {
   const key = parentDirs.join("|");
   const cached = discoverCache.get(key);
   if (cached && Date.now() - cached.at < 5000) {
     return cached.result;
   }
-  // spawn 的 args 需要 string[];原 any 同样把原始值直接交给 Node(非字符串由 Node 校验报错),
-  // 断言只为恢复静态类型,不改运行时取值。
+  // spawn 的 args 需要 string[];调用点已把父目录收敛为 string[],这里直接透传。
   const args = [
     "-u",
     "scripts/parse_custom_nodes.py",
-    ...parentDirs.flatMap((parentDir) => [
-      "--discover-parent",
-      /* SAFETY: 类型断言已复核 */ parentDir as string,
-    ]),
+    ...parentDirs.flatMap((parentDir) => ["--discover-parent", parentDir]),
   ];
   /* 候选名与顺序**不在这里写**（台账 A14）：字面量表一旦落在调用点，`py` 就少一个 `-3`，
    * 而 Windows 上的第一候选也不是 `python3`。见 `~/lib/process/python-run`。 */
   for (const attempt of pythonAttempts(args)) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const stdout = await spawnCapture(attempt.command, attempt.args);
     if (stdout === null) {
       continue;
     }
     try {
       const parsed: unknown = JSON.parse(stdout);
-      /* SAFETY: 类型断言已复核 */
-      const pkgs = (
-        isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : []
-      ) as Array<DiscoveredSubpkg>;
+      const pkgs = readDiscoveredPackages(parsed);
       rememberDiscover(key, pkgs);
       return pkgs;
     } catch {
@@ -322,14 +271,9 @@ async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<un
   return [];
 }
 
-/* `runDiscover` 的流式版本 —— 只为**一个**父目录起解析器进程，
- * 把每条 PROGRESS:: 行转发成 `{type:"progress"}` 事件，
- * 等到那行 JSON 回来时以最终的包列表 resolve。命中缓存则直接短路。
- *
- * 输出协议（ndjson）：
- *    {type:"progress", ...} 是进度事件（阶段 scan 或 hash，可带计数）
- *    {type:"discover_done", parent, packages, cached:false} 是收尾事件
- */
+/* `runDiscover` 的流式版本：只为一个父目录起解析器进程，PROGRESS:: 行转发成
+ * `{type:"progress"}` 事件，最终 JSON 回来时以包列表 resolve；命中缓存直接短路。
+ * 输出协议（ndjson）：progress（阶段 scan/hash，可带计数）+ 收尾 discover_done。 */
 
 /** PROGRESS:: 行解析出的进度字段(msg + 可选计数,键由 kvRegex 决定)。 */
 type DiscoverProgressFields = {
@@ -340,9 +284,12 @@ type DiscoverProgressFields = {
   total?: number;
 };
 
+const DISCOVER_PHASES: ReadonlyArray<DiscoverProgressFields["phase"]> = ["scan", "hash"];
+
 function runDiscoverStreaming(
   parent: string,
   send: (ev: SettingsStreamEvent) => void,
+  signal?: AbortSignal,
 ): Promise<Array<unknown>> {
   const cached = discoverCache.get(parent);
   if (cached && Date.now() - cached.at < 5000) {
@@ -367,13 +314,28 @@ function runDiscoverStreaming(
     let finalJson = "";
     let resolved = false;
 
+    /* 看门狗 + 断开回收（#4004）：超时 / 客户端断开都杀整棵子进程树，本父目录按
+     * 「0 个包」降级，后续父目录照常扫——此前进程卡住时整条流永久挂着。 */
+    const guard = createStreamChildGuard({
+      label: `自定义节点探测（${parent}）`,
+      signal,
+      onGiveUp: (reason) => {
+        if (resolved) {
+          return;
+        }
+        resolved = true;
+        send({ type: "progress", parent, phase: "scan", msg: `⚠️ ${reason}` });
+        resolve([]);
+      },
+    });
+
     const tryRun = () => {
-      /* `.at()` 越界即 `undefined`：取候选与「有没有候选」判据合成一处，
-       * 不必先比 `i < length` 再靠 `!` 把 `undefined` 从类型里抹掉。 */
+      /* `.at()` 越界即 `undefined`：取候选与「有没有候选」判据合成一处。 */
       const attempt = attempts.at(i);
       if (!attempt) {
         if (!resolved) {
           resolved = true;
+          guard.settle();
           send({
             type: "progress",
             parent,
@@ -384,17 +346,16 @@ function runDiscoverStreaming(
         }
         return;
       }
-      /* 本档是否已经把退避交给下一个候选。**必须**有这一层：真机上 `spawn` 失败会先报
-       * `error`、随后**再发一次 `close`**，少了这个守卫，那个压根没起来的进程的 `close`
-       * 会走到下面的收尾分支，把「空结果」定成最终答案（`resolved = true`），
-       * 后面真跑成的那一档就被丢掉 —— 表现正是 Windows 上第一候选缺位时
-       * 「扫描到 0 个节点」，而过去的夹具只排 `error`、不排第二次 `close`，
-       * 所以这一形从来没有执行者（台账 A14）。 */
+      /* 本档是否已把退避交给下一候选：真机上 `spawn` 失败会先报 `error`、随后再发一次
+       * `close`，少了这个守卫，没起来的进程的 `close` 会把「空结果」定成最终答案，真跑成的
+       * 那档被丢掉（Windows 第一候选缺位时「扫描到 0 个节点」，台账 A14）。 */
       let handedOff = false;
       const cp = spawn(/*turbopackIgnore: true*/ attempt.command, attempt.args, {
         cwd: process.cwd(),
         env: process.env,
       });
+      /* 句柄登记进看门狗：退避链换档时覆盖为当前子进程。 */
+      guard.track(cp);
 
       forEachOutputLine(cp.stdout, (line) => {
         if (line.startsWith("PROGRESS::")) {
@@ -403,28 +364,30 @@ function runDiscoverStreaming(
           // 其中 `msg=` 那段是在界面副标题里显示的人读文本；
           // 其它 key=value（discovered、done、total）用来驱动进度条填充，
           // 这样界面不必去解析中文文本。
-          const m = /^PROGRESS::(scan|hash)\|(.*)$/.exec(line);
+          const m = /^PROGRESS::(?<phase>scan|hash)\|(?<rest>.*)$/.exec(line);
           if (!m) {
             return;
           }
-          /* SAFETY: 类型断言已复核 */
-          const phase = m[1] as "scan" | "hash";
+          const phase = DISCOVER_PHASES.find((candidate) => candidate === m[1]);
+          if (phase === undefined) {
+            return;
+          }
           const rest = m[2]!;
           // 取出 msg=...（若其中含 `|` 也没关系：我们把它之后
           // 直到下一个 `|key=` 或行尾的内容整体当作 msg）。
           // 向后兼容：没有 `|msg=` 的旧格式行，就把剩余部分整体当 msg。
           const fields: DiscoverProgressFields = { phase, msg: "" };
-          const msgM = /\|?msg=([^|]*)/.exec(rest);
+          const msgM = /\|?msg=(?<msg>[^|]*)/.exec(rest);
           if (msgM) {
-            fields.msg = msgM[1]!;
+            fields.msg = msgM.groups?.msg ?? "";
           } else {
             fields.msg = rest;
           }
-          const kvRegex = /\|?(discovered|done|total)=(\d+)/g;
+          const kvRegex = /\|?(?<key>discovered|done|total)=(?<value>\d+)/g;
           let kv: RegExpExecArray | null;
           while ((kv = kvRegex.exec(rest)) !== null) {
-            const n = Number.parseInt(kv[2]!, 10);
-            const k = kv[1]!;
+            const n = Number.parseInt(kv.groups?.value ?? "", 10);
+            const k = kv.groups?.key ?? "";
             if (k === "discovered") {
               fields.discovered = n;
             } else if (k === "done") {
@@ -468,6 +431,7 @@ function runDiscoverStreaming(
         }
         if (!resolved) {
           resolved = true;
+          guard.settle();
           send({
             type: "progress",
             parent,
@@ -490,12 +454,11 @@ function runDiscoverStreaming(
           tryRun();
           return;
         }
+        /* 走到这就是最终收尾（成功或失败二选一）：拆掉看门狗，别让定时器空挂到点。 */
+        guard.settle();
         try {
           const parsed: unknown = finalJson ? JSON.parse(finalJson) : { packages: [] };
-          /* SAFETY: 类型断言已复核 */
-          const pkgs = (
-            isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : []
-          ) as Array<DiscoveredSubpkg>;
+          const pkgs = readDiscoveredPackages(parsed);
           rememberDiscover(parent, pkgs);
           resolved = true;
           send({
@@ -522,34 +485,66 @@ function runDiscoverStreaming(
   });
 }
 
-/* 校验外部进程参数：拒绝 flag 形态（前缀 -）、空/超长、含 shell/元字符，
- * 防客户端把 `--out=...` 之类伪装成包名注入到 spawn argv。 */
-function safeSpawnArg(token: unknown): string | null {
-  if (typeof token !== "string") {
-    return null;
-  }
-  if (token.length === 0 || token.length > 8192) {
-    return null;
-  }
-  if (token.startsWith("-")) {
-    return null;
-  }
-  if (/[\0'"$;`&|<>(){}=]/.test(token)) {
-    return null;
-  }
-  return token;
-}
-
-/* 构建流式响应：先把解析器的实时日志透出去，再给报告。
- * 传 `onlyPkgs`（具体子包路径）表示做子集 / 合并解析；
- * 否则 `paths` 就是完整的根目录列表。 */
-function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
+/* 构建流式响应：先透出实时日志再给报告；`onlyPkgs` 表示子集/合并解析。 */
+function streamParse(
+  paths: Array<string>,
+  onlyPkgs?: Array<string>,
+  signal?: AbortSignal,
+): Response {
   const encoder = new TextEncoder();
+  /* 收尾标志放函数级：看门狗的 onGiveUp 与 cancel 都要判它（先声明后引用）。 */
+  let closed = false;
+  /* 看门狗在 start 里装配（要拿 controller）；cancel 走这个引用兜底。 */
+  let guard: ReturnType<typeof createStreamChildGuard> | null = null;
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      const send = (ev: ParseStreamEvent) => {
-        controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
+      const safeClose = () => {
+        if (closed) {
+          return;
+        }
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          /* 已关闭/已取消 */
+        }
       };
+      const send = (ev: ParseStreamEvent) => {
+        if (closed) {
+          return;
+        }
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
+        } catch {
+          closed = true;
+        }
+      };
+      guard = createStreamChildGuard({
+        label: "自定义节点解析",
+        signal,
+        onGiveUp: (reason) => {
+          if (closed) {
+            return;
+          }
+          try {
+            controller.enqueue(
+              encoder.encode(
+                `${JSON.stringify({ type: "log", level: "error", msg: reason } satisfies ParseStreamEvent)}\n`,
+              ),
+            );
+            controller.enqueue(
+              encoder.encode(
+                `${JSON.stringify({ type: "done", ok: false, report: null, stderr: reason, exitCode: null } satisfies ParseStreamEvent)}\n`,
+              ),
+            );
+            controller.close();
+          } catch {
+            /* 流已被取消 / 关闭：子进程回收本身已完成，帧发不出去就算了。 */
+          } finally {
+            closed = true;
+          }
+        },
+      });
 
       const scriptArgs = [
         "-u",
@@ -559,7 +554,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
         "--report-out",
         REPORT,
       ];
-      if (onlyPkgs?.length) {
+      if (onlyPkgs !== undefined && onlyPkgs.length > 0) {
         scriptArgs.push("--only-pkgs", onlyPkgs.join(","));
       } else {
         scriptArgs.push("--paths", paths.join(","));
@@ -568,13 +563,13 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
        * 于是 Windows 上从 `python3` 起、且命中 `py` 那一档不带 `-3`。 */
       const attempts = pythonAttempts(scriptArgs);
       let i = 0;
-      let closed = false;
 
       const tryRun = () => {
         /* 同 `runDiscoverStreaming`：`.at()` 越界即 `undefined`，
          * 取候选与「有没有候选」判据合成一处。 */
         const attempt = attempts.at(i);
         if (!attempt) {
+          guard?.settle();
           send({
             type: "log",
             level: "error",
@@ -587,7 +582,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
             stderr: "no python interpreter",
             exitCode: null,
           });
-          controller.close();
+          safeClose();
           return;
         }
         /* 见 `runDiscoverStreaming` 里那段同名的守卫：真机上缺解释器是 `error` 之后
@@ -597,6 +592,8 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
           cwd: process.cwd(),
           env: process.env,
         });
+        /* 句柄登记进看门狗：退避链换档时覆盖为当前子进程。 */
+        guard?.track(cp);
 
         cp.on("error", (e: NodeJS.ErrnoException) => {
           if (handedOff || closed) {
@@ -611,7 +608,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
           if (closed) {
             return;
           }
-          closed = true;
+          guard?.settle();
           send({
             type: "log",
             level: "error",
@@ -624,20 +621,16 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
             stderr: e.message,
             exitCode: null,
           });
-          controller.close();
+          safeClose();
         });
 
-        /* 按行切分交给内核 —— 与探测口原本是一段孪生实现（两份 `indexOf("\n")` 循环，
-         * 一份在 `end` 时补发尾行、一份不补）。 */
+        /* 按行切分交给内核（与探测口同一份行切分语义）。 */
         const pipeLogs = (s: NodeJS.ReadableStream, defaultLevel: "info" | "error" = "info") => {
           forEachOutputLine(s, (line) => {
             send({ type: "log", level: defaultLevel, msg: line });
           });
         };
-        // 解析器的 stdout 是正常进度（绿色 info）。
-        // stderr 是错误（红色）—— 解析器把语法错误与一般异常经 log_stderr()
-        // 写到 stderr，让对话框里的实时控制台把它们渲染成红色，
-        // 而不是淹没在 300 多行成功记录里。
+        // stdout 为进度(info)，stderr 为错误(error)，便于界面区分渲染。
         pipeLogs(cp.stdout, "info");
         pipeLogs(cp.stderr, "error");
 
@@ -656,28 +649,33 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
             tryRun();
             return;
           }
-          closed = true;
-          let report: unknown = null;
+          guard?.settle();
+          let report: ParseReport | null = null;
           try {
             if (fs.existsSync(REPORT)) {
-              report = JSON.parse(fs.readFileSync(REPORT, "utf8"));
+              const parsed: unknown = JSON.parse(fs.readFileSync(REPORT, "utf8"));
+              report = isParseReport(parsed) ? parsed : null;
             }
           } catch {
             report = null;
           }
           send({
             type: "done",
-            ok: !!report,
-            /* SAFETY: 类型断言已复核 */
-            report: report as ParseReport | null,
+            ok: report !== null,
+            report,
             stderr: "",
             exitCode: code,
           });
-          controller.close();
+          safeClose();
         });
       };
 
       tryRun();
+    },
+    cancel() {
+      /* 消费方中途弃流：把还挂着的解析子进程一并回收（#4004；客户端断开在 Next 里
+       * 主要走 req.signal abort，这里兜住其余取消路径）。 */
+      guard?.killNow("解析流被取消，回收解析子进程");
     },
   });
 
@@ -690,7 +688,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
   });
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
@@ -701,7 +699,7 @@ export async function GET() {
    * 前端会崩在「读取 undefined 的 paths 属性」这类报错上，
    * 真实原因反而看不到。现在错误以 { error } JSON 返回，前端可读展示。 */
   try {
-    return await buildGetResponse();
+    return buildGetResponse(req.signal);
   } catch (error) {
     return errorResponse(
       new AppError(apiErrorDetail(error, "读取配置失败"), "custom_nodes.read_failed", 500),
@@ -709,14 +707,15 @@ export async function GET() {
   }
 }
 
-async function buildGetResponse(): Promise<Response> {
+function buildGetResponse(signal?: AbortSignal): Response {
   const paths = getPaths();
   const localWorkflowPaths = getLocalWorkflowPaths();
   const summary = readManifestSummary();
-  let lastReport: unknown = null;
+  let lastReport: ParseReport | null = null;
   if (fs.existsSync(REPORT)) {
     try {
-      lastReport = JSON.parse(fs.readFileSync(REPORT, "utf8"));
+      const parsed: unknown = JSON.parse(fs.readFileSync(REPORT, "utf8"));
+      lastReport = isParseReport(parsed) ? parsed : null;
     } catch {
       lastReport = null;
     }
@@ -729,7 +728,7 @@ async function buildGetResponse(): Promise<Response> {
     paths.length > 0 &&
     paths.every((path) => {
       const c = discoverCache.get(path);
-      return c && Date.now() - c.at < 5000;
+      return c !== undefined && Date.now() - c.at < 5000;
     });
   // 两条分支都带上 localWorkflowPaths，
   // 好让设置对话框在没配 CUSTOM_NODES_PATH 时（冷路径）
@@ -755,8 +754,16 @@ async function buildGetResponse(): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let closed = false;
       const send = (ev: SettingsStreamEvent) => {
-        controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
+        if (closed) {
+          return;
+        }
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
+        } catch {
+          closed = true;
+        }
       };
       try {
         send({ type: "discover_start", parents: paths, total: paths.length });
@@ -772,16 +779,15 @@ async function buildGetResponse(): Promise<Response> {
             phase: "queue",
             msg: `📂 [${idx}/${paths.length}] ${parent}`,
           });
-          discoveredByParent[parent] = await runDiscoverStreaming(parent, send);
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+          discoveredByParent[parent] = await runDiscoverStreaming(parent, send, signal);
         }
         // 把伴随的 LOCAL_WORKFLOWS_PATH 列表沿同一条流送下去，
         // 让对话框在同一次注水时就能渲染本地工作流的扫描结果。
         send({
           type: "summary",
-          /* SAFETY: 类型断言已复核 */
-          summary: summary as SettingsResp["summary"],
-          /* SAFETY: 类型断言已复核 */
-          lastReport: lastReport as ParseReport | null,
+          summary,
+          lastReport,
           byPath,
           settings: { paths, localWorkflowPaths },
         });
@@ -789,7 +795,14 @@ async function buildGetResponse(): Promise<Response> {
       } catch (error) {
         send({ type: "error", message: apiErrorDetail(error, String(error)) });
       } finally {
-        controller.close();
+        if (!closed) {
+          closed = true;
+          try {
+            controller.close();
+          } catch {
+            /* 已关闭/已取消 */
+          }
+        }
       }
     },
   });
@@ -835,7 +848,7 @@ export async function POST(req: NextRequest) {
     const paths = getPaths();
     const rawPkgs = Array.isArray(rec.packages) ? rec.packages : undefined;
     let onlyPkgs: Array<string> | undefined;
-    if (rawPkgs?.length) {
+    if (rawPkgs !== undefined && rawPkgs.length > 0) {
       const sanitized: Array<string> = [];
       for (const p of rawPkgs) {
         const s = safeSpawnArg(p);
@@ -846,9 +859,9 @@ export async function POST(req: NextRequest) {
       }
       onlyPkgs = sanitized;
     }
-    if (onlyPkgs?.length) {
+    if (onlyPkgs !== undefined && onlyPkgs.length > 0) {
       // 子集解析 —— 不必先设置 CUSTOM_NODES_PATH
-      return streamParse(paths, onlyPkgs);
+      return streamParse(paths, onlyPkgs, req.signal);
     }
     if (paths.length === 0) {
       return NextResponse.json(
@@ -860,7 +873,7 @@ export async function POST(req: NextRequest) {
       );
     }
     // 先流式推实时进度日志，再推最终报告，整体用 NDJSON。
-    return streamParse(paths);
+    return streamParse(paths, undefined, req.signal);
   }
 
   if (action === "discover") {
@@ -873,9 +886,7 @@ export async function POST(req: NextRequest) {
       }
       parents.push(s);
     }
-    /* 空批不去起解释器：`runDiscover([])` 原本照样按 python3 → python → py 轮一遍
-     * （每轮各带一次超时与进程启动），扫一个都不存在的目录还要花掉三轮子进程。
-     * 非数组的 `parents` 在上面已经收成空数组，所以这一条同时兜住畸形入参。 */
+    /* 空批不去起解释器：避免空目录/畸形入参白跑三轮 Python 退避。 */
     if (parents.length === 0) {
       return NextResponse.json({ ok: true, packages: [] });
     }

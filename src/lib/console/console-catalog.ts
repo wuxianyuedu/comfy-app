@@ -81,7 +81,7 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
         id: "check-all",
         label: "一键质量门禁",
         command: "pnpm check:all",
-        desc: "scripts/quality-gate.mjs：本地跑一遍完整门禁",
+        desc: "scripts/gates/quality-gate.mjs：本地跑一遍完整门禁",
       },
       {
         id: "check",
@@ -93,13 +93,13 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
         id: "format-check",
         label: "格式检查",
         command: "pnpm run format:check",
-        desc: "prettier 检查（不改文件）",
+        desc: "oxfmt 检查（不改文件）",
       },
       {
         id: "format-write",
         label: "格式化",
         command: "pnpm run format:write",
-        desc: "prettier 就地改文件；改完自己看一眼 diff",
+        desc: "oxfmt 就地改文件；改完自己看一眼 diff",
       },
       {
         id: "lint-fix",
@@ -130,7 +130,7 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
         id: "db-push",
         label: "应用 schema",
         command: "pnpm db:push",
-        desc: "把 schema 推到本地库（走 scripts/db-push.mjs 的共享内核）",
+        desc: "把 schema 推到本地库（走 scripts/db/db-push.mjs 的共享内核）",
       },
       {
         id: "db-studio",
@@ -258,7 +258,7 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
       {
         id: "port-vectors",
         label: "端口推导自检",
-        command: "node scripts/check-app-port-vectors.cjs",
+        command: "node scripts/gates/check-app-port-vectors.cjs",
         desc: "四语言（Node / PowerShell / Python / Rust）读同一份校验向量，任一侧漂移即报错",
       },
       {
@@ -271,12 +271,12 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
         id: "base-batch",
         label: "门禁基线复算",
         command: "pnpm run check:base:batch",
-        desc: "被判据拦下又确信「不是我改的」时先跑它；单条用 node scripts/base-check.mjs <门禁名>",
+        desc: "被判据拦下又确信「不是我改的」时先跑它；单条用 node scripts/gates/base-check.mjs <门禁名>",
       },
       {
         id: "standalone-contents",
         label: "产物内容自检",
-        command: "node scripts/check-standalone-contents.cjs",
+        command: "node scripts/gates/check-standalone-contents.cjs",
         desc: "构建后必跑：同时查「不该进产物的」与「必须在场的运行时脚本」",
       },
       {
@@ -319,7 +319,7 @@ export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
       {
         id: "file-structure",
         label: "文件结构硬规则",
-        command: "node scripts/check-file-structure.cjs",
+        command: "node scripts/gates/check-file-structure.cjs",
         desc: "R1–R14 一次跑完（命名 / 目录归属 / 长度棘轮 / 注释语言）",
       },
     ],
@@ -373,7 +373,7 @@ export function allPresets(): Array<ConsolePreset> {
  * 一句泛泛的「含有特殊字符」用户不知道该改哪里。
  */
 export function shellSyntaxWarning(line: string): string | null {
-  const raw = (line ?? "").trim();
+  const raw = line.trim();
   if (!raw) {
     return null;
   }
@@ -451,7 +451,7 @@ export type ParsedConsoleLine =
  *   · `echo "未闭合`                → ok:false, reason=「引号未闭合」
  */
 export function parseConsoleLine(line: string): ParsedConsoleLine {
-  const raw = (line ?? "").trim();
+  const raw = line.trim();
   if (!raw) {
     return { ok: false, reason: "命令为空" };
   }
@@ -514,6 +514,9 @@ export function parseConsoleLine(line: string): ParsedConsoleLine {
     return { ok: false, reason: "命令为空" };
   }
 
-  const [file, ...args] = /* SAFETY: 类型断言已复核 */ tokens as [string, ...Array<string>];
+  const [file, ...args] = tokens;
+  if (file === undefined) {
+    return { ok: false, reason: "命令为空" };
+  }
   return { ok: true, file, args, display: [file, ...args].join(" ") };
 }

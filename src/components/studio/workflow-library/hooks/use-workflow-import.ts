@@ -1,15 +1,9 @@
 "use client";
 
-/** 从 WorkflowLibrary 抽出的导入面板状态 +
- *  JSON 导入 / 拖放逻辑。该 hook 拥有全部导入面板 UI
- *  状态（name / modes / json / errors / 帮助提示）、手动的
- *  「粘贴 JSON」提交路径，以及预填同一面板的
- *  拖放漏斗。组件只保留状态对象
- *  和 JSX。
- *
- *  **只接受 ComfyUI 的原始工作流格式（RAW）**：API 格式（「导出(API格式)」）不是
- *  本应用支持的导入形态，RAW 转可执行的 API 图由 comfy-cli 在执行时完成。
- */
+/** 从 WorkflowLibrary 抽出的导入面板状态 + JSON 导入 / 拖放逻辑。hook 拥有全部
+ *  面板 UI 状态（name / modes / json / errors / 帮助提示）、手动「粘贴 JSON」提交
+ *  与拖放漏斗；组件只留状态对象和 JSX。**只接受 ComfyUI 原始工作流格式（RAW）**：
+ *  API 格式不是本应用支持的导入形态，RAW 转可执行 API 图由 comfy-cli 执行时完成。 */
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction } from "~/lib/async-action";
@@ -66,7 +60,7 @@ function useDropZone(
       event.preventDefault();
       counterRef.current = 0;
       setActive(false);
-      const files = [...(event.dataTransfer.files ?? [])];
+      const files = [...event.dataTransfer.files];
       const [first] = files;
       if (!first) {
         return;
@@ -117,7 +111,9 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
     if (dropErrTimerRef.current) {
       clearTimeout(dropErrTimerRef.current);
     }
-    dropErrTimerRef.current = setTimeout(() => setDropErr(null), 4000);
+    dropErrTimerRef.current = setTimeout(() => {
+      setDropErr(null);
+    }, 4000);
   }, []);
 
   const handleImport = useCallback(async () => {
@@ -134,7 +130,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       setImportErr("JSON 解析失败，请检查格式");
       return;
     }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       setImportErr("不是有效的工作流 JSON（应为对象）");
       return;
     }
@@ -156,8 +152,9 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
           setShowImport(false);
           setImportName("");
           setImportJson("");
-          setImportModes(["T2I"]);
-          setImportDefaultMode("T2I");
+          /* 模式不给默认（ISSUE #3759）：下一次导入仍由用户自己选。 */
+          setImportModes([]);
+          setImportDefaultMode("");
           void load();
         },
         {
@@ -201,7 +198,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         showFileError("JSON 解析失败：不是合法的工作流 JSON");
         return;
       }
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
         showFileError("不是有效的工作流 JSON（应为对象）");
         return;
       }
@@ -212,35 +209,15 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         return;
       }
       // 由文件名自动取名（去掉扩展名）。
-      const baseName = file.name.replace(/\.(json|workflow)$/i, "").trim();
+      const baseName = file.name.replace(/\.(?:json|workflow)$/i, "").trim();
       setImportName(baseName || "未命名工作流");
       setImportJson(text);
       setImportErr("");
       setImportWarn([]);
       setShowImport(true);
-      // 尽力而为的模式提示：JSON 里若暗示图生图
-      //（upscale / inpaint / img2img），建议默认 I2I；否则 T2I。
-      try {
-        let suggested = "T2I";
-        /* SAFETY: 类型断言已复核 */
-        const obj = parsed as Record<string, unknown>;
-        /* SAFETY: 类型断言已复核 */
-        const nodes = Array.isArray(obj.nodes) ? (obj.nodes as Array<unknown>) : [];
-        for (const n of nodes) {
-          const t =
-            n && typeof n === "object"
-              ? /* SAFETY: 类型断言已复核 */ (n as { type?: unknown }).type
-              : undefined;
-          if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
-            suggested = "I2I";
-            break;
-          }
-        }
-        setImportModes([suggested]);
-        setImportDefaultMode(suggested);
-      } catch {
-        /* 吞掉 —— 保持默认 */
-      }
+      /* 模式不给默认（ISSUE #3759）：拖入 / 选文件只预填名称与 JSON，
+       * 模式留给用户在面板里自己选 —— 此前按节点类型猜 T2I / I2I，
+       * 猜错时用户还得先删掉再选。 */
     },
     [showFileError],
   );

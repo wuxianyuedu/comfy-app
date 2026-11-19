@@ -1,15 +1,6 @@
 /**
- * 隐藏 `<input type=file>` 的出口（规范 16 §16.2.4）。
- *
- * 这条账的实质是**三个共性问题**，而它们在各自的调用点都看不出来
- * （都能跑、界面也都有反应），所以必须先在这里把行为钉住，再谈迁移：
- *  ① `click()` 在 ref 未挂上时静默空操作 → 由组件自己持 input，不存在这个窗口；
- *  ② 选完之后**没有复位 `event.target.value`** → 用户第二次选**同一个文件**
- *     不触发 `change`（浏览器只在取值变化时派发），看起来像上传坏了；
- *  ③ ref + click 的样板在同一文件里重复，改一处要改四处。
- *
- * 第 ② 条是本文件最值钱的两条用例：它是**静默**的（没有报错、没有告警），
- * 只有连选两次同一文件才复现。
+ * 隐藏 `<input type=file>` 的出口（规范 16 §16.2.4）。三个共性问题是本文件要钉的行为：① `click()` 在 ref 未挂上时静默空操作，由组件自己持 input，不存在这个窗口。
+ * 第②条最值钱：选完之后**没有复位 `event.target.value`**，用户第二次选**同一个文件**不触发 `change`（浏览器只在取值变化时派发），看起来像上传坏了；③ ref + click 的样板重复，改一处要改四处。第②条是**静默**的，只有连选两次同一文件才复现。
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { useRef, useState } from "react";
@@ -53,15 +44,17 @@ describe("FilePicker", () => {
   });
 
   it("选中文件后回调：同时给出 file 与整份 FileList（多选要整份）", () => {
-    const onPick = vi.fn();
+    const onPick = vi.fn<(file: File, files: FileList) => void>();
     render(<FilePicker multiple onPick={onPick} />);
     const A = makeFile("a.png");
     const B = makeFile("b.png");
     pick(fileInput(), A, B);
 
     expect(onPick).toHaveBeenCalledTimes(1);
-    /* SAFETY: 类型断言已复核 */
-    const call = onPick.mock.calls[0] as [File, FileList];
+    const call = onPick.mock.calls[0];
+    if (!call) {
+      throw new Error("onPick 未被调用");
+    }
     expect(call[0]).toBe(A);
     expect([...call[1]]).toEqual([A, B]);
   });
@@ -101,11 +94,11 @@ describe("FilePicker", () => {
 });
 
 describe("useFilePicker（命令式）", () => {
-  it("open() 点到真 input；没挂上 Input 时不抛异常（静默空操作，与旧写法一致）", () => {
+  it("open() 点到真 input；没挂上 FilePicker 时不抛异常（静默空操作，与旧写法一致）", () => {
     const click = vi.fn();
     function Probe() {
       const picker = useFilePicker({ onPick: noop });
-      return <picker.Input />;
+      return <FilePicker {...picker.inputProps} />;
     }
     render(<Probe />);
     const input = fileInput();
@@ -117,15 +110,21 @@ describe("useFilePicker（命令式）", () => {
     expect(click).toHaveBeenCalled();
   });
 
-  it("Input 身份稳定：多次渲染不重建 input（否则会打断正开着的文件对话框）", () => {
-    const seen: Array<string> = [];
+  it("Input 身份稳定：onPick 每渲染都是新箭头也不重建 input（#3692）", () => {
     function Probe() {
       const [, force] = useState(0);
-      const picker = useFilePicker({ onPick: noop });
-      seen.push(picker.Input.name);
+      /* onPick 故意用内联箭头（调用方的真实形态）：旧实现把它放进
+       * `useMemo` deps，隐藏 input 随每次渲染卸载重挂——重挂窗口里落下的
+       * 选择事件会打在已脱离 DOM 的旧节点上（ISSUE #3692 的现场）。 */
+      const picker = useFilePicker({ onPick: () => undefined });
       return (
-        <button aria-label="重渲染" onClick={() => force((n) => n + 1)}>
-          <picker.Input />
+        <button
+          aria-label="重渲染"
+          onClick={() => {
+            force((n) => n + 1);
+          }}
+        >
+          <FilePicker {...picker.inputProps} />
         </button>
       );
     }

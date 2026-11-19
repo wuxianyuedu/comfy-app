@@ -1,21 +1,7 @@
 /**
- * 回归护栏：`src/lib/core/index.ts` 的出口纪律（ISSUE #565）。
- *
- * 背景（实测）：这里曾是四个 `export *` 转发的 barrel，注释里写着「所有 server
- * 端模块统一 `import { ... } from "@/lib/core"`」—— 而全库只有 2 处真的这样
- * 导入。这条注释是**一条假承诺**：实际口径是深路径（`@/lib/core/repository` 等），
- * 照着注释写的人只会再多出一种取法（与已删除的 `container` 同款教训）。
- *
- * 本用例把「出口纪律」机器化，三条判据各自对应一个具体后果：
- *
- *   1. **不许 `export *`**：它让每个引用方都强制加载整层（pino + zod + Drizzle 表
- *      定义 + `server-only`），并把「谁依赖了哪一份」藏起来；
- *   2. **每个被转出的符号必须有消费方**：没有消费方的转发就是「零消费导出」
- *      （规范 §12.16 / `scripts/check-dead-exports.cjs` 的同一口径）；
- *   3. **同层环不得靠「没人这么写」维持**：`core/logger` → `lib/app-runtime-log`
- *      → `lib/log-paths`（同层），而 `log-paths` 若从本 barrel 取用就会形成
- *      `index → logger → … → index`。环检测只认真实存在的边，所以此前不报红 ——
- *      本用例直接断言该反例为环，锁住「为什么这里不许 `export *`」这个理由。
+ * 回归护栏：`src/lib/core/index.ts` 的出口纪律（ISSUE #565）。这曾是四个 `export *` 的 barrel，注释里写着「统一从
+ * `@/lib/core` 导入」而全库只有 2 处照做 —— 假承诺，照写只会多出一种取法。三条机器判据：不许 `export *`（强制整层
+ * 加载、藏起依赖）、被转出符号必须有消费方（§12.16 / `check-dead-exports.cjs`）、`log-paths` 那条同层环必须仍判为环。
  */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -26,13 +12,30 @@ import { describe, expect, it } from "vitest";
  * 是它自己的判据）：`tests/` 下那些自造自删的并发探针（`.setup-cleanup-probe-*.test.tsx`）
  * 与本用例同时活动，CI 上撞出来的是一条不含本判据、也不含真凶的 `ENOENT` 栈。 */
 const requireCjs = createRequire(import.meta.url);
-/* SAFETY: 类型断言已复核 */
-const reader = requireCjs("../scripts/gate-scan-read.cjs") as {
+
+/** `gate-scan-read.cjs` 是无类型的 CJS：出口形状在这里做运行时守卫（B5 清账，不走不安全断言）。 */
+type ScanReader = {
   dirExists: (dir: string) => boolean;
   readForScan: (abs: string) => string | null;
   vanishedNote: (count: number) => string;
   walkForScan: (dir: string, fileRe: RegExp, opts?: { skipDirs?: Set<string> }) => Array<string>;
 };
+
+function isScanReader(value: unknown): value is ScanReader {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const keys = new Set(Object.keys(value));
+  return (["dirExists", "readForScan", "vanishedNote", "walkForScan"] as const).every((k) =>
+    keys.has(k),
+  );
+}
+
+const loadedReader: unknown = requireCjs("../scripts/gates/gate-scan-read.cjs");
+if (!isScanReader(loadedReader)) {
+  throw new Error("gate-scan-read.cjs 的出口形状不对（缺 dirExists/readForScan/…）");
+}
+const reader = loadedReader;
 
 const ROOT = process.cwd();
 const INDEX = join(ROOT, "src", "lib", "core", "index.ts");
@@ -60,8 +63,8 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
   // （单独跑 <3s）。给足容忍度，断言本身不变。
   it("转出的每个符号都有消费方（没有消费方的转发等于零消费导出）", { timeout: 30_000 }, () => {
     const code = stripComments(readFileSync(INDEX, "utf8"));
-    const names = [...code.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)]
-      .flatMap((m) => (m[1] ?? "").split(","))
+    const names = [...code.matchAll(/export\s+(?:type\s+)?\{(?<names>[^}]*)\}/g)]
+      .flatMap((m) => (m.groups?.names ?? "").split(","))
       .map((part) =>
         part
           .trim()
@@ -115,7 +118,7 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
     // 这条不是「测代码」，而是把 `export *` 判据的**理由**钉成可执行事实：
     // 若 barrel 重新 `export * ./logger`，而 `lib/log-paths.ts` 又从这里取用，
     // 就会出现 index → logger → app-runtime-log → log-paths → index。
-    // 环检测（scripts/check-circular-deps.cjs）只认真实存在的边，抓不到这种
+    // 环检测（scripts/gates/check-circular-deps.cjs）只认真实存在的边，抓不到这种
     // 「一写就成环」的潜在组合 —— 所以这里用一个合成图复现它，锁住结论。
     const graph = new Map([
       ["src/lib/core/index.ts", ["src/lib/core/logger.ts"]],
@@ -136,14 +139,11 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
   });
 });
 
-/** 递归列出目录下的源码文件（文档与产物不参与）。
- *
- * 遍历这一步走 `scripts/gate-scan-read.cjs` 那一份地基（AGENTS 硬规则 24），不再自己
- * `readdirSync` + `statSync`：后者在「列到名字 → 取类型」之间还有一次消失窗口
- * （CI 上崩的是读取那一跳，枚举这一跳同形）。本仓早就为这件事写过唯一一份实现，
- * 在这里留第二份弱化版只会让下一次竞态换个栈再崩一次。 */
+/** 递归列出目录下的源码文件（文档与产物不参与）。遍历走 `scripts/gates/gate-scan-read.cjs` 的地基（AGENTS 硬规则 24），
+ * 不再自己 `readdirSync` + `statSync`：后者在「列到名字 → 取类型」之间有消失窗口，CI 上崩的正是那一跳的读取
+ * （枚举这一跳同形）；本仓已有唯一实现，留第二份削弱版只会让下一次竞态换个栈再崩。 */
 function walkAll(dir: string): Array<string> {
-  return reader.walkForScan(dir, /\.(ts|tsx|mjs|cjs)$/, {
+  return reader.walkForScan(dir, /\.(?:ts|tsx|mjs|cjs)$/, {
     skipDirs: new Set([".git", ".next", "node_modules"]),
   });
 }

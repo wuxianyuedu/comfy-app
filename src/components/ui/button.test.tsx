@@ -5,10 +5,9 @@ import { Button, buttonVariants } from "./button";
 afterEach(cleanup);
 
 /**
- * 语义变体的判据（ISSUE #672 / 规范 16 §16.2.4）：
- * 视图里 400 处手写 `<button>` 绝大多数是「软底状态色」，批量化替换的前提是
- * `Button` 先有对应的语义变体。这组用例把「有哪些变体、各自落在哪些 token 上」
- * 钉住 —— 变体一旦被删除或改回写死色，这里先失败。
+ * 语义变体的判据（ISSUE #672 / 规范 16 §16.2.4）：视图里 400 处手写 `<button>` 绝大多数是
+ * 「软底状态色」，批量化替换的前提是 `Button` 先有对应的语义变体。这组用例把「有哪些变体、
+ * 各自落在哪些 token 上」钉住 —— 变体一旦被删除或改回写死色，这里先失败。
  */
 /* SAFETY: 类型断言已复核 */
 const SEMANTIC_VARIANTS = [
@@ -26,7 +25,7 @@ const SEMANTIC_VARIANTS = [
 describe("Button 语义变体", () => {
   it.for(SEMANTIC_VARIANTS)("variant=%s 产出的类是语义 token 类名", (variant) => {
     const cls = buttonVariants({ variant });
-    expect(cls).toMatch(/\b(bg|text|border)-(primary|destructive|success|warning|info)/);
+    expect(cls).toMatch(/\b(?:bg|text|border)-(?:primary|destructive|success|warning|info)/);
   });
 
   it.for(SEMANTIC_VARIANTS)("variant=%s 不落任何 Tailwind 原生调色板字面量", (variant) => {

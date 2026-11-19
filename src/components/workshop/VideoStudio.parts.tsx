@@ -5,6 +5,7 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
 import { FieldLabel } from "~/components/ui/field";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { SelectChip } from "~/components/ui/select-chip";
@@ -61,14 +62,18 @@ export function ChannelSwitch({
             抽共享，不是两边一起改）。 */}
         <div aria-label="生成通道" className="flex gap-2" role="radiogroup">
           <SelectChip
-            onClick={() => onChannelChange("local")}
+            onClick={() => {
+              onChannelChange("local");
+            }}
             selected={channel === "local"}
             shape="segment"
           >
             本地 · ComfyUI 工作流
           </SelectChip>
           <SelectChip
-            onClick={() => onChannelChange("api")}
+            onClick={() => {
+              onChannelChange("api");
+            }}
             selected={channel === "api"}
             shape="segment"
           >
@@ -88,7 +93,9 @@ export function ChannelSwitch({
           <span className="text-muted-foreground">帧率</span>
           <SelectMenu
             className="bg-subtle! border-border! text-xs"
-            onChange={(v) => onFpsChange(Number(v) || 16)}
+            onChange={(v) => {
+              onFpsChange(Number(v) || 16);
+            }}
             options={FPS_OPTIONS}
             placeholder="帧率"
             value={String(fps)}
@@ -136,6 +143,13 @@ export function ChannelSwitch({
   );
 }
 
+/* 片段状态 → 文案。与镜头状态同源（只多一档「片段就绪」），配色同样走
+ * `ui/status-badge`（规范 16 §16.2.4.5）。 */
+const CLIP_STATUS_LABEL = {
+  ...SHOT_STATUS_LABEL,
+  done: "片段就绪",
+} satisfies Record<NonNullable<Shot["clipStatus"]>, string>;
+
 /* ── 某镜头片段生成的状态药丸 ── */
 export function ClipBadge({ status }: { status: NonNullable<Shot["clipStatus"]> }) {
   return (
@@ -147,13 +161,6 @@ export function ClipBadge({ status }: { status: NonNullable<Shot["clipStatus"]> 
     />
   );
 }
-
-/* 片段状态 → 文案。与镜头状态同源（只多一档「片段就绪」），配色同样走
- * `ui/status-badge`（规范 16 §16.2.4.5）。 */
-const CLIP_STATUS_LABEL = {
-  ...SHOT_STATUS_LABEL,
-  done: "片段就绪",
-} satisfies Record<NonNullable<Shot["clipStatus"]>, string>;
 
 /* ── 单个镜头行：首帧、提示词、时长 / 运动控件、生成 ── */
 export function ShotCard({
@@ -183,7 +190,9 @@ export function ShotCard({
     <div className="border-border bg-surface rounded-xl border p-4">
       <div className="mb-2 flex items-center gap-2">
         <IndexDot index={shot.index} />
-        <span className="text-muted-foreground truncate text-xs">{shot.sceneHeading}</span>
+        <TruncatedText className="text-muted-foreground truncate text-xs">
+          {shot.sceneHeading}
+        </TruncatedText>
         <ClipBadge status={clipStatus} />
         {clipStatus === "running" && (
           <span className="text-muted-foreground text-3xs">
@@ -208,7 +217,7 @@ export function ShotCard({
       <div className="flex flex-wrap items-center gap-3">
         {/* First frame (auto-prefilled from 镜头生图) */}
         <div className="bg-elevated border-border h-16 w-24 shrink-0 overflow-hidden rounded-lg border">
-          {shot.imageUrl ? (
+          {shot.imageUrl !== undefined && shot.imageUrl !== "" ? (
             <MediaThumbnail
               alt={shot.sceneHeading}
               className="h-full w-full object-cover"
@@ -228,14 +237,14 @@ export function ShotCard({
             <FieldLabel className="text-2xs flex items-center gap-1">
               <span className="text-muted-foreground">时长(s)</span>
               <Input
-                className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 text-2xs h-auto w-14 rounded-md px-2 py-0.5"
+                className="border-border bg-bg text-ink focus-visible:border-primary text-2xs h-auto w-14 rounded-md px-2 py-0.5"
                 max={20}
                 min={1}
-                onChange={(e) =>
+                onChange={(e) => {
                   onPatch({
                     duration: clamp(Number(e.target.value) || 5, 1, 20),
-                  })
-                }
+                  });
+                }}
                 type="number"
                 value={typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 5}
               />
@@ -245,12 +254,12 @@ export function ShotCard({
               <SelectMenu
                 className="bg-subtle! border-border! text-2xs"
                 labels={MOTION_LABELS}
-                onChange={(v) =>
-                  onPatch({
-                    /* SAFETY: 类型断言已复核 */
-                    motion: v as MotionLevel,
-                  })
-                }
+                onChange={(v) => {
+                  const motion = MOTIONS.find((item) => item === v);
+                  if (motion !== undefined) {
+                    onPatch({ motion });
+                  }
+                }}
                 options={MOTIONS}
                 placeholder="运动"
                 value={shot.motion ?? "medium"}
@@ -268,9 +277,13 @@ export function ShotCard({
           size="xs"
           variant="primary-solid"
         >
-          {clipStatus === "running" ? "生成中…" : shot.clipUrl ? "重新生成" : "生成片段"}
+          {clipStatus === "running"
+            ? "生成中…"
+            : shot.clipUrl !== undefined && shot.clipUrl !== ""
+              ? "重新生成"
+              : "生成片段"}
         </Button>
-        {clipStatus === "running" && shot.clipTaskId && (
+        {clipStatus === "running" && shot.clipTaskId !== undefined && shot.clipTaskId !== "" && (
           /* 只对本机任务可取消：API 直连的 remoteTaskId 是另一套体系，没有
              可取消的本机任务 id。 */
           <Button
@@ -284,7 +297,7 @@ export function ShotCard({
         )}
       </div>
 
-      {error && (
+      {error !== undefined && error !== "" && (
         <Alert
           /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
           className="text-2xs mt-2 block rounded-md border-transparent px-2 py-1"
@@ -293,13 +306,14 @@ export function ShotCard({
           {error}
         </Alert>
       )}
-      {!shot.imageUrl && !error && (
-        <p className="text-muted-foreground text-2xs mt-2">
-          该镜头暂无画面 — 将以文生视频方式生成;可回「镜头生图」阶段补图后自动变为图生视频。
-        </p>
-      )}
+      {(shot.imageUrl === undefined || shot.imageUrl === "") &&
+        (error === undefined || error === "") && (
+          <p className="text-muted-foreground text-2xs mt-2">
+            该镜头暂无画面 — 将以文生视频方式生成;可回「镜头生图」阶段补图后自动变为图生视频。
+          </p>
+        )}
 
-      {shot.clipUrl && (
+      {shot.clipUrl !== undefined && shot.clipUrl !== "" && (
         <MediaThumbnail
           className="border-border mt-2 max-h-64 w-auto rounded-lg border"
           controls

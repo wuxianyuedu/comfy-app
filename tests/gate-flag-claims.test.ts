@@ -1,27 +1,7 @@
 /**
- * 「翻闸删掉的旗标 ⇄ 还在教人跑它们的散文」门禁自测（规范 §13.5.16）。
- *
- * 本文件自己**不进扫描面**：下面每一条用例的夹具里都写着真的「已翻闸脚本 + 旗标」
- * 组合，判它等于判自己的量具（§11.14.2 的通用口径，同 `tests/click-keyboard-gate.test.ts`）。
- *
- * 判据要钉的三格（文件头是唯一出处，这里只列「少了它会怎样」）：
- *
- *   ① **用法块承诺 ⇄ 实现**：脚本头部注释块里教人跑自己的那一行承诺了 `--update` /
- *      `--strict`，而实现里一个字都读不到它。少了这一格 ⇒ 翻闸删旗标之后，
- *      用法块会一直是「照它跑却没反应」的样子，而**没有任何东西会红**
- *      （`--report` 一路绿灯，读的人只会以为「这个旗标大概没用」）。
- *   ② **棘轮归类表的陈词 ⇄ 事实**：表里点名一个脚本 = 断言「它仍带 `--update`」。
- *      少了这一格 ⇒ 口径改了、表没跟着改，而表本身是**别人读它时的唯一线索**。
- *   ③ **命令清单 / 红话里的旧旗标**：`node scripts/<已翻闸脚本> --update` 出现在
- *      钩子、规范门禁清单、或**用户可见的阻断输出**里。少了这一格 ⇒ #1845 那处
- *      「红话叫人跑一条自己会拒绝他的命令」原样复发，而那正是立案现场。
- *   ④ **翻闸台账点名的脚本必须有执行者**（门禁链**或**按需召唤台账至少占一条）。
- *      少了这一格 ⇒ 「已翻硬闸」这句话只兑现了一半：翻闸的语义是「命中即退 1」，
- *      而**退 1 要有人跑**才发生 —— 把一条判据从棘轮翻成硬闸却不给它落点，
- *      得到的是「账面写着硬闸、实际连棘轮都不如」（棘轮至少有钩子里的那一步）。
- *
- * 每格都**双向**验：该红的红（正面），当前真仓库绿（对照组）—— 只验正面的话，
- * 判据把**全仓**判红也是「红」。
+ * 「翻闸删掉的旗标 ⇄ 还在教人跑它们的散文」门禁自测（规范 §13.5.16）；本文件不进扫描面（夹具里放着真的已翻闸脚本 + 旗标，判它等于判自己的量具，§11.14.2）。钉四格：
+ * ① 用法块承诺 ⇄ 实现（承诺 `--update`/`--strict` 而实现读不到 ⇒ 翻闸后无人会红）；② 棘轮归类表陈词 ⇄ 事实（点名脚本即断言仍带 `--update`）；
+ * ③ 命令清单 / 红话里的旧旗标（`--update` 出现在钩子或用户可见阻断输出 ⇒ #1845「叫人跑一条会拒绝他的命令」复发）；④ 翻闸台账点名的脚本必须有执行者。每格双向验。
  */
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -30,30 +10,29 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
-const SCRIPT = join(ROOT, "scripts", "check-gate-flag-claims.cjs");
+const SCRIPT = join(ROOT, "scripts", "gates/check-gate-flag-claims.cjs");
 
 /**
- * 在临时工作区里搭一个**最小但自洽**的仓库：一份判据脚本 + 一份归类表 +
- * 两张命令清单。判据从 `process.cwd()` 找全部输入，所以工作区必须自带这些。
- *
- * 为什么不走 `defineGateRepo`：那份夹具按「一个文件绑一个脚本、脚本从
- * `__dirname` 定扫描根」的形态收口，而本判据的输入面是**多份文件的组合**
- * （脚本目录 + 归类表 + 两张清单），且它按 `cwd` 解析。硬套会得到
- * 「脚本被拷到 `scripts/` 下、而归类表不在」，看起来像判据坏了。
+ * 在临时工作区搭一个**最小但自洽**的仓库：判据脚本 + 归类表 + 两张命令清单（判据从 `process.cwd()` 找全部输入）。
+ * 不走 `defineGateRepo`：那份夹具按「一个文件绑一个脚本、脚本从 `__dirname` 定扫描根」收口，而这里输入面是
+ * 多份文件的组合且按 `cwd` 解析；硬套会得到「脚本被拷到 `scripts/` 下、而归类表不在」，看起来像判据坏了。
  */
 function makeWorkspace(): { dir: string; dispose: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "gate-flag-claims-"));
   for (const sub of ["scripts", "tests", "docs/standards", ".githooks"]) {
     mkdirSync(join(dir, sub), { recursive: true });
   }
-  copyFileSync(SCRIPT, join(dir, "scripts", "check-gate-flag-claims.cjs"));
+  mkdirSync(join(dir, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, join(dir, "scripts", "gates/check-gate-flag-claims.cjs"));
   /* 归类表：判据按 `const <表名>` + `\n};` 切块，所以夹具要写足那个形状。 */
   writeFileSync(join(dir, "tests", "ratchet-update-guards.test.ts"), "");
   writeFileSync(join(dir, ".githooks", "pre-commit"), "");
   writeFileSync(join(dir, "docs", "standards", "13-提交与-code-review.md"), "");
   return {
     dir,
-    dispose: () => rmSync(dir, { recursive: true, force: true }),
+    dispose: () => {
+      rmSync(dir, { recursive: true, force: true });
+    },
   };
 }
 
@@ -61,7 +40,7 @@ function makeWorkspace(): { dir: string; dispose: () => void } {
 function run(dir: string, args: Array<string> = []): { code: number; output: string } {
   const r = spawnSync(
     process.execPath,
-    [join(dir, "scripts", "check-gate-flag-claims.cjs"), ...args],
+    [join(dir, "scripts", "gates/check-gate-flag-claims.cjs"), ...args],
     { cwd: dir, encoding: "utf8" },
   );
   return { code: r.status ?? 1, output: `${r.stdout ?? ""}${r.stderr ?? ""}` };
@@ -87,7 +66,7 @@ function writeTables(
     covered = "",
     retired = "",
     flips = "",
-  }: { covered?: string; flips?: string; retired?: string; },
+  }: { covered?: string; flips?: string; retired?: string },
 ): void {
   writeFileSync(
     join(dir, "tests", "ratchet-update-guards.test.ts"),
@@ -234,7 +213,7 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
        * 夹具就要把无关的那几格都配平，同 `ratchet-update-guards` 的「第 ② 步
        * 先配出基线=现状」那条口径）。 */
       writeFileSync(
-        join(ws.dir, "scripts", ".gate-executor-ledger.json"),
+        join(ws.dir, "scripts", "gates", ".gate-executor-ledger.json"),
         JSON.stringify({ onDemand: {} }),
       );
       writeFileSync(
@@ -259,7 +238,7 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
       writeTables(ws.dir, { flips: '  "check-fake.cjs": "tests/check-fake.test.ts",' });
       /* 门禁链三处 + 聚合档都没有它、按需台账也没登记 ⇒ 谁都不会跑它。 */
       writeFileSync(
-        join(ws.dir, "scripts", ".gate-executor-ledger.json"),
+        join(ws.dir, "scripts", "gates", ".gate-executor-ledger.json"),
         JSON.stringify({ onDemand: {} }),
       );
       const { code, output } = run(ws.dir);
@@ -278,27 +257,30 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
     const cases: Array<[string, (dir: string) => void]> = [
       [
         "钩子步骤行",
-        (dir) =>
+        (dir) => {
           writeFileSync(
             join(dir, ".githooks", "pre-commit"),
             '  run "x" node scripts/check-fake.cjs\n',
-          ),
+          );
+        },
       ],
       [
         "聚合档表项（裸 script: 形态，无 scripts/ 前缀）",
-        (dir) =>
+        (dir) => {
           writeFileSync(
-            join(dir, "scripts", "run-ast-gates.cjs"),
+            join(dir, "scripts", "gates", "run-ast-gates.cjs"),
             'const GATES = [\n  { script: "check-fake.cjs", tag: "[x]" },\n];\n',
-          ),
+          );
+        },
       ],
       [
         "按需召唤台账",
-        (dir) =>
+        (dir) => {
           writeFileSync(
-            join(dir, "scripts", ".gate-executor-ledger.json"),
+            join(dir, "scripts", "gates", ".gate-executor-ledger.json"),
             JSON.stringify({ onDemand: { "check-fake.cjs": { why: "w", who: "h" } } }),
-          ),
+          );
+        },
       ],
     ];
     for (const [label, place] of cases) {
@@ -326,7 +308,7 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
       writeScript(ws.dir, "check-fake.cjs", " * 用法：\n *   node scripts/check-fake.cjs");
       writeTables(ws.dir, { flips: '  "check-fake.cjs": "tests/check-fake.test.ts",' });
       writeFileSync(
-        join(ws.dir, "scripts", ".gate-executor-ledger.json"),
+        join(ws.dir, "scripts", "gates", ".gate-executor-ledger.json"),
         JSON.stringify({ onDemand: {} }),
       );
       expect(run(ws.dir).code).toBe(1);
@@ -354,15 +336,15 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
     /* 扫描面非空：一份脚本都没扫到时本判据恒绿 —— 那正是它要防的形态。 */
     expect(output).toMatch(/\d+ 份脚本/);
     expect(output).toMatch(/\d+ 条翻闸台账/);
-    const m = /(\d+) 份脚本/.exec(output);
-    expect(Number(m?.[1] ?? 0)).toBeGreaterThan(50);
-    const f = /(\d+) 条翻闸台账/.exec(output);
-    expect(Number(f?.[1] ?? 0)).toBeGreaterThan(5);
+    const m = /(?<count>\d+) 份脚本/.exec(output);
+    expect(Number(m?.groups?.count ?? 0)).toBeGreaterThan(50);
+    const f = /(?<count>\d+) 条翻闸台账/.exec(output);
+    expect(Number(f?.groups?.count ?? 0)).toBeGreaterThan(5);
     /* ④ 那一格的读数：真仓库里落点缺失必须是 0 —— 它出现非零就是判据在报真问题，
      * 而这条断言让「有人把两条 tw4 从按需台账里摘掉」在**这里**也能看见。 */
-    const miss = /落点缺失 (\d+)/.exec(output);
+    const miss = /落点缺失 (?<count>\d+)/.exec(output);
     expect(miss, "输出里必须有「落点缺失」这个读数").not.toBeNull();
-    expect(Number(miss?.[1] ?? -1)).toBe(0);
+    expect(Number(miss?.groups?.count ?? -1)).toBe(0);
   });
 
   it("判据自己的文件头不被自适应（它必然要点名脚本与旗标）", () => {

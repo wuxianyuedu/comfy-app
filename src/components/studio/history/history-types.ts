@@ -29,13 +29,9 @@ export type TaskDetail = NonNullable<RouterOutputs["task"]["detail"]>;
 export type FilterDef = {
   key: FilterKey;
   label: string;
-  /** 这一枚筛选对应的**状态语义**（`ALL` 不给圆点）。
-   *
-   * 此前这里存的是 Tailwind 类名的**字面量**（`"bg-success-strong"` /
-   * `"bg-primary"` / `"bg-destructive"` / `"bg-gray-400"`）—— 一个 `.ts`
-   * 配置模块直接持有样式字符串，于是「换个状态色」要在这里改、且 `bg-gray-400`
-   * 那一条绕过了全库的语义 token（规范 03 §3.6.2）。现在只给语义键，
-   * 由 `ui/status-dot` 的 `StatusDotState` 唯一一处翻译成颜色。 */
+  /** 这一枚筛选的状态语义（ALL 不给圆点）。此前存 Tailwind 类名字面量
+   *（"bg-success-strong" 等），配置模块直接持样式字符串、且 bg-gray-400 绕过语义 token；
+   * 现在只给语义键，由 ui/status-dot 的 StatusDotState 唯一翻译成颜色。 */
   tone?: StatusDotState;
 };
 

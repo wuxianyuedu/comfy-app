@@ -1,51 +1,51 @@
 /**
- * `src/lib` 的分层边界（ISSUE #575 第 1 项 / 规范 §18.3）。
- *
- * 背景：`eslint-plugin-boundaries` 的 `elements` 此前只声明了 `src/server`、
- * `src/lib/core`、`src/lib/db`、`src/components`、`src/features`——
- * `src/lib/comfyui`、`workshop`、`film`、`llm` **不属于任何 element**，
- * 靠 `default: allow` 放行。于是「lib 不得 import components（H1 依赖倒置）」
- * 这条只写在注释与规范里，**没有任何机器判据**，实测确有两处倒置悄悄存在。
- *
- * 本测试锁两件事：
- *   ① 配置层：`src/lib/**` 是 element `lib`，且 `lib` → `components` 被显式禁止；
- *   ② **元素顺序**：更具体的 `src/lib/core/**`、`src/lib/db/**` 必须排在
- *      `src/lib/**` 之前 —— boundaries 按声明顺序取第一个匹配的 element，
- *      顺序反了会让数据层被重新归类成 `lib`，`server → components` 的既有约束
- *      **静默失效**（没有报错，只是不再拦）。
- *   ③ 事实层：真实仓库里 `src/lib/**` 没有 import `src/components/**`、`src/app/**`。
- *
- * 为什么配置也要断言：这类「顺序是语义」的配置改错了不会让任何既有用例变红，
- * 只会在某次越界时才发现门禁没生效。用测试把顺序钉住，比写注释可靠。
+ * `src/lib` 分层边界（ISSUE #575 第 1 项 / 规范 §18.3）。elements 曾漏 `src/lib/{comfyui,workshop,film,llm}`（`default: allow` 放行），
+ * 故 H1「lib 不得 import components」无机器判据（实测确有两处倒置）。本测试锁：`lib` → `components` 显式禁止、`src/lib/{core,db}/**`
+ * 须排 `src/lib/**` 之前（顺序是语义，反了数据层归 `lib` 致 `server → components` 静默失效），以及真实仓库无越界 import。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
-import eslintConfig from "@/../eslint.config.js";
+
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
+import oxlintConfig from "@/../oxlint.parity.config.mjs";
 
 type ElementDef = { pattern: string; type: string };
-type Policy = {
-  disallow?: { to?: { element?: { type?: string } } };
-  from?: { element?: { type?: string } };
-};
 
-/** 从扁平配置里取出 boundaries 那一节（含 elements 声明与策略）。 */
-function boundariesSection(): { elements: Array<ElementDef>; policies: Array<Policy> } {
-  /* SAFETY: 类型断言已复核 */
-  const configs = eslintConfig as unknown as Array<{
-    plugins?: Record<string, unknown>;
-    rules?: Record<string, unknown>;
-    settings?: Record<string, unknown>;
-  }>;
-  const section = configs.find((c) => c.plugins?.boundaries);
-  expect(section, "eslint.config.js 里找不到 boundaries 配置节").toBeTruthy();
-  /* SAFETY: 类型断言已复核 */
-  const elements = (section?.settings?.["boundaries/elements"] ?? []) as Array<ElementDef>;
-  /* SAFETY: 类型断言已复核 */
-  const rule = section?.rules?.["boundaries/dependencies"] as
-    | [string, { policies?: Array<Policy> }]
-    | undefined;
-  return { elements, policies: rule?.[1]?.policies ?? [] };
+/** 元素声明的消费形状守卫（B5 清账）：pattern / type 都是串。 */
+function isElementDef(value: unknown): value is ElementDef {
+  return isRecord(value) && typeof value.pattern === "string" && typeof value.type === "string";
+}
+
+/**
+ * 从 **oxlint 判决配置**里取出 boundaries 那一节（含 elements 声明与策略）。
+ * #2777 PR-B 起 boundaries 的生效面在 oxlint（jsPlugin `boundaries`）；
+ * #3157 起 eslint 已退役，判决面只有 oxlint。
+ * 配置按 unknown 读、形状由守卫现场答（B5 清账）：policies 的字段只有一处消费者，
+ * 就地逐层判，不再整段断言成类型。
+ */
+function boundariesSection(): { elements: Array<ElementDef>; policies: Array<unknown> } {
+  const config: unknown = oxlintConfig;
+  const root = isRecord(config) ? config : {};
+  const settings = isRecord(root.settings) ? root.settings : {};
+  const elementsUnknown: unknown = settings["boundaries/elements"];
+  const elements = isUnknownArray(elementsUnknown) ? elementsUnknown.filter(isElementDef) : [];
+  let policies: Array<unknown> = [];
+  const overrides = isUnknownArray(root.overrides) ? root.overrides : [];
+  for (const one of overrides) {
+    const rules: unknown = isRecord(one) ? one.rules : undefined;
+    const candidate: unknown = isRecord(rules) ? rules["boundaries/dependencies"] : undefined;
+    /* 规则项是 [名, { policies }] 二元组；这里只取 policies 这一半。 */
+    if (isUnknownArray(candidate) && isRecord(candidate[1])) {
+      const rawPolicies: unknown = candidate[1].policies;
+      if (isUnknownArray(rawPolicies)) {
+        policies = rawPolicies;
+      }
+    }
+  }
+  expect(elements.length > 0, "oxlint 判决配置里缺 boundaries/elements 声明").toBe(true);
+  return { elements, policies };
 }
 
 describe("src/lib 的分层边界（规范 §18.3）", () => {
@@ -74,7 +74,15 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
   it("`lib` → `components` 被显式禁止（H1 依赖倒置）", () => {
     const { policies } = boundariesSection();
     const hasRule = policies.some(
-      (p) => p.from?.element?.type === "lib" && p.disallow?.to?.element?.type === "components",
+      (p) =>
+        isRecord(p) &&
+        isRecord(p.from) &&
+        isRecord(p.from.element) &&
+        p.from.element.type === "lib" &&
+        isRecord(p.disallow) &&
+        isRecord(p.disallow.to) &&
+        isRecord(p.disallow.to.element) &&
+        p.disallow.to.element.type === "components",
     );
     expect(hasRule, "缺少 lib → components 的 disallow 策略").toBe(true);
   });
@@ -95,14 +103,14 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
         const src = readFileSync(full, "utf8");
         // 只匹配模块说明符，注释里提到的路径不算（规范 §18.3 的注释惯例）
         const matches = [
-          ...src.matchAll(/from\s+["']([^"']+)["']/g),
-          ...src.matchAll(/import\s*\(\s*["']([^"']+)["']\s*\)/g),
-        ].map((m) => m[1]);
+          ...src.matchAll(/from\s+["'](?<spec>[^"']+)["']/g),
+          ...src.matchAll(/import\s*\(\s*["'](?<spec>[^"']+)["']\s*\)/g),
+        ].map((m) => m.groups?.spec);
         for (const spec of matches) {
           if (typeof spec !== "string") {
             continue;
           }
-          if (/^((~|@)\/)(components|app)\//.test(spec)) {
+          if (/^(?:~|@)\/(?:components|app)\//.test(spec)) {
             hits.push(`${relative(root, full)} → ${spec}`);
           }
         }

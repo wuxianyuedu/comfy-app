@@ -1,0 +1,22 @@
+diff --git a/dist/node-utils.js b/dist/node-utils.js
+index 96a483d44c9ca066a5128dc40abcffdb8a3aee4b..49dd139339c4cb8790b3df1f48eeb952e6c04446 100644
+--- a/dist/node-utils.js
++++ b/dist/node-utils.js
+@@ -325,12 +325,11 @@ function glob(pattern, root, options = {}) {
+       if (childPath[childPath.length - 1] === "node_modules" && !shouldIncludeNodeModules) {
+         return false;
+       }
+-      return mini.set.some((row) => mini.matchOne(
+-        childPath,
+-        row,
+-        /* partial */
+-        true
+-      ));
++      // patch：minimatch 11（见 pnpm-workspace.yaml 的安全 override）不再暴露
++      // Minimatch#matchOne。等价的公开入口是 match(f, partial) —— 它内部同样逐个
++      // row 以 partial 求值（minimatch 11 dist/index.js 的 match()），语义一致。
++      // childPath 是分段落数组（discoverFiles 按段推进），这里按 "/" 拼回路径。
++      return mini.match(childPath.join("/"), true);
+     },
+     matchDirectories: options.includeDirectories,
+     followSymlinks: options.followSymlinks

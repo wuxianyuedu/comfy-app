@@ -11,8 +11,10 @@
 // 供 Next server 与纯 Node 的 Workshop MCP 两侧共用。
 
 import { createCipheriv, createDecipheriv, hash, randomBytes, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { backoffDelayMs, KEY_FILE_READ } from "~/lib/retry-policy";
 
 const ALGO = "aes-256-gcm";
 const PREFIX = "enc:v1:";
@@ -30,6 +32,37 @@ function deriveKey(material: string): Buffer {
   return Buffer.from(hash("sha256", material), "hex");
 }
 
+/** 密钥文件内容的定长：`randomUUID()` 去连字符后 32 位 + 16 字节 hex 32 位。
+ *  自模块创建起写入格式未变过，可作完整性判据。 */
+const KEY_FILE_MATERIAL_LENGTH = 64;
+
+function readKeyFileMaterial(): string | null {
+  try {
+    const raw = readFileSync(KEY_FILE, "utf8").trim();
+    /* 完整性校验（ISSUE #3877）：`wx` 独占创建只保证「盘上只有一份」，不保证
+     * 对方进程 write→close 已完成；并发首启时可能读到半截内容。用残缺口令
+     * 派生的密钥会与对方分叉，且被 `cachedKey` 固化成进程级错误（表现为
+     * 「明明配了 key 却解不开」）。不定长的历史内容一律拒绝，交给调用方兜底。 */
+    if (raw.length !== KEY_FILE_MATERIAL_LENGTH || !/^[0-9a-f]+$/.test(raw)) {
+      return null;
+    }
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+/** 同步短眠：仅在「密钥文件存在但内容尚不完整」的窄窗口里退避重读用。
+ *  等待参数来自 retry-policy 的 `KEY_FILE_READ`；为什么保持同步见 loadOrCreateKey
+ *  的循环注释（ISSUE #3956）。 */
+function syncSleep(ms: number): void {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    /* 个别宿主不让在主线程 wait：退化为立即重试，不影响正确性。 */
+  }
+}
+
 function loadOrCreateKey(): Buffer {
   if (cachedKey !== undefined) {
     return cachedKey;
@@ -38,17 +71,45 @@ function loadOrCreateKey(): Buffer {
   // 项目根拉起，读同一文件即用同一密钥，加密 / 解密互通。文件不可用时再退回
   // 环境变量或进程内随机兜底。
   try {
-    if (!existsSync(KEY_FILE)) {
-      mkdirSync(join(process.cwd(), "data"), { recursive: true });
-      // 文件里放一个随机口令，由它派生 AES 密钥；不直接存密钥字节。
-      const fileKey = randomUUID().replaceAll("-", "") + randomBytes(16).toString("hex");
-      writeFileSync(KEY_FILE, fileKey, { encoding: "utf8", mode: 0o600 });
+    mkdirSync(join(process.cwd(), "data"), { recursive: true });
+    // 文件里放一个随机口令，由它派生 AES 密钥；不直接存密钥字节。
+    const fileKey = randomUUID().replaceAll("-", "") + randomBytes(16).toString("hex");
+    /* `wx` 独占创建（ISSUE #3836）：Next server 与 Workshop MCP 两进程首启同时
+     * 走到这里时，原先「existsSync → writeFileSync」会让双方各写一个随机密钥、
+     * 后写覆盖先写 —— 先写进程读走的密钥与盘上的不一致，加解密静默失败（表现
+     * 成「明明配了 key 却说未配置」）。独占创建保证只有一份落盘，后到者拿
+     * EEXIST 后与对方读同一个文件。 */
+    try {
+      writeFileSync(KEY_FILE, fileKey, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    } catch {
+      /* EEXIST = 对方先建好了：不视为故障，落回下面的统一读取。 */
     }
-    cachedKey = deriveKey(readFileSync(KEY_FILE, "utf8").trim());
+    /* 回读带完整性校验 + 短退避重试（ISSUE #3877）：自己写入的文件当拍即完整；
+     * 只有「对方先建、对方仍在写」的窄窗口会读到残缺内容，重试几拍即可等到
+     * 完整口令。穷尽仍不完整就走下方 env/随机兜底（与读失败同路），绝不把
+     * 残缺内容固化进 `cachedKey`。 */
+    let material: string | null = null;
+    /* 重试参数收口在 retry-policy 的 `KEY_FILE_READ`（5 × 25ms，ISSUE #3956）。
+     * **刻意保持同步**（syncSleep = Atomics.wait，不是 async sleep）：本函数在
+     * `encryptLlmKey` / `decryptLlmKey` 的同步签名里，调用方（`repository-user` 的
+     * 行映射、Workshop MCP 的 `workshop/llm`）是同步上下文，async 化会把整条加解密
+     * 链传染成 Promise。窗口极窄（仅「对方先建、对方仍在写」的首启竞态），最坏
+     * 125ms 且每进程至多一次（`cachedKey` 之后恒命中）—— 同步短眠是权衡后的保留。 */
+    for (let attempt = 0; attempt < KEY_FILE_READ.maxAttempts; attempt += 1) {
+      material = readKeyFileMaterial();
+      if (material !== null) {
+        break;
+      }
+      syncSleep(backoffDelayMs({ ...KEY_FILE_READ, attempt }));
+    }
+    if (material === null) {
+      throw new Error("llm key file content incomplete");
+    }
+    cachedKey = deriveKey(material);
     return cachedKey;
   } catch {
     const envSecret = process.env[ENV_VAR] ?? process.env[ENV_VAR.toLowerCase()];
-    if (envSecret && envSecret.trim().length >= 8) {
+    if (envSecret !== undefined && envSecret.trim().length >= 8) {
       cachedKey = deriveKey(envSecret.trim());
       return cachedKey;
     }
@@ -63,7 +124,7 @@ export function isEncrypted(value: string): boolean {
 }
 
 export function encryptLlmKey(plaintext: string | null | undefined): string | null {
-  if (!plaintext) {
+  if (plaintext === undefined || plaintext === null || plaintext === "") {
     return null;
   }
   const iv = randomBytes(12);
@@ -74,7 +135,7 @@ export function encryptLlmKey(plaintext: string | null | undefined): string | nu
 }
 
 export function decryptLlmKey(enc: string | null | undefined): string | null {
-  if (!enc) {
+  if (enc === undefined || enc === null || enc === "") {
     return null;
   }
   if (!isEncrypted(enc)) {
@@ -83,7 +144,14 @@ export function decryptLlmKey(enc: string | null | undefined): string | null {
   try {
     const body = enc.slice(PREFIX.length);
     const [ivB64, tagB64, ctB64] = body.split(":");
-    if (!ivB64 || !tagB64 || !ctB64) {
+    if (
+      ivB64 === undefined ||
+      ivB64 === "" ||
+      tagB64 === undefined ||
+      tagB64 === "" ||
+      ctB64 === undefined ||
+      ctB64 === ""
+    ) {
       return null;
     }
     const decipher = createDecipheriv(ALGO, loadOrCreateKey(), Buffer.from(ivB64, "base64"));

@@ -1,7 +1,8 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { StatusDot } from "~/components/ui/status-dot";
+import { SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import {
   STATUS_ACTIONS_CLASS,
   STATUS_ROW_CLASS,
@@ -14,15 +15,8 @@ import {
 const BASE = `http://127.0.0.1:${String(COMFYUI_DEFAULT_PORT)}`;
 
 /**
- * 「服务状态行」= 本机常驻后端（ComfyUI / Drizzle Studio / Ollama）那一条
- * 「左侧状态文字 + 右侧一排按钮」。
- *
- * 这一条最值得看的是**宽度不够时会怎么退化**（ISSUE #423 的现场）：
- * 左侧状态文字截断、按钮整排落到第二行，而不是把按钮压成两行小字。
- * 所以第二个 story 直接给一条 360px 宽的容器。
- *
- * 第三个 story 是**主次**：一屏里只该有一颗实心（`primary-solid`）——
- * 当前这一态该按的那颗。缺省档（软底）留给了「打开查看」这类并列出口。
+ * 「服务状态行」= 本机常驻后端（ComfyUI / Drizzle Studio / Ollama）的「左侧状态文字 + 右侧一排按钮」。
+ * 最值得看的是宽度不够时怎么退化（ISSUE #423）：状态文字截断、按钮整排落到第二行，而不是压成两行小字，故第二个 story 给 360px 宽容器。第三个是主次：一屏只该有一颗实心（`primary-solid`），缺省软底留给并列出口。
  */
 const meta = {
   title: "UI/ServiceStatusRow",
@@ -42,9 +36,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   args: { children: "启动 ComfyUI", onClick: () => undefined },
   render: () => (
-    <div
-      className={`border-border bg-surface-2 w-160 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
-    >
+    <div className={`${SETTINGS_ROW_CLASS} w-160 ${STATUS_ROW_CLASS}`}>
       <StatusDot state="up" />
       <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>
         {`ComfyUI 运行中（${BASE}）·配置路径的实例`}
@@ -75,9 +67,7 @@ export const Default: Story = {
 export const Narrow: Story = {
   args: { children: "启动 ComfyUI", onClick: () => undefined },
   render: () => (
-    <div
-      className={`border-border bg-surface-2 w-90 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
-    >
+    <div className={`${SETTINGS_ROW_CLASS} w-90 ${STATUS_ROW_CLASS}`}>
       <StatusDot state="busy" />
       <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>ComfyUI 正在启动…（已拉起 8 秒）</span>
       <div className={STATUS_ACTIONS_CLASS}>
@@ -109,37 +99,33 @@ export const Narrow: Story = {
 export const States: Story = {
   args: { children: "启动 ComfyUI", onClick: () => undefined },
   render: () => (
+    /* SAFETY: 类型断言已复核 */
     <div className="flex flex-col gap-3">
-      {
-        /* SAFETY: 类型断言已复核 */ (
-          [
-            ["up", `ComfyUI 运行中（${BASE}）`, "关闭 ComfyUI"],
-            ["busy", "ComfyUI 正在启动…", "启动中…"],
-            ["probing", "ComfyUI 状态检测中…", "启动 ComfyUI"],
-            ["down", "ComfyUI 未运行", "启动 ComfyUI"],
-          ] as const
-        ).map(([state, text, action]) => (
-          <div
-            className={`border-border bg-surface-2 w-160 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
-            key={state}
-          >
-            <StatusDot state={state} />
-            <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>{text}</span>
-            <div className={STATUS_ACTIONS_CLASS}>
-              <StatusButton disabled={state === "busy"} onClick={() => undefined} variant="primary">
-                打开查看
-              </StatusButton>
-              <StatusButton
-                disabled={state === "busy"}
-                onClick={() => undefined}
-                variant="primary-solid"
-              >
-                {action}
-              </StatusButton>
-            </div>
+      {(
+        [
+          ["up", `ComfyUI 运行中（${BASE}）`, "关闭 ComfyUI"],
+          ["busy", "ComfyUI 正在启动…", "启动中…"],
+          ["probing", "ComfyUI 状态检测中…", "启动 ComfyUI"],
+          ["down", "ComfyUI 未运行", "启动 ComfyUI"],
+        ] as const
+      ).map(([state, text, action]) => (
+        <div className={`${SETTINGS_ROW_CLASS} w-160 ${STATUS_ROW_CLASS}`} key={state}>
+          <StatusDot state={state} />
+          <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>{text}</span>
+          <div className={STATUS_ACTIONS_CLASS}>
+            <StatusButton disabled={state === "busy"} onClick={() => undefined} variant="primary">
+              打开查看
+            </StatusButton>
+            <StatusButton
+              disabled={state === "busy"}
+              onClick={() => undefined}
+              variant="primary-solid"
+            >
+              {action}
+            </StatusButton>
           </div>
-        ))
-      }
+        </div>
+      ))}
     </div>
   ),
 };

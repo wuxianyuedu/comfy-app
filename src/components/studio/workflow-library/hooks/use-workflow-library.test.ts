@@ -1,11 +1,7 @@
-// 工作流库逻辑层单测：hook 走真实 tRPC React 客户端（trpc.workflow.* /
-// trpc.workflowModel.list 的 options），由 MSW 转发到可控测试 router —— 因此断言的是
-// **真实管线下的 loading → data → 错误流转**，而不是 vi.mock 的永不 resolve 桩。
-//
-// 三个重点：
-//   1. 三级筛选 + 搜索的派生（纯规则在 workflow-library-config.test.ts）；
-//   2. 服务端列表 → 本地 state 的同步（快照比对，同一份数据不重复 setState）；
-//   3. §17.5.4：动作失败的错误不会被后台刷新吞掉（只有 refresh 才清）。
+// 工作流库逻辑层单测：hook 走真实 tRPC React 客户端（MSW 转发到可控测试 router），
+// 因此断言的是**真实管线下的 loading → data → 错误流转**，而不是 vi.mock 桩。
+// 重点：① 三级筛选 + 搜索派生；② 服务端列表 → 本地 state 同步（快照比对）；
+// ③ §17.5.4 动作失败的错误不会被后台刷新吞掉（只有 refresh 才清）。
 
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
@@ -60,11 +56,11 @@ const mockRouter = t.router({
   workflow: t.router({
     list: t.procedure.query(async () => {
       listCalls += 1;
-      if (behavior.listDelayMs && behavior.listDelayMs > 0) {
+      if (behavior.listDelayMs !== undefined && behavior.listDelayMs > 0) {
         // sleep-ok: mock 内部延迟：tRPC mock 的 listDelayMs 是给用例制造「列表慢一拍」的现场（行为开关），不是等条件。
         await new Promise((resolve) => setTimeout(resolve, behavior.listDelayMs));
       }
-      if (behavior.listError) {
+      if (behavior.listError !== undefined && behavior.listError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.listError,
@@ -77,7 +73,7 @@ const mockRouter = t.router({
     }),
     create: t.procedure.mutation(() => ({ id: "new", warnings: [] })),
     update: t.procedure.mutation(() => {
-      if (behavior.updateError) {
+      if (behavior.updateError !== undefined && behavior.updateError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.updateError,
@@ -86,7 +82,7 @@ const mockRouter = t.router({
       return { ok: true };
     }),
     delete: t.procedure.mutation(() => {
-      if (behavior.deleteError) {
+      if (behavior.deleteError !== undefined && behavior.deleteError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.deleteError,
@@ -137,17 +133,19 @@ function makeWrapper() {
     return createElement(
       QueryClientProvider,
       { client: qc },
-      // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
       createElement(TRPCProvider, {
         trpcClient: client,
         queryClient: qc,
+        // oxlint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
         children,
       }),
     );
   };
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
 afterEach(() => {
   cleanup();
   behavior = { workflows: [], localPending: [], tags: [] };
@@ -155,7 +153,9 @@ afterEach(() => {
   vi.clearAllMocks();
   server.resetHandlers();
 });
-afterAll(() => server.close());
+afterAll(() => {
+  server.close();
+});
 
 describe("useWorkflowLibrary", () => {
   it("挂载后拿到列表与标签，并派生出来源 / 类型计数", async () => {
@@ -202,15 +202,25 @@ describe("useWorkflowLibrary", () => {
     await expect.poll(() => result.current.workflows).toHaveLength(2);
 
     const callsBefore = listCalls;
-    act(() => result.current.setTypeFilter("video"));
+    act(() => {
+      result.current.setTypeFilter("video");
+    });
     expect(result.current.workflows.map((workflow) => workflow.id)).toEqual(["2"]);
 
-    act(() => result.current.setTypeFilter("all"));
-    act(() => result.current.setModelFilter("flux"));
+    act(() => {
+      result.current.setTypeFilter("all");
+    });
+    act(() => {
+      result.current.setModelFilter("flux");
+    });
     expect(result.current.workflows.map((workflow) => workflow.id)).toEqual(["1"]);
 
-    act(() => result.current.setModelFilter("all"));
-    act(() => result.current.setSearch("beta"));
+    act(() => {
+      result.current.setModelFilter("all");
+    });
+    act(() => {
+      result.current.setSearch("beta");
+    });
     expect(result.current.workflows.map((workflow) => workflow.id)).toEqual(["2"]);
 
     expect(listCalls).toBe(callsBefore);
@@ -227,16 +237,24 @@ describe("useWorkflowLibrary", () => {
     });
     await expect.poll(() => result.current.workflows).toHaveLength(2);
 
-    act(() => result.current.setSelectedId("2"));
+    act(() => {
+      result.current.setSelectedId("2");
+    });
     expect(result.current.selectedRow?.name).toBe("Beta");
 
-    act(() => result.current.handleDeleteClick("2", "Beta"));
+    act(() => {
+      result.current.handleDeleteClick("2", "Beta");
+    });
     expect(result.current.selectedId).toBeNull();
     expect(result.current.pendingDelete).toEqual({ id: "2", name: "Beta" });
 
     // 删除未选中项不该动选择
-    act(() => result.current.setSelectedId("1"));
-    act(() => result.current.handleDeleteClick("2", "Beta"));
+    act(() => {
+      result.current.setSelectedId("1");
+    });
+    act(() => {
+      result.current.handleDeleteClick("2", "Beta");
+    });
     expect(result.current.selectedId).toBe("1");
   });
 
@@ -249,7 +267,7 @@ describe("useWorkflowLibrary", () => {
     await expect.poll(() => result.current.loadError).toContain("数据库不可用");
 
     behavior = { workflows: [row()], localPending: [], tags: [] };
-    await act(async () => {
+    act(() => {
       result.current.load();
     });
     await expect.poll(() => result.current.loadError).toBeNull();
@@ -275,7 +293,7 @@ describe("useWorkflowLibrary", () => {
     // 关键点：后台刷新成功，动作错误必须还在（否则提示条一闪就没，
     // 用户会以为删除成功了 —— §17.5.4 记录的就是这个坑）。
     behavior = { ...behavior, deleteError: undefined };
-    await act(async () => {
+    act(() => {
       result.current.load();
     });
     await expect.poll(() => result.current.workflows).toHaveLength(1);
@@ -323,7 +341,7 @@ describe("useWorkflowLibrary", () => {
     expect(result.current.loadStalled).toBe(false);
 
     // 推进到刚好触发 stalled 超时
-    await act(async () => {
+    act(() => {
       vi.advanceTimersByTime(LIST_STALL_MS + 50);
     });
 

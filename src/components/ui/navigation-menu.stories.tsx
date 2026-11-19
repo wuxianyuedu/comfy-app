@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import {
   NavigationMenu,
@@ -9,19 +9,9 @@ import {
   NavigationMenuTrigger,
 } from "~/components/ui/navigation-menu";
 
-/**
- * `ui/navigation-menu` 是**站点级导航条**（悬停即展开的横向菜单）。
- *
- * 与 `menubar` 的差别值得说清，两者很容易被当成一件事：
- * - `menubar` 是**应用菜单栏**（`文件 / 编辑` 那种），点开、选一个、关掉；
- * - 本件是**导航**，悬停即展开，且展开的浮层由 `NavigationMenuPositioner`
- *   **统一承载**，所以移动鼠标时面板位置会平滑地跟着走 ——
- *   这是本件最值得看的一处形态，光看单项是看不出来的。
- *
- * 定位那一层同样读 `useOverlayBoundary()`（可用区域 = 视口减去应用级标题行，
- * 壳态才有标题行）。`NavigationMenuTrigger` 自带的 `ChevronDownIcon`
- * 会在展开时 `rotate-180`。
- */
+/** `ui/navigation-menu` 是站点级导航条（悬停即展开的横向菜单）。
+ * 与 `menubar` 的差别值得说清：后者是应用菜单栏（「文件 / 编辑」那种，点开、选一个、关掉）；本件是导航，悬停即展开，且展开的浮层由 `NavigationMenuPositioner` 统一承载，所以移动鼠标时面板位置会平滑地跟着走 —— 这是本件最值得看的一处形态，光看单项是看不出来的。
+ * 定位那一层同样读 `useOverlayBoundary()`（可用区域 = 视口减去应用级标题行，壳态才有标题行）；`NavigationMenuTrigger` 自带的 `ChevronDownIcon` 会在展开时 `rotate-180`。 */
 const meta = {
   title: "UI/NavigationMenu",
   component: NavigationMenu,
@@ -95,31 +85,30 @@ export const PanelsSlideBetweenTriggers: Story = {
  *  —— 两档并排放在一个窄容器里才看得出差别（宽容器下两者几乎重合）。 */
 export const Alignments: Story = {
   render: () => (
+    /* SAFETY: 类型断言已复核 */
     <div className="flex w-72 flex-col gap-6">
-      {
-        /* SAFETY: 类型断言已复核 */ (["start", "center"] as const).map((align) => (
-          <div className="flex flex-col gap-1.5" key={align}>
-            <span className="text-ink-muted font-mono text-[11px]">align={align}</span>
-            <NavigationMenu align={align} className="justify-start">
-              <NavigationMenuList>
-                <NavigationMenuItem>
-                  <NavigationMenuTrigger>菜单</NavigationMenuTrigger>
-                  <NavigationMenuContent>
-                    <ul className="grid w-64 gap-1 p-2">
-                      <li>
-                        <NavigationMenuLink href="#">第一项</NavigationMenuLink>
-                      </li>
-                      <li>
-                        <NavigationMenuLink href="#">第二项</NavigationMenuLink>
-                      </li>
-                    </ul>
-                  </NavigationMenuContent>
-                </NavigationMenuItem>
-              </NavigationMenuList>
-            </NavigationMenu>
-          </div>
-        ))
-      }
+      {(["start", "center"] as const).map((align) => (
+        <div className="flex flex-col gap-1.5" key={align}>
+          <span className="text-ink-muted font-mono text-[11px]">align={align}</span>
+          <NavigationMenu align={align} className="justify-start">
+            <NavigationMenuList>
+              <NavigationMenuItem>
+                <NavigationMenuTrigger>菜单</NavigationMenuTrigger>
+                <NavigationMenuContent>
+                  <ul className="grid w-64 gap-1 p-2">
+                    <li>
+                      <NavigationMenuLink href="#">第一项</NavigationMenuLink>
+                    </li>
+                    <li>
+                      <NavigationMenuLink href="#">第二项</NavigationMenuLink>
+                    </li>
+                  </ul>
+                </NavigationMenuContent>
+              </NavigationMenuItem>
+            </NavigationMenuList>
+          </NavigationMenu>
+        </div>
+      ))}
     </div>
   ),
 };

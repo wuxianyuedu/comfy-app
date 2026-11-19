@@ -4,36 +4,8 @@ import { expectHomeReady } from "./support/home-anchors";
 
 /**
  * 冒烟用例：不依赖 ComfyUI 后端，也不需要登录态。
- * 选择器文本均来自 src/app/login/page.tsx 与 src/components/studio/HomePage.tsx 的真实文案。
+ * 选择器文本来自 src/components/studio/HomePage.tsx 的真实文案。
  */
-
-// @critical：规范 11.7 的 CI 门禁只跑这一类关键流程（CLI: --grep @critical）。
-// 新增冒烟用例若属于「合并前必须验证的主流程」，请带上同一个 tag。
-test.describe("登录页冒烟", () => {
-  test("@critical 渲染登录表单关键元素并支持切换注册模式", async ({ page }) => {
-    await page.goto("/login");
-
-    // 品牌与引导文案
-    await expect(page.getByText("登录以同步你的作品、工作流与训练任务")).toBeVisible();
-
-    // 邮箱 / 密码输入框（登录态）
-    await expect(page.getByPlaceholder("name@example.com")).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toBeVisible();
-
-    // 提交按钮（登录模式下表单内 type=submit 的按钮，避免与顶部「登录」Tab 重名）
-    const submit = page.locator('form button[type="submit"]');
-    await expect(submit).toBeVisible();
-    await expect(submit).toHaveText("登录");
-
-    // 切换到注册模式：出现昵称字段，提交按钮变为「创建并登录」
-    await /* 登录 / 创建账号是一排里选一个（`role="radio"`，规范 16 §16.2.4.75）——
-     不是按钮。改的是读法，不是用例锁的那件事。 */
-    page.getByRole("radio", { name: "创建账号" }).click();
-    await expect(page.getByText("创建一个本地账号，开启你的 AI 创作")).toBeVisible();
-    await expect(page.getByText("昵称（可选）")).toBeVisible();
-    await expect(submit).toHaveText("创建并登录");
-  });
-});
 
 test.describe("首页冒烟", () => {
   test("@critical 首页重定向到 /workspace 且创作台正常渲染", async ({ page }) => {
@@ -51,17 +23,14 @@ test.describe("首页冒烟", () => {
 
 test.describe("数据库链路冒烟", () => {
   /**
-   * ISSUE #489：CI 门禁此前**从不建库**，且 `db:push` 在无 TTY 上会「报错 +
-   * exit 0 + 留 0 字节库」。这条用例是那档退化的**用户可见出口探针**：
-   * `/api/health` 现在会一并探 schema 就绪度（`SELECT 1` 在空库上照样成功，
-   * 光靠它会把「表没建」漏报成 `db: up`），所以断言 `db: "up"` 等价于
-   * 「表真的建好了」。它依赖 CI 里 `pnpm run db:push` 那一步先跑过。
+   * ISSUE #489：CI 门禁此前**从不建库**，且 `db:push` 在无 TTY 上会「报错 + exit 0 + 留 0 字节库」。
+   * `/api/health` 现一并探 schema 就绪度（`SELECT 1` 空库照样成功，光靠它会把「表没建」漏报成
+   * `db: up`），故断言 `db: "up"` 等价于「表真的建好了」；它依赖 CI 里 `pnpm run db:push` 那步先跑过。
    */
   test("@critical 健康检查确认数据库表已就绪", async ({ request }) => {
     const res = await request.get("/api/health");
     expect(res.status()).toBe(200);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as { db: string; status: string; };
+    const body: unknown = await res.json();
     // 表没建时是 503 + db: "empty"（此时应用首页还能 200，正是此前被漏报的形态）
     expect(body).toEqual(expect.objectContaining({ status: "ok", db: "up" }));
   });

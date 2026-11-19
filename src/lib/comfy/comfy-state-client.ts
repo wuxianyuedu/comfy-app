@@ -20,10 +20,26 @@
 // 状态查询。
 
 import { startPollTimer } from "~/lib/poll-timer";
+import { isRecord } from "~/lib/is-record";
+import { backoffDelayMs, COMFY_STATE_POLL_BACKOFF } from "~/lib/retry-policy";
 import type { ComfyStateChange } from "~/lib/comfyui/state-watch";
 
 /** 单次长轮询的请求上限：比服务端的窗口（25s）宽一点，只兜住病态挂死的连接。 */
 const REQUEST_TIMEOUT_MS = 35_000;
+
+/** 一拍长轮询的结局：健康（change 为 null = 无变化）与失败要分得开——
+ *  失败走退避（#4234），健康维持「立即重发」的长轮询语义。 */
+type PollOutcome = { ok: false } | { change: ComfyStateChange | null; ok: true };
+
+/** 失败连击数 → 下一拍延迟。健康（≤0）返回 0（立即重发）；失败按具名指数退避
+ *  + equal 抖动错峰（`COMFY_STATE_POLL_BACKOFF`，形状与数值的理由在那份定义里）。
+ *  导出给用例注入确定性 rand 验证退避表（同文件 `.test.ts` 是在册消费方）。 */
+export function nextPollDelayMs(failureStreak: number, rand: () => number = Math.random): number {
+  if (failureStreak <= 0) {
+    return 0;
+  }
+  return backoffDelayMs({ ...COMFY_STATE_POLL_BACKOFF, attempt: failureStreak - 1 }, rand);
+}
 
 export type Listener = (change: ComfyStateChange) => void;
 
@@ -45,28 +61,38 @@ const st: StateClientGlobal = (globalThis.__comfyStateClient_v1 ??= {});
 
 const listeners = new Set<Listener>();
 
-/** 帧形状收窄：外部输入，逐字段判型，不做类型断言。 */
+/** 合法来源白名单：与服务端 `ComfyStateChangeKind` 的取值保持一致。 */
+const STATE_CHANGE_KINDS: ReadonlyArray<ComfyStateChange["kind"]> = [
+  "start",
+  "ready",
+  "stop",
+  "exit",
+  "config",
+];
+
+function isStateChangeKind(value: unknown): value is ComfyStateChange["kind"] {
+  return typeof value === "string" && STATE_CHANGE_KINDS.some((kind) => kind === value);
+}
+
+/** 帧形状收窄：外部输入，逐字段判型。 */
 function parseChange(raw: unknown): ComfyStateChange | null {
-  if (typeof raw !== "object" || raw === null) {
+  if (!isRecord(raw)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const o = raw as Record<string, unknown>;
   if (
-    typeof o.seq !== "number" ||
-    !Number.isFinite(o.seq) ||
-    typeof o.at !== "number" ||
-    typeof o.kind !== "string" ||
-    typeof o.detail !== "string"
+    typeof raw.seq !== "number" ||
+    !Number.isFinite(raw.seq) ||
+    typeof raw.at !== "number" ||
+    !isStateChangeKind(raw.kind) ||
+    typeof raw.detail !== "string"
   ) {
     return null;
   }
   return {
-    seq: o.seq,
-    at: o.at,
-    /* SAFETY: 类型断言已复核 */
-    kind: o.kind as ComfyStateChange["kind"],
-    detail: o.detail,
+    seq: raw.seq,
+    at: raw.at,
+    kind: raw.kind,
+    detail: raw.detail,
   };
 }
 
@@ -106,38 +132,51 @@ export function subscribeComfyStateChanges(listener: Listener): () => void {
  * 几十秒的长轮询，用户切走时该立刻停下（那条请求还挂在服务端），切回来时
  * 该立刻问一次「我不在的时候变了没」。这正是该原语的语义，重写一遍只会漂。
  *
- * `ms` **必须是函数形态**，且返回 `0`（「立刻再跑一拍」）。写死数字 `0` 不行：
- * 那个原语把**定值** `0` 与 `null` 一并当成「不轮询」（`ms <= 0` 直接返回空停表
- * —— 实测这条会静默什么都不发，界面上表现为「状态再也不更新」）。函数形态
- * 返回 `0` 才是它唯一表达的「立刻再来」；而 `0` 在这里因为**本拍跑完才排下一拍**
- * （请求本身就是等待）不会成为忙等。
+ * `ms` **必须是函数形态**：健康路径返回 `0`（「立刻再跑一拍」），失败路径返回
+ * 退避延迟（`nextPollDelayMs`，#4234——后端不可达时毫秒级失败重发是热循环）。
+ * 写死数字 `0` 不行：那个原语把**定值** `0` 与 `null` 一并当成「不轮询」
+ * （`ms <= 0` 直接返回空停表——实测这条会静默什么都不发，界面上表现为
+ * 「状态再也不更新」）。函数形态返回 `0` 才是它唯一表达的「立刻再来」；而 `0`
+ * 在这里因为**本拍跑完才排下一拍**（请求本身就是等待）不会成为忙等。
  */
 function start(): void {
   if (st.stop) {
     return;
   }
   const runId = (st.runId = (st.runId ?? 0) + 1);
+  /* 失败连击随链起算：新链（退订再订阅）从 0 重新退避。**下一拍等多久由 `ms`
+   * 选项函数决定**（poll-timer 的契约：本拍结算后询问一次），回调只负责更新
+   * 连击数——返回值不参与调度。 */
+  let failureStreak = 0;
   st.stop = startPollTimer(
     async () => {
       /* 已经换过一条链（退订又订阅）：这一拍的结果与下一拍都不该再落下。 */
       if (st.runId !== runId) {
-        return null;
+        return;
       }
-      const change = await pollOnce();
-      if (change !== null && st.runId === runId) {
-        deliver(change);
+      const outcome = await pollOnce();
+      if (outcome.ok) {
+        failureStreak = 0;
+        if (outcome.change !== null && st.runId === runId) {
+          deliver(outcome.change);
+        }
+        return;
       }
-      /* 回来就立刻再发一轮：长轮询的「等」在服务端，客户端这边不该再加延迟。 */
-      return 0;
+      failureStreak += 1;
     },
     {
-      ms: () => 0,
+      /* 健康路径返回 0：长轮询的「等」在服务端，客户端这边不加延迟（0 档 =
+       * 「本拍跑完立刻再来」，不与忙等混同——等的是上一拍结算）。失败路径
+       * （#4234）：后端不可达时 fetch 毫秒级失败，无条件「立刻再发」会变成
+       * 失败请求热循环（每秒几十发，撞上 LogProvider 记录过的同源连接预算
+       * ERR_INSUFFICIENT_RESOURCES）——按具名指数退避 + 抖动错峰，成功一拍即
+       * 复位回「立即重发」。 */
+      ms: () => nextPollDelayMs(failureStreak),
       immediate: true,
       /* 本文件在 `src/lib`，那里不许直接 `console.*`（`tests/single-logger-channel`
-       * 硬闸）。而这条通道**本来就不需要日志**：`pollOnce` 把网络错误与坏帧都
-       * 吞成「这一轮没有变化」——能走到这里的只剩编程错误，而下一次 HTTP 请求
-       * 本身就是「我刚怎么死的」最快的证据（长轮询会立刻重发）。真需要排查时
-       * 打开 Network 面板就能看到全部往返，比一行被吞掉的 console 更完整。 */
+       * 硬闸）。而这条通道**本来就不需要日志**：失败路径的表现是「轮询变慢」，
+       * 语义兜底是设置页那次重新问状态；真需要排查时打开 Network 面板就能看到
+       * 全部往返，比一行被吞掉的 console 更完整。 */
       onError: () => undefined,
     },
   );
@@ -150,8 +189,9 @@ function stop(): void {
   st.runId = (st.runId ?? 0) + 1;
 }
 
-/** 一次长轮询请求：204 = 没有变化，返回 null（调用方继续等）。 */
-async function pollOnce(): Promise<ComfyStateChange | null> {
+/** 一次长轮询请求。健康结局两种：204 / 坏帧 = 无变化；失败结局（网络错 / 超时 /
+ *  5xx）单独返回——调用方据此走退避而不是立即重发（#4234）。 */
+async function pollOnce(): Promise<PollOutcome> {
   let res: Response;
   try {
     res = await fetch(`/api/comfy/state?since=${st.seenSeq ?? 0}`, {
@@ -159,21 +199,21 @@ async function pollOnce(): Promise<ComfyStateChange | null> {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {
-    /* 断网 / 超时 / 服务还在起：静默降级到下一轮。这条通道只是「更快的通知」，
-     * 它坏了不该在界面上说话 —— 兜底是设置页那次重新问状态，而不是这里 */
-    return null;
+    /* 断网 / 超时 / 服务还在起：静默降级。这条通道只是「更快的通知」，它坏了不该
+     * 在界面上说话 —— 兜底是设置页那次重新问状态，而不是这里 */
+    return { ok: false };
   }
   if (res.status === 204) {
-    return null;
+    return { ok: true, change: null };
   }
   if (!res.ok) {
-    return null;
+    return { ok: false };
   }
   try {
-    return parseChange(await res.json());
+    return { ok: true, change: parseChange(await res.json()) };
   } catch {
-    /* 坏帧不影响后续：一条解析不了的载荷不该把整条链拖死。 */
-    return null;
+    /* 坏帧不影响后续：一条解析不了的载荷不该把整条链拖死（对端可达 ⇒ 算健康）。 */
+    return { ok: true, change: null };
   }
 }
 

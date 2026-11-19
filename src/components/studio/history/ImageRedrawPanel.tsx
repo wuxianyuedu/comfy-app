@@ -49,7 +49,7 @@ export function ImageRedrawPanel({
       failureText: "模板清单加载失败",
     });
     // 只在面板挂载时拉一次（ensureTemplates 自带去重）。
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- ensureTemplates 是稳定回调
+    // oxlint-disable-next-line react/exhaustive-deps -- ensureTemplates 是稳定回调
   }, []);
 
   return (
@@ -58,10 +58,12 @@ export function ImageRedrawPanel({
         <FieldLabel>模式</FieldLabel>
         <RadioGroup
           className="flex flex-row gap-4"
-          onValueChange={(v) =>
-            /* SAFETY: 类型断言已复核 */
-            controller.setMode(v as "upscale" | "inpaint")
-          }
+          onValueChange={(v: unknown) => {
+            /* base-ui 的 `onValueChange` 给的是宽值；只有这两档是重绘模式。 */
+            if (v === "upscale" || v === "inpaint") {
+              controller.setMode(v);
+            }
+          }}
           value={controller.mode}
         >
           {/* 点击区走 radio-group 的 children 语义（P78）：文字进 Item，
@@ -90,7 +92,9 @@ export function ImageRedrawPanel({
         </FieldLabel>
         <Select
           disabled={controller.busy}
-          onValueChange={(next) => controller.selectTemplate(next ?? "")}
+          onValueChange={(next) => {
+            controller.selectTemplate(next ?? "");
+          }}
           value={controller.selectedTemplateId || null}
         >
           <SelectTrigger
@@ -113,7 +117,7 @@ export function ImageRedrawPanel({
               controller.templates.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
                   {t.name}
-                  {t.taskType ? `（${t.taskType}）` : ""}
+                  {t.taskType !== null && t.taskType !== "" ? `（${t.taskType}）` : ""}
                 </SelectItem>
               ))
             )}
@@ -148,16 +152,17 @@ export function ImageRedrawPanel({
           disabled={
             controller.busy ||
             !controller.selectedTemplateId ||
-            (controller.mode === "inpaint" && !controller.mask)
+            (controller.mode === "inpaint" && (controller.mask === null || controller.mask === ""))
           }
-          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-          onClick={() => void controller.run(imageUrl)}
+          onClick={() => {
+            void controller.run(imageUrl);
+          }}
           size="sm"
           type="button"
         >
           {controller.busy ? "提交中…" : "提交"}
         </Button>
-        {controller.resultTaskId && (
+        {controller.resultTaskId !== null && controller.resultTaskId !== "" && (
           <span className="text-ink-faint text-2xs">
             已入队：{controller.resultTaskId}（历史页可观察进度）
           </span>

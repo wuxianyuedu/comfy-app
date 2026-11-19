@@ -1,24 +1,6 @@
 /* IO 预览侧面板（工作流编辑器）。
- *
- * 模式体系（与工作流库「类型」同源）：
- *   - 模式页签直接来自工作流的 `modes`（模板列，MultiModeSelect 维护），
- *     不再有「通用」页签，也不再提供自由文本模式码；
- *   - 点击页签切换模式，主表单即时切换到该模式的覆盖层——所有默认值都
- *     用原本的通用组件填写（写入 modes[mode].defaultValue），不再有单独
- *     的「覆盖列表」配置区；
- *   - 每行的 👁 切换该参数在当前模式下是否可见（modes[mode].visible），
- *     按模式分别保留；
- *   - 尚未添加任何模式时表单禁用（禁止配置参数），先在 MultiModeSelect
- *     里勾选模式。
- *
- * DATA MERGE. 本地 `workflowIO` 只携带勾选时的身份字段；`detailIOMap` 是
- * 服务端富化（type/defaultValue/nodeTitle/multiline）。对每个 key 优先取
- * 富化条目、再叠加本地条目——本地是作者编辑态的唯一事实源（label/value/
- * required/seedMode/modes 的未保存修改都在上面，必须整体透传）。
- * 显示名以本地 label 为准，回退顺序见 `io-exposure.ts`（子工作流封装节点的
- * 富化名会落到包装槽位名 `value_1`，与画布上的业务名对不上）。
- *
- * 位置：右上角，占满画布高度，`z-canvas-max`（规范 16 §16.2.5）。 */
+ * 模式体系（与工作流库「类型」同源）：模式页签直接来自工作流的 `modes`（MultiModeSelect 维护），没有「通用」页签、也不再提供自由文本模式码；点页签切换模式，主表单即时切到该模式的覆盖层（默认值写入 `modes[mode].defaultValue`，不再有单独的「覆盖列表」配置区）；每行 👁 切换该参数在当前模式是否可见（`modes[mode].visible`，按模式分别保留）；尚未添加任何模式时表单禁用，先在 MultiModeSelect 里勾选模式。
+ * DATA MERGE：本地 `workflowIO` 只带勾选时的身份字段，`detailIOMap` 是服务端富化（type/defaultValue/nodeTitle/multiline）；每个 key 先取富化条目、再叠加本地条目 —— 本地是作者编辑态的唯一事实源（label/value/required/seedMode/modes 的未保存修改都在上面，必须整体透传）。显示名以本地 label 为准，回退顺序见 `io-exposure.ts`（子工作流封装节点的富化名会落到包装槽位名 `value_1`，与画布业务名对不上）。位置：右上角，占满画布高度，`z-canvas-max`（规范 16 §16.2.5）。 */
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
@@ -70,10 +52,10 @@ export function WorkflowIoPreviewPanel({
    * defaultMode → 第一个模式。没有模式 = 表单禁用（禁止配置参数）。 */
   const [activeMode, setActiveMode] = useState<string | null>(null);
   const effectiveMode = useMemo(() => {
-    if (activeMode && modes.includes(activeMode)) {
+    if (activeMode !== null && activeMode !== "" && modes.includes(activeMode)) {
       return activeMode;
     }
-    if (defaultMode && modes.includes(defaultMode)) {
+    if (defaultMode !== null && defaultMode !== "" && modes.includes(defaultMode)) {
       return defaultMode;
     }
     return modes[0] ?? null;
@@ -87,7 +69,8 @@ export function WorkflowIoPreviewPanel({
       return out;
     }
     for (const [key, local] of Object.entries(workflowIO)) {
-      if (!local) {
+      const localPresent = Boolean(local);
+      if (!localPresent) {
         continue;
       }
       const e = detailIOMap[key];
@@ -109,8 +92,8 @@ export function WorkflowIoPreviewPanel({
   /* 当前模式是否落过覆盖（驱动「恢复默认」按钮）。 */
   const hasModeOverrides = useMemo(
     () =>
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      effectiveMode != null &&
+      effectiveMode !== null &&
+      effectiveMode !== undefined &&
       Object.values(workflowIO).some(
         (entry) => entry?.modeOverrides?.[effectiveMode] !== undefined,
       ),
@@ -118,14 +101,16 @@ export function WorkflowIoPreviewPanel({
   );
 
   const setIOLabel = useCallback(
-    (key: string, label: string) => ioApi.getState().setIOLabel(key, label),
+    (key: string, label: string) => {
+      ioApi.getState().setIOLabel(key, label);
+    },
     [ioApi],
   );
   /* 「必填 / 可选」切换：按当前模式写入覆盖（modes[mode].required）。
    *  仅 widget 输入可调必填（与服务端富化迁移语义一致）。 */
   const setRequiredForMode = useCallback(
     (key: string, required: boolean) => {
-      if (!effectiveMode) {
+      if (effectiveMode === null || effectiveMode === "") {
         return;
       }
       if (workflowIO[key]?.kind !== "widget") {
@@ -140,7 +125,7 @@ export function WorkflowIoPreviewPanel({
    * （modes[mode].seedMode），使不同模式可有独立的 seed 行为。 */
   const setSeedModeForMode = useCallback(
     (key: string, seedBehavior: string) => {
-      if (!effectiveMode) {
+      if (effectiveMode === null || effectiveMode === "") {
         return;
       }
       ioApi.getState().setIOModeOverride(key, effectiveMode, { seedMode: seedBehavior });
@@ -148,8 +133,14 @@ export function WorkflowIoPreviewPanel({
     [effectiveMode, ioApi],
   );
   const reorderIO = useCallback(
-    (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) =>
-      ioApi.getState().reorderIO(fromKey, targetKey, position),
+    (
+      fromKey: string,
+      targetKey: string | null,
+      position: WorkflowIODropPosition,
+      fromKeys?: Array<string>,
+    ) => {
+      ioApi.getState().reorderIO(fromKey, targetKey, position, fromKeys);
+    },
     [ioApi],
   );
 
@@ -157,7 +148,7 @@ export function WorkflowIoPreviewPanel({
    *  通用页签一并移除。只写真正变化的键，避免一进页签就给所有参数落满覆盖。 */
   const handleFormChange = useCallback(
     (next: Record<string, unknown>) => {
-      if (!effectiveMode) {
+      if (effectiveMode === null || effectiveMode === "") {
         return;
       }
       const current = defaultInputValues(previewIO, effectiveMode);
@@ -173,7 +164,7 @@ export function WorkflowIoPreviewPanel({
 
   const toggleModeVisibility = useCallback(
     (key: string, visible: boolean) => {
-      if (!effectiveMode) {
+      if (effectiveMode === null || effectiveMode === "") {
         return;
       }
       ioApi.getState().setIOModeOverride(key, effectiveMode, { visible });
@@ -183,7 +174,7 @@ export function WorkflowIoPreviewPanel({
 
   /* 恢复默认 = 清掉当前模式的全部覆盖（回到通用默认 + 默认可见）。 */
   const resetActiveModeOverrides = useCallback(() => {
-    if (!effectiveMode) {
+    if (effectiveMode === null || effectiveMode === "") {
       return;
     }
     for (const key of Object.keys(workflowIO)) {
@@ -203,7 +194,7 @@ export function WorkflowIoPreviewPanel({
   const seedModes: Record<string, string> = {};
   for (const entry of editableEntries) {
     const resolved = resolveEntrySeedMode(entry, effectiveMode);
-    if (resolved) {
+    if (resolved !== undefined && resolved !== "") {
       seedModes[entry.ioKey] = resolved;
     }
   }
@@ -251,7 +242,9 @@ export function WorkflowIoPreviewPanel({
               <Hint label={code}>
                 <Button
                   className={`${tabClass(effectiveMode === code)} h-auto`}
-                  onClick={() => setActiveMode(code)}
+                  onClick={() => {
+                    setActiveMode(code);
+                  }}
                   size="xs"
                   variant="ghost"
                 >
@@ -298,7 +291,13 @@ export function WorkflowIoPreviewPanel({
               …），之后才能在这里配置参数。
             </div>
           ) : (
-            <div className={effectiveMode ? "" : "pointer-events-none opacity-50"}>
+            <div
+              className={
+                effectiveMode !== null && effectiveMode !== ""
+                  ? ""
+                  : "pointer-events-none opacity-50"
+              }
+            >
               <DynamicWorkflowForm
                 compact
                 emptyHint={null}

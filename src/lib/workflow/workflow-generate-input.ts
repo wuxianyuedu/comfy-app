@@ -21,6 +21,7 @@
  */
 import { z } from "zod";
 
+import { referenceLoaderPresetSchema } from "~/lib/workshop/reference-loader-preset";
 import { workflowParamMapInputSchema } from "~/lib/workflow/workflow-param-map";
 
 /** 一个「对外参数 → 节点端口」的取值项（画布与工坊两条通路共用同一个落点）。 */
@@ -55,6 +56,16 @@ export const generateInputSchema = z.object({
    * `z.record(z.string(), z.string())` —— 那表达不了这层结构（见该模块文件头）。 */
   paramMap: workflowParamMapInputSchema,
   workflowInputs: z.array(workflowInputSchema).optional(),
+  /** 参考图装载计划（#4376）：键 `${nodeId}::${入口名}` → 装载预设全量定义。
+   *  执行期为这些张量图片入口按预设动态生成装载子图（LoadImage → 处理链 → 端口），
+   *  替代裸 LoadImage。计划随任务行自含（复现现场不必回查预设库）；执行期发现
+   *  类定义缺失等异常时该端点回落裸 LoadImage。 */
+  referenceLoaderPlan: z.record(z.string().min(1), referenceLoaderPresetSchema).optional(),
+  /** 部分执行（调试，comfy-cli v1.24.0 `--output-node-ids`）：只跑到这些输出
+   *  节点及其依赖子图，用于把大工作流拆成「只跑可疑输出分支」定位故障。
+   *  缺省 = 整图执行。节点 id 必须存在于提交的工作流且是输出节点，否则
+   *  comfy-cli 提交前报 invalid_output_node_ids。 */
+  outputNodeIds: z.array(z.string().min(1)).max(64).optional(),
   projectId: z.string().optional(),
   /** 工坊镜头号：只作归属，不参与执行（执行载荷与它无关）。 */
   shotId: z.string().optional(),

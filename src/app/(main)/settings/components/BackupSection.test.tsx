@@ -1,21 +1,13 @@
 /**
- * `BackupSection` 的**可见行为契约**（规范 17 §17.2 第③层的视图）。
- *
- * 这一小块界面承担的唯一风险是：**把「恢复」说成已经发生的事**。恢复是两步
- * （写标记 → 下次启动换文件），界面若弹一句「恢复成功」，用户会去刷新页面、
- * 发现数据没变、然后认为整个功能是坏的 —— 而真正要做的事（重启应用）一个字
- * 都没说过。所以这里的断言全部指向「界面说清了下一步是什么」：
- *
- *   1. 没有备份时给的是「点上面的立即备份」，不是空白；
- *   2. 有备份时每份带名字与大小，各有一个「用这一份恢复」；
- *   3. 点恢复**先出确认**（不直接登记）—— 与「立即同步」同款：按钮只是发起；
- *   4. 已登记的那一份说的是「**重启应用**后生效」，且按钮变成不可再点的「已登记」。
- *
- * 只消费 controller 上那几格，其余字段与本节无关（同 `AppearanceSection.test.tsx` 的写法）。
+ * `BackupSection` 的可见行为契约（规范 17 §17.2 第③层视图）。唯一风险是把「恢复」说成已发生：
+ * 恢复是两步（写标记 → 下次启动换文件），弹「恢复成功」会让用户刷新后发现数据没变。
+ * 断言指向「界面说清下一步」：无备份给引导、点恢复先出确认、已登记的说「重启应用后生效」且按钮禁点。
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
@@ -23,20 +15,39 @@ import { BackupSection } from "./BackupSection";
 
 afterEach(cleanup);
 
+/** 本分区只读备份清单那几格；接口其余成员（LLM / 更新 / 日志等）与本节无关。 */
+function isBackupSectionController(v: unknown): v is ReadySettingsPageController {
+  return (
+    isRecord(v) &&
+    Array.isArray(v.backups) &&
+    typeof v.backupBusy === "boolean" &&
+    typeof v.backupListLoading === "boolean" &&
+    typeof v.restoreBusy === "boolean" &&
+    typeof v.createBackupNow === "function" &&
+    typeof v.restoreFrom === "function"
+  );
+}
+
 function controller(
   overrides: Partial<ReadySettingsPageController> = {},
 ): ReadySettingsPageController {
-  /* SAFETY: 类型断言已复核 */
-  return {
+  const stub: unknown = {
     backups: [],
+    appDataBackups: [],
     pendingRestore: null,
     backupListLoading: false,
     backupBusy: false,
     restoreBusy: false,
-    createBackupNow: vi.fn(async () => undefined),
-    restoreFrom: vi.fn(async () => undefined),
+    importBusy: false,
+    importFromDir: vi.fn(() => undefined),
+    createBackupNow: vi.fn(() => undefined),
+    restoreFrom: vi.fn(() => undefined),
     ...overrides,
-  } as unknown as ReadySettingsPageController;
+  };
+  if (!isBackupSectionController(stub)) {
+    throw new Error("备份分区的 controller 替身缺少本分区要读的字段");
+  }
+  return stub;
 }
 
 const oneBackup = [{ name: "db-backup-20261010-120000.sqlite", size: 8192, at: 0 }];
@@ -65,7 +76,7 @@ describe("备份清单", () => {
 
 describe("恢复是两步，界面必须说清", () => {
   it("点恢复先确认，不直接登记", async () => {
-    const restoreFrom = vi.fn(async () => undefined);
+    const restoreFrom = vi.fn(() => Promise.resolve());
     render(<BackupSection c={controller({ backups: oneBackup, restoreFrom })} />);
 
     await userEvent.click(screen.getByRole("button", { name: "用这一份恢复" }));
@@ -74,11 +85,12 @@ describe("恢复是两步，界面必须说清", () => {
     expect(screen.getByText(/确认登记从/)).toBeTruthy();
 
     await userEvent.click(screen.getByRole("button", { name: "确认登记" }));
-    expect(restoreFrom).toHaveBeenCalledWith("db-backup-20261010-120000.sqlite");
+    /* 无配对的应用数据备份时，第二参（appDataDir）是 null。 */
+    expect(restoreFrom).toHaveBeenCalledWith("db-backup-20261010-120000.sqlite", null);
   });
 
   it("取消就真的不登记", async () => {
-    const restoreFrom = vi.fn(async () => undefined);
+    const restoreFrom = vi.fn(() => Promise.resolve());
     render(<BackupSection c={controller({ backups: oneBackup, restoreFrom })} />);
     await userEvent.click(screen.getByRole("button", { name: "用这一份恢复" }));
     await userEvent.click(screen.getByRole("button", { name: "取消" }));
@@ -94,6 +106,7 @@ describe("恢复是两步，界面必须说清", () => {
           pendingRestore: {
             file: "db-backup-20261010-120000.sqlite",
             at: new Date().toISOString(),
+            appDataDir: null,
           },
         })}
       />,

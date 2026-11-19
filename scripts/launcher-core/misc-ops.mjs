@@ -30,16 +30,28 @@ export function openBrowser(ctx, url) {
     windowsHide: true,
   });
   // 打开浏览器是体验降级，绝不能成为启动失败：xdg-open 缺失时给一条 WARN 即可。
-  child.on("error", () => ctx.log(`未能自动打开浏览器，请手动访问 ${url}`, "WARN"));
+  child.on("error", () => {
+    ctx.log(`未能自动打开浏览器，请手动访问 ${url}`, "WARN");
+  });
   child.unref();
   ctx.log(`已尝试打开浏览器：${url}`, "INFO");
 }
+
+/** 重入守卫（ISSUE #3836）：dev-launcher.mjs 信号处理器里的 `shuttingDown` 只覆盖
+ *  信号那一侧；正常收尾正在 `await reapAll()` 时再来一条信号，会从这里**第二次**
+ *  进入 —— 对同一批子进程重复派发回收命令、归档与 exit 竞争。按进程挡住：只跑
+ *  第一遍，后到的直接返回（process.exit 即将发生，无需等待）。 */
+let shutdownStarted = false;
 
 /** 优雅中断（Ctrl-C / SIGTERM / SIGHUP）：回收整棵进程树后退出。
  * @param {{ log: (m: string, l?: import("./log.mjs").LogLevel) => void,
  *           reapAll: () => Promise<void>, root: string }} ctx 注入上下文
  * @param {number} code */
 export async function shutdown(ctx, code) {
+  if (shutdownStarted) {
+    return;
+  }
+  shutdownStarted = true;
   ctx.log("正在回收整棵进程树…", "STEP");
   await ctx.reapAll();
   try {
@@ -49,6 +61,37 @@ export async function shutdown(ctx, code) {
     /* 归档失败不影响退出（下一轮启动的 recoverStaleCurrent 还会再收一次） */
   }
   process.exit(code);
+}
+
+/** 信号收尾的唯一装配（硬规则 3）：第一个到达的信号触发一次 `onSignal`，
+ *  后续信号被守卫吞掉 —— 「回收整树 → 退出」只走这一条路。
+ *
+ *  常驻 promise **不得**再注册 SIGINT/SIGTERM 监听把 signal 当成「正常退出」
+ *  resolve（#4409）：signal 分支 resolve `code:0` 后，run() 的微任务续体会抢在
+ *  `reapAll`（真实异步、挂在宏任务上）完成之前执行 `process.exit(0)` —— POSIX 下
+ *  dev / executor-host 成孤儿，Windows 下退出码变 0、归档与锚点清理被跳过。
+ *  `processLike` 与 dispose 是给测试的注入面：不碰真进程也能判「首信号生效、
+ *  后续信号被吞」。
+ * @param {{ onSignal: (signal: string) => void,
+ *           processLike?: { on: (signal: string, handler: () => void) => unknown },
+ *           signals?: Array<string> }} opts
+ * @returns {() => void} dispose（测试用：之后所有信号都不再触发 onSignal） */
+export function wireSignalShutdown(opts) {
+  const signals = opts.signals ?? ["SIGINT", "SIGTERM", "SIGHUP"];
+  const processLike = opts.processLike ?? process;
+  let wired = false;
+  for (const signal of signals) {
+    processLike.on(signal, () => {
+      if (wired) {
+        return;
+      }
+      wired = true;
+      opts.onSignal(signal);
+    });
+  }
+  return () => {
+    wired = true;
+  };
 }
 
 /** 解析命令行参数（与 .ps1 的开关语义逐项对齐）。 */

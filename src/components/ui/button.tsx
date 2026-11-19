@@ -11,7 +11,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        default:
+          "bg-primary text-primary-foreground hover:bg-primary-hover dark:bg-primary-600 dark:hover:bg-primary-hover",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
@@ -20,14 +21,8 @@ const buttonVariants = cva(
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        /* ── 语义色变体（ISSUE #672 / 规范 16 §16.2.4）──
-           这四组是「软底（tinted）」形态：实心色在浅底上当按钮底会盖住层级
-           关系，而视图里 400 处手写 `<button>` 的绝大多数正是软底徽标按钮
-           （`bg-*-500/10 text-*-700 dark:text-*-300`）。变体名取**语义角色**
-           不取色名：写 `variant="danger"` 而不是 `variant="red"`，换品牌色
-           时调用处不用改（§3.6.2）。
-           每一组的「文字档」都走 -strong token 而不是同一个色相的原色：
-           同一个琥珀 `#d97706` 当底色可以、当浅底上的文字色对比度不足。 */
+        /* 语义色变体（ISSUE #672 / 规范 16 §16.2.4）：软底（tinted）形态 —— 实心色当按钮底会盖住层级关系，视图里 400 处手写按钮绝大多数正是软底徽标按钮。
+           变体名取语义角色不取色名（`danger` 而非 `red`），换品牌色调用处不用改（§3.6.2）；文字档走 -strong token，同一色相当浅底文字对比度不足。 */
         primary:
           "bg-primary-500/15 text-primary-strong hover:bg-primary-500/25 focus-visible:border-primary-500/40 focus-visible:ring-primary-500/20",
         danger:
@@ -37,28 +32,16 @@ const buttonVariants = cva(
         warning:
           "bg-warning/10 text-warning-strong hover:bg-warning/20 focus-visible:border-warning/40 focus-visible:ring-warning/20",
         info: "bg-info/10 text-info-strong hover:bg-info/20 focus-visible:border-info/40 focus-visible:ring-info/20",
-        /* 实心档：视图里的「主行动按钮」还有一种 `bg-<色>-500/90 text-white`，
-           它不属于上面的软底形态，故各出一支 -solid。P1 第一批只出了品牌 /
-           危险 / 成功三色（当时实测只有这三色有实心用法）；设置页批次补出
-           `warning-solid` —— 「继续等待视频生成」是实心琥珀（`bg-amber-500
-           text-white`），它同时是「进行中」与「需要用户动手」两种语义的交叠，
-           软底不足以表达。 */
+        /* 实心档：视图里的「主行动按钮」还有 `bg-<色>-500/90 text-white`，不属于软底形态，故各出一支 -solid。
+           P1 第一批只出品牌/危险/成功（实测仅这三色有实心用法）；设置页批次补 `warning-solid`（「继续等待视频生成」实心琥珀，兼「进行中」与「需用户动手」两种语义，软底不足以表达）。 */
         "primary-solid":
-          "bg-primary-500 text-primary-foreground hover:bg-primary-600 focus-visible:border-primary-600 focus-visible:ring-primary-500/40",
+          "bg-primary-500 text-primary-foreground hover:bg-primary-600 focus-visible:border-primary-600 focus-visible:ring-primary-500/40 dark:bg-primary-600 dark:hover:bg-primary-hover",
         "danger-solid":
-          "bg-destructive text-primary-foreground hover:bg-destructive/90 focus-visible:border-destructive focus-visible:ring-destructive/30",
+          "bg-destructive text-primary-foreground hover:bg-[color-mix(in_oklch,var(--color-destructive),black_10%)] focus-visible:border-destructive focus-visible:ring-destructive/30",
         "success-solid":
-          "bg-success text-primary-foreground hover:bg-success/90 focus-visible:border-success focus-visible:ring-success/30",
+          "bg-success text-on-success hover:bg-[color-mix(in_oklch,var(--color-success),black_10%)] focus-visible:border-success focus-visible:ring-success/30",
         "warning-solid":
-          "bg-warning-strong text-primary-foreground hover:bg-warning-strong/90 focus-visible:border-warning-strong focus-visible:ring-warning/30",
-        /* 品牌渐变档：把 `globals.css` 的 `.btn-gradient` 挂上来（三颗星走品牌 token，
-           改品牌色时跟手）。文字固定 `text-on-brand` —— 底是**深色渐变**，浅色主题下
-           再取 `--color-ink` 就成了「深底深字」（§3.6.1 那条「底色固定时文字必须同为
-           一态」的同一形态）。刻意**不带** hover 底色类：hover 观感由 `.btn-gradient`
-           的 brightness 提供，而 utilities 压过 components 层，再叠一层 `hover:bg-*`
-           只会把它的 transition 整条洗掉。尺寸/圆角的差异留给调用处的共享常量
-           （如 `HEADER_ACTION_BTN`）或下面的 size 轴。 */
-        gradient: "btn-gradient text-on-brand",
+          "bg-warning-strong text-primary-foreground hover:bg-[color-mix(in_oklch,var(--color-warning-strong),black_10%)] focus-visible:border-warning-strong focus-visible:ring-warning/30",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

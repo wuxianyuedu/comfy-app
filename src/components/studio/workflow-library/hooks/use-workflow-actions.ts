@@ -1,16 +1,10 @@
 "use client";
 
-/** P4：从 WorkflowLibrary 的动作回调块抽出
- *  （handleUpgradeConfirm / handleDelete / patchModes / patchModelTags /
- *  downloadJson / resyncWorkflow / handleLoadPending）。该 hook 接收
- *  它需要的原始状态 setter + trpc mutation，返回稳定的
- *  回调；组件只保留状态声明与 JSX。
- *
- *  归位 `hooks/`（规范 17 §17.2 第②层 —— 此前它在 feature 根目录，
- *  名字像逻辑层、位置却不是）。`setImportErr` 同步改名为 `setActionError`：
- *  它承接的是动作失败（删除 / 下载 / 同步 / 载入），不是导入面板的校验错误，
- *  按 §17.5.4 必须走「只有用户重试才清」的通道。
- */
+/** P4：从 WorkflowLibrary 的动作回调块抽出（handleUpgradeConfirm / handleDelete /
+ *  patchModes / patchModelTags / downloadJson / resyncWorkflow / handleLoadPending）。
+ *  hook 接收原始状态 setter + trpc mutation，返回稳定回调；组件只留状态与 JSX。
+ *  归位 hooks/（规范 17 §17.2 ②）。`setImportErr` 改名 `setActionError`：它承接
+ *  动作失败（删除/下载/同步/载入），按 §17.5.4 走「只有用户重试才清」的通道。 */
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTRPC, type RouterInputs, type RouterOutputs } from "~/trpc/react";
@@ -28,6 +22,10 @@ export type MutateAsyncLike<TInput, TOutput> = {
 };
 
 export type UseWorkflowActionsArgs = {
+  convertMut: MutateAsyncLike<
+    RouterInputs["workflow"]["convertToOnline"],
+    RouterOutputs["workflow"]["convertToOnline"]
+  >;
   createMut: MutateAsyncLike<
     RouterInputs["workflow"]["create"],
     RouterOutputs["workflow"]["create"]
@@ -44,6 +42,7 @@ export type UseWorkflowActionsArgs = {
   /** 「哪一条在下载 / 在同步」的执行态由 `~/components/ui/use-item-action` 给
    *  （规范 16 §16.2.4.40）—— 这里只拿它的 `run`（忙标记 + 同步判重入一次给全）。 */
   runBundle: <T>(id: string, action: () => Promise<T>) => Promise<T | undefined>;
+  runConvert: <T>(id: string, action: () => Promise<T>) => Promise<T | undefined>;
   runResync: <T>(id: string, action: () => Promise<T>) => Promise<T | undefined>;
   setActionError: (v: string) => void;
   setDeleting: (v: boolean) => void;
@@ -62,6 +61,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     setPendingDelete,
     setActionError,
     runBundle,
+    runConvert,
     runResync,
     setPendingLoading,
     setWorkflows,
@@ -70,6 +70,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     deleteMut,
     resyncMut,
     createMut,
+    convertMut,
   } = args;
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -145,9 +146,11 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     [setWorkflows, updateMut, report, load],
   );
 
-  /** 模型标签绑定持久化。乐观更新本地列表，失败回滚。 */
+  /** 模型标签绑定持久化。乐观更新本地列表，失败回滚。
+   *  返回 `null` = 成功；否则回传失败文案（绑定唯一性的冲突原因，ISSUE #4102），
+   *  供绑定弹窗就地展示 —— 全局 report 照常走动作错误通道。 */
   const patchModelTags = useCallback(
-    async (id: string, names: Array<string>) => {
+    async (id: string, names: Array<string>): Promise<string | null> => {
       setWorkflows((prev) =>
         prev.map((workflow) => (workflow.id === id ? { ...workflow, modelTags: names } : workflow)),
       );
@@ -157,7 +160,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       });
       if (!result.ok) {
         void load();
+        return result.detail;
       }
+      return null;
     },
     [setWorkflows, updateMut, report, load],
   );
@@ -210,13 +215,14 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           async () => {
             const d = await queryClient.fetchQuery(trpc.workflow.detail.queryOptions({ id }));
             const tpl = d?.template;
-            if (!tpl) {
+            /* template 在类型上非空（恒真对象），防御「没取到」用 Boolean 保判空语义。 */
+            const tplPresent = Boolean(tpl);
+            if (!tplPresent) {
               toast.error("获取工作流失败", "未知错误");
               return true;
             }
             const payload = tpl.rawJson ?? null;
-            // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-            if (payload == null) {
+            if (payload === null || payload === undefined) {
               toast.error("下载失败", "该工作流没有可下载的内容");
               return true;
             }
@@ -242,12 +248,20 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         await runAsyncAction(
           async () => {
             const d = await resyncMut.mutateAsync({ id });
-            if (d?.missing) {
+            if (d?.missing === true) {
               toast.error("同步失败", "磁盘文件已不存在，无法同步（请检查路径或重新载入）");
-            } else if (d?.unchanged) {
+            } else if (d?.unchanged === true) {
               toast.info("磁盘文件未变化", name);
-            } else if (d?.updated) {
+            } else if (d?.updated === true) {
               toast.success("已同步磁盘内容", name);
+              /* #4377：同步后新版本里断掉的 IO 连线要提示重新配置。 */
+              const broken = d.broken ?? [];
+              if (broken.length > 0) {
+                toast.error(
+                  `同步完成，但 ${broken.length} 条 IO 连线已断开，请重新配置`,
+                  broken.map((wire) => `${wire.entryId} ⇢ ${wire.ioKey}`).join("；"),
+                );
+              }
               await load();
             }
             return true;
@@ -257,6 +271,24 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       });
     },
     [toast, load, runResync, resyncMut, report],
+  );
+
+  /** 本地工作流一键转在线（ISSUE #4372）：解除磁盘跟踪，内容以库中当前版本
+   *  为准；成功后刷新列表 —— 徽标翻「在线」，磁盘原文件落入「未载入」区。 */
+  const handleConvertToOnline = useCallback(
+    async (id: string, name: string) => {
+      await runConvert(id, async () => {
+        const result = await runAsyncAction(() => convertMut.mutateAsync({ id }), {
+          report,
+          failureText: "转换失败",
+          successText: `已转为在线工作流：${name}`,
+        });
+        if (result.ok) {
+          void load();
+        }
+      });
+    },
+    [runConvert, convertMut, report, load],
   );
 
   /** 把磁盘上发现的一个文件经单文件导入
@@ -296,6 +328,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     patchWorkflowIO,
     downloadJson,
     resyncWorkflow,
+    handleConvertToOnline,
     handleLoadPending,
   };
 }

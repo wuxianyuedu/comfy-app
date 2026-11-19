@@ -1,15 +1,7 @@
 /**
- * 档位这一刀的判据（ISSUE #2022 / 规范 §13.5.25）。
- *
- * 要挡的失效形态很具体：把「重档不在每次提交上跑」做成**把步骤从钩子里删掉**。那样
- * `check-gate-executors.cjs`（它按文本解析钩子的 `run` 行、`quality-gate.mjs` 的 gate 表、
- * `quality-gate.ps1` 的 `$Blocks` —— **`.cnb.yml` 不在它的解析面上**）会立刻失去那批
- * 判据的出处，而账面上一条红都不会出现：步骤没了 ⇒ 「没有档要找执行者」⇒ 绿。
- * 所以这里钉的不是「跑得快」，是**注册表还在、且真的有人跑它**。
- *
- * 三条方向各一：① 注册表 ⇄ 钩子双向对账与本地档边界（挪档不许减清单，也不许加完不登记）；
- * ② 跳档必须被说出来
- * （否则一次「只跑了 D0」的绿会被读成「全套过了」）；③ CI 那一档读的是同一份注册表。
+ * 档位这一刀的判据（ISSUE #2022 / 规范 §13.5.25）。要挡的失效形态：把「重档不在每次提交跑」做成**删步骤** ——
+ * `check-gate-executors.cjs` 按文本解析钩子 `run` 行、gate 表、`$Blocks`（`.cnb.yml` 不在解析面），步骤没了
+ * ⇒ 判据失去出处而账面全绿。所以钉的是注册表还在且真有人跑：①双向对账与本地档边界；②跳档必须说出来；③CI 读同一份注册表。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -24,7 +16,8 @@ import {
   DECLARED_STEPS,
   registryProblems,
 } from "../scripts/base-check/declared-hook-steps.mjs";
-import { fullTreeArgv, main as heavyMain } from "../scripts/ci-heavy-gates.mjs";
+import { DAILY_GATE_EXECUTORS } from "../scripts/ci/ci-ga-trigger-map.mjs";
+import { fullTreeArgv, main as heavyMain } from "../scripts/ci/ci-heavy-gates.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const HOOK = path.join(ROOT, ".githooks", "pre-commit");
@@ -32,13 +25,9 @@ const hookText = readFileSync(HOOK, "utf8");
 
 describe("档位：注册表与边界", () => {
   /**
-   * 这一格**不写总数**（ISSUE #2235）。应然清单住在
-   * `scripts/base-check/declared-hook-steps.mjs`，这里只核「注册表与钩子说的是不是同一件事」。
-   *
-   * 为什么抄一份名单不算第二份漂移：那份名单是**规约**（「这些判据必须有执行者」），
-   * 而它的两个漂移方向都被 `registryProblems()` 挡住 —— 钩子加了没登记 ⇒ 红；
-   * 登记了而钩子没有 ⇒ 红。两者都**点名是哪一条**，这比旧写法强一整格：
-   * 「总数不等」只说差一条，而排查「差的是哪条」要把 56 行重读一遍。
+   * 这一格不写总数（ISSUE #2235）：应然清单住在 `scripts/base-check/declared-hook-steps.mjs`，这里只核注册表
+   * 与钩子说的是不是同一件事。抄名单不算第二份漂移 —— 它是**规约**（这些判据必须有执行者），两个漂移方向
+   * 都被 `registryProblems()` 挡住并点名是哪一条，比「总数不等」强一整格（排查差哪条要重读 56 行）。
    */
   it("注册表 ⇄ 钩子步骤双向对账（一条不差、一条不多，本地档边界一致）", () => {
     expect(registryProblems(readHookSteps(), localTierLabels())).toEqual([]);
@@ -91,13 +80,13 @@ describe("档位：跳过必须被说出来", () => {
      * （收尾缺）、跑了但结论不落账（skip 标记缺）。 */
     expect(hookText).toContain("COMFY_HEAVY_GATES");
     expect(hookText).toContain("$LOGD/$id.skip");
-    /* 收尾那句自 ISSUE #2154 起住在 `scripts/gate-tier-summary.cjs`（钩子只调它），
+    /* 收尾那句自 ISSUE #2154 起住在 `scripts/gates/gate-tier-summary.cjs`（钩子只调它），
      * 所以这里判的是**接线**而不是那句话的位置：钩子必须点名那个脚本，而那句话必须在
      * 那个脚本里 —— 少任何一半，「跳过被说出来」这条就当场没有执行者。
      * （原先这里直接在 `hookText` 上匹配那句话；把判据钉在行形状上，等于钉住一个
      *  随时该搬走的实现 —— 语义是「有人念」，不是「念的那行住在哪个文件」。） */
-    expect(hookText).toContain("scripts/gate-tier-summary.cjs");
-    expect(readFileSync(path.join(ROOT, "scripts/gate-tier-summary.cjs"), "utf8")).toMatch(
+    expect(hookText).toContain("scripts/gates/gate-tier-summary.cjs");
+    expect(readFileSync(path.join(ROOT, "scripts/gates/gate-tier-summary.cjs"), "utf8")).toMatch(
       /本次提交本地\*\*没跑\*\*：/,
     );
   });
@@ -108,22 +97,19 @@ describe("档位：跳过必须被说出来", () => {
     }
   });
 
-  it("pre-push 不再背受影响用例：那一段 2026-10-20 撤了，执行者换成平台那一格", () => {
-    /* 沿革（别读混）：`unitTests` 段 2026-10-19 从 pre-commit 的 C 组搬到 pre-push，
-     * 2026-10-20 又整体撤掉 —— 本地这一跳在共享机上的失效形态是 forks worker 调度
-     * 超时而不是用例红（实测拦下一次、隔离复跑 88 文件 1116 条全绿），增量档自此
-     * 由 `.cnb.yml` 的 `受影响用例` 一格执行。
-     * 这里钉两件：① premerge 段表里**没有** `unitTests`（留一段恒跳过会让 `--json`
-     * 的读数里永远有一格「没跑起来」，而那一格不构成证据，§13.6.2）；② 新执行者的
-     * 三个事实都在场（GATES 里有名字、跑法脚本走同一条判决链、改动面经 env 传入）。 */
-    const src = readFileSync(path.join(ROOT, "scripts/premerge-check.mjs"), "utf8");
+  it("受影响用例 / 固定结构用例 / 覆盖率上报 从 PR 撤出：执行者收口到每日全量单测", () => {
+    /* 沿革：`unitTests` 段 2026-10-19 从 pre-commit C 组搬到 pre-push，2026-10-20 整体撤掉 —— 共享机上
+     * 失效形态是 forks worker 调度超时而非用例红；2026-11-02 起连同「core 骨架单一事实源」等从 PR 撤到
+     * 每日全量单测（§13.5.21）。这里钉两件：①premerge 段表**没有** `unitTests`（恒跳过的一格不构成证据，
+     * §13.6.2）；②`受影响用例`/`固定结构用例` 在 `.cnb.yml` 不再有独立 stage。 */
+    const src = readFileSync(path.join(ROOT, "scripts/gates/premerge-check.mjs"), "utf8");
     expect(src).not.toContain("unitTests:");
     expect(src).not.toContain('kind: "changed"');
     // `base` 段仍读钩子注册表（localTierLabels），`--light` 那一档的跳过条数照旧要说出来。
     expect(src).toContain("localTierLabels");
     expect(src).toContain("--light");
 
-    const ci = readFileSync(path.join(ROOT, "scripts/ci-affected-tests.mjs"), "utf8");
+    const ci = readFileSync(path.join(ROOT, "scripts/ci/ci-affected-tests.mjs"), "utf8");
     // 同一条判决链：跑法脚本起的是 run-affected-tests.mjs，改动面经 env 递进去。
     expect(ci).toContain("run-affected-tests.mjs");
     expect(ci).toContain("COMFY_AFFECTED_CHANGED");
@@ -131,26 +117,47 @@ describe("档位：跳过必须被说出来", () => {
     expect(ci).toContain("resolveCiWorkers");
 
     const cnb = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
-    expect(cnb).toContain("- name: 受影响用例");
-    /* #2845 起固定/受影响拆成两格：名单里两格相邻、且各有自己的 stage 块。 */
-    expect(cnb).toContain("类型检查, 固定结构用例, 受影响用例,");
-    expect(cnb).toContain("- name: 固定结构用例");
+    // 两测试格从 PR 撤出：PR 清单里不再相邻、且不再有独立 stage 块。
+    expect(cnb).not.toContain("类型检查, 固定结构用例, 受影响用例,");
+    expect(cnb).not.toMatch(/^\s*- name: 受影响用例\s*$/m);
+    expect(cnb).not.toMatch(/^\s*- name: 固定结构用例\s*$/m);
+    // `覆盖率上报` 从 PR 挪到了每日档（PR 上不再有产出 lcov 的测试格，它只会静默空转）。
+    // #3504 起每日档的执行者整体迁 GA：逻辑名 ⇄ step 名登记在 `ci-ga-trigger-map.mjs`
+    // 的 `DAILY_GATE_EXECUTORS`，执行面在 `.github/workflows/daily.yml` —— step 名改了
+    // 而登记没跟，当场红在这里（与 `ci-incremental-gates.test.ts` 的「每日 API 文档」
+    // 那条同一模式）。CNB 侧谁把旧 stage 名加回来，也在上面两条否定断言红。
+    const gaDaily = readFileSync(path.join(ROOT, ".github", "workflows", "daily.yml"), "utf8");
+    const coverageStep = DAILY_GATE_EXECUTORS["覆盖率上报"];
+    expect(coverageStep, "`覆盖率上报` 在 DAILY_GATE_EXECUTORS 里没有登记对位 step").toBeTruthy();
+    const stepAt = gaDaily.indexOf(`      - name: ${coverageStep}`);
+    expect(
+      stepAt,
+      `GA daily.yml 里解析不出「${coverageStep}」step —— 每日档的覆盖率出口没有执行者`,
+    ).toBeGreaterThan(-1);
+    const blockEnd = gaDaily.indexOf("\n      - name:", stepAt + 1);
+    const block = gaDaily.slice(stepAt, blockEnd === -1 ? undefined : blockEnd);
+    // 执行语义是「产物出口」：报告由上一格的 `full-suite-run.mjs` 产出，这一格上传
+    // artifact；「没有报告时跳过而不是判红」由 `if: always()` + `if-no-files-found: warn`
+    // 兑现（对位 CNB 那格的跳过口径，见 daily.yml step 注释）。
+    expect(block).toContain("actions/upload-artifact");
+    expect(block).toContain("path: coverage/");
+    expect(block).toContain("if: always()");
+    expect(block).toContain("if-no-files-found: warn");
     // 拿不到改动面 / 清单为空必须退 2（没判 ≠ 绿）。
     expect(ci).toMatch(/files\.length === 0[\s\S]{0,400}return 2/);
   });
 
   /**
-   * `COMFY_AFFECTED_CHANGED` 这条通道要**真的**换掉改动面，不是被读进去又丢掉。
-   *
-   * 用 `--dry-run`：只走「筛清单 + 规划启动」那一半，不起 vitest，所以既快又不抢机器。
-   * 两个方向都判 —— 只判「给了清单会打印份数」的话，把 env 当空气、永远按暂存区筛也照样过。
+   * `COMFY_AFFECTED_CHANGED` 要**真的**换掉改动面，不是读进去又丢掉。用 `--dry-run` 只走「筛清单 + 规划
+   * 启动」，不起 vitest，既快又不抢机器。两个方向都判 —— 只判「给了清单会打印份数」的话，把 env 当空气、
+   * 永远按暂存区筛也照样过。
    */
   it("改动面从 env 传进来 ⇒ 走的还是同一条判决链", () => {
-    const countOf = (out: string) => Number(/(\d+) 个用例/.exec(out)?.[1] ?? 0);
+    const countOf = (out: string) => Number(/(?<count>\d+) 个用例/.exec(out)?.groups?.count ?? 0);
     const runLauncher = (changed: string) => {
       const r = spawnSync(
         process.execPath,
-        [path.join(ROOT, "scripts", "run-affected-tests.mjs"), "--dry-run"],
+        [path.join(ROOT, "scripts", "affected-tests/run-affected-tests.mjs"), "--dry-run"],
         {
           cwd: ROOT,
           encoding: "utf8",
@@ -179,7 +186,7 @@ describe("档位：跳过必须被说出来", () => {
 
 describe("CI 那一格：读同一份注册表，且三态分得开", () => {
   it("重档 runner 不抄清单（它 import 的就是钩子那份注册表）", () => {
-    const src = readFileSync(path.join(ROOT, "scripts/ci-heavy-gates.mjs"), "utf8");
+    const src = readFileSync(path.join(ROOT, "scripts/ci/ci-heavy-gates.mjs"), "utf8");
     expect(src).toContain("readHookSteps");
     expect(src).not.toMatch(/const GATES = \[/);
   });

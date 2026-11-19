@@ -1,12 +1,6 @@
-/**
- * `Disclosure` —— 「点一行标题、把一段内容折叠 / 展开」的唯一实现
- * （规范 16 §16.2.4.13）。
- *
- * 收口前有三种写法（原生 `<details>` 六处、自绘 `role="button"` + `▸/▾`
- * 四处、树形 `expanded*` 映射两份），差别不是风格而是**无障碍语义各写各的**：
- * 自绘那份基本只有 `onClick`。所以这里逐条钉住基元**替调用处实现的那几件事**，
- * 而不是去断言某个调用点的外观。
- */
+/** `Disclosure` —— 「点一行标题、折叠 / 展开一段内容」的唯一实现（规范 16 §16.2.4.13）。
+ * 收口前有三种写法（原生 `<details>` 六处、自绘 `role="button"` + ▸/▾ 四处、树形 `expanded*` 映射两份），差别不是风格而是无障碍语义各写各的（自绘那份基本只有 `onClick`）。
+ * 这里逐条钉住基元替调用处实现的那几件事，而不是断言某个调用点的外观。 */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 

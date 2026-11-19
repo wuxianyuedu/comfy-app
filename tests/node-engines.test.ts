@@ -1,12 +1,7 @@
 /**
- * node-engines.mjs 的判据测试 —— 重点锁「within() 下界包容性」那一处曾取反的 bug，
- * 以及三个顺手收口的小口子（collectDependencyFloors 静默漏扫 / recommendFrom 已满足仍建议
- * / 独立上界 fail-closed）。方向与 `covers(depRange, declared)` 一致：声明必须是每条依赖
- * 范围的子集（别记反）。
- *
- * 这些用例是 `node-engines.mjs` 的「能力」判据；ok:false 经
- * `tests/dev-launcher-toolchain-gate.test.ts` 的 `checkDeclaredFloor({ root })` 断言
- * `r.ok === true`，在 PR 阻塞测试档里转成非零退出 —— 即「闸能拦违规」。
+ * node-engines.mjs 判据：重点锁「within() 下界包容性」曾取反的 bug；`covers(depRange, declared)` 方向是声明须为每条依赖范围的子集（别记反）。
+ * 另收口三处：collectDependencyFloors 静默漏扫、recommendFrom 已满足仍建议、独立上界 fail-closed。
+ * ok:false 由 `dev-launcher-toolchain-gate.test.ts` 的 `checkDeclaredFloor({ root })` 断言 `r.ok === true`，PR 阻塞档非零退出（闸能拦违规）。
  */
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
@@ -18,7 +13,7 @@ import {
   describeNodeAgainstFloor,
   parseRange,
   satisfies,
-} from "../scripts/node-engines.mjs";
+} from "../scripts/launcher-core/node-engines.mjs";
 
 describe("within() 下界包容性矩阵（曾取反的 bug）", () => {
   it("下界四行全对（含修复前误报为 true 的真实 gap）", () => {
@@ -119,8 +114,8 @@ describe("collectDependencyFloors：exports 隐藏 package.json 的包不静默�
       );
       const scanned = collectDependencyFloors(root);
       expect(scanned.ok).toBe(false);
-      /* SAFETY: 类型断言已复核 */
-      expect((scanned as { reason?: string }).reason).toMatch(/没解析到/);
+      /* `in` 收窄（B5 清账）：reason 只在失败那一变体上。 */
+      expect("reason" in scanned ? scanned.reason : undefined).toMatch(/没解析到/);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

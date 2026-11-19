@@ -17,28 +17,27 @@
 // 不使用 EventSource 的 `lastEventId`：服务端补的是**当前**快照，不是事件回放，
 // 语义上「我见过多大的 seq」这一条由客户端自己记更直接（也少一层协议约定）。
 
+import { isRecord } from "~/lib/is-record";
 import type { ComfyLivenessSignal } from "~/lib/comfyui/liveness-signal";
 
-/** 帧形状收窄：SSE 载荷是外部输入，逐字段判型，不做类型断言。 */
+/** 帧形状收窄：SSE 载荷是外部输入，逐字段判型。 */
 function parseSignal(raw: unknown): ComfyLivenessSignal | null {
-  if (typeof raw !== "object" || raw === null) {
+  if (!isRecord(raw)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const o = raw as Record<string, unknown>;
   if (
-    typeof o.seq !== "number" ||
-    !Number.isFinite(o.seq) ||
-    typeof o.at !== "number" ||
-    typeof o.reason !== "string"
+    typeof raw.seq !== "number" ||
+    !Number.isFinite(raw.seq) ||
+    typeof raw.at !== "number" ||
+    typeof raw.reason !== "string"
   ) {
     return null;
   }
   return {
-    seq: o.seq,
-    at: o.at,
-    reason: o.reason,
-    userStopped: o.userStopped === true,
+    seq: raw.seq,
+    at: raw.at,
+    reason: raw.reason,
+    userStopped: raw.userStopped === true,
   };
 }
 

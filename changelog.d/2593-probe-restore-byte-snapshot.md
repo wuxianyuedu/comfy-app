@@ -16,7 +16,7 @@
   工作（口径同 ISSUE #2415 把 `doc:render` 那组改成夹具仓库）。
 
   同一族的第二处现场同批改掉：`tests/freshness-ledger-backend.test.ts` 往真实入库的
-  `scripts/.e2e-freshness.json` 写一份假账造「机器分支」提交，再用
+  `scripts/freshness/.e2e-freshness.json` 写一份假账造「机器分支」提交，再用
   `git checkout HEAD -- <文件>` 收回去 —— 那一格工作树上若正躺着本机跑出来的新账就被抹掉。
   所以判据认**三种形状**（`execFileSync` 的数组形、`git("checkout HEAD -- <文件>")`
   的字符串形、`restore --`），它们是同一件事的三种写法。

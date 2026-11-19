@@ -1,36 +1,18 @@
 /**
- * 「`ctx.annotate` 的消费方在场」门禁自测（规范 §11.21）。
- *
- * 判据的价值全在**判定口径**上，所以这里跑的是**真脚本**（临时仓库 + 只放被测文件），
- * 断言「该拦的拦、不该误伤的放过」。每条口径都有执行者：
- *
- *   ① **零站点**（该放）：本判据是纯闸门，对象是「下一次有人挂注释」。
- *   ② **有站点 + 台账缺**（该拦）：挂一把没人读的注释比不写更坏 ——
- *      实测 `--reporter=json` 的产物里注释一个字都没有，唯一的读数通道是
- *      programmatic API，而门禁链跑 vitest 用的是 CLI spawn。
- *   ③ **有站点 + 台账在场**（该放）：登记了「谁读、怎么读」才算有消费方。
- *   ④ **折行站点**（该拦）：prettier 折开 `ctx\n  .annotate(` 之后仍要被扫出来
- *      （同 §11.18.3.1 那条：只认行内字面量会整片漏出扫描面，且漏得静默）。
- *   ⑤ **夹具字符串 / 注释里的站点**（该放）：本文件自己就写着夹具字符串，
- *      判据去判自己的夹具是 §11.18.3.1 记过的坑。
- *   ⑥ **台账解析不了**（该拦）：判据自己不许静默降级 —— 静默退回「没有台账」
- *      会让有站点时判据空转（§11.18.3 首版那个 `include: []` 却退 0 的 bug 同族）。
+ * 「`ctx.annotate` 的消费方在场」门禁自测（§11.21）：跑**真脚本**，断言「该拦的拦、不该误伤」。
+ * ① 零站点该放；② 有站点 + 台账缺该拦（`--reporter=json` 产物无注释、唯一读数通道是 programmatic
+ * API）；③ 台账在场该放；④ 折行 `.annotate(` 该拦；⑤ 夹具/注释该放；⑥ 台账解析不了该拦（静默降级会让判据空转）。
  */
 import { describe, expect } from "vitest";
 import { defineGateRepo, type GateRepo } from "./helpers/gate-repo";
 
 /**
- * 临时仓库由**共享 fixture** 搭（`tests/helpers/gate-repo.ts`，§11.16.1）——
- * 本文件原先手抄了同一套四件套（mkdtemp / copyFileSync / execFileSync 归一 /
- * 收尾 rm），属 §12.12 的字面孪生；迁过来之后「跑真脚本看它拦不拦」这件事
- * 与另外十几份门禁自测走同一条路径。
- *
- * ⚠️ **每一格自己负责放台账** —— 真实仓库里它必须在场（判据零站点时也读它）。
- * 那条口径原先在这份自测里没有任何执行者：手抄的夹具不带台账，而判据零站点时
- * 在读到台账之前就 return 了，于是「台账压根不存在」这条路径**全绿通过**。
+ * 临时仓库由**共享 fixture** 搭（`tests/helpers/gate-repo.ts`，§11.16.1），取代原先手抄的 mkdtemp /
+ * copyFileSync / 收尾 rm 四件套（§12.12 的字面孪生）。⚠️ **每一格自己负责放台账** —— 真实仓库里它
+ * 必须在场；判据零站点时在读到台账前就 return，手抄夹具曾让「台账压根不存在」这条路径全绿通过。
  */
 const { test } = defineGateRepo({
-  script: "check-annotate-consumer.cjs",
+  script: "gates/check-annotate-consumer.cjs",
   dirs: ["src", "tests"],
 });
 
@@ -55,23 +37,18 @@ const LEDGER = `${JSON.stringify(
 const EMPTY_LEDGER = `${JSON.stringify({ consumers: [] }, null, 2)}\n`;
 
 /**
- * 各格的公共动作：放台账 + 放被测用例。
- *
- * 收成两个函数（而不是各格各写）**不是**新的手搓样板 —— 它们只做 fixture 的
- * `repo.write`，没有 mkdtemp / 收尾 / 子进程那一套；那三样才是共享 fixture 要
+ * 各格的公共动作：放台账 + 放被测用例。收成两个函数（而不是各格各写）**不是**新的手搓样板 ——
+ * 它们只做 fixture 的 `repo.write`，没有 mkdtemp / 收尾 / 子进程那一套；那三样才是共享 fixture 要
  * 消掉的东西。
  */
 /** 放台账（真实仓库里它必须在场）。 */
 function putLedger(repo: GateRepo, content = EMPTY_LEDGER): void {
-  repo.write("scripts/.annotate-consumers.json", content);
+  repo.write("scripts/gates/.annotate-consumers.json", content);
 }
 
 describe("annotate 消费方门禁：该放的形状（§11.21）", () => {
   test("零站点 → 通过（纯闸门，不是存量清理）", ({ repo }) => {
-    repo.write(
-      "tests/a.test.ts",
-      `${HEAD}describe("p", () => { it("x", () => {}); });\n`,
-    );
+    repo.write("tests/a.test.ts", `${HEAD}describe("p", () => { it("x", () => {}); });\n`);
     putLedger(repo);
     const r = repo.run();
     expect(r.code).toBe(0);
@@ -90,9 +67,7 @@ describe("annotate 消费方门禁：该放的形状（§11.21）", () => {
     expect(r.output).toContain("1 条登记");
   });
 
-  test("站点写在字符串 / 注释里 → 不算站点（判据不去判自己的夹具）", ({
-    repo,
-  }) => {
+  test("站点写在字符串 / 注释里 → 不算站点（判据不去判自己的夹具）", ({ repo }) => {
     repo.write(
       "tests/a.test.ts",
       `${HEAD}export const FIXTURE = 'await ctx.annotate("理由", "type")';\n// ctx.annotate("注释里的也不算")\ndescribe("p", () => { it("x", () => {}); });\n`,
@@ -118,10 +93,7 @@ describe("annotate 消费方门禁：该拦的形状（§11.21）", () => {
      台账、台账压根不存在」。原先这一格不存在，于是那条路径从没被执行者走过 ——
      判据零站点时在读到台账之前就 return，全绿的却是「台账从没被创建过」。 */
   test("台账文件根本不在 → 阻断（零站点时也不许静默通过）", ({ repo }) => {
-    repo.write(
-      "tests/a.test.ts",
-      `${HEAD}describe("p", () => { it("x", () => {}); });\n`,
-    );
+    repo.write("tests/a.test.ts", `${HEAD}describe("p", () => { it("x", () => {}); });\n`);
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain(".annotate-consumers.json 不存在");
@@ -133,9 +105,7 @@ describe("annotate 消费方门禁：该拦的形状（§11.21）", () => {
     expect(r2.output).toContain(".annotate-consumers.json 不存在");
   });
 
-  test("折行站点（prettier 折开）也要被扫出来 —— 漏掉就是整片静默", ({
-    repo,
-  }) => {
+  test("折行站点（prettier 折开）也要被扫出来 —— 漏掉就是整片静默", ({ repo }) => {
     repo.write(
       "tests/a.test.ts",
       `${HEAD}describe("p", () => {\n  it("x", async (ctx) => {\n    await ctx\n      .annotate("理由", "type");\n    expect(1).toBe(1);\n  });\n});\n`,

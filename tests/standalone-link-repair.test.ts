@@ -1,30 +1,14 @@
 /**
- * standalone 载荷里「目标在场而 stat 走不通」的链接要被按原文本重建（审查台账 R8-01）。
- *
- * 立案现场：`pnpm run build` 的收尾冒烟报 `Cannot find package 'promise-limit'`，
- * 而那个包**就在产物里**。量到的形状是 —— 同一份 `.next/standalone/node_modules`，
- * 68 条链接里 16 条 `lstat` 说是链接、`readlink` 拿得到文本、目标目录 `existsSync` 为真，
- * 但 `fs.stat()` 报 `EPERM`；把这 16 条按原链接文本用 `fs.symlinkSync` 重建之后
- * 16/16 可跟随，冒烟转绿。开发树里 2089 条同类链接全部可跟随，所以病不在 pnpm 的形状，
- * 也不在长路径（`LongPathsEnabled=1`、最长 145 字符），而在**建链接的那一方**。
- *
- * 本文件判的是**决策**，不是系统调用：夹具能造出「指向不存在目标的链接」，造不出
- * 「目标在场而穿不过去」那一种（那是 `next build` 的 Rust 侧写出的 reparse 数据），
- * 所以「谁该被修 / 按什么文本修 / 修不好怎么报」用 `deps` 注入边界来钉，
- * 系统调用那一层由 `pnpm build` 链上的冒烟做真机执行者。
- *
- * 四条不许回退的形状：
- *   1. 可跟随的链接**一次都不重建**（重建会换掉链接自身的 mtime，而 mtime 是壳产物
- *      时效判据 `shell-gate.mjs` 的输入）；
- *   2. 重建用的是**原链接文本**，不是 resolve 之后的绝对路径 —— 产物要能整体搬走；
- *   3. 「目标其实在场但修不好」与「目标真不在」在输出里**分得开**（`targetExists` 两态），
- *      否则下一个人只会看到 `Cannot find package`，又去查一遍缺件；
- *   4. 没跑过 `next build` 时这一步**不报错**（与同链上的 `standalone-private-inputs.mjs` 同口径）。
+ * standalone 载荷里「目标在场而 stat 走不通」的链接按原文本重建（审查台账 R8-01）。判的是**决策**不是系统调用：
+ * 可跟随的链接一次都不重建（mtime 是 `shell-gate.mjs` 时效判据的输入）；重建用原链接文本而非绝对路径（产物要能整体
+ * 搬走）；「目标在场但修不好」与「真不在」用 `targetExists` 两态分得开；没跑过 `next build` 不报错（系统调用层由冒烟执行）。
  */
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 import {
   linkFollowability,
@@ -32,7 +16,7 @@ import {
   repairUnfollowableLinks,
   runLinkRepair,
   siblingVariantInstalled,
-} from "../scripts/standalone-link-repair.mjs";
+} from "../scripts/build/standalone-link-repair.mjs";
 import { symlinkDir } from "./helpers/symlink-dir";
 
 /** 夹具根：每条用例一份，`afterEach` 整棵删掉。 */
@@ -169,12 +153,9 @@ type FakeLink = {
 };
 
 /**
- * 「目标在场而穿不过去」的假象：判 broken、给相对文本、重建后变可跟随。
- *
- * @param input.links 要列出的链接
- * @param input.brokenRels 哪些 rel 判成穿不过去（默认全部）
- * @param input.rebuildResult 重建调用回什么（默认成功）
- * @param input.targetExists 目标在不在（默认在 —— 这才是本条发现ing的形状）
+ * 「目标在场而穿不过去」的假象（入参 `links` 要列出的链接）：判 broken、给相对文本、重建后变可跟随。
+ * @param input.brokenRels 哪些 rel 判成穿不过去（默认全部）；`rebuildResult` 重建回什么（默认成功）
+ * @param input.targetExists 目标在不在（默认在 —— 本条要发现的形状）
  */
 function fake(input: {
   brokenRels?: Array<string>;
@@ -193,7 +174,7 @@ function fake(input: {
   const deps = {
     list: () => links,
     readText: (abs: string) => {
-      if (input.throwOnReadText) {
+      if (input.throwOnReadText === true) {
         throw Object.assign(new Error("不是链接"), { code: "EINVAL" });
       }
       return links.find((l) => l.abs === abs)?.text ?? "";
@@ -209,11 +190,9 @@ function fake(input: {
         return "follow" as const;
       }
       return brokenRels.has(l.rel)
-        /* SAFETY: 类型断言已复核 */
-        ? 
+        ? /* SAFETY: 类型断言已复核 */
           ("broken" as const)
-        /* SAFETY: 类型断言已复核 */
-        : 
+        : /* SAFETY: 类型断言已复核 */
           ("follow" as const);
     },
     rebuild: (abs: string, linkText: string) => {
@@ -362,16 +341,22 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
 
 describe("接线在位", () => {
   it("这一步挂在 pnpm build 链上，且顺序是 修链接 → 数产物 → 冒烟", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "../package.json"), "utf8")) as {
-      scripts: { build: string };
-    };
-    const build = pkg.scripts.build;
+    const parsed: unknown = JSON.parse(
+      readFileSync(path.resolve(__dirname, "../package.json"), "utf8"),
+    );
+    if (
+      !isRecord(parsed) ||
+      !isRecord(parsed.scripts) ||
+      typeof parsed.scripts.build !== "string"
+    ) {
+      throw new Error("package.json 形状不对：scripts.build 缺失或不是字符串");
+    }
+    const build = parsed.scripts.build;
     const order = [
       "next build",
-      "scripts/standalone-link-repair.mjs",
-      "scripts/check-standalone-contents.cjs",
-      "scripts/smoke-executor-host-standalone.mjs",
+      "scripts/build/standalone-link-repair.mjs",
+      "scripts/gates/check-standalone-contents.cjs",
+      "scripts/devtools/smoke-executor-host-standalone.mjs",
     ].map((s) => build.indexOf(s));
     for (const idx of order) {
       expect(idx).toBeGreaterThanOrEqual(0);
@@ -381,7 +366,7 @@ describe("接线在位", () => {
 
   it("退出码只由「还有真缺件」决定（不许把违规吞成日志，也别让死链把整条链掐断）", () => {
     const source = readFileSync(
-      path.resolve(__dirname, "../scripts/standalone-link-repair.mjs"),
+      path.resolve(__dirname, "../scripts/build/standalone-link-repair.mjs"),
       "utf8",
     );
     /* `blocking` = 扣掉「非本平台变体死链」之后的那一档（那类死链不阻断，见文件头）。 */

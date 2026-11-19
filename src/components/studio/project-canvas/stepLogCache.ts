@@ -1,37 +1,12 @@
 "use client";
 
-/* ── stepLogCache.ts ──────────────────────────────
- * 跨「卸载 / 重新挂载」缓存 CanvasNode 的步骤日志面板状态。
- *
- * 为什么需要它
- * ────────────
- * 图片节点的正文用 `{selected && <ImageGenerationPanel/>}` 渲染日志面板
- *（CanvasNode.tsx:1234）。用户点走时 → React 卸载该面板 →
- * 连带拆掉 `stepLogs` 与 `validationErrors` 那两个 `useState` 槽位。
- * 点回来又挂载 → 空数组重新来过 → SSE 的 EventSource 从头重连 →
- * 用户会看到重复的「📡 已订阅…」、状态又变回「QUEUED (0%)」，
- * 20s 卡死告警的计数也重置了 —— 哪怕后端上同一个任务还在跑。
- *
- * 后端日志存在 `Task.logs`（任务表的 JSON 列）里、SSE 连上时会重放，
- * 所以**内容**大约一个往返就回来了 —— 但
- *（a）在途的告警计时器（20s 无活动）会丢，接下来 20s 的新静默没人管；
- *（b）界面给人一种「把这次运行的记忆丢了」的感觉；
- *（c）控制台噪音还让用户以为是重复订阅的 bug。
- *
- * 修法：把面板的临时状态放进模块级 Map，按 `taskId` 作键，
- *       于是同一次会话内的卸载 / 重挂载对用户不可见。
- *       用 `MAX_ENTRIES` 做上限（LRU），长时间开着的页签也不会漏内存。
- *
- * 范围
- * ────
- * 只做**标签页内**的持久化。跨整个浏览器刷新要 localStorage，
- * 那是 v1 有意排除的目标 —— 任务级状态属于服务端数据库 + SSE 重放，
- * 不属于每个标签页自己的草稿区。
- *
- * ───────────────────────────────────────────────────────────────────── */
+/* ── stepLogCache.ts ──
+ * 跨「卸载 / 重新挂载」缓存 CanvasNode 的步骤日志面板状态：节点切走时面板卸载，`stepLogs` / `validationErrors` 被拆掉，切回会重复订阅、回退到 QUEUED (0%)，20s 卡死告警也重置（Task.logs 能重放内容，在途计时器却丢）。
+ * 修法：模块级 Map 按 taskId 存（MAX_ENTRIES 做 LRU）；只做标签页内持久化，跨刷新属服务端。
+ */
 
 import type { ValidationError } from "~/lib/comfyui/validation";
-import { tailWindow } from "~/lib/page-window";
+import { tailWindowAppendUnique } from "~/lib/page-window";
 
 /* StepLogEntry 从本模块再导出，让 ImageGenerationPanel 能同时拿到类型与
  * 缓存助手，而不必造成循环导入（面板 ↔ 缓存）。
@@ -69,10 +44,6 @@ const MAX_ENTRIES = 256;
  * 长跑任务（几分钟、上千行）下这点尤其明显。 */
 export const MAX_LOGS_PER_TASK = 2000;
 
-/* 去重只比对尾部若干条：日志按时间追加，重复的那条一定紧跟在它自己之后，
- * 全量 `some` 让每条新日志都变成 O(n)，整个流就是 O(n²)。 */
-const DEDUPE_WINDOW = 64;
-
 const cache = new Map<string, StepLogPanelState>();
 
 /* 触碰一次（移到插入顺序末尾）+ 限制总条数。LRU。 */
@@ -80,7 +51,7 @@ function touch(id: string, next: StepLogPanelState) {
   cache.set(id, next);
   if (cache.size > MAX_ENTRIES) {
     const oldest = cache.keys().next().value;
-    if (oldest) {
+    if (oldest !== undefined) {
       cache.delete(oldest);
     }
   }
@@ -88,7 +59,7 @@ function touch(id: string, next: StepLogPanelState) {
 
 /* 载入某个 taskId 的持久化状态；没有则为 null。 */
 export function loadStepLogPanelState(taskId: string | null | undefined): StepLogPanelState | null {
-  if (!taskId) {
+  if (taskId === null || taskId === undefined || taskId === "") {
     return null;
   }
   return cache.get(taskId) ?? null;
@@ -98,7 +69,7 @@ export function loadStepLogPanelState(taskId: string | null | undefined): StepLo
  * 面板想主动重置时也用（例如用户选了新工作流 —— 目前没有这条路径，
  * 但把出口留着）。 */
 export function saveStepLogPanelState(taskId: string, next: StepLogPanelState): void {
-  if (!taskId) {
+  if (taskId === "") {
     return;
   }
   touch(taskId, next);
@@ -107,7 +78,7 @@ export function saveStepLogPanelState(taskId: string, next: StepLogPanelState): 
 /* 丢掉某个 taskId 的条目。用于「任务真结束后，用户不希望下次点同一节点时
  * 又冒出旧界面状态」的场景 —— 目前还没这么做，但接口先备着。 */
 export function clearStepLogPanelState(taskId: string | null | undefined): void {
-  if (!taskId) {
+  if (taskId === null || taskId === undefined || taskId === "") {
     return;
   }
   cache.delete(taskId);
@@ -119,7 +90,7 @@ export function appendStepLog(
   taskId: string | null | undefined,
   entry: StepLogEntry,
 ): StepLogPanelState | null {
-  if (!taskId) {
+  if (taskId === null || taskId === undefined || taskId === "") {
     return null;
   }
   const prev = cache.get(taskId) ?? {
@@ -127,28 +98,20 @@ export function appendStepLog(
     logs: [] as Array<StepLogEntry>,
     validationErrors: null,
   };
-  // 按 (时间, 消息) 去重 —— 与 ImageGenerationPanel 里的 SSE 去重口径一致。
-  let duplicated = false;
-  for (
-    let index = Math.max(0, prev.logs.length - DEDUPE_WINDOW);
-    index < prev.logs.length;
-    index += 1
-  ) {
-    const known = prev.logs[index];
-    if (known?.t === entry.t && known?.msg === entry.msg) {
-      duplicated = true;
-      break;
-    }
-  }
-  if (duplicated) {
+  // 全窗按 (时间, 消息) 去重（ISSUE #3896）—— SSE 重连会把全量历史从头回放，
+  // 只扫尾部窗口会把窗口外的旧帧当新帧放进来，切回任务时播种出重复日志。
+  // 与 use-task-step-log-stream 实时面板的去重同一口径。
+  const logs = tailWindowAppendUnique(
+    prev.logs,
+    entry,
+    MAX_LOGS_PER_TASK,
+    (e) => `${e.t}|${e.msg}`,
+  );
+  if (logs === prev.logs) {
     return prev;
   }
-
-  const logs = [...prev.logs, entry];
   const next: StepLogPanelState = {
-    /* 尾部窗口走 `~/lib/page-window`（规范 16 §16.2.4.67）—— 与面板显示时的
-     * 取尾部 300 行是同一个出口，不在这里再写一个 `slice(-n)`。 */
-    logs: tailWindow(logs, MAX_LOGS_PER_TASK),
+    logs,
     validationErrors: prev.validationErrors,
   };
   touch(taskId, next);
@@ -160,7 +123,7 @@ export function setStepLogValidationErrors(
   taskId: string | null | undefined,
   errs: Array<ValidationError> | null,
 ): void {
-  if (!taskId) {
+  if (taskId === null || taskId === undefined || taskId === "") {
     return;
   }
   const prev = cache.get(taskId) ?? {
@@ -179,7 +142,7 @@ export function patchStepLogMeta(
   taskId: string | null | undefined,
   meta: { nodeId?: string; status?: string; workflowName?: string },
 ): void {
-  if (!taskId) {
+  if (taskId === null || taskId === undefined || taskId === "") {
     return;
   }
   const prev = cache.get(taskId) ?? {

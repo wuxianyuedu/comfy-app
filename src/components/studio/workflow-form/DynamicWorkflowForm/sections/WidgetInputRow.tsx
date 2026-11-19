@@ -8,6 +8,7 @@ import { Eye, EyeOff } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { EditableLabel } from "~/components/ui/editable-label";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { PortHandle } from "~/components/studio/workflow-form/WorkflowFormControls";
 import {
   ioLabel,
@@ -108,16 +109,24 @@ export function WidgetInputRow({
           避免一进入改名输入态按钮就跑到输入框旁边。 */}
       <span className="flex shrink-0 items-center gap-1.5">
         {onRequiredChange && (
-          <Hint label={entry.required ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}>
+          <Hint
+            label={entry.required === true ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}
+          >
             <Button
               className={`nodrag nopan text-3xs h-auto shrink-0 rounded px-1.5 py-px font-medium ${
-                entry.required ? "" : "border-border-strong bg-subtle text-ink-muted border"
+                entry.required === true
+                  ? ""
+                  : "border-border-strong bg-subtle text-ink-muted border"
               }`}
-              onClick={() => onRequiredChange(!entry.required)}
-              onMouseDown={(event) => event.stopPropagation()}
-              variant={entry.required ? "danger" : "ghost"}
+              onClick={() => {
+                onRequiredChange(entry.required !== true);
+              }}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
+              variant={entry.required === true ? "danger" : "ghost"}
             >
-              {entry.required ? "必填" : "可选"}
+              {entry.required === true ? "必填" : "可选"}
             </Button>
           </Hint>
         )}
@@ -136,8 +145,12 @@ export function WidgetInputRow({
                   ? "text-ink-fainter hover:text-ink-soft"
                   : "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
               }`}
-              onClick={() => onVisibilityChange(visible === false)}
-              onMouseDown={(event) => event.stopPropagation()}
+              onClick={() => {
+                onVisibilityChange(visible === false);
+              }}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
               variant="ghost"
             >
               {visible === false ? (
@@ -178,7 +191,9 @@ export function WidgetInputRow({
         {withHandle && <PortHandle dir="in" id={handleId ?? entry.ioKey} type={entry.type} />}
         <div className="bg-canvas-deep flex items-center gap-2 rounded-md px-2.5 py-1.5 pr-3.5 pl-3.5">
           <span className="size-2 shrink-0 rounded-full" style={{ background: accent }} />
-          <span className="text-ink-soft text-2xs min-w-0 flex-1 truncate">{label}</span>
+          <TruncatedText className="text-ink-soft text-2xs min-w-0 flex-1 truncate">
+            {label}
+          </TruncatedText>
           {/* link 行同样打印 pin 真实声明的类型：MODEL / CLIP / LATENT /
               IMAGEUPLOAD 等自定义类型一律原样展示，不回退成 "*"。 */}
           <TypeChip>{typeDisplay(entry.type)}</TypeChip>

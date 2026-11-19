@@ -91,15 +91,19 @@ export function wrapBase64(base64: string, mime: string): string {
  * 调用处不必判环境（收口前**三处写入全在服务端**，但读取侧的
  * `character-portrait-client` 在浏览器里，故这里两侧都给）。
  */
+/** `globalThis` 上的 Node `Buffer` 构造器视图（浏览器宿主没有它）。 */
+type BufferConstructorLike = {
+  from(bytes: Uint8Array): { toString(encoding: string): string };
+};
+
+function isBufferConstructor(value: unknown): value is BufferConstructorLike {
+  return typeof value === "function" && typeof Reflect.get(value, "from") === "function";
+}
+
 export function toBase64(bytes: Uint8Array): string {
   /* Node / 服务端：`Buffer` 走原生实现（大图快一个数量级）。 */
-  /* SAFETY: 类型断言已复核 */
-  const bufferCtor = (
-    globalThis as {
-      Buffer?: { from(b: Uint8Array): { toString(enc: string): string } };
-    }
-  ).Buffer;
-  if (bufferCtor) {
+  const bufferCtor: unknown = Reflect.get(globalThis, "Buffer");
+  if (isBufferConstructor(bufferCtor)) {
     return bufferCtor.from(bytes).toString("base64");
   }
   /* 浏览器：分块 `btoa`，避免 `String.fromCharCode(...bytes)` 在大数组上

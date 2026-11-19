@@ -1,20 +1,11 @@
 /**
- * `POST /api/comfy/ensure` —— 「需要 ComfyUI」的动作的统一入口（ISSUE #345）。
- *
- * 这个端点的存在理由是一条**三态契约**，前端 `ensureComfyReady` 完全按它渲染：
- *   200 `{ ok: true }`                       → 现在就能用，重试即可
- *   202 `{ ok: false, pending: true, … }`    → 正在启动 / 用户关了自动启动，稍后重试
- *   503 `{ ok: false, pending: false, … }`   → 启动失败，`detail` 直接给用户看
- * 三态被压成两态（比如把 pending 当失败）就是当初那个事故：上传位只甩一句
- * `Configured ComfyUI instance is not running`，用户分不清「没启动」还是「启动中」。
- *
- * 另外三条容易在重构中丢掉的性质，也各有用例：
- *   · **已在运行就不重复拉起**（探活命中必须直接返回，不碰 `ensureComfyUiReady`）；
- *   · 单次请求只等**短窗口**（8s），等不到就 202 让前端继续轮 —— 把整段冷启动
- *     塞进一个请求里，用户看到的是挂死的按钮，中途也看不见「正在启动」；
- *   · 未登录时不探活也不拉起（副作用闸门在鉴权之后）。
+ * `POST /api/comfy/ensure` —— 「需要 ComfyUI」动作的统一入口（ISSUE #345）。
+ * 三态契约：200 可用 / 202 启动中稍后重试 / 503 启动失败带 detail —— 压成两态就是当初「分不清没启动还是启动中」的事故。
+ * 另钉三条：已在运行不重复拉起；单次请求只等短窗口（8s），等不到 202 让前端续轮；未登录不探活也不拉起。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 const AUTOSTART_TIMEOUT_MS = 120_000;
 
@@ -25,7 +16,7 @@ const { requireRequestUser, probeComfyUi, ensureComfyUiReady, logger } = vi.hois
   requireRequestUser: vi.fn<() => Promise<{ id: string } | null>>(),
   probeComfyUi: vi.fn<(ms: number) => Promise<string | null>>(),
   ensureComfyUiReady: vi.fn<(options: EnsureOptions) => Promise<unknown>>(),
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock("~/server/auth/request-user", () => ({
@@ -45,6 +36,7 @@ beforeEach(() => {
   requireRequestUser.mockResolvedValue({ id: "u-1" });
   probeComfyUi.mockReset();
   ensureComfyUiReady.mockReset();
+  logger.debug.mockClear();
   logger.info.mockClear();
   logger.error.mockClear();
 });
@@ -76,13 +68,13 @@ describe("POST /api/comfy/ensure", () => {
     probeComfyUi.mockResolvedValueOnce(null);
     // 真实实现会往 `onLog` 里灌进度；这里照它的契约调一次，既覆盖这个回调，
     // 也钉住「拉起过程必须落日志」（AGENTS 硬规则 4：失败路径与长路径都要可追）。
-    ensureComfyUiReady.mockImplementationOnce(async (options) => {
+    ensureComfyUiReady.mockImplementationOnce((options) => {
       options.onLog("正在拉起 ComfyUI…");
-      return {
+      return Promise.resolve({
         ok: true,
         base: "http://127.0.0.1:8189",
         detail: "已启动并就绪",
-      };
+      });
     });
     const { POST } = await import("./route");
     const res = await POST();
@@ -120,12 +112,7 @@ describe("POST /api/comfy/ensure", () => {
     const { POST } = await import("./route");
     const res = await POST();
     expect(res.status).toBe(503);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      detail: string;
-      ok: boolean;
-      pending: boolean;
-    };
+    const body: unknown = await res.json();
     expect(body).toEqual({
       ok: false,
       pending: false,
@@ -139,12 +126,12 @@ describe("POST /api/comfy/ensure", () => {
     probeComfyUi.mockResolvedValueOnce(null);
     ensureComfyUiReady.mockRejectedValueOnce("boom");
     const { POST } = await import("./route");
-    /* SAFETY: 类型断言已复核 */
-    const body = (await (await POST()).json()) as {
-      detail: string;
-    };
-    expect(body.detail).toBeTruthy();
-    expect(body.detail).not.toBe("undefined");
+    const raw: unknown = await (await POST()).json();
+    if (!isRecord(raw) || typeof raw.detail !== "string") {
+      throw new Error("响应体缺少 detail");
+    }
+    expect(raw.detail).toBeTruthy();
+    expect(raw.detail).not.toBe("undefined");
   });
 
   it("单次请求只等短窗口：整段冷启动交给前端轮，而不是把请求挂死", async () => {

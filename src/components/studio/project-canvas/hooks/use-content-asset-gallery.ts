@@ -1,16 +1,7 @@
-/* ── 内容载体节点的图片组（多图相册）拉取逻辑 ──────────────────────────
- * 从 ContentAssetBody（.tsx 视图）里抽出的第②层逻辑：
- *   1. 按 taskId 拉 task.detail，取出图片列表；只有 >1 张才启用相册
- *      （单图仍走节点主体的常规预览路径）；
- *   2. 相册开关与当前下标是纯视觉状态，但它们是「数据驱动」的（没有多图
- *      就没有相册可开），所以一并放在这里，视图只消费不决策。
- *
- * 错误策略：拉取失败**静默**——单图模式仍要正常显示内容，不能因为一次
- * 查询失败就把整个节点渲染成错误态。
- *
- * taskId / enabled 切换时要立刻拿不到旧图，否则新任务的首帧会先渲染上一张
- * 任务的相册缩略图。做法是把图集和「它属于哪一轮上下文」一起存成一条 state，
- * 渲染时按上下文键取值（不再用渲染期 setState 清空）。
+/* ── 内容载体节点的图片组（多图相册）拉取逻辑 ──
+ * 第②层逻辑：按 taskId 拉 task.detail，取图片列表，只有 >1 张才启用相册。
+ * 拉取失败**静默**：单图模式仍要正常显示，不能把整个节点渲染成错误态。
+ * taskId / enabled 切换必须立刻拿不到旧图，否则新任务首帧会渲染上一张；图集与上下文一起存 state。
  */
 
 "use client";
@@ -55,7 +46,7 @@ export function useContentAssetGallery({
   const images = gallery.key === ctxKey ? gallery.images : null;
 
   useEffect(() => {
-    if (!taskId || !enabled) {
+    if (taskId === undefined || taskId === null || taskId === "" || !enabled) {
       return;
     }
     /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换任务 / 关掉开关会重开一轮，
@@ -64,17 +55,19 @@ export function useContentAssetGallery({
     void (async () => {
       try {
         const list = await fetchTaskImages(taskId);
-        guard.commit(() =>
+        guard.commit(() => {
           setGallery({
             key: ctxKey,
-            images: list && list.length > 1 ? list : null,
-          }),
-        );
+            images: list !== null && list.length > 1 ? list : null,
+          });
+        });
       } catch {
         /* 静默：单图模式仍正常显示，见文件头 */
       }
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [taskId, enabled, ctxKey]);
 
   return { images, open, index, setOpen, setIndex };

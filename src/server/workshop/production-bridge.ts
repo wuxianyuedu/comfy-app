@@ -1,27 +1,26 @@
 // ── 会话 ⇄ 界面真值桥（#2482 · FR-AG-01③）────────────────────
-// 让 MCP 会话与界面共享**同一份** production：会话绑定一个 proj_*（即
-// production.id），内容权威读在 production；`workshopSession` 的内容列退化为
-// 写时镜像，idea / stage / projectId 才是会话行自己的权威字段。
-//
-// 为什么不直接用 `~/lib/core` 的仓储：那一层带 `import "server-only"`，在
-// MCP stdio / 独立 HTTP 的纯 Node 进程里会抛错（目录注释同款约束）。本模块
-// 与 `./db` 一样直连同一份 libsql 库、复用同一份 Drizzle schema——**表是同一批
-// 表**，Next 侧（画布 / 工坊 / run 引擎）与 MCP 侧读写的是同一行。
-//
-// 归属口径：production.userId 非空且外键到 user。会话的 userId 可空（外部 AI
-// 通常不带）→ 显式给 userId 时必须存在；缺省落「本机最早创建的用户」（本地
-// 单机应用的确定性选择）；一个用户都没有时给可行动错误（先在应用内完成一次
-// 初始化 / 登录）。
-//
-// 遗留会话（桥之前创建、projectId 为 NULL）的处置：**首次写时桥接**——以当时
-// 的会话内容为初始值建/绑项目，此后与界面同一份真值；只读不写的遗留会话保持
-// 原读法（不会凭空长出项目）。
+// 会话绑定 proj_*（即 production.id），内容权威读在 production；`workshopSession` 内容列只是写时镜像，
+// idea / stage / projectId 才是会话行的权威字段。本模块与 `./db` 一样直连 node:sqlite、复用同一份 Drizzle schema
+// （表是同一批），因 `~/lib/core` 带 `import "server-only"`，在 MCP stdio / 纯 Node 进程里会抛错。归属：
+// userId 可空（外部 AI 通常不带），显式给时必须存在，缺省落本机最早创建的用户；遗留会话（projectId 为 NULL）首次写时桥接，只读保持原读法。
 import { asc, eq } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 
 import type { Character, Scene, Shot } from "~/lib/workshop/types";
 import { production, project, user, type Production } from "~/server/db/schema";
 import { workshopDb } from "./db";
+
+/** 事务执行者：`workshopDb` 本体或 `workshopDb.transaction` 回调里的那条连接
+ *  （都从签名派生，不手写；与 `~/lib/core/repository-executor-types` 同一形状 ——
+ *  本文件服务 MCP 纯 Node 进程，不能引 `~/lib/core` 的运行时模块，故在此按
+ *  同口径派生一份）。
+ *
+ *  必须导出：它在公开签名 `ensureProductionProject.executor` 里被引用，typedoc
+ *  只收「从入口可达且带 export」的符号——不导出会让 API 文档自检报
+ *  「referenced … but not included」（ISSUE #4407 / 修法先例 #2835）。 */
+export type WorkshopExecutor =
+  | typeof workshopDb
+  | Parameters<Parameters<typeof workshopDb.transaction>[0]>[0];
 
 /** 会话里「属于界面真值」的内容面：绑定后由 production 承载。 */
 export type SessionContent = {
@@ -35,9 +34,21 @@ export type SessionContent = {
   type: string;
 };
 
+// JSON 列只判「是数组」这一层（元素形状由写入端保证，读侧 draft-integrity 判；
+// 认不出就丢等于静默删数据），非数组回落 []。
+function isSceneArray(v: unknown): v is Array<Scene> {
+  return Array.isArray(v);
+}
+function isCharacterArray(v: unknown): v is Array<Character> {
+  return Array.isArray(v);
+}
+function isShotArray(v: unknown): v is Array<Shot> {
+  return Array.isArray(v);
+}
+
 /** 解析会话内容的归属用户：显式 id 必须存在；缺省取本机最早的账号（确定性）。 */
 export async function resolveOwnerUserId(explicit: string | null): Promise<string> {
-  if (explicit) {
+  if (explicit !== null && explicit !== "") {
     const found = await workshopDb
       .select({ id: user.id })
       .from(user)
@@ -54,7 +65,7 @@ export async function resolveOwnerUserId(explicit: string | null): Promise<strin
     .orderBy(asc(user.createdAt))
     .limit(1);
   const owner = first[0]?.id;
-  if (!owner) {
+  if (owner === undefined) {
     throw new Error(
       "本机还没有任何用户：先在应用内完成一次登录 / 初始化，MCP 会话才有归属（production 行需要 userId）",
     );
@@ -63,14 +74,18 @@ export async function resolveOwnerUserId(explicit: string | null): Promise<strin
 }
 
 /** 建 / 绑定项目：给 projectId 就校验存在与归属（缺失的 production 行补建）；
- *  不给就新建 proj_* 的 project + production 两行。返回最终 projectId。 */
+ *  不给就新建 proj_* 的 project + production 两行。返回最终 projectId。
+ *  `executor`：由事务入口（updateState 的 immediate 事务，ISSUE #3852）传入，
+ *  读写都走事务里的连接（§18.10.1 的同一条纪律）。 */
 export async function ensureProductionProject(
   projectId: string | null,
   ownerId: string,
   title: string,
+  executor?: WorkshopExecutor,
 ): Promise<string> {
-  if (projectId) {
-    const rows = await workshopDb.select().from(project).where(eq(project.id, projectId)).limit(1);
+  const exec = executor ?? workshopDb;
+  if (projectId !== null && projectId !== "") {
+    const rows = await exec.select().from(project).where(eq(project.id, projectId)).limit(1);
     const proj = rows[0];
     if (!proj) {
       throw new Error(`项目不存在：${projectId}（projectId 须来自界面的项目列表，不能凭空写）`);
@@ -80,39 +95,41 @@ export async function ensureProductionProject(
         `项目 ${projectId} 归属用户 ${proj.userId}，与会话归属 ${ownerId} 冲突，拒绝绑定`,
       );
     }
-    await ensureProductionRow(projectId, ownerId, title);
+    await ensureProductionRow(projectId, ownerId, title, exec);
     return projectId;
   }
   const id = `proj_${createId()}`;
-  await workshopDb.insert(project).values({ id, userId: ownerId, name: title });
-  await workshopDb.insert(production).values({ id, userId: ownerId, title });
+  await exec.insert(project).values({ id, userId: ownerId, name: title });
+  await exec.insert(production).values({ id, userId: ownerId, title });
   return id;
 }
 
-/** production 行缺失时补一行（绑定 UI 侧「只建过画布、没进过工坊」的项目）。 */
+/** production 行缺失时补一行（绑定 UI 侧「只建过画布、没进过工坊」的项目）。
+ *  单语句 `onConflictDoNothing`（ISSUE #3835）：ensure 语义 = 重复执行成功且
+ *  无害；先查后插在并发首存（MCP 桥接与工坊保存赛跑）会同抢主键让后到者 500。 */
 async function ensureProductionRow(
   projectId: string,
   ownerId: string,
   title: string,
+  executor?: WorkshopExecutor,
 ): Promise<void> {
-  const rows = await workshopDb
-    .select({ id: production.id })
-    .from(production)
-    .where(eq(production.id, projectId))
-    .limit(1);
-  if (rows[0]) {
-    return;
-  }
-  await workshopDb.insert(production).values({ id: projectId, userId: ownerId, title });
+  const exec = executor ?? workshopDb;
+  await exec
+    .insert(production)
+    .values({ id: projectId, userId: ownerId, title })
+    .onConflictDoNothing({ target: production.id });
 }
 
 /** 把会话内容写进 production。**只写内容列**——进度 / run / 评审是另外的字段
- *  所有者（画布 / run 引擎 / 评审器），桥不碰；行缺失时整行新建（带归属）。 */
+ *  所有者（画布 / run 引擎 / 评审器），桥不碰；行缺失时整行新建（带归属）。
+ *  `executor` 供事务入口传入。 */
 export async function writeContentToProduction(
   projectId: string,
   fallbackOwnerId: string,
   content: SessionContent,
+  executor?: WorkshopExecutor,
 ): Promise<void> {
+  const exec = executor ?? workshopDb;
   const values = {
     id: projectId,
     userId: fallbackOwnerId,
@@ -125,7 +142,7 @@ export async function writeContentToProduction(
     characters: content.characters,
     shots: content.shots,
   };
-  await workshopDb
+  await exec
     .insert(production)
     .values(values)
     .onConflictDoUpdate({
@@ -160,11 +177,8 @@ export async function readProductionContent(projectId: string): Promise<SessionC
     tone: row.tone,
     logline: row.logline,
     scriptMarkdown: row.scriptMarkdown,
-    /* SAFETY: 类型断言已复核 */
-    scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
-    /* SAFETY: 类型断言已复核 */
-    characters: Array.isArray(row.characters) ? (row.characters as Array<Character>) : [],
-    /* SAFETY: 类型断言已复核 */
-    shots: Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [],
+    scenes: isSceneArray(row.scenes) ? row.scenes : [],
+    characters: isCharacterArray(row.characters) ? row.characters : [],
+    shots: isShotArray(row.shots) ? row.shots : [],
   };
 }

@@ -1,14 +1,6 @@
-// ComfyUI 运行页的**可见行为**（ISSUE #1900）。
-//
-// 这一屏的风险全在「状态 → 该按哪颗」这条投影上：投影错了不会报错，只是用户
-// 点了一颗点不动的按钮、或者看不见「正在启动」。所以断言挑的是那几件**看一眼
-// 才知道对不对**的事：
-//   · 四态文案（运行中 / 正在启动 / 检测中 / 未运行）各自说得出；
-//   · 「启动 / 关闭」这对互斥主行动：当前这一态该按的那颗才实心，另一颗禁用；
-//   · 未配置路径时启动禁用，且**给出**去设置页配置的出口（不是一颗点不动的按钮）；
-//   · 启动日志框在页上（硬规则 4：失败路径必须有用户可见出口）；
-//   · 页上写出「这一点下去会按哪条**已保存**路径启动」—— 它是「改了路径没保存」
-//     这个组合就地可见的那一份事实（本页无草稿，见 ComfyuiControlView 文件头）。
+// ComfyUI 运行页可见行为（ISSUE #1900）。风险在「状态 → 该按哪颗」的投影：
+// 断言四态文案、启动/关闭互斥主行动（当前态实心、另一颗禁用）、未配置路径时启动禁用
+// 且给出设置页出口、启动日志框在页上、以及「这一点下去按哪条已保存路径启动」。
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -45,16 +37,18 @@ function controller(over: Partial<ComfyuiControlController> = {}): ComfyuiContro
       pathConfigured: true,
       instanceType: "portable",
       desktopManaged: false,
+      pathExists: true,
+      interpreter: { configured: false, exists: null },
     },
     starting: false,
     stopping: false,
     opening: false,
     browserOpening: false,
-    startComfy: vi.fn(async () => undefined),
-    stopComfy: vi.fn(async () => undefined),
-    openComfy: vi.fn(async () => undefined),
-    openComfyInBrowser: vi.fn(async () => undefined),
-    refreshStatus: vi.fn(async () => undefined),
+    startComfy: vi.fn(() => Promise.resolve()),
+    stopComfy: vi.fn(() => Promise.resolve()),
+    openComfy: vi.fn(() => Promise.resolve()),
+    openComfyInBrowser: vi.fn(() => Promise.resolve()),
+    refreshStatus: vi.fn(() => Promise.resolve()),
     log: {
       text: "",
       segments: [],
@@ -65,7 +59,7 @@ function controller(over: Partial<ComfyuiControlController> = {}): ComfyuiContro
       total: 0,
       active: false,
       selectSession: vi.fn(),
-      refresh: vi.fn(async () => undefined),
+      refresh: vi.fn(() => Promise.resolve()),
     },
     ...over,
   };
@@ -146,6 +140,8 @@ describe("ComfyuiControlView", () => {
             pathConfigured: false,
             instanceType: null,
             desktopManaged: false,
+            pathExists: false,
+            interpreter: { configured: false, exists: null },
           },
         })}
       />,
@@ -163,6 +159,8 @@ describe("ComfyuiControlView", () => {
             pathConfigured: false,
             instanceType: null,
             desktopManaged: false,
+            pathExists: false,
+            interpreter: { configured: false, exists: null },
           },
         })}
       />,

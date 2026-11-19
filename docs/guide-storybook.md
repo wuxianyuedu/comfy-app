@@ -40,7 +40,7 @@ pnpm storybook:build   # 出静态产物到 storybook-static/（已 gitignore）
 `.storybook/main.ts`）。CSF3 形态、`satisfies Meta<typeof Component>`：
 
 ```tsx
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Badge } from "~/components/ui/badge";
 
 const meta = {
@@ -81,7 +81,7 @@ const VARIANTS: ButtonVariant[] = ["default", "outline" /* … */];
 [16 §16.2.3.8](standards/16-shadcn-ui与表单校验.md)。
 
 **手写清单必须覆盖每一档，别只列「常用的那几档」**：这条有机器判据兜着
-（`tests/storybook-cva-variant-source.test.ts` + `node scripts/storybook-check.mjs`），
+（`tests/storybook-cva-variant-source.test.ts` + `node scripts/devtools/storybook-check.mjs`），
 `cva` 里加一档而故事没跟上、或整条轴被漏掉，提交时就会被点出来。判据上线时当场
 抓到一处真漏档：`button.stories.tsx` 的 `SIZES` 少列了 `icon-sm` / `icon-lg`，
 而这两档全库有 **46 处**在用 —— 「枚举手写一份」的代价是必然的，判据的作用是把
@@ -151,7 +151,7 @@ const meta = {
 3. **ReactNode 参数走 `render`，不进 Args**。`trigger` / `footer` / `children`
    这类参数由 story 的 `render` 给 —— Args 面板只认可序列化的值。
    注意 `render` **不是 React 组件**：要在里面用 hook，请把它抽成一个真组件
-   （`react-hooks/rules-of-hooks` 会把这一条当场拦下，那条报错是对的）。
+   （`react/rules-of-hooks` 会把这一条当场拦下，那条报错是对的）。
 
 **为什么不用 `vi.mock` / MSW**：测试侧确实有 MSW（`tests/helpers/trpc-msw.ts`），
 但那层的用途是「让 tRPC 的完整管线在无后端时可被断言」——它转发给一个**测试
@@ -309,7 +309,7 @@ const meta = {
     story —— 那是给同一件事造第二套基线，而两套基线的维护成本正是当初撤掉它的理由之一。
     真要看像素时，人的动作是**把页面跑起来看**，不是加一层基线。
 - **不进构建产物**。`.storybook/**` 与 `*.stories.tsx` 不在 Next 的模块图上：
-  story 只被 Storybook 自己的 webpack 图引用，`pnpm build` 看不到它们。
+  story 只被 Storybook 自己的 vite 图引用，`pnpm build` 看不到它们。
   `storybook-static/`、`.storybook/assets/`、`.storybook/generated/` 都在
   `.gitignore` 里。
 - **不覆盖业务组件的全部形态**。`studio/` / `workshop/` 有 story 的 23 件里，
@@ -328,10 +328,10 @@ const meta = {
 「有多少组件被看过」此前写在**这一节**里（「当前只有 3 个 `ui/` 示例」）——
 文档里的数字会过期，而过期时没有任何东西会红。现在它由
 `scripts/storybook-checks/coverage-ledger.mjs` **现算**，与
-`scripts/.storybook-coverage-baseline.json` 比：
+`scripts/gates/.storybook-coverage-baseline.json` 比：
 
 ```bash
-node scripts/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命令出结论
+node scripts/devtools/storybook-check.mjs   # 枚举来源 + 组件覆盖率，一条命令出结论
 ```
 
 三段判据（`tests/storybook-component-coverage.test.ts` 与门禁脚本共用同一份纯函数）：
@@ -407,10 +407,10 @@ hook（没有 DOM 形态，判据是用例）、只有出错时才渲染的边�
   「这份故事到底有没有把那个组件摆出来看」：`title` 缺了会按路径自动分组、
   真组件没接上就是摆了别的东西、必填 props 没 `args` 会在画布上抛、
   同目录两套分组前缀则让「按分组浏览」名存实亡。四种错法**构建全绿、画布也画得出
-  东西**，所以只能靠判据。门禁在 `node scripts/storybook-check.mjs --changed`
+  东西**，所以只能靠判据。门禁在 `node scripts/devtools/storybook-check.mjs --changed`
   （pre-commit D 组就是这么调它的）。
 - 枚举来源的判据：`tests/storybook-cva-variant-source.test.ts` 与
-  `scripts/storybook-check.mjs`（共用 `scripts/storybook-checks/cva-variant-source.mjs`
+  `scripts/devtools/storybook-check.mjs`（共用 `scripts/storybook-checks/cva-variant-source.mjs`
   的纯函数，AST 判；详细口径见规范 [16 §16.2.3.4](standards/16-shadcn-ui与表单校验.md#16234-故事里的枚举清单从-props-派生不要从-cva-的返回值上取)）。
   它与下面那条配置契约**守的不是同一件事**：这条管「故事文件自己怎么写」。
 - 配置契约的判据：`tests/storybook-config.test.ts`（进 `FIXED_STRUCTURAL_TESTS`）
@@ -423,9 +423,29 @@ hook（没有 DOM 形态，判据是用例）、只有出错时才渲染的边�
   硬错误。那条判据直接调 Storybook 自己的 `addExtensionsToRelativeImports`
   （`storybook/internal/bin/loader`）点一遍 `.storybook/**` —— 它「要改写源码」就等价
   于「启动会打那条 deprecation」，规则随 Storybook 变，不另抄一份正则。
-- 为什么启动要经 `scripts/storybook.mjs`：`@storybook/nextjs` 会加载仓库根的
-  `next.config.js`，而它第一行就是 `import "./src/env.js"`。组件预览不需要
-  `BETTER_AUTH_SECRET` / `DATABASE_URL`，所以注入 `SKIP_ENV_VALIDATION=1` 绕开
-  —— 口径与 `playwright.config.ts` 的 webServer、CI 的 `pnpm build` 一致。
+- 为什么启动要经 `scripts/devtools/storybook.mjs`：`SKIP_ENV_VALIDATION=1` 是那条链上
+  注入的（历史原因：webpack 版的 `@storybook/nextjs` 会加载仓库根的
+  `next.config.js`，而它第一行就是 `import "./src/env.js"` —— 缺 `.env` 时抛
+  `MissingEnvFileError`，「只是想看一眼按钮长什么样」会被应用启动期的环境校验
+  拦住）。组件预览不需要 `BETTER_AUTH_SECRET` / `DATABASE_URL`，所以注入这个开关
+  绕开 —— 口径与 `playwright.config.ts` 的 webServer、CI 的 `pnpm build` 一致。
   **不改 `next.config.js`**：那份导入是应用启动期的真实约束，不是它写错了。
+  **迁到 vite 框架之后这条注入仍然留着**（ISSUE #3372）：vite 版的框架只经
+  `@next/env` 读 `.env` 文件、不读 `next.config.js`，所以今天它自己不会触发那条
+  校验 —— 但注入是零成本的安全网，将来任何一个插件读回 `next.config.js`，
+  这条历史坑不该再踩一次。
+- **框架是 `@storybook/nextjs-vite`**（ISSUE #3372 从 webpack 版迁来）：官方在
+  Storybook 11 已把 `@storybook/nextjs` 标记废弃、12 移除，推荐的迁移目标是
+  `@storybook/nextjs-vite`（vite builder，去掉 webpack 与 Babel）。本仓跟着迁的
+  理由不止「跟上上游」—— webpack 版还会把整条 webpack 链拖进依赖图
+  （`@storybook/builder-webpack5` → `node-polyfill-webpack-plugin` →
+  `crypto-browserify` → `elliptic`），迁走后 `pnpm why elliptic` / `pnpm why
+  webpack-dev-middleware` 都是空输出，`pnpm-lock.yaml` 也净少约 3100 行
+  （+1030 / −4140）。
+  迁到 vite 后有两处**必须显式补上**的东西（都是「不补也不报错、只是静默不对」
+  的形状，见 `.storybook/main.ts` 与 `.storybook/preview.tsx` 里那两段说明）：
+  ① 应用 origin 的编译期内联改由 `viteFinal` 的 `define` 承担（vite 的 `env`
+  落到 `import.meta.env`，落不到本仓读取面用的 `process.env`）；
+  ② `next/navigation` 需要 `parameters.nextjs.appDirectory = true`
+  （本仓只有 app 目录，按官方口径全局开）。
 - 跨平台形态登记在 [launch-and-build.md §9.5](standards/launch-and-build.md#95-跨平台动作对照表ps1-与-mjs-不许分叉机器强制)。

@@ -25,20 +25,14 @@ describe("useContentAssetGallery", () => {
       { id: "i1", localPath: "/a.png", isCover: true },
       { id: "i2", localPath: "/b.png", isCover: false },
     ]);
-    const { result } = renderHook(() =>
-      useContentAssetGallery({ taskId: "t-1", enabled: true }),
-    );
+    const { result } = renderHook(() => useContentAssetGallery({ taskId: "t-1", enabled: true }));
     await expect.poll(() => result.current.images).toHaveLength(2);
     expect(mockedFetch).toHaveBeenCalledWith("t-1");
   });
 
   it("单图不启用（images 为 null，视图走常规预览）", async () => {
-    mockedFetch.mockResolvedValue([
-      { id: "i1", localPath: "/a.png", isCover: true },
-    ]);
-    const { result } = renderHook(() =>
-      useContentAssetGallery({ taskId: "t-1", enabled: true }),
-    );
+    mockedFetch.mockResolvedValue([{ id: "i1", localPath: "/a.png", isCover: true }]);
+    const { result } = renderHook(() => useContentAssetGallery({ taskId: "t-1", enabled: true }));
     await expect.poll(() => mockedFetch).toHaveBeenCalled();
     expect(result.current.images).toBeNull();
   });
@@ -61,9 +55,7 @@ describe("useContentAssetGallery", () => {
 
   it("拉取失败静默：images 保持 null，不抛错（单图模式照常显示）", async () => {
     mockedFetch.mockRejectedValue(new Error("任务不存在"));
-    const { result } = renderHook(() =>
-      useContentAssetGallery({ taskId: "t-1", enabled: true }),
-    );
+    const { result } = renderHook(() => useContentAssetGallery({ taskId: "t-1", enabled: true }));
     await expect.poll(() => mockedFetch).toHaveBeenCalled();
     expect(result.current.images).toBeNull();
   });
@@ -74,8 +66,7 @@ describe("useContentAssetGallery", () => {
       { id: "i2", localPath: "/b.png", isCover: false },
     ]);
     const { result, rerender } = renderHook(
-      ({ taskId }: { taskId: string }) =>
-        useContentAssetGallery({ taskId, enabled: true }),
+      ({ taskId }: { taskId: string }) => useContentAssetGallery({ taskId, enabled: true }),
       { initialProps: { taskId: "t-1" } },
     );
     await expect.poll(() => result.current.images).toHaveLength(2);
@@ -90,16 +81,20 @@ describe("useContentAssetGallery", () => {
       { id: "i1", localPath: "/a.png", isCover: true },
       { id: "i2", localPath: "/b.png", isCover: false },
     ]);
-    const { result } = renderHook(() =>
-      useContentAssetGallery({ taskId: "t-1", enabled: true }),
-    );
+    const { result } = renderHook(() => useContentAssetGallery({ taskId: "t-1", enabled: true }));
     await expect.poll(() => result.current.images).toHaveLength(2);
 
-    act(() => result.current.setOpen(true));
+    act(() => {
+      result.current.setOpen(true);
+    });
     expect(result.current.open).toBe(true);
-    act(() => result.current.setIndex((index) => index + 1));
+    act(() => {
+      result.current.setIndex((index) => index + 1);
+    });
     expect(result.current.index).toBe(1);
-    act(() => result.current.setOpen(false));
+    act(() => {
+      result.current.setOpen(false);
+    });
     expect(result.current.open).toBe(false);
   });
 });

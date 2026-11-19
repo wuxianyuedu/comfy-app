@@ -99,7 +99,9 @@ export function useMaterialLibrary({
     // 切换「本项目 / 跨项目」后目录结构变了，退回分类列表避免停在空分类
     setFolder(null);
   }, []);
-  const enterFolder = useCallback((next: string | null) => setFolder(next), []);
+  const enterFolder = useCallback((next: string | null) => {
+    setFolder(next);
+  }, []);
 
   /* ── 拉取素材（搜索做防抖）── */
   useEffect(() => {
@@ -133,7 +135,9 @@ export function useMaterialLibrary({
           setItems([]);
         });
       } finally {
-        guard.commit(() => setLoading(false));
+        guard.commit(() => {
+          setLoading(false);
+        });
       }
     };
 
@@ -160,6 +164,7 @@ export function useMaterialLibrary({
       try {
         await uploadBusy.run(async () => {
           for (const file of files) {
+            // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
             await uploadMaterial(file, { folder: target, projectId });
           }
         });
@@ -192,15 +197,15 @@ export function useMaterialLibrary({
 
   const breadcrumbSegments: Array<{ key: string | null; label: string }> = searching
     ? [{ label: `搜索结果 · ${items.length}`, key: null }]
-    : folder
-      ? [
+    : folder === null
+      ? [{ label: "全部", key: null }]
+      : [
           { label: "全部", key: null },
           {
             label: folders.find((fld) => fld.id === folder)?.name ?? folder,
             key: folder,
           },
-        ]
-      : [{ label: "全部", key: null }];
+        ];
 
   return {
     scope,

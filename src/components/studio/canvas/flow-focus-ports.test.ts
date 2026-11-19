@@ -21,30 +21,20 @@ describe("portHandleId", () => {
 
 describe("resolvePortRowTone / PORT_ROW_TONES", () => {
   it("有连线落到（上游 / 下游）→ 提亮档，方向不影响可见性", () => {
-    expect(resolvePortRowTone({ role: "upstream", hasSelection: true })).toBe(
-      "focused",
-    );
-    expect(resolvePortRowTone({ role: "downstream", hasSelection: true })).toBe(
-      "focused",
-    );
+    expect(resolvePortRowTone({ role: "upstream", hasSelection: true })).toBe("focused");
+    expect(resolvePortRowTone({ role: "downstream", hasSelection: true })).toBe("focused");
   });
 
   it("两端都选中 → 提示档：只说明「有连线」，不假装有方向", () => {
-    expect(resolvePortRowTone({ role: "related", hasSelection: true })).toBe(
-      "related",
-    );
+    expect(resolvePortRowTone({ role: "related", hasSelection: true })).toBe("related");
   });
 
   it("有选中项而这一行没连线 → 压暗档", () => {
-    expect(resolvePortRowTone({ role: "none", hasSelection: true })).toBe(
-      "dimmed",
-    );
+    expect(resolvePortRowTone({ role: "none", hasSelection: true })).toBe("dimmed");
   });
 
   it("没有选中任何节点 → 原样档（不因一次误点整张节点发灰）", () => {
-    expect(resolvePortRowTone({ role: "none", hasSelection: false })).toBe(
-      "plain",
-    );
+    expect(resolvePortRowTone({ role: "none", hasSelection: false })).toBe("plain");
     expect(PORT_ROW_TONES.plain.opacity).toBeUndefined();
     expect(PORT_ROW_TONES.plain.background).toBeUndefined();
   });
@@ -53,9 +43,7 @@ describe("resolvePortRowTone / PORT_ROW_TONES", () => {
     const tones = Object.keys(PORT_ROW_TONES).sort();
     expect(tones).toEqual(["dimmed", "focused", "plain", "related"]);
     /* 提亮的端点最大、压暗最暗（标签色与整行透明度都印证强度差）。 */
-    expect(PORT_ROW_TONES.focused.dotSize).toBeGreaterThan(
-      PORT_ROW_TONES.plain.dotSize,
-    );
+    expect(PORT_ROW_TONES.focused.dotSize).toBeGreaterThan(PORT_ROW_TONES.plain.dotSize);
     expect(PORT_ROW_TONES.dimmed.opacity).toBeLessThan(1);
     /* 压暗档不因「低透明度」而丢掉端点尺寸 —— 端点仍需可定位。 */
     expect(PORT_ROW_TONES.dimmed.dotSize).toBe(PORT_ROW_TONES.plain.dotSize);
@@ -65,9 +53,7 @@ describe("resolvePortRowTone / PORT_ROW_TONES", () => {
   it("端点光晕两档都带上端口类型色（色相承载数据类型语义）", () => {
     expect(portDotGlow("#10b981", true)).toContain("#10b981");
     expect(portDotGlow("#10b981", false)).toContain("#10b981");
-    expect(portDotGlow("#10b981", true)).not.toBe(
-      portDotGlow("#10b981", false),
-    );
+    expect(portDotGlow("#10b981", true)).not.toBe(portDotGlow("#10b981", false));
   });
 });
 
@@ -159,8 +145,7 @@ describe("resolvePortFocusRoles", () => {
         },
       ],
       selectedIds: new Set(["2"]),
-      resolveSourceId: (visualId) =>
-        visualId === "pio:w-512" ? null : visualId,
+      resolveSourceId: (visualId) => (visualId === "pio:w-512" ? null : visualId),
     });
     expect(roles.nodes.has("2")).toBe(false);
   });
@@ -178,8 +163,7 @@ describe("resolvePortFocusRoles", () => {
         { source: "2", target: "3", sourceHandle: "IMAGE" },
       ],
       selectedIds: new Set(["2"]),
-      resolveSourceId: (visualId) =>
-        visualId === "pio:w-512" ? null : visualId,
+      resolveSourceId: (visualId) => (visualId === "pio:w-512" ? null : visualId),
     });
     const bucket = roles.nodes.get("2")!;
     expect(bucket.upstream.has("seed")).toBe(true);

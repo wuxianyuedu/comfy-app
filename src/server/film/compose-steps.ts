@@ -1,13 +1,8 @@
 // ── 影片合成的纯步函数（ffmpeg 参数 / 滤镜 / 字幕构造）───────────────────
-// 从 `orchestrator.ts` 的 `composeFilm` 里抽出的**纯函数**：只吃参数、吐字符串 /
-// 数组，不碰 IO / DB / 时钟。抽出来的理由有两条，都是「收口不收全」的反面教材：
-//
-//   ① 逐镜归一化的 ffmpeg 参数在合成循环里写了**两遍**（带字幕 / 字幕烧录失败后
-//      的重试各一份），两者只差一个 `subtitles=` 滤镜，是 §12.12 的孪生形状——
-//      改一个忘改另一个就会让「有无字幕」走出两条不同的编码参数。这里收成一份
-//      `buildNormalizeArgs`，用 `srtPath` 是否为 null 决定接不接字幕滤镜。
-//   ② `composeFilm` 连同这些长参数数组逼近文件行数上限，把纯字符串算术
-//      下沉到本模块后，编排文件只留「取事实 → 调 ffmpeg → 落库」的骨架。
+// 从 `orchestrator.ts` 的 `composeFilm` 抽出的纯函数：只吃参数、吐字符串 / 数组，不碰 IO / DB / 时钟。
+// ① 逐镜归一化参数曾在合成循环写两遍（带字幕 / 烧录失败后的重试各一份，只差一个 `subtitles=` 滤镜，
+//    §12.12 孪生形状：改一个忘改另一个 ⇒ 有无字幕走两条编码参数），现收成 `buildNormalizeArgs`，以
+//    `srtPath` 是否为 null 决定接不接字幕滤镜；② 纯字符串算术下沉后，`composeFilm` 只留编排骨架。
 import { normalizeSlashes } from "~/lib/path-display";
 import { fixed } from "~/lib/number-format";
 import { artifactDiskPath, generatedRoot } from "~/lib/media/output-paths";
@@ -82,16 +77,11 @@ export function buildNormalizeArgs(opts: {
   ];
 }
 
-/** 把镜头的 `videoPath` 解析成产物根下的绝对文件路径。
- *
- *  解析本身只有 `~/lib/media/output-paths` 那一处（两种历史形状都吃、越界返回 null）。
- *  这一句原先写的是 `path.join(cwd, "public", 去掉前导斜杠)`，而执行器写进
- *  `TaskImage.localPath` 的是 `/api/generated/…`，于是算出 `<cwd>/public/api/generated/…`：
- *  那个目录不存在，ffmpeg 每个镜头都报找不到输入，「合成成片」对每一条镜头必败
- *  （台账 A8 那条 ENOENT 的第二处幸存 —— 删除侧当年修了，这一侧没修）。
- *
- *  `videoPath` 可空由类型层挡在调用方（见 `compose-film` 的显式守卫）；
- *  返回 `null` 表示「这不是一个落在产物根内的地址」，处置同样留在调用点。 */
+/** 把镜头的 `videoPath` 解析成产物根下的绝对文件路径（唯一解析点 `~/lib/media/output-paths`，
+ *  两种历史形状都吃、越界返回 null）。原先写 `path.join(cwd, "public", 去掉前导斜杠)`，而执行器写进
+ *  `TaskImage.localPath` 的是 `/api/generated/…` ⇒ 算出不存在的 `<cwd>/public/api/generated/…`，ffmpeg
+ *  每个镜头都报找不到输入、「合成成片」对每条镜头必败（台账 A8 那条 ENOENT 的第二处幸存：删除侧已修此地未修）。
+ *  `videoPath` 可空由调用方类型层挡（见 `compose-film` 的显式守卫）；返回 null 表示不在产物根内，处置留调用点。 */
 export function clipPathOf(cwd: string, videoPath: string): string | null {
   return artifactDiskPath(videoPath, generatedRoot(cwd));
 }

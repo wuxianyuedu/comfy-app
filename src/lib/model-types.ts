@@ -13,6 +13,45 @@
 
 export type ModelType = string;
 
+/* ── 「什么东西算模型」的判据（同步与目录清单共用，ISSUE #3368）──
+ *
+ * ComfyUI 的 `GET /api/models` 会把 custom_nodes 也列进目录清单（插件注册的目录
+ * 与历史遗留都在里面），且 `/api/models/<folder>` 递归列出该目录下**所有**文件
+ * —— 不过滤就会把插件仓库的 .py/.pyc/.json/README 当成模型收进库（#3368 现场：
+ * 「Custom Nodes」一栏 220 个条目全是 x-flux-comfyui 的源码文件）。 */
+
+/** ComfyUI 权重/模型文件的扩展名（小写、含点）：folder_paths 的 pt 扩展名，
+ *  加上生态常见的 gguf / sft / onnx / tensorrt。 */
+export const MODEL_FILE_EXTENSIONS: ReadonlySet<string> = new Set([
+  ".safetensors",
+  ".ckpt",
+  ".pt",
+  ".pth",
+  ".bin",
+  ".gguf",
+  ".sft",
+  ".onnx",
+  ".engine",
+  ".trt",
+]);
+
+/** 文件名按扩展名判是不是模型：取最后一段后缀、大小写不敏感（`X.FLUX.Py` 这类
+ *  路径里后缀可能是路径段，`lastIndexOf` 取到的就是真后缀段）。 */
+export function isModelFileName(fileName: string): boolean {
+  const dot = fileName.lastIndexOf(".");
+  return dot !== -1 && MODEL_FILE_EXTENSIONS.has(fileName.slice(dot).toLowerCase());
+}
+
+/** 非「模型用途」的目录：custom_nodes 是节点代码目录（有自己的管理面板），
+ *  它出现在 /api/models 里不代表库该把它当模型目录展示。 */
+const NON_MODEL_FOLDERS: ReadonlySet<string> = new Set(["customnodes"]);
+
+/** 目录名按用途判该不该出现在模型库（归一化后比对，覆盖 `custom_nodes` /
+ *  `Custom Nodes` 等大小写与分隔符形态）。 */
+export function isModelFolder(folder: string): boolean {
+  return !NON_MODEL_FOLDERS.has(folder.toLowerCase().replaceAll(/[\s_-]+/g, ""));
+}
+
 /* 把目录名格式化成好看的显示名：下划线 / 连字符分隔 → 首字母大写。 */
 export function prettyFolder(folder: string): string {
   return folder
@@ -67,17 +106,6 @@ export const FIELD_TO_FOLDERS: Record<string, Array<string>> = {
   liveportrait_path: ["liveportrait"],
   pose: ["pose"],
 };
-
-/* 反向映射：目录名 → 从它读取的字段名（用于提示气泡）。 */
-const FOLDER_TO_FIELDS: Record<string, Array<string>> = (() => {
-  const m: Record<string, Array<string>> = {};
-  for (const [field, folders] of Object.entries(FIELD_TO_FOLDERS)) {
-    for (const f of folders) {
-      (m[f] ??= []).push(field);
-    }
-  }
-  return m;
-})();
 
 /**
  * 解析某个 COMBO 字段映射到哪些目录名：先精确查表，
@@ -289,20 +317,4 @@ export function folderMeta(folder: string): { color: string; label: string } {
     label: prettyFolder(folder),
     color: FALLBACK_PALETTE.at(hashString(folder) % FALLBACK_PALETTE.length) ?? FALLBACK_PALETTE[0],
   };
-}
-
-/**
- * 目录类型「药丸」标签的提示气泡。它解释这条原则：
- * 目录名**就是**类型 —— 该目录的模型绝不会归到另一个类型 ——
- * 以及哪些画布 COMBO 字段会列出该目录下的文件。
- */
-export function getFolderTooltip(folder: string): string {
-  const fields = FOLDER_TO_FIELDS[folder] ?? [];
-  const firstFields = fields.slice(0, 4).join(" / ");
-  const more = fields.length > 4 ? ` 等 ${fields.length} 个` : "";
-  const fieldHint =
-    fields.length > 0
-      ? `同步后，画布上 ${firstFields}${more} 字段的 COMBO 下拉会列出此目录的文件。`
-      : "此目录当前没有对应画布 COMBO 字段。";
-  return `目录 "${folder}" 本身就是一个独立的模型类型，其下的模型只归属该目录，不会被归类到其他类型。${fieldHint}`;
 }

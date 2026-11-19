@@ -6,7 +6,7 @@
   `ERROR: Coverage for functions (95.34%) does not meet "src/lib/process/**" threshold (96%)` ——
   **用例可以全绿、覆盖率报告照出、退出码非零**，而自动立案那一格只登记用例红，所以这条一直在账外。
   逐跑回读把它夹在 `2026-10-25T05:08Z ~ 17:05Z` 那段合并窗口里（`cnb-g02` 全绿且无此 ERROR → `cnb-42l` 首次出现）。
-- **同尺复算**：`node scripts/full-suite-run.mjs`（判据自己那份执行者、不带透传参数）本机读到
+- **同尺复算**：`node scripts/affected-tests/full-suite-run.mjs`（判据自己那份执行者、不带透传参数）本机读到
   `82/86 = 95.35%`，与节点那句 `95.34%` 逐字对上；lcov 的 `FN`/`FNDA` 点名四个空位 ——
   `probe-exe.ts:59` 的 `NO_SINK` 两个缺省出口、`process-launch.ts:45/46` 加载期注入
   `elevateLogLevel({ log, warn })` 的两个出口。根因不是「新函数没带用例」，而是

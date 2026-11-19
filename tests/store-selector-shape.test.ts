@@ -1,35 +1,21 @@
 /**
- * 「视图层 store selector 不许现拼对象 / 现造新数组」这条判据自身的用例
- * （ISSUE #1780）。
- *
- * 与 `tests/router-error-envelope.test.ts` 同构：三层各管一件事，缺任何一层
- * 都会静默失效。
- *
- *   ① **存量为零** —— 真扫 `src/**`，按名字匹配真实的 store 订阅 hook 调用点，
- *      断言没有「selector 里写对象字面量 / 用 .map·.filter 造新数组」的形状。
- *      同时断言**扫描面非空** —— 路径写错时「零命中」看起来就像「全都修好了」，
- *      这是这一类清单最典型的死法。
- *   ② **清单与仓库同步** —— `eslint.config.js` 的 `STORE_SELECTOR_HOOKS` 必须
- *      覆盖仓库里**全部** `create<...>()` 出来的 zustand store（漏登记 = 新 store
- *      不受判据保护，而 lint 那边一点反应都没有）。
- *   ③ **selector 真的会响** —— 拿 eslint 自带 `Linter` 在最小片段上验一次：
- *      反模式必须报、合法写法必须不报。少了这一层，② 就只是一句「配置里有个
- *      字符串」—— 本仓库已经付过学费：**「有配置 ≠ 配置在跑」**（§11.7）。
- *
- * 为什么 selector 必须按**名字**限定（而不是 `/^use[A-Z]/` 泛匹配）：见
- * `eslint.config.js` 那段注释 —— `useMemo(() => rows.slice(0, 8), [])` 与
- * `useState(() => ({ ... }))` 都是合法且常见的写法，泛匹配会全报出来。
+ * 「视图层 store selector 不许现拼对象 / 现造新数组」判据自身的用例（ISSUE #1780），与 router 信封那份同构：三层缺一都会静默失效。
+ * ① 真扫 `src/**` 按名字匹配 store 订阅 hook，断言无对象字面量 / `.map`·`.filter` 造数组，并断言扫描面非空（路径写错时「零命中」像「全修好了」）；② `oxlint.parity.config.mjs`（#2777 起判决主体）的 `STORE_SELECTOR_HOOKS` 必须覆盖全部 `create<...>()` 出来的 zustand store（漏登记 = 新 store 失去保护）。
+ * ③ 用真 oxlint CLI 最小探针验行为：反模式必须报、合法写法必须不报 ——「有配置 ≠ 配置在跑」（§11.7）。按**名字**限定而非 `/^use[A-Z]/` 泛匹配的理由见判决配置注释（`useMemo`/`useState` 的合法写法会被泛匹配全报）。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { Linter } from "eslint";
 
+import { probeRules } from "./helpers/oxlint-probe";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = process.cwd();
 const SRC = path.join(ROOT, "src");
-const CONFIG = path.join(ROOT, "eslint.config.js");
+/** #2777：这条规则的生效面已切到 oxlint 判决配置（#3157 起 eslint 已退役，它是唯一出处）。 */
+const CONFIG = path.join(ROOT, "oxlint.parity.config.mjs");
+/** 全量评估尺里也有一份同名清单（两份必须逐字一致，见下面 ② 的用例）。 */
+const RULER_CONFIG = path.join(ROOT, "oxlint.config.ts");
 
 /** 递归收集 `src/**` 下的全部 `.ts` / `.tsx`（跳过用例与 story）。 */
 function sourceFiles(dir = SRC): Array<string> {
@@ -43,7 +29,7 @@ function sourceFiles(dir = SRC): Array<string> {
     if (!/\.tsx?$/.test(entry.name)) {
       continue;
     }
-    if (/\.(test|stories)\.tsx?$/.test(entry.name)) {
+    if (/\.(?:test|stories)\.tsx?$/.test(entry.name)) {
       continue;
     }
     out.push(full);
@@ -57,10 +43,10 @@ function realStoreHooks(): Array<string> {
   for (const file of sourceFiles()) {
     const code = stripComments(readFileSync(file, "utf8"));
     for (const m of code.matchAll(
-      /export\s+const\s+(use[A-Za-z0-9_]+)\s*=\s*create(?:Store)?\s*[<(]/g,
+      /export\s+const\s+(?<hook>use[A-Za-z0-9_]+)\s*=\s*create(?:Store)?\s*[<(]/g,
     )) {
-      const name = m[1];
-      if (name) {
+      const name = m.groups?.hook ?? "";
+      if (name !== "") {
         names.add(name);
       }
     }
@@ -75,15 +61,15 @@ const EXTRA_SUBSCRIBERS = [
   "useLogPanel",
 ];
 
-/** 从 `eslint.config.js` 源码取 `STORE_SELECTOR_HOOKS` 清单（不在此重抄一份）。 */
-function configuredHooks(): Array<string> {
-  const src = readFileSync(CONFIG, "utf8");
-  const block = /const STORE_SELECTOR_HOOKS = \[([\s\S]*?)\];/.exec(src)?.[1];
-  if (!block) {
+/** 从配置源码取 `STORE_SELECTOR_HOOKS` 清单（不在此重抄一份）。 */
+function configuredHooks(file = CONFIG): Array<string> {
+  const src = readFileSync(file, "utf8");
+  const block = /const STORE_SELECTOR_HOOKS = \[(?<block>[\s\S]*?)\];/.exec(src)?.groups?.block;
+  if (block === undefined || block === "") {
     return [];
   }
-  return [...block.matchAll(/"([^"]+)"/g)]
-    .map((m) => m[1] ?? "")
+  return [...block.matchAll(/"(?<name>[^"]+)"/g)]
+    .map((m) => m.groups?.name ?? "")
     .filter((n) => n.length > 0)
     .sort();
 }
@@ -141,6 +127,10 @@ describe("② 清单与仓库同步：漏登记新 store 会红", () => {
   it("清单有多条（扫描面不是空的）", () => {
     expect(configuredHooks().length).toBeGreaterThan(3);
   });
+
+  it("判决配置与全量评估尺的清单逐字一致（两份都是闸的输入）", () => {
+    expect(configuredHooks(RULER_CONFIG)).toEqual(configuredHooks());
+  });
 });
 
 describe("③ selector 真的会响", () => {
@@ -153,7 +143,7 @@ describe("③ selector 真的会响", () => {
       .split("\n")
       .filter((line) => line.includes("CallExpression[callee.name"))
       .map((line) => {
-        const body = /selector:\s*`([^`]*)`/.exec(line)?.[1] ?? "";
+        const body = /selector:\s*`(?<body>[^`]*)`/.exec(line)?.groups?.body ?? "";
         return body.replace('${STORE_SELECTOR_HOOKS.join("|")}', hooks);
       })
       .filter((s) => s.length > 0);
@@ -169,38 +159,32 @@ describe("③ selector 真的会响", () => {
   it("反模式报、合法写法不报", () => {
     const selectors = realSelectors();
     expect(selectors.length).toBe(2);
-    const linter = new Linter();
-    const verify = (code: string) =>
-      linter.verify(code, {
-        languageOptions: { ecmaVersion: 2022, sourceType: "module" },
-        rules: {
-          "no-restricted-syntax": [
-            "error",
-            ...selectors.map((selector) => ({ selector, message: "x" })),
-          ],
-        },
-      });
-    const flagged = (code: string) => verify(code).some((m) => m.ruleId === "no-restricted-syntax");
-
-    // 反模式：对象字面量 / 造新数组
-    expect(
-      flagged(`const a = useShellTabs((s) => ({ tabs: s.tabs, active: s.activeTabId }));`),
-    ).toBe(true);
-    expect(
-      flagged(`const b = useMessageCenterStore((s) => s.messages.filter((m) => !m.read));`),
-    ).toBe(true);
-
-    // 合法：原始值 / store 里已固化的引用 / reduce 成原始值
-    expect(flagged(`const c = useShellTabs((s) => s.activeTabId);`)).toBe(false);
-    expect(flagged(`const d = useLogCategoryStore((s) => s.enabled);`)).toBe(false);
-    expect(
-      flagged(
-        `const e = useMessageCenterStore((s) => s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0));`,
-      ),
-    ).toBe(false);
-
-    // 普通 React hook 造对象**不在拦的范围**（泛匹配 `use[A-Z]` 会误报一片）
-    expect(flagged(`const f = useMemo(() => ({ n: 1 }), []);`)).toBe(false);
-    expect(flagged(`const g = useState(() => rows.slice(0, 8));`)).toBe(false);
+    const hits = probeRules(
+      {
+        "eslint-js/no-restricted-syntax": [
+          "error",
+          ...selectors.map((selector) => ({ selector, message: "x" })),
+        ],
+      },
+      {
+        // 反模式：对象字面量 / 造新数组
+        "object.ts": `const a = useShellTabs((s) => ({ tabs: s.tabs, active: s.activeTabId }));`,
+        "new-array.ts": `const b = useMessageCenterStore((s) => s.messages.filter((m) => !m.read));`,
+        // 合法：原始值 / store 里已固化的引用 / reduce 成原始值
+        "primitive.ts": `const c = useShellTabs((s) => s.activeTabId);`,
+        "store-value.ts": `const d = useLogCategoryStore((s) => s.enabled);`,
+        "reduce.ts": `const e = useMessageCenterStore((s) => s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0));`,
+        // 普通 React hook 造对象**不在拦的范围**（泛匹配 `use[A-Z]` 会误报一片）
+        "use-memo.ts": `const f = useMemo(() => ({ n: 1 }), []);`,
+        "use-state.ts": `const g = useState(() => rows.slice(0, 8));`,
+      },
+    );
+    expect(hits.has("object.ts"), "对象字面量必须报").toBe(true);
+    expect(hits.has("new-array.ts"), "造新数组必须报").toBe(true);
+    expect(hits.has("primitive.ts"), "只取原始值不该报").toBe(false);
+    expect(hits.has("store-value.ts"), "取 store 里已固化的引用不该报").toBe(false);
+    expect(hits.has("reduce.ts"), "reduce 成原始值不该报").toBe(false);
+    expect(hits.has("use-memo.ts"), "useMemo 造对象不在拦的范围").toBe(false);
+    expect(hits.has("use-state.ts"), "useState 造数组不在拦的范围").toBe(false);
   });
 });

@@ -654,7 +654,7 @@ mod tests {
   /**
    * 跨语言一致性：Rust 侧的 **.env 解析** 与另三侧读同一份 .env 得出同一个值。
    *
-   * 这条由 `tests/app-port-cross-language.test.ts` + `scripts/check-app-port-vectors.cjs`
+   * 这条由 `tests/app-port-cross-language.test.ts` + `scripts/gates/check-app-port-vectors.cjs`
    * 从外部复核（它们只能断言本文件引用了向量文件），真正的执行判据在这里。
    */
   #[test]

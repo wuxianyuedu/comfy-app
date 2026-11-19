@@ -16,7 +16,8 @@ import { kickQueue } from "~/lib/comfyui/executor-continuation";
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
-import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import { parseWorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
 import { buildEncapsulatedInputs, type WorkshopExposedValues } from "./workflow-encapsulation";
 import { loadModeContracts } from "./mode-contract.server";
 
@@ -44,22 +45,22 @@ export async function createWorkflowRunTask(
 
   const modes = parseModesJson(tpl.modes);
   const mode = tpl.defaultMode ?? tpl.taskType ?? modes[0] ?? null;
-  const io =
-    /* SAFETY: 类型断言已复核 */
-    tpl.workflowIO && typeof tpl.workflowIO === "object" && !Array.isArray(tpl.workflowIO)
-      ? (tpl.workflowIO as unknown as WorkflowIOMap)
-      : {};
-  /* 该模式生效的契约口清单：作者改过的模式按注册表（含自定义口），没改过的
-   *  走内置默认（不传即回落）。读不到注册表时按空注册表处理 —— 回落内置契约，
-   *  不阻断生成。 */
+  const io = parseWorkflowIOMap(tpl.workflowIO);
+  /* 该模式生效的契约口清单：**生效注册表**（成品配置 + 本机覆盖逐模式合并，
+   * 含自定义口）里那一条 —— 没配过的模式也在表里（回落成品配置那份），
+   * 读不到注册表时按空注册表处理 —— 回落内置契约，不阻断生成。 */
   const contracts = await loadModeContracts();
   const contractIds = contracts.find((c) => c.mode === upperToken(mode))?.inputs;
+  /* 尺寸换算用**生效的那份**表（ISSUE #3972）：项目默认 + 本机覆盖现读磁盘，
+   * 与 /api/size-presets、设置页同源 —— 设置里改过的表在服务端编排真的生效。 */
+  const sizeTable = await loadSizePresetTable();
   const { workflowInputs } = buildEncapsulatedInputs({
     io,
     paramMap: tpl.paramMap,
     mode,
     values: input.values,
     contractIds,
+    table: sizeTable,
   });
 
   const params = {
@@ -70,6 +71,17 @@ export async function createWorkflowRunTask(
   };
 
   const executorClaim = resolveExecutorClaim();
+  /* 执行载荷恒为 RAW 原件 —— comfy-cli 按节点类定义做权威 UI→API 转换 +
+   * 子图展开（判据收在 `hasExecutableWorkflow`，与 generate 路由同一份）。
+   * 没有内容时抛错，而不是静默提交一份空图（空图会在 ComfyUI 侧变成
+   * 「一个节点都没有」的报错，用户看不出是入库时就没内容）。
+   * **先校验、后建行**（#4022，与 generate 路由同序）：此前先 createQueued
+   * 再校验，空 rawJson 会先留下一条 QUEUED 行、调用方拿到 throw 却还没走到
+   * markQueued 挂镜头——orchestrator 的 cancelTask 补偿覆盖不到这一段，任务成
+   * 孤儿（仅 reaper 兜底），多耗一次派发。 */
+  if (!hasExecutableWorkflow(tpl)) {
+    throw new Error(`工作流没有可执行内容（rawJson 为空）：${tpl.name}`);
+  }
   const task = await taskRepository.createQueued({
     userId: input.userId,
     type: tpl.taskType,
@@ -81,14 +93,6 @@ export async function createWorkflowRunTask(
     claimedBy: executorClaim,
     execPayload: tpl.rawJson,
   });
-
-  /* 执行载荷恒为 RAW 原件 —— comfy-cli 按节点类定义做权威 UI→API 转换 +
-   * 子图展开（判据收在 `hasExecutableWorkflow`，与 generate 路由同一份）。
-   * 没有内容时抛错，而不是静默提交一份空图（空图会在 ComfyUI 侧变成
-   * 「一个节点都没有」的报错，用户看不出是入库时就没内容）。 */
-  if (!hasExecutableWorkflow(tpl)) {
-    throw new Error(`工作流没有可执行内容（rawJson 为空）：${tpl.name}`);
-  }
   /* 提交只写库里那一行（`claimedBy` 决定归谁领）——P3 §5 ADR §14 D1 第二刀：
    * 这里过去对 inline 片额外调 `enqueue()` 往进程内存队列推一份，于是「派发的
    * 真相」有两份（内存 vs 库），host 与 Next 各读各的。现在两宿主只走

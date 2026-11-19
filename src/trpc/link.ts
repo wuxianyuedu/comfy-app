@@ -37,7 +37,7 @@ export function trpcHttpLink(options: {
     },
   });
 
-  if (!options.withLogger) {
+  if (options.withLogger !== true) {
     return [http];
   }
 

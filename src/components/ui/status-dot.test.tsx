@@ -5,24 +5,17 @@ import { StatusDot, type StatusDotState } from "./status-dot";
 afterEach(cleanup);
 
 /**
- * 状态圆点的判据（ISSUE #672 / 规范 16 §16.2.4）。
- *
- * 三件事必须钉住，否则「收口」会退回去：
- *   ① 四态齐全 —— 漏一态时调用方只能自己写三元，重复立刻长回来；
- *   ② 颜色走语义 token，不落 Tailwind 原生调色板（原先三处各写
- *      `bg-emerald-400` / `bg-amber-400` / `bg-rose-400`）；
- *   ③ `pulse` 只在传的时候出现（`animate-pulse` 是 P3 判据的计数对象）。
+ * 状态圆点的判据（ISSUE #672 / 规范 16 §16.2.4）。三件事必须钉住，否则「收口」会退回去：① 四态齐全（漏一态时调用方只能自己写三元）；② 颜色走语义 token、不落原生调色板（原先三处各写 `bg-emerald-400` 等）；③ `pulse` 只在传时出现。
  */
 const STATES: Array<StatusDotState> = ["up", "busy", "probing", "down"];
 
 function dotOf(props: Parameters<typeof StatusDot>[0]): HTMLElement {
   const { container } = render(<StatusDot {...props} />);
   const el = container.querySelector("[data-slot=status-dot]");
-  if (!el) {
+  if (!(el instanceof HTMLElement)) {
     throw new Error("StatusDot 未渲染出 data-slot=status-dot 的元素");
   }
-  /* SAFETY: 类型断言已复核 */
-  return el as HTMLElement;
+  return el;
 }
 
 describe("StatusDot", () => {
@@ -31,7 +24,7 @@ describe("StatusDot", () => {
   });
 
   it.for(STATES)("state=%s 的颜色是语义 token 类名", (state) => {
-    expect(dotOf({ state }).className).toMatch(/\bbg-(success|warning|info|destructive)\b/);
+    expect(dotOf({ state }).className).toMatch(/\bbg-(?:success|warning|info|destructive)\b/);
   });
 
   it.for(STATES)("state=%s 不落 Tailwind 原生调色板字面量", (state) => {

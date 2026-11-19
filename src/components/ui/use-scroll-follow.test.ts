@@ -1,15 +1,8 @@
 // @vitest-environment jsdom
 /**
- * `useScrollFollow` —— 「让一段滚动内容跟随底部」的唯一实现
- * （规范 16 §16.2.4.24）。
- *
- * 三件事必须逐一钉住（它们是收口前四处实现**判据不一致**的地方）：
- *  ① 内容变化时贴底；
- *  ② 用户上滚**退出跟随**（此前 `AgentOverlay` 会把人按回底部）；
- *  ③ 跟随态是**输出**且能跨实例共享（受控模式）。
- *
- * jsdom 里 `scrollHeight` / `clientHeight` 恒为 0，所以本文件直接给容器
- * 定义这两个属性 —— 量测口径才是这条账的实质，不量它等于没测。
+ * `useScrollFollow` —— 「让一段滚动内容跟随底部」的唯一实现（规范 16 §16.2.4.24）。
+ * 钉三件事（收口前四处实现判据不一致的地方）：① 内容变化时贴底；② 用户上滚退出跟随（此前 `AgentOverlay` 会把人按回底部）；③ 跟随态是输出且能跨实例共享（受控模式）。
+ * jsdom 里 `scrollHeight` / `clientHeight` 恒为 0，本文件直接给容器定义这两个属性 —— 量测口径才是这条账的实质。
  */
 import { act, renderHook } from "@testing-library/react";
 import type React from "react";
@@ -58,7 +51,9 @@ describe("useScrollFollow", () => {
 
     /* 距底 100px > 阈值 32px → 退出跟随。 */
     el.scrollTop = 700;
-    act(() => result.current.onScroll());
+    act(() => {
+      result.current.onScroll();
+    });
     expect(result.current.following).toBe(false);
   });
 
@@ -67,7 +62,9 @@ describe("useScrollFollow", () => {
     const { result } = renderHook(() => useScrollFollow({ containerRef: makeRef(el), watch: 0 }));
 
     el.scrollTop = 1000 - 200 - (NEAR_BOTTOM_PX - 1);
-    act(() => result.current.onScroll());
+    act(() => {
+      result.current.onScroll();
+    });
     expect(result.current.following).toBe(true);
   });
 
@@ -80,7 +77,9 @@ describe("useScrollFollow", () => {
     );
 
     el.scrollTop = 100;
-    act(() => result.current.onScroll());
+    act(() => {
+      result.current.onScroll();
+    });
     rerender({ text: "b" });
     expect(el.scrollTop, "用户已接管滚动，不该被拉回底部").toBe(100);
   });
@@ -90,10 +89,14 @@ describe("useScrollFollow", () => {
     const { result } = renderHook(() => useScrollFollow({ containerRef: makeRef(el), watch: 0 }));
 
     el.scrollTop = 100;
-    act(() => result.current.onScroll());
+    act(() => {
+      result.current.onScroll();
+    });
     expect(result.current.following).toBe(false);
 
-    act(() => result.current.jumpToLatest());
+    act(() => {
+      result.current.jumpToLatest();
+    });
     expect(result.current.following).toBe(true);
     expect(el.scrollTop).toBe(1000);
   });
@@ -114,7 +117,9 @@ describe("useScrollFollow", () => {
     );
 
     el.scrollTop = 100;
-    act(() => result.current.onScroll());
+    act(() => {
+      result.current.onScroll();
+    });
     expect(changes, "上滚应把结论回传给父级").toEqual([false]);
     /* 父级还没把新值给回来时，hook 仍报父级那份值（受控语义）。 */
     expect(result.current.following).toBe(true);
@@ -134,7 +139,9 @@ describe("useScrollFollow", () => {
     );
 
     el.scrollTop = 700; // 距底 100px，小于自定义阈值 200
-    act(() => result.current.onScroll());
+    act(() => {
+      result.current.onScroll();
+    });
     expect(result.current.following).toBe(true);
   });
 });

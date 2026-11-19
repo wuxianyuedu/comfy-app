@@ -33,6 +33,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { isRecord } from "~/lib/is-record";
 
 let tmp: string;
 let dbFile: string;
@@ -72,12 +73,13 @@ function useTempCwd(): { restore: () => void } {
 /**
  * 扫掉**上一轮**留下的临时目录。
  *
- * 为什么不在这里删自己那份：libsql 的 sqlite 句柄由它的工作线程持有，
- * `client.close()` 既不返回 Promise，实测句柄还要 **1–9s** 才释放（并行负载下
- * 更久且没有上界）—— 本文件此前在 `afterEach` 里带 `maxRetries` 删，就是在赌这个
- * 不确定的窗口，安静机赶得上、108 文件一起跑就赶不上（表现为只在钩子里红一次的
- * EPERM，隔离跑反而绿）。进程内「等到能删为止」是把不确定量搬进关键路径；改成
- * 下一轮开头扫一次，既不留垃圾，也永远不会因为锁而红。
+ * 为什么不在这里删自己那份：本文件还会打开测试宿主（better-sqlite3）的句柄，而且
+ * 同机可能另有一条 vitest 正在用同一前缀的临时目录 —— 在 `afterEach` 里带
+ * `maxRetries` 删，就是在赌一个不确定的释放窗口（隔离跑绿、108 文件一起跑就在钩子里
+ * 红一次的 EPERM）。运行时换成 node:sqlite 后 `closeDb()` 是同步的（ISSUE #3171），
+ * 但「释放是同步的」只覆盖我们自己那一条句柄，不覆盖同机别的进程；进程内
+ * 「等到能删为止」是把不确定量搬进关键路径，改成下一轮开头扫一次，既不留垃圾，
+ * 也永远不会因为锁而红。
  *
  * 只认自己的前缀，且跳过 60s 内还在写的目录（同机可能另有一条 vitest 正在用）。
  */
@@ -107,18 +109,27 @@ function sweepStaleTempDirs(): void {
 
 sweepStaleTempDirs();
 
+/** 单例客户端是否带可调用的 `close`（`globalThis.db` 的形状来自 `~/server/db`）。 */
+function hasClose(value: unknown): value is { close: () => void } {
+  return isRecord(value) && typeof value.close === "function";
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   /* 关掉挂在单例上的客户端（`NODE_ENV !== "production"` 时 `~/server/db` 会把它
    * 留在 `globalThis.db`）。这一步是卫生，不是「让删得掉」—— 真正的释放要等
    * 线程结束，见上面 `sweepStaleTempDirs` 的说明。 */
-  /* SAFETY: 类型断言已复核 */
-  const cached = (
-    globalThis as unknown as {
-      db?: { $client?: { close?: () => void } };
+  const globalScope: unknown = globalThis;
+  if (!isRecord(globalScope)) {
+    throw new Error("globalThis 不是对象");
+  }
+  const cached = globalScope.db;
+  if (isRecord(cached)) {
+    const client = cached.$client;
+    if (hasClose(client)) {
+      client.close();
     }
-  ).db;
-  cached?.$client?.close?.();
+  }
 });
 
 describe("probeSchemaSync", () => {
@@ -169,14 +180,14 @@ describe("isSchemaReady 缓存", () => {
     cwd.restore();
   });
 
-  it("同进程内只探一次：建表后缓存仍为 false（调用方每轮自行重探的语义由 sweep 决定）", async () => {
-    const { isSchemaReady, resetSchemaReadinessCache } = await import("./db-schema-ready");
+  it("负结果不缓存：建表后同一进程内再探翻真（#3875）", async () => {
+    const { isSchemaReady } = await import("./db-schema-ready");
     expect(isSchemaReady()).toBe(false);
     createSchema(dbFile);
-    // 缓存命中，不会因为库刚建好就翻牌
-    expect(isSchemaReady()).toBe(false);
-    // 显式重置后重新探测 → true
-    resetSchemaReadinessCache();
+    // 表从无到有（db:push 晚于服务启动是真实时序）：不重置缓存再探必须翻真。
+    // 负结果若被缓存，reaper 等库侧副作用会被静默禁用到进程退出（ISSUE #3875）。
+    expect(isSchemaReady()).toBe(true);
+    // 肯定结论是粘性的：再探命中缓存，不再开新连接。
     expect(isSchemaReady()).toBe(true);
   });
 });
@@ -208,7 +219,7 @@ describe("reaper 模块级副作用", () => {
      * `Test timed out in 30000ms`（CI 读数就是这个），真因与超时毫无关系。 */
     const { stopReaper } = await import("./comfyui/reaper");
     stopReaper();
-    /* 这一组真的打开了 `~/server/db` 的 libsql 连接（指向临时库）。不关的话
+    /* 这一组真的打开了 `~/server/db` 的 node:sqlite 连接（指向临时库）。不关的话
      * Windows 上文件句柄不释放，文件级 afterEach 的 `rmSync` 会 EPERM。 */
     const { closeDb } = await import("~/server/db");
     closeDb();

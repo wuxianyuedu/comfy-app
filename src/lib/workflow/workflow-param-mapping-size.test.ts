@@ -128,9 +128,7 @@ describe("isSizeDetermined — 定得出宽高才算配置完成", () => {
   });
 
   it("比例单独连上：解不出宽高", () => {
-    expect(isSizeDetermined({ "size-aspect": "5::widget::aspect_ratio" })).toBe(
-      false,
-    );
+    expect(isSizeDetermined({ "size-aspect": "5::widget::aspect_ratio" })).toBe(false);
   });
 });
 
@@ -221,9 +219,7 @@ describe("工坊运行闸门 — 尺寸定不出宽高就不许跑", () => {
       mode: "T2I",
       requiredInputs: ["size"],
     });
-    expect(
-      status.entries.find((entry) => entry.id === "size")!.targetIoKey,
-    ).toBeTruthy();
+    expect(status.entries.find((entry) => entry.id === "size")!.targetIoKey).toBeTruthy();
     expect(status.ready).toBe(true);
   });
 });

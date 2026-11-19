@@ -1,20 +1,13 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { useState } from "react";
 
 import { ViewTabStrip, type OpenableView } from "~/components/studio/ViewTabStrip";
 import { tabKey, type ViewTab } from "~/components/studio/workspace-tabs";
 
 /**
- * 视图页签条（`studio/` 的一等公民：它取代了退役的 `ProjectTabBar`）。
- *
- * 它是**纯 props** 的 —— `tabs` / `activeKey` / 三个回调都由调用处给，
- * 没有 tRPC、没有浏览器运行期。所以这里没有注入层的事：关键是**页签的数据要真**
- *（`key` 走 `tabKey()` 那个唯一编码处、`view` 用真的 `WorkspaceView` 字面量），
- * 而不是随手捏几个字符串让高亮看起来对。
- *
- * 要看的是两件在真机上容易分叉的事：
- *  · **选中 / 悬停 / 焦点三态在两种摆放位置下一致**（`inTitleBar` 只是换背景层级）；
- *  · 关闭按钮是**页签内部**的按钮，点它不能连带切页签（`stopPropagation`）。
+ * 视图页签条（`studio/` 的一等公民：取代退役的 `ProjectTabBar`）。纯 props、无 tRPC 无运行期；
+ * 关键是页签数据要真（`key` 走 `tabKey()` 唯一编码处）。看两件真机易分叉的事：三态在两种摆放
+ * 位置下一致（`inTitleBar` 只换背景层级）；关闭按钮是页签内部按钮，点它不能连带切页签（`stopPropagation`）。
  */
 const PROJECTS: Record<string, string> = {
   p_8f2a1c: "角色一致性",
@@ -57,15 +50,17 @@ function InteractiveStrip({ inTitleBar, tabs }: { inTitleBar: boolean; tabs: Arr
         <ViewTabStrip
           activeKey={state.activeKey}
           inTitleBar={inTitleBar}
-          onClose={(key) =>
+          onClose={(key) => {
             setState((s) => ({
               ...s,
               tabs: s.tabs.filter((t) => t.key !== key),
               closed: [...s.closed, key],
-            }))
-          }
+            }));
+          }}
           onOpenView={() => undefined}
-          onSelect={(key) => setState((s) => ({ ...s, activeKey: key }))}
+          onSelect={(key) => {
+            setState((s) => ({ ...s, activeKey: key }));
+          }}
           openableViews={OPENABLE}
           projectNameOf={projectNameOf}
           tabs={state.tabs}

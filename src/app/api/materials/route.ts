@@ -6,6 +6,7 @@ import { logger } from "~/server/lib/logger";
 import { apiErrorBody, apiErrorDetail } from "~/lib/api-error";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { contentLengthOverLimit } from "~/server/lib/upload-limit";
 import { artifactUrl } from "~/lib/media/output-paths";
 import {
   MATERIAL_FOLDERS,
@@ -67,20 +68,9 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
  * `visibleMaterialScopes` / `canWriteMaterialScope`（这一族曾有两个入口、各写一份
  * `resolveScopes`，而且**两份都不判归属**；入口现在只有这一个）。 */
 
-/* ── 画布素材库 API ───────────────────────────────────────────
- * 文件系统支撑，落点 generated/materials/{scope}/{folder}/。
- * 详见 src/lib/materials.ts 顶部的存储选型说明。
- *
- * 端点：GET    /api/materials?projectId=proj_1&scope=project
- *          → { folders: [{id,name,count}], items: [] }           列分类
- * 端点：GET    /api/materials?projectId=proj_1&folder=docs
- *          → { folders: [...], items: [...] }                    列分类内文件
- * GET    /api/materials?projectId=proj_1&q=角色
- *          → { folders: [...], items: [...] }                    全库搜索
- * GET    ...&scope=cross                                         跨项目聚合
- * POST   multipart: file, projectId, folder                      上传
- * DELETE ?id=scope/folder/name                                   删除
- */
+/* ── 画布素材库 API：文件系统支撑，落点 generated/materials/{scope}/{folder}/（存储选型见 `~/lib/media/materials.ts` 顶部）。
+ * GET /api/materials?projectId=&scope=project 列分类{folders,items}；&folder=docs 列分类内文件；&q=角色 全库搜索；&scope=cross 跨项目聚合。
+ * POST multipart: file, projectId, folder 上传；DELETE ?id=scope/folder/name 删除。 */
 
 /** 解析出本次请求要读取的 scope 列表 —— 判据在 `visibleMaterialScopes`（一处）。 */
 
@@ -112,14 +102,14 @@ export async function GET(req: NextRequest) {
     }));
 
     let items: Array<MaterialItem> = [];
-    if (q) {
+    if (q !== null && q !== "") {
       // 搜索优先于 folder：跨所有分类找名字匹配的
       const pool: Array<MaterialItem> = [];
       for (const f of MATERIAL_FOLDERS) {
         pool.push(...(byFolder.get(f.id) ?? []));
       }
       items = pool.filter((it) => matchesNeedle(q, it.name));
-    } else if (folder) {
+    } else if (folder !== null && folder !== "") {
       if (!isValidFolder(folder)) {
         return NextResponse.json({ error: `未知分类：${folder}` }, { status: 400 });
       }
@@ -147,10 +137,20 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return unauthorizedResponse();
   }
+  /* Content-Length 预拒（#4451）：挡住「先全量缓冲几 GB 再拒绝」的 OOM 形态；
+   * 权威校验仍是解析后的 file.size。 */
+  if (contentLengthOverLimit(req, MAX_UPLOAD_BYTES)) {
+    return NextResponse.json({ error: "文件大小不能超过 100MB" }, { status: 400 });
+  }
+  /* 畸形表单是客户端错误 → 400（#4045）：与 bgm / upload 同一口径，
+   * 不落进下面的 catch 被错报成 500「上传失败」。 */
+  const form = await req.formData().catch(() => null);
+  if (form === null) {
+    return NextResponse.json({ error: "表单解析失败" }, { status: 400 });
+  }
   try {
-    const form = await req.formData();
-    /* SAFETY: 类型断言已复核 */
-    const file = form.get("file") as File | null;
+    const entry = form.get("file");
+    const file = entry instanceof File ? entry : null;
     if (!file) {
       return NextResponse.json({ error: "未收到文件" }, { status: 400 });
     }
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
     const projectIdRaw = form.get("projectId");
     const projectId = sanitizeScope(typeof projectIdRaw === "string" ? projectIdRaw : "");
     const scope = shared ? SHARED_SCOPE : projectId;
-    if (!scope) {
+    if (scope === null || scope === "") {
       return NextResponse.json(
         { error: "缺少 projectId（或改用 shared=true 上传到共享素材）" },
         { status: 400 },
@@ -191,31 +191,43 @@ export async function POST(req: NextRequest) {
     }
 
     const safeName = sanitizeFileName(file.name);
-    if (!safeName) {
+    if (safeName === null || safeName === "") {
       return NextResponse.json({ error: "文件名不合法" }, { status: 400 });
     }
 
     const dir = folderDir(scope, folder);
-    if (!dir) {
+    if (dir === null || dir === "") {
       return NextResponse.json({ error: "路径不合法" }, { status: 400 });
     }
     await fs.mkdir(dir, { recursive: true });
 
-    // 重名不覆盖：追加 -1 / -2 …，避免用户误丢文件
+    // 重名不覆盖：追加 -1 / -2 …，避免用户误丢文件。
+    // 落盘用 `wx` 独占创建（ISSUE #3836）：原先「access 探测可用 → writeFile
+    // 覆盖」两步之间无原子性，并发上传同名文件都通过探测、后者覆盖前者（恰与
+    // 本条注释的承诺相悖）。探测与写入合成一步：EEXIST 才换下一个后缀。
     const ext = path.extname(safeName);
     const stem = safeName.slice(0, safeName.length - ext.length);
+    const buf = Buffer.from(await file.arrayBuffer());
     let finalName = safeName;
-    for (let i = 1; i < 500; i++) {
+    for (let attempt = 0; ; attempt += 1) {
       try {
-        await fs.access(path.join(dir, finalName));
-        finalName = `${stem}-${i}${ext}`;
-      } catch {
-        break; // 不存在 → 可用
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+        await fs.writeFile(path.join(dir, finalName), buf, { flag: "wx" });
+        break;
+      } catch (error) {
+        const code =
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          typeof error.code === "string"
+            ? error.code
+            : "";
+        if (code !== "EEXIST" || attempt >= 499) {
+          throw error;
+        }
+        finalName = `${stem}-${attempt + 1}${ext}`;
       }
     }
-
-    const buf = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(path.join(dir, finalName), buf);
 
     return NextResponse.json({
       ok: true,
@@ -244,7 +256,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const id = url.searchParams.get("id")?.trim();
-    if (!id) {
+    if (id === undefined || id === "") {
       return NextResponse.json({ error: "缺少 id" }, { status: 400 });
     }
 
@@ -255,7 +267,7 @@ export async function DELETE(req: NextRequest) {
     const scope = sanitizeScope(parts[0]);
     const folder = parts[1];
     const name = sanitizeFileName(parts[2]);
-    if (!scope || !isValidFolder(folder) || !name) {
+    if (scope === null || scope === "" || !isValidFolder(folder) || name === null || name === "") {
       return NextResponse.json({ error: "id 不合法" }, { status: 400 });
     }
     /* 归属判定必须在**碰磁盘之前**：这一条的副作用是 `fs.unlink`，
@@ -265,7 +277,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const dir = folderDir(scope, folder);
-    if (!dir) {
+    if (dir === null || dir === "") {
       return NextResponse.json({ error: "路径不合法" }, { status: 400 });
     }
 

@@ -1,23 +1,15 @@
 /**
- * 进程内事件通道已整体退役（P3 §5 ADR §14 D1 的第一刀）。
- *
- * 为什么要有这一条门禁而不是「删完就算」：执行链过去有两套并行的对外通道——
- * 进程内 `EventEmitter`（`done` / `error` / `progress` / `log` / 合成的 `state`）
- * 与 DB 行。SSE 自 §13-3C 起只读库，emitter 就成了**只剩写入、没有读者**的那
- * 一套：13 处 `emit` 全是空转，而空转的代码比缺代码更坏——它让后来人以为
- * 「取消会发一个事件」「成功有个 done 帧」，于是新宿主（host）也照着这条契约
- * 写，而它在跨进程下根本不成立。首帧那条就是照抄出来的事故面。
- *
- * 所以这里钉三件事：
- *   1. 执行链的任何模块都不再持有 / 投递 EventEmitter；
- *   2. 对外只有 DB 一条通道（首帧改读 `findExecutionProgress` 就是证据）；
- *   3. 客户端解析器里没有「另一种宿主收不到的帧类型」残留。
- * 别处更强的执行者：`tests/reaper-side-effect.test.ts` 管「谁起回收器」，
- * `scripts/check-dead-exports.cjs` 管零消费导出（`subscribe` 正是被它逼着一起删的）。
+ * 进程内事件通道已整体退役（P3 §5 ADR §14 D1 的第一刀）：执行链过去有进程内 `EventEmitter` 与 DB 行两套对外通道，SSE 自 §13-3C 起只读库，emitter 只剩写入没有读者（13 处 `emit` 空转）。
+ * 空转的代码比缺代码更坏：它让后来人以为「取消会发事件」「成功有 done 帧」，新宿主照抄而它在跨进程下不成立（首帧那条就是事故面）。
+ * 故钉三件：1) 执行链任何模块不再持有/投递 EventEmitter；2) 对外只有 DB 一条通道（首帧改读 `findExecutionProgress` 为证）；3) 客户端解析器无「另一种宿主收不到的帧类型」残留。别处执行者：`tests/reaper-side-effect.test.ts` 管回收器；`scripts/gates/check-dead-exports.cjs` 管零消费导出（`subscribe` 因此被删）。
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  CHANNEL_RETIRE_EMITTER_ANCHORS,
+  CHANNEL_RETIRE_FACE,
+} from "../scripts/lib/execution-chain-files.mjs";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -29,23 +21,11 @@ const COMFYUI_DIR = "src/lib/comfyui";
 const stripCode = (text: string): string => stripComments(text, { trailing: true });
 const src = (rel: string): string => stripCode(readFileSync(path.join(ROOT, rel), "utf8"));
 
-/**
- * 执行链的文件名规则：`executor*` / `runner-state*` / `enqueue` / `reaper` / `firstframe`。
- *
- * 面是**从目录派生**的，不是一份手抄清单：手抄清单在「把一个大文件拆成几个」之后
- * 只会**少判**，而少判在这一族反向断言上的表现是 `not.toMatch` 恒真 —— 账面读数与
- * 「真的退役干净」逐字相同。派生规则把那一格变成「新文件自动在面里」。
- * 排除 `*.test.*`：夹具里造一个 `EventEmitter` 是正当写法，不该被这条判红。
- */
-const EXEC_CHAIN_PATTERN = /^(?:executor|runner-state|enqueue|reaper|firstframe)/;
-const execChainFiles = (): Array<string> =>
-  readdirSync(path.join(ROOT, COMFYUI_DIR))
-    .filter((name) => /\.tsx?$/.test(name) && !/\.(?:test|spec)\.tsx?$/.test(name))
-    .filter((name) => EXEC_CHAIN_PATTERN.test(name.replace(/\.tsx?$/, "")))
-    .map((name) => `${COMFYUI_DIR}/${name}`)
-    .sort();
-
-const CHAIN = execChainFiles();
+/* 「执行链」这份面的唯一定义在 `scripts/lib/execution-chain-files.mjs`（ISSUE #2914）：
+ * 它**从目录派生**而不是手抄清单 —— 手抄清单在「把一个大文件拆成几个」之后只会**少判**，
+ * 而少判在这一族反向断言上的表现是 `not.toMatch` 恒真，账面读数与「真的退役干净」逐字相同。
+ * 为什么这份面要宽、与派发闸那份 5 项窄面为何不合并，见模块文件头。 */
+const CHAIN = CHANNEL_RETIRE_FACE;
 
 /** 这一族读的全部源（执行链 + 三条别处判据要交叉对账的接收者）。 */
 const READ_FILES = [
@@ -60,17 +40,9 @@ describe("进程内事件通道（EventEmitter）已退役", () => {
    * 派生面为空、或某份文件被搬成只剩一行 re-export 时，全部 `not.toMatch`
    * 会在不判任何东西的情况下绿。 */
   it("这一族读的面非空：派生规则有命中、且每份文件剥完注释仍有代码", () => {
-    expect(CHAIN.length, "执行链派生面为空 ⇒ 下面那组 `emitter` 断言全在判空文").toBeGreaterThan(
-      0,
-    );
+    expect(CHAIN.length, "执行链派生面为空 ⇒ 下面那组 `emitter` 断言全在判空文").toBeGreaterThan(0);
     // 历史上真正持有 emitter 的那几份必须在面里：它们不在 = 规则或文件名漂了，覆盖面静默缩小。
-    for (const name of [
-      "enqueue.ts",
-      "executor.ts",
-      "runner-state.ts",
-      "runner-state-shape.ts",
-      "reaper.ts",
-    ]) {
+    for (const name of CHANNEL_RETIRE_EMITTER_ANCHORS) {
       expect(
         CHAIN,
         `执行链面里不见了 ${name} —— 派生规则没命中它了，这条「任何模块都不再持有 emitter」` +
@@ -78,10 +50,9 @@ describe("进程内事件通道（EventEmitter）已退役", () => {
       ).toContain(`${COMFYUI_DIR}/${name}`);
     }
     for (const rel of READ_FILES) {
-      expect(
-        src(rel).trim(),
-        `${rel}：剥完注释是空文，落在它身上的反向断言恒真`,
-      ).not.toHaveLength(0);
+      expect(src(rel).trim(), `${rel}：剥完注释是空文，落在它身上的反向断言恒真`).not.toHaveLength(
+        0,
+      );
     }
   });
 
@@ -92,15 +63,13 @@ describe("进程内事件通道（EventEmitter）已退役", () => {
   it("判据本身有效：整行注释与行尾注释都不算，代码里的 emitter 算", () => {
     // 三头都要验：走的是 `stripCode` 本身（不是另调一次 `stripComments`），
     // 否则「上面那组忘了传 `{ trailing: true }`」这一形不会被这条抓住。
-    expect(
-      stripCode("// 这里过去写着 s.emitter.emit(taskId, …)\nconst ok = 1;\n"),
-    ).not.toMatch(/emitter/i);
-    expect(stripCode("const ok = 1; // 这里过去写着 s.emitter.emit\n")).not.toMatch(
+    expect(stripCode("// 这里过去写着 s.emitter.emit(taskId, …)\nconst ok = 1;\n")).not.toMatch(
       /emitter/i,
     );
-    expect(
-      stripCode('const s = state();\ns.emitter.emit(taskId, { type: "done" });\n'),
-    ).toMatch(/emitter/i);
+    expect(stripCode("const ok = 1; // 这里过去写着 s.emitter.emit\n")).not.toMatch(/emitter/i);
+    expect(stripCode('const s = state();\ns.emitter.emit(taskId, { type: "done" });\n')).toMatch(
+      /emitter/i,
+    );
   });
 
   it("RunnerState 的初值工厂不再收 EventEmitter，事件形状 TaskEvent 也不存在了", () => {
@@ -111,9 +80,7 @@ describe("进程内事件通道（EventEmitter）已退役", () => {
   });
 
   it("enqueue 不再导出 subscribe（零消费导出的判据由 check-dead-exports 兜）", () => {
-    expect(src("src/lib/comfyui/enqueue.ts")).not.toMatch(
-      /export function subscribe/,
-    );
+    expect(src("src/lib/comfyui/enqueue.ts")).not.toMatch(/export function subscribe/);
   });
 });
 

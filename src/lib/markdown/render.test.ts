@@ -86,9 +86,7 @@ describe("markdownToHtml：XSS 边界", () => {
   });
 
   it("表单类标签被收掉（用户内容里出现表单只有钓鱼一个用途）", () => {
-    const html = markdownToHtml(
-      "<form action='https://evil'><button>x</button></form>",
-    );
+    const html = markdownToHtml("<form action='https://evil'><button>x</button></form>");
     expect(html).not.toContain("<form");
     expect(html).not.toContain("<button");
   });
@@ -99,9 +97,7 @@ describe("markdownToHtml：XSS 边界", () => {
   });
 
   it("SVG / MathML 外壳不被保留（历史高发绕过面）", () => {
-    expect(
-      markdownToHtml("<svg><script>alert(1)</script></svg>"),
-    ).not.toContain("<svg");
+    expect(markdownToHtml("<svg><script>alert(1)</script></svg>")).not.toContain("<svg");
     expect(markdownToHtml("<math><mi>x</mi></math>")).not.toContain("<math");
   });
 
@@ -110,27 +106,19 @@ describe("markdownToHtml：XSS 边界", () => {
      * scheme，`data:` 不在其中）—— 而 `data:image/svg+xml,…` 里的 SVG **可以带脚本**。
      * 这条是本仓库在白名单之外**补的第二件事**（协议白名单，见 `sanitize-config.ts`），
      * 所以必须有一条用例钉住它，而不是靠「DOMPurify 应该挡住了吧」。 */
-    const img = markdownToHtml(
-      "![x](data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=)",
-    );
+    const img = markdownToHtml("![x](data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=)");
     expect(img).not.toContain("data:");
     expect(img).not.toContain("src=");
     expect(img).toContain("<img");
-    const link = markdownToHtml(
-      "[x](data:text/html,<script>alert(1)</script>)",
-    );
+    const link = markdownToHtml("[x](data:text/html,<script>alert(1)</script>)");
     expect(link).not.toContain("data:");
   });
 
   it("协议白名单放行相对路径 / 锚点 / http(s) / mailto", () => {
     expect(markdownToHtml("[a](./rel.md)")).toContain('href="./rel.md"');
     expect(markdownToHtml("[a](#anchor)")).toContain('href="#anchor"');
-    expect(markdownToHtml("[a](https://e.com/x)")).toContain(
-      'href="https://e.com/x"',
-    );
-    expect(markdownToHtml("[a](mailto:x@e.com)")).toContain(
-      'href="mailto:x@e.com"',
-    );
+    expect(markdownToHtml("[a](https://e.com/x)")).toContain('href="https://e.com/x"');
+    expect(markdownToHtml("[a](mailto:x@e.com)")).toContain('href="mailto:x@e.com"');
   });
 
   it("协议白名单在 DOMPurify 归一之后跑：java\tscript: 这类绕过同样被剥", () => {
@@ -250,13 +238,8 @@ describe("loadMarkdownRenderer —— 按需取渲染器", () => {
   });
 
   it("与静态出口同源：两条路径的产物逐字相同", async () => {
-    const [lazy, statically] = await Promise.all([
-      loadMarkdownRenderer(),
-      import("./render"),
-    ]);
-    const sample = ["# 标题", "", "正文 **粗** 与 `代码`", "", "- 一项"].join(
-      "\n",
-    );
+    const [lazy, statically] = await Promise.all([loadMarkdownRenderer(), import("./render")]);
+    const sample = ["# 标题", "", "正文 **粗** 与 `代码`", "", "- 一项"].join("\n");
     expect(lazy.markdownToHtml(sample)).toBe(statically.markdownToHtml(sample));
     expect(lazy.renderMarkdown(sample)).toBe(statically.renderMarkdown(sample));
   });

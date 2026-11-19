@@ -2,7 +2,7 @@
 
 > 这份指南回答一个问题：**仓库搬到 Windows 开发盘之后，怎么把这块盘的红利吃满。**
 > 结论不写死在文档里 —— 每一条都由 `pnpm dev:drive` 实测当前这台机器后给出
-> （入口 `scripts/dev-drive-tune.mjs`，探测层 `scripts/dev-drive-probe.mjs`，
+> （入口 `scripts/dev-drive/dev-drive-tune.mjs`，探测层 `scripts/dev-drive/dev-drive-probe.mjs`，
 > Windows 双击入口 `tools/start/tune-dev-drive.ps1`）。
 
 ---

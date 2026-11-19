@@ -1,6 +1,7 @@
 // review-types 纯逻辑单测（Phase 8 · P8-1a）：评审判定的宽容解析 + 通用写回 reducer。
 import { describe, expect, it } from "vitest";
 
+import { asRecord } from "~/lib/is-record";
 import {
   applyHumanRating,
   applyHumanVerdict,
@@ -137,15 +138,12 @@ describe("applyReview", () => {
       { id: "a", prompt: "p" },
       { id: "b", name: "角色" },
     ];
-    /* SAFETY: 类型断言已复核 */
-    const out = applyReview(entities, "b", verdict) as Array<Record<string, unknown>>;
+    const out = applyReview(entities, "b", verdict);
     expect(out[0]).toBe(entities[0]);
     expect(out[1]).not.toBe(entities[1]);
-    expect(out[1]!.review).toEqual(verdict);
+    expect(asRecord(out[1])?.review).toEqual(verdict);
     // 不改原入参（不可变）
-    expect(
-      /* SAFETY: 类型断言已复核 */ (entities[1] as Record<string, unknown>).review,
-    ).toBeUndefined();
+    expect(asRecord(entities[1])?.review).toBeUndefined();
   });
 
   it("无命中 / 非记录项 → 原样返回入参引用（调用方据此判断无需落库）", () => {
@@ -168,38 +166,27 @@ describe("applyReview", () => {
       scoredAt: "t2",
       scores: { 画面: { score: 4, note: "好了" } },
     };
-    /* SAFETY: 类型断言已复核 */
-    const out = applyReview(applyReview([{ id: "a" }], "a", first), "a", second) as Array<
-      Record<string, unknown>
-    >;
-    expect(out[0]?.review).toEqual(second);
+    const out = applyReview(applyReview([{ id: "a" }], "a", first), "a", second);
+    const record = asRecord(out[0]);
+    expect(record?.review).toEqual(second);
     // history 只存「本轮之前」的判定；曲线 = [...reviewHistory, review]（旧→新）
-    expect(out[0]?.reviewHistory).toEqual([first]);
-    expect([
-      /* SAFETY: 类型断言已复核 */
-      ...(out[0]?.reviewHistory as Array<ReviewVerdict>),
-      second,
-    ]).toEqual([first, second]);
+    expect(record?.reviewHistory).toEqual([first]);
   });
 
   it("轮次历史：旧判定无效（缺 pass）时不塞垃圾；历史超上限从头裁剪", () => {
     let entities: Array<unknown> = [{ id: "a", review: { nope: true } }];
     entities = applyReview(entities, "a", verdict);
-    expect(
-      /* SAFETY: 类型断言已复核 */ (entities[0] as Record<string, unknown>).reviewHistory,
-    ).toBeUndefined();
+    expect(asRecord(entities[0])?.reviewHistory).toBeUndefined();
 
     let chain: Array<unknown> = [{ id: "a" }];
     for (let i = 0; i < 12; i++) {
       chain = applyReview(chain, "a", { ...verdict, scoredAt: `t${i}` });
     }
-    /* SAFETY: 类型断言已复核 */
-    /* SAFETY: 类型断言已复核 */
-    const history = (chain[0] as Record<string, unknown>).reviewHistory as Array<ReviewVerdict>;
+    const historyRaw = asRecord(chain[0])?.reviewHistory;
+    const history = Array.isArray(historyRaw) ? historyRaw : [];
     expect(history).toHaveLength(9); // REVIEW_HISTORY_LIMIT
-    expect(history[0]?.scoredAt).toBe("t2"); // 最早的 2 轮被裁掉
-    /* SAFETY: 类型断言已复核 */
-    expect((chain[0] as Record<string, unknown>).review).toMatchObject({
+    expect(asRecord(history[0])?.scoredAt).toBe("t2"); // 最早的 2 轮被裁掉
+    expect(asRecord(chain[0])?.review).toMatchObject({
       scoredAt: "t11",
     });
   });
@@ -215,7 +202,6 @@ describe("applyImageReview / getRecordImageReview（P8-2 视觉评审写回）",
   };
 
   it("写回 shot.imageReview，不污染 shot.review（两者独立）", () => {
-    /* SAFETY: 类型断言已复核 */
     const out = applyImageReview(
       [
         {
@@ -225,9 +211,10 @@ describe("applyImageReview / getRecordImageReview（P8-2 视觉评审写回）",
       ],
       "a",
       verdict,
-    ) as Array<Record<string, unknown>>;
-    expect(out[0]?.imageReview).toEqual(verdict);
-    expect(out[0]?.review).toEqual({
+    );
+    const record = asRecord(out[0]);
+    expect(record?.imageReview).toEqual(verdict);
+    expect(record?.review).toEqual({
       pass: true,
       issues: [],
       suggestion: "",
@@ -305,6 +292,29 @@ describe("剧本评审位 · 改写留档与低分维度（#2478）", () => {
     expect(dirty.revisions).toEqual([{ at: "t2", markdown: "ok" }]);
   });
 
+  it("维度分解析只收「有限数字分 + 非空 key」，其余条目丢弃（不抛）", () => {
+    /* 模型给回的 JSON 是自由形状：key 全空白、分不是数字、分是 NaN、条目不是对象
+       都在真机上出现过。宽容口径是「丢掉这一条」，不是让整份判定读不出来。 */
+    const v = normalizeReviewVerdict({
+      pass: true,
+      issues: [],
+      suggestion: "",
+      scoredAt: "t",
+      scores: {
+        "  ": { score: 3, note: "" },
+        broken: "不是对象",
+        nan: { score: Number.NaN, note: "" },
+        ok: { score: 9, note: " 越界夹取 " },
+      },
+    });
+    expect(v?.scores).toEqual({ ok: { score: 5, note: "越界夹取" } });
+    // 一条可用的都没有 → 整层按「未评分」缺席
+    expect(
+      normalizeReviewVerdict({ pass: true, issues: [], suggestion: "", scoredAt: "t", scores: {} })
+        ?.scores,
+    ).toBeUndefined();
+  });
+
   it("weakScoreEntries：低分维度升序（最差先改）；未评分 → 空数组", () => {
     expect(weakScoreEntries(verdict)).toEqual([{ key: "structure", score: 2, note: "无高潮" }]);
     expect(
@@ -369,12 +379,12 @@ describe("人工裁决 / 人评分（#2480）", () => {
         imageReview: { pass: true, issues: [], suggestion: "", scoredAt: "y" },
       },
     ];
-    /* SAFETY: 类型断言已复核 */
-    const out = applyHumanVerdict(entities, "a", verdict) as Array<Record<string, unknown>>;
-    expect(out[0]?.humanVerdict).toEqual(verdict);
+    const out = applyHumanVerdict(entities, "a", verdict);
+    const record = asRecord(out[0]);
+    expect(record?.humanVerdict).toEqual(verdict);
     // AI 的两套判定原样保留
-    expect(out[0]?.review).toMatchObject({ pass: true });
-    expect(out[0]?.imageReview).toMatchObject({ pass: true });
+    expect(record?.review).toMatchObject({ pass: true });
+    expect(record?.imageReview).toMatchObject({ pass: true });
     expect(applyHumanVerdict(entities, "missing", verdict)).toBe(entities);
   });
 
@@ -395,16 +405,8 @@ describe("人工裁决 / 人评分（#2480）", () => {
 
   it("applyHumanRating：写 / 清（null）；无命中原样返回入参引用", () => {
     const entities = [{ id: "a" }];
-    expect(
-      /* SAFETY: 类型断言已复核 */ (
-        applyHumanRating(entities, "a", 4) as Array<Record<string, unknown>>
-      )[0]?.humanRating,
-    ).toBe(4);
-    expect(
-      /* SAFETY: 类型断言已复核 */ (
-        applyHumanRating(entities, "a", null) as Array<Record<string, unknown>>
-      )[0]?.humanRating,
-    ).toBeNull();
+    expect(asRecord(applyHumanRating(entities, "a", 4)[0])?.humanRating).toBe(4);
+    expect(asRecord(applyHumanRating(entities, "a", null)[0])?.humanRating).toBeNull();
     expect(applyHumanRating(entities, "missing", 4)).toBe(entities);
   });
 

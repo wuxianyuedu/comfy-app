@@ -6,6 +6,11 @@ import { readStorageJson, writeStorageItem } from "~/lib/browser-storage";
 
 export type GroupStyle = "split" | "preset";
 
+/** 下拉回抛的 `string` → `GroupStyle` 白名单收窄；非法值保持原样（不触发切换）。 */
+function isGroupStyle(value: string): value is GroupStyle {
+  return value === "split" || value === "preset";
+}
+
 const STYLE_PREFIX = "comfyapp:wf-group-style:v1";
 
 export function loadGroupStyle(workflowId: string | undefined, groupId: string): GroupStyle {
@@ -38,13 +43,17 @@ export function StyleSwitcher({
     <div className="flex items-center gap-2">
       <span className="text-ink-muted text-3xs shrink-0">录入方式</span>
       <SelectMenu
-        className={narrow ? "w-37 max-w-full" : ""}
+        className={narrow === true ? "w-37 max-w-full" : ""}
         /* 宽档要「占满剩下的宽度」——那是`fullWidth`，不是`flex-1`：
          *`flex-1` 改的是 flex 项的伸缩，而触发器自身仍是内容宽，
          * 旁边的兄弟一变长它就被挤回内容宽。 */
-        fullWidth={!narrow}
+        fullWidth={narrow !== true}
         labels={Object.fromEntries(options.map((option) => [option.value, option.label]))}
-        onChange={(value) => onChange(/* SAFETY: 类型断言已复核 */ value as GroupStyle)}
+        onChange={(value) => {
+          if (isGroupStyle(value)) {
+            onChange(value);
+          }
+        }}
         options={options.map((option) => option.value)}
         value={style}
       />

@@ -4,6 +4,7 @@ import {
   Puzzle,
   Flame,
   FolderOpen,
+  FolderGit2,
   Lock,
   Sparkles,
   Image as ImageIcon,
@@ -60,6 +61,10 @@ import {
   LayoutGrid,
   Play,
   Film,
+  Database,
+  HardDrive,
+  Monitor,
+  Save,
   type LucideIcon,
   type LucideProps,
 } from "lucide-react";
@@ -67,12 +72,7 @@ import type { ComponentType } from "react";
 
 import { type OmitOwnProps, splitDomProps } from "~/lib/dom-props";
 
-/**
- * 字符串键 → lucide 图标映射。
- * UI 数据（技能、画布节点类型、创建面板类别、工坊页签、
- * API 响应）只带字符串键，所以解析器让
- * 数据模型保持可序列化，同时前端渲染扁平 SVG 图标。
- */
+/** 字符串键 → lucide 图标映射。UI 数据（技能、画布节点类型、创建面板类别、工坊页签、API 响应）只带字符串键，所以解析器让数据模型保持可序列化，同时前端渲染扁平 SVG 图标。 */
 const ICON_MAP: Record<string, LucideIcon> = {
   palette: Palette,
   film: Clapperboard,
@@ -140,6 +140,15 @@ const ICON_MAP: Record<string, LucideIcon> = {
   grid: LayoutGrid,
   play: Play,
   movie: Film,
+  /* 「数据存在哪儿」的存放位置类别（ISSUE #3625）：这几枚键是
+   * `~/lib/data-location/data-locations` 登记本体里引用的图标键 ——
+   * 键写错时 `Icon` 会**静默不渲染**（未知键返回 null），所以那一侧有用例
+   * 钉住「每个类别都真的画得出来」。 */
+  database: Database,
+  foldergit2: FolderGit2,
+  harddrive: HardDrive,
+  monitor: Monitor,
+  save: Save,
 };
 
 /** 本基元的**私有字段**（自己接管，不透传给底层图标组件）——
@@ -162,7 +171,8 @@ export function Icon(props: IconProps) {
   const { own, rest } = splitDomProps(props, OWN_PROPS);
   const name = own.name;
   const size = own.size ?? 16;
-  const Cmp: LucideIcon | undefined = name ? ICON_MAP[name.toLowerCase()] : undefined;
+  const Cmp: LucideIcon | undefined =
+    name !== undefined && name !== null && name !== "" ? ICON_MAP[name.toLowerCase()] : undefined;
   if (!Cmp) {
     return null;
   }

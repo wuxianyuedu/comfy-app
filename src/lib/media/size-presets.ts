@@ -78,97 +78,22 @@ const dims = (width: number, height: number): SizeDims => ({ width, height });
 /* ── 默认表 ──
  * 图片场景：AI 出图 / 通用场景，长边约 1024 / 2048 / 3840~4096。
  * 视频场景：显示器 / 视频行业标准，1K 俗称 = 1280×720、2K = 2560×1440、
- *          4K UHD = 3840×2160；超宽档按行业常见值单列。 */
-const DEFAULT_IMAGE_TABLE: SceneResolutionTable = {
-  "1:1 正方": {
-    "1k": dims(1024, 1024),
-    "2k": dims(2048, 2048),
-    "4k": dims(3840, 3840),
-  },
-  "4:3": {
-    "1k": dims(1024, 768),
-    "2k": dims(2048, 1536),
-    "4k": dims(4096, 3072),
-  },
-  "3:2": {
-    "1k": dims(1024, 683),
-    "2k": dims(2048, 1365),
-    "4k": dims(4096, 2731),
-  },
-  "16:9 横屏": {
-    "1k": dims(1024, 576),
-    "2k": dims(2048, 1152),
-    "4k": dims(3840, 2160),
-  },
-  "21:9 超宽": {
-    "1k": dims(1195, 512),
-    "2k": dims(2560, 1080),
-    "4k": dims(5120, 2160),
-  },
-  "3:4": {
-    "1k": dims(768, 1024),
-    "2k": dims(1536, 2048),
-    "4k": dims(3072, 4096),
-  },
-  "2:3": {
-    "1k": dims(683, 1024),
-    "2k": dims(1365, 2048),
-    "4k": dims(2731, 4096),
-  },
-  "9:16 竖屏": {
-    "1k": dims(576, 1024),
-    "2k": dims(1152, 2048),
-    "4k": dims(2160, 3840),
-  },
-};
+ *          4K UHD = 3840×2160；超宽档按行业常见值单列。
+ *
+ * 这份基线**住在入库的 JSON 里**（`size-preset-defaults.json`，ISSUE #3948）：
+ * 设置页「保存到项目代码库」写的就是它，提交后每个检出与每个桌包都是同一份。
+ * 静态 import（不走 fs）—— 编译进产物后读到的就是这份快照，与写回侧
+ * （`size-preset.server.ts` 落 `SIZE_PRESET_DEFAULTS_REL_PATH`）指向同一份文件，
+ * 与「侧栏页签行为」「模式契约」的项目默认同一套口径。 */
+import defaultsJson from "./size-preset-defaults.json";
 
-const DEFAULT_VIDEO_TABLE: SceneResolutionTable = {
-  "1:1 正方": {
-    "1k": dims(1024, 1024),
-    "2k": dims(2048, 2048),
-    "4k": dims(3840, 3840),
-  },
-  "4:3": {
-    "1k": dims(1280, 960),
-    "2k": dims(2048, 1536),
-    "4k": dims(4096, 3072),
-  },
-  "3:2": {
-    "1k": dims(1280, 854),
-    "2k": dims(2560, 1707),
-    "4k": dims(3840, 2560),
-  },
-  "16:9 横屏": {
-    "1k": dims(1280, 720),
-    "2k": dims(2560, 1440),
-    "4k": dims(3840, 2160),
-  },
-  "21:9 超宽": {
-    "1k": dims(1280, 540),
-    "2k": dims(2560, 1080),
-    "4k": dims(5120, 2160),
-  },
-  "3:4": {
-    "1k": dims(960, 1280),
-    "2k": dims(1536, 2048),
-    "4k": dims(2880, 3840),
-  },
-  "2:3": {
-    "1k": dims(854, 1280),
-    "2k": dims(1707, 2560),
-    "4k": dims(2560, 3840),
-  },
-  "9:16 竖屏": {
-    "1k": dims(720, 1280),
-    "2k": dims(1440, 2560),
-    "4k": dims(2160, 3840),
-  },
-};
-
-export const DEFAULT_SIZE_PRESET_TABLE: SizePresetTable = {
-  image: DEFAULT_IMAGE_TABLE,
-  video: DEFAULT_VIDEO_TABLE,
-};
+/** 项目默认那份（跟代码走的那份基线）：由入库 JSON 解析而来，逐格校验过。
+ *
+ *  它同时是**编译进产物的快照**（正式包没有源码，读到的就是这份）与**本机覆盖的
+ *  基准**（`mergeSizePresetTable` 的默认基准）。开发检出里磁盘上那份可能被
+ *  「保存到项目代码库」改过 —— 那时读侧现读磁盘（`size-preset.server.ts`），
+ *  写完即生效，不必重启进程（与「模式契约」#3634 同一口径）。 */
+export const DEFAULT_SIZE_PRESET_TABLE: SizePresetTable = parseSizePresetDefaults(defaultsJson);
 
 /** 场景的显示名。 */
 export const SIZE_SCENE_LABELS: Record<SizeScene, string> = {
@@ -401,11 +326,11 @@ export const CLARITY_SUBGROUP_LABELS: Record<ClarityKind, string> = {
  *  常用档位 —— 界面上的步进器与外部 JSON 都能给出 2.5 这样的值。解析不出返回
  *  null（`"1k"` / `""` / 乱串），由调用方决定怎么回退。 */
 export function parseMegapixelLabel(label: string): number | null {
-  const match = /^(\d+(?:\.\d+)?)\s*M$/i.exec(label.trim());
+  const match = /^(?<value>\d+(?:\.\d+)?)\s*M$/i.exec(label.trim());
   if (!match) {
     return null;
   }
-  const value = Number(match[1]);
+  const value = Number(match.groups?.value);
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
@@ -603,21 +528,24 @@ export function sizeSpecMultiple(
   return normalizeAlignMultiple(spec.multiple);
 }
 
-/** 尺寸表达 → 远端通道认的「比例 + 百万像素 + 倍数」三元组。
+/** 尺寸表达 → 远端通道认的「比例 + 百万像素（+ 分辨率档）+ 倍数」。
  *
  *  只认这个形状的是 OpenAI 兼容图像的通道（`aspect_ratio` / `megapixels` /
  *  `multiple` 三个字段名），与只认 `"WxH"` 的老接口是两套口径，同源在这里
  *  算 —— 两边各拼一次就会漂移（比例取短标签、百万像素取实际总像素还是幂次
- *  近似，任一处不同就是「设置页显示 A、请求发的是 B」）。 */
+ *  近似，任一处不同就是「设置页显示 A、请求发的是 B」）。
+ *  `resolution`（ISSUE #3622）：选「分辨率」表达时带档位名（"1k"/"2k"/"4k"），
+ *  让原生认档位的接口直接映射；百万像素档为 undefined（它没有档位概念）。 */
 export function sizeSpecToRelay(
   spec: SizeSpec,
   scene: SizeScene = "image",
   table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
-): { aspectRatio: string; megapixels: string; multiple: AlignMultiple } {
+): { aspectRatio: string; megapixels: string; multiple: AlignMultiple; resolution?: string } {
   return {
     aspectRatio: sizeSpecAspect(spec),
     megapixels: String(sizeSpecMegapixels(spec, scene, table)),
     multiple: sizeSpecMultiple(spec, scene, table),
+    ...(resolutionTierOfLabel(spec.clarity) === null ? {} : { resolution: spec.clarity }),
   };
 }
 
@@ -690,12 +618,12 @@ export function parseSizeText(text: unknown): SizeDims | null {
   if (typeof text !== "string" || !text.trim()) {
     return null;
   }
-  const match = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(text.trim());
+  const match = /^(?<width>\d+)\s*[xX×]\s*(?<height>\d+)$/.exec(text.trim());
   if (!match) {
     return null;
   }
-  const width = Number(match[1]);
-  const height = Number(match[2]);
+  const width = Number(match.groups?.width);
+  const height = Number(match.groups?.height);
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     return null;
   }
@@ -726,7 +654,7 @@ export function toSizeSpec(raw: unknown): SizeSpec {
   if (typeof raw === "string") {
     return sizeSpecFromText(raw);
   }
-  if (raw && typeof raw === "object") {
+  if (raw !== null && raw !== undefined && typeof raw === "object") {
     return normalizeSizeSpec(raw);
   }
   return { ...DEFAULT_SIZE_SPEC };
@@ -765,7 +693,7 @@ export function aspectLabelForDims(
       const optionRatio = parseRatioFromText(option);
       return optionRatio !== null && Math.abs(optionRatio - preset.ratio) / preset.ratio < 0.02;
     });
-    if (hit) {
+    if (hit !== undefined) {
       return hit;
     }
   }
@@ -774,22 +702,30 @@ export function aspectLabelForDims(
 
 /** 从自由文本里解出宽高比（`"16:9 (Widescreen)"` → 16/9）；解不出返回 null。 */
 export function parseRatioFromText(text: string): number | null {
-  const match = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(text);
+  const match = /(?<width>\d+(?:\.\d+)?)\s*[:x×]\s*(?<height>\d+(?:\.\d+)?)/.exec(text);
   if (!match) {
     return null;
   }
-  const w = Number(match[1]);
-  const h = Number(match[2]);
+  const w = Number(match.groups?.width);
+  const h = Number(match.groups?.height);
   if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
     return null;
   }
   return w / h;
 }
 
-/** 某场景的表相对默认值是否被改过（配置界面据此显示「已改」与恢复入口）。 */
-export function sceneIsModified(scene: SizeScene, table: SizePresetTable): boolean {
+/** 某场景的表相对默认值是否被改过（配置界面据此显示「已改」与恢复入口）。
+ *
+ *  基准**可传**（默认是项目默认那份）：项目默认被「保存到项目代码库」改过之后，
+ *  「已改」的判据要跟着那份新基线走，否则界面会把没改过的格子也标成已改。
+ */
+export function sceneIsModified(
+  scene: SizeScene,
+  table: SizePresetTable,
+  base: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): boolean {
   const current = table[scene];
-  const fallback = DEFAULT_SIZE_PRESET_TABLE[scene];
+  const fallback = base[scene];
   for (const preset of SIZE_RATIO_PRESETS) {
     for (const tier of RESOLUTION_TIERS) {
       const a = current[preset.label]?.[tier];
@@ -831,3 +767,120 @@ export function resolutionTierOf(
   }
   return best;
 }
+
+/* ── 校验与逐格合并（ISSUE #3788：覆盖表落应用数据文件，读取侧逐格回退默认）──
+ * 纯函数、无 IO：客户端 store 与服务端存储模块共用同一份判据。 */
+
+/** 单格宽高是否合法（正整数且在常识范围内；非法值逐格回退默认）。 */
+function isValidDims(value: unknown): value is SizeDims {
+  if (!isPlainRecord(value)) {
+    return false;
+  }
+  const width = value.width;
+  const height = value.height;
+  return (
+    typeof width === "number" &&
+    typeof height === "number" &&
+    Number.isFinite(width) &&
+    Number.isFinite(height) &&
+    width > 0 &&
+    height > 0
+  );
+}
+
+/** 单场景逐格合并：默认表打底，合法覆盖项才生效。 */
+function mergeSceneTable(fallback: SceneResolutionTable, raw: unknown): SceneResolutionTable {
+  const out: SceneResolutionTable = {};
+  const record = isPlainRecord(raw) ? raw : {};
+  for (const preset of SIZE_RATIO_PRESETS) {
+    const fallbackRow = fallback[preset.label];
+    const rawRow = isPlainRecord(record[preset.label]) ? record[preset.label] : undefined;
+    const row: Record<ResolutionTier, SizeDims> = {
+      "1k": { width: 1024, height: 1024 },
+      "2k": { width: 1024, height: 1024 },
+      "4k": { width: 1024, height: 1024 },
+    };
+    for (const tier of RESOLUTION_TIERS) {
+      const candidate = isPlainRecord(rawRow) ? rawRow[tier] : undefined;
+      row[tier] = isValidDims(candidate)
+        ? {
+            width: Math.round(candidate.width),
+            height: Math.round(candidate.height),
+          }
+        : { ...(fallbackRow?.[tier] ?? { width: 1024, height: 1024 }) };
+    }
+    out[preset.label] = row;
+  }
+  return out;
+}
+
+/** 记录形状的收窄（P41 不允许视图/库层自写名为 isRecord 的函数，换个名字同语义）。 */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/** 空表：给「查不到就按长边算」的兜底路径用（`resolutionDims` 查不到行时走那条）。 */
+const EMPTY_TABLE: SizePresetTable = { image: {}, video: {} };
+
+/**
+ * 项目默认那份（入库 JSON）的解析：逐格校验，坏格回退到**算出来的**默认值。
+ *
+ * 为什么坏格还能兜底：长边口径是死的（1k = 1024、2k = 2048、4k = 3840），按比例
+ * 一除就是那一格 —— 与 `resolutionDims` 的兜底同一条口径。于是文件被手改坏时界面
+ * 仍有可用的宽高，而不是整张表空掉。
+ *
+ * 这份 JSON 是**项目默认的唯一出处**（ISSUE #3948：设置页「保存到项目代码库」
+ * 写的就是它），所以它坏掉的概率不为零 —— 读侧与写侧都要能扛住。
+ */
+export function parseSizePresetDefaults(raw: unknown): SizePresetTable {
+  const record = isPlainRecord(raw) ? raw : {};
+  const out: SizePresetTable = { image: {}, video: {} };
+  for (const scene of ["image", "video"] as const) {
+    const sceneValue = record[scene];
+    const sceneRaw = isPlainRecord(sceneValue) ? sceneValue : {};
+    const table: SceneResolutionTable = {};
+    for (const preset of SIZE_RATIO_PRESETS) {
+      const rowValue = sceneRaw[preset.label];
+      const rowRaw = isPlainRecord(rowValue) ? rowValue : {};
+      /* 三个档位逐个写出来（键名写死但**由类型兜住**：档位表多一档，这里就红 ——
+         少写一格会静默留个空档）。 */
+      const row: Record<ResolutionTier, SizeDims> = {
+        "1k": { width: 0, height: 0 },
+        "2k": { width: 0, height: 0 },
+        "4k": { width: 0, height: 0 },
+      };
+      for (const tier of RESOLUTION_TIERS) {
+        const candidateValue = rowRaw[tier];
+        const candidate = isPlainRecord(candidateValue) ? candidateValue : undefined;
+        row[tier] = isValidDims(candidate)
+          ? { width: Math.round(candidate.width), height: Math.round(candidate.height) }
+          : resolutionDims(scene, preset.ratio, tier, EMPTY_TABLE);
+      }
+      table[preset.label] = row;
+    }
+    out[scene] = table;
+  }
+  return out;
+}
+
+/** 覆盖表逐格合并：基准表打底，合法覆盖项才生效；缺行、缺档、改坏的值一律回退基准
+ *  （ISSUE #3788）。
+ *
+ *  基准**可传**（默认是项目默认那份）：本机覆盖是相对**当前项目默认**算的 —— 项目
+ *  默认被「保存到项目代码库」改过之后，基准必须跟着变，否则还原会回到旧值。
+ */
+export function mergeSizePresetTable(
+  raw: unknown,
+  base: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): SizePresetTable {
+  const record = isPlainRecord(raw) ? raw : {};
+  return {
+    image: mergeSceneTable(base.image, record.image),
+    video: mergeSceneTable(base.video, record.video),
+  };
+}
+
+/* ── 差集覆盖（ISSUE #3973）──
+ * 本机覆盖只记「这台机器上真的改过的那几格」，与侧栏页签行为 / 模式契约同一口径。
+ * 实现拆在 `size-presets-diff.ts`（本文件超出 900 行的文件长度硬闸拆出；纯函数，
+ * 依赖本模块的常量与类型，单向不回环）。 */

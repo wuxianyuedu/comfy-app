@@ -1,11 +1,7 @@
 "use client";
-/* 子图封装节点的非 STRING widget 行 —— 标签 | 值框 两格行；行跨满两列并
- * 借用父 grid 的列轨道（subgrid），标签列宽 = 全部行里最长参数名，
- * 值框起点逐行一致。值格按 widget 类型三分支：
- *   • 图片类（IMAGE / MASK / IMAGEUPLOAD）→ 缩略图；
- *   • COMBO（带候选清单）→ 只读 SelectMenu；
- *   • 其余 → 「凹陷井」文本值。
- */
+/* 子图封装节点的非 STRING widget 行：标签 | 值框两格行，行跨满两列并借用父 grid 的列轨道（subgrid）；
+ * 标签列宽 = 最长参数名，值框起点逐行一致。
+ * 值格按类型分支：IMAGE/MASK/IMAGEUPLOAD → 缩略图；COMBO → 只读 SelectMenu；其余 → 凹陷井文本。 */
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -14,10 +10,7 @@ import { mediaPreviewUrl } from "~/lib/media/media-url";
 import { renderSubgraphWidgetValue, valueCellColor } from "../workflow-utils";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { RawInputMeta } from "../workflow-types";
-
-/** COMBO 输入额外携带自己的候选清单（由导入管线盖章；
- *  不属于共享的 RawInputMeta 契约）。 */
-type ComboInputMeta = RawInputMeta & { comboOptions?: unknown };
+import { Hint } from "~/components/ui/hint";
 
 type SubgraphWidgetRowProps = {
   hostNodeId?: string;
@@ -29,13 +22,20 @@ type SubgraphWidgetRowProps = {
 
 export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: SubgraphWidgetRowProps) {
   const v: unknown = inp.widgetValue;
+  /* COMBO 输入额外携带自己的候选清单（由导入管线盖章；
+   *  不属于共享的 RawInputMeta 契约）—— 运行时按键存在性读取。 */
+  const comboOptions: unknown = "comboOptions" in inp ? inp.comboOptions : undefined;
+  const hasComboOptions = Array.isArray(comboOptions) && comboOptions.length > 0;
+  const comboOptionStrings: Array<string> = Array.isArray(comboOptions)
+    ? comboOptions.filter((option): option is string => typeof option === "string")
+    : [];
   const isConn = inp.isConnection === true || inp.isBoundary === true;
   /* 图片类 widget（IMAGE / MASK / IMAGEUPLOAD）：画布上也要把选中的图
    *  显示出来 —— 此前这类 widget 只渲染成纯文本值（甚至因为值是 ComfyUI
    *  的 `{filename,subfolder,type}` 对象 / 数组而显示成 `[object Object]`），
    *  于是「封装节点选完图在界面上完全看不到」（实测反馈）。这里按类型
    *  切到缩略图；`mediaPreviewUrl` 同时吃字符串与这两种对象 / 数组形态。 */
-  const isImageType = ["IMAGE", "MASK", "IMAGEUPLOAD"].includes(inp.type ?? "");
+  const isImageType = ["IMAGE", "MASK", "IMAGEUPLOAD"].includes(inp.type);
   const previewUrl = isImageType ? mediaPreviewUrl(v) : null;
   const typeCol = portColor(inp.type);
   return (
@@ -68,7 +68,7 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
        *  `max-content` 轨道按**所有行里最长的参数名**统一裁决，
        *  值框因此共享同一起点 x。 */}
       <div className="flex min-w-0 items-center gap-1.5">
-        {io?.ioEditMode && !isConn && (
+        {io?.ioEditMode === true && !isConn && (
           <IoCheckbox
             io={io}
             ioRef={{
@@ -80,17 +80,18 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
             }}
           />
         )}
-        <span
-          /* 去掉 `truncate`：让长的封装 widget 标签换成多行
-           *  而不是被裁掉；完整文本仍可从原生 `title` 看到。 */
-          className="text-2xs min-w-0 text-left wrap-break-word whitespace-normal"
-          style={{
-            color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
-          }}
-          title={label}
-        >
-          {label}
-        </span>
+        <Hint label={label}>
+          <span
+            /* 去掉 `truncate`：让长的封装 widget 标签换成多行
+             *  而不是被裁掉；完整文本仍可从原生 `title` 看到。 */
+            className="text-2xs min-w-0 text-left wrap-break-word whitespace-normal"
+            style={{
+              color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
+            }}
+          >
+            {label}
+          </span>
+        </Hint>
       </div>
       {isImageType ? (
         /* 图片类 widget 在画布上直接渲染缩略图（否则只显示成文本值，
@@ -104,12 +105,7 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
           fallback="none"
           src={previewUrl}
         />
-      ) : inp.type === "COMBO" &&
-        /* SAFETY: 类型断言已复核 */
-        Array.isArray((inp as ComboInputMeta).comboOptions) &&
-        /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
-          (inp as ComboInputMeta).comboOptions as Array<unknown>
-        ).length > 0 ? (
+      ) : inp.type === "COMBO" && hasComboOptions ? (
         /* 工作流画布上的 COMBO widget 渲染成只读的
          *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
          *  在这里保持禁用（编辑发生在会落盘取值的项目
@@ -120,33 +116,31 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
           disabled
           fullWidth
           onChange={() => undefined}
-          options={
-            /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (inp as ComboInputMeta)
-              .comboOptions as Array<string>
-          }
+          options={comboOptionStrings}
           popoverMinWidth={220}
           value={typeof v === "string" ? v : ""}
         />
       ) : (
-        <span
-          className="text-2xs min-w-0 truncate rounded-[5px] px-1.5 text-left tabular-nums"
-          style={{
-            /* 值框：ComfyUI widget 槽同款「凹陷井」—— 深底 +
-             *  细描边。宽度 = 第 2 列整格（最小 64px，随节点
-             *  余宽伸展），文本左对齐，超长省略（只缩略文字，
-             *  节点宽度仍由用户控制）。颜色按「有没有连线」
-             *  取两档（见 `valueCellColor`）。 */
-            display: "flex",
-            alignItems: "center",
-            minHeight: 18,
-            background: "var(--color-canvas-deep)",
-            border: "1px solid var(--color-border-subtle)",
-            color: valueCellColor(v, isConn),
-          }}
-          title={String(v)}
-        >
-          {renderSubgraphWidgetValue(v)}
-        </span>
+        <Hint label={String(v)}>
+          <span
+            className="text-2xs min-w-0 truncate rounded-[5px] px-1.5 text-left tabular-nums"
+            style={{
+              /* 值框：ComfyUI widget 槽同款「凹陷井」—— 深底 +
+               *  细描边。宽度 = 第 2 列整格（最小 64px，随节点
+               *  余宽伸展），文本左对齐，超长省略（只缩略文字，
+               *  节点宽度仍由用户控制）。颜色按「有没有连线」
+               *  取两档（见 `valueCellColor`）。 */
+              display: "flex",
+              alignItems: "center",
+              minHeight: 18,
+              background: "var(--color-canvas-deep)",
+              border: "1px solid var(--color-border-subtle)",
+              color: valueCellColor(v, isConn),
+            }}
+          >
+            {renderSubgraphWidgetValue(v)}
+          </span>
+        </Hint>
       )}
     </div>
   );

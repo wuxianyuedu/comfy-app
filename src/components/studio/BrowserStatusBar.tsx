@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { FileText, Lock } from "lucide-react";
 import { useLogPanel } from "./logs/LogProvider";
 import { MessageCenterButton } from "~/components/message-center/MessageCenterButton";
+import { FeedbackButton } from "~/components/feedback/FeedbackButton";
 import { useAppServiceMessageLog } from "~/components/message-center/hooks/use-app-service-message-log";
 import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyReadiness } from "./hooks/use-comfy-readiness";
@@ -31,27 +32,11 @@ import { Button } from "~/components/ui/button";
 import { displayValue } from "~/lib/display-value";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 
-/* ── Tauri 窗口底部状态栏 ─────────────────────────
-   显示当前浏览器地址 + 系统资源（显存/内存）+ 实时帧率 + 应用服务状态。
-
-   设计要点：
-   1. 资源占用来自 ComfyUI `/system_stats`（服务端经 `/api/comfy/stats` 代理，
-      客户端由 use-comfy-readiness（内含 useComfyStats 轮询）折叠成显隐谓词；
-      离线时隐藏占用条并给出可见降级提示，不静默消失。
-   2. FPS 由全局 useFps 提供，取代原先画布内的 FpsMeter 悬浮层——画布不再
-      各自叠加一块，改由状态栏统一展示。
-   3. 右侧那一格显示**应用服务（dev server）**状态，不再是 ComfyUI 的连接态。
-      ComfyUI 是可选后端：没装 / 没开 / 没配路径时它一律「未连接」，而这一格
-      读起来像「应用坏了」；反过来应用服务真挂了（页面白屏、查询全失败）时
-      旧状态栏一个字也不说。「显存/内存不可用」本身就是 ComfyUI 没启动的表现，
-      信息重复且误导，故改判据（详见 src/lib/dev-server-status.ts 的 Why 注释）。
-
-   规范 08 §8.4 禁止 monkey-patch history——同步 setState 会在第三方库的
-   useInsertionEffect 阶段触发报错。改用 Next.js usePathname()：路由变化
-   自动 re-render，无需手动拦截。
-   本应用始终运行于 localhost / tauri://，连接恒为安全，故不再维护不安全态。
-   须渲染在 <LogProvider> 内部，日志开关才能工作。
-*/
+/* ── Tauri 窗口底部状态栏：地址 + 系统资源（显存/内存）+ 帧率 + 应用服务状态 ──
+   资源来自 ComfyUI `/system_stats`（经 `/api/comfy/stats` 代理）；右侧那格判**应用服务
+   （dev server）**而非 ComfyUI 连接态 —— ComfyUI 是可选后端，未装/未开一律「未连接」，
+   读起来像应用坏了。路由变化不 monkey-patch history（08 §8.4：同步 setState 会在
+   useInsertionEffect 阶段报错），改读 `usePathname()`；须渲染在 `<LogProvider>` 内。 */
 
 /** HH:mm:ss（重启标记的时间展示）。`null` 由 `displayValue` 统一给占位符。 */
 function fmtClock(t: number | null): string {
@@ -77,11 +62,8 @@ const fpsDotColor: Record<string, string> = {
 
 /**
  * 状态栏里的一项「标签 + 已用/总量 + 百分比」内联项。
- *
- * 三个资源项（显存 / 显存·ComfyUI / 内存）此前**各写一份逐字同形的三层
- * `<span>`** —— 差别只有标签文案与 title，`used/total (pct%)` 那段三份完全
- * 一致。行布局走 `KeyValueRows` 的 `inline`（P17），缺值占位走 `displayValue`
- * （P8）—— 两件事各只写一遍。
+ * 三个资源项（显存 / 显存·ComfyUI / 内存）此前各写一份逐字同形的三层 `<span>`，差别只有
+ * 标签与 title；行布局统一走 `KeyValueRows` 的 `inline`（P17）、缺值占位走 `displayValue`（P8）。
  */
 function UsageItem({
   label,
@@ -120,15 +102,9 @@ function UsageItem({
 }
 
 /**
- * 后台 schema 同步的提示格（数据源 `use-schema-sync-status`）。
- *
- * 为什么值得占一格：启动脚本把 Next 拉起来的**同时**在后台核对/同步库结构
- * （不阻塞启动），同步完成前业务请求可能 500。页面若不说「正在同步」，用户看到
- * 的就是一个报错页，无从判断该等一等还是该去查别的原因 —— 那正是「静默失败」
- * 最贵的形态。
- *
- * 说什么由 `schemaSyncNotice` 判（纯函数，见 hooks/use-schema-sync-status.ts），
- * 这里只把 tone 映射成颜色。
+ * 后台 schema 同步的提示格：启动脚本拉起 Next 的同时后台同步库结构（不阻塞启动），完成前
+ * 业务请求可能 500 —— 不说「正在同步」，用户只看到一个报错页，无从判断该等还是该查。
+ * 文案由 `schemaSyncNotice` 纯函数判定，这里只把 tone 映射成颜色。
  */
 const SCHEMA_TONE_CLASS: Record<SchemaSyncNotice["tone"], string> = {
   info: "text-ink-soft",
@@ -150,7 +126,9 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
       <Hint label={notice.title}>
         <Button
           className={`text-2xs h-auto shrink-0 gap-0 rounded px-1 py-0 hover:underline ${tone}`}
-          onClick={() => window.location.reload()}
+          onClick={() => {
+            window.location.reload();
+          }}
           variant="ghost"
         >
           {notice.text}
@@ -165,7 +143,9 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
           <Button
             className={`text-2xs h-auto shrink-0 gap-1 rounded px-1 py-0 hover:underline ${tone}`}
             disabled={pushing}
-            onClick={() => setConfirming(true)}
+            onClick={() => {
+              setConfirming(true);
+            }}
             variant="ghost"
           >
             {notice.text}
@@ -176,7 +156,9 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
           confirmLabel="同步"
           danger
           description={`${notice.title}\n\n这批变更含「会丢数据」的语句（删列 / 重建表），执行后那些数据无法找回。确认这些数据可以丢弃后再继续。`}
-          onClose={() => setConfirming(false)}
+          onClose={() => {
+            setConfirming(false);
+          }}
           onConfirm={() => {
             setConfirming(false);
             void push();
@@ -189,19 +171,16 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
     );
   }
   return (
-    <span className={`shrink-0 truncate ${tone}`} title={notice.title}>
-      {notice.text}
-    </span>
+    <Hint label={notice.title}>
+      <span className={`shrink-0 truncate ${tone}`}>{notice.text}</span>
+    </Hint>
   );
 }
 
 /**
- * ComfyUI 排队 / 当前执行那一格（数据源 `use-comfy-queue`）。
- *
- * 说什么由 `comfyQueueNotice` 判（纯函数），这里只渲染。它回答的是用户盯着画布
- * 转圈时最想知道的四件事：前面还堵着几个、当前跑了多久、跑的是哪个工作流、哪个
- * 模型 —— 此前这些只散在日志面板里，**耗时更是完全没暴露过**（`startedAt` 只在
- * 任务结束时被算成一句文本日志）。
+ * ComfyUI 排队 / 当前执行那一格（数据源 `use-comfy-queue`）：文案由 `comfyQueueNotice`
+ * 纯函数判定。用户盯着画布转圈时最想知道的四件事 —— 前面堵着几个、当前跑了多久、跑的
+ * 哪个工作流与模型 —— 此前只散在日志面板里，耗时更是从未暴露。
  */
 function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
   const notice = comfyQueueNotice(view);
@@ -228,27 +207,18 @@ function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
 }
 
 /**
- * 「应用服务上一次为什么结束」那一格（数据源 `useDevServerStatus` 的 `exitNotice`）。
- *
- * 为什么值得占一格里**可见的文字**，而不是只挂在右侧那格的 hover 上：状态栏那一格
- * 只有 24px 高、右下角位置窄，而这句话恰恰是用户唯一想问的（ISSUE #1692 原话
- * 「前端需要能知道原因」）。把它塞进 tooltip 等于要求「先猜到自己该悬停」，而
- * 悬停本来就不是可发现的动作。
- *
- * 排版上只放**一句原因**（`why`），把「这一次具体是什么结束的」与「现在该做什么」
- * 留给 `title`：这一格是弹性的、旁边还有排队信息要共存，完整三句会把它们挤掉。
+ * 「应用服务上一次为什么结束」那一格（`useDevServerStatus` 的 `exitNotice`）：这句是用户唯一
+ * 想问的（ISSUE #1692），故占一格可见文字而不塞进 hover —— 悬停不是可发现的动作。排版只放
+ * 一句原因（`why`），细节与「现在该做什么」留给 `title`：这格弹性，旁边还有排队信息共存。
  */
 function DevServerExitItem({ notice }: { notice: AppServiceExitNotice | null }) {
   if (notice === null) {
     return null;
   }
   return (
-    <span
-      className="text-destructive/90 max-w-60 shrink-0 truncate"
-      title={`${notice.why}。${notice.detail}。${notice.action}`}
-    >
-      {notice.why}
-    </span>
+    <Hint label={`${notice.why}。${notice.detail}。${notice.action}`}>
+      <span className="text-destructive/90 max-w-60 shrink-0 truncate">{notice.why}</span>
+    </Hint>
   );
 }
 
@@ -263,22 +233,22 @@ export function BrowserStatusBar() {
    * 用 setTimeout 延迟到 render 提交后 setState，规避 react-hooks/set-state-in-effect。 */
   const [host, setHost] = useState("");
   useEffect(() => {
-    const t = setTimeout(() => setHost(window.location.host), 0);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => {
+      setHost(window.location.host);
+    }, 0);
+    return () => {
+      clearTimeout(t);
+    };
   }, []);
 
   const fps = useFps();
   const { cudaVram, smiVram, ram, degradedNote, stale } = useComfyReadiness();
   const devServer = useDevServerStatus();
-  /* 「应用服务断开 / 启动」记进消息中心（时间 + 原因）。
-   *
-   * 接在**这里**而不是新起一个容器，是因为 `useDevServerStatus()` 是
-   * `useDevServerLiveness()` 的唯一消费方——探活循环全应用只有这一条
-   * （2 秒一拍打 `/api/dev/server-id`）。消息中心要的是同一份事实的**边沿**，
-   * 让它自己再轮一遍等于把探活频率翻倍。
-   *
-   * 位置在早退分支之前：非主应用页签（内嵌 ComfyUI 等）状态下状态栏整体隐藏，
-   * 但记录必须继续——否则「看的是内嵌页面时服务断了一次」就彻底没人记。 */
+  /* 「应用服务断开 / 启动」记进消息中心（时间 + 原因）。接在**这里**而不是新起容器：
+     `useDevServerStatus()` 是 `useDevServerLiveness()` 的唯一消费方（2 秒一拍打
+     `/api/dev/server-id`），消息中心要的是同一份事实的边沿，自己再轮一遍等于探活翻倍。
+     位置在早退分支之前：非主应用页签时状态栏整体隐藏，但记录必须继续，否则「看内嵌页面时
+     服务断了一次」就没人记。 */
   useAppServiceMessageLog({
     state: devServer.state,
     processIsNew: devServer.processIsNew,
@@ -312,9 +282,9 @@ export function BrowserStatusBar() {
       <div className="flex w-42.5 shrink-0 items-center gap-1.5">
         <Lock className="text-success-strong shrink-0" size={11} />
         <span className="text-ink-fainter shrink-0">安全</span>
-        <span className="text-ink-soft truncate" title={host ? `${host}${pathname}` : pathname}>
-          {host ? `${host}${pathname}` : pathname}
-        </span>
+        <Hint label={host ? `${host}${pathname}` : pathname}>
+          <span className="text-ink-soft truncate">{host ? `${host}${pathname}` : pathname}</span>
+        </Hint>
       </div>
 
       {/* ── 第 2 区：ComfyUI 排队/运行信息（弹性，左对齐） ── */}
@@ -327,49 +297,53 @@ export function BrowserStatusBar() {
       </div>
 
       {/* ── 第 3 区：显存 + 内存等资源指标（固定宽度） ── */}
-      <div
-        className={`flex w-125 shrink-0 items-center gap-2.5 transition-opacity ${
-          stale ? "opacity-50" : "opacity-100"
-        }`}
-        title={stale ? STALE_RESOURCE_NOTE : undefined}
-      >
-        {/* 三档资源的标签、口径 title 与「缺值整档隐藏」的判据都在
+      <Hint label={stale ? STALE_RESOURCE_NOTE : undefined}>
+        <div
+          className={`flex w-125 shrink-0 items-center gap-2.5 transition-opacity ${
+            stale ? "opacity-50" : "opacity-100"
+          }`}
+        >
+          {/* 三档资源的标签、口径 title 与「缺值整档隐藏」的判据都在
            `comfy-resource-metrics`（首页算力卡读同一份），这里只负责行内排版。 */}
-        {selectVisibleResourceMetrics({ cudaVram, smiVram, ram }).map(({ descriptor, bar }) => (
-          <UsageItem
-            key={descriptor.key}
-            label={descriptor.label}
-            pct={bar.pct}
-            title={descriptor.title}
-            total={bar.total}
-            used={bar.used}
-          />
-        ))}
+          {selectVisibleResourceMetrics({ cudaVram, smiVram, ram }).map(({ descriptor, bar }) => (
+            <UsageItem
+              key={descriptor.key}
+              label={descriptor.label}
+              pct={bar.pct}
+              title={descriptor.title}
+              total={bar.total}
+              used={bar.used}
+            />
+          ))}
 
-        {/* 降级提示 */}
-        {degradedNote && (
-          <span
-            className="text-warning-strong/90 hidden items-center gap-1 sm:flex"
-            title={degradedNote}
-          >
-            {degradedNote}
-          </span>
-        )}
-      </div>
+          {/* 降级提示 */}
+          {degradedNote !== null && degradedNote !== "" && (
+            <Hint label={degradedNote}>
+              <span className="text-warning-strong/90 hidden items-center gap-1 sm:flex">
+                {degradedNote}
+              </span>
+            </Hint>
+          )}
+        </div>
+      </Hint>
 
       {/* ── 第 4 区：FPS + 消息中心 + 日志 + 应用服务状态（固定宽度，最右） ── */}
-      <div className="flex w-70 shrink-0 items-center justify-end gap-2.5 whitespace-nowrap">
+      <div className="flex w-78 shrink-0 items-center justify-end gap-2.5 whitespace-nowrap">
         {/* 实时帧率 */}
-        <span
-          className="hidden items-center gap-1 md:flex"
-          title="全应用实时帧率：≥50 流畅，30~49 轻微掉帧，<30 明显卡顿"
-        >
-          <span aria-hidden className={`inline-block size-1.5 rounded-full ${fpsDotColor[tone]}`} />
-          <span className={`tabular-nums ${fpsTextColor[tone]}`}>{displayValue(fps)}</span>
-          <span className="text-ink-soft">FPS</span>
-        </span>
+        <Hint label="全应用实时帧率：≥50 流畅，30~49 轻微掉帧，<30 明显卡顿">
+          <span className="hidden items-center gap-1 md:flex">
+            <span
+              aria-hidden
+              className={`inline-block size-1.5 rounded-full ${fpsDotColor[tone]}`}
+            />
+            <span className={`tabular-nums ${fpsTextColor[tone]}`}>{displayValue(fps)}</span>
+            <span className="text-ink-soft">FPS</span>
+          </span>
+        </Hint>
 
         <MessageCenterButton />
+
+        <FeedbackButton />
 
         {/* 纯图标按钮（只有图标与可选的错误计数徽标，没有可见文字）：按 ui/hint 的契约
             传 accessibleName，让提示文案同时成为 aria-label —— 否则读屏只报一颗匿名按钮。 */}
@@ -392,39 +366,48 @@ export function BrowserStatusBar() {
           </Button>
         </Hint>
 
-        <span
-          aria-label={devServer.label}
-          className={`flex items-center gap-1 ${
-            devServer.state === "online"
-              ? "text-success-strong"
-              : devServer.state === "starting"
-                ? "text-ink-soft"
-                : "text-destructive"
-          }`}
-          data-dev-server={devServer.state}
-          title={devServer.title}
-        >
-          <StatusDot
-            className={
+        <Hint label={devServer.title}>
+          <span
+            aria-label={devServer.label}
+            className={`flex items-center gap-1 ${
               devServer.state === "online"
-                ? "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_80%,transparent)]"
+                ? "text-success-strong"
                 : devServer.state === "starting"
-                  ? "bg-ink-fainter"
-                  : "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-danger)_80%,transparent)]"
-            }
-            pulse={devServer.state === "starting"}
-            sizeClass="size-1.5"
-            state={
-              devServer.state === "online" ? "up" : devServer.state === "starting" ? "busy" : "down"
-            }
-          />
-          <span className="hidden sm:inline">{devServer.label}</span>
-          {devServer.lastRestartAt !== null && devServer.state === "online" && (
-            <span className="text-ink-muted hidden lg:inline">
-              · {fmtClock(devServer.lastRestartAt)}
-            </span>
-          )}
-        </span>
+                  ? "text-ink-soft"
+                  : devServer.state === "unresponsive"
+                    ? "text-warning-strong"
+                    : "text-destructive"
+            }`}
+            data-dev-server={devServer.state}
+          >
+            <StatusDot
+              className={
+                devServer.state === "online"
+                  ? "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_80%,transparent)]"
+                  : devServer.state === "starting"
+                    ? "bg-ink-fainter"
+                    : devServer.state === "unresponsive"
+                      ? "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-warning)_80%,transparent)]"
+                      : "shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-danger)_80%,transparent)]"
+              }
+              pulse={devServer.state === "starting"}
+              sizeClass="size-1.5"
+              state={
+                devServer.state === "online"
+                  ? "up"
+                  : devServer.state === "starting" || devServer.state === "unresponsive"
+                    ? "busy"
+                    : "down"
+              }
+            />
+            <span className="hidden sm:inline">{devServer.label}</span>
+            {devServer.lastRestartAt !== null && devServer.state === "online" && (
+              <span className="text-ink-muted hidden lg:inline">
+                · {fmtClock(devServer.lastRestartAt)}
+              </span>
+            )}
+          </span>
+        </Hint>
       </div>
     </div>
   );

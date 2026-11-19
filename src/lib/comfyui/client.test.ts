@@ -30,16 +30,21 @@ vi.mock("~/lib/core/logger", () => ({
 
 import {
   ComfyViewError,
+  getHistory,
   getView,
   resolveComfyBase,
   probeComfyBase,
   resetComfyBase,
   resetProbeMissLog,
+  resetStartingLog,
+  startingLogAction,
   COMFY_PROBE_LOG_REPEAT_MS,
+  COMFY_STARTING_PROGRESS_MS,
 } from "./client";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { resolveComfyLaunchPlan } from "./launch-path";
+import { resetSweepNegativeForTests } from "./sweep-negative-cache";
 import { logger } from "~/lib/core/logger";
 
 const plan = {
@@ -51,10 +56,10 @@ const plan = {
 
 /** 只让指定端口应答 `/system_stats`，其余连接一律拒绝。 */
 function respondOn(ports: Array<number>) {
-  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
+  return vi.spyOn(globalThis, "fetch").mockImplementation((input: unknown) => {
     const url = String(input);
     if (ports.some((p) => url.includes(`:${p}/`))) {
-      return new Response("{}", { status: 200 });
+      return Promise.resolve(new Response("{}", { status: 200 }));
     }
     throw new Error("ECONNREFUSED");
   });
@@ -64,12 +69,21 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetComfyBase();
   resetProbeMissLog();
-  vi.mocked(getSettingsSync).mockReturnValue(
-    /* SAFETY: 类型断言已复核 */ {
-      comfyuiPath: String.raw`D:\Comfy`,
-      comfyuiPort: 8188,
-    } as never,
-  );
+  resetStartingLog();
+  /* 进程表「查无实例」的黏滞是跨用例的 globalThis 状态（与上面三个 reset 同族）：
+   * 前一个用例的「全部落空」不该吃掉后一个用例的扫描断言（ISSUE #4195）。 */
+  resetSweepNegativeForTests();
+  vi.mocked(getSettingsSync).mockReturnValue({
+    autoSyncLocalWorkflow: false,
+    comfyCliPython: "",
+    comfyuiAutoStart: true,
+    comfyuiExtraArgs: "",
+    comfyuiPath: String.raw`D:\Comfy`,
+    comfyuiPort: 8188,
+    exitKillComfyui: false,
+    exitKillOllama: true,
+    loginRequired: false,
+  });
   vi.mocked(resolveComfyLaunchPlan).mockReturnValue(plan);
   vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
     pid: null,
@@ -81,6 +95,7 @@ beforeEach(() => {
 afterEach(() => {
   resetComfyBase();
   resetProbeMissLog();
+  resetStartingLog();
   vi.restoreAllMocks();
 });
 
@@ -242,18 +257,20 @@ describe("getView — 取字节的地址组装与失败形状", () => {
    *  `no-base-to-string`；`input: unknown` 的写法与本文件顶部的 `respondOn` 一致）。 */
   function viewReply(reply: { bytes?: Array<number>; status: number }) {
     const seen: Array<string> = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: unknown) => {
       const url = new URL(String(input));
       if (url.pathname !== "/api/view") {
-        return new Response("{}", { status: 200 });
+        return Promise.resolve(new Response("{}", { status: 200 }));
       }
       seen.push(url.search);
       if (reply.status !== 200) {
-        return new Response("nope", { status: reply.status });
+        return Promise.resolve(new Response("nope", { status: reply.status }));
       }
-      return new Response(new Uint8Array(reply.bytes ?? [1, 2, 3]), {
-        status: 200,
-      });
+      return Promise.resolve(
+        new Response(new Uint8Array(reply.bytes ?? [1, 2, 3]), {
+          status: 200,
+        }),
+      );
     });
     return seen;
   }
@@ -272,15 +289,137 @@ describe("getView — 取字节的地址组装与失败形状", () => {
     viewReply({ status: 404 });
     const err = await getView("gone.png", "", "input").catch((error: unknown) => error);
     expect(err).toBeInstanceOf(ComfyViewError);
-    /* SAFETY: 类型断言已复核 */
-    expect((err as ComfyViewError).status).toBe(404);
+    if (!(err instanceof ComfyViewError)) {
+      throw new Error("getView 未按预期抛出 ComfyViewError");
+    }
+    expect(err.status).toBe(404);
     // 消息保持原样：`executor-finalize` 那类只判「拿不到就抛」的调用方零感知
-    /* SAFETY: 类型断言已复核 */
-    expect((err as Error).message).toBe("getView failed: 404");
+    expect(err.message).toBe("getView failed: 404");
   });
 
   it("连不上时不包成 ComfyViewError（那是「上游答了」的形状），原样把 fetch 的失败交出去", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
     await expect(getView("a.png", "", "input")).rejects.toBeInstanceOf(TypeError);
+  });
+});
+
+describe("getHistory — promptId 只作为单个路径段拼接", () => {
+  it("`../` 与 `?` 被编码，不能改写请求路径（CodeQL #12）", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    await getHistory("../../system_stats?x=1");
+    const calledUrl = fetchSpy.mock.calls[0]?.[0];
+    if (typeof calledUrl !== "string") {
+      throw new Error("fetch 的输入不是字符串 URL");
+    }
+    expect(calledUrl).toContain("/api/history/..%2F..%2Fsystem_stats%3Fx%3D1");
+    /* 裸拼的两个症状都要消失：路径穿越与查询串注入。 */
+    expect(calledUrl).not.toContain("../");
+    expect(calledUrl).not.toContain("?x=1");
+  });
+});
+
+describe("startingLogAction —— 启动中日志的场次聚合判据（ISSUE #4149）", () => {
+  const T0 = 1_000_000;
+
+  it("同一场次：首拍 first、窗口内 silent、30s 后 progress（elapsed 是累计等待）", () => {
+    expect(startingLogAction(777, T0)).toEqual({ kind: "first", elapsedMs: 0 });
+    /* 每 2s 一拍的连续轮询：全部静默（这是刷屏的现场——逐拍都还没就绪）。 */
+    expect(startingLogAction(777, T0 + 2000)).toEqual({ kind: "silent" });
+    expect(startingLogAction(777, T0 + 29_000)).toEqual({ kind: "silent" });
+    /* 越过聚合窗口：一条进度行，带累计等待时长。 */
+    expect(startingLogAction(777, T0 + 30_000)).toEqual({
+      kind: "progress",
+      elapsedMs: 30_000,
+    });
+    /* 进度行之后窗口重新起算。 */
+    expect(startingLogAction(777, T0 + 32_000)).toEqual({ kind: "silent" });
+    expect(startingLogAction(777, T0 + 61_000)).toEqual({
+      kind: "progress",
+      elapsedMs: 61_000,
+    });
+  });
+
+  it("pid 变了（换实例 / 查询不到时 null）⇒ 新场次，重新从首条开始", () => {
+    expect(startingLogAction(777, T0)).toEqual({ kind: "first", elapsedMs: 0 });
+    expect(startingLogAction(777, T0 + 1000)).toEqual({ kind: "silent" });
+    expect(startingLogAction(888, T0 + 2000)).toEqual({ kind: "first", elapsedMs: 0 });
+  });
+
+  it(`resetStartingLog 清零后重新 first（聚合窗口 = ${COMFY_STARTING_PROGRESS_MS}ms）`, () => {
+    expect(startingLogAction(777, T0)).toEqual({ kind: "first", elapsedMs: 0 });
+    expect(startingLogAction(777, T0 + 1000)).toEqual({ kind: "silent" });
+    resetStartingLog();
+    expect(startingLogAction(777, T0 + 2000)).toEqual({ kind: "first", elapsedMs: 0 });
+  });
+});
+
+describe("resolveComfyBase —— 启动中日志的逐拍聚合（ISSUE #4149）", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** found.running（pid 在、端口未绑定）的轮询现场。 */
+  const mockStarting = (pid: number | null): void => {
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid, failed: false });
+    vi.mocked(findPidListeningPort).mockResolvedValue(null);
+    respondOn([]);
+  };
+
+  it("70s 等待窗口里逐拍轮询（2s/拍）只写 3 行：1 条首行 + 2 条进度行", async () => {
+    mockStarting(777);
+    let nowMs = 1_000_000;
+    const dateSpy = vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+    try {
+      for (let tick = 0; tick < 35; tick += 1) {
+        // oxlint-disable-next-line no-await-in-loop -- 逐拍轮询的语义就是串行推进时钟；并行化会让拍序错乱
+        await resolveComfyBase();
+        nowMs += 2000;
+      }
+    } finally {
+      dateSpy.mockRestore();
+    }
+    const infos = vi.mocked(logger.info).mock.calls.map(([msg]) => String(msg));
+    const starting = infos.filter((m) => m.includes("starting, port not bound yet"));
+    const progress = infos.filter((m) => m.includes("仍未绑定端口"));
+    expect(starting, "首行文本不变（照发一次）").toHaveLength(1);
+    expect(progress, "每 30s 一条进度行：30s 与 60s 各一条").toHaveLength(2);
+    expect(progress[0]).toContain("已等待 30s");
+    expect(progress[1]).toContain("已等待 60s");
+  });
+
+  it("端口绑定后场次清零：下一次启动重新从首条开始", async () => {
+    let nowMs = 2_000_000;
+    const dateSpy = vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+    try {
+      mockStarting(777);
+      await resolveComfyBase(); // 首条
+      nowMs += 2000;
+      await resolveComfyBase(); // silent
+      /* 实例就绪：监听端口出现在进程表上。 */
+      vi.mocked(findPidListeningPort).mockResolvedValue(8188);
+      respondOn([8188]);
+      await resolveComfyBase(); // Connected（终态）
+      expect(
+        vi
+          .mocked(logger.info)
+          .mock.calls.some(([msg]) => String(msg).includes("Connected to configured instance")),
+      ).toBe(true);
+      /* 下一轮启动（又是端口未绑定）：必须重新写首条，而不是被上一场次的
+       * 状态顶成 silent。粘性缓存先清（生产里由 WS 断开时的 resetComfyBase
+       * 触发，见 executor-ws）——否则 resolveComfyBase 直接命中缓存返回，
+       * 根本走不进未绑定分支。 */
+      resetComfyBase();
+      mockStarting(777);
+      respondOn([]);
+      await resolveComfyBase();
+    } finally {
+      dateSpy.mockRestore();
+    }
+    const starting = vi
+      .mocked(logger.info)
+      .mock.calls.filter(([msg]) => String(msg).includes("starting, port not bound yet"));
+    expect(starting, "两场启动各写一条首行").toHaveLength(2);
   });
 });

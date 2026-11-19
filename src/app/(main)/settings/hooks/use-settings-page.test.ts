@@ -1,16 +1,7 @@
-// 设置页逻辑层单测：hook 走真实 tRPC React 客户端（trpc.setting.* / trpc.llm.*），
-// 由 MSW 转发到可控测试 router。断言的是**编排行为**：
-//   1. 草稿从查询播种（且新的查询结果会重新播种）；
-//   2. Ollama 探测触发时机（仅本地 provider + baseUrl 变化时）；
-//   3. 按任务温度的合并规则（清空 = 删 key，而不是写 undefined）；
-//   4. 失败路径都走 flash 提示（硬规则 4：失败必须有用户可见出口）；
-//   5. openExternalUrl 把生成结果交给系统默认浏览器打开（桌面壳替代外链）。
-//
-// 自 ISSUE #1900 起，**ComfyUI 运行态那一组用例搬去了**
-// `src/components/studio/comfyui/hooks/use-comfyui-control.test.ts`：运行态、
-// 启动 / 关闭 / 打开与启动日志整块归侧栏「ComfyUI」页，判据一条没少。
-// 本文件留在这里的是设置页**自己**的编排（配置读取与播种、Ollama、保存、远端模型、
-// Drizzle Studio、外部链接），外加两条把「运行态真的走干净了」钉死的用例。
+// 设置页逻辑层单测：hook 走真实 tRPC React 客户端，经 MSW 转发到可控测试 router，断言
+// 编排行为（草稿播种与重播、Ollama 探测时机、按任务温度合并、失败走 flash、openExternalUrl）。
+// 自 ISSUE #1900 起 ComfyUI 运行态用例搬去
+// `src/components/studio/comfyui/hooks/use-comfyui-control.test.ts`。
 
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
@@ -47,13 +38,9 @@ vi.mock("~/lib/shell/desktop-shell-client", () => ({
 }));
 
 // 客户端逻辑层现经 `postAppRuntimeLog`（走 `/api/logs/app-runtime`）把失败补记到
-// app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（见 ISSUE #282）。
-// 测试保留 `fetchFileLogSlice` 真实实现（经 MSW 返回日志），只 spy `postAppRuntimeLog`
-// 并记录调用参数。`runtimeLogCalls` 须用 vi.hoisted 定义，供工厂在提升后引用。
-// 客户端逻辑层现经 `postAppRuntimeLog`（走 `/api/logs/app-runtime`）把失败补记到
-// app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（见 ISSUE #282）。
-// 测试通过 `vi.importActual` 保留 `fetchFileLogSlice` 真实实现（经 MSW 返回日志），
-// 只 spy `postAppRuntimeLog` 并记录调用参数。
+// app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（ISSUE #282）。测试保留
+// `fetchFileLogSlice` 真实实现（经 MSW 返回日志），只 spy `postAppRuntimeLog` 并记录调用参数；
+// `runtimeLogCalls` 须用 vi.hoisted 定义，供工厂在提升后引用。
 const { postAppRuntimeLogMock, runtimeLogCalls, sessionLogRequests } = vi.hoisted(() => {
   const calls: Array<{
     fields?: unknown;
@@ -87,18 +74,17 @@ vi.mock("~/lib/log/log-file-client", () => {
       if (!res.ok) {
         return null;
       }
-      /* SAFETY: 类型断言已复核 */
-      return (await res.json()) as {
-        content: string;
-        offset: number;
-        size: number;
-      };
+      const body: unknown = await res.json();
+      if (!isFileLogSlice(body)) {
+        throw new Error("fetchFileLogSlice 的响应体不是 { content, offset, size }");
+      }
+      return body;
     },
   );
   const fetchLogSessions = vi.fn(async (source: string, sessionId?: string) => {
     sessionLogRequests.push({ source, session: sessionId ?? null });
     const query = new URLSearchParams({ source });
-    if (sessionId) {
+    if (sessionId !== undefined && sessionId !== "") {
       query.set("session", sessionId);
     }
     const res = await fetch(`/api/logs/sessions?${query.toString()}`);
@@ -114,6 +100,49 @@ vi.mock("~/lib/log/log-file-client", () => {
     postAppRuntimeLog: postAppRuntimeLogMock,
   };
 });
+
+/** 运行时收窄：只认非 null 的普通对象（数组不算记录）。 */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** `/api/logs/current` 的切片响应；形状不对就让用例直接失败。 */
+type FileLogSlice = { content: string; offset: number; size: number };
+
+function isFileLogSlice(value: unknown): value is FileLogSlice {
+  return (
+    isRecord(value) &&
+    typeof value.content === "string" &&
+    typeof value.offset === "number" &&
+    typeof value.size === "number"
+  );
+}
+
+/** `postAppRuntimeLog` 的记账条目：level/msg 必须是字符串，fields 若给必须是对象。 */
+type RuntimeLogCall = { fields?: unknown; level: string; msg: string };
+
+function isRuntimeLogCall(value: unknown): value is RuntimeLogCall {
+  return (
+    isRecord(value) &&
+    typeof value.level === "string" &&
+    typeof value.msg === "string" &&
+    (value.fields === undefined || isRecord(value.fields))
+  );
+}
+
+/** 把记账数组当 `unknown` 逐层收窄；形状不对就让用例失败（与原来断言后崩同一判定）。 */
+function readRuntimeLogCalls(): RuntimeLogCall[] {
+  const raw: unknown = runtimeLogCalls;
+  if (!Array.isArray(raw)) {
+    throw new Error("runtimeLogCalls 不是数组");
+  }
+  const entries = raw.filter(isRuntimeLogCall);
+  if (entries.length !== raw.length) {
+    throw new Error("runtimeLogCalls 含非日志条目");
+  }
+  return entries;
+}
+
 const probeMock = vi.mocked(probeOllama);
 const startMock = vi.mocked(startOllama);
 
@@ -146,6 +175,8 @@ type Behavior = {
     desktopManaged: boolean;
     instanceType: "desktop" | "portable" | "venv" | null;
     pathConfigured: boolean;
+    /** 已填路径指向的目录是否存在（#4138：无效路径行内提示的判据）。 */
+    pathExists: boolean;
   };
   comfyStatusPending?: boolean;
   dbStudioStatusError?: string;
@@ -164,12 +195,9 @@ type Behavior = {
 const neverSettle = (): Promise<void> => new Promise<void>(() => undefined);
 
 let behavior: Behavior = {};
-/* 「运行态变了」那条长轮询通道收到的请求（`?since=…`）。
- *
- * 这条通道**不再由设置页订阅**（运行态整块搬去了侧栏「ComfyUI」页，
- * ISSUE #1900），但仍要在默认 handler 里记账：设置页一挂载，客户端那条链是否
- * 还会连过来 —— 这一条正是「运行态真的走干净了，没有第二个消费方」的现场证据
- * （见下方「设置页不再订阅运行态通道」那条用例）。 */
+/* 「运行态变了」长轮询通道（`?since=…`）的请求记账：通道不再由设置页订阅（运行态搬去
+ * 侧栏「ComfyUI」页，ISSUE #1900），记账是「没有第二个消费方」的现场证据（见下方
+ * 「设置页不再订阅运行态通道」用例）。 */
 const stateRequests: Array<string> = [];
 /* `comfyStatus` 端点的调用次数：设置页一次都不该调到它（见对应用例）。 */
 let comfyStatusCalls = 0;
@@ -178,7 +206,7 @@ const t = createTestTRPC();
 const mockRouter = t.router({
   setting: t.router({
     get: t.procedure.query(() => {
-      if (behavior.settingsError) {
+      if (behavior.settingsError !== undefined && behavior.settingsError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.settingsError,
@@ -187,7 +215,7 @@ const mockRouter = t.router({
       return { settings: behavior.settings ?? SETTINGS };
     }),
     save: t.procedure.mutation(() => {
-      if (behavior.saveSettingsError) {
+      if (behavior.saveSettingsError !== undefined && behavior.saveSettingsError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.saveSettingsError,
@@ -201,18 +229,17 @@ const mockRouter = t.router({
      * 那是**假红**（判据被环境吃掉），所以留一个必定计数的桩。 */
     comfyStatus: t.procedure.query(async () => {
       comfyStatusCalls += 1;
-      if (behavior.comfyStatusPending) {
+      if (behavior.comfyStatusPending === true) {
         await neverSettle();
       }
       return {
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        up: behavior.comfyBase != null,
+        up: behavior.comfyBase !== null && behavior.comfyBase !== undefined,
         base: behavior.comfyBase ?? null,
         starting: false,
       };
     }),
     /* 安装形态与运行态**分开取**（fs-only，与首屏配置同批）：这里给一份便携版默认。
-     * 用例不关心形态时不必改它；要断言徽标文案就按需覆写这三个字段。 */
+     * 用例不关心形态时不必改它；要断言徽标文案就按需覆写这几个字段。 */
     comfyInstance: t.procedure.query(
       () =>
         behavior.comfyInstance ?? {
@@ -220,12 +247,13 @@ const mockRouter = t.router({
           /* SAFETY: 类型断言已复核 */
           instanceType: "portable" as const,
           desktopManaged: false,
+          pathExists: true,
         },
     ),
     /* Drizzle Studio：分区拉起的 status 查询与动作，均需有 mock handler，
      * 否则 onUnhandledFrame:error 会让渲染整个 hook 的用例全挂 */
     dbStudioStatus: t.procedure.query(() => {
-      if (behavior.dbStudioStatusError) {
+      if (behavior.dbStudioStatusError !== undefined && behavior.dbStudioStatusError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.dbStudioStatusError,
@@ -256,7 +284,7 @@ const mockRouter = t.router({
   }),
   llm: t.router({
     configGet: t.procedure.query(() => {
-      if (behavior.llmError) {
+      if (behavior.llmError !== undefined && behavior.llmError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.llmError,
@@ -265,7 +293,7 @@ const mockRouter = t.router({
       return { config: behavior.llm ?? LLM };
     }),
     configSave: t.procedure.mutation(() => {
-      if (behavior.saveLlmError) {
+      if (behavior.saveLlmError !== undefined && behavior.saveLlmError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.saveLlmError,
@@ -292,10 +320,10 @@ function makeWrapper(queryClient?: QueryClient) {
     return createElement(
       QueryClientProvider,
       { client: qc },
-      // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
       createElement(TRPCProvider, {
         trpcClient: client,
         queryClient: qc,
+        // oxlint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
         children,
       }),
     );
@@ -374,12 +402,9 @@ describe("useSettingsPage", () => {
     expect(result.current.drafts?.settings.comfyuiPath).toBe("D:/ComfyUI");
   });
 
-  /* 跳转落点：从别处（如 ComfyUI 页的「去设置里配置」）跳进来时载荷带目标分区，
-   * hook 直接停在它上面，并把目标登记成 `pendingJump` 交外壳去滚。
-   *
-   * 载荷**不在挂载时消费**：设置页首帧通常在 loading（外壳没有分区节），那时
-   * 消费掉载荷，等就绪外壳挂上时跳转目标已经丢了（现场：左侧停在第一项）。
-   * 只有外壳真的滚过去、调 `ackJumpSection` 之后才算落定。 */
+  /* 跳转落点：载荷带目标分区时 hook 直接停在它上面并登记 `pendingJump` 交外壳去滚。
+   * 载荷不在挂载时消费（首帧通常在 loading，消费掉会丢目标，现场：左侧停在第一项），
+   * 外壳真的滚过去调 `ackJumpSection` 才算落定。 */
   it("带 initialSection 跳进来：停在目标分区并登记待落定目标，消费等外壳回调", () => {
     const onConsume = vi.fn();
     const { result } = renderHook(
@@ -498,12 +523,9 @@ describe("useSettingsPage", () => {
       .mockResolvedValueOnce({ up: false })
       .mockResolvedValueOnce({ up: false })
       .mockResolvedValue({ up: true, models: [] });
-    /* **一个用例一把时钟**：换时钟必须在挂载之前。旧形状是「先用真实时钟
-     * `expect.poll` 等首探落定 → 再 `useFakeTimers()`」，那中间挂载链（查询 + 首探 +
-     * react-query 的调度）还挂在真实时钟上，要多久由机器给多少墙钟 —— 而 `testTimeout` 有上界：
-     * 一旦越过，被抛下的 continuation 落进下一条用例的假时钟窗口，症状就成对出现
-     * （先超时红，再 `Timer APIs are not mocked`）。
-     * 口径与实测读数见规范 11 §11.14「一个用例一把时钟，而且要在挂载之前换」。 */
+    /* 一个用例一把时钟，且换时钟必须在挂载之前（规范 11 §11.14）：否则挂载链还挂在
+     * 真实时钟上，一旦越过 testTimeout，被抛下的 continuation 落进下一条用例的假时钟
+     * 窗口，症状成对出现（先超时红，再 `Timer APIs are not mocked`）。 */
     vi.useFakeTimers();
     try {
       const { result } = renderHook(() => useSettingsPage(), {
@@ -518,7 +540,7 @@ describe("useSettingsPage", () => {
       expect(result.current.ollamaStarting).toBe(false);
 
       let starting: Promise<void> = Promise.resolve();
-      await act(async () => {
+      act(() => {
         starting = result.current.startOllama();
       });
       // 推进轮询的 2s 间隔定时器直到探测到 up（第三轮探测）
@@ -550,7 +572,7 @@ describe("useSettingsPage", () => {
       expect(result.current.ollamaStatus).toBe("down");
 
       let starting: Promise<void> = Promise.resolve();
-      await act(async () => {
+      act(() => {
         starting = result.current.startOllama();
       });
       expect(result.current.ollamaStatus).toBe("starting");
@@ -577,17 +599,11 @@ describe("useSettingsPage", () => {
    * 日志面板里什么也没有。现在失败会主动落 app-runtime 错误日志（面板轮询可见）。 */
   it("查询失败时把错误落 app-runtime 日志且同一错误只记一次", async () => {
     behavior.llmError = "数据库被锁";
-    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<unknown>).length = 0;
+    runtimeLogCalls.length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
-    await expect
-      .poll(() =>
-        /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<{ level: string }>).some(
-          (c) => c.level === "error",
-        ),
-      )
-      .toBe(true);
+    await expect.poll(() => readRuntimeLogCalls().some((c) => c.level === "error")).toBe(true);
     /* llm.configGet 失败、setting.get 成功 → 草稿仍为空（一份都不齐）。
      * 本次运行没有成功读过的配置 → 没有兜底可用，必须落整页降级 UI 拿到重试与
      * 日志出口，而不是 「配置数据未就绪」死角（见下方 ISSUE #304 的专项回归）。 */
@@ -595,32 +611,21 @@ describe("useSettingsPage", () => {
     expect(result.current.hasError).toBe(true);
     expect(result.current.serveState).toBeNull();
     expect(result.current.errorText).toContain("数据库被锁");
-    /* SAFETY: 类型断言已复核 */
-    const errors = (runtimeLogCalls as unknown as Array<{ level: string; msg: string }>).filter(
-      (c) => c.level === "error",
-    );
+    const errors = readRuntimeLogCalls().filter((c) => c.level === "error");
     expect(errors.length).toBe(1);
     expect(errors[0]?.msg).toContain("数据库被锁");
 
     // 重试后失败不变 → 不重复记
-    await act(async () => {
+    act(() => {
       result.current.retry();
     });
-    /* SAFETY: 类型断言已复核 */
-    const errorsAfter = (
-      runtimeLogCalls as unknown as Array<{ level: string; msg: string }>
-    ).filter((c) => c.level === "error");
+    const errorsAfter = readRuntimeLogCalls().filter((c) => c.level === "error");
     expect(errorsAfter.length).toBe(1);
   });
 
-  /* 回归 ISSUE #304：截图中「打开设置失败」，但用户看到的是一句
-   * 「配置数据未就绪」——没有原因、没有重试、也没有日志指引，被冻在死角。
-   *
-   * 根因：`hasError` 此前判的是「两份数据都为空」，而 setting.get 成功、
-   * llm.configGet 失败时草稿仍为空却又不满足该条件；同时 `isInitialLoad`
-   * 也因「有一份数据」为假 → 容器一路落到 `!drafts` 的兜底文案。
-   *
-   * 现在 hasError = 「任一查询失败 且 草稿未就绪」，该边界落错误降级视图。 */
+  /* 回归 ISSUE #304：setting.get 成功、llm.configGet 失败时，旧 hasError 判「两份数据
+   * 都为空」不命中、isInitialLoad 也为假，用户落进「配置数据未就绪」死角（没有原因/重试/
+   * 日志指引）。现 hasError = 任一查询失败且草稿未就绪 → 该边界落错误降级视图。 */
   it("一半查询失败且草稿未就绪 → 落错误视图而非「配置数据未就绪」死角", async () => {
     behavior.llmError = "no such table: llmConfig";
     const { result } = renderHook(() => useSettingsPage(), {
@@ -675,29 +680,21 @@ describe("useSettingsPage", () => {
    * 拿着「请求被中断」的提示无从排查。 */
   it("补记 app-runtime 时带上原始报错（raw 字段）", async () => {
     behavior.llmError = "no such table: llmConfig";
-    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<unknown>).length = 0;
+    runtimeLogCalls.length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.hasError).toBe(true);
-    await expect
-      .poll(() =>
-        /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<{ level: string }>).some(
-          (c) => c.level === "error",
-        ),
-      )
-      .toBe(true);
+    await expect.poll(() => readRuntimeLogCalls().some((c) => c.level === "error")).toBe(true);
 
-    /* SAFETY: 类型断言已复核 */
-    const entry = (
-      runtimeLogCalls as unknown as Array<{
-        fields?: { query?: string; raw?: string };
-        level: string;
-      }>
-    ).find((c) => c.level === "error");
-    expect(entry?.fields?.query).toBe("llm.configGet");
+    const entry = readRuntimeLogCalls().find((c) => c.level === "error");
+    const fields = entry?.fields;
+    if (!isRecord(fields)) {
+      throw new Error("错误日志条目缺少 fields");
+    }
+    expect(fields.query).toBe("llm.configGet");
     // raw 是「给排查用」的原文，应含服务端报错本身
-    expect(entry?.fields?.raw).toContain("no such table: llmConfig");
+    expect(fields.raw).toContain("no such table: llmConfig");
   });
 
   /* 回归 ISSUE #304：两个查询同批失败时，日志字段要把**两个**查询名都记上，
@@ -705,28 +702,20 @@ describe("useSettingsPage", () => {
   it("两个查询都失败时，日志字段记全两条查询名", async () => {
     behavior.llmError = "llm 炸了";
     behavior.settingsError = "settings 炸了";
-    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<unknown>).length = 0;
+    runtimeLogCalls.length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.hasError).toBe(true);
-    await expect
-      .poll(() =>
-        /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<{ level: string }>).some(
-          (c) => c.level === "error",
-        ),
-      )
-      .toBe(true);
+    await expect.poll(() => readRuntimeLogCalls().some((c) => c.level === "error")).toBe(true);
 
-    /* SAFETY: 类型断言已复核 */
-    const entry = (
-      runtimeLogCalls as unknown as Array<{
-        fields?: { query?: string };
-        level: string;
-      }>
-    ).find((c) => c.level === "error");
-    expect(entry?.fields?.query).toContain("setting.get");
-    expect(entry?.fields?.query).toContain("llm.configGet");
+    const entry = readRuntimeLogCalls().find((c) => c.level === "error");
+    const fields = entry?.fields;
+    if (!isRecord(fields)) {
+      throw new Error("错误日志条目缺少 fields");
+    }
+    expect(fields.query).toContain("setting.get");
+    expect(fields.query).toContain("llm.configGet");
   });
 
   it("startOllama 失败 → flash 出可读文案（失败路径必须有出口）", async () => {
@@ -779,103 +768,7 @@ describe("useSettingsPage", () => {
     expect(result.current.drafts?.llm.temperatureByTask).toBeUndefined();
   });
 
-  it("远端模型：添加/移除即时落库（重名/空名拒绝）；生效模型字段不受清单管理", async () => {
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    // 设置页只做配置：初始清单 = 候选条目（不含「当前模型」虚拟行）
-    expect(result.current.remoteModelList.map((e) => e.name)).toEqual([]);
-
-    let out: { error?: string; ok: boolean } = { ok: false };
-    await act(async () => {
-      out = await result.current.addRemoteModel({ name: "gpt-4o" });
-    });
-    expect(out.ok).toBe(true);
-    expect(result.current.remoteModelList.map((e) => e.name)).toEqual(["gpt-4o"]);
-    // 即时落库成功有提示条
-    expect(result.current.flash).toEqual({
-      kind: "ok",
-      text: "LLM 配置已保存",
-    });
-
-    // 重名拒绝（候选）；空名拒绝 —— 校验失败不触发保存
-    await act(async () => {
-      out = await result.current.addRemoteModel({ name: " gpt-4o " });
-    });
-    expect(out.ok).toBe(false);
-    await act(async () => {
-      out = await result.current.addRemoteModel({ name: "   " });
-    });
-    expect(out.ok).toBe(false);
-
-    // 与生效模型同名也可加入候选（「当前生效」概念已移出设置页）
-    await act(async () => {
-      out = await result.current.addRemoteModel({ name: "qwen3:14b" });
-    });
-    expect(out.ok).toBe(true);
-    expect(result.current.remoteModelList.map((e) => e.name)).toEqual(["gpt-4o", "qwen3:14b"]);
-
-    // 移除即时落库，只动清单不碰生效模型字段（运行时在工坊切换）
-    await act(async () => {
-      out = await result.current.removeRemoteModel("gpt-4o");
-    });
-    expect(out.ok).toBe(true);
-    expect(result.current.remoteModelList.map((e) => e.name)).toEqual(["qwen3:14b"]);
-    await act(async () => {
-      out = await result.current.removeRemoteModel("qwen3:14b");
-    });
-    expect(out.ok).toBe(true);
-    expect(result.current.remoteModelList.map((e) => e.name)).toEqual([]);
-    /* 生效模型字段保留原值 —— 它归工坊运行时管理 */
-    expect(result.current.drafts?.llm.model).toBe("qwen3:14b");
-  });
-
-  it("远端模型：落库失败 → ok:false + 错误提示条", async () => {
-    behavior = { saveLlmError: "磁盘只读" };
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    let out: { error?: string; ok: boolean } = { ok: false };
-    await act(async () => {
-      out = await result.current.addRemoteModel({ name: "gpt-4o" });
-    });
-    expect(out.ok).toBe(false);
-    expect(out.error).toBe("磁盘只读");
-    expect(result.current.flash).toEqual({ kind: "err", text: "磁盘只读" });
-  });
-
-  it("远端模型：条目保留独立接口/密钥；切主模型不动条目", async () => {
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    await act(async () => {
-      await result.current.addRemoteModel({
-        name: "gpt-4o",
-        baseUrl: "https://api.example.com/v1",
-        apiKey: "sk-1",
-      });
-    });
-    const entry = result.current.remoteModelList.find((e) => e.name === "gpt-4o");
-    expect(entry?.baseUrl).toBe("https://api.example.com/v1");
-    expect(entry?.apiKey).toBe("sk-1");
-
-    // 切换当前模型 → 草稿的 model 变化，条目原样保留
-    act(() => {
-      result.current.patchLlm({ model: "gpt-4o" });
-    });
-    expect(result.current.drafts?.llm.model).toBe("gpt-4o");
-    expect(result.current.drafts?.llm.extraModels.find((e) => e.name === "gpt-4o")?.baseUrl).toBe(
-      "https://api.example.com/v1",
-    );
-  });
-
-  it("保存 LLM 成功 → ok 提示 + 清空 API Key 输入框", async () => {
+  it("保存 LLM 成功 → 静默（无成功提示）+ 清空 API Key 输入框", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
@@ -887,10 +780,8 @@ describe("useSettingsPage", () => {
     await act(async () => {
       await result.current.saveLlm();
     });
-    expect(result.current.flash).toEqual({
-      kind: "ok",
-      text: "LLM 配置已保存",
-    });
+    // 即时自动保存：成功静默（用户决策），不再弹「已保存」提示条
+    expect(result.current.flash).toBeNull();
     expect(result.current.llmApiKey).toBe("");
     expect(result.current.saving).toBe(false);
   });
@@ -941,130 +832,6 @@ describe("useSettingsPage", () => {
     /* 启动完成后 saving 仍为 false——db studio 动作不该动共享 saving 标志 */
     expect(result.current.saving).toBe(false);
     expect(result.current.dbStudioStarting).toBe(false);
-  });
-
-  it("远端模型：编辑候选条目（改名/接口/密钥）；重名排除自身", async () => {
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    await act(async () => {
-      await result.current.addRemoteModel({ name: "gpt-4o", apiKey: "sk-1" });
-    });
-    let out: { error?: string; ok: boolean } = { ok: false };
-    await act(async () => {
-      out = await result.current.updateRemoteModel("gpt-4o", {
-        name: "gpt-4o-2024",
-        baseUrl: "https://api.example.com/v1",
-      });
-    });
-    expect(out.ok).toBe(true);
-    const renamed = result.current.remoteModelList.find((e) => e.name === "gpt-4o-2024");
-    expect(renamed?.baseUrl).toBe("https://api.example.com/v1");
-    /* 未重填、也没勾「清除密钥」→ 这一条**不带 apiKey 键**（= 本次不提供意见）。
-     * 此前这里是 `(existing?.apiKey ?? null)`，而真实场景里 `existing` 来自服务端
-     * **脱敏下发**的清单（永远没值）→ 折成 null → 覆盖式保存把库里那把密钥清掉
-     * （台账 A11）。草稿不该留着它没见过的值。 */
-    expect(Object.keys(renamed ?? {})).not.toContain("apiKey");
-    expect(result.current.remoteModelList.some((e) => e.name === "gpt-4o")).toBe(false);
-
-    // 改名撞其他候选 → 拒绝；撞生效模型名不拒绝（生效模型不在清单管理范围）
-    await act(async () => {
-      out = await result.current.updateRemoteModel("gpt-4o-2024", {
-        name: "qwen3:14b",
-      });
-    });
-    expect(out.ok).toBe(true);
-    await act(async () => {
-      await result.current.addRemoteModel({ name: "claude" });
-    });
-    await act(async () => {
-      out = await result.current.updateRemoteModel("claude", {
-        name: "qwen3:14b",
-      });
-    });
-    expect(out.ok).toBe(false);
-
-    // 清除独立密钥 → 跟随全局
-    await act(async () => {
-      out = await result.current.updateRemoteModel("qwen3:14b", {
-        clearApiKey: true,
-      });
-    });
-    expect(out.ok).toBe(true);
-    expect(result.current.remoteModelList.find((e) => e.name === "qwen3:14b")?.apiKey).toBeNull();
-  });
-
-  it("远端模型密钥的三态表达：重填=新值 / 显式清除=null / 都没动=不带这个键（台账 A11）", async () => {
-    /* 覆盖式保存（`replaceAll`）里「没带这个键」与「带了 null」是两回事：
-     * 前者=我不提供意见（服务端保留既有），后者=用户按了「清除密钥」。
-     * 客户端此前把两者压成同一个 `null`（草稿拿的是服务端脱敏后的清单，
-     * `existing?.apiKey` 永远是空 → 折成 null），于是「原样保存一次设置」就把
-     * 所有远端模型的密钥清掉。三态在这里一次性钉住。 */
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-    const entryOf = (name: string) => result.current.remoteModelList.find((e) => e.name === name);
-
-    await act(async () => {
-      await result.current.addRemoteModel({ name: "m1", apiKey: "sk-old" });
-    });
-    expect(entryOf("m1")?.apiKey).toBe("sk-old");
-
-    // ① 重填（带空白要去掉）→ 写新值
-    await act(async () => {
-      await result.current.updateRemoteModel("m1", { apiKey: "  sk-new  " });
-    });
-    expect(entryOf("m1")?.apiKey).toBe("sk-new");
-
-    // ② 显式清除 → null（服务端据此真的清掉）
-    await act(async () => {
-      await result.current.updateRemoteModel("m1", { clearApiKey: true });
-    });
-    expect(entryOf("m1")?.apiKey).toBeNull();
-
-    // ③ 都没动（只改名）→ 这个键根本不出现在条目里
-    await act(async () => {
-      await result.current.updateRemoteModel("m1", { name: "m1b" });
-    });
-    expect(entryOf("m1b")).toBeDefined();
-    expect(Object.keys(entryOf("m1b") ?? {})).not.toContain("apiKey");
-  });
-
-  it("远端模型：编辑未配置条目被拒；改名同步生效模型字段", async () => {
-    const { result } = renderHook(() => useSettingsPage(), {
-      wrapper: makeWrapper(),
-    });
-    await expect.poll(() => result.current.drafts).not.toBeNull();
-
-    // llm.model 初始 = "qwen3:14b"，候选为空 —— 不再虚拟「当前模型」行可编辑
-    let out: { error?: string; ok: boolean } = { ok: false };
-    await act(async () => {
-      out = await result.current.updateRemoteModel("qwen3:14b", {
-        baseUrl: "https://api.example.com/v1",
-      });
-    });
-    expect(out.ok).toBe(false);
-
-    // 加入与生效模型同名的条目后，改名时同步生效模型字段
-    await act(async () => {
-      out = await result.current.addRemoteModel({
-        name: "qwen3:14b",
-        baseUrl: "https://api.example.com/v1",
-        apiKey: "sk-main",
-      });
-    });
-    expect(out.ok).toBe(true);
-    await act(async () => {
-      out = await result.current.updateRemoteModel("qwen3:14b", {
-        name: "qwen3:32b",
-      });
-    });
-    expect(out.ok).toBe(true);
-    expect(result.current.drafts?.llm.model).toBe("qwen3:32b");
-    expect(result.current.drafts?.llm.extraModels[0]?.name).toBe("qwen3:32b");
   });
 
   /* ── 运行态从设置页走干净了（ISSUE #1900）────────────────────────────
@@ -1134,7 +901,7 @@ describe("useSettingsPage", () => {
    * 「设置页这一侧有没有偷偷留着第二条通道」—— 留着的表现是全绿且看不出来的：
    * 状态行没了，但后台每 30s 还在轮询一个没人读的端点，且与「ComfyUI」页各持一份
    * 结论（两份漂了也没人发现）。 */
-  it("不再订阅运行态通道（运行态整块归侧栏「ComfyUI」页）", async () => {
+  it("运行态清退后零轮询：stateRequests 与 comfyStatus 调用计数都归零", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });

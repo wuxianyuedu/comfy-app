@@ -1,20 +1,16 @@
 // ── Workshop MCP 本地 DB 客户端 ────────────────────────────────
-// 独立的 @libsql/client 连接（与 Next 进程的 ~/server/db 解耦），
-// 这样 MCP stdio / 独立 HTTP 进程无需启动 Next、也不触碰 `~/env`。
-// 复用同一份 schema（含 workshopSession 表），数据库文件路径锚定
-// 与 drizzle-kit push 一致（相对进程 CWD 解析），避免 Windows 盘符根错误。
-//
-// 与 ~/server/db 同步换 driver：better-sqlite3 的同步语义会把整个事件循环
-// 卡在同一份慢 SQL 上；libsql 保持同 file: 布局、异步不阻塞。
-//
-// 注意：刻意不 import "server-only" —— 该包在普通 Node 进程里会抛错。
+// 独立的 node:sqlite 连接（与 Next 进程的 ~/server/db 解耦）：MCP stdio / 独立 HTTP
+// 进程无需启动 Next、也不触碰 `~/env`；路径与 drizzle-kit push 一致（相对 CWD 解析），
+// 避免 Windows 盘符根错误。运行时驱动从 @libsql/client 换成 Node 自带的 node:sqlite
+// （ISSUE #3171）：不再为每个进程加载 8.5 MB 原生件，同步语句经 `~/lib/sqlite-driver`
+// 包成 drizzle sqlite-proxy 要的异步回调。刻意不 import "server-only" —— 该包在普通
+// Node 进程里会抛错。
 import path from "node:path";
 
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
+import { drizzle, type SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 
-import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
-import { applySqlitePragmas } from "~/lib/sqlite-pragmas";
+import { openNodeSqlite, type NodeSqliteHandle } from "~/lib/sqlite-driver";
+import { gateProxyWithPragmas } from "~/lib/sqlite-pragmas";
 import * as schema from "~/server/db/schema";
 
 /** 未配置 `DATABASE_URL` 时与 drizzle-kit 同锚点的兜底库文件（相对进程 CWD）。 */
@@ -22,27 +18,30 @@ const DEFAULT_DB_FILE = "./db.sqlite";
 
 function resolveDbPath(url: string): string {
   const raw = url.startsWith("file:") ? url.slice("file:".length) : url;
-  return path.resolve(
-    ...tracingIgnoreArgs(),
-    process.cwd(),
-    raw || DEFAULT_DB_FILE,
-  );
+  return path.resolve(/*turbopackIgnore: true*/ process.cwd(), raw || DEFAULT_DB_FILE);
 }
 
 const dbUrl = process.env.DATABASE_URL ?? "file:./db.sqlite";
-const client = createClient({
-  url: `file:${resolveDbPath(dbUrl)}`,
-});
-// 与 `~/server/db` 共用同一份 PRAGMA 清单（`~/lib/sqlite-pragmas`）：以前两边各写
-// 两行，加一条就要记得加两处。清单里只有**库级**那两条；等锁预算是**每条连接**的
-// 客户端选项（`timeout`），本侧刻意不给 —— 等锁是同步的，会把服务界面的这个进程
-// 一起停住那么久（判据与实测见 `sqlite-pragmas` 文件头，ISSUE #1250）。
-// 模块顶层 await 让首次查询前一定就位。
+/* 连接与实例都挂 globalThis 单例（ISSUE #4284）：热重载会重新执行本模块，
+ * 无缓存时每次都新开一个 DatabaseSync 连接（旧连接无人关闭，句柄与内存
+ * 单调增长，Windows 上还会锁住 db.sqlite）。 */
+const nodeSqlite = (globalThis.__comfyWorkshopNodeSqlite ??= openNodeSqlite(resolveDbPath(dbUrl)));
+// PRAGMA 清单与 `~/server/db` 共用（`~/lib/sqlite-pragmas`），加一条不必改两处；等锁预算
+// 本侧刻意不给 —— node:sqlite 是单连接，`PRAGMA busy_timeout` 就是同步等锁，会把这个
+// 服务进程的事件循环一起停住（判据与实测见该文件头，ISSUE #1250）。走共用出口以容忍
+// 「别的进程正在同时切 WAL」：`next build` 起 7 个 worker 每个都 import 这条链，全新
+// 库文件只让一个拿到独占锁（实测 3/8 抛 SQLITE_BUSY，#1282）。
 //
-// 应用走 `applySqlitePragmas`：开机这几条要容忍「别的进程正在同时切 WAL」——
-// `next build` 的 collect-page-data 会起 7 个 worker，每个都 import 这条链，
-// 而一份全新的库文件只让其中一个拿到独占锁（实测 3/8 抛 SQLITE_BUSY），
-// 异常从模块顶层 await 浮出就把整个构建带走了（ISSUE #1282）。
-await applySqlitePragmas(client);
+// 这里**不能**用顶层 await（与 `~/server/db` 同一条理由，ISSUE #3252）：带 TLA 的模块
+// 在 Turbopack 里会被编成 async module，凡是从这条链上 `class extends` 出来的模块都
+// 可能在基类导出注册前求值 ⇒ `Class extends value undefined`。共用出口把初始化 promise
+// gate 在 drizzle proxy 上：模块同步导出，而每条查询仍在 PRAGMA 就位之后才跑。
+const gatedProxy = gateProxyWithPragmas(nodeSqlite);
 
-export const workshopDb = drizzle(client, { schema });
+declare global {
+  /** 热重载单例（ISSUE #4284）：连接与 drizzle 实例只建一次，重载复用。 */
+  var __comfyWorkshopNodeSqlite: NodeSqliteHandle | undefined;
+  var __comfyWorkshopDb: SqliteRemoteDatabase<typeof schema> | undefined;
+}
+
+export const workshopDb = (globalThis.__comfyWorkshopDb ??= drizzle(gatedProxy, { schema }));

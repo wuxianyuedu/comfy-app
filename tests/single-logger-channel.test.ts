@@ -40,20 +40,9 @@ const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
 
 /**
- * 扫描范围：**服务端可达的全部库代码**，无目录级豁免。
- *
- * 不扫视图层（`src/components/**`、`src/app/**`）—— 客户端本来就往浏览器
- * 控制台写，不在「服务端日志唯一通道」这条判据内。
- *
- * 历史上这里有 `SKIP_DIRS = ["src/lib/comfyui"]` 与一条 `ALLOWED`
- * （`generation-log.server.ts`），也就是**整片目录免检**。它们已被逐条消除：
- *
- *   - `generation-log.server.ts`：`console.warn` 已改走 `core/logger`（pino），
- *     消息文案不变，额外获得脱敏与 ERROR 镜像（面板可见）。豁免删除。
- *   - `src/lib/comfyui/**`：本目录**根本没有 console 调用**（实测），它真正的
- *     缺口是「trace 直写文件、不经脱敏」—— 那条由值形状守卫
- *     （`src/lib/core/redact-secret.ts`）在写入边界补上，不是靠目录免检绕开。
- *     目录级 SKIP 的危险恰在于：它让「以后往这里加 console」完全无声。
+ * 扫描范围：**服务端可达的全部库代码**，无目录级豁免；不扫视图层（客户端本就往浏览器控制台写）。
+ * 历史 `SKIP_DIRS`（`src/lib/comfyui`）与 `ALLOWED`（`generation-log.server.ts`）已逐条消除：前者本就
+ * 无 console（缺口由 `redact-secret.ts` 在写入边界补上）。目录级 SKIP 的危险恰在「以后加 console 完全无声」。
  */
 const SCAN_DIRS = ["src/lib", "src/server"];
 
@@ -61,30 +50,16 @@ const SCAN_DIRS = ["src/lib", "src/server"];
 const codeOf = (src: string): string => stripComments(src, { trailing: true });
 
 /**
- * 浏览器侧唯一通道的豁免清单。判据必须满足**全部**三条，缺一不可：
- *  1. 文件首行是 `"use client"` —— 只进浏览器打包图，永不跑到服务端
- *     （服务端日志唯一通道的判据只管服务端可达的代码）；
- *  2. console 是这套诊断的**传输手段本身**，不是「图省事随手带开头」——
- *    `watchTask` 的诊断日志靠 console.info 被 `LogProvider` 拦截后落进
- *    应用日志面板，这是项目规定的客户端日志口（规范 07 §7.6）；
- *  3. 同一份诊断还走 `h.onLog` 写进工作流库「执行日志」弹窗，两条通道都要。
- *
- * 清单按**文件**点名，不按目录：目录级豁免等于「以后往这里加 console 完全无声」，
- * 而这条判据的全部价值就在「服务端可达的代码里不许有第二份日志实现」。
- *
- * 第二条 `sync-notice.ts`（画布镜像的失败状态）三条各自成立：首行 `"use client"`
- * 且消费者只有 `canvas-store` 与画布的持久化 hook；console 是浏览器侧唯一的日志口
- * （这里不能用 `~/lib/core/logger` —— 那是 pino + 文件/DB 落盘，打进浏览器包既跑不
- * 起来也会点着 `client-bundle-node-builtins` 那条判据）；同一份诊断的第二条通道是
- * 「拒收登记表 + toast（给人话）」，而 console 那一行留的是服务端原文与码（给排查），
- * 少任何一条就变成「读不懂」或「查不到」。
- *
- * 豁免必须由正向后置断言锁住（见用例末尾的 `it("浏览器侧豁免确实标了
- * use client")`），防止以后把豁免套在服务端可达的文件上静默放过。
+ * 浏览器侧唯一通道的豁免清单，须**全部**三条成立：① 首行 `"use client"`（只进浏览器包、服务端不可达）；
+ * ② console 是诊断的**传输手段本身**（`LogProvider` 拦进面板，规范 07 §7.6）且同诊断还走 `h.onLog`；
+ * ③ 按**文件**点名，豁免由末尾正向断言锁住。`sync-notice.ts` 不能用 pino 门面（会点着 node-builtins）。
  */
 const CLIENT_ONLY = [
   "src/lib/workshop/generation-client.ts",
   "src/lib/project-canvas/sync-notice.ts",
+  // 尺寸预设表 store：浏览器侧存取（localStorage + /api/size-presets），保存
+  // 失败的诊断走 console（LogProvider 拦进应用日志面板）—— 与 sync-notice 同款。
+  "src/lib/media/size-preset-store.ts",
 ];
 
 function walk(dir: string, out: Array<string> = []): Array<string> {
@@ -94,7 +69,7 @@ function walk(dir: string, out: Array<string> = []): Array<string> {
       walk(full, out);
       continue;
     }
-    if (/\.(ts|tsx)$/.test(name)) {
+    if (/\.(?:ts|tsx)$/.test(name)) {
       out.push(full);
     }
   }
@@ -107,14 +82,14 @@ describe("日志实现只有一处（ISSUE #568）", () => {
     for (const dir of SCAN_DIRS) {
       for (const file of walk(join(ROOT, dir))) {
         const rel = relative(ROOT, file).split("\\").join("/");
-        if (/\.test\.(ts|tsx)$/.test(rel)) {
+        if (/\.test\.(?:ts|tsx)$/.test(rel)) {
           continue;
         } // 用例自己会打点/断言输出
         if (CLIENT_ONLY.includes(rel)) {
           continue;
         } // 浏览器侧唯一通道，见上方清单
         const src = codeOf(readFileSync(file, "utf8"));
-        if (/\bconsole\s*\.\s*(log|info|warn|error|debug)\s*\(/.test(src)) {
+        if (/\bconsole\s*\.\s*(?:log|info|warn|error|debug)\s*\(/.test(src)) {
           offenders.push(rel);
         }
       }
@@ -135,7 +110,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
       const raw = readFileSync(join(ROOT, rel), "utf8");
       expect(raw.split("\n")[0]?.trim(), `${rel} 首行必须是 "use client"`).toBe('"use client";');
       expect(codeOf(raw), `${rel} 里应当有 console 调用`).toMatch(
-        /\bconsole\s*\.\s*(log|info|warn|error|debug)\s*\(/,
+        /\bconsole\s*\.\s*(?:log|info|warn|error|debug)\s*\(/,
       );
     }
   });
@@ -166,7 +141,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
     // 判据落在「实现特征」上，而不是文件清单：谁在 import pino / 谁在定义 redact 路径，
     // 谁就是实现处。两份实现只要出现，这条立刻红。
     const implementors = [...walk(join(SRC, "lib")), ...walk(join(SRC, "server"))]
-      .filter((f) => !/\.test\.(ts|tsx)$/.test(f))
+      .filter((f) => !/\.test\.(?:ts|tsx)$/.test(f))
       .filter((f) => /from\s+["']pino["']/.test(codeOf(readFileSync(f, "utf8"))))
       .map((f) => relative(ROOT, f).split("\\").join("/"));
     expect(
@@ -186,7 +161,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
 
   it("值形状守卫只有一份实现（两条通道都从 core 取）", () => {
     const files = [...walk(join(SRC, "lib")), ...walk(join(SRC, "server"))]
-      .filter((f) => !/\.test\.(ts|tsx)$/.test(f))
+      .filter((f) => !/\.test\.(?:ts|tsx)$/.test(f))
       .filter((f) => /export\s+function\s+redactSecretShaped/.test(codeOf(readFileSync(f, "utf8"))))
       .map((f) => relative(ROOT, f).split("\\").join("/"));
     expect(files).toEqual(["src/lib/core/redact-secret.ts"]);

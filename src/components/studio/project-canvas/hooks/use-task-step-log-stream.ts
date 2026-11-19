@@ -2,23 +2,14 @@
 
 /**
  * useTaskStepLogStream —— 监听单个任务的执行步骤日志流（SSE）。
- *
- * 为什么是独立 hook（规范 17 / 硬规则 10）：`new EventSource(...)` 是浏览器原生
- * 网络请求，视图 `.tsx` 里不该 hand-manage 一条 SSE 长连接的建连 / 帧解析 / 关流。
- * 此前这段生命周期整块内联在 `GlobalStepLogPanel` 里，同文件别处又把网络下沉到
- * `~/lib/task-cancel-client`（视图零 IO），唯独这条流没遵循。收进本 hook 后，
- * 面板只消费 `{ logs, status, progress, error, validationErrors, connected }` 与
- * `setError` / `clear`，不再碰网络。
- *
- * 一并托管三件与「看这一条流」不可分的事：
- *   · 换任务时从跨卸载缓存播种（`loadStepLogPanelState`）；
- *   · SSE 帧解析（log / state / 终态），终态帧只作触发器、去向 DB 要权威结论（#733）；
- *   · 20s 无活动的「卡住」提示（读连接活动时间戳）——它依赖 SSE 更新的活动时刻，
- *     与连接同源，拆开放反而要跨边界传 ref。
+ * 独立成 hook（规范 17 / 硬规则 10）：EventSource 是浏览器原生请求，视图不该 hand-manage
+ * 连接/帧解析/关流。终态帧只作触发器、去向 DB 要权威结论（#733）；20s 无活动提示与连接同源一并托管。
  */
 import { useEffect, useRef, useState } from "react";
 import { useInterval } from "~/components/ui/use-interval";
+import { isPlainRecord } from "~/lib/is-record";
 import { tailWindowAppend } from "~/lib/page-window";
+import { beginStaleRun } from "~/lib/stale-run";
 import type { ValidationError } from "~/lib/comfyui/validation";
 import { isTerminalFailureTaskStatus } from "~/lib/task-state";
 import { fetchTaskStatus } from "~/lib/task-cancel-client";
@@ -44,6 +35,55 @@ type SseFrame = {
   validationErrors?: unknown;
   workflowName?: unknown;
 };
+
+const STEP_LOG_LEVELS: ReadonlyArray<StepLogEntry["level"]> = [
+  "info",
+  "progress",
+  "warn",
+  "error",
+  "success",
+];
+
+function isStepLogLevel(v: unknown): v is StepLogEntry["level"] {
+  return STEP_LOG_LEVELS.some((level) => level === v);
+}
+
+/** `JSON.parse` 产出 `unknown`：是普通对象才按帧字段继续收窄。 */
+function isSseFrame(v: unknown): v is SseFrame {
+  return isPlainRecord(v);
+}
+
+function isStepLogEntry(v: unknown): v is StepLogEntry {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  return (
+    typeof v.t === "number" &&
+    typeof v.msg === "string" &&
+    isStepLogLevel(v.level) &&
+    (v.client === undefined || typeof v.client === "boolean") &&
+    (v.src === undefined || typeof v.src === "string")
+  );
+}
+
+function isValidationError(v: unknown): v is ValidationError {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  return (
+    typeof v.nodeId === "string" &&
+    typeof v.classType === "string" &&
+    typeof v.field === "string" &&
+    typeof v.message === "string"
+  );
+}
+
+function isValidationErrorList(v: unknown): v is Array<ValidationError> {
+  if (!Array.isArray(v)) {
+    return false;
+  }
+  return v.every((item: unknown) => isValidationError(item));
+}
 
 /** 把失败原因补成一条 error 日志行（横幅之外，时间线里也看得见，#378）。
  *  纯函数 + 显式 next：去重在 updater 之外完成，避免在 setState updater 里做副作用
@@ -111,7 +151,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
 
   // 被查看任务一变化就重新从缓存播种。
   useEffect(() => {
-    if (!taskId) {
+    if (taskId === null) {
       return;
     }
     if (loadedForRef.current !== taskId) {
@@ -129,16 +169,20 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
 
   // 订阅该任务的 SSE 流。
   useEffect(() => {
-    if (!taskId) {
+    if (taskId === null) {
       esRef.current?.close();
       esRef.current = null;
       // 与「无任务 → 连接已关」这一外部系统事实同步（非渲染级联）：
       // 关掉上一条 EventSource 后把连接指示复位。
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // oxlint-disable-next-line react/set-state-in-effect
       setConnected(false);
       return;
     }
     const tid = taskId;
+    /* 本轮作废守卫（ISSUE #3899）：终态帧后的异步回查在 await 之后才写
+     * state —— 期间用户切到别的任务（本 effect 已清理）时，旧任务的结论
+     * 不得写进新任务的面板。 */
+    const guard = beginStaleRun();
     lastActivityRef.current = Date.now();
 
     const es = new EventSource(`/api/tasks/${tid}/stream`);
@@ -150,13 +194,18 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
     };
     es.onmessage = (ev) => {
       try {
-        /* SAFETY: 类型断言已复核 */
-        /* SAFETY: 类型断言已复核 */
-        const msg = JSON.parse(ev.data as string) as SseFrame;
+        if (typeof ev.data !== "string") {
+          /* SSE 帧不是文本 —— 忽略 */
+          return;
+        }
+        const parsed: unknown = JSON.parse(ev.data);
+        if (!isSseFrame(parsed)) {
+          return;
+        }
+        const msg = parsed;
         lastActivityRef.current = Date.now();
-        if (msg.type === "log" && msg.entry) {
-          /* SAFETY: 类型断言已复核 */
-          const entry = msg.entry as StepLogEntry;
+        const entry = msg.entry;
+        if (msg.type === "log" && isStepLogEntry(entry)) {
           appendStepLog(tid, entry);
           setLogs((prev) => {
             if (prev.some((prev) => prev.t === entry.t && prev.msg === entry.msg)) {
@@ -165,9 +214,9 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
             return tailWindowAppend(prev, entry, MAX_LOGS_PER_TASK);
           });
         } else if (msg.type === "state") {
-          if (Array.isArray(msg.validationErrors)) {
-            /* SAFETY: 类型断言已复核 */
-            const ves = msg.validationErrors as Array<ValidationError>;
+          const rawValidationErrors = msg.validationErrors;
+          if (isValidationErrorList(rawValidationErrors)) {
+            const ves = rawValidationErrors;
             setStepLogValidationErrors(tid, ves);
             setValidationErrors(ves);
           }
@@ -190,7 +239,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
               }
             }
           }
-          if (msg.workflowName || msg.status) {
+          if (Boolean(msg.workflowName) || Boolean(msg.status)) {
             patchStepLogMeta(tid, {
               workflowName: typeof msg.workflowName === "string" ? msg.workflowName : undefined,
               status: typeof msg.status === "string" ? msg.status : undefined,
@@ -198,15 +247,10 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
             });
           }
         } else if (msg.type === "done" || msg.type === "error") {
-          /* 终态帧**不能直接下结论**。
-           *
-           * 现场（ISSUE #733）：任务被后端判终态（如 CANCELLED）后，迟到的
-           * 「完成」帧仍可能到达；旧实现把它当权威，直接显示「完成」并关流，
-           * 用户看到的是一个已经死掉的任务显示成功。反过来，帧里没有
-           * `status` 字段时旧实现还会把它落成 FAILED —— 成功也被显示成失败。
-           *
-           * 因此这里改为：终态帧只作为**触发器**，去向 DB 要权威结论；DB
-           * 读不到时才退回帧内信息。 */
+          /* 终态帧**不能直接下结论**（ISSUE #733）：任务被后端判终态（如 CANCELLED）后，
+           * 迟到的「完成」帧仍可能到达，旧实现当权威直接显示成功；帧里没有 `status`
+           * 时旧实现还会落成 FAILED。因此这里只把终态帧当**触发器**，去向 DB 要权威
+           * 结论，DB 读不到时才退回帧内信息。 */
           const fallback = msg.type === "error" ? "FAILED" : "SUCCEEDED";
           if (typeof msg.error === "string") {
             setError(msg.error);
@@ -216,6 +260,10 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
           void (async () => {
             /* 网络层收在 `~/lib/task-cancel-client`（视图零 IO，规范 17）。 */
             const snap = await fetchTaskStatus(tid);
+            if (guard.isStale()) {
+              /* 本轮已作废（切走了任务 / 卸载）：旧任务的结论不写进当前面板。 */
+              return;
+            }
             const finalStatus = snap.status;
             const finalError = snap.error;
             const st = finalStatus ?? fallback;
@@ -224,10 +272,10 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
             }
             setStatus(st);
             const reason = finalError ?? (typeof msg.error === "string" ? msg.error : null);
-            if (reason && isTerminalFailureTaskStatus(st)) {
+            if (reason !== null && reason !== "" && isTerminalFailureTaskStatus(st)) {
               setError(reason);
               appendFailureLogLine(tid, reason, setLogs);
-            } else if (reason) {
+            } else if (reason !== null && reason !== "") {
               setError(reason);
             }
           })();
@@ -241,6 +289,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
     };
 
     return () => {
+      guard.dispose();
       es.close();
       esRef.current = null;
     };
@@ -277,11 +326,11 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
         lastActivityRef.current = now;
       }
     },
-    { ms: taskId ? 10_000 : null, immediate: false },
+    { ms: taskId === null ? null : 10_000, immediate: false },
   );
 
   const clear = () => {
-    if (taskId) {
+    if (taskId !== null) {
       clearStepLogPanelState(taskId);
     }
     setLogs([]);

@@ -1,30 +1,63 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { getConfigForClient } from "~/lib/llm/server";
+import { getConfigForClient, resolveRemoteModelConnection } from "~/lib/llm/server";
+import { completeWorkshopLLM, getWorkshopLLMConfig } from "~/server/workshop/llm";
+import type { WorkshopLLMConfig } from "~/server/workshop/llm";
 import { remoteModelEntrySchema } from "~/lib/llm/remote-model-schema";
-import { isHttpUrl } from "~/lib/url-scheme";
-import { remoteModelRepository } from "~/lib/core/repository";
 import {
-  isCustomContractInputId,
-  isModeContractInputId,
-  parseRemoteModeAdapters,
-  WORKSHOP_INPUT_TYPES,
-} from "~/lib/workshop/model-mode-contract";
-import { loadModeContracts, saveModeContracts } from "~/lib/workshop/mode-contract.server";
+  LLM_API_FORMATS,
+  MODEL_CAPABILITIES,
+  MODEL_INPUT_TYPES,
+  MODEL_OUTPUT_TYPES,
+  isMediaEndpointKind,
+  isMediaEndpointPath,
+  resolveApiFormat,
+  resolveMediaEndpointPath,
+} from "~/lib/llm/provider-types";
+import { EXTRA_BODY_TEXT_MAX, isExtraBodyJsonObject } from "~/lib/llm/extra-body";
+import { isHttpUrl } from "~/lib/url-scheme";
+import {
+  llmProviderRepository,
+  parseAdaptersDocJson,
+  remoteModelRepository,
+} from "~/lib/core/repository";
+import type { LlmProvider, RemoteModel } from "~/server/db/schema";
+import { isCustomContractInputId, isModeContractInputId } from "~/lib/workshop/model-mode-contract";
+import { parseRemoteModeAdapters, WORKSHOP_INPUT_TYPES } from "~/lib/workshop/remote-model-adapter";
+import { KeyedAsyncMutex } from "~/lib/async-mutex";
+import {
+  loadModeContractLayers,
+  resetModeContractOverride,
+  saveModeContracts,
+  saveModeContractsAsProjectDefaults,
+} from "~/lib/workshop/mode-contract.server";
+import {
+  effectiveModelAdaptersDoc,
+  saveModelAdaptersAsDefaults,
+} from "~/lib/workshop/model-adapter-defaults.server";
+import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
+
+/* workshopAdapters 文档的「读整份 → 合并 → 整份写回」按模型名串行化（ISSUE #3871）：
+ * 「接口端点」（modelSave）与「模型适配」（workshopAdaptersSave）两处都基于各自
+ * 读到的旧 doc 整份覆盖，并发保存时后写者把先写者的字段抹掉。写入方全在本进程，
+ * 进程内互斥即可闭合；读-改-写三步都在锁内，慢 IO 不在其中。 */
+const workshopAdaptersMutex = new KeyedAsyncMutex();
 
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
-  type: z.enum(
-    /* SAFETY: 类型断言已复核 */ WORKSHOP_INPUT_TYPES.map((t) => t.type) as [
-      string,
-      ...Array<string>,
-    ],
-  ),
+  /* zod v4 的 `z.enum` 带 `const T extends readonly string[]`：直接吃同一份
+   * 词表派生的数组即可，字面量联合原样保留，无需断言成元组。 */
+  type: z.enum(WORKSHOP_INPUT_TYPES.map((t) => t.type)),
   field: z.string().min(1),
 });
+/* 端点路径不在适配器行里（ISSUE #3622）：它是模型本身的配置、与模式无关，
+ * 存档升成模型级 envelope（workshopAdaptersSave 的入参带 endpointPath 一格，
+ * 所有模式共用）。 */
 const adapterSchema = z.object({
+  /* 固定值字段（#3590）：每次请求原样带上的键值（如 Agnes 视频的 mode/size）。 */
+  constants: z.array(z.object({ field: z.string().min(1), value: z.string() })).optional(),
   mode: z.string().min(1),
-  endpointPath: z.string().min(1),
   inputs: z.array(adapterInputSchema).min(1),
   outputField: z.string().optional(),
 });
@@ -41,6 +74,160 @@ const taskTypeKeys = ["txt2img", "img2video", "chat", "code", "creative", "revie
  *  的词表）。在这里再抄一份行内枚举，就是「弹窗能选、服务端不认」那种漂移的起点。 */
 const extraModelsSchema = z.array(z.union([z.string(), remoteModelEntrySchema]));
 
+/** 供应商入参（#3501）：Base URL 必须是 http/https（与 configSave 同一判据）。
+ *  `apiKey` 三态：缺键 = 不动既有、`null`/空白 = 清空、非空串 = 写入新值。
+ *  `apiFormat` 自 #3517 起下移到模型级，这里省略 = 不动既有（历史供应商的协议
+ *  不该被一次「改个名字」的保存改回默认）。 */
+const providerInputSchema = z.object({
+  apiFormat: z.enum(LLM_API_FORMATS).optional(),
+  apiKey: z.string().nullish(),
+  baseUrl: z.string().refine(isHttpUrl, { message: "Base URL 必须为 http/https" }),
+  id: z.string().min(1).optional(),
+  name: z.string().trim().min(1, "供应商名称不能为空"),
+});
+
+/** 模型入参（#3501）：窗口 / 输出上限必须是正整数（0 与负数在上游都无意义）。
+ *  `apiFormat` 是模型级接口格式（#3517）：省略 = 跟随供应商（历史行）。 */
+const modelInputSchema = z.object({
+  apiFormat: z.enum(LLM_API_FORMATS).nullish(),
+  apiKey: z.string().nullish(),
+  /* 与供应商级 / configSave 级同一校验（#4049）：模型行的坏 baseUrl 会在运行期
+   * 按「模型级 → 供应商级」覆盖好值。空值放行（nullish = 未配置 / 清空）。 */
+  baseUrl: z.string().refine(isHttpUrl, { message: "Base URL 必须为 http/https" }).nullish(),
+  capabilities: z.array(z.enum(MODEL_CAPABILITIES)).nullish(),
+  contextWindow: z.number().int().positive().nullish(),
+  /** 图像 / 视频模型的接口端点动作路径（#3656）：写侧按行用途白名单收窄。 */
+  endpointPath: z.string().nullish(),
+  enabled: z.boolean().optional(),
+  id: z.string().min(1).optional(),
+  inputTypes: z.array(z.enum(MODEL_INPUT_TYPES)).nullish(),
+  outputTypes: z.array(z.enum(MODEL_OUTPUT_TYPES)).nullish(),
+  kind: z.enum(["chat", "image", "video"]).optional(),
+  maxOutputTokens: z.number().int().positive().nullish(),
+  name: z.string().trim().min(1, "模型名称不能为空"),
+  /** 额外请求体字段（#3626）：raw JSON 对象文本；空串 = 合法（未配置、不发送）。
+   *  与客户端 `validateModelForm` 同一判据（~/lib/llm/extra-body）。 */
+  extraBody: z
+    .string()
+    .trim()
+    .max(EXTRA_BODY_TEXT_MAX, `额外请求体字段超过 ${EXTRA_BODY_TEXT_MAX} 字符`)
+    .refine(isExtraBodyJsonObject, {
+      message: '额外请求体字段必须是 JSON 对象（如 {"response_format":{"type":"json_object"}}）',
+    })
+    .nullish(),
+  providerId: z.string().min(1),
+  reasoningLevels: z.array(z.string()).nullish(),
+  reasoningParamMapping: z
+    .object({ param: z.string(), values: z.record(z.string(), z.string()) })
+    .nullish(),
+  smartConfig: z.boolean().optional(),
+});
+
+/** 供应商下发给客户端的形状：密钥只报「有没有配」。 */
+function providerView(p: LlmProvider) {
+  return {
+    id: p.id,
+    name: p.name,
+    baseUrl: p.baseUrl,
+    apiFormat: p.apiFormat,
+    hasApiKey: typeof p.apiKey === "string" && p.apiKey !== "",
+  };
+}
+
+/** 模型下发给客户端的形状：密钥只报「有没有配」（供应商级密钥不在这里重复报）。
+ *  `apiFormat` 下发的是**生效值**（模型自己的 → 供应商默认 → chat-completions）：
+ *  设置页的模型行与编辑弹窗都按它显示，不再各自回落一次。
+ *  指向已删除供应商的行 `find` 自然取不到，格式回落默认值，不因一条孤儿行报错。
+ *  `endpointPath`（#3656）同口径，来源是模型级适配器存档（`workshopAdapters`
+ *  envelope 的模型级端点一格，#3622/#3659）：图像 / 视频行下发生效值（存档值
+ *  按用途白名单收窄 → 缺省回落用途默认第一项），文本行恒 null。 */
+function modelView(m: RemoteModel, providers: ReadonlyArray<LlmProvider>) {
+  const provider = providers.find((p) => p.id === m.providerId);
+  const doc = parseAdaptersDocJson(m.workshopAdapters);
+  return {
+    id: m.id,
+    providerId: m.providerId,
+    name: m.name,
+    kind: m.kind,
+    enabled: m.enabled,
+    baseUrl: m.baseUrl,
+    apiFormat: resolveApiFormat(m.apiFormat, provider?.apiFormat),
+    endpointPath: isMediaEndpointKind(m.kind)
+      ? resolveMediaEndpointPath(m.kind, doc.endpointPath)
+      : null,
+    hasApiKey: typeof m.apiKey === "string" && m.apiKey !== "",
+    contextWindow: m.contextWindow,
+    maxOutputTokens: m.maxOutputTokens,
+    inputTypes: m.inputTypes,
+    outputTypes: m.outputTypes,
+    capabilities: m.capabilities,
+    reasoningLevels: m.reasoningLevels,
+    reasoningParamMapping: m.reasoningParamMapping,
+    smartConfig: m.smartConfig,
+    /* 额外请求体字段（#3626）：原文下发（raw JSON 对象文本），弹窗原样回填；
+     * 读取端（运行时）各自按需解析，坏行按「未配置」处理。 */
+    extraBody: m.extraBody ?? "",
+  };
+}
+
+/** 供应商 + 模型全量视图（每条写操作都回这一份，前端不必自己拼状态）。 */
+async function readProviderState() {
+  /* 历史遗留模型先归入默认供应商：这一步幂等，且必须在 list 之前 ——
+   * 否则首次打开设置页会看到一组「无主」模型，用户不知道该挂到哪个供应商下。 */
+  await llmProviderRepository.ensureLegacyProvider();
+  const [providers, models] = await Promise.all([
+    llmProviderRepository.list(),
+    remoteModelRepository.list(),
+  ]);
+  return {
+    providers: providers.map(providerView),
+    models: models.map((m) => modelView(m, providers)),
+  };
+}
+
+/** 一条模式契约的入参形状（本机保存与「保存为项目默认」共用同一份，ISSUE #3396）。
+ *  口 id 由 isModeContractInputId 做类型守卫（zod 随之把入参窄化成契约口）；
+ *  写入侧各自的归一化（`parseModeContracts`）再做一次。
+ *
+ *  **没有「输出类别」这一格**（ISSUE #4072）：模式已按类别区分，再让用户挑一次
+ *  是重复选择。zod 默认剥掉未声明的键 ⇒ 存量客户端仍带着 `output` 提交也不会
+ *  被打回，落盘时那一格也不再进契约（归一化侧同口径）。 */
+const modeContractsInputSchema = z.object({
+  contracts: z.array(
+    z.object({
+      mode: z.string().min(1),
+      // 契约口是工坊对用户的统一口径（尺寸 / 参考图…），**不是**适配器侧的
+      // 输入类型（aspect-ratio / megapixels…）。曾误用 WORKSHOP_INPUT_TYPES
+      // 校验，保存含「尺寸」的契约直接被 zod 打回（Invalid option …）。
+      inputs: z
+        .array(
+          z.string().refine(isModeContractInputId, {
+            message:
+              "契约口必须是 prompt|negative|size|duration|reference-image|first-frame|last-frame（第 2 张起的参考图带序号，如 reference-image-2）、或自定义口 custom-text-1 / custom-image-2 / custom-number-3",
+          }),
+        )
+        .min(1),
+      /* 该模式的必备口（缺了它这条流在工坊里驱动不起来）。缺省 =
+       * 没配过 → 由 requiredInputsFor 回落内置默认（提示词）。 */
+      required: z.array(z.string().refine(isModeContractInputId)).optional(),
+      /* 作者自定义的口：名字由作者填，类型是「简单类型」之一（决定工坊
+       *  控件形态与它接受哪一族端口）。归一化（丢弃无定义的口）在
+       *  `parseModeContracts` 里再做一次。 */
+      customInputs: z
+        .array(
+          z.object({
+            id: z.string().refine(isCustomContractInputId, {
+              message: "自定义口 id 形如 custom-text-1 / custom-image-2",
+            }),
+            label: z.string().min(1),
+            kind: z.enum(["text", "image", "number"]),
+          }),
+        )
+        .optional(),
+    }),
+  ),
+});
+
 export const llmRouter = createTRPCRouter({
   /* GET /api/llm/config —— 读 */
   configGet: authedProcedure.query(async () => {
@@ -48,70 +235,180 @@ export const llmRouter = createTRPCRouter({
     return { config: cfg };
   }),
 
-  /** 模式契约注册表：每种模式的统一输入 / 输出（只含用户改过的模式） */
-  modeContractsGet: authedProcedure.query(async () => {
-    const contracts = await loadModeContracts();
-    return { contracts };
-  }),
-
-  modeContractsSave: authedProcedure
+  /** 对话测试（ISSUE #4080）：向被测模型发一条短提示词，返回补全与耗时。
+   *  本地模型（Ollama，extraModels 里的字符串候选）走设置里配置的本地服务
+   *  （连接参数 = 生效 LLM 配置，模型名换成被测的那个）；远端模型按名解析
+   *  连接参数（baseUrl / apiKey 走模型自己或其供应商的）。 */
+  chatTest: authedProcedure
     .input(
       z.object({
-        contracts: z.array(
-          z.object({
-            mode: z.string().min(1),
-            // 契约口是工坊对用户的统一口径（尺寸 / 参考图…），**不是**适配器侧的
-            // 输入类型（aspect-ratio / megapixels…）。曾误用 WORKSHOP_INPUT_TYPES
-            // 校验，保存含「尺寸」的契约直接被 zod 打回（Invalid option …）。
-            inputs: z
-              .array(
-                z.string().refine(isModeContractInputId, {
-                  message:
-                    "契约口必须是 prompt|negative|size|duration|reference-image|first-frame|last-frame（第 2 张起的参考图带序号，如 reference-image-2）、或自定义口 custom-text-1 / custom-image-2 / custom-number-3",
-                }),
-              )
-              .min(1),
-            output: z.enum(["image", "video", "audio"]),
-            /* 该模式的必备口（缺了它这条流在工坊里驱动不起来）。缺省 =
-             * 没配过 → 由 requiredInputsFor 回落内置默认（提示词）。 */
-            required: z.array(z.string().refine(isModeContractInputId)).optional(),
-            /* 作者自定义的口：名字由作者填，类型是「简单类型」之一（决定工坊
-             *  控件形态与它接受哪一族端口）。归一化（丢弃无定义的口）在
-             *  `parseModeContracts` 里再做一次。 */
-            customInputs: z
-              .array(
-                z.object({
-                  id: z.string().refine(isCustomContractInputId, {
-                    message: "自定义口 id 形如 custom-text-1 / custom-image-2",
-                  }),
-                  label: z.string().min(1),
-                  kind: z.enum(["text", "image", "number"]),
-                }),
-              )
-              .optional(),
-          }),
-        ),
+        name: z.string().min(1),
+        local: z.boolean(),
+        prompt: z.string().min(1).max(4000),
       }),
     )
     .mutation(async ({ input }) => {
-      // 口 id 由 isModeContractInputId 做类型守卫（zod 随之把入参窄化成契约口），
-      // saveModeContracts 内部再做一次契约归一化。
-      const contracts = await saveModeContracts(input.contracts);
-      return { contracts };
+      const started = Date.now();
+      let cfg: WorkshopLLMConfig;
+      if (input.local) {
+        const base = await getWorkshopLLMConfig();
+        cfg = { ...base, model: input.name };
+      } else {
+        const entry = await resolveRemoteModelConnection(input.name);
+        if (!entry?.baseUrl) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `模型「${input.name}」不存在或没有可用的接口地址`,
+          });
+        }
+        cfg = {
+          baseUrl: entry.baseUrl,
+          apiKey: entry.apiKey,
+          model: entry.name,
+          temperature: 0.7,
+          maxTokens: 2048,
+        };
+      }
+      const reply = await completeWorkshopLLM(cfg, [{ role: "user", content: input.prompt }]);
+      return {
+        reply,
+        durationMs: Date.now() - started,
+        endpoint: `${cfg.baseUrl}/chat/completions`,
+        model: cfg.model,
+      };
     }),
 
-  /** 读取某条远端模型的工坊模式适配器 */
+  /** 供应商 + 模型全量清单（#3501「远程模型」页的数据源）。 */
+  providersGet: authedProcedure.query(async () => readProviderState()),
+
+  /** 新建 / 更新供应商；返回全量视图（前端不必自己拼状态）。 */
+  providerSave: authedProcedure.input(providerInputSchema).mutation(async ({ input }) => {
+    await llmProviderRepository.save(input);
+    return readProviderState();
+  }),
+
+  /** 删除供应商及其名下模型。 */
+  providerDelete: authedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      await llmProviderRepository.delete(input.id);
+      return readProviderState();
+    }),
+
+  /** 新建 / 更新供应商下的一条模型。 */
+  modelSave: authedProcedure.input(modelInputSchema).mutation(async ({ input }) => {
+    /* 图像 / 视频的接口端点（#3656）落**模型级适配器存档**（workshopAdapters
+     * envelope 的 endpointPath 一格，#3622/#3659 的同一份存储），不另开列。
+     * `null`（文本行 / 弹窗重置）= 清空该格；白名单外的值折成空串 = 按用途
+     * 默认第一项（读侧 `resolveMediaEndpointPath` 统一回落）。省略 = 不动既有
+     * （旧调用方不带这格）。
+     *
+     * endpointPath 与模型行**同一条语句**落库（#4232）：原先两段独立提交——
+     * 第二段失败时模型行已是新值、端点存档仍旧值（§08 8.12② 的失败窗口）。
+     * 现在读-合并-写整体在 keyed mutex 内完成（并发保存的串行化不变），
+     * 合并好的整份 doc 折进 saveModel 的同一条 INSERT/UPDATE。 */
+    if (input.endpointPath === undefined) {
+      await remoteModelRepository.saveModel(input);
+      return readProviderState();
+    }
+    await workshopAdaptersMutex.run(input.name.trim(), async () => {
+      const doc = await remoteModelRepository.getWorkshopAdaptersDoc(input.name.trim());
+      const endpointPath =
+        isMediaEndpointKind(input.kind) &&
+        typeof input.endpointPath === "string" &&
+        isMediaEndpointPath(input.kind, input.endpointPath)
+          ? input.endpointPath
+          : "";
+      const merged = endpointPath === doc.endpointPath ? doc : { ...doc, endpointPath };
+      await remoteModelRepository.saveModel(input, { workshopAdapters: merged });
+    });
+    return readProviderState();
+  }),
+
+  /** 删除一条模型。 */
+  modelDelete: authedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      await remoteModelRepository.deleteModel(input.id);
+      return readProviderState();
+    }),
+
+  /** 启用 / 停用一条模型（停用的模型不下发给工坊下拉）。 */
+  modelToggle: authedProcedure
+    .input(z.object({ enabled: z.boolean(), id: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      await remoteModelRepository.setEnabled(input.id, input.enabled);
+      return readProviderState();
+    }),
+
+  /** 模式契约注册表：每种模式的统一输入。
+   *
+   *  下发**两层**：`configured` = 成品配置（项目默认基线，开发检出里现读磁盘，
+   *  写完即生效不必重启）；`contracts` = 生效注册表（成品配置逐模式压上本机
+   *  覆盖）。界面读 `contracts` 显示与编辑，读 `configured` 判「已改」——
+   *  两层各给一份，省得界面自己再合一次（合的规则只有一处：`mode-contract-registry`）。
+   *  `projectDefaultEditable` 供界面决定要不要渲染「保存为项目默认」——
+   *  只有开发检出有可写的目标文件（ISSUE #3396）。 */
+  modeContractsGet: authedProcedure.query(async () => {
+    const { configured, contracts } = await loadModeContractLayers();
+    return { configured, contracts, projectDefaultEditable: isDevCheckout() };
+  }),
+
+  modeContractsSave: authedProcedure.input(modeContractsInputSchema).mutation(async ({ input }) => {
+    // 口 id 由 isModeContractInputId 做类型守卫（zod 随之把入参窄化成契约口），
+    // saveModeContracts 内部再做一次契约归一化。
+    await saveModeContracts(input.contracts);
+    // 返回**保存后的生效注册表**（覆盖落盘 → 重读三层），界面据此刷新，
+    // 不用再等一次查询往返。
+    const { contracts } = await loadModeContractLayers();
+    return { contracts };
+  }),
+
+  /** 「保存为项目默认」：编辑器现状**全量**写进入库 JSON（跟代码走）。
+   *  只有开发检出可用 —— 正式包大声失败（判据与出口都在
+   *  `saveModeContractsAsProjectDefaults`）。写完读取侧现读磁盘 ⇒ 不必重启。 */
+  modeContractsSaveProjectDefaults: authedProcedure
+    .input(modeContractsInputSchema)
+    .mutation(async ({ input }) => {
+      const { file } = await saveModeContractsAsProjectDefaults(input.contracts);
+      // 重读三层：刚写进项目默认的那份立刻成为成品配置，生效注册表随之更新
+      // （界面这一跳就能看到新口径，不必重启应用）。
+      const { contracts } = await loadModeContractLayers();
+      return { contracts, file };
+    }),
+
+  /** 「还原默认」：把一个模式从本机覆盖里移除（生效值回落成品配置）。
+   *  返回移除后的生效注册表与该模式的生效契约（界面直接拿它刷新草稿）。 */
+  modeContractReset: authedProcedure
+    .input(z.object({ mode: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const { effective } = await resetModeContractOverride(input.mode);
+      const { contracts } = await loadModeContractLayers();
+      return { contracts, effective };
+    }),
+
+  /** 读取某条远端模型的工坊适配器存档（模型级：端点路径 + 各模式适配器）。
+   *  返回的是**生效档**（ISSUE #3951）：项目默认（跟代码走的基线）与 DB 存档
+   *  逐模式合并 —— 编辑器播种看到「基线 + 本机已改」，改完可另存回项目默认。 */
   workshopAdaptersGet: authedProcedure
     .input(z.object({ name: z.string().min(1) }))
     .query(async ({ input }) => {
-      const adapters = await remoteModelRepository.getWorkshopAdapters(input.name);
-      return { adapters };
+      return effectiveModelAdaptersDoc(
+        input.name,
+        await remoteModelRepository.getWorkshopAdaptersDoc(input.name),
+      );
     }),
 
-  /** 保存某条远端模型的工坊模式适配器（整份覆盖） */
+  /** 保存某条远端模型的工坊适配器存档（整份覆盖；端点路径模型级共用）。
+   *  端点路径**不由「模型适配」页编辑**（#3631：它已在设置页「接口端点」
+   *  下拉配置）—— 入参省略这格 = 保住既有值不被冲掉；显式带上（设置侧
+   *  modelSave 与旧调用方）= 原语义（trim 后整格覆盖）。 */
   workshopAdaptersSave: authedProcedure
     .input(
       z.object({
+        /* 模型级端点路径（拼在条目 Base URL 后）：空 = 未配置，请求侧按
+         * 产物类别推导（ISSUE #3622）。省略 = 不动既有（#3631）。 */
+        endpointPath: z.string().optional(),
         name: z.string().min(1),
         adapters: z.array(adapterSchema),
       }),
@@ -120,9 +417,71 @@ export const llmRouter = createTRPCRouter({
       const adapters = parseRemoteModeAdapters(
         input.adapters.map((a) => ({ ...a, mode: a.mode.toUpperCase() })),
       );
-      const saved = await remoteModelRepository.saveWorkshopAdapters(input.name, adapters);
-      return { adapters: saved };
+      /* 读-改-写收进按模型名的互斥（ISSUE #3871）：与 modelSave 的 endpointPath
+       * 合并同锁，互相不再覆盖。 */
+      return workshopAdaptersMutex.run(input.name, async () => {
+        const existing = await remoteModelRepository.getWorkshopAdaptersDoc(input.name);
+        return remoteModelRepository.saveWorkshopAdaptersDoc(input.name, {
+          endpointPath:
+            input.endpointPath === undefined
+              ? existing.endpointPath
+              : (input.endpointPath.trim() ?? ""),
+          adapters,
+        });
+      });
     }),
+
+  /** 把当前编辑的适配器写进入库的**项目默认**
+   *  （`src/lib/workshop/model-adapter-defaults.json`，跟代码走；ISSUE #3951）。
+   *  与「模式契约」的保存为项目默认同一档：只有开发检出可写（正式包没有源码，
+   *  调用即错用，大声失败）；写完现读即生效，不必重启。端点路径与
+   *  workshopAdaptersSave 同口径：省略 = 取生效档现值（本页不编辑它）。 */
+  workshopAdaptersSaveAsDefaults: authedProcedure
+    .input(
+      z.object({
+        endpointPath: z.string().optional(),
+        name: z.string().min(1),
+        adapters: z.array(adapterSchema),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const adapters = parseRemoteModeAdapters(
+        input.adapters.map((a) => ({ ...a, mode: a.mode.toUpperCase() })),
+      );
+      return workshopAdaptersMutex.run(input.name, async () => {
+        const effective = await effectiveModelAdaptersDoc(
+          input.name,
+          await remoteModelRepository.getWorkshopAdaptersDoc(input.name),
+        );
+        return saveModelAdaptersAsDefaults(input.name, {
+          endpointPath:
+            input.endpointPath === undefined
+              ? effective.endpointPath
+              : (input.endpointPath.trim() ?? ""),
+          adapters,
+        });
+      });
+    }),
+
+  /** 各模型的适配器概览（哪些模型配了、各配了几个模式）——「模型适配」页
+   *  的模型清单标「已配」用，免得逐模型拉全量存档。按**生效档**数（#3951）：
+   *  项目默认（跟代码走）里配了的模型同样标「已配」—— 生成链路真的会用到它。 */
+  workshopAdaptersSummary: authedProcedure.query(async () => {
+    const rows = await remoteModelRepository.list();
+    const models: Array<{ modes: Array<string>; name: string }> = [];
+    for (const row of rows) {
+      /* 逐模型现读基线（小 JSON）；串行与生成链路同序，便于日志归因。 */
+      // oxlint-disable-next-line no-await-in-loop -- 逐模型读盘为独立小文件，串行保持读数可归因
+      const doc = await effectiveModelAdaptersDoc(
+        row.name,
+        parseAdaptersDocJson(row.workshopAdapters),
+      );
+      if (doc.adapters.length > 0) {
+        models.push({ modes: doc.adapters.map((a) => a.mode), name: row.name });
+      }
+    }
+    return { models };
+  }),
 
   /* POST /api/llm/config —— 新建：update singleton config */
   configSave: authedProcedure

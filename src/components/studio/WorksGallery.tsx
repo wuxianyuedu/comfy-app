@@ -1,19 +1,8 @@
 "use client";
 
 // ── 「所有项目」屏（视图层，规范 17 §17.2 第③层）─────────────────────────
-//
-// 取数与删除都在 `works/hooks/use-works-gallery.ts`（§17.2 第②层），本文件只把
-// 它接成卡片网格 + 确认弹窗。此前这一屏自己读 `listProjects()` / `deleteProject()`
-//（本地索引那一侧），于是**「服务端有一行、索引里没有」的项目在这里既看不见、
-// 也删不掉** —— 那是 ISSUE #1522 问的口子。
-//
-// 一行分三种出处，界面上如实标出来（见 `use-works-gallery` 的三条口径）：
-//   · 服务端独有 —— 标「仅服务端」。这不是给人看的装饰：删它动的是服务端那一份，
-//     本机没有副本可回退；
-//   · 本地独有   —— 标「未同步」。它还没推上去（或推送被拒），删它动的是本地那一份；
-//   · 两侧都有   —— 不标，正常行。
-//
-// 本组件只做一件事：把这一屏渲染出来，附带悬停删除 + 弹窗确认。
+// 取数与删除都在 `works/hooks/use-works-gallery.ts`（§17.2 第②层），本文件只把它接成卡片网格 + 确认弹窗。此前这一屏自己读 `listProjects()` / `deleteProject()`（本地索引那一侧），于是「服务端有一行、索引里没有」的项目在这里既看不见也删不掉（ISSUE #1522）。
+// 一行分三种出处，界面上如实标出来（见 `use-works-gallery` 的三条口径）：服务端独有 → 「仅服务端」（删它动的是服务端那一份，本机没有副本可回退）；本地独有 → 「未同步」（还没推上去或推送被拒）；两侧都有 → 不标。
 
 import { Trash2 } from "lucide-react";
 
@@ -23,11 +12,13 @@ import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { PageHeader } from "~/components/ui/page-header";
 import { timeAgo } from "~/lib/time-format";
 import type { ProjectOrigin } from "~/lib/project-canvas/canvas-store";
 import { PROJECTS_ENTRY } from "./NavItems";
 import { useWorksGallery } from "./works/hooks/use-works-gallery";
+import { Hint } from "~/components/ui/hint";
 
 /* 作品/视频项目卡**类别装饰色**——cyan 在这套 UI 里代表"视频/作品"类别
  * (与 `MaterialLibraryPanel KIND_STYLE.video` 蓝调装饰一脉相承)。是"这一
@@ -100,12 +91,8 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
           </>
         }
         className="mb-8"
-        /* 「服务端」这三个字要的是**视觉强调**，不是字面量星号：JSX 文本节点
-           不解析 Markdown，裸写星号会把星号原样印到界面上（ISSUE #1522 收尾
-           时撞到的排版 bug）。
-           词边界也不能交给缩进：JSX 把换行处的空白当内容渲染，中文句子又不该
-           有词间空格 —— 所以外层文本与 `<span>` 之间不留空白、也不把词切开，
-           渲染出来才是「列表以服务端为准」。 */
+        /* 「服务端」这三个字要**视觉强调**，不是字面量星号：JSX 文本节点不解析 Markdown，裸写星号会原样印到界面上（ISSUE #1522 收尾时撞到的排版 bug）。
+           词边界也不能交给缩进：JSX 把换行处空白当内容渲染，中文句又不该有词间空格 —— 外层文本与 `<span>` 之间不留空白、也不把词切开，渲染出来才是「列表以服务端为准」。 */
         description={
           <>
             画布项目，按时间倒序排列。列表以
@@ -138,8 +125,8 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {projects.map((project) => {
-              const nodeCount = project.nodes?.length ?? 0;
-              const edgeCount = project.edges?.length ?? 0;
+              const nodeCount = project.nodes.length;
+              const edgeCount = project.edges.length;
               const badge = ORIGIN_BADGE[project.origin];
               const hint = ORIGIN_HINT[project.origin];
               const displayName = project.name || "未命名项目";
@@ -150,7 +137,9 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
                 >
                   <Button
                     className="flex h-auto w-full items-start gap-3 rounded-2xl p-3.5 text-left font-normal"
-                    onClick={() => controller.openProject(project.id)}
+                    onClick={() => {
+                      controller.openProject(project.id);
+                    }}
                     variant="ghost"
                   >
                     <div
@@ -177,12 +166,12 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
                           铺满整行，长名字会径直压到「删除」两个字底下（用户看到
                           的是两段字叠在一起）。`pr-*` 在这里是给它的**让位**，
                           不是内边距：宽度不够时标题先截断，按钮始终完整。 */}
-                      <p className="text-ink-bright group-hover:text-ink truncate pr-12 text-sm font-medium">
+                      <TruncatedText className="text-ink-bright group-hover:text-ink truncate pr-12 text-sm font-medium">
                         {displayName}
-                      </p>
-                      <p className="text-ink-muted text-2xs mt-1 truncate">
+                      </TruncatedText>
+                      <TruncatedText className="text-ink-muted text-2xs mt-1 truncate">
                         {bodySummary(nodeCount, edgeCount)}
-                      </p>
+                      </TruncatedText>
                       <p className="text-ink-fainter text-2xs mt-0.5">
                         {timeAgo(project.updatedAt, { suffix: "修改" }) ?? "刚刚修改"}
                       </p>
@@ -190,13 +179,12 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
                   </Button>
 
                   {/* 出处标：只给「只在一侧」的行。`both` 是正常行，标出来是噪声。 */}
-                  {badge && (
-                    <span
-                      className="text-ink-fainter border-border-subtle bg-surface-2 text-3xs absolute bottom-2.5 left-3.5 rounded-md border px-1.5 py-0.5"
-                      title={hint}
-                    >
-                      {badge}
-                    </span>
+                  {badge !== undefined && badge !== "" && (
+                    <Hint label={hint}>
+                      <span className="text-ink-fainter border-border-subtle bg-surface-2 text-3xs absolute bottom-2.5 left-3.5 rounded-md border px-1.5 py-0.5">
+                        {badge}
+                      </span>
+                    </Hint>
                   )}
 
                   {/* 逐卡片删除：仅悬停显示，右上角。
@@ -273,7 +261,7 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
         onClose={cancelDelete}
         onConfirm={() => {
           void confirmDelete().then((name) => {
-            if (name) {
+            if (name !== null && name !== "") {
               toast.success(`已删除项目「${name}」`);
             }
           });

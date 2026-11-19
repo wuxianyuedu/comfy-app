@@ -38,6 +38,13 @@ export type CanvasPlacementContext = {
   screenToFlowPosition: (point: XYPosition) => XYPosition;
 };
 
+/** 运行期确认节点类型是画布接受的两支之一，再交给 ReactFlow 的类型面。 */
+function assertCanvasNodeType(node: Node): asserts node is CanvasNodeType {
+  if (node.type !== "canvasNode" && node.type !== "workflowArdot") {
+    throw new TypeError(`不是画布节点：${String(node.type)}`);
+  }
+}
+
 /**
  * 把一个画布节点放进项目画布 —— **全库唯一的入口**（规范 16 §16.2.4.38）。
  *
@@ -86,8 +93,13 @@ export function placeCanvasNode(opts: {
     position,
     data: opts.data,
   };
-  /* SAFETY: 类型断言已复核 */
-  return [...opts.nodes, node] as Array<CanvasNodeType>;
+  const all: Array<CanvasNodeType> = [];
+  for (const existing of opts.nodes) {
+    assertCanvasNodeType(existing);
+    all.push(existing);
+  }
+  all.push(node);
+  return all;
 }
 
 /** 双 rAF 的 fitView 调度器：等 ReactFlow 完成本轮布局后再 fit，
@@ -137,14 +149,19 @@ export function applyPropagationToNodes(
 
     // 连线传入自定义工作流节点：按 ioKey 把上游输出写进 workflowInputs，
     // 这样 runGenerate 的 toWorkflowInputsPayload 会把它一起发给后端。
-    if (td.kind === "workflow" && edge.targetHandle) {
+    /* ioKey / 文件路径都不会是空串，缺省只用 null / undefined 表达 */
+    if (td.kind === "workflow" && edge.targetHandle !== undefined && edge.targetHandle !== null) {
       const key = edge.targetHandle;
       let stored: unknown = undefined;
-      if (src.kind === "text" && src.content?.trim()) {
+      if (typeof src.content === "string" && src.content.trim() !== "") {
         stored = src.content;
-      } else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath) {
+      } else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath !== undefined) {
         stored = src.mediaPath;
-      } else if (src.resultPath && src.resultMediaType !== "video" && importedFile) {
+      } else if (
+        src.resultPath !== undefined &&
+        src.resultMediaType !== "video" &&
+        importedFile !== null
+      ) {
         stored = importedFile;
       }
       if (stored !== undefined) {
@@ -170,15 +187,16 @@ export function applyPropagationToNodes(
       const incoming: string | undefined =
         importedFile ??
         (src.kind === "picture" || src.kind === "movie" ? (src.mediaPath ?? undefined) : undefined);
-      if (incoming) {
+      if (incoming !== undefined) {
         return {
           ...node,
           data: {
             ...td,
             mediaPath: incoming,
-            mediaName: src.resultPath
-              ? lastSegments(String(src.resultPath), 1) || undefined
-              : td.mediaName,
+            mediaName:
+              src.resultPath !== undefined && src.resultPath !== ""
+                ? lastSegments(String(src.resultPath), 1) || undefined
+                : td.mediaName,
             upstreamId: sourceId,
           },
         };
@@ -191,7 +209,7 @@ export function applyPropagationToNodes(
       case "prompt": {
         // 文本载体节点喂它自己的自由文本；其它节点则喂 prompt 字段。
         if (src.kind === "text") {
-          if (src.content?.trim()) {
+          if (typeof src.content === "string" && src.content.trim() !== "") {
             next.prompt = src.content;
           }
         } else if (src.prompt?.trim()) {
@@ -206,15 +224,13 @@ export function applyPropagationToNodes(
         break;
       }
       case "steps": {
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        if (src.steps != null) {
+        if (src.steps !== null && src.steps !== undefined) {
           next.steps = src.steps;
         }
         break;
       }
       case "cfg": {
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        if (src.cfg != null) {
+        if (src.cfg !== null && src.cfg !== undefined) {
           next.cfg = src.cfg;
         }
         break;
@@ -227,7 +243,7 @@ export function applyPropagationToNodes(
       }
       case "inputImage":
       default: {
-        if (importedFile) {
+        if (importedFile !== null) {
           next.inputImage = importedFile;
           next.upstreamId = sourceId;
           // 自动切换消费端模式，让喂进来的图片真正被用上
@@ -237,7 +253,10 @@ export function applyPropagationToNodes(
           if (next.kind === "video" && next.mode === "t2v") {
             next.mode = "i2v";
           }
-        } else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath) {
+        } else if (
+          (src.kind === "picture" || src.kind === "movie") &&
+          src.mediaPath !== undefined
+        ) {
           // 内容载体本来就住在 ComfyUI 的 input 目录里，
           // 因此不必重新导入 —— 直接接上现成的文件名即可。
           next.inputImage = src.mediaPath;

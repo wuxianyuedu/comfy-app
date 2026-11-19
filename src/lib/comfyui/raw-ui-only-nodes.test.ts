@@ -1,9 +1,70 @@
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
 import { UI_ONLY_NODE_TYPES, stripUiOnlyNodes } from "./raw-ui-only-nodes";
 
-/** 断言里用的最小节点形状（只关心 id / type）。 */
-type MiniNode = { id: string | number; type?: string };
+/** 读取 `raw.nodes` 里每个节点的 id（非对象节点直接判失败）。 */
+function nodeIdsOf(raw: unknown): Array<unknown> {
+  if (!isRecord(raw)) {
+    throw new Error("raw 不是对象");
+  }
+  const list: Array<unknown> = Array.isArray(raw.nodes) ? raw.nodes : [];
+  return list.map((n: unknown) => {
+    if (!isRecord(n)) {
+      throw new Error("节点不是对象");
+    }
+    return n.id;
+  });
+}
+
+/** 读取 `definitions.subgraphs`（形态由调用方断言）。 */
+function subgraphsOf(raw: unknown): unknown {
+  if (!isRecord(raw)) {
+    throw new Error("raw 不是对象");
+  }
+  const definitions = raw.definitions;
+  if (!isRecord(definitions)) {
+    throw new Error("raw.definitions 不是对象");
+  }
+  return definitions.subgraphs;
+}
+
+/** 读取对象形态的某个子图定义。 */
+function subgraphOf(raw: unknown, key: string): Record<string, unknown> {
+  const subgraphs = subgraphsOf(raw);
+  if (!isRecord(subgraphs)) {
+    throw new Error("definitions.subgraphs 不是对象形态");
+  }
+  const sub = subgraphs[key];
+  if (!isRecord(sub)) {
+    throw new Error(`找不到子图 ${key}`);
+  }
+  return sub;
+}
+
+/** 读取数组形态的子图定义列表。 */
+function subgraphListOf(raw: unknown): Array<unknown> {
+  const subgraphs = subgraphsOf(raw);
+  if (!Array.isArray(subgraphs)) {
+    throw new Error("definitions.subgraphs 不是数组形态");
+  }
+  const list: Array<unknown> = subgraphs;
+  return list;
+}
+
+/** 读取容器（节点 / 子图定义）里每条连线对象的 id。 */
+function linkIdsOf(container: unknown): Array<unknown> {
+  if (!isRecord(container)) {
+    throw new Error("容器不是对象");
+  }
+  const list: Array<unknown> = Array.isArray(container.links) ? container.links : [];
+  return list.map((l: unknown) => {
+    if (!isRecord(l)) {
+      throw new Error("连线不是对象");
+    }
+    return l.id;
+  });
+}
 
 describe("stripUiOnlyNodes —— 提交前剔除纯 UI 节点", () => {
   it("顶层批注节点被剔除，与它相关的连线一并清掉", () => {
@@ -23,8 +84,7 @@ describe("stripUiOnlyNodes —— 提交前剔除纯 UI 节点", () => {
     const { raw: out, removed } = stripUiOnlyNodes(raw);
 
     expect(removed).toBe(2);
-    /* SAFETY: 类型断言已复核 */
-    expect((out.nodes as Array<MiniNode>).map((n) => n.id)).toEqual([2]);
+    expect(nodeIdsOf(out)).toEqual([2]);
     // 只留下与两个幸存端点都无关的那一条
     expect(out.links).toEqual([[12, 2, 1, 2, 2, "LATENT"]]);
   });
@@ -65,17 +125,11 @@ describe("stripUiOnlyNodes —— 提交前剔除纯 UI 节点", () => {
     const { raw: out, removed } = stripUiOnlyNodes(raw);
 
     expect(removed).toBe(1);
-    /* SAFETY: 类型断言已复核 */
-    const subs = (
-      out.definitions as {
-        subgraphs: Record<string, { links: Array<{ id: number }>; nodes: Array<MiniNode> }>;
-      }
-    ).subgraphs;
-    expect(subs["0"]!.nodes.map((n) => n.id)).toEqual(["1671"]);
-    expect(subs["0"]!.links.map((l) => l.id)).toEqual([2]);
+    const subs = subgraphOf(out, "0");
+    expect(nodeIdsOf(subs)).toEqual(["1671"]);
+    expect(linkIdsOf(subs)).toEqual([2]);
     // 顶层 wrapper 不受影响（它不是 UI-only 类型）
-    /* SAFETY: 类型断言已复核 */
-    expect((out.nodes as Array<MiniNode>).map((n) => n.id)).toEqual(["1512"]);
+    expect(nodeIdsOf(out)).toEqual(["1512"]);
   });
 
   it("数组形态的子图定义同样覆盖", () => {
@@ -96,9 +150,8 @@ describe("stripUiOnlyNodes —— 提交前剔除纯 UI 节点", () => {
     const { raw: out, removed } = stripUiOnlyNodes(raw);
 
     expect(removed).toBe(1);
-    /* SAFETY: 类型断言已复核 */
-    const subs = (out.definitions as { subgraphs: Array<{ nodes: Array<MiniNode> }> }).subgraphs;
-    expect(subs[0]!.nodes.map((n) => n.id)).toEqual([8]);
+    const first = subgraphListOf(out)[0];
+    expect(nodeIdsOf(first)).toEqual([8]);
   });
 
   it("有后端实现的 rgthree 节点一律不动（剔了就是真丢功能）", () => {

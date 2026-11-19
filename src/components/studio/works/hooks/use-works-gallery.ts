@@ -1,21 +1,12 @@
 "use client";
 
-// ── 「所有项目」屏的逻辑层（规范 17 §17.2 第②层）──────────────────────────
-//
-// 这一屏原本在组件里直接读 `listProjects()` + `deleteProject()`（本地索引那一侧），
-// 于是**「服务端有一行、索引里没有」的项目在界面上既看不见、也删不掉**
-//（ISSUE #1522 问的正是这个口子）。现在取数走 `listProjectsWithServer()` 的并集，
-// 删除走 `deleteProjectEverywhere()`（索引里没有的那一行也删得掉）。
-//
-// 三条口径：
-//   · 列表 = 本地索引 ∪ 服务端，按 `updatedAt` 倒序（同 id 取较新的一侧）；
-//   · 每一行标 `origin`（服务端独有 / 本地独有 / 两侧都有），视图据此如实说明
-//     这一行从哪来 —— 「服务端有但本地没有」必须看得出口，否则用户删完一个
-//     不该删的才发现删的是什么；
-//   · 拉取失败（离线 / dev server 未起）照常列本地项目，只是 `serverOk` 为 false，
-//     视图据此给一句「服务端那份没拉到」，而不是把空列表端上去。
+// ── 「所有项目」屏逻辑层（规范 17 §17.2 第②层）──
+// 原组件直接 listProjects() + deleteProject()（只本地索引），「服务端有一行、索引里没有」既看不见也删不掉
+//（ISSUE #1522）。现取数走 listProjectsWithServer() 并集、删除走 deleteProjectEverywhere()。
+// 三口径：列表 = 本地 ∪ 服务端按 updatedAt 倒序（同 id 取较新）；每行标 origin（服务端/本地/两侧）如实说明；
+// 拉取失败照常列本地项目、serverOk=false，视图据此说「服务端那份没拉到」，而非端空列表。
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { subscribeAppEvent } from "~/lib/app-events";
 import { useSyncRefusalNotice } from "../../project-canvas/hooks/use-sync-refusal-notice";
@@ -54,6 +45,9 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
   const [serverOk, setServerOk] = useState(true);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  /* 卸载守卫（#4239）：快速切视图时 load 的回包可能晚于卸载——与
+   * use-sidebar-projects 同款 alive 判据，卸载后不落地。 */
+  const aliveRef = useRef(true);
 
   /* 服务端明确拒收时的用户可见出口（硬规则 4）。这一屏是**发起删除**的那一页，
    * 所以它得自己说得出「没能从服务端删掉」—— 否则失败的表现就是「删了没反应」
@@ -62,6 +56,9 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
 
   const load = useCallback(async (): Promise<void> => {
     const { entries, ok } = await listProjectsWithServer();
+    if (!aliveRef.current) {
+      return;
+    }
     setProjects(entries);
     setServerOk(ok);
     setLoading(false);
@@ -76,13 +73,16 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
      * 是 async），首帧仍是 `loading: true` 的那一态，与 SSR 输出一致；
      * 规则认的是「effect 体里同步调了一个会 setState 的函数」，而那条判据要防的
      * 是级联渲染 —— 这个调用点不产生它（同一约定见 `use-workspace-tabs`）。 */
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
     /* 画布内的编辑（upsert / rename / delete）会广播这一条，重取即可 ——
      * 装配层不重复实现增量更新。 */
-    return subscribeAppEvent("comfyapp:canvas-store-changed", () => {
+    const unsubscribe = subscribeAppEvent("comfyapp:canvas-store-changed", () => {
       void load();
     });
+    return () => {
+      aliveRef.current = false;
+      unsubscribe();
+    };
   }, [load]);
 
   const openProject = useCallback(
@@ -103,9 +103,9 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
     setPendingDeleteId(null);
   }, [deleting]);
 
-  const confirmDelete = useCallback(async (): Promise<string | null> => {
-    if (!pendingDeleteId) {
-      return null;
+  const confirmDelete = useCallback((): Promise<string | null> => {
+    if (pendingDeleteId === null || pendingDeleteId === "") {
+      return Promise.resolve(null);
     }
     const target = projects.find((project) => project.id === pendingDeleteId);
     const id = pendingDeleteId;
@@ -119,7 +119,7 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
        * 服务端列表里把它带回来直到删除落定 —— 所以这里本地先摘掉，
        * 免得好几秒内列表上它还挂着（用户以为没删掉、又点一次）。 */
       setProjects((prev) => prev.filter((project) => project.id !== id));
-      return target?.name ?? "未命名";
+      return Promise.resolve(target?.name ?? "未命名");
     } finally {
       setDeleting(false);
       setPendingDeleteId(null);
@@ -138,7 +138,8 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
     cancelDelete,
     confirmDelete,
     deleting,
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    refresh: () => void load(),
+    refresh: () => {
+      void load();
+    },
   };
 }

@@ -21,7 +21,7 @@ vi.mock("../ToastProvider", () => ({
 
 afterEach(cleanup);
 
-const noop = vi.fn();
+const noop = vi.fn<() => void>();
 
 function makeStores(): WFStores {
   return {
@@ -41,18 +41,21 @@ function renderTopBar() {
   return render(
     <WFStoresProvider stores={makeStores()}>
       <WorkflowEditorTopBar
-        detail={
-          /* SAFETY: 类型断言已复核 */ {
-            name: "wf",
-            nodes: [],
-            edges: [],
-            notes: [],
-            groups: [],
-            positions: {},
-          } as never
-        }
+        detail={{
+          id: "wf-test",
+          name: "wf",
+          taskType: "txt2img",
+          graph: {},
+          nodes: [],
+          notes: [],
+          groups: [],
+          positions: {},
+          paramMap: {},
+          workflowIO: {},
+          rawNodes: [],
+        }}
         error=""
-        fetchDetail={vi.fn(async () => undefined)}
+        fetchDetail={vi.fn(() => Promise.resolve())}
         forceReloadDetail={noop}
         handleSave={noop}
         onClose={noop}
@@ -60,8 +63,8 @@ function renderTopBar() {
         resetLayout={noop}
         rootWorkflowName="wf"
         saving={false}
-        setSubgraphStack={/* SAFETY: 类型断言已复核 */ noop as never}
-        setViewJsonOpen={/* SAFETY: 类型断言已复核 */ noop as never}
+        setSubgraphStack={noop}
+        setViewJsonOpen={noop}
         subgraphStack={[]}
         viewHostNodeId=""
       />
@@ -99,7 +102,7 @@ describe("顶栏按钮全部走 ui/button 基元（ISSUE #672 P1）", () => {
       const el = screen.getByRole("button", { name: new RegExp(text) });
       expect(el.className).toContain("h-auto");
       expect(el.className).not.toContain("rounded-none");
-      expect(el.className).toMatch(/rounded-(md|lg)\b/);
+      expect(el.className).toMatch(/rounded-(?:md|lg)\b/);
     }
     expect(container.querySelectorAll("button").length).toBeGreaterThanOrEqual(labels.length);
   });

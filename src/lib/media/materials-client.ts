@@ -6,6 +6,7 @@
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { withQuery } from "~/lib/query-string";
 import { isRecord } from "~/lib/is-record";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 /** 分类（文件夹）摘要，含该分类素材条数。 */
 export type MaterialFolder = {
@@ -94,12 +95,12 @@ export async function fetchMaterials(query: MaterialListQuery): Promise<Material
    * 查询串、怎么编码」收在 `~/lib/query-string`（规范 16 §16.2.4.32）：
    * 空项目 / 空关键字由出口省略整个键 —— `URLSearchParams` 会把
    * `undefined` 写成字符串 `"undefined"`，所以收口前得自己 `if` 一层。 */
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     withQuery(ENDPOINT, {
       projectId: query.projectId,
       scope: query.scope,
       q: query.q,
-      folder: query.q ? undefined : query.folder,
+      folder: query.q !== undefined && query.q !== "" ? undefined : query.folder,
     }),
   );
   const body = await readJsonBody(res);
@@ -117,13 +118,13 @@ async function postMaterial(
   const fd = new FormData();
   fd.append("file", file);
   fd.append("folder", opts.folder);
-  if (opts.projectId) {
+  if (opts.projectId !== undefined && opts.projectId !== null && opts.projectId !== "") {
     fd.append("projectId", opts.projectId);
   } else {
     fd.append("shared", "true");
   }
 
-  const res = await fetch(ENDPOINT, { method: "POST", body: fd });
+  const res = await fetchWithTimeout(ENDPOINT, { method: "POST", body: fd });
   const body = await readJsonBody(res);
   if (!res.ok) {
     throw new Error(readApiError(body) ?? `上传失败 (${res.status})`);
@@ -169,7 +170,7 @@ export async function uploadMaterialItem(
 
 /** 删除素材。id 形如 `scope/folder/name`，服务端据此定位。 */
 export async function deleteMaterial(id: string): Promise<void> {
-  const res = await fetch(withQuery(ENDPOINT, { id }), {
+  const res = await fetchWithTimeout(withQuery(ENDPOINT, { id }), {
     method: "DELETE",
   });
   const body = await readJsonBody(res);

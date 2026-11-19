@@ -2,9 +2,8 @@
 
 /**
  * LogPanel 的页脚拆分件（§17.12 视图二次拆分：只动 JSX 物理位置，不动行为）。
- * 分页 + 「回到最新」出口 + 「正在看什么」筛选摘要（点任意一项即去掉该层）。
- * 时间线有内存上限（LOG_STORE_MAX=5000）：更旧的会被折叠，droppedTotal
- * 累计并在下方提示，完整历史仍在磁盘日志文件里。
+ * 分页 + 「回到最新」出口 + 筛选摘要（点任意一项即去掉该层）。
+ * 时间线内存上限 LOG_STORE_MAX=5000：更旧的会被折叠，droppedTotal 累计并提示，完整历史在磁盘。
  */
 import { ArrowDownToLine, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -14,14 +13,15 @@ import { FILTER_LABELS } from "./LogFilterBar";
 import { ORIGIN_TEXT } from "./LogPanelOriginSelect";
 import type { LogFilter, LogOriginFilter } from "./log-types";
 
-function pageSummary(
-  page: number,
-  totalPages: number,
-  pageSize: number,
-  total: number,
-  all: number,
-  search: string,
-): string {
+function pageSummary(meta: {
+  all: number;
+  page: number;
+  pageSize: number;
+  search: string;
+  total: number;
+  totalPages: number;
+}): string {
+  const { page, totalPages, pageSize, total, all, search } = meta;
   if (total === 0) {
     return search.trim() ? "无筛选命中的日志" : "无匹配日志";
   }
@@ -72,24 +72,22 @@ export function LogPanelFooter(input: {
   return (
     <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-xs">
       <span className="flex items-center gap-2">
-        <span>{pageSummary(safePage, totalPages, pageSize, total, totalAll, search)}</span>
+        <span>
+          {pageSummary({ page: safePage, totalPages, pageSize, total, all: totalAll, search })}
+        </span>
         {droppedTotal > 0 && (
-          <span
-            className="text-ink-fainter shrink-0"
-            title={`内存时间线已折叠更早的 ${droppedTotal} 条（完整历史见磁盘日志文件）`}
-          >
-            · 更早 {droppedTotal} 条已折叠
-          </span>
+          <Hint label={`内存时间线已折叠更早的 ${droppedTotal} 条（完整历史见磁盘日志文件）`}>
+            <span className="text-ink-fainter shrink-0">· 更早 {droppedTotal} 条已折叠</span>
+          </Hint>
         )}
         {/* 服务端进程标识：用户报障时能说清「日志来自哪个应用服务进程」，
           也让面板在服务真重启后能自证（时间线已重置）。 */}
-        {bootId && (
-          <span
-            className="border-border-strong text-ink-muted text-2xs shrink-0 rounded border px-1.5 py-px"
-            title={`应用服务进程标识：${bootId}（重启后会变化，面板据此重置时间线）`}
-          >
-            服务 {bootId.split(":").slice(-2).join(":")}
-          </span>
+        {bootId !== null && bootId !== "" && (
+          <Hint label={`应用服务进程标识：${bootId}（重启后会变化，面板据此重置时间线）`}>
+            <span className="border-border-strong text-ink-muted text-2xs shrink-0 rounded border px-1.5 py-px">
+              服务 {bootId.split(":").slice(-2).join(":")}
+            </span>
+          </Hint>
         )}
       </span>
       <span className="flex items-center gap-3">
@@ -99,13 +97,9 @@ export function LogPanelFooter(input: {
             {newLogCount > 0 ? `有 ${newLogCount} 条新的日志 · 回到最新` : "回到最新"}
           </Button>
         )}
-        {/* 翻页控件走 `ui/pagination`（规范 16 §16.2.4.6 / §16.2.4.72 的零引用
-          基元复查）：`Pagination` / `PaginationContent` / `PaginationItem` 给的是
-          `nav[aria-label="pagination"]` + `ol`/`li` 的层级语义与统一排布契约。
-          此前这里是一层裸 `span` 串两个按钮 —— 读屏器读到的是一串孤立按钮，
-          没有任何「这是一组分页控件」的说法。
-          **只借结构、不借 `PaginationLink`**：那个是带 `href` 的页链接，而本
-          面板的页码是**受控状态**（当前页归 `useLogStore`），不是地址。 */}
+        {/* 翻页控件走 `ui/pagination`（规范 16 §16.2.4.6 / §16.2.4.72）：它给 `nav` + `ol`/`li`
+          的层级语义与统一排布契约，此前裸 `span` 串两个按钮，读屏器读到的是一串孤立按钮。
+          **只借结构、不借 `PaginationLink`**：那是带 `href` 的页链接，而本面板页码是受控状态。 */}
         <Pagination className="w-auto flex-1 justify-end">
           <PaginationContent className="gap-1">
             <PaginationItem>
@@ -113,7 +107,9 @@ export function LogPanelFooter(input: {
                 <Button
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
                   disabled={safePage <= 1}
-                  onClick={() => setPage(safePage - 1)}
+                  onClick={() => {
+                    setPage(safePage - 1);
+                  }}
                   size="icon-xs"
                   variant="ghost"
                 >
@@ -130,7 +126,9 @@ export function LogPanelFooter(input: {
                   className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md tabular-nums disabled:cursor-default"
                   data-testid="logpanel-origin-chip"
                   disabled={!origin || origin === "all"}
-                  onClick={() => setOrigin("all")}
+                  onClick={() => {
+                    setOrigin("all");
+                  }}
                   size="xs"
                   variant="ghost"
                 >
@@ -142,7 +140,9 @@ export function LogPanelFooter(input: {
                   className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
                   data-testid="logpanel-level-chip"
                   disabled={filter === "all"}
-                  onClick={() => setFilter("all")}
+                  onClick={() => {
+                    setFilter("all");
+                  }}
                   size="xs"
                   variant="ghost"
                 >
@@ -150,10 +150,12 @@ export function LogPanelFooter(input: {
                 </Button>
               </Hint>
               {search.trim() && (
-                <Hint label="清空搜索">
+                <Hint label={`清空搜索「${search.trim()}」`}>
                   <Button
                     className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
-                    onClick={() => setSearch("")}
+                    onClick={() => {
+                      setSearch("");
+                    }}
                     size="xs"
                     variant="ghost"
                   >
@@ -167,7 +169,9 @@ export function LogPanelFooter(input: {
                 <Button
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
                   disabled={safePage >= totalPages}
-                  onClick={() => setPage(safePage + 1)}
+                  onClick={() => {
+                    setPage(safePage + 1);
+                  }}
                   size="icon-xs"
                   variant="ghost"
                 >

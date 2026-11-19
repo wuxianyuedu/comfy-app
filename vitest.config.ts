@@ -1,7 +1,7 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
 
-import { resolveCiWorkers } from "./scripts/ci-load.mjs";
+import { resolveCiWorkers } from "./scripts/ci/ci-load.mjs";
 
 /**
  * `DOM_TEST_GLOBS` —— 进 **DOM 档**（`happy-dom`）的用例面（§11.17）。
@@ -24,7 +24,7 @@ import { resolveCiWorkers } from "./scripts/ci-load.mjs";
  * ⚠️ **例外不是「随手加一行」**：写 jsdom 头的必须有**能被指出的具体理由**
  * （哪一条 API / 哪一个行为在 happy-dom 下不同），因为这一档的默认值选 happy-dom
  * 的全部意义就是「只有真的需要 jsdom 时才付它的钱」。判据：
- * `node scripts/check-test-environment.cjs --report` 会列出每份 jsdom 头的文件。
+ * `node scripts/gates/check-test-environment.cjs --report` 会列出每份 jsdom 头的文件。
  *
  * ⚠️ **路径里的 `(main)` 这类路由组括号必须转义成 `\\(main\\)`** —— 括号是 glob 的
  * 分组语法，写成字面量时 `src/app/(main)/…` 会被翻成「匹配 `src/app/main/…`」，
@@ -33,7 +33,7 @@ import { resolveCiWorkers } from "./scripts/ci-load.mjs";
  * 「门槛写着 100、报告里查无此文件」那一族：清单条目失效不报错，只是不见了。
  *
  * ⚠️ 新增一批 DOM 用例时：若整个目录都是，就把目录加到这里；只加几份就别动它，
- * 直接写文件头（`scripts/check-test-environment.cjs` 会核「目录档与文件头矛盾」）。
+ * 直接写文件头（`scripts/gates/check-test-environment.cjs` 会核「目录档与文件头矛盾」）。
  * **不要为了省几行文件头去 `exclude` 少数派** —— 见上面 `projects` 的注释。
  */
 const DOM_TEST_GLOBS = [
@@ -115,6 +115,7 @@ export function resolveTimeoutBudget(raw: string | undefined) {
     scale: 1,
     testTimeout: BASE_TEST_TIMEOUT_MS,
     hookTimeout: BASE_HOOK_TIMEOUT_MS,
+    /* SAFETY: 类型断言已复核 */
     note: null as string | null,
   };
   if (text === "") {
@@ -237,7 +238,35 @@ const BASE_CONFIG = defineConfig({
      * 一条 `expect.poll` 走到超时说明被等的事根本没发生 —— 去查它为什么没发生，
      * 别把这个数往上抬。 */
     expect: { poll: { timeout: 4000, interval: 50 } },
-    /* 并发上限：**取自 `scripts/ci-load.mjs` 那一处**（ISSUE #2324，以前这里是字面 8）。
+    /* ★ 显式钉住 `reporters`，目的是**不让 vitest 自己往 Job Summary 里写**。
+     *
+     * vitest 5 的默认值是 `["default", ...(GITHUB_ACTIONS === "true" ? ["github-actions"] : [])]`
+     * （`vitest/dist/chunks/defaults.*.js`）。那个 `github-actions` reporter 会：
+     *   ① 把每条失败用例写成 `::error::` 注解；
+     *   ② **往 `$GITHUB_STEP_SUMMARY` 追加一整段 `## Vitest Test Report`** ——
+     *      `jobSummary.outputPath` 的默认值就是那个环境变量，而它在 `test.reporters`
+     *      这一层**关不掉**（只有 `new GithubActionsReporter({jobSummary:{enabled:false}})`
+     *      能关，但那要走自定义 reporter）。
+     *
+     * 后果实测（本文件 + `ci-step-verdict.mjs` 的摘要，2026-11-09 的 GA 页）：
+     * 一次 job 里跑了几次 vitest，摘要里就有几段 `Vitest Test Report`，而且**数字互相
+     * 矛盾**（3 passes 与 1 pass 并排）。读者没法判断哪份是这次的总账，而这几段还压在
+     * 真正的判据结论**前面** —— 这正是「摘要乱糟糟」的形状。
+     *
+     * 口径：本仓的摘要**只有一个写入者** —— `scripts/ci/ci-step-verdict.mjs`（§「一步红了，
+     * 为什么」的唯一出口）。它写的是「这一格判没判、红在哪」，比 reporter 的用例级
+     * 计数更贴近读者要回答的那一问；两套并存 = 同一页两个口径。
+     *
+     * 代价写在明处：**失败用例的 `::error::` 注解随之消失**。这一条不是白丢 ——
+     * `ci-step-verdict.mjs` 在主进程侧按退出码打一条 `::error::`/`::warning::`，注解面仍然
+     * 有；而逐条用例的位置与堆栈本来就在日志里（junit / 终端输出照旧）。
+     *
+     * ⚠️ 命令行**显式**给 `--reporter` 会盖掉这里（`full-suite-run.mjs` 就是
+     * `--reporter=default --reporter=junit`）；那种情况下 `github-actions` 本来也不会被
+     * 追加，所以两边一致。改这一段时跑 `tests/vitest-gha-summary.test.ts` —— 它按
+     * 「GITHUB_ACTIONS=true 跑一次、摘要里不许出现 `Vitest Test Report`」正面判。 */
+    reporters: ["default"],
+    /* 并发上限：**取自 `scripts/ci/ci-load.mjs` 那一处**（ISSUE #2324，以前这里是字面 8）。
      * 为什么不再写数字：同一句「一个 worker 至少 8 核」的判断曾在三个地方各留一份副本
      * （这里 8、`run-affected-tests.mjs` 的 4、`ci-load.mjs` 的按核折算），结果就是
      * 「单条链别占满整台机」那一档压住了平台两格，**本地这一跳照旧 8 个 worker**
@@ -263,7 +292,7 @@ const BASE_CONFIG = defineConfig({
      * 逐份判，147 份是纯冗余（目录档已给出同结论）、37 份承重**（混合目录里归属的
      * 唯一声明）。147 份已删，剩 37 份继续留 —— 同一件事只留一个来源。
      * 第 148 份冗余（`tests/sidebar-selected-state.test.tsx`）是这轮收尾时手工比漏掉的，
-     * 现在由 `scripts/check-test-environment.cjs` 的判据③「冗余文件头」守着，
+     * 现在由 `scripts/gates/check-test-environment.cjs` 的判据③「冗余文件头」守着，
      * 以后不会再长出来（§11.17.1.2）。
      *
      * 分档判据是**实测出来的目录归属**，不是「按扩展名猜」：`.test.tsx` ⇒ jsdom
@@ -287,7 +316,7 @@ const BASE_CONFIG = defineConfig({
      *
      * 这一档买到的是三件事，都不是「省注释」：
      *   ① 没写文件头的用例有确定的、按目录判定的归属（而不是一条全局默认值）；
-     *   ② 归属可被门禁核对：`scripts/check-test-environment.cjs`（进 pre-commit D 组）
+     *   ② 归属可被门禁核对：`scripts/gates/check-test-environment.cjs`（进 pre-commit D 组）
      *      判「目录档与文件头矛盾」与「环境早退」两件 —— 前者让「挪目录 / 改档」
      *      这类改动留下痕迹，后者是这条线索真正的病根；
      *   ③ 每个 project 可以按自己的代价配并发，而不是全库一个 `maxWorkers`。
@@ -815,7 +844,7 @@ const BASE_CONFIG = defineConfig({
          * `pnpm exec vitest run --coverage src/lib/db-backup tests/db-backup.test.ts`
          * 的实测值（100 / 100 / 100 / 100），只升不降。
          * 为什么能满档：本目录**只有取用面**，真正的实现在
-         * `scripts/db-backup-core.mjs`（启动链的纯 Node 宿主必须能引它），
+         * `scripts/db/db-backup-core.mjs`（启动链的纯 Node 宿主必须能引它），
          * 而那 29 条判据全打在**那份实现**上（`tests/db-backup.test.ts`）——
          * 判据的位置与实现的位置可以不同，但必须指得准。 */
         "src/lib/db-backup/**": {
@@ -838,6 +867,18 @@ const BASE_CONFIG = defineConfig({
           functions: 100,
           statements: 95,
           branches: 90,
+        },
+        /* 应用内运行反馈（ISSUE #3371）：契约 / 正文生成 + 网络层。新增域
+         * **同批**登记（规范 §12.5.3 R14 / §18.6）：数值取自
+         * `pnpm exec vitest run --coverage src/lib/feedback` 的实测值向下取整到
+         * 5 的倍数（90.62 / 85.85 / 100 / 90.76 → 90/85/100/90），只升不降。
+         * 未满 100 的是契约守卫里几条「畸形输入」的兜底分支与网络层的
+         * HTTP 失败回落，用例已覆盖主路径，覆盖率工具按分支算不到全部组合。 */
+        "src/lib/feedback/**": {
+          lines: 90,
+          functions: 100,
+          statements: 90,
+          branches: 85,
         },
         /* 应用内控制台（ISSUE #1327）：命令目录/解析（`console-catalog`）、
          * 回环闸门（`console-guard`）、SSE 客户端（`console-client`）、
@@ -1439,6 +1480,16 @@ const BASE_CONFIG = defineConfig({
          * 成片监看的批量进度、执行宿主的领取 / 只读窥视 / 载荷读；再加「includeImages
          * 且只给 skip」那条分页 —— 它走的是「普通 select 取页 + 按 id 装载」，
          * 与此前只跑到「这一页是空的」相比，`attachImages` 的真实装载第一次被执行。 */
+        /* 「数据存放位置」的登记本体（ISSUE #3625）：纯数据模块，四条判据都有执行者 ——
+         * 逐条登记项的不变量（类别存在、文案非空、同一 kind 共名）、分组结果
+         * （不漏 / 不重 / 排序口径）与「每一类位置都真的画得出图标」都在用例里。
+         * 门槛按实测值设满档（纯数据模块没有 IO 分支可漏）。 */
+        "src/lib/data-location/**": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         "src/lib/core/**": {
           lines: 98,
           functions: 97,
@@ -1476,11 +1527,15 @@ const BASE_CONFIG = defineConfig({
         // 未覆盖部分是真的起进程 / 拉工作流 / 等轮询的分支 —— 硬抬门槛会让无关
         // 提交变红（§18.6）。补它的正确方法是给编排判决面（镜头参数折算 / 合成
         // 前置条件 / 取消撤销）继续加用例，届时同批上调这里。
+        //
+        // #4220（2026-11-18）：监看循环兜底那批补了「首拍炸 SQLITE_BUSY → 判失败 +
+        // 留痕」「交接让位」「兜底自身再炸」三形用例，聚合实测 63.86/72.72/63.7/52.15
+        // —— 门槛按实测整数抬到 63/72/63/52（只升不降，§18.6）。
         "src/server/film/**": {
-          lines: 30,
-          functions: 50,
-          statements: 35,
-          branches: 25,
+          lines: 63,
+          functions: 72,
+          statements: 63,
+          branches: 52,
         },
         /* MCP 服务端面（台账 F13′ 那一刀的落点）：按**实测满档**登记。
          * 这里能到 100 是因为整层只有一件事 —— 把一次工具调用翻译成一次
@@ -1568,7 +1623,7 @@ const BASE_CONFIG = defineConfig({
          * ⚠️ 剩下那点分支不是漏网，是平台绑定或走不到的兜底：`taskkill` 以 0 退出时 via 里
          *      那半句（Linux 的假 taskkill 造得出、Windows 上 `.cmd` 起不来）、`ps` 输出解析里
          *      那个不可达的兜底，以及 `executable-resolve.ts` 自己的 74.54% 分支。
-         *   5) **函数这一维现在实测 84/86 = 97.67%**（`node scripts/full-suite-run.mjs` 全量
+         *   5) **函数这一维现在实测 84/86 = 97.67%**（`node scripts/affected-tests/full-suite-run.mjs` 全量
          *      `--coverage`，与 `每日单元测试` 同一份执行者；那一条跑里 `ERROR: Coverage` 出现 0 次）。
          *      补之前是 **82/86 = 95.35%** —— 与节点那句 `95.34%` 逐字对上，所以两边同尺。
          *      起因：登记后目录一直在长，而「登记值按当时的整目录实测」这件事没人回头核，
@@ -1589,6 +1644,18 @@ const BASE_CONFIG = defineConfig({
          *      不能给「谁没盖住」的名单** —— 本单最初把 `executable-resolve.ts` 的两个函数
          *      列为嫌疑（子集里它们没被命中），全量一读那是 22/22 全覆盖。要点名空位，
          *      必须用判据自己那份执行者跑一遍，再去 lcov 里数 `FNDA:0`。 */
+        /* 服务端出网约束域（ISSUE #3904/#4052）：统一 URL 安全校验与安全 fetch。
+         * 新增域同批登记（规范 §12.5.3 R14 / §18.6）。实测值取自
+         * pnpm exec vitest run --coverage --coverage.include='src/lib/network/outbound-url.server.ts' src/lib/network/outbound-url.server.test.ts
+         *（79.03 / 70.86 / 100 / 78.57）向下取整到 5 的倍数 → 75/70/100/75。
+         * 未满 100 的分支与行主要是 IPv6/重定向边界与 DNS 异常回落路径，
+         * 主路径与 SSRF 拦截场景已覆盖。 */
+        "src/lib/network/**": {
+          lines: 75,
+          functions: 100,
+          statements: 75,
+          branches: 70,
+        },
         "src/lib/process/**": {
           lines: 94,
           functions: 96,
@@ -2060,10 +2127,10 @@ const BASE_CONFIG = defineConfig({
          *     这一支的执行者（含那条 `path.sep` 边界的反向验证），`http(s)` 拉取与
          *     `resolveMediaDataUrl` 两族（第 58–121 行）仍**零执行者**，那是 E7 的账；
          *     登记低档是为了让「新增未覆盖」看得见，而不是把它藏进 workshop 的通配档里；
-         *   · `firstframe.ts` 分支 75 / 语句 95 —— 缺的是 `values` 里三个「参数没给
-         *     就不写」的展开支（38–40）、等待轮询的退避支（53）与「库里那行没有图」
-         *     的兜底支（74）。「地址不合法就不读盘」那一条本批已补用例并改成
-         *     精确断言整条绝对路径（不再用 `stringContaining` 蒙过去）。 */
+         *   · `firstframe.ts` 语句 95→100 / 分支 75→87（#4222 同批抬档）：补偿取消
+         *     把等待失败三形（FAILED / 任务行消失 / cancel 自身失败）全部盖住，
+         *     「上传回执无文件名」也补了用例；剩的一档分支是 `res.name === undefined`
+         *     的 true 侧（mock 只回空串形态，再造一个 undefined 回执不值当）。 */
         "src/server/film/compose-steps.ts": {
           lines: 100,
           functions: 100,
@@ -2103,8 +2170,8 @@ const BASE_CONFIG = defineConfig({
         "src/lib/comfyui/firstframe.ts": {
           lines: 100,
           functions: 100,
-          statements: 95,
-          branches: 75,
+          statements: 100,
+          branches: 87,
         },
         /* ⑨ 第六刀 · 产物根搬迁。`output-layout.ts` 四维满档（四个导出各有用例，
          * 含界面用的 `artifactDirDisplay`）。搬迁那份留一档下限：唯一没盖到的是
@@ -2239,7 +2306,7 @@ const BASE_CONFIG = defineConfig({
  *   · 传给 vitest 的那一份才由开关决定。默认**不判**：覆盖率照跑、报告照出
  *     （`text` / `json-summary` / `lcov` 三种 reporter 一个都没动），只是不拿它决定退码；
  *     `COMFY_COVERAGE_ENFORCE=1` 才按门槛判红（本地与 `pnpm check:all` 那一档用它，
- *     见 `scripts/quality-gate.mjs` 的 `test` 条目与 `scripts/full-suite-run.mjs` 的
+ *     见 `scripts/gates/quality-gate.mjs` 的 `test` 条目与 `scripts/affected-tests/full-suite-run.mjs` 的
  *     `--enforce-coverage`）。
  * ⚠️ **不许**在这里开 vitest 自带的 `coverage.thresholds.autoUpdate`：它会在跑的过程中
  *   改写本文件（业主点名「只能在专门 job 或本地跑，别在正常 gated run 里开」），

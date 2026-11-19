@@ -2,9 +2,7 @@
 
 /**
  * 数据库（Drizzle Studio）分区（规范 17 §17.2 第③层）。
- *
- * 状态与「启动 / 停止 / 打开」动作来自 controller；视图自持的仅启动日志的
- * 滚动跟随（纯视觉偏好）。
+ * 状态与「启动 / 停止 / 打开」动作来自 controller；视图自持仅日志滚动跟随。
  */
 
 import { StatusDot, type StatusDotState } from "~/components/ui/status-dot";
@@ -16,16 +14,17 @@ import {
   StatusButton,
 } from "~/components/ui/service-status-row";
 
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { RuntimeLogBox } from "~/components/studio/logs/RuntimeLogBox";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
+import { Hint } from "~/components/ui/hint";
 
 /** Drizzle Studio 状态 → 圆点语义（过渡态优先，口径同 ComfyUI 那条）。 */
 function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
-  if (c.dbStudioStatus?.up) {
+  if (c.dbStudioStatus?.up === true) {
     return "up";
   }
-  if (c.dbStudioStatus?.starting || c.dbStudioStarting) {
+  if (c.dbStudioStatus?.starting === true || c.dbStudioStarting) {
     return "busy";
   }
   return "down";
@@ -33,7 +32,7 @@ function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
 
 export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
   return (
-    <SettingsCard title="数据库（Drizzle Studio）">
+    <SettingsCard>
       {/* 「本分区是什么」那一段搬进了导航行右侧的说明（`sectionSummary`）——
           它回答的是导航问题，读一遍就不再需要，留着只会把第一个控件推到折叠线
           以下。这里只留**答案在别处拿不到的那句**：界面托管在官方远端域名上。 */}
@@ -42,22 +41,23 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
         <code className="text-ink/80">local.drizzle.studio</code>
         ），本地只起一个回连端口；点「打开查看」会用系统默认浏览器打开它。
       </p>
-      <div className={`border-border bg-surface-1 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}>
+      <div className={`${SETTINGS_ROW_CLASS} ${STATUS_ROW_CLASS}`}>
         <StatusDot state={dbStudioDotState(c)} />
-        <span
-          className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
-          title={
-            c.dbStudioStatus?.up
-              ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port ?? 4983}）`
+        <Hint
+          label={
+            c.dbStudioStatus?.up === true
+              ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port}）`
               : undefined
           }
         >
-          {c.dbStudioStatus?.up
-            ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port ?? 4983}）`
-            : c.dbStudioStarting || c.dbStudioStatus?.starting
-              ? "Drizzle Studio 正在启动…"
-              : "Drizzle Studio 未运行"}
-        </span>
+          <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>
+            {c.dbStudioStatus?.up === true
+              ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port}）`
+              : c.dbStudioStarting || c.dbStudioStatus?.starting === true
+                ? "Drizzle Studio 正在启动…"
+                : "Drizzle Studio 未运行"}
+          </span>
+        </Hint>
         <div className={STATUS_ACTIONS_CLASS}>
           {/* 按钮只看自身动作的在途状态（dbStudioStarting/Stopping/
               Opening），不看全局 saving——saving 是保存偏好/ComfyUI
@@ -68,26 +68,29 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
               「看」走软底、`outline` 给并列出口、**当前这一态该按的那一颗**
               才是实心。此前三颗都是实心品牌紫，一屏里三颗主按钮。 */}
           <StatusButton
-            disabled={c.dbStudioOpening || c.dbStudioStarting || !c.dbStudioStatus?.up}
-            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-            onClick={() => void c.openDbStudio()}
+            disabled={c.dbStudioOpening || c.dbStudioStarting || c.dbStudioStatus?.up !== true}
+            onClick={() => {
+              void c.openDbStudio();
+            }}
             variant="primary"
           >
             {c.dbStudioOpening ? "打开中…" : "打开查看"}
           </StatusButton>
           <StatusButton
             disabled={c.dbStudioStarting || c.dbStudioStatus?.up === true}
-            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-            onClick={() => void c.startDbStudio()}
-            variant={c.dbStudioStatus?.up ? "primary" : "primary-solid"}
+            onClick={() => {
+              void c.startDbStudio();
+            }}
+            variant={c.dbStudioStatus?.up === true ? "primary" : "primary-solid"}
           >
             {c.dbStudioStarting ? "启动中…" : "启动 Drizzle Studio"}
           </StatusButton>
           <StatusButton
-            disabled={c.dbStudioStopping || !c.dbStudioStatus?.up}
-            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-            onClick={() => void c.stopDbStudio()}
-            variant={c.dbStudioStatus?.up ? "primary-solid" : "primary"}
+            disabled={c.dbStudioStopping || c.dbStudioStatus?.up !== true}
+            onClick={() => {
+              void c.stopDbStudio();
+            }}
+            variant={c.dbStudioStatus?.up === true ? "primary-solid" : "primary"}
           >
             {c.dbStudioStopping ? "关闭中…" : "关闭 Drizzle Studio"}
           </StatusButton>

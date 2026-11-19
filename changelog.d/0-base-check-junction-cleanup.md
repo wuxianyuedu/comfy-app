@@ -1,6 +1,6 @@
 ## Fixed
 
-- **复算工具会把调用者正在干活的那棵树删穿**（`scripts/base-check.mjs` 的快照收尾）。
+- **复算工具会把调用者正在干活的那棵树删穿**（`scripts/gates/base-check.mjs` 的快照收尾）。
   它把本检出的依赖树以 **junction** 链进临时快照 —— 方向是 `<快照>/node_modules` → **本检出**，
   而收尾原本是两条 `git worktree remove --force` + `fs.rmSync(…, {recursive:true})`。
   **Windows 上 `git worktree remove --force` 会穿 junction 走进目标逐个删**，于是
@@ -31,7 +31,7 @@
   问题从来不是「链」，是**收尾的顺序**。
 - **没有**把「穿 junction 删」这件事 skip 掉来让测试变绿：第①向断言的是**伤害确实发生**，
   将来 git 若修成穿链接不删，那条会红并明确要求回来订正注释与碎片（见测试里那句话）。
-  按平台分档的先例是 `scripts/.runtime-budget-baseline.json`；第①向只在 win32 判危害本体，
+  按平台分档的先例是 `e2e/.runtime-budget-baseline.json`；第①向只在 win32 判危害本体，
   POSIX 上断言「不受损」而不是不判。
 - **没有**动 `--base`（合并前批量档）的基线选择：它早就只认「要并进去的那条」，
   本次是把**事后复算那一档**对齐到同一个语义上。

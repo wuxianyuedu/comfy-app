@@ -123,7 +123,7 @@ lib（纯函数） ← 任意层
 - 稳定引用规则：
   - `nodeTypes` / `edgeTypes` / `defaultEdgeOptions` 保持**模块级常量**；
   - MiniMap `nodeColor` 等渲染回调用 `useCallback([])` + 模块级查找表；
-  - 状态派生用 `useMemo`，依赖数组精确，禁止省略依赖（`react-hooks/exhaustive-deps`）。
+  - 状态派生用 `useMemo`，依赖数组精确，禁止省略依赖（`react/exhaustive-deps`）。
 - zustand store 订阅必须**按需选择字段**：`useStore((s) => s.xxx)`，禁止无选择器订阅整个 store。
 - 副作用（事件监听、定时器）必须在 cleanup 中释放。
 - **UI 与逻辑分离（强制）**：视图层（`src/components/**`、`src/app/**`，Route Handler
@@ -229,7 +229,7 @@ lib（纯函数） ← 任意层
 
 React 19 已移除 `setState-in-render` 豁免并新增严格 hooks 规则，`eslint errors` 必须清零（warnings 另立任务跟踪）。踩坑与规范写法：
 
-- **set-state-in-effect 不再豁免**：禁止用文件级 `/* eslint-disable react-hooks/set-state-in-effect */` 掩盖违规；必须逐处改为规范写法。
+- **set-state-in-effect 不再豁免**：禁止用文件级 `/* eslint-disable react/set-state-in-effect */` 掩盖违规；必须逐处改为规范写法。
 - **规范写法一（渲染期对比 + 渲染期 setState）**：同一 render 内先读 `latestRef.current` 与本次值比较，不等才 `setState`（React 19 允许渲染期 setState，遇冲突自动重渲染）。
 - **规范写法二（setTimeout 延迟提交）**：纯 effect 场景改用 `setTimeout(() => setState(...))` 延迟到 render 提交后，避免同步 setState 触发 lint。
 - **已改造文件**：`settings/page.tsx`、`FilmStudio.tsx`、`ModelLibrary.tsx`、`ContentAssetNode.tsx`、`llm-context.tsx`、`CanvasNode.tsx`、`workflow-stores.tsx`、`workflow-editor-build-nodes.ts` 等；配套删除 5 个文件的文件级豁免。
@@ -288,7 +288,7 @@ git -c core.autocrlf=false -c filter.lfs.process= -c filter.lfs.clean= -c filter
 - **不该记**：内部重构、类型 / lint 清理、注释与文档修订、测试补充 —— 这些归 `git log`。
 - **时机**：PR 合入前随代码一起改；**禁止发版前集中补写**（必然漏项失真）。
 - **载体（避免冲突）**：条目写进 `changelog.d/<issue号>-<slug>.md` 碎片（一件变更一个文件），
-  发版/整理时由 `node scripts/merge-changelog-fragments.mjs` 并入 `CHANGELOG.md`。
+  发版/整理时由 `node scripts/docs/merge-changelog-fragments.mjs` 并入 `CHANGELOG.md`。
   **不要直接改 `CHANGELOG.md`** —— 它是全仓库唯一人人都改同一处的地方，
   并行分支必然冲突（ISSUE #408）。
 
@@ -335,7 +335,7 @@ CHANGELOG 写**对外差异**。完整细则见
 | fitView 时序 | 依赖 setTimeout 魔法数字等待布局完成 | 用 `onInit` / `requestAnimationFrame` 双保险，禁止裸 setTimeout（范例：`makeFitViewScheduler`） |
 | 渲染链路分组 | 调试标签平铺无层级，难以区分画布级/节点级模块 | `RenderChainModule.scope` 字段区分 `canvas`（容器/编排/状态）与 `node`（节点渲染/工具），DebugChainFooter 按组分行渲染（范例：`DebugChainFooter.tsx` + 各 `*-render-chain.ts`） |
 | 弱元数据回退推断 | 元数据由外部服务富化、该服务不可达时字段为空（ComfyUI 离线 → `workflowIO` 无 `type`），下游按类型分派的功能**静默退化**（控件变纯文本框、组合选择器整块消失），用户只看到「组件不见了」而不报错 | 分派函数对空类型做**分级回退**：先按 `defaultValue` 实际类型，再按名称/标签关键词推断；回退判据与 `inferDimensionGroup` 共用同一张名字表（中文标签 宽度/高度/比例/纵横 也认），避免「分组认得出、控件认不出」的错位（那条「DimensionControl 消失」回归的中文侧）。**关键约束**：回退出的数值控件**不许造默认值**——`defaultValue` 缺失时 `defaultInputValues` 不下发该键，否则 ComfyUI 离线时静默下发一个猜出的数字会污染出图结果（与在线状态得到不同 payload，即「结果不一致」）。根上把 `type`/`defaultValue` 在**保存 IO 映射时**用图内字面量固化进库（`persistEnrichedWorkflowIO`，离线可用、不依赖 object_info），GET 时把存档值当兜底基线，富化链路查不到该节点也不退化成 `*`。回退逻辑是纯函数，**必须有单测锁定**，否则极易在下一次类型重构中静默回归（范例：`workflow-io.ts` 的 `inferControlFromName` + `defaultInputValues` + `inferDimensionGroup`，测试见 `workflow-io.test.ts` / `workflow-detail-io.test.ts`） |
-| exhaustive-deps 三分类处置 | 清理 `react-hooks/exhaustive-deps` 时机械地照规则加减依赖，导致副作用被放大或功能回归 | 先判定属于哪一类再动手：**真缺失**（补上，往往顺带修复潜在 bug——fitView effect 缺 `nodes.length` 会让异步填充的画布永不 fit）、**不必要依赖**（模块级导出 / setState 等恒定引用，直接移除）、**规则静态盲区**（「重算触发器」「按 id 触发」这类无法被静态推断的意图，逐处 `eslint-disable-next-line` 并写明理由，禁止文件级 disable）。补依赖前一律先判断「该依赖每次渲染是否为新引用」（范例：`WorkflowEditorInner.tsx` fitView effect、`GlobalStepLogPanel.tsx` cachedIds） |
+| exhaustive-deps 三分类处置 | 清理 `react/exhaustive-deps` 时机械地照规则加减依赖，导致副作用被放大或功能回归 | 先判定属于哪一类再动手：**真缺失**（补上，往往顺带修复潜在 bug——fitView effect 缺 `nodes.length` 会让异步填充的画布永不 fit）、**不必要依赖**（模块级导出 / setState 等恒定引用，直接移除）、**规则静态盲区**（「重算触发器」「按 id 触发」这类无法被静态推断的意图，逐处 `eslint-disable-next-line` 并写明理由，禁止文件级 disable）。补依赖前一律先判断「该依赖每次渲染是否为新引用」（范例：`WorkflowEditorInner.tsx` fitView effect、`GlobalStepLogPanel.tsx` cachedIds） |
 | 不稳引用自激循环 | `useQuery` / `useMutation` 的返回值放进 effect 依赖数组（含依赖它们的 `useCallback`），而该 effect 里又做写动作（mutation / refetch） | 「挂载时跑一次」的 effect 依赖数组收成 `[]`，最新一份实现收进 ref（赋值写在另一个 effect 里，不写渲染期）；effect 在**零交互下持续打请求**是这类缺陷的特征，单测不重渲染时看不见，回归测试须 `rerender()` 数轮断言请求计数不增长（范例：`use-model-library.ts` / `use-model-folder-config.ts` / `use-workflow-library.ts`，判据与实测见 [08 §8.5.1](08-异步与副作用.md#851-依赖写全的反面不稳引用会把跑一次变成每次渲染都跑issue-1803)） |
 | 规则关闭后的失效指令回收 | 为消除某类告警而在配置层关闭规则后，代码里原有的行内 `eslint-disable` 变成「未使用的 disable 指令」，在 `reportUnusedDisableDirectives` 下又是一批新告警 | 关闭规则与回收失效指令必须**成对进行**：改完配置立刻 `eslint --fix`，否则只是把告警从一类搬到另一类（范例：关闭 `@next/next/no-img-element` 后回收 8 处失效 disable） |
 
@@ -349,13 +349,13 @@ CHANGELOG 写**对外差异**。完整细则见
 |---|---|---|
 | 类型 | `pnpm typecheck`（tsc --noEmit） | 零错误 |
 | Lint | `pnpm lint`（eslint 9） | 零 error |
-| 格式 | `pnpm format:check`（prettier，全量）／`pnpm format:ratchet`（门禁口径） | 新增文件零 diff；存量 576 个走棘轮（只减不增），见文档集 13 §13.5.1 |
+| 格式 | `pnpm format:check`（oxfmt，改动面）／`pnpm format:report`（全量盘点） | 改动面零 diff；printWidth 迁移存量用 `report` 查，见文档集 13 §13.5.1.1 |
 | 单测 | `pnpm test`（vitest） | 全绿；纯函数必须覆盖 |
 | 生产构建 | `pnpm build`（next build） | 涉及构建链改动时必跑 |
 
 - 单测聚焦纯函数与可单元化的业务逻辑（见 `docs/guides/TESTING.md`）；API 文档由 `pnpm run docs`（typedoc）生成。
 - 提交门槛最低要求：`typecheck` + 相关单测通过。
-- **格式化与行为改动必须分成两次提交**：一次提交里「过一遍 prettier 就变成另一种写法」的文件 ≥ 10 个即阻断（`scripts/check-reformat-only.cjs`），避免 `git blame` 被全文件重排冲掉。见文档集 13 §13.5.2。
+- **格式化与行为改动必须分成两次提交**：一次提交里「过一遍格式化器（现役 oxfmt）就变成另一种写法」的文件 ≥ 10 个即阻断（`scripts/gates/check-reformat-only.cjs`），避免 `git blame` 被全文件重排冲掉。见文档集 13 §13.5.2。
 
 ---
 
@@ -377,7 +377,7 @@ CHANGELOG 写**对外差异**。完整细则见
 | 命名规范 | 项目 docs 或 output 归档 | 命名规则变更时 |
 | 测试说明 | `docs/guides/TESTING.md` | 测试体系变更时 |
 | 更新日志 | `changelog.d/`（碎片）→ `CHANGELOG.md`（并入） | 用户可感知的变更随 PR 落碎片文件（见 §5.4） |
-| API 文档 | `docs/api`（typedoc 生成，**不提交进 git** —— ISSUE #2231） | 本地想看：`pnpm run docs` 生成一份（只在本机，`pnpm docs` 是 pnpm 内建命令、会抢走脚本）；平台侧那一格「API 文档生成与自检」生成一份自己用并判它可不可用（详见规范 13 §13.5.5.1）。**没有「一并提交」这回事** |
+| API 文档 | `docs/api`（typedoc 生成，**不提交进 git** —— ISSUE #2231） | 本地想看：`pnpm run docs` 生成一份（只在本机，`pnpm docs` 是 pnpm 内建命令、会抢走脚本）；平台侧那一格「每日 API 文档生成与自检」每天 01:00 生成一份自己用并判它可不可用（2026-11-05 从 PR 侧降到每日档，ISSUE #2537：最晚次日 01:00 暴露、窗口 ≤24h；详见规范 13 §13.5.5.1 / §13.5.23）。**没有「一并提交」这回事** |
 
 - 代码行为变更必须同步相关文档；文档与代码同提交。
 - 长文档用目录 + 表格 + 示例，禁止大段无结构文字。
@@ -454,7 +454,7 @@ pnpm build && pnpm start   # 生产预览
 - **`ERR_PNPM_IGNORED_BUILDS`** —— 依赖里有带 `preinstall` / `install` / `postinstall`
   构建脚本的包，而 `pnpm-workspace.yaml` 的 `allowBuilds` 没给出答案（非交互模式 exit 1）。
   修法是**加条目**：`true`（批准）与 `false`（显式拒绝）都算回答过，漏答才红
-  （判据 = `scripts/check-allow-builds.cjs`，口径见规范 §13.5.15）。
+  （判据 = `scripts/gates/check-allow-builds.cjs`，口径见规范 §13.5.15）。
   ⚠️ 这一族**不要**去装编译工具链：v13 起的 `better-sqlite3` 随包附带八个平台的
   `prebuilds/*.node`，install 阶段没有可跑的构建脚本。本节旧写法把它当成
   「Drizzle 的 sqlite 驱动 + node-gyp rebuild + 缺 make/gcc 就失败」，那两句话的前提

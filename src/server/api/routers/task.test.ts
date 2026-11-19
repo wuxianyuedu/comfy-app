@@ -1,22 +1,18 @@
 import type * as LoggerModule from "~/lib/core/logger";
 import type * as FsPromises from "node:fs/promises";
 /**
- * task.router 集成测试。
- *
- * mock 边界：~/server/db（内存数据库替身）、~/server/better-auth、
- * ~/lib/core/logger（静音，同时给「失败必须有日志」那条硬规则留一个可断言的句柄）、
- * fs/promises（替换 `stat` 与 `rm` —— openFolder 的「目录存在」分支与 delete 的
- * 产物清理都不再触真实磁盘，用例也不许往仓库的 public/generated 里写删）。
- * repository 与限流中间件均走真实实现。
+ * task.router 集成测试。mock 边界：~/server/db（内存数据库替身）、~/server/better-auth、~/lib/core/logger（静音，同时给
+ * 「失败必须有日志」硬规则留可断言句柄）、fs/promises（替换 `stat`/`rm` —— openFolder 的「目录存在」分支与 delete 的产物清理
+ * 都不触真实磁盘，也不许往仓库 public/generated 写删）。repository 与限流中间件均走真实实现。
  */
 import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const { statMock, rmMock } = vi.hoisted(() => ({
-  statMock: vi.fn<(path: string) => Promise<unknown>>(async () => {
+  statMock: vi.fn<(path: string) => Promise<unknown>>(() => {
     throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
   }),
-  rmMock: vi.fn<(path: string, opts?: unknown) => Promise<void>>(async () => undefined),
+  rmMock: vi.fn<(path: string, opts?: unknown) => Promise<void>>(() => Promise.resolve(undefined)),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -24,7 +20,7 @@ vi.mock("~/server/db", async () => {
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),
@@ -175,7 +171,7 @@ describe("task.list", () => {
     });
     await expect(
       caller.list({
-        /* SAFETY: 类型断言已复核 */
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 故意喂不在枚举里的值：zod 闸必须拦下（线上载荷可绕过编译期类型）
         media: "doc" as never,
       }),
     ).rejects.toMatchObject({
@@ -309,6 +305,32 @@ describe("task.retry", () => {
     });
     expect(tdb.$tables.tasks.length).toBe(1);
   });
+
+  it("同镜头已有活动任务时拒绝原样重跑（#4002）", async () => {
+    seedTask(tdb, {
+      id: "task-old",
+      userId: "user-a",
+      type: "TXT2IMG",
+      status: "FAILED",
+      prompt: "一只猫",
+      params: { checkpoint: "sdxl.safetensors" },
+      workflowName: "sdxl-txt2img",
+      projectId: "proj-1",
+      shotId: "shot-1",
+      execPayload: { nodes: { "1": { class_type: "KSampler" } } },
+    });
+    seedTask(tdb, {
+      id: "task-active",
+      userId: "user-a",
+      projectId: "proj-1",
+      shotId: "shot-1",
+      status: "QUEUED",
+    });
+    await expect(createCaller(makeCtx()).retry({ id: "task-old" })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(tdb.$tables.tasks.map((t) => t.id).sort()).toEqual(["task-active", "task-old"]);
+  });
 });
 
 // ─────────────────────────────── workflow snapshot ───────────────────────────────
@@ -390,11 +412,11 @@ describe("task.openFolder", () => {
     });
   });
 
-  it("目录不存在 → { opened: false, error: 'directory missing' }", async () => {
+  it("目录不存在 → { opened: false, reason: '该任务尚未生成文件目录' }", async () => {
     seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "proj-1" });
     const res = await createCaller(makeCtx()).openFolder({ id: "task-1" });
     expect(res.opened).toBe(false);
-    expect(res.error).toBe("directory missing");
+    expect(res.reason).toBe("该任务尚未生成文件目录");
     expect(res.absolutePath).toContain("projects");
   });
 
@@ -486,6 +508,7 @@ describe("task.delete（rateLimitedProcedure）", () => {
     );
     // 前 20 次：命中 NOT_FOUND 分支（同时消耗限流配额）
     for (let i = 0; i < 20; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await expect(caller.delete({ id: "task-a" })).rejects.toMatchObject({
         code: "NOT_FOUND",
       });
@@ -514,7 +537,7 @@ describe("task.setImageFeedback（人工评分 / 收藏）", () => {
       isFavorite: true,
     });
     const detail = await createCaller(makeCtx()).detail({ id: "task-fb" });
-    expect(detail?.images[0]).toMatchObject({
+    expect(detail.images[0]).toMatchObject({
       id: "img-fb",
       humanRating: 4,
       isFavorite: true,
@@ -525,7 +548,7 @@ describe("task.setImageFeedback（人工评分 / 收藏）", () => {
       isFavorite: false,
     });
     const cleared = await createCaller(makeCtx()).detail({ id: "task-fb" });
-    expect(cleared?.images[0]).toMatchObject({
+    expect(cleared.images[0]).toMatchObject({
       humanRating: null,
       isFavorite: false,
     });

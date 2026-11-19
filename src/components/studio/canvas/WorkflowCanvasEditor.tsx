@@ -10,12 +10,9 @@ import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
 import { Button } from "~/components/ui/button";
 import { zClass } from "~/lib/shell/overlay-z";
 
-/* 编辑器渲染期异常兜底：全屏降级 UI。此前编辑器没有任何错误边界，
- * 一旦 WorkflowEditorInner 渲染抛错（如子工作流数据形状异常），React
- * 会卸载整棵子树，用户看到的是底下工作流库列表"闪现"甚至整页白屏，
- * 且无法定位根因。接入后崩溃时停留在编辑器内并显示错误详情 +
- * 「返回」按钮（用户主动点击才回工作流库），console 同步打印
- * componentStack 供排查。 */
+/* 编辑器渲染期异常兜底：此前无错误边界，WorkflowEditorInner 抛错会让 React 卸载整棵子树
+ *（表现为工作流库列表闪现或白屏且无法定位）。接入后崩溃停留在编辑器内，显示错误详情 +
+ *「返回」按钮（用户主动点击才回库），console 同步打印 componentStack。 */
 function EditorCrashFallback({ error, onClose }: { error: Error | null; onClose: () => void }) {
   return (
     <FullScreenLayer

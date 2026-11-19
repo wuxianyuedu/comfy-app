@@ -1,26 +1,18 @@
 /**
- * series.router 集成测试（FR-SR-01/02，#2477）。
- *
- * 覆盖：系列 / 季 / 集 的 CRUD + 项目挂载（assignProject / byProject），
- * 以及跨用户归属（FORBIDDEN）—— 与 project.test.ts 同一套越权判据口径。
- * 同时让 `tests/trpc-surface-executors.test.ts` 的「每条 procedure 都有执行者」
- * 判据对本 router 全部通过。
- *
- * mock 边界：~/server/db（内存库 + 真 Drizzle）、~/server/better-auth、~/lib/core/logger。
- *
- * 注意：`createCaller(seriesRouter)` 的 procedure 在本 router 内是**顶层命名**
- * （`caller.create` / `caller.createSeason` …），挂载到 root 后才成为 `series.create` 路径。
+ * series.router 集成测试（FR-SR-01/02，#2477）：覆盖系列/季/集 CRUD + 项目挂载、跨用户 FORBIDDEN
+ * （同 project.test.ts 口径）、trpc-surface-executors 执行者判据全通过；mock ~/server/db（内存库）、better-auth、logger。
+ * 注意 `createCaller(seriesRouter)` 的 procedure 为顶层命名（`caller.create`…），挂 root 后才成 `series.create` 路径。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { isPlainRecord } from "~/lib/is-record";
 import { eq } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
 
 vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../../tests/helpers/test-db");
   return { db: createTestDb() };
 });
 vi.mock("~/server/better-auth", () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
+  auth: { api: { getSession: vi.fn(() => null) } },
 }));
 vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -48,7 +40,7 @@ import { makeCtx } from "../../../../tests/helpers/trpc";
 const createCaller = createCallerFactory(seriesRouter);
 const createGenCaller = createCallerFactory(seriesGenerationRouter);
 const tdb = getTestDb();
-const tdbDb = tdb as unknown as LibSQLDatabase<typeof schema>;
+const tdbDb = tdb;
 const userCaller = () => createCaller(makeCtx());
 const otherCaller = () =>
   createCaller(makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }));
@@ -352,9 +344,8 @@ describe("production ↔ 系列库 双向同步（提升 / 注入）", () => {
       .select({ characters: schema.production.characters })
       .from(schema.production)
       .where(eq(schema.production.id, "p3"));
-    const names = ((prodRow?.characters as Array<{ name: string }> | undefined) ?? []).map(
-      (c) => c.name,
-    );
+    const chars = Array.isArray(prodRow?.characters) ? prodRow.characters : [];
+    const names = chars.filter(isPlainRecord).map((c) => c.name);
     expect(names).toContain("新角");
     expect(names).toContain("已有");
   });
@@ -455,13 +446,14 @@ describe("FR-SR-04 整季生成进度与批量提交", () => {
       userId: "user-a",
       name: "默认工作流",
       taskType: "IMG",
-      rawJson: { nodes: [] },
+      /* 可执行预检（#4043）要求 rawJson 带非空 nodes。 */
+      rawJson: { nodes: [{ id: "n1" }] },
     });
     const res = await genCaller().batchGenerateSeason({
       seasonId: se.id,
       workflowId: "wt-frsr04",
     });
-    expect(res).toEqual({ enqueued: 1, skipped: 1 });
+    expect(res).toEqual({ enqueued: 1, skippedSucceeded: 1, skippedActive: 0, invalid: 0 });
     const tasks = await tdbDb.select().from(schema.task).where(eq(schema.task.projectId, pid));
     expect(tasks.length).toBe(2);
   });

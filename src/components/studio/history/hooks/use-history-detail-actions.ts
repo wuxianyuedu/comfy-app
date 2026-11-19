@@ -2,10 +2,9 @@
 
 // ── 历史详情弹窗：动作逻辑（规范 17 §17.2 第②层）────────────────────────────
 // 原先「打开目录 / 复制路径 / 下载工作流」三条流程内联在 HistoryDetailModal 的 JSX 里
-// （含 comfyapp:// 协议探测、剪贴板降级、blob 下载）。抽到 hook 后：
-//   • 弹窗变成纯展示，可由工具重生成；
-//   • tRPC 调用集中在 ~/lib/history-detail-actions，改协议只需动一处；
-//   • 失败路径统一走 toast（硬规则：失败必须有日志 + 用户可见出口）。
+// （含 comfyapp:// 协议探测、剪贴板降级、blob 下载）。抽到 hook 后弹窗变成纯展示；
+// tRPC 调用集中在 ~/lib/history-detail-actions；失败路径统一走 toast
+// （硬规则：失败必须有日志 + 用户可见出口）。
 
 import { useCallback, useMemo, useState } from "react";
 
@@ -79,23 +78,22 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
       openFolderAction.set(true);
       try {
         const result = await deps.openFolder(taskId);
-        if (result.comfyappUrl) {
-          /* 本机自定义协议方案：服务端已校验目录存在且在白名单内，返回
-           * comfyapp://open?path=... URL。这里直接导航（user-initiated 点击），
-           * 浏览器弹「是否打开外部应用」确认 → OS 调起 handler 用 explorer
-           * 打开目录。
-           *
-           * 「协议助手有没有真的接管」的探测收在 `~/lib/external-open` 的
-           * `detectFolderHelper`（规范 16 §16.2.4.25）—— 收口前它内联在这里，
-           * 是**全库唯一一处**判这个的文件，于是「点了什么都没发生」在别处
-           * 根本不是一个可表达的状态（防静默失败，硬规则 4）。 */
+        if (
+          result.comfyappUrl !== undefined &&
+          result.comfyappUrl !== null &&
+          result.comfyappUrl !== ""
+        ) {
+          /* 本机自定义协议：服务端已校验目录存在且在白名单内，返回 comfyapp://open?path=...。
+           * 此处直接导航（user-initiated 点击）→ 浏览器确认 → OS 调起 handler 打开目录。
+           * 「助手是否接管」的探测收在 ~/lib/external-open 的 detectFolderHelper（规范 16
+           * §16.2.4.25），否则「点了没反应」会成为不可表达的状态（防静默失败，硬规则 4）。 */
           setFolderPopover({
             path: result.absolutePath ?? "",
             helperMissing: false,
           });
-          const helper = detectFolderHelper(() =>
-            setFolderPopover((prev) => (prev ? { ...prev, helperMissing: false } : prev)),
-          );
+          const helper = detectFolderHelper(() => {
+            setFolderPopover((prev) => (prev ? { ...prev, helperMissing: false } : prev));
+          });
           window.location.href = result.comfyappUrl;
           const state = await helper.settle();
           if (state === "missing") {
@@ -116,7 +114,7 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
          * 收口前这里是一句写死的「无法连接服务器」—— 网络层原文
          *（服务重启窗口的 `Failed to fetch`）被整个丢掉了。 */
         await runAsyncAction(
-          async () => {
+          () => {
             throw error;
           },
           { report, failureText: "打开目录失败" },
@@ -149,10 +147,12 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
         runAsyncAction(
           async () => {
             const result = await deps.fetchWorkflow(taskId);
-            if (!result?.workflow) {
+            const workflow = result?.workflow;
+            const hasWorkflow = Boolean(workflow);
+            if (!hasWorkflow) {
               return false;
             }
-            downloadJson(result.workflow, "workflow.json");
+            downloadJson(workflow, "workflow.json");
             return true;
           },
           { report, failureText: "下载失败" },
@@ -162,7 +162,9 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
     [deps, report, downloadAction],
   );
 
-  const dismissFolderPopover = useCallback(() => setFolderPopover(null), []);
+  const dismissFolderPopover = useCallback(() => {
+    setFolderPopover(null);
+  }, []);
 
   return {
     folderPopover,

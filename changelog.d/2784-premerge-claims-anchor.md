@@ -11,4 +11,4 @@
 - 改法：`expectAnchorMissRead(code, output)` —— 绿照旧绿；非 0 只放行「2 + 取不到 /
   算不出锚点」这一形，别的 2（参数不认识、段名不存在……）照旧红。「锚点算不出时不许
   折成 0」仍由既有的 `anchorMissed` 那条用例钉着，它不经过入口、不受这一态影响。
-- 判据一个字没动：`scripts/premerge-check.mjs` 与 `scripts/check-commit-claims.mjs` 原样保留。
+- 判据一个字没动：`scripts/gates/premerge-check.mjs` 与 `scripts/check-commit-claims.mjs` 原样保留。

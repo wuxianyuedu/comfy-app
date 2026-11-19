@@ -3,12 +3,14 @@
 // 从环境变量读取默认值，并可被 `llmConfig` 表里的用户设置覆盖（与界面
 // 设置 UI 共享同一张表，复用 workshopDb 读取，不触碰 `~/env`）。
 import { decryptLlmKey } from "~/lib/llm/secrets";
-import { errorMessage } from "~/lib/error-message";
+import { errorMessage, errorText } from "~/lib/error-message";
+import { logger } from "~/lib/core/logger";
 import type { LLMMessage } from "~/lib/llm/types";
 import { llmConfig } from "~/server/db/schema";
 import { workshopDb } from "./db";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
+import { asRecord, isUnknownArray } from "~/lib/is-record";
 
 export type WorkshopLLMConfig = {
   apiKey: string | null;
@@ -41,27 +43,27 @@ export async function getWorkshopLLMConfig(): Promise<WorkshopLLMConfig> {
       if (row.model) {
         cfg.model = row.model;
       }
-      if (row.apiKey) {
+      if (row.apiKey !== null && row.apiKey !== "") {
         cfg.apiKey = decryptLlmKey(row.apiKey);
       }
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      if (row.temperature != null) {
+      if (row.temperature !== null && row.temperature !== undefined) {
         cfg.temperature = row.temperature;
       }
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      if (row.maxTokens != null) {
+      if (row.maxTokens !== null && row.maxTokens !== undefined) {
         cfg.maxTokens = row.maxTokens;
       }
     }
-  } catch {
-    // 表不存在 / 连接异常 → 使用 env 默认
+  } catch (error) {
+    // 表不存在 / 连接异常 → 使用 env 默认。回落保留，故障留读数（#4419 / 硬规则 4）：
+    // 此前静默吞掉，用户在设置页配好的模型无声失效且排障时无任何 DB 故障读数。
+    logger.warn(errorText(error, "[workshop-llm] 配置行读取失败，本次请求按 env 默认配置执行"));
   }
   return cfg;
 }
 
 function headersFor(cfg: WorkshopLLMConfig): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (cfg.apiKey) {
+  if (cfg.apiKey !== null && cfg.apiKey !== "") {
     h.Authorization = `Bearer ${cfg.apiKey}`;
   }
   return h;
@@ -72,7 +74,7 @@ export async function completeWorkshopLLM(
   cfg: WorkshopLLMConfig,
   messages: Array<LLMMessage>,
 ): Promise<string> {
-  if (!cfg.model?.trim()) {
+  if (!cfg.model.trim()) {
     throw new Error(
       "尚未配置生效模型：请先在「设置 → 本地模型/远程模型」中选择或填写要使用的模型名",
     );
@@ -110,9 +112,12 @@ export async function completeWorkshopLLM(
       `LLM 请求失败 (${res.status})${hint}${detail.trim() ? `：${clampText(detail, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}` : ""}`,
     );
   }
-  /* SAFETY: 类型断言已复核 */
-  const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  return json.choices?.[0]?.message?.content ?? "";
+  // LLM 响应体是外来 JSON：逐层按宽松对象/数组读，content 非字符串回落 ""。
+  const raw: unknown = await res.json();
+  const root = asRecord(raw);
+  const rawChoices = root?.choices;
+  const choices = isUnknownArray(rawChoices) ? rawChoices : [];
+  const message = asRecord(asRecord(choices[0])?.message);
+  const content = message?.content;
+  return typeof content === "string" ? content : "";
 }

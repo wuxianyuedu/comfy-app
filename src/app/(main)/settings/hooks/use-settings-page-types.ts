@@ -1,31 +1,18 @@
 /**
- * 设置页的**共享类型与常量**（`use-settings-page` 的叶子依赖）。
- *
- * 视图与容器共用这些类型：`Settings`、`LlmConfig`、`QueryLlmConfig`、
- * `Section`、`OllamaStatus`、`FlashMessage`、`SettingsPageDrafts`、
- * `SettingsPageController`、`ReadySettingsPageController`，以及侧边栏分区表
- * `SETTINGS_SECTIONS`、按任务温度区的 `TEMPERATURE_TASKS` 两个纯配置常量。
- * 它们与 `useSettingsPage` hook 的实现体无关,只是被两侧共同引用;§12.7
- * `check-circular-deps` 不看 `import type`、只要 AST 上有 import 边就算环,
- * 所以类型必须沉在**独立叶子文件**里才能真正把方向拉直:
- *   `use-settings-page-types.ts` ← `use-settings-page.ts`（并 re-export,
- *   消费者 `from "./hooks/use-settings-page"` 的路径不变,§12.18 复用优先）。
- *
- * 本文件只有类型与常量、没有 React —— 不带 `"use client"`，服务端消费者
- * 也能安全引它。
+ * 设置页的共享类型与常量（`use-settings-page` 的叶子依赖）。
+ * §12.7 `check-circular-deps` 连 `import type` 也算环边，类型须沉在独立叶子文件才能把方向拉直（hook 侧 re-export，消费路径不变）。
+ * 本文件只有类型与常量、没有 React —— 不带 `"use client"`，服务端也能安全引它。
  */
 import type { RuntimeLogController } from "~/components/studio/logs/use-runtime-log-source";
-import type { BackupEntry, PendingRestore } from "./use-settings-page-backup";
+import type { AppDataBackupSet, BackupEntry, PendingRestore } from "./use-settings-page-backup";
 import type { OllamaModel } from "~/lib/llm/ollama-client";
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
-import type { RemoteProbeResult } from "~/lib/llm/browser";
 import type {
   UsageTaskQueryInput,
   UsageTestInput,
   UsageTestResult,
 } from "~/lib/llm/usage-test-client";
 import { TASK_TYPES, type RemoteModelEntry, type TaskType } from "~/lib/llm/types";
-import type { RemoteModelDraftEntry } from "~/lib/llm/remote-model-schema";
 import type { CpuLimitMode } from "~/lib/comfyui/cpu-limit";
 
 export type Settings = {
@@ -61,11 +48,9 @@ export type LlmConfig = {
 };
 
 /**
- * 服务端下发的 LLM 配置形状（`llm.configGet` 的出口）。
- *
- * 与草稿 {@link LlmConfig} 的唯一差别在 `extraModels`：下发的是「本地候选字符串 +
- * 远端条目对象」的混合清单（保存时按类型各自写回），而草稿在播种时就拆成了
- * `localCandidates` 与 `extraModels` 两栏。因此「读取兜底缓存」按本类型存。
+ * 服务端下发的 LLM 配置形状（`llm.configGet` 的出口）。与草稿 {@link LlmConfig} 的差别在 `extraModels`：
+ * 下发是「本地候选字符串 + 远端条目对象」混合清单（保存时按类型各自写回），草稿在播种时就拆成两栏；
+ * 「读取兜底缓存」按本类型存。
  */
 export type QueryLlmConfig = Omit<
   LlmConfig,
@@ -83,12 +68,15 @@ export type QueryLlmConfig = Omit<
 
 export type Section =
   | "appearance"
+  | "sidebar"
   | "appUpdate"
   | "llmLocal"
   | "llmRemote"
   | "comfyui"
   | "database"
   | "backup"
+  | "dataLocation"
+  | "sizePresets"
   | "exit"
   | "logs";
 export type OllamaStatus = "checking" | "starting" | "up" | "down";
@@ -107,10 +95,8 @@ export type SettingsPageDrafts = {
 export type SettingsPageController = {
   /** 跳转目标真正落定 —— 外壳命中锚点后调它（清空 `pendingJump` + 消费载荷）。 */
   ackJumpSection: () => void;
-  /* 入参形状由 lib 里那一份草稿→条目桥给出（`remoteModelEntryFromDraft` 的返回类型）：
-   * 这一层过去另写一遍字段，于是「弹窗拼的那枚条目」与「controller 收的那枚条目」
-   * 是两个各自自洽的形状。 */
-  addRemoteModel: (entry: RemoteModelDraftEntry) => Promise<{ error?: string; ok: boolean }>;
+  /** 本机应用数据的备份套（与数据库备份按同刻配对；#3732）。 */
+  appDataBackups: Array<AppDataBackupSet>;
   /* 应用自更新（Tauri updater + process）：检测 / 下载安装 / 重启 */
   appUpdate: {
     /** 最近一次检测是否发现可用更新。 */
@@ -151,16 +137,27 @@ export type SettingsPageController = {
     desktopManaged: boolean;
     /** 桌面版 / 便携版 / venv；未配置路径或判不出形态时为 null。 */
     instanceType: "desktop" | "portable" | "venv" | null;
+    /** comfy-cli 解释器的事实（#4164）：configured=填了、exists=磁盘上有没有。
+     *  留空是合法语义（退回默认落点）——只有「填了但不存在」才构成行内提示。 */
+    interpreter: {
+      configured: boolean;
+      exists: boolean | null;
+    } | null;
     /** 配置里是否填了路径（与形态同源，都是设置行的事实）。 */
     pathConfigured: boolean;
+    /** 已填路径指向的目录是否存在（#4138：无效路径的行内提示判据）。 */
+    pathExists: boolean;
   } | null;
   /** 桌面实例的六个存储目录（模型 / 共享模型 / 输入 / 共享输入 / 输出 /
-   *  共享输出）——**只读**。
-   *
-   *  非桌面实例为 null：便携版 / venv 的目录只由启动参数逐次决定，界面拿它回答
-   *  「模型在哪」会是另一套口径。数据来源同 `comfyInstance`（配置路径的函数），
-   *  因此同样在保存偏好之后重取一次，不进轮询。 */
+   *  共享输出）——**只读**；非桌面实例为 null（便携版 / venv 的目录只由启动参数
+   *  决定）。与 `comfyInstance` 同为配置路径的函数，保存偏好后重取、不进轮询。 */
   comfyStorage: DesktopStoragePaths | null;
+  /** 提交一次 LLM 草稿局部补丁并立即落库（离散控件：模型选择 / 按任务温度等）。
+   *  成功静默、失败报错；返回本次结果供调用方回滚/刷新。 */
+  commitLlm: (patch: Partial<LlmConfig>) => Promise<{ error?: string; ok: boolean }>;
+  /** 提交一次偏好局部补丁并立即落库（离散控件：开关 / 单选 / CPU 档位等）。
+   *  成功静默、失败报错；返回本次结果供调用方回滚/刷新。 */
+  commitPrefs: (patch: Partial<Settings>) => Promise<{ error?: string; ok: boolean }>;
   createBackupNow: () => Promise<void>;
   /* 启动日志（log/services/*-runtime.log）：共用同一套「按会话切分 + 跟随 +
      刷新」的状态，见 `~/components/studio/logs/use-runtime-log-source`
@@ -185,6 +182,9 @@ export type SettingsPageController = {
   flash: FlashMessage | null;
   /** 加载失败**且**两份草稿都没就绪 —— 容器据此渲染错误降级视图。 */
   hasError: boolean;
+  /** 从用户指定的目录导入备份件（#3732）。 */
+  importBusy: boolean;
+  importFromDir: (dir: string) => Promise<void>;
   installAppUpdate: () => Promise<void>;
   /* 加载 / 错误 */
   isInitialLoad: boolean;
@@ -211,34 +211,26 @@ export type SettingsPageController = {
    */
   pendingJump: Section | null;
   pendingRestore: PendingRestore | null;
-  probeRemote: (input: {
-    apiKey?: string;
-    baseUrl?: string;
-    model?: string;
-  }) => Promise<RemoteProbeResult>;
   /** 对已提交但仍在生成的异步视频任务「继续等待」一轮：只查既有任务，不重复提交扣费 */
   queryUsageTask: (input: UsageTaskQueryInput) => Promise<UsageTestResult>;
   relaunchApp: () => Promise<void>;
-  /* 远端模型管理：列表 + 添加 / 编辑 / 移除 + 测试。增删改即时落库
-   * （无需单独的保存按钮），返回本次保存结果供弹窗留在原地报错。 */
-  remoteModelList: Array<RemoteModelEntry>;
-  removeRemoteModel: (name: string) => Promise<{ error?: string; ok: boolean }>;
   restoreBusy: boolean;
-  restoreFrom: (name: string) => Promise<void>;
+  restoreFrom: (name: string, appDataDir?: string | null) => Promise<void>;
   retry: () => void;
   saveLlm: () => Promise<void>;
-  savePrefs: () => Promise<void>;
+  /**
+   * 偏好落库（即时自动保存的失焦/提交出口，成功静默、仅报错提示）。
+   * 可选 `override`：commitPrefs 即时提交时传入算好的下一份草稿，避免读到 stale 闭包。
+   */
+  savePrefs: (override?: Settings | null) => Promise<{ error?: string; ok: boolean }>;
   /* 保存 */
   saving: boolean;
-  /** 侧边栏当前分区（纯视觉偏好，但影响渲染哪个表单，故由逻辑层持有）。 */
+  /** 当前分区（纯视觉偏好，但影响渲染哪个表单，故由逻辑层持有）。 */
   section: Section;
   /**
-   * 「读不到 / 刚保存的配置」类失败的**可续用**状态（ISSUE #360）：
-   * 草稿已由缓存兜底播种，界面可用，只是当次刷新失败——视图据此在顶部渲染一条
-   * **非阻塞**提示条（含重试），而不是把整页换成错误视图。
-   *
-   * 与 `hasError` 的分工：`hasError` = 失败 **且** 连兜底草稿都没有（真的没法用）；
-   * `serveState` = 有兜底草稿时的「降级但可用」。两者互斥。
+   * 「读不到 / 刚保存的配置」类失败的**可续用**状态（ISSUE #360）：草稿已由缓存
+   * 兜底播种，视图据此渲染**非阻塞**提示条而非整页错误。与 `hasError` 互斥：
+   * `hasError` = 连兜底草稿都没有，`serveState` = 有兜底的降级可用。
    */
   serveState: { errorText: string } | null;
   setLlmApiKey: (value: string) => void;
@@ -254,34 +246,35 @@ export type SettingsPageController = {
   testModelUsage: (input: UsageTestInput) => Promise<UsageTestResult>;
   /* 外观主题：Light / Dark（持久化偏好，统一走 next-themes）。 */
   theme: "light" | "dark";
-  /** 勾选/取消一个候选模型（本地 Ollama 多模型管理） */
-  toggleExtraModel: (name: string) => void;
-  /** 编辑既有条目（只作用于已配置条目）；重名校验排除自身，改名时若生效
-   *  模型引用旧名会同步更新。
-   *  patch.baseUrl = null / clearApiKey = true 表示清掉独立配置、跟随全局。 */
-  updateRemoteModel: (
-    name: string,
-    patch: Partial<RemoteModelDraftEntry>,
-  ) => Promise<{ error?: string; ok: boolean }>;
+  /** 勾选/取消一个候选模型（本地 Ollama 多模型管理）；即时落库，返回保存结果 */
+  toggleExtraModel: (name: string) => Promise<{ error?: string; ok: boolean }>;
 };
 
 export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "appearance", label: "外观" },
+  /* ISSUE #3798：这一节管的已是「全部全局视图」而非仅侧栏项，名字跟着改；
+     内部 id 沿用 `sidebar`（分区 id 是数据键，改名会牵动跳转载荷与持久化，无用户收益）。 */
+  { id: "sidebar", label: "界面页签" },
   { id: "appUpdate", label: "应用更新" },
   { id: "llmLocal", label: "本地模型" },
   { id: "llmRemote", label: "远程模型" },
   { id: "comfyui", label: "创作后端" },
   { id: "database", label: "数据库" },
   { id: "backup", label: "备份与恢复" },
+  { id: "dataLocation", label: "数据存放位置" },
+  { id: "sizePresets", label: "尺寸配置表" },
   { id: "exit", label: "退出与后台服务" },
   { id: "logs", label: "日志" },
 ];
 
 /** 按任务温度区的任务清单 —— 视图遍历渲染，顺序即渲染顺序。 */
-/* SAFETY: 类型断言已复核 */
-export const TEMPERATURE_TASKS = Object.entries(TASK_TYPES) as Array<
-  [TaskType, (typeof TASK_TYPES)[TaskType]]
->;
+function isTaskType(value: string): value is TaskType {
+  return Object.hasOwn(TASK_TYPES, value);
+}
+
+export const TEMPERATURE_TASKS: Array<[TaskType, (typeof TASK_TYPES)[TaskType]]> = Object.entries(
+  TASK_TYPES,
+).filter((entry): entry is [TaskType, (typeof TASK_TYPES)[TaskType]] => isTaskType(entry[0]));
 
 /** `drafts` 非空由容器保证（`if (!c.drafts)` 早退），用交集类型表达，
  *  消费方（含子视图）内不必逐处判空。 */

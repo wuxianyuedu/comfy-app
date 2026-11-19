@@ -18,6 +18,39 @@ import type { NodeTypeConfig, PortSpec, FieldDef } from "~/lib/comfyui/node-conf
 import { isFieldType } from "~/lib/comfyui/field-types";
 import { errorText } from "~/lib/error-message";
 import { emitAppEvent } from "~/lib/app-events";
+import { isRecord } from "~/lib/is-record";
+import { sleep } from "~/lib/with-timeout";
+
+async function fetchManifestWithRetry(
+  base: string,
+  opts: { attempts: number; timeoutMs: number },
+): Promise<Response> {
+  let lastError: unknown = null;
+  let lastResponse: Response | null = null;
+  for (let attempt = 1; attempt <= opts.attempts; attempt++) {
+    try {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- 重试必须顺序执行
+      const res = await fetch(`${base}/api/custom-nodes/manifest`, {
+        signal: AbortSignal.timeout(opts.timeoutMs),
+      });
+      if (res.ok || res.status < 500) {
+        return res;
+      }
+      lastResponse = res;
+      lastError = new Error(`manifest status ${res.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < opts.attempts) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- 重试退避必须顺序等待
+      await sleep(200 * attempt);
+    }
+  }
+  if (lastResponse !== null) {
+    return lastResponse;
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
 
 /* 把 ComfyUI 的原始分类字符串映射到强调色。对外导出，
  * 好让界面给节点预览卡渲染同一个分类配色，而不必先构建完整的 NodeTypeConfig。 */
@@ -51,13 +84,13 @@ function hashColor(s: string): string {
 }
 
 export function colorFor(category: string | undefined): string {
-  if (!category) {
+  if (category === undefined || category === "") {
     return "#7C5CFC";
   }
   const parts = category.replace(/\/$/, "").split("/");
   for (const p of parts) {
     const c = CATEGORY_COLORS[p.toLowerCase()];
-    if (c) {
+    if (c !== undefined && c !== "") {
       return c;
     }
   }
@@ -76,8 +109,9 @@ export function specToField(s: PortSpec): FieldDef {
     /* 与 String(s.default) 运行时一致（default 来自 manifest JSON，无 symbol），
      * 收窄以满足 no-base-to-string。 */
     placeholder:
+      /* SAFETY: 类型断言已复核 */
       s.default !== undefined && s.default !== null
-        ? /* SAFETY: 类型断言已复核 */ (s.default as { toString(): string }).toString()
+        ? (s.default as { toString(): string }).toString()
         : undefined,
     group: "参数",
     // 纯连接端口渲染成连线手柄，而不是编辑字段。
@@ -195,6 +229,14 @@ type RawManifest = {
   nodes?: Record<string, ManifestNode>;
 };
 
+function isRawManifest(v: unknown): v is RawManifest {
+  if (!isRecord(v)) {
+    return false;
+  }
+  const nodes = v.nodes;
+  return nodes === undefined || isRecord(nodes);
+}
+
 type ManifestInput = {
   /** 控件的默认值（字符串 / 数字 / 布尔 … 原始 JSON 值），对本模块不透明。 */
   default?: unknown;
@@ -231,7 +273,10 @@ function buildInto(
 ): number {
   let count = 0;
   for (const [ct, n] of Object.entries(manifest.nodes ?? {})) {
-    if (!n) {
+    /* manifest 是外部 JSON：类型上 `n` 恒非空，运行期仍可能混进 null 条目 ——
+     * 显式转换保留原 `!n` 的防御口径（直接写条件会被恒真判据拦下）。 */
+    const nodePresent = Boolean(n);
+    if (!nodePresent) {
       continue;
     }
     const inputs: Array<PortSpec> = (n.inputs ?? []).map((input) => ({
@@ -240,7 +285,7 @@ function buildInto(
       widget: isFieldType(input.widget) ? input.widget : undefined,
       options: input.options ?? undefined,
       default: input.default,
-      required: !!input.required,
+      required: input.required === true,
     }));
     const outputs: Array<PortSpec> = (n.outputs ?? []).map((output) => ({
       name: output.name,
@@ -256,8 +301,8 @@ function buildInto(
       custom: true,
       // ⚠️ 概念澄清：OUTPUT_NODE（终端节点，后端仍执行）与 properties.frontend_only
       // （纯前端节点，后端不执行）是**两个不同概念**，此处必须分开。
-      outputNode: !!n.outputNode,
-      frontendOnly: !!n.frontend_only,
+      outputNode: n.outputNode === true,
+      frontendOnly: n.frontend_only === true,
       description: n.description ?? undefined,
       width: 240,
       height: 90,
@@ -269,7 +314,7 @@ function buildInto(
     // 好让画布渲染 ComfyUI 原生的左下角页脚。
     // manifest 没给包名时（旧版解析器 / 手工改过的 manifest）
     // 回落到原始分类字符串。
-    if (packages && n.package) {
+    if (packages && n.package !== undefined && n.package !== "") {
       packages[ct] = n.package;
     }
     count++;
@@ -323,13 +368,17 @@ export type ManifestNodeRaw = {
   source?: string;
 };
 
+function isManifestPayload(v: unknown): v is { nodes: Record<string, ManifestNodeRaw> } {
+  return isRecord(v) && isRecord(v.nodes);
+}
+
 /* 直接从磁盘取原始 manifest。manifest 缺失或为空（例如还没解析过）时返回 null。
  * 服务端侧开销很小 —— 首解析之后文件已在缓存里。 */
 export async function getCustomNodesManifest(
   base = "",
 ): Promise<{ nodes: Record<string, ManifestNodeRaw> } | null> {
   try {
-    const res = await fetch(`${base}/api/custom-nodes/manifest`);
+    const res = await fetchManifestWithRetry(base, { attempts: 3, timeoutMs: 10_000 });
     if (!res.ok) {
       const failure = classifyManifestFailure(res.status);
       /* 只有「取不到」这一档值得写日志：「还没解析过」是首屏的正常态，
@@ -341,16 +390,13 @@ export async function getCustomNodesManifest(
       return null;
     }
     const data: unknown = await res.json();
-    if (!data || typeof data !== "object" || !("nodes" in data) || !data.nodes) {
+    if (!isManifestPayload(data)) {
       console.error(
         "[custom-nodes] 清单形状不对：响应里没有 nodes 字段（解析器版本与前端不匹配？）",
       );
       return null;
     }
-    /* SAFETY: 类型断言已复核 */
-    return data as {
-      nodes: Record<string, ManifestNodeRaw>;
-    };
+    return data;
   } catch (error) {
     console.error("[custom-nodes] 读取节点清单失败：", errorText(error, "读取自定义节点清单"));
     return null;
@@ -362,7 +408,7 @@ export async function getCustomNodesManifest(
 export async function refreshCustomNodes(base = ""): Promise<number> {
   let res: Response;
   try {
-    res = await fetch(`${base}/api/custom-nodes/manifest`);
+    res = await fetchManifestWithRetry(base, { attempts: 3, timeoutMs: 10_000 });
   } catch (error) {
     /* 请求压根没出去（离线 / dev server 刚重启 / 端口被回收）。 */
     const detail = `连不上清单端点（${errorText(error, "读取节点清单")}）`;
@@ -386,8 +432,11 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
   }
 
   try {
-    /* SAFETY: 类型断言已复核 */
-    const manifest = (await res.json()) as RawManifest;
+    const parsedManifest: unknown = await res.json();
+    if (!isRawManifest(parsedManifest)) {
+      throw new TypeError("清单不是 JSON 对象");
+    }
+    const manifest = parsedManifest;
     const next: Record<string, NodeTypeConfig> = {};
     const nextPackages: Record<string, string> = {};
     const count = buildInto(next, manifest, nextPackages);

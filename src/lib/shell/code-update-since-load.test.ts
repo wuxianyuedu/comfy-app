@@ -4,29 +4,19 @@
 
 import { describe, expect, it } from "vitest";
 
-import {
-  hasCodeUpdated,
-  isBuildIdChange,
-  isPageOlderThanBuild,
-} from "./code-update-since-load";
+import { hasCodeUpdated, isBuildIdChange, isPageOlderThanBuild } from "./code-update-since-load";
 
 describe("hasCodeUpdated", () => {
   it("加载后模块被替换 → 跑过代码更新", () => {
-    expect(
-      hasCodeUpdated({ updatedSinceLoad: true, pageOlderThanBuild: false }),
-    ).toBe(true);
+    expect(hasCodeUpdated({ updatedSinceLoad: true, pageOlderThanBuild: false })).toBe(true);
   });
 
   it("页面从挂载起就比当前构建旧 → 同样算跑过代码更新", () => {
-    expect(
-      hasCodeUpdated({ updatedSinceLoad: false, pageOlderThanBuild: true }),
-    ).toBe(true);
+    expect(hasCodeUpdated({ updatedSinceLoad: false, pageOlderThanBuild: true })).toBe(true);
   });
 
   it("两者都不成立 → 没跑过代码更新（不该打扰用户）", () => {
-    expect(
-      hasCodeUpdated({ updatedSinceLoad: false, pageOlderThanBuild: false }),
-    ).toBe(false);
+    expect(hasCodeUpdated({ updatedSinceLoad: false, pageOlderThanBuild: false })).toBe(false);
   });
 });
 

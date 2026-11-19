@@ -49,15 +49,22 @@ export type ProjectOutputsController = {
 export function useProjectOutputs(projectId: string | null): ProjectOutputsController {
   const trpc = useTRPC();
   const outputsQ = useQuery(
-    trpc.project.outputs.queryOptions({ projectId: projectId ?? "" }, { enabled: !!projectId }),
+    trpc.project.outputs.queryOptions(
+      { projectId: projectId ?? "" },
+      { enabled: projectId !== null && projectId !== "" },
+    ),
   );
 
-  // 服务端 createdAt 是 Date，视图层要字符串做时间轴展示，这里统一收窄。
-  /* SAFETY: 类型断言已复核 */
-  const outputs = (outputsQ.data?.outputs ?? []).map((output) => ({
+  // 服务端 createdAt 是 Date，视图层要字符串做时间轴展示；params 派生的
+  // sampler/steps/cfg/checkpoint 是 unknown，逐项校验后收窄。
+  const outputs = (outputsQ.data?.outputs ?? []).map<ProjectOutputItem>((output) => ({
     ...output,
+    cfg: typeof output.cfg === "number" ? output.cfg : null,
+    checkpoint: typeof output.checkpoint === "string" ? output.checkpoint : null,
     createdAt: String(output.createdAt),
-  })) as Array<ProjectOutputItem>;
+    sampler: typeof output.sampler === "string" ? output.sampler : null,
+    steps: typeof output.steps === "number" ? output.steps : null,
+  }));
 
   const refetch = useCallback(() => {
     void outputsQ.refetch();

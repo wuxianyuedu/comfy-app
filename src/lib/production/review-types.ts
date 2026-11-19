@@ -60,12 +60,16 @@ export const SCRIPT_REVISION_LIMIT = 3;
 export type ReviewMode = "gacha" | "reprompt";
 
 const MODES: ReadonlyArray<ReviewMode> = ["gacha", "reprompt"];
+const MODE_SET = new Set<string>(MODES);
+
+/** 外部 JSON → 合法重生成方式；不是已知取值 → false。 */
+function isReviewMode(value: unknown): value is ReviewMode {
+  return typeof value === "string" && MODE_SET.has(value);
+}
 
 /** 宽容解析重生成方式；非法/缺省回落 `gacha`（抽卡是默认动作）。 */
 export function normalizeReviewMode(raw: unknown): ReviewMode {
-  /* SAFETY: 类型断言已复核 */
-  /* SAFETY: 类型断言已复核 */
-  return MODES.includes(raw as ReviewMode) ? (raw as ReviewMode) : "gacha";
+  return isReviewMode(raw) ? raw : "gacha";
 }
 
 /**

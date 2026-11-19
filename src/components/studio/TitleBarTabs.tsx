@@ -1,30 +1,19 @@
 "use client";
 
 /* ── TitleBarTabs · 把页签搬到窗口「标题行」的自定义标题栏 ────────────
- *
- * 背景（ISSUE #310 / #200）：此前的应用级页签虽然解决了「另弹独立窗口」，
- * 但页签栏渲染在原生标题栏**下方**，等于在应用内又占掉一条 40px 区域。
- * 用户要的是「像文件资源管理器那样」——页签直接显示在窗口标题行。
- *
- * 做法：主窗口关闭原生装饰（`decorations: false`），标题行由本组件接管，
- * 同一条横条里并列「页签 + 拖拽空白区 + 最小化/最大化/关闭」。浏览器 / dev
- * 环境没有原生标题栏可让位（窗口由系统浏览器提供），调用方（ShellTabs）
- * 会退回应用内页签栏——判据见 `shouldUseTitleBarTabs`。
- *
- * 分层（规范 17 §17.2）：
- *  - 本组件是第③层「视图」：只渲染 props + 转发动作，不含 IO；
- *  - 窗口控制（拖拽/最小化/关闭）与最大化状态订阅都走
- *    `src/lib/shell/window-controls-client.ts`（第②层），视图不直接 invoke。
- *
- * 交互细节：
- *  - 拖拽区铺满标题栏，用 `data-no-drag` 标记排除页签与窗口按钮，
- *    否则点击会被拖拽吞掉（判据在 `isDragRegionTarget`）。
- *  - 双击标题栏空白处 = 最大化/还原，与系统标题栏一致。
- */
+ * 背景（ISSUE #310 / #200）：页签栏此前渲染在原生标题栏**下方**、又占一条 40px；用户要的「像文件资源管理器那样」= 页签直接在标题行。做法：主窗口关原生装饰（`decorations: false`），本组件接管标题行，同一条横条并列「页签 + 拖拽空白区 + 三颗窗口按钮」；浏览器 / dev 无原生标题栏可让位，调用方 `ShellTabs` 退回应用内页签栏（判据 `shouldUseTitleBarTabs`）。
+ * 摆放位置（ISSUE #3807）：**不再是整窗第一行**。`ShellTabs` 经 `TitleBarSlotProvider`
+ * 把本组件交给 `AppShell`，渲染在内容列顶部 —— 与浏览器态 `ViewTabStrip` 同位、
+ * 同款背景。这样侧栏不必再为标题行让出 36px，两形态都从视口 y=0 起，首页贴顶。
+ * 窗口控制、拖拽区、iframe 页签一条没少；`WindowTitleBar`（整屏路由页）仍是整窗
+ * 第一行，那是另一种壳，别把两处的 `data-shell` 让位口径混起来。
+ * 第③层视图（规范 17 §17.2）：只渲染 props + 转发动作，窗口控制走 `src/lib/shell/window-controls-client.ts`（第②层），视图不直接 invoke。
+ * 拖拽区铺满标题栏，用 `data-no-drag` 标记排除页签与窗口按钮（否则点击会被拖拽吞掉，判据 `isDragRegionTarget`）；双击空白 = 最大化 / 还原（与系统标题栏一致）。 */
 
 import { X } from "lucide-react";
 import type { ShellTab } from "~/lib/shell/shell-tabs-store";
 import { MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
+import { sidebarPinnedViewIds } from "./NavItems";
 import { ViewTabStrip } from "./ViewTabStrip";
 import type { ViewTab } from "./workspace-tabs";
 import type { OpenableView } from "./ViewTabStrip";
@@ -68,17 +57,21 @@ function TitleBarTab({
   tab: ShellTab;
 }) {
   return (
-    /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 键等价物是下面那行 `{...simpleKeyHandler(["Space", "Enter"], …)}`（§16.2.4.57）—— 规则认不出属性展开。 */
+    /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events -- 键等价物是下面那行 `{...simpleKeyHandler(["Space", "Enter"], …)}`（§16.2.4.57）—— 规则认不出属性展开。 */
     <div
       aria-selected={active}
       data-no-drag
-      onClick={() => onActivate(tab.id)}
+      onClick={() => {
+        onActivate(tab.id);
+      }}
       role="tab"
       tabIndex={0}
       /* 与 `ShellTabs` 同款：键判据走 `~/components/ui/simple-key-handler`
        *（规范 16 §16.2.4.57）—— 两种渲染形态的页签对「哪个键激活」共用
        *  同一个判据，不再各写一遍。 */
-      {...simpleKeyHandler(["Space", "Enter"], () => onActivate(tab.id))}
+      {...simpleKeyHandler(["Space", "Enter"], () => {
+        onActivate(tab.id);
+      })}
       className={`group border-border-subtle relative flex h-full max-w-52 min-w-0 cursor-pointer items-center gap-2 border-r px-3 text-sm transition-colors ${
         /* 与同一条标题行里的「应用内视图页签」共用 `.u-tab-active`：
            两类页签并列在同一横条上，选中态长两张脸就是漂移。 */
@@ -125,6 +118,11 @@ export function TitleBarTabs({
   /* 有视图页签时，「主应用」那一个伪页签由它们代表 —— 同一条横条里出现
      「主应用」+「首页」+「模型」这种并列，用户分不清哪个才是当前页。 */
   const hasViewTabs = !!viewTabs && viewTabs.length > 0;
+  /* 侧栏常驻项对应的页签不在标题行 / 页签条再渲染一遍（ISSUE #3740 追加反馈）：
+     它们在侧栏里恒在、可切可关，这里再列只贡献占宽。`hasViewTabs` 仍按**原始**
+     页签数判定 ——「要不要用页签代表「主应用」这一格」的规则不受显隐影响。 */
+  const pinnedViewIds = sidebarPinnedViewIds();
+  const stripTabs = viewTabs?.filter((tab) => !pinnedViewIds.has(tab.view)) ?? [];
   const shellTabs = hasViewTabs ? tabs.filter((tab) => tab.id !== MAIN_TAB_ID) : tabs;
   /* 最大化状态与拖拽判据走 `./WindowControls` 的共享实现（与整屏路由页自带的
      精简标题行 `WindowTitleBar` 同一份 —— 两处各写一遍就是孪生）。 */
@@ -137,7 +135,11 @@ export function TitleBarTabs({
 
   return (
     <div
-      className={`flex ${TITLE_BAR_HEIGHT_CLASS} ${TITLE_BAR_CHROME_CLASS} border-border-subtle bg-panel shrink-0 items-stretch border-b select-none`}
+      /* 与浏览器态 `ViewTabStrip` 同款的那条横条（ISSUE #3807）：`bg-sidebar/40` +
+         `border-border` + `border-b` + `px-2`。高度仍取 `--spacing-title-bar`，这样
+         浮层让位（`use-overlay-boundary`）与标题行几何还是同一个数。差别只剩右端那
+         三颗窗口按钮 —— 那是无边框窗口必需的形态差异，不是布局漂移。 */
+      className={`flex ${TITLE_BAR_HEIGHT_CLASS} ${TITLE_BAR_CHROME_CLASS} border-border bg-sidebar/40 shrink-0 items-stretch border-b px-2 select-none`}
       /* `data-slot="title-bar"` 是「应用顶部这条 chrome 在不在」的机器可读标记：
        * `TitleBarTabs` 与精简标题行 `WindowTitleBar` 共用它，e2e 按它断言锚定
        * 浮层的让位对象确实在（气泡被标题行吃掉半个身子那件事，见
@@ -158,7 +160,7 @@ export function TitleBarTabs({
             onSelect={(key) => onSelectViewTab?.(key)}
             openableViews={openableViews}
             projectNameOf={projectNameOf}
-            tabs={viewTabs}
+            tabs={stripTabs}
           />
         ) : null}
         {shellTabs.length > 0 ? (

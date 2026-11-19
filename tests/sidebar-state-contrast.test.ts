@@ -1,21 +1,10 @@
 /**
- * 侧栏导航项三态的可分辨性（ISSUE #1291）。
- *
- * 背景：`--sidebar-accent` 一路转发到通用表面 token `--color-subtle`，而那颗
- * token 的浅色档是「白底上的极浅灰」。搬到深色侧栏（`--color-panel-deep`
- * `#0f0f16`）上时它取 `#141419` —— 与侧栏底只差 **1.04:1**，悬停/选中在
- * 深色下等于没有反馈；同时悬停与选中**共用同一档底色**，「选中偏弱」是必然。
- *
- * 这类故障 tsc / eslint / 主题色扫描器都看不见：色值全都来自 token、命名也
- * 没错，错的是**两颗 token 放在一起时的相对亮度**。所以判据必须是「真量对比度」，
- * 且要量在**编译产物**上（Tailwind 会 tree-shake 没被引用的 `@theme` 变量，
- * 拿源码正则匹配等于以为自己改了、其实产物里没有）。
- *
- * 取值口径：复用 `tests/helpers/theme-tokens.ts`（真编译 globals.css + 自己解析
- * `var()` 链）。**不要改回 `getComputedStyle`**：jsdom 不解析 `var()`，别名会返回
- * 字面量 `"var(--color-nav-hover)"`，断言变成误报。
- */
+ * 侧栏导航项三态的可分辨性（ISSUE #1291）：`--sidebar-accent` 转发到 `--color-subtle`，浅色档搬到深色侧栏
+ * （`--color-panel-deep` `#0f0f16`）时取 `#141419`，与底只差 **1.04:1**，且悬停与选中共用同一档底色 ⇒ 深色无反馈。
+ * tsc/eslint/色值扫描都看不见（错的是两颗 token 的相对亮度），故必须真量对比度、量在编译产物上（Tailwind 会 tree-shake 未引用变量）。
+ * 取值复用 `tests/helpers/theme-tokens.ts`；**别改回 `getComputedStyle`**：jsdom 不解析 `var()`，别名返回字面量。 */
 import { beforeAll, describe, expect, it } from "vitest";
+import { contrast } from "./helpers/contrast";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";
 
 let light: ThemeTokens;
@@ -24,32 +13,6 @@ let dark: ThemeTokens;
 beforeAll(async () => {
   ({ light, dark } = await loadThemeTokens());
 });
-
-/** `#rrggbb` → sRGB 三个通道（0~255）。产物里这几颗 token 都是 6 位 hex。 */
-function channels(value: string): [number, number, number] {
-  const m = /^#([0-9a-f]{6})$/i.exec(value.trim());
-  if (!m) {
-    throw new Error(`期望 6 位 hex 色值，实际是 ${JSON.stringify(value)}`);
-  }
-  const n = Number.parseInt(m[1]!, 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-/** WCAG 相对亮度（sRGB 线性化后加权）。 */
-function luminance(value: string): number {
-  const [r, g, b] = /* SAFETY: 类型断言已复核 */ channels(value).map((c) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  }) as [number, number, number];
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-/** WCAG 对比度，1:1 ~ 21:1。 */
-function contrast(a: string, b: string): number {
-  const [x, y] = [luminance(a), luminance(b)];
-  const [hi, lo] = x > y ? [x, y] : [y, x];
-  return (hi + 0.05) / (lo + 0.05);
-}
 
 /** 某态下某 token 的解析值；未定义即用例失败（比 `!` 断言给出更好的报错）。 */
 function token(t: ThemeTokens, name: string): string {
@@ -60,10 +23,8 @@ function token(t: ThemeTokens, name: string): string {
 
 /* 三态底色相对**侧栏底**的最低可分辨下限。
  *
- * 为什么不是一个数：深浅两态的可行区间不同 —— 浅色侧栏底 `#f0f1f5` 本身已很浅，
- * 底色再压深就从「状态」变成「一块独立卡片」，所以浅色档刻意低一档，两态观感
- * 靠选中态的品牌指示条 + 字重拉齐（见 `globals.css` 的取值说明）。
- * 1.10 是下限：低于它实测在显示器上就是「看不出变化」（修复前深色是 1.04）。
+ * 深浅两态可行区间不同：浅色底 `#f0f1f5` 已很浅，再压深就从「状态」变成「独立卡片」，故浅色档刻意低一档，
+ * 靠选中态品牌指示条 + 字重拉齐（见 `globals.css`）。1.10 是下限：低于它实测「看不出变化」（修复前深色 1.04）。
  */
 const MIN_HOVER_VS_BASE = 1.1;
 /** 选中底色必须比悬停更明显 —— 否则「选中」与「指针路过」无从区分。 */
@@ -72,12 +33,11 @@ const MIN_SELECTED_VS_BASE = 1.35;
 const MIN_SELECTED_VS_HOVER = 1.15;
 
 describe("侧栏导航项三态在真编译产物里可分辨（ISSUE #1291）", () => {
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["浅色", () => light],
-      ["深色", () => dark],
-    ] as const,
-  )("%s：悬停 / 选中底色都明显区别于侧栏底", ([, get]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["浅色", () => light],
+    ["深色", () => dark],
+  ] as const)("%s：悬停 / 选中底色都明显区别于侧栏底", ([, get]) => {
     const t = get();
     const base = token(t, "--color-panel-deep");
     const hover = token(t, "--color-nav-hover");
@@ -99,12 +59,11 @@ describe("侧栏导航项三态在真编译产物里可分辨（ISSUE #1291）",
     ).toBeGreaterThanOrEqual(MIN_SELECTED_VS_HOVER);
   });
 
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["浅色", () => light],
-      ["深色", () => dark],
-    ] as const,
-  )("%s：别名确实落到侧栏专用的两级 token 上", ([, get]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["浅色", () => light],
+    ["深色", () => dark],
+  ] as const)("%s：别名确实落到侧栏专用的两级 token 上", ([, get]) => {
     const t = get();
     // 悬停档必须**不再**是通用表面 token `--color-subtle`：那是本 ISSUE 的根因，
     // 哪天有人「图省事合回去」，这条会当场红。
@@ -117,12 +76,11 @@ describe("侧栏导航项三态在真编译产物里可分辨（ISSUE #1291）",
     expect(token(light, "--color-nav-selected")).not.toBe(token(dark, "--color-nav-selected"));
   });
 
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["浅色", () => light],
-      ["深色", () => dark],
-    ] as const,
-  )("%s：选中底上的正文与指示条都够亮", ([, get]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["浅色", () => light],
+    ["深色", () => dark],
+  ] as const)("%s：选中底上的正文与指示条都够亮", ([, get]) => {
     const t = get();
     const selected = token(t, "--color-nav-selected");
     // 正文：底色不是「越亮越好」，压在它上面的文字必须还读得清（WCAG 4.5:1）。

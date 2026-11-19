@@ -1,13 +1,9 @@
 "use client";
 
-/* 工作流库的**执行日志入口按钮**。
- *
- * 「画布节点」与「工坊封装」两个页签在跑同一条封装口径的工作流，运行登记表
- * 是一份（按来源标记区分）。入口现在下沉到**各页签这一排**，各自带 `source`
- * 过滤（ISSUE #611 的旧形态是「两个页签各写各的」）。按钮只做「有没有可看的
- * 运行 → 显示入口与状态摘要」这一件事，点击上抛打开全屏日志弹窗
- * （`WorkflowRunLogModal`）。运行数据来自共享的 `workflow-run-store`，不碰网络
- * （规范 §17.2 第③层）。 */
+/* 工作流库的执行日志入口按钮：「画布节点」与「工坊封装」跑同一条封装口径的工作流，
+ * 运行登记表是一份（按来源标记区分）。入口下沉到各页签这一排、各自带 `source`
+ * 过滤（ISSUE #611）。按钮只判断「有没有可看的运行 → 显示入口与状态摘要」，点击
+ * 上抛打开全屏日志弹窗；数据来自 `workflow-run-store`，不碰网络（§17.2 ③）。 */
 
 import { useMemo, useSyncExternalStore } from "react";
 import { Button } from "~/components/ui/button";
@@ -59,7 +55,8 @@ export function WorkflowRunLogButton({
   if (runs.length === 0 && !alwaysVisible) {
     return null;
   }
-  const active = taskId ? runs.find((run) => run.taskId === taskId) : runs[0];
+  const active =
+    taskId !== undefined && taskId !== null ? runs.find((run) => run.taskId === taskId) : runs[0];
   /* 呼吸点：调用方没指定（详情头部不绑定任何页签的运行）就按登记表自己判 ——
    * 该工作流还有没收尾的运行就算「在跑」。 */
   const live = running ?? runs.some((run) => run.status !== "done" && run.status !== "failed");

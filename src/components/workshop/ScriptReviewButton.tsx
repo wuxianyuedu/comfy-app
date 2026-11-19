@@ -1,15 +1,10 @@
 "use client";
 
 // 剧本「AI 评审 / 定向改写」入口 + 弹窗（FR-QA-07 ④ · #2478 + 人工侧 #2480）。
-//
-// 弹窗骨架（按钮 / 判定展示 / 占位 / 在途 / 轮次曲线）在 `ReviewVerdictDialogButton`
-// （§12.12 共享内核）；本壳装配剧本场景：注入 rubric 人读维度名、完整分数曲线，
-// 并提供「按意见改写」（`use-script-review` 的 revise 在改写成功后把新剧本交回
-// 编辑器、再自动复评一轮 —— 闭环在界面侧一次点击走完）。
-// 人工侧（#2480）：弹窗内嵌 `HumanVerdictRow` —— 人看完 AI 评审直接拍板
-// （通过 / 否决 + 理由，走 `run.setScriptHumanVerdict`，裁决快照带剧本指纹，
-// 人通过的剧本 AI 不再复评）。
-// projectId 取自当前活跃项目（getActiveId，与工坊同源）。
+// 弹窗骨架在 `ReviewVerdictDialogButton`（§12.12 共享内核）；本壳装配剧本场景：
+// 注入 rubric 维度名与分数曲线，并提供「按意见改写」（改写成功后交回编辑器并自动
+// 复评一轮）。人工侧（#2480）：内嵌 `HumanVerdictRow` 直接拍板（人通过的剧本 AI
+// 不再复评）。projectId 取自当前活跃项目（getActiveId，与工坊同源）。
 import { useMemo, useState } from "react";
 
 import { getActiveId } from "~/lib/project-canvas/canvas-store";

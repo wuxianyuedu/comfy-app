@@ -4,6 +4,9 @@
  * 「是否脏、哪一组、哪些文件」，不直接发 fetch。
  */
 
+import { isRecord } from "~/lib/is-record";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
+
 export type UpdateGroup = {
   dirty: boolean;
   /** 相对仓库根的文件路径（改动或删除） */
@@ -28,20 +31,29 @@ const EMPTY: UpdateCheckPayload = {
   groups: [],
 };
 
+/* 只确认「是数组」这一层运行期判据（条目形状由路由写入端保证），
+ * 替代无运行期校验的类型断言。 */
+function isUpdateGroupList(v: unknown): v is Array<UpdateGroup> {
+  return Array.isArray(v);
+}
+
 /** 拉一次更新检测；请求失败（路由不可达等）返回空态便于降级静默。 */
 export async function fetchUpdateCheck(): Promise<UpdateCheckPayload> {
   try {
-    const res = await fetch(`/api/update-check`, { cache: "no-store" });
+    const res = await fetchWithTimeout(`/api/update-check`, { cache: "no-store" });
     if (!res.ok) {
       return EMPTY;
     }
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as UpdateCheckPayload;
+    const data: unknown = await res.json();
+    if (!isRecord(data)) {
+      return EMPTY;
+    }
+    const groups = data.groups;
     return {
       ok: true,
       armed: data.armed === true,
       dirty: data.dirty === true,
-      groups: Array.isArray(data.groups) ? data.groups : [],
+      groups: isUpdateGroupList(groups) ? groups : [],
     };
   } catch {
     return EMPTY;

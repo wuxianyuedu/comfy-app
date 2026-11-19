@@ -13,17 +13,22 @@ import type { AppServiceExitNotice } from "./app-service-exit";
  * 信息重复；真正会卡住整个界面的失败是**应用服务没起来**——那种情况下页面
  * 会白屏 / 打不开，而旧状态栏恰好没有任何一格在说这件事。
  *
- * 判据（四态，都由「探活那一次得到了什么」这一个事实派生，不依赖任何业务接口）：
- *   online   可达 → 应用服务在线（顺带说明「有没有真正重启」）；
- *   offline  已经探通过、而此刻抗抖动后不可达 → 进程不在了（服务停了 /
- *            窗口断开了）。**单拍失败不算**：冷编译 / 按需编译让某一拍超时是
- *            常态，抖动门槛见 `use-dev-server-liveness` 的
- *            `OFFLINE_CONFIRM_FAILURES`（取事实那一层滤，判据只管四态）；
- *   stale    探活端点答了 **404** → 进程在应答，但这条端点不在编译图里
- *            （陈旧路由表 / Turbopack 会话级路由失效）。它与「不可达」是两件事：
- *            页面往往还被同一个进程正常服务着，而正解是重启应用；
- *   starting 尚未有过成功探测、也没得到 404 → 首次探测还没回来，不冒充在线
- *            也不报故障。
+ * 判据（五态，都由「探活那一次得到了什么」这一个事实派生，不依赖任何业务接口）：
+ *   online      可达 → 应用服务在线（顺带说明「有没有真正重启」）；
+ *   offline     已经探通过、而此刻抗抖动后不可达，**且进程外信号说进程没了（或不
+ *               可知）** → 进程不在了（服务停了 / 窗口断开了）。**单拍失败不算**：
+ *               冷编译 / 按需编译让某一拍超时是常态，抖动门槛见
+ *               `use-dev-server-liveness` 的 `OFFLINE_CONFIRM_FAILURES`（取事实
+ *               那一层滤，判据只管五态）；
+ *   unresponsive已经探通过、此刻抗抖动后不可达，**但进程外信号说进程还活着** →
+ *               服务一时无响应（重载 / 事件循环被占），不是断开——软状态，通常
+ *               几秒内自行恢复（ISSUE #4146）。它是「进程外信号」兜住的那一档：
+ *               HTTP 探活永远带着被测进程的忙闲，判「死没死」要问旁证人（壳）；
+ *   stale       探活端点答了 **404** → 进程在应答，但这条端点不在编译图里
+ *               （陈旧路由表 / Turbopack 会话级路由失效）。它与「不可达」是两件事：
+ *               页面往往还被同一个进程正常服务着，而正解是重启应用；
+ *   starting    尚未有过成功探测、也没得到 404 → 首次探测还没回来，不冒充在线
+ *               也不报故障。
  *
  * `stale` 为什么必须单独成态（它此前被并进 `starting`）：`everOnline` 在整场都
  * 探不通时会永远为假，于是状态栏**永久**停在「应用服务连接中」——而用户眼前正好
@@ -33,8 +38,8 @@ import type { AppServiceExitNotice } from "./app-service-exit";
  * 纯函数、无 React、无 IO（规范 17 §17.2 第①层），可直接单测。
  */
 
-/** 应用服务四态：尚未探通 / 在线 / 不可达 / 探活端点 404。 */
-export type DevServerState = "starting" | "online" | "offline" | "stale";
+/** 应用服务五态：尚未探通 / 在线 / 不可达 / 进程在但无响应 / 探活端点 404。 */
+export type DevServerState = "starting" | "online" | "offline" | "unresponsive" | "stale";
 
 export type DevServerStatusInput = {
   /** 本次会话是否曾成功探测到进程标识。 */
@@ -55,6 +60,16 @@ export type DevServerStatusInput = {
    * 让这个问题的答案变成「不能」。判据只管「怎么把事实翻成三态」，过滤抖动
    * 是取事实那一层的事，两边不互相知道。
    */
+  /**
+   * **进程外信号**：应用服务的进程还活着吗（ISSUE #4146）。由壳读编排器落下的
+   * 进程树名单逐个查 PID 得出，不经过被测进程的任何线程——HTTP 探活永远带着
+   * 被测进程的忙闲，「死没死」要问旁证人。三态：
+   * `true` = 进程在（探活失败只是它一时答不上 → `unresponsive`，不是断开）；
+   * `false` = 进程没了（配合探活失败 = 真断开）；
+   * `null` / 缺省 = 没有进程外信号（浏览器 / 旧壳 / 手工 `pnpm dev`）→ 退回
+   * 纯 HTTP 判据（原行为），**不编一个答案出来**。
+   */
+  processAlive?: boolean | null;
   reachable: boolean;
   /** 是否检测到**真正**重启（进程标识变化，见 use-dev-server-liveness）。 */
   restarted: boolean;
@@ -81,7 +96,7 @@ export function deriveDevServerStatus(input: DevServerStatusInput): DevServerSta
 
   /* 探活端点答了 404：服务活着，坏的是路由表。**排在连通性两档之前**——它比
    * 「不可达」更具体（我们确实拿到了一个应答），也比「连接中」更贴事实。 */
-  if (input.routeTableStale && !reachable) {
+  if (input.routeTableStale === true && !reachable) {
     return {
       state: "stale",
       label: "应用服务路由异常",
@@ -96,6 +111,23 @@ export function deriveDevServerStatus(input: DevServerStatusInput): DevServerSta
   }
 
   if (!reachable && everOnline) {
+    /* 进程外信号说进程还活着：服务只是一时答不上（重载 / 事件循环被占），不是
+     * 断开——软状态，通常几秒内自行恢复。排在 offline 之前：它比「已断开」更
+     * 贴事实（我们确实知道进程还在），也比那句吓人的红字更诚实（此刻查询/保存
+     * 仍可能失败，文案里要说）。`processAlive === true` 才走这档：`false` 是
+     * 「真没了」，`null` 是「没有进程外信号」——两者都维持原判据（offline）。 */
+    if (input.processAlive === true) {
+      return {
+        state: "unresponsive",
+        label: "应用服务无响应",
+        title:
+          "应用服务进程还在，但一时没有应答（重载 / 编译 / 事件循环被占时会出现，ISSUE #4146）。" +
+          "页面里的查询与保存此刻可能失败；通常几秒内自行恢复，长时间不恢复再看应用日志",
+        /* 不挂 exitNotice：进程还活着，「上一次它为什么结束」说的是更早的一份进程，
+         * 此刻贴出来只会把「暂时忙」往「之前那次故障」上引。 */
+        exitNotice: null,
+      };
+    }
     return {
       state: "offline",
       label: "应用服务已断开",

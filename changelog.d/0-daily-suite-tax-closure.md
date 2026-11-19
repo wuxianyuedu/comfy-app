@@ -19,9 +19,9 @@
   挪出每日档 = 有些判据从此每天不被执行。而收益只有 55.2s = 本档墙钟的 **7.9%**。
   耗时前三名（`check-ui-primitives` 135.6s / `check-reformat-only` 75.8s / `a11y-axe-stories` 60.2s）
   同理在断言侧：全库 prettier、全 story 的 axe —— 也是真 gate 工作。**这一格到此关闭，别为它重开一轮**；
-  复量只要一条命令 `pnpm test:coverage:tracked`，读数由 `scripts/full-suite-run.mjs`
+  复量只要一条命令 `pnpm test:coverage:tracked`，读数由 `scripts/affected-tests/full-suite-run.mjs`
   的 `suiteRanking` + `suitePhaseTax` 自己打（判据在 `tests/daily-tracks.test.ts`）。
-- **那张新鲜度账从「一条豁免声明」换成「今天真跑绿」**：`scripts/.full-suite-freshness.json`
+- **那张新鲜度账从「一条豁免声明」换成「今天真跑绿」**：`scripts/freshness/.full-suite-freshness.json`
   原来记的是 2026-10-18 的一次 `--skip` 式声明（理由是「本次只改 ci-image-plan 的文案」），
   现在记的是本次全量 + 覆盖率跑绿的时刻 —— 这是这条链唯一的「这一档上次跑绿在什么时候」的事实，
   按脚本自己那句话连同提交（`writeFreshness` 只在绿时写，红着不记）。

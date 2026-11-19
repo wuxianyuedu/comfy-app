@@ -1,17 +1,13 @@
 /**
- * `AppearanceSection` 的单选组键盘契约（规范 06 §6.12 的「复合控件 ⇄ 键盘契约」）。
- *
- * 本批之前这里手写 `role="radiogroup"` + `role="radio"`：读屏知道「这是个
- * 单选组」，但**组内方向键没人给**（Tab 进得来、聚焦得到、Arrow 没反应），
- * 而 ARIA 的 radiogroup 契约要求方向键在组内移动并选中、且只有选中项
- * 留在 Tab 序列里（roving tabindex）。
- *
- * 断言对齐可见行为：`role` / `aria-checked` / `tabindex` / 方向键后的选中变化，
- * 不锁样式类。
+ * `AppearanceSection` 的单选组键盘契约（规范 06 §6.12）：手写 `role="radiogroup"` + `role="radio"` 时
+ * 组内方向键没人给；ARIA radiogroup 契约要求方向键组内移动选中、且只有选中项留在 Tab 序列（roving tabindex）。
+ * 断言对齐可见行为，不锁样式类。
  */
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
@@ -21,13 +17,18 @@ import { AppearanceSection } from "./AppearanceSection";
    每份用例自己收尾 —— 与 RuntimeLogBox.test.tsx 同款。 */
 afterEach(cleanup);
 
-/** 本分区只消费 `theme` / `setTheme` 两个字段，其余字段与本节无关。 */
+/** 本分区只读 `theme` / `setTheme` 两格；接口其余成员与本节无关，替身里缺席。
+ *  用谓词收窄而不是断言：先确认拿到的是对象、且这两格确实在。 */
+function isAppearanceController(v: unknown): v is ReadySettingsPageController {
+  return isRecord(v) && typeof v.theme === "string" && typeof v.setTheme === "function";
+}
+
 function controller(theme: "light" | "dark", setTheme = vi.fn()): ReadySettingsPageController {
-  /* SAFETY: 类型断言已复核 */
-  return {
-    theme,
-    setTheme,
-  } as unknown as ReadySettingsPageController;
+  const stub: unknown = { theme, setTheme };
+  if (!isAppearanceController(stub)) {
+    throw new Error("外观分区的 controller 替身缺少 theme / setTheme");
+  }
+  return stub;
 }
 
 /** 主题外观那一组（本分区还有「圆角」「标题字阶」两组，同为 radiogroup）。 */
@@ -81,17 +82,49 @@ describe("AppearanceSection 的单选组键盘契约", () => {
   });
 });
 
+describe("AppearanceSection 字体自定义（#3513 / #3784）", () => {
+  it("渲染字体输入框（每档按部分各一个，带可访问名）", () => {
+    render(<AppearanceSection c={controller("dark")} />);
+    for (const name of [
+      "界面字体 · 西文字体",
+      "界面字体 · 中文字体",
+      "代码字体 · 等宽字体",
+      "终端字体 · 等宽字体",
+      "终端字体 · 中文字体",
+    ]) {
+      const input = screen.getByRole("textbox", { name });
+      expect(input).toBeInTheDocument();
+    }
+  });
+
+  it("在西文部分填一种字体，整条栈 = 该字体 + 其余默认回退（ISSUE #3784）", async () => {
+    const user = userEvent.setup();
+    render(<AppearanceSection c={controller("dark")} />);
+    const input = screen.getByRole("textbox", { name: "界面字体 · 西文字体" });
+    await user.type(input, "Inter");
+    expect(document.documentElement.style.getPropertyValue("--font-sans")).toBe(
+      'Inter, "Sarasa UI SC", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif',
+    );
+  });
+
+  it("每档字体都带「恢复默认」按钮", () => {
+    render(<AppearanceSection c={controller("dark")} />);
+    for (const name of ["界面字体", "代码字体", "终端字体"]) {
+      expect(screen.getByRole("button", { name: `${name}恢复默认` })).toBeInTheDocument();
+    }
+  });
+
+  it("字体输入框不增加 radiogroup 数量（恰好仍是三个）", () => {
+    render(<AppearanceSection c={controller("dark")} />);
+    const labels = screen.getAllByRole("radiogroup").map((g) => g.getAttribute("aria-label"));
+    expect(labels).toEqual(["主题外观", "圆角", "标题字阶"]);
+  });
+});
+
 /**
- * 三组的选中档都缺过同一半「悬停值」（ISSUE #1925 第五批）。
- *
- * 底是 `Button variant="ghost"`，它自带**无条件**的 `hover:bg-muted
- * hover:text-foreground`；而 `data-checked:*` 编译出的选择器带 `:where()`、
- * 特异性只有 `(0,1,0)`，`hover:` 是 `(0,2,0)` —— 悬停档稳赢。于是划过
- * **已选中**的那一枚时，「选中」被改写回「未选中」。修法是就地钉
- * `data-checked:hover:*`（与 `ui/select-chip` 的 `aria-checked:hover:*` 同款）。
- *
- * 判的是**裸 token 的存在**，不是「读起来像不像」——上一批那几处正是
- * 因为「三元读起来是完整的」才漏过去的。
+ * 三组的选中档都缺过「悬停值」（ISSUE #1925 第五批）：底是 `Button variant="ghost"` 自带无条件 `hover:`（(0,2,0)），
+ * 而 `data-checked:*` 经 `:where()` 只有 (0,1,0) —— 悬停档稳赢，划过已选中项会被改回「未选中」；修法是就地钉
+ * `data-checked:hover:*`。判的是裸 token 的存在，不是「读起来像不像」。
  */
 describe("AppearanceSection 选中档的悬停值（ISSUE #1925）", () => {
   /** 从 className 里切出类名 token 集合：`a:hover:b` 是一整个 token。 */
@@ -99,7 +132,7 @@ describe("AppearanceSection 选中档的悬停值（ISSUE #1925）", () => {
     return new Set(el.className.split(/\s+/).filter(Boolean));
   }
 
-  it("主题卡（含 `data-unchecked:bg-surface-1` 那一组）钉住了选中档的悬停值", () => {
+  it("主题卡（含 `data-unchecked:bg-surface-row` 那一组）钉住了选中档的悬停值", () => {
     render(<AppearanceSection c={controller("dark")} />);
     const cls = radioAt(0).className;
     /* 选中档三层（描边 / 底色 / 字色）在悬停期间都必须成立 —— 少任何一层，
@@ -122,5 +155,28 @@ describe("AppearanceSection 选中档的悬停值（ISSUE #1925）", () => {
         expect(tokensOf(radio).has("data-checked:hover:bg-primary-soft")).toBe(true);
       }
     }
+  });
+});
+
+describe("AppearanceSection 字体文件加载器（#3513 运行时替换）", () => {
+  it("每档字体都带「选择文件」入口（拖入或选择字体文件）", () => {
+    render(<AppearanceSection c={controller("dark")} />);
+    /* 三档各一个浏览按钮 + 一句拖拽提示，且不应产生额外的 radiogroup。 */
+    expect(screen.getAllByRole("button", { name: "选择文件" })).toHaveLength(3);
+    expect(screen.getAllByText(/拖入字体文件/)).toHaveLength(3);
+    const labels = screen.getAllByRole("radiogroup").map((g) => g.getAttribute("aria-label"));
+    expect(labels).toEqual(["主题外观", "圆角", "标题字阶"]);
+  });
+
+  it("文件输入框接受字体扩展名（.ttf / .otf / .woff / .woff2）", () => {
+    const { container } = render(<AppearanceSection c={controller("dark")} />);
+    const inputs = container.querySelectorAll('input[type="file"][accept*=".ttf"]');
+    expect(inputs).toHaveLength(3);
+    inputs.forEach((el) => {
+      const accept = el.getAttribute("accept") ?? "";
+      expect(accept).toContain(".otf");
+      expect(accept).toContain(".woff");
+      expect(accept).toContain(".woff2");
+    });
   });
 });

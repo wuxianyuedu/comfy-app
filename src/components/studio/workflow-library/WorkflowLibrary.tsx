@@ -23,16 +23,9 @@ const WorkflowCanvasEditor = dynamic(
   () => import("../canvas/WorkflowCanvasEditor").then((mod) => mod.WorkflowCanvasEditor),
   {
     ssr: false,
-    /* 分块还没到时的过渡屏 —— 与编辑器自己的加载态同一口径（ISSUE #1691 第 3 条）：
-     * **吃满内容列、不当整窗浮层**。`FullScreenLayer` 会连同侧栏与视图页签一起盖掉，
-     * 而用户要的是「加载只覆盖右侧部分」。编辑器**加载完成后**仍是全屏视图
-     * （那是它的形态，ISSUE #310），改的只是过渡那一段。
-     *
-     * 这张过渡屏**只在编辑器真的要开时才该出现** —— 调用处因此按 `editingId`
-     * 挂载（见下方渲染点），不能让它常驻：`dynamic()` 的分块是「一渲染就下载」，
-     * 而编辑器是通过态的模态，未打开时它本该什么都不做。常驻的代价是**打开工作流库
-     * 的那一两秒里，整条内容列（列表 + 详情）被一张「加载工作流编辑器…」盖住**
-     * （用户实测口径：「这只是部分区域内容加载中，不要用全屏加载窗口」）。 */
+    /* 分块未到时的过渡屏 —— 与编辑器加载态同一口径（ISSUE #1691 第 3 条）：
+     * 吃满内容列、不当整窗浮层。只在 `editingId` 时才挂载，不能常驻：`dynamic()`
+     * 一渲染就下载，常驻会让打开工作流库的一两秒里整条内容列被加载屏盖住。 */
     loading: () => (
       <div className="bg-bg absolute inset-0 flex items-center justify-center">
         <PageLoading label="加载工作流编辑器…" />
@@ -42,14 +35,9 @@ const WorkflowCanvasEditor = dynamic(
 );
 
 /**
- * WorkflowLibrary 重新设计为左右分栏布局。
- * 左侧为可搜索的工作流列表，右侧为选中项的详情面板，包含画布节点预览、
- * 参数表单、源文件与操作入口。原有的卡片网格、根目录折叠等交互移除。
- *
- * （规范 17 §17.2 第④层）：全部状态与业务规则搬进
- * `hooks/use-workflow-library.ts`，筛选/计数的推导搬进
- * `workflow-library-config.ts`。本文件只剩「取 controller → 传视图 → 挂弹层」。
- * 对外 props 与导出名不变，消费方（app/workspace/page.tsx）零改动。
+ * WorkflowLibrary 左右分栏：左侧可搜索列表，右侧选中项详情（画布预览、参数表单、
+ * 源文件、操作入口）。按规范 17 §17.2 ④，状态与规则在 hooks/use-workflow-library、
+ * 筛选与计数在 workflow-library-config；本文件只取 controller → 传视图 → 挂弹层。
  */
 export function WorkflowLibrary({
   onUse,
@@ -63,7 +51,9 @@ export function WorkflowLibrary({
       <WorkflowLibraryHeader
         modelFilter={c.modelFilter}
         modelTags={c.modelTags}
-        onManageModels={() => c.setShowModelManager(true)}
+        onManageModels={() => {
+          c.setShowModelManager(true);
+        }}
         onModelFilterChange={c.setModelFilter}
         onSourceFilterChange={c.setSourceFilter}
         onToggleImport={c.toggleImport}
@@ -93,7 +83,7 @@ export function WorkflowLibrary({
 
       {/* 动作失败提示：只有用户点「重试」才消失（§17.5.4），
        *  否则防抖期内的后台拉取一成功就会把它吞掉。 */}
-      {c.actionError && (
+      {c.actionError !== null && c.actionError !== "" && (
         <div className="border-destructive/25 bg-destructive/8 text-destructive flex items-start gap-2 border-b px-5 py-2.5 text-xs">
           <span className="font-semibold">⚠</span>
           <span className="min-w-0 flex-1">{c.actionError}</span>
@@ -108,12 +98,14 @@ export function WorkflowLibrary({
         </div>
       )}
 
-      {c.loadError && !c.actionError && (
-        <div className="border-warning/25 bg-warning/8 text-warning-strong flex items-start gap-2 border-b px-5 py-2.5 text-xs">
-          <span className="font-semibold">⚠</span>
-          <span className="min-w-0 flex-1">{c.loadError}</span>
-        </div>
-      )}
+      {c.loadError !== null &&
+        c.loadError !== "" &&
+        (c.actionError === null || c.actionError === "") && (
+          <div className="border-warning/25 bg-warning/8 text-warning-strong flex items-start gap-2 border-b px-5 py-2.5 text-xs">
+            <span className="font-semibold">⚠</span>
+            <span className="min-w-0 flex-1">{c.loadError}</span>
+          </div>
+        )}
 
       <ResizablePanelGroup className="min-h-0 flex-1" orientation="horizontal">
         {/* react-resizable-panels v4：数值 = 像素、字符串 = 百分比。这里必须用
@@ -150,25 +142,37 @@ export function WorkflowLibrary({
             超过窗口、右半部分连同头部按钮一起被根容器的 `overflow-hidden` 裁掉
             ——用户在小屏上「看不到最右侧的内容」就是这个成因。 */}
           <div className="h-full min-w-0 overflow-hidden">
-            <WorkflowLibraryDetail
-              allModelTags={c.modelTags}
-              isBundleBusy={c.isBundleBusy}
-              isResyncBusy={c.isResyncBusy}
-              onDelete={c.handleDeleteClick}
-              onDownload={(id, name) => {
-                void c.handleDownload(id, name);
-              }}
-              onEdit={c.handleEdit}
-              onPatchModelTags={c.patchModelTags}
-              onPatchModes={c.patchModes}
-              onPatchParamMap={c.patchParamMap}
-              onPatchWorkflowIO={c.patchWorkflowIO}
-              onResync={(id, name) => {
-                void c.handleResync(id, name);
-              }}
-              onUse={c.handleUse}
-              workflow={c.selectedRow}
-            />
+            {/* 首次载入的加载态只落在**右侧详情区**（ISSUE #4073 第 1 条）：
+                列表列保持骨架形态，不再整屏转圈。 */}
+            {c.loading && c.workflows.length === 0 && c.pendingRows.length === 0 ? (
+              <div className="flex h-full items-center justify-center">
+                <PageLoading label="正在加载工作流…" />
+              </div>
+            ) : (
+              <WorkflowLibraryDetail
+                allModelTags={c.modelTags}
+                isBundleBusy={c.isBundleBusy}
+                isConvertBusy={c.isConvertBusy}
+                isResyncBusy={c.isResyncBusy}
+                onConvertToOnline={(id, name) => {
+                  void c.handleConvertToOnline(id, name);
+                }}
+                onDelete={c.handleDeleteClick}
+                onDownload={(id, name) => {
+                  void c.handleDownload(id, name);
+                }}
+                onEdit={c.handleEdit}
+                onPatchModelTags={c.patchModelTags}
+                onPatchModes={c.patchModes}
+                onPatchParamMap={c.patchParamMap}
+                onPatchWorkflowIO={c.patchWorkflowIO}
+                onResync={(id, name) => {
+                  void c.handleResync(id, name);
+                }}
+                onUse={c.handleUse}
+                workflow={c.selectedRow}
+              />
+            )}
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
@@ -178,7 +182,7 @@ export function WorkflowLibrary({
        *  首次渲染时下载的**，于是「打开工作流库」这一步就把 7k 行编辑器的分块
        *  拉了下来，过渡屏（`absolute inset-0`）顺势盖住整条内容列。
        *  按需挂载之后，这一步不发生任何下载；用户点「编辑」时才付这一次代价。 */}
-      {c.editingId && (
+      {c.editingId !== null && (
         <WorkflowCanvasEditor
           onClose={c.handleEditorClose}
           onSave={c.load}
@@ -191,7 +195,9 @@ export function WorkflowLibrary({
         <ModelTagManager
           initialTags={c.modelTags}
           onChanged={c.loadModelTags}
-          onClose={() => c.setShowModelManager(false)}
+          onClose={() => {
+            c.setShowModelManager(false);
+          }}
         />
       )}
     </WorkspaceFrame>

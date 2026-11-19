@@ -5,10 +5,8 @@ import { QueueMonitorView } from "./QueueMonitorView";
 import { QueueTaskLogModal } from "./QueueTaskLogModal";
 
 /**
- * 队列与运行 · 第④层（容器）：取 controller → 传给视图 → 挂弹层。
- * 不含任何业务规则（规范 17 §17.2）；`onOpenComfyui` 是它唯一对外要的回调，
- * 由工作区页面给（离线时把用户送到能启动 ComfyUI 的那一页 —— 侧栏「ComfyUI」，
- * 自 ISSUE #1900 起启动动作归那里）。
+ * 队列与运行 · 第④层（容器）：取 controller → 传给视图 → 挂弹层。不含业务规则（规范 17 §17.2）。
+ * `onOpenComfyui` 是唯一对外回调：离线时把用户送到能启动 ComfyUI 的侧栏「ComfyUI」页（ISSUE #1900）。
  */
 export function QueueMonitor({ onOpenComfyui }: { onOpenComfyui: () => void }) {
   const c = useQueueMonitor();

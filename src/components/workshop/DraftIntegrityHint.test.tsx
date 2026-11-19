@@ -1,11 +1,6 @@
 /**
- * 「草稿里读不懂的元素」那条横幅（台账 F13″的界面出口那一半）。
- *
- * 判据本体已有 27 条用例（`draft-integrity.test.ts`），这里只判**它有没有真的到用户眼前**：
- *   · 有问题必须看得见「是哪几条、坏在哪」——只报「有脏数据」等于没报（用户面对 20 张
- *     卡片猜不出是哪一张，最后当成界面在瞎忙）；
- *   · 没问题必须一个字都不渲染（常驻噪音会让真提示失去可信度）；
- *   · 「去看看」要跳到**那一类**元素真正在的那一屏（跳错了等于给了个假出口）。
+ * 「草稿里读不懂的元素」那条横幅（台账 F13″的界面出口那一半）。判据本体已有 27 条用例（`draft-integrity.test.ts`），这里只判**它有没有真的到用户眼前**：
+ * 有问题必须看得见「是哪几条、坏在哪」；没问题必须一个字都不渲染；「去看看」要跳到**那一类**元素真正在的那一屏（跳错了等于给了个假出口）。
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -29,9 +24,7 @@ const CLEAN_SHOT = {
   status: "idle",
 };
 
-function issuesOf(
-  over: Partial<Parameters<typeof auditDraftElements>[0]> = {},
-) {
+function issuesOf(over: Partial<Parameters<typeof auditDraftElements>[0]> = {}) {
   return auditDraftElements({
     scenes: [],
     characters: [],
@@ -127,10 +120,7 @@ describe("DraftIntegrityHint", () => {
       styleTags: 1,
     }));
     render(
-      <DraftIntegrityHint
-        issues={issuesOf({ characters: dirtyCharacters })}
-        onGoTo={vi.fn()}
-      />,
+      <DraftIntegrityHint issues={issuesOf({ characters: dirtyCharacters })} onGoTo={vi.fn()} />,
     );
     expect(screen.getAllByRole("listitem")).toHaveLength(6);
     expect(screen.getByText(/另有 3 条同类问题/)).toBeTruthy();
@@ -138,12 +128,7 @@ describe("DraftIntegrityHint", () => {
   });
 
   it("整条不是对象时也报得出（它连 id 都没有，更要被点名）", () => {
-    render(
-      <DraftIntegrityHint
-        issues={issuesOf({ shots: ["不是对象"] })}
-        onGoTo={vi.fn()}
-      />,
-    );
+    render(<DraftIntegrityHint issues={issuesOf({ shots: ["不是对象"] })} onGoTo={vi.fn()} />);
     expect(screen.getByText("镜头 #1")).toBeTruthy();
     expect(screen.getByText(/整条不是对象/)).toBeTruthy();
   });

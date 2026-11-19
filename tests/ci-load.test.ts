@@ -1,27 +1,19 @@
 /**
- * 「这一跑该开几个并发」的唯一出处（ISSUE #1993 / 规范 §13.5.21）。
- *
- * 为什么要有这条判据：并发旋钮最容易退化的形态是「又变回一个常数」—— 有人嫌
- * `resolveCiWorkers()` 绕，直接在 `.cnb.yml` 或跑法脚本里写死 `--maxWorkers=4`，
- * 而**没有任何东西会红**：那个数在一台 16 核的空闲节点上完全够用，只在「节点换规格」
- * 或「同机多一条流水线」时才咬人，且咬出来的形态是既不推进也不报错（实测
- * `cnb-jt3-1k5071kou` 的 ESLint 挂 8640s）。
- *
- * 这条判据钉三件事：
- *   ① 核数的读取顺序（`CNB_CPUS` → 本机 → 兜底），且非法值不许变成 0；
- *   ② 核数 → worker 数的换算方向（**降载**，不是放宽判据）；
- *   ③ 人的出口（`COMFY_CI_MAX_WORKERS`）只调并发、不碰任何判据，非法值按默认办并提醒。
+ * 「这一跑该开几个并发」的唯一出处（ISSUE #1993 / 规范 §13.5.21）。退化形态是「又变回常数」：写死
+ * `--maxWorkers=4` 时**没有任何东西会红**，只在节点换规格或同机多流水线时咬人（既不推进也不报错）。
+ * 钉三件：① `CNB_CPUS` → 本机 → 兜底（非法值不许变 0）；② 换算方向是**降载**；③ `COMFY_CI_MAX_WORKERS` 只调并发、非法值按默认并提醒。
  */
 import { describe, expect, it } from "vitest";
 
 import {
   CORES_PER_WORKER,
   FALLBACK_CORES,
+  GA_CORES_PER_WORKER,
   MIN_WORKERS,
   resolveCiWorkers,
   resolveCores,
   workersForCores,
-} from "../scripts/ci-load.mjs";
+} from "../scripts/ci/ci-load.mjs";
 
 describe("现场核数：平台读数优先，读不到才落本机 / 兜底", () => {
   it("`CNB_CPUS` 是平台给的读数，优先于本机", () => {
@@ -41,10 +33,7 @@ describe("现场核数：平台读数优先，读不到才落本机 / 兜底", (
   it("非法读数按本机办并留一句提醒 —— 不许静默变成 0", () => {
     for (const raw of ["0", "-2", "abc", "8.5"]) {
       const r = resolveCores({ CNB_CPUS: raw });
-      expect(
-        r.cores,
-        `CNB_CPUS=${raw} 应当落回本机读数`,
-      ).toBeGreaterThanOrEqual(1);
+      expect(r.cores, `CNB_CPUS=${raw} 应当落回本机读数`).toBeGreaterThanOrEqual(1);
       expect(r.note, `CNB_CPUS=${raw} 必须留一句提醒`).toContain("CNB_CPUS");
     }
   });
@@ -64,10 +53,9 @@ describe("核数 → worker 数：方向是降载，不是放宽判据", () => {
     let prev = 0;
     for (const cores of [1, 2, 3, 4, 6, 8, 12, 16, 32]) {
       const w = workersForCores(cores);
-      expect(
-        w,
-        `${cores} 核算不出至少 ${MIN_WORKERS} 个 worker`,
-      ).toBeGreaterThanOrEqual(MIN_WORKERS);
+      expect(w, `${cores} 核算不出至少 ${MIN_WORKERS} 个 worker`).toBeGreaterThanOrEqual(
+        MIN_WORKERS,
+      );
       expect(w).toBeGreaterThanOrEqual(prev);
       prev = w;
     }
@@ -102,12 +90,47 @@ describe("人的出口：只调并发，不动任何判据", () => {
       const r = resolveCiWorkers({
         env: { CNB_CPUS: "16", COMFY_CI_MAX_WORKERS: raw },
       });
-      expect(r.workers, `COMFY_CI_MAX_WORKERS=${raw}`).toBe(
-        workersForCores(16),
-      );
+      expect(r.workers, `COMFY_CI_MAX_WORKERS=${raw}`).toBe(workersForCores(16));
       expect(r.note, `COMFY_CI_MAX_WORKERS=${raw} 必须留一句提醒`).toContain(
         "COMFY_CI_MAX_WORKERS",
       );
     }
+  });
+});
+
+describe("平台分档：CNB 共享宿主机 8 / GA 独享 2（CNB 数字一个不改）", () => {
+  it("CNB 档保持原值：16⇒2、8⇒1、12⇒2", () => {
+    expect(CORES_PER_WORKER).toBe(8);
+    expect(resolveCiWorkers({ env: { CNB_CPUS: "16" } }).workers).toBe(2);
+    expect(resolveCiWorkers({ env: { CNB_CPUS: "8" } }).workers).toBe(1);
+    expect(resolveCiWorkers({ env: { CNB_CPUS: "12" } }).workers).toBe(2);
+  });
+
+  it("GA 档是「一个 worker 至少 2 核」：4 核 ⇒ 2、2 核 ⇒ 1", () => {
+    expect(GA_CORES_PER_WORKER).toBe(2);
+    expect(workersForCores(4, GA_CORES_PER_WORKER)).toBe(2);
+    expect(workersForCores(2, GA_CORES_PER_WORKER)).toBe(1);
+    expect(resolveCiWorkers({ env: { GITHUB_ACTIONS: "true", CNB_CPUS: "4" } }).workers).toBe(2);
+  });
+
+  it("同一个核数在两档上给出不同答案 —— 分档真的生效，不是同一常数换张皮", () => {
+    expect(resolveCiWorkers({ env: { CNB_CPUS: "8" } }).workers).toBe(1);
+    expect(resolveCiWorkers({ env: { GITHUB_ACTIONS: "true", CNB_CPUS: "8" } }).workers).toBe(4);
+  });
+
+  it('缺省 / 非 "true" 的 `GITHUB_ACTIONS` 一律按 CNB 档（本地与 CNB 行为逐字不变）', () => {
+    for (const v of [undefined, "", "false", "1", "TRUE "]) {
+      const env: Record<string, string | undefined> = { CNB_CPUS: "16" };
+      if (v !== undefined) env.GITHUB_ACTIONS = v;
+      expect(resolveCiWorkers({ env }).workers, `GITHUB_ACTIONS=${String(v)}`).toBe(2);
+    }
+  });
+
+  it("人的出口在 GA 档上同样优先，且仍只调并发", () => {
+    const r = resolveCiWorkers({
+      env: { GITHUB_ACTIONS: "true", CNB_CPUS: "4", COMFY_CI_MAX_WORKERS: "1" },
+    });
+    expect(r.workers).toBe(1);
+    expect(r.note).toContain("只调并发");
   });
 });

@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  compareText,
-  union,
-  unique,
-  uniqueBy,
-  uniqueSorted,
-} from "./ordered-set";
+import { compareText, union, unique, uniqueBy, uniqueSorted } from "./ordered-set";
 
 describe("unique", () => {
   it("去重并保留首次出现的顺序", () => {
@@ -39,9 +33,11 @@ describe("uniqueSorted", () => {
 
   it("数字形态的字符串不按数值排（要数值序请显式传比较器）", () => {
     expect(uniqueSorted(["10", "9", "1"])).toEqual(["1", "10", "9"]);
-    expect(
-      uniqueSorted(["10", "9", "1"], (a, b) => Number(a) - Number(b)),
-    ).toEqual(["1", "9", "10"]);
+    expect(uniqueSorted(["10", "9", "1"], (a, b) => Number(a) - Number(b))).toEqual([
+      "1",
+      "9",
+      "10",
+    ]);
   });
 
   it("空数组给空数组", () => {
@@ -63,12 +59,7 @@ describe("uniqueBy", () => {
   });
 
   it("键为空值的项被跳过（没有身份的项不进结果集）", () => {
-    const rows = [
-      { name: "  " },
-      { name: "alpha" },
-      { name: "" },
-      { name: "alpha" },
-    ];
+    const rows = [{ name: "  " }, { name: "alpha" }, { name: "" }, { name: "alpha" }];
     expect(uniqueBy(rows, (r) => r.name.trim())).toEqual([{ name: "alpha" }]);
   });
 

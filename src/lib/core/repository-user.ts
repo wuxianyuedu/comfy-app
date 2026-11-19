@@ -14,20 +14,34 @@ import "server-only";
 
 import { db } from "~/lib/db";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
+import { AppError } from "./errors";
+import { isSqliteUniqueViolation } from "~/lib/sqlite-error";
 import { decryptLlmKey, encryptLlmKey } from "~/lib/llm/secrets";
-import { type RawExtraModel, splitExtraModels, type RemoteModelEntry } from "~/lib/llm/types";
+import {
+  type RawExtraModel,
+  splitExtraModels,
+  type RemoteModelEntry,
+  inferRemoteKindFromName,
+} from "~/lib/llm/types";
+import { isLlmApiFormat } from "~/lib/llm/provider-types";
 import {
   user,
   llmConfig,
+  llmProvider,
   remoteModel,
   type User,
   type LlmConfig,
+  type LlmProvider,
   type RemoteModel,
 } from "~/server/db/schema";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, isNull, sql } from "drizzle-orm";
 import { SETTINGS_DB_WRITE } from "~/lib/retry-policy";
 import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
 import type { DbExecutor } from "./repository-executor-types";
+import { parseRemoteModelAdaptersDoc } from "~/lib/workshop/remote-model-adapter";
+import type { RemoteModelAdaptersDoc } from "~/lib/workshop/remote-model-adapter";
+
+import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
 export class UserRepository {
   async findByEmail(email: string): Promise<User | null> {
@@ -36,8 +50,23 @@ export class UserRepository {
   }
 
   async createUser(input: { email: string; name: string | null; password: string }): Promise<User> {
-    const rows = await db.insert(user).values(input).returning();
-    return firstRowRequired(rows, "用户插入");
+    /* 并发首访（ISSUE #3866）：冷启动/首次登录时页面会并发发出多条请求，各自
+     * 「findByEmail 得空 → insert」会撞 `user.email` 唯一索引，后到者裸 500。
+     * 改独占插入 + 冲突后按 email 复读：同一 email 幂等收敛到同一行。 */
+    const inserted = await db
+      .insert(user)
+      .values(input)
+      .onConflictDoNothing({ target: user.email })
+      .returning();
+    const row = inserted[0];
+    if (row) {
+      return row;
+    }
+    const existing = await this.findByEmail(input.email);
+    if (!existing) {
+      throw new AppError("用户写入失败（唯一冲突后复读仍不存在）", "conflict.user_email", 409);
+    }
+    return existing;
   }
 
   async updateEmail(id: string, email: string): Promise<User> {
@@ -189,12 +218,6 @@ export class LlmConfigRepository {
   }
 }
 
-import {
-  parseRemoteModeAdapters,
-  type RemoteModeAdapter,
-} from "~/lib/workshop/model-mode-contract";
-import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
-
 // ── 远端独立模型仓储（option C：远端模型独立成表，不与本地 ollama 候选混存）──
 
 /**
@@ -220,7 +243,12 @@ async function syncRemoteModels(
    * 插队改掉，那时这里会按一份已经不存在的状态去继承（#2586 的期望 1 明确
    * 不许「只把两条写塞进事务、读仍留在外面」）。 */
   const rows = await exec.select().from(remoteModel).orderBy(remoteModel.createdAt);
-  const keyByName = new Map(rows.map((r) => [r.name, r.apiKey ?? null]));
+  /* #3501：整份清单保存只管**历史遗留行**（providerId IS NULL）。挂在供应商下的
+   * 模型由供应商页各自维护，整份覆盖读不到它们、也不许删它们 —— 否则设置页保存
+   * 一次别的设置，用户配好的供应商模型就整批消失。 */
+  const legacyRows = rows.filter((r) => r.providerId === null);
+  const providerNames = new Set(rows.filter((r) => r.providerId !== null).map((r) => r.name));
+  const keyByName = new Map(legacyRows.map((r) => [r.name, r.apiKey ?? null]));
   const seen = new Set<string>();
   const cleaned: Array<{
     apiKey: string | null;
@@ -230,7 +258,9 @@ async function syncRemoteModels(
   }> = [];
   for (const e of entries) {
     const name = e.name.trim();
-    if (!name || seen.has(name)) {
+    /* 供应商模型的同名条目一律不在这里写：那条连接参数属于供应商，不该被
+     * 一份「本地候选 + 遗留远端」的清单覆盖。 */
+    if (!name || seen.has(name) || providerNames.has(name)) {
       continue;
     }
     seen.add(name);
@@ -247,14 +277,15 @@ async function syncRemoteModels(
         : e.apiKey === null || e.apiKey.trim() === ""
           ? null
           : encryptLlmKey(e.apiKey.trim());
+    /* trim 后空串与缺省同义 = 清空（与 apiKey 的三态语义一致） */
     cleaned.push({
       name,
-      baseUrl: e.baseUrl?.trim() ? e.baseUrl.trim() : null,
+      baseUrl: e.baseUrl?.trim() !== undefined && e.baseUrl.trim() !== "" ? e.baseUrl.trim() : null,
       apiKey,
       kind: e.kind ?? "chat",
     });
   }
-  const removed = rows.filter((r) => !seen.has(r.name));
+  const removed = legacyRows.filter((r) => !seen.has(r.name));
   if (removed.length > 0) {
     await exec.delete(remoteModel).where(
       inArray(
@@ -292,17 +323,23 @@ async function syncRemoteModels(
   }
 }
 
+/** 远端模型行的读侧解密：`apiKey` 密文 → 明文（历史明文由 `decryptLlmKey` 原样透传）。 */
+function decryptRemoteRow(row: RemoteModel): RemoteModel {
+  return { ...row, apiKey: decryptLlmKey(row.apiKey) };
+}
+
 export class RemoteModelRepository {
-  /** 全部远端模型，按创建先后排序（配置视图稳定顺序）。 */
+  /** 全部远端模型，按创建先后排序（配置视图稳定顺序）。读侧解密独立 apiKey
+   *  （#3509：此前只在写侧加密，读侧把密文当密钥发给上游）。 */
   async list(): Promise<Array<RemoteModel>> {
     const rows = await db.select().from(remoteModel).orderBy(remoteModel.createdAt);
-    return rows;
+    return rows.map(decryptRemoteRow);
   }
 
-  /** 按名查找单个远端模型；不存在返回 null。 */
+  /** 按名查找单个远端模型；不存在返回 null（apiKey 已解密）。 */
   async findByName(name: string): Promise<RemoteModel | null> {
     const rows = await db.select().from(remoteModel).where(eq(remoteModel.name, name)).limit(1);
-    return rows[0] ?? null;
+    return rows[0] ? decryptRemoteRow(rows[0]) : null;
   }
 
   /**
@@ -320,64 +357,387 @@ export class RemoteModelRepository {
    * 那一份语句体、把事务开在更大的范围上 —— 两个入口共用实现，不各写一份。
    */
   async replaceAll(entries: ReadonlyArray<RemoteModelEntry>): Promise<Array<RemoteModel>> {
-    /* 运行时这一侧本来就拿得到带写锁的事务：`db.transaction` 走 `drizzle-orm/libsql`
-     * → `client.transaction()`，默认 mode 是 `write`（= `BEGIN IMMEDIATE`），且整条事务
-     * 绑在连接池里的**同一条**连接上（正好避开 §7.6 那条「开机 PRAGMA 只覆盖当时借到的
-     * 那条连接」）。两侧都不显式传 `behavior`：libsql 会话把第二个参数整个丢掉，
-     * 而测试宿主那一侧（`drizzle-orm/sqlite-proxy`）会真把它拼进 `begin` —— 不传，
-     * 这条调用才在两侧都只依赖「回调被 await」这一件事。
+    /* 运行时这一侧要带写锁的事务（ISSUE #3171）：生产已从 `drizzle-orm/libsql`
+     * 换成 `drizzle-orm/sqlite-proxy`（node:sqlite 单连接），proxy 会话会把第二个
+     * 参数拼进 `begin`，所以这里显式给 `immediate`（= `BEGIN IMMEDIATE`）；不传就
+     * 退回默认的 deferred，撞锁时是「先读后写」才失败，晚了半拍。测试宿主
+     * （`tests/helpers/test-db.ts`）也是 sqlite-proxy，两侧同形。
      *
      * 旧注释里那句「测试基建跑 better-sqlite3（同步驱动）不接受 async 事务回调」描述的是
      * 换宿主之前的形状，那是**测试的形状、不是生产的约束**；测试宿主现在也接得住 async
      * 回调了（见 `tests/helpers/test-db.ts` 文件头），所以这条通道没有理由继续空着。 */
     await runWithSqliteBusyRetry(
-      () => db.transaction(async (tx) => syncRemoteModels(tx, entries)),
+      () => db.transaction(async (tx) => syncRemoteModels(tx, entries), { behavior: "immediate" }),
       { policy: SETTINGS_DB_WRITE },
     );
     return this.list();
   }
 
-  /** 读取某条远端模型的工坊模式适配器（JSON 列；未配置返回空数组）。 */
-  async getWorkshopAdapters(name: string) {
+  /** 读取某条远端模型的工坊适配器存档（模型级 envelope，ISSUE #3622；
+   *  兼容旧版裸数组形状。未配置 / 模型不存在返回空档）。 */
+  async getWorkshopAdaptersDoc(name: string): Promise<RemoteModelAdaptersDoc> {
     const row = await this.findByName(name);
     if (!row) {
-      return [];
+      return { endpointPath: "", adapters: [] };
     }
-    return parseAdaptersJson(row.workshopAdapters);
+    return parseAdaptersDocJson(row.workshopAdapters);
   }
 
-  /** 保存某条远端模型的工坊模式适配器（整份覆盖）。模型不存在返回空数组。 */
-  async saveWorkshopAdapters(name: string, adapters: Array<RemoteModeAdapter>) {
+  /** 保存某条远端模型的工坊适配器存档（整份覆盖）。模型不存在时静默不动。 */
+  async saveWorkshopAdaptersDoc(
+    name: string,
+    doc: RemoteModelAdaptersDoc,
+  ): Promise<RemoteModelAdaptersDoc> {
     const row = await this.findByName(name);
     if (!row) {
-      return [];
+      return doc;
     }
     await db
       .update(remoteModel)
       .set({
-        workshopAdapters: JSON.stringify(adapters),
+        workshopAdapters: JSON.stringify(doc),
         updatedAt: new Date(),
       })
       .where(eq(remoteModel.id, row.id));
-    return adapters;
+    return doc;
+  }
+
+  /** 新建 / 更新一条供应商下的模型（#3501）。
+   *  `apiKey` 三态与 `syncRemoteModels` 同一语义：缺键 = 不动既有、`null`/空白 = 清空、
+   *  非空串 = 加密后写入。
+   *  `opts.workshopAdapters`（#4232）：调用方要把端点存档与模型行**同一条语句**落库时
+   *  传入合并好的整份 doc（省略 = 不动既有列）。原先路由器两段独立提交，第二段失败时
+   *  模型行已是新值、endpointPath 存档仍旧值（§08 8.12② 的失败窗口）。 */
+  async saveModel(
+    input: RemoteModelInput,
+    opts?: { workshopAdapters?: RemoteModelAdaptersDoc },
+  ): Promise<RemoteModel> {
+    const name = input.name.trim();
+    if (name === "") {
+      throw new Error("模型名称不能为空");
+    }
+    const baseUrl = input.baseUrl?.trim() ? input.baseUrl.trim() : null;
+    /* 格式是模型级配置（#3517）：非法值折成 null = 跟随供应商，不在写侧猜一个格式
+     * （猜错的表现是「请求发到了一个不存在的端点」，比回落更难查）。 */
+    const apiFormat = isLlmApiFormat(input.apiFormat) ? input.apiFormat : null;
+    const extraBody =
+      typeof input.extraBody === "string" && input.extraBody.trim() !== ""
+        ? input.extraBody.trim()
+        : null;
+    const values = {
+      name,
+      providerId: input.providerId,
+      baseUrl,
+      apiFormat,
+      extraBody,
+      kind: input.kind ?? "chat",
+      enabled: input.enabled ?? true,
+      contextWindow: input.contextWindow ?? null,
+      maxOutputTokens: input.maxOutputTokens ?? null,
+      inputTypes: input.inputTypes ?? null,
+      outputTypes: input.outputTypes ?? null,
+      capabilities: input.capabilities ?? null,
+      reasoningLevels: input.reasoningLevels ?? null,
+      reasoningParamMapping: input.reasoningParamMapping ?? null,
+      smartConfig: input.smartConfig ?? true,
+    };
+    if (input.id !== undefined) {
+      const patch: Record<string, unknown> = { ...values, updatedAt: new Date() };
+      if (opts?.workshopAdapters !== undefined) {
+        patch.workshopAdapters = JSON.stringify(opts.workshopAdapters);
+      }
+      if (input.apiKey !== undefined) {
+        patch.apiKey =
+          input.apiKey === null || input.apiKey.trim() === ""
+            ? null
+            : encryptLlmKey(input.apiKey.trim());
+      }
+      try {
+        const rows = await db
+          .update(remoteModel)
+          .set(patch)
+          .where(eq(remoteModel.id, input.id))
+          .returning();
+        return decryptRemoteRow(firstRowOfExisting(rows, `模型不存在: ${input.id}`));
+      } catch (error) {
+        /* 改名撞 `remoteModel_name_uniq`（ISSUE #3866）：转成可读的冲突错误。 */
+        if (isSqliteUniqueViolation(error)) {
+          throw new AppError(`模型名称已被使用：${name}`, "conflict.model_name", 409);
+        }
+        throw error;
+      }
+    }
+    /* 新建（ISSUE #3866）：并发/重名建同名模型时，捕获唯一冲突转成可读的 409
+     * 冲突错误，不再漏裸 500（「重名当场拒绝」语义不变，见 repository.test.ts）。 */
+    try {
+      const rows = await db
+        .insert(remoteModel)
+        .values({
+          ...values,
+          ...(opts?.workshopAdapters === undefined
+            ? {}
+            : { workshopAdapters: JSON.stringify(opts.workshopAdapters) }),
+          apiKey: encryptLlmKey(input.apiKey?.trim() ? input.apiKey.trim() : null),
+        })
+        .returning();
+      return decryptRemoteRow(firstRowRequired(rows, "模型写入"));
+    } catch (error) {
+      if (isSqliteUniqueViolation(error)) {
+        throw new AppError(`模型名称已被使用：${name}`, "conflict.model_name", 409);
+      }
+      throw error;
+    }
+  }
+
+  /** 删除一条模型（供应商页的行内删除）。 */
+  async deleteModel(id: string): Promise<void> {
+    await db.delete(remoteModel).where(eq(remoteModel.id, id));
+  }
+
+  /** 启用 / 停用一条模型（停用的模型不下发给工坊下拉）。 */
+  async setEnabled(id: string, enabled: boolean): Promise<RemoteModel> {
+    const rows = await db
+      .update(remoteModel)
+      .set({ enabled, updatedAt: new Date() })
+      .where(eq(remoteModel.id, id))
+      .returning();
+    return decryptRemoteRow(firstRowOfExisting(rows, `模型不存在: ${id}`));
+  }
+
+  /** 把探测到的服务端模型目录落进该供应商名下（#3577「获取到的模型应该全部
+   *  显示出来，默认关闭状态」）：
+   *  · 已存在的名字**一行不动**（不重置启停、不覆盖任何已配字段）——目录同步
+   *    是「补缺」，不是「整份覆盖」，反复点测试连接不能把用户启用过的模型又关掉；
+   *  · 缺的名字插入为**停用**行（enabled=false），用途按名字推断（video/image
+   *    关键词），窗口 / 能力留空由「智能配置」在编辑时补；
+   *  · 同名行已挂在**别的供应商**下也跳过（name 全局唯一索引，撞了就跳）。
+   *  单语句 `onConflictDoNothing` + returning（ISSUE #3835）：注释自述「反复点
+   *  测试连接不能重复」—— 先查后插在并发点按下会同抢 `remoteModel_name_uniq`
+   *  让后到者 500；现在重复执行成功且无害，返回真正新插入的名字。 */
+  async syncProviderCatalog(
+    providerId: string,
+    names: ReadonlyArray<string>,
+  ): Promise<Array<string>> {
+    const cleaned = [...new Set(names.map((n) => n.trim()).filter((n) => n !== ""))];
+    if (cleaned.length === 0) {
+      return [];
+    }
+    const inserted = await runWithSqliteBusyRetry(
+      () =>
+        db
+          .insert(remoteModel)
+          .values(
+            cleaned.map((name) => ({
+              name,
+              providerId,
+              apiFormat: null,
+              kind: inferRemoteKindFromName(name),
+              enabled: false,
+              smartConfig: true,
+            })),
+          )
+          .onConflictDoNothing()
+          .returning({ name: remoteModel.name }),
+      { policy: SETTINGS_DB_WRITE },
+    );
+    return inserted.map((r) => r.name);
   }
 }
 
-/** 解析 remoteModel.workshopAdapters JSON 列（坏数据按空处理）。 */
-export function parseAdaptersJson(raw: string | null): Array<RemoteModeAdapter> {
-  if (!raw) {
-    return [];
+/* ── LLM 供应商仓储（#3501）──────────────────────────────────────── */
+
+export type LlmProviderInput = {
+  /** 缺省 = 新建；更新时省略 = 不动既有（格式已下移到模型级，见 #3517）。 */
+  apiFormat?: string;
+  /** 三态：缺键 = 不动既有、`null`/空白 = 清空、非空串 = 加密后写入 */
+  apiKey?: string | null;
+  baseUrl: string;
+  id?: string;
+  name: string;
+};
+
+export type RemoteModelInput = {
+  apiFormat?: string | null;
+  apiKey?: string | null;
+  baseUrl?: string | null;
+  capabilities?: Array<string> | null;
+  contextWindow?: number | null;
+  enabled?: boolean;
+  /** 额外请求体字段（#3626）：raw JSON 对象文本；空白串落 null。 */
+  extraBody?: string | null;
+  id?: string;
+  inputTypes?: Array<string> | null;
+  kind?: string;
+  maxOutputTokens?: number | null;
+  name: string;
+  outputTypes?: Array<string> | null;
+  providerId: string;
+  reasoningLevels?: Array<string> | null;
+  reasoningParamMapping?: unknown;
+  smartConfig?: boolean;
+};
+
+function decryptProviderRow(row: LlmProvider): LlmProvider {
+  return { ...row, apiKey: decryptLlmKey(row.apiKey) };
+}
+
+/* 迁移要在 `LlmProviderRepository` 内部读单例行（默认供应商继承全局 Base URL），
+ * 所以这个单例必须先于该类声明 —— 其余单例仍在文件末尾集中导出。 */
+export const llmConfigRepository = new LlmConfigRepository();
+
+export class LlmProviderRepository {
+  /** 全部供应商（按创建先后），apiKey 已解密。 */
+  async list(): Promise<Array<LlmProvider>> {
+    const rows = await db.select().from(llmProvider).orderBy(llmProvider.createdAt);
+    return rows.map(decryptProviderRow);
+  }
+
+  async findById(id: string): Promise<LlmProvider | null> {
+    const rows = await db.select().from(llmProvider).where(eq(llmProvider.id, id)).limit(1);
+    return rows[0] ? decryptProviderRow(rows[0]) : null;
+  }
+
+  async save(input: LlmProviderInput): Promise<LlmProvider> {
+    const name = input.name.trim();
+    if (name === "") {
+      throw new Error("供应商名称不能为空");
+    }
+    const baseUrl = input.baseUrl.trim();
+    const apiFormat = isLlmApiFormat(input.apiFormat) ? input.apiFormat : "chat-completions";
+    if (input.id !== undefined) {
+      const patch: Record<string, unknown> = { name, baseUrl, updatedAt: new Date() };
+      /* 省略 apiFormat = 不动既有：格式已下移到模型级（#3517），详情页不再编辑它，
+       * 拿默认值覆盖会把历史供应商的协议悄悄改回 chat-completions。 */
+      if (input.apiFormat !== undefined) {
+        patch.apiFormat = apiFormat;
+      }
+      if (input.apiKey !== undefined) {
+        patch.apiKey =
+          input.apiKey === null || input.apiKey.trim() === ""
+            ? null
+            : encryptLlmKey(input.apiKey.trim());
+      }
+      try {
+        const rows = await db
+          .update(llmProvider)
+          .set(patch)
+          .where(eq(llmProvider.id, input.id))
+          .returning();
+        return decryptProviderRow(firstRowOfExisting(rows, `供应商不存在: ${input.id}`));
+      } catch (error) {
+        /* 改名撞 `llmProvider_name_uniq`（ISSUE #3866）：转成可读的冲突错误，
+         * 不把裸 SQLite 约束错误漏给前端。 */
+        if (isSqliteUniqueViolation(error)) {
+          throw new AppError(`供应商名称已被使用：${name}`, "conflict.provider_name", 409);
+        }
+        throw error;
+      }
+    }
+    /* 新建（ISSUE #3866）：并发/重名建同名供应商时，后到者原先拿到的是裸 SQLite
+     * 约束错误（500）。「重名当场拒绝、失败看得见」的既有语义不变（见
+     * repository.test.ts 同名用例），变的只是失败形态：捕获唯一冲突转成可读的
+     * 409 冲突错误，不再把驱动原文漏给前端。 */
+    try {
+      const rows = await db
+        .insert(llmProvider)
+        .values({
+          name,
+          baseUrl,
+          apiFormat,
+          apiKey: encryptLlmKey(input.apiKey?.trim() ? input.apiKey.trim() : null),
+        })
+        .returning();
+      return decryptProviderRow(firstRowRequired(rows, "供应商写入"));
+    } catch (error) {
+      if (isSqliteUniqueViolation(error)) {
+        throw new AppError(`供应商名称已被使用：${name}`, "conflict.provider_name", 409);
+      }
+      throw error;
+    }
+  }
+
+  /** 删除供应商及其名下模型（同一事务：留着孤儿模型会让列表出现「无主」条目）。 */
+  async delete(id: string): Promise<void> {
+    await runWithSqliteBusyRetry(
+      () =>
+        db.transaction(
+          async (tx) => {
+            await tx.delete(remoteModel).where(eq(remoteModel.providerId, id));
+            await tx.delete(llmProvider).where(eq(llmProvider.id, id));
+          },
+          { behavior: "immediate" },
+        ),
+      { policy: SETTINGS_DB_WRITE },
+    );
+  }
+
+  /**
+   * 历史遗留模型（`providerId IS NULL`）迁进「默认供应商」。
+   *
+   * 为什么读侧做而不是一次性迁移脚本：`remoteModel` 是用户已经配好的数据，
+   * 迁移必须幂等、且不能因为某次没跑就把模型从列表里藏起来。每次读供应商列表
+   * 前跑一遍，代价是一次 `WHERE providerId IS NULL LIMIT 1`（无孤儿时立刻返回）。
+   * 已有供应商时优先挂到最早创建的那一个（不新造第二个「默认」）。
+   */
+  async ensureLegacyProvider(): Promise<void> {
+    const orphans = await db
+      .select({ id: remoteModel.id })
+      .from(remoteModel)
+      .where(isNull(remoteModel.providerId))
+      .limit(1);
+    if (orphans.length === 0) {
+      return;
+    }
+    await runWithSqliteBusyRetry(
+      () =>
+        db.transaction(
+          async (tx) => {
+            const existing = await tx
+              .select()
+              .from(llmProvider)
+              .orderBy(llmProvider.createdAt)
+              .limit(1);
+            let provider = existing[0];
+            if (provider === undefined) {
+              const cfg = await llmConfigRepository.findSingleton(tx);
+              const rows = await tx
+                .insert(llmProvider)
+                .values({
+                  name: "默认供应商",
+                  baseUrl: cfg?.baseUrl ?? "",
+                  apiFormat: "chat-completions",
+                })
+                .returning();
+              provider = firstRowRequired(rows, "默认供应商创建");
+            }
+            await tx
+              .update(remoteModel)
+              .set({ providerId: provider.id })
+              .where(isNull(remoteModel.providerId));
+          },
+          { behavior: "immediate" },
+        ),
+      { policy: SETTINGS_DB_WRITE },
+    );
+  }
+}
+
+/** 解析 remoteModel.workshopAdapters JSON 列（模型级 envelope，坏数据按空档处理）。 */
+export function parseAdaptersDocJson(raw: string | null): RemoteModelAdaptersDoc {
+  /* DB 读出的 JSON 列空串与 null 同义 = 没有数据 */
+  if (raw === null || raw === "") {
+    return { endpointPath: "", adapters: [] };
   }
   try {
-    return parseRemoteModeAdapters(JSON.parse(raw));
+    return parseRemoteModelAdaptersDoc(JSON.parse(raw));
   } catch {
-    return [];
+    return { endpointPath: "", adapters: [] };
   }
 }
 
 export const userRepository = new UserRepository();
-export const llmConfigRepository = new LlmConfigRepository();
 export const remoteModelRepository = new RemoteModelRepository();
+export const llmProviderRepository = new LlmProviderRepository();
 
 /* ── 设置页保存的唯一跨表入口（ISSUE #2592）────────────────────────────── */
 
@@ -403,17 +763,22 @@ export const remoteModelRepository = new RemoteModelRepository();
  */
 export async function saveLlmSettings(input: LlmConfigPatch): Promise<void> {
   const split = input.extraModels === undefined ? null : splitExtraModels(input.extraModels);
+  // 同样显式 `immediate`（ISSUE #3171）：sqlite-proxy 会把 behavior 拼进 `begin`，
+  // 生产与测试宿主一致；不传就退回 deferred，锁要等第一次写才拿。
   await runWithSqliteBusyRetry(
     () =>
-      db.transaction(async (tx) => {
-        if (split) {
-          await syncRemoteModels(tx, split.remoteEntries);
-        }
-        await llmConfigRepository.upsertSingleton(
-          { ...input, extraModels: split ? split.localNames : undefined },
-          tx,
-        );
-      }),
+      db.transaction(
+        async (tx) => {
+          if (split) {
+            await syncRemoteModels(tx, split.remoteEntries);
+          }
+          await llmConfigRepository.upsertSingleton(
+            { ...input, extraModels: split ? split.localNames : undefined },
+            tx,
+          );
+        },
+        { behavior: "immediate" },
+      ),
     { policy: SETTINGS_DB_WRITE },
   );
 }

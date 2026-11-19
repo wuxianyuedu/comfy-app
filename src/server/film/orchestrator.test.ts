@@ -1,18 +1,10 @@
-// Film Studio 编排的**判决面**测试（ISSUE #572：`film/**` 此前 7.5% 覆盖）。
-//
-// 这个模块 656 行、全是「拉起生成 → 轮询 → 收口 → 合成」的编排，覆盖率长期只有
-// 个位数。但其中真正会出错、且出错后**用户只看到一句「失败」**的，是三类判决：
-//
-//   1. `cancelFilm`：取消时哪些镜头要撤、什么状态该落 —— 少撤一个就是「点了取消，
-//      任务还在跑并写进历史」；
-//   2. `composeFilm`：没有 ffmpeg / 没有可用镜头时的出口必须落 FAILED 且带可行动
-//      文案 —— 否则影片永远停在「合成中」；
-//   3. `createFilm`：镜头参数（帧数 / 帧率 / 尺寸）与画幅的折算 —— 写错的表现是
-//      「出来的片子和设置不一样」，而没有任何报错。
-//
-// 编排的 IO 全部经注入点桩掉（仓储 / 任务队列 / LLM / ffmpeg），因此这些判决可以
-// 直接断言，不必起真 ComfyUI、不必真的调 ffmpeg。
+// Film Studio 编排的**判决面**测试（ISSUE #572：`film/**` 此前 7.5% 覆盖）。模块是「拉生成 → 轮询 → 收口 → 合成」，
+// 真会出错且用户只看到一句「失败」的是三类判决：`cancelFilm` 少撤镜头 = 点了取消任务仍在跑并写进历史；
+// `composeFilm` 无 ffmpeg/无可用镜头须落 FAILED 并带可行动文案，否则影片停在「合成中」；`createFilm` 的帧数/帧率/尺寸
+// 折算写错 = 片子与设置不符而无报错。IO 全经注入点桩掉（仓储/队列/LLM/ffmpeg），不必起真 ComfyUI、不必真调 ffmpeg。
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 /* ── 仓储与依赖桩 ─────────────────────────────────────────── */
@@ -20,18 +12,21 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
  * 于是「给 mock 塞入参」「读 mock.calls[0]」两侧都通不过 tsc（零 any 口径下不许断言绕过）。 */
 const filmRepo = vi.hoisted(() => ({
   findById: vi.fn<(id: string) => Promise<unknown>>(),
-  markComposing: vi.fn(async (_id: string) => undefined),
-  markFailed: vi.fn(async (_id: string, _detail?: string) => undefined),
-  markCancelled: vi.fn(async (_id: string) => undefined),
-  markDone: vi.fn(async (_id: string, _path: string) => undefined),
-  updateProgress: vi.fn(async (_id: string, _progress: number) => undefined),
-  markGenerating: vi.fn(async (_id: string) => undefined),
+  markComposing: vi.fn((_id: string) => undefined),
+  markFailed: vi.fn((_id: string, _detail?: string) => undefined),
+  markCancelled: vi.fn((_id: string) => undefined),
+  markDone: vi.fn((_id: string, _path: string) => undefined),
+  updateProgress: vi.fn((_id: string, _progress: number) => undefined),
+  markGenerating: vi.fn((_id: string) => undefined),
+  /* 条件抢占（#3836）：startFilm / composeFilm 改为「抢到才继续」，默认抢到。 */
+  claimGenerating: vi.fn((_id: string) => Promise.resolve(true)),
+  claimComposing: vi.fn((_id: string) => Promise.resolve(true)),
   create: vi.fn<(input: { size: string }) => Promise<{ id: string }>>(),
-  appendLog: vi.fn(async (_id: string, _entry: { level: string; msg: string }) => undefined),
+  appendLog: vi.fn((_id: string, _entry: { level: string; msg: string }) => undefined),
   /** 恢复扫描用的按状态查询（5-A）。默认「库里没有未收尾的影片」。 */
   listByStatus: vi.fn<
     (_statuses: ReadonlyArray<string>) => Promise<Array<{ id: string; status: string }>>
-  >(async () => []),
+  >(() => Promise.resolve([])),
 }));
 type ShotRow = { id: string; taskId: string | null };
 type CreatedShot = {
@@ -44,33 +39,37 @@ type CreatedShot = {
 };
 
 const shotRepo = vi.hoisted(() => ({
-  createMany: vi.fn<(filmId: string, shots: Array<CreatedShot>) => Promise<void>>(
-    async () => undefined,
+  createMany: vi.fn<(filmId: string, shots: Array<CreatedShot>) => Promise<void>>(() =>
+    Promise.resolve(undefined),
   ),
-  listByFilm: vi.fn<() => Promise<Array<unknown>>>(async () => []),
-  listActiveWithTask: vi.fn<() => Promise<Array<ShotRow>>>(async () => []),
-  markAllActiveFailed: vi.fn(async (_filmId: string) => undefined),
-  markQueued: vi.fn(async (_shotId: string, _taskId: string) => undefined),
-  markFailed: vi.fn(async (_shotId: string) => undefined),
-  updateFromTask: vi.fn(async (_shotId: string, _patch: unknown) => undefined),
+  listByFilm: vi.fn<() => Promise<Array<unknown>>>(() => Promise.resolve([])),
+  listActiveWithTask: vi.fn<() => Promise<Array<ShotRow>>>(() => Promise.resolve([])),
+  markAllActiveFailed: vi.fn((_filmId: string) => undefined),
+  markQueued: vi.fn((_shotId: string, _taskId: string) => undefined),
+  markFailed: vi.fn((_shotId: string) => undefined),
+  updateFromTask: vi.fn((_shotId: string, _patch: unknown) => undefined),
 }));
 const taskRepo = vi.hoisted(() => ({
-  createQueued: vi.fn(async (_input: unknown) => ({ id: "task-1" })),
-  findExecutionProgress: vi.fn(async (_taskId: string) => null),
+  createQueued: vi.fn((_input: unknown) => ({ id: "task-1" })),
+  findExecutionProgress: vi.fn((_taskId: string) => null),
   /** 监看一轮**只发一次**批量进度查询（`watchLoop` 无条件调它，空数组由仓储侧
    *  早退）；缺这个键的话循环会在这一行 reject，把「收没收到口」演成「静默死掉」。 */
-  findExecutionProgressMany: vi.fn<(_ids: Array<string>) => Promise<Array<unknown>>>(
-    async () => [],
+  findExecutionProgressMany: vi.fn<(_ids: Array<string>) => Promise<Array<unknown>>>(() =>
+    Promise.resolve([]),
   ),
 }));
 const skillRepo = vi.hoisted(() => ({
-  findBySlug: vi.fn(async (_slug: string) => null),
+  findBySlug: vi.fn((_slug: string) => null),
 }));
 const prodRepo = vi.hoisted(() => ({
   getForUser: vi.fn<(userId: string, id: string) => Promise<unknown>>(),
-  upsertForUser: vi.fn<(userId: string, data: Record<string, unknown>) => Promise<unknown>>(
-    async () => undefined,
+  upsertForUser: vi.fn<(userId: string, data: Record<string, unknown>) => Promise<unknown>>(() =>
+    Promise.resolve(undefined),
   ),
+  /* 成片回写改走窄列 patch（#3832）：不再整行覆写。 */
+  patchShotsAndProgress: vi.fn<
+    (userId: string, id: string, patch: Record<string, unknown>) => Promise<boolean>
+  >(() => Promise.resolve(true)),
 }));
 
 /* 首帧图合成 / 视频任务创建：startFilm 测试要读它们的**入参**断言
@@ -82,11 +81,11 @@ const createRunTaskMock = vi.hoisted(() =>
       values: { seed?: number } & Record<string, unknown>;
       workflowId: string;
     }) => Promise<{ taskId: string; taskType: string; workflowName: string }>
-  >(async () => ({ taskId: "task-1", workflowName: "wf", taskType: "T2V" })),
+  >(() => Promise.resolve({ taskId: "task-1", workflowName: "wf", taskType: "T2V" })),
 );
 const synthFirstFrameMock = vi.hoisted(() =>
-  vi.fn<(opts: { seed?: number } & Record<string, unknown>) => Promise<string>>(
-    async () => "firstframe.png",
+  vi.fn<(opts: { seed?: number } & Record<string, unknown>) => Promise<string>>(() =>
+    Promise.resolve("firstframe.png"),
   ),
 );
 
@@ -99,10 +98,15 @@ vi.mock("~/lib/core/repository", () => ({
 vi.mock("~/lib/core/repository-production", () => ({
   productionRepository: prodRepo,
 }));
+vi.mock("~/lib/db", () => ({
+  db: {
+    transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn({}),
+  },
+}));
 vi.mock("~/lib/workshop/workflow-run.server", () => ({
   createWorkflowRunTask: createRunTaskMock,
 }));
-const cancelTaskMock = vi.hoisted(() => vi.fn(async (_taskId: string) => undefined));
+const cancelTaskMock = vi.hoisted(() => vi.fn((_taskId: string) => Promise.resolve(undefined)));
 const enqueueMock = vi.hoisted(() => vi.fn((_payload: unknown) => undefined));
 vi.mock("~/lib/comfyui/enqueue", () => ({
   enqueue: enqueueMock,
@@ -114,8 +118,10 @@ vi.mock("~/lib/comfyui/firstframe", () => ({
 vi.mock("~/lib/workshop/script-parser", () => ({
   parseIdeaToScenes: vi.fn(() => []),
 }));
-const llmConfig = vi.hoisted(() => vi.fn(async () => ({})));
-const llmStructured = vi.hoisted(() => vi.fn<() => Promise<Array<unknown>>>(async () => []));
+const llmConfig = vi.hoisted(() => vi.fn(() => ({})));
+const llmStructured = vi.hoisted(() =>
+  vi.fn<() => Promise<Array<unknown>>>(() => Promise.resolve([])),
+);
 vi.mock("~/lib/llm/server", () => ({
   getLLMConfig: llmConfig,
   completeLLMStructured: llmStructured,
@@ -145,7 +151,9 @@ vi.mock("child_process", async (importOriginal) => ({
     kill: vi.fn(),
     on: vi.fn((event: string, cb: (code: number) => void) => {
       if (event === "close") {
-        queueMicrotask(() => cb(0));
+        queueMicrotask(() => {
+          cb(0);
+        });
       }
     }),
   })),
@@ -191,8 +199,9 @@ describe("cancelFilm — 取消要撤到任务层，不能只改界面状态", (
 
     // 只撤真的带 taskId 的镜头（null 的没有任务可撤）
     expect(cancelTaskMock.mock.calls.map((c) => c[0])).toEqual(["t1", "t3"]);
-    expect(shotRepo.markAllActiveFailed).toHaveBeenCalledWith("f1");
-    expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1");
+    /* #3867：两步收进 immediate 事务，仓储收到的第二参是事务执行者。 */
+    expect(shotRepo.markAllActiveFailed).toHaveBeenCalledWith("f1", expect.anything());
+    expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1", expect.anything());
     expect(filmRepo.appendLog).toHaveBeenCalledWith(
       "f1",
       expect.objectContaining({ level: "warn", msg: "影片已取消" }),
@@ -210,19 +219,19 @@ describe("cancelFilm — 取消要撤到任务层，不能只改界面状态", (
     await cancelFilm("f1");
 
     expect(cancelTaskMock).toHaveBeenCalledTimes(2);
-    expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1");
+    expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1", expect.anything());
   });
 });
 
 describe("startFilm — 自主成片逐镜生成默认带随机种子（走「种子」对外参数）", () => {
   it("首帧图与视频两跳都各带一个有限数字 seed", async () => {
-    // status=CANCELLED 只为了让 startFilm 末尾的 `void watchFilm` 立刻早退，
-    // 不在测试里跑后台轮询循环（startFilm 本身只挡 GENERATING/COMPOSING）。
-    filmRepo.findById.mockResolvedValue({
-      id: "f1",
-      userId: "u1",
-      status: "CANCELLED",
-    });
+    /* #3867：startFilm 开头读一次影片，逐镜提交前每镜再重读一次。前两读给
+     * GENERATING 放行；之后给 CANCELLED——startFilm 末尾的 `void watchFilm`
+     * 起的监看在第一拍就早退，不在测试里跑后台轮询循环。 */
+    filmRepo.findById
+      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
+      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
+      .mockResolvedValue({ id: "f1", userId: "u1", status: "CANCELLED" });
     shotRepo.listByFilm.mockResolvedValue([
       {
         id: "s1",
@@ -254,11 +263,16 @@ describe("composeFilm — 合成前置条件不满足时必须落 FAILED 且文�
   it("影片不存在 / 已在合成或已完成：直接返回，不重复合成", async () => {
     filmRepo.findById.mockResolvedValue(null);
     await composeFilm("f-missing");
-    expect(filmRepo.markComposing).not.toHaveBeenCalled();
+    expect(filmRepo.claimComposing).not.toHaveBeenCalled();
+    expect(filmRepo.markFailed).not.toHaveBeenCalled();
 
+    /* 「已在合成或已完成」在新契约下 = 条件抢占抢不到（WHERE 排除 COMPOSING/DONE，
+     * 0 行更新）：composeFilm 拿到 false 直接让位，不碰 ffmpeg 也不落 FAILED。 */
     filmRepo.findById.mockResolvedValue({ id: "f1", status: "DONE" });
+    filmRepo.claimComposing.mockResolvedValueOnce(false);
     await composeFilm("f1");
-    expect(filmRepo.markComposing).not.toHaveBeenCalled();
+    expect(filmRepo.claimComposing).toHaveBeenCalledWith("f1");
+    expect(filmRepo.markFailed).not.toHaveBeenCalled();
   });
 
   it("没有可用镜头：落 FAILED，且不去调 ffmpeg", async () => {
@@ -321,11 +335,18 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
     filmRepo.create.mockResolvedValue({ id: "f-offline" });
     llmStructured.mockRejectedValue(new Error("no llm"));
     const { parseIdeaToScenes } = await import("~/lib/workshop/script-parser");
-    vi.mocked(parseIdeaToScenes).mockReturnValue(
-      /* SAFETY: 类型断言已复核 */ [
-        { heading: "离线场景", action: "动作", dialogue: "台词", shotCount: 1 },
-      ] as unknown as ReturnType<typeof parseIdeaToScenes>,
-    );
+    // 回执行按 Scene 的必填字段补齐（分镜解析的产出形状），不再靠断言绕过。
+    vi.mocked(parseIdeaToScenes).mockReturnValue([
+      {
+        id: "s-offline",
+        heading: "离线场景",
+        action: "动作",
+        dialogue: "台词",
+        location: "",
+        shotCount: 1,
+        time: "",
+      },
+    ]);
 
     const r = await createFilm({ userId: "u1", title: "离线", script: "剧本" });
 
@@ -354,12 +375,12 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
 
 describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 5）", () => {
   // 只映射用到的字段即可（id / index / prompt / negativePrompt / sceneHeading）。
-  const shot = (over: Record<string, unknown>) =>
-    /* SAFETY: 类型断言已复核 */ ({
-      sceneHeading: "",
-      negativePrompt: "",
-      ...over,
-    }) as never;
+  // getForUser 的桩返回 Promise<unknown>，夹具对象原样回传即可，无需压成 never。
+  const shot = (over: Record<string, unknown>) => ({
+    sceneHeading: "",
+    negativePrompt: "",
+    ...over,
+  });
 
   it("逐条映射镜头、按镜号排序，不触发 LLM 分镜，且落 projectId 关联", async () => {
     filmRepo.create.mockResolvedValue({ id: "film-p1" });
@@ -461,12 +482,13 @@ describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写�
       { shotId: "s2", videoPath: null, status: "FAILED" }, // 无产物，clip 不写
     ]);
 
-    expect(prodRepo.upsertForUser).toHaveBeenCalledTimes(1);
-    const [userId, data] = prodRepo.upsertForUser.mock.calls[0]!;
+    expect(prodRepo.patchShotsAndProgress).toHaveBeenCalledTimes(1);
+    const [userId, projectId, patch] = prodRepo.patchShotsAndProgress.mock.calls[0]!;
     expect(userId).toBe("u1");
-    expect(data.progress).toEqual({ stage: "render", rendered: true });
+    expect(projectId).toBe("proj_1");
+    expect(patch.progress).toEqual({ stage: "render", rendered: true });
     // s1 命中且带 videoPath → 写 clipUrl + clipStatus done；prompt 等原字段保留
-    expect(data.shots).toEqual([
+    expect(patch.shots).toEqual([
       {
         id: "s1",
         index: 1,
@@ -477,9 +499,11 @@ describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写�
       // s2 无 videoPath → 原样，不被 clip 覆盖
       { id: "s2", index: 2, prompt: "p2" },
     ]);
-    // 非镜头字段整体回写、不丢失
-    expect(data.title).toBe("项目片");
-    expect(data.characters).toEqual([{ id: "c1" }]);
+    /* 非镜头字段**不回写**（#3832 的修复语义）：合成期间的剧本 / 角色编辑
+     * 不再被读取时刻的旧快照回滚 —— 那些列归各自的写入者。 */
+    expect(patch.title).toBeUndefined();
+    expect(patch.characters).toBeUndefined();
+    expect(patch.scriptMarkdown).toBeUndefined();
   });
 
   it("脏 progress（缺字段 / 非法 stage）也规范化后再回写", async () => {
@@ -496,15 +520,16 @@ describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写�
       progress: {},
     });
     await syncFilmToProject("u1", "proj_2", []);
-    const [, data] = prodRepo.upsertForUser.mock.calls[0]!;
-    expect(data.progress).toEqual({ stage: "render", rendered: true });
-    expect(data.shots).toEqual([]);
+    await syncFilmToProject("u1", "proj_2", []);
+    const [, , patch] = prodRepo.patchShotsAndProgress.mock.calls[0]!;
+    expect(patch.progress).toEqual({ stage: "render", rendered: true });
+    expect(patch.shots).toEqual([]);
   });
 
   it("无 production 行 → 不写（纯文本自由建片不受影响）", async () => {
     prodRepo.getForUser.mockResolvedValue(null);
     await syncFilmToProject("u1", "proj_missing", []);
-    expect(prodRepo.upsertForUser).not.toHaveBeenCalled();
+    expect(prodRepo.patchShotsAndProgress).not.toHaveBeenCalled();
   });
 });
 
@@ -516,8 +541,8 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
   /** 把 `listByStatus` 桩成「按传入的状态返回对应行」。扫描是分两次查的
    * （GENERATING 一次、COMPOSING 一次），对参数偷懒会让两个判决互相串味。 */
   function rowsByStatus(rows: Array<{ id: string; status: string }>) {
-    filmRepo.listByStatus.mockImplementation(async (statuses) =>
-      rows.filter((r) => statuses.includes(r.status)),
+    filmRepo.listByStatus.mockImplementation((statuses) =>
+      Promise.resolve(rows.filter((r) => statuses.includes(r.status))),
     );
   }
 
@@ -535,7 +560,7 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
     await expect
       .poll(() => filmRepo.markFailed, { message: "markFailed 的调用现场" })
       .toHaveBeenCalledWith("f-gen", "没有可继续的镜头");
-    const msgs = filmRepo.appendLog.mock.calls.map((c) => c[1]?.msg ?? "");
+    const msgs = filmRepo.appendLog.mock.calls.map((c) => c[1].msg);
     expect(msgs.some((m) => m.includes("进程重启后续跑监看"))).toBe(true);
   });
 
@@ -575,12 +600,11 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
   it("「已终态但没有 taskId」的镜头不算等待，否则影片永不收口", async () => {
     rowsByStatus([{ id: "f-term", status: "GENERATING" }]);
     filmRepo.findById.mockResolvedValue({ id: "f-term", status: "GENERATING" });
-    /* 两个镜头都已终态、都没有 taskId：一个是历史行（成功过），一个是「逐镜提交时
-     * catch 掉了」的（`markFailed` 不落 taskId）。旧顺序先判 `!shot.taskId`，于是它们
-     * 都被数成等待 ⇒ `pending` 永不为 0 ⇒ 既不合成也不判失败，一路轮询到预算耗尽
-     * 才落一句「生成超时」（dev 实测：影片停在 progress 50 不动）。
-     * 第二次 `listByFilm` 是合成侧的「取可用镜头」，给它空数组 ⇒ `composeFilm` 在建
-     * 临时目录**之前**就早退，用例不往仓库 `public/` 里写任何东西。 */
+    /* 两个镜头都已终态、都无 taskId：一个是历史行（成功过），一个是「逐镜提交时 catch 掉了」的
+     * （`markFailed` 不落 taskId）。旧顺序先判 `!shot.taskId`，于是都被数成等待 ⇒ `pending` 永不为 0
+     * ⇒ 既不合成也不判失败，一路轮询到预算耗尽才落「生成超时」（dev 实测：影片停在 progress 50）。
+     * 第二次 `listByFilm` 是合成侧「取可用镜头」，给它空数组 ⇒ `composeFilm` 在建临时目录**之前**早退，
+     * 用例不往仓库 `public/` 里写任何东西。 */
     shotRepo.listByFilm
       .mockResolvedValueOnce([
         {
@@ -610,10 +634,10 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
       })
       .toHaveBeenCalledWith("f-term", 100);
     /* 钉「循环走到了 `pending === 0` 那一支」：确实去调了合成，而合成给出的第一个
-     * 判决就是「没有可用的镜头视频」。 */
+     * 判决就是「没有可用的镜头视频」。合成入口现在是条件抢占（#3836），钉抢占调用。 */
     await expect
-      .poll(() => filmRepo.markComposing, {
-        message: "markComposing 的调用现场",
+      .poll(() => filmRepo.claimComposing, {
+        message: "claimComposing 的调用现场",
       })
       .toHaveBeenCalledWith("f-term");
     await expect
@@ -643,5 +667,111 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
     expect(loggerMock.warn).toHaveBeenCalledWith(
       expect.stringContaining("resumeStalledFilms 失败"),
     );
+  });
+
+  it("监看循环自身 reject → 就地收口：影片判 FAILED、日志记 error、不冒进程级 rejection（ISSUE #4216）", async () => {
+    rowsByStatus([{ id: "f-boom", status: "GENERATING" }]);
+    /* 让 watchLoop 的第一跳（findById）就炸——模拟 SQLite BUSY / 磁盘故障。 */
+    filmRepo.findById.mockRejectedValue(new Error("DB BUSY 模拟"));
+
+    const result = await resumeStalledFilms();
+    expect(result.resumed).toEqual(["f-boom"]);
+
+    /* 后台循环是被 `void` 起的：从在飞表里拿同一条 promise 等它落地。
+     * 若收口缺失，这条 promise 就是 unhandledRejection，vitest 当场红。 */
+    const inflight = (
+      globalThis as { filmWatchInFlight_v1?: Map<string, Promise<void>> }
+    ).filmWatchInFlight_v1?.get("f-boom");
+    expect(inflight).toBeDefined();
+    await inflight;
+
+    expect(filmRepo.markFailed).toHaveBeenCalledWith(
+      "f-boom",
+      expect.stringContaining("DB BUSY 模拟"),
+    );
+    const msgs = filmRepo.appendLog.mock.calls.map((c) => c[1].msg);
+    expect(msgs.some((m) => m.includes("监看循环异常终止"))).toBe(true);
+    /* 收口后在飞表清空：不留假活的循环。 */
+    const registry = (globalThis as { filmWatchInFlight_v1?: Map<string, Promise<void>> })
+      .filmWatchInFlight_v1;
+    expect(registry?.size).toBe(0);
+  });
+});
+
+/* ── 监看交接与收口的增量（#4220 ⊕ #4216）──────────────────
+ * 循环体 rejection 的就地收口已由 #4216（watchFilm 里那道 .catch）收编，本组
+ * 只钉它的两处增量：① 收口自身再炸（判失败/行日志也抛）时仍不冒 rejection；
+ * ② 交接重读段（watchFilm 里 await previous 之后的 findById）不在 .catch 的
+ * 收口面内——那是 watchFilm 起飞后、循环未起前的缝隙，让位退场而不是冒出去。
+ * 「不冒 rejection」判据由 vitest 本身承压：冒出来即记败。 */
+describe("监看交接与收口的增量（#4220）", () => {
+  /* 在飞表的类型由 orchestrator.ts 的 `declare global` 增广进本项目（测试导入它），
+   * 直接经 globalThis 读写，不用再过一道断言。 */
+  const inFlightMap = (): Map<string, Promise<void>> | undefined => globalThis.filmWatchInFlight_v1;
+
+  beforeEach(() => {
+    globalThis.filmWatchInFlight_v1 = new Map();
+  });
+
+  /* 与「startFilm — 自主成片逐镜生成」那条用例同一套读序列：开头读一次、
+   * 逐镜提交前每镜再读一次，监看（交接/首拍）是第三次。 */
+  const oneShotRow = () => [
+    {
+      id: "s1",
+      order: 0,
+      prompt: "海边日落",
+      negative: null,
+      params: { videoWorkflowId: "wf-v", imageWorkflowId: "wf-i" },
+    },
+  ];
+
+  it("收口自身再炸（判失败/行日志都抛）：rejection 仍不冒出，在飞表照常清空", async () => {
+    /* 扫描会连查 GENERATING 与 COMPOSING 两轮；按状态各回各的，别让第二次扫描
+     * 拿到同一条行、把「判失败/留痕」的 Once 桩提前消费掉。 */
+    filmRepo.listByStatus.mockImplementation((statuses) =>
+      Promise.resolve(statuses.includes("GENERATING") ? [{ id: "f-w", status: "GENERATING" }] : []),
+    );
+    filmRepo.findById.mockRejectedValue(new Error("SQLITE_BUSY: database is locked"));
+    filmRepo.markFailed.mockRejectedValueOnce(new Error("db gone"));
+    filmRepo.appendLog
+      .mockResolvedValueOnce(undefined) /* 续跑留痕那条成功，让循环走进首拍 */
+      .mockRejectedValueOnce(new Error("db gone"));
+
+    await resumeStalledFilms();
+
+    /* 收口动作各自再兜一层（.catch 内部的 try/catch）：两层都炸也不把刚处理完的
+     * rejection 变回 unhandled。 */
+    const inflight = inFlightMap()?.get("f-w");
+    expect(inflight).toBeDefined();
+    await inflight;
+    expect(inFlightMap()?.size).toBe(0);
+    expect(loggerMock.error).toHaveBeenCalledWith(expect.stringContaining("监看循环异常终止"));
+  });
+
+  it("交接重读失败：让位退场不冒 rejection，也不误判失败", async () => {
+    /* 先占住在飞表 = 「旧循环还在飞」的交接现场（#3867 的语义）。 */
+    const seed = new Map<string, Promise<void>>();
+    seed.set("f1", Promise.resolve());
+    globalThis.filmWatchInFlight_v1 = seed;
+
+    filmRepo.findById
+      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
+      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
+      .mockRejectedValue(new Error("SQLITE_BUSY: database is locked"));
+    shotRepo.listByFilm.mockResolvedValue(oneShotRow());
+
+    await startFilm("f1");
+
+    await expect
+      .poll(() => loggerMock.warn.mock.calls.map((c) => String(c[0])).join("|"))
+      .toContain("监看交接重读失败");
+    /* 让位 ≠ 判失败：影片交给 boot 恢复扫描接回，兜底不许越权改写用户可见状态。 */
+    expect(filmRepo.markFailed).not.toHaveBeenCalled();
+  });
+
+  it("源码形态：收口走 watchFilm 的 .catch（#4216），交接守卫在场（#4220）", () => {
+    const src = readFileSync(path.join(import.meta.dirname, "orchestrator.ts"), "utf8");
+    expect(src).toContain("监看循环异常终止");
+    expect(src).toContain("监看交接重读失败");
   });
 });

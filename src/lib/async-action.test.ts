@@ -57,7 +57,7 @@ describe("toActionResult", () => {
 describe("runAsyncAction", () => {
   it("成功时用 successText 报，失败时不报", async () => {
     const report = vi.fn();
-    const r = await runAsyncAction(async () => undefined, {
+    const r = await runAsyncAction(() => Promise.resolve(undefined), {
       report,
       failureText: "保存失败",
       successText: "已保存",
@@ -69,7 +69,7 @@ describe("runAsyncAction", () => {
 
   it("信封里的 detail 当成功文案（服务端自己探的结论，调用处不该抄一遍）", async () => {
     const report = vi.fn();
-    await runAsyncAction(async () => ({ ok: true, detail: "已启动" }), {
+    await runAsyncAction(() => Promise.resolve({ ok: true, detail: "已启动" }), {
       report,
       failureText: "启动失败",
     });
@@ -78,7 +78,7 @@ describe("runAsyncAction", () => {
 
   it("successText 优先于信封的 detail（调用处有话说时以它为准）", async () => {
     const report = vi.fn();
-    await runAsyncAction(async () => ({ ok: true, detail: "已启动" }), {
+    await runAsyncAction(() => Promise.resolve({ ok: true, detail: "已启动" }), {
       report,
       failureText: "启动失败",
       successText: "已按你的配置启动",
@@ -88,7 +88,7 @@ describe("runAsyncAction", () => {
 
   it("不给 successText = 成功静默（显式表达，而不是忘了写分支）", async () => {
     const report = vi.fn();
-    const r = await runAsyncAction(async () => undefined, {
+    const r = await runAsyncAction(() => Promise.resolve(undefined), {
       report,
       failureText: "保存失败",
     });
@@ -97,15 +97,15 @@ describe("runAsyncAction", () => {
   });
 
   it("抛错时走 errorMessage 兜底成可读文案（硬规则 4：失败必须有可见出口）", async () => {
-    const report = vi.fn();
+    const report = vi.fn<(kind: string, detail: string) => void>();
     const r = await runAsyncAction(
-      async () => {
+      () => {
         throw new Error("ECONNREFUSED");
       },
       { report, failureText: "保存失败" },
     );
     expect(r.ok).toBe(false);
-    const [kind, detail] = /* SAFETY: 类型断言已复核 */ report.mock.calls[0] as [string, string];
+    const [kind, detail] = report.mock.calls[0] ?? ["", ""];
     expect(kind).toBe("err");
     /* `errorMessage` 把网络层原文翻译成人话（`~/lib/error-message`）。 */
     expect(detail).toContain("应用服务");
@@ -114,7 +114,7 @@ describe("runAsyncAction", () => {
   it("空 message 的 Error 回落 failureText（不给空白文案）", async () => {
     const report = vi.fn();
     await runAsyncAction(
-      async () => {
+      () => {
         throw new Error("");
       },
       { report, failureText: "删除失败" },
@@ -129,7 +129,7 @@ describe("runAsyncAction", () => {
     const report = vi.fn();
     const reject: unknown = { code: 500 };
     await runAsyncAction(
-      async () => {
+      () => {
         throw reject;
       },
       { report, failureText: "上传失败" },
@@ -139,7 +139,7 @@ describe("runAsyncAction", () => {
 
   it("`{ok:false}` 的不抛返回也报失败，并用服务端给的 detail", async () => {
     const report = vi.fn();
-    const r = await runAsyncAction(async () => ({ ok: false, detail: "路径不存在" }), {
+    const r = await runAsyncAction(() => Promise.resolve({ ok: false, detail: "路径不存在" }), {
       report,
       failureText: "打开目录失败",
     });
@@ -149,7 +149,7 @@ describe("runAsyncAction", () => {
 
   it("`{ok:false}` 没给 detail 时回落 failureText", async () => {
     const report = vi.fn();
-    await runAsyncAction(async () => ({ ok: false }), {
+    await runAsyncAction(() => Promise.resolve({ ok: false }), {
       report,
       failureText: "删除失败",
     });
@@ -159,7 +159,7 @@ describe("runAsyncAction", () => {
   it("readResultEnvelope=false 时只按「有没有抛」判成败", async () => {
     /* 用于端点返回体里的 `ok` 不是「这次动作成不成」的落点。 */
     const report = vi.fn();
-    const r = await runAsyncAction(async () => ({ ok: false }), {
+    const r = await runAsyncAction(() => Promise.resolve({ ok: false }), {
       report,
       failureText: "同步失败",
       successText: "已同步",
@@ -172,7 +172,7 @@ describe("runAsyncAction", () => {
   it("failureText / successText 支持函数（文案依赖入参）", async () => {
     const report = vi.fn();
     await runAsyncAction(
-      async () => {
+      () => {
         throw new Error("");
       },
       { report, failureText: () => "删除「角色」失败" },
@@ -182,7 +182,7 @@ describe("runAsyncAction", () => {
 
   it("successText 为函数时拿到归一后的结果（可读服务端 detail）", async () => {
     const report = vi.fn();
-    await runAsyncAction(async () => ({ ok: true, detail: "3 个文件" }), {
+    await runAsyncAction(() => Promise.resolve({ ok: true, detail: "3 个文件" }), {
       report,
       failureText: "同步失败",
       successText: (r) => `已同步：${r.detail}`,
@@ -194,7 +194,7 @@ describe("runAsyncAction", () => {
     const report = vi.fn();
     let rolledBack = false;
     const r = await runAsyncAction(
-      async () => {
+      () => {
         throw new Error("boom");
       },
       { report, failureText: "更新失败" },

@@ -65,7 +65,7 @@ Claude Desktop 示例（`claude_desktop_config.json`）：
 
 | 工具 | 作用 |
 |---|---|
-| `workshop_create_session` | 新建会话（可带 `projectId` 绑定界面侧**既有**项目；缺省新建一对 project + production 行），返回 `sessionId` |
+| `workshop_create_session` | 新建会话（可带 `projectId` 绑定界面侧**既有**项目；缺省新建一对 project + production 行），返回 `sessionId`。**幂等边界**：同参数重试在 5 分钟窗口内返回同一会话、不重复建（#3852）；要开新会话换参数即可 |
 | `workshop_list_sessions` | 列出会话摘要 |
 | `workshop_get_session` | 取完整状态（idea/剧本/场景/角色/分镜/阶段） |
 | `workshop_delete_session` | 删除会话 |

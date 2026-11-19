@@ -1,0 +1,329 @@
+/**
+ * `ci-mirror-retry-policy.mjs` —— 镜像格三跳 git 调用的**超时 / 次数 / 退避**常量，
+ * 以及**带预算的重试执行器**（`runGitWithRetry`）与真 git 执行器（`realRunGit`）。
+ *
+ * ## 为什么单独一份
+ *
+ * 这一组数字原先长在 `ci-github-mirror-push.mjs` 的常量区，而那份文件贴着 §12.6 R5 的
+ * 900 行硬闸（切之前 888 行）。2026-11-05 这一批要给推送加「墙钟预算」，正文再塞不下
+ * 一段撑得起理由的注释 —— 切法与 #3106 / #3146 / #3148 同一纪律：**按职责切出去，
+ * 主文件原样转出**，用例与调用方的导入面一个字都不用改。
+ *
+ * gitTimeoutFor / gitSubcommand 随 #3346 迁入（当时零 import、零副作用）；#4315 起
+ * `runGitWithRetry` / `realRunGit` / `realSleep` 也从主文件迁入（那一格再次贴到 900 行
+ * 闸沿）—— 重试执行器与它执行的那组预算 / 阶梯同住一份。只依赖 Node 内建与
+ * `ci-mirror-failure-report.mjs` 的失败分类（`shouldRetryGitFailure`），不与主文件成环。
+ *
+ * ## 那一处口径改动（2026-11-05）
+ *
+ * 推送原先按**次数**收口（2 次、退避 5s），现场暴露出它对真实失败形态没有意义：
+ * `Recv failure: Connection was reset` 是**瞬时**失败 —— 一次尝试 0.3s，于是 2 次 + 5s
+ * 退避 = **整格 6s 就交账**，而同一跳隔一分钟是通的。用户看到的正是「1.2 分钟就失败」。
+ *
+ * 改成**墙钟预算**：整档（首跳 + 全部重试）共用 {@link PUSH_RETRY_BUDGET_MS}，
+ * 到点才按最后一次结果交账。次数上限退化成「别把日志刷成一片」的兜底，不再是主判据。
+ * ISSUE #3252 起推送前不再探活，这份预算就从**推送第一刀**起算（现场见
+ * `ci-mirror-wire-budget.mjs` 文件头）。
+ *
+ * 为什么 8 分钟（ISSUE #3914，原值 4 分钟）：4 分钟预算下，「首刀挂满 240s 无回话」
+ * 会把预算一口吃光——重试预算还在、余量已不足一次尝试，当晚两个不同节点连续两跑
+ * 同样死法（GA 侧早已跑完，CNB 侧读不到结果）。抬到 8 分钟后，首刀挂满仍剩 ~235s
+ * 给一次完整重试，网络恢复（实测抖动分钟级）即可在窗内成功。它仍比改动前旧口径的
+ * 最坏墙钟（2 × 240s + 5s = 485s）大不了多少，`.cnb.yml` 那两格外框同批抬到 15m。
+ *
+ * @module scripts/ci-mirror-retry-policy — 镜像格的超时 / 尝试上限 / 退避阶梯 / 推送墙钟预算 / 重试执行器
+ */
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import process from "node:process";
+
+import { shouldRetryGitFailure } from "./ci-mirror-failure-report.mjs";
+
+/** 本仓检出根（`scripts/` 的上一层）—— 与主文件同一口径，git 子进程只在这里跑。 */
+const ROOT = path.resolve(import.meta.dirname, "../..");
+
+/**
+ * 远端读（`git ls-remote`）的**单次**墙钟上限：推送前不再有探活那一跳，这一读只剩
+ * 「推完之后回读 refs」这一处（`ci-mirror-push-verify.mjs`）。
+ *
+ * 为什么不给就没法收口：不给就得等 git 自己的 connect 超时，而那一形的实测是
+ * `Failed to connect to github.com port 443 after 21114 ms` —— 二十一秒全花在这一格上。
+ * 30s 的取法（2026-11-02 从 15s 放宽）：通的时候这一读实测 0.4–9.2s（#3014 记的几跑）；
+ * 而 `cnb-pe2-1k6e1uhj8` 连续两跑 15s 无回话、同日 19:47 同 runner 却通过 ——
+ * 15s 把「慢但活着」的抖动截成了「没通」。
+ */
+export const REMOTE_READ_TIMEOUT_MS = 30_000;
+
+/**
+ * 推送后回读的**总预算**与尝试上限。
+ *
+ * 回读发生在推送之后：此刻网络刚通过，正常是一刀的事（实测 0.4–9.2s）。60s / 3 次只兜
+ * 「远端刚好在这一秒抖了」，不占推送那 240s 的预算（否则推送吃满后回读必然被裁到 0）。
+ */
+export const VERIFY_RETRY_BUDGET_MS = 60_000;
+export const VERIFY_MAX_ATTEMPTS = 3;
+
+/**
+ * wire 推送的墙钟预算：从推送第一刀起算，到最后一次重试交账。
+ * 见本文件头「那一处口径改动」与 `ci-mirror-wire-budget.mjs`。
+ *
+ * 它与 {@link PUSH_TIMEOUT_MS} 是两个不同的数，别混：后者是**单次尝试**的上限（首次推整棵
+ * 对象库可以很久，所以给到 4 分钟），前者是**这一档总共肯花多久**。给了预算之后，每一次
+ * **重试的**尝试会被裁到「剩余预算」（`runGitWithRetry` 的 `callOpts`）；**首刀不裁**，保护
+ * 「慢但正常」的首次全量推送。
+ *
+ * 8 分钟的取法（ISSUE #3914，原值 4 分钟）：4 分钟下「首刀挂满 240s」正好吃光预算、
+ * 一次重试都发不出去（当晚两跑实证）；抬到 8 分钟后首刀挂满仍剩 ~235s 供一次完整重试，
+ * 出网恢复（抖动分钟级）即可在窗内成功。与单跳上限的合计 480 + 240 = 720s 落在
+ * `.cnb.yml` 那两格 **15m** 外框内（外框同批从 10m 抬到 15m）。
+ */
+export const PUSH_RETRY_BUDGET_MS = 480_000;
+
+/**
+ * LFS 那一跳（`git lfs push`，含可能的 `--object-id` 回退）的**墙钟预算**（2026-11-05 第二批）。
+ *
+ * 为什么要比内容推送的预算小很多：LFS 是在**同一格里的第二跳**，内容推送
+ * （#3252 起不再有探活）预算已抬到 480s（ISSUE #3914），LFS 首刀又照吃 240s 单跳
+ * 上限；两跳的最坏账（480 + 240 + 60 + 回读 60 = 840s）要落在 `.cnb.yml` 那两格的
+ * **15m** 外框内（同批从 10m 抬到 15m），余量留给冷启动与派发。
+ *
+ * 60s 的取法：LFS 对象只有几 MB、正常上传是秒级，而瞬时 `Connection was reset` 一次
+ * 0.3s —— 60s 够吃掉退避阶梯的前四项（5+10+15+20 = 50s ≈ 1 分钟），把原先「2 次 + 5s
+ * = 6s 就交账」的那一形拉到与它自己的量级相称。
+ *
+ * ⚠️ 与内容推送同一个纪律：**首刀不裁**（`runGitWithRetry` 只裁重试那几跳）。LFS 首刀
+ * 仍吃 `PUSH_TIMEOUT_MS` = 240s，免得把一次「慢但正常」的对象上传在 60s 处掐死。
+ * 预算管的是「还敢不敢再发起一次」，不是「第一次能传多久」。两跳（主路径 + 回退）
+ * 共用这一份预算，不各领一份叠成 120s。
+ */
+export const LFS_PUSH_RETRY_BUDGET_MS = 60_000;
+
+/**
+ * LFS 那一跳的尝试上限（首跳 + 4 次重试）：配 60s 预算与退避阶梯的前四项（累计 50s）。
+ * 与 {@link PUSH_MAX_ATTEMPTS} 同一分工 —— 预算管时长、次数只兜住日志刷屏。
+ */
+export const LFS_PUSH_MAX_ATTEMPTS = 5;
+
+/**
+ * 推送的尝试上限（首跳 + 9 次重试）：与预算**分工**，不是两套判据 ——
+ * 预算管「试多久」，这一个管「连挂时不把日志刷成一片」。
+ *
+ * 取 10 的理由：退避阶梯（{@link RETRY_BACKOFF_MS}）累计 230s，正好让瞬时失败那一形
+ * 在 4 分钟预算里被**预算**收口（第 10 次尝试落在 230s 处，之后余量不足一次尝试）；
+ * 而这个次数只在「每次尝试几乎不耗时」时才会先到，那时它是兜底，不是主判据。
+ */
+export const PUSH_MAX_ATTEMPTS = 10;
+
+/**
+ * 重试之间的退避表（毫秒）：第 n 次重试前等 `RETRY_BACKOFF_MS[n-2]`，超出表长按末项取。
+ *
+ * 5s→50s 的阶梯（9 项、累计 230s）配 4 分钟预算：前几次密（瞬时抖动通常几秒就过去）、
+ * 后面稀（真挂了就少刷几行日志）。旧口径的两项表（5s / 10s）配「只试 2 次」，对瞬时失败
+ * 等于没试 —— 见文件头。
+ */
+export const RETRY_BACKOFF_MS = [
+  5000, 10_000, 15_000, 20_000, 25_000, 30_000, 35_000, 40_000, 50_000,
+];
+
+/**
+ * 还剩多少余量才值得再发起一次尝试：比这个还短的话，那一跳只来得及被本仓自己掐断
+ * 并念一句「超时」，白占一次重试与一行日志 —— 不如把最后一次的真结果交账。
+ *
+ * 取 10s：git 的 connect 超时实测 ≈21s，一次 10s 的尝试仍有意义（连得上就够），
+ * 而再往下（比如 3s）就只是制造一条假超时。
+ */
+export const RETRY_MIN_ATTEMPT_MS = 10_000;
+
+/**
+ * `git push` 的**单次**墙钟上限（与预算 {@link PUSH_RETRY_BUDGET_MS} 分工见那里）。
+ *
+ * 4 分钟留在 `.cnb.yml` 那一格 `timeout: 5m` 的外框之内：到点由本仓念「超时」，而不是让
+ * 平台把整格掐掉、一个字读数都不留（§13.6.4 那一族 —— 「拿不到测量」不许被读成「测量是红的」，
+ * 也不许被读成「什么都没发生」）。首次推整棵对象库可以很久，所以这一支给得宽。
+ */
+export const PUSH_TIMEOUT_MS = 240_000;
+
+/**
+ * 「等托管机实验格」的墙钟预算（ISSUE #3346）：自托管主列那一格的 `--await-hosted`
+ * 前置在这一份预算内回读镜像 ref —— 看到本跑 HEAD 已在 ⇒ 托管机已推送并派发，
+ * 本格跳过推送（回执照落，判决回读格不受影响）；到点仍没见 ⇒ 走原有重试推送兜底。
+ *
+ * 300s 的取法：托管格自身 = 流水线起跑（0.5–1.5min）+ 单次推送（egress 通时秒级），
+ * 再留一个冷启动余量（首次拉镜像 / 全量 clone）。它吃进主列那格 15m 外框的最坏账：
+ * 300s（等待）+ 240s（兜底推送预算）+ 60s（回读）+ 60s（LFS）≈ 11 分钟 —— 所以外框
+ * 同批从 10m 抬到 15m（抬的是外框，判据与预算一个字没动）。
+ */
+export const HOSTED_AWAIT_BUDGET_MS = 300_000;
+
+/**
+ * 「等托管机」的轮询间隔：远端读（`ls-remote` 单 ref）实测 0.4–9.2s（#3014 记的几跑），
+ * 15s 足够密，也不会把远端读成压力源。到点交账的是「预算」，不是「次数」——
+ * 与推送那一跳同一分工。
+ */
+export const HOSTED_AWAIT_POLL_INTERVAL_MS = 15_000;
+
+/**
+ * 找出这一次 git 调用的**子命令**。
+ *
+ * 不能拿 `args[0]` 判：`pushArgs()` 为了不带本仓钩子，前面挂着 `-c core.hooksPath=`，
+ * 于是推送那一跳的 `args[0]` 是 `-c`。按 `args[0]` 写会让推送**拿不到超时**而账面看不出
+ * 来（限时的缺席不会红，只会退回「吃平台外框那一刀」的旧形态）。
+ *
+ * @param {string[]} args git 参数表
+ * @returns {string} 子命令（`push` / `ls-remote` / `rev-parse`…）；一个都没有就回空串
+ */
+export function gitSubcommand(args) {
+  for (let i = 0; i < args.length; i += 1) {
+    const a = String(args[i] ?? "");
+    /* `-c` 吃下一个参数（`core.hooksPath=` 那一形态），跳过它才能走到真子命令。 */
+    if (a === "-c") {
+      i += 1;
+      continue;
+    }
+    if (!a.startsWith("-")) {
+      return a;
+    }
+  }
+  return "";
+}
+
+/**
+ * 这一跳该给多大墙钟：`ls-remote` 短、`push` 长，本地那几跳（`rev-parse`）不限。
+ *
+ * @param {string[]} args git 参数表
+ * @returns {number | undefined} 交给 `spawnSync` 的 timeout（毫秒）；不给 = 不限
+ */
+export function gitTimeoutFor(args) {
+  const sub = gitSubcommand(args);
+  if (sub === "ls-remote") {
+    return REMOTE_READ_TIMEOUT_MS;
+  }
+  /* LFS 那一跳（`lfsPushArgs` 的子命令是 `lfs`）与内容推送同量级：对象可以有几 MB，
+   * 首次送存量更久 ⇒ 给推送档，不给回读档（`ls-remote` 只读一个 ref，30s 足够）。 */
+  if (sub === "push" || sub === "lfs") {
+    return PUSH_TIMEOUT_MS;
+  }
+  return undefined;
+}
+
+/**
+ * 「等托管机」的**内容核验**单跳上限（ISSUE #3346 第二批）：ref 上出现的 sha 与本格
+ * HEAD 不同时，浅取那一笔回来比 `^{tree}` —— 树一致才是托管机交付了等价内容。
+ *
+ * 60s 的取法：浅取只有一笔 commit + 树，egress 通时秒级；给到与 LFS 那一跳同量级，
+ * 失败了也只是这一轮轮询多等一下（预算内继续等，不交账）。
+ */
+export const HOSTED_VERIFY_TIMEOUT_MS = 60_000;
+
+/**
+ * git 子进程的环境：清掉 `GIT_DIR` / `GIT_WORK_TREE`（原主文件文件头第 7 条）。
+ *
+ * @returns {NodeJS.ProcessEnv} 交给 `spawnSync` 的环境
+ */
+function gitEnv() {
+  /** @type {NodeJS.ProcessEnv} */
+  const env = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  return env;
+}
+
+/**
+ * 真身：git 子进程执行器（测试注入点同形的假件在用例里给）。
+ *
+ * ⚠️ 超时不是「git 回了个非零」：`spawnSync` 到点是**本仓把它杀了**，`status` 变 `null`、
+ * `error.code` 是 `ETIMEDOUT`。原样交出去只会读成一句「exit -1」，所以这里补一句回话，
+ * 让 `explainRemoteProbeFailure()` 把它归进 egress 那一类（#3051 之前这一形被念成
+ * 「令牌活不活 / 仓库在不在」，把人指到错的下一动作上）。
+ *
+ * @param {string[]} args git 参数表
+ * @param {{timeout?: number}} [opts] 这一次尝试的墙钟（缺省按子命令取 {@link gitTimeoutFor}）
+ * @returns {{code: number, stderr: string, stdout: string}}
+ */
+export function realRunGit(args, opts) {
+  const timeout = opts?.timeout ?? gitTimeoutFor(args);
+  const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", env: gitEnv(), timeout });
+  /* 念出来的是子命令而不是 `args[0]` —— 推送那一跳的 `args[0]` 是 `-c`。 */
+  const sub = gitSubcommand(args);
+  if ((r.error ?? null) !== null || r.status === null) {
+    /* Node 把 `spawnSync` 的 `error` 标成 `Error`，而超时那一支带 `code: "ETIMEDOUT"`（类型没申出来）⇒ 按形状读一次。 */
+    const err = typeof r.error === "object" ? r.error : null;
+    const code = err !== null && "code" in err ? String(err.code) : undefined;
+    const why =
+      code === "ETIMEDOUT"
+        ? `git ${sub} 超时（>${String(timeout)} ms）：这一跳没拿到任何回话 —— 是没通，不是判出的红`
+        : `git ${sub} 连上都没连上：${String(r.error ?? "拿不到退出码")}`;
+    return {
+      code: -1,
+      stderr: `${String(r.stderr ?? "")}\n${why}`,
+      stdout: String(r.stdout ?? ""),
+    };
+  }
+  return { code: r.status, stderr: String(r.stderr ?? ""), stdout: String(r.stdout ?? "") };
+}
+
+/**
+ * 真身的退避等待（测试注入 `io.sleep` 的假件，用例一次真墙钟都不付）。
+ *
+ * @param {number} ms 等多久
+ * @returns {Promise<void>}
+ */
+export const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * 带有限重试的一跳（原 `ci-github-mirror-push.mjs` 文件头第 8 条）：**只有
+ * `shouldRetryGitFailure()` 认下的 egress ∪ 远端 5xx** 才消耗重试；认证 / 权限 /
+ * 仓库不存在一律一次交账。判据在 `ci-mirror-failure-report.mjs`，话术仍只认 egress
+ * （5xx 不该被念成节点出网问题）。
+ *
+ * 两道上限同时收口（2026-11-05）：`maxAttempts` 管次数（别把日志刷成一片），`budgetMs`
+ * 管墙钟（这一跳从第一刀到交账不许超过窗口）。给了预算会把**重试**那些尝试的超时裁到
+ * 「剩余预算」，所以「首刀 240s 挂了再来一刀 240s」不会发生；**首刀不裁**（照吃单跳上限），
+ * 免得 LFS 那 60s 预算把一次「慢但正常」的上传掐死。瞬时失败只吃退避 ⇒ 整档在窗口内反复试。
+ * 取法与数字的理由见上文各常量。
+ *
+ * 每一次重试都留一行读数（第几次、等多久），重试耗尽后交回**最后一次**的结果 ——
+ * 退码与后续话术与没有重试时逐字同形（推送没通仍是 exit 2 —— 前提没落地）。
+ *
+ * @param {string[]} args git 参数表
+ * @param {{runGit: typeof realRunGit, sleep: (ms: number) => Promise<void>, log: (line: string) => void, prefix: string, label: string, maxAttempts: number, budgetMs?: number, now?: () => number}} ctx
+ * @returns {Promise<{attempts: number, code: number, stderr: string, stdout: string}>} 最后一次尝试的结果 + 实际消耗的次数
+ */
+export async function runGitWithRetry(args, ctx) {
+  const { budgetMs, label, log, maxAttempts, prefix, runGit, sleep, now = Date.now } = ctx;
+  const startedAt = now();
+  /** 这一跳还剩多少预算；不给预算 ⇒ 无穷（那时只有 `maxAttempts` 生效）。 */
+  const remaining = () =>
+    budgetMs === undefined ? Number.POSITIVE_INFINITY : budgetMs - (now() - startedAt);
+  /** @type {(ms: number) => {timeout: number} | undefined} 有预算就裁到剩余量，否则留 undefined。 */
+  const callOpts = (ms) => {
+    const base = gitTimeoutFor(args);
+    return budgetMs === undefined || base === undefined
+      ? undefined
+      : { timeout: Math.min(base, Math.round(ms)) };
+  };
+  let attempts = 1;
+  /* 首刀不裁（照吃单跳上限，保护「慢但正常」的上传）；裁的只有下面那几跳重试。 */
+  let result = runGit(args);
+  for (let attempt = 2; attempt <= maxAttempts && result.code !== 0; attempt += 1) {
+    if (!shouldRetryGitFailure(`${result.stdout}\n${result.stderr}`)) {
+      break;
+    }
+    const wait = RETRY_BACKOFF_MS[attempt - 2] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
+    const left = remaining() - wait;
+    if (left < RETRY_MIN_ATTEMPT_MS) {
+      log(
+        `[${prefix}] ${label}重试预算用尽：已试 ${String(attempt - 1)} 次、耗 ${String(Math.round((now() - startedAt) / 1000))}s（预算 ${String((budgetMs ?? 0) / 1000)}s，低于一次尝试的 ${String(RETRY_MIN_ATTEMPT_MS / 1000)}s 就不再发起）⇒ 按最后一次结果交账`,
+      );
+      break;
+    }
+    log(
+      `[${prefix}] ${label}第 ${String(attempt - 1)}/${String(maxAttempts)} 次没通（可重试类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt)} 次（网络抖动 / 远端 5xx 重试；认证 / 权限类不重试）`,
+    );
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
+    await sleep(wait);
+    attempts = attempt;
+    result = runGit(args, callOpts(left));
+  }
+  return { ...result, attempts };
+}

@@ -1,10 +1,8 @@
 "use client";
 
 /* ── 本地更新检测的挂载容器（根布局只挂一次，渲染空节点）────────
- * 职责：从 localStorage 水合轮询开关、把开关与手动检测注册到共享 store
- * （供导航栏按钮等非嵌套 chrome 触发）、监听 Ctrl+Shift+U 主动检测、
- * 在检测到「需重启才生效」的改动时用应用内 toast 提示（安静、不抢焦点）。
- * 真正的轮询/网络在 ~/components/update-check/hooks/use-update-check.ts。
+ * 职责：水合轮询开关、注册手动检测入口、监听 Ctrl+Shift+U、检测到
+ * 需重启改动时弹应用内 toast。轮询/网络在 hooks/use-update-check.ts。
  */
 
 import { useCallback, useEffect } from "react";
@@ -42,7 +40,7 @@ function bodyOf(
   groups: Array<{ files?: Array<string>; hint?: string; key: string; label: string }>,
 ): string {
   const parts = groups.map((g) => {
-    const head = `${g.label}${g.hint ? `（${g.hint}）` : ""}`;
+    const head = `${g.label}${g.hint !== undefined && g.hint !== "" ? `（${g.hint}）` : ""}`;
     const files =
       g.files && g.files.length > 0
         ? `
@@ -88,7 +86,9 @@ export function UpdateCheckProvider() {
   // 把手动检测注册给共享 store（导航栏按钮经 store 触发）
   useEffect(() => {
     registerManual(checkNow);
-    return () => registerManual(null);
+    return () => {
+      registerManual(null);
+    };
   }, [checkNow, registerManual]);
 
   /* 快捷键 ⌘/Ctrl+Shift+U 主动检测一次：无脏态时给「已是最新」的确定性反馈。

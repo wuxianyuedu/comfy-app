@@ -1,12 +1,8 @@
 "use client";
-/* FlowNode（自定义 ComfyUI 图节点渲染器）—— 编排节点卡片。
- * 重块已拆成兄弟模块：
- *   - workflow-node-entries.ts      （输入 / 输出行分桶 hook）
- *   - workflow-node-palette.ts      （模式 / 角色配色计算）
- *   - FlowNodeHeader.tsx            （标题栏）
- *   - FlowNodeCollapsedAnchors.tsx  （折叠态圆柱 + 句柄）
- *   - FlowNodePinRows.tsx           （顶部针脚连接行）
- *   - FlowNodeWidgetRows.tsx        （widget / 旋钮行） */
+/* FlowNode（自定义 ComfyUI 图节点渲染器）—— 节点卡片；重块已拆成兄弟模块：
+ * workflow-node-entries.ts（输入/输出分桶）、workflow-node-palette.ts（配色）、
+ * FlowNodeHeader.tsx（标题栏）、FlowNodeCollapsedAnchors.tsx（折叠锚点）、
+ * FlowNodePinRows.tsx（针脚行）、FlowNodeWidgetRows.tsx（widget 行）。 */
 import React, { useState } from "react";
 import { useTheme } from "next-themes";
 import { Handle, Position } from "@xyflow/react";
@@ -164,12 +160,13 @@ export const FlowNode = React.memo(function FlowNode({
         // 根节点透明（isolation 把磨砂限制在本节点内）。
         // 普通节点保留实心面板。
         isolation: "isolate",
-        background: palette.modeColor ? "transparent" : palette.nodeBg,
-        outline: selected ? "2px solid rgba(56,189,248,0.9)" : "none",
-        outlineOffset: selected ? "2px" : undefined,
+        background:
+          palette.modeColor !== null && palette.modeColor !== "" ? "transparent" : palette.nodeBg,
+        outline: selected === true ? "2px solid rgba(56,189,248,0.9)" : "none",
+        outlineOffset: selected === true ? "2px" : undefined,
       }}
     >
-      {palette.modeColor && palette.nodeMode !== 0 && (
+      {palette.modeColor !== null && palette.modeColor !== "" && palette.nodeMode !== 0 && (
         <FrostLayer color={palette.modeColor} nodeMode={palette.nodeMode} />
       )}
       {/* 头部 —— 钉在 NODE_TITLE_H（litegraph 的 NODE_TITLE_HEIGHT）。
@@ -180,7 +177,9 @@ export const FlowNode = React.memo(function FlowNode({
           displayTitle={displayTitle}
           io={io}
           isCollapsed={isCollapsed}
-          onToggleCollapsed={() => setUserCollapsed((value) => !value)}
+          onToggleCollapsed={() => {
+            setUserCollapsed((value) => !value);
+          }}
           outputs={entries.outputs}
           palette={palette}
           role={role}
@@ -252,13 +251,9 @@ export const FlowNode = React.memo(function FlowNode({
         </div>
       )}
 
-      {/* 完全没有输入的节点的默认目标句柄 ——
-       *  未映射 / 兜底的边总得有个地方锚定。
-       *
-       *  这个 Handle 之前是可见的紫色圆点，但无输入的节点
-       *  （各类 Loader / EmptyLatentImage …）本就没有入端口，左侧挂一颗
-       *  孤零零的圆点看起来像渲染 bug。改为完全透明 + isConnectable=false：
-       *  连线锚点能力保留（避免既有 fallback 边断开），视觉上不再出现。 */}
+      {/* 无输入节点的默认目标句柄：未映射/兜底边总要锚点。此前是可见紫点，
+          但 Loader/EmptyLatentImage 等本无入端口，孤点像渲染 bug；改为完全透明 + isConnectable=false ——
+          保留锚点能力（既有 fallback 边不断），视觉上不再出现。 */}
       {entries.uniqueConnEntries.length === 0 && entries.uniqueWidgetEntries.length === 0 && (
         <Handle
           className="size-2.5! border-0!"

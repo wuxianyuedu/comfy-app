@@ -1,7 +1,7 @@
 ## Fixed
 
 - **`check-commit-claims` 本地那一格只审最近一次提交 ⇒ 批次里较早那笔的假声明没人看**
-  （`scripts/premerge-check.mjs` 的 `claims` 段，ISSUE #2070）。
+  （`scripts/gates/premerge-check.mjs` 的 `claims` 段，ISSUE #2070）。
 
   现场（`ad81a912`，本仓自己的历史）：提交信息写着「master 新增的 §13.5.13 / §13.6.3
   两节与各处插记照旧保留」，而那句话在它自己的树里不成立 ——
@@ -45,7 +45,7 @@
 ## Added
 
 - **平台 PR 那一格 `提交声明核对`**（`.cnb.yml`，同单 #2070 的「第二个执行者」那一半）。
-  跑的是 `node scripts/premerge-check.mjs --only=claims` —— **同一个入口**，
+  跑的是 `node scripts/gates/premerge-check.mjs --only=claims` —— **同一个入口**，
   不是第二份实现（配置里只放调用，逻辑一条都不写，#1959 那条纪律）。
   平台上「要并进去的那条」取自 `CNB_PULL_REQUEST_TARGET_SHA`：这台节点只 fetch 协商后的
   单 ref（`refs/heads` 零条 —— 读数在 `工作区复用读数` 那格），所以 `origin/master`

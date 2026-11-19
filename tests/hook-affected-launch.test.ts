@@ -1,25 +1,7 @@
 /**
- * 提交门槛 C 组的**启动那一步**的判据。
- *
- * ## 事故形状（这条判据不是预防性的，是补的）
- *
- * C 组原本是 `pnpm exec vitest run --maxWorkers=4 $files`。清单是位置参数，长度随
- * 改动面线性增长；而 `pnpm exec <bin>` 在 Windows 上经 `.cmd` shim，那条链的命令行
- * 上限是 cmd.exe 的 **8191 字符**。一次改了 22 个文件的提交，清单实测 10840 字符
- * —— vitest 根本没启动，stdout 只有一行 GBK 乱码（「文件名或扩展名太长」），
- * 钩子的表现是「组 C 失败」而看不见任何用例名。
- *
- * 危害不在「提交被拦」，而在**它长得像任何别的东西**：判据在场、跑的是 0 个用例、
- * 退出码非零但原因读不出。改动面越大的批次越容易撞上，也就是治理线自己的批次
- * 最先撞 —— 这与本仓库反复在收的那一族同源：「绿 ≠ 跑过」的反面形态「红 ≠ 跑过」。
- *
- * ## 判的四件事
- *
- * 1. 分块**不丢不重**（并集等于输入且顺序保持）—— 丢用例的形态就是「绿但没跑」；
- * 2. 每一块都在命令行长预算之内，且单个路径超预算时**点名红**而不是静默跳过；
- * 3. 启动器不经 shell 层（`spawnSync(process.execPath, …)`，没有 `shell: true`），
- *    钩子也不再直接拼 `pnpm exec vitest run $files`；
- * 4. 空清单必须被阻断，绝不让 `vitest run` 不带位置参数跑成全量。
+ * C 组「启动那一步」的四条判据：分块不丢不重、每块在 cmd.exe 8191 字符命令行预算内（单词路径超预算要点名红）、
+ * 启动器不经 shell（`spawnSync(process.execPath, …)`，无 `shell:true`）、空清单阻断。事故是 22 文件清单 10840 字符
+ * 致 vitest 没启动、只剩 GBK 乱码 —— 危害在「红 ≠ 跑过」，它长得像任何别的东西。
  */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -29,7 +11,7 @@ import process from "node:process";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { wideFallbackNote } from "../scripts/affected-tests.mjs";
+import { wideFallbackNote } from "../scripts/affected-tests/affected-tests.mjs";
 /* 「认出超时形态 + 等机器喘口气」那一层住在自己的模块里（`run-affected-tests.mjs`
  * 越过 900 行硬闸时按职责拆出，理由写在那份文件头）。用例跟着 import 走，不在这里
  * 再要一份 `run-affected-tests.mjs` 的同名出口 —— 那等于给拆出去的块留一条「搬走了
@@ -41,7 +23,7 @@ import {
   loadPerCore,
   remainingWaitMs,
   waitForLoadToSettle,
-} from "../scripts/affected-launch-load-retry.mjs";
+} from "../scripts/affected-tests/affected-launch-load-retry.mjs";
 import {
   collectFileTimings,
   planLaunches,
@@ -49,7 +31,7 @@ import {
   resolveVitestEntry,
   runChunk,
   SAFE_ARGV_BUDGET,
-} from "../scripts/run-affected-tests.mjs";
+} from "../scripts/affected-tests/run-affected-tests.mjs";
 /* 「这一跑用哪个 reporter」住在自己那份文件里（日志预算那一刀）。用例跟着 import 走，
  * 不从启动器那儿再要一份同名出口 —— 那等于给搬出去的块留一条「搬走了但还能从老地方
  * 拿到」的假象（与上面 `affected-launch-load-retry.mjs` 同一条处置）。 */
@@ -57,10 +39,13 @@ import {
   announceQuiet,
   reporterArgs,
   resolveQuiet,
-} from "../scripts/affected-launch-log-budget.mjs";
+} from "../scripts/affected-tests/affected-launch-log-budget.mjs";
 /* 日志预算的**另一半**：quiet 那档只打点，「跑了哪些用例」必须另有一处出口 —— 否则
  * 平台那屏日志里一个文件名都没有，只剩 `Tests N passed`（这一格此前就长这样）。 */
-import { fileListReport, MAX_LISTED } from "../scripts/affected-launch-file-list.mjs";
+import {
+  fileListReport,
+  MAX_LISTED,
+} from "../scripts/affected-tests/affected-launch-file-list.mjs";
 /* 清单的**另一半**：每份用例自己花了多久（ISSUE #2683 第二笔）。取数走的是
  * `precommit-timing.mjs` 的 `parseJunitXml`（账本布局的唯一出处），本组用例只钉
  * 「排成什么样」与「读不到时说什么」——判据一个字都没动，这一格买的是可读性。 */
@@ -69,7 +54,7 @@ import {
   SLOWEST_MS,
   SLOWEST_SHOWN,
   TIMED_SHOWN,
-} from "../scripts/affected-launch-file-timing-report.mjs";
+} from "../scripts/affected-tests/affected-launch-file-timing-report.mjs";
 /* 墙钟判点（ISSUE #2364）：等待有预算而**跑**没有上界，于是负载膨胀时那一格一路开到被
  * 平台掐掉（实测 3240105ms），连「未判定」那句话都没说出来。下面这几条钉两件事：
  * **界只划在「还开不开下一遍」**（已开跑的那一遍永远跑完），以及**「没开」不许长得像
@@ -91,31 +76,34 @@ import {
   STAGE_WALL_CLOCK_MS,
   wallClockBudget,
   wallClockSkipReport,
-} from "../scripts/affected-launch-wallclock.mjs";
+} from "../scripts/affected-tests/affected-launch-wallclock.mjs";
 /* junit 取数/落盘形状层拆到自己那份之后（ISSUE #2364 撞上 900 行硬闸那一刀），这里按
  * 真实落点 import —— 判据跟着搬走的符号一起改路径，而不是让机制层转出假出口。
  * 「日志预算那一刀」把同名两件事另抽过一份，已并进这份（两侧各抄一份文件名会静默漂开）。 */
-import { junitReportArgs, writeFilesManifest } from "../scripts/affected-launch-junit-io.mjs";
+import {
+  junitReportArgs,
+  writeFilesManifest,
+} from "../scripts/affected-tests/affected-launch-junit-io.mjs";
 /* 分文件读数的**两侧**要判的是同一个布局，所以判据同时 import 读的那一侧：只测写的
  * 一侧（"它传了某个文件名"）挡不住读的一侧改了前缀 —— 而那正会退化成「永远读不到，
  * 且看起来像这次没有读数」。 */
-import { cFileXmlName, failingSuiteTextsFromJunit } from "../scripts/precommit-timing.mjs";
+import { cFileXmlName, failingSuiteTextsFromJunit } from "../scripts/gates/precommit-timing.mjs";
 /* 复跑面那一层同理：按它真实的落点 import（机制层拆出去之后不再转一层假出口）。 */
-import { retryScope } from "../scripts/affected-launch-retry-scope.mjs";
+import { retryScope } from "../scripts/affected-tests/affected-launch-retry-scope.mjs";
 /* 判决粒度那一层（第 2 遍的红按文件分开）—— #2225 之后它不再住在 runChunk 的那一句
  * `isTimeoutShaped(整块输出)` 里，所以它的三档结论要能被单独钉住。 */
 import {
   classifyFirstPass,
   classifyRetry,
   mergePerFileReads,
-} from "../scripts/affected-launch-retry-verdict.mjs";
+} from "../scripts/affected-tests/affected-launch-retry-verdict.mjs";
 /* 话术层（收尾那两份账）现在住在自己那份文件里 —— 这里按它真实的落点 import，
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
 import {
   firstPassKilledReport,
   rerunReport,
   unverifiedReport,
-} from "../scripts/affected-launch-rerun-report.mjs";
+} from "../scripts/affected-tests/affected-launch-rerun-report.mjs";
 import { groupShBody, withoutCommentLines } from "./helpers/hook-groups";
 /* 反向断言必须先剥注释再判（ISSUE #2660）：不剥的话「源码里不许出现 X」在 X 被挪进
  * 一句解释「为什么别这么写」的注释时**静默通过** —— 那是假绿，比误红更贵。
@@ -125,29 +113,19 @@ import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const HOOK_PATH = ".githooks/pre-commit";
-const LAUNCHER_PATH = "scripts/run-affected-tests.mjs";
+const LAUNCHER_PATH = "scripts/affected-tests/run-affected-tests.mjs";
 /* 「怎么起一次 vitest」那一层（并发覆盖 / 分块 / 入口定位 / 抓子进程输出）合并 master 之后
  * 出列到这一份 —— 判据按**真实落点**读，机制层不转假出口（转一层的话「搬走了」与
  * 「还能用」长得一样）。启动器那一层留下的仍是判决链。 */
-const SPAWN_LAYER_PATH = "scripts/affected-launch-spawn.mjs";
+const SPAWN_LAYER_PATH = "scripts/affected-tests/affected-launch-spawn.mjs";
 /* 显式全量档（`--full`）那一整格出列后的真实落点（ISSUE #3030：那一层已贴住 900 行硬闸，
  * 整档搬进自己那份文件）—— 判据按**真实落点**读，不要求内容留在启动器里。 */
-const FULL_RUN_PATH = "scripts/affected-launch-full-run.mjs";
+const FULL_RUN_PATH = "scripts/affected-tests/affected-launch-full-run.mjs";
 
 /**
- * 把一段代码跑起来期间 `process.stderr` 的写入**收在手里**（随返回值交出 `text`）。
- *
- * 为什么要有这个：`runChunk` 的每一档判决都会往 stderr 写话术（「第 2 遍全绿」、
- * 「记为未校验」、「按真红处置」…），而下面这些用例绝大多数只关心**退出码**。不抓的话
- * 每跑一次就在 vitest 的报告里糊一段夹具的判决话术，与本文件无关的人读报告时会以为
- * 那是**真跑**出来的结论 —— 实测踩到过两次：
- *
- *   · 本机：那几段被误读成 C 组自己的输出；
- *   · 平台：`cnb-n1j-1k5ct202i` 第 9 格（受影响用例）的日志里，这一族话术与真跑的
- *     输出逐字同形，读日志的人按「负载假红 / 真红」去查产品代码，而那一次 32 格全绿。
- *
- * 所以**每一处**调用 `runChunk` 的用例都必须走它（或走下面那份委托它的 `runCapturing`），
- * 「不许有漏掉的调用点」由本文件末尾那条判据钉住（针尖的构造方式见它里面的说明）。
+ * 把 `runChunk` 期间 `process.stderr` 的写入收在手里（随返回值交出 `text`）：它的每档判决都写话术，而用例多只
+ * 关心退出码；不抓就糊进 vitest 报告，被读成真跑结论（实测：本机误当 C 组输出，平台 `cnb-n1j-1k5ct202i` 第 9 格
+ * 与真跑逐字同形）。每处调用都必须走它，漏掉的调用点由本文件末尾那条判据钉住。
  */
 async function captureStderr<T>(fn: () => Promise<T>): Promise<{ text: string; value: T }> {
   const chunks: Array<string> = [];
@@ -172,12 +150,9 @@ function syntheticFiles(count: number): Array<string> {
 }
 
 /**
- * C 组的**实调用体**：`run_group C "…" sh -c '<body>'` 里那段 shell，剔掉行首是 `#` 的行。
- *
- * 为什么解析而不是 `hook.toContain("scripts/run-affected-tests.mjs")`：本文件上方那段
- * 机制说明里就写着这个文件名，`toContain` 会**在注释上命中** —— 有人把那一行注掉，
- * 判据照样绿。同一条教训由刚落地的 `tests/doc-check-hook-wiring.test.ts` 给出
- * （「在场判据要解析、不要 toContain」，规范 §13.5.8）。
+ * C 组实调用体：`run_group C "…" sh -c '<body>'` 里那段 shell，剔掉行首 `#` 的行。必须解析而非 `toContain`：
+ * 本文件机制说明里就写着那个脚本名，`toContain` 会在注释上命中 —— 有人把那行注掉，判据照样绿。同
+ * `tests/doc-check-hook-wiring.test.ts`（「在场判据要解析、不要 toContain」，规范 §13.5.8）。
  */
 function cGroupBody(hookText: string): string {
   // 解析器本体在 `tests/helpers/hook-groups.ts`（与本目录下另外两处消费者共用一份；
@@ -235,12 +210,9 @@ describe("受影响用例的启动器", () => {
   });
 
   it("启动器不经 shell 层：spawn 的是 node 自己，且没有 shell:true", () => {
-    /* 两处都读，且都剥注释（ISSUE #2660 当场照出来的一件事）：`spawnSync(` 在
-     * `scripts/run-affected-tests.mjs` 里如今**只剩第 18 行那句机制说明**（真身早已随
-     * 「起进程」那一层拆到 `scripts/affected-launch-spawn.mjs:147`），所以原来那条
-     * `toContain("spawnSync(")` 是绿在一段注释上的 —— 更坏的是三条**反向**断言读的也是
-     * 那份已经不 spawn 的文件：今天有人在起进程那一层写 `shell: true`，这一格一个字都不会红。
-     * 剥注释解决「注释里提过也算」，读对文件解决「扫错了对象」，两样都要。 */
+    /* 两处都读且都剥注释（ISSUE #2660）：`spawnSync(` 真身已移到 `scripts/affected-tests/affected-launch-spawn.mjs:147`，主文件里
+     * 只剩机制说明；反向断言也读那份不 spawn 的文件 ⇒ 起进程层写 `shell: true` 也不会红。剥注释治「注释里提过也算」，
+     * 读对文件治「扫错对象」，两样都要。 */
     const src = stripComments(readFileSync(LAUNCHER_PATH, "utf8"), { trailing: true });
     const spawnLayer = stripComments(readFileSync(SPAWN_LAYER_PATH, "utf8"), { trailing: true });
     expect(
@@ -271,7 +243,7 @@ describe("受影响用例的启动器", () => {
     expect(hook).toContain("run_group C");
     const body = cGroupBody(hook);
     expect(body).not.toBe("");
-    expect(body).toMatch(/node\s+scripts\/run-affected-tests\.mjs/);
+    expect(body).toMatch(/node\s+scripts\/affected-tests\/run-affected-tests\.mjs/);
     expect(body).not.toMatch(/pnpm\s+exec\s+vitest/);
     expect(body).not.toMatch(/\$files/);
   });
@@ -282,14 +254,14 @@ describe("受影响用例的启动器", () => {
      * `tests/doc-check-hook-wiring.test.ts`（规范 §13.5.8「在场判据要解析」）。 */
     const muted = [
       'run_group C "结构守护测试" sh -c \'',
-      "  # node scripts/run-affected-tests.mjs",
+      "  # node scripts/affected-tests/run-affected-tests.mjs",
       "'",
     ].join("\n");
     expect(cGroupBody(muted)).toBe("");
 
     const oldShape = [
       'run_group C "结构守护测试" sh -c \'',
-      "  files=$(node scripts/affected-tests.mjs) || exit 1",
+      "  files=$(node scripts/affected-tests/affected-tests.mjs) || exit 1",
       "  pnpm exec vitest run --maxWorkers=4 $files'",
     ].join("\n");
     const oldBody = cGroupBody(oldShape);
@@ -299,27 +271,9 @@ describe("受影响用例的启动器", () => {
 });
 
 /**
- * C 组的**负载自适应**：超时形态的失败要自动隔离复跑，不再把提交拦在这里。
- *
- * ## 现场（实测，8 核容器 / 本轮复现）
- *
- * 同一份代码、同一个提交：空闲时这 67 个用例 21s 全绿（685/685）；把机器压到
- * load≈77 时 `tests/ratchet-update-guards.test.ts` 报
- * `Test timed out in 120000ms.`，退出码非零 —— 提交被拦下。隔离复跑立刻全绿
- * （32/32，`--no-file-parallelism`）。
- *
- * 口径规范里**早就有**（§13.6.4 / `base-check` 第五态 `load-flake`），缺的是执行者：
- * 那一节的下一动作「隔离复跑定性」此前只有人能做。本文件钉的就是这个执行者。
- *
- * ## 钉什么（四条，两向）
- *
- * 1. 超时指纹的判别式与 `base-check.mjs` 的 `TIMEOUT_SIGNATURES` **逐条同源** ——
- *    两份清单漂移时，同一个红会在「复算工具」里叫 `load-flake`、在钩子里却直接阻断；
- * 2. 真断言红**不复跑**（不带指纹）—— 这是「不把真回归洗成假红」的那一侧，
- *    也是这一档最容易退化的方向（放宽到「是红就复跑」等于放行一切）；
- * 3. 复跑**只能更隔离，不能更松**：`--no-file-parallelism` 且**不许出现任何抬预算的
- *    形态**（`testTimeout` 相关的旗标 / 把 `MAX_WORKERS` 调大）；
- * 4. 复跑**只一次**，且复跑的结果就是该块的结果。
+ * C 组负载自适应：超时形态失败自动隔离复跑（load≈77 时 `ratchet-update-guards.test.ts` 120s 超时，复跑 32/32 全绿）。
+ * 规范 §13.6.4 / base-check 第五态 `load-flake` 早定口径，缺的是执行者。四条：指纹与 `TIMEOUT_SIGNATURES` 逐条同源
+ * （漂移＝同一红两个判别式）、真断言红不复跑、复跑只更隔离（`--no-file-parallelism`，禁抬预算）且只一次。
  */
 describe("受影响用例的启动器 —— 负载自适应（超时形态自动隔离复跑）", () => {
   /* 整档反向断言剥注释判（#2660 同上一条的理由）：这一族里「不许出现抬预算的形态」
@@ -358,23 +312,22 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
   });
 
   it("指纹清单与 base-check 那一份逐条同源（漂移 = 同一件事两个判别式）", () => {
-    /* 两份清单是同一件事（「这个红首先是一个负载读数」）在两个执行者上的落地：
-     * `base-check` 用它归第五态，启动器用它决定复不复跑。只抄一份正则集合、
-     * 而不是从 `base-check` import —— 它是 ESM 且带 CLI 入口，钩子这一层不该为了
-     * 一个正则常量去背它的整条依赖链；同源的代价是这一条断言。
-     *
-     * 读的落点是 `base-check/verdict.mjs` 而不是 `base-check.mjs`：判决那一层
-     * 随 R5 拆分搬过去了（`base-check.mjs` 1382 → 648 行），只读主文件时
-     * 提取块落空 ⇒ `theirs` 是空数组 ⇒ 这条断言对着空数组比、**静默变成空转**。 */
+    /* 两份清单是同一件事（「这个红首先是负载读数」）在两个执行者上的落地：`base-check` 归第五态、启动器决定复不复跑。
+     * 只抄正则不从 `base-check` import（它是 ESM 且带 CLI 入口，钩子不该背整条依赖链）；同源的代价就是这条断言。
+     * 读落点是 `base-check/verdict.mjs`：判决层随 R5 拆分搬过去（主文件 1382→648 行），只读主文件会提取落空 ⇒
+     * `theirs` 是空数组 ⇒ 断言静默空转。 */
     /* 读的落点跟着**职责**走：指纹清单随 R5 拆分搬进了
-     * `scripts/affected-launch-load-retry.mjs`（`run-affected-tests.mjs` 越过 900 行硬闸，
+     * `scripts/affected-tests/affected-launch-load-retry.mjs`（`run-affected-tests.mjs` 越过 900 行硬闸，
      * 按「负载归因 vs 起进程」切开）。留在老地方读 ⇒ `pick` 落空 ⇒ 下面那条
      * `mine.length > 0` 当场红 —— 这条断言的意义正在这里，别为了它把清单抄回来。 */
-    const launcherLayer = readFileSync("scripts/affected-launch-load-retry.mjs", "utf8");
+    const launcherLayer = readFileSync(
+      "scripts/affected-tests/affected-launch-load-retry.mjs",
+      "utf8",
+    );
     const baseCheck = readFileSync("scripts/base-check/verdict.mjs", "utf8");
     const pick = (text: string): Array<string> => {
-      const block = /const TIMEOUT_SIGNATURES = \[([\s\S]*?)\n\];/.exec(text);
-      return (block?.[1] ?? "")
+      const block = /const TIMEOUT_SIGNATURES = \[(?<body>[\s\S]*?)\n\];/.exec(text);
+      return (block?.groups?.body ?? "")
         .split("\n")
         .map((line) => line.trim())
         .filter((line) => line.startsWith("/"))
@@ -391,26 +344,14 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
     // 抬预算那一侧的反向判据（这一档的主要敌人，见 §11.13 / §13.6.4）。
     expect(src).not.toMatch(/testTimeout\s*[:=]\s*\d/);
     expect(src).not.toMatch(/hookTimeout\s*[:=]\s*\d/);
-    /* 判的是「**传给 vitest 的实参里**并发只许一处」—— 复跑档不许另起一个更大的
-     * `--maxWorkers`。取数的单位是**调用点**（`spawn(entry, [ … ])` 那一段实参），不是
-     * 「哪一行同时含 `spawn(` 与 `--maxWorkers=`」：后者钉的是**行形状** —— prettier 把
-     * 数组折成多行（例如给首跑/复跑各加一段分文件读数的参数）就会让它读出 0 处，而语义
-     * 一个字没变。判据因为排版而红，要修的是判据，不是把代码写回单行去迎合正则
-     * （同上面「读的落点是 verdict.mjs」那条对「提取落空 ⇒ 对着空数组比」的提防）。
-     *   · 注释 / 文件头说明里的形态不算（提取的是实参段，天然不含它们）；
-     *   · 日志话术（`resolveMaxWorkers` 的 `note`）里的同名字符串也不算 —— 它是给人看的
-     *     一行提醒，不是并发旋钮，把它算进来会让这条判据变成「谁在提示语里提到并发谁就
-     *     红」，而真正的退化（复跑另给一个更大的并发）照样能从实参那一段看出来。
-     * 「只许一处」本身不放松：全文件仍只有一处实参带并发旋钮。 */
-    /* 提取形态跟着**调用形状**走，不许写死一种排版：
-     *   · oxfmt 会在实参变长时把它整段折行（`spawn(entry, [ … ], options)` ⇒ 多行）；
-     *   · 2026-10-30 起第一遍还多一个第三参数（那个 `timeout`，PR #2760 的现场：无上界
-     *     的那一遍被平台掐断、零读数）。
-     * 所以这里认「`spawn(` 之后到第一个 `]` 为止」那一段，**两端都放宽**到任意空白。
-     * 写死 `entry, [` 紧邻或写死 `] )` 都会在那次改动里**静默匹配不到** —— 而「提取
-     * 落空」有自己的提防（下面那条 `toBeGreaterThanOrEqual(2)` 会当场红），两者一起才拦得住。 */
-    const spawnSites = [...src.matchAll(/spawn\([\s\S]*?entry,\s*\[([\s\S]*?)\]/g)].map(
-      (m) => m[1] ?? "",
+    /* 判「传给 vitest 的实参里并发只许一处」：取数单位是**调用点**（`spawn(entry, [ … ])` 的实参），不是「某行同时含
+     * `spawn(` 与 `--maxWorkers=`」—— 折行后那形读出 0 处，而语义没变。注释/文件头与 `resolveMaxWorkers` 的 `note`
+     * 日志话术不算并发旋钮，把它算进来会让「谁在提示语里提并发谁就红」。全文件仍只有一处实参带并发旋钮。 */
+    /* 提取形态跟**调用形状**走：oxfmt 在实参变长时折行；2026-10-30 起第一遍多一个第三参数 `timeout`（PR #2760
+     * 现场：无上界那一遍被平台掐断、零读数）。所以认「`spawn(` 之后到第一个 `]`」，两端放宽任意空白 —— 写死
+     * `entry, [` 紧邻或 `] )` 在改动里会静默匹配不到，由下面 `toBeGreaterThanOrEqual(2)` 当场红兜住。 */
+    const spawnSites = [...src.matchAll(/spawn\([\s\S]*?entry,\s*\[(?<args>[\s\S]*?)\]/g)].map(
+      (m) => m.groups?.args ?? "",
     );
     expect(
       spawnSites.length,
@@ -444,7 +385,7 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
      * 要**分两处**判：那一处判「指纹怎么读、三档怎么分」，这一处判「挡在复跑之前」。
      * 整条链的**行为**由下一节用注入的假 spawn 整个跑一遍（两向都断退出码）。 */
     const verdictSrc = readFileSync(
-      path.join(ROOT, "scripts/affected-launch-retry-verdict.mjs"),
+      path.join(ROOT, "scripts/affected-tests/affected-launch-retry-verdict.mjs"),
       "utf8",
     );
     const judge = /export function classifyFirstPass\([\s\S]*?\n\}/.exec(verdictSrc)?.[0];
@@ -485,21 +426,14 @@ describe("受影响用例的启动器 —— 负载自适应（超时形态自�
 });
 
 /**
- * 指纹的**取值面**：只读失败段，不读整块输出（ISSUE #2599）。
- *
- * 现场（build `cnb-u2e-1k619gnro`，PR #2598）：一块里有一份文件的 3 条用例
- * `Test timed out in 30000ms`，于是**整块**被读成「超时形态」并进了隔离复跑那一支；
- * 复跑买不起（墙钟）⇒ 整块按「未判定」退 2。可那三份文件的结论第一遍就写在那儿了
- * —— 不是红、不是没测到，是「把一次现成的读数丢了」。
- *
- * 这一节钉的是**取数面**（判据没变：带指纹 ⇒ 隔离复跑，不带 ⇒ 真红阻断）。
+ * 指纹的取值面：只读失败段，不读整块输出（ISSUE #2599）。现场 build `cnb-u2e-1k619gnro`（PR #2598）：一块里 3 条
+ * `Test timed out` 让整块进隔离复跑，复跑买不起 ⇒ 整块按未判定退 2，可那三份文件的结论第一遍就写在那儿了。
+ * 本节钉取数面（判据没变：带指纹 ⇒ 隔离复跑；不带 ⇒ 真红阻断）。
  */
 /**
- * 第 1 遍那个红的**三档判决**（`classifyFirstPass`）：装载失败 / 值得复跑 / 真断言红。
- *
- * 这一层与第 2 遍的 `classifyRetry` 是同一件事的两个时机，所以「装载失败读整块、
- * 超时读失败段」那一对不同源必须各判一次都站得住 —— 那是最容易在一处改坏、而
- * 另一处仍绿的地方。
+ * 第 1 遍那个红的三档判决（`classifyFirstPass`）：装载失败 / 值得复跑 / 真断言红。
+ * 这一层与第 2 遍的 `classifyRetry` 是同一件事的两个时机，「装载失败读整块、超时读失败段」那对不同源必须各判
+ * 一次都站得住 —— 那是一处改坏、另一处仍绿最容易发生的地方。
  */
 describe("受影响用例的启动器 —— 第 1 遍的三档判决", () => {
   const FAILED = "\nTest Files  1 failed | 1 passed (2)\n";
@@ -596,11 +530,8 @@ describe("受影响用例的启动器 —— 超时指纹只读失败段（ISSUE
 });
 
 /**
- * 「等负载回落」那一层（本文件上方那节的实测表：load≈300 时连串行都会超时，
- * 所以复跑前必须先看机器还剩多少余量）。
- *
- * 钉三件：负载读数是**每核**口径（阈值才立得住）、等待**有界且不静默**、
- * 等不到时**不放行**（返回 `settled: false`，由调用方按真红处置）。
+ * 「等负载回落」那一层（实测 load≈300 时连串行都会超时，所以复跑前先看余量）。钉三件：负载读数是**每核**口径
+ * （阈值才立得住）、等待有界且不静默、等不到时不放行（`settled: false`，调用方按真红处置）。
  */
 describe("受影响用例的启动器 —— 等待负载回落（有界、不静默、不放行）", () => {
   const cores = (n: number) => () => Array.from({ length: n }, () => ({}));
@@ -631,13 +562,9 @@ describe("受影响用例的启动器 —— 等待负载回落（有界、不�
   });
 
   it("负载高 ⇒ 等到回落（每一跳都重新读负载，不是盲等固定时长）", async () => {
-    /* 读数序列：第一次（进循环前）40 ⇒ 高、睡一跳 ⇒ 30 ⇒ 仍高、再睡 ⇒ 2 ⇒ 落回。
-     * 也就是**两跳**。断「读了几次、睡了几跳」而不是断墙钟：这一层判的是
-     * 「它在重新测量」，不是「它等了多少秒」。
-     *
-     * ⚠️ 必须**先 await 完**再断言：`waitForLoadToSettle` 是 async、且它同步执行到
-     * 第一个 `await` 就交还控制权 —— 边跑边断只会看到第一跳（实测踩到过：
-     * 断言报「只睡了 1 次」，而函数是对的）。 */
+    /* 读数序列 40 ⇒ 30 ⇒ 2（两跳）：断「读了几次、睡了几跳」，不是墙钟 —— 这一层判它在重新测量。
+     * ⚠️ 必须先 await 完再断言：`waitForLoadToSettle` 同步跑到第一个 `await` 就交还控制权，边跑边断只看到
+     * 第一跳（实测报「只睡了 1 次」而函数是对的）。 */
     const queue = [40, 30, 2];
     const reads: Array<number> = [];
     const sleeps: Array<number> = [];
@@ -681,7 +608,7 @@ describe("受影响用例的启动器 —— 等待负载回落（有界、不�
   it("启动器真的接了这一步（不是写了一把没人调用的等待）", () => {
     const code = readFileSync(LAUNCHER_PATH, "utf8")
       .split("\n")
-      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
       .join("\n");
     // 默认档就是真等待 —— 注入只在用例里发生，生产路径必须接上；
     // 且预算由调用点给（多块共享一份 deadline，见下一条）。
@@ -707,11 +634,8 @@ describe("受影响用例的启动器 —— 等待负载回落（有界、不�
 });
 
 /**
- * 整条判决链**跑一遍**（注入假的 spawn / 假负载）。
- *
- * 为什么不能只断源码形状：「复跑绿的算过」与「复跑红的也算过」在文本上长得一样，
- * 而后者正是这一档最该拦住的方向（把真回归洗成负载假红 = 门禁静默失效）。
- * 所以这里把 `runChunk` 的真实现整个跑起来，两向都断退出码。
+ * 整条判决链跑一遍（注入假 spawn / 假负载）：只断源码形状分不出「复跑绿的算过」与「复跑红的也算过」—— 后者
+ * 正是最该拦的方向（把真回归洗成负载假红 = 门禁静默失效）。所以把 `runChunk` 真实现整个跑起来，两向都断退出码。
  */
 describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待 ⇒ 隔离复跑）", () => {
   const CHUNK = ["tests/a.test.ts", "tests/b.test.ts"];
@@ -743,10 +667,9 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     output: "AssertionError: expected 3 to be 4",
   };
   /**
-   * 判决粒度换到文件之后（ISSUE #2225），「复跑最多一次」这句原话收窄成更准的一条：
-   * **整块只许跑两遍**（并行一遍 + 串行复跑一遍）。第三遍起的是「一份一次」的补跑，
-   * 它不是「把整块再测一遍」，而是把第 2 遍那份块级红**拆回文件级**的那一步 ——
-   * 不拆的话，同块里一份超时会把别人的真断言红一起降级成「未校验」并退 0。
+   * 判决粒度换到文件之后（ISSUE #2225），「复跑最多一次」收窄成「整块只许跑两遍」（并行一遍 + 串行复跑一遍）：
+   * 第三遍起是「一份一次」的补跑，把第 2 遍那份块级红**拆回文件级** —— 不拆的话，同块里一份超时会把别人的真
+   * 断言红一起降级成「未校验」并退 0。
    */
   const noThirdWholeBlock = (calls: Array<SpawnCall>) => {
     const blocks = calls.filter(
@@ -760,10 +683,8 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   const unsettledHigh = () => Promise.resolve({ settled: false, load: 9.5, waitedMs: 300_000 });
 
   /**
-   * 跑一次本块的 `runChunk` 并把它的 stderr **收在手里**。
-   *
-   * 只判退出码的那些用例也必须走它 —— 理由与「夹具话术不许糊进报告」那一条同源，
-   * 写在模块级 `captureStderr` 的头注里（那里有两次实测被误读的读数）。
+   * 跑一次本块的 `runChunk` 并把 stderr 收在手里。只判退出码的用例也必须走它 —— 理由见模块级 `captureStderr`
+   * 头注（那里有两次实测被误读的读数），与「夹具话术不许糊进报告」同源。
    */
   async function runCapturing(deps: {
     entry: string;
@@ -869,6 +790,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
     const codes: Array<number> = [];
     for (const s of [settledLow, () => Promise.resolve(settled)]) {
       const { spawn } = fakeSpawn([TIMEOUT, TIMEOUT]);
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const { code } = await runCapturing({
         entry: "vitest.mjs",
         spawn,
@@ -912,11 +834,9 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   });
 
   /**
-   * 「等了多久」必须说出口。这一格是**唯一**能区分
-   * 「机器空了 ⇒ 第二遍与第一遍不同条件」与「一点没等 ⇒ 第二遍与第一遍同条件」的读数，
-   * 而后者意味着这次复跑只证伪了「真断言红」、**没有**排除负载。
-   * `waitForLoadToSettle` 一直在算 `waitedMs`，只是从没打印过 —— 算了不说，
-   * 与没算在读数上等价（同 §11.23「写了没有读者等于没写」）。
+   * 「等了多久」必须说出口：这是**唯一**能区分「机器空了 ⇒ 第二遍与第一遍不同条件」与「一点没等 ⇒ 同条件」的
+   * 读数，后者意味着复跑只证伪了「真断言红」、**没有**排除负载。`waitForLoadToSettle` 一直在算 `waitedMs` 却从没
+   * 打印 —— 算了不说与没算在读数上等价（§11.23「写了没有读者等于没写」）。
    */
   it("等了 ⇒ 报「等了 42.0s」；一点没等 ⇒ 说「没等」并明说它不能证明负载已散", async () => {
     const waited = await runCapturing({
@@ -973,19 +893,15 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
       [TIMEOUT, REAL_RED],
     ];
     for (const results of cases) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       codes.push((await once(results)).code);
     }
     expect(codes).toEqual([0, 0, 0, 1, 1]);
   });
 
-  /* 「话术不许糊进报告」这件事本身要有读者 —— 上面每一条都**自觉地**走了 `runCapturing`，
-   * 而下一条新用例忘了走的时候，没有任何一条断言会红，只有读报告的人会看到一段
-   * 「未校验 / 真红」而以为那是真跑的结论（平台侧 `cnb-n1j-1k5ct202i` 第 9 格就是这么
-   * 被读错的）。同一族还有 `waitForLoadToSettle` 的「每核负载 …」—— 那一行里的负载
-   * 是假探针给的，进了报告同样会被读成「这台机器现在很满」。
-   *
-   * 所以判的是**调用点的形状**：本文件里不许有「直接 await 这两个函数」那种写法 ——
-   * 走了 `runCapturing` / `captureStderr` 的那几处都不是这个形状。 */
+  /* 「话术不许糊进报告」这件事本身要有读者：新用例忘了走 `runCapturing` 时没有断言会红，只有读报告的人把
+   * 「未校验 / 真红」当成真跑结论（平台 `cnb-n1j-1k5ct202i` 第 9 格就这样被读错）。所以判调用点的形状：
+   * 本文件不许出现「直接 await 这两个函数」那种写法。 */
   it("本文件不许出现没接住 stderr 的调用点（夹具话术不许进报告）", () => {
     const self = readFileSync(import.meta.filename, "utf8");
     /* 针尖按**拼接**构造：把它整段写成字面量的话，这条断言会命中它自己（恒红 ——
@@ -1000,13 +916,9 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
 });
 
 /**
- * 收尾那份「等待与复跑账」（钩子重构 3）。
- *
- * 立案现场：判决链把「重测一次」机器化之后，**这次总共等了多久、放行的是第几遍测出来的、
- * 放行时它到底是绿还是「未校验」**这三格只剩在散落行里 —— 人被放行（或被拦下）之后
- * 答不出这三问，而「负载假红」与「真回归」在人嘴里的分界就是这三问。
- * 更要紧的是账本里那条实测：C 组中位 207s 对地板 141s，多出来的那一段就是等待 + 复跑，
- * 而钩子从没把它单独报出来过 ⇒ 看账的人只能把「慢」归给判据。
+ * 收尾那份「等待与复跑账」（钩子重构 3）：判「这次总共等了多久、放行的是第几遍、放行时是绿还是『未校验』」——
+ * 人答不出这三问，就无法区分「负载假红」与「真回归」。账本实测 C 组中位 207s 对地板 141s，多出来的是等待 + 复跑，
+ * 而钩子从没单独报过 ⇒ 看账的人只能把「慢」归给判据。
  */
 describe("受影响用例的启动器 —— 收尾的等待与复跑账", () => {
   const BUDGET = { budgetMs: 5 * 60_000 };
@@ -1056,9 +968,9 @@ describe("受影响用例的启动器 —— 收尾的等待与复跑账", () =>
      * 「等了多久、哪几块没被校验」的时候。实测形态：账上只有绿的记录，红的没有。 */
     const src = readFileSync(LAUNCHER_PATH, "utf8");
     expect(src).toContain("const flush = () =>");
-    const early = /if \(code !== 0\) \{([\s\S]*?)return code;/.exec(src);
+    const early = /if \(code !== 0\) \{(?<body>[\s\S]*?)return code;/.exec(src);
     expect(early, "main 里那条提前返回的形状变了？").toBeTruthy();
-    expect(early?.[1]).toContain("flush()");
+    expect(early?.groups?.body).toContain("flush()");
     // 正常收尾那一侧也要打（两块都缺一段就退化成「只在红的时候有账」）。
     const tail = src.slice(src.lastIndexOf("flush();"));
     expect(tail).toContain("return 0;");
@@ -1078,7 +990,10 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
        两格、本地那一跳照旧铺开。默认值撤掉之后，漏传必须**响**。 */
     for (const bad of [undefined, null, 0, -1, 2.5, Number.NaN, "2"]) {
       expect(
-        () => resolveMaxWorkers("2", /* SAFETY: 类型断言已复核 */ bad as unknown as number),
+        /* 故意喂非数（bad 的每个值都不是 number）——判的就是「兜底必须停手」。
+           类型层不让直说，就地豁免这一格（B5 清账：文件级豁免收到行级）。 */
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        () => resolveMaxWorkers("2", bad as unknown as number),
         `兜底 ${String(bad)} 必须停手`,
       ).toThrow(/兜底/);
     }
@@ -1095,12 +1010,12 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
     );
     // 函数体里不许再出现 process.env，也不许自己 import 核数（那会让它不再纯）。
     // 函数体读的是它**现在**住的那一份（合并 master 之后随「起进程」那一层出列）。
-    const body = /export function resolveMaxWorkers\(([\s\S]*?)\n\}/.exec(
+    const body = /export function resolveMaxWorkers\((?<body>[\s\S]*?)\n\}/.exec(
       readFileSync(SPAWN_LAYER_PATH, "utf8"),
     );
     expect(body, "解不出 resolveMaxWorkers 的函数体").not.toBeNull();
-    expect(body![1]).not.toContain("process.env");
-    expect(body![1]).not.toContain("availableParallelism");
+    expect(body?.groups?.body).not.toContain("process.env");
+    expect(body?.groups?.body).not.toContain("availableParallelism");
   });
 
   it("显式覆盖生效，且提醒里说清「只调并发」", () => {
@@ -1130,16 +1045,9 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
 });
 
 /**
- * 第二条档位：`--full`（显式全量）。
- *
- * 这一档的存在理由不是「多一个开关」，而是规范 §13.5.8 写下的**重开条件**：
- * `affected-tests.mjs` 命中公共地基时会放弃收窄、只跑固定清单，而这条兜底此前
- * **没有具名出口**（「翻兜底的前置是先造一条显式的全量通道」）。缺了它，wide 那一档
- * 遇到 `vitest.config.ts` / lockfile 的改动就只能「跑 68 个、然后没人知道全量怎么跑」。
- *
- * 与上面那条空清单守卫是**相反方向**的两件事，所以这里要同时钉住：
- *   · `--full` 是**按名字**要全量 —— 它必须**不**经暂存区解析、**不**拼位置参数；
- *   · 「谁都没筛过」的意外空集**仍然阻断** —— 两者绝不许在退出码上同形。
+ * 第二条档位 `--full`（显式全量）：规范 §13.5.8 的重开条件 —— 命中公共地基时放弃收窄只跑固定清单，而这条兜底
+ * 此前没有具名出口（wide 遇 `vitest.config.ts`/lockfile 改动只能跑 68 个、没人知道全量怎么跑）。与空清单守卫
+ * 相反：`--full` 按名字要全量（不经暂存区解析、不拼位置参数），而意外空集仍阻断，两者绝不许在退出码上同形。
  */
 describe("受影响用例的启动器 —— 显式全量档（--full）", () => {
   /* 整档反向断言（`--full` 不许去写全量新鲜度账那一条）剥注释判：那一族的字面量
@@ -1190,7 +1098,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
   });
 
   it("意外空集仍阻断，且话术里指出 `--full` 是另一档（两者不许同形）", () => {
-    const guard = /affected 解析没给出清单([\s\S]*?)return 1;/.exec(src)?.[0];
+    const guard = /affected 解析没给出清单(?:[\s\S]*?)return 1;/.exec(src)?.[0];
     expect(guard, "解不出空清单守卫").toBeTruthy();
     expect(guard).toContain("--full");
     expect(guard, "空集必须仍然 return 1（不能因为 --full 存在就放行）").toContain("return 1;");
@@ -1206,26 +1114,16 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
   it("wide 话术指名的就是这条命令，且它真的存在于入口（不是写了一段跑不响的话）", () => {
     /* 两半一起钉才成立：前半是「话术里有这条出口」，后半是「那个出口在入口里认这个旗标」。
        只钉前半 = 守一句散文；只钉后半 = 守一个没人知道的开关。 */
-    const note = wideFallbackNote("门槛自身", 20);
-    expect(note).toContain("scripts/run-affected-tests.mjs --full");
+    const note = wideFallbackNote("门槛自身", 20, 0);
+    expect(note).toContain("scripts/affected-tests/run-affected-tests.mjs --full");
     expect(src, "入口不认 --full，话术就指到空气上").toContain('argv.includes("--full")');
   });
 
   it("`--full` **不是**全量那一档（它不带覆盖率门槛，也不记那份账）", async () => {
-    /* 这一条判的是「两条全量通道不许被读成一件事」——它是本轮差点踩进去的坑：
-     * 看到 `--full` 这个名字就顺手让它去写 `scripts/.full-suite-freshness.json`
-     *（甚至替掉 `full-suite-run.mjs`），那条账记的就变成**没跑过覆盖率门槛**的一次了。
-     *
-     * 差异是实的、不是措辞：
-     *   · `pnpm run test:coverage`（= `full-suite-run.mjs`）= 全量用例 **+ `--coverage`
-     *     的 thresholds**（§11.7 明写覆盖率门槛只在这一档判）；
-     *   · `--full` = `runChunk([], …)` → `vitest run`，**没有** `--coverage`。
-     * 所以 `--full` 绿不代表覆盖率门槛过了，它**不该**记账 —— 记了就是把
-     * 「跑过全量」与「过过覆盖率门槛」混成一件（同 `full-suite-run.mjs` 里那句
-     * 「红着记一条『我跑过』会把两件事混成一件」的反面形态）。
-     *
-     * 两侧都判：入口不记账 + 记账通道只挂在 `test:coverage` 上。只判一侧的话，
-     * 另一侧哪天被改就成了「判据看着有、其实只守住了半条缝」。 */
+    /* 判「两条全量通道不许读成一件事」：让 `--full` 去写 `scripts/freshness/.full-suite-freshness.json`（或替掉
+     * `full-suite-run.mjs`），那条账就变成「没跑过覆盖率门槛」的一次。差异是实的：`pnpm run test:coverage`
+     * （= `full-suite-run.mjs`）= 全量 + `--coverage` thresholds（§11.7 门槛只在这档判）；`--full` = `runChunk([], …)`
+     * → `vitest run`，**没有** `--coverage`。所以两侧都判：入口不记账 + 记账通道只挂 `test:coverage`。 */
     expect(src, "`--full` 去写全量新鲜度账 = 用一条不过覆盖率门槛的跑法冒充那一档").not.toMatch(
       /freshness|full-suite-run/,
     );
@@ -1233,7 +1131,7 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
     /* 判**语义**不判行形状：拿 `planRun()` 真跑一次读它给出的参数，而不是在源码文本里
      * 找一句 `"run", "test:coverage"` —— 那个字面量会被 prettier 折行顶掉（本仓踩过第二次），
      * 而折行不改任何行为，红出来的是一条假红。 */
-    const { planRun } = await import("../scripts/full-suite-run.mjs");
+    const { planRun } = await import("../scripts/affected-tests/full-suite-run.mjs");
     const plan = planRun();
     expect(
       plan.args.slice(0, 2),
@@ -1299,7 +1197,7 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
             ? { status: 1, output: "Test timed out in 30000ms" }
             : { status: 0, output: "" };
         },
-        settle: async () => ({ settled: true, load: 0.1, waitedMs: 1 }),
+        settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 1 }),
       }),
     );
     expect(calls).toHaveLength(2);
@@ -1326,7 +1224,7 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
             ? { status: 1, output: "Test timed out in 30000ms" }
             : { status: 0, output: "" };
         },
-        settle: async () => ({ settled: true, load: 0.1, waitedMs: 1 }),
+        settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 1 }),
       }),
     );
     expect(calls).toHaveLength(2);
@@ -1623,13 +1521,9 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
 });
 
 /* ── 判决粒度：第 2 遍那份红要**按文件**分开（ISSUE #2225）──────────────────────
- *
- * 复跑面早就按文件了（上面那节），判决却还停在块级：`isTimeoutShaped(retry.output)`
- * 读的是整块输出，于是「A 超时 + B 真断言红」被整块读成「只是超时形态」⇒ 退 0 ⇒
- * `ci-affected-tests.mjs` 把这个 0 原样透传成平台 stage 的 success —— B 那次真红
- * 没有任何一格会看见。下面这几条判的就是那一型：**同块里有一份真红时，退码不许是 0**。
- * 第一条是负控制：它在旧实现下会绿。
- */
+ * 复跑面早按文件了，判决却停在块级：`isTimeoutShaped(retry.output)` 读整块输出，「A 超时 + B 真断言红」被读成
+ * 「只是超时形态」⇒ 退 0 ⇒ `ci-affected-tests.mjs` 原样透传成平台 success —— B 那次真红没人看见。下面判的就是这一型：
+ * **同块里有一份真红时退码不许是 0**；第一条是负控制（旧实现下会绿）。 */
 describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡箭）", () => {
   const CHUNK = ["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"];
   const TIMEOUT_BODY = "Error: Test timed out in 30000ms.";
@@ -1846,15 +1740,9 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
 });
 
 /* ── 「没跑起来」与「跑起来但红了」必须是两件事 ─────────────────────────────────
- *
- * 现场（平台的 `受影响用例` 一格）：输出里一串 `Error:` 加一段 `AggregateError`，
- * 一条断言都没红，而格子非零退出 —— 于是「这台机器上依赖没装上 / worker 起不来」
- * 被写成「这次改动有回归」。被拦下的人照着那屏去查代码，查的是一件没发生的事。
- *
- * 这一档的**下一动作与真断言红相反**：真红去修代码（一次都不复跑），装载失败去修
- * 环境（复跑没有意义，同样的环境同样的炸）。所以它必须单独成档、退 2（未判定），
- * 而不是退 1。
- */
+ * 现场（平台 `受影响用例`）：一串 `Error:` 加一段 `AggregateError`、一条断言没红，格子却非零退出 —— 于是「依赖
+ * 没装上 / worker 起不来」被写成「这次改动有回归」，被拦的人照着查一件没发生的事。这一档下一动作与真红相反
+ * （真红修代码、一次不复跑；装载失败修环境），所以必须单独成档退 2（未判定）而非退 1。 */
 describe("第 1 遍就没跑起来（装载 / 运行时级错误）", () => {
   const AGGREGATE = {
     status: 1,
@@ -1925,11 +1813,8 @@ describe("第 1 遍就没跑起来（装载 / 运行时级错误）", () => {
 });
 
 /* ── 日志预算：平台那一格只换 reporter，不动判据 ────────────────────────────────
- *
- * 平台对单次构建日志的硬上限是 102400 字节，超了只留一句 `The log length exceeds the
- * limit(102400)`，且保留的是尾部 —— 被截掉的恰是开头（跑了哪些、哪份失败）。而
- * `vitest run` 的默认 reporter 会**逐个文件**打一行，一跑 100+ 行是常态。
- */
+ * 平台单次构建日志硬上限 102400 字节，超了只留 `The log length exceeds the limit(102400)` 且保留尾部 —— 被截掉
+ * 的恰是开头（跑了哪些、哪份失败）。而 `vitest run` 默认 reporter 逐个文件打一行，一跑 100+ 行是常态。 */
 describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
   it("没置 ⇒ 一个字都不加（本地人跑时要看逐文件清单）", () => {
     expect(resolveQuiet(undefined)).toEqual({ quiet: false, note: null });
@@ -1987,12 +1872,8 @@ describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
   });
 
   /* ── 「跑了哪些用例」这一格（quiet 档的代价） ───────────────────────────────
-   *
-   * 现场（业主报的）：平台 `受影响用例` 一格的日志里只剩 `Tests 1116 passed (1116)`
-   * 这类总数，**一个文件名都没有**。根因是上面那条日志预算：`dot` 只打点。
-   * 而清单里排在最前面的是 **103 份固定清单**（`fixed-structural-tests.mjs`），
-   * 它们才是「这次守的到底是什么」的答案 —— 总数答不了这个问题。
-   */
+   * 现场（业主报的）：平台那一格只剩 `Tests 1116 passed (1116)` 这类总数、一个文件名都没有（`dot` 只打点）。
+   * 而清单最前面的 103 份固定清单（`fixed-structural-tests.mjs`）才是「这次守的到底是什么」的答案。 */
 
   it("不 quiet ⇒ 一个字都不打（默认 reporter 已经逐文件打过了）", () => {
     /* 重复打印是反方向的：这一档（不 quiet）是本地人跑，日志不是瓶颈；
@@ -2047,11 +1928,8 @@ describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
 });
 
 /* ── 「每份跑了多久」这一格（ISSUE #2683 第二笔）──────────────────────────
- *
- * 现场（业主报的，第二问）：清单能读到 108 行文件名了，但**一个时长都没有** ——
- * 用时其实一直在 junit 里（`junitReportArgs` 让 vitest 写的就是它），只是躺在账本
- * 目录里、跑完就被删，而读它的那条链（钩子的收尾账）在平台那一格没有出口。
- */
+ * 现场（业主第二问）：清单能读到 108 行文件名了，却一个时长都没有 —— 用时其实一直在 junit 里（`junitReportArgs`
+ * 让 vitest 写的就是它），只是躺在账本目录、跑完就删，而读它的钩子收尾账在平台那格没有出口。 */
 describe("逐份用时：读数怎么排成给人那一段（ISSUE #2683）", () => {
   const FILES = ["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"];
 
@@ -2188,11 +2066,8 @@ describe("逐份用时：读数怎么排成给人那一段（ISSUE #2683）", ()
 });
 
 /**
- * 墙钟判点自己那一份（纯函数层，ISSUE #2364）。
- *
- * 为什么这些不进上面的判决链用例：判决链那几条测的是**接没接上**（起不起第二遍、
- * 退码哪一档、名单点谁），而这里几条测的是**界划在哪一侧**——后者全是算术，
- * 注入 `startMs` / `nowMs` 就能确定，不需要假进程。
+ * 墙钟判点自己那一份（纯函数层，ISSUE #2364）：这些不进上面的判决链用例，因为那几条测「接没接上」（起不起
+ * 第二遍、退码哪一档、名单点谁），而这里测「界划在哪一侧」—— 全是算术，注入 `startMs`/`nowMs` 就能确定。
  */
 describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
   const MIN = 60_000;
@@ -2450,36 +2325,26 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
   });
 });
 
-/* 第一遍自己的上界（2026-10-30 的现场，PR #2760）。
- *
- * 上面那一整组判点都只划在「还开不开下一遍」，前提是「第一遍总会跑完」。实测
- * `cnb-l0u-1k66agmv9` 把这个前提证伪了：808 份 / 并发 1 的第一遍吃了 54 分钟被平台掐断，
- * 而 `STAGE_WALL_CLOCK_MS`（25 分钟）一次都没生效（它的判点在那之后）。最坏的一层是
- * 那一屏**一条用例名都没有** —— `--reporter=dot` 在第一份跑完之前只往同一行打点，
- * 平台保留的又是日志尾部。所以这一组钉的不是「跑得快些」，是「装不下的那一遍要当场说出
- * 来、且仍按未判定收」。 */
+/* 第一遍自己的上界（2026-10-30 的现场，PR #2760）：上面那组判点都默认「第一遍总会跑完」，而
+ * `cnb-l0u-1k66agmv9` 证伪了它 —— 808 份 / 并发 1 吃了 54 分钟被平台掐断，`STAGE_WALL_CLOCK_MS`（25 分钟）一次没生效
+ * （判点在那之后）；最坏一屏**一条用例名都没有**。所以钉的是「装不下的那一遍要当场说出来、且仍按未判定收」。 */
 describe("墙钟预算必须真的到得了第一遍（cnb-53r-1k6b6besn 的现场）", () => {
-  /* 这一条判的是「界到哪里去了」，不是「界取多大」。
-   *
-   * 现场读数：`cnb-53r-1k6b6besn` 的「受影响用例」那一格，预算变量老老实实打出了
-   * 「剩余预算 25 分钟」，而第一遍跑在 9 分钟后被整块吞掉 —— 那一屏没有任何一条用例名，
-   * 也没有 `第 1 遍没跑完` 那句话。根因不是预算太小，是**那一份界没有传到 spawn 上**：
-   * 界在、读数在，掐断却只能等平台（而平台强杀那一屏一个字都不留）。
-   *
-   * 判据取**调用点**（起进程的那一层才拿得到 `timeout`），所以它不随 `main()` 里
-   * 变量的写法漂：`stageBudget` 必须出现在 `runChunk(...)` 的实参里、且在第一块之前
-   * 就被声明。两条都是字符串查找的量级 —— 这一档是提交门槛，代价不能是起 vitest。 */
+  /* 判「界到哪里去了」，不是「界取多大」：`cnb-53r-1k6b6besn` 那格预算变量老实打出了「剩余预算 25 分钟」，而第一遍
+   * 跑在 9 分钟后被整块吞掉、没有任何用例名，也没有 `第 1 遍没跑完` —— 根因是**那份界没传到 spawn 上**（界在、读数在，
+   * 掐断只能等平台）。判据取**调用点**，所以不随 `main()` 写法漂：`stageBudget` 必须出现在 `runChunk(...)` 实参里、
+   * 且在第一块之前声明（字符串查找量级，本档是提交门槛、代价不能是起 vitest）。 */
   const src = stripComments(readFileSync(LAUNCHER_PATH, "utf8"), { trailing: true });
 
   it("`stageBudget` 交给了 `runChunk`（第一遍的 `timeout` 只从它来）", () => {
     /* 针尖按**拼接**构造 —— 同下面那条「不许出现没接住 stderr 的调用点」：整段写成字面量
      * 会命中那条判据（它判的是本文件里没有漏接 stderr 的调用点），而恒红的判据比没有更坏。 */
-    // oxlint-disable-next-line typescript/no-unnecessary-template-expression -- 拆开 run 与 Chunk 是判据的前提：本文件里不许出现完整的 runChunk( 字面量，另一条判据按文本读本文件
-    const call = new RegExp(`await\\s+run${"Chunk"}\\(chunk\\.files, \\{([\\s\\S]*?)\\}\\)`).exec(
-      src,
-    );
+    // 仍按拼接构造：直接写出完整调用点会命中「本文件不许出现没接住 stderr 的调用点」那条判据
+    const chunkSuffix = "Chunk";
+    const call = new RegExp(
+      `await\\s+run${chunkSuffix}\\(chunk\\.files, \\{(?<body>[\\s\\S]*?)\\}\\)`,
+    ).exec(src);
     expect(call, "找不到 `runChunk(chunk.files, { … })` 那个调用点").not.toBeNull();
-    expect(call?.[1] ?? "").toMatch(/\bstageBudget\b/);
+    expect(call?.groups?.body ?? "").toMatch(/\bstageBudget\b/);
   });
 
   it("它在分块循环之前声明，且只声明一次", () => {
@@ -2555,15 +2420,10 @@ describe("墙钟判点：第一遍自己开不开得起（PR #2760 的现场）"
   });
 });
 
-/* 第一遍的上界只有一个出处（build `cnb-pl9-1k6b45aqm` 的现场）。
- *
- * 那个数此前在 `runChunk` 里算了两次：一次喂给 `spawnVitest` 当 `timeout`（扣掉 30s
- * 收尾余量），一次在掐断那一屏里念「剩余预算」—— 而后者漏了那笔扣减。于是一跑掐在
- * 24.5 分钟时，日志念的是「剩余预算 25 分钟」：读的人拿到的是一个**比真实掐点还大**的
- * 数，而它恰是判「这一格装不下 / 刚好差一点」的唯一读数。
- *
- * 这组钉的不是数值本身，是「念出来的那个数 = 真正提交给 vitest 的那个数」这条等式 ——
- * 漂开时两边都编得过、也都跑得动，只有日志在说谎。 */
+/* 第一遍的上界只有一个出处（build `cnb-pl9-1k6b45aqm`）：此前 `runChunk` 里算了两次 —— 一次喂 `spawnVitest`
+ * 的 `timeout`（扣 30s 收尾余量），一次在掐断那屏念「剩余预算」却漏了扣减。于是掐在 24.5 分钟时日志念「剩余 25 分钟」：
+ * 读的人拿到的数**比真实掐点还大**，而它恰是判「装不下 / 差一点」的唯一读数。这组钉的不是数值，是「念出来的数 =
+ * 真正交给 vitest 的数」这条等式 —— 漂开时两边都编得过、跑得动，只有日志在说谎。 */
 describe("第一遍的上界：算一次、念的就是那一个数", () => {
   const MIN = 60_000;
   const RESERVE = 30_000;
@@ -2592,12 +2452,9 @@ describe("第一遍的上界：算一次、念的就是那一个数", () => {
   });
 });
 
-/* 掐断那一屏的三件事（`firstPassKilledReport`）。
- *
- * 「下一动作」此前只有一条「把改动拆开」，而 build `cnb-pl9-1k6b45aqm` 的现场是：
- * 155 份被掐断，同一份清单在本机 3.5 分钟跑完 —— 缺的是那台机器的并发（`--maxWorkers=2`），
- * 不是清单长度。对着那种现场说「拆小」，读的人会去拆一份根本不大的改动。
- * 所以这一组钉的是「两档都要在」＋「不许把调大墙钟预算当成出口」。 */
+/* 掐断那一屏的三件事（`firstPassKilledReport`）：build `cnb-pl9-1k6b45aqm` 里 155 份被掐断，同一份清单本机 3.5
+ * 分钟跑完 —— 缺的是那台机器的并发（`--maxWorkers=2`），不是清单长度；对着那种现场说「拆小」会让人拆一份根本不大
+ * 的改动。所以这一组钉「两档下一动作都要在」＋「不许把调大墙钟预算当出口」。 */
 describe("第一遍被掐断：那一屏必须说清上界、结论、两档下一动作", () => {
   const limitMs = firstPassLimit(25 * 60_000);
   const text = firstPassKilledReport({ files: 155, limitMs, fmtMinutes });

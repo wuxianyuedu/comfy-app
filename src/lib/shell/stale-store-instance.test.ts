@@ -11,9 +11,7 @@ import {
   type StaleStoreSignalInput,
 } from "./stale-store-instance";
 
-const signal = (
-  over: Partial<StaleStoreSignalInput> = {},
-): StaleStoreSignalInput => ({
+const signal = (over: Partial<StaleStoreSignalInput> = {}): StaleStoreSignalInput => ({
   codeUpdatedSinceLoad: true,
   reason: "missing-store-action",
   ...over,
@@ -27,9 +25,7 @@ describe("deriveStaleStoreNotification", () => {
   });
 
   it("没有做任何一次代码更新 → 不提示（一切正常，不该打扰）", () => {
-    expect(
-      deriveStaleStoreNotification(signal({ codeUpdatedSinceLoad: false })),
-    ).toBeNull();
+    expect(deriveStaleStoreNotification(signal({ codeUpdatedSinceLoad: false }))).toBeNull();
   });
 
   it("跑过代码更新但没观测到动作缺失 → 不提示（HMR 已覆盖的常态）", () => {

@@ -11,6 +11,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import { DEFAULT_SIZE_SPEC, sizeSpecToWxH, type SizeSpec } from "~/lib/media/size-presets";
+import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
 import type { Shot } from "~/lib/workshop/types";
 
 const COMPOSE_DIR = path.join(process.cwd(), "data", "workshop-compositions");
@@ -19,10 +20,9 @@ const execFileP = promisify(execFile);
 /** 成片画幅：视频场景的 16:9 1k（= 1280×720）。
  *
  *  尺寸只在 `lib/size-presets` 里定义，这里不写像素字面量 —— 用户在「尺寸表配置」
- *  里改过视频场景的 16:9 1k，合成出来的片子跟着改。 */
+ *  里改过视频场景的 16:9 1k，合成出来的片子跟着改（ISSUE #3972：换算时现读
+ *  生效表，不再用编译进包的默认快照 —— 那样这句话只是 nominally 成立）。 */
 const COMPOSE_SIZE: SizeSpec = { ...DEFAULT_SIZE_SPEC, ratio: "16:9 横屏" };
-/** ffmpeg 的 `scale` 过滤器用 `W:H` 写法（不是 WxH）。 */
-const COMPOSE_SCALE = sizeSpecToWxH(COMPOSE_SIZE, "video").replace("x", ":");
 
 export type CompositionSegment = {
   clipUrl: string | null;
@@ -89,7 +89,7 @@ export async function writeCompositionPlan(
 }
 
 function localPathOf(ref: string | null): string | null {
-  if (!ref) {
+  if (ref === null || ref === "") {
     return null;
   }
   if (ref.startsWith("file://")) {
@@ -102,10 +102,8 @@ function localPathOf(ref: string | null): string | null {
 }
 
 /**
- * 用 ffmpeg 把本地片段合成为成片 mp4（最佳努力）：
- *  - 视频片段 → 按 duration 截断、缩放到成片画幅
- *  - 仅图片的镜头 → 按 duration 以静帧占位
- * 任一片段不可用则跳过；无可用本地片段则仅返回清单。
+ * 用 ffmpeg 把本地片段合成为成片 mp4（最佳努力）：视频按 duration 截断并缩放到成片画幅，仅图片的镜头
+ * 按 duration 以静帧占位；任一片段不可用则跳过，无可用本地片段则仅返回清单。
  */
 export async function renderComposition(
   plan: CompositionPlan,
@@ -125,50 +123,58 @@ export async function renderComposition(
   const tmpDir = path.join(COMPOSE_DIR, `.tmp-${outputName}`);
   await fs.mkdir(tmpDir, { recursive: true });
 
+  /* 生效的尺寸表现读磁盘（ISSUE #3972）：设置里改过视频场景的 16:9 1k，
+   * 合成画幅跟着变 —— 不再用模块加载时算死的那份默认快照。 */
+  const sizeTable = await loadSizePresetTable();
+  /** ffmpeg 的 `scale` 过滤器用 `W:H` 写法（不是 WxH）。 */
+  const composeScale = sizeSpecToWxH(COMPOSE_SIZE, "video", sizeTable).replace("x", ":");
+
   const segs: Array<string> = [];
   for (const s of plan.segments) {
     const clip = localPathOf(s.clipUrl);
     const img = localPathOf(s.imageUrl);
     const src = clip ?? img;
-    if (!src) {
+    if (src === null) {
       continue;
     }
     const tmp = path.join(tmpDir, `seg-${s.order}.mp4`);
-    const scale = `scale=${COMPOSE_SCALE}`;
-    const args = clip
-      ? [
-          "-i",
-          src,
-          "-t",
-          String(s.durationSec),
-          "-vf",
-          scale,
-          "-c:v",
-          "libx264",
-          "-pix_fmt",
-          "yuv420p",
-          "-an",
-          tmp,
-        ]
-      : [
-          "-loop",
-          "1",
-          "-i",
-          src,
-          "-t",
-          String(s.durationSec),
-          "-r",
-          "25",
-          "-vf",
-          scale,
-          "-c:v",
-          "libx264",
-          "-pix_fmt",
-          "yuv420p",
-          "-an",
-          tmp,
-        ];
+    const scale = `scale=${composeScale}`;
+    const args =
+      clip === null
+        ? [
+            "-loop",
+            "1",
+            "-i",
+            src,
+            "-t",
+            String(s.durationSec),
+            "-r",
+            "25",
+            "-vf",
+            scale,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",
+            tmp,
+          ]
+        : [
+            "-i",
+            src,
+            "-t",
+            String(s.durationSec),
+            "-vf",
+            scale,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",
+            tmp,
+          ];
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await execFileP(ff, args, { timeout: 120_000 });
       segs.push(tmp);
     } catch {
@@ -191,17 +197,24 @@ export async function renderComposition(
     "utf8",
   );
   const out = path.join(COMPOSE_DIR, `${outputName}.mp4`);
+  /* 成片先落在正式目录旁的 `.part` 临时名、成功后 rename 到位（ISSUE #3879）：
+   * 原先 concat 直接写 `<outputName>.mp4`，中途失败只清 tmpDir——半成品坏片
+   * 留在正式产物目录里，窗口期内被读到就是坏片。同目录 rename 原子且不跨盘，
+   * 正式目录里要么没有这个文件、要么是完整的。 */
+  const outTmp = path.join(COMPOSE_DIR, `.${outputName}.mp4.part`);
   try {
-    await execFileP(ff, ["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", out], {
+    await execFileP(ff, ["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", outTmp], {
       timeout: 300_000,
     });
   } catch (error) {
     await fs.rm(tmpDir, { recursive: true, force: true });
+    await fs.rm(outTmp, { force: true });
     return {
       ok: false,
       note: errorText(error, "ffmpeg 合成失败"),
     };
   }
+  await fs.rename(outTmp, out);
   await fs.rm(tmpDir, { recursive: true, force: true });
   return { ok: true, outputPath: out };
 }

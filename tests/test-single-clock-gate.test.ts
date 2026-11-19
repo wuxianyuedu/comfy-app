@@ -1,19 +1,12 @@
 /**
- * 「一个用例一把时钟」门禁自测（规范 11 §11.14）。
- *
- * 这个判据的价值全在**边界**上：它必须拦下两种真会坏的形状（同一格里两把时钟、
- * `expect.poll` 落在假时钟窗口内），又必须放过三种**看着像但不是**的形状 ——
- * 挂载发生在换时钟之前（全仓还剩 1 处，是正当的）、假时钟开在隔壁 `describe` 的
- * `beforeEach` 里、以及注释里讲这些 API 的散文。放过与拦下各钉一格，
- * 否则任何一侧松掉都会静默变成「判据在空跑」。
- *
- * 本文件自己**不进扫描面**（`scripts/check-test-single-clock.cjs` 的 `FIXTURE_SKIP`）：
- * 下面的被测字符串里就有真的 `expect.poll`，判它等于判自己的量具（§11.14.2）。
+ * 「一个用例一把时钟」门禁自测（规范 11 §11.14）：边界两侧都要钉 —— 必须拦下同一格里两把时钟、`expect.poll` 落在假时钟窗口内。
+ * 必须放过三种看着像但不是：挂载在换时钟之前（全仓剩 1 处，正当）、假时钟开在隔壁 `describe` 的 `beforeEach`、讲这些 API 的注释散文；任一侧松掉就成「判据在空跑」。
+ * 本文件不进扫描面（`FIXTURE_SKIP`）：被测串里就有真 `expect.poll`，判它等于判自己的量具（§11.14.2）。
  */
 import { defineGateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-test-single-clock.cjs",
+  script: "gates/check-test-single-clock.cjs",
   dirs: ["src", "tests"],
   workdir: "single-clock",
 });
@@ -25,9 +18,7 @@ function caseFile(body: string) {
   };
 }
 
-test("规则 A：先 `expect.poll` 等墙钟、后开假时钟 ⇒ 阻断并点出是哪一行", ({
-  repo,
-}) => {
+test("规则 A：先 `expect.poll` 等墙钟、后开假时钟 ⇒ 阻断并点出是哪一行", ({ repo }) => {
   repo.write(
     "src/a/b.test.ts",
     caseFile(
@@ -81,9 +72,7 @@ test("对照：挂载之前就换时钟（正当形状）⇒ 通过", ({ repo })
   expect(repo.run().code).toBe(0);
 });
 
-test("对照：挂载后只走 microtask 落定、再开假时钟 ⇒ 通过（判据**不**管挂载位置）", ({
-  repo,
-}) => {
+test("对照：挂载后只走 microtask 落定、再开假时钟 ⇒ 通过（判据**不**管挂载位置）", ({ repo }) => {
   repo.write(
     "src/a/sse.test.ts",
     'import { act, renderHook } from "@testing-library/react";\n' +
@@ -103,9 +92,7 @@ test("对照：挂载后只走 microtask 落定、再开假时钟 ⇒ 通过（�
   expect(code, output).toBe(0);
 });
 
-test("规则 B：`expect.poll` 落在假时钟窗口内 ⇒ 阻断（它不推进假定时器）", ({
-  repo,
-}) => {
+test("规则 B：`expect.poll` 落在假时钟窗口内 ⇒ 阻断（它不推进假定时器）", ({ repo }) => {
   repo.write(
     "src/a/hang.test.ts",
     'import { beforeEach, describe, expect, it, vi } from "vitest";\n' +
@@ -128,9 +115,7 @@ test("规则 B：`expect.poll` 落在假时钟窗口内 ⇒ 阻断（它不推�
   expect(output).toContain("不推进假定时器");
 });
 
-test("规则 B 的逃生位：体内先还原时钟再 `expect.poll` ⇒ 通过（那是在真实时钟上等）", ({
-  repo,
-}) => {
+test("规则 B 的逃生位：体内先还原时钟再 `expect.poll` ⇒ 通过（那是在真实时钟上等）", ({ repo }) => {
   repo.write(
     "src/a/escape.test.ts",
     'import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";\n' +
@@ -178,9 +163,7 @@ test("假阳性钉子：假时钟开在**隔壁 describe** 的 beforeEach 里，
   expect(code, output).toBe(0);
 });
 
-test("假阳性钉子：注释里讲 `expect.poll` 与 `vi.useFakeTimers()` 不算站点", ({
-  repo,
-}) => {
+test("假阳性钉子：注释里讲 `expect.poll` 与 `vi.useFakeTimers()` 不算站点", ({ repo }) => {
   repo.write(
     "src/a/doc.test.ts",
     'import { describe, it, vi } from "vitest";\n' +
@@ -195,9 +178,7 @@ test("假阳性钉子：注释里讲 `expect.poll` 与 `vi.useFakeTimers()` 不�
   expect(code, output).toBe(0);
 });
 
-test("`it.each([...])(...)` 的两段式括号：站点在第二段里也要被抓到", ({
-  repo,
-}) => {
+test("`it.each([...])(...)` 的两段式括号：站点在第二段里也要被抓到", ({ repo }) => {
   repo.write(
     "src/a/each.test.ts",
     'import { describe, expect, it, vi } from "vitest";\n' +
@@ -235,9 +216,7 @@ test("两份文件各有一处越界 ⇒ 两份都被点名（钉住「共享 `g
   expect(output).toContain("src/b/two.test.ts:4");
 });
 
-test("规则 B：窗口开在本体内、之后又出现 expect.poll ⇒ 阻断（同一条规则的另一半）", ({
-  repo,
-}) => {
+test("规则 B：窗口开在本体内、之后又出现 expect.poll ⇒ 阻断（同一条规则的另一半）", ({ repo }) => {
   repo.write(
     "src/a/inner.test.ts",
     'import { describe, expect, it, vi } from "vitest";\n' +
@@ -277,10 +256,9 @@ test("历史形状原样回放：`try { … } finally { vi.useRealTimers() }` �
     "src/a/history.test.ts",
     `import { renderHook } from "@testing-library/react";\n` +
       `import { describe, expect, it, vi } from "vitest";\n` +
-      `describe("useSettingsPage", () => {\n${
-      body("拉起后轮询到就绪")
-      }${body("轮询期间状态行停在 starting")
-      }});\n`,
+      `describe("useSettingsPage", () => {\n${body("拉起后轮询到就绪")}${body(
+        "轮询期间状态行停在 starting",
+      )}});\n`,
   );
   const { code, output } = repo.run();
   expect(code, output).toBe(1);
@@ -308,9 +286,7 @@ test("--report 只出清单不判失败", ({ repo }) => {
   expect(output).toContain("越界 1 处（不判失败）");
 });
 
-test("判据自己的夹具文件不进扫描面（否则它会在自己的被测字符串上红）", ({
-  repo,
-}) => {
+test("判据自己的夹具文件不进扫描面（否则它会在自己的被测字符串上红）", ({ repo }) => {
   repo.write(
     "tests/test-single-clock-gate.test.ts",
     'import { it, vi } from "vitest";\n' +

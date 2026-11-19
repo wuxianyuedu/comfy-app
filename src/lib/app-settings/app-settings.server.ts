@@ -13,6 +13,7 @@ import { hash } from "node:crypto";
 import path from "node:path";
 
 import { DEFAULTS, migrateExitDefaults, type AppSettings, type ExitPolicy } from "./index";
+import { isRecord } from "~/lib/is-record";
 
 export * from "./index";
 export type { AppSettings, ExitPolicy };
@@ -138,14 +139,19 @@ export function getSettingsSync(): AppSettings {
     if (raw === null) {
       throw new Error("设置文件读不到");
     }
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(raw) as Partial<AppSettings> & {
-      comfyuiUrl?: string;
-    };
-    /* comfyuiUrl 已废弃（ComfyUI 由本应用拉起，连接地址固定 127.0.0.1:端口）；
-     * 从旧文件里剥掉，下次保存时彻底从磁盘消失。 */
-    delete parsed.comfyuiUrl;
-    cache = migrateExitDefaults({ ...DEFAULTS, ...parsed });
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) {
+      throw new Error("设置文件不是对象");
+    }
+    /* 只取 DEFAULTS 认识的字段（顺带剥掉已废弃的 comfyuiUrl）：
+     * 值仍按原样透传 —— 与从前的整份合并等价，但不再需要断言对象形状。 */
+    const known: Partial<AppSettings> = {};
+    for (const key of Object.keys(DEFAULTS)) {
+      if (Object.hasOwn(parsed, key)) {
+        Reflect.set(known, key, parsed[key]);
+      }
+    }
+    cache = migrateExitDefaults({ ...DEFAULTS, ...known });
   } catch {
     cache = migrateExitDefaults({ ...DEFAULTS });
   }
@@ -153,20 +159,38 @@ export function getSettingsSync(): AppSettings {
   return cache;
 }
 
-export async function getSettings(): Promise<AppSettings> {
-  return getSettingsSync();
+export function getSettings(): Promise<AppSettings> {
+  return Promise.resolve(getSettingsSync());
 }
 
-/* 合并一次局部更新并落盘，返回合并后的完整设置。 */
-export async function saveSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
+/* 保存串行化（ISSUE #3836）：saveSettings 是「读快照 → 合并 → 整包覆盖写盘」，
+ * 两个并发保存（双击保存按钮 / 两个分区同时保存）会从**同一份旧快照**合并各自的
+ * partial，后写者整包覆盖、先写者的字段被回滚丢失。进程内 promise 链把保存
+ * 串行化 —— 设置的写入方都在本进程（执行宿主只读设置，不写盘）。 */
+let saveChain: Promise<unknown> = Promise.resolve();
+
+/** 合并一次局部更新并落盘，返回合并后的完整设置。 */
+export function saveSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
+  const run = saveChain.then(() => saveSettingsUnlocked(partial));
+  saveChain = run.catch(() => undefined);
+  return run;
+}
+
+async function saveSettingsUnlocked(partial: Partial<AppSettings>): Promise<AppSettings> {
   const next: AppSettings = { ...getSettingsSync(), ...partial };
-  cache = next;
+  const written = JSON.stringify(next, null, 2);
   await fs.promises.mkdir(path.dirname(SETTINGS_FILE), { recursive: true });
-  await fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(next, null, 2), "utf8");
-  /* 落盘后把指纹对齐到刚写的这一份：不这样做的话，下一次读会拿「自己刚写进去的
+  await fs.promises.writeFile(SETTINGS_FILE, written, "utf8");
+  /* **先写盘、后改缓存**（#4020）：写盘失败（磁盘满 / 权限）时若已把 `cache`
+   * 换成 `next`，而指纹仍匹配磁盘上的旧内容，本进程后续的 `getSettingsSync()`
+   * 会指纹命中、一直返回这份从未落盘的「新设置」，另一进程按指纹重读磁盘拿到
+   * 旧值——内存与文件永久分叉，重启即回退。写成功后 here 才对齐缓存与指纹。
+   *
+   * 落盘后把指纹对齐到刚写的这一份：不这样做的话，下一次读会拿「自己刚写进去的
    * 内容」判成外部改动、白白重读一遍（读出来还是同一份，只是白花一次 IO）。
    * 别的进程（执行宿主）不受这里影响，它自己按文件指纹重读。 */
-  cacheFingerprint = hash("sha1", JSON.stringify(next, null, 2), "hex");
+  cache = next;
+  cacheFingerprint = hash("sha1", written, "hex");
   return next;
 }
 

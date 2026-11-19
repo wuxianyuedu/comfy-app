@@ -13,7 +13,7 @@
     假存量 —— 裸组件拿不到 `children`，axe 当然报「按钮没有名字」；同时**露面 4 条真违规**
     （`button-group.tsx button-name`、`field.tsx aria-toggle-field-name`、
     `item.tsx aria-required-children`、`select.tsx button-name` ×7），那四条是这一档
-    第一次真正判到的东西，已登进 `scripts/.a11y-axe-known.json` 当负债，不是新坏的。
+    第一次真正判到的东西，已登进 `scripts/gates/.a11y-axe-known.json` 当负债，不是新坏的。
     四条都**当场定过性**（判红消息现在带 axe 的 `failureSummary`）：`button-name` 那两族的
     原文是「Element does not have inner text that is visible to screen readers」——
     base-ui 的 `Select` 在**收起态且没给 `items`** 时，`SelectValue` 解析不出标签，

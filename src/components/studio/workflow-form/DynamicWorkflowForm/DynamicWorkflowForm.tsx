@@ -1,15 +1,9 @@
 "use client";
 
-/* ── DynamicWorkflowForm ──
- * 严格按作者在 IO 编辑模式里暴露的针脚，渲染自定义 ComfyUI 工作流的参数表单。
- * 不写死 提示词/CFG/种子 ——
- * 只暴露一个 `text` 针脚的工作流就只得到一块 textarea；
- * 什么都不暴露的工作流得到一句可行动的提示，而不是一堵
- * 无关字段。
- *
- * Shared by CreatePanel（宽版）and the canvas `workflow` node（compact）.
- *
- * 容器层：取 controller → 交给纯展示视图，自身不持有业务规则。 */
+/* ── DynamicWorkflowForm ── 严格按作者在 IO 编辑模式暴露的针脚渲染自定义工作流参数表单，
+ * 不写死提示词/CFG/种子（只暴露 text 就只得到一块 textarea；什么都不暴露则给可行动提示）。
+ * 容器层：取 controller → 交给纯展示视图，自身不持有业务规则（规范 17 §17.2）。
+ * CreatePanel（宽版）与画布 workflow 节点（compact）共用。 */
 
 import type { DynamicWorkflowFormProps } from "./dynamic-workflow-form-config";
 import { DynamicWorkflowFormView } from "./DynamicWorkflowFormView";

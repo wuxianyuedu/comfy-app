@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  isFilmRunning,
-  formatShotDuration,
-  productionShotsToShotList,
-} from "./film-studio-config";
+import { isFilmRunning, formatShotDuration, productionShotsToShotList } from "./film-studio-config";
 
 describe("isFilmRunning", () => {
   it("解析 / 生成 / 合成三个阶段都算进行中", () => {

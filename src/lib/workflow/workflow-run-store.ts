@@ -18,7 +18,8 @@
 
 import { readStorageItem, removeStorageItem, writeStorageJson } from "../browser-storage";
 import type { TaskLogEntry } from "../workshop/generation-client";
-import { tailWindow, tailWindowAppend } from "~/lib/page-window";
+import { isRecord } from "~/lib/is-record";
+import { tailWindow, tailWindowAppendUnique } from "~/lib/page-window";
 
 /** 这次运行**从哪个入口发起**。
  *
@@ -64,15 +65,6 @@ const MAX_LOGS = 300;
 const STORAGE_KEY = "wflib:runs:v1";
 
 /**
- * 判重只看**尾部**这么多条。
- *
- * 重复帧来自「SSE 回放 + 订阅双投递」，只会紧挨着原帧到达（同一批回放里），
- * 所以窗口够覆盖「同一批重投」就够 —— 扫满整个 `MAX_LOGS` 是把 O(上限) 的
- * 开销摊在**每一行**上（`stepLogCache` 的 M9 就是同一个形状，那边取的也是 64）。
- */
-const DEDUPE_WINDOW = 64;
-
-/**
  * 落盘（`JSON.stringify` 整个登记表 + 同步 `localStorage.setItem`）的合并窗口。
  *
  * 一次运行会一行一行推日志（SSE 每来一行一次），而每次 `notify()` 都落盘 =
@@ -103,6 +95,13 @@ function persist(): void {
   writeStorageJson(STORAGE_KEY, arr);
 }
 
+/** 落库记录的最小可信形状：与 `hydrate` 的既有校验逐字一致（只看两个 id）。 */
+function isWorkflowRunMeta(value: unknown): value is WorkflowRunMeta {
+  return (
+    isRecord(value) && typeof value.taskId === "string" && typeof value.workflowId === "string"
+  );
+}
+
 function hydrate(): void {
   const raw = readStorageItem(STORAGE_KEY);
   if (raw === null) {
@@ -116,17 +115,8 @@ function hydrate(): void {
       return;
     }
     for (const item of parsed) {
-      if (
-        item &&
-        typeof item === "object" &&
-        /* SAFETY: 类型断言已复核 */
-        typeof (item as WorkflowRunMeta).taskId === "string" &&
-        /* SAFETY: 类型断言已复核 */
-        typeof (item as WorkflowRunMeta).workflowId === "string"
-      ) {
-        /* SAFETY: 类型断言已复核 */
-        const meta = item as WorkflowRunMeta;
-        runs.set(meta.taskId, meta);
+      if (isWorkflowRunMeta(item)) {
+        runs.set(item.taskId, item);
       }
     }
   } catch {
@@ -179,6 +169,33 @@ function notify() {
  *（后者在部分浏览器/移动端不触发），且这里只需要「尽力写一次」的语义。 */
 if (typeof window !== "undefined") {
   window.addEventListener("pagehide", flushPersist);
+  /* 别的同源窗口写了这份存储 → 把它**新增**的运行登记并进本窗口内存（#4026）。
+   * 此后本窗口的整表落盘就包含对方的条目，两个窗口不再互相抹掉对方的登记。
+   * 刻意**只并入、不删除**：对方窗口的删除 / 清空要传播过来需要删除墓碑，
+   * 那超出本条的范围——本窗口的 clear 仍只作用于本窗口。 */
+  window.addEventListener("storage", (event) => {
+    if (event.key !== STORAGE_KEY || event.newValue === null) {
+      return;
+    }
+    try {
+      const parsed: unknown = JSON.parse(event.newValue);
+      if (!Array.isArray(parsed)) {
+        return;
+      }
+      let added = false;
+      for (const item of parsed) {
+        if (isWorkflowRunMeta(item) && !runs.has(item.taskId)) {
+          runs.set(item.taskId, item);
+          added = true;
+        }
+      }
+      if (added) {
+        notify();
+      }
+    } catch {
+      /* 损坏的存储内容：忽略 */
+    }
+  });
 }
 
 function touch(meta: WorkflowRunMeta) {
@@ -317,16 +334,12 @@ export function appendWorkflowRunLog(
     return null;
   }
   const logs = prev.logs ?? [];
-  // 与 GlobalStepLogPanel / stepLogCache 的 SSE 去重同款：(t, msg) 重复帧丢弃。
-  // 只扫尾部 DEDUPE_WINDOW 条 —— 重复帧只会紧挨着原帧到达，扫满整个窗口是
-  // 把 O(上限) 摊在每一行上。
-  for (let index = Math.max(0, logs.length - DEDUPE_WINDOW); index < logs.length; index += 1) {
-    const known = logs[index];
-    if (known?.t === entry.t && known?.msg === entry.msg) {
-      return logs;
-    }
+  // 全窗去重（ISSUE #3896）：SSE 重连会把全量历史从头回放，只扫尾部窗口
+  // 会把窗口外的旧帧当新帧放进来（重复历史排在最新日志之后）。
+  const next = tailWindowAppendUnique(logs, entry, MAX_LOGS, (e) => `${e.t}|${e.msg}`);
+  if (next === logs) {
+    return logs;
   }
-  const next = tailWindowAppend(logs, entry, MAX_LOGS);
   touch({ ...prev, logs: next });
   return next;
 }

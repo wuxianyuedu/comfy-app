@@ -51,11 +51,9 @@ function noop(): void {
 }
 
 /**
- * 视频生成 stage：消费上游产出的镜头图片（自动用作
- * I2V 首帧）与镜头的运动 / 时长（从
- * 分镜方案自动预填）。本地通道跑 ComfyUI 的 img2video/txt2video
- * 工作流；API 通道中转到配置的视频端点（同步 URL 或
- * 异步任务）。结果写回 Shot.clipUrl，供成片合成。
+ * 视频生成 stage：消费上游镜头图片（自动用作 I2V 首帧）与运动/时长（分镜预填）。
+ * 本地通道跑 ComfyUI img2video/txt2video 工作流；API 通道中转到配置的端点
+ *（同步 URL 或异步任务）。结果写回 Shot.clipUrl，供成片合成。
  */
 export function VideoStudio({
   shots,
@@ -80,9 +78,11 @@ export function VideoStudio({
   const batch = useBusyAction();
 
   const apiReady = apiChannels?.video.configured === true;
-  const doneCount = shots.filter((s) => !!s.clipUrl).length;
+  const doneCount = shots.filter((s) => s.clipUrl !== undefined && s.clipUrl !== "").length;
   const pending = shots.filter(
-    (s) => !s.clipUrl && (!s.clipStatus || s.clipStatus === "idle" || s.clipStatus === "failed"),
+    (s) =>
+      (s.clipUrl === undefined || s.clipUrl === "") &&
+      (!s.clipStatus || s.clipStatus === "idle" || s.clipStatus === "failed"),
   );
 
   function patchShot(id: string, p: Partial<Shot>) {
@@ -92,7 +92,7 @@ export function VideoStudio({
   function setShotError(id: string, message: string | undefined) {
     setErrors((prev) => {
       const next = { ...prev };
-      if (message) {
+      if (message !== undefined && message !== "") {
         next[id] = message;
       } else {
         delete next[id];
@@ -111,7 +111,9 @@ export function VideoStudio({
     return withTimeoutResult(
       new Promise<void>((resolve) => {
         close = watchTask(taskId, {
-          onProgress: (p) => reportProgress(shotId, p),
+          onProgress: (p) => {
+            reportProgress(shotId, p);
+          },
           onOutput: (out) => {
             // 优先取视频输出；非图片的额外产出（gif / 其他）照样落地。
             if (out.kind !== "image") {
@@ -147,9 +149,11 @@ export function VideoStudio({
   async function pollApiVideo(shotId: string, remoteTaskId: string): Promise<void> {
     const deadline = Date.now() + 10 * 60 * 1000;
     while (Date.now() < deadline) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await sleep(3000);
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const r = await apiPollVideo(remoteTaskId);
-      if (r.url) {
+      if (r.url !== undefined && r.url !== "") {
         patchShot(shotId, { clipStatus: "done", clipUrl: r.url });
         return;
       }
@@ -184,14 +188,17 @@ export function VideoStudio({
     try {
       if (channel === "local") {
         // 生成出的图片 → ComfyUI 输入目录，好让 LoadImage 节点能用它。
-        const inputImage = shot.imageUrl ? await prepareLocalInputImage(shot.imageUrl) : undefined;
+        const inputImage =
+          shot.imageUrl !== undefined && shot.imageUrl !== ""
+            ? await prepareLocalInputImage(shot.imageUrl)
+            : undefined;
         /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个视频工作流
          *（封装口径暴露 提示词 / 尺寸 / 首帧 / 时长，其余走工作流默认值）。
          * 见 generateClip 入口的门禁。 */
         const built = await buildLibraryWorkflowInput(workflowId, {
           prompt,
           negativePrompt: shot.negativePrompt || undefined,
-          ...(inputImage ? { firstFrame: inputImage } : {}),
+          ...(inputImage !== undefined && inputImage !== "" ? { firstFrame: inputImage } : {}),
           ...(typeof shot.duration === "number" && shot.duration > 0
             ? { duration: shot.duration }
             : {}),
@@ -200,7 +207,7 @@ export function VideoStudio({
         /* 没落到任何端口的口本次不生效（工作流用图内默认值）—— 静默就是
          * 「改了没反应」（规范 10 §10.3.1），走控制器提示条说清楚。 */
         const unmatchedWarning = describeUnmatchedInputs(built.unmatched);
-        if (unmatchedWarning) {
+        if (unmatchedWarning !== null && unmatchedWarning !== "") {
           onNotice(unmatchedWarning);
         }
         const input: GenerateInput = built.input;
@@ -220,9 +227,9 @@ export function VideoStudio({
           frames,
           fps,
         });
-        if (submit.url) {
+        if (submit.url !== undefined && submit.url !== "") {
           patchShot(shot.id, { clipStatus: "done", clipUrl: submit.url });
-        } else if (submit.remoteTaskId) {
+        } else if (submit.remoteTaskId !== undefined && submit.remoteTaskId !== "") {
           await pollApiVideo(shot.id, submit.remoteTaskId);
         }
       }
@@ -239,7 +246,7 @@ export function VideoStudio({
     await batch.run(() =>
       /* 有界并发（见 WORKSHOP_BATCH_CONCURRENCY）：同镜头生图批量。 */
       runWithConcurrency([...pending], WORKSHOP_BATCH_CONCURRENCY, async (shot) => {
-        if (shot.clipUrl || shot.clipStatus === "running") {
+        if ((shot.clipUrl !== undefined && shot.clipUrl !== "") || shot.clipStatus === "running") {
           return;
         }
         await generateClip(shot);
@@ -257,8 +264,9 @@ export function VideoStudio({
         fps={fps}
         onChannelChange={setChannel}
         onFpsChange={setFps}
-        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-        onGenerateBatch={() => void generateBatch()}
+        onGenerateBatch={() => {
+          void generateBatch();
+        }}
         onNextStage={onNextStage}
         onOpenModelAdapters={onOpenModelAdapters}
         pendingCount={pending.length}
@@ -280,11 +288,15 @@ export function VideoStudio({
               error={errors[shot.id]}
               fps={fps}
               key={shot.id}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onCancel={() => void onCancelShot(shot)}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onGenerate={() => void generateClip(shot)}
-              onPatch={(p) => patchShot(shot.id, p)}
+              onCancel={() => {
+                onCancelShot(shot);
+              }}
+              onGenerate={() => {
+                void generateClip(shot);
+              }}
+              onPatch={(p) => {
+                patchShot(shot.id, p);
+              }}
               progress={progress[shot.id] ?? 0}
               shot={shot}
             />

@@ -1,11 +1,6 @@
 /**
- * 运行期退出也要写下结束记录（ISSUE #1692 的第二半 / 规范 §4.5.3）。
- *
- * 判据在 `scripts/launcher-core/downstream-exit.mjs` 的 `runtimeExitRecord`
- * （纯函数），这里逐分支钉死：写侧原先只挂在**就绪等待期**那条路径上，于是
- * 「服务起来之后自己没了」——用户在界面上真正会看到的「应用服务已断开」——
- * 一条记录都不会有，恢复后读回 `null`，界面只能回一句把成因猜成「手工
- * `pnpm dev`」的兜底。而双击 exe 走的恰恰是这条最常出问题、也最该有原因的档位。
+ * 运行期退出也要写下结束记录（ISSUE #1692 第二半 / 规范 §4.5.3）：判据在 `scripts/launcher-core/downstream-exit.mjs` 的 `runtimeExitRecord`（纯函数），这里逐分支钉死。
+ * 写侧原先只挂在就绪等待期，于是「服务起来后自己没了」（用户真正看到的「应用服务已断开」）一条记录都没有，恢复后读回 `null`，界面只能把成因猜成「手工 `pnpm dev`」；双击 exe 恰是这条最常出问题、最该有原因的档。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -18,7 +13,7 @@ type RuntimeExitInput = {
   port?: number | null;
   runId?: string | null;
   who: "dev" | "shell" | "signal";
-}
+};
 /** 判据函数的返回形状（.mjs 侧的 JSDoc 对 .ts 消费方不可见，这里显式声明一次）。 */
 type RuntimeExitRecord = {
   code: number | null;
@@ -29,9 +24,20 @@ type RuntimeExitRecord = {
   signal: string | null;
 };
 
-const { runtimeExitRecord } = /* SAFETY: 类型断言已复核 */ (await import(
+/** downstream-exit.mjs 无类型：出口形状在这里做运行时守卫（B5 清账，不走 as 断言）。 */
+function isExitModule(value: unknown): value is {
+  runtimeExitRecord: (input: RuntimeExitInput) => RuntimeExitRecord;
+} {
+  return typeof value === "object" && value !== null && "runtimeExitRecord" in value;
+}
+
+const loadedExitModule: unknown = await import(
   pathToFileURL(join(process.cwd(), "scripts", "launcher-core", "downstream-exit.mjs")).href
-)) as { runtimeExitRecord: (input: RuntimeExitInput) => RuntimeExitRecord };
+);
+if (!isExitModule(loadedExitModule)) {
+  throw new Error("downstream-exit.mjs 缺 runtimeExitRecord");
+}
+const { runtimeExitRecord } = loadedExitModule;
 
 /** dev server 以退出码非零结束。 */
 const DEV_DIED: RuntimeExitInput = {

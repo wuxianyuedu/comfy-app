@@ -7,7 +7,7 @@
   - `Install dependencies` 的「装」那一跳按语义跳过：依赖面（锁文件 / `package.json` /
     `pnpm-workspace.yaml` / `next.config.js`）一项都没碰就不装。`pnpm` 自证照旧每次都跑
     （它是前提，跳不得）。
-- `check-docs-api.cjs` 的输入面补上判据自身与它共用的跑法（`scripts/typedoc-run.mjs`）——
+- `check-docs-api.cjs` 的输入面补上判据自身与它共用的跑法（`scripts/docs/typedoc-run.mjs`）——
   此前改它们**不触发它们自己**。
 
 升级方会看到的差别：一行 `src/lib|server|trpc` 都没碰的 PR 不再付那 200 秒；

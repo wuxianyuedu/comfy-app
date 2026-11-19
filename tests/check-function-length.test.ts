@@ -1,24 +1,14 @@
 /**
- * 函数长度门禁自检：把 `scripts/check-function-length.cjs` 当黑盒跑在临时
- * 工作区上，验证它真能认出「超长函数」并**阻断**（硬闸）。
- *
- * 规范：docs/standards/12-代码组织与文件结构.md §12.13
- *
- * 为什么值得有门禁：文件行数有 R5 守着，**函数**没有 —— 于是 2186 行的单函数
- * （`settings/SettingsPageView.tsx` 的 `SettingsPageView`）一路合法存在，任何
- * 改动都要先在这两千行里定位，而「能不能拆」没有任何机器信号。
- *
- * ISSUE #570 第 7 项补齐了另一半：无名字的块体（IIFE / 回调 / 闭包）**同受约束**
- * —— 否则「把 300 行塞进 IIFE 里」能整条绕过本门禁，而这正是本仓库真实发生过
- * 的事（`lifecycle.ts` 的 `ensureComfyUiReady` 里挂了一个 288 行 IIFE 与三个
- * 40 行事件回调）。见下方「匿名块体」一组用例。
+ * 函数长度门禁自检：把 `scripts/gates/check-function-length.cjs` 当黑盒跑在临时工作区，验证它真能认出「超长函数」并阻断。
+ * 为什么：文件行数有 R5 守着、**函数**没有 —— 2186 行的 `SettingsPageView` 一路合法，拆不拆没有任何机器信号。
+ * ISSUE #570 第 7 项补齐另一半：无名块体（IIFE / 回调 / 闭包）同受约束 —— 否则「300 行塞进 IIFE」能绕过（`lifecycle.ts` 约 288 行 IIFE）。
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-function-length.cjs",
+  script: "gates/check-function-length.cjs",
   dirs: ["src"],
 });
 
@@ -28,16 +18,14 @@ function writeFunction(
   rel: string,
   name: string,
   bodyLines: number,
-  opts: { asConst?: boolean; async?: boolean; } = {},
+  opts: { asConst?: boolean; async?: boolean } = {},
 ): string {
-  const body = Array.from(
-    { length: bodyLines },
-    (_, i) => `  const v${i} = ${i};`,
-  ).join("\n");
-  const kw = opts.async ? "export async function" : "export function";
-  const decl = opts.asConst
-    ? `export const ${name} = (x: number) => {`
-    : `${kw} ${name}(x: number) {`;
+  const body = Array.from({ length: bodyLines }, (_, i) => `  const v${i} = ${i};`).join("\n");
+  const kw = opts.async === true ? "export async function" : "export function";
+  const decl =
+    opts.asConst === true
+      ? `export const ${name} = (x: number) => {`
+      : `${kw} ${name}(x: number) {`;
   const src = `${decl}\n${body}\n  return x;\n}\n`;
   repo.write(rel, src);
   return src;
@@ -89,9 +77,7 @@ describe("check-function-length.cjs（函数长度门禁）", () => {
   test("硬闸：--update 不写任何基线文件", ({ repo }) => {
     writeFunction(repo, "src/big.ts", "huge", 450);
     repo.run(["--update"]);
-    expect(
-      existsSync(join(repo.dir, "scripts", ".function-length-baseline.json")),
-    ).toBe(false);
+    expect(existsSync(join(repo.dir, "scripts", ".function-length-baseline.json"))).toBe(false);
   });
 
   test("测试文件不扫（用例之间雷同、个别用例长是正常的）", ({ repo }) => {
@@ -108,10 +94,7 @@ describe("check-function-length.cjs（函数长度门禁）", () => {
       { length: 450 },
       (_, i) => `  const s${i} = "} { ) ( " + String(${i}) + ' ) }';`,
     ).join("\n");
-    repo.write(
-      rel,
-      `export function braces(x: number) {\n${body}\n  return x;\n}\n`,
-    );
+    repo.write(rel, `export function braces(x: number) {\n${body}\n  return x;\n}\n`);
     const { output } = repo.run(["--report"]);
     // 括号在字符串里被忽略 → 仍应认出这个函数
     expect(output).toContain("src/strings.ts:1");
@@ -141,28 +124,17 @@ describe("匿名块体（IIFE / 回调 / 闭包）同受约束（ISSUE #570 第 
     bodyLines: number,
     outerBody = 5,
   ): void {
-    const body = Array.from(
-      { length: bodyLines },
-      (_, i) => `    const v${i} = ${i};`,
-    ).join("\n");
-    const outer = Array.from(
-      { length: outerBody },
-      (_, i) => `  const o${i} = ${i};`,
-    ).join("\n");
+    const body = Array.from({ length: bodyLines }, (_, i) => `    const v${i} = ${i};`).join("\n");
+    const outer = Array.from({ length: outerBody }, (_, i) => `  const o${i} = ${i};`).join("\n");
     repo.write(
       rel,
       `export function outer(x: number) {\n${outer}\n${head}\n${body}\n  });\n  return x;\n}\n`,
     );
   }
 
-  test("模块级 IIFE 超阈值 → 认出（否则「塞进 IIFE」= 绕过门禁）", ({
-    repo,
-  }) => {
+  test("模块级 IIFE 超阈值 → 认出（否则「塞进 IIFE」= 绕过门禁）", ({ repo }) => {
     const rel = "src/mod-iife.ts";
-    const body = Array.from(
-      { length: 450 },
-      (_, i) => `  const v${i} = ${i};`,
-    ).join("\n");
+    const body = Array.from({ length: 450 }, (_, i) => `  const v${i} = ${i};`).join("\n");
     repo.write(rel, `(() => {\n${body}\n})();\n`);
     const { output } = repo.run(["--report"]);
     expect(output).toContain("src/mod-iife.ts:1");
@@ -170,31 +142,19 @@ describe("匿名块体（IIFE / 回调 / 闭包）同受约束（ISSUE #570 第 
   });
 
   test("具名函数里的 IIFE 超阈值 → 外层与匿名两条都报", ({ repo }) => {
-    writeAnonymous(
-      repo,
-      "src/inner-iife.ts",
-      "  st.starting = (async () => {",
-      430,
-    );
+    writeAnonymous(repo, "src/inner-iife.ts", "  st.starting = (async () => {", 430);
     const { output } = repo.run(["--report"]);
     expect(output).toContain("outer");
     expect(output).toContain("(匿名块体)");
   });
 
   test('回调体（`on("data", (d) => { … })`）超阈值 → 认出', ({ repo }) => {
-    writeAnonymous(
-      repo,
-      "src/callback.ts",
-      '  child.on("data", (d: string) => {',
-      430,
-    );
+    writeAnonymous(repo, "src/callback.ts", '  child.on("data", (d: string) => {', 430);
     const { output } = repo.run(["--report"]);
     expect(output).toContain("(匿名块体)");
   });
 
-  test("`cacheJson(k, ttl, async () => { … })` 这类闭包参数 → 认出", ({
-    repo,
-  }) => {
+  test("`cacheJson(k, ttl, async () => { … })` 这类闭包参数 → 认出", ({ repo }) => {
     writeAnonymous(
       repo,
       "src/closure-arg.ts",
@@ -216,9 +176,7 @@ describe("匿名块体（IIFE / 回调 / 闭包）同受约束（ISSUE #570 第 
 
   test("大对象字面量不被误认成函数体（没有 `=>` / `function`）", ({ repo }) => {
     const rel = "src/object.ts";
-    const body = Array.from({ length: 450 }, (_, i) => `  key${i}: ${i},`).join(
-      "\n",
-    );
+    const body = Array.from({ length: 450 }, (_, i) => `  key${i}: ${i},`).join("\n");
     repo.write(rel, `export const CONFIG = {\n${body}\n};\n`);
     const { output } = repo.run(["--report"]);
     expect(output).toContain("[ok] 函数长度");
@@ -244,9 +202,6 @@ describe("匿名块体（IIFE / 回调 / 闭包）同受约束（ISSUE #570 第 
 
 /** 追加用的第二段函数体（与 writeFunction 同形，不写文件）。 */
 function writeFunctionBody(name: string, bodyLines: number): string {
-  const body = Array.from(
-    { length: bodyLines },
-    (_, i) => `  const w${i} = ${i};`,
-  ).join("\n");
+  const body = Array.from({ length: bodyLines }, (_, i) => `  const w${i} = ${i};`).join("\n");
   return `\nexport function ${name}(x: number) {\n${body}\n  return x;\n}\n`;
 }

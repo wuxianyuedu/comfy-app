@@ -1,27 +1,7 @@
 /**
- * `scripts/ci-log.mjs` —— 门禁脚本一行判决出口的判断面（ISSUE #2506）。
- *
- * ## 它守的是什么
- *
- * 同一个跑批里并排放着的判据，说同一件事时长得完全不一样（四条当场读数写在
- * `scripts/ci-log.mjs` 的头注里：`✓ …` / `[format] OK` / `[cp936-glyph] …：没有 …`
- * / `[重档] … ok …`）。而**跳过与判过在那四条里逐字同形** —— 那是这一族最贵的形态
- * （判据在场、结论静默变成放行）。
- *
- * 所以这里判的不是「话写得好不好看」，只有三件：
- *
- *   ① **三态分得开**：绿 / 跳过 / 红 的前缀各不相同，且「没有判」的那一句不会
- *      长得像「判过了」；
- *   ② **降级是自动的**：判据的读数里带「这一轮没判」的固定说法时，`gatePass()`
- *      必须自己把它降成 `skip` —— 否则漏打一档的全部代价都落回「作者记不记得」；
- *   ③ **红的证据不静默截断**：截了就报「另有 N 条」，与 `ci-heavy-gates.mjs`
- *      那一段的取舍同一口径。
- *
- * ## 不能判什么
- *
- * **不判**某条判据有没有真的改用这个出口 —— 那是 `tests/ci-log-adoption.test.ts`
- * 的活（它按文本核 `scripts/**` 的结论行形状）。这条门禁改的是「读得出来」，
- * 不是「判得对」：判决、退出码、账本一件都没动。
+ * `scripts/ci/ci-log.mjs` 一行判决出口的判断面（ISSUE #2506）。同一跑批的判据形态各异，最贵的是跳过与判过逐字同形（判据在场、结论静默放行）。
+ * 判三件：三态前缀各不相同且「没判」不像「判过」；读数带「这一轮没判」时 `gatePass()` 自动降 `skip`；红的证据截断要报「另有 N 条」（同 ci-heavy-gates 口径）。
+ * 不判某判据是否真改用此出口（那是 `tests/ci-log-adoption.test.ts` 的活）；本门禁只改「读得出来」，判决/退出码/账本未动。
  */
 import { describe, expect, it } from "vitest";
 
@@ -43,7 +23,7 @@ import {
   renderVerdict,
   stateOfLine,
   summarize,
-} from "../scripts/ci-log.mjs";
+} from "../scripts/ci/ci-log.mjs";
 
 describe("三条判决的形状", () => {
   it("绿：一行、带对象与读数，前缀是 [ok]", () => {
@@ -213,9 +193,7 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
     /* 平台那一档的 stdout **不是** TTY（实测绿跑 build cnb-gig-1k65nb59l 的 stage-27：
      * 正文 64 行里只有平台自己那 2 行带 ANSI），而它的日志页会渲染色号 ——
      * 那一格落在「TTY / 抓文本」两个判据之外，这枚就是为它开的。 */
-    expect(
-      colorEnabled({ env: { COMFYAPP_CI_COLOR: "1" }, isTTY: false }),
-    ).toBe(true);
+    expect(colorEnabled({ env: { COMFYAPP_CI_COLOR: "1" }, isTTY: false })).toBe(true);
     expect(
       colorEnabled({
         env: { NO_COLOR: "", COMFYAPP_CI_COLOR: "1" },
@@ -224,17 +202,15 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
     ).toBe(false);
     /* `0` 与空串按关算：它是本仓私有的旗标，关法要有形状（`NO_COLOR` 那条「值不论」
      * 是通行约定的语义，不往这里抄）。 */
-    expect(
-      colorEnabled({ env: { COMFYAPP_CI_COLOR: "0" }, isTTY: false }),
-    ).toBe(false);
-    expect(
-      colorEnabled({ env: { COMFYAPP_CI_COLOR: "" }, isTTY: false }),
-    ).toBe(false);
+    expect(colorEnabled({ env: { COMFYAPP_CI_COLOR: "0" }, isTTY: false })).toBe(false);
+    expect(colorEnabled({ env: { COMFYAPP_CI_COLOR: "" }, isTTY: false })).toBe(false);
   });
 
   it("逐行上色只染标签，不改变「这一行是不是判决」", () => {
     const line = colorizeLine("[info] 命中输入面 3 个文件，生成并自检中…");
-    expect(line.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe("[info] 命中输入面 3 个文件，生成并自检中…");
+    expect(line.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe(
+      "[info] 命中输入面 3 个文件，生成并自检中…",
+    );
     expect(line).not.toBe("[info] 命中输入面 3 个文件，生成并自检中…");
   });
 
@@ -272,9 +248,7 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
     expect(painted.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe(`▌ ${text}`);
     /* 不给 `color` 时它仍是一行认不出态的普通文本（中性灰带）——
      * 覆盖口只给点名要它的那一行，不默认把整屏染起来。 */
-    expect(paintLine(text, { enabled: true })).toBe(
-      `\u001b[90m▌\u001b[0m ${text}`,
-    );
+    expect(paintLine(text, { enabled: true })).toBe(`\u001b[90m▌\u001b[0m ${text}`);
   });
 
   it("调用方给了 out ⇒ 交出去的仍是干净文本（跑批靠它读回结论句）", () => {

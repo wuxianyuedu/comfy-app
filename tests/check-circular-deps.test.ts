@@ -1,11 +1,7 @@
 /**
- * 提交门槛自检：把 scripts/check-circular-deps.cjs 当成黑盒跑在临时工作区上，
- * 验证「模块循环依赖」这条规范（§12.7）真的会阻断提交，而不是只写在文档里。
- *
- * 规范：docs/standards/12-代码组织与文件结构.md §12.7（循环依赖预防，ISSUE #574）
- *
- * 为什么用子进程跑而不是 import：该脚本被 pre-commit 以 `node scripts/xxx.cjs`
- * 调用，且内部用 process.cwd() 定位扫描根；复用同一调用方式才等价于真实门禁。
+ * 提交门槛自检：黑盒跑 `scripts/gates/check-circular-deps.cjs`，验证「模块循环依赖」（§12.7，ISSUE #574）
+ * 真的阻断提交，而不只是写在文档里。
+ * 用子进程而非 import：pre-commit 以 `node scripts/xxx.cjs` 调用、脚本靠 `process.cwd()` 定位扫描根，复刻同一种调用才等价。
  */
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -17,12 +13,12 @@ import { defineGateRepo, describe } from "./helpers/gate-repo";
  * 提供；脚本落点选 `root`（脚本用 cwd，落哪都一样）。
  * 下面「真实仓库的状态」那组不搭临时仓库，直接对着源码仓库跑，所以这里
  * 仍然保留脚本的绝对路径。 */
-const SCRIPT = join(process.cwd(), "scripts", "check-circular-deps.cjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates/check-circular-deps.cjs");
 /** 硬闸判据不该再有基线文件；这条路径只用于断言它**不存在**。 */
 const BASELINE = join(process.cwd(), "scripts", ".circular-deps-baseline.json");
 
 const { test, expect } = defineGateRepo({
-  script: "check-circular-deps.cjs",
+  script: "gates/check-circular-deps.cjs",
   dir: "root",
   dirs: ["src", "scripts"],
 });
@@ -59,48 +55,27 @@ describe("check-circular-deps.cjs（提交门槛）", () => {
   });
 
   test("type-only 回引也算环（类型不构成「谁依赖谁」的例外）", ({ repo }) => {
-    repo.write(
-      "src/a.ts",
-      'import type { B } from "./b";\nexport type A = B;\n',
-    );
-    repo.write(
-      "src/b.ts",
-      'import type { A } from "./a";\nexport type B = A;\n',
-    );
+    repo.write("src/a.ts", 'import type { B } from "./b";\nexport type A = B;\n');
+    repo.write("src/b.ts", 'import type { A } from "./a";\nexport type B = A;\n');
     expect(repo.run().code).toBe(1);
   });
 
   test("别名 @/ 与省略扩展名按 TS 口径解析（环仍能被认出）", ({ repo }) => {
-    repo.write(
-      "src/lib/a.ts",
-      'import { b } from "@/lib/b";\nexport const a = b;\n',
-    );
-    repo.write(
-      "src/lib/b.ts",
-      'import { a } from "@/lib/a";\nexport const b = a;\n',
-    );
+    repo.write("src/lib/a.ts", 'import { b } from "@/lib/b";\nexport const a = b;\n');
+    repo.write("src/lib/b.ts", 'import { a } from "@/lib/a";\nexport const b = a;\n');
     expect(repo.run().code).toBe(1);
   });
 
   test("经 index.ts 目录导入的环也能认出", ({ repo }) => {
     repo.write("src/a.ts", 'import { b } from "./sub";\nexport const a = b;\n');
     repo.write("src/sub/index.ts", 'export { b } from "./b";\n');
-    repo.write(
-      "src/sub/b.ts",
-      'import { a } from "../a";\nexport const b = a;\n',
-    );
+    repo.write("src/sub/b.ts", 'import { a } from "../a";\nexport const b = a;\n');
     expect(repo.run().code).toBe(1);
   });
 
   test("注释里提到的 import 不算依赖（不误报）", ({ repo }) => {
-    repo.write(
-      "src/a.ts",
-      '// import { b } from "./b";\nexport const a = 1;\n',
-    );
-    repo.write(
-      "src/b.ts",
-      '/* import { a } from "./a"; */\nexport const b = 1;\n',
-    );
+    repo.write("src/a.ts", '// import { b } from "./b";\nexport const a = 1;\n');
+    repo.write("src/b.ts", '/* import { a } from "./a"; */\nexport const b = 1;\n');
     expect(repo.run().code).toBe(0);
   });
 

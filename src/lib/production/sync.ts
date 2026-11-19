@@ -107,7 +107,7 @@ export function applyShotPatches<T extends ShotAnchoredNode>(
   const byShot = new Map(patches.map((patch) => [patch.shotId, patch]));
   return nodes.map((node) => {
     const shotId = node.data?.shotId;
-    if (!shotId) {
+    if (shotId === undefined || shotId === "") {
       return node;
     }
     const patch = byShot.get(shotId);
@@ -164,7 +164,7 @@ export function nodeGenToShot(node: {
   if (node.taskId !== undefined) {
     patch.taskId = node.taskId;
   }
-  if (node.status === "done" && node.resultPath) {
+  if (node.status === "done" && node.resultPath !== undefined && node.resultPath !== "") {
     patch.imageUrl = node.resultPath;
   }
   return patch;

@@ -1,17 +1,7 @@
-// 侧栏「ComfyUI」页逻辑层单测（ISSUE #1900）。
-//
-// 这组用例从 `use-settings-page.test.ts` 搬来 —— 那些行为（运行态订阅 / 启动关闭 /
-// 打开查看 / 启动日志的会话切换）自 ISSUE #1900 起归这一页，**判据一条没少**：
-// 每一条都钉着一个静默失效的形态（界面照常渲染、只是不再刷新 / 不再跟随 /
-// 提示词停在旧名字上），断言的是编排行为而不是实现细节。
-//
-// 与搬迁前的两处口径差异（都是这一页自己的选择，不是放松判据）：
-//   · 反馈通道从设置页的整页提示条（`flash`）换成 toast —— 本页是普通视图，
-//     动作结果是「这一刻」的事；
-//   · 启动动作**不再先保存草稿**（本页没有草稿；配置在设置页保存），
-//     所以没有「草稿落库参数」那一组断言。
-//
-// hook 走真实 tRPC React 客户端（`trpc.setting.*`），由 MSW 转发到可控测试 router。
+// 侧栏「ComfyUI」页逻辑层单测（ISSUE #1900），用例从 use-settings-page.test.ts 搬来、判据未减。
+// 每条钉一个静默失效形态（照常渲染但不再刷新/跟随/提示词停在旧名字），断言编排而非实现。
+// 与搬迁前差异：反馈通道改 toast（本页是普通视图）；启动不再先保存草稿（本页无草稿）。
+// hook 走真实 tRPC React 客户端，由 MSW 转发到可控测试 router。
 
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
@@ -80,7 +70,7 @@ vi.mock("~/lib/log/log-file-client", () => {
   const fetchLogSessions = vi.fn(async (source: string, sessionId?: string) => {
     sessionLogRequests.push({ source, session: sessionId ?? null });
     const query = new URLSearchParams({ source });
-    if (sessionId) {
+    if (sessionId !== undefined && sessionId !== "") {
       query.set("session", sessionId);
     }
     const res = await fetch(`/api/logs/sessions?${query.toString()}`);
@@ -91,9 +81,9 @@ vi.mock("~/lib/log/log-file-client", () => {
     return (await res.json()) as unknown;
   });
   return {
-    fetchFileLogSlice: vi.fn(async () => null),
+    fetchFileLogSlice: vi.fn(() => null),
     fetchLogSessions,
-    postAppRuntimeLog: vi.fn(async () => undefined),
+    postAppRuntimeLog: vi.fn(() => undefined),
   };
 });
 
@@ -106,6 +96,8 @@ type Behavior = {
     desktopManaged: boolean;
     instanceType: "desktop" | "portable" | "venv" | null;
     pathConfigured: boolean;
+    /** 已填路径指向的目录是否存在（#4138：无效路径行内提示的判据）。 */
+    pathExists: boolean;
   };
   /** comfyOpen（在浏览器打开）的返回文案；默认成功。 */
   comfyOpen?: { detail: string; ok: boolean };
@@ -130,11 +122,10 @@ let comfyOpenCalls = 0;
 const t = createTestTRPC();
 const mockRouter = t.router({
   setting: t.router({
-    comfyStatus: t.procedure.query(async () => {
+    comfyStatus: t.procedure.query(() => {
       comfyStatusCalls += 1;
       return {
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        up: behavior.comfyBase != null,
+        up: behavior.comfyBase !== null && behavior.comfyBase !== undefined,
         base: behavior.comfyBase ?? null,
         starting: false,
         /* 库里已保存的路径：启动动作按它拉起，视图把它写在页上（ISSUE #1900
@@ -150,6 +141,7 @@ const mockRouter = t.router({
           /* SAFETY: 类型断言已复核 */
           instanceType: "portable" as const,
           desktopManaged: false,
+          pathExists: true,
         },
     ),
     comfyEmbeddable: t.procedure.query(
@@ -192,10 +184,10 @@ function makeWrapper(queryClient?: QueryClient) {
     return createElement(
       QueryClientProvider,
       { client: qc },
-      // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
       createElement(TRPCProvider, {
         trpcClient: client,
         queryClient: qc,
+        // oxlint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
         children,
       }),
     );
@@ -250,7 +242,9 @@ function mockSessionsFor(
   );
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
 beforeEach(() => {
   sessionLogRequests.length = 0;
   comfyStatusCalls = 0;
@@ -312,7 +306,7 @@ describe("useComfyuiControl", () => {
 
     /* 服务端那侧真报一次变化：handler 把当前快照发给客户端，与真实服务端
      * 同一口径（`?since=` 比当前纪元旧 → 回那一次变化）。 */
-    await act(async () => {
+    act(() => {
       noteComfyStateChange("ready", "ComfyUI 已就绪");
       window.dispatchEvent(new Event("focus"));
     });
@@ -415,7 +409,7 @@ describe("useComfyuiControl", () => {
     await expect.poll(() => result.current.log.text).not.toBe("");
     expect(result.current.log.sessions).toHaveLength(2);
 
-    await act(async () => {
+    act(() => {
       result.current.log.selectSession("12");
     });
     await expect.poll(() => result.current.log.text).toBe("第一次启动的输出");
@@ -536,7 +530,7 @@ describe("useComfyuiControl", () => {
     });
     await expect.poll(() => result.current.log.text).toBe("本次运行的内容");
 
-    await act(async () => {
+    act(() => {
       result.current.log.selectSession(archived);
     });
     await expect.poll(() => result.current.log.text).toBe("上一包的内容");
@@ -586,7 +580,7 @@ describe("useComfyuiControl", () => {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.status).not.toBeNull();
-    await act(async () => {
+    act(() => {
       result.current.log.selectSession("12");
     });
     await expect.poll(() => result.current.log.text).toBe("第一次启动的输出");
@@ -731,12 +725,9 @@ describe("useComfyuiControl", () => {
     });
   });
 
-  /* ── 「在浏览器打开」＝页签之外的**并列**出口 ────────────────────────
-   * #310 定下「点『打开查看』只出页签」；这条出口是用户主动点的另一条路
-   * （放大看 / 装插件 / 多屏），所以断言两件事：
-   *   ① 它不再自己判内嵌、也不再开或切页签（页签那套行为完全不受影响）；
-   *   ② 地址由服务端自己探（comfyOpen），前端 state 里的旧 base 不作数。
-   */
+  /* ── 「在浏览器打开」＝页签之外的并列出口 ──
+   * #310 定下「打开查看」只出页签；该出口由用户主动点（放大看/装插件/多屏）。断言：
+   * ① 不自己判内嵌、不开/切页签；② 地址由服务端探（comfyOpen），前端旧 base 不作数。 */
   describe("在浏览器打开 ComfyUI — 与页签并列的出口", () => {
     beforeEach(() => {
       useShellTabs.setState({

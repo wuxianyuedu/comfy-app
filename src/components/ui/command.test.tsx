@@ -1,10 +1,6 @@
 /**
- * `CommandDialog` 必须套一层 `Command`（`command.tsx` 曾经漏掉）：`CommandInput`
- * / `CommandList` / `CommandItem` / `CommandGroup` / `CommandEmpty` 全从 `Command`
- * 的 context 取 store（cmdk 的 `useCmdk` 直接 `store.subscribe`），没有 `<Command>`
- * 祖先就 `Cannot read properties of undefined (reading 'subscribe')` —— 且只在
- * **打开面板**时炸（关闭时 base-ui `Dialog.Portal` 不渲染子节点）。这里把面板打开
- * 渲染一遍，确认不再抛错。
+ * `CommandDialog` 必须套一层 `Command`（`command.tsx` 曾漏掉）：`CommandInput` / `CommandList` / `CommandItem` / `CommandGroup` / `CommandEmpty` 全从 `Command` 的 context 取 store（cmdk 的 `useCmdk` 直接 `store.subscribe`），没有祖先就 `Cannot read properties of undefined (reading 'subscribe')`。
+ * 且只在**打开面板**时炸（关闭时 base-ui `Dialog.Portal` 不渲染子节点）；这里把面板打开渲染一遍，确认不再抛错。
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -19,6 +15,7 @@ import {
 } from "./command";
 
 beforeAll(() => {
+  /* SAFETY: 类型断言已复核 */
   if (!("ResizeObserver" in globalThis)) {
     // jsdom 没有 ResizeObserver；cmdk 的列表高度观察 effect 需要它。
     class ResizeObserverStub {
@@ -32,9 +29,7 @@ beforeAll(() => {
         void 0;
       }
     }
-    /* SAFETY: 类型断言已复核 */ (
-      globalThis as unknown as { ResizeObserver: unknown }
-    ).ResizeObserver = ResizeObserverStub;
+    Reflect.set(globalThis, "ResizeObserver", ResizeObserverStub);
   }
   // jsdom 没有 Element.prototype.scrollIntoView；cmdk 选中项会调用它。
   if (typeof Element.prototype.scrollIntoView !== "function") {
@@ -42,7 +37,7 @@ beforeAll(() => {
       void 0;
     };
   }
-  if (!window.matchMedia) {
+  if (typeof window.matchMedia !== "function") {
     window.matchMedia = (query: string): MediaQueryList => ({
       matches: false,
       media: query,

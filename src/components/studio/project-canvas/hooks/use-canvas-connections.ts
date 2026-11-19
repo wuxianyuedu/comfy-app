@@ -1,10 +1,7 @@
 "use client";
 
-/** 从 ProjectCanvas 抽出 —— 连接串联
- *  逻辑（按哪个端口 / 句柄被连接来路由生成出来的输出）。
- *
- *  ref 对象由父级传入，因为回调要读**最新**的
- *  nodes/edges 而不必在每次状态变化时重绑。
+/** 从 ProjectCanvas 抽出 —— 连接串联逻辑（按哪个端口 / 句柄被连接来路由输出）。
+ *  ref 对象由父级传入，因为回调要读**最新**的 nodes/edges 而不必在每次状态变化时重绑。
  */
 import { subscribeAppEvent } from "~/lib/app-events";
 import {
@@ -54,13 +51,21 @@ export function useCanvasConnections({
       const needsImage = outEdges.some((outEdge) => {
         const t = nodesRef.current.find((current) => current.id === outEdge.target);
         return (
-          !outEdge.targetHandle ||
+          outEdge.targetHandle === undefined ||
+          outEdge.targetHandle === null ||
+          outEdge.targetHandle === "" ||
           outEdge.targetHandle === "inputImage" ||
-          t?.data?.kind === "workflow"
+          t?.data.kind === "workflow"
         );
       });
       let importedFile: string | null = null;
-      if (needsImage && rPath && rType !== "video") {
+      if (
+        needsImage &&
+        rPath !== undefined &&
+        rPath !== null &&
+        rPath !== "" &&
+        rType !== "video"
+      ) {
         try {
           importedFile = await importOutputAsInput(rPath);
         } catch {

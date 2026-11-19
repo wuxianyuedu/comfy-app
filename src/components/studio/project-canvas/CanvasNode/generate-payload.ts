@@ -1,21 +1,11 @@
 /* ── 画布节点 → `generate.generate` 入参（纯构造，不读全局、不做 IO）──
- *
- * 台账 E4 第四格的客户端那一半。此前这段拼装直接长在 `use-generate.ts` 的
- * `runGenerate` 里，产物类型是 `Record<string, unknown>`，靠传输前一句
- * `payload as GenerateInput` 交出去 —— 那个 cast 就是「客户端不知道线上要什么」
- * 的合法藏身处：少一个必填键、多一个服务端已经不收的旧字段，编译期一句都不响。
- * 现在它的返回类型就是 `GenerateInput`（由 `generateInputSchema` 反向派生），
- * 而那份 schema 与服务端 `.input()` 用的是同一个对象。
- *
- * 画在这里而不是 `src/lib/**`：`toWorkflowInputsPayload` / `seedModeOverrides` /
- * `collectReferenceImages` 这三个助手住在视图层（它们读的是画布上的 IO 映射），
- * 而 lib 不许 import 视图（硬规则 22）。
- *
- * `projectId` 由调用点注入（原来是函数体内直接 `getActiveId()`）—— 读 store 这件事
- * 一旦写进构造函数，它就再也没法在没有人造上下文的条件下被测。
+ * 返回类型即 `GenerateInput`（与 `generateInputSchema` / 服务端 `.input()` 同一份 schema）。
+ * 住在视图层：这里用到的三个助手读画布 IO 映射，而 lib 不许 import 视图（硬规则 22）。
+ * `projectId` 由调用点注入（原为函数体内 `getActiveId()`），否则无法脱离人造上下文测试。
  */
 import { toWorkflowInputsPayload, type WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { GenerateInput } from "~/lib/workflow/workflow-generate-input";
+import { getSizePresetTable } from "~/lib/media/size-preset-store";
 import {
   applyParamMapping,
   buildParamEntries,
@@ -60,8 +50,10 @@ export function buildCanvasGeneratePayload({
         io: wfIO,
         entries: buildParamEntries(wfIO, undefined, { mode }),
         mapping: parseParamMapping(wfParamMap ?? d.paramMap),
-        values: d.workflowInputs ?? {},
         mode,
+        /* 档位反解与正向换算同源：同一份本机生效表（ISSUE #4099）。 */
+        table: getSizePresetTable(),
+        values: d.workflowInputs ?? {},
       })
     : null;
   const baseInputs =
@@ -78,8 +70,8 @@ export function buildCanvasGeneratePayload({
   return {
     workflow: d.workflowId ?? "",
     workflowInputs: [...baseInputs, ...cagInputs],
-    ...(d.inputImage ? { inputImage: d.inputImage } : {}),
-    ...(projectId ? { projectId } : {}),
+    ...(d.inputImage !== undefined && d.inputImage !== "" ? { inputImage: d.inputImage } : {}),
+    ...(projectId !== undefined && projectId !== null && projectId !== "" ? { projectId } : {}),
     ...(referenceImages.length > 0 ? { referenceImages } : {}),
   };
 }

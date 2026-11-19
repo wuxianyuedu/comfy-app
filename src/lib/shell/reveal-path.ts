@@ -176,7 +176,8 @@ export async function revealPathInFileManager(
   /* 区分目录（直接打开进入）与文件（在父层选中）：`revealPath` 的探针只答
    * 「存不存在」，不答「是不是目录」，所以这里用一次 stat 补判据。stat 失败
    * （理论上 probe 已答存在，不该发生）按文件处理 —— 退回原来的「选中」语义。 */
-  const isDir = statSync(target, { throwIfNoEntry: false })?.isDirectory() ?? false;
+  const isDir =
+    statSync(/*turbopackIgnore: true*/ target, { throwIfNoEntry: false })?.isDirectory() ?? false;
   const { cmd, args } = revealCommand(target, isDir);
   try {
     await new Promise<void>((resolve, reject) => {
@@ -184,7 +185,7 @@ export async function revealPathInFileManager(
        * 二次引号剥离（与 `open-in-browser` 同一条血泪教训）。Windows 那一路的
        * `start` 是 cmd 内建命令，由 `cmd /c` 承载 —— 第一个 `""` 是标题占位，
        * 防止接下来的参数被 `start` 当成窗口标题。 */
-      const cp = spawn(cmd, args, { stdio: "ignore", windowsHide: true });
+      const cp = spawn(/*turbopackIgnore: true*/ cmd, args, { stdio: "ignore", windowsHide: true });
       cp.on("error", reject);
       cp.on("spawn", () => {
         /* spawn 成功即认为指令已送达（资源管理器由系统拉起），不等子进程退出：

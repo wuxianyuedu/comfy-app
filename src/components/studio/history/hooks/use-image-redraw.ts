@@ -1,12 +1,9 @@
 "use client";
 
-// ── 历史详情「放大 / 局部重绘」动作逻辑（规范 17 §17.2 第②层）────────────
-// 提交形状：重绘 / 放大都是「带修改的重跑」（FR-QA-09）——原图 + （重绘才有）
-// 蒙版走 referenceImages 的契约槽（模板里第一个图像口 = 原图，第二个 = 蒙版），
-// parentId 指回原任务。模板来自**用户工作流库**（内置模板已移除，库是唯一
-// 来源）；选了没有图像输入口的模板时，执行侧的 unmatched 读数会说明值没落上。
-//
-// 依赖全部注入（与 use-history-detail-actions 同款），逻辑层可脱离网络单测。
+// ── 历史详情「放大 / 局部重绘」动作逻辑（规范 17 §17.2 第②层）──
+// 重绘/放大都是「带修改的重跑」（FR-QA-09）：原图 + （重绘才有）蒙版走 referenceImages 契约槽
+//（模板第一个图像口 = 原图，第二个 = 蒙版），parentId 指回原任务。模板只来自用户工作流库；
+// 无图像输入口时执行侧 unmatched 读数会说明值没落上。依赖全部注入，逻辑层可脱离网络单测。
 import { useCallback, useState } from "react";
 
 import { runAsyncAction } from "~/lib/async-action";
@@ -87,7 +84,7 @@ export function useImageRedraw(
         deps.report("err", "先从工作流库选一个模板（需要带图像输入口）");
         return;
       }
-      if (mode === "inpaint" && !mask) {
+      if (mode === "inpaint" && (mask === null || mask === "")) {
         deps.report("err", "局部重绘需要先画蒙版（白色为重绘区域）");
         return;
       }
@@ -99,12 +96,17 @@ export function useImageRedraw(
         const result = await runAsyncAction(
           async () => {
             const originalName = await deps.prepareImage(originalImageUrl);
-            const maskName = mode === "inpaint" && mask ? await deps.prepareImage(mask) : null;
+            const maskName =
+              mode === "inpaint" && mask !== null && mask !== ""
+                ? await deps.prepareImage(mask)
+                : null;
             const taskId = await deps.submit({
               workflow: selectedTemplateId,
               prompt: prompt.trim() || undefined,
               referenceImages:
-                mode === "inpaint" && maskName ? [originalName, maskName] : [originalName],
+                mode === "inpaint" && maskName !== null && maskName !== ""
+                  ? [originalName, maskName]
+                  : [originalName],
               projectId: initial.projectId ?? undefined,
               parentId: initial.parentId,
             });

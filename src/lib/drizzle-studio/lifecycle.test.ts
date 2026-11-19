@@ -26,11 +26,11 @@ vi.mock("child_process", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   spawn: spawnMock,
 }));
-const killProcessTreeMock = vi.hoisted(() => vi.fn(async () => ({ ok: true, via: "stub" })));
+const killProcessTreeMock = vi.hoisted(() => vi.fn(() => ({ ok: true, via: "stub" })));
 vi.mock("~/lib/process/kill-process-tree", () => ({
   killProcessTree: killProcessTreeMock,
 }));
-const openUrlMock = vi.hoisted(() => vi.fn(async () => ({ ok: true, detail: "opened" })));
+const openUrlMock = vi.hoisted(() => vi.fn(() => ({ ok: true, detail: "opened" })));
 vi.mock("~/lib/shell/open-in-browser", () => ({
   openUrlInBrowser: openUrlMock,
 }));
@@ -158,17 +158,19 @@ describe("openDrizzleStudio — 未运行时不打开空页面", () => {
 
 describe("退出记录的归属（ISSUE #2435）", () => {
   /** 假子进程：只给到本模块真会碰到的那几样（pid、两条输出流、事件）。 */
+  class FakeChild extends EventEmitter {
+    pid: number;
+    stdout = new EventEmitter();
+    stderr = new EventEmitter();
+
+    constructor(pid: number) {
+      super();
+      this.pid = pid;
+    }
+  }
+
   function fakeChild(pid: number) {
-    /* SAFETY: 类型断言已复核 */
-    const child = new EventEmitter() as EventEmitter & {
-      pid: number;
-      stderr: EventEmitter;
-      stdout: EventEmitter;
-    };
-    child.pid = pid;
-    child.stdout = new EventEmitter();
-    child.stderr = new EventEmitter();
-    return child;
+    return new FakeChild(pid);
   }
 
   /** 落盘行里「为什么退出」那几行（横幅 + `[exit]`）。写入器带时间戳前缀，
@@ -192,7 +194,7 @@ describe("退出记录的归属（ISSUE #2435）", () => {
     const child = await launchFakeStudio(4321, (m) => seen.push(m));
     // 真实顺序：taskkill 返回 → 子进程以 code=1、signal=null 消失
     //（Windows 上被杀就是这一对值，与它自己崩溃长得一模一样）。
-    killProcessTreeMock.mockImplementation(async () => {
+    killProcessTreeMock.mockImplementation(() => {
       child.emit("exit", 1, null);
       return { ok: true, via: "taskkill" };
     });

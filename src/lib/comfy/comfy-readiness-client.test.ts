@@ -2,13 +2,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readComfyErrorMessage, waitForComfyReady } from "./comfy-readiness-client";
 
-function jsonRes(status: number, body: unknown): Response {
-  /* SAFETY: 类型断言已复核 */
+/** 可重复读的响应替身：用例里的同一个对象可能被多拍复用。 */
+type JsonResponse = {
+  json: () => Promise<unknown>;
+  ok: boolean;
+  status: number;
+};
+
+function jsonRes(status: number, body: unknown): JsonResponse {
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
-  } as unknown as Response;
+    json: () => Promise.resolve(body),
+  };
 }
 
 afterEach(() => {
@@ -84,11 +90,10 @@ describe("waitForComfyReady", () => {
 
     const r = await waitForComfyReady({ timeoutMs: 20, pollMs: 5 });
     expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.pending).toBe(true);
-      expect(r.message).toContain("正在启动 ComfyUI");
-      expect(r.message).toContain("手动启动");
-    }
+    if (r.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+    expect(r.pending).toBe(true);
+    expect(r.message).toContain("正在启动 ComfyUI");
+    expect(r.message).toContain("手动启动");
   });
 
   it("网络层异常按「还在启动」处理，最终超时也算 pending", async () => {
@@ -96,8 +101,7 @@ describe("waitForComfyReady", () => {
 
     const r = await waitForComfyReady({ timeoutMs: 20, pollMs: 5 });
     expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.pending).toBe(true);
-    }
+    if (r.ok) throw new Error("unreachable：ok=false 已由上一行断言");
+    expect(r.pending).toBe(true);
   });
 });

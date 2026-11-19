@@ -23,6 +23,7 @@
  * §18.4：本模块零 Node 内建 import、被 `executor-ws.ts` 静态引用，而后者在宿主的
  * 运行时图里（`host-runtime.ts` 注入 `configureExecutorWs`）⇒ 不能加 `server-only`。
  */
+import { isRecord } from "~/lib/is-record";
 import { rawUiNodeType } from "./raw-overrides";
 
 /**
@@ -30,17 +31,14 @@ import { rawUiNodeType } from "./raw-overrides";
  * @param nodeId WS 帧里的节点 id（`String(...)` 之后传进来）
  */
 export function classTypeForNode(graph: unknown, nodeId: string): string | undefined {
-  if (typeof graph !== "object" || graph === null || !nodeId) {
+  if (!isRecord(graph) || !nodeId) {
     return undefined;
   }
 
   // API 形状优先：这一支不需要遍历，是 O(1) 的按键取。
-  /* SAFETY: 类型断言已复核 */
-  const apiNode = (graph as Record<string, unknown>)[nodeId];
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (apiNode != null && typeof apiNode === "object") {
-    /* SAFETY: 类型断言已复核 */
-    const classType = (apiNode as Record<string, unknown>).class_type;
+  const apiNode = graph[nodeId];
+  if (isRecord(apiNode)) {
+    const classType = apiNode.class_type;
     if (typeof classType === "string" && classType) {
       return classType;
     }

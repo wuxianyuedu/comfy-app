@@ -20,6 +20,7 @@
 
 import { trace } from "./trace";
 import { classTypeForNode, nodeLabel } from "./graph-node-class";
+import { isRecord } from "~/lib/is-record";
 import { INLINE_DUMP_MAX, clampText } from "~/lib/text-clamp";
 
 /** 面板日志的注入点（同 TraceFn：默认用 runner-state 的 log，测试传收集器）。
@@ -49,6 +50,11 @@ export const STDERR_MAX_LINES = 60;
 /** comfy-cli 返回的原始 JSON 行进入面板的上限（envelope 可能很大，且事件行
  *  数随节点数走；设上限防止一次失控的执行把日志面板刷成瀑布）。 */
 export const MAX_RAW_JSON_LINES = 300;
+/** stderr 原文缓冲的尾部窗口（#4418）：消费点只要末尾十几行，全文累积会随
+ *  失控任务刷屏线性增长。 */
+export const STDERR_RAW_CAP_CHARS = 256 * 1024;
+/** stdout 单行（无换行）聚合缓冲的硬上限（#4418）：与 stderr 原文窗口同族。 */
+export const STDOUT_LINE_CAP_CHARS = 256 * 1024;
 
 /**
  * 在任意嵌套对象/数组里深搜 `node_errors`（dict 或非空 list）。
@@ -63,13 +69,11 @@ export const MAX_RAW_JSON_LINES = 300;
  * 字段（它是 {code, message, hint, details}），于是 6 条逐字段清单从未渲染。
  */
 export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
-  if (typeof root !== "object" || root === null) {
+  if (!isRecord(root)) {
     return undefined;
   }
   const seen = new WeakSet();
-  const stack: Array<{ d: number; node: JsonRecord }> = [
-    { node: /* SAFETY: 类型断言已复核 */ root as JsonRecord, d: 0 },
-  ];
+  const stack: Array<{ d: number; node: JsonRecord }> = [{ node: root, d: 0 }];
   while (stack.length) {
     /* 判据与取值同一处：`stack.pop()` 在非空循环里必然有值。 */
     const top = stack.pop();
@@ -83,20 +87,15 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
     seen.add(node);
     const ne = node.node_errors;
     if (
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      ne != null &&
+      ne !== null &&
+      ne !== undefined &&
       (Array.isArray(ne) ? ne.length > 0 : typeof ne === "object" && Object.keys(ne).length > 0)
     ) {
       return ne;
     }
     for (const v of Object.values(node)) {
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      if (v != null && typeof v === "object") {
-        stack.push({
-          /* SAFETY: 类型断言已复核 */
-          node: v as JsonRecord,
-          d: d + 1,
-        });
+      if (isRecord(v)) {
+        stack.push({ node: v, d: d + 1 });
       }
     }
   }
@@ -117,18 +116,12 @@ export function extractEnvelopeValidationErrors(
 
 /** envelope 里错误消息的取值：message → hint → 兜底文案。 */
 export function envelopeErrorMessage(env: unknown): string {
-  const err =
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    env != null && typeof env === "object"
-      ? /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error
-      : undefined;
+  const err = isRecord(env) ? env.error : undefined;
   const str = (o: unknown, key: string): string | undefined => {
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (o == null || typeof o !== "object") {
+    if (!isRecord(o)) {
       return undefined;
     }
-    /* SAFETY: 类型断言已复核 */
-    const v = (o as JsonRecord)[key];
+    const v = o[key];
     return typeof v === "string" ? v : undefined;
   };
   return str(err, "message") ?? str(err, "hint") ?? "comfy-cli 执行失败";
@@ -143,31 +136,22 @@ export function envelopeErrorMessage(env: unknown): string {
  *
  *  返回 `null` 表示不是这种错误（交给下方兜底逻辑按原样落盘）。 */
 export function translateWorkflowUnknownNodesError(env: unknown): string | null {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (env == null || typeof env !== "object") {
+  if (!isRecord(env)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const err = (env as JsonRecord).error;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (err == null || typeof err !== "object") {
+  const err = env.error;
+  if (!isRecord(err)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  if ((err as JsonRecord).code !== "workflow_unknown_nodes") {
+  if (err.code !== "workflow_unknown_nodes") {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const details = (err as JsonRecord).details;
-  const list =
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    details != null && typeof details === "object"
-      ? /* SAFETY: 类型断言已复核 */ (details as JsonRecord).errors
-      : undefined;
-  if (Array.isArray(list) && list.length > 0) {
+  const details = err.details;
+  const rawList: unknown = isRecord(details) ? details.errors : undefined;
+  if (Array.isArray(rawList) && rawList.length > 0) {
+    const list: Array<unknown> = rawList;
     const lines = list.slice(0, 12).map((raw) => {
-      /* SAFETY: 类型断言已复核 */
-      const e = raw as JsonRecord;
+      const e: Record<string, unknown> = isRecord(raw) ? raw : {};
       const node = typeof e.node_id === "string" ? `节点 ${e.node_id}` : "某节点";
       const field = typeof e.field === "string" ? ` 的「${e.field}」输入` : "";
       const hint =
@@ -182,13 +166,7 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
     const more = list.length > 12 ? `\n  …还有 ${list.length - 12} 处` : "";
     return `工作流校验未通过（comfy-cli 对照服务端校验），请修正后重新执行：\n${lines.join("\n")}${more}`;
   }
-  const message =
-    /* SAFETY: 类型断言已复核 */
-    /* SAFETY: 类型断言已复核 */
-    typeof (err as JsonRecord).message === "string"
-      ? /* SAFETY: 类型断言已复核 */
-        ((err as JsonRecord).message as string)
-      : "未知校验错误";
+  const message = typeof err.message === "string" ? err.message : "未知校验错误";
   return `工作流校验未通过（comfy-cli 对照服务端校验）：${message}`;
 }
 
@@ -250,10 +228,9 @@ export type CliEnvelopeParser = {
  * （`deps.patched`，与 `progress` 帧同一条路，见 ADR §24）。
  */
 function nodeTag(evt: JsonRecord, patched: Record<string, unknown> | undefined): string {
-  /* SAFETY: 类型断言已复核 */
-  const node = (evt.node ??
-    /* SAFETY: 类型断言已复核 */ (evt.data as JsonRecord | null | undefined)?.node ??
-    "?") as string;
+  const dataNode: unknown = isRecord(evt.data) ? evt.data.node : undefined;
+  const rawNode = evt.node ?? dataNode ?? "?";
+  const node = typeof rawNode === "string" ? rawNode : "?";
   const fromEvent =
     typeof evt.class_type === "string" && evt.class_type ? evt.class_type : undefined;
   const classType =
@@ -279,53 +256,6 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
   let nodeCountTotal: number | undefined;
   /** 本轮命中执行缓存的节点数（ISSUE #1278）。 */
   let cachedNodes = 0;
-
-  const handleLine = (line: string): void => {
-    if (!line) {
-      return;
-    }
-    let ev: unknown;
-    try {
-      ev = JSON.parse(line);
-    } catch {
-      // 非 JSON 行也要露面：comfy-cli 打印 Python traceback / import error
-      // 时用户才能看见。带上限，避免合法 verbose 输出刷屏。
-      deps.rawCli?.(taskId, `[comfy-cli stdout] ${line}`);
-      nonJsonLines++;
-      doTrace("cli", taskId, "stdout 非 JSON 行", { line });
-      if (nonJsonLines <= MAX_NON_JSON_LINES) {
-        const trimmed =
-          line.length > NON_JSON_LINE_CHARS ? `${line.slice(0, NON_JSON_LINE_CHARS)}…` : line;
-        log(taskId, "info", `[comfy-cli stdout] ${trimmed}`);
-      } else if (nonJsonLines === MAX_NON_JSON_LINES + 1) {
-        log(taskId, "info", `[comfy-cli stdout] …后续非 JSON 行已省略（查看后端日志）`);
-      }
-      return;
-    }
-    if (typeof ev !== "object" || ev === null) {
-      doTrace("cli", taskId, "stdout JSON 非对象", { line });
-      return;
-    }
-    /* comfy-cli 返回的原始内容也进面板：事件行会被折叠成面向用户的摘要
-     * （envelope / progress / execution_success 甚至整行不露面），排障时
-     * 「ComfyUI 到底回了什么」此前只能翻 trace 文件。带行数与单行截断
-     * 上限，原文仍完整落 trace。 */
-    rawJsonLines++;
-    /* 原始行**完整**进面板（不按单行截断）：面板把它折成一行，展开后经
-     * JsonViewer 显示完整 JSON —— 排障要看被截掉的那一段（envelope 尾部的
-     * 大对象、hint 里的逐节点明细）。同一份原文另存进 rawCli 缓冲，交给
-     * 「查看完整输出」弹窗按需整体拉取。 */
-    deps.rawCli?.(taskId, `[comfy-cli 原始] ${line}`);
-    if (rawJsonLines <= MAX_RAW_JSON_LINES) {
-      log(taskId, "info", `[comfy-cli 原始] ${line}`);
-    } else if (rawJsonLines === MAX_RAW_JSON_LINES + 1) {
-      log(taskId, "info", `[comfy-cli 原始] …后续原始行已省略（完整内容见后端 trace）`);
-    }
-    /* 已解析事件也原样落 trace：面板会按事件类型折叠成一行，这里保留原文。 */
-    doTrace("cli", taskId, "stdout 事件", { event: ev });
-    /* SAFETY: 类型断言已复核 */
-    dispatchEvent(ev as JsonRecord);
-  };
 
   const dispatchEvent = (evt: JsonRecord): void => {
     if (evt.type === "queued" && typeof evt.prompt_id === "string" && evt.prompt_id) {
@@ -366,6 +296,22 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
         "warn",
         `[comfy-cli] error 事件${typeof evt.message === "string" ? `：${evt.message}` : ""}`,
       );
+      return;
+    }
+    if (evt.type === "partial_execution" || evt.type === "partial_execution_targets_ignored") {
+      /* comfy-cli v1.24.0 的部分执行回执（本应用带 `--output-node-ids` 时才会
+       * 出现）：`partial_execution` 是「按目标节点统计」的提示；`…_ignored` 是
+       * 服务端**忽略了目标、跑了全图**的警告（计费与耗时都会按全图走，必须
+       * 让用户看见）。原始事件行已在面板（[comfy-cli 原始]），这里给一句定性。 */
+      const detail =
+        typeof evt.message === "string" && evt.message
+          ? evt.message
+          : clampText(JSON.stringify(evt.data ?? evt), { maxLength: 200, marker: "…" });
+      if (evt.type === "partial_execution") {
+        log(taskId, "info", `部分执行回执：${detail}`);
+      } else {
+        log(taskId, "warn", `⚠ 部分执行目标被服务端忽略（实际按全图执行）：${detail}`);
+      }
       return;
     }
     if (
@@ -415,12 +361,65 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
     }
   };
 
+  const handleLine = (line: string): void => {
+    if (!line) {
+      return;
+    }
+    let ev: unknown;
+    try {
+      ev = JSON.parse(line);
+    } catch {
+      // 非 JSON 行也要露面：comfy-cli 打印 Python traceback / import error
+      // 时用户才能看见。带上限，避免合法 verbose 输出刷屏。
+      deps.rawCli?.(taskId, `[comfy-cli stdout] ${line}`);
+      nonJsonLines++;
+      doTrace("cli", taskId, "stdout 非 JSON 行", { line });
+      if (nonJsonLines <= MAX_NON_JSON_LINES) {
+        const trimmed =
+          line.length > NON_JSON_LINE_CHARS ? `${line.slice(0, NON_JSON_LINE_CHARS)}…` : line;
+        log(taskId, "info", `[comfy-cli stdout] ${trimmed}`);
+      } else if (nonJsonLines === MAX_NON_JSON_LINES + 1) {
+        log(taskId, "info", `[comfy-cli stdout] …后续非 JSON 行已省略（查看后端日志）`);
+      }
+      return;
+    }
+    if (!isRecord(ev)) {
+      doTrace("cli", taskId, "stdout JSON 非对象", { line });
+      return;
+    }
+    /* comfy-cli 返回的原始内容也进面板：事件行会被折叠成面向用户的摘要
+     * （envelope / progress / execution_success 甚至整行不露面），排障时
+     * 「ComfyUI 到底回了什么」此前只能翻 trace 文件。带行数与单行截断
+     * 上限，原文仍完整落 trace。 */
+    rawJsonLines++;
+    /* 原始行**完整**进面板（不按单行截断）：面板把它折成一行，展开后经
+     * JsonViewer 显示完整 JSON —— 排障要看被截掉的那一段（envelope 尾部的
+     * 大对象、hint 里的逐节点明细）。同一份原文另存进 rawCli 缓冲，交给
+     * 「查看完整输出」弹窗按需整体拉取。 */
+    deps.rawCli?.(taskId, `[comfy-cli 原始] ${line}`);
+    if (rawJsonLines <= MAX_RAW_JSON_LINES) {
+      log(taskId, "info", `[comfy-cli 原始] ${line}`);
+    } else if (rawJsonLines === MAX_RAW_JSON_LINES + 1) {
+      log(taskId, "info", `[comfy-cli 原始] …后续原始行已省略（完整内容见后端 trace）`);
+    }
+    /* 已解析事件也原样落 trace：面板会按事件类型折叠成一行，这里保留原文。 */
+    doTrace("cli", taskId, "stdout 事件", { event: ev });
+    dispatchEvent(ev);
+  };
+
   return {
     sink: (chunk: Buffer | string) => {
       /* 原始 chunk 直送 trace（不截断不聚合）——面板只显示解析后的事件，
        * 出现「没找到生成结果」时唯一能回答「ComfyUI 到底回了什么」的就是这里。 */
       doTrace("cli", taskId, "stdout 原始输出", { chunk: String(chunk) });
       buf += String(chunk);
+      if (buf.length > STDOUT_LINE_CAP_CHARS) {
+        /* 单行无换行的巨型输出按预算截断（#4418）：与 stderr 原文缓冲同一族——
+         * 失控的自定义节点可以产出无换行的巨量输出，不封顶就把常驻进程内存
+         * 撑到任务时长线性增长。截断点落 trace，行内容按截断后处理。 */
+        doTrace("cli", taskId, "stdout 单行超预算截断", { cappedAt: buf.length });
+        buf = buf.slice(0, STDOUT_LINE_CAP_CHARS);
+      }
       let idx: number;
       while ((idx = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, idx).trim();
@@ -468,6 +467,12 @@ export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
      * traceback 尾部（异常类 + 行号）必须完整可查。 */
     doTrace("cli", taskId, "stderr 原始输出", { chunk: d });
     errBuf += d;
+    if (errBuf.length > STDERR_RAW_CAP_CHARS) {
+      /* 尾部窗口（#4418）：消费点（close 时的 tail）只要末尾十几行，超限从头部
+       * 截——失控的自定义节点/comfy-cli 插件在最长 25 分钟里持续刷屏（含 tqdm
+       * 的 \r 反复重绘）时，内存不再随任务时长线性增长。 */
+      errBuf = errBuf.slice(errBuf.length - STDERR_RAW_CAP_CHARS);
+    }
     for (const line of d.split(/\r?\n/)) {
       const trimmed = line.trim();
       if (!trimmed) {
@@ -565,16 +570,8 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
         // 把原始 envelope（截断）落盘，支持现场能看到真实形状，而不是只剩
         // 一句「Workflow has N validation error(s)」。
         const rawMsg = msg;
-        const err =
-          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-          env != null && typeof env === "object"
-            ? /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error
-            : undefined;
-        const errCode =
-          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-          err != null && typeof err === "object"
-            ? /* SAFETY: 类型断言已复核 */ (err as JsonRecord).code
-            : undefined;
+        const err = isRecord(env) ? env.error : undefined;
+        const errCode = isRecord(err) ? err.code : undefined;
         if (/validation error/i.test(rawMsg) || errCode === "prompt_rejected") {
           try {
             const dump = clampText(JSON.stringify(env), {

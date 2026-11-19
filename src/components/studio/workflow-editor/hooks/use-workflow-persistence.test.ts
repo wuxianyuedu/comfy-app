@@ -1,18 +1,19 @@
 import { createElement, type ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 
 import type { WorkflowDetail } from "~/components/studio/workflow-types";
 import { ToastProvider } from "../../ToastProvider";
 import { useWorkflowPersistence } from "./use-workflow-persistence";
 
-/* 「重置布局」的回归护栏。
- *
- * 这条用例钉的是一个曾经静默失效的路径：快照与当前视图来自**不同的
- * id 命名空间**时，`Object.keys(positions).length < nodes.length` 这种
- * 跨命名空间计数会把完整的快照误判成「残缺」，于是重置退化成
- * 「清空本地 positions + Kahn 重排」—— 用户拖动过的节点纹丝不动，按钮看起来
- * 完全没反应。 */
+type SetDetail = (
+  value: WorkflowDetail | null | ((prev: WorkflowDetail | null) => WorkflowDetail | null),
+) => void;
+
+/* 「重置布局」的回归护栏：快照与当前视图来自**不同的 id 命名空间**时，
+ * `Object.keys(positions).length < nodes.length` 这种跨命名空间计数会把完整快照误判
+ * 成「残缺」，重置退化成「清空本地 positions + Kahn 重排」—— 用户拖过的节点纹丝不动，
+ * 按钮看起来完全没反应。 */
 
 function makeDetail(over: Partial<WorkflowDetail> = {}): WorkflowDetail {
   return {
@@ -46,7 +47,7 @@ function renderReset(args: {
   hostNodeId?: string;
   reloadView?: () => void;
 }) {
-  const setDetail = vi.fn();
+  const setDetail = vi.fn<SetDetail>();
   const mutate = vi.fn();
   const fitToContent = args.fitToContent ?? vi.fn();
   const { result, rerender } = renderHook(
@@ -80,12 +81,9 @@ function renderReset(args: {
 }
 
 /** 从 setDetail 的 updater 里取出写回的 positions。 */
-function readWrittenPositions(setDetail: ReturnType<typeof vi.fn>, detail: WorkflowDetail) {
-  /* SAFETY: 类型断言已复核 */
-  const updater = setDetail.mock.calls.at(-1)?.[0] as
-    | ((prev: WorkflowDetail | null) => WorkflowDetail | null)
-    | undefined;
-  if (!updater) {
+function readWrittenPositions(setDetail: Mock<SetDetail>, detail: WorkflowDetail) {
+  const updater = setDetail.mock.calls.at(-1)?.[0];
+  if (typeof updater !== "function") {
     return undefined;
   }
   return updater(detail)?.positions;
@@ -102,7 +100,9 @@ describe("resetLayout", () => {
     const detail = makeDetail({ positions });
     const { result, setDetail, mutate } = renderReset({ detail });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     /* 顶层视图 → 空串 scope。 */
     expect(mutate).toHaveBeenCalledTimes(1);
@@ -127,7 +127,9 @@ describe("resetLayout", () => {
       reloadView,
     });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     expect(reloadView).toHaveBeenCalledTimes(1);
     /* 有重拉就不再自己 fit：重拉回来的数据会触发一次新的 fit。 */
@@ -151,7 +153,9 @@ describe("resetLayout", () => {
       detail,
     });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     /* 子图内部节点的坐标属于下钻视图，顶层重置不该碰。 */
     expect(readWrittenPositions(setDetail, detail)).toEqual({
@@ -167,19 +171,18 @@ describe("resetLayout", () => {
     const detail = makeDetail({ positions: null });
     const { result, setDetail } = renderReset({ detail });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     expect(readWrittenPositions(setDetail, detail)).toBeNull();
   });
 });
 
-/* 子图视图的 id 命名空间。
- *
- * 下钻后画布上的节点 id 是**裸内部 id**（`1670`），而 `positions` 列存的
- * 是 `宿主:内部` 拼接键（`4:1670`，见 extractPositions）。两套键各写各的时
- * 会出现「子图里拖的位置顶层看不到、下钻回来又被当成原始坐标盖掉真正的原始
- * 位置」—— 用户看到的就是「重置布局回不到原始工作流，再改一次却回归到一个
- * 错误位置」。下面两条钉住写入与还原都必须走同一个拼接口径。 */
+/* 子图视图的 id 命名空间：下钻后画布节点 id 是**裸内部 id**（`1670`），而 `positions`
+ * 列存的是 `宿主:内部` 拼接键（`4:1670`，见 extractPositions）。两套键各写各的会出现
+ * 「子图里拖的位置顶层看不到、下钻回来又被当成原始坐标盖掉真正的原始位置」，即
+ * 「重置布局回不到原始工作流」。下面两条钉住写入与还原都走同一个拼接口径。 */
 describe("resetLayout · 子图 id 命名空间", () => {
   it("子图内拖动内部节点时，落库的键是 `宿主:内部` 而不是裸内部 id", () => {
     const detail = makeDetail({
@@ -192,12 +195,12 @@ describe("resetLayout · 子图 id 命名空间", () => {
       hostNodeId: "4",
     });
 
-    act(() =>
+    act(() => {
       result.current.onNodeDragStop(
         {},
         { id: "1001", type: "wfNode", position: { x: 30, y: 0 }, data: {} },
-      ),
-    );
+      );
+    });
 
     /* 锚点反演：wfNode 的 y 要加回 NODE_TITLE_H(30)。 */
     expect(mutate.mock.calls.at(-1)![0]).toMatchObject({
@@ -217,12 +220,12 @@ describe("resetLayout · 子图 id 命名空间", () => {
       hostNodeId: "4:5",
     });
 
-    act(() =>
+    act(() => {
       result.current.onNodeDragStop(
         {},
         { id: "1670", type: "wfNode", position: { x: 10, y: 20 }, data: {} },
-      ),
-    );
+      );
+    });
 
     expect(mutate.mock.calls.at(-1)![0]).toMatchObject({
       positions: { "4:5:1670": [10, 50] },
@@ -254,7 +257,9 @@ describe("resetLayout · 子图 id 命名空间", () => {
       hostNodeId: "4",
     });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     expect(mutate.mock.calls.at(-1)![0]).toEqual({
       id: "wf-1",
@@ -285,7 +290,9 @@ describe("resetLayout · 子图 id 命名空间", () => {
       hostNodeId: "4:5",
     });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     expect(mutate.mock.calls.at(-1)![0]).toEqual({
       id: "wf-1",
@@ -313,7 +320,9 @@ describe("resetLayout · 子图 id 命名空间", () => {
       reloadView,
     });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     expect(reloadView).toHaveBeenCalledTimes(1);
   });

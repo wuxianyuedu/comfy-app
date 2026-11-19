@@ -32,7 +32,9 @@ function RatingStars({
           aria-label={`${star} 星`}
           disabled={disabled}
           key={star}
-          onClick={() => onPick(value === star ? null : star)}
+          onClick={() => {
+            onPick(value === star ? null : star);
+          }}
           size="icon-sm"
           type="button"
           variant="ghost"
@@ -90,7 +92,9 @@ export function HumanVerdictRow({
   }
 
   // 反馈通道（~/lib/async-action 的形状）：成功清掉行内错误块，失败落一句话。
-  const report: ActionReport = (kind, detail) => setError(kind === "err" ? detail : "");
+  const report: ActionReport = (kind, detail) => {
+    setError(kind === "err" ? detail : "");
+  };
 
   const submit = (pass: boolean) =>
     busy.run(async () => {
@@ -128,8 +132,9 @@ export function HumanVerdictRow({
         {onRatingChange && (
           <RatingStars
             disabled={disabled || busy.busy}
-            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-            onPick={(value) => void pickRating(value)}
+            onPick={(value) => {
+              void pickRating(value);
+            }}
             value={localRating}
           />
         )}
@@ -152,8 +157,9 @@ export function HumanVerdictRow({
         />
         <Button
           disabled={disabled || busy.busy}
-          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-          onClick={() => void submit(true)}
+          onClick={() => {
+            void submit(true);
+          }}
           size="sm"
           type="button"
           variant="outline"
@@ -162,8 +168,9 @@ export function HumanVerdictRow({
         </Button>
         <Button
           disabled={disabled || busy.busy}
-          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-          onClick={() => void submit(false)}
+          onClick={() => {
+            void submit(false);
+          }}
           size="sm"
           type="button"
           variant="outline"

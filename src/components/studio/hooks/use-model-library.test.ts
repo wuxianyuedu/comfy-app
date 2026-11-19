@@ -10,15 +10,14 @@ import { httpBatchStreamLink } from "@trpc/client";
 import { http } from "msw/http";
 import { TRPCError } from "@trpc/server";
 import SuperJSON from "superjson";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createTestTRPC, testTrpcEndpoint } from "../../../../tests/helpers/test-trpc";
 import { forwardForTest, setupTrpcServer } from "../../../../tests/helpers/trpc-msw";
 import { createTestQueryClient } from "../../../../tests/helpers/renderWithProviders";
 import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
-import { useModelLibrary } from "./use-model-library";
-import { ALL_TYPES } from "../model-library-config";
+import { useModelLibrary, type ModelLibraryController } from "./use-model-library";
 
 type Row = {
   createdAt: string;
@@ -41,7 +40,10 @@ type Behavior = {
 let behavior: Behavior = { models: [] };
 /** 记录 list 收到的入参，用于断言筛选真的传到了后端 */
 const listInputs: Array<{ q?: string; type?: string } | undefined> = [];
-/** 记录 sync 被调用的次数 —— 断言「挂载时同步一次」不会随重渲染复发。 */
+/** 记录 sync 被调用的次数 —— 断言「挂载时同步一次」不会随重渲染复发。
+ *  它是**跨用例共享**的模块级计数：用例必须在自己的请求全部落地后才结束
+ *  （见 waitSyncSettled），否则迟到的 handler 会在 afterEach 清零之后才执行，
+ *  把 +1 落进下一条用例（ISSUE #2911 的串号根因）。 */
 let syncCalls = 0;
 
 const t = createTestTRPC();
@@ -49,7 +51,7 @@ const mockRouter = t.router({
   model: t.router({
     list: t.procedure.query(({ input }) => {
       listInputs.push(input);
-      if (behavior.listError) {
+      if (behavior.listError !== undefined && behavior.listError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.listError,
@@ -59,7 +61,7 @@ const mockRouter = t.router({
     }),
     sync: t.procedure.mutation(() => {
       syncCalls += 1;
-      if (behavior.syncError) {
+      if (behavior.syncError !== undefined && behavior.syncError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.syncError,
@@ -67,10 +69,19 @@ const mockRouter = t.router({
       }
       return { ok: true, count: behavior.models.length };
     }),
+    configList: t.procedure.query(() => ({
+      folders: [],
+      comfyReachable: true,
+      comfyuiPathConfigured: true,
+    })),
   }),
 });
 
 const server = setupTrpcServer(mockRouter);
+
+/* #4236：sync 失败要给用户可见出口（toast）。ToastProvider 用桩替掉，断言打在桩上。 */
+const toast = vi.hoisted(() => ({ info: vi.fn(), error: vi.fn() }));
+vi.mock("~/components/studio/ToastProvider", () => ({ useToast: () => toast }));
 
 const ONE: Row = {
   id: "m1",
@@ -98,9 +109,8 @@ const THREE: Row = {
 
 /**
  * hook 用到 trpc.model.*，必须挂在真实的 tRPC Provider 下。
- * 用 createElement 而不是 JSX：本文件是 `.test.ts`（要求 .tsx 一律 PascalCase，
- * 而 hook 的测试伙伴文件按 必须 kebab-case），带 JSX 就得改名成 `Use*Test.tsx`，
- * 反而更怪。
+ * 用 createElement 而不是 JSX：本文件是 `.test.ts`（带 JSX 就得改名成 PascalCase，
+ * 而 hook 测试伙伴文件按约定是 kebab-case，反而更怪）。
  */
 function makeWrapper() {
   const qc = createTestQueryClient();
@@ -116,17 +126,34 @@ function makeWrapper() {
     return createElement(
       QueryClientProvider,
       { client: qc },
-      // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children，tRPC 的 ProviderProps 要求它带在 props 上
       createElement(TRPCProvider, {
         trpcClient: client,
         queryClient: qc,
+        // oxlint-disable-next-line react/no-children-prop -- createElement 的第三参即 children，tRPC 的 ProviderProps 要求它带在 props 上
         children,
       }),
     );
   };
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+/**
+ * 等本用例挂载的那次静默同步「已发车且全链落地」，让用例结束在**静止态**。为什么需要它
+ *（ISSUE #2911）：sync 经 `setTimeout(…,0)` 发车、与 list 并行，且 sync 的 `onSettled` 还会
+ * 触发一次静默 refetch；原收尾只等 `loading` 收敛，负载下回包可晚于 `afterEach` 清零后到达。
+ */
+async function waitSyncSettled(result: { current: ModelLibraryController }): Promise<void> {
+  await expect.poll(() => syncCalls, { message: "挂载时的静默同步应已记账" }).toBe(1);
+  await expect
+    .poll(() => listInputs.length, { message: "初次 list 与 sync 触发的 refetch 应都已到达" })
+    .toBe(2);
+  await expect
+    .poll(() => result.current.refreshing, { message: "sync 与其触发的 refetch 应已落地" })
+    .toBe(false);
+}
+
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
 afterEach(() => {
   cleanup();
   behavior = { models: [] };
@@ -134,7 +161,9 @@ afterEach(() => {
   syncCalls = 0;
   server.resetHandlers();
 });
-afterAll(() => server.close());
+afterAll(() => {
+  server.close();
+});
 
 describe("useModelLibrary", () => {
   it("挂载：静默同步后 loading 收敛到 false，并拿到模型行", async () => {
@@ -147,6 +176,7 @@ describe("useModelLibrary", () => {
     await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.models).toHaveLength(1);
     expect(result.current.models[0]?.fileName).toBe("dreamshaper-xl.safetensors");
+    await waitSyncSettled(result);
   });
 
   /* 回归：effect 的依赖数组曾经是 `[syncMut, reload]`，而这两个引用
@@ -160,12 +190,16 @@ describe("useModelLibrary", () => {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.loading).toBe(false);
-    expect(syncCalls).toBe(1);
+    /* 先等本用例自己的 sync 全链落地再计数（原先是裸读 `syncCalls`，负载下
+     * handler 晚于 list 回包时会读到上一条用例的迟到 +1 / 自己的还没记账）；
+     * 断言本身不弱化 —— 重渲染后仍是硬断言 `toBe(1)`。 */
+    await waitSyncSettled(result);
 
     /* 反复重渲染（模拟父级因轮询 / 状态更新重渲染）：若依赖数组再回到不稳的
      * 引用上，这里会随之线性增长。 */
     for (let i = 0; i < 5; i++) {
       rerender();
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await act(async () => {
         await Promise.resolve();
       });
@@ -174,41 +208,89 @@ describe("useModelLibrary", () => {
     expect(result.current.models).toHaveLength(1);
   });
 
-  it("筛选与搜索：filtered / typeChips 随状态派生（本地筛选，不打新请求）", async () => {
+  it("按目录浏览：folders / activeFolder 随数据派生，切换目录与搜索都是本地筛选", async () => {
     behavior = { models: [ONE, TWO, THREE] };
     const { result } = renderHook(() => useModelLibrary(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.loading).toBe(false);
+    await waitSyncSettled(result);
 
-    expect(result.current.filtered).toHaveLength(3);
-    // 类型 chips 按数量降序
-    expect(result.current.typeChips).toEqual([
+    // 目录列按数量降序；默认选中第一项（loras 2 个）
+    expect(result.current.folders.map((folder) => [folder.type, folder.count])).toEqual([
       ["loras", 2],
       ["checkpoints", 1],
     ]);
-
-    const callsBefore = listInputs.length;
-    act(() => result.current.setFilter("loras"));
+    expect(result.current.activeFolder).toBe("loras");
     expect(result.current.filtered.map((m) => m.id)).toEqual(["m2", "m3"]);
 
-    act(() => result.current.setQ("anime"));
+    const callsBefore = listInputs.length;
+    act(() => {
+      result.current.setActiveFolder("checkpoints");
+    });
+    expect(result.current.filtered.map((m) => m.id)).toEqual(["m1"]);
+
+    act(() => {
+      result.current.setQ("anime");
+    });
+    expect(result.current.filtered).toEqual([]);
+
+    act(() => {
+      result.current.setActiveFolder("loras");
+    });
     expect(result.current.filtered.map((m) => m.id)).toEqual(["m3"]);
 
-    act(() => result.current.setQ(""));
-    act(() => result.current.setFilter(ALL_TYPES));
-    expect(result.current.filtered).toHaveLength(3);
-    // 筛选是纯本地派生：不应该为了筛选再发请求
+    act(() => {
+      result.current.setQ("");
+    });
+    expect(result.current.filtered.map((m) => m.id)).toEqual(["m2", "m3"]);
+    // 目录选择与搜索是纯本地派生：不应该为了它们再发请求
     expect(listInputs.length).toBe(callsBefore);
   });
 
-  it("类型 count 为 0 时 chips 不出现（数据驱动，不是写死的目录表）", async () => {
-    behavior = { models: [ONE] };
+  it("空库：folders 为空、activeFolder 为 null", async () => {
+    behavior = { models: [] };
     const { result } = renderHook(() => useModelLibrary(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.loading).toBe(false);
-    expect(result.current.typeChips).toEqual([["checkpoints", 1]]);
+    await waitSyncSettled(result);
+    expect(result.current.folders).toEqual([]);
+    expect(result.current.activeFolder).toBeNull();
+    expect(result.current.filtered).toEqual([]);
+  });
+
+  it("list 失败 → loadError 带原因浮现，retry 重拉后恢复（#4236）", async () => {
+    behavior = { models: [ONE], listError: "后端炸了" };
+    const { result } = renderHook(() => useModelLibrary(), {
+      wrapper: makeWrapper(),
+    });
+    await expect.poll(() => result.current.loading).toBe(false);
+
+    /* 失败态独立于空态：错误原因可见（含动作前缀与原文），而不是空库文案。 */
+    expect(result.current.loadError).toContain("模型库加载失败");
+    expect(result.current.loadError).toContain("后端炸了");
+
+    /* 重试：服务端恢复后，retry 重新拉取 → 错误清空、模型行到位。 */
+    behavior = { models: [ONE] };
+    await act(async () => {
+      result.current.retry();
+      await Promise.resolve();
+    });
+    await expect.poll(() => result.current.loadError).toBeNull();
+    await expect.poll(() => result.current.models).toHaveLength(1);
+  });
+
+  it("sync 失败 → toast.error 带动作前缀与原因（#4236）", async () => {
+    behavior = { models: [ONE], syncError: "磁盘只读" };
+    const { result } = renderHook(() => useModelLibrary(), {
+      wrapper: makeWrapper(),
+    });
+    await waitSyncSettled(result);
+
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(String(toast.error.mock.calls[0]?.[0])).toContain("模型同步失败");
+    expect(String(toast.error.mock.calls[0]?.[0])).toContain("磁盘只读");
   });
 
   it("sync 失败不阻塞列表：loading 仍收敛，行照常渲染", async () => {
@@ -217,56 +299,25 @@ describe("useModelLibrary", () => {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.loading).toBe(false);
+    /* sync 失败同样走 onSettled → 静默 refetch：syncCalls 仍记账 1、list 仍到 2，
+     * 收尾判定与成功路径同一条（见 waitSyncSettled）。 */
+    await waitSyncSettled(result);
     expect(result.current.models).toHaveLength(1);
   });
 });
 
 /**
- * 回归：游离 promise 链在卸载后不得再 setState（ISSUE #489）
- * ---------------------------------------------------------------------------
- * 实测形态：`pnpm test` **随机**非零退出（65 轮里 4 轮），用例层面全绿
- * （`Tests N passed / 0 failed`），退出码来自 vitest 的 `Unhandled Errors`：
- *
- * 实测量：Unhandled Rejection: ReferenceError: window is not defined
- *       栈帧：resolveUpdatePriority 在 react-dom-client.development.js:1308
- *       栈帧：dispatchSetState 在同一文件的 9126 行
- *       栈帧：use-model-library.ts:58 的 .finally(() => setLoading(false))
- *
- * 根因：`loadModels` 里 `listQ.refetch().finally(...)` 是一条**脱离组件生命
- * 周期的链**。测试结束后（jsdom 环境已拆除、window 已消失）它才 resolve，
- * 于是 setLoading 触发 React 更新调度、读 window 抛错。`cleanup()` 只卸载组件、
- * 不会取消这条已发出的 promise。
- *
- * 「点名哪个文件」只取决于谁的 MSW handler 回包慢一拍 —— 所以报错文件每次都不同
- * （实测出现过 ModelLibrary.integration / use-model-folder-config / WorkflowEditorInner），
- * 全是被牵连的无辜文件。这也是为什么这条要单独用**确定性**用例守住：
- * 靠全量跑碰上概率太低，没法当门禁。
- *
- * 反向验证：去掉 hook 里的 aliveRef 判定，本用例必挂（卸载后调用计数继续增长）。
+ * 回归：游离 promise 链在卸载后不得再 setState（ISSUE #489）。`loadModels` 里
+ * `listQ.refetch().finally(...)` 脱离组件生命周期；测试结束后 jsdom 已拆、window 消失它才
+ * resolve，setLoading 触发 React 调度读 window 抛错。`pnpm test` 随机非零退出（65 轮 4 轮）即此。
  */
 describe("useModelLibrary 卸载后不再 setState", () => {
   it("卸载后 refetch 回包不得触发更新调度（原缺陷：React 读到已拆除的 window）", async () => {
-    /* 把原来「只在全量并行下偶然出现」的时序变成**必现**：
-     * 让 list 的回包卡住到我们显式放行 —— 于是 `.finally` 必然发生在
-     * unmount 之后，正是缺陷形态（游离 promise 落在组件生命周期之外）。
-     *
-     * 判据为什么不是「有没有 unhandled rejection」：卸载后 React 在**仍有
-     * jsdom 环境**时能容忍这次更新（静默排掉），只有环境已拆才会抛 ——
-     * 而单测里没法在同一个用例内拆掉 jsdom。实测那条路走不通（改坏实现也绿）。
-     *
-     * 可判定的信号是**更新调度被触发的次数**：React 在没有活动 fiber 时接到
-     * setState，会走 `resolveUpdatePriority` 去读 `globalThis.window`。
-     * 拿一个记账替身换掉 window，只统计**调用栈含更新调度函数**的读取：
-     *
-     *   修好（finally 先判 aliveRef）→ 2 次（都来自本次卸载自身的清理）
-     *   没修（无条件 setLoading）    → 4 次（多出的两次就是游离 promise 触发的调度）
-     *
-     * 只统计调度栈、不统计全部读取很重要：ambient 活动（react-query 的
-     * focusManager / onlineManager、tRPC 的 getFetch）也会读 window，
-     * 全量统计得到的是 7 vs 16，混着与本缺陷无关的噪声。
-     *
-     * 反向验证：把 finally 改回无条件 `setLoading(false)`，本条必挂。
-     */
+    /* 把原来「只在全量并行下偶然出现」的时序变成**必现**：让 list 回包卡到显式放行，
+     * 于是 `.finally` 必然发生在 unmount 之后。判据是**更新调度被触发的次数**：React 在
+     * 无活动 fiber 时接到 setState 会走 `resolveUpdatePriority` 读 `globalThis.window`；
+     * 记账替身只统计调用栈含调度函数的读取（修好 2 次 / 没修 4 次；全量统计 7 vs 16 混噪声）。
+     * 反向验证：把 finally 改回无条件 `setLoading(false)`，本条必挂。 */
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -282,6 +333,11 @@ describe("useModelLibrary 卸载后不再 setState", () => {
           return { models: [ONE] };
         }),
         sync: t.procedure.mutation(() => ({ ok: true, count: 1 })),
+        configList: t.procedure.query(() => ({
+          folders: [],
+          comfyReachable: true,
+          comfyuiPathConfigured: true,
+        })),
       }),
     });
     server.use(

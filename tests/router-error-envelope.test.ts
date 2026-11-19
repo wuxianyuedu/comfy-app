@@ -1,36 +1,83 @@
 /**
- * 「router 层的错误信封只许 TRPCError」这条判据自身的用例（台账 E8 的防线）。
- *
- * 三层各管一件事，缺任何一层都会静默失效：
- *   ① **存量为零** —— 真扫 `src/server/api/routers/**`（先过 `stripComments`，
- *      否则本文件的注释里那些「裸 `throw new Error`」叙述会把自己判红）。
- *      同时断言**扫描面非空**：路径写错时「零命中」看起来就像「全都修好了」，
- *      这是这一类清单最典型的死法。
- *   ② **配置在写** —— `eslint.config.js` 里确实有针对该 glob 的 `no-restricted-syntax`，
- *      selector 直接从配置源码里取（不在这里重抄一份，否则改了配置而测试还绿）。
- *   ③ **selector 真的会响** —— 拿 eslint 自带的 `Linter` 在两段最小片段上验一次：
- *      裸 `throw new Error` 必须报、`throw new TRPCError` 必须不报。
- *      少了这一层，② 就只是一句「配置里有个字符串」—— 而本仓库已经付过学费：
- *      **「有配置 ≠ 配置在跑」**（§11.7 / 台账 E2 同源）。
+ * 「router 层的错误信封只许 TRPCError」判据自身的用例（台账 E8）。三层缺一都会静默失效：
+ * ① 真扫 `src/server/api/routers/**`（先 `stripComments`，否则本文件注释里的裸 `throw new Error` 会把自己判红）并断言扫描面非空 —— 路径写错时「零命中」看起来就像「全都修好了」，这是这类清单最典型的死法；
+ * ② 规则条目从 `oxlint.parity.config.mjs` 的导入对象取（#2777 迁 oxlint jsPlugin，不在测试里重抄）；③ 用真 oxlint CLI 最小探针验行为：裸 `throw new Error` 报、`throw new TRPCError` 不报，store selector 那条同样在响（#2777 修层覆盖前，后一层会整条替换前一层）——「有配置 ≠ 配置在跑」（§11.7 / 台账 E2）。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { Linter } from "eslint";
 
+import oxlintConfig from "../oxlint.parity.config.mjs";
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+import { probeRules } from "./helpers/oxlint-probe";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = process.cwd();
 const ROUTER_DIR = path.join(ROOT, "src", "server", "api", "routers");
-const CONFIG = path.join(ROOT, "eslint.config.js");
+const ROUTER_GLOB = "src/server/api/routers/**/*.ts";
 
 /** 被拦的形状：`throw new 任何非 TRPCError`。 */
 const BARE_THROW = /throw\s+new\s+(?!TRPCError\b)[A-Za-z_$][\w$]*\s*\(/;
+
+type RestrictedSyntaxEntry = { message: string; selector: string };
+type ConfigBlock = {
+  excludeFiles?: Array<string> | string;
+  files?: Array<string> | string;
+  rules?: Record<string, unknown>;
+};
 
 function routerSources(): Array<string> {
   return readdirSync(ROUTER_DIR)
     .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
     .map((f) => path.join(ROUTER_DIR, f));
+}
+
+/** 从真实判决配置里取 router 那一档生效的规则条目（配置变了，这里跟着变）。 */
+/** 判决配置里 router 那一档的形状守卫（B5 清账：不走 `as` 断言）。 */
+function isConfigBlock(value: unknown): value is ConfigBlock {
+  return isRecord(value) && isUnknownArray(value.files);
+}
+
+function routerRestrictedSyntax(): { block: ConfigBlock; entries: Array<RestrictedSyntaxEntry> } {
+  /* overrides 用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+  const overrides: unknown = oxlintConfig.overrides;
+  const blocks: Array<ConfigBlock> = [];
+  if (isUnknownArray(overrides)) {
+    for (const entry of overrides) {
+      if (
+        isConfigBlock(entry) &&
+        isUnknownArray(entry.files) &&
+        entry.files.includes(ROUTER_GLOB)
+      ) {
+        blocks.push(entry);
+      }
+    }
+  }
+  expect(blocks).toHaveLength(1);
+  const block = blocks[0];
+  if (!block) {
+    throw new Error(`oxlint.parity.config.mjs 里没有 ${ROUTER_GLOB} 这一档（glob 改过？）`);
+  }
+  const rules: unknown = block.rules?.["eslint-js/no-restricted-syntax"];
+  expect(isUnknownArray(rules), "router 档的 no-restricted-syntax 不是数组").toBe(true);
+  const entries: Array<RestrictedSyntaxEntry> = [];
+  if (isUnknownArray(rules)) {
+    for (const entry of rules) {
+      if (
+        isRecord(entry) &&
+        typeof entry.message === "string" &&
+        typeof entry.selector === "string"
+      ) {
+        entries.push({ message: entry.message, selector: entry.selector });
+      }
+    }
+  }
+  return { block, entries };
+}
+
+/** 用真实条目真跑一次 oxlint —— 这就是「判据是否真的会响」的行为断言。 */
+function flagged(entries: Array<RestrictedSyntaxEntry>, samples: Record<string, string>) {
+  return probeRules({ "eslint-js/no-restricted-syntax": ["error", ...entries] }, samples);
 }
 
 describe("① 存量为零：router 里不许有裸 throw", () => {
@@ -58,39 +105,43 @@ describe("① 存量为零：router 里不许有裸 throw", () => {
   });
 });
 
-describe("② + ③ 配置在写，且 selector 真的会响", () => {
-  const configSrc = readFileSync(CONFIG, "utf8");
-
-  it("eslint.config.js 为 router 目录声明了 no-restricted-syntax", () => {
-    expect(configSrc).toContain("src/server/api/routers/**/*.ts");
-    expect(configSrc).toContain("no-restricted-syntax");
+describe("② + ③ router 档的规则条目：两层同时生效，且真的会响", () => {
+  it("router 档同时带着 router selector 和 store selector（层覆盖缺陷已修）", () => {
+    const { block, entries } = routerRestrictedSyntax();
+    expect(entries).toHaveLength(3);
+    const selectors = entries.map((e) => e.selector);
+    expect(selectors.some((s) => s.includes("ThrowStatement"))).toBe(true);
+    expect(
+      selectors.filter(
+        (s) => s.includes("STORE_SELECTOR") || s.includes("CallExpression[callee.name="),
+      ),
+    ).toHaveLength(2);
+    // 测试夹具要模拟裸 Error，必须留在豁免面外。
+    const exclude = block.excludeFiles;
+    expect(Array.isArray(exclude) ? exclude : [exclude]).toContain(
+      "src/server/api/routers/**/*.test.ts",
+    );
   });
 
-  it("从配置里取出的 selector：裸 Error 报、TRPCError 不报", () => {
-    const selector = /selector:\s*\n?\s*'([^']*NewExpression[^']*)'/.exec(configSrc)?.[1] ?? "";
-    expect(selector).toContain("ThrowStatement");
-    expect(selector).toContain('callee.name!="TRPCError"');
+  it("行为：裸 Error / TypeError 报，TRPCError 不报", () => {
+    const { entries } = routerRestrictedSyntax();
+    const hits = flagged(entries, {
+      "bare.ts": `export const a = () => {\n  throw new Error("x");\n};`,
+      "typeerror.ts": `export const a = () => {\n  throw new TypeError("x");\n};`,
+      "trpc.ts": `export const a = () => {\n  throw new TRPCError({ code: "NOT_FOUND" });\n};`,
+    });
+    expect(hits.has("bare.ts"), "裸 Error 必须报").toBe(true);
+    expect(hits.has("typeerror.ts"), "裸 TypeError 必须报").toBe(true);
+    expect(hits.has("trpc.ts"), "TRPCError 不该报").toBe(false);
+  });
 
-    const linter = new Linter();
-    const verify = (code: string) =>
-      linter.verify(code, {
-        languageOptions: { ecmaVersion: 2022, sourceType: "module" },
-        rules: {
-          "no-restricted-syntax": ["error", { selector, message: "bare" }],
-        },
-      });
-
-    expect(
-      verify(`export const a = () => {\n  throw new Error("x");\n};`).map((m) => m.ruleId),
-    ).toContain("no-restricted-syntax");
-    expect(
-      verify(`export const a = () => {\n  throw new TRPCError({ code: "NOT_FOUND" });\n};`).map(
-        (m) => m.ruleId,
-      ),
-    ).not.toContain("no-restricted-syntax");
-    // TypeError / 自定义错误名同样在拦的范围里（不只是 `Error` 这一个词）
-    expect(
-      verify(`export const a = () => {\n  throw new TypeError("x");\n};`).map((m) => m.ruleId),
-    ).toContain("no-restricted-syntax");
+  it("行为：router 文件里的 store selector 同类形态照样报（没被 router 层盖掉）", () => {
+    const { entries } = routerRestrictedSyntax();
+    const hits = flagged(entries, {
+      "store-object.ts": `export const value = useLogStore((s) => ({ a: s.a }));`,
+      "store-ok.ts": `export const value = useLogStore((s) => s.a);`,
+    });
+    expect(hits.has("store-object.ts"), "router 档里的 store selector 必须报").toBe(true);
+    expect(hits.has("store-ok.ts"), "只取原始值不该报").toBe(false);
   });
 });

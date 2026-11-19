@@ -18,6 +18,11 @@ import { classifyChanges, describeChanges, parseDiffEntries } from "./sync-attri
 /** 运行期探测的节拍：与心跳同档（明显小于「上一位 launcher 已死」的 30s 阈值）。 */
 export const RUNTIME_BEAT_MS = 5000;
 
+/** git 子进程的超时（ISSUE #4394）：git 被安全软件 / 网络盘 / 钩子挂起时，
+ * 同步 spawn 会把 launcher（含启动主路径上的 readGitHead）无限期阻塞——
+ * 与同文件族其它 spawn（corepack / node-runner / runCapture）的 10s 级预算对齐。 */
+export const GIT_TIMEOUT_MS = 10_000;
+
 /** 「接口层持续 404」连中几拍才定性（约 15s）：单拍 404 可能只是路由在按需编译。 */
 export const RUNTIME_404_THRESHOLD = 3;
 
@@ -38,6 +43,7 @@ export function readGitHead(root) {
     const r = spawnSync("git", ["rev-parse", "HEAD"], {
       cwd: root,
       encoding: "utf8",
+      timeout: GIT_TIMEOUT_MS,
     });
     if (r.status !== 0) {
       return null;
@@ -56,7 +62,7 @@ export function readGitHead(root) {
  */
 export function readNameStatusDiff(root, base) {
   try {
-    /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
+    /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/lib/changed-scope.mjs`
      * 的文件头「口径 ④」）。 */
     const r = spawnSync(
       "git",
@@ -64,6 +70,7 @@ export function readNameStatusDiff(root, base) {
       {
         cwd: root,
         encoding: "utf8",
+        timeout: GIT_TIMEOUT_MS,
       },
     );
     if (r.status !== 0) {

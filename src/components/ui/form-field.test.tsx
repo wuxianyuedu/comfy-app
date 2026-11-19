@@ -1,12 +1,6 @@
-/**
- * `FormField` —— 「标签 + 控件 + 校验错误」这一行的唯一实现
- * （规范 16 §16.2.4.26）。
- *
- * 这条账的实质不是字号不一致，而是三件事在**不同落点被漏掉**：
- *  `htmlFor` 关联（15 处表单行**没有一处**做过）、`aria-invalid` +
- *  `aria-describedby`（只有 1/15 处写了 `aria-invalid`、**没有一处**关联
- *  错误文案）、错误行的位置。所以用例逐条钉这三件，而不是钉 class。
- */
+/** `FormField` —— 「标签 + 控件 + 校验错误」这一行的唯一实现（规范 16 §16.2.4.26）。
+ * 这条账的实质不是字号不一致，而是三件事在不同落点被漏掉：`htmlFor` 关联（15 处表单行没有一处做过）、`aria-invalid` + `aria-describedby`（只有 1/15 处写了 `aria-invalid`、没有一处关联错误文案）、错误行的位置。
+ * 所以用例逐条钉这三件，而不是钉 class。 */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -79,7 +73,7 @@ describe("FormField", () => {
   /* 「小标题」形态：控件在别处（或多个控件，如按钮组），没有一个能被
    * `htmlFor` 指到。这一档下**不许**给 `htmlFor` —— 给了就是一个指向
    * DOM 里不存在的 id 的悬空箭头，比不给更坏（读屏器读出孤立标签文本）。
-   * 判据 `scripts/check-form-field-wiring.cjs` 把这一档记在基线里。 */
+   * 判据 `scripts/gates/check-form-field-wiring.cjs` 把这一档记在基线里。 */
   it("children 是普通节点时不给 htmlFor（箭头会悬空）", () => {
     render(
       <FormField id="k" label="用途">

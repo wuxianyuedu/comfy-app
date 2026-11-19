@@ -1,25 +1,8 @@
 "use client";
 
-/**
- * JsonViewer — 重构
- *
- * 之前 自写的纯客户端 JSON 查看器 (660+ 行) 已有结构性问题：
- *   - PrimitiveRow 用 `<div>` 渲染值，block-in-block 把 key-value 拆两行
- *   - 嵌套 paddingLeft 在深 indent 处把值挤到右侧 → 视觉错位
- *   - primitive string 整段渲染，没有 substring 着色 → active hit 看不出来
- *
- * 改用 react18-json-view 处理渲染层 (语法着色 / 容器折叠 / 长 string
- * 折叠 / 暗黑主题 / clipboard / 多主题 + URL 识别)。我们只负责：
- *   1. 搜索 (collectHits 遍历 + 计数 + Enter/Shift+Enter/箭头/Esc)
- *   2. scroll-into-view (active hit 居中)
- *   3. DOM 后处理 (text node 内 substring 高亮 + active hit 行标 + data-jv-active-hit)
- *
- * 选 react18-json-view 的理由:
- *   - 0.2.10, 4 月前发布, 仍维护, React 18+ 兼容声明
- *   - 零业务依赖 + 7 主题 + CSS 变量覆盖
- *   - 我们自己的搜索/计数/跳转逻辑还是自写 (50 行 wrapper),
- *     但渲染结构、外观、长 string 折叠、clipboard 全交给 lib。
- */
+/** JsonViewer — 重构：此前自写的纯客户端 JSON 查看器（660+ 行）有结构性问题 —— PrimitiveRow 用 `<div>` 渲染值、block-in-block 把 key-value 拆成两行；嵌套 paddingLeft 在深 indent 处把值挤到右侧造成视觉错位；primitive string 整段渲染、没有 substring 着色，active hit 看不出来。
+ * 现改用 react18-json-view 处理渲染层（语法着色 / 容器折叠 / 长 string 折叠 / 暗黑主题 / clipboard / 多主题 + URL 识别）；本模块只负责：① 搜索（collectHits 遍历 + 计数 + Enter/Shift+Enter/箭头/Esc）；② scroll-into-view（active hit 居中）；③ DOM 后处理（text node 内 substring 高亮 + active hit 行标 + data-jv-active-hit）。
+ * 选该库的理由：0.2.10 仍维护、React 18+ 兼容声明、零业务依赖 + 7 主题 + CSS 变量覆盖；我们自己的搜索 / 计数 / 跳转逻辑仍是自写（约 50 行 wrapper），渲染结构、外观、长 string 折叠、clipboard 全交给 lib。 */
 
 import {
   memo,
@@ -32,6 +15,7 @@ import {
 } from "react";
 import JsonView from "react18-json-view";
 import { textHandler } from "~/lib/form-props";
+import { isRecord } from "~/lib/is-record";
 import "react18-json-view/src/style.css";
 import { Button } from "~/components/ui/button";
 import { onNextFrame } from "~/lib/next-frame";
@@ -49,6 +33,25 @@ const MemoJsonView = memo(JsonView);
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
 type JsonValue = null | boolean | number | string | Array<JsonValue> | { [k: string]: JsonValue };
+
+/** `unknown` 收窄成 {@link JsonValue}：搜索只能遍历真正的 JSON 树，非法形状直接当无命中。 */
+function isJsonValue(value: unknown): value is JsonValue {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every((item) => isJsonValue(item));
+  }
+  if (isRecord(value)) {
+    return Object.values(value).every((item) => isJsonValue(item));
+  }
+  return false;
+}
 
 /** 命中路径 — `{[nodeId]: {class_type, inputs, widgets_values, ...}}` 这一层
  *  对应 `["nodes", "3", "widgets_values", "2"]`。在 我们用不到具体 path
@@ -91,7 +94,9 @@ function collectHits(root: JsonValue, query: string): Array<Path> {
       return;
     }
     if (Array.isArray(node)) {
-      node.forEach((value, index) => visit(value, [...path, index]));
+      node.forEach((value, index) => {
+        visit(value, [...path, index]);
+      });
       return;
     }
     // object
@@ -210,24 +215,22 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
   const targets: Array<HitNode> = [];
   let cur = walker.nextNode();
   while (cur) {
-    /* SAFETY: 类型断言已复核 */
-    const t = cur as Text;
-    const text = t.textContent || "";
-    if (text.toLowerCase().includes(q)) {
-      // 估算该 textNode 内出现次数 (大小写不敏感)
-      const lower = text.toLowerCase();
-      let count = 0;
-      let p = 0;
-      while (true) {
-        const j = lower.indexOf(q, p);
-        if (j === -1) {
-          break;
+    if (cur instanceof Text) {
+      const text = cur.textContent || "";
+      if (text.toLowerCase().includes(q)) {
+        // 估算该 textNode 内出现次数 (大小写不敏感)
+        const lower = text.toLowerCase();
+        let count = 0;
+        let p = 0;
+        let j = lower.indexOf(q, p);
+        while (j !== -1) {
+          count += 1;
+          p = j + q.length;
+          j = lower.indexOf(q, p);
         }
-        count += 1;
-        p = j + q.length;
-      }
-      if (count > 0) {
-        targets.push({ node: t, count });
+        if (count > 0) {
+          targets.push({ node: cur, count });
+        }
       }
     }
     cur = walker.nextNode();
@@ -303,8 +306,7 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const hits = useMemo(
-    /* SAFETY: 类型断言已复核 */
-    () => collectHits(data as JsonValue, query.trim()),
+    () => (isJsonValue(data) ? collectHits(data, query.trim()) : []),
     [data, query],
   );
 
@@ -349,11 +351,8 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
       return;
     }
     return onNextFrame(() => {
-      /* SAFETY: 类型断言已复核 */
-      const el = bodyRef.current?.querySelector(
-        "mark.jv-hit-sub[data-jv-active-hit]",
-      ) as HTMLElement | null;
-      if (!el) {
+      const el = bodyRef.current?.querySelector("mark.jv-hit-sub[data-jv-active-hit]");
+      if (!(el instanceof HTMLElement)) {
         return;
       }
       el.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -389,7 +388,7 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
     }
     if (e.key === "Escape") {
       setQuery("");
-      /* SAFETY: 类型断言已复核 */ (e.target as HTMLInputElement).blur();
+      e.currentTarget.blur();
     }
   };
 
@@ -402,7 +401,9 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
       setCopyFailed(false);
       copied.flash();
     },
-    onFailure: () => setCopyFailed(true),
+    onFailure: () => {
+      setCopyFailed(true);
+    },
   });
 
   // ── 渲染 ──
@@ -417,7 +418,9 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
         <span className="flex-1" />
         <Button
           className="text-ink-muted hover:bg-subtle hover:text-ink-bright bg-transparent"
-          onClick={() => copy(JSON.stringify(data, null, 2))}
+          onClick={() => {
+            copy(JSON.stringify(data, null, 2));
+          }}
           size="xs"
           title={copyFailed ? copyFailureText() : "把当前 JSON 复制到剪贴板"}
           variant="outline"
@@ -449,7 +452,9 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
             <Button
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
               disabled={hits.length === 0}
-              onClick={() => nextHit(-1)}
+              onClick={() => {
+                nextHit(-1);
+              }}
               size="icon-xs"
               title="上一个 (Shift+Enter)"
               variant="outline"
@@ -464,7 +469,9 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
             <Button
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
               disabled={hits.length === 0}
-              onClick={() => nextHit(1)}
+              onClick={() => {
+                nextHit(1);
+              }}
               size="icon-xs"
               title="下一个 (Enter)"
               variant="outline"
@@ -478,7 +485,9 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
             </Button>
             <Button
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
-              onClick={() => setQuery("")}
+              onClick={() => {
+                setQuery("");
+              }}
               size="icon-xs"
               title="清空 (Esc)"
               variant="outline"
@@ -500,13 +509,7 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
         ) : (
           <MemoJsonView
             className="jv-theme-comfy"
-            /* 这里**不能**传 `collapsed`：库的 isCollapsed() 第一句就是
-               `if (typeof collapsed === 'boolean') return collapsed;` —— 传
-               `collapsed={false}` 会让它「每个容器都返回 false」，下面的
-               `collapseObjectsAfterLength` 阈值**永远不生效**，整棵树（含几百
-               个键的 prompt）首屏全量展开。comfy-cli 的 prompt_preview 因此能把
-               「查看完整输出」弹窗卡死。省略它才走阈值分支：小容器展开、项数
-               超过 `collapseThreshold` 的容器折成 `…`，点开才渲染。 */
+            /* 这里不能传 `collapsed`：库的 isCollapsed() 第一句就是 `if (typeof collapsed === 'boolean') return collapsed;` —— 传 `collapsed={false}` 会让它「每个容器都返回 false」，下面的 `collapseObjectsAfterLength` 阈值永远不生效，整棵树（含几百个键的 prompt）首屏全量展开；comfy-cli 的 prompt_preview 因此能把「查看完整输出」弹窗卡死。省略它才走阈值分支：小容器展开、项数超过 `collapseThreshold` 的容器折成 `…`，点开才渲染。 */
             collapseObjectsAfterLength={collapseThreshold}
             collapseStringMode="word"
             collapseStringsAfterLength={80}

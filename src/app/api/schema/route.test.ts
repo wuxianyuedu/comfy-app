@@ -1,21 +1,13 @@
 /**
- * `GET /api/schema` 的契约 —— 底部状态栏「数据库同步中 / 已同步请刷新 / 需人工同步」
- * 的数据源。
- *
- * 三条：
- *   1. 状态文件在 → 字段原样透出（`phase` / `detail` / `at`）；
- *   2. 文件不在 / 不是 JSON / 不是对象 → `{ ok: false, phase: "unknown" }`，
- *      **不是**报错 —— 没有提示 ≠ 出错，状态栏据此什么都不显示；
- *   3. 不能缓存（`force-dynamic`）：否则同步完成后页面读到的还是旧状态，
- *      「正在同步」会一直挂着。
- *
- * 状态文件由后台的 `scripts/db-sync.mjs` 写（另一个进程），所以这里用真文件
- * 驱动：读的就是 `process.cwd()/log/schema-sync.json`，mock 掉文件系统等于把
- * 「两个进程靠磁盘交汇」这件事本身测掉了。
+ * `GET /api/schema` 的契约 —— 底部状态栏「数据库同步中 / 已同步请刷新 / 需人工同步」的数据源。三条：状态文件在 → 字段原样透出（`phase` / `detail` / `at`）；
+ * 文件不在 / 不是 JSON / 不是对象 → `{ ok: false, phase: "unknown" }`，**不是**报错（没有提示 ≠ 出错，状态栏据此什么都不显示）；不能缓存（`force-dynamic`，否则
+ * 同步完成后仍读到旧状态、「正在同步」一直挂着）。状态文件由另一个进程的 `scripts/db/db-sync.mjs` 写，故用真文件驱动（mock 掉文件系统等于把「两进程靠磁盘交汇」测掉了）。
  */
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { isPlainRecord } from "~/lib/is-record";
 
 const statusFile = path.join(process.cwd(), "log", "current", "tools", "schema-sync.json");
 let backup: string | null = null;
@@ -47,7 +39,7 @@ describe("GET /api/schema", () => {
       "utf8",
     );
     const { GET } = await import("./route");
-    const res = await GET();
+    const res = GET();
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       ok: true,
@@ -66,17 +58,15 @@ describe("GET /api/schema", () => {
       "utf8",
     );
     const { GET } = await import("./route");
-    /* SAFETY: 类型断言已复核 */
-    const body = (await (await GET()).json()) as {
-      phase: string;
-    };
-    expect(body.phase).toBe("syncing");
+    const body: unknown = await GET().json();
+    const phase = isPlainRecord(body) && typeof body.phase === "string" ? body.phase : null;
+    expect(phase).toBe("syncing");
   });
 
   it("文件不在时回 unknown 而不是报错（没提示 ≠ 出错）", async () => {
     fs.rmSync(statusFile, { force: true });
     const { GET } = await import("./route");
-    const res = await GET();
+    const res = GET();
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       ok: false,
@@ -90,14 +80,14 @@ describe("GET /api/schema", () => {
     const { GET } = await import("./route");
 
     fs.writeFileSync(statusFile, "{ 这不是 JSON", "utf8");
-    await expect((await GET()).json()).resolves.toEqual({
+    await expect(GET().json()).resolves.toEqual({
       ok: false,
       phase: "unknown",
       canPush: true,
     });
 
     fs.writeFileSync(statusFile, '"synced"', "utf8");
-    await expect((await GET()).json()).resolves.toEqual({
+    await expect(GET().json()).resolves.toEqual({
       ok: false,
       phase: "unknown",
       canPush: true,

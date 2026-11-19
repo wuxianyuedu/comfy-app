@@ -48,10 +48,11 @@ export async function shouldActivateWindowOnLaunch(): Promise<boolean> {
 }
 
 /**
- * 把已在任务栏的应用窗口唤到前台（清掉任务栏闪烁提醒）。
+ * 把已在任务栏的应用窗口唤到前台。
  *
  * 用在哪：应用启动时若判定「不抢前台」（用户在启动期手动让出了前台，见
- * `docs/standards/launch-and-build.md` §1.3），窗口只显示在任务栏并闪烁提示；
+ * `docs/standards/launch-and-build.md` §1.3），窗口安静地留在任务栏
+ * （ISSUE #3562 起不再请求闪烁提醒）；
  * 之后用户主动唤起本应用（再点一次启动器 / 双击图标）时，壳会把
  * `COMFYAPP_FOREGROUND=1` 注入已运行的实例，应用据此在首次挂载时把自己顶到
  * 前台——否则「再点一次还是没反应」。收件箱这类「用户点了就该看到」的入口
@@ -93,13 +94,11 @@ export function clearLaunchLoadingStub(): void {
   if (typeof window === "undefined") {
     return;
   }
-  /* SAFETY: 类型断言已复核 */
-  const w = window as unknown as {
-    __comfyappStubTimer?: number;
-  };
-  if (w.__comfyappStubTimer) {
-    window.clearInterval(w.__comfyappStubTimer);
-    w.__comfyappStubTimer = 0;
+  const timer: unknown = Reflect.get(window, "__comfyappStubTimer");
+  /* 计时器 id 用 0 表示「已清」，0 与缺省都按没有计时器处理 */
+  if (typeof timer === "number" && timer !== 0) {
+    window.clearInterval(timer);
+    Reflect.set(window, "__comfyappStubTimer", 0);
   }
   document.getElementById(LOADING_STUB_ID)?.remove();
 }
@@ -184,6 +183,42 @@ export async function readAppServiceExitRecord(): Promise<string | null> {
     const { invoke } = await import("@tauri-apps/api/core");
     const raw = await invoke<string | null>("get_app_service_exit");
     return typeof raw === "string" && raw.trim() !== "" ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 探活失败时补问壳：应用服务的**进程**还活着吗？——双信号判据的进程外那一半
+ * （ISSUE #4146；standalone 档 ISSUE #4151）。
+ *
+ * ## 为什么探活之外还要这一问
+ *
+ * HTTP 探活（`GET /api/dev/server-id`）由应用服务自己应答，而它是**单事件循环**：
+ * 同步重活（进程探针 `spawnSync`、Turbopack 编译锁、大型同步压缩）会把事件循环
+ * 停走数秒，期间所有请求（含探活）都排不上队——进程活得好好的，探活却连续超时
+ * （#4140 的「莫名断开」）。壳是旁证人，两档按序作答：prebuilt 读编排器落下的
+ * `run/launcher-session.json`（进程树名单）并逐个查 PID 存活；standalone 分发形态
+ * 没有会话文件，壳直接查它持有的内嵌 server 句柄。两档都**不经过被测进程的任何
+ * 线程**，所以这个答案不受它忙闲影响。
+ *
+ * ## 返回三态
+ *
+ * · `true` / `false`：进程还活着 / 进程没了（判据在壳侧
+ *   `shell_launch::read_app_service_liveness` 与 `shell_launch::liveness_from_sidecar`）。
+ * · `null`：不知道——非壳环境（浏览器）、旧壳没有本命令（invoke 报错）、
+ *   两档都答不上（手工 `pnpm dev` 没有会话文件，壳也没持有 sidecar 句柄）。
+ *   调用方按「没有进程外信号」处理，**退回纯 HTTP 判据（原行为）**，
+ *   不编一个答案出来。
+ */
+export async function readAppServiceProcessAlive(): Promise<boolean | null> {
+  if (!isDesktopShell()) {
+    return null;
+  }
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const answer = await invoke<boolean | null>("get_app_service_liveness");
+    return typeof answer === "boolean" ? answer : null;
   } catch {
     return null;
   }

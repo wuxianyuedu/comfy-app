@@ -1,34 +1,9 @@
 "use client";
 
 /**
- * useEnterCommit —— 「在输入框里按 Enter 提交 / Esc 取消」的**唯一实现**
- * （规范 16 §16.2.4.29）。
- *
- * 为什么收口：全库 **11 处**各自在 `onKeyDown` 里判键，而它们对两件事各判各的：
- *
- *   ① **Enter 要不要 `preventDefault`** —— 有 6 处写了、5 处没写。
- *      没写的那几处**在表单里会连带提交整张表单**（Enter 触发 `<form>` 的
- *      隐式 submit），于是「回车新增一个标签」变成了「回车提交整页」；
- *      唯一没被波及的落点靠的是「它恰好不在 form 里」。
- *   ② **Esc 取消之后要不要复位草稿** —— 有 4 处只把编辑态关掉、草稿留在原值
- *      （下次点开看到的是上次输入一半的内容）；有 3 处显式回退到原值。
- *      两种都「能用」，差别只在「再点开时看到什么」。
- *
- * 另外两类是同一条账里**更差**的写法：
- *
- *   · **组合键不判 IME** —— `AgentOverlay` 的「Enter 发送、Shift+Enter 换行」
- *     用中文输入法时，**拼音未上屏的 Enter 会被当成发送**（把半截拼音发给 AI）；
- *   · **`role="button"` 元素自己补 Enter/Space** —— 6 处（`ShellTabs` /
- *     `TitleBarTabs` / `RgthreeBodies` / `MultiModeSelect` 选项行 /
- *     `NodePreviewCard` 头部 …）在 `onKeyDown` 里复刻浏览器对原生按钮的
- *     默认行为。**这类不该由本模块承担**：它们要的是「用真正的 `<button>`」
- *     （`<Button variant="ghost">` 自带 Enter/Space），见 §16.2.4.2 与 P1 判据。
- *     本模块只管**输入框**这一个形态。
- *
- * 形态取「返回 `onKeyDown` 属性对象」而不是 hook：调用点在 JSX 里，
- * `onKeyDown={…}` 拿到的是稳定的属性包（内部 handler 放 ref，传新闭包不重建）。
- * 这与 `mediaDragSourceProps`（纯函数返回 props）同款 —— 硬做成 hook 会逼着
- * 每个调用点先拆组件。
+ * useEnterCommit —— 「在输入框里按 Enter 提交 / Esc 取消」的唯一实现（规范 16 §16.2.4.29）。
+ * 收口前 11 处各判键：6 处写了 Enter preventDefault、5 处没写 → 表单隐式 submit；Esc 后 4 处不复位草稿。另两类更差：不判 IME（拼音未上屏被当发送）、`role="button"` 自己补 Enter/Space（应改用真按钮，§16.2.4.2）。
+ * 形态取「返回 onKeyDown 属性包」而非 hook（同 mediaDragSourceProps），内部 handler 放 ref，传新闭包不重建。
  */
 
 /** `onCommit` / `onCancel` 拿到的键事件（够表达「让这个框失焦」这类动作）。 */
@@ -45,10 +20,7 @@ export type EnterCommitOptions = {
   excludeShift?: boolean;
   /**
    * 是否忽略「正在用输入法组字」时的 Enter。默认 `true`。
-   *
-   * 判据是 `event.nativeEvent.isComposing`（React 的合成事件把它透在
-   * `nativeEvent` 上）—— 中文 / 日文输入法在候选词未上屏时按 Enter 是
-   * **确认候选**，不是提交。`keyCode === 229` 是旧宿主上的等价信号，一并判。
+   * 判据是 `event.nativeEvent.isComposing`（合成事件透在 nativeEvent 上）；`keyCode === 229` 是旧宿主的等价信号，一并判。
    */
   ignoreIme?: boolean;
   /**
@@ -104,18 +76,9 @@ export function isCommitKey(
 }
 
 /**
- * 造出「Enter 提交 / Esc 取消」的 `onKeyDown` 属性。
- *
- * 用法：在 `<input>` 上把 `{...enterCommit({ onCommit, onCancel })}` 摆在
- * `onChange` 之后（与 `mediaDragSourceProps` 同款，属性包里只有 `onKeyDown`）。
- *
- * ⚠️ **别写成 ` ```tsx ` 代码块**：JSDoc 里的代码块不能内插 JS 注释，
- * `/* … *\/` 会提前闭合外层的 `/** … *\/`，prettier 直接报
- * `SyntaxError: Expression expected`（`ui/wide-panel` 踩过一次）。
- *
- * `onCommit` 收到的是键事件 —— 「Enter = 让这个框失焦、落盘交给 `onBlur`」
- * 的形态写 `onCommit: ({ currentTarget }) => currentTarget.blur()`，
- * 不必为一个 `ref` 破坏 `react-hooks/refs`（渲染期不许读 `ref.current`）。
+ * 造出「Enter 提交 / Esc 取消」的 `onKeyDown` 属性包（与 `mediaDragSourceProps` 同款，属性包里只有 `onKeyDown`）。
+ * 用法：`{...enterCommit({ onCommit, onCancel })}` 摆在 `onChange` 之后。⚠️ 别写成 JSDoc 里的 ` ```tsx ` 代码块：内插 `/* … *\/` 会提前闭合外层注释（`ui/wide-panel` 踩过）。
+ * `onCommit` 收到键事件：「Enter = 失焦、落盘交给 onBlur」写 `({ currentTarget }) => currentTarget.blur()`，不必为 `ref` 破坏 `react-hooks/refs`。
  */
 export function enterCommit({
   onCommit,

@@ -1,17 +1,12 @@
 //
 // ShotStudio 行为测试：镜头生图 stage 的门禁、预填、并发出口与提示接线。
-//
-// 钉死的用户可见契约：
-//   • 本地通道没选工作流 → 单镜生成被行内门禁拦下（不发起任何请求）；
-//   • 本地生成发起前 unmatched 口经 onNotice 上屏（不静默丢输入）；
-//   • API 通道未配置 → 批量按钮禁用 + 放行提示；
-//   • 进行中且有本机任务 id 的镜头显示「取消」并接 onCancelShot；
-//   • 空提示词的镜头在挂载后自动预填（场景 + 角色卡素材），手改不覆盖由
-//     editedRef 保证（这里验「空提示词会被预填」这半条）。
-// 网络层整体 mock（generation-client），组件的编排与状态写回保持真实。
+// 钉死：本地没选工作流 → 行内门禁拦下不请求；unmatched 口经 onNotice 上屏；
+// API 未配置 → 批量禁用 + 放行提示；进行中有任务 id 显示「取消」接 onCancelShot；
+// 空提示词挂载后自动预填且手改不覆盖。网络层整体 mock（generation-client）。
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { SetStateAction } from "react";
 
 import { ShotStudio } from "./ShotStudio";
 import {
@@ -30,7 +25,7 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
     buildLibraryWorkflowInput: vi.fn(),
     startLocalGenerate: vi.fn(),
     watchTask: vi.fn(),
-    preparePortraitReferences: vi.fn(async () => ({
+    prepareShotReferences: vi.fn(() => ({
       files: [],
       failedCount: 0,
     })),
@@ -116,8 +111,11 @@ type RenderOptions = {
   workflowId?: string;
 };
 
+/** `onShotsChange` 的签名：可收镜头数组或函数式补丁（React 状态 setter）。 */
+type ShotsSetter = (value: SetStateAction<Array<Shot>>) => void;
+
 function renderStudio(options: RenderOptions = {}) {
-  const onShotsChange = vi.fn();
+  const onShotsChange = vi.fn<ShotsSetter>();
   const onNotice = vi.fn();
   const onCancelShot = vi.fn();
   const utils = render(
@@ -139,11 +137,26 @@ function renderStudio(options: RenderOptions = {}) {
   return { onShotsChange, onNotice, onCancelShot, ...utils };
 }
 
+/** 从一条 onShotsChange 调用里取出函数式补丁并应用一次。 */
+function patchedShotOf(call: Parameters<ShotsSetter>): Shot {
+  const updater = call[0];
+  if (typeof updater !== "function") {
+    throw new Error("onShotsChange 首参不是函数式更新");
+  }
+  const patched = updater([makeShot()])[0];
+  if (patched === undefined) {
+    throw new Error("onShotsChange 的补丁没有返回镜头");
+  }
+  return patched;
+}
+
 /** onShotsChange 是函数式补丁：把它折叠成「最终一条 patch 里的镜头列表」。 */
-function lastPatchedShot(mock: { mock: { calls: Array<Array<unknown>> } }): Shot {
-  /* SAFETY: 类型断言已复核 */
-  const last = mock.mock.calls.at(-1)![0] as (prev: Array<Shot>) => Array<Shot>;
-  return last([makeShot()])[0]!;
+function lastPatchedShot(mock: { mock: { calls: Array<Parameters<ShotsSetter>> } }): Shot {
+  const lastCall = mock.mock.calls.at(-1);
+  if (lastCall === undefined) {
+    throw new Error("onShotsChange 未被调用");
+  }
+  return patchedShotOf(lastCall);
 }
 
 beforeEach(() => {
@@ -152,7 +165,9 @@ beforeEach(() => {
   mockedWatch.mockReset();
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+});
 
 describe("ShotStudio 门禁", () => {
   it("本地通道未选工作流：点单镜生成被行内门禁拦下，不发起请求", async () => {
@@ -243,10 +258,9 @@ describe("ShotStudio 生图出口", () => {
     await user.click(screen.getByRole("button", { name: "生成此镜头" }));
     await expect.poll(() => onShotsChange).toHaveBeenCalled();
     /* watchShot 的产物回写经 onShotsChange 的函数式补丁发生 */
-    const calls = vi.mocked(onShotsChange).mock.calls;
+    const calls = onShotsChange.mock.calls;
     const wroteImage = calls.some((call) => {
-      /* SAFETY: 类型断言已复核 */
-      const patch = (call[0] as (prev: Array<Shot>) => Array<Shot>)([makeShot()])[0]!;
+      const patch = patchedShotOf(call);
       return patch.imageUrl === "/api/generated/1.png";
     });
     expect(wroteImage).toBe(true);

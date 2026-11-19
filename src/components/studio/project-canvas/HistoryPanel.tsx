@@ -7,6 +7,7 @@ import { Hint } from "~/components/ui/hint";
 import { Skeleton } from "~/components/ui/skeleton";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { SelectChip } from "~/components/ui/select-chip";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { DisplayDensityToggle } from "~/components/ui/display-density-toggle";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
@@ -21,6 +22,13 @@ import {
   type HistoryScope,
   type TaskMediaType,
 } from "~/lib/project-canvas/history-panel-types";
+
+/** 作用域白名单：`Tabs` 的 `onValueChange` 给的是 `string`，收窄回联合类型。 */
+const HISTORY_SCOPE_VALUES: ReadonlyArray<string> = ["project", "all"];
+
+function isHistoryScope(value: unknown): value is HistoryScope {
+  return typeof value === "string" && HISTORY_SCOPE_VALUES.includes(value);
+}
 
 function KindIcon({ kind }: { kind: TaskMediaType }) {
   if (kind === "video") {
@@ -93,16 +101,16 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       </div>
 
       {/* ── 作用域切换（仅在有项目时出现）──
-          此前是手搓的 `<Button variant="ghost">` + 下划线三元：选中档给
-          `border-b-2 border-accent`，**未选中档根本没有那条边框** —— 于是
-          未选中的那一枚整体比选中的矮 2px，切来切去文字基线上下跳。这就是
-          「一排里选一个」的又一处手搓（与上面类型筛选同一族）。
-          改用 `ui/tabs` 的 `line` 档：它就是这一类「下划线页签」的全库实现，
-          选中态由 `data-active` 驱动（字色 / 下划线两层），两枚同高同基线。 */}
-      {projectId && (
+          原手搓下划线页签：未选中档没有 border-b-2，整枚矮 2px，切来切去基线上下跳。
+          改用 ui/tabs `line` 档（全库实现，选中态由 data-active 驱动字色 / 下划线）。 */}
+      {projectId !== undefined && projectId !== null && projectId !== "" && (
         <Tabs
           className="gap-0"
-          onValueChange={(value) => setScope(/* SAFETY: 类型断言已复核 */ value as HistoryScope)}
+          onValueChange={(value) => {
+            if (isHistoryScope(value)) {
+              setScope(value);
+            }
+          }}
           value={scope}
         >
           <TabsList
@@ -134,19 +142,16 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       )}
 
       {/* ── 类型筛选（pill）──
-          此前是手搓的 `<Button variant="ghost">` + 选中分支：选中档只写了
-          `bg-surface-2 text-ink-bright ring-border-strong`，字重与悬停都没钉
-          —— 划过**已选中**的那一枚时，`ghost` 变体的 `hover:bg-muted` 会把它
-          改成「未选中」的样子（用户原话「悬浮和非悬浮一个紫一个白」那一族，
-          ISSUE #1423）。整排交给 `ui/select-chip`（「一排里选一个」的全库
-          唯一实现，规范 16 §16.2.4）：选中态有底色 / 字色 / 描边 / 字重四层，
-          且自带与常态同值的 `hover:`。语义也从 `aria-pressed` 回到
-          `radiogroup` + `radio`（这一排本来就只能选一个）。 */}
+          原手搓按钮：选中档未钉字重/悬停，划过得 hover:bg-muted 又变回「未选中」样子
+          （ISSUE #1423）。改用 ui/select-chip（「一排里选一个」的全库实现）：选中态
+          底色/字色/描边/字重四层且 hover 与常态同值，语义为 radiogroup + radio。 */}
       <div aria-label="按类型筛选生成记录" className="flex gap-1.5 px-4 py-3" role="radiogroup">
         {FILTER_TABS.map((filterTab) => (
           <SelectChip
             key={filterTab.id}
-            onClick={() => setFilter(filterTab.id)}
+            onClick={() => {
+              setFilter(filterTab.id);
+            }}
             selected={filter === filterTab.id}
           >
             {filterTab.label}
@@ -155,7 +160,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       </div>
 
       {/* ── Error banner ── */}
-      {error && (
+      {error !== null && error !== "" && (
         <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
           <span className="text-destructive text-2xs min-w-0 flex-1 wrap-break-word">{error}</span>
           <Button
@@ -190,7 +195,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             {scope === "project" && globalCount !== null && globalCount > 0 && (
               <Button
                 className="border-border-strong text-ink-soft hover:bg-subtle hover:text-ink-bright text-2xs mt-3 h-auto rounded-lg px-3 py-1.5"
-                onClick={() => setScope("all")}
+                onClick={() => {
+                  setScope("all");
+                }}
                 variant="outline"
               >
                 查看全部记录
@@ -218,7 +225,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   })}
                 >
                   <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
-                    {task.cover ? (
+                    {task.cover !== null && task.cover !== "" ? (
                       <MediaThumbnail
                         alt={titleOf(task)}
                         className="h-full w-full object-cover"
@@ -239,18 +246,20 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       {pill.label}
                     </span>
                   )}
-                  <p className="text-ink-soft text-2xs truncate px-2 py-1.5">{titleOf(task)}</p>
-                  {onUse && cover && (
+                  <p className="text-ink-soft text-2xs px-2 py-1.5">
+                    <TruncatedText className="block truncate">{titleOf(task)}</TruncatedText>
+                  </p>
+                  {onUse && cover !== null && cover !== "" && (
                     <Hint accessibleName label="加入画布">
                       <Button
-                        className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/70 group-hover:flex hover:bg-black/60 hover:text-white"
-                        onClick={() =>
+                        className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/70 group-hover:flex hover:bg-black/80 hover:text-white"
+                        onClick={() => {
                           onUse({
                             id: task.id,
                             cover,
                             mediaType: task.mediaType,
-                          })
-                        }
+                          });
+                        }}
                         size="icon-xs"
                         variant="ghost"
                       >
@@ -281,7 +290,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   })}
                 >
                   {/* 缩略图 / 类型占位 */}
-                  {task.cover ? (
+                  {task.cover !== null && task.cover !== "" ? (
                     <div className="bg-canvas-deep size-10 shrink-0 overflow-hidden rounded-md">
                       <MediaThumbnail
                         alt={titleOf(task)}
@@ -298,7 +307,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   )}
 
                   <div className="min-w-0 flex-1">
-                    <p className="text-ink-bright truncate text-sm">{titleOf(task)}</p>
+                    <p className="text-ink-bright text-sm">
+                      <TruncatedText className="block truncate">{titleOf(task)}</TruncatedText>
+                    </p>
                     <div className="mt-0.5 flex items-center gap-1.5">
                       <span className="text-ink-fainter text-2xs">{timeAgo(task.createdAt)}</span>
                       {pill && (
@@ -306,29 +317,28 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                           {pill.label}
                         </span>
                       )}
-                      {task.status === "FAILED" && task.error && (
-                        <span
-                          className="text-destructive/80 text-3xs min-w-0 truncate"
-                          title={task.error}
-                        >
-                          {task.error}
-                        </span>
+                      {task.status === "FAILED" && task.error !== null && task.error !== "" && (
+                        <Hint label={task.error}>
+                          <span className="text-destructive/80 text-3xs min-w-0 truncate">
+                            {task.error}
+                          </span>
+                        </Hint>
                       )}
                     </div>
                   </div>
 
                   <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">
-                    {onUse && cover && (
+                    {onUse && cover !== null && cover !== "" && (
                       <Hint accessibleName label="加入画布">
                         <Button
                           className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
-                          onClick={() =>
+                          onClick={() => {
                             onUse({
                               id: task.id,
                               cover,
                               mediaType: task.mediaType,
-                            })
-                          }
+                            });
+                          }}
                           size="icon-sm"
                           variant="ghost"
                         >
@@ -336,16 +346,17 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                         </Button>
                       </Hint>
                     )}
-                    {task.cover && (
-                      <a
-                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
-                        download
-                        draggable={false}
-                        href={task.cover}
-                        title="下载"
-                      >
-                        <Download size={13} />
-                      </a>
+                    {task.cover !== null && task.cover !== "" && (
+                      <Hint label="下载">
+                        <a
+                          className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
+                          download
+                          draggable={false}
+                          href={task.cover}
+                        >
+                          <Download size={13} />
+                        </a>
+                      </Hint>
                     )}
                   </div>
                 </div>

@@ -1,24 +1,7 @@
 /**
- * 侧栏「模型适配 / 模式契约」两项的接线判据 —— 它们此前是**全局浮层入口**，
- * 现在是**视图页签**（与设置、控制台同一族收口）。
- *
- * 为什么这两件事该是视图：它们是**项目无关**的（模式契约 = 每种模式有哪些统一输入 /
- * 输出；模型适配 = 每个远端模型 × 每个模式的字段映射），入口不该挂在工坊那个项目内
- * 视图上；但「点开弹窗、不改视图」也不是答案 —— 弹窗形态下没有页签、不能一边配着
- * 别的一边对照工作流库，而配置一张适配器恰恰要来回对照。
- *
- * 用例锁四件事（与旧版逐条对照，其中两条的判据方向**反过来**了）：
- *   1. 入口在侧栏、且说得出自己的名字（不变）；
- *   2. 点击走 `onSelect(view)` —— 与别的视图同一条切换路径，不再是外壳自己 `useState`
- *      一份「开没开」（旧版判的是「挂的是不是同一个弹窗」）；
- *   3. **参与**视图高亮：当前视图就是它时要有 active 态（旧版判的是「不参与高亮」，
- *      因为那时它们根本不是视图 —— 形态翻了，判据方向跟着翻）；
- *   4. 外壳不再持有这两个视图的渲染路径（渲染只在 `workspace/page.tsx` 一处）。
- *
- * 第五组（ISSUE #1784）判的是**反面**：设置**不该**在侧栏里。那一项在侧栏列表与
- * 侧栏底部各有一处，两处都会走到 `onOpenSettings`，而顶栏应用菜单里本来就有第三处
- * —— 一个动作三个入口。用例判两侧都不再渲染它，同时确认 `onOpenSettings` 仍由
- * 外壳转给顶栏（撤的是入口，不是能力）。
+ * 侧栏「模型适配 / 模式契约」的接线判据：它们由全局浮层入口改成**视图页签**（与设置、控制台同族），
+ * 因两者与项目无关、且配适配器要来回对照工作流库。用例锁入口在侧栏、点击走 `onSelect(view)`、参与
+ * 高亮、渲染只在 `workspace/page.tsx`。反面（#1784）：设置**不该**在侧栏，两侧都不渲染、仍转给顶栏。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -28,8 +11,12 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AppShell } from "./AppShell";
 import type { WorkspaceView } from "./NavItems";
 
+/* CommandPalette 新增的「其他」组用 useRouter 导航：测试环境没有 App Router 上下文，按
+ * BrowserStatusBar 用例的同一约定在渲染入口 mock 掉（真实链路在 workspace 页里）。 */
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => undefined }) }));
+
 /* jsdom 没有 `matchMedia`，`ui/sidebar` 挂载时就读它（与既有测试同一份桩）。 */
-if (!window.matchMedia) {
+if (typeof window.matchMedia !== "function") {
   window.matchMedia = (query: string): MediaQueryList => ({
     matches: false,
     media: query,
@@ -120,13 +107,19 @@ describe("侧栏的模型适配 / 模式契约入口", () => {
   });
 });
 
-describe("设置不在侧栏（ISSUE #1784：入口收归顶栏应用菜单）", () => {
-  it("侧栏列表里没有「设置」这一项（它只在顶栏菜单里）", () => {
+describe("设置不在侧栏（ISSUE #1784：入口收归顶栏）", () => {
+  it("侧栏列表里没有「设置」这一项；顶栏有直达的设置图标（ISSUE #3789）", () => {
     renderShell();
     /* 侧栏那几项都是带文字的按钮；撤掉之后按名字查应该一个都查不到。
-       注意不能用 `onOpenSettings` 的回调次数代替 —— 那是顶栏菜单的路径，
+       注意不能用 `onOpenSettings` 的回调次数代替 —— 那是顶栏的路径，
        与侧栏无关（下面那条正是要把它分开判）。 */
-    expect(screen.queryByRole("button", { name: "设置" })).toBeNull();
+    const sidebarItems = screen
+      .getAllByRole("listitem")
+      .filter((item) => item.dataset.sidebar === "menu-item");
+    expect(sidebarItems.filter((item) => item.textContent?.includes("设置"))).toEqual([]);
+    /* 顶栏右上角现在有**直达**的「设置」图标按钮（ISSUE #3789：不必再点
+       应用菜单 → 设置 两次）；应用菜单里的「设置」项也仍在。 */
+    expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
   });
 
   it("侧栏底部那枚「设置」也不在了（三处入口收成一处）", () => {

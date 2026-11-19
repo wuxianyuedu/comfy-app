@@ -57,8 +57,15 @@ export function scanPorts(port) {
  * 走第二条而不是只看会话，是因为用户完全可以绕过编排器自己 `pnpm dev` ——
  * 那时没有会话锚点，而 `node_modules` 一样被锁着。
  *
+ *  ⚠️ **探测失效时抛 `ProbeUnavailableError`，不返回 `{running:false}`**：
+ *  「没量到」与「量到空」必须是两种读数（§13.6.3）。底层 `listeningPidsOnPort` /
+ *  `processCommandLines` 在命令起不来时抛的是同一族异常，这里刻意不吞 —— 吞成
+ *  「没有实例在跑」正是硬规则 9 的 fail-open。调用方各自有 try/catch 把这一族
+ *  转成「没有结论」（CLI exit 2 / 停止补装 / 启动失败），见各自文件的说明。
+ *
  * @param {string} root 检出根
  * @returns {Promise<{running: boolean, pids: number[], via: "session" | "port" | null}>}
+ * @throws {import("./procs.mjs").ProbeUnavailableError} 端口或命令行探测没跑起来
  */
 export async function runningAppInstances(root) {
   if (isSessionOwnerAlive(root)) {
@@ -75,12 +82,16 @@ export async function runningAppInstances(root) {
   }
 
   const held = [];
+  /* 下面两次探测的失败出口都刻意不接：让 ProbeUnavailableError 原样冒泡到调用方。
+   * 在这里 catch 成空数组 / 空 Map，等于把「没量到」写回「量到空」。 */
   for (const port of scanPorts(resolveAppPort(root))) {
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const pids = await listeningPidsOnPort(port);
     if (pids.length === 0) {
       continue;
     }
     // 命令行按一次批量查询取回（Windows 上逐 PID 起 PowerShell 是 0.5~1.5s 的冷启动）。
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const lines = await processCommandLines(pids);
     for (const pid of pids) {
       if (isAppDevServerCmdline(lines.get(pid) ?? "", root)) {
@@ -131,6 +142,7 @@ export async function reapAll(ctx) {
     }
     try {
       if (child.pid) {
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
         const via = await reapProcessTree({
           pid: child.pid,
           detached: !isWindows(),
@@ -157,9 +169,20 @@ export async function reapAll(ctx) {
  *  没机会执行自己的 `clearSession()`，锚点于是**必然**留下；而它拉起的整棵树
  *  早已被插件 kill / Job Object 收干净。这种情形只清锚点、**不回报**，否则每次
  *  正常关窗后的启动都会刷一条「回收上一次运行遗留的进程树」（PID 早已不存在，
- *  徒增噪声，且旧号被系统复用时还有误伤无关进程的风险）。
+ *  徒增噪声）。
+ *
+ *  **强杀前先验归属（#4330）**：锚点里的 PID 只说明「上次拉起过谁」，不说明
+ *  「这个号现在还是它」——子进程 PID 只做 signal-0 探活就 `taskkill /T /F`
+ *  整树强杀，PID 被系统复用给无关进程时会连它的子树一起误杀。所以动手前
+ *  逐个读命令行（`processCommandLine`），只回收「命令行落在本检出根内」的 PID
+ *  （编排器拉起的一切子进程都以检出内绝对路径为入参，见
+ *  `spawnDevServer` / `spawnSchemaSync` / executor-host 的 spawn 实参；被复用的
+ *  无关进程几乎必然不含这个路径）。读不到命令行、或验不出归属的一律**保守
+ *  跳过**（§1.4「不猜着杀」），锚点保留，下次启动再验。
+ *
  *  本函数**不写日志**（只清锚点或回报回收结果，调用方决定怎么说）—— 因此
- *  不接 ctx。
+ *  不接 ctx；唯一例外是「验不出归属而跳过」走 `console.warn` 落进编排日志，
+ *  不让保守跳过变成静默失效。
  *  @param {string} [root] @returns {Promise<number[] | null>} 真正回收的 PID */
 export async function reapStaleSession(root = process.cwd()) {
   if (isSessionOwnerAlive(root)) {
@@ -177,15 +200,71 @@ export async function reapStaleSession(root = process.cwd()) {
     clearSession(root);
     return null;
   }
+  const owned = [];
   for (const pid of alive) {
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
+    const cmdline = await processCommandLine(pid);
+    if (cmdlineBelongsToRoot(cmdline, root)) {
+      owned.push(pid);
+    }
+  }
+  if (owned.length === 0) {
+    console.warn(
+      `[port-reap] 会话锚点里的存活 PID 验不出本检出归属（PID ${alive.join(", ")}），` +
+        "保守跳过不回收（防 PID 复用误杀，#4330）；锚点保留，下次启动再验。",
+    );
+    return null;
+  }
+  for (const pid of owned) {
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await reapProcessTree({ pid, detached: !isWindows(), force: true });
   }
-  clearSession(root);
-  return alive;
+  if (owned.length === alive.length) {
+    clearSession(root);
+  }
+  return owned;
 }
 
-/** 该 PID 的命令行（判「端口上的是不是本仓库的应用服务」，拿不到返回空串）。 */
-/** @param {number} pid @returns {Promise<string>} */
+/** 命令行是否落在检出根内（#4330 的归属判据）。
+ *
+ *  与 `isAppDevServerCmdline` 的分工：那条回答「跑的是不是本仓库应用服务」
+ *  （要求根路径 + dev/start/next 形状），这条只回答「这个进程是不是从本检出
+ *  出去的」——锚点里的 PID 本就来自本检出的编排器，用它防「PID 复用误杀」
+ *  足够，且能盖住 db-sync / executor-host 这类非 dev 形状的子进程。
+ *
+ *  子串命中后要求**路径边界**（#4423）：base 后一位必须是命令行结尾或 `/` `\`。
+ *  裸子串下，前缀兄弟检出（`…comfy-app-t3-branch3-old` 的命令行包含
+ *  `…comfy-app-t3-branch3`）与「命令行恰好带着本检出绝对路径的无关进程」都会
+ *  命中——PID 复用撞上锚点里的陈旧 PID 时会连同子树被误杀。形状判据保持放宽
+ *  （不要求 dev/start/next 形状），盖住 db-sync / executor-host 的语义不变。
+ *  导出给测试钉边界（兄弟目录 / 边界内 / 边界外三类）。
+ *  @param {string} cmdline @param {string} root @returns {boolean} */
+export function cmdlineBelongsToRoot(cmdline, root) {
+  /** @param {string} value */
+  const norm = (value) => value.replaceAll("\\", "/").toLowerCase();
+  const text = norm(cmdline);
+  const base = norm(root).replace(/\/+$/, "");
+  if (!text || !base) {
+    return false;
+  }
+  let at = text.indexOf(base);
+  while (at !== -1) {
+    const next = text[at + base.length];
+    if (next === undefined || next === "/" || next === "\\") {
+      return true;
+    }
+    at = text.indexOf(base, at + 1);
+  }
+  return false;
+}
+
+/** 该 PID 的命令行（判「端口上的是不是本仓库的应用服务」，拿不到返回空串）。
+ *
+ *  这里是**尽力而为**的单 PID 查询，刻意留在宽松档 `runCapture`：拿不到就返回
+ *  空串（判据不清时按「不是本仓库的应用服务」处理，§1.4 不猜着杀）。它不在
+ *  `runningAppInstances` 的归属判据链上 —— 那条链走的是 `processCommandLines`
+ *  的严格版，失败要能冒泡成「没有结论」。两处用途不同，不许混成同一档。
+ *  @param {number} pid @returns {Promise<string>} */
 export async function processCommandLine(pid) {
   try {
     return (
@@ -232,7 +311,7 @@ export function isAppDevServerCmdline(cmdline, root = process.cwd()) {
   if (text.includes(`${base}/scripts/${APP_START_SCRIPT_MARKER}`)) {
     return true;
   }
-  if (/next(\.cmd|\.ps1)?\s+(dev|start)\b/.test(text)) {
+  if (/next(?:\.cmd|\.ps1)?\s+(?:dev|start)\b/.test(text)) {
     return true;
   }
   return false;
@@ -258,6 +337,7 @@ export async function reconcilePort(ctx, port, root = process.cwd(), { explicit 
   for (const p of scanPorts(port)) {
     // 自证只对「本次真正要用的那个端口」成立：扫描范围内的 +1/+2 是「Next 会不会
     // 顺延」的探测位，本次并不打算用它们，谈不上回收。
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const verdict = await inspectPort(p, {
       listenPids: listeningPidsOnPort,
       belongsToRoot: pidBelongsToRoot,
@@ -266,11 +346,13 @@ export async function reconcilePort(ctx, port, root = process.cwd(), { explicit 
     /* 命令行一次批量预取：`portOwnershipVerdict` 会对每个占位 PID 各调一次
      * `cmdlineOf`，Windows 上那是每 PID 一次 PowerShell 冷启动（0.5~1.5s）；
      * 合并为一条 CIM 查询后回填进 Map，回调只查表（契约不变，仍是逐 PID 取）。 */
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const commandLines = await processCommandLines(verdict.pids ?? []);
+    // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const decision = await portOwnershipVerdict({
       requestedPort: explicit && p === port ? port : null,
       verdict,
-      cmdlineOf: async (pid) => commandLines.get(pid) ?? "",
+      cmdlineOf: (pid) => commandLines.get(pid) ?? "",
       isAppProcess: (_pid, cmdline) => isAppDevServerCmdline(cmdline, root),
     });
     if (decision.ownership === PORT_OWNERSHIP.free) {
@@ -285,6 +367,7 @@ export async function reconcilePort(ctx, port, root = process.cwd(), { explicit 
         "WARN",
       );
       for (const pid of decision.ownPids) {
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
         const via = await reapProcessTree({
           pid,
           detached: !isWindows(),
@@ -303,4 +386,64 @@ export async function reconcilePort(ctx, port, root = process.cwd(), { explicit 
     );
   }
   return summary.join("；");
+}
+
+/** 有界等待端口族**全部空闲**（#4333）：回收派发与「清缓存 / 起新服务」之间的
+ *  同步点。
+ *
+ *  为什么要有它：Windows 侧 taskkill 是异步派发，「进程死」与「端口 / 文件句柄
+ *  释放」之间还有内核收尾的间隙。旧 Turbopack 未死透时 `rm -rf .next` 会
+ *  EBUSY/EPERM（一次自愈重启被打成启动失败）；旧 server 还占着口时新 Next 会
+ *  静默顺延 +1，而就绪探测只探原端口 → 空等满 180 秒（假超时）。所以在回收
+ *  之后、动缓存 / spawn 之前**等一个有界的窗口**。
+ *
+ *  预算耗尽或探测不可用（`ProbeUnavailableError` 族）都不抛错：如实返回
+ *  `free: false` 并记 WARN，由调用方决定继续（下游各自有探测与提示兜底）——
+ *  「没量到」不许被说成「空闲」（§13.6.3）。
+ *
+ * @param {(port: number) => Promise<number[]>} probe 端口探测（注入，便于测试）
+ * @param {number[]} ports 要等空闲的端口（含需要一并观察的顺延位）
+ * @param {{ budgetMs?: number, intervalMs?: number, log?: (m: string, l?: import("./log.mjs").LogLevel) => void }} [options]
+ * @returns {Promise<{ free: boolean, occupied: number[] }>} free=false = 预算内没等到空闲
+ */
+export async function waitForPortsFree(
+  probe,
+  ports,
+  { budgetMs = 10_000, intervalMs = 250, log } = {},
+) {
+  const deadline = Date.now() + budgetMs;
+  /** @type {number[]} */
+  let occupied;
+  /** 探测不可用（没量到）与「量到被占」是两种读数，文案要分开。 */
+  let probeBroken;
+  for (;;) {
+    occupied = [];
+    probeBroken = false;
+    for (const port of ports) {
+      // oxlint-disable-next-line no-await-in-loop -- 端口族按序探测（与启动编排同一节奏）
+      const pids = await Promise.resolve(probe(port)).catch(() => null);
+      if (pids === null) {
+        probeBroken = true;
+        continue;
+      }
+      if (pids.length > 0) {
+        occupied.push(port);
+      }
+    }
+    if (!probeBroken && occupied.length === 0) {
+      return { free: true, occupied: [] };
+    }
+    if (Date.now() >= deadline) {
+      const reason = probeBroken
+        ? "端口探测不可用（没量到 ≠ 空闲）"
+        : `端口 ${occupied.join(", ")} 仍被占用`;
+      log?.(
+        `等端口释放超时（${budgetMs}ms）：${reason} —— 继续启动；若接下来失败，请回看上方回收日志`,
+        "WARN",
+      );
+      return { free: false, occupied };
+    }
+    // oxlint-disable-next-line no-await-in-loop -- 有界轮询（预算封顶）
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 }

@@ -1,9 +1,7 @@
 /**
- * `scripts/app-service-exit.mjs` 写侧的落盘契约（ISSUE #1692）。
- *
- * 这份记录是「应用服务为什么断了」在**事后唯一还能读到的证据**：探活走的是刚死掉
- * 那个服务自己的 HTTP，事后问不到。所以写侧的形态（落点、字段、无 BOM、不因为
- * 退出码 / 信号拿不到而编一个值）每一条都是判据，不是实现细节。
+ * `scripts/app-service-exit.mjs` 写侧的落盘契约（ISSUE #1692）：这份记录是「应用服务为什么断了」
+ * 事后唯一可读的证据（探活走的是刚死那个服务自己的 HTTP，事后问不到）。故写侧形态 —— 落点、
+ * 字段、无 BOM、不因退出码 / 信号拿不到而编值 —— 每条都是判据，不是实现细节。
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,10 +15,28 @@ type ExitModule = {
   writeAppServiceExit: (root: string, input: Record<string, unknown>) => boolean;
 };
 
-/* SAFETY: 类型断言已复核 */
-const mod = (await import(
+/** 外来值是不是普通对象（数组不算）：本文件收窄外来 JSON / 模块的统一入口。 */
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** 动态 import 的模块导出面：三个导出逐字段校验后才收成 ExitModule。 */
+function isExitModule(v: unknown): v is ExitModule {
+  return (
+    isPlainObject(v) &&
+    typeof v.APP_SERVICE_EXIT_FILE === "string" &&
+    typeof v.appServiceExitPath === "function" &&
+    typeof v.writeAppServiceExit === "function"
+  );
+}
+
+const imported: unknown = await import(
   pathToFileURL(join(process.cwd(), "scripts", "app-service-exit.mjs")).href
-)) as unknown as ExitModule;
+);
+if (!isExitModule(imported)) {
+  throw new Error("app-service-exit.mjs 的导出面不对");
+}
+const mod = imported;
 
 const dirs: Array<string> = [];
 function tmpRoot(): string {
@@ -36,11 +52,13 @@ afterEach(() => {
 });
 
 function read(root: string): Record<string, unknown> {
-  /* SAFETY: 类型断言已复核 */
-  return JSON.parse(readFileSync(join(root, "run", mod.APP_SERVICE_EXIT_FILE), "utf8")) as Record<
-    string,
-    unknown
-  >;
+  const parsed: unknown = JSON.parse(
+    readFileSync(join(root, "run", mod.APP_SERVICE_EXIT_FILE), "utf8"),
+  );
+  if (!isPlainObject(parsed)) {
+    throw new Error("app-service-exit.json 不是对象");
+  }
+  return parsed;
 }
 
 describe("writeAppServiceExit", () => {

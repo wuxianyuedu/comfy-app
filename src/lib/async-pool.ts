@@ -13,10 +13,12 @@
  * 语义：
  *   • `limit` 被夹到 `[1, items.length]`：0 / 负数按 1 处理（退化串行），
  *     超出条数不空转；
- *   • worker 抛错会**立即短路**整个池（`Promise.all` 语义，其余 runner 会在
- *     后台跑完各自队列但不被等待）——批量调用方的 worker 应当自行兜错
- *     （工坊的 generateShot / generateClip 就是这么写的：单条失败置 failed、
- *     不中断批量）；
+ *   • worker 抛错即**失败短路**（ISSUE #4342）：池立刻停止从队列派发新任务，
+ *     已经开跑的在途任务照常跑完（无法取消），池等它们全部落定后才以首个
+ *     错误 reject（多条失败聚合成 `AggregateError`，不再静默吞掉）——短路
+ *     短的是「后续派发」，不是只结束等待；调用方仍应让 worker 自行兜住
+ *     单条失败（工坊的 generateShot / generateClip 就是这么写的：置 failed、
+ *     不中断批量），但地基不再依赖这份自觉；
  *   • `items` 里不允许出现 `undefined` 条目（内部用它做索引守卫）。
  */
 import { clamp } from "~/lib/clamp";
@@ -29,8 +31,11 @@ export async function runWithConcurrency<T>(
   /* 并发宽度夹到 [1, 条数]：夹取走统一出口（P59）。 */
   const width = clamp(limit, 1, items.length);
   let next = 0;
+  /* 失败后不再取新任务；已开始的那条 await 照常落定。 */
+  let failed = false;
+  const errors: unknown[] = [];
   const runners = Array.from({ length: width }, async () => {
-    while (next < items.length) {
+    while (!failed && next < items.length) {
       const index = next;
       next += 1;
       /* noUncheckedIndexedAccess 下索引访问返回 `T | undefined`；
@@ -39,8 +44,22 @@ export async function runWithConcurrency<T>(
       if (item === undefined) {
         return;
       }
-      await worker(item, index);
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+        await worker(item, index);
+      } catch (error) {
+        failed = true;
+        errors.push(error);
+      }
     }
   });
   await Promise.all(runners);
+  if (errors.length > 0) {
+    throw errors.length === 1
+      ? errors[0]
+      : new AggregateError(
+          errors,
+          `批量任务共有 ${errors.length} 条失败（已短路，后续条目未再派发）`,
+        );
+  }
 }

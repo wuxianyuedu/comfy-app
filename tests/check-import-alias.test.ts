@@ -1,14 +1,7 @@
 /**
- * import 别名门禁的自测（ISSUE #640）。
- *
- * 为什么要有：这条门禁的价值全在**判定口径**上——`@/` 与 `~/` 在
- * `tsconfig.json` 的 `paths` 里都能解析，写错不会报错、不会红、跑起来一模一样，
- * 唯一的代价是「同一件事有两种写法」越滚越大。所以判据必须精确到「哪一行是
- * 静态模块说明符」，并且**不能误伤注释**：注释里写「旧写法是 @/…」正是在解释
- * 这条规则本身的来由（§12.4.1 要求的 Why），当成违规会逼着人删掉它。
- *
- * 用「临时仓库 + 只放被测文件」跑真脚本，断言「该拦的拦、不该误伤的放过」，
- * 别让门禁自己变成误报源（成员会直接删掉误报的门禁，等于没有）。
+ * import 别名门禁的自测（ISSUE #640）：`@/` 与 `~/` 在 `tsconfig.json` 的 `paths` 里都能解析，写错不报错
+ * 也不变色，代价只是风格分叉。判据须精确到「哪一行是静态模块说明符」，且不能误伤注释——注释里写
+ * 「旧写法是 @/…」正是 §12.4.1 要求的 Why。用临时仓库跑真脚本，断言该拦的拦、该放的放，别让门禁变成误报源。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -18,7 +11,14 @@ import path from "node:path";
 import { copyGateDeps } from "./helpers/gate-repo";
 import { afterEach, describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-import-alias.cjs");
+/**
+ * 外来值（`execFileSync` 抛出的对象）先落 `unknown`，过这道守卫后逐字段 `typeof` 收窄才使用。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-import-alias.cjs");
 const tempDirs: Array<string> = [];
 
 /** 造一个只含被测文件的临时仓库（脚本按仓库根解析扫描目录）。 */
@@ -27,8 +27,9 @@ function scanner(files: Record<string, string>) {
   tempDirs.push(root);
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   /* 判据 `require("./gate-scan-read.cjs")`（`--staged` 的共享短路器）—— 临时仓库只放得下被测那一份脚本时，缺依赖的表现是可读性极差的 requireStack，所以按 `require("./x.cjs")` 递归补齐（同 `tests/helpers/gate-repo.ts` 的文件头）。 */
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
-  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
+  copyGateDeps(path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
@@ -40,14 +41,15 @@ function scanner(files: Record<string, string>) {
         ok: true,
         output: execFileSync(
           process.execPath,
-          [path.join(root, "scripts", path.basename(SCRIPT))],
+          [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
           { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
         ),
       };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as { stderr?: string; stdout?: string };
-      return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+      const fields = isRecord(error) ? error : null;
+      const stdout = typeof fields?.stdout === "string" ? fields.stdout : "";
+      const stderr = typeof fields?.stderr === "string" ? fields.stderr : "";
+      return { ok: false, output: `${stdout}${stderr}` };
     }
   };
   return { run };

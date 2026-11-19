@@ -13,9 +13,8 @@
  * 否则会把自己的图判成 404。真正的默认放行清单写在下面 `UNSCOPED_PREFIXES` 里，
  * 让「还有哪些前缀判不了」是看得见的、而不是被 `return false` 悄悄吸收。
  *
- * 只在 `loginRequired` 打开时启用（理由在调用点与 A13 里）：关掉时每个请求都解析成
- * 同一个演示用户，归属判定在数学上不可能有不同结果，只可能因为历史行的 `userId`
- * 漂移把用户自己的产物打裂。 */
+ * 历史上仅在 `loginRequired` 打开时启用；登录页与登录开关已移除（ISSUE #3827），
+ * 当前产物读取口不再按该开关做归属拦截，以避免单用户模式下误伤可用产物。 */
 import "server-only";
 
 import { filmRepository } from "~/lib/core/repository-film";
@@ -50,20 +49,20 @@ export async function isForeignOwnedArtifact(
   userId: string,
 ): Promise<boolean> {
   const [first, second] = segments;
-  if (!first) {
+  if (first === undefined || first === "") {
     return false;
   }
 
   if (first === "materials") {
     // materials/<scope>/<folder>/<file>：scope 就是项目 id（或 _shared）
-    return second ? isForeignProjectScope(second, userId) : false;
+    return second !== undefined && second !== "" ? isForeignProjectScope(second, userId) : false;
   }
   if (first === "projects") {
     // projects/<项目 id>/<任务 id>/…
-    return second ? isForeignProjectScope(second, userId) : false;
+    return second !== undefined && second !== "" ? isForeignProjectScope(second, userId) : false;
   }
   if (first === "films") {
-    if (!second || UNSCOPED_PREFIXES.has(`films/${second}`)) {
+    if (second === undefined || second === "" || UNSCOPED_PREFIXES.has(`films/${second}`)) {
       return false;
     }
     const row = await filmRepository.findById(filmIdOf(second));

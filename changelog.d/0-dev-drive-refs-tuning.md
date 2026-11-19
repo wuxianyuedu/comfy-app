@@ -73,7 +73,7 @@
 
 ## Changed
 
-- **`pnpm doc:check` 的文档集合新增这份指南**（`scripts/doc-facts.cjs`）：
+- **`pnpm doc:check` 的文档集合新增这份指南**（`scripts/docs/doc-facts.cjs`）：
   它引用的落点（pnpm store、四个缓存目录名、Defender 排除项的命令形态）
   都来自机器配置，漂了就会指着一个不存在的位置 —— 与 `sync-after-pull.md`
   同类，纳入校验。
@@ -100,5 +100,5 @@
   契约测试补两条，把「读不到 ≠ 不是」钉住。
 - **检出目录不再在探测层硬拼**（master 新进的字面量扫描闸抓到的存量违规）：
   `scripts/dev-drive-probe.mjs` 原先把检出里的 git 目录当普通子目录拼出来，而
-  「检出位置只有 `scripts/git-dir.mjs` 知道」是本仓的一条硬规则 —— 链接工作树里那还是
+  「检出位置只有 `scripts/lib/git-dir.mjs` 知道」是本仓的一条硬规则 —— 链接工作树里那还是
   **一个文件**，硬拼根本指不到它。改用 `resolveGitDir()` 拿 git 自己报的位置。

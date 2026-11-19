@@ -13,12 +13,14 @@ import {
 
 function makeDeps(over: Partial<ImageRedrawDeps> = {}): ImageRedrawDeps {
   return {
-    listTemplates: vi.fn(async () => [
-      { id: "wf-up", name: "放大", taskType: "UPSCALE" },
-      { id: "wf-in", name: "重绘", taskType: "INPAINT" },
-    ]),
-    prepareImage: vi.fn(async (image: string) => `up-${image}`),
-    submit: vi.fn(async () => "task-new"),
+    listTemplates: vi.fn(() =>
+      Promise.resolve([
+        { id: "wf-up", name: "放大", taskType: "UPSCALE" },
+        { id: "wf-in", name: "重绘", taskType: "INPAINT" },
+      ]),
+    ),
+    prepareImage: vi.fn((image: string) => Promise.resolve(`up-${image}`)),
+    submit: vi.fn(() => Promise.resolve("task-new")),
     report: vi.fn(),
     ...over,
   };
@@ -81,10 +83,7 @@ describe("useImageRedraw", () => {
       }),
     );
     expect(current().resultTaskId).toBe("task-new");
-    expect(deps.report).toHaveBeenCalledWith(
-      "ok",
-      expect.stringContaining("task-new"),
-    );
+    expect(deps.report).toHaveBeenCalledWith("ok", expect.stringContaining("task-new"));
   });
 
   it("局部重绘：原图 + 蒙版两槽；没画蒙版先拦下（不提交）", async () => {
@@ -99,10 +98,7 @@ describe("useImageRedraw", () => {
       await current().run("/generated/t/1.png");
     });
     expect(deps.submit).not.toHaveBeenCalled();
-    expect(deps.report).toHaveBeenCalledWith(
-      "err",
-      expect.stringContaining("蒙版"),
-    );
+    expect(deps.report).toHaveBeenCalledWith("err", expect.stringContaining("蒙版"));
 
     act(() => {
       current().setMask("data:image/png;base64,AAAA");
@@ -110,22 +106,17 @@ describe("useImageRedraw", () => {
     await act(async () => {
       await current().run("/generated/t/1.png");
     });
-    expect(deps.prepareImage).toHaveBeenCalledWith(
-      "data:image/png;base64,AAAA",
-    );
+    expect(deps.prepareImage).toHaveBeenCalledWith("data:image/png;base64,AAAA");
     expect(deps.submit).toHaveBeenCalledWith(
       expect.objectContaining({
-        referenceImages: [
-          "up-/generated/t/1.png",
-          "up-data:image/png;base64,AAAA",
-        ],
+        referenceImages: ["up-/generated/t/1.png", "up-data:image/png;base64,AAAA"],
       }),
     );
   });
 
   it("没选模板先拦下；提交失败走失败通道（不冒充成功）", async () => {
     const deps = makeDeps({
-      submit: vi.fn(async () => {
+      submit: vi.fn(() => {
         throw new Error("工作流不存在");
       }),
     });
@@ -134,10 +125,7 @@ describe("useImageRedraw", () => {
       await current().run("/generated/t/1.png");
     });
     expect(deps.submit).not.toHaveBeenCalled();
-    expect(deps.report).toHaveBeenCalledWith(
-      "err",
-      expect.stringContaining("模板"),
-    );
+    expect(deps.report).toHaveBeenCalledWith("err", expect.stringContaining("模板"));
 
     await act(async () => {
       await current().ensureTemplates();

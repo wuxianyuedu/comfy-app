@@ -23,7 +23,13 @@ export const historyTaskRowSchema = z.object({
   workflowName: z.string().default(""),
   status: z.string().default("QUEUED"),
   prompt: z.string().default(""),
-  createdAt: z.string(),
+  /* createdAt 经 tRPC 的 superjson transformer 过线后仍是 **Date 实例**（drizzle
+   * dateNotNull 产出 Date、superjson 保真复原，见 src/trpc/link.ts）——只判
+   * string 会把每一行都判失败、整行丢弃，历史面板恒空（#4039）。两种形态都收，
+   * 归一成 ISO 字符串供 timeAgo 消费。 */
+  createdAt: z
+    .union([z.string(), z.date()])
+    .transform((v) => (v instanceof Date ? v.toISOString() : v)),
   cover: z.string().nullable().default(null),
   mediaType: z.enum(["image", "video", "audio"]).default("image"),
   projectId: z.string().nullable().default(null),

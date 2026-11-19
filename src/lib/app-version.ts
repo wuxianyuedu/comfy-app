@@ -1,7 +1,7 @@
 // 产品版本号的**运行时读取面**（浏览器 / 服务端同构）。
 //
 // 单一事实仍然是 `package.json` 的 `version`（外加 `tauri.conf.json` 与
-// `Cargo.toml` 两处，由 `scripts/check-app-version.cjs` 守着三者逐字相等，
+// `Cargo.toml` 两处，由 `scripts/gates/check-app-version.cjs` 守着三者逐字相等，
 // 规范 launch-and-build §7.1.1）。此处只做一件事：**不在源码里另抄一份**。
 //
 // 为什么在源码里手抄一份是危险的：MCP `serverInfo.version` 此前是硬编码的

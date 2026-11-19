@@ -38,7 +38,8 @@ import type { LogSessionMeta } from "./log-sessions";
 const PACK_SEP = "/";
 
 /** 包目录名里的日期与时分秒（形态与 `run.mjs` 的 `runDirName` 同源）。 */
-const PACK_NAME_RE = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})-([0-9a-f]+)$/;
+const PACK_NAME_RE =
+  /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})_(?<hour>\d{2})(?<minute>\d{2})(?<second>\d{2})-(?:[0-9a-f]+)$/;
 
 /**
  * 运行包目录名 → 毫秒时刻（本地时区）；形态不符返回 null。
@@ -48,17 +49,17 @@ const PACK_NAME_RE = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})-([0-9a-f]+)
  * 是写进去的、不随搬动变化。
  */
 export function packNameToMs(name: string): number | null {
-  const m = PACK_NAME_RE.exec(name);
+  const m = PACK_NAME_RE.exec(name)?.groups;
   if (!m) {
     return null;
   }
   const value = new Date(
-    Number(m[1]),
-    Number(m[2]) - 1,
-    Number(m[3]),
-    Number(m[4]),
-    Number(m[5]),
-    Number(m[6]),
+    Number(m.year),
+    Number(m.month) - 1,
+    Number(m.day),
+    Number(m.hour),
+    Number(m.minute),
+    Number(m.second),
   ).getTime();
   return Number.isFinite(value) ? value : null;
 }

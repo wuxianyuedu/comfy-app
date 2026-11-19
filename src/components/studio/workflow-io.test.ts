@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  cliOutputNodeId,
   controlForEntry,
   ioLabel,
   isUploadPinName,
@@ -28,7 +29,7 @@ function pin(name: string, label: string, type?: string): WorkflowIOEntry {
     nodeId: "7",
     name,
     label,
-    ...(type ? { type } : {}),
+    ...(type !== undefined && type !== "" ? { type } : {}),
   };
 }
 
@@ -171,7 +172,7 @@ describe("splitWorkflowIO — kind 决定分组，客户端无 legacy 特判", (
     kind,
     nodeId: "7",
     name,
-    ...(type ? { type } : {}),
+    ...(type !== undefined && type !== "" ? { type } : {}),
   });
 
   it("kind=param 一律归 wireInputs（连线端口行）", () => {
@@ -501,5 +502,14 @@ describe("persistEnrichedWorkflowIO — 保存时固化类型（fix 4）", () =>
     // 字符串无法区分 STRING 与 COMBO，这里不写 type，让 GET 富化接管。
     expect(out["7::widget::ckpt_name"]?.type).toBeUndefined();
     expect(out["7::widget::ckpt_name"]?.defaultValue).toBe("sd_xl.safetensors");
+  });
+});
+
+describe("cliOutputNodeId（#4189 部分执行的目标 id）", () => {
+  it("顶层条目就是 nodeId", () => {
+    expect(cliOutputNodeId({ nodeId: "9" })).toBe("9");
+  });
+  it("子图内部条目拼成 宿主id:内部id（comfy-cli 展开后的运行期 id）", () => {
+    expect(cliOutputNodeId({ nodeId: "1670", hostNodeId: "4" })).toBe("4:1670");
   });
 });

@@ -1,26 +1,18 @@
-/**
- * auth/会话边界 + authedProcedure demo 兜底与 loginRequired 开关 + rateLimitedProcedure 限流契约测试（Issue #11）。
- *
- * 覆盖：
- * - createTRPCContext 的会话边界（未登录 → user null / 已有用户 → 取库中 / 新邮箱 → 自动建号）。
- * - authedProcedure 的 demo-user 兜底（ctx.user 为 null 时注入 demo@comfy.app）。
- * - authedProcedure 与 REST 面共用的 `loginRequired` 判决：开关打开且无会话
- *   → UNAUTHORIZED；已登录照常放行（此前 tRPC 面无条件兜底，开关形同虚设）。
- * - rateLimitedProcedure 超窗返回 TOO_MANY_REQUESTS、不同 key 相互独立。
- *
- * mock 边界：~/server/db（内存测试库）、~/server/better-auth（可控 getSession）、
- * ~/lib/core/logger（静音）、~/lib/app-settings/app-settings.server（可控
- * loginRequired 开关，同 auth-server.test.ts 的口径）。鉴权/限流中间件均走真实实现。
- *
- * 说明：限流「超窗测试」先用同一模块的 `checkRateLimit` 预填桶（二者共享限流桶），
- * 以最少真实 tRPC 调用确定性地命中「超窗 → TOO_MANY_REQUESTS」路径。
+/** auth/会话边界＋authedProcedure demo 兜底＋rateLimitedProcedure 限流契约（Issue #11 / ISSUE #3827）。
+ * 登录页与登录开关已移除：无会话一律回落演示用户，不再因 `loginRequired` 拒绝；mock 只到 db /
+ * better-auth / logger，鉴权与限流中间件走真实实现；超窗用同模块 `checkRateLimit` 预填共享桶，
+ * 以最少真实调用确定性命中 TOO_MANY_REQUESTS。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type * as AppSettingsModule from "~/lib/app-settings/app-settings.server";
 
-const { getSessionMock } = vi.hoisted(() => ({
-  getSessionMock: vi.fn<() => Promise<unknown>>(async () => null),
-}));
+const { getSessionMock, loggerMocks } = vi.hoisted(() => {
+  /* 带签名的 mock：mock.calls 的元素是 [fields, msg]，测试里解构不落 any。 */
+  const logFn = () => vi.fn<(fields: Record<string, unknown>, msg: string) => void>();
+  return {
+    getSessionMock: vi.fn<() => Promise<unknown>>(() => Promise.resolve(null)),
+    loggerMocks: { debug: logFn(), info: logFn(), warn: logFn(), error: logFn() },
+  };
+});
 
 vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../tests/helpers/test-db");
@@ -29,16 +21,6 @@ vi.mock("~/server/db", async () => {
 vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: getSessionMock } },
 }));
-/* loginRequired 开关可控（真实实现要读 data/app-settings.json），
- * 其余设置走真实导出。 */
-let loginRequired = false;
-vi.mock("~/lib/app-settings/app-settings.server", async (importOriginal) => {
-  const mod = await importOriginal<typeof AppSettingsModule>();
-  return {
-    ...mod,
-    getSettingsSync: () => ({ ...mod.getSettingsSync(), loginRequired }),
-  };
-});
 /* 静音服务端日志。
  *
  * 用 `importOriginal` 部分 mock：日志实现只有一份（`lib/core/logger`），
@@ -48,7 +30,7 @@ vi.mock("~/lib/core/logger", async (importOriginal) => {
   const actual: Record<string, unknown> = await importOriginal();
   return {
     ...actual,
-    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    logger: loggerMocks,
   };
 });
 
@@ -61,7 +43,9 @@ import {
   rateLimitedProcedure,
   recordSlowQuery,
   resetSlowQueryBuckets,
+  logTrpcError,
 } from "~/server/api/trpc";
+import { TRPCError } from "@trpc/server";
 import { checkRateLimit } from "~/server/api/middleware/rate-limit";
 import { getTestDb, seedUser, type Row } from "../../../tests/helpers/test-db";
 import { makeCtx } from "../../../tests/helpers/trpc";
@@ -83,7 +67,6 @@ beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
   getSessionMock.mockResolvedValue(null);
-  loginRequired = false;
 });
 
 // ─────────────────────────── createTRPCContext 会话边界 ───────────────────────────
@@ -123,31 +106,20 @@ describe("authedProcedure demo-user 兜底", () => {
   it("ctx.user 非空时透传，不注入 demo", async () => {
     const caller = createCaller(makeCtx());
     const res = await caller.authedWhoami();
-    expect(res.user?.id).toBe("user-a");
+    expect(res.user.id).toBe("user-a");
   });
 
   it("ctx.user 为 null（本地单用户/未登录）→ 注入 demo@comfy.app", async () => {
     const caller = createCaller(makeCtx({ user: null }));
     const res = await caller.authedWhoami();
     expect(res.user).not.toBeNull();
-    expect(res.user?.email).toBe("demo@comfy.app");
+    expect(res.user.email).toBe("demo@comfy.app");
   });
 
-  it("loginRequired=true 且无会话 → UNAUTHORIZED（开关不再被 tRPC 面绕过）", async () => {
-    loginRequired = true;
+  it("无会话始终回落演示用户（无需登录，ISSUE #3827）", async () => {
     const caller = createCaller(makeCtx({ user: null }));
-    await expect(caller.authedWhoami()).rejects.toMatchObject({
-      code: "UNAUTHORIZED",
-    });
-    // 开关拦下时不得顺手建出演示用户（与 REST 面同一要求）
-    expect(tdb.$tables.users.find((u: Row) => u.email === "demo@comfy.app")).toBeUndefined();
-  });
-
-  it("loginRequired=true 但 ctx.user 已有真实用户 → 照常放行", async () => {
-    loginRequired = true;
-    const caller = createCaller(makeCtx());
     const res = await caller.authedWhoami();
-    expect(res.user?.id).toBe("user-a");
+    expect(res.user.email).toBe("demo@comfy.app");
   });
 });
 
@@ -207,5 +179,43 @@ describe("recordSlowQuery：同一路径在一个窗口内只写首条 + 一条�
     expect(recordSlowQuery("a.b", 2000, "query", 1000)).not.toBeNull();
     expect(recordSlowQuery("a.c", 2000, "query", 1000)).not.toBeNull();
     expect(recordSlowQuery("a.b", 2000, "mutation", 1000)).not.toBeNull();
+  });
+});
+
+// ─────────────────────────── tRPC 错误日志分级（#4093）───────────────────────────
+
+describe("logTrpcError：服务端故障升 error 带堆栈，客户端错误维持 warn", () => {
+  beforeEach(() => {
+    loggerMocks.warn.mockClear();
+    loggerMocks.error.mockClear();
+  });
+
+  it("INTERNAL_SERVER_ERROR → logger.error 并带 stack（真 5xx 不淹在 warn 里、不丢现场）", () => {
+    logTrpcError(new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "db down" }), "task.list");
+    expect(loggerMocks.error).toHaveBeenCalledTimes(1);
+    const [fields, msg] = loggerMocks.error.mock.calls[0] ?? [];
+    expect(msg).toBe("trpc_error_server_fault");
+    expect(fields).toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      path: "task.list",
+      message: "db down",
+    });
+    expect(typeof fields?.stack).toBe("string");
+    expect(loggerMocks.warn).not.toHaveBeenCalled();
+  });
+
+  it("BAD_REQUEST → logger.warn（客户端错误不进告警面）", () => {
+    logTrpcError(new TRPCError({ code: "BAD_REQUEST", message: "参数坏了" }), "task.create");
+    expect(loggerMocks.warn).toHaveBeenCalledTimes(1);
+    const [, msg] = loggerMocks.warn.mock.calls[0] ?? [];
+    expect(msg).toBe("trpc_error");
+    expect(loggerMocks.error).not.toHaveBeenCalled();
+  });
+
+  it("UNAUTHORIZED / FORBIDDEN → 预期内的鉴权拒绝，一条都不记", () => {
+    logTrpcError(new TRPCError({ code: "UNAUTHORIZED" }));
+    logTrpcError(new TRPCError({ code: "FORBIDDEN" }));
+    expect(loggerMocks.warn).not.toHaveBeenCalled();
+    expect(loggerMocks.error).not.toHaveBeenCalled();
   });
 });

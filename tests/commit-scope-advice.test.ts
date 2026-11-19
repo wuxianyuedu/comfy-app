@@ -1,17 +1,7 @@
 /**
- * 「把大改动拆小」这条建议的判据。
- *
- * 为什么单独成一份：它判的是**另一件事**。`hook-affected-launch.test.ts` 守的是
- * 「启动那一步」的契约（分块不丢用例、负载自适应、命令行长预算），而这里守的是
- * **改动面的代价信息** —— 两者共用的只有那个入口文件。拆开也是为了不让任何一份
- * 长到要靠长度棘轮来管（同 §12.6 对「登记表 vs 编排」的分档口径）。
- *
- * ## 这条判据补的是什么洞
- *
- * 规范 §13.5.8.1 末尾那句「真正能让每次提交更快的是**把大改动拆小**」此前
- * **没有任何执行者**：提交的人拿不到「这次多大、哪一刀最值、拆完能省多少」。
- * 没有这三件，那句建议就只是散文。本文件的用例逐条钉住这三件事都被交付了，
- * 且这份建议**永远不许变成隐性阻断**（大改动有时不可分）。
+ * 「把大改动拆小」这条建议的判据：`hook-affected-launch.test.ts` 守启动那一步，这里守**改动面的代价信息**，两者只共用入口文件。
+ * 拆开也避免单份长到要靠长度棘轮管（§12.6）。§13.5.8.1 末尾「把大改动拆小」此前无执行者：提交的人拿不到「这次多大、
+ * 哪一刀最值、拆完省多少」；用例逐条钉住三件都交付，且**永远不许变成隐性阻断**（大改动有时不可分）。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -21,11 +11,11 @@ import { describe, expect, it } from "vitest";
 /* 这一格的两半（归因 + 话术）住在 `affected-launch-scope-advice.mjs` —— 从启动器那一层
  * 搬出去是因为它贴住了 900 行硬闸（§12.6 R5），判据一个字没改。用例跟着走：**读者面是
  * 函数自己**，不是它碰巧常住的那个文件。 */
-import { scopeAdvice } from "../scripts/affected-launch-scope-advice.mjs";
+import { scopeAdvice } from "../scripts/affected-tests/affected-launch-scope-advice.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const LAUNCHER_PATH = path.join(ROOT, "scripts", "run-affected-tests.mjs");
-const ADVICE_PATH = path.join(ROOT, "scripts", "affected-launch-scope-advice.mjs");
+const LAUNCHER_PATH = path.join(ROOT, "scripts", "affected-tests/run-affected-tests.mjs");
+const ADVICE_PATH = path.join(ROOT, "scripts", "affected-tests/affected-launch-scope-advice.mjs");
 
 describe("受影响用例的启动器 —— 「大改动拆小」这条建议的执行者", () => {
   /* 两处都要读：建议的**话术**在 advice 那份里，而「该不该印」那条判定留在启动器的
@@ -135,10 +125,23 @@ describe("受影响用例的启动器 —— 「大改动拆小」这条建议�
     // 不是新起一次 git；那份清单的变量名随改动面拆过一次（#2905），所以只钉
     // 「从某个已有数组的 filter 结果来」这个形态。
     expect(src).toContain("const wantAdvice = affectedCount >= SCOPE_ADVICE_MIN;");
-    expect(
-      src,
-      "affectedCount 必须从已经拿到的清单算出来 —— 另起一次 git 就是白付",
-    ).toMatch(/const affectedCount = \w+\.filter\(/);
+    expect(src, "affectedCount 必须从已经拿到的清单算出来 —— 另起一次 git 就是白付").toMatch(
+      /const affectedCount = \w+\.filter\(/,
+    );
+  });
+
+  it("归因那一跳用跨进程心跳（spawnSync 阻塞主线程，进程内定时器不跳）", () => {
+    /* 归因要重建一次反向 import 图，`spawnSync` 期间本进程的定时器整段不跳 ——
+     * 进程内那条 `startProgress` 在这里只能打首尾两行。所以必须走跨进程那条，
+     * 而且失败分支也要在 `finally` 里收尾。 */
+    const fnStart = adviceSrc.indexOf("export function collectAttribute() {");
+    expect(fnStart, "解不出 collectAttribute").toBeGreaterThan(-1);
+    const fnBody = adviceSrc.slice(fnStart, adviceSrc.indexOf("\n}\n", fnStart));
+    expect(adviceSrc, "没接同一入口").toContain('from "../gates/progress-heartbeat.mjs"');
+    expect(fnBody, "必须是跨进程那条").toContain("startProgressSync(");
+    expect(fnBody, "要报出当前段名").toContain("progress.step(");
+    expect(fnBody, "失败分支也必须收尾").toContain("finally {");
+    expect(fnBody).toContain("progress.done(");
   });
 
   it("它**不改变退出码**（代价不是结论）—— 打印点自己不许 return", () => {
@@ -150,9 +153,7 @@ describe("受影响用例的启动器 —— 「大改动拆小」这条建议�
     const start = src.indexOf("if (wantAdvice) {");
     expect(start, "解不出 wantAdvice 的打印点").toBeGreaterThan(-1);
     const body = src.slice(start, src.indexOf("\n  }", start));
-    expect(body, "建议那一段里出现了 return —— 它就不再是纯信息了").not.toMatch(
-      /\breturn\b/,
-    );
+    expect(body, "建议那一段里出现了 return —— 它就不再是纯信息了").not.toMatch(/\breturn\b/);
     expect(body).toContain("scopeAdvice({");
   });
 

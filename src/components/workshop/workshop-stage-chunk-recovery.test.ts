@@ -1,15 +1,8 @@
-// 工坊六段的**分块失败自愈必须穷尽**（按源码读，不做渲染）。
-//
-// 为什么这条要机械化：六段是互斥懒加载（每段单独切 bundle），而懒加载的
-// `import()` 在 dev server 重建后可能指向被换掉的旧分块 —— 剩下的 Promise 只能
-// reject。工坊外面只有路由级边界，一段失败就把另外五段、连同标题与阶段轨道一起
-// 打成「页面出错了」（现场：ScriptGenerator 的 async loader 抛
-// `Failed to load chunk …`）。判定与刷新出口只有一处实现
-// （`~/lib/shell/lazy-chunk-recovery`），这里的判据钉的是**每段都接上了**：
-// 漏一段，那一段撞上时仍是整屏崩，而正常构建下完全看不出来。
-//
-// 不用渲染判据的理由与 `workshop-heading-structure.test.ts` 同一条：要 mock 掉
-// 整条 pipeline controller 与四个网络客户端，测的却是一个源码结构事实。
+// 工坊六段的**分块失败自愈必须穷尽**（按源码读，不做渲染）：六段互斥懒加载，
+// `import()` 在 dev server 重建后可能指向被换掉的旧分块而 reject；工坊外面只有
+// 路由级边界，一段失败就整屏崩（现场：ScriptGenerator 抛 `Failed to load chunk …`）。
+// 判定与刷新出口只有一处实现（`~/lib/shell/lazy-chunk-recovery`），这里钉**每段都
+// 接上了**。不用渲染判据的理由同 `workshop-heading-structure.test.ts`。
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

@@ -14,7 +14,7 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import { SelectChip } from "~/components/ui/select-chip";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { Progress } from "~/components/ui/progress";
 import { Alert } from "~/components/ui/alert";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -54,8 +54,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   /* 导入定妆照：隐藏 input + 选完复位收进`ui/file-picker`。 */
   const importPicker = useFilePicker({
     accept: "image/*",
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    onPick: (file) => void actions.importFile(character, file),
+    onPick: (file) => {
+      void actions.importFile(character, file);
+    },
   });
 
   /** 会话消息只挂在发起它的那张卡上，别的角色卡不重复展示同一份进度与日志。 */
@@ -74,17 +75,18 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   const tagCounts = new Map<string, number>();
   for (const w of localWorkflows) {
     const tag = w.modelTags[0];
-    if (tag) {
+    if (tag !== undefined && tag !== "") {
       tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
     }
   }
   for (const w of localWorkflows) {
     const tag = w.modelTags[0];
-    localOptionLabels[w.id] = tag
-      ? (tagCounts.get(tag) ?? 0) > 1
-        ? `${tag} · ${w.name}`
-        : tag
-      : w.name;
+    localOptionLabels[w.id] =
+      tag !== undefined && tag !== ""
+        ? (tagCounts.get(tag) ?? 0) > 1
+          ? `${tag} · ${w.name}`
+          : tag
+        : w.name;
   }
   const localOptions = localWorkflows.map((w) => w.id);
   const localBlocked = session.channel === "local" && !session.localWorkflowId;
@@ -96,17 +98,26 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   /* 生成日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [history, setHistory] = React.useState<Array<PersistableGenerationLog> | null>(null);
+  const [historyFailed, setHistoryFailed] = React.useState(false);
   const loadHistory = () => {
     setHistoryOpen(true);
     if (history) {
       return;
     }
-    void fetchGenerationLogs("portrait", 100).then(setHistory);
+    /* 失败与空态分开说（#4242）：失败时把 history 复位成 null，重开「历史」可重试。 */
+    void fetchGenerationLogs("portrait", 100).then((res) => {
+      setHistory(res.entries);
+      setHistoryFailed(!res.ok);
+      if (!res.ok) {
+        setHistory(null);
+      }
+    });
   };
 
   const candidates = portraitCandidates(character);
 
   return (
+    /* SAFETY: 类型断言已复核 */
     <div className="bg-subtle mt-3 rounded-lg p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground text-xs font-medium">定妆照</p>
@@ -114,26 +125,28 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             与镜头台 / 影片台的「生成通道」是同一族：手搓的
             `variant="outline"` + 选中三元，缺「已选中时的悬停值」那一半。 */}
         <div aria-label="定妆照生成通道" className="flex gap-2" role="radiogroup">
-          {
-            /* SAFETY: 类型断言已复核 */ (["local", "remote"] as const).map((channel) => (
-              <SelectChip
-                disabled={session.busy || session.importing}
-                key={channel}
-                onClick={() => actions.patch({ channel })}
-                selected={session.channel === channel}
-                shape="compact"
-              >
-                {channel === "local" ? "本地（ComfyUI）" : "远端 API"}
-              </SelectChip>
-            ))
-          }
+          {(["local", "remote"] as const).map((channel) => (
+            <SelectChip
+              disabled={session.busy || session.importing}
+              key={channel}
+              onClick={() => {
+                actions.patch({ channel });
+              }}
+              selected={session.channel === channel}
+              shape="compact"
+            >
+              {channel === "local" ? "本地（ComfyUI）" : "远端 API"}
+            </SelectChip>
+          ))}
         </div>
         {session.channel === "local" && (
           <SelectMenu
             className="bg-subtle! border-border! text-2xs"
             disabled={session.busy || session.importing}
             labels={localOptionLabels}
-            onChange={(value) => actions.patch({ localWorkflowId: value })}
+            onChange={(value) => {
+              actions.patch({ localWorkflowId: value });
+            }}
             options={localOptions}
             placeholder="选择本地生图模型"
             popoverMinWidth={240}
@@ -144,7 +157,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           <SelectMenu
             className="bg-subtle! border-border! text-2xs"
             disabled={session.busy || session.importing}
-            onChange={(value) => actions.patch({ remoteModel: value })}
+            onChange={(value) => {
+              actions.patch({ remoteModel: value });
+            }}
             options={remoteImageModels}
             placeholder="选择远端生图模型"
             popoverMinWidth={220}
@@ -153,14 +168,15 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         )}
         <ShotSizePicker
           disabled={session.busy}
-          onChange={(size) => actions.patch({ size })}
+          onChange={(size) => {
+            actions.patch({ size });
+          }}
           value={session.size}
         />
         <Button
           className="h-auto rounded-md px-3 py-1.5"
           disabled={!canGenerate}
-          onClick={() =>
-            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
+          onClick={() => {
             void actions.generate(
               character,
               session.channel === "remote" && effectiveRemoteModel
@@ -171,8 +187,8 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                       localLabel: localOptionLabels[session.localWorkflowId] ?? "库工作流",
                     }
                   : undefined,
-            )
-          }
+            );
+          }}
           size="xs"
           variant="primary-solid"
         >
@@ -187,7 +203,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         >
           {importing ? "导入中…" : "导入图片"}
         </Button>
-        <importPicker.Input />
+        <FilePicker {...importPicker.inputProps} />
       </div>
 
       {/* 通道门禁提示：说清缺什么、去哪里补，不让按钮无声失效 */}
@@ -286,7 +302,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                 </Disclosure>
                 <Button
                   className="text-muted-foreground hover:text-primary text-2xs h-auto shrink-0 p-0 underline underline-offset-2"
-                  onClick={() => loadHistory()}
+                  onClick={() => {
+                    loadHistory();
+                  }}
                   variant="link"
                 >
                   历史
@@ -297,7 +315,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   <p className="text-muted-foreground text-3xs">
                     历史日志（含此前会话，保存在 log/workshop/）
                   </p>
-                  {history === null ? (
+                  {historyFailed ? (
+                    <p className="text-destructive text-2xs">历史日志拉取失败：请稍后重试。</p>
+                  ) : history === null ? (
                     <p className="text-muted-foreground text-2xs">加载中…</p>
                   ) : history.length === 0 ? (
                     <p className="text-muted-foreground text-2xs">还没有落盘的历史日志。</p>
@@ -348,7 +368,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                     className={`block overflow-hidden rounded-lg border-2 transition-colors ${
                       selected ? "border-primary" : "border-border hover:border-primary/60"
                     }`}
-                    onClick={() => actions.select(character.id, candidate.url)}
+                    onClick={() => {
+                      actions.select(character.id, candidate.url);
+                    }}
                     variant="ghost"
                   >
                     <MediaThumbnail
@@ -370,7 +392,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   aria-label="删除这张定妆照候选"
                   className="text-muted-foreground hover:text-danger-strong absolute -top-1.5 -right-1.5 rounded-full bg-black/70"
                   disabled={session.busy || session.importing}
-                  onClick={() => actions.remove(character.id, candidate.url)}
+                  onClick={() => {
+                    actions.remove(character.id, candidate.url);
+                  }}
                   size="icon-xs"
                   variant="ghost"
                 >

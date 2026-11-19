@@ -1,0 +1,7 @@
+## Changed
+
+- **GA 回读结论判红时补「错误日志怎么取」的指针**（ISSUE #3469，#3454 后续指令）：用户贴出 `GA 回调结论回读` stage 判红截图 —— 日志只有 `[ga-readout] … state=error → 红` 与 `任务执行失败，返回码：1`，没有一句话告诉看日志的人/AI「真正的失败日志去哪找」，AI 分析/修复拿着空读数只能猜。取法其实早有（#3437 / #3452 / #3454）：GA 收尾 job 判红时把失败 job 日志正文搬到 CNB（附件 + PR 评论 / 描述镜像），本地取回是 `pnpm ship --gh-logs pr:<号>`；这条提示此前只写在 PR 评论 / 描述正文里，回读格的 build 日志看不到，两条通道在读的人那里没合流。
+- `ci-ga-verdict-readout.mjs` 新增纯函数 `errorLogsHint(pr)`：明确判红（`code === CODE.FAIL`）那一眼，在 `⇒ 红` 之后多打三行只读提示 —— 本格只站内读 GA 送回的结论、这里没有失败 job 正文；错误日志取 `pnpm ship --gh-logs pr:<号>`（优先 CNB 站内读、无需出站 github.com，也不需要 GitHub 令牌）；同一份附件链也挂在 PR 评论与描述里，可直接点开。`pr` 本就从 `--pr` / `CNB_PULL_REQUEST_IID` 解析好，拼它不需要新前提。
+- **只在明确判红给**：绿（0）/ 没判过（2，pending / 缺席 / 前提不全 / 平台没回）都不刷，避免把「没判过」读成「有日志可取」；`--json` 仍只给一行机器读数，判红也不夹提示。提示不改三态、不改退码、不发网络请求、不写 commit-statuses；不碰流水线 `name` / `COMFYAPP_CI_GATES` / `GATE_TIER_LEDGER` / `GA_VERDICT` 折叠。
+- **单一出处**：命令形状与 `ci-ga-logs-relay.mjs` 的 `relayCommentBody` / `renderRelayDescriptionBlock` 同源（都是 `pnpm ship --gh-logs pr:<号>`），由用例逐字对账；取法本身（relay / `ship-ga-logs-cnb.mjs` / `ship-gh-logs.mjs`）一行不改，只是把现成入口从评论/描述里挪一份到判红日志里。
+- 逐笔对账同批：`ci-ga-verdict-readout.mjs`（头注 + 纯函数 + `main` 判红接线）/ `tests/ci-ga-verdict-readout.test.ts`（提示带 PR 号且与 relay 评论同源 / 判红给且退 1 / 绿与没判过不给 / `--json` 不污染 / 前提不全不刷，共 5 条新增）/ `.cnb.yml`（回读格配置注释补口径，它本来就在讲「GA 侧判红的全量日志仍可 `--gh-logs` 按需取」）/ §13.5.33.7 续节 + 生成态镜像 / `ga-migration-checklist.md` + 镜像 / 本碎片。

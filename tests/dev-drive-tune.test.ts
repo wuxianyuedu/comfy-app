@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+
 import {
   buildLevers,
   classifyFilesystem,
@@ -8,14 +10,11 @@ import {
   renderReport,
   summarizeLevers,
   volumeRootOf,
-} from "../scripts/dev-drive-tune.mjs";
+} from "../scripts/dev-drive/dev-drive-tune.mjs";
 
-/**
- * 契约测试：开发盘调优脚本的**判据**与**命令形态**。
- *
- * 为什么要钉住「块克隆靠实测、不靠文件系统类型推断」：这份工具的全部价值就在
- * 那条差别上 —— 「卷是 ReFS」与「卷被指定为开发驱动器」是两件事，块克隆只认后者。
- * 一旦有人把结论写死成「ReFS 就有块克隆」，报告会开始说假话，而假话比没有更贵。
+/** 契约测试：开发盘调优脚本的**判据**与**命令形态**。必须钉「块克隆靠实测、不靠文件系统类型推断」：
+ * 「卷是 ReFS」与「卷被指定为开发驱动器」是两件事，块克隆只认后者；一旦写死成「ReFS 就有块克隆」，
+ * 报告会开始说假话，而假话比没有更贵。
  */
 
 /** 探测结果的形状（取自被测模块的类型，测试不另抄一份）。 */
@@ -495,11 +494,9 @@ describe("报告与计数", () => {
     const report = makeReport();
     report.levers = buildLevers(report);
     report.summary = summarizeLevers(report.levers);
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(JSON.stringify(report)) as {
-      levers: Array<unknown>;
-    };
-    expect(Array.isArray(parsed.levers)).toBe(true);
+    /* 序列化结果按 unknown 收窄（B5 清账）：levers 是数组即通过。 */
+    const parsed: unknown = JSON.parse(JSON.stringify(report));
+    expect(isRecord(parsed) && isUnknownArray(parsed.levers)).toBe(true);
   });
 
   it("动作里的命令不得出现 npm / npx 形态（仓库口径：只用 pnpm）", () => {

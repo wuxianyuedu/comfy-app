@@ -11,7 +11,7 @@
   所以排在后面 = 这个结论要么永远看不到、要么在最贵的位置才看到。提到最前代价是几秒。
 
 - **本仓解析器现在会真读着 `.cnb.yml` 的 `env`，把「这台机器上解释器在哪」打成可读读数**
-  （同一 ISSUE）：新增 `scripts/python-probe.mjs`（逐个候选问「这个**命令**起不起得来」，
+  （同一 ISSUE）：新增 `scripts/lib/python-probe.mjs`（逐个候选问「这个**命令**起不起得来」，
   与 `--python-only` 共用 `findPython` / `pythonForensics`，不造第二张候选表），
   由 `env.COMFYAPP_CI_PYTHON_PROBE` 点名、`.githooks/pre-commit` 的 C 组在跑结构守护用例
   之前打印一次（**只打印、不阻断** —— 开发机没装 Python 不该变成提交门槛）。

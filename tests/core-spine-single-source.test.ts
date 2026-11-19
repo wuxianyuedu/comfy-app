@@ -1,15 +1,7 @@
 /**
- * 回归护栏：**core 骨架的三处「唯一事实源」**（ISSUE #568）。
- *
- * 本条守的是三条裁决（都写在被守文件自己的注释里，这里只做机器判据）：
- *
- *   ① 日志只有一条通道：`lib/core/logger.ts` 是 pino 的薄封装，
- *      `tests/single-logger-channel.test.ts` 判「没有第二条实现」；
- *   ② 仓储只有一种取法：容器已移除，`tests/container-single-access.test.ts` 判；
- *   ③ 配置**不再假装集中**：`lib/core/config.ts` 只承诺「类型契约 + 默认值」，
- *      它的注释里不许再出现「任何模块都应从这里读」这类**与现状相反**的承诺
- *      ——本仓库直接读 `process.env` 的地方有 30+ 处，且绝大多数改不动
- *      （schema 只覆盖 7 个变量）。承诺写在那里，下一个人就会照着再抄一条口径。
+ * 回归护栏：core 骨架的三处「唯一事实源」（ISSUE #568）：日志单通道（`lib/core/logger.ts`，`single-logger-channel` 判）、
+ * 仓储单取法（容器已移除，`container-single-access` 判）、配置不再假装集中——`lib/core/config.ts` 只承诺「类型契约 +
+ * 默认值」，注释里不许写「任何模块都应从这里读」：直读 `process.env` 有 30+ 处（schema 只覆盖 7 个变量），下一个人会照抄。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

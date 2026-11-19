@@ -11,6 +11,7 @@ import { StringTextarea } from "../StringTextarea";
 import { PORT_ROW_TONES, portDotGlow, resolvePortRowTone } from "./flow-focus-endpoints";
 import { NODE_PORT_FOCUS_ACTIVE_KEY, readPortFocusRole } from "./hooks/use-related-edges-highlight";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
+import { Hint } from "~/components/ui/hint";
 
 type FlowNodeWidgetRowsProps = {
   data: WorkflowNodeData;
@@ -30,9 +31,7 @@ export function FlowNodeWidgetRows({
   /* 选中节点时端口行跟着连线一起变（判据与连线同源，见 FlowNodePinRows）：
    *  有连线落到的那一行提亮、端点放大，没有落到的行压暗。级别由
    *  `useRelatedEdgesHighlight` 写在本节点 data 上，行渲染层只读。 */
-  /* SAFETY: 类型断言已复核 */
-  const nodeData = data as unknown as Record<string, unknown>;
-  const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
+  const portFocusActive = data[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
   return (
     <div className="relative flex min-h-0 flex-1 flex-col py-0.5">
       {visibleWidgetEntries.map(([k, v], idx) => {
@@ -45,12 +44,10 @@ export function FlowNodeWidgetRows({
         // 的 edgeType 路径在顶部针脚区）。
         const inputType = inferInputType(data.classType, k, v);
         const typeCol = portColor(inputType);
-        // Display label: 工作流 JSON 里作者写的 label（英文业务名）优先于
-        // ComfyUI 的 zh-CN localized_name —— 与该 pin 在 IO 列表 / 运行期
-        // 表单里的取法保持一致（label → localized → name）。localized_name
-        // 是通用词（"图像"），排前面会让同一节点上多个 pin 长得一模一样。
-        // COMBO 候选串由 sanitizeComboLabel 剥掉；BOOLEAN 描述串（rgthree
-        // Settings）保留。
+        // Display label: 作者写的 label 优先于 ComfyUI zh-CN localized_name ——
+        // 与 IO 列表/运行期表单的取法一致（label → localized → name）。
+        // localized_name 是通用词（"图像"），排前面会让同节点多个 pin 重名。
+        // COMBO 候选串由 sanitizeComboLabel 剥掉；BOOLEAN 描述串（rgthree Settings）保留。
         const meta = rawMeta[k];
         const friendlyLabel =
           sanitizeComboLabel(meta?.label) ||
@@ -72,7 +69,7 @@ export function FlowNodeWidgetRows({
         const tone =
           PORT_ROW_TONES[
             resolvePortRowTone({
-              role: readPortFocusRole(nodeData, k),
+              role: readPortFocusRole(data, k),
               hasSelection: portFocusActive,
             })
           ];
@@ -121,7 +118,7 @@ export function FlowNodeWidgetRows({
               /* STRING 堆叠块 —— 顶部是 LABEL + IoCheckbox，textarea
                * 在下方占满剩余竖向空间。 */
               <div className="flex shrink-0 items-center gap-1.5">
-                {io?.ioEditMode && !isConn && !isBoundary && (
+                {io?.ioEditMode === true && !isConn && !isBoundary && (
                   <IoCheckbox
                     io={io}
                     ioRef={{
@@ -133,28 +130,30 @@ export function FlowNodeWidgetRows({
                     }}
                   />
                 )}
-                <span
-                  className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
-                  style={{
-                    /* 提亮档统一走表里的色；其余行沿用「连线行比普通行重一档」的
-                     * 既有口径（`ink-strong` / `ink-subtle`）。 */
-                    color: tone.background
-                      ? tone.labelColor
-                      : isConn
-                        ? "var(--color-ink-strong)"
-                        : "var(--color-ink-subtle)",
-                    fontWeight: tone.labelWeight,
-                  }}
-                  title={k}
-                >
-                  {friendlyLabel}
-                </span>
+                <Hint label={k}>
+                  <span
+                    className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
+                    style={{
+                      /* 提亮档统一走表里的色；其余行沿用「连线行比普通行重一档」的
+                       * 既有口径（`ink-strong` / `ink-subtle`）。 */
+                      color:
+                        tone.background !== undefined && tone.background !== ""
+                          ? tone.labelColor
+                          : isConn
+                            ? "var(--color-ink-strong)"
+                            : "var(--color-ink-subtle)",
+                      fontWeight: tone.labelWeight,
+                    }}
+                  >
+                    {friendlyLabel}
+                  </span>
+                </Hint>
               </div>
             ) : (
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 {/* 工作流输入必须是**未连线**的 —— 对已连线 /
                  *  边界槽位跳过复选框。 */}
-                {io?.ioEditMode && !isConn && !isBoundary && (
+                {io?.ioEditMode === true && !isConn && !isBoundary && (
                   <IoCheckbox
                     io={io}
                     ioRef={{
@@ -166,38 +165,38 @@ export function FlowNodeWidgetRows({
                     }}
                   />
                 )}
-                <span
-                  className="text-2xs min-w-0 shrink text-left wrap-break-word whitespace-normal"
-                  style={{
-                    flex: "0 1 auto",
-                    color: tone.background
-                      ? tone.labelColor
-                      : isConn
-                        ? "var(--color-ink-strong)"
-                        : "var(--color-ink-subtle)",
-                    fontWeight: tone.labelWeight,
-                  }}
-                  title={k}
-                >
-                  {friendlyLabel}
-                </span>
+                <Hint label={k}>
+                  <span
+                    className="text-2xs min-w-0 shrink text-left wrap-break-word whitespace-normal"
+                    style={{
+                      flex: "0 1 auto",
+                      color:
+                        tone.background !== undefined && tone.background !== ""
+                          ? tone.labelColor
+                          : isConn
+                            ? "var(--color-ink-strong)"
+                            : "var(--color-ink-subtle)",
+                      fontWeight: tone.labelWeight,
+                    }}
+                  >
+                    {friendlyLabel}
+                  </span>
+                </Hint>
 
-                {/* **同时**带线的 widget 输入仍显示它的
-                 * 控件取值（ComfyUI 从不隐藏它）—— 只是调暗，让
-                 * 读者能看出这个活值来自连线。
-                 *
-                 * 版式对齐 ComfyUI：标签与取值之间**不画分隔线**，值紧接标签
-                 * 左对齐（此前是一条 1px 竖线 + 右对齐的值列）。 */}
-                <span
-                  className="text-2xs min-w-0 truncate text-left tabular-nums"
-                  style={{
-                    flex: "1 1 0",
-                    color: valueCellColor(v, isConn),
-                  }}
-                  title={String(v)}
-                >
-                  {renderWidgetValue(v)}
-                </span>
+                {/* 同时带线的 widget 输入仍显示控件取值（ComfyUI 从不隐藏），只是调暗，
+                     让人看出活值来自连线。版式对齐 ComfyUI：标签与取值之间不画分隔线，
+                     值紧接标签左对齐。 */}
+                <Hint label={String(v)}>
+                  <span
+                    className="text-2xs min-w-0 truncate text-left tabular-nums"
+                    style={{
+                      flex: "1 1 0",
+                      color: valueCellColor(v, isConn),
+                    }}
+                  >
+                    {renderWidgetValue(v)}
+                  </span>
+                </Hint>
               </div>
             )}
             {/* STRING widget 文本框 —— **堆叠**在 LABEL 行下方。
@@ -209,13 +208,14 @@ export function FlowNodeWidgetRows({
                 {stringText.length > 0 ? (
                   <StringTextarea hasSize={hasSize} value={stringText} />
                 ) : (
-                  <div
-                    className="border-border-strong bg-canvas-deep text-ink-fainter text-2xs rounded border px-2 py-1.5 leading-snug"
-                    style={{ minHeight: 28 }}
-                    title={stringText}
-                  >
-                    （空）
-                  </div>
+                  <Hint label={stringText}>
+                    <div
+                      className="border-border-strong bg-canvas-deep text-ink-fainter text-2xs rounded border px-2 py-1.5 leading-snug"
+                      style={{ minHeight: 28 }}
+                    >
+                      （空）
+                    </div>
+                  </Hint>
                 )}
               </div>
             )}

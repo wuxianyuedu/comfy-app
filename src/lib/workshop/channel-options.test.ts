@@ -70,13 +70,9 @@ describe("channel-options 独立选择与全局配置的换算", () => {
 
   it("展示值：已选择回显所选值，未选择跟随全局配置", () => {
     const config = makeConfig({ provider: "local", model: "llama3" });
-    expect(channelSelectionDisplayValue("remote::qwen3:14b", config)).toBe(
-      "remote::qwen3:14b",
-    );
+    expect(channelSelectionDisplayValue("remote::qwen3:14b", config)).toBe("remote::qwen3:14b");
     expect(channelSelectionDisplayValue("", config)).toBe("local::llama3");
-    expect(channelSelectionDisplayValue("", makeConfig({ model: "" }))).toBe(
-      "",
-    );
+    expect(channelSelectionDisplayValue("", makeConfig({ model: "" }))).toBe("");
     expect(channelSelectionDisplayValue("", null)).toBe("");
   });
 });

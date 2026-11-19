@@ -1,18 +1,7 @@
 "use client";
-/* Dimension 组合控件的入口与 W/H 形态（另见 AspectMegapixelControl.tsx）。
- *
- * 两种尺寸类别，同一块控件里都能选：
- * · 比例 + 分辨率 （1k / 2k / 4k，宽高按场景查「尺寸表」）
- * · 比例 + 百万像素 + 倍数 （1M / 2M / 4M × 宽高对齐倍数 8/16/32/64）
- * 差别只在于控件把值写到哪些端口上：
- * · 工作流暴露 width + height → 由选中的档位算出宽高写回去（本文件）；
- * · 工作流暴露 aspect_ratio + megapixels (+ multiple) → 直接写这三个值，
- * 选「分辨率」时按尺寸表换算成「百万像素 + 倍数」（AspectMegapixelControl）。
- *
- * 「像素」大类下分「分辨率」与「百万像素」两个子类；「倍数」只在选中百万像素档
- * 时出现 —— 那一档的宽高由总像素预算与对齐倍数共同决定，分辨率档则由表给定。
- * 百万像素在端口上是 FLOAT（连续量），所以那一组下面还有一条「自定义」步进器
- * （`MegapixelStepper`）—— 档位之外能填 2.5 这类任意值。 */
+/* Dimension 组合控件入口与 W/H 形态（另见 AspectMegapixelControl.tsx）。两类尺寸：比例 + 分辨率
+ * （1k/2k/4k 查场景表）/ 比例 + 百万像素 + 倍数（8/16/32/64）。写入口不同：width+height 由档位算宽高（本文件），
+ * aspect_ratio+megapixels(+multiple) 直写；megapixels 是 FLOAT 连续量，故另配 MegapixelStepper 可填 2.5 这类值。 */
 
 import { useCallback, useMemo, useState } from "react";
 
@@ -192,14 +181,9 @@ function DimensionSizeControl({
       DEFAULT_DIM_RATIO_PRESET,
     ).label;
   }, [w0, h0]);
-  /* 清晰度预设跨两种类型挑选（"pixel" = 分辨率 1k/2k/4k；
-   *"megapixel" = 1M/2M/4M），由`pickClarityPreset` 负责，它镜像了
-   * 应用预设时用的同一张场景表 + 对齐倍数。
-   *
-   * 用户显式挑过的清晰度会锁进`explicitClarity`，好让点过
-   * 例如「4M」之后能扛过下一轮 pickClarityPreset 往返。用户经
-   * NumberField 手动改 W 或 H 时锁会被清掉，
-   * 这样手打值之后仍是自动检测胜出。 */
+  /* 清晰度跨「分辨率 / 百万像素」两类挑选（pickClarityPreset 镜像应用预设的
+   *  场景表 + 对齐倍数）。显式挑过的锁进 explicitClarity，好扛过下一轮往返；
+   *  手改 W/H（NumberField）清锁，让自动检测重新胜出。 */
   const derivedClarity = useMemo(
     () => pickClarityPreset(w0, h0, alignMultiple, scene, table).label,
     [w0, h0, alignMultiple, scene, table],
@@ -229,12 +213,9 @@ function DimensionSizeControl({
     [group, setMany, alignMultiple, scene, table],
   );
 
-  /* 改对齐倍数会把当前 W/H
-   * 重新吸附到新网格，并清掉
-   * 显式清晰度锁，好让弹层重新检测最接近的
-   * 预设（吸附后的尺寸可能已属于另一个
-   * 清晰度桶）。数值 W/H 步进器也跟随这个值，
-   * 让 +/- 按钮与吸附网格保持一致。 */
+  /* 改对齐倍数：当前 W/H 吸附到新网格，并清掉显式清晰度锁让弹层重新检测
+   *  最接近的预设（吸附后可能已属另一清晰度桶）；W/H 步进器也跟随，
+   *  使 +/- 与吸附网格保持一致。 */
   const handleAlignChange = useCallback(
     (next: number) => {
       const clamped = normalizeAlignMultiple(next);
@@ -276,7 +257,9 @@ function DimensionSizeControl({
           label: shortRatioLabel(preset.label),
           render: <RatioIcon ratio={preset.ratio} />,
         })),
-        onChange: (value) => applyPreset(value, clarity),
+        onChange: (value) => {
+          applyPreset(value, clarity);
+        },
       },
       {
         label: "像素",
@@ -288,14 +271,18 @@ function DimensionSizeControl({
           label: preset.label,
           subgroup: CLARITY_SUBGROUP_OF_KIND[preset.kind],
         })),
-        onChange: (value) => applyPreset(ratio, value),
+        onChange: (value) => {
+          applyPreset(ratio, value);
+        },
         /* 百万像素是连续量：档位之外再给一个能填任意值的步进器（挨着「百万像素」
          * 那一组渲染）。写出去的 label 与档位同形（"2.5M"），`applyPreset` 经
          *`clarityPresetFor` 认出它。 */
         extra: (
           <MegapixelStepper
             disabled={disabled}
-            onChange={(megapixels) => applyPreset(ratio, megapixelLabel(megapixels))}
+            onChange={(megapixels) => {
+              applyPreset(ratio, megapixelLabel(megapixels));
+            }}
             value={currentMegapixels}
           />
         ),
@@ -310,7 +297,9 @@ function DimensionSizeControl({
           value: String(option),
           label: String(option),
         })),
-        onChange: (value) => handleAlignChange(Number(value)),
+        onChange: (value) => {
+          handleAlignChange(Number(value));
+        },
       });
     }
     return list;
@@ -332,16 +321,16 @@ function DimensionSizeControl({
  窄版（画布节点 / 库内）卡按内容收窄：`w-fit` + 上限，长度跟内容走。 */}
       <div
         className={
-          narrow
-            ? "border-accent/30 bg-accent/4 w-fit max-w-full rounded-lg border p-2"
-            : "border-accent/30 bg-accent/4 rounded-lg border p-2.5"
+          narrow === true
+            ? "border-primary/30 bg-primary/4 w-fit max-w-full rounded-lg border p-2"
+            : "border-primary/30 bg-primary/4 rounded-lg border p-2.5"
         }
       >
         <div className="flex items-center gap-2">
-          <span className="text-accent text-3xs shrink-0 font-semibold tracking-wider uppercase">
+          <span className="text-primary text-3xs shrink-0 font-semibold tracking-wider uppercase">
             比例 + 像素
           </span>
-          <div className={narrow ? "w-28 min-w-0" : "min-w-0 flex-1"}>
+          <div className={narrow === true ? "w-28 min-w-0" : "min-w-0 flex-1"}>
             <MultiSegmentPopover
               align="right"
               ariaLabel="选择比例与像素"
@@ -350,7 +339,9 @@ function DimensionSizeControl({
                   extra={
                     <span className="text-ink-faint text-3xs">{CLARITY_HINT[clarityKind]}</span>
                   }
-                  onOpen={() => setTableOpen(true)}
+                  onOpen={() => {
+                    setTableOpen(true);
+                  }}
                   scene={scene}
                 />
               }
@@ -368,13 +359,10 @@ function DimensionSizeControl({
         />
       </div>
 
-      {/* 宽 + 高 —— 始终可见，样式与别的节点参数字段一致
- （NumberField，两列栅格）。上面一行里挑一个预设
- 会经 applyPreset → setMany 写入真实的 W/H，所以下面的
- NumberField 会实时更新。步进器 +/- 遵循
- 用户钉住的对齐倍数，好让手动微调 W/H 落在
- 与百万像素清晰度同一张网格上。 */}
-      {!narrow && (
+      {/* 宽 + 高 —— 始终可见，样式与其他参数字段一致（NumberField，两列栅格）。
+ 上方预设经 applyPreset → setMany 写入真实 W/H，这里实时更新；步进器 +/- 遵循
+ 钉住的对齐倍数，使手动微调落在与百万像素同一张网格上。 */}
+      {narrow !== true && (
         <div className="grid grid-cols-2 gap-2">
           <Field label="宽度">
             <NumberField
@@ -399,7 +387,14 @@ function DimensionSizeControl({
         </div>
       )}
 
-      {tableOpen && <SizePresetTableModal onClose={() => setTableOpen(false)} scene={scene} />}
+      {tableOpen && (
+        <SizePresetTableModal
+          onClose={() => {
+            setTableOpen(false);
+          }}
+          scene={scene}
+        />
+      )}
     </div>
   );
 }

@@ -1,19 +1,8 @@
 /**
- * 提交门槛自检：oxfmt 格式判据（ISSUE #575 第 9 项 / #1811 收尾 / 规范 §13.5）。
- *
- * 这一条在 ISSUE #1811 收尾时**从棘轮翻成硬闸**：存量已清零，于是棘轮车道没有
- * 成员 —— `--update` 写回去的永远是一份空账，留下的却是「手改 JSON 就能把新
- * 违规登记成已知存量」这条通道（§13.6.2 的两类对照）。基线文件已删、
- * `--update` / `--strict` 已不存在。
- *
- * 价值仍在**两个方向**都成立上：真的拦住脏文件，也放过干净文件（一个永远返回
- * 非空的扫描器会让一切都红）。用「临时工作区 + 只放被测文件」跑真脚本。
- *
- * 为什么用子进程而不是 import：脚本被 pre-commit 以 `node scripts/xxx.cjs`
- * 调用，且用 `process.cwd()` 定位扫描根 —— 复用同一调用方式才等价于真实门禁。
- *
- * 规范：docs/standards/13-提交与-code-review.md §13.5
- */
+ * 提交门槛自检：oxfmt 格式判据（ISSUE #575 第 9 项 / #1811 收尾 / 规范 §13.5）。#1811 时从棘轮翻成硬闸：存量
+ * 清零后棘轮车道没有成员，`--update` 只写回空账却留下「手改 JSON 就能把新违规登记成已知存量」这条通道
+ * （§13.6.2）；基线文件已删、`--update` / `--strict` 已不存在。价值须两个方向都成立：真拦脏文件，也放过干净
+ * 文件（永远返回非空的扫描器会让一切都红）。用「临时工作区 + 只放被测文件」跑真脚本；走子进程而非 import，因为 pre-commit 以 `node scripts/xxx.cjs` 调用且用 `process.cwd()` 定位扫描根 —— 同方式才等价于真实门禁。 */
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
@@ -21,15 +10,27 @@ import { defineGateRepo, describe } from "./helpers/gate-repo";
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { vi } from "vitest";
 
-/* 每条用例都要在临时工作区里真跑 git（init / add / commit）并**真起 prettier**
- * —— 门禁按 glob 各调一次 `prettier --list-different`，实测单次约 300~550ms。
- * 默认 5s 的用例超时在本机是「刚好够用」，CI 全量并行满载时会直接被击穿：现场
- * 是 `Test timed out in 5000ms`，且报错会落在**调度顺序**排在后面的任意一条用例
- * 上（看起来像「某条用例写得慢」，实际是整条固定成本顶着上限跑）。
- *
- * 这一处方与 `check-reformat-only.test.ts` 同源：那里把「每条用例起十几个
- * prettier」收敛成「整批一次」，这里没有可收敛的调用数（每条用例都要建一个独立
- * 仓库 + 基线），所以只能放宽整文件的超时。放宽只影响本文件。 */
+/**
+ * 外来值（`require` 的模块 / `execFileSync` 抛出的对象）先落 `unknown`，
+ * 过这道守卫后逐字段 `typeof` 收窄才使用，不用类型断言。
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** `require` 进来的 CJS 模块导出面（下面两个函数）。 */
+function isFormatModule(v: unknown): v is {
+  globToRegExp: (glob: string) => RegExp;
+  isIgnored: (rel: string) => boolean;
+} {
+  return isRecord(v) && typeof v.globToRegExp === "function" && typeof v.isIgnored === "function";
+}
+
+/* 每条用例都要在临时工作区里真跑 git（init / add / commit）并**真起 prettier**：门禁按 glob 各调一次
+ * `prettier --list-different`，实测单次约 300~550ms。默认 5s 超时本机「刚好够用」，CI 全量并行满载会被击穿
+ * （`Test timed out in 5000ms`，且报错落在调度顺序靠后的任意一条上 —— 看似某条写得慢，实为整条固定成本顶着
+ * 上限跑）。与 `check-reformat-only.test.ts` 同源，但这里每条用例都要建独立仓库 + 基线、没有可收敛的调用数，
+ * 所以只能放宽整文件超时；放宽只影响本文件。 */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 /** 真实仓里 oxfmt 的入口（沙箱用例通过 `COMFYAPP_OXFMT_ENTRY` 借给它）。 */
@@ -40,7 +41,7 @@ const OXFMT_ENTRY = join(
 );
 
 const { test, expect } = defineGateRepo({
-  script: "check-format.cjs",
+  script: "gates/check-format.cjs",
   dirs: ["src/lib"],
   /* 沙箱里没有 `node_modules`，不借这条接缝就会走「入口解析不到 → exit 2」
    * 那一档（那是脚本**正确**的 fail-closed 行为，不是本文件要验的形态）。
@@ -64,12 +65,9 @@ const CLEAN = "export const PROBE = { a: 1, b: 2 };\n";
 const CLEAN2 = "export const PROBE = { b: 2, a: 1 };\n";
 
 /**
- * 「没有平台旗标」那一档的输入：**声明**不设它，而不是指望跑测试那一跳恰好没设。
- *
- * 平台的「受影响用例」运行器给每个 stage 进程都注入 `CNB_PULL_REQUEST_TARGET_SHA`
- * （ISSUE #2795）：继承来的基线在临时夹具仓库里不存在 ⇒ 判据 fail-closed 退 2，
- * 于是「本机绿、平台恒红」，而报错一个字都不指向「继承」这件事。
- */
+ * 「没有平台旗标」那一档的输入：**声明**不设它，而不是指望跑测试那一跳恰好没设。平台「受影响用例」运行器
+ * 给每个 stage 进程都注入 `CNB_PULL_REQUEST_TARGET_SHA`（ISSUE #2795）：继承来的基线在临时夹具仓库里不存在
+ * ⇒ 判据 fail-closed 退 2，于是「本机绿、平台恒红」，而报错一个字都不指向「继承」这件事。 */
 const NO_PLATFORM_TARGET = { env: { CNB_PULL_REQUEST_TARGET_SHA: undefined } };
 
 /** 读工作区 HEAD 的 sha（`--changed` 用例拿它当 `CNB_PULL_REQUEST_TARGET_SHA`）。 */
@@ -157,18 +155,15 @@ describe("oxfmt 格式判据（硬闸）", () => {
     expect(r.output).toContain("src/lib/fresh.ts");
   });
 
-  test("测试 / 脚本 / 根级配置 / 非源码产物落在白名单里 → 不误报", ({ repo }) => {
+  test("测试 / 根级配置 / 非源码产物落在白名单里 → 不误报", ({ repo }) => {
     // 白名单是「形态」而不是文件列表：新增的这类文件自动豁免。
     // 夹具预建了空的 `src/lib`：oxfmt 对「存在但一个可扫文件都没有」的根报
     // `Expected at least one target file`（exit 2），所以这里放一份干净源文件
     // —— 让 oxfmt 真扫起来，验证的才是「白名单里的脏文件不被误报」。
     repo.write("src/lib/keep.ts", CLEAN);
     repo.write("tests/fresh.test.ts", DIRTY);
-    repo.write("scripts/fresh.mjs", DIRTY);
-    repo.write("e2e/fresh.spec.ts", DIRTY);
-    /* Rust 壳的构建输出：它被**嵌套的** src-tauri/.gitignore 忽略，而 prettier 只
-     * 按仓库根读 .gitignore —— 不进白名单就会拿它阻断每一次提交（ISSUE #638 修好
-     * pnpm 启动形态后本门禁第一次真正扫到全库时暴露的现象）。 */
+    /* `scripts/**` / `tools/**` / `e2e/**` 已从白名单移出（ISSUE #3251），这三类
+     * 脏文件**必须**被点名 —— 见下面「glob 白名单判定」那张表与 `--changed` 那条。 */
     repo.write("src-tauri/target/debug/build/app-1/out/__global-api-script.js", DIRTY);
     const r = repo.run();
     expect(r.code).toBe(0);
@@ -176,21 +171,25 @@ describe("oxfmt 格式判据（硬闸）", () => {
 });
 
 describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
-  /* SAFETY: 类型断言已复核 */
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require("../scripts/check-format.cjs") as {
-    globToRegExp: (glob: string) => RegExp;
-    isIgnored: (rel: string) => boolean;
-  };
+  // oxlint-disable-next-line typescript/no-require-imports
+  const required: unknown = require("../scripts/gates/check-format.cjs");
+  if (!isFormatModule(required)) {
+    throw new Error("check-format.cjs 的导出面不对");
+  }
+  const mod = required;
 
+  /* SAFETY: 类型断言已复核 */
   test.for(
     /* 表里的路径只是**分类样例**，一律用不存在的夹具路径（ISSUE #2830）：写成真路径时，
      * 「按路径引用」那一档会把整份自测算成它们的消费方 —— 改一个 `src/**` 业务文件就拉起
-     * 这 40 多秒的一跑。被测脚本自己（`scripts/check-format.cjs`）照旧写真实路径，那是消费关系。 */
-    /* SAFETY: 类型断言已复核 */ [
-      ["scripts/check-format.cjs", true],
+     * 这 40 多秒的一跑。被测脚本自己（`scripts/gates/check-format.cjs`）照旧写真实路径，那是消费关系。 */
+    [
+      // `scripts/` `tools/` `e2e/` 已从全量档白名单移出（ISSUE #3251）：存量清完，
+      // 这三类现在与 `src/**` 同面。
+      ["scripts/gates/check-format.cjs", false],
+      ["tools/fixture.ts", false],
       ["tests/anything.test.ts", true],
-      ["e2e/fixture.spec.ts", true],
+      ["e2e/fixture.spec.ts", false],
       ["docs/api/assets/main.js", true],
       ["fixture.config.js", true],
       ["fixture.config.ts", true],
@@ -213,34 +212,42 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
 });
 
 /**
- * `--staged` 的输入面跳过（ISSUE #1747）。
- *
- * ⚠️ 这一档自 ISSUE #2010 起**不再是钩子里的那一条**（钩子那一步整体挪到了平台侧，
- * 平台侧跑的是全量档、不带 `--staged`）。它留下来是因为 `--staged` 仍是**人的动作**
- * ——提交前自查「我这一批改动有没有带脏文件进来」，而人不想为此扫全库。
- * 判据本体与前一档一字不差，判法也不变（下面这些用例判的是那个 flag 的语义，
- * 与谁在什么时候敲它无关）。
- *
- * 这一步的扫描面由 `GLOBS` 与 `IGNORE_GLOBS` 现算（实测只剩 `src/**` 与
- * `.storybook/**`），两个方向都要钉住：不在扫描面内 ⇒ 跳过（省下全库扫描），
- * 在扫描面内 ⇒ **照旧真扫**（跳过不是「让判据松掉」的后门）。
- *
- * 为什么断言 `code === 0` 之外还要看输出：「跳过」与「扫过之后没有脏文件」是同
- * 一个退出码，只看退出码的话，一条把 `--staged` 实现成「永远跳过」的改动能全绿
- * 通过 —— 那正是门禁静默失效的形态（§11.23 的「声明 ⇄ 读者」）。
- */
+ * `--staged` 的输入面跳过（ISSUE #1747）。⚠️ 自 ISSUE #2010 起它**不再是钩子里的那一条**（钩子那步整体挪到
+ * 平台侧跑全量档），留下是因为 `--staged` 仍是**人的动作**：提交前自查「这批改动有没有带脏文件」，不想扫全库；
+ * 判据本体与前一档一字不差（这些用例判的是 flag 语义，与谁在何时敲它无关）。扫描面由 `GLOBS` + `IGNORE_GLOBS`
+ * 现算（`src/**`、`.storybook/**`，以及 ISSUE #3251 起纳入的 `scripts/**`、`tools/**`、`e2e/**`）：面外 ⇒ 跳过（省全库扫描），面内 ⇒ **照旧真扫**（跳过不是松闸后门）。断言 `code === 0` 之外还看输出：「跳过」与「扫过之后没有脏文件」同码，只看码则「永远跳过」能全绿。 */
 describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
   test("暂存文件全在扫描面外 → 跳过（不起 prettier）", ({ repo }) => {
     repo.write("src/lib/dirty.ts", DIRTY);
     repo.git("add", "-A");
     repo.commit("clean-baseline");
-    // 改一个不在 prettier 靶子里的文件：`IGNORE_GLOBS` 收 `scripts/**`。
-    repo.write("scripts/probe.cjs", "module.exports = {a:1,   b:2}\n");
-    repo.git("add", "scripts/probe.cjs");
+    // 改一个不在 `GLOBS` 靶子里的文件：`.md` 不在扩展名表里（ISSUE #2979 起
+    // 改动面两档只看 `GLOBS`、不过 `IGNORE_GLOBS`，所以这里要挑 GLOBS 本身
+    // 不认的形状 —— `scripts/*.cjs` 已经**在**面内，见下一条）。
+    repo.write("docs/README.md", "# 随手写的说明\n");
+    repo.git("add", "docs/README.md");
     const r = repo.run(["--staged"]);
     expect(r.code).toBe(0);
     expect(r.output).toContain("未触及扫描面");
     expect(r.output).not.toContain("运行 oxfmt");
+  });
+
+  test("暂存 scripts/*.cjs → 改动面判它自己（不再被 IGNORE_GLOBS 豁免，ISSUE #2979）", ({
+    repo,
+  }) => {
+    /* #2979 的钉子：`IGNORE_GLOBS` 收着 `scripts/**`，改动面两档从前对它整类豁免
+     * ——「本仓自己的脚本从来没被格式判据看过」。收窄之后改动面 = 改动面 ∩ GLOBS
+     * （GLOBS 含 cjs），暂存的脏脚本要被点名并阻断；全量档自 ISSUE #3251 起也扫
+     * 它（存量已清零，不再豁免）。 */
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("scripts/probe.cjs", "module.exports = {a:1,   b:2}\n");
+    repo.git("add", "scripts/probe.cjs");
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).not.toContain("未触及扫描面");
+    expect(r.output).toContain("scripts/probe.cjs");
   });
 
   test("暂存文件落在扫描面内 → 真扫（脏文件照旧阻断）", ({ repo }) => {
@@ -279,28 +286,121 @@ describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
 });
 
 /**
- * 合并态下的 `--staged` 输入面（ISSUE #2747）。
- *
- * 现场：PR 分支上 `git merge origin/master` 解冲突，`.githooks/pre-commit` 的 D0 这一步
- * 把**主干带来的全部存量未格式化文件**当成本次提交点名（实测那次：`git diff --cached`
- * 有 901 份、被点名 2 份，而那两份相对 `origin/master` 是零 diff），于是一次与本 PR
- * 无关的解冲突被别人的旧账拦死。同一判据的 `--changed` 档对同一条链给出相反结论
- * （「0 个在靶子内」）—— 两个入口不可能都对，错的是 `--staged` 这一头的输入面：
- * 合并未提交时 `git diff --cached` 是**相对第一父提交**的全量差异，不是「本次改动」。
- *
- * 四条用例钉四件事，缺任何一条都能静默通过：
- *   ① 收窄生效（主干存量不被点名）—— 平台基线那一档；
- *   ② 同一个面在**本地那一档**（没有平台旗标、走 merge-base 兜底）也成立 —— 现场就是本地；
- *   ③ 收窄**不是消音**：解冲突时动了「本分支自己面内」的文件，仍然被点名并阻断；
- *   ④ 对照：合并状态一消失（`MERGE_HEAD` 不在），同一批文件立刻回到判据面内。
- *      没有这一条，「把 `--staged` 实现成永远跳过」也能全绿。
- *
- * 一条边界（③ 的形状为什么要说清）：本分支**已提交**的改动，在合并那一刻不在
- * `git diff --cached` 里（它们是 HEAD 自己的内容），所以也不在收窄后的面内 ——
- * 它们由**自己那一次提交**的 `--staged` 判过，平台 `--changed` 那一档再按 merge-base
- * 三点 diff 判一遍；两档合起来才是完整一条链（判据文件头那段话）。本单修的是
- * 「合并那一刻把主干的账算进本次」这一格，不是把 `--staged` 扩成第二份全量。
+ * 删除不进判面（ISSUE #4145）：`git diff`（暂存 / 改动两档都一样）会把**删除**的
+ * 路径列进改动面，而 oxfmt 按路径读工作区 —— 删除项已无字节可判，靶子全剩不下时
+ * 它以「Expected at least one target file」退出 2。现场：#4142 一次只删 14 份垫片
+ * + 一份 `.md` 碎片（`.md` 不在 GLOBS 里）⇒ 靶子恰好全是删除，提交被格式门误拦。
  */
+describe("oxfmt 格式判据 删除不进判面（ISSUE #4145）", () => {
+  test("暂存面靶子全是删除 → 剔除后放行（纯删除提交不再被误拦）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.write("scripts/old.cjs", "module.exports = { a: 1 };\n");
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.git("rm", "scripts/old.cjs");
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).toContain("不进格式判面");
+    expect(r.output).not.toContain("Expected at least one target file");
+  });
+
+  test("删除与改动混在暂存面 → 删除剔除、改动照判（脏文件照样点名）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.write("scripts/old.cjs", "module.exports = { a: 1 };\n");
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.git("rm", "scripts/old.cjs");
+    repo.write("src/lib/fresh.ts", DIRTY);
+    repo.git("add", "src/lib/fresh.ts");
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("src/lib/fresh.ts");
+    expect(r.output).not.toContain("scripts/old.cjs");
+  });
+});
+
+/**
+ * `--staged` 的输入面不只管「哪些路径」，还得管「这些路径的内容从哪来」（ISSUE #3259）。
+ * 现场：暂存一份脏文件、再把工作区改干净却不重新 `git add`（AM），oxfmt 按路径读工作区
+ * ⇒ 判绿，而提交进历史的是 index 里那份没过格式的 blob。这里五条一起钉：① 两个方向的
+ * 不一致都不给结论（exit 2 + 点名 + 绝不判绿/判红）② 一致时照旧判绿、照旧判红 ③ 面外
+ * 那份**已跟踪**的脏文件（改了但没暂存）不误报 —— 「只判暂存的那一批」不许被守卫撑破。
+ */
+describe("oxfmt 格式判据 --staged 暂存面 ⇄ 工作区一致性（ISSUE #3259）", () => {
+  test("index 脏 / 工作区干净（AM）→ exit 2 不给结论，绝不判绿", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("src/lib/keep.ts", DIRTY);
+    repo.git("add", "src/lib/keep.ts");
+    /* 关键一跳：工作区改干净但**不重新 git add** —— index 里躺着的仍是脏 blob。
+     * 旧实现在这里会念「命中 0 个（暂存面）」并放行，正是本单要堵的那扇门。 */
+    repo.write("src/lib/keep.ts", CLEAN);
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(2);
+    expect(r.output).toContain("src/lib/keep.ts");
+    expect(r.output).toContain("不给结论");
+    expect(r.output).not.toContain("[ok] oxfmt 格式");
+  });
+
+  test("index 干净 / 工作区又改脏 → 同样 exit 2（既不假红也不假绿）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("src/lib/keep.ts", CLEAN2);
+    repo.git("add", "src/lib/keep.ts");
+    repo.write("src/lib/keep.ts", DIRTY);
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(2);
+    expect(r.output).toContain("src/lib/keep.ts");
+    expect(r.output).not.toContain("个文件未过");
+    expect(r.output).not.toContain("[ok] oxfmt 格式");
+  });
+
+  test("两边一致且干净 → 照旧判绿（守卫不误伤普通提交）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("src/lib/keep.ts", CLEAN2);
+    repo.git("add", "src/lib/keep.ts");
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).toContain("[ok] oxfmt 格式");
+  });
+
+  test("两边一致但脏 → 照旧 exit 1 并点名（守卫不吞真红）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("src/lib/keep.ts", DIRTY);
+    repo.git("add", "src/lib/keep.ts");
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("src/lib/keep.ts");
+    expect(r.output).toContain("个文件未过");
+  });
+
+  test("面外那份已跟踪文件改脏未暂存 → 仍判绿（交集只取 hits）", ({ repo }) => {
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.write("src/lib/other.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("src/lib/keep.ts", CLEAN2);
+    repo.git("add", "src/lib/keep.ts");
+    /* `other.ts` 已跟踪、被改脏、但没暂存 ⇒ 不在 hits 内。`git diff --name-only`
+     * 会列出它；守卫必须靠「交集只取 hits」放行，否则每次部分暂存都白挨一次 exit 2。 */
+    repo.write("src/lib/other.ts", DIRTY);
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(0);
+    expect(r.output).not.toContain("src/lib/other.ts");
+  });
+});
+
+/**
+ * 合并态下的 `--staged` 输入面（ISSUE #2747）。现场：解冲突时 D0 把主干带来的存量未格式化文件当成本次提交
+ * （合并未提交时 `git diff --cached` 是**相对第一父提交**的全量差异，不是「本次改动」），于是一次与本 PR 无关
+ * 的解冲突被别人的旧账拦死；同链 `--changed` 却给「0 个在靶子内」。四条用例钉：①收窄生效（主干存量不被点名）
+ * ②本地档（无平台旗标、走 merge-base 兜底）也成立 ③收窄不是消音（本分支面内文件仍被点名阻断）④合并态消失即回判据面内 —— 没有 ④，「把 `--staged` 实现成永远跳过」也能全绿。 */
 describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747）", () => {
   /** 合并来源那条分支的 tip sha（`CNB_PULL_REQUEST_TARGET_SHA` 的形状）。 */
   function shaOf(dir: string, ref: string): string {
@@ -308,10 +408,9 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
   }
 
   /**
-   * 夹具那份 `repo.git` / `repo.commit` 是 `stdio: "ignore"`（各自注释里写明了），
-   * 于是这一族用例里「造历史」那一步一失败，屏幕上只剩一句 `Command failed`，
-   * git 自己那句话读不到 —— 正是本文件反复在防的「报错指不到夹具」。
-   * 造合并现场要六步 git，这里自带 stderr：失败时把 git 的原话抛出来。
+   * 夹具的 `repo.git` / `repo.commit` 是 `stdio: "ignore"`（各自注释写明），于是「造历史」一失败屏幕上只剩
+   * `Command failed`，git 原话读不到 —— 正是本文件反复在防的「报错指不到夹具」。造合并现场要六步 git，
+   * 这里自带 stderr：失败时把 git 的原话抛出来。
    */
   function gitOf(dir: string, args: Array<string>): string {
     try {
@@ -321,18 +420,24 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
         env: gitSandboxEnv(),
       }).trim();
     } catch (error) {
-      const err = error as { message: string; stderr?: string };
+      const fields = isRecord(error) ? error : null;
+      const stderr = fields?.stderr;
+      const message = fields?.message;
       /* 空串 stderr 也算「没拿到那句话」（git 走 stdout-only 失败形态时就是这样），
        * 所以这里判的是「有没有内容」而不是「是不是 undefined」—— 用 `??` 会把空串端出去。 */
-      const why = err.stderr && err.stderr.trim() !== "" ? err.stderr : err.message;
+      let why: string;
+      if (typeof stderr === "string" && stderr.trim() !== "") {
+        why = stderr;
+      } else {
+        why = typeof message === "string" ? message : String(error);
+      }
       throw new Error(`git ${args.join(" ")} 失败：${why}`, { cause: error });
     }
   }
 
   /**
-   * 造两条线并停在「合并已解完、提交未落地」那一态：
-   * master 上加一份**脏**文件（主干存量），分支上按 `mine` 加一份自己的文件。
-   *
+   * 造两条线并停在「合并已解完、提交未落地」那一态：master 上加一份**脏**文件（主干存量），分支上按 `mine`
+   * 加一份自己的文件。
    * @returns 合并来源那一头的 sha（当 `CNB_PULL_REQUEST_TARGET_SHA` 用）
    */
   function toMergeState(
@@ -414,15 +519,10 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
 });
 
 /**
- * `--changed`：改动面档（printWidth 80→100 增量迁移的执行档，平台侧与 check:all 用）。
- *
- * 改动面取自 `changed-scope.mjs` 的 `resolveChangedFiles`（唯一出处，§12.18）：
- * 给了 `CNB_PULL_REQUEST_TARGET_SHA` 就按它三点 diff —— 所以每条用例自己给基线
- * sha，不依赖 git 的默认分支名，也不踩 `resolveMergeBaseRef` 的兜底链。
- *
- * 与 `--staged` 同一条纪律：跳过与「扫过之后没有脏文件」是同一个退出码，
- * 所以每条断言都同时看输出（§11.23 的「声明 ⇄ 读者」）。
- */
+ * `--changed`：改动面档（printWidth 80→100 增量迁移的执行档，平台侧与 check:all 用）。改动面取自
+ * `changed-scope.mjs` 的 `resolveChangedFiles`（唯一出处，§12.18）：给了 `CNB_PULL_REQUEST_TARGET_SHA` 就按它
+ * 三点 diff —— 所以每条用例自己给基线 sha，不依赖 git 默认分支名，也不踩 `resolveMergeBaseRef` 兜底链。
+ * 与 `--staged` 同一条纪律：跳过与「扫过之后没有脏文件」同一个退出码，所以每条断言都同时看输出（§11.23）。 */
 describe("oxfmt 格式判据 --changed 改动面档", () => {
   test("改动面里有未过格式的文件 → 阻断，并指出是哪个文件", ({ repo }) => {
     repo.write("src/lib/keep.ts", CLEAN);
@@ -444,9 +544,11 @@ describe("oxfmt 格式判据 --changed 改动面档", () => {
     repo.git("add", "-A");
     repo.commit("clean-baseline");
     const base = gitSha(repo.dir);
-    repo.write("scripts/probe.cjs", "module.exports = {a:1,   b:2}\n");
+    /* `scripts/**` 自 ISSUE #2979 起**在**改动面里（见上一条），所以「面外」要用
+     * `GLOBS` 本身不认的形状 —— `docs/*.md`。 */
+    repo.write("docs/probe.md", "随手写的说明\n");
     repo.git("add", "-A");
-    repo.commit("scripts-only");
+    repo.commit("docs-only");
     const r = repo.run(["--changed"], {
       env: { CNB_PULL_REQUEST_TARGET_SHA: base },
     });
@@ -455,13 +557,15 @@ describe("oxfmt 格式判据 --changed 改动面档", () => {
     expect(r.output).not.toContain("运行 oxfmt");
   });
 
-  test("改动面里混着白名单文件 → 只判扫描面内的那份", ({ repo }) => {
+  test("改动面里混着扫描面外的文件 → 只判扫描面内的那份", ({ repo }) => {
     repo.write("src/lib/keep.ts", CLEAN);
     repo.git("add", "-A");
     repo.commit("clean-baseline");
     const base = gitSha(repo.dir);
     repo.write("src/lib/fresh.ts", CLEAN);
-    repo.write("scripts/fresh.mjs", DIRTY);
+    /* 面外的脏文件不进 oxfmt 的目标集（`docs/**` 不在 GLOBS 里）；
+     * 面内那份是干净的 ⇒ 结论仍是 0。 */
+    repo.write("docs/fresh.md", "随手写的说明\n");
     repo.git("add", "-A");
     repo.commit("mixed");
     const r = repo.run(["--changed"], {

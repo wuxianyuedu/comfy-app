@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// @ts-nocheck -- 纯函数台账（与 scripts/storybook-check.mjs 同款：本仓的门禁脚本
+// @ts-nocheck -- 纯函数台账（与 scripts/devtools/storybook-check.mjs 同款：本仓的门禁脚本
 // 不走 tsc 的类型检查，判据由各自的契约测试守着）
 // 「哪些组件有故事」的台账（供 tests/storybook-component-coverage.test.ts 与
-// 门禁 scripts/storybook-check.mjs 共用）。
+// 门禁 scripts/devtools/storybook-check.mjs 共用）。
 //
 // 为什么要它：`docs/guide-storybook.md` 的「它不做什么」写着「当前只有 3 个
 // `ui/` 示例」—— 那是一个**会过期的事实**，而它过期时没有任何东西会红。
@@ -72,11 +72,46 @@ export const NOT_A_UI_SURFACE = new Map([
  * 人的提交 —— 本仓发生过）。`@type` 注解必须写在**这个导出**上：写在中间函数
  * 上 `checkJs` 认、但类型化 eslint 规则读的是导出符号本身的类型。
  *
- * 「表为空」是这一批的成果，不是被删空 —— 见上面那段说明。
+ * 「表为空 ⟺ 覆盖率已满」是双向不变式（用例里钉着）：给表加条目的同一批，
+ * ui/ 里必然有对应的未覆盖文件 —— 两边要同真同假，单边动就是违规。
  *
- * @type {Map<string, string>} 文件 → 理由（当前为空）
+ * @type {Map<string, string>} 文件 → 理由
  */
-export const NO_STORY_REASON = new Map();
+export const NO_STORY_REASON = new Map([
+  /* ── UI 控件总览页（/ui-kit，ISSUE #3525 / #4110 / #4125）的十二件 ──
+   * 它们不是基元，是「把全部基元摆到一屏」的演示分组：这页本身就是活的
+   * 展示载体（真实主题链路下渲染全部控件），再加 story 等于把页内每个
+   * 演示格抄进工作台、还多出一条会漂的第二事实来源。
+   * 「怎么验」：tests/ui-kit-gallery.test.tsx 钉分组齐全 / token 墙在页 /
+   * 主题开关初值；颜色错档的观察面就是 /ui-kit 路由本身（命令面板可直达）。 */
+  [
+    "ui-kit-gallery.tsx",
+    "UI 控件总览页本体（见上）：验收判据是冒烟用例与路由实测，story 会成为第二事实来源",
+  ],
+  [
+    "ui-kit-gallery-parts.tsx",
+    "总览页的演示脚手架（GallerySection / GalleryCell / GalleryGrid）：纯布局壳，由总览页用例覆盖",
+  ],
+  ["ui-kit-gallery-tokens.tsx", "总览页的 token 墙分组：数据驱动的色票清单，由总览页用例覆盖"],
+  [
+    "ui-kit-gallery-primitives.tsx",
+    "总览页的基元 UI 速览分组（#4110）：核心基元各一态的紧凑清单，由总览页用例覆盖",
+  ],
+  ["ui-kit-gallery-actions.tsx", "总览页的按钮 / 徽标分组：只是基元调用清单，由总览页用例覆盖"],
+  ["ui-kit-gallery-forms.tsx", "总览页的输入 / 选择分组：只是基元调用清单，由总览页用例覆盖"],
+  ["ui-kit-gallery-overlays.tsx", "总览页的浮层 / 对话框分组：只是基元调用清单，由总览页用例覆盖"],
+  ["ui-kit-gallery-navigation.tsx", "总览页的导航 / 布局分组：只是基元调用清单，由总览页用例覆盖"],
+  ["ui-kit-gallery-status.tsx", "总览页的反馈 / 状态分组：只是基元调用清单，由总览页用例覆盖"],
+  ["ui-kit-gallery-data.tsx", "总览页的数据展示分组：只是基元调用清单，由总览页用例覆盖"],
+  [
+    "ui-kit-gallery-nav.tsx",
+    "总览页的左侧大类导航（#4125）：分区锚点清单的简单列表，由总览页用例覆盖",
+  ],
+  [
+    "ui-kit-gallery-categories.ts",
+    "总览页分区清单的常量表（#4125）：只有 id / 标题数据、无 UI 形态，由总览页用例覆盖",
+  ],
+]);
 
 /**
  * 收集 `src/components/**` 下的故事文件。
@@ -125,9 +160,9 @@ export function componentTargetsOf(storyFile, source, repoRoot) {
   /** @type {string[]} */
   const out = [];
   const dir = path.dirname(storyFile);
-  const re = /from\s+"([./~][^"]*)"/g;
+  const re = /from\s+"(?<specifier>[./~][^"]*)"/g;
   for (const match of source.matchAll(re)) {
-    const spec = match[1];
+    const spec = match.groups?.specifier ?? "";
     const bases = spec.startsWith("~/")
       ? [path.join(repoRoot, "src", spec.slice(2))]
       : spec.startsWith("./") || spec.startsWith("../")

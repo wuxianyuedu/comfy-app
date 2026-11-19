@@ -24,7 +24,13 @@ export async function patchWorkflow(input: WorkflowUpdateInput): Promise<void> {
   await vanillaApi.workflow.update.mutate(input);
 }
 
-/** 次要写：失败静默吞掉，不打断交互（见文件头注释）。 */
-export function patchWorkflowSilently(input: WorkflowUpdateInput): void {
-  vanillaApi.workflow.update.mutate(input).catch(() => undefined);
+/** 次要写：失败默认静默吞掉，不打断交互（见文件头注释）；给 `onFailure` 时
+ *  在不打断交互的前提下把失败交给调用方——乐观更新的本地回滚（#4024）。 */
+export function patchWorkflowSilently(
+  input: WorkflowUpdateInput,
+  onFailure?: (error: unknown) => void,
+): void {
+  vanillaApi.workflow.update.mutate(input).catch((error: unknown) => {
+    onFailure?.(error);
+  });
 }

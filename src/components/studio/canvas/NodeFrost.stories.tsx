@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { FrostLayer, NodeFrost, PseudoFrostLayer } from "~/components/studio/canvas/NodeFrost";
 import { StorybookFlowCanvas, canvasScene, withNodeType } from "../../../../.storybook/flow-canvas";
@@ -9,29 +9,17 @@ import {
 /* 节点**角色色**（`computeNodePalette()` 的第二个入参）经端点的类型色出口取 ——
  * 与画布节点里那份同一来源，不在 story 里另写一遍 palette 字面量。 */
 import { portChipStyle } from "~/components/studio/workflow-form/WorkflowPortHandle";
+import type { WorkflowNodeData } from "~/components/studio/workflow-types";
 import { zClass } from "~/lib/shell/overlay-z";
 
 /** 一个真角色的颜色（`IMAGE` 档）；`NodeFrost` 的 `color` 入参就是这种值。 */
 const ROLE_COLOR = portChipStyle("IMAGE").color;
 
 /**
- * 绕过 / 禁用节点用的毛玻璃层 —— 第二层注入（React Flow）里**缩放**那一维的现场。
- *
- * 这一族有一半是纯 props、另一半吃画布上下文，分开说：
- *
- *  · `NodeFrost({ zoom, color, nodeMode })` —— **纯 props**，`zoom` 是入参；
- *  · `FrostLayer` —— 自己订阅 `useStore(s => s.transform[2])`，所以只能在真画布里
- *    看（下面 `InCanvas` 那一档）。它存在的理由正是**性能**：把缩放订阅从每个节点
- *    挪到这一层，普通节点就不必在捏合 / 滚轮缩放时重渲染。
- *
- * 要看的是 Chromium 那条经典 bug 的**修法**在画布上真的成立：`backdrop-filter`
- * 在屏幕占位极小的元素上会重铺平铺，缩小时出现 2² / 3² / 4² 重影。修法是按
- * `1/zoom` 反向缩放模糊元素、外层 `overflow:hidden` 裁回节点边界 —— 所以这里
- * 把三档缩放并排，重影在 `zoom < 1` 那两档最容易看出来。
- *
- * `nodeMode` 的取值来自 LiteGraph：`0` 始终 / `2` 静音（灰）/ `4` 旁路（粉），
- * 颜色由 `computeNodePalette()` 给出 —— 不手抄色值。
- */
+ * 毛玻璃层 story — 缩放维度。`NodeFrost` 纯 props（zoom/color/nodeMode）；FrostLayer 自订阅 `transform[2]`，
+ * 只能在真画布看（缩放订阅收口到该层，避免全体节点重渲染）。验 Chromium backdrop-filter 小元素重铺 bug：
+ * 按 1/zoom 反向缩放 + overflow:hidden 裁回，并排三档，zoom<1 最易见 2²/3²/4² 重影。
+ * nodeMode = LiteGraph 0 始终 / 2 静音 / 4 旁路，颜色由 `computeNodePalette()` 给出。 */
 const meta = {
   title: "Studio/Canvas/NodeFrost",
   component: NodeFrost,
@@ -48,13 +36,23 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+/** `computeNodePalette()` 只读 `mode`，入参却声明为完整节点数据 —— 补齐必填项，不写断言。 */
+function nodePaletteFor(nodeMode: number) {
+  const data: WorkflowNodeData = {
+    assignedRole: null,
+    classType: "KSampler",
+    inputs: {},
+    inputSources: {},
+    mode: nodeMode,
+    nodeId: "story",
+    title: "KSampler",
+  };
+  return computeNodePalette(data, { color: ROLE_COLOR }, DARK_PALETTE_BASE);
+}
+
 /** 节点卡片的摆法（`relative` + `overflow-hidden` 是毛玻璃能被裁回边界的前提）。 */
 function FrostCard({ zoom, nodeMode, label }: { label: string; nodeMode: number; zoom: number }) {
-  const palette = computeNodePalette(
-    /* SAFETY: 类型断言已复核 */ { mode: nodeMode } as Parameters<typeof computeNodePalette>[0],
-    { color: ROLE_COLOR },
-    DARK_PALETTE_BASE,
-  );
+  const palette = nodePaletteFor(nodeMode);
   return (
     <div className="flex flex-col items-center gap-2">
       <div
@@ -105,6 +103,8 @@ export const ModeColors: Story = {
   ),
 };
 
+const FROST_NODE_TYPES = { story: FrostDemoNode };
+
 /**
  * 真画布里的 `FrostLayer`：缩放来自 `useStore`，不是 props ——
  * 这份 story 的存在就是为了让「缩放订阅挪到独立一层」这个设计在真上下文里成立。
@@ -122,11 +122,7 @@ export const InCanvas: Story = {
 
 /** 真画布里的节点渲染器：走 `FrostLayer`，所以缩放由 store 给。 */
 function FrostDemoNode() {
-  const palette = computeNodePalette(
-    /* SAFETY: 类型断言已复核 */ { mode: 4 } as Parameters<typeof computeNodePalette>[0],
-    { color: ROLE_COLOR },
-    DARK_PALETTE_BASE,
-  );
+  const palette = nodePaletteFor(4);
   return (
     <div
       className="relative h-27.5 w-55 overflow-hidden rounded-[14px]"
@@ -142,5 +138,3 @@ function FrostDemoNode() {
     </div>
   );
 }
-
-const FROST_NODE_TYPES = { story: FrostDemoNode };

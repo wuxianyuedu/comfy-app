@@ -16,7 +16,7 @@
 export type CliLogTag = "原始" | "stdout" | "stderr";
 
 /** `[comfy-cli <tag>] ` 前缀（tag 只认这三种，避免把别的 `[comfy-cli …]` 行误当原文）。 */
-const CLI_LOG_PREFIX = /^\[comfy-cli (原始|stdout|stderr)\]\s?/;
+const CLI_LOG_PREFIX = /^\[comfy-cli (?<tag>原始|stdout|stderr)\]\s?/;
 
 /**
  * 拆出原文行的来源标记与载荷（去掉前缀）。
@@ -29,9 +29,12 @@ export function splitCliLogLine(message: string): { payload: string; tag: CliLog
   if (!match) {
     return null;
   }
+  const tag = match.groups?.tag;
+  if (tag !== "原始" && tag !== "stdout" && tag !== "stderr") {
+    return null;
+  }
   return {
-    /* SAFETY: 类型断言已复核 */
-    tag: match[1] as CliLogTag,
+    tag,
     payload: message.slice(match[0].length).trimStart(),
   };
 }
@@ -71,7 +74,7 @@ export function parseCliJsonLine(message: string): { tag: CliLogTag; value: unkn
   }
   try {
     const value: unknown = JSON.parse(split.payload);
-    if (value && typeof value === "object") {
+    if (value !== null && value !== undefined && typeof value === "object") {
       return { tag: split.tag, value };
     }
   } catch {

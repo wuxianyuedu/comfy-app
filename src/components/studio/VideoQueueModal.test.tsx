@@ -1,22 +1,15 @@
 /**
- * `VideoQueueModal` —— 队列只读视图的判据（ISSUE #2169，业主拍板）。
- *
- * 「批量提交」草稿页签整格撤掉：它长在内置模板通路被拆除之前，每条草稿只有
- * 提示词、没有必填的 `workflow`，这条通路**从来没成功过**（生产挂载从不播种
- * 草稿；新视频的唯一真实入口是创作台「视频」模式）。这里钉住撤掉后的形态：
- * 弹窗里**不再有**「批量提交」入口（radiogroup / 草稿行 / 提交按钮都没有），
- * 队列本身照常渲染。
- *
- * 旧的两组用例（批量提交出口的失败通道、队列视图切换的 radiogroup 形态）
- * 随通路一起退役 —— 它们判的对象已经不存在了。
+ * `VideoQueueModal` —— 队列只读视图的判据（ISSUE #2169，业主拍板）：「批量提交」草稿页签整格撤掉，
+ * 因那条通路（每条草稿只有提示词、没有必填 `workflow`）**从来没成功过**，新视频唯一入口是创作台
+ * 「视频」模式。这里钉撤掉后的形态：弹窗里不再有该入口（radiogroup / 草稿行 / 提交按钮都没有），队列照常渲染。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 
 import { VideoQueueModal } from "./VideoQueueModal";
 import type { VideoTask } from "~/lib/media/video-queue-client";
 
-const fetchVideoTasksMock = vi.fn<() => Promise<Array<VideoTask>>>(async () => []);
+const fetchVideoTasksMock = vi.fn<() => Promise<Array<VideoTask>>>(() => Promise.resolve([]));
 vi.mock("~/lib/media/video-queue-client", () => ({
   fetchVideoTasks: () => fetchVideoTasksMock(),
 }));
@@ -40,7 +33,7 @@ describe("VideoQueueModal：队列只读视图（批量提交已整格撤掉，#
   it("弹窗里不再有「批量提交」入口 —— 无 radiogroup、无草稿行、无提交按钮", async () => {
     renderModal();
     // 等首轮加载落地，避免「还没渲染完」被误读成「不存在」。
-    await waitFor(() => expect(fetchVideoTasksMock).toHaveBeenCalled());
+    await expect.poll(() => fetchVideoTasksMock.mock.calls.length).toBeGreaterThan(0);
     expect(screen.queryByRole("radiogroup")).toBeNull();
     expect(screen.queryByRole("radio", { name: /批量提交/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /开始生成/ })).toBeNull();

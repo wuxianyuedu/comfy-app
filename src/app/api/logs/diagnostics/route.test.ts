@@ -1,15 +1,7 @@
 /**
- * /api/logs/diagnostics 的打包契约（ISSUE #1326）。
- *
- * 面板的「保存到本地」只导出**它看得见的行**；用户报 bug 时真正要给的现场还包括
- * `run.json`（runId / 版本 / 分支 / commit / pid / 退出码）、上一次崩溃留下的残留、
- * comfyui 原始回执。本端点复用启动编排的 `exportDiagnostics()`，把
- * `current/` + 最近几次 `runs/` 打成一个 zip 落在 `log/exports/`。
- *
- * 钉死三条：
- *   1. 产物真的是一个能解开的 zip（用 python 的 zipfile 验，不靠「文件存在」）；
- *   2. 内容含本次运行的 `current/run.json` 与历史包 —— 缺了就等于没打包；
- *   3. 鉴权与同族端点一致（未登录不打包）。
+ * /api/logs/diagnostics 的打包契约（ISSUE #1326）：复用启动编排的 `exportDiagnostics()`，把 `current/` + 最近几次 `runs/`
+ * 打成 zip 落 `log/exports/`（面板导出只有它看得见的行，报 bug 还要 run.json / 崩溃残留 / comfyui 原始回执）。
+ * 钉三条：产物真是能解开的 zip（python zipfile 验）；内容含本次 `current/run.json` 与历史包；未登录不打包。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -17,6 +9,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { hasPython, runPython } from "../../../../../tests/helpers/python-exe";
+import { isPlainRecord } from "~/lib/is-record";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "log-diag-"));
 /** 日志根（`<项目根>/log`）—— 与真实布局同形，`LOG_ROOT` 指的就是它。 */
@@ -35,8 +28,7 @@ vi.mock("~/lib/log/log-paths", async () => {
 
 let authed = true;
 vi.mock("~/server/auth/request-user", () => ({
-  requireRequestUser: async () =>
-    authed ? { id: "u1", email: "t@example.com", name: null } : null,
+  requireRequestUser: () => (authed ? { id: "u1", email: "t@example.com", name: null } : null),
 }));
 
 const { POST } = await import("./route");
@@ -62,6 +54,23 @@ print("\\n".join(sorted(z.namelist())))
   )
     .split(/\r?\n/)
     .filter(Boolean);
+}
+
+type DiagnosticsPayload = {
+  bytes: number | null;
+  ok: boolean;
+  path: string;
+  relativePath: string;
+};
+
+function isDiagnosticsPayload(v: unknown): v is DiagnosticsPayload {
+  return (
+    isPlainRecord(v) &&
+    (v.bytes === null || typeof v.bytes === "number") &&
+    typeof v.ok === "boolean" &&
+    typeof v.path === "string" &&
+    typeof v.relativePath === "string"
+  );
 }
 
 beforeEach(() => {
@@ -92,13 +101,10 @@ describe("/api/logs/diagnostics", () => {
   it.skipIf(!PYTHON_OK)("打出能解开的 zip，含本次 current/ 与历史 runs/", async () => {
     const res = await POST();
     expect(res.status).toBe(200);
-    /* SAFETY: 类型断言已复核 */
-    const data = (await res.json()) as {
-      bytes: number | null;
-      ok: boolean;
-      path: string;
-      relativePath: string;
-    };
+    const data: unknown = await res.json();
+    if (!isDiagnosticsPayload(data)) {
+      throw new Error(`诊断包响应形状不符：${JSON.stringify(data)}`);
+    }
     expect(data.ok).toBe(true);
     expect(data.path.startsWith(path.join(logRoot, "exports"))).toBe(true);
     expect(data.relativePath.startsWith("exports/")).toBe(true);

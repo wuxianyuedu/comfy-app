@@ -132,7 +132,8 @@ function startFailureMessage(
  */
 export function createConsoleRunner(): ConsoleRunner {
   let current: {
-    child: ReturnType<typeof spawn>;
+    /* 占槽到 spawn 完成之间是 null（ISSUE #4282）：这一窗口 cancel 到来时无进程可杀。 */
+    child: ReturnType<typeof spawn> | null;
     command: string;
     /** 用户 / 看门狗是否已经判它「该死了」（用于 exit 事件里区分「失败」与「掐掉」）。 */
     killed: boolean;
@@ -154,6 +155,35 @@ export function createConsoleRunner(): ConsoleRunner {
     onEvent: (event: ConsoleEvent) => void,
   ): Promise<ConsoleRunResult> {
     const startedAt = Date.now();
+
+    /* 单槽**原子认领**（ISSUE #4282）：路由层的 busy() 检查与本函数的
+     * `current = …` 占槽之间隔着 await（resolve / spawn），两个并发 POST 都能
+     * 通过检查——后到者覆盖 current，先到者的看门狗因 runId 对不上失明、其
+     * close 又把后到者的槽清成「空闲」，最终留下超时也收不回的孤儿进程。
+     * 这里在任何 await 之前同步占槽；占不到就把本条按「未执行」收尾
+     * （error 帧说明原因，路由层自己的 busy() 仍先拦一道）。 */
+    if (current !== null) {
+      onEvent({
+        type: "error",
+        message: `已有命令在跑（${current.command}），本条命令未执行`,
+      });
+      return {
+        runId: opts.runId,
+        command: opts.command,
+        exitCode: null,
+        killed: false,
+        durationMs: 0,
+      };
+    }
+    current = {
+      runId: opts.runId,
+      command: opts.command,
+      startedAt,
+      /* spawn 完成前先占槽：这一窗口内 cancel() 到来时 child 还不存在，
+       * cancel 侧对空 child 直接让位（见 cancel 的判据）。 */
+      child: null,
+      killed: false,
+    };
 
     /* 起之前先问一次「这台机器上这个命令怎么起」（判据实现在
      * `~/lib/process/executable-resolve`，与启动编排同一份）—— **不解析就是
@@ -200,6 +230,8 @@ export function createConsoleRunner(): ConsoleRunner {
         },
       });
     } catch (error) {
+      /* 起不来也要把槽还回去：否则一次失败启动会把单槽永久占死。 */
+      current = null;
       onEvent({
         type: "error",
         message: startFailureMessage(opts.file, invocation, error),
@@ -328,7 +360,8 @@ export function createConsoleRunner(): ConsoleRunner {
   }
 
   async function cancel(): Promise<boolean> {
-    if (!current) {
+    /* child 为空 = 已占槽但 spawn 还没回来：这一窗口没有进程可杀（ISSUE #4282）。 */
+    if (!current || current.child === null) {
       return false;
     }
     current.killed = true;
@@ -354,7 +387,7 @@ export function createConsoleRunner(): ConsoleRunner {
  */
 async function terminate(child: ReturnType<typeof spawn>): Promise<void> {
   const pid = child.pid;
-  if (!pid) {
+  if (pid === undefined) {
     return;
   }
   await killProcessTree({

@@ -1,20 +1,7 @@
 /**
- * 「待发段落的来源锚 ⇄ 条目归属」双向判据的门禁自测（规范 §13.10.6）。
- *
- * 判据 `scripts/check-changelog-versions.cjs` 的价值全在**三件事都真的被核到**上：
- *   ① 锚的**形状**（写歪了 ⇒ 红。这一格是本轮实测撞出来的：严格识别锚的那条正则
- *      认不出歪锚 ⇒ 回 `null` ⇒ 走到「这一段没有锚」那一支 ⇒ **整份判据静默放过**，
- *      而「写了但写歪」比「没写」更坏 —— 它看上去像一条来源记录）；
- *   ② 锚解析不解析得开（日期 / 分支名 / 不存在的短哈希都不行）；
- *   ③ **跨锚分裂**：同一个 ISSUE 号既在待发段落里、又在它**之前**（文件里排在它下面）
- *      的已发布段落里 ⇒ 报出来。那是最贵的失效形态（归属被切成两半，两端都没写错）。
- *
- * 三件事各自有一组「该拦的」，外加「不该误伤的」与「判据自己不许静默降级」。
- *
- * ⚠️ **待发段落 = `[Unreleased]` / `[未发布]`**，带日期的 `## [x.y.z] - <日期>` **不算**：
- * 把它算进去，第 ③ 条那句「锚之前的已发布段落」就永远是空集（实测过：`earlier` 恒为 0），
- * 判据会一直绿而什么都没核。所以另有一组用例专门钉这条口径 —— 它是**判据自己的**
- * 静默失效面，只有用例看得见。
+ * 「待发段落的来源锚 ⇄ 条目归属」双向判据的门禁自测（规范 §13.10.6），三件事都各有执行者。
+ * ① 锚的形状：歪锚被正则漏判 ⇒ 回 null ⇒ 走「这一段没有锚」⇒ 静默放过（「写了但写歪」比「没写」更坏）；② 锚必须解析得开（日期 / 分支名 / 不存在的短哈希都不行）；
+ * ③ 跨锚分裂：同一 ISSUE 号既在待发段落、又在它之前的已发布段落 ⇒ 报出来（归属被切成两半）。口径：待发 = `[Unreleased]` / `[未发布]`，带日期的标题不算，否则 ③ 的 earlier 恒为 0、判据永远绿。
  */
 import { execFileSync } from "node:child_process";
 
@@ -25,7 +12,7 @@ import { defineGateRepo, describe } from "./helpers/gate-repo";
  * ⚠️ 锚必须解析成**本仓库历史里真实存在的提交** —— 用例拿 `git rev-parse HEAD`
  * 现算（不写死哈希：写死一个短哈希会在某个历史被 gc 掉之后变成假红）。 */
 const { test, expect } = defineGateRepo({
-  script: "check-changelog-versions.cjs",
+  script: "gates/check-changelog-versions.cjs",
   dir: "scripts",
   workdir: "changelog-versions",
   setup: (repo) => {
@@ -38,10 +25,8 @@ const { test, expect } = defineGateRepo({
 
 /**
  * 工作区 HEAD 的短哈希 —— 锚必须解析成一个**真实存在的**提交，所以现算。
- *
- * 夹具的 `repo.git()` 只转 `stdio: "ignore"`（它服务的是「造状态」而不是「读数」），
- * 所以这里自己起一次 git 把 stdout 拿回来：写死一个短哈希会在某个历史被 gc 之后
- * 变成假红，而那条红指向的是「锚解析不出提交」—— 读起来像判据坏了。
+ * 夹具的 `repo.git()` 只转 `stdio: "ignore"`（它服务「造状态」而非「读数」），故这里自己起一次 git
+ * 拿回 stdout：写死短哈希会在某个历史被 gc 之后变成假红，读起来像判据坏了。
  */
 function headSha(repo: { dir: string }): string {
   return execFileSync("git", ["rev-parse", "--short", "HEAD"], {
@@ -89,30 +74,20 @@ function changelog(
 describe("changelog-versions —— 锚的形状", () => {
   test("合规的锚 + 归属不分裂 ⇒ 通过", ({ repo }) => {
     const sha = headSha(repo);
-    repo.write(
-      "CHANGELOG.md",
-      changelog({ pendingAnchor: `<!-- since: ${sha} — 第一批 -->` }),
-    );
+    repo.write("CHANGELOG.md", changelog({ pendingAnchor: `<!-- since: ${sha} — 第一批 -->` }));
     const { code, output } = repo.run();
     expect(code).toBe(0);
     expect(output).toContain("来源锚与条目归属一致");
   });
 
-  test("写了锚但形状写歪（提交换成日期）⇒ 红 —— 这一格曾经整份静默放过", ({
-    repo,
-  }) => {
-    repo.write(
-      "CHANGELOG.md",
-      changelog({ pendingAnchor: "<!-- since: 2026-09-12 — 第一批 -->" }),
-    );
+  test("写了锚但形状写歪（提交换成日期）⇒ 红 —— 这一格曾经整份静默放过", ({ repo }) => {
+    repo.write("CHANGELOG.md", changelog({ pendingAnchor: "<!-- since: 2026-09-12 — 第一批 -->" }));
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("锚形状不对");
   });
 
-  test("没写锚 ⇒ **不拦**（锚不是每段的必修项，第一次并入时由脚本补）", ({
-    repo,
-  }) => {
+  test("没写锚 ⇒ **不拦**（锚不是每段的必修项，第一次并入时由脚本补）", ({ repo }) => {
     repo.write("CHANGELOG.md", changelog());
     const { code, output } = repo.run();
     expect(code).toBe(0);
@@ -120,10 +95,7 @@ describe("changelog-versions —— 锚的形状", () => {
   });
 
   test("锚写了但那个提交不存在（短哈希凑的）⇒ 红", ({ repo }) => {
-    repo.write(
-      "CHANGELOG.md",
-      changelog({ pendingAnchor: "<!-- since: deadbee — 第一批 -->" }),
-    );
+    repo.write("CHANGELOG.md", changelog({ pendingAnchor: "<!-- since: deadbee — 第一批 -->" }));
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("解析不出提交");
@@ -147,9 +119,7 @@ describe("changelog-versions —— 跨锚分裂（本条判据的主判据）",
     expect(output).toContain("切成了两半");
   });
 
-  test("待发段落里的号在**已发布段落**里没有出现 ⇒ 通过（负控制）", ({
-    repo,
-  }) => {
+  test("待发段落里的号在**已发布段落**里没有出现 ⇒ 通过（负控制）", ({ repo }) => {
     const sha = headSha(repo);
     repo.write(
       "CHANGELOG.md",
@@ -163,9 +133,25 @@ describe("changelog-versions —— 跨锚分裂（本条判据的主判据）",
     expect(code).toBe(0);
   });
 
-  test("**带日期的版本段落不算待发段落** —— 算进去这条判据就恒空转", ({
-    repo,
-  }) => {
+  test("HTML 注释里的 ISSUE 号不算（含未闭合注释整段丢弃 · CodeQL #8）", ({ repo }) => {
+    const sha = headSha(repo);
+    repo.write(
+      "CHANGELOG.md",
+      changelog({
+        pendingAnchor: `<!-- since: ${sha} — 第一批 -->`,
+        /* 未闭合的 `<!--` 会吞掉这一行剩下的部分 —— 注释里的 #355 一律不算，
+         * 所以它与已发布段落的 #355 **不构成跨锚分裂**。旧实现只删成对注释，
+         * 这里会留下 `#355` 而误判。 */
+        pendingBody: "- 一条 <!-- 尚未闭合的注释里提到 ISSUE #355\n",
+        releasedBody: "首个版本基线（含 ISSUE #355 的初版）。\n",
+      }),
+    );
+    const { code, output } = repo.run();
+    expect(code).toBe(0);
+    expect(output).toContain("来源锚与条目归属一致");
+  });
+
+  test("**带日期的版本段落不算待发段落** —— 算进去这条判据就恒空转", ({ repo }) => {
     /* 这是判据自己的静默失效面：把 `## [0.2.0] - 2026-10-01` 也算成待发段落，
      * 「锚之前的已发布段落」就永远是空集（实测 `earlier` 恒为 0），
      * 上面那条「同时出现 ⇒ 红」当场变成永远绿。 */
@@ -202,31 +188,21 @@ describe("changelog-versions —— 跨锚分裂（本条判据的主判据）",
 });
 
 describe("changelog-versions —— 判据自己不许静默降级", () => {
-  test("CHANGELOG.md 读不到 ⇒ 红（不是「没有段落要查、于是放过」）", ({
-    repo,
-  }) => {
+  test("CHANGELOG.md 读不到 ⇒ 红（不是「没有段落要查、于是放过」）", ({ repo }) => {
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("读不到 CHANGELOG.md");
   });
 
   test("一个待发段落都没有 ⇒ 红", ({ repo }) => {
-    repo.write(
-      "CHANGELOG.md",
-      "# 更新日志\n\n## [0.1.0] - 2026-08-31\n\n基线。\n",
-    );
+    repo.write("CHANGELOG.md", "# 更新日志\n\n## [0.1.0] - 2026-08-31\n\n基线。\n");
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("一个待发段落都没有");
   });
 
-  test("只有版本段落、没有未发布标题 ⇒ 红，且报错点名 `[Unreleased]`", ({
-    repo,
-  }) => {
-    repo.write(
-      "CHANGELOG.md",
-      "# 更新日志\n\n## [0.2.0] - 2026-10-01\n\n### Added\n\n- 一条。\n",
-    );
+  test("只有版本段落、没有未发布标题 ⇒ 红，且报错点名 `[Unreleased]`", ({ repo }) => {
+    repo.write("CHANGELOG.md", "# 更新日志\n\n## [0.2.0] - 2026-10-01\n\n### Added\n\n- 一条。\n");
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("[Unreleased]");
@@ -244,10 +220,7 @@ describe("changelog-versions —— 判据自己不许静默降级", () => {
   });
 
   test("--report 只出清单、不判失败", ({ repo }) => {
-    repo.write(
-      "CHANGELOG.md",
-      "# 更新日志\n\n## [0.1.0] - 2026-08-31\n\n基线。\n",
-    );
+    repo.write("CHANGELOG.md", "# 更新日志\n\n## [0.1.0] - 2026-08-31\n\n基线。\n");
     const { code, output } = repo.run(["--report"]);
     expect(code).toBe(0);
     expect(output).toContain("待发段落的来源锚");

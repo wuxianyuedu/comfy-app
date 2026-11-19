@@ -15,7 +15,7 @@
   按 §13.5.4 的例外流程认账：`node scripts/check-bundle-budget.cjs --update
   --allow-increase`，`baselineRev` 落到 `b6c3c353`，`generatedAt` → 2026-10-15。
   **文件数 221 没变**（只涨字节、没多出 chunk）。同批把产物档（`pnpm run build` +
-  数产物 + `executor-host-smoke`）在本机实跑一遍记账（`scripts/.artifact-freshness.json`）。
+  数产物 + `executor-host-smoke`）在本机实跑一遍记账（`scripts/freshness/.artifact-freshness.json`）。
 
   ⚠️ 留给下一个读到的人：这一档是**棘轮**，`--update` 不带 `--allow-increase` 会拒绝
   抬高。本条认的是「基线之后那几十次提交的累积涨幅」，**下一个人若看到它又红了，

@@ -7,5 +7,5 @@
   cnb-bo5-1k68vik3o 实测一份 30s 超时 ⇒ 整块进复跑判决链，靠墙钟判点救成逐文件补跑
   是预算判出来的侥幸。分块后一份假红最多陪跑 24 份，代价是多 4 次 vitest 冷启（秒级）。
   受影响段不戴帽（它的面由 import 图决定，常态远小于固定段）。`fixedChunkFiles: 0`
-  显式关帽回到旧行为；常数按 report 入 `scripts/.gate-thresholds.json` 账（不改变
+  显式关帽回到旧行为；常数按 report 入 `scripts/gates/.gate-thresholds.json` 账（不改变
   任何断言判定，只改「一份假红要陪跑多少份」与冷启次数）。

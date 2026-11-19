@@ -1,22 +1,14 @@
 /**
- * src 非空断言 `!` **硬闸**自检:把 `scripts/check-non-null-assertions.cjs`
- * 当黑盒跑在临时工作区上,验证它真能按 AST 认出 `NonNullExpression`、
- * 并**逐站点**放行已登记的合法形态（正则捕获组 / drizzle 判据构造）。
- *
- * 规范:docs/standards/13-提交与-code-review.md §13.5.6 与
- * docs/standards/18-lib层规范.md §18.6
- *
- * 为什么是硬闸:直接开 eslint `no-non-null-assertion` 一次报 160 处、评审全是噪声,
- * 所以本仓先以基线棘轮把存量清干净（ISSUE #1811 那批 160 → 0）,归零后翻成
- * 硬闸 —— 棘轮在 0 上只剩「手改 JSON 就能登记新违规」这条通道。
- * 合法例外走 `LEGIT_SITES` 逐条登记（唯一出口）,不是把判据调松。
+ * src 非空断言 `!` 硬闸自检：黑盒跑 `scripts/gates/check-non-null-assertions.cjs`，验证按 AST 认出 `NonNullExpression`，
+ * 且只放行 `LEGIT_SITES` 登记的合法形态（正则捕获组 / drizzle 判据）。硬闸来由：直接开 eslint 一次报 160 处
+ * （ISSUE #1811 那批 160 → 0），归零后翻硬闸，例外只走唯一出口；规范 docs/standards/13-提交与-code-review.md §13.5.6、18-lib层规范.md §18.6。
  */
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { defineGateRepo, describe, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
-  script: "check-non-null-assertions.cjs",
+  script: "gates/check-non-null-assertions.cjs",
   dirs: ["src"],
   /* 判据走 TS AST，要能解析 typescript —— 临时工作区旁边没有 node_modules。 */
   env: { NODE_PATH: join(process.cwd(), "node_modules") },
@@ -92,7 +84,7 @@ export function ok(a: string | null): boolean {
     /* 豁免若做成「凡是 `x[n]!` 就放过」,它立刻变成一块谁都能蹭的空地。
      * 这里在临时工作区里原样复刻 `LEGIT_SITES` 的一条登记（变量名 `m`、组号 `1`），
      * 再写一个**没登记**的版本 —— 后者必须被算进去。 */
-    const scriptPath = "scripts/check-non-null-assertions.cjs";
+    const scriptPath = "scripts/gates/check-non-null-assertions.cjs";
     repo.write(
       scriptPath,
       repo.read(scriptPath).replace(
@@ -120,8 +112,8 @@ export function ok(a: string | null): boolean {
     /* 行号做键的话,删掉上面几行注释就会让豁免静默失效 —— 也就等于没登记。
      * 这里把同一个函数往下垫 30 行,豁免照旧。 */
     repo.write(
-      "scripts/check-non-null-assertions.cjs",
-      repo.read("scripts/check-non-null-assertions.cjs").replace(
+      "scripts/gates/check-non-null-assertions.cjs",
+      repo.read("scripts/gates/check-non-null-assertions.cjs").replace(
         "const LEGIT_SITES = new Map([",
         `const LEGIT_SITES = new Map([
   ["src/lib/padded.ts|m|1", "exec 第 1 组"],`,
@@ -130,8 +122,7 @@ export function ok(a: string | null): boolean {
     writeSrcFile(
       repo,
       "lib/padded.ts",
-      `${"\n".repeat(30)
-        }export function grab(re: RegExp, s: string): string {
+      `${"\n".repeat(30)}export function grab(re: RegExp, s: string): string {
   const m = re.exec(s);
   return m ? m[1]! : "";
 }`,

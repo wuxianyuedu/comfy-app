@@ -1,60 +1,9 @@
 "use client";
 
 /**
- * 设置页共享外壳（③视图层）—— （可选）标题行 + 分区导航树 + 内容滚动容器。
- *
- * 「就绪视图」`SettingsPageView` 与「加载 / 错误占位壳」都复用它：设置页打开时
- * 外壳（含分区导航）随首帧立即渲染，用户马上看到界面框架，而不是整屏 spinner
- * 等全部配置就绪；内容区按加载 / 错误 / 就绪三态各自展示。
- *
- * ## 这里没有「返回」按钮
- *
- * 此前左上是「← 返回」（`router.back()`）—— 而设置在本应用里是**一页页签**，
- * 页签自带关闭按钮、侧栏也永远在；那枚箭头要么是第二条退出路径、要么在独立路由
- * `/settings` 上把用户带回上一页（同一个动作在两个入口下含义不同）。用户看到的
- * 只是一枚占了标题行左端的箭头 —— 标题因此被推离左边缘，而它没有任何独有的作用。
- * 现在标题（在它出现时）独占那一行，退出交给页签自己的关闭按钮与侧栏。
- *
- * 因此本模块**不再**需要 `onClose`：两个挂载点此前都不传它（那条分支进不去），
- * 按 §12.16 一并删掉，`SettingsView` / `SettingsPageView` 也不用再透传。
- *
- * ## 一页到底：导航是**目录**，不是分屏开关
- *
- * 此前导航点一下把右侧换成另一份 JSX（一屏一节）。代价是「从头看到尾」做不到 ——
- * 想比较两个分区的取值得来回点，而正文里没有任何标题说明「现在读的是哪一节」
- *（ISSUE #1722）。现在**所有分区都在同一根滚动条里**，导航退回到它本来的角色：
- *   · 点一项 → 平滑滚到那一节（`scrollToSection`）；
- *   · 手动滚动 → 高亮跟着走（`useSectionScrollSpy` 的 `IntersectionObserver`）。
- * 「我现在在哪」由**每个分区自己的标题行**回答（它就是滚到那一节时读到的那一行）。
- *
- * 滚动容器在**外壳**这一层（`overflow-y-auto`），分区节是它的子项 ——
- * 「从头部滚到尾」因此是一条连续的滚动条，不再是每节各自一小条。
- *
- * ## 分区导航是左侧一棵**竖向的树**，不是一条横排 chip 带
- *
- * 横排那一版把**分组名**与**分区项**排在同一行、同一种字号里，用户读到的是一串
- * 平权的词（`模型 本地模型 远程模型 ｜ 后端 创作后端 ｜ …`）—— 哪个是组、哪个能点
- * 分不出来（ISSUE #1694）。竖排的树把层级还给**缩进 + 引导线**：
- *   · 分组名是父行（弱一档、不可点），分区项是它的子行（可点、`aria-current`）；
- *   · 缩进与引导线由 `~/components/ui/tree-rows` 一次给全（§16.2.4.39，P36 硬闸），
- *     本文件不再手写 `ml-* / border-l-*`；
- *   · 内容区仍是 `--container-medium` 里的那一列，导航固定宽、不长出滚动竞争。
- * 左侧这一列**只放导航**，纵向溢出交给它自己的 `.custom-scrollbar`。
- *
- * ## 页签已经在说屏名时，**不再重复一次可见标题**（ISSUE #1872）
- *
- * 此前这个外壳无条件渲染一行 `h1「设置」` + 一句副说明（「全部设置在一页里，
- * 按左侧目录跳转或直接滚动」）。工作区里进设置时，页签条与顶栏**都在写「设置」**，
- * 屏内再写一遍是同一个名字的第三次出现；那句副说明也只是把「左边是目录、右边
- * 是一页」又说了一遍 —— 左侧那棵树与唯一一根滚动条自己就在说明这件事
- *（规范 03 §3.10「屏名已经由常驻页签（或顶栏）给出时不再重复一次可见标题」）。
- *
- * 于是屏名与那句说明各有去处，`title` 是**可选**的：
- *   · **工作区页签**（`fillHeight`）：页签 + 顶栏已在视野里 → 不传 `title`，
- *     屏名以 `sr-only` 留在 DOM（读屏按标题跳转的前提，规范 06）；那句说明
- *     由顶栏标题右侧那颗问号承载（`viewHelp()` 注册表，全库唯一出处）。
- *   · **独立路由 `/settings`**：它不在 `AppShell` 里、没有顶栏也不显示页签 →
- *     屏名只在这一屏才出现，仍给可见标题；说明仍收掉（它读一次就够）。
+ * 设置页共享外壳（③视图层）—— （可选）标题行 + 分区导航树 + 内容滚动容器，就绪视图与
+ * 三态占位壳复用它。要点：无「返回」按钮（`onClose` 按 §12.16 删掉）；一页到底、导航是
+ * 目录（ISSUE #1722）、是竖向的树（§16.2.4.39，ISSUE #1694）；页签已给屏名时不重复标题（ISSUE #1872）。
  */
 
 import { useCallback, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
@@ -64,23 +13,25 @@ import { Button } from "~/components/ui/button";
 import { TreeChildren } from "~/components/ui/tree-rows";
 import { cn } from "~/lib/utils";
 
-import { SETTINGS_SCROLL_ORDER, TREE_GROUPS, sectionSummary } from "./settings-section-summary";
+import {
+  SETTINGS_SCROLL_ORDER,
+  TREE_GROUPS,
+  isGroupFirstSection,
+  sectionGroupLabel,
+  sectionSummary,
+} from "./settings-section-summary";
 import { useSectionScrollSpy } from "./use-section-scroll-spy";
 
 /**
- * 外壳的两种形态 —— **恰好给一种**（判别联合，`tsc` 挡住「两头都不给」与
- * 「两头都给」）。
- *
- *   · **就绪**：给 `sections`（每个分区的正文），外壳按 `SETTINGS_SCROLL_ORDER`
- *    （= 导航树的展开顺序）铺成一页，导航是目录、滚动时高亮跟着走；
- *   · **三态**：给 `fallback`（整块内容区的替代品），导航仍在、右侧换成这一块。
+ * 外壳的两种形态 —— **恰好给一种**（判别联合，`tsc` 挡住「两头都不给/都给」）。
+ * **就绪**：给 `sections`，外壳按 `SETTINGS_SCROLL_ORDER`（= 导航树展开顺序）铺成一页；
+ * **三态**：给 `fallback`，导航仍在、右侧换成这一块。
  */
 type SettingsShellProps = {
   /**
    * 页面级提示条（保存结果 / 读取失败降级），落在滚动区**之内、分区之前**。
-   *
-   * 放滚动区内是刻意的：它是这一次操作的结果，用户滚下去之后不应该还钉在顶上
-   * 占位置；而放在分区之前则保证它不会被第一节的标题挡掉。
+   * 放滚动区内是刻意的：它是这次操作的结果，不该钉在顶上占位；放分区之前
+   * 保证不被第一节标题挡掉。
    */
   banner?: ReactNode;
   /** 根容器高度 class（overlay 模式传 h-full 覆盖）。 */
@@ -98,6 +49,11 @@ type SettingsShellProps = {
   /** 当前分区（导航高亮用）。 */
   section: Section;
   /**
+   * 各分区标题行右侧的附加物（ISSUE #3724）：按分区 id 给一枚「数据存放位置」
+   * 徽标等小标识。没有正文的分区节（`fallback` 态）不渲染，无需给全。
+   */
+  sectionTitleExtra?: SectionTitleExtra;
+  /**
    * 屏级可见标题 —— 走 `.u-title-page`。**页签（或顶栏）已经在说屏名时不传**
    * （ISSUE #1872）：那一次出现是重复的，不传时屏名以 `sr-only` 留在 DOM，
    * 这一行也不再占位（口径与 `ui/page-header` 的 `title` / `srTitle` 同一份）。
@@ -108,26 +64,25 @@ type SettingsShellProps = {
       fallback?: undefined;
       /**
        * 每个分区的正文（**一份映射，不许缺项**）。
-       *
-       * 类型是 `Record<Section, ReactNode>` 而不是 `ReactNode`：外壳把**所有**
-       * 分区铺在同一根滚动条里，少一个分区就是正文里凭空缺一段 —— 而它在运行时
-       * 完全静默（少渲染一个 `<section>`，滚动条只是短了一点）。让类型挡这一手，
-       * 比再加一条运行时判据直接。
+       * 类型是 `Record<Section, ReactNode>`：外壳把**所有**分区铺在同一根滚动条里，
+       * 少一个分区就是正文里凭空缺一段——而它在运行时完全静默，让类型挡这一手。
        */
       sections: Record<Section, ReactNode>;
     }
   | {
       /**
        * 「整块内容区」的替代品（加载中 / 加载失败 / 未就绪三态）。
-       *
-       * 给了它就不再渲染分区列表：那三态下每个分区都没有可渲染的正文，铺 9 份
-       * 同样的占位 / 错误文案等于把同一句话重复 9 遍（也会把滚动条撑成 9 倍的
-       * 假长度）。分区**导航仍在**（外壳这一层照常渲染），只是右侧换成这一块。
+       * 给了它就不再渲染分区列表：三态下每个分区都没有可渲染的正文，铺 9 份同样的
+       * 占位等于把同一句话重复 9 遍。分区**导航仍在**，只是右侧换成这一块。
        */
       fallback: ReactNode;
       sections?: undefined;
     }
 );
+
+/** 各分区标题行右侧的附加物（ISSUE #3724）：「这类数据存在哪儿」的徽标挂在大标题
+ * （`.u-title-stage` 那一行）右侧——卡片标题行没有别的可说时，徽标不再独占一行。 */
+export type SectionTitleExtra = Partial<Record<Section, ReactNode>>;
 
 export function SettingsShell({
   section,
@@ -139,6 +94,7 @@ export function SettingsShell({
   onJumpApplied,
   fallback,
   sections,
+  sectionTitleExtra,
 }: SettingsShellProps) {
   /** 滚动容器：分区节挂在它里面，观察器也以它为 root。 */
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -162,15 +118,11 @@ export function SettingsShell({
     [onSelect, scrollToSection],
   );
 
-  /* 跳转载荷的落点：`layout` 期（分区节刚挂上、观察器与浏览器还没算位置）就
-   * **瞬时**滚过去。放在 layout 期而不是普通 effect：普通 effect 跑在观察器建立
-   * 之后，容器仍停在顶部，初始那批 IntersectionObserver 回调会把第一个分区判成
-   * 当前项、把刚设好的高亮覆写回第一项（这正是「点去设置，左侧还是第一项」的
-   * 现场）。瞬时（`behavior: "auto"`）而不是平滑：动画期间观察器会先报当前视图
-   * 里那几节，高亮会闪一下再跳。
-   *
-   * 只有 `scrollToSection` 真的命中锚点（返回 true）才回调消费载荷 —— 三态壳
-   * （加载 / 失败）没有分区节，那时不能把载荷吃掉，就绪壳挂上后再滚。 */
+  /* 跳转载荷的落点：`layout` 期（分区节刚挂上）就**瞬时**滚过去——普通 effect 跑在
+   * 观察器建立之后，初始那批回调会把第一个分区判成当前项、覆写刚设好的高亮；平滑
+   * 动画期间观察器会先报当前视图里那几节，高亮会闪一下再跳，故用 `behavior: "auto"`。
+   * 只有 `scrollToSection` 真命中锚点（返回 true）才回调消费载荷——三态壳没有分区节，
+   * 不能把载荷吃掉。 */
   useLayoutEffect(() => {
     if (!jumpSection) {
       return;
@@ -185,7 +137,7 @@ export function SettingsShell({
       {/* 宽度取统一档位（`--container-medium` = 从前这里写的 max-w-275）：
           设置页是「标题 + 全宽内容」的文档型壳，不并入更宽的编辑器容器，
           但同一个数不该有两个家。 */}
-      <div className="max-w-medium mx-auto flex min-h-0 w-full flex-1 flex-col px-6 pt-6">
+      <div className="max-w-medium mx-auto flex min-h-0 w-full flex-1 flex-col px-6 pt-4">
         {/* 屏名：页签（或顶栏）已经在说时**不出现这一行**（`title` 不传），只把
             名字留在 `sr-only` —— 读屏仍能按标题跳转，视觉上不重复第二次
             （规范 03 §3.10 / 06）。`h1` 始终在位，一屏一个；那一行不占位，
@@ -200,7 +152,7 @@ export function SettingsShell({
 
         {/* 导航在左、内容在右：树需要的是**纵向**空间（父行 + 缩进子行），
             而横排那条带子只能靠分隔符暗示分组 —— 层级读不出来。 */}
-        <div className="flex min-h-0 flex-1 gap-6 pt-4">
+        <div className="flex min-h-0 flex-1 gap-8 pt-2">
           <SettingsSectionNav onSelect={handleSelect} section={section} />
 
           {/* 内容区：**全部**分区节，唯一一根滚动条。每个节自带 `id` 与
@@ -209,7 +161,7 @@ export function SettingsShell({
               主操作按钮仍在各区卡片自己的末尾（规范 §4.12 管的是「列表容器内
               不要放主操作」，这里是文档式长页、卡片不是滚动容器的直接子项）。 */}
           <div
-            className="custom-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto pb-6"
+            className="custom-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto pr-4 pb-6"
             ref={scrollRef}
           >
             {fallback === undefined ? (
@@ -227,8 +179,10 @@ export function SettingsShell({
                     key={id}
                     ref={registerSection(id)}
                   >
-                    <SettingsSectionHeading section={id} />
-                    {sections?.[id]}
+                    <SettingsSectionHeading section={id} titleExtra={sectionTitleExtra?.[id]} />
+                    {/* 一节里可能有多张卡片（「备份与恢复」下的「创建备份 / 恢复备份」）：
+                        卡片之间要有间距，否则两张卡贴在一起像一块（ISSUE #3547）。 */}
+                    <div className="flex flex-col gap-4">{sections?.[id]}</div>
                   </section>
                 ))}
               </>
@@ -253,35 +207,48 @@ function sectionLabel(section: Section): string {
 }
 
 /**
- * 分区在正文里的标题。
+ * 分区在正文里的标题（ISSUE #1722：正文里要有「现在读的是哪一节」的本地线索）。
+ * 走 `.u-title-stage`（段级档）：屏级与卡片之间那一层（规范 03 §3.10），数值只住在
+ * `@theme` 里。字从 `SETTINGS_SECTIONS` 取，导航与正文标题不可能漂移。
  *
- * 此前「现在读的是哪一节」只由导航的 `aria-current` 与标题行那句摘要表达 ——
- * 正文里一个标题都没有，于是滚动到中段时没有任何本地线索（ISSUE #1722：
- * 「每一项在右侧展示区也要有对应标题」）。
- *
- * 走 `.u-title-stage`（段级档）：它比卡片标题（`.u-title`）重、比屏级标题
- * （`.u-title-page`，每屏唯一那个 h1）轻，正是「屏级与卡片之间那一层」
- *（规范 03 §3.10）。**刻意不写 `text-lg` 这类硬写字号** —— 标题的数值只住在
- * `@theme` 里，调用点只挑档。
- *
- * 字从 `SETTINGS_SECTIONS` 取（不重抄一遍分区名），于是导航与正文标题**不可能
- * 漂移** —— 改一处两边同时改。
+ * 两处按 ISSUE #3519 改过：
+ * · **大类标题**（`模型` / `后端` / …）接进正文 —— 每组只出现一次（在组内第一个
+ *   分区上），此前正文只说分区名，长页里读不出「这几节属于一类」。
+ * · `font-title` 补上：段级标题此前走**正文字体**，17px/600 的笔画在深色下只到
+ *   `#c2c2c8`（实测），比同屏 14px 的行标题（`#ededf2`）还暗 —— 「标题比正文还暗」
+ *   的观感就是这么来的（用户现场：「这里界面的字体是白色吗，怎么感觉有些暗」）。
  */
-function SettingsSectionHeading({ section }: { section: Section }) {
+function SettingsSectionHeading({
+  section,
+  titleExtra,
+}: {
+  section: Section;
+  /** 标题行右侧的徽标等附加物（`sectionTitleExtra` 按 id 给到这一节）。 */
+  titleExtra?: ReactNode;
+}) {
   return (
-    <h2 className="u-title-stage border-border-subtle mb-3 flex items-baseline gap-2 border-b pb-2">
-      {sectionLabel(section)}
-      <span className="text-ink-muted text-xs font-normal">{sectionSummary(section)}</span>
-    </h2>
+    <>
+      {isGroupFirstSection(section) ? (
+        /* 大类：弱一档的小标签（与左侧导航树里的父行同一档），它是「这一组从哪开始」。 */
+        <p className="text-ink-fainter mb-1 text-xs font-medium">{sectionGroupLabel(section)}</p>
+      ) : null}
+      <h2 className="u-title-stage font-title border-border-subtle mb-3 flex items-baseline gap-2 border-b pb-2">
+        {sectionLabel(section)}
+        <span className="text-ink-muted text-xs font-normal">{sectionSummary(section)}</span>
+        {titleExtra === undefined ? null : (
+          <span className="ml-auto flex shrink-0 items-center gap-1.5 self-center">
+            {titleExtra}
+          </span>
+        )}
+      </h2>
+    </>
   );
 }
 
 /**
  * 分区导航（左侧的树，按 `TREE_GROUPS` 分组）。
- *
- * 分组名不是第二份分区清单 —— 它只给「哪几项挂在一起」起名字，项本身与顺序一律
- * 来自 `SETTINGS_SECTIONS`（§12.18：不许在视图里重抄一遍分区表）。漏登记一项
- * 由 `SettingsShell.test.tsx` 拦下（它按 id 集合双向比对，不按字面量）。
+ * 分组名不是第二份分区清单——项本身与顺序一律来自 `SETTINGS_SECTIONS`（§12.18）；
+ * 漏登记一项由 `SettingsShell.test.tsx` 拦下（按 id 集合双向比对）。
  */
 function SettingsSectionNav({
   section,
@@ -291,36 +258,42 @@ function SettingsSectionNav({
   section: Section;
 }) {
   return (
-    <nav aria-label="设置分区" className="custom-scrollbar w-40 shrink-0 overflow-y-auto pb-2">
+    <nav aria-label="设置分区" className="custom-scrollbar w-40 shrink-0 overflow-y-auto pr-2 pb-2">
       {TREE_GROUPS.map((group) => {
         const items = SETTINGS_SECTIONS.filter((item) => group.sections.includes(item.id));
         if (items.length === 0) {
           return null;
         }
+        /* 分组间距与行高取紧凑档（ISSUE #3495）：9 个分区 + 5 个分组名全靠
+            这一列的纵向空间，矮窗口下松一档就会把末尾几项裁出可视区。 */
         return (
-          <div className="mb-3 last:mb-0" key={group.label}>
+          <div className="mb-2 last:mb-0" key={group.label}>
             {/* 分组名是父行：弱一档、不可点 —— 它只回答「这几项属于一类」，
                 不是导航目标（点了也不会切到某个分区）。读屏不进可访问名，
                 分区自身由子行的 `aria-current` 表达。 */}
-            <p aria-hidden className="text-ink-fainter px-2 text-xs font-medium">
+            <p aria-hidden className="text-ink-muted px-2 text-sm font-medium">
               {group.label}
             </p>
             {/* 子行集合走 `TreeChildren`：缩进档 + 引导线一处给全（§16.2.4.39）。
                 `depth=1` 是「父行是分组头」这一档的标准形态。 */}
-            <TreeChildren className="flex flex-col gap-0.5" depth={1}>
+            <TreeChildren className="mt-0.5 flex flex-col gap-0.5 py-0.5" depth={1}>
               {items.map((item) => {
                 const active = section === item.id;
                 return (
                   <Button
                     aria-current={active ? "true" : undefined}
                     className={cn(
-                      "h-auto w-full justify-start rounded-lg px-3 py-1.5 text-sm font-medium",
+                      /* `h-6` 压过 `size="sm"` 的 `h-7`：这一列要的是行距紧凑的
+                          目录树，不是按钮尺寸档（矮窗口下整列才放得下，#3495）。 */
+                      "h-6 w-full justify-start rounded-lg px-3 text-sm font-medium",
                       active
                         ? "bg-primary-soft text-primary-strong hover:bg-primary-soft hover:text-primary-strong"
                         : "text-ink-muted hover:text-ink",
                     )}
                     key={item.id}
-                    onClick={() => onSelect(item.id)}
+                    onClick={() => {
+                      onSelect(item.id);
+                    }}
                     size="sm"
                     variant="ghost"
                   >

@@ -1,5 +1,5 @@
 // 故事文件的「枚举从 cva 返回值上取」判据（供 tests/storybook-cva-variant-source.test.ts
-// 与门禁 scripts/storybook-check.mjs 共用）。
+// 与门禁 scripts/devtools/storybook-check.mjs 共用）。
 //
 // 为什么要这条：`cva()` 返回的是一个 `(props?) => string` 的**函数**，`.variants`
 // 只存在于 TS 泛型里、运行时没有。写成 `Object.keys(buttonVariants.variants.variant)`
@@ -20,7 +20,9 @@ import ts from "typescript";
  */
 function walk(root, fn) {
   fn(root);
-  ts.forEachChild(root, (child) => walk(child, fn));
+  ts.forEachChild(root, (child) => {
+    walk(child, fn);
+  });
 }
 
 /**
@@ -190,7 +192,9 @@ export function literalArray(name, source) {
     if (node.initializer === undefined) {
       found = [];
     } else if (ts.isArrayLiteralExpression(node.initializer)) {
-      found = node.initializer.elements.map((el) => el.getText(source).replaceAll(/^["']|["']$/g, ""));
+      found = node.initializer.elements.map((el) =>
+        el.getText(source).replaceAll(/^["']|["']$/g, ""),
+      );
     }
   });
   return found;

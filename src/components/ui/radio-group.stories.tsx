@@ -1,17 +1,12 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 
 /**
- * `ui/radio-group` 是 base-ui 的 Radio：**单选组**（组里同时只有一项选中）。
- *
- * 与 `ui/checkbox` 的分工要说清，否则很容易写错：勾选是「多选、每项独立」，
- * 单选组是「值唯一、键盘 ↑↓ 在组内移动」。所以下面这条 story 特意给了
- * 键盘操作要看的两件事 —— 组级 `name` / 逐项 `aria-label`（或配 `Label`）。
- *
- * 注意 `RadioGroupItem` 与 `<Label>` 的关联走 **`htmlFor` + `id`**，
- * 不是把 Label 包在外面 —— 与 `Checkbox` 那套（可以包）不同。
+ * `ui/radio-group` 是 base-ui 的 Radio：单选组（值唯一、键盘 ↑↓ 在组内移动）。与 `ui/checkbox` 的分工：
+ * 勾选是多选、每项独立；单选组是值唯一。story 特意给键操作要看的两件事：组级 `name` / 逐项 `aria-label`
+ * （或配 `Label`）。`RadioGroupItem` 与 `<Label>` 的关联走 `htmlFor` + `id`，不能像 `Checkbox` 那样包住。
  */
 const meta = {
   title: "UI/RadioGroup",
@@ -41,7 +36,8 @@ export const Default: Story = {
 };
 
 /** 三态并列：未选 / 选中 / 禁用（组级禁用也一并覆盖）——
- *  `data-checked` 走 `border-primary` + 内点，禁用是 `opacity-50`。 */
+ *  `data-checked` 走 `border-primary` + 实心紫底 + 内点（底色自 #3553 起在
+ *  Indicator 上，只随选中态渲染），禁用是 `opacity-50`。 */
 export const States: Story = {
   render: () => (
     <div className="flex flex-col gap-6">

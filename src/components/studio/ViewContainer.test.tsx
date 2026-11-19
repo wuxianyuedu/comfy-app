@@ -1,12 +1,7 @@
-// 统一容器的形状判据（规范 11.2：断言用户看得见的结构，不测内部实现细节）。
-//
-// 这一刀把「外层滚动 + 居中窄栏」从八个视图里收进一处，所以用例要守住的是**收口这件事
-// 本身**，而不是某个视图长什么样：
-//   · 文档型必须恰好有一层纵向滚动条（多一层就是双层滚动，少一层内容就被裁）；
-//   · 工作区型必须**不**给页面滚动条 —— 它自己管内部滚动，套上窄栏等于砍掉工作面积；
-//   · 宽度档位只有三个名字，且调用处可以覆盖（规范 03 §3.8.1.1：宽度是布局决定）；
-//   · 铺底挂在外框、是滚动层的兄弟：塞进居中列会改变它的位置语义。
-// 这几条都是「以后有人图省事在视图里手写 div」时会静默回潮的点。
+// 统一容器的形状判据（规范 11.2：断言用户看得见的结构，不测内部实现）。这一刀把「外层滚动 + 居中
+// 窄栏」从八个视图收进一处，故用例守的是**收口本身**：文档型必须恰好一层纵向滚动条（多一层双层滚、
+// 少一层被裁）；工作区型必须**不**给页面滚动条（它自己管内部滚动）；宽度档位只有三个名字且调用处
+// 可覆盖（03 §3.8.1.1）；铺底挂外框、是滚动层兄弟（塞进居中列会改位置语义）。
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
@@ -72,14 +67,13 @@ describe("DocumentFrame（文档型）", () => {
     expect(column.className).toContain("max-w-wide");
   });
 
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["narrow", "max-w-narrow"],
-      ["medium", "max-w-medium"],
-      ["wide", "max-w-wide"],
-      ["full", "max-w-none"],
-    ] as const,
-  )("档位 %s ⇒ 只写 %s 这一个类（有数值的那三档留在令牌里）", ([width, cls]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["narrow", "max-w-narrow"],
+    ["medium", "max-w-medium"],
+    ["wide", "max-w-wide"],
+    ["full", "max-w-none"],
+  ] as const)("档位 %s ⇒ 只写 %s 这一个类（有数值的那三档留在令牌里）", ([width, cls]) => {
     const { container } = render(
       <DocumentFrame width={width}>
         <p>内容</p>
@@ -170,10 +164,12 @@ describe("DocumentFrame（文档型）", () => {
     }
     expect(backdrop.parentElement).toBe(frame);
     const scroller = frame.querySelector("[class*='overflow-y-auto']");
+    if (!scroller) {
+      throw new Error("没找到滚动层");
+    }
     // 同一父级下的前一个兄弟 —— 它不该被塞进居中列里。
     expect(
-      /* SAFETY: 类型断言已复核 */
-      backdrop.compareDocumentPosition(scroller as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+      backdrop.compareDocumentPosition(scroller) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 

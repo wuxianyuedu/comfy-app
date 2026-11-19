@@ -3,7 +3,7 @@
 - **`scripts/ci-daily-build.mjs` 里两处死声明删掉（ISSUE #2524）**：`ARTIFACT_TIMEOUT_MS`
   被 import 而从未使用、`const HERE` 定义后从未使用。
 
-  它们是怎么被看见的：#2503 新增的 `scripts/publish-desktop-bundle.mjs` import 了这份模块的
+  它们是怎么被看见的：#2503 新增的 `scripts/build/publish-desktop-bundle.mjs` import 了这份模块的
   `runContext`，于是它第一次进入 `tsc` 的 program —— 同一份 `pnpm exec tsc --noEmit`
   当场报出这两条（本机实测：把那两个新文件挪出工作区 ⇒ EXIT=0，加回 ⇒ EXIT=1，
   唯一变量就是那一条 import）。

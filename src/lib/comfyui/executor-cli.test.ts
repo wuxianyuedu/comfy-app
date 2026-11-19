@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { pruneTempWorkflowFiles } from "./executor-cli";
+import { isRecord } from "~/lib/is-record";
 import { applyRawOverrides } from "./raw-overrides";
 
 /**
@@ -45,10 +47,12 @@ function rawJsonWith(node: unknown) {
 describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回退", () => {
   it("子图 wrapper 无 control 哨兵槽时，randomize 应兜底刷新 seed 值", () => {
     const raw = rawJsonWith(JSON.parse(JSON.stringify(subgraphWrapperNode)));
-    /* SAFETY: 类型断言已复核 */
     const result = applyRawOverrides(raw, [
       { nodeId: "76", name: "control_after_generate", value: "randomize" },
-    ]) as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> };
+    ]);
+    if (!isRawNodesFixture(result)) {
+      throw new Error("applyRawOverrides 未返回预期的 nodes 结构");
+    }
 
     const node = result.nodes.find((n) => n.id === 76)!;
     const seed = node.widgets_values[6];
@@ -81,10 +85,12 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
       widgets_values: [276_260_017_540_259, "fixed", 25, 4, "res_multistep", "simple", 1],
     };
     const raw = rawJsonWith(JSON.parse(JSON.stringify(ksampler)));
-    /* SAFETY: 类型断言已复核 */
     const result = applyRawOverrides(raw, [
       { nodeId: "69", name: "control_after_generate", value: "randomize" },
-    ]) as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> };
+    ]);
+    if (!isRawNodesFixture(result)) {
+      throw new Error("applyRawOverrides 未返回预期的 nodes 结构");
+    }
 
     const node = result.nodes.find((n) => n.id === 69)!;
     // 有哨兵槽 → 写入 seedSlot+1（随机化模式），seed 值保持不变
@@ -94,10 +100,12 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
 
   it("非 randomize 且无哨兵槽时保持原值（不误改 seed）", () => {
     const raw = rawJsonWith(JSON.parse(JSON.stringify(subgraphWrapperNode)));
-    /* SAFETY: 类型断言已复核 */
     const result = applyRawOverrides(raw, [
       { nodeId: "76", name: "control_after_generate", value: "fixed" },
-    ]) as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> };
+    ]);
+    if (!isRawNodesFixture(result)) {
+      throw new Error("applyRawOverrides 未返回预期的 nodes 结构");
+    }
 
     const node = result.nodes.find((n) => n.id === 76)!;
     expect(node.widgets_values[6]).toBe(276_260_017_540_259);
@@ -114,10 +122,10 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
     const result = applyRawOverrides(raw, [
       { nodeId: "35", name: "control_after_generate", value: "randomize" },
     ]);
-    /* SAFETY: 类型断言已复核 */
-    const node = (result as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> })
-      .nodes[0]!;
-    expect(node.widgets_values).toEqual(["hello"]);
+    if (!isRawNodesFixture(result)) {
+      throw new Error("applyRawOverrides 未返回预期的 nodes 结构");
+    }
+    expect(result.nodes[0]?.widgets_values).toEqual(["hello"]);
   });
 });
 
@@ -304,21 +312,48 @@ function liblibSubgraphFixture() {
   };
 }
 
+type FixtureNode = { id: number; widgets_values: Array<unknown> };
 type FixtureResult = {
   definitions: {
     subgraphs: Array<{
-      nodes: Array<{ id: number; widgets_values: Array<unknown> }>;
+      nodes: Array<FixtureNode>;
     }>;
   };
-  nodes: Array<{ id: number; widgets_values: Array<unknown> }>;
+  nodes: Array<FixtureNode>;
 };
+
+/** 收窄成 `applyRawOverrides` 结果里的顶层节点表。 */
+function isRawNodesFixture(v: unknown): v is { nodes: Array<FixtureNode> } {
+  return isRecord(v) && isFixtureNodeList(v.nodes);
+}
+
+function isFixtureNode(v: unknown): v is FixtureNode {
+  return isRecord(v) && typeof v.id === "number" && Array.isArray(v.widgets_values);
+}
+
+function isFixtureNodeList(v: unknown): v is Array<FixtureNode> {
+  return Array.isArray(v) && v.every(isFixtureNode);
+}
+
+/** 收窄成带子图定义的完整夹具形状（顶层 nodes + definitions.subgraphs.nodes）。 */
+function isFixtureResult(v: unknown): v is FixtureResult {
+  if (!isRecord(v) || !isFixtureNodeList(v.nodes)) {
+    return false;
+  }
+  if (!isRecord(v.definitions) || !Array.isArray(v.definitions.subgraphs)) {
+    return false;
+  }
+  return v.definitions.subgraphs.every((sub) => isRecord(sub) && isFixtureNodeList(sub.nodes));
+}
 
 describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () => {
   it("提示词覆盖要写进内层 CLIPTextEncode（宿主数组随后被漂移中和清空）", () => {
-    /* SAFETY: 类型断言已复核 */
     const raw = applyRawOverrides(liblibSubgraphFixture(), [
       { nodeId: "76", name: "text", value: "3只小猫在喝山泉" },
-    ]) as unknown as FixtureResult;
+    ]);
+    if (!isFixtureResult(raw)) {
+      throw new Error("applyRawOverrides 未返回预期的夹具结构");
+    }
 
     const wrapper = raw.nodes.find((n) => n.id === 76)!;
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 67)!;
@@ -331,10 +366,12 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
   });
 
   it("seed 覆盖要写进内层 KSampler 的 seed 槽（跳过 control 哨兵）", () => {
-    /* SAFETY: 类型断言已复核 */
     const raw = applyRawOverrides(liblibSubgraphFixture(), [
       { nodeId: "76", name: "seed", value: 12_345 },
-    ]) as unknown as FixtureResult;
+    ]);
+    if (!isFixtureResult(raw)) {
+      throw new Error("applyRawOverrides 未返回预期的夹具结构");
+    }
 
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 69)!;
     // KSampler 的 widgets_values 依次是：seed、control、steps、cfg、sampler、scheduler、denoise
@@ -346,10 +383,12 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
   });
 
   it("randomize 兜底生成的随机种子同样要落到内层 KSampler", () => {
-    /* SAFETY: 类型断言已复核 */
     const raw = applyRawOverrides(liblibSubgraphFixture(), [
       { nodeId: "76", name: "control_after_generate", value: "randomize" },
-    ]) as unknown as FixtureResult;
+    ]);
+    if (!isFixtureResult(raw)) {
+      throw new Error("applyRawOverrides 未返回预期的夹具结构");
+    }
 
     const wrapper = raw.nodes.find((n) => n.id === 76)!;
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 69)!;
@@ -363,7 +402,6 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
   });
 
   it("非子图节点不受影响（顶层普通节点仍只改自己）", () => {
-    /* SAFETY: 类型断言已复核 */
     const raw = applyRawOverrides(
       {
         nodes: [
@@ -385,7 +423,10 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
         links: [],
       },
       [{ nodeId: "5", name: "text", value: "new" }],
-    ) as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> };
+    );
+    if (!isRawNodesFixture(raw)) {
+      throw new Error("applyRawOverrides 未返回预期的 nodes 结构");
+    }
     expect(raw.nodes[0]!.widgets_values[0]).toBe("new");
   });
 });
@@ -405,8 +446,112 @@ describe("configureExecutorCli 接缝", () => {
     }).not.toThrow();
     expect(() => {
       mod.configureExecutorCli({
-        resolveComfyBase: async () => "http://127.0.0.1:8188",
+        resolveComfyBase: () => Promise.resolve("http://127.0.0.1:8188"),
       });
     }).not.toThrow();
+  });
+});
+
+/* ── #4189：comfy-cli v1.24.0+ 用法升级（client-id / 部分执行）─────────────
+ * 纯函数断言，dynamic import 同上（不拖累上面的静态用例）。 */
+describe("comfy-cli run 参数构造（#4189）", () => {
+  it("client id 按任务拼接（ComfyUI 侧按它对账本次提交）", async () => {
+    const mod = await import("./executor-cli");
+    expect(mod.comfyCliClientId("task-123")).toBe("comfy-app-task-123");
+  });
+
+  it("基础参数保持既有口径，--client-id 随提交下发", async () => {
+    const mod = await import("./executor-cli");
+    const args = mod.buildComfyCliRunArgs({
+      clientId: "comfy-app-t1",
+      host: "127.0.0.1",
+      port: 8188,
+      workflowFile: "temp/comfy-cli/wf-t1.json",
+    });
+    expect(args).toEqual([
+      "-m",
+      "comfy_cli",
+      "run",
+      "--workflow",
+      "temp/comfy-cli/wf-t1.json",
+      "--json",
+      "--wait",
+      "--where",
+      "local",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "8188",
+      "--client-id",
+      "comfy-app-t1",
+      "--no-notify",
+      "--timeout",
+      "600",
+    ]);
+  });
+
+  it("outputNodeIds 逐个追加可重复的 --output-node-ids；缺省一个都不加", async () => {
+    const mod = await import("./executor-cli");
+    const base = mod.buildComfyCliRunArgs({
+      clientId: "c",
+      host: "127.0.0.1",
+      port: 8188,
+      workflowFile: "wf.json",
+    });
+    expect(base.filter((a) => a === "--output-node-ids")).toHaveLength(0);
+    const partial = mod.buildComfyCliRunArgs({
+      clientId: "c",
+      host: "127.0.0.1",
+      port: 8188,
+      workflowFile: "wf.json",
+      outputNodeIds: ["9", "12"],
+    });
+    expect(partial.slice(-4)).toEqual(["--output-node-ids", "9", "--output-node-ids", "12"]);
+  });
+
+  it("sanitizeOutputNodeIds：只收非空字符串、去重、封顶 64；空/坏形状回 undefined", async () => {
+    const mod = await import("./executor-cli");
+    expect(mod.sanitizeOutputNodeIds(undefined)).toBeUndefined();
+    expect(mod.sanitizeOutputNodeIds("9")).toBeUndefined();
+    expect(mod.sanitizeOutputNodeIds({})).toBeUndefined();
+    expect(mod.sanitizeOutputNodeIds([])).toBeUndefined();
+    expect(mod.sanitizeOutputNodeIds(["", "   "])).toBeUndefined();
+    // 非字符串项跳过；重复 id 只留一个；保留首现顺序
+    expect(mod.sanitizeOutputNodeIds(["9", 9, null, "9", "12"])).toEqual(["9", "12"]);
+    const flooded = mod.sanitizeOutputNodeIds(Array.from({ length: 100 }, (_, i) => `n${i}`));
+    expect(flooded).toHaveLength(64);
+  });
+});
+
+describe("pruneTempWorkflowFiles（#4225）", () => {
+  it("只删超龄的 wf-*.json：新文件与异名文件保留，目录不存在整轮跳过", async () => {
+    const { mkdtempSync, writeFileSync, utimesSync, existsSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const nodePath = await import("node:path");
+    const tmp = mkdtempSync(nodePath.join(tmpdir(), "comfy-prune-"));
+    try {
+      const stale = nodePath.join(tmp, "wf-stale.json");
+      const fresh = nodePath.join(tmp, "wf-fresh.json");
+      const other = nodePath.join(tmp, "other.json");
+      writeFileSync(stale, "{}");
+      writeFileSync(fresh, "{}");
+      writeFileSync(other, "{}");
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60_000);
+      utimesSync(stale, twoHoursAgo, twoHoursAgo);
+
+      await pruneTempWorkflowFiles(60 * 60_000, tmp);
+
+      expect(existsSync(stale)).toBe(false);
+      expect(existsSync(fresh)).toBe(true);
+      expect(existsSync(other)).toBe(true);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("目录不存在：整轮静默跳过（不抛）", async () => {
+    await expect(
+      pruneTempWorkflowFiles(60 * 60_000, "G:/comfy-definitely-not-exists-4225"),
+    ).resolves.toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
 // 故事「面」的判据（供 tests/storybook-story-surface.test.ts 与门禁
-// `scripts/storybook-check.mjs` 共用）。
+// `scripts/devtools/storybook-check.mjs` 共用）。
 //
 // ## 它补的是哪一格
 //
@@ -94,7 +94,9 @@ import ts from "typescript";
  */
 function walk(root, fn) {
   fn(root);
-  ts.forEachChild(root, (child) => walk(child, fn));
+  ts.forEachChild(root, (child) => {
+    walk(child, fn);
+  });
 }
 
 /**
@@ -591,6 +593,9 @@ function isReturnTypePosition(node) {
   return false;
 }
 
+/** `XProps` 形态的接口名（`Props` 结尾、且不是 `ComponentProps` 那种工具类型）。 */
+const TS_PROPS_NAME = /^[A-Z][A-Za-z0-9]*Props$/;
+
 /**
  * 组件文件里**被引用到的** props 接口名（`XProps` / `ComponentProps<typeof C>`）。
  *
@@ -688,9 +693,6 @@ function siblingTypeSources(componentFile) {
   }
   return out;
 }
-
-/** `XProps` 形态的接口名（`Props` 结尾、且不是 `ComponentProps` 那种工具类型）。 */
-const TS_PROPS_NAME = /^[A-Z][A-Za-z0-9]*Props$/;
 
 /** 类型里含 `undefined`（`string | undefined` / `undefined`）即视为可缺省。
  *  @param {ts.TypeNode} type @returns {boolean} */

@@ -79,7 +79,7 @@ export function resolvePython({
  *
  * 为什么非要有这一半：`resolvePython()` 答 `null` 时，调用方手上只有「试过哪些名字」
  * 这一份清单，说不出**每一个**是因为什么 —— 而「机器上没有 Python」与「有一个同名
- * 的东西顶掉了它」的下一动作完全不同（前者去装，后者改探测）。`scripts/python-probe.mjs`
+ * 的东西顶掉了它」的下一动作完全不同（前者去装，后者改探测）。`scripts/lib/python-probe.mjs`
  * 打印的就是这一格，它的意义正是「两边读数并列，人一眼分得出是哪一边错」。
  *
  * `resolvePython()` 只 `return findPython(...).hit`：判据只有这一份（§12.12），
@@ -114,7 +114,8 @@ export function findPython({
        * 怎么起它**，管不了「选不选得中」：探针参数错了，`py` 在上一行就被跳过了。 */
       probeArgs: pythonProbeArgs(name, ["--version"]),
     });
-    if (found) {
+    /* whichCommand 的命中是拼出来的绝对路径，空串不可能出现 */
+    if (found !== null) {
       return {
         hit: { command: name, path: found, args: pythonProbeArgs(name), tried },
         missed,

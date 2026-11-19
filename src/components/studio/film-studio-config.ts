@@ -92,11 +92,12 @@ export function productionShotsToShotList(shots: Array<unknown>): Array<ShotList
       `镜头 ${list.length + 1}`;
     const duration =
       typeof raw.duration === "number" ? `${fixed(raw.duration, 1)}s` : EMPTY_PLACEHOLDER;
+    const hasImage = Boolean(raw.imageUrl);
     list.push({
       id: raw.id,
       name,
       duration,
-      mode: raw.imageUrl ? "img2video" : "txt2img",
+      mode: hasImage ? "img2video" : "txt2img",
       status: shotStatusToFilmStatus(raw.status),
       thumbnailUrl: typeof raw.imageUrl === "string" ? raw.imageUrl : undefined,
     });
@@ -129,10 +130,8 @@ export const DEFAULT_SCRIPT =
 export const FILM_POLL_MS = 3000;
 
 /**
- * 时长输入的显示格式：一位小数并补齐到 5 位（"3" → "003.0"）。
- *
- * 这个格式看着怪（样例数据是 "00:03.2" 而这里产出 "003.0"），是与原视图**逐字一致**
- * 的行为：本轮战役只搬不改（§17.6），视觉/文案差异另开 PR 处理。
+ * 时长输入的显示格式：一位小数补齐到 5 位（"3" → "003.0"）。看着怪（样例是 "00:03.2"），
+ * 但与本轮搬移前的原视图**逐字一致**：本轮只搬不改（§17.6），视觉/文案差异另开 PR。
  */
 export function formatShotDuration(seconds: number): string {
   /* 「按一位小数写数」走 `~/lib/number-format`（规范 16 §16.2.4.54）。 */

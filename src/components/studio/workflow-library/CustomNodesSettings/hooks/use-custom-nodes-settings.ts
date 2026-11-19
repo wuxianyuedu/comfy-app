@@ -21,6 +21,7 @@ import { useBusyAction } from "~/components/ui/use-busy-action";
 /* 三个解析入口（全部 / 单条子包 / 单个父目录）：见 use-parse-actions.ts 头注。 */
 import { createParseActions } from "./use-parse-actions";
 import { errorText } from "~/lib/error-message";
+import { isPlainRecord } from "~/lib/is-record";
 import { offsetWithin } from "~/lib/dom-rect";
 import { tailWindowAppend } from "~/lib/page-window";
 import { onNextFrame } from "~/lib/next-frame";
@@ -34,6 +35,7 @@ import type {
   SettingsStreamEvent,
   SummaryPkg,
 } from "../types";
+import { fetchWithTimeout } from "~/lib/network/fetch-with-timeout";
 
 /** 解析控制台日志的内存上限（规范 §2.1）：流式解析可能一次性吐出成百上千行，
  * 无上限会泄漏内存并让面板重渲染变贵。 */
@@ -98,19 +100,106 @@ export type CustomNodesSettingsController = {
 };
 
 /**
- * ndjson 进度事件流的消费器（从 `fetchSettings` 拆出，§12.13）。
- *
- * 逐行解析设置流的 ndjson 事件（每行由 JSON.parse 自身校验，坏行跳过）：
- * discover_start / progress / discover_done 逐拍写进度（经 sinks），
- * summary / error 聚合。聚合结果（paths / summary / lastReport / byPath /
- * discoveredByParent）**原样返回**，落库（setState）由调用方统一处理——
- * 消费器本身不持有任何 React 状态。
+ * ndjson 进度事件流的消费器（§12.13）：逐行 JSON.parse（坏行跳过），经 sinks
+ * 写进度，聚合结果原样返回；不持有 React 状态，落库统一由调用方处理。
  */
+const SETTINGS_EVENT_PHASES: ReadonlyArray<string> = ["queue", "scan", "hash"];
+
+function isStringArray(value: unknown): value is Array<string> {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+/** `JSON.parse` 产出 `unknown`：只校验消费方读取的顶层字段，畸形行由调用方跳过。 */
+function isSettingsStreamEvent(value: unknown): value is SettingsStreamEvent {
+  if (!isPlainRecord(value) || typeof value.type !== "string") {
+    return false;
+  }
+  if (value.type === "discover_start") {
+    return value.parents === undefined || isStringArray(value.parents);
+  }
+  if (value.type === "progress") {
+    return (
+      (value.discovered === undefined || typeof value.discovered === "number") &&
+      (value.done === undefined || typeof value.done === "number") &&
+      (value.msg === undefined || typeof value.msg === "string") &&
+      (value.parent === undefined || typeof value.parent === "string") &&
+      (value.phase === undefined ||
+        (typeof value.phase === "string" && SETTINGS_EVENT_PHASES.includes(value.phase))) &&
+      (value.total === undefined || typeof value.total === "number")
+    );
+  }
+  if (value.type === "discover_done") {
+    return (
+      (value.packages === undefined || Array.isArray(value.packages)) &&
+      (value.parent === undefined || typeof value.parent === "string")
+    );
+  }
+  if (value.type === "summary") {
+    return (
+      (value.byPath === undefined || isPlainRecord(value.byPath)) &&
+      (value.lastReport === undefined ||
+        value.lastReport === null ||
+        isPlainRecord(value.lastReport)) &&
+      (value.summary === undefined || value.summary === null || isPlainRecord(value.summary))
+    );
+  }
+  if (value.type === "error") {
+    return value.message === undefined || typeof value.message === "string";
+  }
+  return value.type === "done";
+}
+
+/** 解析日志流的一行：同上，只校验 `log` / `done` 消费的字段。 */
+function isParseStreamEvent(value: unknown): value is ParseStreamEvent {
+  if (!isPlainRecord(value) || typeof value.type !== "string") {
+    return false;
+  }
+  if (value.type === "log") {
+    return (
+      (value.level === undefined || typeof value.level === "string") &&
+      (value.msg === undefined || typeof value.msg === "string")
+    );
+  }
+  if (value.type === "done") {
+    return (
+      (value.ok === undefined || typeof value.ok === "boolean") &&
+      (value.report === undefined || value.report === null || isPlainRecord(value.report))
+    );
+  }
+  return false;
+}
+
+type SettingsBlob = SettingsResp & { error?: { message?: string } | string };
+
+/** 单个 JSON blob（缓存预热路径）：settings 或 error 至少有一个可读。 */
+function isSettingsResp(value: unknown): value is SettingsBlob {
+  if (!isPlainRecord(value)) {
+    return false;
+  }
+  const settings = value.settings;
+  const error = value.error;
+  const settingsValid =
+    isPlainRecord(settings) && (settings.paths === undefined || isStringArray(settings.paths));
+  const errorValid =
+    typeof error === "string" ||
+    (isPlainRecord(error) && (error.message === undefined || typeof error.message === "string"));
+  if (!settingsValid && !errorValid) {
+    return false;
+  }
+  return (
+    (value.byPath === undefined || isPlainRecord(value.byPath)) &&
+    (value.discoveredByParent === undefined || isPlainRecord(value.discoveredByParent)) &&
+    (value.lastReport === undefined ||
+      value.lastReport === null ||
+      isPlainRecord(value.lastReport)) &&
+    (value.summary === undefined || value.summary === null || isPlainRecord(value.summary))
+  );
+}
+
 /**
- * 缓存预热路径的 blob 解析（从 `fetchSettings` 拆出，§12.13）：校验 settings
- * 存在——401 / 500 等错误响应没有 settings，原代码直接炸
- * `Cannot read properties of undefined (reading 'paths')`，真实原因被掩盖；
- * 这里读出服务端给的可读信息——返回落库所需的五元组。
+ * 缓存预热路径的 blob 解析（§12.13）：401/500 响应没有 settings，直接读会炸
+ * `Cannot read properties of undefined (reading 'paths')` 并掩盖真实原因；
+ * 这里校验存在并返回落库所需的五元组。
  */
 function parseSettingsBlob(
   data: SettingsResp & { error?: { message?: string } | string },
@@ -122,18 +211,21 @@ function parseSettingsBlob(
   paths: Array<string>;
   summary: SettingsResp["summary"];
 } {
-  if (!data.settings) {
+  const settingsPresent = Boolean(data.settings);
+  if (!settingsPresent) {
     const err = data.error;
     const detail = typeof err === "string" ? err : (err?.message ?? `HTTP ${status}`);
     throw new Error(detail || `读取配置失败（HTTP ${status}）`);
   }
-  const paths = data.settings.paths || [];
+  /* `??` 而非 `||`：对象 / 数组在声明域内恒真，回退只在运行期 null/undefined
+   * （接口缺字段）时触发 —— 与原 `||` 在该域内逐值等价。 */
+  const paths = data.settings.paths ?? [];
   return {
     paths,
     summary: data.summary,
     lastReport: data.lastReport,
-    discoveredByParent: data.discoveredByParent || {},
-    byPath: data.byPath || {},
+    discoveredByParent: data.discoveredByParent ?? {},
+    byPath: data.byPath ?? {},
   };
 }
 async function consumeSettingsStream(
@@ -162,6 +254,7 @@ async function consumeSettingsStream(
   const paths: Array<string> = [];
 
   while (true) {
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const { done, value } = await reader.read();
     if (done) {
       break;
@@ -174,11 +267,14 @@ async function consumeSettingsStream(
       if (!line.trim()) {
         continue;
       }
-      // 设置流的 ndjson 事件 —— 仅本对话框消费的字段；每行由 JSON.parse 自身校验。
+      // 设置流的 ndjson 事件 —— 仅本对话框消费的字段；坏行直接跳过。
       let ev: SettingsStreamEvent;
       try {
-        /* SAFETY: 类型断言已复核 */
-        ev = JSON.parse(line) as SettingsStreamEvent;
+        const payload: unknown = JSON.parse(line);
+        if (!isSettingsStreamEvent(payload)) {
+          continue;
+        }
+        ev = payload;
       } catch {
         continue;
       }
@@ -205,7 +301,7 @@ async function consumeSettingsStream(
           if (ev.phase) {
             next.phase = ev.phase;
           }
-          if (ev.msg) {
+          if (ev.msg !== undefined && ev.msg !== "") {
             next.msg = ev.msg;
           }
           if (ev.discovered !== undefined) {
@@ -242,6 +338,19 @@ async function consumeSettingsStream(
   }
 
   return { paths, summary, lastReport, byPath, discoveredByParent };
+}
+
+/** 延迟一拍 fire-and-forget 地拉一次数据，返回清定时器的 cleanup（三处 useEffect 共用）。
+ *  cleanup 时同时 abort 在途请求（ISSUE #4288）：卸载/依赖变化后，响应不再写回界面。 */
+function scheduleDeferredRefresh(run: (signal: AbortSignal) => Promise<unknown>): () => void {
+  const abort = new AbortController();
+  const timer = setTimeout(() => {
+    void run(abort.signal);
+  }, 0);
+  return () => {
+    clearTimeout(timer);
+    abort.abort();
+  };
 }
 
 export function useCustomNodesSettings(): CustomNodesSettingsController {
@@ -285,12 +394,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    * 落到已拆除的环境上（test 里表现为 React 读 window 抛
    * `ReferenceError: window is not defined`，`pnpm test` 因此随机非零退出，
    * 而用例层面全绿）。ISSUE #489。 */
-  const aliveRef = useRef(true);
   const progressHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    aliveRef.current = true;
     return () => {
-      aliveRef.current = false;
       if (progressHideTimerRef.current) {
         clearTimeout(progressHideTimerRef.current);
       }
@@ -363,65 +469,70 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
   /** 从服务端拉取设置并写入本地 state。首个 await 之前不做同步 setState，因此可直接
    *  从 effect 调用（React 19 规则：effect 内不 set-state）。想要重置 spinner 的调用方
-   *  用 `reloadFromServer`。 */
-  const fetchSettings = useCallback(async () => {
-    try {
-      const res = await fetch("/api/custom-nodes");
-      const ct = res.headers.get("content-type") ?? "";
-      const isStream = ct.includes("ndjson");
+   *  用 `reloadFromServer`。`signal`：卸载判活（ISSUE #4288）——调用方（deferred
+   *  refresh 的 effect）在卸载时 abort，await 之后的写入据此不再落进已卸载的界面。
+   *  用 signal 而不是读 ref：本函数经 `runParse` 在 render 期被传给
+   *  `createParseActions`，react(refs) 禁止这条链上出现 ref 读取。 */
+  const fetchSettings = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        const res = await fetchWithTimeout("/api/custom-nodes");
+        const ct = res.headers.get("content-type") ?? "";
+        const isStream = ct.includes("ndjson");
 
-      if (!isStream) {
-        // 缓存预热路径：服务端返回单个 JSON blob。
-        /* SAFETY: 类型断言已复核 */
-        const data = (await res.json()) as SettingsResp & {
-          error?: { message?: string } | string;
-        };
-        const parsed = parseSettingsBlob(data, res.status);
-        setSavedPaths(parsed.paths);
-        setSummary(parsed.summary);
-        setReport(parsed.lastReport);
-        setDiscoveredByParent(parsed.discoveredByParent);
-        setByPath(parsed.byPath);
-        seedParentDefaults(parsed.paths);
-        return;
-      }
-
-      // 冷路径：读取 ndjson 进度事件流（消费器拆到模块级，见其说明）。
-      const acc = await consumeSettingsStream(res, { setProgress, setSaveErr });
-      setSavedPaths(acc.paths);
-      setSummary(acc.summary);
-      setReport(acc.lastReport);
-      setDiscoveredByParent(acc.discoveredByParent);
-      setByPath(acc.byPath);
-      seedParentDefaults(acc.paths);
-    } catch (error) {
-      setSaveErr(errorText(error, "读取配置失败"));
-    } finally {
-      /* 卸载后不再碰任何 state。原写法在 finally 里 `return` —— 那会吞掉
-       * try/catch 抛出的任何异常（no-unsafe-finally 拦的正是这个形态）；
-       * 定时器回调自带 aliveRef 检查，组件卸载后触发也只是空转。 */
-      if (aliveRef.current) {
-        setLoading(false);
-        // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
-        if (progressHideTimerRef.current) {
-          clearTimeout(progressHideTimerRef.current);
-        }
-        progressHideTimerRef.current = setTimeout(() => {
-          if (!aliveRef.current) {
-            return;
+        if (!isStream) {
+          // 缓存预热路径：服务端返回单个 JSON blob。
+          const data: unknown = await res.json();
+          if (!isSettingsResp(data)) {
+            throw new Error(`读取配置失败（HTTP ${res.status}）`);
           }
-          setProgress({
-            phase: "",
-            done: 0,
-            total: 0,
-            discovered: 0,
-            parent: "",
-            msg: "",
-          });
-        }, 800);
+          const parsed = parseSettingsBlob(data, res.status);
+          if (signal?.aborted) return;
+          setSavedPaths(parsed.paths);
+          setSummary(parsed.summary);
+          setReport(parsed.lastReport);
+          setDiscoveredByParent(parsed.discoveredByParent);
+          setByPath(parsed.byPath);
+          seedParentDefaults(parsed.paths);
+          return;
+        }
+
+        // 冷路径：读取 ndjson 进度事件流（消费器拆到模块级，见其说明）。
+        const acc = await consumeSettingsStream(res, { setProgress, setSaveErr });
+        if (signal?.aborted) return;
+        setSavedPaths(acc.paths);
+        setSummary(acc.summary);
+        setReport(acc.lastReport);
+        setDiscoveredByParent(acc.discoveredByParent);
+        setByPath(acc.byPath);
+        seedParentDefaults(acc.paths);
+      } catch (error) {
+        if (!signal?.aborted) setSaveErr(errorText(error, "读取配置失败"));
+      } finally {
+        /* 卸载后不再碰任何 state。原写法在 finally 里 `return` —— 那会吞掉
+         * try/catch 抛出的任何异常（no-unsafe-finally 拦的正是这个形态）。 */
+        if (!signal?.aborted) {
+          setLoading(false);
+          // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
+          if (progressHideTimerRef.current) {
+            clearTimeout(progressHideTimerRef.current);
+          }
+          progressHideTimerRef.current = setTimeout(() => {
+            if (signal?.aborted) return;
+            setProgress({
+              phase: "",
+              done: 0,
+              total: 0,
+              discovered: 0,
+              parent: "",
+              msg: "",
+            });
+          }, 800);
+        }
       }
-    }
-  }, [seedParentDefaults]);
+    },
+    [seedParentDefaults],
+  );
 
   /** 重置 spinner/状态再拉取。仅从事件处理器或异步回调调用（绝不在 effect 内同步调用）。 */
   const reloadFromServer = useCallback(() => {
@@ -442,9 +553,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     if (!open) {
       return;
     }
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    const timer = setTimeout(() => void fetchSettings(), 0);
-    return () => clearTimeout(timer);
+    return scheduleDeferredRefresh(fetchSettings);
   }, [open, fetchSettings]);
 
   // 打开时 + 每次解析后（report state 在解析完成事件落地时更新）拉取原始 manifest。
@@ -452,24 +561,20 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   const fetchManifest = useCallback(async () => {
     const manifest = await getCustomNodesManifest();
     if (manifest) {
-      setManifestByNode(manifest.nodes || {});
+      setManifestByNode(manifest.nodes ?? {});
     }
   }, []);
   useEffect(() => {
     if (!open) {
       return;
     }
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    const timer = setTimeout(() => void fetchManifest(), 0);
-    return () => clearTimeout(timer);
+    return scheduleDeferredRefresh(fetchManifest);
   }, [open, fetchManifest]);
   useEffect(() => {
     if (!report) {
       return;
     }
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    const timer = setTimeout(() => void fetchManifest(), 0);
-    return () => clearTimeout(timer);
+    return scheduleDeferredRefresh(fetchManifest);
   }, [report, fetchManifest]);
 
   async function readNdjson(
@@ -485,6 +590,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     const decoder = new TextDecoder();
     let buf = "";
     while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const { done, value } = await reader.read();
       if (done) {
         break;
@@ -498,8 +604,11 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
           continue;
         }
         try {
-          /* SAFETY: 类型断言已复核 */
-          const obj = JSON.parse(line) as ParseStreamEvent;
+          const payload: unknown = JSON.parse(line);
+          if (!isParseStreamEvent(payload)) {
+            continue;
+          }
+          const obj = payload;
           if (obj.type === "log") {
             setLogs((prev) =>
               tailWindowAppend(
@@ -509,7 +618,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
               ),
             );
           } else if (obj.type === "done") {
-            void onDone(obj.report ?? null, !!obj.ok);
+            void onDone(obj.report ?? null, obj.ok === true);
           }
         } catch {
           // 忽略非 JSON 行
@@ -531,7 +640,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     setError_(null);
     setLogs([]);
     try {
-      const res = await fetch("/api/custom-nodes", {
+      const res = await fetchWithTimeout("/api/custom-nodes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(packages ? { action: "parse", packages } : { action: "parse" }),

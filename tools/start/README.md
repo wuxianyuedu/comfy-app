@@ -11,13 +11,14 @@ Windows 双击入口，逻辑在 [`../../scripts/`](../../scripts/) 同名或对
 | `start-tauri.ps1` | 双击即启动桌面壳 `src-tauri/target/release/app.exe`（秒出窗口） | 编排由壳自己负责（`src-tauri/src/shell_launch.rs`） |
 | `start-tauri-dev.ps1` | 开发 Rust 壳本身（Rust 热重载，编译慢） | `scripts/dev-launcher.ps1 -Tauri` |
 | `start-desktop.ps1` | 拿到「即开即用桌面包」的普通用户：自检 + 启动 | 自检逻辑内联在入口里 |
-| `run-local.ps1` | 非开发人员一次性初始化（自检 node/pnpm、生成 `.env`、补依赖） | `scripts/prepare-local-run.ps1` |
-| `verify-quality.ps1` | 一键质量门禁：typecheck / eslint（零警告）/ vitest | `scripts/quality-gate.ps1` |
-| `run-tests.ps1` | **只**跑测试，可指定文件、可 `-Full` | `scripts/run-tests.ps1` |
-| `sync-lint.ps1` | 日常：同步依赖 + `pnpm lint` | `scripts/sync-lint.ps1` |
-| `register-comfyapp-protocol.ps1` | 一次性：注册 `comfyapp://` 协议（HKCU，免管理员） | `scripts/install-comfyapp-helper.ps1` |
-| `storybook.ps1` | 起组件工作台 Storybook（http://127.0.0.1:6006），看 ui/ 组件形态与 a11y | `scripts/storybook.mjs` |
-| `tune-dev-drive.ps1` | 探测开发盘（ReFS / Dev Drive）红利：实测硬链接 / 块克隆 / 稀疏文件，给动作矩阵 | `scripts/dev-drive-tune.mjs`（指南 `docs/guides/dev-drive-refs.md`） |
+| `run-local.ps1` | 非开发人员一次性初始化（自检 node/pnpm、生成 `.env`、补依赖） | `scripts/devtools/prepare-local-run.ps1` |
+| `verify-quality.ps1` | 一键质量门禁：typecheck / eslint（零警告）/ vitest | `scripts/gates/quality-gate.ps1` |
+| `run-tests.ps1` | **只**跑测试，可指定文件、可 `-Full` | `scripts/affected-tests/run-tests.ps1` |
+| `sync-lint.ps1` | 日常：同步依赖 + `pnpm lint` | `scripts/devtools/sync-lint.ps1` |
+| `register-comfyapp-protocol.ps1` | 一次性：注册 `comfyapp://` 协议（HKCU，免管理员） | `scripts/devtools/install-comfyapp-helper.ps1` |
+| `storybook.ps1` | 起组件工作台 Storybook（http://127.0.0.1:6006），看 ui/ 组件形态与 a11y | `scripts/devtools/storybook.mjs` |
+| `tune-dev-drive.ps1` | 探测开发盘（ReFS / Dev Drive）红利：实测硬链接 / 块克隆 / 稀疏文件，给动作矩阵 | `scripts/dev-drive/dev-drive-tune.mjs`（指南 `docs/guides/dev-drive-refs.md`） |
+| `fetch-daily-shell.ps1` | 从 CNB 站内每日成品获取纯壳：下载 `ComfyAPP-shell.exe` → `src-tauri/target/release/app.exe`，展示同发的构建信息（构建时间 / commit / run / sha256 对账，#4056），缺快捷方式时补根目录 `Comfy APP.lnk` | `scripts/devtools/fetch-daily-shell.mjs` |
 
 ## 非 Windows 平台（同一件事的跨平台入口）
 
@@ -35,3 +36,4 @@ Windows 双击入口，逻辑在 [`../../scripts/`](../../scripts/) 同名或对
 | 初始化 `.env` | `run-local.ps1` | `pnpm env:init` |
 | 起组件工作台 | `storybook.ps1` | `pnpm storybook` |
 | 探测开发盘红利并调优 | `tune-dev-drive.ps1` | `pnpm dev:drive` |
+| 获取每日纯壳并补齐快捷方式 | `fetch-daily-shell.ps1` | `pnpm fetch:daily-shell` |

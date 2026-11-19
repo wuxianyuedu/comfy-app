@@ -1,27 +1,8 @@
 // @vitest-environment jsdom
 /**
- * comfy state 那条长轮询通道的**信封契约**（台账 E4 的第三格）：生产侧记下的那一笔，
- * 与消费侧交给订阅者的那一笔，必须是同一份形状。
- *
- * 这一族原先两边各测各的：客户端那份用例（`src/lib/comfy/comfy-state-client.test.ts`）
- * 回答 fetch 的是它**自己手写的 `change()` 夹具**，而路由那份（`src/app/api/comfy/state/route.test.ts`）
- * 用 `toMatchObject({seq, kind})` 只点它关心的两列 —— 两份都不引用对方的产物。
- * 于是任何一侧改字段名，另一侧只会**静默丢帧**：模块内那份手写收窄（`parseChange`）认不出新形状就回
- * `null`，`pollOnce` 把 `null` 当成「这一轮没有变化」，界面表现是「状态再也不即时更新」
- * （而这条通道存在的理由就是替掉那一拍 5s 轮询），tsc / eslint / 两边各自的用例 /
- * 覆盖率门槛全绿。`toMatchObject` 那一半尤其挡不住：它**只判点到的列**，少一列不多一列都不红。
- * 客户端那一半的收窄是手写的（逐字段 `typeof` 加一处 `as`），运行时没有东西知道它读哪几列
- * —— 与 E4 前两格（`task.list` 的 `videoPath`、`task.detail` 的 `images`）同形。
- *
- * 所以这里不新造任何夹具帧：把**真路由**的回答接进**真客户端**，然后判两件事，缺一不可 ——
- *   ① 交出去的那一笔与记下的那一笔 `toEqual`（这条同时挡「少一列」与「多要求一列」两个方向，
- *      比逐列断言强：逐列断言正是 `toMatchObject` 漏掉那一维的原因）；
- *   ② 反向证明：线上把 `detail` 改名，消费侧必须**一帧都不交**，
- *      而不是交出一个 `detail` 为 `undefined` 的半成品 —— 少了这一条，
- *      ①可以被一份「两边都不读 detail」的实现无痛满足。
- *
- * mock 边界只有 `fetch` 一处（客户端写的相对 URL 由这里交给真 handler）；
- * 路由、`state-watch` 的纪元与等待、客户端的 `seq` 去重与 `runId` 全部真实跑。
+ * comfy state 长轮询通道的**信封契约**（台账 E4 第三格）：生产侧记下的那笔与消费侧交给订阅者的那笔必须同一形状。原先两边各测各的
+ * （客户端用手写 `change()` 夹具，路由用 `toMatchObject({seq, kind})` 只点两列），任一字段改名另一侧只会**静默丢帧**（`parseChange` 认不出→`null`→`pollOnce` 当没变化，界面「状态不再即时更新」），tsc/eslint/两侧用例/覆盖率全绿。
+ * 做法：真路由接真客户端，① 交出的与记下的 `toEqual`（挡少一列与多要求一列）；② 线上把 `detail` 改名时消费侧**一帧都不交**（否则①可被「两边都不读 detail」满足）。mock 边界只有 `fetch`。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,6 +18,11 @@ import { noteComfyStateChange, resetComfyStateWatchForTest } from "~/lib/comfyui
  *  那一句会直接抛（然后被客户端的 catch 吞成「这一轮没有变化」，表现是永远收不到帧）。 */
 const BASE = "http://127.0.0.1:3000";
 
+/** 信封必须是对象：`res.json()` 的 `any` 用守卫收窄，不走 `as` 断言（B5 清账）。 */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 /** 把真路由的回答喂给客户端；`mutate` 用来造「线上漂了」那一格。 */
 function wireClientToRealRoute(
   mutate?: (frame: Record<string, unknown>) => Record<string, unknown>,
@@ -45,15 +31,17 @@ function wireClientToRealRoute(
     "fetch",
     vi.fn(async (url: string | URL) => {
       const href = new URL(String(url), BASE).href;
-      /* 只给 `url` 一个字段就够：路由读的就是它。
-       * 不构造 `Request` 是为了不让这一格依赖 jsdom 那侧有没有 fetch 家族的全局。 */
-      /* SAFETY: 类型断言已复核 */
-      const res = await GET({ url: href } as unknown as Request);
+      /* 路由只读 `request.url`：给一个真 Request（jsdom 环境下 vitest 保留 Node 的
+       * fetch 家族全局；这一格不再依赖「手写假对象 + 断言」）。 */
+      const res = await GET(new Request(href));
       if (res.status !== 200) {
         return res;
       }
-      /* SAFETY: 类型断言已复核 */
-      const frame = (await res.clone().json()) as Record<string, unknown>;
+      const payload: unknown = await res.clone().json();
+      if (!isRecord(payload)) {
+        throw new Error("comfy state 信封不是对象");
+      }
+      const frame = payload;
       return new Response(JSON.stringify(mutate ? mutate(frame) : frame), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -65,7 +53,9 @@ function wireClientToRealRoute(
 /** 让在途那一拍跑完（长轮询链是「请求完成 → 立刻再发」）。 */
 async function settle(times = 2): Promise<void> {
   for (let i = 0; i < times; i += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await Promise.resolve();
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }
@@ -73,6 +63,7 @@ async function settle(times = 2): Promise<void> {
 /** 等到条件成立（最多若干轮），不等就按失败处理 —— 不靠「赌一拍够不够」。 */
 async function settleUntil(condition: () => boolean, rounds = 50): Promise<boolean> {
   for (let i = 0; i < rounds; i += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await settle(1);
     if (condition()) {
       return true;

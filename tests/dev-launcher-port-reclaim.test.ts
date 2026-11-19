@@ -1,27 +1,14 @@
 /**
- * 端口残留回收判据的回归护栏（ISSUE #621）。
- *
- * 现场：用户在别的项目里用 `COMFYAPP_PORT` 固定过端口，本检出的 `.env` 里也写着
- * 同一个数字；上一次启动的实例（dev server）退出得不干净，端口仍被它听着。
- * 兜底回收路径**一条也没跑**：
- *   - 会话锚点（`run/launcher-session.json`）在正常收尾时已被清掉；
- *   - `pidBelongsToRoot` 按「命令行里有没有出现过检出根路径」判定，而
- *     `pnpm dev -p N`（缺省端口）与 `pnpm exec next dev --turbo` 两条命令行里
- *     **都没有检出根路径** → 判成「别的检出 / 别的程序」，按 §1.4 只提示不回收。
- * 结果是死死卡在端口被占，而那个进程其实就是本检出自己的。
- *
- * 判据现在分两层（唯一出处 `scripts/launcher-core/orchestrator.mjs`）：
- *   1. `usesExplicitPort()` —— 编排器有没有把端口**显式传给** dev server。
- *      `pnpm dev` 一律是 `pnpm dev -p <port>`（Next 不认 `COMFYAPP_PORT`），
- *      因此显式口上的本检出应用服务只可能是残留；
- *   2. `portOwnershipVerdict()` —— 在「显式端口」这个前提下，用**应用服务自证**
- *      （`scripts/dev.mjs` / `scripts/start.mjs` / `next dev|start` +
- *      检出根路径）把「本检出自己的服务」从「别的程序恰好从本检出目录启动」
- *      里分出来。缺任一前提就不动它 —— 宁可放过一次残留，也不猜着杀别人的进程。
+ * 端口残留回收回归护栏（ISSUE #621）：上次 dev server 退出不干净仍听着 `COMFYAPP_PORT`，而 `pidBelongsToRoot`
+ * 靠命令行里的检出根路径判定，`pnpm dev -p N` / `pnpm exec next dev --turbo` 都不含它 → 判成「别的程序」只提示不回收。
+ * 两层判据（`scripts/launcher-core/orchestrator.mjs`）：`usesExplicitPort()` 显式端口前提 + `portOwnershipVerdict()` 应用服务自证；缺前提不动，宁可放过残留不误杀。
  */
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import { isRecord, isUnknownArray } from "~/lib/is-record";
+import { cmdlineBelongsToRoot, waitForPortsFree } from "../scripts/launcher-core/port-reap.mjs";
 
 const LAUNCHER = JSON.stringify(
   pathToFileURL(join(process.cwd(), "scripts", "dev-launcher.mjs")).href,
@@ -66,11 +53,20 @@ function verdictFor(
     });
     process.stdout.write(JSON.stringify(result));
   `;
-  /* SAFETY: 类型断言已复核 */
-  return decidePort(script) as {
-    foreignPids: Array<number>;
-    ownership: string;
-    ownPids: Array<number>;
+  /* 读数按 unknown 收窄（B5 清账）：三件（ownership / ownPids / foreignPids）逐一对型。 */
+  const parsed: unknown = decidePort(script);
+  if (
+    !isRecord(parsed) ||
+    typeof parsed.ownership !== "string" ||
+    !isUnknownArray(parsed.ownPids) ||
+    !isUnknownArray(parsed.foreignPids)
+  ) {
+    throw new Error(`decidePort 的读数形状不对：${JSON.stringify(parsed)}`);
+  }
+  return {
+    foreignPids: parsed.foreignPids.filter((p): p is number => typeof p === "number"),
+    ownership: parsed.ownership,
+    ownPids: parsed.ownPids.filter((p): p is number => typeof p === "number"),
   };
 }
 
@@ -80,8 +76,8 @@ function isApp(cmdline: string): boolean {
     import { isAppDevServerCmdline } from ${LAUNCHER};
     process.stdout.write(JSON.stringify(isAppDevServerCmdline(${JSON.stringify(cmdline)}, ${JSON.stringify(ROOT)})));
   `;
-  /* SAFETY: 类型断言已复核 */
-  return decidePort(script) as boolean;
+  const parsed: unknown = decidePort(script);
+  return typeof parsed === "boolean" && parsed;
 }
 
 describe("端口残留回收：显式端口 + 应用服务自证（ISSUE #621）", () => {
@@ -176,5 +172,86 @@ describe("端口残留回收：显式端口 + 应用服务自证（ISSUE #621）
       ownership: "own",
       ownPids: [4401],
     });
+  });
+});
+
+describe("waitForPortsFree —— 回收与清缓存/起服务之间的有界同步点（#4333）", () => {
+  it("端口族全部空闲 → free=true，且只探一轮", async () => {
+    const probe = vi.fn(() => Promise.resolve([]));
+    const result = await waitForPortsFree(probe, [3779, 3780], { budgetMs: 300 });
+    expect(result.free).toBe(true);
+    expect(probe).toHaveBeenCalledTimes(2);
+  });
+
+  it("预算内一直被占 → free=false，并点名被占端口", async () => {
+    const probe = vi.fn(() => Promise.resolve([1234]));
+    const logs: Array<string> = [];
+    const result = await waitForPortsFree(probe, [3779], {
+      budgetMs: 300,
+      intervalMs: 50,
+      log: (m) => logs.push(m),
+    });
+    expect(result.free).toBe(false);
+    expect(result.occupied).toEqual([3779]);
+    expect(logs.join("\n")).toContain("3779 仍被占用");
+  });
+
+  it("先被占、等待中释放 → free=true（轮询生效）", async () => {
+    let calls = 0;
+    const probe = vi.fn(() => {
+      calls += 1;
+      return Promise.resolve(calls >= 3 ? [] : [1234]);
+    });
+    const result = await waitForPortsFree(probe, [3779], { budgetMs: 2000, intervalMs: 50 });
+    expect(result.free).toBe(true);
+    expect(calls).toBeGreaterThanOrEqual(3);
+  });
+
+  it("探测不可用 ≠ 空闲：如实 free=false（不许把没量到说成量到空）", async () => {
+    const probe = vi.fn(() => Promise.reject(new Error("netstat 不可用")));
+    const logs: Array<string> = [];
+    const result = await waitForPortsFree(probe, [3779], {
+      budgetMs: 300,
+      intervalMs: 50,
+      log: (m) => logs.push(m),
+    });
+    expect(result.free).toBe(false);
+    expect(logs.join("\n")).toContain("探测不可用");
+  });
+});
+
+describe("cmdlineBelongsToRoot 的路径边界（#4423）", () => {
+  const ROOT_DIR = "G:/ComfyAPP/comfy-app-t3-branch3";
+  const OTHER = "G:/ComfyAPP/comfy-app-t3-branch3-old";
+  /* 带尾斜杠的形态单列一个常量：模板字面量（no-unnecessary-template-expression）
+   * 与字符串拼接（prefer-template）两条清零规则在这里互相夹击。 */
+  const ROOT_DIR_TRAILING_SLASH = "G:/ComfyAPP/comfy-app-t3-branch3/";
+
+  it("检出内脚本路径：命中（既有语义不变）", () => {
+    expect(cmdlineBelongsToRoot(`node ${ROOT_DIR}/scripts/dev.mjs`, ROOT_DIR)).toBe(true);
+    /* 反斜杠归一后命中；大小写不敏感。 */
+    expect(
+      cmdlineBelongsToRoot("node G:/ComfyAPP/COMFY-APP-T3-BRANCH3/scripts/x.mjs", ROOT_DIR),
+    ).toBe(true);
+    expect(cmdlineBelongsToRoot(`node ${ROOT_DIR}\\scripts\\dev.mjs`, ROOT_DIR)).toBe(true);
+  });
+
+  it("前缀兄弟检出：不命中（裸子串会误判真，PID 复用时误杀整树）", () => {
+    expect(cmdlineBelongsToRoot(`node ${OTHER}/scripts/dev.mjs`, ROOT_DIR)).toBe(false);
+    /* 同一命令行里两个检出并存：兄弟那段不算数，本检出那段算。 */
+    expect(cmdlineBelongsToRoot(`node ${OTHER}/a.mjs --ref ${ROOT_DIR}/b.mjs`, ROOT_DIR)).toBe(
+      true,
+    );
+  });
+
+  it("base 后一位必须是结尾或路径分隔符：目录名恰为前缀的无关文件不命中", () => {
+    expect(cmdlineBelongsToRoot(`edit ${ROOT_DIR}-notes.txt`, ROOT_DIR)).toBe(false);
+    expect(cmdlineBelongsToRoot(ROOT_DIR_TRAILING_SLASH, ROOT_DIR)).toBe(true);
+    expect(cmdlineBelongsToRoot(ROOT_DIR, ROOT_DIR)).toBe(true);
+  });
+
+  it("空命令行 / 空根：不命中", () => {
+    expect(cmdlineBelongsToRoot("", ROOT_DIR)).toBe(false);
+    expect(cmdlineBelongsToRoot("node x.mjs", "")).toBe(false);
   });
 });

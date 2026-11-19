@@ -1,12 +1,7 @@
 /**
- * 回归护栏：陈旧路由表自愈的「懒归因」——把一次代码改动翻成一句人话。
- *
- * 归因不是判据（判据是症状），所以本用例只钉两件事：
- *   1. 类目划分：只有**路由约定文件的增 / 删 / 改名**算改路由结构，内容改动
- *      （`M`）不算；中间件 / `next.config` / 依赖面 / 桌面壳各成一类，其余进 other；
- *   2. 文案：拿不到改动（`headChanged === false`）时说「未检测到代码改动」，且**不抛**。
- * 读不懂的 diff 行**静默跳过**：宁可少说一句，也不能因为一行怪格式把整条自愈
- * 路径拖进异常。
+ * 回归护栏：陈旧路由表自愈的「懒归因」——把一次代码改动翻成一句人话。归因不是判据（判据是症状），只钉两件事：① 类目划分 —— 只有**路由约定文件的增 / 删 / 改名**算改路由结构，内容改动（`M`）不算；中间件 / `next.config` / 依赖面 / 桌面壳各成一类，其余进 other。
+ * ② 文案 —— `headChanged === false` 时说「未检测到代码改动」且**不抛**。
+ * 读不懂的 diff 行**静默跳过**：宁可少说一句，也不能因为一行怪格式把整条自愈路径拖进异常。
  */
 import { describe, expect, it } from "vitest";
 
@@ -99,11 +94,7 @@ describe("classifyChanges", () => {
   it("examples 至多两条（文案里给的是例子，不是清单）", () => {
     const c = classifyChanges(
       parseDiffEntries(
-        [
-          "A\tsrc/app/a/route.ts",
-          "A\tsrc/app/b/route.ts",
-          "A\tsrc/app/c/route.ts",
-        ].join("\n"),
+        ["A\tsrc/app/a/route.ts", "A\tsrc/app/b/route.ts", "A\tsrc/app/c/route.ts"].join("\n"),
       ),
     );
     expect(c.routes.added).toBe(3);
@@ -119,9 +110,7 @@ describe("describeChanges", () => {
   });
 
   it("改了路由结构 → 说清增删改名并给一个例子", () => {
-    const c = classifyChanges(
-      parseDiffEntries(["A\tsrc/app/api/foo/route.ts"].join("\n")),
-    );
+    const c = classifyChanges(parseDiffEntries(["A\tsrc/app/api/foo/route.ts"].join("\n")));
     const text = describeChanges(c, { headChanged: true });
     expect(text).toContain("改了路由结构");
     expect(text).toContain("新增 1");

@@ -5,12 +5,13 @@ import React from "react";
 import { ExtractModelSelect } from "~/components/workshop/ExtractModelSelect";
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
 import type { PersistableGenerationLog } from "~/lib/workshop/generation-log-client";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 
 /** 提取执行日志的展示样式（按日志类型区分色块，不随组件卸载清空）。
  *  状态色全走语义 token（§4.11.1 / P71）：init→primary（品牌）、
@@ -115,6 +116,7 @@ export function ExtractToolbar({
   /* 执行日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [history, setHistory] = React.useState<Array<PersistableGenerationLog> | null>(null);
+  const [historyFailed, setHistoryFailed] = React.useState(false);
   const loadHistory = () => {
     if (!logStage) {
       return;
@@ -123,7 +125,14 @@ export function ExtractToolbar({
     if (history) {
       return;
     }
-    void fetchGenerationLogs(logStage, 100).then(setHistory);
+    /* 失败与空态分开说（#4242）：失败时把 history 复位成 null，重开「历史」可重试。 */
+    void fetchGenerationLogs(logStage, 100).then((res) => {
+      setHistory(res.entries);
+      setHistoryFailed(!res.ok);
+      if (!res.ok) {
+        setHistory(null);
+      }
+    });
   };
 
   return (
@@ -153,10 +162,10 @@ export function ExtractToolbar({
         >
           外部导入
         </Button>
-        <importPicker.Input />
+        <FilePicker {...importPicker.inputProps} />
       </div>
       {/* 实时流式输出（提取中单独展示，便于跟随 token 累积） */}
-      {busy && progressText && (
+      {busy && progressText !== undefined && progressText !== "" && (
         <Disclosure
           className="text-primary bg-bg/60 text-2xs mt-2 rounded-lg px-3 py-2"
           defaultOpen
@@ -168,13 +177,17 @@ export function ExtractToolbar({
           </pre>
         </Disclosure>
       )}
-      {statusText && !errorText && <p className="text-primary mt-2 text-xs">{statusText}</p>}
-      {errorText && (
+      {statusText !== undefined &&
+        statusText !== "" &&
+        (errorText === undefined || errorText === "") && (
+          <p className="text-primary mt-2 text-xs">{statusText}</p>
+        )}
+      {errorText !== undefined && errorText !== "" && (
         <p className="bg-destructive/10 text-destructive mt-2 rounded-lg px-3 py-2 text-xs">
           {errorText}
         </p>
       )}
-      {extractDisabled && !busy && !errorText && (
+      {extractDisabled && !busy && (errorText === undefined || errorText === "") && (
         <p className="text-muted-foreground text-2xs mt-2">
           {extractDisabledReason ?? "从剧本提取暂不可用"}
         </p>
@@ -203,14 +216,14 @@ export function ExtractToolbar({
                       >
                         {logBadgeLabel(entry.kind)}
                       </span>
-                      <span className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
+                      <TruncatedText className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
                         {entry.summary}
-                      </span>
+                      </TruncatedText>
                       <span className="text-muted-foreground/60 text-3xs shrink-0">
                         {formatClock(entry.ts)}
                       </span>
                     </div>
-                    {entry.detail && (
+                    {entry.detail !== undefined && entry.detail !== "" && (
                       <pre className="bg-bg/70 text-ink-subtle text-2xs mt-1.5 max-h-32 overflow-y-auto rounded px-2 py-1.5 leading-relaxed break-all whitespace-pre-wrap">
                         {entry.detail}
                       </pre>
@@ -222,7 +235,9 @@ export function ExtractToolbar({
             {logStage && (
               <Button
                 className="text-muted-foreground hover:text-primary text-3xs h-auto shrink-0 p-0 font-normal underline underline-offset-2"
-                onClick={() => loadHistory()}
+                onClick={() => {
+                  loadHistory();
+                }}
                 variant="link"
               >
                 历史
@@ -234,7 +249,9 @@ export function ExtractToolbar({
               <p className="text-muted-foreground text-3xs">
                 历史日志（含此前会话，保存在 log/workshop/）
               </p>
-              {history === null ? (
+              {historyFailed ? (
+                <p className="text-destructive text-2xs">历史日志拉取失败：请稍后重试。</p>
+              ) : history === null ? (
                 <p className="text-muted-foreground text-2xs">加载中…</p>
               ) : history.length === 0 ? (
                 <p className="text-muted-foreground text-2xs">还没有落盘的历史日志。</p>
@@ -246,14 +263,14 @@ export function ExtractToolbar({
                         <span className="bg-primary-soft text-primary text-3xs rounded px-1.5 py-0.5 font-medium">
                           {entry.kind}
                         </span>
-                        <span className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
+                        <TruncatedText className="text-muted-foreground text-2xs min-w-0 flex-1 truncate leading-relaxed">
                           {entry.summary}
-                        </span>
+                        </TruncatedText>
                         <span className="text-muted-foreground/60 text-3xs shrink-0">
                           {formatClock(entry.ts)}
                         </span>
                       </div>
-                      {entry.detail && (
+                      {entry.detail !== undefined && entry.detail !== "" && (
                         <pre className="bg-bg/70 text-ink-subtle text-2xs mt-1.5 max-h-32 overflow-y-auto rounded px-2 py-1.5 leading-relaxed break-all whitespace-pre-wrap">
                           {entry.detail}
                         </pre>

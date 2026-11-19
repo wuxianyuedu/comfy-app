@@ -24,15 +24,10 @@ function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {
   return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
 }
 
-/* 提示气泡与窗口边缘之间保留的安全边距（px）。
- *
- * 基元默认只留 5px —— 于是在右上角 / 右下角这类贴边控件上，气泡的右边缘
- * 会**紧贴窗口边**（实测右边缘落在 1435/1440）：窗口边框与内阴影正好压住
- * 最后那几个像素，长文案读起来像「被屏幕裁掉了」。这不是定位算错
- *（Base UI 的 `shift` 确实把它夹回来了），而是**夹得太靠边**。
- *
- * 12 是「气泡圆角 + `px-3` 内边距」的自然读数：再小会让圆角弧线贴着窗口边，
- * 再大则窄窗下气泡被无谓地推离锚点。 */
+/* 提示气泡与窗口边缘之间的安全边距（px）。基元默认只留 5px，贴边控件上气泡右边缘会紧贴窗口边
+ * （实测落在 1435/1440），窗口边框与内阴影压住最后几个像素，长文案像被裁掉。不是定位算错
+ *（Base UI 的 `shift` 确实夹回来了），而是**夹得太靠边**。12 是「气泡圆角 + `px-3` 内边距」的
+ * 自然读数：再小圆角弧线贴着窗口边，再大窄窗下气泡被无谓推离锚点。 */
 const TOOLTIP_COLLISION_PADDING = 12;
 
 function TooltipContent({
@@ -66,14 +61,18 @@ function TooltipContent({
       >
         <TooltipPrimitive.Popup
           className={cn(
-            "bg-foreground text-background data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-popup inline-flex w-fit max-w-xs origin-(--transform-origin) items-center gap-1.5 rounded-md px-3 py-1.5 text-xs wrap-break-word has-data-[slot=kbd]:pr-1.5 **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-sm",
+            /* 主题跟随的气泡（#3720）：此前 `bg-foreground text-background` 在浅色
+             * 主题下是「深底白字」，与浅色界面相撞。改用 popover token（浅色 =
+             * 浅底深字，深色 = 深底浅字）+ 描边与投影，两态都成立。
+             * `wrap-anywhere`：长文件名 / 长路径在气泡里也要断行，不溢出框。 */
+            "bg-popover text-popover-foreground border-primary-500/50 shadow-md data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-popup max-h-(--available-height) overflow-y-auto flex w-fit max-w-xs origin-(--transform-origin) items-center gap-1.5 rounded-md px-3 py-1.5 text-xs wrap-anywhere has-data-[slot=kbd]:pr-1.5 **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-sm",
             className,
           )}
           data-slot="tooltip-content"
           {...props}
         >
           {children}
-          <TooltipPrimitive.Arrow className="bg-foreground fill-foreground z-popup size-2.5 translate-y-[calc(-50%-2px)] rotate-45 rounded-xs data-[side=bottom]:top-1 data-[side=inline-end]:top-1/2! data-[side=inline-end]:-left-1 data-[side=inline-end]:-translate-y-1/2 data-[side=inline-start]:top-1/2! data-[side=inline-start]:-right-1 data-[side=inline-start]:-translate-y-1/2 data-[side=left]:top-1/2! data-[side=left]:-right-1 data-[side=left]:-translate-y-1/2 data-[side=right]:top-1/2! data-[side=right]:-left-1 data-[side=right]:-translate-y-1/2 data-[side=top]:-bottom-2.5" />
+          <TooltipPrimitive.Arrow className="bg-popover fill-popover border-primary-500/50 z-popup size-2.5 translate-y-[calc(-50%-2px)] rotate-45 rounded-xs data-[side=bottom]:top-1 data-[side=inline-end]:top-1/2! data-[side=inline-end]:-left-1 data-[side=inline-end]:-translate-y-1/2 data-[side=inline-start]:top-1/2! data-[side=inline-start]:-right-1 data-[side=left]:top-1/2! data-[side=left]:-right-1 data-[side=right]:top-1/2! data-[side=right]:-left-1 data-[side=top]:-bottom-2.5" />
         </TooltipPrimitive.Popup>
       </TooltipPrimitive.Positioner>
     </TooltipPrimitive.Portal>

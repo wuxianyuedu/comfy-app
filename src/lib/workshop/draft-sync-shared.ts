@@ -4,6 +4,7 @@
 // 与纯校验函数，同时被客户端 hook 与服务端 route/repository 引用，保证两侧
 // 只对齐一份契约（风格对齐 api-channel-shared.ts —— 纯函数、客户端可安全 import）。
 import { asRecord } from "~/lib/is-record";
+import { isProjectType } from "~/lib/workshop/types";
 import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 
 /** 与 use-workshop-pipeline 中 localStorage WorkshopDraft 对齐的线上结构。 */
@@ -13,11 +14,15 @@ export type WorkshopDraftDto = {
   scenes: Array<Scene>;
   scriptMarkdown: string;
   shots: Array<Shot>;
+  /** 最近一次写入的时刻（epoch ms，#4023）：本地 ↔ 服务端双写的版本对账用。
+   *  服务端镜像由 `workshopDraft.updatedAt` 行列（drizzle `$onUpdate`）供给，
+   *  本地由自动保存写入时盖章。缺省（旧数据）= 不参与对账、保持既有本地优先。 */
+  updatedAt?: number;
 };
 
 /** 未知值 → 草稿线上结构：逐字段校验类型，损坏字段回退空值（不抛）。
  *
- * 三类**元素**是刻意原样留着的（`as Character[]` 那一档）：这条路径读的是用户自己的
+ * 三类**元素**是刻意原样留着的（只判「是不是数组」这一层）：这条路径读的是用户自己的
  * 草稿，认不出就丢掉等于静默删数据。代价是类型在这里被叫停，所以「哪些元素形状
  * 不认识」由 `~/lib/workshop/draft-integrity` 的 `auditDraftElements` 在读的那一侧
  * 判出来（服务端镜像与浏览器缓存两扇门共用一份判据），界面上的出口在
@@ -36,12 +41,13 @@ export function parseDraftDto(raw: unknown): WorkshopDraftDto {
       scriptMarkdown: typeof meta.scriptMarkdown === "string" ? meta.scriptMarkdown : undefined,
     },
     scriptMarkdown: typeof obj.scriptMarkdown === "string" ? obj.scriptMarkdown : "",
-    /* SAFETY: 类型断言已复核 */
-    scenes: Array.isArray(obj.scenes) ? (obj.scenes as Array<Scene>) : [],
-    /* SAFETY: 类型断言已复核 */
-    characters: Array.isArray(obj.characters) ? (obj.characters as Array<Character>) : [],
-    /* SAFETY: 类型断言已复核 */
-    shots: Array.isArray(obj.shots) ? (obj.shots as Array<Shot>) : [],
+    scenes: isSceneList(obj.scenes) ? obj.scenes : [],
+    characters: isCharacterList(obj.characters) ? obj.characters : [],
+    shots: isShotList(obj.shots) ? obj.shots : [],
+    updatedAt:
+      typeof obj.updatedAt === "number" && Number.isFinite(obj.updatedAt)
+        ? obj.updatedAt
+        : undefined,
   };
 }
 
@@ -55,12 +61,16 @@ export function draftHasContent(draft: WorkshopDraftDto): boolean {
   );
 }
 
-/* SAFETY: 类型断言已复核 */
-const PROJECT_TYPES = ["short_video", "micro_film", "animation", "ad", "comic", "other"] as const;
+/* 三类元素只确认「是数组」这一层运行期判据（条目形状由写入端保证；
+ *  形状问题由 `~/lib/workshop/draft-integrity` 在读侧判，与 canvas-store 同口径）。 */
+function isSceneList(v: unknown): v is Array<Scene> {
+  return Array.isArray(v);
+}
 
-function isProjectType(v: unknown): v is ProjectMeta["type"] {
-  return (
-    typeof v === "string" &&
-    /* SAFETY: 类型断言已复核 */ (PROJECT_TYPES as ReadonlyArray<string>).includes(v)
-  );
+function isCharacterList(v: unknown): v is Array<Character> {
+  return Array.isArray(v);
+}
+
+function isShotList(v: unknown): v is Array<Shot> {
+  return Array.isArray(v);
 }

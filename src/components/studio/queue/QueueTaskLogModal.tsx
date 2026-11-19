@@ -1,21 +1,10 @@
 "use client";
 
-/**
- * QueueTaskLogModal —— 队列页「执行日志」弹窗。
- *
- * 从「队列与运行」的任意一行点「日志」打开：按 taskId 直连
- * `/api/tasks/:id/stream`（`useTaskLogStream`），服务端回放全量历史再增量
- * 推送 —— 在跑的实时跟、排队的看着它开跑、已结束的回放完整日志。
- *
- * 与工作流库的 `WorkflowRunLogModal` 同款交互（居中大弹窗 + 级别筛选 +
- * 自动滚动 + 加宽/收窄），时间线主体收在共享的 `logs/TaskLogTimeline`；
- * 差异只在头部：队列行的任务不在 workflow-run-store 登记表里（没有
- * workflowId），运行态取自流内的 progress / 终态帧，而不是那个 store。
- *
- * view 层只渲染（§17）：订阅在 `queue/hooks/use-task-log-stream.ts`，
- * 取消复用画布的 `useCancelTask`，「查看完整输出」复用工作流库的
- * `WorkflowRunRawCliModal`。
- */
+/** QueueTaskLogModal —— 队列页「执行日志」弹窗，从任意一行点「日志」打开。
+ * 按 taskId 直连 /api/tasks/:id/stream（useTaskLogStream）：服务端回放全量历史再增量推送 ——
+ * 在跑实时跟、排队看开跑、已结束回放完整日志。
+ * 交互同 WorkflowRunLogModal（居中大弹窗 + 级别筛选 + 自动滚动 + 加宽/收窄），时间线收在 logs/TaskLogTimeline；
+ * 差异在头部：队列任务不在 workflow-run-store 登记表（无 workflowId），运行态取自流内 progress/终态帧。本文件只渲染。 */
 
 import { useState } from "react";
 import { FileText, X } from "lucide-react";
@@ -81,9 +70,17 @@ export function QueueTaskLogModal({
   /* 还没落定才谈得上「在跑」：raw-cli 弹窗据此决定要不要保持 1.5s 轮询。 */
   const running = !stream.settled && (stream.started || task.status === "RUNNING");
   const failureMessage = stream.settled && !stream.settled.ok ? stream.settled.message : null;
+  /* 顶部错误条文案：流 settled 的失败信息优先，否则回退任务记录上的 error。
+   * 收成 `string | null`（task.error 是可选项），视图只判一次。 */
+  const bannerMessage = failureMessage ?? task.error ?? null;
 
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="执行日志"
         className="bg-transparent p-0 ring-0"
@@ -99,12 +96,11 @@ export function QueueTaskLogModal({
             <div className="flex min-w-0 items-center gap-2">
               <FileText className="text-primary-strong shrink-0" size={16} />
               <span className="text-ink truncate text-[15px] font-semibold">执行日志</span>
-              <span
-                className="text-ink-muted text-2xs max-w-55 truncate"
-                title={task.workflowName ?? undefined}
-              >
-                {task.workflowName ?? "（未知工作流）"}
-              </span>
+              <Hint label={task.workflowName ?? undefined}>
+                <span className="text-ink-muted text-2xs max-w-55 truncate">
+                  {task.workflowName ?? "（未知工作流）"}
+                </span>
+              </Hint>
               <StatusBadge
                 className="text-3xs px-1.5 py-px"
                 dot={false}
@@ -120,8 +116,9 @@ export function QueueTaskLogModal({
                     className="text-2xs h-auto rounded-md px-2 py-0.5"
                     data-testid="queue-log-cancel"
                     disabled={cancelling}
-                    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                    onClick={() => void cancel()}
+                    onClick={() => {
+                      void cancel();
+                    }}
                     variant="danger"
                   >
                     {cancelling ? "× 取消中…" : "× 取消"}
@@ -132,7 +129,9 @@ export function QueueTaskLogModal({
                 <Button
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong text-2xs rounded-md px-2 py-0.5"
                   data-testid="queue-log-raw"
-                  onClick={() => setRawOpen(true)}
+                  onClick={() => {
+                    setRawOpen(true);
+                  }}
                   variant="ghost"
                 >
                   查看完整输出
@@ -170,11 +169,9 @@ export function QueueTaskLogModal({
             logs={stream.logs}
             rowTestId="queue-log-line"
             topSlot={
-              (failureMessage ?? task.error) ? (
+              bannerMessage !== null && bannerMessage !== "" ? (
                 <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
-                  <div className="wrap-break-word whitespace-pre-wrap">
-                    {failureMessage ?? task.error}
-                  </div>
+                  <div className="wrap-break-word whitespace-pre-wrap">{bannerMessage}</div>
                 </div>
               ) : null
             }
@@ -182,7 +179,9 @@ export function QueueTaskLogModal({
         </div>
       </DialogContent>
       <WorkflowRunRawCliModal
-        onClose={() => setRawOpen(false)}
+        onClose={() => {
+          setRawOpen(false);
+        }}
         open={rawOpen}
         running={running}
         taskId={task.id}

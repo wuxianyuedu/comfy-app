@@ -1,40 +1,18 @@
 /**
- * `scripts/qoder-ignore.mjs`（`.qoderignore` 的唯一写出者）的判据（ISSUE #2712）。
- *
- * ── 这份文件为什么存在 ────────────────────────────────────────────────────
- *
- * 本仓真正重的树早就被 `.gitignore` 忽略，而**索引器不吃 `.gitignore`**：它吃自己那份
- * `.qoderignore`。于是每台机器都要重新发现一遍「索引为什么这么贵」，并各自手写一份
- * 形状不一的表 —— 而「手写的那份」既没人复核，也不知道该包含哪些目录。这个工具把
- * 那一次发现固定下来：拿到仓库执行 `pnpm qoder:ignore` 就装好。
- *
- * ── 为什么进固定清单，而不是只跟着改动走 ──────────────────────────────────
- *
- * 它判的是**两份文本**（入库的 `.qoderignore` ⇄ 工具渲染出的那一份）。`.qoderignore`
- * 不被任何代码 import ⇒ 改它不会把这份用例带进增量面；`package.json` 里那条出口同理
- * （配置住在仓库根，静态 import 图追不到）。漂了的表现不是红，是「装了等于没装」：
- * 别人跑一次 `pnpm qoder:ignore` 得到的是一份**比仓里那份更窄**的表，而他没有任何理由
- * 怀疑它。与 `tests/build-desktop-step-readings.test.ts`（#2574）、
- * `tests/env-import-meta-shape.test.ts`（#2599）同因，进固定清单。
- *
- * ── 钉的是语义，不是行形状 ────────────────────────────────────────────────
- *
- * 「逐行等于渲染结果」这一条只保证**一致**，不保证**够宽**：谁把 `IGNORE_SECTIONS`
- * 删掉一半，盘上那份跟着删一半，一致判据照样绿。所以下面单独立一条 `MUST_COVER` ——
- * 它钉的是「哪些树必须被排除」（本仓最重的几棵 + 私有输入那几份），而不是第几行写什么。
+ * `scripts/docs/qoder-ignore.mjs`（`.qoderignore` 唯一写出者）判据（#2712）：索引器不吃 `.gitignore`、只吃 `.qoderignore`，工具固化「哪些树贵」的发现。
+ * 判的是两份文本（入库 `.qoderignore` ⇄ 工具渲染）；它不被任何 import，漂了不是红而是「装了等于没装」——别人跑一次只会得到更窄的表（同 #2574、#2599 进固定清单）。
+ * 逐行相等只保证一致、不保证够宽（删一半 `IGNORE_SECTIONS` 仍然绿），故另立 `MUST_COVER` 钉「哪些树必须排除」（最重的几棵 + 私有输入），不钉行形状。
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { stripComments } from "./helpers/strip-comments";
 import { defineGateRepo, expectGateRan } from "./helpers/gate-repo";
-import {
-  IGNORE_SECTIONS,
-  diffIgnore,
-  renderIgnore,
-} from "../scripts/qoder-ignore.mjs";
+import { IGNORE_SECTIONS, diffIgnore, renderIgnore } from "../scripts/docs/qoder-ignore.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -55,8 +33,9 @@ const MUST_COVER = [
    * 既没意义又让「索引为什么这么贵」重新长回来（ISSUE #2762）。 */
   "/.codegraph/",
   "/.zvec-grep/",
-  /* 入库的那两条：正文与源逐字重复（镜像）或纯历史（归档），它们在检索面里常驻
-   * 就等于让每一次文档检索都命中两份 —— 见 ISSUE #2761。 */
+  /* 两条文字产物：`docs/generated/` 是本机渲染态镜像（#3586 起不入库），
+   * `CHANGELOG-archive.md` 是入库的纯历史归档。两者都与源 / 历史正文逐字重复，
+   * 在检索面里常驻就等于每次文档检索都命中两份 —— 见 ISSUE #2761。 */
   "/docs/generated/",
   "/CHANGELOG-archive.md",
 ];
@@ -66,7 +45,7 @@ function diskIgnore(): string {
 }
 
 function scriptSource(): string {
-  return readFileSync(path.join(ROOT, "scripts", "qoder-ignore.mjs"), "utf8");
+  return readFileSync(path.join(ROOT, "scripts", "docs", "qoder-ignore.mjs"), "utf8");
 }
 
 describe("渲染出的形状：每条排除都带着它的理由", () => {
@@ -84,9 +63,7 @@ describe("渲染出的形状：每条排除都带着它的理由", () => {
 
   it("分组名以注释行出现，读者能看出这份表分了几件事", () => {
     for (const { section } of IGNORE_SECTIONS) {
-      expect(WANTED.split("\n"), `缺少分组注释：${section}`).toContain(
-        `# ${section}`,
-      );
+      expect(WANTED.split("\n"), `缺少分组注释：${section}`).toContain(`# ${section}`);
     }
   });
 
@@ -106,20 +83,38 @@ describe("渲染出的形状：每条排除都带着它的理由", () => {
     expect(head).toContain("只出索引");
   });
 
-  it("入库那一组的「入库」是事实：git 确实跟踪这些路径", () => {
-    /* 反向也判：若它们哪天不再入库（镜像出库、归档被拆走），这条排除就是在藏一份
+  it("入库那一组的「入库」是事实：git 确实跟踪这份归档", () => {
+    /* 反向也判：若它哪天不再入库（归档被拆走），这条排除就是在藏一份
      * 不存在的产物，该整条删掉 —— 而不是留一句会过期的理由占着排除面。 */
-    for (const one of ["docs/generated", "CHANGELOG-archive.md"]) {
-      const out = execFileSync(
-        "git",
-        ["-c", "core.quotePath=false", "ls-files", "-z", "--", one],
-        { cwd: ROOT, encoding: "utf8" },
-      );
-      expect(
-        out.split("\0").filter(Boolean).length,
-        `${one} 并不入库 —— 那这一条排除该归到「构建产物」那一组，或直接删掉`,
-      ).toBeGreaterThan(0);
-    }
+    const out = execFileSync(
+      "git",
+      ["-c", "core.quotePath=false", "ls-files", "-z", "--", "CHANGELOG-archive.md"],
+      { cwd: ROOT, encoding: "utf8" },
+    );
+    expect(out.split("\0").filter(Boolean).length, "CHANGELOG-archive.md 并不入库").toBeGreaterThan(
+      0,
+    );
+  });
+
+  it("生成态镜像确实不入库：排除项守的是本地生成物，不是漏配", () => {
+    /* #3586：`docs/generated/**` 退出入库产物，排除项仍在（谁本地跑了
+     * `pnpm doc:render` 就不该让索引多命中一份），但它的**理由**归到了
+     * 「生成物与工具缓存」组。这条反向钉住事实：哪天有人把镜像重新提交进
+     * git，这里会红，逼他回来把分组与 why 一起改回「入库」口径。 */
+    const out = execFileSync(
+      "git",
+      ["-c", "core.quotePath=false", "ls-files", "-z", "--", "docs/generated"],
+      { cwd: ROOT, encoding: "utf8" },
+    );
+    expect(
+      out.split("\0").filter(Boolean),
+      "docs/generated 又被提交进 git 了 —— 分组与理由要同步改",
+    ).toEqual([]);
+    const generated = IGNORE_SECTIONS.find((s) => s.section === "生成物与工具缓存");
+    expect(
+      generated?.entries.map((e) => e.pattern),
+      "生成态镜像的排除项不在「生成物与工具缓存」组里",
+    ).toContain("/docs/generated/");
   });
 
   it("产物里没有绝对体积读数（那是「这台机器、这一刻」的数）", () => {
@@ -133,12 +128,10 @@ describe("入库那份 ⇄ 工具会写的那份", () => {
     const delta = diffIgnore(disk, WANTED);
     expect(
       delta.same,
-      `.qoderignore 与工具输出不一致：+${delta.added.length} / -${delta.removed.length}\n${
-        [
-          ...delta.added.map((l) => `  + ${l}`),
-          ...delta.removed.map((l) => `  - ${l}`),
-        ].join("\n")
-        }\n修法：pnpm qoder:ignore 后把结果一并提交（人别手改产物）`,
+      `.qoderignore 与工具输出不一致：+${delta.added.length} / -${delta.removed.length}\n${[
+        ...delta.added.map((l) => `  + ${l}`),
+        ...delta.removed.map((l) => `  - ${l}`),
+      ].join("\n")}\n修法：pnpm qoder:ignore 后把结果一并提交（人别手改产物）`,
     ).toBe(true);
   });
 
@@ -165,13 +158,18 @@ describe("入库那份 ⇄ 工具会写的那份", () => {
   });
 
   it("pnpm 出口在册：写/刷新 与 只比对 各一条，且都指向这一份脚本", () => {
-    const pkg = JSON.parse(
-      readFileSync(path.join(ROOT, "package.json"), "utf8"),
-    ) as { scripts: Record<string, string> };
-    expect(pkg.scripts["qoder:ignore"]).toBe("node scripts/qoder-ignore.mjs");
-    expect(pkg.scripts["qoder:ignore:check"]).toBe(
-      "node scripts/qoder-ignore.mjs --check",
-    );
+    /* package.json 的 scripts 段用运行时守卫收窄（B5 清账，不走 as 断言）。 */
+    const pkgRaw: unknown = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const scripts: Record<string, string> = {};
+    if (isRecord(pkgRaw) && isRecord(pkgRaw.scripts)) {
+      for (const [key, value] of Object.entries(pkgRaw.scripts)) {
+        if (typeof value === "string") {
+          scripts[key] = value;
+        }
+      }
+    }
+    expect(scripts["qoder:ignore"]).toBe("node scripts/docs/qoder-ignore.mjs");
+    expect(scripts["qoder:ignore:check"]).toBe("node scripts/docs/qoder-ignore.mjs --check");
   });
 });
 
@@ -193,7 +191,7 @@ describe("它只写仓库根那一份，不碰别人的本地 git 状态", () =>
 /* ── 三态退出码：0 绿 / 1 不一致 / 2 没跑成 ──────────────────────────────── */
 
 const { test } = defineGateRepo({
-  script: "qoder-ignore.mjs",
+  script: "docs/qoder-ignore.mjs",
   workdir: "2712-qoder-ignore",
 });
 
@@ -233,10 +231,7 @@ test("默认档写出内容，第二次跑念「没动任何字节」（幂等 =
 
 test("手改产物 ⇒ --check 退 1 并报出增删；默认档刷回来", ({ repo }) => {
   repo.run();
-  repo.write(
-    ".qoderignore",
-    `${WANTED.replace("/node_modules/", "# 有人手删了一条")}\n`,
-  );
+  repo.write(".qoderignore", `${WANTED.replace("/node_modules/", "# 有人手删了一条")}\n`);
   const drift = repo.run(["--check"]);
   expectGateRan(drift);
   expect(drift.code, drift.output).toBe(1);
@@ -261,8 +256,6 @@ test("写不进去退 2，且失败路上不念任何成功话术", ({ repo }) =
   /* 退 2 不是绿：成功话术（已生成 / 已刷新 / 没动任何字节）一条都不许出现在这一跑里。
    * 「拿不到测量」被读成「测量结果是绿的」是这一族最重的失效（规范 §13.6.4）。 */
   for (const success of ["已生成", "已刷新", "没动任何字节"]) {
-    expect(r.raw.stdout, `退 2 的一跑里念了成功话术：${success}`).not.toContain(
-      success,
-    );
+    expect(r.raw.stdout, `退 2 的一跑里念了成功话术：${success}`).not.toContain(success);
   }
 });

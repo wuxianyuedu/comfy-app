@@ -1,22 +1,8 @@
-/**
- * `schema.ts` — Drizzle SQLite schema
- * ===========================================================================
- *
- * 表名严格对齐现有 `db.sqlite`，保证 `drizzle-kit push` 以 ALTER 方式同步、
- * **不破坏已有数据**。
- *
- * 列形态（**改了就是改库文件格式**，别当风格问题）：
- *   - `DateTime` 一律 ISO 字符串（TEXT）+ `dateNotNull` / `dateNull` 序列化。
- *     不用 Drizzle 默认的 `integer(timestamp)` —— 库里已有的行是 ISO 文本，
- *     换了读写两端对不上（`createdAt` 出现过的「裸毫秒串」就是旧格式残留，
- *     读取侧由 `dateNotNull.fromDriver` 与 `~/lib/time-format` 统一归一）。
- *   - `Boolean` 用 `integer(..., { mode: "boolean" })`（列里是 0/1）。
- *   - `Json` 用 `text(..., { mode: "json" })`（列里是 TEXT JSON）。
- *   - id 默认 cuid2（`@paralleldrive/cuid2` 的 createId）；
- *     Project 复用客户端 `proj_*` id（无默认）。
- *
- * @module server/db/schema — Drizzle SQLite schema（表定义与行类型）
- */
+/** `schema.ts` — Drizzle SQLite schema（表定义与行类型）。表名严格对齐现有 `db.sqlite`，保证
+ * `drizzle-kit push` 以 ALTER 方式同步、**不破坏已有数据**。列形态（改了就是改库文件格式）：
+ * `DateTime` 一律 ISO 文本 TEXT + `dateNotNull`/`dateNull`（不用默认 integer timestamp，已有行是
+ * ISO 文本）；`Boolean` 用 `integer(...,{mode:"boolean"})`，`Json` 用 `text(...,{mode:"json"})`，
+ * id 默认 cuid2（Project 复用客户端 `proj_*`）。@module server/db/schema */
 import {
   sqliteTable,
   text,
@@ -39,10 +25,8 @@ const dateNull = customType<{ data: Date | null; driverData: string | null }>({
   dataType() {
     return "text";
   },
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  fromDriver: (v) => (v == null ? null : new Date(v)),
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  toDriver: (v) => (v == null ? null : v.toISOString()),
+  fromDriver: (v) => (v === null || v === undefined ? null : new Date(v)),
+  toDriver: (v) => (v === null || v === undefined ? null : v.toISOString()),
 });
 
 // ── Better Auth 表（表名单数，对齐 better-auth 的默认命名）─────────
@@ -68,29 +52,37 @@ export const session = sqliteTable("session", {
     .references(() => user.id, { onDelete: "cascade" }),
 });
 
-export const account = sqliteTable("account", {
-  id: text("id").primaryKey(),
-  accountId: text("accountId").notNull(),
-  providerId: text("providerId").notNull(),
-  issuer: text("issuer"),
-  userId: text("userId")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  accessToken: text("accessToken"),
-  refreshToken: text("refreshToken"),
-  idToken: text("idToken"),
-  accessTokenExpiresAt: dateNull("accessTokenExpiresAt"),
-  refreshTokenExpiresAt: dateNull("refreshTokenExpiresAt"),
-  scope: text("scope"),
-  password: text("password"),
-  createdAt: dateNotNull("createdAt")
-    .notNull()
-    .$defaultFn(() => new Date()),
-  updatedAt: dateNotNull("updatedAt")
-    .notNull()
-    .$defaultFn(() => new Date())
-    .$onUpdate(() => new Date()),
-});
+export const account = sqliteTable(
+  "account",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("accountId").notNull(),
+    providerId: text("providerId").notNull(),
+    issuer: text("issuer"),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accessToken: text("accessToken"),
+    refreshToken: text("refreshToken"),
+    idToken: text("idToken"),
+    accessTokenExpiresAt: dateNull("accessTokenExpiresAt"),
+    refreshTokenExpiresAt: dateNull("refreshTokenExpiresAt"),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: dateNotNull("createdAt")
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: dateNotNull("updatedAt")
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    // 同一用户在同一外部身份（provider + account）至多一行（#3937，对齐
+    // better-auth 的 account 语义）；存量重复由 db-unique-sweep 清洗。
+    uniqueIndex("account_provider_account_user_uniq").on(t.providerId, t.accountId, t.userId),
+  ],
+);
 
 export const verification = sqliteTable("verification", {
   id: text("id").primaryKey(),
@@ -229,12 +221,9 @@ export const task = sqliteTable(
     workflowSnapshot: text("workflowSnapshot", { mode: "json" }),
     projectId: text("projectId"),
     /**
-     * 工坊镜头号：这条任务是为「哪一镜」跑的。只有按镜生成（工坊镜头生图）才有值，
-     * 手动/画布节点级生成为 NULL。
-     *
-     * 旧行**不回填**，且不能回填：提交时的 `params` 里没记镜头，任何按时间或按
-     * 名称的猜测都会把归属写错，而错一次的代价是健康度条从此长期报一个假数。
-     * 因此读侧的口径是「NULL = 归属未知」，**不等于**「这一镜没出过图」。
+     * 工坊镜头号：这条任务为「哪一镜」跑的；只有按镜生成（工坊镜头生图）才有值，其余 NULL。
+     * 旧行**不回填**且不能回填：提交时 `params` 没记镜头，按时间/名称猜归属会写错，代价是健康度条
+     * 长期报假数。因此读侧口径是「NULL = 归属未知」，**不等于**「这一镜没出过图」。
      */
     shotId: text("shotId"),
     referenceImages: text("referenceImages", { mode: "json" }),
@@ -246,14 +235,10 @@ export const task = sqliteTable(
     progress: integer("progress").notNull().default(0),
     resultImages: text("resultImages", { mode: "json" }),
     logs: text("logs", { mode: "json" }),
-    /** comfy-cli 的**完整原始输出**（不截断，P3 §5 ADR §14 D1 的 4-B2）。
-     *  面板里的 `[comfy-cli 原始]`/`stdout`/`stderr` 行出于防刷屏做过单行与行数
-     *  截断，「查看完整输出」那个入口需要的是被截掉的完整 JSON 与整段 traceback。
-     *  此前它只活在**执行进程的记忆**里（`runnerState.rawCli`），于是 host 执行的
-     *  任务点进去永远是空的——而排障恰恰最想看这种任务的原文。
-     *  写入时机：执行侧收口时整包落一次（成功与失败两条都写，形态与 `replaceLogs`
-     *  同族：只带归属守卫、不带终态守卫，尾随输出不该被挡掉）。行数上限由写入侧
-     *  `RAW_CLI_MAX_LINES` 兜着，本列不会无界增长。 */
+    /** comfy-cli 的**完整原始输出**（不截断，P3 §5 ADR §14 D1 的 4-B2）：面板为防刷屏截断，
+     *  「查看完整输出」要的是完整 JSON 与整段 traceback —— 此前只活在执行进程内存
+     *  （`runnerState.rawCli`），host 执行的任务点进去永远为空。收口时整包落一次（成功/失败都写，
+     *  只带归属守卫、不带终态守卫，尾随输出不该被挡）；行数上限由 `RAW_CLI_MAX_LINES` 兜着。 */
     rawCli: text("rawCli", { mode: "json" }),
     error: text("error"),
     validationErrors: text("validationErrors"),
@@ -266,14 +251,10 @@ export const task = sqliteTable(
      *  按 COMFY_EXECUTOR 写值），领取侧见 `repository-task-impl.ts` 的
      *  `claimNextQueued`。 */
     claimedBy: text("claimedBy"),
-    /** 被领走的时刻（P3 §5 ADR §14 D1 的 4-B2：状态栏「已运行 mm:ss」的时间基准）。
-     *  此前这个数只在**执行进程的内存**里（`runnerState.startedAt`），host 执行时
-     *  Next 侧读不到，状态栏那一格的耗时就永远是空的——而它恰恰是用户最想要的
-     *  那个数（前面堵了几个、当前这个跑了多久）。
-     *  写入点两条：`claimNextQueued`（pull 侧，与 `claimedBy` 同一语句）与
-     *  `markRunning`（inline 的 push 侧，4-B3 收敛成一条 pull 后只剩前一处）。
-     *  历史行不回填：NULL 的语义是「这一轮没记下开始时刻」，前端不显示耗时，
-     *  而不是「零秒」——拿 `createdAt` 冒充会把排队时间算进「已运行」，那是假数。 */
+    /** 被领走的时刻（P3 §5 ADR §14 D1 的 4-B2：状态栏「已运行 mm:ss」的时间基准）。此前只在
+     *  执行进程内存（`runnerState.startedAt`），host 执行时读不到，耗时那格永远为空 —— 而那正是
+     *  用户最想要的数。写入点：`claimNextQueued`（与 `claimedBy` 同一语句，4-B3 收敛后 `markRunning`
+     *  那处不再需要）。历史行不回填：NULL = 没记下开始时刻，前端不显示耗时；拿 `createdAt` 冒充会把排队算进去。 */
     claimedAt: dateNull("claimedAt"),
     /** 提交时刻的执行载荷（RAW 原件，P3 §5 ADR §13-3B1 决定 1）：host 领到行后
      *  由它重建 Job，不经 `workflowName` 回查模板——模板被改/删也不影响在队任务
@@ -302,6 +283,13 @@ export const task = sqliteTable(
     // 与 task_status_finished_idx 分开：那条服务孤儿判决（status, finishedAt），
     // 本条服务领取谓词（status, claimedBy），语义不同不合并。
     index("task_claimed_by_idx").on(t.status, t.claimedBy),
+    // ⚠️ 刻意**没有** (projectId, shotId) 的活动任务唯一索引（#3849）：同一镜头
+    // 同时至多一条 QUEUED/RUNNING 任务（重复扣款形态）的库级闸做不了 ——
+    // drizzle-kit 0.31 的 SQLite diff 对部分索引（WHERE）与表达式索引都会
+    // 永远 DROP+CREATE、两次 push 不收敛（#3849 实测，普通列索引无此问题），
+    // 建了会让 `pnpm db:push` 永久红。该约束由应用层承：单发生成的
+    // KeyedAsyncMutex 锁内查重（generate.ts）+ 整季批量入队的占用集合与互斥
+    // （series-generation.ts），口径见规范 §8.9 ②。
   ],
 );
 
@@ -359,6 +347,9 @@ export const workflowTemplate = sqliteTable(
     // workflow.list 的 listForUser：按 userId 过滤 + createdAt desc 排序。仅有
     // userId 单列索引时仍需整段临时 B-tree 排序；复合索引让有序扫描走索引。
     index("wt_user_created_idx").on(t.userId, t.createdAt),
+    // 同一用户的模板名唯一（#3934）：本地导入 / 粘贴 JSON 双击不再落重复模板，
+    // 改名撞名转业务 409。存量重复由 db-unique-sweep 在建索引前清洗。
+    uniqueIndex("wt_user_name_uniq").on(t.userId, t.name),
   ],
 );
 
@@ -396,6 +387,10 @@ export const workflowModelTagToWorkflowTemplate = sqliteTable(
     /* 反向索引：按标签找它绑定的模板（`templateHasTagIdsWhere` 的 IN 查询），
      * 没有这侧索引时连接表全扫。 */
     index("wmtt_tag_idx").on(t.workflowModelTag),
+    // 同一对 (标签, 模板) 只许一行（#3849）：setModelTags 的「删了再插」在并发
+    // 交错时曾落下重复关联行、计数虚高（#3835/#3870 的现场），此前只靠
+    // immediate 事务把交错串行化 —— 这里补上库级兜底。
+    uniqueIndex("wmtt_tag_wt_uniq").on(t.workflowModelTag, t.workflowTemplate),
   ],
 );
 
@@ -418,25 +413,90 @@ export const llmConfig = sqliteTable("llmConfig", {
 });
 
 /**
+ * LLM 供应商表（#3501）：Base URL / API 格式 / API Key 挂在供应商上，
+ * 模型只声明「我属于哪个供应商」+ 自己的窗口 / 能力等配置。
+ *
+ * 为什么独立成表而不是继续塞进 `llmConfig`：用户会配多个供应商
+ * （OpenAI 兼容 / Anthropic / 自建网关），全局只有一份 apiKey 时换供应商
+ * 就得重填密钥；且远端模型的密钥与全局密钥是两回事，混在一格会互相覆盖。
+ */
+export const llmProvider = sqliteTable(
+  "llmProvider",
+  {
+    id: cuid(),
+    /** 供应商名（展示用），唯一 */
+    name: text("name").notNull(),
+    /** 接口地址（不含动作路径段，路径由 apiFormat 决定） */
+    baseUrl: text("baseUrl").notNull().default(""),
+    /** 接口格式：chat-completions / anthropic-messages / responses（词表见
+     *  `~/lib/llm/provider-types`；库里存字符串，读侧按白名单收窄） */
+    apiFormat: text("apiFormat").notNull().default("chat-completions"),
+    /** 供应商级密钥；密文(enc:v1:...)或历史明文。模型条目可另带自己的密钥。 */
+    apiKey: text("apiKey"),
+    createdAt: dateNotNull("createdAt")
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: dateNotNull("updatedAt")
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [uniqueIndex("llmProvider_name_uniq").on(t.name)],
+);
+
+/**
  * 远端独立模型表（option C：与本地 Ollama 候选彻底分开存放）。
  * 设置页配置的「远端模型」落这里，不再与本地候选混在 llmConfig.extraModels。
  * 每个条目可带独立 baseUrl / apiKey —— apiKey 仅远端模型才有，本地模型没有。
+ *
+ * #3501 起每个模型可挂在 `providerId` 下（供应商提供 Base URL / 格式 / 密钥）；
+ * `providerId` 为空的行是历史遗留（旧设置页整份清单保存写入的），
+ * 首次读供应商列表时会被迁进「默认供应商」。
  */
 export const remoteModel = sqliteTable(
   "remoteModel",
   {
     id: cuid(),
-    /** 模型名，唯一（同名重复添加会被唯一索引拒绝） */
+    /** 模型名，唯一（同名重复添加会被唯一索引拒绝；运行时与工坊按名字引用） */
     name: text("name").notNull(),
-    /** 独立接口地址；空 = 跟随 llmConfig.baseUrl（远端全局默认） */
+    /** 所属供应商；NULL = 历史遗留条目（尚未归入供应商） */
+    providerId: text("providerId"),
+    /** 独立接口地址；空 = 跟随所属供应商 / llmConfig.baseUrl */
     baseUrl: text("baseUrl"),
+    /** 接口格式（#3517 起下移到模型级：同一供应商下文本 / 图片 / 视频模型
+     *  可能各用一套协议）。空 = 跟随所属供应商（历史行），读侧按白名单收窄。 */
+    apiFormat: text("apiFormat"),
     /** 独立密钥；仅远端模型持有。密文(enc:v1:...)或历史明文。 */
     apiKey: text("apiKey"),
     /** 用途：chat / image / video */
     kind: text("kind").notNull().default("chat"),
+    /** 是否启用（停用的模型不下发给工坊下拉、不参与按名解析） */
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    /** 上下文窗口（token）；NULL = 未知 */
+    contextWindow: integer("contextWindow"),
+    /** 最大输出 token；NULL = 未知 */
+    maxOutputTokens: integer("maxOutputTokens"),
+    /** 输入类型（JSON 数组：text / image / video / pdf） */
+    inputTypes: text("inputTypes", { mode: "json" }),
+    /** 输出类型（JSON 数组：text / image / video，#3577）；NULL = 未标注 */
+    outputTypes: text("outputTypes", { mode: "json" }),
+    /** 模型能力（JSON 数组：structured-output / native-web-search / system-messages） */
+    capabilities: text("capabilities", { mode: "json" }),
+    /** 推理等级（JSON 数组；各家叫法不同，只做去重不做白名单） */
+    reasoningLevels: text("reasoningLevels", { mode: "json" }),
+    /** 推理参数映射（JSON：{ param, values }，见 `~/lib/llm/provider-types`） */
+    reasoningParamMapping: text("reasoningParamMapping", { mode: "json" }),
+    /** 「智能配置」：按模型名推断窗口 / 输出上限 / 输入类型（关掉 = 全部手填） */
+    smartConfig: integer("smartConfig", { mode: "boolean" }).notNull().default(true),
     /** 工坊按模式的输入/输出适配器（JSON 数组字符串；RemoteModeAdapter[]）。
-     *  配置后工坊按该模型在对应模式下的字段映射发起请求，替代统一猜测。 */
+     *  配置后工坊按该模型在对应模式下的字段映射发起请求，替代统一猜测。
+     *  #3622/#3659 起是模型级 envelope（RemoteModelAdaptersDoc）：含模型级
+     *  端点路径 endpointPath（#3656 设置页下拉也落这一格）。 */
     workshopAdapters: text("workshopAdapters"),
+    /** 额外请求体字段（#3626）：raw JSON 对象文本，透传进请求 body 且覆盖运行时默认
+     *  组装（用途是把厂商特有的字段原样带上，如 `extra_body.response_format`）。
+     *  文本 / 图像 / 视频三种 kind 都生效；空串 / NULL = 未配置、不发送。 */
+    extraBody: text("extraBody"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
@@ -448,6 +508,7 @@ export const remoteModel = sqliteTable(
   (t) => [
     uniqueIndex("remoteModel_name_uniq").on(t.name),
     index("remoteModel_kind_idx").on(t.kind),
+    index("remoteModel_provider_idx").on(t.providerId),
   ],
 );
 
@@ -707,6 +768,8 @@ export type TaskImage = InferSelectModel<typeof taskImage>;
 export type WorkflowTemplate = InferSelectModel<typeof workflowTemplate>;
 export type WorkflowModelTag = InferSelectModel<typeof workflowModelTag>;
 export type LlmConfig = InferSelectModel<typeof llmConfig>;
+export type LlmProvider = InferSelectModel<typeof llmProvider>;
+export type LlmProviderInsert = InferInsertModel<typeof llmProvider>;
 export type RemoteModel = InferSelectModel<typeof remoteModel>;
 export type RemoteModelInsert = InferInsertModel<typeof remoteModel>;
 export type Skill = InferSelectModel<typeof skill>;

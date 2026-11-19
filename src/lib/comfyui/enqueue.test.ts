@@ -5,6 +5,8 @@
 // 眼里的消费方（同目录 `.test.ts` 算数）。
 
 import { describe, expect, it, vi } from "vitest";
+import type { ChildProcess } from "node:child_process";
+import { isRecord } from "~/lib/is-record";
 import type { TaskWriteOutcome } from "../core/repository-task-impl";
 
 // `./reaper`（模块级副作用）与 `./executor`（barrel）会拉起 reaper 心跳 +
@@ -20,13 +22,13 @@ import type { TaskWriteOutcome } from "../core/repository-task-impl";
 vi.mock("~/lib/db", () => ({ db: {} }));
 vi.mock("../core/repository", () => ({
   taskRepository: {
-    findStatusAndPromptById: vi.fn(async () => null),
-    cancel: vi.fn(async () => undefined),
+    findStatusAndPromptById: vi.fn(() => null),
+    cancel: vi.fn(() => undefined),
   },
 }));
 vi.mock("./client", () => ({
-  interrupt: vi.fn(async () => undefined),
-  resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
+  interrupt: vi.fn(() => undefined),
+  resolveComfyBase: vi.fn(() => "http://127.0.0.1:8188"),
 }));
 vi.mock("~/lib/core/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
@@ -48,9 +50,9 @@ const cli = await import("./executor-cli");
 describe("configureEnqueue 接缝", () => {
   it("接受 Partial<EnqueueDeps>、两次调用是合并语义", () => {
     const fakeRepo = {
-      findStatusAndPromptById: async () => null,
+      findStatusAndPromptById: () => Promise.resolve(null),
       /* SAFETY: 类型断言已复核 */
-      cancel: async () => "written" as const,
+      cancel: () => Promise.resolve("written" as const),
     };
     expect(() => {
       mod.configureEnqueue({ taskRepo: fakeRepo });
@@ -78,6 +80,11 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
   const runnerLog = { warn: vi.fn() };
   let seq = 0;
 
+  /** 收窄成「带着 `kill` 的子进程句柄」，即取消路径真正读取的那一项。 */
+  function isCliProcHandle(v: unknown): v is ChildProcess {
+    return isRecord(v) && typeof v.kill === "function";
+  }
+
   function setup(
     row: { promptId: string | null; status: string } | null,
     options: {
@@ -89,17 +96,22 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     const { cancelOutcome = "written", inFlight = false } = options;
     const taskId = `cancel-${(seq += 1)}`;
     const repo = {
-      findStatusAndPromptById: vi.fn(async () => row),
-      cancel: vi.fn(async () => cancelOutcome),
-      replaceLogs: vi.fn(async () => undefined),
-      replaceRawCli: vi.fn(async () => undefined),
+      findStatusAndPromptById: vi.fn(() => Promise.resolve(row)),
+      cancel: vi.fn(() => Promise.resolve(cancelOutcome)),
+      replaceLogs: vi.fn(() => Promise.resolve(undefined)),
+      replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
     };
     mod.configureEnqueue({ taskRepo: repo });
     runnerState.configureRunner({ taskRepo: repo, log: runnerLog });
     vi.mocked(client.interrupt).mockReset().mockResolvedValue(undefined);
     const kill = vi.fn();
     if (inFlight) {
-      cli.cliProcs.set(taskId, /* SAFETY: 类型断言已复核 */ { kill } as never);
+      /* `cliProcs` 的消费侧只读 `kill`；按运行期实际用到的字段校验形状。 */
+      const handle: unknown = { kill };
+      if (!isCliProcHandle(handle)) {
+        throw new Error("comfy-cli 句柄夹具形状不符");
+      }
+      cli.cliProcs.set(taskId, handle);
     } else {
       cli.cliProcs.delete(taskId);
     }

@@ -1,14 +1,5 @@
 /**
- * 应用日志面板的**可见行为**（ISSUE #262）。
- *
- * 用户诉求逐条对应到断言：
- *   1. 「按时间顺序显示」——时间线由 store 保证，这里断言渲染出来的行首时刻
- *      是单调不减的；
- *   2. 「不能翻页、锁死 2000 条」——页脚给出「第 N / M 页」，翻到历史页能看到
- *      更早的日志且内容与第 1 页不同；
- *   3. 「query 刷满了、其他内容基本看不到」——来源筛选切到「应用」能滤掉启动行；
- *   4. 「看不出有没有新增」——停在历史页时页脚出现「有新的日志 · 回到最新」，
- *      点击后回到第 1 页。
+ * 应用日志面板的**可见行为**（ISSUE #262）。用户诉求逐条对应断言：①「按时间顺序显示」——渲染行首时刻单调不减；②「不能翻页、锁死 2000 条」——页脚给出「第 N / M 页」，历史页内容与第 1 页不同；③「query 刷满、其他内容看不到」——来源筛选切「应用」能滤掉启动行；④「看不出有没有新增」——停在历史页时页脚出现「有新的日志 · 回到最新」，点击回到第 1 页。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, within } from "@testing-library/react";
@@ -17,6 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { LogPanel } from "./LogPanel";
 import { LOG_PAGE_SIZE, computeOriginCounts, useLogStore } from "./log-store";
 import type { LogEntry } from "./log-store";
+import { isPlainRecord } from "~/lib/is-record";
 import { Z, zClass } from "~/lib/shell/overlay-z";
 import {
   LOG_PANEL_OVERLAY_Z,
@@ -25,14 +17,10 @@ import {
 } from "./log-panel-layers";
 import { LOG_ROW_SINGLE } from "./log-virtual";
 
-/* 本文件是 jsdom 里的**重交互**用例（数百行日志的渲染 + 多次 userEvent 点击），
- * 默认 5s 超时在全量并行负载下不够（翻页 / 回到最新等用例各自偶发超时）。
- * 分页族已改用**小页夹具**（`useSmallPage`）：页数判定、翻页交互、边界禁用、
- * 新日志横幅的回归不依赖「真塞 2000+ 行」——2000 行满页在 jsdom 的渲染成本
- * （约 1.5 万节点 × 8~10s）是纯预算损耗，真实浏览器的成本由 e2e 量（本文件
- * 末尾的分工注释）。20s 取的是现役最重用例（多步翻页交互）实测的 ~3 倍：
- * 安静机与负载机都过得去，真死循环也不至于等到天荒地老。
- * ⚠️ 只作用于本文件；别再给单个用例补显式超时（那会让这一档变成五处要同改的数）。 */
+/* 本文件是 jsdom 里的**重交互**用例（数百行日志渲染 + 多次 userEvent 点击），默认 5s 超时在全量
+ * 并行负载下不够。分页族已改用**小页夹具**（`useSmallPage`）：页数判定、翻页交互、边界禁用、新日志
+ * 横幅的回归不依赖「真塞 2000+ 行」——满页渲染在 jsdom 约 1.5 万节点 × 8~10s，是纯预算损耗，
+ * 真实浏览器成本由 e2e 量。20s 是现役最重用例实测 ~3 倍。⚠️ 只作用于本文件，别再补单条显式超时。 */
 vi.setConfig({ testTimeout: 20_000 });
 
 function makeEntry(index: number, overrides: Partial<LogEntry> = {}): LogEntry {
@@ -48,25 +36,23 @@ function makeEntry(index: number, overrides: Partial<LogEntry> = {}): LogEntry {
 }
 
 function seed(count: number) {
-  act(() =>
-    useLogStore.getState().appendFileLogs(Array.from({ length: count }, (_, i) => makeEntry(i))),
-  );
+  act(() => {
+    useLogStore.getState().appendFileLogs(Array.from({ length: count }, (_, i) => makeEntry(i)));
+  });
 }
 
 /**
- * 把每页大小临时改成 `size`（顶层与 `header` 切片必须同时改，见 §7.20.5）：
- * 交互密集的翻页用例不必每个动作都重排 2000 行——分页/横幅/边界禁用的回归
- * 判定与页大小无关；默认页大小（2000 行）满页渲染的真实成本由 e2e 在真实
- * 浏览器里量，jsdom 只锁几何与接线。夹具自带页数，不依赖 LOG_PAGE_SIZE 的
- * 具体值。
+ * 把每页大小临时改成 `size`（顶层与 `header` 切片必须同时改，见 §7.20.5）：交互密集的翻页用例不必每
+ * 个动作都重排 2000 行——分页/横幅/边界禁用的回归与页大小无关；满页渲染的真实成本由 e2e 量。
+ * 夹具自带页数，不依赖 LOG_PAGE_SIZE 的具体值。
  */
 function useSmallPage(size = 200) {
-  act(() =>
+  act(() => {
     useLogStore.setState((state) => ({
       pageSize: size,
       header: { ...state.header, pageSize: size },
-    })),
-  );
+    }));
+  });
 }
 
 beforeEach(() => {
@@ -113,21 +99,17 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
-  /* 来源下拉是 portal 渲染到 `document.body` 的。`cleanup()` 卸载 React 树之后，
-   * base-ui 还要跑几轮收尾才摘掉弹层宿主：jsdom 里它等的是 `transitionend`
-   * 这类事件，不会自己到来；而它的清理回调又会在**之后**的某个宏任务里再动一次
-   * DOM。只放一轮宏任务就清空 `body`，下一轮回调会往清空后的 DOM 里补写节点，
-   * 下一个用例于是继承到一个坏掉的弹层宿主——用户读到的现象是「点开了却没有
-   * option」（本文件里表现为「来源列表计数」那条在整文件跑时随机失败）。
-   *
-   * 因此收尾分**两轮**：先让 base-ui 自己跑完两轮宏任务，再手工把残留清干净，
-   * 最后清空 `body`。真实浏览器里这些会自行结束，这里只是替测试环境收尾。 */
+  /* 来源下拉是 portal 渲染到 `document.body` 的。`cleanup()` 之后 base-ui 还要跑几轮收尾才摘掉弹层宿主：
+   * jsdom 里它等的是不会到来的 `transitionend`，清理回调又会在之后的宏任务里再动 DOM。只放一轮宏任务
+   * 就清空 `body`，下一轮回调会往清空后的 DOM 补写，下一个用例继承到坏掉的弹层宿主——现象是「点开了
+   * 却没有 option」。因此收尾分**两轮**：先让 base-ui 跑完两轮宏任务，再手工清残留、最后清空 `body`。 */
   /* 收尾要等多久不能写死：base-ui 的收尾回调排在其后的宏任务 / rAF 里，
    * 负载下（全量并行跑其它文件时）会晚于固定两轮宏任务才动 DOM——残宿主
    * 因此落进下个用例，表现为「点开了却没有 option」。这里轮询到 DOM 连续
    * 两轮不再变化（该跑的回调都跑完了）再手工兜底清除，上限封顶防悬挂。 */
   let prevBody = "";
   for (let i = 0; i < 30; i++) {
+    // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
     await new Promise((resolve) => setTimeout(resolve, 0));
     const body = document.body.innerHTML;
     if (body === prevBody) {
@@ -137,7 +119,9 @@ afterEach(async () => {
   }
   document
     .querySelectorAll('[data-slot="select-content"], [data-slot="select-backdrop"]')
-    .forEach((node) => node.remove());
+    .forEach((node) => {
+      node.remove();
+    });
   document
     .querySelectorAll<HTMLElement>("[data-base-ui-inert]")
     .forEach((node) => delete node.dataset.baseUiInert);
@@ -145,17 +129,14 @@ afterEach(async () => {
 });
 
 /**
- * 级别筛选按钮。
- *
- * 用 `title` 前缀定位而不是 role+name：按钮的可访问名是「标签 + 数字」拼出来的
- * （如「警告 2」），而标题旁那组警告/错误文本里也有一个「警告」，按 `/警告/` 找
- * 会命中不止一个元素。这里按既有实现给出的 `title`（「当前来源的警告：…」）
- * 作为稳定锚点。
+ * 级别筛选按钮。用 `title` 前缀定位而不是 role+name：可访问名是「标签 + 数字」（如「警告 2」），
+ * 而标题旁那组警告/错误文本里也有一个「警告」，按 `/警告/` 会命中多个元素。按实现给出的
+ * `title`（「当前来源的警告：…」）作为稳定锚点。
  */
 function levelButton(label: string): HTMLElement {
   const button = screen
     .getAllByRole("button")
-    .find((item) => item.getAttribute("title")?.startsWith(`当前来源的${label}：`));
+    .find((item) => item.getAttribute("title")?.startsWith(`当前来源的${label}：`) === true);
   if (!button) {
     throw new Error(`找不到级别按钮「${label}」`);
   }
@@ -205,7 +186,9 @@ describe("LogPanel 日志面板", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
 
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(9999, { message: "新来的" })]));
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(9999, { message: "新来的" })]);
+    });
     const banner = screen.getByRole("button", { name: /有 1 条新的日志/ });
     await user.click(banner);
 
@@ -215,31 +198,33 @@ describe("LogPanel 日志面板", () => {
     expect(screen.queryByRole("button", { name: /有 \d+ 条新的日志/ })).toBeNull();
   });
 
-  it("按来源筛选能滤掉启动行，只看应用运行日志", async () => {
-    act(() =>
+  it("按来源筛选能滤掉启动行，只看应用运行日志", () => {
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { message: "开发服务已就绪", origin: "dev" }),
           makeEntry(2, { message: "任务入队", origin: "app-runtime" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
 
-    act(() => useLogStore.getState().setOrigin("app-runtime"));
+    act(() => {
+      useLogStore.getState().setOrigin("app-runtime");
+    });
     expect(screen.getByText(/任务入队/)).toBeInTheDocument();
     expect(screen.queryByText(/开发服务已就绪/)).not.toBeInTheDocument();
   });
 
   it("搜索命中时高亮关键词，并只留下命中的行", async () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { message: "ComfyUI 启动完成" }),
           makeEntry(2, { message: "任务入队" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
 
@@ -250,13 +235,13 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("连续重复行被折叠成一条「重复 N 次」说明", () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs(
           Array.from({ length: 40 }, (_, i) => makeEntry(i, { message: "ComfyUI 未就绪，等待中" })),
-        ),
-    );
+        );
+    });
     render(<LogPanel />);
     expect(screen.getByText(/以上内容连续重复 35 次/)).toBeInTheDocument();
   });
@@ -266,9 +251,9 @@ describe("LogPanel 日志面板", () => {
    * 两边对不上。下面两条锁住修法：计数要分来源，且能一眼看出警告/错误。 */
 
   it("收起状态下只显示当前来源的名字，不重复每一项的条数", () => {
-    act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry(1, { level: "warn", origin: "app" })]),
-    );
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(1, { level: "warn", origin: "app" })]);
+    });
     render(<LogPanel />);
     /* 收缩面板本来就窄：这里报一遍每个来源多少条，只是把宽度再挤掉一块，
      * 而左侧级别按钮上已经写着同样的数字（用户反馈第 4 条）。 */
@@ -281,15 +266,15 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("级别按钮显示当前来源的计数，切来源后同步变化", () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { level: "warn", origin: "app" }),
           makeEntry(2, { level: "warn", origin: "app" }),
           makeEntry(3, { level: "warn", origin: "launcher" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     const warnButton = () => levelButton("警告");
 
@@ -298,10 +283,14 @@ describe("LogPanel 日志面板", () => {
 
     /* 切来源（等价于在来源列表里点一项——选择动作本身由
      * 「按来源筛选能滤掉启动行」那条用例覆盖） */
-    act(() => useLogStore.getState().setOrigin("launcher"));
+    act(() => {
+      useLogStore.getState().setOrigin("launcher");
+    });
     expect(warnButton().textContent).toContain("1");
 
-    act(() => useLogStore.getState().setOrigin("dev"));
+    act(() => {
+      useLogStore.getState().setOrigin("dev");
+    });
     /* 启动来源里一条警告都没有：按钮上是 0，列表也确实是空的——
      * 数字与内容对得上，用户不会再怀疑「日志丢了」。 */
     expect(warnButton().textContent).toContain("0");
@@ -316,19 +305,21 @@ describe("LogPanel 日志面板", () => {
    * 归入其他分类」。无文件来源的行（console 拦截 / Tauri 事件 / 全局错误）
    * 现在有自己的分类——此前选中任何来源都会把它们整批藏起来。 */
   it("来源列表里有「控制台 / 全局错误」分类，无文件来源的行能单独筛出来", () => {
-    act(() =>
+    act(() => {
       useLogStore.getState().appendFileLogs([
         { ...makeEntry(1, { message: "console 里的一条" }), source: "console" },
         { ...makeEntry(2, { message: "开发服务已就绪" }), origin: "dev" },
-      ]),
-    );
+      ]);
+    });
     render(<LogPanel />);
 
     /* 该分类出现在下拉选项里（带它自己的计数），而不是只在「全部来源」下能看见。 */
     const optionTexts = () => screen.queryAllByRole("option").map((o) => o.textContent ?? "");
     expect(useLogStore.getState().countsByOrigin.console.all).toBe(1);
 
-    act(() => useLogStore.getState().setOrigin("console"));
+    act(() => {
+      useLogStore.getState().setOrigin("console");
+    });
     expect(screen.getByText(/console 里的一条/)).toBeInTheDocument();
     expect(screen.queryByText(/开发服务已就绪/)).not.toBeInTheDocument();
     /* 计数与内容同口径：按钮上的数就是切过去能看到的行数。 */
@@ -337,7 +328,7 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("来源列表里每一项都自带「条数 / 信息 / 警告 / 错误」的计数", async () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
@@ -345,8 +336,8 @@ describe("LogPanel 日志面板", () => {
           makeEntry(2, { level: "warn", origin: "app" }),
           makeEntry(3, { level: "error", origin: "app" }),
           makeEntry(4, { level: "info", origin: "launcher" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
 
@@ -372,37 +363,24 @@ describe("LogPanel 日志面板", () => {
    * jsdom 不做层叠与命中测试，所以这里断言的是**层级接线**：弹层定位层拿到的
    * class 必须高于遮罩。真正「点得动」由 e2e（真实 Chromium）兜底。 */
   it("级别按钮整组吃掉行头的富余宽度（不再挤成 32px 的窄条）", () => {
-    act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry(1, { level: "warn", origin: "app" })]),
-    );
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(1, { level: "warn", origin: "app" })]);
+    });
     render(<LogPanel />);
 
     const button = levelButton("警告");
-    /* 用户诉求：「顶部还有较大空白区域，全部/警告/错误这些挤在一起，可以占用
-     * 大些空间」。落地方式有两件，缺一不可：
-     *   1. 每个按钮 `flex-1 basis-0` —— 五个按钮**等分**容器宽度，不再是固定的
-     *      `w-8`（32px）；
-     *   2. 容器 `flex-1` —— 它自己就是那块弹性空间，富余宽度不再被一个无名的
-     *      空白 div 吸走（多一个 `flex-1` 会与它平分，"空白又回来了"）。
-     * 几何结果（按钮实际有多宽）由 e2e 在真实浏览器里量，这里断言接线。 */
+    /* 用户诉求「顶部还有较大空白，全部/警告/错误挤在一起，可以占用大些空间」。两件缺一不可：
+     * 每个按钮 `flex-1 basis-0`（五个等分容器宽度，不再固定 `w-8`）；容器 `flex-1`（自己就是弹性
+     * 空间，富余宽度不再被无名空白 div 吸走，多一个 `flex-1` 会平分、空白又回来）。几何结果由 e2e 量。 */
     expect(button.className).toContain("flex-1");
     expect(button.className).toContain("basis-0");
     expect(button.className).not.toContain("w-8");
     const group = button.parentElement!;
     expect(group.className).toContain("flex-1");
-    /* ISSUE #1695：容器与按钮的**内容下限**必须同源。
-     *
-     * 用户截到的现象是「错误」的紫色选中底盖住了搜索框左缘与放大镜。根因不在
-     * 选中样式，而在这一组的两条宽度约束**脱节**：
-     *   · 容器挂 `min-w-56`（224px）—— 允许它被压到 **224px**；
-     *   · 每个按钮挂 `min-w-fit` —— 谁都压不到自己的内容宽（五个约 406px）。
-     * 于是容器比内容窄，多出来的那截**溢出盒子**（实测 16~174px，见 PR 里的
-     * 真机数据），而 `overflow` 默认 `visible` ⇒ 直接画到紧邻右侧的搜索框上。
-     * 而且 `flex-wrap` 判的是子项的 flex base size（`basis-0`）、不是溢出的内容，
-     * 所以「放不下」永远不触发换行，只会一直往外压。
-     *
-     * 修法是让容器也取**内容固有宽度**：`min-w-fit`。这里锁住接线 ——
-     * 一旦有人把容器改回固定像素下限，这条断言就红。 */
+    /* ISSUE #1695：容器与按钮的**内容下限**必须同源。现象是「错误」的紫色选中底盖住搜索框左缘与
+     * 放大镜。根因：容器 `min-w-56`（224px）允许被压窄，按钮 `min-w-fit` 压不到内容宽（约 406px），
+     * 多出的那截溢出盒子（实测 16~174px，overflow 默认 visible）直接画到右侧搜索框上；且 `flex-wrap`
+     * 判 flex base size（`basis-0`）而非溢出内容，永不换行。修法是容器也取 `min-w-fit`，改回固定像素下限就红。 */
     expect(group.className).toContain("min-w-fit");
     expect(group.className).not.toContain("min-w-56");
     /* 按键位的内容下限同样必须是 fit（`min-w-0` 会把「警告」切成 `警…`，
@@ -414,22 +392,19 @@ describe("LogPanel 日志面板", () => {
     expect(button.children[1]?.textContent).toContain("1");
   });
 
-  /* ISSUE #262 五审：「不要因为宽度不够导致文字显示成省略号」。
-   *
-   * 省略号在 CSS 里需要**同时**满足三个前提：`text-overflow: ellipsis`
-   * （`.truncate`）、`overflow: hidden`、`white-space: nowrap`。去掉后两个，
-   * 文本就不可能被换成省略号；再把按钮的 `min-w-0` 换成 `min-w-fit`，按钮的
-   * 最小宽度就是「内边距 + 文字 + 四位数字」的固有宽度，挤不下时也不会切字。
-   * 这三条在 jsdom 里只能断言**接线**（不做布局），实际渲染宽度由 e2e 量。 */
+  /* ISSUE #262 五审：「不要因为宽度不够导致文字显示成省略号」。省略号需**同时**满足 `text-overflow:
+   * ellipsis`、`overflow: hidden`、`white-space: nowrap`；去掉后两个就不可能被换成省略号。再把按钮
+   * `min-w-0` 换成 `min-w-fit`，最小宽度＝内边距 + 文字 + 四位数字的固有宽度，挤不下也不切字。
+   * jsdom 只能断言**接线**（不做布局），实际宽度由 e2e 量。 */
   it("级别按钮不会把文字切成省略号（无 truncate/overflow-hidden/min-w-0）", () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { level: "warn", origin: "app" }),
           makeEntry(2, { level: "info", origin: "app" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
 
     for (const label of ["全部", "调试", "信息", "警告", "错误"]) {
@@ -439,10 +414,11 @@ describe("LogPanel 日志面板", () => {
       expect(button.className).not.toContain("min-w-0");
       expect(button.className).toContain("min-w-fit");
 
-      /* SAFETY: 类型断言已复核 */
-      const labelEl = button.children[0] as HTMLElement;
-      /* SAFETY: 类型断言已复核 */
-      const countEl = button.children[1] as HTMLElement;
+      const labelEl = button.children[0];
+      const countEl = button.children[1];
+      if (!(labelEl instanceof HTMLElement) || !(countEl instanceof HTMLElement)) {
+        throw new Error("级别按钮缺少标签或计数子元素");
+      }
       expect(labelEl.className).toContain("whitespace-nowrap");
       expect(labelEl.className).not.toContain("truncate");
       /* 数字列：定宽 `4ch` + 右对齐 + 等宽数字——「文字 + 四位数字」是固定预算，
@@ -454,21 +430,18 @@ describe("LogPanel 日志面板", () => {
     }
   });
 
-  /* ISSUE #262 五审：级别色给**文字**——「警告」黄、「错误」红（用户原话
-   * 「右侧的警告文字改成黄色，错误改成红色」）。
-   *
-   * 颜色不上在数字上，是因为按 `/警告/` 扫过去时用户读的是那几个字；数字
-   * （`4ch` 定宽）保持中性灰，避免一行里出现两个互相稀释的高亮块。
-   * 零条目也照样着色：它表达的是「这一格是警告」，不是「这里有 0 个问题」。 */
+  /* ISSUE #262 五审：级别色给**文字**——「警告」黄、「错误」红（用户原话）。颜色不上在数字上，因为
+   * 按 `/警告/` 扫过去读的是那几个字；数字（`4ch` 定宽）保持中性灰，避免一行里两个高亮块互相稀释。
+   * 零条目也照样着色：它表达「这一格是警告」，不是「这里有 0 个问题」。 */
   it("级别按钮的标签带级别色：警告黄、错误红，数字保持中性", () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { level: "warn", origin: "app" }),
           makeEntry(2, { level: "error", origin: "app" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
 
     /* 颜色挂在按钮上、由标签文字继承（标签自身只管不换行）。
@@ -491,15 +464,15 @@ describe("LogPanel 日志面板", () => {
    * （同一个 `originCounts`），是同一项数据在两处出现。现在整块删除，计数只
    * 保留在级别按钮上；完整分类数（含信息）留在各按钮的悬浮说明里。 */
   it("标题旁不再有复述警告/错误的灰底胶囊（计数只在级别按钮上）", () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { level: "warn", origin: "app" }),
           makeEntry(2, { level: "error", origin: "app" }),
           makeEntry(3, { level: "info", origin: "app" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
 
     /* 老形态：标题旁一个 `rounded-full bg-subtle` 的胶囊，title 里写全分类数。 */
@@ -513,18 +486,20 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("页脚写出当前看的是哪一段，点一下即去掉该层筛选", async () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { message: "开发服务已就绪", origin: "dev" }),
           makeEntry(2, { level: "error", message: "任务失败", origin: "app" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
 
-    act(() => useLogStore.getState().setOrigin("app"));
+    act(() => {
+      useLogStore.getState().setOrigin("app");
+    });
     await user.click(levelButton("错误"));
 
     const footer = screen.getByTestId("logpanel-origin-chip");
@@ -543,14 +518,14 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("计数与过滤同口径：搜索时数字跟着收窄，不会「写着 2 切过去只有 1」", async () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { message: "启动完成", origin: "app" }),
           makeEntry(2, { message: "另一件事", origin: "app" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
     const allButton = () => levelButton("全部");
@@ -573,7 +548,9 @@ describe("LogPanel 日志面板", () => {
   /* ISSUE #262 复审（这一轮的 4 条反馈）──────────────────────────────── */
 
   it("行头里类别与计数在前，搜索与来源下拉被推到最右", () => {
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]));
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]);
+    });
     render(<LogPanel />);
 
     const header = document.querySelector(".min-h-14");
@@ -595,12 +572,9 @@ describe("LogPanel 日志面板", () => {
     expect(search).toBeGreaterThan(levelButtons);
     expect(triggerHost).toBeGreaterThan(search);
 
-    /* 「留大空间给左边」的载体是本轮的**级别按钮容器**（它自己 `flex-1`），
-     * 位置在搜索之前：没有它，行头会把搜索框与下拉直接顶在级别按钮后面，
-     * 大块空白反过来留在右边（用户截图里的红框）。
-     *
-     * 早先这里另有一个无名 `flex-1` 空白 div 承担同一职责；本轮去掉它——
-     * 两个 `flex-1` 会**平分**富余宽度，等于把一半空间又还给了空白。 */
+    /* 「留大空间给左边」的载体是本轮的**级别按钮容器**（它自己 `flex-1`），位置在搜索之前：没有它，
+     * 行头会把搜索框与下拉顶在级别按钮后面，大块空白反过来留在右边（用户截图红框）。早先这里另有一个
+     * 无名 `flex-1` 空白 div；本轮去掉——两个 `flex-1` 会**平分**富余宽度，等于把一半还给空白。 */
     const group = levelButton("全部").parentElement!;
     expect(group.className).toContain("flex-1");
     expect(order.indexOf(group)).toBeGreaterThanOrEqual(0);
@@ -613,18 +587,16 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("来源下拉的弹层与扳机底边对齐，且不向上翻转", async () => {
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]));
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
     await user.click(screen.getByRole("combobox", { name: "按来源筛选" }));
 
-    /* base-ui 把定位参数写在定位层的 data 属性上。两条都要对：
-     *   - `side=bottom`：弹层在扳机**下面**（用户要求「弹出下拉菜单的最上方和
-     *     下拉按钮的最下方对齐」）；
-     *   - `align=trigger` 为假：不覆盖扳机本身。默认为真时，头部贴着窗口顶端
-     *     会让弹层只能向上生长，实测直接顶到窗口最上方、盖住左侧的标题。
-     * 真实浏览器里「撞到底部也不翻上去」由 §7.22 的现场复核兜底
-     * （jsdom 不做布局，量不出坐标）。 */
+    /* base-ui 把定位参数写在定位层的 data 属性上。两条都要对：`side=bottom`（弹层在扳机**下面**，
+     * 用户要求「最上方与下拉按钮最下方对齐」）；`align=trigger` 为假（不覆盖扳机本身，默认为真时
+     * 头部贴窗口顶端会让弹层只能向上生长、实测顶到最上方盖住标题）。撞到底部也不翻上去由 §7.22 现场复核。 */
     const positioner = document.querySelector('[data-slot="select-content"]')!.parentElement!;
     expect(positioner.dataset.side).toBe("bottom");
     expect(
@@ -658,7 +630,9 @@ describe("LogPanel 日志面板", () => {
      * 别把我拽走」）。 */
     await user.click(screen.getByRole("button", { name: "更早的一页" }));
     expect(screen.getByText(/第 2 \/ 4 页/)).toBeInTheDocument();
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(9999, { message: "新来的" })]));
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(9999, { message: "新来的" })]);
+    });
     /* 正好来了 1 条新的（页面仍停在第 2 页，因为还没点「回到最新」） */
     expect(screen.getByText(/第 2 \/ 5 页/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /有 1 条新的日志/ })).toBeInTheDocument();
@@ -668,21 +642,18 @@ describe("LogPanel 日志面板", () => {
     expect(screen.getByText(/第 1 \/ 5 页/)).toBeInTheDocument();
   });
 
-  /* ISSUE #262 六审：「日志多了我想复制报错文本还是复制不了，我刚选中内容就
-   * 刷走了，需要每条日志后面加一个复制按钮，可复制日志内容」。
-   *
-   * 这里断言的是**接线**（每条行末尾都有一个复制按钮、点一下写的就是这一行的
-   * 文本、成功/失败说真话）；「日志一直刷、选不中」那一半由 e2e 在真实浏览器里
-   * 证明（jsdom 不做剪切板也不做滚动）。 */
+  /* ISSUE #262 六审：「日志多了想复制报错文本还是复制不了，刚选中就刷走了，需要每条日志后面加一个
+   * 复制按钮」。这里断言**接线**（每行末尾有按钮、点一下写的就是这一行、成功/失败说真话）；
+   * 「日志一直刷、选不中」那一半由 e2e 在真实浏览器证明（jsdom 不做剪切板也不做滚动）。 */
   it("每条日志末尾都有复制按钮，点一下复制的就是这一行", async () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { level: "error", message: "任务失败：连接超时" }),
           makeEntry(2, { message: "任务入队" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     /* `userEvent.setup()` 会装一个**真的记录写入了什么**的剪贴板替身
      * （jsdom 本身不实现 navigator.clipboard）。这正好是这里要断言的：
@@ -707,14 +678,10 @@ describe("LogPanel 日志面板", () => {
   it("选中的类别在浅色/深色主题下都看得出（不是只差一个近乎同值的底色）", () => {
     seed(3);
     render(<LogPanel />);
-    /* 选中态此前只有 `bg-subtle`——而浅色主题下它与行头底色（surface-1）是
-     * 同一个值 #f7f8fa，于是「选中的是哪一项」在浅色下完全看不出来（ISSUE #609
-     * 第 1 条）。判据落在**类**上：底色 + 描边 + 字重三层里至少底色与描边
-     * 都换成了主色调，任何一层单独失效仍读得出选中。
-     * ⚠️ 这里按**类名 token** 精确比对而不是子串包含：`ui/toggle-group` 会给每个
-     * item 都挂 `data-pressed:ring-*` / `data-pressed:font-semibold`（规范 16
-     * §16.8），子串判据分不出「裸类」与「带变体前缀的类」，会把未选中项也判成
-     * 「带着这三样」——那是假红，且真正要防的「选中没有区分度」反而被盖住。 */
+    /* 选中态此前只有 `bg-subtle`——浅色下它与行头底色（surface-1）同值 #f7f8fa，「选中的是哪一项」
+     * 完全看不出来（ISSUE #609 第 1 条）。判据落在**类**上：底色 + 描边 + 字重三层里至少底色与描边都
+     * 换成主色调。⚠️ 按**类名 token** 精确比对而非子串：`ui/toggle-group` 给每个 item 都挂
+     * `data-pressed:ring-*` / `data-pressed:font-semibold`，子串判据分不出裸类与变体前缀，会假红。 */
     const tokensOf = (el: HTMLElement) => new Set(el.className.split(/\s+/));
     const selected = levelButton("全部");
     expect(selected.getAttribute("aria-pressed")).toBe("true");
@@ -736,17 +703,19 @@ describe("LogPanel 日志面板", () => {
     /* 两类来源各若干行：用户先把来源收窄到「应用运行」，再按复制——期望拿到的
      * 只有这一类（ISSUE #609 第 2 条：「复制日志，需要只复制当前选择类型的
      * 全部日志」）。 */
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { origin: "app-runtime", message: "要复制的运行日志" }),
           makeEntry(2, { origin: "dev", message: "不该被复制的启动日志" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
-    act(() => useLogStore.getState().setOrigin("app-runtime"));
+    act(() => {
+      useLogStore.getState().setOrigin("app-runtime");
+    });
 
     await user.click(screen.getByRole("button", { name: "复制当前筛选的全部日志" }));
     const written = await navigator.clipboard.readText();
@@ -758,9 +727,9 @@ describe("LogPanel 日志面板", () => {
     /* 面板此前只有浏览器下载：桌面壳里是否落盘由宿主决定，用户点完常常本地
      * 什么都没有（ISSUE #609 第 3 条）。这里断言接线——点一下会把当前筛选的
      * 文本 POST 给导出端点，并把服务端回的路径显示出来。 */
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn<(url: string, init: { body: string }) => unknown>(() => ({
       ok: true,
-      json: async () => ({
+      json: () => ({
         ok: true,
         path: String.raw`F:\proj\log\exports\logs-all-20260101-100000.txt`,
         relativePath: "exports/logs-all-20260101-100000.txt",
@@ -778,15 +747,18 @@ describe("LogPanel 日志面板", () => {
         }),
       );
       expect(await screen.findByText(/exports\//)).toBeInTheDocument();
-      const [url, init] = /* SAFETY: 类型断言已复核 */ fetchMock.mock.calls[0] as unknown as [
-        string,
-        { body: string },
-      ];
+      /* 面板挂载还会取一次启动耗时分解（#4327），所以按**端点**挑出导出那一通，
+       * 不再假设它是全场第一发。 */
+      const call = fetchMock.mock.calls.find(([url]) => url === "/api/logs/export");
+      if (call === undefined) {
+        throw new Error("未发出导出请求");
+      }
+      const [url, init] = call;
       expect(url).toBe("/api/logs/export");
-      /* SAFETY: 类型断言已复核 */
-      const sent = JSON.parse(init.body) as {
-        content?: string;
-      };
+      const sent: unknown = JSON.parse(init.body);
+      if (!isPlainRecord(sent) || typeof sent.content !== "string") {
+        throw new Error("导出请求体缺少 content 字段");
+      }
       expect(sent.content).toContain("事件");
     } finally {
       vi.unstubAllGlobals();
@@ -799,9 +771,9 @@ describe("LogPanel 日志面板", () => {
      *   「打包诊断」  = 服务端把 current/ + 最近几次 runs/ 打成 zip（run.json
      *                  与环境信息在面板上根本看不到）。
      * 这里断言后者走的是它自己的端点、且不需要带 body（服务端自己找现场）。 */
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn<(url: string) => unknown>(() => ({
       ok: true,
-      json: async () => ({
+      json: () => ({
         ok: true,
         path: String.raw`F:\proj\log\exports\diagnostics-20260101-100000-a1b2c3.zip`,
         relativePath: "exports/diagnostics-20260101-100000-a1b2c3.zip",
@@ -815,15 +787,21 @@ describe("LogPanel 日志面板", () => {
       const user = userEvent.setup();
       await user.click(screen.getByRole("button", { name: "打包诊断现场到本地文件" }));
       expect(await screen.findByText(/diagnostics-/)).toBeInTheDocument();
-      const [url] = /* SAFETY: 类型断言已复核 */ fetchMock.mock.calls[0] as unknown as [string];
-      expect(url).toBe("/api/logs/diagnostics");
+      /* 同上：按端点挑出诊断那一通（面板挂载时还有 #4327 的耗时取数在场）。 */
+      const call = fetchMock.mock.calls.find(([url]) => url === "/api/logs/diagnostics");
+      if (call === undefined) {
+        throw new Error("未发出诊断请求");
+      }
+      expect(call[0]).toBe("/api/logs/diagnostics");
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
   it("复制失败时如实说失败，不谎报「已复制」", async () => {
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(1, { message: "任务入队" })]));
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(1, { message: "任务入队" })]);
+    });
     render(<LogPanel />);
     const user = userEvent.setup();
     /* 让剪贴板写入失败（权限被拒 / 非安全上下文都会走到这里）。注意顺序：
@@ -853,16 +831,10 @@ describe("LogPanel 日志面板", () => {
     expect(rows[0]?.textContent).toContain("事件");
   });
 
-  /* ISSUE #609 八审：「日志切换到 1000+ 的页签有明显卡顿需要优化」。
-   *
-   * 根因是一页 2000 行**全部**挂进 DOM（加上行内的分片 span，满页约 1.5 万
-   * 个节点），切页那一刻的布局成本就是用户感知到的卡顿。现在只渲染视口内的
-   * 几十行（`log-virtual`）。
-   *
-   * jsdom 不做布局、量不到视口高度，所以面板在这一支走的是「整页渲染」的兜底
-   * ——这里断言的正是**这条兜底**与**几何接线**：量不到就不能少渲染（否则内容
-   * 会看不见），量到了就必须给出撑开滚动条的总高与窗口起点。真实浏览器里
-   * 「节点数不随页大小增长」由 e2e 量。 */
+  /* ISSUE #609 八审：「日志切换到 1000+ 的页签有明显卡顿」。根因是一页 2000 行**全部**挂进 DOM
+   * （含行内分片 span 约 1.5 万节点），切页那刻的布局成本就是卡顿；现在只渲染视口内几十行
+   * （`log-virtual`）。jsdom 不做布局、量不到视口高度，面板走「整页渲染」兜底——这里断言的正是这条
+   * 兜底与几何接线：量不到不能少渲染，量到了必须给出总高与窗口起点。节点数由 e2e 量。 */
   it("量不到视口时整页渲染（虚拟化不能变成内容看不见）", () => {
     /* 页大小显式钉住 200：本文件里别的用例（`useSmallPage`）会把它改小，
      * 而页码/页大小是**全文件共享的 store 状态**——不钉住就会读到上个用例
@@ -890,13 +862,10 @@ describe("LogPanel 日志面板", () => {
     expect(spacer.style.height).toBe(`${120 * LOG_ROW_SINGLE}px`);
   });
 
-  /* 上面两条走的是「量不到视口就整页渲染」的兜底分支。这条**真的把视口量出来**
-   * （jsdom 里 `clientHeight` 本来是 0，这里给它一个数），于是走的是真正的虚拟
-   * 窗口分支——判据是「渲染的行数明显少于整页」以及「滚动能换窗口」。
-   *
-   * 为什么值得在 jsdom 里也钉一条：整页渲染的兜底让「虚拟化没生效」这件事在
-   * jsdom 里**完全不可见**（两条分支的可见输出都是全部行）。这条是唯一能在单测
-   * 层发现「窗口算歪了、滚动不换段」的判据；真实浏览器里的节点数与总高由 e2e 量。 */
+  /* 上面两条走的是「量不到视口就整页渲染」的兜底。这条**真的把视口量出来**（jsdom 的 `clientHeight`
+   * 本来是 0），于是走真正的虚拟窗口分支——判据是「渲染行数明显少于整页」与「滚动能换窗口」。
+   * 为什么值得钉：兜底让「虚拟化没生效」在 jsdom 里完全不可见，这条是单测层唯一能发现「窗口算歪、
+   * 滚动不换段」的判据；真实浏览器里的节点数与总高由 e2e 量。 */
   it("量到视口后只渲染窗口内的行，滚动能换窗口", () => {
     useSmallPage(200);
     seed(200);
@@ -904,8 +873,10 @@ describe("LogPanel 日志面板", () => {
     /* jsdom 不做布局，`clientHeight` 恒为 0；这里给它一个真实尺度的视口
      * （600px 高、1100px 宽），面板才会走虚拟窗口分支。改的是**原型**上的取值：
      * 面板读的是它自己那个滚动元素，而 jsdom 里所有元素的尺寸都由这一份原型给出。 */
-    /* SAFETY: 类型断言已复核 */
-    const prototype: object = Object.getPrototypeOf(document.createElement("div")) as object;
+    const prototype = Reflect.getPrototypeOf(document.createElement("div"));
+    if (prototype === null) {
+      throw new Error("无法读取元素原型");
+    }
     const heights = Object.getOwnPropertyDescriptor(prototype, "clientHeight");
     const widths = Object.getOwnPropertyDescriptor(prototype, "clientWidth");
     Object.defineProperty(prototype, "clientHeight", {
@@ -953,22 +924,18 @@ describe("LogPanel 日志面板", () => {
     }
   });
 
-  /* 贴底滚动的落点必须取自**位置表**，不能量 DOM 节点。
-   *
-   * 用户侧的形态是「滚到底就再也回不去底」：虚拟化之后行的 `offsetParent` 是那层
-   * `translateY` 过的内层容器，`offsetTop` 量到的是「它在**当前窗口**里的位置」；
-   * 拿它算 `scrollTop` 会把视口拉回窗口起点（e2e 里表现为滚到底只渲染到第 44 行，
-   * 2000 行的页尾永远够不到）。
-   *
-   * jsdom 里 `offsetTop` / `offsetHeight` 恒为 0，`clientHeight` 被下面这些用例
-   * 显式量成 600——按节点量出来的落点会恒等于 `max(0, 0 + 0 - 600) = 0`，与
-   * 位置表算出来的页尾位置相差一个整页。这条判据正是两者的分界线。 */
+  /* 贴底滚动的落点必须取自**位置表**，不能量 DOM 节点：虚拟化后行的 `offsetParent` 是 `translateY`
+   * 内层容器，`offsetTop` 回答「它在**当前窗口**里的位置」，拿它算 `scrollTop` 会把视口拉回窗口起点
+   * （e2e 表现为滚到底只渲染到第 44 行）。jsdom 里 `offsetTop`/`offsetHeight` 恒为 0、`clientHeight`
+   * 被量成 600——按节点算的落点恒为 0，与位置表算出的页尾差一整页，这条判据正是两者的分界线。 */
   it("贴底按位置表滚动：落点能到本页最后一行，而不是退回窗口起点", () => {
     useSmallPage(200);
     seed(200);
 
-    /* SAFETY: 类型断言已复核 */
-    const prototype: object = Object.getPrototypeOf(document.createElement("div")) as object;
+    const prototype = Reflect.getPrototypeOf(document.createElement("div"));
+    if (prototype === null) {
+      throw new Error("无法读取元素原型");
+    }
     const heights = Object.getOwnPropertyDescriptor(prototype, "clientHeight");
     const widths = Object.getOwnPropertyDescriptor(prototype, "clientWidth");
     Object.defineProperty(prototype, "clientHeight", {
@@ -1016,7 +983,9 @@ describe("LogPanel 日志面板", () => {
      结束（jsdom 不会派发那个事件），展开过一次就会给后续用例留下一份没摘除的
      弹层宿主。只影响测试环境，真实浏览器里过渡会正常结束。 */
   it("弹层定位层的层级高于面板遮罩（否则被遮罩压住、点不动）", async () => {
-    act(() => useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]));
+    act(() => {
+      useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]);
+    });
     render(<LogPanel />);
 
     /* 面板遮罩：面板改用 `ui/dialog` 后遮罩由基元 Portal 到 body（不再挂在
@@ -1043,14 +1012,14 @@ describe("LogPanel 日志面板", () => {
   /* 零条目同样不留占位：胶囊已删，所以「警告 0 / 错误 0」在任何地方都不出现，
    * 标题行不会因为一个恒在的徽标被挤（列宽也就不会被逼到省略号）。 */
   it("警告/错误都为零时标题行不留占位", () => {
-    act(() =>
+    act(() => {
       useLogStore
         .getState()
         .appendFileLogs([
           makeEntry(1, { level: "info", origin: "app" }),
           makeEntry(2, { level: "info", origin: "app" }),
-        ]),
-    );
+        ]);
+    });
     render(<LogPanel />);
 
     expect(document.querySelector("span.rounded-full")).toBeNull();

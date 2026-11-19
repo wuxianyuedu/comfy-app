@@ -1,27 +1,13 @@
 /**
- * 组件覆盖率的**棘轮**判据（ISSUE #1381 续，规范 16 §16.2.3 / 11 §11.8）。
- *
- * 为什么需要它：这一批之前长这样 —— `ui/` 下 157 个文件里 **3 个**有 story，
- * 而「只有 3 个」这句话写在 `docs/guide-storybook.md` 的「它不做什么」里。
- * 文档里的数字**会过期**，且过期时没有任何东西会红：`tests/storybook-config.test.ts`
- * 守配置契约、`tests/storybook-cva-variant-source.test.ts` 守「故事文件怎么写」，
- * 两条对「有多少组件根本没被看过」都无感。F6 的「组件覆盖率」那一格就是这么
- * 挂着的（数字写在台账里、没人负责让它变准）。
- *
- * 本条把它换成机器判据，三段：
- *  1. **扫描面非空**：`ui/` 的可预览文件数与 story 份数都要大于 0 —— 否则
- *     「覆盖率 100%」会被一个空集白送（判据在空转）。
- *  2. **只许升不许降**：与 `scripts/.storybook-coverage-baseline.json` 比。
- *  3. **理由表与磁盘对得上**：`NO_STORY_REASON` 里指向不存在文件的条目是过期
- *     账；已经有 story 却还留着的条目会静默放行「下一个人改回去」。
- *
- * 与门禁脚本 `scripts/storybook-check.mjs` 共用
- * `scripts/storybook-checks/coverage-ledger.mjs` 的纯函数（不写第二份实现）；
- * 那边管「提交时挡一下」，这里管 `pnpm test` 与全量门禁的同一句话。
+ * 组件覆盖率的**棘轮**判据（ISSUE #1381 续，规范 16 §16.2.3 / 11 §11.8）：此前 `ui/` 157 个文件只有 3 个有 story，
+ * 数字只写在文档里、过期时无物会红（`storybook-config` / `storybook-cva-variant-source` 都管不到）。三段：扫描面非空
+ * （防空集白送 100%）、只升不降（比 `.storybook-coverage-baseline.json`）、`NO_STORY_REASON` 对齐磁盘；共用 `coverage-ledger.mjs`。
  */
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+
+import { isRecord } from "~/lib/is-record";
 
 import {
   NO_STORY_REASON,
@@ -33,13 +19,20 @@ import {
 const ROOT = resolve(".");
 const COMPONENTS = join(ROOT, "src", "components");
 const UI = join(COMPONENTS, "ui");
-const BASELINE_PATH = join(ROOT, "scripts", ".storybook-coverage-baseline.json");
+const BASELINE_PATH = join(ROOT, "scripts", "gates", ".storybook-coverage-baseline.json");
 
-/* SAFETY: 类型断言已复核 */
-const BASELINE = JSON.parse(readFileSync(BASELINE_PATH, "utf8")) as {
-  covered: number;
-  uiSurfaces: number;
-};
+/** 基线形状守卫（B5 清账）：两个读数都必须是数，缺了就没法比棘轮。 */
+function isBaseline(value: unknown): value is { covered: number; uiSurfaces: number } {
+  return (
+    isRecord(value) && typeof value.covered === "number" && typeof value.uiSurfaces === "number"
+  );
+}
+
+const parsedBaseline: unknown = JSON.parse(readFileSync(BASELINE_PATH, "utf8"));
+if (!isBaseline(parsedBaseline)) {
+  throw new Error("覆盖率基线形状不对：covered / uiSurfaces 必须是数");
+}
+const BASELINE = parsedBaseline;
 
 const STAT = uiCoverage({ componentsRoot: COMPONENTS });
 
@@ -84,22 +77,17 @@ describe("ui/ 的组件覆盖率（ISSUE #1381）", () => {
   });
 
   /**
-   * 理由表的**空 ⟺ 满**不变式（替代原先那条「表非空」）。
-   *
-   * 原判据是「表被清空 = 判据在空转」，本意是别让人把表删掉、然后看起来判据
-   * 还在跑。但那个「空转」真正的信号不在这张表上 —— 它在**实测**里（分子分母
-   * 是否非空）。表空 + 覆盖率满是一个合法且真实的状态（这一批就到达了），
-   * 判红只会逼人凑一条假理由（那正是这套棘轮最不想鼓励的事）。
-   *
-   * 换成一条双向的不变式：两者**同时**成立才合法。
+   * 理由表的**空 ⟺ 满**不变式（替代原先「表非空」那条）。原判据怕「表被删掉却看起来还在跑」，
+   * 但空转的真正信号在**实测**里（分子分母是否非空）；表空 + 覆盖率已满合法且真实（这一批就到达了），
+   * 判红只会逼人凑一条假理由。换成双向不变式：两边同时成立才合法。
    */
   it("理由表为空 ⟺ 覆盖率已满（两边都不能单独成立）", () => {
-    if (NO_STORY_REASON.size === 0) {
-      expect(
-        STAT.uncovered,
-        "理由表空了，但还有组件没有 story —— 要么补 story，要么把理由加回去",
-      ).toEqual([]);
-    }
+    /* 双向不变式收进一条期望值：两边同真同假才合法 —— 断言无条件跑
+     * （no-conditional-expect；条件里的断言在另一支上会静默不跑）。 */
+    expect(
+      NO_STORY_REASON.size === 0,
+      "理由表空了，但还有组件没有 story —— 要么补 story，要么把理由加回去",
+    ).toBe(STAT.uncovered.length === 0);
   });
 
   it("已经有 story 的组件不许留在理由表里（那会静默放行下一次回归）", () => {

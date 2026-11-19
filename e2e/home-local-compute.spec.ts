@@ -1,16 +1,9 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 /**
- * 首页「本机算力」卡在真浏览器里的形态（@critical）。
- *
- * jsdom 那边（`LocalComputeCard.test.tsx`）钉的是组件分支；这里钉两件它替代不了的：
- *   ① 这张卡确实出现在 `/workspace` 的首页上（首页由 AppShell 组装，组件测不出装配）；
- *   ② 后端在线/离线两态在真实轮询链路（`comfy-stats-store` → `/api/comfy/stats` → hook →
- *      `ProgressBar`）里各自落成什么样的 DOM —— 特别是**离线时一根占用条都不该有**。
- *      「画 0% 冒充没数据」是这个界面最容易犯的错，也是唯一值得在浏览器层再判一次的。
- *
- * 单位与百分比都由真实格式化链路给出，这里只读 `aria-valuenow`（数值契约），不比像素、
- * 不录视觉基线（规范 §11.8：这类断言走 getComputedStyle / ARIA，不进基线库）。
+ * 首页「本机算力」卡在真浏览器里的形态（@critical）。jsdom（`LocalComputeCard.test.tsx`）钉组件分支；这里钉两件替代不了的：① 卡确实在 `/workspace` 首页上（首页由 AppShell 组装）；
+ * ② 在线/离线两态在真实轮询链路（`comfy-stats-store` → `/api/comfy/stats` → hook → `ProgressBar`）里各自落成的 DOM —— 离线时**一根占用条都不该有**（「画 0% 冒充没数据」）。
+ * 只读 `aria-valuenow`（数值契约），不比像素、不录视觉基线（规范 §11.8：这类断言走 getComputedStyle / ARIA）。
  */
 const GIB = 1024 * 1024 * 1024;
 
@@ -28,9 +21,7 @@ async function stubStats(page: Page, body: Record<string, unknown>) {
 }
 
 test.describe("首页本机算力卡 @critical", () => {
-  test("在线时三档占用条各有数值，设备名与「在线」徽标可见", async ({
-    page,
-  }) => {
+  test("在线时三档占用条各有数值，设备名与「在线」徽标可见", async ({ page }) => {
     await stubStats(page, {
       online: true,
       gpuName: "NVIDIA GeForce RTX 4090",
@@ -57,9 +48,7 @@ test.describe("首页本机算力卡 @critical", () => {
           (
             await card
               .locator('[role="progressbar"]')
-              .evaluateAll((els) =>
-                els.map((el) => el.getAttribute("aria-valuenow")),
-              )
+              .evaluateAll((els) => els.map((el) => el.getAttribute("aria-valuenow")))
           ).join(","),
         { message: "占用条没按口径次序拿到三个百分比" },
       )
@@ -85,9 +74,7 @@ test.describe("首页本机算力卡 @critical", () => {
     const card = page.locator(CARD);
     await expect(card.getByText("本机算力")).toBeVisible();
     await expect(card.getByText("离线")).toBeVisible();
-    await expect(
-      card.getByText("ComfyUI 未运行，显存/内存暂不可用"),
-    ).toBeVisible();
+    await expect(card.getByText("ComfyUI 未运行，显存/内存暂不可用")).toBeVisible();
     /* 关键判据：读不到 = 不画，而不是画成 0%。 */
     await expect(card.locator('[role="progressbar"]')).toHaveCount(0);
   });

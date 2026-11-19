@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { displayValue } from "~/lib/display-value";
 
 import { NAV_ITEMS, type WorkspaceView } from "./NavItems";
@@ -26,7 +27,7 @@ export function viewTabLabel(view: WorkspaceView, projectName?: string | null): 
   const name = projectName?.trim();
   // 项目类视图带上项目名（原型里就是「工坊·雾中来信」）—— 同一视图开两页时，
   // 只有视图名的话用户分不清哪一页是哪个项目。
-  return name ? `${base}·${name}` : base;
+  return name !== undefined && name !== "" ? `${base}·${name}` : base;
 }
 
 export type ViewTabStripProps = {
@@ -54,15 +55,8 @@ export type OpenableView = {
 };
 
 /**
- * 视图页签条 —— 桌面壳内嵌进窗口标题行，浏览器/dev 里单独一条。
- *
- * 为什么两种形态共用一个组件：这是同一件事的两种摆放位置，不是两件事。分成两份
- * 渲染，「当前项高亮 / 可关闭 / 键盘激活」迟早只在一边修（`ShellTabs` 与
- * `TitleBarTabs` 此前对 iframe 页签就是这么各写一遍键判据，后来才收进
- * `simpleKeyHandler`）。
- *
- * 语义用 `tablist`/`tab` + `aria-selected`：这里的选中态是真的存在（当前视图），
- * 与「镜头胶片带」那种只有跳转、没有选中态的控件刻意不同。
+ * 视图页签条 —— 桌面壳内嵌进窗口标题行，浏览器/dev 里单独一条。两种形态共用一个组件，因为这是同一件事的两种摆放位置：「当前项高亮 / 可关闭 / 键盘激活」分两份写迟早只修一边（`ShellTabs` 与 `TitleBarTabs` 对 iframe 页签就曾各写一遍键判据，后收进 `simpleKeyHandler`）。
+ * 语义用 `tablist`/`tab` + `aria-selected`：这里的选中态真的存在（当前视图），与「镜头胶片带」那种只有跳转、没有选中态的控件刻意不同。
  */
 export function ViewTabStrip({
   tabs,
@@ -89,15 +83,19 @@ export function ViewTabStrip({
         const active = tab.key === activeKey;
         const label = viewTabLabel(tab.view, projectNameOf?.(tab.projectId));
         return (
-          /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：键出口是 `simpleKeyHandler` 的展开。 */
+          /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events -- 同上：键出口是 `simpleKeyHandler` 的展开。 */
           <div
             aria-selected={active}
             data-no-drag
             key={tab.key}
-            onClick={() => onSelect(tab.key)}
+            onClick={() => {
+              onSelect(tab.key);
+            }}
             role="tab"
             tabIndex={active ? 0 : -1}
-            {...simpleKeyHandler(["Space", "Enter"], () => onSelect(tab.key))}
+            {...simpleKeyHandler(["Space", "Enter"], () => {
+              onSelect(tab.key);
+            })}
             className={
               /* 选中态走 `.u-tab-active`（更亮的表面 + 顶部一条品牌色），两种形态
                  共用同一套语言 —— 原来标题行里给的是 `bg-canvas/70`，暗色下比
@@ -112,7 +110,7 @@ export function ViewTabStrip({
               }`
             }
           >
-            <span className="min-w-0 truncate">{label}</span>
+            <TruncatedText className="min-w-0 truncate">{label}</TruncatedText>
             {isTabClosable(tab) ? (
               <Button
                 aria-label={`关闭 ${displayValue(label)}`}

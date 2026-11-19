@@ -3,6 +3,7 @@ import { useId, useRef, useState } from "react";
 import { textHandler } from "~/lib/form-props";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
@@ -10,17 +11,8 @@ import { filterGroupsByKeyword } from "~/lib/list-filter";
 import type { OptionGroup } from "~/lib/workshop/character-options";
 
 /**
- * AttributeMultiSelect —— 角色属性穷举式多选下拉。
- *
- * 把服装/外貌/性格/气质/风格从"手写自由文本"升级为"下拉穷举勾选"：
- *  - 选中项以可删除 chip 平铺展示；
- *  - 点「+ 选择」开 popover：按分组分类 + 搜索过滤 + 复选框多选；
- *  - popover 底部提供「添加自定义」以覆盖穷举之外的同义表达。
- *
- * 浮层走 `~/components/ui/popover`（规范 16 §16.2.3 P2）：此前这里自搓了一套
- * portal + fixed 定位 + Esc/外点关闭 + 滚动重定位，`SelectMenu` 里还有一份 ——
- * 定位与关闭语义本就不该由每个调用点各写一遍。翻上/翻下、右边界收边、随触发
- * 元素滚动重定位全部交给 base-ui Positioner。
+ * AttributeMultiSelect —— 角色属性穷举式多选下拉：选中项以可删除 chip 平铺，「+ 选择」开 popover（分组 + 搜索 + 复选），底部可「添加自定义」覆盖同义表达。
+ * 浮层走 `~/components/ui/popover`（规范 16 §16.2.3 P2），翻上/翻下、右边界收边、滚动重定位交给 base-ui Positioner，不再每个调用点自写定位与关闭语义。
  */
 type AttributeMultiSelectProps = {
   className?: string;
@@ -43,6 +35,7 @@ export function AttributeMultiSelect({
   className = "",
 }: AttributeMultiSelectProps) {
   const panelId = useId();
+  const listboxId = `${panelId}-listbox`;
   const [open, setOpen] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [custom, setCustom] = useState("");
@@ -104,7 +97,9 @@ export function AttributeMultiSelect({
             <Button
               aria-label={`移除 ${v}`}
               className="text-primary/60 hover:text-danger-strong"
-              onClick={() => removeOne(v)}
+              onClick={() => {
+                removeOne(v);
+              }}
               size="icon-xs"
               variant="ghost"
             >
@@ -122,6 +117,8 @@ export function AttributeMultiSelect({
           open={open}
         >
           <PopoverTrigger
+            aria-controls={listboxId}
+            aria-expanded={open}
             className="border-border text-muted-foreground hover:border-primary hover:text-primary ml-1 inline-flex h-auto items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-xs transition-colors disabled:opacity-40"
             disabled={disabled}
             id={panelId}
@@ -157,6 +154,7 @@ export function AttributeMultiSelect({
             <div
               aria-multiselectable="true"
               className="max-h-56 overflow-y-auto px-1 py-1"
+              id={listboxId}
               role="listbox"
             >
               {visibleGroups.length === 0 ? (
@@ -172,27 +170,26 @@ export function AttributeMultiSelect({
                     {g.options.map((opt) => {
                       const on = selected.has(opt);
                       return (
-                        /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：选项行的键出口是 `simpleKeyHandler` 的展开（`tabIndex` 本轮已补）。 */
+                        /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events -- 同上：选项行的键出口是 `simpleKeyHandler` 的展开（`tabIndex` 本轮已补）。 */
                         <div
                           aria-selected={on}
                           key={opt}
-                          onClick={() => toggle(opt)}
+                          onClick={() => {
+                            toggle(opt);
+                          }}
                           role="option"
-                          /* 行可聚焦 + Enter/Space 切换：此前只有 `onClick`，
-                           * 连 `tabIndex` 都没有 —— 键盘用户完全进不来。
-                           * `role="option"` 承诺「Space / Enter 可选中」，键判据
-                           * 走 §16.2.4.57 的唯一出口，不手写第二份 `event.key`
-                           * 比较（`simpleKeyHandler` 是属性展开，a11y 规则按
-                           * 字面量找 `onKeyDown` 找不到，豁免登记在
-                           * `scripts/.a11y-rule-ledger.json`）。 */
+                          /* 行可聚焦 + Enter/Space 切换：此前只有 `onClick`、连
+                           * `tabIndex` 都没有，键盘用户完全进不来。键判据走 §16.2.4.57
+                           * 的唯一出口（`simpleKeyHandler` 是属性展开，a11y 规则按字面量
+                           * 找不到 `onKeyDown`，豁免登记在 `scripts/gates/.a11y-rule-ledger.json`）。 */
                           tabIndex={0}
-                          /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`：
-                           * 这一行里还有「点 label 选、点默认星切默认」两个动作，合成
-                           * 一个 button 会把后者的键语义一起吞掉）。`tabIndex={0}` 让
-                           * 行可聚焦，Enter/Space 由 `simpleKeyHandler` 给
-                           *（§16.2.4.57 的唯一出口：ARIA 的 `checkbox` 承诺「Space 可
-                           * 切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」）。 */
-                          {...simpleKeyHandler(["Space", "Enter"], () => toggle(opt))}
+                          /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`：行里
+                           * 还有「点 label 选、点默认星切默认」两个动作，合成 button 会吞掉
+                           * 后者的键语义）。Enter/Space 由 `simpleKeyHandler` 给（§16.2.4.57
+                           * 唯一出口：只挂 `onClick` 就是「鼠标点得开、键盘进不来」）。 */
+                          {...simpleKeyHandler(["Space", "Enter"], () => {
+                            toggle(opt);
+                          })}
                           className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs transition-colors ${
                             on ? "bg-primary-soft text-primary" : "text-ink/80 hover:bg-subtle"
                           }`}
@@ -204,7 +201,7 @@ export function AttributeMultiSelect({
                           >
                             {on && <Check size={10} />}
                           </span>
-                          <span className="min-w-0 flex-1 truncate">{opt}</span>
+                          <TruncatedText className="min-w-0 flex-1 truncate">{opt}</TruncatedText>
                         </div>
                       );
                     })}

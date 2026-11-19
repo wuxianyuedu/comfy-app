@@ -41,14 +41,10 @@ export const CLARITY_HINT: Record<DimClarityPreset["kind"], string> = {
   megapixel: "总像素预算，宽高由倍数对齐",
 };
 
-/** 组合参数子 pin 的必填 / 显隐控制：grouped 行替代了各自的独立参数行，
- *  原来的必填/可选徽标与 👁 会跟着消失 —— 在组合卡内按 pin 补回。
- *  仅编辑态（IO 预览多模式作者态）传入回调时渲染。
- *
- *  required / visible 都按当前 mode 解析（resolveEntryRequired /
- *  isVisibleInMode）：IO 预览在模式页签下把必填/显隐写进 `modes[mode]`
- *  覆盖层，这里必须读同源回读，否则点完按钮 UI 不回读、看起来像“无法切换”
- *  （历史根因：原实现直读条目级 `pin.required`，与模式级写入错层）。 */
+/** 组合参数子 pin 的必填/显隐控制：grouped 行替代独立参数行，原徽标与 👁 会消失 —— 在组合卡内按 pin 补回。
+ *  仅编辑态（IO 预览多模式作者态）传入回调时渲染。required/visible 按当前 mode 解析
+ *（resolveEntryRequired / isVisibleInMode）：模式页签下写入 modes[mode] 覆盖层，这里必须同源回读，
+ *  否则点完按钮 UI 不回读、看起来像无法切换（历史根因：直读条目级 pin.required 与模式级写入错层）。 */
 export function RequiredChips({
   pins,
   onRequiredChange,
@@ -65,67 +61,82 @@ export function RequiredChips({
   visibilityMode?: string | null;
 }) {
   const live = pins.filter((pin): pin is EnrichedWidget => !!pin);
-  const showAny = !!onRequiredChange || (!!onVisibilityChange && !!visibilityMode);
+  const showAny =
+    !!onRequiredChange ||
+    (!!onVisibilityChange &&
+      visibilityMode !== undefined &&
+      visibilityMode !== null &&
+      visibilityMode !== "");
   if (!showAny || live.length === 0) {
     return null;
   }
   return (
     <div className="flex flex-wrap items-center justify-end gap-1 pt-1">
       {live.map((pin) => {
-        const required = !!resolveEntryRequired(pin, mode);
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        const visible = visibilityMode == null ? true : isVisibleInMode(pin, visibilityMode);
+        const required = resolveEntryRequired(pin, mode) === true;
+        const visible =
+          visibilityMode === null || visibilityMode === undefined
+            ? true
+            : isVisibleInMode(pin, visibilityMode);
         return (
           <span
             className="border-border-strong bg-canvas-deep flex items-center gap-1 rounded border px-1.5 py-0.5"
             data-dimension-pin={pin.ioKey}
             key={pin.ioKey}
           >
-            <span
-              className="text-ink-soft text-3xs max-w-20 truncate"
-              title={pin.label ?? pin.name}
-            >
-              {pin.label ?? pin.name}
-            </span>
+            <Hint label={pin.label ?? pin.name}>
+              <span className="text-ink-soft text-3xs max-w-20 truncate">
+                {pin.label ?? pin.name}
+              </span>
+            </Hint>
             {onRequiredChange && (
               <Hint label={required ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}>
                 <Button
                   className={`nodrag nopan text-3xs h-auto rounded px-1.5 py-px font-medium ${
                     required ? "" : "border-border-strong bg-subtle text-ink-muted border"
                   }`}
-                  onClick={() => onRequiredChange(pin.ioKey, !required)}
+                  onClick={() => {
+                    onRequiredChange(pin.ioKey, !required);
+                  }}
                   variant={required ? "danger" : "ghost"}
                 >
                   {required ? "必填" : "可选"}
                 </Button>
               </Hint>
             )}
-            {onVisibilityChange && visibilityMode && (
-              <Hint
-                label={
-                  visible
-                    ? "该参数在当前模式下已可见，点击隐藏"
-                    : "该参数在当前模式下已隐藏，点击恢复显示"
-                }
-              >
-                <Button
-                  className={`nodrag nopan h-auto rounded p-0.5 ${
+            {onVisibilityChange &&
+              visibilityMode !== undefined &&
+              visibilityMode !== null &&
+              visibilityMode !== "" && (
+                <Hint
+                  label={
                     visible
-                      ? "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
-                      : "text-ink-fainter hover:bg-surface-2 hover:text-ink-bright"
-                  }`}
-                  onClick={() => onVisibilityChange(pin.ioKey, !visible)}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  variant="ghost"
+                      ? "该参数在当前模式下已可见，点击隐藏"
+                      : "该参数在当前模式下已隐藏，点击恢复显示"
+                  }
                 >
-                  {visible ? (
-                    <Eye data-icon="inline-start" size={11} />
-                  ) : (
-                    <EyeOff data-icon="inline-start" size={11} />
-                  )}
-                </Button>
-              </Hint>
-            )}
+                  <Button
+                    className={`nodrag nopan h-auto rounded p-0.5 ${
+                      visible
+                        ? "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
+                        : "text-ink-fainter hover:bg-surface-2 hover:text-ink-bright"
+                    }`}
+                    onClick={() => {
+                      onVisibilityChange(pin.ioKey, !visible);
+                    }}
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    variant="ghost"
+                  >
+                    {visible ? (
+                      <Eye data-icon="inline-start" size={11} />
+                    ) : (
+                      <EyeOff data-icon="inline-start" size={11} />
+                    )}
+                  </Button>
+                </Hint>
+              )}
           </span>
         );
       })}

@@ -8,7 +8,7 @@
 //     `spawnSync(candidate, ["-NoProfile", …])` 起得来却解释不了参数 ⇒ 守卫脚本的
 //      `HITS=` 一个都不出现 ⇒ `toContain` 等满 20s 才抛 `Test timed out` —— 一条
 //     「这一格在这台机器上判不了」变成了「这一格红了」，而报错行指向「超时」。
-//   · `scripts/check-app-port-vectors.cjs` 的 `python3 --version` 探针：形态不对的命令
+//   · `scripts/gates/check-app-port-vectors.cjs` 的 `python3 --version` 探针：形态不对的命令
 //     被归进「这台机器没有 Python」，而那句话是假的 —— 下一动作（去装）也是错的。
 //
 // 所以这里给**一次探测**三个出口，调用方按语义挑一个用（不许糊成一个布尔）：
@@ -153,7 +153,7 @@ export function probeExecutable(
      * 「没有码」（它会打出一句「起不来（）」），所以这里刻意不用 `??`。 */
     /* SAFETY: 类型断言已复核 */
     const errno = (probe.error as NodeJS.ErrnoException).code;
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+    // oxlint-disable-next-line typescript/prefer-nullish-coalescing
     const code: string = errno || "UNKNOWN";
     if (code === "ETIMEDOUT") {
       return { ok: false, failure: { kind: "timeout", timeoutMs } };
@@ -218,7 +218,8 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
     ((candidate: string, args: Array<string>) =>
       probeExecutable(candidate, args, options.timeoutMs));
   const got = firstRunnable(options.candidates, options.probeArgs, probe);
-  if (got.hit) {
+  /* 命中的候选名不会是空串（候选本身就是非空的名字或路径） */
+  if (got.hit !== null) {
     return got.hit;
   }
   /* 一行读数走**两条出口**，它们答的是两件不同的事：

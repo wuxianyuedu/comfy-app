@@ -15,6 +15,7 @@ import { Switch } from "~/components/ui/switch";
 import { FieldLabel } from "~/components/ui/field";
 
 import type { CanvasSettings } from "./canvas-settings-types";
+import { Hint } from "~/components/ui/hint";
 
 /* 读数格式化：`fixed` 是全库 `toFixed` 的唯一落点（~/lib/number-format），
  * 非有限数返回 null —— 这里以空串兜底，不渲染出「NaN」。 */
@@ -37,7 +38,12 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
   /* 抽屉走 ui/sheet（规范 16 §16.2.3 P2）：Esc 关闭、点遮罩关闭、遮罩让出
  标题行与 ProjectSettingsDrawer 是同一件事，此前两边各写一份。 */
   return (
-    <Sheet onOpenChange={(next) => !next && onClose()} open>
+    <Sheet
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <SheetContent
         aria-label="工作流画布设置"
         className="bg-panel/97 border-border-strong text-ink-bright w-85 gap-0 border-l shadow-2xl shadow-black/10 sm:max-w-85 dark:shadow-black/50"
@@ -77,7 +83,9 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
               label="细线透明度"
               max={1}
               min={0}
-              onChange={(value) => update({ gridMinorAlpha: value })}
+              onChange={(value) => {
+                update({ gridMinorAlpha: value });
+              }}
               step={0.02}
               tooltip="细格子 (默认 10px 一格) 线条的可见度。设为 0 接近全透明"
               value={settings.gridMinorAlpha}
@@ -87,7 +95,9 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
               label="主线透明度"
               max={1}
               min={0}
-              onChange={(value) => update({ gridMajorAlpha: value })}
+              onChange={(value) => {
+                update({ gridMajorAlpha: value });
+              }}
               step={0.02}
               tooltip="主参考线 (每 10 格 = 100px) 的可见度"
               value={settings.gridMajorAlpha}
@@ -97,7 +107,9 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
               label="细线宽度"
               max={3}
               min={0.5}
-              onChange={(value) => update({ gridMinorLineWidth: value })}
+              onChange={(value) => {
+                update({ gridMinorLineWidth: value });
+              }}
               step={0.25}
               value={settings.gridMinorLineWidth}
             />
@@ -106,7 +118,9 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
               label="主线宽度"
               max={3}
               min={0.5}
-              onChange={(value) => update({ gridMajorLineWidth: value })}
+              onChange={(value) => {
+                update({ gridMajorLineWidth: value });
+              }}
               step={0.25}
               value={settings.gridMajorLineWidth}
             />
@@ -115,14 +129,18 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
               label="格子间距"
               max={40}
               min={4}
-              onChange={(value) => update({ gridGap: value })}
+              onChange={(value) => {
+                update({ gridGap: value });
+              }}
               step={2}
               tooltip="细格子之间的世界坐标距离；调小 → 更密集的网格"
               value={settings.gridGap}
             />
             <ToggleRow
               label="显示网格"
-              onChange={(value) => update({ showGrid: value })}
+              onChange={(value) => {
+                update({ showGrid: value });
+              }}
               value={settings.showGrid}
             />
           </Section>
@@ -130,13 +148,17 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
           <Section subtitle="坐标尺 / 缩略图 等装饰" title="画布">
             <ToggleRow
               label="显示坐标尺"
-              onChange={(value) => update({ showRulers: value })}
+              onChange={(value) => {
+                update({ showRulers: value });
+              }}
               tooltip="四边的世界坐标刻度，鼠标移动时会同步高亮最近刻度"
               value={settings.showRulers}
             />
             <ToggleRow
               label="显示缩略图"
-              onChange={(value) => update({ showMiniMap: value })}
+              onChange={(value) => {
+                update({ showMiniMap: value });
+              }}
               tooltip="右下角缩略图，方便定位大规模工作流"
               value={settings.showMiniMap}
             />
@@ -148,7 +170,9 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
               label="最大缩放"
               max={4}
               min={1}
-              onChange={(value) => update({ maxZoom: value })}
+              onChange={(value) => {
+                update({ maxZoom: value });
+              }}
               step={0.1}
               value={settings.maxZoom}
             />
@@ -157,7 +181,9 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
               label="最小缩放"
               max={0.5}
               min={0.05}
-              onChange={(value) => update({ minZoom: value })}
+              onChange={(value) => {
+                update({ minZoom: value });
+              }}
               step={0.05}
               value={settings.minZoom}
             />
@@ -166,7 +192,9 @@ export function CanvasSettingsPanel({ settings, update, reset, onClose }: PanelP
           <Section subtitle="日志入口开关；节点渲染链路标签由顶栏「调试」按钮控制" title="调试">
             <ToggleRow
               label="日志面板"
-              onChange={(value) => update({ debugMode: value })}
+              onChange={(value) => {
+                update({ debugMode: value });
+              }}
               tooltip="开启后在画布右上角显示『执行日志』入口按钮，点击以弹窗形式查看实时执行日志；节点卡片上的渲染链路标签请用顶栏「调试」按钮"
               value={settings.debugMode}
             />
@@ -205,7 +233,9 @@ function Section({
     <section className="mb-5 last:mb-0">
       <header className="mb-2">
         <h3 className="text-ink-soft text-2xs font-semibold tracking-wider uppercase">{title}</h3>
-        {subtitle && <p className="text-ink-muted text-2xs mt-0.5">{subtitle}</p>}
+        {subtitle !== undefined && subtitle !== "" && (
+          <p className="text-ink-muted text-2xs mt-0.5">{subtitle}</p>
+        )}
       </header>
       <div className="border-border-strong bg-subtle flex flex-col gap-2.5 rounded-lg border p-3">
         {children}
@@ -236,9 +266,9 @@ function SliderRow({
   return (
     <FieldLabel className="block">
       <div className="mb-1 flex items-baseline justify-between gap-2 text-[11.5px]">
-        <span className="text-ink-soft" title={tooltip}>
-          {label}
-        </span>
+        <Hint label={tooltip}>
+          <span className="text-ink-soft">{label}</span>
+        </Hint>
         <span className="text-ink-soft font-mono tabular-nums">{format(value)}</span>
       </div>
       <RangeSlider max={max} min={min} onChange={onChange} step={step} value={value} />
@@ -259,9 +289,9 @@ function ToggleRow({
 }) {
   return (
     <FieldLabel className="flex cursor-pointer items-center justify-between gap-2 text-[11.5px]">
-      <span className="text-ink-soft" title={tooltip}>
-        {label}
-      </span>
+      <Hint label={tooltip}>
+        <span className="text-ink-soft">{label}</span>
+      </Hint>
       {/* 与 ProjectCanvasSettings 的 ToggleRow 是同一件事（开关），此前各画
  一份 —— 现在都走 ui/switch（规范 16 §16.2.3）。 */}
       <Switch checked={value} className="shrink-0" onCheckedChange={onChange} />

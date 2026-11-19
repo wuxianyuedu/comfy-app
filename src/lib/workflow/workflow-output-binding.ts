@@ -21,6 +21,7 @@
  * = 断开（卡片悬空），刷新后不会被默认落点复活。
  */
 
+import { isPlainRecord } from "~/lib/is-record";
 import { MODE_KEY_PREFIX } from "~/lib/workflow/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
@@ -66,26 +67,22 @@ function manualMapForMode(
   paramMap: unknown,
   mode: string | null | undefined,
 ): Record<string, string | null> {
-  if (!mode) {
+  if (mode === null || mode === undefined || mode === "") {
     return {};
   }
-  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) {
+  if (!isPlainRecord(paramMap)) {
     return {};
   }
-  /* SAFETY: 类型断言已复核 */
-  const ns = (paramMap as Record<string, unknown>)[OUTPUT_BINDING_NAMESPACE];
-  if (!ns || typeof ns !== "object" || Array.isArray(ns)) {
+  const ns = paramMap[OUTPUT_BINDING_NAMESPACE];
+  if (!isPlainRecord(ns)) {
     return {};
   }
-  /* SAFETY: 类型断言已复核 */
-  const table = (ns as Record<string, unknown>)[`${MODE_KEY_PREFIX}${mode}`];
-  if (!table || typeof table !== "object" || Array.isArray(table)) {
+  const table = ns[`${MODE_KEY_PREFIX}${mode}`];
+  if (!isPlainRecord(table)) {
     return {};
   }
   const out: Record<string, string | null> = {};
-  for (const [ioKey, value] of Object.entries(
-    /* SAFETY: 类型断言已复核 */ table as Record<string, unknown>,
-  )) {
+  for (const [ioKey, value] of Object.entries(table)) {
     if (typeof value === "string") {
       out[ioKey] = value;
     } else if (value === null) {
@@ -102,7 +99,7 @@ export function manualOutputSource(
   outputIoKey: string,
   mode: string | null | undefined,
 ): string | null | undefined {
-  if (!mode) {
+  if (mode === null || mode === undefined || mode === "") {
     return undefined;
   }
   const table = manualMapForMode(paramMap, mode);
@@ -152,22 +149,16 @@ export function applyOutputBindingEdit(
   paramMap: Record<string, unknown> | null | undefined,
   edit: { ioKey: string | null; mode: string | null; outputIoKey: string },
 ): Record<string, unknown> {
-  const base = paramMap && typeof paramMap === "object" ? { ...paramMap } : {};
-  if (!edit.mode) {
+  const base = typeof paramMap === "object" && paramMap !== null ? { ...paramMap } : {};
+  if (edit.mode === null || edit.mode === "") {
     return base;
   }
   const ns = base[OUTPUT_BINDING_NAMESPACE];
-  const table =
-    /* SAFETY: 类型断言已复核 */
-    ns && typeof ns === "object" && !Array.isArray(ns)
-      ? {
-          ...(ns as Record<string, unknown>),
-        }
-      : {};
+  const table: Record<string, unknown> = isPlainRecord(ns) ? { ...ns } : {};
   const key = `${MODE_KEY_PREFIX}${edit.mode}`;
   const byOutput = table[key];
   table[key] = {
-    ...(byOutput && typeof byOutput === "object" && !Array.isArray(byOutput) ? byOutput : {}),
+    ...(isPlainRecord(byOutput) ? byOutput : {}),
     [edit.outputIoKey]: edit.ioKey,
   };
   return { ...base, [OUTPUT_BINDING_NAMESPACE]: table };
@@ -182,27 +173,21 @@ export function clearOutputBindingEdit(
   outputIoKey: string,
   mode: string | null,
 ): Record<string, unknown> {
-  const base = paramMap && typeof paramMap === "object" ? { ...paramMap } : {};
-  if (!mode) {
+  const base = typeof paramMap === "object" && paramMap !== null ? { ...paramMap } : {};
+  if (mode === null || mode === "") {
     return base;
   }
   const ns = base[OUTPUT_BINDING_NAMESPACE];
-  if (!ns || typeof ns !== "object" || Array.isArray(ns)) {
+  if (!isPlainRecord(ns)) {
     return base;
   }
-  /* SAFETY: 类型断言已复核 */
-  const table = {
-    ...(ns as Record<string, unknown>),
-  };
+  const table: Record<string, unknown> = { ...ns };
   const key = `${MODE_KEY_PREFIX}${mode}`;
   const byOutput = table[key];
-  if (!byOutput || typeof byOutput !== "object" || Array.isArray(byOutput)) {
+  if (!isPlainRecord(byOutput)) {
     return base;
   }
-  /* SAFETY: 类型断言已复核 */
-  const next = {
-    ...(byOutput as Record<string, unknown>),
-  };
+  const next: Record<string, unknown> = { ...byOutput };
   delete next[outputIoKey];
   if (Object.keys(next).length > 0) {
     table[key] = next;
@@ -223,7 +208,7 @@ export function canApplyOutputBindingEdit(
   edit: { ioKey: string | null; mode: string | null },
   io: WorkflowIOMap | null | undefined,
 ): boolean {
-  if (!edit.mode) {
+  if (edit.mode === null || edit.mode === "") {
     return false;
   }
   if (edit.ioKey === null) {

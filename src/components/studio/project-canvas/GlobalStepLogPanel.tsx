@@ -2,15 +2,8 @@
 
 /**
  * GlobalStepLogPanel —— 全局执行步骤日志面板
- *
- * 设计决策（Why 弹窗而非底部抽屉）：
- * 1. 底部抽屉会压缩画布可用空间；
- * 2. 与右下 MiniMap、底部状态栏容易重叠。
- * 故采用「应用日志」同款的居中弹窗。
- *
- * 交互约定：
- * - 「调试模式」开关仅控制入口按钮显隐；
- * - 弹窗打开后不受该开关影响，避免操作中突然消失。
+ * 用居中弹窗而非底部抽屉：抽屉会压缩画布空间，且与 MiniMap、底部状态栏易重叠。
+ * 「调试模式」开关仅控制入口按钮显隐；弹窗打开后不受该开关影响，避免操作中突然消失。
  */
 
 import { LOG_MODAL_MAX_ROWS, tailWindow } from "~/lib/page-window";
@@ -77,7 +70,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   /* 没有显式钉住时，视图重置到活跃任务。 */
   const taskId = viewTaskId ?? activeTaskId;
   useEffect(() => {
-    if (activeTaskId && !viewTaskId) {
+    if (activeTaskId !== null && activeTaskId !== "" && viewTaskId === null) {
       setViewTaskId(activeTaskId);
     }
   }, [activeTaskId, viewTaskId]);
@@ -95,7 +88,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   });
   const onCancelFromPanel = () => {
     // 无任务时按钮本就禁用（下方 disabled），这里只是防重复点击的兜底。
-    if (!taskId) {
+    if (taskId === null) {
       return;
     }
     return cancelFromPanel();
@@ -108,12 +101,10 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const cachedIds = useMemo(
     () => listCachedTaskIds(),
     /* 依赖是**重算触发器**，不是 `listCachedTaskIds()` 真实读的输入 ——
-     * 它读的是 `stepLogCache` 的模块级 Map，静态推不出来「什么时候该重算」。
-     * 三条各自对应一次缓存写入：`taskId` 换了（新任务进了缓存）、`logs` 追加了
-     * （缓存内容推进）、`validationErrors` 更新了（同批落进来的新条目）。
-     * 属规范 §13.4 的「规则静态盲区」；去掉任一条件会让面板停在旧清单上
-     * （表现是任务选择器少一条，且不会自愈）。 */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     * 它读 `stepLogCache` 的模块级 Map，静态推不出何时该重算。三条各对应一次
+     * 缓存写入：taskId 换（新任务进缓存）、logs 追加、validationErrors 更新。
+     * 属规范 §13.4「规则静态盲区」；去掉任一条件会让面板停在旧清单上。 */
+    // oxlint-disable-next-line react/exhaustive-deps
     [logs, validationErrors, taskId],
   );
 
@@ -146,7 +137,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
   const errorCount = visibleAll.filter((l) => l.level === "error").length;
 
-  const onClear = () => clear();
+  const onClear = () => {
+    clear();
+  };
 
   return (
     <>
@@ -155,7 +148,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         <Button
           className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max text-2xs pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 font-medium shadow-lg backdrop-blur-sm"
           data-testid="step-log-trigger"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setOpen(true);
+          }}
           variant="outline"
         >
           <FileText data-icon="inline-start" size={12} />
@@ -170,7 +165,12 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
       {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */}
-      <Dialog onOpenChange={(next) => setOpen(next)} open={open}>
+      <Dialog
+        onOpenChange={(next) => {
+          setOpen(next);
+        }}
+        open={open}
+      >
         <DialogContent
           aria-label="执行步骤日志"
           className="bg-transparent p-0 ring-0"
@@ -191,18 +191,20 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   label={statusLabel}
                   status={status ?? "IDLE"}
                 />
-                <span
-                  className={`inline-block size-1.5 shrink-0 rounded-full ${
-                    connected
-                      ? "bg-success shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_70%,transparent)]"
-                      : "bg-gray-600"
-                  }`}
-                  title={connected ? "SSE 已连接" : "SSE 未连接"}
-                />
+                <Hint label={connected ? "SSE 已连接" : "SSE 未连接"}>
+                  <span
+                    className={`inline-block size-1.5 shrink-0 rounded-full ${
+                      connected
+                        ? "bg-success shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_70%,transparent)]"
+                        : "bg-gray-600"
+                    }`}
+                  />
+                </Hint>
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
-                {taskId &&
+                {taskId !== null &&
+                taskId !== "" &&
                 status !== "SUCCEEDED" &&
                 status !== "FAILED" &&
                 status !== "CANCELLED" ? (
@@ -239,7 +241,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <Hint accessibleName label="关闭">
                   <Button
                     className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
-                    onClick={() => setOpen(false)}
+                    onClick={() => {
+                      setOpen(false);
+                    }}
                     variant="ghost"
                   >
                     <X data-icon="inline-start" size={16} />
@@ -265,7 +269,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                       className="px-2.5 py-1 text-sm"
                       data-testid={`log-filter-${option.value}`}
                       key={option.value}
-                      onClick={() => setFilter(option.value)}
+                      onClick={() => {
+                        setFilter(option.value);
+                      }}
                       selected={filter === option.value}
                       shape="compact"
                     >
@@ -279,7 +285,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <Checkbox
                   checked={autoscroll}
                   className="accent-primary size-3.5 cursor-pointer"
-                  onCheckedChange={(checked) => setAutoscroll(checked === true)}
+                  onCheckedChange={(checked) => {
+                    setAutoscroll(checked === true);
+                  }}
                 />
                 自动滚动
               </FieldLabel>
@@ -291,7 +299,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               emptySlot={
                 <EmptyState
                   icon={FileText}
-                  title={taskId ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
+                  title={taskId === null ? "运行生成后此处会显示执行步骤日志" : "等待日志…"}
                   variant="panel"
                 />
               }
@@ -319,7 +327,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                     </div>
                   )}
 
-                  {!valErrs.length && error && (
+                  {!valErrs.length && error !== null && error !== "" && (
                     <div className="border-destructive/30 bg-destructive/6 text-destructive/90 mb-2 flex flex-col gap-1 rounded border p-2 text-sm">
                       <div className="wrap-break-word whitespace-pre-wrap">{error}</div>
                     </div>

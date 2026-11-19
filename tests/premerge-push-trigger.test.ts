@@ -1,15 +1,7 @@
 /**
- * 「合并前的固定动作」挂到 push 上之后的四条边界（规范 §13.6.2.1）。
- *
- * 立案现场：`pnpm check:premerge` 三段复算此前唯一的执行者是「合并前记得敲一次」——
- * 平台侧 squash 合并不跑本地钩子、#623 之后又没有 CI 兜底，而纪律的三种漏法都不报错。
- * 这一族最坏的回潮形态不是「没人跑」，而是**接了线却没人守那条线**：
- * 所以这里既判决策本身，也判「钩子真的调它」这件事在位（同
- * `tests/doc-check-hook-wiring.test.ts` / `tests/daily-tracks.test.ts` 的先例）。
- *
- * 为什么并进 `scripts/affected-tests.mjs` 的 FIXED_STRUCTURAL_TESTS：改 `.githooks/**`
- * 会让增量层**放弃收窄、只跑固定清单**，这条用例守的正是那次改动本身，留在按路径
- * 引用的那份里就等于「本该拦住它的那一次一条都不跑」。
+ * 「合并前的固定动作」挂到 push 上的四条边界（规范 §13.6.2.1，ISSUE #623）。立案现场：`pnpm
+ * check:premerge` 唯一执行者是纪律，平台 squash 不跑本地钩子、也无 CI 兜底；最坏回潮是「接了线却没人
+ * 守那条线」，所以既判决策也判钩子真在调它。并入固定清单：改 `.githooks/**` 让增量层放弃收窄，留原地等于不跑。
  */
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -27,7 +19,7 @@ import {
   readProof,
   readRevisions,
   writeProof,
-} from "../scripts/premerge-proof.mjs";
+} from "../scripts/gates/premerge-proof.mjs";
 
 const HEAD = "a".repeat(40);
 const UPSTREAM = "b".repeat(40);
@@ -134,9 +126,7 @@ describe("过期判定：什么时候才值得花那 336 秒", () => {
 
   it("没有目标分支 ref ⇒ 不跑也不拦（推 tag 不该被这一跳卡住）", () => {
     const verdict = decidePremergePush({
-      candidates: mergeCandidates(
-        parseRefLines(`refs/tags/v1\t${HEAD}\trefs/tags/v1\t${HEAD}`),
-      ),
+      candidates: mergeCandidates(parseRefLines(`refs/tags/v1\t${HEAD}\trefs/tags/v1\t${HEAD}`)),
       headSha: HEAD,
       upstreamSha: UPSTREAM,
       proof: null,
@@ -313,14 +303,14 @@ describe("接线在位（判据要有人跑，也要有人守那条线）", () =
     // 锚定行首：把那一行前面加 `# ` 注掉之后，`toContain` 仍然命中，只有这里会红。
     // `"$1" "$2"` 是目的地那一问的输入（ISSUE #3025）：少了它们，推向镜像仓库的 push
     // 会拿到「取不到上游引用」的读数而被拦死。
-    expect(hook).toMatch(/^node scripts\/premerge-proof\.mjs "\$1" "\$2" <"\$refs_in"/m);
+    expect(hook).toMatch(/^node scripts\/gates\/premerge-proof\.mjs "\$1" "\$2" <"\$refs_in"/m);
   });
 
   it("stdin 只读一次、再分喂两处 —— 少一处就会有一方拿到空输入且不报错", () => {
     expect(hook).toMatch(/^cat >"\$refs_in" \|\| exit 1$/m);
     expect(hook).toMatch(/^git lfs pre-push "\$@" <"\$refs_in" \|\| exit \$\?$/m);
     expect(hook).toMatch(
-      /^node scripts\/premerge-proof\.mjs "\$1" "\$2" <"\$refs_in" \|\| exit \$\?$/m,
+      /^node scripts\/gates\/premerge-proof\.mjs "\$1" "\$2" <"\$refs_in" \|\| exit \$\?$/m,
     );
   });
 
@@ -330,7 +320,7 @@ describe("接线在位（判据要有人跑，也要有人守那条线）", () =
   });
 
   it("台账认得 pre-push 这个执行者来源（否则接线会被读成「没人跑」）", () => {
-    const ledger = readFileSync("scripts/check-gate-executors.cjs", "utf8");
+    const ledger = readFileSync("scripts/gates/check-gate-executors.cjs", "utf8");
     expect(ledger).toContain('".githooks/pre-push"');
   });
 
@@ -341,15 +331,9 @@ describe("接线在位（判据要有人跑，也要有人守那条线）", () =
 });
 
 /**
- * 上游 sha 到底怎么取 —— 立案现场是**本检出的一次真实 push**：钩子报
- * 「取不到上次 fetch 看到的上游引用（退 2）」，而 `git fetch` 刚跑过、`cnb/master` 就在场上。
- * 根因是旧实现把引用名写死成 `refs/remotes/origin/master`，而这份检出的远端叫 `cnb`
- * （`git remote -v` 里压根没有 `origin`）⇒ `upstreamSha` 恒 `null` ⇒ **每一次 topic 分支的
- * push 都被判成「没法复算」而拦下**：§13.6.2.1 刚立的执行者反过来挡住了所有 push。
- *
- * 另一面同样要钉住：远端名可以变，**「上游 = 要并进去的那条 master」不可以变**。
- * `@{u}` 在推送后就是你自己的分支，拿它当上游等于「自己跟自己比」——那份复算会报「都没变、
- * 直接过」，而它一个字节都没回答「并进 master 会不会红」。
+ * 上游 sha 到底怎么取（现场：本检出一次真实 push，钩子报「取不到上游引用」退 2）。根因是引用名写死
+ * `refs/remotes/origin/master`，而这份检出远端叫 `cnb` ⇒ 每次 topic push 都被判「没法复算」而拦下。
+ * 另一面：远端名可变，「上游 = 要并进去的 master」不可变；`@{u}` 是自己跟自己比，会假过。
  */
 describe("上游 sha 的取法：远端名不假定叫 origin，上游也不许是自己的分支", () => {
   const git = (args: Array<string>, cwd: string) => {
@@ -379,9 +363,8 @@ describe("上游 sha 的取法：远端名不假定叫 origin，上游也不许�
   };
 
   /**
-   * 最小检出：`<tmp>/bare.git` 当远端（名字由调用方给）、`<tmp>/work` 是工作树，
-   * 已把一条 `master` 推上去 ⇒ 本地有 `refs/remotes/<remoteName>/master`，**没有 `origin`**。
-   *
+   * 最小检出：`<tmp>/bare.git` 当远端（名字由调用方给）、`<tmp>/work` 是工作树，已推一条 `master` ⇒
+   * 本地有 `refs/remotes/<remoteName>/master`，**没有 `origin`**。
    * @param {string} remoteName
    */
   function makeCheckout(remoteName: string) {
@@ -467,12 +450,9 @@ describe("上游 sha 的取法：远端名不假定叫 origin，上游也不许�
 });
 
 /**
- * 目的地那一问（ISSUE #3025）：推向镜像仓库 / 第三方备份远端时，这批 ref 与
- * 「这条分支要不要合进本仓 master」无关 —— 跳过复算，且不许把原因说成「没有要合进
- * master 的分支 ref」（那是行为，不是成因）。
- *
- * 现场：平台侧检出是 `git init` + 单 ref fetch，`refs/remotes/**` 一条都没有 ⇒
- * `readRevisions()` 取不到上游 ⇒ `unavailable` ⇒ 退 2 ⇒ 镜像格那次 push 被拦死。
+ * 目的地那一问（ISSUE #3025）：推向镜像/第三方远端时这批 ref 与「要不要合进本仓 master」无关 ——
+ * 跳过复算，且不许把原因说成「没有要合进 master 的分支 ref」（那是行为，不是成因）。现场：平台检出
+ * `git init` + 单 ref fetch，`refs/remotes/**` 为空 ⇒ 取不到上游 ⇒ 退 2 ⇒ 镜像格 push 被拦死。
  */
 describe("push 的目的地不在本仓 remote 上 ⇒ 跳过复算（ISSUE #3025）", () => {
   it("URL 比对：命中本仓 remote（含 .git 后缀 / 尾斜杠 / 协议大小写差异）不算外来", () => {
@@ -485,7 +465,10 @@ describe("push 的目的地不在本仓 remote 上 ⇒ 跳过复算（ISSUE #302
   it("镜像仓库的 URL 判成外来", () => {
     const known = ["https://cnb.cool/moon-read/comfy-app-t3.git"];
     expect(
-      isForeignRemotePush("https://x-access-token:TOKEN@github.com/wuxianyuedu/comfy-app.git", known),
+      isForeignRemotePush(
+        "https://x-access-token:TOKEN@github.com/wuxianyuedu/comfy-app.git",
+        known,
+      ),
     ).toBe(true);
   });
 
@@ -508,7 +491,12 @@ describe("push 的目的地不在本仓 remote 上 ⇒ 跳过复算（ISSUE #302
     expect(verdict.verdict).toBe("skip");
     expect(verdict.reasons[0]).toContain("github.com/wuxianyuedu/comfy-app");
     expect(verdict.reasons[0]).toContain("不在本仓任何 remote 上");
-    const got = exitForNotRun(verdict, { proof: null, candidates, headSha: HEAD, upstreamSha: null });
+    const got = exitForNotRun(verdict, {
+      proof: null,
+      candidates,
+      headSha: HEAD,
+      upstreamSha: null,
+    });
     expect(got?.code).toBe(0);
   });
 
@@ -522,7 +510,12 @@ describe("push 的目的地不在本仓 remote 上 ⇒ 跳过复算（ISSUE #302
       foreignPush: null,
     });
     expect(verdict.verdict).toBe("unavailable");
-    const got = exitForNotRun(verdict, { proof: null, candidates, headSha: HEAD, upstreamSha: null });
+    const got = exitForNotRun(verdict, {
+      proof: null,
+      candidates,
+      headSha: HEAD,
+      upstreamSha: null,
+    });
     expect(got?.code).toBe(2);
   });
 });

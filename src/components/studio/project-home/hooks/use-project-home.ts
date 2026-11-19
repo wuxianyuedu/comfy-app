@@ -1,19 +1,12 @@
 "use client";
 
-// ── 项目主页：业务逻辑层（规范 17 §17.2 第②层）───────────────────────────
-//
-// 主页要回答两个问题，来源是同一份 production 行 + 同一份 run：
-//   ① 「这个项目做到哪了」—— 取 production，经 `lib/production/project-home`
-//      派生阶段总览（判据在纯函数里，这里只做取数与接线）；
-//   ② 「AI 自主成片跑到哪了」—— 复用 `agent-run` 那份 `useAgentRun`
-//      （不另起一套轮询：同一个 run 拉两路会让控制条与主页显示不同步）。
-//
-// 读的是**服务端**的 production 行，不是本地画布 store：工坊的产出（剧本 /
-// 角色 / 镜头）只落 production 表，本地 store 里没有 —— 拿它算状态会永远显示
-// 「还没开始」。取数失败静默回落空态（主页是只读展示，不该弹错），
-// 由用户刷新或切回来重取。
+// ── 项目主页业务逻辑层（规范 17 §17.2 第②层）──
+// 两个问题同一份 production 行 + run：① 做到哪了 —— 取 production，经 lib/production/project-home
+// 派生阶段总览（判据在纯函数）；② AI 自主成片跑到哪了 —— 复用 agent-run 的 useAgentRun（不另起轮询）。
+// 读服务端 production 行而非本地画布 store：工坊产出只落 production 表，拿 store 会永远显示「还没开始」。
+// 取数失败静默回落空态（主页只读，不该弹错），由刷新或切回重取。
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { useAgentRun, type AgentRunController } from "~/components/agent-run/use-agent-run";
@@ -57,12 +50,19 @@ export function useProjectHome(): ProjectHomeController {
   const [progress, setProgress] = useState(DEFAULT_PRODUCTION_PROGRESS);
   const [loading, setLoading] = useState(true);
 
+  /* 轮次令牌（ISSUE #3906）：轮询间隔内的两发在途时，先发后至者不得把旧
+   * 快照盖在新快照上（样板见 use-runtime-log-source 的 seqRef）。 */
+  const loadSeqRef = useRef(0);
   const load = useCallback(async (): Promise<void> => {
     if (!projectId) {
       setLoading(false);
       return;
     }
+    const seq = ++loadSeqRef.current;
     const production = await fetchProduction(projectId);
+    if (seq !== loadSeqRef.current) {
+      return;
+    }
     setRunView(toRunView(production));
     setProgress(normalizeProductionProgress(production?.progress));
     setLoading(false);
@@ -81,7 +81,9 @@ export function useProjectHome(): ProjectHomeController {
         setLoading(false);
       });
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [projectId]);
 
   /* run 跑动 / 待确认时顺带刷新项目状态：引擎每一步都会改 production，

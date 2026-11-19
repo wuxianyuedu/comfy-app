@@ -7,7 +7,7 @@
   `ci-incremental-gates.mjs` 的收窄登记（`narrowingEntryForScript()` / `faceTouched()`，与平台
   `ifModify` 同一份 glob）、一键门禁档取自 `quality-gate.mjs` 导出的 `GATES`；用例那一半直接起
   `scripts/affected-tests.mjs --changed-stdin --json` 那条判决链（本入口不重算 import 图）；
-  规范那一半读 `scripts/doc-reading-map.mjs` —— `AGENTS.md`「强制先读规范文档的改动范围」那张表的
+  规范那一半读 `scripts/docs/doc-reading-map.mjs` —— `AGENTS.md`「强制先读规范文档的改动范围」那张表的
   **机器可读副本**，两边由 `tests/gates-which.test.ts` 双向核对（范围名集合相等 + 数据里的章节记号
   必须出现在表里那一格），改一边忘另一边当场红。两条「按动作判断」的行（视图层新增 IO、抽共享模块）
   路径匹配不出来，**单列**在输出里，不因没命中而消失。

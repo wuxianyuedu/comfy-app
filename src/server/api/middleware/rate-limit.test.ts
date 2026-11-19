@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { checkRateLimit, resetRateLimitBuckets } from "~/server/api/middleware/rate-limit";
 
 describe("checkRateLimit（滑动窗口限流）", () => {
-  beforeEach(() => resetRateLimitBuckets());
+  beforeEach(() => {
+    resetRateLimitBuckets();
+  });
 
   it("窗口内未超限时连续放行", () => {
     expect(checkRateLimit("u1", 3, 10_000)).toBe(true);

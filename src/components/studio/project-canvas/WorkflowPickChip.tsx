@@ -6,6 +6,7 @@
  */
 import { PageLoading } from "~/components/ui/page-loading";
 import { OptionListPopover } from "~/components/ui/option-list-popover";
+import { Hint } from "~/components/ui/hint";
 
 export type WorkflowPickOption = {
   id: string;
@@ -53,30 +54,34 @@ export function WorkflowPickChip({
         prefix: (
           <span
             className={`size-1.5 shrink-0 rounded-full ${
-              option.sourcePath ? "bg-status-online" : "bg-primary-strong"
+              option.sourcePath !== undefined &&
+              option.sourcePath !== null &&
+              option.sourcePath !== ""
+                ? "bg-status-online"
+                : "bg-primary-strong"
             }`}
           />
         ),
-        suffix: option.taskType ? (
-          <span className="bg-subtle text-ink-muted shrink-0 rounded px-1.5 py-0.5 text-[9.5px]">
-            {option.taskType}
-          </span>
-        ) : undefined,
+        suffix:
+          option.taskType !== undefined && option.taskType !== "" ? (
+            <span className="bg-subtle text-ink-muted shrink-0 rounded px-1.5 py-0.5 text-[9.5px]">
+              {option.taskType}
+            </span>
+          ) : undefined,
       }))}
       onSelect={onSelect}
       trigger={
-        <span
-          className="text-ink-bright min-w-0 flex-1 truncate text-left font-semibold"
-          style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}
-        >
-          {loading && !sel ? (
-            <span className="text-ink-muted">加载中…</span>
-          ) : sel ? (
-            sel.name
-          ) : (
-            <span className="text-ink-muted">选择工作流…</span>
-          )}
-        </span>
+        <Hint label={sel?.name}>
+          <span className="text-ink-bright text-2xs min-w-0 flex-1 truncate text-left font-sans font-semibold">
+            {loading && !sel ? (
+              <span className="text-ink-muted">加载中…</span>
+            ) : sel ? (
+              sel.name
+            ) : (
+              <span className="text-ink-muted">选择工作流…</span>
+            )}
+          </span>
+        </Hint>
       }
       triggerClassName="border-primary/35 bg-node-accent h-6 min-w-0 flex-1 rounded-lg border px-2.5 text-xs"
       triggerTitle="选择工作流"

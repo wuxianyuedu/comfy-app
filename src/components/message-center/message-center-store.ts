@@ -1,18 +1,15 @@
 "use client";
 
 /* ── 应用内「消息中心」共享状态（状态 + 持久化，无 React、无网络）────────────
- * 用于承载「只看一次就消失」的系统级提示（本地更新需重启、dev server
- * 重启、**应用服务断开与启动**等），让它们以消息列表的形式常驻：底部状态栏
- * 有铃铛按钮 + 未读数量，点开可全屏查看正文，避免信息一闪而过无处回看。
- *
- * 本文件只定义状态与动作，不 import 任何 React 组件 / 不发请求；
- * 消息的生产（谁触发 push）与展示（面板 UI）在 container/组件层分别接入，
- * 与规范 17 四层归属一致。
+ * 承载「只看一次就消失」的系统级提示（更新需重启、dev server 重启、应用服务
+ * 断开与启动等）：状态栏铃铛 + 未读数，点开全屏看正文。
+ * 本文件只定义状态与动作；生产（谁触发 push）与展示在组件层接入（规范 17）。
  */
 
 import { create } from "zustand";
 
 import { readStorageJson, writeStorageJson } from "~/lib/browser-storage";
+import { isPlainRecord } from "~/lib/is-record";
 import { nextId } from "~/lib/unique-id";
 
 export type MessageKind = "update" | "restart" | "offline" | "info";
@@ -28,13 +25,8 @@ export type MessageRecord = {
   read: boolean;
   /**
    * 这条消息属于**哪一次启动**（launcher 的 runId）；null = 写入时不知道。
-   *
-   * 存在的理由：消息中心里多次启动的记录此前混成一列平铺，用户分不清哪几条属于
-   * 同一次启动——而这个面板记的恰恰是故障，分不清批次等于分不清故障次数。面板按
-   * 它分组显示（判据见 `~/lib/shell/message-run-groups`）。
-   *
-   * 与 `run/runs/<日期>_<时分秒>-<runId>`、`run/app-service-exit.json` 的 runId
-   * 同源，分组头带上它就能直接和日志目录对号。
+   * 面板按它分组（判据见 `~/lib/shell/message-run-groups`）：多次启动的记录混在一起
+   * 时分不清哪几条属于同一次故障。与 `run/runs/<…>-<runId>` 的 runId 同源。
    */
   runId: string | null;
   /** Unix 时间戳（ms） */
@@ -45,16 +37,15 @@ export type MessageRecord = {
 
 /** 供 push 传入的载荷（id/time/read 由 store 补全，runId 缺省取当前启动）。 */
 export type NewMessage = Omit<MessageRecord, "id" | "time" | "read" | "runId"> & {
+  /** 确定性 id（ISSUE #4257）：给了它，同 id 的消息不重复入列（幂等推送）——
+   *  刷新 / 重复轮询由这里吸收。缺省随机生成（恒不撞）。 */
+  id?: string;
   /** 缺省时由 store 用「当前是哪一次启动」盖上，于是各生产方不必各自去取。 */
   runId?: string | null;
   /**
    * **事件发生的时刻**（Unix 毫秒）；缺省取 push 那一刻。
-   *
-   * 生产方知道得比 store 准：应用服务断开那条要先把原因从盘上读回来（壳的 IPC），
-   * push 因此比事件晚一个往返；恢复那条则可能几乎同时写进去。若 `time` 一律取
-   * push 时刻，两条消息的先后就取决于「哪个往返先回来」而不是「哪件事先发生」
-   * —— 消息中心按 `time` 倒序摆放与分组（`~/lib/shell/message-run-groups` 判的
-   * 也是「连续同一 runId」），次序一翻，用户读到的因果就反了。
+   * 断开那条要先把原因从盘上读回来（壳的 IPC），push 比事件晚一个往返；一律取
+   * push 时刻的话「断开 → 恢复」的先后取决于往返快慢——列表按 `time` 倒序排。
    */
   time?: number;
 };
@@ -64,11 +55,8 @@ export type MessageCenterState = {
   clear: () => void;
   /**
    * 当前是哪一次启动（运行时事实，**不持久化**）。
-   *
-   * 由探活链路在学到 runId 时写进来（`use-app-service-message-log` → 本 store）。
-   * 两个用途：① 面板据此把「本次启动」那一组高亮出来；② `push` 缺省 runId 时
-   * 用它盖戳，于是**所有**生产方（应用服务、代码更新、版本更新）都自动按启动
-   * 分组，不需要每一个都去接一次探活。
+   * 由探活链路学到 runId 时写入（`use-app-service-message-log` → 本 store）：
+   * ① 面板高亮「本次启动」组；② `push` 缺省 runId 时盖它，生产方自动按启动分组。
    */
   currentRunId: string | null;
   /** 从持久化里恢复消息（挂载后调一次，见文件末尾的接线说明）。 */
@@ -105,71 +93,74 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
   messages: [],
   hydrated: false,
   currentRunId: null,
-  setOpen: (open) => set({ open }),
-  toggleOpen: () => set({ open: !get().open }),
-  push: (m) =>
-    set((s) => ({
-      messages: [
-        {
-          ...m,
-          /* runId **没给**时盖「当前这一次启动」：生产方（应用服务 / 代码更新 /
-           * 版本更新）于是不必各自去接探活链路，也不会漏盖——漏盖的消息在面板上
-           * 只能落到「未标记启动」那一组，而它本可以归对批次。
-           *
-           * 判 `=== undefined` 而不是 `??`：**显式给的 null 是「明确不知道」**
-           * （纯手工 `pnpm dev` 起的服务、探活还没答过第一次），它必须留 null；
-           * 被 `??` 补成当前启动，等于断言「它属于现在这次启动」——一个不知道的
-           * 事实，而面板据此分组，断言错了就是分错批次。 */
-          runId: m.runId === undefined ? s.currentRunId : m.runId,
-          id: makeId(),
-          time: m.time ?? Date.now(),
-          read: false,
-        },
-        ...s.messages,
-      ]
-        /* 最新在前**按事件时刻排**（而不是「谁先 push 完」）：断开那条要先读原因，
-         * 它的 push 天然比事件晚，靠插入次序摆放会把「断开 → 恢复」翻成反的。 */
-        .sort((a, b) => b.time - a.time)
-        .slice(0, MAX_MESSAGES),
-    })),
-  setCurrentRunId: (runId) => set({ currentRunId: runId }),
-  markRead: (id) =>
+  setOpen: (open) => {
+    set({ open });
+  },
+  toggleOpen: () => {
+    set({ open: !get().open });
+  },
+  push: (m) => {
+    set((s) => {
+      /* 幂等 id（ISSUE #4257）：调用方给了确定性 id（如按 runId + 分支名）时，
+       * 同一条消息不重复入列——刷新 / 重复轮询由这里吸收。没给 id 的调用方
+       * 照旧每次新起（随机 id 恒不撞）。 */
+      const id = m.id ?? makeId();
+      if (s.messages.some((x) => x.id === id)) {
+        return s;
+      }
+      return {
+        messages: [
+          {
+            ...m,
+            /* runId **没给**时盖「当前这一次启动」：生产方不必各自去接探活链路，
+             * 也不会漏盖（漏盖只能落到「未标记启动」组）。
+             * 判 `=== undefined` 而不是 `??`：显式给的 null 是「明确不知道」（纯手工
+             * `pnpm dev`、探活未首答），必须留 null；`??` 补盖等于断言「属于这次」，
+             * 分组依据就错了。 */
+            runId: m.runId === undefined ? s.currentRunId : m.runId,
+            id,
+            time: m.time ?? Date.now(),
+            read: false,
+          },
+          ...s.messages,
+        ]
+          .sort((a, b) => b.time - a.time)
+          .slice(0, MAX_MESSAGES),
+      };
+    });
+  },
+  setCurrentRunId: (runId) => {
+    set({ currentRunId: runId });
+  },
+  markRead: (id) => {
     set((s) => ({
       messages: s.messages.map((x) => (x.id === id ? { ...x, read: true } : x)),
-    })),
-  markAllRead: () =>
+    }));
+  },
+  markAllRead: () => {
     set((s) => ({
       messages: s.messages.map((x) => (x.read ? x : { ...x, read: true })),
-    })),
-  remove: (id) => set((s) => ({ messages: s.messages.filter((x) => x.id !== id) })),
-  clear: () => set({ messages: [] }),
-  hydrate: () =>
+    }));
+  },
+  remove: (id) => {
+    set((s) => ({ messages: s.messages.filter((x) => x.id !== id) }));
+  },
+  clear: () => {
+    set({ messages: [] });
+  },
+  hydrate: () => {
     set((s) => ({
       hydrated: true,
       messages: restoreMessages(s.messages),
-    })),
+    }));
+  },
 }));
 
 /* ── 持久化：消息中心此前是纯内存的，于是「记了等于没记」 ──────────────────
- *
- * 消息中心记的恰恰是**应用服务断开 / 启动**这类事件，而它们的观察窗口恰好覆盖
- * 一次整页刷新：应用服务重启会让 Next 的客户端重连并重载页面，内存里的消息随之
- * 归零 —— 于是用户回到应用打开铃铛看到的是空的，只能得出「记了但没生效」的结论。
- * 落一份 `localStorage` 之后，「刚才断开过一次、因为什么、持续多久」在刷新之后
- * 仍然查得到，这正是这个面板存在的意义（留底，而不是一闪而过）。
- *
- * ## 为什么恢复走 `hydrate()` 而不是模块加载时就读
- *
- * 模块加载发生在 SSR 与客户端各一份，客户端那一份在**首帧渲染之前**就把消息填上，
- * 于是服务端渲染出的「铃铛无角标」与客户端首帧的「角标 N」对不上 —— 一次水合不
- * 匹配。`hydrate()` 由组件在**挂载之后**调一次，首帧与 SSR 完全一致。
- *
- * ## 读回来时逐条校验，而不是整体相信
- *
- * 存的是 JSON，坏数据（手工改过、版本降级、写到一半）都可能出现，而这份数据的
- * 消费者是「已经出故障时」的界面：读不出来必须回落到「没有消息」，而不是抛错把
- * 面板整个打不开。
- */
+ * 记的恰恰是应用服务断开/启动这类事件，观察窗口覆盖整页刷新，内存归零就看不到了；
+ * 落 localStorage 留底。恢复走 `hydrate()` 而非模块加载时读：模块加载发生在首帧
+ * 渲染前，SSR「无角标」与客户端首帧对不上（水合不匹配）；`hydrate()` 挂载后才调。
+ * 读回逐条校验：坏数据必须落到「没有消息」，而不是抛错让面板整个打不开。 */
 
 /** 持久化键（带版本号：形状变了就换键，不去猜旧数据怎么迁）。
  *
@@ -180,16 +171,20 @@ export const MESSAGE_CENTER_STORAGE_KEY = "comfyapp:message-center:v1";
 
 const MESSAGE_KINDS: ReadonlyArray<MessageKind> = ["update", "restart", "offline", "info"];
 
+/** 只认白名单里的档位；持久化里的 kind 是外部输入，先收窄再采用。 */
+function isMessageKind(v: unknown): v is MessageKind {
+  return typeof v === "string" && MESSAGE_KINDS.some((kind) => kind === v);
+}
+
 /** 一条记录是否可用（字段齐、类型对、kind 认识）。
  *
  * `runId` **容忍缺席**（升级前写入的历史消息没有这个字段）：缺了就按 null 处理，
  * 于是那些消息落到「未标记启动」那一组——不猜它属于哪一次，也不因此丢掉整条。 */
 function asMessageRecord(raw: unknown): MessageRecord | null {
-  if (typeof raw !== "object" || raw === null) {
+  if (!isPlainRecord(raw)) {
     return null;
   }
-  /* SAFETY: 类型断言已复核 */
-  const o = raw as Record<string, unknown>;
+  const o = raw;
   if (typeof o.id !== "string" || o.id === "") {
     return null;
   }
@@ -202,17 +197,12 @@ function asMessageRecord(raw: unknown): MessageRecord | null {
   if (typeof o.read !== "boolean") {
     return null;
   }
-  if (
-    typeof o.kind !== "string" ||
-    /* SAFETY: 类型断言已复核 */
-    !MESSAGE_KINDS.includes(o.kind as MessageKind)
-  ) {
+  if (!isMessageKind(o.kind)) {
     return null;
   }
   return {
     id: o.id,
-    /* SAFETY: 类型断言已复核 */
-    kind: o.kind as MessageKind,
+    kind: o.kind,
     title: o.title,
     body: o.body,
     time: o.time,
@@ -248,7 +238,7 @@ function sameAsPersisted(current: Array<MessageRecord>): boolean {
       c.read === m.read &&
       c.title === m.title &&
       c.body === m.body &&
-      c?.runId === m.runId
+      c.runId === m.runId
     );
   });
 }
@@ -264,3 +254,35 @@ useMessageCenterStore.subscribe((state, prev) => {
     writeStorageJson(MESSAGE_CENTER_STORAGE_KEY, state.messages);
   }
 });
+
+/* 别的同源窗口写了这份存储 → 把它**新增**的消息并进本窗口内存（#4026）。
+ * 此后本窗口的整表落盘就包含对方的消息，两个窗口不再互相抹掉对方的留底。
+ * 刻意**只并入、不删除 / 不改已读态**：跨窗口的删除与已读传播需要删除墓碑
+ * 或共享真相源，超出本条的范围——本窗口的 clear / markAllRead 仍只作用于
+ * 本窗口。排序与上限和 `push` 同一条判据（新到旧、200 条封顶）。 */
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key !== MESSAGE_CENTER_STORAGE_KEY || event.newValue === null) {
+      return;
+    }
+    try {
+      const parsed: unknown = JSON.parse(event.newValue);
+      if (!Array.isArray(parsed)) {
+        return;
+      }
+      const incoming = parsed.map(asMessageRecord).filter((m): m is MessageRecord => m !== null);
+      const current = useMessageCenterStore.getState().messages;
+      const known = new Set(current.map((m) => m.id));
+      const foreign = incoming.filter((m) => !known.has(m.id));
+      if (foreign.length === 0) {
+        return;
+      }
+      const merged = [...current, ...foreign]
+        .sort((a, b) => b.time - a.time)
+        .slice(0, MAX_MESSAGES);
+      useMessageCenterStore.setState({ messages: merged });
+    } catch {
+      /* 损坏的存储内容：忽略 */
+    }
+  });
+}

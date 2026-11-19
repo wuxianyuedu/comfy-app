@@ -38,7 +38,8 @@ let target: string | null = null;
 
 /** 面板读取本次运行转录文件的路径（服务端路由用）。 */
 export function panelCaptureLogPath(): string {
-  if (target) {
+  /* 转录文件路径是拼出来的绝对路径，空串不可能出现 */
+  if (target !== null) {
     return target;
   }
   let boot = "unknown";
@@ -88,6 +89,7 @@ export async function latestPanelLogFile(dir = NEXTJS_LOG_DIR): Promise<string |
     const file = path.join(dir, name);
     let mtimeMs: number;
     try {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
       mtimeMs = stat.mtimeMs;
     } catch {
@@ -185,10 +187,14 @@ function bufferedAppend(filePath: string, text: string): void {
     flushBuffer(filePath);
     return;
   }
-  flushTimer ??= setTimeout(() => {
-    flushTimer = null;
-    flushBuffer(filePath);
-  }, FLUSH_INTERVAL_MS);
+  if (flushTimer === null) {
+    flushTimer = setTimeout(() => {
+      flushTimer = null;
+      flushBuffer(filePath);
+    }, FLUSH_INTERVAL_MS);
+    /* 转录定时器是后台刷盘，不该单独把进程吊住；退出时尽力刷一次。 */
+    flushTimer.unref?.();
+  }
 }
 
 let installed = false;
@@ -221,9 +227,23 @@ export function installStreamCapture(): void {
     /* 目录建不出来就不再转录（退化为原行为，不影响应用） */
   }
 
+  /* 退出时尽力刷掉未满缓冲：只能做同步写，避免把关闭路径变成异步竞态。 */
+  process.once("exit", () => {
+    flushBuffer(filePath);
+  });
+
   type WriteFn = NodeJS.WriteStream["write"];
 
   const wrap = (stream: NodeJS.WriteStream, original: WriteFn) => {
+    /* 管道断裂后「写一次就永远失败」：对端（dev-launcher 的日志采集侧）被强杀后，
+     * fd 上的每一次 write 都同步抛 EPIPE。异常从本 patched 冒出去就成了
+     * uncaughtException，而 Next 的默认处理器自己又经 console.error 写 stderr
+     * → 再过 patched → 再抛 —— 进程进入「活着但不服务」的未捕获异常循环
+     * （ISSUE #3534 现场：端口在监听、请求全部超时，面板日志无限刷同一帧栈）。
+     * 所以这里对 EPIPE 单独降级：标记流已断（对端不会再读，重试没有意义），
+     * 之后跳过原写、只保留转录 —— 面板仍能看到输出，这正是本模块存在的理由；
+     * 其余异常不掩盖，那是真正的程序缺陷。 */
+    let pipeBroken = false;
     /* 与原签名同形：chunk + 可选 encoding / callback。真实调用方（console、
      * Next 的日志器、库）走的是这两个重载，覆盖它们即可全量转录。 */
     const patched: WriteFn = function patchedWrite(
@@ -237,12 +257,38 @@ export function installStreamCapture(): void {
       } catch {
         /* 转录失败不吞掉输出本身 */
       }
-      return original.call(
-        stream,
-        chunk,
-        /* SAFETY: 类型断言已复核 */ encodingOrCb as never,
-        /* SAFETY: 类型断言已复核 */ cb as never,
-      );
+      const done =
+        typeof cb === "function"
+          ? cb
+          : typeof encodingOrCb === "function"
+            ? encodingOrCb
+            : undefined;
+      if (pipeBroken) {
+        /* 断流后照常推进调用方的簿记（console 的 flush 回调靠它走），但不给
+         * 错误形状 —— 把错误交给流机制会变成无人监听的 error 事件，等于把
+         * 僵尸循环从「同步抛」换到「异步事件」那条路上再犯一次。 */
+        done?.();
+        return false;
+      }
+      let written: unknown;
+      try {
+        written = Reflect.apply(original, stream, [chunk, encodingOrCb, cb]);
+      } catch (error) {
+        /* Node 的写错误带 `code`（EPIPE / ERR_STREAM_*）；`in` 收窄后 `code` 是
+         * unknown，与字面量直比即可，不需要类型断言（no-unsafe-type-assertion）。 */
+        if (
+          typeof error !== "object" ||
+          error === null ||
+          !("code" in error) ||
+          error.code !== "EPIPE"
+        ) {
+          throw error;
+        }
+        pipeBroken = true;
+        done?.();
+        return false;
+      }
+      return written === true;
     };
     stream.write = patched;
   };

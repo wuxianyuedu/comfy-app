@@ -1,22 +1,7 @@
-/**
- * 减弱动态效果的三档分治（规范 06 §6.7 的执行者）。
- *
- * 为什么这条必须有执行者：§6.7 原来写的是「所有 `transition` / `animation` 必须有
- * `prefers-reduced-motion` 降级」，而实测 `src/`+`public/`+`.storybook/` 里
- * `prefers-reduced-motion` **0 命中** —— 一句强制条文挂着零执行者，表现不是红，
- * 是「规范说做了而全绿」（规范 §13.5.8 那一族）。
- *
- * 判的四件事，缺一档都算这条判据在空转：
- * ① 循环动画必须停（含两处**内联 `style`** —— 它们必须带 `!important`，否则静默不降级）；
- * ② 大位移必须去掉位移、保留淡入；
- * ③ 短程 hover/focus **明确豁免** —— 所以降级块里不许出现全局 `*` 或 `transition: none`
- *    这类「一把梭」写法（那条是签字时被否掉的另一档方案）；
- * ④ 降级块点名的每个 `data-slot` **在组件源码里真的存在** —— 组件改名/删掉后，
- *    CSS 里的选择器不会报错，只会静默不再命中任何元素。这一半才是本用例独有的价值。
- * ⑤ 本轮新增的两条动效机制（`.value-tick` 与 `[data-exit-reminder]`）**各有执行者**：
- *    前者是「值变了闪一下」，后者是「离开会丢东西」的提示条。它们都不是循环动画，
- *    落在「没停下 / 没命中也不会报错」那一族里 —— 所以除降级外，还要判它们
- *    真的被 CSS 定义过、且被注明的那一条选择器形状没被改写。
+/** 减弱动态效果三档分治（规范 06 §6.7 的执行者）：要求 transition/animation 都有 `prefers-reduced-motion` 降级，实测
+ * `src/`/`public/`/`.storybook/` 0 命中 —— 挂零执行者即「规范说做了而全绿」。①循环动画必须停（内联 `style` 须
+ * `!important`）②大位移留淡入 ③短程 hover/focus 豁免（禁全局 `*`/`transition: none`）④`data-slot` 须在组件源码存在，
+ * 改名即静默失配；⑤新增 `.value-tick`/`[data-exit-reminder]` 各有执行者。
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -24,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { collectDataSlots } from "./helpers/data-slots";
+import { stripComments } from "./helpers/strip-comments";
 
 const SRC_ROOT = fileURLToPath(new URL("../src", import.meta.url));
 const CSS_PATH = fileURLToPath(new URL("../src/app/globals.css", import.meta.url));
@@ -48,10 +34,9 @@ const DISPLACEMENT_SELECTORS = [
 ] as const;
 
 /**
- * 切出 `@media (prefers-reduced-motion: reduce)` 的**块体**。
- * 用花括号配平而不是「找下一个 `}`」—— 块里还有嵌套规则，粗切会在第一个内层
- * 闭括号就截断（那等于只核到半条规则）。取不到块 / 块内零声明都返回 null，
- * 让调用方判红，而不是「解析到 0 条」当成全绿。
+ * 切出 `@media (prefers-reduced-motion: reduce)` 的块体。用花括号配平而非「找下一个 `}`」：块里有嵌套规则，粗切会在
+ * 第一个内层闭括号截断（等于只核到半条）。取不到块 / 块内零声明都返回 null，让调用方判红，而不是把「解析到 0 条」
+ * 当成全绿。
  */
 function reduceBlockOf(text: string): string | null {
   const start = text.search(/@media[^{]*prefers-reduced-motion[^{]*\{/);
@@ -75,7 +60,11 @@ function reduceBlockOf(text: string): string | null {
 
 /** 块体内出现过的 `data-slot` 值（选择器里点名的那些）。 */
 function slotsNamedIn(block: string): Array<string> {
-  return [...new Set([...block.matchAll(/\[data-slot="([^"]+)"\]/g)].map((m) => m[1]!))];
+  return [
+    ...new Set(
+      [...block.matchAll(/\[data-slot="(?<slot>[^"]+)"\]/g)].map((m) => m.groups?.slot ?? ""),
+    ),
+  ];
 }
 
 /** 用到某个 class 的 `.tsx` 清单（只扫 `src/components` 与 `src/app`）。 */
@@ -92,10 +81,9 @@ function collectConsumers(cls: string): Array<string> {
       } else if (/\.tsx?$/.test(entry.name)) {
         const text = readFileSync(full, "utf8");
         /* 只认 `className` 里的写法，**并且先剥注释** —— 注释里提到类名
-           不算消费（本仓库已有 18 份内联的剥注释实现，见
-           `tests/strip-comments-single-source.test.ts`；这里按同口径内联一遍，
-           它的判据是「不许再新增第 19 份」，而本文件是既有的一份）。 */
-        const code = text.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/(^|[^:])\/\/.*$/gm, "$1");
+           不算消费。剥注释走共享件（ISSUE #2969），原先这里按「同口径」内联
+           抄了一遍无锚的 `//` 全局替换，会把字符串里的 `http://…` 一并截断。 */
+        const code = stripComments(text, { trailing: true });
         if (code.includes(cls)) {
           out.push(full);
         }
@@ -140,7 +128,7 @@ describe("prefers-reduced-motion 三档分治（规范 06 §6.7）", () => {
   it("③ 短程反馈是刻意豁免：不许出现全局一把梭的写法", () => {
     const body = block ?? "";
     expect(
-      /(^|\n)\s*\*\s*[,{]/.test(body),
+      /(?:^|\n)\s*\*\s*[,{]/.test(body),
       "reduce 块里出现了裸 `*` 选择器 —— 三档分治否掉了全局降级，" +
         "112 行短程 hover 过渡属第 ③ 档，刻意不降级",
     ).toBe(false);

@@ -1,13 +1,9 @@
 "use client";
 
 /**
- * 本地更新检测分区（规范 17 §17.2 第③层）。
- *
- * 开着桌面壳时，源码热更由 dev server 负责；只有「改完当前窗口不生效、得重启」
- * 的文件（Rust / tauri.conf.json / splash / .env / pnpm 配置）在运行期变动才有意义，
- * 检测结果由 `update-check-store` 承载（Provider 在根布局注册与持久化）。
- *
- * 视图自持的仅「本次手动检测的提示文案」这一个交互态，其余读 store。
+ * 本地更新检测分区（规范 17 §17.2 第③层）。桌面壳下源码热更归 dev server，只有
+ * 「改完须重启才生效」的文件（Rust / tauri.conf.json / splash / .env / pnpm 配置）在运行期检测；
+ * 结果由 `update-check-store` 承载，视图只自持「本次手动检测的提示文案」。
  */
 
 import { ArrowLeft } from "lucide-react";
@@ -18,8 +14,9 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Spinner } from "~/components/ui/spinner";
 
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { FieldLabel } from "~/components/ui/field";
+import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 
 export function UpdateCheckSection() {
   const updateCheckEnabled = useUpdateCheckStore((s) => s.enabled);
@@ -39,7 +36,7 @@ export function UpdateCheckSection() {
   };
 
   return (
-    <SettingsCard title="本地更新检测">
+    <SettingsCard title="本地更新检测" titleExtra={<DataLocationBadge id="update-check" />}>
       <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
         桌面壳开着时，本地源码由 dev server 自动热更（无需提示）。仅当
         <strong className="text-ink/80">改完当前窗口不生效、得重启</strong>
@@ -59,12 +56,13 @@ export function UpdateCheckSection() {
           开启运行期「本地更新需重启」检测
         </FieldLabel>
       </div>
-      <div className="border-border bg-surface-1 mb-3 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 text-sm">
+      <div className={`${SETTINGS_ROW_CLASS} mb-3 flex flex-wrap items-center gap-3 text-sm`}>
         <Button
           className="text-primary h-auto items-center gap-1.5 p-0 font-medium"
           disabled={checking}
-          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-          onClick={() => void handleManualCheck()}
+          onClick={() => {
+            void handleManualCheck();
+          }}
           variant="link"
         >
           {checking ? (

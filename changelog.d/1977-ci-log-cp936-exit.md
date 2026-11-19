@@ -256,7 +256,7 @@
   后者为真就整体放行）。
 
   修法是把剥注释补齐 —— 先剥 `/* … */` 再剥行注释，与仓里已有的同类实现
-  （`scripts/lib-node-only-scan.mjs` / `check-dead-exports.cjs` 的 `stripComments`）
+  （`scripts/gates/lib-node-only-scan.mjs` / `check-dead-exports.cjs` 的 `stripComments`）
   同口径。**不动 `ci-cp936-exit.mjs`**：它确实复用了同一处形态判据，判据该改的是
   自己的读法，不是把正确代码改成判据认得的形状。
 
@@ -268,7 +268,7 @@
   第五轮 `类型检查` 已在 21s 内转绿（**前两处修的那两半都成立**），红往下走到
   `生成态文档与源同步` —— 而这一步的日志里**一个字都没有**：
 
-      Runner[…]$ node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check
+      Runner[…]$ node scripts/ci-cp936-exit.mjs -- node scripts/docs/render-doc-placeholders.cjs --check
       Finished, code: 1, duration: 4.5s
 
   **「输出被吞」与「这条命令本来就不打字」在日志上完全同形**，读的人连它红在哪一步都

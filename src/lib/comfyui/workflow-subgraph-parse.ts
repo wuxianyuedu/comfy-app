@@ -311,7 +311,6 @@ export function extractSubgraphAnnotations(
   }> = [];
   const innerNodes: Array<RawNode> = Array.isArray(sub.nodes) ? sub.nodes : [];
   for (const n of innerNodes) {
-    // oxlint-disable-next-line strict-boolean-expressions -- 外部工作流 JSON 的 nodes 元素运行期可能为 null（类型收窄看不到），按「没有该节点」防御性跳过
     if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) {
       continue;
     }
@@ -333,8 +332,7 @@ export function extractSubgraphAnnotations(
   /* 位置：用户拖出来的覆盖值优先于原始坐标。
    *  `host:inner` 与裸内部 id 两种键写法都会读 —— 见上面 `hostId` 的说明。 */
   const innerNodeIdSet = new Set(
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    innerNodes.filter((rn) => rn?.id != null).map((rn) => String(rn.id)),
+    innerNodes.filter((rn) => rn?.id !== null && rn?.id !== undefined).map((rn) => String(rn.id)),
   );
   const draggedByInnerId: Record<string, [number, number]> = {};
   for (const [key, pos] of Object.entries(tplPositions)) {
@@ -349,7 +347,6 @@ export function extractSubgraphAnnotations(
   }
   const positions: Record<string, [number, number]> = {};
   for (const rn of innerNodes) {
-    // oxlint-disable-next-line strict-boolean-expressions -- 节点 id 是 number|string 并集，0/空串/NaN 在畸形工作流里同属「没有 id」，必须保留整体真值判断
     if (!rn?.id) {
       continue;
     }

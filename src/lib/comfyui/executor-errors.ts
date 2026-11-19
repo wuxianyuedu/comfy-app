@@ -13,6 +13,7 @@
  * @module comfyui/executor-errors — 面向用户的错误提示映射
  */
 
+import { isRecord } from "~/lib/is-record";
 import { TASK_ERROR_MAX, clampText } from "~/lib/text-clamp";
 
 // 把 ComfyUI / 节点抛回的原始错误翻译成用户能照着做的提示。
@@ -23,8 +24,7 @@ import { TASK_ERROR_MAX, clampText } from "~/lib/text-clamp";
 // 用户看到的就不是真实原因了。本函数递归剥出已知字段，兜底再打印 JSON ——
 // 保证 `task.error` 里**总有**可读的信息。
 export function friendlyError(raw: unknown): string {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (raw == null) {
+  if (raw === null || raw === undefined) {
     return "";
   }
   if (typeof raw === "string") {
@@ -40,9 +40,8 @@ export function friendlyError(raw: unknown): string {
     const parts = raw.map(friendlyError).filter((msg) => msg.trim() !== "");
     return parts.length ? parts.join("\n") : "";
   }
-  if (typeof raw === "object") {
-    /* SAFETY: 类型断言已复核 */
-    const o = raw as Record<string, unknown>;
+  if (isRecord(raw)) {
+    const o = raw;
     // 按优先级取：先 ComfyUI 自己的规范字段，再取通用异常形状
     //（Error.message / details / reason 这类通用形状）。
     const candidates: Array<keyof typeof o> = [
@@ -65,8 +64,7 @@ export function friendlyError(raw: unknown): string {
     //（例如 `{ data: { exception_message: "..." } }`）。
     for (const k of ["data", "exception", "exception_payload"]) {
       const inner = o[k];
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      if (inner != null && typeof inner === "object") {
+      if (inner !== null && inner !== undefined && typeof inner === "object") {
         const innerText = friendlyError(inner);
         if (innerText.trim()) {
           return innerText;

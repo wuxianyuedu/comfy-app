@@ -1,15 +1,12 @@
 "use client";
-/* ── 画布偏好的状态与持久化（设置的字段声明见 `../canvas-settings-types.ts`，
+/* ── 画布偏好状态与持久化（字段声明见 ../canvas-settings-types.ts，
  * 渲染出口是 <CanvasSettingsPanel> / <CanvasSettingsButton>）──
- *
- * 设置由 CanvasGrid / CanvasRulers / ZoomIndicator 经 props 读取
- * （工作流编辑器根组件调一次`useCanvasSettings()` 再分发）。
- * 这样就避免了任何 React Context 跨越`<ReactFlow>` 边界 ——
- * 那会干扰编辑器内部的选择器订阅。
- */
+ * CanvasGrid / CanvasRulers / ZoomIndicator 经 props 读取；根组件调一次 `useCanvasSettings()` 再分发，
+ * 避免 React Context 跨越 <ReactFlow> 边界干扰内部选择器订阅。 */
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 
 import { readStorageJson, writeStorageJson } from "~/lib/browser-storage";
+import { isPlainRecord } from "~/lib/is-record";
 
 import { DEFAULT_CANVAS_SETTINGS, type CanvasSettings } from "../canvas-settings-types";
 
@@ -17,14 +14,43 @@ import { DEFAULT_CANVAS_SETTINGS, type CanvasSettings } from "../canvas-settings
  * 不会与旧载荷相撞。 */
 const STORAGE_KEY = "comfyapp:canvas-settings:v1";
 
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === "number" ? value : fallback;
+}
+
+function booleanOr(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function readSettings(): CanvasSettings {
   /* SSR / 隐私模式 / 坏数据一律回落默认值 —— 三条判据收在
    *`~/lib/browser-storage`（§16.2.4.28）。 */
   return readStorageJson(STORAGE_KEY, DEFAULT_CANVAS_SETTINGS, (raw) => {
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(raw) as Partial<CanvasSettings>;
-    /* 向前兼容：存储里的未知键忽略，默认值补齐旧载荷留下的空洞。 */
-    return { ...DEFAULT_CANVAS_SETTINGS, ...parsed };
+    const parsed: unknown = JSON.parse(raw);
+    /* 向前兼容：存储里的未知键忽略，逐字段按运行时类型采用，
+     * 坏值由默认值补齐（旧载荷留下的空洞同理）。 */
+    if (!isPlainRecord(parsed)) {
+      return DEFAULT_CANVAS_SETTINGS;
+    }
+    return {
+      debugMode: booleanOr(parsed.debugMode, DEFAULT_CANVAS_SETTINGS.debugMode),
+      gridGap: numberOr(parsed.gridGap, DEFAULT_CANVAS_SETTINGS.gridGap),
+      gridMajorAlpha: numberOr(parsed.gridMajorAlpha, DEFAULT_CANVAS_SETTINGS.gridMajorAlpha),
+      gridMajorLineWidth: numberOr(
+        parsed.gridMajorLineWidth,
+        DEFAULT_CANVAS_SETTINGS.gridMajorLineWidth,
+      ),
+      gridMinorAlpha: numberOr(parsed.gridMinorAlpha, DEFAULT_CANVAS_SETTINGS.gridMinorAlpha),
+      gridMinorLineWidth: numberOr(
+        parsed.gridMinorLineWidth,
+        DEFAULT_CANVAS_SETTINGS.gridMinorLineWidth,
+      ),
+      maxZoom: numberOr(parsed.maxZoom, DEFAULT_CANVAS_SETTINGS.maxZoom),
+      minZoom: numberOr(parsed.minZoom, DEFAULT_CANVAS_SETTINGS.minZoom),
+      showGrid: booleanOr(parsed.showGrid, DEFAULT_CANVAS_SETTINGS.showGrid),
+      showMiniMap: booleanOr(parsed.showMiniMap, DEFAULT_CANVAS_SETTINGS.showMiniMap),
+      showRulers: booleanOr(parsed.showRulers, DEFAULT_CANVAS_SETTINGS.showRulers),
+    };
   });
 }
 
@@ -34,12 +60,10 @@ function writeSettings(settings: CanvasSettings): void {
   writeStorageJson(STORAGE_KEY, settings);
 }
 
-/* 画布偏好的唯一事实源。挂载时从 localStorage 读入；
- * 变更会自动落盘，并经模块级监听器集合（useSyncExternalStore）
- * 广播给**每一个**`useCanvasSettings()` 实例。
- * 这一点很要紧：设置抽屉与 GlobalStepLogPanel 是两个独立组件 ——
- * 在抽屉里切换「调试模式」必须立刻让面板重渲染，
- * 而不是靠 props 一路穿过 React Flow 边界传下去。 */
+/* 画布偏好唯一事实源：挂载时从 localStorage 读入，变更自动落盘并经模块级监听器集合
+ *（useSyncExternalStore）广播给每个 `useCanvasSettings()` 实例。
+ * 设置抽屉与 GlobalStepLogPanel 是独立组件 —— 在抽屉切换「调试模式」必须立刻让面板重渲染，
+ * 而不是靠 props 穿过 React Flow 边界。 */
 const SETTINGS_LISTENERS = new Set<() => void>();
 let CURRENT_SETTINGS: CanvasSettings = DEFAULT_CANVAS_SETTINGS;
 
@@ -97,8 +121,16 @@ export function useDebugMode() {
   const { settings, update } = useCanvasSettings();
   return {
     debugMode: settings.debugMode,
-    setDebugMode: (value: boolean) => update({ debugMode: value }),
+    setDebugMode: (value: boolean) => {
+      update({ debugMode: value });
+    },
   };
+}
+
+/* `Object.keys` 的运行时结果是 `string[]`；只有默认表里列出的键才是设置字段，
+ * 由类型谓词收窄（不接受断言）。 */
+function isCanvasSettingsKey(value: string): value is keyof CanvasSettings {
+  return value in DEFAULT_CANVAS_SETTINGS;
 }
 
 /* 当且仅当用户改过任何一项、偏离了默认值时为真 ——
@@ -106,10 +138,9 @@ export function useDebugMode() {
  *`debugMode` 被排除在外：它是运行期调试手段，不是视觉定制，
  * 不该点亮「你改过设置」这个点。 */
 export function isCustomCanvasSettings(settings: CanvasSettings): boolean {
-  /* SAFETY: 类型断言已复核 */
-  const keys = (Object.keys(DEFAULT_CANVAS_SETTINGS) as Array<keyof CanvasSettings>).filter(
-    (key) => key !== "debugMode",
-  );
+  const keys = Object.keys(DEFAULT_CANVAS_SETTINGS)
+    .filter(isCanvasSettingsKey)
+    .filter((key) => key !== "debugMode");
   for (const k of keys) {
     if (settings[k] !== DEFAULT_CANVAS_SETTINGS[k]) {
       return true;

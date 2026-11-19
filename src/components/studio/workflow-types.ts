@@ -1,12 +1,7 @@
-/* 抽出的类型声明 —— 原本声明在 WorkflowCanvasEditor.tsx 内部。
- * 这里只有纯类型声明，没有运行期代码。
- * 下面的 `import type` 只在编译期存在（完全擦除）——复用服务端派生图的节点
- * 形状，让 detail.graph 的消费方仍能拿到 class_type / inputs 访问器，
- * 不必退化成 any。
- *
- *  命名约定（避免 Ctrl+F 漏找）：同一份数据在服务端 DTO 与画布 data 两套拼写 ——
- *  `raw_inputs`（snake，服务端 DTO）/ `rawInputs`（camel，画布 data）/
- *  `inputs`（裸名，子图 data）同源，`rawJson` 同理。别只认其中一个名字。 */
+/* 抽出的类型声明 —— 原本声明在 WorkflowCanvasEditor.tsx 内部；这里只有纯类型，没有运行期代码（`import type` 只在编译期存在）。
+ * 复用服务端派生图的节点形状，让 detail.graph 的消费方仍能拿到 class_type / inputs 访问器，不必退化成 any。
+ * 命名约定（避免 Ctrl+F 漏找）：同一份数据在服务端 DTO 与画布 data 有两套拼写 —— `raw_inputs`（snake，服务端 DTO）/ `rawInputs`（camel，画布 data）/ `inputs`（裸名，子图 data）同源，`rawJson` 同理，别只认其中一个名字。
+ */
 import type { ApiWorkflowNode } from "~/lib/comfyui/raw";
 import type { AnchorRect } from "~/lib/dom-rect";
 import type { WorkflowIOModeOverride, IOParamSlot } from "~/lib/workflow/workflow-io-types";
@@ -14,14 +9,9 @@ import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 /* ── 类型定义 ── */
 export type RawInputMeta = {
-  /** 当这个 IMAGE 输入由 LoadImage 一族的上游节点馈入时，服务端解析出上游
-   *  上传的文件名并盖在这里，画布便能经 /api/images 代理渲染内联缩略图。
-   *
-   *  **适用范围已收窄** —— 只盖在服务端为 LoadImage 节点本身推送的那条
-   *  合成 `preview: true` 条目上；下游的 IMAGE 输入（ImageScale /
-   *  CLIPVisionEncode 等）不再携带它：在那里显示未缩放 / 未编码的上游图会
-   *  误导用户。合成预览条目自身也可能是 undefined —— widgets_values[0] 缺失
-   *  （没上传图）时渲染器回落到「需要上传图片」占位，保证节点主体始终有预览位。 */
+  /** 当这个 IMAGE 输入由 LoadImage 一族的上游节点馈入时，服务端解析出上游上传的文件名盖在这里，画布经 /api/images 代理渲染内联缩略图。
+   *  适用范围已收窄：只盖在服务端为 LoadImage 节点本身推送的合成 `preview: true` 条目上；下游 IMAGE 输入（ImageScale / CLIPVisionEncode 等）不再携带它 —— 显示未缩放/未编码的上游图会误导用户。
+   *  合成预览条目自身也可能是 undefined（widgets_values[0] 缺失 = 没上传图），渲染器回落到「需要上传图片」占位，保证节点主体始终有预览位。 */
   imageRef?: { filename: string; subfolder: string; type: string };
   /** 该槽位由边界哨兵连线馈入时为真（子图暴露口的输入/输出线 ——
    *  origin_id=-10 / target_id=-20）。内部节点侧仍以 `link` 携带这条线，
@@ -35,31 +25,17 @@ export type RawInputMeta = {
   label?: string;
   /** ComfyUI 的简体中文本地化标签（可选，显示时优先用它）。 */
   localized?: string;
-  /** 服务端盖上的 `multiline` 标记 —— 驱动 WorkflowNode /
-   *  WorkflowSubgraphNode 里的 `isStringWidget`：上游 Python `INPUT_TYPES()`
-   *  声明为 multiline 的 STRING 输入一律渲染成多行文本框，
-   *  与默认值多短无关。
-   *
-   *  由服务端用「静态 (classType, name) 表 + 长度启发式」算出：原件里没有
-   *  `multiline` 这类 widget 规格提示时只能靠它兜底。widget 规格里没有
-   *  `multiline` 提示时同样会盖章 ——
+  /** 服务端盖上的 `multiline` 标记 —— 驱动 WorkflowNode / WorkflowSubgraphNode 里的 `isStringWidget`：上游 Python `INPUT_TYPES()` 声明为 multiline 的 STRING 输入一律渲染成多行文本框，与默认值多短无关。
+   *  由服务端用「静态 (classType, name) 表 + 长度启发式」算出：原件里没有 `multiline` 这类 widget 规格提示时只能靠它兜底；widget 规格里没有提示时同样盖章。
    *  启发式只标「确定是 multiline」，不盖 = 「没有意见」。 */
   multiline?: boolean;
   /** ComfyUI 输入名（英文字段名）。 */
   name: string;
-  /** 合成 LoadImage 预览条目的标记。
-   *  渲染器会把它从 connEntries 与 widgetEntries **两侧**都过滤掉，
-   *  因此它永远不会画成端口圆柱或普通 widget 控件 —— 只由专属的
-   *  <WorkflowImagePreview> 尾部块消费。这样 LoadImage 的主体保持干净
-   *  （左侧不会为合成的 `image` 条目多出一个假输入柱），
-   *  也保证预览 / 占位的渲染只有一个来源。 */
+  /** 合成 LoadImage 预览条目的标记：渲染器把它从 connEntries 与 widgetEntries **两侧**都过滤掉，因此它永远不会画成端口圆柱或普通 widget 控件 —— 只由专属的 `<WorkflowImagePreview>` 尾部块消费（主体左侧不会多出一个假输入柱，预览/占位只有一个来源）。
+   */
   preview?: boolean;
-  /** 子工作流封装节点暴露口背后的「内部真实字段」（服务端由
-   *  `properties.proxyWidgets` 解析后随条目下发）。
-   *
-   *  wrapper 的槽位名是本层自动编号的别名（`value_1`），业务名在内部节点
-   *  上。画布与 IO 面板都按「内部字段 label → localized → 字段名」取名，
-   *  避免同一 pin 在两处显示成不同字符串（ISSUE #349）。普通节点不携带。 */
+  /** 子工作流封装节点暴露口背后的「内部真实字段」（服务端由 `properties.proxyWidgets` 解析后随条目下发）。wrapper 槽位名是本层自动编号的别名（`value_1`），业务名在内部节点上；画布与 IO 面板都按「内部字段 label → localized → 字段名」取名，避免同一 pin 两处显示成不同字符串（ISSUE #349）。
+   *  普通节点不携带。 */
   proxyField?: {
     field: string;
     label?: string;
@@ -135,15 +111,9 @@ export type WorkflowIOParam = IOParamSlot & {
    *  `nodeId` 是子图内部节点 id（`1670`），运行期 comfy-cli 展开后是 `4:1670`
    *  （宿主 id + 内部 id），两个 id 都存下来才能在运行期确定性还原。 */
   hostNodeId?: string;
-  /** 作者在 IO 面板里显式重命名的显示名（**唯一**写入点是面板的 ✎ 改名框）。
-   *
-   *  勾选 IO 那一刻画布透传的名字不再进库：它本来就是画布从同一个 raw 槽位
-   *  读出来的名字，抄一份下来只会在两处口径不一致时固化出一个陈旧名字。
-   *  因此这里没有值 = 作者没重命名过，显示名走富化链
-   *  （`ioLabel(e) = e.label ?? e.name` 之外还含子图内部业务名）。
-   *  刻意不从 `data.title` 播种 —— 节点标题在同节点的兄弟 pin 之间是共用的
-   *  （一个 T2I 节点上的 `text` / `text_1` 会拿到同一个标题），那样 IO 摘要
-   *  反而没法看。 */
+  /** 作者在 IO 面板里显式重命名的显示名（**唯一**写入点是面板的 ✎ 改名框）。勾选 IO 那一刻画布透传的名字不再进库 —— 它本就来自同一个 raw 槽位，抄一份只会在两处口径不一致时固化出陈旧名字；没有值 = 作者没重命名过，显示名走富化链（`ioLabel(e) = e.label ?? e.name` 之外还含子图内部业务名）。
+   *  刻意不从 `data.title` 播种 —— 节点标题在同节点的兄弟 pin 之间共用（一个 T2I 节点上的 `text` / `text_1` 会拿到同一个标题），那样 IO 摘要反而没法看。
+   */
   label?: string;
   /** 多模式覆盖层：按模式码的覆盖（镜像 `WorkflowIOEntry.modeOverrides`）。
    *  落在同一个 workflowIO JSON 列里（因此新增模式无需改表）。由 IO 预览面板的
@@ -200,12 +170,8 @@ export type WorkflowIODropPosition = "before" | "after";
  *  切换只在这里更新 `workflowIO` 状态，所有消费节点经 context 直接重渲染。 */
 export type IOEditContextValue = {
   ioEditMode: boolean;
-  /** IO 预览里的拖拽排序：把 `fromKey` 移到渲染列表中 `targetKey` 的前方
-   *  （`before`）或后方（`after`）；传 `null` 表示移到末尾。插入点由指针在
-   *  目标行内的上/下半区显式给出，与拖拽指示线画的位置同源（旧版按拖动方向
-   *  猜插入点、指示线却永远画在行顶，两者打架时用户看到「拖了但顺序没变」）。
-   *  会重排受影响分组的 `displayOrder` 并即时 PATCH 服务端，让排列能扛过
-   *  一次刷新。密集编号策略与分组隔离契约见 `reorderIO` 的实现。 */
+  /** IO 预览里的拖拽排序：把 `fromKey` 移到 `targetKey` 的前方（`before`）或后方（`after`），传 `null` 表示移到末尾。插入点由指针在目标行内的上/下半区显式给出，与拖拽指示线同源（旧版按拖动方向猜、指示线却画在行顶，用户看到「拖了但顺序没变」）。
+   *  会重排受影响分组的 `displayOrder` 并即时 PATCH 服务端，让排列扛过一次刷新；密集编号策略与分组隔离契约见 `reorderIO` 的实现。 */
   reorderIO: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
   /** 更新某个已勾选 pin 的显示名。新值存在 `workflowIO[key].label` 上，
    *  下一次 `handleSave` 落库（现有 PATCH 体本来就整份发送 `workflowIO`）。
@@ -446,12 +412,8 @@ export type WorkflowNodeData = {
    *  切换分组旁路要走 `RgthreeGroupsContext.setBypass` → PATCH，
    *  而不是直接改。 */
   groups?: Array<WorkflowGroup>;
-  /** 当前视图的宿主（外层封装）节点 id —— 仅当视图是「下钻后的子工作流内部」
-   *  时由编辑器注入（值 = 进入本层时的 wrapper 节点 id）。
-   *
-   *  本层节点都是子图内部节点（id 形如 `1670`），在顶层画布上不存在；勾选它们
-   *  时 `IoRef.nodeId` 会带上 `hostNodeId`，运行期据此把内部 id 还原成 comfy-cli
-   *  展开后的 `4:1670` 拼接形式。顶层视图不注入（undefined）。 */
+  /** 当前视图的宿主（外层封装）节点 id —— 仅当视图是「下钻后的子工作流内部」时由编辑器注入（值 = 进入本层时的 wrapper 节点 id）。本层节点都是子图内部节点（id 形如 `1670`）、在顶层画布上不存在；勾选它们时 `IoRef.nodeId` 会带上 `hostNodeId`，运行期据此还原成 comfy-cli 展开后的 `4:1670` 拼接形式。
+   *  顶层视图不注入（undefined）。 */
   hostNodeId?: string;
   inputs: Record<string, unknown>;
   /** 对每个「连线型」输入（[srcId, slot]），记录源节点的 title 与
@@ -470,13 +432,8 @@ export type WorkflowNodeData = {
    *  旁路 → 紫色，禁用 → 灰色，正常 → 角色色 / 默认色。 */
   mode?: number;
   nodeId: string; // ComfyUI 节点 ID
-  /** rawJson 里的 LiteGraph `properties` 字典。那些在运行期由这些值推导
-   *  自身主体 UI 的自定义前端会用它 —— 最典型的例子是 rgthree 的
-   *  `Fast Groups Bypasser`，它读 `matchTitle` / `matchColors` / `sort`
-   *  等来算出自己的开关清单。`classType === "Fast Groups Bypasser
-   *  (rgthree)"` 时 WorkflowNode 会看 `properties.matchTitle`，
-   *  把匹配到的分组渲染成运行期主体。不带 properties 的节点为空 /
-   *  undefined。 */
+  /** rawJson 里的 LiteGraph `properties` 字典。那些在运行期由这些值推导自身主体 UI 的自定义前端会用它 —— 最典型是 rgthree 的 `Fast Groups Bypasser`，它读 `matchTitle` / `matchColors` / `sort` 算出开关清单；`classType === "Fast Groups Bypasser (rgthree)"` 时 WorkflowNode 会看 `properties.matchTitle`，把匹配到的分组渲染成运行期主体。
+   *  不带 properties 的节点为空 / undefined。 */
   properties?: Record<string, unknown>;
   /** 每个输入的显示元数据，来自原始 JSON（localized_name + type）。 */
   rawInputs?: Array<RawInputMeta>;

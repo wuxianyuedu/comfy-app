@@ -7,28 +7,10 @@ import { shouldDimEdge, type EdgeFocusRole } from "./flow-focus-endpoints";
 import { readEdgeFocusRole } from "./hooks/use-related-edges-highlight";
 
 /**
- * WorkflowEdge —— ComfyUI 风格的贝塞尔连线。
- *
- * 为什么**不用** React Flow 自带的 `getBezierPath`：
- *
- *   自带算法把控制点偏移写成源与目标之间**距离**的函数。
- *   对于短距离的 L→R 或 T→B
- *   连线，偏移植会塌缩到几个像素，于是曲线读起来就是
- *   一条直线 —— 视觉上等于完全没有边样式。
- *
- *   ComfyUI 的 lit-renderer 则一律按**句柄朝向**拉一个
- *   近乎固定的偏移量，与距离无关。
- *   我们这里照做。
- *
- *   结果：
- *     • L→R / R→L 的边得到干净的 S 形曲线，两端各锚出 100 px。
- *     • T→B / B→T（竖向）的边**同样**弯曲，因为偏移落在
- *       *句柄*方向上（竖向），而不是源→目标轴上。
- *     • 斜向的边把偏移在 x 与 y 之间分摊。
- *
- * 数据模型（id / source / target / handles / style）不动
- * —— 本组件只决定曲线怎么画。
- */
+ * WorkflowEdge —— ComfyUI 风格贝塞尔连线。
+ * 不用 React Flow 的 getBezierPath：它把控制点偏移写成两端距离的函数，短 L→R / T→B 线会塌成直线。
+ * ComfyUI lit-renderer 一律按句柄朝向给近乎固定偏移（本组件照做）：L→R/R→L 为两端各锚 100px 的 S 曲线，
+ * 竖向同样弯曲，斜向在 x/y 分摊；数据模型不动，本组件只决定曲线怎么画。 */
 const HANDLE_OUT: Record<Position, [number, number]> = {
   [Position.Left]: [-1, 0],
   [Position.Right]: [1, 0],
@@ -52,19 +34,15 @@ function pickOffset(sx: number, sy: number, tx: number, ty: number) {
   return mag;
 }
 
-/** 三次贝塞尔在 t = 0.5 处的中点。 */
+/** 三次贝塞尔在 t = 0.5 处的中点（p0 起点、p1/p2 控制点、p3 终点）。 */
 function bezierMidpoint(
-  p0x: number,
-  p0y: number,
-  p1x: number,
-  p1y: number,
-  p2x: number,
-  p2y: number,
-  p3x: number,
-  p3y: number,
+  p0: { x: number; y: number },
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  p3: { x: number; y: number },
 ): [number, number] {
-  const x = (p0x + 3 * p1x + 3 * p2x + p3x) / 8;
-  const y = (p0y + 3 * p1y + 3 * p2y + p3y) / 8;
+  const x = (p0.x + 3 * p1.x + 3 * p2.x + p3.x) / 8;
+  const y = (p0.y + 3 * p1.y + 3 * p2.y + p3.y) / 8;
   return [x, y];
 }
 
@@ -93,7 +71,7 @@ function parseHexColor(color: string): [number, number, number] | null {
   const body = hex.slice(1);
   if (body.length === 3) {
     const [r, g, b] = body.split("");
-    if (!r || !g || !b) {
+    if (r === undefined || r === "" || g === undefined || g === "" || b === undefined || b === "") {
       return null;
     }
     return [Number.parseInt(r + r, 16), Number.parseInt(g + g, 16), Number.parseInt(b + b, 16)];
@@ -112,11 +90,11 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
   const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, data } =
     props;
 
-  const sPos = sourcePosition ?? Position.Right;
-  const tPos = targetPosition ?? Position.Left;
+  const sPos = sourcePosition;
+  const tPos = targetPosition;
 
-  const sOut = HANDLE_OUT[sPos] ?? [1, 0];
-  const tOut = HANDLE_OUT[tPos] ?? [-1, 0];
+  const sOut = HANDLE_OUT[sPos];
+  const tOut = HANDLE_OUT[tPos];
 
   const offset = pickOffset(sourceX, sourceY, targetX, targetY);
 
@@ -126,7 +104,12 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
   const c2y = targetY + tOut[1] * offset;
 
   const edgePath = `M ${sourceX},${sourceY} C ${c1x},${c1y} ${c2x},${c2y} ${targetX},${targetY}`;
-  const [labelX, labelY] = bezierMidpoint(sourceX, sourceY, c1x, c1y, c2x, c2y, targetX, targetY);
+  const [labelX, labelY] = bezierMidpoint(
+    { x: sourceX, y: sourceY },
+    { x: c1x, y: c1y },
+    { x: c2x, y: c2y },
+    { x: targetX, y: targetY },
+  );
 
   /* 选中节点的相关连线：加粗 + 提亮，其余连线在选中态下降噪，让「这个节点连到
    * 哪里」一眼可读。关注级别由 `useRelatedEdgesHighlight` 写在 edge.data 上；

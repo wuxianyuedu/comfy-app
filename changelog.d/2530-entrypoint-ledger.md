@@ -1,6 +1,6 @@
 ## Added
 
-- `scripts/check-gate-executors.cjs` 多出**第四个方向**：台账 `scripts/.gate-executor-ledger.json`
+- `scripts/check-gate-executors.cjs` 多出**第四个方向**：台账 `scripts/gates/.gate-executor-ledger.json`
   新增 `entrypoints` 那张表，登记成入口的每一形（`脚本 + 那串旗标 + 执行者`）都必须在那个执行者文件里
   **真找得到一行以这串旗标调起它**，找不到就红（ISSUE #2530，立案现场是 #2385）。
   它补的是本判据自己的一条已知盲区：① 按 **basename** 认执行者是刻意的（整命令逐字比会随引号与

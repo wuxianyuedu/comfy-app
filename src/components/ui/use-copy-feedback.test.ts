@@ -1,18 +1,8 @@
 // @vitest-environment jsdom
-/**
- * 「复制到剪贴板之后给什么反馈」的唯一出口（规范 16 §16.2.4.43）。
- *
- * 收口前 14 个落点给出六种答案，其中一半**没有失败分支** —— 浏览器要
- * 「非安全上下文 / 无剪贴板权限」两条同时成立才会失败，所以在开发机上几乎
- * 复现不出来，只在打包后的 `http://` 里出现。用例因此把 `copyText` 的结果
- * 直接桩成成功 / 失败两态，逐条钉住：
- *  - 成功与失败**各自**都必须走各自的出口（这是这条账的核心）；
- *  - `onFailure: "silent"` 是**显式**静默，与「忘了写」在行为上一致、
- *    在代码上不同；
- *  - 重入期间重复点不发第二次写入（`setState` 是异步的，同一次事件循环里
- *    读不到刚写的值 —— 与 `useItemAction` 同一个坑）；
- *  - `useCopyResult` 只给成败、不触发反馈（调用处自己要把结果接进别的通道）。
- */
+/** 「复制到剪贴板之后给什么反馈」的唯一出口（规范 16 §16.2.4.43）。收口前 14 个落点给出六种答案，一半**没有失败分支** ——
+ * 只有「非安全上下文 / 无剪贴板权限」同时成立才失败，开发机几乎复现不出来，只在打包后的 `http://` 里出现。用例把
+ * `copyText` 桩成两态：成功与失败**各自**走各自出口；`onFailure: "silent"` 是显式静默；重入期间重复点不发第二次写入
+ *（`setState` 异步）；`useCopyResult` 只给成败、不触发反馈。 */
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,8 +12,7 @@ vi.mock("~/lib/browser-io", () => ({
   copyText: (text: string) => copyText(text),
 }));
 
-const { copyFailureText, useCopyFeedback, useCopyResult } =
-  await import("./use-copy-feedback");
+const { copyFailureText, useCopyFeedback, useCopyResult } = await import("./use-copy-feedback");
 
 beforeEach(() => {
   copyText.mockReset();
@@ -34,9 +23,7 @@ describe("useCopyFeedback", () => {
     const onSuccess = vi.fn();
     const onFailure = vi.fn();
     copyText.mockResolvedValue(false);
-    const { result } = renderHook(() =>
-      useCopyFeedback({ onSuccess, onFailure }),
-    );
+    const { result } = renderHook(() => useCopyFeedback({ onSuccess, onFailure }));
 
     await act(async () => {
       result.current("文本");
@@ -59,9 +46,7 @@ describe("useCopyFeedback", () => {
 
   it('`onFailure: "silent"` 是显式静默（与「忘了写」行为一致、写法不同）', async () => {
     copyText.mockResolvedValue(false);
-    const { result } = renderHook(() =>
-      useCopyFeedback({ onFailure: "silent" }),
-    );
+    const { result } = renderHook(() => useCopyFeedback({ onFailure: "silent" }));
     await act(async () => {
       result.current("文本");
       await Promise.resolve();
@@ -97,7 +82,9 @@ describe("useCopyFeedback", () => {
     });
     /* 第一次落地后重入解除，可以再点。 */
     copyText.mockResolvedValue(true);
-    act(() => result.current("第三次"));
+    act(() => {
+      result.current("第三次");
+    });
     expect(copyText).toHaveBeenCalledTimes(2);
   });
 
@@ -161,12 +148,8 @@ describe("copyFailureText（复制失败的固定提示句）", () => {
 
   it("target 是可选的界面位置说明，插在「手动选中」与「复制」之间", () => {
     // 只有调用处知道「可复制物在哪一段界面里」；固定句不该把这层写死。
-    expect(copyFailureText("日志列表")).toBe(
-      "复制失败：剪贴板不可用，请手动选中日志列表后复制",
-    );
-    expect(copyFailureText("下方展开区")).toContain(
-      "请手动选中下方展开区后复制",
-    );
+    expect(copyFailureText("日志列表")).toBe("复制失败：剪贴板不可用，请手动选中日志列表后复制");
+    expect(copyFailureText("下方展开区")).toContain("请手动选中下方展开区后复制");
     expect(copyFailureText("日志列表")).not.toContain("后后");
   });
 

@@ -4,10 +4,10 @@ run-local.ps1 — 非开发人员本地运行引导入口（原 run-local.bat）
 
 一键完成环境自检与初始化：检查 node/pnpm → 生成 .env（并跑 `pnpm env:init` 补齐缺失键）
 → 补齐依赖 → 补齐 comfy-cli 运行环境，完成后提示双击 start-web.ps1 启动。实际逻辑在
-scripts\prepare-local-run.ps1。
+scripts\devtools\prepare-local-run.ps1。
 
 前置（一次性）：Windows 默认双击 .ps1 是「用记事本打开」，需先右键
-  scripts\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
+  scripts\devtools\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
 
 用法：
   双击 <项目根>\tools\start\run-local.ps1
@@ -27,10 +27,10 @@ $root = Get-ProjectRoot -StartDir $PSScriptRoot
 Set-Location $root
 
 Write-Host "[INFO] 正在执行本地运行环境自检与初始化..." -ForegroundColor Cyan
-Write-Host "[INFO] 调用 PowerShell 脚本：scripts\prepare-local-run.ps1" -ForegroundColor Cyan
+Write-Host "[INFO] 调用 PowerShell 脚本：scripts\devtools\prepare-local-run.ps1" -ForegroundColor Cyan
 Write-Host ""
 
-$code = Invoke-Entry -ScriptPath "scripts\prepare-local-run.ps1"
+$code = Invoke-Entry -ScriptPath "scripts\devtools\prepare-local-run.ps1"
 Write-Host ""
 if ($code -ne 0) {
     Write-Host "[ERROR] 初始化未完成，退出码 $code 。请阅读上方红色提示后处理。" -ForegroundColor Red

@@ -13,5 +13,5 @@
 - 全落的诊断句不再只说「PATH 与 rustup 的默认安装位都没有」：现在把探过的四处点全
   （`CARGO_HOME/bin`、rustup 记着的 `cargo_home/bin`、`~/.cargo/bin`、
   `~/.rustup/toolchains`），并明说那是「没装 / 装在别处」，下一步是 `where cargo` 核一次。
-- 寻址判据整段搬到 `scripts/shell-gate-cargo.mjs`（`shell-gate.mjs` re-export，
+- 寻址判据整段搬到 `scripts/gates/shell-gate-cargo.mjs`（`shell-gate.mjs` re-export，
   调用方导入路径不变）：落这一笔时主文件 925 行，撞上 R5 的 900 行硬闸。

@@ -1,11 +1,9 @@
 "use client";
 
 // ── ComfyUI 排队 / 当前执行（底部状态栏那一格的数据源）──
-//
-// 轮询本体已收进 `~/lib/comfy/comfy-queue-store`（与 comfy-stats-store 同款：
-// 全页单点持有者，状态栏与队列面板共用一条 GET /api/comfy/queue，避免重复轮询）。
-// 本文件只剩「订阅快照 + 纯展示函数」两层：组件只消费 useComfyQueue()，逻辑
-// （notice 文案 / 耗时格式化）走下面的纯函数，视图不再自己发请求（硬规则 10）。
+// 轮询本体在 `~/lib/comfy/comfy-queue-store`（全页单点持有者，状态栏与队列面板共用一条
+// GET /api/comfy/queue，避免重复轮询）。本文件只剩订阅快照 + 纯展示函数：逻辑（notice
+// 文案 / 耗时格式化）走纯函数，视图不再自己发请求（硬规则 10）。
 
 import { useSyncExternalStore } from "react";
 

@@ -25,7 +25,9 @@ export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
   const [error, setError] = useState("");
 
   // 反馈通道（~/lib/async-action 的形状）：成功清掉行内错误块，失败落一句话。
-  const report: ActionReport = (kind, detail) => setError(kind === "err" ? detail : "");
+  const report: ActionReport = (kind, detail) => {
+    setError(kind === "err" ? detail : "");
+  };
 
   const save = async (nextRating: number | null, nextFav: boolean, rollback: () => void) => {
     const result = await runAsyncAction(
@@ -45,14 +47,18 @@ export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
     const prev = rating;
     const next = prev === star ? null : star;
     setRatingState(next);
-    void save(next, fav, () => setRatingState(prev));
+    void save(next, fav, () => {
+      setRatingState(prev);
+    });
   };
 
   const toggleFav = () => {
     const prev = fav;
     const next = !prev;
     setFav(next);
-    void save(rating, next, () => setFav(prev));
+    void save(rating, next, () => {
+      setFav(prev);
+    });
   };
 
   return (
@@ -63,7 +69,9 @@ export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
             aria-label={`${star} 星`}
             className="size-5"
             key={star}
-            onClick={() => pickRating(star)}
+            onClick={() => {
+              pickRating(star);
+            }}
             size="icon-sm"
             type="button"
             variant="ghost"

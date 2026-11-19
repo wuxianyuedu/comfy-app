@@ -1,21 +1,7 @@
 /**
- * 认证 origin 策略的判据（ISSUE #2158 第 4 条）。
- *
- * 判的是**三件会静默失效的事**：
- *
- *  ① **允许名单的形状**：better-auth 的 `getHost()` 取 `new URL(url).host`
- *     ⇒ host **带端口**。名单里写裸 `127.0.0.1` 与写 `127.0.0.1:*` 的差别是
- *     「一个不匹配 / 一个匹配」—— 而不匹配的那份**不报错**，只是解析不出 origin，
- *     于是回调/重定向指向兜底值。⇒ 这一条用 better-auth 自己的匹配器判。
- *  ② **动态解析真的按请求的 Host 头走**：桌面形态的端口运行期才定
- *     （`standalone-runtime-env.mjs`），编译期写死的 baseURL 对它永远不对 ⇒
- *     这一条判「请求的 host 就是解析出来的 origin」。
- *  ③ **外来 host 落兜底而不是被解析成它**：允许名单是**安全面**（谁能配当
- *     origin）；不在名单里的 host 必须落兜底，否则 DNS rebinding 那类
- *     `Host: evil.example.com` 会被当成合法 origin（回调指向攻击者）。
- *
- * 另有一条负控制：baseURL **不许**退回字符串形态（那正是本条要治的病），
- * 兜底值必须与「应用自身 origin」那一份同口径（不另写一份拼法）。
+ * 认证 origin 策略判据（ISSUE #2158 第 4 条）：① 允许名单形状 —— better-auth `getHost()` 取带端口的 host，裸
+ * `127.0.0.1` 与 `127.0.0.1:*` 一个是「不匹配且不报错」；② 动态解析按请求 Host 头走（桌面端口运行期才定）。
+ * ③ 外来 host 必须落兜底，否则 `Host: evil.example.com` 被当合法 origin（DNS rebinding）；负控制：baseURL 不许退回字符串形态。
  */
 import { describe, expect, it, vi } from "vitest";
 import { matchesHostPattern, resolveBaseURL } from "better-auth";
@@ -47,15 +33,10 @@ describe("认证 origin 策略：允许名单的形状", () => {
   it("两种回环 host（都带端口）各自被名单覆盖", () => {
     // 名单是「每个 host 形状一条」，不是「一条通吃」：断言的是**覆盖**，
     // 不是每条 pattern 都匹配两个 host（`127.0.0.1:*` 本来就不匹配 localhost）。
-    for (const host of [
-      `127.0.0.1:${RUNTIME_PORT}`,
-      `localhost:${RUNTIME_PORT}`,
-    ]) {
-      expect(
-        AUTH_LOOPBACK_HOST_PATTERNS.some((pattern) =>
-          matchesHostPattern(host, pattern),
-        ),
-      ).toBe(true);
+    for (const host of [`127.0.0.1:${RUNTIME_PORT}`, `localhost:${RUNTIME_PORT}`]) {
+      expect(AUTH_LOOPBACK_HOST_PATTERNS.some((pattern) => matchesHostPattern(host, pattern))).toBe(
+        true,
+      );
     }
   });
 
@@ -64,9 +45,7 @@ describe("认证 origin 策略：允许名单的形状", () => {
       expect(pattern).toContain(":*");
     }
     // 反证：裸 host 形状确实不匹配带端口的 host（所以不能写进名单）。
-    expect(matchesHostPattern(`127.0.0.1:${RUNTIME_PORT}`, "127.0.0.1")).toBe(
-      false,
-    );
+    expect(matchesHostPattern(`127.0.0.1:${RUNTIME_PORT}`, "127.0.0.1")).toBe(false);
   });
 
   it("不放行非回环 host（DNS rebinding 那一族）", () => {
@@ -79,10 +58,9 @@ describe("认证 origin 策略：允许名单的形状", () => {
 describe("认证 origin 策略：动态解析", () => {
   it("请求的 host 就是解析出来的 origin（桌面端口运行期才定也照样对）", () => {
     const config = authBaseUrlConfig(undefined);
-    const request = new Request(
-      `http://127.0.0.1:${RUNTIME_PORT}/api/auth/sign-in/email`,
-      { headers: { host: `127.0.0.1:${RUNTIME_PORT}` } },
-    );
+    const request = new Request(`http://127.0.0.1:${RUNTIME_PORT}/api/auth/sign-in/email`, {
+      headers: { host: `127.0.0.1:${RUNTIME_PORT}` },
+    });
     expect(resolveBaseURL(config, "/api/auth", request, false, false)).toBe(
       `http://127.0.0.1:${RUNTIME_PORT}/api/auth`,
     );
@@ -90,10 +68,9 @@ describe("认证 origin 策略：动态解析", () => {
 
   it("localhost 形态同样按请求解析（裸 next dev 那条链路的 origin）", () => {
     const config = authBaseUrlConfig(undefined);
-    const request = new Request(
-      "http://localhost:3100/api/auth/sign-in/email",
-      { headers: { host: "localhost:3100" } },
-    );
+    const request = new Request("http://localhost:3100/api/auth/sign-in/email", {
+      headers: { host: "localhost:3100" },
+    });
     expect(resolveBaseURL(config, "/api/auth", request, false, false)).toBe(
       "http://localhost:3100/api/auth",
     );
@@ -101,10 +78,9 @@ describe("认证 origin 策略：动态解析", () => {
 
   it("不在名单里的 host 落兜底（不是解析成它）", () => {
     const config = authBaseUrlConfig(undefined);
-    const request = new Request(
-      "http://evil.example.com/api/auth/sign-in/email",
-      { headers: { host: "evil.example.com" } },
-    );
+    const request = new Request("http://evil.example.com/api/auth/sign-in/email", {
+      headers: { host: "evil.example.com" },
+    });
     const resolved = resolveBaseURL(config, "/api/auth", request, false, false);
     expect(String(resolved)).not.toContain("evil.example.com");
     expect(resolved).toBe(`${getBaseUrl()}/api/auth`);
@@ -144,12 +120,8 @@ describe("认证 origin 策略：配置形状与可信 origin 名单", () => {
     for (const pattern of AUTH_LOOPBACK_HOST_PATTERNS) {
       expect(origins).toContain(pattern);
     }
-    expect(
-      matchesHostPattern(`http://127.0.0.1:${RUNTIME_PORT}`, origins[0] ?? ""),
-    ).toBe(true);
-    expect(
-      matchesHostPattern(`http://localhost:${RUNTIME_PORT}`, origins[1] ?? ""),
-    ).toBe(true);
+    expect(matchesHostPattern(`http://127.0.0.1:${RUNTIME_PORT}`, origins[0] ?? "")).toBe(true);
+    expect(matchesHostPattern(`http://localhost:${RUNTIME_PORT}`, origins[1] ?? "")).toBe(true);
   });
 });
 

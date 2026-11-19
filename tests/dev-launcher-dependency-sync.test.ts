@@ -1,18 +1,7 @@
 /**
- * 回归护栏：**启动前的依赖补装，判据是 lockfile 漂移 + 安装结果复核**（ISSUE #636）。
- *
- * 用户现场的后续：`pnpm install` 失败后，用户「再次双击就显示已经没有可安装的了」
- * —— 入口报「依赖已就绪，跳过安装」而应用仍然起不来。原因是判据只看
- * 「`node_modules` 在不在」（`.modules.yaml` + `.bin/next`），而
- * **装了 ≠ 装的是当前 lockfile**：拉了更新（新依赖进 lockfile）后没重装时，
- * 前者照样为真，真正缺席的新依赖会在业务模块解析时才炸出来，报错与「依赖没装」
- * 这句结论完全不像。
- *
- * 本用例钉死三条：
- *   1. `lockfileDrift()` 四态判据（fresh / drift / no-install / no-lockfile）；
- *   2. `verifyInstall()` 是「安装真的成功了」的**复核**入口，不看退出码；
- *   3. 编排器里补装的动作与复核都在（`syncDependencies`：漂移才装、装完复核，
- *      复核不通过即非零退出），且**不许**再退回「每次都无条件 install」。
+ * 回归护栏：启动前依赖补装以 lockfile 漂移 + 安装结果复核为判据（ISSUE #636）。现场：`pnpm install` 失败后再次双击报
+ * 「依赖已就绪」而应用起不来 —— 旧判据只看 `node_modules` 存在（`.modules.yaml` + `.bin/next`），但「装了 ≠ 装的是当前
+ * lockfile」。钉三件：`lockfileDrift()` 四态、`verifyInstall()` 复核成功而非退出码、`syncDependencies` 漂移才装并复核后才放行。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -35,15 +24,11 @@ afterEach(() => {
   }
 });
 
-/** 最小可用 lockfile —— 形态必须**与 pnpm 真实产物同形**。
- *
- *  这一条踩过坑：手写一个「差不多」的 fixture 会让判据**静默失效**，而且看起来
- *  全绿。三处缺一不可（`scripts/lockfile/lock-diff.mjs` 按段/键切分）：
- *    · `settings:` 段要在 `importers:` 之前（否则 `packages:` 会被算进 importer）；
- *    · `packages:` / `snapshots:` 必须是**裸键 + 子块**（`packages: {}` 是行内值，
- *      不匹配顶层段落正则，整段会被吞进上一个段落）；
- *    · 依赖名要比 `dependencies:` 更深一层（`splitTopKeys` 按最小缩进取一级键）。
- *  正确形态可用 `pnpm install --lockfile-only` 在一个空包里生成后对照。 */
+/**
+ * 最小可用 lockfile，形态必须与 pnpm 真实产物同形：手写「差不多」的 fixture 会让判据静默失效而看起来全绿。
+ * 三处缺一不可（`scripts/lockfile/lock-diff.mjs` 按段/键切）：`settings:` 在 `importers:` 前；`packages:`/`snapshots:` 是裸键
+ * + 子块（`packages: {}` 会被吞进上一段）；依赖名比 `dependencies:` 深一层；正确形态用 `pnpm install --lockfile-only` 生成后对照。
+ */
 function lockText(
   deps: Array<string> = ["      clsx:", "        specifier: ^2.1.1", "        version: 2.1.1"],
 ): string {
@@ -101,10 +86,21 @@ function fakeInstall(dir: string, installedLock: string, { healthy = true } = {}
   const bin = path.join(nm, ".bin");
   fs.mkdirSync(bin, { recursive: true });
   fs.writeFileSync(path.join(bin, "next"), "", "utf8");
+  // KEY_DEPS（目录非空即可）+ RESOLVE_PROBES（必须能从仓库根 resolve 到 package.json）。
+  // #4105 把 probe 解析纳入 checkNodeModules/verifyInstall 后，合成的「健康安装」也要满足探针。
   for (const rel of ["typescript", "@typescript/native", "next"]) {
     const p = path.join(nm, rel);
     fs.mkdirSync(p, { recursive: true });
     fs.writeFileSync(path.join(p, "index.js"), "// stub\n", "utf8");
+  }
+  for (const name of ["typescript", "next", "axe-core", "pino"]) {
+    const p = path.join(nm, name);
+    fs.mkdirSync(p, { recursive: true });
+    fs.writeFileSync(
+      path.join(p, "package.json"),
+      `{"name":"${name}","version":"1.0.0"}\n`,
+      "utf8",
+    );
   }
 }
 
@@ -210,16 +206,9 @@ describe("syncDependencies：漂移才装，装完必须复核", () => {
 });
 
 /**
- * 补装之前的现场拦截（AGENTS 硬规则 9）。
- *
- * 立案现场：编排主流程里端口检查（`reconcilePort`）排在补装**之后**几十行，
- * 而更早的 `reapStaleSession` 在「上一位 launcher 还活着」时刻意什么都不做 ——
- * 所以「实例活着 → 直接 pnpm install」这条路是真实存在的，而它的后果不是警告一句
- * 就完了：原生模块被活进程锁住时 install 以 EPERM 失败，并拖垮后续每一条 pnpm 命令。
- *
- * 判据必须按**归属**判，不按「端口有没有人监听」判：隔壁检出占着同一个端口并不会
- * 锁本检出的 `node_modules`，拿端口当条件会在多检出并行下天天误拦（这也是
- * `scripts/sync-lint.ps1` 原先那份 `Get-NetTCPConnection` 探测的问题之一）。
+ * 补装前的现场拦截（AGENTS 硬规则 9）。立案现场：`reconcilePort` 排在补装之后几十行，更早的 `reapStaleSession`
+ * 在「上一位 launcher 还活着」时刻意什么都不做 ⇒「实例活着 → 直接 install」真实存在；原生模块被活进程锁住时
+ * install 以 EPERM 失败并拖垮后续每条 pnpm。判据按归属判，不按端口：隔壁检出占同端口不锁本检出的 `node_modules`。
  */
 describe("syncDependencies：本检出实例在跑时先拦下来（AGENTS 硬规则 9）", () => {
   it("会话锚点新鲜且 launcher 存活 → 不装，原因给出 EPERM 与出口", async () => {
@@ -270,9 +259,12 @@ describe("syncDependencies：本检出实例在跑时先拦下来（AGENTS 硬�
   });
 
   it("命令行出口复用同一个判据（不在 .ps1 里再写一份端口探测）", () => {
-    const cli = fs.readFileSync(path.join(ROOT, "scripts", "deps-install-guard.mjs"), "utf8");
+    const cli = fs.readFileSync(
+      path.join(ROOT, "scripts", "devtools", "deps-install-guard.mjs"),
+      "utf8",
+    );
     expect(cli).toContain("runningAppInstances");
-    const ps1 = fs.readFileSync(path.join(ROOT, "scripts", "sync-lint.ps1"), "utf8");
+    const ps1 = fs.readFileSync(path.join(ROOT, "scripts", "devtools", "sync-lint.ps1"), "utf8");
     expect(ps1).toContain("deps-install-guard.mjs");
     expect(ps1, "又回到 .ps1 自己探端口那一族").not.toMatch(/Get-NetTCPConnection/);
   });

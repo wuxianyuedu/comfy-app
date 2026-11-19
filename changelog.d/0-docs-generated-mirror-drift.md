@@ -3,7 +3,7 @@
 - **补回两份「生成态文档」镜像：`docs/generated/11-测试与可观测性.md` 与
   `docs/generated/13-提交与-code-review.md`** —— 它们落后于各自的源，是主干上带的红，
   不是本批写出来的：`pnpm doc:render` 之后 `--check` 在 `cnb/master` 顶端 `dd4ec873`
-  上直接报这两条（复算入口：`node scripts/render-doc-placeholders.cjs --check`，只读、
+  上直接报这两条（复算入口：`node scripts/docs/render-doc-placeholders.cjs --check`，只读、
   不写盘）。成因是 #2110 那批改了 `docs/standards/11-*.md` / `13-*.md` 的正文，
   而 `docs/generated/**` 那一份没跟着重渲染进同一次提交。
 - **为什么这一族会漏**：本地钩子不跑这条（ISSUE #1975 那批的处置：判据一字未改、只换执行者），

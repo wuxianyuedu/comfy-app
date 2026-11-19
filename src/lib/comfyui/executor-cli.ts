@@ -42,6 +42,16 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { primaryModelName } from "./executed-model";
 import { comfyCliInterpreter, comfyCliMissingHint } from "./comfy-cli-python";
+import {
+  augmentReferenceImageLoadersApi,
+  augmentReferenceImageLoadersRaw,
+} from "./reference-loader-augment";
+import {
+  applyReferenceLoaderChainsApi,
+  applyReferenceLoaderChainsRaw,
+} from "./reference-loader-chain";
+import { buildReferenceChainCatalog } from "./reference-loader-catalog";
+import { fetchObjectInfo } from "./raw";
 import { state, log, appendRawCli } from "./runner-state";
 import type { Job } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
@@ -55,6 +65,10 @@ import { stripUiOnlyNodes } from "./raw-ui-only-nodes";
 import { applyApiOverrides, applyRawOverrides, type JsonRecord } from "./raw-overrides";
 import { trace } from "./trace";
 import { COMFYUI_DEFAULT_PORT, LOOPBACK_HOST } from "../endpoints";
+
+/* 进度落库失败已留痕的任务（ISSUE #4268）：进度事件高频，每个任务只记第一次
+ * 失败防刷屏；集合带上限（超限清空重来），不随任务数无界增长。 */
+const progressPersistWarned = new Set<string>();
 
 /* ── 依赖注入接缝（P3 §5 第 1 期·第三步·执行批） ────────────────────── */
 
@@ -101,6 +115,51 @@ function cliWarn(msg: string): void {
   (depsOverride.logger ?? _loggerRef)?.warn(msg);
 }
 
+/* 临时工作流目录的形状只有这一份出处：写入（executeViaComfyCli）与
+ * 清理（settle 时的删除 + reaper 的兜底扫描）都引用它，别处不重拼。 */
+const TEMP_WORKFLOW_DIR = path.join(process.cwd(), "temp", "comfy-cli");
+/** 崩溃孤儿的保留窗：进程在「写完」与「收口」之间崩掉时文件会留下，
+ * 按 mtime 留一小时余量再删（收口即删是正常路径，这里只兜孤儿）。
+ *
+ * 必须导出：它是公开签名 `pruneTempWorkflowFiles.maxAgeMs` 的缺省值，注释里的
+ * `{@linkcode}` 也指它——typedoc 只收「从入口可达且带 export」的符号，不导出
+ * 会让 API 文档自检报「resolved but is not included」（ISSUE #4407 / 先例 #2835）。 */
+export const TEMP_WORKFLOW_MAX_AGE_MS = 60 * 60_000;
+
+/**
+ * 清理崩溃残留的临时工作流文件（#4225）：正常路径在任务收口（settle）时就删，
+ * 这里只兜「写完与收口之间进程崩掉」的孤儿——按 mtime 留 {@linkcode TEMP_WORKFLOW_MAX_AGE_MS}
+ * 的余量，目录不存在 / 读不到就整轮跳过（诊断通道，不参与业务退码）。
+ * reaper 的 `sweepOnce` 每拍顺带跑一次。
+ */
+export async function pruneTempWorkflowFiles(
+  maxAgeMs: number = TEMP_WORKFLOW_MAX_AGE_MS,
+  dir: string = TEMP_WORKFLOW_DIR,
+): Promise<void> {
+  let entries: Array<string>;
+  try {
+    entries = await fs.readdir(dir);
+  } catch {
+    /* 目录不存在 = 没有残留 */
+    return;
+  }
+  const cutoff = Date.now() - maxAgeMs;
+  await Promise.all(
+    entries
+      .filter((name) => name.startsWith("wf-") && name.endsWith(".json"))
+      .map(async (name) => {
+        try {
+          const stat = await fs.stat(path.join(dir, name));
+          if (stat.mtimeMs < cutoff) {
+            await fs.unlink(path.join(dir, name));
+          }
+        } catch {
+          /* 单个文件失败（被并发收口删掉 / 句柄占用）不影响其余 */
+        }
+      }),
+  );
+}
+
 /** taskRepo / resolveComfyBase 是关键路径：拿不到（未注入 + 纯 Node dynamic
  *  import 撞 server-only）→ 让 `executeViaComfyCli` 的 await 直接 reject，
  *  caller（executor-dispatch）感知。 */
@@ -144,9 +203,98 @@ export const cliProcs: Map<string, ChildProcess> = (globalThis.__comfyCliProcs_v
 
 const CLI_TIMEOUT_MS = 25 * 60 * 1000;
 
+/** 本次 comfy-cli 提交的客户端标识（comfy-cli v1.24.0 起 `run --client-id` 可指定）。
+ *
+ *  此前 comfy-cli 自己生成随机 client_id，ComfyUI 侧的 /queue /history 与服务端
+ *  日志都答不了「这条在跑的是哪个任务」（reaper 的注释记过这笔账）。现在按任务
+ *  拼一个确定性 id 随提交下发，用户拿它即可在 ComfyUI 侧日志 / 队列 extra_data
+ *  里对上号。前缀 `comfy-app-` 与自有 WS 连接的 `comfy-app-web`（runner-state）
+ *  同族，但逐任务不同，不会与长连接混淆。 */
+export function comfyCliClientId(taskId: string): string {
+  return `comfy-app-${taskId}`;
+}
+
+/** 清洗来自任务 `params` 列的 `outputNodeIds`（部分执行目标，comfy-cli
+ *  v1.24.0 `--output-node-ids`）。库里那一列是历史数据，形状不作保证：
+ *  只收「非空字符串数组」，去重、去掉空串，条数封顶（防失控载荷）；
+ *  不是数组或清完为空 → undefined（= 整图执行，与旧行为逐字一致）。 */
+export function sanitizeOutputNodeIds(raw: unknown): Array<string> | undefined {
+  if (!Array.isArray(raw)) {
+    return undefined;
+  }
+  const ids: Array<string> = [];
+  for (const item of raw) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const trimmed = item.trim();
+    if (trimmed && !ids.includes(trimmed)) {
+      ids.push(trimmed);
+    }
+    if (ids.length >= 64) {
+      break;
+    }
+  }
+  return ids.length > 0 ? ids : undefined;
+}
+
+/** `python -m comfy_cli run …` 的完整参数清单（**纯函数**：单测直接断言，
+ *  不必起真进程）。
+ *
+ *  `outputNodeIds` 非空时逐个追加**可重复**的 `--output-node-ids <id>`
+ *  （comfy-cli 只执行这些输出节点及其依赖子图；本地与云端都支持）。 */
+export function buildComfyCliRunArgs(options: {
+  clientId: string;
+  host: string;
+  outputNodeIds?: ReadonlyArray<string>;
+  port: number;
+  workflowFile: string;
+}): Array<string> {
+  const args = [
+    "-m",
+    "comfy_cli",
+    "run",
+    "--workflow",
+    options.workflowFile,
+    "--json",
+    "--wait",
+    "--where",
+    "local",
+    "--host",
+    options.host,
+    "--port",
+    String(options.port),
+    "--client-id",
+    options.clientId,
+    "--no-notify",
+    "--timeout",
+    "600",
+  ];
+  for (const id of options.outputNodeIds ?? []) {
+    args.push("--output-node-ids", id);
+  }
+  return args;
+}
+
 /* 纯 UI 节点的名单与剔除逻辑收在 `./raw-ui-only-nodes`（纯叶子：单测可直接喂
  * 夹具，不必把本模块那一串服务端依赖拉进测试；名单缺项此前也没有判据会红 —— 那
  * 正是 `Bookmark (rgthree)` 让整单校验失败的成因）。 */
+
+/** 装载链目录（#4376）：计划非空时现查 object_info 归一；ComfyUI 未就绪 → null
+ *  （计划本轮不生效，相关入口回落裸 LoadImage），打一行 warn 说明。 */
+async function resolveChainCatalog(
+  taskId: string,
+  loaderPlan: Job["loaderPlan"],
+): Promise<ReturnType<typeof buildReferenceChainCatalog>> {
+  if (!loaderPlan || Object.keys(loaderPlan).length === 0) {
+    return null;
+  }
+  const catalog = buildReferenceChainCatalog(await fetchObjectInfo());
+  if (catalog === null) {
+    log(taskId, "warn", "参考图装载计划未生效：ComfyUI 节点目录不可用，相关入口回落裸 LoadImage");
+  }
+  return catalog;
+}
 
 export async function executeViaComfyCli(job: Job) {
   // 关键路径依赖在函数入口 resolve 成同名局部（`taskRepository` /
@@ -158,8 +306,7 @@ export async function executeViaComfyCli(job: Job) {
   const s = state();
   const { taskId, rawJson, prompt, overrides } = job;
   /* RAW 原件走 UI→API 转换；没有 rawJson 就是 API 图，直接提交。 */
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  const isRaw = rawJson != null;
+  const isRaw = rawJson !== null && rawJson !== undefined;
   /* RAW 路径的入口行：让用户在日志面板上直接看出「任务正由哪条路径处理」。
    * 加这行之前，提交后要等第一条 stdout JSON 事件（常在 5–30s 之后，
    * Python venv 启动完）才会安静结束 —— 面板上看不出是在跑还是卡住。 */
@@ -188,8 +335,23 @@ export async function executeViaComfyCli(job: Job) {
   log(taskId, "info", `ComfyUI 目标：${host}:${port}（${base}）`);
 
   let patched: JsonRecord;
+  /* 装载链目录（#4376）：计划命中的端点按预设实例化子图时要用节点类定义。 */
+  const chainCatalog = await resolveChainCatalog(taskId, job.loaderPlan);
   if (isRaw) {
-    patched = applyRawOverrides(rawJson, overrides);
+    /* 装载链（#4376）：计划命中的端点按预设实例化 LoadImage → 处理链子图，
+     * 再把剩余覆盖项交给裸增强。 */
+    const chained = applyReferenceLoaderChainsRaw(rawJson, overrides, job.loaderPlan, chainCatalog);
+    if (chained.added > 0) {
+      log(taskId, "info", `参考图装载链：${chained.added} 个入口按预设生成装载子图`);
+    }
+    /* 图增强（#4355）：参考图落点是张量图片入口（无 widget）时，先自动补
+     * LoadImage 装载节点再应用覆盖 —— 否则多参考图工作流第 2~N 张图没有可写之处
+     * （只能在每个工作流的画布里手工加节点）。 */
+    const augmented = augmentReferenceImageLoadersRaw(chained.graph, chained.overrides);
+    if (augmented.added > 0) {
+      log(taskId, "info", `图增强：为 ${augmented.added} 个张量图片入口自动补 LoadImage 装载节点`);
+    }
+    patched = applyRawOverrides(augmented.graph, augmented.overrides);
     const stripped = stripUiOnlyNodes(patched);
     patched = stripped.raw;
     if (stripped.removed > 0) {
@@ -205,7 +367,16 @@ export async function executeViaComfyCli(job: Job) {
      *
      * 顺序不能反：先注入覆盖、再收拾图。被旁路/静音的节点会被收拾掉，写给它们的
      * 覆盖项本就该随之丢弃（它们不会执行）。 */
-    const withOverrides = applyApiOverrides(prompt, overrides);
+    /* 装载链（#4376）：同 RAW 侧，先按计划实例化装载子图，剩余端点再走裸增强。 */
+    const chained = applyReferenceLoaderChainsApi(prompt, overrides, job.loaderPlan, chainCatalog);
+    if (chained.added > 0) {
+      log(taskId, "info", `参考图装载链：${chained.added} 个入口按预设生成装载子图`);
+    }
+    const augmented = augmentReferenceImageLoadersApi(chained.graph, chained.overrides);
+    if (augmented.added > 0) {
+      log(taskId, "info", `图增强：为 ${augmented.added} 个张量图片入口自动补 LoadImage 装载节点`);
+    }
+    const withOverrides = applyApiOverrides(augmented.graph, augmented.overrides);
     const prep = prepareGraphForExecution(withOverrides);
     if (!Object.keys(prep.graph).length) {
       log(taskId, "error", "工作流没有可执行的节点（可能全部被禁用）");
@@ -226,9 +397,8 @@ export async function executeViaComfyCli(job: Job) {
     patched = prep.graph;
   }
   /* 临时工作流文件统一放到项目根目录 temp/comfy-cli/，便于清理和跨平台管理。 */
-  const tmpDir = path.join(process.cwd(), "temp", "comfy-cli");
-  await fs.mkdir(tmpDir, { recursive: true });
-  const tmpFile = path.join(tmpDir, `wf-${taskId}.json`);
+  await fs.mkdir(TEMP_WORKFLOW_DIR, { recursive: true });
+  const tmpFile = path.join(TEMP_WORKFLOW_DIR, `wf-${taskId}.json`);
   log(taskId, "info", `写入临时工作流文件：${tmpFile}`);
   await fs.writeFile(tmpFile, JSON.stringify(patched), "utf8");
   // 记下本次实际提交出去的工作流：RAW 是（覆盖 + 剔除后的）未展开原件，
@@ -237,7 +407,7 @@ export async function executeViaComfyCli(job: Job) {
   log(
     taskId,
     "info",
-    `工作流文件就绪（${Object.keys(patched?.nodes ?? {}).length || Object.keys(patched).length} 节点）`,
+    `工作流文件就绪（${Object.keys(patched.nodes ?? {}).length || Object.keys(patched).length} 节点）`,
   );
   /* 主模型名入日志（复用 `executed-model.ts` 的双格式识别，与状态栏同一份
    * 口径）：模型名是执行日志里最常被追问的上下文，出问题时「当时用的哪个
@@ -249,24 +419,18 @@ export async function executeViaComfyCli(job: Job) {
   }
 
   const py = comfyCliInterpreter(getSettingsSync().comfyCliPython);
-  const args = [
-    "-m",
-    "comfy_cli",
-    "run",
-    "--workflow",
-    tmpFile,
-    "--json",
-    "--wait",
-    "--where",
-    "local",
-    "--host",
-    host,
-    "--port",
-    String(port),
-    "--no-notify",
-    "--timeout",
-    "600",
-  ];
+  const clientId = comfyCliClientId(taskId);
+  const outputNodeIds = sanitizeOutputNodeIds(job.outputNodeIds);
+  const args = buildComfyCliRunArgs({ clientId, host, outputNodeIds, port, workflowFile: tmpFile });
+  if (outputNodeIds !== undefined) {
+    /* 部分执行（comfy-cli v1.24.0）：只跑这些输出节点及其依赖子图 —— 调试时把
+     * 大工作流拆成「只跑可疑输出分支」，快速二分故障在上游还是某条输出链路。 */
+    log(
+      taskId,
+      "info",
+      `部分执行：只跑输出节点 ${outputNodeIds.join("、")} 及其依赖子图（--output-node-ids）`,
+    );
+  }
 
   // 提前检查 Python 解释器是否存在，避免把原始 ENOENT 抛给用户
   try {
@@ -295,6 +459,10 @@ export async function executeViaComfyCli(job: Job) {
     "info",
     `comfy-cli 执行${isRaw ? " raw 工作流（UI→API 转换）" : " API 工作流"}（${host}:${port}）`,
   );
+  /* 客户端标识单独给一行：ComfyUI 侧的队列 / 历史 / 服务端日志都带 client_id，
+   * 用户拿这一行就能把「本应用这次提交」与 ComfyUI 侧的现场对上号（排障时
+   * 两边日志可以互相印证）。 */
+  log(taskId, "info", `客户端标识：${clientId}（ComfyUI 侧队列/日志按它对上本次提交）`);
   // 打完整解释器路径而不是裸 `python.exe`：这一行的用途是「照着复现这次调用」，
   // 而解释器落在哪（设置项 / 项目根 venv）正是复现时最容易搞错的一件事。
   log(taskId, "info", `  ${py} ${args.join(" ")}`);
@@ -395,12 +563,17 @@ export async function executeViaComfyCli(job: Job) {
       settled = true;
       clearTimeout(guard);
       cliProcs.delete(taskId);
+      /* 临时工作流文件的生命周期到收口为止（#4225）：comfy-cli 启动时读入，
+       * 之后不再需要——所有收口路径（complete/fail/看门狗/进程退出）都汇聚到
+       * 这一个 settle。best-effort：Windows 上句柄未放时会 EBUSY，残留交给
+       * reaper 的 pruneTempWorkflowFiles 兜底。 */
+      void fs.rm(tmpFile, { force: true }).catch(() => undefined);
       return true;
     },
     promptId: () => promptId,
   });
 
-  child.stdout?.setEncoding("utf8");
+  child.stdout.setEncoding("utf8");
   const stdoutParser = createCliEnvelopeParser({
     taskId,
     log,
@@ -422,7 +595,17 @@ export async function executeViaComfyCli(job: Job) {
             log(taskId, "warn", "任务已由其它路径收口，忽略本次 prompt_id 回传（不再改写终态）");
           }
         })
-        .catch(() => undefined);
+        .catch((markError: unknown) => {
+          /* 落库失败要看得见（ISSUE #4268）：上面 updated=false 是 CAS 让位
+           * （业务性，已 warn）；这里接的是 promise **拒绝**——SQLite busy 等
+           * 真故障会让行停在 QUEUED/promptId=null，reaper 的「QUEUED 超时且无
+           * promptId」规则可能把正在执行的任务误判孤儿。低频事件，逐条留痕。 */
+          log(
+            taskId,
+            "warn",
+            `markRunning 落库失败（状态推进受阻）：${sqliteAwareErrorText(markError, "markRunning 落库")}`,
+          );
+        });
     },
     onProgress: (
       progress: number,
@@ -438,10 +621,24 @@ export async function executeViaComfyCli(job: Job) {
        *  的进度事件此前只发进程内 emitter——host 模式下界面全程 0% 的根因。
        *  CAS 语义在 updateProgress 内部（终态行不再改写），这里 fire-and-forget，
        *  形态对齐上方 onPromptId 的 markRunning 调用。 */
-      void taskRepository.updateProgress(taskId, progress, node).catch(() => undefined);
+      void taskRepository.updateProgress(taskId, progress, node).catch((progressError: unknown) => {
+        /* 进度落库失败要看得见（ISSUE #4268）：进度事件高频，只记每个任务的
+         * 第一次失败防刷屏；持续失败时界面进度静默停在旧值，这条 warn 是唯一线索。 */
+        if (!progressPersistWarned.has(taskId)) {
+          progressPersistWarned.add(taskId);
+          if (progressPersistWarned.size > 500) {
+            progressPersistWarned.clear();
+          }
+          log(
+            taskId,
+            "warn",
+            `进度落库失败（界面进度将停在旧值）：${sqliteAwareErrorText(progressError, "进度落库")}`,
+          );
+        }
+      });
     },
   });
-  child.stdout?.on("data", stdoutParser.sink);
+  child.stdout.on("data", stdoutParser.sink);
 
   // 实时透传 stderr：Python 的 traceback 一出现就进面板，而不是只在 close() 时汇总。
   // 行数上限 60（真实 traceback 一般 < 40 行）；click/Python 的
@@ -449,8 +646,8 @@ export async function executeViaComfyCli(job: Job) {
   // 错误堆栈挤出面板。单行截断放宽到 400 字符（traceback 的路径很长）。
   // stderrSink.raw() 始终完整累积，close 时的 tail 汇总不受行数上限影响。
   const stderrSink = createCliStderrSink({ taskId, log, rawCli: appendRawCli });
-  child.stderr?.setEncoding("utf8");
-  child.stderr?.on("data", stderrSink.sink);
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", stderrSink.sink);
 
   child.on("close", (code) => {
     clearTimeout(guard);

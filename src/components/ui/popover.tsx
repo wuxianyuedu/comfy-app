@@ -21,12 +21,8 @@ function PopoverContent({
   alignOffset = 0,
   side = "bottom",
   sideOffset = 4,
-  /** 锚点元素 / 虚拟锚点 / `{ getBoundingClientRect }` 形状的函数。
-   *  默认锚点是 `<PopoverTrigger>`；没有 trigger（浮层由外部状态打开、
-   *  触发元素住在别处）时由调用方传它 —— 例如节点 JSON 浮层，触发者是画布
-   *  节点里的 `#id` 芯片，而浮层由 store 打开（ISSUE #717）。
-   *  翻转 / 收边（`flip` / `shift`）由 base-ui 的 Positioner 自带，调用方
-   *  不必自己夹紧视口。 */
+  /** 锚点元素 / 虚拟锚点 / `{ getBoundingClientRect }` 形状的函数。默认锚点是 `<PopoverTrigger>`；没有 trigger（浮层由外部状态打开、触发元素住在别处）时由调用方传它 —— 例如节点 JSON 浮层，触发者是画布节点里的 `#id` 芯片，而浮层由 store 打开（ISSUE #717）。
+   * 翻转 / 收边（`flip` / `shift`）由 base-ui 的 Positioner 自带，调用方不必自己夹紧视口。 */
   anchor,
   /** 与视口边缘保持的最小距离（翻转 / 收边的边界）。 */
   collisionPadding,
@@ -58,7 +54,7 @@ function PopoverContent({
       >
         <PopoverPrimitive.Popup
           className={cn(
-            "border-border-strong bg-popover text-popover-foreground data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-popup flex w-72 origin-(--transform-origin) flex-col gap-2.5 rounded-lg border p-2.5 text-sm shadow-lg ring-1 shadow-black/5 ring-(--ring-shadow) outline-hidden duration-100 dark:shadow-black/40",
+            "border-border-strong bg-popover text-popover-foreground data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-popup max-h-(--available-height) overflow-x-hidden overflow-y-auto flex w-72 origin-(--transform-origin) flex-col gap-2.5 rounded-lg border p-2.5 text-sm shadow-lg ring-1 shadow-black/5 ring-(--ring-shadow) outline-hidden duration-100 dark:shadow-black/40",
             className,
           )}
           data-slot="popover-content"

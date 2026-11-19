@@ -22,11 +22,7 @@ function view(over: Partial<ProductionRunView> = {}): ProductionRunView {
 }
 
 /** 造 n 个镜头，前 imageDone 个有图、前 clipDone 个有片段。 */
-function shots(
-  n: number,
-  imageDone = 0,
-  clipDone = 0,
-): ProductionRunView["shots"] {
+function shots(n: number, imageDone = 0, clipDone = 0): ProductionRunView["shots"] {
   return Array.from({ length: n }, (_, index) => ({
     id: `s${index + 1}`,
     rev: 0,
@@ -152,9 +148,7 @@ describe("deriveProjectOverview", () => {
 
 describe("overviewHeadline", () => {
   it("未完成时报「下一步：X」", () => {
-    expect(overviewHeadline(overview({ hasScript: true }))).toBe(
-      "下一步：角色卡",
-    );
+    expect(overviewHeadline(overview({ hasScript: true }))).toBe("下一步：角色卡");
   });
 
   it("空项目报「下一步：剧本」（阶段表是常量，不需要「还没有开始」这条分支）", () => {

@@ -1,10 +1,10 @@
 ## Fixed
 
 - **主干上有一条硬闸违规，拦住的是从它分出的每一个提交**：`scripts/dev-drive-probe.mjs` 的
-  `probeWorkdirs()` 硬拼检出子目录字面量，被 `scripts/git-dir-literal-scan.mjs`
-  （ISSUE #2072 那条「落点只有 `scripts/git-dir.mjs` 一处知道」的判据）判红 ——
+  `probeWorkdirs()` 硬拼检出子目录字面量，被 `scripts/lib/git-dir-literal-scan.mjs`
+  （ISSUE #2072 那条「落点只有 `scripts/lib/git-dir.mjs` 一处知道」的判据）判红 ——
   硬闸类须为 0、没有「带病通行」的中间态，所以它一落地，后面每个 PR 的
-  `受影响用例` 那一格都会红一次（复算：`node scripts/git-dir-literal-scan.mjs` 在
+  `受影响用例` 那一格都会红一次（复算：`node scripts/lib/git-dir-literal-scan.mjs` 在
   本修复之前的 `cnb/master` 上退 1 并点名那一行）。引入它的是
   `7ddadf69`（开发盘红利那一格），不是本批写出来的：本批撞它的那次跑，改的是
   `custom-nodes` 与文档面，一个 `scripts/**` 字节都没动。

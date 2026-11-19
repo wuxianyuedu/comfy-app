@@ -30,7 +30,7 @@ import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 
-import { spawnInGroup } from "./launcher-core/shell.mjs";
+import { assertAbsoluteRoot, resolveSpawnTarget, spawnInGroup } from "./launcher-core/shell.mjs";
 import { pruneTimestampedLogs } from "./launcher-core/worktree.mjs";
 import { runStamp } from "./launcher-core/log.mjs";
 import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
@@ -38,17 +38,26 @@ import {
   buildStandaloneRuntimeEnv,
   ensureStandaloneSchema,
 } from "./launcher-core/standalone-runtime-env.mjs";
+import { resolveAppDataDir } from "./launcher-core/app-data-dir.mjs";
 
 /** 应用根 = 本文件所在的 `scripts/` 的上一层：standalone 载荷的四个必需件
  *  （`server.js` / `package.json` / `.next/` / `node_modules/`）都在这一层。
  *  自定位而不是信传入的 cwd——Next 的 server 启动即 `process.chdir(__dirname)`，
  *  任何依赖 cwd 的锚点在它手里都会漂。 */
-const APP_ROOT = path.resolve(import.meta.dirname, "..");
-const SERVER = path.join(APP_ROOT, "server.js");
-const REAP_ENTRY = path.join(APP_ROOT, "scripts", "reap-process.mjs");
+const APP_ROOT = assertAbsoluteRoot(path.resolve(import.meta.dirname, ".."), "standalone 应用根");
+/** 运行期数据根（日志 / 导出）：OS app-data 目录，避开「载荷根不可写 / 更新被清」
+ *  （ISSUE #3498）。`COMFY_APP_DATA_DIR` 优先（测试 / 高级用户覆盖），否则按 OS 算。
+ *  启动器写 server/host 日志与 Next 读 log 根都用它，两侧必须指向同一处。 */
+const APP_DATA_DIR = resolveAppDataDir();
+/** 三个载荷入口（写死）：`spawn` 的参数数组只许放这类常量，变量部分（应用根）留在
+ *  `cwd`；落点由 {@link resolveSpawnTarget} 校验在根内且无父级跳转（ISSUE #3327）。 */
+const SERVER_ENTRY = "server.js";
+const REAP_ENTRY_REL = "scripts/reap-process.mjs";
+const HOST_ENTRY_REL = "scripts/executor-host.mjs";
+const SERVER = resolveSpawnTarget(APP_ROOT, SERVER_ENTRY, "standalone server 入口");
 /** 执行宿主的入口（3-E2b）。与 `server.js` 不同，它是**可选**的一路：开关没设
  *  就不该有它，所以判据是「设了 host 而这份不在」才报，而不是「不在就报」。 */
-const HOST_ENTRY = path.join(APP_ROOT, "scripts", "executor-host.mjs");
+const HOST_ENTRY = resolveSpawnTarget(APP_ROOT, HOST_ENTRY_REL, "执行器宿主入口");
 
 function line(message) {
   process.stdout.write(`[standalone-runtime] ${message}\n`);
@@ -67,8 +76,8 @@ function fail(message) {
  *  `stamp` 由调用方给**一次**：server 日志、宿主日志与 `COMFYAPP_HOST_BOOT_ID` 必须
  *  是同一个值，否则「按 boot id 跨进程 grep」这条既有能力在桌包里就断了（两次
  *  `runStamp()` 跨秒就会给出不同的值，而这种错配只在日志里看得见）。 */
-function openServerLogFiles(stamp) {
-  const dir = path.join(APP_ROOT, "log", "current", "nextjs");
+function openServerLogFiles(stamp, dataDir) {
+  const dir = path.join(dataDir, "log", "current", "nextjs");
   mkdirSync(dir, { recursive: true });
   pruneTimestampedLogs(dir, ["standalone-server-stdout-", "standalone-server-stderr-"], 5);
   return {
@@ -81,8 +90,8 @@ function openServerLogFiles(stamp) {
  *  + 保留 5 份）。不接进本入口的输出流：宿主是 pino 中文日志，经壳的 shell 插件再落
  *  一次会与控制台编码打架（launcher 那份注释里记的就是这个），而且它的逐 tick 输出
  *  会淹没入口自己的 boot 行。 */
-function openHostLogFiles(stamp) {
-  const dir = path.join(APP_ROOT, "log", "current", "services");
+function openHostLogFiles(stamp, dataDir) {
+  const dir = path.join(dataDir, "log", "current", "services");
   mkdirSync(dir, { recursive: true });
   pruneTimestampedLogs(dir, ["executor-host-stdout-", "executor-host-stderr-"], 5);
   return {
@@ -97,9 +106,13 @@ function reapTree(pid) {
   if (!pid) {
     return;
   }
-  const run = spawnSync(process.execPath, [REAP_ENTRY, String(pid), "--force"], {
+  const run = spawnSync(process.execPath, [REAP_ENTRY_REL, String(pid), "--force"], {
     encoding: "utf8",
+    // 入口是相对应用根的常量：Next 会 chdir，cwd 必须显式钉住（ISSUE #3327）。
+    cwd: APP_ROOT,
     windowsHide: true,
+    /* 预算（#4006）：reap 正常秒回；这是关停路径上的同步等待，不许无界。 */
+    timeout: 10_000,
   });
   const out = `${run.stdout ?? ""}${run.stderr ?? ""}`.trim();
   if (run.status === 0) {
@@ -116,7 +129,7 @@ function reapTree(pid) {
  *  壳进程继承下来的环境变量（载荷不含 `.env`，硬规则 17），不另造文件开关或库开关——
  *  多一个来源就是多一处会与人对不上的判决，而「Next 以为 host、host 跑成骨架」这类
  *  错配历史上已经吃过（executor-mode.mjs 模块头记着）。 */
-function spawnExecutorHost(childEnv, stamp) {
+function spawnExecutorHost(childEnv, stamp, dataDir) {
   const { mode, unknown } = resolveExecutorMode({ procEnv: process.env });
   if (unknown !== null) {
     line(`executor mode=inline unknown=${JSON.stringify(unknown)}（只认 inline|host）`);
@@ -135,10 +148,10 @@ function spawnExecutorHost(childEnv, stamp) {
     );
     return null;
   }
-  const { stdoutFile, stderrFile } = openHostLogFiles(stamp);
+  const { stdoutFile, stderrFile } = openHostLogFiles(stamp, dataDir);
   const host = spawnInGroup({
     command: process.execPath,
-    args: [HOST_ENTRY],
+    args: [HOST_ENTRY_REL],
     cwd: APP_ROOT,
     // 与 server 共用同一份装配结果（绝对 `DATABASE_URL`、`SKIP_ENV_VALIDATION`、
     // 运行期密钥…）——两处各拼一遍等于给「宿主读的库不是 server 的库」留缝。
@@ -159,7 +172,7 @@ function main() {
   const port = Number.parseInt(String(process.env.PORT ?? ""), 10);
   let childEnv;
   try {
-    childEnv = buildStandaloneRuntimeEnv({ appRoot: APP_ROOT, port });
+    childEnv = buildStandaloneRuntimeEnv({ appRoot: APP_ROOT, port, dataDir: APP_DATA_DIR });
   } catch (error) {
     fail(`cannot assemble runtime env: ${error?.message ?? error}`);
   }
@@ -178,19 +191,21 @@ function main() {
     fail(`schema bootstrap failed: ${error?.message ?? error}`);
   }
   const stamp = runStamp();
-  const { stdoutFile, stderrFile } = openServerLogFiles(stamp);
+  const { stdoutFile, stderrFile } = openServerLogFiles(stamp, APP_DATA_DIR);
   const server = spawnInGroup({
     command: process.execPath,
-    args: [SERVER],
-    // cwd = 应用根：Next 会自己 chdir 到这里，提前对齐让 `log/`、`data/`、
-    // `generated/`（产物根）这些按 cwd 解析的运行期目录与 server 看到的是同一处。
+    args: [SERVER_ENTRY],
+    // cwd = 应用根：Next 会自己 chdir 到这里，提前对齐 `data/`（运行期密钥）与 `generated/`（产物根）
+    // 这些按 cwd 解析的运行期目录与 server 看到的是同一处。日志与导出例外：它们经 `COMFY_APP_DATA_DIR`
+    // （见 `openServerLogFiles` / `buildStandaloneRuntimeEnv`）落进 OS app-data 目录，避开「载荷根不可写 /
+    // 更新被清」（ISSUE #3498），启动器写 server/host 日志与 Next 读到的 log 根指向同一处。
     cwd: APP_ROOT,
     env: childEnv,
     stdoutFile,
     stderrFile,
   });
   line(`boot pid=${process.pid} server=${server.pid ?? "?"} port=${port} appRoot=${APP_ROOT}`);
-  let host = spawnExecutorHost(childEnv, stamp);
+  let host = spawnExecutorHost(childEnv, stamp, APP_DATA_DIR);
   if (host) {
     host.on("exit", (code, signal) => {
       // **不降级、不重启**（签字口径）：降级会让已经写成 host 归属的行变成没人领的
@@ -236,7 +251,9 @@ function main() {
     close(`server exited code=${code ?? "null"} signal=${signal ?? "null"}`, code ?? 1);
   });
   for (const sig of ["SIGTERM", "SIGINT", "SIGBREAK"]) {
-    process.on(sig, () => close(`signal ${sig}`, 0));
+    process.on(sig, () => {
+      close(`signal ${sig}`, 0);
+    });
   }
 }
 

@@ -77,11 +77,12 @@ const MAIN_TAB: ShellTab = {
 };
 
 function resolveTabId(tab: Omit<ShellTab, "id"> & { id?: string }): string {
-  if (tab.id) {
+  /* 页签 id 与 url 都不会是空串，缺省只看 null / undefined */
+  if (tab.id !== undefined) {
     return tab.id;
   }
   // 无显式 id 时按 type + url 保证唯一（同 URL 不会叠出重复页签）。
-  if (tab.url) {
+  if (tab.url !== null) {
     return `${tab.label}:${tab.url}`;
   }
   return `${tab.label}:${Date.now()}`;
@@ -102,7 +103,7 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
             t.id === id
               ? {
                   ...t,
-                  label: tab.label ?? t.label,
+                  label: tab.label,
                   url: tab.url ?? t.url,
                   blockedReason: tab.blockedReason ?? null,
                   blockedUrl: tab.blockedUrl ?? null,

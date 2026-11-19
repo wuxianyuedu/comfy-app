@@ -2,13 +2,8 @@
 
 /**
  * 日志分类开关分区（规范 07 §7.x）。
- *
- * 每一项对应「日志面板」里的一个来源分类（与来源筛选下拉同源）。开关**只控制面板
- * 里是否显示**该类日志——`log/` 下的真实文件照常写入，关掉只是「不想看」，不是
- * 「不记录」。改动经`useLogCategoryStore` 即时落 localStorage，面板侧已订阅该 store，
- * 因此**不重启、不重开面板**即生效（用户例子：「不关注应用服务，把它的开关关掉」）。
- *
- * 视图自持的仅交互态，其余读 category store；开关值从 store 派生，不在此处另存一份。
+ * 开关**只控制日志面板是否显示**该来源分类——`log/` 文件照常写入；改动经
+ * `useLogCategoryStore` 即时落 localStorage，面板侧已订阅，不重启即生效。
  */
 
 import { Switch } from "~/components/ui/switch";
@@ -16,7 +11,7 @@ import { LOG_CATEGORY_FILTERS, type LogCategoryFilter } from "~/components/studi
 import { useLogCategoryStore } from "~/components/studio/logs/log-category-store";
 import { ORIGIN_TEXT } from "~/components/studio/logs/LogPanelOriginSelect";
 
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 
 /** 给每个分类一句简短说明，帮用户判断「这是不是我想关的那一类」。 */
 const CATEGORY_HINT: Record<LogCategoryFilter, string> = {
@@ -34,7 +29,7 @@ export function LogCategorySection() {
   const setEnabled = useLogCategoryStore((s) => s.setEnabled);
 
   return (
-    <SettingsCard title="日志分类开关">
+    <SettingsCard>
       <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
         关闭某一类，它的日志就
         <strong className="text-ink/80">不在日志面板里显示</strong>
@@ -46,7 +41,7 @@ export function LogCategorySection() {
           const on = enabled[category] !== false;
           return (
             <li
-              className="border-border/60 flex items-start justify-between gap-4 rounded-lg border px-3 py-2.5"
+              className={`${SETTINGS_ROW_CLASS} flex items-start justify-between gap-4`}
               key={category}
             >
               <div className="min-w-0">

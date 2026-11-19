@@ -8,7 +8,7 @@ function mockFetch(body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
-    json: async () => body,
+    json: () => body,
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -42,20 +42,18 @@ describe("useResourceLibrary", () => {
     const { result } = renderHook(() => useResourceLibrary());
     expect(result.current.library.scope).toBe("project");
 
-    act(() => result.current.setScope("cross"));
+    act(() => {
+      result.current.setScope("cross");
+    });
     await expect.poll(() => result.current.library.scope).toBe("cross");
     await expect
-      .poll(
-        () =>
-          fetchMock.mock.calls.some((call) =>
-            String(call[0]).includes("scope=cross"),
-          ),
-        { message: "切到跨项目后查询串要带上 scope=cross" },
-      )
+      .poll(() => fetchMock.mock.calls.some((call) => String(call[0]).includes("scope=cross")), {
+        message: "切到跨项目后查询串要带上 scope=cross",
+      })
       .toBe(true);
   });
 
-  it("没有活跃项目时 projectId 为 null（页面据此给引导）", async () => {
+  it("没有活跃项目时 projectId 为 null（页面据此给引导）", () => {
     mockFetch(BODY);
     const { result } = renderHook(() => useResourceLibrary());
     expect(result.current.projectId).toBeNull();

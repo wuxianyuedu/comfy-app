@@ -17,7 +17,7 @@
 
 ## Fixed
 
-- **`scripts/publish-desktop-bundle.mjs`：`buildLabel` 的 JSDoc `@param` 补上参数名
+- **`scripts/build/publish-desktop-bundle.mjs`：`buildLabel` 的 JSDoc `@param` 补上参数名
   `[input]`（#2528 基线红，五态归属 `baseline-red`，挡路硬闸就地修掉）**。
   `@param {{…}}` 缺名字让 typedoc 解析该文件时 TS1003 `Identifier expected`，
   「API 文档生成与自检」格红。#2528 自己的 PR 没红是因为该文件不在这一格的

@@ -1,21 +1,14 @@
 "use client";
 
-// 工坊中间列：按当前阶段分发内容。
-// 纯展示 + 事件上抛：这里不持有任何业务规则，数据来自 controller。
-//
-// 性能治理：把各 stage 的重型子组件改为按 stage 懒加载，仅在对应 tab
-// 激活时拉进模块图。Turbopack 的模块图被切成独立小块后，保存枢纽文件或
-// 单个 stage 组件时，热更新的重编范围不再横跨整条工坊链路。
-//
-// 代价：懒加载的 `import()` 在 dev server 重建后可能撞上「分块已被换掉」——
-// 剩下的 Promise 只能 reject，而 React 会让它冒到最近的上层边界去。若这一屏
-// 外面只有一个路由级边界，工坊整屏会一起崩（ISSUE #1900 的同族故障）。
-// 所以每段都套一层 `<StageBoundary>`：卡片内局部隔离 + 分块失败时给
-// 「重新加载页面」这个真能出去的动作。
+// 工坊中间列：按当前阶段分发内容。纯展示 + 事件上抛，数据来自 controller。
+// 各 stage 的重型子组件按 stage 懒加载（热更新重编范围不再横跨整条工坊链路）。
+// 代价：`import()` 在 dev server 重建后可能撞上「分块已被换掉」而 reject，
+// 冒到路由级边界会让整屏一起崩（ISSUE #1900 同族），故每段套 `<StageBoundary>`
+// 局部隔离 + 给「重新加载页面」出口。
 
 import React from "react";
 import { Button } from "~/components/ui/button";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { readFileAsText } from "~/lib/file-io";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Icon } from "~/components/ui/icon";
@@ -73,12 +66,8 @@ function StageFallback() {
 
 /**
  * 一段 stage 的懒加载外壳：局部边界 + 「分块没加载上」的用户出口。
- *
- * 边界必须落在**每一段各自**身上（而不是工坊外面套一个）：套在外面时，任何
- * 一段的 `import()` 失败都会把另外五段、连同标题与阶段轨道一起打成错误页。
- *
- * `label` 是用户能认出来的那一段的名字 —— 只说「加载失败」等于让用户自己在
- * 六个卡片里找哪块坏了。
+ * 边界必须落在**每一段各自**身上：套在外面时任何一段的 `import()` 失败都会把
+ * 另外五段连同标题与轨道一起打成错误页。`label` 是用户能认出的段名。
  */
 function StageBoundary({ label, children }: { children: React.ReactNode; label: string }) {
   const fallback = useLazyChunkFallback(label);
@@ -92,6 +81,27 @@ function StageBoundary({ label, children }: { children: React.ReactNode; label: 
 type WorkshopStageBodyProps = {
   controller: WorkshopPipelineController;
 };
+
+/** 前置阶段未就绪的提示：五个 stage 入口共用同一块，收在这里（§12.13 函数长度闸）。 */
+function StagePrereqHint({
+  prereq,
+  setTab,
+}: {
+  prereq: WorkshopPipelineController["prereq"];
+  setTab: WorkshopPipelineController["setTab"];
+}) {
+  if (!prereq) {
+    return null;
+  }
+  return (
+    <StageHint
+      onGo={() => {
+        setTab(prereq.go);
+      }}
+      text={prereq.text}
+    />
+  );
+}
 
 export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
   const {
@@ -184,7 +194,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
         </span>
       </div>
 
-      {notice && (
+      {notice !== null && notice !== "" && (
         <div className="border-destructive/30 bg-destructive/10 text-destructive mb-4 flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs">
           <Icon className="shrink-0" name="info" size={13} />
           <span className="flex-1">{notice}</span>
@@ -226,7 +236,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                     className="px-4"
                     onClick={openScriptEditor}
                     type="button"
-                    variant="gradient"
+                    variant="primary-solid"
                   >
                     编辑剧本
                   </Button>
@@ -263,11 +273,11 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                       className="px-4"
                       onClick={openScriptEditor}
                       type="button"
-                      variant="gradient"
+                      variant="primary-solid"
                     >
                       新建剧本
                     </Button>
-                    <scriptPicker.Input />
+                    <FilePicker {...scriptPicker.inputProps} />
                   </div>
                 </div>
               </section>
@@ -291,7 +301,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Character ── */}
       {tab === "character" && (
         <>
-          {prereq && <StageHint onGo={() => setTab(prereq.go)} text={prereq.text} />}
+          <StagePrereqHint prereq={prereq} setTab={setTab} />
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <h3 className="text-ink u-title mb-3">角色工具</h3>
             <StageBoundary label="角色工具">
@@ -320,11 +330,13 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Storyboard ── */}
       {tab === "storyboard" && (
         <>
-          {prereq && <StageHint onGo={() => setTab(prereq.go)} text={prereq.text} />}
+          <StagePrereqHint prereq={prereq} setTab={setTab} />
           <div className="mt-4 flex justify-end">
             <Button
               className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-xl px-6 py-3 text-sm font-semibold"
-              onClick={() => setTab("shots")}
+              onClick={() => {
+                setTab("shots");
+              }}
               type="button"
               variant="ghost"
             >
@@ -359,7 +371,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Shot images (镜头生图) ── */}
       {tab === "shots" && (
         <>
-          {prereq && <StageHint onGo={() => setTab(prereq.go)} text={prereq.text} />}
+          <StagePrereqHint prereq={prereq} setTab={setTab} />
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-ink u-title">生图工具</h3>
@@ -371,9 +383,12 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
               <LazyShotStudio
                 apiChannels={apiChannels}
                 characters={characters}
-                // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                onCancelShot={(shot) => void cancelShotTask(shot, "image")}
-                onNextStage={() => setTab("video")}
+                onCancelShot={(shot) => {
+                  void cancelShotTask(shot, "image");
+                }}
+                onNextStage={() => {
+                  setTab("video");
+                }}
                 onNotice={showNotice}
                 onOpenModelAdapters={openModelAdapters}
                 onShotsChange={setShots}
@@ -391,7 +406,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Video generation (视频生成) ── */}
       {tab === "video" && (
         <>
-          {prereq && <StageHint onGo={() => setTab(prereq.go)} text={prereq.text} />}
+          <StagePrereqHint prereq={prereq} setTab={setTab} />
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-ink u-title">视频工具</h3>
@@ -402,12 +417,17 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             <StageBoundary label="视频工具">
               <LazyVideoStudio
                 apiChannels={apiChannels}
-                // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                onCancelShot={(shot) => void cancelShotTask(shot, "video")}
-                onNextStage={() => setTab("render")}
+                onCancelShot={(shot) => {
+                  void cancelShotTask(shot, "video");
+                }}
+                onNextStage={() => {
+                  setTab("render");
+                }}
                 onNotice={showNotice}
                 onOpenModelAdapters={openModelAdapters}
-                onPrevStage={() => setTab("shots")}
+                onPrevStage={() => {
+                  setTab("shots");
+                }}
                 onShotsChange={setShots}
                 projectId={activeProjectId}
                 shots={shots}
@@ -421,7 +441,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Final composition (成片合成) ── */}
       {tab === "render" && (
         <>
-          {prereq && <StageHint onGo={() => setTab(prereq.go)} text={prereq.text} />}
+          <StagePrereqHint prereq={prereq} setTab={setTab} />
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <StageBoundary label="成片合成">
               <LazyFinalComposer

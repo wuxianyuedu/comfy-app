@@ -1,39 +1,36 @@
 /**
- * `pnpm doc:toc` —— 规范文档的按节定位入口（ISSUE #2763）。
- *
- * 它治的是「整篇读一遍不现实、grep 猜词读到半句」那一格，所以判据也全是**定位正确性**：
- *   ① 标题树要跳过围栏代码块里的 `# 注释`（bash 示例的第一行就是它）；
- *   ② 列表项里缩进的子标题（`13.6.2.1` 那一层）不能被漏掉 —— 漏了目录照样"完整"；
- *   ③ 小节区间到「下一个同级或更高级标题」为止（父小节不能只剩标题一行）；
- *   ④ 源与生成态镜像必须显式区分（同名两份、行号不同，拿错不会报错）；
- *   ⑤ 「没读成」（退 2）与「关键词 0 命中」（退 0）分开。
+ * `pnpm doc:toc` —— 规范文档的按节定位入口（ISSUE #2763），判的是定位正确性：标题树跳过围栏代码块里的
+ * `# 注释`；列表项里缩进的子标题（`13.6.2.1` 层）不能漏；小节区间到下一个同级或更高级标题为止；
+ * 源与生成态镜像必须显式区分（同名两份、行号不同）；「没读成」（退 2）与「关键词 0 命中」（退 0）分开。
  */
 import { execFileSync } from "node:child_process";
-import { join } from "node:path";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-import { parseHeadings, resolveDoc, sectionRange } from "../scripts/doc-toc.mjs";
+import { parseHeadings, resolveDoc, sectionRange } from "../scripts/docs/doc-toc.mjs";
 
-const SCRIPT = join(process.cwd(), "scripts", "doc-toc.mjs");
+const SCRIPT = join(process.cwd(), "scripts", "docs", "doc-toc.mjs");
 
-function run(args: Array<string> = []) {
+function run(args: Array<string> = [], env: Record<string, string> = {}) {
   try {
     const output = execFileSync(process.execPath, [SCRIPT, ...args], {
       cwd: process.cwd(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, ...env },
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    /* 失败形状用运行时守卫取字段，不走 `as` 断言（B5 清账）。 */
+    const e: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
     return {
       code: typeof e.status === "number" ? e.status : 1,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      output: `${typeof e.stdout === "string" ? e.stdout : ""}${
+        typeof e.stderr === "string" ? e.stderr : ""
+      }`,
     };
   }
 }
@@ -141,12 +138,42 @@ describe("doc-toc —— 入口三态", () => {
     expect(output).toContain("（源）");
   });
 
-  test("`--rendered` 明确写出「行号属于生成态镜像」", () => {
-    const { code, output } = run(["13", "--rendered", "合并前"]);
-    expect(code).toBe(0);
-    expect(output).toContain("生成态镜像");
-    expect(output).toContain("docs/generated/13-");
-    expect(output).toContain("与源文档的行号不同");
+  test("`--rendered` 明确写出「行号属于生成态镜像」（谁要读谁本地先生成）", () => {
+    /* #3586：干净检出上没有 `docs/generated/**`（镜像退出入库产物）。本机跑过
+     * `pnpm doc:render` 时这条用例会意外绿，CI 干净检出却退 2 —— 正是「本机产物
+     * 掩盖了判据」那一族（实测 PR #3609 的 affected-tests 就红在这里）。所以这里走
+     * 读者那条路：在一次性夹具里自己造一份镜像、用 `DOC_TOC_ROOT` 指过去，
+     * 不写真实工作树（#2665）。 */
+    const root = mkdtempSync(join(tmpdir(), "doc-toc-rendered-"));
+    const mirror = join(root, "docs", "generated", "13-提交与-code-review.md");
+    try {
+      mkdirSync(dirname(mirror), { recursive: true });
+      writeFileSync(
+        mirror,
+        "# 13 章（夹具镜像）\n\n## 13.1 合并前清单\n\n## 13.2 别的节\n",
+        "utf8",
+      );
+      const { code, output } = run(["13", "--rendered", "合并前"], { DOC_TOC_ROOT: root });
+      expect(code, output).toBe(0);
+      expect(output).toContain("生成态镜像");
+      expect(output).toContain("docs/generated/13-");
+      expect(output).toContain("与源文档的行号不同");
+      expect(output).toContain("13.1 合并前清单");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("没本地生成过镜像 ⇒ 退 2 并给出「先 doc:render」的修法（#3586）", () => {
+    const root = mkdtempSync(join(tmpdir(), "doc-toc-no-mirror-"));
+    try {
+      const { code, output } = run(["13", "--rendered", "合并前"], { DOC_TOC_ROOT: root });
+      expect(code, output).toBe(2);
+      expect(output).toContain("生成态镜像不在盘上");
+      expect(output).toContain("pnpm run doc:render");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("关键词 0 命中是退 0（文档读到了，只是没有这一节）", () => {

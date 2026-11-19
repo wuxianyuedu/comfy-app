@@ -75,7 +75,7 @@ export function FilmStudioPreviewPanel({
       )}
 
       {/* 成片播放器（完成后） */}
-      {c.film?.status === "DONE" && c.film.finalVideo && (
+      {c.film?.status === "DONE" && c.film.finalVideo !== null && c.film.finalVideo !== "" && (
         <MediaThumbnail
           autoPlay
           className="absolute inset-0 h-full w-full bg-black object-contain"

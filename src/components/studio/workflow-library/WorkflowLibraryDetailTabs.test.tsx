@@ -1,10 +1,7 @@
 //
 // 详情面板页签走 `ui/tabs` 基元的契约（ISSUE #672 / 规范 16 §16.2.4.6 第一档）。
-//
-// 此前这里是自绘 `TabButton`：手写 `h-auto rounded-none` 的按钮 + 靠
-// `active` 条件渲染一条 `absolute inset-x-3 bottom-0 h-0.5` 渐变指示条，
-// 键盘导航 / `role="tablist"` / `aria-selected` / `aria-controls` 全都没有。
-// 换成基元后，这些语义由 base-ui 给；本文件钉住「接通了、且没有退回自绘」。
+// 此前自绘 `TabButton` 缺 role="tablist" / aria-selected / aria-controls 与键盘
+// 导航；换成基元后这些语义由 base-ui 给，本文件钉住「接通了且没退回自绘」。
 
 import { readFileSync } from "node:fs";
 import path from "node:path";

@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import type { ValidationError } from "~/lib/comfyui/validation";

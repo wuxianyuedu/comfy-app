@@ -14,7 +14,7 @@ function stubFetch(impl: (...args: Array<unknown>) => unknown) {
 }
 
 function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 500) {
-  return { ok, status, json: async () => body };
+  return { ok, status, json: () => body };
 }
 
 describe("readApiErrorMessage", () => {
@@ -52,7 +52,7 @@ describe("saveApiChannels", () => {
         hasApiKey: false,
       },
     };
-    const fetchMock = stubFetch(async () => jsonResponse({ channels }));
+    const fetchMock = stubFetch(() => jsonResponse({ channels }));
     await expect(saveApiChannels({ image: { baseUrl: "https://a" } })).resolves.toEqual(channels);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/workshop-api/config",
@@ -61,27 +61,27 @@ describe("saveApiChannels", () => {
   });
 
   it("响应不 ok 时抛出服务端文案", async () => {
-    stubFetch(async () => jsonResponse({ error: "baseUrl 不合法" }, false));
+    stubFetch(() => jsonResponse({ error: "baseUrl 不合法" }, false));
     await expect(saveApiChannels({})).rejects.toThrow("baseUrl 不合法");
   });
 
   it("响应格式不符时抛可读错误，不把 undefined 漏给调用方", async () => {
-    stubFetch(async () => jsonResponse({ channels: { image: {} } }));
+    stubFetch(() => jsonResponse({ channels: { image: {} } }));
     await expect(saveApiChannels({})).rejects.toThrow("服务端返回的通道配置格式不正确");
   });
 
   it("fetch 直接 reject（断网 / dev server 未起）时统一中文文案", async () => {
-    stubFetch(async () => {
+    stubFetch(() => {
       throw new Error("Failed to fetch");
     });
     await expect(saveApiChannels({})).rejects.toThrow("无法连接服务器");
   });
 
   it("响应体非法 JSON 时按空对象处理，不二次抛错", async () => {
-    stubFetch(async () => ({
+    stubFetch(() => ({
       ok: false,
       status: 500,
-      json: async () => {
+      json: () => {
         throw new Error("not json");
       },
     }));

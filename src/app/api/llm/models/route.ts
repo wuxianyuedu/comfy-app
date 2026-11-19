@@ -3,7 +3,7 @@ import { isRecord } from "~/lib/is-record";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { describeFetchFailure, getLLMConfig } from "~/lib/llm/server";
-import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
+import { httpFailureDetail } from "~/lib/llm/http-failure";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,17 +12,9 @@ export const dynamic = "force-dynamic";
 const PROBE_TIMEOUT_MS = 6000;
 
 /**
- * GET /api/llm/models?provider=local|remote[&model=<name>] —— 拉取候选模型清单。
- *
- * - local：优先 GET {本地 base 剥掉 /v1}/api/tags（Ollama 形状），
- *   失败回落 GET {base}/models（LM Studio / vLLM 等 OpenAI 兼容端点）。
- * - remote：默认按已保存的全局远端 baseUrl / apiKey GET {base}/models；
- *   若带 model 参数且该远端条目配了独立 baseUrl/apiKey，则用该条目自己的
- *   连接参数探测——避免「工坊选了独立配置的远端模型，却拿全局 Base URL
- *   去探导致误报 fetch failed」这类误导提示。
- *
- * 探测失败不是硬错误：一律 200 + { ok:false, detail }，前端在对应分组里
- * 展示降级文案而不是让整页报错。
+ * GET /api/llm/models?provider=local|remote[&model=<name>] —— 拉取候选模型清单：local 优先 `{base剥掉/v1}/api/tags`（Ollama），
+ * 失败回落 `{base}/models`；remote 默认用已保存的全局 baseUrl/apiKey 探 `{base}/models`，带 model 且该条目配了独立连接参数时用它自己的，
+ * 避免「工坊选了独立配置却拿全局 Base URL 去探导致误报 fetch failed」。探测失败不是硬错误：一律 200 + `{ ok:false, detail }`，前端按分组展示降级文案。
  */
 export async function GET(req: NextRequest) {
   if (!(await requireRequestUser())) {
@@ -48,7 +40,7 @@ export async function GET(req: NextRequest) {
   }
 
   const headers: Record<string, string> = {};
-  if (provider === "remote" && cfg.apiKey) {
+  if (provider === "remote" && cfg.apiKey !== null && cfg.apiKey !== "") {
     headers.Authorization = `Bearer ${cfg.apiKey}`;
   }
   const probe = (base: string) =>
@@ -87,14 +79,14 @@ export async function GET(req: NextRequest) {
 
     res = await probe(cfg.baseUrl);
     if (!res.ok) {
-      const snippet = clampText(await res.text().catch(() => ""), {
-        maxLength: INLINE_SNIPPET_MAX,
-        marker: "",
-      });
       return NextResponse.json({
         ok: false,
         models: [],
-        detail: `HTTP ${res.status}${snippet ? `：${snippet}` : ""}`,
+        detail: httpFailureDetail({
+          body: await res.text().catch(() => ""),
+          status: res.status,
+          url: `${cfg.baseUrl.replace(/\/$/, "")}/models`,
+        }),
       });
     }
     const parsed: unknown = await res.json();

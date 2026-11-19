@@ -8,7 +8,7 @@
  * （§13.6.2 那条「面从哪来」）。而有一族判据**天然进不了钩子**、理由与「代价高」
  * 无关 —— 是**本地看不到那个形态**：
  *
- *   · 首发成员 `scripts/check-commit-claims.mjs`（「提交信息里的声明 ⇄ 那次提交的
+ *   · 首发成员 `scripts/gates/check-commit-claims.mjs`（「提交信息里的声明 ⇄ 那次提交的
  *     事实」，11 §11.23.5）判的是**某一次提交**的树（「§x.y 照旧保留」），而丢失
  *     发生在**平台侧 squash** 那一刻 —— 实测 `ad81a912` / `bdabd26f` / `b9bedd37`
  *     在 `master` 上都是**单亲**、提交信息里却带 `Merge origin/master into …` 字样，
@@ -17,7 +17,7 @@
  *   · 硬塞进钩子只会让人学会绕开它（§13.6.2 的边界原话）。
  *
  * 它单独成模块、而不是长在 `base-check.mjs` 里，有一条**具体的**理由：
- * `scripts/.tsc-diagnostic-executors.json` 把 `base-check.mjs` 的**声明行数**当
+ * `scripts/gates/.tsc-diagnostic-executors.json` 把 `base-check.mjs` 的**声明行数**当
  * 零增量棘轮管（§13.5.14）—— 在那份文件里新写一处 JSDoc / 类型注解，就得回答
  * 「它由谁执行、谁来敲」，而这一族的答案在**别处**（`--base` 那条链）。写在同目录
  * 的这份模块里，棘轮的**对象与答案才落在同一个地方**（同 §12.5.3 对目录归属的口径）。
@@ -35,7 +35,7 @@
  *
  * ── 事实从哪来 ────────────────────────────────────────────────────────
  *
- * 从下面 `CHAINED_STEPS` 那一份清单现算（`scripts/.on-demand-duties.json` 里对应行的
+ * 从下面 `CHAINED_STEPS` 那一份清单现算（`scripts/gates/.on-demand-duties.json` 里对应行的
  * `fact.kind` 是 `base-check-chained`，由 `check-on-demand-duties.cjs` 双向核对 ——
  * **它读的就是这个文件里的 `const script = "…"`**，不另抄第二份）。
  */
@@ -49,7 +49,7 @@ import path from "node:path";
  * 这个形状现算「有哪些成员」，好与 `.on-demand-duties.json` 的登记**双向**核对
  * （新增一条却忘了登记 ⇒ 当场红）。改这个形状要同批改那一边。
  */
-export const CHAINED_STEPS = [{ script: "scripts/check-commit-claims.mjs" }];
+export const CHAINED_STEPS = [{ script: "scripts/gates/check-commit-claims.mjs" }];
 
 /**
  * 把这一族展开成 `resolveMergeBatch` 的 `{argv, label, baseSide}` 条目。

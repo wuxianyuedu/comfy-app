@@ -4,7 +4,7 @@ import { ChevronLeft, CircleHelp, Plus, Search, X } from "lucide-react";
 import { Hint } from "~/components/ui/hint";
 import { textHandler } from "~/lib/form-props";
 import { ARTIFACT_ROOT_DIR } from "~/lib/media/output-layout";
-import { useFilePicker } from "~/components/ui/file-picker";
+import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
@@ -24,6 +24,13 @@ export type { MaterialItem };
 /* ── Types ───────────────────────────────────────────────── */
 
 type DisplayMode = "grid" | "list";
+
+/** 作用域白名单：`Tabs` 的 `onValueChange` 给的是 `string`，收窄回联合类型。 */
+const MATERIAL_SCOPE_VALUES: ReadonlyArray<string> = ["project", "cross"];
+
+function isMaterialScope(value: unknown): value is MaterialScope {
+  return typeof value === "string" && MATERIAL_SCOPE_VALUES.includes(value);
+}
 
 /* ── Component ───────────────────────────────────────────── */
 
@@ -63,8 +70,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
   /* 素材上传选择器：多选、无类型限制（素材库也收音频/视频）。 */
   const uploadPicker = useFilePicker({
     multiple: true,
-    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-    onPick: (_first, files) => void upload(files),
+    onPick: (_first, files) => {
+      void upload(files);
+    },
   });
 
   return (
@@ -99,16 +107,16 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
       </div>
 
       {/* ── Tabs（下划线页签）──
-          此前是手搓的 `<Button variant="ghost">` + 下划线三元：选中档给
-          `border-b-2 border-accent`，**未选中档根本没写那条边框** —— 未选中的
-          那一枚整体比选中的矮 2px，切来切去文字基线上下跳。这就是「一排里选
-          一个」的又一处手搓，与 `project-canvas/HistoryPanel` 的作用域切换
-          **逐字同形**（规范 16 §16.2.4.75）。
-          改用 `ui/tabs` 的 `line` 档：选中态由 `data-active` 驱动（字色 +
-          下划线两层），两枚同高同基线。 */}
+          此前选中给下边框、未选中没写，未选中那枚矮 2px、切换时基线上下跳；
+          与 HistoryPanel 的作用域切换逐字同形（规范 16 §16.2.4.75）。
+          改用 `ui/tabs` 的 `line` 档：选中态由 `data-active` 驱动，两枚同高同基线。 */}
       <Tabs
         className="gap-0"
-        onValueChange={(value) => setScope(/* SAFETY: 类型断言已复核 */ value as MaterialScope)}
+        onValueChange={(value) => {
+          if (isMaterialScope(value)) {
+            setScope(value);
+          }
+        }}
         value={scope}
       >
         <TabsList
@@ -145,7 +153,7 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
           <Input
             className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
             onChange={textHandler(setSearch)}
-            placeholder={folder ? "在当前分类搜索" : "搜索全部素材"}
+            placeholder={folder === null ? "搜索全部素材" : "在当前分类搜索"}
             type="text"
             value={search}
           />
@@ -153,7 +161,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
             <Hint accessibleName label="清空">
               <Button
                 className="text-ink-fainter hover:text-ink-soft h-auto shrink-0 p-0 hover:bg-transparent"
-                onClick={() => setSearch("")}
+                onClick={() => {
+                  setSearch("");
+                }}
                 size="icon-xs"
                 variant="ghost"
               >
@@ -162,12 +172,12 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
             </Hint>
           )}
         </div>
-        <uploadPicker.Input />
+        <FilePicker {...uploadPicker.inputProps} />
         <Hint
           label={
-            folder
-              ? `上传到「${folders.find((fld) => fld.id === folder)?.name ?? folder}」`
-              : "上传到「参考素材」"
+            folder === null
+              ? "上传到「参考素材」"
+              : `上传到「${folders.find((fld) => fld.id === folder)?.name ?? folder}」`
           }
           wrap
         >
@@ -197,10 +207,12 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
           segments={breadcrumbSegments}
         />
         {/* 返回按钮：仅在进入某分类且非搜索时显示 */}
-        {showItems && !searching && folder && (
+        {showItems && !searching && folder !== null && (
           <Button
             className="text-ink-muted hover:bg-subtle hover:text-ink-soft text-2xs ml-auto h-auto shrink-0 gap-1 rounded-md px-2 py-1 font-normal"
-            onClick={() => enterFolder(null)}
+            onClick={() => {
+              enterFolder(null);
+            }}
             variant="ghost"
           >
             <ChevronLeft data-icon="inline-start" size={11} strokeWidth={2.5} />
@@ -210,7 +222,7 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
       </div>
 
       {/* ── Error banner ── */}
-      {error && (
+      {error !== null && (
         <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
           <span className="text-destructive text-2xs min-w-0 flex-1 wrap-break-word">{error}</span>
           <Button

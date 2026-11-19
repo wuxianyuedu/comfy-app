@@ -1,16 +1,7 @@
 /**
- * 桌包 standalone 形态的判据（P3 §5 · ISSUE #1216，3-E2a）。
- *
- * 这一刀的每条判据都来自一次真跑，而且**每条失败的表现都是同一个**：用户双击桌包后
- * 窗口停在启动页，或页面 200 而接口全 500。桌包链路既不在 pre-commit 也不在 CI，
- * 构建期一片绿是常态——所以判据必须落在「跑得到、且改回去就红」的形态上：
- *   · 形态层（永远跑）：顶层白名单的默认拒绝、私有输入剔除、运行期 env 装配、
- *     首启建表，以及「装配 / 打包配置 / 产物层检查三者同形」。
- *   · 入口层：用**桩 server** 在临时目录里真起一次入口（不起真 Next），验 boot 行 /
- *     建表 / 退出码透传 / 缺件时大声失败。「文件名里的冒号」这类只有真跑才暴露的问题
- *     就是这么抓到的（本刀第一版栽在 Windows 非法文件名上）。
- * 真 Next server 那一跑（`/`、`/workspace`、`/api/health` 全 200）不在这里：它要一次
- * 全量构建。它的构建期等价物是 `scripts/build-desktop.mjs` §载荷实体化 的三条模块解析断言。
+ * 桌包 standalone 形态的判据（P3 §5 · ISSUE #1216，3-E2a）。每条都来自一次真跑，而失败表现**都是同一个**：双击后停在启动页，或页面 200 而接口全 500。桌包链路既不在 pre-commit 也不在 CI，构建期一片绿是常态 ⇒ 判据须落在「跑得到、改回去就红」。
+ * 形态层（永远跑）：顶层白名单默认拒绝、私有输入剔除、运行期 env 装配、首启建表，以及装配/打包配置/产物层检查三者同形。入口层：用**桩 server** 在临时目录真起一次入口（不起真 Next），验 boot 行/建表/退出码透传/缺件大声失败（「文件名里的冒号」只有真跑才暴露）。
+ * 真 Next 那一跑（`/`、`/workspace`、`/api/health`）不在这里：它要全量构建，构建期等价物是 `scripts/build-desktop.mjs` §载荷实体化 的三条模块解析断言。
  */
 import { DatabaseSync } from "node:sqlite";
 import {
@@ -26,48 +17,23 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { MODE_CONTRACTS_REL_PATH } from "../src/lib/workshop/mode-contract-write-path";
+
+import { symlinkDir } from "./helpers/symlink-dir";
 
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
 
 /**
  * 被测的两个模块是纯 Node 宿主模块（§18.4 第三类：既不加 `server-only` 也不是
- * `.server.ts`），TS 侧没有声明文件。这里**显式声明消费的这一小片面**而不是收 `any`：
- * 判据的形状必须由用例自己写清楚，否则模块改签名时用例会静默变宽。
+ * `.server.ts`）。用**字面量说明符**动态 import：TS 沿 import 图拿到 .mjs 的推断
+ * 导出类型（JSDoc），不再需要 `as Promise<T>` 断言收型（B5 清账）。消费成员的
+ * 形状由下面的用例自己证——模块改签名时用例会红，而不是静默变宽。
  */
-type StaticAllowModule = {
-  BUILT_RUNTIME_SCRIPTS: Array<string>;
-  isStaticPathAllowed: (rel: string) => boolean;
-  PREBUNDLED_SRC_ROOTS: Array<string>;
-  PRIVATE_INPUTS: Array<string>;
-  pruneStaticToAllowList: (dir: string, onRemoved?: (name: string) => void) => Array<string>;
-  RUNTIME_SCRIPTS: Array<string>;
-  RUNTIME_SRC: Array<string>;
-  stripPrivateInputs: (dir: string, onRemoved?: (name: string) => void) => Array<string>;
-};
-type RuntimeEnvModule = {
-  AUTH_SECRET_FILE_REL: string;
-  buildStandaloneRuntimeEnv: (input: {
-    appRoot: string;
-    env?: NodeJS.ProcessEnv;
-    port: number;
-  }) => NodeJS.ProcessEnv;
-  ensureStandaloneSchema: (input: { appRoot: string; dbFile?: string }) => {
-    applied: boolean;
-    tablesAfter: number;
-    tablesBefore: number;
-  };
-  OAUTH_PLACEHOLDER: string;
-  readOrCreateAuthSecret: (appRoot: string) => string;
-  standaloneDbFile: (appRoot: string) => string;
-};
-
-const load = <T>(rel: string): Promise<T> =>
-  /* SAFETY: 类型断言已复核 */ import(pathToFileURL(path.join(ROOT, rel)).href) as Promise<T>;
-const loadStatic = () => load<StaticAllowModule>("scripts/standalone-private-inputs.mjs");
-const loadEnv = () => load<RuntimeEnvModule>("scripts/launcher-core/standalone-runtime-env.mjs");
+const loadStatic = () => import("../scripts/standalone-private-inputs.mjs");
+const loadEnv = () => import("../scripts/launcher-core/standalone-runtime-env.mjs");
 
 /** 只含结构的最小 DDL（真实 DDL 由 §首启建表 每轮构建现生成）。 */
 const FIXTURE_DDL = [
@@ -141,27 +107,17 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
   });
 
   it("随包脚本 import 的那几份 TS 必须都在清单里（漏登记 = 桌包脚本加载即断）", () => {
-    // 入口面是 `RUNTIME_SCRIPTS` **全部** `.mjs`，不是「记得列进来的那几个」：
-    // 上一版只列了 3 份文件，于是第 4 份随包脚本 import 一份新的 `src/*.ts` 时这条用例
-    // 一个字都不会说 —— 那正是 ISSUE #2158 第 7 条问的那件事（产物里被剔掉的 90 个
-    // `src/` 文件，「运行期若有人 import 其中之一会怎样」当时没有一格在看）。
-    // 实测读数：全部入口可达 `src/` 61 个，其中 58 个是 `PREBUNDLED_SRC_ROOTS` 那一
-    // 份闭包（构建期已打进 `scripts/executor-host.runtime.mjs`），**净 3 个 = 本清单**。
-    // 载荷里的 src/ 是默认拒绝的，所以清单与这些说明符必须**逐字相等**（多了也是错：
-    // 清单里挂一份没人读的，等于放宽了「默认不进」那条口径）。
-    // 相对深度两种写法都要认（`../` 与 `../../`）。
-    //
-    // **链要跟着走**（ISSUE #1961）：只数「脚本直接 import 的那一层」会漏掉被它
-    // import 的模块自己再 import 的东西 —— 而逐文件放行的语义是「一个都不能少」：
-    // 漏了不是「那一步跳过」，是整个编排器加载即 `ERR_MODULE_NOT_FOUND`。
-    // 实测踩过：`executable-resolve.ts` 多了个叶子 `platform.ts`，上面那层数字一个
-    // 没变，而产物里少一份就等于桌包启动即断（这条用例当场红了才看见）。
+    // 入口面是 `RUNTIME_SCRIPTS` **全部** `.mjs`，不是「记得列进来的那几个」：上一版只列 3 份，第 4 份随包
+    // 脚本 import 新 `src/*.ts` 时这条用例一字不说（ISSUE #2158 第 7 条）。实测入口可达 `src/` 61 个，58 个
+    // 在 `PREBUNDLED_SRC_ROOTS` 闭包内，**净 3 个 = 本清单**；载荷里的 src/ 默认拒绝，故清单与说明符必须
+    // **逐字相等**（多了也是错），相对深度 `../` 与 `../../` 都要认。**链要跟着走**（ISSUE #1961）：只数直接
+    // import 会漏掉传递依赖，逐文件放行是「一个都不能少」—— 漏了即整个编排器加载 `ERR_MODULE_NOT_FOUND`。
     /** 整行注释先剥掉：JSDoc 里点名的路径不是运行期依赖（与
      *  `tests/dist-artifact-hygiene.test.ts` 那条 `scripts/` 闭包判据同一口径）。 */
     const stripCommentLines = (src: string): string =>
       src
         .split("\n")
-        .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+        .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
         .join("\n");
     /** 说明符 → 相对 `src/` 的路径（不含 `.ts`，落在 `src/` 之外返回 null）。 */
     const toSrcRel = (spec: string, fromFile: string): string | null => {
@@ -178,8 +134,8 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
      *  而 `.mjs` 侧必须带 —— 那正是 `platform.ts` 被拆出来的理由）。 */
     const relativeSpecifiers = (abs: string): Array<string> => {
       const code = stripCommentLines(readFileSync(abs, "utf8"));
-      return [...code.matchAll(/from "(\.[^"]+)"/g)]
-        .map((m) => m[1])
+      return [...code.matchAll(/from "(?<specifier>\.[^"]+)"/g)]
+        .map((m) => m.groups?.specifier)
         .filter((spec): spec is string => typeof spec === "string");
     };
     /** 从几个 `src/` 根出发，顺着它们自己的 import 走到底。 */
@@ -215,8 +171,9 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
     const seeds: Array<string> = [];
     for (const abs of entries) {
       const code = stripCommentLines(readFileSync(abs, "utf8"));
-      for (const m of code.matchAll(/"((?:\.\.\/)+src\/[^"]+)"/g)) {
-        const rel = m[1] === undefined ? null : toSrcRel(m[1], abs);
+      for (const m of code.matchAll(/"(?<specifier>(?:\.\.\/)+src\/[^"]+)"/g)) {
+        const spec = m.groups?.specifier;
+        const rel = spec === undefined ? null : toSrcRel(spec, abs);
         if (rel !== null && !seeds.includes(rel)) {
           seeds.push(rel);
         }
@@ -275,6 +232,95 @@ describe("开发机私有输入：data 下的密钥与设置不许随包", () =>
   });
 });
 
+/**
+ * `data/` 下的**本机覆盖**不许随包（ISSUE #3646）。
+ *
+ * 这一族与上面那份「密钥与整机设置」走同一道减法，但性质不同：它们大多不是凭据，
+ * 而是「造这个包的那台机器上改过的那点配置」。随包出去的表现不是「泄漏」，而是
+ * **所有用户都拿到造包者的口径**（模式契约 / 侧栏页签行为），或者拿到造包者的
+ * 上游 key。
+ *
+ * 判据是「名单里逐个点名」与「真删一次」两件都要成立：只断言名单里有那份名字，
+ * 断言的只是清单文本；真删一次才是「产物里没有它」。
+ */
+describe("本机覆盖：data/ 下的配置不许随包（ISSUE #3646）", () => {
+  it("模式契约的本机覆盖登记进名单，且真的被删掉", async () => {
+    const { PRIVATE_INPUTS, stripPrivateInputs } = await loadStatic();
+    // 名单里的名字必须与**写入方自己的路径常量**逐字相同（常量在
+    // `src/lib/workshop/mode-contract-write-path.ts`，是落盘路径的唯一出处）：
+    // 登记名与落盘名漂了 ⇒ 减法侧删的是另一份文件，而泄漏照旧、没人看见。
+    expect(PRIVATE_INPUTS).toContain(MODE_CONTRACTS_REL_PATH);
+    mkdirSync(path.join(workdir, "data"), { recursive: true });
+    writeFileSync(path.join(workdir, MODE_CONTRACTS_REL_PATH), "[]", "utf8");
+    const removed = stripPrivateInputs(workdir);
+    expect(removed).toContain(MODE_CONTRACTS_REL_PATH);
+    expect(existsSync(path.join(workdir, MODE_CONTRACTS_REL_PATH))).toBe(false);
+  });
+
+  it("同族其余各项（上游 apiKey / ComfyUI 通道配置 / 三处目录）也在名单里，且真被删掉", async () => {
+    const { PRIVATE_INPUTS, stripPrivateInputs } = await loadStatic();
+    // 文件的写入方：`src/lib/workshop/api-channel.server.ts` 与 MCP 侧
+    // `src/server/workshop/api-channel.ts`（两者共用 `api-channel-core.ts` 的
+    // `WORKSHOP_API_SETTINGS_FILE`）、以及 `src/server/workshop/comfyui.ts` 的
+    // `SETTINGS_FILE`。前者含上游 apiKey —— 随包出去 = 造包者的 key 落到每个用户手里。
+    const files = ["data/workshop-api-settings.json", "data/workshop-comfy-settings.json"];
+    // 目录的写入方：`scripts/db/db-backup-core.mjs`（**这台机器的整库快照**）、
+    // `src/server/workshop/comfyui.ts`（通道产物）、`src/server/workshop/final-compose.ts`
+    // （合成产物）。它们装不进「逐文件」那一层，只能按目录点名 ⇒ 减法的删除动作
+    // 必须能删目录（否则 `rmSync` 撞上目录会抛 `ERR_FS_EISDIR`，构建当场崩）。
+    const dirs = ["data/backups", "data/workshop-outputs", "data/workshop-compositions"];
+    mkdirSync(path.join(workdir, "data"), { recursive: true });
+    for (const rel of files) {
+      expect(PRIVATE_INPUTS, `剔除清单缺少 ${rel}`).toContain(rel);
+      writeFileSync(path.join(workdir, rel), "{}", "utf8");
+    }
+    for (const rel of dirs) {
+      expect(PRIVATE_INPUTS, `剔除清单缺少 ${rel}`).toContain(rel);
+      mkdirSync(path.join(workdir, rel), { recursive: true });
+      writeFileSync(path.join(workdir, rel, "inside.txt"), "本机的东西", "utf8");
+    }
+    const removed = stripPrivateInputs(workdir);
+    for (const rel of [...files, ...dirs]) {
+      expect(removed).toContain(rel);
+      expect(existsSync(path.join(workdir, rel))).toBe(false);
+    }
+  });
+
+  /**
+   * **不顺着符号链接删**：产物里的 `data/` 万一是链接（tracing 今天复制的是真实目录，
+   * 但「换了复制方式」就未必），顺着递归删会**删掉开发机上的那一份** —— 开发机的
+   * `data/backups/` 里躺着整库快照，而被删的是产物。这是最贵的一类事故。
+   *
+   * 判据落在**行为**上（真摆一个链接、真删一次、真看目标还在不在），不是源码里有没有
+   * 那句判断 —— 结构断言会在换写法时无谓变红，也会在检查真被删掉时变成无谓的绿。
+   */
+  it("产物里的 data/ 是链接时不跟着删（不损坏开发机那一份）", async () => {
+    const { stripPrivateInputs } = await loadStatic();
+    const store = mkdtempSync(path.join(tmpdir(), "comfyapp-store-data-"));
+    const prod = mkdtempSync(path.join(tmpdir(), "comfyapp-prod-data-"));
+    try {
+      // 开发机那一份：`data/` 里有密钥与备份快照
+      mkdirSync(path.join(store, "data", "backups"), { recursive: true });
+      writeFileSync(path.join(store, "data", "llm-secret.key"), "SECRET-ISH", "utf8");
+      writeFileSync(path.join(store, "data", "backups", "db-backup-x.sqlite"), "快照", "utf8");
+      // 产物那一份：`data/` 是个链接，指向开发机那份
+      symlinkDir(path.join(store, "data"), path.join(prod, "data"));
+
+      const removed = stripPrivateInputs(prod);
+
+      // 链接后面的东西一个都不许动（这是这一条的全部内容）
+      expect(existsSync(path.join(store, "data", "llm-secret.key"))).toBe(true);
+      expect(existsSync(path.join(store, "data", "backups", "db-backup-x.sqlite"))).toBe(true);
+      // 减法也没把「链接本身」当成产物内容删掉（叶子是链接时删链接是安全的，但这一格
+      // 认的是「父段是链接 ⇒ 整项跳过」）
+      expect(removed).toEqual([]);
+    } finally {
+      rmSync(store, { recursive: true, force: true });
+      rmSync(prod, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("入口的运行期环境装配（分发产物不含 .env）", () => {
   it("少 PORT / 坏 PORT 都大声失败：缺省端口等于让 server 与壳各认一个", async () => {
     const { buildStandaloneRuntimeEnv } = await loadEnv();
@@ -294,6 +340,7 @@ describe("入口的运行期环境装配（分发产物不含 .env）", () => {
       "PORT",
       "HOSTNAME",
       "SKIP_ENV_VALIDATION",
+      "COMFY_APP_DATA_DIR",
     ]) {
       expect(typeof env[key], key).toBe("string");
       expect(String(env[key]).length, key).toBeGreaterThan(0);
@@ -346,7 +393,7 @@ describe("入口的运行期环境装配（分发产物不含 .env）", () => {
   it("OAuth 占位值只有一份定义（两份字面量迟早分叉，且两侧都能起来 = 没人报红）", async () => {
     const { OAUTH_PLACEHOLDER } = await loadEnv();
     expect(OAUTH_PLACEHOLDER.length).toBeGreaterThan(0);
-    const init = read("scripts/env-init.mjs");
+    const init = read("scripts/devtools/env-init.mjs");
     expect(init).toContain("standalone-runtime-env.mjs");
     expect(init).toContain("OAUTH_PLACEHOLDER");
     expect(init).not.toMatch(/const OAUTH_PLACEHOLDER\s*=/);
@@ -432,16 +479,20 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
   }
 
   const entryPath = () => path.join(workdir, "scripts", "standalone-runtime.mjs");
+  /** 运行期数据根（日志 / 导出）：测试里钉死在载荷根之外的固定位置，让「日志真的离开载荷根」
+   *  这一条断言可跨平台复现（ISSUE #3498）。入口的 `resolveAppDataDir` 读 `COMFY_APP_DATA_DIR`
+   *  覆盖，所以这里注入后两侧（启动器写 server/host 日志、Next 读 log 根）都落在它身上。 */
+  const dataDirOf = () => path.join(workdir, "app-data");
   const runWith = (port: string, extraEnv: Record<string, string> = {}) =>
     spawnSync(process.execPath, [entryPath()], {
       encoding: "utf8",
-      env: { ...process.env, PORT: port, ...extraEnv },
+      env: { ...process.env, PORT: port, COMFY_APP_DATA_DIR: dataDirOf(), ...extraEnv },
       timeout: 90_000,
     });
-  const both = (r: { stderr?: string; stdout?: string; }) => `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  const both = (r: { stderr?: string; stdout?: string }) => `${r.stdout ?? ""}${r.stderr ?? ""}`;
   /** 宿主自己的输出通道内容（入口把这两份路径写在 `host pid=` 那一行里）。 */
   function hostStdout() {
-    const dir = path.join(workdir, "log", "current", "services");
+    const dir = path.join(workdir, "app-data", "log", "current", "services");
     if (!existsSync(dir)) {
       return "";
     }
@@ -459,7 +510,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     expect(text).toMatch(/boot pid=\d+ server=\d+ port=4210/);
     expect(text).toMatch(/schema bootstrap tables=0->2/);
     expect(text).toMatch(/closing \(server exited code=0/);
-    const dir = path.join(workdir, "log", "current", "nextjs");
+    const dir = path.join(dataDirOf(), "log", "current", "nextjs");
     const names = readdirSync(dir);
     // 本刀第一版用了带冒号与空格的日志行时间戳，Windows 上直接 ENOENT：钉住文件名形态。
     for (const name of names) {
@@ -468,8 +519,9 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     const stdoutName = names.find((n) => n.startsWith("standalone-server-stdout-"));
     expect(stdoutName, names.join(",")).toBeTruthy();
     expect(readFileSync(path.join(dir, String(stdoutName)), "utf8")).toContain("stub server up");
-    // 库与日志都落在载荷根，而不是调用者的 cwd。
+    // 库仍落在载荷根（db 迁移是另一单，ISSUE #3498 只动日志 / 导出）；但日志已离开载荷根。
     expect(existsSync(path.join(workdir, "db.sqlite"))).toBe(true);
+    expect(existsSync(path.join(workdir, "log"))).toBe(false);
   });
 
   it("桩 server 退 3 ⇒ 入口也退 3（壳据此写它的失败出口）", () => {
@@ -511,7 +563,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     const text = both(out);
     expect(out.status, text).toBe(0);
     expect(text).toMatch(/executor mode=host/);
-    const hostPid = /host pid=(\d+)/.exec(text)?.[1];
+    const hostPid = /host pid=(?<pid>\d+)/.exec(text)?.groups?.pid;
     expect(hostPid, text).toBeTruthy();
     // 桩宿主的输出：三项都必须落在同一个值上
     const echoed = hostStdout();
@@ -519,13 +571,13 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     // 绝对路径：宿主与 server 读同一个库文件，靠的就是这一条（相对路径 = 赌两侧锚点一致）。
     // 判据写成「绝对路径」而不是某个平台的形状：原实现只认 `[A-Za-z]:\`，
     // 那是把 Windows 当唯一平台（本仓库处处强调跨平台），在 POSIX 上必红。
-    const dbUrl = /db=(file:\S+)/.exec(echoed)?.[1] ?? "";
+    const dbUrl = /db=(?<url>file:\S+)/.exec(echoed)?.groups?.url ?? "";
     expect(dbUrl, `宿主没回显库路径：${echoed}`).not.toBe("");
     expect(path.isAbsolute(dbUrl.slice("file:".length))).toBe(true);
     // 子进程真的拿到 production（不是只在单测里成立）：pino 在别值时去找 pino-pretty，
     // 而那份 devDependency 不在载荷里 —— 桌包宿主退出 1 的现场就是这条。
     expect(echoed).toContain("node=production");
-    const stamp = /executor-host-stdout-(\S+?)\.log/.exec(text)?.[1];
+    const stamp = /executor-host-stdout-(?<stamp>\S+?)\.log/.exec(text)?.groups?.stamp;
     expect(stamp, `入口没打出宿主输出通道：${text}`).toBeTruthy();
     expect(echoed, `boot id 必须与本次日志同名（跨进程 grep 的唯一线索）：${echoed}`).toContain(
       `boot=${stamp}`,
@@ -562,7 +614,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     expect(out.status, text).toBe(0);
     expect(text).toMatch(/host exited code=7/);
     // 已经退掉的宿主不许再补一刀（那会在日志里留一行假的 reap FAILED）
-    const hostPid = /host pid=(\d+)/.exec(text)?.[1];
+    const hostPid = /host pid=(?<pid>\d+)/.exec(text)?.groups?.pid;
     expect(hostPid, text).toBeTruthy();
     expect(text).not.toContain(`reap pid=${hostPid}`);
   });
@@ -592,13 +644,11 @@ describe("装配、打包配置与产物判据三者同形", () => {
   });
 
   it("只编壳的那条路也补齐 static 占位（bundle.resources 编译期校验）", () => {
-    // 实测（ISSUE #1247）：全新克隆上跑「一键发布构建」（build-all.ps1 →
-    // build-tauri-release.ps1，只编 release 壳、不跑 build-desktop.mjs），
-    // cargo build 在 app 的 build script 里 panic：
+    // 实测（ISSUE #1247）：全新克隆上跑「一键发布构建」（build-all.ps1 → build-tauri-release.ps1，只编 release
+    // 壳、不跑 build-desktop.mjs），cargo build 在 app 的 build script 里 panic：
     //   tauri build failed: resource path `static` doesn't exist
-    // externalBin 的报错在前（sidecar 那条已修），但两者是**同一条判据**：
-    // tauri-build 每次编译都校验 conf 里声明的路径存在，而这些路径是构建产物、
-    // 不入库，所以两条都要有补齐步。
+    // externalBin 的报错在前（sidecar 那条已修），但两者是**同一条判据**：tauri-build 每次编译都校验 conf
+    // 里声明的路径存在，而这些是构建产物、不入库，所以两条都要有补齐步。
     const script = read("tools/scripts/build-tauri-release.ps1");
     expect(script).toContain('$resDir = Join-Path $TAURI_DIR "static"');
     expect(script).toContain("Test-Path $resDir");
@@ -624,7 +674,7 @@ describe("装配、打包配置与产物判据三者同形", () => {
   });
 
   it("产物层检查认识桌包载荷必备件（standalone 层没有它们才是常态，所以只查 static）", () => {
-    const checker = read("scripts/check-standalone-contents.cjs");
+    const checker = read("scripts/gates/check-standalone-contents.cjs");
     for (const needle of [
       "REQUIRED_PAYLOAD_FILES",
       '"schema.sql"',
@@ -638,7 +688,7 @@ describe("装配、打包配置与产物判据三者同形", () => {
   it("入口与其环境模块登记进两侧白名单（漏一侧 = 被剪掉，或检查瞎掉）", () => {
     for (const name of ["standalone-runtime.mjs", "launcher-core/standalone-runtime-env.mjs"]) {
       expect(registry.RUNTIME_SCRIPTS, name).toContain(name);
-      expect(read("scripts/check-standalone-contents.cjs"), name).toContain(name);
+      expect(read("scripts/gates/check-standalone-contents.cjs"), name).toContain(name);
     }
   });
 

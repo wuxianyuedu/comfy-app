@@ -1,6 +1,6 @@
 ## Added
 
-- **桌包档不再在构建期现下 NSIS 工具：`scripts/tauri-tools-cache.mjs` + 清单里新增的
+- **桌包档不再在构建期现下 NSIS 工具：`scripts/build/tauri-tools-cache.mjs` + 清单里新增的
   `打包·桌包工具预置` 那一格（ISSUE #2525）**。
 
   补的是那条链上唯一一格「判据在场、执行者不在场」的东西：nsis 打包段要两件 GitHub release

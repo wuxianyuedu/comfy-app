@@ -1,18 +1,9 @@
 "use client";
 
-// ── 侧栏「项目」分组的逻辑层（规范 17 §17.2 第②层）──────────────────────
-//
-// 取数与 `~/components/studio/works/hooks/use-works-gallery` 同一支：都读
-// `listProjectsWithServer()` 的**并集**（本地索引 ∪ 服务端）。
-//
-// 为什么侧栏不能只读本地索引（`listProjects()`）：索引是 `hydrateFromServer`
-// 对账**之后**的本地副本，而画布页没打开过就没有那次对账 —— 于是「服务端有一行、
-// 索引里没有」的项目在「所有项目」那一屏看得见（那一屏读并集，ISSUE #1522）、
-// 侧栏却一条都不列，读起来就是「明明有项目，侧栏看不见」。
-//
-// 拉取失败（离线 / dev server 未起）仍照常列出本地索引那一份：本地索引是离线时
-// 唯一有的那一份（local-first 的承诺），失败的表现只是少了服务端独有的那几行，
-// 不是整组清空。
+// ── 侧栏「项目」分组的逻辑层（规范 17 §17.2 第②层）
+// 取数与 use-works-gallery 同一支：读 `listProjectsWithServer()` 的并集（本地 ∪ 服务端）。
+// 不能只读本地索引：index 是 hydrate 对账后的副本，画布页没开过就没有对账（ISSUE #1522）。
+// 拉取失败仍列本地索引那一份（local-first），只是少了服务端独有行，不清空整组。
 
 import { useEffect, useState } from "react";
 

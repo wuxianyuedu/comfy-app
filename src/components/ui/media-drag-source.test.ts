@@ -1,13 +1,12 @@
 /**
- * 「把一张媒体图变成可拖拽源」只允许一处实现的契约（ISSUE #672 §16.2.4.22）。
- *
- * 现场：`HistoryPanel` 与 `MaterialLibraryPanel` 各有网格 / 列表两个视图，
- * **四处逐字相同**地手写 `setData("application/x-comfyapp-media", JSON.stringify(…))`，
- * 而消费端 `use-canvas-drop` 只做 `JSON.parse` + 类型断言 —— 形状对不上是
- * **静默丢投**。这里钉住「两端共用同一份载荷定义」这件事。
+ * 「把一张媒体图变成可拖拽源」只允许一处实现的契约（ISSUE #672 §16.2.4.22）。现场是四处逐字相同的
+ * `setData("application/x-comfyapp-media", JSON.stringify(…))`，而消费端只做 `JSON.parse` + 类型断言，
+ * 形状对不上就是静默丢投。这里钉住「两端共用同一份载荷定义」。
  */
+import type { DragEvent } from "react";
 import { describe, expect, it } from "vitest";
 
+import { isPlainRecord, isRecord } from "~/lib/is-record";
 import { displayNameFromUrl, mediaDragSourceProps, MEDIA_DRAG_MIME } from "./media-drag-source";
 
 /** 造一个够用的 dragstart 事件替身。 */
@@ -35,6 +34,32 @@ function dragEvent() {
   };
 }
 
+/** 拖拽事件替身：出口只读 `dataTransfer` 的 `setData` / `getData` 与 `effectAllowed`。
+ *  先按这些成员做运行时校验，再收窄成 `DragEvent<HTMLElement>`。 */
+function isDragEvent(value: unknown): value is DragEvent<HTMLElement> {
+  if (!isRecord(value) || !isRecord(value.dataTransfer)) {
+    return false;
+  }
+  const transfer = value.dataTransfer;
+  return typeof transfer.setData === "function" && typeof transfer.getData === "function";
+}
+
+function dragEventOf(value: unknown): DragEvent<HTMLElement> {
+  if (!isDragEvent(value)) {
+    throw new Error("拖拽事件替身形状不完整");
+  }
+  return value;
+}
+
+/** 载荷是 JSON 对象体；不是对象就早抛，不把 `JSON.parse` 的结果当已知形状用。 */
+function payloadOf(event: DragEvent<HTMLElement>): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(event.dataTransfer.getData(MEDIA_DRAG_MIME));
+  if (!isPlainRecord(parsed)) {
+    throw new Error("拖拽载荷不是 JSON 对象");
+  }
+  return parsed;
+}
+
 describe("载荷形状由出口定义（源端与落点共用一份）", () => {
   it("写的是同一个 MIME，且载荷字段齐全", () => {
     const event = dragEvent();
@@ -42,8 +67,7 @@ describe("载荷形状由出口定义（源端与落点共用一份）", () => {
       url: "https://x.test/a.png",
       kind: "image",
     });
-    /* SAFETY: 类型断言已复核 */
-    props.onDragStart(event as never);
+    props.onDragStart(dragEventOf(event));
     const raw = event.data.get(MEDIA_DRAG_MIME);
     expect(raw).toBeTypeOf("string");
     expect(JSON.parse(raw!)).toEqual({
@@ -55,9 +79,7 @@ describe("载荷形状由出口定义（源端与落点共用一份）", () => {
 
   it("effectAllowed 是 copy（拖拽是「加一份」，不是搬走）", () => {
     const event = dragEvent();
-    mediaDragSourceProps({ url: "/a.png", kind: "image" }).onDragStart(
-      /* SAFETY: 类型断言已复核 */ event as never,
-    );
+    mediaDragSourceProps({ url: "/a.png", kind: "image" }).onDragStart(dragEventOf(event));
     expect(event.effectAllowed).toBe("copy");
   });
 
@@ -67,11 +89,8 @@ describe("载荷形状由出口定义（源端与落点共用一份）", () => {
       url: "/x/a.png",
       displayName: "素材：封面",
       kind: "image",
-    }).onDragStart(/* SAFETY: 类型断言已复核 */ event as never);
-    /* SAFETY: 类型断言已复核 */
-    const payload = JSON.parse(event.data.get(MEDIA_DRAG_MIME)!) as {
-      displayName: string;
-    };
+    }).onDragStart(dragEventOf(event));
+    const payload = payloadOf(dragEventOf(event));
     expect(payload.displayName).toBe("素材：封面");
   });
 });
@@ -139,8 +158,7 @@ describe("可拖与光标类是同一个判据", () => {
   it("不可拖时 onDragStart 不写任何数据（显式静默，而不是半份载荷）", () => {
     const event = dragEvent();
     const props = mediaDragSourceProps({ url: null, kind: "image" });
-    /* SAFETY: 类型断言已复核 */
-    props.onDragStart(event as never);
+    props.onDragStart(dragEventOf(event));
     expect(event.data.size).toBe(0);
   });
 });
@@ -148,13 +166,8 @@ describe("可拖与光标类是同一个判据", () => {
 describe("audio / doc 也能拖（落点给「暂不支持」的提示）", () => {
   it("mediaType 原样透传", () => {
     const event = dragEvent();
-    mediaDragSourceProps({ url: "/a.mp3", kind: "audio" }).onDragStart(
-      /* SAFETY: 类型断言已复核 */ event as never,
-    );
-    /* SAFETY: 类型断言已复核 */
-    const payload = JSON.parse(event.data.get(MEDIA_DRAG_MIME)!) as {
-      mediaType: string;
-    };
+    mediaDragSourceProps({ url: "/a.mp3", kind: "audio" }).onDragStart(dragEventOf(event));
+    const payload = payloadOf(dragEventOf(event));
     expect(payload.mediaType).toBe("audio");
   });
 });
@@ -164,12 +177,10 @@ describe("onDragStart 身份稳定（同一份参数复用不重建）", () => {
     const a = mediaDragSourceProps({ url: "/a.png", kind: "image" });
     const b = mediaDragSourceProps({ url: "/a.png", kind: "image" });
     const ev = dragEvent();
-    /* SAFETY: 类型断言已复核 */
-    a.onDragStart(ev as never);
+    a.onDragStart(dragEventOf(ev));
     const first = ev.data.get(MEDIA_DRAG_MIME);
     const ev2 = dragEvent();
-    /* SAFETY: 类型断言已复核 */
-    b.onDragStart(ev2 as never);
+    b.onDragStart(dragEventOf(ev2));
     expect(ev2.data.get(MEDIA_DRAG_MIME)).toBe(first);
   });
 });

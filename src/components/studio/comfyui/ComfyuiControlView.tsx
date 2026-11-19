@@ -2,23 +2,9 @@
 
 /**
  * 侧栏「ComfyUI」页 · 第③层（纯视图，规范 17 §17.2）。
- *
- * 一屏三段，顺序就是读屏顺序 —— **它现在是什么状态**（要点的那颗按钮跟着这一
- * 段走）→ **它这一路的输出**（启动日志，切每次启动 / 全屏）→ **它按什么启动**
- * （安装形态与路径，只读；改路径的出口指向设置）。
- *
- * 「将按哪个路径启动」写成只读一段是有意的：同一份配置若在这一页也能编辑，
- * 保存路径会重写 `setting` 表里那一行，而两处草稿的播种时机不同 —— 结果是
- * 「在设置页改了没保存，来这边启动发现跑的还是旧路径」。所以这里只说事实、
- * 只给出口。
- *
- * 这一句还**只读地写出那条会生效的路径**（`comfyStartPathText`）：用户刚在设置页
- * 改了路径却没保存时，这里显示的仍是库里那条旧路径，「这一点下去跑的是谁」当场
- * 可见 —— 有了它，就不必为一句「配置有未保存改动」去跨屏共享草稿。
- *
- * 屏名由页签给出（`PageHeader` 的 `srTitle` 只留给读屏），副说明挂在顶栏那枚问号
- * 上（`ViewHelp` 注册表）。
- */
+ * 三段顺序即读屏顺序：当前状态 → 启动日志 → 按什么启动（安装形态与路径，只读）。
+ * 路径只读是有意的：本页无草稿，若可编辑会与设置页草稿冲突（改了没保存会跑旧路径）；
+ * 页上只读写出会生效的 `comfyStartPathText`，让「这点下去跑的是谁」当场可见；屏名由 PageHeader 的 srTitle 给读屏。 */
 
 import { ArrowRight, RefreshCcw } from "lucide-react";
 
@@ -29,7 +15,7 @@ import { ViewActions } from "~/components/studio/ViewActions";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Button } from "~/components/ui/button";
 import { PageHeader } from "~/components/ui/page-header";
-import { SettingsCard } from "~/components/ui/settings-card";
+import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
 import { Hint } from "~/components/ui/hint";
 import { RuntimeLogBox } from "~/components/studio/logs/RuntimeLogBox";
 import {
@@ -59,7 +45,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
     opening: c.opening,
   };
   const busy = isComfyBusy(c.status, flags);
-  const running = !!c.status?.up;
+  const running = c.status?.up === true;
   const configHint = comfyConfigHint(c.instance);
 
   return (
@@ -74,8 +60,9 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
           <Button
             aria-label="刷新 ComfyUI 状态"
             className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
-            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-            onClick={() => void c.refreshStatus()}
+            onClick={() => {
+              void c.refreshStatus();
+            }}
             size="xs"
             variant="outline"
           >
@@ -89,44 +76,38 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
         description="提交任务时它没在跑，任务不会开始；状态变了自己会刷，不必手动点。"
         title="运行状态"
       >
-        <div
-          className={`border-border bg-surface-2 mb-3 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
-        >
+        <div className={`${SETTINGS_ROW_CLASS} mb-3 ${STATUS_ROW_CLASS}`}>
           <StatusDot state={comfyDotState(c.status, flags)} />
           {/* 状态行是**活区**（规范 16 §16.2.4）：状态变了自己会刷，读屏得跟着播报，
               否则「我点了启动、它到底起没起」只能靠肉眼盯。这也让「这一行在不在、
               落没落定」有了一个**不读文案**的稳定锚点 —— 文案里的地址长度会变、
               跨元素分布会给量可见性带来补间窗口（E2E 侧据此等状态落地）。 */}
-          <span
-            aria-live="polite"
-            className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
-            role="status"
-            title={comfyDotTitle(c.status)}
-          >
-            {comfyStatusText(c.status, flags)}
-          </span>
+          <Hint label={comfyDotTitle(c.status)}>
+            <span aria-live="polite" className={`text-ink/80 ${STATUS_TEXT_CLASS}`} role="status">
+              {comfyStatusText(c.status, flags)}
+            </span>
+          </Hint>
           <div className={STATUS_ACTIONS_CLASS}>
             {/* 「打开查看」是**看**，不是这一态的主行动：它走软底，主行动的实心档
                 留给「启动 / 关闭」。只在「明确未运行」时禁用 —— 探测进行中也允许
                 点一下，openComfy 会先取一份新鲜状态再打开（ISSUE #339）。 */}
             <StatusButton
-              disabled={c.opening || (!running && !c.status?.probing)}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onClick={() => void c.openComfy()}
+              disabled={c.opening || (!running && c.status?.probing !== true)}
+              onClick={() => {
+                void c.openComfy();
+              }}
               variant="primary"
             >
               {c.opening ? "打开中…" : "打开查看"}
             </StatusButton>
-            {/* 并列出口：同一个地址再交给系统默认浏览器（放大看 / 装插件 / 多屏）。
-                页签内嵌照旧，这里不做替换。地址由服务端自己探（comfyOpen），不采信
-                界面里缓存的旧 base。禁用口径与「打开查看」一致。
-                配色与「打开查看」同一档：此前它是这一排里唯一走 `outline` + 手写
-                `text-muted-foreground` 覆写的次级按钮，三颗次级就长出两种形状，
-                读起来像「这四个按钮各有不同职责」，而它们其实是同一层。 */}
+            {/* 并列出口：同一地址再交给系统默认浏览器（放大看/装插件/多屏），页签内嵌照旧。
+                地址由服务端自己探（comfyOpen），不采信界面缓存的旧 base；禁用口径同「打开查看」。
+                配色与「打开查看」同档（此前 outline + 手写 text 覆写导致同层按钮长出两种形状）。 */}
             <StatusButton
-              disabled={c.browserOpening || (!running && !c.status?.probing)}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onClick={() => void c.openComfyInBrowser()}
+              disabled={c.browserOpening || (!running && c.status?.probing !== true)}
+              onClick={() => {
+                void c.openComfyInBrowser();
+              }}
             >
               {c.browserOpening ? "打开中…" : "在浏览器打开"}
             </StatusButton>
@@ -137,38 +118,40 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
               /* 已配置路径才允许启动：`comfyStart` 会拿库里的路径去 spawn，
                 空路径的失败文案（服务端给的）不如这里提前说清去哪配。 */
               disabled={busy || running || (!!c.instance && !c.instance.pathConfigured)}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onClick={() => void c.startComfy()}
+              onClick={() => {
+                void c.startComfy();
+              }}
               variant={running ? "primary" : "primary-solid"}
             >
-              {c.starting || c.status?.starting ? "启动中…" : "启动 ComfyUI"}
+              {c.starting || c.status?.starting === true ? "启动中…" : "启动 ComfyUI"}
             </StatusButton>
             <StatusButton
               disabled={busy || !running}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onClick={() => void c.stopComfy()}
+              onClick={() => {
+                void c.stopComfy();
+              }}
               variant={running ? "primary-solid" : "primary"}
             >
-              {c.stopping || c.status?.stopping ? "关闭中…" : "关闭 ComfyUI"}
+              {c.stopping || c.status?.stopping === true ? "关闭中…" : "关闭 ComfyUI"}
             </StatusButton>
           </div>
         </div>
 
         {/* 未配置路径：说清后果 + 给出**唯一**能改它的地方。不做成禁用但不解释的
             按钮 —— 那种形态下用户只会反复点它。 */}
-        {configHint ? (
+        {configHint !== null && configHint !== "" ? (
           <div className="border-warning/40 bg-warning/10 mb-3 rounded-lg border px-3 py-2">
             <p className="text-warning-strong text-xs leading-relaxed">{configHint}</p>
             <Button
               className="border-warning/40 text-warning-strong hover:bg-warning/10 mt-2 h-auto gap-1 rounded-lg px-2.5 py-1"
-              onClick={() =>
+              onClick={() => {
                 emitAppEvent("workspace:navigate", {
                   view: "settings",
                   /* 落点直接停在「创作后端」那一节（本页文案写的就是
                      「设置 → 创作后端」）：只切视图的话用户还得自己再找一次。 */
                   section: "comfyui",
-                })
-              }
+                });
+              }}
               size="xs"
               variant="outline"
             >

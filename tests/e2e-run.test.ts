@@ -1,16 +1,7 @@
 /**
- * 全量 e2e「按需通道 + 新鲜度账」的判据 —— 规范 §11.8 / §13.5.4（ISSUE #1545 / #1547）。
- *
- * 立案现场：`pnpm test:e2e` 此前是「人记得就跑」，而没有**任何东西守它上一次是绿的**
- * —— 实测的形态是靠人手动把这条入口跑了一遍才发现它已经红了两天。
- *
- * 判据分三头，缺一条这层就退化成一句好看的话：
- *   ① **记账语义**：只有绿了才记、`--dry-run` 不记（记的是「上次真跑绿」这个**状态**，
- *      不是「我跑过」这个**动作**）。
- *   ② **几份账同形但不同键**：`FRESHNESS_TRACKS` 的四个值（账文件 / 键 / 名字 / 命令）
- *      各就各位，且各份账**不共用一个文件**（共用 = A 档的绿把 B 档的自证覆盖掉）。
- *   ③ **接线在位**：`package.json` 的 `test:e2e` 真的走这条通道（否则记账这一步
- *      一个执行者都没有 —— 那是 §13.5.12 的立案形态），且钩子那一步真判了它。
+ * 全量 e2e「按需通道 + 新鲜度账」的判据 —— 规范 §11.8 / §13.5.4（ISSUE #1545 / #1547）。立案：`pnpm test:e2e`
+ * 此前「人记得就跑」，没有任何东西守它上一次是绿的（实测靠人手动跑才发现已红两天）。判三头：① 只有绿才记、
+ * `--dry-run` 不记（记「上次真跑绿」状态而非「跑过」）；② 四份账同形不同键、不共用文件；③ `test:e2e` 真走这条通道。
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -29,18 +20,18 @@ import {
   spawnFailureLine,
   shouldRecord,
   stripArgvSeparator,
-} from "../scripts/e2e-run.mjs";
+} from "../scripts/e2e/e2e-run.mjs";
 /* schema 预检那三张卡在 #1956 这一批里从 `e2e-run.mjs` 拆到了
  * `e2e-schema-preflight.mjs`（R5 的 900 行硬闸，出口只有按职责拆）。判据直接指着
  * 定义它们的那一份，不跟着走「转出去再用」的路 —— 多一层转发就多一处「改了实现
  * 忘了改出口」的缝。 */
-import { canAutoApply, pendingStatements, pushBlockedByTty } from "../scripts/db-push-core.mjs";
+import { canAutoApply, pendingStatements, pushBlockedByTty } from "../scripts/db/db-push-core.mjs";
 import {
   checkSchemaBeforeRun,
   dryRunConcluded,
   ensureSchemaBeforeRun,
   schemaPreflightDecision,
-} from "../scripts/e2e-schema-preflight.mjs";
+} from "../scripts/e2e/e2e-schema-preflight.mjs";
 import {
   FRESHNESS_TRACKS,
   freshnessRecord,
@@ -48,8 +39,9 @@ import {
   freshnessTrack,
   isSameLocalDay,
   readFreshnessLedgerAt,
-} from "../scripts/freshness-ledger.mjs";
-import { runGate } from "../scripts/freshness-gate.mjs";
+} from "../scripts/freshness/freshness-ledger.mjs";
+import { runGate } from "../scripts/freshness/freshness-gate.mjs";
+import { isRecord } from "~/lib/is-record";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -72,15 +64,9 @@ const GOOD = freshnessRecord({
 const SAME_DAY = new Date("2026-10-09T06:00:00.000Z");
 
 /**
- * 把 e2e 这一档读成「**平台侧还没有执行者**」的那一种登记形状。
- *
- * 2026-10-19 起真实登记里 `ciStage = 每日全量E2E`，于是「缺记录 / 今天动过面而账停在
- * 改动之前 / 超出宽限」这三种红在真实档上**再也走不到**（本地那层整层跳过，见 §11.8）。
- * 下面那三格判的是这一档**自己的话术**（账文件路径、输入面清单、宽限那句），仍然要能
- * 被判红 —— 拿合成档打它与 `tests/daily-tracks.test.ts` 里同一条理由：
- * **判据要能对当前登记之外的那种形状继续响**，否则「将来某一档失去平台执行者」这件事
- * 发生时，唯一知道它的办法就是有人在生产上撞一次。
- * ciStage 语义本身的完整矩阵在那一个文件里判，这里不重复。
+ * 把 e2e 这一档读成「**平台侧还没有执行者**」的登记形状（`ciStage: ""`）。2026-10-19 起真实登记为 `每日全量E2E`，
+ * 于是「缺记录 / 今天动过面而账停在改动之前 / 超出宽限」三种红在真实档上走不到（本地那层整层跳过，§11.8）。
+ * 仍要用合成档打它：判据要能对当前登记之外的形状继续响（同 `daily-tracks.test.ts`），ciStage 完整矩阵在那份判。
  */
 const localE2e = { ...freshnessTrack("e2e"), ciStage: "" };
 
@@ -97,12 +83,10 @@ describe("全量 e2e 的记账语义（§11.8）", () => {
   });
 
   it("绿了但**跑的不是整档**也不记 —— 一条 `--help` 曾买到过一天的自证", () => {
-    /* 这条是本档最坏的一种假：`extra` 按位置透传给 Playwright，而 `--help` / `--list`
-     * 打完字就**退 0** —— 只看退出码时记账条件全满足，账上留下一条「今天全量 e2e 绿了」，
-     * 而一次用例都没跑。实测本机就是这么写进去一条假绿的（`--help` 之后账面变成
-     * 当天、无 `skippedReason`），所以两个方向都要钉：
-     *   · 不带参数跑完整档且绿 ⇒ 记；
-     *   · 任何形式的子集 / 不执行 ⇒ 不记，哪怕退出码是 0。 */
+    /* 这条是本档最坏的一种假：`extra` 按位置透传给 Playwright，而 `--help` / `--list` 打完字就**退 0** ——
+     * 只看退出码时记账条件全满足，账上留下「今天全量 e2e 绿了」，而一次用例都没跑。实测本机就这么写进过
+     * 一条假绿（`--help` 之后账面变成当天、无 `skippedReason`），所以两个方向都要钉：不带参数跑完整档且绿
+     * ⇒ 记；任何形式的子集 / 不执行 ⇒ 不记，哪怕退出码是 0。 */
     expect(shouldRecord({ exitCode: 0, dryRun: false, extra: [] })).toBe(true);
     expect(shouldRecord({ exitCode: 0, dryRun: false, extra: ["--help"] })).toBe(false);
     expect(
@@ -214,13 +198,11 @@ Error: Interactive prompts require a TTY terminal (process.stdin.isTTY or proces
   });
 
   it("指纹不一致、**清单没拿到** ⇒ 阻断，不许读成「库本来就对」（ISSUE #1956）", () => {
-    /* 立案现场（本轮在临时副本上真跑复现，活库未碰）：库里那张 `workflowTemplate`
-     * 被改名走，diff 撞上「这是改名还是新建+删除」的询问 —— 它在**列出语句之前**
-     * 就要人回答，无 TTY 时当场抛，`about to execute` 那句根本不出现。于是
-     * `pendingStatements` 交出空清单，而旧判决把「没读到」读成「库本来就对」放行：
-     * 这一卡存在的理由（#1834 那批「库落后 → 接口 500 → 用例报元素没出现」的红）
-     * 恰恰被它自己放进了来。口径同 §13.6.2「拿不到测量 ≠ 测量结果是红的」，
-     * 反过来也不成立。 */
+    /* 立案现场（在临时副本上真跑复现，活库未碰）：库里那张 `workflowTemplate` 被改名走，diff 撞上「这是改名
+     * 还是新建+删除」的询问 —— 它在**列出语句之前**就要人回答，无 TTY 时当场抛，`about to execute` 那句
+     * 根本不出现。于是 `pendingStatements` 交出空清单，而旧判决把「没读到」读成「库本来就对」放行：
+     * 这一卡存在的理由（#1834「库落后 → 接口 500 → 用例报元素没出现」）恰恰被它自己放进了来。口径同
+     * §13.6.2「拿不到测量 ≠ 测量结果是红的」，反过来也不成立。 */
     const d = schemaPreflightDecision({
       probe: "ready",
       fingerprintMatch: false,
@@ -331,57 +313,50 @@ Error: Interactive prompts require a TTY terminal (process.stdin.isTTY or proces
      * **没拿到清单**那条带不出语句 —— 拿「risky 必非空」判它等于把新那一档判成
      * 用例红。这里按语义钉：有 risky 就逐条给全，没有就必须在 reason 里说清
      * 「是读不出而不是库没问题」。 */
-    if (d.verdict === "abort") {
-      if ((d.risky?.length ?? 0) > 0) {
-        expect(d.reason).toContain("丢数据");
-      } else {
-        expect(d.reason).toContain("没交出语句清单");
-      }
-    }
+    /* 分支收进期望值：abort 档按 risky 有无取话术、非 abort 档不约束（取值恒真）——
+     * 断言本体无条件跑（no-conditional-expect）。 */
+    expect(
+      d.verdict !== "abort" ||
+        d.reason.includes((d.risky?.length ?? 0) > 0 ? "丢数据" : "没交出语句清单"),
+    ).toBe(true);
   });
 });
 
 describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
   it("四个值各就各位：账文件 / 键 / 名字 / 命令", () => {
-    /* 只核**本档的两栏与关键字**，不核「`FRESHNESS_TRACKS` 一共几个键」——
-     * 那份清单是 `tests/daily-tracks.test.ts` 的事（它判四档全在、且互不重名），
-     * 在这里再写一份会在**每次新增一档**时红，而红的原因与「e2e 的账有没有写对」
-     * 毫无关系（`tests/gate-executors.test.ts` 把份数写死 `.toBe(44)` 那次同族）。
-     *
-     * 同理，四栏用**挑出来比**而不是 `toEqual` 比整条登记：整条比等于顺手断言
-     * 「形状刚好这几栏」，而登记表**会**长栏 —— `daily` / `skipHow` / `dirty` /
-     * `dirtyHow` / `graceMs` 进来时它把一次**新增**报成一次**抄错**（ISSUE #1553
-     * 合并后就是这个形态）。差异那几栏各判各的，见下一条。 */
+    /* 只核**本档的两栏与关键字**，不核「`FRESHNESS_TRACKS` 一共几个键」—— 那份清单是 `daily-tracks.test.ts`
+     * 的事（它判四档全在、互不重名），再写一份会在**每次新增一档**时红，而原因与「e2e 的账有没有写对」
+     * 无关（`gate-executors.test.ts` 写死 `.toBe(44)` 那次同族）。同理四栏用**挑出来比**而非 `toEqual` 比整条：
+     * 整条比等于顺手断言「形状刚好这几栏」，而登记表**会**长栏 —— `daily`/`skipHow`/`dirty`/`graceMs` 进来时
+     * 它把一次**新增**报成一次**抄错**（ISSUE #1553 合并后就是这个形态）。差异那几栏各判各的，见下一条。 */
     expect(Object.keys(FRESHNESS_TRACKS)).toContain("e2e");
     const { ledger, key, label, run } = freshnessTrack("e2e");
     expect({ ledger, key, label, run }).toEqual({
-      ledger: "scripts/.e2e-freshness.json",
+      ledger: "scripts/freshness/.e2e-freshness.json",
       key: "e2e",
       label: "全量 e2e",
       run: "pnpm test:e2e",
     });
     // 另两档各有一份自己的账与键（不是同一个文件里的两个键）。
-    expect(freshnessTrack("full").ledger).toBe("scripts/.full-suite-freshness.json");
-    expect(freshnessTrack("artifact").ledger).toBe("scripts/.artifact-freshness.json");
+    expect(freshnessTrack("full").ledger).toBe("scripts/freshness/.full-suite-freshness.json");
+    expect(freshnessTrack("artifact").ledger).toBe("scripts/freshness/.artifact-freshness.json");
   });
 
   it("各份账的差异都在数据里（`daily` / `skipHow` / 输入面），不是分支", () => {
-    /* 「同形」有边界：差异栏各回答一个问题 ——
-     *   · `daily`：这一档要不要按「每天首次」判；
-     *   · `skipHow`：这一档「今天不跑」那条出路长什么样（每一档都有：没有这条出路
-     *     就等于拦人而指不出退路）；
-     *   · `dirty` / `graceMs`：吃输入面的档按「改了就当天跑」判，不吃的那一档两栏为空。
-     * 逐档一起判：只有一侧变了就说明「同形」这句话已经不成立了。 */
+    /* 「同形」有边界：差异栏各回答一个问题 —— `daily`：这一档要不要按「每天首次」判；`skipHow`：这一档
+     * 「今天不跑」那条出路长什么样（每档都有：没有这条出路就等于拦人而指不出退路）；`dirty` / `graceMs`：
+     * 吃输入面的档按「改了就当天跑」判，不吃的那一档两栏为空。逐档一起判：只有一侧变了就说明「同形」
+     * 这句话已经不成立了。 */
     expect(freshnessTrack("e2e").daily).toBe(true);
     /* 这一档的执行者现在是平台侧那一格（2026-10-19：「新鲜度都不要本地跑，都 CI 跑」）。
      * 名字写在这里而不是别处：`e2e-run.mjs` 是那一格的入口，而「那一格真在每日清单里」
      * 由 `tests/no-platform-ci-config.test.ts` 判 —— 两侧合起来才是「本地不拦」这句豁免
      * 的完整前提；少任何一侧，「不拦」都会变成「谁都不跑」。 */
     expect(freshnessTrack("e2e").ciStage).toBe("每日全量E2E");
-    expect(freshnessTrack("e2e").skipHow).toBe('node scripts/e2e-run.mjs --skip "<理由>"');
+    expect(freshnessTrack("e2e").skipHow).toBe('node scripts/e2e/e2e-run.mjs --skip "<理由>"');
     // e2e 现在也吃输入面（钩子重构 4），于是它也有「这次改动不吃这一档」那条出路。
     expect(freshnessTrack("e2e").dirty.length).toBeGreaterThan(0);
-    expect(freshnessTrack("e2e").dirtyHow).toBe('node scripts/e2e-run.mjs --dirty "<理由>"');
+    expect(freshnessTrack("e2e").dirtyHow).toBe('node scripts/e2e/e2e-run.mjs --dirty "<理由>"');
     /* 三档**都**要有出路：没有 `skipHow` / `dirtyHow` 就等于拦人而指不出退路，
      * 而下一个人做的事会是 `--no-verify`（§13.5.4 那条边界）。逐档一起判，
      * 只有一侧变了就说明「同形」这句话已经不成立了。 */
@@ -435,11 +410,9 @@ describe("两条新鲜度账同形但不同键（§11.8 / §12.12）", () => {
     /* 记录与 `SAME_DAY` 同在 2026-10-09（记录在 00:30Z、时钟在 06:00Z）：age 按整天向下取整
      * 所以是「今天」—— 也正是「每天首次」那条判据放行所需的形状。 */
     /*
-     * ⚠️ **时刻那一半不写死字面量**（ISSUE #1979）：它是**本地时间**（判据判的是本地
-     * 日历日，用 UTC 打时刻在东八区会把 00:30 的提交显示成昨天），而这一档在别的
-     * 时区里跑出来的字符串逐字不同 —— 写死 `2026-10-09 08:30 (+08:00)` 就等于把用例
-     * 绑在「跑它的那台机器的 TZ」上（本机实测 +08:00、CI 容器可能是 UTC）。
-     * 所以断言的是**形状与内容**：这一句里带着那个时间点、且带上显式偏移。
+     * ⚠️ **时刻那一半不写死字面量**（ISSUE #1979）：它是**本地时间**（判据判本地日历日，用 UTC 在东八区会把
+     * 00:30 的提交显示成昨天），写死 `2026-10-09 08:30 (+08:00)` 就等于把用例绑在「跑它的那台机器的 TZ」上
+     * （本机实测 +08:00、CI 容器可能是 UTC）。所以断言的是形状与内容：这句里带着那个时间点、且带显式偏移。
      */
     expect(result.ages).toEqual([`e2e：今天（${freshnessStamp(GOOD)}）`]);
     expect(result.ages[0]).toMatch(
@@ -578,12 +551,10 @@ describe("全量 e2e 的自证账（ISSUE #1282 立「每天首次」→ 钩子�
   });
 
   it("两条出路的三种形状：没给 / 可用理由 / 不合用的理由（`--skip` 与 `--dirty` 同形）", () => {
-    /* 这一段判的是**命令行契约**：`--skip`（今天故意不跑）与 `--dirty`（这次改动不吃这一档）
-     * 是这个入口仅有的两条出路，判定抽成纯入口就是为了让「缺理由 / 占位理由」这两条边界
-     * 能被真跑一次 —— 它们是「豁免不是绕过」这句话的机器形态。
-     * `mode` 现在跟着返回：落账要按它分栏（`skippedReason` / `dirtyReason`），而两栏读的
-     * 是两件不同的事 —— 混成一片之后「这一档三个月没跑」与「三个月每次都声明不吃它」
-     * 在账面上长得一模一样。 */
+    /* 这一段判的是**命令行契约**：`--skip`（今天故意不跑）与 `--dirty`（这次改动不吃这一档）是这个入口仅有的
+     * 两条出路，抽成纯入口就是为了让「缺理由 / 占位理由」两条边界能被真跑一次 —— 它们是「豁免不是绕过」的
+     * 机器形态。`mode` 跟着返回：落账要按它分栏（`skippedReason` / `dirtyReason`），两栏读的是两件不同的事
+     * —— 混成一片之后「三个月没跑」与「三个月每次都声明不吃它」在账面上长得一模一样。 */
     expect(parseSkip(["node", "e2e-run"])).toEqual({
       skipped: false,
       mode: "run",
@@ -619,7 +590,7 @@ describe("全量 e2e 的自证账（ISSUE #1282 立「每天首次」→ 钩子�
      * —— 出路少一条不会红，只会让人在钩子里被拦之后自己去找命令（那就是 §13.5.12
      * 那一族：判据在场、没人敲）。顺手钉住「出路先于起跑」：给了出路还去起 webServer，
      * 既白付十几分钟，又会把「不跑」那一条账记成跑绿的。 */
-    const src = readText("scripts/e2e-run.mjs");
+    const src = readText("scripts/e2e/e2e-run.mjs");
     const loopAt = src.indexOf('["--skip", "--dirty"]');
     expect(loopAt, "main 里那两条出路只剩一条了？").toBeGreaterThan(-1);
     const launchAt = src.indexOf("= planRun(");
@@ -641,25 +612,23 @@ describe("全量 e2e 的自证账（ISSUE #1282 立「每天首次」→ 钩子�
 
 describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("`pnpm test:e2e` 真的走这条通道（否则记账这一步没有执行者）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const pkg = JSON.parse(readText("package.json")) as {
-      scripts?: Record<string, string>;
-    };
+    const parsed: unknown = JSON.parse(readText("package.json"));
+    const scripts = isRecord(parsed) && isRecord(parsed.scripts) ? parsed.scripts : undefined;
     /* 按**入口**判而不是按命令长得像什么：`playwright test` 与
-     * `node scripts/e2e-run.mjs` 都能跑出同样的用例，只有后者会记账 ——
+     * `node scripts/e2e/e2e-run.mjs` 都能跑出同样的用例，只有后者会记账 ——
      * 而「账上有没有日期」正是这一档存在的全部意义。 */
-    expect(pkg.scripts?.["test:e2e"]).toContain("scripts/e2e-run.mjs");
-    expect(pkg.scripts?.["test:e2e:dry"]).toContain("--dry-run");
+    expect(scripts?.["test:e2e"]).toContain("scripts/e2e/e2e-run.mjs");
+    expect(scripts?.["test:e2e:dry"]).toContain("--dry-run");
   });
 
   it("钩子那一步真判了这条账（每次提交都看得见它的日期）", () => {
     // `cmd` 逐字相等而不是 `toContain`：把这一行注掉时行首锚定的解析已经不认它
     // ——「把这一步静音」正是这一族要拦的动作（§13.5.8）。
-    const steps = [...readText(".githooks/pre-commit").matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map(
-      (m) => ({ label: m[1] ?? "", cmd: m[2] ?? "" }),
-    );
-    const hit = steps.find((s) => s.cmd.includes("scripts/freshness-gate.mjs"));
-    expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
+    const steps = [
+      ...readText(".githooks/pre-commit").matchAll(/^ {2}run "(?<label>[^"]+)" (?<cmd>.+)$/gm),
+    ].map((m) => ({ label: m.groups?.label ?? "", cmd: m.groups?.cmd ?? "" }));
+    const hit = steps.find((s) => s.cmd.includes("scripts/freshness/freshness-gate.mjs"));
+    expect(hit?.cmd).toBe("node scripts/freshness/freshness-gate.mjs");
     // 标签要能让人从这一行读出「判的是哪几档」—— 只写其中一档时，
     // 另一档红出来会被读成别人的事。
     expect(hit?.label).toContain("e2e");
@@ -668,9 +637,10 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("账文件真的读同一个落点（读接口与登记表同源）", () => {
     const live = readFreshnessLedgerAt(ROOT, TRACK.ledger);
     expect(Object.keys(live)).toContain(TRACK.key);
-    // 这份记录是**真跑**过的（本轮的 `node scripts/e2e-run.mjs`），不是手写的一行。
-    /* SAFETY: 类型断言已复核 */
-    const rec = live[TRACK.key] as Record<string, unknown> | undefined;
+    // 这份记录是**真跑**过的（本轮的 `node scripts/e2e/e2e-run.mjs`），不是手写的一行。
+    /* 索引值用运行时守卫收窄，不走 `as` 断言（B5 清账）。 */
+    const entry: unknown = live[TRACK.key];
+    const rec: Record<string, unknown> | undefined = isRecord(entry) ? entry : undefined;
     expect(String(rec?.trackedBy)).toBe("e2e");
   });
 
@@ -687,13 +657,9 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
 });
 
 /**
- * ISSUE #1948：把「容器 / 全新检出里跑 e2e 会踩的三件事」变成三条机器判据。
- *
- * 三件事的共同形态是**红得看不出真因**：
- *   · 浏览器缺一半 ⇒ 全档每一条都报同一个 launch 失败（看着像 81 个问题）；
- *   · 空库 ⇒ 冒烟档的健康检查断言红，话术在说「数据库表还没建好」，
- *     看起来像环境没准备好，实际是这一档把建表甩在了后台；
- *   · `-- ` 吃掉位置参数 ⇒ 想跑 3 条跑成 81 条，而退出码与输出里没有一处说这件事。
+ * ISSUE #1948：把「容器 / 全新检出里跑 e2e 会踩的三件事」变成三条机器判据 —— 共同形态是**红得看不出真因**：
+ * 浏览器缺一半 ⇒ 每条都报同一个 launch 失败（看着像 81 个问题）；空库 ⇒ 健康检查红而话术说「表还没建好」，
+ * 实际是这一档把建表甩在后台；`-- ` 吃掉位置参数 ⇒ 想跑 3 条跑成 81 条，退出码与输出里没一处说这件事。
  */
 describe("开跑前的三档前置（ISSUE #1948）", () => {
   it("`--` 分隔符被剥掉：位置参数不再被吃掉（想跑冒烟跑的就是冒烟）", () => {
@@ -764,12 +730,13 @@ describe("开跑前的三档前置（ISSUE #1948）", () => {
      * （本机实测：它给 `…/chromium-1243/chrome-linux64/chrome`，而真缺的是
      * `chromium_headless_shell-1243/…`）。所以这里喂一个真的会抛的 launch。 */
     const missing = await checkBrowserReady({
-      launch: async () => ({
-        ok: false,
-        error: new Error(
-          "browserType.launch: Executable doesn't exist at /tmp/x/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell\nCall log: ...",
-        ),
-      }),
+      launch: () =>
+        Promise.resolve({
+          ok: false,
+          error: new Error(
+            "browserType.launch: Executable doesn't exist at /tmp/x/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell\nCall log: ...",
+          ),
+        }),
     });
     expect(missing.verdict).toBe("missing");
     expect(missing.executablePath).toBe(
@@ -783,16 +750,17 @@ describe("开跑前的三档前置（ISSUE #1948）", () => {
     expect(text).toContain(missing.installHint);
 
     // 起得来 ⇒ ready，且不产生任何话术噪音（happy path 上不打扰）。
-    expect(await checkBrowserReady({ launch: async () => ({ ok: true }) })).toEqual({
+    expect(await checkBrowserReady({ launch: () => Promise.resolve({ ok: true }) })).toEqual({
       verdict: "ready",
     });
 
     // 不是缺文件（权限 / 缺系统库）也归这一档，但**不猜路径** —— 抠不出来就报原文。
     const other = await checkBrowserReady({
-      launch: async () => ({
-        ok: false,
-        error: new Error("browserType.launch: Target page, context or browser has been closed"),
-      }),
+      launch: () =>
+        Promise.resolve({
+          ok: false,
+          error: new Error("browserType.launch: Target page, context or browser has been closed"),
+        }),
     });
     expect(other.verdict).toBe("missing");
     expect(other.executablePath).toBeUndefined();
@@ -805,31 +773,18 @@ describe("开跑前的三档前置（ISSUE #1948）", () => {
 });
 
 /**
- * 起 Playwright 那一跳：**不带缓冲**、且 env 是「本档算好的那一份」（ISSUE #1998）。
- *
- * ## 立案现场
- *
- * `E2E 关键流程` 在平台侧 36 分钟被 stage 墙钟 kill（`cnb-m0t-1k54oljem`，
- * `timeout of 2160000ms exceeded`），日志**零行** —— 连前置那几条读数都没有。
- * 真因不在判据：这一档此前用 `spawnSync(process.execPath, [entry, …], { stdio:
- * "inherit" })` 起 Playwright，而 `spawnSync` **照样**把子进程整段输出攒进
- * `res.stdout`（它要在串行调用里交回结论），本文件从不读那个字段 —— 于是被 kill
- * 时那一整段随进程一起消失。与 §13.5.3「第十二处」（外壳攒到 `close` 才发）是同一
- * 形态的第二处：修完外壳的时序，缓存落在调用方这一层。
- *
- * ## 判据为什么判形状而不是「跑一遍看日志」
- *
- * 这一格在 Linux 上跑一遍**是看不见的**：缓存不影响退出码，本地终端里输出照旧。
- * 能判的只有「起的是什么、`stdio` 是什么」—— 所以判据钉在
- * `resolvePlaywrightInvocation()` 交出的那一份上，外加一条真跑（`runChild`）
- * 保证「等到了结论」这半条没有退化成空壳。
+ * 起 Playwright 那一跳：**不带缓冲**、env 是「本档算好的那一份」（ISSUE #1998）。现场：`E2E 关键流程` 在平台侧
+ * 36 分钟被 stage 墙钟 kill（`cnb-m0t-1k54oljem`），日志**零行** —— 真因是 `spawnSync` 把输出攒进 `res.stdout`
+ * （本文件从不读），被 kill 时随进程消失（§13.5.3「第十二处」同形态）。本地跑看不见，故钉 `stdio` 形状 + 一条真跑。
  */
 describe("起 Playwright 的那一跳：不缓存输出（ISSUE #1998）", () => {
-  /* SAFETY: 类型断言已复核 */
-  const ENV = {
+  /* 空对象直接标注类型即可满足 ProcessEnv（本仓的 ProcessEnv 带 NODE_ENV 必填，
+     B5 清账：不走 `as` 断言）。 */
+  const ENV: NodeJS.ProcessEnv = {
+    NODE_ENV: "test",
     E2E_PREFLIGHT: "{}",
     E2E_PYTHON_PREFLIGHT: "{}",
-  } as unknown as NodeJS.ProcessEnv;
+  };
 
   it("形态：`spawn` 那一份里 `stdio` 是 inherit —— 缓存掉了就是零行日志", () => {
     const inv = resolvePlaywrightInvocation({
@@ -867,12 +822,9 @@ describe("起 Playwright 的那一跳：不缓存输出（ISSUE #1998）", () =>
   });
 
   it("起不来（ENOENT）交 `status: null` 而不是抛 —— 调用方转非零退出码", async () => {
-    /* `origin: "test"`：本条**要的就是**那条失败路径，打出来的那一行必须是
-     * `[e2e-run/test]` 一族（见下一条）—— 否则它与「这一跑真起不来」共用一行，
-     * 读 CI 日志的人得先猜这一行是不是某条用例造的。
-     *
-     * `origin` 是 `runChild()` 第二个参数的字段（不是 invocation 的 —— 它不描述
-     * 「起什么」，只描述「**谁**在要它起」）。 */
+    /* `origin: "test"`：本条**要的就是**那条失败路径，打出来的那一行必须是 `[e2e-run/test]` 一族 —— 否则它与
+     * 「这一跑真起不来」共用一行，读 CI 日志的人得先猜这行是不是某条用例造的。`origin` 是 `runChild()` 第二
+     * 个参数的字段（不是 invocation 的 —— 它不描述「起什么」，只描述「**谁**在要它起」）。 */
     const res = await runChild(
       {
         command: path.join(ROOT, "no-such-playwright-runner"),
@@ -913,7 +865,7 @@ describe("起 Playwright 的那一跳：不缓存输出（ISSUE #1998）", () =>
     /* 按**调用形态**判而不是按字面：要拦的形态是「某一行里真的调了 spawnSync」，
      * 而函数头注里那句来历（`` * ## 为什么不是 `spawnSync(process.execPath, …)``` ）
      * 与 `--dry-run` 的用法说明都会被字面判据误伤。 */
-    const src = readText("scripts/e2e-run.mjs");
+    const src = readText("scripts/e2e/e2e-run.mjs");
     expect(src).toContain("await runChild(invocation)");
     const calls = src
       .split("\n")
@@ -926,10 +878,8 @@ describe("起 Playwright 的那一跳：不缓存输出（ISSUE #1998）", () =>
 });
 
 /**
- * 开跑前的读数**按序全部说出来**（ISSUE #1998）。
- *
- * 判据是「顺序」与「第一条阻断生效」两件事，而真去起一遍浏览器 / drizzle 的形态
- * 不适合每条用例都跑 —— 所以 `runPreflightReadings` 收一个 `collect`，
+ * 开跑前的读数**按序全部说出来**（ISSUE #1998）。判据是「顺序」与「第一条阻断生效」两件事，而真去起一遍
+ * 浏览器 / drizzle 不适合每条用例都跑 —— 所以 `runPreflightReadings` 收一个 `collect`，
  * `makePreflightCollectors` 的三份判决用注入的假判决喂进来。
  */
 describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () => {
@@ -938,9 +888,9 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
   it("三步各说一句；全绿时一条都不拦", async () => {
     touched.length = 0;
     const { abort } = await runPreflightReadings({
-      collect: async (step) => {
+      collect: (step) => {
         touched.push(step);
-        return { say: `[${step}]\n` };
+        return Promise.resolve({ say: `[${step}]\n` });
       },
     });
     expect(abort).toBeNull();
@@ -950,12 +900,12 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
   it("第一条阻断就停，且它之前那几步的读数**已经说过了**", async () => {
     touched.length = 0;
     const { abort } = await runPreflightReadings({
-      collect: async (step) => {
+      collect: (step) => {
         touched.push(step);
         if (step === "schema") {
-          return { abort: "库没建齐" };
+          return Promise.resolve({ abort: "库没建齐" });
         }
-        return { say: `[${step}]\n` };
+        return Promise.resolve({ say: `[${step}]\n` });
       },
     });
     expect(abort).toBe("库没建齐");
@@ -966,17 +916,16 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
   it("`collect` 回 null 的步骤被跳过（端口那条已在别处算过，不重复探）", async () => {
     touched.length = 0;
     await runPreflightReadings({
-      collect: async (step) => {
+      collect: (step) => {
         touched.push(step);
-        return step === "ports" ? null : { say: "x\n" };
+        return Promise.resolve(step === "ports" ? null : { say: "x\n" });
       },
     });
     expect(touched).toContain("ports");
   });
 
   it("Python 缺件 ⇒ 拦，且**结论已经写进 env**（`playwright.config.ts` 读它）", async () => {
-    /* SAFETY: 类型断言已复核 */
-    const env = {} as NodeJS.ProcessEnv;
+    const env: NodeJS.ProcessEnv = { NODE_ENV: "test" };
     const collectors = makePreflightCollectors({
       env,
       cwd: ROOT,
@@ -988,17 +937,17 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
       }),
     });
     const { abort } = await runPreflightReadings({
-      collect: async (step) => (step === "python" ? collectors.python() : null),
+      collect: (step) => Promise.resolve(step === "python" ? collectors.python() : null),
     });
     expect(abort).toContain("没有解释器");
     // 缺件那一档也要把结论带过去：否则 `playwright.config.ts` 退回「不知道」。
     expect(env[PYTHON_PREFLIGHT_ENV_KEY]).toBeTruthy();
   });
 
-  it("schema 判成 abort ⇒ 拦下，且逐条列出丢数据的语句", async () => {
+  it("schema 判成 abort ⇒ 拦下，且逐条列出丢数据的语句", () => {
+    const env: NodeJS.ProcessEnv = { NODE_ENV: "test" };
     const collectors = makePreflightCollectors({
-      /* SAFETY: 类型断言已复核 */
-      env: {} as NodeJS.ProcessEnv,
+      env,
       cwd: ROOT,
       schema: () => ({
         /* SAFETY: 类型断言已复核 */
@@ -1007,27 +956,29 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
         risky: ["DROP TABLE loraTrainingJob"],
       }),
     });
-    const result = await collectors.schema();
-    expect(result?.abort).toContain("含丢数据语句");
-    expect(result?.abort).toContain("DROP TABLE loraTrainingJob");
+    const result = collectors.schema();
+    expect(result.abort).toContain("含丢数据语句");
+    expect(result.abort).toContain("DROP TABLE loraTrainingJob");
     // 出口是可执行的：`pnpm db:push`（不是一句「请同步数据库」）。
-    expect(result?.abort).toContain("pnpm db:push");
+    expect(result.abort).toContain("pnpm db:push");
   });
 
   it("浏览器 ready / 拿不到结论都只是读数，不拦", async () => {
     for (const verdict of [
-      { verdict: /* SAFETY: 类型断言已复核 */ "ready" as const },
-      { verdict: /* SAFETY: 类型断言已复核 */ "unknown" as const, detail: "探不动" },
+      /* SAFETY: 类型断言已复核 */
+      { verdict: "ready" as const },
+      /* SAFETY: 类型断言已复核 */
+      { verdict: "unknown" as const, detail: "探不动" },
     ]) {
       const collectors = makePreflightCollectors({
-        /* SAFETY: 类型断言已复核 */
-        env: {} as NodeJS.ProcessEnv,
+        env: { NODE_ENV: "test" } satisfies NodeJS.ProcessEnv,
         cwd: ROOT,
-        browser: async () => verdict,
+        browser: () => Promise.resolve(verdict),
       });
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const result = await collectors.browser();
-      expect(result?.abort).toBeUndefined();
-      expect(result?.say).toContain("浏览器预检");
+      expect(result.abort).toBeUndefined();
+      expect(result.say).toContain("浏览器预检");
     }
   });
 });

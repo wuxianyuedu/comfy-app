@@ -1,32 +1,7 @@
 /**
- * 回归护栏：**壳自编排**（ISSUE #784，「只启动一个 exe」）。
- *
- * 现场（用户原话）：「主要是想只启动一个 exe。双击 app.exe → MSHTML 画面 +
- * WebView2 env A → 启动编排拉起第二个 app.exe 这种也不是想要的方式」。
- *
- * 旧链路是「双击 start-tauri.exe（python 启动器）→ 它起 dev-launcher.mjs →
- * 编排器再起 app.exe」，也就是说**双击的是启动器、跑起来两个进程、任务栏上
- * 两个图标**，而且用户关掉主窗后整棵树能不能被回收，取决于启动器退出前有没有
- * 把 Job Object 句柄交出去。
- *
- * **第二轮（本条 ISSUE 的后续）：Python 启动器整体移除**，双击 `app.exe` 是唯一
- * 的启动入口形态。随之搬进壳的三件事也在这里钉住：运行模式由壳自己定（按编排器
- * 在不在）、双击单实例的「唤起已有实例」仍由壳自己承担、失败时写启动页可见的出口。
- *
- * 本用例钉死五条契约（每条都做了反向验证：还原旧实现，对应用例必失败）：
- *   1. **认亲判据是环境标记，不是形态**。环境块里的 `COMFYAPP_SHELL_OWNED`
- *      只有壳自己写、只有它起的编排器才有；把它换成「命令行里有没有项目根」
- *      或「有没有 dev server 在跑」，回收就会打到**别人的**启动过程上 ——
- *      误认一次就是误杀一次。
- *   2. **不许同时起两份编排**：壳起之前先清掉上一次运行遗留的编排器（原先靠
- *      「有就跳过」，现在双击路径上不存在「别人起的编排器」，只能回收旧孤儿）。
- *   3. **回收链不许断**：壳退出 → 回收自己起的编排器（插件 kill + 统一回收），
- *      并且**转发给 `scripts/reap-process.mjs`**，而不是在 Rust 里另写一套
- *      `taskkill`（POSIX 上会退化成单杀 leader，AGENTS 硬规则 3）。
- *   4. **运行模式由壳决定**（按编排器在不在），且只在 release 写 —— debug 归
- *      `pnpm tauri dev` 管，壳再插一手就是两边争同一个端口。
- *   5. **起不来有人类可见出口**：写 `run/launch-status.json`，启动页据此显示原因
- *      （原先这个出口是 Python 启动器的 msgbox，随它一起消失）。
+ * 回归护栏（ISSUE #784「只启动一个 exe」）：Python 启动器移除后双击 app.exe 是唯一入口，壳自定运行模式。
+ * 契约（均做过反向验证）：① 认亲靠 `COMFYAPP_SHELL_OWNED` 而非形态，误认即误杀；② 起前清遗留编排器；
+ * ③ 回收转发 `scripts/reap-process.mjs`（POSIX 自写 taskkill 只杀 leader，硬规则 3）；④ 模式只在 release；⑤ 失败写 `run/launch-status.json`。
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -48,16 +23,9 @@ function stripComments(source: string, lineComments = true): string {
 }
 
 /**
- * 取 `marker` 起、到下一个顶格 `}` 为止的函数体。
- *
- * 「A 必须排在 B 之前」这类顺序判据要落在**同一个可数的范围**里：整份文件比会
- * 命中别处的同名调用，函数体比才说明这两步真的前后相邻（本仓库把它们抽成小函数
- * 之后，顺序就搬进了那个函数体内）。
- *
- * 收尾找不到就**当场红**（ISSUE #2660 的批 5）：原先这一格写的是
- * `return end > 0 ? rest.slice(0, end) : rest;` —— 「找不到本函数收尾」被静默换成
- * "从这里到文件尾"，于是顺序判据与反向判据都在一个远比函数宽的区间上判，
- * 而账面仍是全绿。区间放宽不该是一个可以悄悄发生的决定。
+ * 取 `marker` 起、到下一个顶格 `}` 为止的函数体。顺序判据须落在同一可数范围：
+ * 整份文件比会命中别处的同名调用。收尾找不到就当场红（ISSUE #2660 批 5）——旧写法
+ * `return end > 0 ? rest.slice(0, end) : rest;` 把「找不到本函数收尾」静默换成「到文件尾」。
  */
 function fnBody(source: string, marker: string): string {
   const start = source.indexOf(marker);
@@ -73,18 +41,11 @@ function fnBody(source: string, marker: string): string {
 }
 
 /**
- * 取「起点标记 → 终点标记」那一段，两个标记都**必须看得见**。
- *
- * 原先各处直接写 `source.slice(source.indexOf(A), source.indexOf(B))`：
- * 任一改名的函数一消失，`indexOf` 给 -1 ⇒ 区间变空或反向，落在区间上的反向断言恒真；
- * 正向那几条虽然会红，红话也只说"没找到 X"，指不到"标记没了"这个真因。
- * 终点从**起点之后**开始找，顺手堵住"B 在 A 之前"那一形（旧写法会给出一段倒序的空串）。
+ * 取「起点标记 → 终点标记」那段，两个标记都必须看得见（终点从起点之后找，堵住「B 在 A 前」）。
+ * 旧写法 `source.slice(source.indexOf(A), source.indexOf(B))`：函数改名后 indexOf 返回 -1，区间变空或反向，
+ * 反向断言恒真，红话只说「没找到 X」而指不到「标记没了」这个真因。
  */
-function sliceBetween(
-  source: string,
-  startMarker: string,
-  endMarker: string,
-): string {
+function sliceBetween(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker);
   expect(start, `找不到起点标记 ${startMarker}`).toBeGreaterThan(-1);
   const end = source.indexOf(endMarker, start + startMarker.length);
@@ -104,11 +65,9 @@ function windowOf(source: string, marker: string, span: number): string {
 }
 
 /**
- * 从起点标记到**文件尾**那一段，但起点必须先验在场。
- *
- * 只给"确实要看整段尾部"的两处用（match 臂与后面的分支写在一起、没法按函数收）。
- * 没有 `expect(start…)` 的话，`slice(-1)` 给出最后一个字符，落在它身上的
- * `toContain` 会红成"没找到 X"——红话指不到"标记改名了"这个真因。
+ * 从起点标记到文件尾那段，但起点必须先验在场（只给确实要看整段尾部的两处用）。
+ * 少了 `expect(start…)` 时 `slice(-1)` 只剩最后一个字符，`toContain` 红成「没找到 X」，
+ * 指不到「标记改名了」这个真因。
  */
 function since(source: string, marker: string): string {
   const start = source.indexOf(marker);
@@ -121,9 +80,7 @@ describe("壳自编排：认亲判据", () => {
     const source = stripComments(read("src-tauri/src/shell_launch.rs"));
     // 判据本体：环境里必须恰好等于 "1"。
     expect(source).toContain("COMFYAPP_SHELL_OWNED");
-    expect(source).toMatch(
-      /pub const OWNED_ENV: &str = "COMFYAPP_SHELL_OWNED"/,
-    );
+    expect(source).toMatch(/pub const OWNED_ENV: &str = "COMFYAPP_SHELL_OWNED"/);
     expect(source).toMatch(/pub fn is_own\(/);
     // 认亲**不能**退化成按名字 / 路径 / 端口猜：那三条都只能说明「有个编排在跑」，
     // 认不出是谁起的，而这里紧跟着的动作是「复用它」或「回收它」。
@@ -145,21 +102,15 @@ describe("壳自编排：认亲判据", () => {
   });
 
   it("Python 启动器已整体移除（唯一入口是 app.exe）", () => {
-    expect(
-      fs.existsSync(path.join(ROOT, "scripts", "start_tauri_launcher.py")),
-    ).toBe(false);
-    expect(fs.existsSync(path.join(ROOT, "tools", "start-tauri.spec"))).toBe(
-      false,
-    );
+    expect(fs.existsSync(path.join(ROOT, "scripts", "start_tauri_launcher.py"))).toBe(false);
+    expect(fs.existsSync(path.join(ROOT, "tools", "start-tauri.spec"))).toBe(false);
     for (const rel of [
       "tools/build/build-launcher.ps1",
       "tools/build/build-launcher-dev.ps1",
       "tools/build/build-launcher-standalone.ps1",
       "tools/scripts/build-launcher.ps1",
     ]) {
-      expect(fs.existsSync(path.join(ROOT, rel)), `${rel} 应已删除`).toBe(
-        false,
-      );
+      expect(fs.existsSync(path.join(ROOT, rel)), `${rel} 应已删除`).toBe(false);
     }
     // 唯一的双击入口（.ps1 壳层）指向那个 exe 本身，不再指向第二层启动器。
     const entry = read("tools/start/start-tauri.ps1");
@@ -172,23 +123,25 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
   it("起第二份之前先回收上一次遗留的编排器（不再有「命中就跳过」的捷径）", () => {
     const lib = stripComments(read("src-tauri/src/lib.rs"));
     // 编排步骤体在命名函数里（Rust 侧函数长度阈值 120 行，见规范 §12.13），
-    // 调用点必须仍是安装期的一条：`if self_launch { … }`。
+    // 调用点必须仍是安装期的一条：`if parts.self_launch { … }`。#4416 起残留
+    // 回收是同步重活，挪到后台线程执行（不阻塞事件循环线程上的启动页 IPC）。
+    expect(lib).toMatch(/if parts\.self_launch \{/);
     expect(lib).toMatch(
-      /if self_launch \{\s*start_self_orchestration\(app, &project_root\);/,
+      /std::thread::spawn\(move \|\| start_self_orchestration\(&handle, &project_root\)\)/,
     );
-    const branch = sliceBetween(
-      lib,
-      "fn start_self_orchestration(",
-      "fn start_own_orchestrator(",
-    );
+    const branch = sliceBetween(lib, "fn start_self_orchestration(", "fn start_own_orchestrator(");
     // 判据是环境块标记（不是「有没有 dev server」），命中即回收：
     // 「别人已经在编排」这条路在双击形态下不存在（编排器只可能是壳自己起的），
     // 残留只可能是壳被强杀留下的孤儿 —— 留着它会占着端口，表现为双击没反应。
-    expect(branch).toContain("shell_launch::find_owned_orchestrator()");
-    expect(branch).toContain("shell_launch::reap_pid(project_root, pid)");
-    expect(branch).toContain(
-      "start_own_orchestrator(app.handle(), project_root)",
-    );
+    // 认亲是双判据（#3851）：「是某个壳起的」+「是**本检出**的壳起的」——
+    // 多检出并行时只看前者会把别家正在跑的编排器当成残留误杀整树。
+    expect(branch).toContain("shell_launch::find_owned_orchestrator(&project_root)");
+    const shell = stripComments(read("src-tauri/src/shell_launch.rs"));
+    expect(shell).toContain("process_env_is_owned(pid, project_root)");
+    expect(shell).toContain("PROJECT_ROOT_ENV}={project_root}");
+    expect(branch).toContain("shell_launch::reap_pid(");
+    expect(branch).toContain("shell_launch::REAPER_BUDGET");
+    expect(branch).toContain("start_own_orchestrator(app, project_root)");
     // 命中残留要说清「先回收再启动」，别让它看起来像一次正常启动。
     expect(branch).toContain("先回收它再启动本次编排");
   });
@@ -211,14 +164,10 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
     expect(rust).toMatch(/pub fn ensure_launch_mode\(project_root: &str\)/);
     expect(rust).toContain("orchestrator_script(project_root).is_some()");
     expect(rust).toContain("COMFYAPP_LAUNCH_MODE");
-    expect(rust).toMatch(
-      /#\[cfg\(not\(debug_assertions\)\)\]\s*pub fn ensure_launch_mode/,
-    );
+    expect(rust).toMatch(/#\[cfg\(not\(debug_assertions\)\)\]\s*pub fn ensure_launch_mode/);
     // debug 下必须是**不写**的空实现（写了就与 `pnpm tauri dev` 的 dev server 抢同一个
     // 端口）。返回值形态可以变（调用方要按形态说话），判据不变：不许 set_var。
-    const debugImplAt = rust.indexOf(
-      "#[cfg(debug_assertions)]\npub fn ensure_launch_mode",
-    );
+    const debugImplAt = rust.indexOf("#[cfg(debug_assertions)]\npub fn ensure_launch_mode");
     expect(debugImplAt, "debug 形态下的空实现不见了").toBeGreaterThan(-1);
     const debugImpl = rust.slice(debugImplAt, debugImplAt + 260);
     expect(debugImpl).not.toContain("set_var");
@@ -229,9 +178,7 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
 
   it("起不来写启动页可见的出口（原先由 Python 启动器的弹窗承担）", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
-    expect(rust).toMatch(
-      /pub fn mark_launch_failed\(project_root: &str, message: &str\)/,
-    );
+    expect(rust).toMatch(/pub fn mark_launch_failed\(project_root: &str, message: &str\)/);
     expect(rust).toContain("launch-status.json");
     expect(rust).toContain('"phase": "error"');
     // progress 必须是 0：启动页把 100% 画成「✓」，一次失败会看起来像「成功但没打开」。
@@ -239,9 +186,7 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
     // 写失败只记 WARN：失败出口本身不该再产生一个失败。
     expect(rust).toContain("create_dir_all");
     const lib = stripComments(read("src-tauri/src/lib.rs"));
-    expect(lib).toMatch(
-      /shell_launch::mark_launch_failed\([\s\S]{0,200}pnpm install/,
-    );
+    expect(lib).toMatch(/shell_launch::mark_launch_failed\([\s\S]{0,200}pnpm install/);
   });
 });
 
@@ -252,9 +197,7 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
     const page = splash();
     // 快照轮必须被标记出来，updateUI 才会拿 maxProgress 兜底。
     expect(page).toContain("updateFromShellFallback");
-    expect(page).toMatch(
-      /updateFromShellFallback && !error\) raw = Math\.max\(raw, maxProgress\)/,
-    );
+    expect(page).toMatch(/updateFromShellFallback && !error\) raw = Math\.max\(raw, maxProgress\)/);
     // 标记必须**每轮都重算**：编排器写自己的状态之后就再也不该走这条兜底
     //（否则它的 20% 也会被抬到上一次的 30%）。
     const marks = page.match(/updateFromShellFallback =/g) ?? [];
@@ -283,9 +226,7 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
     expect(tickBody).toMatch(/if \(shellUrl\) appUrl = shellUrl/);
     // 兜底链（launch-status.json / 写死的 3000）只在壳答不上来时才走，
     // 且仍然只走一次——它给不出权威地址，每轮问只会多刷 get_launch_status。
-    expect(tickBody).toMatch(
-      /else if \(!appUrl\) appUrl = await resolveAppUrl\(\)/,
-    );
+    expect(tickBody).toMatch(/else if \(!appUrl\) appUrl = await resolveAppUrl\(\)/);
   });
 
   it("快照自己也带诊断出口（编排器顶掉它之前，现场已经在磁盘上）", () => {
@@ -312,9 +253,7 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
       expect.soft(body, `标记里应说清「${phrase}」：${body}`).toContain(phrase);
     }
     // 前缀是面板裁剪历史日志的判据，一个字都不能改。
-    expect(rust).toMatch(
-      /pub const SESSION_START_MARKER: &str = "=== 启动会话开始"/,
-    );
+    expect(rust).toMatch(/pub const SESSION_START_MARKER: &str = "=== 启动会话开始"/);
     // 标记是单行：多行会让「按前缀裁剪」把紧跟其后的第一段真实日志一起裁掉。
     expect(body).not.toMatch(/\\n/);
     // `log_session_start` 必须走这个唯一出口，不许各写一份拼接。
@@ -357,13 +296,9 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
     // 三份文件的写入点都在这个函数里（`shell-launch.log` 一次 + 两文件 for 循环一次），
     // 且两处写的都是**同一个** `stamped` 变量 —— 各自 format! 一遍就是三个时刻。
     const appends = startFn.match(/append_line\(/g) ?? [];
-    expect(appends.length, `写入点都在这里：${startFn}`).toBeGreaterThanOrEqual(
-      2,
-    );
+    expect(appends.length, `写入点都在这里：${startFn}`).toBeGreaterThanOrEqual(2);
     const stamped = startFn.match(/\{stamped\}/g) ?? [];
-    expect(stamped.length, `每处都写 stamped 而不是各拼一次：${startFn}`).toBe(
-      appends.length,
-    );
+    expect(stamped.length, `每处都写 stamped 而不是各拼一次：${startFn}`).toBe(appends.length);
   });
 
   it("读不到日志时把壳写下的启动报告一并给出（报告是那一刻唯一的现场）", () => {
@@ -371,14 +306,16 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
     // 三个路径全空 → 只回「暂无日志」等于让用户去贴截图；报告里有项目根、
     // 编排脚本是否找到、端口与各日志路径，用户贴这一屏就等于把现场带出来。
     expect(rust).toContain("startup_report_section");
-    expect(rust).toMatch(/report[\s\S]{0,200}no_log_guidance\(&root\)/);
+    // 兜底在 collect_launch_log（同步主体，#4335 起由命令层挪阻塞线程池）：
+    // 报告 + 指引必须同屏给出。
+    expect(rust).toMatch(/report[\s\S]{0,200}no_log_guidance\(root\)/);
   });
 });
 
 describe("壳自编排：回收链", () => {
   it("壳退出时回收自己起的编排器整棵树（转发给 reap-process.mjs）", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
-    expect(rust).toMatch(/pub fn reap\(project_root: &str\)/);
+    expect(rust).toMatch(/pub fn reap\(project_root: &str, deadline: std::time::Instant\)/);
     // 两道机制：插件的 kill()（跨平台）+ 统一回收（不漏 node 下面那几层）。
     expect(rust).toContain("child.kill()");
     expect(rust).toContain("reap-process.mjs");
@@ -392,7 +329,7 @@ describe("壳自编排：回收链", () => {
     const lib = stripComments(read("src-tauri/src/lib.rs"));
     const onExit = since(lib, "tauri::RunEvent::Exit =>");
     expect(onExit).toContain("shell_launch::is_owning()");
-    expect(onExit).toContain("shell_launch::reap(&root)");
+    expect(onExit).toContain("shell_launch::reap(&root, exit_deadline)");
   });
 
   // 会话锚点只有编排器自己会在 `clearSession()` 里清，而壳收它是 `Child.kill()`
@@ -403,12 +340,14 @@ describe("壳自编排：回收链", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
     const reap = sliceBetween(
       rust,
-      "pub fn reap(project_root: &str)",
+      "pub fn reap(project_root: &str, deadline: std::time::Instant)",
       "pub fn reap_pid(",
     );
-    // 只在 `kill()` 成功那一支清：失败说明编排器可能还活着，锚点必须留给下一次启动回收。
+    // 回收换序（#3857）：先派发 reaper（taskkill 目标在进程活着时不存在 PID
+    // 复用），插件 kill 多半落在已被收走的进程上（无害 no-op）。两道任一落地
+    // 都要清锚点 —— 它在 spawn_reaper 之后无条件执行。
     expect(reap).toMatch(
-      /Ok\(\(\)\)[\s\S]{0,200}clear_session_anchor\(project_root\)/,
+      /spawn_reaper\(project_root, pid, deadline\)[\s\S]{0,400}clear_session_anchor\(project_root\)/,
     );
     expect(rust).toContain("pub fn clear_session_anchor(");
     // 路径与 Node 侧同源（唯一实现是 `scripts/dev-launcher-session.mjs`）：
@@ -422,11 +361,7 @@ describe("壳自编排：回收链", () => {
 
   it("按 PID 回收上一次的残留也走同一处平台判据", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
-    const fn = sliceBetween(
-      rust,
-      "pub fn reap_pid(",
-      "pub fn ensure_launch_mode(",
-    );
+    const fn = sliceBetween(rust, "pub fn reap_pid(", "pub fn ensure_launch_mode(");
     // 不许在壳里另写一套 taskkill / 单杀 leader（硬规则 3）：转交统一回收。
     expect(fn).toContain("spawn_reaper(");
     expect(fn).not.toMatch(/taskkill|Command::new\("kill"\)/);
@@ -448,9 +383,7 @@ describe("壳自编排：回收链", () => {
     expect(rust).toContain("attach_kill_on_close_job");
     expect(rust).toContain("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE");
     // 非 Windows 上必须有空实现，否则调用点要按平台分叉（判据只收一处，§9.2）。
-    expect(rust).toMatch(
-      /#\[cfg\(not\(windows\)\)\]\s*pub fn attach_kill_on_close_job\(\) \{\}/,
-    );
+    expect(rust).toMatch(/#\[cfg\(not\(windows\)\)\]\s*pub fn attach_kill_on_close_job\(\) \{\}/);
     // Cargo feature 也必须真的开：漏了它整个 crate 编译不过（且报错与业务无关）。
     const cargo = read("src-tauri/Cargo.toml");
     for (const feature of [
@@ -460,6 +393,21 @@ describe("壳自编排：回收链", () => {
     ]) {
       expect(cargo).toContain(feature);
     }
+  });
+
+  it("standalone sidecar 这棵树也挂 KILL_ON_JOB_CLOSE job（#4165：壳被硬杀时内嵌 server 不成孤儿）", () => {
+    const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
+    expect(rust).toContain("pub fn attach_sidecar_kill_on_close_job");
+    expect(rust).toContain("static SIDECAR_JOB_HANDLE");
+    // 与编排器同构：非 Windows 留空实现，调用点不分叉（判据只收一处，§9.2）。
+    // （cfg 与 fn 之间允许夹 #[allow(dead_code)]：调用点随 spawn_sidecar 只在 release 编译。）
+    expect(rust).toMatch(
+      /#\[cfg\(not\(windows\)\)\]\s*(?:#\[allow\(dead_code\)\]\s*)?pub fn attach_sidecar_kill_on_close_job\(_pid: u32\) \{\}/,
+    );
+    // 调用点在 spawn_sidecar：起完就挂——standalone 不写会话锚点，下一次启动的
+    // 孤儿回收认不出它，兜底必须在壳死当场生效。
+    const lib = stripComments(read("src-tauri/src/lib.rs"));
+    expect(lib).toContain("shell_launch::attach_sidecar_kill_on_close_job(sidecar_pid)");
   });
 });
 
@@ -517,19 +465,12 @@ describe("壳自编排：能自起的判据与真起得来", () => {
     expect(occurrences.length).toBe(3);
   });
 
-  // ── 第三轮（ISSUE #821：用户 .env 写死端口，壳却按路径推导，两边永远对不上）──
-  //
-  // 现场：「.env 里 COMFYAPP_PORT="3100" 与 Rust 壳按路径推导的端口 3809 不一致。
-  // 壳不读 .env 文件（只看 OS 环境变量），所以它按 f:/ai/other/comfy-app-t3-branch2
-  // 的 FNV-1a 哈希推出 3809 并死等；而 launcher 读 .env 拿到 3100 去起 Next.js，
-  // 结果 3100 又被另一个副本占了 → EADDRINUSE → 两边永远对不上」。
-  //
-  // 判据不是「壳里出现过 .env 字样」——那是可以写在注释里的东西。真正的判据是
-  // **端口解析只有一个出口**：所有需要端口的调用点都走它，而它按
-  // 环境变量 → 检出 .env → 路径推导 的顺序取值（与 scripts/app-port.mjs 逐条对齐）。
+  // ── 第三轮（ISSUE #821：.env 写死端口，壳按路径推导，两边永远对不上）──
+  // 现场：COMFYAPP_PORT="3100"（launcher 读 .env）vs 壳按路径 FNV-1a 推出的 3809，
+  // 壳不读 .env（只看 OS 环境变量）→ 死等 3809；3100 被另一副本占用 → EADDRINUSE。
+  // 判据：端口解析只有一个出口，按 环境变量 → 检出 .env → 路径推导 取值（与 scripts/app-port.mjs 对齐）。
   describe("端口解析：.env 必须对壳可见（ISSUE #821）", () => {
-    const single = () =>
-      stripComments(read("src-tauri/src/single_instance.rs"));
+    const single = () => stripComments(read("src-tauri/src/single_instance.rs"));
 
     it("壳侧有一条 .env 优先的解析出口（而不是只做路径推导）", () => {
       const src = single();
@@ -545,9 +486,7 @@ describe("壳自编排：能自起的判据与真起得来", () => {
       expect(src).toContain("resolve_app_port_with_source_for_root");
       expect(src).toContain("if let Some(port) = env_app_port()");
       expect(src).toContain("if let Some(port) = read_env_app_port(root)");
-      expect(src).toContain(
-        "derive_app_port_for_root(root), PortSource::Derived",
-      );
+      expect(src).toContain("derive_app_port_for_root(root), PortSource::Derived");
       expect(src).toContain('std::env::var("COMFYAPP_PORT")');
       // 端口与来源必须**同一次计算**给出：各算一遍时判据容易被静默拉开，
       // 而表现是「日志说 .env、实际用的是路径推导」——比没有日志更坏。
@@ -564,9 +503,7 @@ describe("壳自编排：能自起的判据与真起得来", () => {
       expect(shell).not.toContain("derive_app_port_for_root(project_root)");
       expect(lib).not.toMatch(/single_instance::derive_app_port\(\)/);
       // 壳侧要端口一律经 app_port_for_root（= single_instance 的唯一出口）。
-      expect(shell).toContain(
-        "crate::single_instance::resolve_app_port_for_root(project_root)",
-      );
+      expect(shell).toContain("crate::single_instance::resolve_app_port_for_root(project_root)");
     });
 
     it("启动报告与编排日志都带上端口来源（归因那一半信息）", () => {
@@ -597,13 +534,9 @@ describe("壳自编排：能自起的判据与真起得来", () => {
   });
 
   // ── 第三轮（手验反馈：提示还在、一直卡住）────────────────────────────────
-  //
-  // 现场：用户重编壳后双击 `target\release\app.exe`，启动页仍写着
-  // 「项目根未推导出来（COMFYAPP_PROJECT_ROOT 为空）」。根因是**项目根推导
-  // 只看 exe 的同级目录**（= `target\release`），而 `package.json` 在
-  // 上溯三级的地方 —— 也就是说「按文档唯一入口的落位双击」这条路径，
-  // 推导项目根**永远失败**，而失败的表现是启动页停在 0% + 一句指向不存在
-  // 文件的提示（看起来像「双击没反应」）。
+  // 现场：双击 `target\release\app.exe`，启动页仍写「项目根未推导出来（COMFYAPP_PROJECT_ROOT 为空）」。
+  // 根因：项目根推导只看 exe 同级目录（= target\release），而 package.json 在上溯三级处 ——
+  // 按文档唯一入口的落位双击时推导永远失败，表现为停在 0% + 指向不存在文件的提示（像「双击没反应」）。
   describe("项目根推导：必须逐级上溯（ISSUE #784 手验反馈）", () => {
     const lib = () => stripComments(read("src-tauri/src/lib.rs"));
 
@@ -611,13 +544,9 @@ describe("壳自编排：能自起的判据与真起得来", () => {
       const source = lib();
       // 上溯函数本体：循环取 parent，命中 looks_like_project_root 才停。
       expect(source).toContain("fn find_project_root_from");
-      expect(source).toMatch(
-        /fn find_project_root_from\([\s\S]{0,400}?\.parent\(\)/,
-      );
+      expect(source).toMatch(/fn find_project_root_from\([\s\S]{0,400}?\.parent\(\)/);
       // 推导链必须经过上溯函数。
-      expect(source).toMatch(
-        /fn resolve_project_root\(\)[\s\S]{0,900}?find_project_root_from/,
-      );
+      expect(source).toMatch(/fn resolve_project_root\(\)[\s\S]{0,900}?find_project_root_from/);
     });
 
     it("不得退回「只查 exe 同级目录」的写法", () => {

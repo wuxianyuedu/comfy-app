@@ -1,5 +1,6 @@
 import type { Node } from "@xyflow/react";
 import type { ValidationError } from "~/lib/comfyui/validation";
+import { isRecord } from "~/lib/is-record";
 import { DEFAULT_SIZE_SPEC, type SizeSpec } from "~/lib/media/size-presets";
 
 /* ── 画布节点模型 ── */
@@ -182,12 +183,18 @@ export type CanvasNodeData = StrictCanvasNodeData & Record<string, unknown>;
  *   - 输入是运行时真实数据（ReactFlow 给的对象），断言在此是**唯一**的；
  *   - 输出是严格类型，下游字段访问全部受类型检查保护。
  *
- * 收口不做运行时校验（画布数据由本应用写入、结构自持），因此单点断言是
- * 恰当的成本——继续保留零散断言才是问题。
+ * 收口只做「是对象」这一层运行期判据（画布数据由本应用写入、结构自持），
+ * 因此单点收窄是恰当的成本——继续保留零散断言才是问题。
  */
+function assertStrictCanvasNodeData(data: unknown): asserts data is StrictCanvasNodeData {
+  if (!isRecord(data)) {
+    throw new TypeError("画布节点数据必须是对象");
+  }
+}
+
 export function asCanvasNodeData(data: unknown): StrictCanvasNodeData {
-  /* SAFETY: 类型断言已复核 */
-  return data as StrictCanvasNodeData;
+  assertStrictCanvasNodeData(data);
+  return data;
 }
 
 /** ReactFlow 节点联合：逻辑节点（canvasNode）与纯视觉节点（workflowArdot）。

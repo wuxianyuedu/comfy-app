@@ -52,14 +52,13 @@ function InputGroupAddon({
   return (
     /* `onClick` 是**点击代理** —— 把焦点转给同组里的 `<input>`（可聚焦、可输入的
        是那个 input）；`role="group"` 的容器本身不该可聚焦。 */
-    /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- 点击代理容器，不是交互本体 */
+    /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events, jsx_a11y/no-noninteractive-element-interactions -- 点击代理容器，不是交互本体 */
     <div
       className={cn(inputGroupAddonVariants({ align }), className)}
       data-align={align}
       data-slot="input-group-addon"
       onClick={(e) => {
-        /* SAFETY: 类型断言已复核 */
-        if ((e.target as HTMLElement).closest("button")) {
+        if (e.target instanceof Element && e.target.closest("button")) {
           return;
         }
         e.currentTarget.parentElement?.querySelector("input")?.focus();

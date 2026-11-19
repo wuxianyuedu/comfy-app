@@ -6,16 +6,9 @@ import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 /**
- * `GET /api/images?filename=&subfolder=&type=` —— 本机代理 ComfyUI 的 `/api/view`。
- *
- * 为什么要有这一层：浏览器直接打 ComfyUI 的 `:8188` 会被 CORS 与「私有网络访问」
- * 挡住，所以媒体字节必须经本应用同源转发。地址形状由 `~/lib/media/media-url` 的
- * `comfyImageUrl()` 一处给出（全库唯一出口），**本文件就是它那个落点** ——
- * 这个 handler 一度在基线迁移时没带过来，于是地址是对的、请求必然 404、
- * 调用点一句 `catch {}` 把 404 咽成「没有图」，界面常年空态而判据全绿（台账 E3‴）。
- *
- * 四道判据，顺序即优先级：会话 → 文件名形状 → 类别枚举 → 上游状态。
- * `type` 只认 ComfyUI 的 `input` / `output` / `temp` 三个值。
+ * `GET /api/images?filename=&subfolder=&type=` —— 本机代理 ComfyUI `/api/view`：浏览器直打 :8188 会被 CORS 与「私有网络访问」挡住，
+ * 媒体字节必须经本应用同源转发；地址形状由 `~/lib/media/media-url` 的 `comfyImageUrl()` 一处给出，本文件就是那个落点（台账 E3‴）。
+ * 四道判据按序：会话 → 文件名形状 → 类别枚举 → 上游状态；`type` 只认 input/output/temp。
  */
 
 export const runtime = "nodejs";
@@ -58,12 +51,9 @@ export async function GET(req: NextRequest): Promise<Response> {
   try {
     body = await getView(filename, subfolder, type);
   } catch (error) {
-    /* 三种失败给三个可分支的答案，而不是统一一个 500：
-     *  · 上游明确 404 → 这一格本来就没有文件；
-     *  · 上游回了别的状态 → 网关层的失败；
-     *  · fetch 自己抛（连不上 / 超时）→ ComfyUI 没在跑。最后这条是**常态**
-     *    （壳起来而 ComfyUI 还没起来），所以带 `hint` 让调用方能显示「未连接」
-     *    而不是把它当「图不存在」画成碎图标。 */
+    /* 三种失败给三个可分支的答案：上游 404 → 没有文件；上游回了别的状态 → 网关失败（502）；
+     * fetch 自己抛（连不上/超时）→ ComfyUI 没在跑（常态），带 `hint` 让调用方显示「未连接」
+     * 而不是画成碎图标。 */
     if (error instanceof ComfyViewError) {
       if (error.status === 404) {
         return NextResponse.json({ error: "素材不存在" }, { status: 404 });

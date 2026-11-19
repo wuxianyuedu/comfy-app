@@ -16,7 +16,7 @@
 # 第二件事：把「合并前的固定动作」挂到 push 上（规范 §13.6.2.1）。平台侧是 squash
 # 合并、那一步不跑本地钩子，而 #623 之后已无 CI 兜底 —— push 是本地最后一个紧贴
 # 「这条分支要被合」的事件。代价、过期判定与「证明为什么不入库」全部写在
-# `scripts/premerge-proof.mjs` 的头部，这里只负责调用（钩子不抄判据，§12.12）。
+# `scripts/gates/premerge-proof.mjs` 的头部，这里只负责调用（钩子不抄判据，§12.12）。
 #
 # stdin（待推送的 ref 行）**只能读一次**，而两件事都要它 —— 先整份收到临时文件，
 # 再各喂各的。少了这一步，LFS 或复算必有一个拿到空输入，且都不报错。
@@ -35,4 +35,4 @@ git lfs pre-push "$@" <"$refs_in" || exit $?
 # `"$1" "$2"` 是 git 给的「远端名 + 远端 URL」：推向镜像仓库 / 第三方备份远端时，
 # 这批 ref 与「这条分支要不要合进本仓 master」无关，脚本按 URL 比对后跳过复算
 # （判据在 `isForeignRemotePush()`，钩子不抄，§12.12）。
-node scripts/premerge-proof.mjs "$1" "$2" <"$refs_in" || exit $?
+node scripts/gates/premerge-proof.mjs "$1" "$2" <"$refs_in" || exit $?

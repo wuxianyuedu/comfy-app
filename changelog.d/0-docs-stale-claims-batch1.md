@@ -27,7 +27,7 @@
     `tools\build\build-launcher.ps1` 重打包」——两个路径都不在树上（那条 Python 启动器链
     连同 `build-launcher*.ps1` 已全部移除，本章自己另处就写着这件事）。改成只剩「重编壳」。
 - `docs/standards/11-测试与可观测性.md` / `docs/guides/TESTING.md` /
-  `scripts/shell-gate.mjs` / `tests/shell-gate.test.ts`
+  `scripts/gates/shell-gate.mjs` / `tests/shell-gate.test.ts`
   - 「壳里 **37 条** `#[test]`」这一句在四处被当现状引用，而 `src-tauri/src/**` 现在
     `#[test]` 合计 **54**（`detached_spawn` 4 + `lib.rs` 19 + `shell_launch` 23 +
     `single_instance` 8）。四处一律去掉条数、保留「`cargo test` 是唯一执行者」那句判断。

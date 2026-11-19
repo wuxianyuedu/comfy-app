@@ -7,13 +7,8 @@ import { BreadcrumbPath } from "./breadcrumb-path";
 // vitest globals: false 下 RTL 不会自动 cleanup，需手动注册
 afterEach(cleanup);
 
-/**
- * 路径行的回归（规范 16 §16.2.4.72）。
- *
- * 收口前素材库抽屉与资源库页各手写一份同一段渲染 —— 两份都丢掉了
- * `ui/breadcrumb` 的语义（`ol` / `li` 层级、`aria-current="page"`）。
- * 这里逐条钉住接管后的语义与交互契约：中间段可点、末段不可点。
- */
+/** 路径行的回归（规范 16 §16.2.4.72）：收口前素材库抽屉与资源库页各手写一份同一段渲染，两份都丢掉了 `ui/breadcrumb` 的语义（ol / li 层级、aria-current="page"）。
+ * 这里逐条钉住接管后的语义与交互契约：中间段可点、末段不可点。 */
 const SEGMENTS = [
   { label: "参考素材", key: null },
   { label: "角色参考", key: "characters" },

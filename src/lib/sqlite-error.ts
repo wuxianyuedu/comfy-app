@@ -3,24 +3,29 @@
  *
  * 现场：桌包（standalone + host）的宿主日志里只有一句
  *   `[comfyui] fail(pkg…) 缺解释器收口异常：Failed query: update "task" set … params: FAILED,…`
- * 这是 drizzle 的**包装**消息，真正的原因挂在 `error.cause` 上（libsql / node:sqlite 给的是
- * `SQLITE_BUSY: database is locked` 一类）。原因不落到日志，现场就只能猜「是没这张表，还是
- * 库被锁了」—— 而这两者的处置完全相反：前者要改代码，后者等一等就过。
+ * 这是 drizzle 的**包装**消息，真正的原因挂在 `error.cause` 上（libsql 给的是
+ * `SQLITE_BUSY: database is locked` 一类文案；node:sqlite（#3171）把锁族拆成
+ * `code=ERR_SQLITE_ERROR` + `errcode=5` + `errstr="database is locked"`）。原因不落到日志，
+ * 现场就只能猜「是没这张表，还是库被锁了」—— 而这两者的处置完全相反：前者要改代码，
+ * 后者等一等就过。
  *
- * 只做三件事，且都不碰 IO / 不引驱动：
+ * 只做四件事，且都不碰 IO / 不引驱动：
  *   ①  {@link describeSqliteWriteError} 把 cause 链上的 code / message 拼回一句可读文本；
  *   ②  {@link isSqliteBusyError} 判「这类错误等一等就能过」，供调用处决定要不要重试；
  *   ③  {@link sqliteAwareErrorText} 给**所有**库写失败的捕获点取日志文案 —— 是库失败就
- *      带上驱动码，不是就交回 `~/lib/error-message` 的 `errorText`（ISSUE #1262 的前置）。
+ *      带上驱动码，不是就交回 `~/lib/error-message` 的 `errorText`（ISSUE #1262 的前置）；
+ *   ④  {@link isSqliteUniqueViolation} 判「撞了唯一索引」，供先查后写的入口把裸
+ *      SQLITE_CONSTRAINT 转成业务语义的冲突错误（ISSUE #3866）。
  *
  * 为什么不并进 `~/lib/error-message` 的 `errorText`：那条是「unknown → 可读」的通用兜底
  * （还要照顾网络错的翻译表），而这几条的判据是 **SQLite 的错误码族**，语义与生命周期都
  * 不同；③ 就是两边之间那层薄封装，方向是「库 → 通用」，通用那侧不认识库。
  */
 import { errorText } from "~/lib/error-message";
+import { isRecord } from "~/lib/is-record";
 import { LOG_DETAIL_MAX, clampText } from "~/lib/text-clamp";
 
-/** cause 链最多走几层：drizzle → libsql → native 实际只有一两层，留出余量即可，
+/** cause 链最多走几层：drizzle → 驱动 → native 实际只有一两层，留出余量即可，
  *  再深就当作循环引用停手（抛值可以是任何东西，`unknown` 的纪律在这里同样成立）。 */
 const CAUSE_CHAIN_LIMIT = 5;
 
@@ -30,33 +35,62 @@ const TRANSIENT_LOCK_CODES = ["SQLITE_BUSY", "SQLITE_LOCKED", "SQLITE_PROTOCOL"]
 /** 同上，但有些驱动版本只在消息里给这句话、不给 `code`。 */
 const TRANSIENT_LOCK_PHRASES = ["database is locked", "database table is locked"];
 
-function fieldOf(value: unknown, key: "code" | "message" | "name"): string {
-  if (typeof value !== "object" || value === null) {
+/** node:sqlite 的数字锁码（`errcode`），ISSUE #3171：它的字符串 `code` 一律是
+ *  `ERR_SQLITE_ERROR`，锁族只能从 `errcode` 认（5=BUSY、6=LOCKED，实测）。 */
+const LOCK_ERRCODES: Readonly<Record<number, string>> = {
+  5: "SQLITE_BUSY",
+  6: "SQLITE_LOCKED",
+};
+
+function fieldOf(value: unknown, key: "code" | "message" | "name" | "errstr"): string {
+  if (!isRecord(value)) {
     return "";
   }
-  const raw = /* SAFETY: 类型断言已复核 */ (value as Record<string, unknown>)[key];
+  const raw = value[key];
   return typeof raw === "string" ? raw : "";
 }
 
-/** 沿 cause 链收集 code / message（去重、保序）。 */
+/** node:sqlite 的 `errcode`（原生扩展码），取不到给 `null`。 */
+function errcodeOf(value: unknown): number | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const raw = value.errcode;
+  return typeof raw === "number" ? raw : null;
+}
+
+/** 沿 cause 链收集 code / message / errstr（去重、保序）。
+ *
+ *  node:sqlite（ISSUE #3171）把锁族信息拆成两个驱动字段：字符串 `code` 恒为
+ *  `ERR_SQLITE_ERROR`，真正的锁码在 `errcode`（5=BUSY、6=LOCKED），人话在 `errstr`。
+ *  这里把数字锁码折回 `SQLITE_BUSY` / `SQLITE_LOCKED` 放进 `codes`，`errstr` 并进
+ *  `messages`，下游的 `isSqliteFailure` / `isSqliteBusyError` 因此不用认识两种驱动。 */
 function collect(error: unknown): { codes: Array<string>; messages: Array<string> } {
   const codes: Array<string> = [];
   const messages: Array<string> = [];
   let node: unknown = error;
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  for (let depth = 0; depth < CAUSE_CHAIN_LIMIT && node != null; depth++) {
+  for (let depth = 0; depth < CAUSE_CHAIN_LIMIT && node !== null && node !== undefined; depth++) {
     const code = fieldOf(node, "code");
     if (code && !codes.includes(code)) {
       codes.push(code);
+    }
+    const errcode = errcodeOf(node);
+    // nullish 而不是 `||`：errcode=0 不是锁，也不必查表。
+    const errcodeName = errcode === null ? "" : (LOCK_ERRCODES[errcode] ?? "");
+    if (errcodeName && !codes.includes(errcodeName)) {
+      codes.push(errcodeName);
     }
     const message = fieldOf(node, "message");
     if (message && !messages.includes(message)) {
       messages.push(message);
     }
+    const errstr = fieldOf(node, "errstr");
+    if (errstr && !messages.includes(errstr)) {
+      messages.push(errstr);
+    }
     node =
-      typeof node === "object"
-        ? /* SAFETY: 类型断言已复核 */ (node as { cause?: unknown }).cause
-        : undefined;
+      /* SAFETY: 类型断言已复核 */
+      typeof node === "object" ? (node as { cause?: unknown }).cause : undefined;
   }
   return { codes, messages };
 }
@@ -172,4 +206,50 @@ export function isSqliteBusyError(error: unknown): boolean {
       TRANSIENT_LOCK_PHRASES.some((p) => m.toLowerCase().includes(p)) ||
       TRANSIENT_LOCK_CODES.some((c) => m.includes(c)),
   );
+}
+
+/**
+ * 这次失败是「撞了唯一索引」吗？（ISSUE #3866）
+ *
+ * 先查后写的入口在并发/重名时，后到者原先拿到的是裸 `SQLITE_CONSTRAINT`（500）；
+ * 有了这个判据，调用处可以把它转成业务语义的冲突错误（CONFLICT / 409），
+ * 或者按「冲突即复用既有行」的口径复读回落。libsql 与 node:sqlite 的人话文案
+ * 都含 `UNIQUE constraint failed`；libsql 另给 `SQLITE_CONSTRAINT_UNIQUE` 码，
+ * node:sqlite 的字符串码恒为 `ERR_SQLITE_ERROR`、真码在 `errcode=19`（约束族）——
+ * 消息短语是两种驱动都可靠给出的证据，错误码族作补充。
+ */
+export function isSqliteUniqueViolation(error: unknown): boolean {
+  const { codes, messages } = collect(error);
+  if (codes.some((c) => c.startsWith("SQLITE_CONSTRAINT"))) {
+    return true;
+  }
+  return messages.some((m) => /UNIQUE constraint failed/i.test(m));
+}
+
+/**
+ * 撞唯一索引时，从 cause 链的消息里取涉及到的列（`table.column` 全名数组）。
+ *
+ * SQLite / libsql 的人话文案形如
+ * `UNIQUE constraint failed: season.seriesId, season.seasonNumber`（复合索引用
+ * 逗号列出全部列）。调用方按列名把裸约束翻成业务语义的冲突文案（哪条业务键
+ * 撞了给哪句 409），而不是一句笼统的「写入失败」。不是唯一冲突、或消息里取
+ * 不到列名 ⇒ 空数组（调用方按「不知道撞了哪条」兜底）。
+ */
+export function sqliteUniqueColumns(error: unknown): Array<string> {
+  if (!isSqliteUniqueViolation(error)) {
+    return [];
+  }
+  const { messages } = collect(error);
+  const marker = "UNIQUE constraint failed:";
+  for (const m of messages) {
+    const at = m.indexOf(marker);
+    if (at !== -1) {
+      return m
+        .slice(at + marker.length)
+        .split(",")
+        .map((c) => c.trim())
+        .filter((c) => c.length > 0);
+    }
+  }
+  return [];
 }

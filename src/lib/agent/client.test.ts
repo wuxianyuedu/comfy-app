@@ -11,8 +11,13 @@ import type { AgentChatRequest } from "./shared";
 
 const REQ: AgentChatRequest = {
   messages: [{ role: "user", content: "hi" }],
-  /* SAFETY: 类型断言已复核 */
-  draft: {} as AgentChatRequest["draft"],
+  draft: {
+    characters: [],
+    meta: { logline: "", title: "", tone: "", type: "short_video" },
+    scenes: [],
+    scriptMarkdown: "",
+    shots: [],
+  },
 };
 
 function mockFetch(impl: () => Promise<Response> | Response) {
@@ -86,6 +91,7 @@ describe("sendAgentMessage", () => {
   it("响应是原始值（字符串 / null / 数字）→ 给可见占位且 done=true", async () => {
     for (const body of ['"hello"', "null", "42"]) {
       mockFetch(() => new Response(body, { status: 200 }));
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const res = await sendAgentMessage(REQ);
       expect(res.done).toBe(true);
       expect(res.reply).toBe("（无有效响应）");
@@ -154,7 +160,10 @@ describe("sendAgentMessage", () => {
     await sendAgentMessage(REQ);
     expect(seen.url).toBe("/api/agent/chat");
     expect(seen.init?.method).toBe("POST");
-    /* SAFETY: 类型断言已复核 */
-    expect(JSON.parse(seen.init?.body as string)).toEqual(REQ);
+    const body = seen.init?.body;
+    if (typeof body !== "string") {
+      throw new TypeError("请求体不是字符串");
+    }
+    expect(JSON.parse(body)).toEqual(REQ);
   });
 });

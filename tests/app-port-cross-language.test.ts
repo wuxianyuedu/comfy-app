@@ -1,25 +1,58 @@
-// 端口推导的跨语言一致性（ISSUE #489 缺陷 4）。
-//
-// 背景：规范 §1.1 与 changelog 都承诺「Node / PowerShell / Python / Rust 四侧
-// 对同一路径给出同一端口」，但此前四侧各写各的固定断言，没有任何测试会发现某
-// 一侧漂移 —— 实测就发现 Rust 的 normalize_root_for_port 完全不做路径解析，
-// 而 Node / Python / PowerShell 对**相对路径**会拼 cwd，于是 `rel/p` 四侧端口
-// 不同。对绝对路径（真实检出的形态）不影响，但「四侧一致」当时只是文档承诺。
-//
-// 本文件把「四侧一致」变成可失败断言，分两层：
-//   ① 可执行层：能跑的（Node 已在本进程；Python 若可用）真跑共享向量；
-//   ② 参考层：不能跑的（Rust 需 cargo、PowerShell 需 pwsh，本机/CI 均无）
-//      断言其**实现与测试确实引用同一份向量文件** —— 这样某侧被改回「自己写
-//      死值」时会被拦下，而不是等到 Windows 真机上才发现漂移。
-//
-// 共享向量：tests/fixtures/app-port-vectors.json
+// 端口推导的跨语言一致性（ISSUE #489 缺陷 4）。规范 §1.1 承诺 Node / PowerShell / Python / Rust
+// 四侧对同一路径给出同一端口，但此前各写各的固定断言、无人发现漂移：实测 Rust 的
+// normalize_root_for_port 不做路径解析，另三侧对**相对路径**会拼 cwd，`rel/p` 四侧就不同
+// （绝对路径即真实检出形态不受影响）。分两层：① 能跑的（Node / 可用时的 Python）真跑共享向量
+// tests/fixtures/app-port-vectors.json；② 不能跑的（Rust / pwsh）断言其实现与测试引用同一份向量文件。
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isPlainRecord, isUnknownArray } from "../src/lib/is-record";
+
 const ROOT = process.cwd();
 const VECTORS = "tests/fixtures/app-port-vectors.json";
+
+type PortFixture = {
+  envVectors: Array<{ content: string; note: string; port: number | null }>;
+  vectors: Array<{ fnv1a32: number; input: string; normalized: string; port: number }>;
+};
+
+/** 共享向量夹具：JSON 解析后逐字段校验，再读两个向量数组。 */
+function isPortFixture(v: unknown): v is PortFixture {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  const env = v.envVectors;
+  const vec = v.vectors;
+  return (
+    isUnknownArray(env) &&
+    env.every(
+      (e) =>
+        isPlainRecord(e) &&
+        typeof e.content === "string" &&
+        typeof e.note === "string" &&
+        (typeof e.port === "number" || e.port === null),
+    ) &&
+    isUnknownArray(vec) &&
+    vec.every(
+      (e) =>
+        isPlainRecord(e) &&
+        typeof e.fnv1a32 === "number" &&
+        typeof e.input === "string" &&
+        typeof e.normalized === "string" &&
+        typeof e.port === "number",
+    )
+  );
+}
+
+function readPortFixture(): PortFixture {
+  const parsed: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS), "utf8"));
+  if (!isPortFixture(parsed)) {
+    throw new Error("app-port 共享向量夹具形状不对");
+  }
+  return parsed;
+}
 
 function readIfExists(rel: string): string | null {
   try {
@@ -40,11 +73,7 @@ function hasCommand(cmd: string, args: Array<string>): boolean {
 }
 
 describe("app-port 跨语言一致性（四侧读同一份共享向量）", () => {
-  /* SAFETY: 类型断言已复核 */
-  const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS), "utf8")) as {
-    envVectors: Array<{ content: string; note: string; port: number | null }>;
-    vectors: Array<{ fnv1a32: number; input: string; normalized: string; port: number }>;
-  };
+  const fixture = readPortFixture();
 
   it("向量文件存在且至少 5 条（防止误删后全绿）", () => {
     expect(fixture.vectors.length).toBeGreaterThanOrEqual(5);
@@ -59,10 +88,10 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
   });
 
   it("① Python 侧真跑共享向量（可用时）", () => {
-    const script = "scripts/check-app-port-vectors.py";
+    const script = "scripts/gates/check-app-port-vectors.py";
     expect(fs.existsSync(path.join(ROOT, script))).toBe(true);
     const python = ["python3", "python"].find((c) => hasCommand(c, ["--version"]));
-    if (!python) {
+    if (python === undefined || python === "") {
       // 无 Python 环境（罕见）：跳过可执行层，参考层仍会断言脚本引用向量。
       return;
     }
@@ -103,7 +132,7 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     expect(ps).not.toBeNull();
     expect(ps!).toContain("Get-NormalizedRootForPort");
     expect(ps!).toContain("Get-Fnv1a32");
-    const checker = readIfExists("scripts/check-app-port-vectors.ps1");
+    const checker = readIfExists("scripts/gates/check-app-port-vectors.ps1");
     expect(checker).not.toBeNull();
     expect(checker!).toContain("app-port-vectors.json");
     // `envVectors` 也必须真跑：此前 PowerShell 侧只跑 `vectors`，「四侧读同一份
@@ -123,18 +152,15 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     // 内联进「顶层就打 ctypes.windll」的 Windows-only 宿主（历史上是
     // scripts/start_tauri_launcher.py，已随 ISSUE #784 移除）就跑不了。
     // 现在 Python 侧只剩这一个纯逻辑模块 + 它的自检脚本，两侧都不碰 Win32。
-    expect(fs.existsSync(path.join(ROOT, "scripts", "check-app-port-vectors.py"))).toBe(true);
+    expect(fs.existsSync(path.join(ROOT, "scripts", "gates/check-app-port-vectors.py"))).toBe(true);
   });
 
   it("①′ `.env` 单值解析：Node 侧对共享 envVectors 逐条一致", async () => {
-    // 四侧读的**同一份** envVectors —— 任一侧对「带引号 / 行尾注释 / 注释行 /
-    // 空值」的理解不一致，用户写死的端口就只对一部分进程可见，剩下的按路径
-    // 推导去等另一个端口（现象是启动页卡在「等 dev server」，ISSUE #821）。
-    //
-    // 这里走 `parseDotEnvPortValue`（生产同一条出口），**不再在用例里另抄一份
-    // `/^\d+$/ + parseInt` 判定**：那份抄件与生产实现的判据一旦漂了，这一格会
-    // 照着抄件判、而链路上跑的是实现 —— 实测就栽过一次（`+3100` 三侧都收，
-    // 用例里那份抄件不收，于是它把实现判成红的）。
+    // 四侧读的**同一份** envVectors：任一侧对「带引号 / 行尾注释 / 注释行 / 空值」理解不一致，
+    // 用户写死的端口就只对一部分进程可见，其余按路径推导去等另一个端口（现象是启动页卡在
+    // 「等 dev server」，ISSUE #821）。这里走 `parseDotEnvPortValue`（生产同一条出口），**不另抄
+    // `/^\d+$/ + parseInt`**：抄件与实现的判据一漂，就会照着抄件判而链路上跑的是实现（实测栽过：
+    // `+3100` 三侧都收、抄件不收，于是把实现判成红的）。
     const { parseDotEnvPortValue, readEnvFileValue } = await import("../scripts/app-port.mjs");
     for (const v of fixture.envVectors) {
       const port = parseDotEnvPortValue(readEnvFileValue(v.content, "COMFYAPP_PORT"));
@@ -147,7 +173,10 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
   });
 
   it("①′ 另三侧也读同一份 envVectors（不能真跑时锁引用）", () => {
-    for (const rel of ["scripts/check-app-port-vectors.py", "scripts/check-app-port-vectors.cjs"]) {
+    for (const rel of [
+      "scripts/gates/check-app-port-vectors.py",
+      "scripts/gates/check-app-port-vectors.cjs",
+    ]) {
       const src = readIfExists(rel);
       expect(src, `${rel} 必须存在`).not.toBeNull();
       expect(src, `${rel} 必须读 envVectors`).toContain("envVectors");
@@ -161,10 +190,13 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     // 若某侧把 F:\\… 交给 path.resolve / abspath，在 POSIX 上会拼上 cwd，
     // 规范化结果就不再是 f:/… —— 这条检查 normalized 字段本身的形状。
     for (const v of fixture.vectors) {
-      if (/^[a-zA-Z]:/.test(v.input.replaceAll("\\", "/"))) {
-        expect(v.normalized).toMatch(/^[a-z]:\//);
-        expect(v.normalized).not.toContain(ROOT.toLowerCase());
-      }
+      /* 只有盘符向量（Windows 形状）查这两条：规范化不染 cwd、不回落根检出 ——
+       * 条件收进合取式（非盘符向量恒真），断言本体无条件跑（no-conditional-expect）。 */
+      const isDriveVector = /^[a-zA-Z]:/.test(v.input.replaceAll("\\", "/"));
+      expect(
+        !isDriveVector ||
+          (/^[a-z]:\//.test(v.normalized) && !v.normalized.includes(ROOT.toLowerCase())),
+      ).toBe(true);
     }
   });
 });

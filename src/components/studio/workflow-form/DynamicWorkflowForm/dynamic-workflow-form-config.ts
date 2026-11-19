@@ -7,6 +7,17 @@ import type { ReactNode } from "react";
 import type { ControlKind, EnrichedWidget, WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { WorkflowIODropPosition } from "~/components/studio/workflow-types";
 
+/** 行 / 组合块拖拽重排的上抛契约。普通行只给 `fromKey`；尺寸 / 视频这类
+ *  组合块在表单里只渲染成一块、底下压着多个 ioKey，拖动时必须在第 4 参把
+ *  整块的 key 一起交给调用方，由它调 `withIOGroupReordered` 整体搬移。
+ *  第 4 参可选，旧调用方（编辑器 IO 预览）保持不变即可。 */
+export type WorkflowIOReorderHandler = (
+  fromKey: string,
+  targetKey: string | null,
+  position: WorkflowIODropPosition,
+  fromKeys?: Array<string>,
+) => void;
+
 export type DynamicWorkflowFormProps = {
   /** 更紧的间距 + 单列，适配 300px 宽的画布节点。 */
   compact?: boolean;
@@ -29,16 +40,11 @@ export type DynamicWorkflowFormProps = {
    *  IO 编辑预览面板的 UX：作者看到表单最终长什么样，
    *  并能就地重命名每个针脚。 */
   onLabelChange?: (ioKey: string, label: string) => void;
-  /** 设置后，渲染列表里的行变成可拖拽重排：作者从行的**不可编辑区域**
-   *  （标签、空白处；输入框 / 下拉 / 按钮上起手会被取消）拎起一行，放到
-   *  另一行上。回调收到 `(fromKey, targetKey, position)`：`targetKey` 是
-   *  松手时所在的那一行，`position` 由指针在该行的上/下半区给出（与指示线
-   *  画的位置同源）；`targetKey === null` 表示「送到同组末尾」。消费方
-   * （通常是 IO 编辑预览面板）负责重排 `displayOrder` 序号并落盘 —— 这里只
-   *  发意图，好让本组件不背持久化的包袱。不传 = 行不可拖
-   *（只读场景如 CreatePanel、WorkflowLibrary、画布的
-   *  `workflow` 节点）。 */
-  onReorder?: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
+  /** 设置后渲染列表行可拖拽重排：从行不可编辑区域（标签、空白处）拎起，放到另一行上。
+   *  回调收到 (fromKey, targetKey, position)：position 按指针在该行上/下半区给出，
+   *  targetKey === null 表示「送到同组末尾」。消费方负责重排 displayOrder 并落盘 —— 这里只发意图。
+   *  不传 = 行不可拖（只读场景如 CreatePanel、WorkflowLibrary、画布 workflow 节点）。 */
+  onReorder?: WorkflowIOReorderHandler;
   /** 设置后，每个 widget 行在标签旁得到「必填 / 可选」切换按钮。
    *  点击它翻转 `workflowIO[ioKey].required`。仍为空的必填
    *  行会把输入渲染成红边框，逼作者面对 —— 这是

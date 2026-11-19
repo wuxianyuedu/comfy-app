@@ -1,23 +1,14 @@
 import { useState } from "react";
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { SETTINGS_SECTIONS, type Section } from "~/app/(main)/settings/hooks/use-settings-page";
+import { isRecord } from "~/lib/is-record";
 import { SettingsShell } from "./SettingsShell";
 
 /**
  * `SettingsShell` 是设置页的共享外壳：标题行 + 左侧分区导航树 + **一根**内容滚动条。
- *
- * 这几个 story 要验的是两件在源码里看不出来的事：
- *
- *   1. **导航树的两层看得出层级**（ISSUE #1694）—— 分组名是父行（弱一档、不可点），
- *      分区项是它的子行（缩进 + 引导线、可点）。横排那版把两者排成同一种词，
- *      光看代码分不出「模型」是组、「本地模型」是项。
- *   2. **一页到底：滚动时高亮跟着走**（ISSUE #1722）—— 全部小节铺在同一根滚动条里，
- *      点导航滚过去、手动滚动则高亮自己跟。`Long` 那份刻意把每节撑高，
- *      不滚动就看不出差异。
- *
- * 外壳本身不持状态（`section` / `onSelect` 都由调用方给），所以这里用一个最小
- * 容器把它受控的部分接起来。
+ * story 要验两件源码里看不出来的事：① 导航树的两层看得出层级（ISSUE #1694）；② 一页到底、
+ * 滚动时高亮跟着走（ISSUE #1722，`Long` 刻意把每节撑高）。外壳不持状态，用最小容器接起来。
  */
 /** 三态 story 不需要真实的选中回调 —— 显式空函数，别写内联空箭头（lint 拦下）。 */
 function noop() {
@@ -33,17 +24,25 @@ export default meta;
 
 type Story = StoryObj<typeof SettingsShell>;
 
+/** `Object.fromEntries` 只给到字符串索引 —— 用运行期补全校验收窄成外壳要的完整映射。 */
+function isSectionChildren(v: unknown): v is Record<Section, React.ReactNode> {
+  return isRecord(v) && SETTINGS_SECTIONS.every((item) => item.id in v);
+}
+
 /** 每个分区给一段占位正文 —— 只为了让锚点有实体。 */
-function sections(pad: string) {
-  /* SAFETY: 类型断言已复核 */
-  return Object.fromEntries(
+function sections(pad: string): Record<Section, React.ReactNode> {
+  const filled = Object.fromEntries(
     SETTINGS_SECTIONS.map((item) => [
       item.id,
       <p className={`text-ink text-sm ${pad}`} key={item.id}>
         这一节的正文（<code className="font-mono">{item.id}</code>）
       </p>,
     ]),
-  ) as Record<Section, React.ReactNode>;
+  );
+  if (!isSectionChildren(filled)) {
+    throw new Error("SETTINGS_SECTIONS 未覆盖全部分区");
+  }
+  return filled;
 }
 
 function Demo({ initial = "llmLocal", pad = "" }: { initial?: Section; pad?: string }) {

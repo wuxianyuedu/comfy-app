@@ -7,7 +7,7 @@
 //     也要能 import 它，一旦加上就把 §18.4 三选一里第三类（纯 Node 宿主）的口子
 //     关死了；
 //   · **不 import 任何 Node 内建值** —— `ws` 一律 `import type` 引入。
-//     扫描器 `scripts/lib-node-only-scan.mjs`（规范 §18.4）的 `parseImports`
+//     扫描器 `scripts/gates/lib-node-only-scan.mjs`（规范 §18.4）的 `parseImports`
 //     对 `type` 前缀的 clause 是**跳过**的，因此本模块既不会落进 `unguarded`
 //     （没声明却引 Node 内建），也不会被 `clientReachable` 抓到（浏览器图引
 //     Node-only 会整页 500）。这是「拆层不影响 import-graph 判定」的关键。
@@ -17,6 +17,8 @@
 
 import type WebSocket from "ws";
 
+import type { ReferenceLoaderPreset } from "~/lib/workshop/reference-loader-preset";
+
 export type RawWorkflowOverride = {
   name: string;
   nodeId: string;
@@ -24,6 +26,16 @@ export type RawWorkflowOverride = {
 };
 
 export type Job = {
+  /** 参考图装载计划（#4376）：键 `${nodeId}::${入口名}` → 预设定义。派发侧按
+   *  id 从预设库回查后放进 Job；id 对不上已删预设的端点不进这张表（执行期回落
+   *  裸 LoadImage）。 */
+  loaderPlan?: Record<string, ReferenceLoaderPreset>;
+
+  /** 部分执行目标（调试用，comfy-cli v1.24.0 `--output-node-ids`）：只跑这些
+   *  输出节点及其依赖子图。缺省 = 整图执行，与旧行为逐字一致。取值已经过
+   *  `sanitizeOutputNodeIds` 清洗（非空字符串、去重、封顶）。 */
+  outputNodeIds?: Array<string>;
+
   /** 执行前注入到原始 JSON 里的画布 `workflowInputs`。 */
   overrides?: Array<RawWorkflowOverride>;
 
@@ -146,10 +158,13 @@ export type RunnerState = {
   /** 当前使用的 WS 路径下标（连接失败时推进到下一条路径重试）。 */
   wsPathIndex: number;
 
-  /** 已向排队任务写入过「等待 ComfyUI 连接/启动」提示的 taskId 集合。
+  /** 已向排队任务写入过「等待 ComfyUI 连接/启动」提示的 taskId 集合（键=taskId）。
    *  防止领取循环每 2s 撞一次不就绪、对同一任务反复刷同一行。
-   *  领到该行时不清除（它已经不排队了）；下一轮全新提交是新的 taskId。 */
-  wsWaitLogged: Set<string>;
+   *  领到该行时不清除（它已经不排队了）；下一轮全新提交是新的 taskId。
+   *  封顶 + 插入序淘汰（ISSUE #4351）：清空路径只有 WS open 一条，ComfyUI 长期
+   *  不就绪时集合会随宕机期的新提示任务只增不减；写入侧经 `touchAndEvict`
+   *  限住（上限见 executor-dispatch 的 `WS_WAIT_LOGGED_MAX`）。 */
+  wsWaitLogged: Map<string, true>;
 };
 
 /** 建一份 RunnerState 的初始值。
@@ -178,6 +193,6 @@ export function createEmptyState(): RunnerState {
     reconnectAttempts: 0,
     wsPathIndex: 0,
     executedWorkflow: new Map(),
-    wsWaitLogged: new Set(),
+    wsWaitLogged: new Map(),
   };
 }

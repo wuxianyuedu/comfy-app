@@ -96,13 +96,13 @@
 另有四条本机单点：
 
 - **本地钩子 D0 那一档 = 10.7s 与 7.8s 两笔**（本增量的真实绿提交**自记账**，取前两笔；
-  取 `scripts/precommit-timing.mjs`，账本 `.git/comfy-precommit-timing.jsonl`，本机不入库）。
+  取 `scripts/gates/precommit-timing.mjs`，账本 `.git/comfy-precommit-timing.jsonl`，本机不入库）。
   旧盘那一笔是 **D0 组 16.1s / 步之和 15.4s**（§13.5.8.2.1）。方向是快，但**两条样本不构成新基线**——
   且这两笔都只动文档面（14 步里有两步因「未触及依赖面」早退）。
   最贵的三步（第一笔）：`故事面` 2.3s、`端口推导跨语言一致性` 1.6s、`UI/逻辑分离硬闸` 1.0s。
 - `pnpm install --frozen-lockfile` **无改动快路** = pnpm 自报 `Done in 1.7s`（含 pnpm 启动的墙钟 3.3s）。
 - 页面级运行时（`e2e/runtime-budget.spec.ts` 原口径：12 轮、弃前 4 轮取 min、dev 档 webServer）=
-  **`loadEventEnd 740.1ms / FCP 372.0ms`**，对照 `scripts/.runtime-budget-baseline.json` 的
+  **`loadEventEnd 740.1ms / FCP 372.0ms`**，对照 `e2e/.runtime-budget-baseline.json` 的
   win32 基线 716ms / 344ms ⇒ 一条 +3.4%、一条 +8.1%，仍在 ×2 预算内。**基线不改**（一条读数不足以
   重记基线，而那两份数的口径本来就写着「三次独立运行同值」——要重记就按同口径跑够三次）。
 - `每日单元测试` 那一格的 627.9s 是**节点身份**（服务账号 + 全新作业目录）的读数，
@@ -138,7 +138,7 @@
 ## 表 E：`每日单元测试` 内部的「断言 vs 装载税」分解（本地一跑，结案用）
 
 表 A 只给到那一格的**墙钟**（627.9s、1 红不是超时形态）。要决定「还剩多少可以治」，
-得看它自己那份分文件账 —— 执行者是 `scripts/full-suite-run.mjs` 的 `suitePhaseTax`
+得看它自己那份分文件账 —— 执行者是 `scripts/affected-tests/full-suite-run.mjs` 的 `suitePhaseTax`
 （ISSUE #2010 那一格建的读数）。本地跑一次：`pnpm test:coverage:tracked`
 （10-21 13:26:59 起跑、约 13:38 收尾，load 每核 0.00 起跑，16 核 / `maxWorkers=4`，master `1a838b20` 之后）：
 
@@ -226,7 +226,7 @@
    `Symlink [project]/node_modules is invalid, it points out of the filesystem root`。
    成因形状：接槽把作业里的 `node_modules` 做成**指向项目根之外**的 junction（槽根由
    `pnpm store path` 推导 ⇒ `G:\ci-cache\comfy-app-t3\<key>`，作业在 `G:\runner\…\workspace`），
-   而 `scripts/ci-slot-apply.mjs` 头注那句「接过去是干净的」**只验过 `tsc` 与 `vitest`**（第 1 条实测），
+   而 `scripts/ci/ci-slot-apply.mjs` 头注那句「接过去是干净的」**只验过 `tsc` 与 `vitest`**（第 1 条实测），
    从没验过 `next build`。臂 B（不接槽）过了 Turbopack 跑到 121.3s ⇒ **红归给接槽，不归给搬盘**。
    开关是 2026-10-20 拨的（#2049/#2051），而每日那一跑上一次执行是当天 04:00（拨开关之前）——
    所以这是这两格第一次组合，不是回归。
@@ -321,7 +321,7 @@
      - 与 `theme-toggle.spec.ts` **同跑** ⇒ 同一条断言翻红（8 tests / 14.0s，`1 failed / 7 passed`），
        消息与 CI 同形、只有 α 落在不同档：`light档网格线色相应当是 [0, 0, 0]，实际 [148,163,184]
        （… / 0.6）`，CI 那一跑是 `… / 0.22`；
-     - 全量档本地复跑（`COMFY_E2E_SERVER=start node scripts/e2e-run.mjs`，产物按当轮 master 重建）⇒
+     - 全量档本地复跑（`COMFY_E2E_SERVER=start node scripts/e2e/e2e-run.mjs`，产物按当轮 master 重建）⇒
        **`1 failed / 80 passed`（1.3m）**，与 CI 那一跑（100.0s、同样 `1 failed / 80 passed`）逐字同形。
      ⇒ 差异**不在执行面（`SKIP_ENV_VALIDATION` / 占位 secret）、不在库**（本地 `db:push` 后 23 张表、
      schema 收敛，红照旧）、**也不在搬盘**。
@@ -350,8 +350,8 @@
      让 provider 自己落地：它在那条「二次代入」上把**用例自己搭的前提**拆了
      （要先「建项目 → 开画布」才有可测 DOM），红从「色相取错」变成 `解析不出颜色：none`。
    · **修后本地读数**：最小复现两格同跑 `8 passed`（13.9s）；整档
-     `COMFY_E2E_SERVER=start node scripts/e2e-run.mjs` ⇒ **`81 passed`（1.5m）**，
-     e2e 新鲜度账随之登记（`scripts/.e2e-freshness.json` 随本增量提交）。
+     `COMFY_E2E_SERVER=start node scripts/e2e/e2e-run.mjs` ⇒ **`81 passed`（1.5m）**，
+     e2e 新鲜度账随之登记（`scripts/freshness/.e2e-freshness.json` 随本增量提交）。
      同形隐患一处未在本增量内改：`e2e/view-tabs.spec.ts:147-151` 是同一句手写 `classList`
      且同样不验状态是否生效 —— 它现在是绿的，把一个 lucky-green 改成会红不属于本刀的范围，
      已记在 #2100 的收口评论里。
@@ -532,7 +532,7 @@ cnb-lao-1k5gho1pn  event=api_trigger_build  branch=master
   ⇒ 明天起，每日那一跑里某一格变慢**不许**照旧登记成判据回归，先分清当时那台机上还有谁。
 
 同批动的现役时刻：`.cnb.yml` 事件键 + 它旁边那段注释（「这个点换过一次」→「换过两次」）、
-`AGENTS.md`、`docs/standards/11`、`docs/standards/13`（18 处）、`scripts/ci-cache-slot.mjs`
+`AGENTS.md`、`docs/standards/11`、`docs/standards/13`（18 处）、`scripts/ci/ci-cache-slot.mjs`
 那句 26h TTL 的理由。**历史数据一律没动** —— 本页立案 4 的逐晚表、
 `changelog.d/2114-daily-run-moved-to-0200.md`、以及规范里那句「04:00 缺勤 2 次、02:00 缺勤 1 次」，
 它们记的是当时量到的事。
@@ -560,11 +560,11 @@ cnb-lao-1k5gho1pn  event=api_trigger_build  branch=master
 （上一节那句「样本只有四晚」的边界仍然成立 —— 一次成功不保证下一个夜里人收工更早）。
 也顺带回答了本页表 B 那条：`每日安装依赖` 在这一跑是 256.4s（冷态），与「每日那一跑拿到的一直是冷态」一致。
 
-**出路 1 落地**：`pnpm check:daily-attendance`（`scripts/check-daily-attendance.mjs`）。
+**出路 1 落地**：`pnpm check:daily-attendance`（`scripts/gates/check-daily-attendance.mjs`）。
 按 `crontab:` **前缀** + 两条手点 / API 口认每日派发（写死钟点的判据在第二次换时刻时就该静默失效了），
 三态退码 0 出勤 / 1 缺勤 / **2 没结论或取不到读数（不算绿）**，逐格判定整个复用
 `ci-build-readout.mjs` 那份四档（不写第二份），登记在 `quality-gate.mjs` 的
-`GATES.dailyAttendance`（`run: false`）+ `scripts/.on-demand-duties.json` 的一行
+`GATES.dailyAttendance`（`run: false`）+ `scripts/gates/.on-demand-duties.json` 的一行
 （`fact.kind = gate-not-in-all`）——它不进 `.gate-executor-ledger.json` 的 `onDemand`，
 那个位置是「一个执行者都没有」的那一档，而这里有名字。今晚这一跑用它读出来是：
 

@@ -1,15 +1,13 @@
 "use client";
 
-/* CanvasNode 的可折叠的错误面板。
- * 负责 errExpanded 开关状态 + shouldAutoExpand / errorSuggestion
- * 两个推导，并渲染整个面板 JSX（展开/收起、复制、重试、
- * 建议）。父组件无条件渲染 <ErrorPanel/>；节点不处于
- * 可见错误态时，组件在 hooks 之后返回 null，好让展开状态的
- * 生命周期与拆分前内联 JSX 完全一致（隐藏期间状态保留，
- * running/idle 切换时重置）。 */
+/* CanvasNode 的可折叠错误面板：负责 errExpanded 开关状态 + shouldAutoExpand /
+ * errorSuggestion 推导，并渲染整个面板 JSX（展开/收起、复制、重试、建议）。
+ * 父组件无条件渲染；非可见错误态时在 hooks 之后返回 null，使展开状态的生命周期
+ * 与拆分前内联 JSX 一致（隐藏期间保留，running/idle 切换时重置）。 */
 import { useMemo, useState } from "react";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { Hint } from "~/components/ui/hint";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -58,15 +56,11 @@ export function ErrorPanel({
   workflowName,
   onRetry,
 }: ErrorPanelProps) {
-  /* 错误面板状态 —— 默认收起（只有一行摘要），
-   * 可展开查看后端原始错误（含 ComfyUI traceback）。
-   * 每次新运行开始时重置为收起，好让下一次失败
-   * 以干净状态呈现，用户不会看到上次残留的展开态。
-   *
-   * 错误信息里出现 ComfyUI 的
-   *"Node X not found" /"OOM" /"Cannot find model" / 5xx 形态时，
-   * 面板自动展开，让用户能看到可行动的
-   * 上下文（taskId、请求 payload、建议）。 */
+  /* 错误面板状态 —— 默认收起（只有一行摘要），可展开查看后端原始错误
+   * （含 ComfyUI traceback）。每次新运行开始时重置为收起，下一次失败以干净
+   * 状态呈现。错误信息出现 ComfyUI 的 "Node X not found" / "OOM" /
+   * "Cannot find model" / 5xx 形态时面板自动展开，让可行动的上下文
+   * （taskId、请求 payload、建议）直接可见。 */
   const [errExpanded, setErrExpanded] = useState(false);
   /* 每次新运行开始时重置为收起（渲染期间调整，
    * React 19 模式）。 */
@@ -97,8 +91,12 @@ export function ErrorPanel({
    * 静默** —— 它本身就是一段可见文本，点它只是省一次选中。 */
   const [detailCopyFailed, setDetailCopyFailed] = useState(false);
   const copyDetail = useCopyFeedback({
-    onSuccess: () => setDetailCopyFailed(false),
-    onFailure: () => setDetailCopyFailed(true),
+    onSuccess: () => {
+      setDetailCopyFailed(false);
+    },
+    onFailure: () => {
+      setDetailCopyFailed(true);
+    },
   });
   const copyTaskId = useCopyFeedback({ onFailure: "silent" });
 
@@ -119,13 +117,13 @@ export function ErrorPanel({
     if (trimmed && trimmed !== "[object Object]" && trimmed !== "[unserializable error]") {
       errText = trimmed;
     }
-  } else if (raw && typeof raw === "object") {
+  } else if (raw !== undefined && typeof raw === "object") {
     errText = jsonOrString(raw, true);
   }
 
   const rawTs = errorContext?.timestamp;
   let ts: string | null = null;
-  if (rawTs) {
+  if (rawTs !== undefined && rawTs !== "") {
     const dt = new Date(rawTs);
     ts = Number.isNaN(dt.getTime()) ? rawTs : formatLocalStamp(dt);
   }
@@ -136,7 +134,9 @@ export function ErrorPanel({
    * （而不是在父级拦住挂载），好让展开 / 重置生命周期
    * 每次渲染都跑一遍，与原来的
    * 内联块完全一致。 */
-  if (!(status === "error" && (error || (validationErrors?.length ?? 0) > 0))) {
+  const hasVisibleError =
+    (error !== undefined && error !== "") || (validationErrors?.length ?? 0) > 0;
+  if (status !== "error" || !hasVisibleError) {
     return null;
   }
 
@@ -147,41 +147,52 @@ export function ErrorPanel({
         <div className="min-w-0 flex-1">
           {/* 头部行：状态徽标 + 工作流名 + 动作 */}
           <div className="flex items-center justify-between gap-1.5">
-            <span className="text-danger-strong min-w-0 truncate font-medium">
-              {errorStatus === "TIMEOUT"
-                ? "轮询超时"
-                : errorStatus === "CANCELLED"
-                  ? "任务被取消"
-                  : errorStatus
-                    ? "生成失败"
-                    : "未捕获异常"}
-              <span className="text-danger-strong/60 ml-1">
-                · {errorStatus ? `task ${errorStatus}` : "client"}
-              </span>
-            </span>
-            <div className="flex shrink-0 items-center gap-1">
-              {kind === "workflow" && workflowName && (
-                <span
-                  className="border-destructive/15 bg-destructive/10 text-danger-strong/80 rounded border px-1.5 py-0.5 font-mono text-[9.5px]"
-                  title="执行的工作流"
-                >
-                  {/* 转型说明：CanvasNodeData 有 [key: string]: unknown
-                   * 索引签名，会在 JSX 读取时把 d.workflowName 放宽成
-                   * unknown。显式 String() 修好
-                   * ReactNode 兼容性，照顾少见的包裹联合。
-                   */}
-                  {String(workflowName)}
+            <Hint
+              label={`${
+                errorStatus === "TIMEOUT"
+                  ? "轮询超时"
+                  : errorStatus === "CANCELLED"
+                    ? "任务被取消"
+                    : errorStatus
+                      ? "生成失败"
+                      : "未捕获异常"
+              } · ${errorStatus ? `task ${errorStatus}` : "client"}`}
+            >
+              <span className="text-danger-strong min-w-0 truncate font-medium">
+                {errorStatus === "TIMEOUT"
+                  ? "轮询超时"
+                  : errorStatus === "CANCELLED"
+                    ? "任务被取消"
+                    : errorStatus
+                      ? "生成失败"
+                      : "未捕获异常"}
+                <span className="text-danger-strong/60 ml-1">
+                  · {errorStatus ? `task ${errorStatus}` : "client"}
                 </span>
+              </span>
+            </Hint>
+            <div className="flex shrink-0 items-center gap-1">
+              {kind === "workflow" && workflowName !== undefined && workflowName !== "" && (
+                <Hint label="执行的工作流">
+                  <span className="border-destructive/15 bg-destructive/10 text-danger-strong/80 rounded border px-1.5 py-0.5 font-mono text-[9.5px]">
+                    {/* 转型说明：CanvasNodeData 有 [key: string]: unknown
+                     * 索引签名，会在 JSX 读取时把 d.workflowName 放宽成
+                     * unknown。显式 String() 修好
+                     * ReactNode 兼容性，照顾少见的包裹联合。
+                     */}
+                    {String(workflowName)}
+                  </span>
+                </Hint>
               )}
               {/* 用同一份参数重跑。仅当有 taskId（即任务真的跑过）且不是
                * 预检阶段的校验错误时才出现。用 Boolean() 包一层是为了让 TS
                * 满意 ——`d.errorContext?.request` 的类型是`unknown`。 */}
-              {Boolean(errorContext?.request) && taskId && (
+              {Boolean(errorContext?.request) && taskId !== undefined && taskId !== "" && (
                 <Hint label="用相同参数重跑一次">
                   <Button
                     className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
                     onClick={() => {
-                      void onRetry(errorContext?.request);
+                      onRetry(errorContext?.request);
                     }}
                     variant="outline"
                   >
@@ -192,7 +203,9 @@ export function ErrorPanel({
               <Hint accessibleName label={errExpanded ? "收起错误详情" : "展开错误详情"}>
                 <Button
                   className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
-                  onClick={() => setErrExpanded((value) => !value)}
+                  onClick={() => {
+                    setErrExpanded((value) => !value);
+                  }}
                   variant="outline"
                 >
                   {errExpanded ? "▲" : "▼"}
@@ -272,13 +285,16 @@ export function ErrorPanel({
               {/* 1) 任务上下文：taskId（可点击复制）+ 时间 */}
               {hasCtx && (
                 <div className="bg-canvas-deep border-destructive/15 text-3xs grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border px-1.5 py-1">
-                  {taskId && (
+                  {taskId !== undefined && taskId !== "" && (
                     <>
                       <span className="text-danger-strong/60">taskId</span>
-                      <Hint label="点击复制 taskId">
+                      {/* 悬停给纯文本 taskId 全文 + 点击复制的 affordance；点击仍走复制。 */}
+                      <Hint label={`${taskId}（点击复制）`}>
                         <Button
                           className="nodrag nopan text-danger-strong/90 hover:text-danger-strong h-auto min-w-0 truncate p-0 text-left font-mono font-normal hover:bg-transparent"
-                          onClick={() => copyTaskId(taskId)}
+                          onClick={() => {
+                            copyTaskId(taskId);
+                          }}
                           variant="ghost"
                         >
                           {taskId}
@@ -286,17 +302,17 @@ export function ErrorPanel({
                       </Hint>
                     </>
                   )}
-                  {ts && (
+                  {ts !== null && ts !== "" && (
                     <>
                       <span className="text-danger-strong/60">时间</span>
-                      <span className="text-danger-strong/80 truncate">{ts}</span>
+                      <TruncatedText className="text-danger-strong/80 truncate">{ts}</TruncatedText>
                     </>
                   )}
                 </div>
               )}
 
               {/* 2) 自动建议 — 正则推断的纠错提示 */}
-              {errorSuggestion && (
+              {errorSuggestion !== null && errorSuggestion !== "" && (
                 <Alert
                   className="text-3xs block rounded px-2 py-1 leading-relaxed"
                   variant="warning"
@@ -307,7 +323,7 @@ export function ErrorPanel({
               )}
 
               {/* 3) 请求参数快照 */}
-              {errorContext?.request ? (
+              {errorContext !== undefined && Boolean(errorContext.request) ? (
                 <Disclosure
                   className="text-danger-strong text-3xs hover:brightness-110"
                   defaultOpen

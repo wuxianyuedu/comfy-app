@@ -5,6 +5,7 @@ import { ensureComfyUiReady } from "~/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
 import { apiErrorDetail } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { contentLengthOverLimit } from "~/server/lib/upload-limit";
 import { uniqueStamp } from "~/lib/unique-id";
 import { extOfPath } from "~/lib/media/mime-ext";
 import { fixed } from "~/lib/number-format";
@@ -28,11 +29,24 @@ export async function POST(req: NextRequest) {
     return unauthorizedResponse();
   }
 
-  const form = await req.formData();
-  /* SAFETY: 类型断言已复核 */
-  const file = form.get("image") as File | null;
-  if (!file) {
+  /* Content-Length 预拒（#4451）：挡住「先全量缓冲几 GB 再拒绝」的 OOM 形态；
+   * 权威校验仍是解析后的 file.size。 */
+  if (contentLengthOverLimit(req, MAX_UPLOAD_BYTES)) {
+    return NextResponse.json({ error: "图片大小不能超过 50MB" }, { status: 400 });
+  }
+
+  /* 畸形表单是客户端错误 → 400（#4045）：与 bgm / materials 同一口径，
+   * 不让它落成未捕获的 500 非 JSON 体。 */
+  const form = await req.formData().catch(() => null);
+  if (form === null) {
+    return NextResponse.json({ error: "表单解析失败" }, { status: 400 });
+  }
+  const file = form.get("image");
+  if (file === null) {
     return NextResponse.json({ error: "未收到文件" }, { status: 400 });
+  }
+  if (typeof file === "string") {
+    return NextResponse.json({ error: "仅支持 PNG / JPG / WebP / GIF 图片" }, { status: 400 });
   }
   if (!ALLOWED_MIME.has(file.type)) {
     return NextResponse.json({ error: "仅支持 PNG / JPG / WebP / GIF 图片" }, { status: 400 });
@@ -52,7 +66,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const res = await uploadImage(buf, filename, "input");
-    if (!res.name) {
+    if (res.name === undefined || res.name === "") {
       return NextResponse.json({ error: "上传失败" }, { status: 500 });
     }
     return NextResponse.json({ name: res.name });

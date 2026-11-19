@@ -1,6 +1,6 @@
-import { listModels, comfyBase } from "./comfyui/client";
-import { modelRepository, userModelConfigRepository } from "./core/repository";
-import type { ModelType } from "./model-types";
+import { listModels, listModelFolders } from "./comfyui/client";
+import { modelRepository } from "./core/repository";
+import { isModelFileName, isModelFolder, type ModelType } from "./model-types";
 
 export function baseFromName(name: string): string {
   const lower = name.toLowerCase();
@@ -29,24 +29,6 @@ export function stripExt(fileName: string): string {
   return fileName.replace(/\.[^.]+$/, "");
 }
 
-/* 同步流程用来判断「要不要从磁盘重新填充」的健康探测。
- *
- * 它不是整个同步的守卫 —— 每次同步都会**先**退掉所有 LOCAL 行，
- * 因此模型库不会谎称自己与 `UserModelConfig` 同步。
- * 用户一个目录都没配（或全部禁用）时，无论 ComfyUI 通不通，库里都是空的；
- * 这个探测只决定「要不要接着尝试从磁盘回填」。
- */
-async function isComfyReachable(): Promise<boolean> {
-  try {
-    const res = await fetch(`${comfyBase()}/system_stats`, {
-      signal: AbortSignal.timeout(1500),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
 type ScannedFile = {
   baseModel: string;
   fileName: string;
@@ -57,48 +39,49 @@ type ScannedFile = {
 
 /* 把磁盘上的 ComfyUI 模型同步进本项目的注册表。
  *
- * 零隐式默认：只访问用户在 `UserModelConfig` 里明确启用的目录。
+ * 所有 ComfyUI 模型目录默认全部启用 —— 这与 ComfyUI 自身的默认状态一致，
+ * 不再有「用户挑目录」这一步。目录清单以 ComfyUI 的 `GET /api/models` 为准：
+ * 它返回空即视为连不上，库保持为空。
  * 每个目录**就是**它自己的模型类型 —— `Model.type` 的值直接就是目录名原样
  *（不做分类学重映射，也不给每一行加别的类型）。
  * 某个目录的文件只归属于该目录的类型。
  *
+ * 收录判据见 `model-types.ts`（ISSUE #3368）：非模型用途的目录（custom_nodes）
+ * 整个排除；目录里的文件按**模型扩展名**过滤 —— ComfyUI 对目录列的是全部文件，
+ * 插件仓库的源码 / 文档不该进模型库。过滤后没剩任何文件的目录不落库，
+ * 目录列与计数随之自然消失。
+ *
  * 返回同步到的模型文件数。
  */
-export async function syncModels(userId?: string): Promise<number> {
-  // 解析该用户的「目录 → 是否启用」映射。映射为空说明用户一个目录都没配
-  // → 库为空。
-  type FolderOverride = { enabled: boolean; isCustom: boolean };
-  const overrides = new Map<string, FolderOverride>();
-  if (userId) {
-    const rows = await userModelConfigRepository.listByUser(userId);
-    for (const r of rows) {
-      overrides.set(r.folder, { enabled: r.enabled, isCustom: r.isCustom });
-    }
-  } else {
-    // 兼容旧路径（不带用户）：/api/models/sync 已不再走它。
-    return 0;
-  }
-
-  // 第 1 步 —— 无条件退掉所有 LOCAL 行。
-  await modelRepository.disableAllLocal();
-
-  // 第 2 步 —— 只在 ComfyUI 可达时才从磁盘回填。
-  if (!(await isComfyReachable())) {
+export async function syncModels(): Promise<number> {
+  // 第 1 步 —— 先扫描、后落库（ISSUE #3869）：目录扫描是秒级 IO，可能失败/超时
+  //（ComfyUI 正在重启等）。原先「先无条件全量停用、再扫描、再回填」三段各自
+  // 提交，扫描失败会把模型库整表留在不可用状态直到下次成功同步。改成先算后写：
+  // 扫描抛错时库内现有数据一字不动。
+  const folders = (await listModelFolders()).filter(isModelFolder);
+  if (!folders.length) {
+    // 目录清单为空（视为连不上/确实无模型）：保持既有语义——全部 LOCAL 行不可用。
+    await modelRepository.disableAllLocal();
     return 0;
   }
 
   /* 按目录**并发**拉取：原先是串行 await，目录一个接一个等，总耗时是所有目录
-   * 的往返之和。目录数就是模型类型数（十几个），并发不会打爆本地 ComfyUI。 */
-  const enabledFolders = [...overrides].filter(([, ov]) => ov.enabled).map(([folder]) => folder);
+   * 的往返之和。目录数就是模型类型数，并发不会打爆本地 ComfyUI。 */
   const perFolder = await Promise.all(
-    enabledFolders.map(async (folder) => ({
+    folders.map(async (folder) => ({
       folder,
-      files: await listModels(folder),
+      files: (await listModels(folder)).filter(isModelFileName),
     })),
   );
 
   const scanned: Array<ScannedFile> = [];
   for (const { folder, files } of perFolder) {
+    /* 过滤后为空的目录不落库：数据库里没有它的行，目录列与计数自然为零。
+     *（isAvailable 的既有语义不承载「目录在不在」——停用行是同步重置的产物，
+     * 这里不靠它表达。） */
+    if (files.length === 0) {
+      continue;
+    }
     for (const fileName of files) {
       const name = stripExt(fileName);
       scanned.push({
@@ -111,18 +94,18 @@ export async function syncModels(userId?: string): Promise<number> {
     }
   }
 
-  /* 一次性批量落库：模型目录常数百到数千文件，逐条 `await upsertScanned`
-   * 就是同数量的数据库往返，同步接口因此长时间挂起。 */
-  await modelRepository.upsertScannedMany(scanned);
+  // 第 2 步 —— 「全量停用 + 批量回填」收进同一事务原子提交（ISSUE #3869）：
+  // 回填分片逐片执行但同滚，中途失败不会留下「部分模型可见、部分不可见」的中间态。
+  await modelRepository.applyLocalSync(scanned);
 
   return scanned.length;
 }
 
 /* 为画布下拉框的并集（P4）查询本地已同步的模型文件名。
  *
- * `folders` 是目录名（它们**就是**模型类型）。先匹配 `UserModelConfig` 里
- * `folder` 属于所请求集合的已启用行，再从 `Model` 取出去重后的 `fileName`，
- * 条件是 `isAvailable=true` 且 `folder` 属于这些目录之一。
+ * `folders` 是目录名（它们**就是**模型类型）。所有目录默认启用，因此直接从
+ * `Model` 取出去重后的 `fileName`，条件是 `isAvailable=true` 且 `folder` 属于
+ * 所请求的目录集合。
  *
  * 重要：返回值是**原样**的（含扩展名）。ComfyUI 的 COMBO 候选就是
  * `/api/models/<folder>` 的原始条目 —— 例如
@@ -132,16 +115,10 @@ export async function localModelFileNames(folders: Array<string>): Promise<Array
   if (!folders.length) {
     return [];
   }
-  const enabled = await userModelConfigRepository.listEnabledFolders();
-  const wanted = new Set(folders);
-  const matchedFolders = enabled.filter((enabled) => wanted.has(enabled));
-  if (!matchedFolders.length) {
-    return [];
-  }
-  return modelRepository.listAvailableFileNamesByFolders(matchedFolders);
+  return modelRepository.listAvailableFileNamesByFolders(folders);
 }
 
-/** File counts per folder, for the config modal's "文件数" column. */
+/** 每个目录的可用文件数（首页模型概览与模型库目录列共用）。 */
 export async function modelCountsByFolder(): Promise<Record<string, number>> {
   return modelRepository.countsByFolder();
 }

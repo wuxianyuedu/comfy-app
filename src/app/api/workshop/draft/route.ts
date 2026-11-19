@@ -1,9 +1,6 @@
-// Workshop 前端项目草稿的服务端镜像：读 / 写 / 删。
-//   端点：GET /api/workshop/draft?project=<wsp_*>  → { exists, draft? }
-//   端点：PUT /api/workshop/draft  { project, draft } → { ok: true }
-//   端点：DELETE /api/workshop/draft?project=<wsp_*> → { ok: true }
-// 目的：工坊界面编辑的剧本/角色/分镜不再只落浏览器 localStorage —— 每次
-// 自动保存也写穿到本地 db.sqlite 的 workshopDraft 表，清缓存也不丢。
+// Workshop 前端项目草稿的服务端镜像：GET /api/workshop/draft?project=<wsp_*> → { exists, draft? }；
+// PUT { project, draft } → { ok: true }；DELETE (同上 query) → { ok: true }。
+// 目的：工坊编辑的剧本/角色/分镜不再只落 localStorage —— 每次自动保存也写穿到本地 db.sqlite 的 workshopDraft 表，清缓存也不丢。
 // 鉴权沿用 requireRequestUser（未开启登录门槛时回落本地演示用户，单机照常可用）。
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -26,7 +23,7 @@ const UNAUTHORIZED = () => unauthorizedResponse();
 
 function projectIdFrom(q: string | null): string | null {
   const trimmed = q?.trim();
-  if (trimmed) {
+  if (trimmed !== undefined && trimmed !== "") {
     return trimmed;
   }
   return null;
@@ -40,7 +37,7 @@ export async function GET(req: NextRequest) {
   const project = projectIdFrom(req.nextUrl.searchParams.get("project"));
   try {
     // 不带 project → 返回该用户全部服务端项目摘要（本地索引被清空时用来重建）。
-    if (!project) {
+    if (project === null || project === "") {
       const drafts = await listDraftsByUser(user.id);
       return NextResponse.json({ drafts });
     }
@@ -67,11 +64,24 @@ export async function PUT(req: NextRequest) {
     return body;
   }
   const project = typeof body.project === "string" && body.project ? body.project : null;
-  if (!project) {
+  if (project === null || project === "") {
     return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
   }
   const draft = parseDraftDto(body.draft);
   try {
+    /* ifNewer（#4023）：两侧都带版本时刻时，更旧的 PUT 不覆盖较新的镜像——
+     * 旧标签页 / 旧窗口迟到的自动保存不再回滚别处的新编辑。缺时刻（旧数据）
+     * 保持原样落库，行为与此前一致。 */
+    const existing = await getDraft(project);
+    const incomingAt = draft.updatedAt;
+    const existingAt = existing?.updatedAt;
+    if (
+      typeof incomingAt === "number" &&
+      typeof existingAt === "number" &&
+      incomingAt < existingAt
+    ) {
+      return NextResponse.json({ ok: true, stale: true });
+    }
     await upsertDraft(project, draft, user.id);
     return NextResponse.json({ ok: true });
   } catch (error) {
@@ -87,12 +97,14 @@ export async function DELETE(req: NextRequest) {
     return UNAUTHORIZED();
   }
   const project = projectIdFrom(req.nextUrl.searchParams.get("project"));
-  if (!project) {
+  if (project === null || project === "") {
     return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
   }
   try {
-    await deleteDraft(project);
-    return NextResponse.json({ ok: true });
+    const deleted = await deleteDraft(project);
+    /* 幂等应答带 alreadyGone（#4048）：与 materials 的 DELETE 同一判据——
+     * 「删了不存在的东西」对调用方可见，而不是无差别 ok。 */
+    return NextResponse.json({ ok: true, alreadyGone: !deleted });
   } catch (error) {
     return NextResponse.json(apiErrorBody(error, "删除服务端草稿失败"), {
       status: 500,

@@ -1,33 +1,16 @@
 /**
- * `/api/custom-nodes` 的判据：**POST 的 argv 闸门（台账 A6）+ GET 的只读侧（台账 E7 最后一格）**。
- *
- * POST 这一半：这个端点会把客户端传来的字符串**拼进 spawn 的 argv**（Python 解析器），所以它
- * 的危险不是 SQL 那种「查别人的行」，而是「让自己的命令行多出两个 token」：
- * 解析器本身写死了 `--out=<manifest>` / `--report-out=<report>`，一旦包名能带
- * `--out=...`，客户端就能把生成物写到机器上任意路径（任意文件覆写）。
- * 判据收在 `safeSpawnArg()`：flag 形态、空/超长、shell 元字符一律拒。
- *
- * 因此用例的分工是「**拒绝必须发生在 spawn 之前**」—— 只在响应码上打勾是不够的，
- * 请求已经发出去了就等于没拦住。正面一条（合法包名）同时钉住 argv 的形状：
- * `--only-pkgs` 永远是**一个**值、`--out` 的位置与内容不许被客户端挪动。
- *
- * GET 这一半判的是「磁盘上那份清单到底被读成了什么」：摘要按 `(size, mtime)` 指纹短路缓存、
- * 报告原样透传、冷/热两条返回形态（ndjson 流 vs 直接 JSON）。此前**零执行者**，
- * 于是「指纹不变 → 界面永远显示上一次解析的结果」这类洞没有任何东西能照出来。
- *
- * mock 边界：`node:child_process`（换成可编程的假子进程，绝不真起 Python）、
- * `~/server/auth/request-user`（鉴权两态）、`~/lib/app-settings/app-settings.server`
- * 与 `~/lib/envfile`（扫描根的推导口径 —— 这里只关心「有没有配过」）、
- * `node:fs`（**只包一层**：命中本文件显式管理的两个路径才给假内容，其余一律转调真实现 ——
- * 摘要与指纹的逻辑本身必须由被测代码真跑一遍，替它写一份就等于没测）。
+ * `/api/custom-nodes` 的判据：POST 的 argv 闸门（台账 A6）+ GET 的只读侧（台账 E7 最后一格）。POST：客户端字符串会拼进
+ * spawn argv，包名带 `--out=...` 就是任意文件覆写，判据收在 `safeSpawnArg()` 且拒绝必须发生在 spawn 之前；GET：摘要按
+ * `(size, mtime)` 指纹短路缓存、报告原样透传。mock 边界：`node:fs` 只包一层（命中登记路径才给假内容，指纹逻辑必须真跑）。
  */
 import path from "node:path";
 import type * as nodeFs from "node:fs";
 import type { PathLike } from "node:fs";
-import type { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import { customNodesManifestPath } from "~/lib/comfyui/custom-nodes-manifest.server";
+import { isRecord } from "~/lib/is-record";
 import { pythonCandidates } from "~/lib/process/python-candidates";
 
 type Cb = (...args: Array<unknown>) => void;
@@ -38,10 +21,9 @@ type FakeChild = {
 };
 
 /**
- * 假文件系统的登记表（只覆盖下面这两个路径，其余转调真 `node:fs`）。
- *
- * 路径是开发机上「解析过一次就会长出来」的那两个，所以每条用例都**显式**登记自己那一档
- *（包括「不存在」）—— 否则同一个断言在解析过一次的机器上会与在干净检出上不同形。
+ * 假文件系统的登记表（只覆盖这两个路径，其余转调真 `node:fs`）。
+ * 这两个路径在「解析过一次」的开发机上就会长出来，所以每条用例都显式登记自己那一档
+ *（包括「不存在」），否则同一断言在解析过的机器上与干净检出上不同形。
  */
 type StubFile = {
   /** 连「在不在」都问不出来（挂载点失效 / 权限）—— 路由的 try/catch 就是为这一档写的。
@@ -62,7 +44,7 @@ const { spawnMock, userMock, settingsMock, fsState } = vi.hoisted(() => {
   const files = new Map<string, StubFile>();
   const reads = new Map<string, number>();
   return {
-    spawnMock: vi.fn(),
+    spawnMock: vi.fn<(command: string, args?: Array<string>) => unknown>(),
     userMock: vi.fn<() => Promise<{ id: string } | null>>(),
     settingsMock: vi.fn<() => { comfyuiPath: string }>(() => ({
       comfyuiPath: "C:/ComfyUI",
@@ -87,13 +69,22 @@ vi.mock("~/lib/envfile", () => ({ readEnvVar: () => undefined }));
  * 一律转调真实现 —— 摘要与指纹的逻辑本身必须由被测代码真跑一遍。 */
 vi.mock("node:fs", async (importOriginal) => {
   const real = await importOriginal<typeof nodeFs>();
-  const keyOf = (p: unknown): string =>
-    typeof p === "string"
-      ? p
-      : p instanceof URL
-        ? p.href
-        : /* SAFETY: 类型断言已复核 */
-          (p as { toString(): string }).toString();
+  /** `unknown` 收窄成 `BufferEncoding`：只认 Node 自己认的编码名。 */
+  const isBufferEncoding = (v: unknown): v is BufferEncoding =>
+    typeof v === "string" && Buffer.isEncoding(v);
+  /** `PathLike`（string / URL / Buffer）→ 登记表的键；别的形状这里不认识。 */
+  const keyOf = (p: unknown): string => {
+    if (typeof p === "string") {
+      return p;
+    }
+    if (p instanceof URL) {
+      return p.href;
+    }
+    if (Buffer.isBuffer(p)) {
+      return p.toString();
+    }
+    throw new Error(`桩 fs 不认识的路径类型：${String(p)}`);
+  };
   const stub = {
     ...real,
     existsSync: (p: PathLike): boolean => {
@@ -101,7 +92,7 @@ vi.mock("node:fs", async (importOriginal) => {
       if (hit) {
         /* 「在不在」都问不出来（挂载点失效 / 权限）是路由那层 try/catch 存在的理由，
          * 所以这一档要能造出来 —— 不能让假 fs 只会返回布尔值。 */
-        if (hit.existsFails) {
+        if (hit.existsFails === true || hit.existsFails === "silent") {
           if (hit.existsFails === "silent") {
             throw new Error("");
           }
@@ -109,7 +100,7 @@ vi.mock("node:fs", async (importOriginal) => {
             code: "EACCES",
           });
         }
-        return !hit.missing;
+        return hit.missing !== true;
       }
       return real.existsSync(p);
     },
@@ -117,17 +108,25 @@ vi.mock("node:fs", async (importOriginal) => {
       const k = keyOf(p);
       const hit = fsState.files.get(k);
       if (!hit) {
-        /* SAFETY: 类型断言已复核 */
-        return (real.readFileSync as (a: unknown, b: unknown) => unknown)(p, options);
+        if (options === undefined) {
+          return real.readFileSync(p);
+        }
+        if (options === null) {
+          return real.readFileSync(p, null);
+        }
+        if (isBufferEncoding(options)) {
+          return real.readFileSync(p, options);
+        }
+        throw new Error(`桩 fs 不认识的 readFileSync options 类型：${typeof options}`);
       }
-      if (hit.missing || hit.readFails) {
+      if (hit.missing === true || hit.readFails === true) {
         /* SAFETY: 类型断言已复核 */
         const e = new Error(
-          hit.missing
+          hit.missing === true
             ? `ENOENT: no such file or directory, open '${k}'`
             : `EIO: i/o error, read '${k}'`,
         ) as NodeJS.ErrnoException;
-        e.code = hit.missing ? "ENOENT" : "EIO";
+        e.code = hit.missing === true ? "ENOENT" : "EIO";
         throw e;
       }
       fsState.reads.set(k, (fsState.reads.get(k) ?? 0) + 1);
@@ -137,17 +136,16 @@ vi.mock("node:fs", async (importOriginal) => {
       const k = keyOf(p);
       const hit = fsState.files.get(k);
       if (!hit) {
-        /* SAFETY: 类型断言已复核 */
-        return (real.statSync as (a: unknown) => unknown)(p);
+        return real.statSync(p);
       }
-      if (hit.missing || hit.statFails) {
+      if (hit.missing === true || hit.statFails === true) {
         /* SAFETY: 类型断言已复核 */
         const e = new Error(
-          hit.missing
+          hit.missing === true
             ? `ENOENT: no such file or directory, stat '${k}'`
             : `EACCES: permission denied, stat '${k}'`,
         ) as NodeJS.ErrnoException;
-        e.code = hit.missing ? "ENOENT" : "EACCES";
+        e.code = hit.missing === true ? "ENOENT" : "EACCES";
         throw e;
       }
       return {
@@ -162,6 +160,49 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import { GET, POST } from "./route";
+
+/** GET 的入参：路由要读 `req.signal`（子进程看门狗 #4004），测试里逐次造一个真请求。 */
+function callGet(): ReturnType<typeof GET> {
+  return GET(new NextRequest("http://127.0.0.1:3000/api/custom-nodes"));
+}
+
+/** `unknown` → 对象视图；不是对象就当场失败（与旧断言后崩溃是同一个判定）。 */
+function recordOf(v: unknown, label: string): Record<string, unknown> {
+  if (!isRecord(v)) {
+    throw new Error(`${label} 不是对象：${String(v)}`);
+  }
+  return v;
+}
+
+/** `unknown` → 元素仍是 `unknown` 的数组；不是数组就当场失败。 */
+function isUnknownArray(v: unknown): v is Array<unknown> {
+  return Array.isArray(v);
+}
+
+function arrayOf(v: unknown, label: string): Array<unknown> {
+  if (!isUnknownArray(v)) {
+    throw new Error(`${label} 不是数组：${String(v)}`);
+  }
+  return v;
+}
+
+/** `unknown` → 字符串数组；任一项不是字符串就当场失败。 */
+function stringArrayOf(v: unknown, label: string): Array<string> {
+  const out: Array<string> = [];
+  for (const item of arrayOf(v, label)) {
+    if (typeof item !== "string") {
+      throw new Error(`${label} 含非字符串：${String(item)}`);
+    }
+    out.push(item);
+  }
+  return out;
+}
+
+/** 读响应体并收窄成对象：不是对象就当场失败。 */
+async function jsonRecord(res: Response, label: string): Promise<Record<string, unknown>> {
+  const body: unknown = await res.json();
+  return recordOf(body, label);
+}
 
 /** 被测代码里那两个落点（与 `route.ts` 的常量同一算法，不是抄来的字面量）。 */
 const MANIFEST = customNodesManifestPath();
@@ -215,32 +256,36 @@ function emitClose(child: FakeChild, code: number) {
 }
 
 async function post(body: unknown) {
-  /* SAFETY: 类型断言已复核 */
-  const req = new Request("http://127.0.0.1:3000/api/custom-nodes", {
+  const req = new NextRequest("http://127.0.0.1:3000/api/custom-nodes", {
     method: "POST",
     headers: { "content-type": "application/json" },
     // body 允许是「不是 JSON」的原文 —— 畸形体这一路也在测
     body: typeof body === "string" ? body : JSON.stringify(body),
-  }) as unknown as NextRequest;
+  });
   return POST(req);
 }
 
 /** 取 argv（spawn 的第二个入参）。 */
 function argv(i = 0): Array<string> {
-  /* SAFETY: 类型断言已复核 */
-  return spawnMock.mock.calls[i]?.[1] as Array<string>;
+  const args = spawnMock.mock.calls[i]?.[1];
+  if (!args) {
+    throw new Error(`第 ${i} 次 spawn 没有 argv`);
+  }
+  return args;
 }
 
 /**
- * 期望顺序 = **那份判据给本平台的顺序**，不在这里抄第二份名字表。
- *
- * 抄一份字面量就是把 A14 的成因在测试里复现一遍：路由与用例同时写死 `python3 → python → py`
- * 时，两边一起错也一起绿。取判据之后这条判的是「路由有没有复用判据」——
- * 谁再自写一张表（或把顺序改回去），这里当场红。
- * 「Windows 上是 `python → py → python3`」与「`py` 必须带 `-3`」那两条**平台字面量**
- * 钉在 `src/lib/process/python-run.test.ts`（那里两个平台都能正面跑）。
+ * 期望顺序 = 那份判据给本平台的顺序，不在这里抄第二份名字表 —— 两边一起写死时一起错也一起绿（A14 的成因）。
+ * 取判据之后这条判的是「路由有没有复用判据」。平台字面量（Windows 顺序、`py` 带 `-3`）
+ * 钉在 `src/lib/process/python-run.test.ts`。
  */
 const ORDER = pythonCandidates();
+
+/** 本条用例是否已经指定过扫描根（没指定时 `getEvents` 自动补一条，避免跨用例串味）。 */
+let armed = false;
+
+/** 记一次 Date.now 的替身（只在「缓存过期」那一档用）。 */
+let nowSpy: { mockRestore(): void } | null = null;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -300,11 +345,7 @@ describe("POST /api/custom-nodes —— 鉴权与请求体", () => {
       localWorkflowsPath: "C:/Windows",
     });
     expect(res.status).toBe(200);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      localWorkflowPaths: Array<string>;
-      paths: Array<string>;
-    };
+    const body = await jsonRecord(res, "saveSettings 响应体");
     expect(body.paths).toEqual(["C:/ComfyUI/custom_nodes"]);
     expect(body.localWorkflowPaths).toEqual(["C:/ComfyUI/workflows"]);
     expect(spawnMock).not.toHaveBeenCalled();
@@ -395,11 +436,7 @@ describe("POST parse —— argv 注入闸门（台账 A6）", () => {
     settingsMock.mockReturnValue({ comfyuiPath: "" });
     const res = await post({ action: "parse" });
     expect(res.status).toBe(400);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      error: string;
-      ok: boolean;
-    };
+    const body = await jsonRecord(res, "缺路径响应体");
     expect(body.ok).toBe(false);
     expect(body.error).toContain("CUSTOM_NODES_PATH");
     expect(spawnMock).not.toHaveBeenCalled();
@@ -422,10 +459,8 @@ describe("POST parse —— argv 注入闸门（台账 A6）", () => {
 });
 
 /**
- * 解析口（`streamParse`）的解释器退避 —— 台账 A14 在这条链上照出两个形状，
- * 而它们**过去没有任何执行者**：上面那一组只测「argv 会不会被客户端加长」，
- * 从不排第二、第三个子进程，所以「起不来时说什么」与「换档之后谁收尾」两格都是空的。
- * 体量读数：这条链在改之前未被覆盖的那一段就是退避与收尾那十几行。
+ * 解析口（`streamParse`）的解释器退避 —— 台账 A14 在这条链上照出两个形状而过去没有执行者：
+ * 上面那组只测 argv 闸门，从不排第二、三个子进程，「起不来时说什么」与「换档后谁收尾」两格都是空的。
  */
 describe("POST parse —— 解释器退避与收尾归属（台账 A14）", () => {
   it("全部候选都退 127 → 每一个都起过，且那句原因落成 error 日志", async () => {
@@ -486,8 +521,7 @@ describe("POST parse —— 解释器退避与收尾归属（台账 A14）", () 
       if (String(command) !== "py") {
         continue;
       }
-      /* SAFETY: 类型断言已复核 */
-      expect((args as Array<string>)[0]).toBe("-3");
+      expect(args?.[0]).toBe("-3");
     }
   });
 });
@@ -535,8 +569,10 @@ describe("POST discover —— parent 同样过闸门", () => {
       { action: "discover", parents: [] },
       { action: "discover", parents: "ComfyUI-Foo" },
     ]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       const res = await post(body);
       expect(res.status).toBe(200);
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       expect(await res.json()).toEqual({ ok: true, packages: [] });
     }
     // 旧行为：空批照样按 python3 → python → py 轮三遍（各带一次超时与一次进程启动）
@@ -552,24 +588,18 @@ describe("POST discover —— parent 同样过闸门", () => {
 /** 基准 mtime（真时刻的量级，让「只改 mtime」这一档与真实写盘同形）。 */
 const BASE_MTIME = 1_760_000_000_000;
 /**
- * 每次登记自动 +1（`mtimeMs` 的最低位就足以让指纹不同 —— 判的是「换过一次内容」这件事）。
- *
- * **跨用例不清零**：摘要缓存也是模块级的、跟着被测实例活，而指纹是 `(size, mtime)` ——
- * 重置计数器会让后一条用例的「第一次读」撞上前一条留下的缓存，于是那一次读盘
- * 根本没发生，断言却照样绿（台账 E7 记的「有执行者 ≠ 走的是那条路」的同形）。
+ * 每次登记自动 +1（`mtimeMs` 最低位就足以让指纹不同）。**跨用例不清零**：摘要缓存是模块级的，
+ * 重置计数器会让后一条用例的「第一次读」撞上前一条留下的缓存，读盘根本没发生而断言照样绿
+ *（台账 E7「有执行者 ≠ 走的是那条路」的同形）。
  */
 let mtime = BASE_MTIME;
 /** 每条 GET 用例自己的扫描根序号（见 `coldRoot`）。 */
 let rootSeq = 0;
-/** 本条用例是否已经指定过扫描根（没指定时 `getEvents` 自动补一条，避免跨用例串味）。 */
-let armed = false;
 
 /**
- * 给这一条用例一个**别人的父目录都不沾**的扫描根，返回推导出的父路径。
- *
- * `discoverCache` 挂在模块作用域上（同一份被测实例里跨用例存活，TTL 5 秒），
- * 沿用同一个父目录会让后来的用例不知不觉落进「全命中缓存」那条**热路径**分支：
- * 判的是 JSON 形态，而它想判的是流式形态 —— 又一种「看着像测过了，其实走的是另一条路」。
+ * 给本条用例一个别人的父目录都不沾的扫描根。`discoverCache` 挂在模块作用域跨用例存活（TTL 5s），
+ * 沿用同一父目录会让后来的用例落进「全命中缓存」的热路径分支：判的是 JSON 形态，
+ * 而想判的是流式形态 —— 「看着像测过了，其实走的是另一条路」。
  */
 function coldRoot(): string {
   rootSeq += 1;
@@ -578,9 +608,6 @@ function coldRoot(): string {
   armed = true;
   return `${root}/custom_nodes`;
 }
-
-/** 记一次 Date.now 的替身（只在「缓存过期」那一档用）。 */
-let nowSpy: { mockRestore(): void } | null = null;
 
 /** 把清单登记成「存在且可读」，并按 `size` / `mtimeMs` 决定指纹。 */
 function putManifest(value: unknown, over: StubFile = {}): void {
@@ -609,7 +636,7 @@ async function getEvents(): Promise<Array<Record<string, unknown>>> {
   if (!armed) {
     coldRoot();
   }
-  const res = await GET();
+  const res = await callGet();
   expect(res.status).toBe(200);
   expect(res.headers.get("content-type")).toContain("ndjson");
   return eventsOf(res);
@@ -629,7 +656,7 @@ function scriptDiscover(
   opts: { code?: number; spawnThrows?: boolean } = {},
 ): void {
   spawnMock.mockImplementationOnce(() => {
-    if (opts.spawnThrows) {
+    if (opts.spawnThrows === true) {
       throw Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" });
     }
     const child: FakeChild = { proc: {}, out: {}, err: {} };
@@ -683,47 +710,45 @@ const FULL_MANIFEST = {
 /** 摘要事件里的 `summary` 字段（冷/热两种返回形态都走这一个口子取）。 */
 async function summaryOf(): Promise<Record<string, unknown> | null> {
   const payload = await payloadOf();
-  /* SAFETY: 类型断言已复核 */
-  return payload.summary as Record<string, unknown> | null;
+  if (payload.summary === null) {
+    return null;
+  }
+  return recordOf(payload.summary, "summary");
 }
 
 /**
- * 取这一次 GET 的载荷本体。
- *
- * 两种形态必须给同一个答案：冷路径是 ndjson 流（摘要挂在 `summary` 事件上），
- * 热路径是直接 JSON（摘要挂在顶层）。所以取摘要不能假定形态 —— 只判 JSON 那一档
- * 就等于「测过了」而流式那一档一个字都没判。
+ * 取这一次 GET 的载荷本体。两种形态必须给同一个答案：冷路径 ndjson 流（摘要挂在 `summary` 事件）、
+ * 热路径直接 JSON（摘要挂顶层）—— 只判 JSON 那一档就等于流式那一档一个字都没判。
  */
 async function payloadOf(): Promise<Record<string, unknown>> {
   if (!armed) {
     coldRoot();
   }
-  const res = await GET();
+  const res = await callGet();
   expect(res.status).toBe(200);
   if ((res.headers.get("content-type") ?? "").includes("ndjson")) {
     return eventOf(await eventsOf(res), "summary");
   }
-  /* SAFETY: 类型断言已复核 */
-  return (await res.json()) as Record<string, unknown>;
+  return jsonRecord(res, "GET 载荷");
 }
 
 /** 把流式响应读到底，按行解析成事件数组。 */
 async function eventsOf(res: Response): Promise<Array<Record<string, unknown>>> {
   const text = await res.text();
-  return (
-    text
-      .split("\n")
-      .filter((line) => line.trim() !== "")
-      /* SAFETY: 类型断言已复核 */
-      .map((line) => JSON.parse(line) as Record<string, unknown>)
-  );
+  return text
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => {
+      const parsed: unknown = JSON.parse(line);
+      return recordOf(parsed, "ndjson 事件");
+    });
 }
 
 describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
   it("未登录 → 401，一次盘都不读、一个进程都不起", async () => {
     putManifest(FULL_MANIFEST);
     userMock.mockResolvedValueOnce(null);
-    const res = await GET();
+    const res = await callGet();
     expect(res.status).toBe(401);
     expect(await res.json()).toMatchObject({
       error: { code: "auth.required", message: "未登录或会话已失效" },
@@ -737,35 +762,28 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
        此前它会把整个请求炸成 Next 的默认错误页，前端崩在
        「读取 undefined 的 paths 属性」上，真实原因反而看不见（硬规则 4）。 */
     fsState.files.set(MANIFEST, { text: "{}", existsFails: true });
-    const res = await GET();
+    const res = await callGet();
     expect(res.status).toBe(500);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      error?: { code?: string; message?: string };
-    };
-    expect(body.error?.code).toBe("custom_nodes.read_failed");
+    const body = await jsonRecord(res, "读盘失败响应体");
+    const error = recordOf(body.error, "error 信封");
+    expect(error.code).toBe("custom_nodes.read_failed");
     // 详情取到了就说清是哪一步取不到：错误原文本身已经指名了机制（EACCES）。
-    expect(body.error?.message).toContain("EACCES");
+    expect(error.message).toContain("EACCES");
   });
 
   it("抛上来的东西没有可读详情 → 兜底成「读取配置失败」，而不是空文案或 undefined", async () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: "silent" });
-    const res = await GET();
+    const res = await callGet();
     expect(res.status).toBe(500);
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as {
-      error?: { message?: string };
-    };
-    expect(body.error?.message).toBe("读取配置失败");
+    const body = await jsonRecord(res, "兜底错误响应体");
+    const error = recordOf(body.error, "error 信封");
+    expect(error.message).toBe("读取配置失败");
   });
 
   it("500 的信封里只有 error —— 消费方靠「没有 settings」判失败，形状不许偷偷加字段", async () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: true });
-    const res = await GET();
-    expect(
-      /* SAFETY: 类型断言已复核 */
-      Object.keys((await res.json()) as Record<string, unknown>),
-    ).toEqual(["error"]);
+    const res = await callGet();
+    expect(Object.keys(await jsonRecord(res, "500 信封"))).toEqual(["error"]);
   });
 });
 
@@ -775,15 +793,16 @@ describe("GET 摘要：清单的六种坏法", () => {
     const events = await getEvents();
     const summary = eventOf(events, "summary");
     expect(summary.summary).toBeNull();
-    /* SAFETY: 类型断言已复核 */
-    const settings = summary.settings as {
-      localWorkflowPaths: Array<string>;
-      paths: Array<string>;
-    };
+    const settings = recordOf(summary.settings, "summary.settings");
+    const paths = stringArrayOf(settings.paths, "settings.paths");
+    const localWorkflowPaths = stringArrayOf(
+      settings.localWorkflowPaths,
+      "settings.localWorkflowPaths",
+    );
     // 两个伴随字段都得指向**同一个安装根**（对话框靠它们在同一屏里配对显示）。
-    expect(settings.paths).toEqual([parent]);
-    expect(path.dirname(settings.localWorkflowPaths[0] ?? "")).toBe(path.dirname(parent));
-    expect(settings.localWorkflowPaths[0]).toMatch(/workflows$/);
+    expect(paths).toEqual([parent]);
+    expect(path.dirname(localWorkflowPaths[0] ?? "")).toBe(path.dirname(parent));
+    expect(localWorkflowPaths[0]).toMatch(/workflows$/);
   });
 
   it.for(["42", '"一段字符串"', "[1,2]", "null", "true"])(
@@ -953,10 +972,7 @@ describe("GET 的 lastReport：原样透传，读不出来时按 null", () => {
     putReport("{ 半截");
     const events = await getEvents();
     expect(eventOf(events, "summary").lastReport).toBeNull();
-    expect(
-      /* SAFETY: 类型断言已复核 */ (eventOf(events, "summary").summary as Record<string, unknown>)
-        ?.totalNodes,
-    ).toBe(2);
+    expect(recordOf(eventOf(events, "summary").summary, "summary").totalNodes).toBe(2);
   });
 
   it("报告有效时逐字段原样透（视图侧要读 mode / addedNodes 这些增量字段）", async () => {
@@ -984,15 +1000,17 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
         packages: [{ name: "Foo", path: "/tmp/custom_nodes/foo" }],
       }),
     ]);
-    const res = await GET();
+    const res = await callGet();
     expect(res.headers.get("content-type")).toContain("application/x-ndjson");
     expect(res.headers.get("cache-control")).toBe("no-cache, no-transform");
     const text = await res.text();
     const events = text
       .split("\n")
       .filter((l) => l.trim() !== "")
-      /* SAFETY: 类型断言已复核 */
-      .map((l) => JSON.parse(l) as Record<string, unknown>);
+      .map((l) => {
+        const parsed: unknown = JSON.parse(l);
+        return recordOf(parsed, "ndjson 事件");
+      });
     expect(events.map((e) => e.type)).toEqual([
       "discover_start",
       "progress",
@@ -1022,14 +1040,12 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     await getEvents();
     expect(spawnMock).toHaveBeenCalledTimes(1);
 
-    const res = await GET();
+    const res = await callGet();
     expect(res.headers.get("content-type")).toContain("application/json");
-    /* SAFETY: 类型断言已复核 */
-    const body = (await res.json()) as Record<string, unknown>;
+    const body = await jsonRecord(res, "热路径响应体");
     expect(spawnMock).toHaveBeenCalledTimes(1);
     expect(body.discoveredByParent).toEqual({ [parent]: [{ name: "Foo" }] });
-    /* SAFETY: 类型断言已复核 */
-    expect((body.summary as Record<string, unknown>).totalNodes).toBe(2);
+    expect(recordOf(body.summary, "body.summary").totalNodes).toBe(2);
     expect(body.settings).toMatchObject({ paths: [parent] });
   });
 
@@ -1054,10 +1070,7 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     expect(events.map((e) => e.type)).toEqual(["discover_start", "summary", "done"]);
     expect(events[0]).toMatchObject({ parents: [], total: 0 });
     expect(spawnMock).not.toHaveBeenCalled();
-    expect(
-      /* SAFETY: 类型断言已复核 */ (eventOf(events, "summary").summary as Record<string, unknown>)
-        .totalNodes,
-    ).toBe(2);
+    expect(recordOf(eventOf(events, "summary").summary, "summary").totalNodes).toBe(2);
   });
 
   it("流内部起进程失败 → 出一条 error 事件并把流收尾，不是半截挂着", async () => {
@@ -1065,10 +1078,7 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     const events = await getEvents();
     expect(events.map((e) => e.type)).toEqual(["discover_start", "progress", "error"]);
     expect(events[2]).toMatchObject({ type: "error" });
-    expect(
-      /* SAFETY: 类型断言已复核 */
-      String((events[2] as { message?: string }).message ?? ""),
-    ).not.toBe("");
+    expect(recordOf(events[2], "error 事件").message ?? "").not.toBe("");
   });
 
   it("byPath 把同一个目录的两种写法归一到同一个键（界面上「已载入/已过期」靠它）", async () => {
@@ -1080,8 +1090,7 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     });
     scriptDiscover([JSON.stringify({ packages: [] })]);
     const events = await getEvents();
-    /* SAFETY: 类型断言已复核 */
-    const byPath = eventOf(events, "summary").byPath as Record<string, unknown>;
+    const byPath = recordOf(eventOf(events, "summary").byPath, "summary.byPath");
     expect(Object.keys(byPath)).toHaveLength(1);
     const key = Object.keys(byPath)[0] ?? "";
     expect(key).toBe(key.toLowerCase());
@@ -1090,20 +1099,9 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
 });
 
 /**
- * 流式探测那一支的**进程协议**（`runDiscoverStreaming`）。
- *
- * 上面那批用例把结果读对了，但**失败与进度的来源**基本没人跑过：
- * 唯一那条「流内部起进程失败」把 `spawnMock` 排成**同步 throw**，走的是外层 catch，
- * 而真机上 `spawn("python3")` 缺解释器时**不 throw**，是**异步 `error` 事件（ENOENT）**——
- * 那个事件才是 `python3 → python → py` 退避链的驱动者，Windows 上这是主路径。
- * 同族还没执行者的：`close` 码 127 也要换解释器、非 ENOENT 的 error **不许**继续换、
- * `stderr` 每一行都要转成进度、`PROGRESS::` 那行语法的四个分支（`hash` 的 done/total、
- * 没有 `msg=` 的旧格式、不成形的行跳过、**一行被 chunk 切断**），
- * 以及「最后一行 JSON 才算结果」「收尾 JSON 坏了要带退出码」。
- *
- * 夹具形状：`queueChild()` 排的是**真形状的事件**（`error` 走 `cp.on("error")`、
- * `close` 带退出码、data 可以只给半行），一次可排多个子进程 —— 解释器退避链的判据
- * 就是「第 N 个子进程是谁、argv 落在哪个候选上」。
+ * 流式探测那一支的进程协议（`runDiscoverStreaming`）：真机 spawn 缺解释器时不 throw，是异步 `error` 事件（ENOENT）
+ * —— 它才是退避链的驱动者（Windows 主路径）；`close` 码 127 也要换解释器、非 ENOENT 的 error 不许继续换；stderr 每行转进度、
+ * `PROGRESS::` 语法四分支（含一行被 chunk 切断）；「最后一行 JSON 才算结果」「收尾 JSON 坏了带退出码」。夹具 `queueChild()` 排真形状事件。
  */
 type ChildPlan = {
   /** 逐 chunk 原样吐（**不**补换行）—— 用来造「一行被切断」。 */
@@ -1162,7 +1160,7 @@ function queueChild(plan: ChildPlan): void {
           }),
         );
       }
-      if (!plan.noClose && (!plan.error || plan.closeCode !== undefined)) {
+      if (plan.noClose !== true && (!plan.error || plan.closeCode !== undefined)) {
         /* `closeCode: null` 是**真机那一形**（spawn 失败时 Node 给的是 null，不是 0），
          * 所以这里不能写 `?? 0` —— 那样 `null` 会被折成 0，「退出码为空」这一档
          * 在夹具里就永远造不出来了。 */
@@ -1183,10 +1181,8 @@ function msgOf(ev: Record<string, unknown>): string {
 }
 
 /**
- * 从进度事件里挑含 `substr` 的那一条。
- *
- * 不能取「第一条 progress」：外层流自己会先吐一条 `📂 [1/1] <扫描根>`，
- * 拿第一条会把外层那条当成解析器发来的进度（实测就是这四条一开始红的原因）。
+ * 从进度事件里挑含 `substr` 的那一条。不能取「第一条 progress」：外层流自己会先吐
+ * `📂 [1/1] <扫描根>`，拿第一条会把外层那条当成解析器的进度（实测就是这四条一开始红的原因）。
  */
 function progressWith(
   events: Array<Record<string, unknown>>,
@@ -1276,12 +1272,10 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
   });
 
   it("缺解释器那一档的真形状是 error 之后**再来一次 close**：那次 close 不许定案", async () => {
-    /* 真机上 `spawn` 一个不存在的命令，Node 先报 `error`（ENOENT），随后**仍然发一次
-     * `close`**。上面那两条退避用例的夹具刻意不发这次 close —— 于是「换到第二个候选
-     * 并且第二个真跑成」这一条路，在加了这个守卫之前从来没有执行者：第一个（压根没起来
-     * 的）进程的 close 会先走到收尾分支，把「0 个节点」定成答案并置 `resolved`，
-     * 第二个真跑成的那一档随后被 `if (resolved) return` 丢掉。
-     * 这一条要的就是**第二个候选的结果落地**，不是「有个 discover_done 就行」。 */
+    /* 真机上 spawn 不存在的命令，Node 先报 `error`（ENOENT）后仍发一次 `close`。上面两条退避用例
+     * 的夹具刻意不发这次 close —— 否则第一个（没起来的）进程的 close 会先走到收尾分支，把「0 个节点」
+     * 定成答案并置 `resolved`，第二个真跑成的那档随后被 `if (resolved) return` 丢掉。
+     * 这一条要的就是第二个候选的结果落地。 */
     coldRoot();
     queueChild({ error: { code: "ENOENT" }, closeCode: null });
     queueChild({ lines: [ONE_PKG_LINE] });
@@ -1351,11 +1345,8 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
       lines: [JSON.stringify({ packages: [{ name: "Old", path: "/tmp/a" }] }), ONE_PKG_LINE],
     });
     const events = await getEvents();
-    /* SAFETY: 类型断言已复核 */
-    const packages = eventOf(events, "discover_done").packages as Array<{
-      name: string;
-    }>;
-    expect(packages.map((p) => p.name)).toEqual(["Foo"]);
+    const packages = arrayOf(eventOf(events, "discover_done").packages, "discover_done.packages");
+    expect(packages.map((p) => recordOf(p, "package").name)).toEqual(["Foo"]);
   });
 
   it("收尾时最后一行不是合法 JSON → 失败进度里带退出码，流不挂着", async () => {

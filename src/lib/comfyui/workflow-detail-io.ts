@@ -89,12 +89,12 @@ export type WorkflowIOEnrichParams = {
 
 /** 从 "16:9 (Widescreen)" / "16:9" 抽宽高比；抽不出返回 null。 */
 function optionRatio(label: string): number | null {
-  const m = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(label);
+  const m = /(?<width>\d+(?:\.\d+)?)\s*[:x×]\s*(?<height>\d+(?:\.\d+)?)/.exec(label);
   if (!m) {
     return null;
   }
-  const w = Number(m[1]);
-  const h = Number(m[2]);
+  const w = Number(m.groups?.width);
+  const h = Number(m.groups?.height);
   if (!Number.isFinite(w) || !Number.isFinite(h) || h === 0) {
     return null;
   }
@@ -182,7 +182,6 @@ export function persistEnrichedWorkflowIO(
 ): Record<string, WorkflowIORawEntry> {
   const out: Record<string, WorkflowIORawEntry> = {};
   for (const [ioKey, v] of Object.entries(workflowIO)) {
-    // oxlint-disable-next-line strict-boolean-expressions -- v 是落库 JSON 记录的值，运行期可能为 null，保留防御判空
     if (!v || typeof v !== "object") {
       continue;
     }
@@ -234,7 +233,6 @@ export async function enrichWorkflowIO(
   const workflowIO: Record<string, WorkflowIOEntry> = {};
 
   for (const [ioKey, v] of Object.entries(workflowIORaw)) {
-    // oxlint-disable-next-line strict-boolean-expressions -- v 是落库 JSON 记录的值，运行期可能为 null，保留防御判空
     if (!v || typeof v !== "object") {
       continue;
     }
@@ -273,7 +271,6 @@ export async function enrichWorkflowIO(
       );
       const dicts: Array<Record<string, unknown>> = [rawInputsById, metaById, graph];
       for (const dict of dicts) {
-        // oxlint-disable-next-line strict-boolean-expressions -- dicts 成员（rawInputsById / graph 等）源于外部 JSON 记录，同域 graph 参数存在可空调用形态，保留防御判空
         if (!dict) {
           continue;
         }
@@ -285,7 +282,6 @@ export async function enrichWorkflowIO(
        * 一个词边界字符（`-`），这样 `9b9009e4` 永远不会
        * 因此不会与 `9b9009e44` 相撞。 */
       for (const dict of dicts) {
-        // oxlint-disable-next-line strict-boolean-expressions -- dicts 成员（rawInputsById / graph 等）源于外部 JSON 记录，同域 graph 参数存在可空调用形态，保留防御判空
         if (!dict) {
           continue;
         }
@@ -425,12 +421,14 @@ export async function enrichWorkflowIO(
         if (ri?.comboOptions) {
           options = ri.comboOptions;
         } else {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const byClass = await comboOptionsForClassField(nodeTypeById[canonicalNodeId], v.name);
           /* wrapper 节点（尤其是那些 `properties.proxyWidgets` 缺失或被隔离的
            *  `comfy-core` 子图）解析不出内部类型，导致上面的按类型查表什么也拿不到。
            *  此时回落到跨 object_info 的字段名扫描，
            *  为「名字唯一」的 COMBO 找回候选项
            *  （例如 `resolution_preset`）。 */
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           options = byClass ?? (await comboOptionsForFieldName(v.name));
         }
         /* ComfyUI 不可达时 object_info 查不到候选；若存档里上一次在线时存过
@@ -453,8 +451,8 @@ export async function enrichWorkflowIO(
     const modeOverridesSource = v.modeOverrides;
     let cleanedModes: Record<string, WorkflowIOModeOverride> | undefined;
     if (
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      modeOverridesSource != null &&
+      modeOverridesSource !== null &&
+      modeOverridesSource !== undefined &&
       typeof modeOverridesSource === "object" &&
       options &&
       options.length > 0
@@ -462,8 +460,7 @@ export async function enrichWorkflowIO(
       let touched = false;
       const next: Record<string, WorkflowIOModeOverride> = {};
       for (const [mode, override] of Object.entries(modeOverridesSource)) {
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-        if (override == null || typeof override !== "object") {
+        if (override === null || override === undefined || typeof override !== "object") {
           /* 畸形覆盖（PATCH 原样落库可能带 null/标量）：原样透传不清洗。 */
           next[mode] = override ?? {};
           continue;
@@ -521,6 +518,7 @@ export async function enrichWorkflowIO(
        *  `prompt_width_of_thing` 这类单行输入不会被升级成 textarea，作者改过名的
        *  提示词框也不会因为名字里没「prompt」而掉回单行。 */
       ...(type === "STRING" &&
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       inferIsMultiline(await multilineForClassField(classType, v.name), defaultValue)
         ? { multiline: true }
         : {}),

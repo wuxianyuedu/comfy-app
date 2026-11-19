@@ -1,12 +1,6 @@
 /**
- * 「这次改动面」的**唯一出处**（`scripts/changed-scope.mjs`）。
- *
- * 它收的是同一个问题的两个消费点：「受影响用例」那一格（`ci-affected-tests.mjs`）
- * 与桌面壳门禁（`shell-gate.mjs --base`）。两边各算一次，就会在某一次改动里漂开
- * —— 改名的旧路径算不算？三点 diff 还是两点？基线取 PR 目标 sha 还是 merge-base？
- *
- * 这里钉的是**基线怎么选**与**diff 形态**两件事：前者决定「这个 PR 改了什么」，
- * 后者决定「改名那一行的两侧是不是都在面里」（ISSUE #2226）。
+ * 「这次改动面」的**唯一出处**（`scripts/lib/changed-scope.mjs`）。两个消费点——「受影响用例」（`ci-affected-tests.mjs`）与桌面壳门禁（`shell-gate.mjs --base`）——各算一次就会漂：改名的旧路径算不算？三点 diff 还是两点？基线取 PR 目标 sha 还是 merge-base？
+ * 这里钉**基线怎么选**与 **diff 形态**：前者决定「这个 PR 改了什么」，后者决定「改名那一行的两侧是不是都在面里」（ISSUE #2226）。
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -22,7 +16,7 @@ import {
   reconcileSyntheticMergeFace,
   resolveBaseRef,
   resolveChangedFiles,
-} from "../scripts/changed-scope.mjs";
+} from "../scripts/lib/changed-scope.mjs";
 
 /** 假 git：按调用顺序回放预置结果。 */
 function fakeGit(handlers: Record<string, { ok: boolean; stdout: string }>) {
@@ -174,16 +168,8 @@ describe("changed-scope —— 改动面怎么读", () => {
 });
 
 /**
- * 平台**合成 merge 提交**上的对账（口径 ⑤，ISSUE #2325）。
- *
- * 这一族治的是「与壳无关的 PR 被判成改了壳」：平台检出的是「本 PR 并进目标分支（那一刻）」
- * 的 merge 提交，而基线是 `CNB_PULL_REQUEST_TARGET_SHA` —— 两者错位时三点 diff 的
- * merge-base 就是**基线自己**，目标分支在基线之后自己落地的改动进了本 PR 的改动面。
- *
- * 用例**真造 git 仓库**（假 git 回放不出 merge 拓扑，而这一族判的就是拓扑）：
- *   基线 B → 目标分支上别人的改动 T（改了 `src-tauri/src/lib.rs`）
- *   → 本 PR 只改 `src/lib/x.ts` → 平台把 PR 并进 T 生成 M（合成提交）。
- * 期望：`<B>...M` 里**有**别人的 `lib.rs`（这就是 bug），而对账之后只剩 PR 自己那条。
+ * 平台**合成 merge 提交**上的对账（口径 ⑤，ISSUE #2325）。治「与壳无关的 PR 被判成改了壳」：平台检出的是本 PR 并进目标分支（那一刻）的 merge 提交，基线却是 `CNB_PULL_REQUEST_TARGET_SHA`；错位时三点 diff 的 merge-base 就是基线自己，目标分支在基线之后落地的改动进了本 PR 的改动面。
+ * 用例**真造 git 仓库**（假 git 回放不出 merge 拓扑）：B → 目标分支上别人的改动 T（改 `src-tauri/src/lib.rs`）→ 本 PR 只改 `src/lib/x.ts` → 平台并进 T 生成 M。期望 `<B>...M` 里有别人的 `lib.rs`（这就是 bug），对账之后只剩 PR 自己那条。
  */
 describe("changed-scope —— 平台合成 merge 提交上的对账（#2325）", () => {
   const temps: Array<string> = [];
@@ -388,13 +374,9 @@ describe("changed-scope —— 平台合成 merge 提交上的对账（#2325）"
 });
 
 /**
- * 「这个 PR 真的一处没改」（口径 ⑥，ISSUE #3026）。
- *
- * 现场是 PR #3023：目标分支已经包含源分支的全部提交（同步 master 之后逐字节相同），
- * 平台仍合成 merge 提交，而 `<基线>...HEAD` 是空的 —— 那一跑被读成「改动面为空 ⇒ 没判」
- * 而红。它其实判过了：答案是零个文件。
- *
- * 与上面那族同样**真造 git 仓库**（假 git 回放不出拓扑，而这一族判的就是拓扑）。
+ * 「这个 PR 真的一处没改」（口径 ⑥，ISSUE #3026）。现场是 PR #3023：目标分支已包含源分支全部提交
+ * （同步 master 之后逐字节相同），平台仍合成 merge 提交，而 `<基线>...HEAD` 是空的 —— 那一跑被读成
+ * 「改动面为空 ⇒ 没判」而红，其实它判过了：答案是零个文件。与上面那族同样**真造 git 仓库**。
  */
 describe("changed-scope —— 空改动面的两半读法（#3026）", () => {
   const temps: Array<string> = [];
@@ -522,9 +504,11 @@ describe("changed-scope —— 空改动面的两半读法（#3026）", () => {
   });
 
   it("两个父的对称差只进「只在一侧之下」的那一份", () => {
-    /* 钉的是**判据的形状**：两个父各自往前走了、谁也包不住谁时，对称差里两边的新文件
-     * 都在；而 `<第一父>..HEAD` 只看得见第二父那一侧。两个答案不同 —— 这正是它与
-     * 「单个父的两点 diff」的实质差别。 */
+    /* 钉的是 **git 自身的行为**：两个父各自往前走了、谁也包不住谁时，`第一父...第二父`
+     * 的三点对称差里两边的新文件都在；而 `<第一父>..HEAD` 只看得见第二父那一侧。
+     * ⚠️ 这不再是「空改动面」判据的形状（#3644）：对称差在 squash 拓扑下会把分支
+     * 自己已落地的提交误算成分叉，判据的第二半已改读 `第一父..HEAD` 的两点树差
+     * —— 留着这条是钉 git 行为本身，免得有人把旧形状当判据接回去。 */
     const { dir, base } = initRepo();
     write(dir, "m.txt", "m\n");
     commit(dir, "main＃1");
@@ -566,5 +550,46 @@ describe("changed-scope —— 空改动面的两半读法（#3026）", () => {
       return;
     }
     expect(got.reason).toContain("取不到");
+  });
+
+  it("净零 PR：目标分支 squash 落地同批改动、分支从旧分叉点重带 ⇒ 判「零个文件」（#3644）", () => {
+    /* #3644 的现场：master 已用**一笔 squash** 把同批改动落地（第一父），PR 分支从
+     * 旧分叉点把同批改动又带了一遍 —— 平台合成 merge 的树与第一父逐字节相同
+     * （净贡献为零）。旧读法 `第一父...第二父` 的 merge-base 退回旧分叉点，把分支
+     * 自己那几笔**已落地**的提交误算成「这个 PR 带进来的」⇒ 退 2 假红；改读
+     * `第一父..HEAD`（两点树差）后，空就是直接证据。 */
+    const { base, dir } = initRepo();
+    /* 分支从基线分出来，落 3 笔（k1/k2/k3）。 */
+    git(dir, "checkout", "-q", "-b", "feat");
+    write(dir, "k1.txt", "1\n");
+    commit(dir, "feat: k1");
+    write(dir, "k2.txt", "2\n");
+    commit(dir, "feat: k2");
+    write(dir, "k3.txt", "3\n");
+    commit(dir, "feat: k3");
+    /* 目标分支在基线上以一笔 squash 落地**同批内容**（与分支历史不相交）。 */
+    git(dir, "checkout", "-q", "main");
+    write(dir, "k1.txt", "1\n");
+    write(dir, "k2.txt", "2\n");
+    write(dir, "k3.txt", "3\n");
+    const target = commit(dir, "main: squash 落地 k1-k3");
+    /* 平台合成 merge：树与第一父（target）逐字节相同。 */
+    git(dir, "checkout", "-q", "main");
+    git(dir, "merge", "-q", "--no-ff", "-m", "Merge feat into main", "feat");
+
+    /* 前置读数一：旧读法在这里读出 3 个「分叉」（本单要修掉的正是它）。 */
+    expect(git(dir, "diff", "--name-status", "-M", `${target}...feat`).trim()).toBe(
+      "A\tk1.txt\nA\tk2.txt\nA\tk3.txt",
+    );
+    /* 前置读数二：两点树差为空 —— 「净零」的直接证据。 */
+    expect(git(dir, "diff", "--name-status", "-M", `${target}..HEAD`).trim()).toBe("");
+
+    const got = confirmEmptyChangeFace({ cwd: dir, env: { CNB_PULL_REQUEST_TARGET_SHA: target } });
+    expect(got.ok).toBe(true);
+    if (!got.ok) {
+      return;
+    }
+    expect(got.firstParent).toBe(target);
+    expect(base === "").toBe(false);
   });
 });

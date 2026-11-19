@@ -36,6 +36,7 @@ import { baseForLocalPort, queryInstanceByPath } from "./instance-port";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { collectComfyPythonCandidates } from "./env-python";
+import { resetSweepNegativeForTests, SWEEP_NEGATIVE_TTL_MS } from "./sweep-negative-cache";
 import { readRegisteredLauncher, launcherCommandCandidates } from "./status";
 
 const plan = {
@@ -95,11 +96,13 @@ describe("queryInstanceByPath — 直接从配置路径拿事实", () => {
     ]);
     let call = 0;
     // 第 1 次 = main.py（落空），第 2 次 = 解释器候选（命中）
-    vi.mocked(findPidForMainPyDetailed).mockImplementation(async () => {
+    vi.mocked(findPidForMainPyDetailed).mockImplementation(() => {
       call += 1;
-      return call === 1
-        ? { pid: null, failed: false } // main.py 落空
-        : { pid: 900, failed: false }; // 解释器候选命中
+      return Promise.resolve(
+        call === 1
+          ? { pid: null, failed: false } // main.py 落空
+          : { pid: 900, failed: false }, // 解释器候选命中
+      );
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
     const q = await queryInstanceByPath(String.raw`C:\Comfy`);
@@ -112,11 +115,13 @@ describe("queryInstanceByPath — 直接从配置路径拿事实", () => {
       { exe: String.raw`C:\uv\other\python.exe`, via: "实例环境的解释器" },
     ]);
     let call = 0;
-    vi.mocked(findPidForMainPyDetailed).mockImplementation(async () => {
+    vi.mocked(findPidForMainPyDetailed).mockImplementation(() => {
       call += 1;
-      return call === 1
-        ? { pid: null, failed: false } // main.py 落空
-        : { pid: 555, failed: false }; // 候选命中
+      return Promise.resolve(
+        call === 1
+          ? { pid: null, failed: false } // main.py 落空
+          : { pid: 555, failed: false }, // 候选命中
+      );
     });
     vi.mocked(findPidListeningPort).mockResolvedValue(8188);
     const q = await queryInstanceByPath(String.raw`C:\Comfy`);
@@ -161,5 +166,49 @@ describe("baseForLocalPort — 端口 → 地址", () => {
   it("COMFYUI_BASE 指向远端实例时不用本机端口事实", () => {
     process.env.COMFYUI_BASE = "http://192.168.1.9:8188";
     expect(baseForLocalPort(8190)).toBeNull();
+  });
+});
+
+describe("queryInstanceByPath — 查无实例的短窗黏滞（ISSUE #4195）", () => {
+  beforeEach(() => {
+    resetSweepNegativeForTests();
+    /* 让扫描「有候选可查」（空候选 → 不算「查过」，不黏滞）。 */
+    vi.mocked(collectComfyPythonCandidates).mockReturnValue([
+      { exe: String.raw`C:\uv\python.exe`, via: "standalone-env 的 pyvenv.cfg" },
+    ]);
+  });
+
+  it("完整扫描确认查无实例后，窗口内不再重复发起进程表扫描", async () => {
+    await queryInstanceByPath(String.raw`C:\Comfy`);
+    const sweepsAfterFirst = vi.mocked(findPidForMainPyDetailed).mock.calls.length;
+    expect(sweepsAfterFirst).toBeGreaterThan(0);
+    const second = await queryInstanceByPath(String.raw`C:\Comfy`);
+    expect(second.running).toBe(false);
+    expect(second.unverified).toBe(false);
+    expect(vi.mocked(findPidForMainPyDetailed).mock.calls.length).toBe(sweepsAfterFirst);
+  });
+
+  it("查询失败（unverified）的结论不黏滞：下一拍照常重扫", async () => {
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: null, failed: true });
+    await queryInstanceByPath(String.raw`C:\Comfy`);
+    const sweepsAfterFirst = vi.mocked(findPidForMainPyDetailed).mock.calls.length;
+    const second = await queryInstanceByPath(String.raw`C:\Comfy`);
+    expect(second.unverified).toBe(true);
+    expect(vi.mocked(findPidForMainPyDetailed).mock.calls.length).toBeGreaterThan(sweepsAfterFirst);
+  });
+
+  it("黏滞窗口过期后恢复扫描（TTL 语义，不是永久免扫）", async () => {
+    vi.useFakeTimers();
+    try {
+      await queryInstanceByPath(String.raw`C:\Comfy`);
+      const sweepsAfterFirst = vi.mocked(findPidForMainPyDetailed).mock.calls.length;
+      vi.advanceTimersByTime(SWEEP_NEGATIVE_TTL_MS + 1);
+      await queryInstanceByPath(String.raw`C:\Comfy`);
+      expect(vi.mocked(findPidForMainPyDetailed).mock.calls.length).toBeGreaterThan(
+        sweepsAfterFirst,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

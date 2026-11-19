@@ -1,25 +1,7 @@
 /**
- * 「被取消」与「真失败」在读数上分得开（ISSUE #2158 第 2 条 / 规范 §13.5.27）。
- *
- * ## 为什么要有这条判据
- *
- * 平台的看板只给一列状态，而那一列把两件**完全不同**的事写成同一个字：
- * 「某一格自己跑挂了」与「这一跑被人为终止 / 被同一把锁上的另一跑顶掉了」。
- * 现场读数（`cnb-lm1-1k5h1otqt`，2026-10-22）：第二格 `单跑构建·同步数据库表结构`
- * 是 `cancel`，第三格 `单跑构建·生产构建` 是 `skipped`（**0 秒，没跑**），而整条
- * 流水线的状态是 `error` —— 看板上它与「生产构建真的失败了」长得一样。
- *
- * ## 样本是**真形状**
- *
- * 三份样本都照着平台 JSON 的原样抄（`get-build-status -v` 的 `data` 那一段），
- * 包括平台自己那几格（`Prepare` / `BeforeEnd` / `DebugDetection` / `End`）——
- * 它们在真实读数里就在那儿，而**不是**本仓配置的那几格，判据要把它们认出来。
- *
- * ## 反向样本（缺了就会静默全绿的那几种）
- *
- * ① 只有信封上的 `status`（`data` 缺席）⇒ **不许**当成绿：那只是 HTTP 200；
- * ② 逐格读数缺席 ⇒ 退回构建级状态，而不是「没发现问题」；
- * ③ 真红的那一格与被取消的那一格同时出现 ⇒ **真红优先**（那一格才是最该被看见的）。
+ * 「被取消」与「真失败」在读数上分得开（ISSUE #2158 第 2 条 / 规范 §13.5.27）。平台看板只给一列状态，把两件**完全不同**的事写成同一个字：某格自己跑挂了 vs 这一跑被人为终止 / 被同一把锁上的另一跑顶掉；现场（`cnb-lm1-1k5h1otqt`，2026-10-22）第二格 `cancel`、第三格 `skipped`（**0 秒，没跑**），整条却是 `error` —— 看板上与「生产构建真失败」长得一样。
+ * 三份样本都照平台 JSON 原样抄（`get-build-status -v` 的 `data`），含平台自带那几格（`Prepare` / `BeforeEnd` / `DebugDetection` / `End`）—— 它们在真实读数里就在那儿，判据要把它们认出来。
+ * 反向样本（缺了会静默全绿）：①只有信封上的 `status`（`data` 缺席）⇒ 不许当绿（那只是 HTTP 200）；②逐格读数缺席 ⇒ 退回构建级状态；③真红的那格与被取消的那格同时出现 ⇒ **真红优先**。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -45,8 +27,8 @@ import {
   resolveBuildSn,
   stageInFlight,
   stageLogExcerpt,
-} from "../scripts/ci-build-readout.mjs";
-import { buildSignature } from "../scripts/ship-build.mjs";
+} from "../scripts/ci/ci-build-readout.mjs";
+import { buildSignature } from "../scripts/ship/ship-build.mjs";
 
 /** 被取消那一跑（`cnb-lm1-1k5h1otqt`）：第二格被顶掉，第三格根本没跑。 */
 const CANCELLED_BUILD = {
@@ -432,13 +414,8 @@ describe("入口：三档各退各的码", () => {
 });
 
 /**
- * `inFlightStages`（ISSUE #2184）：轮询的**第二个前提**。
- *
- * 签名是离散计数，一格跑得久时签名自己不动 —— 只看「签名没变」就会把正在推进的流水线
- * 掐掉（现场：`…/pending/0-1+11/33` 连满 10 眼，几分钟后同一条构建是 28/33）。
- * 所以这一判要认的是平台那份**逐格**词汇：运行中的那一格叫 `start`，
- * 而还没轮到的那一格叫 `pending` —— 两者必须分开，否则队列里没起来的那种真停滞
- * 就再也断不掉了（那是 #2152 这一格存在的全部理由）。
+ * `inFlightStages`（ISSUE #2184）：轮询的**第二个前提**。签名是离散计数，一格跑得久时签名自己不动 —— 只看「签名没变」会把正在推进的流水线掐掉（现场 `…/pending/0-1+11/33` 连满 10 眼，几分钟后同一条构建是 28/33）。
+ * 所以要认平台那份**逐格**词汇：运行中那格叫 `start`，还没轮到那格叫 `pending` —— 两者必须分开，否则队列里没起来的真停滞就再也断不掉（那是 #2152 这一格存在的全部理由）。
  */
 describe("inFlightStages：这一刻有没有一格在飞", () => {
   /** 造一份「一条 pipeline、几格各有各状态」的读数。 */
@@ -485,10 +462,7 @@ describe("inFlightStages：这一刻有没有一格在飞", () => {
 });
 
 /**
- * 格的日志正文有三种形状（字符串 / 行数组 / 带 ANSI），归一是**唯一实现**。
- *
- * 不归一的后果不是「显示难看」：`content` 是行数组时按字符串读会得到 `"a,b,c"`，
- * 行号与 `FAIL` 匹配全部失效，于是「摘要空着」被读成「日志里没有失败行」。
+ * 格的日志正文有三种形状（字符串 / 行数组 / 带 ANSI），归一是**唯一实现**。不归一的后果不是「显示难看」：`content` 是行数组时按字符串读会得到 `"a,b,c"`，行号与 `FAIL` 匹配全部失效，于是「摘要空着」被读成「日志里没有失败行」。
  */
 describe("normalizeStageContent：三种形状一处收口", () => {
   it("行数组按行拼接（不是逗号串）", () => {
@@ -511,13 +485,8 @@ describe("normalizeStageContent：三种形状一处收口", () => {
 });
 
 /**
- * 构建列表的信封有两种形状（ISSUE #2335 的现场读数）。
- *
- * 平台在 `get-build-logs` 上两种都给过：列表直挂 `data`，与套一层
- * `{data:{total,totalCapped,data:[…]}}`。只认第一种时 `fetchBuildList()` 回 `null`，
- * 调用方把它念成「取不到构建列表」—— 一次**看起来像网络故障**的空读数；而 PR 档那一格
- * 正是靠这份列表认出「这一跑是谁」的：认不出 ⇒ 一律不写 ⇒ 那一格绿着、红没人知道
- * （#2335 的 `cnb-vko-1k5oj5gb0`）。
+ * 构建列表的信封有两种形状（ISSUE #2335 的现场读数）：列出直挂 `data`，与套一层 `{data:{total,totalCapped,data:[…]}}`。只认第一种时 `fetchBuildList()` 回 `null`，调用方把它念成「取不到构建列表」—— 一次**看起来像网络故障**的空读数。
+ * 而 PR 档那一格正是靠这份列表认出「这一跑是谁」的：认不出 ⇒ 一律不写 ⇒ 那一格绿着、红没人知道（`cnb-vko-1k5oj5gb0`）。
  */
 describe("fetchBuildList：两种信封都要认出列表", () => {
   const ROWS = [
@@ -562,11 +531,8 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
   });
 
   /**
-   * `event` 为空 ⇒ 发命令时**不带 `--event`**（什么事件的都要）。
-   *
-   * 这一形是 ISSUE #2550 加的：桌面成品包那一档的立案口要按「我自己这一跑」查列表，
-   * 而那一档挂在 `crontab` / 手点上 —— 沿用「只查 `pull_request`」的过滤就查不到自己
-   * （现场：事件念成 `(取不到)`、`self` 为 null，连「还没到终态」那一道都跳过了）。
+   * `event` 为空 ⇒ 发命令时**不带 `--event`**（什么事件的都要）。这一形是 ISSUE #2550 加的：桌面成品包那一档的立案口要按「我自己这一跑」查列表，而那一档挂在 `crontab` / 手点上。
+   * 沿用「只查 `pull_request`」的过滤就查不到自己（现场：事件念成 `(取不到)`、`self` 为 null，连「这一跑是谁」都认不出来）。
    */
   it("`event` 为空 ⇒ 命令里不带 `--event`（查得到自己那一跑）", () => {
     const seen: Array<Array<string>> = [];
@@ -871,11 +837,8 @@ describe("formatOutcome：前缀可注入（ship 的 --diagnose 复用同一份�
 });
 
 /**
- * 「还在跑」那一支的进度读数（ISSUE #2304）。
- *
- * 防的是这一格：诊断只念「还在跑，等它跑完再读一次」，而轮询那行念的是格子进度 ——
- * 同一个事实两个读者面，看诊断的人只能去翻原始 JSON，而那层嵌套
- * （`data.pipelinesStatus.<sn>-001.stages[]`）读错一次就把「在推进」念成「一格都没起」。
+ * 「还在跑」那一支的进度读数（ISSUE #2304）。防的是这一格：诊断只念「还在跑，等它跑完再读一次」，而轮询那行念的是格子进度 —— 同一个事实两个读者面，看诊断的人只能去翻原始 JSON。
+ * 而那层嵌套（`data.pipelinesStatus.<sn>-001.stages[]`）读错一次就把「在推进」念成「一格都没起」。
  */
 const RUNNING_BUILD = {
   status: 200,
@@ -959,16 +922,9 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
 });
 
 /**
- * ⚠️ 下面这一族是 ISSUE #2406 的现场（2026-10-26）：**prepare 期就被另一条流水线抢走锁**。
- *
- * 它此前被判成「真失败」，理由是漏了整整一层读数：
- *   · `get-build-status` 的 `stages[]` **没有 `error` 这一栏**（真机取回来只有
- *     `status/duration/name/id`），而「被顶掉」与「真失败」的分界线就在那句原话上；
- *   · `prepare` 那一格平台记的是 `error`（不是 `cancel`），它又曾被当成
- *     「平台自带的噪声」丢掉 ⇒ `failed` / `cancelled` 两个集合都空 ⇒ 落到构建级 `error`。
- *
- * 所以这一族的样本必须**两层都给**：`get-build-status` 那份（没 `error`）
- * 与 `get-build-stage` 那份（有 `error`），而 `enrichStageErrors()` 就是中间那一步。
+ * ⚠️ 下面这一族是 ISSUE #2406 的现场（2026-10-26）：**prepare 期就被另一条流水线抢走锁**，此前被判成「真失败」，理由是漏了整整一层读数。
+ * ①`get-build-status` 的 `stages[]` **没有 `error` 这一栏**（真机只有 `status/duration/name/id`），而「被顶掉」与「真失败」的分界线就在那句原话上；②`prepare` 那格平台记的是 `error`（不是 `cancel`），又被当「平台自带噪声」丢掉 ⇒ `failed` / `cancelled` 两个集合都空 ⇒ 落到构建级 `error`。
+ * 所以样本必须**两层都给**：`get-build-status` 那份（没 `error`）与 `get-build-stage` 那份（有 `error`），而 `enrichStageErrors()` 就是中间那一步。
  */
 
 /** `get-build-status -v` 的 `data` 那一段（用例只用到 `pipelinesStatus[*].stages[]`）。 */
@@ -990,6 +946,96 @@ type StageJson = {
   name?: string;
   status?: string;
 };
+
+/** 外来值是不是普通对象（数组不算）：本文件收窄平台读数的统一入口。 */
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** 外来数组（元素类型未知）：逐格读数的入口。 */
+function isUnknownArray(v: unknown): v is Array<unknown> {
+  return Array.isArray(v);
+}
+
+/**
+ * 一格读数的形状核对：出现的字段逐个按 `typeof` 收窄，缺席的字段不强求。
+ *
+ * 为什么逐字段核而不是断言一次到位：这一格的字段全是**可选**的（`error` 只有
+ * `get-build-stage -v` 才给），断言等于把「读到的那一格长什么样」与「假定的样子」
+ * 混成一句话 —— 而 `error` 在不在，正是这一族判据要分的那条线。
+ */
+function isStageJson(v: unknown): v is StageJson {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  if (v.duration !== undefined && typeof v.duration !== "number") {
+    return false;
+  }
+  if (v.error !== undefined && typeof v.error !== "string") {
+    return false;
+  }
+  if (v.id !== undefined && typeof v.id !== "string") {
+    return false;
+  }
+  if (v.name !== undefined && typeof v.name !== "string") {
+    return false;
+  }
+  if (v.status !== undefined && typeof v.status !== "string") {
+    return false;
+  }
+  return true;
+}
+
+/** 一条流水线那一格的形状核对（`stages` 是逐格读数，其余字段可选）。 */
+function isPipelineJson(v: unknown): v is {
+  id?: string;
+  name?: string;
+  stages: Array<StageJson>;
+  status?: string;
+} {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  if (v.id !== undefined && typeof v.id !== "string") {
+    return false;
+  }
+  if (v.name !== undefined && typeof v.name !== "string") {
+    return false;
+  }
+  if (v.status !== undefined && typeof v.status !== "string") {
+    return false;
+  }
+  const stages: unknown = v.stages;
+  if (!isUnknownArray(stages)) {
+    return false;
+  }
+  return stages.every((stage) => isStageJson(stage));
+}
+
+/**
+ * `get-build-status -v` 那份读数的形状核对。
+ *
+ * `enrichStageErrors()` 的返回类型是 `any`（脚本那份 JSDoc 写的），断言它等于把
+ * 「补完原话之后长什么样」与「假定长什么样」混成一句话 —— 而这一族的判据正是
+ * 「补完之后那一格有没有原话」。故先落 `unknown`，逐层收窄。
+ */
+function isBuildJson(v: unknown): v is BuildJson {
+  if (!isPlainRecord(v)) {
+    return false;
+  }
+  const data: unknown = v.data;
+  if (!isPlainRecord(data)) {
+    return false;
+  }
+  if (data.status !== undefined && typeof data.status !== "string") {
+    return false;
+  }
+  const table: unknown = data.pipelinesStatus;
+  if (!isPlainRecord(table)) {
+    return false;
+  }
+  return Object.values(table).every((pipeline) => isPipelineJson(pipeline));
+}
 
 /** 取 `prepare` 那一格 —— 这一族样本里它是主角（唯一有读数的那一格）。 */
 function prepareStage(json: BuildJson, key = "cnb-9qi-1k5qojle1-001"): StageJson {
@@ -1168,13 +1214,15 @@ describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须
 
   it("非绿非 skipped 的那一格被补上原话，且不改入参（原值要留给比对）", () => {
     const run = stageRun(KILLED_AT_PREPARE_STAGE);
-    /* SAFETY: 类型断言已复核 */
-    const enriched = enrichStageErrors(
+    const enriched: unknown = enrichStageErrors(
       run,
       "org/repo",
       "cnb-9qi-1k5qojle1",
       KILLED_AT_PREPARE,
-    ) as BuildJson;
+    );
+    if (!isBuildJson(enriched)) {
+      throw new Error("补完原话之后那份读数的形状不对");
+    }
     expect(prepareStage(enriched).error).toBe(LOCK_TERMINATED_MESSAGE);
     /* 原值一个字节都没改 —— 这是「只读平台读数」那条纪律的执行面。 */
     expect(prepareStage(KILLED_AT_PREPARE)).not.toHaveProperty("error");
@@ -1202,13 +1250,15 @@ describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须
   });
 
   it("取不到原话 ⇒ 那一格保持原样（空 ≠ 「没有异常」，分类照状态判）", () => {
-    /* SAFETY: 类型断言已复核 */
-    const enriched = enrichStageErrors(
+    const enriched: unknown = enrichStageErrors(
       stageRun({ data: { code: 204, message: "没有查询到该stage信息。" } }),
       "org/repo",
       "b1",
       KILLED_AT_PREPARE,
-    ) as BuildJson;
+    );
+    if (!isBuildJson(enriched)) {
+      throw new Error("补完原话之后那份读数的形状不对");
+    }
     expect(prepareStage(enriched)).toEqual({
       status: "error",
       duration: 12_856,
@@ -1237,13 +1287,15 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
       stderr: "",
       error: null,
     });
-    /* SAFETY: 类型断言已复核 */
-    const enriched = enrichStageErrors(
+    const enriched: unknown = enrichStageErrors(
       run,
       "org/repo",
       "cnb-9qi-1k5qojle1",
       KILLED_AT_PREPARE,
-    ) as BuildJson;
+    );
+    if (!isBuildJson(enriched)) {
+      throw new Error("补完原话之后那份读数的形状不对");
+    }
     const o = classifyBuildOutcome(enriched);
     expect(o.state).toBe("cancelled");
     expect(o.failed).toEqual([]);
@@ -1271,13 +1323,10 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
       stderr: "",
       error: null,
     });
-    /* SAFETY: 类型断言已复核 */
-    const enriched = enrichStageErrors(
-      run,
-      "org/repo",
-      "cnb-ico-1k5r2letb",
-      REAL_FAILURE,
-    ) as BuildJson;
+    const enriched: unknown = enrichStageErrors(run, "org/repo", "cnb-ico-1k5r2letb", REAL_FAILURE);
+    if (!isBuildJson(enriched)) {
+      throw new Error("补完原话之后那份读数的形状不对");
+    }
     const o = classifyBuildOutcome(enriched);
     expect(o.state).toBe("failed");
     expect(o.failed.map((s) => s.name)).toEqual(["受影响用例"]);
@@ -1286,12 +1335,8 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
 });
 
 /**
- * `--stage-log` 那三件（ISSUE #2455）：按格名反查、在飞判定、「要读哪一跑」的归属。
- *
- * 它们与 `--diagnose` 共用同一份实现，所以样本钉的是「两个入口不会给出两种答案」：
- * 反查只认**逐字**（三十几格里互为子串的格名不少，挑错一格读的是另一格的日志，
- * 而它同样带行号、看起来就像证据 —— #2455 现场那条手工拼 `stageId` 的命令正是这个坑）；
- * 归属不到就 null，不拿「最新那条」顶上。
+ * `--stage-log` 那三件（ISSUE #2455）：按格名反查、在飞判定、「要读哪一跑」的归属。它们与 `--diagnose` 共用同一份实现，所以样本钉的是「两个入口不会给出两种答案」。
+ * 反查只认**逐字**（三十几格里互为子串的格名不少，挑错一格读的是另一格的日志，而它同样带行号、看起来就像证据 —— #2455 现场手工拼 `stageId` 正是这个坑）；归属不到就 null，不拿「最新那条」顶上。
  */
 describe("findStageMatches：格名反查只认逐字，认不出就停手", () => {
   const TWO_PIPELINES = {
@@ -1360,6 +1405,116 @@ describe("findStageMatches：格名反查只认逐字，认不出就停手", () 
     expect(stageInFlight("success")).toBe(false);
     expect(stageInFlight("skipped")).toBe(false);
     expect(stageInFlight(null)).toBe(false);
+  });
+});
+
+/**
+ * `endStages` 那一族（`PR 失败立案` / `令牌权限读数` / 桌包档的 `桌包失败立案`）平台记的 id 是 `stage-endStages-<n>`，掉在 `CONFIGURED_STAGE_ID`（`/^(stage-\d+|prepare)$/`）那条口径外面 ⇒ 它红了而 `--diagnose` 一个字不念、`--stage-log` 按名按 id 都退 2（ISSUE #3047 现场：`cnb-61a-1k6d4na5o` 的 `stage-endStages-2`，正文 `Failed to connect to github.com port 443`；该格已于 #3051 前移进主列，这里同格名只是那份平台读数的原样形状）。
+ * 两个面不许混：**可见性**（诊断念得出、日志取得到）与**判决**（流水线级结论、出勤读数）是分开的两支 —— 平台自己也不把 endStages 计入流水线状态，而本仓把立案格/令牌读数放这一档，正是为了「它坏了既不许把门禁的红洗成绿，也不许把自己的红叠进门禁的账」。
+ * 所以每一条都同时钉两侧：这一族进得了反查与展开，**但不改 `state`、不改 `configured`**。
+ */
+describe("endStages 在可见性面里、不在判决面里（ISSUE #3047）", () => {
+  const SN = "cnb-61a-1k6d4na5o";
+  const WITH_ENDSTAGE = {
+    status: 200,
+    data: {
+      status: "success",
+      pipelinesStatus: {
+        [`${SN}-001`]: {
+          id: `${SN}-001`,
+          name: "质量门禁",
+          status: "success",
+          stages: [
+            { status: "success", name: "Prepare", id: "prepare" },
+            { status: "success", name: "类型检查", id: "stage-8" },
+            { status: "success", name: "UI/逻辑分离", id: "stage-24" },
+            { status: "success", name: "PR 失败立案", id: "stage-endStages-0" },
+            { status: "success", name: "令牌权限读数", id: "stage-endStages-1" },
+            { status: "error", name: "GitHub 镜像同步", id: "stage-endStages-2", duration: 30_500 },
+          ],
+        },
+      },
+    },
+  };
+  const outcome = classifyBuildOutcome(WITH_ENDSTAGE);
+
+  it("判决面不收它：`configured` 与 `state` 都不因 endStage 的红而改", () => {
+    expect(outcome.configured.map((s) => s.id)).toEqual(["prepare", "stage-8", "stage-24"]);
+    expect(outcome.state).toBe("green");
+    expect(outcome.failed).toEqual([]);
+  });
+
+  it("可见性面收它：`diagnosable` / `endStages` / `endFailed` 三张都点得到名", () => {
+    expect(outcome.diagnosable.map((s) => s.id)).toEqual([
+      "prepare",
+      "stage-8",
+      "stage-24",
+      "stage-endStages-0",
+      "stage-endStages-1",
+      "stage-endStages-2",
+    ]);
+    expect(outcome.endStages).toHaveLength(3);
+    expect(outcome.endFailed.map((s) => s.name)).toEqual(["GitHub 镜像同步"]);
+  });
+
+  it("按格名与按格 id 都反查得到（修之前两条路都退 2）", () => {
+    expect(findStageMatches(outcome, "GitHub 镜像同步").hits).toHaveLength(1);
+    expect(findStageMatches(outcome, "stage-endStages-2").hits[0]?.stage.name).toBe(
+      "GitHub 镜像同步",
+    );
+    // 「比过 N 格」念的是可见性面那一张：念成判决面的 3 格会把「这一跑明明有这一格」盖住。
+    expect(findStageMatches(outcome, "GitHub 镜像同步").examined).toBe(6);
+  });
+
+  it("念得出这一格，且明说它不计入流水线判决", () => {
+    const text = formatOutcome(outcome, { sn: SN, slug: "org/repo" }).join("\n");
+    expect(text).toContain("红在 endStage：GitHub 镜像同步（stage-endStages-2，status=error）");
+    expect(text).toContain("不计入流水线判决");
+    // 绿跑不许被这一行改口成红：结论那一句仍是「绿」。
+    expect(text).toContain("结论：绿（这一跑有结论）");
+    expect(text).not.toContain("红的那一格：GitHub 镜像同步");
+  });
+
+  it("展开这一格时按它自己的流水线 id 取日志（不另起一套取数）", () => {
+    const calls: Array<Array<string>> = [];
+    const log: Array<string> = [];
+    const run = (_cmd: string, args: Array<string>) => {
+      calls.push(args);
+      if (args[1] === "get-build-stage") {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            status: 200,
+            data: {
+              status: "error",
+              duration: 30_500,
+              error: "",
+              content: [
+                "[mirror] 推送前这一读没通（exit 128）",
+                "Failed to connect to github.com port 443 after 21114 ms",
+              ],
+            },
+          }),
+          stderr: "",
+          error: null,
+        };
+      }
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+    const noted = describeFailedStages(run, {
+      slug: "org/repo",
+      sn: SN,
+      outcome,
+      log: (s) => log.push(s),
+    });
+    expect(noted).toBe(1);
+    const asked = calls.find((a) => a[1] === "get-build-stage");
+    expect(asked?.slice(0, 2)).toEqual(["build", "get-build-stage"]);
+    expect(asked).toContain(`${SN}-001`);
+    expect(asked).toContain("stage-endStages-2");
+    const text = log.join("\n");
+    expect(text).toContain("endStage，不计入流水线判决");
+    expect(text).toContain("L2 Failed to connect to github.com port 443");
   });
 });
 
@@ -1450,20 +1605,71 @@ describe("resolveBuildSn：点名照点名，没点名按 HEAD 逐字归属（�
     expect(out).toContain("pnpm ship --stage-log <sn>");
     expect(out).not.toContain("--diagnose");
   });
+
+  it("ISSUE #2950：目标构建被挤出首页 ⇒ 翻到第 2 页命中，不念「CI 还没起」", () => {
+    /* 首页被 20 条别人的构建占满（= 页大小，触发续翻），我的那条在第 2 页 ——
+     * 只看第一页的版本在这里回 null 并念「还没推 / CI 还没起」，而构建明明在。 */
+    const calls: Array<string> = [];
+    const others = Array.from({ length: 20 }, (_, i) => ({
+      sn: `cnb-other-${i}`,
+      sha: "1111111111111111111111111111111111111111",
+      event: "pull_request",
+      createTime: `2026-10-27T09:${String(i).padStart(2, "0")}:00Z`,
+    }));
+    const pages: Record<string, unknown> = {
+      "1": others,
+      "2": [
+        {
+          sn: "cnb-mine-1k5q00009",
+          sha: SHA,
+          event: "pull_request",
+          createTime: "2026-10-27T02:00:00Z",
+        },
+      ],
+    };
+    const run = (cmd: string, args: Array<string>) => {
+      calls.push([cmd, ...args].join(" "));
+      const page = args[args.indexOf("--page") + 1] ?? "1";
+      return {
+        status: 0,
+        stdout: JSON.stringify({ status: 200, data: pages[page] ?? [] }),
+        stderr: "",
+        error: null,
+      };
+    };
+    const h = hear();
+    expect(resolveBuildSn({ run, log: h.log, slug: "a/b", headSha: SHA })).toBe(
+      "cnb-mine-1k5q00009",
+    );
+    expect(calls.some((c) => c.includes("--page 2"))).toBe(true);
+    expect(h.lines.join("\n")).toContain("命中在第 2 页");
+  });
+
+  it("ISSUE #2950（负控制）：翻满上界也没有 ⇒ 照实念「已翻 N 页」，不假装「没有」", () => {
+    /* 每页都满（20 条别人的）⇒ 翻够 5 页停手：上界存在的理由是「归属」不该变成
+     * 无界扫；而这一格的话术必须说清「扫了多大面」，否则「没找到」与「没扫」同形。 */
+    const full = Array.from({ length: 20 }, (_, i) => ({
+      sn: `cnb-other-${i}`,
+      sha: "1111111111111111111111111111111111111111",
+      event: "pull_request",
+      createTime: "2026-10-27T09:00:00Z",
+    }));
+    const f = fake(full);
+    const h = hear();
+    expect(resolveBuildSn({ run: f.run, log: h.log, slug: "a/b", headSha: SHA })).toBeNull();
+    expect(h.lines.join("\n")).toContain("已翻 5 页");
+    /* 上界真的被走到：发了 5 次列表请求（fake 对每次调用都回同一页满的）。 */
+    expect(f.calls.filter((c) => c.includes("get-build-logs"))).toHaveLength(5);
+  });
 });
 
 /**
- * 「一族读数只允许有一份定义」（ISSUE #2526 切分之后的形状档）。
- *
- * 为什么要单独钉这一条：#2526 把 `formatOutcome` / `stageLogExcerpt` 搬到
- * `ci-build-print.mjs`，而 `ci-build-readout.mjs` 继续**转发**它们（消费口一字不改）。
- * 那个形状一旦被人「顺手在原处再补一份」，两份会同时存在、被不同调用点各读一份，
- * 漂移形态恰恰是**账面全绿而两个入口给出两种话术**（与 #2455 那条「同一跑不许给出两种答案」
- * 同一个方向）。而 `scripts/` 不在 `check-code-duplication.cjs` 的量程里（它扫 `src/**`），
- * 这一族没有别的执行者会响。
+ * 「一族读数只允许有一份定义」（ISSUE #2526 切分之后的形状档）。#2526 把 `formatOutcome` / `stageLogExcerpt` 搬到 `ci-build-print.mjs`，而 `ci-build-readout.mjs` 继续**转发**它们（消费口一字不改）。
+ * 一旦有人在原处「顺手再补一份」，两份会同时存在、被不同调用点各读一份，漂移形态恰恰是**账面全绿而两个入口给出两种话术**（与 #2455「同一跑不许给出两种答案」同向）。
+ * 而 `scripts/` 不在 `check-code-duplication.cjs` 的量程里（它扫 `src/**`），这一族没有别的执行者会响。
  */
 describe("切分之后：ci-build 这一族的读数各只有一份定义", () => {
-  const dir = path.resolve(process.cwd(), "scripts");
+  const dir = path.resolve(process.cwd(), "scripts", "ci");
   const files = fs
     .readdirSync(dir)
     .filter((f) => /^ci-build.*\.mjs$/.test(f))
@@ -1498,7 +1704,9 @@ describe("切分之后：ci-build 这一族的读数各只有一份定义", () =
     /* ⚠️ 锚在**行首**：`readout` 的文件头里有一句正写着「见下面那个 `export { … }`」，
      * 不锚行首的写法会从那句注释起、一路吞到真的转发块，于是清单里少转发一个名字也照样绿
      * （变异自证踩过：把 `formatOutcome` 从清单里删掉，这条当时没红）。 */
-    const block = /^export \{([\s\S]*?)\};/m.exec(readout?.src ?? "")?.[1] ?? "(没有转发块)";
+    const block =
+      /^export \{(?<exportBody>[\s\S]*?)\};/m.exec(readout?.src ?? "")?.groups?.exportBody ??
+      "(没有转发块)";
     for (const name of ["formatOutcome", "stageLogExcerpt", "progressReadout"]) {
       expect(block, `转发清单里没有 ${name}`).toContain(name);
     }

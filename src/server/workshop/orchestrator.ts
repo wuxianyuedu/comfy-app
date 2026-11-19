@@ -4,6 +4,7 @@
 // 纯函数模块（script-parser / script-parse / prompt-builder），不触碰
 // `server-only` / `~/env`，故 stdio 与 Next HTTP 双 transport 共用。
 import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
+import { advancePipelineStage } from "~/lib/workshop/types";
 import { parseIdeaToScenes } from "~/lib/workshop/script-parser";
 import {
   buildExtractCharactersMessages,
@@ -20,6 +21,8 @@ import {
   buildShotPrompt,
 } from "~/lib/workshop/prompt-builder";
 import { sizeSpecToWxH, type SizeSpec } from "~/lib/media/size-presets";
+import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
+import { KeyedAsyncMutex } from "~/lib/async-mutex";
 import {
   generateImageViaApi,
   pollVideoViaApi,
@@ -87,7 +90,7 @@ export function rebuildShotPrompts(
 }
 
 function extractRemoteTaskId(clipUrl: string | undefined): string | null {
-  if (!clipUrl) {
+  if (clipUrl === undefined) {
     return null;
   }
   return clipUrl.startsWith("task:") ? clipUrl.slice("task:".length) : null;
@@ -103,10 +106,79 @@ async function load(id: string): Promise<WorkshopSessionState> {
   return state;
 }
 
+/* 会话级写互斥（ISSUE #3891 / #3895）：下面每个变更函数的形状都是
+ * 「load 快照 →（数秒到数分钟的）外部调用 → updateState 整包写回」，
+ * 快照在读与写之间会过期 —— 并发调用（MCP 超时重试与首叫在飞交叠、
+ * 同时给两个镜头生图）会以各自的旧快照互相覆盖（后写者抹掉先写者
+ * 已落库的产物），或双双通过幂等闸重复提交外部计费任务。updateState
+ * 的 immediate 事务只串行化了「写段」；这里把整个读-改-写跨度按会话
+ * id 串行化（进程内，MCP 服务端单进程），锁内的 load 拿到的永远是
+ * 上一个变更落库后的最新状态，幂等闸因此真实生效。读路径（getSession /
+ * listSessions）不进锁：界面读的是 production 权威内容，保持实时。
+ * 锁内不得再调其它带锁编排函数（会排队等自己 → 死锁）。 */
+const sessionMutationMutex = new KeyedAsyncMutex();
+
 // ── 阶段 0：会话与元信息 ───────────────────────────────────────
 
-export async function createSession(input: repo.CreateSessionInput = {}) {
-  return repo.createSession(input);
+/** 会话创建的去重窗口与指纹账（ISSUE #3852，见 createSession 内注释）。 */
+const CREATE_DEDUP_TTL_MS = 5 * 60_000;
+type CreateFingerprintEntry = { at: number; session: Promise<string> };
+
+function createFingerprintStore(): Map<string, CreateFingerprintEntry> {
+  const g = globalThis as typeof globalThis & {
+    __workshopCreateDedup_v1?: Map<string, CreateFingerprintEntry>;
+  };
+  g.__workshopCreateDedup_v1 ??= new Map();
+  return g.__workshopCreateDedup_v1;
+}
+
+export async function createSession(input: repo.CreateSessionInput = {}): Promise<string> {
+  /* 重试去重（ISSUE #3852）：MCP 工具超时重试 / 模型对同一指令二次调用时，
+   * 参数逐字相同——按参数指纹在短窗口内返回既有会话，不再重复建
+   * 「会话 + 项目 + production」三件套。显式绑 projectId 的调用同样参与：
+   * 重试重复绑定无害，返回同一会话。进程内 Map 即可（MCP 服务端单进程），
+   * 挂 globalThis 与仓内其它单例同口径。 */
+  const dedupKey = JSON.stringify([
+    input.userId ?? null,
+    input.projectId ?? null,
+    input.title ?? "",
+    input.type ?? "",
+    input.tone ?? "",
+    input.logline ?? "",
+    input.idea ?? "",
+  ]);
+  const store = createFingerprintStore();
+  /* 机会性清理过期且未再命中的指纹（ISSUE #3953 / #3850）：避免多样化/自动化
+   * 创建流量下历史 key 永久驻留；只删已过 TTL 的条目，不影响窗口内复用语义。 */
+  const now = Date.now();
+  for (const [key, entry] of store.entries()) {
+    if (now - entry.at >= CREATE_DEDUP_TTL_MS) {
+      store.delete(key);
+    }
+  }
+  const hit = store.get(dedupKey);
+  if (hit !== undefined && now - hit.at < CREATE_DEDUP_TTL_MS) {
+    /* 命中还要复核会话仍在：测试夹具会整库重置，生产侧也可能删会话；
+     * 已消失的命中按未命中处理（重新创建）—— 去重不跨「会话已消失」。 */
+    const id = await hit.session;
+    const existing = await repo.getSession(id);
+    if (existing) {
+      return id;
+    }
+    store.delete(dedupKey);
+  }
+  /* 先占位后创建（ISSUE #3908）：指纹在创建完成**之前**就写进账本，
+   * 并发同参调用共享同一次创建（各拿到同一个 promise），不再各自建一套。
+   * 创建失败要把占位撤掉，否则 TTL 窗口内的后续重试会拿到同一个 rejection。 */
+  const session = Promise.resolve(repo.createSession(input));
+  session.catch(() => {
+    const current = store.get(dedupKey);
+    if (current?.session === session) {
+      store.delete(dedupKey);
+    }
+  });
+  store.set(dedupKey, { at: Date.now(), session });
+  return session;
 }
 
 export async function listSessions() {
@@ -121,7 +193,7 @@ export async function deleteSession(id: string) {
   return repo.deleteSession(id);
 }
 
-export async function setMeta(
+async function setMetaImpl(
   id: string,
   patch: Partial<Pick<ProjectMeta, "title" | "type" | "tone" | "logline">>,
 ) {
@@ -131,19 +203,44 @@ export async function setMeta(
   return state.meta;
 }
 
-export async function setIdea(id: string, idea: string) {
+export function setMeta(
+  id: string,
+  patch: Partial<Pick<ProjectMeta, "title" | "type" | "tone" | "logline">>,
+) {
+  return sessionMutationMutex.run(id, () => setMetaImpl(id, patch));
+}
+
+async function setIdeaImpl(id: string, idea: string) {
   const state = await load(id);
   state.idea = idea;
   await repo.updateState(id, state);
   return { idea: state.idea };
 }
 
+export function setIdea(id: string, idea: string) {
+  return sessionMutationMutex.run(id, () => setIdeaImpl(id, idea));
+}
+
 // ── 阶段 1：脚本 ───────────────────────────────────────────────
 
-export async function generateScript(id: string) {
+async function generateScriptImpl(id: string, force = false) {
   const state = await load(id);
   if (!state.idea.trim()) {
     throw new Error("请先设置 idea（灵感 / 梗概）再生成脚本");
+  }
+  /* 幂等闸（ISSUE #3852）：已有剧本时，重试 / 二次指令不再重跑 LLM（重复
+   * token 消耗 + 整幅覆盖）；显式 force 才重新生成。 */
+  if (
+    !force &&
+    state.meta.scriptMarkdown !== undefined &&
+    state.meta.scriptMarkdown.trim() !== ""
+  ) {
+    return {
+      script: state.meta.scriptMarkdown,
+      sceneCount: state.scenes.length,
+      scenes: state.scenes,
+      skipped: true,
+    };
   }
   const cfg = await getWorkshopLLMConfig();
   const script = await completeWorkshopLLM(cfg, buildScriptMessages(state.idea, state.meta));
@@ -155,12 +252,16 @@ export async function generateScript(id: string) {
   });
   state.meta = { ...state.meta, scriptMarkdown: script };
   state.scenes = scenes;
-  state.stage = "script";
+  state.stage = advancePipelineStage(state.stage, "script");
   await repo.updateState(id, state);
   return { script, sceneCount: scenes.length, scenes };
 }
 
-export async function setScript(id: string, markdown: string, parse = true) {
+export function generateScript(id: string, force = false) {
+  return sessionMutationMutex.run(id, () => generateScriptImpl(id, force));
+}
+
+async function setScriptImpl(id: string, markdown: string, parse = true) {
   const state = await load(id);
   state.meta = { ...state.meta, scriptMarkdown: markdown };
   if (parse) {
@@ -171,7 +272,7 @@ export async function setScript(id: string, markdown: string, parse = true) {
       logline: state.meta.logline,
     });
   }
-  state.stage = "script";
+  state.stage = advancePipelineStage(state.stage, "script");
   await repo.updateState(id, state);
   return {
     scriptLength: markdown.length,
@@ -180,12 +281,26 @@ export async function setScript(id: string, markdown: string, parse = true) {
   };
 }
 
+export function setScript(id: string, markdown: string, parse = true) {
+  return sessionMutationMutex.run(id, () => setScriptImpl(id, markdown, parse));
+}
+
 // ── 阶段 2：角色卡 ─────────────────────────────────────────────
 
-export async function extractCharacters(id: string) {
+async function extractCharactersImpl(id: string, force = false) {
   const state = await load(id);
-  if (!state.meta.scriptMarkdown?.trim()) {
+  if (state.meta.scriptMarkdown === undefined || state.meta.scriptMarkdown.trim() === "") {
     throw new Error("请先生成 / 设置脚本再提取角色");
+  }
+  /* 幂等闸（ISSUE #3852）：已有角色卡时重复调用不再重跑 LLM 提取（合并本身
+   * 按 name 幂等，但外部调用是重复消耗）；显式 force 才重跑。 */
+  if (!force && state.characters.length > 0) {
+    return {
+      added: 0,
+      skipped: state.characters.length,
+      total: state.characters.length,
+      characters: state.characters,
+    };
   }
   const cfg = await getWorkshopLLMConfig();
   const text = await completeWorkshopLLM(
@@ -195,25 +310,37 @@ export async function extractCharacters(id: string) {
   const drafts = parseExtractedCharacters(text);
   const { list, added, skipped } = mergeCharacterDrafts(state.characters, drafts, []);
   state.characters = list;
-  state.stage = "character";
+  state.stage = advancePipelineStage(state.stage, "character");
   await repo.updateState(id, state);
   return { added, skipped, total: list.length, characters: list };
 }
 
-export async function setCharacters(id: string, characters: Array<Character>) {
+export function extractCharacters(id: string, force = false) {
+  return sessionMutationMutex.run(id, () => extractCharactersImpl(id, force));
+}
+
+async function setCharactersImpl(id: string, characters: Array<Character>) {
   const state = await load(id);
   state.characters = rebuildCharacterPrompts(characters);
-  state.stage = "character";
+  state.stage = advancePipelineStage(state.stage, "character");
   await repo.updateState(id, state);
   return state.characters;
 }
 
+export function setCharacters(id: string, characters: Array<Character>) {
+  return sessionMutationMutex.run(id, () => setCharactersImpl(id, characters));
+}
+
 // ── 阶段 3：分镜 ───────────────────────────────────────────────
 
-export async function buildStoryboard(id: string) {
+async function buildStoryboardImpl(id: string, force = false) {
   const state = await load(id);
-  if (!state.meta.scriptMarkdown?.trim()) {
+  if (state.meta.scriptMarkdown === undefined || state.meta.scriptMarkdown.trim() === "") {
     throw new Error("请先生成 / 设置脚本再拆分分镜");
+  }
+  /* 幂等闸（ISSUE #3852）：已有分镜时重复调用不再重跑 LLM；显式 force 才重拆。 */
+  if (!force && state.shots.length > 0) {
+    return { shotCount: state.shots.length, shots: state.shots, skipped: true };
   }
   const names = state.characters.map((c) => c.name);
   const cfg = await getWorkshopLLMConfig();
@@ -228,17 +355,25 @@ export async function buildStoryboard(id: string) {
     state.characters,
   );
   state.shots = shots;
-  state.stage = "storyboard";
+  state.stage = advancePipelineStage(state.stage, "storyboard");
   await repo.updateState(id, state);
   return { shotCount: shots.length, shots };
 }
 
-export async function setStoryboard(id: string, shots: Array<Shot>) {
+export function buildStoryboard(id: string, force = false) {
+  return sessionMutationMutex.run(id, () => buildStoryboardImpl(id, force));
+}
+
+async function setStoryboardImpl(id: string, shots: Array<Shot>) {
   const state = await load(id);
   state.shots = rebuildShotPrompts(shots, state.scenes, state.characters);
-  state.stage = "storyboard";
+  state.stage = advancePipelineStage(state.stage, "storyboard");
   await repo.updateState(id, state);
   return state.shots;
+}
+
+export function setStoryboard(id: string, shots: Array<Shot>) {
+  return sessionMutationMutex.run(id, () => setStoryboardImpl(id, shots));
 }
 
 // ── 阶段 4：生图 ───────────────────────────────────────────────
@@ -246,6 +381,9 @@ export async function setStoryboard(id: string, shots: Array<Shot>) {
 export type GenerateImageInput = {
   channel?: "api" | "comfyui";
   characterId?: string;
+  /** 显式重跑（ISSUE #3852）：镜头已有产物时，缺省直接返回既有图片，
+   *  不重复执行外部生图调用。 */
+  force?: boolean;
   shotId?: string;
   /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见 `lib/size-presets`）。
    *  缺省各通道按自己的默认档走。调用方（MCP）若仍按老口径给 "1024x1024"，
@@ -253,15 +391,24 @@ export type GenerateImageInput = {
   size?: SizeSpec;
 };
 
-export async function generateImage(id: string, input: GenerateImageInput) {
+async function generateImageImpl(id: string, input: GenerateImageInput) {
   const state = await load(id);
   const channel = input.channel ?? "api";
   let prompt: string;
   let negative: string | undefined;
-  const shot = input.shotId ? state.shots.find((s) => s.id === input.shotId) : undefined;
-  const character = input.characterId
-    ? state.characters.find((c) => c.id === input.characterId)
-    : undefined;
+  const shot =
+    input.shotId === undefined ? undefined : state.shots.find((s) => s.id === input.shotId);
+  const character =
+    input.characterId === undefined
+      ? undefined
+      : state.characters.find((c) => c.id === input.characterId);
+  /* 幂等闸（ISSUE #3852）：镜头已有产物时，重试 / 二次指令不再重复执行外部
+   * 生图调用（重复费用 / GPU），也不再用新结果覆盖旧产物引用。角色卡不落
+   * 产物字段，无此闸。会话锁（sessionMutationMutex）保证闸与外部调用之间
+   * 没有并发插队 —— 锁内重读到的必是最新状态。 */
+  if (input.force !== true && shot && shot.imageUrl !== undefined && shot.imageUrl !== "") {
+    return { url: shot.imageUrl, channel };
+  }
   if (shot) {
     prompt = shot.prompt || shot.description;
     negative = shot.negativePrompt || undefined;
@@ -287,11 +434,14 @@ export async function generateImage(id: string, input: GenerateImageInput) {
     await repo.updateState(id, state);
     return { url, channel: "comfyui" };
   }
+  /* 尺寸换算用**生效的那份**表（ISSUE #3972）：现读项目默认 + 本机覆盖，
+   * 与设置页 / 界面控件同源 —— 设置里改过的表在出图链路真的生效。 */
+  const sizeTable = await loadSizePresetTable();
   const url = await generateImageViaApi({
     prompt,
     negative,
     /* 上游 images/generations 只认 "WxH" —— 尺寸表达在**外部 wire** 边界折算。 */
-    ...(input.size ? { size: sizeSpecToWxH(input.size, "image") } : {}),
+    ...(input.size ? { size: sizeSpecToWxH(input.size, "image", sizeTable) } : {}),
   });
   if (shot) {
     shot.imageUrl = url;
@@ -303,10 +453,17 @@ export async function generateImage(id: string, input: GenerateImageInput) {
   return { url };
 }
 
+export function generateImage(id: string, input: GenerateImageInput) {
+  return sessionMutationMutex.run(id, () => generateImageImpl(id, input));
+}
+
 // ── 阶段 5：生视频 ─────────────────────────────────────────────
 
 export type SubmitVideoInput = {
   channel?: "api" | "comfyui";
+  /** 显式重跑（ISSUE #3852）：镜头已有产物或在跑的异步任务时，缺省直接返回
+   *  既有引用，不重复提交外部计费调用。 */
+  force?: boolean;
   fps?: number;
   frames?: number;
   negative?: string;
@@ -315,15 +472,23 @@ export type SubmitVideoInput = {
   useFirstFrame?: boolean;
 };
 
-export async function submitVideo(id: string, input: SubmitVideoInput) {
+async function submitVideoImpl(id: string, input: SubmitVideoInput) {
   const state = await load(id);
   const shot = state.shots.find((s) => s.id === input.shotId);
   if (!shot) {
     throw new Error(`镜头不存在：${input.shotId}`);
   }
+  /* 幂等闸（ISSUE #3852）：镜头已有产物（done 的 url）或在跑的异步任务
+   * （`task:` 前缀）时，重试 / 二次指令不再重新提交外部计费调用，也不再用
+   * 新任务句柄覆盖旧的（旧的将无法轮询取回）。显式 force 才重跑。
+   * 会话锁（sessionMutationMutex）保证闸与外部计费提交之间没有并发插队
+   *（ISSUE #3895）—— 锁内重读到的必是最新状态。 */
+  if (input.force !== true && shot.clipUrl !== undefined && shot.clipUrl !== "") {
+    return { url: shot.clipUrl, channel: input.channel ?? "api", skipped: true };
+  }
   if (input.channel === "comfyui") {
     let imageDataUrl: string | undefined;
-    if (input.useFirstFrame && shot.imageUrl) {
+    if (input.useFirstFrame === true && shot.imageUrl !== undefined && shot.imageUrl !== "") {
       imageDataUrl = await resolveMediaDataUrl(shot.imageUrl);
     }
     const r = await submitVideoViaComfyUI({
@@ -332,7 +497,7 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
       imageDataUrl,
       sessionId: id,
     });
-    if (r.url) {
+    if (r.url !== undefined && r.url !== "") {
       shot.clipUrl = r.url;
       shot.clipStatus = "done";
     }
@@ -340,7 +505,7 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
     return { url: r.url, channel: "comfyui" };
   }
   let imageDataUrl: string | undefined;
-  if (input.useFirstFrame && shot.imageUrl) {
+  if (input.useFirstFrame === true && shot.imageUrl !== undefined && shot.imageUrl !== "") {
     imageDataUrl = await resolveMediaDataUrl(shot.imageUrl);
   }
   const result = await submitVideoViaApi({
@@ -350,10 +515,10 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
     frames: input.frames,
     fps: input.fps,
   });
-  if (result.url) {
+  if (result.url !== undefined && result.url !== "") {
     shot.clipUrl = result.url;
     shot.clipStatus = "done";
-  } else if (result.remoteTaskId) {
+  } else if (result.remoteTaskId !== undefined && result.remoteTaskId !== "") {
     shot.clipUrl = `task:${result.remoteTaskId}`;
     shot.clipStatus = "running";
   }
@@ -361,14 +526,18 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
   return result;
 }
 
-export async function pollVideo(id: string, shotId: string) {
+export function submitVideo(id: string, input: SubmitVideoInput) {
+  return sessionMutationMutex.run(id, () => submitVideoImpl(id, input));
+}
+
+async function pollVideoImpl(id: string, shotId: string) {
   const state = await load(id);
   const shot = state.shots.find((s) => s.id === shotId);
   if (!shot) {
     throw new Error(`镜头不存在：${shotId}`);
   }
   const taskId = extractRemoteTaskId(shot.clipUrl);
-  if (!taskId) {
+  if (taskId === null || taskId === "") {
     return {
       pending: false,
       url: shot.clipUrl,
@@ -376,12 +545,16 @@ export async function pollVideo(id: string, shotId: string) {
     };
   }
   const r = await pollVideoViaApi(taskId);
-  if (!r.pending && r.url) {
+  if (!r.pending && r.url !== undefined && r.url !== "") {
     shot.clipUrl = r.url;
     shot.clipStatus = "done";
     await repo.updateState(id, state);
   }
   return { pending: r.pending, url: r.url };
+}
+
+export function pollVideo(id: string, shotId: string) {
+  return sessionMutationMutex.run(id, () => pollVideoImpl(id, shotId));
 }
 
 // ── 阶段 6：成片合成 ─────────────────────────────────────────────
@@ -399,7 +572,14 @@ export type ComposeFinalResult = {
 };
 
 /** 把分镜按序合成为成片：写出合成清单（JSON），可选 ffmpeg 渲染成 mp4。 */
-export async function composeFinal(
+export function composeFinal(
+  id: string,
+  input: ComposeFinalInput = {},
+): Promise<ComposeFinalResult> {
+  return sessionMutationMutex.run(id, () => composeFinalImpl(id, input));
+}
+
+async function composeFinalImpl(
   id: string,
   input: ComposeFinalInput = {},
 ): Promise<ComposeFinalResult> {
@@ -408,14 +588,14 @@ export async function composeFinal(
   const planPath = await writeCompositionPlan(id, plan);
   let outputPath: string | undefined;
   let renderNote: string | undefined;
-  if (input.render) {
+  if (input.render === true) {
     const r = await renderComposition(plan, `${id}-final`);
-    if (r.ok && r.outputPath) {
+    if (r.ok && r.outputPath !== undefined && r.outputPath !== "") {
       outputPath = r.outputPath;
     }
     renderNote = r.note;
   }
-  state.stage = "final_edit";
+  state.stage = advancePipelineStage(state.stage, "final_edit");
   await repo.updateState(id, state);
   return { plan, planPath, outputPath, renderNote };
 }

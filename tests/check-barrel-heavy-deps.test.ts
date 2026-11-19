@@ -1,22 +1,7 @@
 /**
- * 提交门槛自检：把 `scripts/check-barrel-heavy-deps.cjs` 当黑盒跑在临时工作区上，
- * 验证「入口的**静态**可达图里不许出现重依赖」这条规范（§12.19 / 02 §2.9）
- * 真的会阻断提交，而不是只写在文档里。
- *
- * 规范：docs/standards/12-代码组织与文件结构.md §12.19、
- *       docs/standards/02-性能规范.md §2.9
- *
- * ## 为什么这条判据必须有「它真的会响」的负例
- *
- * 本判据的三格（静态边 / `import type` 不算边 / `import()` 不算边）都是**解析口径**，
- * 而解析口径写错时的表现是**永远绿**——判据看着在、结论恒为「没问题」。本仓已经
- * 栽过同族（`ui/file-picker.tsx` 的门槛写着 100、报告里查无此文件；`core/index` 的
- * `export *` 承诺与现状相反）。所以下面每一格都配一个正例 + 一个负例：
- *
- *   · 静态 `import` 一条重依赖的模块 → 红（且报告要给出整条链）；
- *   · `import type` 同一条 → **绿**（类型边编译后不存在；不排除它判据会长期假阳性）；
- *   · `React.lazy(() => import("…"))` 同一条 → **绿**（懒加载正是本判据要的行为）；
- *   · 登记入口不存在 → 红（登记项静默失效是这一类清单最典型的死法）。
+ * 提交门槛自检：把 `scripts/gates/check-barrel-heavy-deps.cjs` 当黑盒跑在临时工作区，验证「入口静态可达图不许有重依赖」（§12.19 / 02 §2.9）真会阻断提交。
+ * 解析口径写错的表现是永远绿（判据在、结论恒「没问题」）；同族已栽过（`ui/file-picker.tsx` 门槛 100 却查无此文件、`core/index` 的 `export *` 与现状相反），故每格配正例+负例：
+ * 静态 `import` 重依赖 → 红且报整条链；`import type` 同一条 → 绿（类型边编译后不存在）；`React.lazy(() => import(…))` → 绿（懒加载正是所求）；登记入口不存在 → 红（静默失效）。
  */
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
@@ -26,19 +11,21 @@ import { defineGateRepo, describe } from "./helpers/gate-repo";
  * 定位扫描根 —— 临时工作区与 `run` / `write` 由 `tests/helpers/gate-repo.ts` 提供。
  * 登记清单（`.barrel-heavy-deps.json`）与脚本同目录、是它的**真实输入**，
  * 所以必须一起搬进工作区，否则跑起来读不到配置（表现是 exit 2，像「门禁坏了」）。 */
-const SCRIPT = join(process.cwd(), "scripts", "check-barrel-heavy-deps.cjs");
+const SCRIPT = join(process.cwd(), "scripts", "gates/check-barrel-heavy-deps.cjs");
 
 const { test, expect } = defineGateRepo({
-  script: "check-barrel-heavy-deps.cjs",
+  script: "gates/check-barrel-heavy-deps.cjs",
   dir: "root",
   dirs: ["src/app", "src/components"],
-  copy: [{ from: "scripts/.barrel-heavy-deps.json", to: "scripts/.barrel-heavy-deps.json" }],
+  copy: [
+    { from: "scripts/gates/.barrel-heavy-deps.json", to: "scripts/gates/.barrel-heavy-deps.json" },
+  ],
 });
 
 /** 把登记清单换成「一个入口 + 一条重依赖 + 一条必须懒加载的模块」。 */
 function seedConfig(repo: { write: (rel: string, s: string) => void }) {
   repo.write(
-    "scripts/.barrel-heavy-deps.json",
+    "scripts/gates/.barrel-heavy-deps.json",
     JSON.stringify({
       entries: ["src/app/entry.tsx"],
       heavyDeps: ["@xyflow/react"],
@@ -139,7 +126,7 @@ describe("check-barrel-heavy-deps.cjs（提交门槛）", () => {
     seedConfig(repo);
     seedCheapChain(repo);
     repo.write(
-      "scripts/.barrel-heavy-deps.json",
+      "scripts/gates/.barrel-heavy-deps.json",
       JSON.stringify({
         entries: ["src/app/entry.tsx"],
         heavyDeps: [],
@@ -163,6 +150,34 @@ describe("check-barrel-heavy-deps.cjs（提交门槛）", () => {
   });
 
   test("--json 给机器读的结论（reports + findings）", ({ repo }) => {
+    /** 外来值是不是普通对象 / 数组。 */
+    function isPlainObject(v: unknown): v is Record<string, unknown> {
+      return typeof v === "object" && v !== null && !Array.isArray(v);
+    }
+    function isUnknownArray(v: unknown): v is Array<unknown> {
+      return Array.isArray(v);
+    }
+
+    /** --json 结论的形状：外来 JSON 先落 unknown，再逐字段收窄。 */
+    function isBarrelJson(v: unknown): v is {
+      findings: Array<{ chain?: Array<string>; dep?: string; entry: string; module: string }>;
+      reports: Array<{ entry: string; reachable: number }>;
+    } {
+      if (!isPlainObject(v)) return false;
+      const reports: unknown = v.reports;
+      const findings: unknown = v.findings;
+      return (
+        isUnknownArray(reports) &&
+        reports.every(
+          (r) => isPlainObject(r) && typeof r.entry === "string" && typeof r.reachable === "number",
+        ) &&
+        isUnknownArray(findings) &&
+        findings.every(
+          (f) => isPlainObject(f) && typeof f.entry === "string" && typeof f.module === "string",
+        )
+      );
+    }
+
     seedConfig(repo);
     seedCheapChain(repo);
     repo.write(
@@ -171,11 +186,11 @@ describe("check-barrel-heavy-deps.cjs（提交门槛）", () => {
     );
     const { code, output } = repo.run(["--json"]);
     expect(code).toBe(1);
-    /* SAFETY: 类型断言已复核 */
-    const parsed = JSON.parse(output) as {
-      findings: Array<{ chain?: Array<string>; dep?: string; entry: string; module: string }>;
-      reports: Array<{ entry: string; reachable: number }>;
-    };
+    const raw: unknown = JSON.parse(output);
+    if (!isBarrelJson(raw)) {
+      throw new Error("--json 结论形状不对");
+    }
+    const parsed = raw;
     expect(parsed.reports[0]?.entry).toBe("src/app/entry.tsx");
     expect(parsed.reports[0]?.reachable).toBeGreaterThan(0);
     expect(parsed.findings[0]?.module).toBe("src/components/leaf.ts");

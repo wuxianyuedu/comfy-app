@@ -1,14 +1,14 @@
 /**
  * `ComfyuiStoragePaths` 的可见行为（设置页「实例目录（只读）」区块）。
- *
- * 断言对齐用户能看到的四件事：六组标签都在、路径按斜杠统一显示、覆盖来源与
- * 「目录不存在」有标注、共享组为空时说「未配置共享目录」。非桌面实例
- * （storage 为 null）整块不渲染 —— 那是「不适用」而不是「空目录」。
+ * 断言：六组标签齐全、路径斜杠统一、覆盖来源与「目录不存在」有标注、共享组为
+ * 空时说「未配置共享目录」；非桌面实例（storage 为 null）整块不渲染。
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import { ComfyuiStoragePaths } from "./ComfyuiStoragePaths";
 
 function storageOf(overrides: Partial<DesktopStoragePaths> = {}): DesktopStoragePaths {
@@ -39,8 +39,13 @@ describe("ComfyuiStoragePaths", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("六组标签都在，路径按正斜杠显示（便于逐字对照盘符）", () => {
-    render(<ComfyuiStoragePaths storage={storageOf()} />);
+  it("六组标签都在，路径按正斜杠显示（便于逐字对照盘符）", async () => {
+    const user = userEvent.setup();
+    render(
+      <TooltipProvider delay={0}>
+        <ComfyuiStoragePaths storage={storageOf()} />
+      </TooltipProvider>,
+    );
     for (const label of [
       "模型目录",
       "共享模型目录",
@@ -51,8 +56,15 @@ describe("ComfyuiStoragePaths", () => {
     ]) {
       expect(screen.getByText(label)).toBeTruthy();
     }
-    expect(screen.getByTitle(String.raw`D:\installs\ComfyUI2\ComfyUI\models`).textContent).toBe(
-      "D:/installs/ComfyUI2/ComfyUI/models",
+    /* 原生 title= 撤干净：完整路径走 <Hint>，悬停可见。 */
+    const shown = screen.getByText("D:/installs/ComfyUI2/ComfyUI/models");
+    expect(shown).not.toHaveAttribute("title");
+    await user.hover(shown);
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      String.raw`D:\installs\ComfyUI2\ComfyUI\models`,
     );
   });
 

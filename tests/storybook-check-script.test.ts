@@ -1,18 +1,7 @@
 /**
- * 故事枚举来源门禁（`scripts/storybook-check.mjs`）的自测契约。
- *
- * 为什么要有这一层：门禁的价值全在**判定口径**上，而这条判据的两种错法都
- * 不报错 ——
- *  · 口径太松（只认文件内 `const X = cva(…)`）：漏掉「import 组件的变体表再点
- *    `.variants`」这一族，而那正是首轮踩坑的**原形态**；
- *  · 口径太紧（把注释里出现 `xxxVariants.variants` 也当违规）：会误伤解释这条
- *    规则本身的注释（`button.stories.tsx` 头部就是那么写的），成员会直接删掉
- *    误报的门禁，等于没有。
- *
- * 这里用「临时仓库 + 只放被测文件」跑**真脚本**（与 `check-import-alias.test.ts`
- * 同一套路），四个方向都断言一遍：该拦的拦、该放的放、空转要报错。
- *
- * 规范：docs/standards/16-shadcn-ui与表单校验.md §16.2.3.2、§9.5。
+ * 故事枚举来源门禁（`scripts/devtools/storybook-check.mjs`）的自测契约：价值全在判定口径上，两种错法都不报错 ——
+ * 太松（只认 `const X = cva(…)`）漏掉 import 变体表再点 `.variants`（首轮踩坑的原形态）；太紧把讲规则的注释也当违规（`button.stories.tsx`），成员会删掉门禁。
+ * 用「临时仓库 + 只放被测文件」跑真脚本（同 `check-import-alias.test.ts`），四个方向都断言：该拦的拦、该放的放、空转报错。规范 §16.2.3.2、§9.5。
  */
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -23,7 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { symlinkDir } from "./helpers/symlink-dir";
 
 const ROOT = path.resolve(__dirname, "..");
-const SCRIPT_REL = "scripts/storybook-check.mjs";
+const SCRIPT_REL = "scripts/devtools/storybook-check.mjs";
 const CHECK_DIR_REL = "scripts/storybook-checks";
 const tempDirs: Array<string> = [];
 
@@ -62,8 +51,9 @@ function makeRepo() {
      临时仓库里自己造一份，值按 `scanner()` 会写下的那份「组件 + 故事」算
      （分母 1、已覆盖 1）。不这么做的话，**每一条故事枚举用例都会顺带红在
      「理由表里的文件在这不存在」上**，那就不再是「枚举来源」的判据了。 */
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
   writeFileSync(
-    path.join(root, "scripts", ".storybook-coverage-baseline.json"),
+    path.join(root, "scripts", "gates", ".storybook-coverage-baseline.json"),
     JSON.stringify({ uiSurfaces: 1, covered: 1 }),
   );
   /* 占位理由指向的文件要**真的存在**，否则「理由表与磁盘对得上」那条会红 ——
@@ -92,9 +82,12 @@ function runIn(root: string): { ok: boolean; output: string } {
       }),
     };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as { stderr?: string; stdout?: string };
-    return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    /* 失败形状按字段读（B5 清账）：两股输出缺省当空串。 */
+    const e: { stderr?: unknown; stdout?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
+    const out = typeof e.stdout === "string" ? e.stdout : "";
+    const err = typeof e.stderr === "string" ? e.stderr : "";
+    return { ok: false, output: `${out}${err}` };
   }
 }
 
@@ -113,7 +106,7 @@ afterEach(() => {
   }
 });
 
-const GOOD_STORY = `import type { Meta, StoryObj } from "@storybook/nextjs";
+const GOOD_STORY = `import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Thing } from "./thing";
 
 type ThingVariant = NonNullable<React.ComponentProps<typeof Thing>["variant"]>;
@@ -238,7 +231,7 @@ describe("storybook-check（故事枚举来源门禁）", () => {
     writeFileSync(path.join(uiDir, "thing.tsx"), COMPONENT);
     writeFileSync(path.join(uiDir, "thing.stories.tsx"), GOOD_STORY);
     writeFileSync(
-      path.join(root, "scripts", ".storybook-coverage-baseline.json"),
+      path.join(root, "scripts", "gates", ".storybook-coverage-baseline.json"),
       JSON.stringify({ uiSurfaces: 2, covered: 1 }),
     );
     const { ok, output } = runIn(root);

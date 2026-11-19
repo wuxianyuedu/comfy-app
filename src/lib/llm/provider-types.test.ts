@@ -1,0 +1,285 @@
+/**
+ * `provider-types.ts` 的共享词表与纯函数（#3501）。
+ *
+ * 这里判三件事：接口格式 → 请求地址、库里坏值 → 可用词表（坏值不该让整条
+ * 模型消失）、模型名 → 智能配置默认值。请求组装与落库各自有用例，不在本文件。
+ */
+import { describe, expect, it } from "vitest";
+
+import { EMPTY_PLACEHOLDER } from "~/lib/display-value";
+
+import {
+  formatContextWindow,
+  inferModelDefaults,
+  isLlmApiFormat,
+  joinApiUrl,
+  knownApiEndpointHint,
+  parseCapabilities,
+  parseInputTypes,
+  parseOutputTypes,
+  parseReasoningLevels,
+  parseReasoningParamMapping,
+  requestUrlForFormat,
+  resolveApiFormat,
+} from "./provider-types";
+
+describe("isLlmApiFormat / requestUrlForFormat", () => {
+  it("只认三种格式，其余值一律 false", () => {
+    expect(isLlmApiFormat("chat-completions")).toBe(true);
+    expect(isLlmApiFormat("anthropic-messages")).toBe(true);
+    expect(isLlmApiFormat("responses")).toBe(true);
+    expect(isLlmApiFormat("openai")).toBe(false);
+    expect(isLlmApiFormat(null)).toBe(false);
+    expect(isLlmApiFormat(42)).toBe(false);
+  });
+
+  it("#3656 新口径：Base 不带版本段时补 /v1 再接动作路径；空 Base URL 给空串", () => {
+    expect(requestUrlForFormat("https://platform.agnes-ai.com/", "chat-completions")).toBe(
+      "https://platform.agnes-ai.com/v1/chat/completions",
+    );
+    expect(requestUrlForFormat(" https://agnes ", "anthropic-messages")).toBe(
+      "https://agnes/v1/messages",
+    );
+    expect(requestUrlForFormat("https://agnes", "responses")).toBe("https://agnes/v1/responses");
+    expect(requestUrlForFormat("   ", "responses")).toBe("");
+  });
+
+  it("历史形态：Base 已带版本段（…/v1、/api/v1、/v1beta）不重复补，行为与 #3656 之前一致", () => {
+    expect(requestUrlForFormat("https://api.example.com/v1/", "chat-completions")).toBe(
+      "https://api.example.com/v1/chat/completions",
+    );
+    expect(requestUrlForFormat("https://api.example.com/api/v1", "responses")).toBe(
+      "https://api.example.com/api/v1/responses",
+    );
+    expect(requestUrlForFormat("https://api.example.com/v1beta", "chat-completions")).toBe(
+      "https://api.example.com/v1beta/chat/completions",
+    );
+  });
+
+  it("Base 与动作路径都带版本段时 Base 的让位（本地 Ollama 地址 + Anthropic 不出 /v1/v1）", () => {
+    expect(requestUrlForFormat("https://gateway.example.com/v1", "anthropic-messages")).toBe(
+      "https://gateway.example.com/v1/messages",
+    );
+    expect(requestUrlForFormat("http://127.0.0.1:11434/v1", "chat-completions")).toBe(
+      "http://127.0.0.1:11434/v1/chat/completions",
+    );
+  });
+});
+
+describe("joinApiUrl：版本段统一拼装的唯一出处（#3656）", () => {
+  it("裸域 Base 补 /v1；带路径前缀的 Base 在前缀后补", () => {
+    expect(joinApiUrl("https://apihub.agnes-ai.com", "/models")).toBe(
+      "https://apihub.agnes-ai.com/v1/models",
+    );
+    expect(joinApiUrl("https://gateway.example.com/api/", "/chat/completions")).toBe(
+      "https://gateway.example.com/api/v1/chat/completions",
+    );
+  });
+
+  it("动作路径自带版本段时不叠（Anthropic /v1/messages）", () => {
+    expect(joinApiUrl("https://api.anthropic.com", "/v1/messages")).toBe(
+      "https://api.anthropic.com/v1/messages",
+    );
+    expect(joinApiUrl("https://api.anthropic.com/v1", "/v1/messages")).toBe(
+      "https://api.anthropic.com/v1/messages",
+    );
+  });
+
+  it("空动作路径 = 去尾斜杠的 Base 本身；空 Base = 空串", () => {
+    expect(joinApiUrl("https://x/v1/videos/", "")).toBe("https://x/v1/videos");
+    expect(joinApiUrl("", "/models")).toBe("");
+  });
+});
+
+describe("resolveApiFormat：模型自己的格式优先，其次供应商默认，最后回落 OpenAI 兼容", () => {
+  it("取第一个合法候选", () => {
+    expect(resolveApiFormat("anthropic-messages", "responses")).toBe("anthropic-messages");
+    expect(resolveApiFormat(null, "responses", "chat-completions")).toBe("responses");
+  });
+
+  it("非法值 / 缺值跳过，不是「取到第一个非空」", () => {
+    expect(resolveApiFormat("grpc", undefined, "anthropic-messages")).toBe("anthropic-messages");
+  });
+
+  it("一条合法信息都没有时回落 chat-completions（历史行 / 全新配置）", () => {
+    expect(resolveApiFormat()).toBe("chat-completions");
+    expect(resolveApiFormat(null, "", 42)).toBe("chat-completions");
+  });
+});
+
+describe("joinApiUrl 的版本段判定沿用原 hint 判据（v1 / v1beta / v2 都算，末段之外不看）", () => {
+  it("历史形态 Base 已带版本段的（含 /api/v1/、v1beta、v2）不再补", () => {
+    for (const base of [
+      "https://api.example.com/v1",
+      "https://api.example.com/api/v1/",
+      "https://api.example.com/v1beta",
+      "https://api.example.com/v2",
+    ]) {
+      expect(joinApiUrl(base, "/chat/completions"), base).toBe(
+        `${base.replace(/\/$/, "")}/chat/completions`,
+      );
+    }
+  });
+
+  it("裸域 / 路径前缀不带版本段的补 /v1（#3656 新口径的默认形状）", () => {
+    for (const base of ["https://api.example.com", "https://api.example.com/api"]) {
+      expect(joinApiUrl(base, "/chat/completions"), base).toBe(`${base}/v1/chat/completions`);
+    }
+  });
+});
+
+describe("knownApiEndpointHint：只对核实过的「端点在另一个域」的厂商指路（#3612）", () => {
+  it("官网 / 控制台子域给指路提示，带出真正的 API 端点", () => {
+    const hint = knownApiEndpointHint("https://api.agnes-ai.com/api/v1");
+    expect(hint).toContain("https://apihub.agnes-ai.com/v1");
+    expect(hint).toContain("api.agnes-ai.com");
+    expect(hint).toContain("Agnes");
+    // #3612 的现场：401 但密钥没问题 —— 提示要说出「不接受 API 密钥」这件事
+    expect(hint).toContain("不接受 API 密钥");
+  });
+
+  it("厂商主域与其余子域一并命中（子域一起算，路径不影响判定）", () => {
+    expect(knownApiEndpointHint("https://agnes-ai.com")).toContain("apihub.agnes-ai.com");
+    expect(knownApiEndpointHint("https://www.agnes-ai.com/v1")).toContain("apihub.agnes-ai.com");
+    expect(knownApiEndpointHint("https://platform.agnes-ai.com/")).toContain("apihub.agnes-ai.com");
+  });
+
+  it("已落在真正的 API 主机上 = 没填错，不再提示", () => {
+    expect(knownApiEndpointHint("https://apihub.agnes-ai.com/v1")).toBeNull();
+    expect(knownApiEndpointHint("https://apihub.agnes-ai.com")).toBeNull();
+  });
+
+  it("未知域一概不开口（对未知域猜「这是控制台域」会误伤 API 架在主域上的服务商）", () => {
+    expect(knownApiEndpointHint("https://api.example.com/api/v1")).toBeNull();
+    expect(knownApiEndpointHint("https://openai.com/v1")).toBeNull();
+    // 长得像但不是同一个域：按「.域」后缀判，不按子串判
+    expect(knownApiEndpointHint("https://agnes-ai.com.evil.example")).toBeNull();
+  });
+
+  it("空值 / 非 URL 不提示", () => {
+    expect(knownApiEndpointHint("")).toBeNull();
+    expect(knownApiEndpointHint("   ")).toBeNull();
+    expect(knownApiEndpointHint("not a url")).toBeNull();
+  });
+});
+
+describe("词表容错解析：坏值跳过、重复去掉、空白裁掉", () => {
+  it("输入类型与能力只留词表里认得的字符串", () => {
+    expect(parseInputTypes(["text", "image", "bogus", 3, "text"])).toEqual(["text", "image"]);
+    expect(parseInputTypes("text")).toEqual([]);
+    expect(parseCapabilities(["structured-output", "nope"])).toEqual(["structured-output"]);
+    expect(parseCapabilities(undefined)).toEqual([]);
+  });
+
+  it("推理等级是用户可扩展词表：只裁空白与去重，不收窄到三档", () => {
+    expect(parseReasoningLevels([" low ", "high", "low", "", 1, "minimal"])).toEqual([
+      "low",
+      "high",
+      "minimal",
+    ]);
+    expect(parseReasoningLevels(null)).toEqual([]);
+  });
+
+  it("推理参数映射：param 与 values 都空时给 null（不是一条空壳）", () => {
+    expect(parseReasoningParamMapping(null)).toBeNull();
+    expect(parseReasoningParamMapping({ param: "", values: {} })).toBeNull();
+    expect(
+      parseReasoningParamMapping({
+        param: " reasoning_effort ",
+        values: { " low ": " low ", high: 8192, "": "x" },
+      }),
+    ).toEqual({ param: "reasoning_effort", values: { low: "low" } });
+    expect(parseReasoningParamMapping({ param: "thinking.budget_tokens" })).toEqual({
+      param: "thinking.budget_tokens",
+      values: {},
+    });
+  });
+});
+
+describe("inferModelDefaults：按模型名给保守默认值", () => {
+  it("空名 / 认不出的名字给兜底值（空窗口会让下游算错预算）", () => {
+    const fallback = {
+      contextWindow: 8192,
+      maxOutputTokens: 2048,
+      inputTypes: ["text"],
+      capabilities: ["system-messages"],
+    };
+    expect(inferModelDefaults("")).toEqual(fallback);
+    expect(inferModelDefaults("   ")).toEqual(fallback);
+    expect(inferModelDefaults("mystery-model")).toEqual(fallback);
+  });
+
+  it("agnes 家族（#3577）：512K 窗口 / 65,536 输出 / 输入含图像", () => {
+    expect(inferModelDefaults("agnes-3.0-flash")).toMatchObject({
+      contextWindow: 524_288,
+      maxOutputTokens: 65_536,
+      inputTypes: ["text", "image"],
+    });
+  });
+
+  it("各家族命中各自的窗口 / 输出上限 / 输入类型", () => {
+    expect(inferModelDefaults("claude-sonnet-4-5")).toMatchObject({
+      contextWindow: 200_000,
+      maxOutputTokens: 8192,
+      inputTypes: ["text", "image", "pdf"],
+    });
+    expect(inferModelDefaults("gemini-2.5-pro")).toMatchObject({
+      contextWindow: 1_000_000,
+      inputTypes: ["text", "image", "video", "pdf"],
+    });
+    expect(inferModelDefaults("o3-mini")).toMatchObject({
+      contextWindow: 200_000,
+      maxOutputTokens: 100_000,
+    });
+    expect(inferModelDefaults("gpt-5")).toMatchObject({
+      contextWindow: 1_000_000,
+      maxOutputTokens: 32_768,
+    });
+    expect(inferModelDefaults("gpt-4o")).toMatchObject({
+      contextWindow: 128_000,
+      maxOutputTokens: 16_384,
+    });
+    expect(inferModelDefaults("deepseek-chat")).toMatchObject({ contextWindow: 64_000 });
+    expect(inferModelDefaults("qwen-max")).toMatchObject({ contextWindow: 32_768 });
+    expect(inferModelDefaults("llama-3-8b")).toMatchObject({
+      contextWindow: 8192,
+      maxOutputTokens: 4096,
+      capabilities: ["system-messages"],
+    });
+  });
+
+  it("返回的数组是副本：改它不会污染下一次推断", () => {
+    const first = inferModelDefaults("");
+    first.inputTypes.push("pdf");
+    first.capabilities.push("native-web-search");
+    expect(inferModelDefaults("").inputTypes).toEqual(["text"]);
+    expect(inferModelDefaults("").capabilities).toEqual(["system-messages"]);
+  });
+});
+
+describe("parseOutputTypes（#3577 输出类型词表容错解析）", () => {
+  it("只认 text / image / video；坏值跳过、重复去掉；非数组给空", () => {
+    expect(parseOutputTypes(["text", "unknown", "image", "text"])).toEqual(["text", "image"]);
+    expect(parseOutputTypes(null)).toEqual([]);
+    expect(parseOutputTypes("text")).toEqual([]);
+    expect(parseOutputTypes(["pdf"])).toEqual([]);
+  });
+});
+
+describe("formatContextWindow：未知给唯一占位符，大数按 K / M 档", () => {
+  it("缺值 / 非有限数 / 非正数 → 占位符", () => {
+    expect(formatContextWindow(null)).toBe(EMPTY_PLACEHOLDER);
+    expect(formatContextWindow(undefined)).toBe(EMPTY_PLACEHOLDER);
+    expect(formatContextWindow(Number.NaN)).toBe(EMPTY_PLACEHOLDER);
+    expect(formatContextWindow(0)).toBe(EMPTY_PLACEHOLDER);
+    expect(formatContextWindow(-5)).toBe(EMPTY_PLACEHOLDER);
+  });
+
+  it("千位以上用 K / M，小数去掉尾零", () => {
+    expect(formatContextWindow(999)).toBe("999");
+    expect(formatContextWindow(2500)).toBe("2.5K");
+    expect(formatContextWindow(200_000)).toBe("200K");
+    expect(formatContextWindow(1_000_000)).toBe("1M");
+    expect(formatContextWindow(1_500_000)).toBe("1.5M");
+  });
+});

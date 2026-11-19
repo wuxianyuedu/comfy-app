@@ -1,13 +1,9 @@
 "use client";
 
-// ── 底部状态栏 controller（规范 17 §17.2 第②层）───────────────────────
-// 把「轮询到的原始指标」折叠成视图直接可渲染的字段：显隐谓词、百分比与
-// 降级提示。视图（BrowserStatusBar）只读这里的结果，不自己做判据推导——
-// 判据一变只有一处要改，也便于 renderHook 直接断言。
-//
-// 注意这里不再产出「ComfyUI 就绪」这一格：状态栏那格已改为显示**应用服务**
-// 状态（见 use-dev-server-status.ts），ComfyUI 是否运行由占用条是否可见 +
-// 降级文案表达（"显存/内存暂不可用" 本身就等于「ComfyUI 没启动」）。
+// ── 底部状态栏 controller（规范 17 §17.2 第②层）
+// 把「轮询到的原始指标」折叠成视图直接可渲染的字段：显隐谓词、百分比与降级提示；
+// 判据只在这一处，便于 renderHook 断言。不再产出「ComfyUI 就绪」格：那格已改为显示
+// 应用服务状态，ComfyUI 是否运行由占用条可见性 + 降级文案表达。
 
 import { toPct } from "~/lib/progress";
 import type { ComfyStatsPayload } from "~/lib/comfy/comfy-stats-client";
@@ -45,8 +41,14 @@ const DEGRADED_NOTE = "ComfyUI 未运行，显存/内存暂不可用";
 
 /** 已用/总量 → 占用条；总量非法或未用为负则返回 null（该项隐藏）。 */
 function toBar(used: number | undefined, total: number | undefined): StatBar | null {
-  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (!total || total <= 0 || used == null || used < 0) {
+  if (
+    total === undefined ||
+    Number.isNaN(total) ||
+    total <= 0 ||
+    used === null ||
+    used === undefined ||
+    used < 0
+  ) {
     return null;
   }
   /* 「已用 / 总量 → 百分比」走 `~/lib/progress` 的 `toPct`（同一条口径的另一
@@ -67,9 +69,9 @@ export function useComfyReadiness(): ComfyStatusViewModel {
     online,
     stale,
     connecting: online && !hasStats,
-    cudaVram: hasStats ? toBar(stats?.vramUsed, stats?.vramTotal) : null,
-    smiVram: hasStats ? toBar(stats?.smiVramUsed, stats?.smiVramTotal) : null,
-    ram: hasStats ? toBar(stats?.ramUsed, stats?.ramTotal) : null,
+    cudaVram: hasStats ? toBar(stats.vramUsed, stats.vramTotal) : null,
+    smiVram: hasStats ? toBar(stats.smiVramUsed, stats.smiVramTotal) : null,
+    ram: hasStats ? toBar(stats.ramUsed, stats.ramTotal) : null,
     degradedNote: online ? null : DEGRADED_NOTE,
   };
 }

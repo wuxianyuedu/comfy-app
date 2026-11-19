@@ -1,11 +1,8 @@
 // @vitest-environment jsdom
-// 锁住 useComfyStats 的「连续失败迟滞」行为（本次修复的核心）。
-//
-// 为什么单独建这个文件：use-comfy-readiness.test.ts 的「真实轮询失败降级」用例
-// 其实在首帧就通过了——stats 初值 null → online 恒 false，waitFor(online=false)
-// 在第一次 poll 之前即成立，根本没走到计数器 / setStats(OFFLINE) 分支。也就是说
-// 若有人把阈值改回 1、或删掉「保留旧数据」，那套全绿测试不会报警。这里用受控的
-// fetchComfyStats 桩 + 手动驱动轮询，把三条迟滞语义钉死。
+// 锁住 useComfyStats 的「连续失败迟滞」行为。
+// use-comfy-readiness.test.ts 的降级用例在首帧就通过（stats 初值 null → online false），
+// 根本没走到计数器 / setStats(OFFLINE) 分支；这里用受控 fetchComfyStats 桩 + 手动轮询
+// 把三条迟滞语义钉死。
 
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -145,6 +142,7 @@ describe("useComfyStats 进程级判活（与 /api/comfy/queue 同口径）", ()
 
     fetchMock.mockResolvedValue(aliveButNoAnswer);
     for (let i = 0; i < 5; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await tick();
     } // 远超离线阈值，也不该翻离线
 
@@ -157,6 +155,7 @@ describe("useComfyStats 进程级判活（与 /api/comfy/queue 同口径）", ()
     fetchMock.mockResolvedValue(aliveButNoAnswer);
     const { result } = renderHook(() => useComfyStats());
     for (let i = 0; i < 5; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
       await tick();
     }
 

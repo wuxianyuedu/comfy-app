@@ -1,14 +1,7 @@
 /**
- * `pnpm agent:index` —— 两个代码索引工具的就绪读数入口（ISSUE #2762）。
- *
- * 它治的是「索引没建 ⇒ 语义查询返回空而不报错 ⇒ 被读成『仓库里没有现成实现』」，
- * 所以判据全钉在**读数从哪来**：
- *   ① codegraph 未建索引时**退出码仍是 0**，就绪只认 `initialized` —— 拿退出码当结论
- *      的那一版会把「没建」读成「就绪」；
- *   ② zvec-grep 的就绪只认 `zg status --check-ready` 的退出码，且它自己的输出要原样转发
- *      （非零但输出里没有它那句「not ready」⇒ 归「没结论」，不许折成「没就绪」）；
- *   ③ 工具不在 / 输出解析不了 ⇒ 退 2，**不是**绿；
- *   ④ 合成口径与仓库其余入口同一条：2 压过 1 压过 0。
+ * `pnpm agent:index` —— 两个代码索引工具的就绪读数入口（ISSUE #2762）：索引没建时语义查询返回空而不报错，会被读成「仓库里没有现成实现」。
+ * 判据钉来源：codegraph 未建索引退出码仍 0，只认 `initialized`（拿退出码会把「没建」读成「就绪」）；zvec-grep 只认 `zg status --check-ready` 退出码。
+ * zvec 输出原样转发（非零且无「not ready」⇒ 归「没结论」，不折成「没就绪」）；工具不在/解析不了 ⇒ 退 2（不是绿）；合成：2 压过 1 压过 0。
  */
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
@@ -20,9 +13,16 @@ import {
   probeZvec,
   renderProbe,
   runTool,
-} from "../scripts/agent-index.mjs";
+} from "../scripts/platform/agent-index.mjs";
+import { isPlainRecord } from "../src/lib/is-record";
 
-const SCRIPT = join(process.cwd(), "scripts", "agent-index.mjs");
+const SCRIPT = join(process.cwd(), "scripts", "platform", "agent-index.mjs");
+
+/** execFileSync 抛出的错误对象：字段可选，按宽松对象声明后再逐字段读。 */
+type ExecErrorFields = { status?: number; stderr?: string; stdout?: string };
+function isExecErrorFields(v: unknown): v is ExecErrorFields {
+  return isPlainRecord(v);
+}
 
 /** 一次命令的读数形状（与 `runTool` 的返回值同形）。 */
 type RunResult = {
@@ -45,12 +45,7 @@ function run(args: Array<string> = []) {
     });
     return { code: 0, output };
   } catch (error) {
-    /* SAFETY: 类型断言已复核 */
-    const e = error as {
-      status?: number;
-      stderr?: string;
-      stdout?: string;
-    };
+    const e: ExecErrorFields = isExecErrorFields(error) ? error : {};
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,

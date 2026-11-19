@@ -1,9 +1,7 @@
 /**
- * 标题行让位门禁的自测（ISSUE #310 弹窗类回归）。
- *
- * 为什么要有：这条门禁的价值全在**判定口径**上——漏一个浮层形态，回归就再来一次。
- * 用「临时仓库 + 只放被测文件」跑真脚本，断言「该拦的拦、不该误伤的放过」，
- * 别让门禁自己变成误报源（成员会直接删掉误报的门禁，等于没有）。
+ * 标题行让位门禁的自测（ISSUE #310 弹窗类回归）。门禁价值全在判定口径：漏一个浮层形态回归就再来一次，
+ * 太紧又会变成误报源（成员会直接删掉误报的门禁，等于没有）。用「临时仓库 + 只放被测文件」跑真脚本，
+ * 断言「该拦的拦、不该误伤的放过」。
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -13,8 +11,13 @@ import path from "node:path";
 import { copyGateDeps } from "./helpers/gate-repo";
 import { afterEach, describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-title-bar-clearance.cjs");
+const SCRIPT = path.resolve(__dirname, "../scripts/gates/check-title-bar-clearance.cjs");
 const tempDirs: Array<string> = [];
+
+/** execFileSync 抛出的失败对象：只认「是对象」这一层，字段各自再按 typeof 收窄。 */
+function isExecFailure(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
 
 /** 造一个只含被测文件的临时仓库（脚本按仓库根解析扫描目录）。 */
 function scanner(files: Record<string, string>) {
@@ -24,8 +27,9 @@ function scanner(files: Record<string, string>) {
   // 否则扫的还是真实仓库 —— 那样用例会「总是通过」，等于没测。
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   /* 判据 `require("./gate-scan-read.cjs")`（`--staged` 的共享短路器）—— 临时仓库只放得下被测那一份脚本时，缺依赖的表现是可读性极差的 requireStack，所以按 `require("./x.cjs")` 递归补齐（同 `tests/helpers/gate-repo.ts` 的文件头）。 */
-  copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
-  copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
+  mkdirSync(path.join(root, "scripts", "gates"), { recursive: true });
+  copyFileSync(SCRIPT, path.join(root, "scripts", "gates", path.basename(SCRIPT)));
+  copyGateDeps(path.join(root, "scripts", "gates", path.basename(SCRIPT)));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });
@@ -37,14 +41,15 @@ function scanner(files: Record<string, string>) {
         ok: true,
         output: execFileSync(
           process.execPath,
-          [path.join(root, "scripts", path.basename(SCRIPT))],
+          [path.join(root, "scripts", "gates", path.basename(SCRIPT))],
           { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
         ),
       };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as { stderr?: string; stdout?: string };
-      return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+      const e: Record<string, unknown> = isExecFailure(error) ? error : {};
+      const stdout = typeof e.stdout === "string" ? e.stdout : "";
+      const stderr = typeof e.stderr === "string" ? e.stderr : "";
+      return { ok: false, output: `${stdout}${stderr}` };
     }
   };
   return { run };

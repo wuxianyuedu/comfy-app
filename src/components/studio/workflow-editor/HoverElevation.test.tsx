@@ -1,15 +1,8 @@
-//
-// 悬浮置顶（ISSUE #400）：鼠标指着的节点必须压住连线。
-//
-// 链路是「鼠标进入节点 → **React Flow 的节点外壳**打上 data-hovered → CSS 抬
-// z-index」。抬升幅度在 globals.css（`.react-flow__node[data-hovered="true"]`）。
-//
-// 这里盯住三件事：
-//   1. 属性落在 `.react-flow__node` 外壳上 —— 外壳带 position:absolute + 行内
-//      z-index，自成层叠上下文；属性若落在卡片本体上，CSS 选择器永远不命中，
-//      「悬浮抬升」会静默失效（这正是本 ISSUE 修复前的实际故障）。
-//   2. 移开后属性撤销，不与其他节点串味。
-//   3. 悬浮状态是本节点自己的 —— 鼠标进出不惊动画布其余部分。
+// 悬浮置顶（ISSUE #400）：鼠标指着的节点必须压住连线。链路是「鼠标进入节点 →
+// **React Flow 的节点外壳**打上 data-hovered → CSS 抬 z-index」（globals.css
+// `.react-flow__node[data-hovered="true"]`）。盯住三点：属性必须落在
+// `.react-flow__node` 外壳上（外壳 position:absolute + 行内 z-index 自成层叠上下文，
+// 落在卡片上选择器永不命中）；移开即撤销；悬浮态只属于本节点。
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -161,9 +154,11 @@ describe("悬浮压住连线：CSS 抬升规则", () => {
   });
 
   it("抬升值高于节点自带 zIndex，也高于选中态（+1000）", () => {
-    const decl = /\.react-flow__node\[data-hovered="true"\]\s*\{[^}]*z-index:\s*(\d+)/.exec(css);
+    const decl = /\.react-flow__node\[data-hovered="true"\]\s*\{[^}]*z-index:\s*(?<z>\d+)/.exec(
+      css,
+    );
     expect(decl).not.toBeNull();
-    const hoverZ = Number(decl![1]);
+    const hoverZ = Number(decl!.groups?.z);
     /* 节点自带 zIndex 最大 20（对外参数卡片）、选中态 ≈1010（elevateNodesOnSelect）。 */
     expect(hoverZ).toBeGreaterThan(1010);
     /* 低于节点内部浮层 / <Handle> 惯用的 9999 档，避免反过来盖住端口。 */

@@ -1,44 +1,7 @@
 /**
- * `scripts/spawn-shell-scan.mjs` / `scripts/package-bin-entry.mjs` 的判据（ISSUE #2453）。
- *
- * ── 为什么这两条要进固定清单 ──────────────────────────────────────────────
- *
- * ISSUE #2445 把 typedoc 那一处「开 shell 起 `.cmd` 垫片」改掉了，而**第二处**
- * （`scripts/storybook.mjs`）是靠 grep 肉眼找到的 —— 没有判据，第三处还会长出来，
- * 而且它的失效形态是**只在换台机器 / 换 Node 大版本时才响**（DEP0190 是警告不是错误、
- * 引号是「换台机器跑不起来」）。
- *
- * 触发它的改动面是「某个 `scripts/*.mjs` 里新加一句 `shell: true`」—— 那条改动
- * **不在这两个文件的 import 图里**，于是「只在受影响时才跑」等于让它随下一次新增
- * spawn 过去 ⇒ 与 `tests/git-dir-literal-scan.test.ts` 同因，进
- * `scripts/fixed-structural-tests.mjs` 固定清单（改那些脚本不会把这条带进受影响集）。
- *
- * ── 形状判据为什么钉得这么细 ──────────────────────────────────────────────
- *
- * 第一版剥注释写成「整个文件一个状态机」，被一处游离引号卡在字符串状态里跑飞 ——
- * 之后几百行全被当成字符串，块注释不再被认，判据把**正在教人别这么写的注释**
- * 报成违例（`hook-steps.mjs` 那几行）。那条假阳性的代价不是「多修一次」，而是
- * 「下一个人学会给判据加白名单」。所以这里钉两件事：注释真的被剥掉、以及
- * `shell: false` 这类**明确关掉**的写法不被判（判它就是把写清楚的人一起罚）。
- *
- * ── ISSUE #2513：判据面收在调用点上，两侧都要证 ────────────────────────────
- *
- * 第一版按**行的字面形态**认（任意 `shell:` 键）：`ci-cache-slot.mjs` 里一个普通读数
- * 字段就把 PR 判红，而那一行没有任何 `spawn`。收窄之后**两个方向都要有用例** ——
- * 只把误报压下去、把真形状一起放走，是更坏的结果（规范 §13.5.4 那一族）：
- *   · 真违规仍然判得出来（含多行选项对象、临时树端到端）；
- *   · 普通数据对象的同名键（哪怕值不是 `false`）、`re.exec(...)` 的实参、
- *     字符串里写着 `shell:` 的那几个反例，一个都不判。
- *
- * ── ISSUE #2572：同一个坑的**另一半**（「起不来」之外还有「起得绕」）──────────
- *
- * `shell: true` 是「开一层 shell 去起垫片」；`.cnb.yml` 那两格写的是
- * `node_modules/.bin/tsc`，外壳为了起它**回退去跑同目录那份 `.ps1`**——没开
- * `shell: true`，但同样多了一层宿主。所以本文件接着判两件事：
- *   · **按名字问出包真身**（`resolveBinEntryByName`）——本仓 `tsc` 与 `tsc6` 是两份
- *     不同的编译器，按依赖名推会把一个名字安到另一份头上（那两条「本仓事实」的用例）；
- *   · **清单里不再出现直接起垫片的命令行**，而那两格确实换成了 `ci-run-tool.mjs`
- *     （读磁盘文本 ⇒ 与上面「形状判据」同一条不固定的理由）。
+ * `spawn-shell-scan.mjs` / `package-bin-entry.mjs` 判据（ISSUE #2453/#2513/#2572）。进固定清单：触发面
+ * （新加 `shell: true`）不在 import 图里，会随下次新增 spawn 溜走；形状判据须先剥注释、放过 `shell: false`，
+ * 收在调用点且误报/真违规两侧都证；#2572 另判按垫片名问包真身、清单不直接起垫片。失效形态换机器/换 Node 版本才响。
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -47,23 +10,33 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+
 import { stripComments } from "./helpers/strip-comments";
 import {
   binRelativePath,
   resolveBinEntryByName,
   resolvePackageBinEntry,
-} from "../scripts/package-bin-entry.mjs";
-import { findShellOptions, findShellOptionsIn } from "../scripts/spawn-shell-scan.mjs";
+} from "../scripts/lib/package-bin-entry.mjs";
+import { findShellOptions, findShellOptionsIn } from "../scripts/gates/spawn-shell-scan.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-describe("scripts/spawn-shell-scan.mjs", () => {
+/** 子进程失败输出取正文（B5 清账）：串直接用，Buffer 解 utf8，其余当空串。 */
+function asText(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  return Buffer.isBuffer(value) ? value.toString("utf8") : "";
+}
+
+describe("scripts/gates/spawn-shell-scan.mjs", () => {
   it("scripts/** 里没有「起子进程开 shell」的形态（DEP0190 + 手工引号）", () => {
     // 这一条是 #2453 的护栏：#2445 修掉 typedoc 那一处之后，第二处（storybook）
     // 是肉眼找到的。不进固定清单就等于「发现第三处靠运气」。
     let stdout = "";
     expect(() => {
-      stdout = execFileSync(process.execPath, ["scripts/spawn-shell-scan.mjs"], {
+      stdout = execFileSync(process.execPath, ["scripts/gates/spawn-shell-scan.mjs"], {
         cwd: ROOT,
         encoding: "utf8",
       });
@@ -224,7 +197,7 @@ describe("scripts/spawn-shell-scan.mjs", () => {
     }
   });
 
-  it("#2562 缺口 1（阳性对照 / canary）：`node scripts/spawn-shell-scan.mjs` 撞到已知违例必须非零退出", () => {
+  it("#2562 缺口 1（阳性对照 / canary）：`node scripts/gates/spawn-shell-scan.mjs` 撞到已知违例必须非零退出", () => {
     // 「0 命中」只证明此刻没有违规，不能证明闸能拦违规。这一条造一个已知坏文件，
     // 直接跑扫描器二进制（不是调库函数），确认它 exit != 0 且把违例点名出来。
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "spawn-shell-canary-"));
@@ -241,16 +214,18 @@ describe("scripts/spawn-shell-scan.mjs", () => {
       let stderr = "";
       let code = 0;
       try {
-        execFileSync(process.execPath, ["scripts/spawn-shell-scan.mjs", "--root", root], {
+        execFileSync(process.execPath, ["scripts/gates/spawn-shell-scan.mjs", "--root", root], {
           cwd: ROOT,
           encoding: "utf8",
           stdio: ["ignore", "ignore", "pipe"],
         });
       } catch (error) {
-        /* SAFETY: 类型断言已复核 */
-        const e = error as { status?: number; stderr?: string | Buffer };
-        code = e.status ?? 1;
-        stderr = String(e.stderr ?? "");
+        /* 失败形状按字段读（B5 清账）：status 缺省当 1（非零即「闸拦了」），
+           stderr 缺省当空串。 */
+        const e: { status?: unknown; stderr?: unknown } =
+          typeof error === "object" && error !== null ? error : {};
+        code = typeof e.status === "number" ? e.status : 1;
+        stderr = asText(e.stderr);
       }
       expect(code, "撞到违例却绿了 ⇒ 闸没在拦").not.toBe(0);
       expect(stderr, "没把违例点名出来").toContain("scripts/violation.mjs");
@@ -277,7 +252,7 @@ describe("scripts/spawn-shell-scan.mjs", () => {
   });
 });
 
-describe("scripts/package-bin-entry.mjs", () => {
+describe("scripts/lib/package-bin-entry.mjs", () => {
   it("本仓三个 CLI 都解析得到包真身（不在 .bin 垫片下）", () => {
     for (const pkg of ["typedoc", "vitest", "storybook"]) {
       const entry = resolvePackageBinEntry(pkg);
@@ -332,34 +307,37 @@ function withFixture(
 }
 
 /**
- * 「按**垫片名字**问归谁」那一族（ISSUE #2572）。
- *
- * ── 为什么这一族必须单独钉 ────────────────────────────────────────────────
- *
- * 上面那个按包名解析的回答是「这个包的入口在哪」；CI 清单里要问的是**另一个**问题：
- * 「`.bin/tsc` 这一跳，实际跑的是哪份文件」。本仓这两件事的答案**不是同一个包**，
- * 而漂移的形态是静默的：拿依赖名去推 ⇒ 拿到 `null` ⇒ 很自然地补一句
- * 「取 `bin` 的第一个键」 ⇒ 拿到的是**另一份编译器的入口**，跑起来一声不吭。
- *
- * ⚠️ 量具边界（先说清，免得下次把这条当「它证明了两份版本永远不同」）：
- *   · 下面那两条「本仓事实」的用例读的是**当前装的** `node_modules`，它们钉的是
- *     「名字归谁」这条**关系**，不钉版本号 —— 升过 `@typescript/*` 之后关系若变了，
- *     用例会红在那一句 `bin` 键的比对上，这正是需要重读口径的时刻；
- *   · 「起得来」这一半由 `ci-run-tool` 那几条端到端用例判（真起一次子进程）。
+ * 「按垫片名字问归谁」那一族（ISSUE #2572）：上面答「包的入口在哪」，CI 清单问「`.bin/tsc` 实际跑哪份」——
+ * 本仓两者不是同一个包。拿依赖名推会得 `null`，补「取 `bin` 第一个键」就拿到另一份编译器入口，且一声不吭。
+ * ⚠️ 边界：下面两条「本仓事实」读当前 `node_modules`，钉「名字归谁」这条关系而非版本号；起得来由 `ci-run-tool` 端到端判。
  */
-describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", () => {
+/** `package.json` 的消费形状守卫（B5 清账）：name / version 是串，bin 是「名 → 相对路径」映射或缺省。 */
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((entry) => typeof entry === "string");
+}
+
+function isPkgJson(value: unknown): value is {
+  bin?: Record<string, string>;
+  name: string;
+  version: string;
+} {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    typeof value.version === "string" &&
+    (value.bin === undefined || isStringRecord(value.bin))
+  );
+}
+
+describe("scripts/lib/package-bin-entry.mjs — 按垫片名字解析（#2572）", () => {
   /** 从「包真身入口」回到那份包的 `package.json`（`<pkgDir>/bin/<名>` 那一层）。 */
   const pkgJsonOfEntry = (entry: string) => {
     const pkgDir = path.resolve(entry, "..", "..");
-    return {
-      pkgDir,
-      /* SAFETY: 类型断言已复核 */
-      pkg: JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8")) as {
-        bin?: Record<string, string>;
-        name: string;
-        version: string;
-      },
-    };
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"));
+    if (!isPkgJson(parsed)) {
+      throw new Error(`${pkgDir}/package.json 缺 name / version，或 bin 不是字符串映射`);
+    }
+    return { pkgDir, pkg: parsed };
   };
 
   it("本仓 `tsc` 与 `tsc6` 解析到**两份不同的包**，且各自 `bin` 里就是那个名字", () => {
@@ -384,7 +362,8 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
     expect(a.pkg.bin?.tsc6 ?? null, "两份的键撞了：tsc 那份也有 tsc6").toBeNull();
     expect(b.pkg.bin?.tsc ?? null, "两份的键撞了：tsc6 那份也有 tsc").toBeNull();
     /* 入口路径与包自己申报的那条一致（垫片没指到别处去）。 */
-    for (const [name, entry] of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const [name, entry] of [
       ["tsc", tsc!],
       ["tsc6", tsc6!],
     ] as const) {
@@ -394,12 +373,9 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
   });
 
   it('危险的那一格：`require.resolve("typescript")` 与 `.bin/tsc` **不是同一份包**', () => {
-    /* 这条是本单的全部理由，所以它判的是**关系**而不是路径字符串：
-     *   · 按依赖名解析 ⇒ 别名包（`@typescript/typescript6`）；
-     *   · 按垫片名字 ⇒ 另一个包（`@typescript/native`），而它自己申报的 `name`
-     *     恰恰是 `typescript`。
-     * 谁在这里补「取 `bin` 的第一个键」当兜底，`tsc` 就安静地跑成了别名包那份 ——
-     * 下面那两条 `toBeNull` 就是那个兜底会被写出来的原因。 */
+    /* 本单全部理由：判的是**关系**而不是路径字符串 —— 按依赖名解析 ⇒ 别名包 `@typescript/typescript6`；
+     * 按垫片名字 ⇒ 另一个包 `@typescript/native`，而它自己申报的 `name` 恰是 `typescript`。
+     * 谁补「取 `bin` 第一个键」当兜底，`tsc` 就安静地跑成别名包那份 —— 下面两条 `toBeNull` 正是为此。 */
     const requireFromRoot = createRequire(path.join(ROOT, "noop.js"));
     const byDepName = path.dirname(requireFromRoot.resolve("typescript/package.json"));
     const byShimName = path.dirname(path.dirname(resolveBinEntryByName("tsc")!));
@@ -407,11 +383,13 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
       byShimName,
       '`.bin/tsc` 与 `require.resolve("typescript")` 给了同一份包 —— 口径变了，重读 #2572',
     ).not.toBe(byDepName);
-    /* SAFETY: 类型断言已复核 */
-    const aliasPkg = JSON.parse(fs.readFileSync(path.join(byDepName, "package.json"), "utf8")) as {
-      bin?: Record<string, string>;
-      name: string;
-    };
+    const aliasParsed: unknown = JSON.parse(
+      fs.readFileSync(path.join(byDepName, "package.json"), "utf8"),
+    );
+    if (!isPkgJson(aliasParsed)) {
+      throw new Error("别名包 package.json 缺 name / version，或 bin 不是字符串映射");
+    }
+    const aliasPkg = aliasParsed;
     expect(resolvePackageBinEntry("typescript"), "按依赖名居然解析得到").toBeNull();
     expect(resolvePackageBinEntry("@typescript/native"), "按目录名居然解析得到").toBeNull();
     /* 「取第一个键」那条兜底会把 tsc 变成 tsc6 —— 判它，是因为它长得像正确答案。 */
@@ -447,12 +425,9 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
   });
 
   it("第二层：声明指到空气时回落到 `.cmd` 那条相对路径（跳过 node.exe、剥前导分隔符）", () => {
-    /* `node_modules` 是从别的检出搬来的那一形：绝对声明落在空气上，而垫片里那条
-     * 相对路径还在。这一层顺带判两件 —— `node.exe` 那个 token 是可执行位不是目标，
-     * 而 `%~dp0\..\…` 拆出来**带着前导反斜杠**，直接 `path.resolve` 会被当盘根相对
-     * （「所有垫片都解析不到」那一次的根因）。
-     * 夹具里那份 sh shim 刻意**不带** `$basedir` 目标，好让「答上来的是 `.cmd`」
-     * 这件事可归因 —— 两份 shim 给同一个结果时，摘掉任一层都判不出来。 */
+    /* `node_modules` 从别的检出搬来：绝对声明落空而垫片里相对路径还在。顺带判两件 —— `node.exe` 是
+     * 可执行位不是目标；`%~dp0\..\…` 拆出来带前导反斜杠，直接 `path.resolve` 会被当盘根相对（「所有
+     * 垫片都解析不到」那次的根因）。夹具里 sh shim 刻意不带 `$basedir`，好让「答上来的是 `.cmd`」可归因。 */
     withFixture(
       {
         [targetRel]: "console.log(1)\n",
@@ -512,7 +487,7 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
   });
 });
 
-describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () => {
+describe("scripts/ci/ci-run-tool.mjs — 按名字直起包真身（#2572）", () => {
   const run = (
     argv: Array<string>,
     cwd = ROOT,
@@ -525,16 +500,15 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
       });
       return { status: 0, stdout, stderr: "" };
     } catch (error) {
-      /* SAFETY: 类型断言已复核 */
-      const e = error as {
-        status?: number;
-        stderr?: string;
-        stdout?: string;
-      };
+      /* 失败形状按字段读（B5 清账）：status 缺省当 1，两股输出缺省当空串。 */
+      const e: { status?: unknown; stderr?: unknown; stdout?: unknown } =
+        typeof error === "object" && error !== null ? error : {};
+      const out = asText(e.stdout);
+      const err = asText(e.stderr);
       return {
-        status: e.status ?? 1,
-        stdout: String(e.stdout ?? ""),
-        stderr: String(e.stderr ?? ""),
+        status: typeof e.status === "number" ? e.status : 1,
+        stdout: out,
+        stderr: err,
       };
     }
   };
@@ -545,10 +519,145 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
      * 这一条判真跑起来之后日志里没有宿主的话术）。 */
     const entry = resolveBinEntryByName("tsc");
     expect(entry).toBeTruthy();
-    const r = run(["scripts/ci-run-tool.mjs", "tsc", "--version"]);
+    const r = run(["scripts/ci/ci-run-tool.mjs", "tsc", "--version"]);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/Version \d/);
     expect(r.stdout).toContain(`[ci-run-tool] 实际执行：node ${entry}`);
+    /* 版本跟着入口一起念（ISSUE #3041）：平台与本机对照时，第一问是「两边跑的是不是
+     * 同一份编译器」——只念路径不念版本，别名（typescript 是个 npm 别名）之下还是对不上。 */
+    expect(r.stdout).toContain("（typescript@");
+  });
+
+  it("判决面读数：tsc 不带 -p ⇒ cwd 的 tsconfig.json；带 -p ⇒ 点名那份（含 include 摘要）", () => {
+    /* ISSUE #3041：类型检查格过去只念得出二进制，念不出「按哪份 tsconfig 判」——
+     * 平台与本机对同一批报错给出相反读数时（#2990 的六条只在平台显形），第一问就是
+     * 「两边判的是不是同一份面」。夹具里垫片名必须是 tsc 才触发这一档读数。 */
+    withFixture(
+      {
+        "node_modules/pkg/bin/echo.cjs": 'process.stdout.write("ok\\n");\n',
+        "node_modules/.bin/tsc": (root) =>
+          `# cmd-shim-target=${path
+            .join(root, "node_modules", "pkg", "bin", "echo.cjs")
+            .replaceAll("\\", "/")}\n`,
+        /* 夹具 tsconfig 刻意带上与主配置同款的三样：块注释、glob 字符串里的 `/*`、
+         * 行尾注释 —— 那正是读数剥离最容易碎的三处（`"~/*"` 的 `/*` 是内容）。 */
+        "tsconfig.ci.json": `{
+  /* 判决面夹具 */
+  "compilerOptions": { "strict": true }, // 行尾注释
+  "include": ["src/**/*", "~/*.ts"]
+}\n`,
+      },
+      (root) => {
+        /* cwd 换成夹具（判「无 -p ⇒ cwd 的 tsconfig.json」这一支）时，脚本本身
+         * 要用绝对路径点名 —— 相对形态只在 ROOT 下解析得到。 */
+        const tool = path.join(ROOT, "scripts", "ci/ci-run-tool.mjs");
+        const pointed = run(
+          [tool, "--root", root, "tsc", "--noEmit", "-p", "tsconfig.ci.json"],
+          root,
+        );
+        expect(pointed.status, pointed.stderr).toBe(0);
+        expect(pointed.stdout).toContain(
+          `[ci-run-tool] 判决面：${path.join(root, "tsconfig.ci.json")}（点名；`,
+        );
+        expect(pointed.stdout).toContain("include: src/**/*, ~/*.ts");
+        expect(pointed.stdout, "glob 里的 `/*` 不能被当注释吃掉").toContain("~/*.ts");
+
+        const defaulted = run([tool, "--root", root, "tsc"], root);
+        expect(defaulted.status, defaulted.stderr).toBe(0);
+        expect(defaulted.stdout).toContain(
+          `[ci-run-tool] 判决面：${path.join(root, "tsconfig.json")}（tsc 默认（cwd 的 tsconfig.json）`,
+        );
+      },
+    );
+  });
+
+  it("判决面读数只属于编译器：非 tsc 垫片一律不念", () => {
+    withFixture(
+      {
+        "node_modules/pkg/bin/echo.cjs":
+          'process.stdout.write(JSON.stringify(process.argv.slice(2)) + "\\n");\n',
+        "node_modules/.bin/echo": (root) =>
+          `# cmd-shim-target=${path
+            .join(root, "node_modules", "pkg", "bin", "echo.cjs")
+            .replaceAll("\\", "/")}\n`,
+      },
+      (root) => {
+        const r = run(["scripts/ci/ci-run-tool.mjs", "--root", root, "echo", "--version"]);
+        expect(r.status, r.stderr).toBe(0);
+        expect(r.stdout, "判决面是 tsc 的概念，别的工具念它是噪声").not.toContain("判决面");
+      },
+    );
+  });
+
+  it("程序图读数：主跑红才念 program 里的 .mjs，绿跑不付这笔（ISSUE #3049）", () => {
+    /* 主 `tsconfig.json` 的 allowJs+checkJs 会沿 import 图把被引到的 `.mjs` 拉进主面
+     * （分工登记见 §13.5.14.1）—— 那条通道只存在于 tsc 的 program 行为里。读数用
+     * `--listFilesOnly` 把 program 里的 .mjs 念出来，只付在红跑上（绿跑没有要归因的红）。
+     * 夹具的假 tsc 按 argv 分叉：主跑退 1，探针（--listFilesOnly）回一份带 .mjs 的
+     * 文件清单 —— 判据读的就是这份回执，不依赖真编译器。 */
+    const entryBody = [
+      "const argv = process.argv.slice(2);",
+      'if (argv.includes("--listFilesOnly")) {',
+      String.raw`  process.stdout.write(["src/a.ts", "scripts/entry.mjs", "e2e/walk.mjs", "node_modules/x/lib.mjs"].join("\n") + "\n");`,
+      "  process.exit(0);",
+      "}",
+      'process.exit(argv.includes("--noEmit") ? 1 : 0);',
+      "",
+    ].join("\n");
+    withFixture(
+      {
+        "node_modules/pkg/bin/tsc-fake.cjs": entryBody,
+        "node_modules/.bin/tsc": (root) =>
+          `# cmd-shim-target=${path
+            .join(root, "node_modules", "pkg", "bin", "tsc-fake.cjs")
+            .replaceAll("\\", "/")}\n`,
+        "tsconfig.json": '{ "compilerOptions": { "strict": true } }\n',
+      },
+      (root) => {
+        const tool = path.join(ROOT, "scripts", "ci/ci-run-tool.mjs");
+        const red = run([tool, "--root", root, "tsc", "--noEmit"], root);
+        expect(red.status, red.stderr).toBe(1);
+        expect(red.stdout).toContain("[ci-run-tool] 程序图里的 .mjs：共 3 份，仓内：");
+        /* 仓内 / 第三方分开念：node_modules 那部分不是本仓通道的证据。 */
+        expect(red.stdout).toContain("scripts/entry.mjs、e2e/walk.mjs");
+        expect(red.stdout).toContain("allowJs+checkJs 经 import 图");
+        expect(red.stdout).toContain("tsconfig.scripts.json 的棘轮，见 §13.5.14.1");
+
+        const green = run([tool, "--root", root, "tsc", "--version"], root);
+        expect(green.status, green.stderr).toBe(0);
+        expect(green.stdout, "绿跑没有要归因的红，不为读数起第二次编译器").not.toContain(
+          "程序图里的 .mjs",
+        );
+      },
+    );
+  });
+
+  it("程序图读数取不到 ⇒ 点名「读数缺一格」，不冒充也不改判定（ISSUE #3049）", () => {
+    /* 探针（--listFilesOnly）没跑成时，缺读数要说缺 —— 把它读成「0 份」或「没判过」
+     * 都是给下一次误诊递刀（#3041 的现场就是读数缺位下推出来的）。 */
+    const entryBody = [
+      "const argv = process.argv.slice(2);",
+      'if (argv.includes("--listFilesOnly")) { process.exit(7); }',
+      "process.exit(1);",
+      "",
+    ].join("\n");
+    withFixture(
+      {
+        "node_modules/pkg/bin/tsc-fake.cjs": entryBody,
+        "node_modules/.bin/tsc": (root) =>
+          `# cmd-shim-target=${path
+            .join(root, "node_modules", "pkg", "bin", "tsc-fake.cjs")
+            .replaceAll("\\", "/")}\n`,
+        "tsconfig.json": '{ "compilerOptions": { "strict": true } }\n',
+      },
+      (root) => {
+        const tool = path.join(ROOT, "scripts", "ci/ci-run-tool.mjs");
+        const r = run([tool, "--root", root, "tsc", "--noEmit"], root);
+        expect(r.status, r.stderr).toBe(1);
+        expect(r.stdout).toContain("程序图读数取不到");
+        expect(r.stdout).toContain("读数缺一格，不影响判定");
+      },
+    );
   });
 
   it("参数逐字转发（含带空格的值），不拼回一条字符串", () => {
@@ -563,7 +672,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
       },
       (root) => {
         const args = ["--reporter", "verbose output", "--only-changed"];
-        const r = run(["scripts/ci-run-tool.mjs", "--root", root, "echo", ...args]);
+        const r = run(["scripts/ci/ci-run-tool.mjs", "--root", root, "echo", ...args]);
         expect(r.status, r.stderr).toBe(0);
         /* 「逐字」两半都要判：值里带空格被切开 ⇒ 数组对不上；
          * 被拼成一整串再交给 shell ⇒ 更早就红了（子进程收到一个参数）。 */
@@ -582,9 +691,9 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
             .replaceAll("\\", "/")}\n`,
       },
       (root) => {
-        expect(run(["scripts/ci-run-tool.mjs", "--root", root, "fail"]).status).toBe(3);
+        expect(run(["scripts/ci/ci-run-tool.mjs", "--root", root, "fail"]).status).toBe(3);
 
-        const notRun = run(["scripts/ci-run-tool.mjs", "--root", root, "这个垫片不在"]);
+        const notRun = run(["scripts/ci/ci-run-tool.mjs", "--root", root, "这个垫片不在"]);
         expect(notRun.status, "解析不到却退 0/1 —— 会被读成「跑过了且红」").toBe(2);
         /* 话术分两档（ISSUE #2720）：fixture 没有 package.json ⇒ 名字不在仓内声明里，
          * 走「面外」那一档 —— 出口指向 ship-exec 的 pnpmInvocation，**不再出现**
@@ -601,7 +710,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
         "package.json": '{"dependencies":{"声明了没装":"1.0.0"}}\n',
       },
       (root) => {
-        const missing = run(["scripts/ci-run-tool.mjs", "--root", root, "声明了没装"]);
+        const missing = run(["scripts/ci/ci-run-tool.mjs", "--root", root, "声明了没装"]);
         expect(missing.status).toBe(2);
         expect(missing.stderr).toContain("仓内声明了这个依赖");
         expect(missing.stderr).toContain("pnpm install");
@@ -610,27 +719,35 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
       },
     );
     /* 「没点名要跑谁」同样是没结论，不是绿。 */
-    expect(run(["scripts/ci-run-tool.mjs"]).status).toBe(2);
-    expect(run(["scripts/ci-run-tool.mjs", "--root"]).status).toBe(2);
+    expect(run(["scripts/ci/ci-run-tool.mjs"]).status).toBe(2);
+    expect(run(["scripts/ci/ci-run-tool.mjs", "--root"]).status).toBe(2);
   });
 
-  it("`.cnb.yml` 不再直接起 `.bin` 垫片，那两格改走本入口", () => {
+  it("`.cnb.yml` 不再直接起 `.bin` 垫片，那两格在 GA 走本入口", () => {
     /* 这一条读磁盘文本，而 `.cnb.yml` **不被任何测试 import** ⇒ 它已经在固定清单里
-     * （`scripts/fixed-structural-tests.mjs`，本文件那条理由登记在那儿）：改清单不会
+     * （`scripts/affected-tests/fixed-structural-tests.mjs`，本文件那条理由登记在那儿）：改清单不会
      * 把这些用例带进增量面，不固定跑的表现不是红，是下一次又长出 `.bin/tsc`。 */
-    const yml = fs.readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
-    const commandLines = yml
-      .split("\n")
-      /* 注释行是说明，不是命令 —— 本文件里正当地写着「别再写 `node_modules/.bin/…`」
-       * 那一句；把它判成违例就是罚正在教人别这么写的那行（同 `stripComments` 的理由）。 */
-      .filter((l) => !/^\s*#/.test(l));
+    const stripComments = (text: string) =>
+      text
+        .split("\n")
+        /* 注释行是说明，不是命令 —— 本文件里正当地写着「别再写 `node_modules/.bin/…`」
+         * 那一句；把它判成违例就是罚正在教人别这么写的那行（同 `stripComments` 的理由）。 */
+        .filter((l) => !/^\s*#/.test(l));
+    const commandLines = stripComments(fs.readFileSync(path.join(ROOT, ".cnb.yml"), "utf8"));
     const offenders = commandLines.filter((l) => /node_modules[\\/]\.bin[\\/]/.test(l));
     expect(offenders, "清单里又出现了直接起垫片的写法").toEqual([]);
-    /* 反向：那两格确实用了新入口（只判「没有旧写法」的话，删掉两格也能绿）。 */
-    const joined = commandLines.join("\n");
-    expect(joined).toContain("node scripts/ci-run-tool.mjs tsc --noEmit");
+    /* 反向：那两格确实用了新入口（只判「没有旧写法」的话，删掉两格也能绿）。
+     * 2026-11-05 薄化后 `类型检查` / `lib Node-only 声明` 由 GA `pr-gate.yml` 执行，
+     * 命令一字未改 —— 所以这一半读 GA 的 workflow，不再读 CNB 的 stage。 */
+    const joined = [
+      ...commandLines,
+      ...stripComments(
+        fs.readFileSync(path.join(ROOT, ".github", "workflows", "pr-gate.yml"), "utf8"),
+      ),
+    ].join("\n");
+    expect(joined).toContain("node scripts/ci/ci-run-tool.mjs tsc --noEmit");
     expect(joined).toContain(
-      "node scripts/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts",
+      "node scripts/ci/ci-run-tool.mjs vitest run tests/lib-node-only-declarations.test.ts",
     );
   });
 });

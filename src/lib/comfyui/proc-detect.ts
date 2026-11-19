@@ -165,9 +165,9 @@ export function socketInodesOfPid(pid: number): Set<string> {
   for (const fd of entries) {
     try {
       const target = readlinkSync(`/proc/${pid}/fd/${fd}`);
-      const m = /^socket:\[(\d+)\]$/.exec(target);
-      if (m?.[1] !== undefined) {
-        set.add(m[1]);
+      const m = /^socket:\[(?<inode>\d+)\]$/.exec(target);
+      if (m?.groups?.inode !== undefined) {
+        set.add(m.groups.inode);
       }
     } catch {
       /* 单个 fd 读不到（如已关闭）不影响其余 */

@@ -94,7 +94,7 @@ export function countActive(tasks: Array<HistoryTaskRow>): number {
 
 /** 只有图片/视频封面可拖拽到画布；音频没有可视封面。 */
 export function isDraggableCover(task: HistoryTaskRow): boolean {
-  return !!task.cover && (task.mediaType === "image" || task.mediaType === "video");
+  return Boolean(task.cover) && (task.mediaType === "image" || task.mediaType === "video");
 }
 
 export const FILTER_TABS: Array<{ id: HistoryFilter; label: string }> = [

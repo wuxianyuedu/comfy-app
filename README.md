@@ -42,13 +42,14 @@ Comfy-APP-T3/
 │  ├─ Cargo.toml            # Rust 依赖
 │  ├─ icons/                # 应用图标
 │  └─ binaries/             # Node 运行时 sidecar（Windows: node-<triple>.exe；其它: node-<triple>）
-├─ scripts/                 # 启动与构建脚本（被壳/工具调用）
+├─ scripts/                 # 启动与构建脚本（被壳/工具调用；完整导航见 scripts/README.md）
 │  ├─ dev-launcher.mjs      # 启动编排（全平台同一份：预检 / 端口 / 拉起 / 回收）
 │  ├─ dev-launcher.ps1      # Windows 调用入口（只负责转交给上面那份）
 │  ├─ launcher-core/        # 编排的平台机制层（进程与端口探测 / 进程组 / 日志）
+│  ├─ gates/                # 质量门禁判据与对账台账（pre-commit / CI 每一条的执行者）
+│  ├─ ci/                   # CI 流水线机制（派发 / 镜像 / GA 回调 / 逐格判决）
 │  ├─ entry-common.ps1      # 双击入口公共库（定位项目根 / 解析 pwsh / 透传退出码）
-│  ├─ build-desktop.mjs     # 组装 src-tauri/static（standalone + splash + sidecar）
-│  └─ install-comfyapp-helper.ps1  # 注册 comfyapp:// 协议
+│  └─ build-desktop.mjs     # 组装 src-tauri/static（standalone + splash + sidecar）
 ├─ tools/                   # 双击入口与构建编排（Windows .ps1，按用途分目录）
 │  ├─ start/                # 启动与初始化入口（双击用）
 │  │  ├─ start-web.ps1            # 控制台模式启动 Web 开发（可见日志）
@@ -61,7 +62,7 @@ Comfy-APP-T3/
 │  │  ├─ sync-lint.ps1           # 同步依赖 + pnpm lint（拉取更新/改码后日常自检）
 │  │  └─ register-comfyapp-protocol.ps1  # 注册 comfyapp:// 协议（免管理员）
 │  ├─ build/                # 构建打包入口
-│  │  ├─ build-all.ps1            # 一键发布构建（安装包 + 常驻目录留 2 份；入口仍是 app.exe）
+│  │  ├─ build-all.ps1            # 一键发布构建（安装包 + 发布到项目内 dist\desktop；入口仍是 app.exe）
 │  │  ├─ build-tauri-release.ps1  # 仅构建 release 版 Tauri 壳
 │  │  └─ rebuild-static.ps1       # 清理并重建 src-tauri/static
 │  ├─ shadcn-registry/      # 团队 shadcn Registry（start-shadcn-registry.ps1）
@@ -80,21 +81,22 @@ Comfy-APP-T3/
 
 ## 根目录文件用途
 
-| 文件                                      | 用途                                                                                                                                                                |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `package.json`                            | 前端依赖与脚本（`dev` / `build` / `tauri` / `test` 等）                                                                                                             |
-| `next.config.js`                          | Next.js 配置，含 `output: 'standalone'`（供桌面壳打包）与产物排除清单                                                                                               |
-| `scripts/standalone-private-inputs.mjs`   | 从产物里剥掉开发机私有输入（`.env` / `db.sqlite*`），由 `pnpm build` 与 `build-desktop.mjs` 共用                                                                    |
-| `tsconfig.json`                           | TypeScript 配置                                                                                                                                                     |
-| `eslint.config.js` `prettier.config.js`   | 代码检查与格式化                                                                                                                                                    |
-| `postcss.config.js`                       | Tailwind CSS v4 接入                                                                                                                                                |
-| `vitest.config.ts` `playwright.config.ts` | 测试配置                                                                                                                                                            |
-| `typedoc.json`                            | API 文档生成配置                                                                                                                                                    |
-| `public/splash.html`                      | 桌面壳启动加载页（编译时嵌入，由 Tauri 窗口初始显示）                                                                                                               |
-| `CHANGELOG.md`                            | 变更日志（**不要直接改**：条目先进 `changelog.d/` 碎片，见 [规范 §13.10.5](docs/standards/13-提交与-code-review.md#13105-碎片化落地改-changelogd不改-changelogmd)） |
-| `CHANGELOG-archive.md`                    | 历史条目归档：`changelog.d/` 建成至 2026-10 的全部碎片原文（逐份收录、一字未改），供检索历史变更（**它入库给人读，但不进代码索引** —— 单份体量最大，检索走 `grep`/`git`，见下方 `.qoderignore` 那一行）                                                                 |
-| `changelog.d/`                            | 变更日志碎片：一件变更一个文件，避免并行分支在 `CHANGELOG.md` 上冲突；**只放尚未并入的条目**                                                                        |
-| `.qoderignore`                            | Qoder 代码索引的排除表（**不要手改**：由 `scripts/qoder-ignore.mjs` 渲染，`pnpm qoder:ignore` 写 / 刷新、`pnpm qoder:ignore:check` 比对；绝大多数条目本来也被 `.gitignore` 忽略，另有**入库但刻意只出索引**的那一组（`docs/generated/` 生成态镜像、`CHANGELOG-archive.md` 历史归档）—— 它们给人读、由配对门禁判同批，只是不该让每次文档检索都命中两份；改完要重启 Qoder CN 进程才生效，见 [规范 §12.20](docs/standards/12-代码组织与文件结构.md#1220-重复的手工流程收成有名字的入口能做成工具的就做成工具)）  |
+| 文件                                          | 用途                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json`                                | 前端依赖与脚本（`dev` / `build` / `tauri` / `test` 等）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `next.config.js`                              | Next.js 配置，含 `output: 'standalone'`（供桌面壳打包）与产物排除清单                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `scripts/standalone-private-inputs.mjs`       | 从产物里剥掉开发机私有输入（`.env` / `db.sqlite*`），由 `pnpm build` 与 `build-desktop.mjs` 共用                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `tsconfig.json`                               | TypeScript 配置                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `oxlint.parity.config.mjs` `oxlint.config.ts` | 通用 lint 的判决配置（oxlint；`lint:oxlint` **384 条**，含 2 条 jsPlugin、171 条预设 0 命中免费档与 5 条 T1 语义规则——后者存量按文件挂账、分批次清，见 `docs/audits/2026-11-04-oxlint-t1-burndown.md`）。最终架构与已退役的 eslint 侧清单见 [AGENTS.md](AGENTS.md)                                                                                                                                                                                                                                                                                                                        |
+| `.oxfmtrc.json`                               | 格式化配置（格式化器是 **oxfmt**，prettier 已随 #2541 退役；`format:*` 脚本与格式门禁 `scripts/gates/check-format.cjs` 共用这一份）                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `postcss.config.js`                           | Tailwind CSS v4 接入                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `vitest.config.ts` `playwright.config.ts`     | 测试配置                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `typedoc.json`                                | API 文档生成配置                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `public/splash.html`                          | 桌面壳启动加载页（编译时嵌入，由 Tauri 窗口初始显示）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `CHANGELOG.md`                                | 变更日志（**不要直接改**：条目先进 `changelog.d/` 碎片，见 [规范 §13.10.5](docs/standards/13-提交与-code-review.md#13105-碎片化落地改-changelogd不改-changelogmd)）                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `CHANGELOG-archive.md`                        | 历史条目归档：`changelog.d/` 建成至 2026-10 的全部碎片原文（逐份收录、一字未改），供检索历史变更（**它入库给人读，但不进代码索引** —— 单份体量最大，检索走 `grep`/`git`，见下方 `.qoderignore` 那一行）                                                                                                                                                                                                                                                                                                                                                                                   |
+| `changelog.d/`                                | 变更日志碎片：一件变更一个文件，避免并行分支在 `CHANGELOG.md` 上冲突；**只放尚未并入的条目**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `.qoderignore`                                | Qoder 代码索引的排除表（**不要手改**：由 `scripts/docs/qoder-ignore.mjs` 渲染，`pnpm qoder:ignore` 写 / 刷新、`pnpm qoder:ignore:check` 比对；绝大多数条目本来也被 `.gitignore` 忽略，另有**入库但刻意只出索引**的 `CHANGELOG-archive.md` 历史归档 —— 它给人读，只是不该让每次文档检索都命中历史碎片；`docs/generated/` 生成态镜像自 #3586 起**不再入库**（谁需要谁本地 `pnpm doc:render`），这一条排除项保留是为了本地生成后仍不进索引；改完要重启 Qoder CN 进程才生效，见 [规范 §12.20](docs/standards/12-代码组织与文件结构.md#1220-重复的手工流程收成有名字的入口能做成工具的就做成工具)） |
 
 > **双击入口都在 `tools/` 下**（启动类 `tools/start/`、构建类 `tools/build/`），
 > 根目录只保留工程配置与文档，见下方「双击入口速查」与 `tools/README.md`。
@@ -103,7 +105,7 @@ Comfy-APP-T3/
 > `db.sqlite` 复制进 `.next/standalone`，进而被内嵌进桌面包（密钥明文分发 +
 > 开发者本机数据库变成出厂库）。现在 `pnpm build` 会自动剥离这两类文件
 > （`scripts/standalone-private-inputs.mjs`），并有产物层护栏
-> `node scripts/check-standalone-contents.cjs` 兜底；**不要**为了省事把 `.env`
+> `node scripts/gates/check-standalone-contents.cjs` 兜底；**不要**为了省事把 `.env`
 > 写进 `outputFileTracingExcludes` 就以为解决了——实测对 `.env` 无效，见
 > [规范 §7.3](docs/standards/launch-and-build.md)。
 
@@ -130,7 +132,7 @@ Comfy-APP-T3/
 - **WebView2 运行时**：Windows 10/11 通常已内置；Linux 用系统 WebKitGTK
   （Debian/Ubuntu：`libwebkit2gtk-4.1-dev` / `libgtk-3-dev` / `pkg-config`，
   Fedora：`webkit2gtk4.1-devel`），macOS 用系统 WKWebView
-- （可选）**Python**：仅 comfy-cli venv（`scripts/setup-comfy-cli-venv.ps1`）用到
+- （可选）**Python**：仅 comfy-cli venv（`scripts/devtools/setup-comfy-cli-venv.ps1`）用到
   （Windows Job Object 已由壳内联 Rust 实现，不再依赖 Python）
 
 启动编排**只有一份实现**：`scripts/dev-launcher.mjs`（Windows 也走它）。
@@ -159,7 +161,7 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 ## 双击入口速查（Windows）
 
 所有双击入口都在 `tools/` 下按用途分目录，根目录只放工程配置。首次双击 `.ps1` 前需
-右键 `scripts/enable-ps1-double-click.ps1` →「使用 PowerShell 运行」完成一次性关联
+右键 `scripts/devtools/enable-ps1-double-click.ps1` →「使用 PowerShell 运行」完成一次性关联
 （Windows 默认双击 `.ps1` 是用记事本打开），详见 `docs/standards/launch-and-build.md` §8.3。
 
 | 我想…                                             | 双击                                                                           |
@@ -172,7 +174,7 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 跑一遍质量门禁（typecheck / lint / vitest）       | `tools/start/verify-quality.ps1`                                               |
 | 只跑测试（可指定单个文件 / 复现基线失败）         | `tools/start/run-tests.ps1`                                                    |
 | 拉取更新后同步依赖并跑 lint                       | `tools/start/sync-lint.ps1`                                                    |
-| 探测开发盘（ReFS / Dev Drive）红利并调优          | `tools/start/tune-dev-drive.ps1`                                              |
+| 探测开发盘（ReFS / Dev Drive）红利并调优          | `tools/start/tune-dev-drive.ps1`                                               |
 | 注册 `comfyapp://` 协议（任务历史「打开文件夹」） | `tools/start/register-comfyapp-protocol.ps1`                                   |
 | 构建发行包（release 壳）                          | `tools/build/*.ps1`（见 `tools/README.md`）                                    |
 
@@ -181,21 +183,24 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 `.ps1` 只解决「Windows 上怎么被双击」；**逻辑是跨平台的，入口不是**。常用动作逐条对照
 （完整表与它对应的门禁见 [launch-and-build.md §9.5](docs/standards/launch-and-build.md)）：
 
-| 我想…                                   | Linux / macOS / CI                             | 对应 Windows 双击                 |
-| --------------------------------------- | ---------------------------------------------- | --------------------------------- |
-| 启动开发环境                            | `pnpm dev`                                     | `tools/start/start-web.ps1`       |
-| 跑质量门禁（typecheck / lint / vitest） | `pnpm check:all`                               | `tools/start/verify-quality.ps1`  |
-| 只跑测试                                | `pnpm test:file [文件]`                        | `tools/start/run-tests.ps1`       |
-| 连已知基线失败一起跑                    | `pnpm test:full`                               | `tools/start/run-tests.ps1 -Full` |
-| 同步依赖 + lint                         | `pnpm deps:guard && pnpm install && pnpm lint` | `tools/start/sync-lint.ps1`       |
-| 生成 `.env`                             | `pnpm env:init`                                | `tools/start/run-local.ps1`       |
-| 建库                                    | `pnpm db:push`                                 | （双击启动链路会自动做）          |
-| 生成原文文档                            | `pnpm doc:gen`                                 | `tools/docs/generate-docs.ps1`    |
-| 起组件工作台                            | `pnpm storybook`                               | `tools/start/storybook.ps1`       |
-| 出一份节点镜像的操作计划（装机提速）    | `pnpm ci:image-plan`                           | （Windows 侧同一条命令）          |
-| 探测开发盘红利并调优                    | `pnpm dev:drive`                               | `tools/start/tune-dev-drive.ps1`  |
+| 我想…                                     | Linux / macOS / CI                             | 对应 Windows 双击                  |
+| ----------------------------------------- | ---------------------------------------------- | ---------------------------------- |
+| 启动开发环境                              | `pnpm dev`                                     | `tools/start/start-web.ps1`        |
+| 跑质量门禁（typecheck / lint / vitest）   | `pnpm check:all`                               | `tools/start/verify-quality.ps1`   |
+| 只跑测试                                  | `pnpm test:file [文件]`                        | `tools/start/run-tests.ps1`        |
+| 连已知基线失败一起跑                      | `pnpm test:full`                               | `tools/start/run-tests.ps1 -Full`  |
+| 同步依赖 + lint                           | `pnpm deps:guard && pnpm install && pnpm lint` | `tools/start/sync-lint.ps1`        |
+| 生成 `.env`                               | `pnpm env:init`                                | `tools/start/run-local.ps1`        |
+| 建库                                      | `pnpm db:push`                                 | （双击启动链路会自动做）           |
+| 生成原文文档                              | `pnpm doc:gen`                                 | `tools/docs/generate-docs.ps1`     |
+| 起组件工作台                              | `pnpm storybook`                               | `tools/start/storybook.ps1`        |
+| 截「改后真实运行」界面（UI 改动交付截图） | `pnpm screenshot [路由]`                       | `tools/start/take-screenshot.ps1`  |
+| 录一段页面 / 操作的性能 trace（性能取证） | `pnpm perf:trace [路由]`                       | `tools/start/perf-trace.ps1`       |
+| 出一份节点镜像的操作计划（装机提速）      | `pnpm ci:image-plan`                           | （Windows 侧同一条命令）           |
+| 组装免安装版（portable zip）              | `pnpm package:portable`                        | `tools/build/package-portable.ps1` |
+| 探测开发盘红利并调优                      | `pnpm dev:drive`                               | `tools/start/tune-dev-drive.ps1`   |
 
-> 这两张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 挂在 `.githooks/pre-commit`，
+> 这两张表不是「文档承诺」：`scripts/gates/check-ps1-consistency.mjs` 挂在 `.githooks/pre-commit`，
 > 平台侧也有同名那一格在跑（在场哪几格以 `.cnb.yml` 自己列的为准；口径见 `docs/standards/13-提交与-code-review.md` §13.5）——
 > 它核对它们与磁盘 / `package.json` 三向对齐 —— 表里的路径与 `pnpm` 命令都真实存在、
 > `tools/**` 下的双击入口至少出现在**这里或 `tools/README.md`**（后者是完整清单，
@@ -250,7 +255,7 @@ pnpm env:init
 #    而校验把空串当「没给」，会直接报 Invalid environment variables。
 
 # 3. 初始化数据库（Drizzle，按 drizzle.config.ts）
-#    经 scripts/db-push.mjs：以 --force 非交互运行，并**复核库里真的建出表**——
+#    经 scripts/db/db-push.mjs：以 --force 非交互运行，并**复核库里真的建出表**——
 #    drizzle-kit push 在无 TTY 环境（CI / 脚本 / 容器）会「报错 + exit 0 + 留 0 字节库」，
 #    此时首页与 /api/health 都 200，只有真实业务页面 500（见规范 §9.1）
 pnpm db:push
@@ -320,7 +325,7 @@ pnpm tauri build
 ```
 
 它执行 `pnpm tauri build` → 编译出 `src-tauri/target/release/app.exe` **并打出安装包**
-（nsis / msi），收尾把安装包发布到常驻目录（留最近 2 份，`latest.txt` 只是指针文件）。
+（nsis / msi），收尾把安装包发布到项目内 `dist\desktop`（留最近 2 份，`latest.txt` 只是指针文件）。
 装配由 `beforeBuildCommand`（`node scripts/build-desktop.mjs`）负责：`pnpm build` 出
 standalone → 组装 `src-tauri/static`（数产物 + 体积护栏两道防线都在那条链上）→
 同步 `splash.html` 进 `src-tauri/splash-assets/`（启动页是编译期嵌入的）→
@@ -385,11 +390,12 @@ tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .nex
 | --------------------------------- | --------------------------------------------------------- |
 | 浏览器开发                        | `pnpm dev`                                                |
 | 桌面壳开发（热重载）              | `pnpm tauri dev` 或双击 `tools\start\start-tauri-dev.ps1` |
-| 一键构建（安装包 + 发布到常驻目录）   | `tools\build\build-all.ps1`                               |
-| 仅 release 壳（不含安装包）           | `tools\build\build-tauri-release.ps1`                     |
+| 一键构建（安装包 + 发布到项目内） | `tools\build\build-all.ps1`                               |
+| 仅 release 壳（不含安装包）       | `tools\build\build-tauri-release.ps1`                     |
 | 独立模式资源（standalone）        | `tools\build\build-standalone.ps1`                        |
 | 完整安装包（不发布）              | `pnpm tauri build`                                        |
-| 把打好的安装包发布到常驻目录      | `node scripts/publish-desktop-bundle.mjs`                 |
+| 把打好的安装包发布到指定目录      | `node scripts/build/publish-desktop-bundle.mjs --root <dir>`    |
+| 组装免安装版（解压即用 zip）      | `pnpm package:portable`                                   |
 | 清理重建前端资源                  | `tools\build\rebuild-static.ps1`                          |
 
 更详细的脚本职责、启动入口对比（`start-tauri.ps1` / `start-tauri-dev.ps1` / 壳自身）、CSP 与 standalone 模式说明，
@@ -405,13 +411,17 @@ tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .nex
 pnpm dev          # 前端开发服务器
 pnpm build        # Next.js 生产构建（standalone）
 pnpm check        # eslint + tsc --noEmit
-pnpm ship         # 交出去：提交 → push → 开 PR → 等 CI（合并要显式加 --merge）
+pnpm ship         # 交出去：提交 → push → 开 PR → 等 CI（--mode auto 全托管 / --mode confirm 关键步确认 / 合并要显式）
+pnpm ship:wait    # 确定性等待后台 ship 出终态（短间隔 + 明确终止条件 + 总上限；坏消息立即返回，禁止命令间插无意义 sleep）
+pnpm report:session --range A..B  # 开发汇报骨架（第五节：本轮发现**已立案的号**，不是「要不要提单」的待办；§13.10.9 / §13.10.14）
 pnpm test         # Vitest 单元测试
+pnpm shell:smoke  # 真实 Windows 会话的壳冒烟（前台 / Z 序 / 闪烁收口；需先重编 release 壳，见 §11.10.4）
 pnpm test:e2e     # Playwright e2e
 pnpm run docs     # 生成 API 文档到 docs/api（必须是 run docs：pnpm docs 是内建命令）
 pnpm storybook    # 起组件工作台（http://127.0.0.1:6006）
 pnpm db:push      # 同步 Drizzle schema 到 db.sqlite（非交互、复核建表结果）
 pnpm env:init     # 生成/补齐本地 .env（随机密钥 + 本地 OAuth 占位值）
+pnpm deps:prune   # 清掉 node_modules/.pnpm 里不在当前依赖图的残留条目（--dry-run 只看清单；pnpm store prune 管不到这一层）
 pnpm qoder:ignore # 写/刷新 .qoderignore（代码索引排除表；改完要重启 Qoder CN 才生效）
 ```
 
@@ -429,7 +439,7 @@ pnpm qoder:ignore # 写/刷新 .qoderignore（代码索引排除表；改完要�
 > PR 标题与 squash 那一行取的是**这条分支相对主干的第一笔非常规提交**（不是顶端那一笔，
 > 觉得那笔写小了可以 `--title "…"` 覆盖）；④ **它说「提交段全过」不等于 tsc / eslint /
 > 用例过了** —— `pre-commit` 默认只跑形态档，本地要全套加 `COMFY_HEAVY_GATES=1`（规范 §13.5.25）。
-> 全部旗标与阶段见 `scripts/ship.mjs` 文件头；判据在 `tests/ship.test.ts`。
+> 全部旗标与阶段见 `scripts/ship/ship.mjs` 文件头；判据在 `tests/ship.test.ts`。
 
 ---
 

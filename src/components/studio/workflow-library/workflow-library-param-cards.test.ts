@@ -1,17 +1,13 @@
-/* 工作流库画布的对外参数归属派生（纯函数）—— ISSUE #355
- *
- * 库详情要能回答两件事，且都能与编辑器对上：
- *   ① 每个对外参数由哪些端口组成（卡片列）；
- *   ② 宿主卡片里被落到的那一行属于哪个对外参数（行尾徽标）。
- * 这里只测派生规则（与 paramMap 同源、按模式归属）与「端口键 → 参数名」的反查。
- *
- * 另测只读映射连线（卡片圆点 → 宿主行）：`wires` 与 `resolved` / 编辑器同一
- * 份事实源，未连线与显式断开都不给线。
+/* 工作流库画布的对外参数归属派生（纯函数）—— ISSUE #355。
+ * 库详情要回答两件事且都能与编辑器对上：① 每个对外参数由哪些端口组成（卡片列）；
+ * ② 宿主卡片里被落到的那一行属于哪个对外参数（行尾徽标）。这里只测派生规则
+ * （与 paramMap 同源、按模式归属）与端口键 → 参数名的反查；另测只读映射连线。
  */
 
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import { isRecord } from "~/lib/is-record";
 import {
   buildParamEntries,
   SIZE_SUB_IDS,
@@ -211,8 +207,7 @@ describe("deriveLibraryParamCards", () => {
     for (const bad of [{ source: [] }, { source: 1 }, [], null, undefined]) {
       const { resolved } = deriveLibraryParamCards({
         io,
-        /* SAFETY: 类型断言已复核 */
-        paramMap: bad as Record<string, unknown>,
+        paramMap: isRecord(bad) ? bad : null,
         mode: "T2I",
       });
       expect(resolved).toEqual({});

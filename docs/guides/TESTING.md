@@ -22,11 +22,14 @@ pnpm run build          # 产物级护栏（build + 剥私有输入 + 数产物 
 - **别默认用 `--no-file-parallelism` 跑全量**：串行要 2~3 小时。它的正确用途是给一条红
   **定性**（串行也红才是真红，见规范 §11.13）。
 - 提交时不必手动跑这些：`.githooks/pre-commit` 已覆盖提交自身的形态判据；**受影响用例**
-  （固定守护清单 + 沿静态 import 图解析出的那一层）2026-10-20 起由平台侧 PR 流水线的
-  `受影响用例` 一格执行（规范 §13.5.8 / §13.5.25），本地只剩 `pnpm test` / `pnpm check:all`
-  的全量入口。
+  （固定守护清单 + 沿静态 import 图解析出的那一层）2026-10-20 起由平台侧执行，
+  2026-11-02 起并入每日全量单测（ISSUE #3052：增量面是全量子集，规范 §13.5.8 / §13.5.25），
+  本地只剩 `pnpm test` / `pnpm check:all` 的全量入口。
 
 ## 单元测试（Vitest）
+
+> CI 配置文件（`.cnb.yml` / `.github/workflows`）有独立的真解析器校验：
+> 改了它们后跑 `pnpm check:ci-yaml`（判据在 `tests/ci-yaml-parse.test.ts`）。
 
 ### 配置
 
@@ -43,7 +46,7 @@ pnpm run build          # 产物级护栏（build + 剥私有输入 + 数产物 
   所以每份的头里都写明了具体是哪一条 API / 哪一个行为在 happy-dom 下不同
   （`Node.prototype.nodeName` 空串桩 / CSSOM 不认 `color-mix()` /
   `clientWidth` 不可 spy / `getAnimations()` 不推进时钟）。现状 8 份，
-  清单跑 `node scripts/check-test-environment.cjs` 会打出来。
+  清单跑 `node scripts/gates/check-test-environment.cjs` 会打出来。
   ⚠️ 这里曾经写着「为什么不用 `projects` 分档 …… 维持」—— 那是**上一轮的结论，
   已被采纳的那次改动推翻**：分档做了，但**没有**按目录一刀切（那会把 260 份
   node 用例误升进 DOM 档，而 DOM 档下跑纯逻辑不报错、只是变慢，是静默的那一侧）。
@@ -102,7 +105,7 @@ procedure 有没有执行者**与**消费方（这两条已由 `tests/trpc-surfa
 - 纯函数模块（lib 层、utils）优先补 `*.test.ts`；跨模块通用能力先补进地基再 import（§12.18）
 - 组件测试范例：`AgentPanel.test.tsx`（轻量交互）、`SubgraphHeader.test.tsx`（真实 Provider 包装）
 - 断言基于实现语义编写，禁止为"让测试通过"而弱化断言
-- 新目录要同时登记两处：`scripts/check-file-structure.cjs` 的 `DOMAINS`（R14）与
+- 新目录要同时登记两处：`scripts/gates/check-file-structure.cjs` 的 `DOMAINS`（R14）与
   `vitest.config.ts` 的覆盖率门槛（§18.6 / §12.5.3）
 
 ### 组件测试（@testing-library/react）
@@ -152,12 +155,12 @@ procedure 有没有执行者**与**消费方（这两条已由 `tests/trpc-surfa
 这一层与像素无关，继续用（口径与边界见规范 §11.8）：全量 e2e / 全量单测 + 覆盖率 /
 产物级护栏此前各自只有一句「按需手动跑」，而那句话没有任何东西在守。
 
-- **全量 e2e**（`scripts/.e2e-freshness.json`）按本地日历日判「**当天的第一次提交**
+- **全量 e2e**（`scripts/freshness/.e2e-freshness.json`）按本地日历日判「**当天的第一次提交**
   带没带一次自证」：跑 `pnpm test:e2e` 跑绿即记，或
-  `node scripts/e2e-run.mjs --skip "<理由>"` 记一条豁免（占位理由被拦）。
-- **全量单测 + 覆盖率**（`scripts/.full-suite-freshness.json`，`pnpm run test:coverage`
-  走 `scripts/full-suite-run.mjs`）与**产物级护栏**（`scripts/.artifact-freshness.json`，
-  `pnpm run build` 走 `scripts/artifact-run.mjs`）判的是「**改了就当天跑**」：
+  `node scripts/e2e/e2e-run.mjs --skip "<理由>"` 记一条豁免（占位理由被拦）。
+- **全量单测 + 覆盖率**（`scripts/freshness/.full-suite-freshness.json`，`pnpm run test:coverage`
+  走 `scripts/affected-tests/full-suite-run.mjs`）与**产物级护栏**（`scripts/freshness/.artifact-freshness.json`，
+  `pnpm run build` 走 `scripts/build/artifact-run.mjs`）判的是「**改了就当天跑**」：
   当天提交动过它们的输入面（`src/`+`tests/` / 产物链那几个文件）就必须今天自证，
   没动过以 7 天为宽限 —— 十分钟量级的两档没必要每天都跑。
   出路三条：跑一次（跑绿即记）/ `--skip "<理由>"` / `--dirty "<理由>"`（这次改动不吃这一档）。
@@ -196,7 +199,7 @@ Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎�
   `expect.poll` 报 `must be called inside a test`（实测 20/20 红；两条用例次序反转
   则 0/20 红）。修法：该条改回串行 `it`，或把等待换成 `vi.waitFor`。
 
-真要用的话，文件里必须写明隔离声明（`scripts/check-test-concurrency.cjs` 在
+真要用的话，文件里必须写明隔离声明（`scripts/gates/check-test-concurrency.cjs` 在
 pre-commit 强制）：
 
 ```ts
@@ -249,7 +252,7 @@ platformTest("同步入口在 Windows 上是 /PID …", ({ asPlatform }) => {
       只保证「一天至少有人跑过一次」，不等于每次提交都跑。
 - [ ] **页面级视觉回归完全没有执行者**：这一档已整档撤掉（上面 §「视觉回归」那一节），
       所以「界面有没有变形」现在只由 review 看图负责 —— 不要再把它读成「有那一层兜着」。
-- [ ] **Rust 壳的 `#[test]` 只在「改了 `.rs`」时被跑**：`scripts/shell-gate.mjs`（pre-commit D 组）
+- [ ] **Rust 壳的 `#[test]` 只在「改了 `.rs`」时被跑**：`scripts/gates/shell-gate.mjs`（pre-commit D 组）
       在暂存改动命中壳输入时跑 `cargo test`、并把硬规则 5「改了壳必须重编」变成判据 ——
       但它**不是全量执行者**：不动壳的提交永远不跑壳里那些 `#[test]`，全量仍要靠
       `cd src-tauri && cargo test` 的手上（`check:all` 里也没有这一路）。
@@ -295,5 +298,9 @@ platformTest("同步入口在 Windows 上是 /PID …", ({ asPlatform }) => {
 - [ ] **`DynamicWorkflowForm` / `CanvasNode` 主组件的深度行为测试**（fetch/poll 生命周期）仍开放。
 - [x] 存量 `.snap` 结构快照已按行为断言迁移完并删除（见 §11.9）。
 - [ ] `log-store.parseFileLogs`：`[WARNING]` 行当前回退 info 级（源码怪癖，测试已按现状断言并标注）。
-- [ ] Tauri 壳冒烟自动化落地：先按规范 §11.10 定壳级清单与边界，壳改动 PR 跑
-      `cargo build --release --features custom-protocol` 重编 + 冒烟（Windows 环境）。
+- [x] Tauri 壳冒烟自动化落地（ISSUE #3570）：真实 Windows 会话里跑 release 版
+      `{{shell.app.exe}}`，观察 Win32 前台归属 / Z 序 / 任务栏闪烁收口与「交接后不重放」
+      （运行期计数信号 #3569 + 壳日志交叉印证）。入口 `pnpm shell:smoke`
+      （`scripts/devtools/shell-smoke.mjs` → `scripts/devtools/win32-shell-smoke.py`，只吃标准库）；
+      五个场景、读数口径与退出码见规范 §11.10.4 末段。改动 src-tauri 仍需
+      `cargo build --release --features custom-protocol` 重编后跑。

@@ -4,9 +4,11 @@
 // （两个周期源），逐个换桩。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { BrowserStatusBar } from "./BrowserStatusBar";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import type * as ComfyQueueModule from "./hooks/use-comfy-queue";
 import type { ComfyStatusViewModel } from "./hooks/use-comfy-readiness";
 import type * as FpsModule from "./hooks/use-fps";
@@ -23,12 +25,9 @@ vi.mock("./hooks/use-fps", async (importOriginal) => {
   const actual = await importOriginal<typeof FpsModule>();
   return { ...actual, useFps: fpsMock };
 });
-/* 状态栏还挂着两个周期源：schema 同步状态（每挂载一次就 `GET /api/schema`）与
- * 队列快照（订阅即拉起 `GET /api/comfy/queue` 的轮询）。两者各有自己的用例
- * （`use-schema-sync-status.test.ts` / `use-comfy-queue.test.ts`），这里换桩 ——
- * 不换的话每一条用例都会真发两笔请求，在本机撞 `localhost:3000` 的
- * ECONNREFUSED，并在 happy-dom 拆窗时把这些在飞的请求打成一片 AbortError
- * （ISSUE #2458：它们是**别的文件**打印的噪声，这条用例自己一条断言都没红）。 */
+/* 状态栏还挂着 schema 同步与队列两个周期源（各自有专用用例），这里换桩 ——
+ * 不换则每条用例都真发两笔请求，撞 `localhost:3000` 的 ECONNREFUSED，并在拆窗
+ * 时把这些在飞请求打成 AbortError 噪声（ISSUE #2458：噪声来自别的文件）。 */
 vi.mock("./hooks/use-schema-sync-status", async (importOriginal) => {
   const actual = await importOriginal<typeof SchemaSyncModule>();
   return {
@@ -76,6 +75,14 @@ vi.mock("~/components/message-center/hooks/use-app-service-message-log", () => (
   },
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/workspace" }));
+// 反馈按钮自带 controller（ToastProvider / TRPCProvider 上下文），有独立用例；
+// 这份用例只断言状态栏第 1~3 区的指标与可访问名，把它换成透传壳，避免每条
+// 用例都被迫补一整套应用接线（与上面 LogProvider / 消息中心换桩同一口径）。
+vi.mock("~/components/feedback/FeedbackButton", () => ({
+  FeedbackButton: () => {
+    /* 反馈按钮不在本用例的断言面里 */
+  },
+}));
 
 function noop() {
   /* 测试桩：仅为满足 LogProvider 上下文的最小形状 */
@@ -132,7 +139,13 @@ function renderBar(
   readinessMock.mockReturnValue(vm);
   fpsMock.mockReturnValue(fps);
   devServerMock.mockReturnValue(server);
-  return render(<BrowserStatusBar />);
+  /* `Hint` 的浮层要 `TooltipProvider`（应用里挂在根布局 `app/layout` 上），否则
+   * 悬停不弹浮层 —— 包一层即等价。 */
+  return render(
+    <TooltipProvider delay={0}>
+      <BrowserStatusBar />
+    </TooltipProvider>,
+  );
 }
 
 describe("BrowserStatusBar 指标显隐与降级", () => {
@@ -140,15 +153,23 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
     renderBar(viewModel());
 
     expect(screen.getByText("显存·ComfyUI")).toBeInTheDocument();
-    expect(screen.queryByTitle(/nvidia-smi 物理专用显存/)).toBeNull();
+    expect(screen.queryByText("显存")).toBeNull();
     expect(screen.getByText("内存")).toBeInTheDocument();
   });
 
-  it("双口径同时可用：nvidia-smi 与 ComfyUI 两项并列且有可读标签", () => {
+  it("双口径同时可用：nvidia-smi 与 ComfyUI 两项并列且有可读标签", async () => {
+    const user = userEvent.setup();
     renderBar(viewModel({ smiVram: { used: 3 * GIB, total: 12 * GIB, pct: 25 } }));
 
-    expect(screen.getByTitle(/nvidia-smi 物理专用显存/)).toBeInTheDocument();
-    expect(screen.getByText("显存")).toBeInTheDocument();
+    /* 原生 title= 撤干净：口径说明走 <Hint>，悬停后文案落在 tooltip 浮层里。 */
+    expect(screen.getByText("显存")).not.toHaveAttribute("title");
+    await user.hover(screen.getByText("显存"));
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "nvidia-smi 物理专用显存",
+    );
     expect(screen.getByText("显存·ComfyUI")).toBeInTheDocument();
   });
 
@@ -209,10 +230,11 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
     expect(screen.getByText(/08:30:00/)).toBeInTheDocument();
   });
 
-  it("断开且原因已知：把原因作为**可见文字**摆出来，而不是只挂在 hover 上（ISSUE #1692）", () => {
+  it("断开且原因已知：把原因作为**可见文字**摆出来，而不是只挂在 hover 上（ISSUE #1692）", async () => {
+    const user = userEvent.setup();
     /* 悬停不是可发现的动作：用户盯着「已断开」四个字，唯一想问的就是为什么。
      * 状态栏那一格窄，只放「为什么」这一句，完整三句（为什么 / 这一次的具体
-     * 退出事实 / 现在做什么）在 title 里。 */
+     * 退出事实 / 现在做什么）在 <Hint> 里。 */
     renderBar(
       viewModel(),
       60,
@@ -229,13 +251,18 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
       }),
     );
 
-    // 可见：不只是 title 里有（断开那一格自己也带 title，所以这里锁**文字节点**）。
+    // 可见：不只是 <Hint> 里有（断开那一格的可见句子本身必须存在）。
     const visible = screen.getByText(/本地服务自身退出了/);
     expect(visible).toBeInTheDocument();
-    // 完整三句挂在它自己的 title 上（悬停能看全：为什么 / 这一次的具体退出事实 / 做什么）。
-    const full = visible.getAttribute("title") ?? "";
-    expect(full).toContain("SIGKILL");
-    expect(full).toContain("重新启动一次");
+    /* 完整三句挂在 <Hint> 上：原生 title= 撤干净，悬停能看全三句（为什么 / 退出事实 / 做什么）。 */
+    expect(visible).not.toHaveAttribute("title");
+    await user.hover(visible);
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    const popup = document.querySelector('[data-slot="tooltip-content"]');
+    expect(popup?.textContent).toContain("SIGKILL");
+    expect(popup?.textContent).toContain("重新启动一次");
   });
 
   it("没有原因可讲时不占位（不摆一句「原因未知」的噪声）", () => {
@@ -252,22 +279,28 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
     expect(screen.queryByText(/未知/)).toBeNull();
   });
 
-  it("FPS 归属：状态栏渲染实时帧率（画布内已无 FpsMeter）", () => {
+  it("FPS 归属：状态栏渲染实时帧率（画布内已无 FpsMeter）", async () => {
+    const user = userEvent.setup();
     renderBar(viewModel(), 60);
     expect(screen.getByText("FPS")).toBeInTheDocument();
     expect(screen.getByText("60")).toBeInTheDocument();
-    expect(screen.getByTitle(/全应用实时帧率/)).toBeInTheDocument();
+    /* 原生 title= 撤干净：帧率口径说明走 <Hint>。 */
+    expect(screen.getByText("FPS")).not.toHaveAttribute("title");
+    await user.hover(screen.getByText("FPS"));
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "全应用实时帧率",
+    );
   });
 });
 
 describe("BrowserStatusBar 纯图标按钮的可访问名", () => {
   /**
-   * 日志面板入口只有图标（外加可选的错误计数徽标），没有可见文字。少了
-   * `accessibleName`，它就既没有 `aria-label` 也没有 `title` —— 读屏用户点到的
-   * 是一颗匿名按钮，而自动化只能退回去等一个并不存在的 `title`
-   * （`locator.click` 没有独立动作超时，会静静等满整条用例的预算）。
-   * `ui/hint` 的契约正是「纯图标按钮传 accessibleName，由它把提示文案写成子元素
-   * 的 aria-label」，这里钉它真的落到 DOM 上。
+   * 日志面板入口只有图标，没有可见文字。缺 `accessibleName` 时它既无 `aria-label`
+   * 也无 `title`：读屏用户点到匿名按钮，自动化只能等一个不存在的 `title`（`locator.click`
+   * 无独立超时，会耗满用例预算）。`ui/hint` 的契约：纯图标按钮传 accessibleName，由它写成子元素 aria-label。
    */
   it("日志面板入口的提示文案同时是它的可访问名", () => {
     renderBar(viewModel());

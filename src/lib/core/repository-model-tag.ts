@@ -12,18 +12,74 @@ import {
   type WorkflowModelTag,
 } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
+import type { DbExecutor } from "./repository-executor-types";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
-import { eq, and, asc, count, inArray, exists, sql, type SQL } from "drizzle-orm";
+import { eq, and, asc, count, inArray, exists, ne, sql, type SQL } from "drizzle-orm";
+import { parseModesJson } from "~/lib/workflow/workflow-types";
+
+/** 一个标签在某模式上被哪条工作流占用（同一「标签 × 模式」只归一条工作流，ISSUE #4102）。 */
+export type WorkflowModelTagModeBinding = {
+  /** 有 `sourcePath` = 本地（跟踪磁盘文件）；否则在线（粘贴导入）。 */
+  local: boolean;
+  mode: string;
+  /** 占用这个模式的工作流名。 */
+  workflowName: string;
+};
 
 export type WorkflowModelTagView = {
   count: number;
   id: string;
+  /** 该标签名下被占用的模式 → 占用工作流（按模式去重；历史数据若同模式多行，保留首个）。 */
+  modeBindings: Array<WorkflowModelTagModeBinding>;
   name: string;
 };
 
 export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelTag> {
   constructor() {
     super(workflowModelTag, workflowModelTag.id);
+  }
+
+  /** 查一批标签名下「模式 → 占用工作流」明细（标签库按模式计数 / 悬停明细共用这一份）。
+   *  按模式去重：同一 (标签 × 模式) 只应有一条工作流（ISSUE #4102 的唯一性规则）；
+   *  历史脏数据同模式多行时保留首个，不把同一模式数两遍。 */
+  private async modeBindingsFor(
+    tagIds: Array<string>,
+  ): Promise<Map<string, Array<WorkflowModelTagModeBinding>>> {
+    const out = new Map<string, Array<WorkflowModelTagModeBinding>>();
+    if (tagIds.length === 0) {
+      return out;
+    }
+    const rows = await db
+      .select({
+        tagId: workflowModelTagToWorkflowTemplate.workflowModelTag,
+        modes: workflowTemplate.modes,
+        workflowName: workflowTemplate.name,
+        sourcePath: workflowTemplate.sourcePath,
+      })
+      .from(workflowModelTagToWorkflowTemplate)
+      .innerJoin(
+        workflowModelTag,
+        eq(workflowModelTagToWorkflowTemplate.workflowModelTag, workflowModelTag.id),
+      )
+      .innerJoin(
+        workflowTemplate,
+        eq(workflowModelTagToWorkflowTemplate.workflowTemplate, workflowTemplate.id),
+      )
+      .where(inArray(workflowModelTagToWorkflowTemplate.workflowModelTag, tagIds));
+    for (const row of rows) {
+      const list = out.get(row.tagId) ?? [];
+      for (const mode of parseModesJson(row.modes)) {
+        if (!list.some((binding) => binding.mode === mode)) {
+          list.push({
+            mode,
+            workflowName: row.workflowName,
+            local: row.sourcePath !== null,
+          });
+        }
+      }
+      out.set(row.tagId, list);
+    }
+    return out;
   }
 
   async listByUser(userId: string): Promise<Array<WorkflowModelTagView>> {
@@ -43,59 +99,103 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
       .where(eq(workflowModelTag.userId, userId))
       .groupBy(workflowModelTag.id)
       .orderBy(asc(workflowModelTag.name));
+    const bindings = await this.modeBindingsFor(rows.map((r) => r.id));
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
       count: Number(r.count),
+      modeBindings: bindings.get(r.id) ?? [],
     }));
   }
 
-  async upsertByName(userId: string, name: string): Promise<WorkflowModelTagView> {
-    const existing = await db
-      .select()
-      .from(workflowModelTag)
-      .where(and(eq(workflowModelTag.userId, userId), eq(workflowModelTag.name, name)))
-      .limit(1);
-    const row =
-      existing[0] ??
-      firstRowRequired(
-        await db.insert(workflowModelTag).values({ userId, name }).returning(),
-        "模型标签插入",
+  /** 查一个标签被哪些**其他**工作流绑定（带各自模式清单）—— 供「同一
+   *  (标签 × 模式) 只能被一条工作流占用」的服务端校验（ISSUE #4102）。 */
+  async listBindingsByTagName(
+    userId: string,
+    tagName: string,
+    excludeTemplateId: string,
+  ): Promise<Array<{ modes: Array<string>; templateId: string; workflowName: string }>> {
+    const rows = await db
+      .select({
+        templateId: workflowTemplate.id,
+        workflowName: workflowTemplate.name,
+        modes: workflowTemplate.modes,
+      })
+      .from(workflowModelTagToWorkflowTemplate)
+      .innerJoin(
+        workflowModelTag,
+        eq(workflowModelTagToWorkflowTemplate.workflowModelTag, workflowModelTag.id),
+      )
+      .innerJoin(
+        workflowTemplate,
+        eq(workflowModelTagToWorkflowTemplate.workflowTemplate, workflowTemplate.id),
+      )
+      .where(
+        and(
+          eq(workflowModelTag.userId, userId),
+          eq(workflowModelTag.name, tagName),
+          ne(workflowModelTagToWorkflowTemplate.workflowTemplate, excludeTemplateId),
+        ),
       );
+    return rows.map((row) => ({
+      templateId: row.templateId,
+      modes: parseModesJson(row.modes),
+      workflowName: row.workflowName,
+    }));
+  }
+
+  /** 确保同名标签存在并返回带绑定计数的视图。
+   *  单语句 upsert（ISSUE #3835）：冲突目标 = `(userId, name)` 唯一索引
+   *  `wmt_user_name_uniq`；冲突时把 name 原值回写（no-op update）换 returning。
+   *  原先「先查后插」有唯一索引兜底不会重复建行，但并发重复调用（保存工作流
+   *  双击 / 两页签同时保存）会让后到者撞索引 500 —— upsert 语义应当让重复
+   *  执行成功且无害。 */
+  async upsertByName(userId: string, name: string): Promise<WorkflowModelTagView> {
+    const rows = await db
+      .insert(workflowModelTag)
+      .values({ userId, name })
+      .onConflictDoUpdate({
+        target: [workflowModelTag.userId, workflowModelTag.name],
+        set: { name },
+      })
+      .returning();
+    const row = firstRowRequired(rows, "模型标签插入");
     const [c] = await db
       .select({ v: count() })
       .from(workflowModelTagToWorkflowTemplate)
       .where(eq(workflowModelTagToWorkflowTemplate.workflowModelTag, row.id));
-    return { id: row.id, name: row.name, count: Number(c?.v ?? 0) };
+    const bindings = await this.modeBindingsFor([row.id]);
+    return {
+      id: row.id,
+      name: row.name,
+      count: Number(c?.v ?? 0),
+      modeBindings: bindings.get(row.id) ?? [],
+    };
   }
 
-  /** `upsertByName` 的批量版：保存工作流时一次要落一整套标签，逐个调用就是
-   *  每个标签 2~3 次往返（查 → 插 → 计数）。批量版一次 `IN` 查出已有的、
-   *  一条多值 INSERT 补齐缺的，最后按**输入顺序**返回 id（与逐个版同样确定；
-   *  count 视图不需要，`setModelTags` 只吃 id）。 */
-  async upsertByNames(userId: string, names: Array<string>): Promise<Array<string>> {
+  /** `upsertByName` 的批量版：保存工作流时一次要落一整套标签。单语句批量
+   *  upsert（ISSUE #3835）：冲突目标 = `(userId, name)` 唯一索引，已存在的行
+   *  no-op 回写换 returning，一次往返拿到全部 id，且并发重复调用不再撞唯一
+   *  索引 500；按**输入顺序**返回 id（`setModelTags` 只吃 id）。 */
+  async upsertByNames(
+    userId: string,
+    names: Array<string>,
+    executor?: DbExecutor,
+  ): Promise<Array<string>> {
     if (!names.length) {
       return [];
     }
     const wanted = [...new Set(names)];
-    const idByName = new Map<string, string>();
-    const existing = await db
-      .select({ id: workflowModelTag.id, name: workflowModelTag.name })
-      .from(workflowModelTag)
-      .where(and(eq(workflowModelTag.userId, userId), inArray(workflowModelTag.name, wanted)));
-    for (const row of existing) {
-      idByName.set(row.name, row.id);
-    }
-    const missing = wanted.filter((name) => !idByName.has(name));
-    if (missing.length > 0) {
-      const inserted = await db
-        .insert(workflowModelTag)
-        .values(missing.map((name) => ({ userId, name })))
-        .returning({ id: workflowModelTag.id, name: workflowModelTag.name });
-      for (const row of inserted) {
-        idByName.set(row.name, row.id);
-      }
-    }
+    const exec = executor ?? db;
+    const rows = await exec
+      .insert(workflowModelTag)
+      .values(wanted.map((name) => ({ userId, name })))
+      .onConflictDoUpdate({
+        target: [workflowModelTag.userId, workflowModelTag.name],
+        set: { name: sql`excluded.name` },
+      })
+      .returning({ id: workflowModelTag.id, name: workflowModelTag.name });
+    const idByName = new Map(rows.map((row) => [row.name, row.id]));
     return names.map((name) => idByName.get(name)).filter((id): id is string => id !== undefined);
   }
 
@@ -119,10 +219,12 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
       .from(workflowModelTagToWorkflowTemplate)
       .where(eq(workflowModelTagToWorkflowTemplate.workflowModelTag, id));
     const renamed = firstRowOfExisting(updated, `模型标签不存在: ${id}`);
+    const bindings = await this.modeBindingsFor([renamed.id]);
     return {
       id: renamed.id,
       name: renamed.name,
       count: Number(c?.v ?? 0),
+      modeBindings: bindings.get(renamed.id) ?? [],
     };
   }
 

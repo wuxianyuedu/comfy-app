@@ -1,21 +1,10 @@
 /**
- * 「读数取不到时，屏幕上必须读得到那句原因」（ISSUE #2675）。
- *
- * 这一格存在的理由是本仓反复记过的那一型：**判据在场、执行者不在场**。
- * `Reading.note` 由 `emptyReading()` 写、由成功那一路写空串，函数头还挂着
- * 「附一句原因（不静默、不冒充绿）」—— 而打印那一圈只念六个字段，那句原因
- * 从没被念出来过。于是「不静默」是一句**没有读者的自我声明**：拿读数的人看到的
- * 只有 `status=(取不到)`，分不出「响应不是 JSON」「响应里没有 data」「cnb 起不来」
- * 这三件下一动作完全不同的事。
- *
- * 所以本文件不判「源码里有没有 `note` 这个词」（那一族整档字面量断言的作用域是整份
- * 文件，等价改写会判红、字面量落在注释里会假绿 —— 见 ISSUE #2660），而是**调用真实
- * 的打印出口**：`report()` 的第三个参数就是取数那一格的出口，喂进一份「取不到」的
- * 读数，判它打到屏幕上的那一行。
+ * 「读数取不到时，屏幕上必须读得到那句原因」（ISSUE #2675）：`Reading.note` 由 `emptyReading()` 写、函数头挂着「附一句原因」，但打印那一圈只念六个字段 —— 于是「不静默」是无读者的自我声明，只剩 `status=(取不到)`，分不出「非 JSON」「无 data」「cnb 起不来」这三件下一动作完全不同的事。
+ * 不判源码字面量（ISSUE #2660：等价改写误红、注释假绿），而是喂一份「取不到」的读数给真实打印出口 `report()` 的第三个参数，判它打到屏幕上的那一行。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { formatReadingRow, report } from "../scripts/ci-probe-lock-readout.mjs";
+import { formatReadingRow, report } from "../scripts/ci/ci-probe-lock-readout.mjs";
 
 /** 成功那一路的形状（`readBuild` 命中时给的就是这一形：note 是空串）。 */
 const OK = {
@@ -56,9 +45,7 @@ describe("读数取不到时的那句原因要念在结论同一行", () => {
   });
 
   it("正向：`report()` 打出的那一行末尾带得上那句原因", () => {
-    const spy = vi
-      .spyOn(console, "log")
-      .mockImplementation(() => undefined);
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     for (const { reading } of UNAVAILABLE) {
       report("moon-read/comfy-app-t3", [reading.sn], () => reading);
     }
@@ -77,13 +64,9 @@ describe("读数取不到时的那句原因要念在结论同一行", () => {
   it("反向锚点：成功那一路（note 是空串）行尾不出现空括号", () => {
     // 豁免不放过散文、拼接不许造出一对空括号 —— 后者会让「有原因」与「没原因」
     // 在屏幕上长得一样，而那正是本件要修的那个读感。
-    const spy = vi
-      .spyOn(console, "log")
-      .mockImplementation(() => undefined);
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     report("moon-read/comfy-app-t3", [OK.sn], () => OK);
-    const line = spy.mock.calls
-      .map((c) => String(c[0]))
-      .find((l) => l.includes(OK.sn));
+    const line = spy.mock.calls.map((c) => String(c[0])).find((l) => l.includes(OK.sn));
     expect(line).toBeDefined();
     expect(line).not.toContain("（）");
     expect(line).toContain("title=质量门禁");
@@ -103,9 +86,7 @@ describe("读数取不到时的那句原因要念在结论同一行", () => {
 
   it("逐对相交与「还没到终态」那两行照旧打：本次只动第一行的拼接", () => {
     // 反向钉住改动面：注入两行仍在跑的读数，除了原因那半句，其余输出形状不许变。
-    const spy = vi
-      .spyOn(console, "log")
-      .mockImplementation(() => undefined);
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const running = { ...OK, status: "running", endTime: "" };
     report("moon-read/comfy-app-t3", ["a1", "a2"], (sn) => ({
       ...running,

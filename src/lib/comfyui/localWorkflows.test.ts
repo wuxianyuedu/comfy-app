@@ -151,3 +151,18 @@ describe("scanLocalWorkflowRoots 只读不写", () => {
     expect(allFiles.map((f) => f.name).sort()).toEqual(["a.workflow", "b.json", "c.json"]);
   });
 });
+
+describe("scanLocalWorkflowChecksums 的 recursive 口径（#4415）", () => {
+  it("子目录里的文件只有带 recursive 才进 checksum 索引（workflow.list 改名重关联的判据）", async () => {
+    const body = JSON.stringify({ nodes: [{ id: 1 }] });
+    fs.mkdirSync(path.join(dir, "sub"));
+    write(path.join("sub", "c.json"), body);
+
+    const flat = await scanLocalWorkflowChecksums([dir]);
+    expect(flat).toHaveLength(0);
+
+    const recursive = await scanLocalWorkflowChecksums([dir], { recursive: true });
+    expect(recursive).toHaveLength(1);
+    expect(recursive[0]!.checksum).toBe(expected(body));
+  });
+});
