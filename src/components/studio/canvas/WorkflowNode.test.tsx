@@ -256,3 +256,19 @@ describe("已连线 widget 行不再渲染取值控件（#4548）", () => {
     expect(findRow?.querySelector("textarea")).not.toBeNull();
   });
 });
+
+describe("悬停四角括号（#4549）", () => {
+  it("卡片渲染四个角括号装饰，显隐交给外壳 data-hovered（不进 React 状态）", () => {
+    renderFlowNode(nodeData({ rawInputs: RAW_INPUTS }));
+    const corners = document.querySelectorAll(".flow-node-corner");
+    expect(corners.length).toBe(4);
+    /* 装饰不抢交互、不进无障碍树。 */
+    for (const c of corners) {
+      expect(c.getAttribute("aria-hidden")).toBe("true");
+    }
+    /* 四角各一：类名齐全。 */
+    for (const side of ["tl", "tr", "bl", "br"]) {
+      expect(document.querySelector(`.flow-node-corner-${side}`)).not.toBeNull();
+    }
+  });
+});
