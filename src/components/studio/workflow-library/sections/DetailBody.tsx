@@ -18,6 +18,7 @@ import { useLazyChunkFallback } from "~/components/ui/use-lazy-chunk-fallback";
 import { PageLoading } from "~/components/ui/page-loading";
 import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { WorkshopEncapsulationPanel } from "./WorkshopEncapsulationPanel";
+import { ReferenceLoaderTab } from "./ReferenceLoaderTab";
 
 /* ── 两个页签的重型内容各自懒加载（规范 §12.19 / 02 §2.9）──
  * 本面板常驻，下面挂着画布引擎 `@xyflow/react` 与 `react18-json-view`；此前静态
@@ -171,7 +172,6 @@ export function DetailBody({
       {tab === "params" && (
         <WorkshopEncapsulationPanel
           displayName={workflow.modelTags?.[0] ?? workflow.name}
-          imageInputPorts={imageInputPorts}
           key={workflow.id}
           /* 模式取详情层的当前模式（与画布节点页签同一份），并通过
            * `onModeChange` 让用户在本页直接换模式跑流程测试 —— 多模式工作流
@@ -181,10 +181,21 @@ export function DetailBody({
            * （`metaEditor.modes`：缺省回退 [taskType]，兼容旧行）。 */
           modes={meta?.modes ?? []}
           onModeChange={onActiveModeChange}
-          onPatchParamMap={onPatchParamMap}
           paramMap={paramMap}
           workflowId={workflow.id}
           workflowIO={workflowIO}
+        />
+      )}
+
+      {tab === "reference" && (
+        /* 「参考图装载」独立页签（ISSUE #4526）：与工坊封装同一份契约口取数，
+         * 只渲染参考图槽位的装载配置。轻面板，不拉画布引擎。 */
+        <ReferenceLoaderTab
+          activeMode={activeMode}
+          graphImagePorts={imageInputPorts}
+          io={workflowIO}
+          onPatchParamMap={onPatchParamMap}
+          paramMap={paramMap}
         />
       )}
 
