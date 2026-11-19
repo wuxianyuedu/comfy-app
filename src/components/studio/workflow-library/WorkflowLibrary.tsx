@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 
 import { Button } from "~/components/ui/button";
-import { PageLoading } from "~/components/ui/page-loading";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "~/components/ui/resizable";
 import { ModelTagManager } from "../ModelTagManager";
 import { WorkspaceFrame } from "../ViewContainer";
@@ -23,12 +22,20 @@ const WorkflowCanvasEditor = dynamic(
   () => import("../canvas/WorkflowCanvasEditor").then((mod) => mod.WorkflowCanvasEditor),
   {
     ssr: false,
-    /* 分块未到时的过渡屏 —— 与编辑器加载态同一口径（ISSUE #1691 第 3 条）：
+    /* 分块未到时的过渡屏（ISSUE #4511：骨架形态，与路由级加载态同一口径）：
      * 吃满内容列、不当整窗浮层。只在 `editingId` 时才挂载，不能常驻：`dynamic()`
      * 一渲染就下载，常驻会让打开工作流库的一两秒里整条内容列被加载屏盖住。 */
     loading: () => (
-      <div className="bg-bg absolute inset-0 flex items-center justify-center">
-        <PageLoading label="加载工作流编辑器…" />
+      <div
+        aria-label="加载工作流编辑器"
+        className="bg-bg absolute inset-0 flex flex-col gap-3 p-4"
+        role="status"
+      >
+        <div className="flex items-center gap-2">
+          <div className="bg-subtle h-6 w-40 rounded-md" />
+          <div className="bg-subtle ml-auto h-7 w-20 rounded-md" />
+        </div>
+        <div className="bg-surface-2 min-h-0 flex-1 rounded-xl" />
       </div>
     ),
   },
@@ -154,10 +161,28 @@ export function WorkflowLibrary({
             ——用户在小屏上「看不到最右侧的内容」就是这个成因。 */}
           <div className="h-full min-w-0 overflow-hidden">
             {/* 首次载入的加载态只落在**右侧详情区**（ISSUE #4073 第 1 条）：
-                列表列保持骨架形态，不再整屏转圈。 */}
+                列表列保持骨架形态；右侧也用骨架（ISSUE #4511：骨架比转圈好，
+                形状与路由级加载态的右栏一致），不再整屏转圈。 */}
             {c.loading && c.workflows.length === 0 && c.pendingRows.length === 0 ? (
-              <div className="flex h-full items-center justify-center">
-                <PageLoading label="正在加载工作流…" />
+              <div
+                aria-label="正在加载工作流"
+                className="flex h-full flex-col gap-3 p-4"
+                role="status"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="bg-subtle h-6 w-52 rounded-md" />
+                  <div className="bg-subtle ml-auto h-7 w-24 rounded-md" />
+                </div>
+                <div className="border-border-strong flex gap-4 border-b pb-2">
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <div className="bg-subtle h-4 w-14 rounded-md" key={index} />
+                  ))}
+                </div>
+                <div className="flex flex-col gap-2 pt-1">
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <div className="bg-surface-2 h-9 rounded-lg" key={index} />
+                  ))}
+                </div>
               </div>
             ) : (
               <WorkflowLibraryDetail
