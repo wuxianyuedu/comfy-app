@@ -718,6 +718,51 @@ describe("TaskRepository", () => {
     expect((await taskRepository.createQueued(queued)).shotId).toBeNull();
   });
 
+  it("listByUser / findByProjectIdWithImages 不拉四个重列（#4411）", async () => {
+    const { task } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const t = await taskRepository.createQueued({
+      ...queued,
+      projectId: "p1",
+      workflowSnapshot: { nodes: [{ heavy: "x".repeat(2048) }] },
+      execPayload: { raw: { nodes: [] } },
+    });
+    /* rawCli / logs 是执行侧收口才写的列：测试里直接落库，形状与执行后一致。 */
+    await tdb
+      .update(task)
+      .set({ rawCli: ["x".repeat(4096)], logs: [{ level: "info", line: "boot" }] })
+      .where(eq(task.id, t.id));
+
+    /* 两个分页口径（take 走 relational findMany / 只给 skip 走普通 select）都必须
+     * 裁掉重列 —— 列表页把它们整批拉回再丢弃，node:sqlite 的同步反序列化直接压
+     * 在事件循环上。 */
+    const card = await taskRepository.listByUser("u1", { take: 1, includeImages: true });
+    expect(card[0]?.images).toBeDefined();
+    for (const heavy of ["execPayload", "rawCli", "workflowSnapshot", "logs"]) {
+      expect(heavy in (card[0] ?? {})).toBe(false);
+    }
+    const paged = await taskRepository.listByUser("u1", { skip: 0, includeImages: true });
+    expect(paged[0]?.images).toBeDefined();
+    for (const heavy of ["execPayload", "rawCli", "workflowSnapshot", "logs"]) {
+      expect(heavy in (paged[0] ?? {})).toBe(false);
+    }
+
+    /* 详情路径不受影响：仍取全列（重绘 / 放大要读 snapshot）。 */
+    const detail = await taskRepository.findByIdWithImages(t.id);
+    expect(detail).toMatchObject({ execPayload: { raw: { nodes: [] } } });
+    expect(detail?.rawCli).toEqual(["x".repeat(4096)]);
+
+    /* project.outputs 的取数路径：列裁剪 + take 下推。 */
+    await taskRepository.createQueued({ ...queued, projectId: "p1" });
+    const outs = await taskRepository.findByProjectIdWithImages("p1");
+    expect(outs).toHaveLength(2);
+    for (const heavy of ["execPayload", "rawCli", "workflowSnapshot", "logs"]) {
+      expect(heavy in (outs[0] ?? {})).toBe(false);
+    }
+    const firstPage = await taskRepository.findByProjectIdWithImages("p1", { take: 1 });
+    expect(firstPage).toHaveLength(1);
+  });
+
   it("listByUser includeImages 走关系装载：封面优先、sortIndex 升序", async () => {
     const t = await taskRepository.createQueued(queued);
     await taskRepository.createImages(t.id, [

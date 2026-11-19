@@ -48,6 +48,7 @@ import { logger } from "~/lib/core/logger";
 import {
   MAX_CONCURRENCY,
   clearFinalize,
+  forgetTaskFootprint,
   log,
   logWhileQueued,
   markDispatched,
@@ -228,77 +229,89 @@ async function claimAndDispatchOnceInner(options?: {
     `任务已从队列领取（本进程在飞：${s.pendingDispatch.size}/${MAX_CONCURRENCY}）`,
   );
 
-  const row = await repo.findExecJob(taskId);
-  if (!row?.execPayload) {
-    /* 行没有执行载荷 = 建行异常（或本刀之前的历史 host 行）。判失败并留可见原因，
-     * 不许变 RUNNING 僵尸——host 片的 reaper 是这条的兜底，主动收口更快也更准。 */
-    log(taskId, "error", "任务缺少执行载荷（execPayload），无法提交给 ComfyUI");
-    await repo.finalizeFailure(taskId, "任务缺少执行载荷（execPayload），无法提交给 ComfyUI");
-    releaseDispatchSlot(taskId);
-    return taskId;
-  }
+  try {
+    const row = await repo.findExecJob(taskId);
+    if (!row?.execPayload) {
+      /* 行没有执行载荷 = 建行异常（或本刀之前的历史 host 行）。判失败并留可见原因，
+       * 不许变 RUNNING 僵尸——host 片的 reaper 是这条的兜底，主动收口更快也更准。 */
+      log(taskId, "error", "任务缺少执行载荷（execPayload），无法提交给 ComfyUI");
+      await repo.finalizeFailure(taskId, "任务缺少执行载荷（execPayload），无法提交给 ComfyUI");
+      releaseDispatchSlot(taskId);
+      return taskId;
+    }
 
-  const paramsRaw = row.params;
-  const overridesRaw = isRecord(paramsRaw) ? paramsRaw.workflowInputs : undefined;
-  /* 参考图装载计划（#4376）：提交口已按 schema 收窄（端点 → 预设全量定义），
-   * 这里只做库列的形状兜底——`params` 是 JSON 列，旧行 / 异常行形状不作保证；
-   * 每个值须是带 steps 数组的对象，脏键丢弃（执行期该端点回落裸 LoadImage）。 */
-  let loaderPlan: NonNullable<Job["loaderPlan"]> | undefined;
-  const planRaw = isRecord(paramsRaw) ? paramsRaw.referenceLoaderPlan : undefined;
-  if (isRecord(planRaw)) {
-    for (const [key, value] of Object.entries(planRaw)) {
-      if (isRecord(value) && Array.isArray(value.steps)) {
-        /* 形状已粗检（对象 + steps 数组）；权威判据在提交口的 zod schema。 */
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        (loaderPlan ??= {})[key] = value as NonNullable<Job["loaderPlan"]>[string];
+    const paramsRaw = row.params;
+    const overridesRaw = isRecord(paramsRaw) ? paramsRaw.workflowInputs : undefined;
+    /* 参考图装载计划（#4376）：提交口已按 schema 收窄（端点 → 预设全量定义），
+     * 这里只做库列的形状兜底——`params` 是 JSON 列，旧行 / 异常行形状不作保证；
+     * 每个值须是带 steps 数组的对象，脏键丢弃（执行期该端点回落裸 LoadImage）。 */
+    let loaderPlan: NonNullable<Job["loaderPlan"]> | undefined;
+    const planRaw = isRecord(paramsRaw) ? paramsRaw.referenceLoaderPlan : undefined;
+    if (isRecord(planRaw)) {
+      for (const [key, value] of Object.entries(planRaw)) {
+        if (isRecord(value) && Array.isArray(value.steps)) {
+          /* 形状已粗检（对象 + steps 数组）；权威判据在提交口的 zod schema。 */
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          (loaderPlan ??= {})[key] = value as NonNullable<Job["loaderPlan"]>[string];
+        }
       }
     }
-  }
-  /* 部分执行目标（调试，comfy-cli `--output-node-ids`）：schema 在提交口已收窄成
-   * string[]，这里再过一次清洗 —— `params` 是库里的一列 JSON，旧行 / 异常行形状
-   * 不作保证；清完为空等价于「不传」= 整图执行。 */
-  const outputNodeIds = sanitizeOutputNodeIds(
-    isRecord(paramsRaw) ? paramsRaw.outputNodeIds : undefined,
-  );
-  const job: Job = {
-    taskId,
-    workflowName: row.workflowName,
-    rawJson: row.execPayload,
-    overrides: Array.isArray(overridesRaw) ? overridesRaw : undefined,
-    ...(loaderPlan === undefined ? {} : { loaderPlan }),
-    ...(outputNodeIds === undefined ? {} : { outputNodeIds }),
-  };
+    /* 部分执行目标（调试，comfy-cli `--output-node-ids`）：schema 在提交口已收窄成
+     * string[]，这里再过一次清洗 —— `params` 是库里的一列 JSON，旧行 / 异常行形状
+     * 不作保证；清完为空等价于「不传」= 整图执行。 */
+    const outputNodeIds = sanitizeOutputNodeIds(
+      isRecord(paramsRaw) ? paramsRaw.outputNodeIds : undefined,
+    );
+    const job: Job = {
+      taskId,
+      workflowName: row.workflowName,
+      rawJson: row.execPayload,
+      overrides: Array.isArray(overridesRaw) ? overridesRaw : undefined,
+      ...(loaderPlan === undefined ? {} : { loaderPlan }),
+      ...(outputNodeIds === undefined ? {} : { outputNodeIds }),
+    };
 
-  /* 完整输入参数入日志（原 `processQueue` 里那条）：任务日志是复现与排障的唯一
-   * 现场，本次提交的 workflowInputs 全量进日志，执行面板与历史回放都能看到
-   * 当时到底填了什么。**按任务错误列的预算截断**（ISSUE #4255）：overrides
-   * 里可能有无上限的大字符串（画布端口值），全量进日志会落出 MB 级单行随
-   * persistLogs 落库——完整参数仍在 task.params 里，日志只是排障现场。 */
-  if (job.overrides !== undefined && job.overrides.length > 0) {
-    const text = clampText(JSON.stringify(job.overrides, null, 2), {
-      maxLength: TASK_ERROR_MAX,
-      annotation: "已截断，完整参数见任务记录",
-    });
-    log(taskId, "info", `输入参数（workflowInputs，${job.overrides.length} 项）：\n${text}`);
-  }
-
-  /* fire-and-forget + `.catch`：`executeViaComfyCli` 若 reject（resolveComfyBase
-   * throw、writeFile EACCES、spawn ENOENT…），不兜住就是 unhandled rejection，
-   * 而在飞记账会永远占着那个槽（界面表现：任务永远 QUEUED 0%）。 */
-  void executeViaComfyCli(job).catch(async (error: unknown) => {
-    const msg = error instanceof Error ? error.message : String(error);
-    log(taskId, "error", `工作流启动异常：${msg}`);
-    try {
-      await finalizeFailure(taskId, "", msg);
-    } catch (error) {
-      /* finalizeFailure 自己也可能抛（数据库挂了）：不再嵌 catch，只归还槽位。
-       * 这里**刻意不再立刻领一次**——走到这一支的含义就是「库此刻写不进去」，
-       * 在它上面自旋只会把每一次领取都变成一次失败；下一拍（2s 的常驻循环）
-       * 再试才是有退避的推进。 */
-      log(taskId, "error", errorText(error, "finalizeFailure 二次失败"));
-      releaseDispatchSlot(taskId);
+    /* 完整输入参数入日志（原 `processQueue` 里那条）：任务日志是复现与排障的唯一
+     * 现场，本次提交的 workflowInputs 全量进日志，执行面板与历史回放都能看到
+     * 当时到底填了什么。**按任务错误列的预算截断**（ISSUE #4255）：overrides
+     * 里可能有无上限的大字符串（画布端口值），全量进日志会落出 MB 级单行随
+     * persistLogs 落库——完整参数仍在 task.params 里，日志只是排障现场。 */
+    if (job.overrides !== undefined && job.overrides.length > 0) {
+      const text = clampText(JSON.stringify(job.overrides, null, 2), {
+        maxLength: TASK_ERROR_MAX,
+        annotation: "已截断，完整参数见任务记录",
+      });
+      log(taskId, "info", `输入参数（workflowInputs，${job.overrides.length} 项）：\n${text}`);
     }
-  });
+
+    /* fire-and-forget + `.catch`：`executeViaComfyCli` 若 reject（resolveComfyBase
+     * throw、writeFile EACCES、spawn ENOENT…），不兜住就是 unhandled rejection，
+     * 而在飞记账会永远占着那个槽（界面表现：任务永远 QUEUED 0%）。 */
+    void executeViaComfyCli(job).catch(async (error: unknown) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      log(taskId, "error", `工作流启动异常：${msg}`);
+      try {
+        await finalizeFailure(taskId, "", msg);
+      } catch (error) {
+        /* finalizeFailure 自己也可能抛（数据库挂了）：不再嵌 catch，只归还槽位。
+         * 这里**刻意不再立刻领一次**——走到这一支的含义就是「库此刻写不进去」，
+         * 在它上面自旋只会把每一次领取都变成一次失败；下一拍（2s 的常驻循环）
+         * 再试才是有退避的推进。 */
+        log(taskId, "error", errorText(error, "finalizeFailure 二次失败"));
+        releaseDispatchSlot(taskId);
+      }
+    });
+  } catch (error) {
+    /* 领取后的兜错（#4410）：行已翻 RUNNING、槽位已记账（markDispatched 在前），
+     * findExecJob / finalizeFailure 在这里 reject 一次（SQLite busy 超预算、磁盘 IO）
+     * 若不兜住，槽位永不归还 —— 常驻循环从此在 `pendingDispatch.size >= 1` 早退，
+     * reaper 又把这条当「仍被本进程认领」永久跳过，队列整体停摆（唯一恢复手段是
+     * 手动取消或重启进程）。这里不再补写库（此刻多半写不进去，与下方
+     * fire-and-forget 的 catch 同口径）：摘干净内存足迹，让 reaper 下一轮按
+     * 「无人认领的 RUNNING」接管这一行；下一拍继续领新任务。 */
+    log(taskId, "error", errorText(error, "领取后处理失败：已归还槽位，交回收器接管"));
+    forgetTaskFootprint(taskId);
+  }
 
   return taskId;
 }

@@ -14,10 +14,52 @@ import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import { isTerminalTaskStatus } from "~/lib/task-state";
 
-/** 列表卡的行形状：`task.list` 的映射只需要十来个字段，而 `workflowSnapshot`
- *  （整份工作流 JSON）与 `logs`（全量日志）单行就能到数 MB —— take=60 的列表页
- *  会把它们整批拉回来、反序列化、然后立刻丢弃。列表查询排除这两列。 */
-export type TaskCardRow = Omit<Task, "workflowSnapshot" | "logs">;
+/** 任务卡的四个重列（唯一名单）：`workflowSnapshot`（整份工作流 JSON）、
+ *  `execPayload`（提交时刻的 RAW 原件）、`rawCli`（comfy-cli 完整原文，上限
+ *  5000 行）、`logs`（全量日志）—— 单行就能到数 MB，take=60 的列表页会把它们
+ *  整批拉回来、反序列化、然后立刻丢弃（node:sqlite 是同步驱动，这批反序列化
+ *  直接压在事件循环上）。#4411：`execPayload` / `rawCli` 是 #4044 裁剪清单之后
+ *  才进 schema 的，彼时没跟着更新排除集。 */
+const HEAVY_TASK_COLUMNS = [
+  "execPayload",
+  "logs",
+  "rawCli",
+  "workflowSnapshot",
+] as const satisfies ReadonlyArray<keyof Task>;
+type HeavyTaskColumns = (typeof HEAVY_TASK_COLUMNS)[number];
+
+/** 列表卡的行形状：`task.list` 与 `project.outputs` 的映射只需要十来个字段。 */
+export type TaskCardRow = Omit<Task, HeavyTaskColumns>;
+
+/** 任务卡列集：除四个重列之外的全部列，逐列显式点名。普通 select 分支（只给
+ *  skip 的无 limit 分页，relational query 表达不了）用它取数；relational 分支
+ *  （findMany）用 `columns` 排除集 —— 两条路必须同口径，否则同一次列表在
+ *  不同分页参数下行为漂移。`satisfies` 把列名钉在 Task 的键集上：schema 加列 /
+ *  改名列而这份清单没跟，当场编译红（#4411 的病根就是没人被逼着更新它）。 */
+const taskCardColumns = {
+  id: task.id,
+  userId: task.userId,
+  type: task.type,
+  prompt: task.prompt,
+  negativePrompt: task.negativePrompt,
+  params: task.params,
+  workflowName: task.workflowName,
+  projectId: task.projectId,
+  shotId: task.shotId,
+  referenceImages: task.referenceImages,
+  parentId: task.parentId,
+  status: task.status,
+  promptId: task.promptId,
+  progress: task.progress,
+  resultImages: task.resultImages,
+  error: task.error,
+  validationErrors: task.validationErrors,
+  createdAt: task.createdAt,
+  finishedAt: task.finishedAt,
+  claimedBy: task.claimedBy,
+  claimedAt: task.claimedAt,
+  progressNode: task.progressNode,
+} satisfies Omit<Record<keyof Task, unknown>, HeavyTaskColumns>;
 
 /**
  * SQLite 表达「不限条数，只跳过前 n 条」的写法是 `LIMIT -1 OFFSET n` ——
@@ -75,7 +117,9 @@ function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
  * query 表达不了无 limit 的 offset），但对外仍要返回带 images 的行 —— 与其在
  * 两处分头拼 `with`，不如把「按 id 装载」收到这里，保证两种取法给出同一形状。
  */
-async function attachImages(rows: Array<Task>): Promise<Array<TaskWithCover>> {
+async function attachImages<R extends { id: string }>(
+  rows: Array<R>,
+): Promise<Array<R & { images: Array<TaskImage> }>> {
   if (!rows.length) {
     return [];
   }
@@ -249,15 +293,21 @@ export class TaskRepository extends DrizzleRepository<Task> {
         : undefined,
     );
     if (opts?.includeImages === true) {
-      const withImages = (rows: Array<Task>) => attachImages(rows);
+      const withImages = <R extends { id: string }>(rows: Array<R>) => attachImages(rows);
       // 分页口径与下面普通 select 分支**必须一致**：drizzle 的 relational
       // query 只认 `limit`（`limit: -1` 会被整个丢掉，实测），所以「只给 skip」
       // 那条路走不了它 —— 先用普通 select 取到这一页的 id，再按 id 装载图片。
       // 两条路都产出「同一页 + 同一份 images」，顺序由外层 orderBy 保证。
       if (opts.skip !== undefined && opts.take === undefined) {
         const page = await limitAll(
-          /* 排序带 id tiebreaker（#4044）：同毫秒批量入队的行序稳定，skip 翻页不重不漏。 */
-          db.select().from(task).where(where).orderBy(desc(task.createdAt), desc(task.id)),
+          /* 排序带 id tiebreaker（#4044）：同毫秒批量入队的行序稳定，skip 翻页不重不漏。
+           * 列集走 taskCardColumns（四个重列不拉，#4411）——与下方 findMany 的
+           * columns 排除集同口径。 */
+          db
+            .select(taskCardColumns)
+            .from(task)
+            .where(where)
+            .orderBy(desc(task.createdAt), desc(task.id)),
         ).offset(opts.skip);
         return withImages(page);
       }
@@ -265,10 +315,10 @@ export class TaskRepository extends DrizzleRepository<Task> {
         where,
         orderBy: [desc(task.createdAt), desc(task.id)],
         ...(opts.take === undefined ? {} : { limit: opts.take }),
-        /* 列表卡只要十来个字段：`workflowSnapshot` 与 `logs` 单行可达数 MB，
-         * take=60 时是几十 MB 的白拉白反序列化（router 只映射卡片字段）。
-         * 详情查询（findByIdWithImages）不受影响，仍取全列。 */
-        columns: { workflowSnapshot: false, logs: false },
+        /* 列表卡只要十来个字段：四个重列（workflowSnapshot / logs / execPayload /
+         * rawCli）单行可达数 MB，take=60 时是几十 MB 的白拉白反序列化（router 只
+         * 映射卡片字段）。详情查询（findByIdWithImages）不受影响，仍取全列。 */
+        columns: { execPayload: false, logs: false, rawCli: false, workflowSnapshot: false },
         with: {
           images: {
             orderBy: [desc(taskImage.isCover), asc(taskImage.sortIndex)],
@@ -352,10 +402,14 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return rows[0] ?? null;
   }
 
-  async findByProjectIdWithImages(projectId: string) {
+  async findByProjectIdWithImages(projectId: string, opts?: { take?: number }) {
     return db.query.task.findMany({
       where: eq(task.projectId, projectId),
       orderBy: [desc(task.createdAt)],
+      /* 产物页只映射卡片字段（project.outputs）：四个重列整批拉回只为 slice 后
+       * 丢弃（#4411）。take 顺带下推到 SQL —— 调用方本来就要 slice 到同一数。 */
+      ...(opts?.take === undefined ? {} : { limit: opts.take }),
+      columns: { execPayload: false, logs: false, rawCli: false, workflowSnapshot: false },
       with: { images: { orderBy: [asc(taskImage.sortIndex)] } },
     });
   }
