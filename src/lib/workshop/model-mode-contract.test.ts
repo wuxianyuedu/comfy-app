@@ -3,20 +3,21 @@ import { describe, expect, it } from "vitest";
 import { exposedParamDisplayLabel } from "~/lib/workflow/workflow-exposed-params";
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import {
-  ALL_CONTRACT_MODES,
   adapterInputsFromContract,
+  ALL_CONTRACT_MODES,
   configuredModeContracts,
-  derivedModeContract,
+  contractControlFor,
   contractToStatusEntries,
   customInputKindOf,
+  derivedModeContract,
   isCustomContractInputId,
   isModeContractInputId,
   modeContractEntries,
   modeContractInputIdLabel,
+  modeContractInputLabel,
   moveContractInput,
   nextCustomInputId,
   nextReferenceImageId,
-  modeContractInputLabel,
   parseModeContracts,
   referenceImageSlotIndex,
   type ModeContract,
@@ -397,5 +398,31 @@ describe("parseRemoteModeAdapters：固定值字段（#3590）", () => {
     expect(out).toHaveLength(2);
     expect("constants" in out[0]!).toBe(false);
     expect("constants" in out[1]!).toBe(false);
+  });
+});
+
+describe("contractControlFor：契约口 → 工坊控件形态（#4494 收口）", () => {
+  it("预制口逐个登记：数值口出数字框，文本口出文本，图片族口出图片选择", () => {
+    expect(contractControlFor("prompt")).toBe("text");
+    expect(contractControlFor("negative")).toBe("text");
+    expect(contractControlFor("lora-name")).toBe("text");
+    expect(contractControlFor("seed")).toBe("number");
+    expect(contractControlFor("lora-strength")).toBe("number");
+    expect(contractControlFor("size")).toBe("size");
+    expect(contractControlFor("duration")).toBe("duration");
+    expect(contractControlFor("reference-image")).toBe("image");
+    expect(contractControlFor("reference-image-3")).toBe("image");
+    expect(contractControlFor("first-frame")).toBe("image");
+    expect(contractControlFor("last-frame")).toBe("image");
+  });
+
+  it("自定义口按作者选的简单类型；无定义 / 未知 id 兜成文本", () => {
+    expect(
+      contractControlFor("custom-image-1", [
+        { id: "custom-image-1", kind: "image", label: "风格图" },
+      ]),
+    ).toBe("image");
+    expect(contractControlFor("custom-image-1")).toBe("text");
+    expect(contractControlFor("images")).toBe("text");
   });
 });
