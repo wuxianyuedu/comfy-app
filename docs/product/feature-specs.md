@@ -363,6 +363,10 @@
   （`LOCAL_WORKFLOWS_PATH` / ComfyUI workflows 目录）、导入后的记录在
   `workflowTemplate` 表；列表顶部挂两枚「存放位置」徽标说清这件事（换机器时两样
   都要搬，只搬一样会变成「有记录没有原件」，见 FR-ST-05）。
+- 筛选口径（#4465）：待载入项没有 taskType / 模型标签 —— 来源页签把它们计入
+  `local`、类型页签只计入 `all`（不进具体分类）；**类型 / 模型筛选激活时，
+  待载入区块整块隐藏**（`filterPending`，与 `source=online` 的处理对齐），
+  列表与页签计数从此同一套约定。
 - 落点：`src/server/api/routers/workflow-list.ts`、
   `src/lib/workflow/localWorkflows.ts`
 
