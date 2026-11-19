@@ -276,6 +276,8 @@ export function readRevisions(gitDir, cwd = ROOT) {
       cwd,
       encoding: "utf8",
       env: { ...process.env, GIT_DIR: gitDir },
+      /* 预算（#4448）：git 挂死（挂起的 lock / 异常 shim）时不再无限等。 */
+      timeout: 30_000,
     });
     return r.status === 0 ? String(r.stdout ?? "").trim() : "";
   };
@@ -451,6 +453,9 @@ function runQuiet(script, args) {
     cwd: ROOT,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "inherit"],
+    /* 预算（#4448）：门禁脚本挂死时的兜底上限——给足重档门禁的合理墙钟
+     * （eslint 70s 级），只封「无限挂死」那一形，不改正常判决。 */
+    timeout: 600_000,
   });
   /* `r.stdout` 是 `spawnSync` 出参：子进程起不来时实测 undefined（`@types/node` 按泛型
    * 声明非空）。这里 `?? ""` 的语义是「没读到输出」—— 与 `status` 那一格同一件事。 */
@@ -470,7 +475,8 @@ function runQuiet(script, args) {
  * @returns {string[]}
  */
 function readRemoteUrls(cwd) {
-  const names = spawnSync("git", ["remote"], { cwd, encoding: "utf8" });
+  /* 预算（#4448）：git 挂死时不再无限等。 */
+  const names = spawnSync("git", ["remote"], { cwd, encoding: "utf8", timeout: 30_000 });
   if (names.status !== 0) {
     return [];
   }

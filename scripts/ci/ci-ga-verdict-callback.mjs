@@ -136,7 +136,7 @@ const SHA_RE = /^[0-9a-f]{40}$/i;
  * 一次 HTTP 读数的最小形状（注入面用，不给 `typeof fetch` 逼测试做断言）。
  *
  * @typedef {{ok: boolean, status: number, json: () => Promise<any>}} FetchResponse
- * @typedef {(url: string, init: {method: string, headers: Record<string, string>, body: string}) => Promise<FetchResponse>} FetchLike
+ * @typedef {(url: string, init: {method: string, headers: Record<string, string>, body: string, signal?: AbortSignal}) => Promise<FetchResponse>} FetchLike
  */
 
 /**
@@ -378,6 +378,9 @@ export async function sendCallback({ ctx, fetchImpl = fetch, log }) {
     response = await fetchImpl(full, {
       ...init,
       headers: { ...init.headers, Authorization: `Bearer ${ctx.token}` },
+      /* 判决信使的墙钟预算（#4447）：对端不回话时不再挂到 undici 默认超时
+       * （约 5 分钟），挤占 GA 收尾 job 的墙钟。 */
+      signal: AbortSignal.timeout(30_000),
     });
   } catch (error) {
     log(`[ga-callback] 请求没发出去：${String(error)}`);

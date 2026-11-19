@@ -48,6 +48,7 @@ import { findLandedPull, openScanReadout, scanPullPages } from "./ship-scan.mjs"
 import { PR_ALREADY_OPEN_ERRCODE, readCreatedPullNumber } from "./ship-pull-reuse.mjs";
 import { planCreateBody, updatePullBodyOnReuse, updatePullTitleOnReuse } from "./ship-pr-body.mjs";
 import { diffBaseRef, pickTitle } from "./ship-title.mjs";
+import { syncLocalTrunkAfterMerge } from "./ship-local.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
 import { reportConflictStage, reportStage } from "./ship-stage.mjs";
 import { DEV_HANDLE_ENV_KEY, handlerLabel } from "./ship-ticket.mjs";
@@ -764,17 +765,16 @@ export function mergeAndVerify(ctx) {
     sha: short(mergeData.sha ?? ""),
     target: trunkBranch || "master",
   });
-  /* 验真过了才写这份读数 —— 并且**在这里**写，不留给阶段 7 去回推：
-   * 下面两行 `git checkout master` + `pull` 会把 HEAD 挪走，而
-   * `pickTitle` 取的是「这条分支相对主干带进来的第一笔」，跳过了这一步就再也算不出来。
-   * 阶段 7（关单）要的正是「落进主干的那一行标题本体」，所以它是**这一刻**的快照。 */
+  /* 验真过了才写这份读数，且**在这里**写：下面的本地同步会把 HEAD 挪走，
+   * 而 `pickTitle` 取的是「这条分支相对主干带进来的第一笔」，跳过这步就再也算不出来；
+   * 阶段 7（关单）要的正是「落进主干的那一行标题本体」——它是**这一刻**的快照。 */
   if (landed) {
     landed.title = title;
     landed.sha = mergeSha;
     landed.verified = true;
   }
-  run("git", ["checkout", "master"]);
-  run("git", ["pull", "--ff-only"]);
+  /* 本地同步跟 PR 的实际 base 走（#4450）：实现见 `ship-local.mjs` 的 syncLocalTrunkAfterMerge。 */
+  syncLocalTrunkAfterMerge({ run, log, remote, trunk: trunkBranch || "master" });
   /* 那句边界声明按**这一跳实际做了什么**来说：`--clean-branch` 落地之前它是事实，
    * 落地之后如果还照原样念，就成了「在这一轮里被自己的下一行推翻」的声明 ——
    * 形态与 `check-commit-claims.mjs` 治的那一类相同，只是它落在运行期输出里、照不到。 */

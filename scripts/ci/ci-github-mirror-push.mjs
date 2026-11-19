@@ -522,6 +522,8 @@ export async function runMirror(io) {
         "X-GitHub-Api-Version": "2022-11-28",
       },
       method: "POST",
+      /* 派发跳的墙钟预算（#4447）：不挂到 undici 默认超时。 */
+      signal: AbortSignal.timeout(30_000),
     });
   } catch (error) {
     log(`[mirror] 派发请求没跑起来（网络层）：${String(error)}`);

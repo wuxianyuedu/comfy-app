@@ -51,6 +51,8 @@
  * 起 `cnb` 一律经 `ship-exec.mjs` 的 `makeRunner`（它是 pnpm 全局垫片，Node 直接
  * spawn 会 ENOENT —— 那一份形态判据已有出处，不在这里重拼）。
  */
+import path from "node:path";
+
 import { existsSync, readFileSync } from "node:fs";
 import { cnbJson, makeRunner } from "../ship/ship-exec.mjs";
 import { classifyBuildOutcome, downstreamSkipped } from "../ci/ci-build-readout.mjs";
@@ -798,6 +800,9 @@ export function main(rawArgv, env = {}) {
   return out.code;
 }
 
-if (process.argv[1] && import.meta.filename === process.argv[1]) {
+/* 直跑判据双侧归一（#4449）：argv[1] 在旧版 Node / 特定 loader 下可能保持相对
+ * 形态，路径大小写也可能与盘上不一致——不归一会让 main() 一次都不跑、进程退 0，
+ * 出勤判据「在册、恒绿、永不执行」。与 ci-build-readout.mjs 的同款判据对齐。 */
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main());
 }
