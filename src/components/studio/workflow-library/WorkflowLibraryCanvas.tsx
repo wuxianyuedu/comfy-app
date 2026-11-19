@@ -45,9 +45,11 @@ import {
 } from "./workflow-library-wire-graph";
 import {
   LibraryBackdropNode,
+  LibraryHostContentContext,
   LibraryHostNode,
-  LibraryNodeContentContext,
+  LibraryOutputsContentContext,
   LibraryOutputsNode,
+  LibraryParamsContentContext,
   LibraryParamsNode,
 } from "./WorkflowLibraryCanvasNodes";
 import { gridLineColor } from "../canvas/workflow-canvas-grid";
@@ -201,27 +203,39 @@ function WorkflowLibraryCanvasInner({
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<ReadonlySet<string>>(
     () => new Set<string>(),
   );
-  const flow = useLibraryWireFlow({
-    io,
-    paramCards,
-    outputWires: outputCards.wires,
-    entries,
-    paramsNode: {
+  /* 三列的渲染内容各做一层 memo（#4467）：宿主内容（整张表单）keystroke 之间
+   * 必然变化，左 / 右两列的内容对象引用保持稳定 —— 配合拆分后的三条 context，
+   * 宿主表单每敲一个字不再把左 / 右两列整棵拖着重渲。 */
+  const paramsNode = useMemo(
+    () => ({
       cards: paramCards,
       contractEntries: contractEntries ?? [],
       canWire,
       selectedEntryId,
       onSelect: onSelectParam,
       onReset: onResetParam,
-    },
-    hostNode: { host },
-    outputsNode: {
+    }),
+    [paramCards, contractEntries, canWire, selectedEntryId, onSelectParam, onResetParam],
+  );
+  const hostNode = useMemo(() => ({ host }), [host]);
+  const outputsNode = useMemo(
+    () => ({
       cards: outputCards,
       canWire,
       selectedOutputId,
       onSelect: onSelectOutput,
       onReset: onResetOutput,
-    },
+    }),
+    [outputCards, canWire, selectedOutputId, onSelectOutput, onResetOutput],
+  );
+  const flow = useLibraryWireFlow({
+    io,
+    paramCards,
+    outputWires: outputCards.wires,
+    entries,
+    paramsNode,
+    hostNode,
+    outputsNode,
     connect: onConnect,
     connectOutput: onConnectOutput,
     backdropSize,
@@ -353,65 +367,71 @@ function WorkflowLibraryCanvasInner({
         boxRef(el);
       }}
     >
-      <LibraryNodeContentContext.Provider value={flow.nodeContent}>
-        <ReactFlow
-          className="wflib-canvas-flow"
-          data-testid="wflib-canvas-flow"
-          defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
-          deleteKeyCode={["Backspace", "Delete"]}
-          edges={edges}
-          isValidConnection={flow.isValidConnection}
-          maxZoom={2}
-          minZoom={0.2}
-          nodeDragThreshold={6}
-          nodes={nodes}
-          nodesConnectable={canWire}
-          /* 节点**可拖**：关掉它，列与宿主卡片整块变成 pointer-events: none，
-           *  输入、圆点、按钮全部点不动。`nodeDragThreshold` 6px 过滤误拖；
-           *  拖完吸附回布局位置（见 onNodeDragStop）。节点不可选中/不可删：
-           *  选中会挂蓝框、Delete 可能误删整列；连线的选中/删除只针对 edge。 */
-          nodesDraggable
-          nodeTypes={NODE_TYPES}
-          onConnect={flow.onConnect}
-          onConnectEnd={flow.onConnectEnd}
-          /* 点一条线选中它（驱动高亮 + Delete 删除）；按 Delete / Backspace 删除
-           *  选中线时经 `onEdgesDelete` 落到数据源断开那一条（只读时边不可删）。
-           *  节点不在 `elementsSelectable` 范围里——它们各自 `selectable:false`，
-           *  这里只负责让边可点选。 */
-          onEdgeClick={handleEdgeClick}
-          onEdgesChange={onEdgesChange}
-          onEdgesDelete={handleEdgesDelete}
-          /* 首帧定向 fitView 由 `onInit` 发起（只按三列内容节点，见 `handleInit`）；
-           *  这里**不开** `fitView` prop —— 它按全部节点（含背景板）缩放，与定向
-           *  fitView 是两次口径不同的缩放，第一帧的错缩放就是这么来的。 */
-          onInit={handleInit}
-          /* 库里三个节点全是卡片与表单：裁剪省不下什么，却要接一份 error#008
-           *  过滤（见文件头说明）—— 直接关掉。 */
-          onlyRenderVisibleElements={false}
-          onMoveStart={markFitted}
-          onNodeDragStop={resetNodePositions}
-          onNodesChange={onNodesChange}
-          /* 点空白 = 取消选中（与「点一条线选中它对应的口」互补）。 */
-          onPaneClick={() => {
-            onSelectParam(null);
-            onSelectOutput(null);
-            setSelectedEdgeIds(new Set());
-          }}
-          panOnDrag
-          proOptions={{ hideAttribution: true }}
-          zoomOnScroll
-        >
-          {/* 网格背景与编辑器画布同一套（色相同一个 token，α 现取）——
+      {/* 三条 context 各发各的内容（#4467）：左 / 右两列的 value 在 keystroke 间
+              引用稳定，宿主内容单独一条（它随表单输入变）。 */}
+      <LibraryParamsContentContext.Provider value={flow.nodeContent.params}>
+        <LibraryHostContentContext.Provider value={flow.nodeContent.host}>
+          <LibraryOutputsContentContext.Provider value={flow.nodeContent.outputs}>
+            <ReactFlow
+              className="wflib-canvas-flow"
+              data-testid="wflib-canvas-flow"
+              defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+              deleteKeyCode={["Backspace", "Delete"]}
+              edges={edges}
+              isValidConnection={flow.isValidConnection}
+              maxZoom={2}
+              minZoom={0.2}
+              nodeDragThreshold={6}
+              nodes={nodes}
+              nodesConnectable={canWire}
+              /* 节点**可拖**：关掉它，列与宿主卡片整块变成 pointer-events: none，
+               *  输入、圆点、按钮全部点不动。`nodeDragThreshold` 6px 过滤误拖；
+               *  拖完吸附回布局位置（见 onNodeDragStop）。节点不可选中/不可删：
+               *  选中会挂蓝框、Delete 可能误删整列；连线的选中/删除只针对 edge。 */
+              nodesDraggable
+              nodeTypes={NODE_TYPES}
+              onConnect={flow.onConnect}
+              onConnectEnd={flow.onConnectEnd}
+              /* 点一条线选中它（驱动高亮 + Delete 删除）；按 Delete / Backspace 删除
+               *  选中线时经 `onEdgesDelete` 落到数据源断开那一条（只读时边不可删）。
+               *  节点不在 `elementsSelectable` 范围里——它们各自 `selectable:false`，
+               *  这里只负责让边可点选。 */
+              onEdgeClick={handleEdgeClick}
+              onEdgesChange={onEdgesChange}
+              onEdgesDelete={handleEdgesDelete}
+              /* 首帧定向 fitView 由 `onInit` 发起（只按三列内容节点，见 `handleInit`）；
+               *  这里**不开** `fitView` prop —— 它按全部节点（含背景板）缩放，与定向
+               *  fitView 是两次口径不同的缩放，第一帧的错缩放就是这么来的。 */
+              onInit={handleInit}
+              /* 库里三个节点全是卡片与表单：裁剪省不下什么，却要接一份 error#008
+               *  过滤（见文件头说明）—— 直接关掉。 */
+              onlyRenderVisibleElements={false}
+              onMoveStart={markFitted}
+              onNodeDragStop={resetNodePositions}
+              onNodesChange={onNodesChange}
+              /* 点空白 = 取消选中（与「点一条线选中它对应的口」互补）。 */
+              onPaneClick={() => {
+                onSelectParam(null);
+                onSelectOutput(null);
+                setSelectedEdgeIds(new Set());
+              }}
+              panOnDrag
+              proOptions={{ hideAttribution: true }}
+              zoomOnScroll
+            >
+              {/* 网格背景与编辑器画布同一套（色相同一个 token，α 现取）——
               此前这里写的是 `var(--color-canvas-grid-line, rgba(148,163,184,0.14))`，
               而那颗 token 从未定义过：永远走兜底，读代码的人会以为它随主题，实际不随。 */}
-          <Background
-            color={gridLineColor(LIBRARY_GRID_LINE_ALPHA)}
-            gap={20}
-            size={1}
-            variant={BackgroundVariant.Lines}
-          />
-        </ReactFlow>
-      </LibraryNodeContentContext.Provider>
+              <Background
+                color={gridLineColor(LIBRARY_GRID_LINE_ALPHA)}
+                gap={20}
+                size={1}
+                variant={BackgroundVariant.Lines}
+              />
+            </ReactFlow>
+          </LibraryOutputsContentContext.Provider>
+        </LibraryHostContentContext.Provider>
+      </LibraryParamsContentContext.Provider>
       {/* 落点失败的原因：贴在画布左下角，4 秒后自己消失（不只读，可直接重试）。
           上一版由自绘连线层给出，换 React Flow 后由 `onConnectEnd` 补回来 ——
           「拖了没反应」不许是静默的。 */}
