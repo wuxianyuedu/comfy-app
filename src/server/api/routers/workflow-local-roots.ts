@@ -127,14 +127,12 @@ function normalizePathKey(p: string): string {
  *
  *  读 `LOCAL_WORKFLOWS_PATH` 与 `getLocalWorkflowRoots` 同走 `readEnvVar`：
  *  此前守卫用 `process.env`（启动快照），.env 新增目录后扫描器看得到、
- *  守卫却拒绝——「界面给得出待导入项、点了导入被拒」的死胡同。 */
+ *  守卫却拒绝——「界面给得出待导入项、点了导入被拒」的死胡同。
+ *  两个口径共用同一份函数体（ISSUE #4475）：此前同文件里并存两份逐字相同的
+ *  实现，将来只改其中一份（比如再加一个目录来源）就会重新造出「扫描看得到、
+ *  导入守卫拒绝」的死胡同——正是本文件头记录过的历史事故形态。 */
 function getAllowedLocalWorkflowRoots(): Array<string> {
-  const derived = deriveComfyuiWorkflowsDir(getSettingsSync().comfyuiPath);
-  const extra = (readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "")
-    .split(/[\n,]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return derived === null ? extra : [derived, ...extra];
+  return getLocalWorkflowRoots();
 }
 
 /** 判定 absPath 是否落在允许导入的根目录内（忽略大小写 / 正反斜杠）。 */

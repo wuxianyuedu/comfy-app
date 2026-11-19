@@ -77,6 +77,20 @@ function resolveWorkflowName(raw: unknown, fallback: string): string {
   return (name || fallback).slice(0, 200);
 }
 
+/**
+ * 两个导入分支共用的 taskType 归一出口（#4472）：defaultMode / 文件识别结果
+ * 一律过同一份 normalizeTaskType，未知码同走一条「放行自定义」日志。此前本地
+ * 文件导入分支把 defaultMode 原样落库、粘贴 JSON 分支才归一，同一工作流走
+ * 不同入口落库的 taskType 不一致（fl2v vs FLF2V）。
+ */
+function resolveImportedTaskType(raw: string | undefined | null): string {
+  const taskType = raw ? normalizeTaskType(raw) : "";
+  if (taskType && !VALID_TASK_TYPE_CODES.has(taskType)) {
+    logger.info(`[workflow] Unknown taskType "${taskType}", allowing as custom type`);
+  }
+  return taskType;
+}
+
 export const workflowMutationProcedures = {
   /* POST /api/workflows —— 新建：create/import (API graph, RAW UI json, or local file) */
   create: authedProcedure
@@ -134,7 +148,7 @@ export const workflowMutationProcedures = {
         const tpl = await createImportedOrConflict({
           userId: ctx.user.id,
           name,
-          taskType: defaultMode ?? imported.taskType,
+          taskType: resolveImportedTaskType(defaultMode ?? imported.taskType),
           rawJson: imported.rawJson,
           positions: imported.positions,
           sourcePath: imported.sourcePath,
@@ -184,13 +198,7 @@ export const workflowMutationProcedures = {
       const explicitDefaultMode =
         typeof body.defaultMode === "string" && body.defaultMode ? body.defaultMode : undefined;
       const defaultMode = explicitDefaultMode ?? modes?.[0];
-      let taskType = defaultMode ?? String(body.taskType ?? "");
-      if (taskType) {
-        taskType = normalizeTaskType(taskType);
-      }
-      if (taskType && !VALID_TASK_TYPE_CODES.has(taskType)) {
-        logger.info(`[workflow] Unknown taskType "${taskType}", allowing as custom type`);
-      }
+      const taskType = resolveImportedTaskType(defaultMode ?? String(body.taskType ?? ""));
 
       const tpl = await createImportedOrConflict({
         userId: ctx.user.id,
@@ -253,7 +261,14 @@ export const workflowMutationProcedures = {
          * ② 同一「标签 × 模式」只能被一条工作流占用 —— 例：A 工作流（文生图 + 图生图）
          * 已绑 z-image，则 B 工作流（文生图）再绑 z-image 会撞 A 已占用的文生图，
          * 拒绝并点名占用的工作流。模式取本次要改成的那份（同批改 modes 时按新值判），
-         * 没改 modes 就用库里现值；两者都空（未配模式）时无模式可撞，放行。 */
+         * 没改 modes 就用库里现值；两者都空（未配模式）时无模式可撞，放行。
+         * 占用查重挪进下方 immediate 事务内执行（ISSUE #4474）：此前查重在事务外，
+         * 与落库之间隔着一次提交——两个并发请求给**不同**模板绑同一「标签 × 模式」
+         * 时，各自的查重都看不到对方未提交的绑定，双双放行打破唯一性。immediate
+         * 事务 BEGIN 即取写锁，跨模板并发在事务里串行化：后到者在锁内看到先到者
+         * 已提交的占用并拒绝，check-then-act 的窗口闭合。这里只做入参校验与
+         * 「按哪些模式判」的计算，不碰库。 */
+        let modelTagUniqueness: { effectiveModes: Array<string>; tagName: string } | undefined;
         if (input.modelTags !== undefined) {
           const wanted = [
             ...new Set(input.modelTags.map((name) => name.trim()).filter((name) => name !== "")),
@@ -269,22 +284,7 @@ export const workflowMutationProcedures = {
             const modes = input.modes ?? parseModesJson(existing.modes);
             const effectiveModes =
               modes.length > 0 ? modes : existing.taskType ? [existing.taskType] : [];
-            const occupied = await workflowModelTagRepository.listBindingsByTagName(
-              ctx.user.id,
-              tagName,
-              input.id,
-            );
-            for (const other of occupied) {
-              const clash = other.modes.find((code) => effectiveModes.includes(code));
-              if (clash !== undefined) {
-                throw new TRPCError({
-                  code: "CONFLICT",
-                  message:
-                    `模型标签「${tagName}」的「${getWorkflowType(clash)?.label ?? clash}」模式` +
-                    `已被工作流「${other.workflowName}」占用 —— 同一模型的同一模式只能由一条工作流绑定`,
-                });
-              }
-            }
+            modelTagUniqueness = { effectiveModes, tagName };
           }
         }
 
@@ -410,7 +410,11 @@ export const workflowMutationProcedures = {
                 ...(isPositionMap(input.positions) ? input.positions : {}),
               };
             } else {
-              patch.positions = input.positions;
+              /* 整体替换同过 isPositionMap（#4473）：垃圾形状落 undefined
+               *（该列不动、保留用户已有布局），与合并路径「非法来源按 {}
+               * 处理」同口径——不再把垃圾值原样写进坐标列，让读侧把整列
+               * 判成「无覆盖」而丢掉此前的布局覆盖。 */
+              patch.positions = isPositionMap(input.positions) ? input.positions : undefined;
             }
           }
         }
@@ -423,9 +427,34 @@ export const workflowMutationProcedures = {
          * 标签关联重挂原先各自提交，后段失败会留下「模板已改、标签仍旧」的半态。
          * 改名撞 `wt_user_name_uniq`（#3934）在这里转成业务 409，不裸 500。 */
         let template;
+        /* 事务回调里读外层 let 变量过不了 TS 收窄：进事务前固化成 const。 */
+        const uniqueness = modelTagUniqueness;
         try {
           template = await db.transaction(
             async (tx) => {
+              /* 「标签 × 模式」占用查重（#4474）：与落库同一 immediate 事务、
+               * 持写锁执行（执行者传 tx），并发跨模板绑定在此串行化。 */
+              if (uniqueness !== undefined) {
+                const occupied = await workflowModelTagRepository.listBindingsByTagName(
+                  ctx.user.id,
+                  uniqueness.tagName,
+                  id,
+                  tx,
+                );
+                for (const other of occupied) {
+                  const clash = other.modes.find((code) =>
+                    uniqueness.effectiveModes.includes(code),
+                  );
+                  if (clash !== undefined) {
+                    throw new TRPCError({
+                      code: "CONFLICT",
+                      message:
+                        `模型标签「${uniqueness.tagName}」的「${getWorkflowType(clash)?.label ?? clash}」模式` +
+                        `已被工作流「${other.workflowName}」占用 —— 同一模型的同一模式只能由一条工作流绑定`,
+                    });
+                  }
+                }
+              }
               const updated = hasColumnPatch
                 ? await workflowTemplateRepository.update(id, patch, tx)
                 : existing;
@@ -445,6 +474,12 @@ export const workflowMutationProcedures = {
             { behavior: "immediate" },
           );
         } catch (error) {
+          /* 查重（#4474）在事务里抛的 CONFLICT 是业务错误，原样透传；
+           * uniqueConflict 只负责把裸唯一约束（如改名撞 wt_user_name_uniq）
+           * 翻译成 409，不认得 TRPCError。 */
+          if (error instanceof TRPCError) {
+            throw error;
+          }
           throw uniqueConflict(error, [
             { columns: ["workflowTemplate.name"], message: "同名工作流已存在" },
           ]);
