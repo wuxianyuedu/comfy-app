@@ -26,6 +26,8 @@
 import { z } from "zod";
 
 import { isPlainRecord } from "~/lib/is-record";
+import { REFERENCE_LOADER_CAP_LIMIT } from "~/lib/workshop/reference-loader-binding";
+import { MODE_KEY_PREFIX } from "./workflow-param-mapping";
 
 /** 一个命名空间内、某个模式下的覆盖表：`{ <键>: <落点> | null }`。
  *  有一个值不是 `string` / `null` 就整表不收（`z.record` 判的是整份值，
@@ -50,10 +52,36 @@ const referenceLoaderBindingSchema = z.object({
   extraTargets: z.array(z.string()).optional(),
 });
 
-const referenceLoaderNamespaceSchema = z.record(
-  z.string(),
-  z.record(z.string(), referenceLoaderBindingSchema),
-);
+const referenceLoaderNamespaceSchema = z
+  .looseObject({
+    /** 参考图上限（#4537）：这条工作流实际最多使用的参考图张数（1~16）。
+     *  边界与写入口 `withReferenceLoaderMax` 的 `REFERENCE_LOADER_CAP_LIMIT`
+     *  一致。 */
+    maxReferences: z.number().int().min(1).max(REFERENCE_LOADER_CAP_LIMIT).optional(),
+    /** 参考图挂载节点 id 名单（#4534）。 */
+    mountNodeIds: z.array(z.string()).optional(),
+  })
+  .superRefine((namespace, ctx) => {
+    /* `mode:<模式>` 键的槽位绑定表沿用原严格形状；与工作流级键（上限 / 挂载
+     *  名单）同住一层，逐表校验 —— 形状不符让整份 paramMap 判 null（与原
+     *  读边界一致），调用方按「这一列没有内容」处理。 */
+    const tableShape = z.record(z.string(), referenceLoaderBindingSchema);
+    for (const [key, value] of Object.entries(namespace)) {
+      if (!key.startsWith(MODE_KEY_PREFIX)) {
+        continue;
+      }
+      const parsed = tableShape.safeParse(value);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          ctx.addIssue({
+            code: "custom",
+            message: `${key}: ${issue.message}`,
+            path: [key, ...issue.path],
+          });
+        }
+      }
+    }
+  });
 
 export const workflowParamMapSchema = z.looseObject({
   /** 作者画的输入落点线（运行期据此派值）。 */

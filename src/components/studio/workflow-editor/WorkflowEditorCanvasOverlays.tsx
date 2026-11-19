@@ -79,6 +79,20 @@ export function IoEditModeBanner() {
   );
 }
 
+/** 参考图挂载编辑态提示条（ISSUE #4534）：与 IO 编辑横条同款形态。
+ *  点击节点标记 / 取消挂载；装载计划按 image_0..N 规律自动接线。 */
+export function RefMountModeBanner({ count }: { count: number }) {
+  return (
+    <div className="border-primary-soft bg-primary-soft/30 text-primary flex shrink-0 items-center justify-center gap-2 border-b px-4 py-1.5 text-xs font-medium">
+      <span aria-hidden="true">🔗</span>
+      <span>
+        参考图挂载编辑：点击节点标记 / 取消多参考图挂载点（其 image_0..N 图片口按序自动接线）
+        {count > 0 ? ` · 已标记 ${count} 个` : ""}
+      </span>
+    </div>
+  );
+}
+
 /** 子工作流下钻失败：内联错误提示，父图保持可见（绝不回退到工作流库）。 */
 export function SubgraphErrorToast({ error, onDismiss }: { error: string; onDismiss: () => void }) {
   return (

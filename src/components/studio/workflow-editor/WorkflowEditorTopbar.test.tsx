@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { WorkflowEditorTopBar } from "./WorkflowEditorTopbar";
 import {
@@ -37,7 +37,14 @@ function makeStores(): WFStores {
   };
 }
 
-function renderTopBar() {
+function renderTopBar(
+  over: {
+    onToggleRefMountMode?: () => void;
+    refMountCount?: number;
+    refMountMode?: boolean;
+    subgraphStack?: Array<{ name: string; nodeId: string; uid: string }>;
+  } = {},
+) {
   return render(
     <WFStoresProvider stores={makeStores()}>
       <WorkflowEditorTopBar
@@ -60,12 +67,15 @@ function renderTopBar() {
         handleSave={noop}
         onClose={noop}
         onExitSubgraph={noop}
+        onToggleRefMountMode={over.onToggleRefMountMode ?? noop}
+        refMountCount={over.refMountCount ?? 0}
+        refMountMode={over.refMountMode ?? false}
         resetLayout={noop}
         rootWorkflowName="wf"
         saving={false}
         setSubgraphStack={noop}
         setViewJsonOpen={noop}
-        subgraphStack={[]}
+        subgraphStack={over.subgraphStack ?? []}
         viewHostNodeId=""
       />
     </WFStoresProvider>,
@@ -105,5 +115,28 @@ describe("顶栏按钮全部走 ui/button 基元（ISSUE #672 P1）", () => {
       expect(el.className).toMatch(/rounded-(?:md|lg)\b/);
     }
     expect(container.querySelectorAll("button").length).toBeGreaterThanOrEqual(labels.length);
+  });
+});
+
+describe("参考图挂载按钮（ISSUE #4534）", () => {
+  it("点击切换编辑态（回调上抛）", () => {
+    const onToggleRefMountMode = vi.fn();
+    renderTopBar({ onToggleRefMountMode });
+    fireEvent.click(screen.getByRole("button", { name: /参考图挂载/ }));
+    expect(onToggleRefMountMode).toHaveBeenCalledTimes(1);
+  });
+
+  it("编辑态下按钮高亮并显示已标记节点数", () => {
+    renderTopBar({ refMountMode: true, refMountCount: 2 });
+    expect(screen.getByRole("button", { name: /✓ 参考图挂载中/ }).textContent).toContain("2");
+  });
+
+  it("子图视图不提供参考图挂载入口（挂载是工作流级配置）", () => {
+    renderTopBar({
+      subgraphStack: [{ name: "子图", nodeId: "4", uid: "u1" }],
+      refMountMode: true,
+      refMountCount: 1,
+    });
+    expect(screen.queryByRole("button", { name: /参考图挂载/ })).toBeNull();
   });
 });

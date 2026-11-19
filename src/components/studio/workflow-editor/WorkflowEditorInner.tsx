@@ -4,7 +4,7 @@
  * 表、连线类型表与共享布局常量）。本组件是容器，纯逻辑编排收在 hooks/：
  * use-workflow-viewport-fit（画布聚焦）、use-workflow-graph-derivation（detail →
  * 图节点）、use-io-modes-commit（IO 模式落库）；过渡屏与浮层在 Overlays。 */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNodesState, useEdgesState, useReactFlow, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "~/config/custom-nodes";
@@ -44,11 +44,16 @@ import { zClass } from "~/lib/shell/overlay-z";
 import {
   CanvasHintTooltip,
   IoEditModeBanner,
+  RefMountModeBanner,
   SubgraphErrorToast,
   SubgraphLoadingOverlay,
   WorkflowEditorErrorScreen,
   WorkflowEditorLoadingScreen,
 } from "./WorkflowEditorCanvasOverlays";
+import {
+  referenceLoaderMountNodes,
+  withReferenceLoaderMountNodes,
+} from "~/lib/workshop/reference-loader-binding";
 
 /* ── 画布网格 ── 两层都原生 <Background>，网格才随视口平移/缩放（给
  *  `.react-flow__pane` 加 CSS 网格是静态的，pane 不做变换）。一格 = 10 画布单位，
@@ -335,6 +340,43 @@ function WorkflowEditorBody({
     workflowId,
   });
 
+  /* ── 参考图挂载编辑态（ISSUE #4534）──
+   * 顶栏按钮进入 / 退出；编辑态里点击节点即标记 / 取消多参考图挂载点，标记
+   * 写进 paramMap.referenceLoaders.mountNodeIds 并**即时落库**（与 IO 模式提交
+   * 同一口径，不依赖用户记得点「保存」）。装载计划按 image_0..N 规律把这些
+   * 节点的图片口接成参考图落点（见 reference-loader-plan.ts）。 */
+  const [refMountMode, setRefMountMode] = useState(false);
+  const mountedNodeIds = useMemo(() => referenceLoaderMountNodes(paramMap), [paramMap]);
+  const handleToggleRefMountMode = useCallback(() => {
+    setRefMountMode((value) => !value);
+  }, []);
+  const handleNodeClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      if (!refMountMode) {
+        return;
+      }
+      const current = referenceLoaderMountNodes(paramMap);
+      const nextIds = current.includes(node.id)
+        ? current.filter((id) => id !== node.id)
+        : [...current, node.id];
+      const nextParamMap = withReferenceLoaderMountNodes({ paramMap, nodeIds: nextIds });
+      setParamMap(nextParamMap);
+      savePatch.mutate({ id: workflowId, paramMap: nextParamMap });
+    },
+    [refMountMode, paramMap, savePatch, workflowId],
+  );
+  /* 已标记节点加高亮类（画布 wrapper 的 ring，样式见 globals.css）。 */
+  const mountedSet = useMemo(() => new Set(mountedNodeIds), [mountedNodeIds]);
+  const decoratedNodes = useMemo(
+    () =>
+      mountedSet.size === 0
+        ? nodes
+        : nodes.map((node) =>
+            mountedSet.has(node.id) ? { ...node, className: "ref-mount-node" } : node,
+          ),
+    [nodes, mountedSet],
+  );
+
   /* Loading state */
   if (loading) {
     return <WorkflowEditorLoadingScreen />;
@@ -355,6 +397,9 @@ function WorkflowEditorBody({
         handleSave={handleSave}
         onClose={onClose}
         onExitSubgraph={onExitSubgraph}
+        onToggleRefMountMode={handleToggleRefMountMode}
+        refMountCount={mountedNodeIds.length}
+        refMountMode={refMountMode}
         resetLayout={resetLayout}
         rootWorkflowName={rootWorkflowName}
         saving={saving}
@@ -366,6 +411,8 @@ function WorkflowEditorBody({
 
       {/* IO 编辑模式提示：顶栏下方的流内横条，不叠在画布上（ISSUE #3632）。 */}
       {ioEditMode && <IoEditModeBanner />}
+      {/* 参考图挂载编辑态提示（ISSUE #4534）：同款流内横条。 */}
+      {refMountMode && <RefMountModeBanner count={mountedNodeIds.length} />}
 
       {/* ── Canvas ── */}
       <div className="relative min-h-0 flex-1">
@@ -399,10 +446,11 @@ function WorkflowEditorBody({
           canvasSettings={canvasSettings}
           canvasSettingsHydrated={canvasSettingsHydrated}
           edges={edges}
-          nodes={nodes}
+          nodes={decoratedNodes}
           onEdgeClick={onEdgeClick}
           onEdgesChange={onEdgesChange}
           onMiniMapJump={onMiniMapJump}
+          onNodeClick={handleNodeClick}
           onNodeDragStop={onNodeDragStop}
           onNodesChange={onNodesChange}
           onOpenSettings={() => {

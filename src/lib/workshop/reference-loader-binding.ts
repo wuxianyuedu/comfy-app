@@ -158,3 +158,58 @@ export function withReferenceLoaderMax(args: {
   }
   return base;
 }
+
+/** 参考图挂载节点（ISSUE #4534）：作者在编辑器「参考图挂载」编辑态里点选的
+ *  节点。装载计划按 `image_0..N` 命名规律把参考图槽位自动接到这些节点的图片口
+ *  上（见 `mountImagePortsForNodes`），不必逐口手连。未配置 / 空名单 = 没有挂载
+ *  节点。畸形数据按「没配」处理，不把脏形状带给执行期。 */
+export function referenceLoaderMountNodes(paramMap: unknown): ReadonlyArray<string> {
+  if (!isPlainRecord(paramMap)) {
+    return [];
+  }
+  const namespace = paramMap.referenceLoaders;
+  if (!isPlainRecord(namespace)) {
+    return [];
+  }
+  const value = namespace.mountNodeIds;
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const out: Array<string> = [];
+  for (const id of value) {
+    if (typeof id === "string" && id !== "" && !out.includes(id)) {
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+/** 写回参考图挂载节点名单（不可变返回；空名单 = 清除配置）。
+ *
+ *  与槽位绑定 / 上限同住 `referenceLoaders` 命名空间（`mountNodeIds` 是命名空间
+ *  级的工作流属性）；畸形项过滤，命名空间清空后连键一起摘掉。 */
+export function withReferenceLoaderMountNodes(args: {
+  nodeIds: ReadonlyArray<string>;
+  paramMap: unknown;
+}): Record<string, unknown> {
+  const { nodeIds, paramMap } = args;
+  const base = isPlainRecord(paramMap) ? { ...paramMap } : {};
+  const namespace = isPlainRecord(base.referenceLoaders) ? { ...base.referenceLoaders } : {};
+  const clean: Array<string> = [];
+  for (const id of nodeIds) {
+    if (typeof id === "string" && id !== "" && !clean.includes(id)) {
+      clean.push(id);
+    }
+  }
+  if (clean.length > 0) {
+    namespace.mountNodeIds = clean;
+  } else {
+    delete namespace.mountNodeIds;
+  }
+  if (Object.keys(namespace).length > 0) {
+    base.referenceLoaders = namespace;
+  } else {
+    delete base.referenceLoaders;
+  }
+  return base;
+}
