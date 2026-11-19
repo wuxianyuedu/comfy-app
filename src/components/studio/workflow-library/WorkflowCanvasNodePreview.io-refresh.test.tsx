@@ -247,7 +247,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     const tags = [...container.querySelectorAll('[data-testid="wflib-param-owner"]')];
     /* 徽标文案 = 这个对外参数自己的名字（尺寸在映射层是子口，卡片上「尺寸 ·
      *  宽高比」那一行属于它）。按同一份派生取值断言，不写字面量。 */
-    const sizeAspect = buildParamEntries(promptSizeIO(), undefined, {
+    const sizeAspect = buildParamEntries(promptSizeIO(), {
       mode: "T2I",
     }).find((entry) => entry.id === "size-aspect")!;
     expect(tags.map((tag) => tag.textContent).sort()).toEqual(
@@ -256,7 +256,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
   });
 
   it("作者显式断开的那一条不再标徽标", () => {
-    const promptEntry = buildParamEntries(promptSizeIO(), undefined, {
+    const promptEntry = buildParamEntries(promptSizeIO(), {
       mode: "T2I",
     }).find((entry) => entry.id === "prompt")!;
     const { container } = render(
@@ -278,7 +278,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
       />,
     );
     const tags = [...container.querySelectorAll('[data-testid="wflib-param-owner"]')];
-    const sizeAspect = buildParamEntries(promptSizeIO(), undefined, {
+    const sizeAspect = buildParamEntries(promptSizeIO(), {
       mode: "T2I",
     }).find((entry) => entry.id === "size-aspect")!;
     expect(tags.map((tag) => tag.textContent)).toEqual([sizeAspect.label]);

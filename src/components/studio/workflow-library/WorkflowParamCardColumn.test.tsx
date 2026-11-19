@@ -228,7 +228,7 @@ describe("WorkflowParamCardColumn", () => {
         defaultValue: "b",
       },
     };
-    const dupEntries = buildParamEntries(dupIo, undefined, { mode: "T2I" });
+    const dupEntries = buildParamEntries(dupIo, { mode: "T2I" });
     const { container } = render(
       <WorkflowParamCardColumn
         endpoint={(port) => <span data-endpoint-handle={port.handleId} />}

@@ -270,7 +270,7 @@ export function WorkflowCanvasNodePreview({
    * 整表现算一遍（端口多的工作流输入时可感知卡顿）。 */
   const paramEntries = useMemo(
     () =>
-      buildParamEntries(workflowIO ?? null, undefined, {
+      buildParamEntries(workflowIO ?? null, {
         mode: effectiveMode,
         contractIds: contractEntries.map((item) => item.id),
       }),

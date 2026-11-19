@@ -113,7 +113,7 @@ export function deriveEncapsulationStatus(args: {
   const mapping = parseParamMapping(paramMap);
   /* 口子清单与下面的 `canonical` 同源：调用方给了生效契约就按它列（未给回落内置
    *  默认）—— 两处各取一份会让「这一口有没有落点」与「这一口存不存在」对不上。 */
-  const entries = buildParamEntries(io, undefined, {
+  const entries = buildParamEntries(io, {
     mode: mode ?? null,
     contractIds: contractEntries?.map((item) => item.id),
   });

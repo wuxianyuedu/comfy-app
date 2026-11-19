@@ -99,7 +99,6 @@ function isParamClass(value: string): value is ParamClass {
  */
 export function buildParamEntries(
   io: WorkflowIOMap | null | undefined,
-  labels?: Record<string, string>,
   options?: {
     /** **该模式生效的契约口清单**（`modeContractEntries(mode, storedContracts)`
      *  的 id）。不传 = 按内置默认（`exposedParamsForMode`）。
@@ -112,16 +111,15 @@ export function buildParamEntries(
   },
 ): Array<ParamEntry> {
   /* 只有一条构造路径：契约（按模式 / 按该模式生效的契约清单）。没有模式语境时退
-   *  到最保守的一套（提示词 + 尺寸）。旧版「按节点 + 端口名分类聚类」那条路已删除
-   *  —— 对外有哪些参数只由契约决定，工作流里的内部参数（步数 / CFG…）不再是
-   *  「对外参数」。 */
-  return buildContractEntries(io, labels, options?.mode ?? null, options?.contractIds);
+   * 到最保守的一套（提示词 + 尺寸）。旧版「按节点 + 端口名分类聚类」那条路已删除
+   * —— 对外有哪些参数只由契约决定，工作流里的内部参数（步数 / CFG…）不再是
+   * 「对外参数」。 */
+  return buildContractEntries(io, options?.mode ?? null, options?.contractIds);
 }
 
 /** 契约驱动的条目构造（有模式语境时的唯一路径）。 */
 function buildContractEntries(
   io: WorkflowIOMap | null | undefined,
-  labels: Record<string, string> | undefined,
   mode: string | null,
   contractIds?: ReadonlyArray<string>,
 ): Array<ParamEntry> {
@@ -153,7 +151,6 @@ function buildContractEntries(
         continue;
       }
       const pins = pinsByClass.get(cls) ?? [];
-      const override = pins.map((pin) => labels?.[pin.ioKey]).find(Boolean);
       out.push({
         id,
         /* 落点由映射表决定，`nodeId` 不带宿主节点（分组展示不需要它）。 */
@@ -164,8 +161,7 @@ function buildContractEntries(
         hostNodeId: nodeIdOfIoKey(pins[0]?.ioKey ?? ""),
         nodeTitle: "",
         cls,
-        label:
-          override ?? (def.cls === "size" ? sizeSubLabel(cls) : exposedParamDisplayLabel(def.id)),
+        label: def.cls === "size" ? sizeSubLabel(cls) : exposedParamDisplayLabel(def.id),
         pins,
       });
     }
@@ -282,8 +278,6 @@ export const MODE_KEY_PREFIX = "mode:";
 export type ParamMappingByMode = Record<string, Record<string, string | null>>;
 
 export type ParamMapping = {
-  /** 作者改过的「对外参数名」（ioKey → 名字）。 */
-  labels?: Record<string, string>;
   /** 作者画的线，按模式分开（`{ [mode]: { [entryId]: ioKey | null } }`）。 */
   manualByMode?: ParamMappingByMode;
 };
@@ -363,7 +357,7 @@ const LEGACY_SIZE_ENTRY_ID = "size";
  *  畸形数据（数字 / 数组 / 非对象模式表）同样丢弃——画布容不下脏数据。 */
 export function parseParamMapping(paramMap: unknown): ParamMapping {
   const manualByMode: Record<string, Record<string, string | null>> = {};
-  const out: ParamMapping = { manualByMode, labels: {} };
+  const out: ParamMapping = { manualByMode };
   if (!isPlainRecord(paramMap)) {
     return out;
   }
@@ -463,7 +457,7 @@ export function clearModeWiring(
   if (mode !== null && mode !== undefined && mode !== "") {
     delete manualByMode[mode];
   }
-  return { manualByMode, labels: { ...mapping?.labels } };
+  return { manualByMode };
 }
 
 /** 映射落点（`resolved` 的值，= ioKey）→ 画布渲染侧那条端口的 **React Flow

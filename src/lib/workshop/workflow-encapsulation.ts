@@ -507,7 +507,7 @@ export function buildEncapsulatedInputs(args: {
     return { workflowInputs: [], unmatched: [], resolved: {} };
   }
   const effectiveMode = mode ?? null;
-  const entries = buildParamEntries(io, undefined, {
+  const entries = buildParamEntries(io, {
     mode: effectiveMode,
     contractIds,
   });
