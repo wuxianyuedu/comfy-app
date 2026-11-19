@@ -12,8 +12,7 @@ import {
   BackgroundVariant,
   ReactFlow,
   ReactFlowProvider,
-  useEdgesState,
-  useNodesState,
+  useReactFlow,
   useUpdateNodeInternals,
   type Edge,
   type Node,
@@ -96,6 +95,12 @@ const NODE_TYPES = {
 
 /** 三列的布局位置（模块级常量：吸附目标不随渲染重建）。 */
 const LAYOUT_NODES = buildLibraryNodes(LAYOUT_SIZING);
+
+/* 非受控画布（#4541）的挂载初值：`defaultEdges` 必须在场（空数组也算）——
+ * React Flow 的 `rf.setEdges` 只在 `hasDefaultEdges` 为真时才写 store，否则
+ * 把更新丢进队列后只回调受控模式的 `onEdgesChange`（本画布没有）⇒ 库内
+ * 新拖的线永远进不了画布。模块级常量保持引用稳定。 */
+const INITIAL_EDGES: Array<Edge> = [];
 
 /** 边的渲染参数：线本身要能点选（选中后按 ⌫ / Delete 断开，或点「删除选中线」）。
  *  `deletable` 由派生时按 `canWire` 逐边设（只读预览不可删）；这里的默认值只作兜底。 */
@@ -302,16 +307,20 @@ function WorkflowLibraryCanvasInner({
   /* 节点与边在挂载时取一次：React Flow 自己持有视口、位置与选中。
    *
    *  节点渲染内容不进 `node.data` —— 否则只能冻在首帧或每帧 setNodes 打循环；
-   *  改由 `LibraryNodeContentContext` 下发，节点组件读最新那一份。 */
-  const [nodes, setNodes, onNodesChange] = useNodesState(flow.defaultNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(flow.defaultEdges);
+   *  改由 `LibraryNodeContentContext` 下发，节点组件读最新那一份。
+   *
+   *  非受控画布（#4541，同 #4536）：节点 / 连线状态住 React Flow 自身 store，
+   *  派生边同步、背景板尺寸同步与拖后吸附都经 `rf.setNodes` / `rf.setEdges`
+   *  下发，不再经组件 state 的 effect 链。这个画布只有三个固定列节点，
+   *  拖拽后立即吸附回布局位，本来就不存在拖拽掉帧问题；统一形态是为了一致性。 */
+  const rf = useReactFlow();
 
-  /* 派生出来的边同步进 React Flow：`useEdgesState` 只在挂载时取初值，不同步则
-   *  库内新拖的线永远进不了画布（写入成功，用户却看到「松手线就消失」）。
-   *  依赖是 `flow.defaultEdges` 的引用（wires 派生），不会每帧触发。 */
+  /* 派生出来的边同步进 React Flow：不同步则库内新拖的线永远进不了画布
+   * （写入成功，用户却看到「松手线就消失」）。依赖是 `flow.defaultEdges`
+   * 的引用（wires 派生），不会每帧触发。 */
   useEffect(() => {
-    setEdges(flow.defaultEdges);
-  }, [flow.defaultEdges, setEdges]);
+    rf.setEdges(flow.defaultEdges);
+  }, [flow.defaultEdges, rf]);
 
   /* 背景板尺寸随容器变化（窗口缩放 / 左右分栏拖动），而 React Flow 只在挂载时
    * 读 `nodes`（不受控画布）—— 尺寸变了要把新尺寸同步进去，否则画布还停在旧
@@ -324,7 +333,7 @@ function WorkflowLibraryCanvasInner({
       return;
     }
     lastBackdropKey.current = backdropKey;
-    setNodes((current) =>
+    rf.setNodes((current) =>
       current.map((node) => {
         const sized = flow.defaultNodes.find((item) => item.id === node.id);
         if (!sized || node.width === sized.width) {
@@ -333,7 +342,7 @@ function WorkflowLibraryCanvasInner({
         return { ...node, width: sized.width, height: sized.height };
       }),
     );
-  }, [backdropKey, flow.defaultNodes, setNodes]);
+  }, [backdropKey, flow.defaultNodes, rf]);
 
   /* 节点被拖动后回到布局位置：三列是**固定布局**（左列说「要什么」、中间是宿主
    *  卡片、右列说「给什么」），拖散之后读者要自己重新认列 —— 而「可拖」这件事
@@ -345,11 +354,11 @@ function WorkflowLibraryCanvasInner({
       if (!at) {
         return;
       }
-      setNodes((current) =>
+      rf.setNodes((current) =>
         current.map((node) => (node.id === dragged.id ? { ...node, position: at } : node)),
       );
     },
-    [setNodes],
+    [rf],
   );
 
   return (
@@ -376,13 +385,13 @@ function WorkflowLibraryCanvasInner({
               className="wflib-canvas-flow"
               data-testid="wflib-canvas-flow"
               defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+              defaultEdges={INITIAL_EDGES}
+              defaultNodes={flow.defaultNodes}
               deleteKeyCode={["Backspace", "Delete"]}
-              edges={edges}
               isValidConnection={flow.isValidConnection}
               maxZoom={2}
               minZoom={0.2}
               nodeDragThreshold={6}
-              nodes={nodes}
               nodesConnectable={canWire}
               /* 节点**可拖**：关掉它，列与宿主卡片整块变成 pointer-events: none，
                *  输入、圆点、按钮全部点不动。`nodeDragThreshold` 6px 过滤误拖；
@@ -397,7 +406,6 @@ function WorkflowLibraryCanvasInner({
                *  节点不在 `elementsSelectable` 范围里——它们各自 `selectable:false`，
                *  这里只负责让边可点选。 */
               onEdgeClick={handleEdgeClick}
-              onEdgesChange={onEdgesChange}
               onEdgesDelete={handleEdgesDelete}
               /* 首帧定向 fitView 由 `onInit` 发起（只按三列内容节点，见 `handleInit`）；
                *  这里**不开** `fitView` prop —— 它按全部节点（含背景板）缩放，与定向
@@ -408,7 +416,6 @@ function WorkflowLibraryCanvasInner({
               onlyRenderVisibleElements={false}
               onMoveStart={markFitted}
               onNodeDragStop={resetNodePositions}
-              onNodesChange={onNodesChange}
               /* 点空白 = 取消选中（与「点一条线选中它对应的口」互补）。 */
               onPaneClick={() => {
                 onSelectParam(null);
