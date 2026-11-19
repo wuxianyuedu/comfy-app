@@ -219,7 +219,7 @@ export function WorkflowLibraryDetailView({
           )}
         </TabsContent>
 
-        {(["params", "source"] as const).map((tab) => (
+        {(["params", "reference", "source"] as const).map((tab) => (
           <TabsContent className="min-h-0 flex-1 overflow-y-auto p-5" key={tab} value={tab}>
             <DetailBody
               activeMode={activeMode}

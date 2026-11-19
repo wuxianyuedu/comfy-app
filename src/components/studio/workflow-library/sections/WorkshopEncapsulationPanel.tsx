@@ -18,7 +18,6 @@ import { ContractRequiredBadge } from "~/components/workshop/mode-contract/Contr
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
 import { modeLabel } from "../workflow-library-config";
 import { sceneFromMode } from "~/lib/media/size-presets";
-import type { WorkflowImageInputPort } from "~/lib/comfyui/workflow-detail-raw";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { useWorkflowEncapsulation } from "../hooks/use-workflow-encapsulation";
 import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
@@ -28,7 +27,6 @@ import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulatio
 import { displayValue } from "~/lib/display-value";
 import { EncapsulationTestForm } from "./EncapsulationTestForm";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
-import { ReferenceLoaderBindingSection } from "../reference-loader/ReferenceLoaderBindingSection";
 
 /* 运行日志弹窗按需拉（规范 §12.19）：它下面挂着 `ui/json-viewer`
  * → `react18-json-view`，而本面板只在**真的点开日志**时才需要它。此前那条静态边
@@ -43,19 +41,14 @@ const LazyWorkflowRunLogModal = React.lazy(() =>
 type WorkshopEncapsulationPanelProps = {
   /** 工坊下拉/徽标展示名（模型标签优先；仅用于文案）。 */
   displayName: string;
-  /** 图里全部 IMAGE / MASK 连线输入口（含未暴露的张量口，#4405）——
-   *  参考图装载「追加端口」的候选。 */
-  imageInputPorts?: Array<WorkflowImageInputPort>;
   /** 当前模式（详情层持有，与「画布节点」页签同一份）。 */
   mode: string | null | undefined;
   /** 该工作流可跑的模式码（多于一个时渲染模式下拉）。 */
   modes?: ReadonlyArray<string>;
   /** 切换当前模式（**只改查看 / 测试语境，不落库**）：多模式工作流要能逐个
-   * 模式跑一次流程测试 —— 文生图 / 图生图两条链路的封装口往往不同，只看默认
-   * 模式测不出另一条能不能用。 */
+   * 模式跑一次流程测试 —— 文生图 / 图生图的封装口不同，只看默认模式测不出
+   * 另一条能不能用。 */
   onModeChange?: (mode: string) => void;
-  /** 整份 paramMap 的写回口（参考图装载绑定落 `referenceLoaders` 命名空间）。 */
-  onPatchParamMap?: (next: Record<string, unknown>) => Promise<void> | void;
   paramMap: Record<string, unknown> | null;
   workflowId: string;
   workflowIO: WorkflowIOMap | null;
@@ -93,8 +86,6 @@ export function WorkshopEncapsulationPanel({
   mode,
   modes,
   onModeChange,
-  onPatchParamMap,
-  imageInputPorts,
 }: WorkshopEncapsulationPanelProps) {
   /* 模式契约注册表：契约口清单、必备口与封装状态都经 `useWorkflowEncapsulation`
    * 取生效注册表（本机覆盖逐模式压过项目默认）—— 与模式契约编辑器、列表行徽标、
@@ -256,18 +247,8 @@ export function WorkshopEncapsulationPanel({
         })}
       </div>
 
-      {/* 参考图装载绑定（#4376）：有参考图槽位时给出「装载预设 + 追加端口」配置。
-       *  写回 paramMap 的 referenceLoaders 命名空间，生成时变成执行期装载计划。 */}
-      {onPatchParamMap && mode !== null && mode !== undefined && mode !== "" && (
-        <ReferenceLoaderBindingSection
-          entries={status.entries}
-          graphImagePorts={imageInputPorts}
-          io={workflowIO}
-          mode={mode}
-          onPatchParamMap={onPatchParamMap}
-          paramMap={paramMap}
-        />
-      )}
+      {/* 参考图装载已拆到独立页签（ISSUE #4526，`sections/ReferenceLoaderTab.tsx`）：
+       *  本页签只保留契约口一览与流程测试。 */}
 
       {/* 流程测试：按封装口径真实跑一次（提示词 / 负向 / 尺寸 / 图片 / 时长 → ComfyUI） */}
       <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">
