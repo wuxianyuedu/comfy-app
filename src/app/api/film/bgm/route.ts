@@ -3,6 +3,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { apiErrorBody } from "~/lib/api-error";
+import { contentLengthOverLimit } from "~/server/lib/upload-limit";
 import { uniqueStamp } from "~/lib/unique-id";
 import { safeDisplayName } from "~/lib/safe-name";
 import { extOfPath, stemOfPath } from "~/lib/media/mime-ext";
@@ -25,6 +27,11 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 export async function POST(req: NextRequest) {
   if (!(await requireRequestUser())) {
     return unauthorizedResponse();
+  }
+  /* Content-Length 预拒（#4451）：挡住「先全量缓冲几 GB 再拒绝」的 OOM 形态；
+   * 权威校验仍是解析后的 file.size。 */
+  if (contentLengthOverLimit(req, MAX_UPLOAD_BYTES)) {
+    return NextResponse.json({ error: "音频大小不能超过 100MB" }, { status: 400 });
   }
   const form = await req.formData().catch(() => null);
   if (!form) {
@@ -51,7 +58,14 @@ export async function POST(req: NextRequest) {
    * `${Date.now()}_${safe}${ext}`，与另两处上传路由各写一份「怎么保证不撞名」。 */
   const name = `${uniqueStamp("bgm-")}_${safe}.${ext}`;
   const dir = filmBgmRoot();
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, name), buf);
+  try {
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, name), buf);
+  } catch (error) {
+    /* 落盘失败（磁盘满 / 杀软锁文件 / 权限变化）走本路由族统一的 JSON 错误出口
+     * （#4454）：裸 500 的 HTML 错误页会让前端 readApiError 解析失败，用户看不到
+     * 可行动原因。 */
+    return NextResponse.json(apiErrorBody(error, "保存背景音乐失败"), { status: 500 });
+  }
   return NextResponse.json({ name });
 }

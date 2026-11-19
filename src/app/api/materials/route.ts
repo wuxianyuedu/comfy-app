@@ -6,6 +6,7 @@ import { logger } from "~/server/lib/logger";
 import { apiErrorBody, apiErrorDetail } from "~/lib/api-error";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { contentLengthOverLimit } from "~/server/lib/upload-limit";
 import { artifactUrl } from "~/lib/media/output-paths";
 import {
   MATERIAL_FOLDERS,
@@ -135,6 +136,11 @@ export async function POST(req: NextRequest) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* Content-Length 预拒（#4451）：挡住「先全量缓冲几 GB 再拒绝」的 OOM 形态；
+   * 权威校验仍是解析后的 file.size。 */
+  if (contentLengthOverLimit(req, MAX_UPLOAD_BYTES)) {
+    return NextResponse.json({ error: "文件大小不能超过 100MB" }, { status: 400 });
   }
   /* 畸形表单是客户端错误 → 400（#4045）：与 bgm / upload 同一口径，
    * 不落进下面的 catch 被错报成 500「上传失败」。 */
