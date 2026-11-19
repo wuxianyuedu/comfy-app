@@ -8,6 +8,7 @@ import { Maximize2 } from "lucide-react";
 
 import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import type { WorkflowImageInputPort } from "~/lib/comfyui/workflow-detail-raw";
 import { Button } from "~/components/ui/button";
 import type { DetailTab } from "../workflow-library-detail-config";
 import type { WorkflowRow } from "../workflow-library-config";
@@ -44,6 +45,9 @@ type DetailBodyProps = {
    *  的 `activeMode`）：画布卡片列与工坊封装按同一个模式渲染，用户在两处切换的
    *  是同一件事。 */
   activeMode: string | null;
+  /** 图里全部 IMAGE / MASK 连线输入口（含未暴露的张量口，#4405）——
+   *  参考图装载「追加端口」的候选，透传给工坊封装面板。 */
+  imageInputPorts: Array<WorkflowImageInputPort>;
   isLoading: boolean;
   /** 多模式工作流的模式切换（画布预览节点的类型 chip 可点选默认模式）。 */
   meta?: {
@@ -80,6 +84,7 @@ export function DetailBody({
   activeMode,
   onActiveModeChange,
   onEdit,
+  imageInputPorts,
   meta,
   onSeedModeChange,
   onPatchParamMap,
@@ -166,6 +171,7 @@ export function DetailBody({
       {tab === "params" && (
         <WorkshopEncapsulationPanel
           displayName={workflow.modelTags?.[0] ?? workflow.name}
+          imageInputPorts={imageInputPorts}
           key={workflow.id}
           /* 模式取详情层的当前模式（与画布节点页签同一份），并通过
            * `onModeChange` 让用户在本页直接换模式跑流程测试 —— 多模式工作流

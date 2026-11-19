@@ -22,6 +22,7 @@ import type {
   RawNodeMeta,
   RawOutputEntry,
   RawViewPacket,
+  WorkflowImageInputPort,
 } from "./workflow-detail-raw-types";
 
 export { buildRawInputs };
@@ -31,6 +32,7 @@ export type {
   RawNodeMeta,
   RawOutputEntry,
   RawViewPacket,
+  WorkflowImageInputPort,
 } from "./workflow-detail-raw-types";
 
 /**
@@ -98,6 +100,42 @@ export function buildNodeTypeMap(raw: RawWorkflow | null): Record<string, string
     }
   }
   return nodeTypeById;
+}
+
+/** 图里全部 IMAGE / MASK **连线输入口**的候选清单（#4405）。
+ *
+ *  参考图装载的「追加端口」候选不能只看已暴露的 workflowIO：MiniMax 这类
+ *  工作流的参考图消费口是张量连线口（`images.image_0..4`），作者没勾选暴露时
+ *  不在 workflowIO 里 → 候选为空 → 扇出下拉整格不渲染，「这张图还要喂到哪」
+ *  就没有地方可配。这里直接从 rawJson 的输入元数据收集全图图片族连线口
+ *  （含未暴露、未连线的），按 ioKey 去重、稳定排序。
+ *
+ *  只收**连线口**（无 `widget` 标记）：扇出的执行期路径（自动补 LoadImage /
+ *  按预设建链）就是为张量连线口设计的；部件口落值走既有的覆盖写值路径，
+ *  不在这份候选里。子图哨兵口（isBoundary）不是可落点的业务端口，同样排除。 */
+export function collectGraphImageInputs(
+  rawInputsById: Record<string, Array<RawInputEntry>>,
+): Array<WorkflowImageInputPort> {
+  const out: Array<WorkflowImageInputPort> = [];
+  const seen = new Set<string>();
+  for (const [nodeId, entries] of Object.entries(rawInputsById)) {
+    for (const entry of entries) {
+      const type = typeof entry.type === "string" ? entry.type.toUpperCase() : "";
+      if (type !== "IMAGE" && type !== "MASK") {
+        continue;
+      }
+      if (entry.widget || entry.isBoundary) {
+        continue;
+      }
+      const ioKey = `${nodeId}::param::${entry.name}`;
+      if (seen.has(ioKey)) {
+        continue;
+      }
+      seen.add(ioKey);
+      out.push({ ioKey, label: `${entry.name}（${nodeId}）`, name: entry.name, nodeId });
+    }
+  }
+  return out.sort((a, b) => (a.ioKey < b.ioKey ? -1 : a.ioKey > b.ioKey ? 1 : 0));
 }
 
 /** 子工作流内部节点的输入元数据索引（nodeId → raw 条目）。

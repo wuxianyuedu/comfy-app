@@ -87,3 +87,64 @@ describe("buildReferenceLoaderPlan", () => {
     expect(extraInputs).toEqual([{ nodeId: "12", name: "image", value: "a.png" }]);
   });
 });
+
+describe("buildReferenceLoaderPlan · 未暴露张量口（#4405）", () => {
+  it("追加端口落在未暴露的图片族连线上时，经 graphImagePorts 解析 nodeId/name", () => {
+    /* MiniMax 现场：暴露面里只有 LoadImage 的 upload 部件口，
+     * images.image_1 / images.image2 都是没勾选暴露的张量口。 */
+    const { plan, extraInputs } = buildReferenceLoaderPlan({
+      bindings: {
+        "reference-image": {
+          presetId: "p1",
+          extraTargets: ["69::param::images.image_1", "34::param::images.image2"],
+        },
+      },
+      filenames: ["a.png"],
+      io: {
+        "45::widget::upload": { nodeId: "45", name: "upload", kind: "widget", direction: "input" },
+      },
+      presets: [PRESET],
+      resolved: { "reference-image": "45::widget::upload" },
+      graphImagePorts: [
+        {
+          ioKey: "69::param::images.image_1",
+          label: "images.image_1（69）",
+          name: "images.image_1",
+          nodeId: "69",
+        },
+        {
+          ioKey: "34::param::images.image2",
+          label: "images.image2（34）",
+          name: "images.image2",
+          nodeId: "34",
+        },
+      ],
+    });
+    expect(plan).toEqual({
+      "45::upload": PRESET,
+      "69::images.image_1": PRESET,
+      "34::images.image2": PRESET,
+    });
+    /* 主落点（45::widget::upload）不重发；两个追加端口各补一份同值覆盖项。 */
+    expect(extraInputs).toEqual([
+      { nodeId: "69", name: "images.image_1", value: "a.png" },
+      { nodeId: "34", name: "images.image2", value: "a.png" },
+    ]);
+  });
+
+  it("暴露面与全图候选同键时以暴露面为准（不重复发覆盖项）", () => {
+    const { extraInputs } = buildReferenceLoaderPlan({
+      bindings: { "reference-image": { extraTargets: ["69::param::image_1"] } },
+      filenames: ["a.png"],
+      io: {
+        "69::param::image_1": { nodeId: "69", name: "image_1", kind: "param", direction: "input" },
+      },
+      presets: [PRESET],
+      resolved: { "reference-image": "69::param::image_0" },
+      graphImagePorts: [
+        { ioKey: "69::param::image_1", label: "image_1（69）", name: "image_1", nodeId: "69" },
+      ],
+    });
+    expect(extraInputs).toEqual([{ nodeId: "69", name: "image_1", value: "a.png" }]);
+  });
+});

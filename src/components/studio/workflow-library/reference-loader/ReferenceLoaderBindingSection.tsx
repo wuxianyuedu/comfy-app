@@ -13,6 +13,7 @@ import { Settings2, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { SelectMenu } from "~/components/ui/select-menu";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import type { WorkflowImageInputPort } from "~/lib/comfyui/workflow-detail-raw";
 import {
   referenceLoaderBindingsForMode,
   withReferenceLoaderBinding,
@@ -27,6 +28,10 @@ import { ReferenceLoaderPresetModal } from "./ReferenceLoaderPresetModal";
 type Props = {
   /** 该模式的契约口状态（只取参考图槽位）。 */
   entries: ReadonlyArray<{ id: string; label: string; targetIoKey: string | null }>;
+  /** 全图 IMAGE / MASK 连线输入口（含未暴露的张量口，#4405）。
+   *  只看已暴露的 workflowIO 时，MiniMax 这类多参考图工作流的消费口
+   *  （`images.image_0..4`）不在候选里，追加端口下拉会是空的。 */
+  graphImagePorts?: ReadonlyArray<WorkflowImageInputPort>;
   io: WorkflowIOMap | null;
   mode: string;
   /** 整份 paramMap 的写回口（详情层 PATCH workflow.update）。 */
@@ -36,6 +41,7 @@ type Props = {
 
 export function ReferenceLoaderBindingSection({
   entries,
+  graphImagePorts,
   io,
   mode,
   onPatchParamMap,
@@ -53,18 +59,30 @@ export function ReferenceLoaderBindingSection({
     return labels;
   }, [presets]);
   const slots = useMemo(() => entries.filter((entry) => referenceSlotOf(entry.id) >= 0), [entries]);
-  /* 候选端口：工作流里图族的输入口（IMAGE / MASK）。 */
+  /* 候选端口：工作流里图族的输入口（IMAGE / MASK）。两个来源按 ioKey 去重：
+   * ① 已暴露的 workflowIO 图片口；② 全图图片族连线口（#4405，含未暴露的
+   * 张量口 —— 多参考图工作流的消费口通常没被勾选暴露）。 */
   const candidates = useMemo(() => {
-    return Object.entries(io ?? {})
-      .filter(([, entry]) => {
-        const type = upperToken(entry.type);
-        return entry.direction === "input" && (type === "IMAGE" || type === "MASK");
-      })
-      .map(([ioKey, entry]) => ({
+    const byKey = new Map<string, WorkflowImageInputPort>();
+    for (const [ioKey, entry] of Object.entries(io ?? {})) {
+      const type = upperToken(entry.type);
+      if (entry.direction !== "input" || (type !== "IMAGE" && type !== "MASK")) {
+        continue;
+      }
+      byKey.set(ioKey, {
         ioKey,
         label: `${entry.name}（${entry.nodeId}）`,
-      }));
-  }, [io]);
+        name: entry.name,
+        nodeId: entry.nodeId,
+      });
+    }
+    for (const port of graphImagePorts ?? []) {
+      if (!byKey.has(port.ioKey)) {
+        byKey.set(port.ioKey, port);
+      }
+    }
+    return [...byKey.values()];
+  }, [io, graphImagePorts]);
 
   const write = (slotId: string, binding: ReferenceLoaderBinding | null) => {
     onPatchParamMap(withReferenceLoaderBinding({ paramMap, mode, slotId, binding }));

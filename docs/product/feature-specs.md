@@ -511,6 +511,13 @@
   - 「工坊封装」页签的参考图槽位行可配**装载预设**（缺省 = 裸 LoadImage 直连，
     即 #4355 行为）与**追加端口**（同一张图除主落点外再喂给的端口，扇出）；
     绑定随模式存放，写回 `paramMap` 的 `referenceLoaders` 命名空间。
+  - **追加端口的候选是全图的图片族连线口**（#4405）：不要求作者先把端口勾选
+    暴露进 workflowIO —— 多参考图工作流的消费口（如 MiniMax H3 的
+    `images.image_0..4`）通常是未暴露的张量连线口，只看暴露面时扇出下拉会是
+    空的、「这张图还要喂到哪」没有地方可配。候选由详情载荷的
+    `imageInputPorts`（从 rawJson 输入元数据现收）与已暴露图片口按 ioKey
+    并集给出；落在未暴露口上的追加端口，装载计划经同一份候选解析
+    nodeId / name，不静默丢目标。
   - 预设库弹窗（封装页签「管理预设」）可新建 / 编辑 / 删除预设：名称 +
     装载链（LoadImage 之后串哪些处理节点，节点类从 ComfyUI object_info 目录
     按关键词搜索追加）。控件值就地编辑，**有候选的控件出下拉**（#4404）：
@@ -531,6 +538,8 @@
     通道维持裸 LoadImage 行为）。
 - 落点：`src/lib/comfyui/reference-loader-chain.ts`（执行期建链）、
   `src/lib/comfyui/reference-loader-catalog.ts`（object_info 归一）、
+  `src/lib/comfyui/workflow-detail-raw.ts`（`collectGraphImageInputs`：全图图片族
+  连线口候选，#4405）、
   `src/lib/workshop/reference-loader-preset*.ts`（预设存储）、
   `src/server/api/routers/reference-loader.ts`（路由）、
   `src/components/studio/workflow-library/reference-loader/`（预设库弹窗与绑定区）、
