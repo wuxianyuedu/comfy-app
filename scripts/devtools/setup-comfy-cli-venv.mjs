@@ -6,7 +6,8 @@
  * `src/lib/comfyui/executor-cli.ts` 固定使用 `<项目根>/python-venv/comfy-cli` 下的
  * Python 解释器（读侧按平台认 `Scripts/python.exe` 与 `bin/python`，
  * 见 `src/lib/comfyui/comfy-cli-python.ts`）。该 venv 不存在时 spawn 直接 ENOENT，
- * 用户只看到一串 spawn 报错，无从下手。本脚本把「建 venv → 升 pip → 装 comfy-cli」
+ * 用户只看到一串 spawn 报错，无从下手。本脚本把「建 venv → 升 pip → 装 comfy-cli
+ * （+ comfy-mcp，工作区 MCP 服务器 `comfy-mcp` 的入口 exe 由它提供，ISSUE #4521）」
  * 固化下来。ISSUE #2197：此前这套逻辑只住在 `setup-comfy-cli-venv.ps1`
  * （Windows 单侧，读侧却早已支持 POSIX 布局）——现在逻辑全部在本文件，
  * `.ps1` 是薄壳入口（定位项目根 → 调用本文件，硬规则 12 的既定形状）。
@@ -151,6 +152,51 @@ function isComfyCliInstalled() {
   return r.status === 0;
 }
 
+function isComfyMcpInstalled() {
+  if (!existsSync(VenvPy)) {
+    return false;
+  }
+  const r = spawnSync(VenvPy, ["-c", "import comfy_mcp"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    timeout: 120_000,
+    windowsHide: true,
+  });
+  return r.status === 0;
+}
+
+/** 确保 comfy-mcp 就位（幂等：已可导入则零副作用）。venv 首建与「已就绪」两条
+ * 路径都会走到 —— 只装不升（升级节奏仍归 comfy-cli 那套节流）。缺 comfy-mcp
+ * 只影响工作区 MCP 服务器，不影响工作流执行，所以安装失败记日志 + 给出可复制
+ * 的手工命令后继续，不阻断启动。
+ *
+ * @returns {boolean} 结束时 comfy-mcp 是否可用
+ */
+function ensureComfyMcpInstalled() {
+  if (isComfyMcpInstalled()) {
+    writeLog("OK", "comfy-mcp 已就绪");
+    return true;
+  }
+  writeStatus("pip", "正在安装 comfy-mcp（工作区 MCP 用）…");
+  const ok = runStep("安装 comfy-mcp", VenvPy, ["-m", "pip", "install", "comfy-mcp"], 1_800_000).ok;
+  if (ok) {
+    writeLog("OK", "comfy-mcp 安装完成");
+    return true;
+  }
+  writeLog(
+    "ERROR",
+    "comfy-mcp 安装失败 —— 工作区 MCP 服务器 comfy-mcp 将不可用（不影响工作流执行）",
+  );
+  const pipCmd = isWin
+    ? String.raw`python-venv\comfy-cli\Scripts\python.exe -m pip install comfy-mcp`
+    : "python-venv/comfy-cli/bin/python -m pip install comfy-mcp";
+  process.stderr.write(
+    `[setup-comfy-cli-venv] comfy-mcp 安装失败，工作区 MCP（comfy-mcp）将不可用；` +
+      `可手工执行：${pipCmd}\n`,
+  );
+  return false;
+}
+
 function getInstalledComfyCliVersion() {
   const r = runStep(
     "读取已安装的 comfy-cli 版本",
@@ -289,6 +335,8 @@ function main() {
   if (existsSync(VenvPy) && isComfyCliInstalled()) {
     const installed = getInstalledComfyCliVersion();
     writeLog("INFO", `comfy-cli 环境已就绪：${VenvPy}（v${installed ?? "?"}）`);
+    // ISSUE #4521：旧检出的 venv 里可能没有 comfy-mcp，就绪路径同样补齐
+    ensureComfyMcpInstalled();
 
     if (!upgradeCheckDue(force)) {
       writeLog(
@@ -398,6 +446,9 @@ function main() {
     });
     return 1;
   }
+
+  // comfy-mcp 与 comfy-cli 同批就位（工作区 MCP 服务器 `comfy-mcp` 依赖它，#4521）
+  ensureComfyMcpInstalled();
 
   // 刚装上的就是最新版，记录一次检查时间，避免下次启动立刻再查一遍
   saveUpgradeState(getInstalledComfyCliVersion() ?? "", "");

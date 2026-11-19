@@ -94,7 +94,7 @@
 - ✅ 检查依赖是否已安装，未安装则自动执行 `pnpm install`（会下载较久，**别关窗口**）；
 - ✅ 自动从 `.env.example` 生成一份 `.env`（已存在则跳过，不会覆盖你的配置）；
 - ✅ 生成后再跑 `pnpm env:init`，补齐 `.env` 里**缺失的键**（例如 `COMFYAPP_DEV_HANDLE`，启动留痕需要），已有的键一律不覆盖；
-- ✅ 检查 `comfy-cli` 运行环境（`<项目根>/python-venv/comfy-cli` 下的 Python 解释器），缺失时自动创建虚拟环境并安装 `comfy-cli`（已就绪则跳过）；工作流执行依赖它，拿不到会报「未找到 comfy-cli Python 解释器」；
+- ✅ 检查 `comfy-cli` 运行环境（`<项目根>/python-venv/comfy-cli` 下的 Python 解释器），缺失时自动创建虚拟环境并安装 `comfy-cli`，并确保 `comfy-mcp`（工作区 MCP 服务器用）也就位（已就绪则跳过）；工作流执行依赖它，拿不到会报「未找到 comfy-cli Python 解释器」；
 - ✅ 最后提示你接下来双击 `tools/start/start-web.ps1`。
 
 > 窗口最末尾如果出现绿色的 `[OK]` 或类似「初始化完成」提示，就说明成功了。

@@ -167,8 +167,10 @@ wrapper 的覆盖不生效（提示词/种子整段失效，1.20 才修）。按
   1. `python -m venv python-venv\comfy-cli`
   2. `python-venv\comfy-cli\Scripts\python.exe -m pip install --upgrade pip`
   3. `python-venv\comfy-cli\Scripts\python.exe -m pip install comfy-cli`
+  4. `python-venv\comfy-cli\Scripts\python.exe -m pip install comfy-mcp`（工作区 MCP 服务器 `comfy-mcp` 用，#4521）
 - **已就绪** → 版本检查：比对已装版本与 PyPI 最新版，落后才
   `pip install --upgrade comfy-cli`；已是最新则只记一行日志。
+  `comfy_mcp` 不可导入时同样自动补装 `comfy-mcp`（失败只记日志，不阻断）。
 
 版本检查**默认 24 小时才联网一次**（状态见 `run/comfy-cli-upgrade-check.json`），
 避免每次启动都打扰 PyPI；离线 / PyPI 不可达或升级失败只记日志并保持已安装版本——
