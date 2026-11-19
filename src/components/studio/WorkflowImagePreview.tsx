@@ -56,7 +56,8 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
         />
       </div>
       {size && (
-        <div className="text-ink-soft text-3xs text-right tabular-nums">
+        /* 尺寸文字随预览盒居中（ISSUE #4549，此前右对齐）。 */
+        <div className="text-ink-soft text-3xs text-center tabular-nums">
           {size.width} × {size.height}
         </div>
       )}

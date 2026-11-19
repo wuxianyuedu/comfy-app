@@ -1448,6 +1448,49 @@ textarea::-webkit-scrollbar {
   z-index: 1180 !important;
 }
 
+/* ── 节点悬停四角括号（ISSUE #4549） ────────────────────────────────────
+   悬浮反馈只在四角出现括号装饰（对齐 ComfyUI 原生节点的悬停形态），
+   节点本体不变色（实测当前构建悬停本就无颜色变化，此处把「括号 = 悬停反馈」
+   定为唯一观感）。显隐由外壳的 `data-hovered`（useHoverElevation 写入）驱动，
+   不进 React 状态 —— 鼠标进出零重渲染。颜色走语义 token，明暗两态自动适配。
+   四个 <span> 由 FlowNode 卡片渲染（绝对定位于卡片四角），pointer-events 关闭
+   不抢交互；折叠态卡片只剩标题栏，括号依旧落在四角。 */
+.flow-node-corner {
+  pointer-events: none;
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.react-flow__node[data-hovered="true"] .flow-node-corner {
+  opacity: 1;
+}
+.flow-node-corner-tl {
+  top: 3px;
+  left: 3px;
+  border-top: 2px solid var(--color-ink-muted);
+  border-left: 2px solid var(--color-ink-muted);
+}
+.flow-node-corner-tr {
+  top: 3px;
+  right: 3px;
+  border-top: 2px solid var(--color-ink-muted);
+  border-right: 2px solid var(--color-ink-muted);
+}
+.flow-node-corner-bl {
+  bottom: 3px;
+  left: 3px;
+  border-bottom: 2px solid var(--color-ink-muted);
+  border-left: 2px solid var(--color-ink-muted);
+}
+.flow-node-corner-br {
+  bottom: 3px;
+  right: 3px;
+  border-bottom: 2px solid var(--color-ink-muted);
+  border-right: 2px solid var(--color-ink-muted);
+}
+
 /* ── 参考图挂载节点高亮（ISSUE #4534） ────────────────────────────────
    编辑器「参考图挂载」编辑态里被标记的节点：外壳上加主色描边环。
    打在 React Flow 节点外壳上（与悬浮态同位、不进节点数据，标记变化只重渲

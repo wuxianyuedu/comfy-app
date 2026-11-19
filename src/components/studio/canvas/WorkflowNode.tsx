@@ -169,6 +169,14 @@ export const FlowNode = React.memo(function FlowNode({
       {palette.modeColor !== null && palette.modeColor !== "" && palette.nodeMode !== 0 && (
         <FrostLayer color={palette.modeColor} nodeMode={palette.nodeMode} />
       )}
+      {/* 悬停角括号（ISSUE #4549）—— 悬浮反馈只在四角出现括号装饰，节点
+       *  本体不变色。显隐由 React Flow 外壳的 `data-hovered`（useHoverElevation
+       *  写入）经 CSS 切换，不在 React 状态里，鼠标进出不重渲染节点。
+       *  样式与档位唯一出口在 globals.css（`flow-node-corner-*`）。 */}
+      <span aria-hidden className="flow-node-corner flow-node-corner-tl" />
+      <span aria-hidden className="flow-node-corner flow-node-corner-tr" />
+      <span aria-hidden className="flow-node-corner flow-node-corner-bl" />
+      <span aria-hidden className="flow-node-corner flow-node-corner-br" />
       {/* 头部 —— 钉在 NODE_TITLE_H（litegraph 的 NODE_TITLE_HEIGHT）。
        *  rgthree Label 节点整个抑制（见 `isLabel`）。 */}
       {!isLabel && (
