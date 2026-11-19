@@ -15,6 +15,10 @@ import type { WorkflowRow } from "./workflow-library-config";
 /* SAFETY: 类型断言已复核 */
 export const DETAIL_TABS = [
   { key: "params", label: "工坊封装" },
+  /* 参考图装载：每个参考图槽位的「装载预设 + 追加端口」配置。原混在「工坊封装」
+   * 页签里，多参考图工作流的装载配置与契约口清单挤在一屏（ISSUE #4526），
+   * 拆成独立页签。轻面板：不牵画布引擎，与「源文件」同族。 */
+  { key: "reference", label: "参考图装载" },
   { key: "canvas", label: "编辑对外参数" },
   /* IO 预览：不进编辑器就能改显隐 / 默认值 / 必填 / 显示名（ISSUE #3632）。
    * 与「编辑对外参数」相邻 —— 两者都是对外参数配置，只是后者要拉画布引擎。 */
