@@ -194,6 +194,13 @@ export function DetailBody({
               <LazyJsonViewer
                 data={sourceData.source}
                 initialCollapsedDepth={2}
+                /* key=workflow.id：react18-json-view 的 JsonNode 按值类型条件式调
+                 * useState（primitive 分支两个、object/array 分支零个）。不重建时换
+                 * 工作流 = 同一实例收到一棵结构不同的树，同位置节点类型一变就触发
+                 * React「change in the order of Hooks」(ISSUE #4406 第 2 条)。重建后
+                 * 每条工作流从全新 JsonView 实例挂载，内部 useState(_src) 也从新值起步。
+                 * 与画布预览 / IO 面板 / 封装面板的 key={workflow.id} 同一策略。 */
+                key={workflow.id}
                 title="工作流(RAW)格式"
               />
             )}

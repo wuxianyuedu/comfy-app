@@ -132,6 +132,28 @@ export function resolveActiveMode(
   return override.workflowId === workflowId ? override.mode : defaultMode;
 }
 
+/** 画布那份常驻实例是否该挂载（ISSUE #4406 第 1 条）。
+ *
+ *  两个条件或起来：① **当前正停在画布页签**（canvas / use）—— 视图此刻就要显示它，
+ *  无论 `canvasVisitedFor` 记的是谁；② 这条工作流此前访问过画布页签 —— 切回工坊封装
+ *  也不卸载，保住表单值 / 运行态。
+ *
+ *  此前只有条件②，切换工作流时 `activeTab` 不重置（仍停在画布页签），但新工作流的 id
+ *  不等于 `canvasVisitedFor` 记的旧 id → 判成不挂载 → 常驻容器被卸载而其它页签又不匹配
+ *  当前 tab → 整块内容空白，只有切回被记住的那条才显示。加上条件① 后：正显示的页签
+ *  必然有内容，且 `key={workflow.id}` 保证换工作流时画布实例重建、不残留上一条的状态。 */
+export function resolveCanvasMounted(
+  activeTab: DetailTab,
+  canvasVisitedFor: string | null,
+  workflowId: string | null,
+): boolean {
+  if (workflowId === null || workflowId === "") {
+    return false;
+  }
+  const isCanvasTab = activeTab === "canvas" || activeTab === "use";
+  return isCanvasTab || canvasVisitedFor === workflowId;
+}
+
 export function useWorkflowLibraryDetail(
   props: WorkflowLibraryDetailProps,
 ): WorkflowLibraryDetailController {
@@ -400,9 +422,9 @@ export function useWorkflowLibraryDetail(
     activeTab,
     setActiveTab: handleTabChange,
     patchWorkflowIO,
-    /* 画布预览那一份常驻实例该不该挂载：当前工作流被访问过画布页签就挂载
-     *  （切回工坊封装也不卸载 —— 卸载会丢表单值 / 运行态，见上面的说明）。 */
-    canvasMounted: !!workflow && canvasVisitedFor === workflow.id,
+    /* 画布预览那份常驻实例该不该挂载：当前正停在画布页签，或本工作流访问过画布
+     *  页签（切回工坊封装也不卸载）。判据收在纯函数里，见 resolveCanvasMounted。 */
+    canvasMounted: resolveCanvasMounted(activeTab, canvasVisitedFor, workflow?.id ?? null),
     activeMode,
     setActiveMode,
     sourceOpen,

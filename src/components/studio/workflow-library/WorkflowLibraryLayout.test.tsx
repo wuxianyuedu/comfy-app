@@ -405,14 +405,20 @@ describe("局部加载不许用整列加载界面", () => {
     expect(view).toMatch(/hidden=\{activeTab !== "canvas" && activeTab !== "use"\}/);
   });
 
-  it("`canvasMounted` 由 controller 给，且落在「首次切到画布页签」那一刻", () => {
+  it("`canvasMounted` 由 controller 给，且停在画布页签或访问过画布时为真", () => {
     /* 读源断言钉的是**结构**（字段在 controller 上、记录点在切页签那条路上），
      * 不是括号形态：先过归一化，oxlint `curly` 补 `{}` 不改变这条判据的结论。 */
     const hook = normalizeControlFlow(read("hooks/use-workflow-library-detail.ts"), "detail.ts");
     /* 契约：controller 上有这个字段。 */
     expect(hook).toMatch(/canvasMounted: boolean;/);
-    /* 判据：当前工作流访问过画布页签才为真。 */
-    expect(hook).toMatch(/canvasMounted: !!workflow && canvasVisitedFor === workflow\.id/);
+    /* 判据收在纯函数里（ISSUE #4406：停在画布页签换工作流也必须挂载，见其单测）。 */
+    expect(hook).toMatch(
+      /canvasMounted: resolveCanvasMounted\(activeTab, canvasVisitedFor, workflow\?\.id \?\? null\)/,
+    );
+    /* 纯函数本体：当前是画布页签 OR 本工作流访问过，两者或起来。 */
+    expect(hook).toMatch(/export function resolveCanvasMounted\(/);
+    expect(hook).toMatch(/const isCanvasTab = activeTab === "canvas" \|\| activeTab === "use";/);
+    expect(hook).toMatch(/return isCanvasTab \|\| canvasVisitedFor === workflowId;/);
     /* 记录点只在切页签那一条路径上（不是 effect 里 setState）。 */
     expect(hook).toMatch(
       /if \(isCanvasTab\(tab\) && workflow\) setCanvasVisitedFor\(workflow\.id\)/,
