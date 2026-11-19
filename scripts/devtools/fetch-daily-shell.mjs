@@ -435,14 +435,151 @@ async function safeReadText(res) {
 }
 
 /**
+ * rename 落位时值得重试的错误码：Windows 上目标文件被其它句柄短暂占用时，
+ * `MoveFileEx(REPLACE_EXISTING)` 会以 EPERM / EACCES / EBUSY 失败，而占用方
+ * （杀软扫描、索引器、备份工具）往往几秒内就放手 —— 退避重试比直接失败更有用。
+ */
+const RETRYABLE_RENAME_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
+
+/** 重试间隔（毫秒），总预算约 3 秒：足以跨过一次杀软扫描，又不至于让双击入口久等。 */
+export const RENAME_RETRY_DELAYS_MS = [100, 200, 400, 800, 1600];
+
+/**
+ * tasklist 子进程结果里本脚本用得到的形状（比 SpawnSyncReturns 宽松，便于测试注入）。
+ *
+ * @typedef {{status: number | null, stdout?: string | Buffer | null}} TasklistSpawnResult
+ */
+
+/**
+ * 按映像名列举正在运行的进程（只读查询，不杀进程）。用于落位失败时回答
+ * 「是不是应用还开着」—— Windows 上运行中的 exe 会被系统锁住，rename 覆盖必失败。
+ *
+ * @param {string} imageName 目标文件名（如 app.exe）
+ * @param {{platform?: NodeJS.Platform, spawnImpl?: (command: string, args: string[], options?: {encoding: "utf8", windowsHide: boolean, stdio: "pipe"}) => TasklistSpawnResult}} [io]
+ * @returns {Array<{name: string, pid: number}>}
+ */
+export function findRunningProcessesByImage(imageName, io = {}) {
+  const platform = io.platform ?? process.platform;
+  const spawnImpl = io.spawnImpl ?? spawnSync;
+  if (platform !== "win32" || !imageName) {
+    return [];
+  }
+  let res;
+  try {
+    res = spawnImpl("tasklist", ["/FI", `IMAGENAME eq ${imageName}`, "/FO", "CSV", "/NH"], {
+      encoding: "utf8",
+      windowsHide: true,
+      stdio: "pipe",
+    });
+  } catch {
+    return [];
+  }
+  if (res?.status !== 0 || !res?.stdout) {
+    return [];
+  }
+  /** @type {Array<{name: string, pid: number}>} */
+  const found = [];
+  const lower = imageName.toLowerCase();
+  for (const row of String(res.stdout).split(/\r?\n/u)) {
+    /* CSV 行形如 `"app.exe","1234","Console","1","…"`；首列映像名、次列 PID。 */
+    const m = row.match(/^"(?<name>[^"]+)"\s*,\s*"(?<pid>\d+)"/u);
+    const name = m?.groups?.name;
+    const pid = m?.groups?.pid;
+    if (name !== undefined && pid !== undefined && name.trim().toLowerCase() === lower) {
+      found.push({ name: name.trim(), pid: Number(pid) });
+    }
+  }
+  return found;
+}
+
+/**
+ * 把 rename 失败翻译成「下一步做什么」。目标被锁在 Windows 上最常见的原因是
+ * 旧壳还在运行（或杀软正在扫描）；按能不能查到同名进程分别给提示。
+ *
+ * @param {NodeJS.ErrnoException} err rename 抛出的原始错误
+ * @param {string} outAbs 目标落点绝对路径
+ * @param {{platform?: NodeJS.Platform, spawnImpl?: (command: string, args: string[], options?: {encoding: "utf8", windowsHide: boolean, stdio: "pipe"}) => TasklistSpawnResult}} [io]
+ * @returns {string}
+ */
+export function describeRenameFailure(err, outAbs, io = {}) {
+  const tag = err?.code ? `（${err.code}）` : "";
+  const lines = [`无法把下载的壳落位到 ${outAbs}${tag}：${err?.message ?? "未知错误"}。`];
+  const running = findRunningProcessesByImage(path.basename(outAbs), io);
+  if (running.length > 0) {
+    const pids = running.map((p) => `${p.name}(PID ${p.pid})`).join("、");
+    lines.push(
+      `检测到同名进程正在运行：${pids} —— 它锁住了目标文件。请先退出 Comfy APP（注意托盘/后台实例），再重新获取。`,
+    );
+  } else {
+    lines.push(
+      "目标文件被占用：多半是应用仍在运行、或杀毒软件正在扫描新文件。请先关闭应用，稍等几秒后重试；若反复出现，把杀软的该目录扫描加入白名单。",
+    );
+  }
+  return lines.join("\n");
+}
+
+/**
+ * 原子落盘：先写同目录临时文件，再 rename 到目标。rename 遇到可重试的占用错误时
+ * 按退避间隔重试；耗尽后清掉临时文件，并抛出带「下一步」提示的错误（保留原错误为 cause）。
+ *
  * @param {string} outAbs
  * @param {Buffer} bytes
+ * @param {{delays?: number[], sleep?: (ms: number) => Promise<void>, platform?: NodeJS.Platform, spawnImpl?: (command: string, args: string[], options?: {encoding: "utf8", windowsHide: boolean, stdio: "pipe"}) => TasklistSpawnResult}} [opts]
  */
-export function writeFileAtomic(outAbs, bytes) {
+export async function writeFileAtomic(outAbs, bytes, opts = {}) {
   fs.mkdirSync(path.dirname(outAbs), { recursive: true });
   const tmp = `${outAbs}.tmp-${process.pid}-${Date.now()}`;
   fs.writeFileSync(tmp, bytes);
-  fs.renameSync(tmp, outAbs);
+  const delays = opts.delays ?? RENAME_RETRY_DELAYS_MS;
+  const sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  /* oxlint-disable no-await-in-loop -- 退避重试必须逐次等待，不能并行 */
+  for (let attempt = 0; ; attempt++) {
+    try {
+      fs.renameSync(tmp, outAbs);
+      return;
+    } catch (error) {
+      if (!isRetryableRenameError(error)) {
+        /* 非占用类错误不是重试能解决的：清掉临时文件后原样抛出，不包装占用提示。 */
+        removeTempQuietly(tmp);
+        throw error;
+      }
+      if (attempt >= delays.length) {
+        removeTempQuietly(tmp);
+        const wrapped = new Error(describeRenameFailure(error, outAbs, opts));
+        wrapped.cause = error;
+        throw wrapped;
+      }
+      await sleep(delays[attempt] ?? 0);
+    }
+  }
+  /* oxlint-enable no-await-in-loop */
+}
+
+/**
+ * 判断抛出的值是不是「目标被占用」一族的 rename 错误（EPERM / EACCES / EBUSY）。
+ * 用类型守卫收窄 unknown，避免对 unknown 做不安全断言。
+ *
+ * @param {unknown} v
+ * @returns {v is NodeJS.ErrnoException}
+ */
+function isRetryableRenameError(v) {
+  if (!(v instanceof Error) || !("code" in v)) {
+    return false;
+  }
+  return RETRYABLE_RENAME_CODES.has(typeof v.code === "string" ? v.code : "");
+}
+
+/**
+ * 清掉半途残留的临时文件；清不掉就留着，别为清理再抛一个错盖住真因。
+ *
+ * @param {string} tmp
+ */
+function removeTempQuietly(tmp) {
+  try {
+    fs.unlinkSync(tmp);
+  } catch {
+    /* 残留不影响结论；真因在原错误里 */
+  }
 }
 
 /**
@@ -503,7 +640,7 @@ export function ensureRootShortcut(opts) {
 }
 
 /**
- * @param {{argv?: string[], env?: NodeJS.ProcessEnv, cwd?: string, fetchImpl?: typeof fetch, platform?: NodeJS.Platform, spawn?: typeof spawnSync, configPaths?: string[]}} io
+ * @param {{argv?: string[], env?: NodeJS.ProcessEnv, cwd?: string, fetchImpl?: typeof fetch, platform?: NodeJS.Platform, spawn?: typeof spawnSync, configPaths?: string[], writeFile?: typeof writeFileAtomic}} io
  */
 export async function main(io = {}) {
   const argv = io.argv ?? process.argv.slice(2);
@@ -636,7 +773,21 @@ export async function main(io = {}) {
     return 1;
   }
 
-  writeFileAtomic(outAbs, downloaded.bytes);
+  try {
+    await (io.writeFile ?? writeFileAtomic)(outAbs, downloaded.bytes);
+  } catch (error) {
+    /* 落位失败不再是裸栈：把「先关应用再重试」的可执行出口直接念给双击入口的人。 */
+    process.stderr.write(`[fetch-daily-shell] 写入落点失败：${outAbs}\n`);
+    process.stderr.write(
+      `[fetch-daily-shell] ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    const causeStack =
+      error instanceof Error && error.cause instanceof Error ? error.cause.stack : null;
+    if (causeStack) {
+      process.stderr.write(`[fetch-daily-shell] ${causeStack}\n`);
+    }
+    return 1;
+  }
   process.stdout.write(
     `[fetch-daily-shell] ✓ 已下载 ${downloaded.bytes.length} 字节 -> ${outAbs}${downloaded.auth ? "（已鉴权）" : ""}\n`,
   );
