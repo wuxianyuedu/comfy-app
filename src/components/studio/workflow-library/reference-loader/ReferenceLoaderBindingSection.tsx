@@ -133,7 +133,6 @@ export function ReferenceLoaderBindingSection({
                 <span className="text-muted-foreground text-3xs shrink-0">装载预设</span>
                 <SelectMenu
                   aria-label={`${slot.label} 装载预设`}
-                  autoFitFromOptions={false}
                   className="text-3xs h-7"
                   labels={presetLabels}
                   onChange={(next) => {
@@ -174,7 +173,6 @@ export function ReferenceLoaderBindingSection({
                 {selectable.length > 0 && (
                   <SelectMenu
                     aria-label={`${slot.label} 追加端口`}
-                    autoFitFromOptions={false}
                     className="text-3xs h-7"
                     labels={Object.fromEntries(
                       selectable.map((candidate) => [candidate.ioKey, candidate.label]),
