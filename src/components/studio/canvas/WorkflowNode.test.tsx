@@ -107,7 +107,7 @@ describe("FlowNode（WorkflowNode 渲染冒烟）", () => {
     // #4533：值 cell 是「widget 槽凹陷井」——深底 + 圆角，铺在标签列之后的整格
     //（flex: 1 1 0），文本左对齐；标签列固定占比，各行值槽共享同一起点 x。
     expect(valueCell.className).toContain("bg-canvas-deep");
-    expect(valueCell.className).toContain("rounded-[5px]");
+    expect(valueCell.className).toContain("rounded-sm");
     expect(valueCell.className).toContain("text-left");
     /* happy-dom 会把 flex 简写规范化成带 px 的形态（"1 1 0" → "1 1 0px"）。 */
     expect(valueCell.style.flex).toBe("1 1 0px");

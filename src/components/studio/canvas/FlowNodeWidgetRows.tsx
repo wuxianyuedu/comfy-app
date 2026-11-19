@@ -191,7 +191,7 @@ export function FlowNodeWidgetRows({
                  *  形态与 SubgraphWidgetRow 的值框同一套（#4533）。 */}
                 <Hint label={String(v)}>
                   <span
-                    className="text-2xs bg-canvas-deep border-border-subtle min-w-0 truncate rounded-[5px] border px-1.5 text-left tabular-nums"
+                    className="text-2xs bg-canvas-deep border-border-subtle min-w-0 truncate rounded-sm border px-1.5 text-left tabular-nums"
                     style={{
                       flex: "1 1 0",
                       display: "flex",
