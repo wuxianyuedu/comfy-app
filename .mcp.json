@@ -25,6 +25,12 @@
         "COMFY_BIN": "python-venv/comfy-cli/Scripts/comfy.exe"
       },
       "description": "ComfyUI 本地 MCP（PyPI comfy-mcp，comfy-cli 的薄封装；ISSUE #4488）：搜模型 / 节点 / 模板、读已有工作流、改插槽、跑图取产物——驱动用户自跑的本机 ComfyUI（默认 127.0.0.1:8188），工具调用执行 comfy --where local --json。用之前先 server_info 确认 ComfyUI 在跑；POSIX 检出把两处路径换成 python-venv/comfy-cli/bin/。"
+    },
+    "chrome-devtools": {
+      "type": "stdio",
+      "command": "pnpm",
+      "args": ["dlx", "chrome-devtools-mcp@1.12.0", "--isolated", "--memoryDebugging"],
+      "description": "Chrome DevTools 官方调试 MCP（#3447）：读网络请求/响应体、performance trace、堆快照。补 browser-use 的三个空白（其 list_network_requests 不含 body）。--isolated 起干净临时实例、不碰真机浏览器登录态；堆快照工具默认关、由 --memoryDebugging 显式开。钉版本走 pnpm dlx（硬规则 1）。"
     }
   }
 }
