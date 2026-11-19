@@ -395,7 +395,8 @@ export function stageEnvValue(text, stage, key) {
  * @returns {{ok: boolean, out: string}}
  */
 function run(cmd, args) {
-  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
+  /* 预算（#4448）：子进程挂死时不再无限等。 */
+  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true, timeout: 60_000 });
   return {
     ok: r.status === 0 && !r.error,
     out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim(),

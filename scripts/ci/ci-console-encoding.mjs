@@ -86,7 +86,8 @@ export const UTF8_CODE_PAGE = 65_001;
  * @returns {RunResult}
  */
 function defaultRun(cmd, args) {
-  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
+  /* 预算（#4448）：子进程挂死（杀软扫描 / 管道阻塞）时不再无限等。 */
+  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true, timeout: 60_000 });
   return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
 }
 

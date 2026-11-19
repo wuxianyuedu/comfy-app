@@ -543,3 +543,25 @@ export function runRerunCiStage(ctx) {
   log("[ship]   稍后用 pnpm ship --diagnose 看这一跑的结果。");
   return CODE.GREEN;
 }
+
+/**
+ * 合并验真后的本地同步（#4450）：checkout / pull 跟 PR 的实际 base 走，不写死
+ * master——栈式 PR / 换默认分支时切错分支会把验真后的本地状态落到错误基线上。
+ * 两步各留一行失败读数：合并验真的结论不变，但「本地没同步成」要可见。
+ *
+ * @param {{run: PlatformRun, log: (line: string) => void, remote: string, trunk: string}} io
+ */
+export function syncLocalTrunkAfterMerge({ run, log, remote, trunk }) {
+  const checkoutResult = run("git", ["checkout", trunk]);
+  if (checkoutResult.status !== 0) {
+    log(
+      `[ship] 本地同步：checkout ${trunk} 没跑起来（exit ${checkoutResult.status}）——合并验真结论不变`,
+    );
+  }
+  const pullResult = run("git", ["pull", "--ff-only", remote, trunk]);
+  if (pullResult.status !== 0) {
+    log(
+      `[ship] 本地同步：pull ${remote}/${trunk} 没跑起来（exit ${pullResult.status}）——合并验真结论不变`,
+    );
+  }
+}

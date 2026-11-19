@@ -53,6 +53,17 @@ import process from "node:process";
 
 import { CODE } from "./ci-github-mirror-push.mjs";
 import { readOption } from "./ci-ga-verdict-callback.mjs";
+import { RETRY_BACKOFF_MS } from "./ci-mirror-retry-policy.mjs";
+
+/** 单次读数请求的墙钟预算（#4446）：无 `signal` 的 fetch 在对端不回话时会挂到
+ *  undici 的默认超时；与同族请求层（`ci-github-verdict-request.mjs` 的 30s 档）
+ *  对齐。 */
+const REQUEST_TIMEOUT_MS = 30_000;
+
+/** 网络类失败连续多少次才放弃整个轮询（#4446）：单次抖动（连接重置 / 代理闪断）
+ *  不再直接把剩余的二三十分钟预算丢掉——预算内记一行读数、按退避阶梯续轮；
+ *  连续 3 次仍发不出去才落「没判过」（fail-closed 方向不变）。 */
+const MAX_CONSECUTIVE_REQUEST_FAILURES = 3;
 
 /** 回调/占位共用的 context 前缀（与 `CALLBACK_EVENT` 同源）。 */
 export const STATUS_PREFIX = "cnb/api_trigger_ga_verdict";
@@ -235,16 +246,34 @@ export async function main(io = {}) {
   const deadline = now() + budgetMs;
   let lastState;
   let lastPresent;
+  /* 网络类失败连续计数（#4446）：预算内按退避阶梯续轮，连续超限才放弃。 */
+  let requestFailures = 0;
   for (;;) {
     let response;
     try {
       // oxlint-disable-next-line no-await-in-loop -- 轮询本就是串行等待，并行没有意义
       response = await fetchImpl(url, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
+      requestFailures = 0;
     } catch (error) {
-      log(`[ga-readout] 请求没发出去：${String(error)}`);
-      return CODE.NO_FACT;
+      requestFailures += 1;
+      const left = Math.max(0, deadline - now());
+      if (requestFailures >= MAX_CONSECUTIVE_REQUEST_FAILURES || left <= 0) {
+        log(
+          `[ga-readout] 请求连续 ${requestFailures} 次没发出去（预算余 ${Math.round(left / 1000)}s）：${String(error)}`,
+        );
+        return CODE.NO_FACT;
+      }
+      const backoff =
+        RETRY_BACKOFF_MS[Math.min(requestFailures - 1, RETRY_BACKOFF_MS.length - 1)] ?? 10_000;
+      log(
+        `[ga-readout] 请求失败（连续 ${requestFailures} 次，${Math.round(left / 1000)}s 后继续轮）：${String(error)}`,
+      );
+      // oxlint-disable-next-line no-await-in-loop -- 轮询本就是串行等待，并行没有意义
+      await sleep(Math.min(backoff, Math.max(0, deadline - now())));
+      continue;
     }
     if (!response.ok) {
       log(`[ga-readout] 平台回 ${response.status} ⇒ 没取到读数`);

@@ -178,6 +178,8 @@ export async function awaitShaVisible({ repo, sha, token, budgetSeconds, interva
           "X-GitHub-Api-Version": "2022-11-28",
         },
         method: "GET",
+        /* 探 sha 的墙钟预算（#4447）：不挂到 undici 默认超时。 */
+        signal: AbortSignal.timeout(30_000),
       });
       status = res.status;
       if (status === 200) {
@@ -241,6 +243,8 @@ export async function sendDispatch({ request, token, io }) {
   const init = {
     ...request.init,
     headers: { ...request.init.headers, Authorization: `Bearer ${token}` },
+    /* 派发跳的墙钟预算（#4447）：不挂到 undici 默认超时。 */
+    signal: AbortSignal.timeout(30_000),
   };
   try {
     const res = await fetchImpl(request.url, init);
