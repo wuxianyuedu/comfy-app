@@ -177,6 +177,7 @@ export function DetailBody({
           modes={meta?.modes ?? []}
           onModeChange={onActiveModeChange}
           paramMap={paramMap}
+          rawJson={sourceData?.source}
           workflowId={workflow.id}
           workflowIO={workflowIO}
         />

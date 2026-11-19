@@ -317,6 +317,16 @@ export function WorkflowCanvasNodePreview({
       }`}
     >
       {/* ── edit 模式：参数连线画布（三列 React Flow） ── */}
+      {viewMode === "edit" && effectiveMode === null && onPatchParamMap !== undefined && (
+        /* 未配置模式的提示（ISSUE #4550）：落点必须归属一个模式，没有模式时
+         *  拖线被拒是**正常**的（写入无归属），但此前连一句说明都没有 —— 用户
+         *  只看到「拖了没反应」。这里给一句可操作的出口，不阻断浏览（卡片与
+         *  表单照常可见）。只读消费方（无 onPatchParamMap）不提示。 */
+        <p className="bg-warning/10 text-warning-strong text-2xs w-full rounded-lg px-3 py-2">
+          这条工作流还没有配置模式，参数落点暂不能连线（落点必须归属一个模式）。
+          到工作流编辑器顶栏「编辑 IO」配置模式集合后，回这里拖卡片圆点连线。
+        </p>
+      )}
       {viewMode === "edit" && (
         <WorkflowLibraryCanvas
           canWire={effectiveMode !== null && !!onPatchParamMap}

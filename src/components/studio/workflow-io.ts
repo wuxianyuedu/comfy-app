@@ -661,6 +661,7 @@ export {
   inferVideoGroup,
   parseRatioFromLabel,
   pickClarityPreset,
+  workflowDefaultSizeSpec,
 } from "./workflow-io-groups";
 export type {
   DimClarityPreset,

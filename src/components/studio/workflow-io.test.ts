@@ -11,6 +11,7 @@ import {
   parseRatioFromLabel,
   typeDisplay,
   defaultInputValues,
+  workflowDefaultSizeSpec,
   type WorkflowIOMap,
   type WorkflowIOEntry,
   type EnrichedWidget,
@@ -511,5 +512,136 @@ describe("cliOutputNodeId（#4189 部分执行的目标 id）", () => {
   });
   it("子图内部条目拼成 宿主id:内部id（comfy-cli 展开后的运行期 id）", () => {
     expect(cliOutputNodeId({ nodeId: "1670", hostNodeId: "4" })).toBe("4:1670");
+  });
+});
+
+describe("workflowDefaultSizeSpec — 图内默认尺寸（ISSUE #4550）", () => {
+  /** 暴露面用例的最小 io 组装：widget 输入挂到节点 7。 */
+  function ioOf(...entries: Array<WorkflowIOEntry>): WorkflowIOMap {
+    const map: WorkflowIOMap = {};
+    for (const entry of entries) {
+      map[`7::widget::${entry.name}`] = entry;
+    }
+    return map;
+  }
+
+  it("暴露面：比例 + 像素 (+ 倍数) 的图内默认收窄成 SizeSpec", () => {
+    const spec = workflowDefaultSizeSpec({
+      io: ioOf(
+        { ...pin("aspect_ratio", "宽高比", "COMBO"), defaultValue: "1:1" },
+        { ...pin("megapixels", "百万像素", "FLOAT"), defaultValue: 4 },
+        { ...pin("multiple", "倍数", "INT"), defaultValue: 32 },
+      ),
+    });
+    expect(spec).toEqual({ ratio: "1:1 正方", clarity: "4M", multiple: 32 });
+  });
+
+  it("暴露面：模式覆盖层的默认值压过图内值（与表单播种同一口径）", () => {
+    const aspect = {
+      ...pin("aspect_ratio", "宽高比", "COMBO"),
+      defaultValue: "1:1",
+      modeOverrides: { I2I: { defaultValue: "16:9" } },
+    };
+    const io = ioOf(aspect, { ...pin("megapixels", "百万像素", "FLOAT"), defaultValue: 4 });
+    expect(workflowDefaultSizeSpec({ io, mode: "I2I" })?.ratio).toBe("16:9 横屏");
+    expect(workflowDefaultSizeSpec({ io })?.ratio).toBe("1:1 正方");
+  });
+
+  it("暴露面：width + height 形态经 sizeSpecFromDims 反推", () => {
+    const spec = workflowDefaultSizeSpec({
+      io: ioOf(
+        { ...pin("width", "宽度", "FLOAT"), defaultValue: 1024 },
+        { ...pin("height", "高度", "FLOAT"), defaultValue: 1024 },
+      ),
+    });
+    expect(spec).not.toBeNull();
+    expect(spec?.ratio).toBe("1:1 正方");
+  });
+
+  it("RAW 图直读：暴露面没给尺寸口时从 widgets_values 取图内默认（MiniMax H3 现场）", () => {
+    const rawJson = {
+      nodes: [
+        {
+          id: 14,
+          type: "Mini Max H3Image Conditioning",
+          inputs: [
+            { name: "enable_PE", type: "BOOLEAN", widget: { name: "enable_PE" } },
+            { name: "seed", type: "INT", widget: { name: "seed" } },
+            { name: "aspect_ratio", type: "COMBO", widget: { name: "aspect_ratio" } },
+            { name: "megapixels", type: "FLOAT", widget: { name: "megapixels" } },
+            { name: "multiple", type: "INT", widget: { name: "multiple" } },
+          ],
+          widgets_values: [true, 0, "1:1", 4, 32],
+        },
+      ],
+    };
+    /* 暴露面为空（多数工作流没暴露尺寸口）——初值来自图内控件值。 */
+    expect(workflowDefaultSizeSpec({ io: {}, rawJson })).toEqual({
+      ratio: "1:1 正方",
+      clarity: "4M",
+      multiple: 32,
+    });
+    expect(workflowDefaultSizeSpec({ rawJson })).toEqual({
+      ratio: "1:1 正方",
+      clarity: "4M",
+      multiple: 32,
+    });
+  });
+
+  it("RAW 图直读：width + height 形态同样认（经典「比例 + 清晰度」节点）", () => {
+    const rawJson = {
+      nodes: [
+        {
+          id: 3,
+          type: "EmptyLatentImage",
+          inputs: [
+            { name: "width", type: "INT", widget: { name: "width" } },
+            { name: "height", type: "INT", widget: { name: "height" } },
+            { name: "batch_size", type: "INT", widget: { name: "batch_size" } },
+          ],
+          widgets_values: [1024, 1024, 1],
+        },
+      ],
+    };
+    expect(workflowDefaultSizeSpec({ rawJson })?.ratio).toBe("1:1 正方");
+  });
+
+  it("认不出 → null（没有尺寸组 / 关键值缺失或非法），不冒充图内默认", () => {
+    expect(workflowDefaultSizeSpec({ io: ioOf(pin("seed", "种子", "INT")) })).toBeNull();
+    expect(workflowDefaultSizeSpec({ rawJson: { nodes: [] } })).toBeNull();
+    expect(workflowDefaultSizeSpec({ rawJson: "垃圾" })).toBeNull();
+    expect(
+      workflowDefaultSizeSpec({
+        io: ioOf({ ...pin("aspect_ratio", "宽高比", "COMBO") }),
+        rawJson: { nodes: [] },
+      }),
+    ).toBeNull();
+    expect(
+      workflowDefaultSizeSpec({
+        io: ioOf(
+          { ...pin("aspect_ratio", "宽高比", "COMBO"), defaultValue: "" },
+          { ...pin("megapixels", "百万像素", "FLOAT"), defaultValue: 4 },
+        ),
+      }),
+    ).toBeNull();
+    expect(
+      workflowDefaultSizeSpec({
+        io: ioOf(
+          { ...pin("aspect_ratio", "宽高比", "COMBO"), defaultValue: "1:1" },
+          { ...pin("megapixels", "百万像素", "FLOAT") },
+        ),
+      }),
+    ).toBeNull();
+  });
+
+  it("倍数缺失 / 非法回默认对齐档，比例与像素照常收窄", () => {
+    const spec = workflowDefaultSizeSpec({
+      io: ioOf(
+        { ...pin("aspect_ratio", "宽高比", "COMBO"), defaultValue: "16:9" },
+        { ...pin("megapixels", "百万像素", "FLOAT"), defaultValue: 2 },
+      ),
+    });
+    expect(spec?.clarity).toBe("2M");
+    expect(typeof spec?.multiple).toBe("number");
   });
 });

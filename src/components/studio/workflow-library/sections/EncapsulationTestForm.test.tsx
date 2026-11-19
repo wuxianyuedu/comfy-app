@@ -150,4 +150,58 @@ describe("EncapsulationTestForm", () => {
     const img = await screen.findByRole("img", { name: "首帧" });
     expect(img.getAttribute("src") ?? "").toMatch(/^data:image\/png/);
   });
+
+  it("initialSize：尺寸初值跟工作流的图内默认走，而不是全局默认（ISSUE #4550）", () => {
+    const { onRun } = renderForm(T2I_ENTRIES, {
+      initialSize: { ratio: "1:1 正方", clarity: "4M", multiple: 32 },
+    });
+    /* 触发器文本是 shotSizeSummary 现算的摘要（"1:1 / 4M / 32" 形态）。 */
+    expect(screen.getByLabelText("选择生图比例与像素").textContent).toContain("4M");
+    fireEvent.click(screen.getByRole("button", { name: "执行流程测试" }));
+    expect(onRun.mock.calls[0]?.[0].size).toMatchObject({ clarity: "4M", multiple: 32 });
+  });
+
+  it("initialSize 变化：没动过尺寸时跟随新默认（换模式重算），动过则保留用户选择", async () => {
+    const harness = render(
+      <EncapsulationTestForm
+        canRun
+        entries={T2I_ENTRIES}
+        initialSize={{ ratio: "3:4", clarity: "1k", multiple: 64 }}
+        onRun={vi.fn()}
+        running={false}
+        scene="image"
+        uploadImage={vi.fn().mockResolvedValue("uploaded.png")}
+      />,
+    );
+    /* 未动过：initialSize 换成新的图内默认 → 控件跟随。 */
+    harness.rerender(
+      <EncapsulationTestForm
+        canRun
+        entries={T2I_ENTRIES}
+        initialSize={{ ratio: "1:1 正方", clarity: "4M", multiple: 32 }}
+        onRun={vi.fn()}
+        running={false}
+        scene="image"
+        uploadImage={vi.fn().mockResolvedValue("uploaded.png")}
+      />,
+    );
+    expect(screen.getByLabelText("选择生图比例与像素").textContent).toContain("4M");
+    /* 用户改一次尺寸（弹层里点「4:3」比例档）→ touched；此后 initialSize 再变
+     * 也不覆盖用户的选择。 */
+    fireEvent.click(screen.getByLabelText("选择生图比例与像素"));
+    const ratioOption = await screen.findByText("4:3");
+    fireEvent.click(ratioOption);
+    harness.rerender(
+      <EncapsulationTestForm
+        canRun
+        entries={T2I_ENTRIES}
+        initialSize={{ ratio: "3:4", clarity: "1k", multiple: 64 }}
+        onRun={vi.fn()}
+        running={false}
+        scene="image"
+        uploadImage={vi.fn().mockResolvedValue("uploaded.png")}
+      />,
+    );
+    expect(screen.getByLabelText("选择生图比例与像素").textContent).toContain("4M");
+  });
 });

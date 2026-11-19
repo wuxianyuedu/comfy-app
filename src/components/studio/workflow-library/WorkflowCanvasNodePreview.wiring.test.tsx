@@ -186,7 +186,7 @@ describe("库内映射编辑", () => {
     expect(parseParamMapping(next).manualByMode).toEqual({});
   });
 
-  it("有模式 → 卡片可连线；没有模式 → 不可（写入无归属）", () => {
+  it("有模式 → 卡片可连线；没有模式 → 不可（写入无归属）且给出提示", () => {
     /* 落点覆盖必须归属一个模式 —— 没有模式时写入是无归属的空操作，卡片不给拖
      *  （`canWire=false`）。判据：卡片列的提示文案。 */
     const { unmount } = renderPreview({});
@@ -205,6 +205,9 @@ describe("库内映射编辑", () => {
       />,
     );
     expect(screen.getByText("对外参数")).toBeTruthy();
+    /* 无模式不再是静默禁用（ISSUE #4550）：一句可操作的说明就摆在画布上方。 */
+    expect(screen.getByText(/还没有配置模式/)).toBeTruthy();
+    expect(screen.getByText(/编辑 IO/)).toBeTruthy();
   });
 });
 
