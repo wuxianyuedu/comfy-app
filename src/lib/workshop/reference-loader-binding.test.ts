@@ -2,11 +2,15 @@
 //  1) 按模式取绑定表：只认 `mode:<模式>` 键，畸形数据按「没配」处理；
 //  2) 写入只动 `referenceLoaders` 命名空间，`source` / `output` 原样保留；
 //  3) 删除绑定 / 清空模式表 / 清空命名空间时连键一起摘掉，不留空壳。
+// 参考图上限（#4537）：`maxReferences` 是命名空间级的工作流属性，读写同测。
 import { describe, expect, it } from "vitest";
 
 import {
   referenceLoaderBindingsForMode,
+  referenceLoaderMax,
+  REFERENCE_LOADER_CAP_LIMIT,
   withReferenceLoaderBinding,
+  withReferenceLoaderMax,
 } from "./reference-loader-binding";
 
 const PARAM_MAP = {
@@ -88,5 +92,67 @@ describe("withReferenceLoaderBinding", () => {
     });
     expect(next.referenceLoaders).toBeUndefined();
     expect(JSON.stringify(original)).toBe(snapshot);
+  });
+});
+
+describe("referenceLoaderMax / withReferenceLoaderMax（参考图上限，#4537）", () => {
+  it("读出工作流级上限；未配置 / 畸形值 → null", () => {
+    expect(referenceLoaderMax({ referenceLoaders: { maxReferences: 3 } })).toBe(3);
+    expect(referenceLoaderMax(PARAM_MAP)).toBeNull();
+    expect(referenceLoaderMax(null)).toBeNull();
+    expect(referenceLoaderMax({ referenceLoaders: { maxReferences: "3" } })).toBeNull();
+    expect(referenceLoaderMax({ referenceLoaders: { maxReferences: 2.5 } })).toBeNull();
+    expect(referenceLoaderMax({ referenceLoaders: { maxReferences: 0 } })).toBeNull();
+    expect(
+      referenceLoaderMax({ referenceLoaders: { maxReferences: REFERENCE_LOADER_CAP_LIMIT + 1 } }),
+    ).toBeNull();
+  });
+
+  it("上限与槽位绑定同住命名空间，互不干扰", () => {
+    const paramMap = {
+      ...PARAM_MAP,
+      referenceLoaders: {
+        maxReferences: 4,
+        "mode:T2I": { "reference-image": { presetId: "p1" } },
+      },
+    };
+    expect(referenceLoaderMax(paramMap)).toBe(4);
+    expect(referenceLoaderBindingsForMode(paramMap, "T2I")).toEqual({
+      "reference-image": { presetId: "p1" },
+    });
+  });
+
+  it("写上限只动 referenceLoaders 命名空间；越界 / null = 清除", () => {
+    const next = withReferenceLoaderMax({ paramMap: PARAM_MAP, max: 3 });
+    expect(next.source).toEqual(PARAM_MAP.source);
+    expect(next.referenceLoaders).toEqual({ maxReferences: 3 });
+    const cleared = withReferenceLoaderMax({ paramMap: next, max: null });
+    expect(cleared.referenceLoaders).toBeUndefined();
+    const outOfRange = withReferenceLoaderMax({ paramMap: PARAM_MAP, max: 99 });
+    expect(outOfRange.referenceLoaders).toBeUndefined();
+  });
+
+  it("清除上限后命名空间里还有槽位绑定时保留命名空间", () => {
+    const withBinding = withReferenceLoaderBinding({
+      paramMap: PARAM_MAP,
+      mode: "T2I",
+      slotId: "reference-image",
+      binding: { presetId: "p1" },
+    });
+    const withCap = withReferenceLoaderMax({ paramMap: withBinding, max: 2 });
+    expect(referenceLoaderMax(withCap)).toBe(2);
+    const withoutCap = withReferenceLoaderMax({ paramMap: withCap, max: null });
+    expect(referenceLoaderMax(withoutCap)).toBeNull();
+    expect(referenceLoaderBindingsForMode(withoutCap, "T2I")).toEqual({
+      "reference-image": { presetId: "p1" },
+    });
+  });
+
+  it("上限边界 = 1 ~ REFERENCE_LOADER_CAP_LIMIT", () => {
+    expect(REFERENCE_LOADER_CAP_LIMIT).toBe(16);
+    expect(referenceLoaderMax(withReferenceLoaderMax({ paramMap: {}, max: 1 }))).toBe(1);
+    expect(
+      referenceLoaderMax(withReferenceLoaderMax({ paramMap: {}, max: REFERENCE_LOADER_CAP_LIMIT })),
+    ).toBe(16);
   });
 });

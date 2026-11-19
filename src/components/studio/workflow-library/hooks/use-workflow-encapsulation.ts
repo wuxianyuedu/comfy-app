@@ -10,6 +10,8 @@
 import { useMemo } from "react";
 
 import { upperToken } from "~/lib/upper-token";
+import { referenceLoaderMax } from "~/lib/workshop/reference-loader-binding";
+import { referenceSlotOf } from "~/lib/workshop/workflow-encapsulation";
 import {
   modeContractEntries,
   requiredInputsFor,
@@ -41,7 +43,20 @@ export function useWorkflowEncapsulation(args: {
   const { mode, io, paramMap } = args;
   const { contracts } = useModeContracts();
   const contractEntries = useMemo(() => modeContractEntries(mode, contracts), [mode, contracts]);
-  const contractIds = useMemo(() => contractEntries.map((entry) => entry.id), [contractEntries]);
+  /* 参考图上限（ISSUE #4537）：这条工作流实际最多使用 N 张参考图——契约口里
+   * 序号超出上限的参考图槽位不进封装视图（装载页签 / 工坊封装 / 流程测试一致）。
+   * 未配置 = 不设限，跟随模式契约的槽位数。 */
+  const referenceCap = referenceLoaderMax(paramMap);
+  const effectiveEntries = useMemo(
+    () =>
+      referenceCap === null
+        ? contractEntries
+        : contractEntries.filter(
+            (entry) => referenceSlotOf(entry.id) < 0 || referenceSlotOf(entry.id) < referenceCap,
+          ),
+    [contractEntries, referenceCap],
+  );
+  const contractIds = useMemo(() => effectiveEntries.map((entry) => entry.id), [effectiveEntries]);
   const requiredInputs = useMemo(
     () =>
       requiredInputsFor({
@@ -56,10 +71,10 @@ export function useWorkflowEncapsulation(args: {
         io,
         paramMap,
         mode,
-        contractEntries,
+        contractEntries: effectiveEntries,
         requiredInputs,
       }),
-    [io, paramMap, mode, contractEntries, requiredInputs],
+    [io, paramMap, mode, effectiveEntries, requiredInputs],
   );
-  return { contractEntries, contractIds, requiredInputs, status };
+  return { contractEntries: effectiveEntries, contractIds, requiredInputs, status };
 }
