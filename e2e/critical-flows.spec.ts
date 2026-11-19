@@ -97,34 +97,31 @@ test.describe("工作区链路 @critical", () => {
    * ISSUE #720：「加载是有个不知道是什么的图案」——`Spinner` 默认 `display: inline`，`size-6` 的
    * width/height 对行内盒不生效，画出「4×21 的竖线」；尺寸只有真实浏览器量得出（jsdom 不做布局）。
    * 判据：宽高到位（老形态宽 4px）、宽高相等是圆、把父容器 flex 抽掉再量仍成立——守「尺寸不靠调用处
-   * 布局撑着」（原先钉「父容器不是 flex」属实现细节，恒红却不说明退化）。读数用 `getComputedStyle` 而非 `boundingBox()`：`animate-spin` 使外接矩形随角度漂（26×26 / 34×34）。 */
-  test("@critical 工作流库加载态的转圈是真的圆，不是一条竖线", async ({ page }) => {
+   * 布局撑着」（原先钉「父容器不是 flex」属实现细节，恒红却不说明退化）。读数用 `getComputedStyle` 而非 `boundingBox()`：`animate-spin` 使外接矩形随角度漂（26×26 / 34×34）。
+   * 宿主原是工作流库首次载入的转圈；#4511 起库内加载态改为骨架占位（不再有 spinner），
+   * 形状守卫换到设置页首屏加载的 `PageLoading`（同一个 `ui/spinner` 出口）。 */
+  test("@critical 设置页加载态的转圈是真的圆，不是一条竖线", async ({ page }) => {
     await stubBackend(page);
-    /* 把列表查询拖住，制造「加载中」这一刻（它只持续几秒，抓不到就白跑）。 */
+    /* 把设置读取拖住，制造「加载中」这一刻（isInitialLoad = setting.get 未回来，
+     * 见 use-settings-page-load-status.ts）。 */
     await page.route("**/api/trpc/**", async (route: Route) => {
-      if (!route.request().url().includes("workflow.list")) {
-        await route.continue();
+      if (!route.request().url().includes("setting.get")) {
+        await route.fallback();
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, 60_000));
     });
 
     await page.goto("/workspace");
-    await gotoWorkspaceView(page, "工作流库");
-    await expect(page.getByText(/正在加载工作流/)).toBeVisible({
-      timeout: 15_000,
-    });
+    /* 从应用菜单进设置（唯一入口，见 `support/settings-entry`）。这里故意**不等加载完**——
+       要量的就是首屏 `PageLoading` 的那根 spinner，所以不走 `openSettingsView`（它等的是
+       加载完成后的分区导航）。 */
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await page.getByRole("button", { name: "应用菜单" }).click();
+    await page.getByRole("menu").getByRole("menuitem", { name: "设置" }).click();
 
-    /* 锁在**加载态这一处**：页面上同时还有工作流编辑器覆盖层的另一根 spinner
-       （实测同一刻能数到两根），整页 `.first()` 拿到的未必是加载态那根。
-       取法：从「正在加载工作流」那段文案往上找**第一个含 spinner 的祖先**，
-       不依赖某个未必存在的 data-slot。 */
-    const spinner = page
-      .getByText(/正在加载工作流/)
-      .locator("xpath=ancestor::*[.//*[@data-slot='spinner']][1]")
-      .locator('[data-slot="spinner"]')
-      .first();
-    await expect(spinner).toBeAttached();
+    const spinner = page.locator('[data-slot="spinner"]').first();
+    await expect(spinner).toBeVisible({ timeout: 15_000 });
 
     /* 量**布局尺寸**（computed width/height），不是 boundingBox：
        spinner 是 `<svg>`，SVG 图形元素没有 offsetWidth/offsetHeight（实测 undefined）；
@@ -141,7 +138,7 @@ test.describe("工作区链路 @critical", () => {
       });
 
     const size = await measure();
-    /* 老形态宽 4px / 高 21px；正常形态是 24×24（`size-6`）。 */
+    /* 老形态宽 4px / 高 21px；此处的宿主是 `PageLoading` 的 `size-9`（36×36）。 */
     expect(size.width, `宽度塌了：${size.width}×${size.height}`).toBeGreaterThan(16);
     expect(
       Math.abs(size.width - size.height),
