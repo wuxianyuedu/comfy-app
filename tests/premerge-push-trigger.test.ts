@@ -324,6 +324,13 @@ describe("接线在位（判据要有人跑，也要有人守那条线）", () =
     expect(ledger).toContain('".githooks/pre-push"');
   });
 
+  it("复算子进程带上触发来源（COMFY_PREMERGE_TRIGGER=pre-push），耗时账才分得清 push 触发与手工跑（ISSUE #4520）", () => {
+    const proof = readFileSync("scripts/gates/premerge-proof.mjs", "utf8");
+    expect(proof).toContain('COMFY_PREMERGE_TRIGGER: "pre-push"');
+    /* env 是「继承本进程再叠加」，不是整份替换 —— 整份替换会把 PATH 等底层变量弄丢。 */
+    expect(proof).toMatch(/\.\.\.process\.env,\s*\.\.\.extraEnv/);
+  });
+
   it("复算本体只有一处实现 —— 钩子里不许长出第二套编排（§12.12）", () => {
     expect(hook).not.toMatch(/base-check|check-commit-claims|check-merged-side-loss/);
     expect(hook).toContain("premerge-proof.mjs");

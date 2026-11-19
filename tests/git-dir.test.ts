@@ -1,5 +1,5 @@
 /**
- * `scripts/lib/git-dir.mjs` 的判据：判的是「写错地方」，不是「写不进去」。硬拼 `<root>/.git` 在 **worktree** 上拿到的是那个**指针文件**的路径（往里写东西会当场失败或写到不该在的地方）；设了 `GIT_DIR` 时，真正的 git 目录与仓库根可以毫无关系；两种都**不报错**。本仓恰好靠 worktree 跑事后复算（`base-check.mjs` 建临时快照检出），而 `.git/comfy-precommit-timing.jsonl` 与 `.git/comfy-premerge-proof.json` 都落在那个目录里——写错的那侧不会喊，读的那侧只是「永远读不到」，「这次没留下证据」看起来就像「这次没有证据要留」。
+ * `scripts/lib/git-dir.mjs` 的判据：判的是「写错地方」，不是「写不进去」。硬拼 `<root>/.git` 在 **worktree** 上拿到的是那个**指针文件**的路径（往里写东西会当场失败或写到不该在的地方）；设了 `GIT_DIR` 时，真正的 git 目录与仓库根可以毫无关系；两种都**不报错**。本仓恰好靠 worktree 跑事后复算（`base-check.mjs` 建临时快照检出），而 `.git/comfy-premerge-proof.json` 就落在那个目录里（两份耗时账则落各工作树自己的 `.tmp/timing/`，根由 `resolveRepoRoot` 定）——写错的那侧不会喊，读的那侧只是「永远读不到」，「这次没留下证据」看起来就像「这次没有证据要留」。
  * 所以建真 repo / 真 worktree 而不是造假形状：造一个「`.git` 是文件、内容写着 `gitdir: …`」的假目录，测的是**我自己猜的那份格式**，会在 git 换格式时继续绿（那正是本模块要避免的失效）。
  */
 import { spawnSync } from "node:child_process";
@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { gitScratchPath, resolveGitDir } from "../scripts/lib/git-dir.mjs";
+import { gitScratchPath, resolveGitDir, resolveRepoRoot } from "../scripts/lib/git-dir.mjs";
 
 /** 跑一次 git（静默，失败时把 stderr 带进断言消息）。 */
 function git(args: Array<string>, cwd: string): string {
@@ -108,6 +108,21 @@ describe("resolveGitDir：三种检出形态", () => {
     expect(fs.existsSync(pointer), `worktree 没建起来：${pointer}`).toBe(true);
     expect(fs.statSync(pointer).isFile()).toBe(true);
     expect(fs.readFileSync(pointer, "utf8")).toMatch(/^gitdir:\s*\S+/m);
+  });
+});
+
+describe("resolveRepoRoot：工作树根（`.tmp/` 作业目录的落点，规范 §12.8.7）", () => {
+  it("普通检出 ⇒ 仓库根本身", () => {
+    expect(norm(resolveRepoRoot(repo))).toBe(norm(repo));
+  });
+
+  it("worktree ⇒ **那份 worktree 自己的根**，不是主仓的根（账各记各的）", () => {
+    expect(norm(resolveRepoRoot(worktree))).toBe(norm(worktree));
+    expect(norm(resolveRepoRoot(worktree))).not.toBe(norm(repo));
+  });
+
+  it("非检出 ⇒ null（不猜一个路径出去）", () => {
+    expect(resolveRepoRoot(bare)).toBeNull();
   });
 });
 
