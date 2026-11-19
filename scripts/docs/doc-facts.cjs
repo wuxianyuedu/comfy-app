@@ -186,9 +186,17 @@ function extractShellAppExe() {
   return `${m.groups?.file}.exe`;
 }
 function extractSplash() {
-  const conf = readJson("src-tauri/tauri.conf.json");
-  const win = conf.app.windows.find((w) => w.label === "splash") ?? conf.app.windows[0];
-  return win.url;
+  // 权威源随 #4412 挪进代码：splash 由 src-tauri/src/lib.rs 的 create_splash_window
+  // 程序化创建（tauri.conf.json 的 app.windows 已清空——声明式建窗失败直达框架
+  // panic，无声崩溃）。从建窗调用里提取 WebviewUrl::App 的 URL 值。
+  const t = readText("src-tauri/src/lib.rs");
+  const m = t.match(/WebviewUrl::App\("(?<splash>[^"]+)"\.into\(\)\)/);
+  if (!m) {
+    throw new Error(
+      "无法从 src-tauri/src/lib.rs 提取 splash（create_splash_window 的 WebviewUrl::App）",
+    );
+  }
+  return m.groups?.splash;
 }
 
 // ---- 扩展：项目自身"值类"端口（独立单值，非 dev 端口族） ----
