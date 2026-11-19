@@ -82,7 +82,11 @@ export const seriesGenerationRouter = createTRPCRouter({
           if (t.projectId === null || t.shotId === null) {
             continue;
           }
-          const byShot = tasksByProject.get(t.projectId) ?? new Map<string, string>();
+          let byShot = tasksByProject.get(t.projectId);
+          if (!byShot) {
+            byShot = new Map<string, string>();
+            tasksByProject.set(t.projectId, byShot);
+          }
           byShot.set(t.shotId, bestStatus(byShot.get(t.shotId), t.status));
         }
       }
