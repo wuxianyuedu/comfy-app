@@ -747,8 +747,7 @@ describe("LogPanel 日志面板", () => {
         }),
       );
       expect(await screen.findByText(/exports\//)).toBeInTheDocument();
-      /* 面板挂载还会取一次启动耗时分解（#4327），所以按**端点**挑出导出那一通，
-       * 不再假设它是全场第一发。 */
+      /* 按**端点**挑出导出那一通，不假设它是全场第一发（面板还会取其他读数）。 */
       const call = fetchMock.mock.calls.find(([url]) => url === "/api/logs/export");
       if (call === undefined) {
         throw new Error("未发出导出请求");
@@ -787,7 +786,7 @@ describe("LogPanel 日志面板", () => {
       const user = userEvent.setup();
       await user.click(screen.getByRole("button", { name: "打包诊断现场到本地文件" }));
       expect(await screen.findByText(/diagnostics-/)).toBeInTheDocument();
-      /* 同上：按端点挑出诊断那一通（面板挂载时还有 #4327 的耗时取数在场）。 */
+      /* 同上：按端点挑出诊断那一通。 */
       const call = fetchMock.mock.calls.find(([url]) => url === "/api/logs/diagnostics");
       if (call === undefined) {
         throw new Error("未发出诊断请求");
