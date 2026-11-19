@@ -114,8 +114,12 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
     userId: string,
     tagName: string,
     excludeTemplateId: string,
+    /* 事务执行者（ISSUE #4474）：占用查重要与落库落在同一 immediate 事务
+     * （持写锁）里，check-then-act 才没有并发窗口；不传 = 模块级连接。 */
+    executor?: DbExecutor,
   ): Promise<Array<{ modes: Array<string>; templateId: string; workflowName: string }>> {
-    const rows = await db
+    const exec = executor ?? db;
+    const rows = await exec
       .select({
         templateId: workflowTemplate.id,
         workflowName: workflowTemplate.name,
