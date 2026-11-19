@@ -523,6 +523,61 @@ describe("图片槽位：同名 pin 由线区分，不看名字 / 节点类名",
       value: "b.png",
     });
   });
+
+  it("参考图上限（#4537）：配置 maxReferences 后，超出上限的参考图不参与装载", () => {
+    const io: WorkflowIOMap = {
+      ...IO,
+      ref2: { ...IO.initImage!, nodeId: "11" },
+    };
+    const paramMap = {
+      ...wire("I2I", {
+        "reference-image": "initImage",
+        "reference-image-2": "ref2",
+      }),
+      /* 工作流级上限：只吃 1 张参考图。 */
+      referenceLoaders: { maxReferences: 1 },
+    };
+    const res = buildEncapsulatedInputs({
+      io,
+      paramMap,
+      mode: "I2I",
+      values: { referenceImages: ["a.png", "b.png"] },
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "9",
+      name: "image",
+      value: "a.png",
+    });
+    expect(res.workflowInputs).not.toContainEqual({
+      nodeId: "11",
+      name: "image",
+      value: "b.png",
+    });
+  });
+
+  it("参考图上限未配置时行为不变（两张都落）", () => {
+    const io: WorkflowIOMap = {
+      ...IO,
+      ref2: { ...IO.initImage!, nodeId: "11" },
+    };
+    const res = buildEncapsulatedInputs({
+      io,
+      paramMap: {
+        ...wire("I2I", {
+          "reference-image": "initImage",
+          "reference-image-2": "ref2",
+        }),
+        referenceLoaders: {},
+      },
+      mode: "I2I",
+      values: { referenceImages: ["a.png", "b.png"] },
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "11",
+      name: "image",
+      value: "b.png",
+    });
+  });
 });
 
 /* ── 自定义口：作者自己声明的口 ───────────────────────────── */
