@@ -108,7 +108,9 @@ export const projectRouter = createTRPCRouter({
       if (project?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "项目不存在" });
       }
-      const tasks = await taskRepository.findByProjectIdWithImages(input.projectId);
+      const tasks = await taskRepository.findByProjectIdWithImages(input.projectId, {
+        take: input.take,
+      });
       const limited = tasks.slice(0, input.take);
       const outputs = limited.map((task) => {
         // params 是任务表的 JSON 列:非对象(标量)时所有属性读取均为 undefined,与原

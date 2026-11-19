@@ -89,6 +89,7 @@ import {
   openBrowser as miscOpsOpenBrowser,
   parseArgs as miscOpsParseArgs,
   shutdown as miscOpsShutdown,
+  wireSignalShutdown as miscOpsWireSignalShutdown,
 } from "./launcher-core/misc-ops.mjs";
 import {
   reapAll as portReapReapAll,
@@ -801,16 +802,11 @@ export async function run(argv = process.argv.slice(2)) {
   // 「等任一退出」这个语义本身不回答是谁。
   const ended = await new Promise((resolve) => {
     /* dev 的监听由 watchDevChild 接（它随每次轻量重启重新武装）；这里只把解析器
-     * 交出去 + 接壳与信号这两条一轮会话内不会变的边。 */
+     * 交出去 + 接壳退出这条边。**signal 不在这里 resolve**（#4409）：它一律走
+     * 模块级处理器的「回收后退出」单出口，本 promise 只服务「谁先正常退出」。 */
     resolveLaunchEnd = resolve;
     shell?.once("exit", (code) => {
       resolve({ who: "shell", code: code ?? 0 });
-    });
-    process.once("SIGINT", () => {
-      resolve({ who: "signal", code: 0 });
-    });
-    process.once("SIGTERM", () => {
-      resolve({ who: "signal", code: 0 });
     });
     watchDevChild(dev);
   });
@@ -857,17 +853,16 @@ function clearIntervalGuard(timer) {
 }
 
 // 信号处理：任何中断都要先回收整棵进程树再退出（硬规则 3）。
-let shuttingDown = false;
-for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-  process.on(signal, () => {
-    if (shuttingDown) {
-      return;
-    }
-    shuttingDown = true;
+// signal 一律交模块级处理器**独占**收尾：常驻 promise 里不注册 SIGINT/SIGTERM
+// 监听 —— 若 signal 也从 promise resolve 出 `code:0`，run() 的微任务续体会抢在
+// reapAll（真实异步、挂在宏任务上）完成之前执行 process.exit(0)，POSIX 下
+// dev / executor-host 成孤儿（#4409）。
+miscOpsWireSignalShutdown({
+  onSignal: (/** @type {string} */ signal) => {
     log(`收到 ${signal}：回收子进程树后退出`, "WARN");
     void shutdown(signal === "SIGINT" ? 130 : 143);
-  });
-}
+  },
+});
 
 // 直跑（被 import 时不执行）：供测试复用上面这些纯函数。
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {

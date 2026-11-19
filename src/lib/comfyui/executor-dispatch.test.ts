@@ -524,6 +524,46 @@ describe("提交异常必须归还槽位", () => {
   });
 });
 
+describe("领取后的兜错（#4410）：库故障一次不能停摆整条队列", () => {
+  it("findExecJob reject：不抛、槽位归还、内存足迹摘干净（reaper 可接管 RUNNING 行）", async () => {
+    openWs();
+    const repo = fakeRepo({
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-busy"])),
+      /* SQLite busy 读超预算 / 磁盘 IO：领取后第一次读写就炸。 */
+      findExecJob: vi.fn(() => Promise.reject(new Error("database is locked"))),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    /* 修缺陷前的形态：异常沿 claimMutex 冒出调用方，槽位永不归还 ——
+     * 常驻循环从此在 pendingDispatch.size >= 1 早退，reaper 又把这条
+     * 当「仍被本进程认领」永久跳过，队列整体停摆。 */
+    await expect(mod.claimAndDispatchOnce()).resolves.toBe("t-busy");
+
+    expect(state().pendingDispatch.has("t-busy")).toBe(false);
+    expect(state().pendingDispatch.size).toBe(0);
+    expect(cli.executeViaComfyCli).not.toHaveBeenCalled();
+    expect(logsOf("t-busy").some((m) => m.includes("领取后处理失败"))).toBe(true);
+  });
+
+  it("缺载荷分支里 finalizeFailure reject：同样兜住，槽位归还（不再沿调用方冒出）", async () => {
+    openWs();
+    const repo = fakeRepo({
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-nopayload"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({ workflowName: "w", execPayload: null, params: {} }),
+      ),
+      finalizeFailure: vi.fn(() => Promise.reject(new Error("db down"))),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    await expect(mod.claimAndDispatchOnce()).resolves.toBe("t-nopayload");
+
+    expect(repo.finalizeFailure).toHaveBeenCalledTimes(1);
+    expect(state().pendingDispatch.has("t-nopayload")).toBe(false);
+    expect(cli.executeViaComfyCli).not.toHaveBeenCalled();
+  });
+});
+
 describe("叶子总线接线（这一刀把它从一条回调扩成两条）", () => {
   it("dispatch 加载即注册续跑与广播；广播写给本归属片里排队的行", async () => {
     const repo = fakeRepo({

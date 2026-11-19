@@ -63,6 +63,37 @@ export async function shutdown(ctx, code) {
   process.exit(code);
 }
 
+/** 信号收尾的唯一装配（硬规则 3）：第一个到达的信号触发一次 `onSignal`，
+ *  后续信号被守卫吞掉 —— 「回收整树 → 退出」只走这一条路。
+ *
+ *  常驻 promise **不得**再注册 SIGINT/SIGTERM 监听把 signal 当成「正常退出」
+ *  resolve（#4409）：signal 分支 resolve `code:0` 后，run() 的微任务续体会抢在
+ *  `reapAll`（真实异步、挂在宏任务上）完成之前执行 `process.exit(0)` —— POSIX 下
+ *  dev / executor-host 成孤儿，Windows 下退出码变 0、归档与锚点清理被跳过。
+ *  `processLike` 与 dispose 是给测试的注入面：不碰真进程也能判「首信号生效、
+ *  后续信号被吞」。
+ * @param {{ onSignal: (signal: string) => void,
+ *           processLike?: { on: (signal: string, handler: () => void) => unknown },
+ *           signals?: Array<string> }} opts
+ * @returns {() => void} dispose（测试用：之后所有信号都不再触发 onSignal） */
+export function wireSignalShutdown(opts) {
+  const signals = opts.signals ?? ["SIGINT", "SIGTERM", "SIGHUP"];
+  const processLike = opts.processLike ?? process;
+  let wired = false;
+  for (const signal of signals) {
+    processLike.on(signal, () => {
+      if (wired) {
+        return;
+      }
+      wired = true;
+      opts.onSignal(signal);
+    });
+  }
+  return () => {
+    wired = true;
+  };
+}
+
 /** 解析命令行参数（与 .ps1 的开关语义逐项对齐）。 */
 /** @param {string[]} argv */
 export function parseArgs(argv) {
