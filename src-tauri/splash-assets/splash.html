@@ -217,6 +217,26 @@
     .message.error {
       color: var(--error);
     }
+    /* 服务端动态（ISSUE #4431）：等待就绪的窗口期里，把服务进程自己刚说过的
+       那句有信息量的输出（Next 横幅 / ✓ Ready / ComfyUI 拉起进度 / 编译与报错）
+       摆到进度文案下面——「等待服务就绪 12.7s（进行中）」不再是一句空话。
+       数据来自壳命令 get_server_activity（只读一份 Next 日志尾，可常驻轮询）；
+       取不到读数（服务还没输出）或壳过旧（命令不存在）时整行收起，不摆空话。 */
+    .server-activity {
+      display: none;
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--muted);
+      margin: 0 0 6px;
+      flex-shrink: 0;
+      /* 内容是服务日志的原行，可能带路径——允许选中复制（与消息区同一档）；
+         文本现场不参与整窗拖拽（data-no-drag，见 startSplashDrag 的判定口径）。 */
+      user-select: text;
+      cursor: text;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .footer {
       display: flex;
       justify-content: space-between;
@@ -383,6 +403,7 @@
       <span id="percent">0%</span>
     </div>
     <div class="message" id="message" data-no-drag>启动器正在初始化…</div>
+    <div class="server-activity" id="server-activity" data-no-drag></div>
     <div class="footer">
       <span class="hint">关闭（右上角 ✕）即放弃本次启动</span>
       <button class="log-toggle" id="log-btn" type="button">查看日志</button>
@@ -475,8 +496,9 @@
     // 紧凑档尺寸：**只**在壳命令 set_splash_compact 调不动（壳过旧 / 纯 Web）
     // 时的兜底值，与壳侧 SPLASH_WINDOW_SIZE 同值。正常路径下尺寸一律由壳算，
     // 页面不参与（见 applyCompact）。高度按「逐行耗时分解（最多 3 行 + 其余
-    // 段 1 行）铺开后的内容高度」给（#4327：耗时分解读得清，窗口跟着长高）。
-    const COMPACT_SIZE = { width: 744, height: 264 };
+    // 段 1 行）铺开后的内容高度」给（#4327：耗时分解读得清，窗口跟着长高），
+    // #4431 起另含「服务端动态」一行。
+    const COMPACT_SIZE = { width: 744, height: 288 };
     const subtitleEl = $('subtitle');
 
     /** 正在执行的窗口动作（'' 表示空闲）——onclick 与监听两条路的去重。 */
@@ -657,6 +679,42 @@
         // 首次启动时 Rust command 可能尚未注册，静默重试
       }
       return null;
+    }
+
+    // ── 服务端动态（ISSUE #4431）──
+    // 「等待服务就绪」是启动里最长的一段，此前画面上只有一句「进行中」。
+    // 服务进程自己的输出才是「此刻在做什么」的答案：壳命令 get_server_activity
+    // 从本次运行最新的 Next 日志尾里挑出最近一条有信息量的行（健康探活的访问
+    // 日志与 ComfyUI 拉起期的逐拍轮询这类高频噪声行不算，判据在壳侧），这里
+    // 常驻轮询把它摆到进度文案下面。每 1s 一拍（tick 的每 4 轮）：命令只读
+    // 一份 8KB 日志尾，成本可控。取不到读数（服务还没输出）整行收起；
+    // 壳过旧（命令未注册）这一行整体退场，不逐轮重试。
+    const serverActivityEl = $('server-activity');
+    let serverActivityRetired = false;
+    let serverActivityLast = null;
+
+    function renderServerActivity(line) {
+      if (line === serverActivityLast) return;
+      serverActivityLast = line;
+      if (!serverActivityEl) return;
+      if (line === '') {
+        serverActivityEl.style.display = 'none';
+        serverActivityEl.textContent = '';
+        return;
+      }
+      serverActivityEl.textContent = `服务端：${line}`;
+      serverActivityEl.style.display = 'block';
+    }
+
+    async function fetchServerActivity() {
+      if (serverActivityRetired) return;
+      try {
+        const data = await invokeRaw('get_server_activity');
+        renderServerActivity(typeof data === 'string' ? data.trim() : '');
+      } catch (e) {
+        serverActivityRetired = true;
+        renderServerActivity('');
+      }
     }
 
     // 解析出需要探测的真实应用 URL：优先 Rust 状态 > launch-status.json > 兜底 dev URL
@@ -1047,6 +1105,8 @@
     async function tick() {
       if (navigating) return;
       ticks++;
+      // 服务端动态每 1s 一拍（其余轮次只走 250ms 的状态轮询）。
+      if (ticks % 4 === 1) void fetchServerActivity();
 
       /* 应用地址每轮向壳重取，不在第一轮锁死。
        * standalone 形态下 sidecar 听的是**现挑的空闲端口**（`spawn_sidecar` 的
