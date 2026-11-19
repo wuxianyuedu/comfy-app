@@ -338,9 +338,16 @@ export async function main(deps = {}) {
    * `running`），会把后台那一跑的活读数覆盖掉 —— 轮询的眼睛毁掉它正在看的东西。
    * 所以这一族（result / status / whoami / branches / claims / diagnose /
    * stage-log / gh-logs / gh-prs）即使处在 CLI 入口（给了 shipResultResolve）也不写。 */
+  /* 单件动作**不落盘**（ISSUE #3923 / #4510）：`--result` / `--status` 这些口读的就是
+   * `.git/ship-result.json` 这份文件；查询自己再写一份进去（write-ahead 一创建就写
+   * `running`），会把后台那一跑的活读数覆盖掉 —— 轮询的眼睛毁掉它正在看的东西。
+   * #4510 把同一条理由扩到**写侧快动作**：`--comment` 这类单件跑得快、一样收口落盘，
+   * 流程长跑（--mode auto 等 CI）期间它一收口，就把 `status=running` 的活读数覆盖成
+   * 自己的结论 ⇒ `ship:wait` 拿旧结论当终态、等错对象。所以除完整流程外的所有
+   * 单件动作（读的 + 写的）都不写 —— 这份文件只当「流程那一跑」的账。 */
   const sinkArgs = deps.args ?? process.argv.slice(2);
   const sinkOpt = parseArgs(sinkArgs);
-  const readOnlyQuery =
+  const sideAction =
     sinkOpt.result ||
     sinkOpt.status ||
     sinkOpt.whoami ||
@@ -350,11 +357,17 @@ export async function main(deps = {}) {
     sinkOpt.stageLog ||
     sinkOpt.ghLogs ||
     sinkOpt.ghPrs ||
-    sinkOpt.fetchIssue;
+    sinkOpt.fetchIssue ||
+    sinkOpt.comment !== null ||
+    sinkOpt.claim !== null ||
+    sinkOpt.release !== null ||
+    sinkOpt.misclaim ||
+    sinkOpt.newIssue !== null ||
+    sinkOpt.rerunCi;
   const sink = createShipResultSink({
     root,
     args: sinkArgs,
-    resolve: !readOnlyQuery && shipResultResolve ? shipResultResolve : () => null,
+    resolve: !sideAction && shipResultResolve ? shipResultResolve : () => null,
   });
   const log = sink.wrapLog(deps.log ?? ((s) => process.stdout.write(`${s}\n`)));
   try {

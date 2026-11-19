@@ -28,14 +28,21 @@ afterEach(() => {
   fs.rmSync(fakeGitDir, { recursive: true, force: true });
 });
 
-/** 写一份快照；`status` 决定等待方该不该停（running = 继续等）。 */
-function writeSnapshot(status: string, exitCode: number | null = null, stages: string[] = []) {
+/** 写一份快照；`status` 决定等待方该不该停（running = 继续等）。
+ * `startedAt` 是「等的是哪一跑」的身份锚（ISSUE #4510）：并发跑互相覆盖单文件时，
+ * 靠它分辨眼前的结论来自哪一跑。 */
+function writeSnapshot(
+  status: string,
+  exitCode: number | null = null,
+  stages: string[] = [],
+  startedAt = "T0",
+) {
   fs.writeFileSync(
     path.join(fakeGitDir, "ship-result.json"),
     JSON.stringify({
       version: 2,
       status,
-      startedAt: "T0",
+      startedAt,
       finishedAt: status === "running" ? null : "T1",
       interruptedBy: null,
       pid: 1,
@@ -129,6 +136,54 @@ describe("waitForShip：终止条件（ISSUE #4118）", () => {
     expect(code).toBe(CODE.CI_PENDING);
     expect(timedOut).toBe(true);
     expect(reading.found).toBe(false);
+  });
+
+  it("等的是哪一跑要念出来：running 的 startedAt 进输出（ISSUE #4510）", async () => {
+    writeSnapshot("running", null, ["预检通过"]);
+    const lines: Array<string> = [];
+    const sleeps: number[] = [];
+    const { code } = await waitForShip({
+      root: ROOT,
+      resolve,
+      intervalMs: 5,
+      timeoutMs: 30_000,
+      log: (s) => lines.push(s),
+      sleep: (ms) => {
+        sleeps.push(ms);
+        if (sleeps.length >= 2) {
+          writeSnapshot("green", 0, ["预检通过", "合并"]);
+        }
+        return Promise.resolve();
+      },
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(lines.some((l) => l.includes("等的是这一跑：startedAt=T0"))).toBe(true);
+  });
+
+  it("别的跑的结论不冒充等的那一跑的终态（#4510 现场：并发跑互相覆盖单文件）", async () => {
+    writeSnapshot("running", null, ["预检通过"]);
+    const sleeps: number[] = [];
+    const { code, timedOut } = await waitForShip({
+      root: ROOT,
+      resolve,
+      intervalMs: 5,
+      timeoutMs: 30_000,
+      sleep: (ms) => {
+        sleeps.push(ms);
+        if (sleeps.length === 2) {
+          /* 别的跑（不同 startedAt）收口覆盖了单文件快照 —— 不许被它放行。 */
+          writeSnapshot("green", 0, ["评论已回读"], "T9");
+        }
+        if (sleeps.length === 4) {
+          /* 等的那一跑（T0）自己收口了。 */
+          writeSnapshot("green", 0, ["预检通过", "合并"]);
+        }
+        return Promise.resolve();
+      },
+    });
+    expect(code).toBe(CODE.GREEN);
+    expect(timedOut).toBe(false);
+    expect(sleeps).toEqual([5, 5, 5, 5]);
   });
 });
 
