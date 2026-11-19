@@ -14,12 +14,18 @@ export function GET() {
   if (!fs.existsSync(installer)) {
     return NextResponse.json({ error: "installer not found" }, { status: 404 });
   }
-  const buf = fs.readFileSync(installer);
-  return new NextResponse(buf, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="install-comfyapp-helper.ps1"',
-    },
-  });
+  try {
+    const buf = fs.readFileSync(installer);
+    return new NextResponse(buf, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="install-comfyapp-helper.ps1"',
+      },
+    });
+  } catch (error) {
+    /* 读失败（权限 / 杀软锁文件）给 JSON 错误而不是裸 500 HTML 页。 */
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: `读取 installer 失败：${message}` }, { status: 500 });
+  }
 }

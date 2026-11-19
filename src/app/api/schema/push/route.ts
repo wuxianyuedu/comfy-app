@@ -15,8 +15,21 @@ import { isSplashOrigin } from "~/lib/shell/splash-origin";
  */
 export const dynamic = "force-dynamic";
 
-/** 同进程内的并发闸：spawn 与子进程写下 `syncing` 之间有个窗口，双击会撞上。 */
-let spawning = false;
+/** 同进程内的并发闸：spawn 与子进程写下 `syncing` 之间有个窗口，双击会撞上。
+ *  挂 globalThis 而不是模块顶层（#4455）：dev 的 HMR 会重置模块变量，而闸要
+ *  保持到子进程退出（最坏 600s）——模块被重新求值时闸归零，第二个请求会穿过
+ *  两道闸并发 push 同一个 SQLite。与 ollama-start 的启动锁同一形态。 */
+const GATE_KEY = "__comfySchemaPushGate_v1";
+
+function isSchemaPushGate(v: unknown): v is { spawning: boolean } {
+  return isRecord(v) && typeof v.spawning === "boolean";
+}
+
+const existingGate: unknown = Reflect.get(globalThis, GATE_KEY);
+const gate: { spawning: boolean } = isSchemaPushGate(existingGate)
+  ? existingGate
+  : { spawning: false };
+Reflect.set(globalThis, GATE_KEY, gate);
 
 export async function POST(req: NextRequest) {
   /* 鉴权 + 同源校验（#4040）：本端点会以 `--force` 口径 spawn schema 同步
@@ -35,7 +48,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "跨站请求已拒绝" }, { status: 403 });
   }
 
-  if (spawning) {
+  if (gate.spawning) {
     return NextResponse.json({ ok: false, error: "已有一次同步在发起中" }, { status: 409 });
   }
 
@@ -62,17 +75,17 @@ export async function POST(req: NextRequest) {
    * 才会把相位写成 `syncing`——那只靠 finally 在 spawn 返回后立刻放闸是挡不住
    * 双击/并发的（第二个请求会穿过两道闸去并发 push 同一个 SQLite）。子进程
    * 有 600s 预算兜底（最坏 600s 后闸也会放开），正常几秒退出即放闸。 */
-  spawning = true;
+  gate.spawning = true;
   const started = spawnSchemaSync(process.cwd(), { force: true });
   if (!started.started) {
-    spawning = false;
+    gate.spawning = false;
     return NextResponse.json(
       { ok: false, error: started.reason ?? "无法发起同步" },
       { status: 404 },
     );
   }
   started.child?.once("exit", () => {
-    spawning = false;
+    gate.spawning = false;
   });
   return NextResponse.json({ ok: true });
 }

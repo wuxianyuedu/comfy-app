@@ -75,6 +75,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
        * log 增量与节点进度统一走 DB：单一来源、inline/host 同一观感（代价 ≤3s 延迟 + 200ms 落库防抖）。
        * `findSseSnapshot` 是窄投影（不含 workflowSnapshot 大列）；同时最多一次轮询在途。 */
       let polling = false;
+      /* 任务消失的连击计数（#4453）：任务被删除（task.delete 是在册用户动作）或
+       * id 从未存在时，快照永远读不到——原先直接 return，轮询与心跳随连接期泄漏，
+       * EventSource 自动重连还会再起一套。连续两拍读不到（避开删除瞬间与 DB 抖动
+       * 的单拍误判）就发一帧 NOT_FOUND 终态并收口；客户端 onerror 本就 close 不
+       * 重连，流到此确定终止。 */
+      let notFoundStreak = 0;
       const pollTick = () => {
         if (polling) {
           return;
@@ -84,8 +90,19 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
           .findSseSnapshot(id)
           .then((cur) => {
             if (!cur) {
+              notFoundStreak += 1;
+              if (notFoundStreak >= 2) {
+                send({
+                  type: "state",
+                  status: "NOT_FOUND",
+                  progress: 0,
+                  error: "任务不存在或已被删除",
+                });
+                cleanup();
+              }
               return;
             }
+            notFoundStreak = 0;
             // 日志是 unknown 列：Array.isArray 收窄到 any[] 会踩
             // no-unsafe-assignment，标注成 unknown[] 保住类型纪律。
             const logs: Array<unknown> = Array.isArray(cur.logs) ? cur.logs : [];
