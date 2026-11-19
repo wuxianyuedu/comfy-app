@@ -359,7 +359,10 @@ jobs:
       # pnpm symlink 与原生产物在恢复后的正确性需持续观察（回滚 = 删本步 + 恢复 store 缓存）。
       - name: 恢复 node_modules 缓存（灰度）
         id: node-modules-cache
-        uses: actions/cache@v4
+        # v4 → v6（#4483）：对齐文件头的 uses 版本口径（没有 v7 就用最新主版本；
+        # git ls-remote --tags 核过 v6.1.0 即最新），消 node20 强迁 node24 的弃用
+        # 告警。path / key 输入面 v4 → v6 无变化；package-desktop 的 NSIS 缓存同款。
+        uses: actions/cache@v6
         with:
           path: node_modules
           key: ${{ runner.os }}-node26-node_modules-${{ hashFiles('pnpm-lock.yaml') }}
