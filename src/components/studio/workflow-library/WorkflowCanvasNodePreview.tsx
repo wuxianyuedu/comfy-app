@@ -33,7 +33,8 @@ import { LibraryHostCard } from "./LibraryHostCard";
 import { WorkflowPreviewUsePanel } from "./WorkflowPreviewUsePanel";
 import { WorkflowPreviewRunFeedback } from "./WorkflowPreviewRunFeedback";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
-import { useLatestRunTaskId } from "./hooks/use-latest-run-task-id";
+import { useCanvasSelection } from "./hooks/use-canvas-selection";
+import { useRunLogView } from "./hooks/use-run-log-view";
 
 type Props = {
   defaultMode?: string;
@@ -86,11 +87,13 @@ export function WorkflowCanvasNodePreview({
   /* 素材上传的可见出口：ComfyUI 未运行 / 正在启动 / 启动超时都落在这里。
    * 上传位自身没有错误区，只记 console 用户看不到任何原因（ISSUE #345）。 */
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
-  /* 选中的对外参数（点卡片或点它那条线）—— 选中后按 ⌫ 断开，或按卡片头 ↺ 恢复默认。 */
-  const [selectedParamId, setSelectedParamId] = useState<string | null>(null);
-  /* 右列选中的对外输出口 —— 与左列的选中互斥（同一时刻只有一处被选，否则
-   *  「按 ⌫ 断的是哪一根」说不清）。 */
-  const [selectedOutputId, setSelectedOutputId] = useState<string | null>(null);
+  /* 画布选中态（左列卡片 / 右列输出口，互斥；回调引用稳定，#4467）。 */
+  const {
+    selectOutput: handleSelectOutput,
+    selectParam: handleSelectParam,
+    selectedOutputId,
+    selectedParamId,
+  } = useCanvasSelection();
   /* 调试用的部分执行目标（comfy-cli v1.24.0 `--output-node-ids`）：勾选的输出
    *  节点（cli 展开后 id）。空 = 整图执行，与旧行为一致。 */
   const [debugOutputIds, setDebugOutputIds] = useState<Array<string>>([]);
@@ -183,12 +186,7 @@ export function WorkflowCanvasNodePreview({
 
   /* 本页签独立的「执行日志」入口：按钮带 canvas-node 来源过滤，弹窗同理，
    * 与「工坊封装」页签各自一处（ISSUE #611 旧形态：两个页签各写各的）。 */
-  const [logOpen, setLogOpen] = useState(false);
-  const [logTaskId, setLogTaskId] = useState<string | null>(null);
-  /* 订阅运行登记表取最近一次（#4466）：此前 useMemo 依赖只有 workflowId，
-   * 登记表变化不重算，摘要指向旧一次运行。 */
-  const latestLogTaskId = useLatestRunTaskId(workflowId, "canvas-node");
-  const logViewTaskId = logTaskId ?? latestLogTaskId;
+  const logView = useRunLogView(workflowId, "canvas-node");
 
   const statusLabel = phase.kind === "running" ? `生成中 ${phase.pct}%` : STATUS_LABEL[phase.kind];
   const pct = phase.kind === "running" ? phase.pct : 0;
@@ -288,18 +286,6 @@ export function WorkflowCanvasNodePreview({
     },
     [resetParamWires],
   );
-  const handleSelectOutput = useCallback((id: string | null) => {
-    setSelectedOutputId(id);
-    if (id !== null) {
-      setSelectedParamId(null);
-    }
-  }, []);
-  const handleSelectParam = useCallback((id: string | null) => {
-    setSelectedParamId(id);
-    if (id !== null) {
-      setSelectedOutputId(null);
-    }
-  }, []);
 
   /** 提交到本机生成并等待落定（相位与 SSE 订阅在 use-generation-runner）。 */
   function run() {
@@ -418,14 +404,12 @@ export function WorkflowCanvasNodePreview({
           debugOutputIds={debugOutputIds}
           effectiveMode={effectiveMode}
           effectiveModeLabel={effectiveModeLabel}
-          logViewTaskId={logViewTaskId}
+          logViewTaskId={logView.viewTaskId}
           missingLabels={missingLabels}
           modes={modes}
           onDebugOutputIdsChange={setDebugOutputIds}
           onModeChange={onModeChange}
-          onOpenLog={() => {
-            setLogOpen(true);
-          }}
+          onOpenLog={logView.openLog}
           onSeedModeChange={onSeedModeChange}
           onUploadNotice={setUploadNotice}
           onValuesChange={setValuesAndClearFailure}
@@ -457,13 +441,11 @@ export function WorkflowCanvasNodePreview({
         workflowName={workflowName}
       />
       <WorkflowRunLogModal
-        onClose={() => {
-          setLogOpen(false);
-        }}
-        onViewTaskIdChange={setLogTaskId}
-        open={logOpen}
+        onClose={logView.closeLog}
+        onViewTaskIdChange={logView.setViewTaskId}
+        open={logView.open}
         source="canvas-node"
-        viewTaskId={logViewTaskId}
+        viewTaskId={logView.viewTaskId}
         workflowId={workflowId}
       />
     </div>
