@@ -92,22 +92,37 @@ export function WorkflowRunLogModal({
 
   /* 加宽档与它的记忆收在`~/components/ui/wide-panel`（规范 16 §16.2.4.18）。 */
   const panel = useWidePanel("wflib-run-log", RUN_LOG_WIDTH);
-  /* 弹窗取消按钮复用画布同款 hook（视图零 IO）。 */
+  /* 取消失败的可见出口（ISSUE #4469）：此前 onFailed 传空函数，网络断 / 404 时
+   * 按钮悄悄恢复、任务继续跑，用户完全不知道取消没送达。与画布日志面板
+   * （`onFailed: setError`）同款，落到弹窗顶部横幅。 */
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const { cancelling, cancel } = useCancelTask({
     taskId: viewTaskId,
-    onFailed: () => undefined,
+    onFailed: setCancelError,
   });
 
   if (!open) {
     return null;
   }
 
-  const status = run?.status ?? "running";
+  /* 未知 ≠ 运行中（ISSUE #4469）：run === null 表示这条运行已被登记表（上限 32 条）
+   * 挤掉、查不到了 —— 不能再兜底成 running，否则头部挂「运行中」、取消按钮指向已
+   * 消失的任务、raw-cli 弹窗以 1.5s 永久轮询一个查不到的 id。按 done 中性兜底，
+   * 文案直说「记录已清理」。run 在但 status 未到（刚登记）仍是正常运行中。 */
+  const runMissing = viewTaskId !== null && run === null;
+  const status = runMissing ? "done" : (run?.status ?? "running");
   /* 文案在这里，配色走`ui/status-badge` 的同一份状态 → 语义 token 映射
    *（规范 16 §16.2.4.5）。 */
-  const statusLabel = status === "done" ? "完成" : status === "failed" ? "失败" : `运行中`;
+  const statusLabel = runMissing
+    ? "记录已清理"
+    : status === "done"
+      ? "完成"
+      : status === "failed"
+        ? "失败"
+        : `运行中`;
 
   const onCancel = () => {
+    setCancelError(null); // 重试前清掉上一次失败提示
     void cancel();
   };
 
@@ -147,12 +162,12 @@ export function WorkflowRunLogModal({
                   {runLogSourceLabel(run.source)}
                 </Badge>
               )}
-              {run && (
+              {(run ?? runMissing) && (
                 <StatusBadge
                   className="text-3xs px-1.5 py-px"
                   dot={false}
                   label={statusLabel}
-                  status={status}
+                  status={runMissing ? "idle" : status}
                 />
               )}
             </div>
@@ -223,17 +238,37 @@ export function WorkflowRunLogModal({
           {/* 时间线主体（级别筛选 + 自动滚动 + 虚拟列表 + 底栏计数）—— 共享组件 */}
           <TaskLogTimeline
             emptySlot={
-              <TaskLogEmptyHint message={run ? "等待日志…" : "运行生成后此处会显示执行步骤日志"} />
+              <TaskLogEmptyHint
+                message={
+                  runMissing
+                    ? "该运行的记录已清理，日志不可再取"
+                    : run
+                      ? "等待日志…"
+                      : "运行生成后此处会显示执行步骤日志"
+                }
+              />
             }
             listClassName="bg-panel-deep/60"
             logs={logs}
             rowTestId="wflib-modal-log-line"
             topSlot={
-              run?.errorMessage !== undefined && run.errorMessage !== "" ? (
-                <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
-                  <div className="wrap-break-word whitespace-pre-wrap">{run.errorMessage}</div>
-                </div>
-              ) : null
+              <>
+                {/* 取消失败的即时反馈（ISSUE #4469）：网络断 / 404 时 useCancelTask 的
+                 * onFailed 落到这里，不再静默 —— 与运行错误横幅同款样式。 */}
+                {cancelError !== null && cancelError !== "" ? (
+                  <div
+                    className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm"
+                    data-testid="wflib-log-cancel-error"
+                  >
+                    <div className="wrap-break-word whitespace-pre-wrap">{cancelError}</div>
+                  </div>
+                ) : null}
+                {run?.errorMessage !== undefined && run.errorMessage !== "" ? (
+                  <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
+                    <div className="wrap-break-word whitespace-pre-wrap">{run.errorMessage}</div>
+                  </div>
+                ) : null}
+              </>
             }
           />
         </div>
