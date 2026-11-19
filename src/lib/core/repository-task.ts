@@ -20,13 +20,19 @@ import { isTerminalTaskStatus } from "~/lib/task-state";
  *  整批拉回来、反序列化、然后立刻丢弃（node:sqlite 是同步驱动，这批反序列化
  *  直接压在事件循环上）。#4411：`execPayload` / `rawCli` 是 #4044 裁剪清单之后
  *  才进 schema 的，彼时没跟着更新排除集。 */
-const HEAVY_TASK_COLUMNS = [
+/** 必须导出：`HeavyTaskColumns`（公开签名 `TaskCardRow` 的 Omit 键）从它派生，
+ *  typedoc 只收「从入口可达且带 export」的符号——不导出会让 API 文档自检
+ *  报「referenced … but not included」（ISSUE #4407 / 修法先例 #2835）。 */
+export const HEAVY_TASK_COLUMNS = [
   "execPayload",
   "logs",
   "rawCli",
   "workflowSnapshot",
 ] as const satisfies ReadonlyArray<keyof Task>;
-type HeavyTaskColumns = (typeof HEAVY_TASK_COLUMNS)[number];
+/** 必须导出：它在公开签名 `TaskCardRow`（`Omit<Task, …>` 的键）里被引用，
+ *  typedoc 只收「从入口可达且带 export」的符号——不导出会让 API 文档自检
+ *  报「referenced … but not included」（ISSUE #4407 / 修法先例 #2835）。 */
+export type HeavyTaskColumns = (typeof HEAVY_TASK_COLUMNS)[number];
 
 /** 列表卡的行形状：`task.list` 与 `project.outputs` 的映射只需要十来个字段。 */
 export type TaskCardRow = Omit<Task, HeavyTaskColumns>;

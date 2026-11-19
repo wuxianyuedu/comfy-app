@@ -13,8 +13,12 @@ import { workshopDb } from "./db";
 /** 事务执行者：`workshopDb` 本体或 `workshopDb.transaction` 回调里的那条连接
  *  （都从签名派生，不手写；与 `~/lib/core/repository-executor-types` 同一形状 ——
  *  本文件服务 MCP 纯 Node 进程，不能引 `~/lib/core` 的运行时模块，故在此按
- *  同口径派生一份）。 */
-type WorkshopExecutor =
+ *  同口径派生一份）。
+ *
+ *  必须导出：它在公开签名 `ensureProductionProject.executor` 里被引用，typedoc
+ *  只收「从入口可达且带 export」的符号——不导出会让 API 文档自检报
+ *  「referenced … but not included」（ISSUE #4407 / 修法先例 #2835）。 */
+export type WorkshopExecutor =
   | typeof workshopDb
   | Parameters<Parameters<typeof workshopDb.transaction>[0]>[0];
 
