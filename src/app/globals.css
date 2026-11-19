@@ -1448,6 +1448,16 @@ textarea::-webkit-scrollbar {
   z-index: 1180 !important;
 }
 
+/* ── 参考图挂载节点高亮（ISSUE #4534） ────────────────────────────────
+   编辑器「参考图挂载」编辑态里被标记的节点：外壳上加主色描边环。
+   打在 React Flow 节点外壳上（与悬浮态同位、不进节点数据，标记变化只重渲
+   被标记的节点）；颜色走语义 token，明暗两态自动适配。 */
+.react-flow__node.ref-mount-node {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+  border-radius: 14px;
+}
+
 /* ── CodeBlock：行号列 + 代码列的 flex 布局（ISSUE #534） ──────────────
    此前这份 CSS 以 `<style>{CODE_BLOCK_CSS}</style>` 的形式内联在渲染出的
    JSX 里，违反规范 03 §3.5（反模式 T5：CSS 注入走静态文件，不在渲染路径上

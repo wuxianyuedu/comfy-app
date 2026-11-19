@@ -44,11 +44,13 @@ import { zClass } from "~/lib/shell/overlay-z";
 import {
   CanvasHintTooltip,
   IoEditModeBanner,
+  RefMountModeBanner,
   SubgraphErrorToast,
   SubgraphLoadingOverlay,
   WorkflowEditorErrorScreen,
   WorkflowEditorLoadingScreen,
 } from "./WorkflowEditorCanvasOverlays";
+import { useReferenceMountMode } from "./hooks/use-reference-mount-mode";
 
 /* ── 画布网格 ── 两层都原生 <Background>，网格才随视口平移/缩放（给
  *  `.react-flow__pane` 加 CSS 网格是静态的，pane 不做变换）。一格 = 10 画布单位，
@@ -274,19 +276,29 @@ function WorkflowEditorBody({
     [rf],
   );
 
+  /* ── 参考图挂载编辑态（ISSUE #4534）── 逻辑收在 hook（规范 §17.2 第②层）：
+   * 顶栏按钮进入 / 退出；编辑态里点击节点即标记 / 取消多参考图挂载点（即时
+   * 落库）；装载计划按 image_0..N 规律把这些节点的图片口接成参考图落点。 */
+  const {
+    refMountMode,
+    mountedNodeIds,
+    toggleRefMountMode: handleToggleRefMountMode,
+    handleNodeClick,
+    decoratedNodes,
+  } = useReferenceMountMode({ workflowId, paramMap, graphNodes, savePatch });
+
   /* 画布上只有**工作流图**本身：图节点与图连线都来自工作流自身
    * （`buildInitialNodes` / `buildEdges`）。对外参数卡片与其映射线已从编辑器移除
    * —— 它们会浮在图节点之上挡掉一片，且落点编辑已收敛到工作流库的「画布节点」
    * 页签（用户口径：「彻底不显示」）。 */
-  const initialNodes: Array<Node> = graphNodes;
-
   /* 图或映射变化时同步节点与连线到 React Flow store。
-   * 拖拽期间这些依赖都不变，effect 不会打断进行中的拖拽。 */
+   * 拖拽期间这些依赖都不变，effect 不会打断进行中的拖拽。
+   * 节点走**装饰后**的列表（参考图挂载高亮，#4534）。 */
   useEffect(() => {
-    rf.setNodes(initialNodes);
+    rf.setNodes(decoratedNodes);
     /* 连线只有一种来源：工作流图自身的 `buildEdges`。 */
     rf.setEdges(buildEdges(scopeDetail, graphNodes, outSlotNameById));
-  }, [initialNodes, graphNodes, scopeDetail, outSlotNameById, rf]);
+  }, [decoratedNodes, graphNodes, scopeDetail, outSlotNameById, rf]);
 
   /* 视口贴合：自动聚焦的排程 / 收敛 / 「居中」出口收在
    * use-workflow-viewport-fit（聚焦路径的容器尺寸口径判据也随迁到那里）。
@@ -371,6 +383,9 @@ function WorkflowEditorBody({
         handleSave={handleSave}
         onClose={onClose}
         onExitSubgraph={onExitSubgraph}
+        onToggleRefMountMode={handleToggleRefMountMode}
+        refMountCount={mountedNodeIds.length}
+        refMountMode={refMountMode}
         resetLayout={resetLayout}
         rootWorkflowName={rootWorkflowName}
         saving={saving}
@@ -382,6 +397,8 @@ function WorkflowEditorBody({
 
       {/* IO 编辑模式提示：顶栏下方的流内横条，不叠在画布上（ISSUE #3632）。 */}
       {ioEditMode && <IoEditModeBanner />}
+      {/* 参考图挂载编辑态提示（ISSUE #4534）：同款流内横条。 */}
+      {refMountMode && <RefMountModeBanner count={mountedNodeIds.length} />}
 
       {/* ── Canvas ── */}
       <div className="relative min-h-0 flex-1">
@@ -414,9 +431,10 @@ function WorkflowEditorBody({
         <WorkflowEditorCanvas
           canvasSettings={canvasSettings}
           canvasSettingsHydrated={canvasSettingsHydrated}
-          defaultNodes={graphNodes}
+          defaultNodes={decoratedNodes}
           onEdgeClick={onEdgeClick}
           onMiniMapJump={onMiniMapJump}
+          onNodeClick={handleNodeClick}
           onNodeDragStop={onNodeDragStop}
           onOpenSettings={() => {
             setCanvasSettingsOpen(true);
