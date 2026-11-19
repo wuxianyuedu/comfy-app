@@ -506,8 +506,14 @@ export type ContractEntryDisplay = {
 /** 契约口 id → 工坊控件形态（尺寸是组合控件、时长是秒数选择、其余按图示）。
  *
  *  自定义口按它自己的简单类型给控件：文本 / 图片 / 数字 —— 类型是作者选的，
- *  不从 id 之外的任何地方推。 */
-function contractControlFor(
+ *  不从 id 之外的任何地方推。
+ *
+ *  **这是「契约口 → 控件形态」的唯一口径**（#4494）：封装状态派生
+ *  （`workshop-encapsulation-status`）与此同源。预制口逐个登记 —— default
+ *  兜成 "image" 曾让 seed / lora-name / lora-strength 在流程测试表单里出
+ *  图片选择器；未知 / 历史遗留 id 兜成 "text"（文本框什么值都放得下，图片
+ *  选择器只对图片族口成立）。 */
+export function contractControlFor(
   id: string,
   customInputs?: ReadonlyArray<ModeContractCustomInput>,
 ): ContractEntryDisplay["control"] {
@@ -521,10 +527,21 @@ function contractControlFor(
   if (id === "duration") {
     return "duration";
   }
-  if (id === "prompt" || id === "negative") {
+  if (id === "prompt" || id === "negative" || id === "lora-name") {
     return "text";
   }
-  return "image";
+  if (id === "seed" || id === "lora-strength") {
+    return "number";
+  }
+  if (
+    id === "reference-image" ||
+    id.startsWith("reference-image-") ||
+    id === "first-frame" ||
+    id === "last-frame"
+  ) {
+    return "image";
+  }
+  return "text";
 }
 
 /** **某一模式生效的契约口清单**：用户改过的模式用注册表里的口径，未改过的
