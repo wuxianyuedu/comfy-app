@@ -5,6 +5,7 @@ import { Timer } from "lucide-react";
 
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { EmptyState } from "~/components/ui/empty-state";
+import { Hint } from "~/components/ui/hint";
 import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { fixed } from "~/lib/number-format";
 import {
@@ -50,24 +51,27 @@ function TimingRow({
   widthPct: number;
 }) {
   return (
-    <li className="flex items-center gap-2 text-xs" title={title}>
-      <span
-        className={`text-3xs w-10 shrink-0 rounded-sm px-1 py-px text-center leading-4 font-medium ${SIDE_BADGE_CLASS[side]}`}
-      >
-        {LAUNCH_SIDE_LABELS[side]}
-      </span>
-      <span className="text-ink-muted w-28 shrink-0 truncate">{label}</span>
-      <span className="bg-surface-2 relative h-1.5 min-w-0 flex-1 overflow-hidden rounded-full">
+    /* 悬停说明走 <Hint>（P88：host 元素不许原生 title=），提示挂在这一行上。 */
+    <Hint label={title}>
+      <li className="flex items-center gap-2 text-xs">
         <span
-          className={`absolute top-0 h-full rounded-full ${SIDE_BAR_CLASS[side]}`}
-          style={{ left: `${startPct}%`, width: `${widthPct}%` }}
-        />
-      </span>
-      <span className="text-ink-muted w-28 shrink-0 text-right tabular-nums">
-        {valueText}
-        {running ? "（进行中）" : ""}
-      </span>
-    </li>
+          className={`text-3xs w-10 shrink-0 rounded-sm px-1 py-px text-center leading-4 font-medium ${SIDE_BADGE_CLASS[side]}`}
+        >
+          {LAUNCH_SIDE_LABELS[side]}
+        </span>
+        <span className="text-ink-muted w-28 shrink-0 truncate">{label}</span>
+        <span className="bg-surface-2 relative h-1.5 min-w-0 flex-1 overflow-hidden rounded-full">
+          <span
+            className={`absolute top-0 h-full rounded-full ${SIDE_BAR_CLASS[side]}`}
+            style={{ left: `${startPct}%`, width: `${widthPct}%` }}
+          />
+        </span>
+        <span className="text-ink-muted w-28 shrink-0 text-right tabular-nums">
+          {valueText}
+          {running ? "（进行中）" : ""}
+        </span>
+      </li>
+    </Hint>
   );
 }
 
