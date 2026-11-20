@@ -2,6 +2,7 @@
 // 只记日志、不退出；同一 message 的重复异常限频（首 3 条全量、之后每 50 条一条）；
 // 去重表封顶、LRU 淘汰；注册幂等。直接调导出的安装函数，并经 process.listeners().at(-1)
 // 取到**本模块注册的**处理器调用（数组里可能还有别的消费者先注册的监听器，取最后一个才是自己的）。
+// 文件随实现从 `src/instrumentation.ts` 拆到本模块（ISSUE #4568：process.on 不能进 Edge 编译图）。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -9,7 +10,7 @@ import {
   createSafetyNetReporter,
   installProcessSafetyNet,
   SAFETY_NET_MAX_KEYS,
-} from "./instrumentation";
+} from "./process-safety-net.server";
 
 function lastSafetyNetHandlers(): {
   onException: (error: Error, origin: NodeJS.UncaughtExceptionOrigin) => void;
