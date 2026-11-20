@@ -15,7 +15,13 @@
  * （成片监看 / 派发 / reaper）的 rejection 不该打挂整个应用。此前这层只来自
  * `@sentry/node` 默认集成的隐式副作用（且 `scripts/executor-host.mjs` 等宿主进程
  * 没有这层）；显式化之后，谁起服务谁就有这张网（ISSUE #4216）。
+ *
+ * 日志走 `~/lib/core/logger` 那一条通道（服务端 lib 不得直写 console ——
+ * 单通道判据 `tests/single-logger-channel.test.ts`；直写的后果是绕开 redact
+ * 脱敏与 ERROR 镜像，规范 07 §7.18.2.1）。
  */
+
+import { logger } from "~/lib/core/logger";
 
 /** 进程级兜底是否已挂（幂等闸：register 可能被 Next 以不同 runtime 多次触发）。 */
 let processSafetyNetInstalled = false;
@@ -63,7 +69,7 @@ export function createSafetyNetReporter(): SafetyNetReporter {
         counts.delete(oldest);
       }
       if (count <= 3 || count % SAFETY_NET_REPEAT_EVERY === 0) {
-        console.error(`[process] ${kind}#${count}：${text}`);
+        logger.error(`[process] ${kind}#${count}：${text}`);
       }
     },
   };

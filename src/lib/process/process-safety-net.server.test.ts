@@ -4,13 +4,28 @@
 // 取到**本模块注册的**处理器调用（数组里可能还有别的消费者先注册的监听器，取最后一个才是自己的）。
 // 文件随实现从 `src/instrumentation.ts` 拆到本模块（ISSUE #4568：process.on 不能进 Edge 编译图）。
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createSafetyNetReporter,
   installProcessSafetyNet,
   SAFETY_NET_MAX_KEYS,
 } from "./process-safety-net.server";
+
+/* 日志走单通道（~/lib/core/logger）——替身收进 hoisted，避免真身把 pino
+ * transport / ERROR 镜像拉起来（写日志类用例不往仓库 log/ 落字）。 */
+const loggerMock = vi.hoisted(() => ({
+  debug: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+}));
+
+vi.mock("~/lib/core/logger", () => ({ logger: loggerMock }));
+
+beforeEach(() => {
+  loggerMock.error.mockClear();
+});
 
 function lastSafetyNetHandlers(): {
   onException: (error: Error, origin: NodeJS.UncaughtExceptionOrigin) => void;
@@ -49,29 +64,28 @@ describe("installProcessSafetyNet —— 进程级兜底（ISSUE #4216 / #4256�
 
   it("兜底只记日志、不退出进程", () => {
     installProcessSafetyNet();
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { onRejection, onException } = lastSafetyNetHandlers();
     onRejection(new Error("测试拒绝"));
     onException(new Error("测试异常"), "uncaughtException");
-    expect(errSpy).toHaveBeenCalledTimes(2);
-    expect(errSpy.mock.calls.every((c) => String(c[0]).includes("[process]"))).toBe(true);
+    expect(loggerMock.error).toHaveBeenCalledTimes(2);
+    expect(loggerMock.error.mock.calls.every((c) => String(c[0]).includes("[process]"))).toBe(true);
   });
 
   it("同一 message 的重复异常限频：首 3 条全量、之后每 50 条一条（ISSUE #4256）", () => {
     installProcessSafetyNet();
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { onRejection } = lastSafetyNetHandlers();
     for (let i = 0; i < 60; i++) {
       onRejection(new Error("周期循环的同一异常"));
     }
-    const logged = errSpy.mock.calls.filter((c) => String(c[0]).includes("周期循环的同一异常"));
+    const logged = loggerMock.error.mock.calls.filter((c) =>
+      String(c[0]).includes("周期循环的同一异常"),
+    );
     /* 首 3 条 + 第 50 条一条 = 4 条；其余 56 条静默计数，不再灌满日志文件。 */
     expect(logged.length).toBe(4);
   });
 
   it("去重表封顶：大量一次性变体不再无界增长（ISSUE #4338）", () => {
     const reporter = createSafetyNetReporter();
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
     /* 故障态后台循环的形状：每拍抛出带不同 id / 路径 / SQL 片段的变体，
      * 修复前每种变体各占一条完整堆栈键、永久驻留（键数 = 抛出次数）。 */
     for (let i = 0; i < SAFETY_NET_MAX_KEYS + 200; i++) {
@@ -85,7 +99,6 @@ describe("installProcessSafetyNet —— 进程级兜底（ISSUE #4216 / #4256�
 
   it("热键不被冷变体洪水挤掉：持续重复的异常限频记账不中断（ISSUE #4338）", () => {
     const reporter = createSafetyNetReporter();
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     /* 同一个 Error 实例复用：键是完整 stack（含构造点行号），换行构造会变成不同键。 */
     const hotError = new Error("热键：周期循环的同一异常");
     for (let i = 0; i < 10; i++) {
@@ -100,7 +113,7 @@ describe("installProcessSafetyNet —— 进程级兜底（ISSUE #4216 / #4256�
     expect(reporter.size).toBe(SAFETY_NET_MAX_KEYS);
     /* 热键计数累计到 610：首 3 条 + 每 50 条一条（50~600 共 12 条）= 15 条。
      * 若热键被挤掉重置，中期会再记「首 3 条」、总数与末条序号都对不上。 */
-    const hotLogged = errSpy.mock.calls.filter((c) => String(c[0]).includes("热键"));
+    const hotLogged = loggerMock.error.mock.calls.filter((c) => String(c[0]).includes("热键"));
     expect(hotLogged.length).toBe(15);
     expect(String(hotLogged.at(-1)?.[0])).toContain("#600");
   });
