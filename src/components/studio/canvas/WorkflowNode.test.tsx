@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -269,6 +272,18 @@ describe("悬停四角括号（#4549）", () => {
     /* 四角各一：类名齐全。 */
     for (const side of ["tl", "tr", "bl", "br"]) {
       expect(document.querySelector(`.flow-node-corner-${side}`)).not.toBeNull();
+    }
+  });
+
+  it("括号外角随节点圆角走（#4578）：四角都以 --radius 派生圆角，不再直角切过圆角", () => {
+    const css = readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8");
+    for (const side of ["tl", "tr", "bl", "br"]) {
+      const start = css.indexOf(`.flow-node-corner-${side} {`);
+      expect(start, `找到 .flow-node-corner-${side} 的样式块`).toBeGreaterThan(-1);
+      const body = css.slice(start, css.indexOf("}", start));
+      /* 与节点卡片（rounded-lg = var(--radius)）同心：内缩 3px，半径即 --radius - 3px。
+         设置页改圆角档时括号自动跟随，不会回到直角切圆角的旧形态。 */
+      expect(body).toContain("calc(var(--radius) - 3px)");
     }
   });
 });
