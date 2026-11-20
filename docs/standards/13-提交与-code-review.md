@@ -8490,7 +8490,8 @@ glob 真的罩住（枚举办法是从每条正则里取出它锚定的字面前
 **落地的这一半**：把「几个并发」从**常数**变成**按现场核数算出来的值**。
 
 - 唯一出处 `scripts/ci/ci-load.mjs`：`resolveCores()`（`CNB_CPUS` → `os.availableParallelism()`
-  → 兜底）、`workersForCores()`（`ceil(cores / 8)`，即「一个 worker 至少 8 核」）、
+  → 兜底）、`workersForCores()`（`ceil(cores / perWorker)`，`perWorker` 按平台档取：
+  共享宿主机 8 / GA 独享 2 / 本地开发机 2，见下方「平台分档」）、
   `resolveCiWorkers()`（叠一层人的出口 `COMFY_CI_MAX_WORKERS`）。
 - **消费点现在有三处，全都从这一处取**（ISSUE #2324 之前是三份副本）：
   ① `ci-affected-tests.mjs`（PR `受影响用例`）；② `full-suite-run.mjs`（每日 `单元测试`）；
@@ -8501,7 +8502,9 @@ glob 真的罩住（枚举办法是从每条正则里取出它锚定的字面前
   `.gate-thresholds.json` 里那一条一起撤掉**，兜底改为调用点注入
   （`resolveMaxWorkers(raw, resolveCiWorkers().workers)`，**漏传兜底直接 `throw`**；
   `runChunk` 的默认档同样从 `ci-load` 推导，本地那份常数一并消失）。
-  ⇒ 本地要临时快跑：`COMFY_CI_MAX_WORKERS=8 pnpm test`（一处旋钮管全部，只调并发）。
+  ⇒ 本地默认档自 #4613 起按 `cores/2` 铺开（16 核 ⇒ 8，`vitest.config.ts` 会在输出里
+  打一行读数）；机器被别的东西占着时压并发：`COMFY_CI_MAX_WORKERS=<n> pnpm test`
+  （一处旋钮管全部，只调并发）。
 
 **这一档为什么从「至少 4 核」抬到「至少 8 核」（ISSUE #2317，代价叙述由 #2320 订正）**：
 抬档买的不是「跑得快」，是**单条流水线别把整台机占满** —— 这一档唯一承诺的是**峰值占用减半**，
@@ -8550,14 +8553,18 @@ glob 真的罩住（枚举办法是从每条正则里取出它锚定的字面前
 （`cnb-jt3-1k5071kou` 的 `ESLint 零警告` 挂 8640s、`cnb-did-1k50659np` 的 `单元测试`
 挂 2h24m，都只留下 `timeout of … exceeded`）。
 
-**平台分档（2026-11-06 补，GA 适配）：GA 侧 `ceil(cores / 2)`，4 核 ⇒ 2。** 上面那个 8 的前提是
+**平台分档（2026-11-06 补 GA，2026-11-20 补本地，ISSUE #4613）。** 上面那个 8 的前提是
 **共享宿主机** —— 同机并着别人的 PR 与每日档、仓库又控不住「一台机接几个 runner」，
 只能靠并发数给邻居留余量。GA 托管 runner 是**每个 job 独享一台 4 核 VM**，没有邻居要保护：
 照抄 8 只会得到 `ceil(4/8)=1`（三核空转），而这一档买的东西（峰值占用减半）在独享机上
-一分也换不到。所以 `resolveCiWorkers()` 按 `GITHUB_ACTIONS==="true"` 分档：
-GA ⇒ `GA_CORES_PER_WORKER=2`（留一半余量，4 核 ⇒ 2）；其余（CNB 自托管 / 本地）⇒
+一分也换不到 ⇒ GA 侧 `ceil(cores / 2)`，4 核 ⇒ 2。本地开发机同属「没有邻居」的一侧，
+却一直在付共享档的钱（16 核 ⇒ 2，全量墙钟明显偏长）⇒ 非 CI 环境同样按 `cores/2` 铺开。
+所以 `platformCpusPerWorker()` 按「平台给了什么条件」分档：
+GA（`GITHUB_ACTIONS==="true"`）⇒ `GA_CORES_PER_WORKER=2`（留一半余量，4 核 ⇒ 2）；
+本地开发机（`CNB_CPUS` / `GITHUB_ACTIONS` / `CI` 三者都缺席，`isCiEnvironment()` 判）⇒
+`LOCAL_CORES_PER_WORKER=2`（独占整机用一半，16 核 ⇒ 8）；CNB 共享宿主机 ⇒
 `CORES_PER_WORKER=8`，CNB 的 16⇒2 / 8⇒1 / 12⇒2 **一个不改**（`tests/ci-load.test.ts`
-两套断言同时钉住）。**4 worker 不写进默认**：GA 托管 runner 的「4 vCPU / 16GB」只是口径，
+三档断言同时钉住）。**4 worker 不写进默认**：GA 托管 runner 的「4 vCPU / 16GB」只是口径，
 本仓没有内存读数；取数计划与待定项在 `docs/guides/ga-migration-checklist.md` G-1，
 没有读数就不升档。
 
