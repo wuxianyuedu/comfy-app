@@ -97,7 +97,7 @@ describe("多行 payload 归并", () => {
     expect(out[1]!.message).toBe("[app] 下一条");
   });
 
-  it("ANSI 在切记录之前剥掉，续行上的残留颜色码不会破坏结构", () => {
+  it("ANSI 完整 SGR 保留进正文，续行上的颜色码不破坏多行归并结构", () => {
     const text = [
       "[2026-01-01 10:00:00.000] [INFO] 开始",
       "{",
@@ -106,13 +106,14 @@ describe("多行 payload 归并", () => {
     ].join("\n");
     const out = parseFileLogs(text, undefined, "app-runtime");
     expect(out).toHaveLength(1);
-    expect(out[0]!.message).not.toContain("[36m");
+    /* 颜色码原样保留（渲染层按 SGR 上色），但**结构**不受影响：JSON 续行仍归并进同一条。 */
+    expect(out[0]!.message).toBe('开始\n{\n\u001b[36m  "a": 1\u001b[0m\n}');
   });
 });
 
 describe("stripSgr", () => {
-  it("剥掉完整 SGR 与残缺颜色码", () => {
-    expect(stripSgr("\u001b[36m[OK]\u001b[0m [90m[OK[0m")).toBe("[OK] [OK");
+  it("保留完整 SGR（渲染层上色用）、只剥残缺颜色码", () => {
+    expect(stripSgr("\u001b[36m[OK]\u001b[0m [90m[OK[0m")).toBe("\u001b[36m[OK]\u001b[0m [OK");
   });
 });
 

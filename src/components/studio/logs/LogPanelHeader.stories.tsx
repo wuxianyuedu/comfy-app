@@ -46,13 +46,17 @@ function HeaderHarness({ wrapInitial = false }: { wrapInitial?: boolean }) {
     <div className="w-240 max-w-full">
       <LogPanelHeader
         clear={clear}
+        columns="full"
         copyAllAction={() => {
           void copyAll();
         }}
         copyDone={false}
         copyFailed={false}
         countsByOrigin={header.countsByOrigin}
+        density="standard"
         download={download}
+        onColumnsChange={() => undefined}
+        onDensityChange={() => undefined}
         origin={origin}
         originCounts={originCounts}
         panel={panel}

@@ -106,6 +106,19 @@ const SGR_RE = /\u001b\[(?<param>[0-9;:]*)m/g;
  */
 const PARTIAL_SGR_RE = /\[[0-9;:]*m/g;
 
+/**
+ * 只剥**残缺颜色码**（转义符丢失后剩下的 `[90m` / `[0m`），完整 SGR 序列保留。
+ *
+ * 供「要把 ANSI 颜色带进渲染」的读取链使用（ISSUE #4567：设置页运行日志的
+ * 图内默认颜色此前被整体剥掉、面板全灰）。切分记录前仍要清掉残缺码——它们
+ * 会以 `[90m` 的形状混进正文被原样显示。
+ */
+export function stripPartialSgr(text: string): string {
+  /* 负回顾：`[36m` 前面是 `\x1b` 时它是**完整 SGR 的尾巴**，不能剥——
+   * 只剥前面不是转义符的残缺码。 */
+  return text.replaceAll(/(?<!\u001b)\[[0-9;:]*m/g, "");
+}
+
 /** 「有没有 SGR（完整形态）」—— 只判不改。`logs/log-row-style` 的这个判据
  *  用来决定「按 ANSI 上色还是走词法上色」，不动文本。 */
 export function hasSgr(text: string): boolean {
