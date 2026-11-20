@@ -52,6 +52,12 @@ describe("outputFileTracingIncludes：Next 自带运行时脚本必须显式包�
     // 而 excludes 只会让产物更小。缺件只能靠 includes。
     expect(config).not.toMatch(/outputFileTracingExcludes:\s*\{[^}]*next-server[^}]*\}/);
   });
+
+  it("launcher-core/server-timings.mjs 也显式包含（#4643：白名单有它、追踪图没有）", () => {
+    // RUNTIME_SCRIPTS 与 check-standalone-contents.cjs 早已登记这份运行期脚本，
+    // 但 Next 追踪不到它；缺 include 时带产物的检出在 executor-host 冒烟里真红。
+    expect(config).toContain('"./scripts/launcher-core/server-timings.mjs"');
+  });
 });
 
 /* ── 产物级探针：真去数那份运行时脚本在不在 ────────────────────────────
