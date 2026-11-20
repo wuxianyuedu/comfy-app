@@ -8,6 +8,10 @@ export type TaskItem = {
   createdAt: string;
   error?: string | null;
   id: string;
+  /** 模型名称（ISSUE #4619）：任务所用工作流上挂的模型标签，服务端随
+   *  task.list 批量解析；工作流没挂标签 / 模板引用缺失时为 null（前端回落
+   *  工作流名，行上仍能认出这是哪次提交）。 */
+  modelName?: string | null;
   negativePrompt?: string | null;
   params?: Record<string, unknown> | null;
   prompt: string;

@@ -39,6 +39,7 @@ function queuedRow(id: string, workflowName: string): QueueRow {
     id,
     type: "IMAGE",
     workflowName,
+    modelName: null,
     status: "QUEUED",
     prompt: `提示词 ${id}`,
     createdAt: new Date("2026-01-01T00:00:00Z"),

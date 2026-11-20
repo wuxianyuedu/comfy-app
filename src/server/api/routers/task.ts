@@ -2,7 +2,7 @@ import { upperToken } from "~/lib/upper-token";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure, rateLimitedProcedure } from "~/server/api/trpc";
-import { taskRepository } from "~/lib/core/repository";
+import { taskRepository, workflowModelTagRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
 import { errorMessage } from "~/lib/error-message";
 import { asRecord } from "~/lib/is-record";
@@ -90,9 +90,22 @@ export const taskRouter = createTRPCRouter({
           statusList: statusList ?? undefined,
           includeImages: true,
         });
+        /* 模型名称（ISSUE #4619）：任务行不存模型，工作流上挂的模型标签才是
+         * 权威来源。按本页任务引用的模板 id 批量取「模板 → 标签名」映射，
+         * 一页一次查询；没挂标签 / 模板引用缺失的行如实给 null，前端回落。 */
+        const templateIds = [
+          ...new Set(
+            tasks
+              .map((t) => asRecord(t.params)?.workflow)
+              .filter((id): id is string => typeof id === "string" && id !== ""),
+          ),
+        ];
+        const tagRows = await workflowModelTagRepository.getTemplateTagRows(templateIds);
+        const modelNameByTemplate = new Map(tagRows.map((row) => [row.templateId, row.name]));
         return tasks.map((task) => {
           const p = asRecord(task.params) ?? {};
           const checkpoint = typeof p.checkpoint === "string" ? p.checkpoint : null;
+          const templateId = typeof p.workflow === "string" ? p.workflow : null;
           const cover = task.images[0]?.localPath ?? null;
           const coverMediaType = task.images[0]?.mediaType ?? null;
           /* 视频落点只有服务端答得了：封面（`images[0]`）通常是预览图，成片不在首位（执行侧
@@ -105,6 +118,7 @@ export const taskRouter = createTRPCRouter({
             id: task.id,
             type: task.type,
             workflowName: task.workflowName,
+            modelName: templateId === null ? null : (modelNameByTemplate.get(templateId) ?? null),
             status: task.status,
             prompt: task.prompt,
             createdAt: task.createdAt,
