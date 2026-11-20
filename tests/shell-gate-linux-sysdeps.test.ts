@@ -262,8 +262,9 @@ describe("GA 侧真的装了那些系统库（ISSUE #3572 / #3580）", () => {
   });
 
   it("这一步在 ubuntu runner 上、且用 sudo 装（apt 需要 root）", () => {
-    expect(workflow).toContain("sudo apt-get install");
-    expect(workflow).toContain("sudo apt-get update");
+    // #4513 起两条命令带 `sudo timeout <秒>` 上限 —— sudo 仍在（apt 需要 root）。
+    expect(workflow).toContain("sudo timeout 480 apt-get install");
+    expect(workflow).toContain("sudo timeout 180 apt-get update");
   });
 
   /* 镜像侧瞬时 DNS / 连接故障曾让这一步无声空等 22 分钟才 exit 100、整条 PR 流水线
@@ -467,6 +468,61 @@ describe("apt 包档跨跑缓存（#4480）", () => {
     expect(restore).toContain("if: steps.shell-face.outputs.shell != 'false'");
     expect(save).toContain("!cancelled()");
     expect(save).toContain("steps.shell-face.outputs.shell != 'false'");
+  });
+});
+
+/* ── 拥塞时段的重试预算与缓存落档（#4513）────────────────────────────────
+ *
+ * 现场：PR #4508 两条流水线同一步连续两次 15 分钟超时（apt 单包 1~2 分钟、成片
+ * Ign 重试；同一步当天更早还是全绿，属时段性拥塞）。根因两段：① 两次 apt 尝试
+ * 没有各自的时长上限，慢镜像是「连接活着、传输极慢」，连接级空闲超时不触发，
+ * 第一次尝试就能烧满步级预算，重试根本没机会发生；② 缓存 save 恒失败——chown
+ * 只在 restore 前跑一次，apt 以 root 落包后把 partial/ 重建为 root:root 0700，
+ * runner 身份的 save 打包时 Permission denied ⇒ 缓存永远存不进去，每个碰壳的
+ * PR 都从零下载。
+ */
+
+describe("apt 拥塞下的重试预算与缓存落档（#4513）", () => {
+  const workflow = read(PR_GATE);
+
+  function stepByName(name: string): string {
+    const start = workflow.indexOf(`- name: ${name}`);
+    expect(start).toBeGreaterThan(-1);
+    const rest = workflow.slice(start);
+    const next = rest.indexOf("\n      - name:", 1);
+    return next === -1 ? rest : rest.slice(0, next);
+  }
+
+  it("两条 apt 命令各带 timeout 上限 —— 第一次尝试烧不完步级预算，重试才真的会发生", () => {
+    const step = stepByName("装 Tauri 的 Linux 系统依赖");
+    const update = step.split("\n").find((l) => l.includes("apt-get update")) ?? "";
+    const install = step.split("\n").find((l) => l.includes("apt-get install")) ?? "";
+    expect(update).toContain("sudo timeout 180 apt-get update");
+    expect(install).toContain("sudo timeout 480 apt-get install");
+  });
+
+  it("步级超时罩得住两次有界尝试（2×(180s+480s)+5s ≈ 22.1m < 25m）", () => {
+    const step = stepByName("装 Tauri 的 Linux 系统依赖");
+    expect(step).toContain("timeout-minutes: 25");
+  });
+
+  it("重试前 dpkg --configure -a 收尾 —— timeout 掐在解包段时不留脏 dpkg", () => {
+    const step = stepByName("装 Tauri 的 Linux 系统依赖");
+    expect(step).toContain("sudo dpkg --configure -a || true");
+  });
+
+  it("save 之前把 deb 档目录交回 runner 用户 —— apt 以 root 重建 partial，不 chown save 必 Permission denied", () => {
+    const installAt = workflow.indexOf("- name: 装 Tauri 的 Linux 系统依赖");
+    const chownAt = workflow.indexOf("- name: deb 档目录交回缓存步");
+    const saveAt = workflow.indexOf("- name: 保存 Tauri 的 Linux 系统依赖 deb 缓存");
+    expect(chownAt).toBeGreaterThan(installAt);
+    expect(saveAt).toBeGreaterThan(chownAt);
+    const step = stepByName("deb 档目录交回缓存步");
+    expect(step).toContain("sudo chown -R");
+    expect(step).toContain("/var/cache/apt/archives");
+    // 与 save 同一条条件：装挂了 / 超时了也要落档（!cancelled()），被取消的不抢。
+    expect(step).toContain("!cancelled()");
+    expect(step).toContain("steps.shell-face.outputs.shell != 'false'");
   });
 });
 
