@@ -191,6 +191,7 @@ function resolveDbFile(url) {
  * @property {any} cliProcs
  * @property {() => Promise<unknown>} interrupt
  * @property {(options?: any) => Promise<unknown>} claimAndDispatch
+ * @property {(opts: { pid: number, detached: boolean, force: boolean }) => Promise<unknown>} killProcessTree
  */
 
 // 运行时句柄：bootRuntime 成功后填充，claim tick 与测试钩子共用。
@@ -344,6 +345,7 @@ async function bootRuntime() {
     cliProcs: graph.cliProcs,
     interrupt: graph.interrupt,
     claimAndDispatch: graph.claimAndDispatchOnce,
+    killProcessTree: graph.killProcessTree,
   };
   writeLine(
     "runtime inject-ok seams=runner+cli+finalize+ws+enqueue+reaper(owner=host)+dispatch(owner=host)+trace",
