@@ -111,6 +111,10 @@ export const NO_STORY_REASON = new Map([
     "ui-kit-gallery-categories.ts",
     "总览页分区清单的常量表（#4125）：只有 id / 标题数据、无 UI 形态，由总览页用例覆盖",
   ],
+  [
+    "view-tab-active.tsx",
+    "页签可见性的 Context Provider（#4598）：无 DOM 形态，判据在 use-interval.test.ts 与 ViewActions.test.tsx（同 use-*.ts「只测不看」的口径）",
+  ],
 ]);
 
 /**

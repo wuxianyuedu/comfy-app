@@ -40,7 +40,13 @@ function useActiveProjectId(): string | null {
       setProjectId(getActiveId());
     };
     sync();
-    return subscribeAppEvent("comfyapp:canvas-store-changed", sync);
+    /* 自动保存（save）不动 active-id，跳过（ISSUE #4600）：编辑期每 500ms
+     * 一拍不再重设同一个值。 */
+    return subscribeAppEvent("comfyapp:canvas-store-changed", (payload) => {
+      if (payload.reason !== "save") {
+        sync();
+      }
+    });
   }, []);
   return projectId;
 }

@@ -14,13 +14,12 @@
  * `CODE.NOT_RUN` 处理 —— 「没拿到测量」与「测量结果是红的」是两件事（三态退出码，
  * 见 `ship.mjs` 文件头第 2 条纪律）。
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
 import { gitScratchPath, resolveGitDir } from "../lib/git-dir.mjs";
-import { pnpmInvocation } from "../launcher-core/shell.mjs";
+import { pnpmInvocation, runGateStep } from "../launcher-core/shell.mjs";
 
 /**
  * 一次外部命令的结果。`stderr` 是**必需**字段，不是可选（见 `makeRunner`）。
@@ -81,10 +80,13 @@ export function makeRunner(cwd) {
     }
     /* `opts.env` 是**叠加**而不是替换：换掉整个环境会把 PATH/HOME 一起带走，
      * 那会让一次「只想多带一个旗标」的调用变成另一件事（且失败形态是 ENOENT，看不出关系）。
-     * 目前唯一的用处是给刻意空提交带 `COMFY_INTENTIONAL_EMPTY_COMMIT`（ISSUE #2354）。 */
-    const r = spawnSync(inv.command, inv.args, {
+     * 目前唯一的用处是给刻意空提交带 `COMFY_INTENTIONAL_EMPTY_COMMIT`（ISSUE #2354）。
+     * 预算 180s（ISSUE #4601）：cnb 是网络调用（含取日志 / 传正文的大包），挂死
+     * 不再无限卡住 ship 链路；预算话术由调用方按「没跑起来」读 `error`。 */
+    const r = runGateStep(inv.command, inv.args, {
       cwd,
-      encoding: "utf8",
+      timeoutMs: 180_000,
+      echo: false,
       env: opts.env ? { ...process.env, ...opts.env } : process.env,
     });
     // 这里刻意保留 ||：error.code 可能是空串，那时要念 error 本身。

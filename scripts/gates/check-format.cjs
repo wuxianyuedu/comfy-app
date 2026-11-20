@@ -152,8 +152,9 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
 const { createRequire } = require("node:module");
+/* 带预算的判据执行器（ISSUE #4601）：oxfmt / git 挂死不再无限卡住提交。 */
+const { runGateStep } = require("../launcher-core/shell.mjs");
 const { gateFail, gatePass, indentItems } = require("../ci/ci-log.mjs");
 
 /* oxfmt 的调用**不经 pnpm 层**（口径同台账 E10：平台 shim 那一层正是
@@ -355,10 +356,11 @@ function stagedFiles() {
   /* `-c core.quotePath=false`:路径要原样(ISSUE #2272,机制见 scripts/lib/changed-scope.mjs 的
    * 文件头「口径 ④」)。git 默认把含非 ASCII 字符的路径转义加引号,而本仓有 38 份文件名
    * 带非 ASCII 的文件(全在 docs/ 下)⇒ 转义过的路径认不出来,那些文件会**不进 oxfmt**。 */
-  const res = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
+  const res = runGateStep(
+    "git",
+    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
+    { cwd: ROOT, timeoutMs: 30_000 },
+  );
   if (res.status !== 0) {
     return null;
   }
@@ -388,9 +390,9 @@ function stagedFiles() {
  * @returns {string[] | null} 不一致的路径（排序后），或 null = 没读到读数
  */
 function unstagedOverlap(hits) {
-  const res = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--name-only"], {
+  const res = runGateStep("git", ["-c", "core.quotePath=false", "diff", "--name-only"], {
     cwd: ROOT,
-    encoding: "utf8",
+    timeoutMs: 30_000,
   });
   if (res.status !== 0) {
     return null;
@@ -423,13 +425,10 @@ function unstagedOverlap(hits) {
  * @returns {Set<string> | null} 与 MERGE_HEAD 不同的暂存路径集合，或 null = 没读到读数
  */
 function stagedDifferingFromMergeHead() {
-  const res = spawnSync(
+  const res = runGateStep(
     "git",
     ["-c", "core.quotePath=false", "diff", "--cached", "MERGE_HEAD", "--name-only"],
-    {
-      cwd: ROOT,
-      encoding: "utf8",
-    },
+    { cwd: ROOT, timeoutMs: 30_000 },
   );
   if (res.status !== 0) {
     return null;
@@ -458,13 +457,13 @@ function stagedDifferingFromMergeHead() {
  */
 function oxfmtCheckTargets(entry, targets, subject) {
   const args = ["--check", ...targets];
-  const res = spawnSync(process.execPath, [entry, ...args], {
+  /* 预算保持 600s（ISSUE #4601 收口到 runGateStep，语义不变）。 */
+  const res = runGateStep(process.execPath, [entry, ...args], {
     cwd: ROOT,
-    encoding: "utf8",
     // 单文件清单在超大仓库里能到几百 KB；默认 1 MB 会把 stdout 截成空串，
     // 那正好落进上面第三条要拦的形态 —— 宁可显式给大。
     maxBuffer: 64 * 1024 * 1024,
-    timeout: 600_000,
+    timeoutMs: 600_000,
   });
   if (res.error) {
     console.error(
@@ -489,9 +488,7 @@ function oxfmtCheckTargets(entry, targets, subject) {
     /* `stdout` 实测在子进程起不来时是 `undefined`、失败时 `error` 才有值 —— 下面那个
      * `?? ver.error` 就是为这一支写的（`@types/node` 把它们按 `encoding` 声明成非空）。 */
     const ver = /** @type {{ stdout?: string, error?: unknown }} */ (
-      spawnSync(process.execPath, [entry, "--version"], {
-        encoding: "utf8",
-      })
+      runGateStep(process.execPath, [entry, "--version"], { timeoutMs: 30_000 })
     );
     console.log(
       `[format][debug] ROOT=${ROOT}\n` +

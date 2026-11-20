@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { COMFY_QUEUE_POLL_MS, useComfyQueue } from "~/components/studio/hooks/use-comfy-queue";
 import { useCopyResult } from "~/components/ui/use-copy-feedback";
 import { useItemAction } from "~/components/ui/use-item-action";
+import { useViewTabActive } from "~/components/ui/view-tab-active";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { revealTaskFolder } from "~/lib/history-detail-actions";
 import { cancelTask } from "~/lib/task-cancel-client";
@@ -82,6 +83,10 @@ export function useQueueMonitor(): QueueMonitorController {
    * 一次的轮询都会换掉对象身份，弹窗会被误重挂、SSE 反复重订。 */
   const [logRow, setLogRow] = useState<QueueTaskLogTarget | null>(null);
 
+  /* 页签隐藏时不轮询（ISSUE #4598）：disabled 期间 React Query 不发请求、
+   * refetchInterval 停摆；切回当前页且数据过 staleTime 时自动补拉一次。 */
+  const isTabActive = useViewTabActive();
+
   const listQ = useQuery(
     trpc.task.list.queryOptions(
       { take: 200 },
@@ -91,6 +96,7 @@ export function useQueueMonitor(): QueueMonitorController {
         /* 与状态栏那一格同一个节奏：两处都在回答「机器现在在干什么」，
          * 快慢不该不一样。 */
         refetchInterval: COMFY_QUEUE_POLL_MS,
+        enabled: isTabActive,
       },
     ),
   );

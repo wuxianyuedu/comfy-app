@@ -12,6 +12,7 @@ import { subscribeAppEvent } from "~/lib/app-events";
 import { useSyncRefusalNotice } from "../../project-canvas/hooks/use-sync-refusal-notice";
 import {
   deleteProjectEverywhere,
+  getProject,
   listProjectsWithServer,
   reapAllEmptyDrafts,
   type ProjectListEntry,
@@ -64,6 +65,12 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
     setLoading(false);
   }, []);
 
+  /* 事件回调里要基于「当前列表」做增量判断，state 闭包会过期 —— 镜像一份。 */
+  const projectsRef = useRef<Array<ProjectListEntry>>([]);
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
+
   useEffect(() => {
     /* 列之前先清掉遗留的空默认名草稿（挂载时的一次性清扫，与工作区首页同口径）。
      * 它现在**两侧一起删**（ISSUE #1501 修的就是这个），所以这里不会再攒出
@@ -74,11 +81,40 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
      * 规则认的是「effect 体里同步调了一个会 setState 的函数」，而那条判据要防的
      * 是级联渲染 —— 这个调用点不产生它（同一约定见 `use-workspace-tabs`）。 */
     void load();
-    /* 画布内的编辑（upsert / rename / delete）会广播这一条，重取即可 ——
-     * 装配层不重复实现增量更新。 */
-    const unsubscribe = subscribeAppEvent("comfyapp:canvas-store-changed", () => {
+    /* 自动保存（save）就地改那一行，不再全量重拉并集（ISSUE #4600）：画布
+     * 编辑期每 500ms 一拍，画廊只在该行真的变化时换引用；结构性变化
+     * （增删 / 对账 / 建草稿）与「不在当前列表里的行」才重取。 */
+    const applySave = (projectId: string): boolean => {
+      const project = getProject(projectId);
+      if (project === null) {
+        return false;
+      }
+      const prev = projectsRef.current;
+      const idx = prev.findIndex((entry) => entry.id === projectId);
+      const before = prev[idx];
+      if (idx === -1 || before === undefined) {
+        return false;
+      }
+      if (before.name === project.name && before.updatedAt === project.updatedAt) {
+        return true;
+      }
+      const next = [...prev];
+      next[idx] = { ...project, origin: before.origin };
+      projectsRef.current = next;
+      setProjects(next);
+      return true;
+    };
+    const onChanged = (payload: { projectId?: string; reason: string }): void => {
+      if (
+        payload.reason === "save" &&
+        payload.projectId !== undefined &&
+        applySave(payload.projectId)
+      ) {
+        return;
+      }
       void load();
-    });
+    };
+    const unsubscribe = subscribeAppEvent("comfyapp:canvas-store-changed", onChanged);
     return () => {
       aliveRef.current = false;
       unsubscribe();

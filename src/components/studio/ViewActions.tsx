@@ -5,27 +5,15 @@
  * 之所以是「槽」而非「注册表」：按钮的动作（刷新 / 清空 / 上传 / 搜索框的受控值）都长在各视图自己的 controller 上，注册表只装得下声明、装不了处理器 —— 这里传的是**已经渲染好的子树**（handler 跟着它走）。
  * 传送机制在 `ui/slot-outlet`（`createPortal` 是 `react-dom` 的 API，散在视图层各写一遍就没人说得清哪些地方在传送、为什么）；本文件只剩三件应用级知识：落点**是顶栏**、**非当前页签不显示**、**没落点时退化成从前那一行**。
  */
-import { createContext, useContext, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { SlotContent, SlotOutlet, SlotOutletProvider } from "~/components/ui/slot-outlet";
+import { useViewTabActive, ViewTabActiveProvider } from "~/components/ui/view-tab-active";
 
-/**
- * 「这一屏现在是当前页签吗」—— 由 `WorkspaceViewStack` 按页签逐个提供。必须有它：页签的意义是**切走不卸载**，
- * 于是所有打开过的屏都同时活着、都会把动作送进同一个落点 —— 不过滤就变成「四屏的按钮挤在顶栏里」。
- * 缺省 `true`：不挂壳的渲染路径（`/models`、Storybook、组件用例）没有页签这回事，按「就是当前屏」处理。
- */
-const ViewTabActiveContext = createContext(true);
-
-/** 给一个页签内容标上「是不是当前页」。 */
-export function ViewTabActiveProvider({
-  active,
-  children,
-}: {
-  active: boolean;
-  children: ReactNode;
-}) {
-  return <ViewTabActiveContext.Provider value={active}>{children}</ViewTabActiveContext.Provider>;
-}
+/* 「这一屏是不是当前页签」的事实源住在 `ui/view-tab-active`（ISSUE #4598 起
+ * 轮询原语也要读它，不能反向依赖 studio 层）；这里转出 Provider 维持既有
+ * 导入面（WorkspaceViewStack 仍从本文件取）。 */
+export { ViewTabActiveProvider };
 
 /** 提供者 —— 挂在 `AppShell` 上（顶栏与所有视图都是它的后代）。 */
 export function ViewActionsProvider({ children }: { children: ReactNode }) {
@@ -46,7 +34,7 @@ export function ViewActionsHost() {
  * —— 右对齐 + 下边距，与交给 `PageHeader` 的 `actions` 时逐像素相同。
  */
 export function ViewActions({ children }: { children: ReactNode }) {
-  const active = useContext(ViewTabActiveContext);
+  const active = useViewTabActive();
 
   return (
     <SlotContent

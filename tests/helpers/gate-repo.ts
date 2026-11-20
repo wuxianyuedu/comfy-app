@@ -54,11 +54,15 @@ export function copyGateDeps(
   /** CJS 的 `require("./x.cjs")`（也认 `createRequire(…)("./x.cjs")`）、ESM 的 `import/export … from "./x.mjs"`，以及
    *  CJS 里 `require` 一个 ESM（Node 24 的 `require(esm)`，`check-doc-mirror-pairing.cjs` 要 `changed-scope.mjs`，ISSUE #2265）。
    *  路径允许 `/`：`changed-scope.mjs` 依赖链伸进 `scripts/base-check/` 与 `launcher-core/`，只认平铺名会让沙箱 import 时炸。
-   *  也认 `../` 开头：判据脚本归入 `scripts/<域>/` 子目录后（#3930），跨域依赖长成了 `../ci/ci-log.mjs` 这一族。 */
+   *  也认 `../` 开头：判据脚本归入 `scripts/<域>/` 子目录后（#3930），跨域依赖长成了 `../ci/ci-log.mjs` 这一族。
+   *  `.ts` 也要认（ISSUE #4601）：launcher-core 的 `shell.mjs` 静态 import `src/lib/process/executable-resolve.ts`
+   *  （Node 26 类型擦除让它能跑），判据沙箱若不把 .ts 依赖链一起搬进去，shell.mjs 在沙箱里起不来。 */
   const DEP_RES = [
-    /require\w*\(\s*"(?<dep>\.{1,2}\/[\w./-]+\.(?:c|m)js)"\s*\)/g,
-    /(?:^|\n)\s*(?:import|export)\s[^;\n]*?from\s+"(?<dep>\.{1,2}\/[\w./-]+\.mjs)"/g,
-    /(?:^|\n)\s*import\s+"(?<dep>\.{1,2}\/[\w./-]+\.mjs)"/g,
+    /require\w*\(\s*"(?<dep>\.{1,2}\/[\w./-]+\.(?:c|m)?(?:js|ts))"\s*\)/g,
+    /* `[^;]*?` 不排换行：shell.mjs 的 import 块是多行的（`import {\n…\n} from "…ts"`），
+     * 按 `[^;\n]` 写会整条漏掉（ISSUE #4601 的 GA 红正是这一形）。 */
+    /(?:^|\n)\s*(?:import|export)\s[^;]*?from\s+"(?<dep>\.{1,2}\/[\w./-]+\.(?:c|m)?(?:js|ts))"/g,
+    /(?:^|\n)\s*import\s+"(?<dep>\.{1,2}\/[\w./-]+\.(?:c|m)?(?:js|ts))"/g,
   ];
   /** 真仓库 `scripts/**` 的 basename → 绝对路径索引。判据归入域子目录后，依赖说明符相对
    *  的「原目录」只有仓库自己知道；而 `scripts/` 下文件名全仓唯一（#3930 迁移时已核对），
@@ -77,6 +81,27 @@ export function copyGateDeps(
     }
   };
   indexScripts(path.join(REPO_ROOT, "scripts"));
+  /* `src/**` 下的 .ts 依赖也要进索引（ISSUE #4601）：判据 → launcher-core/*.mjs →
+   * src/lib/process/*.ts 这条链现在是真的。src/ 下同名 .ts 很多（`index.ts` 一族），
+   * 按 basename 定位会指错文件 ⇒ 只收「全 src 唯一名」的 .ts；测试与声明文件不是
+   * 运行时依赖，不进。 */
+  const indexTsDeps = (dir: string): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) {
+        if (e.name === "node_modules" || e.name === "__pycache__") continue;
+        indexTsDeps(path.join(dir, e.name));
+      } else if (
+        e.name.endsWith(".ts") &&
+        !e.name.endsWith(".d.ts") &&
+        !e.name.includes(".test.") &&
+        e.name !== "index.ts" &&
+        !sourceByBasename.has(e.name)
+      ) {
+        sourceByBasename.set(e.name, path.join(dir, e.name));
+      }
+    }
+  };
+  indexTsDeps(path.join(REPO_ROOT, "src"));
   /* pending 带**各自所在目录**：spec 相对「当前被扫文件」解析，不是相对入口——
    * 平铺布局下两者恒等价，#3930 的子目录布局下按入口解析会把
    * `./ui-primitives-rules-p1-p37.cjs` 落错目录（探针实测：进 gates/ 而不是

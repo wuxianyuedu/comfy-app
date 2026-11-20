@@ -9,6 +9,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { useExternalAction } from "~/components/ui/use-external-action";
+import { useViewTabActive } from "~/components/ui/view-tab-active";
 import { runAsyncAction } from "~/lib/async-action";
 import { useTRPC } from "~/trpc/react";
 import type { ActionReport } from "~/lib/async-action";
@@ -44,10 +45,12 @@ export function useSettingsDbStudio({
   statusQueriesEnabled: boolean;
 }): UseSettingsDbStudio {
   const trpc = useTRPC();
+  /* 页签隐藏时不轮询（ISSUE #4598）：独立路由（/settings）没有页签壳，恒为活跃。 */
+  const isTabActive = useViewTabActive();
   const statusQ = useQuery(
     trpc.setting.dbStudioStatus.queryOptions(undefined, {
       refetchInterval: 15_000,
-      enabled: statusQueriesEnabled,
+      enabled: statusQueriesEnabled && isTabActive,
     }),
   );
   const startM = useMutation(trpc.setting.dbStudioStart.mutationOptions());

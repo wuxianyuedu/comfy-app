@@ -547,7 +547,8 @@ describe("cargo 缓存与 --locked（#4317）", () => {
   it("壳门禁的 cargo test 带 --locked —— 改了 Cargo.toml 必须同批更 Cargo.lock", () => {
     // 与 Node 侧 `pnpm install --frozen-lockfile` 同一纪律；锁与清单的同步在
     // #4317 交付时用 `cargo metadata --locked` 实测过，这里钉的是判据形状。
+    // （#4601 起经 runGateStep 起子进程：预算 900s，超时按「没跑起来」落 2。）
     const src = read("scripts/gates/shell-gate.mjs");
-    expect(src).toContain('spawnSync(cargo, ["test", "--locked"]');
+    expect(src).toContain('runGateStep(cargo, ["test", "--locked"]');
   });
 });

@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 
 import { startPollTimer } from "~/lib/poll-timer";
 
+import { useViewTabActive } from "./view-tab-active";
+
 /** useInterval —— 「按固定间隔重复跑一个异步动作」的唯一实现（规范 16 §16.2.4.15）。收口前全库 9 处各自 `setInterval` + 清理，
  * 缺陷各异：不立刻跑一次（挂载后先空着等一个间隔）；后台标签页空转（请求照发）；跑在已卸载组件上（异步回调后才 `setState`）。
  * 本 hook 一次给全：`immediate` 挂载先跑一次、`pauseWhenHidden` 切后台暂停且回前台立即补跑；背压由调用方决定
@@ -32,6 +34,15 @@ export type UseIntervalOptions = {
    * `visibilitychange` 不触发，靠这条补上；浏览器 tab 默认 `false`（切焦点时用户可能仍希望页面跟新）。
    */
   pauseWhenUnfocused?: boolean;
+  /**
+   * 本屏不是当前工作区页签时是否暂停（默认 `true`，ISSUE #4598）。工作区多页签
+   * 打开后，隐藏页签常驻挂载、`visibilityState` 仍报 visible——只认文档可见性的
+   * 既有两档拦不住它们，隐藏页签的轮询与随之而来的整树重渲染会随页签数线性增长。
+   * 暂停期间不发起调用、不起定时器；切回当前页时 effect 重建，`immediate` 先补跑
+   * 一拍（与切后台/回前台同语义）。页签之外（独立路由 / Storybook）恒为当前屏，
+   * 本档不生效。
+   */
+  pauseWhenViewHidden?: boolean;
 };
 
 /** 视图侧默认通道：一次失败一行，不炸轮询循环。 */
@@ -50,6 +61,7 @@ export function useInterval(
     immediate = true,
     pauseWhenHidden = true,
     pauseWhenUnfocused,
+    pauseWhenViewHidden = true,
     onError = reportPollError,
   }: UseIntervalOptions,
 ): void {
@@ -67,7 +79,16 @@ export function useInterval(
     runRef.current = run;
   }, [run]);
 
+  /* 页签隐藏档（ISSUE #4598）：隐藏页签直接不起定时器；翻回当前页时本 effect
+   * 重建、按 `immediate` 先补跑一拍。进依赖数组——切页签是低频动作，重建
+   * 定时器的代价远小于隐藏页签持续的轮询与重渲染税。 */
+  const tabActive = useViewTabActive();
+  const viewPaused = pauseWhenViewHidden && !tabActive;
+
   useEffect(() => {
+    if (viewPaused) {
+      return undefined;
+    }
     /* 实现本体在 `~/lib/poll-timer` —— 那份「立即先跑 / 后台暂停 / 回前台补跑 /
        桌面壳失焦也暂停」的判据只能有一处：非 React 的持有者（如系统指标 store）
        也要用它，各写一份一定会漂。这里只负责把它接到组件生命周期上。 */
@@ -80,5 +101,5 @@ export function useInterval(
         onErrorRef.current(err);
       },
     });
-  }, [ms, immediate, pauseWhenHidden, pauseWhenUnfocused]);
+  }, [ms, immediate, pauseWhenHidden, pauseWhenUnfocused, viewPaused]);
 }
