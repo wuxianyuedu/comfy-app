@@ -105,12 +105,17 @@ export function dateBucket(iso: string): string {
   return formatDate(date);
 }
 
-/** 简单的「看起来在跑」动效：递增到 95% 后封顶；任务结束时归 0。 */
+/** 简单的「看起来在跑」动效：递增到 95% 后封顶；任务结束时归 0。
+ *  引用纪律（ISSUE #4559）：只有**真的有值变化**才换 `map` 的引用 ——
+ *  RUNNING 卡封顶在 95% 之后每拍算出的还是 95，再每拍造新对象就会让
+ *  整页卡片（哪怕已 memo）拿到一个「值没变、引用变了」的 props 源。 */
 export function useSimulatedProgress(tasks: Array<TaskItem>) {
   const [map, setMap] = useState<Record<string, number>>({});
   /* `useInterval` 的 `ms` 固定、回调放 ref —— 此前把 `tasks` 写进依赖数组，
    * 每次任务数组变化（轮询每次都会给新数组）都要重建定时器、把计时重置；
-   * 现在定时器稳定，回调里读到的是最新的 `tasks`（规范 16 §16.2.4.15）。 */
+   * 现在定时器稳定，回调里读到的是最新的 `tasks`（规范 16 §16.2.4.15）。
+   * `pauseWhenHidden` 用默认的 true：模拟进度是给人看的，页面不可见时照跑
+   * 只会空转（与仓内其它轮询的可见性口径对齐，ISSUE #4559）。 */
   useInterval(
     () => {
       setMap((prev) => {
@@ -119,8 +124,11 @@ export function useSimulatedProgress(tasks: Array<TaskItem>) {
         for (const task of tasks) {
           if (task.status === "RUNNING") {
             const cur = prev[task.id] ?? 12 + Math.random() * 25;
-            next[task.id] = Math.min(95, cur + Math.random() * 5);
-            dirty = true;
+            const nextValue = Math.min(95, cur + Math.random() * 5);
+            if (nextValue !== cur) {
+              next[task.id] = nextValue;
+              dirty = true;
+            }
           } else {
             if (prev[task.id] !== null && prev[task.id] !== undefined) {
               delete next[task.id];
@@ -131,7 +139,7 @@ export function useSimulatedProgress(tasks: Array<TaskItem>) {
         return dirty ? next : prev;
       });
     },
-    { ms: 1500, immediate: false, pauseWhenHidden: false },
+    { ms: 1500, immediate: false },
   );
   return map;
 }
