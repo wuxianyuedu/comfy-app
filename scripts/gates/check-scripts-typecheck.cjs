@@ -90,7 +90,8 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+/* 带预算的判据执行器（ISSUE #4601）：tsc / git 挂死不再无限卡住提交。 */
+const { runGateStep } = require("../launcher-core/shell.mjs");
 
 /**
  * 判决面的根 = 被测的那棵树。默认是本仓库；用例可以把它指向一棵**临时夹具仓库**
@@ -205,9 +206,9 @@ function trackedMjsDetailed(root) {
       .split("\n")
       .map((l) => l.trim())
       .find(Boolean) ?? "(stderr 为空)";
-  const top = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+  const top = runGateStep("git", ["rev-parse", "--show-toplevel"], {
     cwd: root,
-    encoding: "utf8",
+    timeoutMs: 30_000,
   });
   if (top.error) {
     return { kind: "error", reason: `git rev-parse 起不来：${top.error.message}` };
@@ -238,10 +239,10 @@ function trackedMjsDetailed(root) {
   if (same(String(top.stdout).trim()) !== same(root)) {
     return { kind: "not-git-top" };
   }
-  const listed = spawnSync("git", ["ls-files", "-z", "--", "*.mjs"], {
+  const listed = runGateStep("git", ["ls-files", "-z", "--", "*.mjs"], {
     cwd: root,
-    encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
+    timeoutMs: 60_000,
   });
   if (listed.error) {
     return { kind: "error", reason: `git ls-files 起不来：${listed.error.message}` };
@@ -384,10 +385,11 @@ function runTsc() {
       reason: `跑不到 typescript 本体（缺 ${path.relative(ROOT, TSC_ENTRY)}）—— 先 pnpm install`,
     };
   }
-  const r = spawnSync(
+  /* 预算用缺省 600s（ISSUE #4601）：tsc 全量面是分钟量级的长跑，挂死不再无限卡。 */
+  const r = runGateStep(
     process.execPath,
     [TSC_ENTRY, "-p", CONFIG_REL, "--noEmit", "--pretty", "false", "--listFiles"],
-    { cwd: ROOT, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
+    { cwd: ROOT, maxBuffer: 256 * 1024 * 1024 },
   );
   if (r.error) {
     return { ok: false, reason: `tsc 没跑起来：${r.error.message}` };

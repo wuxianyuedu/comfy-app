@@ -21,7 +21,12 @@ import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { timeAgo } from "~/lib/time-format";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProjectOutputsMetadataSheet, TYPE_CHIP } from "./ProjectOutputsMetadataSheet";
-import { getActiveId, listProjects, type CanvasProject } from "~/lib/project-canvas/canvas-store";
+import {
+  getActiveId,
+  getProject,
+  listProjects,
+  type CanvasProject,
+} from "~/lib/project-canvas/canvas-store";
 import {
   type ProjectOutputItem,
   type ProjectOutputImage,
@@ -238,6 +243,23 @@ function taskCover(images: Array<ProjectOutputImage>): ProjectOutputImage | null
   return images[0] ?? null;
 }
 
+/* 本屏只消费项目的 id/name：按内容比较决定要不要换引用（ISSUE #4600）。
+ * 索引缓存是原位变更的（数组引用恒定），必须比内容而不是比引用。 */
+function sameProjectRows(prev: Array<CanvasProject>, next: Array<CanvasProject>): boolean {
+  if (prev.length !== next.length) {
+    return false;
+  }
+  return prev.every((project, index) => {
+    const candidate = next[index];
+    return (
+      candidate !== undefined &&
+      project.id === candidate.id &&
+      project.name === candidate.name &&
+      project.updatedAt === candidate.updatedAt
+    );
+  });
+}
+
 export function ProjectOutputs() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Array<CanvasProject>>([]);
@@ -245,18 +267,50 @@ export function ProjectOutputs() {
   /* 「已复制 ✓」的一次性反馈：亮 1.5s 自动复位（连点/卸载由 hook 收口）。 */
   const copied = useFlashState();
 
-  const refreshProjects = useCallback(() => {
-    setProjects(listProjects());
-  }, []);
-
   useEffect(() => {
-    const sync = () => {
+    /* 事件回调里要基于「当前列表」做增量判断，state 闭包会过期 —— 镜像一份。 */
+    const projectsRef = { current: [] as Array<CanvasProject> };
+    const syncAll = () => {
       setProjectId(getActiveId());
-      refreshProjects();
+      const next = listProjects();
+      setProjects((prev) => (sameProjectRows(prev, next) ? prev : next));
+      projectsRef.current = next;
     };
-    sync();
-    return subscribeAppEvent("comfyapp:canvas-store-changed", sync);
-  }, [refreshProjects]);
+    /* 自动保存（save）不动 active-id，那一行就地更新（ISSUE #4600）：
+     * 名字没变连 setState 都省掉——编辑期每 500ms 一拍的广播不再打穿这个
+     * （可能隐藏着的）页签。新转正的项目（不在当前列表）走全量同步。 */
+    const applySave = (savedId: string): boolean => {
+      const saved = getProject(savedId);
+      if (saved === null) {
+        return false;
+      }
+      const prev = projectsRef.current;
+      const idx = prev.findIndex((project) => project.id === saved.id);
+      const current = prev[idx];
+      if (idx === -1 || current === undefined) {
+        return false;
+      }
+      if (current.name === saved.name) {
+        return true;
+      }
+      const next = [...prev];
+      next[idx] = saved;
+      projectsRef.current = next;
+      setProjects(next);
+      return true;
+    };
+    syncAll();
+    return subscribeAppEvent("comfyapp:canvas-store-changed", (payload) => {
+      if (
+        payload.reason === "save" &&
+        payload.projectId !== undefined &&
+        applySave(payload.projectId)
+      ) {
+        return;
+      }
+      syncAll();
+    });
+  }, []);
 
   const { outputs, loading, refetch: refetchOutputs } = useProjectOutputs(projectId);
 

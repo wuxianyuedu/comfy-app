@@ -3,6 +3,7 @@ import React from "react";
 import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress";
 import { EmptyState } from "~/components/ui/empty-state";
 import { useBusyAction } from "~/components/ui/use-busy-action";
+import { useViewTabActive } from "~/components/ui/view-tab-active";
 import type { Shot } from "~/lib/workshop/types";
 import { isWantedOutput } from "~/lib/workshop/output-filter";
 import {
@@ -72,6 +73,14 @@ export function VideoStudio({
   /* 批处理的忙碌位走唯一出口（规范 16 §16.2.4.71）：复位此前写在循环之后，
    * 循环里抛错就永远停在「批处理中」。 */
   const batch = useBusyAction();
+
+  /* 生成期轮询的页签门控（ISSUE #4598）：轮询循环是跨渲染的 async 函数，
+   * 读不到渲染期的 context 值——可见性走 ref（effect 内同步，不渲染期写 ref）。 */
+  const isTabActive = useViewTabActive();
+  const tabActiveRef = React.useRef(isTabActive);
+  React.useEffect(() => {
+    tabActiveRef.current = isTabActive;
+  }, [isTabActive]);
 
   const apiReady = apiChannels?.video.configured === true;
   const doneCount = shots.filter((s) => s.clipUrl !== undefined && s.clipUrl !== "").length;
@@ -148,6 +157,14 @@ export function VideoStudio({
   async function pollApiVideo(shotId: string, remoteTaskId: string): Promise<void> {
     const deadline = Date.now() + 10 * 60 * 1000;
     while (Date.now() < deadline) {
+      /* 页签隐藏时只等不问（ISSUE #4598）：本循环生成期每 3s 打一次服务端，
+       * 页签切走后照发就是纯网络税。挂起等待、切回再继续问；任务真终态另有
+       * SSE / 看门狗兜底，不因这条等待而丢。 */
+      if (!tabActiveRef.current) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+        await sleep(1000);
+        continue;
+      }
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await sleep(3000);
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）

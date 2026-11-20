@@ -6,6 +6,8 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { emitAppEvent } from "~/lib/app-events";
+
 type EntryRow = {
   edges: Array<unknown>;
   id: string;
@@ -20,6 +22,17 @@ const listProjectsWithServerMock = vi.hoisted(() =>
 );
 const deleteProjectEverywhereMock = vi.hoisted(() => vi.fn<(id: string, name?: string) => void>());
 const reapAllEmptyDraftsMock = vi.hoisted(() => vi.fn(() => 0));
+const getProjectMock = vi.hoisted(() =>
+  vi.fn<
+    (id: string) => {
+      edges: Array<unknown>;
+      id: string;
+      name: string;
+      nodes: Array<unknown>;
+      updatedAt: number;
+    } | null
+  >(),
+);
 
 /* 拒收出口（`useSyncRefusalNotice`）要 `useToast` —— 这里替换掉，本文件断言的
  * 是列表与删除的编排，不是提示通道（提示通道由 use-project-persistence 那边守）。 */
@@ -33,6 +46,7 @@ vi.mock("~/lib/project-canvas/canvas-store", () => ({
     deleteProjectEverywhereMock(id, name);
   },
   reapAllEmptyDrafts: () => reapAllEmptyDraftsMock(),
+  getProject: (id: string) => getProjectMock(id),
 }));
 
 import { useWorksGallery } from "./use-works-gallery";
@@ -53,6 +67,7 @@ beforeEach(() => {
   listProjectsWithServerMock.mockReset();
   deleteProjectEverywhereMock.mockReset();
   reapAllEmptyDraftsMock.mockClear();
+  getProjectMock.mockReset();
 });
 
 afterEach(cleanup);
@@ -133,6 +148,42 @@ describe("useWorksGallery", () => {
       result.current.refresh();
     });
     await expect.poll(() => listProjectsWithServerMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("save 事件：那一行就地更新，不重拉并集（ISSUE #4600）", async () => {
+    listProjectsWithServerMock.mockResolvedValue({ entries: [entry()], ok: true });
+    getProjectMock.mockReturnValue({
+      id: "proj_a",
+      name: "改了名",
+      updatedAt: 3,
+      nodes: [],
+      edges: [],
+    });
+    const { result } = renderHook(() => useWorksGallery());
+    await expect.poll(() => result.current.loading).toBe(false);
+    expect(listProjectsWithServerMock).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      emitAppEvent("comfyapp:canvas-store-changed", { reason: "save", projectId: "proj_a" });
+    });
+
+    expect(listProjectsWithServerMock, "自动保存不触发并集重拉").toHaveBeenCalledTimes(1);
+    await expect.poll(() => result.current.projects[0]?.name).toBe("改了名");
+    expect(result.current.projects[0]?.origin).toBe("both");
+  });
+
+  it("save 事件但该行不在列表里（可能刚挤进窗口）→ 重取一次", async () => {
+    listProjectsWithServerMock.mockResolvedValue({ entries: [entry()], ok: true });
+    getProjectMock.mockReturnValue(null);
+    const { result } = renderHook(() => useWorksGallery());
+    await expect.poll(() => result.current.loading).toBe(false);
+
+    act(() => {
+      emitAppEvent("comfyapp:canvas-store-changed", { reason: "save", projectId: "proj_new" });
+    });
+
+    await expect.poll(() => listProjectsWithServerMock).toHaveBeenCalledTimes(2);
+    expect(result.current.projects).toHaveLength(1);
   });
 });
 

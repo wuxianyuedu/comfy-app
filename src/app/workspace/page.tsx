@@ -19,6 +19,25 @@ import {
   reapAllEmptyDrafts,
 } from "~/lib/project-canvas/canvas-store";
 
+/* 近期项目列表按**展示字段**逐项比较（ISSUE #4600）：全部相同就复用旧数组引用，
+ * 掐掉「编辑期每 500ms 一拍广播 → recentProjects 换引用 → 整壳重渲染」那条税。 */
+function sameRecentProjects(prev: Array<RecentProject>, next: Array<RecentProject>): boolean {
+  if (prev.length !== next.length) {
+    return false;
+  }
+  return prev.every((item, index) => {
+    const candidate = next[index];
+    return (
+      candidate !== undefined &&
+      item.id === candidate.id &&
+      item.name === candidate.name &&
+      item.updatedAt === candidate.updatedAt &&
+      item.subtitle === candidate.subtitle &&
+      item.kind === candidate.kind
+    );
+  });
+}
+
 /* ── 工作区页面 —— Updream 风全屏编辑器 ── */
 
 export default function WorkspacePage() {
@@ -86,8 +105,12 @@ export default function WorkspacePage() {
     // 与本文件恢复视图处同一约定。订阅回调里的 setState 属合规的外部同步。
     // oxlint-disable-next-line react/set-state-in-effect
     refreshActiveProject();
-    return subscribeAppEvent("comfyapp:canvas-store-changed", () => {
-      refreshActiveProject();
+    /* 自动保存（save）不动 active-id，跳过（ISSUE #4600）：编辑期每 500ms
+     * 一拍都来重设同一个值只会白打重渲染。 */
+    return subscribeAppEvent("comfyapp:canvas-store-changed", (payload) => {
+      if (payload.reason !== "save") {
+        refreshActiveProject();
+      }
     });
   }, [refreshActiveProject]);
 
@@ -111,25 +134,28 @@ export default function WorkspacePage() {
     // 无需硬重载就保持干净。
     reapAllEmptyDrafts();
     const compute = () => {
-      setRecentProjects(
-        listProjects()
-          .slice(0, 8) // 给 HomePage 内部 recentsExpanded ? 7 : 3 切片留余量
-          .map((project) => {
-            const nodeCount = project.nodes?.length ?? 0;
-            const edgeCount = project.edges?.length ?? 0;
-            return {
-              id: project.id,
-              name: (project.name || "未命名项目").slice(0, 28),
-              updatedAt: project.updatedAt
-                ? (timeAgo(project.updatedAt, { suffix: "修改" }) ?? "刚刚修改")
-                : "刚刚",
-              /* SAFETY: 类型断言已复核 */
-              kind: "canvas" as const,
-              subtitle: nodeCount > 0 ? `${nodeCount} 节点 · ${edgeCount} 连线` : "空画布",
-              thumbnails: [],
-            };
-          }),
-      );
+      const next = listProjects()
+        .slice(0, 8) // 给 HomePage 内部 recentsExpanded ? 7 : 3 切片留余量
+        .map((project) => {
+          const nodeCount = project.nodes?.length ?? 0;
+          const edgeCount = project.edges?.length ?? 0;
+          return {
+            id: project.id,
+            name: (project.name || "未命名项目").slice(0, 28),
+            updatedAt: project.updatedAt
+              ? (timeAgo(project.updatedAt, { suffix: "修改" }) ?? "刚刚修改")
+              : "刚刚",
+            /* SAFETY: 类型断言已复核 */
+            kind: "canvas" as const,
+            subtitle: nodeCount > 0 ? `${nodeCount} 节点 · ${edgeCount} 连线` : "空画布",
+            thumbnails: [],
+          };
+        });
+      /* 内容没变就复用旧数组引用（ISSUE #4600）：自动保存每 500ms 一拍都会
+       * 广播到这里，而 recentProjects 穿进 WorkspaceViewStack / projectNameOf
+       * —— 引用一换整壳跟着重渲染。展示字段（id/名/时间文案/副标题）全部
+       * 相同就保持旧引用，把「编辑期整壳重渲染」掐掉。 */
+      setRecentProjects((prev) => (sameRecentProjects(prev, next) ? prev : next));
     };
     compute();
     /* 重新读取靠**应用事件**（`comfyapp:canvas-store-changed`），不靠依赖数组

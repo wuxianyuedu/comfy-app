@@ -11,13 +11,7 @@ import {
   logSyncIssue,
   reportMirrorFailure,
 } from "~/lib/project-canvas/sync-notice";
-import {
-  readStorageItem,
-  readStorageJson,
-  removeStorageItem,
-  writeStorageItem,
-  writeStorageJson,
-} from "~/lib/browser-storage";
+import { readStorageItem, removeStorageItem, writeStorageItem } from "~/lib/browser-storage";
 import { vanillaApi } from "~/trpc/vanilla";
 
 export type CanvasProject = {
@@ -33,11 +27,18 @@ export type CanvasProject = {
 
 const INDEX_KEY = "comfyapp.canvas.projects.v1";
 const ACTIVE_KEY = "comfyapp.canvas.active.v1";
-/* 每次画布仓库变更（upsert / delete / create）都会广播的事件名。
- * 订阅它的页面（例如工作区首页）会重读仓库，刷新依赖它的视图
- *（最近项目、切换器标签等）。 */
-function emitChanged() {
-  emitAppEvent("comfyapp:canvas-store-changed");
+
+/** 画布仓库变更的类型（`comfyapp:canvas-store-changed` 的载荷，ISSUE #4600）：
+ * 自动保存每 500ms 一拍，订阅方凭 `save` 就地增量更新那行，结构性变化才全量重取。 */
+export type CanvasStoreChangeReason = "delete" | "delete-remote" | "draft" | "hydrate" | "save";
+
+/* 每次画布仓库变更（upsert / delete / create）都会广播的事件名（带载荷）。
+ * 订阅它的页面（侧栏 / 作品库 / 工作区首页）据此增量或全量刷新。 */
+function emitChanged(reason: CanvasStoreChangeReason, projectId?: string): void {
+  emitAppEvent(
+    "comfyapp:canvas-store-changed",
+    projectId === undefined ? { reason } : { reason, projectId },
+  );
 }
 
 /* 以下三个守卫只确认「是数组」这一层运行期判据（条目形状由写入端保证），
@@ -54,19 +55,56 @@ function isPersistedEdgeList(v: unknown): v is Array<PersistedEdge> {
   return Array.isArray(v);
 }
 
+/* 索引的模块级缓存（ISSUE #4600）：读侧（listProjects / getProject / 各订阅方的
+ * 事件回调）不再每次全量 JSON.parse。缓存带**原始串指纹**自校验——任何人绕过
+ * writeIndex 直写 storage（含测试播种、手工改库），下一次读都会重新解析，
+ * 不会拿到过期数组。返回的是**共享引用**，调用方不得就地改写行（要改走
+ * upsertProject / deleteProject 这些出口）。 */
+let indexCache: Array<CanvasProject> | null = null;
+let indexCacheRaw: string | null = null;
+
 /** 读项目索引（坏数据 / 没存过一律空表）。「能不能用 storage」与「坏数据怎么办」
- *  收在 `~/lib/browser-storage`（§16.2.4.28）—— 此前本文件 12 处各写一遍
- *  `typeof localStorage === "undefined"`，另有自己的 `safeParse`。 */
+ *  的口径与 `~/lib/browser-storage` 一致；解析在这里展开是因为缓存校验要拿到
+ *  原始串本身（`readStorageJson` 不透出 raw）。 */
 function readIndex(): Array<CanvasProject> {
-  return readStorageJson<Array<CanvasProject>>(INDEX_KEY, [], (raw) => {
-    const parsed: unknown = JSON.parse(raw);
-    return isCanvasProjectList(parsed) ? parsed : [];
-  });
+  const raw = readStorageItem(INDEX_KEY);
+  if (indexCache !== null && raw === indexCacheRaw) {
+    return indexCache;
+  }
+  let parsed: Array<CanvasProject> = [];
+  if (raw !== null) {
+    try {
+      const value: unknown = JSON.parse(raw);
+      parsed = isCanvasProjectList(value) ? value : [];
+    } catch {
+      parsed = [];
+    }
+  }
+  indexCache = parsed;
+  indexCacheRaw = raw;
+  return parsed;
 }
 
-/** 写回项目索引（写失败静默 —— 与 `writeStorageJson` 同口径）。 */
+/* 逐项目序列化备忘（ISSUE #4600）：盘上仍是「一个键一份 JSON」，但落盘时
+ * 只有**引用变了**的那一行才重新 JSON.stringify——自动保存一拍只换一行，
+ * 其余行直接复用上次的串。WeakMap 按对象身份命中，upsert 换行即自然失效。 */
+const serializedIndexRows = new WeakMap<CanvasProject, string>();
+
+/** 写回项目索引（写失败静默 —— 与 `writeStorageJson` 同口径）。
+ *  `"[" + rows.join(",") + "]"` 与 `JSON.stringify(all)` 逐字节相同。 */
 function writeIndex(all: Array<CanvasProject>): void {
-  writeStorageJson(INDEX_KEY, all);
+  const parts = all.map((project) => {
+    let serialized = serializedIndexRows.get(project);
+    if (serialized === undefined) {
+      serialized = JSON.stringify(project);
+      serializedIndexRows.set(project, serialized);
+    }
+    return serialized;
+  });
+  const raw = `[${parts.join(",")}]`;
+  writeStorageItem(INDEX_KEY, raw);
+  indexCache = all;
+  indexCacheRaw = raw;
 }
 
 export function listProjects(): Array<CanvasProject> {
@@ -108,10 +146,55 @@ function adoptServerProject(row: ServerProjectRow, byId: Map<string, CanvasProje
  * 也保持同步（单靠 localStorage 是按来源隔离的，换端口时数据会静默丢失，
  * 例如从 3100 换到 3102）。
  */
+/* 上次已推送服务端的快照（ISSUE #4600）：内容没变就不重发整项目 POST。
+ * 判据是**引用级**：自动保存每个 500ms 拍从 React Flow store 重新取
+ * nodes/edges，没有内容变化的拍里元素引用不变——逐项全等即可跳过
+ * （重命名那一拍 name 不同，照发）。 */
+const lastPushedToServer = new Map<
+  string,
+  { edges: Array<PersistedEdge>; name: string; nodes: Array<PersistedNode> }
+>();
+
+function samePushedContent(
+  prev: { edges: Array<PersistedEdge>; name: string; nodes: Array<PersistedNode> },
+  next: CanvasProject,
+): boolean {
+  const nodes = next.nodes ?? [];
+  const edges = next.edges ?? [];
+  if (
+    prev.name !== next.name ||
+    prev.nodes.length !== nodes.length ||
+    prev.edges.length !== edges.length
+  ) {
+    return false;
+  }
+  for (let i = 0; i < nodes.length; i += 1) {
+    if (prev.nodes[i] !== nodes[i]) {
+      return false;
+    }
+  }
+  for (let i = 0; i < edges.length; i += 1) {
+    if (prev.edges[i] !== edges[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function persistProjectToServer(p: CanvasProject): void {
   if (typeof window === "undefined") {
     return;
   }
+  const pushed = lastPushedToServer.get(p.id);
+  if (pushed && samePushedContent(pushed, p)) {
+    return;
+  }
+  /* 快照**调用时乐观记录**（而不是等成功回执）：自动保存 500ms 一拍，
+   * 上一拍还在飞时下一拍就会进来——等回执再记，内容相同的连拍会漏判成
+   * 「没推过」而重发。推送失败则撤销快照，让下一拍照常重试。 */
+  const nodes = p.nodes ?? [];
+  const edges = p.edges ?? [];
+  lastPushedToServer.set(p.id, { name: p.name, nodes, edges });
   /* 走 `fireAndForget` 而不是 `void fn()`：那条地基的语义就是「不 await、不抛、
    * 失败必须落到一个显式 onError」，`onError` 没有默认值 —— 通道恰恰是这里
    * 最不该被悄悄通用掉的东西（见 `~/lib/async-action`）。 */
@@ -120,8 +203,8 @@ function persistProjectToServer(p: CanvasProject): void {
       .mutate({
         projectId: p.id,
         name: p.name,
-        nodes: p.nodes ?? [],
-        edges: p.edges ?? [],
+        nodes,
+        edges,
       })
       /* 成功要把之前的拒收记录撤掉：用户照着提示把名字改对之后，
        * 旧提示继续留在界面上等于制造第二条假故障。 */
@@ -129,6 +212,7 @@ function persistProjectToServer(p: CanvasProject): void {
         clearSyncFailure(p.id);
       }),
     (e) => {
+      lastPushedToServer.delete(p.id);
       reportMirrorFailure("这份画布没能存进服务端", p, e);
     },
   );
@@ -162,7 +246,7 @@ export function upsertProject(p: CanvasProject): void {
     all[idx] = next;
   }
   writeIndex(all);
-  emitChanged();
+  emitChanged("save", next.id);
   // 同步到服务端（持久、跨来源的存储）。不阻塞。
   persistProjectToServer(next);
 }
@@ -176,7 +260,7 @@ export function deleteProject(id: string): void {
   if (getActiveId() === id) {
     removeStorageItem(ACTIVE_KEY);
   }
-  emitChanged();
+  emitChanged("delete", id);
   // 尽力在服务端也删掉。
   if (removed) {
     deleteProjectOnServer(removed);
@@ -256,7 +340,7 @@ export async function hydrateFromServer(): Promise<void> {
     if (changed || localAll.length > 0) {
       const merged = [...byId.values()].sort((left, right) => right.updatedAt - left.updatedAt);
       writeIndex(merged);
-      emitChanged();
+      emitChanged("hydrate");
     }
   } catch (error) {
     /* 拉不到服务端列表 ⇒ 这一轮只用本地索引（local-first 的承诺），并把
@@ -309,7 +393,7 @@ export async function hydrateProjectFromServer(id: string): Promise<CanvasProjec
       return null;
     }
     writeIndex(sortByUpdated(index));
-    emitChanged();
+    emitChanged("hydrate", id);
     return getProject(id);
   } catch (error) {
     logSyncIssue("读取服务端画布列表失败，这一行没能拉到本机", error);
@@ -428,7 +512,7 @@ export function createDraftProject(name?: string): CanvasProject {
     edges: [],
   };
   setActive(p.id);
-  emitChanged(); // so homepage re-reads the (unchanged) index
+  emitChanged("draft", p.id); // 索引未变（草稿不进索引），但首页/切换器要跟上新 active-id
   return p;
 }
 
@@ -657,5 +741,5 @@ export function deleteProjectEverywhere(id: string, name?: string): void {
     nodes: [],
     edges: [],
   });
-  emitChanged();
+  emitChanged("delete-remote", id);
 }

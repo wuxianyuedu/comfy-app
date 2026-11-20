@@ -17,6 +17,7 @@ import { shouldUseBrowserTab } from "~/lib/comfy/comfy-embed";
 import { useTRPC } from "~/trpc/react";
 
 import { useExternalAction } from "~/components/ui/use-external-action";
+import { useViewTabActive } from "~/components/ui/view-tab-active";
 import { useToast } from "~/components/studio/ToastProvider";
 import { useRuntimeLogSource } from "~/components/studio/logs/use-runtime-log-source";
 import { useComfyStateEvents } from "./use-comfy-state-events";
@@ -35,13 +36,20 @@ export function useComfyuiControl() {
   const [comfyStopping, setComfyStopping] = useState(false);
   const [comfyOpening, setComfyOpening] = useState(false);
 
+  /* 页签隐藏时不轮询、不挂长轮询（ISSUE #4598）：disabled 期间查询不发请求，
+   * refetchInterval 停摆，SSE 一起摘下；切回当前页时 enabled 翻真、数据过
+   * staleTime 自动补拉（动作里的 refetch 不受 enabled 影响，照常可用）。 */
+  const isTabActive = useViewTabActive();
+
   const comfyStartM = useMutation(trpc.setting.comfyStart.mutationOptions());
   const comfyStopM = useMutation(trpc.setting.comfyStop.mutationOptions());
   const comfyOpenM = useMutation(trpc.setting.comfyOpen.mutationOptions());
 
   /* 安装形态：fs-only 的毫秒级判据 —— 不进状态轮询，与首屏同批发出。
    * 本页读它只为一件事：说清「将按哪个安装形态启动」，以及路径没配时给出口。 */
-  const comfyInstanceQ = useQuery(trpc.setting.comfyInstance.queryOptions());
+  const comfyInstanceQ = useQuery(
+    trpc.setting.comfyInstance.queryOptions(undefined, { enabled: isTabActive }),
+  );
 
   /* 状态查询：**事件驱动为主、低频轮询兜底**（与搬迁前同一口径 —— 5s 那一拍
    * 的原话是「外部拉起的实例要被及时认出来」，而这件事现在有更直接的答案：
@@ -50,14 +58,15 @@ export function useComfyuiControl() {
     trpc.setting.comfyStatus.queryOptions(undefined, {
       refetchInterval: COMFY_STATUS_FALLBACK_MS,
       refetchIntervalInBackground: false,
+      enabled: isTabActive,
     }),
   );
 
-  /* 服务端「运行态变了」的订阅：变化一到就重问一次状态。三条门控都与
+  /* 服务端「运行态变了」的订阅：变化一到就重问一次状态。四条门控都与
    * 「此刻重问有没有意义」对齐（见 `use-comfy-state-events`）。
    * `refetch` 不走 `void`：`fireAndForget` 是库里唯一允许悬空 Promise 的出口。 */
   useComfyStateEvents({
-    paused: comfyOpening || comfyStarting,
+    paused: comfyOpening || comfyStarting || !isTabActive,
     /* 刻意不另开日志：这条失败（重问状态没成）自己就有可见出口 —— 状态行留在
      * 上一次的结论上、30s 兜底轮询随后再试一次，用户看得到结果；而它最常见的
      * 成因（服务正在重启）每重启一次打一行只是噪声。 */

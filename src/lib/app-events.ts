@@ -56,8 +56,22 @@ export type AppEvents = {
     resultMediaType?: string;
     resultPath: string;
   };
-  /** 画布仓库（项目索引 / 激活项）发生增删改后广播。载荷：无。 */
-  "comfyapp:canvas-store-changed": undefined;
+  /**
+   * 画布仓库（项目索引 / 激活项）发生增删改后广播。
+   *
+   * 载荷带「变更类型 + 项目 id」（ISSUE #4600）：自动保存每 500ms 一拍，
+   * 订阅方（侧栏 / 作品库 / 首页最近项目）凭 `reason === "save"` 就地增量更新
+   * 那一行，不再各自全量重拉并集、重读索引；结构性变化（增删 / 对账 / 建草稿）
+   * 才整表重取。
+   */
+  "comfyapp:canvas-store-changed": {
+    /** 受影响的项目 id。`hydrate` 对账可能落多行，可缺省。 */
+    projectId?: string;
+    /** `save`=upsert 自动保存（含重命名）；`delete`=删本地索引行；
+     * `delete-remote`=删服务端-only 行；`hydrate`=服务端对账落盘；
+     * `draft`=新建草稿（索引未变，只动了 active-id）。 */
+    reason: "delete" | "delete-remote" | "draft" | "hydrate" | "save";
+  };
   /**
    * 画布的**服务端镜像**状态变了（某条被永久拒收、或某条重新同步成功）。
    * 载荷：无 —— 状态本身可查（`~/lib/project-canvas/sync-notice` 的
@@ -113,7 +127,13 @@ const PAYLOAD_VALIDATORS: { [K in AppEventName]: (value: unknown) => value is Ap
     typeof value.id === "string" &&
     typeof value.resultPath === "string" &&
     (value.resultMediaType === undefined || typeof value.resultMediaType === "string"),
-  "comfyapp:canvas-store-changed": (value): value is undefined => value === undefined,
+  "comfyapp:canvas-store-changed": (value): value is AppEvents["comfyapp:canvas-store-changed"] =>
+    isRecord(value) &&
+    typeof value.reason === "string" &&
+    (["delete", "delete-remote", "draft", "hydrate", "save"] as ReadonlyArray<string>).includes(
+      value.reason,
+    ) &&
+    (value.projectId === undefined || typeof value.projectId === "string"),
   "comfyapp:canvas-sync-changed": (value): value is undefined => value === undefined,
   "comfyapp:custom-nodes-updated": (value): value is undefined => value === undefined,
   "workspace:navigate": (value): value is AppEvents["workspace:navigate"] =>
@@ -127,7 +147,7 @@ const PAYLOAD_VALIDATORS: { [K in AppEventName]: (value: unknown) => value is Ap
  *
  * 无 `window`（SSR / 构建期模块图）时**直接返回** —— 广播方只在浏览器里跑。
  *
- * 载荷为 `undefined` 的事件（`comfyapp:canvas-store-changed` 这类
+ * 载荷为 `undefined` 的事件（`comfyapp:canvas-sync-changed` 这类
  * 「只表示『有变化』」的信号）派发**不带 `detail`** 的普通 `Event`：
  * 收口前它们用的就是 `new Event(name)`，读侧也从来不读 `detail`
  * —— 给一个 `detail: undefined` 只会让读侧以为「这里有东西可读」。
@@ -136,7 +156,7 @@ const PAYLOAD_VALIDATORS: { [K in AppEventName]: (value: unknown) => value is Ap
  *
  * ```ts
  * emitAppEvent("canvas:produce", { id, resultPath });  // 带载荷
- * emitAppEvent("comfyapp:canvas-store-changed");       // 纯信号
+ * emitAppEvent("comfyapp:canvas-sync-changed");        // 纯信号
  * ```
  */
 export function emitAppEvent<K extends AppEventName>(

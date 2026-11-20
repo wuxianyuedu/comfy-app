@@ -28,12 +28,15 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { spawnSync } from "node:child_process";
-
 import { renderDriftReport } from "../lockfile/render-lock-diff.mjs";
 import { lockfileDrift } from "../launcher-core/worktree.mjs";
-import { echoCommandLine, formatCommandLine } from "../launcher-core/command-echo.mjs";
-import { pnpmInvocation } from "../launcher-core/shell.mjs";
+import { formatCommandLine } from "../launcher-core/command-echo.mjs";
+import {
+  GATE_STEP_DEFAULT_BUDGET_MS,
+  abortedAdvice,
+  pnpmInvocation,
+  runGateStep,
+} from "../launcher-core/shell.mjs";
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 import { renderVerdict } from "../ci/ci-log.mjs";
 
@@ -431,14 +434,18 @@ function runGate(pnpm, key, gate) {
      * `./gates/x` 这种 #3930 后的新写法都指得回真文件）。此前按 basename
      * 拼回 `ROOT/scripts/` 是平铺假设，判据归入域子目录后会 spawn ENOENT。 */
     const script = path.resolve(HERE, firstArg);
-    // 回显解释器与脚本的**真实**路径（不写成 `node scripts/x.cjs` 的近似形态）：
-    // 这一步用的是 `process.execPath`，与 PATH 上的 `node` 未必是同一个。
-    echoCommandLine(process.execPath, [script, ...restArgs]);
-    const r = spawnSync(process.execPath, [script, ...restArgs], {
+    /* 统一走带预算的判据执行器（ISSUE #4601）：判据挂死不再无限卡住提交。
+     * 超时/起不来按「测量没发生」落 2（未校验 ≠ 红），不当成判据失败。 */
+    const r = runGateStep(process.execPath, [script, ...restArgs], {
       cwd: ROOT,
       stdio: "inherit",
-      windowsHide: true,
     });
+    if (r.outcome === "aborted") {
+      process.stderr.write(
+        `${abortedAdvice({ label: gate.label ?? firstArg, timeoutMs: GATE_STEP_DEFAULT_BUDGET_MS, signal: r.signal, errorCode: r.errorCode })}\n`,
+      );
+      return 2;
+    }
     const code = r.status ?? 1;
     reportVerdict(gate, code);
     return code;
@@ -453,11 +460,12 @@ function runGate(pnpm, key, gate) {
   // 回显真正被执行的那条（`pnpm.command` 可能是经 PowerShell 宿主的 `.ps1`），
   // 而不是把参数拼到「pnpm」这个字面名后面 —— 后者在 Windows 上常常不是同一条。
   const { command, args: argv } = invocation(args);
-  echoCommandLine(command, argv);
-  const result = spawnSync(command, argv, {
+  /* 统一走带预算的判据执行器（ISSUE #4601）；`test` 档实测 10 分钟量级，
+   * 预算给到它的两倍，其余档吃缺省预算。 */
+  const result = runGateStep(command, argv, {
     cwd: ROOT,
     stdio: "inherit",
-    windowsHide: true,
+    timeoutMs: key === "test" ? 1_200_000 : GATE_STEP_DEFAULT_BUDGET_MS,
     /* 覆盖率门槛的**判定**在 CI 那一档已经改成「只上报」（ISSUE #2669），所以
      * `vitest.config.ts` 那批登记值需要一个真的会算它的执行者，否则它就退化成
      * 又一份「写在配置里、没人判」的死配置（那正是下面这段注释记录的原病）。
@@ -470,6 +478,14 @@ function runGate(pnpm, key, gate) {
   // 「命令没起来」与「跑完但非零退出」分开报：前者 stderr 通常是空的，
   // `status ?? 1` 只给一个退出码等于没说原因（ISSUE #576 的形态）。
   if (result.error) {
+    if (result.timedOut) {
+      /* 预算砍 = 测量没发生（未校验 ≠ 红）：落 2，话术按 abortedAdvice，
+       * 不把挂死读成判据失败。 */
+      process.stderr.write(
+        `${abortedAdvice({ label: gate.label ?? key, timeoutMs: result.timeoutMs ?? GATE_STEP_DEFAULT_BUDGET_MS, signal: result.signal, errorCode: result.errorCode })}\n`,
+      );
+      return 2;
+    }
     const spawnError = /** @type {NodeJS.ErrnoException} */ (result.error);
     fail(`起 ${command} 失败（${spawnError.code ?? "UNKNOWN"}）：${spawnError.message}`, {
       after: [`        实际命令：${formatCommandLine(command, argv)}`],

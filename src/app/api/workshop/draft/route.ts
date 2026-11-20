@@ -6,15 +6,17 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";
 import { parseDraftDto, draftHasContent } from "~/lib/workshop/draft-sync-shared";
+import { NotFoundError } from "~/lib/core/errors";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import {
   deleteDraft,
+  findDraftOwner,
   getDraft,
   listDraftsByUser,
   upsertDraft,
 } from "~/server/workshop/draft-repository";
 import { apiErrorBody } from "~/lib/api-error";
-import { unauthorizedResponse } from "~/server/lib/error-response";
+import { errorResponse, unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,7 +43,9 @@ export async function GET(req: NextRequest) {
       const drafts = await listDraftsByUser(user.id);
       return NextResponse.json({ drafts });
     }
-    const draft = await getDraft(project);
+    /* 归属过滤（ISSUE #4556）：本人或无主可见；他人的草稿与不存在同形
+     * （exists:false），不借响应探得他人项目 id 的存在性。 */
+    const draft = await getDraft(project, user.id);
     if (!draft || !draftHasContent(draft)) {
       return NextResponse.json({ exists: false });
     }
@@ -69,12 +73,18 @@ export async function PUT(req: NextRequest) {
   }
   const draft = parseDraftDto(body.draft);
   try {
+    /* 归属校验（ISSUE #4556，与 tRPC task.detail 同口径）：他人的草稿按 NOT_FOUND
+     * 拒绝——不区分「不存在」与「不是你的」，避免借状态码探得他人项目 id 的存在性。
+     * findDraftOwner 不做归属过滤，才能把这两种情形分开。 */
+    const existing = await findDraftOwner(project);
+    if (existing && existing.userId !== null && existing.userId !== user.id) {
+      return errorResponse(new NotFoundError("工坊草稿不存在"));
+    }
     /* ifNewer（#4023）：两侧都带版本时刻时，更旧的 PUT 不覆盖较新的镜像——
      * 旧标签页 / 旧窗口迟到的自动保存不再回滚别处的新编辑。缺时刻（旧数据）
      * 保持原样落库，行为与此前一致。 */
-    const existing = await getDraft(project);
     const incomingAt = draft.updatedAt;
-    const existingAt = existing?.updatedAt;
+    const existingAt = existing?.updatedAt.getTime();
     if (
       typeof incomingAt === "number" &&
       typeof existingAt === "number" &&
@@ -101,7 +111,9 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
   }
   try {
-    const deleted = await deleteDraft(project);
+    /* 归属过滤（ISSUE #4556）：只删本人或无主的行；他人的草稿删不动，
+     * 与「本来就不存在」同形（alreadyGone:true），不泄露存在性。 */
+    const deleted = await deleteDraft(project, user.id);
     /* 幂等应答带 alreadyGone（#4048）：与 materials 的 DELETE 同一判据——
      * 「删了不存在的东西」对调用方可见，而不是无差别 ok。 */
     return NextResponse.json({ ok: true, alreadyGone: !deleted });

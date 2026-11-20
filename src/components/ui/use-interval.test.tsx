@@ -5,9 +5,11 @@
  * 用假定时器控制时间轴；「切后台暂停、回前台立即补跑」只有拿捏住 `visibilityState` 才验得了。
  */
 import { act, renderHook } from "@testing-library/react";
+import { useState, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useInterval } from "./use-interval";
+import { ViewTabActiveProvider } from "./view-tab-active";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -312,5 +314,110 @@ describe("useInterval", () => {
       await vi.advanceTimersByTimeAsync(0);
     });
     expect(run, "上一拍跑完才立刻发下一拍").toHaveBeenCalledTimes(2);
+  });
+});
+
+/** 页签可见性测试台：包一层 `ViewTabActiveProvider`，按需翻转「本屏是不是当前页」。 */
+function createTabHarness() {
+  let flip: ((v: boolean) => void) | null = null;
+  function Wrapper({ children }: { children: ReactNode }) {
+    const [active, setActive] = useState(true);
+    flip = setActive;
+    return <ViewTabActiveProvider active={active}>{children}</ViewTabActiveProvider>;
+  }
+  return {
+    Wrapper,
+    /** active=true 表示本屏是当前页签；false 表示它被切到后台隐藏了。 */
+    setTabActive: (active: boolean) => {
+      flip?.(active);
+    },
+  };
+}
+
+describe("useInterval 的页签隐藏档（ISSUE #4598）", () => {
+  it("默认开：隐藏页签的定时器停掉，切回当前页立即补跑一次并恢复", async () => {
+    const harness = createTabHarness();
+    const run = vi.fn();
+    renderHook(
+      () => {
+        useInterval(run, { ms: 1000 });
+      },
+      { wrapper: harness.Wrapper },
+    );
+    expect(run, "当前页签：挂载即先跑一次").toHaveBeenCalledTimes(1);
+
+    act(() => {
+      harness.setTabActive(false);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(run, "隐藏页签不该继续跑").toHaveBeenCalledTimes(1);
+
+    act(() => {
+      harness.setTabActive(true);
+    });
+    expect(run, "切回当前页应立即补跑一次").toHaveBeenCalledTimes(2);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(run, "恢复后按间隔继续").toHaveBeenCalledTimes(3);
+  });
+
+  it("pauseWhenViewHidden=false：页签隐藏仍跑（有意的选择，行为与从前一致）", async () => {
+    const harness = createTabHarness();
+    const run = vi.fn();
+    renderHook(
+      () => {
+        useInterval(run, { ms: 1000, pauseWhenViewHidden: false });
+      },
+      { wrapper: harness.Wrapper },
+    );
+    expect(run).toHaveBeenCalledTimes(1);
+    act(() => {
+      harness.setTabActive(false);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(run, "显式关掉页签判据后，隐藏页签也照跑").toHaveBeenCalledTimes(4);
+  });
+
+  it("无 Provider（独立路由 / Storybook / 组件用例）按当前屏处理，行为不变", async () => {
+    const run = vi.fn();
+    renderHook(() => {
+      useInterval(run, { ms: 1000 });
+    });
+    expect(run, "缺省 value=true：不挂壳的路径照常轮询").toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(run).toHaveBeenCalledTimes(3);
+  });
+
+  it("页签隐藏但文档可见也暂停：两档判据任一命中即停（叠加语义）", async () => {
+    const harness = createTabHarness();
+    const run = vi.fn();
+    renderHook(
+      () => {
+        useInterval(run, { ms: 1000 });
+      },
+      { wrapper: harness.Wrapper },
+    );
+    expect(run).toHaveBeenCalledTimes(1);
+
+    /* 文档仍可见（visibilityState=visible），但本屏已不是当前页签：照停。 */
+    act(() => {
+      harness.setTabActive(false);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(run, "页签隐藏即停，不要求文档同时隐藏").toHaveBeenCalledTimes(1);
+
+    act(() => {
+      harness.setTabActive(true);
+    });
+    expect(run, "切回当前页立即补跑").toHaveBeenCalledTimes(2);
   });
 });

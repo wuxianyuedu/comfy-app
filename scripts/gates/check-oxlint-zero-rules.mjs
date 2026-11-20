@@ -51,7 +51,6 @@
  *   `react/jsx-boolean-value` —— 后两条把 import / react 族的「探针真的在扫」
  *   也钉进契约，ISSUE #3340），见 `tests/check-oxlint-zero-rules.test.ts`。
  */
-import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -59,6 +58,7 @@ import path from "node:path";
 import awesomeness from "oxlint-config-awesomeness";
 
 import { resolveBinEntryByName } from "../lib/package-bin-entry.mjs";
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 
@@ -320,10 +320,10 @@ ${pluginsLine}${jsPluginsLines()}  categories: {
  * `STAGED_EXTENSIONS`。读不到暂存清单时报 2，不冒充「没有可扫文件」。
  */
 function stagedSourcePaths() {
-  const res = spawnSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"], {
+  const res = runGateStep("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"], {
     cwd: ROOT,
-    encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
+    timeoutMs: 30_000,
   });
   if ((res.error !== undefined && res.error !== null) || res.status !== 0) {
     const reason =
@@ -369,13 +369,17 @@ function main() {
     args.push("--type-aware");
   }
   args.push(...(staged ? stagedPaths : paths));
-  const res = spawnSync(process.execPath, [entry, ...args], {
+  /* 预算 300s（ISSUE #4601）：全仓 type-aware 探针挂死（杀软锁文件等）不再无限
+   * 卡住提交；超时走下方「没跑起来」出口落 2，不冒充判据红。 */
+  const res = runGateStep(process.execPath, [entry, ...args], {
     cwd: ROOT,
-    encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
+    timeoutMs: 300_000,
   });
   if (res.error !== undefined && res.error !== null) {
-    console.error(`[没跑起来] oxlint 进程没起来：${res.error.message}`);
+    console.error(
+      `[没跑起来] oxlint 进程没起来${res.timedOut ? "（墙钟预算处被砍）" : ""}：${res.error.message}`,
+    );
     process.exit(2);
   }
   // oxlint 有诊断时退 1，所以 status 不是判决面；判决面只有 stdout 是不是 JSON。

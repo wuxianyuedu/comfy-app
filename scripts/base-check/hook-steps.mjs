@@ -5,12 +5,11 @@
  * 以及在这份检出上跑一条命令并回收它的输出。这里也是 `HOOK` 之所以跟着
  * `cwd` 走的地方 —— 标签 ⇄ 命令的对应关系必须来自**被复算的那份检出**。
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { pnpmInvocation } from "../launcher-core/shell.mjs";
+import { pnpmInvocation, runGateStep } from "../launcher-core/shell.mjs";
 import { chainedSteps } from "./chained-steps.mjs";
 import { cleanGitEnv, git, HOOK, resolveMergeBaseRef, ROOT } from "./git-ref.mjs";
 
@@ -510,11 +509,12 @@ export function runGate(argv, cwd) {
       output: `[base-check] PATH 上找不到可用的 ${argv[0]} ` + "（自查：pnpm check:toolchain）",
     };
   }
-  const r = spawnSync(invocation.command, invocation.args, {
+  /* 带预算的判据执行器（ISSUE #4601）：判据挂死不再无限卡住；超时走 normalizeRun
+   * 的「没跑起来」归一（inconclusive，不构成证据）。 */
+  const r = runGateStep(invocation.command, invocation.args, {
     cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    shell: false,
+    stdio: "pipe",
+    echo: false,
     /* 同样走干净环境：被判的判据自己也可能是 git 判据（`check-branch-guard` 等），
      * 继承来的 `GIT_*` 会让它判的**不是这个检出**。 */
     env: { ...cleanGitEnv(), CI: "1" },
