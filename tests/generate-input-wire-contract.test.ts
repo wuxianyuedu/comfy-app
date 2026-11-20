@@ -225,4 +225,19 @@ describe("画布载荷 ⇄ generate 的入参判据", () => {
     }
     expect(parsed.input.paramMap).toEqual(paramMap);
   });
+
+  it("工作流内置的超长提示词（>2000 字符）也收（#4633 反馈：预填默认值曾被 2000 上限拦成生成出错）", () => {
+    /* 测试页 / 错误重试会把工作流在 IO 面板配置的内置提示词原样带进 prompt；
+     * 那类文本可以远超 2000 字符。字段在任务行只作标题与历史来源（参数真值走
+     * workflowInputs），上限放宽到 20_000，长默认值不再被拦成 too_big。 */
+    const parsed = parseGenerateInput({
+      workflow: WORKFLOW_ID,
+      prompt: "长".repeat(20_000),
+      negative: "长".repeat(20_000),
+    });
+    if (!parsed.ok) {
+      throw new Error(`不该被拒：${parsed.message}`);
+    }
+    expect(parsed.input.prompt).toHaveLength(20_000);
+  });
 });
