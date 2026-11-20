@@ -27,11 +27,20 @@ export const READY_SCHEMA_NOTICE_THRESHOLD = 8;
  * 等症状消失或超时。返回 `{ ready, lastProbeState, recovered }`；**不做**收尾 ——
  * 「dev 先退出」与「超时」两个出口分别交回编排器（它才持有进程账本与收尾入口）。
  *
+ * 就绪等待的拆分显示（ISSUE #4577）：这一段原来在时间线上是一格黑盒——「进程
+ * 还没监听」与「服务已应答但健康检查没过」都记在「等待服务就绪」里，看不出
+ * 这段最长的等待到底花在哪。现拆成两段：首跳拿到**任意 HTTP 应答**（含 404 /
+ * 503）之前记「等待端口应答」，之后到 /api/health 200 记「等待健康检查」——
+ * 后者装着 /api/health 的首次按需编译、建表 503 等待、陈旧路由 404 重试与
+ * 轮询间隔。
+ *
  * @param {object} ctx
  * @param {(m: string, l?: import("./log.mjs").LogLevel) => void} ctx.log 日志出口
  * @param {(phase: string, progress: number, message: string, extra?: object) => void} ctx.status 进度快照
  * @param {(reason: string) => Promise<void>} ctx.respawnDev 只重启 dev（保住壳）
  * @param {() => boolean} ctx.devExited dev 是否已退出
+ * @param {import("./timeline.mjs").LaunchTimeline | null} [ctx.timeline] 启动时间线
+ *   （可选注入；缺席时只等就绪、不记 span，与其它阶段模块同口径）
  * @param {object} target
  * @param {number} target.port
  * @param {string} target.host
@@ -43,7 +52,7 @@ export const READY_SCHEMA_NOTICE_THRESHOLD = 8;
  * @returns {Promise<{ ready: boolean, lastProbeState: string, recovered: boolean, tail?: string }>}
  */
 export async function waitForDevReady(ctx, target) {
-  const { log, status, respawnDev, devExited } = ctx;
+  const { log, status, respawnDev, devExited, timeline } = ctx;
   const { port, host, staleShell, nextOut, nextErr, panelDir, startedAt } = target;
 
   let consecutive404 = 0;
@@ -54,7 +63,10 @@ export async function waitForDevReady(ctx, target) {
   /** 最后一次探测的结论：超时出口要靠它讲清「卡在哪一档」（见 §5）。 */
   let lastProbeState = "not-up";
   let pollCount = 0;
+  /** 是否已切到「健康检查」段（首跳拿到任意应答后置位，只切一次）。 */
+  let healthSpanOpened = false;
   const readyDeadline = Date.now() + READY_TIMEOUT_MS;
+  timeline?.begin("ready-port", "等待端口应答");
   while (Date.now() < readyDeadline) {
     if (devExited()) {
       break;
@@ -62,6 +74,13 @@ export async function waitForDevReady(ctx, target) {
     // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     const state = await classifyProbe({ port, host });
     lastProbeState = state;
+    if (!healthSpanOpened && state !== "not-up") {
+      /* 首个非「连不上」的应答：端口应答段收口、健康检查段开跑。404 / 503 也算
+       * 「已应答」——它们说明端口通了，卡的是路由编译或建表，不是进程启动。 */
+      healthSpanOpened = true;
+      timeline?.end("ready-port");
+      timeline?.begin("ready-health", "等待健康检查");
+    }
     if (state === "ready") {
       ready = true;
       break;
@@ -124,6 +143,10 @@ export async function waitForDevReady(ctx, target) {
     // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
     await new Promise((r) => setTimeout(r, pollCount < 10 ? 1000 : pollCount < 30 ? 2000 : 3000));
   }
+  /* 三条出口（就绪 / dev 退出 / 超时）都把打开中的段收口——end 对已收口或没开过
+   * 的键是 no-op，两个都调不碍事；不收口的话进行中段会一直按「现在」涨时长。 */
+  timeline?.end("ready-port");
+  timeline?.end("ready-health");
   if (ready) {
     return { ready: true, lastProbeState, recovered };
   }
