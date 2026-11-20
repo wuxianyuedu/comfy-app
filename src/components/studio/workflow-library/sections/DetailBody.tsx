@@ -185,12 +185,14 @@ export function DetailBody({
 
       {tab === "reference" && (
         /* 「参考图装载」独立页签（ISSUE #4526）：与工坊封装同一份契约口取数，
-         * 只渲染参考图槽位的装载配置。轻面板，不拉画布引擎。 */
+         * 只渲染参考图槽位的装载配置。轻面板，不拉画布引擎。#4593：传入 RAW
+         * 原件，挂载节点按名字展示。 */
         <ReferenceLoaderTab
           activeMode={activeMode}
           io={workflowIO}
           onPatchParamMap={onPatchParamMap}
           paramMap={paramMap}
+          rawJson={sourceData?.source}
         />
       )}
 

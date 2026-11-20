@@ -16,6 +16,7 @@ import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useWorkflowEncapsulation } from "./hooks/use-workflow-encapsulation";
+import { referenceLoaderMountNodes } from "~/lib/workshop/reference-loader-binding";
 import { SourceTag } from "~/components/ui/source-tag";
 import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -344,6 +345,10 @@ function WorkflowListItem({
   const { usable } = deriveFormatFlags(workflow);
   const { missing, canResync } = deriveSyncFlags(workflow);
   const isTech = isTechnicalName(workflow.name);
+  /* 参考图挂载节点数（ISSUE #4593）：paramMap 里点选的挂载节点名单——
+   * 库列表上直接可见「这条工作流挂了参考图」，具体挂在哪些节点在详情
+   * 「参考图装载」页签按名字列出。 */
+  const mountCount = referenceLoaderMountNodes(workflow.paramMap).length;
   /* 对外参数封装状态（与生成链路同口径）：提示词口已有落点 = 工坊可直接驱动。
    * 契约口与必备口读生效注册表（本机覆盖优先）—— 与详情「工坊封装」页签
    * 同一份口径（ISSUE #4113：此前列表行回落内置默认，用户改过的契约不生效）。 */
@@ -407,9 +412,17 @@ function WorkflowListItem({
         <SourceTag source={workflow.source} />
       </div>
 
-      {(workflow.taskType || (workflow.modelTags?.length ?? 0) > 0) && (
+      {(workflow.taskType || (workflow.modelTags?.length ?? 0) > 0 || mountCount > 0) && (
         <div className="mt-1 flex min-w-0 items-center gap-1.5">
           <TaskTypeChip taskType={workflow.taskType} />
+          {mountCount > 0 && (
+            <ListBadge
+              title={`参考图挂载在 ${mountCount} 个节点上；节点名见详情「参考图装载」页签`}
+              tone="neutral"
+            >
+              参考图挂载 {mountCount}
+            </ListBadge>
+          )}
           {workflow.modelTags?.slice(0, 2).map((tag) => (
             <ListBadge
               className="max-w-18 truncate rounded-full"
