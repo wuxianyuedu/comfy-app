@@ -65,6 +65,19 @@ describe("子界面日志助手（ISSUE #4580）", () => {
     vi.spyOn(performance, "now").mockReturnValue(4321);
     expect(markSubviewOpenStart()).toBe(4321);
   });
+
+  it("子页签打开：同一只表、同一消息形状（ISSUE #4592）", () => {
+    vi.spyOn(performance, "now").mockReturnValue(3000);
+    logSubviewOpen("子页签打开", "工作流详情", "工坊封装", 1000, { tab: "params" });
+    expect(runtimeLogCalls[0]?.msg).toBe("子页签打开：工作流详情·工坊封装 耗时 2000ms");
+    expect(runtimeLogCalls[0]?.fields).toMatchObject({
+      kind: "子页签打开",
+      scope: "工作流详情",
+      name: "工坊封装",
+      durationMs: 2000,
+      tab: "params",
+    });
+  });
 });
 
 describe("接线形状：三处导航点都接了子界面日志（ISSUE #4580）", () => {
@@ -87,6 +100,17 @@ describe("接线形状：三处导航点都接了子界面日志（ISSUE #4580�
     expect(src).toContain("tabSwitchedAtRef.current = markSubviewOpenStart()");
     // 数据没落定（isLoading）不记 —— 那时候子界面还没真的就绪。
     expect(src).toContain("if (workflow === null || isLoading || openedAtRef === undefined)");
+  });
+
+  it("工作流详情：数据落定同批记「子页签打开」，页签名取自 DETAIL_TABS（ISSUE #4592）", () => {
+    const src = read("workflow-library/WorkflowLibraryDetailView.tsx");
+    expect(src).toContain('logSubviewOpen("子页签打开", "工作流详情"');
+    // 页签中文名从 DETAIL_TABS 派生（单一出处），不另抄一份「工坊封装」字面量。
+    expect(src).toContain("DETAIL_TABS.find((tab) => tab.key === activeTab)?.label");
+    // 与「子界面打开」同用点击时刻（openedAt），不是数据落定那一刻另起一只表。
+    expect(src.indexOf('logSubviewOpen("子界面打开"')).toBeLessThan(
+      src.indexOf('logSubviewOpen("子页签打开"'),
+    );
   });
 
   it("设置：分区切换经包装的 handleSectionSelect 记时刻与日志", () => {

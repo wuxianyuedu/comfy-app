@@ -7,6 +7,9 @@
  * 同族的两条：
  *   · `子界面打开：<scope>·<name> 耗时 <n>ms` —— 点开视图内的一个子界面
  *     （工作流库 → 某条工作流的详情），耗时从点击到内容（含详情数据）就绪；
+ *   · `子页签打开：<scope>·<name> 耗时 <n>ms` —— 子界面里落定的**首个子页签**
+ *     （工作流详情 → 工坊封装等，ISSUE #4592）：耗时仍从点击起算，与「子界面
+ *     打开」同一只表；两行并排读，差值就是「数据就绪之后页签内容还欠多少」。
  *   · `页签切换：<scope>·<name> 耗时 <n>ms` —— 同一屏内切页签 / 分区，耗时
  *     从点击到切换提交完成（懒页签后续的分块下载不在这一段里，另由 Suspense
  *     的加载态呈现）。
@@ -20,7 +23,7 @@
 import { postAppRuntimeLog } from "~/lib/log/log-file-client";
 
 /** 子界面动作的种类（日志动词，与「界面打开」同一面板同一通道）。 */
-export type SubviewOpenKind = "子界面打开" | "页签切换";
+export type SubviewOpenKind = "子界面打开" | "子页签打开" | "页签切换";
 
 /** 导航意图发生的那一刻 —— 在点击 / 切换处理器里调，返回值交给 `logSubviewOpen`。 */
 export function markSubviewOpenStart(): number {
