@@ -390,6 +390,42 @@ function useTestCatalog(args: {
   };
 }
 
+/** 本地工作流候选的详情查询与**模式默认值**播种（ISSUE #4633）。
+ *
+ * 从 useModelTest 拆出（§12.13：宿主函数越过 400 行硬闸）：这一簇只读
+ * `workflow.detailFull`（富化视图）并把 `workflowModeDefaults` 的结果缓存成
+ * memo——端口的 defaultValue 要取**图内当前控件值**，原始行里的 IO 列可能是
+ * 作者勾选时的旧存档（没有 defaultValue）。
+ * `workflowDefaultsReady`：详情 settle（成功 / 失败）前为 false，调用方在此
+ * 期间不摆任何默认（打开瞬间的「通用默认 → 工作流默认」闪烁即源于此）。 */
+function useWorkflowModeDefaults(
+  selectedCandidate: TestCandidate | null,
+  mode: string,
+): { workflowDefaults: ModelTestValues; workflowDefaultsReady: boolean } {
+  const trpc = useTRPC();
+  const workflowDetailQ = useQuery(
+    trpc.workflow.detailFull.queryOptions(
+      { id: selectedCandidate?.workflow?.id ?? "" },
+      { enabled: selectedCandidate?.workflow !== undefined },
+    ),
+  );
+  const workflowDefaults = useMemo<ModelTestValues>(() => {
+    if (selectedCandidate?.workflow === undefined) {
+      return {};
+    }
+    const detail = workflowDetailQ.data;
+    if (detail === null || detail === undefined) {
+      return {};
+    }
+    return workflowModeDefaults({ io: detail.workflowIO, mode, paramMap: detail.paramMap });
+  }, [mode, selectedCandidate?.workflow, workflowDetailQ.data]);
+  const workflowDefaultsReady =
+    selectedCandidate?.workflow === undefined ||
+    workflowDetailQ.isSuccess === true ||
+    workflowDetailQ.isError === true;
+  return { workflowDefaults, workflowDefaultsReady };
+}
+
 export function useModelTest(): ModelTestController {
   const trpc = useTRPC();
   const [kind, setKindState] = useState<ModelTestKind>("image");
@@ -479,27 +515,11 @@ export function useModelTest(): ModelTestController {
     selectedCandidate,
   } = useTestCatalog({ kind, mode, selectedModel, trpc });
 
-  /* 本地工作流候选的详情（富化后的 workflowIO + paramMap）：统一输入的默认值从
-   * **工作流在所选模式下的端口默认值**播种（ISSUE #4633），不再一律用
-   * 页面的「1:1 / 1k」通用预设。用 detailFull（富化视图）而不是 detail 原始行：
-   * 端口的 defaultValue 要取**图内当前控件值**，原始行里的 IO 列可能是作者
-   * 勾选时的旧存档（没有 defaultValue）。 */
-  const workflowDetailQ = useQuery(
-    trpc.workflow.detailFull.queryOptions(
-      { id: selectedCandidate?.workflow?.id ?? "" },
-      { enabled: selectedCandidate?.workflow !== undefined },
-    ),
+  /* 本地工作流候选的模式默认值与就绪位（#4633）：详情没 settle 前不摆通用默认。 */
+  const { workflowDefaults, workflowDefaultsReady } = useWorkflowModeDefaults(
+    selectedCandidate,
+    mode,
   );
-  const workflowDefaults = useMemo<ModelTestValues>(() => {
-    if (selectedCandidate?.workflow === undefined) {
-      return {};
-    }
-    const detail = workflowDetailQ.data;
-    if (detail === null || detail === undefined) {
-      return {};
-    }
-    return workflowModeDefaults({ io: detail.workflowIO, mode, paramMap: detail.paramMap });
-  }, [mode, selectedCandidate?.workflow, workflowDetailQ.data]);
 
   /* 表单值随格走（#4080 评论 19）：测试界面不关闭时，切模型不丢已填参数。
    * 没填过的格：本地工作流候选回落**工作流在该模式下的默认值**（ISSUE #4633），
@@ -508,10 +528,6 @@ export function useModelTest(): ModelTestController {
    * 打开瞬间先摆通用「1:1 / 1k」、详情到了再跳成工作流默认，界面闪一下）——
    * 表单留空一瞬，等详情到位一次性播工作流默认；查询失败也算 settle，回落
    * 通用默认，不至于永远空着。 */
-  const workflowDefaultsReady =
-    selectedCandidate?.workflow === undefined ||
-    workflowDetailQ.isSuccess === true ||
-    workflowDetailQ.isError === true;
   const values = useMemo(
     () =>
       Object.keys(activeSession.values).length > 0
