@@ -204,8 +204,9 @@ describe("RuntimeLogBox", () => {
     /* 默认显示原文时间戳。 */
     expect(screen.getByText(/2026-11-17 16:28:42 \[err\]/)).toBeTruthy();
 
+    /* 开关态由可见文案与 aria-label 给出（不在视图手写 aria-pressed，P77）。 */
     const hide = screen.getByLabelText("隐藏时间戳");
-    expect(hide.getAttribute("aria-pressed")).toBe("false");
+    expect(hide.textContent).toContain("隐藏时间");
     fireEvent.click(hide);
 
     expect(screen.queryByText(/2026-11-17 16:28:42/)).toBeNull();

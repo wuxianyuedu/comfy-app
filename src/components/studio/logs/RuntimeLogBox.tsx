@@ -223,7 +223,6 @@ function LogToolbar({
         <Hint label={showTime ? "隐藏每行的时间戳" : "显示每行的时间戳"}>
           <Button
             aria-label={showTime ? "隐藏时间戳" : "显示时间戳"}
-            aria-pressed={!showTime}
             className="text-2xs h-auto gap-1 rounded px-2 py-0.5"
             onClick={() => {
               onShowTimeChange(!showTime);
