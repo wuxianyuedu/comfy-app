@@ -210,8 +210,9 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
    * 覆写（「已取消又被判失败」「已完成又被判失败」）；失败原因取第一次落库的
    * 那条，后续迟到判决不再改写。
    */
-  async markFailed(id: string, error: string): Promise<void> {
-    await db
+  async markFailed(id: string, error: string, executor?: DbExecutor): Promise<void> {
+    const exec = executor ?? db;
+    await exec
       .update(filmProject)
       .set({ status: "FAILED", error })
       .where(
@@ -400,6 +401,16 @@ export class FilmShotRepository {
       .update(filmShot)
       .set({ status: "FAILED" })
       .where(and(eq(filmShot.filmId, filmId), inArray(filmShot.status, ["QUEUED", "RUNNING"])));
+  }
+
+  /** 重跑恢复口（#4595）：把失败镜头重置回 IDLE 并摘掉旧任务挂链，让 `startFilm`
+   *  只重跑没完成的镜头——已 SUCCEEDED 的镜头保留视频不动。只在影片已被判
+   *  FAILED 后由 startFilm 调用；在飞任务的撤单由超时/取消路径先行完成。 */
+  async markFailedShotsIdle(filmId: string): Promise<void> {
+    await db
+      .update(filmShot)
+      .set({ status: "IDLE", taskId: null, progress: 0 })
+      .where(and(eq(filmShot.filmId, filmId), eq(filmShot.status, "FAILED")));
   }
 }
 
