@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { parseAnsiSegments, parseOllamaLogText, stripAnsi } from "./log-ansi";
+import {
+  createAnsiSegmentParser,
+  parseAnsiSegments,
+  parseOllamaLogText,
+  stripAnsi,
+  type AnsiSegment,
+} from "./log-ansi";
 
 describe("stripAnsi", () => {
   it(String.raw`剥掉 SGR 颜色序列与 \r，保留正文`, () => {
@@ -85,5 +91,55 @@ describe("parseOllamaLogText（logrus 纯文本语义上色）", () => {
     const segments = parseOllamaLogText('level=WARN msg="a"\nlevel=WARN msg="b"');
     expect(segments.filter((s) => s.styles?.includes("yellow") === true)).toHaveLength(2);
     expect(segments.filter((s) => s.text === "\n")).toHaveLength(1);
+  });
+});
+
+describe("createAnsiSegmentParser — 流式解析与一次性解析逐段等价（ISSUE #4558）", () => {
+  /**
+   * 归一化：合并**相邻同样式**的片段。流式喂入的切割点可能落在一段文字
+   * 中间（"err" | "or" 两个红色片段），与全文一次解析的片段边界不必逐段
+   * 一致 —— 渲染等价的判据是「合并相邻同样式后逐段相等」。
+   */
+  function normalize(segs: Array<AnsiSegment>): Array<AnsiSegment> {
+    const out: Array<AnsiSegment> = [];
+    for (const seg of segs) {
+      const key = seg.styles?.join("+") ?? "";
+      const last = out.at(-1);
+      if (last !== undefined && (last.styles?.join("+") ?? "") === key) {
+        last.text += seg.text;
+        continue;
+      }
+      out.push(seg.styles === undefined ? { ...seg } : { ...seg, styles: [...seg.styles] });
+    }
+    return out;
+  }
+
+  it("跨调用延续 SGR 状态：分段喂入与全文一次解析结果相同", () => {
+    const full = "start \u001b[31merror\u001b[0m ok\nnext \u001b[32mdone\u001b[0m\n";
+    const incremental = (() => {
+      const parse = createAnsiSegmentParser();
+      const a = parse(full.slice(0, 14));
+      const b = parse(full.slice(14));
+      return [...a, ...b];
+    })();
+    expect(normalize(incremental)).toEqual(normalize(parseAnsiSegments(full)));
+  });
+
+  it("未闭合的颜色跨调用延续、0m 复位同样跨调用生效", () => {
+    const parse = createAnsiSegmentParser();
+    const first = parse("A\u001b[31mred");
+    expect(first.at(-1)?.styles).toEqual(["red"]);
+    const second = parse("more\u001b[0mplain");
+    expect(second.at(-1)?.styles).toBeUndefined();
+  });
+
+  it("每段解析空文本返回空数组（不打断状态）", () => {
+    const parse = createAnsiSegmentParser();
+    const first = parse("A\u001b[31mred");
+    expect(parse("")).toEqual([]);
+    /* red 状态延续到这段；0m 之后没有更多文本，最后一段仍是 reset 前的红色。 */
+    const tail = parse("tail\u001b[0m");
+    expect(tail.at(-1)?.styles).toEqual(first.at(-1)?.styles);
+    expect(tail.at(-1)?.text).toBe("tail");
   });
 });

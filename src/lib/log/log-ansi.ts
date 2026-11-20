@@ -144,18 +144,51 @@ export function stripAnsi(text: string): string {
     .replaceAll("\r", "");
 }
 
+const INITIAL_SGR_STATE: SgrState = {
+  bold: false,
+  dim: false,
+  italic: false,
+  underline: false,
+};
+
 /**
  * 把含 ANSI SGR 序列的日志文本切成带样式片段。
  * 当前活动样式跨片段延续（与终端语义一致），\x1b[0m 复位。
  */
 export function parseAnsiSegments(text: string): Array<AnsiSegment> {
+  return parseWithState(text, INITIAL_SGR_STATE).segments;
+}
+
+/**
+ * **流式** ANSI 解析器（ISSUE #4558）：跨多次调用延续 SGR 状态 —— 每次只解析
+ * 「新增的一段」，不必把整份正文从头重扫。设置页运行日志面板的增量拉取据此
+ * 每秒只解析新增尾巴（全文重扫是最长 400KB 的正则成本 × 每秒 × 三来源）。
+ *
+ * 与 `parseAnsiSegments` 的关系：同一个状态机，只是状态从「函数内局部变量」
+ * 提到闭包里跨调用延续。`parseAnsiSegments(text)` 等价于工厂的一次性使用。
+ * 返回的函数**必须串行使用**（状态在调用间单调推进；乱序喂入会给出错的颜色）。
+ */
+export function createAnsiSegmentParser(): (text: string) => Array<AnsiSegment> {
+  let state = INITIAL_SGR_STATE;
+  return (text: string) => {
+    const parsed = parseWithState(text, state);
+    state = parsed.state;
+    return parsed.segments;
+  };
+}
+
+/** 带初始 SGR 状态解析一段文本；返回片段与**终止状态**（流式续接用）。 */
+function parseWithState(
+  text: string,
+  initial: SgrState,
+): { segments: Array<AnsiSegment>; state: SgrState } {
   const segments: Array<AnsiSegment> = [];
-  let bold = false;
-  let dim = false;
-  let italic = false;
-  let underline = false;
-  let fg: AnsiStyleKey | undefined;
-  let bg: AnsiStyleKey | undefined;
+  let bold = initial.bold;
+  let dim = initial.dim;
+  let italic = initial.italic;
+  let underline = initial.underline;
+  let fg = initial.fg;
+  let bg = initial.bg;
   let plain = "";
 
   const flush = () => {
@@ -196,7 +229,10 @@ export function parseAnsiSegments(text: string): Array<AnsiSegment> {
   plain += text.slice(last);
 
   flush();
-  return segments.length > 0 ? segments : text ? [{ text }] : [];
+  return {
+    segments: segments.length > 0 ? segments : text ? [{ text }] : [],
+    state: { bold, dim, italic, underline, fg, bg },
+  };
 }
 
 /** 汇总当前活动样式：前景/背景/字重可叠加，由视图层逐个映射成 class。 */
