@@ -1,11 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useRef } from "react";
 
 import { Button } from "~/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "~/components/ui/resizable";
 import { ModelTagManager } from "../ModelTagManager";
 import { WorkspaceFrame } from "../ViewContainer";
+import { markSubviewOpenStart } from "../subview-open-log";
 import { DeleteWorkflowModal } from "../DeleteWorkflowModal";
 import { WorkflowImportPanel } from "../WorkflowImportPanel";
 import { WorkflowLibraryHeader } from "./WorkflowLibraryHeader";
@@ -52,6 +54,17 @@ export function WorkflowLibrary({
   onUse?: (id: string, meta?: { name: string; taskType: string }) => void;
 }) {
   const c = useWorkflowLibrary(onUse);
+
+  /* 详情打开耗时的记账口（ISSUE #4580）：在「选中一条工作流」的点击处理器里
+   * 取时刻，详情数据落定时由视图消费（子界面打开：工作流详情·<名称>）。
+   * ref 而非 state：时刻是命令式的一次性读数，不参与渲染。 */
+  const detailOpenedAtRef = useRef<number | null>(null);
+  const handleSelect = (id: string | null) => {
+    if (id !== null && id !== c.selectedId) {
+      detailOpenedAtRef.current = markSubviewOpenStart();
+    }
+    c.setSelectedId(id);
+  };
 
   return (
     <WorkspaceFrame>
@@ -144,7 +157,7 @@ export function WorkflowLibrary({
             }}
             onRefresh={c.refresh}
             onSearchChange={c.setSearch}
-            onSelect={c.setSelectedId}
+            onSelect={handleSelect}
             pendingLoading={c.pendingLoading}
             pendingRows={c.pendingRows}
             search={c.search}
@@ -206,6 +219,7 @@ export function WorkflowLibrary({
                   void c.handleResync(id, name);
                 }}
                 onUse={c.handleUse}
+                openedAtRef={detailOpenedAtRef}
                 workflow={c.selectedRow}
               />
             )}

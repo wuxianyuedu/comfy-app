@@ -1,6 +1,8 @@
 // WorkflowLibraryDetail 的纯配置与派生规则。
 // 纯类型 + 纯函数（无 React、无副作用）：hook 据此算派生数据，视图只负责渲染。
 
+import type { RefObject } from "react";
+
 import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { isPlainRecord } from "~/lib/is-record";
@@ -56,6 +58,10 @@ export type WorkflowLibraryDetailProps = {
   onPatchWorkflowIO?: (id: string, workflowIO: Record<string, unknown>) => Promise<void>;
   onResync: (id: string, name: string) => void;
   onUse: (id: string, meta?: { name: string; taskType: string }) => void;
+  /** 详情打开耗时的记账口（ISSUE #4580）：父级在「选中一条工作流」那一刻写入
+   *  `performance.now()`，详情数据落定时由视图消费并清回 null。可缺省 —— 测试
+   *  夹具与不记账的挂载点不带。 */
+  openedAtRef?: RefObject<number | null>;
   workflow: WorkflowRow | null;
 };
 

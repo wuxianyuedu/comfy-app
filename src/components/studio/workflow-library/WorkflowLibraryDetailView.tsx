@@ -3,12 +3,13 @@
 // WorkflowLibraryDetail 的纯展示视图：只消费 controller，不发请求、不算业务
 // 规则，交互一律通过 controller.actions 上抛。
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { ErrorBoundary } from "~/components/ui/error-boundary";
 import { useLazyChunkFallback } from "~/components/ui/use-lazy-chunk-fallback";
 
 import { SourceModal } from "~/components/studio/SourceModal";
+import { logSubviewOpen, markSubviewOpenStart } from "~/components/studio/subview-open-log";
 import type { WorkflowLibraryDetailController } from "./hooks/use-workflow-library-detail";
 import { useWorkflowUpdateFromJson } from "./hooks/use-workflow-update-from-json";
 import { UpdateJsonModal } from "./UpdateJsonModal";
@@ -34,8 +35,11 @@ const LazyWorkflowLibraryIoPanel = React.lazy(() =>
 
 export function WorkflowLibraryDetailView({
   controller,
+  openedAtRef,
 }: {
   controller: WorkflowLibraryDetailController;
+  /** 详情打开耗时的记账口（父级在点击那一刻写入；可缺省，见 config 的类型注释）。 */
+  openedAtRef?: React.RefObject<number | null>;
 }) {
   const {
     workflow,
@@ -81,6 +85,38 @@ export function WorkflowLibraryDetailView({
     clearUpdateJsonReport();
   }, [workflowIdForReport, clearUpdateJsonReport]);
 
+  /* 子界面打开耗时（ISSUE #4580）：从列表点击（父级经 openedAtRef 记的时刻）
+   * 到详情数据落定。就绪判据与布局的加载态同一把尺（isLoading = 当前 workflow
+   * 的键还没到过数据）—— 换工作流先挂新行、查询在飞时不记，落定那一刻才记。
+   * 同一次打开只记一条：消费后把 ref 清回 null（重渲染 / 后台刷新再触发也无害）。 */
+  useEffect(() => {
+    if (workflow === null || isLoading || openedAtRef === undefined) {
+      return;
+    }
+    const openedAt = openedAtRef.current;
+    if (openedAt === null) {
+      return;
+    }
+    openedAtRef.current = null;
+    logSubviewOpen("子界面打开", "工作流详情", workflow.name, openedAt, {
+      workflowId: workflow.id,
+    });
+  }, [workflow, isLoading, openedAtRef]);
+
+  /* 页签切换耗时（ISSUE #4580）：点击那一刻记时刻（onValueChange），切换提交
+   * 完成（本 effect，commit 之后）落日志。懒页签（IO 预览）后续的分块下载
+   * 不计入这一段 —— 那部分由页签内的加载态呈现。 */
+  const tabSwitchedAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    const switchedAt = tabSwitchedAtRef.current;
+    if (switchedAt === null) {
+      return;
+    }
+    tabSwitchedAtRef.current = null;
+    const label = DETAIL_TABS.find((tab) => tab.key === activeTab)?.label ?? activeTab;
+    logSubviewOpen("页签切换", "工作流详情", label, switchedAt, { tab: activeTab });
+  }, [activeTab]);
+
   if (!workflow) {
     return (
       <div className="text-ink-fainter flex h-full flex-col items-center justify-center">
@@ -124,6 +160,7 @@ export function WorkflowLibraryDetailView({
         className="min-h-0 flex-1 gap-0"
         onValueChange={(value) => {
           if (isDetailTab(value)) {
+            tabSwitchedAtRef.current = markSubviewOpenStart();
             setActiveTab(value);
           }
         }}
