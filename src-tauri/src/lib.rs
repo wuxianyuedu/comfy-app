@@ -2367,11 +2367,10 @@ fn build_tray(app: &tauri::AppHandle) -> Result<(), String> {
 /// - 展开日志后页面会把窗口调到 SPLASH_WINDOW_SIZE_EXPANDED，仍是「内容多大、
 ///   窗口多大」。
 ///
-/// 高度 512 的出处（#4504）：紧凑档要铺得下**全量逐行耗时时间线**——最多 15 段
-/// （预检族 6 + 壳/端口/缓存/服务拉起/执行器宿主/后台建表/等待就绪 + 服务端反推
-/// 2 段）+ 收拢行 1 行，#4327 时代的「3 行 + 其余 1 行」上界（288）装不下；行数
-/// 随启动进程增长，窗口先按上限给足，不留『看一半、剩一半被裁掉』的半透明现场。
-const SPLASH_WINDOW_SIZE: (f64, f64) = (744.0, 512.0);
+/// 高度 300 的出处（#4588）：启动页按用户反馈去掉逐段耗时条与总进度条后，紧凑档
+/// 只摆「标题行 + 阶段 + 消息（两行余量）+ 服务端动态 + 页脚（耗时 / 查看日志）」，
+/// 高度按这份内容给足余量；逐段耗时的分解保留在应用内「查看日志」的启动时间线里。
+const SPLASH_WINDOW_SIZE: (f64, f64) = (560.0, 300.0);
 
 /// 展开日志后的窗口尺寸（对应页面里「展开日志」那一档，见 splash.html）。
 const SPLASH_WINDOW_SIZE_EXPANDED: (f64, f64) = (1424.0, 788.0);
@@ -3077,7 +3076,7 @@ fn create_splash_window(app: &mut tauri::App) -> tauri::Result<()> {
   tauri::WebviewWindowBuilder::new(app, "splash", tauri::WebviewUrl::App("splash.html".into()))
     .title("Comfy APP 启动中")
     .inner_size(SPLASH_WINDOW_SIZE.0, SPLASH_WINDOW_SIZE.1)
-    .min_inner_size(620.0, 180.0)
+    .min_inner_size(480.0, 200.0)
     .center()
     .resizable(true)
     .decorations(false)
