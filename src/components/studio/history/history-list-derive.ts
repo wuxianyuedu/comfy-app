@@ -2,9 +2,35 @@
 // 筛选 / 排序 / 状态计数 / 日期分组 / 分页裁剪——纯函数、可直接单测，
 // 这五条规则是「历史记录怎么看」的全部业务。
 
+import { getWorkflowType } from "~/lib/workflow/workflow-types";
+
 import type { FilterKey, SortKey, TaskItem } from "./history-types";
 import { dateBucket } from "./history-utils";
 import { getOrCreate } from "~/lib/collections";
+
+/**
+ * 模式名称（ISSUE #4619）：任务类型码 → 工作流类型表的中文标签
+ * （T2I → 文生图、I2V → 单图生视频…）。表里没有的码（历史遗留 / 新增未登记）
+ * 如实回落原码，不编一个假名字。
+ */
+export function modeLabelOf(type: string): string {
+  return getWorkflowType(type)?.label ?? type;
+}
+
+/**
+ * 展示用模型名（ISSUE #4619）：优先任务行上解析到的模型标签
+ * （工作流库给工作流挂的模型名）；没挂标签时回落工作流名 —— 行上仍要能
+ * 认出这是哪次提交，不为了「不显示工作流名」而留空白。
+ */
+export function modelLabelOf(task: Pick<TaskItem, "modelName" | "workflowName">): string {
+  const model = task.modelName?.trim();
+  return model !== undefined && model !== "" ? model : task.workflowName;
+}
+
+/** 还有进行中（QUEUED / RUNNING）的任务吗——轮询与进行中 UI 的判据。 */
+export function hasActiveTasks(tasks: ReadonlyArray<Pick<TaskItem, "status">>): boolean {
+  return tasks.some((task) => task.status === "QUEUED" || task.status === "RUNNING");
+}
 
 export type TaskGroup = {
   items: Array<TaskItem>;

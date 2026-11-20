@@ -12,6 +12,13 @@ import { runAsyncAction, type ActionReport } from "~/lib/async-action";
  * `useMutation(trpc.task.cancel.mutationOptions())`，于是「取消失败怎么提示」在历史面板与画布
  * 面板各说一套（§12.14 端点收口）。取消的服务端语义见 ADR §14 D2。 */
 import { cancelTask } from "~/lib/task-cancel-client";
+/* 输出目录 / 复制去重投（ISSUE #4619）：与队列页同一份实现 ——
+ * 目录走 `revealTaskFolder`（comfyapp:// 深链 + 失败文案单一出处），
+ * 复制走 `useCopyResult` + `reprintText`（载荷只含 task.list 真有的字段）。 */
+import { revealTaskFolder } from "~/lib/history-detail-actions";
+import { useCopyResult } from "~/components/ui/use-copy-feedback";
+import { reprintText } from "~/components/studio/queue/queue-monitor-config";
+import type { QueueTaskLogTarget } from "~/components/studio/queue/QueueTaskLogModal";
 import { useItemAction } from "~/components/ui/use-item-action";
 
 import { useToast } from "../../ToastProvider";
@@ -24,6 +31,7 @@ import {
   emptyStateText,
   filterTasks,
   groupByDate,
+  hasActiveTasks,
   paginateGroups,
   sortTasks,
 } from "../history-list-derive";
@@ -37,6 +45,11 @@ import {
 import { PAGE_SIZE, useSimulatedProgress } from "../history-utils";
 import { useTRPC } from "~/trpc/react";
 
+/** 有进行中任务时的轮询节奏（与画布历史面板同一档）：任务完成 / 新任务入队
+ *  能自己冒出来，不再依赖手动刷新 —— #4619 的「队列两条、历史一条」正是
+ *  页面开着不动导致的陈旧读数。没有进行中任务时不轮询（列表是静历史）。 */
+const HISTORY_POLL_MS = 4000;
+
 /** 空 IO 表：引用恒定（未查到工作流时沿用同一个对象，不每次渲染造新的）。 */
 const EMPTY_WORKFLOW_IO: WorkflowIOMap = {};
 
@@ -46,8 +59,12 @@ export type HistoryListController = {
   cancelRemove: () => void;
   canLoadMore: boolean;
   closeDetail: () => void;
+  /** 关闭执行日志弹窗（ISSUE #4619）。 */
+  closeLog: () => void;
   /** 确认删除待删目标（ConfirmDialog 的确认侧，ISSUE #3771）。 */
   confirmRemove: () => Promise<void>;
+  /** 「复制去重投」：复制本次提交内容到剪贴板，回画布改完再投（与队列页同款）。 */
+  copyForReprint: (task: TaskItem) => Promise<void>;
   /** 各状态计数，key 为 FilterKey 或任务 status。 */
   counts: Record<string, number>;
   detail: TaskDetail | null;
@@ -59,12 +76,20 @@ export type HistoryListController = {
   filteredCount: number;
   /** 「这一条在重试吗」的判据（收在 `useItemAction` 里，视图不再自己比较）。 */
   isRetrying: (id: string) => boolean;
+  /** 这一条的动作（输出目录 / 复制去重投）正在进行吗。 */
+  isRowBusy: (id: string) => boolean;
   loading: boolean;
   loadMore: () => void;
+  /** 正在查看执行日志的那条（快照）；null = 弹窗关着。 */
+  logTarget: QueueTaskLogTarget | null;
   /** 模式契约注册表（只含用户改过的模式）：详情弹窗按它 + 任务模式枚举工坊对外口。
    *  未加载 / 失败时为 null，工坊参数回落内置默认契约。 */
   modeContracts: ReadonlyArray<ModeContract> | null;
   openDetail: (id: string) => void;
+  /** 打开这一条的产物目录（comfyapp:// 深链，与队列页同一份实现）。 */
+  openFolder: (task: TaskItem) => Promise<void>;
+  /** 打开这一条的执行日志弹窗（与队列页同一份组件）。 */
+  openLog: (task: TaskItem) => void;
   /** 进行中任务的模拟进度 Map。 */
   progressMap: Record<string, number>;
   refresh: () => void;
@@ -103,7 +128,8 @@ export function useHistoryList(): HistoryListController {
    * 工作流库的下载与同步各写一份 —— 而「同一条能不能重复点」四处都没防。 */
   const retryAction = useItemAction();
   /* 真分页（#4044）：无限查询按页拉取（skip = 已拉取行数，由 getNextPageParam
-   * 累计）；hasMore 由服务端响应给出（media 过滤的截断也因此对调用方可见）。 */
+   * 累计）；hasMore 由服务端响应给出（media 过滤的截断也因此对调用方可见）。
+   * 有进行中任务时按 HISTORY_POLL_MS 轮询（判据读查询自身已拉到的行）。 */
   const tasksQ = useInfiniteQuery(
     trpc.task.list.infiniteQueryOptions(
       { take: PAGE_SIZE },
@@ -114,6 +140,10 @@ export function useHistoryList(): HistoryListController {
           }
           const fetched = allPages.reduce((sum, p) => sum + p.tasks.length, 0);
           return fetched;
+        },
+        refetchInterval: (query) => {
+          const rows = (query.state.data?.pages ?? []).flatMap((page) => page.tasks);
+          return hasActiveTasks(rows) ? HISTORY_POLL_MS : false;
         },
       },
     ),
@@ -300,6 +330,59 @@ export function useHistoryList(): HistoryListController {
     [refresh, report, retryAction, retryTask],
   );
 
+  /* ── 行级动作：输出目录 / 复制去重投 / 执行日志（ISSUE #4619）──────────────
+   *  与队列页同一份实现（同一出口、同一文案）：目录走 `revealTaskFolder`、
+   *  复制走 `useCopyResult` + `reprintText`、日志复用队列的弹窗组件。
+   *  忙标记收在 `useItemAction`，与重试互不干扰（可以边重试边看日志）。 */
+  const rowAction = useItemAction();
+  const copyText = useCopyResult();
+
+  const openFolder = useCallback(
+    async (task: TaskItem) => {
+      await rowAction.run(task.id, async () => {
+        /* 成败与文案都由 `revealTaskFolder` 的 `{ ok, detail }` 表达（与队列页
+         * 同一口径），这里不重复抄一份成功/失败判断。 */
+        const result = await revealTaskFolder(task.id);
+        await runAsyncAction(() => Promise.resolve(result), {
+          report,
+          failureText: "未能打开输出目录，可在任务详情里复制文件路径",
+        });
+      });
+    },
+    [report, rowAction],
+  );
+
+  const copyForReprint = useCallback(
+    async (task: TaskItem) => {
+      await rowAction.run(task.id, async () => {
+        /* 成败由复制出口的返回值表达（它不抛）：让「复制失败」走失败分支，
+         * 而不是被 try 当成成功。 */
+        const copied = await copyText(reprintText(task));
+        await runAsyncAction(() => Promise.resolve(copied), {
+          report,
+          failureText: "复制失败，请检查是否允许访问剪贴板",
+          successText: "后端没有重试接口，已复制本次提交内容 —— 回画布改完参数再投一次",
+        });
+      });
+    },
+    [copyText, report, rowAction],
+  );
+
+  /* 日志弹窗的目标行：openLog 那一刻的快照（与队列页同一理由——轮询换对象
+   * 身份不该重挂弹窗、重订 SSE）。 */
+  const [logTarget, setLogTarget] = useState<QueueTaskLogTarget | null>(null);
+  const openLog = useCallback((task: TaskItem) => {
+    setLogTarget({
+      error: task.error ?? null,
+      id: task.id,
+      status: task.status,
+      workflowName: task.workflowName,
+    });
+  }, []);
+  const closeLog = useCallback(() => {
+    setLogTarget(null);
+  }, []);
+
   return {
     tasks,
     loading,
@@ -314,6 +397,8 @@ export function useHistoryList(): HistoryListController {
     progressMap,
     retryingId: retryAction.busyId,
     isRetrying: retryAction.isBusy,
+    isRowBusy: (id: string) => rowAction.isBusy(id),
+    logTarget,
     detailId,
     detail,
     detailLoading,
@@ -325,6 +410,10 @@ export function useHistoryList(): HistoryListController {
     refresh,
     openDetail,
     closeDetail,
+    openLog,
+    closeLog,
+    openFolder,
+    copyForReprint,
     cancel,
     remove,
     removeTarget,

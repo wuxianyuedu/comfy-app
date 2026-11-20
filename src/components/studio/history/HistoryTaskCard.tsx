@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { Copy, FileText, FolderOpen } from "lucide-react";
 
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
@@ -8,11 +9,20 @@ import { TruncatedText } from "~/components/ui/truncated-text";
 import { clampPct } from "~/lib/progress";
 
 import type { TaskItem } from "./history-types";
+import { modelLabelOf, modeLabelOf } from "./history-list-derive";
 import { QUEUED_STATUS_STYLE, STATUS_STYLE, timeAgo } from "./history-utils";
 
 type HistoryTaskCardProps = {
+  /** 这一条的动作（输出目录 / 复制去重投）正在进行吗——按钮禁用态，判据在 controller。 */
+  busy: boolean;
   onCancel: (id: string) => void;
+  /** 「复制去重投」：把本次提交内容复制到剪贴板，回画布改完再投。 */
+  onCopyForReprint: (task: TaskItem) => void;
   onOpenDetail: (id: string) => void;
+  /** 打开这一条的产物目录（comfyapp:// 深链）。 */
+  onOpenFolder: (task: TaskItem) => void;
+  /** 打开这一条的执行日志弹窗（与队列页同一份）。 */
+  onOpenLog: (task: TaskItem) => void;
   onRemove: (id: string) => void;
   onRetry: (task: TaskItem) => void;
   /** 进行中任务的模拟进度（0-100）。 */
@@ -22,7 +32,13 @@ type HistoryTaskCardProps = {
   task: TaskItem;
 };
 
-/** 历史记录列表中的单条任务卡片（缩略图 + 状态 + 错误 + 操作按钮）。
+/** 历史记录列表中的单条任务卡片（缩略图 + 状态 + 模型/模式 + 错误 + 操作区）。
+ *
+ *  布局按 ISSUE #4619 重排：主行显示「状态 + 模式 + 模型名 + 时间」
+ *  （不再显示工作流名——模型标签才是用户认任务的锚点），底部补一排与
+ *  队列页同款的「日志 / 输出目录 / 复制去重投」动作，与右上的
+ *  取消 / 重试 / 删除分开放，视觉上「看」与「做」两层分开。
+ *
  *  `memo` 是这一页渲染预算的一半（ISSUE #4559）：进度定时器每拍只动 RUNNING 卡的
  *  `progress` 一个数字，其余卡的 props（task / 回调 / 布尔）引用与值都稳定 ——
  *  不 memo 时「加载更多」累积的几十上百张静止卡每 1.5s 陪跑一次整树 diff。 */
@@ -30,20 +46,26 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
   task,
   progress,
   retrying,
+  busy,
   onOpenDetail,
   onCancel,
   onRetry,
   onRemove,
+  onOpenLog,
+  onOpenFolder,
+  onCopyForReprint,
 }: HistoryTaskCardProps) {
   const st = STATUS_STYLE[task.status] ?? QUEUED_STATUS_STYLE;
+  const terminal =
+    task.status === "SUCCEEDED" || task.status === "FAILED" || task.status === "CANCELLED";
   return (
     <div
-      className={`group bg-card hover:bg-subtle relative overflow-hidden rounded-2xl border border-l-4 py-3 pr-3 pl-5 transition-all ${
+      className={`group bg-card hover:bg-subtle relative overflow-hidden rounded-2xl border transition-all ${
         st.accentCls
       } ${st.cardBorderCls}`}
       key={task.id}
     >
-      {/* 左缘 accent 额外强调（border-l-4 已在父级，再叠一层高亮条） */}
+      {/* 左缘 accent 额外强调：状态色高亮条（border-l-4 已在父级，再叠一层） */}
       <div
         aria-hidden
         className={`absolute top-0 bottom-0 left-0 w-1 ${
@@ -59,7 +81,7 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
         }`}
       />
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 py-3 pr-3 pl-5">
         {/* ── 缩略图 ── */}
         <Button
           aria-label="查看任务详情"
@@ -119,8 +141,14 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
                 {clampPct(progress)}%
               </span>
             )}
-            <TruncatedText className="text-ink-muted truncate text-xs">
-              {task.workflowName}
+            {/* 模式 + 模型（ISSUE #4619）：按测试模型页的封装形式认任务 ——
+                模式来自任务类型码的中文标签，模型来自工作流上挂的模型标签
+                （没挂标签回落工作流名）。工作流名不再单独占一行。 */}
+            <span className="border-border-subtle text-ink-muted text-2xs rounded-full border px-2 py-0.5">
+              {modeLabelOf(task.type)}
+            </span>
+            <TruncatedText className="text-ink-strong max-w-48 truncate text-xs font-medium">
+              {modelLabelOf(task)}
             </TruncatedText>
             <span className="text-ink-fainter shrink-0 text-xs">· {timeAgo(task.createdAt)}</span>
           </div>
@@ -157,7 +185,7 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
             )}
         </Button>
 
-        {/* ── 操作按钮（永远可见） ── */}
+        {/* ── 状态动作（取消 / 重试 / 删除，永远可见） ── */}
         <div className="flex shrink-0 flex-col items-end gap-2">
           <div className="flex items-center gap-2">
             {st.isActive && (
@@ -197,6 +225,53 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* ── 底部动作区（ISSUE #4619）：与队列页同款的 日志 / 输出目录 / 复制去重投。
+          终态行才有产物与「重投」可言；进行中行只给日志（跟队列页同一取舍）。 */}
+      <div className="border-border-subtle flex flex-wrap items-center gap-1 border-t px-5 py-2">
+        <Button
+          aria-label="查看这一条的执行日志"
+          className="h-auto gap-1"
+          onClick={() => {
+            onOpenLog(task);
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          <FileText aria-hidden className="size-3" data-icon="inline-start" />
+          日志
+        </Button>
+        {terminal ? (
+          <>
+            <Button
+              aria-label="打开这一条的输出目录"
+              className="h-auto gap-1"
+              disabled={busy}
+              onClick={() => {
+                onOpenFolder(task);
+              }}
+              size="xs"
+              variant="ghost"
+            >
+              <FolderOpen aria-hidden className="size-3" data-icon="inline-start" />
+              输出目录
+            </Button>
+            <Button
+              aria-label="复制这一条的提交内容，回画布改完再投一次"
+              className="h-auto gap-1"
+              disabled={busy}
+              onClick={() => {
+                onCopyForReprint(task);
+              }}
+              size="xs"
+              variant="ghost"
+            >
+              <Copy aria-hidden className="size-3" data-icon="inline-start" />
+              复制去重投
+            </Button>
+          </>
+        ) : null}
       </div>
     </div>
   );
