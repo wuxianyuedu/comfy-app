@@ -196,8 +196,10 @@ describe("generate.generate（工作流库工作流）", () => {
 
   it("Zod 校验失败：超长 prompt / 空 workflow → BAD_REQUEST", async () => {
     const caller = createCaller(makeCtx());
+    /* 上限随 #4633 反馈放宽到 20000（工作流内置提示词实测 3308 字符要能过），
+     * 这条「超长被拒」的载体跟着改到新上限之上，语义不变：超上限仍拒。 */
     await expect(
-      caller.generate({ workflow: "wf-lib", prompt: "x".repeat(2001) }),
+      caller.generate({ workflow: "wf-lib", prompt: "x".repeat(20_001) }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(caller.generate({ workflow: "" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
