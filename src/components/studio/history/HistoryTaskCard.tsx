@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Copy, FileText, FolderOpen } from "lucide-react";
 
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -31,6 +31,59 @@ type HistoryTaskCardProps = {
   retrying: boolean;
   task: TaskItem;
 };
+
+/** 失败卡的错误警示条（ISSUE #4665）：折叠态把错误钳在两行内 —— 每张失败卡
+ *  的折叠高度一致，不再被长错误撑开；点「展开」看完整错误 + 修复建议 +
+ *  结构化校验清单，展开态超长部分在块内滚动（max-h + 纵向滚动）。
+ *  完整文案始终在 DOM 里（读屏可读、可选中复制）。 */
+function CardErrorBar({
+  message,
+  suggestion,
+  validationErrors,
+}: {
+  message: string;
+  /** 失败原因 → 可行动建议（`建议：…`），无建议时为 null。 */
+  suggestion: string | null;
+  validationErrors: TaskItem["validationErrors"];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="bg-destructive/10 flex items-start gap-2 px-4 py-2" role="alert">
+      <span aria-hidden className="bg-destructive mt-1.5 size-1.5 shrink-0 rounded-full" />
+      <div className="min-w-0 flex-1">
+        <div className={expanded ? "max-h-40 overflow-y-auto pr-1" : "line-clamp-2"}>
+          <p className="text-destructive text-xs leading-relaxed break-words">
+            <span className="font-semibold">错误：</span>
+            {message}
+          </p>
+          {expanded && suggestion !== null && (
+            <p className="text-warning-strong/90 text-2xs mt-1 leading-relaxed">{suggestion}</p>
+          )}
+          {/* 结构化校验错误逐字段列表（展开后可见） */}
+          {expanded && validationErrors && validationErrors.length > 0 && (
+            <div className="border-destructive/20 mt-1.5 rounded border px-2 py-1.5">
+              <div className="text-destructive text-3xs mb-1 font-semibold">
+                节点配置校验（{validationErrors.length} 项）
+              </div>
+              <ValidationErrorList className="text-destructive/90" errors={validationErrors} />
+            </div>
+          )}
+        </div>
+        <Button
+          aria-expanded={expanded}
+          className="text-destructive/80 hover:text-destructive mt-1 h-auto px-0 py-0"
+          onClick={() => {
+            setExpanded((prev) => !prev);
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          {expanded ? "收起" : "展开"}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 /** 历史记录列表中的单条任务卡片（缩略图 + 状态 + 模型/模式 + 错误 + 操作区）。
  *
@@ -151,7 +204,10 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
               {modelLabelOf(task)}
             </TruncatedText>
           </div>
-          <span className="text-ink-strong mt-1 line-clamp-2 block text-sm leading-relaxed">
+          {/* 提示词定高（ISSUE #4665）：宽高固定在信息列内，超出部分在块内
+              纵向滚动查看，完整文案仍在 DOM 里（可选中 / 读屏可读）；
+              定高同时让每张卡折叠态的固定部分高度一致。 */}
+          <span className="text-ink-strong mt-1 block h-12 overflow-y-auto pr-1 text-sm leading-relaxed">
             {task.prompt || "（无提示词）"}
           </span>
         </Button>
@@ -202,34 +258,14 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
 
       {/* ── 错误提示条（卡片内底部内嵌，ISSUE #4630 核心痛点）──
           半透暗红底 + 左侧小红点；「错误：」红字、「建议：」琥珀小字，
-          读起来像便签而不是警报；放在底部动作区之上，仍是「这条任务的内部信息」。 */}
+          读起来像便签而不是警报；放在底部动作区之上，仍是「这条任务的内部信息」。
+          折叠态把错误钳在两行内，让失败卡的折叠高度与成功卡一致（ISSUE #4665）。 */}
       {showError && (
-        <div className="bg-destructive/10 flex items-start gap-2 px-4 py-2" role="alert">
-          <span aria-hidden className="bg-destructive mt-1.5 size-1.5 shrink-0 rounded-full" />
-          <div className="min-w-0 flex-1">
-            <p className="text-destructive text-xs leading-relaxed break-words">
-              <span className="font-semibold">错误：</span>
-              {errorMessage}
-            </p>
-            {st.failureSuggestion && (
-              <p className="text-warning-strong/90 text-2xs mt-1 leading-relaxed">
-                {st.failureSuggestion(errorMessage)}
-              </p>
-            )}
-            {/* 结构化校验错误逐字段列表 */}
-            {task.validationErrors && task.validationErrors.length > 0 && (
-              <div className="border-destructive/20 mt-1.5 rounded border px-2 py-1.5">
-                <div className="text-destructive text-3xs mb-1 font-semibold">
-                  节点配置校验（{task.validationErrors.length} 项）
-                </div>
-                <ValidationErrorList
-                  className="text-destructive/90"
-                  errors={task.validationErrors}
-                />
-              </div>
-            )}
-          </div>
-        </div>
+        <CardErrorBar
+          message={errorMessage}
+          suggestion={st.failureSuggestion?.(errorMessage) ?? null}
+          validationErrors={task.validationErrors}
+        />
       )}
 
       {/* ── 底部动作区（ISSUE #4619）：与队列页同款的 日志 / 输出目录 / 复制去重投。

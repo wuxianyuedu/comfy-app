@@ -232,3 +232,18 @@ export function deriveWorkflowParams(
     hasAny: rows.length > 0 || topLevelEntries.length > 0,
   };
 }
+
+/**
+ * 参数表里「提示词」行的判据（ISSUE #4665）：这类值可能很长，展示格要定高滚动。
+ * 工坊参数按契约口 id 判（`prompt`）；工作流参数只有 pin 名 —— 按常见命名兜底
+ * （`prompt` / `positive_prompt`），`negative_prompt` 以 negative 开头、天然不命中。
+ */
+export function isPromptParamRow(id: string, name?: string | null): boolean {
+  if (id === "prompt") {
+    return true;
+  }
+  if (name === null || name === undefined) {
+    return false;
+  }
+  return /^(?:positive[-_])?prompt/i.test(name.trim());
+}

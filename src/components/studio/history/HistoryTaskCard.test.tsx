@@ -3,6 +3,8 @@
  * 左侧缩略图是 Button，同一动作只有鼠标那条通；改原生 <Button> 后 Enter/Space 与焦点语义免费。
  * 另覆盖 ISSUE #4619 的条目形态：模式 / 模型名取代工作流名，底部补 队列同款动作按钮。
  * 另覆盖 ISSUE #4630 的视觉收口：错误内嵌卡底警示条、状态圆点角标带读屏状态名。
+ * 另覆盖 ISSUE #4665 的定高与折叠：提示词块定高滚动、错误条折叠态两行钳制 +
+ * 展开 / 收起看全文。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -127,20 +129,54 @@ describe("HistoryTaskCard 条目形态（ISSUE #4619）", () => {
   });
 });
 
-describe("HistoryTaskCard 错误提示条（ISSUE #4630）", () => {
+describe("HistoryTaskCard 错误提示条（ISSUE #4630 / #4665）", () => {
   const failedTask: TaskItem = {
     ...task,
     status: "FAILED",
     error: "e2e 假 comfy-cli 按哨兵判定失败：E2E_FAKE_CLI_FAIL_SENTINEL",
   };
 
-  it("失败卡的错误信息内嵌为卡片底部警示条（role=alert，错误 + 建议同条）", () => {
+  it("失败卡的错误信息内嵌为卡片底部警示条（role=alert）", () => {
     renderCard({ task: failedTask });
     const alert = screen.getByRole("alert");
-    /* 错误正文与可行动建议同在警示条内，而不是悬浮在卡片中部的独立色块。 */
+    /* 错误正文在警示条内（折叠态也可见 —— line-clamp 只裁视觉、不裁 DOM）。 */
     expect(alert.textContent).toContain("错误：");
     expect(alert.textContent).toContain(failedTask.error!);
-    expect(alert.textContent).toContain("建议：");
+  });
+
+  it("错误默认折叠（两行钳制，无建议），点「展开」看完整错误与建议（ISSUE #4665）", async () => {
+    renderCard({ task: failedTask });
+    /* 折叠态：完整错误仍在 DOM 里，但「建议」与展开专属内容不出现。 */
+    expect(screen.getByRole("alert").textContent).toContain(failedTask.error!);
+    expect(screen.queryByText(/建议/)).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "展开" }));
+    expect(screen.getByRole("alert").textContent).toContain("建议：");
+
+    await userEvent.click(screen.getByRole("button", { name: "收起" }));
+    expect(screen.queryByText(/建议/)).toBeNull();
+  });
+
+  it("展开 / 收起开关带 aria-expanded，随状态翻转", async () => {
+    renderCard({ task: failedTask });
+    const toggle = screen.getByRole("button", { name: "展开" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "收起" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("结构化校验错误清单只在展开态显示（折叠态不占高）", async () => {
+    renderCard({
+      task: {
+        ...failedTask,
+        validationErrors: [
+          { classType: "KSampler", field: "steps", message: "步数不能为空", nodeId: "3" },
+        ],
+      },
+    });
+    expect(screen.queryByText(/节点配置校验/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "展开" }));
+    expect(screen.getByText(/节点配置校验/)).toBeInTheDocument();
   });
 
   it("非失败卡不渲染警示条（错误条只属于失败态）", () => {
@@ -151,6 +187,23 @@ describe("HistoryTaskCard 错误提示条（ISSUE #4630）", () => {
   it("失败但 error 为空串时不渲染空警示条", () => {
     renderCard({ task: { ...task, status: "FAILED", error: "" } });
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("HistoryTaskCard 提示词定高（ISSUE #4665）", () => {
+  it("提示词块定高、超出部分块内滚动（取代 line-clamp 截断）", () => {
+    renderCard({ task: { ...task, prompt: "一段非常长的提示词。".repeat(80) } });
+    const promptEl = screen.getByText(/一段非常长的提示词/);
+    expect(promptEl.className).toContain("h-12");
+    expect(promptEl.className).toContain("overflow-y-auto");
+    expect(promptEl.className).not.toContain("line-clamp-2");
+  });
+
+  it("无提示词时显示占位文案，仍是同一个定高块", () => {
+    renderCard({ task: { ...task, prompt: "" } });
+    const placeholder = screen.getByText("（无提示词）");
+    expect(placeholder.className).toContain("h-12");
+    expect(placeholder.className).toContain("overflow-y-auto");
   });
 });
 

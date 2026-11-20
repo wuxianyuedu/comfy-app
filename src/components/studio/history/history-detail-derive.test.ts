@@ -13,6 +13,7 @@ import {
   deriveTaskOrigin,
   deriveWorkflowParams,
   deriveWorkshopParams,
+  isPromptParamRow,
   kvValueText,
   resolveParamLabel,
   taskWorkflowId,
@@ -234,5 +235,27 @@ describe("kvValueText", () => {
     expect(kvValueText(3)).toBe("3");
     expect(kvValueText([1, 2])).toBe("[1,2]");
     expect(kvValueText({ a: 1 })).toBe('{"a":1}');
+  });
+});
+
+describe("isPromptParamRow（ISSUE #4665：提示词行在详情参数表里定高滚动）", () => {
+  it("工坊契约口按 id 判：prompt 命中，其余口不命中", () => {
+    expect(isPromptParamRow("prompt")).toBe(true);
+    expect(isPromptParamRow("negative")).toBe(false);
+    expect(isPromptParamRow("size")).toBe(false);
+  });
+
+  it("工作流 pin 按常见命名兜底：prompt / positive_prompt 命中，negative 不算提示词", () => {
+    expect(isPromptParamRow("9:prompt:0", "prompt")).toBe(true);
+    expect(isPromptParamRow("9:positive_prompt:0", "positive_prompt")).toBe(true);
+    expect(isPromptParamRow("9:Positive-Prompt:0", "Positive-Prompt")).toBe(true);
+    expect(isPromptParamRow("9:negative_prompt:0", "negative_prompt")).toBe(false);
+    expect(isPromptParamRow("9:negative:0", "negative")).toBe(false);
+    expect(isPromptParamRow("9:steps:0", "steps")).toBe(false);
+  });
+
+  it("无 pin 名时只按 id 判（工坊参数行只有契约口 id）", () => {
+    expect(isPromptParamRow("prompt", null)).toBe(true);
+    expect(isPromptParamRow("workflow", null)).toBe(false);
   });
 });
