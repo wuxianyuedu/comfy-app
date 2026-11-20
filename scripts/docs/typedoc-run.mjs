@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { localStampOf } from "../launcher-core/log.mjs";
 // @ts-nocheck -- typedoc 的「跑 + 验 + 重试」唯一实现（`pnpm run docs` 与 `docs:check` 共用）
 /**
  * typedoc-run.mjs — typedoc 的**唯一调用方式**：跑一次 → 验「这一次真的写了」 →
@@ -171,8 +172,8 @@ export function judgeRun(run, { after, startedAt }) {
       ok: false,
       reason:
         `exit 0 but nothing was written this run ` +
-        `(${PROBE_REL} mtime ${new Date(after.probeMtimeMs).toISOString()} ` +
-        `< run start ${new Date(startedAt).toISOString()})`,
+        `(${PROBE_REL} mtime ${localStampOf(after.probeMtimeMs)} ` +
+        `< run start ${localStampOf(startedAt)})`,
     };
   }
   return { ok: true, reason: "" };

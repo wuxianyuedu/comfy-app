@@ -25,6 +25,7 @@
  */
 
 import path from "node:path";
+import { localStampOf } from "../launcher-core/log.mjs";
 
 import { buildSnFromOutput, makeRunner } from "../ship/ship-exec.mjs";
 
@@ -163,7 +164,7 @@ export function readBuild(repo, sn, call = cnbCall) {
  * @returns {string}
  */
 function isoOf(ms) {
-  return Number.isFinite(ms) ? new Date(ms).toISOString() : "";
+  return Number.isFinite(ms) ? localStampOf(ms) : "";
 }
 
 /**
@@ -206,11 +207,11 @@ export function readRunWindow(repo, sn) {
     const durationMs = Number(row.duration ?? Number.NaN);
     const ended = Number.isFinite(create) && Number.isFinite(durationMs);
     return {
-      createTime: Number.isFinite(create) ? new Date(create).toISOString() : "",
+      createTime: Number.isFinite(create) ? localStampOf(create) : "",
       /* 还在跑的那一跑**没有** endTime —— 给空串，由 `overlap()` 按「此刻」收口并
        * 在答案里带 `stillRunning`。拿 `create + duration` 编一个假的结束时刻，
        * 等于把「正在跑」写成「已经停了」。 */
-      endTime: ended && durationMs > 0 ? new Date(create + durationMs).toISOString() : "",
+      endTime: ended && durationMs > 0 ? localStampOf(create + durationMs) : "",
       title: String(row.title ?? ""),
       event: String(row.event ?? ""),
     };

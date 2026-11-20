@@ -54,6 +54,7 @@ import path from "node:path";
 import process from "node:process";
 
 import { gitScratchPath, resolveGitDir } from "../lib/git-dir.mjs";
+import { localStampOf } from "../launcher-core/log.mjs";
 import { CODE } from "./ship-codes.mjs";
 
 const SHIP_RESULT_FILE = "ship-result.json";
@@ -376,8 +377,9 @@ export function formatShipResult(reading) {
     return lines;
   }
   lines.push(`[ship-result] 回读点：${reading.path}`);
+  /* 时刻按本地时区展示（#4654）：存储仍是 ISO UTC，读给人看先换算。 */
   lines.push(
-    `[ship-result] 上一次 ship：${r.startedAt} → ${r.finishedAt ?? "未收口"} · ` +
+    `[ship-result] 上一次 ship：${localStampOf(r.startedAt)} → ${r.finishedAt ? localStampOf(r.finishedAt) : "未收口"} · ` +
       `status=${r.status} · exit=${r.exitCode ?? "无"}`,
   );
   lines.push(
@@ -400,7 +402,7 @@ export function formatShipResult(reading) {
           .join(" ")
       : "";
     lines.push(
-      `  ${e.at} · ${e.kind}${e.stage ? ` · ${e.stage}` : ""}${facts ? ` · ${facts}` : ""}${e.text ? ` · ${e.text}` : ""}`,
+      `  ${localStampOf(e.at)} · ${e.kind}${e.stage ? ` · ${e.stage}` : ""}${facts ? ` · ${facts}` : ""}${e.text ? ` · ${e.text}` : ""}`,
     );
   }
   lines.push(`[ship-result] 结论：${r.conclusion ?? "这一跑没念结论行"}`);
