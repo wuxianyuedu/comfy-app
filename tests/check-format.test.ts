@@ -477,7 +477,7 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
     });
     expect(r.code, r.output).toBe(0);
     expect(r.output).toContain("合并态（MERGE_HEAD 在场）");
-    expect(r.output).toContain("暂存面 1 份 → 收窄到本分支带来的 0 份");
+    expect(r.output).toContain("暂存面 1 份 → 收窄到 0 份");
     expect(r.output).not.toContain("src/lib/legacy.ts");
   });
 
@@ -485,7 +485,7 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
     toMergeState(repo, CLEAN2);
     const r = repo.run(["--staged"], NO_PLATFORM_TARGET);
     expect(r.code, r.output).toBe(0);
-    expect(r.output).toContain("暂存面 1 份 → 收窄到本分支带来的 0 份");
+    expect(r.output).toContain("暂存面 1 份 → 收窄到 0 份");
     expect(r.output).not.toContain("src/lib/legacy.ts");
   });
 
@@ -502,6 +502,22 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
     expect(r.output).toContain("src/lib/mine.ts");
     /* 只点名这一份 —— 主干那份仍不在面内（两条同时断言，才排除「整个跳过」与
      * 「把两份都端上来」这两个相反的错误实现）。 */
+    expect(r.output).not.toContain("src/lib/legacy.ts");
+  });
+
+  test("解冲突时新建的文件也要判，不许被收窄漏掉（ISSUE #4586）", ({ repo }) => {
+    toMergeState(repo, CLEAN2);
+    /* 解冲突时**新建**一份两边原本都没有的文件并暂存：它在暂存面（相对第一父）里，
+     * 却**不在**「本分支相对分叉点带来的那一份」里 —— 旧的收窄（按分叉点以来的
+     * 分支改动求交集）会把它滤掉，格式检查就此漏判。#4586 的现场：合并提交
+     * 48cea7615 里解冲突时新建的 log-display-prefs.test.ts 本地绿、GA 的
+     * `--changed` 红。判据必须点名它。 */
+    repo.write("src/lib/resolved-new.ts", DIRTY);
+    gitOf(repo.dir, ["add", "src/lib/resolved-new.ts"]);
+    const r = repo.run(["--staged"], NO_PLATFORM_TARGET);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).toContain("src/lib/resolved-new.ts");
+    /* 主干带来的存量仍不在面内（#2747 的收窄不因本次修复回潮）。 */
     expect(r.output).not.toContain("src/lib/legacy.ts");
   });
 
