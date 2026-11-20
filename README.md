@@ -176,6 +176,7 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 拉取更新后同步依赖并跑 lint                       | `tools/start/sync-lint.ps1`                                                    |
 | 探测开发盘（ReFS / Dev Drive）红利并调优          | `tools/start/tune-dev-drive.ps1`                                               |
 | 注册 `comfyapp://` 协议（任务历史「打开文件夹」） | `tools/start/register-comfyapp-protocol.ps1`                                   |
+| 建立代码索引（codegraph / zvec-grep，AI 语义检索用） | `tools/start/agent-index.ps1`                                                  |
 | 构建发行包（release 壳）                          | `tools/build/*.ps1`（见 `tools/README.md`）                                    |
 
 ### 同一件事在 Linux / macOS / CI 上怎么写
@@ -199,6 +200,8 @@ comfy-cli 解释器」填它的绝对路径即可，留空时行上的错误与�
 | 出一份节点镜像的操作计划（装机提速）      | `pnpm ci:image-plan`                           | （Windows 侧同一条命令）           |
 | 组装免安装版（portable zip）              | `pnpm package:portable`                        | `tools/build/package-portable.ps1` |
 | 探测开发盘红利并调优                      | `pnpm dev:drive`                               | `tools/start/tune-dev-drive.ps1`   |
+
+| 建立本地代码索引（codegraph / zvec-grep）  | `pnpm agent:index --init`                      | `tools/start/agent-index.ps1`      |
 
 > 这两张表不是「文档承诺」：`scripts/gates/check-ps1-consistency.mjs` 挂在 `.githooks/pre-commit`，
 > 平台侧也有同名那一格在跑（在场哪几格以 `.cnb.yml` 自己列的为准；口径见 `docs/standards/13-提交与-code-review.md` §13.5）——

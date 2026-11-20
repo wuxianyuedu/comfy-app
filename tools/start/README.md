@@ -20,6 +20,8 @@ Windows 双击入口，逻辑在 [`../../scripts/`](../../scripts/) 同名或对
 | `tune-dev-drive.ps1` | 探测开发盘（ReFS / Dev Drive）红利：实测硬链接 / 块克隆 / 稀疏文件，给动作矩阵 | `scripts/dev-drive/dev-drive-tune.mjs`（指南 `docs/guides/dev-drive-refs.md`） |
 | `fetch-daily-shell.ps1` | 从 CNB 站内每日成品获取纯壳：下载 `ComfyAPP-shell.exe` → `src-tauri/target/release/app.exe`，展示同发的构建信息（构建时间 / commit / run / sha256 对账，#4056），缺快捷方式时补根目录 `Comfy APP.lnk` | `scripts/devtools/fetch-daily-shell.mjs` |
 
+| `agent-index.ps1` | 建立本地代码索引（codegraph / zvec-grep），供 MCP 语义检索；双击无参默认 `--init`（ISSUE #4585） | `scripts/platform/agent-index.mjs` |
+
 ## 非 Windows 平台（同一件事的跨平台入口）
 
 `.ps1` **不是逻辑层**——启动编排的唯一实现是 `scripts/dev-launcher.mjs`，
