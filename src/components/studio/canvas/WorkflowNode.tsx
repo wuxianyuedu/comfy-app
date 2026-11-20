@@ -156,12 +156,12 @@ export const FlowNode = React.memo(function FlowNode({
             : undefined,
         // 不设 maxWidth 上限 —— ComfyUI 允许用户自由缩放节点框。
         borderColor: palette.nodeBorder,
-        // 模式（旁路 / 停用）节点经 <FrostLayer> + 真实模糊着色，所以
-        // 根节点透明（isolation 把磨砂限制在本节点内）。
-        // 普通节点保留实心面板。
+        // 卡片体一律铺**不透明**底色（角色微着色）。旁路 / 停用节点的模式色
+        // 由 <FrostLayer> 叠在底色之上 —— 不再用半透明底 + backdrop-filter
+        // 透采画布：那会让悬停抬层（ISSUE #400）改变毛玻璃取样背影，
+        // 节点颜色随悬停漂移（ISSUE #4578 补充的用户实测）。
         isolation: "isolate",
-        background:
-          palette.modeColor !== null && palette.modeColor !== "" ? "transparent" : palette.nodeBg,
+        background: palette.nodeBgOpaque,
         outline: selected === true ? "2px solid rgba(56,189,248,0.9)" : "none",
         outlineOffset: selected === true ? "2px" : undefined,
       }}
