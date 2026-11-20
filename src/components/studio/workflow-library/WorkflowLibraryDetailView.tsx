@@ -14,7 +14,11 @@ import type { WorkflowLibraryDetailController } from "./hooks/use-workflow-libra
 import { useWorkflowUpdateFromJson } from "./hooks/use-workflow-update-from-json";
 import { UpdateJsonModal } from "./UpdateJsonModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { DETAIL_TABS, type DetailTab } from "./workflow-library-detail-config";
+import {
+  DETAIL_LOADING_LABEL,
+  DETAIL_TABS,
+  type DetailTab,
+} from "./workflow-library-detail-config";
 import { DetailBody, TabContentLoading } from "./sections/DetailBody";
 import { DetailHeader } from "./sections/DetailHeader";
 
@@ -88,7 +92,10 @@ export function WorkflowLibraryDetailView({
   /* 子界面打开耗时（ISSUE #4580）：从列表点击（父级经 openedAtRef 记的时刻）
    * 到详情数据落定。就绪判据与布局的加载态同一把尺（isLoading = 当前 workflow
    * 的键还没到过数据）—— 换工作流先挂新行、查询在飞时不记，落定那一刻才记。
-   * 同一次打开只记一条：消费后把 ref 清回 null（重渲染 / 后台刷新再触发也无害）。 */
+   * 同一次打开只记一条：消费后把 ref 清回 null（重渲染 / 后台刷新再触发也无害）。
+   * 子页签打开耗时（ISSUE #4592）：详情数据落定的同一提交里，落定的首个子页签
+   * （默认工坊封装）内容即已就绪 —— 把这一层也记出来，日志才对得上「时间花在
+   * 哪个子页签」；与「子界面打开」同用点击那一步的时刻，两行并排读。 */
   useEffect(() => {
     if (workflow === null || isLoading || openedAtRef === undefined) {
       return;
@@ -101,7 +108,13 @@ export function WorkflowLibraryDetailView({
     logSubviewOpen("子界面打开", "工作流详情", workflow.name, openedAt, {
       workflowId: workflow.id,
     });
-  }, [workflow, isLoading, openedAtRef]);
+    const tabLabel = DETAIL_TABS.find((tab) => tab.key === activeTab)?.label ?? activeTab;
+    logSubviewOpen("子页签打开", "工作流详情", tabLabel, openedAt, {
+      tab: activeTab,
+      workflowId: workflow.id,
+      workflowName: workflow.name,
+    });
+  }, [workflow, isLoading, openedAtRef, activeTab]);
 
   /* 页签切换耗时（ISSUE #4580）：点击那一刻记时刻（onValueChange），切换提交
    * 完成（本 effect，commit 之后）落日志。懒页签（IO 预览）后续的分块下载
@@ -225,9 +238,11 @@ export function WorkflowLibraryDetailView({
              controller.patchWorkflowIO 落库，显示源是富化后的 workflowIO，
             落库底稿是模板原始 DB 列。 */}
         <TabsContent className="min-h-0 flex-1 overflow-y-auto p-5" value="io">
-          {/* 详情查询未排空时不渲染：否则会先按空 IO 闪一屏「还没有暴露任何
-              IO」再被真实数据顶掉（与 DetailBody 的 isLoading 同款口径）。 */}
-          {!isLoading && (
+          {/* 详情查询未排空时给局部加载态（ISSUE #4592）：不按空 IO 渲染，也
+              不留空白 —— 与 DetailBody 的 isLoading 同一款口径、同一句文案。 */}
+          {isLoading ? (
+            <TabContentLoading label={DETAIL_LOADING_LABEL} />
+          ) : (
             <ErrorBoundary fallback={ioChunkFallback}>
               {/* 懒分块的加载态收在本页签内容区（局部 Suspense）：没有这层
                   边界，suspend 会冒到路由级 fallback 换来整屏加载（ISSUE #3800）。 */}
