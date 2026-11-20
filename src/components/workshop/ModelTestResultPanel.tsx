@@ -11,7 +11,6 @@ import {
   CircleAlert,
   ExternalLink,
   Image as ImageIcon,
-  LoaderCircle,
   MessageSquareText,
   ScrollText,
   Video,
@@ -20,6 +19,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
+import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
 import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import type { useModelTest } from "./hooks/use-model-test";
@@ -168,7 +168,7 @@ function ResultCard({ c }: { c: ModelTestController }) {
         c.generating ? (
           <div className="border-border bg-surface-1 flex h-44 flex-col items-center justify-center gap-3 rounded-lg border">
             <span className="relative inline-flex size-12 items-center justify-center">
-              <LoaderCircle className="text-primary size-12 animate-spin motion-reduce:animate-none" />
+              <Spinner className="text-primary size-12" />
               <span className="text-2xs text-primary-strong absolute font-semibold tabular-nums">
                 {c.workflowProgress === null ? "" : `${Math.floor(c.workflowProgress.pct)}%`}
               </span>
@@ -223,7 +223,7 @@ function ResultCard({ c }: { c: ModelTestController }) {
             size="sm"
             variant="ghost"
           >
-            <ExternalLink className="size-3.5" />
+            <ExternalLink className="size-3.5" data-icon="inline-start" />
             打开原始产物（系统浏览器）
           </Button>
         </div>

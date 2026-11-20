@@ -29,10 +29,12 @@ import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { PageHeader } from "~/components/ui/page-header";
+import { Progress } from "~/components/ui/progress";
 import { SelectChip } from "~/components/ui/select-chip";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
+import { clampInt } from "~/lib/clamp";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
@@ -262,7 +264,7 @@ function InputRow({
                 onClick={onRandom}
                 variant="outline"
               >
-                <Dices className="size-3.5" />
+                <Dices className="size-3.5" data-icon="inline-start" />
                 随机
               </Button>
             )}
@@ -601,7 +603,7 @@ export function ModelTestView() {
                     }}
                     variant="primary-solid"
                   >
-                    <Play className="size-4" />
+                    <Play className="size-4" data-icon="inline-start" />
                     {c.generating
                       ? c.kind === "chat"
                         ? "发送中…"
@@ -647,12 +649,10 @@ export function ModelTestView() {
                         {Math.floor(c.workflowProgress.pct)}%
                       </span>
                     </div>
-                    <div className="bg-surface-2 mt-2 h-1.5 overflow-hidden rounded-full">
-                      <div
-                        className="from-primary-500 to-accent h-full rounded-full bg-gradient-to-r transition-all"
-                        style={{ width: `${Math.max(2, Math.min(100, c.workflowProgress.pct))}%` }}
-                      />
-                    </div>
+                    <Progress
+                      className="mt-2"
+                      value={clampInt(Math.floor(c.workflowProgress.pct), 2, 100)}
+                    />
                   </div>
                 )}
 
