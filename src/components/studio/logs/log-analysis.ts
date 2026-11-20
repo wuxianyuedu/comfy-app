@@ -235,7 +235,7 @@ const LAUNCHER_LOG_RE =
 const APP_RUNTIME_LOG_RE =
   /^\[(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})\s+(?<hh>\d{2}):(?<mm>\d{2}):(?<ss>\d{2})\.(?<ms>\d{3})\]\s*\[(?<level>INFO|WARN|ERROR|DEBUG)\]\s*(?:\[(?<ns>[^\]]+)\]\s*)?(?<message>.*)$/;
 
-/** 壳日志（Rust 侧 tracing 落盘）的记录头：`[2026-11-20][08:31:20][INFO][模块] 正文`（ISSUE #4567）。
+/** 壳日志（Rust 侧 tracing 落盘）的记录头：`[日期][时刻][级别][模块] 正文`（ISSUE #4567）。
  *  此前这个形态不被任何记录头正则命中，整份正文走裸文本兜底挤成**一条**多行记录（「壳日志很多条、
  *  面板只有一条」的根源）；颜色也被无差别剥掉。级别取壳侧六级（TRACE/DEBUG/INFO/WARN/ERROR/FATAL）。 */
 const SHELL_LOG_RE =
