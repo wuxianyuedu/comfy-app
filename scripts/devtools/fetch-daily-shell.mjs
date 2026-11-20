@@ -294,7 +294,7 @@ export function describeBuiltAt(raw) {
     return raw;
   }
   const d = new Date(ms);
-  const p = (n) => String(n).padStart(2, "0");
+  const p = (/** @type {number} */ n) => String(n).padStart(2, "0");
   const local =
     `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
     `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
