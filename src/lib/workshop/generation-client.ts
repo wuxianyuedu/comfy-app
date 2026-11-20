@@ -20,6 +20,7 @@
 import { clampPct } from "~/lib/progress";
 import { upperToken } from "~/lib/upper-token";
 import { vanillaApi } from "~/trpc/vanilla";
+import { fireAndForget } from "~/lib/async-action";
 import type { RouterInputs } from "~/trpc/react";
 import { isPlainRecord, isRecord } from "~/lib/is-record";
 import { getSizePresetTable } from "~/lib/media/size-preset-store";
@@ -614,6 +615,83 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
       settled = true;
     }
     es.close();
+  };
+}
+
+/** 观察一个本地任务直到落定，带「无响应看门狗 + 超时对账」（#4597）。
+ *
+ *  旧形态是 `withTimeoutResult(new Promise(…), LOCAL_TASK_TIMEOUT_MS, …)`：
+ *  定时器从订阅那一刻起跑，判的是**总时长**——健康但跑得久的长任务（长视频
+ *  渲染）会在仍有进展时被误判失败，而失败后没有任何对账出口（任务其实已
+ *  SUCCEEDED、产物已落盘，也只能重新生成，重复占用唯一执行槽）。
+ *  这里改成**无响应看门狗**：进度 / 日志 / 产物帧都算「有响应」并续期定时器，
+ *  连续 `timeoutMs` 静默才触发；触发时先查任务真值（`fetchTaskSnapshot`）
+ *  对账，把快照交给 `onIdleTimeout` —— 任务其实已成功就采纳产物，只有确认
+ *  仍未终态才按失败收尾。返回值是清理函数（停看门狗 + 退订 SSE），调用方
+ *  提前退场（组件卸载 / 批量取消）时调用。 */
+export function observeTaskUntilSettled(opts: {
+  /** 看门狗触发（连续 timeoutMs 无任何帧）：`snapshot` 是任务真值（查询失败
+   *  为 null），采纳产物还是按失败收尾由调用方决定；SSE 已在本 helper 内退订。 */
+  onIdleTimeout: (snapshot: TaskSnapshot | null) => void;
+  onLog?: (entry: TaskLogEntry) => void;
+  onOutput?: (output: SavedOutput) => void;
+  onProgress?: (progress: number, node?: TaskProgressNode) => void;
+  onSettled: (result: { message?: string; ok: boolean }) => void;
+  taskId: string;
+  timeoutMs: number;
+}): () => void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let closeStream: () => void = () => undefined;
+  const arm = () => {
+    timer = setTimeout(() => {
+      timer = null;
+      closeStream();
+      /* 对账失败已在 catch 里折成 null；onIdleTimeout 自身的异常也不冒泡——
+       * 看门狗触发的收尾不该变成 unhandledRejection（fireAndForget 收口）。 */
+      fireAndForget(
+        fetchTaskSnapshot(opts.taskId)
+          .catch(() => null)
+          .then((snapshot) => {
+            opts.onIdleTimeout(snapshot);
+          }),
+        () => undefined,
+      );
+    }, opts.timeoutMs);
+  };
+  const touch = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      arm();
+    }
+  };
+  closeStream = watchTask(opts.taskId, {
+    onLog: (entry) => {
+      touch();
+      opts.onLog?.(entry);
+    },
+    onOutput: (output) => {
+      touch();
+      opts.onOutput?.(output);
+    },
+    onProgress: (progress, node) => {
+      touch();
+      opts.onProgress?.(progress, node);
+    },
+    onSettled: (result) => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      opts.onSettled(result);
+    },
+  });
+  arm();
+  return () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    closeStream();
   };
 }
 

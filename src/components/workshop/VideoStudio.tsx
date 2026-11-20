@@ -4,6 +4,7 @@ import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress"
 import { EmptyState } from "~/components/ui/empty-state";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import type { Shot } from "~/lib/workshop/types";
+import { isWantedOutput } from "~/lib/workshop/output-filter";
 import {
   apiPollVideo,
   apiSubmitVideo,
@@ -13,7 +14,7 @@ import {
   prepareLocalInputImage,
   startLocalGenerate,
   withGenerationAttribution,
-  watchTask,
+  observeTaskUntilSettled,
   type GenerateInput,
 } from "~/lib/workshop/generation-client";
 import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
@@ -22,7 +23,7 @@ import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { ChannelSwitch, ShotCard } from "./VideoStudio.parts";
 import { framesFor, videoPrompt } from "./video-studio-utils";
 import { errorMessage } from "~/lib/error-message";
-import { withTimeoutResult, sleep } from "~/lib/with-timeout";
+import { sleep } from "~/lib/with-timeout";
 import { Button } from "~/components/ui/button";
 
 type Props = {
@@ -44,11 +45,6 @@ type Props = {
 };
 
 type Channel = "local" | "api";
-
-/** 空操作（订阅句柄的初值）。 */
-function noop(): void {
-  /* 无操作。 */
-}
 
 /**
  * 视频生成 stage：消费上游镜头图片（自动用作 I2V 首帧）与运动/时长（分镜预填）。
@@ -103,46 +99,49 @@ export function VideoStudio({
 
   /** 等一个本地 ComfyUI 任务；SSE 流落定后 resolve。
    *
-   * 与「安全阀」赛跑的那一半交给`withTimeoutResult`：超时给兜底（不抛），
-   *`onTimeout` 里退订 —— 放弃等待之后流还挂着才是真问题。 */
+   * 安全阀走 `observeTaskUntilSettled` 的无响应看门狗（#4597）：进展帧续期，
+   * 连续 30 分钟静默才触发；触发时先查任务真值对账——其实已成功就采纳产物。 */
   function runLocalTask(shotId: string, taskId: string): Promise<void> {
-    /* 订阅句柄 —— watchTask 返回前先给一个空实现，settle 路径上一定已赋值。 */
-    let close: () => void = noop;
-    return withTimeoutResult(
-      new Promise<void>((resolve) => {
-        close = watchTask(taskId, {
-          onProgress: (p) => {
-            reportProgress(shotId, p);
-          },
-          onOutput: (out) => {
-            // 优先取视频输出；非图片的额外产出（gif / 其他）照样落地。
-            if (out.kind !== "image") {
-              patchShot(shotId, { clipUrl: out.url });
-            }
-          },
-          onSettled: (r) => {
-            /* 落定即写终值：节流窗口会在边界上丢掉最后一次读数，
-             * 进度条停在 97% 而任务已完成的现场就是这么来的。 */
-            flushProgress(shotId, 100);
-            patchShot(shotId, { clipStatus: r.ok ? "done" : "failed" });
-            if (!r.ok) {
-              setShotError(shotId, r.message ?? "视频生成失败");
-            }
-            resolve();
-          },
-        });
-      }),
-      LOCAL_TASK_TIMEOUT_MS,
-      undefined,
-      {
-        onTimeout: () => {
-          // 安全阀：视频渲染慢，但永不让批量循环卡住。
-          close();
-          patchShot(shotId, { clipStatus: "failed" });
-          setShotError(shotId, "任务超时(30 分钟无响应)");
+    return new Promise<void>((resolve) => {
+      observeTaskUntilSettled({
+        taskId,
+        timeoutMs: LOCAL_TASK_TIMEOUT_MS,
+        onProgress: (p) => {
+          reportProgress(shotId, p);
         },
-      },
-    );
+        onOutput: (out) => {
+          /* 只收视频产物（#4596）：「排除图片」会把后到的 audio/other 产物
+           * 覆盖进 clipUrl，进而污染成片合成的镜头素材。 */
+          if (isWantedOutput("video", out)) {
+            patchShot(shotId, { clipUrl: out.url });
+          }
+        },
+        onSettled: (r) => {
+          /* 落定即写终值：节流窗口会在边界上丢掉最后一次读数，
+           * 进度条停在 97% 而任务已完成的现场就是这么来的。 */
+          flushProgress(shotId, 100);
+          patchShot(shotId, { clipStatus: r.ok ? "done" : "failed" });
+          if (!r.ok) {
+            setShotError(shotId, r.message ?? "视频生成失败");
+          }
+          resolve();
+        },
+        onIdleTimeout: (snapshot) => {
+          const out =
+            snapshot?.status === "SUCCEEDED"
+              ? (snapshot.outputs.find((o) => o.kind === "video") ?? snapshot.outputs[0])
+              : undefined;
+          if (out) {
+            flushProgress(shotId, 100);
+            patchShot(shotId, { clipStatus: "done", clipUrl: out.url });
+          } else {
+            patchShot(shotId, { clipStatus: "failed" });
+            setShotError(shotId, "任务超时（30 分钟无进展）");
+          }
+          resolve();
+        },
+      });
+    });
   }
 
   /** 轮询异步 API 视频任务直到 resolve 或超时（约 10 分钟）。 */
