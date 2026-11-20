@@ -67,3 +67,12 @@ describe("HistoryTaskCard 键盘可达性", () => {
     expect(onOpenDetail).toHaveBeenCalledWith("t-1");
   });
 });
+
+describe("HistoryTaskCard memo（ISSUE #4559）", () => {
+  /* 「静止卡短路」本身是 React.memo 的框架契约；这里锁的是**我们的决定**：
+     这张卡必须保持 memo 包裹。摘掉它，配合每 1.5s 换拍的进度源，
+     「加载更多」累积的几十上百张静止卡就会整树陪跑（ISSUE #4559 的现场）。 */
+  it("卡片保持 memo 包裹（摘掉会让静止卡每拍陪跑）", () => {
+    expect(HistoryTaskCard.$$typeof).toBe(Symbol.for("react.memo"));
+  });
+});

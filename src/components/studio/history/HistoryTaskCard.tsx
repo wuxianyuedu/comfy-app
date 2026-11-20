@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Button } from "~/components/ui/button";
@@ -20,8 +22,11 @@ type HistoryTaskCardProps = {
   task: TaskItem;
 };
 
-/** 历史记录列表中的单条任务卡片（缩略图 + 状态 + 错误 + 操作按钮）。 */
-export function HistoryTaskCard({
+/** 历史记录列表中的单条任务卡片（缩略图 + 状态 + 错误 + 操作按钮）。
+ *  `memo` 是这一页渲染预算的一半（ISSUE #4559）：进度定时器每拍只动 RUNNING 卡的
+ *  `progress` 一个数字，其余卡的 props（task / 回调 / 布尔）引用与值都稳定 ——
+ *  不 memo 时「加载更多」累积的几十上百张静止卡每 1.5s 陪跑一次整树 diff。 */
+export const HistoryTaskCard = memo(function HistoryTaskCard({
   task,
   progress,
   retrying,
@@ -195,4 +200,4 @@ export function HistoryTaskCard({
       </div>
     </div>
   );
-}
+});
