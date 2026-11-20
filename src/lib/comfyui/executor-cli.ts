@@ -35,6 +35,7 @@ import { errorText } from "~/lib/error-message";
 import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { fireAndForget } from "~/lib/async-action";
+import { killProcessTree } from "~/lib/process/kill-process-tree";
 import { tailWindow } from "~/lib/page-window";
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
@@ -113,6 +114,18 @@ void import("~/lib/core/logger")
 
 function cliWarn(msg: string): void {
   (depsOverride.logger ?? _loggerRef)?.warn(msg);
+}
+
+/** 看门狗共用的整树回收（硬规则 3，#4603）：comfy-cli 若带出子进程，单杀
+ * leader 会留孤儿。收口走 fireAndForget（定时器回调是同步上下文）。 */
+function killCliTree(taskId: string, child: ChildProcess): void {
+  const pid = child.pid;
+  if (pid === undefined) {
+    return;
+  }
+  fireAndForget(killProcessTree({ pid, detached: false, force: true }), (e) => {
+    cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `回收 comfy-cli 进程树失败（task=${taskId}）`)}`);
+  });
 }
 
 /* 临时工作流目录的形状只有这一份出处：写入（executeViaComfyCli）与
@@ -520,11 +533,7 @@ export async function executeViaComfyCli(job: Job) {
       return;
     }
     settled = true;
-    try {
-      child.kill("SIGKILL");
-    } catch {
-      /* ignore */
-    }
+    killCliTree(taskId, child);
     cliProcs.delete(taskId);
     fireAndForget(fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）"), (e) => {
       cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 看门狗收口异常`)}`);

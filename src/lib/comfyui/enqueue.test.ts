@@ -37,6 +37,9 @@ vi.mock("./lifecycle", () => ({
   isComfyStarting: vi.fn().mockReturnValue(false),
 }));
 vi.mock("./executor-cli", () => ({ cliProcs: new Map() }));
+vi.mock("~/lib/process/kill-process-tree", () => ({
+  killProcessTree: vi.fn(() => Promise.resolve({ ok: true, via: "mock", pid: 0 })),
+}));
 
 const mod = await import("./enqueue");
 /* 下面两组用例要动到「注入接缝」与被 mock 的网络层，所以在模块顶层取句柄
@@ -46,6 +49,7 @@ const runnerState = await import("./runner-state");
 /* `enqueue.ts` 用的 `cliProcs` 来自 `./executor` → 再导出本文件 mock 掉的那份
  * Map，所以往这里塞句柄就等于「本进程正在执行该任务」。 */
 const cli = await import("./executor-cli");
+const kpt = await import("~/lib/process/kill-process-tree");
 
 describe("configureEnqueue 接缝", () => {
   it("接受 Partial<EnqueueDeps>、两次调用是合并语义", () => {
@@ -80,9 +84,9 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
   const runnerLog = { warn: vi.fn() };
   let seq = 0;
 
-  /** 收窄成「带着 `kill` 的子进程句柄」，即取消路径真正读取的那一项。 */
+  /** 收窄成「带着 `pid` 的子进程句柄」，即取消路径真正读取的那一项（#4603）。 */
   function isCliProcHandle(v: unknown): v is ChildProcess {
-    return isRecord(v) && typeof v.kill === "function";
+    return isRecord(v) && typeof v.pid === "number";
   }
 
   function setup(
@@ -104,10 +108,11 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     mod.configureEnqueue({ taskRepo: repo });
     runnerState.configureRunner({ taskRepo: repo, log: runnerLog });
     vi.mocked(client.interrupt).mockReset().mockResolvedValue(undefined);
-    const kill = vi.fn();
+    vi.mocked(kpt.killProcessTree).mockClear();
     if (inFlight) {
-      /* `cliProcs` 的消费侧只读 `kill`；按运行期实际用到的字段校验形状。 */
-      const handle: unknown = { kill };
+      /* 取消路径现在读句柄的 `pid` 走整树回收（#4603）；句柄形状按运行期实际
+       * 用到的字段校验。 */
+      const handle: unknown = { pid: 4242 };
       if (!isCliProcHandle(handle)) {
         throw new Error("comfy-cli 句柄夹具形状不符");
       }
@@ -115,21 +120,19 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     } else {
       cli.cliProcs.delete(taskId);
     }
-    return { taskId, repo, kill };
+    return { taskId, repo };
   }
 
   const logged = (taskId: string, needle: string): boolean =>
     mod.getLogs(taskId).some((entry) => String(entry.msg).includes(needle));
 
-  it("本进程正在执行它：杀掉子进程并请求 ComfyUI 中断当前这一轮", async () => {
-    const { taskId, repo, kill } = setup(
-      { status: "RUNNING", promptId: "p-a" },
-      { inFlight: true },
-    );
+  it("本进程正在执行它：整树回收子进程并请求 ComfyUI 中断当前这一轮", async () => {
+    const { taskId, repo } = setup({ status: "RUNNING", promptId: "p-a" }, { inFlight: true });
 
     await mod.cancelTask(taskId);
 
-    expect(kill).toHaveBeenCalledWith("SIGKILL");
+    /* #4603：回收走 killProcessTree 整树收口，不再单杀 leader。 */
+    expect(kpt.killProcessTree).toHaveBeenCalledWith({ pid: 4242, detached: false, force: true });
     expect(client.interrupt).toHaveBeenCalledTimes(1);
     expect(repo.cancel).toHaveBeenCalledWith(taskId);
     expect(logged(taskId, "已请求 ComfyUI 中断")).toBe(true);
