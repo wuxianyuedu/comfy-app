@@ -16,7 +16,6 @@ import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useWorkflowEncapsulation } from "./hooks/use-workflow-encapsulation";
-import { referenceLoaderMountNodes } from "~/lib/workshop/reference-loader-binding";
 import { SourceTag } from "~/components/ui/source-tag";
 import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -24,8 +23,8 @@ import { StatusDot } from "~/components/ui/status-dot";
 import { ListBadge } from "~/components/ui/list-badge";
 
 /** 窗口化列表的两个常量（ISSUE #4557，与 CustomNodesSettings/NodesTab 同款模式）。
- *  行高是**估计值**：单行（仅名称 + 徽标）与两行（多一组类型/标签）都由
- *  `measureElement` 量到真值，估计只影响首帧窗口宽度。 */
+ *  行高是**估计值**：行恒为单行（名称 + 类型 + 状态徽标 + 来源，#4667），真高
+ *  由 `measureElement` 量到，估计只影响首帧窗口宽度。 */
 const WORKFLOW_ROW_ESTIMATE_PX = 34;
 const WORKFLOW_ROW_GAP_PX = 4;
 
@@ -345,10 +344,6 @@ function WorkflowListItem({
   const { usable } = deriveFormatFlags(workflow);
   const { missing, canResync } = deriveSyncFlags(workflow);
   const isTech = isTechnicalName(workflow.name);
-  /* 参考图挂载节点数（ISSUE #4593）：paramMap 里点选的挂载节点名单——
-   * 库列表上直接可见「这条工作流挂了参考图」，具体挂在哪些节点在详情
-   * 「参考图装载」页签按名字列出。 */
-  const mountCount = referenceLoaderMountNodes(workflow.paramMap).length;
   /* 对外参数封装状态（与生成链路同口径）：提示词口已有落点 = 工坊可直接驱动。
    * 契约口与必备口读生效注册表（本机覆盖优先）—— 与详情「工坊封装」页签
    * 同一份口径（ISSUE #4113：此前列表行回落内置默认，用户改过的契约不生效）。 */
@@ -369,7 +364,9 @@ function WorkflowListItem({
       onClick={onClick}
       variant="ghost"
     >
-      {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}
+      {/* 单行布局（#4667）：名称 + 类型 + 状态徽标 + 来源，全部同一行。
+          参考图挂载徽标与模型标签不再上列表——前者意义不大，后者挤行；
+          完整信息（挂载节点 / 模型标签）仍在右侧详情里看。 */}
       <div className="flex min-w-0 items-center gap-1.5">
         <Hint label={workflow.name}>
           <span
@@ -382,6 +379,11 @@ function WorkflowListItem({
             {workflow.name}
           </span>
         </Hint>
+        {workflow.taskType && (
+          <span className="shrink-0">
+            <TaskTypeChip taskType={workflow.taskType} />
+          </span>
+        )}
         {!usable && (
           <ListBadge title="没有工作流(RAW)原件 —— 没有可执行内容" tone="danger">
             无可执行内容
@@ -411,38 +413,6 @@ function WorkflowListItem({
         )}
         <SourceTag source={workflow.source} />
       </div>
-
-      {(workflow.taskType || (workflow.modelTags?.length ?? 0) > 0 || mountCount > 0) && (
-        /* flex-wrap：徽标多时（如参考图挂载，#4593）折到下一行，不挤爆行宽——
-         * 行高由 measureElement 量到真值，虚拟滚动不受影响。 */
-        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-          <TaskTypeChip taskType={workflow.taskType} />
-          {mountCount > 0 && (
-            <ListBadge
-              className="shrink-0"
-              title={`参考图挂载在 ${mountCount} 个节点上；节点名见详情「参考图装载」页签`}
-              tone="neutral"
-            >
-              参考图挂载 {mountCount}
-            </ListBadge>
-          )}
-          {workflow.modelTags?.slice(0, 2).map((tag) => (
-            <ListBadge
-              className="max-w-18 truncate rounded-full"
-              key={tag}
-              title={tag}
-              tone="neutral"
-            >
-              {tag}
-            </ListBadge>
-          ))}
-          {(workflow.modelTags?.length ?? 0) > 2 && (
-            <span className="text-ink-fainter text-4xs shrink-0">
-              +{(workflow.modelTags?.length ?? 0) - 2}
-            </span>
-          )}
-        </div>
-      )}
     </Button>
   );
 }
