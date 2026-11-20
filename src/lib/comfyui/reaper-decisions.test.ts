@@ -36,6 +36,15 @@ vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+/* #4607：对账判 SUCCEEDED 会委托 executor 的完成入口做产物恢复。
+ * 这里把它换成本地 spy —— 下载管线本体不在判决矩阵的量程里，
+ * 矩阵只钉「成功 → 委托 complete；失败 → finalizeFromReaper」的分流。 */
+const completeMock = vi.hoisted(() => vi.fn(() => Promise.resolve(undefined)));
+vi.mock("./executor-finalize", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  complete: completeMock,
+}));
+
 import { taskRepository } from "../core/repository";
 import { isComfyStarting } from "./lifecycle";
 import { cliProcs } from "./executor-cli";
@@ -418,7 +427,7 @@ describe("RUNNING reaper 判决矩阵", () => {
     return new Response(JSON.stringify(body), { status });
   }
 
-  it("/history 有条目且无错 → 判 SUCCEEDED", async () => {
+  it("/history 有条目且无错 → 判 SUCCEEDED，并委托 complete 恢复产物（#4607）", async () => {
     const reaper = await loadReaper();
     repoMock("listStaleRunning").mockResolvedValue([runningRow("t-ok", "p-1")]);
     mockFetchOnce({
@@ -427,7 +436,11 @@ describe("RUNNING reaper 判决矩阵", () => {
 
     await reaper.reapStaleRunningTasks!();
 
-    expect(repoMock("finalizeFromReaper")).toHaveBeenCalledWith("t-ok", "SUCCEEDED", null);
+    /* #4607：成功判决不再走「只写状态」的 finalizeFromReaper（那会让恢复侧
+     *  读到「SUCCEEDED 但无产物」），改为委托 executor 完成入口把产物拉回来。 */
+    expect(completeMock).toHaveBeenCalledTimes(1);
+    expect(completeMock).toHaveBeenCalledWith("t-ok", "p-1");
+    expect(repoMock("finalizeFromReaper")).not.toHaveBeenCalled();
   });
 
   it("/history 有条目且 errored → 判 FAILED 并带上 execution_error 原文", async () => {
@@ -518,6 +531,8 @@ describe("RUNNING reaper 判决矩阵", () => {
     await reaper.reapStaleRunningTasks!();
 
     expect(repoMock("finalizeFromReaper")).not.toHaveBeenCalled();
+    /* #4607 起成功判决走 complete 恢复产物 —— 终态已落库时连下载也不该开始。 */
+    expect(completeMock).not.toHaveBeenCalled();
     expect(logsOf("t-done").some((m) => m.includes("终态已落库"))).toBe(true);
   });
 

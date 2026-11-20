@@ -587,6 +587,13 @@ export async function reapStaleRunningTasks(): Promise<void> {
           continue;
         }
         if (verdict === "succeeded") {
+          /* 终态已被本进程认领 / 落库 → 跳过，不做无谓的产物下载
+           *  （与下方失败路径的两把锁同一语义，只是这里只读不抢 ——
+           *  抢了会让 completeInner 的 claimFinalize 拿不到而静默跳过写库）。 */
+          if (s.settled.has(t.id) || s.finalized.has(t.id)) {
+            log(t.id, "warn", "reaper(running) 跳过：任务终态已落库（不覆盖已有结果）");
+            continue;
+          }
           /* #4607：对账判成功 ≠ 只写状态。复用 executor 的完成入口
            *  （complete → completeInner：拉 /history → 收集产物 → getView
            *  下载落盘 → finalizeSuccessWithImages 同事务写产物行），把产物从
