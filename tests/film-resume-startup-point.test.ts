@@ -17,6 +17,8 @@ const code = (rel: string): string =>
   normalizeControlFlow(stripComments(readFileSync(path.join(ROOT, rel), "utf8")), rel);
 
 const ORCHESTRATOR = "src/server/film/orchestrator.ts";
+/* 监看循环本体在 film-watch.ts（#4595 拆分）：在飞表、预算常量与恢复扫描都在那份里。 */
+const FILM_WATCH = "src/server/film/film-watch.ts";
 
 /** 全仓（src + scripts）里出现 `resumeStalledFilms(` **调用**的文件。 */
 function sweepCallSites(): Array<string> {
@@ -29,6 +31,7 @@ function sweepCallSites(): Array<string> {
     "scripts/dev-launcher.mjs",
     "scripts/standalone-runtime.mjs",
     ORCHESTRATOR,
+    FILM_WATCH,
   ];
   /* 只数调用点：声明行（`export async function resumeStalledFilms(`）也带这个名字，
    * 把它算进来会把模块自己报成第二个启动点。 */
@@ -70,7 +73,7 @@ describe("恢复扫描的启动点：Next 侧一处，且只一处", () => {
 
 describe("去重与预算的同源性（漂开就静默失效的那两条）", () => {
   it("在飞表挂在**带版本号**的 globalThis 键上", () => {
-    const src = code(ORCHESTRATOR);
+    const src = code(FILM_WATCH);
     /* 模块级 `const inFlight = new Map()` 是错的：dev 热重启后旧模块那条循环还在飞，
      * 新模块的自己是一份新 Map，看不见它 ⇒ 同一部影片两条循环。而 `??=` 只认键名，
      * 字段形状变了不升版本号 = 读到旧单例里没有这个字段（同 runner-state 的坑）。 */
@@ -83,19 +86,22 @@ describe("去重与预算的同源性（漂开就静默失效的那两条）", (
   });
 
   it("监看预算的分钟数只有一处出处（文案与判据不许各写一份）", () => {
-    const src = code(ORCHESTRATOR);
+    const src = code(FILM_WATCH);
     expect(src).toMatch("const WATCH_POLL_MS = 4000;");
-    expect(src).toMatch("const WATCH_MAX_ITER = 240;");
-    /* 数字分隔符（`60_000`）与常量写法都归 lint 管，这里钉的是**除数 60 秒**这件事本身
-     * —— 照字面量写死会把一次纯排版改写读成「预算口径变了」（判据钉语义不钉行形状）。 */
+    /* #4595：固定 240 轮总预算改成两档——无响应看门狗（连续 900 轮零进展）+
+     * 「底仓 240 + 每镜 600 轮」的绝对上限。这里的分钟数都由常量现算，不写死。 */
+    expect(src).toMatch("const WATCH_IDLE_MAX_ITER = 900;");
+    expect(src).toMatch("const WATCH_BASE_MAX_ITER = 240;");
+    expect(src).toMatch("const WATCH_PER_SHOT_ITER = 600;");
     expect(src).toMatch(
-      /const WATCH_BUDGET_MIN = Math\.round\(\(WATCH_POLL_MS \* WATCH_MAX_ITER\) \/ 60_?000\);/,
+      /const WATCH_IDLE_MIN = Math\.round\(\(WATCH_POLL_MS \* WATCH_IDLE_MAX_ITER\) \/ 60_?000\);/,
     );
     // 两条给用户看的文案都插值同一个常量；写死「16 分钟」的那版改一个不动另一个。
-    expect(src.match(/\$\{WATCH_BUDGET_MIN\} 分钟/g)).toHaveLength(2);
+    expect(src.match(/\$\{WATCH_IDLE_MIN\} 分钟/g)).toHaveLength(2);
     expect(src).not.toMatch("超过 16 分钟");
-    // 循环用的也是常量，不再是裸 4000 / 240。
+    // 绝对上限在首轮按镜头数补足；循环用的也是常量，不再是裸 4000 / 240。
+    expect(src).toMatch("WATCH_BASE_MAX_ITER + total * WATCH_PER_SHOT_ITER");
     expect(src).toMatch("await sleep(WATCH_POLL_MS)");
-    expect(src).toMatch("i < WATCH_MAX_ITER");
+    expect(src).toMatch("i < maxIter");
   });
 });
