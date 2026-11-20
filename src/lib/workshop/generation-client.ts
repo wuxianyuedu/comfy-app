@@ -21,6 +21,7 @@ import { clampPct } from "~/lib/progress";
 import { upperToken } from "~/lib/upper-token";
 import { vanillaApi } from "~/trpc/vanilla";
 import { fireAndForget } from "~/lib/async-action";
+import { isFailedTaskStreamStatus } from "~/lib/task-state";
 import type { RouterInputs } from "~/trpc/react";
 import { isPlainRecord, isRecord } from "~/lib/is-record";
 import { getSizePresetTable } from "~/lib/media/size-preset-store";
@@ -546,11 +547,14 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
           h.onProgress?.(clampPct(p), node);
         }
         // 数据库侧的实情轮询会把发射器漏掉的终态结论补发一次。
+        // 终态集合（含 NOT_FOUND）读 ~/lib/task-state 的共享判据（#4606）：
+        // 服务端新增终态帧值时这里不会再漏 —— 漏掉的表现是帧被丢弃、
+        // 流关闭重连 404，用户看到误导性的「任务连接中断」。
         const st: unknown = msg.status;
-        if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
+        if (isFailedTaskStreamStatus(st)) {
           const err: unknown = msg.error;
-          note(`收到 state 帧 status=${st}，按失败落定`);
-          settle(false, typeof err === "string" && err.trim() ? err : `任务 ${st}`);
+          note(`收到 state 帧 status=${String(st)}，按失败落定`);
+          settle(false, typeof err === "string" && err.trim() ? err : `任务 ${String(st)}`);
         } else if (st === "SUCCEEDED") {
           /*  成功收口走这条：终态 state 帧带 DB 的产出清单（与 TaskImage 同源，
            * 见 executor-finalize 的 `saved`）。inline 与 host 执行的任务到这里

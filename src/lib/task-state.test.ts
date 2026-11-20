@@ -8,10 +8,13 @@
 import { describe, expect, it } from "vitest";
 import {
   TASK_STATUS_LABELS,
+  TASK_STREAM_STATUS_NOT_FOUND,
   TERMINAL_TASK_STATUSES,
   isActiveTaskStatus,
+  isFailedTaskStreamStatus,
   isTerminalFailureTaskStatus,
   isTerminalTaskStatus,
+  isTerminalTaskStreamStatus,
   taskStatusLabel,
 } from "./task-state";
 
@@ -52,6 +55,34 @@ describe("isActiveTaskStatus", () => {
     for (const s of [...TERMINAL_TASK_STATUSES, "QUEUED", "RUNNING", null]) {
       expect(isActiveTaskStatus(s)).toBe(!isTerminalTaskStatus(s));
     }
+  });
+});
+
+describe("SSE state 帧的终态判据（#4606）", () => {
+  it("DB 终态 + 帧专属的 ERROR / NOT_FOUND 都算终态", () => {
+    for (const s of [...TERMINAL_TASK_STATUSES, "ERROR", TASK_STREAM_STATUS_NOT_FOUND]) {
+      expect(isTerminalTaskStreamStatus(s)).toBe(true);
+    }
+  });
+
+  it("在飞状态与非字符串不算终态", () => {
+    expect(isTerminalTaskStreamStatus("QUEUED")).toBe(false);
+    expect(isTerminalTaskStreamStatus("RUNNING")).toBe(false);
+    expect(isTerminalTaskStreamStatus(undefined)).toBe(false);
+    expect(isTerminalTaskStreamStatus(42)).toBe(false);
+  });
+
+  it("失败向 = 终态且非成功：NOT_FOUND 也在内（帧上带服务端给的原因）", () => {
+    expect(isFailedTaskStreamStatus("FAILED")).toBe(true);
+    expect(isFailedTaskStreamStatus("CANCELLED")).toBe(true);
+    expect(isFailedTaskStreamStatus("ERROR")).toBe(true);
+    expect(isFailedTaskStreamStatus(TASK_STREAM_STATUS_NOT_FOUND)).toBe(true);
+    expect(isFailedTaskStreamStatus("SUCCEEDED")).toBe(false);
+    expect(isFailedTaskStreamStatus("RUNNING")).toBe(false);
+  });
+
+  it("NOT_FOUND 是帧专属值：不在 DB 终态表里，别混用两份判据", () => {
+    expect(isTerminalTaskStatus(TASK_STREAM_STATUS_NOT_FOUND)).toBe(false);
   });
 });
 

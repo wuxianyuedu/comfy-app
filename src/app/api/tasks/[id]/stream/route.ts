@@ -4,7 +4,7 @@ import { NotFoundError } from "~/lib/core/errors";
 import { taskRepository } from "~/lib/core/repository";
 import { getLogs } from "~/lib/comfyui/enqueue";
 import { parseValidationErrors } from "~/lib/comfyui/validation";
-import { isTerminalTaskStatus } from "~/lib/task-state";
+import { isTerminalTaskStatus, TASK_STREAM_STATUS_NOT_FOUND } from "~/lib/task-state";
 import { errorResponse, unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
@@ -119,7 +119,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
               if (notFoundStreak >= 2) {
                 send({
                   type: "state",
-                  status: "NOT_FOUND",
+                  /* 帧值取共享表（#4606）：客户端的终态判据读同一份出处，
+                   * 服务端再加终态值时不会再出现「发得出、认不得」的漂移。 */
+                  status: TASK_STREAM_STATUS_NOT_FOUND,
                   progress: 0,
                   error: "任务不存在或已被删除",
                 });
