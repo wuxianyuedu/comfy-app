@@ -228,3 +228,35 @@ describe("GET /api/tasks/[id]/stream 的日志增量契约（#4605）", () => {
     vi.useRealTimers();
   });
 });
+
+describe("GET /api/tasks/[id]/stream 的任务消失出口（#4453 / #4606）", () => {
+  it("轮询连续两拍读不到快照 → 发 NOT_FOUND 终态帧并收口流", async () => {
+    vi.useFakeTimers();
+    findByIdForUser.mockResolvedValue({ id: "t-gone" });
+    getLogs.mockReturnValue([]);
+    readAllLogs.mockResolvedValue([]);
+    findById.mockResolvedValue(null);
+    findSseSnapshot.mockResolvedValue(null);
+
+    const { res } = await call("t-gone");
+    expect(res.status).toBe(200);
+
+    const sink: Array<Frame> = [];
+    const done = collectFrames(res, sink);
+    /* 连续两拍（3s 轮询）读不到 → NOT_FOUND 帧；服务端随即收口、流关闭。
+     * 客户端（#4606 起）认得这个终态值，不会再走到「重连 404 → 连接中断」。 */
+    for (let i = 0; i < 40 && !sink.some((f) => f.status === "NOT_FOUND"); i += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- 假定时器须逐拍推进，帧到位即停
+      await vi.advanceTimersByTimeAsync(250);
+    }
+    expect(sink.some((f) => f.status === "NOT_FOUND")).toBe(true);
+    expect(sink.find((f) => f.status === "NOT_FOUND")).toMatchObject({
+      type: "state",
+      error: "任务不存在或已被删除",
+    });
+
+    /* 流已收口：读取循环应自然结束（不会挂到用例超时）。 */
+    await done;
+    vi.useRealTimers();
+  });
+});

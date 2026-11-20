@@ -39,6 +39,35 @@ export function isActiveTaskStatus(status: string | null | undefined): boolean {
   return !isTerminalTaskStatus(status);
 }
 
+/* ── SSE state 帧的 status 判据（#4606）────────────────────────────────
+ * `/api/tasks/[id]/stream` 的 state 帧除了回放 DB 行状态（QUEUED / RUNNING /
+ * SUCCEEDED / FAILED / CANCELLED），还有两个**只在帧上出现**的值：
+ *   · `ERROR` —— 历史帧值（客户端历来按失败落定）；
+ *   · `NOT_FOUND` —— 任务被删除 / id 从未存在时服务端发的终态帧（#4453）。
+ * 「哪些 status 该让客户端落定」这份集合此前只写在客户端的落定分支里，
+ * 服务端新增终态值时它不会跟着长 —— #4606 的漂移（NOT_FOUND 帧被客户端
+ * 丢弃 → 误报「任务连接中断」）正是这么来的。发射侧（stream/route.ts）与
+ * 消费侧（generation-client.ts）一律读本表，不再各写一份字面量。 */
+
+/** state 帧上的「任务不存在或已被删除」终态值（#4453 引入）。 */
+export const TASK_STREAM_STATUS_NOT_FOUND = "NOT_FOUND" as const;
+
+/** SSE state 帧的 status 是否终态（客户端据此落定收口；服务端据此收流）。 */
+export function isTerminalTaskStreamStatus(status: unknown): boolean {
+  return (
+    status === "SUCCEEDED" ||
+    status === "FAILED" ||
+    status === "CANCELLED" ||
+    status === "ERROR" ||
+    status === TASK_STREAM_STATUS_NOT_FOUND
+  );
+}
+
+/** SSE state 帧的 status 是否按「失败」落定（终态且非成功）。 */
+export function isFailedTaskStreamStatus(status: unknown): boolean {
+  return isTerminalTaskStreamStatus(status) && status !== "SUCCEEDED";
+}
+
 /**
  * 任务状态 → 中文标签的**唯一出处**。
  *

@@ -97,6 +97,24 @@ describe("watchTask 的终态落定路径", () => {
     expect(es.close).not.toHaveBeenCalled();
   });
 
+  it("state 帧 NOT_FOUND（任务被删，#4606）：按失败落定并带服务端文案", () => {
+    const { es, handlers } = startWatch();
+    es.emit({
+      type: "state",
+      status: "NOT_FOUND",
+      progress: 0,
+      error: "任务不存在或已被删除",
+    });
+    /* 此前 NOT_FOUND 不在客户端终态集合里，帧被丢弃 → 流关闭重连 404 →
+     * 误报「任务连接中断」。现在按服务端给的文案落定为失败。 */
+    expect(handlers.onSettled).toHaveBeenCalledTimes(1);
+    expect(handlers.onSettled).toHaveBeenCalledWith({
+      ok: false,
+      message: "任务不存在或已被删除",
+    });
+    expect(es.close).toHaveBeenCalled();
+  });
+
   it("终态被读到两次也只落定一次：产出回调不许重发", () => {
     const { es, handlers } = startWatch();
     es.emit({
