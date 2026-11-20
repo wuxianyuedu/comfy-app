@@ -10,6 +10,7 @@ import React from "react";
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 import { parseShotSize } from "~/components/workshop/shot-size-config";
 import { errorMessage } from "~/lib/error-message";
+import { isWantedOutput } from "~/lib/workshop/output-filter";
 import {
   buildLibraryWorkflowInput,
   LOCAL_TASK_TIMEOUT_MS,
@@ -151,9 +152,10 @@ export function useWorkshopGeneration({
               }));
             },
             onOutput: (out) => {
-              /* 生图只要图片产物、视频只要视频产物（另一种是别的阶段的）。 */
-              const wanted = target === "video" ? out.kind !== "image" : out.kind !== "video";
-              if (!wanted) {
+              /* 生图只要图片产物、视频只要视频产物（#4596）：按「命中本媒体」
+               * 精确收，不按「排除另一种」——后者会把 text/other 产物覆盖进
+               * 已写入的 imageUrl / clipUrl。 */
+              if (!isWantedOutput(target, out)) {
                 return;
               }
               patchIfOwned(target === "video" ? { clipUrl: out.url } : { imageUrl: out.url });

@@ -10,6 +10,7 @@ import { uploadMaterialItem } from "~/lib/media/materials-client";
 import { getSizePresetTable } from "~/lib/media/size-preset-store";
 import { sizeSpecToRelay, sizeSpecToWxH, type SizeSpec } from "~/lib/media/size-presets";
 import type { SavedOutput } from "./api-channel-shared";
+import { isWantedOutput } from "./output-filter";
 import {
   apiGenerateImage,
   buildLibraryWorkflowInput,
@@ -57,7 +58,9 @@ export async function generateWorkflowPortrait(
       onProgress: (pct) => handlers.onProgress?.(pct),
       onLog: (entry) => handlers.onLog?.(entry),
       onOutput: (output: SavedOutput) => {
-        if (output.kind !== "video" && !imageUrl) {
+        /* 只收图片（#4596）：首个命中者生效——「排除视频」会让先到的 text/other
+         * 产物占住 imageUrl，真正的图片反而被丢掉。 */
+        if (isWantedOutput("image", output) && !imageUrl) {
           imageUrl = output.url;
         }
       },

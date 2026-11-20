@@ -4,6 +4,7 @@ import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress"
 import { EmptyState } from "~/components/ui/empty-state";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import type { Shot } from "~/lib/workshop/types";
+import { isWantedOutput } from "~/lib/workshop/output-filter";
 import {
   apiPollVideo,
   apiSubmitVideo,
@@ -115,8 +116,9 @@ export function VideoStudio({
             reportProgress(shotId, p);
           },
           onOutput: (out) => {
-            // 优先取视频输出；非图片的额外产出（gif / 其他）照样落地。
-            if (out.kind !== "image") {
+            /* 只收视频产物（#4596）：「排除图片」会把后到的 audio/other 产物
+             * 覆盖进 clipUrl，进而污染成片合成的镜头素材。 */
+            if (isWantedOutput("video", out)) {
               patchShot(shotId, { clipUrl: out.url });
             }
           },

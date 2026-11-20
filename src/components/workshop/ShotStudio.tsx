@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { randomSeed } from "~/lib/comfyui/random-seed";
+import { isWantedOutput } from "~/lib/workshop/output-filter";
 import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress";
 import { EmptyState } from "~/components/ui/empty-state";
 import { useBusyAction } from "~/components/ui/use-busy-action";
@@ -208,7 +209,9 @@ export function ShotStudio({
             reportProgress(shotId, p);
           },
           onOutput: (out) => {
-            if (out.kind !== "video") {
+            /* 只收图片产物（#4596）：「排除另一种」会把后到的 text/other 产物
+             * 覆盖进 imageUrl（工作流带 ShowText 类输出节点时很常见）。 */
+            if (isWantedOutput("image", out)) {
               patchShot(shotId, { imageUrl: out.url });
             }
           },
