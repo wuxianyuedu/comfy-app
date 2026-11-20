@@ -107,6 +107,21 @@ describe("侧栏的模型适配 / 模式契约入口", () => {
   });
 });
 
+describe("资产占位入口（未上线）", () => {
+  it("留在侧栏里但禁用，点击不切视图", () => {
+    const onSelect = renderShell();
+    const btn = screen.getByRole("button", { name: /资产/ });
+    expect(btn.textContent).toContain("资产");
+    /* 带 tooltip 的菜单按钮被 Base UI 包了 TooltipTrigger，disabled 落成
+       `data-trigger-disabled` 而不是原生属性；置灰靠 AppShell 显式给的 class。 */
+    expect(btn.dataset.triggerDisabled).toBe("");
+    expect(btn.className).toContain("opacity-50");
+
+    fireEvent.click(btn);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+});
+
 describe("设置不在侧栏（ISSUE #1784：入口收归顶栏）", () => {
   it("侧栏列表里没有「设置」这一项；顶栏有直达的设置图标（ISSUE #3789）", () => {
     renderShell();

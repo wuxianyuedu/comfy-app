@@ -176,12 +176,17 @@ export function AppShell({
                         {/* 未上线的视图留在列表里但禁用：移除会让「以后有这个」这件事消失，
                           禁用则给出「即将推出」（`tooltip` 里写明）。 */}
                         <SidebarMenuButton
-                          className={
+                          className={cn(
                             /* 关闭按钮悬停时行背景也带上悬停色（ISSUE #3740 追加反馈）：
                                按钮是兄弟控件、盖在行右缘，光标落在它上面时行自身的 :hover
                                不触发；用组悬停变量把整行接成悬停态。 */
-                            "group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground"
-                          }
+                            "group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground",
+                            /* 未上线的占位项要看着是禁用的：带 tooltip 的菜单按钮会被 Base UI
+                               包一层 TooltipTrigger，`disabled` 不会落成原生属性，变体里的
+                               `disabled:opacity-50` 因此不生效。这里显式置灰但不动
+                               pointer-events —— 悬停仍要能弹出「即将推出」提示。 */
+                            !enabled && "opacity-50",
+                          )}
                           disabled={!enabled}
                           isActive={active === item.id}
                           onClick={() => {
