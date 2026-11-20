@@ -9,7 +9,10 @@ import {
   CORES_PER_WORKER,
   FALLBACK_CORES,
   GA_CORES_PER_WORKER,
+  LOCAL_CORES_PER_WORKER,
   MIN_WORKERS,
+  isCiEnvironment,
+  platformCpusPerWorker,
   resolveCiWorkers,
   resolveCores,
   workersForCores,
@@ -118,7 +121,7 @@ describe("平台分档：CNB 共享宿主机 8 / GA 独享 2（CNB 数字一个�
     expect(resolveCiWorkers({ env: { GITHUB_ACTIONS: "true", CNB_CPUS: "8" } }).workers).toBe(4);
   });
 
-  it('缺省 / 非 "true" 的 `GITHUB_ACTIONS` 一律按 CNB 档（本地与 CNB 行为逐字不变）', () => {
+  it('缺省 / 非 "true" 的 `GITHUB_ACTIONS` 不改 CNB 档（`CNB_CPUS` 在场 = 共享宿主机）', () => {
     for (const v of [undefined, "", "false", "1", "TRUE "]) {
       const env: Record<string, string | undefined> = { CNB_CPUS: "16" };
       if (v !== undefined) env.GITHUB_ACTIONS = v;
@@ -131,6 +134,49 @@ describe("平台分档：CNB 共享宿主机 8 / GA 独享 2（CNB 数字一个�
       env: { GITHUB_ACTIONS: "true", CNB_CPUS: "4", COMFY_CI_MAX_WORKERS: "1" },
     });
     expect(r.workers).toBe(1);
+    expect(r.note).toContain("只调并发");
+  });
+});
+
+describe("本地档：独占开发机按 cores/2 铺开（ISSUE #4613）", () => {
+  it("档位逐字钉死：本地一个 worker 至少 2 核，16 核 ⇒ 8", () => {
+    /* 与 CNB / GA 那两条同一条纪律：档位是**判断**，必须逐字钉在这里，
+     * 改常数就要同时改这一行 —— 不许写成 `toBe(16 / LOCAL_CORES_PER_WORKER)`
+     * 那种改什么都绿的恒等式。 */
+    expect(LOCAL_CORES_PER_WORKER).toBe(2);
+    expect(workersForCores(16, LOCAL_CORES_PER_WORKER)).toBe(8);
+    expect(workersForCores(8, LOCAL_CORES_PER_WORKER)).toBe(4);
+    expect(workersForCores(4, LOCAL_CORES_PER_WORKER)).toBe(2);
+    expect(workersForCores(2, LOCAL_CORES_PER_WORKER)).toBe(1);
+  });
+
+  it("CI 判据：`CNB_CPUS` / `GITHUB_ACTIONS` / `CI` 任一在场即 CI；显式写 false/0 不冒充", () => {
+    expect(isCiEnvironment({})).toBe(false);
+    expect(isCiEnvironment({ CNB_CPUS: "16" })).toBe(true);
+    expect(isCiEnvironment({ GITHUB_ACTIONS: "true" })).toBe(true);
+    expect(isCiEnvironment({ CI: "true" })).toBe(true);
+    expect(isCiEnvironment({ CI: "1" })).toBe(true);
+    expect(isCiEnvironment({ CI: "false" })).toBe(false);
+    expect(isCiEnvironment({ CI: "0" })).toBe(false);
+    expect(isCiEnvironment({ CI: "" })).toBe(false);
+  });
+
+  it("分档：无 CI 注入 ⇒ 本地档；`CNB_CPUS` / `CI` 在场 ⇒ 共享档；GA ⇒ GA 档", () => {
+    expect(platformCpusPerWorker({})).toBe(LOCAL_CORES_PER_WORKER);
+    expect(platformCpusPerWorker({ CNB_CPUS: "16" })).toBe(CORES_PER_WORKER);
+    expect(platformCpusPerWorker({ CI: "true" })).toBe(CORES_PER_WORKER);
+    expect(platformCpusPerWorker({ GITHUB_ACTIONS: "true" })).toBe(GA_CORES_PER_WORKER);
+  });
+
+  it("本地默认值 == 公式值（不另立一份机器相关数字）", () => {
+    const r = resolveCiWorkers({ env: {} });
+    expect(r.workers).toBe(workersForCores(resolveCores({}).cores, LOCAL_CORES_PER_WORKER));
+    expect(r.note).toBeNull();
+  });
+
+  it("人的出口在本地档同样优先（压并发是本地唯一还兑现得了的动作）", () => {
+    const r = resolveCiWorkers({ env: { COMFY_CI_MAX_WORKERS: "2" } });
+    expect(r.workers).toBe(2);
     expect(r.note).toContain("只调并发");
   });
 });

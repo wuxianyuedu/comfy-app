@@ -1,7 +1,7 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
 
-import { resolveCiWorkers } from "./scripts/ci/ci-load.mjs";
+import { isCiEnvironment, resolveCiWorkers } from "./scripts/ci/ci-load.mjs";
 
 /**
  * `DOM_TEST_GLOBS` —— 进 **DOM 档**（`happy-dom`）的用例面（§11.17）。
@@ -153,6 +153,23 @@ if (TIMEOUT_BUDGET.scale !== 1) {
   process.stdout.write(`[vitest] ${TIMEOUT_BUDGET.note}\n`);
 }
 
+/* 并发档：唯一出处 `scripts/ci/ci-load.mjs`（§13.5.21）。本地开发机（三个 CI 变量都缺席）
+ * 自 #4613 起按 `cores/2` 铺开（16 核 ⇒ 8）；CNB 共享宿主机与 GA 档见该文件头。 */
+const WORKER_PLAN = resolveCiWorkers();
+
+/* 并发档同样要读得出来：覆盖了（或给了坏值）念 `resolveCiWorkers()` 的那句话；
+ * 本地默认档打一整行 —— 「这一跑开几个 worker、按哪一档算的、想改找哪个旋钮」
+ * 不再藏在配置注释里（ISSUE #4613 的第 2 条期望）。CI 侧不加行：那边的 stage 日志
+ * 本就带 `--maxWorkers / 核数 / 来源` 读数（§13.5.21「读得到才算数」），别重复占预算。 */
+if (WORKER_PLAN.note) {
+  process.stdout.write(`[vitest] ${WORKER_PLAN.note}\n`);
+} else if (!isCiEnvironment(process.env)) {
+  process.stdout.write(
+    `[vitest] 本地并发档 --maxWorkers=${WORKER_PLAN.workers}（${WORKER_PLAN.cores} 核 ÷2；` +
+      "要压并发设 COMFY_CI_MAX_WORKERS=<n>，只调并发、不动任何判据）\n",
+  );
+}
+
 /* 覆盖率门槛的「登记处 ⇄ 判定开关」在**文件末尾**（ISSUE #2669）：这里先把整份配置
  * 收成一份具名对象，末尾再决定「传给 vitest 的那一份带不带 thresholds」。
  * 那 149 条门槛的**字面量一行都没动**，也没有搬家 —— 挪走的只是「谁来判」。 */
@@ -275,8 +292,10 @@ const BASE_CONFIG = defineConfig({
      * 抄到这儿就会和那份表漂移。
      * ⚠️ 这一档买到的是「红得少 + 峰值占用低」，**买不到**「红即可归因」：红仍然要先
      * `--no-file-parallelism` 隔离重跑定性（§13.6.4），别靠抬预算掩盖。
-     * 本地要临时快跑：`COMFY_CI_MAX_WORKERS=8 pnpm test`（只调并发，不动任何判据）。 */
-    maxWorkers: resolveCiWorkers().workers,
+     * 本地默认档自 #4613 起按 cores/2 铺开（16 核 ⇒ 8，文件顶部那行读数会念出来）；
+     * 机器被别的东西占着时压并发：`COMFY_CI_MAX_WORKERS=<n> pnpm test`（只调并发，
+     * 不动任何判据）。 */
+    maxWorkers: WORKER_PLAN.workers,
     /* 环境档：**默认 node，按目录把 jsdom 挂到该用的地方**（§11.17）。
      *
      * 这里曾经是一条全局 `environment: "node"` + 183 份用例各自在文件头写
