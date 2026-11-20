@@ -560,6 +560,47 @@ export async function interrupt(): Promise<void> {
   }
 }
 
+/** 让 ComfyUI 卸载已加载的模型，并可连带释放执行缓存（ISSUE #4637）。
+ *
+ *  对应 ComfyUI 自己菜单里的两个动作：`unload_models` 卸载显存里的权重；
+ *  `freeMemory=true` 连执行缓存 / 非图像内存一起释放（更彻底，下一次出图要
+ *  重新加载）。端点是 `POST /free`，挂在**根路径**（与 `/system_stats` /
+ *  `/queue` 同族，不在 `/api/` 下）。
+ *
+ *  返回 `{ ok, detail }` 信封而非抛错：卸载失败是可预期的常态档（实例刚好
+ *  退出 / 端口变了），调用方（`setting.comfyFree`）把文案直接交给界面，
+ *  不需要调用侧再包一层 try。 */
+export async function freeComfyMemory(opts: {
+  freeMemory: boolean;
+  unloadModels: boolean;
+}): Promise<{ detail: string; ok: boolean }> {
+  const base = await resolveComfyBase();
+  try {
+    const res = await fetch(`${base}/free`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        unload_models: opts.unloadModels,
+        free_memory: opts.freeMemory,
+      }),
+      // 卸载通常秒回；超时只兜「连上却不返回」的病态挂死。
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      return { ok: false, detail: `ComfyUI 拒绝了卸载请求（HTTP ${res.status}）` };
+    }
+    return {
+      ok: true,
+      detail: opts.freeMemory ? "已卸载模型并释放执行缓存" : "已卸载模型",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: `卸载请求发不出去：${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
 /* ── /system_stats ──────────────────────────────────────────────────────
  * ComfyUI 系统状态：返回 GPU（devices）与系统内存（system）容量与占用，
  * 底部状态栏据此显示显存/内存占用；进程离线时返回 null（调用方降级展示）。 */

@@ -870,18 +870,22 @@
 
 - 状态：已上线
 - 需求：ComfyUI 有**自己的屏**：运行状态、启动 / 关闭 / 打开查看、
-  每次启动的日志。与「设置 → 创作后端」（改配置）分开。
+  卸载模型 / 卸载模型和执行缓存、每次启动的日志。与「设置 → 创作后端」
+  （改配置）分开。
 - 行为与验收：归全局视图（与「当前是哪个画布项目」无关）；
   切走再切回保留滚动与全屏日志态；探不到时说出候选与原因。
   状态区与日志区上下排布（间距 24px），日志滚动区铺满下方可用高度、
   不浪费空白；状态圆点运行中带呼吸、文案加粗、地址等宽降亮；按钮层级为
   「打开查看 / 在浏览器打开」主题紫实心主按钮、「启动」幽灵档、
-  「关闭」危险档（浅红底），避免误触。
+  「关闭」危险档（浅红底），避免误触；「卸载模型 / 卸载模型和执行缓存」
+  走 outline 档，只在明确运行中可点，卸载进行中两颗互斥禁用，结果经提示条
+  反馈（对应 ComfyUI `POST /free` 的 `unload_models` / `free_memory` 两档）。
   启动日志逐行的 `[out]` / `[err]` 是标准输出 / 标准错误**流标记**、不代表是否
   出错（INFO 级日志也可能走 stderr），界面常驻一行释义；每行写入时间戳可
   一键隐藏 / 显示，隐藏只改展示、不改落盘原文与滚动跟随。
 - 落点：`src/components/studio/comfyui/ComfyuiControl.tsx`、
-  `src/components/studio/logs/RuntimeLogBox.tsx`
+  `src/components/studio/logs/RuntimeLogBox.tsx`、
+  `src/lib/comfyui/client.ts`（`freeComfyMemory`）
 
 #### FR-CU-02 就绪探测与 ensure
 

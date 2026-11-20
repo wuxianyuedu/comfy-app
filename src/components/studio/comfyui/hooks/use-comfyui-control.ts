@@ -34,10 +34,12 @@ export function useComfyuiControl() {
   const [comfyStarting, setComfyStarting] = useState(false);
   const [comfyStopping, setComfyStopping] = useState(false);
   const [comfyOpening, setComfyOpening] = useState(false);
+  const [comfyFreeing, setComfyFreeing] = useState(false);
 
   const comfyStartM = useMutation(trpc.setting.comfyStart.mutationOptions());
   const comfyStopM = useMutation(trpc.setting.comfyStop.mutationOptions());
   const comfyOpenM = useMutation(trpc.setting.comfyOpen.mutationOptions());
+  const comfyFreeM = useMutation(trpc.setting.comfyFree.mutationOptions());
 
   /* 安装形态：fs-only 的毫秒级判据 —— 不进状态轮询，与首屏同批发出。
    * 本页读它只为一件事：说清「将按哪个安装形态启动」，以及路径没配时给出口。 */
@@ -109,6 +111,36 @@ export function useComfyuiControl() {
       setComfyStopping(false);
     }
   }, [comfyStopM, comfyStatusQ, toast]);
+
+  /* ── 卸载模型 / 卸载模型和执行缓存（ISSUE #4637）────────────────
+   * 同一个端点（ComfyUI `POST /free`）的两档力度：`freeMemory=false` 只卸
+   * 显存里的模型权重；`true` 连执行缓存 / 非图像内存一起释放。共用一个
+   * busy 态 —— 两颗按钮互斥按下，避免并发发两份卸载请求。 */
+  const freeMemory = useCallback(
+    async (freeMemory: boolean) => {
+      setComfyFreeing(true);
+      try {
+        await runAsyncAction(
+          async () => {
+            const result = await comfyFreeM.mutateAsync({ freeMemory });
+            /* 卸载会改显存 / 内存占用：底部状态栏那一路统计随下一次轮询自会刷新，
+             * 这里只需把服务端给的结论交给提示条（信封 detail 优先于手写文案）。 */
+            return result;
+          },
+          {
+            report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
+            failureText: freeMemory ? "卸载模型和执行缓存失败" : "卸载模型失败",
+          },
+        );
+      } finally {
+        setComfyFreeing(false);
+      }
+    },
+    [comfyFreeM, toast],
+  );
+
+  const unloadModels = useCallback(() => freeMemory(false), [freeMemory]);
+  const unloadModelsWithCache = useCallback(() => freeMemory(true), [freeMemory]);
 
   /* ── 打开（页签内嵌 / 浏览器）───────────────────────────── */
   const openComfy = useCallback(async () => {
@@ -239,8 +271,14 @@ export function useComfyuiControl() {
     stopping: comfyStopping,
     opening: comfyOpening,
     browserOpening: openComfyInBrowserAction.busy,
+    /** 卸载动作进行中（两档共享，互斥禁用）。 */
+    freeing: comfyFreeing,
     startComfy,
     stopComfy,
+    /** 卸载已加载的模型（ComfyUI `POST /free`，`free_memory=false`）。 */
+    unloadModels,
+    /** 卸载模型并连执行缓存一起释放（`free_memory=true`，更彻底）。 */
+    unloadModelsWithCache,
     openComfy,
     openComfyInBrowser,
     /** 「立刻再问一次」—— 状态本身事件驱动，这颗是「我不信刚才那一拍」的出口。 */

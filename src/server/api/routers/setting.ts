@@ -13,6 +13,7 @@ import {
   stopComfyUiProcess,
 } from "~/lib/comfyui/lifecycle";
 import { describeComfyInstance } from "~/lib/comfyui/instance-kind";
+import { freeComfyMemory } from "~/lib/comfyui/client";
 import { describeComfyCliInterpreter } from "~/lib/comfyui/comfy-cli-python";
 import { noteComfyStateChange } from "~/lib/comfyui/state-watch";
 import { resolveDesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths.server";
@@ -181,6 +182,23 @@ export const settingRouter = createTRPCRouter({
   comfyOpen: authedProcedure.mutation(async () => {
     return openComfyUi();
   }),
+
+  /** 手动卸载 ComfyUI 已加载的模型 / 连执行缓存一起释放（ComfyUI 页按钮，ISSUE #4637）。
+   *  两档力度由 `freeMemory` 区分，`unload_models` 恒为 true（两个按钮都要卸模型）。
+   *  未运行时**不发请求**：对不存在的端口发 `/free` 只会得到一句连接失败，
+   *  这里先给可行动的提示。 */
+  comfyFree: authedProcedure
+    .input(z.object({ freeMemory: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const status = await getComfyUiStatus();
+      if (status.up !== true) {
+        return {
+          ok: false,
+          detail: "ComfyUI 未在运行，无需卸载 —— 请先点「启动 ComfyUI」",
+        };
+      }
+      return freeComfyMemory({ unloadModels: true, freeMemory: input.freeMemory });
+    }),
 
   /** ComfyUI 能否被内嵌进应用页签（「打开查看」据此决定页签里渲染什么）。必须在**服务端**探：宿主页在 WebView2
    * 里跨源读不到 ComfyUI 的响应头，iframe 的 error/load 事件也都不带失败原因 ——「被拦下」与「内容为空」在 JS

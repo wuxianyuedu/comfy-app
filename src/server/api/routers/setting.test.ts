@@ -22,6 +22,7 @@ const {
   statusMock,
   openComfyMock,
   stopComfyMock,
+  freeMemoryMock,
   describeInstanceMock,
   resolveStorageMock,
   studioProbeMock,
@@ -83,6 +84,14 @@ const {
       ok: true,
     }),
   ),
+  /** `freeComfyMemory` 的替身：`comfyFree` 是「先判运行、再委托」的接线，
+   *  委托语义与「未运行不发请求」都靠它记账。 */
+  freeMemoryMock: vi.fn<
+    (opts: {
+      freeMemory: boolean;
+      unloadModels: boolean;
+    }) => Promise<{ detail: string; ok: boolean }>
+  >(() => Promise.resolve({ ok: true, detail: "已卸载模型" })),
   describeInstanceMock: vi.fn<() => { kind: string }>(() => ({
     kind: "portable",
   })),
@@ -147,6 +156,9 @@ vi.mock("~/lib/comfyui/lifecycle", () => ({
   getComfyUiStatus: statusMock,
   openComfyUi: openComfyMock,
   stopComfyUiProcess: stopComfyMock,
+}));
+vi.mock("~/lib/comfyui/client", () => ({
+  freeComfyMemory: freeMemoryMock,
 }));
 vi.mock("~/lib/comfyui/instance-kind", () => ({
   describeComfyInstance: describeInstanceMock,
@@ -411,6 +423,29 @@ describe("setting 的状态读与进程动作", () => {
     expect(studioEnsureMock).toHaveBeenCalledTimes(1);
     expect(studioStopMock).toHaveBeenCalledTimes(1);
     expect(studioOpenMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("comfyFree：运行中委托 freeComfyMemory（unload_models 恒 true，freeMemory 透传）", async () => {
+    freeMemoryMock.mockResolvedValueOnce({ ok: true, detail: "已卸载模型并释放执行缓存" });
+    const res = await createCaller(makeCtx()).comfyFree({ freeMemory: true });
+    expect(freeMemoryMock).toHaveBeenCalledWith({ unloadModels: true, freeMemory: true });
+    expect(res).toEqual({ ok: true, detail: "已卸载模型并释放执行缓存" });
+  });
+
+  it("comfyFree：未运行时不发 /free，直接给可行动提示（ISSUE #4637）", async () => {
+    statusMock.mockResolvedValueOnce({
+      up: false,
+      base: null,
+      starting: false,
+      probing: false,
+      stopping: false,
+      port: null,
+      via: null,
+    });
+    const res = await createCaller(makeCtx()).comfyFree({ freeMemory: false });
+    expect(freeMemoryMock).not.toHaveBeenCalled();
+    expect(res.ok).toBe(false);
+    expect(res.detail).toContain("未在运行");
   });
 
   it("dbStudioStatus：探测挂了按「未运行」降级，而不是抛错把三个按钮全禁掉（#92）", async () => {
