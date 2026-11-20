@@ -23,6 +23,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestDb, seedUser, type TestDb } from "../../../tests/helpers/test-db";
 import { task } from "~/server/db/schema";
 import { isRecord } from "~/lib/is-record";
+import { LOGS_MAX_LINES } from "../comfyui/runner-state";
 import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
 import type { TaskRepoDb } from "./repository-task-impl-types";
 
@@ -712,5 +713,66 @@ describe("replaceRawCli / findRawCli", () => {
     expect(await impl.findRawCli("no-such-task")).toBeNull();
     await impl.replaceRawCli(id, []);
     expect(await impl.findRawCli(id)).toEqual([]);
+  });
+});
+
+describe("任务日志增量（#4605）：appendLogs / readLogsSince / readAllLogs / resetLogs", () => {
+  it("追加后按游标读尾段：只返回 seq 更大的行，顺序按 seq 稳定", async () => {
+    const id = await seed({ status: "RUNNING" });
+    await impl.appendLogs(id, [
+      { t: 1, level: "info", msg: "a", seq: 1 },
+      { t: 2, level: "warn", msg: "b", seq: 2 },
+      { t: 3, level: "info", msg: "c", seq: 3 },
+    ]);
+    expect((await impl.readLogsSince(id, 0)).map((r) => r.msg)).toEqual(["a", "b", "c"]);
+    expect((await impl.readLogsSince(id, 1)).map((r) => r.msg)).toEqual(["b", "c"]);
+    // 游标已到末尾 ⇒ 空数组（轮询无增量时的常态）。
+    expect((await impl.readLogsSince(id, 3)).map((r) => r.msg)).toEqual([]);
+    const all = await impl.readAllLogs(id);
+    expect(all.map((r) => r.seq)).toEqual([1, 2, 3]);
+    expect(all[0]).toMatchObject({ t: 1, level: "info", msg: "a", src: undefined });
+  });
+
+  it("src 缺省落库为 NULL、读出为 undefined；空批次是 no-op", async () => {
+    const id = await seed({ status: "RUNNING" });
+    await impl.appendLogs(id, [{ t: 5, level: "error", msg: "no-src" }]);
+    expect(await impl.readAllLogs(id)).toEqual([
+      { seq: 0, t: 5, level: "error", msg: "no-src", src: undefined },
+    ]);
+    await expect(impl.appendLogs(id, [])).resolves.toBeUndefined();
+  });
+
+  it("resetLogs 只清该任务的增量行（重跑清场），其他任务不受影响", async () => {
+    const a = await seed({ status: "RUNNING" });
+    const b = await seed({ status: "RUNNING" });
+    await impl.appendLogs(a, [{ t: 1, level: "info", msg: "a1", seq: 1 }]);
+    await impl.appendLogs(b, [{ t: 2, level: "info", msg: "b1", seq: 1 }]);
+    await impl.resetLogs(a);
+    expect(await impl.readAllLogs(a)).toEqual([]);
+    expect((await impl.readAllLogs(b)).map((r) => r.msg)).toEqual(["b1"]);
+  });
+
+  it("行数越过上限时裁到最近 LOGS_MAX_LINES 行（与内存视图同窗）", async () => {
+    // 上限是**判断**，逐字钉住；core 侧字面量不反向 import comfyui，靠本条对齐。
+    expect(LOGS_MAX_LINES).toBe(5000);
+    const id = await seed({ status: "RUNNING" });
+    for (let base = 0; base < 6; base += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- 分批是刻意串行：批边界触发裁剪，乱序会破坏 cadence 与主键顺序
+      await impl.appendLogs(
+        id,
+        Array.from({ length: 1000 }, (_, i) => ({
+          t: base * 1000 + i + 1,
+          level: "info" as const,
+          msg: `l${base * 1000 + i + 1}`,
+          seq: base * 1000 + i + 1,
+        })),
+      );
+    }
+    const all = await impl.readAllLogs(id);
+    expect(all.length).toBe(5000);
+    expect(all[0]?.seq).toBe(1001);
+    expect(all[4999]?.seq).toBe(6000);
+    // 直接数表行双保险：readAllLogs 自带 limit，别让它替裁剪打掩护。
+    expect(tdb.$tables.taskLogs.filter((r) => r.taskId === id).length).toBe(5000);
   });
 });

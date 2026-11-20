@@ -7,12 +7,14 @@
 // `TEST_CONSUMER_EXT`）。
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { LogEntry } from "./runner-state";
+import { LOGS_MAX_LINES, type LogEntry } from "./runner-state";
 
 // 把 logger / taskRepository 都先 mock 掉，避免测试路径触到真库/真日志文件；
 // 具体断言靠 configureRunner 注入的**第二层**替身完成，这两份 mock 只是「默认侧
 // 的兜底哨兵」，用来证明「configureRunner 一覆盖，就走不到它们」。
 const defaultTaskRepoMock = {
+  appendLogs: vi.fn(() => Promise.resolve(undefined)),
+  resetLogs: vi.fn(() => Promise.resolve(undefined)),
   replaceLogs: vi.fn(() => Promise.resolve(undefined)),
   replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
 };
@@ -51,6 +53,8 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
     const injectedReplace = vi.fn(() => Promise.resolve(undefined));
     mod.configureRunner({
       taskRepo: {
+        appendLogs: vi.fn(() => Promise.resolve(undefined)),
+        resetLogs: vi.fn(() => Promise.resolve(undefined)),
         replaceLogs: injectedReplace,
         replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
       },
@@ -71,6 +75,8 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
     const injectedWarn = vi.fn();
     mod.configureRunner({
       taskRepo: {
+        appendLogs: vi.fn(() => Promise.resolve(undefined)),
+        resetLogs: vi.fn(() => Promise.resolve(undefined)),
         replaceLogs: injectedReplace,
         replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
       },
@@ -97,6 +103,8 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
     // 只注入 taskRepo；log 一侧留空。
     mod.configureRunner({
       taskRepo: {
+        appendLogs: vi.fn(() => Promise.resolve(undefined)),
+        resetLogs: vi.fn(() => Promise.resolve(undefined)),
         replaceLogs: injectedReplace,
         replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
       },
@@ -145,6 +153,10 @@ describe("logWhileQueued / takeQueuedEntries", () => {
     mod.log("t-plain", "info", "执行中的一行");
     expect(mod.state().queuedEntries.has("t-plain")).toBe(false);
     expect(mod.takeQueuedEntries("t-plain")).toEqual([]);
+    /* 本例留的防抖定时器与缓冲是模块级单例的跨用例残留：到点会在后续用例的
+     * await 间隙触发落库、污染后续用例的替身调用面，用完即清。 */
+    mod.cancelPersistLogs("t-plain");
+    mod.state().logs.delete("t-plain");
   });
 
   it("落库是整包替换：收口之后再打的行必须仍带着之前的现场（不许提前删缓冲）", async () => {
@@ -152,6 +164,9 @@ describe("logWhileQueued / takeQueuedEntries", () => {
     const written: Array<Array<unknown>> = [];
     mod.configureRunner({
       taskRepo: {
+        /* 增量档（#4605）的两条边也要在：persistLogs 先追加增量、再整包写列。 */
+        appendLogs: vi.fn(() => Promise.resolve(undefined)),
+        resetLogs: vi.fn(() => Promise.resolve(undefined)),
         replaceLogs: vi.fn((_taskId: string, entries: Array<LogEntry>) => {
           written.push(entries.map((e) => e.msg));
           return Promise.resolve(undefined);
@@ -184,6 +199,14 @@ describe("logWhileQueued / takeQueuedEntries", () => {
     /* Map 的迭代顺序=插入顺序，所以最早那批先出局，而最贴近当前排队的行留着。 */
     expect(s.queuedEntries.has("t-bound-0")).toBe(false);
     expect(s.queuedEntries.has(`t-bound-${total - 1}`)).toBe(true);
+
+    /* 本例留下 69 份缓冲与未触发的落库定时器（模块级单例，跨用例存活）：到点后
+     * 会在后续用例的 await 间隙批量触发落库，污染后续用例的替身调用面，甚至把
+     * 后续用例刚写的日志从 LRU 里挤掉（实测咬掉首批的首行）。用完即清。 */
+    for (let i = 0; i < total; i += 1) {
+      mod.cancelPersistLogs(`t-bound-${i}`);
+      mod.state().logs.delete(`t-bound-${i}`);
+    }
   });
 });
 
@@ -211,6 +234,8 @@ describe("定时器回调的双重失败兜底（#4221）", () => {
     try {
       mod.configureRunner({
         taskRepo: {
+          appendLogs: vi.fn(() => Promise.resolve(undefined)),
+          resetLogs: vi.fn(() => Promise.resolve(undefined)),
           replaceLogs: () => Promise.reject(new Error("db gone")),
           replaceRawCli: () => Promise.resolve(undefined),
         },
@@ -232,5 +257,133 @@ describe("定时器回调的双重失败兜底（#4221）", () => {
       process.stderr.write = originalWrite;
       vi.useRealTimers();
     }
+  });
+});
+
+describe("任务日志增量落库（#4605）：按 seq 追加，不再整包重写", () => {
+  /** 每例自建一份注入替身（appendLogs / resetLogs 是本档新增的两条边）。 */
+  async function injectRepo() {
+    const mod = await loadRunnerState();
+    const appendLogs = vi.fn((_taskId: string, _entries: Array<LogEntry>) =>
+      Promise.resolve(undefined),
+    );
+    const resetLogs = vi.fn((_taskId: string) => Promise.resolve(undefined));
+    const replaceLogs = vi.fn((_taskId: string, _entries: Array<LogEntry>) =>
+      Promise.resolve(undefined),
+    );
+    mod.configureRunner({
+      taskRepo: {
+        appendLogs,
+        resetLogs,
+        replaceLogs,
+        replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
+      },
+      log: defaultLoggerMock,
+    });
+    return { mod, appendLogs, resetLogs, replaceLogs };
+  }
+
+  /** 本文件的若干用例会留下未清的防抖定时器，到点后会对**它们自己**的 taskId
+   * 调 appendLogs、落进本例的替身。断言只看本例 taskId 的调用，天然隔离。 */
+  function callsFor(
+    fn: { mock: { calls: Array<[string, Array<{ msg: string; seq?: number }>]> } },
+    taskId: string,
+  ): Array<Array<{ msg: string; seq?: number }>> {
+    return fn.mock.calls.filter((call) => call[0] === taskId).map((call) => call[1]);
+  }
+
+  it("flushLogsDelta 只追加「游标之后」的行；再 flush 只追新行，无增量不调用", async () => {
+    const { mod, appendLogs, replaceLogs } = await injectRepo();
+    const taskId = `t-inc-${Math.random().toString(36).slice(2, 8)}`;
+
+    mod.log(taskId, "info", "one");
+    mod.log(taskId, "info", "two");
+
+    await mod.flushLogsDelta(taskId);
+
+    const batches = callsFor(appendLogs, taskId);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.map((e) => e.msg)).toEqual(["one", "two"]);
+    expect(batches[0]?.map((e) => e.seq)).toEqual([1, 2]);
+
+    // 防抖窗口内又来的行 → 只追这一行；无新行 → 不再调用。
+    mod.log(taskId, "info", "three");
+    await mod.flushLogsDelta(taskId);
+    expect(callsFor(appendLogs, taskId)).toHaveLength(2);
+    expect(callsFor(appendLogs, taskId)[1]?.map((e) => e.msg)).toEqual(["three"]);
+
+    await mod.flushLogsDelta(taskId);
+    expect(callsFor(appendLogs, taskId)).toHaveLength(2);
+
+    // 增量路径不碰整包列写——那是收口档（persistLogs）的事。
+    expect(callsFor(replaceLogs, taskId)).toHaveLength(0);
+    mod.cancelPersistLogs(taskId);
+  });
+
+  it("persistLogs（收口档）补齐增量后，把内存视图整包写一次 task.logs 列", async () => {
+    const { mod, appendLogs, replaceLogs } = await injectRepo();
+    const taskId = `t-fin-${Math.random().toString(36).slice(2, 8)}`;
+
+    mod.log(taskId, "info", "one");
+    await mod.flushLogsDelta(taskId);
+    mod.log(taskId, "info", "two");
+    mod.log(taskId, "info", "three");
+
+    await mod.persistLogs(taskId);
+
+    const batches = callsFor(appendLogs, taskId);
+    expect(batches).toHaveLength(2);
+    expect(batches[1]?.map((e) => e.msg)).toEqual(["two", "three"]);
+    const written = callsFor(replaceLogs, taskId);
+    expect(written).toHaveLength(1);
+    expect(written[0]?.map((e) => e.msg)).toEqual(["one", "two", "three"]);
+  });
+
+  it("seq 跨轮次单调：resetLogsForRerun 清游标与表行，但行号不回退", async () => {
+    const { mod, appendLogs, resetLogs } = await injectRepo();
+    const taskId = `t-rr-${Math.random().toString(36).slice(2, 8)}`;
+
+    mod.log(taskId, "info", "run1-a");
+    mod.log(taskId, "info", "run1-b");
+    await mod.flushLogsDelta(taskId);
+
+    /* 重跑清场的真实顺序（executor-dispatch 领取段）：先重开内存缓冲，再清
+     * 增量表与游标。这里照抄——缓冲里只剩新轮次要保留的行。 */
+    mod.state().logs.set(taskId, []);
+    await mod.resetLogsForRerun(taskId);
+
+    expect(resetLogs).toHaveBeenCalledTimes(1);
+    expect(resetLogs).toHaveBeenCalledWith(taskId);
+
+    // 重跑后的第一行：seq 接着旧值往上走（不回到 1），SSE 游标因此跨轮次稳定。
+    mod.log(taskId, "info", "run2-a");
+    await mod.flushLogsDelta(taskId);
+    const batches = callsFor(appendLogs, taskId);
+    expect(batches).toHaveLength(2);
+    expect(batches[1]?.map((e) => e.seq)).toEqual([3]);
+    mod.cancelPersistLogs(taskId);
+  });
+
+  it("内存 5000 行封顶后，增量仍按 seq 对齐——已落库的行不会被再追一遍", async () => {
+    const { mod, appendLogs } = await injectRepo();
+    const taskId = `t-cap-${Math.random().toString(36).slice(2, 8)}`;
+
+    for (let i = 1; i <= LOGS_MAX_LINES + 2; i += 1) {
+      mod.log(taskId, "info", `l${i}`);
+    }
+    await mod.flushLogsDelta(taskId);
+    const batches = callsFor(appendLogs, taskId);
+    /* 内存视图 5000 行封顶（丢最旧）：首拍只能追到缓冲里还在线的那些行，
+     * 被封顶挤掉的头两行与旧行为同命（整包重写也只写这 5000 行）。 */
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.length).toBe(LOGS_MAX_LINES);
+
+    mod.log(taskId, "info", "tail");
+    await mod.flushLogsDelta(taskId);
+    const after = callsFor(appendLogs, taskId);
+    expect(after).toHaveLength(2);
+    expect(after[1]?.map((e) => e.msg)).toEqual(["tail"]);
+    expect(after[1]?.[0]?.seq).toBe(LOGS_MAX_LINES + 3);
+    mod.cancelPersistLogs(taskId);
   });
 });

@@ -65,6 +65,11 @@ export type LogEntry = {
 
   msg: string;
 
+  /** 每任务单调递增的行号（`runner-state.log()` 写入时分配，重跑清场也不回退）：
+   *  增量落库（`taskLog` 表）按它判「哪些行还没落」，SSE 轮询按它做增量游标。
+   *  旧路径（`task.logs` 列里的历史行）没有这个字段，读侧按缺省 0 处理。 */
+  seq?: number;
+
   /** 发日志时捕获的调用方位置（"文件:行"）：让调试面板能显示每行日志
    *  来自哪条代码路径。跳过捕获时为空。它作为条目的一部分一并落盘，
    *  因此 SSE 重放也带着它（实现见 log() 与 callerLoc()）。
@@ -113,9 +118,9 @@ export type RunnerState = {
    *  仅 API 格式路径需要这一对日志；comfy-cli 路径自己会打（见 executor-ws）。 */
   lastNodeByTask: Map<string, { classType: string; node: string; t: number }>;
 
-  /** taskId → 这一轮的日志缓冲。落库是整包 `replaceLogs`（不是追加），所以这一份
-   *  就是「库里那一列接下来会变成什么」的草稿，进程内活着的轮次都攒在这里，由
-   *  `LOGS_MAX_TASKS` 的 LRU 收干。 */
+  /** taskId → 这一轮的日志缓冲。落库按 seq **增量追加**进 `taskLog` 表（#4605），
+   *  收口时再把这份视图整包写一次 `task.logs` 列；进程内活着的轮次都攒在这里，
+   *  由 `LOGS_MAX_TASKS` 的 LRU 收干。 */
   logs: Map<string, Array<LogEntry>>;
 
   /** 本进程已领取、尚未收口的任务（P3 §5 ADR §14 D1 的第二刀：取代原来的

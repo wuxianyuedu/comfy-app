@@ -22,6 +22,8 @@ import { configureRunner, isDispatchedHere, markDispatched, state } from "./runn
 
 configureRunner({
   taskRepo: {
+    appendLogs: () => Promise.resolve(undefined),
+    resetLogs: () => Promise.resolve(undefined),
     replaceLogs: () => Promise.resolve(undefined),
     replaceRawCli: () => Promise.resolve(undefined),
   },

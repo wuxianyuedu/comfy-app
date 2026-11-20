@@ -484,11 +484,9 @@ export class TaskRepository extends DrizzleRepository<Task> {
   /** SSE 轮询的轻量快照：只要状态与进度这几个字段。
    *
    *  每条 SSE 连接各挂一个轮询、每几秒一次，原先用 `findById` 全行查询 ——
-   *  `workflowSnapshot`（整份工作流 JSON）与 `logs`（全量日志）单行可达数 MB，
-   *  拉回来只为了读状态和进度。 */
+   *  `workflowSnapshot`（整份工作流 JSON）单行可达数 MB，拉回来只为了读状态和进度。 */
   async findSseSnapshot(id: string): Promise<{
     error: string | null;
-    logs: unknown;
     progress: number;
     progressNode: unknown;
     resultImages: unknown;
@@ -504,13 +502,12 @@ export class TaskRepository extends DrizzleRepository<Task> {
         validationErrors: task.validationErrors,
         workflowName: task.workflowName,
         // 终态收口要带产出清单（host 模式没有进程内 done 帧，见 stream 路由）；
-        // 它是路径小数组，不破坏「不拉 workflowSnapshot/logs 大列」的轻投影契约。
+        // 它是路径小数组，不破坏「不拉 workflowSnapshot 大列」的轻投影契约。
         resultImages: task.resultImages,
-        // 3-C（ADR §13 D1/D2）：SSE 单源化后轮询要读节点进度与日志增量。
-        // 「轻量投影」的边界随之从「不含大列」改为「不含 workflowSnapshot」——
-        // 本机 sqlite-proxy（node:sqlite）单连接、单用户个位数活跃流，3s 一次可承受。
+        // 3-C（ADR §13 D1/D2）：SSE 单源化后轮询要读节点进度。日志**不在此列**
+        // （#4605）：日志增量改由 `readLogsSince` 按游标从 `taskLog` 表取尾段，
+        // 不再每 3s/连接整列读回 `task.logs`（单列 MB 级，BUSY 竞争的主要读放大源）。
         progressNode: task.progressNode,
-        logs: task.logs,
       })
       .from(task)
       .where(eq(task.id, id))
@@ -604,6 +601,17 @@ export class TaskRepository extends DrizzleRepository<Task> {
     impl.replaceRawCli(taskId, lines);
 
   findRawCli: TaskRepoImpl["findRawCli"] = (taskId) => impl.findRawCli(taskId);
+
+  /* 任务日志增量三件套（#4605）：追加 / 按游标读尾段 / 重跑清场。SQL 主体与
+   * 守卫口径见 `repository-task-impl.ts`，这里只 delegate（与上方 16 个方法同形）。 */
+  appendLogs: TaskRepoImpl["appendLogs"] = (taskId, entries) => impl.appendLogs(taskId, entries);
+
+  readLogsSince: TaskRepoImpl["readLogsSince"] = (taskId, afterSeq, limit) =>
+    impl.readLogsSince(taskId, afterSeq, limit);
+
+  readAllLogs: TaskRepoImpl["readAllLogs"] = (taskId) => impl.readAllLogs(taskId);
+
+  resetLogs: TaskRepoImpl["resetLogs"] = (taskId) => impl.resetLogs(taskId);
 
   listQueuedIds: TaskRepoImpl["listQueuedIds"] = (owner, take) => impl.listQueuedIds(owner, take);
 
