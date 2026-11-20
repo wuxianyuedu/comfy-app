@@ -194,6 +194,15 @@ jobs:
           COMFY_CI_TOOLS_ROOT: ${{ runner.temp }}\ci-tools
         run: node scripts/build/tauri-tools-cache.mjs || (node scripts/build/tauri-tools-cache.mjs --download && node scripts/build/tauri-tools-cache.mjs)
 
+      # ISSUE #4573：项目级 `src-tauri/.cargo/config.toml` 把 crates.io 换成了 rsproxy.cn
+      #（国内加速镜像，服务本机开发）。GA runner 在美国，绕道中国镜像既慢，又把「每日
+      # 打包」押在镜像站的可用性上 —— run 44653534345 就是 rsproxy 连环 504 把 cargo
+      # fetch 打死、整格红的。构建前摘掉这份项目级配置，runner 直连 crates.io（Fastly
+      # CDN）；本机开发不受影响（文件仍在库里，中国侧照走镜像）。
+      - name: cargo 源回归 crates.io（美国 runner 不绕国内镜像，#4573）
+        shell: bash
+        run: rm -f src-tauri/.cargo/config.toml
+
       - name: 桌面成品构建（cnb 同款判据一字不改）
         run: pnpm tauri build
 
