@@ -5,18 +5,11 @@
 
 import { TRPCError } from "@trpc/server";
 import { clamp } from "~/lib/clamp";
-import { sleep } from "~/lib/with-timeout";
 import "server-only";
 import { db } from "~/lib/db";
-import {
-  filmRepository,
-  filmShotRepository,
-  skillRepository,
-  taskRepository,
-} from "~/lib/core/repository";
+import { filmRepository, filmShotRepository, skillRepository } from "~/lib/core/repository";
 import { productionRepository } from "~/lib/core/repository-production";
 import { logger } from "~/lib/core/logger";
-import { isSchemaReady } from "~/lib/db-schema-ready";
 import { isProjectType } from "~/lib/workshop/types";
 import type { Shot } from "~/lib/workshop/types";
 import { asRecord } from "~/lib/is-record";
@@ -31,12 +24,10 @@ import { getLLMConfig, completeLLMStructured } from "~/lib/llm/server";
 import { errorText } from "~/lib/error-message";
 /* 镜头尺寸表达 → 像素的折算在读载荷时还要用（合成那半段搬到 compose-film.ts 了）。 */
 import { toSizeSpec } from "~/lib/media/size-presets";
-/* 状态族的一份定义（视图层与服务端共用，见那份模块的文件头）：这里只 import，不再抄一份。 */
-import type { ShotStatus } from "~/lib/film/film-status";
-/* 合成与「回写统一项目」是同一格（只搬合成会成环，判据见 compose-film.ts 文件头）；
- * 行日志那一份两侧都要用，所以它在 film-log.ts 这个叶子上。 */
+/* 行日志那一份两侧（编排与监看）都要用，所以它在 film-log.ts 这个叶子上。 */
 import { appendFilmLog } from "./film-log";
-import { composeFilm } from "./compose-film";
+/* 监看（无响应看门狗 / 超时收口 / 重启恢复扫描）在 film-watch.ts，这里只取入口。 */
+import { watchFilm } from "./film-watch";
 
 export type FilmShotInput = {
   heading?: string;
@@ -92,9 +83,6 @@ function isShotArray(v: unknown): v is Array<Shot> {
 
 // 执行进度的 resultImages 是 JSON 列（unknown）：只判「是数组」这层，
 // 元素字段（mediaType / localPath）按可选字段读，不认的形状回落空数组。
-function isResultImages(v: unknown): v is Array<{ localPath?: string; mediaType?: unknown }> {
-  return Array.isArray(v);
-}
 
 // ── script → storyboard ────────────────────────────────────
 const ShotSchema = z.object({
@@ -428,6 +416,11 @@ export async function startFilm(id: string) {
     throw new TRPCError({ code: "NOT_FOUND", message: "影片不存在" });
   }
 
+  /* 重跑恢复口（#4595）：影片被判 FAILED（含监看超时）后，把失败镜头重置回
+   * IDLE 再领——已 SUCCEEDED 的镜头保留视频不重跑，只补没完成的那些。 */
+  if (film.status === "FAILED") {
+    await filmShotRepository.markFailedShotsIdle(id);
+  }
   const shots = await filmShotRepository.listByFilm(id, { status: "IDLE" });
   if (!shots.length) {
     throw new TRPCError({
@@ -504,305 +497,8 @@ export async function startFilm(id: string) {
   void watchFilm(id);
 }
 
-// ── watch + update ──────────────────────────────────────────
-/* 监看循环的两项常量。写在一起是因为**给用户看的预算文案必须与判据同源**：
- * 上一版把「~16 min」写在注释里、把「超过 16 分钟」写在报错文案里，改一个
- * 另一个不会跟着改。 */
-const WATCH_POLL_MS = 4000;
-const WATCH_MAX_ITER = 240;
-const WATCH_BUDGET_MIN = Math.round((WATCH_POLL_MS * WATCH_MAX_ITER) / 60_000);
-
-/* **监看在飞表**（跨模块实例）：`watchFilm` 是被 `void` 起的常驻循环，dev 热重启不杀旧 promise 链，
- * 新实例又会被 boot 扫描起一条 ⇒ 同一部影片两个监看同时写进度、都调 `composeFilm`（`markComposing`
- * 无条件写）⇒ 被 ffmpeg 合成两次。所以必须放在跨 HMR 仍活着的地方。键名带版本号是既定的坑：`??=`
- * 只认键名，不会给旧单例补字段（同 `runner-state`）。 */
-declare global {
-  var filmWatchInFlight_v1: Map<string, Promise<void>> | undefined;
-}
-
-function inFlightFilms(): Map<string, Promise<void>> {
-  globalThis.filmWatchInFlight_v1 ??= new Map<string, Promise<void>>();
-  return globalThis.filmWatchInFlight_v1;
-}
-
-/** 监看一部影片直到出片 / 判失败；同一部影片在本进程内**至多一条**循环。
- *
- *  「取消后立刻重新开始」的交接（ISSUE #3867）：旧循环要等下一拍轮询才发现
- *  CANCELLED 退场，此时新 startFilm 的监看若直接早退，旧循环退场后就**没有
- *  任何人**在监看这部重新置为 GENERATING 的影片——进度永停、不合成也不判
- *  失败，只能等进程重启被恢复扫描捡回。改为「等旧循环退场 → 重读状态 →
- *  仍 GENERATING 才起新循环」的交接语义。 */
-async function watchFilm(id: string, opts: { resumed?: boolean } = {}): Promise<void> {
-  const inFlight = inFlightFilms();
-  const previous = inFlight.get(id);
-  if (previous) {
-    await previous.catch(() => undefined);
-    /* 交接重读失败（DB 撞锁等）只让位退场，不把 rejection 冒给调用点（#4220）：
-     * 本条循环不起最坏也只是影片停在 GENERATING，boot 恢复扫描会接回；
-     * 让 rejection 打崩进程的代价不成比例。 */
-    try {
-      const film = await filmRepository.findById(id);
-      if (film?.status !== "GENERATING") {
-        return;
-      }
-    } catch (error) {
-      logger.warn(`[film] ${errorText(error, "监看交接重读失败，本条循环让位")}`);
-      return;
-    }
-  }
-  if (inFlightFilms().has(id)) {
-    /* 等旧循环退场期间，别的调用方已经起新循环：让位。 */
-    return;
-  }
-  const loop = watchLoop(id, opts)
-    .catch(async (error: unknown) => {
-      /* 监看循环的任何 rejection 都就地收口（ISSUE #4216）：这是 `void` 起的
-       * 常驻后台链，冒出去就是 unhandledRejection（进程级事故，#4146 那类
-       * 「服务莫名断开」的又一来源）。失败要让用户看见：影片日志记 error、
-       * 影片判 FAILED（不留 GENERATING 假活）。收口自身可能正踩在故障路径上
-       * （DB BUSY / 磁盘），再各兜一层，不让收口自己变成新的漏网口。 */
-      const detail = errorText(error, "成片监看循环异常终止");
-      logger.error(`[film] 监看循环异常终止（film=${id}）：${detail}`);
-      try {
-        await appendFilmLog(id, "error", `监看循环异常终止：${detail}`);
-      } catch {
-        /* 日志路径本身失败时不再冒泡 */
-      }
-      try {
-        await filmRepository.markFailed(id, detail);
-      } catch {
-        /* 同上 */
-      }
-    })
-    .finally(() => {
-      if (inFlightFilms().get(id) === loop) {
-        inFlightFilms().delete(id);
-      }
-    });
-  inFlightFilms().set(id, loop);
-  return loop;
-}
-
-async function watchLoop(id: string, opts: { resumed?: boolean }) {
-  if (opts.resumed === true) {
-    /* 续跑要在行日志里留痕：否则用户看到的是「重启之后它自己动起来了」，
-     * 而支持现场需要据这一行判断「是 boot 扫描接上的，还是原循环还活着」。 */
-    await appendFilmLog(id, "info", `进程重启后续跑监看（本轮预算 ${WATCH_BUDGET_MIN} 分钟）`);
-  }
-  for (let i = 0; i < WATCH_MAX_ITER; i++) {
-    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-    const film = await filmRepository.findById(id);
-    if (!film || film.status === "CANCELLED" || film.status === "FAILED") {
-      return;
-    }
-    if (film.status !== "GENERATING") {
-      // 已经走掉了（例如合成已开始）
-    }
-
-    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-    const shots = await filmShotRepository.listByFilm(id);
-    /* 一行镜头都没有的 GENERATING 只可能是「`markGenerating` 之后、逐镜提交之前」
-     * 崩在这里。这条状态在本刀之前不可达（监看只由 `startFilm` 起，那时 shots 必然
-     * 非空），而 boot 续跑扫描会把它捡起来 —— 不判掉就是 `0/0` 的 NaN 进度，
-     * 然后带着一条空时间线去合成。 */
-    if (!shots.length) {
-      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      await filmRepository.markFailed(id, "没有可继续的镜头");
-      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      await appendFilmLog(
-        id,
-        "error",
-        "监看发现这部影片一个镜头都没有（在逐镜提交之前就中断了），已判失败：请重新创建镜头后再点「开始生成」。",
-      );
-      return;
-    }
-    let pending = 0;
-    let done = 0;
-    let failed = 0;
-
-    /* 先把「不用再问数据库」的镜头结清（没有 taskId 的、已终态的），剩下的
-     * **一次性**批量取进度：原先是逐镜头 `await findExecutionProgress`，一轮
-     * 就是 2N 次往返（N = 镜头数），跑满 240 轮是上万次查询。 */
-    const awaiting: Array<(typeof shots)[number]> = [];
-    for (const shot of shots) {
-      /* **先判终态、再判 taskId**，顺序是判据：原先是 `if (!shot.taskId) { pending++; continue }` 打头，
-       * 于是「已终态但没有任务」的镜头被数成还在等 —— 那种行真实存在（提交 catch 落的 `markFailed`
-       * 无 taskId、重跑也带已完成旧镜头）。后果是**永不收口**：pending 恒非 0 ⇒ 不合成也不判失败，
-       * 轮询到预算耗尽才落「生成超时」（实测一个 SUCCEEDED 无 taskId 就让影片停在 progress 50）。 */
-      if (shot.status === "SUCCEEDED" || shot.status === "FAILED") {
-        if (shot.status === "SUCCEEDED") {
-          done++;
-        } else {
-          failed++;
-        }
-        continue;
-      }
-      if (shot.taskId === null || shot.taskId === "") {
-        pending++;
-        continue;
-      }
-      awaiting.push(shot);
-    }
-
-    const taskIds: Array<string> = [];
-    for (const shot of awaiting) {
-      if (shot.taskId !== null && shot.taskId !== "") {
-        taskIds.push(shot.taskId);
-      }
-    }
-    const progressById = new Map(
-      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      (await taskRepository.findExecutionProgressMany(taskIds)).map(
-        /* SAFETY: 类型断言已复核 */
-        (row) => [row.id, row] as const,
-      ),
-    );
-
-    for (const shot of awaiting) {
-      const task =
-        shot.taskId !== null && shot.taskId !== "" ? progressById.get(shot.taskId) : undefined;
-      if (!task) {
-        pending++;
-        continue;
-      }
-      const map: Record<string, ShotStatus> = {
-        QUEUED: "QUEUED",
-        RUNNING: "RUNNING",
-        SUCCEEDED: "SUCCEEDED",
-        FAILED: "FAILED",
-        CANCELLED: "FAILED",
-      };
-      const next = map[task.status] ?? "QUEUED";
-      let videoPath: string | undefined;
-      let duration: number | undefined;
-      if (next === "SUCCEEDED") {
-        const imgs = isResultImages(task.resultImages) ? task.resultImages : [];
-
-        const vid = imgs.find((img) => img.mediaType === "video") ?? imgs[0];
-
-        videoPath = vid?.localPath;
-
-        // 同 generateVideoShot：params 当成宽松对象读，帧数/fps 逐字段 typeof 校验。
-        const params: Record<string, unknown> = asRecord(shot.params ?? {}) ?? {};
-
-        const frames = typeof params.frames === "number" ? params.frames : 49;
-        const fps = typeof params.fps === "number" ? params.fps : 16;
-        duration = typeof params.duration === "number" ? params.duration : frames / fps;
-      }
-
-      /* 只在真的变了才写：原先每轮对每个在跑的镜头都无条件 UPDATE，绝大多数
-       * 轮次写进去的是与库里一模一样的值。 */
-      const nextProgress = task.progress;
-      if (shot.status !== next || shot.progress !== nextProgress) {
-        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        await filmShotRepository.updateFromTask(shot.id, {
-          status: next,
-          progress: nextProgress,
-          videoPath: videoPath ?? undefined,
-          duration: duration ?? null,
-        });
-      }
-      if (next === "SUCCEEDED") {
-        done++;
-      } else if (next === "FAILED") {
-        failed++;
-      } else {
-        pending++;
-      }
-    }
-
-    const total = shots.length;
-    const progress = Math.round(((done + failed) / total) * 100);
-    /* 续写/收口前重读影片状态（ISSUE #3867）：拍首读到的还不是 CANCELLED，
-     * 用户可能在取进度期间点了取消——取消是用户终态，不再续写进度、
-     * 也不进入判失败/合成那一段。 */
-    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：收口动作前必须拿到最新状态
-    const current = await filmRepository.findById(id);
-    const status = current?.status;
-    if (status === undefined || status === "CANCELLED" || status === "FAILED") {
-      return;
-    }
-    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-    await filmRepository.updateProgress(id, progress);
-
-    if (pending === 0) {
-      if (failed > 0 && done === 0) {
-        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        await filmRepository.markFailed(id, `${failed} 个镜头生成失败`);
-        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        await appendFilmLog(id, "error", `影片生成失败：${failed} 个镜头失败`);
-        return;
-      }
-      // 成功（或部分成功）→ 合成
-      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      await composeFilm(id);
-      return;
-    }
-    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-    await sleep(WATCH_POLL_MS);
-  }
-  await filmRepository.markFailed(id, "生成超时");
-  await appendFilmLog(id, "error", `影片生成超时（本轮监看超过 ${WATCH_BUDGET_MIN} 分钟）`);
-}
-
-/**
- * 进程重启后的恢复扫描：把丢了监看主体的影片接回去（P3 §5 ADR 的 5-A）。`startFilm` 末尾的
- * `watchFilm` 起的循环只活在**当前进程**，dev 热重启与桌包重启都会让它消失 —— 而任务还在库里由执行侧
- * 推进（宿主不跟 Next 一起死，ADR §14 D1）。没人监看 ⇒ 影片永远停在 `GENERATING`；返回值只给日志与用例。
- */
-export async function resumeStalledFilms(): Promise<{
-  abandoned: Array<string>;
-  resumed: Array<string>;
-}> {
-  /* 表还没建就整轮跳过，与回收器同一口径（`sweepOnce` 也判这条）：哨兵表是 `task`，首启一次应用整套
-   * DDL ⇒ `task` 在时 `filmProject` 也在。「表在、查询失败」不在这里吞，走下面的 catch、Warn 但仍不炸
-   * 启动。这条扫描是**一次性**的，跳过了要等下次重启才有人接片，所以必须留痕，否则现场只看到影片停在生成中。 */
-  if (!isSchemaReady()) {
-    logger.info("[film] 重启恢复扫描跳过（表还没建就绪）");
-    return { resumed: [], abandoned: [] };
-  }
-
-  const resumed: Array<string> = [];
-  const abandoned: Array<string> = [];
-
-  try {
-    for (const film of await filmRepository.listByStatus(["GENERATING"])) {
-      /* 本进程已有循环在跑（HMR 之后旧循环还活着）就不再起第二条 ——
-       * 判据与 `watchFilm` 内部那道是同一份在飞表，两处各自判就会漂开。 */
-      if (inFlightFilms().has(film.id)) {
-        continue;
-      }
-      resumed.push(film.id);
-      void watchFilm(film.id, { resumed: true });
-    }
-
-    /* COMPOSING **不**续跑，直接判掉。`composeFilm` 一见到 COMPOSING 就早退
-     * （`status === "COMPOSING" || "DONE"` 那条），而它是**无条件**写进去的状态，
-     * 于是崩在合成中的影片连界面上「重新合成」这个唯一出口都被自己挡住 ——
-     * 判成 FAILED 才把出口接回来（FAILED 是 `composeFilm` 允许重跑的状态），
-     * 而不是开机时静默重跑 ffmpeg（用户没要求却开始占 CPU 写文件）。 */
-    for (const film of await filmRepository.listByStatus(["COMPOSING"])) {
-      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      await filmRepository.markFailed(film.id, "合成中断（进程在合成期间退出）");
-      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      await appendFilmLog(
-        film.id,
-        "error",
-        "合成在进程重启时被打断，已判失败。镜头视频仍在，点「重新合成」可再来一次（需要本机装有 ffmpeg）。",
-      );
-      abandoned.push(film.id);
-    }
-  } catch (error) {
-    logger.warn(`[film] ${errorText(error, "resumeStalledFilms 失败（重启恢复扫描）")}`);
-  }
-
-  if (resumed.length || abandoned.length) {
-    logger.info(
-      `[film] 重启恢复扫描：续跑监看 ${resumed.length} 部，合成中断判失败 ${abandoned.length} 部`,
-    );
-  }
-  return { resumed, abandoned };
-}
+// ── watch + update：拆到 film-watch.ts（文件行数硬闸，#4595）─────────
+export { resumeStalledFilms } from "./film-watch";
 
 // ── cancel ──────────────────────────────────────────────────
 export async function cancelFilm(id: string) {

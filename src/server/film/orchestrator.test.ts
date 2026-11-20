@@ -13,7 +13,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const filmRepo = vi.hoisted(() => ({
   findById: vi.fn<(id: string) => Promise<unknown>>(),
   markComposing: vi.fn((_id: string) => undefined),
-  markFailed: vi.fn((_id: string, _detail?: string) => undefined),
+  markFailed: vi.fn((_id: string, _detail?: string, _tx?: unknown) => undefined),
   markCancelled: vi.fn((_id: string) => undefined),
   markDone: vi.fn((_id: string, _path: string) => undefined),
   updateProgress: vi.fn((_id: string, _progress: number) => undefined),
@@ -45,6 +45,7 @@ const shotRepo = vi.hoisted(() => ({
   listByFilm: vi.fn<() => Promise<Array<unknown>>>(() => Promise.resolve([])),
   listActiveWithTask: vi.fn<() => Promise<Array<ShotRow>>>(() => Promise.resolve([])),
   markAllActiveFailed: vi.fn((_filmId: string) => undefined),
+  markFailedShotsIdle: vi.fn((_filmId: string) => undefined),
   markQueued: vi.fn((_shotId: string, _taskId: string) => undefined),
   markFailed: vi.fn((_shotId: string) => undefined),
   updateFromTask: vi.fn((_shotId: string, _patch: unknown) => undefined),
@@ -114,6 +115,12 @@ vi.mock("~/lib/comfyui/enqueue", () => ({
 }));
 vi.mock("~/lib/comfyui/firstframe", () => ({
   synthesizeFirstFrame: synthFirstFrameMock,
+}));
+/* 监看循环的 4 秒轮询在测试里不能真睡：几百轮预算的判决面用例（#4595）靠
+ * 把 sleep 桩成空转才跑得动。withTimeoutResult 等其余导出保持原实现。 */
+vi.mock("~/lib/with-timeout", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  sleep: vi.fn(() => Promise.resolve(undefined)),
 }));
 vi.mock("~/lib/workshop/script-parser", () => ({
   parseIdeaToScenes: vi.fn(() => []),
@@ -220,6 +227,145 @@ describe("cancelFilm — 取消要撤到任务层，不能只改界面状态", (
 
     expect(cancelTaskMock).toHaveBeenCalledTimes(2);
     expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1", expect.anything());
+  });
+});
+
+describe("watchLoop 超时收口（#4595）— 撤在飞任务、镜头落失败、留重跑出口", () => {
+  function seedShot(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "s1",
+      taskId: "t1",
+      status: "RUNNING",
+      progress: 0,
+      order: 0,
+      prompt: "镜头",
+      negative: null,
+      params: {},
+      ...overrides,
+    };
+  }
+
+  it("健康长任务不误判：进度持续移动时跑过旧固定预算仍不判死", async () => {
+    /* 旧口径 240 轮（16 分钟）固定总预算：单镜渲染超过 16 分钟即被误判。
+     * 这里让进度每轮 +1（健康在跑），跑到 300 轮（> 240）才由用户取消退场
+     * —— 看门狗不许响，也不撤任务。 */
+    filmRepo.listByStatus.mockImplementation((statuses: ReadonlyArray<string>) =>
+      Promise.resolve(statuses.includes("GENERATING") ? [{ id: "f1", status: "GENERATING" }] : []),
+    );
+    let reads = 0;
+    filmRepo.findById.mockImplementation(() => {
+      reads += 1;
+      return Promise.resolve({ id: "f1", status: reads > 600 ? "CANCELLED" : "GENERATING" });
+    });
+    shotRepo.listByFilm.mockResolvedValue([seedShot()]);
+    let progress = 0;
+    taskRepo.findExecutionProgressMany.mockImplementation((ids: Array<string>) => {
+      progress = Math.min(98, progress + 1);
+      return Promise.resolve(
+        ids.map((id) => ({ id, status: "RUNNING", progress, resultImages: null })),
+      );
+    });
+
+    await resumeStalledFilms();
+    await vi.waitFor(
+      () => {
+        expect(reads).toBeGreaterThanOrEqual(601);
+      },
+      { timeout: 15_000 },
+    );
+
+    expect(filmRepo.markFailed).not.toHaveBeenCalled();
+    expect(cancelTaskMock).not.toHaveBeenCalled();
+    expect(filmRepo.updateProgress.mock.calls.length).toBe(300);
+  });
+
+  it("无响应看门狗：状态与进度零变化连续 900 轮 ⇒ 判超时、撤在飞任务、镜头落失败", async () => {
+    /* 6 镜：绝对上限（240 + 6×600 轮）远在无响应档（900 轮）之后，保证这一格
+     * 走的是看门狗而不是绝对上限。 */
+    filmRepo.listByStatus.mockImplementation((statuses: ReadonlyArray<string>) =>
+      Promise.resolve(statuses.includes("GENERATING") ? [{ id: "f1", status: "GENERATING" }] : []),
+    );
+    filmRepo.findById.mockResolvedValue({ id: "f1", status: "GENERATING" });
+    shotRepo.listByFilm.mockResolvedValue(
+      Array.from({ length: 6 }, (_, i) => seedShot({ id: `s${i}`, taskId: `t${i}` })),
+    );
+    taskRepo.findExecutionProgressMany.mockImplementation((ids: Array<string>) =>
+      Promise.resolve(
+        ids.map((id) => ({ id, status: "RUNNING", progress: 30, resultImages: null })),
+      ),
+    );
+    shotRepo.listActiveWithTask.mockResolvedValue([{ id: "s0", taskId: "t0" }]);
+
+    await resumeStalledFilms();
+    await vi.waitFor(
+      () => {
+        expect(filmRepo.markFailed).toHaveBeenCalled();
+      },
+      { timeout: 15_000 },
+    );
+
+    expect(filmRepo.markFailed).toHaveBeenCalledWith(
+      "f1",
+      expect.stringContaining("没有任何进展"),
+      expect.anything(),
+    );
+    expect(cancelTaskMock).toHaveBeenCalledWith("t0");
+    expect(shotRepo.markAllActiveFailed).toHaveBeenCalledWith("f1", expect.anything());
+    /* 行日志的出口断言不走 objectContaining 嵌套（判据面里会判成不安全赋值）：
+     * 直接把收到的 (level, msg) 摊开比。 */
+    const errorLogs = filmRepo.appendLog.mock.calls.filter(([, entry]) => entry.level === "error");
+    expect(errorLogs.map(([, entry]) => entry.msg).join("\n")).toContain("只重跑没完成的镜头");
+  });
+
+  it("绝对上限耗尽（单镜卡死）：同样撤任务收口，不留下占执行槽的孤儿", async () => {
+    filmRepo.listByStatus.mockImplementation((statuses: ReadonlyArray<string>) =>
+      Promise.resolve(statuses.includes("GENERATING") ? [{ id: "f1", status: "GENERATING" }] : []),
+    );
+    filmRepo.findById.mockResolvedValue({ id: "f1", status: "GENERATING" });
+    shotRepo.listByFilm.mockResolvedValue([seedShot()]);
+    taskRepo.findExecutionProgressMany.mockResolvedValue([
+      { id: "t1", status: "RUNNING", progress: 0, resultImages: null },
+    ]);
+    shotRepo.listActiveWithTask.mockResolvedValue([{ id: "s1", taskId: "t1" }]);
+
+    await resumeStalledFilms();
+    await vi.waitFor(
+      () => {
+        expect(filmRepo.markFailed).toHaveBeenCalled();
+      },
+      { timeout: 15_000 },
+    );
+
+    expect(filmRepo.markFailed).toHaveBeenCalledWith(
+      "f1",
+      expect.stringContaining("绝对上限"),
+      expect.anything(),
+    );
+    expect(cancelTaskMock).toHaveBeenCalledWith("t1");
+  });
+});
+
+describe("startFilm 重跑恢复口（#4595）— FAILED 影片只重跑失败镜头", () => {
+  it("先把失败镜头重置回 IDLE，再只提交这些镜头（已成功的保留视频不重跑）", async () => {
+    filmRepo.findById
+      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "FAILED" })
+      .mockResolvedValueOnce({ id: "f1", userId: "u1", status: "GENERATING" })
+      .mockResolvedValue({ id: "f1", userId: "u1", status: "CANCELLED" });
+    shotRepo.listByFilm.mockResolvedValue([
+      {
+        id: "s2",
+        order: 0,
+        prompt: "海边日落",
+        negative: null,
+        params: { videoWorkflowId: "wf-v", imageWorkflowId: "wf-i" },
+      },
+    ]);
+
+    await startFilm("f1");
+
+    expect(shotRepo.markFailedShotsIdle).toHaveBeenCalledWith("f1");
+    expect(createRunTaskMock).toHaveBeenCalledTimes(1);
+    expect(shotRepo.markQueued).toHaveBeenCalledWith("s2", "task-1");
   });
 });
 
@@ -770,7 +916,8 @@ describe("监看交接与收口的增量（#4220）", () => {
   });
 
   it("源码形态：收口走 watchFilm 的 .catch（#4216），交接守卫在场（#4220）", () => {
-    const src = readFileSync(path.join(import.meta.dirname, "orchestrator.ts"), "utf8");
+    /* 监看循环本体在 film-watch.ts（#4595 拆分）：收口与交接守卫的源码形态在那一份里。 */
+    const src = readFileSync(path.join(import.meta.dirname, "film-watch.ts"), "utf8");
     expect(src).toContain("监看循环异常终止");
     expect(src).toContain("监看交接重读失败");
   });
