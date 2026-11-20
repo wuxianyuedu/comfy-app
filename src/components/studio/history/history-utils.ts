@@ -12,19 +12,16 @@ export function timeAgo(iso: string): string {
 }
 
 export type StatusStyle = {
-  // 左缘 3px accent（Tailwind border-l-4 系列）
-  accentCls: string;
-  // 整卡边框（失败/进行中/排队中加深）
-  cardBorderCls: string;
   // 失败错误转修复建议
   failureSuggestion?: (err?: string | null) => string;
   isActive: boolean;
   label: string;
-  pillCls: string;
   showProgress: boolean;
+  // 状态语义色（bg 档）：左缘短条与头像状态角标共用同一出处（状态 → 配色单点）
+  toneCls: string;
 };
 
-/** 任务状态 → pill / 左缘 accent / 卡边框样式（**状态语义**，全部走语义 token）。
+/** 任务状态 → 角标 / 左缘短条样式（**状态语义**，全部走语义 token）。
  *  §4.11.1 + P71：`--color-destructive` / `--color-success` / `--color-primary`
  *  / `--color-info` 等 token 内部已含浅/深两态，不再写 `dark:` 手写档；这也让
  *  状态色与其他域（log 徽标 / status-badge / alert）同源，改主题一处生效全站。 */
@@ -33,9 +30,7 @@ export type StatusStyle = {
  * 连 `STATUS_STYLE.QUEUED` 本身也是 `StatusStyle | undefined`）。 */
 export const QUEUED_STATUS_STYLE: StatusStyle = {
   label: "排队中",
-  pillCls: "bg-info/15 text-info-strong border border-info/30 border-dashed",
-  accentCls: "border-l-info",
-  cardBorderCls: "border-info/30 border-dashed",
+  toneCls: "bg-info",
   isActive: true,
   showProgress: false,
 };
@@ -44,34 +39,26 @@ export const STATUS_STYLE: Record<string, StatusStyle> = {
   QUEUED: QUEUED_STATUS_STYLE,
   RUNNING: {
     label: "生成中",
-    pillCls: "bg-primary/20 text-primary-strong",
-    accentCls: "border-l-primary",
-    cardBorderCls: "border-primary/30",
+    toneCls: "bg-primary",
     isActive: true,
     showProgress: true,
   },
   SUCCEEDED: {
     label: "已完成",
-    pillCls: "bg-success/15 text-success-strong",
-    accentCls: "border-l-success",
-    cardBorderCls: "border-border-subtle",
+    toneCls: "bg-success",
     isActive: false,
     showProgress: false,
   },
   FAILED: {
     label: "失败",
-    pillCls: "bg-destructive/15 text-destructive",
-    accentCls: "border-l-destructive",
-    cardBorderCls: "border-destructive/30",
+    toneCls: "bg-destructive",
     isActive: false,
     showProgress: false,
     failureSuggestion: (err) => suggestFix(err),
   },
   CANCELLED: {
     label: "已取消",
-    pillCls: "bg-surface-2 text-ink-faint",
-    accentCls: "border-l-gray-500",
-    cardBorderCls: "border-border-subtle",
+    toneCls: "bg-gray-500",
     isActive: false,
     showProgress: false,
   },
