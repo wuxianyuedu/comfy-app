@@ -217,6 +217,59 @@ describe("VideoStudio API 通道出口", () => {
     expect(mockedPoll).toHaveBeenCalledWith("remote-1");
   });
 
+  it("API 轮询单次 5xx 不判失败：下一拍拿到 url 仍落 done（#4608）", async () => {
+    const user = userEvent.setup();
+    const { onShotsChange } = renderStudio({ shots: [makeShot()] });
+    await switchToApi(user);
+    mockedSubmit.mockResolvedValue({ remoteTaskId: "remote-1" });
+    mockedPoll
+      .mockRejectedValueOnce(new Error("API 视频轮询失败 (500)"))
+      .mockResolvedValueOnce({ url: "/api/materials/remote.mp4", pending: false });
+
+    await user.click(screen.getByRole("button", { name: "生成片段" }));
+    await expect
+      .poll(() => lastPatchedShot(onShotsChange))
+      .toMatchObject({
+        clipStatus: "done",
+        clipUrl: "/api/materials/remote.mp4",
+      });
+    expect(mockedPoll).toHaveBeenCalledTimes(2);
+  });
+
+  it("API 轮询的失败计数是「连续」：中间一拍 pending 会清零（#4608）", async () => {
+    const user = userEvent.setup();
+    const { onShotsChange } = renderStudio({ shots: [makeShot()] });
+    await switchToApi(user);
+    mockedSubmit.mockResolvedValue({ remoteTaskId: "remote-1" });
+    mockedPoll
+      .mockRejectedValueOnce(new Error("抖动一"))
+      .mockResolvedValueOnce({ pending: true })
+      .mockRejectedValueOnce(new Error("抖动二"))
+      .mockResolvedValueOnce({ url: "/api/materials/remote.mp4", pending: false });
+
+    await user.click(screen.getByRole("button", { name: "生成片段" }));
+    await expect
+      .poll(() => lastPatchedShot(onShotsChange))
+      .toMatchObject({
+        clipStatus: "done",
+        clipUrl: "/api/materials/remote.mp4",
+      });
+    expect(mockedPoll).toHaveBeenCalledTimes(4);
+  });
+
+  it("API 轮询连续三次请求级失败才落 failed，提示带连续次数（#4608）", async () => {
+    const user = userEvent.setup();
+    const { onShotsChange } = renderStudio({ shots: [makeShot()] });
+    await switchToApi(user);
+    mockedSubmit.mockResolvedValue({ remoteTaskId: "remote-1" });
+    mockedPoll.mockRejectedValue(new Error("上游 503"));
+
+    await user.click(screen.getByRole("button", { name: "生成片段" }));
+    await expect.poll(() => lastPatchedShot(onShotsChange).clipStatus).toBe("failed");
+    expect(mockedPoll).toHaveBeenCalledTimes(3);
+    expect(screen.getByText(/连续失败 3 次/)).toBeTruthy();
+  });
+
   it("API 提交失败：错误进行内 Alert 并把片段置 failed", async () => {
     const user = userEvent.setup();
     const { onShotsChange } = renderStudio({ shots: [makeShot()] });
