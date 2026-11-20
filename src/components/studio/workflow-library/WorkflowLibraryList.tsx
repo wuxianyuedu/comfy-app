@@ -413,10 +413,13 @@ function WorkflowListItem({
       </div>
 
       {(workflow.taskType || (workflow.modelTags?.length ?? 0) > 0 || mountCount > 0) && (
-        <div className="mt-1 flex min-w-0 items-center gap-1.5">
+        /* flex-wrap：徽标多时（如参考图挂载，#4593）折到下一行，不挤爆行宽——
+         * 行高由 measureElement 量到真值，虚拟滚动不受影响。 */
+        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
           <TaskTypeChip taskType={workflow.taskType} />
           {mountCount > 0 && (
             <ListBadge
+              className="shrink-0"
               title={`参考图挂载在 ${mountCount} 个节点上；节点名见详情「参考图装载」页签`}
               tone="neutral"
             >
