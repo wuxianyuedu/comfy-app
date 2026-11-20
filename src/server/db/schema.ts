@@ -334,6 +334,11 @@ export const workflowTemplate = sqliteTable(
     paramMap: text("paramMap", { mode: "json" }),
     workflowIO: text("workflowIO", { mode: "json" }),
     rawJson: text("rawJson", { mode: "json" }),
+    /* 列表行的「RAW 原件有内容」物化列（#4557）：workflow.list 不再把 rawJson
+     * 大列整批拉进列表（单行可达数 MB），hasRaw 由仓储在写入 rawJson 时物化
+     * （与 hasRawContent 同一口径：rawJson.nodes 是非空数组）。存量行为 NULL，
+     * 列表查询按用户惰性回填一次。 */
+    hasRaw: integer("hasRaw", { mode: "boolean" }),
     positions: text("positions", { mode: "json" }),
     sourcePath: text("sourcePath"),
     sourceChecksum: text("sourceChecksum"),

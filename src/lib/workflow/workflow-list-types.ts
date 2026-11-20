@@ -17,7 +17,6 @@
  *   · `paramMap` 是 `WorkflowParamMap | null` —— 不是「一层 key → string」。
  */
 
-import type { WorkflowPreview } from "~/lib/comfyui/workflow";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
@@ -87,8 +86,6 @@ export type WorkflowListRow = {
   name: string;
   /** `paramMap` JSON 列，形状见 `WorkflowParamMap`。 */
   paramMap: WorkflowParamMap | null;
-  /** 紧凑预览（节点/边/宽高），没有 rawJson 时是空图。 */
-  preview: WorkflowPreview;
   /** 分类：有 `sourcePath` 即 local，否则 online；`"local-pending"` 只出现在
    *  「本地待导入」占位行上（`workflow-local-roots` 的 `LocalPendingRow`）。 */
   source: "local" | "online" | "local-pending";

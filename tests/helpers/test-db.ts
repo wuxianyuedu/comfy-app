@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS taskImage (
 CREATE TABLE IF NOT EXISTS workflowTemplate (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, taskType TEXT NOT NULL DEFAULT 'TXT2IMG',
   modes TEXT NOT NULL DEFAULT '[]', defaultMode TEXT, paramMap TEXT, workflowIO TEXT,
-  rawJson TEXT, positions TEXT, sourcePath TEXT, sourceChecksum TEXT, sourceMtime INTEGER, createdAt TEXT NOT NULL
+  rawJson TEXT, hasRaw INTEGER, positions TEXT, sourcePath TEXT, sourceChecksum TEXT, sourceMtime INTEGER, createdAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS workflowModelTag (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, createdAt TEXT NOT NULL
