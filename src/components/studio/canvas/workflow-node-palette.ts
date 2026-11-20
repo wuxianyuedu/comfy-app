@@ -1,6 +1,6 @@
 /* FlowNode 配色计算 —— 纯函数：节点模式（LiteGraph 0/2/4）+
  * 指定角色 → 卡片颜色。底色随主题，不再写死深色 hex。 */
-import { mixHex, hexToRgba, lightenHex } from "../workflow-utils";
+import { mixHex, lightenHex } from "../workflow-utils";
 import type { WorkflowNodeData } from "../workflow-types";
 
 const BYPASS_COLOR = "#ec4899";
@@ -46,7 +46,10 @@ export type NodePalette = {
   effectiveColor: string | undefined;
   headerBg: string;
   modeColor: string | null;
-  nodeBg: string;
+  /** 不透明的卡片体底色 —— 旁路 / 停用节点也用它：毛玻璃层若透采画布，
+   *  悬停抬层（ISSUE #400 的 z-index 提升）会改变取样背影、节点颜色跟着漂移
+   *  （ISSUE #4578 补充的用户实测）。底色不透明后，着色层不再依赖层叠序。 */
+  nodeBgOpaque: string;
   nodeBorder: string;
   nodeMode: number;
   titleColor: string;
@@ -69,11 +72,12 @@ export function computeNodePalette(
     effectiveColor !== undefined && effectiveColor !== ""
       ? mixHex(base.body, effectiveColor, 0.22)
       : base.header;
-  // 卡片体：只 ~8% 着色，让角色身份是个提示而不是铺满。模式
-  // 节点保留半透明着色，好让真正的背景模糊接上。
-  const nodeBg = modeColor
-    ? hexToRgba(modeColor, nodeMode === 4 ? 0.16 : 0.11)
-    : role?.color !== undefined && role.color !== ""
+  // 卡片体的**不透明**底色：只 ~8% 着色，让角色身份是个提示而不是铺满。
+  // 旁路 / 停用节点也以它为底 —— 半透明底会让悬停抬层改变毛玻璃的取样
+  // 背影，节点颜色随悬停漂移（ISSUE #4578 补充）；模式色改由 <NodeFrost>
+  // 叠在不透明底之上（色仍带 α，但取样面恒定）。
+  const nodeBgOpaque =
+    role?.color !== undefined && role.color !== ""
       ? mixHex(base.body, role.color, 0.08)
       : base.body;
   const nodeBorder =
@@ -88,7 +92,7 @@ export function computeNodePalette(
     modeColor,
     effectiveColor,
     headerBg,
-    nodeBg,
+    nodeBgOpaque,
     nodeBorder,
     titleColor,
     dotBg,

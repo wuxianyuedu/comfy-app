@@ -16,16 +16,16 @@ import { zClass } from "~/lib/shell/overlay-z";
 const ROLE_COLOR = portChipStyle("IMAGE").color;
 
 /**
- * 毛玻璃层 story — 缩放维度。`NodeFrost` 纯 props（zoom/color/nodeMode）；FrostLayer 自订阅 `transform[2]`，
- * 只能在真画布看（缩放订阅收口到该层，避免全体节点重渲染）。验 Chromium backdrop-filter 小元素重铺 bug：
- * 按 1/zoom 反向缩放 + overflow:hidden 裁回，并排三档，zoom<1 最易见 2²/3²/4² 重影。
- * nodeMode = LiteGraph 0 始终 / 2 静音 / 4 旁路，颜色由 `computeNodePalette()` 给出。 */
+ * 模式着色层 story。ISSUE #4578 补充起，旁路 / 停用节点 = **不透明角色底色**
+ * （卡片本体铺 `nodeBgOpaque`，与 WorkflowNode 同一口径）+ `<NodeFrost>` 叠模式色
+ * —— 不再透采画布：悬停抬层（ISSUE #400）改变层叠序时节点颜色恒定。
+ * nodeMode = LiteGraph 0 始终 / 2 静音 / 4 旁路，颜色由 `computeNodePalette()` 给出。
+ */
 const meta = {
   title: "Studio/Canvas/NodeFrost",
   component: NodeFrost,
-  args: { zoom: 1, color: ROLE_COLOR, nodeMode: 4 },
+  args: { color: ROLE_COLOR, nodeMode: 4 },
   argTypes: {
-    zoom: { control: { type: "range", min: 0.1, max: 2, step: 0.05 } },
     color: { control: { type: "color" } },
     nodeMode: { control: { type: "inline-radio" }, options: [0, 2, 4] },
   },
@@ -50,20 +50,20 @@ function nodePaletteFor(nodeMode: number) {
   return computeNodePalette(data, { color: ROLE_COLOR }, DARK_PALETTE_BASE);
 }
 
-/** 节点卡片的摆法（`relative` + `overflow-hidden` 是毛玻璃能被裁回边界的前提）。 */
-function FrostCard({ zoom, nodeMode, label }: { label: string; nodeMode: number; zoom: number }) {
+/** 节点卡片的摆法：底色 = `nodeBgOpaque`（不透明），着色层叠在其上。 */
+function FrostCard({ nodeMode, label }: { label: string; nodeMode: number }) {
   const palette = nodePaletteFor(nodeMode);
   return (
     <div className="flex flex-col items-center gap-2">
       <div
         className="relative h-35 w-60 overflow-hidden rounded-[14px]"
         style={{
-          background: DARK_PALETTE_BASE.body,
+          background: palette.nodeBgOpaque,
           border: `1px solid ${DARK_PALETTE_BASE.borderFallback}`,
         }}
       >
         <PseudoFrostLayer modeColor={palette.modeColor} />
-        <NodeFrost color={palette.modeColor} nodeMode={palette.nodeMode} zoom={zoom} />
+        <NodeFrost color={palette.modeColor} nodeMode={palette.nodeMode} />
         <div
           className={`relative ${zClass("base")} p-3 text-xs`}
           style={{ color: DARK_PALETTE_BASE.titleFallback }}
@@ -71,34 +71,19 @@ function FrostCard({ zoom, nodeMode, label }: { label: string; nodeMode: number;
           {label}
         </div>
       </div>
-      <span className="text-ink-muted text-2xs font-mono">
-        zoom {zoom} · mode {nodeMode}
-      </span>
+      <span className="text-ink-muted text-2xs font-mono">mode {nodeMode}</span>
     </div>
   );
 }
 
-/**
- * 缩放三档并排（纯 props）：Chromium 的重铺平铺 bug 在**缩小**那两档最容易看出来 ——
- * 修法（`scale = 1/zoom`）如果被去掉，圆角处会出现 2² / 3² / 4² 的重影。
- */
-export const ZoomLadder: Story = {
-  render: () => (
-    <div className="flex flex-wrap items-start gap-6 p-4">
-      {[0.25, 0.5, 1, 2].map((zoom) => (
-        <FrostCard key={zoom} label="旁路（粉）" nodeMode={4} zoom={zoom} />
-      ))}
-    </div>
-  ),
-};
-
-/** 两档模式色并排：旁路 `#7C5CFC` 偏粉、静音偏灰 —— 用户靠颜色读 ComfyUI 状态。 */
+/** 两档模式色并排：旁路 `#ec4899` 偏粉、静音偏灰 —— 用户靠颜色读 ComfyUI 状态；
+ *  底色不透明，颜色不随悬停 / 层叠漂移（ISSUE #4578 补充）。 */
 export const ModeColors: Story = {
   render: () => (
     <div className="flex flex-wrap items-start gap-6 p-4">
-      <FrostCard label="旁路 nodeMode=4" nodeMode={4} zoom={1} />
-      <FrostCard label="静音 nodeMode=2" nodeMode={2} zoom={1} />
-      <FrostCard label="始终 nodeMode=0（不渲染毛玻璃）" nodeMode={0} zoom={1} />
+      <FrostCard label="旁路 nodeMode=4" nodeMode={4} />
+      <FrostCard label="静音 nodeMode=2" nodeMode={2} />
+      <FrostCard label="始终 nodeMode=0（不渲染着色层）" nodeMode={0} />
     </div>
   ),
 };
@@ -106,8 +91,8 @@ export const ModeColors: Story = {
 const FROST_NODE_TYPES = { story: FrostDemoNode };
 
 /**
- * 真画布里的 `FrostLayer`：缩放来自 `useStore`，不是 props ——
- * 这份 story 的存在就是为了让「缩放订阅挪到独立一层」这个设计在真上下文里成立。
+ * 真画布里的 `FrostLayer`：接线层不再订阅缩放（旧版为 backdrop-filter 的
+ * 缩放补偿而订阅；着色层不透采画布后没有可补偿的量）。
  */
 export const InCanvas: Story = {
   render: () => (
@@ -120,20 +105,23 @@ export const InCanvas: Story = {
   ),
 };
 
-/** 真画布里的节点渲染器：走 `FrostLayer`，所以缩放由 store 给。 */
+/** 真画布里的节点渲染器：走 `FrostLayer`；底色与 WorkflowNode 同一口径。 */
 function FrostDemoNode() {
   const palette = nodePaletteFor(4);
   return (
     <div
       className="relative h-27.5 w-55 overflow-hidden rounded-[14px]"
-      style={{ border: `1px solid ${DARK_PALETTE_BASE.borderFallback}` }}
+      style={{
+        background: palette.nodeBgOpaque,
+        border: `1px solid ${DARK_PALETTE_BASE.borderFallback}`,
+      }}
     >
       <FrostLayer color={palette.modeColor} nodeMode={palette.nodeMode} />
       <div
         className={`relative ${zClass("base")} p-3 text-xs`}
         style={{ color: DARK_PALETTE_BASE.titleFallback }}
       >
-        KSampler（旁路 · 缩放来自 store）
+        KSampler（旁路）
       </div>
     </div>
   );
