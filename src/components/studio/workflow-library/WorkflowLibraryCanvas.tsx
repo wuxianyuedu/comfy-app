@@ -35,6 +35,7 @@ import {
   libraryFitViewOptions,
   useLibraryWireFlow,
 } from "./hooks/use-library-wire-flow";
+import { useRefitOnFirstRealSize } from "./hooks/use-refit-on-first-size";
 import {
   libraryBackdropSize,
   libraryEdgeOwner,
@@ -314,6 +315,10 @@ function WorkflowLibraryCanvasInner({
    *  下发，不再经组件 state 的 effect 链。这个画布只有三个固定列节点，
    *  拖拽后立即吸附回布局位，本来就不存在拖拽掉帧问题；统一形态是为了一致性。 */
   const rf = useReactFlow();
+
+  /* 首帧 fitView 跑在 0×0 容器上（画布挂载时视图整棵隐藏）会算出退化视口，
+   * 且此后没人重算 —— 容器首次量到真实尺寸时补一次（ISSUE #4579）。 */
+  useRefitOnFirstRealSize(rf, containerBox, markFitted);
 
   /* 派生出来的边同步进 React Flow：不同步则库内新拖的线永远进不了画布
    * （写入成功，用户却看到「松手线就消失」）。依赖是 `flow.defaultEdges`
