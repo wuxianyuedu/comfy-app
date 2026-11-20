@@ -57,28 +57,53 @@ export function comfyDotState(
 }
 
 /**
- * 状态行文案（读屏与肉眼同一句）。运行中一并写地址与启动方式：
+ * 状态行的结构（纯派生）。视图据此给地址单独上等宽 + 降亮的样式，读屏仍读整句：
  * 同端口可能跑着外部实例，「谁拉起来的」是排查第一件事（via 非空即服务端探测）。
+ * `comfyStatusText` 由这里拼出，**不在视图里另拼一遍**（§12.12）。
+ */
+export type ComfyStatusParts = {
+  /** 主文案（运行中即「ComfyUI 运行中」）；读屏与肉眼同一句。 */
+  lead: string;
+  /** 运行中的访问地址（已去掉括号），无地址时为 null。 */
+  url: string | null;
+  /** 启动方式，无则 null（视图在它前面补 `·`）。 */
+  via: string | null;
+};
+
+export function comfyStatusParts(
+  status: ComfyRuntimeStatus | null,
+  flags: { starting: boolean; stopping: boolean },
+): ComfyStatusParts {
+  if (status?.up === true) {
+    return {
+      lead: "ComfyUI 运行中",
+      url: status.base !== null && status.base !== "" ? status.base : null,
+      via: status.via !== null && status.via !== "" ? status.via : null,
+    };
+  }
+  if (flags.stopping || status?.stopping === true) {
+    return { lead: "ComfyUI 关闭中…", url: null, via: null };
+  }
+  if (flags.starting || status?.starting === true) {
+    return { lead: "ComfyUI 正在启动…", url: null, via: null };
+  }
+  if (status?.probing === true) {
+    return { lead: "ComfyUI 状态检测中…", url: null, via: null };
+  }
+  return { lead: "ComfyUI 未运行", url: null, via: null };
+}
+
+/**
+ * 状态行文案（读屏与肉眼同一句），由 {@link comfyStatusParts} 拼出唯一一份。
  */
 export function comfyStatusText(
   status: ComfyRuntimeStatus | null,
   flags: { starting: boolean; stopping: boolean },
 ): string {
-  if (status?.up === true) {
-    const base = status.base !== null && status.base !== "" ? `（${status.base}）` : "";
-    const via = status.via !== null && status.via !== "" ? `·${status.via}` : "";
-    return `ComfyUI 运行中${base}${via}`;
-  }
-  if (flags.stopping || status?.stopping === true) {
-    return "ComfyUI 关闭中…";
-  }
-  if (flags.starting || status?.starting === true) {
-    return "ComfyUI 正在启动…";
-  }
-  if (status?.probing === true) {
-    return "ComfyUI 状态检测中…";
-  }
-  return "ComfyUI 未运行";
+  const parts = comfyStatusParts(status, flags);
+  const base = parts.url === null ? "" : `（${parts.url}）`;
+  const via = parts.via === null ? "" : `·${parts.via}`;
+  return `${parts.lead}${base}${via}`;
 }
 
 /**

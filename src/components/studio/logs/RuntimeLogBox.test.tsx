@@ -186,4 +186,40 @@ describe("RuntimeLogBox", () => {
     expect(screen.getByText("跟随中")).toBeTruthy();
     expect(screen.getByText(TITLE)).toBeTruthy();
   });
+
+  it("行首 [out]/[err] 有常驻释义：那是流标记，不代表是否出错", () => {
+    renderBox(controller());
+    expect(screen.getByText(/表示标准输出 \/ 标准错误流，不代表是否出错/)).toBeTruthy();
+  });
+
+  it("时间戳默认显示；点「隐藏时间戳」后逐行剥掉、再点恢复（小窗口与全屏共用同一状态）", () => {
+    const log = controller({
+      text: "2026-11-17 16:28:42 [err] [INFO] first\n2026-11-17 16:28:43 [out] second\n",
+      segments: [
+        { text: "2026-11-17 16:28:42 [err] [INFO] first\n2026-11-17 16:28:43 [out] second\n" },
+      ],
+    });
+    renderBox(log);
+
+    /* 默认显示原文时间戳。 */
+    expect(screen.getByText(/2026-11-17 16:28:42 \[err\]/)).toBeTruthy();
+
+    /* 开关态由可见文案与 aria-label 给出（不在视图手写 aria-pressed，P77）。 */
+    const hide = screen.getByLabelText("隐藏时间戳");
+    expect(hide.textContent).toContain("隐藏时间");
+    fireEvent.click(hide);
+
+    expect(screen.queryByText(/2026-11-17 16:28:42/)).toBeNull();
+    expect(screen.getByText(/\[err\] \[INFO\] first/)).toBeTruthy();
+    expect(screen.getByText(TITLE)).toBeTruthy();
+
+    /* 开关状态在小窗口与全屏之间共享：进全屏仍是隐藏态。 */
+    fireEvent.click(screen.getByLabelText("全屏查看"));
+    expect(screen.getByLabelText("显示时间戳")).toBeTruthy();
+    expect(screen.queryByText(/2026-11-17 16:28:42/)).toBeNull();
+    expect(screen.getByText(/\[err\] \[INFO\] first/)).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("显示时间戳"));
+    expect(screen.getByText(/2026-11-17 16:28:42 \[err\]/)).toBeTruthy();
+  });
 });
