@@ -56,6 +56,7 @@ import {
   type ModeTab,
   type TestCandidate,
 } from "../model-test-config";
+import { workflowModeDefaults } from "../model-test-defaults";
 
 /** 空适配器索引的稳定引用：查询数据未到时兜底，让 useMemo 依赖不逐渲染变化。 */
 const EMPTY_ADAPTERS_BY_MODEL: AdaptersByModel = {};
@@ -410,13 +411,6 @@ export function useModelTest(): ModelTestController {
     activeKeyRef.current = activeKey;
   });
   const activeSession = sessions[activeKey] ?? emptyModelTestSession();
-  /* 表单值随格走（#4080 评论 19：测试界面不关闭时，切模型不丢已填参数）。
-   * 没填过的格回落到该用途/模式的最常用档。 */
-  const values = useMemo(
-    () =>
-      Object.keys(activeSession.values).length > 0 ? activeSession.values : defaultSizeValues(mode),
-    [activeSession.values, mode],
-  );
 
   const patchSession = useCallback((key: string, patch: Partial<ModelTestSession>) => {
     setSessions((prev) => {
@@ -484,6 +478,39 @@ export function useModelTest(): ModelTestController {
     modeTabs,
     selectedCandidate,
   } = useTestCatalog({ kind, mode, selectedModel, trpc });
+
+  /* 本地工作流候选的详情（富化后的 workflowIO + paramMap）：统一输入的默认值从
+   * **工作流在所选模式下的端口默认值**播种（ISSUE #4633），不再一律用
+   * 页面的「1:1 / 1k」通用预设。用 detailFull（富化视图）而不是 detail 原始行：
+   * 端口的 defaultValue 要取**图内当前控件值**，原始行里的 IO 列可能是作者
+   * 勾选时的旧存档（没有 defaultValue）。 */
+  const workflowDetailQ = useQuery(
+    trpc.workflow.detailFull.queryOptions(
+      { id: selectedCandidate?.workflow?.id ?? "" },
+      { enabled: selectedCandidate?.workflow !== undefined },
+    ),
+  );
+  const workflowDefaults = useMemo<ModelTestValues>(() => {
+    if (selectedCandidate?.workflow === undefined) {
+      return {};
+    }
+    const detail = workflowDetailQ.data;
+    if (detail === null || detail === undefined) {
+      return {};
+    }
+    return workflowModeDefaults({ io: detail.workflowIO, mode, paramMap: detail.paramMap });
+  }, [mode, selectedCandidate?.workflow, workflowDetailQ.data]);
+
+  /* 表单值随格走（#4080 评论 19）：测试界面不关闭时，切模型不丢已填参数。
+   * 没填过的格：本地工作流候选回落**工作流在该模式下的默认值**（ISSUE #4633），
+   * 其余回落该用途/模式的最常用档。 */
+  const values = useMemo(
+    () =>
+      Object.keys(activeSession.values).length > 0
+        ? activeSession.values
+        : { ...defaultSizeValues(mode), ...workflowDefaults },
+    [activeSession.values, mode, workflowDefaults],
+  );
 
   /* 下拉显示名（#4080 评论 17）：工作流候选显示**模型名**（工作流上挂的模型
    * 标签，如 z-image），不是工作流文件名；同一模型挂在多个工作流上时，后

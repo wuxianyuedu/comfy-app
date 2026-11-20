@@ -74,6 +74,13 @@ vi.mock("~/trpc/react", () => ({
     setting: {
       openExternal: { mutationOptions: () => ({ mutationKey: ["setting", "openExternal"] }) },
     },
+    workflow: {
+      detailFull: {
+        queryOptions: (input: { id: string }) => ({
+          queryKey: ["workflow", "detailFull", input],
+        }),
+      },
+    },
   }),
 }));
 
