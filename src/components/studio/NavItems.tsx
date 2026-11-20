@@ -2,6 +2,7 @@
 
 import React from "react";
 import {
+  AtSign,
   Blocks,
   BookOpen,
   Box,
@@ -28,7 +29,7 @@ import {
 
 /**
  * 共享的导航注册表 —— 侧栏 / 顶部标题 / 命令面板 / 项目内切换器的唯一事实来源。三个分区：全局项（`globalNavItems`，十二件项目无关的事；控制台跑仓库级脚本、设置读写应用级配置、模型适配/测试模型/模式契约读写全局配置、UI 控件总览是开发者的基元对照页，故都该能开能关）；项目页签（`projectTabs`，只在项目界面顶部的标签栏出现，脱离项目无意义）；项目入口（`PROJECTS_ENTRY`，侧栏底部「项目」分组）。
- * 全局项共十二件，但侧栏只列十件（`sidebarNavItems`）：设置与 UI 控件总览撤出侧栏（设置的入口在顶栏应用菜单、控件总览的入口在命令面板）。「全局的 / 侧栏列不列」是两个独立属性；而「切走关不关」不再写在注册表里 —— 每个全局视图（首页除外）都在「设置 → 界面页签」的配置面里逐项配，见 `configurableTabViews` 与 `~/lib/shell/sidebar-tab-behavior`（ISSUE #3798）。
+ * 全局项共十三件，但侧栏只列十一件（`sidebarNavItems`）：设置与 UI 控件总览撤出侧栏（设置的入口在顶栏应用菜单、控件总览的入口在命令面板）。「全局的 / 侧栏列不列」是两个独立属性；而「切走关不关」不再写在注册表里 —— 每个全局视图（首页除外）都在「设置 → 界面页签」的配置面里逐项配，见 `configurableTabViews` 与 `~/lib/shell/sidebar-tab-behavior`（ISSUE #3798）。
  * 历史教训：此前用 `visibleNavItems(active)` 按「首页 vs 非首页」切换项目页签显隐，导致点非首页视图时画布/工坊复现、点首页又消失；现改为「按分区归属」一次性决定，显隐不随当前视图漂移。
  */
 export type WorkspaceView =
@@ -36,6 +37,7 @@ export type WorkspaceView =
   | "project"
   | "canvas"
   | "models"
+  | "assets"
   | "works"
   | "workshop"
   | "library"
@@ -116,6 +118,16 @@ export const NAV_ITEMS: Array<NavItem> = [
     id: "models",
     label: "模型",
     icon: <Box size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* 跨项目资产库的占位入口：角色库 / 风格锚 / 场景库的复用能力尚未成屏，
+       先让「以后有这一项」可见。`enabled: false` 让它在侧栏里禁用并给出
+       「即将推出」提示，命令面板里也不出现（点不开的东西不该能被搜到）。
+       真正上线时补视图与渲染分支，再把这里改成启用。 */
+    id: "assets",
+    label: "资产",
+    enabled: false,
+    icon: <AtSign size={22} strokeWidth={1.8} />,
   },
   {
     id: "history",
@@ -302,10 +314,11 @@ const FIXED_HOME_VIEW: WorkspaceView = "home";
  *
  * 首页不在其中：它是**固定页签**（恒在、不可关），「切走即关」对它没有意义 ——
  * 真按它那样做，「首页永远在列表里」这条不变式就得靠另一条规则兜着，而那条规则
- * 本身没有任何用户可见的收益。
+ * 本身没有任何用户可见的收益。未上线的占位项同理：它根本打不开，配置面里不该
+ * 多出一行永远用不上的开关。
  */
 export function configurableTabViews(): Array<NavItem> {
-  return globalNavItems().filter((item) => item.id !== FIXED_HOME_VIEW);
+  return globalNavItems().filter((item) => item.id !== FIXED_HOME_VIEW && item.enabled !== false);
 }
 
 /**

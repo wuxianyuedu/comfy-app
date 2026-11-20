@@ -21,6 +21,9 @@ import {
 const GLOBAL_IDS: Array<WorkspaceView> = [
   "home",
   "models",
+  /* 资产是未上线的占位入口：仍在全局清单与侧栏里（「以后有这一项」要可见），
+     但不可点、不进命令面板、不进配置面。 */
+  "assets",
   "history",
   "queue",
   /* ComfyUI（ISSUE #1900）：从设置页「创作后端」搬出来的运行态页。排在 queue
@@ -64,6 +67,20 @@ describe("globalNavItems", () => {
       expect(ids).not.toContain(tab);
     }
     expect(ids).not.toContain(PROJECTS_ENTRY.id);
+  });
+});
+
+describe("资产占位入口", () => {
+  it("在侧栏与全局清单里都可见，但标为未上线", () => {
+    const item = globalNavItems().find((i) => i.id === "assets");
+    expect(item).toBeDefined();
+    expect(item?.label).toBe("资产");
+    expect(item?.enabled).toBe(false);
+    expect(sidebarNavItems().map((i) => i.id)).toContain("assets");
+  });
+
+  it("不进配置面：打不开的视图不该有一行「切走关不关」的开关", () => {
+    expect(configurableTabViews().map((i) => i.id)).not.toContain("assets");
   });
 });
 
