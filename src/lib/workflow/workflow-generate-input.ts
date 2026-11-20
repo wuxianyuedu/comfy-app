@@ -42,9 +42,13 @@ const workflowInputSchema = z.object({
 export const generateInputSchema = z.object({
   /** 工作流库工作流 id（内置模板已移除，这里是唯一的工作流来源）。 */
   workflow: z.string().min(1, "缺少要执行的工作流"),
-  /** 提示词 / 反向提示词：供历史列表与任务标题（参数真值走 workflowInputs）。 */
-  prompt: z.string().max(2000).optional(),
-  negative: z.string().max(2000).optional(),
+  /** 提示词 / 反向提示词：供历史列表与任务标题（参数真值走 workflowInputs）。
+   *  上限 20_000 而不是 2000（ISSUE #4633 反馈）：工作流在 IO 面板配置的内置
+   *  提示词可以远超 2000 字符，测试页 / 重试会把它原样带进本字段；这里拦下
+   *  会让「用工作流自己的默认值」直接生成失败。任务标题与历史列表在显示层
+   *  自行截断，入库文本无压力。 */
+  prompt: z.string().max(20_000).optional(),
+  negative: z.string().max(20_000).optional(),
   /** 参考图 / 首末帧文件名（已在 ComfyUI input 目录）。 */
   inputImage: z.string().optional(),
   firstFrame: z.string().optional(),

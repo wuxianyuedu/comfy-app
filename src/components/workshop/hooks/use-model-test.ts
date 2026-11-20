@@ -503,13 +503,23 @@ export function useModelTest(): ModelTestController {
 
   /* 表单值随格走（#4080 评论 19）：测试界面不关闭时，切模型不丢已填参数。
    * 没填过的格：本地工作流候选回落**工作流在该模式下的默认值**（ISSUE #4633），
-   * 其余回落该用途/模式的最常用档。 */
+   * 其余回落该用途/模式的最常用档。
+   * 工作流候选的详情没 settle（成功 / 失败）前**不摆任何默认**（#4633 评论 2：
+   * 打开瞬间先摆通用「1:1 / 1k」、详情到了再跳成工作流默认，界面闪一下）——
+   * 表单留空一瞬，等详情到位一次性播工作流默认；查询失败也算 settle，回落
+   * 通用默认，不至于永远空着。 */
+  const workflowDefaultsReady =
+    selectedCandidate?.workflow === undefined ||
+    workflowDetailQ.isSuccess === true ||
+    workflowDetailQ.isError === true;
   const values = useMemo(
     () =>
       Object.keys(activeSession.values).length > 0
         ? activeSession.values
-        : { ...defaultSizeValues(mode), ...workflowDefaults },
-    [activeSession.values, mode, workflowDefaults],
+        : workflowDefaultsReady
+          ? { ...defaultSizeValues(mode), ...workflowDefaults }
+          : {},
+    [activeSession.values, mode, workflowDefaults, workflowDefaultsReady],
   );
 
   /* 下拉显示名（#4080 评论 17）：工作流候选显示**模型名**（工作流上挂的模型

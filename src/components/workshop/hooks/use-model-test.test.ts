@@ -45,6 +45,11 @@ const mutateAsyncSpy = vi.fn<(input: unknown) => Promise<unknown>>();
 /* 工作流候选（#4080 评论 4）的测试态：fetchWorkshopWorkflows 的读数走 useQuery
  * 替身的 workshop 分支；本地通道的四个执行者各自给替身。 */
 let workflowsData: Array<Record<string, unknown>>;
+/** detailFull 替身读数（#4633 评论 2 闪烁修复）：缺省 = 已成功且无数据（组件
+ *  回落通用默认，与既有用例同形）；`pending` = 查询进行中（组件不摆任何默认）；
+ *  `data` = 已到位的工作流详情（组件播种工作流默认）；`failed` = 查询失败
+ *  （组件回落通用默认）。 */
+let detailFullState: { data?: unknown; failed?: boolean; pending?: boolean } = {};
 const buildLibraryWorkflowInputMock =
   vi.fn<
     (
@@ -148,7 +153,15 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
       if (ns === "llm" && ep === "workshopAdaptersAll") {
         return { data: adaptersAll, isLoading: false };
       }
-      return { data: undefined, isLoading: false };
+      if (ns === "workflow" && ep === "detailFull") {
+        return {
+          data: detailFullState.data,
+          isError: detailFullState.failed === true,
+          isLoading: detailFullState.pending === true,
+          isSuccess: detailFullState.pending !== true && detailFullState.failed !== true,
+        };
+      }
+      return { data: undefined, isError: false, isLoading: false, isSuccess: false };
     },
     useMutation: () => ({ mutateAsync: mutateAsyncSpy }),
   };
@@ -185,6 +198,7 @@ beforeEach(() => {
   contractsData = { contracts: [] };
   adaptersByName = {};
   workflowsData = [];
+  detailFullState = {};
   /* 适配器索引给上该模型的 T2I 条目：索引已加载且模型支持默认模式，
    * 候选不会被「按模式收窄」滤空。 */
   adaptersAll = { "agnes-image": [{ mode: "T2I" }] };
@@ -522,6 +536,82 @@ describe("useModelTest：工作流提供的图片/视频模型（ISSUE #4080 评
     expect(result.current.requestRows[0]?.body).toMatchObject({
       workflow: "工作流·生图A",
       mode: "T2I",
+      "aspect-ratio": "1:1",
+      resolution: MODEL_TEST_DEFAULT_RESOLUTION,
+    });
+  });
+
+  it("工作流详情未到时不摆通用默认，到了再一次性播工作流默认（#4633 评论 2 闪烁）", () => {
+    workflowsData = [WF_IMAGE];
+    detailFullState = { pending: true };
+    const { result, rerender } = renderModelTest();
+    act(() => {
+      result.current.selectModel("wf::wf-1");
+    });
+    /* 查询进行中：表单不先摆「1:1 / 1k」，详情到达后不再跳一次（不闪）。 */
+    expect(result.current.values).toEqual({});
+
+    /* 详情到位：一次性播工作流在所选模式下的端口默认值（模式覆盖层生效）；
+     * 工作流用「百万像素 + 倍数」表达尺寸时通用分辨率档清空。 */
+    detailFullState = {
+      data: {
+        paramMap: {
+          source: {
+            "mode:T2I": {
+              "size-aspect": "7::widget::aspect_ratio",
+              "size-megapixels": "7::widget::megapixels",
+              "size-multiple": "7::widget::multiple",
+            },
+          },
+        },
+        workflowIO: {
+          "7::widget::aspect_ratio": {
+            defaultValue: "16:9 (Widescreen)",
+            direction: "input",
+            kind: "widget",
+            label: "aspect_ratio",
+            name: "aspect_ratio",
+            nodeId: "7",
+            type: "COMBO",
+          },
+          "7::widget::megapixels": {
+            defaultValue: 4,
+            direction: "input",
+            kind: "widget",
+            label: "megapixels",
+            name: "megapixels",
+            nodeId: "7",
+            type: "INT",
+          },
+          "7::widget::multiple": {
+            defaultValue: 32,
+            direction: "input",
+            kind: "widget",
+            label: "multiple",
+            name: "multiple",
+            nodeId: "7",
+            type: "INT",
+          },
+        },
+      },
+    };
+    rerender();
+    expect(result.current.values).toMatchObject({
+      "aspect-ratio": "16:9",
+      megapixels: "4",
+      multiple: "32",
+      resolution: "",
+    });
+  });
+
+  it("工作流详情查询失败也回落通用默认（表单不至于永远空着）（#4633 评论 2）", () => {
+    workflowsData = [WF_IMAGE];
+    detailFullState = { failed: true };
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("wf::wf-1");
+    });
+    expect(result.current.values).toMatchObject({
       "aspect-ratio": "1:1",
       resolution: MODEL_TEST_DEFAULT_RESOLUTION,
     });
