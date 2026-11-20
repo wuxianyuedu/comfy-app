@@ -14,5 +14,7 @@ export type { WorkflowLibraryDetailProps };
 export function WorkflowLibraryDetail(props: WorkflowLibraryDetailProps) {
   const controller = useWorkflowLibraryDetail(props);
 
-  return <WorkflowLibraryDetailView controller={controller} />;
+  /* 打开耗时的记账口不经 controller（它是父级的一次性时刻，不是详情的状态），
+   * 直接递给视图 —— 视图在详情数据落定那一刻消费它（ISSUE #4580）。 */
+  return <WorkflowLibraryDetailView controller={controller} openedAtRef={props.openedAtRef} />;
 }
