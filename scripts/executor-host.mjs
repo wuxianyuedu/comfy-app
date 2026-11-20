@@ -250,8 +250,13 @@ async function reconcileCancelled(runtime) {
       if (!proc) {
         continue;
       }
+      /* 硬规则 3：整树回收走 kill-process-tree，不单杀 leader。动态 import
+       * 保持骨架形态「不 import 任何 TS」的契约（tsx 已在 host 注入链注册）。 */
       try {
-        proc.kill("SIGKILL");
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
+        const { killProcessTree } = await import("../src/lib/process/kill-process-tree.ts");
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
+        await killProcessTree({ pid: proc.pid, detached: false, force: true });
       } catch {
         /* ignore：与 cancelTask 同形——进程可能已自己退了 */
       }

@@ -35,6 +35,7 @@ import { errorText } from "~/lib/error-message";
 import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { fireAndForget } from "~/lib/async-action";
+import { killProcessTree } from "~/lib/process/kill-process-tree";
 import { tailWindow } from "~/lib/page-window";
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
@@ -520,10 +521,15 @@ export async function executeViaComfyCli(job: Job) {
       return;
     }
     settled = true;
-    try {
-      child.kill("SIGKILL");
-    } catch {
-      /* ignore */
+    /* 硬规则 3：整树回收走 killProcessTree，不单杀 leader——comfy-cli 若带出
+     * 子进程，单杀会留孤儿。看门狗是同步定时器回调，收口走 fireAndForget。 */
+    const pid = child.pid;
+    if (pid !== undefined) {
+      fireAndForget(killProcessTree({ pid, detached: false, force: true }), (e) => {
+        cliWarn(
+          `[comfyui] ${sqliteAwareErrorText(e, `看门狗回收 comfy-cli 进程树失败（task=${taskId}）`)}`,
+        );
+      });
     }
     cliProcs.delete(taskId);
     fireAndForget(fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）"), (e) => {
