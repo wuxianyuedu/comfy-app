@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { chunkRange, countAfterPage, tailPages, tailWindow, tailWindowAppend } from "./page-window";
+import {
+  ceilDiv,
+  chunkRange,
+  countAfterPage,
+  tailPages,
+  tailWindow,
+  tailWindowAppend,
+} from "./page-window";
 
 const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
@@ -212,5 +219,19 @@ describe("page-window —— 平行分块", () => {
       expect(r.total).toBe(3);
       expect(r).toEqual({ start: 0, end: 1, total: 3 });
     }
+  });
+});
+
+describe("page-window —— 向上取整除（ceilDiv）", () => {
+  it("正除：常规向上取整", () => {
+    expect(ceilDiv(10, 3)).toBe(4);
+    expect(ceilDiv(9, 3)).toBe(3);
+    expect(ceilDiv(1, 130)).toBe(1);
+  });
+
+  it("分母为 0 / 负数 / NaN 按 1 处理（与 chunkRange 的片长钳制同口径）", () => {
+    expect(ceilDiv(10, 0)).toBe(10);
+    expect(ceilDiv(10, -3)).toBe(10);
+    expect(ceilDiv(10, Number.NaN)).toBe(10);
   });
 });

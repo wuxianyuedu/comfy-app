@@ -20,12 +20,14 @@ import { LogPanelHeader } from "./LogPanelHeader";
 import { LogPanelFooter } from "./LogPanelFooter";
 import {
   LOG_MESSAGE_OVERHEAD,
-  LOG_ROW_SINGLE,
   UNMEASURED_WINDOW_ROWS,
   layoutRows,
+  rowHeightFor,
   scrollHeightOf,
   visibleRange,
+  type LogDensity,
 } from "./log-virtual";
+import { useLogDisplayPrefs, setLogDensity, setLogColumns } from "./log-display-prefs";
 import { EmptyState } from "~/components/ui/empty-state";
 import { useWidePanel } from "~/components/ui/wide-panel";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
@@ -46,6 +48,7 @@ import { isCliJsonLine } from "~/lib/log/log-cli-json";
  *  折叠态强制单行、展开态用行高常量；判据走共享 `isCliJsonLine`，与 `LogRow` 同口径。
  *  量不到视口高度（jsdom / 首帧）就整页渲染：虚拟化是优化，不该变成「内容看不见」。 */
 function useVirtualWindow(input: {
+  density: LogDensity;
   expansionMap: Record<string, boolean>;
   pageLogs: Array<LogEntry>;
   scrollTop: number;
@@ -53,7 +56,7 @@ function useVirtualWindow(input: {
   viewportWidth: number;
   wrap: boolean;
 }) {
-  const { pageLogs, wrap, viewportWidth, viewportHeight, scrollTop, expansionMap } = input;
+  const { density, expansionMap, pageLogs, scrollTop, viewportHeight, viewportWidth, wrap } = input;
   const cliJsonIds = useMemo(() => {
     const ids = new Set<string>();
     for (const entry of pageLogs) {
@@ -80,8 +83,9 @@ function useVirtualWindow(input: {
       layoutRows(pageLogs, wrap, wrap ? messageWidth : 0, {
         expandedIds,
         singleLineIds: cliJsonIds,
+        density,
       }),
-    [pageLogs, wrap, messageWidth, expandedIds, cliJsonIds],
+    [pageLogs, wrap, messageWidth, expandedIds, cliJsonIds, density],
   );
   const { height: scrollHeight } = scrollHeightOf(totalSize);
   const rowWindow = useMemo(() => {
@@ -187,6 +191,9 @@ export function LogPanel() {
    * `LOG_ROW_EXPANDED`、折叠态强制单行）。状态挂面板而不是行内，行滚出窗口
    * 卸载后回来仍是同一行、同一展开态。 */
   const expansion = useExpansionSet();
+  /* 显示偏好（ISSUE #4567）：行密度（间隔大小）与精简列（隐藏时刻/级别/来源）。
+   * 跨会话记忆在 `log-display-prefs`（localStorage），多实例共享同一份真相。 */
+  const displayPrefs = useLogDisplayPrefs();
   /* 直接取 `toggle` 交给行：它的引用稳定（`useExpansionSet` 内 `useCallback([])`），
    * 因此 `LogRow` 的 memo 不会被每次展开 / 收起破坏。 */
   /* 加宽档与它的记忆收在 `~/components/ui/wide-panel`（规范 16 §16.2.4.18）：
@@ -247,6 +254,7 @@ export function LogPanel() {
     viewportHeight: viewport.height,
     scrollTop,
     expansionMap: expansion.map,
+    density: displayPrefs.density,
   });
 
   useEffect(() => {
@@ -346,11 +354,15 @@ export function LogPanel() {
         >
           <LogPanelHeader
             clear={clear}
+            columns={displayPrefs.columns}
             copyAllAction={copyAllAction}
             copyDone={copyOutcome.on}
             copyFailed={copyFailed}
             countsByOrigin={countsByOrigin}
+            density={displayPrefs.density}
             download={download}
+            onColumnsChange={setLogColumns}
+            onDensityChange={setLogDensity}
             origin={origin}
             originCounts={originCounts}
             panel={panel}
@@ -401,14 +413,16 @@ export function LogPanel() {
                     return (
                       <div data-log-index={index} key={entry.id}>
                         <LogRow
+                          density={displayPrefs.density}
                           entry={entry}
                           expanded={expansion.isExpanded(entry.id)}
                           keyword={search}
                           onToggleExpand={expansion.toggle}
+                          showDetails={displayPrefs.columns === "full"}
                           /* 显式高度 = 估算高度：两者不同口径时误差会累积，
                            滚动位置与内容就错开了（见 log-virtual 的常量）。 */
                           style={{
-                            height: `${rows[index]?.size ?? LOG_ROW_SINGLE}px`,
+                            height: `${rows[index]?.size ?? rowHeightFor(displayPrefs.density)}px`,
                           }}
                           wrap={wrap}
                         />
