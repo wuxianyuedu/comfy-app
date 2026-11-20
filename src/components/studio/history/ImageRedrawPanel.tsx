@@ -7,6 +7,7 @@ import { useEffect } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Field, FieldLabel } from "~/components/ui/field";
+import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import {
   Select,
@@ -66,22 +67,22 @@ export function ImageRedrawPanel({
           }}
           value={controller.mode}
         >
-          {/* 点击区走 radio-group 的 children 语义（P78）：文字进 Item，
-              组件自渲染 children 并带扩大的点击热区。 */}
-          <RadioGroupItem
-            className="text-ink-soft flex items-center gap-1.5 text-xs font-normal"
-            disabled={controller.busy}
-            value="upscale"
-          >
-            放大重出
-          </RadioGroupItem>
-          <RadioGroupItem
-            className="text-ink-soft flex items-center gap-1.5 text-xs font-normal"
-            disabled={controller.busy}
-            value="inpaint"
-          >
-            局部重绘
-          </RadioGroupItem>
+          {/* P78 判据（同设置页 CPU 限制档）：`RadioGroupItem` 只是 16px 的单选圈，
+              选项文字在圈**旁边**用 `<Label htmlFor>` 关联——此前把文字当 children
+              塞进圈里，16px 盒装不下、逐字竖排溢出，两组选项互相重叠还压到下一行
+              （ISSUE #4629）。id 由档位名派生，组内唯一且稳定。 */}
+          <div className="flex items-center gap-1.5">
+            <RadioGroupItem disabled={controller.busy} id="redraw-mode-upscale" value="upscale" />
+            <Label className="text-ink-soft text-xs font-normal" htmlFor="redraw-mode-upscale">
+              放大重出
+            </Label>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <RadioGroupItem disabled={controller.busy} id="redraw-mode-inpaint" value="inpaint" />
+            <Label className="text-ink-soft text-xs font-normal" htmlFor="redraw-mode-inpaint">
+              局部重绘
+            </Label>
+          </div>
         </RadioGroup>
       </Field>
 
