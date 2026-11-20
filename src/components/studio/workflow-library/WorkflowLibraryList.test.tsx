@@ -306,18 +306,29 @@ describe("WorkflowLibraryList 查询失败态（#4464）", () => {
   });
 });
 
-describe("参考图挂载徽标（ISSUE #4593）", () => {
-  it("paramMap 里点选了挂载节点 → 行上显示「参考图挂载 N」", () => {
+/* #4667：列表行只单行显示——参考图挂载徽标与模型标签不再上列表（前者意义
+ * 不大，后者挤行），单行保留基本信息 = 名称 + 类型 + 状态徽标 + 来源。 */
+describe("列表只单行显示（#4667）", () => {
+  it("paramMap 里有挂载节点也不再显示「参考图挂载」徽标", () => {
     renderList({
       workflows: [row({ paramMap: { referenceLoaders: { mountNodeIds: ["45", "69"] } } })],
     });
 
-    expect(screen.getByText("参考图挂载 2")).toBeInTheDocument();
+    expect(screen.queryByText(/参考图挂载/)).toBeNull();
   });
 
-  it("没有挂载节点 → 不显示徽标", () => {
-    renderList({ workflows: [row()] });
+  it("模型标签不再上列表行（完整信息在详情页）", () => {
+    renderList({
+      workflows: [row({ modelTags: ["特殊模型标签甲", "特殊模型标签乙"] })],
+    });
 
-    expect(screen.queryByText(/参考图挂载/)).toBeNull();
+    expect(screen.queryByText("特殊模型标签甲")).toBeNull();
+    expect(screen.queryByText("特殊模型标签乙")).toBeNull();
+  });
+
+  it("任务类型徽标保留在单行上（基本信息）", () => {
+    renderList({ workflows: [row({ name: "image_z_image_int8_t2i", taskType: "T2I" })] });
+
+    expect(screen.getByText("文生图")).toBeInTheDocument();
   });
 });
