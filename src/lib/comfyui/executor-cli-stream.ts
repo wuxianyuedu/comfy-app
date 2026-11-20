@@ -260,9 +260,17 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
   const dispatchEvent = (evt: JsonRecord): void => {
     if (evt.type === "queued" && typeof evt.prompt_id === "string" && evt.prompt_id) {
       deps.onPromptId(evt.prompt_id);
+      /* ComfyUI 侧对账标识（ISSUE #4599）：应用不再随提交下发 `--client-id`
+       * （1.26.0 起它与 `--wait` 互斥），cli 自己生成的 id 由这个事件回报——
+       * 用户拿它与 ComfyUI 侧队列 / 历史与服务端日志对上本次提交。 */
+      const cid = typeof evt.client_id === "string" && evt.client_id ? evt.client_id : null;
       // 与 API 路径的「✓ 已接收…等待 executing」措辞对齐，两条提交路径
       // 在日志面板里是同一套词汇。
-      log(taskId, "info", `✓ comfy-cli 已提交（prompt_id: ${evt.prompt_id}），等待节点执行…`);
+      log(
+        taskId,
+        "info",
+        `✓ comfy-cli 已提交（prompt_id: ${evt.prompt_id}${cid ? `，ComfyUI 侧 client_id: ${cid}` : ""}），等待节点执行…`,
+      );
       return;
     }
     if (evt.type === "converted" && typeof evt.node_count === "number") {
