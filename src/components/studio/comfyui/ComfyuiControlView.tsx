@@ -150,6 +150,30 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
             >
               {c.stopping || c.status?.stopping === true ? "关闭中…" : "关闭 ComfyUI"}
             </StatusButton>
+            {/* 卸载模型两档（ISSUE #4637）：把 ComfyUI 自己菜单里的「卸载模型 /
+                卸载模型和执行缓存」搬到页上当按钮 —— 免得为释放显存专门切进
+                ComfyUI 页签翻菜单。维护性动作走 outline 档，与主行动（紫实心）、
+                低频「启动」（幽灵）、危险「关闭」（浅红）分层；只有明确运行中才
+                可点（对没在跑的实例发 /free 只会得到连接失败），卸载进行中两颗
+                一起禁用（共用一份 freeing，避免并发发两份请求）。 */}
+            <StatusButton
+              disabled={busy || c.freeing || !running}
+              onClick={() => {
+                void c.unloadModels();
+              }}
+              variant="outline"
+            >
+              卸载模型
+            </StatusButton>
+            <StatusButton
+              disabled={busy || c.freeing || !running}
+              onClick={() => {
+                void c.unloadModelsWithCache();
+              }}
+              variant="outline"
+            >
+              卸载模型和执行缓存
+            </StatusButton>
           </div>
         </div>
 

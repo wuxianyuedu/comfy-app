@@ -44,8 +44,11 @@ function controller(over: Partial<ComfyuiControlController> = {}): ComfyuiContro
     stopping: false,
     opening: false,
     browserOpening: false,
+    freeing: false,
     startComfy: vi.fn(() => Promise.resolve()),
     stopComfy: vi.fn(() => Promise.resolve()),
+    unloadModels: vi.fn(() => Promise.resolve()),
+    unloadModelsWithCache: vi.fn(() => Promise.resolve()),
     openComfy: vi.fn(() => Promise.resolve()),
     openComfyInBrowser: vi.fn(() => Promise.resolve()),
     refreshStatus: vi.fn(() => Promise.resolve()),
@@ -228,5 +231,37 @@ describe("ComfyuiControlView", () => {
     render(<ComfyuiControlView c={controller()} />);
     expect(screen.getByText("启动日志（comfyui-runtime.log）")).toBeInTheDocument();
     expect(screen.getByText(/暂无日志/)).toBeInTheDocument();
+  });
+
+  /* ── 卸载模型两颗按钮（ISSUE #4637）──────────────────────────────
+   * ComfyUI 自己菜单里的「卸载模型 / 卸载模型和执行缓存」搬上页：
+   * 未运行时禁用（对没在跑的实例发 /free 只会得到连接失败）、运行中可点、
+   * 点谁调谁；卸载进行中（freeing）两颗一起禁用。 */
+  describe("卸载模型 / 卸载模型和执行缓存", () => {
+    it("未运行：两颗都禁用", () => {
+      render(<ComfyuiControlView c={controller()} />);
+      expect(screen.getByRole("button", { name: "卸载模型" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "卸载模型和执行缓存" })).toBeDisabled();
+    });
+
+    it("运行中：两颗可点，点谁调谁", () => {
+      const unloadModels = vi.fn(() => Promise.resolve());
+      const unloadModelsWithCache = vi.fn(() => Promise.resolve());
+      render(
+        <ComfyuiControlView
+          c={controller({ status: running, unloadModels, unloadModelsWithCache })}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "卸载模型" }));
+      fireEvent.click(screen.getByRole("button", { name: "卸载模型和执行缓存" }));
+      expect(unloadModels).toHaveBeenCalledTimes(1);
+      expect(unloadModelsWithCache).toHaveBeenCalledTimes(1);
+    });
+
+    it("卸载进行中（freeing）：两颗一起禁用，不并发发第二份请求", () => {
+      render(<ComfyuiControlView c={controller({ status: running, freeing: true })} />);
+      expect(screen.getByRole("button", { name: "卸载模型" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "卸载模型和执行缓存" })).toBeDisabled();
+    });
   });
 });

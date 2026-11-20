@@ -9,6 +9,7 @@ import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import { http, HttpResponse } from "msw/http";
 import SuperJSON from "superjson";
+import { z } from "zod";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createTestQueryClient } from "../../../../../tests/helpers/renderWithProviders";
@@ -92,6 +93,8 @@ type Behavior = {
   comfyBase?: string | null;
   /** comfyEmbeddable 探测结论（决定页签里渲染 iframe 还是可读说明）。 */
   comfyEmbeddable?: { embeddable: boolean; reason: string };
+  /** comfyFree（卸载模型两档）的返回信封；默认成功。 */
+  comfyFree?: { detail: string; ok: boolean };
   comfyInstance?: {
     desktopManaged: boolean;
     instanceType: "desktop" | "portable" | "venv" | null;
@@ -118,6 +121,8 @@ function comfyStateRequests(): Array<string> {
 /* 「在浏览器打开」端点的调用计数：单独一个模块级变量，不放进 behavior ——
  * 每个用例都会整体重置 behavior，塞进去就得在每一处重置点重复，容易漏。 */
 let comfyOpenCalls = 0;
+/* 「卸载模型」端点收到的 freeMemory 入参序列：两档力度「点谁发谁」的判据靠它。 */
+const comfyFreeInputs: Array<boolean> = [];
 
 const t = createTestTRPC();
 const mockRouter = t.router({
@@ -162,6 +167,18 @@ const mockRouter = t.router({
         behavior.comfyOpen ?? {
           ok: true,
           detail: "已用系统默认浏览器打开 ComfyUI",
+        }
+      );
+    }),
+    /* 与真实 router 同款 input schema：测试 tRPC 的 procedure 不挂 `.input()`
+     * 时 resolver 收到的 input 是 undefined（tRPC v11 不给无 parser 的过程
+     * 透传入参），所以这里要显式声明才能记账 `freeMemory`。 */
+    comfyFree: t.procedure.input(z.object({ freeMemory: z.boolean() })).mutation(({ input }) => {
+      comfyFreeInputs.push(input.freeMemory);
+      return (
+        behavior.comfyFree ?? {
+          ok: true,
+          detail: input.freeMemory ? "已卸载模型并释放执行缓存" : "已卸载模型",
         }
       );
     }),
@@ -286,6 +303,7 @@ afterEach(() => {
   behavior = {};
   comfyOpenCalls = 0;
   comfyStatusCalls = 0;
+  comfyFreeInputs.length = 0;
   toastSuccessMock.mockClear();
   toastErrorMock.mockClear();
   server.resetHandlers();
@@ -348,6 +366,76 @@ describe("useComfyuiControl", () => {
     });
     expect(toastErrorMock).toHaveBeenCalledWith("未找到 main.py");
     expect(result.current.starting).toBe(false);
+  });
+
+  /* ── 卸载模型两档（ISSUE #4637）：点谁发谁、结论进提示条、busy 归位 ── */
+  describe("卸载模型 / 卸载模型和执行缓存", () => {
+    it("卸载模型：freeMemory=false 发给端点，成功文案进 toast", async () => {
+      const { result } = renderHook(() => useComfyuiControl(), {
+        wrapper: makeWrapper(),
+      });
+      await expect.poll(() => result.current.status).not.toBeNull();
+
+      await act(async () => {
+        await result.current.unloadModels();
+      });
+      expect(comfyFreeInputs).toEqual([false]);
+      expect(toastSuccessMock).toHaveBeenCalledWith("已卸载模型");
+      expect(toastErrorMock).not.toHaveBeenCalled();
+      expect(result.current.freeing).toBe(false);
+    });
+
+    it("卸载模型和执行缓存：freeMemory=true 发给端点", async () => {
+      const { result } = renderHook(() => useComfyuiControl(), {
+        wrapper: makeWrapper(),
+      });
+      await expect.poll(() => result.current.status).not.toBeNull();
+
+      await act(async () => {
+        await result.current.unloadModelsWithCache();
+      });
+      expect(comfyFreeInputs).toEqual([true]);
+      expect(toastSuccessMock).toHaveBeenCalledWith("已卸载模型并释放执行缓存");
+      expect(result.current.freeing).toBe(false);
+    });
+
+    it("服务端报未运行：err 信封的 detail 原样进提示条", async () => {
+      behavior = {
+        comfyFree: { ok: false, detail: "ComfyUI 未在运行，无需卸载 —— 请先点「启动 ComfyUI」" },
+      };
+      const { result } = renderHook(() => useComfyuiControl(), {
+        wrapper: makeWrapper(),
+      });
+      await expect.poll(() => result.current.status).not.toBeNull();
+
+      await act(async () => {
+        await result.current.unloadModels();
+      });
+      expect(toastErrorMock).toHaveBeenCalledWith(
+        "ComfyUI 未在运行，无需卸载 —— 请先点「启动 ComfyUI」",
+      );
+      expect(toastSuccessMock).not.toHaveBeenCalled();
+      expect(result.current.freeing).toBe(false);
+    });
+
+    it("端点抛错：走错误通道，不误报成功，busy 归位", async () => {
+      server.use(
+        http.post("*/api/trpc/setting.comfyFree", () =>
+          HttpResponse.json({ error: "network down" }, { status: 500 }),
+        ),
+      );
+      const { result } = renderHook(() => useComfyuiControl(), {
+        wrapper: makeWrapper(),
+      });
+      await expect.poll(() => result.current.status).not.toBeNull();
+
+      await act(async () => {
+        await result.current.unloadModelsWithCache();
+      });
+      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect(toastSuccessMock).not.toHaveBeenCalled();
+      expect(result.current.freeing).toBe(false);
+    });
   });
 
   it("comfyLog.refresh 拉取 comfyui-runtime 的会话日志，未启动时不在跟随态", async () => {
