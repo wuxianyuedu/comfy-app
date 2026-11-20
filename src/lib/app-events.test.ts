@@ -25,12 +25,21 @@ describe("emitAppEvent / subscribeAppEvent", () => {
     off();
   });
 
+  it("canvas-store-changed 带 `{ reason, projectId? }` 载荷，读侧拿到同一对象", () => {
+    const seen: Array<{ projectId?: string; reason: string }> = [];
+    const off = subscribeAppEvent("comfyapp:canvas-store-changed", (p) => seen.push(p));
+    emitAppEvent("comfyapp:canvas-store-changed", { reason: "save", projectId: "proj_1" });
+    emitAppEvent("comfyapp:canvas-store-changed", { reason: "hydrate" });
+    expect(seen).toEqual([{ reason: "save", projectId: "proj_1" }, { reason: "hydrate" }]);
+    off();
+  });
+
   it("无载荷的事件派发普通 `Event`（读侧拿到 `undefined`）", () => {
     let called = 0;
-    const off = subscribeAppEvent("comfyapp:canvas-store-changed", () => {
+    const off = subscribeAppEvent("comfyapp:canvas-sync-changed", () => {
       called++;
     });
-    emitAppEvent("comfyapp:canvas-store-changed");
+    emitAppEvent("comfyapp:canvas-sync-changed");
     expect(called).toBe(1);
     off();
   });

@@ -58,7 +58,7 @@
  * 静默吞掉它，于是那句话既没生效也没报错）；`--full` 与 `--light` 同时给 ⇒ 退 2
  * （两个方向的口号同时出现 = 没人知道该跑哪一档）。
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
@@ -70,6 +70,7 @@ import {
 } from "./base-check.mjs";
 import { localTierLabels } from "../base-check/hook-steps.mjs";
 import { renderVerdict } from "../ci/ci-log.mjs";
+import { runGateStep } from "../launcher-core/shell.mjs";
 import { formatTimingSummary, recordTimingLedger } from "./premerge-timing.mjs";
 import { startProgressSync } from "./progress-heartbeat.mjs";
 import { performance } from "node:perf_hooks";
@@ -309,10 +310,12 @@ function parseArgs(argv) {
  * @returns {{code: number, output: string}}
  */
 function runScript(script, args, extraEnv = {}, cwd = ROOT) {
-  const r = spawnSync(process.execPath, [path.join(HERE, script), ...args], {
+  /* 带预算的判据执行器（ISSUE #4601）：单条判据挂死不再无限卡住推送。
+   * 退出码含义与被跑的判据同一套（0 / 1 红 / 2 没跑起来），超时落在 2。 */
+  const r = runGateStep(process.execPath, [path.join(HERE, script), ...args], {
     cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: "pipe",
+    echo: false,
     env: { ...process.env, CI: "1", ...extraEnv },
   });
   /* Node 自己在 `MODULE_NOT_FOUND` 时也退 1 —— 与「判据红了」同形。所以「没跑起来」

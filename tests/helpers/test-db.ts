@@ -388,7 +388,7 @@ export function armStatementFailure(
 
 /** drizzle 的 `sqlite-proxy` 宿主：把 better-sqlite3 的同步语句包成代理层要的异步形状。`method` 四种返回形状照
  * `sqlite-proxy/session.cjs` 的实现取（不是照类型）：`get` ⇒ `{ rows: 单行 | undefined }`（写成数组会让 `.get()` 恒拿 undefined）、
- * `all` / `values` ⇒ 行数组，`run` ⇒ `{ rows: [] }`（全仓不读 `.changes` / `lastInsertRowid`，不透出 RunResult）。
+ * `all` / `values` ⇒ 行数组，`run` ⇒ `{ rows: [], changes, lastInsertRowid }`（与生产 `~/lib/sqlite-driver` 的宿主形状对齐——draft-repository 的 deleteDraft 读 `result.changes` 判删没删到行）。
  * ⚠️ 行必须是 `raw()` 的位置数组：`mapResultRow` 按列序取 `row[columnIndex]`（`utils.cjs:62`），返回对象会让每列读成 undefined，
  * 先炸 `SyntaxError: "undefined" is not valid JSON`（看似数据坏、实为宿主形状错）；且 `raw()` 只能对会返数据的语句调，`run` 那支若也调会当场抛。 */
 function sqliteProxyHost(client: Database.Database) {
@@ -411,8 +411,15 @@ function sqliteProxyHost(client: Database.Database) {
         return Promise.resolve({ rows: stmt.raw().get(...params) });
       }
       case "run": {
-        stmt.run(...params);
-        return Promise.resolve({ rows: [] });
+        /* run 结果带上 changes/lastInsertRowid（与生产 `~/lib/sqlite-driver` 的
+         * 宿主形状对齐）：draft-repository 的 deleteDraft 按 `result.changes`
+         * 判「删没删到行」，宿主不给这个键时该判据恒假。 */
+        const info = stmt.run(...params);
+        return Promise.resolve({
+          rows: [],
+          changes: Number(info.changes),
+          lastInsertRowid: Number(info.lastInsertRowid),
+        });
       }
       case "values":
       case "all":

@@ -20,6 +20,7 @@ import { useCopyResult } from "~/components/ui/use-copy-feedback";
 import { reprintText } from "~/components/studio/queue/queue-monitor-config";
 import type { QueueTaskLogTarget } from "~/components/studio/queue/QueueTaskLogModal";
 import { useItemAction } from "~/components/ui/use-item-action";
+import { useViewTabActive } from "~/components/ui/view-tab-active";
 
 import { useToast } from "../../ToastProvider";
 import { parseWorkflowIOMap, type WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
@@ -129,7 +130,9 @@ export function useHistoryList(): HistoryListController {
   const retryAction = useItemAction();
   /* 真分页（#4044）：无限查询按页拉取（skip = 已拉取行数，由 getNextPageParam
    * 累计）；hasMore 由服务端响应给出（media 过滤的截断也因此对调用方可见）。
-   * 有进行中任务时按 HISTORY_POLL_MS 轮询（判据读查询自身已拉到的行）。 */
+   * 有进行中任务时按 HISTORY_POLL_MS 轮询（判据读查询自身已拉到的行）。
+   * 页签隐藏时不轮询（ISSUE #4598）：disabled 期间函数式 refetchInterval 一并停摆。 */
+  const isTabActive = useViewTabActive();
   const tasksQ = useInfiniteQuery(
     trpc.task.list.infiniteQueryOptions(
       { take: PAGE_SIZE },
@@ -145,6 +148,7 @@ export function useHistoryList(): HistoryListController {
           const rows = (query.state.data?.pages ?? []).flatMap((page) => page.tasks);
           return hasActiveTasks(rows) ? HISTORY_POLL_MS : false;
         },
+        enabled: isTabActive,
       },
     ),
   );

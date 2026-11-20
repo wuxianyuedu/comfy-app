@@ -282,6 +282,91 @@ export function runSync(
   };
 }
 
+/** 门禁判据子进程的**缺省墙钟预算**。与 `runSync` / `runNodeScript` 的现值对齐；
+ *  已知长档（cargo test 冷编译这类）由调用方显式给更大预算，缺省值不迁就最长档。 */
+export const GATE_STEP_DEFAULT_BUDGET_MS = 600_000;
+
+/**
+ * 门禁判据子进程的统一同步执行器（ISSUE #4601）。
+ *
+ * 为什么要有它：门禁/钩子链上 128 处 `spawnSync` 只有约 25 处带超时，任何一格
+ * 挂死（杀软扫描锁文件 / 网络悬挂 / 子进程等 stdin）都会把本地提交无限卡住——
+ * CI 侧有 stage 墙钟，本地此前没有任何兜底。这里把「预算 + 三态收场」收成
+ * 一个入口，与 {@link runSync} / `runPnpmSync` / `runNodeScript` 同一机制族
+ * （`spawnSync` 的 `timeout` 到点由 Node 砍掉直接子进程）。
+ *
+ * **已知边界（与既有 runSync 族同一档）**：`spawnSync` 拿不到子进程 pid，
+ * 预算到点砍的是**直接子进程**；孙进程的整树回收（硬规则 3 的 `killProcessTree`）
+ * 在这个同步形态下没有落点——真需要整树收尾的长跑应走编排器的异步路径
+ * （`spawnInGroup` + `reap-process`）。门禁子进程（vitest/tsc/cargo）的被杀
+ * 孙进程会随 IPC 通道断开自行退出，实测不攒永久孤儿。
+ *
+ * 收场判读复用 {@link classifyOutcome}：`outcome === "aborted"` = 这一格**没判成**
+ * （起不来 / 被预算砍 / 被信号打死），话术拼 {@link abortedAdvice}——按「未校验 ≠ 红」
+ * 口径落 2，不许记成判据失败、也不许静默放行成绿（§13.6.4.1）。
+ *
+ * @param {string} command 已解析好的可执行件（`process.execPath` / `pnpmInvocation`
+ *   的 command / `git`）
+ * @param {string[]} [args]
+ * @param {{ cwd?: string, env?: NodeJS.ProcessEnv,
+ *           timeoutMs?: number, stdio?: "pipe"|"inherit"|"ignore",
+ *           maxBuffer?: number, echo?: boolean }} [options] `echo` 缺省 true
+ *   （跑之前留一行命令行证据）；**聚合子进程输出做机器解析的调用点**（premerge
+ *   的 --json、base-check 的逐段读数、ship 的 cnb JSON）给 `echo: false`——
+ *   回显落在父进程自己的 stdout，混进读数就会破掉「输出必须是可解析 JSON」的契约。
+ * @returns {{ ok: boolean, status: number | null, signal: NodeJS.Signals | null,
+ *             error: NodeJS.ErrnoException | null, errorCode: string | null,
+ *             timedOut: boolean, timeoutMs: number, stdout: string, stderr: string,
+ *             outcome: "ran" | "aborted", command: string, args: string[] }}
+ */
+export function runGateStep(
+  command,
+  args = [],
+  {
+    cwd,
+    env,
+    timeoutMs = GATE_STEP_DEFAULT_BUDGET_MS,
+    stdio = "pipe",
+    maxBuffer,
+    echo = true,
+  } = {},
+) {
+  // 回显与真正 spawn 的是同一个 (command, args)：跑起来之前先留一行证据。
+  if (echo) {
+    echoCommandLine(command, args);
+  }
+  const result = /** @type {import("node:child_process").SpawnSyncReturns<string>} */ (
+    spawnSync(command, args, {
+      cwd,
+      env,
+      encoding: "utf8",
+      timeout: timeoutMs,
+      windowsHide: true,
+      shell: false,
+      ...(maxBuffer === undefined ? {} : { maxBuffer }),
+      stdio: stdio === "pipe" ? ["ignore", "pipe", "pipe"] : stdio,
+    })
+  );
+  /* `SpawnSyncReturns.error` 按 `Error` 声明，但运行时是带 `code` 的
+   * `ErrnoException`（ENOENT / ETIMEDOUT…）——按 Node 文档收窄一次。 */
+  const spawnError = /** @type {NodeJS.ErrnoException | undefined} */ (result.error);
+  const errorCode = spawnError?.code ?? null;
+  return {
+    ok: result.status === 0,
+    status: result.status ?? null,
+    signal: result.signal ?? null,
+    error: result.error ?? null,
+    errorCode,
+    timedOut: errorCode === "ETIMEDOUT",
+    timeoutMs,
+    stdout: String(result.stdout ?? ""),
+    stderr: String(result.stderr ?? ""),
+    outcome: classifyOutcome(result),
+    command,
+    args,
+  };
+}
+
 /**
  * 「这一串参数在 PowerShell 宿主那一跳会被切开」的形状 —— **本机逐形状实测**出来的边界：
  *

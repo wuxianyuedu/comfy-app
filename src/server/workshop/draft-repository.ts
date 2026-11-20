@@ -2,7 +2,7 @@
 // 纯函数 draftToRow / rowToDto 不触碰 DB，便于单测；写读走 workshopDb。
 // 该表与 AI/MCP 用的 workshopSession 并列，互不污染：id 直接复用前端
 // 生成的 wsp_* 项目 id，应用重启后稳定不变，天然支持多项目按 id upsert。
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { asRecord } from "~/lib/is-record";
 import { parseDraftDto, type WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 import {
@@ -50,14 +50,33 @@ export function rowToDto(row: WorkshopDraftRow): WorkshopDraftDto {
   };
 }
 
-/** 读取某项目的服务端镜像；不存在返回 null。 */
-export async function getDraft(id: string): Promise<WorkshopDraftDto | null> {
+/** 草稿可见性判据（ISSUE #4556）：本人或无主（userId 可空——开启登录门槛之前的
+ *  历史行 / 单机行）可见。他人的草稿既读不到也删不掉，避免凭项目 id 跨用户存取。 */
+function draftVisibleTo(userId: string | null) {
+  return or(eq(workshopDraft.userId, userId ?? ""), isNull(workshopDraft.userId));
+}
+
+/** 读取某项目的服务端镜像；不存在、或属于其他用户时返回 null。 */
+export async function getDraft(id: string, userId: string): Promise<WorkshopDraftDto | null> {
   const rows = await workshopDb
     .select()
     .from(workshopDraft)
-    .where(eq(workshopDraft.id, id))
+    .where(and(eq(workshopDraft.id, id), draftVisibleTo(userId)))
     .limit(1);
   return rows[0] ? rowToDto(rows[0]) : null;
+}
+
+/** 读取某项目草稿的归属与版本戳（**不做**归属过滤）：PUT 要先分清「不存在」
+ *  与「存在但属于别人」（前者可写、后者按 NOT_FOUND 拒绝），再做 ifNewer 比较。 */
+export async function findDraftOwner(
+  id: string,
+): Promise<{ updatedAt: Date; userId: string | null } | null> {
+  const rows = await workshopDb
+    .select({ userId: workshopDraft.userId, updatedAt: workshopDraft.updatedAt })
+    .from(workshopDraft)
+    .where(eq(workshopDraft.id, id))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 /** 服务端镜像的项目摘要（列表恢复用：全量清空 localStorage 后按此重建索引）。 */
@@ -122,6 +141,10 @@ export async function upsertDraft(
     .values(insertRow)
     .onConflictDoUpdate({
       target: workshopDraft.id,
+      /* 归属守卫（ISSUE #4556）：只更新无主行或本人行，他人的草稿不动——
+       * where 不命中 ⇒ 本语句零行更新、不报错。set 里的 userId 因此只可能
+       * 是「无主行被认领」或「本人行原值回写」，不会把他人草稿接管成调用方。 */
+      where: draftVisibleTo(userId),
       // update 分支：只改内容列（id / createdAt 不动）。
       set: {
         userId: insertRow.userId,
@@ -138,9 +161,12 @@ export async function upsertDraft(
     });
 }
 
-/** 删除某项目的镜像（前端删除项目时同步清掉，避免残留孤行）。 */
-export async function deleteDraft(id: string): Promise<boolean> {
-  const result = await workshopDb.delete(workshopDraft).where(eq(workshopDraft.id, id));
+/** 删除某项目的镜像（前端删除项目时同步清掉，避免残留孤行）。
+ *  只删本人或无主的行（ISSUE #4556）：他人的草稿删不动，返回 false（= unchanged）。 */
+export async function deleteDraft(id: string, userId: string): Promise<boolean> {
+  const result = await workshopDb
+    .delete(workshopDraft)
+    .where(and(eq(workshopDraft.id, id), draftVisibleTo(userId)));
   // node:sqlite 的 sqlite-proxy run 结果给 changes（libsql ResultSet 的 rowsAffected 已随驱动退场，#3171）：
   // drizzle 的 SqliteRemoteResult 类型只声明 rows，故按驱动实际返回形状取一次；
   // 只有数字才认，外来/异常值按 0 回落。

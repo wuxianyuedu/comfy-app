@@ -54,6 +54,9 @@ import {
   setActive,
   upsertProject,
 } from "./canvas-store";
+import { subscribeAppEvent } from "~/lib/app-events";
+import { DEFAULT_SIZE_SPEC } from "~/lib/media/size-presets";
+import type { PersistedNode } from "./canvas-persistence-types";
 import { listSyncNotices } from "./sync-notice";
 
 /** 什么都不做的桩（`mockImplementation` 拒收不了 `() => {}` 那种空箭头）。 */
@@ -644,5 +647,84 @@ describe("hydrateProjectFromServer（打开只在服务端的项目的前置）"
     const kept = listProjects().find((project) => project.id === "proj_keep");
     expect(kept?.name).toBe("已有的");
     expect(kept?.updatedAt).toBe(5);
+  });
+});
+
+describe("保存链路增量语义（ISSUE #4600）", () => {
+  /** 合法形状的持久化节点夹具（data 取 StrictCanvasNodeData 的必填全集）。 */
+  const node = (id: string, x = 0): PersistedNode => ({
+    id,
+    type: "canvasNode",
+    position: { x, y: 0 },
+    data: {
+      agentHistory: [],
+      cfg: 1,
+      fps: 16,
+      frames: 1,
+      kind: "image",
+      mode: "txt2img",
+      model: "",
+      negative: "",
+      prompt: "",
+      seed: "",
+      size: DEFAULT_SIZE_SPEC,
+      status: "idle",
+      steps: 20,
+      theme: "",
+    },
+  });
+
+  it("upsert 广播 save + 项目 id；delete 广播 delete + 项目 id（订阅方据此增量更新）", () => {
+    const seen: Array<{ projectId?: string; reason: string }> = [];
+    const off = subscribeAppEvent("comfyapp:canvas-store-changed", (p) => seen.push(p));
+    upsertProject({ id: "p1", name: "画布", updatedAt: 1, nodes: [node("n1")], edges: [] });
+    deleteProject("p1");
+    off();
+    expect(seen).toEqual([
+      { reason: "save", projectId: "p1" },
+      { reason: "delete", projectId: "p1" },
+    ]);
+  });
+
+  it("逐项目序列化备忘不改变盘上形状：落盘串与内存行的 JSON.stringify 逐字节一致", () => {
+    seed([{ id: "p1", name: "已有的", updatedAt: 5, nodes: [], edges: [] }]);
+    upsertProject({ id: "p1", name: "改名", updatedAt: 9, nodes: [node("n1", 1)], edges: [] });
+    const row = getProject("p1");
+    expect(row?.name).toBe("改名");
+    expect(row?.nodes).toHaveLength(1);
+    /* 不变量：盘上字节串 == 内存行数组的全量序列化（备忘只是省 CPU，不改格式）。 */
+    expect(localStorage.getItem(INDEX_KEY) ?? "").toBe(JSON.stringify([row]));
+  });
+
+  it("绕过 writeIndex 直写 storage（测试播种 / 手工改库）后，读侧重新解析不过期缓存", () => {
+    upsertProject({ id: "p_old", name: "旧", updatedAt: 1, nodes: [], edges: [] });
+    /* 直写：模拟另一来源改了同一个键。 */
+    seed([{ id: "p_new", name: "新", updatedAt: 2, nodes: [], edges: [] }]);
+    const ids = listProjects().map((project) => project.id);
+    expect(ids).toEqual(["p_new"]);
+  });
+
+  it("内容没变的重复保存不再重发整项目 POST（引用级全等判据）", async () => {
+    const nodes = [node("n1")];
+    const edges = [{ id: "e1", source: "n1", target: "n2" }];
+    upsertProject({ id: "p1", name: "画布", updatedAt: 1, nodes, edges });
+    upsertProject({ id: "p1", name: "画布", updatedAt: 2, nodes, edges });
+    await settled();
+    expect(projectUpsertMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("重命名（同一批节点引用）会再发一次 POST", async () => {
+    const nodes = [node("n1")];
+    upsertProject({ id: "p1", name: "旧名", updatedAt: 1, nodes, edges: [] });
+    upsertProject({ id: "p1", name: "新名", updatedAt: 2, nodes, edges: [] });
+    await settled();
+    expect(projectUpsertMutate).toHaveBeenCalledTimes(2);
+  });
+
+  it("节点内容变化（换元素引用）会再发一次 POST", async () => {
+    upsertProject({ id: "p1", name: "画布", updatedAt: 1, nodes: [node("n1")], edges: [] });
+    upsertProject({ id: "p1", name: "画布", updatedAt: 2, nodes: [node("n1", 9)], edges: [] });
+    await settled();
+    expect(projectUpsertMutate).toHaveBeenCalledTimes(2);
   });
 });

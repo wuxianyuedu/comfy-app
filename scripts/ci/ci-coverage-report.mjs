@@ -39,10 +39,11 @@
  *
  * 用法：`node scripts/ci/ci-coverage-report.mjs`（需先有 `coverage/lcov.info`）
  */
-import { spawnSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 
@@ -92,10 +93,11 @@ function main() {
   }
   const args = reportArgs();
   console.log(`[coverage-report] cnb ${args.join(" ")}`);
-  const r = spawnSync("cnb", args, { cwd: ROOT, stdio: "inherit" });
-  if (r.error !== undefined || r.status !== 0) {
+  /* 预算 120s（ISSUE #4601）：cnb 是网络调用，挂死不再无限卡住那一跑。 */
+  const r = runGateStep("cnb", args, { cwd: ROOT, stdio: "inherit", timeoutMs: 120_000 });
+  if (r.error !== null || r.status !== 0) {
     /* 上报失败照实说出来，但**不判红**（这一档是从属的，理由见文件头）。 */
-    const why = r.error === undefined ? `退出码 ${r.status}` : r.error.message;
+    const why = r.error === null ? `退出码 ${r.status}` : r.error.message;
     console.log(`[coverage-report] 上报没成功（${why}），这一步不因此判红`);
   }
 }

@@ -75,12 +75,12 @@
  *   · **cargo 缺失退 2 而不是退 1** —— 「这台机器上没有 cargo」是「这一格没跑起来」，
  *     不是「判据判出失败」（§13.5.25 的三态口径）。本地形态保持退 1（那边确实该拦）。
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
 import { defaultShellExe, shellStaleWarning } from "../dev-launcher.mjs";
+import { abortedAdvice, runGateStep } from "../launcher-core/shell.mjs";
 import { findCargo, findCargoLookup } from "./shell-gate-cargo.mjs";
 import { resolveGitDir } from "../lib/git-dir.mjs";
 import { changedFilesForBaseRef, reconcileSyntheticMergeFace } from "../lib/changed-scope.mjs";
@@ -118,10 +118,11 @@ export const RUST_SOURCE_RE = /^src-tauri\/src\/.*\.rs$/;
 export function stagedFiles() {
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/lib/changed-scope.mjs`
    * 的文件头「口径 ④」）。 */
-  const out = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
+  const out = runGateStep(
+    "git",
+    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
+    { cwd: ROOT, timeoutMs: 30_000 },
+  );
   if (out.status !== 0) {
     return [];
   }
@@ -161,10 +162,10 @@ export function dropAdoptedShellInputs(staged, repoRoot = ROOT) {
       return true;
     }
     // 与第二父（被合进来的那侧）一致 ⇒ 只是采纳，不算本次改动。
-    const againstMergeHead = spawnSync(
+    const againstMergeHead = runGateStep(
       "git",
       ["-C", repoRoot, "diff", "--quiet", mergeHead, "--", file],
-      { cwd: repoRoot },
+      { cwd: repoRoot, timeoutMs: 30_000 },
     );
     return againstMergeHead.status !== 0;
   });
@@ -240,10 +241,7 @@ export function materializeCargoTestInputs({
   // 三元组编译，sidecar 名里带的是同一个；写死或从 process.arch 翻译都会漂。
   let triple = null;
   if (cargo !== null && cargo !== undefined) {
-    const out =
-      versionOutput ??
-      spawnSync(cargo, ["-vV"], { encoding: "utf8", windowsHide: true }).stdout ??
-      "";
+    const out = versionOutput ?? runGateStep(cargo, ["-vV"], { timeoutMs: 30_000 }).stdout ?? "";
     triple = hostTripleFromCargoVersion(out) ?? null;
   }
   if (!triple) {
@@ -388,7 +386,7 @@ export function tauriLinuxAptPackages() {
  * @returns {boolean} 找得到那个 `.pc` 描述文件就是 true
  */
 function defaultPkgConfigProbe(mod) {
-  const r = spawnSync("pkg-config", ["--exists", mod], { stdio: "ignore" });
+  const r = runGateStep("pkg-config", ["--exists", mod], { stdio: "ignore", timeoutMs: 30_000 });
   return r.status === 0;
 }
 
@@ -505,12 +503,21 @@ export function runCargoTest({
   /* `--locked`（#4317）：与 Node 侧 `pnpm install --frozen-lockfile` 同一纪律 ——
    * 改了 Cargo.toml 就必须同批更 Cargo.lock，漂移在门禁当场红，而不是在别人的
    * 下一跑里静默换依赖版本。锁与清单的同步在 #4317 交付时用 `cargo metadata
-   * --locked` 实测过。 */
-  const r = spawnSync(cargo, ["test", "--locked"], {
+   * --locked` 实测过。
+   * 预算 900s（ISSUE #4601）：文件头自述冷编译 430s，600s 缺省太贴边；cargo
+   * 可能走网络拉 crate，挂死不再无限卡住提交。 */
+  const r = runGateStep(cargo, ["test", "--locked"], {
     cwd: path.join(ROOT, "src-tauri"),
     stdio: "inherit",
-    windowsHide: true,
+    timeoutMs: 900_000,
   });
+  if (r.outcome === "aborted") {
+    /* 超时/被杀 = 测量没发生（未校验 ≠ 红）：落 2，不冒充判据红。 */
+    process.stderr.write(
+      `${abortedAdvice({ label: "cargo test", timeoutMs: r.timeoutMs, signal: r.signal, errorCode: r.errorCode })}\n`,
+    );
+    return { code: 2 };
+  }
   return { code: r.status ?? 1 };
 }
 
