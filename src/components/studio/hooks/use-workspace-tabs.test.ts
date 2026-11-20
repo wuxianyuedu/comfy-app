@@ -83,6 +83,68 @@ describe("页签恢复不被落盘反冲", () => {
   });
 });
 
+describe("storage 已有页签 → 挂载后恢复激活视图（ISSUE #4562）", () => {
+  /* 这一组把「恢复」的判据从『存储没被冲掉』推进到『激活视图真的跟随存储』：
+     reload 后用户该落回离开时的那一屏，而不是永远停在首页。 */
+
+  it("恢复的 activeKey 成为当前视图（viewMode 跟随，不只存储存活）", async () => {
+    sessionStorage.setItem(
+      WS_TABS_KEY,
+      JSON.stringify({
+        activeKey: "workflows:",
+        tabs: [
+          ["home", null],
+          ["workflows", null],
+        ],
+      }),
+    );
+    render(createElement(Probe));
+    await expect.poll(() => latest?.viewMode).toBe("workflows");
+    expect(latest?.tabs.map((tab) => tab.view)).toEqual(["home", "workflows"]);
+    expect(latest?.activeKey).toBe("workflows:");
+  });
+
+  it("存储里页签顺序不是首页在先也能恢复（读侧归一，不整份放弃）", async () => {
+    /* ISSUE #4562 的原始读数：workflows 排在 home 前面。解析侧 `withHomeFirst`
+       只补位、不因顺序不同而丢整份 —— 这条锁住该口径。 */
+    sessionStorage.setItem(
+      WS_TABS_KEY,
+      JSON.stringify({
+        activeKey: "workflows:",
+        tabs: [
+          ["workflows", null],
+          ["home", null],
+        ],
+      }),
+    );
+    render(createElement(Probe));
+    await expect.poll(() => latest?.viewMode).toBe("workflows");
+    expect(latest?.tabs.map((tab) => tab.view)).toEqual(["home", "workflows"]);
+    expect(latest?.activeKey).toBe("workflows:");
+  });
+
+  it("恢复后再点侧栏仍能正常开新页（恢复态不是死的）", async () => {
+    sessionStorage.setItem(
+      WS_TABS_KEY,
+      JSON.stringify({
+        activeKey: "workflows:",
+        tabs: [
+          ["workflows", null],
+          ["home", null],
+        ],
+      }),
+    );
+    render(createElement(Probe));
+    await expect.poll(() => latest?.viewMode).toBe("workflows");
+
+    act(() => {
+      latest?.navigateTo("history");
+    });
+    expect(latest?.tabs.map((tab) => tab.view)).toEqual(["home", "workflows", "history"]);
+    expect(latest?.activeKey).toBe("history:");
+  });
+});
+
 describe("侧栏项的页签行为由配置面决定（ISSUE #3623）", () => {
   it("配置说「模型」是共享标签页时：切走它就退场", async () => {
     configMock.config = { models: "shared" };
