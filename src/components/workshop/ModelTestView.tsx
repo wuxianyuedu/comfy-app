@@ -423,17 +423,12 @@ export function ModelTestView() {
       <PageHeader srTitle={pageHeaderTitle("model-test")} />
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-        {/* ── 左栏：用途 + 模式 + 模型（桌面下吸附成独立滚动区）── */}
+        {/* ── 左栏：用途 + 模型 + 模式（模型卡紧跟用途，不被长模式列表挤出
+            首屏；桌面下吸附成独立滚动区）── */}
         <aside className="flex w-full shrink-0 flex-col gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-96px)] xl:w-64 xl:overflow-y-auto">
-          <Panel hint="同一模型分栏测试" icon={<Shapes />} title="用途">
+          <Panel icon={<Shapes />} title="用途">
             <KindTabs kind={c.kind} onChange={c.setKind} />
           </Panel>
-
-          {c.modeTabs.length > 0 && (
-            <Panel hint="全部生成类模式" icon={<ListChecks />} title="模式">
-              <ModeTabs mode={c.mode} onSelect={c.setMode} tabs={c.modeTabs} />
-            </Panel>
-          )}
 
           <Panel hint="按用途与模式过滤" icon={<Boxes />} title="模型">
             {c.loading ? (
@@ -486,6 +481,14 @@ export function ModelTestView() {
             )}
             {hasModel && <ChannelNote c={c} />}
           </Panel>
+
+          {c.modeTabs.length > 0 && (
+            <Panel icon={<ListChecks />} title="模式">
+              <div className="max-h-80 overflow-y-auto pr-0.5">
+                <ModeTabs mode={c.mode} onSelect={c.setMode} tabs={c.modeTabs} />
+              </div>
+            </Panel>
+          )}
         </aside>
 
         {/* ── 中栏：统一输入 + 生成 CTA（未选模型时给三步引导）── */}
