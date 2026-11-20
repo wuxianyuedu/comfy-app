@@ -151,7 +151,11 @@ export function judgeRun(run, { after, startedAt }) {
   if (run.error) {
     return {
       ok: false,
-      reason: `typedoc did not start (${/** @type {any} */ (run.error).code ?? "UNKNOWN"}): ${run.error.message}`,
+      /* code 不在 Error 的声明面上（Node 的系统错误才带）：用 in 收窄取值，
+       * 不做 any 断言（no-unsafe-type-assertion 硬闸）。 */
+      reason: `typedoc did not start (${
+        "code" in run.error ? String(run.error.code) : "UNKNOWN"
+      }): ${run.error.message}`,
     };
   }
   if (run.status !== 0) {
