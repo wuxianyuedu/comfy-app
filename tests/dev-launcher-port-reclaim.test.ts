@@ -4,6 +4,7 @@
  * 两层判据（`scripts/launcher-core/orchestrator.mjs`）：`usesExplicitPort()` 显式端口前提 + `portOwnershipVerdict()` 应用服务自证；缺前提不动，宁可放过残留不误杀。
  */
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
@@ -253,5 +254,54 @@ describe("cmdlineBelongsToRoot 的路径边界（#4423）", () => {
   it("空命令行 / 空根：不命中", () => {
     expect(cmdlineBelongsToRoot("", ROOT_DIR)).toBe(false);
     expect(cmdlineBelongsToRoot("node x.mjs", "")).toBe(false);
+  });
+});
+
+/**
+ * 裸 next dev 的**带引号**命令行（ISSUE #4552）：Windows 的命令行会把脚本路径整个
+ * 加引号，node 起 next 的 JS bin 时是 `node "…\bin\next" dev --turbo`——`next` 与
+ * `dev` 之间隔了一个收尾引号。此前 `\s+` 前不容许引号，这一最常见形态被卡在
+ * `isAppDevServerCmdline` 的正则外：端口被裸 next dev 占着、`pnpm dev` 报
+ * EADDRINUSE，`runningAppInstances()` 的归属读数却报「无实例」，两个读数互相矛盾。
+ * 既有用例（上方「next CLI 层同样算自证」）拼的是**不带引号**的命令行，所以一直
+ * 没盖到这一形态——这里专门补上带引号的真实形状与不该放行的负例。
+ */
+describe("裸 next dev 的带引号命令行（ISSUE #4552）", () => {
+  const sep = path.sep;
+  /** 按本机分隔符把「检出根 + 以 / 分隔的尾段」拼成真实路径形态。 */
+  const segments = (tail: string): string => `${ROOT}${sep}${tail.split("/").join(sep)}`;
+  const nextBin = segments("node_modules/next/dist/bin/next");
+
+  it("node + 带引号的 next bin：命中（裸 next dev 最常见的命令行形态）", () => {
+    expect(isApp(`node "${nextBin}" dev --turbo -p 3311`)).toBe(true);
+  });
+
+  it("next.cmd 垫片带引号：命中", () => {
+    expect(isApp(`"${segments("node_modules/.bin/next.cmd")}" dev -p 3311`)).toBe(true);
+  });
+
+  it("pnpm exec 落到 .pnpm 真实路径且带引号：命中", () => {
+    const pnpmNext = segments("node_modules/.pnpm/next@16.4.3/node_modules/next/dist/bin/next");
+    expect(isApp(`node "${pnpmNext}" dev -p 3311`)).toBe(true);
+  });
+
+  it("不带引号的同一命令行照旧命中（修复不回退既有形态）", () => {
+    expect(isApp(`node ${nextBin} dev -p 3311`)).toBe(true);
+  });
+
+  it("带引号的别的 CLI 不算：引号不能变成放行一切的口子", () => {
+    const otherBin = segments("node_modules/.bin/some-other-cli");
+    expect(isApp(`node "${otherBin}" serve -p 3311`)).toBe(false);
+  });
+
+  it("隔壁检出的 next dev（带引号）不算：归属仍看根路径", () => {
+    const segs = ROOT.split(sep);
+    segs[segs.length - 1] = "comfy-other-checkout";
+    const otherNext = `${segs.join(sep)}${sep}node_modules${sep}next${sep}dist${sep}bin${sep}next`;
+    expect(isApp(`node "${otherNext}" dev -p 3311`)).toBe(false);
+  });
+
+  it("next devtools 这类 dev 前缀词不误中（dev|start 后仍有词边界守着）", () => {
+    expect(isApp(`node "${nextBin}" devtools -p 3311`)).toBe(false);
   });
 });

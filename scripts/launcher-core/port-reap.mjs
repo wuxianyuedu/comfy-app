@@ -52,7 +52,8 @@ export function scanPorts(port) {
  *     同步、零子进程；
  *   · **端口上的应用进程** —— 端口取本检出解析出来的那一个（含 +1/+2 顺延位），
  *     占位 PID 的命令行必须命中「根路径 + 本仓库的 `dev.mjs` / `start.mjs` /
- *     `next dev|start`」（`isAppDevServerCmdline`），否则按「别人的进程」处理。
+ *     `next dev|start`」（`isAppDevServerCmdline`；Windows 命令行的脚本路径带
+ *     引号，`…\bin\next" dev` 这一形态也算），否则按「别人的进程」处理。
  *
  * 走第二条而不是只看会话，是因为用户完全可以绕过编排器自己 `pnpm dev` ——
  * 那时没有会话锚点，而 `node_modules` 一样被锁着。
@@ -311,7 +312,13 @@ export function isAppDevServerCmdline(cmdline, root = process.cwd()) {
   if (text.includes(`${base}/scripts/${APP_START_SCRIPT_MARKER}`)) {
     return true;
   }
-  if (/next(?:\.cmd|\.ps1)?\s+(?:dev|start)\b/.test(text)) {
+  /* Windows 的命令行会把脚本路径整个加引号：node 起 next 的 JS bin 时是
+   * `node "…\bin\next" dev --turbo`——`next` 与 `dev` 之间隔了一个收尾引号。
+   * 此前 `\s+` 前不容许引号，这一最常见形态被卡在正则外（ISSUE #4552：端口被
+   * 裸 next dev 占着、`pnpm dev` 报 EADDRINUSE，归属读数却报「无实例」）。
+   * `["']?` 容许这个收尾引号；`dev|start` 后仍要 `\b`，`next devtools` /
+   * `next startup` 这类不会误中。 */
+  if (/next(?:\.cmd|\.ps1)?["']?\s+(?:dev|start)\b/.test(text)) {
     return true;
   }
   return false;
