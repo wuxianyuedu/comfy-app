@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 
+import { cn } from "~/lib/utils";
+
 import { PROJECTS_ENTRY, sidebarNavItems } from "./NavItems";
 import { ShellFullPage } from "./ShellFullPage";
 
@@ -33,7 +35,14 @@ export function WorkspaceLoadingShell({ children }: { children: ReactNode }) {
             <ul className="flex w-full min-w-0 flex-col gap-0">
               {navItems.map((item) => (
                 <li key={item.id}>
-                  <div className="flex h-8 w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm [&_svg]:size-4 [&_svg]:shrink-0">
+                  <div
+                    className={cn(
+                      "flex h-8 w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm [&_svg]:size-4 [&_svg]:shrink-0",
+                      /* 未上线的占位项与真壳同形置灰：加载态切到真壳时侧栏不该跳一下
+                         （真壳里 disabled 的 SidebarMenuButton 带 opacity-50）。 */
+                      item.enabled === false && "opacity-50",
+                    )}
+                  >
                     {item.icon}
                     <span className="truncate">{item.label}</span>
                   </div>
