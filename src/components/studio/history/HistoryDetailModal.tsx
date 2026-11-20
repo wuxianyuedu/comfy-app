@@ -11,6 +11,7 @@ import {
   deriveTaskOrigin,
   deriveWorkflowParams,
   deriveWorkshopParams,
+  isPromptParamRow,
   kvValueText,
 } from "./history-detail-derive";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
@@ -40,6 +41,17 @@ type HistoryDetailModalProps = {
    * pin 名）。工作流已被删除时是空表，参数名如实回落 pin 名。 */
   workflowIO: WorkflowIOMap;
 };
+
+/** 提示词这类长文案在参数表里的展示格（ISSUE #4665）：定高 + 纵向滚动，
+ *  超出部分滚动查看；完整文案始终在 DOM 里（可选中 / 可复制 / 读屏可读）。
+ *  定高让「提示词」这一行不再把弹窗内容无限拉长。 */
+function PromptValueCell({ text }: { text: string }) {
+  return (
+    <span className="text-ink-bright block h-24 overflow-y-auto break-words whitespace-pre-wrap">
+      {text}
+    </span>
+  );
+}
 
 /**
  * 历史任务详情弹窗 —— 纯展示层（规范 17 §17.2 第③层）：图片网格 + 工坊参数（工坊发起时）+ 工作流参数 + 打开目录/下载工作流。
@@ -330,6 +342,9 @@ export function HistoryDetailModal({
                         value:
                           row.value === undefined ? (
                             <span className="text-ink-fainter">未提供</span>
+                          ) : isPromptParamRow(row.id) ? (
+                            /* 提示词定高滚动（ISSUE #4665）：长提示词不再把弹窗拉长。 */
+                            <PromptValueCell text={kvValueText(row.value)} />
                           ) : (
                             kvValueText(row.value)
                           ),
@@ -353,7 +368,13 @@ export function HistoryDetailModal({
                           /* 显示工作流 IO 的作者标签（「宽高比」而不是
 `aspect_ratio`）；查不到标签时它自己就是 pin 名。 */
                           key: row.label,
-                          value: kvValueText(row.value),
+                          /* 提示词 pin 同样定高滚动（ISSUE #4665）：工作流直接
+                             发起的任务，提示词落在工作流参数表里。 */
+                          value: isPromptParamRow(row.id, row.name) ? (
+                            <PromptValueCell text={kvValueText(row.value)} />
+                          ) : (
+                            kvValueText(row.value)
+                          ),
                           /* 悬停补上原始 pin 名：排查问题 / 对 ComfyUI 报错时
  用的是程序名，作者改的名字对不上。 */
                           title: `${row.label}（${row.name}）`,
