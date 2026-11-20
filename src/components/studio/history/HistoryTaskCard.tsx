@@ -34,10 +34,12 @@ type HistoryTaskCardProps = {
 
 /** 历史记录列表中的单条任务卡片（缩略图 + 状态 + 模型/模式 + 错误 + 操作区）。
  *
- *  布局按 ISSUE #4619 重排：主行显示「状态 + 模式 + 模型名 + 时间」
- *  （不再显示工作流名——模型标签才是用户认任务的锚点），底部补一排与
- *  队列页同款的「日志 / 输出目录 / 复制去重投」动作，与右上的
+ *  布局按 ISSUE #4619 重排：主行显示「模式 + 模型名 + 时间」
+ *  （不再显示工作流名——模型标签才是用户认任务的锚点），底部一排与
+ *  队列页同款的「日志 / 输出目录 / 复制去重投」动作，与右侧的
  *  取消 / 重试 / 删除分开放，视觉上「看」与「做」两层分开。
+ *  视觉按 ISSUE #4630 轻量化：状态改「左缘短条 + 头像圆点角标」表达、
+ *  失败错误内嵌为卡底警示条、悬停轻微上浮。
  *
  *  `memo` 是这一页渲染预算的一半（ISSUE #4559）：进度定时器每拍只动 RUNNING 卡的
  *  `progress` 一个数字，其余卡的 props（task / 回调 / 布尔）引用与值都稳定 ——
@@ -58,68 +60,67 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
   const st = STATUS_STYLE[task.status] ?? QUEUED_STATUS_STYLE;
   const terminal =
     task.status === "SUCCEEDED" || task.status === "FAILED" || task.status === "CANCELLED";
+  const failed = task.status === "FAILED";
+  /* 错误条内嵌在卡片底部、占满卡宽（ISSUE #4630）：错误是这条任务的内部信息，
+   * 不再做成悬浮在主体旁的独立色块 —— 悬浮块抢视线且把卡片纵向中线打乱。 */
+  const errorMessage = failed ? (task.error ?? "") : "";
+  const showError = failed && errorMessage !== "";
   return (
     <div
-      className={`group bg-card hover:bg-subtle relative overflow-hidden rounded-2xl border transition-all ${
-        st.accentCls
-      } ${st.cardBorderCls}`}
+      className="group bg-card hover:bg-subtle border-border-subtle relative flex flex-col overflow-hidden rounded-xl border transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/25"
       key={task.id}
     >
-      {/* 左缘 accent 额外强调：状态色高亮条（border-l-4 已在父级，再叠一层） */}
-      <div
-        aria-hidden
-        className={`absolute top-0 bottom-0 left-0 w-1 ${
-          task.status === "SUCCEEDED"
-            ? "bg-success"
-            : task.status === "RUNNING"
-              ? "bg-primary"
-              : task.status === "FAILED"
-                ? "bg-destructive"
-                : task.status === "QUEUED"
-                  ? "bg-info"
-                  : "bg-gray-500"
-        }`}
-      />
+      {/* 左缘状态短条：只与首行等高、颜色即状态语义（ISSUE #4630）——
+          整卡通高的粗边条让每张卡都像「被标了一刀」，缩短后只做状态提示。 */}
+      <div aria-hidden className={`absolute top-3 left-0 h-5 w-1 rounded-r-full ${st.toneCls}`} />
 
-      <div className="flex items-center gap-4 py-3 pr-3 pl-5">
-        {/* ── 缩略图 ── */}
-        <Button
-          aria-label="查看任务详情"
-          className="bg-panel-deep relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl p-0"
-          onClick={() => {
-            onOpenDetail(task.id);
-          }}
-          variant="ghost"
-        >
-          {task.cover !== null && task.cover !== "" ? (
-            <MediaThumbnail
-              alt=""
-              autoPlay
-              className="h-full w-full object-cover"
-              loop
-              src={task.cover}
-            />
-          ) : (
-            <span className="text-ink-fainter text-xs">
-              {task.status === "FAILED" ? "失败" : "无图"}
-            </span>
-          )}
-          {/* 进行中：底部进度条（卡片下缘的一条装饰条：无轨道底色、方角，
-              宽度下限与文字百分比分列两处，观感与收口前一致）。 */}
-          {st.showProgress && (
-            <ProgressBar
-              className="absolute inset-x-0 bottom-0"
-              fillClassName="u-gradient-brand rounded-none duration-1000 ease-linear"
-              showValue={false}
-              trackClassName="bg-canvas-deep h-1 rounded-none"
-              value={progress}
-            />
-          )}
-          {/* 排队中：虚线边框 + 计时图标 */}
-          {task.status === "QUEUED" && (
-            <div className="border-info/40 pointer-events-none absolute inset-0 rounded-xl border border-dashed" />
-          )}
-        </Button>
+      <div className="flex items-center gap-3 py-2.5 pr-3 pl-4">
+        {/* ── 缩略图（头像）── 失败项加红色描边；状态以小圆点徽标叠在右上角，
+            状态名给读屏（sr-only），色即语义、不再横占一格文字徽标。 */}
+        <div className="relative shrink-0">
+          <Button
+            aria-label="查看任务详情"
+            className={`bg-panel-deep relative flex size-20 items-center justify-center overflow-hidden rounded-xl p-0 ${
+              failed ? "ring-destructive/50 ring-1" : ""
+            }`}
+            onClick={() => {
+              onOpenDetail(task.id);
+            }}
+            variant="ghost"
+          >
+            {task.cover !== null && task.cover !== "" ? (
+              <MediaThumbnail
+                alt=""
+                autoPlay
+                className="h-full w-full object-cover"
+                loop
+                src={task.cover}
+              />
+            ) : (
+              <span className="text-ink-fainter text-xs">{failed ? "失败" : "无图"}</span>
+            )}
+            {/* 进行中：底部进度条（卡片下缘的一条装饰条：无轨道底色、方角，
+                宽度下限与文字百分比分列两处，观感与收口前一致）。 */}
+            {st.showProgress && (
+              <ProgressBar
+                className="absolute inset-x-0 bottom-0"
+                fillClassName="u-gradient-brand rounded-none duration-1000 ease-linear"
+                showValue={false}
+                trackClassName="bg-canvas-deep h-1 rounded-none"
+                value={progress}
+              />
+            )}
+            {/* 排队中：虚线边框 + 计时图标 */}
+            {task.status === "QUEUED" && (
+              <div className="border-info/40 pointer-events-none absolute inset-0 rounded-xl border border-dashed" />
+            )}
+          </Button>
+          <span
+            className={`border-card absolute -top-1 -right-1 size-3 rounded-full border-2 ${st.toneCls}`}
+          >
+            <span className="sr-only">{st.label}</span>
+          </span>
+        </div>
 
         {/* ── 主体信息 ── */}
         {/* 整块可点 → 原生按钮，不是「加了 onClick 的 div」：非原生元素键盘用户进不来
@@ -132,10 +133,7 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
           }}
           variant="ghost"
         >
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`text-2xs rounded-full px-2 py-0.5 font-medium ${st.pillCls}`}>
-              {st.label}
-            </span>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             {st.showProgress && (
               <span className="text-primary-strong text-3xs tabular-nums">
                 {clampPct(progress)}%
@@ -143,51 +141,26 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
             )}
             {/* 模式 + 模型（ISSUE #4619）：按测试模型页的封装形式认任务 ——
                 模式来自任务类型码的中文标签，模型来自工作流上挂的模型标签
-                （没挂标签回落工作流名）。工作流名不再单独占一行。 */}
-            <span className="border-border-subtle text-ink-muted text-2xs rounded-full border px-2 py-0.5">
+                （没挂标签回落工作流名）。工作流名不再单独占一行。
+                胶囊改极简底色档、不再描边（ISSUE #4630）：元信息退半步，
+                提示词回到视觉主位。 */}
+            <span className="bg-subtle text-ink-muted text-2xs rounded-full px-2 py-0.5">
               {modeLabelOf(task.type)}
             </span>
             <TruncatedText className="text-ink-strong max-w-48 truncate text-xs font-medium">
               {modelLabelOf(task)}
             </TruncatedText>
-            <span className="text-ink-fainter shrink-0 text-xs">· {timeAgo(task.createdAt)}</span>
           </div>
-          <span className="text-ink-strong mt-1 line-clamp-1 block text-sm">
+          <span className="text-ink-strong mt-1 line-clamp-2 block text-sm leading-relaxed">
             {task.prompt || "（无提示词）"}
           </span>
-          {task.status === "FAILED" &&
-            task.error !== undefined &&
-            task.error !== null &&
-            task.error !== "" && (
-              <div className="border-destructive/20 bg-destructive/6 mt-2 rounded-md border px-2.5 py-1.5">
-                <p className="text-destructive text-2xs leading-relaxed">
-                  <span className="font-semibold">错误：</span>
-                  {task.error}
-                </p>
-                {st.failureSuggestion && (
-                  <p className="text-warning-strong/90 text-2xs mt-1 leading-relaxed">
-                    {st.failureSuggestion(task.error)}
-                  </p>
-                )}
-                {/* 结构化校验错误逐字段列表 */}
-                {task.validationErrors && task.validationErrors.length > 0 && (
-                  <div className="bg-canvas-deep border-destructive/20 mt-1.5 rounded border px-2 py-1.5">
-                    <div className="text-destructive text-3xs mb-1 font-semibold">
-                      节点配置校验（{task.validationErrors.length} 项）
-                    </div>
-                    <ValidationErrorList
-                      className="text-destructive/90"
-                      errors={task.validationErrors}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
         </Button>
 
-        {/* ── 状态动作（取消 / 重试 / 删除，永远可见） ── */}
+        {/* ── 时间戳 + 状态动作（取消 / 重试 / 删除，永远可见）──
+            时间戳右对齐、不再挤在元信息行里（ISSUE #4630）。 */}
         <div className="flex shrink-0 flex-col items-end gap-2">
-          <div className="flex items-center gap-2">
+          <span className="text-ink-fainter text-xs tabular-nums">{timeAgo(task.createdAt)}</span>
+          <div className="flex items-center gap-1.5">
             {st.isActive && (
               <Button
                 className="h-auto rounded-lg px-2.5 py-1"
@@ -200,26 +173,26 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
                 取消
               </Button>
             )}
-            {task.status === "FAILED" && (
+            {failed && (
               <Button
-                className="h-auto rounded-lg px-2.5 py-1"
+                className="border-primary/40 text-primary-strong hover:bg-primary/10 h-auto rounded-lg border px-2.5 py-1"
                 disabled={retrying}
                 onClick={() => {
                   onRetry(task);
                 }}
                 size="xs"
-                variant="primary"
+                variant="ghost"
               >
                 {retrying ? "提交中…" : "↻ 重试"}
               </Button>
             )}
             <Button
-              className="h-auto rounded-lg px-2.5 py-1"
+              className="text-ink-faint hover:text-danger-strong h-auto rounded-lg px-2.5 py-1"
               onClick={() => {
                 onRemove(task.id);
               }}
               size="xs"
-              variant="danger"
+              variant="ghost"
             >
               删除
             </Button>
@@ -227,12 +200,46 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
         </div>
       </div>
 
+      {/* ── 错误提示条（卡片内底部内嵌，ISSUE #4630 核心痛点）──
+          半透暗红底 + 左侧小红点；「错误：」红字、「建议：」琥珀小字，
+          读起来像便签而不是警报；放在底部动作区之上，仍是「这条任务的内部信息」。 */}
+      {showError && (
+        <div className="bg-destructive/10 flex items-start gap-2 px-4 py-2" role="alert">
+          <span aria-hidden className="bg-destructive mt-1.5 size-1.5 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1">
+            <p className="text-destructive text-xs leading-relaxed break-words">
+              <span className="font-semibold">错误：</span>
+              {errorMessage}
+            </p>
+            {st.failureSuggestion && (
+              <p className="text-warning-strong/90 text-2xs mt-1 leading-relaxed">
+                {st.failureSuggestion(errorMessage)}
+              </p>
+            )}
+            {/* 结构化校验错误逐字段列表 */}
+            {task.validationErrors && task.validationErrors.length > 0 && (
+              <div className="border-destructive/20 mt-1.5 rounded border px-2 py-1.5">
+                <div className="text-destructive text-3xs mb-1 font-semibold">
+                  节点配置校验（{task.validationErrors.length} 项）
+                </div>
+                <ValidationErrorList
+                  className="text-destructive/90"
+                  errors={task.validationErrors}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── 底部动作区（ISSUE #4619）：与队列页同款的 日志 / 输出目录 / 复制去重投。
-          终态行才有产物与「重投」可言；进行中行只给日志（跟队列页同一取舍）。 */}
-      <div className="border-border-subtle flex flex-wrap items-center gap-1 border-t px-5 py-2">
+          终态行才有产物与「重投」可言；进行中行只给日志（跟队列页同一取舍）。
+          间距拉开一档、悬停时图标随文字转主题色（ISSUE #4630 微交互）；
+          lucide 图标走 currentColor，悬停变色只需作用在按钮字色上。 */}
+      <div className="border-border-subtle flex flex-wrap items-center gap-2 border-t px-4 py-1.5">
         <Button
           aria-label="查看这一条的执行日志"
-          className="h-auto gap-1"
+          className="text-ink-faint hover:text-primary-strong h-auto gap-1"
           onClick={() => {
             onOpenLog(task);
           }}
@@ -246,7 +253,7 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
           <>
             <Button
               aria-label="打开这一条的输出目录"
-              className="h-auto gap-1"
+              className="text-ink-faint hover:text-primary-strong h-auto gap-1"
               disabled={busy}
               onClick={() => {
                 onOpenFolder(task);
@@ -259,7 +266,7 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
             </Button>
             <Button
               aria-label="复制这一条的提交内容，回画布改完再投一次"
-              className="h-auto gap-1"
+              className="text-ink-faint hover:text-primary-strong h-auto gap-1"
               disabled={busy}
               onClick={() => {
                 onCopyForReprint(task);

@@ -188,10 +188,11 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
         <div className="flex-col gap-6">
           {c.visibleGroups.map((group) => (
             <section key={group.key}>
-              {/* ── 日期分组标题 ── */}
+              {/* ── 日期分组标题 ── 居中时间轴样式（ISSUE #4630）：
+                  文字居中、两侧细线，读起来是「列表的分节」而不是「又一行业务信息」。 */}
               <div className="mb-3 flex items-center gap-3">
-                <div className="u-gradient-brand h-4 w-1 rounded-full" />
-                <h2 className="text-ink-strong text-sm font-semibold">{group.key}</h2>
+                <div className="bg-subtle h-px flex-1" />
+                <h2 className="text-ink-soft text-xs font-medium">{group.key}</h2>
                 <span className="text-ink-fainter text-xs">{group.items.length} 个任务</span>
                 <div className="bg-subtle h-px flex-1" />
               </div>

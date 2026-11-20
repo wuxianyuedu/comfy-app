@@ -85,10 +85,12 @@ export function QueueRowLine({
           {row.error}
         </TruncatedText>
       ) : null}
-      <span className="flex shrink-0 items-center gap-1">
+      {/* 动作组：间距拉开一档 + 悬停时图标随文字转主题色（ISSUE #4630 微交互）；
+          lucide 图标走 currentColor，悬停变色只需作用在按钮字色上。 */}
+      <span className="flex shrink-0 items-center gap-2">
         <Button
           aria-label="查看这一条的执行日志"
-          className="h-auto gap-1"
+          className="text-ink-faint hover:text-primary-strong h-auto gap-1"
           onClick={onOpenLog}
           size="xs"
           variant="ghost"
@@ -100,7 +102,7 @@ export function QueueRowLine({
           <>
             <Button
               aria-label="打开这一条的输出目录"
-              className="h-auto gap-1"
+              className="text-ink-faint hover:text-primary-strong h-auto gap-1"
               disabled={busy}
               onClick={onOpenFolder}
               size="xs"
@@ -111,7 +113,7 @@ export function QueueRowLine({
             </Button>
             <Button
               aria-label="复制这一条的提交内容，回画布改完再投一次"
-              className="h-auto gap-1"
+              className="text-ink-faint hover:text-primary-strong h-auto gap-1"
               disabled={busy}
               onClick={onCopy}
               size="xs"
@@ -124,7 +126,7 @@ export function QueueRowLine({
         ) : (
           <Button
             aria-label="取消这一条"
-            className="h-auto gap-1"
+            className="text-ink-faint hover:text-primary-strong h-auto gap-1"
             disabled={busy}
             onClick={onCancel}
             size="xs"

@@ -2,6 +2,7 @@
  * 历史任务卡的键盘可达性（规范 06 §6.11）。收口前主体信息块是 div + onClick（打开详情），
  * 左侧缩略图是 Button，同一动作只有鼠标那条通；改原生 <Button> 后 Enter/Space 与焦点语义免费。
  * 另覆盖 ISSUE #4619 的条目形态：模式 / 模型名取代工作流名，底部补 队列同款动作按钮。
+ * 另覆盖 ISSUE #4630 的视觉收口：错误内嵌卡底警示条、状态圆点角标带读屏状态名。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -123,5 +124,44 @@ describe("HistoryTaskCard 条目形态（ISSUE #4619）", () => {
       screen.getByRole("button", { name: "复制这一条的提交内容，回画布改完再投一次" }),
     ).toBeDisabled();
     expect(screen.getByRole("button", { name: "查看这一条的执行日志" })).toBeEnabled();
+  });
+});
+
+describe("HistoryTaskCard 错误提示条（ISSUE #4630）", () => {
+  const failedTask: TaskItem = {
+    ...task,
+    status: "FAILED",
+    error: "e2e 假 comfy-cli 按哨兵判定失败：E2E_FAKE_CLI_FAIL_SENTINEL",
+  };
+
+  it("失败卡的错误信息内嵌为卡片底部警示条（role=alert，错误 + 建议同条）", () => {
+    renderCard({ task: failedTask });
+    const alert = screen.getByRole("alert");
+    /* 错误正文与可行动建议同在警示条内，而不是悬浮在卡片中部的独立色块。 */
+    expect(alert.textContent).toContain("错误：");
+    expect(alert.textContent).toContain(failedTask.error!);
+    expect(alert.textContent).toContain("建议：");
+  });
+
+  it("非失败卡不渲染警示条（错误条只属于失败态）", () => {
+    renderCard();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("失败但 error 为空串时不渲染空警示条", () => {
+    renderCard({ task: { ...task, status: "FAILED", error: "" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("HistoryTaskCard 状态角标（ISSUE #4630）", () => {
+  it("状态名以读屏文本挂在头像角标上（视觉是圆点、语义不丢）", () => {
+    renderCard();
+    expect(screen.getByText("已完成", { selector: ".sr-only" })).toBeInTheDocument();
+  });
+
+  it("失败卡角标读「失败」", () => {
+    renderCard({ task: { ...task, status: "FAILED", error: "boom" } });
+    expect(screen.getByText("失败", { selector: ".sr-only" })).toBeInTheDocument();
   });
 });
