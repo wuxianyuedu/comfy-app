@@ -195,3 +195,47 @@ export function withReferenceLoaderMountNodes(args: {
   }
   return base;
 }
+
+/** 解析后的参考图挂载节点（#4593）：id + 给人看的名字。 */
+export type ReferenceMountNode = {
+  id: string;
+  title: string;
+};
+
+/**
+ * 从 RAW 工作流图解析「参考图挂载在了哪些节点」（#4593）：把挂载节点 id 名单
+ * 对到 RAW 节点的标题，供工作流库详情直接展示——不必进编辑器就能看到挂载在了
+ * 什么节点。RAW 节点的 `title` 缺省时回落「类型 #id」（ComfyUI 图的 title 是
+ * 可选字段）；名单里指不到的 id 保留原样返回（配置里有、图里找不到是真实现场，
+ * 兜底显示比静默丢更诚实）。RAW 不是对象 / 节点缺 id 的按跳过处理。
+ */
+export function resolveReferenceMountNodes(args: {
+  mountNodeIds: ReadonlyArray<string>;
+  rawJson: unknown;
+}): Array<ReferenceMountNode> {
+  const { mountNodeIds, rawJson } = args;
+  if (mountNodeIds.length === 0) {
+    return [];
+  }
+  const titles = new Map<string, string>();
+  if (isPlainRecord(rawJson) && Array.isArray(rawJson.nodes)) {
+    for (const node of rawJson.nodes) {
+      if (!isPlainRecord(node)) {
+        continue;
+      }
+      /* RAW 节点 id 是数字，容错处理其它形状；归不出给空串 = 跳过
+       * （与 workflow-update-remap 的 nodeIdOf 同一口径）。 */
+      const id =
+        typeof node.id === "string" ? node.id : typeof node.id === "number" ? String(node.id) : "";
+      if (id === "" || titles.has(id)) {
+        continue;
+      }
+      const type = typeof node.type === "string" && node.type !== "" ? node.type : "节点";
+      titles.set(
+        id,
+        typeof node.title === "string" && node.title !== "" ? node.title : `${type} #${id}`,
+      );
+    }
+  }
+  return mountNodeIds.map((id) => ({ id, title: titles.get(id) ?? id }));
+}

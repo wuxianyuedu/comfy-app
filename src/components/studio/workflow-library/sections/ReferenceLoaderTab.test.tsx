@@ -87,4 +87,26 @@ describe("参考图装载独立页签（ISSUE #4526）", () => {
     expect(body).toMatch(/tab === "reference" && \(/);
     expect(body).toMatch(/<ReferenceLoaderTab/);
   });
+
+  it("挂载节点面板：按 RAW 解析出的名字列出挂载节点（#4593）", () => {
+    status = { entries: [entry({})] };
+    renderTab({
+      paramMap: { referenceLoaders: { mountNodeIds: ["45", "69"] } },
+      rawJson: {
+        nodes: [
+          { id: 45, type: "ReferenceImageNode", title: "参考图挂载 A" },
+          { id: 69, type: "ReferenceImageNode" },
+        ],
+      },
+    });
+    expect(screen.getByText("参考图挂载节点（2）")).toBeTruthy();
+    expect(screen.getByText("参考图挂载 A")).toBeTruthy();
+    expect(screen.getByText("ReferenceImageNode #69")).toBeTruthy();
+  });
+
+  it("没有挂载节点 → 不渲染挂载面板", () => {
+    status = { entries: [entry({})] };
+    renderTab({ paramMap: {} });
+    expect(screen.queryByText(/参考图挂载节点/)).toBeNull();
+  });
 });
