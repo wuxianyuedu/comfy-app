@@ -45,6 +45,8 @@ const { state, MAX_CONCURRENCY } = runner;
  * 未注入那条路），所以不先把注入侧补上，每个用例都会留一串 unhandled rejection
  * （与 `enqueue.test.ts` 同一处置）。 */
 const runnerPersist = {
+  appendLogs: vi.fn(() => Promise.resolve(undefined)),
+  resetLogs: vi.fn(() => Promise.resolve(undefined)),
   replaceLogs: vi.fn(() => Promise.resolve(undefined)),
   replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
 };

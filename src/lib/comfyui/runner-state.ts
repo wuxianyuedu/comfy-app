@@ -200,13 +200,23 @@ const persistTimers = new Map<
   }
 >();
 
+/** 已追加进 `taskLog` 表的最大行号（按任务记）：增量落库只取「此游标之后」的行，
+ *  这是取代整包重写的游标本体（#4605）。任务缓冲被淘汰后随之清除——游标丢了
+ *  也不会重写已落库的行，最坏多追加一次缓冲里剩下的行。 */
+const appendedSeqByTask = new Map<string, number>();
+
+/** 每任务的下一个日志行号。与 `appendedSeqByTask` 刻意分开：重跑清场删的是
+ *  已落库的行，行号**不回退**（新轮次从旧值之后继续编），SSE 游标按 seq 比大小
+ *  因此跨轮次单调，不会把新轮日志误判成「已发送」。 */
+const logSeqByTask = new Map<string, number>();
+
 /** 写入并把该任务标记为「最近使用」，再淘汰超出 `maxTasks` 的最久未用项。
  *  Map 的迭代序是插入序、对已存在的键 `set` 不改变位置 —— 所以标记最近
  *  使用要 delete 后再 set，淘汰时取迭代器的第一个键即得最旧项。
  *
  *  `skip`：命中即**跳过本轮淘汰**（#4021）。日志 Map 传「还有 pending 落库
- *  定时器」——被淘汰任务的 pending `persistLogs` 会以空数组 `replaceLogs`
- *  抹掉 DB 里已落库的日志；「日志已落库才可淘汰」这条不变式靠它守住。
+ *  定时器」——缓冲被淘汰后，那些行再也没有机会增量落库（游标清了、内存没了），
+ *  等于把已发生的日志从库里漏掉；「日志已落库才可淘汰」这条不变式靠它守住。
  *  全部键都被 skip 时允许暂时超限（ bounded：最迟 1.5s 的兜底 flush 后回落）。
  *
  *  同一形态的第二处消费（ISSUE #4351）：`executor-dispatch` 的 `wsWaitLogged`
@@ -241,6 +251,12 @@ export function log(taskId: string, level: LogEntry["level"], msg: string): LogE
 
   const entry: LogEntry = { t: Date.now(), level, msg, src: callerLoc() };
 
+  /* 行号在写日志那一刻定死：增量落库（appendLogs）与 SSE 增量游标都按它比大小。
+   * 计数跨轮次单调（重跑清场只删行、不回退计数），见 logSeqByTask 的注释。 */
+  const seq = (logSeqByTask.get(taskId) ?? 0) + 1;
+  logSeqByTask.set(taskId, seq);
+  entry.seq = seq;
+
   const arr = store.logs.get(taskId) ?? [];
 
   arr.push(entry);
@@ -266,8 +282,8 @@ const QUEUED_KEEP_MAX = 8;
  *  上一轮的尾巴」），那连带抹掉了本轮刚写下的「⏳ 等待 ComfyUI WebSocket 连接
  *  就绪…」——而回收器不再兜底判死排队行之后（ISSUE #1204），那句是用户唯一能
  *  看到「这条在等什么」的地方（ISSUE #1206）。边界不能整体挪到收口：收口之后
- *  还会再打「✓ 全部完成」这类行，先删缓冲就让它带着整包 `replaceLogs` 把现场
- *  覆盖成一两行（实测过，比原缺陷更糟）。所以只把「排队期的行」单独保住。 */
+ *  还会再打「✓ 全部完成」这类行，先删缓冲会让这些行失去落库机会（增量追加只认
+ *  缓冲里还在线的行，#4605）。所以只把「排队期的行」单独保住。 */
 export function logWhileQueued(taskId: string, level: LogEntry["level"], msg: string): void {
   const store = state();
   const kept = store.queuedEntries.get(taskId) ?? [];
@@ -304,8 +320,9 @@ export function takeQueuedEntries(taskId: string): Array<LogEntry> {
  *  以 Unhandled Rejection 浮出、让 `pnpm test` 随机非零退出，而用例层面全绿，
  *  报错点名的文件是当时恰好在跑的那个）。ISSUE #489。
  *
- *  生产语义同理：任务被丢弃 / 重跑时先把上一次的落库排期掐掉，避免**旧日志
- *  覆盖新日志**（`persistLogs` 是整包 `replaceLogs`，不是在末尾追加）。 */
+ *  生产语义同理：任务被丢弃 / 重跑时先把上一次的落库排期掐掉——重跑的清场走
+ *  `resetLogsForRerun`（删上一轮增量行）；排期若还挂着，会把上一轮的尾巴追加进
+ *  新一轮（#4605 增量语义下同样是「混尾巴」，只是形态从覆盖变成掺入）。 */
 export function cancelPersistLogs(taskId: string): void {
   const pending = persistTimers.get(taskId);
 
@@ -353,7 +370,7 @@ export function schedulePersistLogs(taskId: string) {
         persistTimers.delete(taskId);
       }
 
-      fireAndForget(persistLogs(taskId), onPersistLogsFailure);
+      fireAndForget(flushLogsDelta(taskId), onPersistLogsFailure);
     }, PERSIST_DEBOUNCE_MS);
 
     return;
@@ -525,8 +542,8 @@ export function forgetTaskClaimEntirely(taskId: string): void {
 /**
  * runner-state 的**宿主依赖注入接缝**（P3 迁移第 1 期·第二/三步）。
  *
- * 现状：本模块只剩一处真 IO —— `persistLogs` 里的 `await taskRepository.replaceLogs`
- * 加失败分支的 `logger.warn`。这两条在**加载时**会牵进 `server-only` 链（repository
+ * 现状：本模块只剩两处真 IO —— `persistLogsCore` 里的增量 `appendLogs` 与收口时
+ * `replaceLogs` 的整包列写，加失败分支的 `logger.warn`。这两条在**加载时**会牵进 `server-only` 链（repository
  * 与 logger 各自带 `import "server-only"`），把整个 runner-state 拖回 Next 专属
  * 上下文；纯 Node 宿主（未来的 `scripts/executor-host.mjs`）动态加载本模块时会撞
  * `server-only` 的入口 throw。P3 §5 第 3 步「摘 server-only」卡在这两条静态值
@@ -548,10 +565,14 @@ export type RunnerDeps = {
     warn(msg: string): void;
   };
   taskRepo: {
+    /** 日志增量追加（#4605）：只交「游标之后」的新行，不再整包重写。 */
+    appendLogs(taskId: string, entries: Array<LogEntry>): Promise<void>;
     replaceLogs(taskId: string, entries: Array<LogEntry>): Promise<void>;
     /** comfy-cli 完整原文整包落库（P3 §5 ADR §14 D1 的 4-B2）：「查看完整输出」
      *  这个排障入口此前只有执行进程自己看得见。 */
     replaceRawCli(taskId: string, lines: Array<string>): Promise<void>;
+    /** 重跑清场：删掉上一轮落在 `taskLog` 表里的行（与内存缓冲的领取重开同口径）。 */
+    resetLogs(taskId: string): Promise<void>;
   };
 };
 
@@ -578,13 +599,42 @@ async function resolveDeps(): Promise<RunnerDeps> {
   return { taskRepo, log };
 }
 
-export async function persistLogs(taskId: string) {
-  // 此时防抖写与终结点的 `await persistLogs(taskId)` 调用在竞争。
+/** 取「此游标之后」的未落库增量。内存视图有 5000 行封顶（丢最旧），游标按
+ *  「已落库的最大 seq」记账、与数组位置无关 —— 封顶截断不影响增量判定。 */
+function takeUnpersistedLogs(taskId: string): Array<LogEntry> {
+  const arr = state().logs.get(taskId) ?? [];
+  const appended = appendedSeqByTask.get(taskId) ?? 0;
+  const delta: Array<LogEntry> = [];
+  for (const entry of arr) {
+    if ((entry.seq ?? 0) > appended) {
+      delta.push(entry);
+    }
+  }
+  return delta;
+}
 
-  // 取消防抖计时器，让最终这次同步刷盘
-
-  // 成为该任务**唯一**的写入。
-
+/**
+ * 日志落库的唯一实现（#4605 拆成两档）：
+ *
+ *   · `flushLogsDelta`（防抖/看门狗定时器走这档）—— 只把「游标之后」的增量行
+ *     `appendLogs` 进 `taskLog` 表。单次写入与防抖窗口内的增量成正比，不再把
+ *     最多 5000 行的 JSON 列整包重写一遍（那是长任务高频日志期 SQLITE_BUSY
+ *     写放大与 MB 级序列化的主要来源）。
+ *   · `persistLogs`（收口点走这档：成功 / 失败 / 取消 / reaper 回收）—— 先补齐
+ *     增量，再把内存视图**整包**写一次 `task.logs` 列。列是「完整记录」的权威
+ * 面（历史查看、无增量行的旧任务回放都读它），每轮只在此刻写一次。
+ *
+ * 防抖写与终结点的 `await persistLogs(...)` 会竞争：进到这里先取消防抖计时器，
+ * 让最终这次同步刷盘成为该任务**唯一**的在途写入。
+ *
+ * 落库失败不向外抛（理由与旧行为一致）：定时器回调那几处经 fireAndForget 接到
+ * `onPersistLogsFailure`（stderr 最后通道，#4221）；`await persistLogs(...)`
+ * 的收口方（enqueue / executor-finalize / reaper）若被这里抛错会整段回滚，
+ * 比漏一份日志严重。日志的**内存视图**仍完整，真故障经 `log.warn` 落
+ * app-runtime.log 镜像通道。`resolveDeps` 自身也可能抛（宿主忘 configureRunner
+ * → dynamic import 撞 server-only），同样进 catch 走 warn 兜底。
+ */
+async function persistLogsCore(taskId: string, writeColumn: boolean): Promise<void> {
   const pending = persistTimers.get(taskId);
 
   if (pending) {
@@ -595,21 +645,32 @@ export async function persistLogs(taskId: string) {
     persistTimers.delete(taskId);
   }
 
-  const arr = state().logs.get(taskId) ?? [];
-
-  // 内部把 DB 落库的失败咽下——理由与旧行为不匹配：
-  //   · 防抖/看门狗定时器回调里的 3 处经 fireAndForget 接到 onPersistLogsFailure
-  //     （stderr 最后通道），rejection 不再走 unhandledRejection；
-  //   · 另外几处 `await persistLogs(...)`
-  //     （enqueue / executor-finalize / reaper），若这里抛错会让 finalize 链路整段回滚，
-  //     表现比「一份日志没落库」严重得多。
-  // 日志面板的**内存视图**仍完整（state().logs），只是这一次没持久化；
-  // 真故障通过 log.warn 落 app-runtime.log 镜像通道，运维看得到。
-  // resolveDeps 自身也可能抛（executor host 忘记 configureRunner → 动态
-  // import 撞 server-only throw）；这条抛同样进下面的 catch，走 warn 兜底。
   try {
     const { taskRepo } = await resolveDeps();
-    await taskRepo.replaceLogs(taskId, arr);
+
+    const delta = takeUnpersistedLogs(taskId);
+
+    if (delta.length > 0) {
+      await taskRepo.appendLogs(taskId, delta);
+
+      const lastSeq = delta.at(-1)?.seq ?? 0;
+
+      if (lastSeq > (appendedSeqByTask.get(taskId) ?? 0)) {
+        appendedSeqByTask.set(taskId, lastSeq);
+      }
+    }
+
+    if (writeColumn) {
+      const arr = state().logs.get(taskId) ?? [];
+
+      await taskRepo.replaceLogs(taskId, arr);
+    }
+
+    /* 缓冲已被 LRU 淘汰（本轮落库是它最后的机会）且已全部落库：游标随之清掉，
+     * 不给长生命周期进程留单调增长的死角。行号计数保留——跨轮次单调的依据。 */
+    if (!state().logs.has(taskId)) {
+      appendedSeqByTask.delete(taskId);
+    }
   } catch (error) {
     const message = `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(error, "unknown")}`;
     // 兜底 warn：若 resolveDeps 已经拉起了 log，走注入侧；否则再试一次 dynamic
@@ -621,9 +682,43 @@ export async function persistLogs(taskId: string) {
       const { log } = await resolveDeps();
       log.warn(message);
     } catch {
-      // 完全无法落库 + 无法 warn：对 `await persistLogs(...)` 的调用方照抛（它们有自己的
-      // try/catch）；定时器回调那三处走 fireAndForget 的 stderr 兜底（onPersistLogsFailure），
-      // 不再借 unhandledRejection 当信号通道（那等于崩进程）。
+      throw error;
+    }
+  }
+}
+
+/** 防抖/看门狗定时器的落库动作：只追加增量行，不碰 `task.logs` 列。 */
+export function flushLogsDelta(taskId: string): Promise<void> {
+  return persistLogsCore(taskId, false);
+}
+
+/** 收口点的日志落库：补齐增量 + `task.logs` 列整包写一次（完整记录面）。 */
+export async function persistLogs(taskId: string): Promise<void> {
+  return persistLogsCore(taskId, true);
+}
+
+/**
+ * 重跑清场的日志侧（#4605）：同一任务行再次领取时，删掉上一轮落在 `taskLog`
+ * 表里的行、清掉追加游标 —— 与内存缓冲的「领取重开」同一口径（重跑不混上一轮
+ * 的尾巴）。行号计数刻意不清（见 `logSeqByTask`）：新轮次的行从旧值之后继续
+ * 编号，SSE 游标跨轮次单调。
+ *
+ * 失败吞掉只 warn：清场失败的表现是旧轮次行还留在表里，内存优先的回放与
+ * 按游标的增量读都不会把它们重放给用户，比把领取链路整段回滚轻。
+ */
+export async function resetLogsForRerun(taskId: string): Promise<void> {
+  appendedSeqByTask.delete(taskId);
+
+  try {
+    const { taskRepo } = await resolveDeps();
+
+    await taskRepo.resetLogs(taskId);
+  } catch (error) {
+    const message = `[comfyui] resetLogsForRerun(${taskId}) 清场失败：${errorText(error, "unknown")}`;
+    try {
+      const { log } = await resolveDeps();
+      log.warn(message);
+    } catch {
       throw error;
     }
   }
@@ -658,8 +753,8 @@ function getRawCli(taskId: string): Array<string> {
 
 /** 把 comfy-cli 完整原文整包落库（P3 §5 ADR §14 D1 的 4-B2）。
  *
- *  与 `persistLogs` 的分工：日志跟着 200ms 防抖走（每几秒一次整包重写），原文
- *  **只在收口点写一次**——它能到几千行，跟着防抖重写等于白写几十遍。所以这一句
+ *  与 `persistLogs` 的分工：日志跟着 200ms 防抖走（增量追加，见 `flushLogsDelta`），
+ *  原文**只在收口点写一次**——它能到几千行，跟着防抖写等于白写几十遍。所以这一句
  *  的调用点是成功 / 失败 / 取消三条收口，不是 `appendRawCli`。
  *  失败的处理与 `persistLogs` 同形：排障入口少一份原文，不该把收口链路整段回滚。 */
 export async function persistRawCli(taskId: string): Promise<void> {
