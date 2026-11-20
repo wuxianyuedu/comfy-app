@@ -31,6 +31,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+import { localStampOf } from "../launcher-core/log.mjs";
 import { CODE } from "./ship-codes.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 
@@ -132,9 +133,11 @@ export function renderIssueMd(r) {
     `# #${r.number} ${r.title}`,
     "",
     `- 号：#${r.number} · 状态：${r.state} · 作者：${r.author}`,
-    `- 创建：${r.createdAt} · 更新：${r.updatedAt}`,
+    /* 平台给的 createdAt / updatedAt 与抓取时刻都是 ISO UTC；落进正文给人看，
+     * 统一按本地时区展示（#4654）。 */
+    `- 创建：${localStampOf(r.createdAt)} · 更新：${localStampOf(r.updatedAt)}`,
     `- 优先级：${r.priority || "（未设）"} · 标签：${r.labels.length > 0 ? r.labels.join("、") : "（无）"}`,
-    `- 抓取时间：${r.fetchedAt}（重跑即更新；评论 ${r.commentsCount} 条）`,
+    `- 抓取时间：${localStampOf(r.fetchedAt)}（重跑即更新；评论 ${r.commentsCount} 条）`,
     `- 图片：${r.imagesTotal} 张（下载成功 ${r.imagesTotal - r.imagesFailed}、失败 ${r.imagesFailed}；失败者保留原链接）`,
     "",
     "## 正文",

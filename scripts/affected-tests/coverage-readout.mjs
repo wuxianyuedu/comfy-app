@@ -35,6 +35,7 @@ import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
+import { localStampOf } from "../launcher-core/log.mjs";
 
 const require = createRequire(import.meta.url);
 const { globToRegExp } = require("../gates/check-format.cjs");
@@ -182,7 +183,7 @@ async function main() {
   }
   const ageMin = Math.round((Date.now() - new Date(reportMtime).getTime()) / 60_000);
   console.log(
-    `[coverage-readout] 实况 vs 登记值（报告 mtime ${reportMtime.toISOString()} ≈ ${ageMin} 分钟前；` +
+    `[coverage-readout] 实况 vs 登记值（报告 mtime ${localStampOf(reportMtime)} ≈ ${ageMin} 分钟前；` +
       `登记处 ${r.registeredCount} 条）。`,
   );
   console.log(

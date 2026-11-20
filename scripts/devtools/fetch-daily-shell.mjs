@@ -280,6 +280,28 @@ function isPlainObject(v) {
 }
 
 /**
+ * 把构建信息的 `built_at`（回传侧 `new Date().toISOString()` 的 ISO UTC 文本）
+ * 换算成本地时间展示，并保留 UTC 原值供对账。此前原样打印 ISO 串——中国用户在
+ * CNB Release 页看到的是北京时间（如 19:50），脚本输出却是 `…T11:50…Z`，会被
+ * 误读成上午构建的（ISSUE #4653）。解析不了（非 ISO 文本）就原样给出，不抛错。
+ *
+ * @param {string} raw 附件里的 built_at 原文
+ * @returns {string} 可直接拼进「构建时间」一行的文本
+ */
+export function describeBuiltAt(raw) {
+  const ms = Date.parse(raw);
+  if (!Number.isFinite(ms)) {
+    return raw;
+  }
+  const d = new Date(ms);
+  const p = (/** @type {number} */ n) => String(n).padStart(2, "0");
+  const local =
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return `${local}（本地；UTC 原值 ${raw}）`;
+}
+
+/**
  * 把构建信息附件整理成给人看的两段话（ISSUE #4056）：`info` 进 stdout（构建时间 /
  * commit / run + 对账结果），校验不一致的 `warn` 进 stderr。字段缺席就少念；
  * sha256 / 大小与到手字节对不上要明说（nightly 滚动覆盖时「exe 与清单不同批」
@@ -314,7 +336,7 @@ export function describeBuildInfo(infoBytes, actual) {
   };
   const parts = [];
   const builtAt = text(rec, "built_at");
-  if (builtAt) parts.push(`构建时间 ${builtAt}`);
+  if (builtAt) parts.push(`构建时间 ${describeBuiltAt(builtAt)}`);
   const commit = text(rec, "commit");
   if (commit) parts.push(`commit ${commit.slice(0, 12)}`);
   const runId = text(rec, "run_id");

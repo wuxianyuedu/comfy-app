@@ -32,6 +32,7 @@
  */
 
 import { logger } from "~/lib/core/logger";
+import { formatLocalStamp } from "~/lib/time-format";
 
 /** 心跳间隔。越小对阻塞起点的估算越准，代价是常态空转；1s 足够（读数是秒级）。 */
 export const EVENT_LOOP_WATCH_INTERVAL_MS = 1000;
@@ -104,10 +105,11 @@ export function eventLoopBeat(now: number): EventLoopBlock | null {
       logger.warn(
         {
           driftMs: block.driftMs,
+          /* 结构化字段保持 ISO UTC（机器可读）；给人看的消息文本走本地时区（#4654）。 */
           startedAt: new Date(block.startedAt).toISOString(),
           endedAt: new Date(block.endedAt).toISOString(),
         },
-        `[event-loop] 事件循环被阻塞了约 ${Math.round(block.driftMs / 100) / 10}s（起点为估算、时长为下界）——期间所有请求（含探活）都无法处理；恢复调度于 ${block.endedAt}`,
+        `[event-loop] 事件循环被阻塞了约 ${Math.round(block.driftMs / 100) / 10}s（起点为估算、时长为下界）——期间所有请求（含探活）都无法处理；恢复调度于 ${formatLocalStamp(block.endedAt)}`,
       );
       return block;
     }
