@@ -1,10 +1,9 @@
 "use client";
 
 // ── 「测试模型能力」**视图**（规范 §17 第③层：只渲染 + 上抛）─────────────
-// 三栏 Bento 布局：左栏 = 用途页签 → 模式列表（带候选模型数徽标）→ 模型
-// 下拉（本地 / 远端分组）与通道提示；中栏 = 统一输入 + 生成 CTA + 进度 /
-// 告警；右栏 = 产物 / 执行日志 / 请求与响应（ModelTestResultPanel）。生成后
-// 产物与日志常驻右栏，不再依赖长滚动。
+// 三栏 Bento 布局：左栏 = 用途页签 → 模式列表（带候选模型数徽标，内部滚动）
+// → 模型下拉（本地 / 远端分组）与通道提示；中栏 = 统一输入 + 生成 CTA +
+// 进度 / 告警 + 执行日志；右栏 = 产物 / 请求与响应（ModelTestResultPanel）。
 // 候选 / 适配器 / 契约 / 生成动作都在 `hooks/use-model-test.ts`（第②层）与
 // `model-test-config.ts`（第①层）；本文件不出现 fetch / api.*。
 
@@ -53,7 +52,7 @@ import {
 } from "./model-test-config";
 import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
 import { useModelTest } from "./hooks/use-model-test";
-import { ModelTestResultPanel } from "./ModelTestResultPanel";
+import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
 
 type ModelTestController = ReturnType<typeof useModelTest>;
 
@@ -423,12 +422,20 @@ export function ModelTestView() {
       <PageHeader srTitle={pageHeaderTitle("model-test")} />
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-        {/* ── 左栏：用途 + 模型 + 模式（模型卡紧跟用途，不被长模式列表挤出
-            首屏；桌面下吸附成独立滚动区）── */}
+        {/* ── 左栏：用途 + 模式 + 模型（模式列表有滚动上限，不会把模型卡挤走；
+            桌面下吸附成独立滚动区）── */}
         <aside className="flex w-full shrink-0 flex-col gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-96px)] xl:w-64 xl:overflow-y-auto">
           <Panel icon={<Shapes />} title="用途">
             <KindTabs kind={c.kind} onChange={c.setKind} />
           </Panel>
+
+          {c.modeTabs.length > 0 && (
+            <Panel icon={<ListChecks />} title="模式">
+              <div className="max-h-80 overflow-y-auto pr-0.5">
+                <ModeTabs mode={c.mode} onSelect={c.setMode} tabs={c.modeTabs} />
+              </div>
+            </Panel>
+          )}
 
           <Panel hint="按用途与模式过滤" icon={<Boxes />} title="模型">
             {c.loading ? (
@@ -481,14 +488,6 @@ export function ModelTestView() {
             )}
             {hasModel && <ChannelNote c={c} />}
           </Panel>
-
-          {c.modeTabs.length > 0 && (
-            <Panel icon={<ListChecks />} title="模式">
-              <div className="max-h-80 overflow-y-auto pr-0.5">
-                <ModeTabs mode={c.mode} onSelect={c.setMode} tabs={c.modeTabs} />
-              </div>
-            </Panel>
-          )}
         </aside>
 
         {/* ── 中栏：统一输入 + 生成 CTA（未选模型时给三步引导）── */}
@@ -680,13 +679,17 @@ export function ModelTestView() {
                   </p>
                 )}
               </Panel>
+
+              {/* 执行日志放中栏：紧贴生成动作（进度 → 日志），列宽也容得下
+                  等宽字体行，不再挤在窄右栏里 */}
+              <LogsCard logs={c.taskLogs} />
             </>
           ) : (
             <OnboardingPanel c={c} />
           )}
         </div>
 
-        {/* ── 右栏：产物 / 执行日志 / 请求与响应（选中模型后才出现）── */}
+        {/* ── 右栏：产物 / 请求与响应（选中模型后才出现）── */}
         {hasModel && (
           <ModelTestResultPanel
             c={c}
