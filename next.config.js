@@ -252,6 +252,11 @@ const config = {
       // 白名单里再有多少件搬进被误伤的子树，由冒烟那一步的逐件在场检查兜底。
       "./scripts/devtools/env-preflight.mjs",
       "./scripts/devtools/install-comfyapp-helper.ps1",
+      // 执行器宿主运行期按路径加载 `server-timings.mjs`（#4367），不在 Next 的静态
+      // 追踪图里 ⇒ 不带这一条时产物缺件，带产物的检出在 executor-host 冒烟里真红
+      // （#4643）。`RUNTIME_SCRIPTS` / `check-standalone-contents.cjs` 的清单早已有它，
+      // 这里补的是追踪期的那一半；补完仍由产物层那两处数件兜底（§7.4 / §7.5）。
+      "./scripts/launcher-core/server-timings.mjs",
     ],
   },
   // ── dev 期回环两种拼法都要放行（Next 16 的 dev 资源跨源闸门）────────
