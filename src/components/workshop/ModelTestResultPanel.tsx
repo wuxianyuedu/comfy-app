@@ -232,8 +232,9 @@ function ResultCard({ c }: { c: ModelTestController }) {
   );
 }
 
-/** 日志卡：有日志才出列表，否则给占位说明。 */
-function LogsCard({ logs }: { logs: Array<TaskLogEntry> }) {
+/** 日志卡：有日志才出列表，否则给占位说明。渲染在**中栏**（生成卡下方）——
+ *  右栏太窄，等宽字体行频繁截断；贴着生成动作也更好读。 */
+export function LogsCard({ logs }: { logs: Array<TaskLogEntry> }) {
   return (
     <Panel hint="SSE 实时流 · 自动滚底" icon={<ScrollText />} title="执行日志">
       {logs.length > 0 ? (
@@ -245,7 +246,7 @@ function LogsCard({ logs }: { logs: Array<TaskLogEntry> }) {
   );
 }
 
-/** 右栏整体：产物 / 执行日志 / 请求与响应。 */
+/** 右栏整体：产物 / 请求与响应（执行日志已移到中栏）。 */
 export function ModelTestResultPanel({
   c,
   excerptPretty,
@@ -259,7 +260,6 @@ export function ModelTestResultPanel({
   return (
     <div className="flex w-full shrink-0 flex-col gap-4 xl:w-80">
       <ResultCard c={c} />
-      <LogsCard logs={c.taskLogs} />
       {hasDetails ? (
         <>
           {c.requestRows.length > 0 && (
