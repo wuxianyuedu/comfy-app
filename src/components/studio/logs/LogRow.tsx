@@ -2,8 +2,8 @@
 
 /**
  * 日志行的渲染层。行内分片缓存、关键词高亮、行级复制按钮只被此处使用，与面板状态无耦合。
- * 契约（拆走后不许改）：入参 `entry / wrap / keyword / style / showMeta / density` 与
- * `data-log-*` 标记；换行与行高口径须与 `log-virtual` 的常量（含行距档）一致。
+ * 契约（拆走后不许改）：入参 `entry / wrap / keyword / style` 与 `data-log-*` 标记；
+ * 换行与行高口径须与 `log-virtual` 的常量一致。
  */
 
 import React, { memo, useMemo, useState } from "react";
@@ -20,12 +20,7 @@ import { normalizeNeedle } from "~/lib/list-filter";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { formatTime } from "./log-format";
 import { useRevealLogPath } from "./use-reveal-log-path";
-import {
-  LOG_DENSITY_PRESETS,
-  LOG_ROW_EXPANDED,
-  LOG_ROW_SINGLE,
-  type LogDensity,
-} from "./log-virtual";
+import { LOG_ROW_EXPANDED, rowHeightFor, type LogDensity } from "./log-virtual";
 import {
   LEVEL_BADGE_STYLES,
   LEVEL_TEXT_STYLES,
@@ -40,6 +35,13 @@ import {
  * 内存由 RENDER_CACHE_MAX 限制（溢出整体清空）。Fast Refresh 重执行模块时规则变化天然从空缓存开始。 */
 const FRAGMENT_CACHE = new Map<string, Array<RowToken>>();
 const FRAGMENT_CACHE_MAX = 5000;
+
+/** 密度档 → 行的上下内边距 class（与 `log-virtual` 的 `DENSITY_PADDING` 对齐，行高同口径）。 */
+const DENSITY_PY_CLASS: Record<LogDensity, string> = {
+  compact: "py-0.5",
+  standard: "py-1",
+  relaxed: "py-2",
+};
 
 /* 搜索命中 `<mark>` 高亮——琥珀是"荧光笔"的通用视觉语言、不是状态色
  * (warning-strong 会把「搜索到」误读为「警告」)。没有对应的"命中/高亮"
@@ -202,9 +204,8 @@ function RevealPathButton({ path, children }: { children: React.ReactNode; path:
  * 一行日志末尾的复制按钮（用户反馈第 2 条：「想复制报错文本还是复制不了，刚选中就刷走了」）。
  * 此前唯一出口是「复制全部日志」，用户要一行却拿到 2000 行，还得自己搜；它也让选区变得不重要。
  * 反馈本地、按行独立：1.2s 内显示「已复制」，且**只在成功时**改口（失败说已复制是撒谎）。
- * 面板隐藏元信息列时只复制正文（`includeMeta: false`，ISSUE #4567）——用户把列藏起来，
- * 就是不想让它混进复制结果。
  */
+/** `includeMeta=false`（精简列档）只复制正文——把列藏起来就是不想让它们混进复制结果（ISSUE #4567）。 */
 function RowCopyButton({ entry, includeMeta }: { entry: LogEntry; includeMeta: boolean }) {
   const [outcome, setOutcome] = useState<"idle" | "done" | "failed">("idle");
   /* 亮起态与「到点复位、连点清旧定时器、卸载清定时器」由 hook 收口 ——
@@ -282,35 +283,30 @@ function RowCopyButton({ entry, includeMeta }: { entry: LogEntry; includeMeta: b
  * 一行日志。`height` 由虚拟窗口给出并写成内联样式：估算与 `leading-snug` 实际行高须同口径，
  * 否则累计误差让滚动位置与内容错开；`overflow-hidden` 防止内容溢到下一行。
  * comfy-cli 原始输出行折叠成一行、展开经 `JsonViewer`；展开状态归面板，展开高度归
- * `log-virtual` 的 `LOG_ROW_EXPANDED`（行内不自己测高）。
- * `showMeta=false`（ISSUE #4567）隐藏行头元信息列（时刻 / 级别 / 位置 / 来源），只留正文与
- * 复制按钮——鼠标框选多条日志时不再带上无用信息；行距档（`density`）给出垂直内边距，
- * 与 `log-virtual` 的估算常量同源。
- */
+ * `log-virtual` 的 `LOG_ROW_EXPANDED`（行内不自己测高）。 */
 export const LogRow = memo(function LogRow({
+  density = "standard",
   entry,
-  wrap,
-  keyword,
   expanded,
+  keyword,
   onToggleExpand,
-  showMeta,
-  density,
+  showDetails = true,
   style,
+  wrap,
 }: {
-  /** 行距档（与 `log-virtual` 的行高估算同源）。 */
-  density: LogDensity;
+  /** 行密度（ISSUE #4567 的间隔配置）：行的上下内边距随档位走，与虚拟行高同口径。 */
+  density?: LogDensity;
   entry: LogEntry;
   /** 该行是否处于展开态（只对可展开的原始输出行有意义）。 */
   expanded: boolean;
   keyword: string;
   /** 点标题行折叠 / 展开（`Disclosure` 的受控回调）；回调带 id 以便面板方用稳定引用。 */
   onToggleExpand: (id: string) => void;
-  /** 是否显示行头元信息列（时刻 / 级别徽标 / 位置 / 来源）。 */
-  showMeta: boolean;
+  /** false = 精简显示：隐藏时刻 / 级别 / 位置 / 来源列，只留正文与复制按钮（复制选中内容时不带前缀）。 */
+  showDetails?: boolean;
   style: React.CSSProperties;
   wrap: boolean;
 }) {
-  const padClass = LOG_DENSITY_PRESETS[density].padClass;
   /* 文件路径那枚的复制：**显式静默**失败 —— 整条路径就印在按钮上，
    * 旁边没有第二处可说的地方，而弹 toast 会盖住正在看的日志。 */
   const copyLocation = useCopyFeedback({ onFailure: "silent" });
@@ -371,7 +367,7 @@ export const LogRow = memo(function LogRow({
     ? `${location}（库内部打出的日志，不是本项目文件；点击复制）`
     : `${location}（点击复制）`;
   const locationNode =
-    location !== undefined && location !== "" ? (
+    showDetails && location !== undefined && location !== "" ? (
       <Hint label={locationHint}>
         <Button
           className="text-ink-fainter hover:text-ink-soft text-2xs h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right font-normal whitespace-nowrap"
@@ -384,26 +380,27 @@ export const LogRow = memo(function LogRow({
         </Button>
       </Hint>
     ) : null;
-  const sourceNode = entry.origin ? (
-    <span className="text-ink-fainter text-2xs shrink-0">{entry.origin}</span>
-  ) : entry.source === "console" ? null : (
-    <span className="text-ink-fainter text-2xs shrink-0">{entry.source}</span>
-  );
+  const sourceNode =
+    showDetails && entry.origin ? (
+      <span className="text-ink-fainter text-2xs shrink-0">{entry.origin}</span>
+    ) : showDetails && entry.source === "console" ? null : showDetails ? (
+      <span className="text-ink-fainter text-2xs shrink-0">{entry.source}</span>
+    ) : null;
   /* 复制按钮永远在**最后一列**：它是行的终点，位置固定用户才找得到；
      `self-center` 让它在多行（换行显示）的行里也贴住垂直中线。 */
-  const copyNode = <RowCopyButton entry={entry} includeMeta={showMeta} />;
+  const copyNode = <RowCopyButton entry={entry} includeMeta={showDetails} />;
 
   if (!expandable) {
     return (
       <div
-        className={`border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 ${padClass} font-mono text-sm leading-snug`}
+        className={`border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 font-mono text-sm leading-snug ${DENSITY_PY_CLASS[density]}`}
         style={style}
       >
-        {showMeta ? timeNode : null}
-        {showMeta ? levelNode : null}
+        {showDetails && timeNode}
+        {showDetails && levelNode}
         {messageNode}
-        {showMeta ? locationNode : null}
-        {showMeta ? sourceNode : null}
+        {locationNode}
+        {sourceNode}
         {copyNode}
       </div>
     );
@@ -420,12 +417,10 @@ export const LogRow = memo(function LogRow({
       <Disclosure
         className="w-auto min-w-0 flex-1"
         leading={
-          showMeta ? (
-            <>
-              {timeNode}
-              {levelNode}
-            </>
-          ) : undefined
+          <>
+            {showDetails && timeNode}
+            {showDetails && levelNode}
+          </>
         }
         marker="chevron"
         onOpenChange={(next) => {
@@ -435,18 +430,18 @@ export const LogRow = memo(function LogRow({
         }}
         open={expanded}
         panelClassName="basis-full"
-        rootClassName={`flex flex-wrap items-start gap-x-2.5 px-4 ${padClass}`}
+        rootClassName={`flex flex-wrap items-start gap-x-2.5 px-4 ${DENSITY_PY_CLASS[density]}`}
         trailing={
           <>
-            {showMeta ? locationNode : null}
-            {showMeta ? sourceNode : null}
+            {locationNode}
+            {sourceNode}
             {copyNode}
           </>
         }
         trigger={messageNode}
       >
         {expanded && cliJson ? (
-          <div className="min-h-0" style={{ height: LOG_ROW_EXPANDED - LOG_ROW_SINGLE }}>
+          <div className="min-h-0" style={{ height: LOG_ROW_EXPANDED - rowHeightFor(density) }}>
             <LazyJsonViewer
               data={cliJson.value}
               initialCollapsedDepth={2}

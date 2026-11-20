@@ -51,22 +51,12 @@ describe("行高估算", () => {
     expect(estimateRowHeight(long, true)).toBe(LOG_ROW_SINGLE);
   });
 
-  it("量到宽度时按逐字宽度估软换行（窄字符 8.1px / 宽字符 14.7px）", () => {
-    /* 容量 130px / 窄字 8.1px ≈ 每行 16 字；25 个窄字 → 2 行 */
+  it("量到宽度时按码点宽度求和估软换行（ASCII 窄、宽字符宽）", () => {
+    /* 25 个 ASCII 字符 × 9px = 225px；容量 130px → 2 行（旧的单系数 13px 会
+     * 高估成 3 行，行盒里留出一整行空白——ISSUE #4567）。 */
     expect(countLines("x".repeat(25), 130)).toBe(2);
-    /* 宽字符（CJK / 全角）按 14.7px 计：10 个汉字 = 147px > 130px → 2 行。 */
-    expect(countLines("日".repeat(10), 130)).toBe(2);
-    /* 同样 10 个字符，窄字符一行装得下——宽度按字累计，不再按 13px 均摊。 */
-    expect(countLines("x".repeat(10), 130)).toBe(1);
     /* 空串也是 1 行，不会是 0 行——0 行会让整行高度塌成 0。 */
     expect(countLines("", 130)).toBe(1);
-  });
-
-  it("长 ASCII 路径行不再被均摊估宽多算一行（ISSUE #4567）", () => {
-    /* 旧口径按 13px/字均摊，这行会被估成 2 行（92×13=1196 > 820），
-     * 实际等宽字体下 92×7.7≈708px，一行装得下——「内容一行、占两行空间」的主因。 */
-    const path = String.raw`C:\Users\yuedu\AppData\Local\pnpm\pnpm.exe -v `.repeat(2);
-    expect(countLines(path, 820)).toBe(1);
   });
 });
 

@@ -4,17 +4,31 @@
  * 级别（ISSUE #609）。判据只认**结构**：正文里未闭合的 `{` / `[` 才让后续行并入，独立裸文本行不会被误并；
  * 深度靠扫描字符、引号内括号不计入（见 {@link bracketDepthDelta}）；窗口从文件中间开始时另有续接兜底。 */
 
-import { stripSgr as stripSgrFromAnsi } from "~/lib/log/log-ansi";
+import { stripPartialSgr } from "~/lib/log/log-ansi";
 
 /**
  * 一行里的括号净增量（`{`/`[` 记 +1，`}`/`]` 记 −1）。**必须跳过字符串字面量内的括号**：把 `"path": "a[b"` 里的 `[` 算成未闭合，会让后面所有无关行被吸进这条记录；扫描器只处理两种引号状态（普通串 / 转义符），不做 JSON 语法校验。
  * **引号状态按行重置**：日志正文里的引号经常不成对，带进下一行会让整段 JSON 的括号一个都数不到；JSON 本身也不允许字符串跨裸换行，按行重置既安全又符合语法。
+ * **ANSI 转义序列不计括号**（ISSUE #4567：壳日志要带着原始颜色进面板，切分前不再剥 SGR）：`\x1b[31m` 里的 `[` 会被算成深度 +1，把后续行误并进上一条记录——扫描进转义序列后跳到终止字节（SGR 的 `m` / 其他 CSI 的终止字母 / BEL）再恢复计数。
  */
 export function bracketDepthDelta(line: string): number {
   let depth = 0;
   let inString = false;
   let escaped = false;
+  let inAnsi = false;
   for (const ch of line) {
+    if (inAnsi) {
+      /* CSI 序列以字母（SGR 的 `m` 等）终止；OSC 以 BEL 或 `\x1b\\` 终止——
+       * BEL 是单字符、`\x1b` 会重新进入本分支，两个终止形态都覆盖。 */
+      if (/[A-Za-z]/.test(ch) || ch === "\u0007") {
+        inAnsi = false;
+      }
+      continue;
+    }
+    if (ch === "\u001b") {
+      inAnsi = true;
+      continue;
+    }
     if (escaped) {
       escaped = false;
       continue;
@@ -41,6 +55,13 @@ export function bracketDepthDelta(line: string): number {
 }
 
 /**
+ * 切分前只剥**残缺颜色码**（转义符丢失后剩下的 `[90m` / `[0m`），完整 SGR 保留给渲染层上色
+ * （ISSUE #4567：壳日志的原始颜色此前被整体剥掉、面板全灰）。残缺码必须剥——它们会以
+ * `[90m` 的形状混进正文被原样显示，且搅乱后续的 JSON 片段判据。
+ */
+export const stripSgr = (text: string) => stripPartialSgr(text);
+
+/**
  * 该行是否**看起来是 JSON 片段**（窗口截断后的续接兜底）：只认引号、`}`/`]`、`{`/`[` 及缩进后的这些
  * 形状。刻意**不**认普通中英文句子——`npm notice …`、`----- 应用服务输出 -----` 这类独立行不该被吸进上一条记录。
  */
@@ -59,12 +80,6 @@ export type RawRecord = {
   /** 记录全文（head + 续行，行之间保留 `\n`）。 */
   text: string;
 };
-
-/**
- * 剥掉行内残留的 ANSI SGR（出口在 `~/lib/log/log-ansi`，规范 16 §16.2.4.58）。必须在**切记录之前**做：颜色码残缺时（`\x1b` 丢失、只剩 `[90m` / `[0m`）会留在正文里，按 SGR 形状整段剥掉才不会显示成 `[[OK]【[90m[OK[0m] …`；只在记录头上剥会让续行的颜色码被当成 JSON 正文、拼回时搅乱结构。
- * 「要不要连残缺码一起剥」现在是出口的**显式参数**（`includePartial`，默认 `true`）。
- */
-export const stripSgr = (text: string) => stripSgrFromAnsi(text);
 
 /** 明显缩进的行（`"inputs",` 这类数组元素在 pretty-print 里至少缩两格）。 */
 const INDENTED_RE = /^\s{2,}/;

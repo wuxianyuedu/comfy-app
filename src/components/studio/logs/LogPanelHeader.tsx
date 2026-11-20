@@ -8,6 +8,7 @@
 import { Check, Copy, Download, Eye, EyeOff, FileText, Trash2, Type, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { DiagnosticsButton } from "./DiagnosticsButton";
 import { SaveExportButton } from "./SaveExportButton";
 import { LogFilterBar } from "./LogFilterBar";
@@ -15,24 +16,35 @@ import { OriginSelect } from "./LogPanelOriginSelect";
 import { WidePanelToggle, type WidePanel } from "~/components/ui/wide-panel";
 import { copyFailureText } from "~/components/ui/use-copy-feedback";
 import { FILTER_SELECTED_STYLES } from "./log-row-style";
+import type { LogDensity } from "./log-virtual";
+import type { LogColumnVisibility } from "./log-display-prefs";
 import type { LogLevelCounts, LogOriginCounts, LogOriginFilter } from "./log-types";
+
+/** 密度档的展示名（SelectMenu 的 label 表）。 */
+const DENSITY_LABELS: Record<LogDensity, string> = {
+  compact: "紧凑",
+  standard: "标准",
+  relaxed: "宽松",
+};
 
 export function LogPanelHeader(input: {
   clear: () => void;
+  columns: LogColumnVisibility;
   copyAllAction: () => void;
   copyDone: boolean;
   copyFailed: boolean;
   countsByOrigin: LogOriginCounts;
+  density: LogDensity;
   download: () => void;
+  onColumnsChange: (columns: LogColumnVisibility) => void;
+  onDensityChange: (density: LogDensity) => void;
   origin: LogOriginFilter | null;
   originCounts: LogLevelCounts;
   panel: WidePanel;
   scopeLabel: string;
   setIsOpen: (open: boolean) => void;
   setOrigin: (value: LogOriginFilter) => void;
-  setShowMeta: (show: boolean) => void;
   setWrap: (updater: (prev: boolean) => boolean) => void;
-  showMeta: boolean;
   total: number;
   wrap: boolean;
 }) {
@@ -43,8 +55,6 @@ export function LogPanelHeader(input: {
     setOrigin,
     wrap,
     setWrap,
-    showMeta,
-    setShowMeta,
     copyFailed,
     copyDone,
     copyAllAction,
@@ -54,6 +64,10 @@ export function LogPanelHeader(input: {
     clear,
     panel,
     setIsOpen,
+    density,
+    onDensityChange,
+    columns,
+    onColumnsChange,
   } = input;
 
   return (
@@ -93,6 +107,50 @@ export function LogPanelHeader(input: {
 
         {/* Actions */}
         <div className="flex items-center gap-1 pl-2">
+          <Hint label="切换日志行间距（紧凑 / 标准 / 宽松）">
+            <span>
+              <SelectMenu
+                aria-label="日志行间距"
+                className="text-2xs h-8 rounded-md"
+                labels={DENSITY_LABELS}
+                onChange={(next) => {
+                  onDensityChange(
+                    next === "compact" ? "compact" : next === "relaxed" ? "relaxed" : "standard",
+                  );
+                }}
+                options={["compact", "standard", "relaxed"]}
+                popoverMinWidth={130}
+                value={density}
+              />
+            </span>
+          </Hint>
+          <Hint
+            label={
+              columns === "message-only"
+                ? "显示时刻 / 级别 / 来源等列"
+                : "隐藏时刻 / 级别 / 来源等列（只留日志正文，方便复制）"
+            }
+          >
+            <Button
+              aria-label={columns === "message-only" ? "显示时刻与级别列" : "隐藏时刻与级别列"}
+              className={`rounded-md p-2 transition-colors ${
+                columns === "message-only"
+                  ? `${FILTER_SELECTED_STYLES} text-ink-bright`
+                  : "text-ink-muted hover:bg-subtle hover:text-ink"
+              }`}
+              onClick={() => {
+                onColumnsChange(columns === "message-only" ? "full" : "message-only");
+              }}
+              size="icon"
+              variant="ghost"
+            >
+              {columns === "message-only" ? (
+                <EyeOff data-icon="inline-start" size={16} />
+              ) : (
+                <Eye data-icon="inline-start" size={16} />
+              )}
+            </Button>
+          </Hint>
           <Hint accessibleName label={wrap ? "折叠超长行" : "自动换行显示"}>
             <Button
               /* 选中态与级别按钮同一份：`bg-subtle` 在浅色主题下与行头底色同值。 */
@@ -108,29 +166,6 @@ export function LogPanelHeader(input: {
               variant="ghost"
             >
               <Type size={16} />
-            </Button>
-          </Hint>
-          <Hint
-            accessibleName
-            label={showMeta ? "隐藏时刻/级别/来源列（复制选区更干净）" : "显示时刻/级别/来源列"}
-          >
-            <Button
-              /* 隐藏元信息列（ISSUE #4567）：只想读 / 框选正文时，把时刻、级别徽标、
-               * 位置、来源整排收起——鼠标选中的就只有日志本身。行内复制按钮随同一
-               * 开关只给正文（见 LogRow / log-format）。 */
-              aria-label={showMeta ? "隐藏元信息列" : "显示元信息列"}
-              className={`rounded-md p-2 transition-colors ${
-                showMeta
-                  ? "text-ink-muted hover:bg-subtle hover:text-ink"
-                  : `${FILTER_SELECTED_STYLES} text-ink-bright`
-              }`}
-              onClick={() => {
-                setShowMeta(!showMeta);
-              }}
-              size="icon"
-              variant="ghost"
-            >
-              {showMeta ? <Eye size={16} /> : <EyeOff size={16} />}
             </Button>
           </Hint>
           {/* 提示写明范围：复制/下载的是**当前筛选下的全部日志**（跨所有页）。

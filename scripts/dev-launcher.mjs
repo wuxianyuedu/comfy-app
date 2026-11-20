@@ -699,12 +699,16 @@ export async function run(argv = process.argv.slice(2)) {
     });
   }
 
-  timeline.begin("ready-wait", "等待服务就绪");
+  /* 就绪等待的拆分显示（ISSUE #4577）：span 在 waitForDevReady 内部记——
+   * 「等待端口应答」（进程未监听）与「等待健康检查」（/api/health 首次按需
+   * 编译、建表 503 等待、陈旧路由 404 重试、轮询间隔）两段，取代原来的
+   * 「等待服务就绪」整格黑盒；时间线与启动页据此分开显示。 */
   const waited = await waitForDevReady(
     {
       log,
       status,
       devExited,
+      timeline,
       respawnDev: async (reason) => {
         /* 启动就绪期的自愈不带归因（headAtBoot 刚记下、此刻 diff 必为空）：这句
          * 「为什么」由既有文案给出，无需多跑一次 git。 */
@@ -722,7 +726,6 @@ export async function run(argv = process.argv.slice(2)) {
       startedAt,
     },
   );
-  timeline.end("ready-wait");
 
   if (devExited()) {
     reportTimeline();

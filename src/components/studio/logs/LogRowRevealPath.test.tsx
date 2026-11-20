@@ -43,12 +43,12 @@ function renderRow(message: string) {
     /* `Hint` 的浮层要 `TooltipProvider`（应用里挂在根布局上，见 `app/layout`）。 */
     <TooltipProvider delay={0}>
       <LogRow
-        density="default"
+        density="standard"
         entry={entry(message)}
         expanded={false}
         keyword=""
         onToggleExpand={() => undefined}
-        showMeta
+        showDetails
         style={{}}
         wrap
       />

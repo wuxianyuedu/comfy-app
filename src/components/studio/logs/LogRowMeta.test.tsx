@@ -22,7 +22,7 @@ function entry(): LogEntry {
   };
 }
 
-function renderRow(showMeta: boolean, density: "compact" | "default" | "relaxed" = "default") {
+function renderRow(showDetails: boolean, density: "compact" | "standard" | "relaxed" = "standard") {
   render(
     <TooltipProvider delay={0}>
       <LogRow
@@ -31,7 +31,7 @@ function renderRow(showMeta: boolean, density: "compact" | "default" | "relaxed"
         expanded={false}
         keyword=""
         onToggleExpand={() => undefined}
-        showMeta={showMeta}
+        showDetails={showDetails}
         style={{}}
         wrap
       />
@@ -53,7 +53,7 @@ describe("LogRow 元信息列显隐", () => {
     expect(screen.getByText(/编排器互斥占坑/)).toBeTruthy();
   });
 
-  it("隐藏：时刻 / 级别 / 来源整排收起，正文与复制按钮保留", () => {
+  it("隐藏（精简列）：时刻 / 级别 / 来源整排收起，正文与复制按钮保留", () => {
     renderRow(false);
     expect(document.querySelector("time")).toBeNull();
     expect(screen.queryByText(/info/i)).toBeNull();
@@ -77,7 +77,7 @@ describe("formatEntryForClipboard 的 includeMeta", () => {
     expect(text).toContain("编排器互斥占坑");
   });
 
-  it("includeMeta: false 只给正文（隐藏元信息列时的行内复制）", () => {
+  it("includeMeta: false 只给正文（精简列档的行内复制）", () => {
     expect(formatEntryForClipboard(entry(), { includeMeta: false })).toBe(
       "编排器互斥占坑: 已写入会话锚点（PID 74404）",
     );

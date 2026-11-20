@@ -4,6 +4,8 @@
  * 日志分类开关分区（规范 07 §7.x）。
  * 开关**只控制日志面板是否显示**该来源分类——`log/` 文件照常写入；改动经
  * `useLogCategoryStore` 即时落 localStorage，面板侧已订阅，不重启即生效。
+ * 同一分区里还有行距与元信息列两件显示偏好（ISSUE #4567）：走
+ * `log-display-prefs` 的模块级 store，与面板工具栏上的同名控制共享一份状态。
  */
 
 import { Switch } from "~/components/ui/switch";
@@ -11,8 +13,12 @@ import { Button } from "~/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { LOG_CATEGORY_FILTERS, type LogCategoryFilter } from "~/components/studio/logs/log-types";
 import { useLogCategoryStore } from "~/components/studio/logs/log-category-store";
-import { useLogDisplayStore } from "~/components/studio/logs/log-display-store";
-import type { LogDensity } from "~/components/studio/logs/log-virtual";
+import {
+  setLogColumns,
+  setLogDensity,
+  useLogDisplayPrefs,
+  type LogDensity,
+} from "~/components/studio/logs/log-display-prefs";
 import { ORIGIN_TEXT } from "~/components/studio/logs/LogPanelOriginSelect";
 
 import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
@@ -28,21 +34,18 @@ const CATEGORY_HINT: Record<LogCategoryFilter, string> = {
   console: "浏览器 console 拦截 / Tauri 事件 / 全局未捕获错误",
 };
 
-/** 行距档的展示文案与排列顺序（与 `LOG_DENSITY_PRESETS` 的键一一对应）。 */
+/** 行距档的展示文案与排列顺序（与 `LogDensity` 的键一一对应）。 */
 const DENSITY_LABEL: Record<LogDensity, string> = {
   compact: "紧凑",
-  default: "标准",
+  standard: "标准",
   relaxed: "宽松",
 };
-const DENSITY_ORDER: Array<LogDensity> = ["compact", "default", "relaxed"];
+const DENSITY_ORDER: Array<LogDensity> = ["compact", "standard", "relaxed"];
 
 export function LogCategorySection() {
   const enabled = useLogCategoryStore((s) => s.enabled);
   const setEnabled = useLogCategoryStore((s) => s.setEnabled);
-  const density = useLogDisplayStore((s) => s.density);
-  const setDensity = useLogDisplayStore((s) => s.setDensity);
-  const showMeta = useLogDisplayStore((s) => s.showMeta);
-  const setShowMeta = useLogDisplayStore((s) => s.setShowMeta);
+  const { density, columns } = useLogDisplayPrefs();
 
   return (
     <SettingsCard>
@@ -93,8 +96,8 @@ export function LogCategorySection() {
           className="flex max-w-md flex-wrap gap-2"
           onValueChange={(raw) => {
             const v: unknown = raw;
-            if (v === "compact" || v === "default" || v === "relaxed") {
-              setDensity(v);
+            if (v === "compact" || v === "standard" || v === "relaxed") {
+              setLogDensity(v);
             }
           }}
           value={density}
@@ -125,10 +128,10 @@ export function LogCategorySection() {
           </div>
           <Switch
             aria-label="日志元信息列显示开关"
-            checked={showMeta}
+            checked={columns === "full"}
             className="shrink-0"
             onCheckedChange={(checked) => {
-              setShowMeta(checked);
+              setLogColumns(checked ? "full" : "message-only");
             }}
             size="sm"
           />
