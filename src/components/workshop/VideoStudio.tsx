@@ -47,6 +47,14 @@ type Props = {
 type Channel = "local" | "api";
 
 /**
+ * 异步视频轮询对「请求这一拍失败」的容忍上限（ISSUE #4608）：轮询是幂等 GET，
+ * 上游 5xx / 429 / 网络抖动属于瞬态错误，不该让整条镜头失败。连续 N 拍都失败才
+ * 落 failed；成功一拍（含 pending）即清零。总预算仍由 `pollApiVideo` 的 deadline
+ * 罩住，退避就是循环里既有的 3s 间隔（规范 §8.10 的「有界次数 + 墙钟预算」）。
+ */
+const API_VIDEO_POLL_MAX_CONSECUTIVE_ERRORS = 3;
+
+/**
  * 视频生成 stage：消费上游镜头图片（自动用作 I2V 首帧）与运动/时长（分镜预填）。
  * 本地通道跑 ComfyUI img2video/txt2video 工作流；API 通道中转到配置的端点
  *（同步 URL 或异步任务）。结果写回 Shot.clipUrl，供成片合成。
@@ -147,11 +155,29 @@ export function VideoStudio({
   /** 轮询异步 API 视频任务直到 resolve 或超时（约 10 分钟）。 */
   async function pollApiVideo(shotId: string, remoteTaskId: string): Promise<void> {
     const deadline = Date.now() + 10 * 60 * 1000;
+    let consecutiveErrors = 0;
     while (Date.now() < deadline) {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       await sleep(3000);
-      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      const r = await apiPollVideo(remoteTaskId);
+      let r;
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+        r = await apiPollVideo(remoteTaskId);
+        consecutiveErrors = 0;
+      } catch (error) {
+        /* 请求级失败 ≠ 任务失败：远端任务可能还在正常生成。连续 N 拍都失败才认输，
+           中途任何一拍成功（含 pending）都把计数清掉（ISSUE #4608）。 */
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= API_VIDEO_POLL_MAX_CONSECUTIVE_ERRORS) {
+          patchShot(shotId, { clipStatus: "failed" });
+          setShotError(
+            shotId,
+            `API 视频轮询连续失败 ${consecutiveErrors} 次：${errorMessage(error, "未知错误")}`,
+          );
+          return;
+        }
+        continue;
+      }
       if (r.url !== undefined && r.url !== "") {
         patchShot(shotId, { clipStatus: "done", clipUrl: r.url });
         return;
