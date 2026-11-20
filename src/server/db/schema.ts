@@ -11,6 +11,7 @@ import {
   index,
   uniqueIndex,
   customType,
+  primaryKey,
 } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
@@ -317,6 +318,40 @@ export const taskImage = sqliteTable(
     // 每次 task.list / history 带 includeImages 都按 taskId IN(...) 回表；
     // 产物行随任务增长，此前无索引 → 近全表扫。
     index("taskimage_task_idx").on(t.taskId),
+  ],
+);
+
+/**
+ * 任务执行日志的**增量行存**（#4605）：一行一条日志，替代「整包防抖重写 task.logs 列」。
+ *
+ * 为什么单独立表而不是继续用 `task.logs` JSON 列：长任务高频日志期，旧形态每 200ms 把
+ * 最多 5000 行的 JSON 列整列重写一次（单列 MB 级），同时 SSE 每 3s/连接整列读回 ——
+ * 单连接 SQLite 上持续制造写放大与序列化开销，加剧与进度写、reaper 写的 SQLITE_BUSY
+ * 竞争。改为按 `(taskId, seq)` 追加后，写入是每次防抖窗口一小批 INSERT，SSE 读是
+ * 「游标之后的尾段」，两者都不再随日志总量增长。
+ *
+ * `seq` 是**每任务单调递增**的行号，由写入侧（`runner-state.log()`）分配；行删除
+ * （重跑清场、裁剪旧行）后新行的 seq 继续增大，SSE 游标按 seq 比大小因此不需要回退。
+ * 行形状与 `LogEntry`（`t`/`level`/`msg`/`src`）一致，读侧原样组帧。
+ *
+ * `task.logs` 列**保留**：它仍是收口时整包落一次的「完整记录」（历史行也在这里），
+ * SSE 回放对没有增量行的旧任务回落读它。
+ */
+export const taskLog = sqliteTable(
+  "taskLog",
+  {
+    taskId: text("taskId")
+      .notNull()
+      .references(() => task.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    t: integer("t").notNull(),
+    level: text("level").notNull(),
+    msg: text("msg").notNull(),
+    src: text("src"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.taskId, t.seq] }),
+    // SSE 增量读按 (taskId, seq > 游标) 扫尾段；复合主键已覆盖该前缀，这里不再单列索引。
   ],
 );
 

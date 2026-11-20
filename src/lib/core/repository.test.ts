@@ -1108,12 +1108,12 @@ describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
     expect(await taskRepository.findExecutionProgressMany([])).toEqual([]);
   });
 
-  it("findSseSnapshot：轮询要的列都在，唯独 workflowSnapshot 不拉", async () => {
+  it("findSseSnapshot：轮询要的列都在，workflowSnapshot 与 logs 都不拉", async () => {
     const t = await taskRepository.createQueued({
       ...queued,
       workflowSnapshot: { nodes: [1] },
     });
-    await taskRepository.replaceLogs(t.id, [{ level: "info", msg: "起图" }]);
+    await taskRepository.appendLogs(t.id, [{ t: 1, level: "info", msg: "起图", seq: 1 }]);
     await taskRepository.replaceRawCli(t.id, ["CLI 第一行", "第二行"]);
 
     const snap = await taskRepository.findSseSnapshot(t.id);
@@ -1122,13 +1122,16 @@ describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
       progress: 0,
       error: null,
       workflowName: "wf-wire",
-      logs: [{ level: "info", msg: "起图" }],
     });
-    /* 「轻投影」的边界是不含 workflowSnapshot（整份工作流，单行可达数 MB），
-     * 而 progressNode / logs 是 3-C 之后轮询要读的。写成整行查询不报错，
-     * 只是每条 SSE 连接每 3s 白拉一份工作流。 */
+    /* 「轻投影」的边界是不含 workflowSnapshot（整份工作流，单行可达数 MB）。
+     * logs 也离开了这条投影（#4605）：日志增量改由 `readLogsSince` 按游标从
+     * `taskLog` 表取尾段，不再每 3s/连接整列读回。写成整行查询不报错，
+     * 只是每条 SSE 连接每 3s 白拉一份工作流与日志。 */
     expect(snap).not.toHaveProperty("workflowSnapshot");
+    expect(snap).not.toHaveProperty("logs");
     expect(snap).toHaveProperty("progressNode");
+    /* 日志增量按游标读尾段（SSE 轮询的日志数据源）。 */
+    expect((await taskRepository.readLogsSince(t.id, 0)).map((r) => r.msg)).toEqual(["起图"]);
     /* rawCli 是同一条轮询要的另一列：写进去读得回来，未知行给 null。 */
     expect(await taskRepository.findRawCli(t.id)).toEqual(["CLI 第一行", "第二行"]);
     expect(await taskRepository.findRawCli("nope")).toBeNull();

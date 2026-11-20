@@ -9,6 +9,20 @@ import { errorResponse, unauthorizedResponse } from "~/server/lib/error-response
 
 export const runtime = "nodejs";
 
+/** 回放行的 seq 读取（旧 `task.logs` 列里的历史行没有 seq → 0）：游标按它比大小，
+ *  不对 unknown 做类型断言。 */
+function replaySeq(entry: unknown): number {
+  if (
+    typeof entry === "object" &&
+    entry !== null &&
+    "seq" in entry &&
+    typeof entry.seq === "number"
+  ) {
+    return entry.seq;
+  }
+  return 0;
+}
+
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const params = await ctx.params;
   const id = params.id;
@@ -70,15 +84,16 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
       /* 下面「初始回放」与「数据库轮询」两处共用同一组游标。
        * `lastSent`：已发出的状态快照（相同则不重发 state 帧）。
-       * `sentLogCount`：已发出的日志条数——日志是**追加数组**，轮询按它做
-       * 增量 diff 发 log 帧（P3 §5 ADR §13-3C：SSE 单源化，log/state 都以
-       * DB 为准；初始回放读内存是为了接住 persistLogs 200ms 防抖窗口）。 */
+       * `sentLogSeq`：已发出的日志最大行号——日志按 `(taskId, seq)` 增量落库
+       * （#4605），轮询按它从 `taskLog` 表取尾段发 log 帧（P3 §5 ADR §13-3C：
+       * SSE 单源化，log/state 都以 DB 为准；初始回放读内存是为了接住 persistLogs
+       * 200ms 防抖窗口）。 */
       const lastSent: { nodeKey: string; progress: number; status: string } = {
         status: "",
         progress: 0,
         nodeKey: "",
       };
-      let sentLogCount = 0;
+      let sentLogSeq = 0;
 
       /* 数据库轮询 = SSE 的唯一事件源（P3 §5 ADR §13-3C，D2 定 3s）。
        * 进程内 emitter 只覆盖 inline 一半流量（host 执行到不了），两模式契约曾分裂；
@@ -98,7 +113,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         polling = true;
         taskRepository
           .findSseSnapshot(id)
-          .then((cur) => {
+          .then(async (cur) => {
             if (!cur) {
               notFoundStreak += 1;
               if (notFoundStreak >= 2) {
@@ -113,25 +128,23 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
               return;
             }
             notFoundStreak = 0;
-            // 日志是 unknown 列：Array.isArray 收窄到 any[] 会踩
-            // no-unsafe-assignment，标注成 unknown[] 保住类型纪律。
-            const logs: Array<unknown> = Array.isArray(cur.logs) ? cur.logs : [];
             const nodeKey = JSON.stringify(cur.progressNode ?? null);
             const changed =
               cur.status !== lastSent.status ||
               cur.progress !== lastSent.progress ||
               nodeKey !== lastSent.nodeKey;
             try {
-              /* 日志增量：追加数组按游标切。DB 数组只会变长（persistLogs
-               * 整包重写同一序列）；万一看到变短（异常形态），只把游标
-               * 归正、不重发历史，宁缺勿重。 */
-              if (logs.length < sentLogCount) {
-                sentLogCount = logs.length;
-              }
-              for (const entry of logs.slice(sentLogCount)) {
+              /* 日志增量（#4605）：按 seq 游标从 `taskLog` 表取尾段，不再每 3s
+               * 整列读回 `task.logs`（单列 MB 级，BUSY 竞争的主要读放大源）。
+               * 行只增不删（重跑清场后新行 seq 续大），游标不需要旧形态的
+               * 「变短归正」护栏。 */
+              const newLogs = await taskRepository.readLogsSince(id, sentLogSeq);
+              for (const entry of newLogs) {
                 send({ type: "log", entry });
+                if (entry.seq > sentLogSeq) {
+                  sentLogSeq = entry.seq;
+                }
               }
-              sentLogCount = Math.max(sentLogCount, logs.length);
               if (changed) {
                 lastSent.status = cur.status;
                 lastSent.progress = cur.progress;
@@ -181,7 +194,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       // 初始状态（覆盖「订阅之前任务就已经结束」的情形）。
       taskRepository
         .findById(id)
-        .then((task) => {
+        .then(async (task) => {
           if (!task || closed) {
             return;
           }
@@ -191,9 +204,16 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
             // 优先回放 runner 内存日志（getLogs），恒为 DB 日志超集：提交与领取在 EventSource
             // 订阅前就会输出「已从队列领取」「输入参数」等行，而落库走 200ms 防抖，
             // SSE 在防抖窗口内连接时只读 DB 会漏掉它们（ISSUE #1206）。
-            // 内存为空（服务器重启）时回落 DB 日志；两者同源，不会矛盾。
+            // 内存为空（服务器重启 / host 模式）时读 `taskLog` 增量表；仍为空
+            //（迁移前的旧任务）再回落 `task.logs` 列。三者同源，不会矛盾。
             const inMemory = getLogs(id);
-            const replaySrc = inMemory.length > 0 ? inMemory : existing;
+            let replaySrc: Array<unknown> = inMemory;
+            if (replaySrc.length === 0) {
+              replaySrc = await taskRepository.readAllLogs(id);
+            }
+            if (replaySrc.length === 0) {
+              replaySrc = existing;
+            }
             // 回放顺序必须「先日志、后终态 state」：前端 watchTask 在处理 state 的
             // 终态（FAILED/CANCELLED/ERROR）分支时会立即 settle 并关闭 EventSource，
             // 若把 state 排在日志前面，后续 log 帧会被丢弃，用户只看到「等待日志…」
@@ -204,7 +224,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
             if (closed) {
               return;
             }
-            sentLogCount = replaySrc.length;
+            /* 游标按「已回放的最大 seq」记（旧列里的行没有 seq，按 0 计）：轮询只发
+             * 比它大的行，防抖窗内先从内存回放、随后才落库的行不会重发。 */
+            for (const entry of replaySrc) {
+              const seq = replaySeq(entry);
+              if (seq > sentLogSeq) {
+                sentLogSeq = seq;
+              }
+            }
             // 把结构化校验错误透出去，好让消费方（CreatePanel）
             // 渲染出精确到字段的列表，而不是 `error` 里那句英文摘要。
             send({

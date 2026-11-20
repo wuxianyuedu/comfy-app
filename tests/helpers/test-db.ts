@@ -59,6 +59,7 @@ const TABLES = [
   "favorite",
   "task",
   "taskImage",
+  "taskLog",
   "workflowTemplate",
   "workflowModelTag",
   "workflowModelTag_workflowTemplate",
@@ -126,6 +127,10 @@ CREATE TABLE IF NOT EXISTS taskImage (
   id TEXT PRIMARY KEY, taskId TEXT NOT NULL, localPath TEXT NOT NULL, mediaType TEXT NOT NULL DEFAULT 'image',
   seed TEXT, width INTEGER, height INTEGER, isCover INTEGER NOT NULL DEFAULT 0, sortIndex INTEGER NOT NULL DEFAULT 0,
   humanRating INTEGER, isFavorite INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS taskLog (
+  taskId TEXT NOT NULL, seq INTEGER NOT NULL, t INTEGER NOT NULL, level TEXT NOT NULL, msg TEXT NOT NULL, src TEXT,
+  PRIMARY KEY (taskId, seq), FOREIGN KEY (taskId) REFERENCES task(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS workflowTemplate (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, taskType TEXT NOT NULL DEFAULT 'TXT2IMG',
@@ -250,6 +255,7 @@ export type TestTables = {
   projects: Array<Row>;
   remoteModels: Array<Row>;
   taskImages: Array<Row>;
+  taskLogs: Array<Row>;
   tasks: Array<Row>;
   users: Array<Row>;
   workflowModelTags: Array<Row>;
@@ -478,6 +484,9 @@ export function createTestDb(): TestDb {
     },
     get taskImages() {
       return allRows("taskImage");
+    },
+    get taskLogs() {
+      return allRows("taskLog");
     },
     get llmConfig() {
       return allRows("llmConfig");

@@ -102,6 +102,8 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     const repo = {
       findStatusAndPromptById: vi.fn(() => Promise.resolve(row)),
       cancel: vi.fn(() => Promise.resolve(cancelOutcome)),
+      appendLogs: vi.fn(() => Promise.resolve(undefined)),
+      resetLogs: vi.fn(() => Promise.resolve(undefined)),
       replaceLogs: vi.fn(() => Promise.resolve(undefined)),
       replaceRawCli: vi.fn(() => Promise.resolve(undefined)),
     };

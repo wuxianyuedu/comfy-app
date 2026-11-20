@@ -53,6 +53,7 @@ import {
   logWhileQueued,
   markDispatched,
   releaseDispatchSlot,
+  resetLogsForRerun,
   state,
   takeQueuedEntries,
   touchAndEvict,
@@ -222,6 +223,9 @@ async function claimAndDispatchOnceInner(options?: {
   s.settled.delete(taskId);
   clearFinalize(taskId);
   s.logs.set(taskId, takeQueuedEntries(taskId));
+  /* 增量日志表同步清场（#4605）：内存缓冲的重开只管本进程视图，跨进程读的
+   * `taskLog` 表要单独删掉上一轮的行，新轮次从干净的表开始追加。 */
+  await resetLogsForRerun(taskId);
   s.startedAt.set(taskId, Date.now());
   log(
     taskId,
