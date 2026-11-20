@@ -57,6 +57,14 @@ import os from "node:os";
  * 所以 GA 侧单独一档：`ceil(cores / 2)`（4 核 ⇒ 2），保住「留一半余量」的原意，
  * 与 CNB 的 8 是两套约束，不是同一常数换了张皮。
  *
+ * **本地开发机是第三档（2026-11-20 补，ISSUE #4613）**：独占开发机同样没有邻居要保护，
+ * 却一直在付共享宿主机那一档的钱 —— 16 核机 `ceil(16/8)=2`，449+ 文件全量墙钟明显偏长，
+ * 而快跑出口（`COMFY_CI_MAX_WORKERS`）藏在配置注释里。非 CI 环境（`CNB_CPUS` /
+ * `GITHUB_ACTIONS` / `CI` 三者都缺席，`isCiEnvironment()` 判）改按 `cores/2` 铺开
+ * （16 核 ⇒ 8）：与 GA 同式但理由不同 —— GA 是「独享 4 核 VM 留一半」，本地是
+ * 「独占整机用一半」。CNB 共享宿主机那一档（8）一个不改；人的覆盖出口
+ * `COMFY_CI_MAX_WORKERS` 对三档同样优先。
+ *
  * **4 worker 刻意不写进默认**：GA 托管 runner 的 4 vCPU / 16GB 只是口径，本仓没有
  * 内存读数；取数计划与待定项写在 `docs/guides/ga-migration-checklist.md` G-1，
  * 没有读数就不把 4 升成默认。
@@ -65,6 +73,9 @@ export const CORES_PER_WORKER = 8;
 
 /** GA 托管 runner 的档：每个 job 独享一台机 ⇒ 只留一半余量（4 核 ⇒ 2）。 */
 export const GA_CORES_PER_WORKER = 2;
+
+/** 本地开发机的档：独占整机 ⇒ 用一半核铺 worker（16 核 ⇒ 8，ISSUE #4613）。 */
+export const LOCAL_CORES_PER_WORKER = 2;
 
 /** 平台池与自托管都不给读数时的兜底（等于按 16 逻辑核这一档算）。 */
 export const FALLBACK_CORES = 16;
@@ -142,15 +153,38 @@ export function isGitHubActions(env = process.env) {
 }
 
 /**
- * 本平台「一个 worker 至少要几核」：GA 独享 ⇒ 2；其余（CNB 自托管 / 本地）⇒ 8。
+ * 这一跑在 CI 上吗（CNB 平台池 / 自托管 / GA 都算）。
  *
- * 本地不判 GA，行为与 2026-11-06 之前逐字一致（不设 `GITHUB_ACTIONS` 就永远走 8）。
+ * 判据是「CI 平台会注入的环境变量在场」：`CNB_CPUS`（CNB 平台池 / 自托管）、
+ * `GITHUB_ACTIONS`（GA runner 恒为 `"true"`）、`CI`（各平台通用约定）。`CI` 显式写
+ * `"false"` / `"0"` 的按「人关掉了」算，不冒充 CI。三者都缺席 ⇒ 本地开发机，
+ * `platformCpusPerWorker()` 据此走 `LOCAL_CORES_PER_WORKER` 那一档（ISSUE #4613）。
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {boolean}
+ */
+export function isCiEnvironment(env = process.env) {
+  if (String(env.CNB_CPUS ?? "").trim() !== "") return true;
+  if (isGitHubActions(env)) return true;
+  const ci = String(env.CI ?? "").trim();
+  return ci !== "" && ci !== "false" && ci !== "0";
+}
+
+/**
+ * 本平台「一个 worker 至少要几核」：GA 独享 ⇒ 2；本地开发机 ⇒ 2（`cores/2`，#4613）；
+ * CNB 共享宿主机 ⇒ 8。
+ *
+ * 分档只看「平台给了什么条件」，与公式解耦：`GITHUB_ACTIONS=true` 是 GA；
+ * 三个 CI 变量都缺席是本地开发机；剩下（`CNB_CPUS` 在场、或仅 `CI` 在场）按
+ * 共享宿主机办 —— 与 2026-11-20 之前「非 GA 即 8」相比，只有**本地**那一侧变了。
  *
  * @param {Record<string, string | undefined>} env
  * @returns {number}
  */
 export function platformCpusPerWorker(env = process.env) {
-  return isGitHubActions(env) ? GA_CORES_PER_WORKER : CORES_PER_WORKER;
+  if (isGitHubActions(env)) return GA_CORES_PER_WORKER;
+  if (!isCiEnvironment(env)) return LOCAL_CORES_PER_WORKER;
+  return CORES_PER_WORKER;
 }
 
 /**
