@@ -6,7 +6,7 @@
  * 记得改两处；现在两个挂载点各只负责「多高」。页签里「关」由页签承担，不另画返回（§12.16）。
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight, Copy } from "lucide-react";
 
 import { SettingsShell } from "~/components/settings/SettingsShell";
@@ -18,9 +18,14 @@ import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedb
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { cn } from "~/lib/utils";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
+import { logSubviewOpen, markSubviewOpenStart } from "~/components/studio/subview-open-log";
 
 import { SettingsPageView } from "~/app/(main)/settings/SettingsPageView";
 import { useSettingsPage } from "~/app/(main)/settings/hooks/use-settings-page";
+import {
+  SETTINGS_SECTIONS,
+  type Section,
+} from "~/app/(main)/settings/hooks/use-settings-page-types";
 
 export type SettingsViewProps = {
   /** 撑满父级高度（工作区视图里由外层给视口高度）；缺省走外壳自己的视口档。 */
@@ -41,13 +46,37 @@ export function SettingsView({ fillHeight, initialSection, onConsumeSection }: S
     onConsumeInitialSection: onConsumeSection,
   });
 
+  /* 分区切换耗时（ISSUE #4580）：点击分区那一刻记时刻，切换提交完成（本
+   * effect，commit 之后）落一条「页签切换：设置·<分区>」。同一分区的重复
+   * 点击不记（没发生切换）；同一次切换只记一条 —— 消费后把 ref 清回 null。 */
+  const { section, setSection } = c;
+  const sectionSwitchedAtRef = useRef<number | null>(null);
+  const handleSectionSelect = useCallback(
+    (next: Section) => {
+      if (next !== section) {
+        sectionSwitchedAtRef.current = markSubviewOpenStart();
+      }
+      setSection(next);
+    },
+    [section, setSection],
+  );
+  useEffect(() => {
+    const switchedAt = sectionSwitchedAtRef.current;
+    if (switchedAt === null) {
+      return;
+    }
+    sectionSwitchedAtRef.current = null;
+    const label = SETTINGS_SECTIONS.find((entry) => entry.id === section)?.label ?? section;
+    logSubviewOpen("页签切换", "设置", label, switchedAt, { section });
+  }, [section]);
+
   /* 屏名只在「这一屏才出现」时给可见标题（ISSUE #1872）：工作区页签（`fillHeight`）
    * 的页签条与顶栏已经在写「设置」，屏内再写一遍是同一个名字的第三次出现 —— 那时
    * 不传 `title`，屏名以 `sr-only` 留在 DOM；独立路由 `/settings` 没有顶栏也不显示
    * 页签，屏名只在这一屏出现，仍给可见标题。 */
   const frame = {
     section: c.section,
-    onSelect: c.setSection,
+    onSelect: handleSectionSelect,
     /* 跳转载荷的落点透给外壳：三态壳也带着它 —— 加载壳没有分区节、滚不过去也
      * 不会消费载荷；就绪壳挂上后再滚到目标分区。 */
     jumpSection: c.pendingJump,
