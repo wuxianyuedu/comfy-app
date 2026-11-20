@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   referenceLoaderBindingsForMode,
+  resolveReferenceMountNodes,
   referenceLoaderMax,
   referenceLoaderMountNodes,
   REFERENCE_LOADER_CAP_LIMIT,
@@ -214,5 +215,48 @@ describe("referenceLoaderMountNodes / withReferenceLoaderMountNodes（挂载节�
     expect(referenceLoaderBindingsForMode(cleared, "T2I")).toEqual({
       "reference-image": { presetId: "p1" },
     });
+  });
+});
+
+describe("resolveReferenceMountNodes（#4593：库详情按名字展示挂载节点）", () => {
+  const RAW = {
+    nodes: [
+      { id: 45, type: "ReferenceImageNode", title: "参考图挂载 A" },
+      { id: 69, type: "ReferenceImageNode" },
+      { id: "custom-str", type: "SomethingElse", title: "字符串 id 节点" },
+    ],
+  };
+
+  it("id 对到 RAW 节点标题；title 缺省回落「类型 #id」", () => {
+    expect(resolveReferenceMountNodes({ mountNodeIds: ["45", "69"], rawJson: RAW })).toEqual([
+      { id: "45", title: "参考图挂载 A" },
+      { id: "69", title: "ReferenceImageNode #69" },
+    ]);
+  });
+
+  it("字符串 id 的 RAW 节点同样能对上", () => {
+    expect(resolveReferenceMountNodes({ mountNodeIds: ["custom-str"], rawJson: RAW })).toEqual([
+      { id: "custom-str", title: "字符串 id 节点" },
+    ]);
+  });
+
+  it("名单里指不到的 id 保留原样（不静默丢）", () => {
+    expect(resolveReferenceMountNodes({ mountNodeIds: ["45", "999"], rawJson: RAW })).toEqual([
+      { id: "45", title: "参考图挂载 A" },
+      { id: "999", title: "999" },
+    ]);
+  });
+
+  it("RAW 不是对象 / 没有节点时按 id 兜底返回", () => {
+    expect(resolveReferenceMountNodes({ mountNodeIds: ["45"], rawJson: null })).toEqual([
+      { id: "45", title: "45" },
+    ]);
+    expect(resolveReferenceMountNodes({ mountNodeIds: ["45"], rawJson: { nodes: "bad" } })).toEqual(
+      [{ id: "45", title: "45" }],
+    );
+  });
+
+  it("空名单直接返回空数组（不碰 RAW）", () => {
+    expect(resolveReferenceMountNodes({ mountNodeIds: [], rawJson: RAW })).toEqual([]);
   });
 });

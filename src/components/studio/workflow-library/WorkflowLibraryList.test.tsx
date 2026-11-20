@@ -305,3 +305,19 @@ describe("WorkflowLibraryList 查询失败态（#4464）", () => {
     expect(screen.queryByText("工作流列表加载失败")).toBeNull();
   });
 });
+
+describe("参考图挂载徽标（ISSUE #4593）", () => {
+  it("paramMap 里点选了挂载节点 → 行上显示「参考图挂载 N」", () => {
+    renderList({
+      workflows: [row({ paramMap: { referenceLoaders: { mountNodeIds: ["45", "69"] } } })],
+    });
+
+    expect(screen.getByText("参考图挂载 2")).toBeInTheDocument();
+  });
+
+  it("没有挂载节点 → 不显示徽标", () => {
+    renderList({ workflows: [row()] });
+
+    expect(screen.queryByText(/参考图挂载/)).toBeNull();
+  });
+});
