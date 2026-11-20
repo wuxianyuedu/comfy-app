@@ -19,6 +19,7 @@ import { isRecord } from "~/lib/is-record";
 // / #1071 executor-cli / 本 PR enqueue 的模式：`configureReaper({ taskRepo })`
 // + 未注入时首次调用 dynamic import 兜底 Next 侧真单例。
 import { resolveComfyBase } from "./client";
+import { complete } from "./executor-finalize";
 import { cliProcs, pruneTempWorkflowFiles } from "./executor-cli";
 import { isComfyStarting } from "./lifecycle";
 import {
@@ -118,9 +119,9 @@ const STALE_MS = 30_000; // 过老且**无主**的 QUEUED 行才算死信（判�
  *  但它的内存执行器丢了（dev 冷重启、崩溃），就会永远卡在 RUNNING ——
  *  心跳只重新驱动内存队列。ComfyUI 的 /queue 对内存状态也一无所知，
  *  于是我们直接问 ComfyUI 要结论：
- *    • /history/{promptId} 有条目 → 标 SUCCEEDED（若是 execution_error 则 FAILED）。
- *      产物在 ComfyUI 的 history 里；这里**不**重新拉二进制（那是另一件事），
- *      原因字符串把用户指向 promptId。
+ *    • /history/{promptId} 有条目 → 判成功（若是 execution_error 则 FAILED）。
+ *      成功**走 executor 的完成路径**把产物从 ComfyUI 拉回本地落库（#4607）——
+ *      只写状态会让恢复侧读到「成功但无产物」，用户只能整镜重来。
  *    • 404 → ComfyUI 从没见过它（ComfyUI 也重启了，或 prompt 被上游拒了）
  *      → 标成 FAILED 孤儿。
  *    • 还在 /queue 里 → 它确实在跑，放过，下一轮再看。
@@ -585,6 +586,34 @@ export async function reapStaleRunningTasks(): Promise<void> {
           log(t.id, "warn", `reaper(running): ${reason}`);
           continue;
         }
+        if (verdict === "succeeded") {
+          /* 终态已被本进程认领 / 落库 → 跳过，不做无谓的产物下载
+           *  （与下方失败路径的两把锁同一语义，只是这里只读不抢 ——
+           *  抢了会让 completeInner 的 claimFinalize 拿不到而静默跳过写库）。 */
+          if (s.settled.has(t.id) || s.finalized.has(t.id)) {
+            log(t.id, "warn", "reaper(running) 跳过：任务终态已落库（不覆盖已有结果）");
+            continue;
+          }
+          /* #4607：对账判成功 ≠ 只写状态。复用 executor 的完成入口
+           *  （complete → completeInner：拉 /history → 收集产物 → getView
+           *  下载落盘 → finalizeSuccessWithImages 同事务写产物行），把产物从
+           *  ComfyUI 输出目录拿回来 —— 否则恢复侧读到「SUCCEEDED 但无产物」
+           *  只能提示用户整镜重来，而产物明明就在。complete 自带
+           *  claimSettle / claimFinalize 两把一次性锁与「恢复失败 →
+           *  finalizeFailure」的兜底：下载失败时任务落 FAILED 并带真实原因，
+           *  而不是挂着一个无产物的 SUCCEEDED。 */
+          log(
+            t.id,
+            "info",
+            `reaper(running): 对账判定成功，恢复产物下载（promptId=${t.promptId}）`,
+          );
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+          await complete(t.id, t.promptId);
+          /* 与下方失败路径同款的在飞记账归还：complete 的成功分支不归还
+           *  （正常执行流里槽位归领取循环管），对账恢复这里补一次（幂等）。 */
+          releaseDispatchSlot(t.id);
+          continue;
+        }
         /* 与 QUEUED reaper 同一把锁：执行路径若已认领终态就跳过，
          *  保证「执行日志」与「应用日志 / DB」里的失败原因出自同一次收口。 */
         if (!claimTerminal(t.id)) {
@@ -595,15 +624,12 @@ export async function reapStaleRunningTasks(): Promise<void> {
           log(t.id, "warn", "reaper(running) 跳过：任务终态已落库");
           continue;
         }
-        const finalStatus = verdict === "succeeded" ? "SUCCEEDED" : "FAILED";
-        log(t.id, verdict === "succeeded" ? "success" : "error", reason);
+        /* 走到这里只剩 FAILED 判决（unknown 已跳过、succeeded 已走 complete 恢复）。 */
+        const finalStatus = "FAILED";
+        log(t.id, "error", reason);
         try {
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-          const outcome = await taskRepository.finalizeFromReaper(
-            t.id,
-            finalStatus,
-            verdict === "failed" ? reason : null,
-          );
+          const outcome = await taskRepository.finalizeFromReaper(t.id, finalStatus, reason);
           if (outcome !== "written") {
             logger.warn(`[comfyui] reaper: 跳过对账收口 ${t.id}（${outcome}），终态已由执行方落定`);
           }
