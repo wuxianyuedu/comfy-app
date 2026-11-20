@@ -82,10 +82,10 @@ export const taskRouter = createTRPCRouter({
        * 不再无条件把 400 行拉回来。扫描行数上限与旧版对齐（400）。 */
       const MAX_ROUNDS = Math.ceil(400 / PAGE);
 
-      const scanOnce = async (skip: number) => {
+      const scanOnce = async (skip: number, take: number) => {
         const tasks = await taskRepository.listByUser(ctx.user.id, {
           projectId: input.projectId ?? undefined,
-          take: PAGE,
+          take,
           skip,
           statusList: statusList ?? undefined,
           includeImages: true,
@@ -123,8 +123,10 @@ export const taskRouter = createTRPCRouter({
        * 触到表尾（exhausted）就为 true；精确与否由调用方的下一页兜底
        * （下一页拉回 0 行时 hasMore 自然变 false）。 */
       if (!input.media) {
-        const rows = await scanOnce(input.cursor);
-        /* 多取一行判 hasMore：返回行数超过 take = 还有下一页。 */
+        /* 多取一行判 hasMore（#4594）：请求 PAGE+1 行，返回行数超过 PAGE = 还有下一页。
+         * 此前 scanOnce 只取 PAGE 行，`rows.length > PAGE` 恒假 ⇒ hasMore 恒 false，
+         * 历史列表在第一页之后永远翻不下去。 */
+        const rows = await scanOnce(input.cursor, PAGE + 1);
         const hasMore = rows.length > PAGE;
         return { tasks: rows.slice(0, PAGE), hasMore, scanned: rows.length };
       }
@@ -135,7 +137,7 @@ export const taskRouter = createTRPCRouter({
       let exhausted = false;
       for (let round = 0; round < MAX_ROUNDS; round += 1) {
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-        const page = await scanOnce(input.cursor + round * PAGE);
+        const page = await scanOnce(input.cursor + round * PAGE, PAGE);
         scanned += page.length;
         if (page.length < PAGE) {
           exhausted = true;
