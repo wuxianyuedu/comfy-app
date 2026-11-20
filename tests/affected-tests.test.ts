@@ -13,6 +13,7 @@ import {
   specCandidates,
   wideFallbackNote,
 } from "../scripts/affected-tests/affected-tests.mjs";
+import { declaredSourcesOf } from "../scripts/affected-tests/affected-graph.mjs";
 /* `--name-status` 的解析住在零依赖模块里（ISSUE #2830：说明符扫描器带上了
  * `typescript`，沙箱里那份 `changed-scope.mjs` 不能再连带它）。 */
 import { changedPathsFromNameStatus } from "../scripts/lib/git-name-status.mjs";
@@ -86,7 +87,7 @@ describe("affected-tests：路径判据", () => {
   });
 });
 
-describe("affected-tests：五条命中判据", () => {
+describe("affected-tests：六条命中判据", () => {
   it("① 改动的测试文件自身一定跑", () => {
     const run = harness({ [UI_TEST]: "it('x', () => {});" });
     expect(run([UI_TEST]).tests).toContain(UI_TEST);
@@ -212,6 +213,29 @@ describe("affected-tests：五条命中判据", () => {
     expect(res.tests).toContain("tests/check-x.test.ts");
     expect(res.tests).not.toContain("src/a/plain.test.ts");
     expect(res.reasons["src/a/spawn.test.ts"]).toContain("按路径引用");
+  });
+
+  it("⑥ 用例显式声明的源依赖：拼路径 / 解析目录外的文件改动也选中它", () => {
+    // 现场是 #4642：路径被 join(ROOT, "src-tauri", "src", "lib.rs") 拆成几段，
+    // .rs 也不在 isSourcePath 的目录与扩展名里 ⇒ ③ ④ 全抓不到。
+    const run = harness({
+      "tests/gate.test.ts": [
+        "// 本用例把下列路径拼出来读（不是 import）：",
+        "// @affected-source src-tauri/",
+        "// @affected-source public/splash.html",
+        "it('x', () => {});",
+      ].join("\n"),
+      "src/a/unrelated.test.ts": "it('x', () => {});",
+    });
+    const byDir = run(["src-tauri/src/lib.rs"]);
+    expect(byDir.tests).toContain("tests/gate.test.ts");
+    expect(byDir.reasons["tests/gate.test.ts"]).toContain("显式源依赖");
+    expect(byDir.tests).not.toContain("src/a/unrelated.test.ts");
+
+    const byExact = run(["public/splash.html"]);
+    expect(byExact.tests).toContain("tests/gate.test.ts");
+    /* 声明面不是「任何改动都跑」：没声明的路径不进这份用例的面。 */
+    expect(run(["README.md"]).tests).not.toContain("tests/gate.test.ts");
   });
 });
 
@@ -457,6 +481,22 @@ describe("affected-tests：与仓库现状的漂移守卫", () => {
   it("固定清单里每个文件都真实存在", () => {
     // 用例改名/删掉时，写死的清单会**静默**不再守任何东西 —— 这条就是拦这个。
     const missing = FIXED_STRUCTURAL_TESTS.filter((rel) => !fs.existsSync(path.join(ROOT, rel)));
+    expect(missing).toEqual([]);
+  });
+
+  it("@affected-source 声明的路径都真实存在（写错一个 = 那一行永远命不中）", () => {
+    const declared = ["src", "tests"]
+      .flatMap((dir) =>
+        fs
+          .readdirSync(path.join(ROOT, dir), { recursive: true })
+          .map((p) => `${dir}/${String(p).replaceAll("\\", "/")}`),
+      )
+      .filter(isTestPath)
+      .flatMap((rel) => declaredSourcesOf(fs.readFileSync(path.join(ROOT, rel), "utf8")));
+    expect(declared.length).toBeGreaterThan(0);
+    const missing = declared
+      .map((p) => (p.endsWith("/") ? p.slice(0, -1) : p))
+      .filter((p) => !fs.existsSync(path.join(ROOT, p)));
     expect(missing).toEqual([]);
   });
 
