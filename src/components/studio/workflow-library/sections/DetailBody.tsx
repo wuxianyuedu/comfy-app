@@ -9,7 +9,7 @@ import { Maximize2 } from "lucide-react";
 import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { Button } from "~/components/ui/button";
-import type { DetailTab } from "../workflow-library-detail-config";
+import { DETAIL_LOADING_LABEL, type DetailTab } from "../workflow-library-detail-config";
 import type { WorkflowRow } from "../workflow-library-config";
 import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
 import { ErrorBoundary } from "~/components/ui/error-boundary";
@@ -90,9 +90,12 @@ export function DetailBody({
   /* 换工作流 / 首次打开时详情查询尚未排空：此时表单拿不到 IO，预览会先渲染
    * 一遍无参卡片再被真实 IO 顶掉（整块高度改变 → 页面跳一下），参数页签同
    * 理。统一的处理是「还没就绪就不渲染页签内容」——container 用 min-h-0 撑满
-   * 父级，切换不会闪出占位文案，也不会出现半渲染的中间态。 */
+   * 父级，不会出现半渲染的中间态。但查询可能跑好几秒（detailFull 实测 4s+），
+   * 期间只留空白会让「选中工作流后卡在工坊封装」看起来像死机（ISSUE #4592），
+   * 所以这一段给**局部**加载态：spinner 只占页签内容区，头部与页签条照常显示；
+   * 后台 refetch（数据已在，isLoading 为假）不走这一支，不会闪。 */
   if (isLoading) {
-    return null;
+    return <TabContentLoading label={DETAIL_LOADING_LABEL} />;
   }
 
   return (

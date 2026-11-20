@@ -34,6 +34,10 @@ export type DetailTab = (typeof DETAIL_TABS)[number]["key"];
 /** 打开一条工作流时的默认页签 —— 取表里的第一项（最轻的那个，见上）。 */
 export const DEFAULT_DETAIL_TAB: DetailTab = DETAIL_TABS[0].key;
 
+/** 详情数据在飞时页签内容区的加载文案（ISSUE #4592）：详情面板各页签共用
+ *  一句 —— 数据没排空之前页签内容不渲染，这一句是那段时间里唯一的用户反馈。 */
+export const DETAIL_LOADING_LABEL = "加载工作流详情…";
+
 export type WorkflowLibraryDetailProps = {
   /** 用户级全局模型标签库（用于类型/模型编辑器）。 */
   allModelTags?: Array<ModelTagSummary>;
