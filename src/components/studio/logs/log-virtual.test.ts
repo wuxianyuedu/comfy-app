@@ -258,3 +258,53 @@ describe("贴底要写入的 scrollTop", () => {
     expect(pinScrollTop({ start: 0, size: 0 }, -100)).toBe(0);
   });
 });
+
+/* 实测高度校正（ISSUE #4618）：估算的字符宽度系数只能取均值，临界长消息会
+ * 差出一行，固定行高把多行正文截断、与后一行重叠。行盒改 minHeight 后按
+ * 消息实测经 heightOf 回填 —— 校正只向上修，位置表随实测值走。 */
+describe("实测高度校正（heightOf，ISSUE #4618）", () => {
+  const long = String.raw`G:\app\python.exe -m comfy_cli run --workflow x.json --json --wait --timeout 600`;
+
+  it("实测比估算高的行用实测值，后续行的 start 随之前移", () => {
+    const entries = [{ message: long }, { message: "后面的行" }];
+    const base = layoutRows(entries, true, 0);
+    const correctedHeight = base.rows[0]!.size + LOG_ROW_LINE;
+    const corrected = layoutRows(entries, true, 0, {
+      heightOf: (message) => (message === long ? correctedHeight : undefined),
+    });
+    expect(corrected.rows[0]!.size).toBe(base.rows[0]!.size + LOG_ROW_LINE);
+    expect(corrected.rows[1]!.start).toBe(base.rows[1]!.start + LOG_ROW_LINE);
+    expect(corrected.totalSize).toBe(base.totalSize + LOG_ROW_LINE);
+  });
+
+  it("校正只增不减：比估算小的实测值不采纳（行盒是 minHeight，实际不会更矮）", () => {
+    const entries = [{ message: "a\nb\nc" }];
+    const base = layoutRows(entries, true, 0);
+    const shrunk = layoutRows(entries, true, 0, {
+      heightOf: () => LOG_ROW_SINGLE,
+    });
+    expect(shrunk.rows[0]!.size).toBe(base.rows[0]!.size);
+  });
+
+  it("校正按消息原文点名：同文同高，未点名的行保持估算", () => {
+    const entries = [{ message: long }, { message: "别的" }, { message: long }];
+    const corrected = layoutRows(entries, true, 0, {
+      heightOf: (message) => (message === long ? 120 : undefined),
+    });
+    expect(corrected.rows[0]!.size).toBe(120);
+    expect(corrected.rows[2]!.size).toBe(120);
+    expect(corrected.rows[1]!.size).toBe(LOG_ROW_SINGLE);
+  });
+
+  it("展开行 / 强制单行不受校正影响（它们的口径另有出处）", () => {
+    const id = "row-1";
+    const entries = [{ id, message: long }];
+    const corrected = layoutRows(entries, true, 0, {
+      expandedIds: new Set([id]),
+      singleLineIds: new Set([id]),
+      heightOf: () => 500,
+    });
+    /* expandedIds 优先命中 → 固定 LOG_ROW_EXPANDED；校正不改它。 */
+    expect(corrected.rows[0]!.size).toBe(LOG_ROW_EXPANDED);
+  });
+});
