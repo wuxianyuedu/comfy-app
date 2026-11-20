@@ -11,6 +11,7 @@
 
 import { FolderOpen, Waypoints } from "lucide-react";
 
+import { Hint } from "~/components/ui/hint";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import {
   referenceLoaderMountNodes,
@@ -59,12 +60,13 @@ function MountedNodesPanel({ nodes }: { nodes: ReadonlyArray<ReferenceMountNode>
       </p>
       <ul className="mt-2 flex flex-wrap gap-1.5">
         {nodes.map((node) => (
-          <li
-            className="border-border/60 bg-panel text-ink text-2xs rounded-lg border px-2 py-1"
-            key={node.id}
-            title={node.id}
-          >
-            {node.title}
+          <li key={node.id}>
+            {/* 节点 id 走 Hint 悬停（P88：视图层不写原生 title=）。 */}
+            <Hint label={`节点 id：${node.id}`}>
+              <span className="border-border/60 bg-panel text-ink text-2xs rounded-lg border px-2 py-1">
+                {node.title}
+              </span>
+            </Hint>
           </li>
         ))}
       </ul>
