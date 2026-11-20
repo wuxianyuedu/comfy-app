@@ -3,6 +3,10 @@
  * 中文 .ps1 必须 UTF-8 BOM（cmd/PS5.1 走 GBK 必乱码，#23）；R9 根目录禁 .ps1 双击入口（#29）；R10 注释禁历史流水（#46）；
  * R11 代理约定名 src/proxy.ts（#489）；R12 src/ 禁控制字符（NUL 会让 git/diff/grep 判成二进制）；R5 超 900 行即阻断、
  * 扫全 `src/` 不分层（#536 / #575 / #1811）。 */
+// 本用例把下列路径拼出来读（不是 import），显式登记给「受影响用例」增量面（§13.5.8）：
+// @affected-source src-tauri/
+// @affected-source public/splash.html
+// @affected-source src/app/layout.tsx
 import {
   existsSync,
   mkdtempSync,

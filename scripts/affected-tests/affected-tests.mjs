@@ -30,9 +30,14 @@
  *      直接读文本的两份本体）→ 跑 `tests/dist-artifact-hygiene.test.ts` —— 那份判据对
  *      闭包成员的消费是运行时读文本解析，③ 追不到（ISSUE #3812）。实现见
  *      `scripts/affected-tests/affected-launcher-hygiene.mjs`，闭包算法在 `scripts/affected-tests/launcher-closure.mjs`。
+ *   ⑥ **用例显式声明的源依赖**：用例文件头写 `// @affected-source <仓库相对路径>`，
+ *      把「运行期读文件、但不是 import」的消费登记进图；路径以 `/` 结尾表示整个子树。
+ *      门禁用例常把 `join(ROOT, "src-tauri", "src", "lib.rs")` 这种**拼出来**的路径当
+ *      断言输入，③ 看不到、④ 的整串字面量也抓不到，改动于是漏跑（ISSUE #4648）。
  *
- * ⚠️ 闭包只跟着**静态写出来的**说明符走，两类它抓不到：运行时拼出来的路径
- * （`import(base + name)`、`path.join(dir, …)`）、以及解析目录之外的消费方。
+ * ⚠️ 闭包只跟着**静态写出来的**说明符走（⑥ 那条是显式开的口子）：两类它抓不到：
+ * 运行时拼出来的路径（`import(base + name)`、`path.join(dir, …)`）、以及解析目录之外的
+ * 消费方。
  * 遇到公共地基（`vitest.config.ts`、`tests/setup.ts`、`package.json` / lockfile、
  * `.githooks/**`）被改时明确**放弃收窄**：固定清单全跑 + 本次变更路径命中的用例，
  * 并把放弃的理由打到 stderr。兜底是**扩大范围、不是替换**（ISSUE #2792）——
@@ -69,6 +74,7 @@ import process from "node:process";
 import ts from "typescript";
 
 import { KNOWN_FAILED_FILES } from "../gates/quality-gate-shared.mjs";
+import { addDeclaredSources, declaredSourceHits, reachFrom } from "./affected-graph.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 import { selectFixedByFace } from "../gates/fixed-gate-input-faces.mjs";
 import { changedPathsFromNameStatus, normalizeRel } from "../lib/git-name-status.mjs";
@@ -259,13 +265,15 @@ export function wideReasonFor(rel) {
  *
  * @param {Iterable<string>} nodes 参与建图的文件（源码 + 测试）
  * @param {(rel: string) => string | null} readText
- * @returns {{importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}}
+ * @returns {{importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>, declaredBy: Map<string, Set<string>>}}
  */
 export function buildImportedBy(nodes, readText) {
   /** @type {Map<string, Set<string>>} */
   const importedBy = new Map();
   /** ④ 的比对面：注释里引用一个路径 ≠ 运行期读它，所以只留「代码文本」这一份。 */
   const codeTexts = new Map();
+  /** ⑥ 用例 → 显式声明的源依赖（原始文本，可能以 `/` 结尾表示子树）。 */
+  const declaredBy = new Map();
   for (const from of nodes) {
     const text = readText(from);
     if (text === null) {
@@ -273,6 +281,7 @@ export function buildImportedBy(nodes, readText) {
     }
     if (isTestPath(from)) {
       codeTexts.set(from, stripComments(text));
+      addDeclaredSources(declaredBy, from, text);
     }
     for (const cand of specifiersOf(text, from)) {
       let bucket = importedBy.get(cand);
@@ -282,49 +291,14 @@ export function buildImportedBy(nodes, readText) {
       bucket.add(from);
     }
   }
-  return { importedBy, codeTexts };
-}
-
-/**
- * 反向 import 闭包：从 `roots` 出发，沿「谁 import 我」走到测试为止。
- *
- * @param {Iterable<string>} roots
- * @param {Map<string, Set<string>>} importedBy
- * @returns {Map<string, number>} 文件 → 跳数（roots 自身为 0）
- */
-function reachFrom(roots, importedBy) {
-  /** @type {Map<string, number>} */
-  const hops = new Map();
-  const queue = [];
-  for (const rel of roots) {
-    if (hops.has(rel)) {
-      continue;
-    }
-    hops.set(rel, 0);
-    queue.push(rel);
-  }
-  while (queue.length > 0) {
-    const cur = queue.shift();
-    if (cur === undefined) {
-      continue;
-    }
-    const hop = (hops.get(cur) ?? 0) + 1;
-    for (const consumer of importedBy.get(cur) ?? []) {
-      if (hops.has(consumer)) {
-        continue;
-      }
-      hops.set(consumer, hop);
-      queue.push(consumer);
-    }
-  }
-  return hops;
+  return { importedBy, codeTexts, declaredBy };
 }
 
 /**
  * 核心解析：改动清单 + 测试清单 +（注入的）读文件函数 → 该跑哪些测试。
  * 不碰 git、不碰真实磁盘，便于用例喂夹具。
  *
- * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[], graph?: {importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}, tracked?: string[] | null, launcherClosure?: Set<string> | null}} input
+ * @param {{changedPaths: string[], testFiles: string[], sourceFiles: string[], readText: (rel: string) => string | null, knownFailed?: string[], graph?: {importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>, declaredBy: Map<string, Set<string>>}, tracked?: string[] | null, launcherClosure?: Set<string> | null}} input
  *   `tracked` 是当前树/索引里的全部路径（`git ls-files`）。给了它才对**已消失的旧路径**
  *   （改名旧侧、删除）做「旧路径片」匹配；不给则只认整串字面量（用例夹具的默认口径）。
  *   `launcherClosure` 是编排器（`dev-launcher.mjs`）的相对 import 闭包成员（相对仓库根）；
@@ -462,7 +436,7 @@ export function resolveAffectedTests({
    * 注入这一条不是优化手段而是**口径**手段：归因的数必须与主解析走同一条判定链，
    * 否则两处会各自漂 —— 实测过一版「照抄一份判定」的归因，三个文件的数就都差了
    * 一两份（「按路径引用」那一档在增量面里只对尚未选中的测试生效）。 */
-  const { importedBy, codeTexts } =
+  const { importedBy, codeTexts, declaredBy } =
     graph ?? buildImportedBy(new Set([...sourceFiles, ...testFiles]), readText);
 
   const hops = reachFrom(list, importedBy);
@@ -515,6 +489,11 @@ export function resolveAffectedTests({
     }
   }
 
+  /* ── ⑥ 显式源依赖：声明与命中都在图辅助层，判决链只消费它的结果 ───────────── */
+  for (const testFile of declaredSourceHits(declaredBy, list, changed)) {
+    add(testFile, "显式源依赖");
+  }
+
   /* 已知基线红（`KNOWN_FAILED_FILES` 单点定义，与 `run-tests.mjs` / 一键门禁同一份）：
    * 从**增量**面里剔掉，否则别线的红会让无关提交落不了地。固定清单不受影响 ——
    * 那几条是全库不变量的执行者，没有「先放行」的余地。剔除是被打印出来的，不是静默。 */
@@ -554,7 +533,7 @@ export function resolveAffectedTests({
  * 精确、实际含义不同的数，比不给更坏。
  *
  * @param {string[]} changedPaths 本次改动的文件
- * @param {{importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>}} graph
+ * @param {{importedBy: Map<string, Set<string>>, codeTexts: Map<string, string>, declaredBy: Map<string, Set<string>>}} graph
  *   `buildImportedBy()` 的产物（复用同一份图，避免逐文件重建）
  * @param {string[]} testFiles 参与统计的测试全集（须与建图时的口径一致）
  * @param {string[]} sourceFiles 参与建图的源码全集（须与建图时的口径一致）
