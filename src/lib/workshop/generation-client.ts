@@ -20,6 +20,7 @@
 import { clampPct } from "~/lib/progress";
 import { upperToken } from "~/lib/upper-token";
 import { vanillaApi } from "~/trpc/vanilla";
+import { fireAndForget } from "~/lib/async-action";
 import type { RouterInputs } from "~/trpc/react";
 import { isPlainRecord, isRecord } from "~/lib/is-record";
 import { getSizePresetTable } from "~/lib/media/size-preset-store";
@@ -645,11 +646,16 @@ export function observeTaskUntilSettled(opts: {
     timer = setTimeout(() => {
       timer = null;
       closeStream();
-      void fetchTaskSnapshot(opts.taskId)
-        .catch(() => null)
-        .then((snapshot) => {
-          opts.onIdleTimeout(snapshot);
-        });
+      /* 对账失败已在 catch 里折成 null；onIdleTimeout 自身的异常也不冒泡——
+       * 看门狗触发的收尾不该变成 unhandledRejection（fireAndForget 收口）。 */
+      fireAndForget(
+        fetchTaskSnapshot(opts.taskId)
+          .catch(() => null)
+          .then((snapshot) => {
+            opts.onIdleTimeout(snapshot);
+          }),
+        () => undefined,
+      );
     }, opts.timeoutMs);
   };
   const touch = () => {
