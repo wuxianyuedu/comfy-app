@@ -22,7 +22,7 @@ import { runWithConcurrency } from "~/lib/async-pool";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { ChannelSwitch, ShotCard } from "./VideoStudio.parts";
 import { framesFor, videoPrompt } from "./video-studio-utils";
-import { errorMessage } from "~/lib/error-message";
+import { errorMessage, errorText } from "~/lib/error-message";
 import { sleep } from "~/lib/with-timeout";
 import { Button } from "~/components/ui/button";
 
@@ -170,10 +170,7 @@ export function VideoStudio({
         consecutiveErrors += 1;
         if (consecutiveErrors >= API_VIDEO_POLL_MAX_CONSECUTIVE_ERRORS) {
           patchShot(shotId, { clipStatus: "failed" });
-          setShotError(
-            shotId,
-            `API 视频轮询连续失败 ${consecutiveErrors} 次：${errorMessage(error, "未知错误")}`,
-          );
+          setShotError(shotId, errorText(error, `API 视频轮询连续失败 ${consecutiveErrors} 次`));
           return;
         }
         continue;
