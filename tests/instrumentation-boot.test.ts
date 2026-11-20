@@ -5,13 +5,13 @@
  * 响应**之前**会等它返回，所以它的 await 面直接决定「启动页 → 主界面」要等多久。
  * 本文件钉住它的耗时契约（不能靠读源码形状 —— 那类判据拦得住「忘了写」，拦不住
  * 「写成了串行」）：
- *   ① 串行段有且只有两步：产物根搬迁 → 流捕获（两者有先后契约）；
+ *   ① 串行段是三步：进程级兜底 → 产物根搬迁 → 流捕获（后两者有先后契约）；
  *   ② 五支后台分支（reaper / dispatch / film 恢复 / 事件循环观测 / Sentry）互不依赖，
  *      **并行踢出、不阻塞 register 返回**；
  *   ③ film 恢复必须排在产物搬迁完成之后（它读镜头视频）；
  *   ④ 单支失败只记日志，不许把 register 变成拒绝（自愈/观测网失效不该拖垮首请求）。
  *
- * 七个动态 import 目标全部 vi.mock：真实模块要么 import "server-only"（在 vitest
+ * 八个动态 import 目标全部 vi.mock：真实模块要么 import "server-only"（在 vitest
  * 的纯 Node 环境下会 throw），要么加载即带副作用 —— 这里只验接线的时序与失败语义。
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
@@ -21,6 +21,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
  *  重置义务 —— 跨测试的实现残留（上一条用例塞的 deferred / 永不 resolve）会让
  *  下一条用例挂在无关的 await 上，这类红看起来像超时，实际是状态泄漏。 */
 const branchFns = vi.hoisted(() => ({
+  installProcessSafetyNet: vi.fn(),
   migrateLegacyArtifactRoot: vi.fn(() => Promise.resolve()),
   installStreamCapture: vi.fn(),
   startReaper: vi.fn(),
@@ -29,6 +30,9 @@ const branchFns = vi.hoisted(() => ({
   startEventLoopWatch: vi.fn(),
 }));
 
+vi.mock("../src/lib/process/process-safety-net.server", () => ({
+  installProcessSafetyNet: branchFns.installProcessSafetyNet,
+}));
 vi.mock("../src/lib/media/artifact-root-migration.server", () => ({
   migrateLegacyArtifactRoot: branchFns.migrateLegacyArtifactRoot,
 }));
@@ -52,8 +56,9 @@ beforeEach(() => {
   /* 静音控制台：汇总行与失败读数走 console.*，断言时取的是 spy 本体。 */
   vi.spyOn(console, "info").mockImplementation(() => undefined);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
-  /* 串行两步的默认实现必须「会完成」：搬迁 / film 恢复的真身是异步任务，
+  /* 串行几步的默认实现必须「会完成」：搬迁 / film 恢复的真身是异步任务，
    * 替身不 resolve 的话 register 永远等不到串行段结束。 */
+  branchFns.installProcessSafetyNet.mockReset();
   branchFns.migrateLegacyArtifactRoot.mockReset();
   branchFns.migrateLegacyArtifactRoot.mockImplementation(() => Promise.resolve());
   branchFns.installStreamCapture.mockReset();
@@ -87,17 +92,29 @@ const neverResolves = (): Promise<void> =>
   });
 
 describe("instrumentation register —— 启动分支的耗时契约（ISSUE #4137）", () => {
-  it("串行段只有搬迁与流捕获两步；五支后台分支全部被踢出且各恰好一次", async () => {
+  it("串行段是兜底→搬迁→流捕获三步；五支后台分支全部被踢出且各恰好一次", async () => {
     const register = await loadRegister();
     await register();
     await flushAsync();
 
+    expect(branchFns.installProcessSafetyNet).toHaveBeenCalledTimes(1);
     expect(branchFns.migrateLegacyArtifactRoot).toHaveBeenCalledTimes(1);
     expect(branchFns.installStreamCapture).toHaveBeenCalledTimes(1);
     expect(branchFns.startReaper).toHaveBeenCalledTimes(1);
     expect(branchFns.startDispatchLoop).toHaveBeenCalledTimes(1);
     expect(branchFns.resumeStalledFilms).toHaveBeenCalledTimes(1);
     expect(branchFns.startEventLoopWatch).toHaveBeenCalledTimes(1);
+  });
+
+  /* ISSUE #4568：`process.on` 写在 instrumentation 本体里会被 Edge 编译面静态看到，
+   * 每次编译都在 stderr 刷「not supported in the Edge Runtime」+「Ecmascript file
+   * had an error」。兜底必须住在 .server.ts、经 nodejs 分支动态 import 进 Node 图。
+   * 这条判据读源码形状，拦「把兜底再内联回 instrumentation」的回潮。 */
+  it("instrumentation 本体不再静态引用 process.on（Edge 编译面干净，ISSUE #4568）", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile("src/instrumentation.ts", "utf8");
+    expect(source).not.toMatch(/\bprocess\.on\s*\(/);
+    expect(source).toContain("process-safety-net.server");
   });
 
   it("film 恢复排在产物搬迁之后（搬迁没完成不许读产物）", async () => {

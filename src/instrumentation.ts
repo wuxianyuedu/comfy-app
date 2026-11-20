@@ -4,8 +4,9 @@
  *
  * 启动耗时形状（本文件的唯一耗时契约）：
  *   · **请求会等 register() 返回**（Next 的启动语义），所以本函数里 await 的每一步
- *     都直接加在「首个请求被响应」之前 —— 这里只保留两步**有先后契约**的串行：
- *     产物根搬迁（先于一切读产物的启动点）→ 流捕获（先于其余分支可能产生的输出）。
+ *     都直接加在「首个请求被响应」之前 —— 这里只保留**有先后契约**的串行：
+ *     进程级兜底（先于一切会抛异常的启动点）→ 产物根搬迁（先于一切读产物的启动点）
+ *     → 流捕获（先于其余分支可能产生的输出）。
  *   · 其余五支（reaper / dispatch / film 恢复 / 事件循环观测 / Sentry）互不依赖、
  *     都是「起循环即返回」或纯后台核对，**并行踢出、不阻塞 register**：串行 await
  *     它们的模块图编译（每支都要拉起一大片 server 代码）曾占掉暖启动就绪时间的
@@ -13,99 +14,25 @@
  *
  * 注意：本文件在 Node.js 与 Edge 两种 runtime 下都会执行，
  * 必须按 runtime 分别加载对应配置，禁止在此处引入 server-only 模块；
- * Node-only 分件因此一律走动态 import（不能进 Edge 图）。
+ * Node-only 分件因此一律走动态 import（不能进 Edge 图）。进程级兜底也因此
+ * 住在 `.server.ts` 里（ISSUE #4568）：`process.on` 写在本体里会被 Edge 编译面
+ * 静态看到，每次编译都刷「not supported in the Edge Runtime」。
  */
-/** 进程级兜底是否已挂（幂等闸：register 可能被 Next 以不同 runtime 多次触发）。 */
-let processSafetyNetInstalled = false;
-
-/** 同一条消息的重复记账：首 3 条全量记，之后每 50 条记一条——周期循环里的
- *  每拍异常不再把日志文件灌满（ISSUE #4256）。 */
-const SAFETY_NET_REPEAT_EVERY = 50;
-
-/** 洪水防护去重表的条目上限（ISSUE #4338）。键是完整异常文本（含 stack），
- *  故障态下后台循环每拍抛出的变体（不同 id / 路径 / SQL 片段）各占一条长键；
- *  不设上限时键数随变体数无界增长，常驻数周的桌面进程内存缓慢上涨。
- *  封顶后淘汰「最久未重复」的冷变体键；持续重复的热键每次命中都刷新位次、
- *  不会被挤掉，限频记账不中断。 */
-export const SAFETY_NET_MAX_KEYS = 512;
-
-/** 洪水防护的记账器（去重 + 限频 + 封顶）。独立成工厂是为了单测能直接断言
- *  「键数封顶 / 热键不被冷变体洪水挤掉」，不必真挂进程级监听器。 */
-export type SafetyNetReporter = {
-  report: (kind: string, reason: unknown) => void;
-  /** 当前驻留的去重键数（恒 ≤ SAFETY_NET_MAX_KEYS）。 */
-  readonly size: number;
-};
-
-export function createSafetyNetReporter(): SafetyNetReporter {
-  const describe = (reason: unknown): string =>
-    reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
-  const counts = new Map<string, number>();
-  return {
-    get size(): number {
-      return counts.size;
-    },
-    report: (kind: string, reason: unknown): void => {
-      const text = describe(reason);
-      const count = (counts.get(text) ?? 0) + 1;
-      /* LRU 触碰（与 runner-state 的 touchAndEvict 同一形态）：Map 迭代序=插入序、
-       * 对已存在的键 set 不改位次，所以先 delete 再 set 刷新「最近使用」；
-       * 超限时淘汰迭代器首项（最久未用）。 */
-      counts.delete(text);
-      counts.set(text, count);
-      while (counts.size > SAFETY_NET_MAX_KEYS) {
-        const oldest = counts.keys().next().value;
-        if (oldest === undefined) {
-          break;
-        }
-        counts.delete(oldest);
-      }
-      if (count <= 3 || count % SAFETY_NET_REPEAT_EVERY === 0) {
-        console.error(`[process] ${kind}#${count}：${text}`);
-      }
-    },
-  };
-}
-
-/**
- * 显式注册 `unhandledRejection` / `uncaughtException` 的进程级兜底（ISSUE #4216）。
- *
- * 策略与既有有效行为一致：**只记日志、不退出**——常驻桌面服务里，一条后台循环
- * （成片监看 / 派发 / reaper）的 rejection 不该打挂整个应用。此前这层只来自
- * `@sentry/node` 默认集成的隐式副作用（且 `scripts/executor-host.mjs` 等宿主进程
- * 没有这层）；这里显式化之后，谁起服务谁就有这张网。
- *
- * 洪水防护（ISSUE #4256）：同一 message 的重复异常只记首 3 条、之后每 50 条记
- * 一条（带累计序号），防止「周期循环每拍抛同一异常」把日志文件灌满；去重表
- * 封顶 SAFETY_NET_MAX_KEYS 条、LRU 淘汰（ISSUE #4338），长生命周期进程不再
- * 随异常变体数无界增长。
- * 导出仅为可测（注册是进程级副作用，用例直接调用并断言监听器挂载与输出）。
- */
-export function installProcessSafetyNet(): void {
-  if (processSafetyNetInstalled) {
-    return;
-  }
-  processSafetyNetInstalled = true;
-  const reporter = createSafetyNetReporter();
-  process.on("unhandledRejection", (reason: unknown) => {
-    reporter.report("unhandledRejection", reason);
-  });
-  process.on("uncaughtException", (error: Error) => {
-    reporter.report("uncaughtException", error);
-  });
-}
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     /* 进程级兜底（ISSUE #4216）：先于一切后台分支挂上——后台循环（成片监看、
-     * 派发、reaper）的 rejection 不该打挂常驻服务。 */
-    installProcessSafetyNet();
+     * 派发、reaper）的 rejection 不该打挂常驻服务。实现住在 `.server.ts`
+     * （ISSUE #4568，见文件头），这里动态 import 保证它不进 Edge 编译图。 */
+    await import("./lib/process/process-safety-net.server").then((m) => {
+      m.installProcessSafetyNet();
+    });
     /* 产物根的一次性搬迁（台账 A13 的结构性关法）：历史落点在 `public/generated/`，
      * 而 `public/**` 由 Next 按静态文件直接发出、根本不经过带闸的 route handler ——
      * 把根搬到 `generated/` 之后那条旁路**不存在**。搬这一动作必须排在所有会读产物的
      * 启动点**之前**（下面的成片监看恢复就会读镜头视频），所以它是这里串行等待的
-     * 第一步；dev 下本文件懒编译（`✓ Ready` 之后首个请求触发），这个编译窗口仍存在，
-     * 但它只覆盖下面两步串行，不再叠加五支后台分支。 */
+     * 一步；dev 下本文件懒编译（`✓ Ready` 之后首个请求触发），这个编译窗口仍存在，
+     * 但它只覆盖下面几步串行，不再叠加五支后台分支。 */
     await import("./lib/media/artifact-root-migration.server").then((m) =>
       m.migrateLegacyArtifactRoot(),
     );
