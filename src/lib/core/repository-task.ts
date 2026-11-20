@@ -304,6 +304,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
       // query 只认 `limit`（`limit: -1` 会被整个丢掉，实测），所以「只给 skip」
       // 那条路走不了它 —— 先用普通 select 取到这一页的 id，再按 id 装载图片。
       // 两条路都产出「同一页 + 同一份 images」，顺序由外层 orderBy 保证。
+      // skip+take 并给（真分页，#4594）走下方 findMany：limit 之外必须把
+      // offset 一并传下去——此前 offset 被静默丢弃，第二页会重复返回第一页。
       if (opts.skip !== undefined && opts.take === undefined) {
         const page = await limitAll(
           /* 排序带 id tiebreaker（#4044）：同毫秒批量入队的行序稳定，skip 翻页不重不漏。
@@ -321,6 +323,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
         where,
         orderBy: [desc(task.createdAt), desc(task.id)],
         ...(opts.take === undefined ? {} : { limit: opts.take }),
+        ...(opts.skip === undefined ? {} : { offset: opts.skip }),
         /* 列表卡只要十来个字段：四个重列（workflowSnapshot / logs / execPayload /
          * rawCli）单行可达数 MB，take=60 时是几十 MB 的白拉白反序列化（router 只
          * 映射卡片字段）。详情查询（findByIdWithImages）不受影响，仍取全列。 */

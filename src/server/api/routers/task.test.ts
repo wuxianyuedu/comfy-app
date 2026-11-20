@@ -161,6 +161,39 @@ describe("task.list", () => {
     expect(res.tasks.map((t) => t.id)).toEqual(["task-in"]);
   });
 
+  it("分页：hasMore 随页推进、两页不重不漏（#4594）", async () => {
+    /* 回归现场：此前 scanOnce 只取 PAGE 行，`rows.length > PAGE` 恒假 ⇒ hasMore 恒 false，
+     * 历史列表翻不过第一页；且 relational 分支把 offset 静默丢弃，第二页会重复第一页。
+     * 9 条任务、每页 2 条：五页拼起来必须恰好覆盖全部 id（created 全异，排序确定），
+     * hasMore 依次 true×4 → false（最后一页靠「多取一行」判完，不靠「行数不足」。 */
+    for (let i = 0; i < 9; i += 1) {
+      seedTask(tdb, { id: `task-${i}`, userId: "user-a", createdAt: new Date(9000 - i * 1000) });
+    }
+    const caller = createCaller(makeCtx());
+    const seen: Array<string> = [];
+    let cursor = 0;
+    for (let page = 0; page < 5; page += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一页的 cursor 来自前一页
+      const res = await caller.list({ take: 2, cursor });
+      seen.push(...res.tasks.map((t) => t.id));
+      const expectedHasMore = page < 4;
+      expect(res.hasMore, `page${page + 1}`).toBe(expectedHasMore);
+      cursor += res.tasks.length;
+    }
+    expect(seen).toEqual([
+      "task-0",
+      "task-1",
+      "task-2",
+      "task-3",
+      "task-4",
+      "task-5",
+      "task-6",
+      "task-7",
+      "task-8",
+    ]);
+    expect(cursor).toBe(9);
+  });
+
   it("Zod 校验：take 越界 / 非法 media → BAD_REQUEST", async () => {
     const caller = createCaller(makeCtx());
     await expect(caller.list({ take: 0 })).rejects.toMatchObject({
