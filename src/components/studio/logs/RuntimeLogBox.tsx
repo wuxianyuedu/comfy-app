@@ -6,8 +6,8 @@
  * 「全屏查看」（`ui/fullscreen-dialog`，带同一个下拉与刷新）。视图只渲染，数据来自 controller（§17）；
  * 它住在 `studio/logs` 是因为有两个屏的消费者，留在任一侧都会形成「共用部件 → 某个屏」的反向依赖。 */
 
-import { useRef, useState, type ReactNode } from "react";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { Clock3, Maximize2, Minimize2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
@@ -18,6 +18,7 @@ import { FullScreenDialog } from "~/components/ui/fullscreen-dialog";
 import { cn } from "~/lib/utils";
 
 import { AnsiLogText } from "./AnsiLogText";
+import { stripLineTimestamps } from "./runtime-log-display";
 import type { RuntimeLogController } from "./use-runtime-log-source";
 
 export type RuntimeLogBoxProps = {
@@ -27,14 +28,28 @@ export type RuntimeLogBoxProps = {
   emptyHint: ReactNode;
   /** 日志文件名（标题里显示，如 `comfyui-runtime.log`）。 */
   fileName: string;
+  /**
+   * 让小窗口的日志正文吃满更多纵向空间（ComfyUI 页用）——这一页下方本没有别的
+   * 内容，用 `max-h-44` 把滚动区压成一条、下面留一大片空白是浪费（ISSUE #4631）。
+   * 其它调用点（设置页三段）保持原紧凑高度。
+   */
+  fill?: boolean;
   /** 日志来源：正文 / 片段 / 会话列表 / 选中项 / 跟随态 / 刷新动作。 */
   log: RuntimeLogController;
 };
 
-export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLogBoxProps) {
+export function RuntimeLogBox({
+  fileName,
+  fill = false,
+  log,
+  emptyHint,
+  className,
+}: RuntimeLogBoxProps) {
   const [fullscreen, setFullscreen] = useState(false);
   /* 滚动跟随是纯视觉偏好，留在视图层（三个分区此前各持一份，现已合并）。 */
   const [follow, setFollow] = useState(true);
+  /* 时间戳显隐同为纯视觉偏好：默认显示（与落盘一致），隐藏只影响展示片段。 */
+  const [showTime, setShowTime] = useState(true);
 
   const title = `启动日志（${fileName}）`;
 
@@ -48,6 +63,8 @@ export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLo
             follow={follow}
             log={log}
             onFollowChange={setFollow}
+            onShowTimeChange={setShowTime}
+            showTime={showTime}
             title={title}
             trailing={
               <Hint label="全屏查看">
@@ -67,11 +84,16 @@ export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLo
             variant="inline"
           />
           <LogBody
-            className="border-border-subtle mx-3 mb-3 max-h-44 rounded-lg border px-3 py-2"
+            className={
+              fill
+                ? "border-border-subtle mx-3 mb-3 max-h-[calc(100vh-16rem)] min-h-64 rounded-lg border px-3 py-2"
+                : "border-border-subtle mx-3 mb-3 max-h-44 rounded-lg border px-3 py-2"
+            }
             emptyHint={emptyHint}
             follow={follow}
             log={log}
             onFollowChange={setFollow}
+            showTime={showTime}
           />
           <LogHint log={log} />
         </div>
@@ -87,6 +109,8 @@ export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLo
           follow={follow}
           log={log}
           onFollowChange={setFollow}
+          onShowTimeChange={setShowTime}
+          showTime={showTime}
           title={title}
           trailing={
             <Hint label="退出全屏">
@@ -111,6 +135,7 @@ export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLo
           follow={follow}
           log={log}
           onFollowChange={setFollow}
+          showTime={showTime}
         />
         <LogHint log={log} />
       </FullScreenDialog>
@@ -120,7 +145,7 @@ export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLo
 
 /**
  * 日志框的行头（小窗口与全屏共用一份实现）。两个形态只差排布（紧凑一行 / 全屏 48px 行头）与标题
- * 字号，控件集合一致：会话下拉 → 恢复自动滚动 → 刷新 → 调用方给的尾部按钮（全屏 / 退出全屏）。
+ * 字号，控件集合一致：会话下拉 → 恢复自动滚动 → 时间显隐 → 刷新 → 调用方给的尾部按钮（全屏 / 退出全屏）。
  */
 function LogToolbar({
   variant,
@@ -128,11 +153,15 @@ function LogToolbar({
   log,
   follow,
   onFollowChange,
+  showTime,
+  onShowTimeChange,
   trailing,
 }: {
   follow: boolean;
   log: RuntimeLogController;
   onFollowChange: (next: boolean) => void;
+  onShowTimeChange: (next: boolean) => void;
+  showTime: boolean;
   title: string;
   trailing: ReactNode;
   variant: "inline" | "full";
@@ -189,6 +218,22 @@ function LogToolbar({
             恢复自动滚动
           </Button>
         )}
+        {/* 时间戳显隐：落盘原文带时刻，但盯日志正文时它是干扰。开关只改展示，
+            不改文件内容 / 滚动跟随（ISSUE #4631）。 */}
+        <Hint label={showTime ? "隐藏每行的时间戳" : "显示每行的时间戳"}>
+          <Button
+            aria-label={showTime ? "隐藏时间戳" : "显示时间戳"}
+            className="text-2xs h-auto gap-1 rounded px-2 py-0.5"
+            onClick={() => {
+              onShowTimeChange(!showTime);
+            }}
+            size="xs"
+            variant="outline"
+          >
+            <Clock3 aria-hidden data-icon="inline-start" size={12} />
+            {showTime ? "隐藏时间" : "显示时间"}
+          </Button>
+        </Hint>
         <Button
           className="text-muted-foreground text-2xs h-auto rounded px-2 py-0.5"
           onClick={() => {
@@ -212,6 +257,7 @@ function LogBody({
   log,
   follow,
   onFollowChange,
+  showTime,
   emptyHint,
   className,
 }: {
@@ -220,6 +266,7 @@ function LogBody({
   follow: boolean;
   log: RuntimeLogController;
   onFollowChange: (next: boolean) => void;
+  showTime: boolean;
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const scroller = useScrollFollow({
@@ -228,6 +275,11 @@ function LogBody({
     following: follow,
     onFollowingChange: onFollowChange,
   });
+  /* 隐藏时间戳只改渲染片段；`watch` 仍用原文，故跟随判据不受影响。 */
+  const segments = useMemo(
+    () => (showTime ? log.segments : stripLineTimestamps(log.segments)),
+    [log.segments, showTime],
+  );
 
   return (
     <div
@@ -237,7 +289,7 @@ function LogBody({
     >
       {log.text ? (
         <span className="break-all whitespace-pre-wrap">
-          <AnsiLogText segments={log.segments} />
+          <AnsiLogText segments={segments} />
         </span>
       ) : (
         <span className="text-muted-foreground">{emptyHint}</span>
@@ -260,8 +312,19 @@ function LogHint({ log }: { log: RuntimeLogController }) {
   if (log.sessions.length < log.total) {
     parts.push(`该服务一共启动过 ${log.total} 次，下拉只列最近 ${log.sessions.length} 次。`);
   }
-  if (parts.length === 0) {
-    return null;
-  }
-  return <p className="text-ink-fainter text-2xs px-3 pb-2 leading-relaxed">{parts.join("")}</p>;
+  return (
+    <>
+      {/* 流前缀释义（ISSUE #4631）：`[err]` 是 stderr 流、不是错误级别——
+          ComfyUI 是 Python，常规 INFO 也走 stderr，满屏 `[err] [INFO]` 是正常输出。 */}
+      <p
+        className={`text-ink-fainter text-2xs px-3 leading-relaxed ${parts.length === 0 ? "pb-2" : ""}`}
+      >
+        行首 <code className="font-mono">[out]</code> / <code className="font-mono">[err]</code>{" "}
+        表示标准输出 / 标准错误流，不代表是否出错（INFO 级日志也可能走 stderr）。
+      </p>
+      {parts.length > 0 ? (
+        <p className="text-ink-fainter text-2xs px-3 pb-2 leading-relaxed">{parts.join("")}</p>
+      ) : null}
+    </>
+  );
 }

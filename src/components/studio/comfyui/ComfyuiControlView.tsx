@@ -31,7 +31,7 @@ import {
   comfyDotState,
   comfyDotTitle,
   comfyStartPathText,
-  comfyStatusText,
+  comfyStatusParts,
   instanceKindLabel,
   isComfyBusy,
 } from "./comfyui-control-config";
@@ -47,6 +47,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
   const busy = isComfyBusy(c.status, flags);
   const running = c.status?.up === true;
   const configHint = comfyConfigHint(c.instance);
+  const statusParts = comfyStatusParts(c.status, flags);
 
   return (
     <DocumentFrame className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8" width="medium">
@@ -77,26 +78,40 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
         title="运行状态"
       >
         <div className={`${SETTINGS_ROW_CLASS} mb-3 ${STATUS_ROW_CLASS}`}>
-          <StatusDot state={comfyDotState(c.status, flags)} />
+          {/* 绿点保留，运行中加呼吸（ISSUE #4631）：「它在跑」要一眼可见，
+              但过渡态（busy/probing）不呼吸——那不是稳定状态。 */}
+          <StatusDot pulse={running} state={comfyDotState(c.status, flags)} />
           {/* 状态行是**活区**（规范 16 §16.2.4）：状态变了自己会刷，读屏得跟着播报，
               否则「我点了启动、它到底起没起」只能靠肉眼盯。这也让「这一行在不在、
               落没落定」有了一个**不读文案**的稳定锚点 —— 文案里的地址长度会变、
-              跨元素分布会给量可见性带来补间窗口（E2E 侧据此等状态落地）。 */}
+              跨元素分布会给量可见性带来补间窗口（E2E 侧据此等状态落地）。
+              「ComfyUI 运行中」加粗、地址等宽降亮（ISSUE #4631）；textContent 仍由
+              comfyStatusParts 拼成同一句，读屏与判据都不受影响。 */}
           <Hint label={comfyDotTitle(c.status)}>
-            <span aria-live="polite" className={`text-ink/80 ${STATUS_TEXT_CLASS}`} role="status">
-              {comfyStatusText(c.status, flags)}
+            <span
+              aria-live="polite"
+              className={`text-ink/80 ${running ? "font-semibold" : ""} ${STATUS_TEXT_CLASS}`}
+              role="status"
+            >
+              {statusParts.lead}
+              {statusParts.url === null ? null : (
+                <>
+                  （<span className="text-ink-faint font-mono">{statusParts.url}</span>）
+                </>
+              )}
+              {statusParts.via === null ? null : `·${statusParts.via}`}
             </span>
           </Hint>
           <div className={STATUS_ACTIONS_CLASS}>
-            {/* 「打开查看」是**看**，不是这一态的主行动：它走软底，主行动的实心档
-                留给「启动 / 关闭」。只在「明确未运行」时禁用 —— 探测进行中也允许
+            {/* 「打开查看 / 在浏览器打开」是运行中真正的主行动，保留主题紫实心档
+                （ISSUE #4631）；只在「明确未运行」时禁用 —— 探测进行中也允许
                 点一下，openComfy 会先取一份新鲜状态再打开（ISSUE #339）。 */}
             <StatusButton
               disabled={c.opening || (!running && c.status?.probing !== true)}
               onClick={() => {
                 void c.openComfy();
               }}
-              variant="primary"
+              variant="primary-solid"
             >
               {c.opening ? "打开中…" : "打开查看"}
             </StatusButton>
@@ -108,12 +123,13 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
               onClick={() => {
                 void c.openComfyInBrowser();
               }}
+              variant="primary-solid"
             >
               {c.browserOpening ? "打开中…" : "在浏览器打开"}
             </StatusButton>
-            {/* 「启动 / 关闭」是一组互斥的主行动：**当前这一态该按的那一颗**才是
-                实心（未运行时「启动」实心、运行时「关闭」实心），另一颗此时本就被
-                禁用。两颗都实心时一屏里两颗同款主按钮，用户无从判断该点哪个。 */}
+            {/* 按钮权重（ISSUE #4631）：主题紫实心只给「打开查看 / 在浏览器打开」；
+                「启动」是低频动作走幽灵档、「关闭」是危险动作走浅红档（danger），
+                避免一屏里出现两颗抢眼的紫色实心按钮、也避免误触关闭。两颗仍互斥禁用。 */}
             <StatusButton
               /* 已配置路径才允许启动：`comfyStart` 会拿库里的路径去 spawn，
                 空路径的失败文案（服务端给的）不如这里提前说清去哪配。 */
@@ -121,7 +137,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
               onClick={() => {
                 void c.startComfy();
               }}
-              variant={running ? "primary" : "primary-solid"}
+              variant="ghost"
             >
               {c.starting || c.status?.starting === true ? "启动中…" : "启动 ComfyUI"}
             </StatusButton>
@@ -130,7 +146,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
               onClick={() => {
                 void c.stopComfy();
               }}
-              variant={running ? "primary-solid" : "primary"}
+              variant="danger"
             >
               {c.stopping || c.status?.stopping === true ? "关闭中…" : "关闭 ComfyUI"}
             </StatusButton>
@@ -162,8 +178,9 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
         ) : null}
 
         {/* 按什么启动：安装形态 + 是否已配路径。**只读** —— 改路径的出口在设置页，
-            这里不给第二组输入框（见文件头）。 */}
-        <p className="text-ink-muted text-xs leading-relaxed">
+            这里不给第二组输入框（见文件头）。说明文字降为 12px 辅助档、降亮度，
+            让状态与按钮成为这一区的主角（ISSUE #4631）。 */}
+        <p className="text-ink-faint text-xs leading-relaxed">
           {c.instance
             ? `安装形态：${instanceKindLabel(c.instance.instanceType)}。${
                 c.instance.desktopManaged ? "端口与启动参数由 Comfy Desktop 实例元数据决定。" : ""
@@ -175,7 +192,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
             在设置页改了路径却没保存时，这里显示的仍是旧路径 —— 当场可见，不需要
             为此跨屏共享草稿。 */}
         <p
-          className="text-ink-muted mt-1 text-xs leading-relaxed break-all"
+          className="text-ink-faint mt-1 text-xs leading-relaxed break-all"
           data-testid="comfyui-start-path"
         >
           {comfyStartPathText(c.status)}
@@ -186,7 +203,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
           不再是个黑盒（硬规则 4 的用户可见出口）。右上角的下拉按「每次启动」切换
           （服务端按会话横幅切分），全屏按钮铺满标题行下方的内容区。 */}
       <RuntimeLogBox
-        className="mt-4"
+        className="mt-6"
         emptyHint={
           <>
             暂无日志 —— 点「启动 ComfyUI」后这里会实时输出拉起过程（spawn
@@ -194,6 +211,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
           </>
         }
         fileName="comfyui-runtime.log"
+        fill
         log={c.log}
       />
     </DocumentFrame>

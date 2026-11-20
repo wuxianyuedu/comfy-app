@@ -77,31 +77,46 @@ const running = {
 };
 
 describe("ComfyuiControlView", () => {
-  it("未运行：说明「未运行」，「启动」是当态唯一实心主行动", () => {
+  it("未运行：说明「未运行」，主题紫实心留给「打开查看」，启动是幽灵、关闭是危险档", () => {
     render(<ComfyuiControlView c={controller()} />);
     expect(screen.getByText("ComfyUI 未运行")).toBeInTheDocument();
     const start = screen.getByRole("button", { name: "启动 ComfyUI" });
     const stop = screen.getByRole("button", { name: "关闭 ComfyUI" });
+    const open = screen.getByRole("button", { name: "打开查看" });
     expect(start).toBeEnabled();
     expect(stop).toBeDisabled();
-    /* 实心档只有一颗：`primary-solid`（实心底 `bg-primary-500`）是「当前这一态
-       该按的那颗」的编码，而软底档是 `bg-primary-500/15`。两颗都实心时用户无从
-       判断该点哪个（ISSUE #423 同族）。 */
-    expect(start.className).toContain("bg-primary-500 ");
-    expect(stop.className).toContain("bg-primary-500/15");
+    /* 按钮权重（ISSUE #4631）：主题紫实心只给「打开查看 / 在浏览器打开」；
+       低频「启动」走幽灵档（无实心底）、危险「关闭」走浅红档（danger 的 destructive 底）。 */
+    expect(open.className).toContain("bg-primary-500 ");
+    expect(start.className).not.toContain("bg-primary-500");
+    expect(stop.className).toContain("bg-destructive/10");
   });
 
-  it("运行中：文案带上地址与启动方式，「关闭」接替为实心主行动", () => {
+  it("运行中：文案带上地址与启动方式，打开查看仍是主题紫实心主按钮", () => {
     render(<ComfyuiControlView c={controller({ status: running })} />);
     const text = screen.getByText(/ComfyUI 运行中/);
     expect(text.textContent).toContain("http://127.0.0.1:8188");
     expect(text.textContent).toContain("配置路径的实例");
     const start = screen.getByRole("button", { name: "启动 ComfyUI" });
     const stop = screen.getByRole("button", { name: "关闭 ComfyUI" });
+    const open = screen.getByRole("button", { name: "打开查看" });
     expect(start).toBeDisabled();
     expect(stop).toBeEnabled();
-    expect(stop.className).toContain("bg-primary-500 ");
-    expect(start.className).toContain("bg-primary-500/15");
+    expect(open.className).toContain("bg-primary-500 ");
+    expect(stop.className).toContain("bg-destructive/10");
+    expect(start.className).not.toContain("bg-primary-500");
+  });
+
+  it("运行中：绿点呼吸 + 文案加粗、地址等宽降亮（ISSUE #4631）", () => {
+    const { container } = render(<ComfyuiControlView c={controller({ status: running })} />);
+    const dot = container.querySelector('[data-slot="status-dot"]');
+    expect(dot?.className).toContain("animate-pulse");
+
+    const status = screen.getByRole("status");
+    expect(status.className).toContain("font-semibold");
+    const url = screen.getByText("http://127.0.0.1:8188");
+    expect(url.className).toContain("font-mono");
+    expect(url.className).toContain("text-ink-faint");
   });
 
   it("过渡态优先于探测中：正在启动时不许显示「未运行」", () => {
