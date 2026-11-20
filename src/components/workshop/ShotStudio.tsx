@@ -17,7 +17,6 @@ import type { Character, Scene, Shot, StyleRef } from "~/lib/workshop/types";
 import { autoselectShot } from "~/lib/production/run-client";
 import { reviewScoreMean } from "~/lib/production/review-types";
 import { fixed } from "~/lib/number-format";
-import { withTimeoutResult } from "~/lib/with-timeout";
 import { buildShotNegative, buildShotPrompt } from "~/lib/workshop/prompt-builder";
 import {
   apiGenerateImage,
@@ -27,7 +26,7 @@ import {
   prepareShotReferences,
   startLocalGenerate,
   withGenerationAttribution,
-  watchTask,
+  observeTaskUntilSettled,
   type GenerateInput,
 } from "~/lib/workshop/generation-client";
 import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
@@ -75,11 +74,6 @@ type Props = {
 };
 
 type Channel = "local" | "api";
-
-/** 空操作（订阅句柄的初值）。 */
-function noop(): void {
-  /* 无操作。 */
-}
 
 /** 解析高级种子的输入框值：空 / 非数字 → 每次一个新的随机 seed（默认随机）；
  *  有限数字 → 用该固定 seed（pin 住以复现）。 */
@@ -197,46 +191,48 @@ export function ShotStudio({
 
   /** 等一个本地 ComfyUI 任务；SSE 流落定后 resolve。
    *
-   * 与「安全阀」赛跑的那一半交给`withTimeoutResult`：超时给兜底（不抛），
-   *`onTimeout` 里退订 —— 放弃等待之后流还挂着才是真问题。 */
+   * 安全阀走 `observeTaskUntilSettled` 的无响应看门狗（#4597）：进展帧续期，
+   * 连续 30 分钟静默才触发；触发时先查任务真值对账——其实已成功就采纳产物。 */
   function runLocalTask(shotId: string, taskId: string): Promise<void> {
-    /* 订阅句柄 —— watchTask 返回前先给一个空实现，settle 路径上一定已赋值。 */
-    let close: () => void = noop;
-    return withTimeoutResult(
-      new Promise<void>((resolve) => {
-        close = watchTask(taskId, {
-          onProgress: (p) => {
-            reportProgress(shotId, p);
-          },
-          onOutput: (out) => {
-            /* 只收图片产物（#4596）：「排除另一种」会把后到的 text/other 产物
-             * 覆盖进 imageUrl（工作流带 ShowText 类输出节点时很常见）。 */
-            if (isWantedOutput("image", out)) {
-              patchShot(shotId, { imageUrl: out.url });
-            }
-          },
-          onSettled: (r) => {
-            /* 落定即写终值（见 VideoStudio 同处注释）。 */
-            flushProgress(shotId, 100);
-            patchShot(shotId, { status: r.ok ? "done" : "failed" });
-            if (!r.ok) {
-              setShotError(shotId, r.message ?? "生成失败");
-            }
-            resolve();
-          },
-        });
-      }),
-      LOCAL_TASK_TIMEOUT_MS,
-      undefined,
-      {
-        onTimeout: () => {
-          // 安全阀：永不让批量循环卡在一个沉默的流上。
-          close();
-          patchShot(shotId, { status: "failed" });
-          setShotError(shotId, "任务超时(30 分钟无响应)");
+    return new Promise<void>((resolve) => {
+      observeTaskUntilSettled({
+        taskId,
+        timeoutMs: LOCAL_TASK_TIMEOUT_MS,
+        onProgress: (p) => {
+          reportProgress(shotId, p);
         },
-      },
-    );
+        onOutput: (out) => {
+          /* 只收图片产物（#4596）：「排除另一种」会把后到的 text/other 产物
+           * 覆盖进 imageUrl（工作流带 ShowText 类输出节点时很常见）。 */
+          if (isWantedOutput("image", out)) {
+            patchShot(shotId, { imageUrl: out.url });
+          }
+        },
+        onSettled: (r) => {
+          /* 落定即写终值（见 VideoStudio 同处注释）。 */
+          flushProgress(shotId, 100);
+          patchShot(shotId, { status: r.ok ? "done" : "failed" });
+          if (!r.ok) {
+            setShotError(shotId, r.message ?? "生成失败");
+          }
+          resolve();
+        },
+        onIdleTimeout: (snapshot) => {
+          const out =
+            snapshot?.status === "SUCCEEDED"
+              ? (snapshot.outputs.find((o) => o.kind === "image") ?? snapshot.outputs[0])
+              : undefined;
+          if (out) {
+            flushProgress(shotId, 100);
+            patchShot(shotId, { status: "done", imageUrl: out.url });
+          } else {
+            patchShot(shotId, { status: "failed" });
+            setShotError(shotId, "任务超时（30 分钟无进展）");
+          }
+          resolve();
+        },
+      });
+    });
   }
 
   /** 返回本机任务的 taskId（抽卡优选要收集候选；API 直连与门禁早退为 null）。 */

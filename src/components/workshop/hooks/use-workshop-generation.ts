@@ -16,12 +16,11 @@ import {
   LOCAL_TASK_TIMEOUT_MS,
   prepareShotReferences,
   startLocalGenerate,
-  watchTask,
+  observeTaskUntilSettled,
   withGenerationAttribution,
   type GenerateInput,
 } from "~/lib/workshop/generation-client";
 import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
-import { withTimeoutResult } from "~/lib/with-timeout";
 import type { Character, Shot } from "~/lib/workshop/types";
 
 /** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别）。 */
@@ -115,12 +114,11 @@ export function useWorkshopGeneration({
 
   /** 观察一个本地任务直到落定，结果回写对应镜头（`target` 决定写生图还是视频字段）。
    *  回写前核对任务归属 —— 恢复期间用户可能已对同一镜头重新发起，旧观察不得覆盖
-   *  新结果。30 分钟无响应按失败收尾并退订（与 ShotStudio / VideoStudio 同口径同
-   *  常量）：批量循环永不卡死在一条沉默的流上。 */
+   *  新结果。安全阀走 `observeTaskUntilSettled` 的无响应看门狗（#4597，与
+   *  ShotStudio / VideoStudio 同口径同常量）：进展帧续期、连续 30 分钟静默才触发，
+   *  批量循环永不卡死在一条沉默的流上。 */
   const watchShotTask = React.useCallback(
     (shotId: string, taskId: string, target: "image" | "video" = "image"): Promise<void> => {
-      /* 订阅句柄 —— watchTask 返回前先给一个空实现，超时路径上一定已赋值。 */
-      let close: () => void = () => undefined;
       /** 回写只认「仍归属本任务」的镜头（生图与视频的归属字段不同）。 */
       const patchIfOwned = (p: Partial<Shot>) => {
         setShots((prev) =>
@@ -133,75 +131,84 @@ export function useWorkshopGeneration({
           }),
         );
       };
-      return withTimeoutResult(
-        new Promise<void>((resolve) => {
-          close = watchTask(taskId, {
-            onProgress: (pct, node) => {
-              /* 高频回调：按条目独立节流（规范 16 §16.2.4.68）。这条的值是
-               * 「百分比 + 当前节点名」的复合体，故只用闸门、不用 hook。 */
-              if (!progressGate.current.allow(shotId)) {
-                return;
-              }
-              const label = node?.label;
-              setShotProgress((prev) => ({
-                ...prev,
-                [shotId]: {
-                  pct,
-                  ...(label !== undefined && label !== "" ? { label } : {}),
-                },
-              }));
-            },
-            onOutput: (out) => {
-              /* 生图只要图片产物、视频只要视频产物（#4596）：按「命中本媒体」
-               * 精确收，不按「排除另一种」——后者会把 text/other 产物覆盖进
-               * 已写入的 imageUrl / clipUrl。 */
-              if (!isWantedOutput(target, out)) {
-                return;
-              }
-              patchIfOwned(target === "video" ? { clipUrl: out.url } : { imageUrl: out.url });
-            },
-            onSettled: (result) => {
-              setShotProgress((prev) => {
-                const next = { ...prev };
-                delete next[shotId];
-                return next;
-              });
-              patchIfOwned(
-                target === "video"
-                  ? { clipStatus: result.ok ? "done" : "failed" }
-                  : { status: result.ok ? "done" : "failed" },
-              );
-              if (!result.ok && result.message !== undefined && result.message !== "") {
-                /* 用户主动取消走的是 CANCELLED 终态：不是故障，文案要分开 ——
-                 * 否则一次正常取消会被报成红色「生成失败」。 */
-                const cancelled = result.message.includes("CANCELLED");
-                notify(
-                  cancelled
-                    ? `${target === "video" ? "视频" : "镜头"}任务已取消，可重新生成`
-                    : `${target === "video" ? "视频" : "镜头"}生成失败：${result.message}`,
-                );
-              }
-              resolve();
-            },
-          });
-        }),
-        LOCAL_TASK_TIMEOUT_MS,
-        undefined,
-        {
-          onTimeout: () => {
-            /* 安全阀：超时退订（放弃等待后流还挂着才是真问题），按失败收尾，
-             * 批量循环得以继续下一镜。 */
-            close();
+      return new Promise<void>((resolve) => {
+        observeTaskUntilSettled({
+          taskId,
+          timeoutMs: LOCAL_TASK_TIMEOUT_MS,
+          onProgress: (pct, node) => {
+            /* 高频回调：按条目独立节流（规范 16 §16.2.4.68）。这条的值是
+             * 「百分比 + 当前节点名」的复合体，故只用闸门、不用 hook。 */
+            if (!progressGate.current.allow(shotId)) {
+              return;
+            }
+            const label = node?.label;
+            setShotProgress((prev) => ({
+              ...prev,
+              [shotId]: {
+                pct,
+                ...(label !== undefined && label !== "" ? { label } : {}),
+              },
+            }));
+          },
+          onOutput: (out) => {
+            /* 生图只要图片产物、视频只要视频产物（#4596）：按「命中本媒体」
+             * 精确收，不按「排除另一种」——后者会把 text/other 产物覆盖进
+             * 已写入的 imageUrl / clipUrl。 */
+            if (!isWantedOutput(target, out)) {
+              return;
+            }
+            patchIfOwned(target === "video" ? { clipUrl: out.url } : { imageUrl: out.url });
+          },
+          onSettled: (result) => {
             setShotProgress((prev) => {
               const next = { ...prev };
               delete next[shotId];
               return next;
             });
-            patchIfOwned(target === "video" ? { clipStatus: "failed" } : { status: "failed" });
-            notify("任务超时（30 分钟无响应），已按失败收尾");
+            patchIfOwned(
+              target === "video"
+                ? { clipStatus: result.ok ? "done" : "failed" }
+                : { status: result.ok ? "done" : "failed" },
+            );
+            if (!result.ok && result.message !== undefined && result.message !== "") {
+              /* 用户主动取消走的是 CANCELLED 终态：不是故障，文案要分开 ——
+               * 否则一次正常取消会被报成红色「生成失败」。 */
+              const cancelled = result.message.includes("CANCELLED");
+              notify(
+                cancelled
+                  ? `${target === "video" ? "视频" : "镜头"}任务已取消，可重新生成`
+                  : `${target === "video" ? "视频" : "镜头"}生成失败：${result.message}`,
+              );
+            }
+            resolve();
           },
-        },
-      );
+          onIdleTimeout: (snapshot) => {
+            /* 安全阀（#4597）：连续 30 分钟无任何帧才走到这里；先对账任务真值
+             * ——其实已成功就采纳产物，不冤枉成失败（批量循环得以继续下一镜）。 */
+            const wantKind = target === "video" ? "video" : "image";
+            const out =
+              snapshot?.status === "SUCCEEDED"
+                ? (snapshot.outputs.find((o) => o.kind === wantKind) ?? undefined)
+                : undefined;
+            setShotProgress((prev) => {
+              const next = { ...prev };
+              delete next[shotId];
+              return next;
+            });
+            if (out) {
+              patchIfOwned(
+                target === "video"
+                  ? { clipStatus: "done", clipUrl: out.url }
+                  : { status: "done", imageUrl: out.url },
+              );
+            } else {
+              patchIfOwned(target === "video" ? { clipStatus: "failed" } : { status: "failed" });
+              notify("任务超时（30 分钟无进展），已按失败收尾");
+            }
+            resolve();
+          },
+        });
+      });
     },
     [notify, setShots],
   );
