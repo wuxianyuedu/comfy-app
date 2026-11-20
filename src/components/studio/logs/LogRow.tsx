@@ -205,7 +205,8 @@ function RevealPathButton({ path, children }: { children: React.ReactNode; path:
  * 此前唯一出口是「复制全部日志」，用户要一行却拿到 2000 行，还得自己搜；它也让选区变得不重要。
  * 反馈本地、按行独立：1.2s 内显示「已复制」，且**只在成功时**改口（失败说已复制是撒谎）。
  */
-function RowCopyButton({ entry }: { entry: LogEntry }) {
+/** `includeMeta=false`（精简列档）只复制正文——把列藏起来就是不想让它们混进复制结果（ISSUE #4567）。 */
+function RowCopyButton({ entry, includeMeta }: { entry: LogEntry; includeMeta: boolean }) {
   const [outcome, setOutcome] = useState<"idle" | "done" | "failed">("idle");
   /* 亮起态与「到点复位、连点清旧定时器、卸载清定时器」由 hook 收口 ——
    * 此前这里自己持 `timerRef` + 自己 `clearTimeout`（全库两处这样写，
@@ -230,7 +231,7 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
   });
 
   const onCopy = () => {
-    copy(formatEntryForClipboard(entry));
+    copy(formatEntryForClipboard(entry, { includeMeta }));
   };
 
   return (
@@ -387,7 +388,7 @@ export const LogRow = memo(function LogRow({
     ) : null;
   /* 复制按钮永远在**最后一列**：它是行的终点，位置固定用户才找得到；
      `self-center` 让它在多行（换行显示）的行里也贴住垂直中线。 */
-  const copyNode = <RowCopyButton entry={entry} />;
+  const copyNode = <RowCopyButton entry={entry} includeMeta={showDetails} />;
 
   if (!expandable) {
     return (

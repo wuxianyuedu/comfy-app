@@ -43,8 +43,18 @@ export type FormattableLog = {
  * 单条日志 → 可复制的文本（行内复制按钮与导出共用）。**位置与来源要带上**（ISSUE #1703）：面板上有那一列，
  * 复制 / 导出却丢掉，用户拿日志报障时能定位问题的那一半信息在粘贴时没了。位置写在**正文之前**、同一行内：
  * 多行正文（堆栈、JSON）在前时位置会飘到几十行之后。追加字段用 ` · ` 分隔且只在有值时才出现，无值行与旧文本逐字相同。
+ *
+ * `includeMeta: false`（面板隐藏元信息列时的行内复制，ISSUE #4567）只给正文本身——
+ * 用户把列藏起来就是不想让时刻 / 级别 / 来源混进复制结果；导出（`formatForClipboard`）不带
+ * 这个开关，报障场景仍然要完整元信息。
  */
-export function formatEntryForClipboard(entry: FormattableLog): string {
+export function formatEntryForClipboard(
+  entry: FormattableLog,
+  opts?: { includeMeta?: boolean },
+): string {
+  if (opts?.includeMeta === false) {
+    return entry.message;
+  }
   const head = `${formatTime(entry.time, { alwaysDate: true })} [${entry.level.toUpperCase()}]`;
   const where = entry.location !== undefined && entry.location !== "" ? ` <${entry.location}>` : "";
   const from = entry.origin !== undefined && entry.origin !== "" ? ` · ${entry.origin}` : "";
@@ -57,5 +67,5 @@ export function formatEntryForClipboard(entry: FormattableLog): string {
  * 「复制当前筛选」与「下载/保存到本地」共用它；行内复制按钮直接用上面那条单行口径。
  */
 export function formatForClipboard(entries: Array<FormattableLog>): string {
-  return entries.map(formatEntryForClipboard).join("\n");
+  return entries.map((entry) => formatEntryForClipboard(entry)).join("\n");
 }

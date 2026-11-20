@@ -46,10 +46,12 @@ function VirtualLogListHarness({
         getMessage={(entry) => entry.message}
         renderRow={(entry) => (
           <LogRow
+            density="standard"
             entry={entry}
             expanded={expansion.isExpanded(entry.id)}
             keyword=""
             onToggleExpand={expansion.toggle}
+            showDetails
             style={{ minHeight: LOG_ROW_SINGLE }}
             wrap={wrap}
           />
