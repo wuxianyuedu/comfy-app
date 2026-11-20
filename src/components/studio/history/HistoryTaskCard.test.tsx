@@ -1,6 +1,7 @@
 /**
  * 历史任务卡的键盘可达性（规范 06 §6.11）。收口前主体信息块是 div + onClick（打开详情），
  * 左侧缩略图是 Button，同一动作只有鼠标那条通；改原生 <Button> 后 Enter/Space 与焦点语义免费。
+ * 另覆盖 ISSUE #4619 的条目形态：模式 / 模型名取代工作流名，底部补 队列同款动作按钮。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -13,8 +14,9 @@ afterEach(cleanup);
 
 const task: TaskItem = {
   id: "t-1",
-  type: "txt2img",
+  type: "T2I",
   workflowName: "测试工作流",
+  modelName: "minimax_h3",
   status: "SUCCEEDED",
   prompt: "一只猫",
   createdAt: new Date().toISOString(),
@@ -25,8 +27,12 @@ function renderCard(overrides: Partial<Parameters<typeof HistoryTaskCard>[0]> = 
   const onOpenDetail = vi.fn();
   render(
     <HistoryTaskCard
+      busy={false}
       onCancel={vi.fn()}
+      onCopyForReprint={vi.fn()}
       onOpenDetail={onOpenDetail}
+      onOpenFolder={vi.fn()}
+      onOpenLog={vi.fn()}
       onRemove={vi.fn()}
       onRetry={vi.fn()}
       progress={0}
@@ -41,13 +47,14 @@ function renderCard(overrides: Partial<Parameters<typeof HistoryTaskCard>[0]> = 
 describe("HistoryTaskCard 键盘可达性", () => {
   it("主体信息块是原生按钮：Enter 也能打开详情", async () => {
     const { onOpenDetail } = renderCard();
-    /* 两个落点（缩略图 + 主体块）都打开同一个详情 —— 都是按钮、都可聚焦。 */
+    /* 两个落点（缩略图 + 主体块）都打开同一个详情 —— 都是按钮、都可聚焦。
+     * 主体块的可达名来自它的文本（提示词在块内），用它定位。 */
     const buttons = screen.getAllByRole("button", {
-      name: /查看任务详情|测试工作流/,
+      name: /查看任务详情|一只猫/,
     });
     expect(buttons.length).toBeGreaterThanOrEqual(2);
 
-    const body = buttons.find((b) => b.textContent?.includes("测试工作流"))!;
+    const body = buttons.find((b) => b.textContent?.includes("一只猫"))!;
     body.focus();
     expect(body).toHaveFocus();
 
@@ -59,8 +66,8 @@ describe("HistoryTaskCard 键盘可达性", () => {
   it("鼠标点击主体块仍然打开详情（收口没改行为）", async () => {
     const { onOpenDetail } = renderCard();
     const body = screen
-      .getAllByRole("button", { name: /测试工作流/ })
-      .find((b) => b.textContent?.includes("测试工作流"))!;
+      .getAllByRole("button", { name: /一只猫/ })
+      .find((b) => b.textContent?.includes("一只猫"))!;
 
     await userEvent.click(body);
 
@@ -74,5 +81,47 @@ describe("HistoryTaskCard memo（ISSUE #4559）", () => {
      「加载更多」累积的几十上百张静止卡就会整树陪跑（ISSUE #4559 的现场）。 */
   it("卡片保持 memo 包裹（摘掉会让静止卡每拍陪跑）", () => {
     expect(HistoryTaskCard.$$typeof).toBe(Symbol.for("react.memo"));
+  });
+});
+
+describe("HistoryTaskCard 条目形态（ISSUE #4619）", () => {
+  it("显示模式名称与模型名称，不再显示工作流名", () => {
+    renderCard();
+    /* 模式：任务类型码 → 工作流类型表的中文标签。 */
+    expect(screen.getByText("文生图")).toBeInTheDocument();
+    /* 模型：工作流上挂的模型标签。 */
+    expect(screen.getByText("minimax_h3")).toBeInTheDocument();
+    expect(screen.queryByText("测试工作流")).not.toBeInTheDocument();
+  });
+
+  it("没挂模型标签的行回落工作流名（行上仍能认出是哪次提交）", () => {
+    renderCard({ task: { ...task, modelName: null } });
+    expect(screen.getByText("测试工作流")).toBeInTheDocument();
+  });
+
+  it("底部动作区：日志 / 输出目录 / 复制去重投，点击走对应回调", async () => {
+    const onOpenLog = vi.fn();
+    const onOpenFolder = vi.fn();
+    const onCopyForReprint = vi.fn();
+    renderCard({ onOpenLog, onOpenFolder, onCopyForReprint });
+
+    await userEvent.click(screen.getByRole("button", { name: "查看这一条的执行日志" }));
+    await userEvent.click(screen.getByRole("button", { name: "打开这一条的输出目录" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "复制这一条的提交内容，回画布改完再投一次" }),
+    );
+
+    expect(onOpenLog).toHaveBeenCalledWith(task);
+    expect(onOpenFolder).toHaveBeenCalledWith(task);
+    expect(onCopyForReprint).toHaveBeenCalledWith(task);
+  });
+
+  it("动作进行中（busy）时禁用 输出目录 与 复制去重投，日志仍可点", () => {
+    renderCard({ busy: true });
+    expect(screen.getByRole("button", { name: "打开这一条的输出目录" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "复制这一条的提交内容，回画布改完再投一次" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "查看这一条的执行日志" })).toBeEnabled();
   });
 });

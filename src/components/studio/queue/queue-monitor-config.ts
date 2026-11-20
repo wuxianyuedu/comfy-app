@@ -164,7 +164,9 @@ export function offlineRunningCardNote(): string {
  * 「复制去重投」的载荷。动作不叫「重试」：后端没有 retry 端点（REST 路径从未实现），
  * 真实语义是把这次提交的输入交回画布再投一遍 —— 所以不摆点了必然失败的按钮，只送剪贴板。
  * 载荷只放 task.list 真有的字段（提示词/工作流/类型）；参数表要详情接口才有。
+ * 参数收窄成这三列的结构化子集（ISSUE #4619）：历史页的行（TaskItem）与队列行
+ * 同源不同形，动作是同一件事，不该逼调用方先凑齐整行。
  */
-export function reprintText(row: QueueRow): string {
+export function reprintText(row: Pick<QueueRow, "prompt" | "type" | "workflowName">): string {
   return [`提示词：${row.prompt}`, `工作流：${row.workflowName}`, `类型：${row.type}`].join("\n");
 }

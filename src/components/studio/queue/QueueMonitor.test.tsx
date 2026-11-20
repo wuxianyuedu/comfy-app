@@ -29,6 +29,7 @@ function row(over: Partial<QueueRow> & Pick<QueueRow, "id" | "status">): QueueRo
   return {
     type: "IMAGE",
     workflowName: `工作流 ${over.id}`,
+    modelName: null,
     prompt: `提示词 ${over.id}`,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     cover: null,

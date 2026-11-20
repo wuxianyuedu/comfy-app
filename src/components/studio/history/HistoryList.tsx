@@ -1,9 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 import { HistoryDetailModal } from "./HistoryDetailModal";
 import { HistoryTaskCard } from "./HistoryTaskCard";
+/* 执行日志弹窗与队列页同一份（ISSUE #4619）：同一条任务的「日志」在两个
+ * 入口长得一样、同一份 SSE 流。它经 WorkflowRunRawCliModal 静态拖着
+ * react18-json-view（重依赖，§12.19），这里**动态**加载把这条静态边断掉
+ * ——工作区入口的静态可达图里不再出现 json-viewer。 */
+const QueueTaskLogModal = dynamic(() =>
+  import("~/components/studio/queue/QueueTaskLogModal").then((m) => m.QueueTaskLogModal),
+);
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { Button } from "~/components/ui/button";
@@ -32,17 +40,26 @@ function HistoryGroupTaskList({
   items,
   progressMap,
   isRetrying,
+  isRowBusy,
   onOpenDetail,
   onCancel,
   onRetry,
   onRemove,
+  onOpenLog,
+  onOpenFolder,
+  onCopyForReprint,
 }: {
   /** 「这一条在重试吗」的判据由导出它的出口给（规范 16 §16.2.4.40）——
    * 视图不再自己写`retryingId === task.id`。 */
   isRetrying: (id: string) => boolean;
+  /** 「这一条的动作（输出目录 / 复制去重投）在进行中吗」（ISSUE #4619）。 */
+  isRowBusy: (id: string) => boolean;
   items: Array<TaskItem>;
   onCancel: (id: string) => void;
+  onCopyForReprint: (task: TaskItem) => void;
   onOpenDetail: (id: string) => void;
+  onOpenFolder: (task: TaskItem) => void;
+  onOpenLog: (task: TaskItem) => void;
   onRemove: (id: string) => void;
   onRetry: (task: TaskItem) => void;
   progressMap: Record<string, number>;
@@ -61,9 +78,13 @@ function HistoryGroupTaskList({
     <div className="flex flex-col gap-3" ref={listRef}>
       {items.map((task) => (
         <HistoryTaskCard
+          busy={isRowBusy(task.id)}
           key={task.id}
           onCancel={onCancel}
+          onCopyForReprint={onCopyForReprint}
           onOpenDetail={onOpenDetail}
+          onOpenFolder={onOpenFolder}
+          onOpenLog={onOpenLog}
           onRemove={onRemove}
           onRetry={onRetry}
           progress={progressMap[task.id] ?? 0}
@@ -178,9 +199,13 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
               {/* ── 任务列表 ── */}
               <HistoryGroupTaskList
                 isRetrying={c.isRetrying}
+                isRowBusy={c.isRowBusy}
                 items={group.items}
                 onCancel={c.cancel}
+                onCopyForReprint={c.copyForReprint}
                 onOpenDetail={c.openDetail}
+                onOpenFolder={c.openFolder}
+                onOpenLog={c.openLog}
                 onRemove={c.remove}
                 onRetry={c.retry}
                 progressMap={c.progressMap}
@@ -217,6 +242,8 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
         onClose={c.closeDetail}
         workflowIO={c.workflowIO}
       />
+      {/* 执行日志弹窗（ISSUE #4619）：与队列页同款，按行上的「日志」打开。 */}
+      <QueueTaskLogModal onClose={c.closeLog} task={c.logTarget} />
       {/* 删除确认走非阻塞弹窗（ISSUE #3771）：原生 confirm() 在内嵌浏览器里
           未被处置会以 0 CPU 卡死同源渲染进程（连 splash.html 都冻结）。 */}
       <ConfirmDialog

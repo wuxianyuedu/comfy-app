@@ -7,6 +7,9 @@ import {
   emptyStateText,
   filterTasks,
   groupByDate,
+  hasActiveTasks,
+  modeLabelOf,
+  modelLabelOf,
   paginateGroups,
   sortTasks,
 } from "./history-list-derive";
@@ -145,5 +148,44 @@ describe("emptyStateText", () => {
     const out = emptyStateText("FAILED", "失败");
     expect(out.title).toBe("暂无失败任务");
     expect(out.hint).toContain("全部");
+  });
+});
+
+describe("modeLabelOf / modelLabelOf（ISSUE #4619：按测试模型的封装形式认任务）", () => {
+  it("模式名称：任务类型码走工作流类型表的中文标签", () => {
+    expect(modeLabelOf("T2I")).toBe("文生图");
+    expect(modeLabelOf("I2V")).toBe("单图生视频");
+  });
+
+  it("类型表没有的码如实回落原码，不编名字", () => {
+    expect(modeLabelOf("txt2img")).toBe("txt2img");
+  });
+
+  it("模型名称：优先工作流上挂的模型标签", () => {
+    expect(modelLabelOf({ modelName: "minimax_h3", workflowName: "image_minimax" })).toBe(
+      "minimax_h3",
+    );
+  });
+
+  it("模型名称：没挂标签（null / 空串 / 纯空白）回落工作流名", () => {
+    expect(modelLabelOf({ modelName: null, workflowName: "image_z" })).toBe("image_z");
+    expect(modelLabelOf({ modelName: "  ", workflowName: "image_z" })).toBe("image_z");
+    expect(modelLabelOf({ workflowName: "image_z" })).toBe("image_z");
+  });
+});
+
+describe("hasActiveTasks（ISSUE #4619：有进行中任务才轮询）", () => {
+  it("QUEUED / RUNNING 算进行中，终态不算", () => {
+    expect(hasActiveTasks([task("a", "RUNNING", daysAgo(0))])).toBe(true);
+    expect(hasActiveTasks([task("a", "QUEUED", daysAgo(0))])).toBe(true);
+    expect(hasActiveTasks([task("a", "SUCCEEDED", daysAgo(0))])).toBe(false);
+    expect(hasActiveTasks([task("a", "FAILED", daysAgo(0))])).toBe(false);
+    expect(hasActiveTasks([])).toBe(false);
+  });
+
+  it("混排时只要有一条进行中就是 true", () => {
+    expect(
+      hasActiveTasks([task("a", "SUCCEEDED", daysAgo(0)), task("b", "RUNNING", daysAgo(0))]),
+    ).toBe(true);
   });
 });
