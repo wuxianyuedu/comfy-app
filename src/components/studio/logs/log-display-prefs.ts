@@ -10,6 +10,7 @@
 import { useSyncExternalStore } from "react";
 
 import { readStorageItem, writeStorageItem } from "~/lib/browser-storage";
+import { isRecord } from "~/lib/is-record";
 
 /** 行密度档：影响每行的上下内边距与虚拟滚动的行高常量（见 `log-virtual` 的 `rowHeightFor`）。 */
 export type LogDensity = "compact" | "standard" | "relaxed";
@@ -53,10 +54,6 @@ function readInitial(): LogDisplayPrefs {
   } catch {
     return { ...DEFAULT_PREFS };
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 const LISTENERS = new Set<() => void>();

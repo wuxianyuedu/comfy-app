@@ -9,6 +9,7 @@
  * 必须与 `LogRow` 的 class 对齐。
  */
 import { clamp } from "~/lib/clamp";
+import { ceilDiv } from "~/lib/page-window";
 
 /** 行密度档（与 `log-display-prefs` 的偏好同一套值；ISSUE #4567 的「日志项间隔大小配置」）。
  *  档位只改行的上下内边距，正文行高不变。 */
@@ -110,7 +111,7 @@ export function countLines(message: string, availableWidth = 0): number {
        * lint 档对 4~5 位数字给不出合法形态）。 */
       widthUnits += ch >= "⺀" ? 15 : 9;
     }
-    total += Math.max(1, Math.ceil(widthUnits / availableWidth));
+    total += Math.max(1, ceilDiv(widthUnits, availableWidth));
   }
   return Math.max(1, total);
 }

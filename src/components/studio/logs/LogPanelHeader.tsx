@@ -144,7 +144,11 @@ export function LogPanelHeader(input: {
               size="icon"
               variant="ghost"
             >
-              {columns === "message-only" ? <EyeOff size={16} /> : <Eye size={16} />}
+              {columns === "message-only" ? (
+                <EyeOff data-icon="inline-start" size={16} />
+              ) : (
+                <Eye data-icon="inline-start" size={16} />
+              )}
             </Button>
           </Hint>
           <Hint accessibleName label={wrap ? "折叠超长行" : "自动换行显示"}>
