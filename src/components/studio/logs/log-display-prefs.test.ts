@@ -18,9 +18,8 @@ describe("log-display-prefs 显示偏好", () => {
   });
 
   it("setLogDensity / setLogColumns 即时生效并写穿 localStorage", async () => {
-    const { getLogDisplayPrefs, setLogColumns, setLogDensity } = await import(
-      "./log-display-prefs"
-    );
+    const { getLogDisplayPrefs, setLogColumns, setLogDensity } =
+      await import("./log-display-prefs");
     setLogDensity("relaxed");
     setLogColumns("message-only");
     expect(getLogDisplayPrefs()).toEqual({ columns: "message-only", density: "relaxed" });
