@@ -5,7 +5,7 @@
  * 标题 + 级别筛选 + 来源下拉 + 操作按钮排；反馈位（复制成败）与宽度档
  * 由父组件经 props 注入。
  */
-import { Check, Copy, Download, FileText, Trash2, Type, X } from "lucide-react";
+import { Check, Copy, Download, Eye, EyeOff, FileText, Trash2, Type, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { DiagnosticsButton } from "./DiagnosticsButton";
@@ -30,7 +30,9 @@ export function LogPanelHeader(input: {
   scopeLabel: string;
   setIsOpen: (open: boolean) => void;
   setOrigin: (value: LogOriginFilter) => void;
+  setShowMeta: (show: boolean) => void;
   setWrap: (updater: (prev: boolean) => boolean) => void;
+  showMeta: boolean;
   total: number;
   wrap: boolean;
 }) {
@@ -41,6 +43,8 @@ export function LogPanelHeader(input: {
     setOrigin,
     wrap,
     setWrap,
+    showMeta,
+    setShowMeta,
     copyFailed,
     copyDone,
     copyAllAction,
@@ -104,6 +108,29 @@ export function LogPanelHeader(input: {
               variant="ghost"
             >
               <Type size={16} />
+            </Button>
+          </Hint>
+          <Hint
+            accessibleName
+            label={showMeta ? "隐藏时刻/级别/来源列（复制选区更干净）" : "显示时刻/级别/来源列"}
+          >
+            <Button
+              /* 隐藏元信息列（ISSUE #4567）：只想读 / 框选正文时，把时刻、级别徽标、
+               * 位置、来源整排收起——鼠标选中的就只有日志本身。行内复制按钮随同一
+               * 开关只给正文（见 LogRow / log-format）。 */
+              aria-label={showMeta ? "隐藏元信息列" : "显示元信息列"}
+              className={`rounded-md p-2 transition-colors ${
+                showMeta
+                  ? "text-ink-muted hover:bg-subtle hover:text-ink"
+                  : `${FILTER_SELECTED_STYLES} text-ink-bright`
+              }`}
+              onClick={() => {
+                setShowMeta(!showMeta);
+              }}
+              size="icon"
+              variant="ghost"
+            >
+              {showMeta ? <Eye size={16} /> : <EyeOff size={16} />}
             </Button>
           </Hint>
           {/* 提示写明范围：复制/下载的是**当前筛选下的全部日志**（跨所有页）。

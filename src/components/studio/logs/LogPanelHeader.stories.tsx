@@ -59,7 +59,9 @@ function HeaderHarness({ wrapInitial = false }: { wrapInitial?: boolean }) {
         scopeLabel="全部来源 · 全部级别"
         setIsOpen={setIsOpen}
         setOrigin={setOrigin}
+        setShowMeta={() => undefined}
         setWrap={() => undefined}
+        showMeta
         total={header.filteredLogs.length}
         wrap={wrapInitial}
       />

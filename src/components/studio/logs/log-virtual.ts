@@ -11,16 +11,65 @@
 import { clamp } from "~/lib/clamp";
 
 /**
- * 估算行高时从面板总宽扣掉「非正文列」的固定开销（时刻 + 级别徽标 + 来源 + 复制按钮 + 内边距 + 列间距，
- * 约 260px）。`countLines` 算软换行用的是**正文列**可用宽度：此前直接拿整宽估算会低估行数，正文被
- * `overflow-hidden` 裁掉（「超出边框看不全」）。取偏保守值——宁可多留空白，也不让内容跑到视口外。
+ * 估算行高时从面板总宽扣掉「非正文列」的固定开销。`countLines` 算软换行用的是**正文列**
+ * 可用宽度：直接拿整宽估算会低估行数，正文被 `overflow-hidden` 裁掉（「超出边框看不全」）。
+ * 元信息列（时刻 + 级别徽标 + 来源 + 复制按钮 + 内边距 + 列间距）实测约 320px；
+ * 隐藏元信息列（`showMeta=false`）后只剩内边距 + 复制按钮 + 列间距。取偏保守值——
+ * 宁可多留一点空白，也不让内容跑到视口外。
  */
-export const LOG_MESSAGE_OVERHEAD = 260;
+export const LOG_MESSAGE_OVERHEAD = 320;
+/** 隐藏元信息列时的正文列开销（内边距 + 复制按钮 + 列间距）。 */
+export const LOG_MESSAGE_OVERHEAD_METALESS = 96;
+
+/** 元信息列是否显示 → 估算软换行时该用的开销。 */
+export function messageOverhead(showMeta: boolean): number {
+  return showMeta ? LOG_MESSAGE_OVERHEAD : LOG_MESSAGE_OVERHEAD_METALESS;
+}
 
 export const LOG_ROW_SINGLE = 28;
 
+/**
+ * 行距档（设置 → 日志，ISSUE #4567）：`rowBase` 是单行高度（px）、`padClass` 是行内
+ * 垂直内边距，两者必须与 `LogRow` 的 class 同口径（与 {@link LOG_ROW_SINGLE} 同一条纪律：
+ * 估算与渲染各写一份就会漂）。默认档即 {@link LOG_ROW_SINGLE}。
+ */
+export const LOG_DENSITY_PRESETS = {
+  compact: { padClass: "py-0.5", rowBase: 24 },
+  default: { padClass: "py-1", rowBase: 28 },
+  relaxed: { padClass: "py-2", rowBase: 36 },
+} as const;
+
+export type LogDensity = keyof typeof LOG_DENSITY_PRESETS;
+
+/** 密度档的健壮解析（localStorage 读回的值不可信）：词表外一律回落标准档。 */
+export function toLogDensity(value: unknown): LogDensity {
+  return value === "compact" || value === "default" || value === "relaxed" ? value : "default";
+}
+
 /** 换行显示时，**每一行文字**的像素高度（`leading-snug` 下的 14px 行高 = 19.25）。 */
 export const LOG_ROW_LINE = 19;
+
+/**
+ * 估宽用的单字宽度（px）。行是 `font-mono text-sm`（14px）：窄字符（拉丁 / 数字 / 半角标点）
+ * 在等宽字体下约 0.55–0.6em（Windows Consolas ≈ 7.7px、macOS Menlo ≈ 8.4px），取 8.1px 折中；
+ * CJK 与全角字符走系统字体回退，约 1em = 14px。两档都内含约 5% 余量——估宽**宁略宽勿窄**：
+ * 多算一行的代价是行尾一点空白（此前「一行内容占两行空间」的主因就是按 13px/字均摊，
+ * 把上百字符的 ASCII 路径行估成了两行），估窄则直接裁掉正文。
+ */
+const NARROW_CHAR_PX = 8.1;
+const WIDE_CHAR_PX = 14.7;
+
+/** 宽字符（CJK / 全角 / emoji）判定：命中即按 1em 计宽。 */
+const WIDE_CHAR_RE =
+  /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6\u{1F000}-\u{1FAFF}\u{20000}-\u{3FFFD}]/u;
+
+function segmentWidthPx(segment: string): number {
+  let width = 0;
+  for (const ch of segment) {
+    width += WIDE_CHAR_RE.test(ch) ? WIDE_CHAR_PX : NARROW_CHAR_PX;
+  }
+  return width;
+}
 
 /**
  * **展开**的日志行高度（常量，不是量出来的）。展开内容交给 `JsonViewer`（自带工具栏 / 搜索与内部滚动），
@@ -48,22 +97,26 @@ export const UNMEASURED_WINDOW_ROWS = 120;
 export const LOG_SCROLL_MAX = 8_000_000;
 
 /**
- * 一条日志在页面里的高度：`wrap` 为假时行不换行（`truncate`），恒为 {@link LOG_ROW_SINGLE}；为真时按显式
- * 换行符与软换行估算（软换行数由字符数除以每行容量，而容量取决于面板宽度）。这里只求「不低估」：低估会让
- * 下面几行被推到视口外，高估只是多留一点空白。
+ * 一条日志在页面里的高度：`wrap` 为假时行不换行（`truncate`），恒为 `rowBase`；为真时按显式
+ * 换行符与软换行估算（软换行数由逐字宽度除以每行容量，见 {@link countLines}）。这里只求「不低估」：
+ * 低估会让下面几行被推到视口外，高估只是多留一点空白。
  */
-export function estimateRowHeight(message: string, wrap: boolean): number {
+export function estimateRowHeight(
+  message: string,
+  wrap: boolean,
+  rowBase = LOG_ROW_SINGLE,
+): number {
   if (!wrap) {
-    return LOG_ROW_SINGLE;
+    return rowBase;
   }
   const lines = Math.max(1, countLines(message));
-  return LOG_ROW_SINGLE + (lines - 1) * LOG_ROW_LINE;
+  return rowBase + (lines - 1) * LOG_ROW_LINE;
 }
 
 /**
- * 消息在面板里**至少**占几行。显式换行（`\n`，多行 JSON payload）逐段数；每段再按宽度拆软换行——容量按
- * **最窄的字**（中文 13px）算，`ceil(段长 × 13 / 可用宽度)` 是下界。`availableWidth` 取不到（jsdom /
- * 首帧）时只数显式换行：宁可少估也不能瞎估。
+ * 消息在面板里**至少**占几行。显式换行（`\n`，多行 JSON payload）逐段数；每段再按宽度拆软换行——
+ * 容量按**逐字累计宽度**（窄字符 / 宽字符两档，见 {@link segmentWidthPx}）除以可用宽度。
+ * `availableWidth` 取不到（jsdom / 首帧）时只数显式换行：宁可少估也不能瞎估。
  */
 export function countLines(message: string, availableWidth = 0): number {
   const segments = message.split("\n");
@@ -78,7 +131,7 @@ export function countLines(message: string, availableWidth = 0): number {
   }
   let total = 0;
   for (const segment of segments) {
-    total += Math.max(1, Math.ceil((segment.length * 13) / availableWidth));
+    total += Math.max(1, Math.ceil(segmentWidthPx(segment) / availableWidth));
   }
   return Math.max(1, total);
 }
@@ -93,8 +146,10 @@ export type RowLayout = {
 
 /** {@link layoutRows} 的两类**按 id 点名**的行（见下方说明）。 */
 export type LogLayoutOptions = {
-  /** 已展开的行 id：固定为 {@link LOG_ROW_EXPANDED}。 */
+  /** 已展开的行 id：固定为「展开视口 + 当前档单行高」。 */
   expandedIds?: ReadonlySet<string>;
+  /** 单行行高（行距档，见 {@link LOG_DENSITY_PRESETS}）；缺省 = 标准档。 */
+  rowBase?: number;
   /**
    * 折叠态**强制单行**的行 id（comfy-cli 原始 JSON 行）。这类行的完整原文（可能几十 KB、不含换行符）在
    * `wrap` 下会被 `countLines` 按宽度估成几百行——既是错的显示（原文本该折起）也是错的滚动长度。
@@ -115,24 +170,27 @@ export function layoutRows(
   options: LogLayoutOptions = {},
 ): { rows: Array<RowLayout>; totalSize: number } {
   const { expandedIds, singleLineIds } = options;
+  const rowBase = options.rowBase ?? LOG_ROW_SINGLE;
+  /* 展开档随行距走：JSON 视口（LOG_ROW_EXPANDED − 标准单行高）不变，单行高按当前档。 */
+  const expandedSize = LOG_ROW_EXPANDED + (rowBase - LOG_ROW_SINGLE);
   /* `Array.from` 而不是 `new Array(n)`：后者在 lint 下是 `any[]`，会一路传染到
      下面的 `rows[i]` 赋值上。 */
   const rows: Array<RowLayout> = Array.from({ length: entries.length }, () => ({
     start: 0,
-    size: LOG_ROW_SINGLE,
+    size: rowBase,
   }));
   let start = 0;
   for (const [i, entry] of entries.entries()) {
     const id = entry.id;
     let size: number;
     if (id !== undefined && id !== "" && expandedIds?.has(id) === true) {
-      size = LOG_ROW_EXPANDED;
+      size = expandedSize;
     } else if (id !== undefined && id !== "" && singleLineIds?.has(id) === true) {
-      size = LOG_ROW_SINGLE;
+      size = rowBase;
     } else {
       /* 每行的行数只数一次：estimateRowHeight 与 countLines 都靠它推高度。 */
       const lines = wrap ? countLines(entry.message, availableWidth) : 1;
-      size = LOG_ROW_SINGLE + (lines - 1) * LOG_ROW_LINE;
+      size = rowBase + (lines - 1) * LOG_ROW_LINE;
     }
     rows[i] = { start, size };
     start += size;

@@ -1530,6 +1530,52 @@ describe("parseFileLogs 文件日志解析", () => {
   });
 });
 
+/* ── 壳自持日志（shell.log）解析（ISSUE #4567）──────────────────
+ * 形态 `[YYYY-MM-DD][HH:mm:ss][LEVEL][target] 正文` 此前不匹配任何记录头，而行首的
+ * `[` 又命中「JSON 片段」续接判据，整份文件被并成一条记录——「壳日志有很多条，显示
+ * 只有单条」。判据：每一行都是独立一条，时刻/级别从行结构里来，target 留在正文。 */
+describe("parseFileLogs 壳自持日志（shell.log）行", () => {
+  const SHELL_LINES = [
+    String.raw`[2026-11-13][17:39:07][INFO][app_lib::shell_launch] [orchestrator] [b1750d][launcher] project_root=G:\ComfyAPP\comfy-app-t3`,
+    "[2026-11-13][17:39:08][INFO][app_lib] [ComfyAPP] tray icon created",
+    "[2026-11-13][17:39:09][WARN][app_lib::shell_launch] [orchestrator] >>> netstat -ano -p TCP",
+  ].join("\n");
+
+  it("每一行都是独立一条，不再整份并成一条", () => {
+    const entries = parseFileLogs(SHELL_LINES, undefined, "shell");
+    expect(entries).toHaveLength(3);
+  });
+
+  it("时刻与级别来自行结构（无毫秒位补 0），target 保留在正文", () => {
+    const entries = parseFileLogs(SHELL_LINES, undefined, "shell");
+    expect(entries[0]?.time).toBe(new Date(2026, 10, 13, 17, 39, 7, 0).getTime());
+    expect(entries[0]?.level).toBe("info");
+    expect(entries[0]?.message).toBe(
+      String.raw`[app_lib::shell_launch] [orchestrator] [b1750d][launcher] project_root=G:\ComfyAPP\comfy-app-t3`,
+    );
+    expect(entries[2]?.level).toBe("warn");
+    expect(entries[2]?.message).toBe(
+      "[app_lib::shell_launch] [orchestrator] >>> netstat -ano -p TCP",
+    );
+  });
+
+  it("带续行的记录仍把续行拼回正文（结构判据不被壳行破坏）", () => {
+    const entries = parseFileLogs(
+      [
+        "[2026-11-13][17:39:10][INFO][app_lib::shell_launch] payload 如下",
+        "{",
+        '  "a": 1,',
+        '  "b": 2',
+        "}",
+      ].join("\n"),
+      undefined,
+      "shell",
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.message).toContain('"b": 2');
+  });
+});
+
 /* ── 调用位置采集（ISSUE #1703）──────────────────────────────
  * 用户报「日志里那条 React key 警告看不到调用堆栈」。两个成因各自锁一条：① 业务帧一个都没有时
  * （React 警告全在 react-dom 里），旧实现返回 undefined；现在退回库帧，说出是哪个库在哪层打的。

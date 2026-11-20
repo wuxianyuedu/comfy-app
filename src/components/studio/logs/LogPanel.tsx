@@ -19,13 +19,14 @@ import { useLogPanelPin } from "./use-log-panel-pin";
 import { LogPanelHeader } from "./LogPanelHeader";
 import { LogPanelFooter } from "./LogPanelFooter";
 import {
-  LOG_MESSAGE_OVERHEAD,
-  LOG_ROW_SINGLE,
+  LOG_DENSITY_PRESETS,
   UNMEASURED_WINDOW_ROWS,
   layoutRows,
+  messageOverhead,
   scrollHeightOf,
   visibleRange,
 } from "./log-virtual";
+import { useLogDisplayStore } from "./log-display-store";
 import { EmptyState } from "~/components/ui/empty-state";
 import { useWidePanel } from "~/components/ui/wide-panel";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
@@ -48,7 +49,11 @@ import { isCliJsonLine } from "~/lib/log/log-cli-json";
 function useVirtualWindow(input: {
   expansionMap: Record<string, boolean>;
   pageLogs: Array<LogEntry>;
+  /** 单行行高（行距档）。 */
+  rowBase: number;
   scrollTop: number;
+  /** 是否显示行头元信息列：决定正文列宽度（估软换行用）。 */
+  showMeta: boolean;
   viewportHeight: number;
   viewportWidth: number;
   wrap: boolean;
@@ -72,16 +77,17 @@ function useVirtualWindow(input: {
     }
     return ids;
   }, [expansionMap]);
-  /* 软换行估高用的是**正文列**可用宽度，不是整面板宽：时刻/级别/来源/复制这几列
-   * 占了约 `LOG_MESSAGE_OVERHEAD` px，直接拿整宽会低估行数、把多行正文裁掉。 */
-  const messageWidth = Math.max(200, viewportWidth - LOG_MESSAGE_OVERHEAD);
+  /* 软换行估高用的是**正文列**可用宽度，不是整面板宽：行头那几列
+   * 占了约 `messageOverhead(showMeta)` px，直接拿整宽会低估行数、把多行正文裁掉。 */
+  const messageWidth = Math.max(200, viewportWidth - messageOverhead(input.showMeta));
   const { rows, totalSize } = useMemo(
     () =>
       layoutRows(pageLogs, wrap, wrap ? messageWidth : 0, {
         expandedIds,
         singleLineIds: cliJsonIds,
+        rowBase: input.rowBase,
       }),
-    [pageLogs, wrap, messageWidth, expandedIds, cliJsonIds],
+    [pageLogs, wrap, messageWidth, expandedIds, cliJsonIds, input.rowBase],
   );
   const { height: scrollHeight } = scrollHeightOf(totalSize);
   const rowWindow = useMemo(() => {
@@ -147,6 +153,11 @@ export function LogPanel() {
   const clear = useLogPanel((state) => state.clear);
   const copyAllRaw = useLogPanel((state) => state.copyAll);
   const download = useLogPanel((state) => state.download);
+  /* 行显示偏好（设置 ↔ 面板共享）：行距档与「隐藏元信息列」（ISSUE #4567）。 */
+  const density = useLogDisplayStore((state) => state.density);
+  const showMeta = useLogDisplayStore((state) => state.showMeta);
+  const setShowMeta = useLogDisplayStore((state) => state.setShowMeta);
+  const rowBase = LOG_DENSITY_PRESETS[density].rowBase;
 
   /* 「复制 / 下载」两枚工具按钮的成败反馈（规范 16 §16.2.4.43）：此前这一段
    * 完全没有出口 —— `copyAll` 把剪贴板结果吞掉，按钮上也没有任何状态，于是
@@ -247,6 +258,8 @@ export function LogPanel() {
     viewportHeight: viewport.height,
     scrollTop,
     expansionMap: expansion.map,
+    showMeta,
+    rowBase,
   });
 
   useEffect(() => {
@@ -357,7 +370,9 @@ export function LogPanel() {
             scopeLabel={scopeLabel}
             setIsOpen={setIsOpen}
             setOrigin={setOrigin}
+            setShowMeta={setShowMeta}
             setWrap={setWrap}
+            showMeta={showMeta}
             total={total}
             wrap={wrap}
           />
@@ -401,14 +416,16 @@ export function LogPanel() {
                     return (
                       <div data-log-index={index} key={entry.id}>
                         <LogRow
+                          density={density}
                           entry={entry}
                           expanded={expansion.isExpanded(entry.id)}
                           keyword={search}
                           onToggleExpand={expansion.toggle}
+                          showMeta={showMeta}
                           /* 显式高度 = 估算高度：两者不同口径时误差会累积，
                            滚动位置与内容就错开了（见 log-virtual 的常量）。 */
                           style={{
-                            height: `${rows[index]?.size ?? LOG_ROW_SINGLE}px`,
+                            height: `${rows[index]?.size ?? rowBase}px`,
                           }}
                           wrap={wrap}
                         />

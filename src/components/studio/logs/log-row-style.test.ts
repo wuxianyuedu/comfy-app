@@ -98,6 +98,9 @@ describe("词法上色里的路径区间", () => {
         .filter((token) => token.style !== undefined)
         .map((token) => token.text),
     ).toEqual([
+      /* `>>>` 是命令回显的提示符标记，ISSUE #4567 起按类别前缀调暗（gray）、
+       * 排在两条路径之前；路径仍各自整条落地、不在空格处断开。 */
+      ">>>",
       String.raw`C:\Program Files\PowerShell\7\pwsh.EXE`,
       String.raw`D:\Program Files\nodejs\pnpm.ps1`,
     ]);
@@ -137,6 +140,56 @@ describe("词法上色里的路径区间", () => {
       ["[OK]", "green-bright"],
       [" 阶段: 壳已接手 ", undefined],
       ["http://x/y", "blue-bright"],
+    ]);
+  });
+});
+
+/* ── 类别前缀调暗（ISSUE #4567）──────────────────────────────
+ * 壳日志正文头部带着一长串类别（`[app_lib::shell_launch] [orchestrator] [d617a7][launcher]`），
+ * 全按正文色渲染时前缀比内容还显眼。判据：类别 token 落到 gray（背景层），
+ * 端口 / 普通数字括号与正文不受影响，级别词保持各自的状态色。 */
+describe("类别前缀调暗", () => {
+  it("模块 / 组件 / 会话短 id / 阶段标记 → gray", () => {
+    const line =
+      "[app_lib::shell_launch] [orchestrator] [d617a7][launcher] 编排器互斥占坑: 已写入会话锚点";
+    expect(tokenizeRow(line).map((t) => [t.text, t.style])).toEqual([
+      ["[app_lib::shell_launch]", "gray"],
+      [" ", undefined],
+      ["[orchestrator]", "gray"],
+      [" ", undefined],
+      ["[d617a7]", "gray"],
+      ["[launcher]", "gray"],
+      [" 编排器互斥占坑: 已写入会话锚点", undefined],
+    ]);
+  });
+
+  it("ComfyAPP / dev-launcher / tauri 等其余类别同名同档", () => {
+    for (const token of ["[ComfyAPP]", "[dev-launcher]", "[tauri]", "[app_lib]"]) {
+      expect(tokenizeRow(`${token} 正文`)).toEqual([
+        { text: token, style: "gray" },
+        { text: " 正文", style: undefined },
+      ]);
+    }
+  });
+
+  it("四位以内的数字括号（端口等）不算会话 id，保持正文色", () => {
+    expect(tokenizeRow("端口检查: [3797] 空闲").map((t) => t.style)).toEqual([undefined]);
+  });
+
+  it("级别词保持状态色，不随类别调暗", () => {
+    expect(tokenizeRow("[WARN] [orchestrator] 慢")).toEqual([
+      { text: "[WARN]", style: "yellow-bright" },
+      { text: " ", style: undefined },
+      { text: "[orchestrator]", style: "gray" },
+      { text: " 慢", style: undefined },
+    ]);
+    expect(tokenizeRow("[ERROR] [app_lib] 崩了")[0]?.style).toBe("red");
+  });
+
+  it("命令回显提示符 >>> 调暗", () => {
+    expect(tokenizeRow(">>> netstat -ano -p TCP")).toEqual([
+      { text: ">>>", style: "gray" },
+      { text: " netstat -ano -p TCP", style: undefined },
     ]);
   });
 });

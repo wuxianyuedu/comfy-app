@@ -46,11 +46,13 @@ function LogRowHarness({
     <div className="bg-canvas-deep border-border-strong w-225 max-w-full overflow-hidden rounded-md border">
       {entries.map((entry) => (
         <LogRow
+          density="default"
           entry={entry}
           expanded={expansion.isExpanded(entry.id)}
           key={entry.id}
           keyword={keyword}
           onToggleExpand={expansion.toggle}
+          showMeta
           style={{ minHeight: LOG_ROW_SINGLE }}
           wrap={wrap}
         />

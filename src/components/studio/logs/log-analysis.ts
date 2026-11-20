@@ -234,6 +234,13 @@ const LAUNCHER_LOG_RE =
   /^\[(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})\s+(?<hh>\d{2}):(?<mm>\d{2}):(?<ss>\d{2})\.(?<ms>\d{3})\]\s*(?<message>.*)$/;
 const APP_RUNTIME_LOG_RE =
   /^\[(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})\s+(?<hh>\d{2}):(?<mm>\d{2}):(?<ss>\d{2})\.(?<ms>\d{3})\]\s*\[(?<level>INFO|WARN|ERROR|DEBUG)\]\s*(?:\[(?<ns>[^\]]+)\]\s*)?(?<message>.*)$/;
+/** 壳自持日志（shell.log）行：`[YYYY-MM-DD][HH:mm:ss][LEVEL][target] 正文`。
+ *  与 LAUNCHER_LOG_RE（`[date HH:mm:ss.mmm] [LEVEL] …`）是两份形态：这里日期与时刻
+ *  各自包在括号里、中间无空格、无毫秒。此前它不匹配任何记录头，而行首的 `[` 又命中
+ *  「JSON 片段」续接判据，整份 shell.log 被并成一条记录——「壳日志有很多条，显示
+ *  只有单条」（ISSUE #4567）。target（Rust 模块路径）保留在正文里，由视图调暗。 */
+const SHELL_LOG_RE =
+  /^\[(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})\]\[(?<hh>\d{2}):(?<mm>\d{2}):(?<ss>\d{2})\]\[(?<level>[A-Z]+)\]\[(?<ns>[^\]]+)\]\s*(?<message>.*)$/;
 
 /**
  * 过滤常规 tRPC/RPC 调用计时日志（#294）：`[rpc] xxx 155ms {…}` 来自中间件，正常调用每几秒刷一整屏。
@@ -420,6 +427,31 @@ export function parseFileLogs(
       });
       continue;
     }
+    const sm = SHELL_LOG_RE.exec(head);
+    if (sm) {
+      const [, year, month, day, hh, mm, ss, lv, ns, msg] = sm;
+      /* 壳日志无毫秒位：毫秒补 0。同秒内的多行靠 seq 保持先后（时间线契约）。 */
+      const d = new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(hh),
+        Number(mm),
+        Number(ss),
+        0,
+      );
+      /* target（Rust 模块路径）是类别信息，保留在正文里、由视图调暗（#4567）。 */
+      const msgText = withRest((ns !== undefined && ns !== "" ? `[${ns}] ` : "") + (msg ?? ""));
+      push({
+        id: nextId(d.getTime()),
+        time: d.getTime(),
+        level: parseLogLevel(lv ?? "INFO"),
+        message: msgText,
+        source: "system",
+        ...originOf,
+      });
+      continue;
+    }
     push({
       id: nextId(now),
       time: now,
@@ -432,9 +464,14 @@ export function parseFileLogs(
   return entries;
 }
 
-/** 该行是不是「带时刻的日志记录头」（三种可解析形态之一）。 */
+/** 该行是不是「带时刻的日志记录头」（四种可解析形态之一）。 */
 function isLogLine(line: string): boolean {
-  return LOG_LINE_RE.test(line) || APP_RUNTIME_LOG_RE.test(line) || LAUNCHER_LOG_RE.test(line);
+  return (
+    LOG_LINE_RE.test(line) ||
+    APP_RUNTIME_LOG_RE.test(line) ||
+    LAUNCHER_LOG_RE.test(line) ||
+    SHELL_LOG_RE.test(line)
+  );
 }
 
 /**
