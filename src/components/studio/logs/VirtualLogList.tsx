@@ -9,7 +9,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useElementBox } from "~/components/ui/use-element-box";
 import { NEAR_BOTTOM_PX } from "~/components/ui/use-scroll-follow";
-import { layoutRows, LOG_ROW_SINGLE, scrollHeightOf, visibleRange } from "./log-virtual";
+import {
+  layoutRows,
+  LOG_MESSAGE_OVERHEAD,
+  LOG_ROW_SINGLE,
+  scrollHeightOf,
+  visibleRange,
+} from "./log-virtual";
 
 /** 渲染某一条日志行的回调：`entry` 是原始条目，`index` 是它在 `entries` 里的
  * **绝对下标**（同一行在窗口滑动后下标不变，便于稳定 key 与测试断言）。 */
@@ -74,6 +80,17 @@ export function VirtualLogList<T>({
     width: box?.clientWidth ?? 0,
   };
 
+  /* 实测高度校正表：估算的字符宽度系数只能取均值，临界长消息会差出一行 ——
+   * 行盒用 minHeight 渲染、内容撑开后在行盒的 ref 回调里实测回填，位置表随之
+   * 修正，多行消息不再被固定行高截断、与后一行重叠（ISSUE #4618）。键带上面板
+   * 宽度：同一消息在不同宽度下折行数不同，宽度变了旧实测自然失效（不用再开
+   * 一个 effect 去清）。 */
+  const [heightOverrides, setHeightOverrides] = useState<ReadonlyMap<string, number>>(new Map());
+  const heightOf = useCallback(
+    (message: string) => heightOverrides.get(`${viewport.width}:${message}`),
+    [heightOverrides, viewport.width],
+  );
+
   /* 整页行位置表（单调前缀和）：`start[i]` 必须对上前面所有行高之和，否则
    * `translateY` 与滚动条会各说各话。300 行乘法远低于一帧预算。 */
   const { rows, totalSize } = useMemo(
@@ -84,9 +101,12 @@ export function VirtualLogList<T>({
           id: getId?.(entry),
         })),
         wrap,
-        wrap ? viewport.width : 0,
+        /* 与 `LogPanel` 同一口径：从面板宽里扣掉时刻 / 级别徽标 / 来源等
+         * 非正文列的固定开销，再估软换行 —— 直接拿整宽会低估行数（ISSUE #4618）。 */
+        wrap ? Math.max(200, viewport.width - LOG_MESSAGE_OVERHEAD) : 0,
+        { heightOf },
       ),
-    [entries, getMessage, getId, wrap, viewport.width],
+    [entries, getMessage, getId, wrap, viewport.width, heightOf],
   );
   const { height: scrollHeight } = scrollHeightOf(totalSize);
 
@@ -141,9 +161,37 @@ export function VirtualLogList<T>({
     /* 滚动位置是渲染输入（决定窗口取哪一段），因此进 state 而非只留 ref。 */
     setScrollTop(el.scrollTop);
     /* 「用户有没有接管滚动」：离底超过阈值就退出跟随，给出可见出口（自动滚动
-     * 开关会相应取消勾选）。阈值复用 `use-scroll-follow` 的唯一定义。 */
+       开关会相应取消勾选）。阈值复用 `use-scroll-follow` 的唯一定义。 */
     setFollowing(el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX);
   }, [setFollowing]);
+
+  /* 实测校正：行盒只有 minHeight，多行内容会把它撑高 —— 行盒挂载 / 重渲染时
+   * 量一次实际高度，比估算高的按「宽度:消息」记入校正表（只增不减），位置表
+   * 下一轮用实测值。在 ref 回调里做（提交阶段元素已在树上），不走 effect
+   * setState；实测 == 估算后不再写入，循环自然收敛。jsdom 里 offsetHeight
+   * 恒 0，不触发。 */
+  const measureRow = useCallback(
+    (el: HTMLElement | null) => {
+      if (el === null) {
+        return;
+      }
+      const index = Number(el.dataset.logIndex);
+      const entry = entries[index];
+      if (entry === undefined) {
+        return;
+      }
+      const message = getMessage(entry);
+      const estimated = rows[index]?.size ?? 0;
+      const actual = el.offsetHeight;
+      const key = `${viewport.width}:${message}`;
+      if (actual > estimated + 1 && heightOverrides.get(key) !== actual) {
+        const next = new Map(heightOverrides);
+        next.set(key, actual);
+        setHeightOverrides(next);
+      }
+    },
+    [entries, getMessage, rows, heightOverrides, viewport.width],
+  );
 
   return (
     <div
@@ -174,8 +222,12 @@ export function VirtualLogList<T>({
               const index = rowWindow.start + offset;
               return (
                 <div
+                  data-log-index={index}
                   key={`log-${index}`}
-                  style={{ height: `${rows[index]?.size ?? LOG_ROW_SINGLE}px` }}
+                  ref={measureRow}
+                  /* minHeight 而非 height：多行内容撑开行盒（实测校正见上），
+                   * 不再被固定行高截断、与后一行重叠（ISSUE #4618）。 */
+                  style={{ minHeight: `${rows[index]?.size ?? LOG_ROW_SINGLE}px` }}
                 >
                   {renderRow(entry, index)}
                 </div>
