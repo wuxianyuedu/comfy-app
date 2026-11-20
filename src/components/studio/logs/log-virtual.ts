@@ -9,6 +9,28 @@
  * 必须与 `LogRow` 的 class 对齐。
  */
 import { clamp } from "~/lib/clamp";
+import { ceilDiv } from "~/lib/page-window";
+
+/** 行密度档（与 `log-display-prefs` 的偏好同一套值；ISSUE #4567 的「日志项间隔大小配置」）。
+ *  档位只改行的上下内边距，正文行高不变。 */
+export type LogDensity = "compact" | "standard" | "relaxed";
+
+/** 各档的**单侧**内边距像素（与 `LogRow` 的 `py-*` class 对齐：compact=py-0.5、standard=py-1、relaxed=py-2）。 */
+const DENSITY_PADDING: Record<LogDensity, number> = { compact: 2, standard: 4, relaxed: 8 };
+
+/** 正文一行的像素高度（`text-sm` + `leading-snug` = 14px 字号 × 1.375 ≈ 19），不含行内边距与分隔线。 */
+export const LOG_ROW_CONTENT = 19;
+
+/**
+ * 标准档的行高（原 {@link LOG_ROW_SINGLE} 的口径：正文 19 + `py-1` 上下 8 + 下边框 1）。
+ * 密度档的行高走 {@link rowHeightFor}；本常量保留给「不关心密度」的既有消费方。
+ */
+export const LOG_ROW_SINGLE = 28;
+
+/** 按密度给**普通日志行**的估算高度（虚拟化行盒高度；估算 ≥ 实际，不足会裁内容）。 */
+export function rowHeightFor(density: LogDensity): number {
+  return LOG_ROW_CONTENT + DENSITY_PADDING[density] * 2 + 1;
+}
 
 /**
  * 估算行高时从面板总宽扣掉「非正文列」的固定开销（时刻 + 级别徽标 + 来源 + 复制按钮 + 内边距 + 列间距，
@@ -16,8 +38,6 @@ import { clamp } from "~/lib/clamp";
  * `overflow-hidden` 裁掉（「超出边框看不全」）。取偏保守值——宁可多留空白，也不让内容跑到视口外。
  */
 export const LOG_MESSAGE_OVERHEAD = 260;
-
-export const LOG_ROW_SINGLE = 28;
 
 /** 换行显示时，**每一行文字**的像素高度（`leading-snug` 下的 14px 行高 = 19.25）。 */
 export const LOG_ROW_LINE = 19;
@@ -52,18 +72,24 @@ export const LOG_SCROLL_MAX = 8_000_000;
  * 换行符与软换行估算（软换行数由字符数除以每行容量，而容量取决于面板宽度）。这里只求「不低估」：低估会让
  * 下面几行被推到视口外，高估只是多留一点空白。
  */
-export function estimateRowHeight(message: string, wrap: boolean): number {
+export function estimateRowHeight(
+  message: string,
+  wrap: boolean,
+  density: LogDensity = "standard",
+): number {
   if (!wrap) {
-    return LOG_ROW_SINGLE;
+    return rowHeightFor(density);
   }
   const lines = Math.max(1, countLines(message));
-  return LOG_ROW_SINGLE + (lines - 1) * LOG_ROW_LINE;
+  return rowHeightFor(density) + (lines - 1) * LOG_ROW_LINE;
 }
 
 /**
  * 消息在面板里**至少**占几行。显式换行（`\n`，多行 JSON payload）逐段数；每段再按宽度拆软换行——容量按
- * **最窄的字**（中文 13px）算，`ceil(段长 × 13 / 可用宽度)` 是下界。`availableWidth` 取不到（jsdom /
- * 首帧）时只数显式换行：宁可少估也不能瞎估。
+ * **最窄的字**算。宽度按**码点求和**而不是「字符数 × 单一系数」：此前 13px 的单一系数对纯 ASCII 长行
+ * （实际 ≈8.4px/字符）会高估近一半行数，行盒被撑出成片空白——正是「内容一行、占了两行空间」的来源
+ * （ISSUE #4567）。系数取 ASCII 9 / 宽字符（CJK 等）15：仍略高于真实均值（估算不许低于实际，否则
+ * `overflow-hidden` 会裁内容），但不再成倍高估。
  */
 export function countLines(message: string, availableWidth = 0): number {
   const segments = message.split("\n");
@@ -78,7 +104,14 @@ export function countLines(message: string, availableWidth = 0): number {
   }
   let total = 0;
   for (const segment of segments) {
-    total += Math.max(1, Math.ceil((segment.length * 13) / availableWidth));
+    let widthUnits = 0;
+    for (const ch of segment) {
+      /* 界限 = CJK 部首扩展区起点（U+2E80）：之后的字符按宽字符计。字符串比较
+       * 对 BMP 字符与码点序一致——这里刻意不用数字字面量（数字分组分隔符的
+       * lint 档对 4~5 位数字给不出合法形态）。 */
+      widthUnits += ch >= "⺀" ? 15 : 9;
+    }
+    total += Math.max(1, ceilDiv(widthUnits, availableWidth));
   }
   return Math.max(1, total);
 }
@@ -93,6 +126,8 @@ export type RowLayout = {
 
 /** {@link layoutRows} 的两类**按 id 点名**的行（见下方说明）。 */
 export type LogLayoutOptions = {
+  /** 行密度（ISSUE #4567 的间隔配置）：普通行与折叠行的高度随它走。 */
+  density?: LogDensity;
   /** 已展开的行 id：固定为 {@link LOG_ROW_EXPANDED}。 */
   expandedIds?: ReadonlySet<string>;
   /**
@@ -114,12 +149,13 @@ export function layoutRows(
   availableWidth = 0,
   options: LogLayoutOptions = {},
 ): { rows: Array<RowLayout>; totalSize: number } {
-  const { expandedIds, singleLineIds } = options;
+  const { expandedIds, singleLineIds, density = "standard" } = options;
+  const base = rowHeightFor(density);
   /* `Array.from` 而不是 `new Array(n)`：后者在 lint 下是 `any[]`，会一路传染到
      下面的 `rows[i]` 赋值上。 */
   const rows: Array<RowLayout> = Array.from({ length: entries.length }, () => ({
     start: 0,
-    size: LOG_ROW_SINGLE,
+    size: base,
   }));
   let start = 0;
   for (const [i, entry] of entries.entries()) {
@@ -128,11 +164,11 @@ export function layoutRows(
     if (id !== undefined && id !== "" && expandedIds?.has(id) === true) {
       size = LOG_ROW_EXPANDED;
     } else if (id !== undefined && id !== "" && singleLineIds?.has(id) === true) {
-      size = LOG_ROW_SINGLE;
+      size = base;
     } else {
       /* 每行的行数只数一次：estimateRowHeight 与 countLines 都靠它推高度。 */
       const lines = wrap ? countLines(entry.message, availableWidth) : 1;
-      size = LOG_ROW_SINGLE + (lines - 1) * LOG_ROW_LINE;
+      size = base + (lines - 1) * LOG_ROW_LINE;
     }
     rows[i] = { start, size };
     start += size;

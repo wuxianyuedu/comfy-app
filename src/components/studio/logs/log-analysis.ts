@@ -235,6 +235,12 @@ const LAUNCHER_LOG_RE =
 const APP_RUNTIME_LOG_RE =
   /^\[(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})\s+(?<hh>\d{2}):(?<mm>\d{2}):(?<ss>\d{2})\.(?<ms>\d{3})\]\s*\[(?<level>INFO|WARN|ERROR|DEBUG)\]\s*(?:\[(?<ns>[^\]]+)\]\s*)?(?<message>.*)$/;
 
+/** 壳日志（Rust 侧 tracing 落盘）的记录头：`[日期][时刻][级别][模块] 正文`（ISSUE #4567）。
+ *  此前这个形态不被任何记录头正则命中，整份正文走裸文本兜底挤成**一条**多行记录（「壳日志很多条、
+ *  面板只有一条」的根源）；颜色也被无差别剥掉。级别取壳侧六级（TRACE/DEBUG/INFO/WARN/ERROR/FATAL）。 */
+const SHELL_LOG_RE =
+  /^\[(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})\]\[(?<hh>\d{2}):(?<mm>\d{2}):(?<ss>\d{2})\]\[(?<level>TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\]\s*(?<message>.*)$/;
+
 /**
  * 过滤常规 tRPC/RPC 调用计时日志（#294）：`[rpc] xxx 155ms {…}` 来自中间件，正常调用每几秒刷一整屏。
  * 带「失败」或 warn/error 级别的慢查询必须保留——它们不会命中这里的「常规 info 计时」判定。
@@ -420,6 +426,36 @@ export function parseFileLogs(
       });
       continue;
     }
+    const sm = SHELL_LOG_RE.exec(head);
+    if (sm) {
+      const [, year, month, day, hh, mm, ss, lv, msg] = sm;
+      const d = new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(hh),
+        Number(mm),
+        Number(ss),
+        0,
+      );
+      push({
+        id: nextId(d.getTime()),
+        time: d.getTime(),
+        /* 壳侧六级 → 面板四级：TRACE 与 DEBUG 同档（面板不设 trace），FATAL 归 error。 */
+        level:
+          lv === "TRACE" || lv === "DEBUG"
+            ? "debug"
+            : lv === "WARN"
+              ? "warn"
+              : lv === "ERROR" || lv === "FATAL"
+                ? "error"
+                : "info",
+        message: withRest(msg ?? ""),
+        source: "system",
+        ...originOf,
+      });
+      continue;
+    }
     push({
       id: nextId(now),
       time: now,
@@ -434,7 +470,12 @@ export function parseFileLogs(
 
 /** 该行是不是「带时刻的日志记录头」（三种可解析形态之一）。 */
 function isLogLine(line: string): boolean {
-  return LOG_LINE_RE.test(line) || APP_RUNTIME_LOG_RE.test(line) || LAUNCHER_LOG_RE.test(line);
+  return (
+    LOG_LINE_RE.test(line) ||
+    APP_RUNTIME_LOG_RE.test(line) ||
+    LAUNCHER_LOG_RE.test(line) ||
+    SHELL_LOG_RE.test(line)
+  );
 }
 
 /**

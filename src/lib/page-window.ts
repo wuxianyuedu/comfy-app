@@ -113,6 +113,18 @@ export function countAfterPage(total: number, page: number, pageSize: number): n
 export const LOG_MODAL_MAX_ROWS = 300;
 
 /**
+ * **向上取整除**：`ceil(numerator / denominator)` 的唯一实现。
+ *
+ * 分页 / 窗口切片家族里反复出现「总里数 ÷ 容量，向上取整」（总页数、按宽度
+ * 估出的软换行行数……）。它就是这一族算术的一员：与 {@link countAfterPage}
+ * 的分母钳制口径一致（分母 ≤ 0 视为 1，避免除 0 变 `Infinity`）。
+ */
+export function ceilDiv(numerator: number, denominator: number): number {
+  const safeDenominator = denominator > 0 ? denominator : 1;
+  return Math.ceil(numerator / safeDenominator);
+}
+
+/**
  * **尾部窗口**：恒取列表最后 `size` 条。
  *
  * 两个日志弹窗、`workflow-run-store`、`generation-log.server` 与

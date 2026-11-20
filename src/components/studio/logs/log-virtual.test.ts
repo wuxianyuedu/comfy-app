@@ -51,9 +51,10 @@ describe("行高估算", () => {
     expect(estimateRowHeight(long, true)).toBe(LOG_ROW_SINGLE);
   });
 
-  it("量到宽度时按最窄的字估软换行下界", () => {
-    /* 容量 130px / 每字 13px = 每行 10 字；25 字 → 3 行 */
-    expect(countLines("x".repeat(25), 130)).toBe(3);
+  it("量到宽度时按码点宽度求和估软换行（ASCII 窄、宽字符宽）", () => {
+    /* 25 个 ASCII 字符 × 9px = 225px；容量 130px → 2 行（旧的单系数 13px 会
+     * 高估成 3 行，行盒里留出一整行空白——ISSUE #4567）。 */
+    expect(countLines("x".repeat(25), 130)).toBe(2);
     /* 空串也是 1 行，不会是 0 行——0 行会让整行高度塌成 0。 */
     expect(countLines("", 130)).toBe(1);
   });
