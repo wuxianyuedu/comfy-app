@@ -546,19 +546,28 @@ jobs:
       - name: 装 Tauri 的 Linux 系统依赖（壳门禁要在本机编 Tauri）
         # fail-open 的双保险：输出不是字面 'false'（含本步没跑到 / 输出缺席）都装。
         if: steps.shell-face.outputs.shell != 'false'
-        timeout-minutes: 15
+        # 25 分钟 = 两次有界尝试的最坏墙钟（2×(180s+480s)+5s ≈ 22.1m）+ dpkg 收尾
+        # 与 shell 开销的余量（#4513）。
+        timeout-minutes: 25
         run: |
           # 2026-11-18（#4294）：GA runner 的 apt 镜像抖动频发——「找不到包」与
           # 「装到一半超时」轮流出现，一天内三次把在途 PR 卡死。#3589 的连接级
           # 重试之外，这里再加**一次整体重试**：第一次失败（含 index 拉到坏镜像）
-          # 后清掉 lists 重来一次；两次都失败才让这一格红。15 分钟步级超时罩住
-          # 两次尝试。
+          # 后清掉 lists 重来一次；两次都失败才让这一格红。
           # 2026-11-19（#4480）：install 显式留档（APT::Keep-Downloaded-Packages=true；
           # apt 对下载的 deb 默认装完即清）——deb 留在 /var/cache/apt/archives，
           # 被上一步的缓存收走；命中 ⇒ 这一步只解包不下载，不再付 13 分钟级的下载。
+          # 2026-11-20（#4513）：慢镜像拥塞是「连接活着、传输极慢」——单包 1~2 分钟、
+          # 成片 Ign 重试，连接级空闲超时（Acquire::*::Timeout）不触发，第一次尝试
+          # 就能把步级预算烧满、重试根本没机会发生。给每条命令加 timeout 上限
+          # （update 180s / install 480s）：拥塞时段第一次尝试下载到一半被掐，
+          # 已下载的完整 deb 留档、重试接着下；步级超时放宽到 25 分钟罩住两次
+          # 有界尝试。timeout 以 SIGTERM 掐掉 apt，若掐在解包段会留半配置的 dpkg
+          # ⇒ 重试前 dpkg --configure -a 收尾（|| true：没脏就不动，修不动也让
+          # 下一次尝试报真因）。
           for attempt in 1 2; do
-            if sudo apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 \
-              && sudo apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 -o APT::Keep-Downloaded-Packages=true \
+            if sudo timeout 180 apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 \
+              && sudo timeout 480 apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 -o APT::Keep-Downloaded-Packages=true \
                 libglib2.0-dev libatk1.0-dev libcairo2-dev libgdk-pixbuf-2.0-dev libpango1.0-dev libgtk-3-dev libdbus-1-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev build-essential libayatana-appindicator3-dev; then
               exit 0
             fi
@@ -567,8 +576,19 @@ jobs:
             fi
             echo "apt 安装第 ${attempt} 次失败，清理 lists 后重试一次"
             sudo rm -rf /var/lib/apt/lists/*
+            sudo dpkg --configure -a || true
             sleep 5
           done
+
+      # apt 以 root 跑（上面的 sudo），落包后 /var/cache/apt/archives 里的 deb 与
+      # partial/ 又回到 root 属主（partial 还是 0700）—— save 以 runner 身份打包，
+      # 读不到就是 Permission denied（#4513 现场：##[warning]Failed to save，
+      # tauri-linux-apt-archives-v1 永远存不进去 ⇒ 缓存兜底失效、每个碰壳的 PR 都
+      # 从零下载）。装完（或装挂了 / 超时了）把目录交回 runner 用户，save 才落得
+      # 进档。条件与 save 同一条：被取消的那一跑两者都不跑。
+      - name: deb 档目录交回缓存步（#4513）
+        if: ${{ !cancelled() && steps.shell-face.outputs.shell != 'false' }}
+        run: sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
 
       # 装挂了也落档（!cancelled() 而非 always()：被取消的那一跑不抢缓存上传）：
       # 已下载的 deb 是完整文件（apt 按校验和把关，残包不会被采用），下一次少付
