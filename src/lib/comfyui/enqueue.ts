@@ -16,6 +16,7 @@
 
 import { interrupt } from "./client";
 import { errorText } from "~/lib/error-message";
+import { killProcessTree } from "~/lib/process/kill-process-tree";
 import {
   state,
   log,
@@ -83,12 +84,12 @@ export async function cancelTask(taskId: string) {
   const cliProc = cliProcs.get(taskId);
 
   if (cliProc) {
-    try {
-      cliProc.kill("SIGKILL");
-    } catch {
-      /* ignore */
+    const pid = cliProc.pid;
+    if (pid !== undefined) {
+      /* 硬规则 3：整树回收走 killProcessTree，不单杀 leader——comfy-cli 若带出
+       * 子进程，单杀会留孤儿。失败不拦取消收口（状态照翻）。 */
+      await killProcessTree({ pid, detached: false, force: true }).catch(() => undefined);
     }
-
     cliProcs.delete(taskId);
   }
 

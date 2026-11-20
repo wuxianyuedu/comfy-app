@@ -26,6 +26,7 @@ import { configureExecutorFinalize } from "./executor-finalize";
 import { configureExecutorWs } from "./executor-ws";
 import { getView, interrupt, resolveComfyBase } from "./client";
 import { configureEnqueue } from "./enqueue";
+import { killProcessTree } from "~/lib/process/kill-process-tree";
 import { configureReaper, startReaper } from "./reaper";
 import { configureRunner } from "./runner-state";
 import { configureTraceLogPath } from "./trace";
@@ -68,6 +69,7 @@ export {
   getView,
   interrupt,
   isSchemaReady,
+  killProcessTree,
   logger,
   resolveComfyBase,
   startReaper,

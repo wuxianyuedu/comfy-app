@@ -191,6 +191,7 @@ function resolveDbFile(url) {
  * @property {any} cliProcs
  * @property {() => Promise<unknown>} interrupt
  * @property {(options?: any) => Promise<unknown>} claimAndDispatch
+ * @property {(opts: { pid: number, detached: boolean, force: boolean }) => Promise<unknown>} killProcessTree
  */
 
 // 运行时句柄：bootRuntime 成功后填充，claim tick 与测试钩子共用。
@@ -250,8 +251,12 @@ async function reconcileCancelled(runtime) {
       if (!proc) {
         continue;
       }
+      /* 硬规则 3：整树回收走 kill-process-tree，不单杀 leader。经 host-runtime
+       * 的再导出取用——入口不逐个 import src/lib 的 TS 源（图只在 host-runtime
+       * 一处声明，契约见 executor-host-artifact.test.ts）。 */
       try {
-        proc.kill("SIGKILL");
+        // oxlint-disable-next-line no-await-in-loop -- 脚本按步串行（命令行/进程编排），并行会打乱启动与回收顺序
+        await runtime.killProcessTree({ pid: proc.pid, detached: false, force: true });
       } catch {
         /* ignore：与 cancelTask 同形——进程可能已自己退了 */
       }
@@ -340,6 +345,7 @@ async function bootRuntime() {
     cliProcs: graph.cliProcs,
     interrupt: graph.interrupt,
     claimAndDispatch: graph.claimAndDispatchOnce,
+    killProcessTree: graph.killProcessTree,
   };
   writeLine(
     "runtime inject-ok seams=runner+cli+finalize+ws+enqueue+reaper(owner=host)+dispatch(owner=host)+trace",
