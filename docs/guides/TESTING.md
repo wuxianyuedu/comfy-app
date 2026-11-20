@@ -9,7 +9,7 @@
 ## 快速开始
 
 ```bash
-pnpm test               # 全量单测（vitest run，约 10~16 分钟，8 worker）
+pnpm test               # 全量单测（vitest run；并发由 scripts/ci/ci-load.mjs 按平台档推导——本地 16 核 ⇒ 8 worker，约 10~16 分钟）
 pnpm test:coverage      # 同一套全量 + v8 覆盖率与棘轮门槛
 pnpm check:all          # 一键完整门禁：typecheck / eslint 零警告 / 格式棘轮 / 全量+覆盖率
 pnpm typecheck          # tsc --noEmit
@@ -21,6 +21,12 @@ pnpm run build          # 产物级护栏（build + 剥私有输入 + 数产物 
 
 - **别默认用 `--no-file-parallelism` 跑全量**：串行要 2~3 小时。它的正确用途是给一条红
   **定性**（串行也红才是真红，见规范 §11.13）。
+- **要跑一次全量，优先派 GA**（ISSUE #4644 / 规范 §13.5.23）：
+  `node scripts/ci/ci-ga-dispatch.mjs --preset unit [--sha <sha>]` 落到 GA 的
+  `oneshot-unit.yml`（`--sha` 可指某张 PR 的 head），或不赶时间就等定时的
+  `每日单元测试` 那一跑——两跳与本地跑的是**同一份判据**，本机不必付整面墙钟。
+  本地 `pnpm test` / `pnpm run test:coverage` 仍是合法入口（跑绿照记新鲜度账），
+  常规用途收窄为改完代码的快速自检、与红的隔离复跑定性。
 - 提交时不必手动跑这些：`.githooks/pre-commit` 已覆盖提交自身的形态判据；**受影响用例**
   （固定守护清单 + 沿静态 import 图解析出的那一层）2026-10-20 起由平台侧执行，
   2026-11-02 起并入每日全量单测（ISSUE #3052：增量面是全量子集，规范 §13.5.8 / §13.5.25），
