@@ -430,15 +430,57 @@ describe("WorkflowModelTagRepository", () => {
     const rows = await workflowTemplateRepository.listForUser("u1");
     expect(rows).toHaveLength(1);
     const row: Record<string, unknown> = { ...rows[0]! };
-    /* 判据是「列投影真的生效」而不是「值恰好为空」：`select()` 会把 positions
-     * 取出来，投影不会 —— 两种写法下 `row.positions` 都为 `undefined`，所以这里断
-     * 的是**键不在行对象上**（`"positions" in row`）。真正要拦的回归是有人把
-     * `LIST_ROW_COLUMNS` 换回 `select()`，那样这个键会重新出现。 */
+    /* 判据是「列投影真的生效」而不是「值恰好为空」：`select()` 会把大列
+     * 取出来，投影不会 —— 两种写法下 `row.positions` / `row.rawJson` 都为
+     * `undefined`，所以这里断的是**键不在行对象上**。真正要拦的回归是有人把
+     * `LIST_ROW_COLUMNS` 换回 `select()`，那样这些键会重新出现（#4557：
+     * rawJson 单行可达数 MB，库大时列表线性变慢的存储侧根源）。 */
     expect("positions" in row).toBe(false);
+    expect("rawJson" in row).toBe(false);
     // 列表页真正要用的列一个都不能少（少一列 = 列表静默缺字段）。
     expect(row.id).toBe("wt-pos");
     expect(typeof row.taskType).toBe("string");
-    expect(row.rawJson).toEqual({ nodes: [{ id: "1", type: "KSampler" }] });
+    /* hasRaw 物化列：seed 没带（NULL）→ 列表查询惰性回填，按 rawJson 形状判真。 */
+    expect(row.hasRaw).toBe(true);
+  });
+
+  it("hasRaw 物化：写入 rawJson 时随批更新，存量 NULL 行由列表查询回填", async () => {
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    /* seed 默认带 RAW 原件，但**不写 hasRaw** —— 模拟加列前的存量行。 */
+    seedWorkflowTemplate(tdb, { id: "wt-legacy", userId: "u1" });
+    seedWorkflowTemplate(tdb, {
+      id: "wt-empty",
+      userId: "u1",
+      rawJson: null,
+      name: "空原件行",
+    });
+
+    // 回填：nodes 非空数组 → true；rawJson 为 null → false。
+    await workflowTemplateRepository.listForUser("u1");
+    const legacy = await workflowTemplateRepository.findById("wt-legacy");
+    const emptyRow = await workflowTemplateRepository.findById("wt-empty");
+    expect(legacy?.hasRaw).toBe(true);
+    expect(emptyRow?.hasRaw).toBe(false);
+
+    // 写入 rawJson 时随批物化：清空原件 → false。
+    await workflowTemplateRepository.update("wt-legacy", { rawJson: null });
+    expect((await workflowTemplateRepository.findById("wt-legacy"))?.hasRaw).toBe(false);
+    // patch 不带 rawJson = 该列不动，hasRaw 保持原值。
+    await workflowTemplateRepository.update("wt-legacy", { name: "改名不动原件" });
+    expect((await workflowTemplateRepository.findById("wt-legacy"))?.hasRaw).toBe(false);
+    // 再写回非空原件 → true。
+    await workflowTemplateRepository.update("wt-legacy", {
+      rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
+    });
+    expect((await workflowTemplateRepository.findById("wt-legacy"))?.hasRaw).toBe(true);
+    // createImported 同口径物化。
+    const created = await workflowTemplateRepository.createImported({
+      userId: "u1",
+      name: "导入行",
+      taskType: "T2I",
+      rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
+    });
+    expect(created.hasRaw).toBe(true);
   });
 });
 

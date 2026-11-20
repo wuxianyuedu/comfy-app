@@ -1,0 +1,1 @@
+ALTER TABLE `workflowTemplate` ADD `hasRaw` integer;
