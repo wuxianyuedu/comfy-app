@@ -1,0 +1,3 @@
+## Fixed
+
+- **「受影响用例」选不中「读源文件当断言输入」的门禁用例（#4648）**：`tests/check-file-structure.test.ts` 把 `src-tauri/src/lib.rs` / splash 三副本用 `join(ROOT, "src-tauri", "src", "lib.rs")` 这类**拼出来的路径**读取，既不在静态 import 图里（`.rs`/`.html` 也不是解析目录与扩展名），又不是整串字面量 ⇒ #4591 改尺寸时 PR 漏跑该用例，漂移一直到每日全量才暴露（#4642）。现在用例可在文件头写 `// @affected-source <仓库相对路径>`（结尾 `/` 表示子树）显式声明源依赖，选择器新增第⑥条判据把它纳入增量面；`declaredSourcesOf()` 是解析的唯一出处，另有存在性守卫拦「写错路径 = 永远命不中」。图辅助层（声明解析 + 反向遍历）拆进 `scripts/affected-tests/affected-graph.mjs`，判决链本体从 899 行降到 878 行、过 §12.6 R5 的 900 行硬闸。已给 `tests/check-file-structure.test.ts` 声明 `src-tauri/`、`public/splash.html`、`src/app/layout.tsx`，实测改 `src-tauri/src/lib.rs` 会选中它并念出「显式源依赖」。规范 §13.5.8、AGENTS 与钩子注释里的「五条判据」同步改成六条，并写清「未声明的拼路径仍抓不到」。
