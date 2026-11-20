@@ -21,6 +21,7 @@ import {
   RENAME_RETRY_DELAYS_MS,
   buildDownloadUrl,
   describeBuildInfo,
+  describeBuiltAt,
   describeRenameFailure,
   downloadToBuffer,
   findRunningProcessesByImage,
@@ -391,7 +392,16 @@ describe("构建信息：取壳时同取、展示并对账（ISSUE #4056）", ()
     });
     expect(result.code).toBe(0);
     expect(fs.readFileSync(path.join(dir, DEFAULT_OUT), "utf8")).toBe(EXE);
-    expect(result.out).toContain("构建信息：构建时间 2026-11-16T02:41:12Z");
+    /* 构建时间按本地时区展示并保留 UTC 原值（#4653）：期望串用同一套本地字段
+     * 重算，任何时区的 runner 上都成立。 */
+    const at = new Date("2026-11-16T02:41:12Z");
+    const p = (n: number) => String(n).padStart(2, "0");
+    const local =
+      `${at.getFullYear()}-${p(at.getMonth() + 1)}-${at.getDate()} ` +
+      `${p(at.getHours())}:${p(at.getMinutes())}:${p(at.getSeconds())}`;
+    expect(result.out).toContain(
+      `构建信息：构建时间 ${local}（本地；UTC 原值 2026-11-16T02:41:12Z）`,
+    );
     expect(result.out).toContain(`commit ${"a".repeat(12)}`);
     expect(result.out).toContain("run 4242");
     expect(result.out).toContain("校验：sha256 一致 · 大小一致（11 字节）");
@@ -447,6 +457,20 @@ describe("构建信息：取壳时同取、展示并对账（ISSUE #4056）", ()
     expect(bad.warn).toBe("");
     const empty = describeBuildInfo(Buffer.from("{}"), actual);
     expect(empty.info).toContain("没有可读字段");
+  });
+
+  it("describeBuiltAt：ISO 转本地时区并保留 UTC 原值；非法文本原样回落（#4653）", () => {
+    /* 期望串用同一套本地字段重算：任何时区的 runner 上都成立（UTC runner 与
+     * UTC+8 本机各自算各自的本地值，输出与输入是同一时刻）。 */
+    const at = new Date("2026-11-16T02:41:12Z");
+    const p = (n: number) => String(n).padStart(2, "0");
+    const local =
+      `${at.getFullYear()}-${p(at.getMonth() + 1)}-${at.getDate()} ` +
+      `${p(at.getHours())}:${p(at.getMinutes())}:${p(at.getSeconds())}`;
+    expect(describeBuiltAt("2026-11-16T02:41:12Z")).toBe(
+      `${local}（本地；UTC 原值 2026-11-16T02:41:12Z）`,
+    );
+    expect(describeBuiltAt("不是时间")).toBe("不是时间");
   });
 });
 

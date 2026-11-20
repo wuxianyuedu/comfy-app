@@ -29,6 +29,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { localStampOf } from "../launcher-core/log.mjs";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "../..");
@@ -423,12 +424,12 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
     return null;
   }
   if ((track.dirty ?? []).length === 0) {
-    return `今天还没有自证 —— 上一次跑绿在 "${at.toISOString()}"，不是今天。${how}`;
+    return `今天还没有自证 —— 上一次跑绿在 "${localStampOf(at)}"，不是今天。${how}`;
   }
   if (since) {
     return (
       `今天的提交动过这一档的输入面（${track.dirty.join(" / ")}），而它还没有自证 —— ` +
-      `上一次跑绿在 "${at.toISOString()}"，早于当天的第一次改动。${
+      `上一次跑绿在 "${localStampOf(at)}"，早于当天的第一次改动。${
         how
       }${track.dirtyHow ? `\n              若这次改动确实不吃这一档：\`${track.dirtyHow}\`。` : ""}`
     );
@@ -438,7 +439,7 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
     return null;
   }
   return (
-    `已经 ${days} 天没有自证（上一次跑绿在 "${at.toISOString()}"），` +
+    `已经 ${days} 天没有自证（上一次跑绿在 "${localStampOf(at)}"），` +
     `超过了 ${Math.round(track.graceMs / 86_400_000)} 天的宽限。${
       how
     }${track.dirtyHow ? `\n              若近期改动确实不吃这一档：\`${track.dirtyHow}\`。` : ""}`

@@ -69,6 +69,24 @@ export function localTimestamp(at = new Date()) {
   );
 }
 
+/** 来源不定的时刻值 → 本地可读时间戳；解析不了**原样返回**，不抛。
+ *
+ *  「给人看的输出」统一走这里（ISSUE #4654）：平台返回的 ISO 串、文件 mtime、
+ *  毫秒数都可能直接进终端 / 落盘正文，原样打印 UTC（`…T11:50…Z`）会与 CNB
+ *  页面 / 本机时钟差 8 小时（#4653 同族）。转不动（缺令牌的占位串、旧文件里
+ *  的非常量）就原样给出，由调用方的既有话术兜底。
+ *
+ * @param {string | number | Date} value ISO 串 / 毫秒数 / Date
+ * @returns {string} 本地 `YYYY-MM-DD HH:mm:ss.mmm`，或原值文本
+ */
+export function localStampOf(value) {
+  if (value instanceof Date) {
+    return localTimestamp(value);
+  }
+  const ms = typeof value === "number" ? value : Date.parse(String(value));
+  return Number.isFinite(ms) ? localTimestamp(new Date(ms)) : String(value ?? "");
+}
+
 /** 按次命名的运行戳（文件名安全：去掉冒号、点与空格）。
  * @param {Date} [at] @returns {string} */
 export function runStamp(at = new Date()) {

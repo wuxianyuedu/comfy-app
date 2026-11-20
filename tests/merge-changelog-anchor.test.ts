@@ -28,8 +28,15 @@ function fixture(
   const root = mkdtempSync(path.join(tmpdir(), "merge-changelog-"));
   tempDirs.push(root);
   mkdirSync(path.join(root, "scripts", "docs"), { recursive: true });
+  mkdirSync(path.join(root, "scripts", "launcher-core"), { recursive: true });
   mkdirSync(path.join(root, "changelog.d"), { recursive: true });
   copyFileSync(SCRIPT, path.join(root, "scripts", "docs", path.basename(SCRIPT)));
+  /* 被测脚本 import 的本地时间工具（#4654）随夹具一起落进临时仓，否则
+   * 临时检出里 ERR_MODULE_NOT_FOUND。 */
+  copyFileSync(
+    path.resolve(import.meta.dirname, "../scripts/launcher-core/log.mjs"),
+    path.join(root, "scripts", "launcher-core", "log.mjs"),
+  );
   writeFileSync(path.join(root, "CHANGELOG.md"), changelog);
   for (const [name, body] of Object.entries(fragments)) {
     writeFileSync(path.join(root, "changelog.d", name), body);

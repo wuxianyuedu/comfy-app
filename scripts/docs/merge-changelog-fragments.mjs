@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { localStampOf } from "../launcher-core/log.mjs";
 /**
  * merge-changelog-fragments.mjs —— 把 changelog.d 的碎片并入 CHANGELOG.md
  *
@@ -304,7 +305,7 @@ function mergeInto(changelogText, fragments, version, anchorRev) {
   }
 
   const heading = version
-    ? `## [${version}] - ${new Date().toISOString().slice(0, 10)}`
+    ? `## [${version}] - ${localStampOf(new Date()).slice(0, 10)}`
     : `## ${target.title}`;
 
   /* 锚刷成「本轮条目里最早的那一个」,并保留原来那句 slug(它是**这一段从哪儿开始**的

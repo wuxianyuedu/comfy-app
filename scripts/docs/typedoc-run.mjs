@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { localStampOf } from "../launcher-core/log.mjs";
 // @ts-nocheck -- typedoc 的「跑 + 验 + 重试」唯一实现（`pnpm run docs` 与 `docs:check` 共用）
 /**
  * typedoc-run.mjs — typedoc 的**唯一调用方式**：跑一次 → 验「这一次真的写了」 →
@@ -150,7 +151,11 @@ export function judgeRun(run, { after, startedAt }) {
   if (run.error) {
     return {
       ok: false,
-      reason: `typedoc did not start (${run.error.code ?? "UNKNOWN"}): ${run.error.message}`,
+      /* code 不在 Error 的声明面上（Node 的系统错误才带）：用 in 收窄取值，
+       * 不做 any 断言（no-unsafe-type-assertion 硬闸）。 */
+      reason: `typedoc did not start (${
+        "code" in run.error ? String(run.error.code) : "UNKNOWN"
+      }): ${run.error.message}`,
     };
   }
   if (run.status !== 0) {
@@ -171,8 +176,8 @@ export function judgeRun(run, { after, startedAt }) {
       ok: false,
       reason:
         `exit 0 but nothing was written this run ` +
-        `(${PROBE_REL} mtime ${new Date(after.probeMtimeMs).toISOString()} ` +
-        `< run start ${new Date(startedAt).toISOString()})`,
+        `(${PROBE_REL} mtime ${localStampOf(after.probeMtimeMs)} ` +
+        `< run start ${localStampOf(startedAt)})`,
     };
   }
   return { ok: true, reason: "" };
@@ -216,7 +221,7 @@ async function spawnTypedoc(entry, outDir, root) {
     });
     /** @type {string[]} */
     const lines = [];
-    const keep = (buf) => {
+    const keep = (/** @type {unknown} */ buf) => {
       lines.push(...String(buf).split(/\r?\n/));
       if (lines.length > 400) {
         lines.splice(0, lines.length - 400);
@@ -245,7 +250,15 @@ async function spawnTypedoc(entry, outDir, root) {
   });
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (/** @type {number} */ ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * 产物快照的形状（`snapshotOutput` 的返回）：下面 `@returns` 里两处引用它。
+ * 单层引用让 JSDoc 的嵌套泛型不再叠 `ReturnType<typeof …>`——tsc 的 JSDoc
+ * 解析在双层嵌套处报 `> expected`（#4654 现场），语义与原来逐字等价。
+ *
+ * @typedef {ReturnType<typeof snapshotOutput>} TypedocOutputSnapshot
+ */
 
 /**
  * 跑 typedoc（含重试与产物校验），给结论。
@@ -259,7 +272,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  *        起进程的注入缝：typedoc 冷跑以百秒计（现值取法见规范 §13.5.17），契约测试不可能真跑它，于是把
  *        「起了但没写」这种现场直接喂进来（见 `tests/typedoc-run.test.ts`）。
  * @param {(msg: string) => void} [opts.onProgress] 每次尝试的结论（默认打到 stderr）
- * @returns {Promise<{ok: boolean, outDir: string, attempt: number, total: number, files: number, reason: string, log: string, before: ReturnType<typeof snapshotOutput>, after: ReturnType<typeof snapshotOutput}>} 结论对象：`ok` 成没成、`attempt` 第几次成的（失败时等于最后一次）、`files` 产物文件数、`reason` 没成的原因（成功时是空串）、`log` 日志尾巴、`before` / `after` 跑前与跑后的产物快照。
+ * @returns {Promise<{ok: boolean, outDir: string, attempt: number, total: number, files: number, reason: string, log: string, before: TypedocOutputSnapshot, after: TypedocOutputSnapshot}>} 结论对象：`ok` 成没成、`attempt` 第几次成的（失败时等于最后一次）、`files` 产物文件数、`reason` 没成的原因（成功时是空串）、`log` 日志尾巴、`before` / `after` 跑前与跑后的产物快照。
  *   两个快照写成 `ReturnType<typeof snapshotOutput>` 而不是 `object`（同文件
  *   `judgeRun` 的入参早就是这个引用）：`object` 会把快照的三个字段抹掉，消费点
  *   （`generate-api-docs.mjs` 打 `files before=/after=`）在声明面上取不到自己
