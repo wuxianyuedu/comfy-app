@@ -452,18 +452,12 @@ describe("configureExecutorCli 接缝", () => {
   });
 });
 
-/* ── #4189：comfy-cli v1.24.0+ 用法升级（client-id / 部分执行）─────────────
+/* ── #4189：comfy-cli v1.24.0+ 用法升级（部分执行）；#4599：--client-id 退场 ──
  * 纯函数断言，dynamic import 同上（不拖累上面的静态用例）。 */
-describe("comfy-cli run 参数构造（#4189）", () => {
-  it("client id 按任务拼接（ComfyUI 侧按它对账本次提交）", async () => {
-    const mod = await import("./executor-cli");
-    expect(mod.comfyCliClientId("task-123")).toBe("comfy-app-task-123");
-  });
-
-  it("基础参数保持既有口径，--client-id 随提交下发", async () => {
+describe("comfy-cli run 参数构造（#4189 / #4599）", () => {
+  it("基础参数保持既有口径；不下发 --client-id（1.26.0 起与 --wait 互斥）", async () => {
     const mod = await import("./executor-cli");
     const args = mod.buildComfyCliRunArgs({
-      clientId: "comfy-app-t1",
       host: "127.0.0.1",
       port: 8188,
       workflowFile: "temp/comfy-cli/wf-t1.json",
@@ -482,25 +476,22 @@ describe("comfy-cli run 参数构造（#4189）", () => {
       "127.0.0.1",
       "--port",
       "8188",
-      "--client-id",
-      "comfy-app-t1",
       "--no-notify",
       "--timeout",
       "600",
     ]);
+    expect(args).not.toContain("--client-id");
   });
 
   it("outputNodeIds 逐个追加可重复的 --output-node-ids；缺省一个都不加", async () => {
     const mod = await import("./executor-cli");
     const base = mod.buildComfyCliRunArgs({
-      clientId: "c",
       host: "127.0.0.1",
       port: 8188,
       workflowFile: "wf.json",
     });
     expect(base.filter((a) => a === "--output-node-ids")).toHaveLength(0);
     const partial = mod.buildComfyCliRunArgs({
-      clientId: "c",
       host: "127.0.0.1",
       port: 8188,
       workflowFile: "wf.json",

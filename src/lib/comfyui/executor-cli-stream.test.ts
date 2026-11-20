@@ -124,6 +124,20 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
     expect(onProgress).toHaveBeenCalledWith(25, undefined);
   });
 
+  it("queued 事件把 cli 回报的 client_id 带进提交日志（ISSUE #4599：对账标识改由 cli 回报）", () => {
+    const logs: Array<string> = [];
+    const { p } = mk({ log: (_t, _lv, msg) => logs.push(msg) });
+    p.sink('{"type":"queued","prompt_id":"p1","client_id":"cli-gen-abc"}\n');
+    expect(
+      logs.some((m) => m.includes("prompt_id: p1") && m.includes("client_id: cli-gen-abc")),
+    ).toBe(true);
+    /* 事件不带 client_id（旧版 cli）时日志不添空段 */
+    const logs2: Array<string> = [];
+    const { p: p2 } = mk({ log: (_t, _lv, msg) => logs2.push(msg) });
+    p2.sink('{"type":"queued","prompt_id":"p2"}\n');
+    expect(logs2.some((m) => m.includes("prompt_id: p2") && !m.includes("client_id"))).toBe(true);
+  });
+
   it("progress 事件带 node 时透传当前节点步数（3-C D1：调用方落 progressNode）", () => {
     const { p, onProgress } = mk();
     p.sink('{"type":"progress","node":"76:69","completed":3,"total":25}\n');

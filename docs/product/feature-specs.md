@@ -489,8 +489,7 @@
 - 行为与验收：勾选清单来自工作流的对外输出；子图内部条目按
   「宿主id:内部id」拼成 comfy-cli 展开后的节点 id（`cliOutputNodeId`）。
   不勾选 = 整图执行，行为与从前逐字一致。提交后任务日志可见
-  「部分执行：只跑输出节点 …」与完整命令行（含按任务拼接的 `--client-id`，
-  ComfyUI 侧队列 / 日志按它对账本次提交）；comfy-cli 回报
+  「部分执行：只跑输出节点 …」与完整命令行；comfy-cli 回报
   `partial_execution_targets_ignored`（服务端忽略目标按全图执行）时，执行
   日志以 warn 落出。id 不存在或不是输出节点时，由 comfy-cli 提交前报
   `invalid_output_node_ids`。排查顺序（validate → 部分执行 → jobs 跟踪）

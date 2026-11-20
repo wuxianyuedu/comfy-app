@@ -213,10 +213,14 @@ POSIX 上 `python3 -m venv` 缺 `ensurepip`（Debian/Ubuntu 系在单独的 `pyt
    `run/comfy-cli-setup.json`（`{ phase, message, done, error, updated_at }`）。
 
 **执行链的提交参数（comfy-cli v1.24+）**：`executor-cli.ts` 的 `comfy run` 固定带
-`--client-id comfy-app-<taskId>`（按任务拼接，ComfyUI 侧队列 / 历史与服务端日志
-可据此对账本次提交——此前 cli 自生成随机 id，两边对不上号），并支持
+`--wait`（进度与收口事件经 stdout NDJSON 流回，是进度/收口流水线的承重参数），并支持
 `--output-node-ids`（可重复）做部分执行：工作流库「实际使用」页签勾选输出后只跑
-目标分支及其依赖子图。参数构造收在纯函数 `buildComfyCliRunArgs`，部分执行回执
+目标分支及其依赖子图。**不带 `--client-id`**（ISSUE #4599）：comfy-cli 1.26.0 起把它按
+「借用的 client id」处理——本次运行的事件会定向给那个 client，`--wait` 下 cli 自己的
+watcher socket 收不到事件（静默挂到超时），因此 cli 提前拒绝该组合
+（`client_id_rejected`，reason=wait）。ComfyUI 侧对账改用 cli 在 `queued` 事件里回报的
+自生成 `client_id`，由 `executor-cli-stream.ts` 带进提交成功日志行。参数构造收在纯函数
+`buildComfyCliRunArgs`，部分执行回执
 （`partial_execution` / `partial_execution_targets_ignored`）由
 `executor-cli-stream.ts` 落进任务日志。排查顺序与命令示例见
 `docs/guides/comfy-cli-debug.md`。
