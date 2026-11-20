@@ -27,6 +27,12 @@ const { test, expect } = defineGateRepo({
       to: "scripts/freshness/freshness-ledger.mjs",
     },
     {
+      /* freshness-ledger 的本地时间展示（#4654）import 这份工具，少拷则
+       * 临时检出里 ERR_MODULE_NOT_FOUND（它只依赖 node:fs/path，链路闭合）。 */
+      from: "scripts/launcher-core/log.mjs",
+      to: "scripts/launcher-core/log.mjs",
+    },
+    {
       from: "scripts/freshness/freshness-ledger-sync.mjs",
       to: "scripts/freshness/freshness-ledger-sync.mjs",
     },
