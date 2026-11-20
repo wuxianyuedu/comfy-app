@@ -131,6 +131,13 @@ export type LogLayoutOptions = {
   /** 已展开的行 id：固定为 {@link LOG_ROW_EXPANDED}。 */
   expandedIds?: ReadonlySet<string>;
   /**
+   * **实测高度出口**（按消息原文查询）：估算的字符宽度系数只能取均值，临界长消息会差出一行 ——
+   * 行盒用 `minHeight` 渲染、内容撑开后实测回填，位置表用实测值，多行消息不再被固定行高
+   * 截断、与后一行重叠（ISSUE #4618）。键用消息原文而不是下标：尾窗滑动时下标会移，
+   * 消息与高度一一对应（同文同高）。
+   */
+  heightOf?: (message: string) => number | undefined;
+  /**
    * 折叠态**强制单行**的行 id（comfy-cli 原始 JSON 行）。这类行的完整原文（可能几十 KB、不含换行符）在
    * `wrap` 下会被 `countLines` 按宽度估成几百行——既是错的显示（原文本该折起）也是错的滚动长度。
    * 折叠态恒为一行摘要，完整内容交给展开态，因此不参与换行估高。
@@ -142,6 +149,7 @@ export type LogLayoutOptions = {
  * 估算整页每一行的位置与高度。**整页算一遍**而不是按需累加：位置是单调前缀和，`start[i]` 必须对得上
  * `sum(size[0..i-1])`，否则 `translateY` 与滚动条各说各话；整页 2000 次乘法远低于一帧预算（实测 < 1ms）。
  * `options` 的两类行按 **id** 点名（不用下标）：分页窗口随新日志前移，下标不稳定，而 id 与日志一一对应。
+ * 实测出口（`heightOf`）按**消息原文**查询，同理不受下标滑动影响。
  */
 export function layoutRows(
   entries: ReadonlyArray<{ id?: string; message: string }>,
@@ -149,7 +157,7 @@ export function layoutRows(
   availableWidth = 0,
   options: LogLayoutOptions = {},
 ): { rows: Array<RowLayout>; totalSize: number } {
-  const { expandedIds, singleLineIds, density = "standard" } = options;
+  const { expandedIds, singleLineIds, heightOf, density = "standard" } = options;
   const base = rowHeightFor(density);
   /* `Array.from` 而不是 `new Array(n)`：后者在 lint 下是 `any[]`，会一路传染到
      下面的 `rows[i]` 赋值上。 */
@@ -169,6 +177,12 @@ export function layoutRows(
       /* 每行的行数只数一次：estimateRowHeight 与 countLines 都靠它推高度。 */
       const lines = wrap ? countLines(entry.message, availableWidth) : 1;
       size = base + (lines - 1) * LOG_ROW_LINE;
+      /* 实测校正只**向上**修普通行（行盒是 minHeight，实际高度不会低于估算）；
+       * 展开行 / 强制单行的口径另有出处，不随实测变。同文同高。 */
+      const measured = heightOf?.(entry.message);
+      if (measured !== undefined && measured > size) {
+        size = measured;
+      }
     }
     rows[i] = { start, size };
     start += size;
