@@ -109,7 +109,8 @@
  *   node scripts/gates/check-format.cjs --report    # 只出清单不判失败(盘点用,照旧全库)
  *   node scripts/gates/check-format.cjs --staged    # 判暂存面(人的动作:提交前自查)
  *                                           #   合并态(MERGE_HEAD 在场)下暂存面 = 相对第一父的
- *                                           #   全量差异,会收窄到本分支带来的那份(ISSUE #2747)
+ *                                           #   全量差异,收窄:剔掉与 MERGE_HEAD 逐字相同的文件
+ *                                           #   (ISSUE #2747 立;#4586 修掉收窄的漏判,见下)
  *
  * ── `--staged` / `--changed` 的输入面：两份扫描面怎么分（ISSUE #2979）─────────
  *
@@ -399,6 +400,44 @@ function unstagedOverlap(hits) {
 }
 
 /**
+ * 合并态（`MERGE_HEAD` 在场）下，「暂存面里**不是原样来自对方分支**」的那批路径。
+ *
+ * 为什么要在合并态收窄（ISSUE #2747）：合并未提交时 `git diff --cached` 是**相对
+ * 第一父提交（合并前的自己）**的全量差异 —— 也就是整份对方分支的改动面。对方分支上
+ * 任何存量未格式化文件都会被点名为「本次带来的」而阻断一次与本 PR 无关的解冲突
+ * （被点名的那些相对对方分支是**零 diff**）。
+ *
+ * 为什么判面 = 「与 MERGE_HEAD 逐字不同的那批」（ISSUE #4586 修掉的漏判）：#2747 的
+ * 原始实现按「本分支相对分叉点以来的改动」（`resolveChangedFiles()`）求交集，但
+ * 分叉点在对方分支前进之后就不含**解冲突时新建 / 新写**的文件 —— 那批文件在暂存面
+ * （相对第一父）里、却不在分支改动面里，被悄悄滤出判据（现场：合并提交 48cea7615
+ * 解冲突时新建的 `log-display-prefs.test.ts` 本地绿、GA 的 `--changed` 红）。改成
+ * 直接与 `MERGE_HEAD` 逐字比对：对方带来的（index 与 MERGE_HEAD 相同，对方的 CI 已
+ * 判过）剔掉；本侧改动、解冲突时改写 / 新建的文件全部留在判面里 —— 与 GA 侧
+ * `--changed` 档（合并之后按 merge-base 三点 diff）对同一批文件给出同判。
+ *
+ * 实现：`git diff --cached MERGE_HEAD --name-only` 列出「index 与 MERGE_HEAD 不同」
+ * 的路径；暂存面里不在这张清单里的就是原样来自对方的。与 `stagedFiles()` 同一把尺子
+ * （`core.quotePath=false` + POSIX 路径）。读不出来返回 null ⇒ 调用方 fail-closed。
+ *
+ * @returns {Set<string> | null} 与 MERGE_HEAD 不同的暂存路径集合，或 null = 没读到读数
+ */
+function stagedDifferingFromMergeHead() {
+  const res = spawnSync(
+    "git",
+    ["-c", "core.quotePath=false", "diff", "--cached", "MERGE_HEAD", "--name-only"],
+    {
+      cwd: ROOT,
+      encoding: "utf8",
+    },
+  );
+  if (res.status !== 0) {
+    return null;
+  }
+  return new Set((res.stdout || "").split(/\r?\n/).filter(Boolean).map(toPosix));
+}
+
+/**
  * oxfmt 调一次 `--check <targets…>` 的**共通壳**：三条 fail-closed 规则 +
  * 剥 ANSI + 抽文件名（两条收集器共用这一份，§12.12）。
  *
@@ -614,24 +653,33 @@ function main() {
     }
     /* 合并态下的暂存面**不是**「本次改动」（ISSUE #2747）：`git merge` 解完冲突、
      * 提交还没落地时，`git diff --cached` 是**相对第一父提交（合并前的自己）**的全量
-     * 差异 —— 也就是整份主干的改动面（现场：901 份）。于是主干上任何存量未格式化文件
-     * 都会被点名为「本次带来的」而阻断一次与本 PR 无关的解冲突（被点名的两份相对
-     * `origin/master` 是**零 diff**）。同一判据的 `--changed` 档对此给出相反结论
-     * （「0 个在靶子内」）—— 两个入口不可能都对，错的是这一头的输入面。
+     * 差异 —— 也就是整份对方分支的改动面（现场：901 份）。于是对方分支上任何存量
+     * 未格式化文件都会被点名为「本次带来的」而阻断一次与本 PR 无关的解冲突（被点名
+     * 的那些相对 `origin/master` 是**零 diff**）。
      *
-     * 收窄到「本条分支相对目标分支带来的那一份」，与 `--changed` **同一个口径**
-     * （`changedFaceOrExit()`，基线只有一份）。收窄后的面仍然**逐份判**：这不是降档，
-     * 而是把面修回它自称的那个东西（「本次提交带进来的改动」）。剔掉多少必须念出来。 */
+     * 收窄判面 = 剔掉「与 MERGE_HEAD 逐字相同」的那批：那些是对方分支带来的、对方
+     * 的 CI 已判过的内容，不随本次解冲突重新背书；本侧改动、解冲突时改写 / **新建**
+     * 的文件全部照判。⚠️ 不能按「本分支相对分叉点以来的改动」求交集（#2747 的原始
+     * 实现，ISSUE #4586）：分叉点在对方分支前进之后，解冲突时新建的文件不在那份面里，
+     * 会被悄悄滤出判据（现场：48cea7615 里新建的 log-display-prefs.test.ts 本地绿、
+     * GA 的 `--changed` 红）。收窄后的面仍然**逐份判**：这不是降档，而是把面修回它
+     * 自称的那个东西（「本次提交带进来的改动」）。剔掉多少必须念出来。 */
     let face = files;
     if (mergeInProgress()) {
-      const changed = changedFaceOrExit();
-      const mine = new Set(changed.files);
-      face = files.filter((f) => mine.has(f));
+      const differing = stagedDifferingFromMergeHead();
+      if (differing === null) {
+        console.error(
+          "[format] 合并态读不到「暂存面 ⇄ MERGE_HEAD」的差异（git diff --cached MERGE_HEAD 失败）" +
+            "—— 按 fail-closed 判定为「判据没跑成」，以 exit 2 结束（不冒充「未触及扫描面」）。",
+        );
+        process.exit(2);
+      }
+      face = files.filter((f) => differing.has(f));
       console.log(
-        `[format] 合并态（MERGE_HEAD 在场）：暂存面 ${files.length} 份 → 收窄到本分支带来的` +
-          ` ${face.length} 份（基线：${changed.via}）。被剔掉的 ${files.length - face.length} 份` +
-          "是主干那边的改动，不随本次提交走 —— 判据没降，只是不再让主干存量替这次解冲突背书" +
-          "（ISSUE #2747）。",
+        `[format] 合并态（MERGE_HEAD 在场）：暂存面 ${files.length} 份 → 收窄到 ${face.length} 份` +
+          `（剔掉与 MERGE_HEAD 逐字相同的 ${files.length - face.length} 份 —— 那是对方分支带来的、` +
+          "对方的 CI 已判过的内容，不随本次解冲突重新背书；本侧改动与解冲突时改写 / 新建的文件照判。" +
+          "ISSUE #2747 立、#4586 修掉按分叉点求交集时的漏判。）",
       );
     }
     const hits = face.filter(isChangedFaceFile);
