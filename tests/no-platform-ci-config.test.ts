@@ -348,9 +348,12 @@ const PR_GATE_YML = ".github/workflows/pr-gate.yml" as const;
  *     一律按「要装」）。判定面与壳门禁同源（changed-scope + `SHELL_INPUT_RE`），
  *     误跳只会让壳门禁红在缺库上，不会静默放行。
  *   · `deb 档目录交给缓存步（#4480）` / `恢复 Tauri 的 Linux 系统依赖 deb 缓存（#4480）` /
- *     `保存 Tauri 的 Linux 系统依赖 deb 缓存（#4480）` —— 上一格的**缓存三件套**（#4480）：
- *     chown 是 restore 能写进 root 目录的功能前提；restore/save 只搬 deb 档，
- *     恒不判红（save 带 `!cancelled()`，落不进只影响下一跑的速度，不影响本跑结论）。
+ *     `deb 档目录交回缓存步（#4513）` / `保存 Tauri 的 Linux 系统依赖 deb 缓存（#4480）` ——
+ *     上一格的**缓存四件套**（#4480 建、#4513 补落档权限）：restore 前的 chown 是 restore
+ *     能写进 root 目录的功能前提；apt 以 root 落包后把 partial/ 重建为 root 属主，
+ *     save 前的 chown 把目录交回 runner（#4513 之前 save 恒 Permission denied，缓存
+ *     永远存不进去）；restore/save 只搬 deb 档，恒不判红（save 带 `!cancelled()`，
+ *     落不进只影响下一跑的速度，不影响本跑结论）。
  *   · `安装依赖`（3 个 job）与 `安装依赖（allowBuilds 清单见 pnpm-workspace.yaml）`
  *     （1 个 job）—— **每个 job 自己装一次**的前提设施：装不上 ⇒ 那个 job 红，
  *     读数已经在账上（daily 段那一条 `安装依赖（…）` 是**整跑一次**的安装 ⇒ 是门格）。
@@ -376,6 +379,7 @@ const GA_PR_INFRA_STEPS: ReadonlyArray<string> = [
   "这次改没改壳输入（没改就不白付 apt，#4309）",
   "deb 档目录交给缓存步（#4480）",
   "恢复 Tauri 的 Linux 系统依赖 deb 缓存（#4480）",
+  "deb 档目录交回缓存步（#4513）",
   "保存 Tauri 的 Linux 系统依赖 deb 缓存（#4480）",
   "cargo 缓存",
   "恢复 node_modules 缓存（灰度）",
