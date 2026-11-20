@@ -9,7 +9,6 @@ import { renderHook, act, cleanup } from "@testing-library/react";
 import { useWorkshopPipeline } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { createProject } from "~/lib/project-canvas/canvas-store";
 import {
-  LOCAL_TASK_TIMEOUT_MS,
   buildLibraryWorkflowInput,
   cancelLocalTask,
   startLocalGenerate,
@@ -23,17 +22,25 @@ vi.mock("~/lib/workshop/character-portrait-client", () => ({
   importPortraitFile: vi.fn(),
 }));
 
-/* 生成链路整体部分 mock：保留真实导出（常量 / 类型），只换掉网络行为。 */
-type SettleFn = (r: { message?: string; ok: boolean }) => void;
-const watchTaskMock = vi.hoisted(() =>
-  vi.fn<(taskId: string, h: { onSettled: SettleFn }) => () => void>(),
+/* 生成链路整体部分 mock：保留真实导出（常量 / 类型），只换掉网络行为。
+ * 组件自 #4597 起消费 observeTaskUntilSettled（内部持真 watchTask，mock 边界
+ * 必须钉在组件实际消费的出口上，否则真 EventSource 会在 happy-dom 里炸）。 */
+const observeTaskMock = vi.hoisted(() =>
+  vi.fn<
+    (opts: {
+      onIdleTimeout: (snapshot: unknown) => void;
+      onOutput?: (o: { kind: "image" | "video" | "other"; url: string }) => void;
+      onSettled: (r: { message?: string; ok: boolean }) => void;
+      taskId: string;
+    }) => () => void
+  >(),
 );
 const fetchTaskSnapshotMock = vi.hoisted(() => vi.fn());
 vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    watchTask: watchTaskMock,
+    observeTaskUntilSettled: observeTaskMock,
     fetchTaskSnapshot: fetchTaskSnapshotMock,
     startLocalGenerate: vi.fn(),
     cancelLocalTask: vi.fn(),
@@ -92,7 +99,7 @@ function buildResult(patch: Partial<LibraryWorkflowBuildResult> = {}): LibraryWo
 
 beforeEach(() => {
   localStorage.clear();
-  watchTaskMock.mockReset();
+  observeTaskMock.mockReset();
   fetchTaskSnapshotMock.mockReset();
   vi.mocked(cancelLocalTask).mockReset();
   globalThis.fetch = vi.fn(() =>
@@ -129,7 +136,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
       imageUrl: "/api/generated/task-ok/1.png",
     });
     /* 成功终态的 SSE 重订阅拿不到产物（done 帧只随 live 流下发），不该走它。 */
-    expect(watchTaskMock).not.toHaveBeenCalled();
+    expect(observeTaskMock).not.toHaveBeenCalled();
   });
 
   it("任务已成功但没有图片产物：按失败收尾并提示（不假装完成）", async () => {
@@ -185,22 +192,20 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     seedDraft(project.id, [makeShot({ status: "running", taskId: "task-live" })]);
     fetchTaskSnapshotMock.mockResolvedValue({ status: "RUNNING", outputs: [] });
     let settle!: (r: { message?: string; ok: boolean }) => void;
-    watchTaskMock.mockImplementation(
-      (_taskId: string, h: { onSettled: (r: { message?: string; ok: boolean }) => void }) => {
-        settle = h.onSettled;
-        return () => undefined;
-      },
-    );
+    observeTaskMock.mockImplementation((opts) => {
+      settle = opts.onSettled;
+      return () => undefined;
+    });
 
     const { result } = renderHook(() => useWorkshopPipeline());
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(watchTaskMock).toHaveBeenCalledTimes(1);
-    const [calledTaskId, handler] = watchTaskMock.mock.calls[0]!;
-    expect(calledTaskId).toBe("task-live");
-    expect(typeof handler.onSettled).toBe("function");
+    expect(observeTaskMock).toHaveBeenCalledTimes(1);
+    const opts = observeTaskMock.mock.calls[0]![0];
+    expect(opts.taskId).toBe("task-live");
+    expect(typeof opts.onSettled).toBe("function");
     act(() => {
       settle({ ok: true });
     });
@@ -260,7 +265,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
       clipStatus: "done",
       clipUrl: "/api/generated/clip-ok/1.mp4",
     });
-    expect(watchTaskMock).not.toHaveBeenCalled();
+    expect(observeTaskMock).not.toHaveBeenCalled();
   });
 
   it("刷新恢复（视频）：成功任务的产物里没有视频（只有图）→ 按失败收尾", async () => {
@@ -285,8 +290,8 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     const project = createProject();
     seedDraft(project.id, [makeShot({ clipStatus: "running", clipTaskId: "clip-live" })]);
     fetchTaskSnapshotMock.mockResolvedValue({ status: "RUNNING", outputs: [] });
-    watchTaskMock.mockImplementation((_taskId, h) => {
-      h.onSettled({ ok: true });
+    observeTaskMock.mockImplementation((opts) => {
+      opts.onSettled({ ok: true });
       return () => undefined;
     });
 
@@ -295,8 +300,8 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
       await Promise.resolve();
     });
 
-    expect(watchTaskMock).toHaveBeenCalledTimes(1);
-    expect(watchTaskMock.mock.calls[0]![0]).toBe("clip-live");
+    expect(observeTaskMock).toHaveBeenCalledTimes(1);
+    expect(observeTaskMock.mock.calls[0]![0].taskId).toBe("clip-live");
     expect(result.current.shots[0]!.clipStatus).toBe("done");
   });
 
@@ -339,12 +344,10 @@ describe("useWorkshopPipeline generateShot 的可靠性出口", () => {
 
     vi.mocked(buildLibraryWorkflowInput).mockResolvedValue(buildResult({ unmatched: ["seed"] }));
     vi.mocked(startLocalGenerate).mockResolvedValue("task-1");
-    watchTaskMock.mockImplementation(
-      (_taskId: string, h: { onSettled: (r: { message?: string; ok: boolean }) => void }) => {
-        h.onSettled({ ok: true });
-        return () => undefined;
-      },
-    );
+    observeTaskMock.mockImplementation((opts) => {
+      opts.onSettled({ ok: true });
+      return () => undefined;
+    });
 
     await act(async () => {
       await result.current.generateShot(result.current.shots[0]!);
@@ -364,19 +367,22 @@ describe("useWorkshopPipeline generateShot 的可靠性出口", () => {
 
     vi.mocked(buildLibraryWorkflowInput).mockResolvedValue(buildResult());
     vi.mocked(startLocalGenerate).mockResolvedValue("task-hang");
-    const closeSpy = vi.fn();
-    watchTaskMock.mockImplementation(() => closeSpy);
+    /* 捕获观察入口：看门狗触发（onIdleTimeout）由测试手动打一拍——定时器语义
+     * 归 observeTaskUntilSettled 本体（有它自己的判据），这里钉组件的收尾回写。 */
+    let captured!: { onIdleTimeout: (snapshot: unknown) => void };
+    observeTaskMock.mockImplementation((opts) => {
+      captured = opts;
+      return () => undefined;
+    });
 
-    /* 安全阀的定时器在 generateShot 内部创建：先开假时钟再发起。 */
-    vi.useFakeTimers();
     await act(async () => {
       const pending = result.current.generateShot(result.current.shots[0]!);
-      await vi.advanceTimersByTimeAsync(LOCAL_TASK_TIMEOUT_MS + 1000);
+      /* 提交链路有多个 await：等到观察入口真的挂上，再打看门狗那一拍。 */
+      await expect.poll(() => observeTaskMock.mock.calls.length).toBeGreaterThan(0);
+      captured.onIdleTimeout(null);
       await pending;
     });
-    vi.useRealTimers();
 
-    expect(closeSpy).toHaveBeenCalled();
     expect(result.current.shots[0]!.status).toBe("failed");
     expect(result.current.notice).toContain("超时");
   });
@@ -394,7 +400,7 @@ describe("useWorkshopPipeline cancelShotTask", () => {
     /* 真实时序：先发起生成（观察循环挂上、taskId 写回镜头），再取消。 */
     vi.mocked(buildLibraryWorkflowInput).mockResolvedValue(buildResult());
     vi.mocked(startLocalGenerate).mockResolvedValue("task-cancel");
-    watchTaskMock.mockImplementation(() => () => undefined);
+    observeTaskMock.mockImplementation(() => () => undefined);
     let pending!: Promise<void>;
     await act(async () => {
       pending = result.current.generateShot(result.current.shots[0]!);
@@ -413,7 +419,7 @@ describe("useWorkshopPipeline cancelShotTask", () => {
 
     /* SSE 收到 CANCELLED 终态：不是故障，文案不报「生成失败」。 */
     await act(async () => {
-      watchTaskMock.mock.calls[0]![1].onSettled({
+      observeTaskMock.mock.calls[0]![0].onSettled({
         ok: false,
         message: "任务 CANCELLED",
       });

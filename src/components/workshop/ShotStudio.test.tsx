@@ -12,7 +12,7 @@ import { ShotStudio } from "./ShotStudio";
 import {
   buildLibraryWorkflowInput,
   startLocalGenerate,
-  watchTask,
+  observeTaskUntilSettled,
   type LibraryWorkflowBuildResult,
 } from "~/lib/workshop/generation-client";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
@@ -24,7 +24,7 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
     ...actual,
     buildLibraryWorkflowInput: vi.fn(),
     startLocalGenerate: vi.fn(),
-    watchTask: vi.fn(),
+    observeTaskUntilSettled: vi.fn(),
     prepareShotReferences: vi.fn(() => ({
       files: [],
       failedCount: 0,
@@ -34,7 +34,7 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
 
 const mockedBuild = vi.mocked(buildLibraryWorkflowInput);
 const mockedStart = vi.mocked(startLocalGenerate);
-const mockedWatch = vi.mocked(watchTask);
+const mockedObserve = vi.mocked(observeTaskUntilSettled);
 
 const scene: Scene = {
   id: "scene-1",
@@ -162,7 +162,7 @@ function lastPatchedShot(mock: { mock: { calls: Array<Parameters<ShotsSetter>> }
 beforeEach(() => {
   mockedBuild.mockReset();
   mockedStart.mockReset();
-  mockedWatch.mockReset();
+  mockedObserve.mockReset();
 });
 
 afterEach(() => {
@@ -215,8 +215,8 @@ describe("ShotStudio 生图出口", () => {
     });
     mockedBuild.mockResolvedValue(buildResult({ unmatched: ["seed"] }));
     mockedStart.mockResolvedValue("task-1");
-    mockedWatch.mockImplementation((_taskId, h) => {
-      h.onSettled({ ok: true });
+    mockedObserve.mockImplementation((opts) => {
+      opts.onSettled({ ok: true });
       return () => undefined;
     });
 
@@ -249,9 +249,9 @@ describe("ShotStudio 生图出口", () => {
     });
     mockedBuild.mockResolvedValue(buildResult());
     mockedStart.mockResolvedValue("task-1");
-    mockedWatch.mockImplementation((_taskId, h) => {
-      h.onOutput?.({ url: "/api/generated/1.png", kind: "image" });
-      h.onSettled({ ok: true });
+    mockedObserve.mockImplementation((opts) => {
+      opts.onOutput?.({ url: "/api/generated/1.png", kind: "image" });
+      opts.onSettled({ ok: true });
       return () => undefined;
     });
 

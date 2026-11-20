@@ -19,6 +19,7 @@ import {
   type WorkshopWorkflowOption,
 } from "~/lib/workshop/generation-client";
 import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import { isWantedOutput } from "~/lib/workshop/output-filter";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import {
   pruneEmptyExposedValues,
@@ -205,9 +206,8 @@ export async function runWorkflowModelTest(args: {
           args.onProgress?.({ pct, ...(node?.label === undefined ? {} : { label: node.label }) });
         },
         onOutput: (out) => {
-          /* 图片测试只要图片产物、视频测试只要视频产物（另一类是别的阶段的）。 */
-          const wanted = kind === "video" ? out.kind !== "image" : out.kind === "image";
-          if (wanted) {
+          /* 图片测试只要图片产物、视频测试只要视频产物（#4596，全库唯一判据）。 */
+          if (isWantedOutput(kind, out)) {
             settleUnlessAborted(() => {
               resolve({ kind, url: out.url });
             });
