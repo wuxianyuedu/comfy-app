@@ -6,23 +6,23 @@ import path from "node:path";
 import { hash } from "node:crypto";
 
 import { deriveComfyuiWorkflowsDir, getSettingsSync } from "~/lib/app-settings/app-settings.server";
-import { hasRawContent } from "~/lib/comfyui/execution-shape";
 import { readEnvVar } from "~/lib/envfile";
 import { normalizeSlashes } from "~/lib/path-display";
-import type { WorkflowPreview } from "~/lib/comfyui/workflow";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
-/** 列表行下发给前端的「可执行形态」事实 —— 判据全在
- *  `~/lib/comfyui/execution-shape`（原件是 RAW 才可执行）。
+/** 列表行下发给前端的「可执行形态」事实 —— 判据在存储层已物化
+ *  （`workflowTemplate.hasRaw`，#4557 起列表不再拉 rawJson 大列）。
  *
- *  · `usable`：这条工作流能不能跑；
- *  · `hasRaw`：RAW 原件列有没有内容（如实标注，不判可用性）。 */
-function executionShapeOf(row: { rawJson: unknown }): {
+ *  · `usable`：这条工作流能不能跑（RAW 原件是可执行入口）；
+ *  · `hasRaw`：RAW 原件列有没有内容（如实标注，不判可用性）。
+ *  存量行回填前的 NULL 按「无内容」如实下发 —— 回填在列表查询前完成，
+ *  正常路径行里总是物化值。 */
+function executionShapeOf(row: { hasRaw: boolean | null }): {
   hasRaw: boolean;
   usable: boolean;
 } {
-  const hasRaw = hasRawContent(row.rawJson);
+  const hasRaw = row.hasRaw === true;
   return { hasRaw, usable: hasRaw };
 }
 
@@ -61,7 +61,6 @@ type LocalPendingRow = {
   pending: boolean;
   pendingMtime: number;
   pendingSize: number;
-  preview: WorkflowPreview;
   source: "local-pending";
   sourcePath: string;
   sourceRoot: string | undefined;

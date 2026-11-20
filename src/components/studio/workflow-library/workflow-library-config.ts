@@ -3,7 +3,6 @@
  * 无 React、无副作用，可直接单测；视图 / hook 一律从这里取类型与派生。
  */
 
-import type { WorkflowPreview as WorkflowPreviewT } from "~/lib/comfyui/workflow";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { getWorkflowType, normalizeTaskType } from "~/lib/workflow/workflow-types";
@@ -92,7 +91,6 @@ export type WorkflowRow = {
    *  string），而库里真实落的是按模式归拢的三层结构 —— 声明与运行时不符，
    *  没有任何消费点按它读，只靠双跳断言抹平（ISSUE #1460）。 */
   paramMap?: WorkflowParamMap | null;
-  preview?: WorkflowPreviewT;
   /** 分类："local" = 绑定磁盘上的文件；"online" = 粘贴导入；
    *  "local-pending" = 磁盘上有、但还没导入过的占位行。
    *  由有没有 `sourcePath` 推导（占位行走 `workflow-local-roots` 的

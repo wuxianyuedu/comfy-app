@@ -1,6 +1,7 @@
 "use client";
 
-import type { DragEventHandler } from "react";
+import { useState, type DragEventHandler } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { textHandler } from "~/lib/form-props";
 import { AlertTriangle, Search, Download } from "lucide-react";
 import {
@@ -20,6 +21,12 @@ import { DataLocationBadge } from "~/components/data-location/DataLocationBadge"
 import { EmptyState } from "~/components/ui/empty-state";
 import { StatusDot } from "~/components/ui/status-dot";
 import { ListBadge } from "~/components/ui/list-badge";
+
+/** 窗口化列表的两个常量（ISSUE #4557，与 CustomNodesSettings/NodesTab 同款模式）。
+ *  行高是**估计值**：单行（仅名称 + 徽标）与两行（多一组类型/标签）都由
+ *  `measureElement` 量到真值，估计只影响首帧窗口宽度。 */
+const WORKFLOW_ROW_ESTIMATE_PX = 34;
+const WORKFLOW_ROW_GAP_PX = 4;
 
 type WorkflowLibraryListProps = {
   /** 拖入 JSON 导入：整片列表侧栏就是投放区，这里接管高亮与投放事件
@@ -82,6 +89,21 @@ export function WorkflowLibraryList({
   pendingLoading = {},
 }: WorkflowLibraryListProps) {
   const empty = workflows.length === 0 && pendingRows.length === 0;
+  /* 窗口化渲染（ISSUE #4557）：库大时整表渲染让每次筛选/快照同步都挂上几百行的
+   * DOM（每行还各挂一个封装状态 hook）。视口外不挂载；量测前（jsdom clientHeight
+   * 恒 0）退化为全量渲染，否则清单变空白 —— 与 NodesTab 同一条兜底。 */
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  // 与 ModelLibrary / ProjectOutputs / NodesTab 同一条误报豁免：virtualizer 的
+  // 读数只在本组件 render 内消费，不外传给被 memo 的子组件。
+  // oxlint-disable-next-line react/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: workflows.length,
+    getScrollElement: () => scrollEl,
+    estimateSize: () => WORKFLOW_ROW_ESTIMATE_PX,
+    overscan: 6,
+    gap: WORKFLOW_ROW_GAP_PX,
+  });
+  const measured = (scrollEl?.clientHeight ?? 0) > 0;
   return (
     <div
       className={[
@@ -128,8 +150,8 @@ export function WorkflowLibraryList({
         </p>
       )}
 
-      {/* 列表：已载入工作流排在前 */}
-      <div className="flex-1 overflow-y-auto px-1.5 py-1.5">
+      {/* 列表：已载入工作流排在前。滚动容器挂 ref（窗口化的视口判据）。 */}
+      <div className="flex-1 overflow-y-auto px-1.5 py-1.5" ref={setScrollEl}>
         {empty && loading ? (
           /* 首次载入的加载态收在**骨架行**（ISSUE #4073 第 1 条）：不再用
            * 带转圈的整块加载界面占住列表列——「加载中」的转圈交给右侧详情区
@@ -201,17 +223,55 @@ export function WorkflowLibraryList({
             minHeightClass="min-h-40"
             title={search ? "未找到匹配的工作流" : "还没有工作流"}
           />
+        ) : measured ? (
+          <div
+            className="relative w-full"
+            role="list"
+            style={{ height: virtualizer.getTotalSize() }}
+          >
+            {virtualizer.getVirtualItems().map((vi) => {
+              const workflow = workflows[vi.index];
+              if (!workflow) {
+                return null;
+              }
+              return (
+                <div
+                  data-index={vi.index}
+                  key={workflow.id}
+                  ref={virtualizer.measureElement}
+                  role="listitem"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${vi.start}px)`,
+                  }}
+                >
+                  <WorkflowListItem
+                    onClick={() => {
+                      onSelect(workflow.id);
+                    }}
+                    selected={selectedId === workflow.id}
+                    workflow={workflow}
+                  />
+                </div>
+              );
+            })}
+          </div>
         ) : (
+          /* 量测前（jsdom / 首帧）退化为全量渲染：窗口化依赖量到的视口高度。 */
           <ul className="flex flex-col gap-1">
             {workflows.map((workflow) => (
-              <WorkflowListItem
-                key={workflow.id}
-                onClick={() => {
-                  onSelect(workflow.id);
-                }}
-                selected={selectedId === workflow.id}
-                workflow={workflow}
-              />
+              <li key={workflow.id}>
+                <WorkflowListItem
+                  onClick={() => {
+                    onSelect(workflow.id);
+                  }}
+                  selected={selectedId === workflow.id}
+                  workflow={workflow}
+                />
+              </li>
             ))}
           </ul>
         )}
@@ -294,81 +354,79 @@ function WorkflowListItem({
   });
 
   return (
-    <li>
-      <Button
-        className={[
-          "h-auto w-full min-w-0 rounded-lg border px-2 py-1.5 text-left font-normal hover:bg-transparent",
-          selected
-            ? "border-primary/40 from-primary/15 to-accent/10 bg-linear-to-br"
-            : "bg-subtle hover:border-border hover:bg-subtle border-transparent",
-        ].join("")}
-        onClick={onClick}
-        variant="ghost"
-      >
-        {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}
-        <div className="flex min-w-0 items-center gap-1.5">
-          <Hint label={workflow.name}>
-            <span
-              className={[
-                NAME_MAX_WIDTH_CLASS,
-                "shrink truncate text-xs leading-tight font-medium",
-                isTech ? "text-ink-strong font-mono" : "text-ink-bright",
-              ].join("")}
-            >
-              {workflow.name}
-            </span>
-          </Hint>
-          {!usable && (
-            <ListBadge title="没有工作流(RAW)原件 —— 没有可执行内容" tone="danger">
-              无可执行内容
-            </ListBadge>
-          )}
-          {/* 对外参数：状态收成一枚 1 字标记（✓ / ！），完整说明在 tooltip 里。
+    <Button
+      className={[
+        "h-auto w-full min-w-0 rounded-lg border px-2 py-1.5 text-left font-normal hover:bg-transparent",
+        selected
+          ? "border-primary/40 from-primary/15 to-accent/10 bg-linear-to-br"
+          : "bg-subtle hover:border-border hover:bg-subtle border-transparent",
+      ].join("")}
+      onClick={onClick}
+      variant="ghost"
+    >
+      {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}
+      <div className="flex min-w-0 items-center gap-1.5">
+        <Hint label={workflow.name}>
+          <span
+            className={[
+              NAME_MAX_WIDTH_CLASS,
+              "shrink truncate text-xs leading-tight font-medium",
+              isTech ? "text-ink-strong font-mono" : "text-ink-bright",
+            ].join("")}
+          >
+            {workflow.name}
+          </span>
+        </Hint>
+        {!usable && (
+          <ListBadge title="没有工作流(RAW)原件 —— 没有可执行内容" tone="danger">
+            无可执行内容
+          </ListBadge>
+        )}
+        {/* 对外参数：状态收成一枚 1 字标记（✓ / ！），完整说明在 tooltip 里。
  此前这里是一整块`对外参数未配置` 文字，与名称争夺同一行宽度，
  是列表超框的主因。颜色 + 形状都表达「配好了没有」，所以不必靠
  文字长度来承载（`title` 里给全口径：已配置几个口 / 缺哪些口）。 */}
-          {usable && (
-            <ListBadge
-              className={encapsulation.ready ? "" : "text-encap-pending bg-warning/12"}
-              title={
-                encapsulation.ready
-                  ? `对外参数已配置（${encapsulation.resolvedCount}/${encapsulation.entries.length}）`
-                  : `对外参数未配置：${encapsulation.missingLabels.join("、") || "提示词口未落到端口"}`
-              }
-              tone={encapsulation.ready ? "success" : "warning"}
-            >
-              {encapsulation.ready ? "✓" : "！"}
-            </ListBadge>
-          )}
-          {canResync && (
-            <ListBadge title={missing ? "本地文件已丢失" : "本地文件有更新"} tone="warning">
-              {missing ? "已丢失" : "有更新"}
-            </ListBadge>
-          )}
-          <SourceTag source={workflow.source} />
-        </div>
-
-        {(workflow.taskType || (workflow.modelTags?.length ?? 0) > 0) && (
-          <div className="mt-1 flex min-w-0 items-center gap-1.5">
-            <TaskTypeChip taskType={workflow.taskType} />
-            {workflow.modelTags?.slice(0, 2).map((tag) => (
-              <ListBadge
-                className="max-w-18 truncate rounded-full"
-                key={tag}
-                title={tag}
-                tone="neutral"
-              >
-                {tag}
-              </ListBadge>
-            ))}
-            {(workflow.modelTags?.length ?? 0) > 2 && (
-              <span className="text-ink-fainter text-4xs shrink-0">
-                +{(workflow.modelTags?.length ?? 0) - 2}
-              </span>
-            )}
-          </div>
+        {usable && (
+          <ListBadge
+            className={encapsulation.ready ? "" : "text-encap-pending bg-warning/12"}
+            title={
+              encapsulation.ready
+                ? `对外参数已配置（${encapsulation.resolvedCount}/${encapsulation.entries.length}）`
+                : `对外参数未配置：${encapsulation.missingLabels.join("、") || "提示词口未落到端口"}`
+            }
+            tone={encapsulation.ready ? "success" : "warning"}
+          >
+            {encapsulation.ready ? "✓" : "！"}
+          </ListBadge>
         )}
-      </Button>
-    </li>
+        {canResync && (
+          <ListBadge title={missing ? "本地文件已丢失" : "本地文件有更新"} tone="warning">
+            {missing ? "已丢失" : "有更新"}
+          </ListBadge>
+        )}
+        <SourceTag source={workflow.source} />
+      </div>
+
+      {(workflow.taskType || (workflow.modelTags?.length ?? 0) > 0) && (
+        <div className="mt-1 flex min-w-0 items-center gap-1.5">
+          <TaskTypeChip taskType={workflow.taskType} />
+          {workflow.modelTags?.slice(0, 2).map((tag) => (
+            <ListBadge
+              className="max-w-18 truncate rounded-full"
+              key={tag}
+              title={tag}
+              tone="neutral"
+            >
+              {tag}
+            </ListBadge>
+          ))}
+          {(workflow.modelTags?.length ?? 0) > 2 && (
+            <span className="text-ink-fainter text-4xs shrink-0">
+              +{(workflow.modelTags?.length ?? 0) - 2}
+            </span>
+          )}
+        </div>
+      )}
+    </Button>
   );
 }

@@ -16,8 +16,6 @@ import {
   scanLocalWorkflowRoots,
   type LocalWorkflowFile,
 } from "~/lib/comfyui/localWorkflows";
-import { buildWorkflowPreview } from "~/lib/comfyui/workflow";
-import { asRawWorkflow } from "~/lib/comfyui/raw";
 import {
   getWorkflowType,
   getWorkflowTypesByCategory,
@@ -229,16 +227,15 @@ export const workflowListProcedures = {
         }
       }
 
-      // ── 补上类型元数据与紧凑预览 ──
+      // ── 补上类型元数据与可执行形态 ──
       /* 显式标注成**共用行类型**（数据形状的唯一出处）：不标的话对象字面量的
        *  字面量属性会在 `.map()` 里被推宽成 `string`，于是视图侧那份「三档联合」
-       *  的收窄在出口静默失效 —— 收窄丢在这里，没有任何地方会红（ISSUE #1460）。 */
+       *  的收窄在出口静默失效 —— 收窄丢在这里，没有任何地方会红（ISSUE #1460）。
+       *  预览字段随 #4557 移除：核对后全仓零消费（列表行卡片只渲染名称 / 徽标 /
+       *  类型与标签），此前每行对 rawJson 做 JSON.parse + 整图解析只为算这个
+       *  没人读的字段 —— 库大时列表线性变慢的主因。 */
       const enriched: Array<WorkflowListRow> = list.map((list) => {
         const def = getWorkflowType(normalizeTaskType(list.taskType));
-        const rawView = asRawWorkflow(list.rawJson);
-        /* RawWorkflow 自带 `[k: string]: unknown` 索引签名，本身就是
-         * `Record<string, unknown>` 的子形态 —— 原先的双断言是纯仪式。 */
-        const graphObj = rawView && Array.isArray(rawView.nodes) ? rawView : null;
         const exec = executionShapeOf(list);
 
         let diskMtimeSec: number | null = null;
@@ -273,7 +270,6 @@ export const workflowListProcedures = {
           typeDescription: def?.description ?? "",
           isGenerative: def?.isGenerative ?? true,
           ...exec,
-          preview: buildWorkflowPreview(graphObj ?? {}),
           workflowIO: parseWorkflowIOMap(list.workflowIO),
           modelTags: tagsByName.get(list.id) ?? [],
           sourceMtimeSec: typeof list.sourceMtime === "number" ? list.sourceMtime : null,
@@ -324,10 +320,6 @@ export const workflowListProcedures = {
             isGenerative: false,
             hasRaw: false,
             usable: false,
-            /* 空图预览走**同一个构造器**，不手写一份 `{ nodes, edges, w, h }`
-             *  ——那个字面量的字段名与 `WorkflowPreview`（`total` / `width` /
-             *  `height` / `truncated`）对不上，是同一类「形状各写一份」的错配。 */
-            preview: buildWorkflowPreview({}),
             workflowIO: {},
             modelTags: [],
             pending: true,

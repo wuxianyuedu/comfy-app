@@ -10,12 +10,32 @@ import {
   workflowModelTagToWorkflowTemplate,
   type WorkflowTemplate,
 } from "~/server/db/schema";
+import { isPlainRecord } from "~/lib/is-record";
 import { DrizzleRepository } from "./repository-base";
 import type { DbExecutor } from "./repository-executor-types";
-import { eq, and, desc, type SQL } from "drizzle-orm";
+import { eq, and, desc, isNull, sql, type SQL } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
 
-/** 列表页需要的列：除 `positions`（列表页不读、且是大 JSON blob）外的全部。 */
+/**
+ * 「RAW 原件有没有内容」的物化判据 —— 与 `hasRawContent`
+ * （`~/lib/comfyui/execution-shape`）同一口径：rawJson.nodes 是**非空数组**。
+ * 判据本体复刻在这里而不是反向 import：lib/core 是地基层（§18.3，lib 反过来
+ * 依赖它），core 不许 import 上层模块；判据只有一行，两处以注释互相钉住。
+ */
+function listHasRaw(rawJson: unknown): boolean {
+  if (!isPlainRecord(rawJson)) {
+    return false;
+  }
+  const nodes = rawJson.nodes;
+  return Array.isArray(nodes) && nodes.length > 0;
+}
+
+/** 列表页需要的列：**大 JSON 列（rawJson / positions）都不再下发**（#4557）。
+ *
+ *  `positions` 一直没下发；`rawJson` 原本以「可执行性判据与紧凑预览都以它为
+ *  真值来源」为由留在投影里 —— 但列表行真正消费的只有它的派生结论 `hasRaw`
+ *  （预览字段在 #4557 核对后确认全仓零消费，已随本单移除），结论在写入时由
+ *  {@link listHasRaw} 物化进 `hasRaw` 列，列表查询不再碰整图。 */
 /* SAFETY: 类型断言已复核 */
 const LIST_ROW_COLUMNS = {
   id: workflowTemplate.id,
@@ -26,7 +46,7 @@ const LIST_ROW_COLUMNS = {
   defaultMode: workflowTemplate.defaultMode,
   paramMap: workflowTemplate.paramMap,
   workflowIO: workflowTemplate.workflowIO,
-  rawJson: workflowTemplate.rawJson,
+  hasRaw: workflowTemplate.hasRaw,
   sourcePath: workflowTemplate.sourcePath,
   sourceChecksum: workflowTemplate.sourceChecksum,
   sourceMtime: workflowTemplate.sourceMtime,
@@ -41,8 +61,9 @@ const SOURCE_META_COLUMNS = {
   sourceMtime: workflowTemplate.sourceMtime,
 } as const;
 
-/** {@link WorkflowTemplateRepository.listForUser} 的行形状（列投影的结果）。 */
-export type WorkflowTemplateListRow = Omit<WorkflowTemplate, "positions">;
+/** {@link WorkflowTemplateRepository.listForUser} 的行形状（列投影的结果）：
+ *  两个大 JSON 列（rawJson / positions）都不在行里（#4557）。 */
+export type WorkflowTemplateListRow = Omit<WorkflowTemplate, "positions" | "rawJson">;
 
 /** {@link WorkflowTemplateRepository.findSourceMetaForUser} 的行形状。 */
 export type WorkflowTemplateSourceMeta = {
@@ -93,13 +114,12 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
   /** 列表页要用的列 —— **显式投影，不是 `select()`**。
    *
    *  为什么不写 `select()`：它把每一列的整份值都取出来，其中 `positions`
-   *  （每个节点的坐标数组）与 `rawJson` 都是**大 JSON blob**，而列表页对
-   *  `positions` 一个字都不看。全字段读法让 SQLite 把整行物化、驱动再把
-   *  几 MB 的字符串跨过 C++ ↔ JS 边界，堆压力与 GC 全落在一次轮询上。
-   *
-   *  `rawJson` **必须留**：可执行性判据（`hasRawContent`）与紧凑预览
-   *  （`buildWorkflowPreview`）都以它为真值来源，去掉它列表就答不出
-   *  「这条能不能跑」。`positions` 是唯一能整列省掉的大字段。
+   *  与 `rawJson` 都是**大 JSON blob**（单行可达数 MB），全字段读法让 SQLite
+   *  把整行物化、驱动再把几 MB 的字符串跨过 C++ ↔ JS 边界，堆压力与 GC 全落在
+   *  一次轮询上（#4557：库大时列表线性变慢的存储侧根源）。列表行对 rawJson
+   *  的唯一消费是派生结论 `hasRaw`，由 {@link listHasRaw} 在写入时物化进列；
+   *  存量行的 NULL 在这里按用户**惰性回填一次**（只扫 NULL 行，SQL 直接判
+   *  JSON 形状，与 {@link listHasRaw} 同一口径），此后回填语句匹配零行。
    *
    *  mock 边界：`~/server/db` 的测试替身走的是内存实现，列投影在类型层
    *  收窄、在行为层只影响读了多少 —— 见 `repository.test.ts` 的断言。 */
@@ -107,11 +127,34 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
     userId: string,
     opts: { orderBy?: Array<SQL>; where?: SQL } = {},
   ): Promise<Array<WorkflowTemplateListRow>> {
+    await db
+      .update(workflowTemplate)
+      .set({
+        hasRaw: sql`CASE WHEN json_valid(${workflowTemplate.rawJson}) = 1 AND json_type(${workflowTemplate.rawJson}, '$.nodes') = 'array' AND json_array_length(${workflowTemplate.rawJson}, '$.nodes') > 0 THEN 1 ELSE 0 END`,
+      })
+      .where(and(eq(workflowTemplate.userId, userId), isNull(workflowTemplate.hasRaw)));
     return db
       .select(LIST_ROW_COLUMNS)
       .from(workflowTemplate)
       .where(and(eq(workflowTemplate.userId, userId), opts.where))
       .orderBy(...(opts.orderBy ?? [desc(workflowTemplate.createdAt)]));
+  }
+
+  /** 覆盖基类 update：patch 带 rawJson 时**同批物化** hasRaw（#4557）。
+   *
+   *  rawJson 的全部写入都经这个方法（workflow-mutations 的 update / resync /
+   *  分组便签回写）或 {@link createImported}，在仓储收口物化就不必每个调用点
+   *  各算一遍。rawJson 不在 patch 里 = 该列不动，hasRaw 保持原值。
+   *  `hasRawContent` 的判据本体见 {@link listHasRaw}（分层约束下判据在 core
+   *  本地复刻，两处互为镜像）。 */
+  override async update(
+    id: string,
+    patch: Partial<WorkflowTemplate>,
+    executor?: DbExecutor,
+  ): Promise<WorkflowTemplate> {
+    const merged: Partial<WorkflowTemplate> =
+      patch.rawJson === undefined ? patch : { ...patch, hasRaw: listHasRaw(patch.rawJson) };
+    return super.update(id, merged, executor);
   }
 
   async createImported(input: {
@@ -135,6 +178,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
         taskType: input.taskType,
         paramMap: input.paramMap,
         rawJson: input.rawJson,
+        hasRaw: listHasRaw(input.rawJson),
         positions: input.positions,
         sourcePath: input.sourcePath ?? undefined,
         sourceChecksum: input.sourceChecksum ?? undefined,
