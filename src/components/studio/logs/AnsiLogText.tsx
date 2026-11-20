@@ -4,7 +4,13 @@
  * 启动日志正文的 ANSI 着色渲染（落盘的是子进程原始输出，含 SGR 颜色序列）。它是「样式键 → class」
  * 的纯映射；此前嵌在设置页展示原语里，导致跨屏共用的 `RuntimeLogBox` 反向依赖设置页模块。
  * 未映射的样式键回退默认色：新增键不会渲染成透明文本。
+ *
+ * `React.memo`（ISSUE #4558）：正文片段数组在增量口径下逐秒追加新片段，memo 让
+ * 「segments 引用未变」的渲染直接跳过 —— 与 `use-runtime-log-source` 的引用复用
+ * 配合，把每秒的重协调收敛到真正新增的 span 上。
  */
+import { memo } from "react";
+
 import type { AnsiSegment, AnsiStyleKey } from "~/lib/log/log-ansi";
 
 /* 表内 red/green/yellow/blue/magenta/cyan + 各自 bright 变体 + bg 变体的
@@ -42,7 +48,11 @@ const ANSI_STYLE_CLASS: Record<AnsiStyleKey, string> = {
 };
 // p71-allow:end
 
-export function AnsiLogText({ segments }: { segments: Array<AnsiSegment> }) {
+export const AnsiLogText = memo(function AnsiLogText({
+  segments,
+}: {
+  segments: Array<AnsiSegment>;
+}) {
   return (
     <>
       {segments.map((seg, i) =>
@@ -62,4 +72,4 @@ export function AnsiLogText({ segments }: { segments: Array<AnsiSegment> }) {
       )}
     </>
   );
-}
+});
