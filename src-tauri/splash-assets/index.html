@@ -185,9 +185,6 @@
     .elapsed {
       font-variant-numeric: tabular-nums;
     }
-    .hint {
-      opacity: 0.7;
-    }
     .log-toggle {
       -webkit-app-region: no-drag;
       background: transparent;
@@ -334,7 +331,6 @@
     <div class="message" id="message" data-no-drag>启动器正在初始化…</div>
     <div class="server-activity" id="server-activity" data-no-drag></div>
     <div class="footer">
-      <span class="hint">关闭（右上角 ✕）即放弃本次启动</span>
       <button class="log-toggle" id="log-btn" type="button">查看日志</button>
       <span class="elapsed" id="elapsed">00:00</span>
     </div>
@@ -423,9 +419,10 @@
     // 紧凑档尺寸：**只**在壳命令 set_splash_compact 调不动（壳过旧 / 纯 Web）
     // 时的兜底值，与壳侧 SPLASH_WINDOW_SIZE 同值。正常路径下尺寸一律由壳算，
     // 页面不参与（见 applyCompact）。紧凑档只摆「标题 + 阶段 + 消息 + 服务端
-    // 动态 + 页脚（耗时 / 查看日志）」五件（#4588：逐段耗时条撤出启动页，
-    // 耗时分解在应用内「查看日志」里看），高度按这份内容的两行消息余量给。
-    const COMPACT_SIZE = { width: 560, height: 300 };
+    // 动态 + 页脚（查看日志 / 耗时）」五件（#4588：逐段耗时条撤出启动页，
+    // 耗时分解在应用内「查看日志」里看）；高度按这份内容的实际占位给足
+    // （#4638：300 时页脚上方留出约 120px 空白带，收到 200 贴合内容）。
+    const COMPACT_SIZE = { width: 560, height: 200 };
     const subtitleEl = $('subtitle');
 
     /** 正在执行的窗口动作（'' 表示空闲）——onclick 与监听两条路的去重。 */

@@ -129,9 +129,7 @@ export async function waitForDevReady(ctx, target) {
       status(
         "dev-server-starting",
         progress,
-        schemaNoticeSent
-          ? `数据库表还没建，正在等待自动建表（还剩 ${left}s）…`
-          : `正在等待本地服务就绪（还剩 ${left}s）…`,
+        schemaNoticeSent ? `数据库表还没建，正在等待自动建表…` : `正在等待本地服务就绪…`,
         { staleShell },
       );
     }
