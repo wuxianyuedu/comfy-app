@@ -42,7 +42,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
    *  也要压住连线。状态在本节点内，悬浮进出不影响其余节点。 */
   const { hoverHandlers, hoverRef } = useHoverElevation();
 
-  /* 这里不再订阅视口缩放（只有磨砂节点需要跟缩放，见 FlowNode / FrostLayer）。
+  /* 视口缩放**不**在节点层订阅（旧毛玻璃的缩放补偿已随 #4578 移除）。
    * 父图子图卡片与 WorkflowNode 两区布局对齐：紫色头部 + 顶部 PINS 区
    *（纯连线输入左圆点与暴露输出右圆点按 22px 行拉链成对）+ WIDGET 区
    *（LABEL|VALUE 行，仅槽位同时接线时才画圆点）；IO 行连接模型与普通节点完全相同。 */

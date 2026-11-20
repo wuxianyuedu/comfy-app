@@ -91,8 +91,8 @@ export const FlowNode = React.memo(function FlowNode({
    * 标签读的是 `~/config/custom-nodes` 里就地替换的 map，而 FlowNode 是 memo 的。
    * 只调不读返回值是有意的 —— 订阅本身就是「变了」的信号（理由见该 hook 的文件头）。 */
   useCustomNodesRegistryVersion();
-  /* 视口缩放**不再**在这里订阅 —— 缩放的读取
-   *  挪进了 <FrostLayer>，缩放时只有磨砂节点重渲染。 */
+  /* 视口缩放**不**在节点层订阅：旧毛玻璃的缩放补偿已随 #4578 移除
+   *  （着色层不再透采画布），画布缩放与节点重渲染彻底无关。 */
   const debugMode = useDebugStore((state) => state.debugMode);
 
   /* 悬浮置顶：鼠标指着的节点压住连线（ISSUE #400）。
