@@ -1334,14 +1334,15 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
 
   it("splash 开窗是紧凑的一条，不铺满屏幕留空白", () => {
     const win = splashWindow();
-    // 高度必须贴着「收起日志时的内容高度」（逐行耗时分解铺开后约 247px，
-    // #4327：耗时分解读得清，窗口跟着长高；#4431 起另含「服务端动态」一行，
-    // 上界放到 288；#4504 起耗时分解读**全量时间线**——最多 15 段 + 收拢行
-    // 逐行铺开，上界放到 512），而不是留出一大块空白：旧值 1680×1000 就是
-    // 这块空白的来源。
+    // 高度必须贴着「收起日志时的内容高度」：#4504 曾因全量时间线逐行铺开放到
+    // 512；#4588 撤掉逐段耗时条后内容只剩「标题 + 阶段 + 消息 + 服务端动态 +
+    // 页脚」，#4638 把高度收到 200 贴合内容（300 时页脚上方留约 120px 空白）。
+    // 宽度下界 560（#4588）：紧凑档不含日志面板，日志一行的可读宽度由展开档
+    // （≥1400）保证，紧凑档不再为日志宽度兜底。旧值 1680×1000 是「窗口大于
+    // 内容」空白的来源。
     expect(win.width).toBeLessThanOrEqual(900);
     expect(win.height).toBeLessThanOrEqual(512);
-    expect(win.width).toBeGreaterThanOrEqual(640);
+    expect(win.width).toBeGreaterThanOrEqual(560);
     // 紧凑档必须与壳里的常量一致，否则开窗和回落档会是两个尺寸
     const rust = readFileSync(LIB_RS, "utf8");
     const [compactWidth, compactHeight] = sizeConst(rust, "SPLASH_WINDOW_SIZE");
