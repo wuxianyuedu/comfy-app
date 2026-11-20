@@ -287,3 +287,40 @@ describe("悬停四角括号（#4549）", () => {
     }
   });
 });
+
+/* 旁路 / 停用节点曾是「半透明卡 + backdrop-filter 透采画布」：悬停抬层
+ * （ISSUE #400 的 z-index 提升）改变毛玻璃取样到的背影，节点颜色跟着悬停
+ * 漂移 —— 用户实测同一节点悬停前后色值不同（ISSUE #4578 补充）。现在卡片
+ * 铺不透明角色底色，着色层只叠模式色，颜色与层叠序彻底解耦。 */
+
+/** querySelector 的收窄助手：命中失败当场抛，类型经 instanceof 收窄（不走 as 断言）。 */
+function htmlEl(el: Element | null, what: string): HTMLElement {
+  if (!(el instanceof HTMLElement)) {
+    throw new Error(`${what} 不是 HTMLElement`);
+  }
+  return el;
+}
+
+describe("旁路 / 停用节点底色不透明（#4578 补充：悬停不再变色）", () => {
+  it("mode=4 节点卡片铺不透明角色底色，不再是 transparent", () => {
+    renderFlowNode(nodeData({ mode: 4, rawInputs: RAW_INPUTS }));
+    const card = htmlEl(document.querySelector("[data-node-id]"), "节点卡片");
+    const bg = card.style.background;
+    expect(bg).not.toBe("transparent");
+    expect(bg).not.toContain("rgba(0, 0, 0, 0)");
+    /* assignedRole 为空 → 不透明底 = base.body（#2B2B36，happy-dom 保留原字面量）。 */
+    expect(bg).toContain("#2B2B36");
+  });
+
+  it("模式着色层仍叠旁路色，但不再使用 backdrop-filter（变色根因）", () => {
+    renderFlowNode(nodeData({ mode: 4, rawInputs: RAW_INPUTS }));
+    const frost = htmlEl(document.querySelector('[data-testid="node-frost"]'), "着色层");
+    /* 旁路色 #ec4899 @ 0.16 仍叠在底色上（模式身份保留）—— 色在着色层内层。
+       happy-dom 会把 rgba 规范化成带空格的形态（同 flex 简写），比对前去空格。 */
+    const tint = htmlEl(frost.querySelector("div"), "着色层内层");
+    expect(tint.style.background.replaceAll(/\s/g, "")).toContain("rgba(236,72,153,0.16)");
+    /* 根因判据：着色层不再使用 backdrop-filter —— 旧版透采画布，取样背影随
+     * 悬停抬层变化，正是「悬停变色」的根因；现在只是叠在不透明底上的一层色。 */
+    expect(tint.style.backdropFilter ?? "").toBe("");
+  });
+});

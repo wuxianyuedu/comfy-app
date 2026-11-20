@@ -42,7 +42,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
    *  也要压住连线。状态在本节点内，悬浮进出不影响其余节点。 */
   const { hoverHandlers, hoverRef } = useHoverElevation();
 
-  /* 这里不再订阅视口缩放（只有磨砂节点需要跟缩放，见 FlowNode / FrostLayer）。
+  /* 视口缩放**不**在节点层订阅（旧毛玻璃的缩放补偿已随 #4578 移除）。
    * 父图子图卡片与 WorkflowNode 两区布局对齐：紫色头部 + 顶部 PINS 区
    *（纯连线输入左圆点与暴露输出右圆点按 22px 行拉链成对）+ WIDGET 区
    *（LABEL|VALUE 行，仅槽位同时接线时才画圆点）；IO 行连接模型与普通节点完全相同。 */
@@ -50,9 +50,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
    * 静音时切成灰色。与 WorkflowNode 的「模式 → 颜色」逻辑一致。 */
   const nodeMode = data.mode ?? 0;
 
-  /*  子图封装节点与 WorkflowNode 一样，经 <NodeFrost> 用**真实**的
-   *  `backdrop-filter` —— 按 1/缩放 反向缩放，避开 Chromium 在低缩放下的
-   *  重复平铺伪影。<PseudoFrostLayer> 仍是不启用的兜底。 */
+  /*  子图封装节点与 WorkflowNode 一样，经 <NodeFrost> 叠模式着色 ——
+   *  底色不透明（`bg-node`），不再透采画布（ISSUE #4578 补充）。
+   *  <PseudoFrostLayer> 仍是不启用的兜底。 */
   const accent = nodeMode === 4 ? "#ec4899" : nodeMode === 2 ? "#6b7280" : "#7C5CFC"; // subgraph default purple identity (mode 0)
 
   /* 外框语义与 WorkflowNode 相同：导入的配置带显式尺寸时，
@@ -97,9 +97,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
 
   return (
     <div
-      className={`relative flex flex-col rounded-lg border shadow-[0_6px_22px_var(--color-shadow-strong)] ${
-        nodeMode === 0 ? "bg-node" : "bg-transparent"
-      }`}
+      className="bg-node relative flex flex-col rounded-lg border shadow-[0_6px_22px_var(--color-shadow-strong)]"
       data-node-id={data.nodeId}
       ref={hoverRef}
       {...hoverHandlers}
@@ -124,10 +122,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         //  而我们必须尊重配置里带的 `size`
         //  （硬写 320 的上限会把用户在 ComfyUI 里明确调宽的框裁掉）。
         borderColor: hexToRgba(accent, 0.55),
-        // 旁路 / 禁用子图的着色与真模糊在 <NodeFrost> 里；
-        //  根节点保留 `isolation`，把磨砂层的负 z 关在里面；
-        //  同时保持透明，磨砂才透得出来。
-        //  普通子图用 `bg-node` 的实心面板（跟随主题）。
+        // 旁路 / 禁用子图的模式着色在 <NodeFrost> 里，叠在**不透明**的
+        //  `bg-node` 底上（与 WorkflowNode 同一修正，ISSUE #4578 补充）：
+        //  旧版半透明 + backdrop-filter 会随悬停抬层改变取样背影、颜色漂移。
+        //  根节点保留 `isolation`，把着色层的负 z 关在里面。
         isolation: "isolate",
         // ComfyUI 会给当前激活的节点画一圈亮色选中矩形。
         outline: selected === true ? "2px solid rgba(56,189,248,0.9)" : "none",

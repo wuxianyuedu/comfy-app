@@ -1,6 +1,5 @@
 "use client";
 import { Z } from "~/lib/shell/overlay-z";
-import { useStore } from "@xyflow/react";
 import { pseudoFrostPalette, hexToRgba } from "../workflow-utils";
 
 export const PSEUDO_FROST_NOISE_URL =
@@ -91,50 +90,37 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
   );
 }
 
-/* NodeFrost —— 绕过/禁用节点用的真·透视毛玻璃层（backdrop-filter 模糊真实画布）。
- * Chromium 经典 bug：backdrop-filter 在屏幕占位极小的元素上会重铺平铺，缩小时出现 2²/3²/4² 重影。
- * 修法：按 1/zoom 反向缩放模糊元素，使屏幕占位保持 zoom=1 尺寸；外层 overflow:hidden 裁回节点边界，
- * 模糊半径除以同一比例，各缩放档有效屏幕模糊约 6px。 */
-export function NodeFrost({
-  zoom,
-  color,
-  nodeMode,
-}: {
-  color: string | null;
-  nodeMode: number;
-  zoom: number;
-}) {
+/* NodeFrost —— 旁路 / 停用节点的模式着色层。
+ *
+ * ⚠️ 这一版**不再透采画布**（ISSUE #4578 补充）：旧实现用 backdrop-filter
+ * 模糊真实画布，而悬停抬层（ISSUE #400 的 z-index 提升）会改变节点在层叠序里
+ * 的位置 —— 毛玻璃取样到的背影随之改变，节点颜色跟着悬停漂移（用户实测：
+ * 同一节点悬停前后色值不同）。现在卡片本体已铺**不透明**的角色底色
+ * （`palette.nodeBgOpaque`，见 WorkflowNode），本层只负责把模式色叠上去，
+ * 颜色与层叠序彻底解耦：悬停、选中、邻点遮挡都不再改变它的色值。 */
+export function NodeFrost({ color, nodeMode }: { color: string | null; nodeMode: number }) {
   if (color === null || color === "" || nodeMode === 0) {
     return null;
   }
-  // 让屏幕占位不小于节点 zoom=1 时的尺寸。
-  const scale = Math.max(1, 1 / Math.max(zoom, 0.01));
-  const blur = 6 / scale; // 不论缩放多少，屏幕上的模糊都保持在约 6px
   return (
     <div
       aria-hidden
       className="pointer-events-none absolute inset-0 z-[-1] overflow-hidden rounded-[inherit]"
+      data-testid="node-frost"
     >
       <div
         className="absolute inset-0"
-        style={{
-          background: hexToRgba(color, nodeMode === 4 ? 0.16 : 0.11),
-          backdropFilter: `blur(${blur}px)`,
-          WebkitBackdropFilter: `blur(${blur}px)`,
-          transform: `scale(${scale})`,
-          transformOrigin: "center center",
-        }}
+        style={{ background: hexToRgba(color, nodeMode === 4 ? 0.16 : 0.11) }}
       />
     </div>
   );
 }
 
-/* FrostLayer —— 感知缩放的 <NodeFrost> 包装层。
- * 此前每个节点都订阅 `transform[2]` 只为传 zoom，捏合/滚轮会让上百节点全部重渲染。
- * 把缩放订阅挪到这一层后，只有真的渲染毛玻璃的节点响应缩放，普通节点纹丝不动。 */
+/* FrostLayer —— <NodeFrost> 的接线层。旧版在这里订阅画布缩放
+ * （backdrop-filter 的补偿参数）；着色层不再透采画布后没有可补偿的量，
+ * 订阅随之撤除 —— 缩放不再触发磨砂节点重渲染。 */
 export function FrostLayer({ color, nodeMode }: { color: string | null; nodeMode: number }) {
-  const zoom = useStore((state) => state.transform[2]);
-  return <NodeFrost color={color} nodeMode={nodeMode} zoom={zoom} />;
+  return <NodeFrost color={color} nodeMode={nodeMode} />;
 }
 
 /* StringTextarea —— 长 STRING 控件的多行只读文本框：用原生可滚动 textarea 取代旧的 <div>

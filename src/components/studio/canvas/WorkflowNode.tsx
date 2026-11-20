@@ -91,8 +91,8 @@ export const FlowNode = React.memo(function FlowNode({
    * 标签读的是 `~/config/custom-nodes` 里就地替换的 map，而 FlowNode 是 memo 的。
    * 只调不读返回值是有意的 —— 订阅本身就是「变了」的信号（理由见该 hook 的文件头）。 */
   useCustomNodesRegistryVersion();
-  /* 视口缩放**不再**在这里订阅 —— 缩放的读取
-   *  挪进了 <FrostLayer>，缩放时只有磨砂节点重渲染。 */
+  /* 视口缩放**不**在节点层订阅：旧毛玻璃的缩放补偿已随 #4578 移除
+   *  （着色层不再透采画布），画布缩放与节点重渲染彻底无关。 */
   const debugMode = useDebugStore((state) => state.debugMode);
 
   /* 悬浮置顶：鼠标指着的节点压住连线（ISSUE #400）。
@@ -156,12 +156,12 @@ export const FlowNode = React.memo(function FlowNode({
             : undefined,
         // 不设 maxWidth 上限 —— ComfyUI 允许用户自由缩放节点框。
         borderColor: palette.nodeBorder,
-        // 模式（旁路 / 停用）节点经 <FrostLayer> + 真实模糊着色，所以
-        // 根节点透明（isolation 把磨砂限制在本节点内）。
-        // 普通节点保留实心面板。
+        // 卡片体一律铺**不透明**底色（角色微着色）。旁路 / 停用节点的模式色
+        // 由 <FrostLayer> 叠在底色之上 —— 不再用半透明底 + backdrop-filter
+        // 透采画布：那会让悬停抬层（ISSUE #400）改变毛玻璃取样背影，
+        // 节点颜色随悬停漂移（ISSUE #4578 补充的用户实测）。
         isolation: "isolate",
-        background:
-          palette.modeColor !== null && palette.modeColor !== "" ? "transparent" : palette.nodeBg,
+        background: palette.nodeBgOpaque,
         outline: selected === true ? "2px solid rgba(56,189,248,0.9)" : "none",
         outlineOffset: selected === true ? "2px" : undefined,
       }}
