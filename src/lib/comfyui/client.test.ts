@@ -30,6 +30,7 @@ vi.mock("~/lib/core/logger", () => ({
 
 import {
   ComfyViewError,
+  freeComfyMemory,
   getHistory,
   getView,
   resolveComfyBase,
@@ -421,5 +422,76 @@ describe("resolveComfyBase —— 启动中日志的逐拍聚合（ISSUE #4149�
       .mocked(logger.info)
       .mock.calls.filter(([msg]) => String(msg).includes("starting, port not bound yet"));
     expect(starting, "两场启动各写一条首行").toHaveLength(2);
+  });
+});
+
+// ── freeComfyMemory — 卸载模型两档（ISSUE #4637）──────────────────────────
+// 端点在**根路径** `/free`（与 /system_stats / /queue 同族，不在 /api/ 下）；
+// 两档力度 = free_memory 开关；失败返回 {ok:false, detail} 信封不抛错。
+describe("freeComfyMemory — POST /free 的地址、载荷与失败信封", () => {
+  /** RequestInit 的形状守卫（no-unsafe-type-assertion 禁 `as` 硬断言，收口用谓词）。 */
+  function isRequestInit(value: unknown): value is RequestInit {
+    return typeof value === "object" && value !== null && "method" in value && "body" in value;
+  }
+
+  /** 取 spy 收到的**发往 /free** 的那一笔（resolveComfyBase 先发的 /system_stats
+   *  探测也在同一只 spy 里，按 URL 挑出目标请求），并把 init / body 收窄成
+   *  可断言的形状。 */
+  function freeCall(spy: { mock: { calls: Array<Array<unknown>> } }): {
+    body: string;
+    init: RequestInit;
+    url: string;
+  } {
+    const call = spy.mock.calls.find((entry) => String(entry[0]).endsWith("/free"));
+    if (call === undefined || !isRequestInit(call[1])) {
+      throw new Error("应发出一笔带 RequestInit 的 POST /free");
+    }
+    const init = call[1];
+    if (typeof init.body !== "string") {
+      throw new Error("/free 的 body 应是 JSON 字符串");
+    }
+    return { body: init.body, init, url: String(call[0]) };
+  }
+
+  it("卸载模型：POST 根路径 /free，body 带 unload_models=true / free_memory=false", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    const r = await freeComfyMemory({ unloadModels: true, freeMemory: false });
+    expect(r).toMatchObject({ ok: true, detail: "已卸载模型" });
+    const call = freeCall(fetchSpy);
+    expect(call.url).toBe("http://127.0.0.1:8188/free");
+    expect(call.init.method).toBe("POST");
+    expect(JSON.parse(call.body)).toEqual({
+      unload_models: true,
+      free_memory: false,
+    });
+  });
+
+  it("卸载模型和执行缓存：free_memory=true，成功文案带「执行缓存」", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    const r = await freeComfyMemory({ unloadModels: true, freeMemory: true });
+    expect(r).toMatchObject({ ok: true, detail: "已卸载模型并释放执行缓存" });
+    const call = freeCall(fetchSpy);
+    expect(JSON.parse(call.body)).toEqual({
+      unload_models: true,
+      free_memory: true,
+    });
+  });
+
+  it("非 2xx：ok=false 且带状态码，不抛错", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 503 }));
+    const r = await freeComfyMemory({ unloadModels: true, freeMemory: false });
+    expect(r.ok).toBe(false);
+    expect(r.detail).toContain("503");
+  });
+
+  it("连不上（ECONNREFUSED）：ok=false 且带原因，不抛错", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("ECONNREFUSED"));
+    const r = await freeComfyMemory({ unloadModels: true, freeMemory: true });
+    expect(r.ok).toBe(false);
+    expect(r.detail).toContain("ECONNREFUSED");
   });
 });
