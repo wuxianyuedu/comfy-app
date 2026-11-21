@@ -41,7 +41,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const { runGateStep } = require("../launcher-core/shell.mjs");
+const { spawnSync } = require("node:child_process");
 
 /** 默认不进去的目录：依赖与产物。要更多豁免由调用方传 `skipDirs`。 */
 const DEFAULT_SKIP_DIRS = new Set(["node_modules"]);
@@ -260,15 +260,14 @@ function readStagedPaths(root = process.cwd()) {
    * 文件（全在 `docs/` 下）⇒ 转义过的路径**对不上扫描根前缀** ⇒ `skipUnlessStagedTouches()`
    * 会**跳过整条判据**：判据在场却没跑，而机器之间还不一样（本机全局配了
    * `core.quotepath=false`，CI runner 是 git 默认值）。 */
-  const res = runGateStep(
-    "git",
-    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
-    {
-      cwd: root,
-      timeoutMs: 30_000,
-      echo: false, // 暂存清单读数，回显不得混进本判据的 stdout
-    },
-  );
+  // **保留裸 `spawnSync` 不迁 `runGateStep`（#4679）**：本件是门禁共用的扫描读取器，
+  // 会被 `tests/gate-repo-boilerplate-gate.test.ts` 单独拷进沙箱临时仓库真跑（同批
+  // 只带判据本体与被测文件），不 import 仓库内模块 —— 预算在选项层显式给（30s 档）。
+  const res = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 30_000,
+  });
   if (res.status !== 0) {
     return null;
   }
