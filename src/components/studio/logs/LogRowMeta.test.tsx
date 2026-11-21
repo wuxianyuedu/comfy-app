@@ -47,8 +47,8 @@ describe("LogRow 元信息列显隐", () => {
   it("显示（默认）：时刻、级别徽标、来源都在场", () => {
     renderRow(true);
     expect(document.querySelector("time")).not.toBeNull();
-    /* 徽标文本是级别原值（大写由 `uppercase` class 呈现），匹配按不区分大小写。 */
-    expect(screen.getByText(/info/i)).toBeTruthy();
+    /* 徽标文本是级别的中文展示名（设计稿「日志面板 · 重设计」）。 */
+    expect(screen.getByText("信息")).toBeTruthy();
     expect(screen.getByText("shell-launch")).toBeTruthy();
     expect(screen.getByText(/编排器互斥占坑/)).toBeTruthy();
   });
@@ -56,7 +56,7 @@ describe("LogRow 元信息列显隐", () => {
   it("隐藏（精简列）：时刻 / 级别 / 来源整排收起，正文与复制按钮保留", () => {
     renderRow(false);
     expect(document.querySelector("time")).toBeNull();
-    expect(screen.queryByText(/info/i)).toBeNull();
+    expect(screen.queryByText("信息")).toBeNull();
     expect(screen.queryByText("shell-launch")).toBeNull();
     expect(screen.getByText(/编排器互斥占坑/)).toBeTruthy();
     expect(screen.getByLabelText("复制本条日志")).toBeTruthy();
@@ -64,8 +64,8 @@ describe("LogRow 元信息列显隐", () => {
 
   it("行距档改变行内边距（与 log-virtual 的行高常量同源）", () => {
     renderRow(true, "relaxed");
-    expect(document.querySelector("div[class*='py-2']")).not.toBeNull();
-    expect(document.querySelector("div[class*='py-1 ']")).toBeNull();
+    expect(document.querySelector("div[class*='py-4']")).not.toBeNull();
+    expect(document.querySelector("div[class*='py-3']")).toBeNull();
   });
 });
 

@@ -15,7 +15,11 @@ import {
   LOG_PANEL_POPUP_Z,
   LOG_PANEL_POPUP_Z_CLASS,
 } from "./log-panel-layers";
-import { LOG_ROW_SINGLE } from "./log-virtual";
+import { rowHeightFor } from "./log-virtual";
+
+/** 标准档单行高度（设计稿「日志面板 · 重设计」的行距）：行盒与滚动条断言都按它推导，
+ * 不再引用旧常量 `LOG_ROW_SINGLE`（那颗已退化为 stories / 兜底的遗留口径）。 */
+const ROW_STD = rowHeightFor("standard");
 
 /* 本文件是 jsdom 里的**重交互**用例（数百行日志渲染 + 多次 userEvent 点击），默认 5s 超时在全量
  * 并行负载下不够。分页族已改用**小页夹具**（`useSmallPage`）：页数判定、翻页交互、边界禁用、新日志
@@ -459,12 +463,11 @@ describe("LogPanel 日志面板", () => {
     }
   });
 
-  /* ISSUE #262 五审：「警告/错误显示重复了，左侧那两个去掉」。
-   *
-   * 标题旁那块灰底胶囊（`警告 n · 错误 n`）与级别按钮上的同名计数完全同源
-   * （同一个 `originCounts`），是同一项数据在两处出现。现在整块删除，计数只
-   * 保留在级别按钮上；完整分类数（含信息）留在各按钮的悬浮说明里。 */
-  it("标题旁不再有复述警告/错误的灰底胶囊（计数只在级别按钮上）", () => {
+  /* 设计稿「日志面板 · 重设计」（ISSUE #4692）：标题旁一枚**总数徽标**，显示当前
+   * 筛选命中的总条数（与页脚「匹配 N 条」同口径，同一份 filteredLogs）；分档计数
+   * 仍在级别按钮上（同一份 `originCounts`），两处数字各管一层、不互相复述。
+   * （推倒了 ISSUE #262 五审「标题旁不放任何计数」的旧决策，旧断言随稿改写。） */
+  it("标题旁的总数徽标显示当前筛选命中数，分档计数仍在级别按钮上", () => {
     act(() => {
       useLogStore
         .getState()
@@ -476,11 +479,11 @@ describe("LogPanel 日志面板", () => {
     });
     render(<LogPanel />);
 
-    /* 老形态：标题旁一个 `rounded-full bg-subtle` 的胶囊，title 里写全分类数。 */
+    /* 老形态的「警告 n · 错误 n」分类胶囊不回来；徽标是单一总数。 */
     expect(screen.queryByText(/^警告 \d+ · 错误 \d+$/)).toBeNull();
-    expect(document.querySelector("span.rounded-full")).toBeNull();
+    expect(document.querySelector("span.rounded-full")?.textContent).toBe("3 条");
 
-    /* 计数与完整分类数改由级别按钮承载（悬浮说明里能读全）。 */
+    /* 分档计数与完整分类数仍由级别按钮承载（悬浮说明里能读全）。 */
     expect(levelButton("警告").textContent).toContain("警告1");
     expect(levelButton("错误").textContent).toContain("错误1");
     expect(levelButton("警告").getAttribute("title")).toContain("共 3 条 · 警告 1 · 错误 1");
@@ -679,24 +682,24 @@ describe("LogPanel 日志面板", () => {
   it("选中的类别在浅色/深色主题下都看得出（不是只差一个近乎同值的底色）", () => {
     seed(3);
     render(<LogPanel />);
-    /* 选中态此前只有 `bg-subtle`——浅色下它与行头底色（surface-1）同值 #f7f8fa，「选中的是哪一项」
-     * 完全看不出来（ISSUE #609 第 1 条）。判据落在**类**上：底色 + 描边 + 字重三层里至少底色与描边都
-     * 换成主色调。⚠️ 按**类名 token** 精确比对而非子串：`ui/toggle-group` 给每个 item 都挂
-     * `data-pressed:ring-*` / `data-pressed:font-semibold`，子串判据分不出裸类与变体前缀，会假红。 */
+    /* 选中态是设计稿的分段控件语言（ISSUE #609 的判据延续）：轨道 `bg-subtle` 上
+     * 选中段**浮起**——面板底色 + 投影 + 字重，浅深两态都读得出「选中的是哪一项」。
+     * ⚠️ 按**类名 token** 精确比对而非子串：`ui/toggle-group` 给每个 item 都挂
+     * `data-pressed:*` 变体，子串判据分不出裸类与变体前缀，会假红。 */
     const tokensOf = (el: HTMLElement) => new Set(el.className.split(/\s+/));
     const selected = levelButton("全部");
     expect(selected.getAttribute("aria-pressed")).toBe("true");
     const selectedTokens = tokensOf(selected);
-    expect(selectedTokens.has("bg-primary/12!")).toBe(true);
-    expect(selectedTokens.has("ring-primary/45")).toBe(true);
+    expect(selectedTokens.has("bg-panel!")).toBe(true);
+    expect(selectedTokens.has("shadow-sm")).toBe(true);
     expect(selectedTokens.has("font-semibold")).toBe(true);
 
     /* 未选中的按钮不得带这三样（否则「选中」就没有区分度了）。 */
     const unselected = levelButton("警告");
     expect(unselected.getAttribute("aria-pressed")).toBe("false");
     const unselectedTokens = tokensOf(unselected);
-    expect(unselectedTokens.has("bg-primary/12!")).toBe(false);
-    expect(unselectedTokens.has("ring-primary/45")).toBe(false);
+    expect(unselectedTokens.has("bg-panel!")).toBe(false);
+    expect(unselectedTokens.has("shadow-sm")).toBe(false);
     expect(unselectedTokens.has("font-semibold")).toBe(false);
   });
 
@@ -855,11 +858,11 @@ describe("LogPanel 日志面板", () => {
     /* 显式高度是这件事的地基：估算高度与实际渲染高度不同口径时，累计误差会让
      * 滚动位置与内容错开（见 log-virtual 的常量说明）。 */
     for (const row of rows) {
-      expect(row.style.height).toBe(`${LOG_ROW_SINGLE}px`);
+      expect(row.style.height).toBe(`${ROW_STD}px`);
     }
     /* 撑开滚动条的那一层：高度 = 行数 × 单行高度。 */
     const spacer = rows[0]!.closest("[data-log-index]")!.parentElement!.parentElement!;
-    expect(spacer.style.height).toBe(`${120 * LOG_ROW_SINGLE}px`);
+    expect(spacer.style.height).toBe(`${120 * ROW_STD}px`);
   });
 
   /* 上面两条走的是「量不到视口就整页渲染」的兜底。这条**真的把视口量出来**（jsdom 的 `clientHeight`
@@ -893,9 +896,9 @@ describe("LogPanel 日志面板", () => {
       const firstIndex = () =>
         Number(document.querySelector<HTMLElement>("[data-log-index]")!.dataset.logIndex);
 
-      /* 一页 200 行，视口 600px（单行取 `LOG_ROW_SINGLE`）只装得下二十来行 +
-       * overscan。这里不写像素数：那个常量从 27 改到 28 时，抄下来的数字就是
-       * 漏改的那一处（`e2e/critical-flows.spec.ts` 同一条教训）。 */
+      /* 一页 200 行，视口 600px（单行取标准档行高 `ROW_STD`）只装得下十几行 +
+       * overscan。这里不写像素数：行距一调，抄下来的数字就是漏改的那一处
+       * （`e2e/critical-flows.spec.ts` 同一条教训）。 */
       expect(rowCount()).toBeGreaterThan(0);
       expect(rowCount()).toBeLessThan(200);
       expect(firstIndex()).toBe(0);
@@ -951,14 +954,14 @@ describe("LogPanel 日志面板", () => {
       const scroller = document.querySelector<HTMLElement>(".custom-scrollbar")!;
 
       /* 用户滚到最底：贴底基线跟着取到当前页最后一条，effect 据此定位。 */
-      scroller.scrollTop = 200 * LOG_ROW_SINGLE;
+      scroller.scrollTop = 200 * ROW_STD;
       act(() => {
         scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
       });
 
-      /* 页尾那一行的下边缘在内容里的位置 = 200 × 27；落点必须是它减去一个视口
-       * （600），也就是远大于 0 的一个值。按节点量的话这里恒为 0。 */
-      const expected = 200 * LOG_ROW_SINGLE - 600;
+      /* 页尾那一行的下边缘在内容里的位置 = 200 × ROW_STD；落点必须是它减去一个
+       * 视口（600），也就是远大于 0 的一个值。按节点量的话这里恒为 0。 */
+      const expected = 200 * ROW_STD - 600;
       expect(scroller.scrollTop).toBe(expected);
       /* 窗口也真的跟着走到了页尾。 */
       const nodes = document.querySelectorAll<HTMLElement>("[data-log-index]");
@@ -1009,9 +1012,10 @@ describe("LogPanel 日志面板", () => {
     expect(Z.popup).toBeGreaterThan(Z.modal);
   });
 
-  /* 零条目同样不留占位：胶囊已删，所以「警告 0 / 错误 0」在任何地方都不出现，
-   * 标题行不会因为一个恒在的徽标被挤（列宽也就不会被逼到省略号）。 */
-  it("警告/错误都为零时标题行不留占位", () => {
+  /* 零警告/错误时徽标不消失：它显示的是**命中总数**（2 条），不是分类占位——
+   * 旧决策「零条目不留占位」随 #4692 的总数徽标改写。级别按钮上仍是 `警告0`
+   * （`0` 与「切过去是空的」互相印证），但按钮不会把它单独摆成一行的宽度。 */
+  it("警告/错误都为零时总数徽标仍显示命中数（不按分类留占位）", () => {
     act(() => {
       useLogStore
         .getState()
@@ -1022,9 +1026,7 @@ describe("LogPanel 日志面板", () => {
     });
     render(<LogPanel />);
 
-    expect(document.querySelector("span.rounded-full")).toBeNull();
-    /* 级别按钮上仍然是 `警告0`（`0` 与「切过去是空的」互相印证），
-     * 但按钮不会把它单独摆成一行的宽度。 */
+    expect(document.querySelector("span.rounded-full")?.textContent).toBe("2 条");
     expect(levelButton("警告").textContent).toBe("警告0");
   });
 });

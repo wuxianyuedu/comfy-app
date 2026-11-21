@@ -23,12 +23,21 @@ export type RowToken = {
 /** 日志级别的徽标配色（视图与测试共用同一份表）。级别是**状态语义**，走项目语义 token
  *  （§4.11.1 / P71）：info→`--color-info`、warn→`--color-warning`、error→`--color-destructive`
  *  （与 status-badge/alert 同源，消除「log 用 rose、全局用 destructive」的不一致）；debug 走 subtle。
- *  token 内部已含深浅两态，不再写 `dark:`。 */
+ *  token 内部已含深浅两态，不再写 `dark:`。
+ *  视觉稿（Ardot「日志面板 · 重设计」）为**无边框软底**：底色即层级，不再另描一圈边。 */
 export const LEVEL_BADGE_STYLES: Record<LogLevel, string> = {
-  debug: "border-border-strong bg-subtle text-ink-muted",
-  info: "border-info/20 bg-info/15 text-info-strong",
-  warn: "border-warning/20 bg-warning/15 text-warning-strong",
-  error: "border-destructive/20 bg-destructive/15 text-destructive",
+  debug: "bg-subtle text-ink-muted",
+  info: "bg-info/15 text-info-strong",
+  warn: "bg-warning/15 text-warning-strong",
+  error: "bg-destructive/15 text-destructive",
+};
+
+/** 级别徽标的中文展示名（设计稿以中文级别词替代此前的英文大写）。 */
+export const LEVEL_BADGE_LABELS: Record<LogLevel, string> = {
+  debug: "调试",
+  info: "信息",
+  warn: "警告",
+  error: "错误",
 };
 
 /**
@@ -39,11 +48,13 @@ export const LEVEL_BADGE_STYLES: Record<LogLevel, string> = {
 export const FILTER_SELECTED_STYLES = "bg-primary/12 ring-1 ring-primary/45 font-semibold";
 
 /**
- * `ToggleGroupItem` 那一档的选中样式：同一套三层表达，唯一差别是底色要加 `!`。基元 `ui/toggle`
- * 的选中档 `data-pressed:bg-muted` 特异性高于裸 utility，不压一层就永远轮到它；而 `bg-muted` →
- * `--color-subtle` 在浅色下与行头同值 #f7f8fa，选中又看不见（ISSUE #609）。
+ * `ToggleGroupItem` 那一档的选中样式（设计稿的分段控件语言）：轨道是 `bg-subtle`，
+ * 选中段**浮起**——底色换成面板色 + 一层小投影 + 字重。底色要加 `!`：基元 `ui/toggle`
+ * 的选中档 `data-pressed:bg-muted` 特异性高于裸 utility，不压一层就永远轮到它。
+ * 深色下面板比轨道深一档，与 shadcn Tabs 的 `data-active:bg-background` 同族，
+ * 靠投影与字重把「选中的是哪一项」读出来（ISSUE #609 的判据由测试按 token 断言）。
  */
-export const FILTER_SELECTED_ITEM_STYLES = "bg-primary/12! ring-1 ring-primary/45 font-semibold";
+export const FILTER_SELECTED_ITEM_STYLES = "bg-panel! shadow-sm font-semibold";
 
 /** 日志级别的正文配色（视图与测试共用同一份表）。级别是状态语义，走语义
  *  token（§4.11.1 / P71）：warn→`text-warning-strong`、error→

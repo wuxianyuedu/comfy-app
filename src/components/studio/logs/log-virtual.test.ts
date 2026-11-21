@@ -18,10 +18,15 @@ import {
   pinPlan,
   pinScrollTop,
   pinTargetIndex,
+  rowHeightFor,
   scrollHeightOf,
   visibleRange,
   type RowLayout,
 } from "./log-virtual";
+
+/** 标准档单行行高（设计稿「日志面板 · 重设计」的行距）：凡断言「默认密度下的行高」
+ * 都按它推导，不引用旧常量 `LOG_ROW_SINGLE`（那颗只服务 flat 几何与遗留消费方）。 */
+const ROW_STD = rowHeightFor("standard");
 
 /** 造一批等高行（不换行），几何断言才可手算。 */
 function flat(count: number, size = LOG_ROW_SINGLE): Array<RowLayout> {
@@ -33,22 +38,22 @@ function flat(count: number, size = LOG_ROW_SINGLE): Array<RowLayout> {
 
 describe("行高估算", () => {
   it("不换行时恒为单行高度（truncate 下内容不影响高度）", () => {
-    expect(estimateRowHeight("短", false)).toBe(LOG_ROW_SINGLE);
-    expect(estimateRowHeight("很长".repeat(200), false)).toBe(LOG_ROW_SINGLE);
+    expect(estimateRowHeight("短", false)).toBe(ROW_STD);
+    expect(estimateRowHeight("很长".repeat(200), false)).toBe(ROW_STD);
     /* 多行 payload 在不换行显示时也只占一行——它是被截断的，不是被展开的。 */
-    expect(estimateRowHeight("a\nb\nc", false)).toBe(LOG_ROW_SINGLE);
+    expect(estimateRowHeight("a\nb\nc", false)).toBe(ROW_STD);
   });
 
   it("换行时按显式换行符加高", () => {
-    expect(estimateRowHeight("一行", true)).toBe(LOG_ROW_SINGLE);
-    expect(estimateRowHeight("一行\n两行", true)).toBe(LOG_ROW_SINGLE + LOG_ROW_LINE);
-    expect(estimateRowHeight("a\nb\nc\nd", true)).toBe(LOG_ROW_SINGLE + 3 * LOG_ROW_LINE);
+    expect(estimateRowHeight("一行", true)).toBe(ROW_STD);
+    expect(estimateRowHeight("一行\n两行", true)).toBe(ROW_STD + LOG_ROW_LINE);
+    expect(estimateRowHeight("a\nb\nc\nd", true)).toBe(ROW_STD + 3 * LOG_ROW_LINE);
   });
 
   it("量不到宽度（首帧 / jsdom）时只数显式换行，不瞎估软换行", () => {
     const long = "x".repeat(5000);
     expect(countLines(long, 0)).toBe(1);
-    expect(estimateRowHeight(long, true)).toBe(LOG_ROW_SINGLE);
+    expect(estimateRowHeight(long, true)).toBe(ROW_STD);
   });
 
   it("量到宽度时按码点宽度求和估软换行（ASCII 窄、宽字符宽）", () => {
@@ -64,10 +69,10 @@ describe("行位置表", () => {
   it("start 是单调前缀和，总高等于各行之和", () => {
     const entries = [{ message: "a" }, { message: "a\nb" }, { message: "a" }];
     const { rows, totalSize } = layoutRows(entries, true, 0);
-    expect(rows[0]).toEqual({ start: 0, size: LOG_ROW_SINGLE });
-    expect(rows[1]!.start).toBe(LOG_ROW_SINGLE);
-    expect(rows[2]!.start).toBe(LOG_ROW_SINGLE * 2 + LOG_ROW_LINE);
-    expect(totalSize).toBe(LOG_ROW_SINGLE * 3 + LOG_ROW_LINE);
+    expect(rows[0]).toEqual({ start: 0, size: ROW_STD });
+    expect(rows[1]!.start).toBe(ROW_STD);
+    expect(rows[2]!.start).toBe(ROW_STD * 2 + LOG_ROW_LINE);
+    expect(totalSize).toBe(ROW_STD * 3 + LOG_ROW_LINE);
     /* 单调性：二分查找的前提，破了它滚动定位会静默错位。 */
     for (let i = 1; i < rows.length; i += 1) {
       expect(rows[i]!.start).toBeGreaterThan(rows[i - 1]!.start);
@@ -90,8 +95,8 @@ describe("展开行与强制单行的原始输出行（按 id 点名）", () => 
     const { rows } = layoutRows(entries, true, 0, {
       expandedIds: new Set(["b"]),
     });
-    expect(rows[0]).toEqual({ start: 0, size: LOG_ROW_SINGLE });
-    expect(rows[1]).toEqual({ start: LOG_ROW_SINGLE, size: LOG_ROW_EXPANDED });
+    expect(rows[0]).toEqual({ start: 0, size: ROW_STD });
+    expect(rows[1]).toEqual({ start: ROW_STD, size: LOG_ROW_EXPANDED });
   });
 
   it("强制单行的原始输出行在 wrap 下也只占一行（完整原文交给展开态）", () => {
@@ -99,12 +104,12 @@ describe("展开行与强制单行的原始输出行（按 id 点名）", () => 
     const list = [{ id: "a", message: long }];
     /* 不点名时，wrap 会把它按宽度估成很多行（那就是「错的显示 + 错的滚动长度」）。 */
     const loose = layoutRows(list, true, 130);
-    expect(loose.rows[0]!.size).toBeGreaterThan(LOG_ROW_SINGLE);
+    expect(loose.rows[0]!.size).toBeGreaterThan(ROW_STD);
     /* 点名之后恒为一行。 */
     const tight = layoutRows(list, true, 130, {
       singleLineIds: new Set(["a"]),
     });
-    expect(tight.rows[0]!.size).toBe(LOG_ROW_SINGLE);
+    expect(tight.rows[0]!.size).toBe(ROW_STD);
   });
 
   it("start 前缀和仍由实际行高累加（位置与滚动条同一口径）", () => {
@@ -114,8 +119,8 @@ describe("展开行与强制单行的原始输出行（按 id 点名）", () => 
     });
     expect(rows[0]).toEqual({ start: 0, size: LOG_ROW_EXPANDED });
     expect(rows[1]!.start).toBe(LOG_ROW_EXPANDED);
-    expect(rows[2]!.start).toBe(LOG_ROW_EXPANDED + LOG_ROW_SINGLE);
-    expect(totalSize).toBe(LOG_ROW_EXPANDED + LOG_ROW_SINGLE * 2);
+    expect(rows[2]!.start).toBe(LOG_ROW_EXPANDED + ROW_STD);
+    expect(totalSize).toBe(LOG_ROW_EXPANDED + ROW_STD * 2);
   });
 });
 
@@ -293,7 +298,7 @@ describe("实测高度校正（heightOf，ISSUE #4618）", () => {
     });
     expect(corrected.rows[0]!.size).toBe(120);
     expect(corrected.rows[2]!.size).toBe(120);
-    expect(corrected.rows[1]!.size).toBe(LOG_ROW_SINGLE);
+    expect(corrected.rows[1]!.size).toBe(ROW_STD);
   });
 
   it("展开行 / 强制单行不受校正影响（它们的口径另有出处）", () => {

@@ -22,6 +22,7 @@ import { formatTime } from "./log-format";
 import { useRevealLogPath } from "./use-reveal-log-path";
 import { LOG_ROW_EXPANDED, rowHeightFor, type LogDensity } from "./log-virtual";
 import {
+  LEVEL_BADGE_LABELS,
   LEVEL_BADGE_STYLES,
   LEVEL_TEXT_STYLES,
   LOG_ROW_TEXT_ATTRIBUTE,
@@ -36,11 +37,12 @@ import {
 const FRAGMENT_CACHE = new Map<string, Array<RowToken>>();
 const FRAGMENT_CACHE_MAX = 5000;
 
-/** 密度档 → 行的上下内边距 class（与 `log-virtual` 的 `DENSITY_PADDING` 对齐，行高同口径）。 */
+/** 密度档 → 行的上下内边距 class（与 `log-virtual` 的 `DENSITY_PADDING` 对齐，行高同口径）。
+ *  标准档 `py-3`（行高 44）来自设计稿「日志面板 · 重设计」的疏朗行距；紧凑/宽松档照同一梯队推。 */
 const DENSITY_PY_CLASS: Record<LogDensity, string> = {
-  compact: "py-0.5",
-  standard: "py-1",
-  relaxed: "py-2",
+  compact: "py-1",
+  standard: "py-3",
+  relaxed: "py-4",
 };
 
 /* 搜索命中 `<mark>` 高亮——琥珀是"荧光笔"的通用视觉语言、不是状态色
@@ -330,9 +332,9 @@ export const LogRow = memo(function LogRow({
   );
   const levelNode = (
     <span
-      className={`text-2xs shrink-0 rounded border px-1.5 py-0.5 font-medium uppercase ${LEVEL_BADGE_STYLES[entry.level]}`}
+      className={`text-2xs inline-flex h-5 w-11 shrink-0 items-center justify-center rounded-md font-medium ${LEVEL_BADGE_STYLES[entry.level]}`}
     >
-      {entry.level}
+      {LEVEL_BADGE_LABELS[entry.level]}
     </span>
   );
   /* 可展开行折叠态恒为一行摘要（完整内容在展开态），因此不受 `wrap` 影响。 */

@@ -68,7 +68,7 @@ export function LogFilterBar({
           （overflow 默认 visible）画到搜索框上，且 `flex-wrap` 判 flex base size 而非溢出内容、永不换行。 */}
       <ToggleGroup
         aria-label="日志级别筛选"
-        className="ml-3 min-w-fit flex-1 basis-0 gap-1"
+        className="bg-subtle ml-3 min-w-fit flex-1 basis-0 gap-0.5 rounded-lg p-0.5"
         multiple={false}
         onValueChange={(vals) => {
           const next = vals[0];
@@ -92,7 +92,7 @@ export function LogFilterBar({
              * （ISSUE #262）；它与上面容器的 `min-w-fit` 同源（ISSUE #1695 的溢出正是两者脱节）。
              * 选中态不能只靠 `data-pressed:bg-muted`（`--color-subtle` 浅色下与行头同值，ISSUE #609），
              * 故显式挂 `FILTER_SELECTED_ITEM_STYLES`（底色 + 描边 + 字重）；`LEVEL_LABEL_STYLES` 是级别语义色。 */
-            className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-xs leading-none transition-colors ${LEVEL_LABEL_STYLES[option.value]} ${
+            className={`flex h-8 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs leading-none transition-colors ${LEVEL_LABEL_STYLES[option.value]} ${
               option.value === filter ? FILTER_SELECTED_ITEM_STYLES : ""
             }`}
             key={option.value}
@@ -113,7 +113,7 @@ export function LogFilterBar({
       <div className="relative flex w-56 min-w-24 shrink items-center">
         <Search className="text-ink-fainter pointer-events-none absolute left-2.5" size={14} />
         <Input
-          className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus-visible:border-primary-500/40 h-8 rounded-lg pr-7 pl-8 text-sm"
+          className="bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus-visible:border-primary-500/40 h-8 rounded-lg border-transparent pr-7 pl-8 text-sm"
           onChange={textHandler(setSearch)}
           placeholder="搜索日志（支持命中高亮）..."
           type="text"
