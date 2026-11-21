@@ -50,6 +50,21 @@ const { test, expect } = defineGateRepo({
       to: "src/lib/process/executable-resolve.ts",
     },
     {
+      /* executable-resolve 自己的两份仓库内依赖与 pnpm-resolve 的一份：
+       * 这条链到 platform.ts / pnpm-resolve.ts / version-compare.ts 为止
+       * （再无仓库内 import），补齐即链路闭合。 */
+      from: "src/lib/process/platform.ts",
+      to: "src/lib/process/platform.ts",
+    },
+    {
+      from: "src/lib/process/pnpm-resolve.ts",
+      to: "src/lib/process/pnpm-resolve.ts",
+    },
+    {
+      from: "src/lib/process/version-compare.ts",
+      to: "src/lib/process/version-compare.ts",
+    },
+    {
       from: "scripts/freshness/freshness-ledger-sync.mjs",
       to: "scripts/freshness/freshness-ledger-sync.mjs",
     },
