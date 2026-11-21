@@ -59,7 +59,7 @@ describe("门禁夹具：同一条路径只写一次", () => {
       "夹具里出现了第二处 cpSync —— `copy` 与 `copyGateDeps` 各写各的，同一条路径就会写两遍",
     ).toBe(1);
     expect(
-      helper.includes("copyGateDeps(path.join(root, scriptRel), place)"),
+      helper.includes("copyGateDeps(path.join(root, scriptRel), place, copySeeds)"),
       "依赖链没有再走那一处收口（`place`）—— 「已存在的目标不覆盖」就管不到 `copy` 刚落的那些",
     ).toBe(true);
   });
@@ -92,5 +92,57 @@ describe("门禁夹具：同一条路径只写一次", () => {
     expect(gate.read(path.join("scripts", "lockfile", "lock-diff.mjs"))).toBe(
       "// 用例自己的夹具\n",
     );
+  });
+});
+
+describe("门禁夹具：显式 copy 的传递依赖自动闭合（ISSUE #4691）", () => {
+  /**
+   * 现场：#4688 为让 on-demand-duties 沙箱跑起来，沿 freshness-ledger →
+   * freshness-ledger-sync → shell.mjs → executable-resolve.ts → platform /
+   * pnpm-resolve / version-compare 手补了六件 `copy:`；同族坑 #4654（log.mjs）
+   * 已犯过一次。修法：显式 copy 的真实源也进 `copyGateDeps` 的 BFS 队列 ——
+   * 拷一件 = 它的仓库内依赖链自动闭合。
+   */
+  it("显式拷入的模块，其仓库内 import 链自动补齐，不必逐个手补", () => {
+    const { repo: gate } = repo({
+      script: "gates/check-on-demand-duties.cjs",
+      workdir: "gate-repo-copy-closure",
+      copy: [
+        {
+          from: "scripts/freshness/freshness-ledger.mjs",
+          to: "scripts/freshness/freshness-ledger.mjs",
+        },
+      ],
+    });
+
+    for (const rel of [
+      path.join("scripts", "launcher-core", "log.mjs"),
+      path.join("scripts", "freshness", "freshness-ledger-sync.mjs"),
+      path.join("scripts", "launcher-core", "shell.mjs"),
+      path.join("scripts", "launcher-core", "command-echo.mjs"),
+      path.join("src", "lib", "process", "executable-resolve.ts"),
+      path.join("src", "lib", "process", "platform.ts"),
+      path.join("src", "lib", "process", "pnpm-resolve.ts"),
+      path.join("src", "lib", "process", "version-compare.ts"),
+    ]) {
+      expect(gate.exists(rel), `${rel} 应随显式 copy 的传递依赖自动落盘`).toBe(true);
+    }
+  });
+
+  it("整目录 copy 也展开扫描：目录内文件的依赖同样闭合", () => {
+    const { repo: gate } = repo({
+      script: "gates/check-deps-freshness.mjs",
+      workdir: "gate-repo-copy-closure-dir",
+      copy: [{ from: "scripts/launcher-core", to: "scripts/launcher-core" }],
+    });
+
+    for (const rel of [
+      path.join("src", "lib", "process", "executable-resolve.ts"),
+      path.join("src", "lib", "process", "version-compare.ts"),
+      // launcher-core/worktree.mjs 的仓库内依赖（判据入口的 import 链之外）。
+      path.join("scripts", "lockfile", "lock-diff.mjs"),
+    ]) {
+      expect(gate.exists(rel), `${rel} 应随整目录 copy 的传递依赖自动落盘`).toBe(true);
+    }
   });
 });
