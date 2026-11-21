@@ -120,19 +120,18 @@ async function ensureProductionRow(
     .onConflictDoNothing({ target: production.id });
 }
 
-/** 把会话内容写进 production。**只写内容列**——进度 / run / 评审是另外的字段
- *  所有者（画布 / run 引擎 / 评审器），桥不碰；行缺失时整行新建（带归属）。
- *  `executor` 供事务入口传入。 */
-export async function writeContentToProduction(
-  projectId: string,
-  fallbackOwnerId: string,
-  content: SessionContent,
-  executor?: WorkshopExecutor,
-): Promise<void> {
-  const exec = executor ?? workshopDb;
-  const values = {
-    id: projectId,
-    userId: fallbackOwnerId,
+/** 会话内容列 → production 行的列值（不含 id / userId / 时间戳）。 */
+function contentColumns(content: SessionContent): {
+  characters: SessionContent["characters"];
+  logline: string;
+  scenes: SessionContent["scenes"];
+  scriptMarkdown: string;
+  shots: SessionContent["shots"];
+  title: string;
+  tone: string;
+  type: string;
+} {
+  return {
     title: content.title,
     type: content.type,
     tone: content.tone,
@@ -142,22 +141,123 @@ export async function writeContentToProduction(
     characters: content.characters,
     shots: content.shots,
   };
-  await exec
-    .insert(production)
-    .values(values)
-    .onConflictDoUpdate({
-      target: production.id,
-      set: {
-        title: values.title,
-        type: values.type,
-        tone: values.tone,
-        logline: values.logline,
-        scriptMarkdown: values.scriptMarkdown,
-        scenes: values.scenes,
-        characters: values.characters,
-        shots: values.shots,
-      },
-    });
+}
+
+/** shots 按 shotId 叠加合并（ISSUE #4730）：当前 production 为底，会话态逐 id
+ *  覆盖 / 追加——慢 IO 期间界面新增的镜头（不在会话态里）得以保留，会话改过的
+ *  镜头按锁内后写生效。 */
+export function mergeShotsById(current: Array<Shot>, mine: Array<Shot>): Array<Shot> {
+  const merged = [...current];
+  const indexById = new Map<string, number>();
+  merged.forEach((shot, index) => indexById.set(shot.id, index));
+  for (const shot of mine) {
+    const at = indexById.get(shot.id);
+    if (at === undefined) {
+      indexById.set(shot.id, merged.length);
+      merged.push(shot);
+    } else {
+      merged[at] = shot;
+    }
+  }
+  return merged;
+}
+
+function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/** 逐列与基线比对（ISSUE #4730）：只把会话真正改过的列放进补丁——慢 IO 期间
+ *  界面改动的其它列（剧本 / 角色卡 / 镜头提示词…）不再被旧快照整列覆盖。
+ *  shots 改过时按 shotId 与当前 production 叠加合并，而非整列替换。
+ *  `current` 是写前 production 的内容面（行缺失传 null）。返回空补丁 = 相对
+ *  基线无变化（调用方跳过 UPDATE）。 */
+export function diffContentAgainstBaseline(
+  baseline: SessionContent,
+  next: SessionContent,
+  current: SessionContent | null,
+): Partial<SessionContent> {
+  const patch: Partial<SessionContent> = {};
+  if (next.title !== baseline.title) {
+    patch.title = next.title;
+  }
+  if (next.type !== baseline.type) {
+    patch.type = next.type;
+  }
+  if (next.tone !== baseline.tone) {
+    patch.tone = next.tone;
+  }
+  if (next.logline !== baseline.logline) {
+    patch.logline = next.logline;
+  }
+  if (next.scriptMarkdown !== baseline.scriptMarkdown) {
+    patch.scriptMarkdown = next.scriptMarkdown;
+  }
+  if (!sameJson(next.scenes, baseline.scenes)) {
+    patch.scenes = next.scenes;
+  }
+  if (!sameJson(next.characters, baseline.characters)) {
+    patch.characters = next.characters;
+  }
+  if (!sameJson(next.shots, baseline.shots)) {
+    patch.shots = mergeShotsById(current?.shots ?? [], next.shots);
+  }
+  return patch;
+}
+
+/** 把会话内容写进 production。**只写内容列**——进度 / run / 评审是另外的字段
+ *  所有者（画布 / run 引擎 / 评审器），桥不碰；行缺失时整行新建（带归属）。
+ *  `executor` 供事务入口传入。
+ *  `baseline`（ISSUE #4730）：会话加载时的内容快照。给出时按列比对、只写
+ *  会话真正改过的列（shots 按 shotId 叠加合并），并跳过「无变化」的写——
+ *  MCP 慢 IO 期间界面的并发改动不再被旧快照整列覆盖。缺省整包写（兼容）。 */
+export async function writeContentToProduction(
+  projectId: string,
+  fallbackOwnerId: string,
+  content: SessionContent,
+  executor?: WorkshopExecutor,
+  baseline?: SessionContent,
+): Promise<void> {
+  const exec = executor ?? workshopDb;
+  if (baseline === undefined) {
+    const values = { id: projectId, userId: fallbackOwnerId, ...contentColumns(content) };
+    await exec
+      .insert(production)
+      .values(values)
+      .onConflictDoUpdate({
+        target: production.id,
+        set: contentColumns(content),
+      });
+    return;
+  }
+  const currentRows = await exec
+    .select()
+    .from(production)
+    .where(eq(production.id, projectId))
+    .limit(1);
+  const currentRow = currentRows[0];
+  if (currentRow === undefined) {
+    /* 行缺失（被外部删掉）：整行新建，无历史可覆盖。 */
+    await exec
+      .insert(production)
+      .values({ id: projectId, userId: fallbackOwnerId, ...contentColumns(content) })
+      .onConflictDoNothing({ target: production.id });
+    return;
+  }
+  const currentContent: SessionContent = {
+    title: currentRow.title,
+    type: currentRow.type,
+    tone: currentRow.tone,
+    logline: currentRow.logline,
+    scriptMarkdown: currentRow.scriptMarkdown,
+    scenes: isSceneArray(currentRow.scenes) ? currentRow.scenes : [],
+    characters: isCharacterArray(currentRow.characters) ? currentRow.characters : [],
+    shots: isShotArray(currentRow.shots) ? currentRow.shots : [],
+  };
+  const patch = diffContentAgainstBaseline(baseline, content, currentContent);
+  if (Object.keys(patch).length === 0) {
+    return;
+  }
+  await exec.update(production).set(patch).where(eq(production.id, projectId));
 }
 
 /** 读会话绑定项目的内容面；行不存在（被外部删掉）返回 null，调用方回落会话行。 */

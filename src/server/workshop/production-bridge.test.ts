@@ -12,6 +12,9 @@ vi.mock("./db", async () => {
 
 import { eq } from "drizzle-orm";
 
+import { isRecord } from "~/lib/is-record";
+import type { Shot } from "~/lib/workshop/types";
+
 import { getTestDb, seedProject, seedUser } from "../../../tests/helpers/test-db";
 import { production, project, workshopSession } from "../db/schema";
 import { workshopDb } from "./db";
@@ -192,5 +195,133 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
       }),
     ).resolves.toBeUndefined();
     expect((await workshopDb.select().from(workshopSession)).length).toBe(0);
+  });
+});
+
+// ── 带基线写回（ISSUE #4730）：慢 IO 期间界面的并发改动不被旧快照整列覆盖 ──
+describe("updateState 带变更基线（#4730）", () => {
+  beforeEach(() => {
+    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+  });
+
+  /** 造一个最小可用的镜头（production.shots JSON 列的元素形状）。 */
+  function mkShot(id: string, prompt: string): Shot {
+    return {
+      id,
+      index: 1,
+      sceneId: "",
+      sceneHeading: "",
+      shotType: "medium",
+      description: "",
+      characterIds: [],
+      prompt,
+      negativePrompt: "",
+      params: {},
+      status: "idle",
+    };
+  }
+
+  /** production 行的 shots 是 unknown JSON 列：按形状收窄回 Shot 列表再断言。 */
+  function shotsOf(row: { shots: unknown } | undefined): Array<Shot> {
+    const raw = row?.shots;
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.filter((s): s is Shot => isRecord(s) && typeof s.id === "string");
+  }
+
+  async function prodIdOf(sessionId: string): Promise<string> {
+    const rows = await workshopDb
+      .select()
+      .from(workshopSession)
+      .where(eq(workshopSession.id, sessionId));
+    const prodId = rows[0]?.projectId;
+    if (prodId === undefined || prodId === null) {
+      throw new Error("绑定失败：会话行没有 projectId");
+    }
+    return prodId;
+  }
+
+  it("慢 IO 期间界面改的剧本列保留，会话改的镜头列照常落库", async () => {
+    const sessionId = await repo.createSession({ title: "并发" });
+    const before = await repo.getSession(sessionId);
+    if (!before) throw new Error("会话不存在");
+    const baseline = structuredClone(before);
+    const prodId = await prodIdOf(sessionId);
+
+    // 界面在慢 IO 期间直改 production 的剧本列：
+    await workshopDb
+      .update(production)
+      .set({ scriptMarkdown: "# 界面改的剧本" })
+      .where(eq(production.id, prodId));
+
+    // 会话态只改了 shots（剧本列与基线相同）：
+    const next = structuredClone(baseline);
+    next.shots = [mkShot("shot-1", "AI 改的提示词")];
+    await repo.updateState(sessionId, next, baseline);
+
+    const prod = await workshopDb.select().from(production).where(eq(production.id, prodId));
+    expect(prod[0]?.scriptMarkdown).toBe("# 界面改的剧本");
+    expect(shotsOf(prod[0])[0]?.prompt).toBe("AI 改的提示词");
+  });
+
+  it("shots 按 shotId 叠加：会话覆盖同 id 镜头，界面新增的镜头保留", async () => {
+    const sessionId = await repo.createSession({ title: "镜头合并" });
+    const before = await repo.getSession(sessionId);
+    if (!before) throw new Error("会话不存在");
+    const baseline = structuredClone(before);
+    baseline.shots = [mkShot("s1", "基线镜头")];
+    const prodId = await prodIdOf(sessionId);
+
+    // 界面在慢 IO 期间：改了 s1 的提示词、又新增了 s2：
+    await workshopDb
+      .update(production)
+      .set({ shots: [mkShot("s1", "界面改的提示词"), mkShot("s2", "界面新增")] })
+      .where(eq(production.id, prodId));
+
+    // 会话态只带着自己改过的 s1：
+    const next = structuredClone(baseline);
+    next.shots = [mkShot("s1", "AI 改的提示词")];
+    await repo.updateState(sessionId, next, baseline);
+
+    const prod = await workshopDb.select().from(production).where(eq(production.id, prodId));
+    const shots = shotsOf(prod[0]);
+    expect(shots).toHaveLength(2);
+    expect(shots.find((s) => s.id === "s1")?.prompt).toBe("AI 改的提示词");
+    expect(shots.find((s) => s.id === "s2")?.prompt).toBe("界面新增");
+  });
+
+  it("相对基线无变化 → 不写 production，界面并发改动完整保留", async () => {
+    const sessionId = await repo.createSession({ title: "无变化" });
+    const before = await repo.getSession(sessionId);
+    if (!before) throw new Error("会话不存在");
+    const baseline = structuredClone(before);
+    const prodId = await prodIdOf(sessionId);
+    await workshopDb
+      .update(production)
+      .set({ scriptMarkdown: "# 界面改的剧本" })
+      .where(eq(production.id, prodId));
+
+    const next = structuredClone(baseline); // 会话什么都没改
+    await repo.updateState(sessionId, next, baseline);
+
+    const prod = await workshopDb.select().from(production).where(eq(production.id, prodId));
+    expect(prod[0]?.scriptMarkdown).toBe("# 界面改的剧本");
+  });
+
+  it("会话在慢 IO 期间被删 → 在途变更不再写 production（行检查在事务内）", async () => {
+    const sessionId = await repo.createSession({ title: "被删" });
+    const before = await repo.getSession(sessionId);
+    if (!before) throw new Error("会话不存在");
+    const baseline = structuredClone(before);
+    const prodId = await prodIdOf(sessionId);
+    await workshopDb.delete(workshopSession).where(eq(workshopSession.id, sessionId));
+
+    const next = structuredClone(baseline);
+    next.meta.scriptMarkdown = "# 迟到的旧快照";
+    await expect(repo.updateState(sessionId, next, baseline)).resolves.toBeUndefined();
+
+    const prod = await workshopDb.select().from(production).where(eq(production.id, prodId));
+    expect(prod[0]?.scriptMarkdown).not.toBe("# 迟到的旧快照");
   });
 });

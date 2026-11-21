@@ -98,12 +98,18 @@ function extractRemoteTaskId(clipUrl: string | undefined): string | null {
 
 // ── 会话读写辅助 ───────────────────────────────────────────────
 
-async function load(id: string): Promise<WorkshopSessionState> {
+async function load(
+  id: string,
+): Promise<{ baseline: WorkshopSessionState; state: WorkshopSessionState }> {
   const state = await repo.getSession(id);
   if (!state) {
     throw new Error(`工坊会话不存在：${id}`);
   }
-  return state;
+  /* 变更基线（ISSUE #4730）：改动前的内容快照。updateState 按列与它比对，
+   * 只把会话真正改过的列写进 production —— 慢 IO 期间界面改的其它列
+   * （剧本 / 角色卡 / 镜头提示词…）不再被旧快照整列覆盖。 */
+  const baseline = structuredClone(state);
+  return { state, baseline };
 }
 
 /* 会话级写互斥（ISSUE #3891 / #3895）：下面每个变更函数的形状都是
@@ -197,9 +203,9 @@ async function setMetaImpl(
   id: string,
   patch: Partial<Pick<ProjectMeta, "title" | "type" | "tone" | "logline">>,
 ) {
-  const state = await load(id);
+  const { state, baseline } = await load(id);
   state.meta = { ...state.meta, ...patch };
-  await repo.updateState(id, state);
+  await repo.updateState(id, state, baseline);
   return state.meta;
 }
 
@@ -211,9 +217,9 @@ export function setMeta(
 }
 
 async function setIdeaImpl(id: string, idea: string) {
-  const state = await load(id);
+  const { state, baseline } = await load(id);
   state.idea = idea;
-  await repo.updateState(id, state);
+  await repo.updateState(id, state, baseline);
   return { idea: state.idea };
 }
 
@@ -224,7 +230,7 @@ export function setIdea(id: string, idea: string) {
 // ── 阶段 1：脚本 ───────────────────────────────────────────────
 
 async function generateScriptImpl(id: string, force = false) {
-  const state = await load(id);
+  const { state, baseline } = await load(id);
   if (!state.idea.trim()) {
     throw new Error("请先设置 idea（灵感 / 梗概）再生成脚本");
   }
@@ -253,7 +259,7 @@ async function generateScriptImpl(id: string, force = false) {
   state.meta = { ...state.meta, scriptMarkdown: script };
   state.scenes = scenes;
   state.stage = advancePipelineStage(state.stage, "script");
-  await repo.updateState(id, state);
+  await repo.updateState(id, state, baseline);
   return { script, sceneCount: scenes.length, scenes };
 }
 
@@ -262,7 +268,7 @@ export function generateScript(id: string, force = false) {
 }
 
 async function setScriptImpl(id: string, markdown: string, parse = true) {
-  const state = await load(id);
+  const { state, baseline } = await load(id);
   state.meta = { ...state.meta, scriptMarkdown: markdown };
   if (parse) {
     state.scenes = parseIdeaToScenes(markdown, {
@@ -273,7 +279,7 @@ async function setScriptImpl(id: string, markdown: string, parse = true) {
     });
   }
   state.stage = advancePipelineStage(state.stage, "script");
-  await repo.updateState(id, state);
+  await repo.updateState(id, state, baseline);
   return {
     scriptLength: markdown.length,
     sceneCount: state.scenes.length,
@@ -288,7 +294,7 @@ export function setScript(id: string, markdown: string, parse = true) {
 // ── 阶段 2：角色卡 ─────────────────────────────────────────────
 
 async function extractCharactersImpl(id: string, force = false) {
-  const state = await load(id);
+  const { state, baseline } = await load(id);
   if (state.meta.scriptMarkdown === undefined || state.meta.scriptMarkdown.trim() === "") {
     throw new Error("请先生成 / 设置脚本再提取角色");
   }
@@ -311,7 +317,7 @@ async function extractCharactersImpl(id: string, force = false) {
   const { list, added, skipped } = mergeCharacterDrafts(state.characters, drafts, []);
   state.characters = list;
   state.stage = advancePipelineStage(state.stage, "character");
-  await repo.updateState(id, state);
+  await repo.updateState(id, state, baseline);
   return { added, skipped, total: list.length, characters: list };
 }
 
@@ -320,10 +326,10 @@ export function extractCharacters(id: string, force = false) {
 }
 
 async function setCharactersImpl(id: string, characters: Array<Character>) {
-  const state = await load(id);
+  const { state, baseline } = await load(id);
   state.characters = rebuildCharacterPrompts(characters);
   state.stage = advancePipelineStage(state.stage, "character");
-  await repo.updateState(id, state);
+  await repo.updateState(id, state, baseline);
   return state.characters;
 }
 
@@ -334,7 +340,7 @@ export function setCharacters(id: string, characters: Array<Character>) {
 // ── 阶段 3：分镜 ───────────────────────────────────────────────
 
 async function buildStoryboardImpl(id: string, force = false) {
-  const state = await load(id);
+  const { state, baseline } = await load(id);
   if (state.meta.scriptMarkdown === undefined || state.meta.scriptMarkdown.trim() === "") {
     throw new Error("请先生成 / 设置脚本再拆分分镜");
   }
@@ -356,7 +362,7 @@ async function buildStoryboardImpl(id: string, force = false) {
   );
   state.shots = shots;
   state.stage = advancePipelineStage(state.stage, "storyboard");
-  await repo.updateState(id, state);
+  await repo.updateState(id, state, baseline);
   return { shotCount: shots.length, shots };
 }
 
@@ -365,10 +371,10 @@ export function buildStoryboard(id: string, force = false) {
 }
 
 async function setStoryboardImpl(id: string, shots: Array<Shot>) {
-  const state = await load(id);
+  const { state, baseline } = await load(id);
   state.shots = rebuildShotPrompts(shots, state.scenes, state.characters);
   state.stage = advancePipelineStage(state.stage, "storyboard");
-  await repo.updateState(id, state);
+  await repo.updateState(id, state, baseline);
   return state.shots;
 }
 
@@ -392,7 +398,7 @@ export type GenerateImageInput = {
 };
 
 async function generateImageImpl(id: string, input: GenerateImageInput) {
-  const state = await load(id);
+  const { state, baseline } = await load(id);
   const channel = input.channel ?? "api";
   let prompt: string;
   let negative: string | undefined;
@@ -431,7 +437,7 @@ async function generateImageImpl(id: string, input: GenerateImageInput) {
     } else if (character) {
       character.positivePrompt = prompt;
     }
-    await repo.updateState(id, state);
+    await repo.updateState(id, state, baseline);
     return { url, channel: "comfyui" };
   }
   /* 尺寸换算用**生效的那份**表（ISSUE #3972）：现读项目默认 + 本机覆盖，
@@ -449,7 +455,7 @@ async function generateImageImpl(id: string, input: GenerateImageInput) {
   } else if (character) {
     character.positivePrompt = prompt;
   }
-  await repo.updateState(id, state);
+  await repo.updateState(id, state, baseline);
   return { url };
 }
 
@@ -473,7 +479,7 @@ export type SubmitVideoInput = {
 };
 
 async function submitVideoImpl(id: string, input: SubmitVideoInput) {
-  const state = await load(id);
+  const { state, baseline } = await load(id);
   const shot = state.shots.find((s) => s.id === input.shotId);
   if (!shot) {
     throw new Error(`镜头不存在：${input.shotId}`);
@@ -501,7 +507,7 @@ async function submitVideoImpl(id: string, input: SubmitVideoInput) {
       shot.clipUrl = r.url;
       shot.clipStatus = "done";
     }
-    await repo.updateState(id, state);
+    await repo.updateState(id, state, baseline);
     return { url: r.url, channel: "comfyui" };
   }
   let imageDataUrl: string | undefined;
@@ -522,7 +528,7 @@ async function submitVideoImpl(id: string, input: SubmitVideoInput) {
     shot.clipUrl = `task:${result.remoteTaskId}`;
     shot.clipStatus = "running";
   }
-  await repo.updateState(id, state);
+  await repo.updateState(id, state, baseline);
   return result;
 }
 
@@ -531,7 +537,7 @@ export function submitVideo(id: string, input: SubmitVideoInput) {
 }
 
 async function pollVideoImpl(id: string, shotId: string) {
-  const state = await load(id);
+  const { state, baseline } = await load(id);
   const shot = state.shots.find((s) => s.id === shotId);
   if (!shot) {
     throw new Error(`镜头不存在：${shotId}`);
@@ -548,7 +554,7 @@ async function pollVideoImpl(id: string, shotId: string) {
   if (!r.pending && r.url !== undefined && r.url !== "") {
     shot.clipUrl = r.url;
     shot.clipStatus = "done";
-    await repo.updateState(id, state);
+    await repo.updateState(id, state, baseline);
   }
   return { pending: r.pending, url: r.url };
 }
@@ -583,7 +589,7 @@ async function composeFinalImpl(
   id: string,
   input: ComposeFinalInput = {},
 ): Promise<ComposeFinalResult> {
-  const state = await load(id);
+  const { state, baseline } = await load(id);
   const plan = buildCompositionPlan(input.title ?? state.meta.title, state.shots);
   const planPath = await writeCompositionPlan(id, plan);
   let outputPath: string | undefined;
@@ -596,7 +602,7 @@ async function composeFinalImpl(
     renderNote = r.note;
   }
   state.stage = advancePipelineStage(state.stage, "final_edit");
-  await repo.updateState(id, state);
+  await repo.updateState(id, state, baseline);
   return { plan, planPath, outputPath, renderNote };
 }
 
