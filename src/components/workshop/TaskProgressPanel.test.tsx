@@ -84,4 +84,33 @@ describe("TaskProgressPanel", () => {
     expect(panel.textContent).toContain("节点8");
     expect(panel.querySelectorAll('[data-slot="progress-bar-track"]')).toHaveLength(6);
   });
+
+  it("显示整轮已运行与每节点耗时（#4754）", () => {
+    const { container } = render(
+      <TaskProgressPanel
+        logs={[
+          line(
+            '[comfy-cli 原始] {"type":"executing","node":"23:15","title":"Generate Text"}',
+            1000,
+          ),
+          line(
+            '[comfy-cli 原始] {"type":"progress","node":"23:15","completed":8192,"total":8192}',
+            121_000,
+          ),
+          line('[comfy-cli 原始] {"type":"executed","node":"23:15"}', 121_000),
+          line('[comfy-cli 原始] {"type":"executing","node":"23:7","title":"KSampler"}', 181_000),
+          line(
+            '[comfy-cli 原始] {"type":"progress","node":"23:7","completed":3,"total":6}',
+            193_000,
+          ),
+        ]}
+      />,
+    );
+    const panel = container.querySelector('[data-testid="task-progress-panel"]')!;
+    /* 整轮：最早 1s → 最新 193s = 3m12s。 */
+    expect(panel.textContent).toContain("已运行 3m12s");
+    /* 已完成节点：8192/8192 · 耗时 2m00s；运行中节点：3/6 · 已跑 12s。 */
+    expect(panel.textContent).toContain("8192/8192 · 2m00s");
+    expect(panel.textContent).toContain("3/6 · 12s");
+  });
 });

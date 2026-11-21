@@ -4,27 +4,35 @@
 // 数据来自执行日志里的 `[comfy-cli 原始]` JSON 事件（comfy-cli progress /
 // executing / executed），解析收在 lib/workshop/task-log-progress（唯一实现）。
 // 没有进度形状日志（对话 / API 中继通道）时返回 null，不摆空盒子。
+// 时间维度（#4754）：头部显示整轮「已运行」（最早 → 最新事件，日志每帧到达
+// 即刷新、完成后定格为总耗时）；每行显示该节点耗时（已完成 = 收尾 − 开始，
+// 运行中 = 最新事件 − 开始）。时长文案走 ~/lib/time-format 的 formatDurationMs。
 
 import { useMemo } from "react";
 import { CircleCheck } from "lucide-react";
 
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { Spinner } from "~/components/ui/spinner";
+import { formatDurationMs } from "~/lib/time-format";
 import { tailWindow } from "~/lib/page-window";
 import { cn } from "~/lib/utils";
 import type { TaskLogEntry } from "~/lib/workshop/generation-client";
-import { parseTaskLogProgress } from "~/lib/workshop/task-log-progress";
+import {
+  parseTaskLogProgress,
+  type TaskProgressStage,
+  type TaskProgressSnapshot,
+} from "~/lib/workshop/task-log-progress";
 
 /** 最多展开多少个节点行：进度区是辅助信息，长图（十几个节点）全铺会淹没页面。 */
 const MAX_ROWS = 6;
 
-/** 一行节点进度：状态图标 + 节点名 + 进度条 + 已完成/总量。 */
+/** 一行节点进度：状态图标 + 节点名 + 进度条 + 计数与耗时。 */
 function StageRow({
-  nodeLabel,
-  subLabel,
-  pct,
   caption,
   done,
+  nodeLabel,
+  pct,
+  subLabel,
 }: {
   caption: string;
   done: boolean;
@@ -66,6 +74,32 @@ function StageRow({
   );
 }
 
+/** 一行的右侧文案：计数（completed/total）与耗时并排；运行中无计数时补状态词。 */
+function captionFor(stage: TaskProgressStage, snapshot: TaskProgressSnapshot): string {
+  const parts: Array<string> = [];
+  if (stage.completed !== undefined && stage.total !== undefined) {
+    parts.push(`${String(stage.completed)}/${String(stage.total)}`);
+  }
+  const durationMs =
+    stage.status === "done"
+      ? (stage.durationMs ?? null)
+      : stage.startedAt !== undefined && snapshot.lastAt !== null
+        ? snapshot.lastAt - stage.startedAt
+        : null;
+  const duration = formatDurationMs(durationMs);
+  if (duration !== null) {
+    parts.push(duration);
+  }
+  if (parts.length === 0) {
+    return stage.status === "done" ? "已完成" : "进行中";
+  }
+  if (stage.status === "running" && stage.completed === undefined) {
+    /* 只有耗时没有计数的运行中节点：补状态词，避免孤零零一个「0s」。 */
+    return `进行中 · ${duration}`;
+  }
+  return parts.join(" · ");
+}
+
 /** 分节点进度区：日志里有进度形状的事件才渲染。 */
 export function TaskProgressPanel({ logs }: { logs: ReadonlyArray<TaskLogEntry> }) {
   const snapshot = useMemo(() => parseTaskLogProgress(logs), [logs]);
@@ -80,6 +114,10 @@ export function TaskProgressPanel({ logs }: { logs: ReadonlyArray<TaskLogEntry> 
   /* 尾窗切片走 ~/lib/page-window 的唯一口径（P63），不手写 slice。 */
   const visible = tailWindow(rows, MAX_ROWS);
   const hiddenCount = rows.length - visible.length;
+  const elapsed =
+    snapshot.firstAt !== null && snapshot.lastAt !== null
+      ? formatDurationMs(snapshot.lastAt - snapshot.firstAt)
+      : null;
   return (
     <div
       className="border-border bg-surface-1 rounded-lg border px-4 py-3"
@@ -88,16 +126,14 @@ export function TaskProgressPanel({ logs }: { logs: ReadonlyArray<TaskLogEntry> 
     >
       <div className="mb-2 flex items-center justify-between text-xs">
         <span className="font-medium">生成进度（分节点）</span>
-        <span className="text-muted-foreground text-2xs">解析自执行日志</span>
+        <span className="text-muted-foreground text-2xs tabular-nums">
+          解析自执行日志{elapsed === null ? "" : ` · 已运行 ${elapsed}`}
+        </span>
       </div>
       <div className="flex flex-col gap-2.5">
         {visible.map((stage) => (
           <StageRow
-            caption={
-              stage.completed !== undefined && stage.total !== undefined
-                ? `${String(stage.completed)}/${String(stage.total)}`
-                : "进行中"
-            }
+            caption={captionFor(stage, snapshot)}
             done={stage.status === "done"}
             key={stage.nodeId}
             nodeLabel={stage.title ?? stage.nodeId}
