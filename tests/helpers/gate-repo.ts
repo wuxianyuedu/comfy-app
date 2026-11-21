@@ -44,6 +44,60 @@ export const SANDBOX_POSIX_ONLY = process.platform === "win32";
  */
 const SANDBOX_PACKAGE_MARKER = '{"name":"gate-sandbox","private":true,"type":"module"}\n';
 
+/** 真仓库运行时源的 basename 索引（`copyGateDeps` 解析依赖说明符的依据）。 */
+export type RuntimeSourceIndex = {
+  /** src/ 下因重名被剔除的 basename：命中时给可读告警，不静默指错（ISSUE #4702）。 */
+  ambiguous: Set<string>;
+  /** basename（含扩展名）→ 真仓库绝对路径；因重名被剔除的 .ts **不在场**。 */
+  sources: Map<string, string>;
+};
+
+/**
+ * 建「basename → 真仓库源」索引。`scripts/**` 收 `.cjs`/`.mjs`（文件名全仓唯一，
+ * #3930 迁移时已核对）；`src/**` 收 `.ts`，但**重名即剔除**并记入 `ambiguous`——
+ * 此前「只收全 src 唯一名」只是注释的意图，实现却对重名取遍历先见者，会静默指错
+ * 真源（比缺件更难排查，ISSUE #4702）。`index.ts` 一族、测试与声明文件不是运行时
+ * 依赖，不进。
+ */
+export function buildRuntimeSourceIndex(scriptsDir: string, srcDir: string): RuntimeSourceIndex {
+  const sources = new Map<string, string>();
+  const ambiguous = new Set<string>();
+  const indexScripts = (dir: string): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) {
+        if (e.name === "__pycache__") continue;
+        indexScripts(path.join(dir, e.name));
+      } else if (/\.(?:c|m)js$/.test(e.name) && !sources.has(e.name)) {
+        sources.set(e.name, path.join(dir, e.name));
+      }
+    }
+  };
+  indexScripts(scriptsDir);
+  const indexTsDeps = (dir: string): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) {
+        if (e.name === "node_modules" || e.name === "__pycache__") continue;
+        indexTsDeps(path.join(dir, e.name));
+      } else if (
+        e.name.endsWith(".ts") &&
+        !e.name.endsWith(".d.ts") &&
+        !e.name.includes(".test.") &&
+        e.name !== "index.ts"
+      ) {
+        if (sources.has(e.name)) {
+          /* 重名：两个候选都不可信 ⇒ 从索引剔除，命中时给可读告警（ISSUE #4702）。 */
+          sources.delete(e.name);
+          ambiguous.add(e.name);
+          continue;
+        }
+        sources.set(e.name, path.join(dir, e.name));
+      }
+    }
+  };
+  indexTsDeps(srcDir);
+  return { ambiguous, sources };
+}
+
 /**
  * **按 `require("./x.cjs")` 递归补齐判据的同目录依赖**（临时仓库放好被测脚本之后调）：判据之间有依赖（`maskNonCode`、
  * `gate-scan-read.cjs`），缺一个的读数是 `MODULE_NOT_FOUND` + requireStack，像「判据坏了」其实是夹具少带。认两种同目录相对
@@ -54,13 +108,28 @@ const SANDBOX_PACKAGE_MARKER = '{"name":"gate-sandbox","private":true,"type":"mo
  * 模块自己又静态 import 别的仓库内模块时，只从入口起 BFS 会漏掉整条链（#4688 手补六件、#4654 手补一件，
  * 同族坑两次以更大面出现）。种子给沙箱落点：内容与真源一致，相对说明符按沙箱目录解析，追到的新依赖
  * 仍由同一套 basename 索引落盘；目录种子展开成孩子逐个扫（`copy` 支持整目录拷）。
+ *
+ * `index` 是依赖解析用的 basename 索引，默认从本仓库 `scripts/` 与 `src/` 现建；
+ * 测试可用 `buildRuntimeSourceIndex` 造受控索引（重名剔除语义见其 JSDoc，ISSUE #4702）。
+ *
+ * 返回**命中重名的告警清单**（同时逐条写 stderr，人能看见）。告警走返回值而不是只写
+ * stderr，是因为 vitest worker 里 `process.stderr` 跨访问不是同一对象、spy 拦不到
+ * （实测）——测试按返回值断言，不依赖那个不可靠的观察点。
  */
 export function copyGateDeps(
   destScriptAbs: string,
   place?: (destAbs: string, sourceAbs: string) => void,
   extraSeeds: Array<string> = [],
-): void {
+  index: RuntimeSourceIndex = buildRuntimeSourceIndex(
+    path.join(REPO_ROOT, "scripts"),
+    path.join(REPO_ROOT, "src"),
+  ),
+): Array<string> {
   const destDir = path.dirname(destScriptAbs);
+  const { sources: sourceByBasename, ambiguous: ambiguousTsBasenames } = index;
+  /** 同一重名 basename 只告警一次（多份判据引同一个重名件时别刷屏）。 */
+  const warned = new Set<string>();
+  const warnings: Array<string> = [];
   /** CJS 的 `require("./x.cjs")`（也认 `createRequire(…)("./x.cjs")`）、ESM 的 `import/export … from "./x.mjs"`，以及
    *  CJS 里 `require` 一个 ESM（Node 24 的 `require(esm)`，`check-doc-mirror-pairing.cjs` 要 `changed-scope.mjs`，ISSUE #2265）。
    *  路径允许 `/`：`changed-scope.mjs` 依赖链伸进 `scripts/base-check/` 与 `launcher-core/`，只认平铺名会让沙箱 import 时炸。
@@ -74,44 +143,6 @@ export function copyGateDeps(
     /(?:^|\n)\s*(?:import|export)\s[^;]*?from\s+"(?<dep>\.{1,2}\/[\w./-]+\.(?:c|m)?(?:js|ts))"/g,
     /(?:^|\n)\s*import\s+"(?<dep>\.{1,2}\/[\w./-]+\.(?:c|m)?(?:js|ts))"/g,
   ];
-  /** 真仓库 `scripts/**` 的 basename → 绝对路径索引。判据归入域子目录后，依赖说明符相对
-   *  的「原目录」只有仓库自己知道；而 `scripts/` 下文件名全仓唯一（#3930 迁移时已核对），
-   *  按 basename 定位真源比拼 `scripts/<name>` 的旧平铺契约诚实——后者在子目录布局下
-   *  会把 `../ci/ci-log.mjs` 静默丢掉（existsSync 不中 → 依赖没进沙箱 → Cannot find module，
-   *  长得像门禁坏了）。夹具假路径（`./y` 这类解析不到真文件的）照旧跳过。 */
-  const sourceByBasename = new Map<string, string>();
-  const indexScripts = (dir: string) => {
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      if (e.isDirectory()) {
-        if (e.name === "__pycache__") continue;
-        indexScripts(path.join(dir, e.name));
-      } else if (/\.(?:c|m)js$/.test(e.name) && !sourceByBasename.has(e.name)) {
-        sourceByBasename.set(e.name, path.join(dir, e.name));
-      }
-    }
-  };
-  indexScripts(path.join(REPO_ROOT, "scripts"));
-  /* `src/**` 下的 .ts 依赖也要进索引（ISSUE #4601）：判据 → launcher-core/*.mjs →
-   * src/lib/process/*.ts 这条链现在是真的。src/ 下同名 .ts 很多（`index.ts` 一族），
-   * 按 basename 定位会指错文件 ⇒ 只收「全 src 唯一名」的 .ts；测试与声明文件不是
-   * 运行时依赖，不进。 */
-  const indexTsDeps = (dir: string): void => {
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      if (e.isDirectory()) {
-        if (e.name === "node_modules" || e.name === "__pycache__") continue;
-        indexTsDeps(path.join(dir, e.name));
-      } else if (
-        e.name.endsWith(".ts") &&
-        !e.name.endsWith(".d.ts") &&
-        !e.name.includes(".test.") &&
-        e.name !== "index.ts" &&
-        !sourceByBasename.has(e.name)
-      ) {
-        sourceByBasename.set(e.name, path.join(dir, e.name));
-      }
-    }
-  };
-  indexTsDeps(path.join(REPO_ROOT, "src"));
   /* pending 带**各自所在目录**：spec 相对「当前被扫文件」解析，不是相对入口——
    * 平铺布局下两者恒等价，#3930 的子目录布局下按入口解析会把
    * `./ui-primitives-rules-p1-p37.cjs` 落错目录（探针实测：进 gates/ 而不是
@@ -141,6 +172,16 @@ export function copyGateDeps(
       const source = sourceByBasename.get(path.basename(spec));
       const dest = path.resolve(curDir, spec);
       if (!source) {
+        /* 重名的 .ts 不在索引里：给一句可读告警再跳过 —— 缺件可归因，不静默指错（ISSUE #4702）。 */
+        const base = path.basename(spec);
+        if (ambiguousTsBasenames.has(base) && !warned.has(base)) {
+          warned.add(base);
+          const line =
+            `[gate-repo] 依赖说明符 "${spec}" 的 basename "${base}" 在 src/ 下重名，` +
+            "已从自动补齐索引剔除 —— 沙箱不会自动带这份；请改用 GateRepoOptions.copy 显式指明真源";
+          warnings.push(line);
+          process.stderr.write(`${line}\n`);
+        }
         continue;
       }
       /* 已存在的目标**不覆盖**（用例自己写的夹具 / `DEP` 那份优先），但仍然要**走进去**
@@ -165,6 +206,7 @@ export function copyGateDeps(
       pending.push({ abs: dest, dir: path.dirname(dest) });
     }
   }
+  return warnings;
 }
 
 /**
