@@ -1181,6 +1181,34 @@
   `src/components/workshop/ModelAdaptersView.tsx`（固定值编辑器）、
   `src/lib/workshop/model-mode-contract.ts`（constants）
 
+#### FR-LM-08 测试模型执行日志体验
+
+- 状态：已上线
+- 需求（ISSUE #4743）：测试模型页的执行日志要能控制自动滚动、能打开与历史
+  记录同款的「大屏」查看，并把日志里的生成进度可视化出来（此前只有一个
+  整体百分比条）。
+- 行为与验收：
+  - 执行日志卡头部有「自动滚动」勾选框，默认开启：开启时新日志到达即滚到底部；
+    关掉后日志照常刷新、视图停在用户翻到的位置，不被拉回底部。
+    组件测试：`src/components/workshop/ModelTestResultPanel.test.tsx`。
+  - 本地工作流任务入队后（会话按格登记任务 id），日志卡头部出现「大屏查看」
+    按钮，点击打开与队列 / 历史记录**同一份**执行日志大屏（`QueueTaskLogModal`：
+    级别筛选 / 虚拟列表 / 加宽收窄 / 查看完整输出，SSE 回放全量历史）；远端
+    与对话通道没有本地任务 id，不出现该按钮。
+  - 日志卡上方有「生成进度（分节点）」区：解析日志里 `[comfy-cli 原始]` 的
+    comfy-cli `progress` / `executing` / `executed` 事件，按节点渲染进度条
+    （节点名 + 已完成/总量 + 百分比；运行中高亮、完成打勾；只列有进度数字
+    或正在运行的节点，最多展开 6 行、其余以计数交代）。无进度事件（对话 /
+    API 中继）时不渲染。解析唯一实现：
+    `src/lib/workshop/task-log-progress.ts`（同目录单测覆盖 minimax-h3-image
+    真实事件形状）。
+- 落点：`src/components/workshop/ModelTestView.tsx`、
+  `src/components/workshop/TaskProgressPanel.tsx`、
+  `src/components/workshop/ModelTestResultPanel.tsx`、
+  `src/components/workshop/hooks/workflow-model-test.ts`（onTaskId 上抛）、
+  `src/components/workshop/hooks/use-model-test-generate.ts`（会话登记 taskId）、
+  `src/lib/workshop/task-log-progress.ts`
+
 ---
 
 ## 13. 设置（FR-ST）

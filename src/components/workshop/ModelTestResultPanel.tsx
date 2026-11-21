@@ -5,18 +5,20 @@
 // IO）。三种运行状态各有视觉形态：生成中（进度环 + 徽标）、完成（产物预览 +
 // 外链）、空闲（占位说明）；失败告警在中栏，右栏保留日志与请求现场。
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   CircleAlert,
   ExternalLink,
   Image as ImageIcon,
+  Maximize2,
   MessageSquareText,
   ScrollText,
   Video,
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { Spinner } from "~/components/ui/spinner";
@@ -27,14 +29,17 @@ import { RequestDetailSection } from "./ModelTestRequestDetail";
 
 type ModelTestController = ReturnType<typeof useModelTest>;
 
-/** 卡片外壳：白底细边 + 轻投影，标题行 = 图标 + 名称 + 右侧弱化说明。 */
+/** 卡片外壳：白底细边 + 轻投影，标题行 = 图标 + 名称 + 右侧弱化说明或操作区。 */
 function Panel({
+  action,
   children,
   className,
   hint,
   icon,
   title,
 }: {
+  /** 标题行右侧的操作区（给了就顶掉 hint 的位置）。 */
+  action?: ReactNode;
   children: ReactNode;
   className?: string;
   hint?: string;
@@ -51,8 +56,13 @@ function Panel({
       <div className="flex items-center gap-1.5">
         <span className="text-primary-strong [&_svg]:size-3.5">{icon}</span>
         <span className="text-sm font-semibold">{title}</span>
-        {hint !== undefined && hint !== "" && (
-          <span className="text-2xs text-muted-foreground ml-auto font-normal">{hint}</span>
+        {action === undefined ? (
+          hint !== undefined &&
+          hint !== "" && (
+            <span className="text-2xs text-muted-foreground ml-auto font-normal">{hint}</span>
+          )
+        ) : (
+          <div className="ml-auto flex items-center gap-2">{action}</div>
         )}
       </div>
       {children}
@@ -102,12 +112,16 @@ function EmptySlot({ children }: { children: ReactNode }) {
 }
 
 /** 本地工作流任务的执行日志（与工作流库「就地运行」同一份 SSE log 流）。
- *  新日志到达时自动滚到底部 —— 任务卡住时，最后几行直接指到停在哪个节点。 */
-function TaskLogSection({ logs }: { logs: Array<TaskLogEntry> }) {
+ *  自动滚动开启时，新日志到达即滚到底部 —— 任务卡住时，最后几行直接指到停在
+ *  哪个节点；关掉后视图停在用户翻到的位置（#4743）。 */
+function TaskLogSection({ autoscroll, logs }: { autoscroll: boolean; logs: Array<TaskLogEntry> }) {
   const boxRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
+    if (!autoscroll) {
+      return;
+    }
     boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight });
-  }, [logs]);
+  }, [autoscroll, logs]);
   return (
     <div
       className="border-border bg-surface-1 max-h-72 overflow-y-auto rounded-lg border"
@@ -233,12 +247,49 @@ function ResultCard({ c }: { c: ModelTestController }) {
 }
 
 /** 日志卡：有日志才出列表，否则给占位说明。渲染在**中栏**（生成卡下方）——
- *  右栏太窄，等宽字体行频繁截断；贴着生成动作也更好读。 */
-export function LogsCard({ logs }: { logs: Array<TaskLogEntry> }) {
+ *  右栏太窄，等宽字体行频繁截断；贴着生成动作也更好读。
+ *  头部操作区：「自动滚动」开关（#4743）+「大屏查看」入口（有本地任务才出现）。 */
+export function LogsCard({
+  logs,
+  onOpenScreen,
+}: {
+  logs: Array<TaskLogEntry>;
+  /** 打开「大屏查看日志」弹窗；不传 = 当前没有可看的任务（按钮不出现）。 */
+  onOpenScreen?: () => void;
+}) {
+  const [autoscroll, setAutoscroll] = useState(true);
   return (
-    <Panel hint="SSE 实时流 · 自动滚底" icon={<ScrollText />} title="执行日志">
+    <Panel
+      action={
+        <>
+          <label className="text-muted-foreground text-2xs flex cursor-pointer items-center gap-1.5 select-none">
+            <Checkbox
+              checked={autoscroll}
+              className="accent-primary size-3.5 cursor-pointer"
+              onCheckedChange={(checked) => {
+                setAutoscroll(checked === true);
+              }}
+            />
+            自动滚动
+          </label>
+          {onOpenScreen !== undefined && (
+            <Button
+              className="text-ink-muted hover:bg-subtle hover:text-ink-strong text-2xs h-auto rounded-md px-2 py-1"
+              onClick={onOpenScreen}
+              size="sm"
+              variant="ghost"
+            >
+              <Maximize2 className="size-3" data-icon="inline-start" />
+              大屏查看
+            </Button>
+          )}
+        </>
+      }
+      icon={<ScrollText />}
+      title="执行日志"
+    >
       {logs.length > 0 ? (
-        <TaskLogSection logs={logs} />
+        <TaskLogSection autoscroll={autoscroll} logs={logs} />
       ) : (
         <EmptySlot>暂无日志 · 生成开始后实时滚动，卡住时看最后几行定位节点</EmptySlot>
       )}
