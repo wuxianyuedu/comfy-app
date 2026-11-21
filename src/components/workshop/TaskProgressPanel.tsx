@@ -2,11 +2,12 @@
 
 // ── 测试模型页「分节点生成进度」可视化区（规范 §17 第③层：纯展示）────────
 // 数据来自执行日志里的 `[comfy-cli 原始]` JSON 事件（comfy-cli progress /
-// executing / executed），解析收在 lib/workshop/task-log-progress（唯一实现）。
-// 没有进度形状日志（对话 / API 中继通道）时返回 null，不摆空盒子。
+// executing / executed / execution_cached），解析收在 lib/workshop/task-log-progress
+// （唯一实现）。没有进度形状日志（对话 / API 中继通道）时返回 null，不摆空盒子。
 // 时间维度（#4754）：头部显示整轮「已运行」（最早 → 最新事件，日志每帧到达
 // 即刷新、完成后定格为总耗时）；每行显示该节点耗时（已完成 = 收尾 − 开始，
 // 运行中 = 最新事件 − 开始）。时长文案走 ~/lib/time-format 的 formatDurationMs。
+// 缓存跳过的节点也按执行顺序列出、标「缓存跳过」、不画进度条（#4757）。
 
 import { useMemo } from "react";
 import { CircleCheck } from "lucide-react";
@@ -14,7 +15,6 @@ import { CircleCheck } from "lucide-react";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { Spinner } from "~/components/ui/spinner";
 import { formatDurationMs } from "~/lib/time-format";
-import { tailWindow } from "~/lib/page-window";
 import { cn } from "~/lib/utils";
 import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import {
@@ -23,17 +23,16 @@ import {
   type TaskProgressSnapshot,
 } from "~/lib/workshop/task-log-progress";
 
-/** 最多展开多少个节点行：进度区是辅助信息，长图（十几个节点）全铺会淹没页面。 */
-const MAX_ROWS = 6;
-
-/** 一行节点进度：状态图标 + 节点名 + 进度条 + 计数与耗时。 */
+/** 一行节点进度：状态图标 + 节点名 + 进度条（缓存节点没有进度语义，不画）+ 计数与耗时。 */
 function StageRow({
+  cached,
   caption,
   done,
   nodeLabel,
   pct,
   subLabel,
 }: {
+  cached: boolean;
   caption: string;
   done: boolean;
   nodeLabel: string;
@@ -62,13 +61,17 @@ function StageRow({
           </span>
           <span className="text-muted-foreground text-2xs shrink-0 tabular-nums">{caption}</span>
         </div>
-        <ProgressBar
-          ariaLabel={`${nodeLabel} 进度`}
-          className="mt-1"
-          showValue={false}
-          trackClassName="h-1.5"
-          value={pct}
-        />
+        {!cached && (
+          <ProgressBar
+            ariaLabel={`${nodeLabel} 进度`}
+            className="mt-1"
+            showValue={false}
+            trackClassName="h-1.5"
+            /* 已完成但没采集到进度数字的节点（如 1s 的 VAE Decode）：给满格确定条，
+             * 不给不确定态——否则「已完成」的行会永远扫下去（#4760）。 */
+            value={done ? (pct ?? 100) : pct}
+          />
+        )}
       </div>
     </div>
   );
@@ -76,6 +79,10 @@ function StageRow({
 
 /** 一行的右侧文案：计数（completed/total）与耗时并排；运行中无计数时补状态词。 */
 function captionFor(stage: TaskProgressStage, snapshot: TaskProgressSnapshot): string {
+  if (stage.cached === true && stage.completed === undefined) {
+    /* 命中缓存跳过的节点：没有进度语义，标「缓存跳过」。 */
+    return "缓存跳过";
+  }
   const parts: Array<string> = [];
   if (stage.completed !== undefined && stage.total !== undefined) {
     parts.push(`${String(stage.completed)}/${String(stage.total)}`);
@@ -103,17 +110,12 @@ function captionFor(stage: TaskProgressStage, snapshot: TaskProgressSnapshot): s
 /** 分节点进度区：日志里有进度形状的事件才渲染。 */
 export function TaskProgressPanel({ logs }: { logs: ReadonlyArray<TaskLogEntry> }) {
   const snapshot = useMemo(() => parseTaskLogProgress(logs), [logs]);
-  /* 只展示「有进度数字」或「正在跑」的节点：纯加载类节点（加载模型等）完成后
-   * 不留行，避免把可视化区变成节点清单。 */
-  const rows = snapshot.stages.filter(
-    (stage) => stage.status === "running" || stage.completed !== undefined,
-  );
+  /* 全部节点按执行顺序列出（#4757）：缓存跳过的步骤也在内，用户要求「都列出来」，
+   * 不再做「有进度数字 / 运行中」的过滤，也不截断。 */
+  const { stages: rows } = snapshot;
   if (rows.length === 0) {
     return null;
   }
-  /* 尾窗切片走 ~/lib/page-window 的唯一口径（P63），不手写 slice。 */
-  const visible = tailWindow(rows, MAX_ROWS);
-  const hiddenCount = rows.length - visible.length;
   const elapsed =
     snapshot.firstAt !== null && snapshot.lastAt !== null
       ? formatDurationMs(snapshot.lastAt - snapshot.firstAt)
@@ -131,8 +133,9 @@ export function TaskProgressPanel({ logs }: { logs: ReadonlyArray<TaskLogEntry> 
         </span>
       </div>
       <div className="flex flex-col gap-2.5">
-        {visible.map((stage) => (
+        {rows.map((stage) => (
           <StageRow
+            cached={stage.cached === true}
             caption={captionFor(stage, snapshot)}
             done={stage.status === "done"}
             key={stage.nodeId}
@@ -142,11 +145,6 @@ export function TaskProgressPanel({ logs }: { logs: ReadonlyArray<TaskLogEntry> 
           />
         ))}
       </div>
-      {hiddenCount > 0 && (
-        <p className="text-muted-foreground text-2xs mt-2">
-          另有 {String(hiddenCount)} 个节点已略去
-        </p>
-      )}
     </div>
   );
 }
