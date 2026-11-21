@@ -35,11 +35,14 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
 export const SANDBOX_POSIX_ONLY = process.platform === "win32";
 
 /**
- * 夹具工作区的**边界标记**：这份文件被拷进临时仓库，靠它把「临时仓库」与「夹具自己的检出」分开（ISSUE #2787）。
+ * **夹具工作区的边界标记**：这份文件被拷进临时仓库，靠它把「临时仓库」与「夹具自己的检出」分开（ISSUE #2787）。
  * `mkdtempSync` 在系统临时目录，而 `src/**` 判据的 `require.resolve` 一路向上会捡到祖先目录的 `node_modules`（PR #2784：CI 的
  * `TMPDIR` 落在工作区里，捡到本仓 `pnpm-workspace.yaml`，`!scripts` 让 pnpm 转到仓库根、`ROOT` 变真仓库）；落最小 `package.json` 即成包根、上溯到此为止。
+ * `"type":"module"` 与**真仓库的 package.json 同形**：沙箱里的 `.ts` 依赖（executable-resolve.ts 一族）按 ESM 直载，
+ * 不再触发 Node 26 的 `MODULE_TYPELESS_PACKAGE_JSON`「先按 CJS 解析、再重析为 ESM」警告 —— 那几行走 stderr，而
+ * `run()` 在退码非 0 时合并两路流，JSON 报告后面多出警告正文会让 `JSON.parse` 直接炸（deps-freshness 契约组 CI 红的现场）。
  */
-const SANDBOX_PACKAGE_MARKER = '{"name":"gate-sandbox","private":true}\n';
+const SANDBOX_PACKAGE_MARKER = '{"name":"gate-sandbox","private":true,"type":"module"}\n';
 
 /**
  * **按 `require("./x.cjs")` 递归补齐判据的同目录依赖**（临时仓库放好被测脚本之后调）：判据之间有依赖（`maskNonCode`、

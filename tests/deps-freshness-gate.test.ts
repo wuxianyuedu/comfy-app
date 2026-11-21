@@ -6,10 +6,13 @@
 import { isRecord, isUnknownArray } from "~/lib/is-record";
 import { defineGateRepo, describe } from "./helpers/gate-repo";
 
-/** 「远端」的依赖声明（= 工作区要同步到的目标）。 */
-const PKG_REMOTE = `{"name":"x","dependencies":{"a":"1.0.0"}}\n`;
+/** 「远端」的依赖声明（= 工作区要同步到的目标）。`type:module` 与真检出同形 —— 夹具覆写沙箱根
+ * package.json 会冲掉边界标记里的同名字段，少了它 Node 26 加载沙箱里的 .ts 依赖链时向 stderr 发
+ * `MODULE_TYPELESS_PACKAGE_JSON` 警告，而 `run()` 退码非 0 时合并两路流，`--json` 契约组的
+ * `JSON.parse` 会在报告后面撞上警告正文（ISSUE #4691 的 GA 现场）。 */
+const PKG_REMOTE = `{"name":"x","type":"module","dependencies":{"a":"1.0.0"}}\n`;
 /** 本地还停在旧的那一套（模拟「远端升过版、本地没同步」）。 */
-const PKG_STALE = `{"name":"x","dependencies":{"a":"0.9.0"}}\n`;
+const PKG_STALE = `{"name":"x","type":"module","dependencies":{"a":"0.9.0"}}\n`;
 /** 与 `PKG_STALE` 配套的一小份 lockfile（解析结果里只有 `a@0.9.0`）。 */
 const LOCK_STALE = [
   "lockfileVersion: '9.0'",
