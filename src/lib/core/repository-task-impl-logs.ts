@@ -67,7 +67,11 @@ export function createTaskLogSection(db: TaskRepoDb) {
      *  `task.logs` 列」。单次 INSERT 的体积与防抖窗口内的增量成正比，不再随
      *  日志总量增长 —— 这是 SQLITE_BUSY 写放大的主要治理点。行数裁剪与内存
      *  视图同窗（`LOGS_MAX_LINES`，core 不反向 import comfyui，字面量另立、
-     *  由用例钉住一致），按每千行一次的节奏顺手收，不逐批扫。 */
+     *  由用例钉住一致），按每千行一次的节奏顺手收，不逐批扫。
+     *  `onConflictDoNothing`（ISSUE #4732 / #3850）：防抖 flush 与收口点
+     *  `persistLogs` 并发进入时，双方可能在对方推进游标前用旧游标算出同一批
+     *  delta 各自追加——第二批撞 `(taskId, seq)` 复合主键。追加是幂等操作
+     *  （同 seq 同内容），撞键即跳过，不再让那一次整列写被 catch 吞掉。 */
     async appendLogs(
       taskId: string,
       entries: Array<{ level: string; msg: string; seq?: number; src?: string; t: number }>,
@@ -75,16 +79,19 @@ export function createTaskLogSection(db: TaskRepoDb) {
       if (entries.length === 0) {
         return;
       }
-      await db.insert(taskLog).values(
-        entries.map((entry) => ({
-          taskId,
-          seq: entry.seq ?? 0,
-          t: entry.t,
-          level: entry.level,
-          msg: entry.msg,
-          src: entry.src ?? null,
-        })),
-      );
+      await db
+        .insert(taskLog)
+        .values(
+          entries.map((entry) => ({
+            taskId,
+            seq: entry.seq ?? 0,
+            t: entry.t,
+            level: entry.level,
+            msg: entry.msg,
+            src: entry.src ?? null,
+          })),
+        )
+        .onConflictDoNothing({ target: [taskLog.taskId, taskLog.seq] });
       const lastSeq = entries.at(-1)?.seq ?? 0;
       if (lastSeq % TASK_LOG_TRIM_EVERY === 0) {
         await trimTaskLogs(db, taskId);
