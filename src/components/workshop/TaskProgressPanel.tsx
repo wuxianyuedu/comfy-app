@@ -67,7 +67,9 @@ function StageRow({
             className="mt-1"
             showValue={false}
             trackClassName="h-1.5"
-            value={pct}
+            /* 已完成但没采集到进度数字的节点（如 1s 的 VAE Decode）：给满格确定条，
+             * 不给不确定态——否则「已完成」的行会永远扫下去（#4760）。 */
+            value={done ? (pct ?? 100) : pct}
           />
         )}
       </div>
