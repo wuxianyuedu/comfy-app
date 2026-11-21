@@ -14,7 +14,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { readFileAsDataUrl } from "~/lib/file-io";
 import { runAsyncAction } from "~/lib/async-action";
 import { isRecord } from "~/lib/is-record";
-import { useExternalAction } from "~/components/ui/use-external-action";
 import {
   apiPreviewRequest,
   fetchWorkshopWorkflows,
@@ -23,7 +22,7 @@ import {
 } from "~/lib/workshop/generation-client";
 import { debugBodyOf } from "~/lib/workshop/api-channel-core";
 import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
-import { isWorkshopInputType, parseRemoteModeAdapters } from "~/lib/workshop/remote-model-adapter";
+import { parseRemoteModeAdapters } from "~/lib/workshop/remote-model-adapter";
 import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
 
 import {
@@ -33,9 +32,10 @@ import {
   type ModelTestSession,
 } from "./use-model-test-generate";
 import { useReferenceImageGroup } from "./use-reference-image-group";
+import { useApplyJsonValues } from "./use-model-test-json";
+import { useOpenResultInBrowser } from "./use-open-result-in-browser";
 
 import { useTRPC } from "~/trpc/react";
-import { getBaseUrl } from "~/trpc/base-url";
 
 import {
   buildRequestBodies,
@@ -505,30 +505,14 @@ export function useModelTest(): ModelTestController {
     patchSession(activeKeyRef.current, { error: text });
   });
 
-  /* 产物原链交给系统浏览器（服务端 openExternal；免重编壳，#3791）。 */
-  const openExternalM = useMutation(trpc.setting.openExternal.mutationOptions());
+  /* 产物原链交给系统浏览器（服务端 openExternal；免重编壳，#3791）收在
+   * useOpenResultInBrowser（§12.13 拆分）。 */
+  const { openBusy, openResultInBrowser } = useOpenResultInBrowser({
+    activeKeyRef,
+    patchSession,
+  });
   /* 对话测试（#4080）：向本地 / 远端被测模型发一条提示词，返回补全与耗时。 */
   const chatTestM = useMutation(trpc.llm.chatTest.mutationOptions());
-  const openExternalAction = useExternalAction({
-    target: "browser",
-    report: (kind, text) => {
-      patchSession(activeKeyRef.current, { notice: { kind, text } });
-    },
-  });
-  const openResultInBrowser = useCallback(
-    async (url: string) => {
-      await openExternalAction.runWithTarget(url, (target) => {
-        /* 本地工作流产物是同源相对路径（/api/generated/...），而 openExternal 的入参是
-         * `z.url()` —— 相对路径当场 invalid_format（#4750），更后面 `isHttpUrl()` 也
-         * 只收绝对 http(s)。按应用 origin 补成绝对 URL 再发（`getBaseUrl()` 是全库
-         * origin 唯一出处）；已是绝对地址的原样保留，`file:` / `javascript:` 这类
-         * 危险协议仍由服务端协议闸拦下 —— 这里只补 origin，不放宽任何安全边界。 */
-        const absolute = new URL(target, getBaseUrl()).toString();
-        return openExternalM.mutateAsync({ url: absolute });
-      });
-    },
-    [openExternalAction, openExternalM],
-  );
 
   /* 候选 / 契约 / 适配器索引：取数与派生收在 useTestCatalog（§12.13 第二刀）。 */
   const {
@@ -720,52 +704,13 @@ export function useModelTest(): ModelTestController {
     [generateSession],
   );
 
-  /**
-   * 解析并应用一段 JSON（ISSUE #4769）：历史页「复制去重投」复制的载荷
-   * （`buildReprintPayload` 的形状：`{ mode, inputs }`）。`inputs` 里测试页
-   * 认得的键逐个写回**当前格**的表单值；合法 → 返回 `{ ok: true, values }`
-   * 供调用方在同一次点击里接着生成（生成读这次给出的值，不吃旧闭包）；
-   * 非法 → 错误落当前格的反馈位并返回 `{ ok: false }`，表单不动。
-   */
-  const applyJsonValues = useCallback(
-    (json: string): { ok: true; values: ModelTestValues } | { error: string; ok: false } => {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(json) as unknown;
-      } catch (error) {
-        const text = `JSON 解析失败：${error instanceof Error ? error.message : "格式不合法"}`;
-        patchSession(activeKeyRef.current, { error: text });
-        return { ok: false, error: text };
-      }
-      if (!isRecord(parsed)) {
-        const text = "JSON 需要是对象（历史「复制去重投」的载荷形状是 { mode, inputs }）";
-        patchSession(activeKeyRef.current, { error: text });
-        return { ok: false, error: text };
-      }
-      const rawInputs: unknown = parsed.inputs;
-      if (!isRecord(rawInputs)) {
-        const text = "JSON 缺少 inputs 对象（历史「复制去重投」的载荷形状是 { mode, inputs }）";
-        patchSession(activeKeyRef.current, { error: text });
-        return { ok: false, error: text };
-      }
-      const patch: Partial<ModelTestValues> = {};
-      for (const [key, value] of Object.entries(rawInputs)) {
-        if (!isWorkshopInputType(key) || typeof value !== "string" || value.trim() === "") {
-          continue;
-        }
-        patch[key] = value;
-      }
-      if (Object.keys(patch).length === 0) {
-        const text = "JSON 的 inputs 里没有测试页认得的参数键";
-        patchSession(activeKeyRef.current, { error: text });
-        return { ok: false, error: text };
-      }
-      const nextValues: ModelTestValues = { ...values, ...patch };
-      patchSession(activeKeyRef.current, { values: nextValues, error: null });
-      return { ok: true, values: nextValues };
-    },
-    [patchSession, values],
-  );
+  /* JSON 输入模式的解析与应用（ISSUE #4769）收在 useApplyJsonValues
+   * （§12.13：主 hook 越过函数长度硬闸，按职责拆子 hook）。 */
+  const { applyJsonValues } = useApplyJsonValues({
+    values,
+    activeKeyRef,
+    patchSession,
+  });
 
   /** 取消当前格（或指定格）的生成（#3949 需求 5 / #4080 评论 12）。 */
   const cancelGenerate = useCallback((key?: string) => {
@@ -869,7 +814,7 @@ export function useModelTest(): ModelTestController {
     modeTabs,
     notice: activeSession.notice,
     generate,
-    openBusy: openExternalAction.busy,
+    openBusy,
     openResultInBrowser,
     loading,
     selectedModel,
