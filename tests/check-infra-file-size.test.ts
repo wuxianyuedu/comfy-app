@@ -10,7 +10,7 @@ import { defineGateRepo, type GateRepo } from "./helpers/gate-repo";
 
 const { test, expect } = defineGateRepo({
   script: "gates/check-infra-file-size.cjs",
-  /* 扫描面是两层：`scripts/`（.cjs/.mjs）与 `tools/`（.ps1）。 */
+  /* 扫描面是三层：`scripts/`（.cjs/.mjs）、`tools/`（.ps1）与根级 `*.config.*`（ISSUE #4612）。 */
   dirs: ["scripts", "tools"],
 });
 
@@ -50,6 +50,30 @@ describe("check-infra-file-size 硬闸", () => {
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toMatch(/tools\/start\/Big\.ps1/);
+  });
+
+  /* ── 根级 *.config.*（ISSUE #4612）：vitest.config.ts 一族住在仓库根，──
+   * ── 两个目录根都盖不住；按文件名进面，只扫根层、不递归。 ── */
+  describe("根级 *.config.* 也在面内（ISSUE #4612）", () => {
+    test("根级配置超 900 行即阻断，并点出文件名", ({ repo }) => {
+      repo.write("vitest.config.ts", `${"// 根级配置\n".repeat(905)}export default {};\n`);
+      const r = repo.run();
+      expect(r.code).toBe(1);
+      expect(r.output).toMatch(/vitest\.config\.ts/);
+    });
+
+    test("子目录里的 *.config.ts 不在根级面内（只扫根层，不递归）", ({ repo }) => {
+      repo.write("nested/inner.config.ts", `${"// 行\n".repeat(905)}export default {};\n`);
+      expect(repo.run().code).toBe(0);
+    });
+
+    test("根级配置到 800 行进提醒（与目录扫面同一把提醒尺）", ({ repo }) => {
+      repo.write("playwright.config.ts", `${"// 行\n".repeat(849)}export default {};`);
+      const r = repo.run();
+      expect(r.code).toBe(0);
+      expect(r.output).toContain("临近拆分提醒");
+      expect(r.output).toContain("playwright.config.ts");
+    });
   });
 
   test("`--update` 这个出口**已经不存在**：传了也照样按判定档判（断头用例）", ({ repo }) => {
