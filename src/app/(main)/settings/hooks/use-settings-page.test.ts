@@ -154,6 +154,7 @@ const SETTINGS: Settings = {
   comfyuiPort: 0,
   exitKillComfyui: true,
   exitKillOllama: true,
+  closeKeepTray: false,
   autoSyncLocalWorkflow: false,
 };
 
