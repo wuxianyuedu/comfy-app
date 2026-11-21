@@ -32,6 +32,7 @@ import {
   type RunnerState,
 } from "./runner-state";
 import { logger } from "~/lib/core/logger";
+import { isHostHeartbeatFresh } from "./host-heartbeat";
 import type { TaskClaimMode } from "../core/repository-task-impl";
 
 /* ── 依赖注入接缝（P3 §5 第 1 期·最后一步） ───────────────────────────── */
@@ -41,7 +42,12 @@ export async function loadRealTaskRepo() {
 }
 export type TaskRepoForReaper = Pick<
   Awaited<ReturnType<typeof loadRealTaskRepo>>,
-  "listStaleUnownedQueued" | "listStaleRunning" | "finalizeFailure" | "finalizeFromReaper"
+  | "listStaleUnownedQueued"
+  | "listStaleQueued"
+  | "listStaleRunning"
+  | "finalizeFailure"
+  | "finalizeHostQueuedFailure"
+  | "finalizeFromReaper"
 >;
 
 export type ReaperDeps = {
@@ -107,9 +113,12 @@ async function resolveTaskRepo(): Promise<TaskRepoForReaper | null> {
  *   WebSocket OPEN 门控），一行 48s 的遗留 `QUEUED` 在新宿主 boot 后 1.4s 就被判成
  *   「请重新执行」，而同批 boot 诊断数出的正是 `hostShardQueued=1`。
  *
- * 本刀的用户可见性代价要写清：没有活宿主时，排队行不再被标失败，「它在等什么」由
+ * 本刀的用户可见性代价要写清：没有活宿主时，排队行不再被本条判死，「它在等什么」由
  *   状态栏的排队数与行上的「⏳ 等待 ComfyUI WebSocket 连接就绪…」来说（那行会被领取
  *   时的日志缓冲重开抹掉，另记 ISSUE #1206），而不是靠 30s 后一个 `FAILED` 兜底。
+ *   这条代价后来在 #4604 收口：本文件第三条 sweeper（`reapDeadHostQueuedTasks`）
+ *   按**宿主心跳**判活，心跳停了才代宿主把本片排队行落成 FAILED——健康等待依旧
+ *   不判死，判死的只剩「确认没有活宿主」的那一批。
  *
  * 下方那道「判死前的外部证据」守卫原样保留：它约束的是任何一次误杀，与归属无关。
  */
@@ -424,6 +433,86 @@ export async function reapStaleQueuedTasks(): Promise<void> {
   }
 }
 
+/* ── DB 侧的「死宿主排队行」兜底回收（ISSUE #4604）──────────────────────
+ * #1204 把本片（claimedBy='host'）的排队行从死信判据里放出来（它们通常是健康
+ * 等待），代价是「宿主死了行就永久挂着 + 旧提示误导用户去重启 ComfyUI」。本条
+ * 把缺口补上：按**宿主心跳**判活——心跳文件（executor-host 每 5s 写一笔）在
+ * 20s 内见过 = 宿主在，排队是健康等待，不碰；心跳停了（或压根没写过 = boot
+ * 失败 / 没拉起）= 不会再有人领取，代宿主落一条用户可见的 FAILED（复用
+ * `finalizeHostQueuedFailure` 的窄守卫：只碰 QUEUED+host 的行），任务能被
+ * 看见地重跑。与死信那条同一套一次性锁（claimTerminal / reaping / persistLogs），
+ * 防止与执行路径写出两个互相矛盾的失败原因。 */
+/** 导出以便判决被直接测试（与 reapStaleQueuedTasks 同款：规则是本模块的价值）。 */
+export async function reapDeadHostQueuedTasks(): Promise<void> {
+  const taskRepository = await resolveTaskRepo();
+  if (!taskRepository) {
+    return;
+  }
+  try {
+    const cutoff = new Date(Date.now() - STALE_MS);
+    const stale = await taskRepository.listStaleQueued("host", cutoff, 20);
+    if (stale.length === 0) {
+      return;
+    }
+    if (isHostHeartbeatFresh()) {
+      logger.warn(
+        `[comfyui] reaper: host 片有 ${stale.length} 行排队超 ${STALE_MS / 1000}s，但宿主心跳仍新鲜 —— 是健康等待，不回收`,
+      );
+      return;
+    }
+    for (const t of stale) {
+      if (reaperState.reaping.has(t.id)) {
+        continue;
+      }
+      reaperState.reaping.add(t.id);
+      try {
+        const ageSec = Math.round((Date.now() - t.createdAt.getTime()) / 1000);
+        /* 先抢终态再落库：与执行路径 / 其它 tick 谁先认领谁赢（两条一次性锁的
+         * 理由见死信那条，不重复）。 */
+        if (!claimTerminal(t.id)) {
+          log(t.id, "warn", `reaper 跳过：任务终态已被本进程认领（已排队 ${ageSec}s）`);
+          continue;
+        }
+        if (!claimFinalize(t.id)) {
+          log(t.id, "warn", `reaper 跳过：任务终态已落库（已排队 ${ageSec}s）`);
+          continue;
+        }
+        const reason =
+          `执行宿主已退出（本行排队 ${ageSec}s、宿主心跳已停止）：不会再有宿主领取它` +
+          " —— 请查看宿主日志（log/current/services/executor-host.log）修复宿主后重新执行；" +
+          "若本机并未打算用执行宿主，请把 COMFY_EXECUTOR 配回 inline";
+        log(t.id, "error", reason);
+        try {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+          const outcome = await taskRepository.finalizeHostQueuedFailure(t.id, reason);
+          if (outcome !== "written") {
+            logger.warn(
+              `[comfyui] reaper: 跳过死宿主行收口 ${t.id}（${outcome}），终态已由执行方落定`,
+            );
+          }
+        } catch (error) {
+          /* 写库失败：归还一次性锁，下一 tick 重来（ISSUE #3865 同款）。 */
+          forgetTaskClaimEntirely(t.id);
+          logger.warn(
+            `[comfyui] ${sqliteAwareErrorText(error, `reaper 收口死宿主行 ${t.id} 失败（已归还认领，下一轮重试）`)}`,
+          );
+          continue;
+        }
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+        await persistLogs(t.id);
+        releaseDispatchSlot(t.id);
+      } finally {
+        reaperState.reaping.delete(t.id);
+      }
+    }
+    logger.warn(
+      `[comfyui] reaper: marked ${stale.length} host-shard QUEUED task(s) as FAILED (host heartbeat stopped, older than ${STALE_MS / 1000}s)`,
+    );
+  } catch (error) {
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(error, "reapDeadHostQueuedTasks 失败")}`);
+  }
+}
+
 /* SAFETY: 类型断言已复核 */
 /** 拿 ComfyUI 对账 RUNNING 任务。
  *  判决矩阵见 RUNNING_STALE_MS 上方的文件头注释。 */
@@ -669,6 +758,7 @@ function sweepOnce(): void {
   }
   void reapStaleQueuedTasks();
   void reapStaleRunningTasks();
+  void reapDeadHostQueuedTasks();
   /* 崩溃残留的临时工作流文件按拍兜底清理（#4225）：正常路径在任务收口时已删，
    * 这里只扫「写完与收口之间进程崩掉」的孤儿（按 mtime 留一小时余量）。
    * prune 自吞全部 IO 错误，onError 是不可达的最后一道。 */

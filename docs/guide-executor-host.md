@@ -220,6 +220,14 @@ TS 源。于是「产物里没有 tsx、没有 TS 源」不再是障碍，也**�
   （ISSUE #1184）：这类行连续两轮（≈30~60s）都无人认领才判失败——单轮判定会误杀
   刚领取、还没 spawn comfy-cli 的正常任务。前提是**同一 shard 只跑一个宿主**
   （由 launcher 保证），这也是「本进程没有足迹 ⇒ 真孤儿」成立的依据。
+  **宿主死亡后的排队行兜底（ISSUE #4604）**：#1204 留下的最后一格缺口——宿主
+  起不来（缺 tsx、库不可达）或崩溃后，本片 `QUEUED` 行两头都够不着（inline 不领、
+  死信判据刻意放过合法归属），行上那句「⏳ 等待…」与真实原因无关，用户会去反复
+  重启 ComfyUI。现在宿主每 5s 往 `log/current/services/executor-host-heartbeat.json`
+  写一笔心跳（`{t, bootId}`，`COMFYAPP_HOST_HEARTBEAT` 可覆盖），Next 侧 reaper
+  的第三条 sweeper 按它判活：心跳新鲜 = 健康等待不碰；心跳停止 / 文件缺失 =
+  代宿主把本片排队行落成 `FAILED`，原因点名「执行宿主已退出」并指向宿主日志——
+  任务能被看见地重跑。判据见 `tests/reaper-dead-host.test.ts`。
 
 - **成片监看丢了怎么办（ADR 5-A）**：`startFilm` 末尾那条 `void watchFilm()` 只活在
   当前进程里，而镜头对应的任务还在库里由执行侧推进 —— Next 重启（dev 热编译、桌包重启）

@@ -131,7 +131,36 @@ process.on("uncaughtException", (error) => {
   reportSafetyNet("uncaughtException", error);
 });
 
+/** 心跳写失败只 warn 一条（不刷屏）——与日志写失败同待遇。 */
+let heartbeatWarned = false;
+
 const bootId = process.env.COMFYAPP_HOST_BOOT_ID ?? Date.now().toString(36);
+
+/** 心跳文件（ISSUE #4604）：Next 侧 reaper 判「host 片还有没有活宿主」的读数。
+ *  与日志心跳同拍写一份小 JSON（`{t, bootId}`）；落在日志通道同目录（默认
+ *  `log/current/services/`），路径可用 `COMFYAPP_HOST_HEARTBEAT` 覆盖。读侧在
+ *  `src/lib/comfyui/host-heartbeat.ts`（默认落点与这里同形，用例钉住一致）。 */
+const heartbeatPath =
+  process.env.COMFYAPP_HOST_HEARTBEAT ??
+  path.join(path.dirname(logPath), "executor-host-heartbeat.json");
+/**
+ * @param {number} now
+ * @returns {void}
+ */
+function writeHeartbeat(now) {
+  try {
+    fs.mkdirSync(path.dirname(heartbeatPath), { recursive: true });
+    fs.writeFileSync(heartbeatPath, JSON.stringify({ t: now, bootId }));
+  } catch (error) {
+    // 与日志写失败同待遇：不拖垮主循环，但只 warn 一条（不刷屏）。
+    if (!heartbeatWarned) {
+      heartbeatWarned = true;
+      writeLine(
+        `heartbeat 文件写失败（忽略）：${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+}
 
 /** 判据与 launcher **同源**于 `launcher-core/executor-mode.mjs`（ADR §14 D5）。
  *  这里原先自己写了一行 `(process.env.COMFY_EXECUTOR ?? "inline").toLowerCase()`：
@@ -373,6 +402,9 @@ async function bootRuntime() {
 writeLine(
   `boot pid=${process.pid} bootId=${bootId} node=${process.version} platform=${process.platform} mode=${runtimeMode ? "runtime" : "skeleton"}`,
 );
+/* boot 即写第一笔心跳：别让「宿主起来了、但领取循环还没跑到第一个 5s 节拍」的
+ * 窗口里被 Next 侧的回收器当成「没有活宿主」（ISSUE #4604 的判活读数）。 */
+writeHeartbeat(Date.now());
 /* 认不出的值不猜意图：按骨架起，但必须留一行——否则用户写错一个字母换来的是
  * 「任务永远停在队列」而日志里一句解释都没有（规范硬规则 4）。 */
 if (unknownExecutor) {
@@ -414,10 +446,12 @@ if (runOnce) {
   process.exit(0);
 }
 
-// 心跳：每 intervalMs 写一行（骨架与运行时形态共用，2-B 契约的存活证据）。
+// 心跳：每 intervalMs 写一行（骨架与运行时形态共用，2-B 契约的存活证据），
+// 并同拍刷新心跳文件（ISSUE #4604 的判活读数）。
 const hb = setInterval(
   () => {
     writeLine(`heartbeat bootId=${bootId}`);
+    writeHeartbeat(Date.now());
   },
   Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 5000,
 );

@@ -95,6 +95,10 @@ describe("configureReaper 接缝", () => {
       finalizeFailure: () => Promise.resolve("written" as const),
       /* SAFETY: 类型断言已复核 */
       finalizeFromReaper: () => Promise.resolve("written" as const),
+      /* #4604 起的另外两条 seam：本用例不经过它们，给空实现占位。 */
+      listStaleQueued: () => Promise.resolve([]),
+      /* SAFETY: 类型断言已复核 */
+      finalizeHostQueuedFailure: () => Promise.resolve("written" as const),
     };
     expect(() => {
       mod.configureReaper({ taskRepo: fakeRepo });
