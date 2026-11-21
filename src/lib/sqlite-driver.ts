@@ -38,6 +38,8 @@ import {
 
 import type { RemoteCallback } from "drizzle-orm/sqlite-proxy";
 
+import { guardStatement, trackTxLifecycle } from "~/lib/sqlite-tx-guard";
+
 /** What the three connection sites hand to drizzle and to the PRAGMA list. */
 export type NodeSqliteHandle = {
   close(): void;
@@ -105,6 +107,11 @@ export function openNodeSqlite(file: string): NodeSqliteHandle {
   let closed = false;
 
   const proxyImpl: NodeSqliteProxy = (sql, params, method) => {
+    /* Transaction isolation guard (ISSUE #4734 / ISSUE #3850): track the
+     * open-transaction window and refuse statements that would interleave
+     * into it from outside its async chain. See `sqlite-tx-guard.ts`. */
+    trackTxLifecycle(sql);
+    guardStatement(sql);
     const stmt: RuntimeStatement = sqlite.prepare(sql);
     stmt.setReturnArrays(true);
     try {

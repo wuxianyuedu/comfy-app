@@ -14,6 +14,7 @@ import type { SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 import { env } from "~/env";
 import { openNodeSqlite, type NodeSqliteHandle } from "~/lib/sqlite-driver";
 import { gateProxyWithPragmas } from "~/lib/sqlite-pragmas";
+import { withSqliteTxGuard } from "~/lib/sqlite-tx-guard";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { sql } from "drizzle-orm";
 import * as schema from "./db/schema";
@@ -64,7 +65,11 @@ declare global {
   var __comfyNodeSqlite: NodeSqliteHandle | undefined;
 }
 
-export const db = globalThis.db ?? drizzle(gatedProxy, { schema });
+/* Transaction isolation guard (ISSUE #4734 / ISSUE #3850): `.transaction()`
+ * callbacks run inside a statement scope so interleaving statements from other
+ * requests fail loudly instead of reading uncommitted data. See
+ * `~/lib/sqlite-tx-guard` and lib-layer standards 18.10.2. */
+export const db = withSqliteTxGuard(globalThis.db ?? drizzle(gatedProxy, { schema }));
 
 /** The retired libsql driver exposed the client as `$client`; tests use that
  *  property (and `closeDb`) to release the handle before unlinking a temp
