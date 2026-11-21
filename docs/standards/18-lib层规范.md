@@ -156,7 +156,8 @@ node scripts/gates/check-file-structure.cjs   # 超 900 行即退 1（pre-commit
 
 ### 18.6 覆盖率（按目录设门槛，只升不降）
 
-**唯一真源是 `vitest.config.ts` 的 `coverage.thresholds`。本节不抄数字，只规定口径并给出复算入口。**
+**唯一真源是覆盖率门槛表 `scripts/gates/coverage/thresholds-*.mjs`（纯数据，#4612 起自
+`vitest.config.ts` 抽出，config 只做装配）。本节不抄数字，只规定口径并给出复算入口。**
 
 为什么把那张表撤掉（ISSUE #1733）：它记的是**某一批的实测快照**，而抬门槛这个动作只改
 `vitest.config.ts` 就能通过全部判据 —— 没有任何执行者核对两处，所以「规范落后于判据」
@@ -680,8 +681,9 @@ SQL trace 逐字不变、用例照样绿。生产侧这个区别是实的（libs
 - 拆出 Node-only 模块：按 18.4 的表选声明形态，别三个都试；自查
   `node scripts/gates/lib-node-only-scan.mjs`（声明缺失 / 假声明 / 真进浏览器图 一次看完）。
 - 新增 `src/lib` 子域目录：**两件事必须同批** —— ① 在 `scripts/gates/check-file-structure.cjs` 的
-  `DOMAINS` 登记（R14，未登记即阻断）；② 在 `vitest.config.ts` 的 `thresholds` 里按**实测值**
-  设门槛（18.6）。只做②会让门槛挂在一个「判据不认识」的目录上、只做①会让新域零门槛。
+  `DOMAINS` 登记（R14，未登记即阻断）；② 在覆盖率门槛表（`scripts/gates/coverage/thresholds-*.mjs`，
+  #4612 起自 `vitest.config.ts` 抽出）里按**实测值**设门槛（18.6）。只做②会让门槛挂在一个
+  「判据不认识」的目录上、只做①会让新域零门槛。
   **迁走模块时第三件事**：清掉指向旧路径的**死豁免与基线条目**（`check-inline-style.cjs`
   的 `EXEMPT`、各判据的基线 JSON 等）—— 一个指向不存在路径的豁免不是
   豁免，是「下一个人往这个路径写东西时被静默放行」。完整实例见 §18.13。

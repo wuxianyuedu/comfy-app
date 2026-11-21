@@ -7,10 +7,12 @@
 // @affected-source src-tauri/
 // @affected-source public/splash.html
 // @affected-source src/app/layout.tsx
+// @affected-source drizzle/
 import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -1571,5 +1573,28 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     // tcp_probe 逐个尝试全部解析地址（localhost 先解析出 ::1 的现场不再误判）
     expect(rust).toContain("for addr in addrs");
     expect(rust).not.toContain("let Some(addr) = addrs.next()");
+  });
+});
+
+/** 仓库卫生（ISSUE #4616）：db-migrate 的旧夹具曾把真 `drizzle/` 整体 rename 走来造「前提不成立」，
+ * 进程死在恢复前就留下「drizzle/ 消失 + drizzle.test-bak-<pid> 孤儿备份」的现场（git status 一片 D），
+ * 且 Windows 上目录 rename 常被句柄占用判 EPERM。那条夹具已改为沙箱指路（`COMFY_DB_MIGRATIONS_DIR`），
+ * 这里把当年的事故形态钉成固定结构判据：仓库根不许有测试备份孤儿，被跟踪的迁移文件必须真在工作树。 */
+describe("仓库卫生：迁移目录不许被测试夹具挪走（ISSUE #4616）", () => {
+  it("仓库根没有 drizzle.test-bak-* 孤儿备份", () => {
+    const orphans = readdirSync(process.cwd()).filter((entry) =>
+      entry.startsWith("drizzle.test-bak-"),
+    );
+    expect(orphans, `发现 rename 夹具留下的孤儿备份：${orphans.join("、")}`).toEqual([]);
+  });
+
+  it("被 git 跟踪的 drizzle/ 迁移文件都在工作树里（不被删空）", () => {
+    const tracked = execFileSync("git", ["ls-files", "drizzle"], { encoding: "utf8" })
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    expect(tracked.length, "git 里登记的 drizzle/ 文件清单不应为空").toBeGreaterThan(0);
+    const missing = tracked.filter((file) => !existsSync(join(process.cwd(), file)));
+    expect(missing, `这些被跟踪的迁移文件在工作树里缺失：${missing.join("、")}`).toEqual([]);
   });
 });

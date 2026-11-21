@@ -45,9 +45,10 @@
  * @module scripts/reformat/reformat-preview-range.mjs — 判据机制层（取数 + 判定，输出交回入口）
  */
 
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 /**
  * 区间两侧 —— 「这一次要判哪一段」。
@@ -245,10 +246,11 @@ export function syntheticMergeRange(deps) {
    * @returns {string} 取不到（非零退出）⇒ 空串，由调用方按「没拿到」处理
    */
   const git = (args) => {
-    const r = spawnSync("git", args, {
+    const r = runGateStep("git", args, {
       cwd,
-      encoding: "utf8",
+      timeoutMs: 30_000,
       stdio: ["ignore", "pipe", "ignore"],
+      echo: false, // 区间读数按行解析，回显不得掺进 stdout
     });
     return r.status === 0 ? String(r.stdout ?? "").trim() : "";
   };

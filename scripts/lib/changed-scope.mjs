@@ -73,12 +73,15 @@
  *   · `reconcileSyntheticMergeFace(ref, deps)` ⇒ 平台合成 merge 提交上的对账（口径 ⑤）
  *   · `confirmEmptyChangeFace(ref, deps)` ⇒ 「真的一处都没改」的两半读法（口径 ⑥）
  */
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
 import { changedPathsFromNameStatus } from "./git-name-status.mjs";
 import { resolveMergeBaseRef } from "../base-check/git-ref.mjs";
+import { runGateStep } from "../launcher-core/shell.mjs";
+
+/** git 一次性读数的墙钟预算（#4679）：与 premerge-proof.mjs 现值同口径（30s 档）。 */
+const GIT_READ_BUDGET_MS = 30_000;
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..", "..");
@@ -96,15 +99,13 @@ export function gitRun(args, deps = {}) {
   const runGit =
     deps.runGit ??
     ((/** @type {string[]} */ a, /** @type {string} */ c) => {
-      /* `stdout` / `stderr` 实测在 git 起不来（ENOENT）时是 `undefined`
-       * （`@types/node` 按 `encoding` 声明成 `string`）⇒ `?? ""` 是给运行时兜的。 */
-      const r = /** @type {{ status: number | null, stdout?: string, stderr?: string }} */ (
-        spawnSync("git", a, {
-          cwd: c,
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "pipe"],
-        })
-      );
+      const r = runGateStep("git", a, {
+        cwd: c,
+        timeoutMs: GIT_READ_BUDGET_MS,
+        stdio: ["ignore", "pipe", "pipe"],
+        // 改动面读数会被逐行解析（含非 ASCII 路径），回显不得混进 stdout。
+        echo: false,
+      });
       return {
         ok: r.status === 0,
         stdout: r.status === 0 ? String(r.stdout ?? "") : String(r.stderr ?? ""),

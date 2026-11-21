@@ -36,10 +36,15 @@
  * 退回式实现，以及 `check-reformat-only.cjs` / `launcher-core/run.mjs` /
  * `ci-workspace-probe.mjs` 里几处硬拼的 `.git/<某个引用文件>`。
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
+
+/** git 一次性读数的墙钟预算（#4679）：与 premerge-proof.mjs 现值同口径（30s 档），
+ *  只封「锁竞争 / 杀软扫描 / 网络挂起时的无限等」，不改正常判决。 */
+const GIT_READ_BUDGET_MS = 30_000;
 
 /**
  * 这份工作区此刻是不是停在「`git merge` 已解完冲突、提交还没落地」那一态
@@ -78,10 +83,12 @@ export function hasInProgressMerge(root) {
  * @returns {string | null} git 目录绝对路径，或 `null`
  */
 export function resolveGitDir(cwd = process.cwd()) {
-  const r = spawnSync("git", ["rev-parse", "--absolute-git-dir"], {
+  const r = runGateStep("git", ["rev-parse", "--absolute-git-dir"], {
     cwd,
-    encoding: "utf8",
+    timeoutMs: GIT_READ_BUDGET_MS,
     stdio: ["ignore", "pipe", "ignore"],
+    // 读数探针：回显落在父进程 stdout，会污染按行解析本脚本输出的调用方。
+    echo: false,
   });
   if (r.status !== 0) {
     return null;
@@ -103,10 +110,11 @@ export function resolveGitDir(cwd = process.cwd()) {
  * @returns {string | null} 工作树根绝对路径，或 `null`（裸仓库 / 不在检出里）
  */
 export function resolveRepoRoot(cwd = process.cwd()) {
-  const r = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+  const r = runGateStep("git", ["rev-parse", "--show-toplevel"], {
     cwd,
-    encoding: "utf8",
+    timeoutMs: GIT_READ_BUDGET_MS,
     stdio: ["ignore", "pipe", "ignore"],
+    echo: false,
   });
   if (r.status !== 0) {
     return null;

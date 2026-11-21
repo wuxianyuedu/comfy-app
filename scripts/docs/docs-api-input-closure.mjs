@@ -39,8 +39,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 import ts from "typescript";
 
@@ -154,10 +155,11 @@ export function typedocTsconfigPath(root = ROOT) {
  * @returns {Set<string> | null}
  */
 export function gitTrackedFiles(root = ROOT) {
-  const out = spawnSync("git", ["ls-files", "-z"], {
+  const out = runGateStep("git", ["ls-files", "-z"], {
     cwd: root,
-    encoding: "utf8",
+    timeoutMs: 30_000,
     maxBuffer: 256 * 1024 * 1024,
+    echo: false, // 文件集合按 \0 切分解析，回显不得掺进 stdout
   });
   if (out.status !== 0 || typeof out.stdout !== "string") {
     return null;

@@ -26,9 +26,9 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 
 import { readEnvFileValue } from "../app-port.mjs";
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 /** 提单人这一格读的键名（`.env` 与进程环境同一名）。 */
 export const DEV_HANDLE_ENV_KEY = "COMFYAPP_DEV_HANDLE";
@@ -94,7 +94,7 @@ function mainCheckoutRoot(root) {
     const cwd = root || process.cwd();
     /** @param {string[]} args */
     const rev = (args) => {
-      const got = spawnSync("git", args, { cwd, encoding: "utf8" });
+      const got = runGateStep("git", args, { cwd, timeoutMs: 30_000, echo: false }); // gitdir 读数
       return got.status === 0 ? String(got.stdout ?? "").trim() : "";
     };
     const own = rev(["rev-parse", "--git-dir"]);
@@ -145,9 +145,10 @@ export const PLATFORM_HANDLE_KEYS = Object.freeze(["CNB_NPC_NAME", "CNB_TOKEN_US
  */
 function gitName(root) {
   try {
-    const got = spawnSync("git", ["config", "user.name"], {
+    const got = runGateStep("git", ["config", "user.name"], {
       cwd: root || process.cwd(),
-      encoding: "utf8",
+      timeoutMs: 30_000,
+      echo: false, // 候选读数，回显不得掺进 stdout
     });
     return got.status === 0 ? String(got.stdout ?? "").trim() : "";
   } catch {

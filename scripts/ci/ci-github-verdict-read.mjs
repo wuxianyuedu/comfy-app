@@ -94,10 +94,11 @@
  * 任一即可、两条都给最稳）、`GITHUB_MIRROR_REPO`（缺省 `wuxianyuedu/comfy-app`）、
  * `CNB_PULL_REQUEST_IID`（PR 流水线注入）。
  */
-import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 import {
   CODE,
   DISPATCH_STATE_DIR,
@@ -204,7 +205,7 @@ function gitEnv() {
 }
 
 /**
- * 真身：git 子进程执行器。本格只调 `rev-parse`（本地跳，不限时）。
+ * 真身：git 子进程执行器。本格只调 `rev-parse`（本地跳，30s 挂死兜底）。
  * 镜像格的 `realRunGit` 未导出，这里写本格的最小版 —— 不共享那份是因为它带
  * push/ls-remote 的超时判读，本格一跳都用不上。
  *
@@ -212,7 +213,13 @@ function gitEnv() {
  * @returns {{code: number, stderr: string, stdout: string}}
  */
 function realRunGit(args) {
-  const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", env: gitEnv() });
+  // 本地跳（rev-parse），30s 只是挂死兜底，不改正常判决（#4679）。
+  const r = runGateStep("git", args, {
+    cwd: ROOT,
+    timeoutMs: 30_000,
+    env: gitEnv(),
+    echo: false,
+  });
   return {
     code: r.status ?? -1,
     stderr: String(r.stderr ?? ""),

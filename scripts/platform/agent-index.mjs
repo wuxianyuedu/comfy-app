@@ -35,8 +35,9 @@
  * 退出码：0 = 两个工具都报就绪；1 = 有工具明确报「没就绪」；2 = 没结论
  * （工具不在 / 读数解析不了）—— 2 不是绿，也不是「索引坏了」。
  */
-import { spawnSync } from "node:child_process";
 import path from "node:path";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const TAG = "[agent:index]";
@@ -72,15 +73,16 @@ const TOOLS = {
  * @returns {{missing: boolean, code: number | null, stdout: string, stderr: string}}
  */
 export function runTool(cmd, args) {
-  /** `stdout` / `stderr` 实测在 ENOENT 时是 `undefined`（`@types/node` 按 `encoding`
-   *  声明成 `string`）⇒ 这里按实测形状声明，下面两处 `?? ""` 是给运行时兜的。 */
+  // 索引构建（`--init`）是分钟级动作：给 600s；版本探针同预算只封「挂死不返回」。
+  // `stdout` / `stderr` 实测在 ENOENT 时是 `undefined` 的那一档已由执行器归一成空串。
   const res =
     process.platform === "win32"
-      ? spawnSync("cmd.exe", ["/d", "/s", "/c", cmd, ...args], {
+      ? runGateStep("cmd.exe", ["/d", "/s", "/c", cmd, ...args], {
           cwd: ROOT,
-          encoding: "utf8",
+          timeoutMs: 600_000,
+          echo: false, // 工具读数按 stdout/stderr 解析，回显不得掺入
         })
-      : spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8" });
+      : runGateStep(cmd, args, { cwd: ROOT, timeoutMs: 600_000, echo: false });
   const stdout = res.stdout ?? "";
   const stderr = res.stderr ?? "";
   /* 「命令不在」有两种形状：POSIX 的 spawn ENOENT，与 cmd.exe 回显的

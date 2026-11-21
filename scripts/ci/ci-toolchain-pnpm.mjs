@@ -502,7 +502,9 @@ function viaHost(exe, prefix, probeRun) {
  * @returns {{command: string, args: string[], out: string} | null}
  */
 function runProbe(cmd, args) {
-  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
+  /* 预算（#4679）：pnpm 可用性探针（`-v` 级）给 60s。**保留裸 `spawnSync` 不迁
+   * `runGateStep`**：本文件头约束 —— 流水线第一步不 import 任何仓库内模块。 */
+  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true, timeout: 60_000 });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   if (r.error || r.status !== 0) {
     return null;

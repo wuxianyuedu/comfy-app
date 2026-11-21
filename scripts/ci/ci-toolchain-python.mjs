@@ -81,7 +81,10 @@ import path from "node:path";
  * @returns {RunResult}
  */
 function run(cmd, args) {
-  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
+  /* 预算（#4679）：探针与装解释器都走这里（安装是分钟级）给 600s。**保留裸
+   * `spawnSync` 不迁 `runGateStep`**：本文件头那条硬约束 —— 流水线第一步不许
+   * import 任何仓库内模块（launcher-core 会拖进 src/lib 的 TS 模块图）。 */
+  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true, timeout: 600_000 });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return { ok: r.status === 0 && !r.error, out };
 }
@@ -254,7 +257,8 @@ export function currentAccount() {
   const r = spawnSync(
     "powershell",
     ["-NoProfile", "-Command", "[System.Security.Principal.WindowsIdentity]::GetCurrent().Name"],
-    { encoding: "utf8", windowsHide: true },
+    // 预算（#4679）：单条 PowerShell 查询，30s 挂死兜底（同上：不迁 runGateStep）。
+    { encoding: "utf8", windowsHide: true, timeout: 30_000 },
   );
   return (r.stdout ?? "").trim() || "(取不到)";
 }

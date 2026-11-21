@@ -136,10 +136,13 @@ function run(cmd, args, downloadHost) {
   const env = downloadHost
     ? { ...process.env, PLAYWRIGHT_DOWNLOAD_HOST: downloadHost }
     : process.env;
+  // 预算（#4679）：工具链步骤含浏览器下载（分钟级）给 600s。**保留裸 `spawnSync`
+  // 不迁 `runGateStep`**：本文件头约束 —— 流水线第一步不 import 仓库内模块。
   const r = spawnSync(cmd, args, {
     encoding: "utf8",
     windowsHide: true,
     env,
+    timeout: 600_000,
   });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return { ok: r.status === 0 && !r.error, out };

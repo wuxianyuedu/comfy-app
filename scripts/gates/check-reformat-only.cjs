@@ -65,7 +65,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { runGateStep } = require("../launcher-core/shell.mjs");
 // pnpm 可执行形态的唯一判据（scripts/launcher-core/shell.mjs 的 runPnpmSync）。
 // 这里曾是**第二份**平台判据（`process.platform === "win32" ? "pnpm.cmd" : "pnpm"`）：
 // Windows 上批处理 Node 起不来（EINVAL），一旦走到这一档，「纯格式化」判定就对每个
@@ -316,11 +316,12 @@ function runnerPrefix() {
 function runOxfmt(args, cwd, input) {
   const { kind, head } = runnerPrefix();
   if (kind === "entry") {
-    return spawnSync(process.execPath, [...head, ...args], {
+    // 与下面 pnpm 兜底档同预算（600s）：格式判据是秒级，只封「挂死不返回」。
+    return runGateStep(process.execPath, [...head, ...args], {
       cwd,
-      input,
-      encoding: "utf8",
+      timeoutMs: 600_000,
       maxBuffer: 64 * 1024 * 1024,
+      ...(input === undefined ? {} : { input }),
     });
   }
   if (typeof runPnpmSync !== "function") {

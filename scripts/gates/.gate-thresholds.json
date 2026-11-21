@@ -454,6 +454,15 @@
       "strictness": "n/a",
       "group": "r5-proximity-lines",
       "why": "基础设施档同一把提醒尺（#3473），与 R5 侧组内同数；--staged 档只念本次暂存触碰的文件。"
+    },
+    {
+      "file": "scripts/gates/check-bundle-budget.cjs",
+      "const": "GIT_READ_BUDGET_MS",
+      "value": 30000,
+      "unit": "ms",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "体积账的 git 一次性读数预算（#4679）：只封「锁竞争/杀软扫描时无限等」，不是阻断阈值——归因读数拿不到就按「没量到」说话。"
     }
   ],
   "$notCovered": {

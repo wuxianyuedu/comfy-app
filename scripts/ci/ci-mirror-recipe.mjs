@@ -29,9 +29,10 @@
  * 环境变量：`MIRROR_BASE_SHA` / `MIRROR_HEAD_SHA` / `MIRROR_MERGE_TREE`
  * （pr-gate.yml 的配方 step 从 `client_payload` / `inputs` 注入，见该文件同名 step）。
  */
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 /** 仓根（GA runner 上 = 检出目录；本地自查 = 本检出根）。git 子进程只在这里跑。 */
 const ROOT = path.resolve(import.meta.dirname, "../..");
@@ -113,7 +114,11 @@ export function verifyTree({ mergeTree = "", localTree = "" } = {}) {
  * @returns {{code: number, stdout: string, stderr: string}}
  */
 function runGit(args) {
-  const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8" });
+  const r = runGateStep("git", args, {
+    cwd: ROOT,
+    timeoutMs: 30_000,
+    echo: false, // 树一致性读数，回显不得混进 stdout
+  });
   return {
     code: r.status ?? -1,
     stdout: String(r.stdout ?? ""),

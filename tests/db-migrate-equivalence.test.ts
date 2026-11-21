@@ -8,7 +8,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { acquireRepoDrizzle } from "./helpers/repo-drizzle-lock";
 
 /** 一张表的可比结构：列（名/类型/非空/主键）+ 索引名。 */
 type TableShape = {
@@ -85,63 +84,44 @@ function diffColumns(
   };
 }
 
-/**
- * 真 `drizzle/` 的独占锁（与 `tests/db-migrate-noninteractive.test.ts` 共用一把）。那份判「前提不成立」时要把真迁移目录整个挪开，而本文件
- * 两次 `db-migrate` 都**要靠它在场**：不同 worker 并行时 `beforeAll` 会读到被改名走的 `drizzle/`，表现为「一条断言都没红、整个文件在 setup 里挂，
- * 话术写着没有可应用的迁移」。实测见规范 §11.19.2 与本轮 `check:all` 日志。
- */
-let releaseDrizzle: (() => void) | null = null;
+beforeAll(() => {
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "db-migrate-eq-"));
+  migratedDb = path.join(tmp, "migrated.sqlite");
+  pushedDb = path.join(tmp, "pushed.sqlite");
 
-beforeAll(async () => {
-  releaseDrizzle = await acquireRepoDrizzle("db-migrate-equivalence");
-  try {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "db-migrate-eq-"));
-    migratedDb = path.join(tmp, "migrated.sqlite");
-    pushedDb = path.join(tmp, "pushed.sqlite");
+  const migrate = spawnSync(
+    process.execPath,
+    [path.join(process.cwd(), "scripts", "db/db-migrate.mjs")],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_URL: `file:${migratedDb}` },
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 300_000,
+    },
+  );
+  if (migrate.status !== 0) {
+    throw new Error(`db:migrate 失败：${migrate.stderr || migrate.stdout}`);
+  }
 
-    const migrate = spawnSync(
-      process.execPath,
-      [path.join(process.cwd(), "scripts", "db/db-migrate.mjs")],
-      {
-        cwd: process.cwd(),
-        encoding: "utf8",
-        env: { ...process.env, DATABASE_URL: `file:${migratedDb}` },
-        stdio: ["ignore", "pipe", "pipe"],
-        timeout: 300_000,
-      },
-    );
-    if (migrate.status !== 0) {
-      throw new Error(`db:migrate 失败：${migrate.stderr || migrate.stdout}`);
-    }
-
-    const push = spawnSync(
-      process.execPath,
-      [path.join(process.cwd(), "scripts", "db/db-push.mjs")],
-      {
-        cwd: process.cwd(),
-        encoding: "utf8",
-        env: { ...process.env, DATABASE_URL: `file:${pushedDb}` },
-        stdio: ["ignore", "pipe", "pipe"],
-        timeout: 300_000,
-      },
-    );
-    if (push.status !== 0) {
-      throw new Error(`db:push 失败：${push.stderr || push.stdout}`);
-    }
-  } catch (error) {
-    /* 拿到锁之后的**任何**失败都要先放锁再抛：漏放会把这台检出后面每一次运行都顶成
-     * 「等不到锁」，而那条红长得像并发问题（帮助文件里那句「主家没了才回收」是兜底，
-     * 不是让人放心漏放的借口）。 */
-    releaseDrizzle();
-    releaseDrizzle = null;
-    throw error;
+  const push = spawnSync(
+    process.execPath,
+    [path.join(process.cwd(), "scripts", "db/db-push.mjs")],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_URL: `file:${pushedDb}` },
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 300_000,
+    },
+  );
+  if (push.status !== 0) {
+    throw new Error(`db:push 失败：${push.stderr || push.stdout}`);
   }
 }, 600_000);
 
 afterAll(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
-  releaseDrizzle?.();
-  releaseDrizzle = null;
 });
 
 describe("db:migrate ⇄ db:push 的 schema 等价", () => {
