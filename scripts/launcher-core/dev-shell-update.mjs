@@ -131,9 +131,8 @@ export function compareShellBuildInfo(local, remote) {
  */
 export async function checkDevShellUpdate(io = {}) {
   const root = path.resolve(io.root ?? ROOT);
-  const outAbs = path.isAbsolute(io.out ?? DEFAULT_OUT)
-    ? /** @type {string} */ (io.out)
-    : path.resolve(root, io.out ?? DEFAULT_OUT);
+  const outRaw = io.out ?? DEFAULT_OUT;
+  const outAbs = path.isAbsolute(outRaw) ? outRaw : path.resolve(root, outRaw);
   const stampAbs = stampPathOf(outAbs);
   const repo = io.repo ?? DEFAULT_REPO;
   const tag = io.tag ?? DEFAULT_TAG;
