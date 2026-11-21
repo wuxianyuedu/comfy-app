@@ -277,9 +277,15 @@ export type UseWorkshopPipelineOptions = {
   onControlledTabChange?: (tab: Tab) => void;
 };
 
-export function useWorkshopPipeline(
-  options: UseWorkshopPipelineOptions = {},
-): WorkshopPipelineController {
+/** 阶段游标的接管（自治 / 受控双模，ISSUE #4765）：游标状态与「最新 setTab /
+ *  接管方式」的 ref 镜像都收在这里 —— 主管线只消费；只跑一次的挂载回填 effect
+ *  经 ref 读当次值，不把受控位拖进依赖数组。 */
+function useWorkshopStageCursor(options: UseWorkshopPipelineOptions): {
+  controlledTabRef: React.RefObject<Tab | undefined>;
+  setTab: (next: Tab) => void;
+  setTabRef: React.RefObject<(next: Tab) => void>;
+  tab: Tab;
+} {
   const { controlledTab, onControlledTabChange } = options;
   const [internalTab, setInternalTab] = React.useState<Tab>("script");
   /* 受控优先：外层给了游标就全听外层的；自治模式用内部状态。 */
@@ -291,6 +297,19 @@ export function useWorkshopPipeline(
     },
     [onControlledTabChange],
   );
+  const setTabRef = React.useRef(setTab);
+  const controlledTabRef = React.useRef(controlledTab);
+  React.useEffect(() => {
+    setTabRef.current = setTab;
+    controlledTabRef.current = controlledTab;
+  });
+  return { controlledTabRef, setTab, setTabRef, tab };
+}
+
+export function useWorkshopPipeline(
+  options: UseWorkshopPipelineOptions = {},
+): WorkshopPipelineController {
+  const { tab, setTab, setTabRef, controlledTabRef } = useWorkshopStageCursor(options);
   const [meta, setMeta] = React.useState<ProjectMeta>(
     () => loadWorkshopDraftOnce()?.meta ?? DEFAULT_META,
   );
@@ -368,8 +387,6 @@ export function useWorkshopPipeline(
   const latestDraftRef = React.useRef<WorkshopDraft>(currentDraft());
   const tabRef = React.useRef(tab);
   const renderedRef = React.useRef(rendered);
-  const setTabRef = React.useRef(setTab);
-  const controlledTabRef = React.useRef(controlledTab);
   /* 服务端镜像对账是否已落定（#4023）：落定前不放行自动保存 / 卸载兜底的写穿，
    * 否则挂载即 PUT 会把本机较旧的 localStorage 草稿盖到服务端较新镜像上。 */
   const restoreSettledRef = React.useRef(false);
@@ -378,8 +395,6 @@ export function useWorkshopPipeline(
     latestDraftRef.current = currentDraft();
     tabRef.current = tab;
     renderedRef.current = rendered;
-    setTabRef.current = setTab;
-    controlledTabRef.current = controlledTab;
   });
 
   /** 卸载时让模块级草稿缓存失效，避免组件重挂载时读回旧的当前项目草稿。 */
