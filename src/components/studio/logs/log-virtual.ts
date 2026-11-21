@@ -15,18 +15,18 @@ import { ceilDiv } from "~/lib/page-window";
  *  档位只改行的上下内边距，正文行高不变。 */
 export type LogDensity = "compact" | "standard" | "relaxed";
 
-/** 各档的**单侧**内边距像素（与 `LogRow` 的 `py-*` class 对齐：compact=py-1、standard=py-3、relaxed=py-4）。
- *  标准档 12（行高 44）来自设计稿「日志面板 · 重设计」的疏朗行距；紧凑/宽松档照同一梯队推。 */
-const DENSITY_PADDING: Record<LogDensity, number> = { compact: 4, standard: 12, relaxed: 16 };
+/** 各档的**单侧**内边距像素（与 `LogRow` 的 `py-*` class 对齐：compact=py-0.5、standard=py-1、relaxed=py-3）。
+ *  三档整体下调一档（ISSUE #4716）：标准档 4（行高 28）即下调前的「紧凑」，宽松档 12（行高 44）
+ *  即下调前的「标准」；新紧凑档 2（py-0.5）比原最窄档再收一档。 */
+const DENSITY_PADDING: Record<LogDensity, number> = { compact: 2, standard: 4, relaxed: 12 };
 
 /** 正文一行的像素高度（`text-sm` + `leading-snug` = 14px 字号 × 1.375 ≈ 19），不含行内边距与分隔线。 */
 export const LOG_ROW_CONTENT = 19;
 
 /**
- * 标准档的行高（原 {@link LOG_ROW_SINGLE} 的口径：正文 19 + `py-1` 上下 8 + 下边框 1）。
+ * 标准档的行高（正文 19 + `py-1` 上下 8 + 下边框 1 = 28，与 {@link LOG_ROW_SINGLE} 同值）。
  * 密度档的行高走 {@link rowHeightFor}；本常量保留给「不关心密度」的既有消费方
- * （stories / VirtualLogList 的兜底），**不再是**面板标准档的行高——那是
- * `rowHeightFor("standard")`（44）。
+ * （stories / VirtualLogList 的兜底）。
  */
 export const LOG_ROW_SINGLE = 28;
 
@@ -134,10 +134,10 @@ export type LogLayoutOptions = {
   /** 已展开的行 id：固定为 {@link LOG_ROW_EXPANDED}。 */
   expandedIds?: ReadonlySet<string>;
   /**
-   * **实测高度出口**（按消息原文查询）：估算的字符宽度系数只能取均值，临界长消息会差出一行 ——
-   * 行盒用 `minHeight` 渲染、内容撑开后实测回填，位置表用实测值，多行消息不再被固定行高
-   * 截断、与后一行重叠（ISSUE #4618）。键用消息原文而不是下标：尾窗滑动时下标会移，
-   * 消息与高度一一对应（同文同高）。
+   * **实测高度出口**（按消息原文查询）：估算的字符宽度系数只能取均值，与实际渲染高度会有出入 ——
+   * 行盒用 minHeight 渲染、内容实测后经这里回填，位置表以实测值为准：比估算高时撑开（不再被固定
+   * 行高截断、与后一行重叠，ISSUE #4618），比估算矮时收窄（估高偏保守多出的空行不再显示，
+   * ISSUE #4715）。键用消息原文而不是下标：尾窗滑动时下标会移，消息与高度一一对应（同文同高）。
    */
   heightOf?: (message: string) => number | undefined;
   /**
@@ -180,11 +180,13 @@ export function layoutRows(
       /* 每行的行数只数一次：estimateRowHeight 与 countLines 都靠它推高度。 */
       const lines = wrap ? countLines(entry.message, availableWidth) : 1;
       size = base + (lines - 1) * LOG_ROW_LINE;
-      /* 实测校正只**向上**修普通行（行盒是 minHeight，实际高度不会低于估算）；
-       * 展开行 / 强制单行的口径另有出处，不随实测变。同文同高。 */
+      /* 实测校正**双向**采纳（ISSUE #4715）：内容比估算矮（估高系数偏保守、
+       * 多估出一行）时按实测收窄，行内不再留出成片空白；比估算高时照旧撑开，
+       * 不裁字。下限钳在单行档（内容至少一行）。展开行 / 强制单行的口径另有
+       * 出处，不随实测变。同文同高。 */
       const measured = heightOf?.(entry.message);
-      if (measured !== undefined && measured > size) {
-        size = measured;
+      if (measured !== undefined) {
+        size = Math.max(base, measured);
       }
     }
     rows[i] = { start, size };
