@@ -16,19 +16,21 @@ import { ceilDiv } from "~/lib/page-window";
 export type LogDensity = "compact" | "standard" | "relaxed";
 
 /** 各档的**单侧**内边距像素（与 `LogRow` 的 `py-*` class 对齐：compact=py-0.5、standard=py-1、relaxed=py-3）。
- *  三档整体下调一档（ISSUE #4716）：标准档 4（行高 28）即下调前的「紧凑」，宽松档 12（行高 44）
+ *  三档整体下调一档（ISSUE #4716）：标准档 4（行高 29）即下调前的「紧凑」，宽松档 12（行高 45）
  *  即下调前的「标准」；新紧凑档 2（py-0.5）比原最窄档再收一档。 */
 const DENSITY_PADDING: Record<LogDensity, number> = { compact: 2, standard: 4, relaxed: 12 };
 
-/** 正文一行的像素高度（`text-sm` + `leading-snug` = 14px 字号 × 1.375 ≈ 19），不含行内边距与分隔线。 */
-export const LOG_ROW_CONTENT = 19;
+/** 正文一行的像素高度（`text-sm` + `leading-5` = 20px 行盒，与级别徽标 `h-5` 同高），
+ *  不含行内边距与分隔线。行内所有子项都不得超过这个高度，否则单行行的
+ *  「文字上方 / 下方」空隙不等（ISSUE #4744）。 */
+export const LOG_ROW_CONTENT = 20;
 
 /**
- * 标准档的行高（正文 19 + `py-1` 上下 8 + 下边框 1 = 28，与 {@link LOG_ROW_SINGLE} 同值）。
+ * 标准档的行高（正文 20 + `py-1` 上下 8 + 下边框 1 = 29，与 {@link LOG_ROW_SINGLE} 同值）。
  * 密度档的行高走 {@link rowHeightFor}；本常量保留给「不关心密度」的既有消费方
  * （stories / VirtualLogList 的兜底）。
  */
-export const LOG_ROW_SINGLE = 28;
+export const LOG_ROW_SINGLE = 29;
 
 /** 按密度给**普通日志行**的估算高度（虚拟化行盒高度；估算 ≥ 实际，不足会裁内容）。 */
 export function rowHeightFor(density: LogDensity): number {
@@ -42,13 +44,13 @@ export function rowHeightFor(density: LogDensity): number {
  */
 export const LOG_MESSAGE_OVERHEAD = 260;
 
-/** 换行显示时，**每一行文字**的像素高度（`leading-snug` 下的 14px 行高 = 19.25）。 */
-export const LOG_ROW_LINE = 19;
+/** 换行显示时，**每一行文字**的像素高度（`leading-5` 下的 14px 行盒 = 20）。 */
+export const LOG_ROW_LINE = 20;
 
 /**
  * **展开**的日志行高度（常量，不是量出来的）。展开内容交给 `JsonViewer`（自带工具栏 / 搜索与内部滚动），
  * 树的展开与搜索跳转都不改变**行**高，行高只由这个常量决定——这正是虚拟滚动的「可枚举」：`layoutRows`
- * 不必测 DOM 就能给位置，滚动位置与内容不会错开。取 360 ≈ 单行(28) + 一份够用的 JSON 视口。
+ * 不必测 DOM 就能给位置，滚动位置与内容不会错开。取 360 ≈ 单行(29) + 一份够用的 JSON 视口。
  */
 export const LOG_ROW_EXPANDED = 360;
 
