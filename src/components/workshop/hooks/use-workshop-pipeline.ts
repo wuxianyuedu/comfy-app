@@ -495,7 +495,9 @@ export function useWorkshopPipeline(
     return () => {
       guard.dispose();
     };
-  }, []);
+    /* 两个 ref 恒稳（镜像在 useWorkshopStageCursor 里逐帧更新），列进来只为
+     * 过 exhaustive-deps：effect 仍只在挂载时跑一次。 */
+  }, [controlledTabRef, setTabRef]);
 
   /* 首挂载三路拉取（技能列表 / API 通道 / 工作流库清单）——沉在
    * `./use-workshop-pipeline-effects` 的 `useWorkshopBootstrapData`。 */
