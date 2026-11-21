@@ -38,11 +38,12 @@ export const FILTER_LABELS: Array<{ label: string; value: LogFilter }> = [
 /**
  * 级别按钮上的计数数字：**定宽 + 右对齐 + 等宽数字**。四个按钮上的 `0 / 12 / 3 / 1822` 宽度不一，
  * 按钮再等分也读不齐，所以给显式 `w-[4ch]`——「文字 + 四位数字」是固定预算，文本长度不再随内容变。
- * 数字本身不按级别染色（`text-ink-fainter`）：级别色已由同一行左侧的**标签文字**承担，避免两个色块互相稀释。
+ * 数字本身不按级别染色（`text-ink-muted`）：级别色已由同一行左侧的**标签文字**承担，避免两个色块互相稀释。
+ * 计数是要读的信息，取「弱文字」档（5.0:1）而不是更弱的「辅助说明」档 `ink-fainter`（3.2:1，低于小字 AA）。
  */
 function CountChip({ value }: { value: number }) {
   return (
-    <span className="text-ink-fainter text-2xs w-[4ch] shrink-0 text-right tabular-nums">
+    <span className="text-ink-muted text-2xs w-[4ch] shrink-0 text-right tabular-nums">
       {value}
     </span>
   );

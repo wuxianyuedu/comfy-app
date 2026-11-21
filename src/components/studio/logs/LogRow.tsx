@@ -370,7 +370,7 @@ export const LogRow = memo(function LogRow({
     showDetails && location !== undefined && location !== "" ? (
       <Hint label={locationHint}>
         <Button
-          className="text-ink-fainter hover:text-ink-soft text-2xs h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right font-normal whitespace-nowrap"
+          className="text-ink-muted hover:text-ink-soft text-2xs h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right font-normal whitespace-nowrap"
           onClick={() => {
             copyLocation(location);
           }}
@@ -382,9 +382,9 @@ export const LogRow = memo(function LogRow({
     ) : null;
   const sourceNode =
     showDetails && entry.origin ? (
-      <span className="text-ink-fainter text-2xs shrink-0">{entry.origin}</span>
+      <span className="text-ink-muted text-2xs shrink-0">{entry.origin}</span>
     ) : showDetails && entry.source === "console" ? null : showDetails ? (
-      <span className="text-ink-fainter text-2xs shrink-0">{entry.source}</span>
+      <span className="text-ink-muted text-2xs shrink-0">{entry.source}</span>
     ) : null;
   /* 复制按钮永远在**最后一列**：它是行的终点，位置固定用户才找得到；
      `self-center` 让它在多行（换行显示）的行里也贴住垂直中线。 */

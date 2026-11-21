@@ -77,7 +77,7 @@ export function LogPanelFooter(input: {
         </span>
         {droppedTotal > 0 && (
           <Hint label={`内存时间线已折叠更早的 ${droppedTotal} 条（完整历史见磁盘日志文件）`}>
-            <span className="text-ink-fainter shrink-0">· 更早 {droppedTotal} 条已折叠</span>
+            <span className="text-ink-muted shrink-0">· 更早 {droppedTotal} 条已折叠</span>
           </Hint>
         )}
         {/* 服务端进程标识：用户报障时能说清「日志来自哪个应用服务进程」，
