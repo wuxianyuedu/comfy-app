@@ -16,6 +16,7 @@ import {
   isForeignRemotePush,
   mergeCandidates,
   parseRefLines,
+  recomputeTimeoutMs,
   readProof,
   readRevisions,
   writeProof,
@@ -334,6 +335,31 @@ describe("接线在位（判据要有人跑，也要有人守那条线）", () =
   it("复算本体只有一处实现 —— 钩子里不许长出第二套编排（§12.12）", () => {
     expect(hook).not.toMatch(/base-check|check-commit-claims|check-merged-side-loss/);
     expect(hook).toContain("premerge-proof.mjs");
+  });
+});
+
+describe("复算预算：600s 兜挂死，慢机显式抬（ISSUE #4662）", () => {
+  it("不设 / 空串回默认 600s", () => {
+    expect(recomputeTimeoutMs(undefined)).toBe(600_000);
+    expect(recomputeTimeoutMs("")).toBe(600_000);
+  });
+
+  it("合法的整数毫秒原样采用（共享机上 type-aware lint 的出口）", () => {
+    expect(recomputeTimeoutMs("1800000")).toBe(1_800_000);
+  });
+
+  it("非法值一律 null，调用点退 2 并点名 —— 静默回落等于假抬预算", () => {
+    for (const bad of ["abc", "1.5", "-1", "59999", "NaN"]) {
+      expect(recomputeTimeoutMs(bad), bad).toBeNull();
+    }
+  });
+
+  it("预算罩的是整个复算子进程，抬预算与 --light 两条出口都念出来", () => {
+    const proof = readFileSync("scripts/gates/premerge-proof.mjs", "utf8");
+    expect(proof).toMatch(/timeout:\s*timeoutMs/);
+    expect(proof).toContain("COMFY_PREMERGE_TIMEOUT_MS");
+    expect(proof).toContain("600s 预算罩的是整个复算子进程");
+    expect(proof).toContain("pnpm check:premerge --light");
   });
 });
 

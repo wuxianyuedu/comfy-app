@@ -33,6 +33,13 @@
  * 与 `premerge-check.mjs` / `base-check.mjs` **逐字同一套**（中间层不翻译，§12.18）：
  *   0 = 已证明过、或本次复算全绿；1 = 复算红了；2 = 没跑起来 / 无法归因（含取不到上游引用）。
  *
+ * 600s 的复算预算罩的是**整个** `premerge-check` 子进程（本检出 + 干净快照两侧、四段），
+ * 不是只罩快照那一侧；实测挂死的那一次进度行写的是「本检出:eslint」。共享机上
+ * type-aware oxlint 可能 healthy-but-slow，600s 就会把「慢到没跑完」压成 exit 2 ——
+ * 那既不是绿也不是红。此时用 `COMFY_PREMERGE_TIMEOUT_MS=<整数毫秒, >=60000>` 显式抬
+ * 预算（非法值退 2 并点名），或在飞的改动走 `pnpm check:premerge --light` 把判定交给
+ * 平台（跳过的重档会被念出来，不构成全套凭证）。两条出口都不伪造绿。
+ *
  * 用法：由 `.githooks/pre-push` 调用，stdin 是 git 给的 ref 行
  *      `<local-ref> <local-sha> <remote-ref> <remote-sha>`；也可手工喂同一份输入复现。
  */
@@ -444,19 +451,41 @@ function isBaseCheckReport(v) {
 }
 
 /**
+ * 复算子进程的墙钟预算。默认 600s 兜「无限挂死」那一形（#4448）；在共享机上
+ * type-aware oxlint healthy-but-slow 时 600s 会把「慢到没跑完」压成 exit 2，
+ * 而 exit 2 既不是绿也不是红 —— 给一条**显式**抬预算的出口，不偷偷改默认值。
+ *
+ * 入参是环境变量原值；不设 / 空串回默认，非法值回 `null` 让调用点退 2 并点名
+ * （静默回落 = 以为抬了预算其实没抬，正是本仓反复钉的假绿形状）。
+ * @param {string | undefined} raw
+ * @returns {number | null}
+ */
+export function recomputeTimeoutMs(raw) {
+  if (raw === undefined || raw === "") {
+    return 600_000;
+  }
+  const n = Number(raw);
+  /* 太短的预算只会把正常的重档复算一律判成「没跑起来」，不许设。 */
+  if (!Number.isInteger(n) || n < 60_000) {
+    return null;
+  }
+  return n;
+}
+
+/**
  * @param {string} script
  * @param {string[]} args
  * @param {Record<string, string>} [extraEnv] 追加给子进程的环境变量（继承本进程环境再叠加）
+ * @param {number} [timeoutMs] 墙钟预算（默认 600s；由 `recomputeTimeoutMs` 从环境算出）
  * @returns {{status: number, stdout: string}}
  */
-function runQuiet(script, args, extraEnv) {
+function runQuiet(script, args, extraEnv, timeoutMs = 600_000) {
   const r = spawnSync(process.execPath, [path.join(HERE, script), ...args], {
     cwd: ROOT,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "inherit"],
-    /* 预算（#4448）：门禁脚本挂死时的兜底上限——给足重档门禁的合理墙钟
-     * （eslint 70s 级），只封「无限挂死」那一形，不改正常判决。 */
-    timeout: 600_000,
+    /* 预算：由 `recomputeTimeoutMs` 给出，默认仍是 #4448 的 600s 挂死兜底。 */
+    timeout: timeoutMs,
     ...(extraEnv ? { env: { ...process.env, ...extraEnv } } : {}),
   });
   /* `r.stdout` 是 `spawnSync` 出参：子进程起不来时实测 undefined（`@types/node` 按泛型
@@ -556,13 +585,34 @@ export function runFromStdin(stdinText, pushUrl = null) {
       `[pre-push]   受影响用例那一档不在这里：2026-10-20 起它的执行者是平台侧 PR 流水线的\n` +
       `[pre-push]   「受影响用例」一格（scripts/ci/ci-affected-tests.mjs → run-affected-tests.mjs）。\n`,
   );
+  /* 复算预算：默认 600s 兜挂死；共享机上 type-aware oxlint 可能 healthy-but-slow，
+   * 这时 600s 把「慢到没跑完」压成 exit 2（没结论），push 被卡死。环境变量是显式
+   * 抬预算的出口，非法值一律退 2 并点名 —— 静默回落等于让人以为抬了其实没抬。 */
+  const budgetMs = recomputeTimeoutMs(process.env.COMFY_PREMERGE_TIMEOUT_MS);
+  if (budgetMs === null) {
+    process.stderr.write(
+      `[pre-push] COMFY_PREMERGE_TIMEOUT_MS 必须是 >=60000 的整数毫秒，` +
+        `收到的是 ${JSON.stringify(process.env.COMFY_PREMERGE_TIMEOUT_MS)}（退 2）。\n`,
+    );
+    return 2;
+  }
+  if (budgetMs !== 600_000) {
+    process.stdout.write(
+      `[pre-push] 复算预算已显式抬高：${budgetMs}ms（COMFY_PREMERGE_TIMEOUT_MS）\n`,
+    );
+  }
   /* `--json` 拿逐段码：只有 base 段红时才再问一次归属（那是一批全仓判据的量级，放在稀有
    * 路径上付；绿的那条路径仍然只跑一次）。
    * `COMFY_PREMERGE_TRIGGER=pre-push`（ISSUE #4520）：让耗时账分得清「push 自动触发的
    * 复算」与「手工跑的那次」—— 两者的负载与可比性不同，账上不分就会被混着比。 */
-  const run = runQuiet("premerge-check.mjs", ["--json"], {
-    COMFY_PREMERGE_TRIGGER: "pre-push",
-  });
+  const run = runQuiet(
+    "premerge-check.mjs",
+    ["--json"],
+    {
+      COMFY_PREMERGE_TRIGGER: "pre-push",
+    },
+    budgetMs,
+  );
   const parsedReport = parseJson(run.stdout);
   const report = isPremergeReport(parsedReport) ? parsedReport : null;
   const segments = Array.isArray(report?.segments) ? report.segments : null;
@@ -582,7 +632,12 @@ export function runFromStdin(stdinText, pushUrl = null) {
   if (run.status === 2 || !segments) {
     process.stderr.write(
       `[pre-push] ✗ 合并前复算没跑成（退 ${run.status}）或读数不可归因 —— ` +
-        `拿不到测量不等于测量是绿的，本次 push 不放行。细节看 \`pnpm check:premerge\`。\n`,
+        `拿不到测量不等于测量是绿的，本次 push 不放行。细节看 \`pnpm check:premerge\`。\n` +
+        `[pre-push]   600s 预算罩的是整个复算子进程（本检出 + 干净快照两侧、四段）；` +
+        `慢机上 type-aware oxlint 可能 healthy-but-slow。\n` +
+        `[pre-push]   出口二选一：抬高预算 COMFY_PREMERGE_TIMEOUT_MS=<毫秒> 重推；` +
+        `或在飞的改动先手工 \`pnpm check:premerge --light\` 把判定交给平台` +
+        `（跳过的重档会被念出来，不构成全套凭证）。\n`,
     );
     return 2;
   }
@@ -598,7 +653,7 @@ export function runFromStdin(stdinText, pushUrl = null) {
   if (reds.every((s) => s?.key === "base")) {
     /* 只有 base 段红 ⇒ 去要逐条归属。别的段红（提交信息里的声明 / 合并丢一侧）按构造
      * 就是本分支的事，不查也拦。 */
-    const attr = runQuiet("base-check.mjs", ["--base", "--json"]);
+    const attr = runQuiet("base-check.mjs", ["--base", "--json"], undefined, budgetMs);
     const parsedAttr = parseJson(attr.stdout);
     const decided = decideBaseAttribution(isBaseCheckReport(parsedAttr) ? parsedAttr : null);
     if (decided.allowed) {
