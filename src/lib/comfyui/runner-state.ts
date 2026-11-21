@@ -207,8 +207,15 @@ const appendedSeqByTask = new Map<string, number>();
 
 /** 每任务的下一个日志行号。与 `appendedSeqByTask` 刻意分开：重跑清场删的是
  *  已落库的行，行号**不回退**（新轮次从旧值之后继续编），SSE 游标按 seq 比大小
- *  因此跨轮次单调，不会把新轮日志误判成「已发送」。 */
+ *  因此跨轮次单调，不会把新轮日志误判成「已发送」。
+ *  有界（ISSUE #4731 / #3850）：LRU 封顶（`LOG_SEQ_MAX_TASKS`），覆盖全部驻留
+ *  日志缓冲（`LOGS_MAX_TASKS`=64）之外再留一段最近结束任务的行号——这些任务
+ *  「原样重跑」时行号跨轮次继续单调；被挤出 LRU 的极老任务重跑则从 1 重新编
+ *  （那一轮的 SSE 增量与 taskLog 增量退化，`task.logs` 整包列在收口点仍完整）。 */
 const logSeqByTask = new Map<string, number>();
+
+/** 行号账本的 LRU 容量（ISSUE #4731 / #3850）：见 `logSeqByTask` 的注释。 */
+const LOG_SEQ_MAX_TASKS = 512;
 
 /** 写入并把该任务标记为「最近使用」，再淘汰超出 `maxTasks` 的最久未用项。
  *  Map 的迭代序是插入序、对已存在的键 `set` 不改变位置 —— 所以标记最近
@@ -254,7 +261,7 @@ export function log(taskId: string, level: LogEntry["level"], msg: string): LogE
   /* 行号在写日志那一刻定死：增量落库（appendLogs）与 SSE 增量游标都按它比大小。
    * 计数跨轮次单调（重跑清场只删行、不回退计数），见 logSeqByTask 的注释。 */
   const seq = (logSeqByTask.get(taskId) ?? 0) + 1;
-  logSeqByTask.set(taskId, seq);
+  touchAndEvict(logSeqByTask, taskId, seq, LOG_SEQ_MAX_TASKS);
   entry.seq = seq;
 
   const arr = store.logs.get(taskId) ?? [];
