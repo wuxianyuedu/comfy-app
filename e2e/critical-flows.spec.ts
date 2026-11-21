@@ -446,15 +446,21 @@ test.describe("应用页签与全屏视图 @critical", () => {
      * 等定位元素**几何落定**后取矩形（`boundingBox()` 不认 CSS transition）：带入场动画的浮层在
      * 补间期间量到的是被 `scale(.95)` 缩过的矩形（实测 439.6×249 vs 落定后 444×251.5），取点做
      * `elementFromPoint` 会落到弹层边界之外。也不能 `waitForTimeout(固定值)`：慢机器照样量早、
-     * 快机器白等——要的是「动画结束后那片矩形」这个**状态**，不是一段时长。 */
-    async function settleBox(locator: Locator): Promise<Box> {
+     * 快机器白等——要的是「动画结束后那片矩形」这个**状态**，不是一段时长。
+     *
+     * `moved` 是可选的**方向判据**（ISSUE #4709 daily flaky）：点击触发的宽度补间在过渡首帧
+     * 之前，连续两眼同矩形会把**旧值**误判成落定（CI 负载下过渡首帧可迟数百毫秒，daily 上
+     * `Expected: > 1152 / Received: 1152` 正是这一形）。给出 `moved` 时，「落定」还要求当前
+     * 矩形满足该方向——旧值稳定不再被当成结论。 */
+    async function settleBox(locator: Locator, moved?: (box: Box) => boolean): Promise<Box> {
       let prev: Box | null = null;
       let box: Box | null = null;
       await expect
         .poll(
           async () => {
             const next = await locator.boundingBox();
-            const stable = sameBox(prev, next);
+            const stable =
+              sameBox(prev, next) && (moved === undefined || (next !== null && moved(next)));
             prev = next;
             box = next;
             return stable;
@@ -708,29 +714,42 @@ test.describe("应用页签与全屏视图 @critical", () => {
        * 入场 `zoom-in-95` 作用在 transform 上，外接矩形也含缩放。旧写法立刻量，稳定 1152→1152（补间
        * 起点，恰等于加宽前值）→ 假红；病根是**量在落定之前**（§11.13 / ISSUE #1267），故走 `settleBox`。 */
       const popup = page.locator('[data-slot="dialog-content"]');
-      const popupWidth = async () => Math.round((await settleBox(popup)).width);
+      const popupWidth = async (moved?: (box: Box) => boolean) =>
+        Math.round((await settleBox(popup, moved)).width);
       const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
+      /* 左右留白对称（ISSUE #4709）：可见面板若比外壳宽（内层重复宽度类），会在 LTR 下
+         向右溢出——左侧留白照旧、右侧贴边。判据量在**可见面板**上，外壳对称而面板
+         溢出的形态在这里现形。 */
+      const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      const gapImbalance = async () => {
+        const panel = await popup.locator("div").first().boundingBox();
+        expect(panel).not.toBeNull();
+        return Math.abs(panel!.x - (clientWidth - panel!.x - panel!.width));
+      };
 
       const before = await popupWidth();
       /* 老形态是恒定的 384px（24rem）。给足余量：只要不再是那个值，就说明
          基类的 max-width 没有再把调用处的宽度吃掉。 */
       expect(before).toBeGreaterThan(800);
       expect(before).toBeLessThanOrEqual(viewport.width);
+      expect(await gapImbalance()).toBeLessThanOrEqual(2);
 
       await page.getByTitle("加宽").click();
       await expect(page.getByTitle("收缩")).toBeVisible();
-      const after = await popupWidth();
+      const after = await popupWidth((box) => box.width > before);
 
       /* 加宽必须**看得见**：老形态前后相等（按钮点了没反应就是这个现场）。 */
       expect(after).toBeGreaterThan(before);
-      /* 加宽档 = 贴视线两边（左右各 8px），但不许溢出视口。 */
+      /* 加宽档 = 贴视线两边（左右各 16px，基类 max-w 把 `100vw-16px` 封顶成
+         `100%-2rem`），但不许溢出视口。 */
       expect(after).toBeLessThanOrEqual(viewport.width);
       expect(after).toBeGreaterThan(viewport.width * 0.9);
+      expect(await gapImbalance()).toBeLessThanOrEqual(2);
 
       /* 收缩回到默认档，且宽度不残留：同样量落定后的宽度，与开面板时那次比。 */
       await page.getByTitle("收缩").click();
       await expect(page.getByTitle("加宽")).toBeVisible();
-      expect(await popupWidth()).toBe(before);
+      expect(await popupWidth((box) => box.width < after)).toBe(before);
     });
 
     test("@critical 行头里类别计数在下拉左侧，下拉贴住右侧操作区", async ({ page }) => {

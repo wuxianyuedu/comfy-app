@@ -142,9 +142,10 @@ export function WorkflowRunLogModal({
         popupClassName={panel.widthClass}
         showCloseButton={false}
       >
-        <div
-          className={`border-border bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60 ${panel.widthClass}`}
-        >
+        {/* 宽度只由弹窗外壳给一次（`popupClassName`）：内层面板若再带宽度类，会比被基类
+            `max-w-[calc(100%-2rem)]` 封顶的外壳宽出 16px、向右溢出，加宽后左右留白
+            不对称（ISSUE #4709，与 LogPanel 同形同修）。 */}
+        <div className="border-border bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60">
           {/* Header */}
           <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
