@@ -19,6 +19,12 @@
  *      结构化补记进 app-runtime（这是给生产构建 standlone 用的，那里没有
  *      dev-launcher 的 redirect 文件）。
  *
+ * **启动段回填（ISSUE #4681）**：capture 的安装是懒的——dev 下 instrumentation
+ * `register()` 在 `✓ Ready` 之后的首个请求才触发，服务启动段（dev.mjs 的端口行、
+ * 命令回显、Next 横幅、`✓ Ready in …`）全都写在安装之前，转录里永远没有它们。
+ * 安装时把 stdout 重定向文件（`nextjs-stdout-*.log`）**截至此刻**的快照搬进转录
+ * （`serviceStartupBackfillText`），面板「应用服务」一路才看得到完整启动日志。
+ *
  * 硬约束：
  *   - 本模块是 Node-only（`fs` / `process`），**禁止**被客户端图 import
  *     （见 07 §7.12 与 tests/client-bundle-node-builtins.test.ts）。
@@ -31,7 +37,11 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { NEXTJS_LOG_DIR, NEXTJS_PANEL_LOG_PREFIX } from "~/lib/log/log-paths";
+import {
+  NEXTJS_LOG_DIR,
+  NEXTJS_PANEL_LOG_PREFIX,
+  NEXTJS_STDOUT_LOG_PREFIX,
+} from "~/lib/log/log-paths";
 
 /** 转录文件的绝对路径（单例，模块仅执行一次）。 */
 let target: string | null = null;
@@ -100,6 +110,92 @@ export async function latestPanelLogFile(dir = NEXTJS_LOG_DIR): Promise<string |
     }
   }
   return best?.file ?? null;
+}
+
+/**
+ * 服务 stdout 重定向文件（dev-launcher 侧写入的 `nextjs-stdout-<时刻>.log`）里
+ * 按 mtime 最新的那一份；取不到返回 null。同步：调用点（capture 安装）一生一次，
+ * 且必须赶在输出钩子装上**之前**完成快照。
+ */
+function latestServiceStdoutLogFile(dir: string): string | null {
+  let best: { file: string; mtimeMs: number } | null = null;
+  let names: Array<string>;
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return null; // 目录还不存在（无启动编排链路，如 standalone）
+  }
+  for (const name of names) {
+    if (!name.startsWith(NEXTJS_STDOUT_LOG_PREFIX) || !name.endsWith(".log")) {
+      continue;
+    }
+    const file = path.join(dir, name);
+    let mtimeMs: number;
+    try {
+      mtimeMs = fs.statSync(file).mtimeMs;
+    } catch {
+      continue; // 正在被清理删掉
+    }
+    if (!best || mtimeMs > best.mtimeMs) {
+      best = { file, mtimeMs };
+    }
+  }
+  return best?.file ?? null;
+}
+
+/** 回填进面板转录的最大字节数（与读侧首屏窗口的 1MB 同量级）。 */
+const BACKFILL_MAX_BYTES = 1024 * 1024;
+
+/**
+ * 「启动段回填」（ISSUE #4681）：输出转录在 instrumentation `register()` 里才
+ * 安装，而 dev 下它是**懒编译**——`✓ Ready` 之后的首个请求才触发。服务启动段
+ * （dev.mjs 的端口行、命令回显、Next 横幅、`✓ Ready in …`）全都写在安装之前，
+ * 转录里永远没有它们 ⇒ 面板「应用服务」一路看不到启动日志。
+ *
+ * 这里在安装钩子**之前**，把 stdout 重定向文件**截至此刻**的内容搬进转录：快照
+ * 严格先于钩子安装，与实时转录不重叠（安装后的输出走钩子，两边不会同写一行）。
+ * standalone（无启动编排、无重定向文件）回退空串，行为与今日一致。
+ *
+ * 只取尾部 {@link BACKFILL_MAX_BYTES} 并按行对齐（窗口第一个半行丢弃，与读侧
+ * `alignToLineStart` 同一口径）：异常场景下重定向文件可能已经很大，回填不把
+ * 整份读进内存；被裁掉的更早部分与今日行为一致（本来也看不见）。
+ *
+ * 返回回填文本（可能为空串）；任何一步读不到都返回空串 —— 日志子系统绝不阻塞
+ * 业务主流程。
+ */
+export function serviceStartupBackfillText(dir: string = NEXTJS_LOG_DIR): string {
+  const file = latestServiceStdoutLogFile(dir);
+  if (file === null) {
+    return "";
+  }
+  let size: number;
+  try {
+    size = fs.statSync(file).size;
+  } catch {
+    return "";
+  }
+  if (size <= 0) {
+    return "";
+  }
+  const start = Math.max(0, size - BACKFILL_MAX_BYTES);
+  const length = size - start;
+  const buf = Buffer.alloc(length);
+  try {
+    const handle = fs.openSync(file, "r");
+    try {
+      fs.readSync(handle, buf, 0, length, start);
+    } finally {
+      fs.closeSync(handle);
+    }
+  } catch {
+    return "";
+  }
+  let body = buf;
+  if (start > 0) {
+    const nl = buf.indexOf(0x0a);
+    body = nl === -1 ? Buffer.alloc(0) : buf.subarray(nl + 1);
+  }
+  return body.toString("utf8");
 }
 
 /** 保留最近 N 份转录文件（与 dev-launcher 清理 nextjs-stdout/stderr 的口径一致）。 */
@@ -219,6 +315,10 @@ export function installStreamCapture(): void {
     }
     pruneOldFiles();
     safeAppend(filePath, "----- 应用服务输出（本次运行）-----\n");
+    /* 启动段回填（ISSUE #4681）：横幅之后、钩子安装之前，把 stdout 重定向文件
+     * 里**截至此刻**的服务启动输出搬进转录 —— 安装是懒的（首个请求才触发），
+     * 不回填的话启动段永远赶不上转录。快照先于钩子安装，与实时转录不重叠。 */
+    safeAppend(filePath, serviceStartupBackfillText(NEXTJS_LOG_DIR));
     /* app-runtime 的会话横幅**已随一次启动一份文件撤销**（ISSUE #1326）：日志
      * 句柄由 `app-runtime-log.ts` 在首次写入时按 <时刻> 命名建文件，一份文件
      * 就是一个进程的一次启动，不再需要横幅划边界。这里不再写它 —— 写了也没人

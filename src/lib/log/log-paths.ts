@@ -152,3 +152,13 @@ export const LOG_EXPORT_DIR = path.join(LOG_ROOT, "exports");
  * `nextjs-stdout-*` / `nextjs-stderr-*` 的口径一致：保留最近 5 份。
  */
 export const NEXTJS_PANEL_LOG_PREFIX = "nextjs-panel-";
+
+/**
+ * 服务 stdout 重定向文件（`nextjs-stdout-<时刻>.log`）的文件名前缀。
+ *
+ * 写入方是启动编排链路（`scripts/launcher-core/log.mjs` 的布局字面量，规范 §4）：
+ * dev.mjs 与它拉起的 Next 进程的 stdout 都落到这一族文件里。应用服务内的读取方
+ * 是 `capture-streams.server.ts` —— 输出转录安装前的**启动段**从这份文件回填进
+ * 面板转录（ISSUE #4681：面板里看不到服务启动日志）。
+ */
+export const NEXTJS_STDOUT_LOG_PREFIX = "nextjs-stdout-";

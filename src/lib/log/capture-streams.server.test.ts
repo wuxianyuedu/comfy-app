@@ -323,3 +323,64 @@ describe("转录文件的取最新与轮转（ISSUE #1365）", () => {
     expect(left.some((n) => n.includes("-1005-"))).toBe(true);
   });
 });
+
+/* ISSUE #4681：输出转录的安装是懒的（dev 下 instrumentation register() 在
+ * `✓ Ready` 之后的首个请求才触发），服务启动段（dev.mjs 的端口行、命令回显、
+ * Next 横幅、`✓ Ready in …`）全都写在安装之前 —— 面板「应用服务」一路看不到
+ * 启动日志。修复：安装时把 stdout 重定向文件（`nextjs-stdout-*.log`，启动编排
+ * 链路的落点）截至此刻的快照回填进转录。 */
+describe("启动段回填（ISSUE #4681）", () => {
+  /** 往 nextjs 目录写一份指定时刻的服务 stdout 重定向文件（写入方是启动编排链路）。 */
+  function writeServiceStdout(stamp: number, body: string): string {
+    fs.mkdirSync(tmp, { recursive: true });
+    const file = path.join(tmp, `nextjs-stdout-${stamp}.log`);
+    fs.writeFileSync(file, body, "utf8");
+    const at = stamp / 1000;
+    fs.utimesSync(file, at, at);
+    return file;
+  }
+
+  it("安装时把 stdout 重定向文件里的启动段回填进转录", async () => {
+    writeServiceStdout(
+      1,
+      "[dev.mjs] COMFYAPP_PORT=3797 host=127.0.0.1（来源：命令行 --p/--port）\n" +
+        "▲ Next.js 16.4.6 (Turbopack)\n" +
+        "- Local: http://127.0.0.1:3797\n" +
+        "✓ Ready in 849ms\n",
+    );
+    const mod = await freshInstall();
+    const text = await readCaptureWhenFilled(mod.panelCaptureLogPath(), "✓ Ready in 849ms");
+    expect(text).toContain("----- 应用服务输出（本次运行）-----");
+    expect(text).toContain("[dev.mjs] COMFYAPP_PORT=3797 host=127.0.0.1");
+    expect(text).toContain("▲ Next.js 16.4.6 (Turbopack)");
+    expect(text).toContain("✓ Ready in 849ms");
+  });
+
+  it("多份重定向文件按 mtime 取最新（与转录取最新的口径同源）", async () => {
+    const base = Date.now();
+    writeServiceStdout(base - 60_000, "上一次运行的输出\n");
+    writeServiceStdout(base, "本次运行的启动段\n");
+    const mod = await freshInstall();
+    const text = await readCaptureWhenFilled(mod.panelCaptureLogPath(), "本次运行的启动段");
+    expect(text).toContain("本次运行的启动段");
+    expect(text).not.toContain("上一次运行的输出");
+  });
+
+  it("没有重定向文件（standalone / 裸 dev）时不回填、也不报错", async () => {
+    const mod = await freshInstall();
+    const text = readCapture(mod.panelCaptureLogPath());
+    expect(text).toContain("----- 应用服务输出（本次运行）-----");
+    expect(text).not.toContain("Ready");
+  });
+
+  it("回填封顶：超过 1MB 只取尾部并按行对齐（窗口第一个半行丢弃）", async () => {
+    /* 第一行是 1.2MB 的超长行：1MB 窗口必落在它中间，按行对齐后它整行出局，
+     * 回填只剩 TAIL-MARKER —— 钉住「不把整份大文件读进内存 + 不出半行乱码」。 */
+    writeServiceStdout(1, `HEAD-MARKER\n${"A".repeat(1200 * 1024)}\nTAIL-MARKER\n`);
+    const mod = await freshInstall();
+    const text = await readCaptureWhenFilled(mod.panelCaptureLogPath(), "TAIL-MARKER");
+    expect(text).toContain("TAIL-MARKER");
+    expect(text).not.toContain("HEAD-MARKER");
+    expect(text).not.toContain("AAAAAAAA");
+  });
+});
