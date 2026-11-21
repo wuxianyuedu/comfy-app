@@ -68,7 +68,7 @@ export function useApplyJsonValues(args: {
       patchSession(activeKeyRef.current, { values: nextValues, error: null });
       return { ok: true, values: nextValues };
     },
-    [patchSession, values],
+    [activeKeyRef, patchSession, values],
   );
   return { applyJsonValues };
 }
