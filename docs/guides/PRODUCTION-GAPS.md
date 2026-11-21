@@ -18,6 +18,10 @@
 > `scripts/gates/.ui-primitives-baseline.json:18` 双双过期（现读数 `total: 0` / `rules: {}`，
 > 行号早已不存在），F6 已就地改写成现值；E5 那一段记的「余两格按名登记」也已随之处置完
 > （一格随 R5 翻闸、一格进 `RETIRED_RATCHETS`），E5 正文当时已写明，未改。
+> **触发式复核 2026-11-21（ISSUE #4312，§8.2「事实被改动时当次同步」）**：
+> C1 原证据「全仓 renovate/dependabot/audit/sbom = 0」已过期 —— 依赖漏洞扫描与自动提单
+> （GitHub 镜像仓 Dependabot + CodeQL、每日 triage 档自动建 CNB 单）已在场，C1 就地改写为
+> 「扫描与自动提单已在场；license 合规 / SBOM / 自动升级仍缺」，证据见条目。
 
 ## P0 — 安全/正确性
 
@@ -595,7 +599,16 @@
 - [ ] **B6 `externalBin` 仅 Windows-msvc 一份 node（89MB 入库）**，跨平台出包不可行。证据：`src-tauri/tauri.conf.json:54-56`。
 - [ ] **B7 无 panic hook / 错误全 `String` 化**，前端无法按错误码分支。证据：`src-tauri/Cargo.toml:28-47`（无 thiserror/anyhow）。
 - [ ] **B8 退出无二次确认 / 无 `prevent_close`**。证据：`src-tauri/src/lib.rs:1384-1410`。
-- [ ] **C1 零依赖漏洞扫描 / license 合规 / SBOM / 自动升级**。证据：全仓 renovate/dependabot/audit/sbom = 0。
+- [ ] **C1 依赖漏洞扫描与自动提单已在场；仍缺 license 合规 / SBOM / 自动升级**（ISSUE #4312 事实性漂移修正）。
+      **已在场（证据）**：GitHub 镜像仓 Dependabot + CodeQL 在跑；`.github/workflows/dependabot-triage.yml`
+      （ISSUE #4168）每日 UTC 19:00 把 Dependabot open 告警按依赖聚合成 CNB 单（实现 `scripts/ci/ci-dependabot-triage.mjs`），
+      `.github/workflows/code-scanning-triage.yml` 每日 UTC 18:00 同法聚 code scanning 告警（实现
+      `scripts/ci/ci-code-scanning-triage.mjs`），落点都是本仓、标签 `dependabot` / `code-scanning`；
+      CNB #4307/#4308/#4310/#4311 即 triage 档自动建出的 `dependabot` 单。
+      另 `scripts/gates/check-dependency-audit.mjs`（`pnpm audit` 棘轮，ISSUE #1331）是按需档，
+      不在定时任务里。
+      **仍开放**：license 合规、SBOM、自动升级（renovate）—— 对 `.github/` 与 `scripts/` 做 renovate / sbom / license 合规 三项检索均为 0 命中。
+      原条目「全仓 renovate/dependabot/audit/sbom = 0」写于上述能力落地前，已过期（docs/README.md §8.4 状态类漂移）。
 - [ ] **C2 `minimumReleaseAge: 0`** 关闭投毒版本时间窗。证据：`pnpm-workspace.yaml:6`。
 - [ ] **C3 `.env.production` / `.env.development` 未被忽略**（仅 `.env` + `.env*.local`）。证据：`.gitignore:37-38` vs `next.config.js:50`。（已修：`.gitignore` 改为 `.env.*` + `!.env.example`）
 - [x] **C4 `Cargo.lock` 被忽略** → Rust 二进制依赖树不可复现。**已闭合（#4354，锁随 PR #4353 入库）**：`.gitignore` 摘掉忽略行、`src-tauri/Cargo.lock` 入库 —— shell-gate 的 `cargo test --locked`（#4317）在 fresh clone 上因此有锁可冻结；本机 cargo 1.98.0 / 1.99.1 双工具链 × 冷 `CARGO_HOME` × Linux target 实测 `--locked` 全过（#4356 为同一缺陷的重复单，已并入本条）。
