@@ -22,6 +22,7 @@ import {
 import type { RecentProject } from "~/components/studio";
 import { WorkshopPipeline } from "~/components/workshop/WorkshopPipeline";
 import { ProjectGate } from "~/components/studio/ProjectGate";
+import { HeavyViewGate } from "~/components/studio/HeavyViewGate";
 import { isProjectTab } from "~/components/studio/NavItems";
 import type { ViewTab } from "./workspace-tabs";
 import type { WorkspaceView } from "./NavItems";
@@ -112,6 +113,16 @@ const ResourceLibrary = lazyView("library", () =>
 const ProjectHomePage = lazyView("project", () =>
   import("~/components/studio/project-home").then((mod) => mod.ProjectHomePage),
 );
+
+/**
+ * 重视图名单（ISSUE #4677，#4598 的期望第 3 条）：非活跃时把整棵子树降级为
+ * 「DOM 摘除但状态保留」（React Activity 的 hidden 模式，见 `HeavyViewGate`）
+ * —— 隐藏页签不再因页签切换 / 父级状态 / 兄弟屏事件做任何渲染。逐视图评估：
+ * 队列 / 历史 / 设置三屏最重、内部没有「必须随隐藏页签继续更新」的状态，先落
+ * 这三个；画布（ReactFlow 的视口 / 选中 / 撤销栈都在组件内部）降级要逐状态
+ * 评估可丢性，风险与收益都不在同一个量级，另行评估后再上。
+ */
+const HEAVY_VIEWS = new Set<WorkspaceView>(["queue", "history", "settings"]);
 
 /* 队列与运行：与历史同族（都在看「机器现在在干什么」），只在进入该视图时才拉。 */
 const QueueMonitor = lazyView("queue", () =>
@@ -352,10 +363,16 @@ export function WorkspaceViewStack({
         /* 懒加载视图的「界面打开」日志由 `lazyView` 包的内容自己记（它的测量点
          * 在分块解析后）；即时加载的视图（首页 / 作品库…）在这里补包一层 —— 它
          * 一激活就挂载，耗时天然接近 0，但「打开了」这件事要记下来。 */
-        const content = LAZY_VIEWS.has(tab.view) ? (
+        const inner = LAZY_VIEWS.has(tab.view) ? (
           renderView(tab.view)
         ) : (
           <ViewOpenReport view={tab.view}>{renderView(tab.view)}</ViewOpenReport>
+        );
+        /* 重视图非活跃降级（ISSUE #4677）：DOM 摘除、状态保留、隐藏期零渲染。 */
+        const content = HEAVY_VIEWS.has(tab.view) ? (
+          <HeavyViewGate active={isActive}>{inner}</HeavyViewGate>
+        ) : (
+          inner
         );
         return (
           <div
