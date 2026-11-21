@@ -50,6 +50,7 @@ function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorCon
     runningRows: [],
     queued: [],
     recent: [],
+    stats: { failedToday: 0, queued: 0, running: 0, succeededToday: 0 },
     waitingCount: 0,
     loading: false,
     loadError: null,
@@ -72,6 +73,20 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("QueueMonitor", () => {
+  it("顶部指标带四格读数来自 controller（重设计稿）", () => {
+    monitorMock.mockReturnValue(
+      controller({ stats: { running: 1, queued: 3, succeededToday: 24, failedToday: 2 } }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByLabelText("队列概览")).toBeInTheDocument();
+    expect(screen.getByText("运行中")).toBeInTheDocument();
+    expect(screen.getByText("排队中")).toBeInTheDocument();
+    expect(screen.getByText("今日完成")).toBeInTheDocument();
+    expect(screen.getByText("24")).toBeInTheDocument();
+    expect(screen.getByText("失败")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+  });
+
   it("位次写在对应的那一行上：提交早的显示第 1 位", () => {
     monitorMock.mockReturnValue(
       controller({
