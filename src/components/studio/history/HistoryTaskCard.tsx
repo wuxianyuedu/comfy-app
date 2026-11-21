@@ -95,6 +95,7 @@ function CardErrorBar({
         <ChevronDown
           aria-hidden
           className={cn("size-3.5 transition-transform duration-200", expanded && "rotate-180")}
+          data-icon="inline-start"
         />
       </Button>
     </div>
@@ -225,7 +226,7 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
               size="icon-sm"
               variant="ghost"
             >
-              <Maximize2 aria-hidden size={12} />
+              <Maximize2 aria-hidden data-icon="inline-start" size={12} />
             </Button>
           </div>
         </div>
