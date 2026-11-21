@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { clampPct } from "~/lib/progress";
@@ -342,7 +343,12 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
               {modeLabelOf(task.type)} · {modelLabelOf(task)}
             </DialogDescription>
           </DialogHeader>
-          <div className="custom-scrollbar text-ink-strong max-h-[60vh] overflow-y-auto text-sm leading-relaxed break-words whitespace-pre-wrap">
+          <div
+            className={cn(
+              "custom-scrollbar text-ink-strong overflow-y-auto text-sm leading-relaxed break-words whitespace-pre-wrap",
+              OVERLAY_MAX_HEIGHT,
+            )}
+          >
             {task.prompt || "（无提示词）"}
           </div>
         </DialogContent>

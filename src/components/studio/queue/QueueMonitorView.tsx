@@ -168,7 +168,7 @@ export function QueueMonitorView({
                 key={label}
               >
                 <span
-                  className={`flex size-10 shrink-0 items-center justify-center rounded-[10px] ${chip}`}
+                  className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${chip}`}
                 >
                   <Icon aria-hidden className="size-4" />
                 </span>
