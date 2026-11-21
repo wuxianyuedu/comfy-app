@@ -54,6 +54,8 @@ export type ModelTestSession = {
   result: ModelTestResult;
   /** 本地提交行（工作流候选在封装后升级为带 workflowInputs 落点清单的实况）。 */
   submissionRow: ApiCallDebugRow | null;
+  /** 本地工作流任务 id（入队后登记）：「大屏查看日志」弹窗按它连 SSE。 */
+  taskId: string | null;
   taskLogs: Array<TaskLogEntry>;
   /** 该格的统一输入表单值（#4080 评论 19：切模型不丢已填参数）。 */
   values: ModelTestValues;
@@ -72,6 +74,7 @@ export function emptyModelTestSession(): ModelTestSession {
     responseRows: [],
     result: null,
     submissionRow: null,
+    taskId: null,
     taskLogs: [],
     workflowProgress: null,
   };
@@ -191,6 +194,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
         result: null,
         responseRows: [],
         taskLogs: [],
+        taskId: null,
         workflowProgress: null,
         submissionRow: null,
       });
@@ -215,6 +219,10 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
                 onLog: (entry) => {
                   /* 执行日志逐条进测试页的「执行日志」区块（#4080 评论 8）。 */
                   appendTaskLog(sessionKey, entry);
+                },
+                onTaskId: (taskId) => {
+                  /* 任务 id 落进当前格会话：「大屏查看日志」按钮按它挂弹窗（#4743）。 */
+                  patchSession(sessionKey, { taskId });
                 },
                 onNotice: (text) => {
                   patchSession(sessionKey, { notice: { kind: "err", text } });

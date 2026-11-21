@@ -9,6 +9,7 @@
 
 import { useState } from "react";
 import type { ReactNode } from "react";
+import dynamic from "next/dynamic";
 import {
   Boxes,
   Compass,
@@ -36,6 +37,7 @@ import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { clampInt } from "~/lib/clamp";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
+import type { QueueTaskLogTarget } from "~/components/studio/queue/QueueTaskLogModal";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
 import { cn } from "~/lib/utils";
@@ -53,6 +55,14 @@ import {
 import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
 import { useModelTest } from "./hooks/use-model-test";
 import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
+import { TaskProgressPanel } from "./TaskProgressPanel";
+
+/* 「大屏查看日志」弹窗：与历史记录 / 队列页同一份（QueueTaskLogModal 按 taskId
+ * 直连 SSE）。dynamic 加载断开它携带的重依赖（react18-json-view 等），与
+ * HistoryList 的接法同款。 */
+const QueueTaskLogModal = dynamic(() =>
+  import("~/components/studio/queue/QueueTaskLogModal").then((m) => m.QueueTaskLogModal),
+);
 
 type ModelTestController = ReturnType<typeof useModelTest>;
 
@@ -407,6 +417,20 @@ export function ModelTestView() {
   const c = useModelTest();
   /* 响应摘要的显示形态：默认格式化，可切回原始单行。 */
   const [excerptPretty, setExcerptPretty] = useState(true);
+  /* 「大屏查看日志」弹窗目标：存打开那一刻的快照（与 HistoryList 同款），
+   * 生成态变化不重挂弹窗、不重订 SSE（#4743）。 */
+  const [logTarget, setLogTarget] = useState<QueueTaskLogTarget | null>(null);
+  const openLogScreen = () => {
+    if (c.taskId === null || c.taskId === "") {
+      return;
+    }
+    setLogTarget({
+      id: c.taskId,
+      /* 弹窗内的徽标会按 SSE 流自行翻面，这里只是打开那一刻的初值。 */
+      status: c.generating ? "RUNNING" : c.error === null ? "SUCCEEDED" : "FAILED",
+      workflowName: c.selectedWorkflow?.name ?? c.selectedModel,
+    });
+  };
 
   const selectedAdapter = c.adapters.find((a) => a.mode === c.mode) ?? null;
   /* 适配器映射了的统一输入类型集合：契约行通道承接得住、但适配器没映射时，
@@ -680,9 +704,16 @@ export function ModelTestView() {
                 )}
               </Panel>
 
+              {/* 分节点进度可视化：解析执行日志里的 comfy-cli progress/executing
+                  事件按节点出条（#4743）；无进度事件（对话 / API 中继）不渲染。 */}
+              <TaskProgressPanel logs={c.taskLogs} />
+
               {/* 执行日志放中栏：紧贴生成动作（进度 → 日志），列宽也容得下
                   等宽字体行，不再挤在窄右栏里 */}
-              <LogsCard logs={c.taskLogs} />
+              <LogsCard
+                logs={c.taskLogs}
+                onOpenScreen={c.taskId === null ? undefined : openLogScreen}
+              />
             </>
           ) : (
             <OnboardingPanel c={c} />
@@ -698,6 +729,14 @@ export function ModelTestView() {
           />
         )}
       </div>
+
+      {/* 大屏查看日志弹窗（与历史记录 / 队列页同一份；task 为 null 时不渲染）。 */}
+      <QueueTaskLogModal
+        onClose={() => {
+          setLogTarget(null);
+        }}
+        task={logTarget}
+      />
     </DocumentFrame>
   );
 }
