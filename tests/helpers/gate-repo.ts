@@ -45,10 +45,17 @@ const SANDBOX_PACKAGE_MARKER = '{"name":"gate-sandbox","private":true}\n';
  * **按 `require("./x.cjs")` 递归补齐判据的同目录依赖**（临时仓库放好被测脚本之后调）：判据之间有依赖（`maskNonCode`、
  * `gate-scan-read.cjs`），缺一个的读数是 `MODULE_NOT_FOUND` + requireStack，像「判据坏了」其实是夹具少带。认两种同目录相对
  * 引用：CJS `require("./name.cjs")` 与 ESM `import/export … from "./name.mjs"`（含裸副作用）；落点在被引脚本目录，已存在的不覆盖（`place` 优先）。
+ *
+ * `extraSeeds` 是**额外的扫描种子**（沙箱内绝对路径，文件或目录）：显式 `copy` 落盘的文件也从这里进 BFS
+ * （ISSUE #4691）——判据经**动态** `import()` 引入的模块不在下方识别面里，只能由用例显式拷；而显式拷入的
+ * 模块自己又静态 import 别的仓库内模块时，只从入口起 BFS 会漏掉整条链（#4688 手补六件、#4654 手补一件，
+ * 同族坑两次以更大面出现）。种子给沙箱落点：内容与真源一致，相对说明符按沙箱目录解析，追到的新依赖
+ * 仍由同一套 basename 索引落盘；目录种子展开成孩子逐个扫（`copy` 支持整目录拷）。
  */
 export function copyGateDeps(
   destScriptAbs: string,
   place?: (destAbs: string, sourceAbs: string) => void,
+  extraSeeds: Array<string> = [],
 ): void {
   const destDir = path.dirname(destScriptAbs);
   /** CJS 的 `require("./x.cjs")`（也认 `createRequire(…)("./x.cjs")`）、ESM 的 `import/export … from "./x.mjs"`，以及
@@ -106,7 +113,10 @@ export function copyGateDeps(
    * 平铺布局下两者恒等价，#3930 的子目录布局下按入口解析会把
    * `./ui-primitives-rules-p1-p37.cjs` 落错目录（探针实测：进 gates/ 而不是
    * ui-primitives/），require 在加载阶段当场断。 */
-  const pending: Array<{ abs: string; dir: string }> = [{ abs: destScriptAbs, dir: destDir }];
+  const pending: Array<{ abs: string; dir: string }> = [
+    { abs: destScriptAbs, dir: destDir },
+    ...extraSeeds.map((abs) => ({ abs, dir: path.dirname(abs) })),
+  ];
   const seen = new Set<string>();
   while (pending.length > 0) {
     const { abs, dir: curDir } = pending.shift()!;
@@ -114,6 +124,14 @@ export function copyGateDeps(
       continue;
     }
     seen.add(abs);
+    /* 目录种子（`copy` 整目录拷）展开成孩子再扫：目录读不出文本，逐个入队；
+     * 孩子的相对说明符按它自己所在的目录解析。子目录也照此递归展开。 */
+    if (statSync(abs).isDirectory()) {
+      for (const e of readdirSync(abs, { withFileTypes: true })) {
+        pending.push({ abs: path.join(abs, e.name), dir: abs });
+      }
+      continue;
+    }
     const src = readFileSync(abs, "utf8");
     const specs = DEP_RES.flatMap((re) => [...src.matchAll(re)].map((m) => m.groups?.dep ?? ""));
     for (const spec of specs) {
@@ -272,6 +290,8 @@ export type GateRepoOptions = {
    * 从源码仓库再拷进来的路径（`from` 相对仓库根，`to` 工作区相对路径；目录递归拷），`.cjs`/`.mjs` 这类**同级动态
    * 导入**的模块只能这么来。⚠️ 它与 `copyGateDeps` 会指到同一个落点，两条路径同写一份文件正是 Windows 上 NUL 填充的
    * 来源（ISSUE #2380）；现由 `placeSources()` 收口：**一条路径只写一次**，后到的不覆盖。
+   * 被拷文件（含整目录的每个文件）同时是依赖扫描的**种子**：它的仓库内传递依赖自动闭合（ISSUE #4691），
+   * 不必把链上的文件逐个手补进这份清单。
    */
   copy?: Array<{ from: string; to: string }>;
   /** 脚本在工作区里的落点：`"scripts"`（默认为此）或 `"root"`。 */
@@ -370,10 +390,14 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
       chmodSync(dest, 0o755);
     }
   };
+  /* 显式 `copy` 的落点同时是依赖扫描的种子（ISSUE #4691）：拷一件 = 它的仓库内
+   * 依赖链自动闭合，不再要求用例作者把链上的文件逐个手补进 `copy:`。 */
+  const copySeeds: Array<string> = [];
   for (const { from, to } of copy ?? []) {
     place(abs(to), path.join(REPO_ROOT, from));
+    copySeeds.push(abs(to));
   }
-  copyGateDeps(path.join(root, scriptRel), place);
+  copyGateDeps(path.join(root, scriptRel), place, copySeeds);
 
   const api: GateRepo = {
     dir: root,
