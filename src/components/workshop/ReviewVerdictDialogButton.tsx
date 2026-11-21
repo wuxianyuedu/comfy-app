@@ -55,7 +55,7 @@ function ScoreBars({
           />
           <span className="text-ink-subtle w-8 shrink-0">{item.score} 分</span>
           {item.note && (
-            <TruncatedText className="text-ink-faintest min-w-0 flex-1 truncate">
+            <TruncatedText className="text-ink-fainter min-w-0 flex-1 truncate">
               {item.note}
             </TruncatedText>
           )}
@@ -71,7 +71,7 @@ function HistoryCurve({ history }: { history: Array<ReviewVerdict> }) {
     return null;
   }
   return (
-    <div className="text-ink-faintest text-2xs">
+    <div className="text-ink-fainter text-2xs">
       轮次曲线：
       {history
         .map((item, index) => {
@@ -179,12 +179,12 @@ export function ReviewVerdictDialogButton({
                     {verdict.pass ? "评审通过" : "不合格"}
                   </span>
                   {mean !== null && (
-                    <span className="text-ink-faintest text-xs">
+                    <span className="text-ink-fainter text-xs">
                       维度均分 {displayValue(fixed(mean, 1))} / 5
                     </span>
                   )}
                   {verdict.issues.length > 0 && (
-                    <span className="text-ink-faintest text-xs">
+                    <span className="text-ink-fainter text-xs">
                       {verdict.issues.length} 处待改进
                     </span>
                   )}

@@ -118,7 +118,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
               <span aria-hidden className={step.ok ? "text-success-strong" : "text-destructive"}>
                 {step.ok ? "✓" : "✗"}
               </span>
-              <span className="text-ink-faintest shrink-0 tabular-nums">
+              <span className="text-ink-fainter shrink-0 tabular-nums">
                 {formatStepTime(step.ts)}
               </span>
               <span className="min-w-0">{step.detail}</span>

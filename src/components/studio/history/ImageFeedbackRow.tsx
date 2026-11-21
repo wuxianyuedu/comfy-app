@@ -78,16 +78,14 @@ export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
           >
             <Star
               className={
-                rating !== null && star <= rating
-                  ? "fill-warning text-warning"
-                  : "text-ink-faintest"
+                rating !== null && star <= rating ? "fill-warning text-warning" : "text-ink-fainter"
               }
               data-icon="inline-start"
               size={11}
             />
           </Button>
         ))}
-        {rating !== null && <span className="text-ink-faintest text-2xs">{rating}</span>}
+        {rating !== null && <span className="text-ink-fainter text-2xs">{rating}</span>}
       </div>
       <Button
         aria-label={fav ? "取消收藏" : "收藏"}
@@ -98,7 +96,7 @@ export function ImageFeedbackRow({ image }: ImageFeedbackRowProps) {
         variant="ghost"
       >
         <Bookmark
-          className={fav ? "fill-primary text-primary" : "text-ink-faintest"}
+          className={fav ? "fill-primary text-primary" : "text-ink-fainter"}
           data-icon="inline-start"
           size={12}
         />
