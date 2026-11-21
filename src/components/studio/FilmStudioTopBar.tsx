@@ -93,7 +93,7 @@ export function FilmStudioTopBar({
       <div className="w-3" />
 
       {/* 缩放标签 + 导出 */}
-      <span className="text-ink-faintest text-2xs">时间轴缩放</span>
+      <span className="text-ink-fainter text-2xs">时间轴缩放</span>
       <Button
         className="bg-subtle h-auto gap-1.5 rounded-lg px-3.5 py-1.5 font-semibold"
         disabled={

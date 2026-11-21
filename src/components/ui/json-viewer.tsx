@@ -434,7 +434,7 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
         <Icon className="text-ink-fainter shrink-0" name="search" size={14} />
         <input
           aria-label="在 JSON 里搜索"
-          className="border-border bg-canvas-deep text-ink-bright placeholder:text-ink-faintest focus:border-primary-400/60 flex-1 rounded border px-2 py-0.5 font-mono outline-none"
+          className="border-border bg-canvas-deep text-ink-bright placeholder:text-ink-fainter focus:border-primary-400/60 flex-1 rounded border px-2 py-0.5 font-mono outline-none"
           onChange={textHandler(setQuery)}
           onKeyDown={onSearchKey}
           placeholder="搜索 key / string / number / bool / null…（⌘F / Ctrl+F）"

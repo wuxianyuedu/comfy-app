@@ -88,7 +88,7 @@ export function ShotReviewDialog({
         </DialogHeader>
 
         {calibration && calibration.samples > 0 && (
-          <p className="text-ink-faintest text-2xs">
+          <p className="text-ink-fainter text-2xs">
             校准读数：{calibration.samples} 个镜头人评过 · AI 均分{" "}
             {displayValue(fixed(calibration.aiMeanAvg ?? 0, 1))} vs 人评{" "}
             {displayValue(fixed(calibration.humanAvg ?? 0, 1))} · 判定一致率{" "}
@@ -114,9 +114,7 @@ export function ShotReviewDialog({
                   {verdict.pass ? "评审通过" : "不合格"}
                 </span>
                 {verdict.issues.length > 0 && (
-                  <span className="text-ink-faintest text-xs">
-                    {verdict.issues.length} 处待改进
-                  </span>
+                  <span className="text-ink-fainter text-xs">{verdict.issues.length} 处待改进</span>
                 )}
               </div>
 

@@ -146,7 +146,7 @@ export function FilmStudioPropertyPanel({
             {(field) => (
               <Textarea
                 {...field}
-                className="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest resize-none rounded-lg text-xs leading-relaxed"
+                className="border-border bg-subtle text-ink-fainter placeholder:text-ink-fainter resize-none rounded-lg text-xs leading-relaxed"
                 onChange={textHandler(c.setScript)}
                 placeholder="支持一句话自动分镜…"
                 rows={3}
