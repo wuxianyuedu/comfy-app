@@ -23,18 +23,6 @@
   "inlineExemptions": [
     {
       "rule": "jsx-a11y/click-events-have-key-events",
-      "file": "src/components/studio/TitleBarTabs.tsx",
-      "why": "`role=\"tab\"` 的页签行已有 `{...simpleKeyHandler([\"Space\", \"Enter\"], …)}`（§16.2.4.57）—— 规则认不出属性展开。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",
-      "keeper": "scripts/gates/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，**硬闸**：站点须为 0，`--report` 会打出豁免站点）"
-    },
-    {
-      "rule": "jsx-a11y/click-events-have-key-events",
-      "file": "src/components/studio/ViewTabStrip.tsx",
-      "why": "同上：`role=\"tab\"` 行已走 `simpleKeyHandler`。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",
-      "keeper": "scripts/gates/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，**硬闸**：站点须为 0，`--report` 会打出豁免站点）"
-    },
-    {
-      "rule": "jsx-a11y/click-events-have-key-events",
       "file": "src/components/ui/multi-mode-select.tsx",
       "why": "选项行已是 `role=\"checkbox\"` + `tabIndex={0}` + `simpleKeyHandler`（本轮 PR #1574 收口）。**规则认不出属性展开**（实测：同一份 `{...simpleKeyHandler(…)}` 换成字面量 `onKeyDown={fn}`，这条规则当场不报）。",
       "keeper": "scripts/gates/check-click-keyboard.cjs（钩子 D 组「非原生元素上的鼠标专属点击」，**硬闸**：站点须为 0，`--report` 会打出豁免站点）"

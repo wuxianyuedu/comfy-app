@@ -2,7 +2,8 @@
  * 侧栏「项目」分组在缩略态（图标轨，窗口窄于 `NAV_EXPANDED_MIN_PX`）也要能按名字找到项目
  * （ISSUE #1691）：此前整组挂 `group-data-[collapsible=icon]:hidden` 直接消失。判 DOM 而非源码 ——
  * 每条按钮要有图标、并作为 tooltip 触发器（基元只在 collapsed 时渲染内容，故判接线而非文案）。
- */ import { afterEach, describe, expect, it, vi } from "vitest";
+ */
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { AppShell } from "./AppShell";
