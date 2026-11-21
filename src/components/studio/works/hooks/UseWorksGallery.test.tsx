@@ -18,7 +18,7 @@ type EntryRow = {
 };
 
 const listProjectsWithServerMock = vi.hoisted(() =>
-  vi.fn<() => Promise<{ entries: Array<EntryRow>; ok: boolean }>>(),
+  vi.fn<(options?: { coalesce?: boolean }) => Promise<{ entries: Array<EntryRow>; ok: boolean }>>(),
 );
 const deleteProjectEverywhereMock = vi.hoisted(() => vi.fn<(id: string, name?: string) => void>());
 const reapAllEmptyDraftsMock = vi.hoisted(() => vi.fn(() => 0));
@@ -41,7 +41,9 @@ vi.mock("../../project-canvas/hooks/use-sync-refusal-notice", () => ({
 }));
 
 vi.mock("~/lib/project-canvas/canvas-store", () => ({
-  listProjectsWithServer: () => listProjectsWithServerMock(),
+  /* 参数必须原样转发：事件触发那一跳的 `{ coalesce: true }` 标记要能被断言到
+   * （ISSUE #4678 的接线判据 —— 丢了它两路合并就静默失效）。 */
+  listProjectsWithServer: (options?: { coalesce?: boolean }) => listProjectsWithServerMock(options),
   deleteProjectEverywhere: (id: string, name?: string) => {
     deleteProjectEverywhereMock(id, name);
   },
@@ -184,6 +186,23 @@ describe("useWorksGallery", () => {
 
     await expect.poll(() => listProjectsWithServerMock).toHaveBeenCalledTimes(2);
     expect(result.current.projects).toHaveLength(1);
+  });
+
+  it("结构性事件（delete）：重取并集，且带事件合并标记（ISSUE #4678）", async () => {
+    listProjectsWithServerMock.mockResolvedValue({ entries: [entry()], ok: true });
+    const { result } = renderHook(() => useWorksGallery());
+    await expect.poll(() => result.current.loading).toBe(false);
+
+    listProjectsWithServerMock.mockResolvedValue({ entries: [], ok: true });
+    act(() => {
+      emitAppEvent("comfyapp:canvas-store-changed", { reason: "delete", projectId: "proj_a" });
+    });
+
+    await expect.poll(() => listProjectsWithServerMock).toHaveBeenCalledTimes(2);
+    /* 事件触发的那一跳带合并标记：与侧栏共享短 TTL 在飞请求，同一拍的结构性
+     * 事件不再两路各发一次 project.list。 */
+    expect(listProjectsWithServerMock).toHaveBeenLastCalledWith({ coalesce: true });
+    await expect.poll(() => result.current.projects).toHaveLength(0);
   });
 });
 

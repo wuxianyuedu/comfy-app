@@ -55,8 +55,11 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
    * （此前那是画布页的 hook 管的，而这一屏上没有它）。 */
   useSyncRefusalNotice();
 
-  const load = useCallback(async (): Promise<void> => {
-    const { entries, ok } = await listProjectsWithServer();
+  /* `coalesce` 只给事件触发的那一跳（ISSUE #4678）：结构性事件与侧栏共用
+   * 同一短 TTL 在飞请求，不再两路各发一次 `project.list`；挂载首拉与手动
+   * `refresh()` 不带它，永远拿新鲜读数。 */
+  const load = useCallback(async (coalesce = false): Promise<void> => {
+    const { entries, ok } = await listProjectsWithServer({ coalesce });
     if (!aliveRef.current) {
       return;
     }
@@ -112,7 +115,8 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
       ) {
         return;
       }
-      void load();
+      /* 结构性事件：与侧栏共用的短 TTL 合并取数（ISSUE #4678）。 */
+      void load(true);
     };
     const unsubscribe = subscribeAppEvent("comfyapp:canvas-store-changed", onChanged);
     return () => {
