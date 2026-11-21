@@ -4,6 +4,7 @@ import { createTRPCRouter, authedProcedure, rateLimitedProcedure } from "~/serve
 import { projectRepository, taskRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
 import { asRecord } from "~/lib/is-record";
+import { deleteProjectCascade } from "~/server/project/delete-project-cascade";
 
 export const projectRouter = createTRPCRouter({
   /* GET /api/projects —— 读 */
@@ -86,11 +87,13 @@ export const projectRouter = createTRPCRouter({
       return projectRepository.update(input.projectId, patch);
     }),
 
-  /* DELETE /api/projects/[id] —— 删除 */
+  /* DELETE /api/projects/[id] —— 删除（级联收口，ISSUE #4737）：连 production /
+   * 工坊会话 / 成片 / 任务行与磁盘产物一起清，不再留孤儿。他人 / 不存在的项目
+   * 一行不动、仍回 ok（与旧 deleteForUser 的静默语义一致，前端无需分支）。 */
   delete: rateLimitedProcedure
     .input(z.object({ projectId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await projectRepository.deleteForUser(ctx.user.id, input.projectId);
+      await deleteProjectCascade(ctx.user.id, input.projectId);
       return { ok: true };
     }),
 
