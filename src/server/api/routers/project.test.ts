@@ -5,6 +5,10 @@ import type * as LoggerModule from "~/lib/core/logger";
  * 而非报错；`get`/`patch`/`outputs` 拒他人。mock 仅 db、better-auth、logger（静音，留「拒绝要有日志」句柄）。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import path from "node:path";
+import type * as FsPromises from "node:fs/promises";
+
+import { generatedRoot } from "~/lib/media/output-paths";
 
 vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../../tests/helpers/test-db");
@@ -17,10 +21,20 @@ vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+/* 级联删除（#4737）会清磁盘产物：mock 掉 fs/promises 的 rm，断言「删了哪些路径」
+ * 而不是真动仓库里的 generated/（与 task.test.ts 同一手法）。 */
+const { rmMock } = vi.hoisted(() => ({
+  rmMock: vi.fn<(path: string, opts?: unknown) => Promise<void>>(() => Promise.resolve(undefined)),
+}));
+vi.mock("fs/promises", async (importOriginal) => ({
+  ...(await importOriginal<typeof FsPromises>()),
+  rm: rmMock,
+}));
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { projectRouter } from "~/server/api/routers/project";
 import { logger } from "~/lib/core/logger";
+import * as schema from "~/server/db/schema";
 import {
   getTestDb,
   seedUser,
@@ -223,12 +237,67 @@ describe("project.delete（rateLimitedProcedure）", () => {
     expect(tdb.$tables.projects.find((p) => p.id === "p1")).toBeUndefined();
   });
 
-  it("他人项目 → 回 ok 但那一行还在（deleteForUser 的 id+userId 双条件）", async () => {
+  it("他人项目 → 回 ok 但那一行还在（id+userId 双条件，附属行也一行不动）", async () => {
     seedProject(tdb, { id: "p-b", userId: "user-b", name: "别人的" });
     expect(await createCaller(makeCtx()).delete({ projectId: "p-b" })).toEqual({
       ok: true,
     });
     expect(tdb.$tables.projects.find((p) => p.id === "p-b")).toBeDefined();
+  });
+
+  it("级联清理：production / 会话 / 成片（含镜与文件）/ 任务（含图与日志）/ 产物目录（#4737）", async () => {
+    seedProject(tdb, { id: "p-casc", userId: "user-a", name: "要删的" });
+    await tdb.insert(schema.production).values({ id: "p-casc", userId: "user-a", title: "内容面" });
+    await tdb.insert(schema.workshopSession).values({ id: "ws-1", projectId: "p-casc" });
+    await tdb.insert(schema.filmProject).values({
+      id: "film-1",
+      userId: "user-a",
+      projectId: "p-casc",
+      title: "成片",
+      script: "剧本",
+      type: "short_video",
+    });
+    await tdb
+      .insert(schema.filmShot)
+      .values({ id: "fsh-1", filmId: "film-1", order: 0, prompt: "镜" });
+    seedTask(tdb, {
+      id: "t-1",
+      userId: "user-a",
+      projectId: "p-casc",
+      type: "TXT2IMG",
+      status: "SUCCEEDED",
+    });
+    await tdb.insert(schema.taskImage).values({
+      id: "img-1",
+      taskId: "t-1",
+      localPath: "/api/generated/projects/p-casc/t-1/a.png",
+    });
+    await tdb
+      .insert(schema.taskLog)
+      .values({ taskId: "t-1", seq: 0, t: 1, level: "info", msg: "x" });
+
+    expect(await createCaller(makeCtx()).delete({ projectId: "p-casc" })).toEqual({ ok: true });
+
+    expect(tdb.$tables.projects.find((p) => p.id === "p-casc")).toBeUndefined();
+    const prod = await tdb.select().from(schema.production);
+    expect(prod).toEqual([]);
+    const sessions = await tdb.select().from(schema.workshopSession);
+    expect(sessions).toEqual([]);
+    expect(tdb.$tables.tasks.find((t) => t.id === "t-1")).toBeUndefined();
+    expect(tdb.$tables.taskImages.find((i) => i.id === "img-1")).toBeUndefined();
+    expect(tdb.$tables.taskLogs.find((l) => l.taskId === "t-1")).toBeUndefined();
+    const films = await tdb.select().from(schema.filmProject);
+    expect(films).toEqual([]);
+    const shots = await tdb.select().from(schema.filmShot);
+    expect(shots).toEqual([]);
+    /* 磁盘：项目产物整目录 + 成片文件，各删一次。 */
+    expect(rmMock).toHaveBeenCalledWith(path.resolve(generatedRoot(), "projects", "p-casc"), {
+      recursive: true,
+      force: true,
+    });
+    expect(rmMock).toHaveBeenCalledWith(path.resolve(generatedRoot(), "films", "film-1.mp4"), {
+      force: true,
+    });
   });
 });
 

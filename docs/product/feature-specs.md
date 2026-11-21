@@ -216,8 +216,13 @@
 - 行为与验收：本地 store 是交互真值、服务端是持久真值；
   删除在只剩一个项目时为空操作（至少保留 1 个）；
   项目 id 客户端生成、服务端 upsert 不重发 id。
+- 删除级联（#4737）：删项目 = 删掉它在库与盘上的全部痕迹——production
+  （工坊内容面）、工坊会话、成片（含镜头与 `films/<id>.mp4`）、任务（含产物图
+  与日志）及 `generated/projects/<projectId>/` 目录一并清理，不留孤儿行；
+  他人 / 不存在的项目一行不动、仍回 ok。删除确认弹窗明示该范围。
 - 落点：`src/lib/project-canvas/canvas-store.ts`、
-  `src/server/api/routers/project.ts`
+  `src/server/api/routers/project.ts`、
+  `src/server/project/delete-project-cascade.ts`
 
 #### FR-CV-02 生成单元节点（8 种 kind）
 
