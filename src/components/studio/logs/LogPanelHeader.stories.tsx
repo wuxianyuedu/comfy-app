@@ -55,8 +55,10 @@ function HeaderHarness({ wrapInitial = false }: { wrapInitial?: boolean }) {
         countsByOrigin={header.countsByOrigin}
         density="standard"
         download={download}
+        fontSize="standard"
         onColumnsChange={() => undefined}
         onDensityChange={() => undefined}
+        onFontSizeChange={() => undefined}
         origin={origin}
         originCounts={originCounts}
         panel={panel}

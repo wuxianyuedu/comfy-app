@@ -27,7 +27,13 @@ import {
   visibleRange,
   type LogDensity,
 } from "./log-virtual";
-import { useLogDisplayPrefs, setLogDensity, setLogColumns } from "./log-display-prefs";
+import {
+  useLogDisplayPrefs,
+  setLogDensity,
+  setLogFontSize,
+  setLogColumns,
+  type LogFontSize,
+} from "./log-display-prefs";
 import { EmptyState } from "~/components/ui/empty-state";
 import { useWidePanel } from "~/components/ui/wide-panel";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
@@ -51,6 +57,7 @@ import { isCliJsonLine } from "~/lib/log/log-cli-json";
 function useVirtualWindow(input: {
   density: LogDensity;
   expansionMap: Record<string, boolean>;
+  fontSize: LogFontSize;
   pageLogs: Array<LogEntry>;
   scrollTop: number;
   /** 精简列档：行首类别前缀一并隐藏（ISSUE #4717），估高与实测都按剥掉前缀后的正文算。 */
@@ -62,6 +69,7 @@ function useVirtualWindow(input: {
   const {
     density,
     expansionMap,
+    fontSize,
     pageLogs,
     scrollTop,
     viewportHeight,
@@ -114,10 +122,21 @@ function useVirtualWindow(input: {
           expandedIds,
           singleLineIds: cliJsonIds,
           density,
+          fontSize,
           heightOf,
         },
       ),
-    [pageLogs, displayMessageOf, wrap, messageWidth, expandedIds, cliJsonIds, density, heightOf],
+    [
+      pageLogs,
+      displayMessageOf,
+      wrap,
+      messageWidth,
+      expandedIds,
+      cliJsonIds,
+      density,
+      fontSize,
+      heightOf,
+    ],
   );
   const { height: scrollHeight } = scrollHeightOf(totalSize);
   const rowWindow = useMemo(() => {
@@ -318,6 +337,7 @@ export function LogPanel() {
     scrollTop,
     expansionMap: expansion.map,
     density: displayPrefs.density,
+    fontSize: displayPrefs.fontSize,
     stripPrefixes: !showDetails,
   });
 
@@ -427,8 +447,10 @@ export function LogPanel() {
             countsByOrigin={countsByOrigin}
             density={displayPrefs.density}
             download={download}
+            fontSize={displayPrefs.fontSize}
             onColumnsChange={setLogColumns}
             onDensityChange={setLogDensity}
+            onFontSizeChange={setLogFontSize}
             origin={origin}
             originCounts={originCounts}
             panel={panel}
@@ -486,13 +508,14 @@ export function LogPanel() {
                          * 偏保守多出的那一行空白随之收掉（ISSUE #4715）。行自身不再写死
                          * height，按内容自然高度渲染（实测的正是这个自然高度）。 */
                         style={{
-                          minHeight: `${rows[index]?.size ?? rowHeightFor(displayPrefs.density)}px`,
+                          minHeight: `${rows[index]?.size ?? rowHeightFor(displayPrefs.density, displayPrefs.fontSize)}px`,
                         }}
                       >
                         <LogRow
                           density={displayPrefs.density}
                           entry={entry}
                           expanded={expansion.isExpanded(entry.id)}
+                          fontSize={displayPrefs.fontSize}
                           keyword={search}
                           onToggleExpand={expansion.toggle}
                           showDetails={showDetails}

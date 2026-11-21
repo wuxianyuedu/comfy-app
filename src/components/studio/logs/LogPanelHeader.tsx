@@ -17,7 +17,7 @@ import { WidePanelToggle, type WidePanel } from "~/components/ui/wide-panel";
 import { copyFailureText } from "~/components/ui/use-copy-feedback";
 import { FILTER_SELECTED_STYLES } from "./log-row-style";
 import type { LogDensity } from "./log-virtual";
-import type { LogColumnVisibility } from "./log-display-prefs";
+import type { LogColumnVisibility, LogFontSize } from "./log-display-prefs";
 import type { LogLevelCounts, LogOriginCounts, LogOriginFilter } from "./log-types";
 
 /** 密度档的展示名（SelectMenu 的 label 表）。 */
@@ -25,6 +25,13 @@ const DENSITY_LABELS: Record<LogDensity, string> = {
   compact: "紧凑",
   standard: "标准",
   relaxed: "宽松",
+};
+
+/** 字号档的展示名（SelectMenu 的 label 表）。 */
+const FONT_SIZE_LABELS: Record<LogFontSize, string> = {
+  small: "小",
+  standard: "标准",
+  large: "大",
 };
 
 export function LogPanelHeader(input: {
@@ -36,8 +43,10 @@ export function LogPanelHeader(input: {
   countsByOrigin: LogOriginCounts;
   density: LogDensity;
   download: () => void;
+  fontSize: LogFontSize;
   onColumnsChange: (columns: LogColumnVisibility) => void;
   onDensityChange: (density: LogDensity) => void;
+  onFontSizeChange: (fontSize: LogFontSize) => void;
   origin: LogOriginFilter | null;
   originCounts: LogLevelCounts;
   panel: WidePanel;
@@ -66,6 +75,8 @@ export function LogPanelHeader(input: {
     setIsOpen,
     density,
     onDensityChange,
+    fontSize,
+    onFontSizeChange,
     columns,
     onColumnsChange,
   } = input;
@@ -125,6 +136,23 @@ export function LogPanelHeader(input: {
                 options={["compact", "standard", "relaxed"]}
                 popoverMinWidth={130}
                 value={density}
+              />
+            </span>
+          </Hint>
+          <Hint label="调节日志文字大小（小 / 标准 / 大）">
+            <span>
+              <SelectMenu
+                aria-label="日志文字大小"
+                className="text-2xs h-8 rounded-md"
+                labels={FONT_SIZE_LABELS}
+                onChange={(next) => {
+                  onFontSizeChange(
+                    next === "small" ? "small" : next === "large" ? "large" : "standard",
+                  );
+                }}
+                options={["small", "standard", "large"]}
+                popoverMinWidth={110}
+                value={fontSize}
               />
             </span>
           </Hint>
