@@ -133,11 +133,7 @@ describe("runDevShellAutoUpdate：任何一步失败都照常启动（不阻塞�
     const stamp = stampPathOf(exe);
     writeShellStamp(stamp, OLDER);
     const infoBytes = Buffer.from(JSON.stringify(NEWER));
-    const fakeFetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      arrayBuffer: async () => Uint8Array.from(infoBytes).buffer,
-    })) as unknown as typeof fetch;
+    const fakeFetch = vi.fn(() => Promise.resolve(new Response(infoBytes)));
     const fetchShell = vi.fn().mockResolvedValue(0);
     const res = await runDevShellAutoUpdate({
       root: dir,
@@ -164,11 +160,7 @@ describe("runDevShellAutoUpdate：任何一步失败都照常启动（不阻塞�
     fs.utimesSync(path.join(src, "lib.rs"), new Date("2030-01-01"), new Date("2030-01-01"));
 
     const infoBytes = Buffer.from(JSON.stringify(NEWER));
-    const fakeFetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      arrayBuffer: async () => Uint8Array.from(infoBytes).buffer,
-    })) as unknown as typeof fetch;
+    const fakeFetch = vi.fn(() => Promise.resolve(new Response(infoBytes)));
     const fetchShell = vi.fn().mockResolvedValue(0);
     const res = await runDevShellAutoUpdate({
       root: dir,
@@ -197,11 +189,7 @@ describe("runDevShellAutoUpdate：任何一步失败都照常启动（不阻塞�
     const stamp = stampPathOf(exe);
     writeShellStamp(stamp, OLDER);
     const infoBytes = Buffer.from(JSON.stringify(NEWER));
-    const fakeFetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      arrayBuffer: async () => Uint8Array.from(infoBytes).buffer,
-    })) as unknown as typeof fetch;
+    const fakeFetch = vi.fn(() => Promise.resolve(new Response(infoBytes)));
     const res = await runDevShellAutoUpdate({
       root: dir,
       out: exe,

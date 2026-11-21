@@ -461,11 +461,9 @@ const BASE_CONFIG = defineConfig({
 const COVERAGE_ENFORCE = process.env.COMFY_COVERAGE_ENFORCE === "1";
 
 /** 覆盖率门槛的**登记处**：与判定开关无关，永远在场（读它，不要读下面那份）。 */
-/* SAFETY: 类型断言已复核 */
-export const COVERAGE_THRESHOLDS = (BASE_CONFIG.test?.coverage?.thresholds ?? {}) as Record<
-  string,
-  unknown
->;
+export const COVERAGE_THRESHOLDS: Record<string, unknown> = Object.fromEntries(
+  Object.entries(BASE_CONFIG.test?.coverage?.thresholds ?? {}),
+);
 
 export default defineConfig(
   COVERAGE_ENFORCE

@@ -6,6 +6,7 @@ import { ViewableImage } from "~/components/ui/image-viewer";
 import { isVideo } from "~/lib/media/media";
 import { fetchTaskWorkflow, openTaskFolder } from "~/lib/history-detail-actions";
 import { isPlainRecord } from "~/lib/is-record";
+import { taskStatusLabel } from "~/lib/task-state";
 
 import {
   deriveTaskOrigin,
@@ -40,6 +41,14 @@ type HistoryDetailModalProps = {
   /** 本任务所用工作流的 IO 定义：参数可读名从它的`label` 查（任务行里只存了
    * pin 名）。工作流已被删除时是空表，参数名如实回落 pin 名。 */
   workflowIO: WorkflowIOMap;
+};
+
+/** 弹窗头部的状态徽标（设计稿 #4710）：语义底 + 同色圆点，键是任务状态原值。 */
+const STATUS_BADGE_CLASS: Record<string, string> = {
+  SUCCEEDED: "bg-success/10 text-success-strong",
+  FAILED: "bg-destructive/10 text-destructive",
+  RUNNING: "bg-info/10 text-info-strong",
+  CANCELLED: "bg-warning/10 text-warning-strong",
 };
 
 /** 提示词这类长文案在参数表里的展示格（ISSUE #4665）：定高 + 纵向滚动，
@@ -118,21 +127,31 @@ export function HistoryDetailModal({
       <DialogContent
         aria-label="任务详情"
         className="bg-transparent p-0 ring-0"
-        popupClassName="max-w-3xl"
+        popupClassName="max-w-[1120px]"
         showCloseButton={false}
       >
         <div
-          className={`border-border bg-node flex ${OVERLAY_MAX_HEIGHT} w-full max-w-3xl flex-col overflow-hidden rounded-2xl border`}
+          className={`border-border bg-surface flex ${OVERLAY_MAX_HEIGHT} w-full max-w-[1120px] flex-col overflow-hidden rounded-2xl border`}
         >
-          <div className="border-border-subtle relative flex items-center justify-between gap-3 border-b px-5 py-3">
-            <h3 className="u-title">任务详情</h3>
+          <div className="border-border-subtle relative flex items-center justify-between gap-3 border-b px-6 pt-4 pb-3.5">
+            <h3 className="text-ink-bright text-[17px] leading-snug font-bold">
+              任务详情
+              {current ? (
+                <span
+                  className={`ml-2.5 inline-flex items-center gap-1.5 rounded-full py-0.5 pr-2.5 pl-2 align-middle text-xs font-medium ${STATUS_BADGE_CLASS[current.status] ?? "bg-subtle text-ink-muted"}`}
+                >
+                  <span aria-hidden className="size-1.5 rounded-full bg-current" />
+                  {taskStatusLabel(current.status)}
+                </span>
+              ) : null}
+            </h3>
             <div className="flex items-center gap-2">
               <Hint
                 label="在系统文件管理器中打开本次生成的目录（图片 / 视频 / 音频 / workflow.json / manifest.json 都在这里）"
                 wrap
               >
                 <Button
-                  className="border-border text-ink-strong hover:border-border-strong hover:text-ink text-2xs h-auto gap-1.5 rounded-md px-2.5 py-1"
+                  className="border-border text-ink-muted hover:border-border-strong hover:text-ink h-auto gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium"
                   disabled={current === null || current.id === "" || actions.openFolderBusy}
                   onClick={() => {
                     if (current === null || current.id === "") {
@@ -216,7 +235,7 @@ export function HistoryDetailModal({
                     wrap
                   >
                     <Button
-                      className="border-border text-ink-strong hover:border-border-strong hover:text-ink text-2xs h-auto rounded-md px-2.5 py-1"
+                      className="border-border text-ink-muted hover:border-border-strong hover:text-ink h-auto rounded-lg px-2.5 py-1.5 text-xs font-medium"
                       disabled={actions.downloading}
                       onClick={() => {
                         if (current === null || current.id === "") {
@@ -248,57 +267,65 @@ export function HistoryDetailModal({
               </Button>
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
             {detailLoading ? (
               <p className="text-ink-muted text-sm">加载中…</p>
             ) : current ? (
-              <div className="gap-4">
+              <div className="flex flex-col gap-5">
                 {current.images.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    {current.images.map((img, index) => (
-                      <div
-                        className="group border-border-subtle relative overflow-hidden rounded-xl border"
-                        key={img.localPath}
-                      >
-                        {/* 任务详情里的每一张产物都可以点开看大图（原始大小 /
+                  <>
+                    <div className="flex items-center gap-2">
+                      <p className="text-ink-muted text-[13px] font-semibold">产物</p>
+                      <span className="text-ink-fainter text-2xs ml-auto">
+                        {`${String(current.images.length)} 张`}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {current.images.map((img, index) => (
+                        <div
+                          className="group border-border-subtle relative overflow-hidden rounded-xl border"
+                          key={img.localPath}
+                        >
+                          {/* 任务详情里的每一张产物都可以点开看大图（原始大小 /
  缩放 / 拖拽平移）—— 缩略图是方形的`object-cover`，
  看不到整张图，此前也没有任何放大入口。视频仍按视频
  渲染（`ViewableImage` 的查看器只服务图片）。 */}
-                        {isVideo(img.localPath) ? (
-                          <MediaThumbnail
-                            alt=""
-                            autoPlay
-                            className="aspect-square w-full object-cover"
-                            loop
-                            src={img.localPath}
-                          />
-                        ) : (
-                          <ViewableImage
-                            alt="任务产物"
-                            className="aspect-square w-full object-cover"
-                            label={`任务产物 ${index + 1}`}
-                            src={img.localPath}
-                          />
-                        )}
-                        <a
-                          className="bg-surface-2 text-ink hover:bg-surface-2 text-2xs absolute top-2 right-2 rounded px-2 py-0.5 opacity-0 transition-opacity group-hover:opacity-100"
-                          download
-                          href={img.localPath}
-                        >
-                          {isVideo(img.localPath) ? "下载视频" : "下载"}
-                        </a>
-                        {/* 人工评分 + 收藏（FR-QA-07 人工侧 · #2480）：评分是校准
+                          {isVideo(img.localPath) ? (
+                            <MediaThumbnail
+                              alt=""
+                              autoPlay
+                              className="h-44 w-full object-cover"
+                              loop
+                              src={img.localPath}
+                            />
+                          ) : (
+                            <ViewableImage
+                              alt="任务产物"
+                              className="h-44 w-full object-cover"
+                              label={`任务产物 ${index + 1}`}
+                              src={img.localPath}
+                            />
+                          )}
+                          <a
+                            className="bg-surface-2 text-ink hover:bg-surface-2 text-2xs absolute top-2 right-2 rounded px-2 py-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                            download
+                            href={img.localPath}
+                          >
+                            {isVideo(img.localPath) ? "下载视频" : "下载"}
+                          </a>
+                          {/* 人工评分 + 收藏（FR-QA-07 人工侧 · #2480）：评分是校准
                             读数的人侧输入，收藏是 few-shot 沉淀机制的输入。 */}
-                        <ImageFeedbackRow
-                          image={{
-                            id: img.id,
-                            humanRating: img.humanRating ?? null,
-                            isFavorite: img.isFavorite,
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
+                          <ImageFeedbackRow
+                            image={{
+                              id: img.id,
+                              humanRating: img.humanRating ?? null,
+                              isFavorite: img.isFavorite,
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 ) : (
                   <p className="text-ink-muted text-sm">该任务没有生成图像。</p>
                 )}
@@ -333,9 +360,9 @@ export function HistoryDetailModal({
  「哪些是工坊给的、哪些是工作流收的」分不清。 */}
                 {workshopParams.length > 0 && (
                   <div>
-                    <p className="text-ink-faint mb-1 text-xs font-semibold">工坊参数</p>
+                    <p className="text-ink-muted mb-2.5 text-[13px] font-semibold">工坊参数</p>
                     <KeyValueRows
-                      className="mb-2"
+                      className="border-border rounded-xl"
                       items={workshopParams.map((row) => ({
                         id: row.id,
                         key: row.label,
@@ -350,19 +377,22 @@ export function HistoryDetailModal({
                           ),
                         title: row.label,
                       }))}
-                      keyClassName="text-ink-muted"
+                      keyClassName="bg-canvas text-ink-muted w-56 max-w-none px-4 py-3.5 font-sans text-xs font-medium"
+                      keyWrap
                       layout="table"
+                      mono={false}
+                      valueClassName="text-ink px-4 py-3.5 text-[12.5px]"
                     />
                   </div>
                 )}
 
                 {hasParams && (
                   <div>
-                    <p className="text-ink-faint mb-1 text-xs font-semibold">工作流参数</p>
+                    <p className="text-ink-muted mb-2.5 text-[13px] font-semibold">工作流参数</p>
 
                     {paramRows.length > 0 && (
                       <KeyValueRows
-                        className="mb-2"
+                        className="border-border rounded-xl"
                         items={paramRows.map((row) => ({
                           id: row.id,
                           /* 显示工作流 IO 的作者标签（「宽高比」而不是
@@ -376,17 +406,20 @@ export function HistoryDetailModal({
                             kvValueText(row.value)
                           ),
                           /* 悬停补上原始 pin 名：排查问题 / 对 ComfyUI 报错时
- 用的是程序名，作者改的名字对不上。 */
+                             用的是程序名，作者改的名字对不上。 */
                           title: `${row.label}（${row.name}）`,
                         }))}
-                        keyClassName="text-primary-strong"
+                        keyClassName="bg-canvas text-ink-muted w-56 max-w-none px-4 py-3.5 font-sans text-xs font-medium"
+                        keyWrap
                         layout="table"
+                        mono={false}
+                        valueClassName="text-ink px-4 py-3.5 text-[12.5px]"
                       />
                     )}
 
                     {topLevelEntries.length > 0 && (
                       <Disclosure
-                        className="border-border-subtle bg-canvas-deep text-ink-muted hover:text-ink-strong text-2xs rounded-lg border px-3 py-1.5"
+                        className="border-border bg-canvas-deep text-ink-muted hover:text-ink-strong h-11 rounded-xl border px-4 text-[12.5px] font-medium"
                         marker="caret"
                         trigger={`原始 JSON · ${
                           topLevelEntries.length + (paramRows.length ? 1 : 0)
