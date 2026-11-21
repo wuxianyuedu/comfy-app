@@ -63,6 +63,7 @@ import {
   findLandedPull,
   findMergedPullForBranch,
   findMergedPullForHeadSha,
+  readListTotalPages,
 } from "../scripts/ship/ship-scan.mjs";
 import {
   PR_ALREADY_OPEN_ERRCODE,
@@ -5912,6 +5913,26 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     return { calls, bodies, heard, io };
   }
 
+  describe("readListTotalPages：平台清单规模读数的三种形状与缺键回落（ISSUE #4768）", () => {
+    it("顶层 totalPages 直接认", () => {
+      expect(readListTotalPages({ status: 200, data: [], totalPages: 3 })).toBe(3);
+    });
+    it("header.x-cnb-total + pageSize 推页数", () => {
+      expect(readListTotalPages({ data: [], header: { "x-cnb-total": "41" }, pageSize: 20 })).toBe(
+        3,
+      );
+    });
+    it("顶层 total + pageSize 推页数", () => {
+      expect(readListTotalPages({ data: [], total: 40, pageSize: 20 })).toBe(2);
+    });
+    it("缺键 / 非法值一律回落 null（缺键不等于没有更多）", () => {
+      expect(readListTotalPages({ status: 200, data: [] })).toBeNull();
+      expect(readListTotalPages({ data: [], totalPages: 0 })).toBeNull();
+      expect(readListTotalPages({ data: [], totalPages: "3" })).toBeNull();
+      expect(readListTotalPages(null)).toBeNull();
+    });
+  });
+
   it("capDiffstat 对账：列出的 + 省略的 === 逐行明细总数，且总计数行永远留下", () => {
     const big = capDiffstat(statText(3000), 40);
     expect(big.total).toBe(3000);
@@ -6008,6 +6029,50 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     const all = heard.join("\n");
     expect(all).not.toContain("可能撞 409");
     expect(all).not.toContain("无法判断是否已有 PR");
+  });
+
+  it("平台明确还有下一页（totalPages>1）时，第一页不满页大小也要继续翻（ISSUE #4768）", () => {
+    /* #4768 现场：目标 PR #4762 是这条分支的开放 PR，被排序挤到第 2 页；平台第一页只返回
+     * 2 条（< 页大小 20），旧判据「不满页 ⇒ 到顶」当场 break，判成「没有开放 PR」并新建了
+     * #4767 —— 而 #4762 一直 open、CI 全绿。平台响应里明明带 totalPages/total 说还有更多，
+     * 终止判据必须信它，只有缺键时才回落「不足页 ⇒ 到顶」。 */
+    const { calls, io } = pullHarness({
+      openPullsPages: [
+        /* 第一页不满 20 条，但平台明确 totalPages=3 —— 旧判据在这里错误 break。 */
+        JSON.stringify({
+          status: 200,
+          data: [
+            { number: 4770, head: { ref: "refs/heads/feat/other-a" } },
+            { number: 4769, head: { ref: "refs/heads/feat/other-b" } },
+          ],
+          total: 3,
+          totalPages: 3,
+        }),
+        /* 目标 PR 在第 2 页（同样只 1 条，但 totalPages 说后面还有）。 */
+        JSON.stringify({
+          status: 200,
+          data: [{ number: 4762, head: { ref: "refs/heads/feat/big" } }],
+          total: 3,
+          totalPages: 3,
+        }),
+        JSON.stringify({
+          status: 200,
+          data: [{ number: 4760, head: { ref: "refs/heads/feat/other-c" } }],
+          total: 3,
+          totalPages: 3,
+        }),
+      ],
+    });
+    const out = createOrReusePull(io);
+    expect(out.number, "必须复用第 2 页那条开放 PR，而不是新建").toBe(4762);
+    expect(
+      calls.some((c) => c.includes("--state open") && c.includes("--page 2")),
+      "第一页不满也必须翻到第 2 页",
+    ).toBe(true);
+    expect(
+      calls.some((c) => c.includes("post-pull")),
+      "复用命中还发 post-pull，长出来的就是第二条 PR（#4767 现场）",
+    ).toBe(false);
   });
 
   it("翻页撞上界：5 页 / 100 条仍未命中 ⇒ 明念上界与 409 风险，且仍走建 PR（ISSUE #2964）", () => {

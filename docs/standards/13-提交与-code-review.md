@@ -10541,6 +10541,16 @@ dry-run 的计划同步反映「不 add、不看暂存面、不 commit」。push
 三种形状一份出口）。`ship-*` 家族的取法点已经收口到这一份；类型收窄走谓词不走断言
 （#3167 那条 `no-unsafe-type-assertion` 对断言收窄零容忍）。
 
+**复用/落地判定的开放清单翻页终止先信平台规模读数**（ISSUE #4768）。`scanPullPages`
+（`ship-scan.mjs`，复用与落地判定共用）旧判据只看「这一页不满页大小 ⇒ 到顶」，在
+`list-pulls` 按 `-created_at` 排序、目标开放 PR 被新条目挤到后面页、而第一页恰好不满时
+提前 `break`，把「有开放 PR」读成「没有」⇒ 新建重复 PR（#4767 与一直 open 的 #4762
+同分支同标题同 head.sha，后者成悬空 PR）。平台响应明确带 `totalPages` / `total`（顶层）
+与 `header.x-cnb-total`，终止判据优先信它：给了总页数就翻到那一页，缺键才回落「不足页 ⇒
+到顶」的旧判据（与 `readListHasMore` 的 #3058 缺键口径同族）。`--branches` 那个只读入口的
+翻页是另一份实现（`ship-branches.mjs` 的 `has_more`/`next` 口径，见 §13.6.5），两处形状不同、
+不合并。判据在 `tests/ship.test.ts`（复现用例先红后绿 + `readListTotalPages` 三种形状与缺键回落）。
+
 **「同一条分支上再跑一次」的两种情形分开判**（ISSUE #2250）。旧形状只有一格幂等：在
 `list-pulls --state open` 里按 `head.ref` 找，找到就复用、**找不到就建**。但 squash 合并成功会把
 PR 转 `closed`，那一格因此恰好在「已经合过」的那一刻失效，于是同一条分支上再跑一次会长出一条
