@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
 import { textHandler } from "~/lib/form-props";
 import { cn } from "~/lib/utils";
@@ -41,11 +42,14 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
         <div className="border-border bg-surface-1 flex items-center gap-3 rounded-xl border px-3 py-2 text-xs">
           <span className="text-ink-muted">本项目当前归属：</span>
           <span className="font-medium">
-            {ep === undefined
-              ? "加载中…"
-              : ep
-                ? `第 ${ep.episodeNumber} 集「${ep.title || "未命名"}」`
-                : "未归入任何集"}
+            {ep === undefined ? (
+              /* 骨架条（ISSUE #4749）：归属查询进行中的占位，不再是一行「加载中…」。 */
+              <Skeleton className="inline-block h-4 w-44 align-middle" />
+            ) : ep ? (
+              `第 ${ep.episodeNumber} 集「${ep.title || "未命名"}」`
+            ) : (
+              "未归入任何集"
+            )}
           </span>
         </div>
       )}

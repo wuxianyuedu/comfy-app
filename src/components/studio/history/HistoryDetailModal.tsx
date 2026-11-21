@@ -4,6 +4,7 @@ import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { isVideo } from "~/lib/media/media";
+import { Skeleton } from "~/components/ui/skeleton";
 import { fetchTaskWorkflow, openTaskFolder } from "~/lib/history-detail-actions";
 import { isPlainRecord } from "~/lib/is-record";
 import { taskStatusLabel } from "~/lib/task-state";
@@ -269,7 +270,16 @@ export function HistoryDetailModal({
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
             {detailLoading ? (
-              <p className="text-ink-muted text-sm">加载中…</p>
+              /* 骨架屏（ISSUE #4749）：与产物图网格同形的占位块。 */
+              <div
+                aria-label="加载中"
+                className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+                role="status"
+              >
+                {[0, 1, 2].map((i) => (
+                  <Skeleton className="aspect-square rounded-xl" key={i} />
+                ))}
+              </div>
             ) : current ? (
               <div className="flex flex-col gap-5">
                 {current.images.length > 0 ? (

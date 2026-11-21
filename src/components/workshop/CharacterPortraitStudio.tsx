@@ -11,6 +11,7 @@ import React from "react";
 
 import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { Spinner } from "~/components/ui/spinner";
 import { SelectChip } from "~/components/ui/select-chip";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -318,7 +319,10 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   {historyFailed ? (
                     <p className="text-destructive text-2xs">历史日志拉取失败：请稍后重试。</p>
                   ) : history === null ? (
-                    <p className="text-muted-foreground text-2xs">加载中…</p>
+                    <p className="text-muted-foreground text-2xs flex items-center gap-1.5">
+                      <Spinner className="size-3" />
+                      历史日志加载中…
+                    </p>
                   ) : history.length === 0 ? (
                     <p className="text-muted-foreground text-2xs">还没有落盘的历史日志。</p>
                   ) : (

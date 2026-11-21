@@ -5,6 +5,7 @@ import { taskStatusLabel } from "~/lib/task-state";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useElementBox } from "~/components/ui/use-element-box";
+import { Skeleton } from "~/components/ui/skeleton";
 import { Badge } from "~/components/ui/badge";
 import { PageHeader } from "~/components/ui/page-header";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -480,7 +481,12 @@ export function ProjectOutputs() {
 
       {/* ── Output grid ── */}
       {loading ? (
-        <p className="text-ink-muted text-sm">加载中…</p>
+        /* 骨架屏（ISSUE #4749）：与产出网格同形的占位块，不再是一行「加载中…」。 */
+        <div aria-label="加载中" className="grid grid-cols-2 gap-3 sm:grid-cols-3" role="status">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Skeleton className="aspect-video rounded-xl" key={i} />
+          ))}
+        </div>
       ) : outputs.length === 0 ? (
         <EmptyState
           description="在画布里跑一次生成，结果会自动归档到本项目目录。"

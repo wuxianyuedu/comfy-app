@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { FilePickerButton } from "~/components/ui/file-picker";
 import { FormField } from "~/components/ui/form-field";
@@ -463,7 +464,12 @@ export function ModelTestView() {
 
           <Panel hint="按用途与模式过滤" icon={<Boxes />} title="模型">
             {c.loading ? (
-              <p className="text-muted-foreground text-sm">加载中…</p>
+              /* 骨架屏（ISSUE #4749）：与模型列表条目同形的占位条。 */
+              <div aria-label="加载中" className="flex flex-col gap-2" role="status">
+                {[0, 1, 2].map((i) => (
+                  <Skeleton className="h-9 w-full rounded-lg" key={i} />
+                ))}
+              </div>
             ) : c.candidates.length === 0 ? (
               c.kindCandidateCount === 0 ? (
                 <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
