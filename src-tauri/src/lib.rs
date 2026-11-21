@@ -445,13 +445,20 @@ fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHand
       return;
     }
     let splash_open = monitor.get_webview_window("splash").is_some();
-    let main_hidden = match monitor.get_webview_window("main") {
+    let main_window = monitor.get_webview_window("main");
+    let main_hidden = match &main_window {
       Some(m) => !m.is_visible().unwrap_or(false),
       None => false,
     };
     if splash_open && main_hidden {
       // 强制交接：主窗可能还停在空白 / 错误页，先注入占位再显示，别把空白顶给用户
       watch_main_first_paint(monitor.clone(), true);
+      if let Some(m) = &main_window {
+        // 此刻主窗页面要么没加载完、要么已是内嵌错误页：先恢复原生标题栏，
+        // 保证错误页上也有可点的关闭按钮（ISSUE #4696）；应用页面真正加载
+        // 成功后由 on_main_page_finished 交还给前端标题行。
+        show_native_title_bar_while_offline(m, "安全网强制交换");
+      }
       show_main_window_without_focus(&monitor, false);
       close_splash_window(&monitor);
     }
@@ -3174,6 +3181,31 @@ fn create_main_window(app: &mut tauri::App) -> tauri::Result<()> {
 /// 是内嵌的 Edge「无法访问此页面」错误页——历史上它曾被当成「应用加载完成」直接
 /// 顶给用户，因此交换前用 TCP 可达性做二次校验：不可达就不交换，交给重导航循环，
 /// 保持启动页可见。
+/// 内嵌错误页露脸时，把**原生标题栏**还给主窗（ISSUE #4696）。
+///
+/// 主窗关了原生装饰（`decorations: false`），最小化 / 关闭按钮由前端标题行
+/// （TitleBarTabs → window-controls-client）提供。页面加载失败换成 WebView2
+/// 内嵌错误页（「无法访问此页面」）时，前端标题行不在了，用户手里就没有任何
+/// 可见的关闭出口 —— 只能去任务栏杀进程。此时临时恢复原生装饰：原生标题栏
+/// 自带最小化 / 关闭，窗口可正常关（关窗语义仍走 CloseRequested →
+/// closeKeepTray 那条路，与前端那颗关闭按钮同一出口）。
+fn show_native_title_bar_while_offline(win: &tauri::WebviewWindow, why: &str) {
+  match win.set_decorations(true) {
+    Ok(_) => log::warn!("[ComfyAPP] 已恢复原生标题栏（{why}）：错误页上也有可点的关闭按钮"),
+    Err(e) => log::warn!("[ComfyAPP] 恢复原生标题栏失败（{why}）: {e:?}"),
+  }
+}
+
+/// 应用页面真正加载回来（Finished 且探测可达）→ 把标题行交还前端。
+///
+/// 与 [`show_native_title_bar_while_offline`] 成对：错误态借出去的原生标题栏
+/// 不能常驻，否则应用恢复后会出现「原生条 + 前端标题行」两层。
+fn restore_custom_title_bar(win: &tauri::WebviewWindow, why: &str) {
+  if let Err(e) = win.set_decorations(false) {
+    log::debug!("[ComfyAPP] 交还前端标题行失败（{why}）: {e:?}");
+  }
+}
+
 fn on_main_page_finished(handle: &tauri::AppHandle, url: tauri::Url) {
   let url_str = url.as_str();
   log::info!("[ComfyAPP] main window Finished: {}", url_str);
@@ -3189,6 +3221,17 @@ fn on_main_page_finished(handle: &tauri::AppHandle, url: tauri::Url) {
   // 交接只在启动页还在时发生（ISSUE #3562）：启动完成后应用内的整页导航 /
   // 重载同样会触发 Finished，再走一遍交接就会把已可见的主窗重新激活一次。
   if handle.get_webview_window("splash").is_none() {
+    /* 交接完成后的再次加载（用户刷新 / 整页跳转）：页面不可达 = 眼前就是
+     * 内嵌错误页 —— 把原生标题栏还回来，错误页上也有可点的关闭按钮
+     * （ISSUE #4696）；可达 = 正常页面回来了，把标题行交还前端（若错误态
+     * 借过原生标题栏）。探测预算与下面交接那一步同口径（3s）。 */
+    if let Some(main) = handle.get_webview_window("main") {
+      if url_reachable_bounded(&url, Duration::from_millis(3000)) {
+        restore_custom_title_bar(&main, "应用页面已恢复可达");
+      } else {
+        show_native_title_bar_while_offline(&main, "交接后页面不可达（内嵌错误页）");
+      }
+    }
     log::debug!("[ComfyAPP] window handover already done, ignoring page load");
     return;
   }
@@ -3821,6 +3864,37 @@ mod window_startup_tests {
     let start = src.find(marker).unwrap_or_else(|| panic!("找不到 {marker}"));
     let rest = &src[start..];
     rest[..rest.find("\n}\n").unwrap()].to_string()
+  }
+
+  /// 内嵌错误页上必须有可点的关闭按钮（ISSUE #4696）：主窗是 `decorations: false`，
+  /// 关闭按钮原本由前端标题行提供，页面加载失败换成 WebView2 错误页时它就不在了。
+  /// 判据钉三条出口：① 错误态把原生标题栏借给主窗（`set_decorations(true)`）；
+  /// ② 应用页面恢复可达后必须交还（`set_decorations(false)`），别让原生条常驻；
+  /// ③ 安全网强制交换（主窗可能还停在错误页）同样要先借。三处少一处，用户就会
+  /// 再撞一次「看得见错误页、找不到关闭按钮」。
+  #[test]
+  fn error_page_always_leaves_a_visible_close_button() {
+    let offline = fn_body("fn show_native_title_bar_while_offline");
+    assert!(
+      offline.contains("set_decorations(true)"),
+      "错误态必须恢复原生标题栏（原生条自带关闭按钮）：{offline}"
+    );
+    let restore = fn_body("fn restore_custom_title_bar");
+    assert!(
+      restore.contains("set_decorations(false)"),
+      "应用恢复可达后必须交还前端标题行：{restore}"
+    );
+    let finished = fn_body("fn on_main_page_finished");
+    assert!(
+      finished.contains("show_native_title_bar_while_offline")
+        && finished.contains("restore_custom_title_bar"),
+      "交接后的再次加载要按可达性二选一（错误页借原生条 / 恢复后交还）：{finished}"
+    );
+    let navigate = fn_body("fn navigate_to_app");
+    assert!(
+      navigate.contains("show_native_title_bar_while_offline"),
+      "安全网强制交换前也要借原生标题栏（主窗可能停在错误页）：{navigate}"
+    );
   }
 
   #[test]
