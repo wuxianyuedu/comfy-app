@@ -452,9 +452,10 @@ describe("LogPanel 日志面板", () => {
     /* 其余级别不带这两个警示色（否则「警告黄」就不成立了）。 */
     expect(levelButton("全部").className).not.toContain("text-warning-strong");
     expect(levelButton("信息").className).not.toContain("text-warning-strong");
-    /* 数字是中性灰、显式覆盖继承色，不跟着级别变色。 */
+    /* 数字是中性灰、显式覆盖继承色，不跟着级别变色。取「弱文字」档而不是更弱的
+     * `ink-fainter`：计数是要读的信息，3.2:1 低于小字 AA（#4694）。 */
     for (const label of ["警告", "错误"]) {
-      expect(levelButton(label).children[1]!.className).toContain("text-ink-fainter");
+      expect(levelButton(label).children[1]!.className).toContain("text-ink-muted");
     }
   });
 
