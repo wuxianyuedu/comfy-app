@@ -768,6 +768,8 @@ export function seedFilm(
     id?: string;
     projectId?: string | null;
     script?: string;
+    /** 影片状态（缺省落库默认 PARSING）；按状态分支的闸门用例（如合成前置检查）点名。 */
+    status?: string;
     title?: string;
     userId: string;
   },
@@ -780,6 +782,7 @@ export function seedFilm(
     projectId: input.projectId ?? null,
     title: input.title ?? "seeded-film",
     script: input.script ?? "",
+    ...(input.status === undefined ? {} : { status: input.status }),
     finalVideo: input.finalVideo ?? null,
     createdAt: at,
     updatedAt: at,

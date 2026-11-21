@@ -241,6 +241,10 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   }
 
   /** 同 {@link claimGenerating}，合成侧：仅当不在 COMPOSING/DONE/CANCELLED 时写成 COMPOSING。
+   *  **GENERATING 刻意不在排除集**（ISSUE #4736 评审结论）：监看循环在全部镜头
+   *  落定后、影片仍是 GENERATING 时直调 `composeFilm` 完成自动合成——排除集加
+   *  GENERATING 会掐断这条主链路。「镜头未齐就合成」的闸门收在 compose 路由的
+   *  状态检查上（只放行 FAILED），不收在这里。
    *  CANCELLED 也在排除集（ISSUE #3867）：「取消」与「合成抢跑」赛跑时，
    *  不能给已取消的影片跑完 ffmpeg 并标 DONE——状态与产物互相矛盾。
    *  FAILED **不在**排除集（ISSUE #4251）：合成失败后装好 ffmpeg / 补齐镜头视频，

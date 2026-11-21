@@ -1382,6 +1382,17 @@ describe("FilmRepository / FilmShotRepository", () => {
     expect(await filmRepository.findById(g.id)).toMatchObject({ status: "CANCELLED" });
   });
 
+  it("GENERATING 影片仍可被认领合成（监看循环自动合成的入口；#4736 闸门收在路由层）", async () => {
+    const f = await filmRepository.create(CREATE);
+    await filmRepository.claimGenerating(f.id); // PARSING → GENERATING
+    /* 全部镜头落定后，监看循环直调 composeFilm → claimComposing 完成自动合成，
+     * 此刻影片仍是 GENERATING —— 这一步必须保持可走。#4736 评审结论：把
+     * GENERATING 加进排除集会掐断自动合成主链路，「镜头未齐就合成」的闸门
+     * 收在 compose 路由的状态检查上（只放行 FAILED）。 */
+    expect(await filmRepository.claimComposing(f.id)).toBe(true);
+    expect(await filmRepository.findById(f.id)).toMatchObject({ status: "COMPOSING" });
+  });
+
   it("镜头状态流转与两类筛选：status / onlyWithVideo", async () => {
     const f = await filmRepository.create(CREATE);
     await filmShotRepository.createMany(f.id, [
