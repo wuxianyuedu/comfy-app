@@ -64,6 +64,28 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
           进程生效；Ollama 注册为系统服务 或你手动启动的不受此开关影响。
         </p>
       </div>
+      <div className="mb-4">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={c.drafts.settings.closeKeepTray}
+            id="close-keep-tray"
+            onCheckedChange={(next) => {
+              void c.commitPrefs({
+                closeKeepTray: next === true,
+              });
+            }}
+          />
+          <FieldLabel className="text-ink/80 text-sm" htmlFor="close-keep-tray">
+            关闭窗口后保留后台运行（托盘图标保留）
+          </FieldLabel>
+        </div>
+        <p className="text-muted-foreground mt-1.5 text-xs">
+          默认不勾选：点关闭即退出应用，后台服务按上面的开关处理，托盘 / 任务栏图标在退出
+          清理完成后消失（清理最多 12 秒，期间图标会残留）。勾选：点关闭只是把主窗口收到
+          托盘，应用与 ComfyUI 等后台服务继续运行，托盘图标常驻；从托盘「打开主界面」
+          恢复窗口，托盘菜单「退出」才真正退出并清理。
+        </p>
+      </div>
       <div className={`${SETTINGS_ROW_CLASS} mb-4`}>
         <p className="text-ink/80 mb-1 text-sm font-medium">关于 Drizzle Studio</p>
         <p className="text-muted-foreground text-xs">

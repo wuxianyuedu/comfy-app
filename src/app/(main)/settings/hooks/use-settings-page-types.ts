@@ -19,6 +19,8 @@ export type Settings = {
   /** 查看绑定到本地文件的工作流时，是否自动把磁盘最新内容同步回库（默认 false=手动，更新入口是「同步」按钮）。 */
   autoSyncLocalWorkflow: boolean;
   /** comfy-cli 的 Python 解释器（桌包不随包 Python，用户自备后在这里指路径）。 */
+  /** 关闭主窗后保留后台运行（托盘图标保留；默认 false=关窗即退出）。 */
+  closeKeepTray: boolean;
   comfyCliPython: string;
   comfyuiAutoStart: boolean;
   /** 出图进程的 CPU 档位（ISSUE #1959）；缺值按环境默认（见 `~/lib/comfyui/cpu-limit`）。 */
