@@ -71,18 +71,45 @@ describe("TaskProgressPanel", () => {
     expect(runningBar?.getAttribute("aria-valuenow")).toBeNull();
   });
 
-  it("节点多于 6 个时只展开最近 6 行，其余以计数交代", () => {
+  it("缓存跳过的节点也按执行顺序列出、标「缓存跳过」且不画进度条（#4757）", () => {
+    const { container } = render(
+      <TaskProgressPanel
+        logs={[
+          line(
+            '[comfy-cli 原始] {"type":"execution_cached","node":"23:1","title":"Load Diffusion Model","class_type":"UNETLoader"}',
+            500,
+          ),
+          line(
+            '[comfy-cli 原始] {"type":"execution_cached","node":"23:15","title":"Generate Text","class_type":"TextGenerateV2"}',
+            600,
+          ),
+          line('[comfy-cli 原始] {"type":"executing","node":"23:7","title":"KSampler"}', 1500),
+          line(
+            '[comfy-cli 原始] {"type":"progress","node":"23:7","completed":6,"total":6}',
+            62_500,
+          ),
+        ]}
+      />,
+    );
+    const panel = container.querySelector('[data-testid="task-progress-panel"]')!;
+    expect(panel.textContent).toContain("缓存跳过");
+    expect(panel.textContent).toContain("Load Diffusion Model");
+    expect(panel.textContent).toContain("Generate Text");
+    expect(panel.textContent).toContain("6/6");
+    /* 缓存节点没有进度语义：不画进度条，只有 KSampler 一根。 */
+    expect(panel.querySelectorAll('[data-slot="progress-bar-track"]')).toHaveLength(1);
+  });
+
+  it("全部节点按执行顺序列出、不截断（#4757）", () => {
     const logs = [1, 2, 3, 4, 5, 6, 7, 8].flatMap((i) =>
       stageLogs(`node-${String(i)}`, `节点${String(i)}`, i, 10),
     );
     const { container } = render(<TaskProgressPanel logs={logs} />);
     const panel = container.querySelector('[data-testid="task-progress-panel"]')!;
-    expect(panel.textContent).toContain("另有 2 个节点已略去");
-    expect(panel.textContent).not.toContain("节点1");
-    expect(panel.textContent).not.toContain("节点2");
-    expect(panel.textContent).toContain("节点7");
-    expect(panel.textContent).toContain("节点8");
-    expect(panel.querySelectorAll('[data-slot="progress-bar-track"]')).toHaveLength(6);
+    for (const i of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      expect(panel.textContent).toContain(`节点${String(i)}`);
+    }
+    expect(panel.querySelectorAll('[data-slot="progress-bar-track"]')).toHaveLength(8);
   });
 
   it("显示整轮已运行与每节点耗时（#4754）", () => {
