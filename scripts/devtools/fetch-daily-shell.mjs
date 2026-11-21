@@ -837,6 +837,16 @@ export async function main(io = {}) {
     if (shown.warn) {
       process.stderr.write(shown.warn);
     }
+    /* 把构建标记落在壳旁边（#4722）：dev 启动前的自动更新要靠它判断远端是否更新。
+       写失败只提示，不影响已经到手的壳。标记在 target/ 下，不入 git。 */
+    try {
+      const stamp = path.join(path.dirname(outAbs), ".comfy-shell-build-info.json");
+      fs.writeFileSync(stamp, info.bytes);
+    } catch (error) {
+      process.stderr.write(
+        `[fetch-daily-shell] 构建标记没能落盘（${error instanceof Error ? error.message : String(error)}）—— 下次启动会重新取一次壳建立基线。\n`,
+      );
+    }
   } else if (info.status === 404) {
     process.stdout.write(
       `[fetch-daily-shell] 该 nightly 没带构建信息附件（${BUILD_INFO_ASSET}，功能上线前的旧包）—— 构建时间与来源以 Release 页为准。\n`,
