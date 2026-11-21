@@ -148,10 +148,8 @@ export function pnpmWebServerCommand(
  */
 /* SAFETY: 类型断言已复核 */
 export const E2E_SERVER_COMMANDS = {
-  /* SAFETY: 类型断言已复核 */
-  dev: pnpmWebServerCommand("dev", {} as NodeJS.ProcessEnv),
-  /* SAFETY: 类型断言已复核 */
-  start: pnpmWebServerCommand("start", {} as NodeJS.ProcessEnv),
+  dev: pnpmWebServerCommand("dev", { NODE_ENV: "test" }),
+  start: pnpmWebServerCommand("start", { NODE_ENV: "test" }),
 } as const;
 
 /**

@@ -86,6 +86,8 @@ export async function runWorkflowModelTest(args: {
   /** 本地提交行（封装算出的 workflowInputs 落点清单）：发起前先上抛给
    *  请求详情的「本地提交」行（#4080 评论 8 / 评论 13）。 */
   onSubmissionRow?: (row: ApiCallDebugRow) => void;
+  /** 本地任务 id（入队后即回抛）：测试页据此打开「大屏查看日志」弹窗。 */
+  onTaskId?: (taskId: string) => void;
   /** 参考图组（data URL，已按「多张参考图，否则单图行」归并）。 */
   referenceImages: ReadonlyArray<string>;
   signal: AbortSignal;
@@ -171,6 +173,9 @@ export async function runWorkflowModelTest(args: {
   });
 
   const taskId = await startLocalGenerate(built.input);
+  /* 任务 id 先上抛再订阅：测试页的「大屏查看日志」按钮靠它挂弹窗（弹窗自己
+   * 会按 taskId 重连 SSE，与这里的订阅互不影响）。 */
+  args.onTaskId?.(taskId);
   let closer: () => void = () => undefined;
   let lastPct = -1;
   const result = await withTimeoutResult<WorkflowTestResult | null>(

@@ -44,13 +44,13 @@ import { defineConfig } from "oxlint";
 const REACT_VERSION = parseReactVersion();
 
 function parseReactVersion() {
-  const match = /"react"\s*:\s*"[^\d]*([\d.]+)"/.exec(
+  const match = /"react"\s*:\s*"[^\d]*(?<version>[\d.]+)"/.exec(
     readFileSync(new URL("package.json", import.meta.url), "utf8"),
   );
-  if (match?.[1] === undefined) {
+  if (match?.groups?.version === undefined) {
     throw new Error("package.json 里读不到 react 版本");
   }
-  return match[1];
+  return match.groups.version;
 }
 
 const STORE_SELECTOR_HOOKS = [

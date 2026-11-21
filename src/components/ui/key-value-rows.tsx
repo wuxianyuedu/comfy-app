@@ -55,6 +55,8 @@ export function KeyValueRows({
   className,
   itemClassName,
   keyClassName,
+  /** `table`：键列长标签（如「尺寸（比例 + 分辨率 / …）」）允许换行，不裁省略号。 */
+  keyWrap = false,
   valueClassName,
 }: {
   /** `rows`：整块加外框（圆角 + 描边 + 裁切）。 */
@@ -65,6 +67,8 @@ export function KeyValueRows({
   itemClassName?: string;
   items: ReadonlyArray<KeyValueItem>;
   keyClassName?: string;
+  /** `table`：键列长标签（如「尺寸（比例 + 分辨率 / …）」）允许换行，不裁省略号。 */
+  keyWrap?: boolean;
   /** 布局语言，见文件头。 */
   layout?: KeyValueLayout;
   /** 值是否走等宽字体（数值 / 路径 / 标识符传 true，文案传 false）。 */
@@ -140,7 +144,8 @@ export function KeyValueRows({
                 <Hint key={item.id ?? itemLabelText(item)} label={item.title}>
                   <th
                     className={cn(
-                      "border-border-subtle bg-card w-[36%] max-w-45 truncate border-r px-2.5 py-1.5 text-left align-top font-mono",
+                      "border-border-subtle bg-card w-[36%] max-w-45 border-r px-2.5 py-1.5 text-left align-top font-mono",
+                      keyWrap ? "whitespace-normal" : "truncate",
                       keyClassName,
                     )}
                     scope="row"

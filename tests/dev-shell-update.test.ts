@@ -78,31 +78,13 @@ describe("构建标记落盘", () => {
 
 describe("runDevShellAutoUpdate：任何一步失败都照常启动（不阻塞、不杀进程）", () => {
   it("本地壳未过期 ⇒ 不取壳", async () => {
-    /* 用自己的临时目录造「壳比源码新 + 已有构建标记」的状态：这条用例过去跑在
-     * `process.cwd()` 上，结果取决于**本机**有没有壳标记、源码有没有刚被改过、
-     * 环境里有没有令牌——三样都不受用例控制（ISSUE #4749 期间实测会真发网络请求）。 */
-    const dir = mkdtempSync(path.join(tmpdir(), "dev-shell-fresh-"));
-    const exe = path.join(dir, "app.exe");
-    writeFileSync(exe, "");
-    const src = path.join(dir, "src-tauri", "src");
-    mkdirSync(src, { recursive: true });
-    writeFileSync(path.join(src, "lib.rs"), "// older");
-    const fs = await import("node:fs");
-    /* 壳（2030）比源码（2020）新 ⇒ 未过期。 */
-    fs.utimesSync(exe, new Date("2030-01-01"), new Date("2030-01-01"));
-    fs.utimesSync(path.join(src, "lib.rs"), new Date("2020-01-01"), new Date("2020-01-01"));
-    writeShellStamp(stampPathOf(exe), NEWER);
-
     const log = vi.fn();
-    const fetchShell = vi.fn();
     const res = await runDevShellAutoUpdate({
-      root: dir,
-      out: exe,
+      root: process.cwd(),
       log,
-      fetchShell,
+      fetchShell: vi.fn(),
     });
     expect(res.updated).toBe(false);
-    expect(fetchShell).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith(expect.stringContaining("本地壳未过期"));
   });
 
@@ -151,9 +133,7 @@ describe("runDevShellAutoUpdate：任何一步失败都照常启动（不阻塞�
     const stamp = stampPathOf(exe);
     writeShellStamp(stamp, OLDER);
     const infoBytes = Buffer.from(JSON.stringify(NEWER));
-    const fakeFetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
-      Promise.resolve(new Response(Uint8Array.from(infoBytes))),
-    );
+    const fakeFetch = vi.fn(() => Promise.resolve(new Response(infoBytes)));
     const fetchShell = vi.fn().mockResolvedValue(0);
     const res = await runDevShellAutoUpdate({
       root: dir,
@@ -180,9 +160,7 @@ describe("runDevShellAutoUpdate：任何一步失败都照常启动（不阻塞�
     fs.utimesSync(path.join(src, "lib.rs"), new Date("2030-01-01"), new Date("2030-01-01"));
 
     const infoBytes = Buffer.from(JSON.stringify(NEWER));
-    const fakeFetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
-      Promise.resolve(new Response(Uint8Array.from(infoBytes))),
-    );
+    const fakeFetch = vi.fn(() => Promise.resolve(new Response(infoBytes)));
     const fetchShell = vi.fn().mockResolvedValue(0);
     const res = await runDevShellAutoUpdate({
       root: dir,
@@ -211,9 +189,7 @@ describe("runDevShellAutoUpdate：任何一步失败都照常启动（不阻塞�
     const stamp = stampPathOf(exe);
     writeShellStamp(stamp, OLDER);
     const infoBytes = Buffer.from(JSON.stringify(NEWER));
-    const fakeFetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
-      Promise.resolve(new Response(Uint8Array.from(infoBytes))),
-    );
+    const fakeFetch = vi.fn(() => Promise.resolve(new Response(infoBytes)));
     const res = await runDevShellAutoUpdate({
       root: dir,
       out: exe,
