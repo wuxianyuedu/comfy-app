@@ -17,62 +17,21 @@ const { test, expect } = defineGateRepo({
   /* 判据靠 `__dirname/..` 定位仓库根，所以脚本必须落在 `scripts/` 下。 */
   dir: "scripts",
   workdir: "on-demand-duties",
-  /* 两份「既有出处」要从源码仓库拷进来，判据才知道有哪些机器事实：`freshness-ledger.mjs` —— 新鲜度档的键（判据
-   * `import` 它）；它按 `scripts/**` 900 行硬闸把机器分支回看 / 回写拆到 `freshness-ledger-sync.mjs`，那份也得拷，
-   * 否则 `import` 链半路 `ERR_MODULE_NOT_FOUND`、整组红。`quality-gate.mjs` —— `run: false` 的门禁项。**按需台账
+  /* 三份「既有出处」要从源码仓库拷进来，判据才知道有哪些机器事实：`freshness-ledger.mjs`
+   * —— 新鲜度档的键（判据经**动态** `import()` 引它，动态 import 不在 `copyGateDeps`
+   * 的识别面里，必须显式拷）；`quality-gate.mjs` —— `run: false` 的门禁项（判据**不
+   * import** 它，按文本读 `GATES` 表）；`chained-steps.mjs` —— `base-check-chained`
+   * 那类事实的出处（判据按路径读它）。其余仓库内依赖（log.mjs / freshness-ledger-sync.mjs
+   * → shell.mjs → executable-resolve.ts → platform / pnpm-resolve / version-compare 一族）
+   * 由夹具从这些种子的 import 图自动闭合（ISSUE #4691），不再逐个手补。**按需台账
    * 刻意不拷真件**：只需一条在场（要的是「台账里有东西」的形状，不是文件），拷真件再覆盖会让「夹具提供了什么」不可读。 */
   copy: [
     {
       from: "scripts/freshness/freshness-ledger.mjs",
       to: "scripts/freshness/freshness-ledger.mjs",
     },
-    {
-      /* freshness-ledger 的本地时间展示（#4654）import 这份工具，少拷则
-       * 临时检出里 ERR_MODULE_NOT_FOUND（它只依赖 node:fs/path，链路闭合）。 */
-      from: "scripts/launcher-core/log.mjs",
-      to: "scripts/launcher-core/log.mjs",
-    },
-    {
-      /* freshness-ledger / freshness-ledger-sync 的 git 一次性读数走 runGateStep
-       * （#4679），这条链伸进 launcher-core/shell.mjs 与它 import 的
-       * command-echo.mjs、src/lib/process/executable-resolve.ts（.ts 由运行时
-       * 类型擦除承载）—— 显式 copy 落盘的文件不会被 copyGateDeps 续追依赖，
-       * 少拷则临时检出里 ERR_MODULE_NOT_FOUND。 */
-      from: "scripts/launcher-core/shell.mjs",
-      to: "scripts/launcher-core/shell.mjs",
-    },
-    {
-      from: "scripts/launcher-core/command-echo.mjs",
-      to: "scripts/launcher-core/command-echo.mjs",
-    },
-    {
-      from: "src/lib/process/executable-resolve.ts",
-      to: "src/lib/process/executable-resolve.ts",
-    },
-    {
-      /* executable-resolve 自己的两份仓库内依赖与 pnpm-resolve 的一份：
-       * 这条链到 platform.ts / pnpm-resolve.ts / version-compare.ts 为止
-       * （再无仓库内 import），补齐即链路闭合。 */
-      from: "src/lib/process/platform.ts",
-      to: "src/lib/process/platform.ts",
-    },
-    {
-      from: "src/lib/process/pnpm-resolve.ts",
-      to: "src/lib/process/pnpm-resolve.ts",
-    },
-    {
-      from: "src/lib/process/version-compare.ts",
-      to: "src/lib/process/version-compare.ts",
-    },
-    {
-      from: "scripts/freshness/freshness-ledger-sync.mjs",
-      to: "scripts/freshness/freshness-ledger-sync.mjs",
-    },
     { from: "scripts/gates/quality-gate.mjs", to: "scripts/gates/quality-gate.mjs" },
     {
-      /* `base-check-chained` 那一类事实也从既有出处现算（`CHAINED_STEPS`）——
-       * 判据按 `__dirname/../base-check/chained-steps.mjs` 读它，少拷这一份，
-       * 夹具自己在读事实那一步就 ENOENT（看着像判据坏了，实为夹具缺口）。 */
       from: "scripts/base-check/chained-steps.mjs",
       to: "scripts/base-check/chained-steps.mjs",
     },
