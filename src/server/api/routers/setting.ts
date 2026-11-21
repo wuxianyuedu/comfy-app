@@ -75,6 +75,8 @@ export const settingRouter = createTRPCRouter({
         comfyuiAutoStart: z.boolean().optional(),
         exitKillComfyui: z.boolean().optional(),
         exitKillOllama: z.boolean().optional(),
+        /** 关闭主窗后是否保留后台运行（托盘图标保留；#4680）。壳在关窗时读取。 */
+        closeKeepTray: z.boolean().optional(),
         /** 绑定到本地文件的工作流：进详情是否自动把磁盘最新内容同步回库。 */
         autoSyncLocalWorkflow: z.boolean().optional(),
       }),

@@ -83,6 +83,7 @@ beforeEach(() => {
     comfyuiPort: 8188,
     exitKillComfyui: false,
     exitKillOllama: true,
+    closeKeepTray: false,
     loginRequired: false,
   });
   vi.mocked(resolveComfyLaunchPlan).mockReturnValue(plan);

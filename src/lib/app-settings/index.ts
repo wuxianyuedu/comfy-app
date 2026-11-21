@@ -37,6 +37,16 @@ export type AppSettings = {
    */
   autoSyncLocalWorkflow: boolean;
   /**
+   * 关闭主窗口时的行为（ISSUE #4680）：
+   *   - `false`（默认）：关窗即退出——壳回收编排器 / sidecar 后进程退出，
+   *     托盘与任务栏图标随之消失（回收预算最多 12s，图标会残留几秒）。
+   *   - `true`：关窗只是**隐藏主窗**，应用与 ComfyUI 等后台服务继续运行，
+   *     托盘图标保留；从托盘「打开主界面」恢复窗口，托盘菜单「退出」才真正退出。
+   *
+   * 壳在主窗 `CloseRequested` 时读取本设置（每次关窗现读，不做缓存）。
+   */
+  closeKeepTray: boolean;
+  /**
    * 驱动 ComfyUI 的 **comfy-cli Python 解释器**（执行链用它跑 `-m comfy_cli run`）。
    *
    * 留空 = 退回 `<cwd>/python-venv/comfy-cli/{Scripts|bin}/python(.exe)`（开发检出的
@@ -100,6 +110,8 @@ export type AppSettings = {
   /** 同 exitKillComfyui，作用于应用拉起的 Ollama serve 进程。 */
   exitKillOllama: boolean;
   /**
+   * 关闭主窗口时的行为（ISSUE #4680）：
+  /**
    * 是否要求登录才能调用 REST 接口（自定义节点解析 / 素材 / 上传 /
    * 日志 / LLM 配置等）。false（默认，本机单用户模式）= 未登录自动落到
    * 演示用户，与 tRPC authedProcedure 的回退一致；true = 严格 401。
@@ -121,8 +133,10 @@ export const DEFAULTS: AppSettings = {
   loginRequired: false,
   exitKillComfyui: false,
   exitKillOllama: true,
-  /** 绑定到本地文件的工作流：进详情是否自动把磁盘最新内容同步回库（默认手动）。 */
+  /** 关闭主窗 = 退出（默认）；true = 关窗后隐藏主窗、托盘保留、后台继续运行（#4680）。 */
   autoSyncLocalWorkflow: false,
+  /** 关闭主窗 = 退出（默认）；true = 关窗后隐藏主窗、托盘保留、后台继续运行（#4680）。 */
+  closeKeepTray: false,
 };
 
 /** 退出策略默认值变更的一次性迁移（判据见 exitKillComfyuiDefaultMigrated）。

@@ -2304,6 +2304,27 @@ fn build_window_state_plugin() -> tauri::plugin::TauriPlugin<Wry> {
 /// 托盘图标 id（应用退出时用同一 id 查回托盘对象）。
 const TRAY_ID: &str = "comfyapp-tray";
 
+/// 主窗关闭行为（ISSUE #4680）：读应用设置 `data/app-settings.json` 的
+/// `closeKeepTray`——true = 关主窗只隐藏窗口，应用与后台服务继续运行，
+/// 托盘图标保留；false（缺省 / 文件缺失 / 解析失败）= 维持「关窗即退出」。
+/// 每次关窗现读（设置保存后立即生效，不做缓存）；设置损坏时回落现状，
+/// 不让一份坏文件把「关窗」变成「关不掉」。
+fn close_keep_tray_enabled(root: &str) -> bool {
+  let path = std::path::Path::new(root)
+    .join("data")
+    .join("app-settings.json");
+  let Ok(raw) = std::fs::read_to_string(path) else {
+    return false;
+  };
+  serde_json::from_str::<serde_json::Value>(&raw)
+    .ok()
+    .and_then(|v| {
+      v.get("closeKeepTray")
+        .and_then(|value| value.as_bool())
+    })
+    .unwrap_or(false)
+}
+
 /// 系统托盘：应用以「不抢前台」方式显示时，用户从任务栏点开过就不需要它，
 /// 但「启动完成后窗口在任务栏、用户又切走了」这类场景需要一个稳定的唤起入口，
 /// 因此常驻一个最小托盘——左键单击把主窗口带回前台，右键给出显示/退出。
@@ -3125,6 +3146,23 @@ fn create_main_window(app: &mut tauri::App) -> tauri::Result<()> {
       }
     })
     .build()?;
+  // 关主窗的语义由设置 `closeKeepTray` 决定（ISSUE #4680）：默认关窗即退出
+  //（RunEvent::Exit 里回收进程树）；勾选后关窗只隐藏主窗，应用与 ComfyUI
+  // 等后台服务继续运行，托盘图标保留——从托盘「打开主界面」恢复，托盘
+  // 菜单「退出」才真正退出。设置在关窗那一刻现读（保存后立即生效）。
+  let close_watch = _main_win.clone();
+  _main_win.on_window_event(move |event| {
+    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+      let root = close_watch.app_handle().state::<AppState>().project_root();
+      if close_keep_tray_enabled(&root) {
+        api.prevent_close();
+        let _ = close_watch.hide();
+        log::info!(
+          "[ComfyAPP] main window close requested: kept running in tray (closeKeepTray)"
+        );
+      }
+    }
+  });
   Ok(())
 }
 
@@ -3395,6 +3433,48 @@ fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
       }
     }
     _ => {}
+  }
+}
+
+/// `close_keep_tray_enabled` 的读数判据（ISSUE #4680）：只有设置里显式
+/// `closeKeepTray: true` 才保留托盘；缺字段 / 坏 JSON / 文件缺失一律回落
+/// 「关窗即退出」——一份坏设置不许把「关窗」变成「关不掉」。
+#[cfg(test)]
+mod close_keep_tray_tests {
+  use super::*;
+
+  fn write_settings(tag: &str, body: &str) -> String {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-close-tray-{tag}-{}",
+      std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("data")).unwrap();
+    std::fs::write(dir.join("data").join("app-settings.json"), body).unwrap();
+    dir.to_string_lossy().to_string()
+  }
+
+  #[test]
+  fn keep_tray_requires_explicit_true() {
+    assert!(close_keep_tray_enabled(&write_settings(
+      "true",
+      r#"{"closeKeepTray": true}"#
+    )));
+    assert!(!close_keep_tray_enabled(&write_settings(
+      "false",
+      r#"{"closeKeepTray": false}"#
+    )));
+    assert!(!close_keep_tray_enabled(&write_settings(
+      "missing-key",
+      r#"{"comfyuiPath": "D:/x"}"#
+    )));
+    assert!(!close_keep_tray_enabled(&write_settings(
+      "broken",
+      "{ not json"
+    )));
+    assert!(!close_keep_tray_enabled(
+      "Z:/definitely-not-here-4680"
+    ));
   }
 }
 
