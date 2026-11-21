@@ -95,11 +95,16 @@ describe("ComfyuiControlView", () => {
     expect(stop.className).toContain("bg-destructive/10");
   });
 
-  it("运行中：文案带上地址与启动方式，打开查看仍是主题紫实心主按钮", () => {
+  it("运行中：地址单独一行且不截断（用户反馈 #4710），打开查看仍是主题紫实心主按钮", () => {
     render(<ComfyuiControlView c={controller({ status: running })} />);
+    /* 状态句只带启动方式；地址挪到单独一行。 */
     const text = screen.getByText(/ComfyUI 运行中/);
-    expect(text.textContent).toContain("http://127.0.0.1:8188");
     expect(text.textContent).toContain("配置路径的实例");
+    expect(text.textContent).not.toContain("http://127.0.0.1:8188");
+    /* 地址必须显示全：独立元素 + break-all，不许 truncate。 */
+    const url = screen.getByText("http://127.0.0.1:8188");
+    expect(url.className).toContain("break-all");
+    expect(url.className).not.toContain("truncate");
     const start = screen.getByRole("button", { name: "启动 ComfyUI" });
     const stop = screen.getByRole("button", { name: "关闭 ComfyUI" });
     const open = screen.getByRole("button", { name: "打开查看" });
@@ -190,29 +195,6 @@ describe("ComfyuiControlView", () => {
       name: "workspace:navigate",
       payload: { view: "settings", section: "comfyui" },
     });
-  });
-
-  it("页上写明将按哪条已保存路径启动（本页无草稿，这条是唯一的事实出口）", () => {
-    render(<ComfyuiControlView c={controller({ status: running })} />);
-    const line = screen.getByTestId("comfyui-start-path");
-    expect(line.textContent).toContain(String.raw`D:\ComfyUI`);
-    /* 明写「已保存」这一层语义：用户刚在设置页改了路径没保存时，这里显示的
-       仍是旧路径，那句「改完要点保存」就是给他看的。 */
-    expect(line.textContent).toContain("已保存");
-    expect(line.textContent).toContain("保存");
-  });
-
-  it("路径还没保存时不说「按空路径启动」，而是指出去哪配", () => {
-    render(
-      <ComfyuiControlView
-        c={controller({
-          status: { ...running, up: false, path: "" },
-        })}
-      />,
-    );
-    const line = screen.getByTestId("comfyui-start-path");
-    expect(line.textContent).toContain("尚未保存");
-    expect(line.textContent).not.toContain("将按这条已保存路径拉起");
   });
 
   /* 状态那句是**活区**（`role="status"` + `aria-live="polite"`）：状态变了自己

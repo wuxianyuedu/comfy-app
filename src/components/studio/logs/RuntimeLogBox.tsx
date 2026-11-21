@@ -34,6 +34,11 @@ export type RuntimeLogBoxProps = {
    * 其它调用点（设置页三段）保持原紧凑高度。
    */
   fill?: boolean;
+  /**
+   * 隐藏「行首 [out] / [err]」那行常驻说明（用户反馈 #4710：ComfyUI 页日志框
+   * 下方不要这行小字）。截断 / 会话数这类**按需出现**的提示不受它影响。
+   */
+  hideStreamHint?: boolean;
   /** 日志来源：正文 / 片段 / 会话列表 / 选中项 / 跟随态 / 刷新动作。 */
   log: RuntimeLogController;
 };
@@ -41,6 +46,7 @@ export type RuntimeLogBoxProps = {
 export function RuntimeLogBox({
   fileName,
   fill = false,
+  hideStreamHint = false,
   log,
   emptyHint,
   className,
@@ -58,7 +64,18 @@ export function RuntimeLogBox({
       {/* 全屏时整块小窗口都不渲染：同一段日志渲染两份既费 DOM、又会出现两个
           同名的会话下拉（读屏器与测试都分不清该操作哪一个）。 */}
       {!fullscreen && (
-        <div className={cn("border-border bg-surface-1 mb-4 rounded-xl border", className)}>
+        <div
+          className={cn(
+            "border-border bg-surface-1 rounded-xl border",
+            /* fill：作为弹性列里的一个可伸展块，把页面剩余高度吃满（ComfyUI 页
+               重设计稿）。外框自己成为 flex 容器，正文区 `flex-1` 在框内伸展；
+               `min-h-0` + `overflow-hidden` 让正文区真能收缩、深色日志面一直铺到
+               卡片底缘（用户反馈 #4710：日志和背景高度不匹配）。非 fill 档保持
+               原样的下边距。 */
+            fill ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "mb-4",
+            className,
+          )}
+        >
           <LogToolbar
             follow={follow}
             log={log}
@@ -86,7 +103,9 @@ export function RuntimeLogBox({
           <LogBody
             className={
               fill
-                ? "border-border-subtle mx-3 mb-3 max-h-[calc(100vh-16rem)] min-h-64 rounded-lg border px-3 py-2"
+                ? /* fill 档：深色日志面从工具条下一直铺到卡片底缘（不内缩、不留
+                     卡片底色条），高度吃满卡片剩余空间。 */
+                  "border-border-subtle min-h-0 flex-1 border-t px-3 py-2"
                 : "border-border-subtle mx-3 mb-3 max-h-44 rounded-lg border px-3 py-2"
             }
             emptyHint={emptyHint}
@@ -95,7 +114,7 @@ export function RuntimeLogBox({
             onFollowChange={setFollow}
             showTime={showTime}
           />
-          <LogHint log={log} />
+          <LogHint hideStream={hideStreamHint} log={log} />
         </div>
       )}
 
@@ -137,7 +156,7 @@ export function RuntimeLogBox({
           onFollowChange={setFollow}
           showTime={showTime}
         />
-        <LogHint log={log} />
+        <LogHint hideStream={hideStreamHint} log={log} />
       </FullScreenDialog>
     </>
   );
@@ -301,8 +320,10 @@ function LogBody({
 /**
  * 截断 / 尾窗提示。「看不到更早的启动」与「这次启动只显示了一段」都必须有用户可见的出口
  * （硬规则 4）：否则用户会以为日志本来就长这样，转头去猜为什么缺内容。
+ * `hideStream`（用户反馈 #4710）：「行首 [out] / [err]」那行**常驻**说明按页隐藏
+ * （ComfyUI 页不要它）；截断 / 会话数这类**按需出现**的提示不受影响。
  */
-function LogHint({ log }: { log: RuntimeLogController }) {
+function LogHint({ hideStream = false, log }: { hideStream?: boolean; log: RuntimeLogController }) {
   const parts: Array<string> = [];
   if (log.truncated) {
     parts.push("该次启动的输出过长，只显示最近一段。");
@@ -316,12 +337,14 @@ function LogHint({ log }: { log: RuntimeLogController }) {
     <>
       {/* 流前缀释义（ISSUE #4631）：`[err]` 是 stderr 流、不是错误级别——
           ComfyUI 是 Python，常规 INFO 也走 stderr，满屏 `[err] [INFO]` 是正常输出。 */}
-      <p
-        className={`text-ink-fainter text-2xs px-3 leading-relaxed ${parts.length === 0 ? "pb-2" : ""}`}
-      >
-        行首 <code className="font-mono">[out]</code> / <code className="font-mono">[err]</code>{" "}
-        表示标准输出 / 标准错误流，不代表是否出错（INFO 级日志也可能走 stderr）。
-      </p>
+      {!hideStream && (
+        <p
+          className={`text-ink-fainter text-2xs px-3 leading-relaxed ${parts.length === 0 ? "pb-2" : ""}`}
+        >
+          行首 <code className="font-mono">[out]</code> / <code className="font-mono">[err]</code>{" "}
+          表示标准输出 / 标准错误流，不代表是否出错（INFO 级日志也可能走 stderr）。
+        </p>
+      )}
       {parts.length > 0 ? (
         <p className="text-ink-fainter text-2xs px-3 pb-2 leading-relaxed">{parts.join("")}</p>
       ) : null}

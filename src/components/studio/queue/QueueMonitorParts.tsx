@@ -25,18 +25,22 @@ export function SectionHeading({ id, children }: { children: ReactNode; id: stri
   );
 }
 
-/** 一条度量：上标签下数值。数值是「算出来的字符串」，空值不假装是 0。 */
+/** 一条度量：瓦片里的「上标签下数值」（重设计稿）。数值是「算出来的字符串」，
+ * 空值不假装是 0；瓦片底用页面底色档，在白卡上读出一格一格。 */
 export function Field({ label, children }: { children: string; label: string }) {
   return (
-    <div className="min-w-0">
+    <div className="bg-canvas min-w-0 rounded-xl px-3.5 py-3">
       <dt className="text-ink-fainter text-2xs truncate">{label}</dt>
-      <dd className="text-ink-soft min-w-0 tabular-nums">
+      <dd className="text-ink-strong mt-0.5 min-w-0 tabular-nums">
         {/* 值变了闪一下（`value-tick`，规范 06 §6.7 第 ③ 档）：这一屏每 1s 被
             轮询刷一次，「已跑 12 秒」与「已跑 13 秒」在屏幕上长得一模一样 ——
             不动一下的话，用户分不出「它还在动」与「它卡住了」。
             `key` 换成当前值即触发重挂载：**值没变就不重播**，于是它天然是
             「变化提示」而不是第二条循环动画。 */}
-        <TruncatedText className="value-tick inline-block min-w-0 truncate" key={children}>
+        <TruncatedText
+          className="value-tick inline-block min-w-0 truncate text-sm font-semibold"
+          key={children}
+        >
           {displayValue(children)}
         </TruncatedText>
       </dd>

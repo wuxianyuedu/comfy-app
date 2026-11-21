@@ -2,9 +2,10 @@
 
 /**
  * 侧栏「ComfyUI」页 · 第③层（纯视图，规范 17 §17.2）。
- * 三段顺序即读屏顺序：当前状态 → 启动日志 → 按什么启动（安装形态与路径，只读）。
- * 路径只读是有意的：本页无草稿，若可编辑会与设置页草稿冲突（改了没保存会跑旧路径）；
- * 页上只读写出会生效的 `comfyStartPathText`，让「这点下去跑的是谁」当场可见；屏名由 PageHeader 的 srTitle 给读屏。 */
+ * 两段顺序即读屏顺序：当前状态 → 启动日志。这一页的主角就是这两样：
+ * 日志区弹性铺满剩余高度（fill），常驻说明小字按用户反馈撤掉（hideStreamHint）。
+ * 启动路径 / 安装形态的完整出口在「设置 → 创作后端」，本页不重复（用户反馈 #4710）；
+ * 屏名由 PageHeader 的 srTitle 给读屏。 */
 
 import { ArrowRight, RefreshCcw } from "lucide-react";
 
@@ -15,12 +16,11 @@ import { ViewActions } from "~/components/studio/ViewActions";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Button } from "~/components/ui/button";
 import { PageHeader } from "~/components/ui/page-header";
-import { SettingsCard, SETTINGS_ROW_CLASS } from "~/components/ui/settings-card";
+import { SettingsCard } from "~/components/ui/settings-card";
 import { Hint } from "~/components/ui/hint";
 import { RuntimeLogBox } from "~/components/studio/logs/RuntimeLogBox";
 import {
   STATUS_ACTIONS_CLASS,
-  STATUS_ROW_CLASS,
   STATUS_TEXT_CLASS,
   StatusButton,
 } from "~/components/ui/service-status-row";
@@ -30,9 +30,7 @@ import {
   comfyConfigHint,
   comfyDotState,
   comfyDotTitle,
-  comfyStartPathText,
   comfyStatusParts,
-  instanceKindLabel,
   isComfyBusy,
 } from "./comfyui-control-config";
 
@@ -50,7 +48,12 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
   const statusParts = comfyStatusParts(c.status, flags);
 
   return (
-    <DocumentFrame className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8" width="medium">
+    /* 弹性列（min-h-full）：内容不足一屏时「运行日志」吃满剩余高度（重设计稿），
+       超过一屏时整列照常滚动 —— 滚动锚仍是 DocumentFrame 的 document-scroll 层。 */
+    <DocumentFrame
+      className="flex min-h-full flex-col px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
+      width="medium"
+    >
       {/* 屏名由页签给出，页头的可见标题那一行收掉（ISSUE #1693）。 */}
       <PageHeader srTitle={pageHeaderTitle("comfyui")} />
 
@@ -73,35 +76,37 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
         </Hint>
       </ViewActions>
 
+      {/* 标题与正文之间的留白收紧（用户反馈 #4710：标题下空白过大）——
+          覆盖 SettingsCard 的默认节奏：根 gap 16→8、标题行 pb 12→8、正文 pt 16→12。 */}
       <SettingsCard
-        description="提交任务时它没在跑，任务不会开始；状态变了自己会刷，不必手动点。"
+        className="gap-2 [&_[data-slot=card-content]]:pt-3 [&_[data-slot=card-header]]:pb-2"
         title="运行状态"
       >
-        <div className={`${SETTINGS_ROW_CLASS} mb-3 ${STATUS_ROW_CLASS}`}>
-          {/* 绿点保留，运行中加呼吸（ISSUE #4631）：「它在跑」要一眼可见，
-              但过渡态（busy/probing）不呼吸——那不是稳定状态。 */}
-          <StatusDot pulse={running} state={comfyDotState(c.status, flags)} />
-          {/* 状态行是**活区**（规范 16 §16.2.4）：状态变了自己会刷，读屏得跟着播报，
-              否则「我点了启动、它到底起没起」只能靠肉眼盯。这也让「这一行在不在、
-              落没落定」有了一个**不读文案**的稳定锚点 —— 文案里的地址长度会变、
-              跨元素分布会给量可见性带来补间窗口（E2E 侧据此等状态落地）。
-              「ComfyUI 运行中」加粗、地址等宽降亮（ISSUE #4631）；textContent 仍由
-              comfyStatusParts 拼成同一句，读屏与判据都不受影响。 */}
-          <Hint label={comfyDotTitle(c.status)}>
-            <span
-              aria-live="polite"
-              className={`text-ink/80 ${running ? "font-semibold" : ""} ${STATUS_TEXT_CLASS}`}
-              role="status"
-            >
-              {statusParts.lead}
-              {statusParts.url === null ? null : (
-                <>
-                  （<span className="text-ink-faint font-mono">{statusParts.url}</span>）
-                </>
-              )}
-              {statusParts.via === null ? null : `·${statusParts.via}`}
+        {/* 纵向三行：状态句 → 地址 → 按钮排。不再共用一条会互相挤压的 flex 行 ——
+            按钮多，一挤就把状态句裁出省略号（用户反馈 #4710 的现场）。 */}
+        <div className="mb-3 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            {/* 绿点保留，运行中加呼吸（ISSUE #4631）：「它在跑」要一眼可见，
+                但过渡态（busy/probing）不呼吸——那不是稳定状态。 */}
+            <StatusDot pulse={running} state={comfyDotState(c.status, flags)} />
+            {/* 状态行是**活区**（规范 16 §16.2.4）：状态变了自己会刷，读屏得跟着播报。 */}
+            <Hint label={comfyDotTitle(c.status)}>
+              <span
+                aria-live="polite"
+                className={`text-ink/80 ${running ? "font-semibold" : ""} ${STATUS_TEXT_CLASS}`}
+                role="status"
+              >
+                {statusParts.lead}
+                {statusParts.via === null ? null : `·${statusParts.via}`}
+              </span>
+            </Hint>
+          </div>
+          {/* 地址单独一行、`break-all` 不截断 —— 用户反馈 #4710：地址必须显示全。 */}
+          {statusParts.url === null ? null : (
+            <span className="text-ink-faint pl-4 font-mono text-xs break-all">
+              {statusParts.url}
             </span>
-          </Hint>
+          )}
           <div className={STATUS_ACTIONS_CLASS}>
             {/* 「打开查看 / 在浏览器打开」是运行中真正的主行动，保留主题紫实心档
                 （ISSUE #4631）；只在「明确未运行」时禁用 —— 探测进行中也允许
@@ -201,31 +206,15 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
           </div>
         ) : null}
 
-        {/* 按什么启动：安装形态 + 是否已配路径。**只读** —— 改路径的出口在设置页，
-            这里不给第二组输入框（见文件头）。说明文字降为 12px 辅助档、降亮度，
-            让状态与按钮成为这一区的主角（ISSUE #4631）。 */}
-        <p className="text-ink-faint text-xs leading-relaxed">
-          {c.instance
-            ? `安装形态：${instanceKindLabel(c.instance.instanceType)}。${
-                c.instance.desktopManaged ? "端口与启动参数由 Comfy Desktop 实例元数据决定。" : ""
-              }`
-            : "安装形态判读中…"}
-          路径与启动参数在「设置 → 创作后端」里配置。
-        </p>
-        {/* 「这一点下去会按哪条路径启动」：写的是**库里已保存**的那条，所以用户
-            在设置页改了路径却没保存时，这里显示的仍是旧路径 —— 当场可见，不需要
-            为此跨屏共享草稿。 */}
-        <p
-          className="text-ink-faint mt-1 text-xs leading-relaxed break-all"
-          data-testid="comfyui-start-path"
-        >
-          {comfyStartPathText(c.status)}
-        </p>
+        {/* 按什么启动的说明已按用户反馈（#4710）撤掉：安装形态 / 启动路径的
+            完整出口在「设置 → 创作后端」，本页不再重复一遍。 */}
       </SettingsCard>
 
       {/* 启动日志：启动期间每秒跟随 log/services/comfyui-runtime.log，让「正在启动…」
           不再是个黑盒（硬规则 4 的用户可见出口）。右上角的下拉按「每次启动」切换
-          （服务端按会话横幅切分），全屏按钮铺满标题行下方的内容区。 */}
+          （服务端按会话横幅切分），全屏按钮铺满标题行下方的内容区。
+          这一页的主角就是「运行状态 + 日志」：日志区弹性铺满剩余高度（fill），
+          常驻的流前缀小字也按反馈撤掉（hideStreamHint）。 */}
       <RuntimeLogBox
         className="mt-6"
         emptyHint={
@@ -236,6 +225,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
         }
         fileName="comfyui-runtime.log"
         fill
+        hideStreamHint
         log={c.log}
       />
     </DocumentFrame>
