@@ -9,6 +9,12 @@
  * （合计约 43k 行，与它管的 `src` 非测试代码同量级）—— 落在它自己立的硬闸之外：
  * 判据是**被执行的那部分代码**，它读不懂的时候表现为「这条判据恒绿」，而不是表现为报错。
  *
+ * 根级配置同属这一层（ISSUE #4612）：`vitest.config.ts` 一族 `*.config.{ts,js,mjs,cjs}`
+ * 住在仓库根、不在任何目录根下，两边扫描面都盖不住 —— 长到没人读得动也不会有信号。
+ * 本判据把它们按**文件名**收进扫描面（`discernRoots()` 的根级文件名 + `isUnderAny()`
+ * 的 `rel === root`，与 ci-incremental-gates 同一用法），只扫根层、不递归 ——
+ * 子目录里的 `*.config.*` 归各自所在层管。
+ *
  * ## 为什么是硬闸而不是棘轮
  *
  * 本判据此前是棘轮：超限文件记进 `scripts/.infra-file-size-baseline.json`，
@@ -37,7 +43,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const { skipUnlessStagedTouches, readStagedPaths } = require("./gate-scan-read.cjs");
+const { discernRoots, skipUnlessStagedTouches, readStagedPaths } = require("./gate-scan-read.cjs");
 const { renderProximityLines } = require("./file-size-proximity.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
@@ -65,6 +71,16 @@ const SCAN_ROOTS = [
   { dir: "scripts", ext: /\.(?:cjs|mjs)$/ },
   { dir: "tools", ext: /\.ps1$/ },
 ];
+
+/**
+ * 根级配置文件名（ISSUE #4612）：只认仓库根这一层的 `*.config.{ts,js,mjs,cjs}`，
+ * 首字符须是字母/数字（不收 `.config.ts` 这类隐藏形态）。子目录里的同名形态
+ * 不在面内 —— 那些目录已有各自的层管着。
+ */
+const ROOT_CONFIG_RE = /^[A-Za-z0-9][\w.-]*\.config\.(?:ts|js|mjs|cjs)$/;
+
+/** 读数里的扫描面标签（两处同用一份，别各拼各的）。 */
+const SCAN_LABEL = [...SCAN_ROOTS.map((s) => `${s.dir}/**`), "根级 *.config.*"].join(" + ");
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -116,13 +132,31 @@ function collect() {
       }
     }
   }
+  /* 根级配置：只列根层（不递归），命中扩展名即入面。键用文件名本身 ——
+   * 它就是仓库相对路径（`vitest.config.ts`），与目录扫描那两层的键同一口径。 */
+  for (const name of discernRoots(ROOT)) {
+    if (!ROOT_CONFIG_RE.test(name)) {
+      continue;
+    }
+    scanned += 1;
+    const lines = countLines(path.join(ROOT, name));
+    if (lines > SPLIT_HINT_LINES) {
+      oversized.set(name, lines);
+    } else if (lines >= PROXIMITY_WARN_LINES) {
+      near.set(name, lines);
+    }
+  }
   return { oversized, near, scanned };
 }
 
 function main() {
   if (STAGED && !REPORT_ONLY) {
+    /* 根级配置按**文件名**进根清单：discernRoots() 返回的根级文件名，由
+     * isUnderAny() 的 `rel === root` 接住（与 ci-incremental-gates 同一用法）——
+     * 只改 `vitest.config.ts` 这类根文件的提交，不能被「未触及扫描面」跳过。 */
+    const rootConfigs = discernRoots(ROOT).filter((name) => ROOT_CONFIG_RE.test(name));
     skipUnlessStagedTouches({
-      roots: SCAN_ROOTS.map((r) => r.dir),
+      roots: [...SCAN_ROOTS.map((r) => r.dir), ...rootConfigs],
       tag: "[infra-size]",
     });
   }
@@ -148,7 +182,7 @@ function main() {
 
   if (REPORT_ONLY) {
     console.log(
-      `[infra-size] 扫描 ${SCAN_ROOTS.map((s) => `${s.dir}/**`).join(" + ")}：${scanned} 个文件，超 ${SPLIT_HINT_LINES} 行 ${oversized.size} 个`,
+      `[infra-size] 扫描 ${SCAN_LABEL}：${scanned} 个文件，超 ${SPLIT_HINT_LINES} 行 ${oversized.size} 个`,
     );
     for (const [rel, lines] of [...oversized.entries()].sort((a, b) => b[1] - a[1])) {
       console.log(`  ${String(lines).padStart(6)}  ${rel}`);
@@ -165,7 +199,7 @@ function main() {
   }
 
   console.log(
-    `[infra-size] 扫描 ${SCAN_ROOTS.map((s) => `${s.dir}/**`).join(" + ")}：${scanned} 个文件，超 ${SPLIT_HINT_LINES} 行的文件 ${oversized.size} 个`,
+    `[infra-size] 扫描 ${SCAN_LABEL}：${scanned} 个文件，超 ${SPLIT_HINT_LINES} 行的文件 ${oversized.size} 个`,
   );
   for (const line of renderProximityLines({
     tag: "[infra-size]",
