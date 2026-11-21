@@ -351,6 +351,7 @@ const result = runGateStep(process.execPath, [entry, ...args], {
   cwd: process.cwd(),
   // tsc / eslint 是分钟级动作：给足缺省档预算，只封「挂死不返回」。
   timeoutMs: 600_000,
+  echo: false, // 本入口的 stdout 会被按行解析（子进程输出即全部读数），回显不得掺入
 });
 
 if (result.error) {

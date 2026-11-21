@@ -349,7 +349,10 @@ export function runGateStep(
       shell: false,
       ...(maxBuffer === undefined ? {} : { maxBuffer }),
       ...(input === undefined ? {} : { input }),
-      stdio: stdio === "pipe" ? ["ignore", "pipe", "pipe"] : stdio,
+      /* `input` 只有在 stdin 是管道时才真的送达子进程：缺省的 ["ignore","pipe","pipe"]
+       * 会把 stdin 设成 ignore，喂进去的数据被丢（#4679 现场：--changed-stdin 读到
+       * 空改动面，两个不同的人面数出同一份清单）。给了 input 就整段用 "pipe"。 */
+      stdio: stdio === "pipe" ? (input === undefined ? ["ignore", "pipe", "pipe"] : "pipe") : stdio,
     })
   );
   /* `SpawnSyncReturns.error` 按 `Error` 声明，但运行时是带 `code` 的
