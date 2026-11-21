@@ -20,9 +20,10 @@
  * 退出码：0 = 收尾完成；1 = 有事实是红的（链接没摘掉 / git 注销失败 / 目标被删穿）；
  * 2 = 用法或前置不成立（没给路径 / 目标不在 `git worktree list` 里 / 目标就是主 worktree）。
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 import { unlinkDependencies } from "../gates/base-check.mjs";
 
@@ -45,10 +46,15 @@ function samePath(a, b) {
 
 /** `git worktree list --porcelain` 里登记在案的路径；第一条是主 worktree。 */
 function listWorktrees() {
-  const res = spawnSync("git", ["-c", "core.quotePath=false", "worktree", "list", "--porcelain"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
+  const res = runGateStep(
+    "git",
+    ["-c", "core.quotePath=false", "worktree", "list", "--porcelain"],
+    {
+      cwd: ROOT,
+      timeoutMs: 30_000,
+      echo: false, // 清单按行解析，回显不得掺进 stdout
+    },
+  );
   if (res.status !== 0) {
     return null;
   }
@@ -144,9 +150,10 @@ function main(argv) {
     );
   }
 
-  const removed = spawnSync("git", ["worktree", "remove", "--force", target], {
+  const removed = runGateStep("git", ["worktree", "remove", "--force", target], {
     cwd: ROOT,
-    encoding: "utf8",
+    timeoutMs: 60_000, // 收一个已摘链的 worktree（秒级）；60s 只封挂死
+    echo: false, // 结果按退出码与 stderr 转述，回显不得掺进 stdout
   });
   if (removed.status !== 0) {
     return fail(

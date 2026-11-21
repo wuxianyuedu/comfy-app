@@ -309,11 +309,14 @@ export const GATE_STEP_DEFAULT_BUDGET_MS = 600_000;
  *   的 command / `git`）
  * @param {string[]} [args]
  * @param {{ cwd?: string, env?: NodeJS.ProcessEnv,
- *           timeoutMs?: number, stdio?: "pipe"|"inherit"|"ignore",
- *           maxBuffer?: number, echo?: boolean }} [options] `echo` 缺省 true
+ *           timeoutMs?: number, stdio?: import("node:child_process").StdioOptions,
+ *           maxBuffer?: number, echo?: boolean,
+ *           input?: string }} [options] `echo` 缺省 true
  *   （跑之前留一行命令行证据）；**聚合子进程输出做机器解析的调用点**（premerge
  *   的 --json、base-check 的逐段读数、ship 的 cnb JSON）给 `echo: false`——
  *   回显落在父进程自己的 stdout，混进读数就会破掉「输出必须是可解析 JSON」的契约。
+ *   `input` 是喂给子进程 stdin 的数据（`spawnSync` 原样透传；#4679 迁移
+ *   affected-launch-changed-list 时补的口，此前只有裸 `spawnSync` 能给）。
  * @returns {{ ok: boolean, status: number | null, signal: NodeJS.Signals | null,
  *             error: NodeJS.ErrnoException | null, errorCode: string | null,
  *             timedOut: boolean, timeoutMs: number, stdout: string, stderr: string,
@@ -329,6 +332,7 @@ export function runGateStep(
     stdio = "pipe",
     maxBuffer,
     echo = true,
+    input,
   } = {},
 ) {
   // 回显与真正 spawn 的是同一个 (command, args)：跑起来之前先留一行证据。
@@ -344,6 +348,7 @@ export function runGateStep(
       windowsHide: true,
       shell: false,
       ...(maxBuffer === undefined ? {} : { maxBuffer }),
+      ...(input === undefined ? {} : { input }),
       stdio: stdio === "pipe" ? ["ignore", "pipe", "pipe"] : stdio,
     })
   );

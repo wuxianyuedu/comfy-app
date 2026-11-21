@@ -36,11 +36,12 @@
  *
  * @module scripts/session-report — 会话汇报骨架（编排 + 计时，判定全归既有执行者）
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { performance } from "node:perf_hooks";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 import { parseRange } from "../reformat/reformat-scan-core.mjs";
 
@@ -81,14 +82,20 @@ function secs(ms) {
  */
 function runGit(cwd, args) {
   try {
-    return (
-      spawnSync("git", args, {
-        cwd,
-        encoding: "utf8",
-        maxBuffer: 64 * 1024 * 1024,
-        stdio: ["ignore", "pipe", "ignore"],
-      }).stdout?.trim() ?? null
-    );
+    const r = runGateStep("git", args, {
+      cwd,
+      timeoutMs: 30_000,
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+      echo: false, // 提交清单按 \u0001/\u001f 切分解析，回显不得掺进 stdout
+    });
+    /* 原形是 spawnSync 的 `stdout?.trim() ?? null`：起不来（ENOENT）或被信号砍掉时
+     * stdout 是 `undefined` ⇒ `null`（「没读到」与「空」分开）。runGateStep 把它
+     * 归一成空串，这里按同一契约把「没跑起来」还原成 `null`。 */
+    if (r.error || r.signal) {
+      return null;
+    }
+    return r.stdout.trim();
   } catch {
     return null;
   }
@@ -168,11 +175,12 @@ export function runSteps(steps, opts = {}) {
     o.runner ??
     ((argv, dir) => {
       /* noUncheckedIndexedAccess 下 `argv[0]` 是 `string | undefined`；真给空数组时
-       * 命令按空串起（spawnSync 报 ENOENT ⇒ status null ⇒ 那一步按「没跑起来」记）。 */
+       * 命令按空串起（spawn 报 ENOENT ⇒ status null ⇒ 那一步按「没跑起来」记）。 */
       const cmd = argv[0] ?? "";
-      return spawnSync(cmd, argv.slice(1), {
+      // 验证步骤是真跑（分钟级）：给足缺省档预算，只封「挂死不返回」。
+      return runGateStep(cmd, argv.slice(1), {
         cwd: dir,
-        encoding: "utf8",
+        timeoutMs: 600_000,
         maxBuffer: 64 * 1024 * 1024,
       });
     });

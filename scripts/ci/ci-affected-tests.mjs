@@ -47,9 +47,10 @@
  * 退出码与 `base-check` / `premerge` 逐字同口径：0 全绿（或未校验但已点名）/
  * 1 有档红 / 2 没跑起来。
  */
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 import { confirmEmptyChangeFace, resolveChangedFiles } from "../lib/changed-scope.mjs";
 import { resolveCiWorkers } from "./ci-load.mjs";
@@ -229,10 +230,12 @@ export function main(deps = {}) {
   const spawn =
     deps.spawn ??
     ((/** @type {string} */ script, /** @type {NodeJS.ProcessEnv} */ e) => {
-      const r = spawnSync(process.execPath, [script], {
+      // 受影响用例真跑（分钟级）：给足缺省档预算，只封「挂死不返回」。
+      const r = runGateStep(process.execPath, [script], {
         cwd: ROOT,
         stdio: "inherit",
         env: { ...e, CI: "1" },
+        timeoutMs: 600_000,
       });
       return { status: typeof r.status === "number" ? r.status : 2 };
     });

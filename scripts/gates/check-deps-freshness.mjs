@@ -83,7 +83,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { spawnSync } from "node:child_process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 import { diffLockfiles, isEmptyDiff } from "../lockfile/lock-diff.mjs";
 import { renderLockDiff } from "../lockfile/render-lock-diff.mjs";
@@ -221,15 +222,12 @@ function git(args, cwd) {
   if (typeof cwd !== "string" || cwd === "") {
     return { ok: false, out: "" };
   }
-  /* `stdout` 实测在 git 起不来（ENOENT）时是 `undefined`，`@types/node` 按 `encoding`
-   * 声明成 `string` ⇒ 下面 `?? ""` 是给运行时兜的。 */
-  const res = /** @type {{ status: number | null, stdout?: string, error?: unknown }} */ (
-    spawnSync("git", args, {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-  );
+  const res = runGateStep("git", args, {
+    cwd,
+    timeoutMs: 30_000,
+    stdio: ["ignore", "pipe", "ignore"],
+    echo: false, // 新鲜度读数会被逐行解析，回显不得混进 stdout
+  });
   if (res.error || res.status !== 0) {
     return { ok: false, out: "" };
   }

@@ -49,6 +49,10 @@ import path from "node:path";
 import process from "node:process";
 
 import { resolveMergeBaseRef } from "./base-check.mjs";
+import { runGateStep } from "../launcher-core/shell.mjs";
+
+/** git 一次性读数的墙钟预算（#4679）：本文件既有 git 探针的 30s 档同口径。 */
+const GIT_READ_BUDGET_MS = 30_000;
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..", "..");
@@ -519,7 +523,11 @@ function readRemoteUrls(cwd) {
     if (!name) {
       continue;
     }
-    const got = spawnSync("git", ["remote", "get-url", "--all", name], { cwd, encoding: "utf8" });
+    const got = runGateStep("git", ["remote", "get-url", "--all", name], {
+      cwd,
+      timeoutMs: GIT_READ_BUDGET_MS,
+      echo: false,
+    });
     if (got.status !== 0) {
       continue;
     }
@@ -538,9 +546,10 @@ function readRemoteUrls(cwd) {
  * @returns {number} 退出码
  */
 export function runFromStdin(stdinText, pushUrl = null) {
-  const gitDirOut = spawnSync("git", ["rev-parse", "--git-dir"], {
+  const gitDirOut = runGateStep("git", ["rev-parse", "--git-dir"], {
     cwd: ROOT,
-    encoding: "utf8",
+    timeoutMs: GIT_READ_BUDGET_MS,
+    echo: false,
   });
   if (gitDirOut.status !== 0) {
     process.stderr.write("[pre-push] 当前目录不是 git 检出 —— 无从复算（退 2）\n");
@@ -617,9 +626,10 @@ export function runFromStdin(stdinText, pushUrl = null) {
   const report = isPremergeReport(parsedReport) ? parsedReport : null;
   const segments = Array.isArray(report?.segments) ? report.segments : null;
   const who =
-    spawnSync("git", ["config", "user.name"], {
+    runGateStep("git", ["config", "user.name"], {
       cwd: ROOT,
-      encoding: "utf8",
+      timeoutMs: GIT_READ_BUDGET_MS,
+      echo: false,
     }).stdout?.trim() || "(未登记)";
 
   if (run.status === 0) {

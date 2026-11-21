@@ -54,7 +54,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { runGateStep } = require("../launcher-core/shell.mjs");
 
 /* 复用既有那份件对配置的读法：`loadOxlintConfig()` 是每进程一次的去重单飞
  * （`check-a11y-rules.cjs` 的文件头记着为什么只留一个读面），`normalize` 是规则档位的归一
@@ -178,7 +178,7 @@ function runOxlintCli(files, ruleId, root) {
     "utf8",
   );
   try {
-    const res = spawnSync(
+    const res = runGateStep(
       process.execPath,
       [
         OXLINT_BIN,
@@ -188,7 +188,8 @@ function runOxlintCli(files, ruleId, root) {
         "json",
         ...files.map((rel) => path.join(root, rel)),
       ],
-      { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+      // 逐条规则探针（秒级）给 120s：量级远小于全量 lint，只封「挂死不返回」。
+      { cwd: root, timeoutMs: 120_000, maxBuffer: 64 * 1024 * 1024, echo: false },
     );
     if (res.error) {
       throw new Error(`oxlint 起不来：${res.error.message}`);

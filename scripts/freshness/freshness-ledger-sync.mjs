@@ -8,10 +8,11 @@
  *  - 回写侧不触发流水线（分支键只有 `master:` + commit 带 `[ci skip]`）、不回写 PR 源分支
  *    （触发者只限每日定时任务，可信事件 ⇒ 同仓 `repo-code:rw`）。
  */
-import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 import { FRESHNESS_TRACKS, contextSubject, freshnessTrack, gitUser } from "./freshness-ledger.mjs";
 
 /** 新鲜度账回写去的机器自有分支（ISSUE #2247）。不推 `master`、更不推作者的源分支。 */
@@ -30,9 +31,10 @@ export const FRESHNESS_LEDGER_BRANCH = "ci/freshness-ledger";
 export function readBranchLedger({ root, rel, branch }) {
   // 三处来源只有「没配」一种空值形态（环境变量未设是 `undefined`），不对空串做特判。
   const ref = branch ?? process.env.FRESHNESS_LEDGER_BRANCH ?? FRESHNESS_LEDGER_BRANCH;
-  const res = spawnSync("git", ["show", `${ref}:${rel}`], {
+  const res = runGateStep("git", ["show", `${ref}:${rel}`], {
     cwd: root,
-    encoding: "utf8",
+    timeoutMs: 30_000,
+    echo: false, // 账本 JSON 从 stdout 解析，回显不得掺入
   });
   if (res.error || res.status !== 0 || typeof res.stdout !== "string") {
     return null;
@@ -141,7 +143,10 @@ export function pushFreshnessLedger({ root, kinds, run }) {
     }
   }
   /* 拉取分支最新（拿到前面 stage 已推的账），让本次提交基于它、避免互相覆盖。 */
-  const git = run ?? ((args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }));
+  // 预算（#4679）：这个包装既跑本地读写（reset/add）也跑 fetch/push（网络、
+  // 小载荷）—— 按 network 档给 300s；账本 JSON 从 stdout 解析，回显关掉。
+  const git =
+    run ?? ((args) => runGateStep("git", args, { cwd: root, timeoutMs: 300_000, echo: false }));
   /* 「撤回」只在这之后有意义：`add` 一旦成功，索引里就留下了这两三份账本，
    * 而失败的那一步把整跑后面所有格的输入面换成了它们（ISSUE #2344）。 */
   const unstage = () => {

@@ -40,10 +40,11 @@
  *      打账面（时刻 / 距今 / 谁 + 命令）**并打出这一档现在欠不欠**，但**不阻断**（退 0）；
  *      阻断的那一份在钩子里，两者是同一条判据的两个读者。
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 import {
   FRESHNESS_TRACKS,
@@ -269,10 +270,15 @@ export function combineEvidence(committed, stagedHit, now) {
 function stagedTouchesTrack(track) {
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/lib/changed-scope.mjs`
    * 的文件头「口径 ④」）。 */
-  const res = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
+  const res = runGateStep(
+    "git",
+    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
+    {
+      cwd: ROOT,
+      timeoutMs: 30_000,
+      echo: false, // 暂存清单读数，回显不得混进本判据的 stdout
+    },
+  );
   if (res.error || res.status !== 0 || typeof res.stdout !== "string") {
     return null;
   }
@@ -314,7 +320,7 @@ function committedSinceMidnight(track, now) {
    * 那样 `stamp` 会在文件行到达**之前**被清掉，于是**每一次**都判成「今天没动过这一档」，
    * 而话术里一个字都不会提（判据静默失效，正是本条要防的形态）。
    * 正确的状态机：新时刻出现时才把上一段收掉，空行一律忽略。 */
-  const res = spawnSync(
+  const res = runGateStep(
     "git",
     [
       "-c",
@@ -326,7 +332,7 @@ function committedSinceMidnight(track, now) {
       "--name-only",
       "--",
     ],
-    { cwd: ROOT, encoding: "utf8" },
+    { cwd: ROOT, timeoutMs: 30_000, echo: false }, // 当天提交读数，逐行解析
   );
   if (res.error || res.status !== 0 || typeof res.stdout !== "string") {
     return null;

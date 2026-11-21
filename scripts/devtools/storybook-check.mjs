@@ -245,10 +245,13 @@ function changedStoryFiles() {
   if (!process.argv.includes("--changed")) {
     return [];
   }
+  // **保留裸 `spawnSync` 不迁 `runGateStep`（#4679）**：本脚本会被
+  // `tests/storybook-check-script.test.ts` 单独拷进沙箱临时目录真跑，不 import
+  // 仓库内模块 —— 预算在选项层显式给（30s 档，git 一次性读数同口径）。
   const result = spawnSync(
     "git",
     ["-c", "core.quotePath=false", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-    { cwd: ROOT, encoding: "utf8" },
+    { cwd: ROOT, encoding: "utf8", timeout: 30_000 },
   );
   if (result.error !== undefined || result.status !== 0) {
     /* 拿不到清单时退回空：这一档是**增量**层，读不到就退成盘点 ——

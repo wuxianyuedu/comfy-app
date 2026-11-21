@@ -26,9 +26,10 @@
  *   node scripts/gates/eslint-gate-canary.mjs                     0 = 闸全在；1 = 有闸没拦；2 = 没跑起来
  *   node scripts/gates/eslint-gate-canary.mjs --sabotage <ruleId> 必须退 1（断言「它会红」）
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const OXLINT_BIN = path.join(ROOT, "node_modules", "oxlint", "bin", "oxlint");
@@ -134,10 +135,11 @@ if (process.argv.includes("--sabotage")) {
  */
 function runOxlint(files) {
   OXLINT_CALLS += 1;
-  const res = spawnSync(
+  const res = runGateStep(
     process.execPath,
     [OXLINT_BIN, "--config", SABOTAGE_CONFIG || OXLINT_CONFIG, "--format", "json", ...files],
-    { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    // canary 是逐规则对拍（秒级）给 120s；JSON 从 stdout 解析，回显不得掺入。
+    { cwd: ROOT, timeoutMs: 120_000, maxBuffer: 64 * 1024 * 1024, echo: false },
   );
   if (res.error) {
     throw new Error(`oxlint 起不来：${res.error.message}`);
