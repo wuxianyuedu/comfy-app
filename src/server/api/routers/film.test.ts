@@ -135,10 +135,28 @@ describe("film.cancel / start / compose —— 拒绝必须发生在副作用之
     expect(composeFilm).not.toHaveBeenCalled();
   });
 
-  it("自己的成片：合成编排被调用一次", async () => {
-    await caller().compose({ id: "film-a" });
+  it("自己的成片（FAILED）：合成编排被调用一次（FAILED 是唯一放行态，#4251 恢复出口）", async () => {
+    seedFilm(tdb, { id: "film-failed", userId: "user-a", status: "FAILED" });
+    await caller().compose({ id: "film-failed" });
     expect(composeFilm).toHaveBeenCalledTimes(1);
-    expect(composeFilm).toHaveBeenCalledWith("film-a");
+    expect(composeFilm).toHaveBeenCalledWith("film-failed");
+  });
+
+  it("不可合成的状态入口即拒、不碰编排（#4736）：PARSING/GENERATING/COMPOSING/DONE/CANCELLED", async () => {
+    const statuses = ["PARSING", "GENERATING", "COMPOSING", "DONE", "CANCELLED"];
+    for (const status of statuses) {
+      seedFilm(tdb, { id: `film-st-${status}`, userId: "user-a", status });
+    }
+    const codes = await Promise.all(
+      statuses.map(async (status) => ({
+        status,
+        code: await codeOf(caller().compose({ id: `film-st-${status}` })),
+      })),
+    );
+    for (const { status, code } of codes) {
+      expect(code, `status=${status} 应给可行动错误而非 ok:true`).toBe("PRECONDITION_FAILED");
+    }
+    expect(composeFilm).not.toHaveBeenCalled();
   });
 });
 

@@ -485,4 +485,81 @@ describe("FR-SR-04 整季生成进度与批量提交", () => {
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
+
+  it("batchGenerateSeason 每镜任务带该镜 workflowInputs 与提示词（#4735 回归）", async () => {
+    const { se, ep } = await makeHierarchy();
+    const pid = "p-frsr04-params";
+    await tdbDb.insert(schema.production).values({
+      id: pid,
+      userId: "user-a",
+      shots: [
+        { id: "sh1", prompt: "雨夜的街道，霓虹倒影", negativePrompt: "低质量", params: {} },
+        { id: "sh2", prompt: "清晨的码头，薄雾", negativePrompt: "", params: {} },
+      ],
+    });
+    await tdbDb.update(schema.episode).set({ projectId: pid }).where(eq(schema.episode.id, ep.id));
+    await tdbDb.insert(schema.workflowTemplate).values({
+      id: "wt-frsr04-io",
+      userId: "user-a",
+      name: "带IO的生图工作流",
+      taskType: "T2I",
+      /* 可执行预检（#4043）要求 rawJson 带非空 nodes。 */
+      rawJson: { nodes: [{ id: "n1" }] },
+      workflowIO: {
+        text: {
+          direction: "input",
+          kind: "widget",
+          nodeId: "6",
+          name: "text",
+          label: "positive_prompt",
+          type: "STRING",
+          multiline: true,
+        },
+        negative: {
+          direction: "input",
+          kind: "widget",
+          nodeId: "7",
+          name: "text",
+          label: "negative_prompt",
+          type: "STRING",
+          multiline: true,
+        },
+      },
+      /* 落点只认作者连的线（与 workflow-encapsulation.test.ts 的 wire 同形）。 */
+      paramMap: { source: { "mode:T2I": { prompt: "text", negative: "negative" } } },
+    });
+    const res = await genCaller().batchGenerateSeason({
+      seasonId: se.id,
+      workflowId: "wt-frsr04-io",
+    });
+    expect(res).toEqual({ enqueued: 2, skippedSucceeded: 0, skippedActive: 0, invalid: 0 });
+    const tasks = await tdbDb.select().from(schema.task).where(eq(schema.task.projectId, pid));
+    expect(tasks.length).toBe(2);
+    const byShot = new Map(tasks.map((t) => [t.shotId, t]));
+    const t1 = byShot.get("sh1");
+    const t2 = byShot.get("sh2");
+    expect(t1).toBeDefined();
+    expect(t2).toBeDefined();
+    /* prompt 落为镜头提示词（缺陷现场：恒为空串）。 */
+    expect(t1?.prompt).toBe("雨夜的街道，霓虹倒影");
+    expect(t2?.prompt).toBe("清晨的码头，薄雾");
+    const inputsOf = (task: schema.Task | undefined): Array<Record<string, unknown>> => {
+      const params = isPlainRecord(task?.params) ? task.params : {};
+      const inputs = params.workflowInputs;
+      if (!Array.isArray(inputs)) {
+        return [];
+      }
+      return inputs.filter((i): i is Record<string, unknown> => isPlainRecord(i));
+    };
+    const inputs1 = inputsOf(t1);
+    const inputs2 = inputsOf(t2);
+    /* 每镜任务必须带该镜 workflowInputs（缺陷现场：无 workflowInputs，全部按模板默认值执行）。 */
+    expect(inputs1).toContainEqual({ nodeId: "6", name: "text", value: "雨夜的街道，霓虹倒影" });
+    expect(inputs1).toContainEqual({ nodeId: "7", name: "text", value: "低质量" });
+    expect(inputs2).toContainEqual({ nodeId: "6", name: "text", value: "清晨的码头，薄雾" });
+    /* 负向为空的镜不下发 negative 口（与工坊单镜同一口径）。 */
+    expect(inputs2.some((i) => i.nodeId === "7")).toBe(false);
+    /* 不同镜头的注入内容彼此不同 —— 幂等与进度正常不能掩盖「内容全错」。 */
+    expect(inputs1).not.toEqual(inputs2);
+  });
 });

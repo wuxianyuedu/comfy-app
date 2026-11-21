@@ -16,8 +16,9 @@ import { kickQueue } from "~/lib/comfyui/executor-continuation";
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
-import { parseWorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import { parseWorkflowIOMap, type WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
+import type { SizePresetTable } from "~/lib/media/size-presets";
 import { buildEncapsulatedInputs, type WorkshopExposedValues } from "./workflow-encapsulation";
 import { loadModeContracts } from "./mode-contract.server";
 
@@ -31,44 +32,79 @@ export type RunWorkflowInput = {
   workflowId: string;
 };
 
-/** 按工作流的默认模式（缺省回退 taskType / modes[0]）组装对外参数。
+/** 一次工作流执行的**封装现场**：模板行 + 预解析的 IO / 模式 / 契约口 / 尺寸表。
+ *  元数据解析与磁盘读取（契约注册表 / 尺寸表）只做一次，逐镜复用 —— 整季批量
+ *  生成（series-generation）与单次服务端编排共用同一份封装链。 */
+export type WorkflowRunContext = {
+  /** 该模式**生效的契约口清单**（成品配置 + 本机覆盖；读不到注册表时 undefined
+   *  = 回落内置契约，与 `createWorkflowRunTask` 旧口径一致）。 */
+  contractIds?: ReadonlyArray<string>;
+  /** 模板行的 workflowIO 解析结果（封装换算的落点表）。 */
+  io: WorkflowIOMap;
+  /** 生效模式（工作流默认模式，缺省回退 taskType / modes[0]）。 */
+  mode: string | null;
+  /** 本机生效的尺寸预设表（宽高换算按它查，ISSUE #3972）。 */
+  sizeTable: SizePresetTable;
+  /** 工作流库模板行（rawJson / paramMap / taskType 等的权威来源）。 */
+  tpl: NonNullable<Awaited<ReturnType<typeof workflowTemplateRepository.findByIdForUser>>>;
+};
+
+/** 解析一次工作流执行的封装现场；工作流不存在 / 不属于该用户时返回 **null**
+ *  （抛什么错由调用方决定：tRPC 路由抛 NOT_FOUND，服务端编排抛 Error）。 */
+export async function prepareWorkflowRun(
+  userId: string,
+  workflowId: string,
+): Promise<WorkflowRunContext | null> {
+  const tpl = await workflowTemplateRepository.findByIdForUser(userId, workflowId);
+  if (!tpl) {
+    return null;
+  }
+  const modes = parseModesJson(tpl.modes);
+  const mode = tpl.defaultMode ?? tpl.taskType ?? modes[0] ?? null;
+  const io = parseWorkflowIOMap(tpl.workflowIO);
+  const contracts = await loadModeContracts();
+  const contractIds = contracts.find((c) => c.mode === upperToken(mode))?.inputs;
+  const sizeTable = await loadSizePresetTable();
+  return { contractIds, io, mode, sizeTable, tpl };
+}
+
+/** 按封装现场把一次执行的对外值折算成任务行 `params`（workflow + prompt/negative
+ *  + workflowInputs）。与视图层 `buildLibraryWorkflowInput` 的落库形状一致 ——
+ *  背后是同一份纯函数 `buildEncapsulatedInputs`，落点只认作者连的线。 */
+export function buildWorkflowRunParams(
+  ctx: WorkflowRunContext,
+  values: WorkshopExposedValues,
+): Record<string, unknown> {
+  const { workflowInputs } = buildEncapsulatedInputs({
+    io: ctx.io,
+    paramMap: ctx.tpl.paramMap,
+    mode: ctx.mode,
+    values,
+    contractIds: ctx.contractIds,
+    table: ctx.sizeTable,
+  });
+  return {
+    workflow: ctx.tpl.id,
+    ...(values.prompt === undefined ? {} : { prompt: values.prompt }),
+    ...(values.negativePrompt === undefined ? {} : { negative: values.negativePrompt }),
+    ...(workflowInputs.length > 0 ? { workflowInputs } : {}),
+  };
+}
+
+/** 把一次服务端编排的生成请求落成任务行：封装现场 → 逐值折算 params → 可执行
+ *  预检 → createQueued → kick。工坊 / 成片工作室共用的单次入口（逐镜批量走
+ *  `prepareWorkflowRun` + `buildWorkflowRunParams` 后自管入队守卫）。
  *
  *  工作流不存在 / 不属于该用户时抛错 —— 没有内置模板可回落，静默失败会
  *  变成「任务创建了但没有图」，比直接报错难查。 */
 export async function createWorkflowRunTask(
   input: RunWorkflowInput,
 ): Promise<{ taskId: string; taskType: string; workflowName: string }> {
-  const tpl = await workflowTemplateRepository.findByIdForUser(input.userId, input.workflowId);
-  if (!tpl) {
+  const ctx = await prepareWorkflowRun(input.userId, input.workflowId);
+  if (!ctx) {
     throw new Error(`工作流不存在：${input.workflowId}`);
   }
-
-  const modes = parseModesJson(tpl.modes);
-  const mode = tpl.defaultMode ?? tpl.taskType ?? modes[0] ?? null;
-  const io = parseWorkflowIOMap(tpl.workflowIO);
-  /* 该模式生效的契约口清单：**生效注册表**（成品配置 + 本机覆盖逐模式合并，
-   * 含自定义口）里那一条 —— 没配过的模式也在表里（回落成品配置那份），
-   * 读不到注册表时按空注册表处理 —— 回落内置契约，不阻断生成。 */
-  const contracts = await loadModeContracts();
-  const contractIds = contracts.find((c) => c.mode === upperToken(mode))?.inputs;
-  /* 尺寸换算用**生效的那份**表（ISSUE #3972）：项目默认 + 本机覆盖现读磁盘，
-   * 与 /api/size-presets、设置页同源 —— 设置里改过的表在服务端编排真的生效。 */
-  const sizeTable = await loadSizePresetTable();
-  const { workflowInputs } = buildEncapsulatedInputs({
-    io,
-    paramMap: tpl.paramMap,
-    mode,
-    values: input.values,
-    contractIds,
-    table: sizeTable,
-  });
-
-  const params = {
-    workflow: tpl.id,
-    ...(input.values.prompt === undefined ? {} : { prompt: input.values.prompt }),
-    ...(input.values.negativePrompt === undefined ? {} : { negative: input.values.negativePrompt }),
-    ...(workflowInputs.length > 0 ? { workflowInputs } : {}),
-  };
+  const params = buildWorkflowRunParams(ctx, input.values);
 
   const executorClaim = resolveExecutorClaim();
   /* 执行载荷恒为 RAW 原件 —— comfy-cli 按节点类定义做权威 UI→API 转换 +
@@ -79,19 +115,19 @@ export async function createWorkflowRunTask(
    * 再校验，空 rawJson 会先留下一条 QUEUED 行、调用方拿到 throw 却还没走到
    * markQueued 挂镜头——orchestrator 的 cancelTask 补偿覆盖不到这一段，任务成
    * 孤儿（仅 reaper 兜底），多耗一次派发。 */
-  if (!hasExecutableWorkflow(tpl)) {
-    throw new Error(`工作流没有可执行内容（rawJson 为空）：${tpl.name}`);
+  if (!hasExecutableWorkflow(ctx.tpl)) {
+    throw new Error(`工作流没有可执行内容（rawJson 为空）：${ctx.tpl.name}`);
   }
   const task = await taskRepository.createQueued({
     userId: input.userId,
-    type: tpl.taskType,
+    type: ctx.tpl.taskType,
     prompt: input.values.prompt ?? "",
     negativePrompt: input.values.negativePrompt ?? null,
     params,
-    workflowName: tpl.name,
+    workflowName: ctx.tpl.name,
     projectId: input.projectId ?? null,
     claimedBy: executorClaim,
-    execPayload: tpl.rawJson,
+    execPayload: ctx.tpl.rawJson,
   });
   /* 提交只写库里那一行（`claimedBy` 决定归谁领）——P3 §5 ADR §14 D1 第二刀：
    * 这里过去对 inline 片额外调 `enqueue()` 往进程内存队列推一份，于是「派发的
@@ -99,5 +135,5 @@ export async function createWorkflowRunTask(
    * `executor-dispatch.ts` 那一条 pull；下面这一次 kick 纯粹是**省掉等节拍**
    * （不推进行内队列），行归对侧时它自然空转、不会双执行。 */
   kickQueue();
-  return { taskId: task.id, workflowName: tpl.name, taskType: tpl.taskType };
+  return { taskId: task.id, workflowName: ctx.tpl.name, taskType: ctx.tpl.taskType };
 }

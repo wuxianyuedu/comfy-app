@@ -496,7 +496,7 @@ export function formatReport(runs, opts = {}) {
   }
   const shown = runs.slice(-last);
   const lines = [
-    `[precommit-timing] 最近 ${shown.length} 次（共 ${runs.length} 条；账本 .git/${LEDGER_NAME}，本机、不入库）`,
+    `[precommit-timing] 最近 ${shown.length} 次（共 ${runs.length} 条；账本 .tmp/timing/${LEDGER_NAME}，本机、不入库）`,
     "",
   ];
 
@@ -661,7 +661,7 @@ export function formatFileTimings(runs, opts = {}) {
   const sumMs = ranked.reduce((s, r) => s + r.ms, 0);
   const shown = top > 0 ? ranked.slice(0, top) : ranked;
   const lines = [
-    `[precommit-timing] 组 C 逐份耗时 —— 最近第 ${nth} 次（${at}；账本 .git/${LEDGER_NAME}，本机、不入库）`,
+    `[precommit-timing] 组 C 逐份耗时 —— 最近第 ${nth} 次（${at}；账本 .tmp/timing/${LEDGER_NAME}，本机、不入库）`,
     `  共 ${ranked.length} 份有读数${
       expected > 0 ? ` / 清单 ${expected} 份` : ""
     }${missing > 0 ? `，缺 ${missing} 份**没有读数 —— 不是 0 秒**` : ""}${
