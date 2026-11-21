@@ -813,3 +813,116 @@ describe("useModelTest：工作流提供的图片/视频模型（ISSUE #4080 评
     expect(cancelLocalTaskMock).toHaveBeenCalledWith("task-2");
   });
 });
+
+describe("useModelTest：JSON 输入模式（ISSUE #4769）", () => {
+  it("applyJsonValues：合法载荷写回当前格表单值（认识的键才写）", () => {
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("agnes-image");
+    });
+    let res: ReturnType<typeof result.current.applyJsonValues> | undefined;
+    act(() => {
+      res = result.current.applyJsonValues(
+        JSON.stringify({
+          mode: "T2I",
+          inputs: {
+            prompt: "历史那次的提示词",
+            seed: "731030653625918",
+            "aspect-ratio": "1:1 (Square)",
+            "not-a-type": "应被忽略",
+          },
+        }),
+      );
+    });
+    expect(res?.ok).toBe(true);
+    /* 不用 expect.objectContaining（它返回 any，撞 no-unsafe-assignment）：
+       先取 ok 侧的 values，再逐键断言。 */
+    const applied = res?.ok === true ? res.values : undefined;
+    expect(applied?.prompt).toBe("历史那次的提示词");
+    expect(applied?.seed).toBe("731030653625918");
+    expect(applied?.["aspect-ratio"]).toBe("1:1 (Square)");
+    expect(result.current.values.prompt).toBe("历史那次的提示词");
+    expect(result.current.values.seed).toBe("731030653625918");
+    /* 认不得的键不进表单值（类型收窄在 controller，视图不吃脏键）。 */
+    expect("not-a-type" in result.current.values).toBe(false);
+  });
+
+  it("applyJsonValues：非法 JSON / 缺 inputs → ok:false，错误落当前格反馈位，表单不动", () => {
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("agnes-image");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "原有提示词");
+    });
+    for (const bad of ["不是 JSON", '{"mode":"T2I"}', '{"inputs":"不是对象"}', "[1,2]"]) {
+      let res: ReturnType<typeof result.current.applyJsonValues> | undefined;
+      act(() => {
+        res = result.current.applyJsonValues(bad);
+      });
+      expect(res?.ok, `载荷 ${bad} 应被拒`).toBe(false);
+      expect(result.current.error ?? "").not.toBe("");
+    }
+    /* 表单值未被任何一次失败污染。 */
+    expect(result.current.values.prompt).toBe("原有提示词");
+    expect(result.current.error).toContain("JSON");
+  });
+
+  it("generate 带覆盖值：JSON 解析出的值在同一次点击里进真实请求（不吃旧闭包）", async () => {
+    apiGenerateImageMock.mockImplementation(
+      (
+        _req: unknown,
+        opts?: { onDebug?: (rows: Array<ApiCallDebugRow>) => void; signal?: AbortSignal },
+      ) => {
+        opts?.onDebug?.([UPSTREAM_ROW]);
+        return Promise.resolve("https://img.example/x.png");
+      },
+    );
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("agnes-image");
+    });
+    /* 没先 patchValue：提示词只存在于解析结果里。覆盖值随 generate 显式给 ——
+       这正是 JSON 模式「粘贴后同一次点击重跑」的通路。 */
+    let values: Record<string, string> = {};
+    act(() => {
+      const res = result.current.applyJsonValues(
+        JSON.stringify({ mode: "T2I", inputs: { prompt: "历史那次的提示词", seed: "42" } }),
+      );
+      if (res.ok) {
+        values = res.values;
+      }
+    });
+    await act(async () => {
+      await result.current.generate(undefined, values);
+    });
+    expect(apiGenerateImageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "T2I", model: "agnes-image", prompt: "历史那次的提示词" }),
+      expect.anything(),
+    );
+    expect(result.current.result).toEqual({ kind: "image", url: "https://img.example/x.png" });
+  });
+
+  it("applyJsonValues 失败（缺提示词等必备口）不会发起生成", async () => {
+    apiGenerateImageMock.mockClear();
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("agnes-image");
+    });
+    let values: Record<string, string> = {};
+    act(() => {
+      const res = result.current.applyJsonValues(
+        JSON.stringify({ mode: "T2I", inputs: { seed: "42" } }),
+      );
+      if (res.ok) {
+        values = res.values;
+      }
+    });
+    await act(async () => {
+      await result.current.generate(undefined, values);
+    });
+    /* 契约必备口（提示词）缺失被拦，生成不发起。 */
+    expect(apiGenerateImageMock).not.toHaveBeenCalled();
+    expect(result.current.error).toContain("提示词");
+  });
+});

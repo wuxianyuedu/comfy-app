@@ -10,6 +10,7 @@ import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 import {
+  buildReprintPayload,
   deriveTaskOrigin,
   deriveWorkflowParams,
   deriveWorkshopParams,
@@ -257,5 +258,76 @@ describe("isPromptParamRow（ISSUE #4665：提示词行在详情参数表里定�
   it("无 pin 名时只按 id 判（工坊参数行只有契约口 id）", () => {
     expect(isPromptParamRow("prompt", null)).toBe(true);
     expect(isPromptParamRow("workflow", null)).toBe(false);
+  });
+});
+
+describe("buildReprintPayload（ISSUE #4769：复制去重投的全量参数 JSON）", () => {
+  it("T2I：契约口的值进 inputs，尺寸口按 pin 展开成测试页的四把键", () => {
+    const payload = buildReprintPayload({
+      detail: makeDetail({
+        workflow: "w",
+        prompt: "少女",
+        workflowInputs: [
+          { nodeId: "23", name: "replace", value: "少女" },
+          { nodeId: "23", name: "aspect_ratio", value: "3:4" },
+          { nodeId: "24", name: "megapixels", value: 1 },
+          { nodeId: "25", name: "multiple", value: 64 },
+          { nodeId: "26", name: "seed", value: 731_030_653_625_918 },
+          { nodeId: "27", name: "width", value: 1024 },
+        ],
+      }),
+      mode: "T2I",
+      contracts: null,
+    });
+    expect(payload.mode).toBe("T2I");
+    expect(payload.inputs).toEqual({
+      prompt: "少女",
+      "aspect-ratio": "3:4",
+      megapixels: "1",
+      multiple: "64",
+      seed: "731030653625918",
+    });
+  });
+
+  it("负向提示词有值时一并进载荷；空口（negative 没给）不占键", () => {
+    const payload = buildReprintPayload({
+      detail: makeDetail({ prompt: "a", negative: "blurry", seed: 1 }),
+      mode: "T2I",
+      contracts: null,
+    });
+    expect(payload.inputs.prompt).toBe("a");
+    expect(payload.inputs.negative).toBe("blurry");
+    expect(payload.inputs.seed).toBe("1");
+  });
+
+  it("用户改过的模式契约决定口清单（只复制契约认得的口）", () => {
+    const contracts: Array<ModeContract> = [{ mode: "T2I", inputs: ["prompt", "size"] }];
+    const payload = buildReprintPayload({
+      detail: makeDetail({ prompt: "x", seed: 9 }),
+      mode: "T2I",
+      contracts,
+    });
+    expect(payload.inputs.prompt).toBe("x");
+    expect(payload.inputs.seed).toBeUndefined();
+  });
+
+  it("模式码认不出时仍按内置契约口复制（提示词在），契约口之外的内部键不进载荷", () => {
+    const payload = buildReprintPayload({
+      detail: makeDetail({
+        workflow: "w",
+        prompt: "原始提示词",
+        runtime: "comfyui",
+        checkpoint: "minimax_h3",
+      }),
+      mode: "NOT_A_MODE",
+      contracts: null,
+    });
+    /* 内置契约至少给提示词 / 负向两口 —— 未知模式也能把提示词带走。 */
+    expect(payload.inputs.prompt).toBe("原始提示词");
+    /* checkpoint / workflow / runtime 不是契约口：粘贴侧（测试模型）消费的是
+       契约口值，模型本身由用户在测试页重新挑，这些内部键不进载荷。 */
+    expect("checkpoint" in payload.inputs).toBe(false);
+    expect("workflow" in payload.inputs).toBe(false);
+    expect("runtime" in payload.inputs).toBe(false);
   });
 });
