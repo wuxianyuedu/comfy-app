@@ -1362,10 +1362,12 @@
 > （角色 CRUD / 本集关联）+ 项目主页「系列角色库」面板 + 与 `production.characters` 的
 > 双向同步（提升 / 注入，按 `name` 幂等合并）。
 > 镜头目前仍是 `production` 的 JSON 列（破坏性抽取走 `db:migrate`，单列处理）。
+> 风格锚 / 场景库也尚未实体化（前者仅 `series.styleSlug` 档位引用，后者仍是
+> `production.scenes` JSON 列），见 FR-SR-03 的部分实现。
 
 #### FR-SR-01 系列（Series）实体与层级
 
-- 状态：已实现（容器层，#2477）
+- 状态：已上线（容器层，#2477）
 - 需求：一部作品 = 一个系列；层级为 **系列 → 季 → 集 → 创作链路**（剧本 / 角色 /
   分镜 / 镜头）。系列持有跨集共享的东西（角色库、风格锚、场景设定）。
 - 行为与验收：① schema 里有 `series` 表，且 `episode` 经外键链到它（不是靠名字匹配）；
@@ -1381,7 +1383,7 @@
 
 #### FR-SR-02 季（Season）与集（Episode）
 
-- 状态：已实现（容器层，#2477）；集号唯一约束与单集时长校验待补
+- 状态：已上线（容器层，#2477）；集号唯一约束与单集时长校验待补
 - 需求：集有**季号 / 集号 / 排序 / 单集目标时长**；一集 = 一次完整创作链路 + 一部成片。
 - 行为与验收：① 列表按 (季号, 集号) 排序（`seasons`/`episodes` 查询已 `orderBy`）；
   **同一系列内集号唯一约束**尚未加（目前是界面约定，待补唯一索引）；② 单集目标时长
@@ -1392,7 +1394,8 @@
 
 #### FR-SR-03 跨集资产复用（角色库 / 风格锚 / 场景库）
 
-- 状态：已实现（#2508 角色库实体化 + #2801 引用提示 / 反向查询）
+- 状态：部分实现（角色库已实现：#2508 实体化 + #2801 引用提示 / 反向查询；
+  风格锚 / 场景库尚未实体化）
 - 需求：角色、风格、场景成为**可被多集引用**的实体（引用，不是拷贝）。
 - 行为与验收：① 在 B 集引用 A 集的角色后，改 A 集角色卡时给出「该角色被 N 集引用」的提示，
   **不静默改**（改了别的集会跟着变，这件事必须让操作者看见）；**已达标**：角色库面板聚焦
@@ -1401,7 +1404,10 @@
   反向查询返回该角色被引用的集（含季号 / 集号 / 标题 / 在本集的定位），与正向的
   `episodeCharacters`（某集关联了哪些角色）互为反向；
   ③ **拷贝即失去一致性**：以「复制一份到本集」实现的复用不算本条达标。**已达标**：集经
-  `episode_character` 引用系列角色实体，不复制 JSON。
+  `episode_character` 引用系列角色实体，不复制 JSON；
+  ④ 风格锚 / 场景库的同等「可被多集引用」：**未落地**——风格锚仅 `series.styleSlug`
+  （引用 `skill.slug` 的档位，随系列沿用，无集级引用与反向查询），场景仍是
+  `production.scenes` JSON 列；实体化后按 ①~③ 同口径验收。
 - 落点（现状）：`character` 实体表与 `episode_character` 关联表（`series` 级角色库，字段对齐
   `Character`）；系列角色库 tRPC router（`characters` / `createCharacter` / `updateCharacter` /
   `deleteCharacter` / `episodeCharacters` / `characterEpisodes` / `linkCharacter` /
@@ -1409,7 +1415,8 @@
   见 `src/server/api/routers/series.ts`）、
   UI 面板 `src/components/studio/project-home/SeriesCharacterLibrary.tsx`；与 `production.characters`
   双向同步：提升 = 项目角色按 `name` 幂等并入系列库并关联本集，注入 = 本集关联角色按 `name`
-  合并回项目（同名覆盖字段、不同名追加）。镜头仍走 `production.shots` JSON 列。
+  合并回项目（同名覆盖字段、不同名追加）。镜头仍走 `production.shots` JSON 列；
+  风格锚仅 `series.styleSlug`、场景仍走 `production.scenes` JSON 列（均未实体化，见状态行）。
 
 #### FR-SR-04 剧集级排期与批量（整季调度 / 断点续跑）
 
