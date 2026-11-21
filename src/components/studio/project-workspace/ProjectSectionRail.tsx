@@ -79,7 +79,7 @@ function RailEntryButton({
     >
       <span
         className={cn(
-          "grid size-9 shrink-0 place-items-center rounded-[11px]",
+          "grid size-9 shrink-0 place-items-center rounded-xl",
           active ? "bg-primary text-white" : "bg-elevated text-muted-foreground",
         )}
       >
@@ -88,7 +88,7 @@ function RailEntryButton({
       <span className="min-w-0 text-left leading-tight">
         <span
           className={cn(
-            "block truncate text-[13.5px] font-semibold",
+            "block truncate text-sm font-semibold",
             active ? "text-primary" : "text-ink",
           )}
         >
