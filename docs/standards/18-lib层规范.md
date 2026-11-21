@@ -507,6 +507,30 @@ SQL trace 逐字不变、用例照样绿。生产侧这个区别是实的（libs
 > 与 §6.1 的分工：那一张表记的是**驱动与宿主的读数**（`behavior` 两侧不对称、
 > 等锁预算只能落在重试层）；这一节记的是**边界该落在哪一层**。下次别再从 `llm.ts` 往上重新推。
 
+#### 18.10.2 `db.transaction` 回调里只允许 DB 语句级 await（ISSUE #4734，机器保证）
+
+drizzle 的 sqlite-proxy 事务**不做排队**：`BEGIN → 回调 → COMMIT` 全部跑在进程唯一的
+同步连接上。原子性成立的条件是回调里每个 `await` 都是 DB 语句（同步执行包成已决议
+promise，整段在一个宏任务的微任务排空内完成）——这是一条**靠纪律维持的未成文不变式**：
+任何人在回调里混入一个真实异步（fetch / 定时器 / LLM 调用），`BEGIN IMMEDIATE` 就跨宏任务
+持锁，其它请求的语句插进同一连接的未提交事务——读到未提交数据、被并进他人事务提交、
+或 `cannot start a transaction within a transaction` 后被连坐回滚。
+
+**机器保证（#4734 落地形态）**：`src/lib/sqlite-tx-guard.ts` 在驱动代理层记账事务的
+开/关窗口（`trackTxLifecycle`），并用 `AsyncLocalStorage` 给事务回调的整条 await 链打
+作用域（`withSqliteTxGuard` 包住 drizzle 实例的 `.transaction`）。事务打开期间，凡是不在
+该作用域上的语句一律**当场抛错**（`guardStatement`）——插队者响亮失败，而不是静默
+读未提交数据。`~/server/db` 与 `~/server/workshop/db` 两个实例都已包上。
+
+写事务回调时的纪律由此变成可执行的：
+
+- 回调里**只 await `tx.*` 语句**，以及「接收 `tx` / executor 入参、内部只用它」的仓库
+  侧 helper（如 `ensureProductionProject` / `writeContentToProduction`）；
+- **不许**在回调里 await fetch / 定时器 / LLM / 外部进程等真实异步；需要慢 IO 时，
+  把慢 IO 放在事务**外**、落库放回事务内（#3932 的「慢 IO 锁外、落库锁内」同一取向）；
+- `tests/sqlite-tx-guard.test.ts` 是这条不变式的正反例判据：纯 DB await 事务照常工作；
+  回调混入真实异步后，外部语句插进打开事务必须被拒。
+
 ### 18.11 本批（ISSUE #569 第 2 项 / #572 第 2–3 项）的落地记录
 
 #### 18.11.1 判据只许有一份：客户端可达图的两份实现合并（#569 第 2 项）
