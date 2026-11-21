@@ -43,9 +43,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 
 import { resolveAppPort, resolveRepoRoot } from "../app-port.mjs";
+import { runGateStep } from "../launcher-core/shell.mjs";
 import { checkBrowserReady, describeBrowserMissing } from "../../e2e/support/preflight-browser.mjs";
 
 /** 截图落点（相对仓库根）—— `/log/` 在 `.gitignore` 里，图不进库。 */
@@ -358,12 +359,13 @@ export function reapDevServer(input) {
   if (!Number.isInteger(input.pid) || input.pid <= 0) {
     return "";
   }
-  const result = spawnSync(
+  // reap 正常秒回（与 standalone-runtime 的 reap 同一预算口径：10s 封挂死）。
+  const result = runGateStep(
     process.execPath,
     [path.join(input.root, "scripts", "reap-process.mjs"), String(input.pid), "--force"],
-    { cwd: input.root, encoding: "utf8", windowsHide: true },
+    { cwd: input.root, timeoutMs: 10_000, echo: false },
   );
-  return `${String(result.stdout ?? "")}${String(result.stderr ?? "")}`.trim();
+  return `${result.stdout}${result.stderr}`.trim();
 }
 
 /**

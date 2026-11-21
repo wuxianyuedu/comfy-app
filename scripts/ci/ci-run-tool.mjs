@@ -34,8 +34,9 @@
  * 刻意**不退回 `shell: true`**：`spawn-shell-scan.mjs` 那条判据就在守这件事。
  */
 import fs from "node:fs";
-import { spawnSync } from "node:child_process";
 import path from "node:path";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 import { exitCodeFromTermination } from "./ci-cp936-exit.mjs";
 import { resolveBinEntryByName } from "../lib/package-bin-entry.mjs";
@@ -205,10 +206,10 @@ const SHORT_SHA = 12;
  * @returns {string | null}
  */
 function headShaOf(cwd) {
-  const res = spawnSync("git", ["rev-parse", "HEAD"], {
+  const res = runGateStep("git", ["rev-parse", "HEAD"], {
     cwd,
-    encoding: "utf8",
-    windowsHide: true,
+    timeoutMs: 30_000,
+    echo: false, // 树读数，回显不得混进 stdout
   });
   const sha = String(res.stdout ?? "").trim();
   return res.status === 0 && /^[0-9a-f]{40}$/i.test(sha) ? sha : null;
@@ -276,11 +277,12 @@ function treeReadoutOf(cwd, env) {
  *   （含第三方），`inRepo` 是仓内那部分（剔除 node_modules，保持 tsc 的输出顺序）
  */
 function programMjsOf(entry, faceFile) {
-  const probe = spawnSync(process.execPath, [entry, "--listFilesOnly", "-p", faceFile], {
-    encoding: "utf8",
+  // 程序图探针（--listFilesOnly 也要起一次编译器）：给 120s，只封「挂死不返回」。
+  const probe = runGateStep(process.execPath, [entry, "--listFilesOnly", "-p", faceFile], {
     cwd: process.cwd(),
-    windowsHide: true,
+    timeoutMs: 120_000,
     maxBuffer: 64 * 1024 * 1024,
+    echo: false, // 文件清单按行解析，回显不得混进 stdout
   });
   if (probe.error || (probe.status ?? 1) !== 0) {
     return null;
@@ -344,10 +346,12 @@ if (entry === null) {
   process.exit(NOT_RUN_EXIT);
 }
 
-const result = spawnSync(process.execPath, [entry, ...args], {
+const result = runGateStep(process.execPath, [entry, ...args], {
   stdio: "inherit",
   cwd: process.cwd(),
-  windowsHide: true,
+  // tsc / eslint 是分钟级动作：给足缺省档预算，只封「挂死不返回」。
+  timeoutMs: 600_000,
+  echo: false, // 本入口的 stdout 会被按行解析（子进程输出即全部读数），回显不得掺入
 });
 
 if (result.error) {

@@ -20,6 +20,11 @@ const HOOKS_PATH = ".githooks";
 
 /** 在仓库内跑一条 git 命令，返回 { ok, stdout }；git 缺失/非检出时 ok=false。
  *
+ * **保留裸 `spawnSync` 不迁 `runGateStep`（#4679）**：本脚本会被
+ * `tests/postinstall-cross-platform.test.ts` **单独拷进沙箱临时目录**真跑
+ * （靠 `import.meta.dirname` 自定位仓库根），不 import 任何仓库内模块 ——
+ * 预算在选项层显式给（30s 档，与 premerge-proof.mjs 的 git 探针同口径）。
+ *
  * @param {string[]} args
  * @returns {{ ok: boolean, stdout: string }}
  */
@@ -29,6 +34,7 @@ function git(args) {
       cwd: root,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
+      timeout: 30_000,
     });
     return { ok: r.status === 0, stdout: String(r.stdout ?? "").trim() };
   } catch {

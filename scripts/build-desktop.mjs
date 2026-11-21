@@ -65,7 +65,6 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
 
@@ -82,6 +81,7 @@ import { formatDurationMs } from "../src/lib/time-format.ts";
 import { startProgressSync } from "./gates/progress-heartbeat.mjs";
 
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
+import { runGateStep } from "./launcher-core/shell.mjs";
 import { pnpmCli } from "./ci/ci-install-deps.mjs";
 // 启动页副本（`splash.html` + `index.html`）的清单与同步：与 dev-launcher 共用
 // 同一份实现，避免「少写一个副本名」这类静默失误在两处各自发生。
@@ -212,10 +212,12 @@ const step1At = performance.now();
   // 这一句是「1/4 执行 pnpm build」的**真实命令行**：构建日志里既有步骤名、也有
   // 到底跑了哪条命令，事后核对构建产物与命令的对应关系不必再猜。
   echoCommandLine(cli.command, args);
-  const build = spawnSync(cli.command, args, {
+  // Next standalone 构建是分钟级动作：给 900s（冷构建余量），只封「挂死不返回」。
+  const build = runGateStep(cli.command, args, {
     stdio: "inherit",
     cwd: root,
-    windowsHide: true,
+    timeoutMs: 900_000,
+    echo: false, // 上面已手工回显过同一条命令行
   });
   if (build.error) {
     /* `code` 是 spawn 层附在 Error 上的字段（`ErrnoException`），声明面里没有 ——
@@ -389,15 +391,12 @@ const schemaSqlPath = join(staticDir, "schema.sql");
   const cli = pnpmCli();
   const args = [...cli.prefixArgs, "exec", "drizzle-kit", "export", "--sql"];
   echoCommandLine(cli.command, args);
-  /* `drizzle-kit` 起不来时 `stdout` / `stderr` 实测是 `undefined`（`@types/node` 按
-   * `encoding` 声明成 `string`）⇒ 下面两处 `?? ""` 是给运行时兜的，不是多余的。 */
-  const exported = /** @type {{ status: number | null, stdout?: string, stderr?: string }} */ (
-    spawnSync(cli.command, args, {
-      cwd: root,
-      encoding: "utf8",
-      windowsHide: true,
-    })
-  );
+  // drizzle-kit export（秒级）给 120s；DDL 从 stdout 解析，回显不得掺入。
+  const exported = runGateStep(cli.command, args, {
+    cwd: root,
+    timeoutMs: 120_000,
+    echo: false, // 上面已手工回显过同一条命令行
+  });
   const sql = (exported.stdout ?? "").trim();
   if (exported.status !== 0 || sql.length === 0) {
     fail(
@@ -625,10 +624,11 @@ progress.step("2.6 出厂计数");
 // 为什么放在尺寸护栏之后：两者都是 static 层的闸，顺序无所谓，但都必须早于
 // sidecar 与 `pnpm tauri build`——红在这里 = 构建期就拦住，放过去就是用户解包才发现。
 {
-  const check = spawnSync(
+  // 出厂计数判据（秒级）给 120s；读数走子进程自己的 [static] 行（stdio inherit）。
+  const check = runGateStep(
     process.execPath,
     [join(root, "scripts", "gates", "check-standalone-contents.cjs")],
-    { stdio: "inherit", cwd: root, windowsHide: true },
+    { stdio: "inherit", cwd: root, timeoutMs: 120_000, echo: false },
   );
   if (check.error) {
     const spawnError = /** @type {NodeJS.ErrnoException} */ (check.error);

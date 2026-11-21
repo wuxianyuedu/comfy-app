@@ -66,6 +66,10 @@ if (!entry) {
   process.exit(1);
 }
 
+// **刻意不给 timeout（#4679 豁免档，与 dev.mjs / start.mjs 同一口径）**：
+// `dev` 子命令起的是长驻 storybook server，本进程的生命周期 = 服务的生命周期；
+// 有限预算会在到点时砍掉正在服务的实例（`build` 子命令虽是有限跑，但同一出口
+// 不做子命令分叉 —— 预算只该由「会不会挂死」决定，而这里不会）。
 const result = spawnSync(process.execPath, [entry, ...args, ...rest], {
   cwd: root,
   stdio: "inherit",

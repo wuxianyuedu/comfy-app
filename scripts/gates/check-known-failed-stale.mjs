@@ -42,11 +42,12 @@
  *   node scripts/gates/check-known-failed-stale.mjs --self-test # 自证「量具没坏」：造一条假红
  *                                                         # 验判据说「还红着」，再删掉
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 
@@ -251,9 +252,10 @@ function runRegistered(registered) {
     ...registered,
   ];
   const commandLine = `${process.execPath} ${entry} ${args.join(" ")}`;
-  const r = spawnSync(process.execPath, [entry, ...args], {
+  const r = runGateStep(process.execPath, [entry, ...args], {
     cwd: ROOT,
-    encoding: "utf8",
+    // vitest 真跑（分钟级）：给足缺省档预算，只封「挂死不返回」。
+    timeoutMs: 600_000,
     maxBuffer: 64 << 20,
   });
   return {
@@ -274,10 +276,11 @@ function runRegistered(registered) {
  * @returns {boolean}
  */
 function isTracked(rel) {
-  const r = spawnSync("git", ["ls-files", "--error-unmatch", "--", rel], {
+  const r = runGateStep("git", ["ls-files", "--error-unmatch", "--", rel], {
     cwd: ROOT,
-    encoding: "utf8",
+    timeoutMs: 30_000,
     stdio: ["ignore", "pipe", "ignore"],
+    echo: false,
   });
   return r.status === 0;
 }

@@ -114,6 +114,9 @@ maybeSpawnExecutorHost({
 
 // 与 dev.mjs 同一口径：起服务前先回显真正要跑的那条命令行。
 echoCommandLine(process.execPath, [nextBin, ...nextArgs]);
+// **刻意不给 timeout（#4679 唯一豁免档之一）**：这里起的就是长驻 Next server 本体
+// （standalone / e2e webServer），本进程的生命周期 = 服务的生命周期；任何有限预算
+// 都会在到点时砍掉正在服务的 server。
 const result = spawnSync(process.execPath, [nextBin, ...nextArgs], {
   stdio: "inherit",
   env: { ...process.env, PORT: String(port) },
