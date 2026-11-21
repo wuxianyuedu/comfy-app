@@ -49,3 +49,22 @@ describe("WorkspaceViewStack — 懒加载分块接空闲预热", () => {
     expect(code).toContain("startLazyViewPrefetch()");
   });
 });
+
+describe("WorkspaceViewStack — 重视图非活跃降级（ISSUE #4677）", () => {
+  const code = stripComments(fs.readFileSync(FILE, "utf8"));
+
+  it("重视图名单钉住 queue / history / settings", () => {
+    /* 名单是这次逐视图评估的结论（画布的内部交互态另评，刻意不在内）：
+     * 名单被顺手增删时这条会红，逼着回到单子里重新过一遍评估。 */
+    const decl = /HEAVY_VIEWS = new Set<WorkspaceView>\(\[(?<list>[^\]]*)\]\)/.exec(code);
+    expect(decl, "HEAVY_VIEWS 名单不在场").not.toBeNull();
+    const names = (decl?.groups?.list ?? "").match(/"[a-z-]+"/g) ?? [];
+    expect(names).toEqual(['"queue"', '"history"', '"settings"']);
+  });
+
+  it("名单里的屏经 HeavyViewGate 按页签活跃度降级", () => {
+    expect(code).toContain("HeavyViewGate");
+    expect(code).toMatch(/HEAVY_VIEWS\.has\(tab\.view\)/);
+    expect(code).toMatch(/<HeavyViewGate active=\{isActive\}>/);
+  });
+});
