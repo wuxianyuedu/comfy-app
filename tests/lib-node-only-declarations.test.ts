@@ -146,6 +146,11 @@ const PURE_NODE_HOSTS = [
   // 两处「这台机器有没有 PowerShell/Python」）、脚本侧（`scripts/lib/python-probe.mjs`）与 `python-resolve.ts` 的失败
   // 形态类型；加 `server-only` 会让那两处起进程直接 throw，`.server.ts` 同样碍事，故按第三类登记。
   "src/lib/process/probe-exe.ts",
+  // host-heartbeat.ts（ISSUE #4604）：执行宿主「活着吗」的读数 —— 读宿主每 5s 写的
+  // 心跳文件（`log/current/services/executor-host-heartbeat.json`，`COMFYAPP_HOST_HEARTBEAT`
+  // 可覆盖）。只有 `node:fs`/`node:path` 的 value import；消费方是 reaper（Next 侧与
+  // 宿主侧经 tsx 双宿主加载），加 `server-only` 会让宿主侧加载即 throw，按第三类登记。
+  "src/lib/comfyui/host-heartbeat.ts",
 ];
 
 type Report = {
