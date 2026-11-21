@@ -758,7 +758,9 @@ function sweepOnce(): void {
   }
   void reapStaleQueuedTasks();
   void reapStaleRunningTasks();
-  void reapDeadHostQueuedTasks();
+  /* 第三条 sweeper 走 fireAndForget（带名字的失败通道）而不是裸 `void`：
+   * void-floats 棘轮不许新增悬空 Promise（基线 2 就是上面那两条旧 sweeps）。 */
+  fireAndForget(reapDeadHostQueuedTasks(), () => undefined);
   /* 崩溃残留的临时工作流文件按拍兜底清理（#4225）：正常路径在任务收口时已删，
    * 这里只扫「写完与收口之间进程崩掉」的孤儿（按 mtime 留一小时余量）。
    * prune 自吞全部 IO 错误，onError 是不可达的最后一道。 */
