@@ -6,6 +6,7 @@ import { Badge } from "~/components/ui/badge";
 import { Hint } from "~/components/ui/hint";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { Skeleton } from "~/components/ui/skeleton";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { useInterval } from "~/components/ui/use-interval";
@@ -157,7 +158,21 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
           <div className="flex-1 overflow-y-auto p-5">
             <div className="flex-col gap-3">
               {loading && tasks.length === 0 ? (
-                <p className="text-ink-fainter py-10 text-center text-xs">加载中…</p>
+                /* 骨架屏（ISSUE #4749）：与任务卡同形的占位（缩略块 + 两行文字条）。 */
+                <div aria-label="加载中" className="flex flex-col gap-3" role="status">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      className="border-border-strong bg-subtle flex items-center gap-3 rounded-xl border p-3"
+                      key={i}
+                    >
+                      <Skeleton className="size-16 shrink-0 rounded-lg" />
+                      <div className="flex flex-1 flex-col gap-2">
+                        <Skeleton className="h-3.5 w-3/5" />
+                        <Skeleton className="h-3.5 w-2/5" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : tasks.length === 0 ? (
                 <p className="text-ink-fainter py-10 text-center text-xs">
                   暂无视频生成任务。在创作台「视频」模式直接生成（新视频的入口在创作台，这里只看队列）。

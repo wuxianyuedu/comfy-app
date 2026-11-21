@@ -15,6 +15,7 @@ const QueueTaskLogModal = dynamic(() =>
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
@@ -185,7 +186,12 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
       </div>
 
       {c.loading ? (
-        <p className="text-ink-muted text-sm">加载中…</p>
+        /* 骨架屏（ISSUE #4749）：与任务卡同形的占位条。 */
+        <div aria-label="加载中" className="flex flex-col gap-3" role="status">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton className="h-24 rounded-xl" key={i} />
+          ))}
+        </div>
       ) : c.filteredCount === 0 ? (
         <EmptyState description={c.empty.hint} minHeightClass="min-h-75" title={c.empty.title} />
       ) : (

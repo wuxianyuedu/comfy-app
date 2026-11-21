@@ -6,6 +6,7 @@
 import { useEffect } from "react";
 
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
@@ -111,8 +112,15 @@ export function ImageRedrawPanel({
           </SelectTrigger>
           <SelectContent>
             {controller.templates.length === 0 ? (
-              <div className="text-ink-fainter text-2xs px-2 py-1.5">
-                {controller.templatesLoading ? "加载中…" : "工作流库为空：先在库页导入一个模板"}
+              <div className="text-ink-fainter text-2xs flex items-center gap-1.5 px-2 py-1.5">
+                {controller.templatesLoading ? (
+                  <>
+                    <Spinner className="size-3" />
+                    模板清单加载中…
+                  </>
+                ) : (
+                  "工作流库为空：先在库页导入一个模板"
+                )}
               </div>
             ) : (
               controller.templates.map((t) => (

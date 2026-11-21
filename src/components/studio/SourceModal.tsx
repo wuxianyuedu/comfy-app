@@ -8,6 +8,7 @@ import { Hint } from "~/components/ui/hint";
 import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { Skeleton } from "~/components/ui/skeleton";
 import { downloadText } from "~/lib/browser-io";
 import { displayValue } from "~/lib/display-value";
 
@@ -122,7 +123,15 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
           {/* Body — JsonViewer 自带语法着色 / 折叠 / 搜索 / 滚动。 */}
           <div className="min-h-0 flex-1 overflow-hidden">
             {loading === true ? (
-              <p className="text-ink-muted px-5 py-3 text-sm">加载中…</p>
+              /* 骨架屏（ISSUE #4749）：与 JSON 正文同形的占位条，不再是一行孤零零的「加载中…」。 */
+              <div aria-label="加载中" className="flex flex-col gap-2.5 px-5 py-4" role="status">
+                <Skeleton className="h-4 w-3/5" />
+                <Skeleton className="h-4 w-4/5" />
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-5/12" />
+              </div>
             ) : error !== undefined && error !== "" ? (
               <p className="text-destructive px-5 py-3 text-sm">{error}</p>
             ) : data?.source === null || data?.source === undefined ? (

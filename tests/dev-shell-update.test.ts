@@ -19,13 +19,6 @@ import {
 const NEWER = { built_at: "2026-11-21T10:00:00Z", commit: "aaaaaaaaaaaa", run_id: "200" };
 const OLDER = { built_at: "2026-11-20T10:00:00Z", commit: "bbbbbbbbbbbb", run_id: "100" };
 
-/** 固定 body 的 fetch 替身：用 Response 真身，免 `as unknown as` 断言与无 await 的 async 形态。 */
-function fakeFetchOf(body: Buffer): typeof fetch {
-  return vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
-    Promise.resolve(new Response(Uint8Array.from(body))),
-  );
-}
-
 describe("parseShellBuildInfo", () => {
   it("取出 built_at / commit / run_id，缺席字段留空串", () => {
     expect(parseShellBuildInfo(JSON.stringify(NEWER))).toEqual(NEWER);
@@ -140,7 +133,7 @@ describe("runDevShellAutoUpdate：任何一步失败都照常启动（不阻塞�
     const stamp = stampPathOf(exe);
     writeShellStamp(stamp, OLDER);
     const infoBytes = Buffer.from(JSON.stringify(NEWER));
-    const fakeFetch = fakeFetchOf(infoBytes);
+    const fakeFetch = vi.fn(() => Promise.resolve(new Response(infoBytes)));
     const fetchShell = vi.fn().mockResolvedValue(0);
     const res = await runDevShellAutoUpdate({
       root: dir,
@@ -167,7 +160,7 @@ describe("runDevShellAutoUpdate：任何一步失败都照常启动（不阻塞�
     fs.utimesSync(path.join(src, "lib.rs"), new Date("2030-01-01"), new Date("2030-01-01"));
 
     const infoBytes = Buffer.from(JSON.stringify(NEWER));
-    const fakeFetch = fakeFetchOf(infoBytes);
+    const fakeFetch = vi.fn(() => Promise.resolve(new Response(infoBytes)));
     const fetchShell = vi.fn().mockResolvedValue(0);
     const res = await runDevShellAutoUpdate({
       root: dir,
@@ -196,7 +189,7 @@ describe("runDevShellAutoUpdate：任何一步失败都照常启动（不阻塞�
     const stamp = stampPathOf(exe);
     writeShellStamp(stamp, OLDER);
     const infoBytes = Buffer.from(JSON.stringify(NEWER));
-    const fakeFetch = fakeFetchOf(infoBytes);
+    const fakeFetch = vi.fn(() => Promise.resolve(new Response(infoBytes)));
     const res = await runDevShellAutoUpdate({
       root: dir,
       out: exe,

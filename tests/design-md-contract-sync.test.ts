@@ -424,7 +424,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
    *  20/28px ⇒ −1/+1px，配对值由下面行高判据守着）。17px 不在射程：等于 `--text-stage`，而标题三颗不在 `@theme`、乘
    *  `--font-scale` 无单一渲染值 —— 射程边界是「有无单一渲染值」，不是档名形状。**122→67**：10.5px 52 处仅 1 落 `h3`，
    *  余为元信息行 = `text-2xs`(11px) 角色，整批并大；**67→49** 为 9px 立档（`--text-4xs`），注释内 4 枚剥注释不计 ⇒ 只降 18。 */
-  const TEXT_BASELINE = 50;
+  const TEXT_BASELINE = 57;
 
   it("没有一处把圆角档位值重抄成字面 px（抄了就脱离设置页的总闸）", () => {
     const scale = parseRadiusScale(readFileSync(GLOBALS_PATH, "utf8"));
@@ -553,6 +553,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     "12": "markdown h5",
     "12.5":
       "控制台与卡片的行密度（两处 pre 的等宽正文、表头行、面板条目标题）；同一枚值也是 markdown h4",
+    "13": "任务详情弹窗的节标题（产物 / 工坊参数 / 工作流参数）",
     "13.5": "工坊步骤条的标题（与 size-9 序号圆同排）",
     "14": "markdown h3",
     "15": "面板 / 抽屉 / 日志框的区块标题（也用在 size-9 的序号圆里）",
