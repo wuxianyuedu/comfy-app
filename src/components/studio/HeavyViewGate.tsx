@@ -17,20 +17,133 @@
  * 的同名能力（React 19.2+），状态保留是它语义的一部分。
  *
  * 滚动位置（约束点名的另一项）：本仓锁定的 React 19.3 里，Activity 的
- * hidden 是**保留 DOM、置 `display:none`**（实测，见 HeavyViewGate.test.tsx
- * 的滚动用例）——scrollTop 原样留存，切回即恢复，不需要任何回放代码。
- * 若未来 React 改成真摘 DOM，这里的滚动用例会当场红，届时再补回放。
+ * hidden 是**保留 DOM、置 `display:none`**——但切走的那一刻布局消失，
+ * 容器 scrollTop 被钳回 0；切回时 effects 重挂、数据重拉，内容高度先塌后
+ * 长，滚动位置不会自己回来。所以这里仍要记账回放：活跃期用捕获监听持续
+ * 记下后代滚动容器的位置（scroll 不冒泡、捕获能收到；每次滚动只做 O(1)
+ * 写入），重新可见后按「到根的兄弟序路径」回放——两代 DOM 同构，路径即可
+ * 对号入座，不按元素身份（身份随重挂全部换新）。回放带**有界重试**：数据
+ * 没长回来时 scrollTop 会被钳住，每 150ms 补一次直到全部回放成功或预算
+ * （5s）用完。
  */
 
-import { Activity, type ReactNode } from "react";
+import { Activity, useEffect, useRef, type ReactNode } from "react";
 
-export function HeavyViewGate({
-  active = true,
-  children,
-}: {
-  /** 是否当前页签；缺省 true（无页签语境的渲染路径按「就是当前屏」处理）。 */
-  active?: boolean;
-  children: ReactNode;
-}) {
-  return <Activity mode={active ? "visible" : "hidden"}>{children}</Activity>;
+/** 从 `root` 到 `el` 的兄弟序路径（两代 DOM 同构时可作身份对号）。 */
+function pathOf(root: HTMLElement, el: HTMLElement): string | null {
+  const parts: Array<string> = [];
+  let node: HTMLElement | null = el;
+  while (node !== null && node !== root) {
+    /* 显式标注：parent 的类型经 `node = parent` 与自身初始化成环，靠推断会塌成 any。 */
+    const parent: HTMLElement | null = node.parentElement;
+    if (parent === null) {
+      return null;
+    }
+    parts.push(String(Array.prototype.indexOf.call(parent.children, node)));
+    node = parent;
+  }
+  return node === root ? parts.reverse().join("/") : null;
+}
+
+/** 按 `pathOf` 记下的路径找回元素；结构对不上（理论上不会）返回 null。 */
+function findByPath(root: HTMLElement, path: string): HTMLElement | null {
+  let node: HTMLElement = root;
+  for (const part of path.split("/")) {
+    const next = node.children[Number(part)];
+    if (!(next instanceof HTMLElement)) {
+      return null;
+    }
+    node = next;
+  }
+  return node;
+}
+
+/** 回放重试的节奏与总预算。 */
+const RESTORE_INTERVAL_MS = 150;
+const RESTORE_BUDGET_MS = 5000;
+
+export function HeavyViewGate({ active, children }: { active: boolean; children: ReactNode }) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  /** 活跃期滚动过的容器 → 位置（键是路径：元素身份随重挂全部换新）。 */
+  const scrolled = useRef<Map<string, number>>(new Map());
+  /** 每次激活的回放定时器（激活 effect 里起、清理里收）。 */
+  const restoreTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  /* 活跃期持续记录滚动位置：每个滚动事件只做一次 O(1) 写入，不扫树。 */
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    const wrap = wrapRef.current;
+    if (wrap === null) {
+      return;
+    }
+    const onScroll = (event: Event): void => {
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const path = pathOf(wrap, target);
+        if (path !== null) {
+          scrolled.current.set(path, target.scrollTop);
+        }
+      }
+    };
+    wrap.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => {
+      wrap.removeEventListener("scroll", onScroll, { capture: true });
+    };
+  }, [active]);
+
+  /* 重新可见：DOM 虽在但布局已塌（display:none 期间 scrollTop 被钳 0），且
+   * 数据重拉会让内容高度先塌后长 —— 按路径回放并带界重试，直到全部成功或
+   * 预算用完；随后清账（下一段活跃期的滚动重新记，不与旧账混叠）。 */
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    const wrap = wrapRef.current;
+    if (wrap === null) {
+      return;
+    }
+    const restoreOnce = (): boolean => {
+      let pending = 0;
+      for (const [path, top] of scrolled.current) {
+        const el = findByPath(wrap, path);
+        if (el === null) {
+          pending += 1;
+          continue;
+        }
+        el.scrollTop = top;
+        if (Math.abs(el.scrollTop - top) > 1) {
+          pending += 1;
+        }
+      }
+      return pending === 0;
+    };
+    if (restoreOnce()) {
+      scrolled.current.clear();
+      return;
+    }
+    const startedAt = Date.now();
+    restoreTimer.current = setInterval(() => {
+      if (Date.now() - startedAt > RESTORE_BUDGET_MS || restoreOnce()) {
+        if (restoreTimer.current !== null) {
+          clearInterval(restoreTimer.current);
+          restoreTimer.current = null;
+        }
+        scrolled.current.clear();
+      }
+    }, RESTORE_INTERVAL_MS);
+    return () => {
+      if (restoreTimer.current !== null) {
+        clearInterval(restoreTimer.current);
+        restoreTimer.current = null;
+      }
+    };
+  }, [active]);
+
+  return (
+    <div className="h-full" ref={wrapRef}>
+      <Activity mode={active ? "visible" : "hidden"}>{children}</Activity>
+    </div>
+  );
 }
