@@ -111,5 +111,8 @@ describe("useSidebarProjects", () => {
 
     await expect.poll(() => result.current).toHaveLength(1);
     expect(listProjectsWithServer).toHaveBeenCalledTimes(2);
+    /* 事件触发的那一跳带合并标记（ISSUE #4678）：与作品库共享短 TTL 在飞请求，
+     * 同一拍的结构性事件不再两路各发一次 project.list。 */
+    expect(listProjectsWithServer).toHaveBeenLastCalledWith({ coalesce: true });
   });
 });

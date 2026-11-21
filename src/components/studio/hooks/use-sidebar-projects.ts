@@ -29,8 +29,11 @@ export function useSidebarProjects(): Array<SidebarProjectEntry> {
 
   useEffect(() => {
     let alive = true;
-    const compute = () => {
-      void listProjectsWithServer().then(({ entries }) => {
+    /* `coalesce` 只给事件触发的那一跳（ISSUE #4678）：结构性事件与作品库共用
+     * 同一短 TTL 在飞请求，不再两路各发一次 `project.list`；挂载首拉不带它，
+     * 永远拿新鲜读数。 */
+    const compute = (coalesce = false) => {
+      void listProjectsWithServer({ coalesce }).then(({ entries }) => {
         /* 卸载后落定就别再 setState（`listProjectsWithServer` 是 async，
          * 快速切视图时这一帧可能已经不在）。 */
         if (!alive) {
@@ -77,7 +80,8 @@ export function useSidebarProjects(): Array<SidebarProjectEntry> {
       ) {
         return;
       }
-      compute();
+      /* 结构性事件：与作品库共用的短 TTL 合并取数（ISSUE #4678）。 */
+      compute(true);
     };
     compute();
     /* 与画布页 / 「所有项目」屏同一支刷新口径：编辑（upsert / rename / delete）

@@ -653,15 +653,55 @@ export type ProjectListEntry = {
 };
 
 /**
- * 这一屏要显示的**全部**项目行：本地索引 ∪ 服务端，按 `updatedAt` 倒序。
+ * 事件触发取数的短 TTL 合并窗口（ISSUE #4678）：同一拍的结构性事件会让侧栏
+ * （use-sidebar-projects）与作品库（use-works-gallery）**各自**全量重拉一次并集
+ * —— 同一事件两路各发一次 `project.list`（全列、上限 500 行）。窗口内的第二路
+ * 复用**同一在飞 Promise**（不是过期缓存），窗口过了才重新取。
+ */
+export const EVENT_FETCH_COALESCE_TTL_MS = 2000;
+
+let eventFetchInFlight: Promise<{
+  entries: Array<ProjectListEntry>;
+  ok: boolean;
+}> | null = null;
+let eventFetchStartedAt = 0;
+
+/**
+ * 「本地 ∪ 服务端」项目并集（侧栏 / 作品库共用的那一条取数）。
  *
+ * `coalesce: true` 只给**事件触发**的那一跳（`comfyapp:canvas-store-changed`
+ * 的订阅回调）：短 TTL 内共享同一在飞请求，同一拍的结构性事件不再两路各发
+ * 一次 `project.list`（ISSUE #4678）。手动 `refresh()` / 挂载首拉 / 动作后的
+ * 强制刷新**不带**这个标记 —— 那些必须拿新鲜读数，行为一字不变。
+ */
+export async function listProjectsWithServer(options?: { coalesce?: boolean }): Promise<{
+  entries: Array<ProjectListEntry>;
+  ok: boolean;
+}> {
+  if (options?.coalesce === true) {
+    const now = Date.now();
+    if (eventFetchInFlight !== null && now - eventFetchStartedAt < EVENT_FETCH_COALESCE_TTL_MS) {
+      return eventFetchInFlight;
+    }
+    const pending = listProjectsWithServerFresh();
+    eventFetchInFlight = pending;
+    eventFetchStartedAt = now;
+    return pending;
+  }
+  return listProjectsWithServerFresh();
+}
+
+/**
+ * 并集取数本体：永远全量重取（事件合并壳见 `listProjectsWithServer`）。
+ *
+ * 这一屏要显示的**全部**项目行：本地索引 ∪ 服务端，按 `updatedAt` 倒序。
  * 同名 id 以 `updatedAt` 较新的一侧为准（与 `hydrateFromServer` 的对账口径一致）
  * —— 不这样的话，同一份画布会在列表里出现两行。
  *
  * 拉取失败返回 `ok: false` + 本地索引那一份：视图据此照常列出本地项目，
  * 并给一句「服务端那份没拉到」的说法（不是把一个空列表端上去）。
  */
-export async function listProjectsWithServer(): Promise<{
+async function listProjectsWithServerFresh(): Promise<{
   entries: Array<ProjectListEntry>;
   ok: boolean;
 }> {
