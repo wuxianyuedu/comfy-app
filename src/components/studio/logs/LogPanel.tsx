@@ -349,9 +349,11 @@ export function LogPanel() {
         popupClassName={panel.widthClass}
         showCloseButton={false}
       >
-        <div
-          className={`border-border-strong bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60 ${panel.widthClass}`}
-        >
+        {/* 宽度只由弹窗外壳给一次（`popupClassName`）：内层面板若再带宽度类，会比被基类
+            `max-w-[calc(100%-2rem)]` 封顶的外壳宽出 16px、在 LTR 下向右溢出——加宽后
+            右侧留白被吃掉而左侧照旧（ISSUE #4709）。面板作为外壳唯一的 grid 子项，
+            自动撑满外壳的实际宽度。 */}
+        <div className="border-border-strong bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60">
           <LogPanelHeader
             clear={clear}
             columns={displayPrefs.columns}
