@@ -17,6 +17,7 @@ import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "~/components/ui/select";
 import {
   DEFAULT_APPEARANCE,
   DEFAULT_CODE_FONT,
@@ -32,12 +33,17 @@ import {
   type FontTier,
 } from "~/lib/appearance";
 import {
+  currentFontPlatform,
   describeFontPart,
   fontGroupsOf,
+  fontPartInView,
+  fontPlatformViewOptions,
   fontRoleNote,
   normalizeFontStack,
   slotInputValue,
   stackWithSlotFont,
+  type FontPlatformView,
+  type RuntimePlatform,
 } from "./appearance-font-helpers";
 
 import { SettingsCard } from "~/components/ui/settings-card";
@@ -272,6 +278,29 @@ function FontRow({
   /* 按部分分组陈列 + 每部分一种字体的输入（ISSUE #3784 与补充意见）：
      默认栈里有哪些字体、各排在第几位一眼可见；每个可配部分各填一种。 */
   const groups = fontGroupsOf(value, tier);
+  /* 平台视图（ISSUE #4700）：栈给各平台各留了回退项，陈列默认只显示运行平台
+     会用到的字面，其他平台经下拉切换查看。平台在挂载后判（SSR 无 navigator），
+     挂载前不滤 —— 服务端与客户端首帧一致，避免水合错位。 */
+  const [platform, setPlatform] = useState<RuntimePlatform | null>(null);
+  const [platformView, setPlatformView] = useState<FontPlatformView>("current");
+  useEffect(() => {
+    /* 延到 effect 之外同步 setState（与上面 prefs 读取同一做法）：effect 体内同步
+       setState 会触发级联渲染，也是 react/set-state-in-effect 的命中点。 */
+    const t = setTimeout(() => {
+      setPlatform(currentFontPlatform());
+    }, 0);
+    return () => {
+      clearTimeout(t);
+    };
+  }, []);
+  const platformOptions = fontPlatformViewOptions(platform);
+  const visibleGroups = groups.map((group) => ({
+    ...group,
+    items:
+      platform === null
+        ? group.items
+        : group.items.filter((item) => fontPartInView(item, platformView, platform)),
+  }));
   return (
     <div className="mt-5">
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -284,9 +313,35 @@ function FontRow({
         <span className="text-muted-foreground text-xs">{hint}</span>
       </div>
       {/* 当前栈按部分陈列：每一项都带「什么时候在用」的说明（ISSUE #4059 补充意见）——
-          首项优先使用，其余是各平台缺字时的回退；系统回退为什么有多种也在此说清。 */}
+          首项优先使用，其余是各平台缺字时的回退。陈列默认按运行平台过滤（ISSUE #4700）：
+          本平台 + 内置 + 通用回退直接可见，其他平台用右上下拉切换查看。 */}
       <div className="border-border bg-surface-row mb-3 flex flex-col gap-1.5 rounded-lg border p-3 text-xs">
-        {groups
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-muted-foreground">陈列平台</span>
+          <Select
+            onValueChange={(next) => {
+              const found = platformOptions.find((option) => option.value === next);
+              if (found !== undefined) {
+                setPlatformView(found.value);
+              }
+            }}
+            value={platformView}
+          >
+            <SelectTrigger aria-label={`${label}陈列平台`} className="min-w-0 text-xs" size="sm">
+              {/* base-ui 的 Select.Value 渲染的是 value 本身（`ui/select.test.tsx` 钉过），
+                  触发器要显示人话就得在这里自己映射成 label。 */}
+              {platformOptions.find((option) => option.value === platformView)?.label}
+            </SelectTrigger>
+            <SelectContent>
+              {platformOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {visibleGroups
           .filter((group) => group.items.length > 0)
           .map((group) => (
             <div className="flex flex-wrap items-start gap-1.5" key={group.slot}>

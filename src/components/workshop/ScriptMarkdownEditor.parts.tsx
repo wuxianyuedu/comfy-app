@@ -259,7 +259,7 @@ export function OutlineSidebar({
         目录大纲
       </h3>
       {outline.length === 0 ? (
-        <p className="text-ink-faintest text-xs leading-relaxed">
+        <p className="text-ink-fainter text-xs leading-relaxed">
           使用 # / ## / ### 添加标题后，此处自动生成目录。
         </p>
       ) : (

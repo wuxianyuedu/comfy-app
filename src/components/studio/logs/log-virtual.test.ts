@@ -264,10 +264,10 @@ describe("贴底要写入的 scrollTop", () => {
   });
 });
 
-/* 实测高度校正（ISSUE #4618）：估算的字符宽度系数只能取均值，临界长消息会
- * 差出一行，固定行高把多行正文截断、与后一行重叠。行盒改 minHeight 后按
- * 消息实测经 heightOf 回填 —— 校正只向上修，位置表随实测值走。 */
-describe("实测高度校正（heightOf，ISSUE #4618）", () => {
+/* 实测高度校正（ISSUE #4618，#4715 起双向）：估算的字符宽度系数只能取均值，与实际渲染
+ * 高度会有出入。行盒 minHeight 渲染、内容实测后经 heightOf 回填 —— 比估算高时撑开
+ * （不再截断重叠），比估算矮时收窄（估高偏保守多出的空行不再显示），位置表随实测值走。 */
+describe("实测高度校正（heightOf，ISSUE #4618 / #4715）", () => {
   const long = String.raw`G:\app\python.exe -m comfy_cli run --workflow x.json --json --wait --timeout 600`;
 
   it("实测比估算高的行用实测值，后续行的 start 随之前移", () => {
@@ -282,13 +282,23 @@ describe("实测高度校正（heightOf，ISSUE #4618）", () => {
     expect(corrected.totalSize).toBe(base.totalSize + LOG_ROW_LINE);
   });
 
-  it("校正只增不减：比估算小的实测值不采纳（行盒是 minHeight，实际不会更矮）", () => {
-    const entries = [{ message: "a\nb\nc" }];
+  it("实测比估算矮的行也采纳（多估出的空行收掉），后续行的 start 随之前移", () => {
+    const entries = [{ message: "a\nb\nc" }, { message: "后面的行" }];
     const base = layoutRows(entries, true, 0);
+    /* 估算把 3 行消息算成 单行档 + 2×行距；实测只有一行高 → 收到单行档。 */
     const shrunk = layoutRows(entries, true, 0, {
-      heightOf: () => LOG_ROW_SINGLE,
+      heightOf: (message) => (message === "a\nb\nc" ? LOG_ROW_SINGLE : undefined),
     });
-    expect(shrunk.rows[0]!.size).toBe(base.rows[0]!.size);
+    expect(base.rows[0]!.size).toBeGreaterThan(LOG_ROW_SINGLE);
+    expect(shrunk.rows[0]!.size).toBe(LOG_ROW_SINGLE);
+    expect(shrunk.rows[1]!.start).toBe(LOG_ROW_SINGLE);
+    expect(shrunk.totalSize).toBe(LOG_ROW_SINGLE + base.rows[1]!.size);
+  });
+
+  it("实测矮于单行档时钳在单行档（内容至少一行，不会塌成 0）", () => {
+    const entries = [{ message: "a" }];
+    const shrunk = layoutRows(entries, true, 0, { heightOf: () => 5 });
+    expect(shrunk.rows[0]!.size).toBe(ROW_STD);
   });
 
   it("校正按消息原文点名：同文同高，未点名的行保持估算", () => {
@@ -311,5 +321,18 @@ describe("实测高度校正（heightOf，ISSUE #4618）", () => {
     });
     /* expandedIds 优先命中 → 固定 LOG_ROW_EXPANDED；校正不改它。 */
     expect(corrected.rows[0]!.size).toBe(LOG_ROW_EXPANDED);
+  });
+});
+
+/* 行距三档整体下调一档（ISSUE #4716）：紧凑 = 新增的更窄档（py-0.5），
+ * 标准 = 下调前的紧凑（py-1），宽松 = 下调前的标准（py-3）。档名不变，只调底层值。 */
+describe("行距三档（ISSUE #4716）", () => {
+  it("紧凑 < 标准 < 宽松，标准档与遗留单行常量同值（py-1）", () => {
+    expect(rowHeightFor("compact")).toBeLessThan(rowHeightFor("standard"));
+    expect(rowHeightFor("standard")).toBeLessThan(rowHeightFor("relaxed"));
+    /* 正文 19 + 上下内边距 ×2 + 下边框 1：compact=py-0.5、standard=py-1、relaxed=py-3。 */
+    expect(rowHeightFor("compact")).toBe(24);
+    expect(rowHeightFor("standard")).toBe(LOG_ROW_SINGLE);
+    expect(rowHeightFor("relaxed")).toBe(44);
   });
 });

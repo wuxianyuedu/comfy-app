@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   LOG_ROW_TEXT_ATTRIBUTE,
   selectionInsideLogs,
+  stripCategoryPrefixes,
   tokenizeRow,
   type SelectionLike,
 } from "./log-row-style";
@@ -191,5 +192,41 @@ describe("类别前缀调暗", () => {
       { text: ">>>", style: "gray" },
       { text: " netstat -ano -p TCP", style: undefined },
     ]);
+  });
+});
+
+/* ── 精简列档剥类别前缀（ISSUE #4717）────────────────────────
+ * 隐藏时刻 / 级别 / 来源时，行首的类别标记（[app_lib::shell_launch] [orchestrator] 等）
+ * 一并剥掉，只留最简洁的正文。判据：只认与调暗档同一份词表、只剥行首连续若干个；
+ * 正文里合法的 `[...]`（[OK] / 时间戳 / JSON / 短端口括号）原样保留。 */
+describe("stripCategoryPrefixes 精简列档剥类别前缀", () => {
+  it("剥掉行首连续的类别标记，保留正文", () => {
+    expect(
+      stripCategoryPrefixes("[app_lib::shell_launch] [orchestrator] GET /api/health 200"),
+    ).toBe("GET /api/health 200");
+    expect(stripCategoryPrefixes("[app_lib] [ComfyAPP] main window Finished")).toBe(
+      "main window Finished",
+    );
+    expect(stripCategoryPrefixes("[launcher] [5a79f0] 编排器已启动")).toBe("编排器已启动");
+    /* `[app]` 是应用运行日志自己的来源标记，同一族一并剥掉。 */
+    expect(stripCategoryPrefixes("[app] 界面打开：首页")).toBe("界面打开：首页");
+    /* 前缀之间 / 之后的空白一并收掉，不留「以空格开头」的正文。 */
+    expect(stripCategoryPrefixes("[tauri] [d617a7]   已就绪")).toBe("已就绪");
+    /* 整条只有前缀时剥成空串（渲染为空行，与「没有正文」一致）。 */
+    expect(stripCategoryPrefixes("[launcher] [orchestrator]")).toBe("");
+  });
+
+  it("无前缀 / 非类别括号原样保留", () => {
+    expect(stripCategoryPrefixes("GET /api/health 200")).toBe("GET /api/health 200");
+    expect(stripCategoryPrefixes("[OK] 阶段: 壳已接手")).toBe("[OK] 阶段: 壳已接手");
+    expect(stripCategoryPrefixes("[ERROR] [app_lib] 崩了")).toBe("[ERROR] [app_lib] 崩了");
+    expect(stripCategoryPrefixes("[17:43:16] 完成")).toBe("[17:43:16] 完成");
+    expect(stripCategoryPrefixes("[3797] 端口空闲")).toBe("[3797] 端口空闲");
+    expect(stripCategoryPrefixes('[{"a":1}] 原始输出')).toBe('[{"a":1}] 原始输出');
+    expect(stripCategoryPrefixes("[WARN] 慢查询 1.2s")).toBe("[WARN] 慢查询 1.2s");
+  });
+
+  it("正文中间的同类括号不剥（只认行首）", () => {
+    expect(stripCategoryPrefixes("已启动 [launcher] 子进程")).toBe("已启动 [launcher] 子进程");
   });
 });

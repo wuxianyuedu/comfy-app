@@ -14,9 +14,9 @@ export function FilmStudioTimeline({ playheadPos, bgmName }: FilmStudioTimelineP
     <div className="border-border-subtle bg-panel-deep mt-auto rounded-xl border p-3">
       {/* Time ruler */}
       <div className="mb-2 flex items-center justify-between px-1">
-        <span className="text-ink-faintest text-3xs font-mono">00:00</span>
-        <span className="text-ink-faintest text-3xs font-mono">00:05</span>
-        <span className="text-ink-faintest text-3xs font-mono">00:10</span>
+        <span className="text-ink-fainter text-3xs font-mono">00:00</span>
+        <span className="text-ink-fainter text-3xs font-mono">00:05</span>
+        <span className="text-ink-fainter text-3xs font-mono">00:10</span>
       </div>
 
       {/* Tracks container */}

@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  currentFontPlatform,
   describeFontPart,
   fontGroupsOf,
+  fontPartInView,
+  fontPlatformViewOptions,
   fontRoleNote,
   slotInputValue,
+  splitFontStack,
   stackWithSlotFont,
 } from "./appearance-font-helpers";
 import { DEFAULT_INTERFACE_FONT, DEFAULT_TERMINAL_FONT } from "~/lib/appearance";
@@ -101,5 +105,64 @@ describe("fontRoleNote（ISSUE #4059：每一项什么时候在用，界面上�
   it("未知项按是否首项给通用说明（自定义字体）", () => {
     expect(fontRoleNote("Inter", true)).toBe("优先使用");
     expect(fontRoleNote("Inter", false)).toBe("缺字时回退");
+  });
+});
+
+describe("currentFontPlatform（ISSUE #4700：浏览器侧判运行平台）", () => {
+  it("按 navigator.platform + userAgent 判三平台", () => {
+    expect(currentFontPlatform("Win32 Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("windows");
+    expect(currentFontPlatform("MacIntel Mozilla/5.0 (Macintosh; Intel Mac OS X 14)")).toBe(
+      "macos",
+    );
+    expect(currentFontPlatform("Linux x86_64 Mozilla/5.0 (X11; Linux)")).toBe("linux");
+    expect(currentFontPlatform("Linux; Android 14; Pixel 8")).toBe("linux");
+  });
+
+  it("判不出兜底 windows（桌面壳主力平台）", () => {
+    expect(currentFontPlatform("")).toBe("windows");
+    expect(currentFontPlatform("SomeUnknownShell")).toBe("windows");
+  });
+});
+
+describe("fontPartInView（ISSUE #4700：陈列按平台过滤）", () => {
+  it("current 视图：Windows 上只留内置 + 本平台 + 通用回退", () => {
+    const hiddenOnWindows = ['"PingFang SC"', '"Noto Sans SC"', "-apple-system"];
+    for (const part of splitFontStack(DEFAULT_INTERFACE_FONT)) {
+      expect(fontPartInView(part, "current", "windows")).toBe(!hiddenOnWindows.includes(part));
+    }
+  });
+
+  it("点名平台视图：切到 macOS 能看到 PingFang SC，看不到 Microsoft YaHei", () => {
+    expect(fontPartInView('"PingFang SC"', "macos", "windows")).toBe(true);
+    expect(fontPartInView('"Microsoft YaHei"', "macos", "windows")).toBe(false);
+    expect(fontPartInView('"Noto Sans SC"', "macos", "windows")).toBe(false);
+  });
+
+  it("all 视图：任何平台的字面都显示", () => {
+    expect(fontPartInView('"PingFang SC"', "all", "windows")).toBe(true);
+    expect(fontPartInView('"Microsoft YaHei"', "all", "macos")).toBe(true);
+    expect(fontPartInView("-apple-system", "all", "linux")).toBe(true);
+  });
+
+  it("内置与通用回退在任何平台都显示；自定义字体恒显示", () => {
+    expect(fontPartInView("var(--font-geist-sans)", "current", "linux")).toBe(true);
+    expect(fontPartInView("system-ui", "current", "linux")).toBe(true);
+    expect(fontPartInView('"IBM Plex Mono"', "current", "linux")).toBe(true);
+  });
+});
+
+describe("fontPlatformViewOptions（ISSUE #4700）", () => {
+  it("「当前平台」带出实际平台名；其余平台与全部平台固定在列", () => {
+    expect(fontPlatformViewOptions("windows").map((option) => option.label)).toEqual([
+      "当前平台 · Windows",
+      "Windows",
+      "macOS",
+      "Linux / Android",
+      "全部平台",
+    ]);
+  });
+
+  it("平台未判出时（挂载前）「当前平台」不带后缀", () => {
+    expect(fontPlatformViewOptions(null)[0]?.label).toBe("当前平台");
   });
 });

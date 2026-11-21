@@ -41,14 +41,14 @@ function RatingStars({
         >
           <Star
             className={
-              value !== null && star <= value ? "fill-warning text-warning" : "text-ink-faintest"
+              value !== null && star <= value ? "fill-warning text-warning" : "text-ink-fainter"
             }
             data-icon="inline-start"
             size={14}
           />
         </Button>
       ))}
-      {value !== null && <span className="text-ink-faintest text-2xs">{value} / 5</span>}
+      {value !== null && <span className="text-ink-fainter text-2xs">{value} / 5</span>}
     </div>
   );
 }
@@ -140,7 +140,7 @@ export function HumanVerdictRow({
         )}
       </div>
       {verdict ? (
-        <p className="text-ink-faintest text-2xs">
+        <p className="text-ink-fainter text-2xs">
           人已拍板：{verdict.pass ? "通过" : "否决"}
           {verdict.note ? ` · ${verdict.note}` : ""}
           {verdict.at ? ` · ${verdict.at.slice(0, 10)}` : ""}

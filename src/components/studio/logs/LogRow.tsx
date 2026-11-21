@@ -28,6 +28,7 @@ import {
   LOG_ROW_TEXT_ATTRIBUTE,
   TOKEN_CLASS,
   rowFragments,
+  stripCategoryPrefixes,
   type RowToken,
 } from "./log-row-style";
 
@@ -38,11 +39,12 @@ const FRAGMENT_CACHE = new Map<string, Array<RowToken>>();
 const FRAGMENT_CACHE_MAX = 5000;
 
 /** 密度档 → 行的上下内边距 class（与 `log-virtual` 的 `DENSITY_PADDING` 对齐，行高同口径）。
- *  标准档 `py-3`（行高 44）来自设计稿「日志面板 · 重设计」的疏朗行距；紧凑/宽松档照同一梯队推。 */
+ *  三档整体下调一档（ISSUE #4716）：标准档 `py-1`（行高 28）即下调前的「紧凑」，宽松档 `py-3`
+ *  （行高 44）即下调前的「标准」；新紧凑档 `py-0.5` 比原最窄档再收一档。 */
 const DENSITY_PY_CLASS: Record<LogDensity, string> = {
-  compact: "py-1",
-  standard: "py-3",
-  relaxed: "py-4",
+  compact: "py-0.5",
+  standard: "py-1",
+  relaxed: "py-3",
 };
 
 /* 搜索命中 `<mark>` 高亮——琥珀是"荧光笔"的通用视觉语言、不是状态色
@@ -304,9 +306,10 @@ export const LogRow = memo(function LogRow({
   keyword: string;
   /** 点标题行折叠 / 展开（`Disclosure` 的受控回调）；回调带 id 以便面板方用稳定引用。 */
   onToggleExpand: (id: string) => void;
-  /** false = 精简显示：隐藏时刻 / 级别 / 位置 / 来源列，只留正文与复制按钮（复制选中内容时不带前缀）。 */
+  /** false = 精简显示：隐藏时刻 / 级别 / 位置 / 来源列与行首类别前缀，只留正文（复制也不带元信息）。 */
   showDetails?: boolean;
-  style: React.CSSProperties;
+  /** 附加内联样式（可选）。行盒的尺寸下限由面板方的包裹层（minHeight）承载，行自身按内容自然高度渲染。 */
+  style?: React.CSSProperties;
   wrap: boolean;
 }) {
   /* 文件路径那枚的复制：**显式静默**失败 —— 整条路径就印在按钮上，
@@ -322,6 +325,9 @@ export const LogRow = memo(function LogRow({
   );
 
   const location = entry.location;
+  /* 精简列档（隐藏时刻 / 级别 / 来源）连行首的类别前缀（`[orchestrator]` 等）一并剥掉：
+   * 这一刻用户要的是最简洁的正文（ISSUE #4717）；完整档保留前缀（它们已被调成背景层 gray）。 */
+  const displayMessage = showDetails ? entry.message : stripCategoryPrefixes(entry.message);
   const timeNode = (
     <time
       className="text-ink-muted shrink-0 tabular-nums"
@@ -345,7 +351,7 @@ export const LogRow = memo(function LogRow({
       : "点击展开完整 JSON"
     : wrap
       ? undefined
-      : entry.message;
+      : displayMessage;
   const messageNode = (
     <Hint label={messageTitle}>
       <span
@@ -356,7 +362,7 @@ export const LogRow = memo(function LogRow({
           truncated ? "truncate" : "wrap-break-word whitespace-pre-wrap"
         } ${LEVEL_TEXT_STYLES[entry.level]}`}
       >
-        <HighlightedText keyword={keyword} text={entry.message} />
+        <HighlightedText keyword={keyword} text={displayMessage} />
       </span>
     </Hint>
   );
@@ -389,8 +395,14 @@ export const LogRow = memo(function LogRow({
       <span className="text-ink-muted text-2xs shrink-0">{entry.source}</span>
     ) : null;
   /* 复制按钮永远在**最后一列**：它是行的终点，位置固定用户才找得到；
-     `self-center` 让它在多行（换行显示）的行里也贴住垂直中线。 */
-  const copyNode = <RowCopyButton entry={entry} includeMeta={showDetails} />;
+     `self-center` 让它在多行（换行显示）的行里也贴住垂直中线。
+     精简列档下复制的是剥掉前缀后的正文——列都藏起来了，前缀也不该混进复制结果。 */
+  const copyNode = (
+    <RowCopyButton
+      entry={showDetails ? entry : { ...entry, message: displayMessage }}
+      includeMeta={showDetails}
+    />
+  );
 
   if (!expandable) {
     return (

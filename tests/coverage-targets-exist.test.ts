@@ -83,6 +83,11 @@ function matchedCount(glob: string): number {
   return files.filter((f) => re.test(f)).length;
 }
 
+/** 一个文件是否落在 `coverage.include` 的命中面里（报告的收集面由它决定）。 */
+function includeHit(file: string): boolean {
+  return includeEntries.some((glob) => globToRegExp(unescapeGlob(glob)).test(file));
+}
+
 describe("覆盖率配置的每一条都要落到真实文件", () => {
   it("配置真的解析出了两份清单（解析失效时本条要红，不要静默绿）", () => {
     expect(coverage, "vitest.config.ts 的 test.coverage 解析不到了").toBeTruthy();
@@ -109,9 +114,7 @@ describe("覆盖率配置的每一条都要落到真实文件", () => {
   });
 
   it("匹配器本身不是空转：include 合起来要覆盖到成规模的源文件", () => {
-    const reached = files.filter((f) =>
-      includeEntries.some((glob) => globToRegExp(unescapeGlob(glob)).test(f)),
-    );
+    const reached = files.filter(includeHit);
     expect(
       reached.length,
       `include 共 ${includeEntries.length} 条却只命中 ${reached.length} 个文件 —— 先怀疑匹配口径`,
@@ -139,6 +142,39 @@ describe("覆盖率配置的每一条都要落到真实文件", () => {
       dangling,
       `这些门槛条目指向不存在的文件，等于一扇没人判的门：\n${dangling.join("\n")}`,
     ).toEqual([]);
+  });
+
+  it("coverage.thresholds 的每个键都要被 include 命中（只加门槛忘加 include = 门槛静默失效，ISSUE #4602）", () => {
+    /* 「键 → 磁盘文件存在」只证明文件在，不证明它进得了覆盖率报告：报告的收集面由
+     * `coverage.include` 决定。门槛键指向的真实文件若一条 include 都不命中，门槛在
+     * 报告里就没有对象，全仓照样绿 —— 历史事故族（ui/file-picker.tsx、custom-nodes、
+     * DraftIntegrityHint）都是「加门槛忘加 include」。这里判：每个门槛键匹配到的
+     * 真实文件，必须至少有一个落在 include 的命中面里（键的面整体脱靶才算红，
+     * 部分命中时门槛对命中到的文件仍有牙）。 */
+    const uncovered = thresholdKeys.filter((key) => {
+      const keyRe = globToRegExp(unescapeGlob(key));
+      const keyFiles = files.filter((f) => keyRe.test(f));
+      return keyFiles.length > 0 && !keyFiles.some(includeHit);
+    });
+    expect(
+      uncovered,
+      `这些门槛键的匹配文件全部不在 include 的收集面里 —— 门槛在报告里没有对象，静默失效：\n${uncovered.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("只加门槛忘加 include 的键会被当场抓出（判据真的有牙）", () => {
+    /* 反向自证（与上面 matchedCount 的探针同款）：拿一个磁盘上真实存在、但不被
+     * 任何 include 命中的文件伪装成门槛键 —— 上面的对账判据必须能把它标红；
+     * 若 src/ 下找不出这样的文件（收集面全覆盖），本条当场红，提示换探针。 */
+    const outside = files.find((f) => !includeHit(f));
+    expect(outside, "src/ 下没有 include 之外的文件，探针造不出来了").toBeTruthy();
+    const probe = outside!;
+    const probeFiles = files.filter((f) => globToRegExp(unescapeGlob(probe)).test(f));
+    expect(probeFiles.length, "探针键匹配不到自身").toBeGreaterThan(0);
+    expect(
+      probeFiles.some(includeHit),
+      `${probe} 竟被 include 命中 —— 探针失效，请换一个文件`,
+    ).toBe(false);
   });
 
   it("删掉一条真实档会让本判据变红（判据真的有牙）", () => {

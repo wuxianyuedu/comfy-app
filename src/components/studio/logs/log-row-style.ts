@@ -104,6 +104,23 @@ const TOKEN_STYLES: Array<{ pattern: RegExp; style: AnsiStyleKey }> = [
 /** 路径那一档的样式键（与 `LogRow` 里那个可点按钮的常态色同源，见那里的说明）。 */
 const PATH_STYLE: AnsiStyleKey = "magenta-bright";
 
+/**
+ * 精简列档（隐藏时刻 / 级别 / 来源）下要从行首剥掉的「类别前缀」。词表与上面
+ * TOKEN_STYLES 的类别档同源（orchestrator / launcher / dev-launcher / tauri /
+ * ComfyAPP / app_lib[::子模块] / 5–8 位会话短 id），另加 `app`（应用运行日志
+ * 自己的来源标记，与前面几枚同族）：这一档用户要的是最简洁的正文，连这些
+ * 「这条日志从哪来」的标记一并隐藏（ISSUE #4717）。
+ * 刻意只认这份词表、且只剥**行首连续**的若干个：正文里合法的 `[...]`（`[OK]`、
+ * 时间戳、JSON 数组、四位以内的端口括号等）都不是类别标记，原样保留。
+ */
+const CATEGORY_PREFIX_RE =
+  /^\s*(?:\[(?:app|orchestrator|launcher|dev-launcher|tauri|ComfyAPP|app_lib(?:::[a-z_]+)?|[0-9a-f]{5,8})\]\s*)+/i;
+
+/** 剥掉行首连续的类别前缀，返回剩余正文（无前缀时原样返回）。 */
+export function stripCategoryPrefixes(message: string): string {
+  return message.replace(CATEGORY_PREFIX_RE, "");
+}
+
 /** 行里被命中的一段（半开区间 `[start, end)`）。 */
 type StyledSpan = {
   end: number;

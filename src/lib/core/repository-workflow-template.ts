@@ -35,7 +35,7 @@ function listHasRaw(rawJson: unknown): boolean {
  *  `positions` 一直没下发；`rawJson` 原本以「可执行性判据与紧凑预览都以它为
  *  真值来源」为由留在投影里 —— 但列表行真正消费的只有它的派生结论 `hasRaw`
  *  （预览字段在 #4557 核对后确认全仓零消费，已随本单移除），结论在写入时由
- *  {@link listHasRaw} 物化进 `hasRaw` 列，列表查询不再碰整图。 */
+ *  `listHasRaw` 物化进 `hasRaw` 列，列表查询不再碰整图。 */
 /* SAFETY: 类型断言已复核 */
 const LIST_ROW_COLUMNS = {
   id: workflowTemplate.id,
@@ -117,9 +117,9 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
    *  与 `rawJson` 都是**大 JSON blob**（单行可达数 MB），全字段读法让 SQLite
    *  把整行物化、驱动再把几 MB 的字符串跨过 C++ ↔ JS 边界，堆压力与 GC 全落在
    *  一次轮询上（#4557：库大时列表线性变慢的存储侧根源）。列表行对 rawJson
-   *  的唯一消费是派生结论 `hasRaw`，由 {@link listHasRaw} 在写入时物化进列；
+   *  的唯一消费是派生结论 `hasRaw`，由 `listHasRaw` 在写入时物化进列；
    *  存量行的 NULL 在这里按用户**惰性回填一次**（只扫 NULL 行，SQL 直接判
-   *  JSON 形状，与 {@link listHasRaw} 同一口径），此后回填语句匹配零行。
+   *  JSON 形状，与 `listHasRaw` 同一口径），此后回填语句匹配零行。
    *
    *  mock 边界：`~/server/db` 的测试替身走的是内存实现，列投影在类型层
    *  收窄、在行为层只影响读了多少 —— 见 `repository.test.ts` 的断言。 */
@@ -145,7 +145,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
    *  rawJson 的全部写入都经这个方法（workflow-mutations 的 update / resync /
    *  分组便签回写）或 {@link createImported}，在仓储收口物化就不必每个调用点
    *  各算一遍。rawJson 不在 patch 里 = 该列不动，hasRaw 保持原值。
-   *  `hasRawContent` 的判据本体见 {@link listHasRaw}（分层约束下判据在 core
+   *  `hasRawContent` 的判据本体见 `listHasRaw`（分层约束下判据在 core
    *  本地复刻，两处互为镜像）。 */
   override async update(
     id: string,

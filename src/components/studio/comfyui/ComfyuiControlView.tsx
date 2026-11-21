@@ -3,7 +3,7 @@
 /**
  * 侧栏「ComfyUI」页 · 第③层（纯视图，规范 17 §17.2）。
  * 两段顺序即读屏顺序：当前状态 → 启动日志。这一页的主角就是这两样：
- * 日志区弹性铺满剩余高度（fill），常驻说明小字按用户反馈撤掉（hideStreamHint）。
+ * 日志区弹性铺满剩余高度（fill）。
  * 启动路径 / 安装形态的完整出口在「设置 → 创作后端」，本页不重复（用户反馈 #4710）；
  * 屏名由 PageHeader 的 srTitle 给读屏。 */
 
@@ -213,8 +213,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
       {/* 启动日志：启动期间每秒跟随 log/services/comfyui-runtime.log，让「正在启动…」
           不再是个黑盒（硬规则 4 的用户可见出口）。右上角的下拉按「每次启动」切换
           （服务端按会话横幅切分），全屏按钮铺满标题行下方的内容区。
-          这一页的主角就是「运行状态 + 日志」：日志区弹性铺满剩余高度（fill），
-          常驻的流前缀小字也按反馈撤掉（hideStreamHint）。 */}
+          这一页的主角就是「运行状态 + 日志」：日志区弹性铺满剩余高度（fill）。 */}
       <RuntimeLogBox
         className="mt-6"
         emptyHint={
@@ -225,7 +224,6 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
         }
         fileName="comfyui-runtime.log"
         fill
-        hideStreamHint
         log={c.log}
       />
     </DocumentFrame>

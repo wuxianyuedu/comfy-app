@@ -39,6 +39,7 @@ import {
   createProject,
   deleteProject,
   deleteProjectEverywhere,
+  EVENT_FETCH_COALESCE_TTL_MS,
   findNextAvailableName,
   getAllProjectNames,
   getActiveId,
@@ -521,6 +522,61 @@ describe("listProjectsWithServer（并集 + 出处标注）", () => {
     const { entries, ok } = await listProjectsWithServer();
     expect(ok).toBe(false);
     expect(entries.map((entry) => entry.id)).toEqual(["proj_off"]);
+  });
+});
+
+/* ISSUE #4678：同一拍的结构性事件会让侧栏（use-sidebar-projects）与作品库
+ * （use-works-gallery）各自全量重拉一次并集——同一事件两路各发一次
+ * `project.list`（全列、上限 500 行）。事件触发的那一跳（`coalesce: true`）
+ * 在短 TTL 窗口内共享同一在飞请求；手动 refresh / 挂载首拉不带标记，永远新鲜。
+ * 时间用假钟全控：每条用例先把时钟推过 TTL，上一条用例留下的在飞态必已过期。 */
+describe("listProjectsWithServer 的事件短 TTL 合并（ISSUE #4678）", () => {
+  /* 每条用例一段互不重叠的时钟：useFakeTimers 重装会把钟拨回真实当下，
+   * 上一条用例留下的在飞态（startedAt）因此可能仍在 TTL 内 —— 时钟段跳开
+   * 后它必已过期，第一条 coalesce 调用一定是全新取数。 */
+  let clockBase = 1_700_000_000_000;
+  beforeEach(() => {
+    clockBase += EVENT_FETCH_COALESCE_TTL_MS * 10;
+    vi.useFakeTimers();
+    vi.setSystemTime(clockBase);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("TTL 窗口内两次 coalesce 调用只发一次 project.list", async () => {
+    projectListQuery.mockResolvedValue([]);
+    await listProjectsWithServer({ coalesce: true });
+    await listProjectsWithServer({ coalesce: true });
+    expect(projectListQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("并发（第一笔未落定）也一样合并", async () => {
+    projectListQuery.mockResolvedValue([]);
+    await Promise.all([
+      listProjectsWithServer({ coalesce: true }),
+      listProjectsWithServer({ coalesce: true }),
+    ]);
+    expect(projectListQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("不带 coalesce 的调用永远全量重取（手动 refresh / 挂载首拉不合并）", async () => {
+    projectListQuery.mockResolvedValue([]);
+    await listProjectsWithServer({ coalesce: true });
+    await listProjectsWithServer();
+    await listProjectsWithServer();
+    expect(projectListQuery).toHaveBeenCalledTimes(3);
+  });
+
+  it("TTL 过了才重新取（窗口内一次，出窗重新发）", async () => {
+    projectListQuery.mockResolvedValue([]);
+    await listProjectsWithServer({ coalesce: true });
+    vi.advanceTimersByTime(EVENT_FETCH_COALESCE_TTL_MS - 1);
+    await listProjectsWithServer({ coalesce: true });
+    expect(projectListQuery).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    await listProjectsWithServer({ coalesce: true });
+    expect(projectListQuery).toHaveBeenCalledTimes(2);
   });
 });
 
