@@ -86,7 +86,7 @@ export function LogPanelHeader(input: {
           {/* 总数徽标（设计稿「日志面板 · 重设计」）：当前筛选命中的总条数，
           与页脚「匹配 N 条」同口径（同一份 filteredLogs）。分档计数仍在级别
           按钮上（同一份 `originCounts`），两处数字各管一层、不互相复述。 */}
-          <span className="bg-subtle text-ink-muted rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap tabular-nums">
+          <span className="bg-subtle text-ink-muted text-2xs rounded-full px-2.5 py-0.5 font-medium whitespace-nowrap tabular-nums">
             {total} 条
           </span>
         </div>
