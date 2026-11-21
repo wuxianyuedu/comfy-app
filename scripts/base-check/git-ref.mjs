@@ -6,9 +6,10 @@
  *
  * 无副作用:模块加载时不跑任何 git(只算 `ROOT` / `HOOK` 两个路径常量)。
  */
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 /**
  * 「被复算的那份检出」= **调用时的 cwd**，不是脚本自己的位置。
@@ -207,16 +208,13 @@ export function cleanGitEnv() {
  */
 export function git(args, cwd = ROOT) {
   try {
-    /* `stdout` / `stderr` 实测在 git 起不来（ENOENT）时是 `undefined`，
-     * `@types/node` 按 `encoding` 声明成 `string` ⇒ 下面 `?? ""` 是给运行时兜的。 */
-    const r = /** @type {{ status: number | null, stdout?: string, stderr?: string }} */ (
-      spawnSync("git", args, {
-        cwd,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-        env: cleanGitEnv(),
-      })
-    );
+    const r = runGateStep("git", args, {
+      cwd,
+      timeoutMs: 30_000,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: cleanGitEnv(),
+      echo: false, // 复算读数会被逐行解析（--base --json），回显不得混进 stdout
+    });
     return {
       ok: r.status === 0,
       status: r.status ?? -1,

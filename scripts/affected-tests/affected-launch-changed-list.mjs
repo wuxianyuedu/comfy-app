@@ -27,9 +27,10 @@
  * 还是「清单算出来是红的」。两者的处置完全不同，所以话术里分开说，并把**条数**一起
  * 念出来（对账用：送过去的条数与改动面条数必须对得上，不许静默截断）。
  */
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 /** 本模块所在目录 —— 定位同目录的 `affected-tests.mjs`（**不靠 cwd**，见下）。 */
 const HERE = import.meta.dirname;
@@ -68,16 +69,18 @@ export function changedFromEnv() {
  * 各自拉进来多少份」。抄一份命令行形状就会在某一次改动里漂开（多一个旗标、少一层
  * encoding），而漂开的表现是那一格静默回到「拿不到归因」。
  *
- * `stdout` / `stderr` 按**可空**声明：`@types/node` 的 `spawnSync` 重载把它们写成非空
- * （`T`），而 ENOENT / 超时（本函数最关心的两个形态）实测就是 `undefined`。
- * 替运行时担保会让下游每一处 `??` 都变成「多余条件」——那是把防御读成噪音。
+ * `stdout` / `stderr` 由 `runGateStep` 归一成**字符串**（起不来 / 超时给空串），
+ * 「没跑到」与「跑完但空」的区分走 `status` / `error` / `timedOut` 那几格。
  *
  * @param {string[]} extra 子进程要额外带的旗标（如 `--attribute`）
  * @param {string[]} changed 改动面清单
- * @returns {{status: number|null, stdout: string|null|undefined, stderr: string|null|undefined, error?: Error|null}}
+ * @returns {{ok: boolean, status: number|null, stdout: string, stderr: string,
+ *            error: NodeJS.ErrnoException | null, timedOut: boolean, outcome: "ran"|"aborted",
+ *            command: string, args: string[]}} `runGateStep` 的收场读数
  */
 export function spawnAffected(extra, changed) {
-  return spawnSync(
+  // 清单解析（秒级）给 120s；改动面经 stdin 送（`input` 由 runGateStep 透传）。
+  return runGateStep(
     process.execPath,
     [
       path.join(HERE, "affected-tests.mjs"),
@@ -85,7 +88,8 @@ export function spawnAffected(extra, changed) {
       ...(changed.length > 0 ? ["--changed-stdin"] : []),
     ],
     {
-      encoding: "utf8",
+      timeoutMs: 120_000,
+      echo: false, // stdout 只有空格分隔的路径一行，回显不得掺入
       ...(changed.length > 0 ? { input: changed.join("\n") } : {}),
     },
   );

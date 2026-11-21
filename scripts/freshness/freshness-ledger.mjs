@@ -26,10 +26,10 @@
  * 两边都得能指出是哪一条 —— 各抄一份清点代码就是 §12.12 的孪生对。
  */
 
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { localStampOf } from "../launcher-core/log.mjs";
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "../..");
@@ -56,7 +56,11 @@ const isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v)
  */
 export function gitUserCandidates() {
   /** @type {unknown} */
-  const gitName = spawnSync("git", ["config", "user.name"], { cwd: ROOT, encoding: "utf8" }).stdout;
+  const gitName = runGateStep("git", ["config", "user.name"], {
+    cwd: ROOT,
+    timeoutMs: 30_000,
+    echo: false, // 候选清单是读数，回显不得掺入
+  }).stdout;
   return [
     process.env.GIT_AUTHOR_NAME,
     process.env.CNB_BUILD_USER_NICKNAME,

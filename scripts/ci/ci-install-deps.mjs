@@ -61,7 +61,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { pnpmInvocation } from "../launcher-core/shell.mjs";
+import { pnpmInvocation, runGateStep } from "../launcher-core/shell.mjs";
 import { installBudgetMs, runInstallWithBudget } from "./ci-install-deadline.mjs";
 import { DEP_FILES, FINGERPRINT_FILE, pnpmInstallFingerprint } from "./ci-deps-face.mjs";
 
@@ -370,7 +370,13 @@ export function pnpmCli(deps = {}) {
  *   与 `runPnpmSync` 同形：`error` 非空 = **命令没起来**（不是「跑完但非零」）。
  */
 export function spawnSettled(command, args, options) {
-  const res = spawnSync(command, args, options);
+  const res = spawnSync(command, args, {
+    ...options,
+    /* 预算（#4679）：本出口兜 600s 墙钟（装机是分钟级动作），调用方给了
+     * `timeout` 就以调用方为准 —— 与 premerge-proof.mjs 的 runQuiet 同一形态：
+     * wrapper 保留 spawnSync 契约，预算在选项层显式给。 */
+    timeout: options.timeout ?? 600_000,
+  });
   /* 这里刻意保留 ||：`error.code` 在个别实现里是空串，那时要念 `message` 那一半。 */
   const err = res.error
     ? /** @type {Error & {code?:string}} */ (res.error).code ||
@@ -679,7 +685,11 @@ export async function main(deps = {}) {
   const run =
     deps.run ??
     ((args) => {
-      const out = spawnSync("git", args, { cwd: ROOT, encoding: "utf8" });
+      const out = runGateStep("git", args, {
+        cwd: ROOT,
+        timeoutMs: 30_000,
+        echo: false, // 依赖指纹 diff 读数，回显不得混进 stdout
+      });
       /* `status` 在 spawn 自身失败时是 `null` —— 那一档在这里与「退非零」同义
        * （都是「这条 diff 拿不到」），所以就地归一，不把 `null` 漏给调用方。 */
       return { status: out.status ?? 1, stdout: out.stdout ?? "" };

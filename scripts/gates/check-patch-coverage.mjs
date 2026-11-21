@@ -38,7 +38,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { spawnSync } from "node:child_process";
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 /** 分母口径的**目录/文件排除**（写死在这里 = 口径的唯一出处；用例钉住）。
  *  纯类型/常量模块没法机械识别 —— v8 对它们要么不产 DA 条目（天然出局），要么
@@ -249,20 +249,22 @@ export function computePatchCoverage({ diffText, lcovMaps }) {
  * @returns {string | null}
  */
 function diffAgainstBase(cwd, baseRef) {
-  const mb = spawnSync("git", ["merge-base", baseRef, "HEAD"], {
+  const mb = runGateStep("git", ["merge-base", baseRef, "HEAD"], {
     cwd,
-    encoding: "utf8",
+    timeoutMs: 30_000,
     stdio: ["ignore", "pipe", "ignore"],
+    echo: false,
   });
   const base = mb.status === 0 ? String(mb.stdout ?? "").trim() : "";
   if (base === "") {
     return null;
   }
-  const diff = spawnSync("git", ["diff", "--no-color", "--unified=0", base, "HEAD"], {
+  const diff = runGateStep("git", ["diff", "--no-color", "--unified=0", base, "HEAD"], {
     cwd,
-    encoding: "utf8",
+    timeoutMs: 30_000,
     maxBuffer: 64 * 1024 * 1024,
     stdio: ["ignore", "pipe", "ignore"],
+    echo: false,
   });
   return diff.status === 0 ? String(diff.stdout ?? "") : null;
 }

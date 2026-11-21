@@ -65,7 +65,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { runGateStep } = require("../launcher-core/shell.mjs");
 
 const ROOT = path.resolve(__dirname, "../..");
 
@@ -151,10 +151,15 @@ function matchedInputs(files) {
 function stagedFiles() {
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/lib/changed-scope.mjs`
    * 的文件头「口径 ④」）。 */
-  const out = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
+  const out = runGateStep(
+    "git",
+    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
+    {
+      cwd: ROOT,
+      timeoutMs: 30_000,
+      echo: false, // 暂存清单读数，不往本判据的 stdout 里掺命令行回显
+    },
+  );
   if (out.status !== 0) {
     return [];
   }

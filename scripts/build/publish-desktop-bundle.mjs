@@ -45,7 +45,6 @@
  * `--root` 相对路径按 `cwd` 解析；优先级高于环境变量 `COMFY_CI_ARTIFACT_ROOT`
  * 与 `pnpm store path` 推导。
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -53,7 +52,7 @@ import process from "node:process";
 import { runContext } from "../ci/ci-daily-build.mjs";
 import { ARTIFACT_ROOT_ENV, resolveArtifactRoot } from "../ci/ci-cache-slot.mjs";
 import { hasRoomForSlot } from "../ci/ci-slot-apply.mjs";
-import { runPnpmSync } from "../launcher-core/shell.mjs";
+import { runGateStep, runPnpmSync } from "../launcher-core/shell.mjs";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..", "..");
@@ -305,7 +304,7 @@ function readAppVersion(cwd) {
 
 /** @param {string[]} args @param {string} cwd @returns {{ok: boolean, stdout: string}} */
 function spawnSyncGit(args, cwd) {
-  const r = spawnSync("git", args, { cwd, encoding: "utf8" });
+  const r = runGateStep("git", args, { cwd, timeoutMs: 30_000, echo: false }); // 发布读数
   return { ok: r.status === 0, stdout: String(r.stdout ?? "").trim() };
 }
 

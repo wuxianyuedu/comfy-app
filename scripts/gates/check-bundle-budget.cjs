@@ -104,7 +104,9 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { runGateStep } = require("../launcher-core/shell.mjs");
+/** git 一次性读数的墙钟预算（#4679）：与 premerge-proof.mjs 现值同口径（30s 档）。 */
+const GIT_READ_BUDGET_MS = 30_000;
 const zlib = require("node:zlib");
 const crypto = require("node:crypto");
 
@@ -159,9 +161,10 @@ const MIN_CHUNKS = 20;
  * git 不可用 / 不在检出里时返回 `null`：那不构成判据，只是少一句归因。
  */
 function headRev() {
-  const res = spawnSync("git", ["rev-parse", "HEAD"], {
+  const res = runGateStep("git", ["rev-parse", "HEAD"], {
     cwd: ROOT,
-    encoding: "utf8",
+    timeoutMs: GIT_READ_BUDGET_MS,
+    echo: false,
   });
   if (res.status !== 0 || typeof res.stdout !== "string") {
     return null;
@@ -188,8 +191,9 @@ function baselineRevState(rev) {
   if (!rev || !REV_SHAPE.test(String(rev))) {
     return { kind: "missing" };
   }
-  const res = spawnSync("git", ["cat-file", "-e", `${rev}^{commit}`], {
-    encoding: "utf8",
+  const res = runGateStep("git", ["cat-file", "-e", `${rev}^{commit}`], {
+    timeoutMs: GIT_READ_BUDGET_MS,
+    echo: false,
   });
   /* 不可达 / 不是本检出的仓库 ⇒ 这一档是「基线过期」（ISSUE #653 的原话：
    * 修订号通常是分支提交，合入后不再有 ref 指向，`git gc` 之后一律查不到）。 */
@@ -217,7 +221,7 @@ function commitsSinceDateTouchingSource(dateStr, limit = 5) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr ?? ""))) {
     return null;
   }
-  const res = spawnSync(
+  const res = runGateStep(
     "git",
     [
       "log",
@@ -228,7 +232,7 @@ function commitsSinceDateTouchingSource(dateStr, limit = 5) {
       "--",
       "src/",
     ],
-    { cwd: ROOT, encoding: "utf8" },
+    { cwd: ROOT, timeoutMs: GIT_READ_BUDGET_MS, echo: false },
   );
   if (res.status !== 0 || typeof res.stdout !== "string") {
     return null;
@@ -260,9 +264,10 @@ function commitsSinceDateTouchingSource(dateStr, limit = 5) {
  * @returns {string | null}
  */
 function trunkReachableRev() {
-  const res = spawnSync("git", ["merge-base", "HEAD", "origin/master"], {
+  const res = runGateStep("git", ["merge-base", "HEAD", "origin/master"], {
     cwd: ROOT,
-    encoding: "utf8",
+    timeoutMs: GIT_READ_BUDGET_MS,
+    echo: false,
   });
   if (res.status !== 0 || typeof res.stdout !== "string") {
     return null;
@@ -287,9 +292,10 @@ function trunkReachableRev() {
 function headIsMergeCommit() {
   /* `cwd` 必须显式给：判据自己也是被从别的目录起起来的（`pnpm build` 收尾 /
    * 子进程跑门禁自检），靠继承来的 cwd 得到的是**另一个仓库**的 HEAD。 */
-  const res = spawnSync("git", ["rev-list", "--parents", "-n", "1", "HEAD"], {
+  const res = runGateStep("git", ["rev-list", "--parents", "-n", "1", "HEAD"], {
     cwd: ROOT,
-    encoding: "utf8",
+    timeoutMs: GIT_READ_BUDGET_MS,
+    echo: false,
   });
   if (res.status !== 0 || typeof res.stdout !== "string") {
     return null;
@@ -321,8 +327,9 @@ function commitsSinceBaseline(rev) {
   if (!rev) {
     return null;
   }
-  const res = spawnSync("git", ["rev-list", "--count", `${rev}..HEAD`], {
-    encoding: "utf8",
+  const res = runGateStep("git", ["rev-list", "--count", `${rev}..HEAD`], {
+    timeoutMs: GIT_READ_BUDGET_MS,
+    echo: false,
   });
   if (res.status !== 0 || typeof res.stdout !== "string") {
     return null;

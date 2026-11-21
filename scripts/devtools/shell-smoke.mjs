@@ -13,10 +13,11 @@
  * 用法：`pnpm shell:smoke`（等价 `python scripts/devtools/win32-shell-smoke.py`）。
  * 场景清单、读数口径与退出码见 `win32-shell-smoke.py` 的文件头。
  */
-import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 const root = path.resolve(import.meta.dirname, "..", "..");
 const script = path.join(root, "scripts", "devtools", "win32-shell-smoke.py");
@@ -36,7 +37,7 @@ if (!existsSync(exe)) {
   process.exit(2);
 }
 const python = process.env.COMFYAPP_SMOKE_PYTHON || "python";
-const probe = spawnSync(python, ["--version"], { encoding: "utf8" });
+const probe = runGateStep(python, ["--version"], { timeoutMs: 30_000, echo: false });
 if (probe.status !== 0) {
   console.error(
     `[shell-smoke] 找不到可用的 Python（${python} --version 退 ${probe.status}）。` +
@@ -46,5 +47,6 @@ if (probe.status !== 0) {
   process.exit(2);
 }
 
-const run = spawnSync(python, [script], { stdio: "inherit" });
+// 壳冒烟真跑（Win32 会话观察，分钟级内）：给 300s，只封「挂死不返回」。
+const run = runGateStep(python, [script], { stdio: "inherit", timeoutMs: 300_000 });
 process.exit(run.status ?? 2);

@@ -173,6 +173,8 @@ if (hostname) {
 echoCommandLine(process.execPath, [nextBin, ...nextArgs]);
 
 // Next.js dev 读取 PORT 环境变量；显式透传给 next dev 子进程
+// **刻意不给 timeout（#4679 唯一豁免档之一）**：这里起的就是长驻 dev server 本体，
+// 本进程的生命周期 = 服务的生命周期；任何有限预算都会在到点时砍掉正在服务的 Next。
 const result = spawnSync(process.execPath, [nextBin, ...nextArgs], {
   stdio: "inherit",
   env: { ...process.env, PORT: String(port) },

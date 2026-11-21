@@ -53,10 +53,11 @@
  * （把空清单一律读成「不知道」会让 master 上的本地复算永远退 2 —— 那正是
  * 「降档不许被读成全套过了」的忌讳。）
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+import { runGateStep } from "../launcher-core/shell.mjs";
 
 import { changedFilesForBaseRef } from "../lib/changed-scope.mjs";
 import { intentionalEmptyCommit } from "../platform/intentional-empty-commit.mjs";
@@ -81,10 +82,15 @@ export const GATE_SCRIPT = "scripts/gates/check-known-failed-stale.mjs";
 export function stagedFiles() {
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/lib/changed-scope.mjs`
    * 的文件头「口径 ④」）。 */
-  const out = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
+  const out = runGateStep(
+    "git",
+    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
+    {
+      cwd: ROOT,
+      timeoutMs: 30_000,
+      echo: false, // 暂存清单读数，回显不得混进本判据的 stdout
+    },
+  );
   if (out.status !== 0) {
     return [];
   }
@@ -146,9 +152,10 @@ export function runGate({ staged, selfTest }) {
 
 /** 真跑自证（端到端：造探针 → 起 vitest → 读证据 → 判两侧）。 */
 function runSelfTest() {
-  const r = spawnSync(process.execPath, [path.join(ROOT, GATE_SCRIPT), "--self-test"], {
+  const r = runGateStep(process.execPath, [path.join(ROOT, GATE_SCRIPT), "--self-test"], {
     cwd: ROOT,
-    encoding: "utf8",
+    // 自证是真跑判据（分钟级）：给足缺省档预算，只封「挂死不返回」。
+    timeoutMs: 600_000,
     maxBuffer: 64 << 20,
   });
   if (r.error) {

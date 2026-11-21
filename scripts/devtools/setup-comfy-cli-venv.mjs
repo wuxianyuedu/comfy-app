@@ -36,7 +36,7 @@ import path from "node:path";
 import process from "node:process";
 
 import { PYTHON_MIN_VERSION } from "../ci/ci-env-probe.mjs";
-import { whichCommand } from "../launcher-core/shell.mjs";
+import { runGateStep, whichCommand } from "../launcher-core/shell.mjs";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..", "..");
@@ -464,9 +464,9 @@ function main() {
  * @returns {boolean}
  */
 function pythonMeetsFloor(pythonPath) {
-  const r = spawnSync(pythonPath, ["--version"], {
-    encoding: "utf8",
-    windowsHide: true,
+  const r = runGateStep(pythonPath, ["--version"], {
+    timeoutMs: 30_000,
+    echo: false, // 版本串从 stdout/stderr 解析，回显不得掺入
   });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   const m = /Python\s+(?<major>\d+)\.(?<minor>\d+)(?:\.(?:\d+))?/.exec(out);
