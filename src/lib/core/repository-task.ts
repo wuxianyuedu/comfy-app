@@ -458,9 +458,11 @@ export class TaskRepository extends DrizzleRepository<Task> {
    * 成片监看每 4s 一轮、每轮要按镜头取十几个任务的进度，逐个查就是每轮 N 次
    * 往返（N = 镜头数），跑满 240 轮是上万次查询；批量版一轮只发一条 `IN`。
    * 这里连 `resultImages` 一起取（成片镜头要从中挑视频路径），避免调用方
-   * 为拿它再查一遍。 */
+   * 为拿它再查一遍。`error` 供合成前把失败原因写进影片日志（ISSUE #4609）
+   * ——同一批取走，不为一句人话原因再发一轮单查。 */
   async findExecutionProgressMany(taskIds: Array<string>): Promise<
     Array<{
+      error: string | null;
       id: string;
       progress: number;
       resultImages: unknown;
@@ -476,6 +478,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
         status: task.status,
         progress: task.progress,
         resultImages: task.resultImages,
+        error: task.error,
       })
       .from(task)
       .where(inArray(task.id, taskIds));

@@ -9,8 +9,9 @@ import type { FilmStudioController } from "./hooks/use-film-studio";
 import { STAGE_LABEL } from "./film-studio-config";
 import { sizeSpecSummary } from "~/lib/media/size-presets";
 
-type FilmStudioPreviewPanelProps = {
-  c: FilmStudioController;
+export type FilmStudioPreviewPanelProps = {
+  /** 面板只消费这四块控制器读数——按 Pick 收窄，测试桩与复用方都不必背整个控制器。 */
+  c: Pick<FilmStudioController, "film" | "size" | "fps" | "running">;
   isPlaying: boolean;
   onTogglePlay: () => void;
 };
@@ -20,6 +21,12 @@ export function FilmStudioPreviewPanel({
   isPlaying,
   onTogglePlay,
 }: FilmStudioPreviewPanelProps) {
+  /* 知情交付（ISSUE #4609）：部分镜头失败的影片照样合成出片（DONE），预览区
+   * 顶部露出缺失说明——缺了几镜、用了几镜，别让用户拿到缺段的片子还当它完整。 */
+  const totalShotCount = c.film?.shots.length ?? 0;
+  const failedShotCount = c.film?.shots.filter((shot) => shot.status === "FAILED").length ?? 0;
+  const partialFailed = c.film?.status === "DONE" && failedShotCount > 0;
+
   return (
     <div className="border-border-subtle bg-canvas-deep relative mb-3 flex min-h-80 flex-1 items-center justify-center overflow-hidden rounded-2xl border">
       {/* Resolution hint：写尺寸表达（比例 + 档位），与全项目的尺寸口径一致。 */}
@@ -82,6 +89,14 @@ export function FilmStudioPreviewPanel({
           controls
           src={c.film.finalVideo}
         />
+      )}
+
+      {/* 部分镜头失败仍合成了成片：压在播放器上方的缺失说明（ISSUE #4609）。 */}
+      {partialFailed && (
+        <div className="border-warning/30 bg-warning/15 text-warning-strong absolute top-2.5 right-3 left-3 rounded-lg border px-3 py-1.5 text-center text-xs font-medium">
+          {failedShotCount} 镜失败，已用其余 {totalShotCount - failedShotCount}{" "}
+          镜合成；失败原因见影片日志
+        </div>
       )}
     </div>
   );
