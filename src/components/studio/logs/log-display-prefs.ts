@@ -18,12 +18,20 @@ export type LogDensity = "compact" | "standard" | "relaxed";
 /** 是否隐藏「时刻 / 级别 / 位置 / 来源」等非正文列（只留日志正文与复制按钮）。 */
 export type LogColumnVisibility = "full" | "message-only";
 
+/** 日志正文的字号档：小 / 标准 / 大（行盒高度见 `log-virtual` 的 `LOG_LINE_BOX`）。 */
+export type LogFontSize = "small" | "standard" | "large";
+
 type LogDisplayPrefs = {
   columns: LogColumnVisibility;
   density: LogDensity;
+  fontSize: LogFontSize;
 };
 
-const DEFAULT_PREFS: LogDisplayPrefs = { density: "standard", columns: "full" };
+const DEFAULT_PREFS: LogDisplayPrefs = {
+  columns: "full",
+  density: "standard",
+  fontSize: "standard",
+};
 
 const STORAGE_KEY = "comfyapp:log-display-prefs";
 
@@ -48,6 +56,13 @@ function readInitial(): LogDisplayPrefs {
       }
       if (parsed.columns === "message-only") {
         next.columns = "message-only";
+      }
+      if (
+        parsed.fontSize === "small" ||
+        parsed.fontSize === "standard" ||
+        parsed.fontSize === "large"
+      ) {
+        next.fontSize = parsed.fontSize;
       }
     }
     return next;
@@ -79,6 +94,13 @@ export function setLogDensity(density: LogDensity): void {
     return;
   }
   commit({ ...current, density });
+}
+
+export function setLogFontSize(fontSize: LogFontSize): void {
+  if (current.fontSize === fontSize) {
+    return;
+  }
+  commit({ ...current, fontSize });
 }
 
 export function setLogColumns(columns: LogColumnVisibility): void {

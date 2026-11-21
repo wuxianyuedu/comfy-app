@@ -337,3 +337,30 @@ describe("行距三档（ISSUE #4716）", () => {
     expect(rowHeightFor("relaxed")).toBe(45);
   });
 });
+
+/* 字号三档（ISSUE #4746）：行盒随档位走（小 = 标准 = 20、大 = 24，见 LOG_LINE_BOX）；
+ * 折行容量按字号折算（行是 font-mono，字符宽 ∝ 字号）——大字号同宽估出更多行、
+ * 小字号更少，方向错了会裁字。 */
+describe("字号三档（ISSUE #4746）", () => {
+  it("行盒：小档与标准同高（与级别徽标同高），大档更高", () => {
+    expect(rowHeightFor("standard", "small")).toBe(rowHeightFor("standard", "standard"));
+    expect(rowHeightFor("standard", "large")).toBeGreaterThan(rowHeightFor("standard", "standard"));
+    /* 大档 = 24px 行盒 + py-1 上下 8 + 下边框 1。 */
+    expect(rowHeightFor("standard", "large")).toBe(33);
+  });
+
+  it("折行容量按字号折算：大字号同宽估出更多行、小字号更少", () => {
+    const long = "x".repeat(240);
+    const standard = layoutRows([{ message: long }], true, 130);
+    const large = layoutRows([{ message: long }], true, 130, { fontSize: "large" });
+    const small = layoutRows([{ message: long }], true, 130, { fontSize: "small" });
+    expect(large.rows[0]!.size).toBeGreaterThan(standard.rows[0]!.size);
+    expect(small.rows[0]!.size).toBeLessThan(standard.rows[0]!.size);
+  });
+
+  it("多行消息的行高随字号档走（estimateRowHeight）", () => {
+    expect(estimateRowHeight("a\nb\nc", true, "standard", "large")).toBe(
+      rowHeightFor("standard", "large") + 2 * 24,
+    );
+  });
+});

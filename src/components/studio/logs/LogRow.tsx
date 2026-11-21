@@ -21,6 +21,7 @@ import { useFlashState } from "~/components/ui/use-flash-state";
 import { formatTime } from "./log-format";
 import { useRevealLogPath } from "./use-reveal-log-path";
 import { LOG_ROW_EXPANDED, rowHeightFor, type LogDensity } from "./log-virtual";
+import type { LogFontSize } from "./log-display-prefs";
 import {
   LEVEL_BADGE_LABELS,
   LEVEL_BADGE_STYLES,
@@ -45,6 +46,15 @@ const DENSITY_PY_CLASS: Record<LogDensity, string> = {
   compact: "py-0.5",
   standard: "py-1",
   relaxed: "py-3",
+};
+
+/** 字号档 → 行的字体与行盒 class（行盒与 `log-virtual` 的 `LOG_LINE_BOX` 同口径）：
+ *  小档字更小但行盒仍是 20px（与级别徽标同高），大档 24px 由正文行决定——
+ *  三档都保持行内上下留白对称（ISSUE #4744 的判据不回退）。 */
+const ROW_FONT_CLASS: Record<LogFontSize, string> = {
+  small: "text-xs leading-5",
+  standard: "text-sm leading-5",
+  large: "text-base leading-6",
 };
 
 /* 搜索命中 `<mark>` 高亮——琥珀是"荧光笔"的通用视觉语言、不是状态色
@@ -296,6 +306,7 @@ export const LogRow = memo(function LogRow({
   density = "standard",
   entry,
   expanded,
+  fontSize = "standard",
   keyword,
   onToggleExpand,
   showDetails = true,
@@ -307,6 +318,8 @@ export const LogRow = memo(function LogRow({
   entry: LogEntry;
   /** 该行是否处于展开态（只对可展开的原始输出行有意义）。 */
   expanded: boolean;
+  /** 字号档（ISSUE #4746）：正文与时刻列的字号随它走，与虚拟行高同口径。 */
+  fontSize?: LogFontSize;
   keyword: string;
   /** 点标题行折叠 / 展开（`Disclosure` 的受控回调）；回调带 id 以便面板方用稳定引用。 */
   onToggleExpand: (id: string) => void;
@@ -411,7 +424,7 @@ export const LogRow = memo(function LogRow({
   if (!expandable) {
     return (
       <div
-        className={`border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 font-mono text-sm leading-5 ${DENSITY_PY_CLASS[density]}`}
+        className={`border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 font-mono ${ROW_FONT_CLASS[fontSize]} ${DENSITY_PY_CLASS[density]}`}
         style={style}
       >
         {showDetails && timeNode}
@@ -429,7 +442,7 @@ export const LogRow = memo(function LogRow({
    * `gap`（不要行间距，否则标题行 + 面板会超出 `LOG_ROW_EXPANDED` 而被裁掉）。 */
   return (
     <div
-      className="border-border-subtle hover:bg-subtle/60 group overflow-hidden border-b font-mono text-sm leading-5"
+      className={`border-border-subtle hover:bg-subtle/60 group overflow-hidden border-b font-mono ${ROW_FONT_CLASS[fontSize]}`}
       style={style}
     >
       <Disclosure
@@ -459,7 +472,10 @@ export const LogRow = memo(function LogRow({
         trigger={messageNode}
       >
         {expanded && cliJson ? (
-          <div className="min-h-0" style={{ height: LOG_ROW_EXPANDED - rowHeightFor(density) }}>
+          <div
+            className="min-h-0"
+            style={{ height: LOG_ROW_EXPANDED - rowHeightFor(density, fontSize) }}
+          >
             <LazyJsonViewer
               data={cliJson.value}
               initialCollapsedDepth={2}
