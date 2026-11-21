@@ -194,6 +194,35 @@ describe("task.list", () => {
     expect(cursor).toBe(9);
   });
 
+  it("media 过滤分页：cursor 是扫描前沿 nextScanCursor，翻页不重不漏（#4741）", async () => {
+    /* 缺陷现场：服务端 cursor 是对全量任务的 SQL skip，客户端却按「过滤后
+     * 命中数」推进 —— 后续页从已扫过的位置重扫，重复返回已见行（UI 靠 id
+     * 去重掩盖，读放大）。服务端显式回传扫描前沿后，按它翻页必须不重不漏。 */
+    for (let i = 0; i < 6; i += 1) {
+      seedTask(tdb, {
+        id: `task-${i}`,
+        userId: "user-a",
+        type: i % 2 === 0 ? "TXT2IMG" : "T2V",
+        createdAt: new Date(9000 - i * 1000),
+      });
+    }
+    const caller = createCaller(makeCtx());
+    const seen: Array<string> = [];
+    let cursor = 0;
+    for (let page = 0; page < 4; page += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一页的 cursor 来自前一页
+      const res = await caller.list({ take: 2, cursor, media: "video" });
+      seen.push(...res.tasks.map((t) => t.id));
+      cursor = res.nextScanCursor;
+      if (!res.hasMore) {
+        break;
+      }
+    }
+    /* 3 条视频（task-1/3/5）按新到旧一页不重不漏；前沿推进到表尾 6。 */
+    expect(seen).toEqual(["task-1", "task-3", "task-5"]);
+    expect(cursor).toBe(6);
+  });
+
   it("Zod 校验：take 越界 / 非法 media → BAD_REQUEST", async () => {
     const caller = createCaller(makeCtx());
     await expect(caller.list({ take: 0 })).rejects.toMatchObject({

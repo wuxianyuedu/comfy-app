@@ -128,21 +128,25 @@ export function useHistoryList(): HistoryListController {
    * 此前是本文件自持的 `useState<string | null>`，与工坊两处（AI 润色）、
    * 工作流库的下载与同步各写一份 —— 而「同一条能不能重复点」四处都没防。 */
   const retryAction = useItemAction();
-  /* 真分页（#4044）：无限查询按页拉取（skip = 已拉取行数，由 getNextPageParam
-   * 累计）；hasMore 由服务端响应给出（media 过滤的截断也因此对调用方可见）。
-   * 有进行中任务时按 HISTORY_POLL_MS 轮询（判据读查询自身已拉到的行）。
-   * 页签隐藏时不轮询（ISSUE #4598）：disabled 期间函数式 refetchInterval 一并停摆。 */
+  /* 真分页（#4044）：无限查询按页拉取（cursor = 服务端的扫描前沿，#4741 起由
+   * 响应显式回传、原样透传）；hasMore 由服务端响应给出（media 过滤的截断也
+   * 因此对调用方可见）。有进行中任务时按 HISTORY_POLL_MS 轮询（判据读查询
+   * 自身已拉到的行）。页签隐藏时不轮询（ISSUE #4598）：disabled 期间函数式
+   * refetchInterval 一并停摆。 */
   const isTabActive = useViewTabActive();
   const tasksQ = useInfiniteQuery(
     trpc.task.list.infiniteQueryOptions(
       { take: PAGE_SIZE },
       {
-        getNextPageParam: (lastPage, allPages) => {
+        getNextPageParam: (lastPage) => {
           if (!lastPage.hasMore) {
             return undefined;
           }
-          const fetched = allPages.reduce((sum, p) => sum + p.tasks.length, 0);
-          return fetched;
+          /* cursor 是**扫描前沿**（#4741）：media 过滤时「过滤后命中数」与
+           * SQL skip 是两回事 —— 按命中数推进会让后续页从已扫过的位置重扫、
+           * 重复返回已见行（此前靠 id 去重掩盖，读放大浪费）。服务端显式
+           * 回传前沿后两侧语义统一。 */
+          return lastPage.nextScanCursor;
         },
         refetchInterval: (query) => {
           const rows = (query.state.data?.pages ?? []).flatMap((page) => page.tasks);

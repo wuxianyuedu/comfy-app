@@ -142,7 +142,14 @@ export const taskRouter = createTRPCRouter({
          * 历史列表在第一页之后永远翻不下去。 */
         const rows = await scanOnce(input.cursor, PAGE + 1);
         const hasMore = rows.length > PAGE;
-        return { tasks: rows.slice(0, PAGE), hasMore, scanned: rows.length };
+        /* nextScanCursor（#4741）：本次的**扫描前沿**，供客户端原样透传 ——
+         * cursor 的语义是「全量行的 skip」，不是「过滤后已命中数」。 */
+        return {
+          tasks: rows.slice(0, PAGE),
+          hasMore,
+          scanned: rows.length,
+          nextScanCursor: input.cursor + Math.min(rows.length, PAGE),
+        };
       }
 
       type Card = Awaited<ReturnType<typeof scanOnce>>[number];
@@ -168,7 +175,15 @@ export const taskRouter = createTRPCRouter({
           break;
         }
       }
-      return { tasks: matched, hasMore: !exhausted, scanned };
+      /* nextScanCursor（#4741）：扫描前沿 = 起点加上本次实际扫过的行数。
+       * media 过滤时它与「命中数」是两回事 —— 客户端按命中数推进会让下一页
+       * 从已扫过的位置重扫（重复返回已见行、读放大），按前沿推进才不重不漏。 */
+      return {
+        tasks: matched,
+        hasMore: !exhausted,
+        scanned,
+        nextScanCursor: input.cursor + scanned,
+      };
     }),
 
   /* GET /api/tasks/[id] —— 读 */
