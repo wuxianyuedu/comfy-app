@@ -11378,7 +11378,10 @@ exec node scripts/gates/check-pending-merge-loss.mjs "$2"          # ② 内容�
   脚本段——各格之间有并发，**相加不是墙钟**，所以两格都记）+ `trigger`（`pre-push` 自动
   触发还是 `manual` 手工跑——两者负载不同，读数不许混着比）。翻看：
   `node scripts/gates/premerge-timing.mjs`（最近 10 次 + 逐格中位数前 10）；`--last N` /
-  `--json`。它是**读数不是门禁**：记账失败只往 stderr 说一句，绝不影响 push 的退出码。
+  `--json`。Windows 双击入口是 `tools/start/view-timing.ps1`（默认把 pre-commit 那份
+  `precommit-timing` 账一起看；跨平台等价 `pnpm timing:view`，登记在
+  [launch-and-build.md](launch-and-build.md) §9.5）。它是**读数不是门禁**：记账失败只往
+  stderr 说一句，绝不影响 push 的退出码。
 
   四条口径要说清，否则这条线会变成新的说谎源：① 上游引用来自**上次 fetch**，判据不做网络
   请求，所以话术里不许出现「已最新」（与 §13.5.13 同一条口径）；② 取不到上游引用时

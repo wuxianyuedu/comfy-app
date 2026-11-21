@@ -65,6 +65,7 @@
 | `start/Create-AppShortcut.ps1` | start/ | 一次性配置 | 在仓库根生成 `Comfy APP.lnk` 启动快捷方式（由 `build-tauri-release.ps1` / `build-all.ps1` 构建成功后自动调用；手动 `cargo build --release --features custom-protocol` 之后想单独补生成时也可直接双击） |
 | `start/fetch-daily-shell.ps1` | start/ | 获取成品 | 从 CNB 站内每日成品（nightly Release）下载 `ComfyAPP-shell.exe` → `src-tauri/target/release/app.exe`，并展示同发的构建信息（构建时间 / commit / run / sha256 对账，#4056），项目根缺少 `Comfy APP.lnk` 时补齐快捷方式（跨平台等价：`pnpm fetch:daily-shell`） |
 | `start/agent-index.ps1` | start/ | 开发环境 | 建立/体检 codegraph 与 zvec-grep 本地代码索引（逻辑 `scripts/platform/agent-index.mjs`，= `pnpm agent:index --init`；双击无参默认 `--init`，ISSUE #4585） |
+| `start/view-timing.ps1` | start/ | 耗时账 | 看钩子 / 复算耗时账的人读汇总：pre-commit D0 逐次逐步 + push 前合并前复算逐格中位数（逻辑 `scripts/gates/precommit-timing.mjs` + `scripts/gates/premerge-timing.mjs`，= `pnpm timing:view`；`-Target precommit\|premerge` 选一份，`--last N` / `--json` 原样透传，ISSUE #4766） |
 | `build/build-tauri-release.ps1` | build/ | 壳 | 构建 `src-tauri/target/release/app.exe`（唯一入口；prebuilt / tauri dev 都用它） |
 | `build/build-standalone.ps1` | build/ | 壳（standalone 用） | 完整生产构建独立壳：`pnpm tauri build --no-bundle`，产出不连 dev server 的可分发壳 |
 | `build/build-all.ps1` | build/ | 一键编排 | `pnpm tauri build`（app.exe + nsis/msi 安装包）→ 在仓库根生成 `Comfy APP.lnk` 双击入口 → 发布到项目内 `dist\desktop` 留 2 份（规范 §7.7） |
@@ -107,6 +108,7 @@
 | `start/register-comfyapp-protocol.ps1` | `scripts/devtools/install-comfyapp-helper.ps1` |
 | `start/fetch-daily-shell.ps1` | `scripts/devtools/fetch-daily-shell.mjs`（跨平台逻辑，入口直调 node —— 无 `tools/scripts/*.ps1` 逻辑层） |
 | `start/agent-index.ps1` | `scripts/platform/agent-index.mjs`（跨平台逻辑，入口直调 node —— 无 `tools/scripts/*.ps1` 逻辑层） |
+| `start/view-timing.ps1` | `scripts/gates/precommit-timing.mjs` + `scripts/gates/premerge-timing.mjs`（跨平台逻辑，入口直调 node —— 无 `tools/scripts/*.ps1` 逻辑层） |
 | `start/start-desktop.ps1` | —（自检逻辑内联在入口里，不另起逻辑脚本） |
 
 > **启动类入口原先平铺在仓库根**（`start-web.ps1` / `run-local.ps1` …），2026-09-04
