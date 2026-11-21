@@ -1197,15 +1197,15 @@
     级别筛选 / 虚拟列表 / 加宽收窄 / 查看完整输出，SSE 回放全量历史）；远端
     与对话通道没有本地任务 id，不出现该按钮。
   - 日志卡上方有「生成进度（分节点）」区：解析日志里 `[comfy-cli 原始]` 的
-    comfy-cli `progress` / `executing` / `executed` 事件，按节点渲染进度条
-    （节点名 + 已完成/总量 + 百分比；运行中高亮、完成打勾；只列有进度数字
-    或正在运行的节点，最多展开 6 行、其余以计数交代）。无进度事件（对话 /
-    API 中继）时不渲染。时间维度（#4754）：头部实时显示整轮「已运行」
-    （最早 → 最新日志事件，日志每帧到达即刷新，完成后定格为总耗时）；每行
-    显示该节点耗时（已完成 = 收尾 − 开始，运行中 = 最新事件 − 开始），文案走
-    `formatDurationMs`（`42s` / `2m17s` / `1h02m`）。解析唯一实现：
-    `src/lib/workshop/task-log-progress.ts`（同目录单测覆盖 minimax-h3-image
-    真实事件形状与时间维度）。
+    comfy-cli `progress` / `executing` / `executed` / `execution_cached` 事件，
+    **按执行顺序列出全部节点**并渲染进度条（节点名 + 已完成/总量 + 百分比；
+    运行中高亮、完成打勾；缓存跳过的节点也列出、标「缓存跳过」且不画进度条，
+    #4757；不截断）。无进度事件（对话 / API 中继）时不渲染。时间维度（#4754）：
+    头部实时显示整轮「已运行」（最早 → 最新日志事件，日志每帧到达即刷新，
+    完成后定格为总耗时）；每行显示该节点耗时（已完成 = 收尾 − 开始，运行中 =
+    最新事件 − 开始），文案走 `formatDurationMs`（`42s` / `2m17s` / `1h02m`）。
+    解析唯一实现：`src/lib/workshop/task-log-progress.ts`（同目录单测覆盖
+    minimax-h3-image 真实事件形状、时间维度与缓存节点登记）。
 - 落点：`src/components/workshop/ModelTestView.tsx`、
   `src/components/workshop/TaskProgressPanel.tsx`、
   `src/components/workshop/ModelTestResultPanel.tsx`、
