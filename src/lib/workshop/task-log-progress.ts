@@ -23,6 +23,8 @@ import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 export type TaskProgressStageStatus = "done" | "running";
 
 export type TaskProgressStage = {
+  /** 命中缓存跳过（execution_cached）的节点：没有进度语义，展示为「缓存跳过」。 */
+  cached?: boolean;
   /** 节点的 class_type（如 `TextGenerateV2`），来自 executing 事件。 */
   classType?: string;
   /** 最新一帧 progress 的已完成数。 */
@@ -100,8 +102,9 @@ function finishStage(stage: TaskProgressStage, at: number): TaskProgressStage {
  *   改成 done（多数加载器节点只有 executing、没有 executed 事件，不这样会把
  *   它们永远挂在「进行中」），再登记当前节点（title、class_type）并标 running；
  * - `progress`：更新该节点最新 completed/total 与百分比；
- * - `executed` / `execution_success` / `execution_cached`：按此刻收尾标 done
- *   （缓存跳过也算走到头）。
+ * - `executed` / `execution_success`：按此刻收尾标 done；
+ * - `execution_cached`：缓存跳过的节点也登记（cached 标记、按此刻收尾）——
+ *   否则命中缓存的轮次里这些步骤在进度区不可见（#4757）。
  * 节点顺序 = 在日志里首次出现的顺序（与 ComfyUI 图的执行顺序一致）。
  * 时间取日志行的 `t`：首尾事件差 = 整轮已运行；阶段首尾差 = 该节点耗时。
  */
@@ -160,10 +163,26 @@ export function parseTaskLogProgress(logs: ReadonlyArray<TaskLogEntry>): TaskPro
       });
       continue;
     }
-    if (
-      (type === "executed" || type === "execution_success" || type === "execution_cached") &&
-      nodeId !== null
-    ) {
+    if (type === "execution_cached" && nodeId !== null) {
+      /* 缓存跳过的节点也要登记（#4757）：此前只给已存在的阶段标 done，纯缓存
+       * 节点（只有 cached 事件）根本进不了快照，进度区就看不到这些步骤。 */
+      const stage = byNode.get(nodeId) ?? {
+        nodeId,
+        pct: null,
+        status: "done" as const,
+        startedAt: at,
+      };
+      const title: unknown = evt.title;
+      const classType: unknown = evt.class_type;
+      byNode.set(nodeId, {
+        ...finishStage(stage, at),
+        cached: true,
+        ...(typeof title === "string" && title !== "" ? { title } : {}),
+        ...(typeof classType === "string" && classType !== "" ? { classType } : {}),
+      });
+      continue;
+    }
+    if ((type === "executed" || type === "execution_success") && nodeId !== null) {
       const stage = byNode.get(nodeId);
       if (stage !== undefined) {
         byNode.set(nodeId, finishStage(stage, at));

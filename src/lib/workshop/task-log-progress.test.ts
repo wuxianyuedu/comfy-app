@@ -223,4 +223,54 @@ describe("parseTaskLogProgress", () => {
     });
     expect(text).toMatchObject({ nodeId: "23:15", status: "running", startedAt: 2500 });
   });
+
+  it("缓存跳过的节点也登记并标 cached（#4757）", () => {
+    const snap = parseTaskLogProgress([
+      line(
+        '[comfy-cli 原始] {"type":"execution_cached","node":"23:1","title":"Load Diffusion Model","class_type":"UNETLoader"}',
+        500,
+      ),
+      line(
+        '[comfy-cli 原始] {"type":"execution_cached","node":"23:15","title":"Generate Text","class_type":"TextGenerateV2"}',
+        600,
+      ),
+      line('[comfy-cli 原始] {"type":"executing","node":"23:7","title":"KSampler"}', 1500),
+      line('[comfy-cli 原始] {"type":"progress","node":"23:7","completed":6,"total":6}', 62_500),
+    ]);
+    /* 纯缓存节点（只有 cached 事件）也进快照，按事件时刻收尾、耗时 0。 */
+    const [loader, text, sampler] = snap.stages;
+    expect(loader).toEqual({
+      cached: true,
+      classType: "UNETLoader",
+      nodeId: "23:1",
+      pct: null,
+      startedAt: 500,
+      status: "done",
+      title: "Load Diffusion Model",
+      endedAt: 500,
+      durationMs: 0,
+    });
+    expect(text).toEqual({
+      cached: true,
+      classType: "TextGenerateV2",
+      nodeId: "23:15",
+      pct: null,
+      startedAt: 600,
+      status: "done",
+      title: "Generate Text",
+      endedAt: 600,
+      durationMs: 0,
+    });
+    expect(sampler).toMatchObject({
+      nodeId: "23:7",
+      pct: 100,
+      status: "running",
+      startedAt: 1500,
+      completed: 6,
+      total: 6,
+      title: "KSampler",
+    });
+    expect(snap.firstAt).toBe(500);
+    expect(snap.lastAt).toBe(62_500);
+  });
 });
