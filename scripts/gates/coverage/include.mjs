@@ -276,11 +276,11 @@ export const COVERAGE_INCLUDE = [
    * 数字看着严格，实际什么都不守。 */
   "src/components/studio/model-overview-derive.ts",
   "src/components/studio/HomeModelOverview.tsx",
-  /* 视图页签 刀2 的页签条（**两处同批**登记）。两个薄 hook
-   * （`use-workspace-tabs.ts` / `use-title-bar-tabs-active.ts`）刻意不登记：
+  /* 侧栏「临时页签」组（ISSUE #4770，顶部页签条退役后的新家；**两处同批**登记）。
+   * 两个薄 hook（`use-workspace-tabs.ts` / `use-title-bar-tabs-active.ts`）刻意不登记：
    * 规则与判据分别已在 `workspace-tabs.ts` 与壳的 derive 层有主，
    * 给接线设门槛等于替别人记账。 */
-  "src/components/studio/ViewTabStrip.tsx",
+  "src/components/studio/SidebarTempTabs.tsx",
   /* 体检清单 ⑨ 的零执行者 router（台账 E3 从 7/16 抬到 11/16）：`film` /
    * `model` / `llm` —— 原来那一批里的 `train` 已随功能废弃、文件不在仓库里了，
    * 这条清单里的路径必须都能落到真实文件（`tests/coverage-targets-exist.test.ts`

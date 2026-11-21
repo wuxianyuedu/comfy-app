@@ -50,7 +50,7 @@
 // 初版把「缺 args」判在**组件文件**身上，于是**适配件**（§16.2.3.6 的正当写法）
 // 必然误报：全仓盘出 6 份缺口，逐份查完**没有一份是真缺口**，全是这两类 ——
 //
-//  · **在适配件里已经显式传了**（`<ViewTabStrip activeKey={…} />`、
+//  · **在适配件里已经显式传了**（`<SidebarTempTabs viewTabs={…} onSelectViewTab={…} />`、
 //    `useFilePicker({ onPick: … })`）：组件在画布上读得到值，而初版只统计
 //    `args` 对象，连报错文案自己承诺的「在 `render` 里显式传也算」都没兑现；
 //  · **接口在出参方向**（`mediaDragSourceProps(): MediaDragSourceProps`）：
@@ -449,7 +449,7 @@ export function missingRequiredArgs(storyFile, givenArgs) {
       }
     });
   }
-  /* 「给了」不只有 `args` 一种形态：适配件里显式传（`<ViewTabStrip activeKey={…} />`）、
+  /* 「给了」不只有 `args` 一种形态：适配件里显式传（`<SidebarTempTabs viewTabs={…} onSelectViewTab={…} />`）、
      给 hook / 工厂函数传（`useFilePicker({ onPick: … })`）同样是给了 —— 那种写法下
      组件在画布上**读得到值**，报错文案自己承诺的也是这个口径
      （「写进 `args`，或在 `render` 里显式传」）。只统计 `args` 会把这一整类

@@ -15,6 +15,7 @@ import {
   PROJECTS_ENTRY,
   projectTabs,
   sidebarNavItems,
+  viewTabLabel,
   type WorkspaceView,
 } from "./NavItems";
 
@@ -246,5 +247,21 @@ describe("瞬时页签与配置面（ISSUE #1784 / #3623 / #3798）", () => {
     const globalIds = globalNavItems().map((i) => i.id);
     expect(globalIds).toContain("settings");
     expect(globalIds).toContain("uiKit");
+  });
+});
+
+describe("viewTabLabel（页签文案与侧栏同源，ISSUE #4770 起 SidebarTempTabs 也用它）", () => {
+  it("取 NAV_ITEMS 那份标签，不另写一张表", () => {
+    expect(viewTabLabel("queue")).toBe("队列");
+    expect(viewTabLabel("workshop")).toBe("工坊");
+  });
+
+  it("项目类页签带项目名（同一视图两页要分得开）", () => {
+    expect(viewTabLabel("workshop", "雾中来信")).toBe("工坊·雾中来信");
+  });
+
+  it("项目名缺失或空白时退化为只显视图名，不显示 undefined", () => {
+    expect(viewTabLabel("workshop", null)).toBe("工坊");
+    expect(viewTabLabel("workshop", "   ")).toBe("工坊");
   });
 });

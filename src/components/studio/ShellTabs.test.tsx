@@ -108,9 +108,10 @@ describe("ShellTabs · 壳内 ComfyUI 页签", () => {
       expect(frame.getAttribute("src")).toBe("http://127.0.0.1:8188");
       expect(view.container.contains(frame)).toBe(true);
 
-      /* 「同一个窗口」不是靠说的 —— 壳内页签栏（`TitleBarTabs`）与 iframe 在同一棵
-       * 子树里：两个页签（主应用 + ComfyUI），且只有这一个 iframe。 */
-      expect(screen.getAllByRole("tab")).toHaveLength(2);
+      /* 「同一个窗口」不是靠说的 —— 标题行（`TitleBar`）与 iframe 在同一棵
+       * 子树里。页签切换器已退役到侧栏「临时页签」组（ISSUE #4770），标题行
+       * 上不再有 `role="tab"` 的页签（主应用 + ComfyUI 的切换走侧栏）。 */
+      expect(screen.queryAllByRole("tab")).toHaveLength(0);
       expect(view.container.querySelectorAll("iframe")).toHaveLength(1);
     } finally {
       view.unmount();
@@ -211,7 +212,7 @@ describe("ShellTabs · 壳内 ComfyUI 页签", () => {
     openComfyTab({ url: "http://127.0.0.1:8188" });
     const view = mountTabs();
     try {
-      /* 判据是 `shouldUseBrowserTab`：浏览器自带页签栏，应用内再画一条既占纵向空间又与原生重复。所以不出现「应用页签」栏（`TitleBarTabs` 的 `role="tablist"`），主应用内容照常承载。
+      /* 判据是 `shouldUseBrowserTab`：浏览器自带页签栏，应用内再画一条既占纵向空间又与原生重复。所以不出现「应用页签」栏，主应用内容照常承载。
        * ⚠️ 与 e2e 不重复：那里量页面上 `iframe[title=ComfyUI]` 计数 0（浏览器形态「打开查看」走新浏览器页签，store 里不长 ComfyUI 页签）；这里为摆到浏览器那一档直接往 store 塞了一个页签，而内容区按设计「始终挂载、只切显隐」，所以树里会有 1 个 iframe —— 构造差异，不是判据冲突。 */
       expect(screen.getByTestId("main-content")).not.toBeNull();
       expect(view.container.querySelectorAll(String.raw`[role="tablist"]`)).toHaveLength(0);
@@ -233,8 +234,8 @@ describe("ShellTabs · 壳内 ComfyUI 页签", () => {
        * fixed 侧栏下移 36px，「首页贴顶」又没了。整屏路由页仍用这个标记，但
        * 那棵子树不在这里（见 `ShellFullPage`）。 */
       expect(view.container.querySelector("[data-shell]")).toBeNull();
-      /* 它确实被消费到了内容列那一侧，而不是被顺手丢掉 —— 窗口按钮、拖拽区、
-       * ComfyUI 页签都还挂在这条标题行上。 */
+      /* 它确实被消费到了内容列那一侧，而不是被顺手丢掉 —— 窗口按钮与拖拽区
+       * 还挂在这条标题行上（页签已在侧栏「临时页签」组，ISSUE #4770）。 */
       const host = screen.getByTestId("title-bar-host");
       const titleBar = host.querySelector('[data-slot="title-bar"]');
       expect(titleBar).not.toBeNull();

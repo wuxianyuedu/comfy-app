@@ -282,15 +282,9 @@ export default function WorkspacePage() {
   );
 
   return (
-    <ShellTabs
-      activeViewKey={activeViewKey}
-      onCloseViewTab={closeViewTabByKey}
-      onOpenView={navigateTo}
-      onSelectViewTab={selectViewTab}
-      openableViews={openableViews}
-      projectNameOf={projectNameOf}
-      viewTabs={viewTabs}
-    >
+    /* ShellTabs 只管「标题行 chrome + iframe 页签内容」：页签切换器已在侧栏
+       「临时页签」组（ISSUE #4770），视图页签的读数与动作都由 AppShell 接。 */
+    <ShellTabs>
       <>
         {/* 日志/Toast Provider 与底部状态栏已全局挂载（根布局），此处不再重复包裹 */}
         {/* 侧栏 + 顶栏 + 主内容容器都归 `AppShell`（规范 §12.1 规划的壳层）。

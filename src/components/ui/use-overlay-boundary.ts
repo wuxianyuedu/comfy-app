@@ -12,7 +12,7 @@ import { useViewportSize } from "~/components/ui/use-viewport-size";
 
 /**
  * useOverlayBoundary —— 锚定浮层（气泡 / 下拉 / 气泡卡）可用的碰撞边界。
- * 桌面壳顶部多一条应用级标题行（`TitleBarTabs`，`z-chrome` 2000），挂在 TopBar 上的气泡默认 `side="top"`，Base UI 的 `flip` 只对视口判溢出 → 整块气泡被标题行盖掉一半（实测四个入口全中招）。抬层级不是出路（会吃掉页签与窗口按钮的可点区域，§16.2.5 判据 4），这里把可用区域交给定位引擎翻转。
+ * 桌面壳顶部多一条应用级标题行（`TitleBar`，`z-chrome` 2000），挂在 TopBar 上的气泡默认 `side="top"`，Base UI 的 `flip` 只对视口判溢出 → 整块气泡被标题行盖掉一半（实测四个入口全中招）。抬层级不是出路（会吃掉页签与窗口按钮的可点区域，§16.2.5 判据 4），这里把可用区域交给定位引擎翻转。
  * 「有没有标题行」复用 `shouldUseTitleBarTabs(isDesktopShell())`，「多高」用 `--spacing-title-bar`（`TITLE_BAR_HEIGHT_REM`），一致性由 `full-screen-layer.test.ts` 反向核对；首帧返回 `null`（同 `useViewportSize`），调用处当作「不传这一档」。
  */
 export function useOverlayBoundary(): ViewportRect | null {
