@@ -439,7 +439,7 @@ describe("check-deps-freshness 契约", () => {
     // （反向误报）；基准取分叉点时，远端在依赖面上一字未动 ⇒ 这一层不报。
     repo.git("update-ref", "refs/remotes/origin/master", "fork-point");
     repo.git("reset", "--hard", "fork-point");
-    repo.write("package.json", `{"name":"x","dependencies":{"a":"0.8.0"}}\n`);
+    repo.write("package.json", `{"name":"x","type":"module","dependencies":{"a":"0.8.0"}}\n`);
     repo.git("add", "-A");
     repo.commit("我的分支：降级 a 到 0.8.0");
     const { output } = repo.run(["--json"]);
