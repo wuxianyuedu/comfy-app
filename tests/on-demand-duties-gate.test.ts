@@ -33,6 +33,23 @@ const { test, expect } = defineGateRepo({
       to: "scripts/launcher-core/log.mjs",
     },
     {
+      /* freshness-ledger / freshness-ledger-sync 的 git 一次性读数走 runGateStep
+       * （#4679），这条链伸进 launcher-core/shell.mjs 与它 import 的
+       * command-echo.mjs、src/lib/process/executable-resolve.ts（.ts 由运行时
+       * 类型擦除承载）—— 显式 copy 落盘的文件不会被 copyGateDeps 续追依赖，
+       * 少拷则临时检出里 ERR_MODULE_NOT_FOUND。 */
+      from: "scripts/launcher-core/shell.mjs",
+      to: "scripts/launcher-core/shell.mjs",
+    },
+    {
+      from: "scripts/launcher-core/command-echo.mjs",
+      to: "scripts/launcher-core/command-echo.mjs",
+    },
+    {
+      from: "src/lib/process/executable-resolve.ts",
+      to: "src/lib/process/executable-resolve.ts",
+    },
+    {
       from: "scripts/freshness/freshness-ledger-sync.mjs",
       to: "scripts/freshness/freshness-ledger-sync.mjs",
     },
