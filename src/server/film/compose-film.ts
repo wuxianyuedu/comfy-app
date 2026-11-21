@@ -9,7 +9,7 @@ import { TRPCError } from "@trpc/server";
 import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { filmRepository, filmShotRepository } from "~/lib/core/repository";
+import { filmRepository, filmShotRepository, taskRepository } from "~/lib/core/repository";
 import { productionRepository } from "~/lib/core/repository-production";
 import { normalizeProductionProgress } from "~/lib/production/progress";
 import { withProductionContentLock } from "~/lib/production/content-write-lock";
@@ -186,7 +186,29 @@ export async function composeFilm(id: string) {
   if (!claimed) {
     return;
   }
-  await appendFilmLog(id, "info", "所有镜头完成，开始合成影片…");
+  /* 知情交付（ISSUE #4609）：监看侧只在「全部失败」才判 FAILED，部分镜头失败
+   * 的影片照样进合成。缺段的片子必须让用户知道缺了哪几镜、为什么——失败镜头
+   * 的序号与原因（task.error）在合成前写进影片日志 warn，成片面板另有同源提示。 */
+  const failedShots = await filmShotRepository.listByFilm(id, { status: "FAILED" });
+  if (failedShots.length > 0) {
+    const taskIds = failedShots
+      .map((shot) => shot.taskId)
+      .filter((taskId): taskId is string => taskId !== null && taskId !== "");
+    const reasonById = new Map(
+      (await taskRepository.findExecutionProgressMany(taskIds)).map((row) => [row.id, row.error]),
+    );
+    const detail = failedShots
+      .map((shot) => {
+        const reason =
+          shot.taskId !== null && shot.taskId !== "" ? reasonById.get(shot.taskId) : undefined;
+        return `第 ${shot.order + 1} 镜（${reason ?? "原因未记录"}）`;
+      })
+      .join("、");
+    await appendFilmLog(id, "warn", `部分镜头生成失败：${detail}；将使用其余镜头合成成片`);
+    await appendFilmLog(id, "info", "开始合成影片…");
+  } else {
+    await appendFilmLog(id, "info", "所有镜头完成，开始合成影片…");
+  }
 
   const ok = await isFFmpegAvailable();
   if (!ok) {
