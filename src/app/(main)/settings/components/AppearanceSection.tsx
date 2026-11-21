@@ -12,6 +12,7 @@ import { Moon, Sun } from "lucide-react";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { FieldLabel } from "~/components/ui/field";
 import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { Hint } from "~/components/ui/hint";
@@ -481,7 +482,14 @@ function FontFileLoader({
           size="sm"
           variant="outline"
         >
-          {busy ? "加载中…" : "选择文件"}
+          {busy ? (
+            <>
+              <Spinner className="size-3.5" />
+              加载中…
+            </>
+          ) : (
+            "选择文件"
+          )}
         </Button>
         <FilePicker {...picker.inputProps} />
       </div>

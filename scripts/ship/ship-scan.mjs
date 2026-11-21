@@ -14,6 +14,54 @@ import { LIST_MAX_PAGES, LIST_PAGE_SIZE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 
 /**
+ * 平台清单应答里「一共几页」的读数（ISSUE #4768）：确认真值 / 缺键两态。
+ *
+ * `list-pulls -v` 实测在顶层带 `totalPages` / `total`，`header` 里带 `x-cnb-total`，
+ * 三种都是平台明确说出的清单规模。`scanPullPages` 的终止判据**优先信它** —— 只看
+ * 「这一页不满页大小」会在「排序把目标挤到后面、第一页恰好不满」时提前 break，
+ * 判成「没有开放 PR」而重复建 PR（#4768 现场）。缺键时回 `null`，调用方回落旧判据，
+ * 与 `readListHasMore`（#3058）的缺键口径同族：键不在不等于「没有更多」。
+ *
+ * @param {any} json 应答整体
+ * @returns {number | null} 平台明确给出的总页数（≥1）；读不到 / 非法值回 null
+ */
+export function readListTotalPages(json) {
+  if (!json || typeof json !== "object") {
+    return null;
+  }
+  const bags = [json, json.data, json.header].filter(
+    (b) => b && typeof b === "object" && !Array.isArray(b),
+  );
+  /* 先认明确的总页数（顶层 totalPages / total_pages，或 header 里的同名键）。 */
+  for (const bag of bags) {
+    const pages = bag.totalPages ?? bag.total_pages;
+    if (Number.isInteger(pages) && pages >= 1) {
+      return pages;
+    }
+  }
+  /* 再认「总条数 + 页大小」自己算：total 可能在顶层或 header，pageSize 同理，
+   * 两者不在同一个 bag 里也要能配起来（实测 total 在 header、pageSize 在顶层）。 */
+  let pageSize = 0;
+  let total = 0;
+  let hasTotal = false;
+  for (const bag of bags) {
+    const ps = Number(bag.pageSize ?? bag.page_size);
+    if (!pageSize && ps >= 1) {
+      pageSize = ps;
+    }
+    const t = Number(bag.total ?? bag["x-cnb-total"]);
+    if (!hasTotal && Number.isInteger(t) && t >= 0) {
+      total = t;
+      hasTotal = true;
+    }
+  }
+  if (pageSize >= 1 && hasTotal) {
+    return Math.max(1, Math.ceil(total / pageSize));
+  }
+  return null;
+}
+
+/**
  * 逐页扫 `list-pulls --state <state>`，每页跑一次 `visit`，命中即停。
  *
  * 为什么必须翻页（ISSUE #2964）：清单类接口都是分页的，只取第一页的匹配在
@@ -63,6 +111,16 @@ export function scanPullPages(ctx, step) {
     const hit = step.visit(got.json);
     if (hit) {
       return { hit, ran, scanned, pageCount, capped: false };
+    }
+    /* 终止判据（ISSUE #4768）：先信平台明确给出的总页数 —— 第一页不满不等于到顶，
+     * 排序可能把目标 PR 挤到后面页而第一页恰好不足页大小。只有平台没给规模读数时
+     * 才回落「不足页 ⇒ 到顶」的旧判据（#3058/#2964 的缺键同族口径）。 */
+    const totalPages = readListTotalPages(got.json);
+    if (totalPages !== null) {
+      if (p >= totalPages) {
+        break;
+      }
+      continue;
     }
     if (list.length < pageSize) {
       break;

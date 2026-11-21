@@ -27,7 +27,13 @@ import {
   visibleRange,
   type LogDensity,
 } from "./log-virtual";
-import { useLogDisplayPrefs, setLogDensity, setLogColumns } from "./log-display-prefs";
+import {
+  useLogDisplayPrefs,
+  setLogDensity,
+  setLogFontSize,
+  setLogColumns,
+  type LogFontSize,
+} from "./log-display-prefs";
 import { EmptyState } from "~/components/ui/empty-state";
 import { useWidePanel } from "~/components/ui/wide-panel";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
@@ -51,6 +57,7 @@ import { isCliJsonLine } from "~/lib/log/log-cli-json";
 function useVirtualWindow(input: {
   density: LogDensity;
   expansionMap: Record<string, boolean>;
+  fontSize: LogFontSize;
   pageLogs: Array<LogEntry>;
   scrollTop: number;
   /** 精简列档：行首类别前缀一并隐藏（ISSUE #4717），估高与实测都按剥掉前缀后的正文算。 */
@@ -62,6 +69,7 @@ function useVirtualWindow(input: {
   const {
     density,
     expansionMap,
+    fontSize,
     pageLogs,
     scrollTop,
     viewportHeight,
@@ -114,10 +122,21 @@ function useVirtualWindow(input: {
           expandedIds,
           singleLineIds: cliJsonIds,
           density,
+          fontSize,
           heightOf,
         },
       ),
-    [pageLogs, displayMessageOf, wrap, messageWidth, expandedIds, cliJsonIds, density, heightOf],
+    [
+      pageLogs,
+      displayMessageOf,
+      wrap,
+      messageWidth,
+      expandedIds,
+      cliJsonIds,
+      density,
+      fontSize,
+      heightOf,
+    ],
   );
   const { height: scrollHeight } = scrollHeightOf(totalSize);
   const rowWindow = useMemo(() => {
@@ -318,6 +337,7 @@ export function LogPanel() {
     scrollTop,
     expansionMap: expansion.map,
     density: displayPrefs.density,
+    fontSize: displayPrefs.fontSize,
     stripPrefixes: !showDetails,
   });
 
@@ -413,9 +433,11 @@ export function LogPanel() {
         popupClassName={panel.widthClass}
         showCloseButton={false}
       >
-        <div
-          className={`border-border-strong bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60 ${panel.widthClass}`}
-        >
+        {/* 宽度只由弹窗外壳给一次（`popupClassName`）：内层面板若再带宽度类，会比被基类
+            `max-w-[calc(100%-2rem)]` 封顶的外壳宽出 16px、在 LTR 下向右溢出——加宽后
+            右侧留白被吃掉而左侧照旧（ISSUE #4709）。面板作为外壳唯一的 grid 子项，
+            自动撑满外壳的实际宽度。 */}
+        <div className="border-border-strong bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60">
           <LogPanelHeader
             clear={clear}
             columns={displayPrefs.columns}
@@ -425,8 +447,10 @@ export function LogPanel() {
             countsByOrigin={countsByOrigin}
             density={displayPrefs.density}
             download={download}
+            fontSize={displayPrefs.fontSize}
             onColumnsChange={setLogColumns}
             onDensityChange={setLogDensity}
+            onFontSizeChange={setLogFontSize}
             origin={origin}
             originCounts={originCounts}
             panel={panel}
@@ -484,13 +508,14 @@ export function LogPanel() {
                          * 偏保守多出的那一行空白随之收掉（ISSUE #4715）。行自身不再写死
                          * height，按内容自然高度渲染（实测的正是这个自然高度）。 */
                         style={{
-                          minHeight: `${rows[index]?.size ?? rowHeightFor(displayPrefs.density)}px`,
+                          minHeight: `${rows[index]?.size ?? rowHeightFor(displayPrefs.density, displayPrefs.fontSize)}px`,
                         }}
                       >
                         <LogRow
                           density={displayPrefs.density}
                           entry={entry}
                           expanded={expansion.isExpanded(entry.id)}
+                          fontSize={displayPrefs.fontSize}
                           keyword={search}
                           onToggleExpand={expansion.toggle}
                           showDetails={showDetails}

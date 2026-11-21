@@ -287,6 +287,32 @@ function extractProductCatalogCounts() {
   return { domains, requirements };
 }
 
+/* 数据库表计数（ISSUE #4721）：overview §6 与 launch-and-build 排障表里写过的
+ * 「共 23 张表」在 #2477 / #2508 落地后实际已是 30 张 —— 手写数字没有判据盯守的
+ * 必然结果。与上面两个产品计数同族：文档保留直观数字，脚本从 schema 现场数并核对。 */
+function extractSchemaTableCounts() {
+  const files = [
+    "src/server/db/schema-common.ts",
+    "src/server/db/schema.ts",
+    "src/server/db/schema-series.ts",
+  ];
+  const names = files.flatMap((f) =>
+    [...readText(f).matchAll(/^export const (?<name>\w+) = sqliteTable\(/gm)].map(
+      (m) => m.groups?.name ?? "",
+    ),
+  );
+  /* 数出 0 说明 schema 的表定义形态变了（换 ORM / 换声明写法）—— 那时「现场计数」
+   * 是假的，静默返回 0 等于让文档对着 0 核对 = 恒绿。 */
+  if (!names.length) {
+    throw new Error("无法从 src/server/db/schema*.ts 提取表定义（0 张）—— schema 文件形态变了？");
+  }
+  /* better-auth 的会话四表是框架固定集；业务表 = 总数 − 这四张。名单若变
+   * （如 better-auth 升级增表），overview §6 的括注名单要同批改。 */
+  const authNames = new Set(["user", "session", "account", "verification"]);
+  const auth = names.filter((n) => authNames.has(n)).length;
+  return { total: names.length, business: names.length - auth };
+}
+
 // --------------------------------------------------------------------------
 
 /* ── 注释语言的「纯 ASCII 模块」白名单（ISSUE #678 / 规范 12 §12.4.6）────
@@ -491,6 +517,22 @@ const FACTS = [
     pattern: /(?<count>\d+)\s*条编号化需求/g,
     extract: () => extractProductCatalogCounts().requirements,
     onlyDocs: ["docs/README.md", "docs/product/README.md"],
+  },
+  {
+    key: "db.tables.count",
+    kind: "count",
+    label: "数据库表总数",
+    pattern: /(?:共|，)\s*\*{0,2}(?<count>\d+)\s*张表/g,
+    extract: () => extractSchemaTableCounts().total,
+    onlyDocs: ["docs/product/overview.md", "docs/standards/launch-and-build.md"],
+  },
+  {
+    key: "db.tables.business.count",
+    kind: "count",
+    label: "业务表数",
+    pattern: /业务\s*(?<count>\d+)\s*张/g,
+    extract: () => extractSchemaTableCounts().business,
+    onlyDocs: ["docs/product/overview.md"],
   },
   // 注释语言白名单（ISSUE #678 / 规范 12 §12.4.6）：名单本身是权威定义，
   // 由 reference-facts 的一行承载，脚本解析它 —— 两侧只有一份清单。

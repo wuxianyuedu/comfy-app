@@ -24,11 +24,13 @@ import {
   bucketQueueRows,
   estimateRemainingMs,
   queuedWithPosition,
+  queueStats,
   recentWithin,
   remainingText,
   reprintText,
   runningElapsedText,
   type QueueRow,
+  type QueueStats,
 } from "../queue-monitor-config";
 
 /** 正在跑那条的展示卡（数值都已算成字符串或百分比，视图只渲染）。 */
@@ -68,6 +70,8 @@ export type QueueMonitorController = {
   /** 库里 status=RUNNING 的行。`running` 为 null 而这里非空 = ComfyUI 没连上
    * （富卡片的数据源不可达），离线兜底卡用它渲染。 */
   runningRows: Array<QueueRow>;
+  /** 顶部指标带四格（运行中 / 排队中 / 今日完成 / 失败）。 */
+  stats: QueueStats;
   /** 本应用排队 + ComfyUI 自己排队，与状态栏那格同一算法；离线时退回
    * 「库里在跑 + 排队的行数」（`/api/comfy/queue` 读不到，不能报 0）。 */
   waitingCount: number;
@@ -103,6 +107,8 @@ export function useQueueMonitor(): QueueMonitorController {
 
   const buckets = useMemo(() => bucketQueueRows(listQ.data?.tasks ?? []), [listQ.data?.tasks]);
   const queued = useMemo(() => queuedWithPosition(buckets.queued), [buckets.queued]);
+  /* 指标带四格：随每次轮询的新数据重算（ buckets 身份变化即重算，日期跨天自会跟上）。 */
+  const stats = useMemo(() => queueStats(buckets, new Date()), [buckets]);
 
   /* 「同一条不能重复点」与忙标记的落 / 清走全库唯一出口（规范 16 §16.2.4.40）。
    * 传键集合是为了收敛生命周期：条目从列表里消失后忙标记随之丢掉，否则
@@ -192,6 +198,7 @@ export function useQueueMonitor(): QueueMonitorController {
     running,
     runningRows: buckets.running,
     queued,
+    stats,
     recent: recentWithin(buckets.recent),
     /* 离线时 `/api/comfy/queue` 读不到、两个计数恒为 0，而列表明明排着队 ——
      * 退回「库里在跑 + 排队」的行数，别让「待执行 0」和下面的列表自相矛盾。 */

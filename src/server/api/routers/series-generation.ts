@@ -7,10 +7,13 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { episode, production, task } from "~/server/db/schema";
-import { workflowTemplateRepository, taskRepository } from "~/lib/core/repository";
+import { taskRepository } from "~/lib/core/repository";
 import { kickQueue } from "~/lib/comfyui/executor-continuation";
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
+import { buildWorkflowRunParams, prepareWorkflowRun } from "~/lib/workshop/workflow-run.server";
+import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
+import { sizeSpecFromText } from "~/lib/media/size-presets";
 import { assertSeasonOwner as sharedAssertSeasonOwner } from "./series-shared";
 import { isPlainRecord } from "~/lib/is-record";
 
@@ -29,6 +32,20 @@ function bestStatus(a?: string, b?: string): string {
 /** `production.shots` 的运行期判据：引擎写入的条目是对象、本文件只消费 `id`
  * 字段（字符串化判断在消费点），元素其余字段由写入端与 draft-integrity 保证。 */
 function isShotIdList(v: unknown): v is Array<{ id?: string }> {
+  return Array.isArray(v) && v.every((s) => isPlainRecord(s));
+}
+
+/** 批量入队消费的镜头形状（`production.shots` 的运行期收窄）：除 id 外还要
+ * prompt / negativePrompt / params / referenceImages —— 每镜参数封装的来源，
+ * 缺失的字段按「没有该值」处理（与工坊单镜生成同一口径，不猜不补造）。 */
+type BatchShotEntry = {
+  id?: string;
+  negativePrompt?: unknown;
+  params?: unknown;
+  prompt?: unknown;
+  referenceImages?: unknown;
+};
+function isBatchShotList(v: unknown): v is Array<BatchShotEntry> {
   return Array.isArray(v) && v.every((s) => isPlainRecord(s));
 }
 export const seriesGenerationRouter = createTRPCRouter({
@@ -183,13 +200,13 @@ export const seriesGenerationRouter = createTRPCRouter({
           succeeded.add(`${t.projectId}:${t.shotId}`);
         }
       }
-      const tpl = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.workflowId);
-      if (!tpl) {
+      const runCtx = await prepareWorkflowRun(ctx.user.id, input.workflowId);
+      if (runCtx === null) {
         throw new TRPCError({ code: "NOT_FOUND", message: "工作流不存在" });
       }
       /* 与单发生成同一份预检（#4043）：空 rawJson 的工作流整季收下后会在执行侧
        * 逐个失败——在入队前整批拒绝并提示重新导入。 */
-      if (!hasExecutableWorkflow(tpl)) {
+      if (!hasExecutableWorkflow(runCtx.tpl)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "工作流没有可执行内容（rawJson 为空）：请重新导入该工作流",
@@ -205,19 +222,21 @@ export const seriesGenerationRouter = createTRPCRouter({
               where: inArray(production.id, projectIds),
               columns: { id: true, shots: true },
             });
-      const shotsByProject = new Map<string, Array<{ id?: string }>>();
+      const shotsByProject = new Map<string, Array<BatchShotEntry>>();
       for (const prod of prodRows) {
         const rawShots: unknown = prod.shots;
-        shotsByProject.set(prod.id, isShotIdList(rawShots) ? rawShots : []);
+        shotsByProject.set(prod.id, isBatchShotList(rawShots) ? rawShots : []);
       }
       const executorClaim = resolveExecutorClaim();
       let enqueued = 0;
       let skippedSucceeded = 0;
       let skippedActive = 0;
       let invalid = 0;
-      /* 集镜头清单一趟批查（#4420）：此前每集一个 production.findFirst，集与集
-       * 之间并无顺序依赖。逐镜入队保持 `createQueuedForShotIfNoActive` 的**逐镜
-       * 原子守卫**不变 —— 合并成整批事务会改变锁语义与失败粒度，刻意不做。 */
+      /* 逐镜入队保持 `createQueuedForShotIfNoActive` 的**逐镜原子守卫**不变
+       *（合并成整批事务会改变锁语义与失败粒度，刻意不做）。每镜先走与
+       * workflow-run.server.ts 同一份封装（buildEncapsulatedInputs），把该镜
+       * 提示词 / 负向 / 尺寸 / 参考图落进 params.workflowInputs（#4735：此前
+       * 整批按模板默认值执行，镜头提示词完全丢失、白烧算力）。 */
       for (const ep of eps) {
         if (ep.projectId === null) {
           continue;
@@ -235,19 +254,43 @@ export const seriesGenerationRouter = createTRPCRouter({
             skippedSucceeded++;
             continue;
           }
+          const prompt = typeof s.prompt === "string" ? s.prompt : "";
+          const negative =
+            typeof s.negativePrompt === "string" && s.negativePrompt !== ""
+              ? s.negativePrompt
+              : undefined;
+          const shotParams = isPlainRecord(s.params) ? s.params : {};
+          /* 镜头级参考图只透传**已是 ComfyUI 输入文件名**的那些（与工坊客户端
+           * prepareShotReferences 的免上传快路同一判据）；data:/http(s) 等需上传
+           * 通道的地址服务端不处理，按「没有该参考图」处理，不静默编造落盘名。 */
+          const refs = Array.isArray(s.referenceImages)
+            ? s.referenceImages.filter(
+                (u): u is string =>
+                  typeof u === "string" && u !== "" && !/^(?:data:|https?:|\/)/.test(u),
+              )
+            : [];
+          const values: WorkshopExposedValues = {
+            prompt,
+            ...(negative === undefined ? {} : { negativePrompt: negative }),
+            /* 草稿里存的是尺寸表达（老数据可能是 "832x1216" 字符串，回读时归一）；
+             * 识别不出回落图片场景默认档 —— 与工坊单镜的 parseShotSize 同一份换算。 */
+            size: sizeSpecFromText(shotParams.size, "image"),
+            ...(refs.length > 0 ? { referenceImages: refs } : {}),
+          };
+          const params = buildWorkflowRunParams(runCtx, values);
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           const created = await taskRepository.createQueuedForShotIfNoActive({
             userId: ctx.user.id,
-            type: tpl.taskType,
-            prompt: "",
-            negativePrompt: null,
-            params: { workflow: input.workflowId, paramMap: {} },
-            workflowName: tpl.name,
+            type: runCtx.tpl.taskType,
+            prompt,
+            negativePrompt: negative ?? null,
+            params,
+            workflowName: runCtx.tpl.name,
             projectId: ep.projectId,
             shotId: sid,
             referenceImages: undefined,
             claimedBy: executorClaim,
-            execPayload: tpl.rawJson,
+            execPayload: runCtx.tpl.rawJson,
             parentId: null,
           });
           if (created === null) {

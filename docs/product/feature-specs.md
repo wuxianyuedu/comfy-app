@@ -77,9 +77,10 @@
 - 需求：应用内可查看运行日志；日志列表虚拟化；可按分类显隐。
 - 行为与验收：分类开关持久化在本地（写失败仅内存态，不崩）；
   长日志滚动不卡（虚拟列表）；日志落盘布局见规范 07 章。
-  行距三档（紧凑 / 标准 / 宽松）与精简列（隐藏时刻等级别列时连行首类别前缀
-  一并隐藏）是本地显示偏好（ISSUE #4716 / #4717）；换行行高按内容实测回填，
-  不留估高空行（ISSUE #4715）。
+  行距三档（紧凑 / 标准 / 宽松）、文字大小三档（小 / 标准 / 大，ISSUE #4746）
+  与精简列（隐藏时刻等级别列时连行首类别前缀一并隐藏）是本地显示偏好
+  （ISSUE #4716 / #4717）；换行行高按内容实测回填，不留估高空行（ISSUE #4715）。
+  字号档的行盒与折行容量随档位同步（虚拟估算与实际同口径，行内上下留白对称）。
 - 落点：`src/components/studio/logs/`（`LogProvider` / `LogPanel` /
   `VirtualLogList.tsx`）、`src/lib/log/app-runtime-log.ts`
 
@@ -1199,6 +1200,37 @@
   `src/components/workshop/ModelAdaptersView.tsx`（固定值编辑器）、
   `src/lib/workshop/model-mode-contract.ts`（constants）
 
+#### FR-LM-08 测试模型执行日志体验
+
+- 状态：已上线
+- 需求（ISSUE #4743、#4754）：测试模型页的执行日志要能控制自动滚动、能打开与
+  历史记录同款的「大屏」查看，并把日志里的生成进度可视化出来（此前只有一个
+  整体百分比条）；进度要能看到时间——整轮已运行多久、每个节点花了多久。
+- 行为与验收：
+  - 执行日志卡头部有「自动滚动」勾选框，默认开启：开启时新日志到达即滚到底部；
+    关掉后日志照常刷新、视图停在用户翻到的位置，不被拉回底部。
+    组件测试：`src/components/workshop/ModelTestResultPanel.test.tsx`。
+  - 本地工作流任务入队后（会话按格登记任务 id），日志卡头部出现「大屏查看」
+    按钮，点击打开与队列 / 历史记录**同一份**执行日志大屏（`QueueTaskLogModal`：
+    级别筛选 / 虚拟列表 / 加宽收窄 / 查看完整输出，SSE 回放全量历史）；远端
+    与对话通道没有本地任务 id，不出现该按钮。
+  - 日志卡上方有「生成进度（分节点）」区：解析日志里 `[comfy-cli 原始]` 的
+    comfy-cli `progress` / `executing` / `executed` / `execution_cached` 事件，
+    **按执行顺序列出全部节点**并渲染进度条（节点名 + 已完成/总量 + 百分比；
+    运行中高亮、完成打勾；缓存跳过的节点也列出、标「缓存跳过」且不画进度条，
+    #4757；不截断）。无进度事件（对话 / API 中继）时不渲染。时间维度（#4754）：
+    头部实时显示整轮「已运行」（最早 → 最新日志事件，日志每帧到达即刷新，
+    完成后定格为总耗时）；每行显示该节点耗时（已完成 = 收尾 − 开始，运行中 =
+    最新事件 − 开始），文案走 `formatDurationMs`（`42s` / `2m17s` / `1h02m`）。
+    解析唯一实现：`src/lib/workshop/task-log-progress.ts`（同目录单测覆盖
+    minimax-h3-image 真实事件形状、时间维度与缓存节点登记）。
+- 落点：`src/components/workshop/ModelTestView.tsx`、
+  `src/components/workshop/TaskProgressPanel.tsx`、
+  `src/components/workshop/ModelTestResultPanel.tsx`、
+  `src/components/workshop/hooks/workflow-model-test.ts`（onTaskId 上抛）、
+  `src/components/workshop/hooks/use-model-test-generate.ts`（会话登记 taskId）、
+  `src/lib/workshop/task-log-progress.ts`
+
 ---
 
 ## 13. 设置（FR-ST）
@@ -1380,10 +1412,12 @@
 > （角色 CRUD / 本集关联）+ 项目主页「系列角色库」面板 + 与 `production.characters` 的
 > 双向同步（提升 / 注入，按 `name` 幂等合并）。
 > 镜头目前仍是 `production` 的 JSON 列（破坏性抽取走 `db:migrate`，单列处理）。
+> 风格锚 / 场景库也尚未实体化（前者仅 `series.styleSlug` 档位引用，后者仍是
+> `production.scenes` JSON 列），见 FR-SR-03 的部分实现。
 
 #### FR-SR-01 系列（Series）实体与层级
 
-- 状态：已实现（容器层，#2477）
+- 状态：已上线（容器层，#2477）
 - 需求：一部作品 = 一个系列；层级为 **系列 → 季 → 集 → 创作链路**（剧本 / 角色 /
   分镜 / 镜头）。系列持有跨集共享的东西（角色库、风格锚、场景设定）。
 - 行为与验收：① schema 里有 `series` 表，且 `episode` 经外键链到它（不是靠名字匹配）；
@@ -1399,7 +1433,7 @@
 
 #### FR-SR-02 季（Season）与集（Episode）
 
-- 状态：已实现（容器层，#2477）；集号唯一约束与单集时长校验待补
+- 状态：已上线（容器层，#2477）；集号唯一约束与单集时长校验待补
 - 需求：集有**季号 / 集号 / 排序 / 单集目标时长**；一集 = 一次完整创作链路 + 一部成片。
 - 行为与验收：① 列表按 (季号, 集号) 排序（`seasons`/`episodes` 查询已 `orderBy`）；
   **同一系列内集号唯一约束**尚未加（目前是界面约定，待补唯一索引）；② 单集目标时长
@@ -1410,7 +1444,8 @@
 
 #### FR-SR-03 跨集资产复用（角色库 / 风格锚 / 场景库）
 
-- 状态：已实现（#2508 角色库实体化 + #2801 引用提示 / 反向查询）
+- 状态：部分实现（角色库已实现：#2508 实体化 + #2801 引用提示 / 反向查询；
+  风格锚 / 场景库尚未实体化）
 - 需求：角色、风格、场景成为**可被多集引用**的实体（引用，不是拷贝）。
 - 行为与验收：① 在 B 集引用 A 集的角色后，改 A 集角色卡时给出「该角色被 N 集引用」的提示，
   **不静默改**（改了别的集会跟着变，这件事必须让操作者看见）；**已达标**：角色库面板聚焦
@@ -1419,7 +1454,10 @@
   反向查询返回该角色被引用的集（含季号 / 集号 / 标题 / 在本集的定位），与正向的
   `episodeCharacters`（某集关联了哪些角色）互为反向；
   ③ **拷贝即失去一致性**：以「复制一份到本集」实现的复用不算本条达标。**已达标**：集经
-  `episode_character` 引用系列角色实体，不复制 JSON。
+  `episode_character` 引用系列角色实体，不复制 JSON；
+  ④ 风格锚 / 场景库的同等「可被多集引用」：**未落地**——风格锚仅 `series.styleSlug`
+  （引用 `skill.slug` 的档位，随系列沿用，无集级引用与反向查询），场景仍是
+  `production.scenes` JSON 列；实体化后按 ①~③ 同口径验收。
 - 落点（现状）：`character` 实体表与 `episode_character` 关联表（`series` 级角色库，字段对齐
   `Character`）；系列角色库 tRPC router（`characters` / `createCharacter` / `updateCharacter` /
   `deleteCharacter` / `episodeCharacters` / `characterEpisodes` / `linkCharacter` /
@@ -1427,7 +1465,8 @@
   见 `src/server/api/routers/series.ts`）、
   UI 面板 `src/components/studio/project-home/SeriesCharacterLibrary.tsx`；与 `production.characters`
   双向同步：提升 = 项目角色按 `name` 幂等并入系列库并关联本集，注入 = 本集关联角色按 `name`
-  合并回项目（同名覆盖字段、不同名追加）。镜头仍走 `production.shots` JSON 列。
+  合并回项目（同名覆盖字段、不同名追加）。镜头仍走 `production.shots` JSON 列；
+  风格锚仅 `series.styleSlug`、场景仍走 `production.scenes` JSON 列（均未实体化，见状态行）。
 
 #### FR-SR-04 剧集级排期与批量（整季调度 / 断点续跑）
 

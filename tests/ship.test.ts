@@ -63,6 +63,7 @@ import {
   findLandedPull,
   findMergedPullForBranch,
   findMergedPullForHeadSha,
+  readListTotalPages,
 } from "../scripts/ship/ship-scan.mjs";
 import {
   PR_ALREADY_OPEN_ERRCODE,
@@ -71,6 +72,7 @@ import {
 import {
   addPathKey,
   classifyStagedSurface,
+  pushFailureNote,
   runCommitStage,
   runPushStage,
   runRerunCiStage,
@@ -78,6 +80,7 @@ import {
 } from "../scripts/ship/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
 import { flagConflicts, parseArgs, parseIssueNumberToken } from "../scripts/ship/ship-args.mjs";
+import { pushBudgetMs } from "../scripts/ship/ship-exec.mjs";
 import {
   buildPullBody,
   capDiffstat,
@@ -765,6 +768,69 @@ describe("classifyPushFailure：push 失败按原话分型，不固定猜 premer
     expect(line).toContain("push 失败（exit 128）");
     expect(line).toContain("远端拒了");
     expect(line).not.toContain("多半是 pre-push");
+  });
+});
+
+describe("push 预算随复算预算走 + 预算砍的尸检行（ISSUE #4753）", () => {
+  /* 现场还原：push 触发的 pre-push 复算是分钟级的（本机 84s~5m35s，光 type-aware
+   * oxlint 一档 97~134s），固定 180s 的执行器预算把还在跑复算的 `git push` 整棵砍掉，
+   * `status: null` 被读成 exit -1 —— 看起来像宿主杀进程，其实是 ship 自己的预算。 */
+  it("pushBudgetMs：默认 = 复算预算 600s + LFS/网络余量 180s", () => {
+    expect(pushBudgetMs({})).toBe(780_000);
+    expect(pushBudgetMs({ COMFY_PREMERGE_TIMEOUT_MS: undefined })).toBe(780_000);
+  });
+
+  it("pushBudgetMs：钩子那侧抬了复算预算（COMFY_PREMERGE_TIMEOUT_MS），push 预算自动跟着抬", () => {
+    expect(pushBudgetMs({ COMFY_PREMERGE_TIMEOUT_MS: "1200000" })).toBe(1_380_000);
+  });
+
+  it("pushBudgetMs：复算预算非法时回落默认（钩子自己会退 2，push 不替它猜）", () => {
+    expect(pushBudgetMs({ COMFY_PREMERGE_TIMEOUT_MS: "abc" })).toBe(780_000);
+    expect(pushBudgetMs({ COMFY_PREMERGE_TIMEOUT_MS: "1000" })).toBe(780_000);
+  });
+
+  it("pushFailureNote：预算砍（ETIMEDOUT）给尸检话术 —— 测量没发生，不是复算红", () => {
+    const note = pushFailureNote({ status: -1, stdout: "", stderr: "", error: "ETIMEDOUT" });
+    expect(note).toContain("ETIMEDOUT");
+    expect(note).toContain("测量没发生");
+    expect(note).toContain("COMFY_PREMERGE_TIMEOUT_MS");
+    /* 输出几乎全空是预算砍的形状：不许再落进「看原话定因」的 unknown。 */
+    expect(note).not.toContain("看上面的 push 原话定因");
+  });
+
+  it("pushFailureNote：其余失败照旧按原话分型（remote 404 ⇒ 凭据话术）", () => {
+    const note = pushFailureNote({
+      status: 128,
+      stdout: "",
+      stderr: "remote: Repository Not Found.",
+      error: null,
+    });
+    expect(note).toContain("凭据");
+  });
+
+  it("接线判据：runPushStage 的 push 带大预算，ETIMEDOUT 念尸检行", () => {
+    const logs: Array<string> = [];
+    /** @type {Array<{timeoutMs?: number} | undefined>} */
+    const seenOpts: Array<{ timeoutMs?: number } | undefined> = [];
+    const ctx = {
+      up: { remote: "origin" },
+      branch: "fix/x",
+      root: "/tmp/nowhere",
+      resolveDir: () => null,
+      log: (s: string) => logs.push(s),
+      run: (_cmd: string, _args: Array<string>, opts?: { timeoutMs?: number }) => {
+        seenOpts.push(opts);
+        return { status: -1, stdout: "", stderr: "", error: "ETIMEDOUT" };
+      },
+      relay: () => undefined,
+    };
+    const got = runPushStage(ctx);
+    expect(got).toEqual({ stop: true, codes: [CODE.RED] });
+    expect(seenOpts[0]?.timeoutMs).toBe(pushBudgetMs(process.env));
+    const line = logs.join("\n");
+    expect(line).toContain("push 失败（exit -1）");
+    expect(line).toContain("ETIMEDOUT");
+    expect(line).not.toContain("远端拒了");
   });
 });
 
@@ -5847,6 +5913,26 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     return { calls, bodies, heard, io };
   }
 
+  describe("readListTotalPages：平台清单规模读数的三种形状与缺键回落（ISSUE #4768）", () => {
+    it("顶层 totalPages 直接认", () => {
+      expect(readListTotalPages({ status: 200, data: [], totalPages: 3 })).toBe(3);
+    });
+    it("header.x-cnb-total + pageSize 推页数", () => {
+      expect(readListTotalPages({ data: [], header: { "x-cnb-total": "41" }, pageSize: 20 })).toBe(
+        3,
+      );
+    });
+    it("顶层 total + pageSize 推页数", () => {
+      expect(readListTotalPages({ data: [], total: 40, pageSize: 20 })).toBe(2);
+    });
+    it("缺键 / 非法值一律回落 null（缺键不等于没有更多）", () => {
+      expect(readListTotalPages({ status: 200, data: [] })).toBeNull();
+      expect(readListTotalPages({ data: [], totalPages: 0 })).toBeNull();
+      expect(readListTotalPages({ data: [], totalPages: "3" })).toBeNull();
+      expect(readListTotalPages(null)).toBeNull();
+    });
+  });
+
   it("capDiffstat 对账：列出的 + 省略的 === 逐行明细总数，且总计数行永远留下", () => {
     const big = capDiffstat(statText(3000), 40);
     expect(big.total).toBe(3000);
@@ -5943,6 +6029,50 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     const all = heard.join("\n");
     expect(all).not.toContain("可能撞 409");
     expect(all).not.toContain("无法判断是否已有 PR");
+  });
+
+  it("平台明确还有下一页（totalPages>1）时，第一页不满页大小也要继续翻（ISSUE #4768）", () => {
+    /* #4768 现场：目标 PR #4762 是这条分支的开放 PR，被排序挤到第 2 页；平台第一页只返回
+     * 2 条（< 页大小 20），旧判据「不满页 ⇒ 到顶」当场 break，判成「没有开放 PR」并新建了
+     * #4767 —— 而 #4762 一直 open、CI 全绿。平台响应里明明带 totalPages/total 说还有更多，
+     * 终止判据必须信它，只有缺键时才回落「不足页 ⇒ 到顶」。 */
+    const { calls, io } = pullHarness({
+      openPullsPages: [
+        /* 第一页不满 20 条，但平台明确 totalPages=3 —— 旧判据在这里错误 break。 */
+        JSON.stringify({
+          status: 200,
+          data: [
+            { number: 4770, head: { ref: "refs/heads/feat/other-a" } },
+            { number: 4769, head: { ref: "refs/heads/feat/other-b" } },
+          ],
+          total: 3,
+          totalPages: 3,
+        }),
+        /* 目标 PR 在第 2 页（同样只 1 条，但 totalPages 说后面还有）。 */
+        JSON.stringify({
+          status: 200,
+          data: [{ number: 4762, head: { ref: "refs/heads/feat/big" } }],
+          total: 3,
+          totalPages: 3,
+        }),
+        JSON.stringify({
+          status: 200,
+          data: [{ number: 4760, head: { ref: "refs/heads/feat/other-c" } }],
+          total: 3,
+          totalPages: 3,
+        }),
+      ],
+    });
+    const out = createOrReusePull(io);
+    expect(out.number, "必须复用第 2 页那条开放 PR，而不是新建").toBe(4762);
+    expect(
+      calls.some((c) => c.includes("--state open") && c.includes("--page 2")),
+      "第一页不满也必须翻到第 2 页",
+    ).toBe(true);
+    expect(
+      calls.some((c) => c.includes("post-pull")),
+      "复用命中还发 post-pull，长出来的就是第二条 PR（#4767 现场）",
+    ).toBe(false);
   });
 
   it("翻页撞上界：5 页 / 100 条仍未命中 ⇒ 明念上界与 409 风险，且仍走建 PR（ISSUE #2964）", () => {

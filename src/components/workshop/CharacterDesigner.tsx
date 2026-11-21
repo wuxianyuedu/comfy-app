@@ -5,6 +5,7 @@ import { numberHandler, textHandler } from "~/lib/form-props";
 import { Trash } from "lucide-react";
 import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { Skeleton } from "~/components/ui/skeleton";
 import { EmptyState } from "~/components/ui/empty-state";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -69,6 +70,59 @@ function attrSet(id: string): AttributeOptionSet {
    * 抽取一次即可（`CHARACTER_ATTRIBUTES` 是常量，必有首项）。 */
   const fallback = CHARACTER_ATTRIBUTES[0];
   return CHARACTER_ATTRIBUTES.find((a) => a.id === id) ?? fallback;
+}
+
+/** 角色的 LoRA 绑定块（绑定下拉 + 强度输入）：从主组件切出（函数长度硬闸，§12.13）。 */
+function CharacterLoraBinding({
+  character,
+  loraFiles,
+  lorasLoading,
+  update,
+}: {
+  character: Character;
+  loraFiles: Array<string>;
+  lorasLoading: boolean;
+  update: (id: string, patch: Partial<Character>) => void;
+}) {
+  return (
+    <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_96px]">
+      <div>
+        <span className="text-muted-foreground mb-1 block text-xs">绑定 LoRA（可选）</span>
+        {lorasLoading ? (
+          /* 骨架条（ISSUE #4749）：LoRA 清单加载中的触发器占位。 */
+          <Skeleton className="h-9 w-full rounded-md" />
+        ) : (
+          <SelectMenu
+            className="border-border! bg-subtle! text-sm"
+            onChange={(value) => {
+              update(character.id, {
+                loraName: value || undefined,
+                ...(value ? {} : { loraStrength: undefined }),
+              });
+            }}
+            options={loraFiles}
+            placeholder="不绑定（用工作流图内配置）"
+            value={character.loraName ?? ""}
+          />
+        )}
+      </div>
+      {character.loraName !== undefined && character.loraName !== "" && (
+        <div>
+          <span className="text-muted-foreground mb-1 block text-xs">强度</span>
+          <Input
+            disabled={!character.loraName}
+            inputMode="decimal"
+            onChange={numberHandler((v) => {
+              update(character.id, {
+                loraStrength: clamp(v, 0, 2),
+              });
+            }, 1)}
+            value={character.loraStrength === undefined ? "1" : String(character.loraStrength)}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function CharacterDesigner({
@@ -408,42 +462,12 @@ export function CharacterDesigner({
               {/* 绑定 LoRA（FR-QA-02③ · #2622）：值在提交时落到工作流的
                   「lora-name」契约口（LoraLoader 的 lora_name）；工作流没连
                   该口 → unmatched 提示，用其图内 LoRA 配置。 */}
-              <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_96px]">
-                <div>
-                  <span className="text-muted-foreground mb-1 block text-xs">
-                    绑定 LoRA（可选）
-                  </span>
-                  <SelectMenu
-                    className="border-border! bg-subtle! text-sm"
-                    onChange={(value) => {
-                      update(character.id, {
-                        loraName: value || undefined,
-                        ...(value ? {} : { loraStrength: undefined }),
-                      });
-                    }}
-                    options={loraFiles}
-                    placeholder={lorasLoading ? "加载中…" : "不绑定（用工作流图内配置）"}
-                    value={character.loraName ?? ""}
-                  />
-                </div>
-                {character.loraName !== undefined && character.loraName !== "" && (
-                  <div>
-                    <span className="text-muted-foreground mb-1 block text-xs">强度</span>
-                    <Input
-                      disabled={!character.loraName}
-                      inputMode="decimal"
-                      onChange={numberHandler((v) => {
-                        update(character.id, {
-                          loraStrength: clamp(v, 0, 2),
-                        });
-                      }, 1)}
-                      value={
-                        character.loraStrength === undefined ? "1" : String(character.loraStrength)
-                      }
-                    />
-                  </div>
-                )}
-              </div>
+              <CharacterLoraBinding
+                character={character}
+                loraFiles={loraFiles}
+                lorasLoading={lorasLoading}
+                update={update}
+              />
 
               {/* 生成出的提示词预览 */}
               <div className="bg-subtle mt-3 rounded-lg p-3">

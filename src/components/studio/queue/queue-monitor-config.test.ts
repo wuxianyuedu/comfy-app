@@ -11,6 +11,7 @@ import {
   offlineBannerText,
   offlineEmptyText,
   offlineRunningCardNote,
+  queueStats,
   queuedWithPosition,
   recentWithin,
   remainingText,
@@ -180,5 +181,36 @@ describe("reprintText", () => {
 
   it("不声称复制了参数 —— task.list 里没有参数表", () => {
     expect(reprintText(row({ status: "FAILED" }))).not.toContain("参数");
+  });
+});
+
+describe("queueStats", () => {
+  const now = new Date("2026-01-05T15:00:00Z");
+
+  it("四格各数各的：跑动/排队按桶，完成/失败只数今天创建的终态行（取消不算）", () => {
+    const buckets = bucketQueueRows([
+      row({ id: "run", status: "RUNNING" }),
+      row({ id: "q1", status: "QUEUED" }),
+      row({ id: "q2", status: "QUEUED" }),
+      row({ id: "ok-today", status: "SUCCEEDED", createdAt: new Date("2026-01-05T12:00:00Z") }),
+      row({ id: "bad-today", status: "FAILED", createdAt: new Date("2026-01-05T13:00:00Z") }),
+      row({ id: "ok-old", status: "SUCCEEDED", createdAt: new Date("2026-01-01T12:00:00Z") }),
+      row({ id: "dead", status: "CANCELLED", createdAt: new Date("2026-01-05T14:00:00Z") }),
+    ]);
+    expect(queueStats(buckets, now)).toEqual({
+      failedToday: 1,
+      queued: 2,
+      running: 1,
+      succeededToday: 1,
+    });
+  });
+
+  it("空列表四格全 0（不编数）", () => {
+    expect(queueStats(bucketQueueRows([]), now)).toEqual({
+      failedToday: 0,
+      queued: 0,
+      running: 0,
+      succeededToday: 0,
+    });
   });
 });

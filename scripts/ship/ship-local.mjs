@@ -22,7 +22,7 @@
 /**
  * 一次 `run` 的最小形状（与 `ship.mjs` 注入的那份同源，不在此重新定义判据）。
  * `stderr` 必给（`makeRunner` 的承诺：钩子把原因写在 stderr 侧，吞了就是「只剩一句没理由的红」）。
- * @typedef {(cmd: string, args: string[], opts?: {env?: Record<string,string>}) => {status: number, stdout: string, stderr: string, error: string | null}} PlatformRun
+ * @typedef {(cmd: string, args: string[], opts?: {env?: Record<string,string>, timeoutMs?: number}) => {status: number, stdout: string, stderr: string, error: string | null}} PlatformRun
  */
 
 import {
@@ -34,11 +34,35 @@ import {
 } from "./ship-core.mjs";
 import { failedStageNames, fetchBuildStatus, resolveBuildSn } from "../ci/ci-build-readout.mjs";
 import { readBuildVerdict } from "./ship-build.mjs";
-import { safeRead, short } from "./ship-exec.mjs";
+import { pushBudgetMs, safeRead, short } from "./ship-exec.mjs";
 import { reportStage } from "./ship-stage.mjs";
 /* 「这一笔是刻意的空提交」不靠猜索引 —— 由被触发的两条 D0 判据认这个说出来的旗标
  * （唯一生产者就是下面这一格，口径在 `intentional-empty-commit.mjs`，ISSUE #2354）。 */
 import { EMPTY_COMMIT_ENV } from "../platform/intentional-empty-commit.mjs";
+
+/**
+ * push 失败那一行的**统一出口**（ISSUE #4753）：先分「被墙钟预算砍」这一形，
+ * 其余照 {@link classifyPushFailure} 按原话分型。
+ *
+ * 为什么要单独一形：push 预算到点时 `spawnSync` 把 `git push` 连同钩子整棵砍掉，
+ * `status` 是 null（被执行器读成 -1）、输出**几乎全空** —— 走原话分型只会落进
+ * `unknown`（「看原话定因」，而原话什么都没有），读的人会去猜平台 / 宿主。
+ * `error=ETIMEDOUT` 是 `spawnSync` 超时的指纹（与被信号打死分得开，见
+ * `launcher-core/shell.mjs` 的 `abortedAdvice` 三态拆法），拿到它就能把
+ * 「测量没发生，不是复算红」这句说在前头。放在本文件而不是 `-core`：它服务的
+ * 两个调用点都在这里，而 `-core` 已顶着 900 行硬闸。
+ *
+ * @param {{status: number, stdout: string, stderr: string, error: string | null} | null | undefined} result
+ *   `makeRunner` 的 ExecResult（取不到执行结果的调用方给 null，照旧走原话分型）
+ * @returns {string} 给人看的下一动作
+ */
+export function pushFailureNote(result) {
+  if (result?.error === "ETIMEDOUT") {
+    /* 单一模板串，不用 `+` 拼接（与 `abortedAdvice` 同一条 prefer-template 口径）。 */
+    return `git push 在墙钟预算处被砍（ETIMEDOUT）—— pre-push 的合并前复算是分钟级的（§13.6.2.1），这一跳是**测量没发生**，不是复算红。push 预算已随 \`COMFY_PREMERGE_TIMEOUT_MS\` 自动放宽；仍被砍就再抬它，或前台直接 \`git push\` 重试，别急着归因代码。`;
+  }
+  return classifyPushFailure(result?.stdout, result?.stderr).note;
+}
 
 /**
  * 把 `git status --porcelain` 的输出**按列**分成「已暂存 / 未暂存（已修改）/ 未跟踪」三档。
@@ -367,11 +391,14 @@ export function runPushStage(ctx) {
     );
     return { stop: true, codes: [CODE.NOT_RUN] };
   }
-  const ps = run("git", ["push", "-u", up.remote, branch]);
+  /* push 预算随复算预算走（ISSUE #4753）：pre-push 钩子里的合并前复算是分钟级的，
+   * 固定 180s 会把还在跑复算的 push 砍成 exit -1。 */
+  const ps = run("git", ["push", "-u", up.remote, branch], { timeoutMs: pushBudgetMs() });
   relay(ps);
   if (ps.status !== 0) {
-    /* 分型按 push 原话（ISSUE #2825）：远端 128 与钩子拒绝的修法完全不同，不再固定猜 premerge。 */
-    log(`[ship] push 失败（exit ${ps.status}）⇒ ${classifyPushFailure(ps.stdout, ps.stderr).note}`);
+    /* 分型按 push 原话（ISSUE #2825）：远端 128 与钩子拒绝的修法完全不同，不再固定猜 premerge。
+     * 预算砍（ETIMEDOUT）另有尸检行（ISSUE #4753），不落进「看原话定因」的 unknown。 */
+    log(`[ship] push 失败（exit ${ps.status}）⇒ ${pushFailureNote(ps)}`);
     return { stop: true, codes: [CODE.RED] };
   }
   /* 「走到哪了」第二格（ISSUE #3083）：sha 现读一次 —— 预检钉的那笔在 commit 段之后
@@ -525,11 +552,12 @@ export function runRerunCiStage(ctx) {
     log(`[ship] 空提交失败（exit ${cm.status}）。`);
     return CODE.RED;
   }
-  const ps = run("git", ["push", "-u", up.remote, branch]);
+  /* 同 runPushStage（ISSUE #4753）：这一推同样过 pre-push 复算，预算随复算走。 */
+  const ps = run("git", ["push", "-u", up.remote, branch], { timeoutMs: pushBudgetMs() });
   relay(ps);
   if (ps.status !== 0) {
-    /* 同上（ISSUE #2825）：rerun 那一跳也不固定猜 premerge，按原话分型。 */
-    log(`[ship] push 失败（exit ${ps.status}）⇒ ${classifyPushFailure(ps.stdout, ps.stderr).note}`);
+    /* 同上（ISSUE #2825）：rerun 那一跳也不固定猜 premerge，按原话分型；预算砍另有尸检行。 */
+    log(`[ship] push 失败（exit ${ps.status}）⇒ ${pushFailureNote(ps)}`);
     return CODE.RED;
   }
   const sha = run("git", ["rev-parse", "HEAD"]).stdout.trim();

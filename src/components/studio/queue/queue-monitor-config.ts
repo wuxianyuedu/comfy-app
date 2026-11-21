@@ -53,6 +53,39 @@ export function bucketQueueRows(rows: ReadonlyArray<QueueRow>): QueueBuckets {
   return { running, queued, recent };
 }
 
+/** 顶部指标带的四格读数（纯派生，视图只渲染）。
+ * running / queued 即三桶计数；完成与失败只数**创建于今天**的终态行 ——
+ * task.list 没有完成时刻，创建日是能拿到的最近口径（窗口为最近 200 条，
+ * 日常远不到上限，越界时读数偏保守而非虚高）。 */
+export type QueueStats = {
+  failedToday: number;
+  queued: number;
+  running: number;
+  succeededToday: number;
+};
+
+export function queueStats(buckets: QueueBuckets, now: Date): QueueStats {
+  const today = now.toDateString();
+  let succeededToday = 0;
+  let failedToday = 0;
+  for (const row of buckets.recent) {
+    if (row.createdAt.toDateString() !== today) {
+      continue;
+    }
+    if (row.status === "SUCCEEDED") {
+      succeededToday += 1;
+    } else if (row.status === "FAILED") {
+      failedToday += 1;
+    }
+  }
+  return {
+    failedToday,
+    queued: buckets.queued.length,
+    running: buckets.running.length,
+    succeededToday,
+  };
+}
+
 /**
  * 排队位次（第 1 位 = 下一个开跑）。必须显式反一次：task.list 一律按 createdAt 倒序返回
  *（仓储四条分支同一句倒序、不暴露排序参数），而执行器先入先出 —— 直接拿倒序下标当位次，

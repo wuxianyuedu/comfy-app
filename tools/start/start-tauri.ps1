@@ -46,6 +46,17 @@ if (-not (Test-Path -LiteralPath (Join-Path $root "node_modules\.modules.yaml"))
     Write-Host "       请先执行：pnpm install" -ForegroundColor Yellow
 }
 
+# 启动前检测远端是否有更新的纯壳：逻辑在 .mjs（跨平台，见 scripts/launcher-core/dev-shell-update.mjs），
+# 有则复用 fetch-daily-shell 覆盖 app.exe；无令牌 / 无网络 / 壳被占用时只提示、不阻塞启动。
+# 更新发生在启动前 ⇒ 下面 Start-Process 用的就是更新后的壳（= 更新后重新启动）。
+$autoUpdate = Join-Path $root "scripts\launcher-core\dev-shell-update.mjs"
+if (Test-Path -LiteralPath $autoUpdate) {
+    & node $autoUpdate
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[WARN] 自动检查/更新壳未成功（退出码 $LASTEXITCODE），照常用现有壳启动。" -ForegroundColor Yellow
+    }
+}
+
 Write-Host "[INFO] 正在启动桌面壳 app.exe（唯一入口，编排由壳自己承担）..." -ForegroundColor Cyan
 
 $proc = Start-Process -FilePath $shellExe -WorkingDirectory $root -PassThru

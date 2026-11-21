@@ -15,6 +15,7 @@ const QueueTaskLogModal = dynamic(() =>
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
@@ -75,7 +76,11 @@ function HistoryGroupTaskList({
   });
 
   return (
-    <div className="flex flex-col gap-3" ref={listRef}>
+    /* 双列卡片网格（重设计稿）：宽屏两列并排读日期分组里的任务；窄屏退回单列。
+       不设 items-start —— 同一行的两张卡（成功 / 失败）等高，底部动作区由卡内
+       `mt-auto` 钉在同一条底线上（用户反馈 #4710 的「对不齐」）。
+       auto-animate 的 FLIP 对 grid 重排同样按位移过渡（只动 transform/opacity，规范 §2.7）。 */
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2" ref={listRef}>
       {items.map((task) => (
         <HistoryTaskCard
           busy={isRowBusy(task.id)}
@@ -181,7 +186,12 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
       </div>
 
       {c.loading ? (
-        <p className="text-ink-muted text-sm">加载中…</p>
+        /* 骨架屏（ISSUE #4749）：与任务卡同形的占位条。 */
+        <div aria-label="加载中" className="flex flex-col gap-3" role="status">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton className="h-24 rounded-xl" key={i} />
+          ))}
+        </div>
       ) : c.filteredCount === 0 ? (
         <EmptyState description={c.empty.hint} minHeightClass="min-h-75" title={c.empty.title} />
       ) : (

@@ -10541,6 +10541,16 @@ dry-run 的计划同步反映「不 add、不看暂存面、不 commit」。push
 三种形状一份出口）。`ship-*` 家族的取法点已经收口到这一份；类型收窄走谓词不走断言
 （#3167 那条 `no-unsafe-type-assertion` 对断言收窄零容忍）。
 
+**复用/落地判定的开放清单翻页终止先信平台规模读数**（ISSUE #4768）。`scanPullPages`
+（`ship-scan.mjs`，复用与落地判定共用）旧判据只看「这一页不满页大小 ⇒ 到顶」，在
+`list-pulls` 按 `-created_at` 排序、目标开放 PR 被新条目挤到后面页、而第一页恰好不满时
+提前 `break`，把「有开放 PR」读成「没有」⇒ 新建重复 PR（#4767 与一直 open 的 #4762
+同分支同标题同 head.sha，后者成悬空 PR）。平台响应明确带 `totalPages` / `total`（顶层）
+与 `header.x-cnb-total`，终止判据优先信它：给了总页数就翻到那一页，缺键才回落「不足页 ⇒
+到顶」的旧判据（与 `readListHasMore` 的 #3058 缺键口径同族）。`--branches` 那个只读入口的
+翻页是另一份实现（`ship-branches.mjs` 的 `has_more`/`next` 口径，见 §13.6.5），两处形状不同、
+不合并。判据在 `tests/ship.test.ts`（复现用例先红后绿 + `readListTotalPages` 三种形状与缺键回落）。
+
 **「同一条分支上再跑一次」的两种情形分开判**（ISSUE #2250）。旧形状只有一格幂等：在
 `list-pulls --state open` 里按 `head.ref` 找，找到就复用、**找不到就建**。但 squash 合并成功会把
 PR 转 `closed`，那一格因此恰好在「已经合过」的那一刻失效，于是同一条分支上再跑一次会长出一条
@@ -11347,6 +11357,14 @@ exec node scripts/gates/check-pending-merge-loss.mjs "$2"          # ② 内容�
   先手工 `pnpm check:premerge --light` 把判定交给平台，跳过的重档会被念出来、不构成全套
   凭证。别改默认值去「顺手修好」某一台机器，也别手工写 `.git/comfy-premerge-proof.json`
   冒充钩子跑过 —— `how` 字段会如实区分两条路径。
+  **ship 侧的 `git push` 预算随这条预算走**（ISSUE #4753）：ship 的执行器曾给所有外部命令
+  统一 180s 预算，而 push 会触发本条复算 —— 复算一超过 180s，`spawnSync` 就把 `git push`
+  连同钩子整棵砍掉，`status: null` 被读成「push 失败（exit -1）」。症状是「后台跑 ship 稳定
+  死在 eslint 档、前台裸 `git push` 正常」—— 前后台的差异其实是「有没有那条预算」，与宿主
+  的进程管理无关（后台裸跑同一档 lint 实测 97s 完整跑完）。现在 push 预算 =
+  `COMFY_PREMERGE_TIMEOUT_MS`（同一解析器，默认 600s）+ 180s 的 LFS / 网络余量；push 失败
+  遇 `ETIMEDOUT` 时 ship 念「测量没发生，不是复算红」的尸检行，不再落进「看原话定因」的
+  unknown。
   —— 每次 push 都跑它，按本仓库的节奏（一天几十次提交）换来的是每人十几分钟墙钟，
   而那不会让人更严谨，只会让人 `git push --no-verify`。所以它只在**两个输入之一变了**时跑：
 
@@ -11370,7 +11388,10 @@ exec node scripts/gates/check-pending-merge-loss.mjs "$2"          # ② 内容�
   脚本段——各格之间有并发，**相加不是墙钟**，所以两格都记）+ `trigger`（`pre-push` 自动
   触发还是 `manual` 手工跑——两者负载不同，读数不许混着比）。翻看：
   `node scripts/gates/premerge-timing.mjs`（最近 10 次 + 逐格中位数前 10）；`--last N` /
-  `--json`。它是**读数不是门禁**：记账失败只往 stderr 说一句，绝不影响 push 的退出码。
+  `--json`。Windows 双击入口是 `tools/start/view-timing.ps1`（默认把 pre-commit 那份
+  `precommit-timing` 账一起看；跨平台等价 `pnpm timing:view`，登记在
+  [launch-and-build.md](launch-and-build.md) §9.5）。它是**读数不是门禁**：记账失败只往
+  stderr 说一句，绝不影响 push 的退出码。
 
   四条口径要说清，否则这条线会变成新的说谎源：① 上游引用来自**上次 fetch**，判据不做网络
   请求，所以话术里不许出现「已最新」（与 §13.5.13 同一条口径）；② 取不到上游引用时

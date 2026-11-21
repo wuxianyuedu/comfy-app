@@ -13,6 +13,7 @@ import { Settings2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { Spinner } from "~/components/ui/spinner";
 import {
   referenceLoaderBindingsForMode,
   referenceLoaderMax,
@@ -147,7 +148,12 @@ export function ReferenceLoaderBindingSection({ entries, mode, onPatchParamMap, 
             </div>
           );
         })}
-        {loading && <p className="text-muted-foreground/70 text-3xs">预设清单加载中…</p>}
+        {loading && (
+          <p className="text-muted-foreground/70 text-3xs flex items-center gap-1.5">
+            <Spinner className="size-3" />
+            预设清单加载中…
+          </p>
+        )}
       </div>
       <ReferenceLoaderPresetModal
         onClose={() => {

@@ -288,7 +288,7 @@ const config = {
     };
     return webpackConfig;
   },
-  async headers() {
+  headers() {
     return [
       {
         // 静态字体：Next 对 `/_next/static/**` 自带长缓存，但 `public/` 下的资源

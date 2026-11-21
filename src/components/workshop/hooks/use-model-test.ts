@@ -35,6 +35,7 @@ import {
 import { useReferenceImageGroup } from "./use-reference-image-group";
 
 import { useTRPC } from "~/trpc/react";
+import { getBaseUrl } from "~/trpc/base-url";
 
 import {
   buildRequestBodies,
@@ -135,6 +136,8 @@ export type ModelTestController = {
   /** 切换用途页签（候选 / 选中 / 表单随之重置）。 */
   setKind: (kind: ModelTestKind) => void;
   setMode: (mode: string) => void;
+  /** 当前格本地工作流任务 id（入队后登记；null = 没有可看大屏的任务）。 */
+  taskId: string | null;
   /** 当前格的执行日志（SSE log 帧，#4080 评论 8）。 */
   taskLogs: Array<TaskLogEntry>;
   values: ModelTestValues;
@@ -495,9 +498,15 @@ export function useModelTest(): ModelTestController {
   });
   const openResultInBrowser = useCallback(
     async (url: string) => {
-      await openExternalAction.runWithTarget(url, (target) =>
-        openExternalM.mutateAsync({ url: target }),
-      );
+      await openExternalAction.runWithTarget(url, (target) => {
+        /* 本地工作流产物是同源相对路径（/api/generated/...），而 openExternal 的入参是
+         * `z.url()` —— 相对路径当场 invalid_format（#4750），更后面 `isHttpUrl()` 也
+         * 只收绝对 http(s)。按应用 origin 补成绝对 URL 再发（`getBaseUrl()` 是全库
+         * origin 唯一出处）；已是绝对地址的原样保留，`file:` / `javascript:` 这类
+         * 危险协议仍由服务端协议闸拦下 —— 这里只补 origin，不放宽任何安全边界。 */
+        const absolute = new URL(target, getBaseUrl()).toString();
+        return openExternalM.mutateAsync({ url: absolute });
+      });
     },
     [openExternalAction, openExternalM],
   );
@@ -796,6 +805,7 @@ export function useModelTest(): ModelTestController {
     selectedModel,
     selectedWorkflow: selectedCandidate?.workflow ?? null,
     taskLogs: activeSession.taskLogs,
+    taskId: activeSession.taskId,
     workflowProgress: activeSession.workflowProgress,
     setInputFromFile,
     setKind,

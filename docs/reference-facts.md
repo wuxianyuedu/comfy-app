@@ -150,6 +150,19 @@
 | `product.domains.count`     | `17 个功能域`              | 产品功能域数         | `docs/product/feature-catalog.md` 的 §2 分域小节  | 数 `### 2.x` 小节标题数                  |
 | `product.requirements.count` | `103 条编号化需求`         | 编号化需求条数       | `docs/product/feature-catalog.md` 的总表行        | 数总表里以 `FR-` 开头的行                |
 
+### 1.8 数据库表计数（直观值核对类）
+
+> 同 §1.7 的做法。`docs/product/overview.md` §6 与 `launch-and-build.md` 排障表里
+> 写过「共 23 张表」，#2477 / #2508 落地后 schema 已是 30 张而文档没跟上（ISSUE #4721）
+> —— 手写数字没有判据盯守的必然结果。文档保留直观数字，脚本从
+> `src/server/db/schema*.ts` 现场数 `export const … = sqliteTable(` 并核对；
+> 业务表数 = 总数 − better-auth 四张（`user` / `session` / `account` / `verification`）。
+
+| key                        | 文档形态（保留直观值） | meaning（可读语义）        | source（权威定义文件）                    | extract                                  |
+| -------------------------- | ---------------------- | -------------------------- | ----------------------------------------- | ---------------------------------------- |
+| `db.tables.count`          | `共 30 张表`           | 数据库表总数               | `src/server/db/schema*.ts` 的表定义       | 数 `export const … = sqliteTable(` 行    |
+| `db.tables.business.count` | `业务 26 张`           | 业务表数（非 better-auth） | 同上                                      | 总数 − better-auth 四张                  |
+
 ---
 
 ## 2. 路径类引用（文件 / 目录路径）
