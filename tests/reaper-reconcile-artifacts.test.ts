@@ -65,12 +65,17 @@ const listStaleUnownedQueued = vi.fn(() => Promise.resolve([]));
 const listStaleRunning = vi.fn(() => Promise.resolve([] as Array<StaleRow>));
 const finalizeFailure = vi.fn(() => Promise.resolve("written" as const));
 const finalizeFromReaper = vi.fn(() => Promise.resolve("written" as const));
+/* #4604 起的另外两条 seam：本文件的判决矩阵不经过它们，给空实现占位。 */
+const listStaleQueued = vi.fn(() => Promise.resolve([]));
+const finalizeHostQueuedFailure = vi.fn(() => Promise.resolve("written" as const));
 
 /* 直接按接口形状给实现，避免「测试只提供 reaper 用到的四个方法」的双段断言。 */
 const reaperRepo: TaskRepoForReaper = {
   listStaleUnownedQueued,
   listStaleRunning,
+  listStaleQueued,
   finalizeFailure,
+  finalizeHostQueuedFailure,
   finalizeFromReaper,
 };
 

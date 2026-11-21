@@ -30,25 +30,11 @@
  * `unguarded`；登记 PURE_NODE_HOSTS 只是**给未来**「impl 里若加了 node: 前缀
  * import」留的锚，当前 scanner 视角不严格必要。
  */
-import {
-  and,
-  count,
-  desc,
-  eq,
-  gt,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  lte,
-  max,
-  notInArray,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { TERMINAL_TASK_STATUSES } from "../task-state";
-import { task, taskImage, taskLog } from "~/server/db/schema";
+import { task, taskImage } from "~/server/db/schema";
+import { createTaskLogSection } from "./repository-task-impl-logs";
 
 import type { TaskRepoDb } from "./repository-task-impl-types";
 
@@ -252,6 +238,73 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
       return claimedRows;
     },
 
+    /** reaper 扫「宿主片排队超时」行（ISSUE #4604）：QUEUED + 未收口 + 年龄过
+     *  cutoff + 归属 = 指定片。与上一条（`listStaleUnownedQueued`）互补：那条管
+     *  「写着不认识的归属值」的畸形行，这条管「归属合法、但那一片已经没有活宿主」
+     *  的等待行——#1204 把本片排队行从死信判据里放出来（它们通常是健康等待），
+     *  「宿主是否还活着」的判定交回调用方（reaper 按宿主心跳判），这里只负责把
+     *  候选行按片捞出来。 */
+    async listStaleQueued(
+      owner: TaskClaimMode,
+      cutoff: Date,
+      take: number,
+    ): Promise<
+      Array<{
+        createdAt: Date;
+        id: string;
+        workflowName: string;
+      }>
+    > {
+      return db
+        .select({
+          id: task.id,
+          createdAt: task.createdAt,
+          workflowName: task.workflowName,
+        })
+        .from(task)
+        .where(
+          and(
+            eq(task.status, "QUEUED"),
+            isNull(task.finishedAt),
+            lt(task.createdAt, cutoff),
+            ownedBy(owner),
+          ),
+        )
+        .limit(take);
+    },
+
+    /** 宿主死亡后由回收器**代宿主**收口它的排队行（ISSUE #4604）——归属例外的
+     *  第二处（第一处是 `cancel`）：死宿主不能自己收口，而它的 QUEUED 行
+     *  在 #1204 的口径里被刻意排除在死信判据之外（「本片排队行归领取循环管」），
+     *  不在这里开一个窄口就永远没有用户可见出口。守卫刻意收窄到这次要救的形状：
+     *  `status='QUEUED'` 且 `claimedBy='host'`——inline 片与已进 RUNNING 的行
+     *  一个都碰不到；行还停在 `QUEUED` 本身就保证未终态，不必再叠 notInArray。 */
+    async finalizeHostQueuedFailure(taskId: string, error: string): Promise<TaskWriteOutcome> {
+      const updated = await db
+        .update(task)
+        .set({ status: "FAILED", error, finishedAt: new Date() })
+        .where(and(eq(task.id, taskId), eq(task.status, "QUEUED"), eq(task.claimedBy, "host")))
+        .returning({ id: task.id });
+      if (updated.length > 0) {
+        return "written";
+      }
+      /* 输掉的那一次读数要能区分「已被收口」与「不归宿主片」：本守卫只认
+       * QUEUED+host，没命中时按行现值分类，读侧（日志）不必猜。 */
+      const rows = await db
+        .select({ status: task.status, claimedBy: task.claimedBy })
+        .from(task)
+        .where(eq(task.id, taskId))
+        .limit(1);
+      const row = rows[0];
+      if (!row) {
+        return "skipped-missing";
+      }
+      if (row.claimedBy !== "host") {
+        return "skipped-not-owned";
+      }
+      return "skipped-terminal";
+    },
+
     /** reaper 扫 RUNNING 孤儿（ISSUE #1184 起**不再要求 `promptId` 非空**）：
      *  曾经带一条 `promptId IS NOT NULL`，于是「已被领取、但 comfy-cli 还没把
      *  `prompt_id` 回传落库」的 RUNNING 行两边都不匹配——`listStaleUnownedQueued` 只要
@@ -365,135 +418,6 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
  * node:sqlite，ISSUE #3171）与 better-sqlite3 两种 adapter 都天然满足，测试里
  * 可以直接把 `createTestDb()` 传进来（走 `as unknown as TaskRepoDb` 一次性断言）。
  */
-
-/** 与 `runner-state.LOGS_MAX_LINES` 同一口径的单任务行数上限。core 不反向
- *  import comfyui（分层方向），字面量在此另立，两侧一致由用例钉住。 */
-const TASK_LOG_MAX_LINES = 5000;
-
-/** 每追加多少行做一次裁剪检查：裁剪要付一次计数扫描，逐批做太勤；
- *  靠 seq 取模触发，行有空洞时最坏多留一个检查窗的行，可接受。 */
-const TASK_LOG_TRIM_EVERY = 1000;
-
-/** 把某任务的增量日志裁到最近 `TASK_LOG_MAX_LINES` 行（与内存视图同窗）。
- *  旧形态下这一步由内存 5000 行封顶 + 整包重写顺手完成；增量表自己长，
- *  得自己收。按 seq 上界删，行有空洞时保留条数 ≤ 上限，方向安全。
- *  db 由调用点（impl 工厂作用域）传入——本文件刻意不引全局 db。 */
-async function trimTaskLogs(db: TaskRepoDb, taskId: string): Promise<void> {
-  const counted = await db
-    .select({ total: count() })
-    .from(taskLog)
-    .where(eq(taskLog.taskId, taskId));
-  const total = counted[0]?.total ?? 0;
-  if (total <= TASK_LOG_MAX_LINES) {
-    return;
-  }
-  const headed = await db
-    .select({ maxSeq: max(taskLog.seq) })
-    .from(taskLog)
-    .where(eq(taskLog.taskId, taskId));
-  const upper = headed[0]?.maxSeq;
-  if (upper === null || upper === undefined) {
-    return;
-  }
-  await db
-    .delete(taskLog)
-    .where(and(eq(taskLog.taskId, taskId), lte(taskLog.seq, upper - TASK_LOG_MAX_LINES)));
-}
-
-/** 任务日志增量三件套（#4605）：从主工厂按职责拆出的子工厂（§12.13，与
- *  `createQueueScanSection` 同形）——主工厂已顶到函数长度硬闸。
- *
- *  不带归属守卫：追加只发生在**正在执行该任务的那个进程**（inline / host
- *  各自只写自己领到的任务），不存在 `replaceLogs` 那种两方覆写同一行的竞争；
- *  外键保证任务行存在。`seq` 由写入侧分配（写入侧不变式：批内每条都带），
- *  缺席按 0 落库——同批多条缺 seq 会撞复合主键，那属于写入侧违约，当场红。 */
-function createTaskLogSection(db: TaskRepoDb) {
-  return {
-    /** 任务日志**增量**落库：按 `(taskId, seq)` 追加一小批，取代「整包防抖重写
-     *  `task.logs` 列」。单次 INSERT 的体积与防抖窗口内的增量成正比，不再随
-     *  日志总量增长 —— 这是 SQLITE_BUSY 写放大的主要治理点。行数裁剪与内存
-     *  视图同窗（`LOGS_MAX_LINES`，core 不反向 import comfyui，字面量另立、
-     *  由用例钉住一致），按每千行一次的节奏顺手收，不逐批扫。 */
-    async appendLogs(
-      taskId: string,
-      entries: Array<{ level: string; msg: string; seq?: number; src?: string; t: number }>,
-    ): Promise<void> {
-      if (entries.length === 0) {
-        return;
-      }
-      await db.insert(taskLog).values(
-        entries.map((entry) => ({
-          taskId,
-          seq: entry.seq ?? 0,
-          t: entry.t,
-          level: entry.level,
-          msg: entry.msg,
-          src: entry.src ?? null,
-        })),
-      );
-      const lastSeq = entries.at(-1)?.seq ?? 0;
-      if (lastSeq % TASK_LOG_TRIM_EVERY === 0) {
-        await trimTaskLogs(db, taskId);
-      }
-    },
-
-    /** 全量读某任务的增量日志（SSE 初始回放兜底之一：内存为空时接住防抖窗前
-     *  的行）。行数上限与裁剪口径一致；超出时取**最新**一段（与内存视图的
-     *  「丢最旧」同向），不是最旧的 5000 行。 */
-    async readAllLogs(taskId: string): Promise<Array<TaskLogRow>> {
-      const rows = await db
-        .select({
-          seq: taskLog.seq,
-          t: taskLog.t,
-          level: taskLog.level,
-          msg: taskLog.msg,
-          src: taskLog.src,
-        })
-        .from(taskLog)
-        .where(eq(taskLog.taskId, taskId))
-        .orderBy(desc(taskLog.seq))
-        .limit(TASK_LOG_MAX_LINES);
-      return rows.reverse().map((row) => ({
-        seq: row.seq,
-        t: row.t,
-        level: row.level,
-        msg: row.msg,
-        src: row.src ?? undefined,
-      }));
-    },
-
-    /** 读「游标之后」的日志尾段（SSE 轮询专用）：只取增量行，不再每 3s 整列
-     *  读回 MB 级 JSON。跨归属（读侧给用户看，与 `findRawCli` 同一取向）。
-     *  `limit` 兜住落后过多的连接：一拍最多补这么多，下一拍继续。 */
-    async readLogsSince(taskId: string, afterSeq: number, limit = 500): Promise<Array<TaskLogRow>> {
-      const rows = await db
-        .select({
-          seq: taskLog.seq,
-          t: taskLog.t,
-          level: taskLog.level,
-          msg: taskLog.msg,
-          src: taskLog.src,
-        })
-        .from(taskLog)
-        .where(and(eq(taskLog.taskId, taskId), gt(taskLog.seq, afterSeq)))
-        .orderBy(taskLog.seq)
-        .limit(limit);
-      return rows.map((row) => ({
-        seq: row.seq,
-        t: row.t,
-        level: row.level,
-        msg: row.msg,
-        src: row.src ?? undefined,
-      }));
-    },
-
-    /** 重跑清场：同一任务行再次领取时删掉上一轮的增量行，与内存缓冲的
-     *  「领取重开」同一口径（重跑不混上一轮的尾巴）。执行侧写，跨归属无需判。 */
-    async resetLogs(taskId: string): Promise<void> {
-      await db.delete(taskLog).where(eq(taskLog.taskId, taskId));
-    },
-  };
-}
 
 export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMode }) {
   const { owner } = options;
@@ -824,20 +748,10 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
       return lines;
     },
 
-    /* 任务日志增量三件套（#4605）从主工厂拆出（§12.13：主工厂已顶到函数长度
-     * 硬闸）——与领取扫描的 `createQueueScanSection` 同一拆分形态。 */
+    /* 任务日志增量三件套（#4605）住在隔壁的 repository-task-impl-logs.ts。 */
     ...createTaskLogSection(db),
   };
 }
-
-/** 增量日志行的读出形状（`seq` 必有；`level` 保留写入侧原值）。 */
-type TaskLogRow = {
-  level: string;
-  msg: string;
-  seq: number;
-  src?: string;
-  t: number;
-};
 
 /** impl 返回对象的形状；`repository-task.ts` 里 delegate 用
  *  `TaskRepoImpl["method"]` 反推签名，避免与 impl 漂移。 */

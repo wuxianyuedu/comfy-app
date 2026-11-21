@@ -587,6 +587,11 @@ export class TaskRepository extends DrizzleRepository<Task> {
   finalizeFailure: TaskRepoImpl["finalizeFailure"] = (taskId, error, validationErrors) =>
     impl.finalizeFailure(taskId, error, validationErrors);
 
+  /** 宿主死亡后由回收器代收口它的排队行（ISSUE #4604）：归属例外的第二处，
+   *  守卫只认 QUEUED+host，理由与边界见 impl 同名方法。 */
+  finalizeHostQueuedFailure: TaskRepoImpl["finalizeHostQueuedFailure"] = (taskId, error) =>
+    impl.finalizeHostQueuedFailure(taskId, error);
+
   cancel: TaskRepoImpl["cancel"] = (taskId) => impl.cancel(taskId);
 
   finalizeFromReaper: TaskRepoImpl["finalizeFromReaper"] = (taskId, status, error) =>
@@ -629,6 +634,11 @@ export class TaskRepository extends DrizzleRepository<Task> {
 
   listStaleRunning: TaskRepoImpl["listStaleRunning"] = (cutoff, take, owner) =>
     impl.listStaleRunning(cutoff, take, owner);
+
+  /** 宿主片排队超时候选（ISSUE #4604）：与上一条死信扫描互补，按片捞、判活
+   *  交回调用方（宿主心跳），见 impl 同名方法。 */
+  listStaleQueued: TaskRepoImpl["listStaleQueued"] = (owner, cutoff, take) =>
+    impl.listStaleQueued(owner, cutoff, take);
 
   createImages: TaskRepoImpl["createImages"] = (taskId, images) =>
     impl.createImages(taskId, images);
