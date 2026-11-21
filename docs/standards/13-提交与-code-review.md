@@ -11347,6 +11347,14 @@ exec node scripts/gates/check-pending-merge-loss.mjs "$2"          # ② 内容�
   先手工 `pnpm check:premerge --light` 把判定交给平台，跳过的重档会被念出来、不构成全套
   凭证。别改默认值去「顺手修好」某一台机器，也别手工写 `.git/comfy-premerge-proof.json`
   冒充钩子跑过 —— `how` 字段会如实区分两条路径。
+  **ship 侧的 `git push` 预算随这条预算走**（ISSUE #4753）：ship 的执行器曾给所有外部命令
+  统一 180s 预算，而 push 会触发本条复算 —— 复算一超过 180s，`spawnSync` 就把 `git push`
+  连同钩子整棵砍掉，`status: null` 被读成「push 失败（exit -1）」。症状是「后台跑 ship 稳定
+  死在 eslint 档、前台裸 `git push` 正常」—— 前后台的差异其实是「有没有那条预算」，与宿主
+  的进程管理无关（后台裸跑同一档 lint 实测 97s 完整跑完）。现在 push 预算 =
+  `COMFY_PREMERGE_TIMEOUT_MS`（同一解析器，默认 600s）+ 180s 的 LFS / 网络余量；push 失败
+  遇 `ETIMEDOUT` 时 ship 念「测量没发生，不是复算红」的尸检行，不再落进「看原话定因」的
+  unknown。
   —— 每次 push 都跑它，按本仓库的节奏（一天几十次提交）换来的是每人十几分钟墙钟，
   而那不会让人更严谨，只会让人 `git push --no-verify`。所以它只在**两个输入之一变了**时跑：
 

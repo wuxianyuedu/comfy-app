@@ -71,6 +71,7 @@ import {
 import {
   addPathKey,
   classifyStagedSurface,
+  pushFailureNote,
   runCommitStage,
   runPushStage,
   runRerunCiStage,
@@ -78,6 +79,7 @@ import {
 } from "../scripts/ship/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
 import { flagConflicts, parseArgs, parseIssueNumberToken } from "../scripts/ship/ship-args.mjs";
+import { pushBudgetMs } from "../scripts/ship/ship-exec.mjs";
 import {
   buildPullBody,
   capDiffstat,
@@ -765,6 +767,69 @@ describe("classifyPushFailure：push 失败按原话分型，不固定猜 premer
     expect(line).toContain("push 失败（exit 128）");
     expect(line).toContain("远端拒了");
     expect(line).not.toContain("多半是 pre-push");
+  });
+});
+
+describe("push 预算随复算预算走 + 预算砍的尸检行（ISSUE #4753）", () => {
+  /* 现场还原：push 触发的 pre-push 复算是分钟级的（本机 84s~5m35s，光 type-aware
+   * oxlint 一档 97~134s），固定 180s 的执行器预算把还在跑复算的 `git push` 整棵砍掉，
+   * `status: null` 被读成 exit -1 —— 看起来像宿主杀进程，其实是 ship 自己的预算。 */
+  it("pushBudgetMs：默认 = 复算预算 600s + LFS/网络余量 180s", () => {
+    expect(pushBudgetMs({})).toBe(780_000);
+    expect(pushBudgetMs({ COMFY_PREMERGE_TIMEOUT_MS: undefined })).toBe(780_000);
+  });
+
+  it("pushBudgetMs：钩子那侧抬了复算预算（COMFY_PREMERGE_TIMEOUT_MS），push 预算自动跟着抬", () => {
+    expect(pushBudgetMs({ COMFY_PREMERGE_TIMEOUT_MS: "1200000" })).toBe(1_380_000);
+  });
+
+  it("pushBudgetMs：复算预算非法时回落默认（钩子自己会退 2，push 不替它猜）", () => {
+    expect(pushBudgetMs({ COMFY_PREMERGE_TIMEOUT_MS: "abc" })).toBe(780_000);
+    expect(pushBudgetMs({ COMFY_PREMERGE_TIMEOUT_MS: "1000" })).toBe(780_000);
+  });
+
+  it("pushFailureNote：预算砍（ETIMEDOUT）给尸检话术 —— 测量没发生，不是复算红", () => {
+    const note = pushFailureNote({ status: -1, stdout: "", stderr: "", error: "ETIMEDOUT" });
+    expect(note).toContain("ETIMEDOUT");
+    expect(note).toContain("测量没发生");
+    expect(note).toContain("COMFY_PREMERGE_TIMEOUT_MS");
+    /* 输出几乎全空是预算砍的形状：不许再落进「看原话定因」的 unknown。 */
+    expect(note).not.toContain("看上面的 push 原话定因");
+  });
+
+  it("pushFailureNote：其余失败照旧按原话分型（remote 404 ⇒ 凭据话术）", () => {
+    const note = pushFailureNote({
+      status: 128,
+      stdout: "",
+      stderr: "remote: Repository Not Found.",
+      error: null,
+    });
+    expect(note).toContain("凭据");
+  });
+
+  it("接线判据：runPushStage 的 push 带大预算，ETIMEDOUT 念尸检行", () => {
+    const logs: Array<string> = [];
+    /** @type {Array<{timeoutMs?: number} | undefined>} */
+    const seenOpts: Array<{ timeoutMs?: number } | undefined> = [];
+    const ctx = {
+      up: { remote: "origin" },
+      branch: "fix/x",
+      root: "/tmp/nowhere",
+      resolveDir: () => null,
+      log: (s: string) => logs.push(s),
+      run: (_cmd: string, _args: Array<string>, opts?: { timeoutMs?: number }) => {
+        seenOpts.push(opts);
+        return { status: -1, stdout: "", stderr: "", error: "ETIMEDOUT" };
+      },
+      relay: () => undefined,
+    };
+    const got = runPushStage(ctx);
+    expect(got).toEqual({ stop: true, codes: [CODE.RED] });
+    expect(seenOpts[0]?.timeoutMs).toBe(pushBudgetMs(process.env));
+    const line = logs.join("\n");
+    expect(line).toContain("push 失败（exit -1）");
+    expect(line).toContain("ETIMEDOUT");
+    expect(line).not.toContain("远端拒了");
   });
 });
 
