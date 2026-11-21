@@ -132,6 +132,25 @@ export const filmRouter = createTRPCRouter({
     if (!film) {
       throw new TRPCError({ code: "NOT_FOUND", message: "成片不存在" });
     }
+    /* 不可合成的状态在入口就给**可行动**的错误（ISSUE #4736）：此前一律 ok:true，
+     * 而 composeFilm 里 claimComposing 抢不到就静默让位——GENERATING 期间误触发
+     * 会拿「部分成片」过早 markDone 定格成 DONE，此后剩余镜头完成的自动合成被
+     * DONE 挡住、再点也悄无声息，影片永久失去重合成出口。
+     * 只放行 FAILED（「重新合成」是文档承诺的恢复出口，ISSUE #4251），其余状态
+     * 逐个给可行动文案；COMPOSING 的并发第二次由 claimComposing 的原子守卫兜底，
+     * 这里也如实告知「正在合成中」而不是冒充成功。监看循环的自动合成直调
+     * composeFilm、不经过本路由，不受这道闸影响。 */
+    if (film.status !== "FAILED") {
+      const blockedMessage =
+        {
+          PARSING: "影片还在解析剧本，还没有可合成的镜头",
+          GENERATING: "镜头还在生成中，等全部完成后再合成（可在成片面板看进度）",
+          COMPOSING: "影片正在合成中，请等这一次完成",
+          DONE: "影片已完成合成，无需重复合成",
+          CANCELLED: "影片已取消，不能合成",
+        }[film.status] ?? "当前状态不可合成，请等影片生成完成";
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: blockedMessage });
+    }
     const { composeFilm } = await import("~/server/film/compose-film");
     await composeFilm(input.id);
     return { ok: true };
