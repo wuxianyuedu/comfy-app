@@ -13,6 +13,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { EmptyState } from "~/components/ui/empty-state";
+import { Spinner } from "~/components/ui/spinner";
 import { FieldLabel } from "~/components/ui/field";
 import { Hint } from "~/components/ui/hint";
 import { JsonViewer } from "~/components/ui/json-viewer";
@@ -191,7 +192,14 @@ export function WorkflowRunRawCliModal({
                 comfy-cli 完整输出
               </span>
               <span className="text-ink-faint text-2xs">
-                {loaded ? `${lines.length} 行` : "加载中…"}
+                {loaded ? (
+                  `${lines.length} 行`
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Spinner className="size-3" />
+                    加载中…
+                  </span>
+                )}
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-2">

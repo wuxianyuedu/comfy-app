@@ -3,6 +3,7 @@
 import { upperToken } from "~/lib/upper-token";
 import React, { useEffect, useRef } from "react";
 import { Hint } from "~/components/ui/hint";
+import { Spinner } from "~/components/ui/spinner";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 /* 直接引基础件与结果卡（不再经 CanvasNode 目录 barrel）：barrel 会 re-export
@@ -329,8 +330,17 @@ export function ImageGenerationPanel({
                 value={genTag}
               />
             ) : (
-              <div className="text-ink-muted text-2xs">
-                {wfListLoading ? "加载中…" : genTag ? "当前模型下无工作流" : "该类型暂无工作流"}
+              <div className="text-ink-muted text-2xs flex items-center gap-1.5">
+                {wfListLoading ? (
+                  <>
+                    <Spinner className="size-3" />
+                    加载中…
+                  </>
+                ) : genTag ? (
+                  "当前模型下无工作流"
+                ) : (
+                  "该类型暂无工作流"
+                )}
               </div>
             )}
           </Field>
@@ -348,9 +358,18 @@ export function ImageGenerationPanel({
                 value={d.workflowId ?? ""}
               />
             ) : (
-              <div className="text-ink-muted text-2xs">
-                {wfListLoading ? "加载中…" : genTag ? `模型「${genTag}」下` : ""}
-                {wfListLoading ? "" : "暂无该类型工作流"}
+              <div className="text-ink-muted text-2xs flex items-center gap-1.5">
+                {wfListLoading ? (
+                  <>
+                    <Spinner className="size-3" />
+                    加载中…
+                  </>
+                ) : (
+                  <>
+                    {genTag ? `模型「${genTag}」下` : ""}
+                    暂无该类型工作流
+                  </>
+                )}
               </div>
             )}
           </Field>

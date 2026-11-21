@@ -21,6 +21,7 @@ import type { RemoteModeAdapter, WorkshopInputType } from "~/lib/workshop/remote
 import { ALL_WORKFLOW_TYPES, getWorkflowType } from "~/lib/workflow/workflow-types";
 import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
+import { Skeleton } from "~/components/ui/skeleton";
 import { Disclosure } from "~/components/ui/disclosure";
 import { FormField } from "~/components/ui/form-field";
 import { Hint } from "~/components/ui/hint";
@@ -467,7 +468,12 @@ export function ModelAdaptersView() {
           >
             <SectionLabel>选择要配置的模型</SectionLabel>
             {loading ? (
-              <p className="text-muted-foreground pt-2 text-sm">加载中…</p>
+              /* 骨架屏（ISSUE #4749）：与模型树条目同形的占位条。 */
+              <div aria-label="加载中" className="flex flex-col gap-2 pt-2" role="status">
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton className="h-8 w-full rounded-lg" key={i} />
+                ))}
+              </div>
             ) : candidates.length === 0 ? (
               <p className="bg-warning/10 text-warning-strong mt-2 rounded-lg px-3 py-2 text-xs">
                 还没有远端模型 —— 到「设置 → 模型」添加用途为 图像 / 视频 的远端条目后，

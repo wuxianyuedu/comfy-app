@@ -5,6 +5,7 @@
  *  （规范 16 §16.2.4.14）—— 此前这份壳在本目录的四个 chip 里各写了一遍。
  */
 import { PageLoading } from "~/components/ui/page-loading";
+import { Spinner } from "~/components/ui/spinner";
 import { OptionListPopover } from "~/components/ui/option-list-popover";
 import { Hint } from "~/components/ui/hint";
 
@@ -74,7 +75,10 @@ export function WorkflowPickChip({
         <Hint label={sel?.name}>
           <span className="text-ink-bright text-2xs min-w-0 flex-1 truncate text-left font-sans font-semibold">
             {loading && !sel ? (
-              <span className="text-ink-muted">加载中…</span>
+              <span className="text-ink-muted inline-flex items-center gap-1.5">
+                <Spinner className="size-3" />
+                加载中…
+              </span>
             ) : sel ? (
               sel.name
             ) : (

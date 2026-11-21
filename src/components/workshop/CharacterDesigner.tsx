@@ -5,6 +5,7 @@ import { numberHandler, textHandler } from "~/lib/form-props";
 import { Trash } from "lucide-react";
 import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { Skeleton } from "~/components/ui/skeleton";
 import { EmptyState } from "~/components/ui/empty-state";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -413,18 +414,23 @@ export function CharacterDesigner({
                   <span className="text-muted-foreground mb-1 block text-xs">
                     绑定 LoRA（可选）
                   </span>
-                  <SelectMenu
-                    className="border-border! bg-subtle! text-sm"
-                    onChange={(value) => {
-                      update(character.id, {
-                        loraName: value || undefined,
-                        ...(value ? {} : { loraStrength: undefined }),
-                      });
-                    }}
-                    options={loraFiles}
-                    placeholder={lorasLoading ? "加载中…" : "不绑定（用工作流图内配置）"}
-                    value={character.loraName ?? ""}
-                  />
+                  {lorasLoading ? (
+                    /* 骨架条（ISSUE #4749）：LoRA 清单加载中的触发器占位。 */
+                    <Skeleton className="h-9 w-full rounded-md" />
+                  ) : (
+                    <SelectMenu
+                      className="border-border! bg-subtle! text-sm"
+                      onChange={(value) => {
+                        update(character.id, {
+                          loraName: value || undefined,
+                          ...(value ? {} : { loraStrength: undefined }),
+                        });
+                      }}
+                      options={loraFiles}
+                      placeholder="不绑定（用工作流图内配置）"
+                      value={character.loraName ?? ""}
+                    />
+                  )}
                 </div>
                 {character.loraName !== undefined && character.loraName !== "" && (
                   <div>
