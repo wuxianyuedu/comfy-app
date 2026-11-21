@@ -155,7 +155,7 @@ export function MaterialLibraryContent({
                   {onUse && (
                     <Hint accessibleName label="加入画布">
                       <Button
-                        className="text-ink-soft rounded bg-black/70 hover:bg-black/80 hover:text-white"
+                        className="rounded bg-black/70 text-white/90 hover:bg-black/80 hover:text-white"
                         onClick={() => {
                           onUse(item);
                         }}
@@ -168,7 +168,7 @@ export function MaterialLibraryContent({
                   )}
                   <Hint accessibleName label="删除">
                     <Button
-                      className="text-ink-soft hover:text-destructive rounded bg-black/70 hover:bg-black/80"
+                      className="hover:text-destructive rounded bg-black/70 text-white/90 hover:bg-black/80"
                       onClick={() => {
                         void remove(item);
                       }}

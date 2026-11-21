@@ -78,7 +78,7 @@ export function FilmStudioShotListPanel({
                     className={`text-3xs flex h-12 w-14 shrink-0 items-center justify-center rounded-md ${
                       isSelected
                         ? "bg-primary/10 text-primary-strong"
-                        : "bg-subtle text-ink-faintest"
+                        : "bg-subtle text-ink-fainter"
                     }`}
                   >
                     镜头缩略图
@@ -93,8 +93,8 @@ export function FilmStudioShotListPanel({
                     {shot.name}
                   </TruncatedText>
                   <div className="mt-1 flex items-center gap-2">
-                    <span className="text-ink-faintest text-3xs">{shot.duration}</span>
-                    <span className="text-ink-faintest text-3xs">·</span>
+                    <span className="text-ink-fainter text-3xs">{shot.duration}</span>
+                    <span className="text-ink-fainter text-3xs">·</span>
                     <span className="text-ink-fainter text-3xs">{MODE_LABELS[shot.mode]}</span>
                   </div>
                 </div>

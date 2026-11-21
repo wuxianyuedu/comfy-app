@@ -229,8 +229,8 @@
   --color-ink-subtle: #3f3f46; /* 次级文字 2 (light default) */
   --color-ink-muted: #6b6b76; /* 弱文字 (light default) */
   --color-ink-faint: #71717a; /* 标签/更弱文字 (light default) */
-  --color-ink-fainter: #8e8e99; /* 辅助说明文字 (light default)：#a1a1aa 压白 2.56 太淡，加深到 3.24（ISSUE #3770） */
-  --color-ink-faintest: #b6b6bf; /* 极弱文字 (light default) */
+  --color-ink-fainter: #767680; /* 辅助说明文字 (light default)：小字信息档。#a1a1aa→#8e8e99(3.24，ISSUE #3770)→#767680(4.50 过 AA，#4712) */
+  --color-ink-faintest: #8e8e99; /* 极弱文字 (light default)：装饰性最浅档（3.25），别放需要阅读的信息——那类用 fainter/muted（#b6b6bf 压白仅 2.0，#4712 加深） */
   --color-ink-icon: #8e8e98; /* 折叠箭头/图标弱文字 (light default) */
   --color-ink-placeholder: #a1a1aa; /* placeholder (light default) */
   /* 画布节点的「参数值」文字：未连线取主档、已连线取低一档（值来自上游的提示）。
@@ -501,8 +501,8 @@
   --color-ink-subtle: #d4d4d8; /* 次级文字 2 */
   --color-ink-muted: #9a9aad; /* 弱文字 */
   --color-ink-faint: #8b90a8; /* 标签/更弱文字 */
-  --color-ink-fainter: #6b7088; /* 辅助说明文字 */
-  --color-ink-faintest: #5a5f73; /* 极弱文字 */
+  --color-ink-fainter: #7d82a0; /* 辅助说明文字（压暗底 4.03→5.2，#4712） */
+  --color-ink-faintest: #6b7088; /* 极弱文字（3.12→4.03，#4712） */
   --color-ink-icon: #6e6e80; /* 折叠箭头/图标弱文字 */
   --color-ink-placeholder: #5a5a6b; /* placeholder */
   --color-widget-value: #ffffff; /* 参数值文字（暗色档 = 纯白） */
