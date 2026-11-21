@@ -6,7 +6,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { generatedRoot } from "~/lib/media/output-paths";
-import { buildNormalizeArgs, buildSegmentVf, buildSrtBody, clipPathOf } from "./compose-steps";
+import {
+  buildNormalizeArgs,
+  buildSegmentVf,
+  buildSrtBody,
+  clipPathOf,
+  formatSrtTimestamp,
+} from "./compose-steps";
 
 describe("buildSegmentVf", () => {
   it("拼出 scale/pad/fps + 首尾淡入淡出的滤镜串", () => {
@@ -30,6 +36,17 @@ describe("buildSrtBody", () => {
     expect(buildSrtBody({ text: "开场", dur: 3.9 })).toBe(
       "1\n00:00:00,000 --> 00:00:03,000\n开场\n",
     );
+  });
+
+  it("≥60s 的镜头进位到分，不产出非法秒位（#4739 回归）", () => {
+    /* 缺陷现场：padStart(2,"0") 拼出 00:00:75,000（秒位必须 00-59），
+     * 字幕烧录失败、长镜头字幕被静默丢弃。 */
+    expect(buildSrtBody({ text: "长镜", dur: 75 })).toBe(
+      "1\n00:00:00,000 --> 00:01:15,000\n长镜\n",
+    );
+    expect(formatSrtTimestamp(60)).toBe("00:01:00,000");
+    expect(formatSrtTimestamp(3599)).toBe("00:59:59,000");
+    expect(formatSrtTimestamp(3600)).toBe("01:00:00,000");
   });
 });
 
