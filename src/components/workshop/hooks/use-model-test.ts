@@ -14,7 +14,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { readFileAsDataUrl } from "~/lib/file-io";
 import { runAsyncAction } from "~/lib/async-action";
 import { isRecord } from "~/lib/is-record";
-import { useExternalAction } from "~/components/ui/use-external-action";
 import {
   apiPreviewRequest,
   fetchWorkshopWorkflows,
@@ -33,9 +32,10 @@ import {
   type ModelTestSession,
 } from "./use-model-test-generate";
 import { useReferenceImageGroup } from "./use-reference-image-group";
+import { useApplyJsonValues } from "./use-model-test-json";
+import { useOpenResultInBrowser } from "./use-open-result-in-browser";
 
 import { useTRPC } from "~/trpc/react";
-import { getBaseUrl } from "~/trpc/base-url";
 
 import {
   buildRequestBodies,
@@ -71,6 +71,12 @@ export type ModelTestController = {
   adapters: Array<RemoteModeAdapter>;
   /** 追加若干张参考图（读成 data URL 后落组；上限 8 张）。 */
   addReferenceImages: (files: Array<File>) => Promise<void>;
+  /** 解析并应用一段 JSON（ISSUE #4769：历史「复制去重投」的载荷）。合法 →
+   *  写回当前格表单值并返回合并后的值（调用方同一次点击里接着生成）；
+   *  非法 → 错误落当前格反馈位，返回 ok:false。 */
+  applyJsonValues: (
+    json: string,
+  ) => { ok: true; values: ModelTestValues } | { error: string; ok: false };
   /** 取消当前格（用途 + 模式 + 模型）的生成（#3949 需求 5 / #4080 评论 12）：
    *  中断等待与轮询，界面落「已取消生成」。 */
   cancelGenerate: (key?: string) => void;
@@ -84,7 +90,9 @@ export type ModelTestController = {
   error: string | null;
   /** 生成动作：按适配器映射收集统一输入并发起一次真实调用（消耗额度）。
    *  不传 key = 测当前格。 */
-  generate: (key?: string) => Promise<void>;
+  /** 发起一次真实生成。`valuesOverride`（ISSUE #4769）：JSON 输入模式解析出的
+   *  表单值在同一次点击里直接进生成，不吃旧闭包。 */
+  generate: (key?: string, valuesOverride?: ModelTestValues) => Promise<void>;
   /** 当前格是否在生成中。 */
   generating: boolean;
   /** 当前格生成发起的时刻（ms；null = 不在生成中）：请求详情的已过时间按它走秒。 */
@@ -152,7 +160,7 @@ export type ModelTestController = {
  *  实际请求行落在**当前格**的会话里；生成中不清空、不重算 —— 该格的
  *  「实际请求」在请求中与生成后都保持可见（#4080 评论 20）。 */
 function useRequestPreview(args: {
-  buildBodies: () => ReturnType<typeof buildRequestBodies>;
+  buildBodies: (values: ModelTestValues) => ReturnType<typeof buildRequestBodies>;
   busy: boolean;
   kind: ModelTestKind;
   onError: (text: string) => void;
@@ -160,8 +168,19 @@ function useRequestPreview(args: {
   selectedModel: string;
   sessionKey: string;
   skip: boolean;
+  values: ModelTestValues;
 }): void {
-  const { busy, buildBodies, kind, onError, patchSession, selectedModel, sessionKey, skip } = args;
+  const {
+    busy,
+    buildBodies,
+    kind,
+    onError,
+    patchSession,
+    selectedModel,
+    sessionKey,
+    skip,
+    values,
+  } = args;
   const seqRef = useRef(0);
   /* 卸载判活（ISSUE #4288）：防抖窗口过后组件可能已卸载，在途请求回来
    * 不再写父级 state（seq 只防连发竞态，不防「卸载后写」）。 */
@@ -184,7 +203,7 @@ function useRequestPreview(args: {
         return;
       }
       const seq = ++seqRef.current;
-      const { imageBody, videoBody } = buildBodies();
+      const { imageBody, videoBody } = buildBodies(values);
       const relayBody = imageBody ?? videoBody ?? {};
       void runAsyncAction(
         async () => {
@@ -210,7 +229,7 @@ function useRequestPreview(args: {
     return () => {
       clearTimeout(timer);
     };
-  }, [busy, buildBodies, onError, selectedModel, kind, skip, sessionKey, patchSession]);
+  }, [busy, buildBodies, onError, selectedModel, kind, skip, sessionKey, patchSession, values]);
 }
 
 /** 候选 / 契约 / 适配器索引的取数与派生（§12.13 第二刀）：这一簇只读
@@ -486,30 +505,14 @@ export function useModelTest(): ModelTestController {
     patchSession(activeKeyRef.current, { error: text });
   });
 
-  /* 产物原链交给系统浏览器（服务端 openExternal；免重编壳，#3791）。 */
-  const openExternalM = useMutation(trpc.setting.openExternal.mutationOptions());
+  /* 产物原链交给系统浏览器（服务端 openExternal；免重编壳，#3791）收在
+   * useOpenResultInBrowser（§12.13 拆分）。 */
+  const { openBusy, openResultInBrowser } = useOpenResultInBrowser({
+    activeKeyRef,
+    patchSession,
+  });
   /* 对话测试（#4080）：向本地 / 远端被测模型发一条提示词，返回补全与耗时。 */
   const chatTestM = useMutation(trpc.llm.chatTest.mutationOptions());
-  const openExternalAction = useExternalAction({
-    target: "browser",
-    report: (kind, text) => {
-      patchSession(activeKeyRef.current, { notice: { kind, text } });
-    },
-  });
-  const openResultInBrowser = useCallback(
-    async (url: string) => {
-      await openExternalAction.runWithTarget(url, (target) => {
-        /* 本地工作流产物是同源相对路径（/api/generated/...），而 openExternal 的入参是
-         * `z.url()` —— 相对路径当场 invalid_format（#4750），更后面 `isHttpUrl()` 也
-         * 只收绝对 http(s)。按应用 origin 补成绝对 URL 再发（`getBaseUrl()` 是全库
-         * origin 唯一出处）；已是绝对地址的原样保留，`file:` / `javascript:` 这类
-         * 危险协议仍由服务端协议闸拦下 —— 这里只补 origin，不放宽任何安全边界。 */
-        const absolute = new URL(target, getBaseUrl()).toString();
-        return openExternalM.mutateAsync({ url: absolute });
-      });
-    },
-    [openExternalAction, openExternalM],
-  );
 
   /* 候选 / 契约 / 适配器索引：取数与派生收在 useTestCatalog（§12.13 第二刀）。 */
   const {
@@ -663,9 +666,10 @@ export function useModelTest(): ModelTestController {
   );
 
   /* 请求体组装的唯一入口：本地提交行、生成前预览、真实调用三处共用同一份
-   * 组装结果（#3949 需求 8 —— 三处各拼一套必然漂移）。 */
+   * 组装结果（#3949 需求 8 —— 三处各拼一套必然漂移）。值显式入参：生成可带
+   * 覆盖值（JSON 输入模式，ISSUE #4769），预览 / 提交行走当前表单值。 */
   const buildBodies = useCallback(
-    () =>
+    (values: ModelTestValues) =>
       buildRequestBodies({
         kind,
         mode,
@@ -673,7 +677,7 @@ export function useModelTest(): ModelTestController {
         referenceImages: referenceGroup.images,
         values,
       }),
-    [kind, mode, referenceGroup.images, selectedModel, values],
+    [kind, mode, referenceGroup.images, selectedModel],
   );
 
   /* 生成动作（对话 #4080 / 本地工作流 #4080 评论 4 / 图片视频中继三条通道
@@ -695,9 +699,18 @@ export function useModelTest(): ModelTestController {
     values,
   });
   const generate = useCallback(
-    (key?: string) => generateSession(key ?? activeKeyRef.current),
+    (key?: string, valuesOverride?: ModelTestValues) =>
+      generateSession(key ?? activeKeyRef.current, valuesOverride),
     [generateSession],
   );
+
+  /* JSON 输入模式的解析与应用（ISSUE #4769）收在 useApplyJsonValues
+   * （§12.13：主 hook 越过函数长度硬闸，按职责拆子 hook）。 */
+  const { applyJsonValues } = useApplyJsonValues({
+    values,
+    activeKeyRef,
+    patchSession,
+  });
 
   /** 取消当前格（或指定格）的生成（#3949 需求 5 / #4080 评论 12）。 */
   const cancelGenerate = useCallback((key?: string) => {
@@ -723,6 +736,7 @@ export function useModelTest(): ModelTestController {
     onError: showPreviewError,
     selectedModel,
     sessionKey: activeKey,
+    values,
     patchSession,
     skip: selectedCandidate?.workflow === undefined ? false : true,
   });
@@ -767,7 +781,7 @@ export function useModelTest(): ModelTestController {
         status: null,
       };
     }
-    const { imageBody, videoBody } = buildBodies();
+    const { imageBody, videoBody } = buildBodies(values);
     return relayDebugRow(kind, imageBody ?? videoBody ?? {});
   }, [buildBodies, kind, mode, selectedCandidate, selectedModel, values]);
   /* 当前格的请求行 = 本地提交 + 实际请求（#4080 评论 13：生成后保留，仅徽标
@@ -786,6 +800,7 @@ export function useModelTest(): ModelTestController {
     requestRows,
     kindCandidateCount,
     inputRows,
+    applyJsonValues,
     kind,
     error: activeSession.error,
     generating: activeSession.generating,
@@ -799,7 +814,7 @@ export function useModelTest(): ModelTestController {
     modeTabs,
     notice: activeSession.notice,
     generate,
-    openBusy: openExternalAction.busy,
+    openBusy,
     openResultInBrowser,
     loading,
     selectedModel,

@@ -6,6 +6,7 @@
 
 import { asRecord, isRecord } from "~/lib/is-record";
 import { modeContractEntries, type ModeContract } from "~/lib/workshop/model-mode-contract";
+import { upperToken } from "~/lib/upper-token";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { TaskDetail } from "./history-types";
 
@@ -246,4 +247,70 @@ export function isPromptParamRow(id: string, name?: string | null): boolean {
     return false;
   }
   return /^(?:positive[-_])?prompt/i.test(name.trim());
+}
+
+/* ── 「复制去重投」的 JSON 载荷（ISSUE #4769）────────────────────────────
+ * 历史页把一次提交的**全部参数**折成一个 JSON 复制走，粘贴侧是「测试模型」
+ * 的 JSON 输入模式：按 `mode` 切模式页签、把 `inputs` 逐键写回统一输入表单
+ * 再生成。两半共用这份形状 —— 键是模式契约口 id（= 测试页表单值键），值统一
+ * 字符串化（kvValueText）。 */
+
+export type ReprintPayload = {
+  /** 契约口 id → 该次提交落在口上的值（只含有值的口）。 */
+  inputs: Record<string, string>;
+  /** 任务的模式码（T2I / T2V …）；粘贴侧按它切模式页签。 */
+  mode: string;
+};
+
+/** 尺寸族 pin 名 → 测试页表单值键。尺寸口在任务行里没有单一顶层值
+ *（被封装拆进 workflowInputs 的具体 pin），聚合出的展示串没法反解回表单，
+ * 所以这里逐 pin 展开；`width` / `height` 不是测试页承接的输入类型，不带。 */
+const SIZE_PIN_TO_INPUT_TYPE: Record<string, string> = {
+  "aspect-ratio": "aspect-ratio",
+  aspect_ratio: "aspect-ratio",
+  megapixels: "megapixels",
+  multiple: "multiple",
+  resolution: "resolution",
+};
+
+/**
+ * 把一次提交的全部参数折成可粘贴重跑的 JSON 载荷。
+ *
+ * 口清单与值解析和详情弹窗的「工坊参数」表同一份派生
+ *（`modeContractEntries` + `resolvePortValue`）—— 复制走的内容与用户在详情里
+ * 看到的参数表一字不差，另抄一份键名清单必然漂移。尺寸口按 pin 展开
+ * （见 `SIZE_PIN_TO_INPUT_TYPE`）；契约口一个值都没落上时（模式码认不出等），
+ * 退回原始顶层参数，至少把提示词带走。
+ */
+export function buildReprintPayload(args: {
+  contracts?: ReadonlyArray<ModeContract> | null;
+  detail: TaskDetail;
+  mode: string | null | undefined;
+}): ReprintPayload {
+  const params = paramsOf(args.detail);
+  const inputs = workflowInputsOf<{ name: string; value: unknown }>(args.detail);
+  const expandSizePins = (into: Record<string, string>): void => {
+    for (const pin of inputs) {
+      const type = SIZE_PIN_TO_INPUT_TYPE[pin.name];
+      if (type !== undefined && !isBlank(pin.value)) {
+        into[type] = kvValueText(pin.value);
+      }
+    }
+  };
+  const out: Record<string, string> = {};
+  for (const port of modeContractEntries(args.mode, args.contracts)) {
+    if (port.id === "size") {
+      expandSizePins(out);
+      continue;
+    }
+    const value = resolvePortValue(port.id, params, inputs, undefined);
+    if (value !== undefined) {
+      out[port.id] = kvValueText(value);
+    }
+  }
+  /* 模式码认不出时 `exposedParamsForMode` 仍给内置口（至少提示词 / 负向），
+   * 所以这里不另设「原始参数兜底」—— 不在契约口上的内部键（workflow /
+   * runtime / checkpoint）本来就不该进载荷：粘贴侧（测试模型）消费的是
+   * 契约口值，模型本身由用户在测试页重新挑。 */
+  return { mode: upperToken(args.mode ?? ""), inputs: out };
 }
