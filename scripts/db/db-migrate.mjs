@@ -35,8 +35,12 @@ import { sweepDuplicateRowsForUniqueIndexes } from "./db-unique-sweep.mjs";
 const root = path.resolve(import.meta.dirname, "../..");
 const dbPath = resolveSqlitePath(root);
 
-/** 迁移文件目录（与 `drizzle.config.ts` 的 `out` 同源，写死一处便于核对）。 */
-const MIGRATIONS_DIR = path.join(root, "drizzle");
+/** 迁移文件目录（与 `drizzle.config.ts` 的 `out` 同源，写死一处便于核对）。
+ * `COMFY_DB_MIGRATIONS_DIR` 是**测试指路用**的覆盖口（ISSUE #4616）：指向别处时，
+ * 前置判决按它数 `.sql`（相对路径按仓库根解析）；生产链路不设它，行为不变。 */
+const MIGRATIONS_DIR = process.env.COMFY_DB_MIGRATIONS_DIR
+  ? path.resolve(root, process.env.COMFY_DB_MIGRATIONS_DIR)
+  : path.join(root, "drizzle");
 /** drizzle 的迁移账本表名。 */
 const LEDGER_TABLE = "__drizzle_migrations";
 

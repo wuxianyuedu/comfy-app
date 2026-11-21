@@ -2,55 +2,21 @@
  * `drizzle-kit migrate` 在 `drizzle/` 缺失时**先建库文件、再退 1** —— 调用方拿到「迁移失败」退出码
  * + 0 字节空壳，直到起应用才炸 `no such table`（同族 ISSUE #489 的 push 已修、migrate 这条路没有）。
  * 契约：走 `scripts/db/db-migrate.mjs`；在起 drizzle-kit **之前**拦下（事后复核只能发现、不能阻止）；
- * 判据是库里的真事实（表数 + 账本条数）而非退出码。用例在真仓库跑，前提靠移开/放回真 `drizzle/`。 */
+ * 判据是库里的真事实（表数 + 账本条数）而非退出码。用例在真仓库跑；「前提不成立」靠**沙箱迁移目录**
+ * 构造（`COMFY_DB_MIGRATIONS_DIR` 指路，ISSUE #4616），真 `drizzle/` 全程只读、不挪动 —— 旧夹具把真
+ * 目录 rename 走，进程死在恢复前就永久丢目录，Windows 上目录 rename 还常年 EPERM。 */
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveSqlitePath } from "../scripts/db/db-schema-state.mjs";
-import { acquireRepoDrizzle } from "./helpers/repo-drizzle-lock";
 
 let tmp: string;
 let dbFile: string;
-/** 真仓库里的迁移目录；用例期间可能被临时挪开。 */
+/** 真仓库里的迁移目录：所有用例对它**只读**，任何夹具都不得挪动/改写（ISSUE #4616）。 */
 const REAL_DRIZZLE = path.join(process.cwd(), "drizzle");
-let moved: string | null = null;
-/** 本条用例持有真 `drizzle/` 的独占锁的释放函数（见 `tests/helpers/repo-drizzle-lock.ts`）。 */
-let releaseDrizzle: (() => void) | null = null;
-
-/** 把真 `drizzle/` 挪到一边（返回备份路径）；已经在一边时返回 null。 */
-function hideMigrations(): string | null {
-  if (!fs.existsSync(REAL_DRIZZLE)) {
-    return null;
-  }
-  const bak = `${REAL_DRIZZLE}.test-bak-${process.pid}`;
-  fs.renameSync(REAL_DRIZZLE, bak);
-  return bak;
-}
-
-function restoreMigrations(): void {
-  if (moved !== null && moved !== "" && fs.existsSync(moved)) {
-    fs.rmSync(REAL_DRIZZLE, { recursive: true, force: true });
-    fs.renameSync(moved, REAL_DRIZZLE);
-  }
-  moved = null;
-}
-
-/** 整个文件持有真 `drizzle/` 的独占锁（`tests/helpers/repo-drizzle-lock.ts`）。本文件造「前提不成立」
- * 只能把真目录挪开，而 `db-migrate-equivalence.test.ts` 与下面「绝对库真的落表」都要它在场；并行时实测
- * 红法：等价性那份一条断言都没红、整个文件在 `beforeAll` 挂，话术写着「没有可应用的迁移」。锁按文件取
- * （不是每条用例）：等待只可能发生一次，而 `hookTimeout` 45s、对面实测 ~80s，按用例取会顶穿钩子。
- */
-beforeAll(async () => {
-  releaseDrizzle = await acquireRepoDrizzle("db-migrate-noninteractive");
-}, 480_000);
-
-afterAll(() => {
-  releaseDrizzle?.();
-  releaseDrizzle = null;
-});
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "db-migrate-"));
@@ -58,19 +24,23 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  restoreMigrations();
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-/** 在真仓库里跑迁移入口（`stdio` 全 pipe：无 TTY，正是要复现的环境）。 */
-function runMigrate(databaseUrl = `file:${dbFile}`, extraArgs: Array<string> = []) {
+/** 在真仓库里跑迁移入口（`stdio` 全 pipe：无 TTY，正是要复现的环境）。
+ * `extraEnv` 用来把迁移目录指到沙箱（`COMFY_DB_MIGRATIONS_DIR`，ISSUE #4616）。 */
+function runMigrate(
+  databaseUrl = `file:${dbFile}`,
+  extraArgs: Array<string> = [],
+  extraEnv: Record<string, string> = {},
+) {
   return spawnSync(
     process.execPath,
     [path.join(process.cwd(), "scripts", "db/db-migrate.mjs"), ...extraArgs],
     {
       cwd: process.cwd(),
       encoding: "utf8",
-      env: { ...process.env, DATABASE_URL: databaseUrl },
+      env: { ...process.env, DATABASE_URL: databaseUrl, ...extraEnv },
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 120_000,
     },
@@ -142,7 +112,7 @@ describe("pnpm db:migrate 非交互可用", () => {
 
 /** 参数契约（ISSUE #2096）：认不出的旗标**不许**被吞掉之后照旧落库。修之前这个入口一句 `argv` 都不读，
  * `node scripts/db/db-migrate.mjs --dry-run` 被当成无参调用照跑 —— 临时库建 23 张表、`__drizzle_migrations`
- * 记 1/1、退出码 0。⚠️ 这一档刻意**不挪开**真 `drizzle/`（与上面相反）：判的正是「迁移文件在场、写库
+ * 记 1/1、退出码 0。⚠️ 这一档不碰真 `drizzle/`（下面沙箱那格同样全程只读）：判的正是「迁移文件在场、写库
  * 那条路是活的」，拿「前提不成立」的早退当「它没写库」的证据会把缺陷读成不存在。断言重心是库里的事实
  * （库文件没被建出来），不是话术里有没有那两个字。 */
 describe("参数契约：未知旗标拦下，且一个字节都不写", () => {
@@ -170,10 +140,12 @@ describe("参数契约：未知旗标拦下，且一个字节都不写", () => {
 
 describe("前提不成立时：非零退出，且不产出 0 字节库", () => {
   it("没有迁移文件 → 前置判决拦下，库文件**根本没被创建**", () => {
-    moved = hideMigrations();
-    expect(fs.existsSync(REAL_DRIZZLE), "前置条件：迁移目录已被挪开").toBe(false);
+    /* 沙箱造「目录在、但一份 .sql 都没有」（ISSUE #4616）：迁移目录经 `COMFY_DB_MIGRATIONS_DIR`
+     * 指到临时目录，真仓库 `drizzle/` 全程不动。空沙箱比「目录不在」更严一格 —— 前置判决按 .sql 筛。 */
+    const sandboxDrizzle = path.join(tmp, "drizzle");
+    fs.mkdirSync(sandboxDrizzle);
 
-    const r = runMigrate();
+    const r = runMigrate(`file:${dbFile}`, [], { COMFY_DB_MIGRATIONS_DIR: sandboxDrizzle });
 
     expect(r.status, "前提不成立必须非零退出").not.toBe(0);
     expect(r.stderr).toContain("db:migrate");
@@ -181,6 +153,12 @@ describe("前提不成立时：非零退出，且不产出 0 字节库", () => {
     expect(
       fs.existsSync(dbFile),
       "前置判决必须在起 drizzle-kit 之前拦下 —— 否则它会先建出 0 字节的库",
+    ).toBe(false);
+    // 真仓库目录必须原封不动（旧夹具的事故形态：drizzle/ 消失 + 孤儿备份目录）。
+    expect(fs.existsSync(REAL_DRIZZLE), "真 drizzle/ 必须全程在场").toBe(true);
+    expect(
+      fs.readdirSync(process.cwd()).some((entry) => entry.startsWith("drizzle.test-bak-")),
+      "不许留下 rename 夹具的备份孤儿",
     ).toBe(false);
   }, 150_000);
 
