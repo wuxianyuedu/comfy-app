@@ -20,6 +20,9 @@ import process from "node:process";
 
 import { gitScratchPath, resolveGitDir } from "../lib/git-dir.mjs";
 import { pnpmInvocation, runGateStep } from "../launcher-core/shell.mjs";
+/* push 预算的判据只有一份出处：钩子那侧的复算预算解析器（ISSUE #4753）。
+ * ship 不重抄一份「怎么读 COMFY_PREMERGE_TIMEOUT_MS」—— 抄了就会漂。 */
+import { recomputeTimeoutMs } from "../gates/premerge-proof.mjs";
 
 /**
  * 一次外部命令的结果。`stderr` 是**必需**字段，不是可选（见 `makeRunner`）。
@@ -56,6 +59,35 @@ export function cnbSpawn(args) {
 }
 
 /**
+ * `git push` 预算里、罩住「复算之外」那部分的余量：pre-push 钩子先跑
+ * `git lfs pre-push`（大文件走网络上传）再跑复算，git 自身的连接 / 协商也在这份
+ * 余量里。它不必精确 —— 复算预算那半边本来就有量级余量 —— 只要不把「正常慢」
+ * 读成「被砍」就行。不导出：只有 {@link pushBudgetMs} 用它（零消费导出会被
+ * `check-dead-exports` 判）。
+ */
+const PUSH_BUDGET_HEADROOM_MS = 180_000;
+
+/**
+ * `git push` 那一跳的墙钟预算（ISSUE #4753）。
+ *
+ * push 会触发 pre-push 钩子里的**合并前复算**（分钟级：本机实测 84s ~ 5m35s，
+ * 光 type-aware oxlint 一档就 97~134s；共享机上还能更慢）。此前 ship 的执行器
+ * 给**所有**外部命令统一 180s 预算，复算一超过它，`spawnSync` 就把 `git push`
+ * 连同钩子整棵砍掉 —— `status` 为 null、被 `?? -1` 读成「push 失败（exit -1）」，
+ * 看起来像宿主杀进程，其实是 ship 自己的预算。所以 push 的预算**随复算预算走**：
+ * 复算那侧抬了（`COMFY_PREMERGE_TIMEOUT_MS`），这侧自动跟着抬；默认
+ * 600s（复算）+ 180s（LFS / 网络余量）。复算预算非法时钩子自己会退 2，这里
+ * 回落默认即可 —— 不必替钩子猜。
+ *
+ * @param {Record<string, string | undefined>} [env] 环境变量（缺省读本进程的）
+ * @returns {number} 毫秒
+ */
+export function pushBudgetMs(env = process.env) {
+  const recompute = recomputeTimeoutMs(env?.COMFY_PREMERGE_TIMEOUT_MS);
+  return (recompute ?? 600_000) + PUSH_BUDGET_HEADROOM_MS;
+}
+
+/**
  * 造一个「跑外部命令」的执行者（测试里整体替换掉）。
  *
  * ⚠️ **`stderr` 必须一起带回来**：`git commit` 被 pre-commit 拦下时，钩子把全部
@@ -64,8 +96,9 @@ export function cnbSpawn(args) {
  * 工具，这是它能犯的最重的错。
  *
  * @param {string} cwd 工作目录
- * @returns {(cmd:string,args:string[],opts?:{env?:Record<string,string>})=>ExecResult}
- *   执行函数。第三个入参只用来**叠加**环境变量（见下方实现处那句为什么不是替换）。
+ * @returns {(cmd:string,args:string[],opts?:{env?:Record<string,string>,timeoutMs?:number})=>ExecResult}
+ *   执行函数。第三个入参只用来**叠加**环境变量与按调用放宽墙钟预算
+ *   （`git push` 那一跳带 {@link pushBudgetMs}，其余维持 180s），不是替换环境。
  */
 export function makeRunner(cwd) {
   return (cmd, args, opts = {}) => {
@@ -81,11 +114,12 @@ export function makeRunner(cwd) {
     /* `opts.env` 是**叠加**而不是替换：换掉整个环境会把 PATH/HOME 一起带走，
      * 那会让一次「只想多带一个旗标」的调用变成另一件事（且失败形态是 ENOENT，看不出关系）。
      * 目前唯一的用处是给刻意空提交带 `COMFY_INTENTIONAL_EMPTY_COMMIT`（ISSUE #2354）。
-     * 预算 180s（ISSUE #4601）：cnb 是网络调用（含取日志 / 传正文的大包），挂死
-     * 不再无限卡住 ship 链路；预算话术由调用方按「没跑起来」读 `error`。 */
+     * 预算缺省 180s（ISSUE #4601）：cnb 是网络调用（含取日志 / 传正文的大包），挂死
+     * 不再无限卡住 ship 链路；`git push` 那一跳由调用方按 {@link pushBudgetMs} 放宽
+     * （ISSUE #4753），否则分钟级的 pre-push 复算会被这里砍成 exit -1。 */
     const r = runGateStep(inv.command, inv.args, {
       cwd,
-      timeoutMs: 180_000,
+      timeoutMs: opts.timeoutMs ?? 180_000,
       echo: false,
       env: opts.env ? { ...process.env, ...opts.env } : process.env,
     });
