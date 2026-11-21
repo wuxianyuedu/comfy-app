@@ -3,7 +3,7 @@
  * 组内方向键没人给；ARIA radiogroup 契约要求方向键组内移动选中、且只有选中项留在 Tab 序列（roving tabindex）。
  * 断言对齐可见行为，不锁样式类。
  */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -178,5 +178,58 @@ describe("AppearanceSection 字体文件加载器（#3513 运行时替换）", (
       expect(accept).toContain(".woff");
       expect(accept).toContain(".woff2");
     });
+  });
+});
+
+describe("AppearanceSection 字体陈列按平台过滤（ISSUE #4700）", () => {
+  /** 平台判定读 navigator；jsdom 的默认值随宿主 OS 漂，用例里钉死成目标平台。 */
+  const spies: Array<{ mockRestore: () => void }> = [];
+  function stubPlatform(platform: string, userAgent: string): void {
+    spies.push(
+      vi.spyOn(navigator, "platform", "get").mockReturnValue(platform),
+      vi.spyOn(navigator, "userAgent", "get").mockReturnValue(userAgent),
+    );
+  }
+  afterEach(() => {
+    spies.splice(0).forEach((spy) => {
+      spy.mockRestore();
+    });
+  });
+
+  it("Windows 上默认只陈列本平台 + 内置 + 通用回退（macOS / Linux 字面不出现）", async () => {
+    stubPlatform("Win32", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+    render(<AppearanceSection c={controller("dark")} />);
+    /* 平台判定延到 setTimeout 里（与 prefs 读取同一习惯）：等它落地、过滤生效再判。 */
+    await waitFor(() => {
+      expect(screen.queryByText(/PingFang SC/)).not.toBeInTheDocument();
+    });
+    expect(screen.getByText(/Microsoft YaHei/)).toBeInTheDocument();
+    expect(screen.queryByText(/Noto Sans SC/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/-apple-system/)).not.toBeInTheDocument();
+  });
+
+  it("下拉切到 macOS 能看到 PingFang SC；切到全部平台恢复全量陈列", async () => {
+    const user = userEvent.setup();
+    stubPlatform("Win32", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+    render(<AppearanceSection c={controller("dark")} />);
+    const triggerName = "界面字体陈列平台";
+    fireEvent.click(screen.getByRole("combobox", { name: triggerName }));
+    await user.click(screen.getByRole("option", { name: "macOS" }));
+    expect(screen.getByText(/PingFang SC/)).toBeInTheDocument();
+    expect(screen.queryByText(/Microsoft YaHei/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("combobox", { name: triggerName }));
+    await user.click(screen.getByRole("option", { name: "全部平台" }));
+    expect(screen.getByText(/PingFang SC/)).toBeInTheDocument();
+    expect(screen.getByText(/Microsoft YaHei/)).toBeInTheDocument();
+    expect(screen.getByText(/Noto Sans SC/)).toBeInTheDocument();
+  });
+
+  it("三档陈列各带一个平台下拉（可访问名带档名，互不混淆）", () => {
+    stubPlatform("Win32", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+    render(<AppearanceSection c={controller("dark")} />);
+    for (const name of ["界面字体陈列平台", "代码字体陈列平台", "终端字体陈列平台"]) {
+      expect(screen.getByRole("combobox", { name })).toBeInTheDocument();
+    }
   });
 });

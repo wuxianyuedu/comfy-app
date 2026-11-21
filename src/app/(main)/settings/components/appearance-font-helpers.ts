@@ -107,6 +107,93 @@ export function fontRoleNote(part: string, isFirstInGroup: boolean): string {
   return note.includes("兜底") ? note : `${note}，缺字时回退`;
 }
 
+/* ── 陈列的平台过滤（ISSUE #4700）────────────────────────
+   字体栈给各平台各留了回退项，但设置页把它们一次全量陈列 —— Windows 用户也看到
+   PingFang SC / Noto Sans SC。这里把「哪项专属哪个平台」收口成一张表：陈列框默认
+   只显示运行平台会用到的字面，其他平台经下拉切换查看（字体本身不从栈里删）。 */
+
+/** 运行平台（浏览器侧判据；Node 的 process.platform 管不到 WebView 里的渲染）。 */
+export type RuntimePlatform = "macos" | "windows" | "linux";
+
+/** 陈列视图：current = 跟随运行平台（默认），其余为点名平台或全量。 */
+export type FontPlatformView = "current" | RuntimePlatform | "all";
+
+/** 平台展示名（下拉选项与「当前平台」后缀共用这一份，不各写各的）。 */
+export const PLATFORM_LABELS: Record<RuntimePlatform, string> = {
+  macos: "macOS",
+  windows: "Windows",
+  linux: "Linux / Android",
+};
+
+/** 栈里一项**专属**的平台。内置项（Geist / Sarasa）与通用回退（system-ui /
+ *  sans-serif / ui-monospace 等）不进这张表 = 任何平台都显示；未知项是用户
+ *  自定义字体，同样恒显示。平台归属与 fontRoleNote 的说明同一口径。 */
+const FONT_PART_PLATFORM: Record<string, RuntimePlatform> = {
+  "PingFang SC": "macos",
+  "SF Mono": "macos",
+  Menlo: "macos",
+  "-apple-system": "macos",
+  "Microsoft YaHei": "windows",
+  "Cascadia Code": "windows",
+  "Cascadia Mono": "windows",
+  Consolas: "windows",
+  "Noto Sans SC": "linux",
+};
+
+/** 从 navigator（或给定的 platform + UA 串）判运行平台；判不出兜底 windows
+ *  （桌面壳的主力平台）。 */
+export function currentFontPlatform(source?: string): RuntimePlatform {
+  const raw =
+    source ??
+    (typeof navigator === "undefined" ? "" : `${navigator.platform} ${navigator.userAgent}`);
+  if (/win/i.test(raw)) {
+    return "windows";
+  }
+  if (/mac|iphone|ipad|ipod|ios/i.test(raw)) {
+    return "macos";
+  }
+  if (/linux|android|x11|unix/i.test(raw)) {
+    return "linux";
+  }
+  return "windows";
+}
+
+/** 一项在某个平台下是否会用到。 */
+export function fontPartOnPlatform(part: string, platform: RuntimePlatform): boolean {
+  const normalized = part.replaceAll(/^['"]|['"]$/gu, "").trim();
+  const owned = FONT_PART_PLATFORM[normalized];
+  return owned === undefined || owned === platform;
+}
+
+/** 一项在某陈列视图下是否显示。 */
+export function fontPartInView(
+  part: string,
+  view: FontPlatformView,
+  current: RuntimePlatform,
+): boolean {
+  if (view === "all") {
+    return true;
+  }
+  return fontPartOnPlatform(part, view === "current" ? current : view);
+}
+
+/** 平台下拉的选项（数组驱动，规范 04 §4.2）；「当前平台」带出实际平台名。 */
+export function fontPlatformViewOptions(current: RuntimePlatform | null): Array<{
+  label: string;
+  value: FontPlatformView;
+}> {
+  return [
+    {
+      value: "current",
+      label: current === null ? "当前平台" : `当前平台 · ${PLATFORM_LABELS[current]}`,
+    },
+    { value: "windows", label: PLATFORM_LABELS.windows },
+    { value: "macos", label: PLATFORM_LABELS.macos },
+    { value: "linux", label: PLATFORM_LABELS.linux },
+    { value: "all", label: "全部平台" },
+  ];
+}
+
 /**
  * 每一档的「部分」槽位（ISSUE #3784 补充）：一类字体一个槽位，配置时**每槽一种
  * 字体**；「系统回退」是固定档（不提供输入）——任何字体缺字时都得有地方落地。
