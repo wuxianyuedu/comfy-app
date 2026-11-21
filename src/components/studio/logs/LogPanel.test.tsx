@@ -8,6 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { LogPanel } from "./LogPanel";
 import { LOG_PAGE_SIZE, computeOriginCounts, useLogStore } from "./log-store";
 import type { LogEntry } from "./log-store";
+import { setLogColumns, setLogDensity } from "./log-display-prefs";
 import { isPlainRecord } from "~/lib/is-record";
 import { Z, zClass } from "~/lib/shell/overlay-z";
 import {
@@ -60,6 +61,10 @@ function useSmallPage(size = 200) {
 }
 
 beforeEach(() => {
+  /* 显示偏好是模块级 store + localStorage，跨用例必须复位，否则上个用例切过的
+   * 精简档 / 密度档会漏到这一条（用例各自显式改的档位在本条末尾也会复原）。 */
+  setLogColumns("full");
+  setLogDensity("standard");
   const empty = { all: 0, debug: 0, info: 0, warn: 0, error: 0 };
   useLogStore.setState({
     logs: [],
@@ -849,20 +854,72 @@ describe("LogPanel 日志面板", () => {
     expect(document.querySelectorAll("[data-log-index]")).toHaveLength(120);
   });
 
-  it("每行都带显式高度，且外层撑出与之一致的估算总高", () => {
+  it("每行的行盒带 minHeight 下限（多行撑得开），外层撑出与位置表一致的估算总高", () => {
     useSmallPage(200);
     seed(120);
     render(<LogPanel />);
-    const rows = [...document.querySelectorAll<HTMLElement>("[data-log-index] > div")];
-    expect(rows.length).toBeGreaterThan(0);
-    /* 显式高度是这件事的地基：估算高度与实际渲染高度不同口径时，累计误差会让
-     * 滚动位置与内容错开（见 log-virtual 的常量说明）。 */
-    for (const row of rows) {
-      expect(row.style.height).toBe(`${ROW_STD}px`);
+    const wrappers = [...document.querySelectorAll<HTMLElement>("[data-log-index]")];
+    expect(wrappers.length).toBeGreaterThan(0);
+    /* 行盒 minHeight = 位置表高度：实测前是下限（多行内容撑得开，不与后一行重叠，
+     * ISSUE #4618）；实测回填后它就是实际高度——估高偏保守多出的那行空白收掉
+     * （ISSUE #4715）。行自身不再写死 height（jsdom 不做布局，实测不触发，这里钉下限接线）。 */
+    for (const wrapper of wrappers) {
+      expect(wrapper.style.minHeight).toBe(`${ROW_STD}px`);
+      expect(wrapper.style.height).toBe("");
     }
     /* 撑开滚动条的那一层：高度 = 行数 × 单行高度。 */
-    const spacer = rows[0]!.closest("[data-log-index]")!.parentElement!.parentElement!;
+    const spacer = wrappers[0]!.parentElement!.parentElement!;
     expect(spacer.style.height).toBe(`${120 * ROW_STD}px`);
+  });
+
+  /* ISSUE #4716：行距三档整体下调一档后的接线——切档要真的改变行盒下限。 */
+  it("行距档位切换改变行盒下限：紧凑 < 标准 < 宽松", () => {
+    seed(5);
+    render(<LogPanel />);
+    const minHeight = () =>
+      Number.parseInt(document.querySelector<HTMLElement>("[data-log-index]")!.style.minHeight, 10);
+    const standard = minHeight();
+    act(() => {
+      setLogDensity("compact");
+    });
+    const compact = minHeight();
+    act(() => {
+      setLogDensity("relaxed");
+    });
+    const relaxed = minHeight();
+    expect(compact).toBeLessThan(standard);
+    expect(relaxed).toBeGreaterThan(standard);
+  });
+
+  /* ISSUE #4717：精简列（隐藏时刻/级别/来源）时，行首类别前缀一并隐藏。 */
+  it("精简列模式下剥掉行首类别前缀只留正文，完整档保留前缀", () => {
+    act(() => {
+      useLogStore
+        .getState()
+        .appendFileLogs([
+          makeEntry(1, { message: "[app_lib::shell_launch] [orchestrator] GET /api/health 200" }),
+        ]);
+    });
+    render(<LogPanel />);
+    const bodyText = () => document.querySelector("[data-log-text]")?.textContent ?? "";
+    /* 完整档：前缀在（已调成背景层 gray），正文也在。 */
+    expect(bodyText()).toContain("[app_lib::shell_launch]");
+    expect(bodyText()).toContain("[orchestrator]");
+    expect(bodyText()).toContain("GET /api/health 200");
+
+    act(() => {
+      setLogColumns("message-only");
+    });
+    /* 精简档：前缀消失，正文原样保留。 */
+    expect(bodyText()).not.toContain("app_lib");
+    expect(bodyText()).not.toContain("orchestrator");
+    expect(bodyText()).toContain("GET /api/health 200");
+
+    /* 切回完整档：前缀回来。 */
+    act(() => {
+      setLogColumns("full");
+    });
+    expect(bodyText()).toContain("[orchestrator]");
   });
 
   /* 上面两条走的是「量不到视口就整页渲染」的兜底。这条**真的把视口量出来**（jsdom 的 `clientHeight`

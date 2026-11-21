@@ -34,6 +34,7 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useElementBox } from "~/components/ui/use-element-box";
 import { LogRow } from "./LogRow";
+import { stripCategoryPrefixes } from "./log-row-style";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { useExpansionSet } from "~/components/ui/expansion-set";
@@ -52,11 +53,22 @@ function useVirtualWindow(input: {
   expansionMap: Record<string, boolean>;
   pageLogs: Array<LogEntry>;
   scrollTop: number;
+  /** 精简列档：行首类别前缀一并隐藏（ISSUE #4717），估高与实测都按剥掉前缀后的正文算。 */
+  stripPrefixes: boolean;
   viewportHeight: number;
   viewportWidth: number;
   wrap: boolean;
 }) {
-  const { density, expansionMap, pageLogs, scrollTop, viewportHeight, viewportWidth, wrap } = input;
+  const {
+    density,
+    expansionMap,
+    pageLogs,
+    scrollTop,
+    viewportHeight,
+    viewportWidth,
+    wrap,
+    stripPrefixes,
+  } = input;
   const cliJsonIds = useMemo(() => {
     const ids = new Set<string>();
     for (const entry of pageLogs) {
@@ -75,17 +87,37 @@ function useVirtualWindow(input: {
     }
     return ids;
   }, [expansionMap]);
+  /* 精简列档下的**显示正文**：估高、实测、渲染三处都用它，口径才一致。 */
+  const displayMessageOf = useCallback(
+    (entry: LogEntry) => (stripPrefixes ? stripCategoryPrefixes(entry.message) : entry.message),
+    [stripPrefixes],
+  );
   /* 软换行估高用的是**正文列**可用宽度，不是整面板宽：时刻/级别/来源/复制这几列
    * 占了约 `LOG_MESSAGE_OVERHEAD` px，直接拿整宽会低估行数、把多行正文裁掉。 */
   const messageWidth = Math.max(200, viewportWidth - LOG_MESSAGE_OVERHEAD);
+  /* 实测高度校正表（ISSUE #4618 的机制，#4715 起双向）：估高的字符宽度系数只能取均值，
+   * 行盒用 minHeight 渲染、内容实测后回填，位置表以实测为准——多行不截断、
+   * 估多了的空行收掉。键带上面板宽度：同一消息在不同宽度下折行数不同，
+   * 宽度变了旧实测自然失效（不用再开一个 effect 去清）。 */
+  const [heightOverrides, setHeightOverrides] = useState<ReadonlyMap<string, number>>(new Map());
+  const heightOf = useCallback(
+    (message: string) => heightOverrides.get(`${viewportWidth}:${message}`),
+    [heightOverrides, viewportWidth],
+  );
   const { rows, totalSize } = useMemo(
     () =>
-      layoutRows(pageLogs, wrap, wrap ? messageWidth : 0, {
-        expandedIds,
-        singleLineIds: cliJsonIds,
-        density,
-      }),
-    [pageLogs, wrap, messageWidth, expandedIds, cliJsonIds, density],
+      layoutRows(
+        pageLogs.map((entry) => ({ id: entry.id, message: displayMessageOf(entry) })),
+        wrap,
+        wrap ? messageWidth : 0,
+        {
+          expandedIds,
+          singleLineIds: cliJsonIds,
+          density,
+          heightOf,
+        },
+      ),
+    [pageLogs, displayMessageOf, wrap, messageWidth, expandedIds, cliJsonIds, density, heightOf],
   );
   const { height: scrollHeight } = scrollHeightOf(totalSize);
   const rowWindow = useMemo(() => {
@@ -104,7 +136,36 @@ function useVirtualWindow(input: {
       entries: pageLogs.slice(range.start, range.end),
     };
   }, [rows, scrollTop, viewportHeight, pageLogs]);
-  return { rows, scrollHeight, rowWindow };
+  /* 行盒挂载 / 重渲染时实测一次**内容**高度（ref 回调，提交阶段元素已在树上）：
+   * 与位置表差超过 1px 才记（含变矮——估高偏保守多出的空行，ISSUE #4715），
+   * 实测 == 记录值后不再写入，循环自然收敛。jsdom 里 offsetHeight 恒 0，不触发。
+   * 展开行的高度是常量（LOG_ROW_EXPANDED），不参与实测。 */
+  const measureRow = useCallback(
+    (el: HTMLElement | null) => {
+      if (el === null) {
+        return;
+      }
+      const index = Number(el.dataset.logIndex);
+      const entry = pageLogs[index];
+      if (entry === undefined || expandedIds.has(entry.id)) {
+        return;
+      }
+      const content = el.firstElementChild;
+      const actual = content instanceof HTMLElement ? content.offsetHeight : 0;
+      if (actual <= 0) {
+        return;
+      }
+      const key = `${viewportWidth}:${displayMessageOf(entry)}`;
+      const estimated = rows[index]?.size ?? 0;
+      if (Math.abs(actual - estimated) > 1 && heightOverrides.get(key) !== actual) {
+        const next = new Map(heightOverrides);
+        next.set(key, actual);
+        setHeightOverrides(next);
+      }
+    },
+    [pageLogs, expandedIds, displayMessageOf, viewportWidth, rows, heightOverrides],
+  );
+  return { rows, scrollHeight, rowWindow, measureRow };
 }
 /* 面板的宽度档：默认 6xl —— 行是「时刻 + 级别 + 正文 + 来源」四列，比执行日志
  * 多一列，默认就该更宽；加宽档统一贴视线两边。宽度写 `w-*` 而不是 `max-w-*`
@@ -194,6 +255,8 @@ export function LogPanel() {
   /* 显示偏好（ISSUE #4567）：行密度（间隔大小）与精简列（隐藏时刻/级别/来源）。
    * 跨会话记忆在 `log-display-prefs`（localStorage），多实例共享同一份真相。 */
   const displayPrefs = useLogDisplayPrefs();
+  /* 完整列（时刻 / 级别 / 来源）或精简正文：精简档下行首类别前缀一并隐藏（ISSUE #4717）。 */
+  const showDetails = displayPrefs.columns === "full";
   /* 直接取 `toggle` 交给行：它的引用稳定（`useExpansionSet` 内 `useCallback([])`），
    * 因此 `LogRow` 的 memo 不会被每次展开 / 收起破坏。 */
   /* 加宽档与它的记忆收在 `~/components/ui/wide-panel`（规范 16 §16.2.4.18）：
@@ -247,7 +310,7 @@ export function LogPanel() {
    * 否则 `translateY` 与滚动条会各说各话。2000 行的乘法远低于一帧预算。
    * `viewport.width` 为 0（首帧未量到 / jsdom 不做布局）时 `layoutRows` 只按
    * 显式换行估高——宁可少估，也不瞎估。 */
-  const { rows, scrollHeight, rowWindow } = useVirtualWindow({
+  const { rows, scrollHeight, rowWindow, measureRow } = useVirtualWindow({
     pageLogs,
     wrap,
     viewportWidth: viewport.width,
@@ -255,6 +318,7 @@ export function LogPanel() {
     scrollTop,
     expansionMap: expansion.map,
     density: displayPrefs.density,
+    stripPrefixes: !showDetails,
   });
 
   useEffect(() => {
@@ -411,19 +475,25 @@ export function LogPanel() {
                   {rowWindow.entries.map((entry, offset) => {
                     const index = rowWindow.start + offset;
                     return (
-                      <div data-log-index={index} key={entry.id}>
+                      <div
+                        data-log-index={index}
+                        key={entry.id}
+                        ref={measureRow}
+                        /* 行盒 minHeight = 位置表的高度：实测前它是下限（多行内容撑得开，
+                         * 不与后一行重叠，ISSUE #4618）；实测回填后它就是实际高度——估高
+                         * 偏保守多出的那一行空白随之收掉（ISSUE #4715）。行自身不再写死
+                         * height，按内容自然高度渲染（实测的正是这个自然高度）。 */
+                        style={{
+                          minHeight: `${rows[index]?.size ?? rowHeightFor(displayPrefs.density)}px`,
+                        }}
+                      >
                         <LogRow
                           density={displayPrefs.density}
                           entry={entry}
                           expanded={expansion.isExpanded(entry.id)}
                           keyword={search}
                           onToggleExpand={expansion.toggle}
-                          showDetails={displayPrefs.columns === "full"}
-                          /* 显式高度 = 估算高度：两者不同口径时误差会累积，
-                           滚动位置与内容就错开了（见 log-virtual 的常量）。 */
-                          style={{
-                            height: `${rows[index]?.size ?? rowHeightFor(displayPrefs.density)}px`,
-                          }}
+                          showDetails={showDetails}
                           wrap={wrap}
                         />
                       </div>

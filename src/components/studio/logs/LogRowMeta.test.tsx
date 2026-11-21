@@ -62,10 +62,18 @@ describe("LogRow 元信息列显隐", () => {
     expect(screen.getByLabelText("复制本条日志")).toBeTruthy();
   });
 
-  it("行距档改变行内边距（与 log-virtual 的行高常量同源）", () => {
+  it("行距档改变行内边距（与 log-virtual 的行高常量同源；ISSUE #4716 下调一档）", () => {
+    /* 三档各自钉住：compact=py-0.5、standard=py-1、relaxed=py-3（原 py-4 档退役）。 */
+    renderRow(true, "compact");
+    expect(document.querySelector("div[class*='py-0.5']")).not.toBeNull();
+    cleanup();
+    renderRow(true, "standard");
+    expect(document.querySelector("div[class*='py-1']")).not.toBeNull();
+    expect(document.querySelector("div[class*='py-0.5']")).toBeNull();
+    cleanup();
     renderRow(true, "relaxed");
-    expect(document.querySelector("div[class*='py-4']")).not.toBeNull();
-    expect(document.querySelector("div[class*='py-3']")).toBeNull();
+    expect(document.querySelector("div[class*='py-3']")).not.toBeNull();
+    expect(document.querySelector("div[class*='py-4']")).toBeNull();
   });
 });
 
