@@ -30,13 +30,26 @@ export function buildSegmentVf(opts: {
   );
 }
 
+/** 秒数 → SRT 时间戳 `hh:mm:ss,mmm`（按时 / 分 / 秒进位；毫秒沿用既有整秒口径，恒 000）。
+ *
+ *  #4739：此前按「秒永远两位数」拼（`padStart(2, "0")`），镜头时长 ≥60s 时
+ *  产出 `00:00:75,000` 这类**非法 SRT**（秒位必须 00-59），字幕烧录失败、
+ *  长镜头字幕被静默丢弃（只留一条 warn）。这里按全量进位格式化，时长多大都合法。 */
+export function formatSrtTimestamp(seconds: number): string {
+  const totalSec = Math.max(0, Math.floor(seconds));
+  const s = totalSec % 60;
+  const m = Math.floor(totalSec / 60) % 60;
+  const h = Math.floor(totalSec / 3600);
+  const p2 = (n: number): string => String(n).padStart(2, "0");
+  return `${p2(h)}:${p2(m)}:${p2(s)},000`;
+}
+
 /** 一条字幕的 SRT 文件内容（单条：0 → 镜头时长）。
  *
  *  `text` 由调用方传入（镜头标题或提示词，已截断），本函数只管时间轴与格式。 */
 export function buildSrtBody(opts: { dur: number; text: string }): string {
   const { text, dur } = opts;
-  const endSec = String(Math.floor(dur)).padStart(2, "0");
-  return `1\n00:00:00,000 --> 00:00:${endSec},000\n${text}\n`;
+  return `1\n00:00:00,000 --> ${formatSrtTimestamp(dur)}\n${text}\n`;
 }
 
 /** 逐镜归一化的 ffmpeg 参数（含 `-t` 时长）。
