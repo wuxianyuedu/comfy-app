@@ -77,7 +77,7 @@ const SIGNAL_ADVICE: Record<string, string> = {
  * ComfyUI 是 Python 进程、Studio 是纯 Node 包：把「显存不足」念给 Studio 听，
  * 会让人去查一个它根本没有的方向（ISSUE #2435）。 */
 function nonZeroExitAdvice(mode: ComfyExitFacts["mode"]): string {
-  const lead = "看它崩溃前的最后几行输出（本文件上方与本行的 [out]/[err]）：";
+  const lead = "看它崩溃前的最后几行输出（本文件上方与本行附近）：";
   if (mode === "studio") {
     return `${lead}drizzle.config.ts 解析失败、数据库连接串不可用、端口已被占用都会以非零码退出。`;
   }
