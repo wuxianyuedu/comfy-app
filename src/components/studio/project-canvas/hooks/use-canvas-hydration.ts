@@ -19,11 +19,9 @@ import { isPlainRecord } from "~/lib/is-record";
 import { placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
 import { defaultData, type CanvasNodeType } from "~/lib/project-canvas/canvas-types";
 import {
-  createDraftProject,
   getActiveId,
   getProject,
   hydrateFromServer,
-  listProjects,
   reapAllEmptyDrafts,
   setActive,
   type CanvasProject,
@@ -40,13 +38,11 @@ type PlaceFlowFn = Parameters<typeof placeCanvasNode>[0]["flow"]["screenToFlowPo
 
 export type UseCanvasHydrationDeps = {
   onConsumePending?: () => void;
-  onConsumeSeed?: () => void;
   /** 设置后（来自工作区「工作流库 → 使用」动作）画布会为这条工作流往当前
    *  打开的项目里放一个 `kind="workflow"` 节点。 */
   pendingWorkflow?: { id: string; name: string; taskType: string } | null;
   requestFitView: () => void;
   screenToFlowPosition: PlaceFlowFn;
-  seedNew?: boolean;
   setEdges: (edges: Edge[]) => void;
   setNodes: (nodes: Array<CanvasNodeType>) => void;
   setProgress: (progress: ProductionProgress | null) => void;
@@ -119,11 +115,9 @@ function materializeProductionShots(
 export function useCanvasHydration(deps: UseCanvasHydrationDeps): boolean {
   const {
     onConsumePending,
-    onConsumeSeed,
     pendingWorkflow,
     requestFitView,
     screenToFlowPosition,
-    seedNew,
     setEdges,
     setNodes,
     setProgress,
@@ -151,16 +145,19 @@ export function useCanvasHydration(deps: UseCanvasHydrationDeps): boolean {
         // 已落库的画布数据。
         await hydrateFromServer();
         reapAllEmptyDrafts(); // one-shot cleanup of pre-fix pollution
-        let proj: CanvasProject | null = null;
-        if (seedNew === true) {
-          proj = createDraftProject();
-        } else {
-          const activeId = getActiveId();
-          if (activeId !== null && activeId !== "") {
-            proj = getProject(activeId);
-          }
-          proj ??= listProjects()[0] ?? null;
-          proj ??= createDraftProject();
+        /* 项目必须先经「新建（先命名）或打开」入口落到 active-id，画布不再
+         * 隐式创建草稿项目（本地不留草稿）。active 指向的行也必须真的在
+         * 索引里 —— 对账后索引已含全部服务端行，仍找不到说明这一行已被删
+         * 或从未属于本机：明确报错（catch 里给 toast），不静默换一个项目。 */
+        const activeId = getActiveId();
+        const proj: CanvasProject | null =
+          activeId !== null && activeId !== "" ? getProject(activeId) : null;
+        if (proj === null) {
+          throw new Error(
+            activeId !== null && activeId !== ""
+              ? "项目数据不在本机（可能已被删除），请从项目列表重新打开"
+              : "请先创建或选择一个项目",
+          );
         }
 
         /* 从工作流库「使用」跳转回来时，pendingWorkflow 在挂载时就
@@ -199,7 +196,6 @@ export function useCanvasHydration(deps: UseCanvasHydrationDeps): boolean {
         });
         // fit after nodes are applied（双 rAF，等 ReactFlow 完成布局）
         requestFitView();
-        onConsumeSeed?.();
       } catch (error) {
         /* 失败也要把「加载中」复位，否则用户面对的是一块永久空画布；
          * 文案给可行动出口（刷新重试），原因走 errorText 翻译网络层原文。 */

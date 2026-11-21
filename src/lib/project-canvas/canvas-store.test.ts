@@ -35,7 +35,6 @@ vi.mock("~/trpc/vanilla", () => ({
 
 import {
   EMPTY_DRAFT_NAMES,
-  createDraftProject,
   createProject,
   deleteProject,
   deleteProjectEverywhere,
@@ -212,13 +211,6 @@ describe("活跃项目不可回收（ISSUE #1501）", () => {
     expect(getActiveId()).toBe(live.id);
     expect(listProjects().map((p) => p.id)).toEqual([live.id]);
   });
-
-  it("createDraftProject 造的草稿本来就不在索引里，清扫碰不到它", () => {
-    const draft = createDraftProject();
-    expect(reapAllEmptyDrafts()).toBe(0);
-    expect(getActiveId()).toBe(draft.id);
-    expect(listProjects()).toHaveLength(0);
-  });
 });
 
 /* 清扫不能只在本地删 —— 否则每清一条，服务端就攒下一行再也指不回的记录
@@ -291,7 +283,7 @@ describe("getAllProjectNames", () => {
   });
 });
 
-describe("createProject / createDraftProject", () => {
+describe("createProject", () => {
   it("createProject 立即入索引并设为 active", () => {
     const p = createProject("我的画布");
     expect(getProject(p.id)?.name).toBe("我的画布");
@@ -304,13 +296,6 @@ describe("createProject / createDraftProject", () => {
     expect(second.id).not.toBe(first.id);
     expect(second.name).toBe("未命名_2");
     expect(listProjects()).toHaveLength(2);
-  });
-
-  it("createDraftProject 只设 active，不进索引（避免空草稿污染最近项目）", () => {
-    const draft = createDraftProject();
-    expect(listProjects()).toHaveLength(0);
-    expect(localStorage.getItem("comfyapp.canvas.active.v1")).toBe(draft.id);
-    expect(getProject(draft.id)).toBeNull();
   });
 
   it("listProjects 按 updatedAt 倒序", () => {
@@ -782,5 +767,18 @@ describe("保存链路增量语义（ISSUE #4600）", () => {
     upsertProject({ id: "p1", name: "画布", updatedAt: 2, nodes: [node("n1", 9)], edges: [] });
     await settled();
     expect(projectUpsertMutate).toHaveBeenCalledTimes(2);
+  });
+
+  it("首次推送服务端成功广播一次 hydrate（服务端为准的列表据此取回新行），后续保存保持安静（ISSUE #4765）", async () => {
+    projectUpsertMutate.mockResolvedValue({ ok: true });
+    const seen: Array<{ projectId?: string; reason: string }> = [];
+    const off = subscribeAppEvent("comfyapp:canvas-store-changed", (p) => seen.push(p));
+    upsertProject({ id: "p_push", name: "画布", updatedAt: 1, nodes: [], edges: [] });
+    await settled();
+    upsertProject({ id: "p_push", name: "改名", updatedAt: 2, nodes: [], edges: [] });
+    await settled();
+    off();
+    const hydrates = seen.filter((e) => e.reason === "hydrate" && e.projectId === "p_push");
+    expect(hydrates).toHaveLength(1);
   });
 });

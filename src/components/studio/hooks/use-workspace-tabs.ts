@@ -10,6 +10,7 @@ import {
   WS_TABS_KEY,
   HOME_VIEW,
   closeViewTab,
+  dropProjectTabs,
   findTab,
   focusViewTab,
   initialWorkspaceTabs,
@@ -20,13 +21,15 @@ import {
 } from "../workspace-tabs";
 import {
   defaultSidebarTabConfig,
+  isProjectTab,
   makeTransientJudge,
   type TransientJudge,
   type WorkspaceView,
 } from "../NavItems";
+import { requestProjectSection, sectionFromView } from "../project-workspace/project-sections";
 import type { SidebarTabConfig } from "~/lib/shell/sidebar-tab-behavior";
 import { readSessionStorageItem, writeSessionStorageItem } from "~/lib/browser-storage";
-import { getActiveId } from "~/lib/project-canvas/canvas-store";
+import { getActiveId, setActive } from "~/lib/project-canvas/canvas-store";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { useSidebarTabConfigQuery } from "./use-sidebar-tab-config";
 
@@ -72,6 +75,8 @@ function writeTabsState(state: WorkspaceTabsState, isTransient: TransientJudge):
 export type WorkspaceTabsController = {
   /** 当前页签 key。 */
   activeKey: string;
+  /** 项目被删除后关掉它名下的页签（关的是当前页则按规则落回左邻/首页）。 */
+  closeProjectTabs: (projectId: string) => void;
   /** 页签条上点关闭。 */
   closeTab: (key: string) => void;
   /** 打开/聚焦一个视图页签（侧栏、首页入口、应用事件都走这里）。 */
@@ -139,12 +144,29 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
          读状态会拿到旧值 ⇒ 项目页签被开成"无项目"或直接丢绑。 */
       const projectId = getActiveId();
       setTabsState((prev) => openViewTab(prev, view, projectId, isTransient));
+      /* 一项目一页签（ISSUE #4765）：项目级视图都落在同一个页签上，「这次想去
+       * 哪一屏」由项目页内的左侧列表表达 —— 把请求的视图翻译成分区交给它。
+       * 广播带 projectId：多个项目页签同场时，只有目标项目的容器响应。 */
+      if (projectId !== null && projectId !== "" && isProjectTab(view)) {
+        requestProjectSection(projectId, sectionFromView(view));
+      }
     },
     [isTransient],
   );
 
+  const closeProjectTabs = useCallback((projectId: string) => {
+    setTabsState((prev) => dropProjectTabs(prev, projectId));
+  }, []);
+
   const selectTab = useCallback(
     (key: string) => {
+      /* 切到某个项目页签时让「活跃项目」跟着走（ISSUE #4765）：画布 / 工坊 /
+       * 成片内部都在挂载与保存时读 getActiveId()，多项目页签同场时它必须等于
+       * 当前可见的那一页，否则会把内容写进别的项目。 */
+      const targetProjectId = findTab(tabsState.tabs, key)?.projectId;
+      if (targetProjectId !== null && targetProjectId !== undefined && targetProjectId !== "") {
+        setActive(targetProjectId);
+      }
       // 切页的规则（含「切走的若是瞬时页则退场」）都在 `focusViewTab`，
       // 这里不自己判：找不到这一页时它原样返回，不会把当前页指向空白。
       setTabsState((prev) => focusViewTab(prev, key, isTransient));
@@ -152,7 +174,7 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
          表现就是「点了没反应」。 */
       activateShellTab(MAIN_TAB_ID);
     },
-    [activateShellTab, isTransient],
+    [activateShellTab, isTransient, tabsState.tabs],
   );
 
   const closeTab = useCallback(
@@ -168,6 +190,7 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
     activeKey: tabsState.activeKey,
     viewMode,
     navigateTo,
+    closeProjectTabs,
     selectTab,
     closeTab,
   };

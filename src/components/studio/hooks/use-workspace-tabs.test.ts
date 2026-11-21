@@ -9,6 +9,8 @@ import { act, cleanup, render } from "@testing-library/react";
 import { createElement, StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { subscribeAppEvent } from "~/lib/app-events";
+import { setActive } from "~/lib/project-canvas/canvas-store";
 import { WS_TABS_KEY, parseWorkspaceTabs } from "../workspace-tabs";
 import type { WorkspaceTabsController } from "./use-workspace-tabs";
 import { WORKSPACE_VIEWS, useWorkspaceTabs } from "./use-workspace-tabs";
@@ -53,6 +55,7 @@ function storedTabsSurvive(): boolean {
 
 beforeEach(() => {
   sessionStorage.clear();
+  localStorage.clear();
   configMock.config = undefined;
   latest = null;
 });
@@ -170,5 +173,57 @@ describe("侧栏项的页签行为由配置面决定（ISSUE #3623）", () => {
       latest?.navigateTo("history");
     });
     expect(latest?.tabs.map((tab) => tab.view)).toEqual(["home", "models", "history"]);
+  });
+});
+
+describe("一项目一页签：项目级视图折叠 + 分区广播（ISSUE #4765）", () => {
+  it("同一项目先开工坊再开画布：仍是一个页签，切换意图经 project:section 广播", async () => {
+    const seen: Array<{ projectId?: string; section: string }> = [];
+    const off = subscribeAppEvent("project:section", (p) => seen.push(p));
+    render(createElement(Probe));
+    await expect.poll(() => latest !== null).toBe(true);
+
+    act(() => {
+      setActive("p1");
+      latest?.navigateTo("workshop");
+    });
+    act(() => {
+      latest?.navigateTo("canvas");
+    });
+
+    expect(latest?.tabs.filter((tab) => tab.projectId === "p1")).toHaveLength(1);
+    expect(latest?.activeKey).toBe("project:p1");
+    expect(latest?.viewMode).toBe("project");
+    /* 广播的是「视图 → 分区」的翻译结果：workshop 落流程起点，canvas 落画布。 */
+    expect(seen).toEqual([
+      { projectId: "p1", section: "script" },
+      { projectId: "p1", section: "canvas" },
+    ]);
+    off();
+  });
+
+  it("切到别的项目页签时活跃项目跟着走（画布 / 工坊内部读的是 active id）", async () => {
+    render(createElement(Probe));
+    await expect.poll(() => latest !== null).toBe(true);
+
+    act(() => {
+      setActive("p1");
+      latest?.navigateTo("project");
+    });
+    act(() => {
+      setActive("p2");
+      latest?.navigateTo("project");
+    });
+    /* 两个项目两页；把当前页切回 p1 那一页时，活跃项目必须同步回 p1 ——
+     * 否则 p1 页里的画布 / 工坊会把内容写进 p2。 */
+    act(() => {
+      latest?.selectTab("project:p1");
+    });
+    expect(latest?.tabs.filter((tab) => tab.view === "project")).toHaveLength(2);
+    expect(localStorage.getItem("comfyapp.canvas.active.v1")).toBe("p1");
+    act(() => {
+      latest?.selectTab("project:p2");
+    });
+    expect(localStorage.getItem("comfyapp.canvas.active.v1")).toBe("p2");
   });
 });

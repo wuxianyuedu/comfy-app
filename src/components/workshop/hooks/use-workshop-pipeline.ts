@@ -266,8 +266,31 @@ export function useExtractSession(
   return [session, { patch, appendProgress, appendLog, setLog }];
 }
 
-export function useWorkshopPipeline(): WorkshopPipelineController {
-  const [tab, setTab] = React.useState<Tab>("script");
+/** 工坊管线的接管方式（ISSUE #4765）：
+ *  - **自治**（不传任何项）：独立 /workshop 路由用 —— 阶段游标由工坊自己管理，
+ *    挂载时按 production.progress 恢复「上次做到哪」。
+ *  - **受控**（传 `controlledTab`）：项目页内嵌用 —— 六阶段已是项目页左侧列表的
+ *    六个分区，游标由外层驱动；这里只负责把阶段变化上报回去，不再自行改游标
+ *   （用户点明「剧本」却被恢复逻辑拽去「视频」是越权）。 */
+export type UseWorkshopPipelineOptions = {
+  controlledTab?: Tab;
+  onControlledTabChange?: (tab: Tab) => void;
+};
+
+export function useWorkshopPipeline(
+  options: UseWorkshopPipelineOptions = {},
+): WorkshopPipelineController {
+  const { controlledTab, onControlledTabChange } = options;
+  const [internalTab, setInternalTab] = React.useState<Tab>("script");
+  /* 受控优先：外层给了游标就全听外层的；自治模式用内部状态。 */
+  const tab = controlledTab ?? internalTab;
+  const setTab = React.useCallback(
+    (next: Tab) => {
+      setInternalTab(next);
+      onControlledTabChange?.(next);
+    },
+    [onControlledTabChange],
+  );
   const [meta, setMeta] = React.useState<ProjectMeta>(
     () => loadWorkshopDraftOnce()?.meta ?? DEFAULT_META,
   );
@@ -339,11 +362,14 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     setScriptMarkdown(draft.scriptMarkdown);
   }, []);
 
-  /* 最新项目 id / 草稿 / 阶段 / rendered 的 ref：供卸载兜底与异步服务端回填读取最新值（避免闭包捕获陈旧 state）。 */
+  /* 最新项目 id / 草稿 / 阶段 / rendered 的 ref：供卸载兜底与异步服务端回填读取最新值（避免闭包捕获陈旧 state）。
+   * `setTabRef` / `controlledTabRef` 同理：挂载回填那一条 effect 只跑一次，经 ref 读到当次的 setTab 与接管方式。 */
   const activeProjectRef = React.useRef(activeProjectId);
   const latestDraftRef = React.useRef<WorkshopDraft>(currentDraft());
   const tabRef = React.useRef(tab);
   const renderedRef = React.useRef(rendered);
+  const setTabRef = React.useRef(setTab);
+  const controlledTabRef = React.useRef(controlledTab);
   /* 服务端镜像对账是否已落定（#4023）：落定前不放行自动保存 / 卸载兜底的写穿，
    * 否则挂载即 PUT 会把本机较旧的 localStorage 草稿盖到服务端较新镜像上。 */
   const restoreSettledRef = React.useRef(false);
@@ -352,6 +378,8 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     latestDraftRef.current = currentDraft();
     tabRef.current = tab;
     renderedRef.current = rendered;
+    setTabRef.current = setTab;
+    controlledTabRef.current = controlledTab;
   });
 
   /** 卸载时让模块级草稿缓存失效，避免组件重挂载时读回旧的当前项目草稿。 */
@@ -442,8 +470,10 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       }
       guard.commit(() => {
         setRendered(progress.rendered);
-        if (tabRef.current === "script") {
-          setTab(progress.stage);
+        /* 游标恢复只属于自治模式：受控模式（项目页左列表）里用户点的是哪段
+         * 就停在哪段，不由持久化进度把界面拽去别处（ISSUE #4765）。 */
+        if (controlledTabRef.current === undefined && tabRef.current === "script") {
+          setTabRef.current(progress.stage);
         }
       });
     })();

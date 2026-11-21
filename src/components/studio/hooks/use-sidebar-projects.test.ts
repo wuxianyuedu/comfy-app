@@ -4,6 +4,7 @@
 // 就没有 hydrate 对账，服务端独有的项目在侧栏彻底不可见。这里判那条分叉。
 // 反向验证过：把并集换回「只列本地索引」，第一条必红。
 // ISSUE #4600：自动保存（save 事件）就地改那一行，不再每拍全量重拉并集。
+// ISSUE #4765：只列服务端已有的行（origin ≠ local），与「所有项目」屏同一口径。
 import { cleanup, renderHook, act } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -33,21 +34,22 @@ function entriesOf(count: number): Array<Record<string, string>> {
 }
 
 describe("useSidebarProjects", () => {
-  it("服务端独有的项目也列出来（不只是本地索引那一份）", async () => {
+  it("服务端独有的项目也列出来；本地还没推上去的行不列（ISSUE #4765）", async () => {
     listProjectsWithServer.mockResolvedValue({
       ok: true,
       entries: [
         { id: "proj_server", name: "只在服务端的项目", origin: "server" },
         { id: "proj_local", name: "本地那一份", origin: "local" },
+        { id: "proj_both", name: "两侧都有", origin: "both" },
       ],
     });
 
     const { result } = renderHook(() => useSidebarProjects());
 
-    await expect.poll(() => result.current.map((p) => p.id)).toEqual(["proj_server", "proj_local"]);
+    await expect.poll(() => result.current.map((p) => p.id)).toEqual(["proj_server", "proj_both"]);
   });
 
-  it("拉取失败（离线）时仍交回本地那一份，不清空", async () => {
+  it("拉取失败（离线）时本地独有的行也不再列出（只列服务端已有的）", async () => {
     listProjectsWithServer.mockResolvedValue({
       ok: false,
       entries: [{ id: "proj_local", name: "本地那一份", origin: "local" }],
@@ -55,7 +57,7 @@ describe("useSidebarProjects", () => {
 
     const { result } = renderHook(() => useSidebarProjects());
 
-    await expect.poll(() => result.current.map((p) => p.id)).toEqual(["proj_local"]);
+    await expect.poll(() => result.current).toEqual([]);
   });
 
   it("列表长度收在 SIDEBAR_PROJECT_LIMIT 以内", async () => {

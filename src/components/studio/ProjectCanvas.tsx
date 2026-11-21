@@ -106,20 +106,13 @@ const INITIAL_EDGES: Array<Edge> = [];
 
 type ProjectCanvasProps = {
   onConsumePending?: () => void;
-  onConsumeSeed?: () => void;
   /** 设置后（来自工作区「工作流库 → 使用」动作）画布会为这条工作流
    *  往当前打开的项目里放一个 `kind="workflow"` 节点。 */
   pendingWorkflow?: { id: string; name: string; taskType: string } | null;
-  seedNew?: boolean;
 };
 
 /* ── 内层画布（必须在 ReactFlowProvider 里） ── */
-function CanvasInner({
-  seedNew,
-  onConsumeSeed,
-  pendingWorkflow,
-  onConsumePending,
-}: ProjectCanvasProps) {
+function CanvasInner({ pendingWorkflow, onConsumePending }: ProjectCanvasProps) {
   const toast = useToast();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -202,11 +195,9 @@ function CanvasInner({
    * 一处内聚，这里只留接线。 */
   const hydrating = useCanvasHydration({
     onConsumePending,
-    onConsumeSeed,
     pendingWorkflow,
     requestFitView,
     screenToFlowPosition,
-    seedNew,
     setEdges,
     setNodes: setCanvasNodes,
     setProgress,

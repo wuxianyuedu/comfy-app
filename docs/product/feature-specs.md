@@ -21,17 +21,22 @@
 - 落点：`src/app/workspace/page.tsx`、`src/components/studio/NavItems.tsx`、
   `src/components/studio/AppShell.tsx`、`WorkspaceViewStack.tsx`
 
-#### FR-WS-02 视图页签（多开 / 切走保留 / 瞬时页签）
+#### FR-WS-02 视图页签（多开 / 切走保留 / 瞬时页签 / 一项目一页签）
 
 - 状态：已上线
 - 需求：视图以页签打开，可同时开多个；切走再切回来保留编辑态；
   哪些界面切走即关由配置面逐项决定（见 FR-WS-10）。
+  **一个项目只占一个页签**（ISSUE #4765）：项目级视图（主页 / 画布 / 工坊 /
+  资源库 / 产出 / 成片）全部折叠到该项目唯一的那个页签，页内去哪一屏由
+  左侧列表分区切换，不再各开一页。
 - 行为与验收：`isTransientView(view, config)` 只认**生效配置**（项目默认 + 本机覆盖），
   注册表不再写 `transient` 标记（ISSUE #3798）；不变式是「最多只有当前页可以是
   transient」（`withTransientPruned`）。画布 / 工坊这类有编辑态、跑长任务的视图
-  出厂**不得**设为共享标签页。
+  出厂**不得**设为共享标签页。项目页签的键是 `project:<id>`（`projectTabKey`），
+  旧版「一项目多行页签」的存量数据解析时折叠为一条、不整份作废；切到某个项目
+  页签时活跃项目跟着切（画布 / 工坊内部读写的是活跃项目）。
 - 落点：`src/lib/shell/shell-tabs-store.ts`、`src/components/studio/ShellTabs.tsx`、
-  `workspace-tabs.ts`
+  `workspace-tabs.ts`、`src/components/studio/project-workspace/project-sections.ts`
 
 #### FR-WS-03 命令面板（打开全局视图）
 
@@ -41,14 +46,22 @@
   搜索命中项与侧栏可见项一致（设置不在侧栏但可被搜到）。
 - 落点：`src/components/studio/CommandPalette.tsx`
 
-#### FR-WS-04 项目界面与项目视图入口
+#### FR-WS-04 项目界面与项目视图入口（页内左侧列表切换）
 
 - 状态：已上线
-- 需求：项目类六个视图（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片）只在
-  项目界面出现；入口为「+」菜单与侧栏项目分组；没有活跃项目时不放项目类视图。
-- 行为与验收：项目视图经 `projectTabs()` 切出；「+」菜单在无活跃项目时
-  不放行项目类入口（落了也是闸门，等于给一个开不了的项）。
-- 落点：`src/app/workspace/page.tsx`（「+」菜单清单）、`NavItems.tsx`
+- 需求：项目类视图（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片）只在项目界面
+  出现；一个项目一个页签，项目内的去处在项目页**左侧列表**里选
+  （ISSUE #4765）：概览 / 画布 / 工坊六阶段（剧本 · 角色卡 · 场景分镜 ·
+  镜头生图 · 视频生成 · 成片合成，编号 1~6）/ 资源库 / 产出 / 成片，界面
+  全部在项目页内切换。没有活跃项目时不放项目类入口。
+- 行为与验收：左侧列表是 `ProjectSectionRail`（分区注册表在
+  `project-sections.ts`，阶段状态与项目主页同一份 production 派生）；
+  已到访的分区保持挂载（CSS 显隐），工坊六段共用一个受控的
+  `WorkshopPipeline` 实例（内部阶段轨道隐藏）。「+」菜单只列项目「主页」
+  一页（旧版列六页）。
+- 落点：`src/app/workspace/page.tsx`（「+」菜单清单）、`NavItems.tsx`、
+  `src/components/studio/project-workspace/ProjectWorkspace.tsx`、
+  `src/components/studio/project-workspace/ProjectSectionRail.tsx`
 
 #### FR-WS-05 明暗主题
 
@@ -207,15 +220,20 @@
 
 ## 3. 项目画布（FR-CV）
 
-#### FR-CV-01 画布项目增删改查（本地 store + 服务端镜像）
+#### FR-CV-01 画布项目增删改查（先命名后创建，服务端镜像）
 
 - 状态：已上线
-- 需求：画布项目（`proj_*`）可创建 / 重命名 / 删除 / 切换；本地即时、
-  服务端镜像（nodes / edges JSON）。
+- 需求：画布项目（`proj_*`）可创建 / 重命名 / 删除 / 切换；**新建先输入项目
+  名称、确认后再创建**（名称必填，重名自动加 `_2/_3` 后缀），本地不再留
+  「未命名」草稿项目（ISSUE #4765）；数据本地即时、服务端镜像（nodes / edges
+  JSON）。项目列表（所有项目屏 / 侧栏）**只显示服务端已有的项目**，本地还没
+  同步上去的行不再列出（新项目由「首次推送成功」事件带回列表）。
+  项目**删除**有两个入口：「所有项目」屏的逐卡删除，与项目页左侧列表底部的
+  「删除项目」（确认后本地与服务端一并删、该项目页签关闭回落首页）。
 - 行为与验收：本地 store 是交互真值、服务端是持久真值；
-  删除在只剩一个项目时为空操作（至少保留 1 个）；
   项目 id 客户端生成、服务端 upsert 不重发 id。
 - 落点：`src/lib/project-canvas/canvas-store.ts`、
+  `src/components/studio/create-project-dialog.tsx`、
   `src/server/api/routers/project.ts`
 
 #### FR-CV-02 生成单元节点（8 种 kind）

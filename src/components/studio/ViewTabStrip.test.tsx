@@ -17,6 +17,8 @@ afterEach(() => {
 });
 
 function strip(over: Partial<Parameters<typeof ViewTabStrip>[0]> = {}) {
+  /* 一项目一页签（ISSUE #4765）：开「工坊」落的是该项目唯一的那个项目页签
+   * （view = "project"，键 = project:p1），页签名是「主页·雾中来信」。 */
   const state = openViewTab(openViewTab(initialWorkspaceTabs(), "queue", null), "workshop", "p1");
   return render(
     <ViewTabStrip
@@ -64,9 +66,9 @@ describe("ViewTabStrip", () => {
     expect(tabs[0]?.getAttribute("aria-selected")).toBe("false");
   });
 
-  it("标签渲染出项目名形态（工坊·雾中来信）", () => {
+  it("标签渲染出项目名形态（主页·雾中来信）", () => {
     strip();
-    expect(screen.getByText("工坊·雾中来信")).toBeTruthy();
+    expect(screen.getByText("主页·雾中来信")).toBeTruthy();
   });
 
   it("首页那一页没有关闭按钮，其余有", () => {
@@ -85,8 +87,8 @@ describe("ViewTabStrip", () => {
     expect(onSelect).toHaveBeenCalledWith("queue:");
     expect(onClose).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "关闭 工坊·雾中来信" }));
-    expect(onClose).toHaveBeenCalledWith("workshop:p1");
+    fireEvent.click(screen.getByRole("button", { name: "关闭 主页·雾中来信" }));
+    expect(onClose).toHaveBeenCalledWith("project:p1");
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
