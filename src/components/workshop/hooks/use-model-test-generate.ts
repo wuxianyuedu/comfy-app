@@ -103,7 +103,8 @@ function missingRequiredLabels(
 export type ModelTestGenerateArgs = {
   appendResponseRows: (key: string, rows: ReadonlyArray<ApiCallDebugRow>) => void;
   appendTaskLog: (key: string, entry: TaskLogEntry) => void;
-  buildBodies: () => ReturnType<typeof buildRequestBodies>;
+  /** 请求体组装（唯一入口）：值由调用处显式给（生成可带表单值覆盖，ISSUE #4769）。 */
+  buildBodies: (values: ModelTestValues) => ReturnType<typeof buildRequestBodies>;
   /** 对话测试（#4080）：llm.chatTest 的 mutation（结构化最小面）。 */
   chatTestM: {
     mutateAsync: (input: { local: boolean; name: string; prompt: string }) => Promise<{
@@ -127,7 +128,10 @@ export type ModelTestGenerateArgs = {
 };
 
 export function useModelTestGenerate(args: ModelTestGenerateArgs): {
-  generate: (sessionKey: string) => Promise<void>;
+  /** `valuesOverride`（ISSUE #4769）：JSON 输入模式解析出的表单值 —— 生成读
+   *  的是本次渲染的表单闭包，粘贴后同一次点击里直接生成会拿到旧值，所以
+   *  覆盖值显式随调用给。 */
+  generate: (sessionKey: string, valuesOverride?: ModelTestValues) => Promise<void>;
 } {
   const {
     buildBodies,
@@ -173,8 +177,11 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
   }, []);
 
   const runGenerate = useCallback(
-    async (sessionKey: string) => {
-      const prompt = values.prompt?.trim() ?? "";
+    async (sessionKey: string, valuesOverride?: ModelTestValues) => {
+      /* 表单值可被调用方覆盖（ISSUE #4769：JSON 输入模式解析出的值在同一次
+       * 点击里直接进生成，绕开「先 setState 再读旧闭包」的时序坑）。 */
+      const effective = valuesOverride ?? values;
+      const prompt = effective.prompt?.trim() ?? "";
       if (prompt === "") {
         patchSession(sessionKey, { error: "请填写提示词" });
         return;
@@ -182,7 +189,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
       /* 必备口校验（ISSUE #3778）：契约标了必备、通道又承接得住的行，空着就
        * 拦下 —— 与「必备 / 可选」标识同一份读数，别让用户点生成才被上游打回。
        * 参考图行（#3949 需求 6/7）按数组判空。 */
-      const missing = missingRequiredLabels(inputRows, values, referenceGroup.images.length);
+      const missing = missingRequiredLabels(inputRows, effective, referenceGroup.images.length);
       if (missing.length > 0) {
         patchSession(sessionKey, { error: `请填写必备输入：${missing.join("、")}` });
         return;
@@ -202,7 +209,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
       /* 工作流候选（#4080 评论 4）：走工坊本地 ComfyUI 通道（封装 → 入队 →
        * SSE 观察），不走图片/视频的 API 中继。 */
       if (workflow !== undefined && kind !== "chat") {
-        const firstFrameRaw = values["first-frame"]?.trim();
+        const firstFrameRaw = effective["first-frame"]?.trim();
         const controller = new AbortController();
         setCancelController(sessionKey, controller);
         await runAsyncAction(
@@ -243,11 +250,11 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
                 referenceImages:
                   referenceGroup.images.length > 0
                     ? referenceGroup.images
-                    : values.image?.trim()
-                      ? [values.image.trim()]
+                    : effective.image?.trim()
+                      ? [effective.image.trim()]
                       : [],
                 signal: controller.signal,
-                values,
+                values: effective,
                 workflow,
               });
               patchSession(sessionKey, { result: { kind: res.kind, url: res.url } });
@@ -308,7 +315,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
         );
         return;
       }
-      const { imageBody, videoBody } = buildBodies();
+      const { imageBody, videoBody } = buildBodies(values);
       if (imageBody !== null) {
         const controller = new AbortController();
         setCancelController(sessionKey, controller);
@@ -410,7 +417,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
    * useState，同一事件循环里读不到刚写入的值，双击会跑两遍；不同格互不拦，
    * 可同时测试多个模型（#4080 评论 12）。忙碌位随格走（P65：复位在 finally）。 */
   const generate = useCallback(
-    async (sessionKey: string) => {
+    async (sessionKey: string, valuesOverride?: ModelTestValues) => {
       if (selectedModel === "") {
         return;
       }
@@ -420,7 +427,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
       }
       try {
         patchSession(sessionKey, { generating: true, generatingSince: Date.now() });
-        await runGenerate(sessionKey);
+        await runGenerate(sessionKey, valuesOverride);
       } finally {
         patchSession(sessionKey, { generating: false, generatingSince: null });
         lock.exit();

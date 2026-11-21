@@ -23,7 +23,7 @@ import {
 } from "~/lib/workshop/generation-client";
 import { debugBodyOf } from "~/lib/workshop/api-channel-core";
 import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
-import { parseRemoteModeAdapters } from "~/lib/workshop/remote-model-adapter";
+import { isWorkshopInputType, parseRemoteModeAdapters } from "~/lib/workshop/remote-model-adapter";
 import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
 
 import {
@@ -71,6 +71,12 @@ export type ModelTestController = {
   adapters: Array<RemoteModeAdapter>;
   /** 追加若干张参考图（读成 data URL 后落组；上限 8 张）。 */
   addReferenceImages: (files: Array<File>) => Promise<void>;
+  /** 解析并应用一段 JSON（ISSUE #4769：历史「复制去重投」的载荷）。合法 →
+   *  写回当前格表单值并返回合并后的值（调用方同一次点击里接着生成）；
+   *  非法 → 错误落当前格反馈位，返回 ok:false。 */
+  applyJsonValues: (
+    json: string,
+  ) => { ok: true; values: ModelTestValues } | { error: string; ok: false };
   /** 取消当前格（用途 + 模式 + 模型）的生成（#3949 需求 5 / #4080 评论 12）：
    *  中断等待与轮询，界面落「已取消生成」。 */
   cancelGenerate: (key?: string) => void;
@@ -84,7 +90,9 @@ export type ModelTestController = {
   error: string | null;
   /** 生成动作：按适配器映射收集统一输入并发起一次真实调用（消耗额度）。
    *  不传 key = 测当前格。 */
-  generate: (key?: string) => Promise<void>;
+  /** 发起一次真实生成。`valuesOverride`（ISSUE #4769）：JSON 输入模式解析出的
+   *  表单值在同一次点击里直接进生成，不吃旧闭包。 */
+  generate: (key?: string, valuesOverride?: ModelTestValues) => Promise<void>;
   /** 当前格是否在生成中。 */
   generating: boolean;
   /** 当前格生成发起的时刻（ms；null = 不在生成中）：请求详情的已过时间按它走秒。 */
@@ -152,7 +160,7 @@ export type ModelTestController = {
  *  实际请求行落在**当前格**的会话里；生成中不清空、不重算 —— 该格的
  *  「实际请求」在请求中与生成后都保持可见（#4080 评论 20）。 */
 function useRequestPreview(args: {
-  buildBodies: () => ReturnType<typeof buildRequestBodies>;
+  buildBodies: (values: ModelTestValues) => ReturnType<typeof buildRequestBodies>;
   busy: boolean;
   kind: ModelTestKind;
   onError: (text: string) => void;
@@ -160,8 +168,19 @@ function useRequestPreview(args: {
   selectedModel: string;
   sessionKey: string;
   skip: boolean;
+  values: ModelTestValues;
 }): void {
-  const { busy, buildBodies, kind, onError, patchSession, selectedModel, sessionKey, skip } = args;
+  const {
+    busy,
+    buildBodies,
+    kind,
+    onError,
+    patchSession,
+    selectedModel,
+    sessionKey,
+    skip,
+    values,
+  } = args;
   const seqRef = useRef(0);
   /* 卸载判活（ISSUE #4288）：防抖窗口过后组件可能已卸载，在途请求回来
    * 不再写父级 state（seq 只防连发竞态，不防「卸载后写」）。 */
@@ -184,7 +203,7 @@ function useRequestPreview(args: {
         return;
       }
       const seq = ++seqRef.current;
-      const { imageBody, videoBody } = buildBodies();
+      const { imageBody, videoBody } = buildBodies(values);
       const relayBody = imageBody ?? videoBody ?? {};
       void runAsyncAction(
         async () => {
@@ -210,7 +229,7 @@ function useRequestPreview(args: {
     return () => {
       clearTimeout(timer);
     };
-  }, [busy, buildBodies, onError, selectedModel, kind, skip, sessionKey, patchSession]);
+  }, [busy, buildBodies, onError, selectedModel, kind, skip, sessionKey, patchSession, values]);
 }
 
 /** 候选 / 契约 / 适配器索引的取数与派生（§12.13 第二刀）：这一簇只读
@@ -663,9 +682,10 @@ export function useModelTest(): ModelTestController {
   );
 
   /* 请求体组装的唯一入口：本地提交行、生成前预览、真实调用三处共用同一份
-   * 组装结果（#3949 需求 8 —— 三处各拼一套必然漂移）。 */
+   * 组装结果（#3949 需求 8 —— 三处各拼一套必然漂移）。值显式入参：生成可带
+   * 覆盖值（JSON 输入模式，ISSUE #4769），预览 / 提交行走当前表单值。 */
   const buildBodies = useCallback(
-    () =>
+    (values: ModelTestValues) =>
       buildRequestBodies({
         kind,
         mode,
@@ -673,7 +693,7 @@ export function useModelTest(): ModelTestController {
         referenceImages: referenceGroup.images,
         values,
       }),
-    [kind, mode, referenceGroup.images, selectedModel, values],
+    [kind, mode, referenceGroup.images, selectedModel],
   );
 
   /* 生成动作（对话 #4080 / 本地工作流 #4080 评论 4 / 图片视频中继三条通道
@@ -695,8 +715,56 @@ export function useModelTest(): ModelTestController {
     values,
   });
   const generate = useCallback(
-    (key?: string) => generateSession(key ?? activeKeyRef.current),
+    (key?: string, valuesOverride?: ModelTestValues) =>
+      generateSession(key ?? activeKeyRef.current, valuesOverride),
     [generateSession],
+  );
+
+  /**
+   * 解析并应用一段 JSON（ISSUE #4769）：历史页「复制去重投」复制的载荷
+   * （`buildReprintPayload` 的形状：`{ mode, inputs }`）。`inputs` 里测试页
+   * 认得的键逐个写回**当前格**的表单值；合法 → 返回 `{ ok: true, values }`
+   * 供调用方在同一次点击里接着生成（生成读这次给出的值，不吃旧闭包）；
+   * 非法 → 错误落当前格的反馈位并返回 `{ ok: false }`，表单不动。
+   */
+  const applyJsonValues = useCallback(
+    (json: string): { ok: true; values: ModelTestValues } | { error: string; ok: false } => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(json) as unknown;
+      } catch (error) {
+        const text = `JSON 解析失败：${error instanceof Error ? error.message : "格式不合法"}`;
+        patchSession(activeKeyRef.current, { error: text });
+        return { ok: false, error: text };
+      }
+      if (!isRecord(parsed)) {
+        const text = "JSON 需要是对象（历史「复制去重投」的载荷形状是 { mode, inputs }）";
+        patchSession(activeKeyRef.current, { error: text });
+        return { ok: false, error: text };
+      }
+      const rawInputs: unknown = parsed.inputs;
+      if (!isRecord(rawInputs)) {
+        const text = "JSON 缺少 inputs 对象（历史「复制去重投」的载荷形状是 { mode, inputs }）";
+        patchSession(activeKeyRef.current, { error: text });
+        return { ok: false, error: text };
+      }
+      const patch: Partial<ModelTestValues> = {};
+      for (const [key, value] of Object.entries(rawInputs)) {
+        if (!isWorkshopInputType(key) || typeof value !== "string" || value.trim() === "") {
+          continue;
+        }
+        patch[key] = value;
+      }
+      if (Object.keys(patch).length === 0) {
+        const text = "JSON 的 inputs 里没有测试页认得的参数键";
+        patchSession(activeKeyRef.current, { error: text });
+        return { ok: false, error: text };
+      }
+      const nextValues: ModelTestValues = { ...values, ...patch };
+      patchSession(activeKeyRef.current, { values: nextValues, error: null });
+      return { ok: true, values: nextValues };
+    },
+    [patchSession, values],
   );
 
   /** 取消当前格（或指定格）的生成（#3949 需求 5 / #4080 评论 12）。 */
@@ -723,6 +791,7 @@ export function useModelTest(): ModelTestController {
     onError: showPreviewError,
     selectedModel,
     sessionKey: activeKey,
+    values,
     patchSession,
     skip: selectedCandidate?.workflow === undefined ? false : true,
   });
@@ -767,7 +836,7 @@ export function useModelTest(): ModelTestController {
         status: null,
       };
     }
-    const { imageBody, videoBody } = buildBodies();
+    const { imageBody, videoBody } = buildBodies(values);
     return relayDebugRow(kind, imageBody ?? videoBody ?? {});
   }, [buildBodies, kind, mode, selectedCandidate, selectedModel, values]);
   /* 当前格的请求行 = 本地提交 + 实际请求（#4080 评论 13：生成后保留，仅徽标
@@ -786,6 +855,7 @@ export function useModelTest(): ModelTestController {
     requestRows,
     kindCandidateCount,
     inputRows,
+    applyJsonValues,
     kind,
     error: activeSession.error,
     generating: activeSession.generating,

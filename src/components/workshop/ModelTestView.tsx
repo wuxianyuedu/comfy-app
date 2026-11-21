@@ -421,6 +421,11 @@ export function ModelTestView() {
   /* 「大屏查看日志」弹窗目标：存打开那一刻的快照（与 HistoryList 同款），
    * 生成态变化不重挂弹窗、不重订 SSE（#4743）。 */
   const [logTarget, setLogTarget] = useState<QueueTaskLogTarget | null>(null);
+  /* 输入方式（ISSUE #4769）：统一输入表单 ⇄ JSON 粘贴。jsonText 是纯展示态，
+   * 留在视图层；解析与应用在 controller（applyJsonValues）—— 解析成功后自动
+   * 切回统一输入，让用户看着填进去的参数点生成。 */
+  const [jsonMode, setJsonMode] = useState(false);
+  const [jsonText, setJsonText] = useState("");
   const openLogScreen = () => {
     if (c.taskId === null || c.taskId === "") {
       return;
@@ -528,109 +533,167 @@ export function ModelTestView() {
                 className="flex-1"
                 hint="与工坊生成走同一份模式契约"
                 icon={<SlidersHorizontal />}
-                title="统一输入"
+                title={jsonMode ? "JSON 输入" : "统一输入"}
               >
-                <div className="flex flex-col gap-4">
-                  {c.inputRows.map((row, i) => {
-                    if (row.control === "size") {
+                {/* 输入方式切换（ISSUE #4769）：表单逐项填 ⇄ 粘贴历史「复制去重投」
+                    复制的整份 JSON 重跑。 */}
+                <div aria-label="输入方式" className="flex flex-wrap gap-2" role="radiogroup">
+                  <SelectChip
+                    onClick={() => {
+                      setJsonMode(false);
+                    }}
+                    selected={!jsonMode}
+                    shape="pill"
+                  >
+                    统一输入
+                  </SelectChip>
+                  <SelectChip
+                    onClick={() => {
+                      setJsonMode(true);
+                    }}
+                    selected={jsonMode}
+                    shape="pill"
+                  >
+                    JSON 输入
+                  </SelectChip>
+                </div>
+                {jsonMode ? (
+                  <FormField
+                    hint="粘贴历史「复制去重投」复制的 JSON，点「生成」解析并按这些参数重跑；认不得的键会忽略"
+                    id="model-test-json"
+                    label="提交参数 JSON"
+                    labelClassName="mb-1.5"
+                  >
+                    {(a11y) => (
+                      <textarea
+                        {...a11y}
+                        className="border-border bg-surface-1 focus:border-primary w-full resize-y rounded-lg border px-3 py-2 font-mono text-sm outline-none"
+                        onChange={(e) => {
+                          setJsonText(e.target.value);
+                        }}
+                        placeholder={
+                          '{\n  "mode": "T2I",\n  "inputs": {\n    "prompt": "…",\n    "seed": "…"\n  }\n}'
+                        }
+                        rows={12}
+                        spellCheck={false}
+                        value={jsonText}
+                      />
+                    )}
+                  </FormField>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {c.inputRows.map((row, i) => {
+                      if (row.control === "size") {
+                        return (
+                          <FormField
+                            hint={
+                              row.disabled
+                                ? "API 通道暂未承接尺寸输入（工坊完整链路才有）"
+                                : "比例 / 像素（分辨率 · 百万像素）/ 倍数一次选完，与工作流库同款；已按最常用档预置默认值"
+                            }
+                            id={`model-test-size-${String(i)}`}
+                            key={`${row.id}-${String(i)}`}
+                            label={
+                              <span className="flex min-w-0 items-center gap-1.5">
+                                <TruncatedText className="truncate">
+                                  {row.disabled ? `${row.label}（未承接）` : row.label}
+                                </TruncatedText>
+                                <RequiredBadge required={row.required} />
+                              </span>
+                            }
+                            labelClassName="mb-1.5"
+                          >
+                            {() => (
+                              <SizeField
+                                disabled={row.disabled}
+                                mode={c.mode}
+                                onPatchValues={c.patchValues}
+                                values={c.values}
+                              />
+                            )}
+                          </FormField>
+                        );
+                      }
+                      const control: ModelTestControl = row.control;
+                      const id = `model-test-input-${row.id}`;
+                      /* 通道承接得住、但适配器没映射 → 提示「生成不会带上」。 */
+                      const unmapped =
+                        !row.disabled &&
+                        row.valueKey !== null &&
+                        selectedAdapter !== null &&
+                        !mappedTypes.has(row.valueKey);
+                      const hint = row.disabled
+                        ? "API 通道暂未承接这类输入（工坊完整链路才有）—— 填了也会被忽略"
+                        : unmapped
+                          ? "适配器没有映射这个输入 —— 本次生成不会带上它；要带上请到「模型适配」为它配字段映射"
+                          : undefined;
+                      if (row.id === "reference-image" && control === "image") {
+                        return (
+                          <ReferenceImageField
+                            disabled={row.disabled}
+                            hint={hint}
+                            id={`${id}-${String(i)}`}
+                            images={c.referenceImages}
+                            key={`${row.id}-${String(i)}`}
+                            label={row.label}
+                            onAdd={(files) => {
+                              void c.addReferenceImages(files);
+                            }}
+                            onRemove={c.removeReferenceImage}
+                            required={row.required}
+                          />
+                        );
+                      }
                       return (
-                        <FormField
-                          hint={
-                            row.disabled
-                              ? "API 通道暂未承接尺寸输入（工坊完整链路才有）"
-                              : "比例 / 像素（分辨率 · 百万像素）/ 倍数一次选完，与工作流库同款；已按最常用档预置默认值"
-                          }
-                          id={`model-test-size-${String(i)}`}
-                          key={`${row.id}-${String(i)}`}
-                          label={
-                            <span className="flex min-w-0 items-center gap-1.5">
-                              <TruncatedText className="truncate">
-                                {row.disabled ? `${row.label}（未承接）` : row.label}
-                              </TruncatedText>
-                              <RequiredBadge required={row.required} />
-                            </span>
-                          }
-                          labelClassName="mb-1.5"
-                        >
-                          {() => (
-                            <SizeField
-                              disabled={row.disabled}
-                              mode={c.mode}
-                              onPatchValues={c.patchValues}
-                              values={c.values}
-                            />
-                          )}
-                        </FormField>
-                      );
-                    }
-                    const control: ModelTestControl = row.control;
-                    const id = `model-test-input-${row.id}`;
-                    /* 通道承接得住、但适配器没映射 → 提示「生成不会带上」。 */
-                    const unmapped =
-                      !row.disabled &&
-                      row.valueKey !== null &&
-                      selectedAdapter !== null &&
-                      !mappedTypes.has(row.valueKey);
-                    const hint = row.disabled
-                      ? "API 通道暂未承接这类输入（工坊完整链路才有）—— 填了也会被忽略"
-                      : unmapped
-                        ? "适配器没有映射这个输入 —— 本次生成不会带上它；要带上请到「模型适配」为它配字段映射"
-                        : undefined;
-                    if (row.id === "reference-image" && control === "image") {
-                      return (
-                        <ReferenceImageField
+                        <InputRow
+                          control={control}
                           disabled={row.disabled}
                           hint={hint}
                           id={`${id}-${String(i)}`}
-                          images={c.referenceImages}
                           key={`${row.id}-${String(i)}`}
-                          label={row.label}
-                          onAdd={(files) => {
-                            void c.addReferenceImages(files);
+                          label={row.disabled ? `${row.label}（未承接）` : row.label}
+                          onChange={(value) => {
+                            if (row.valueKey !== null) {
+                              c.patchValue(row.valueKey, value);
+                            }
                           }}
-                          onRemove={c.removeReferenceImage}
+                          onPickFile={(file) => {
+                            if (row.valueKey === "first-frame" || row.valueKey === "image") {
+                              void c.setInputFromFile(row.valueKey, file);
+                            }
+                          }}
+                          onRandom={
+                            row.valueKey === "prompt"
+                              ? () => {
+                                  c.randomizePrompt();
+                                }
+                              : undefined
+                          }
                           required={row.required}
+                          value={row.valueKey === null ? "" : (c.values[row.valueKey] ?? "")}
                         />
                       );
-                    }
-                    return (
-                      <InputRow
-                        control={control}
-                        disabled={row.disabled}
-                        hint={hint}
-                        id={`${id}-${String(i)}`}
-                        key={`${row.id}-${String(i)}`}
-                        label={row.disabled ? `${row.label}（未承接）` : row.label}
-                        onChange={(value) => {
-                          if (row.valueKey !== null) {
-                            c.patchValue(row.valueKey, value);
-                          }
-                        }}
-                        onPickFile={(file) => {
-                          if (row.valueKey === "first-frame" || row.valueKey === "image") {
-                            void c.setInputFromFile(row.valueKey, file);
-                          }
-                        }}
-                        onRandom={
-                          row.valueKey === "prompt"
-                            ? () => {
-                                c.randomizePrompt();
-                              }
-                            : undefined
-                        }
-                        required={row.required}
-                        value={row.valueKey === null ? "" : (c.values[row.valueKey] ?? "")}
-                      />
-                    );
-                  })}
-                </div>
+                    })}
+                  </div>
+                )}
 
-                {/* 生成（生成中可取消；对话用途是「发送」） */}
+                {/* 生成（生成中可取消；对话用途是「发送」）。JSON 输入模式先解析
+                    粘贴的载荷并写回表单值，再带着这份值生成（ISSUE #4769）。 */}
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <Button
                     className="h-10 rounded-lg px-6"
                     disabled={c.generating}
                     onClick={() => {
+                      if (jsonMode) {
+                        const parsed = c.applyJsonValues(jsonText);
+                        if (!parsed.ok) {
+                          return;
+                        }
+                        /* 切回统一输入：填进去的参数看得见，错误也在同一反馈位。 */
+                        setJsonMode(false);
+                        void c.generate(undefined, parsed.values);
+                        return;
+                      }
                       void c.generate();
                     }}
                     variant="primary-solid"

@@ -14,10 +14,10 @@ import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { cancelTask } from "~/lib/task-cancel-client";
 /* 输出目录 / 复制去重投（ISSUE #4619）：与队列页同一份实现 ——
  * 目录走 `revealTaskFolder`（comfyapp:// 深链 + 失败文案单一出处），
- * 复制走 `useCopyResult` + `reprintText`（载荷只含 task.list 真有的字段）。 */
+ * 复制走 `useCopyResult`；#4769 起复制的载荷是**全量参数 JSON**（详情接口
+ * 现取 + 与详情弹窗同一套派生），不再是只有三列的行内文本。 */
 import { revealTaskFolder } from "~/lib/history-detail-actions";
 import { useCopyResult } from "~/components/ui/use-copy-feedback";
-import { reprintText } from "~/components/studio/queue/queue-monitor-config";
 import type { QueueTaskLogTarget } from "~/components/studio/queue/QueueTaskLogModal";
 import { useItemAction } from "~/components/ui/use-item-action";
 import { useViewTabActive } from "~/components/ui/view-tab-active";
@@ -26,7 +26,7 @@ import { useToast } from "../../ToastProvider";
 import { parseWorkflowIOMap, type WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 
-import { taskWorkflowId } from "../history-detail-derive";
+import { buildReprintPayload, taskWorkflowId } from "../history-detail-derive";
 import {
   countByStatus,
   emptyStateText,
@@ -64,7 +64,8 @@ export type HistoryListController = {
   closeLog: () => void;
   /** 确认删除待删目标（ConfirmDialog 的确认侧，ISSUE #3771）。 */
   confirmRemove: () => Promise<void>;
-  /** 「复制去重投」：复制本次提交内容到剪贴板，回画布改完再投（与队列页同款）。 */
+  /** 「复制去重投」：把本次提交的全部参数折成 JSON 复制到剪贴板（ISSUE #4769，
+   *  粘贴侧 = 测试模型的 JSON 输入模式）。 */
   copyForReprint: (task: TaskItem) => Promise<void>;
   /** 各状态计数，key 为 FilterKey 或任务 status。 */
   counts: Record<string, number>;
@@ -336,8 +337,9 @@ export function useHistoryList(): HistoryListController {
 
   /* ── 行级动作：输出目录 / 复制去重投 / 执行日志（ISSUE #4619）──────────────
    *  与队列页同一份实现（同一出口、同一文案）：目录走 `revealTaskFolder`、
-   *  复制走 `useCopyResult` + `reprintText`、日志复用队列的弹窗组件。
-   *  忙标记收在 `useItemAction`，与重试互不干扰（可以边重试边看日志）。 */
+   *  日志复用队列的弹窗组件。复制的载荷自 #4769 起是全量参数 JSON
+   *  （`buildReprintPayload`，与详情弹窗同一套派生）。忙标记收在
+   *  `useItemAction`，与重试互不干扰（可以边重试边看日志）。 */
   const rowAction = useItemAction();
   const copyText = useCopyResult();
 
@@ -359,17 +361,38 @@ export function useHistoryList(): HistoryListController {
   const copyForReprint = useCallback(
     async (task: TaskItem) => {
       await rowAction.run(task.id, async () => {
-        /* 成败由复制出口的返回值表达（它不抛）：让「复制失败」走失败分支，
-         * 而不是被 try 当成成功。 */
-        const copied = await copyText(reprintText(task));
-        await runAsyncAction(() => Promise.resolve(copied), {
-          report,
-          failureText: "复制失败，请检查是否允许访问剪贴板",
-          successText: "后端没有重试接口，已复制本次提交内容 —— 回画布改完参数再投一次",
-        });
+        await runAsyncAction(
+          async () => {
+            /* 全量参数在详情接口里（task.list 的行只有提示词/工作流/类型三列，
+             * ISSUE #4619 时的已知边界）。复制那一刻现取详情 + 模式契约，按详情
+             * 弹窗同一套派生（buildReprintPayload）折成 JSON —— 复制走的与用户
+             * 在详情里看到的参数表一字不差。 */
+            const detail = await queryClient.fetchQuery(
+              trpc.task.detail.queryOptions({ id: task.id }),
+            );
+            const contractsQ = await queryClient.fetchQuery(
+              trpc.llm.modeContractsGet.queryOptions(),
+            );
+            const payload = buildReprintPayload({
+              detail,
+              mode: detail.type,
+              contracts: contractsQ.contracts ?? null,
+            });
+            const copied = await copyText(JSON.stringify(payload, null, 2));
+            if (!copied) {
+              throw new Error("copy rejected");
+            }
+            return { ok: true as const };
+          },
+          {
+            report,
+            failureText: "复制失败，请检查是否允许访问剪贴板",
+            successText: "已复制全部参数 JSON —— 到「测试模型」切到 JSON 输入粘贴即可重跑",
+          },
+        );
       });
     },
-    [copyText, report, rowAction],
+    [copyText, queryClient, report, rowAction, trpc],
   );
 
   /* 日志弹窗的目标行：openLog 那一刻的快照（与队列页同一理由——轮询换对象
