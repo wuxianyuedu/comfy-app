@@ -83,8 +83,12 @@ export function LogPanelHeader(input: {
           <span className="text-ink-bright text-[15px] font-semibold whitespace-nowrap">
             应用日志
           </span>
-          {/* 标题旁不复述任何计数：数字的唯一出口是右侧级别按钮（同一份
-          `originCounts`），完整分类数（含信息）在各按钮的悬浮说明里。 */}
+          {/* 总数徽标（设计稿「日志面板 · 重设计」）：当前筛选命中的总条数，
+          与页脚「匹配 N 条」同口径（同一份 filteredLogs）。分档计数仍在级别
+          按钮上（同一份 `originCounts`），两处数字各管一层、不互相复述。 */}
+          <span className="bg-subtle text-ink-muted rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap tabular-nums">
+            {total} 条
+          </span>
         </div>
 
         {/* Level filters：数字是**当前来源**下的计数，与右边来源下拉同口径。标签与数字同行

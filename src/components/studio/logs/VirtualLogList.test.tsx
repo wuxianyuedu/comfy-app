@@ -8,7 +8,10 @@ import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { VirtualLogList } from "./VirtualLogList";
-import { LOG_ROW_SINGLE } from "./log-virtual";
+import { rowHeightFor } from "./log-virtual";
+
+/** 标准档单行行高（设计稿行距）：行盒下限断言按它推导。 */
+const ROW_STD = rowHeightFor("standard");
 
 /** querySelector 的收窄助手：命中失败当场抛，类型经 instanceof 收窄（不走 as 断言）。 */
 function htmlEl(el: Element | null, what: string): HTMLElement {
@@ -35,10 +38,10 @@ describe("VirtualLogList 行盒（ISSUE #4618）", () => {
     const first = htmlEl(document.querySelector('[data-log-index="0"]'), "第一行行盒");
     const second = htmlEl(document.querySelector('[data-log-index="1"]'), "第二行行盒");
     /* 短消息仍是单行档。 */
-    expect(first.style.minHeight).toBe(`${LOG_ROW_SINGLE}px`);
+    expect(first.style.minHeight).toBe(`${ROW_STD}px`);
     /* 长消息在估宽（jsdom 量不到面板 → 200px 下限）下折成多行，min-height
      * 高于单行档 —— 估算给到行盒的是「下限」，内容可继续撑开。 */
-    expect(Number.parseInt(second.style.minHeight, 10)).toBeGreaterThan(LOG_ROW_SINGLE);
+    expect(Number.parseInt(second.style.minHeight, 10)).toBeGreaterThan(ROW_STD);
     /* 固定 height 不再出现：它正是「内容比行盒高 → 与后一行重叠」的根因。 */
     expect(first.style.height).toBe("");
     expect(second.style.height).toBe("");

@@ -15,15 +15,18 @@ import { ceilDiv } from "~/lib/page-window";
  *  档位只改行的上下内边距，正文行高不变。 */
 export type LogDensity = "compact" | "standard" | "relaxed";
 
-/** 各档的**单侧**内边距像素（与 `LogRow` 的 `py-*` class 对齐：compact=py-0.5、standard=py-1、relaxed=py-2）。 */
-const DENSITY_PADDING: Record<LogDensity, number> = { compact: 2, standard: 4, relaxed: 8 };
+/** 各档的**单侧**内边距像素（与 `LogRow` 的 `py-*` class 对齐：compact=py-1、standard=py-3、relaxed=py-4）。
+ *  标准档 12（行高 44）来自设计稿「日志面板 · 重设计」的疏朗行距；紧凑/宽松档照同一梯队推。 */
+const DENSITY_PADDING: Record<LogDensity, number> = { compact: 4, standard: 12, relaxed: 16 };
 
 /** 正文一行的像素高度（`text-sm` + `leading-snug` = 14px 字号 × 1.375 ≈ 19），不含行内边距与分隔线。 */
 export const LOG_ROW_CONTENT = 19;
 
 /**
  * 标准档的行高（原 {@link LOG_ROW_SINGLE} 的口径：正文 19 + `py-1` 上下 8 + 下边框 1）。
- * 密度档的行高走 {@link rowHeightFor}；本常量保留给「不关心密度」的既有消费方。
+ * 密度档的行高走 {@link rowHeightFor}；本常量保留给「不关心密度」的既有消费方
+ * （stories / VirtualLogList 的兜底），**不再是**面板标准档的行高——那是
+ * `rowHeightFor("standard")`（44）。
  */
 export const LOG_ROW_SINGLE = 28;
 
