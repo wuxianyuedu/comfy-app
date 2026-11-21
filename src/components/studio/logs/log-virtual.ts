@@ -1,15 +1,17 @@
 /**
  * log-virtual — 日志面板的**虚拟滚动窗口**（纯逻辑，无 React、无 DOM）。规范 02 §2.6 要求大列表虚拟滚动：只渲染视口内几十行（满页 2000 行含行内 span 约 1.5 万节点，布局成本就是「切到 1000+ 页签明显卡顿」，ISSUE #609）。
- * 行高用**常量**而非 `measureElement`（动态测高在 2s 一轮刷新里会打断滚动）：单行 28px、多行每行 +19px，视图 class 必须与常量对齐，改字号行距要同步改这里。
+ * 行高用**常量**而非 `measureElement`（动态测高在 2s 一轮刷新里会打断滚动）：单行 29px、多行每行 +20px，视图 class 必须与常量对齐，改字号行距要同步改这里。
  * 误差由 `overscan` 与总高钳位兜住；贴底「滚到哪行」的纯算术也在这里（ISSUE #637），视图只问 DOM 拿目标几何。
  */
 
 /**
- * 一行（未换行）的像素高度：`text-sm` + `leading-snug` + `py-1` + 1px 下边框。
+ * 一行（未换行）的像素高度：`text-sm` + `leading-5` + `py-1` + 1px 下边框。
  * 必须与 `LogRow` 的 class 对齐。
  */
 import { clamp } from "~/lib/clamp";
 import { ceilDiv } from "~/lib/page-window";
+
+import type { LogFontSize } from "./log-display-prefs";
 
 /** 行密度档（与 `log-display-prefs` 的偏好同一套值；ISSUE #4567 的「日志项间隔大小配置」）。
  *  档位只改行的上下内边距，正文行高不变。 */
@@ -19,6 +21,15 @@ export type LogDensity = "compact" | "standard" | "relaxed";
  *  三档整体下调一档（ISSUE #4716）：标准档 4（行高 29）即下调前的「紧凑」，宽松档 12（行高 45）
  *  即下调前的「标准」；新紧凑档 2（py-0.5）比原最窄档再收一档。 */
 const DENSITY_PADDING: Record<LogDensity, number> = { compact: 2, standard: 4, relaxed: 12 };
+
+/** 字号档的正文像素（`text-xs` / `text-sm` / `text-base`）。行是 `font-mono`：
+ *  字符宽与字号严格成正比，折行容量的宽度折算按这个比例走（`layoutRows`）。 */
+export const FONT_PX: Record<LogFontSize, number> = { small: 12, standard: 14, large: 16 };
+
+/** 字号档的**行盒**高度（与 `LogRow` 的 leading class 同口径）：小档字更小但行盒仍是
+ *  20px（与级别徽标 `h-5` 同高，行高不变）；大档 24px 由正文行决定（徽标 20 不撑行）。
+ *  三档都满足 #4744 的判据：行内没有比正文行盒更高的子项，上下留白对称。 */
+export const LOG_LINE_BOX: Record<LogFontSize, number> = { small: 20, standard: 20, large: 24 };
 
 /** 正文一行的像素高度（`text-sm` + `leading-5` = 20px 行盒，与级别徽标 `h-5` 同高），
  *  不含行内边距与分隔线。行内所有子项都不得超过这个高度，否则单行行的
@@ -32,9 +43,9 @@ export const LOG_ROW_CONTENT = 20;
  */
 export const LOG_ROW_SINGLE = 29;
 
-/** 按密度给**普通日志行**的估算高度（虚拟化行盒高度；估算 ≥ 实际，不足会裁内容）。 */
-export function rowHeightFor(density: LogDensity): number {
-  return LOG_ROW_CONTENT + DENSITY_PADDING[density] * 2 + 1;
+/** 按密度与字号给**普通日志行**的估算高度（虚拟化行盒高度；估算 ≥ 实际，不足会裁内容）。 */
+export function rowHeightFor(density: LogDensity, fontSize: LogFontSize = "standard"): number {
+  return LOG_LINE_BOX[fontSize] + DENSITY_PADDING[density] * 2 + 1;
 }
 
 /**
@@ -81,12 +92,13 @@ export function estimateRowHeight(
   message: string,
   wrap: boolean,
   density: LogDensity = "standard",
+  fontSize: LogFontSize = "standard",
 ): number {
   if (!wrap) {
-    return rowHeightFor(density);
+    return rowHeightFor(density, fontSize);
   }
   const lines = Math.max(1, countLines(message));
-  return rowHeightFor(density) + (lines - 1) * LOG_ROW_LINE;
+  return rowHeightFor(density, fontSize) + (lines - 1) * LOG_LINE_BOX[fontSize];
 }
 
 /**
@@ -135,6 +147,8 @@ export type LogLayoutOptions = {
   density?: LogDensity;
   /** 已展开的行 id：固定为 {@link LOG_ROW_EXPANDED}。 */
   expandedIds?: ReadonlySet<string>;
+  /** 字号档（ISSUE #4746）：行盒高度与折行容量（字符宽 ∝ 字号）随它走。 */
+  fontSize?: LogFontSize;
   /**
    * **实测高度出口**（按消息原文查询）：估算的字符宽度系数只能取均值，与实际渲染高度会有出入 ——
    * 行盒用 minHeight 渲染、内容实测后经这里回填，位置表以实测值为准：比估算高时撑开（不再被固定
@@ -162,8 +176,20 @@ export function layoutRows(
   availableWidth = 0,
   options: LogLayoutOptions = {},
 ): { rows: Array<RowLayout>; totalSize: number } {
-  const { expandedIds, singleLineIds, heightOf, density = "standard" } = options;
-  const base = rowHeightFor(density);
+  const {
+    expandedIds,
+    singleLineIds,
+    heightOf,
+    density = "standard",
+    fontSize = "standard",
+  } = options;
+  const base = rowHeightFor(density, fontSize);
+  /* 字号档的每行增量（小 / 标准 = 20，大 = 24，见 {@link LOG_LINE_BOX}）。 */
+  const lineHeight = LOG_LINE_BOX[fontSize];
+  /* 折行容量按字号折算：行是 `font-mono`，字符宽 ∝ 字号——大字号下同样的正文列宽
+   * 装得下的字更少（估少了会裁字），小字号反之。宽度按 `FONT_PX` 比例折算后再数行，
+   * 9/15 的保守系数在折算后仍保守。 */
+  const tierWidth = Math.round(availableWidth * (FONT_PX.standard / FONT_PX[fontSize]));
   /* `Array.from` 而不是 `new Array(n)`：后者在 lint 下是 `any[]`，会一路传染到
      下面的 `rows[i]` 赋值上。 */
   const rows: Array<RowLayout> = Array.from({ length: entries.length }, () => ({
@@ -180,8 +206,8 @@ export function layoutRows(
       size = base;
     } else {
       /* 每行的行数只数一次：estimateRowHeight 与 countLines 都靠它推高度。 */
-      const lines = wrap ? countLines(entry.message, availableWidth) : 1;
-      size = base + (lines - 1) * LOG_ROW_LINE;
+      const lines = wrap ? countLines(entry.message, tierWidth) : 1;
+      size = base + (lines - 1) * lineHeight;
       /* 实测校正**双向**采纳（ISSUE #4715）：内容比估算矮（估高系数偏保守、
        * 多估出一行）时按实测收窄，行内不再留出成片空白；比估算高时照旧撑开，
        * 不裁字。下限钳在单行档（内容至少一行）。展开行 / 强制单行的口径另有

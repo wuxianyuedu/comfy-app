@@ -22,13 +22,18 @@ function entry(): LogEntry {
   };
 }
 
-function renderRow(showDetails: boolean, density: "compact" | "standard" | "relaxed" = "standard") {
+function renderRow(
+  showDetails: boolean,
+  density: "compact" | "standard" | "relaxed" = "standard",
+  fontSize: "small" | "standard" | "large" = "standard",
+) {
   render(
     <TooltipProvider delay={0}>
       <LogRow
         density={density}
         entry={entry()}
         expanded={false}
+        fontSize={fontSize}
         keyword=""
         onToggleExpand={() => undefined}
         showDetails={showDetails}
@@ -89,5 +94,28 @@ describe("formatEntryForClipboard 的 includeMeta", () => {
     expect(formatEntryForClipboard(entry(), { includeMeta: false })).toBe(
       "编排器互斥占坑: 已写入会话锚点（PID 74404）",
     );
+  });
+});
+
+describe("LogRow 字号档（ISSUE #4746）", () => {
+  it("大档：行容器用 text-base / leading-6", () => {
+    renderRow(true, "standard", "large");
+    const row = document.querySelector("time")?.parentElement;
+    expect(row?.className).toContain("text-base");
+    expect(row?.className).toContain("leading-6");
+  });
+
+  it("小档：text-xs / leading-5（行盒与级别徽标同高，行高不变）", () => {
+    renderRow(true, "standard", "small");
+    const row = document.querySelector("time")?.parentElement;
+    expect(row?.className).toContain("text-xs");
+    expect(row?.className).toContain("leading-5");
+  });
+
+  it("默认（标准）：text-sm / leading-5", () => {
+    renderRow(true);
+    const row = document.querySelector("time")?.parentElement;
+    expect(row?.className).toContain("text-sm");
+    expect(row?.className).toContain("leading-5");
   });
 });
