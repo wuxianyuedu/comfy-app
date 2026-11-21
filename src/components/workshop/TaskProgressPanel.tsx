@@ -6,9 +6,11 @@
 // 没有进度形状日志（对话 / API 中继通道）时返回 null，不摆空盒子。
 
 import { useMemo } from "react";
-import { CircleCheck, Loader } from "lucide-react";
+import { CircleCheck } from "lucide-react";
 
 import { ProgressBar } from "~/components/ui/progress-bar";
+import { Spinner } from "~/components/ui/spinner";
+import { tailWindow } from "~/lib/page-window";
 import { cn } from "~/lib/utils";
 import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import { parseTaskLogProgress } from "~/lib/workshop/task-log-progress";
@@ -35,7 +37,7 @@ function StageRow({
       {done ? (
         <CircleCheck aria-hidden className="text-success size-3.5 shrink-0" />
       ) : (
-        <Loader aria-hidden className="text-primary size-3.5 shrink-0 animate-spin" />
+        <Spinner aria-hidden className="text-primary size-3.5 shrink-0" />
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
@@ -75,7 +77,8 @@ export function TaskProgressPanel({ logs }: { logs: ReadonlyArray<TaskLogEntry> 
   if (rows.length === 0) {
     return null;
   }
-  const visible = rows.slice(-MAX_ROWS);
+  /* 尾窗切片走 ~/lib/page-window 的唯一口径（P63），不手写 slice。 */
+  const visible = tailWindow(rows, MAX_ROWS);
   const hiddenCount = rows.length - visible.length;
   return (
     <div

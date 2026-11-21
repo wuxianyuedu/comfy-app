@@ -19,6 +19,7 @@ import {
 
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { FieldLabel } from "~/components/ui/field";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { Spinner } from "~/components/ui/spinner";
@@ -262,7 +263,7 @@ export function LogsCard({
     <Panel
       action={
         <>
-          <label className="text-muted-foreground text-2xs flex cursor-pointer items-center gap-1.5 select-none">
+          <FieldLabel className="text-muted-foreground text-2xs flex cursor-pointer items-center gap-1.5 select-none">
             <Checkbox
               checked={autoscroll}
               className="accent-primary size-3.5 cursor-pointer"
@@ -271,7 +272,7 @@ export function LogsCard({
               }}
             />
             自动滚动
-          </label>
+          </FieldLabel>
           {onOpenScreen !== undefined && (
             <Button
               className="text-ink-muted hover:bg-subtle hover:text-ink-strong text-2xs h-auto rounded-md px-2 py-1"
