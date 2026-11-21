@@ -1,6 +1,14 @@
 "use client";
 
-import { ListChecks, ListOrdered, RefreshCcw, WifiOff } from "lucide-react";
+import {
+  Activity,
+  AlertCircle,
+  CheckCircle2,
+  ListChecks,
+  ListOrdered,
+  RefreshCcw,
+  WifiOff,
+} from "lucide-react";
 
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
@@ -124,6 +132,56 @@ export function QueueMonitorView({
 
       {c.online || hasAny ? (
         <div className="flex flex-col gap-6">
+          {/* ── 顶部指标带（重设计稿）：先一眼回答「现在什么规模」，再看三段明细。
+              四格读数全部来自 controller 的纯派生（`queueStats`），视图不算数。 */}
+          <div aria-label="队列概览" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {(
+              [
+                {
+                  chip: "bg-info/10 text-info-strong",
+                  icon: Activity,
+                  label: "运行中",
+                  value: c.stats.running,
+                },
+                {
+                  chip: "bg-warning/10 text-warning-strong",
+                  icon: ListOrdered,
+                  label: "排队中",
+                  value: c.stats.queued,
+                },
+                {
+                  chip: "bg-success/10 text-success-strong",
+                  icon: CheckCircle2,
+                  label: "今日完成",
+                  value: c.stats.succeededToday,
+                },
+                {
+                  chip: "bg-destructive/10 text-danger-strong",
+                  icon: AlertCircle,
+                  label: "失败",
+                  value: c.stats.failedToday,
+                },
+              ] as const
+            ).map(({ chip, icon: Icon, label, value }) => (
+              <div
+                className="border-border bg-card flex items-center gap-3.5 rounded-2xl border p-4"
+                key={label}
+              >
+                <span
+                  className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${chip}`}
+                >
+                  <Icon aria-hidden className="size-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="text-ink-bright block text-[22px] leading-none font-bold tabular-nums">
+                    {String(value)}
+                  </span>
+                  <span className="text-ink-faint mt-1 block text-xs">{label}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+
           <section aria-labelledby="queue-running-heading">
             <SectionHeading id="queue-running-heading">跑动中</SectionHeading>
             {running ? (

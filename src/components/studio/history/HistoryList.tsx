@@ -75,7 +75,11 @@ function HistoryGroupTaskList({
   });
 
   return (
-    <div className="flex flex-col gap-3" ref={listRef}>
+    /* 双列卡片网格（重设计稿）：宽屏两列并排读日期分组里的任务；窄屏退回单列。
+       不设 items-start —— 同一行的两张卡（成功 / 失败）等高，底部动作区由卡内
+       `mt-auto` 钉在同一条底线上（用户反馈 #4710 的「对不齐」）。
+       auto-animate 的 FLIP 对 grid 重排同样按位移过渡（只动 transform/opacity，规范 §2.7）。 */
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2" ref={listRef}>
       {items.map((task) => (
         <HistoryTaskCard
           busy={isRowBusy(task.id)}

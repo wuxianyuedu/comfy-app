@@ -58,7 +58,18 @@ export function RuntimeLogBox({
       {/* 全屏时整块小窗口都不渲染：同一段日志渲染两份既费 DOM、又会出现两个
           同名的会话下拉（读屏器与测试都分不清该操作哪一个）。 */}
       {!fullscreen && (
-        <div className={cn("border-border bg-surface-1 mb-4 rounded-xl border", className)}>
+        <div
+          className={cn(
+            "border-border bg-surface-1 rounded-xl border",
+            /* fill：作为弹性列里的一个可伸展块，把页面剩余高度吃满（ComfyUI 页
+               重设计稿）。外框自己成为 flex 容器，正文区 `flex-1` 在框内伸展；
+               `min-h-0` + `overflow-hidden` 让正文区真能收缩、深色日志面一直铺到
+               卡片底缘（用户反馈 #4710：日志和背景高度不匹配）。非 fill 档保持
+               原样的下边距。 */
+            fill ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "mb-4",
+            className,
+          )}
+        >
           <LogToolbar
             follow={follow}
             log={log}
@@ -86,7 +97,9 @@ export function RuntimeLogBox({
           <LogBody
             className={
               fill
-                ? "border-border-subtle mx-3 mb-3 max-h-[calc(100vh-16rem)] min-h-64 rounded-lg border px-3 py-2"
+                ? /* fill 档：深色日志面从工具条下一直铺到卡片底缘（不内缩、不留
+                     卡片底色条），高度吃满卡片剩余空间。 */
+                  "border-border-subtle min-h-0 flex-1 border-t px-3 py-2"
                 : "border-border-subtle mx-3 mb-3 max-h-44 rounded-lg border px-3 py-2"
             }
             emptyHint={emptyHint}
@@ -303,6 +316,7 @@ function LogBody({
 /**
  * 截断 / 尾窗提示。「看不到更早的启动」与「这次启动只显示了一段」都必须有用户可见的出口
  * （硬规则 4）：否则用户会以为日志本来就长这样，转头去猜为什么缺内容。
+ * 流前缀（[out]/[err]）的常驻说明已随上游 #4699 在展示层剥离前缀后撤掉。
  */
 function LogHint({ log }: { log: RuntimeLogController }) {
   const parts: Array<string> = [];
@@ -318,7 +332,9 @@ function LogHint({ log }: { log: RuntimeLogController }) {
     <>
       {/* 流前缀（[out]/[err]）已在展示层剥离（ISSUE #4699）：Python 的 INFO 也走
           stderr，满屏 [err] 是噪声、且常被误读成「在报错」。落盘原文仍带标记，
-          导出 / 排查不受影响；崩溃行的 `[exit]` 保留（见 lifecycle-exit）。 */}
+          导出 / 排查不受影响；崩溃行的 `[exit]` 保留（见 lifecycle-exit）。
+          （合并注：此前本检出加过 `hideStream` 按页隐藏该行 —— 上游 #4699 直接
+          剥离后该开关失去对象，随冲突解决一并移除。） */}
       {parts.length > 0 ? (
         <p className="text-ink-fainter text-2xs px-3 pb-2 leading-relaxed">{parts.join("")}</p>
       ) : null}
