@@ -39,8 +39,8 @@ const FRAGMENT_CACHE = new Map<string, Array<RowToken>>();
 const FRAGMENT_CACHE_MAX = 5000;
 
 /** 密度档 → 行的上下内边距 class（与 `log-virtual` 的 `DENSITY_PADDING` 对齐，行高同口径）。
- *  三档整体下调一档（ISSUE #4716）：标准档 `py-1`（行高 28）即下调前的「紧凑」，宽松档 `py-3`
- *  （行高 44）即下调前的「标准」；新紧凑档 `py-0.5` 比原最窄档再收一档。 */
+ *  三档整体下调一档（ISSUE #4716）：标准档 `py-1`（行高 29）即下调前的「紧凑」，宽松档 `py-3`
+ *  （行高 45）即下调前的「标准」；新紧凑档 `py-0.5` 比原最窄档再收一档。 */
 const DENSITY_PY_CLASS: Record<LogDensity, string> = {
   compact: "py-0.5",
   standard: "py-1",
@@ -253,7 +253,11 @@ function RowCopyButton({ entry, includeMeta }: { entry: LogEntry; includeMeta: b
         /* 悬停/聚焦才显形：日志是「长时间盯着看」的界面，一个常在的按钮列会
          * 在每行末尾多出一块常驻色块，把正文的右边界切碎。键盘 Tab 聚焦时同样
          * 显形（`focus-visible`），不然纯键盘用户点不到它。 */
-        className={`shrink-0 self-center rounded transition-opacity ${
+        /* `size-5` 压掉 icon-xs 的 `size-6`：行高必须由**正文行**决定——24px 的
+         * 按钮是行内最高子项，把每行撑到 33px，而 `items-start` 下多出的高度
+         * 全落在文字下方（上隙 ~4px / 下隙 ~9px，用户指出的不一致即此）。
+         * 收到 20px（与级别徽标同高）后行高回到文字行 + 对称 padding。 */
+        className={`size-5 shrink-0 self-center rounded transition-opacity ${
           outcome === "idle"
             ? "hover:bg-subtle hover:text-ink opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
             : "opacity-100"
@@ -284,7 +288,7 @@ function RowCopyButton({ entry, includeMeta }: { entry: LogEntry; includeMeta: b
 }
 
 /**
- * 一行日志。`height` 由虚拟窗口给出并写成内联样式：估算与 `leading-snug` 实际行高须同口径，
+ * 一行日志。`height` 由虚拟窗口给出并写成内联样式：估算与 `leading-5` 实际行高须同口径，
  * 否则累计误差让滚动位置与内容错开；`overflow-hidden` 防止内容溢到下一行。
  * comfy-cli 原始输出行折叠成一行、展开经 `JsonViewer`；展开状态归面板，展开高度归
  * `log-virtual` 的 `LOG_ROW_EXPANDED`（行内不自己测高）。 */
@@ -407,7 +411,7 @@ export const LogRow = memo(function LogRow({
   if (!expandable) {
     return (
       <div
-        className={`border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 font-mono text-sm leading-snug ${DENSITY_PY_CLASS[density]}`}
+        className={`border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 font-mono text-sm leading-5 ${DENSITY_PY_CLASS[density]}`}
         style={style}
       >
         {showDetails && timeNode}
@@ -425,7 +429,7 @@ export const LogRow = memo(function LogRow({
    * `gap`（不要行间距，否则标题行 + 面板会超出 `LOG_ROW_EXPANDED` 而被裁掉）。 */
   return (
     <div
-      className="border-border-subtle hover:bg-subtle/60 group overflow-hidden border-b font-mono text-sm leading-snug"
+      className="border-border-subtle hover:bg-subtle/60 group overflow-hidden border-b font-mono text-sm leading-5"
       style={style}
     >
       <Disclosure

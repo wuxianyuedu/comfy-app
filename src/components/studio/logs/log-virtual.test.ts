@@ -330,9 +330,10 @@ describe("行距三档（ISSUE #4716）", () => {
   it("紧凑 < 标准 < 宽松，标准档与遗留单行常量同值（py-1）", () => {
     expect(rowHeightFor("compact")).toBeLessThan(rowHeightFor("standard"));
     expect(rowHeightFor("standard")).toBeLessThan(rowHeightFor("relaxed"));
-    /* 正文 19 + 上下内边距 ×2 + 下边框 1：compact=py-0.5、standard=py-1、relaxed=py-3。 */
-    expect(rowHeightFor("compact")).toBe(24);
+    /* 正文 20（leading-5 行盒，与级别徽标同高，ISSUE #4744）+ 上下内边距 ×2 + 下边框 1：
+     * compact=py-0.5、standard=py-1、relaxed=py-3。 */
+    expect(rowHeightFor("compact")).toBe(25);
     expect(rowHeightFor("standard")).toBe(LOG_ROW_SINGLE);
-    expect(rowHeightFor("relaxed")).toBe(44);
+    expect(rowHeightFor("relaxed")).toBe(45);
   });
 });
