@@ -46,6 +46,7 @@
     "fetch:daily-shell": "node scripts/devtools/fetch-daily-shell.mjs",
     "screenshot": "node scripts/devtools/screenshot.mjs",
     "perf:trace": "node scripts/devtools/perf-trace.mjs",
+    "timing:view": "node scripts/gates/precommit-timing.mjs && node scripts/gates/premerge-timing.mjs",
     "build:tracked": "node scripts/build/artifact-run.mjs",
     "build:tracked:dry": "node scripts/build/artifact-run.mjs --dry-run",
     "docs": "node scripts/docs/generate-api-docs.mjs",
