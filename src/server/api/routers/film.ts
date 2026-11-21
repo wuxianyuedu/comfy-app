@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { filmRepository } from "~/lib/core/repository";
 import { FILM_COMPOSE_SIZE } from "~/lib/film/film-size";
+import { isSafeBgmName } from "~/lib/film/bgm-name";
 
 /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）。老口径的 "1280x720"
  *  字符串仍收 —— 由 `toSizeSpec` 归一，落库一律是尺寸表达。 */
@@ -11,6 +12,14 @@ const sizeSpecSchema = z.object({
   clarity: z.string(),
   multiple: z.number().int(),
 });
+
+/** bgmName 的输入边界（ISSUE #4738）：只收单段安全文件名（判据与 composeFilm
+ *  的根内包含校验共用 `isSafeBgmName`）—— 此前 `z.string()` 裸收，tRPC 直调传
+ *  `../../x.mp3` 能让 ffmpeg 读 films/bgm 之外的任意本机文件。 */
+const bgmNameSchema = z
+  .string()
+  .max(255)
+  .refine(isSafeBgmName, "BGM 文件名不合法（须是上传口生成的单段文件名）");
 
 export const filmRouter = createTRPCRouter({
   /* GET /api/film —— 读 */
@@ -32,7 +41,7 @@ export const filmRouter = createTRPCRouter({
         fps: z.number().int().positive().optional(),
         framesPerShot: z.number().int().positive().optional(),
         subtitleOn: z.boolean().optional(),
-        bgmName: z.string().nullable().optional(),
+        bgmName: bgmNameSchema.nullable().optional(),
         /** 逐镜生成用的工作流库视频工作流 id（本地链路唯一来源）。 */
         videoWorkflowId: z.string().optional(),
         /** 文生视频镜头合成首帧用的图类工作流 id。 */
@@ -74,7 +83,7 @@ export const filmRouter = createTRPCRouter({
         fps: z.number().int().positive().optional(),
         framesPerShot: z.number().int().positive().optional(),
         subtitleOn: z.boolean().optional(),
-        bgmName: z.string().nullable().optional(),
+        bgmName: bgmNameSchema.nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

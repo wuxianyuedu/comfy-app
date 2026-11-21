@@ -203,4 +203,28 @@ describe("film.create / createFromProject —— 上下文只能来自会话", (
     );
     expect(orchestrator.createFilm).not.toHaveBeenCalled();
   });
+
+  it("bgmName 带路径分隔符或 . / .. → BAD_REQUEST，编排一次都不碰（#4738）", async () => {
+    const badNames = ["../../x.mp3", "a/b.mp3", String.raw`a\b.mp3`, "..", "."];
+    const codes = await Promise.all(
+      badNames.map(async (bad) => ({
+        bad,
+        code: await codeOf(
+          caller().create({ title: "T", script: "S", type: "short_video", bgmName: bad }),
+        ),
+      })),
+    );
+    for (const { bad, code } of codes) {
+      expect(code, `bgmName=${bad} 应在入口被拒`).toBe("BAD_REQUEST");
+    }
+    expect(orchestrator.createFilm).not.toHaveBeenCalled();
+    /* 合法名（上传口生成的形状，含 CJK 展示名）照常放行。 */
+    await caller().create({
+      title: "T",
+      script: "S",
+      type: "short_video",
+      bgmName: "bgm-1_雨声.mp3",
+    });
+    expect(orchestrator.createFilm).toHaveBeenCalledTimes(1);
+  });
 });

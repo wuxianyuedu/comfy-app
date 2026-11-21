@@ -17,7 +17,13 @@ import type { Shot } from "~/lib/workshop/types";
 import { isFilmShotStatus, type ShotStatus } from "~/lib/film/film-status";
 import { sizeSpecDims, toSizeSpec } from "~/lib/media/size-presets";
 import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
-import { artifactUrl, filmBgmRoot, filmsRoot } from "~/lib/media/output-paths";
+import {
+  artifactUrl,
+  filmBgmRoot,
+  filmsRoot,
+  isWithinGeneratedRoot,
+} from "~/lib/media/output-paths";
+import { isSafeBgmName } from "~/lib/film/bgm-name";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { withTimeoutResult } from "~/lib/with-timeout";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
@@ -332,12 +338,26 @@ export async function composeFilm(id: string) {
     const localPath = artifactUrl(["films", `${id}.mp4`]);
 
     if (film.bgmName !== null && film.bgmName !== "") {
-      const bgm = path.join(filmBgmRoot(), film.bgmName);
-      const bgmExists = await fs
-        .stat(bgm)
-        .then(() => true)
-        .catch(() => false);
-      if (bgmExists) {
+      /* 根内包含校验（ISSUE #4738）：bgmName 形状不安全（带路径分隔符 / `.` / `..`）
+       * 或解析结果落在 films/bgm 之外时**拒绝读取**——宁可无配乐，也不把根外文件
+       * 混进音轨。路由侧的 isSafeBgmName 是第一道闸，这里对历史行与绕过路由的
+       * 调用方兜底；判据与路由共用同一份（~/lib/film/bgm-name.ts）。 */
+      const bgm = path.resolve(filmBgmRoot(), film.bgmName);
+      const bgmAllowed = isSafeBgmName(film.bgmName) && isWithinGeneratedRoot(bgm, filmBgmRoot());
+      const bgmExists = bgmAllowed
+        ? await fs
+            .stat(bgm)
+            .then(() => true)
+            .catch(() => false)
+        : false;
+      if (!bgmAllowed) {
+        await appendFilmLog(
+          id,
+          "warn",
+          `BGM 文件名越界，已跳过配乐：${clampText(film.bgmName, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
+        );
+      }
+      if (bgmAllowed && bgmExists) {
         const mres = await runFFmpeg(
           [
             "-y",
