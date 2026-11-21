@@ -524,6 +524,31 @@ describe("useModelTest：工作流提供的图片/视频模型（ISSUE #4080 评
     expect(result.current.taskLogs[0]?.msg).toContain("已订阅 SSE");
   });
 
+  it("打开相对路径产物：传给 openExternal 的是 origin + 路径的绝对 URL（#4750）", async () => {
+    /* 本地工作流产物是 /api/generated/<task>/<file>（相对路径）；openExternal 入参是
+     * z.url()，直接传会 invalid_format。openResultInBrowser 必须先补 origin。 */
+    const relative = "/api/generated/task-abcd/img_0.png";
+    mutateAsyncSpy.mockResolvedValue({ ok: true, detail: "" });
+    const { result } = renderModelTest();
+    await act(async () => {
+      await result.current.openResultInBrowser(relative);
+    });
+    expect(mutateAsyncSpy).toHaveBeenCalledTimes(1);
+    expect(mutateAsyncSpy).toHaveBeenCalledWith({
+      url: new URL(relative, window.location.origin).toString(),
+    });
+  });
+
+  it("打开已是绝对地址的产物：原样交给 openExternal，不改 host（#4750）", async () => {
+    const absolute = "https://cdn.example.com/clip.mp4";
+    mutateAsyncSpy.mockResolvedValue({ ok: true, detail: "" });
+    const { result } = renderModelTest();
+    await act(async () => {
+      await result.current.openResultInBrowser(absolute);
+    });
+    expect(mutateAsyncSpy).toHaveBeenCalledWith({ url: absolute });
+  });
+
   it("生成前的本地提交预览行带尺寸等非空表单值（#4080 评论 8）", () => {
     workflowsData = [WF_IMAGE];
     const { result } = renderModelTest();
