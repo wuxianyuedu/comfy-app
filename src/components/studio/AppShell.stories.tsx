@@ -8,7 +8,7 @@ import { tabKey, type ViewTab } from "~/components/studio/workspace-tabs";
 /**
  * 应用外壳 —— 第三层注入（整屏容器）的主现场。
  * `children` 装的是**真视图** `WorksGallery`（真读 `canvas-store`），项目列表来自真 action
- * （`useSeededProjects`）；看整屏才看得出的三件事：侧栏两段分界、页签条挂内容列顶端、只有一条 `<main>`。
+ * （`useSeededProjects`）；看整屏才看得出的三件事：侧栏几段分界、「临时页签」组与项目打开态、只有一条 `<main>`。
  */
 const meta = {
   title: "Studio/AppShell",
@@ -40,7 +40,7 @@ function ShellHarness({
     extraNames: extraProjects,
   });
   const activeProject = projects[0];
-  /* 常驻侧栏项的页签刻意也放一张（queue）：顶部页签条只渲染项目类页签，
+  /* 常驻侧栏项的页签刻意也放一张（queue）：「临时页签」组只列非常驻项的页签，
      侧栏项的打开态由图标胶片表达（ISSUE #3740） */
   const tabs: Array<ViewTab> = [
     { key: tabKey("works", null), view: "works", projectId: null },
@@ -93,7 +93,7 @@ export const ManyProjects: Story = {
   ),
 };
 
-/** 带视图页签：内容列最顶端那条栏与外框的层级关系（`viewTabs` 由外壳渲染）。 */
+/** 带视图页签：侧栏「临时页签」组列出已打开的页签、项目行带打开态（ISSUE #4770）。 */
 export const WithViewTabs: Story = {
   render: () => <ShellHarness extraProjects={["城市夜景"]} withTabs />,
 };

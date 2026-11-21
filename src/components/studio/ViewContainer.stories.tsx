@@ -10,7 +10,7 @@ import { cn } from "~/lib/utils";
  */
 /**
  * 这两件的入参里有 `children`，直接拿组件当 `Meta` 泛型会逼每个 story 都给一份 `children`（而它正是 story
- * 要自己摆的东西）。故口径与 `WorkshopStageRail` / `ViewTabStrip` 一致：声明一份 story 自己的 Args，`component` 指向把 `children` 收进去的适配件。
+ * 要自己摆的东西）。故口径与 `WorkshopStageRail` / `SidebarTempTabs` 一致：声明一份 story 自己的 Args，`component` 指向把 `children` 收进去的适配件。
  */
 type StoryArgs = {
   width: NonNullable<React.ComponentProps<typeof DocumentFrame>["width"]>;

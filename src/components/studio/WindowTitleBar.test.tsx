@@ -30,7 +30,7 @@ describe("WindowTitleBar", () => {
   it("壳态渲染标题行与三个窗口按钮（可访问名取自窗口按钮标签表）", () => {
     setShellForm(true);
     render(<WindowTitleBar />);
-    /* `data-slot` 与 `TitleBarTabs` 一致 —— e2e（overlay-boundary.spec.ts）
+    /* `data-slot` 与 `TitleBar` 一致 —— e2e（overlay-boundary.spec.ts）
        按它断言「应用顶部这条 chrome 在不在」。 */
     expect(document.querySelector('[data-slot="title-bar"]')).toBeTruthy();
     expect(screen.getByRole("button", { name: "最小化" })).toBeTruthy();

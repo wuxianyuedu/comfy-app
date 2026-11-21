@@ -2,11 +2,11 @@
  * 侧栏「项目」分组在缩略态（图标轨，窗口窄于 `NAV_EXPANDED_MIN_PX`）也要能按名字找到项目
  * （ISSUE #1691）：此前整组挂 `group-data-[collapsible=icon]:hidden` 直接消失。判 DOM 而非源码 ——
  * 每条按钮要有图标、并作为 tooltip 触发器（基元只在 collapsed 时渲染内容，故判接线而非文案）。
- */
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+ */ import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { AppShell } from "./AppShell";
+import { tabKey } from "./workspace-tabs";
 
 /* CommandPalette 新增的「其他」组用 useRouter 导航：测试环境没有 App Router 上下文，按
  * BrowserStatusBar 用例的同一约定在渲染入口 mock 掉（真实链路在 workspace 页里）。 */
@@ -111,6 +111,59 @@ describe("侧栏「项目」分组的缩略态", () => {
       const btn = screen.getByRole("button", { name: label });
       expect(group.contains(btn)).toBe(true);
       expect(btn.querySelector("svg")).not.toBeNull();
+    }
+  });
+});
+
+/**
+ * 项目的「界面打开」态（ISSUE #4770）：项目有开着的项目类页签时，这一行与上方
+ * 导航项同一套表达 —— 图标落进品牌色浅底胶片（打开态），悬停浮现关闭按钮；
+ * 关闭关掉这个项目开着的**全部**页签（侧栏行表达的是项目界面这个整体）。
+ */
+describe("侧栏「项目」分组的打开态（ISSUE #4770）", () => {
+  const tabs = [
+    { key: tabKey("project", "proj_a"), projectId: "proj_a", view: "project" as const },
+    { key: tabKey("workshop", "proj_a"), projectId: "proj_a", view: "workshop" as const },
+  ];
+
+  function renderWithTabs() {
+    const onCloseViewTab = vi.fn();
+    render(
+      <AppShell
+        active="project"
+        activeProjectId="proj_a"
+        onCloseViewTab={onCloseViewTab}
+        onNewProject={vi.fn()}
+        onOpenProject={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onSelect={vi.fn()}
+        onShowAllProjects={vi.fn()}
+        projects={PROJECTS}
+        viewTabs={tabs}
+      >
+        <div />
+      </AppShell>,
+    );
+    return onCloseViewTab;
+  }
+
+  it("开着页签的项目：图标住进打开态胶片（data-open-state），行是当前项目时高亮", () => {
+    renderWithTabs();
+    const openBtn = screen.getByRole("button", { name: "城市夜景" });
+    expect(openBtn.querySelector('[data-open-state="true"]')).not.toBeNull();
+    expect(openBtn.dataset.active).toBeDefined();
+    /* 没开页签的项目：没有胶片，也没有关闭按钮。 */
+    const idleBtn = screen.getByRole("button", { name: "角色设定集" });
+    expect(idleBtn.querySelector('[data-open-state="true"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: "关闭 角色设定集 页签" })).toBeNull();
+  });
+
+  it("关闭按钮关掉这个项目开着的全部页签（逐个 key 交给 onCloseViewTab）", () => {
+    const onCloseViewTab = renderWithTabs();
+    fireEvent.pointerDown(screen.getByRole("button", { name: "关闭 城市夜景 页签" }));
+    expect(onCloseViewTab).toHaveBeenCalledTimes(tabs.length);
+    for (const tab of tabs) {
+      expect(onCloseViewTab).toHaveBeenCalledWith(tab.key);
     }
   });
 });

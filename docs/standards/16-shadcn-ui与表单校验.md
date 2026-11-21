@@ -775,7 +775,7 @@ args）。给当时那 86 份逐条补 `args` 是把 337 张画布的**输入形
 于是**适配件**（§16.2.3.6 的正当写法）必然触发误报 —— 全仓盘出 6 份缺口，逐份查完
 **没有一份是真缺口**，全是这两类：
 
-- **在适配件里已经显式传了**：`<ViewTabStrip activeKey={…} onSelect={…} />`、
+- **在适配件里已经显式传了**：`<SidebarTempTabs viewTabs={…} onSelectViewTab={…} />`、
   `useFilePicker({ onPick: … })` —— 组件在画布上读得到值，而判据只统计 `args` 对象，
   连报错文案自己承诺的「在 `render` 里显式传也算」都没兑现。现在 `args` 之外，
   故事文件里**任何赋值点**（JSX 属性 / 对象字面量属性 / 解构绑定）都算给了。
@@ -1423,7 +1423,7 @@ story 不经 store 读）。
 **收尾批次（第 5 批，P1/P3 双双清零）的口径**：
 
 9. **`variant` 只在「语义能对上」时接管配色，其余交给 `className`**。
-   不是每个手写按钮都有对应的语义变体 —— `TitleBarTabs` 的窗口按钮是
+   不是每个手写按钮都有对应的语义变体 —— `TitleBar` 的窗口按钮是
    「无底色、hover 变色」、`IOEditContext` 的节点 id 徽标是「mono 小字 +
    点线框」、`WorkflowNodeJsonPopover` 的三个控件是行内 `style` 驱动的。
    这些一律用 `variant="ghost"` / `"outline"` + 原 `className`，**不要为了
@@ -1712,7 +1712,7 @@ dark:text-emerald-300` 这类写死值）。
 
 | 基元            | 库内实际的对应形态                                                                                                                                                                                                                                                                                                                                                           | 判断依据                                                                                                                                                                                                                                                                  |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tabs`          | `workflow-library` 详情面板三页签（自绘 `TabButton`：手动 `h-auto rounded-none` + 靠 `active` 条件渲染一条 `absolute inset-x-3 bottom-0 h-0.5` 渐变指示条）；应用级页签 `TitleBarTabs` / `ShellTabs` 已有完整 `role="tablist"` / `role="tab"` / `aria-selected` + Enter/Space 键盘处理                                                                                       | 形态是**标准页签**：`ui/tabs` 的 `line` 变体本身就带 `after:` 指示条与方向键导航，`tabIndex` / `aria-selected` / 键盘三件套全在基元里                                                                                                                                     |
+| `tabs`          | `workflow-library` 详情面板三页签（自绘 `TabButton`：手动 `h-auto rounded-none` + 靠 `active` 条件渲染一条 `absolute inset-x-3 bottom-0 h-0.5` 渐变指示条）；应用级页签 `TitleBar` / `ShellTabs` 已有完整 `role="tablist"` / `role="tab"` / `aria-selected` + Enter/Space 键盘处理                                                                                       | 形态是**标准页签**：`ui/tabs` 的 `line` 变体本身就带 `after:` 指示条与方向键导航，`tabIndex` / `aria-selected` / 键盘三件套全在基元里                                                                                                                                     |
 | `alert`         | 至少 6 处「带语义色边框 + 图标 + 正文」的内联提示块：登录页 `notice`（`border-violet-500/30 bg-violet-500/10`）、训练页「未配置训练后端」横幅（`border-warning/30 bg-warning/10`）、画布节点 `ErrorPanel` 的参数提示（`border-warning/25 bg-warning/8`）、`CharacterPortraitStudio` 的 `role="alert"` 错误行（写死 `bg-red-100 text-red-800 dark:text-red-300`）、设置页若干 | 这正是 `ui/alert` 的 `variant=default\|destructive` 的形态；其中 `CharacterPortraitStudio` 那处**已经写了 `role="alert"`**，只差把外壳换成基元                                                                                                                            |
 | `dropdown-menu` | 两处自绘菜单：画布右键菜单 `CanvasContextMenu`（`fixed` + `style={{left:x,top:y}}` 手定位 + 自绘遮罩关闭 + 手写分组标题/分隔线）、项目切换器 `ProjectSwitcher`（`absolute top-10 left-0` 手定位 + 同样的遮罩与分组/分隔线）                                                                                                                                                  | 形态是**菜单**（一组命令项 + 分组标签 + 分隔线），不是选择框 —— `ui/select`（值选择）与 `ui/select-menu`（列表选择）都覆盖不了「点一项执行一个动作」。`ui/dropdown-menu`（base-ui `Menu`）自带 Portal / Positioner / Esc / 外点关闭 / 方向键 / `GroupLabel` / `Separator` |
 
@@ -1720,7 +1720,7 @@ dark:text-emerald-300` 这类写死值）。
 接上与 §16.2.4.2 第 9 条一致 —— **正确做法是同时删掉调用处那份手写语义**
 （见 §16.2.4 末的「P2 的做法」），只换容器会留下两套 Esc / 两套外点关闭。
 
-> ⚠️ `tabs` 的两处落点里，**应用级页签（`TitleBarTabs` / `ShellTabs`）不建议接**：
+> ⚠️ `tabs` 的两处落点里，**应用级页签（`TitleBar` / `ShellTabs`）不建议接**：
 > 它们是「窗口标题行」的一部分，页签条里混着拖拽区与窗口按钮，
 > `TabsList` 的 `inline-flex w-fit` + 各项 `flex-1` 布局契约与「页签按内容宽度
 > 排布、右侧留出拖拽空白区」直接冲突。这属于**外观会变**，按第 9 条不动。
@@ -3173,7 +3173,7 @@ rejection 分支，读失败被整个吞掉 —— 用户看到的是「什么�
 ##### 不在本出口范围内的那一类
 
 **`role="button"` / `role="tab"` 元素在 `onKeyDown` 里复刻浏览器对原生按钮的
-默认行为**（`ShellTabs` / `TitleBarTabs` / `RgthreeBodies` / `MultiModeSelect`
+默认行为**（`ShellTabs` / `TitleBar` / `RgthreeBodies` / `MultiModeSelect`
 选项行 / `NodePreviewCard` 头部，共 6 处）。那**不是**「输入框回车提交」，
 要的是**用真正的按钮**：《Button》/ 原生 `<button>` 自带 Enter/Space。
 本批顺手把其中两处改成基元（`RgthreeBodies` 的旁路开关 → `<Button variant="ghost">`，
@@ -4673,7 +4673,7 @@ base64PayloadOf(v); // 只要载荷，或 null
 
 | 决定的                      | 收口前的三处                                                                          |
 | --------------------------- | ------------------------------------------------------------------------------------- |
-| **键名叫什么**              | `ShellTabs` / `TitleBarTabs` 判 `"Enter"` 或 `" "`；`ScriptMarkdownEditor` 判 `"Tab"` |
+| **键名叫什么**              | `ShellTabs` / `TitleBar` 判 `"Enter"` 或 `" "`；`ScriptMarkdownEditor` 判 `"Tab"` |
 | **要不要 `preventDefault`** | 三处都写了，但混在**同一个 `if`** 里 —— 看不出「吞掉默认行为」是谁决定的              |
 | **`event.repeat` 收不收**   | 三处都没收                                                                            |
 
