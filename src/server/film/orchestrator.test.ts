@@ -4,6 +4,7 @@
 // 折算写错 = 片子与设置不符而无报错。IO 全经注入点桩掉（仓储/队列/LLM/ffmpeg），不必起真 ComfyUI、不必真调 ffmpeg。
 
 import { readFileSync } from "node:fs";
+import type * as NodeFs from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -42,7 +43,12 @@ const shotRepo = vi.hoisted(() => ({
   createMany: vi.fn<(filmId: string, shots: Array<CreatedShot>) => Promise<void>>(() =>
     Promise.resolve(undefined),
   ),
-  listByFilm: vi.fn<() => Promise<Array<unknown>>>(() => Promise.resolve([])),
+  listByFilm: vi.fn<
+    (
+      _filmId: string,
+      _opts?: { onlyWithVideo?: boolean; status?: string },
+    ) => Promise<Array<unknown>>
+  >(() => Promise.resolve([])),
   listActiveWithTask: vi.fn<() => Promise<Array<ShotRow>>>(() => Promise.resolve([])),
   markAllActiveFailed: vi.fn((_filmId: string) => undefined),
   markFailedShotsIdle: vi.fn((_filmId: string) => undefined),
@@ -165,6 +171,27 @@ vi.mock("child_process", async (importOriginal) => ({
     }),
   })),
 }));
+
+/* composeFilm 的落盘面（临时目录 / 字幕与清单文件 / 成片拷贝 / 收尾清理）全部桩掉：
+ * 用例不往仓库产物根写任何字节（写日志类用例自带临时目录的同一纪律，§11）。
+ * `readFile` 保持原实现 —— 尺寸预置表（size-preset-fs.server）还要真读盘。 */
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>();
+  return {
+    ...actual,
+    promises: {
+      ...actual.promises,
+      mkdir: vi.fn(() => Promise.resolve()),
+      writeFile: vi.fn(() => Promise.resolve()),
+      copyFile: vi.fn(() => Promise.resolve()),
+      /* 同步抛：真被碰到就当场红，而不是静默成功。 */
+      stat: vi.fn(() => {
+        throw new Error("stat 桩：本文件的用例不该触到真实文件");
+      }),
+      rm: vi.fn(() => Promise.resolve()),
+    },
+  };
+});
 
 import {
   cancelFilm,
@@ -436,6 +463,86 @@ describe("composeFilm — 合成前置条件不满足时必须落 FAILED 且文�
     await composeFilm("f1");
 
     expect(filmRepo.markFailed).toHaveBeenCalledWith("f1", "没有可用的镜头视频");
+  });
+});
+
+describe("composeFilm — 部分镜头失败仍合成，但必须知情交付（#4609）", () => {
+  /** composeFilm 全流程要读的影片行（画幅折算 / 字幕 / BGM / 回写开关）。 */
+  function filmRow() {
+    return {
+      id: "f1",
+      status: "GENERATING",
+      size: JSON.stringify({ ratio: "16:9 横屏", clarity: "1k", multiple: 64 }),
+      fps: 16,
+      framesPerShot: 49,
+      subtitleOn: false,
+      bgmName: null,
+      projectId: null,
+      userId: "u1",
+    };
+  }
+  const okShot = {
+    id: "s0",
+    order: 0,
+    status: "SUCCEEDED",
+    taskId: "t-1",
+    videoPath: "/generated/films/_fixture/clip0.mp4",
+    progress: 100,
+    duration: 3,
+    heading: "开场",
+    prompt: "p",
+  };
+
+  it("部分失败：合成前把失败镜头序号与原因写进影片日志 warn", async () => {
+    filmRepo.findById.mockResolvedValue(filmRow());
+    shotRepo.listByFilm.mockImplementation((_filmId, opts) => {
+      if (opts?.status === "FAILED") {
+        return Promise.resolve([
+          { id: "s1", order: 1, status: "FAILED", taskId: "t-2", videoPath: null, progress: 0 },
+          { id: "s3", order: 3, status: "FAILED", taskId: null, videoPath: null, progress: 0 },
+        ]);
+      }
+      return Promise.resolve([okShot]);
+    });
+    taskRepo.findExecutionProgressMany.mockResolvedValue([
+      {
+        id: "t-2",
+        status: "FAILED",
+        progress: 0,
+        resultImages: [],
+        error: "显存不足，无法完成生成",
+      },
+    ]);
+
+    await composeFilm("f1");
+
+    const warnMsgs = filmRepo.appendLog.mock.calls
+      .filter(([, entry]) => entry.level === "warn")
+      .map(([, entry]) => entry.msg);
+    expect(warnMsgs.join("｜"), "失败镜头的 warn 日志必须存在").toContain("部分镜头生成失败");
+    expect(warnMsgs.join("｜")).toContain("第 2 镜");
+    expect(warnMsgs.join("｜")).toContain("显存不足");
+    expect(warnMsgs.join("｜")).toContain("第 4 镜");
+    expect(warnMsgs.join("｜")).toContain("原因未记录");
+    /* 收口仍是 DONE（部分成功照常出片），不因部分失败改判 FAILED。 */
+    expect(filmRepo.markDone).toHaveBeenCalledWith("f1", expect.any(String));
+    /* 失败原因按 taskId 一轮批量取，无 taskId 的镜头不进查询。 */
+    expect(taskRepo.findExecutionProgressMany).toHaveBeenCalledWith(["t-2"]);
+  });
+
+  it("全部成功：不出现失败 warn，仍是「所有镜头完成，开始合成影片…」", async () => {
+    filmRepo.findById.mockResolvedValue(filmRow());
+    shotRepo.listByFilm.mockImplementation((_filmId, opts) =>
+      opts?.status === "FAILED" ? Promise.resolve([]) : Promise.resolve([okShot]),
+    );
+
+    await composeFilm("f1");
+
+    const levels = filmRepo.appendLog.mock.calls.map(([, entry]) => entry.level);
+    expect(levels).not.toContain("warn");
+    const msgs = filmRepo.appendLog.mock.calls.map(([, entry]) => entry.msg);
+    expect(msgs).toContain("所有镜头完成，开始合成影片…");
+    expect(filmRepo.markDone).toHaveBeenCalledWith("f1", expect.any(String));
   });
 });
 
