@@ -18,7 +18,7 @@ import { FullScreenDialog } from "~/components/ui/fullscreen-dialog";
 import { cn } from "~/lib/utils";
 
 import { AnsiLogText } from "./AnsiLogText";
-import { stripLineTimestamps } from "./runtime-log-display";
+import { stripLineTimestamps, stripStreamPrefixes } from "./runtime-log-display";
 import type { RuntimeLogController } from "./use-runtime-log-source";
 
 export type RuntimeLogBoxProps = {
@@ -275,11 +275,13 @@ function LogBody({
     following: follow,
     onFollowingChange: onFollowChange,
   });
-  /* 隐藏时间戳只改渲染片段；`watch` 仍用原文，故跟随判据不受影响。 */
-  const segments = useMemo(
-    () => (showTime ? log.segments : stripLineTimestamps(log.segments)),
-    [log.segments, showTime],
-  );
+  /* 展示变换只动渲染片段：时间戳按开关剥离；流前缀（[out]/[err]）恒剥——
+      Python 的 INFO 也走 stderr，满屏 [err] 是噪声（ISSUE #4699）。
+      `watch` 仍用原文，故跟随判据不受影响。 */
+  const segments = useMemo(() => {
+    const withoutTime = showTime ? log.segments : stripLineTimestamps(log.segments);
+    return stripStreamPrefixes(withoutTime);
+  }, [log.segments, showTime]);
 
   return (
     <div
@@ -314,14 +316,9 @@ function LogHint({ log }: { log: RuntimeLogController }) {
   }
   return (
     <>
-      {/* 流前缀释义（ISSUE #4631）：`[err]` 是 stderr 流、不是错误级别——
-          ComfyUI 是 Python，常规 INFO 也走 stderr，满屏 `[err] [INFO]` 是正常输出。 */}
-      <p
-        className={`text-ink-fainter text-2xs px-3 leading-relaxed ${parts.length === 0 ? "pb-2" : ""}`}
-      >
-        行首 <code className="font-mono">[out]</code> / <code className="font-mono">[err]</code>{" "}
-        表示标准输出 / 标准错误流，不代表是否出错（INFO 级日志也可能走 stderr）。
-      </p>
+      {/* 流前缀（[out]/[err]）已在展示层剥离（ISSUE #4699）：Python 的 INFO 也走
+          stderr，满屏 [err] 是噪声、且常被误读成「在报错」。落盘原文仍带标记，
+          导出 / 排查不受影响；崩溃行的 `[exit]` 保留（见 lifecycle-exit）。 */}
       {parts.length > 0 ? (
         <p className="text-ink-fainter text-2xs px-3 pb-2 leading-relaxed">{parts.join("")}</p>
       ) : null}

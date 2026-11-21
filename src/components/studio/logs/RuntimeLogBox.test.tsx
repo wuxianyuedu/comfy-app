@@ -187,9 +187,19 @@ describe("RuntimeLogBox", () => {
     expect(screen.getByText(TITLE)).toBeTruthy();
   });
 
-  it("行首 [out]/[err] 有常驻释义：那是流标记，不代表是否出错", () => {
-    renderBox(controller());
-    expect(screen.getByText(/表示标准输出 \/ 标准错误流，不代表是否出错/)).toBeTruthy();
+  it("行首流前缀不再显示：正文直接可读，也不再有无穷尽的 [out]/[err] 释义（#4699）", () => {
+    const log = controller({
+      text: "[err] [INFO] boot\n[out] ready\n",
+      segments: [{ text: "[err] [INFO] boot\n[out] ready\n" }],
+    });
+    renderBox(log);
+    /* 流前缀剥掉：INFO 走 stderr 是常态，[err] 满屏只会让人以为在报错。 */
+    expect(screen.getByText(/\[INFO\] boot/)).toBeTruthy();
+    expect(screen.getByText(/ready/)).toBeTruthy();
+    expect(screen.queryByText(/\[err\]/)).toBeNull();
+    expect(screen.queryByText(/\[out\]/)).toBeNull();
+    /* 旧的常驻释义随前缀一起退场。 */
+    expect(screen.queryByText(/表示标准输出 \/ 标准错误流/)).toBeNull();
   });
 
   it("时间戳默认显示；点「隐藏时间戳」后逐行剥掉、再点恢复（小窗口与全屏共用同一状态）", () => {
@@ -201,8 +211,8 @@ describe("RuntimeLogBox", () => {
     });
     renderBox(log);
 
-    /* 默认显示原文时间戳。 */
-    expect(screen.getByText(/2026-11-17 16:28:42 \[err\]/)).toBeTruthy();
+    /* 默认显示原文时间戳（流前缀已剥，见上一条）。 */
+    expect(screen.getByText(/2026-11-17 16:28:42 \[INFO\] first/)).toBeTruthy();
 
     /* 开关态由可见文案与 aria-label 给出（不在视图手写 aria-pressed，P77）。 */
     const hide = screen.getByLabelText("隐藏时间戳");
@@ -210,16 +220,16 @@ describe("RuntimeLogBox", () => {
     fireEvent.click(hide);
 
     expect(screen.queryByText(/2026-11-17 16:28:42/)).toBeNull();
-    expect(screen.getByText(/\[err\] \[INFO\] first/)).toBeTruthy();
+    expect(screen.getByText(/\[INFO\] first/)).toBeTruthy();
     expect(screen.getByText(TITLE)).toBeTruthy();
 
     /* 开关状态在小窗口与全屏之间共享：进全屏仍是隐藏态。 */
     fireEvent.click(screen.getByLabelText("全屏查看"));
     expect(screen.getByLabelText("显示时间戳")).toBeTruthy();
     expect(screen.queryByText(/2026-11-17 16:28:42/)).toBeNull();
-    expect(screen.getByText(/\[err\] \[INFO\] first/)).toBeTruthy();
+    expect(screen.getByText(/\[INFO\] first/)).toBeTruthy();
 
     fireEvent.click(screen.getByLabelText("显示时间戳"));
-    expect(screen.getByText(/2026-11-17 16:28:42 \[err\]/)).toBeTruthy();
+    expect(screen.getByText(/2026-11-17 16:28:42 \[INFO\] first/)).toBeTruthy();
   });
 });
