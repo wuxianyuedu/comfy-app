@@ -83,7 +83,11 @@ export function createStreamChildGuard(opts: {
  *  **不用 `spawnSync`**：它是同步的，会把整个 Node 事件循环连同所有并发请求
  *  一起堵住 —— 而这一步正是本路由最慢的一段。启动失败 / 非零退出 / 超时一律
  *  resolve 成 `null`，由调用方决定换解释器还是放弃。 */
-export function spawnCapture(command: string, args: Array<string>): Promise<string | null> {
+export function spawnCapture(
+  command: string,
+  args: Array<string>,
+  opts: { timeoutMs?: number } = {},
+): Promise<string | null> {
   let killChild: (() => void) | undefined;
 
   /* 起进程并收集 stdout：启动失败 / 非零退出 / 空输出都 resolve 成 null
@@ -100,7 +104,16 @@ export function spawnCapture(command: string, args: Array<string>): Promise<stri
 
     /* 超时由 `withTimeoutResult` 判：它赢下赛跑后经 `onTimeout` 把进程杀掉 ——
      * 否则放弃等待之后进程还在后台占着 CPU 扫目录。 */
-    killChild = () => child.kill();
+    killChild = () => {
+      /* 硬规则 3：回收走统一出口杀整棵树，不单杀（与同文件流式路径的
+       * createStreamChildGuard 同口径，#4727）——解析器若再起孙进程也一并回收。 */
+      const pid = child.pid;
+      if (typeof pid === "number" && pid > 0) {
+        void killProcessTree({ pid, force: true }).catch(() => undefined);
+      } else {
+        child.kill();
+      }
+    };
 
     let stdout = "";
     child.stdout?.setEncoding("utf8");
@@ -118,7 +131,7 @@ export function spawnCapture(command: string, args: Array<string>): Promise<stri
     });
   });
 
-  return withTimeoutResult(collect, DISCOVER_TIMEOUT_MS, null, {
+  return withTimeoutResult(collect, opts.timeoutMs ?? DISCOVER_TIMEOUT_MS, null, {
     onTimeout: () => killChild?.(),
   });
 }

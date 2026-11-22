@@ -458,3 +458,43 @@ describe("跨包：列表含历史包里的份，正文按包取", () => {
     expect(data.sessions.map((s) => s.id)).toEqual(["comfyui-runtime-20261005-093612.log"]);
   });
 });
+
+/* ── #4728：finally 里 close 的清理错误不得覆盖 read 的原始异常 ──────────────
+ * read 与 close 同时失败时，路由 500 的原因必须是 read 的那个 —— 清理侧错误
+ * 吞掉，否则排障时看到的根因是假的。只拦目标文件的那次 open：同请求里
+ * `scanRunPacks` 读 run.json 还要走真 open。 */
+describe("GET /api/logs/sessions · close 清理错误不覆盖原始异常（#4728）", () => {
+  it("read 抛错时 finally 的 close 再抛错也不顶掉原始原因", async () => {
+    const fileName = "comfyui-runtime-20261005-093612.log";
+    makeFile(fileName, "本次\n");
+    const targetPath = path.join(servicesDir, fileName);
+    const originalError = new Error("read 失败（模拟权限被拒）");
+    const closeError = new Error("close 失败（模拟句柄损坏）");
+    const fakeHandle = {
+      read: vi.fn(() => Promise.reject(originalError)),
+      close: vi.fn(() => Promise.reject(closeError)),
+    };
+    const realOpen = fs.promises.open.bind(fs.promises);
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 测试桩只实现 read/close 两个成员
+    const stubOpen = fakeHandle as unknown as Awaited<ReturnType<typeof fs.promises.open>>;
+    const openSpy = vi.spyOn(fs.promises, "open").mockImplementation((file, flags, mode) => {
+      if (String(file) === targetPath) {
+        return Promise.resolve(stubOpen);
+      }
+      return realOpen(file, flags, mode);
+    });
+    try {
+      const res = await GET(
+        new Request("http://localhost/api/logs/sessions?source=comfyui-runtime"),
+      );
+      expect(res.status).toBe(500);
+      const body: unknown = await res.json();
+      expect(isPlainRecord(body) && typeof body.error === "string").toBe(true);
+      const message = isPlainRecord(body) ? String(body.error) : "";
+      expect(message).toContain("read 失败");
+      expect(message).not.toContain("close 失败");
+    } finally {
+      openSpy.mockRestore();
+    }
+  });
+});

@@ -4,7 +4,7 @@
 // 纯内存随之归零、用户只能得出「记了但没生效」的结论。这份用例钉住「刷新之后还查得到」，
 // 以及坏数据不会把面板整个打不开。
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isPlainRecord } from "~/lib/is-record";
 import { MESSAGE_CENTER_STORAGE_KEY, useMessageCenterStore } from "./message-center-store";
@@ -208,5 +208,39 @@ describe("消息中心持久化：启动戳（runId）", () => {
     useMessageCenterStore.getState().push({ kind: "info", title: "A", body: "a" });
     const raw = window.localStorage.getItem(MESSAGE_CENTER_STORAGE_KEY) ?? "";
     expect(raw).not.toContain("currentRunId");
+  });
+});
+
+/* ── #4729：模块级监听器可重入（dev HMR 重求值不叠加）─────────────────────
+ * Turbopack dev 会重求值本模块；storage 监听与 zustand 订阅若不先摘旧再挂新，
+ * 每次热重载都叠加一层（合并逻辑按 id 去重，后果只是重复执行，但属监听器
+ * 无界增长）。摘除凭据挂在 globalThis（HMR 单例），这里直接对着它断言：
+ * 重求值之后，旧监听器被摘掉、挂上的是新的一组。 */
+describe("消息中心模块级监听器可重入（#4729）", () => {
+  it("模块重求值（HMR）时先摘旧 storage 监听器再挂新的，不叠加", async () => {
+    /* 注册表类型来自 message-center-store 的 `declare global` 增补，直接读即可。 */
+    const registry = globalThis.__comfyappMessageCenterListeners__;
+    expect(registry?.onStorage).toBeDefined();
+    expect(registry?.unsubscribePersist).toBeDefined();
+    const firstHandler = registry!.onStorage!;
+    const firstUnsubscribe = registry!.unsubscribePersist!;
+
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    const addSpy = vi.spyOn(window, "addEventListener");
+    try {
+      vi.resetModules();
+      await import("./message-center-store");
+      expect(removeSpy).toHaveBeenCalledWith("storage", firstHandler);
+      expect(registry!.onStorage).toBeDefined();
+      expect(registry!.onStorage).not.toBe(firstHandler);
+      expect(registry!.unsubscribePersist).not.toBe(firstUnsubscribe);
+      // 最近一次 add 挂上的就是注册表里那份新监听器
+      const lastAdd = addSpy.mock.calls.at(-1);
+      expect(lastAdd?.[1]).toBe(registry!.onStorage);
+    } finally {
+      removeSpy.mockRestore();
+      addSpy.mockRestore();
+      vi.resetModules();
+    }
   });
 });

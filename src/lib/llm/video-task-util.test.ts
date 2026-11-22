@@ -158,6 +158,70 @@ describe("saveMediaToLocalTemp · 失败一律静默", () => {
   });
 });
 
+describe("saveMediaToLocalTemp · 中止路径取消上游流（#4726）", () => {
+  it("超限中止时取消上游 reader（不悬挂 socket），且不留半成品", async () => {
+    let cancelled = false;
+    /* 单块就超限：首块读进来即越过上限，既不写盘也不再读下一块。
+     * 上限是 200MB，所以这一块就是 200MB+1 字节 —— 用大块而不是多块，
+     * 免得往临时目录真写 200MB。 */
+    const oversized = new Uint8Array(200 * 1024 * 1024 + 1);
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(oversized);
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Response(stream, { status: 200 })),
+    );
+    const { saveMediaToLocalTemp } = await import("./video-task-util");
+    const dest = await saveMediaToLocalTemp("video", "m", "https://cdn.example/big.mp4");
+    expect(dest).toBeNull();
+    expect(cancelled).toBe(true);
+    expect(localFiles()).toHaveLength(0);
+  });
+
+  it("上游流中途出错同样走取消收口（finally 覆盖一切中止路径）", async () => {
+    /* 真实 Response + 出错流：cancel 的尝试发生在消费侧 finally（对已出错的流
+     * 底层 cancel 回调按规范不会再触发），这里钉「不悬挂、不留半成品、不抛」
+     * —— cancel 调用本身由上一条超限用例的真流语义钉住。 */
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3]));
+        controller.error(new Error("上游中断"));
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Response(stream, { status: 200 })),
+    );
+    const { saveMediaToLocalTemp } = await import("./video-task-util");
+    const dest = await saveMediaToLocalTemp("video", "m", "https://cdn.example/broken.mp4");
+    expect(dest).toBeNull();
+    expect(localFiles()).toHaveLength(0);
+  });
+
+  it("正常读完也走同一收口（cancel 无操作、releaseLock 不抛）", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3]));
+        controller.close();
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Response(stream, { status: 200 })),
+    );
+    const { saveMediaToLocalTemp } = await import("./video-task-util");
+    const dest = await saveMediaToLocalTemp("video", "m", "https://cdn.example/ok.mp4");
+    expect(dest).not.toBeNull();
+    expect(readFileSync(dest!).length).toBe(3);
+  });
+});
+
 describe("pollRemoteVideoTask", () => {
   it("第一个候选地址就绪即返回该 URL（不再等满窗口）", async () => {
     const fetchMock = vi.fn<typeof fetch>(() =>
