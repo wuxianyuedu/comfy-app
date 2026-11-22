@@ -3,13 +3,23 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  appendSharedDirFlags,
   parseInstanceId,
   findInstallationById,
   launchArgsToHeadless,
   parseDesktopLaunchArgs,
+  parseSharedDirsFromSettings,
   splitArgTokens,
   resolveEffectiveLaunch,
+  type DesktopSharedDirFlags,
 } from "./desktop-instance";
+
+/** 测试用的「什么都没登记」共享目录位。 */
+const NO_SHARED: DesktopSharedDirFlags = {
+  extraModelPathsConfig: null,
+  inputDir: null,
+  outputDir: null,
+};
 
 describe("parseInstanceId", () => {
   it("读取单行实例 ID，去空白", () => {
@@ -117,6 +127,65 @@ describe("splitArgTokens", () => {
   });
 });
 
+describe("parseSharedDirsFromSettings", () => {
+  it("解出 inputDir / outputDir", () => {
+    const inputDir = String.raw`D:\ComfyUI-Shared\input`;
+    const outputDir = String.raw`D:\Shared\out`;
+    expect(parseSharedDirsFromSettings(JSON.stringify({ inputDir, outputDir }))).toEqual({
+      inputDir,
+      outputDir,
+    });
+  });
+  it("键缺失 / 空串 / 非字符串值都按没登记（null）", () => {
+    expect(parseSharedDirsFromSettings("{}")).toEqual({ inputDir: null, outputDir: null });
+    expect(parseSharedDirsFromSettings(JSON.stringify({ inputDir: "  ", outputDir: 42 }))).toEqual({
+      inputDir: null,
+      outputDir: null,
+    });
+  });
+  it("JSON 坏 / 顶层不是对象 → null", () => {
+    expect(parseSharedDirsFromSettings("not json")).toEqual({ inputDir: null, outputDir: null });
+    expect(parseSharedDirsFromSettings("[1,2]")).toEqual({ inputDir: null, outputDir: null });
+  });
+});
+
+describe("appendSharedDirFlags", () => {
+  const SHARED: DesktopSharedDirFlags = {
+    extraModelPathsConfig: "C:/appdata/inst-1.yaml",
+    inputDir: "D:/Shared/input",
+    outputDir: "D:/Shared/output",
+  };
+  it("空 argv 三个都追加，顺序固定", () => {
+    expect(appendSharedDirFlags([], SHARED)).toEqual([
+      "--extra-model-paths-config",
+      "C:/appdata/inst-1.yaml",
+      "--input-directory",
+      "D:/Shared/input",
+      "--output-directory",
+      "D:/Shared/output",
+    ]);
+  });
+  it("已带的 flag 不重复（--x 值 与 --x=值 两种写法都算已带）", () => {
+    expect(
+      appendSharedDirFlags(
+        ["--input-directory", "D:/mine", "--extra-model-paths-config=D:/my.yaml"],
+        SHARED,
+      ),
+    ).toEqual([
+      "--input-directory",
+      "D:/mine",
+      "--extra-model-paths-config=D:/my.yaml",
+      "--output-directory",
+      "D:/Shared/output",
+    ]);
+  });
+  it("没登记的位（null）不产生参数", () => {
+    expect(
+      appendSharedDirFlags(["--enable-manager"], { ...SHARED, inputDir: null, outputDir: null }),
+    ).toEqual(["--enable-manager", "--extra-model-paths-config", "C:/appdata/inst-1.yaml"]);
+  });
+});
+
 describe("resolveEffectiveLaunch", () => {
   it("便携版沿用设置端口与 extraArgs", async () => {
     const r = await resolveEffectiveLaunch({
@@ -145,6 +214,7 @@ describe("resolveEffectiveLaunch", () => {
           args: ["--enable-manager"],
           envVars: { PYTHONUTF8: "1" },
         }),
+      resolveShared: () => Promise.resolve(NO_SHARED),
     });
     expect(r.port).toBe(8311);
     expect(r.extraArgs).toEqual(["--enable-manager"]);
@@ -161,9 +231,111 @@ describe("resolveEffectiveLaunch", () => {
         instanceIdFile: "C:/desktop/.comfyui-desktop-2",
       }),
       resolveDesktop: () => Promise.resolve(null),
+      resolveShared: () => Promise.resolve(NO_SHARED),
     });
     expect(r.port).toBe(0); // 0 → 调用方按默认 8188
     expect(r.extraArgs).toEqual([]);
+  });
+
+  it("桌面实例追加共享目录参数（模型声明 + 输入 / 输出）", async () => {
+    const r = await resolveEffectiveLaunch({
+      comfyuiPath: "C:/desktop",
+      comfyuiPort: 0,
+      comfyuiExtraArgs: "",
+      classify: () => ({
+        kind: "desktop",
+        instanceIdFile: "C:/desktop/.comfyui-desktop-2",
+      }),
+      resolveDesktop: () =>
+        Promise.resolve({ port: null, args: ["--enable-manager"], envVars: {} }),
+      resolveShared: (file) => {
+        expect(file).toBe("C:/desktop/.comfyui-desktop-2");
+        return Promise.resolve({
+          extraModelPathsConfig: "C:/appdata/instance-model-paths/inst-1.yaml",
+          inputDir: "D:/ComfyUI-Shared/input",
+          outputDir: "D:/ComfyUI-Shared/output",
+        });
+      },
+    });
+    expect(r.extraArgs).toEqual([
+      "--enable-manager",
+      "--extra-model-paths-config",
+      "C:/appdata/instance-model-paths/inst-1.yaml",
+      "--input-directory",
+      "D:/ComfyUI-Shared/input",
+      "--output-directory",
+      "D:/ComfyUI-Shared/output",
+    ]);
+  });
+
+  it("元数据读不到时共享目录参数照常追加（两者互不依赖）", async () => {
+    const r = await resolveEffectiveLaunch({
+      comfyuiPath: "C:/desktop",
+      comfyuiPort: 0,
+      comfyuiExtraArgs: "",
+      classify: () => ({
+        kind: "desktop",
+        instanceIdFile: "C:/desktop/.comfyui-desktop-2",
+      }),
+      resolveDesktop: () => Promise.resolve(null),
+      resolveShared: () =>
+        Promise.resolve({
+          extraModelPathsConfig: "C:/appdata/inst-1.yaml",
+          inputDir: null,
+          outputDir: "D:/ComfyUI-Shared/output",
+        }),
+    });
+    expect(r.port).toBe(0);
+    expect(r.extraArgs).toEqual([
+      "--extra-model-paths-config",
+      "C:/appdata/inst-1.yaml",
+      "--output-directory",
+      "D:/ComfyUI-Shared/output",
+    ]);
+  });
+
+  it("launchArgs 已带同名 flag 时不重复追加（手填优先）", async () => {
+    const r = await resolveEffectiveLaunch({
+      comfyuiPath: "C:/desktop",
+      comfyuiPort: 0,
+      comfyuiExtraArgs: "",
+      classify: () => ({
+        kind: "desktop",
+        instanceIdFile: "C:/desktop/.comfyui-desktop-2",
+      }),
+      resolveDesktop: () =>
+        Promise.resolve({
+          port: null,
+          args: ["--input-directory", "D:/my-own/input", "--extra-model-paths-config=D:/my.yaml"],
+          envVars: {},
+        }),
+      resolveShared: () =>
+        Promise.resolve({
+          extraModelPathsConfig: "C:/appdata/inst-1.yaml",
+          inputDir: "D:/ComfyUI-Shared/input",
+          outputDir: "D:/ComfyUI-Shared/output",
+        }),
+    });
+    expect(r.extraArgs).toEqual([
+      "--input-directory",
+      "D:/my-own/input",
+      "--extra-model-paths-config=D:/my.yaml",
+      "--output-directory",
+      "D:/ComfyUI-Shared/output",
+    ]);
+  });
+
+  it("便携版不追加共享目录参数（那是 Comfy Desktop 登记的概念）", async () => {
+    const r = await resolveEffectiveLaunch({
+      comfyuiPath: "C:/portable",
+      comfyuiPort: 8300,
+      comfyuiExtraArgs: "--x",
+      classify: () => ({ kind: "portable", instanceIdFile: null }),
+      resolveShared: () => {
+        throw new Error("便携路径不应读共享目录");
+      },
+    });
+    expect(r.extraArgs).toEqual(["--x"]);
   });
 
   it("桌面实例无 ID 文件（仅布局）→ 视为便携逻辑走设置项", async () => {

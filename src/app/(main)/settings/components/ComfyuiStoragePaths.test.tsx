@@ -21,6 +21,7 @@ function storageOf(overrides: Partial<DesktopStoragePaths> = {}): DesktopStorage
     instanceRoot: String.raw`D:\installs\ComfyUI2`,
     baseDir: String.raw`D:\installs\ComfyUI2\ComfyUI`,
     extraModelPathsFile: null,
+    extraModelPathsConfigFiles: [],
     modelDir: dir(String.raw`D:\installs\ComfyUI2\ComfyUI\models`),
     sharedModelDirs: [dir(String.raw`D:\shared\models`, "comfyui_shared")],
     inputDir: dir(String.raw`D:\shared\in`, "--input-directory", false),
