@@ -1,4 +1,6 @@
 // 视图页签的状态模型。四条规则（#1324 拍板）逐条钉死，另加持久化的"整份可用"判据。
+// ISSUE #4765 起项目级视图折叠为**一项目一页签**：键只含项目 id，view 恒为 "project"，
+// 「去画布还是去产出」由项目页内的左侧列表分区表达，不再各开一页。
 import { describe, expect, it } from "vitest";
 
 import {
@@ -14,6 +16,7 @@ import {
   makeTab,
   openViewTab,
   parseWorkspaceTabs,
+  projectTabKey,
   serializeWorkspaceTabs,
   tabKey,
   type WorkspaceTabsState,
@@ -52,9 +55,21 @@ function state(
   };
 }
 
-describe("页签身份 = (视图, 项目)", () => {
-  it("同一视图在不同项目里是两个不同的页签", () => {
-    expect(tabKey("workshop", "p1")).not.toBe(tabKey("workshop", "p2"));
+describe("页签身份：全局 = 视图；项目 = 一项目一页签（ISSUE #4765）", () => {
+  it("同一项目的不同项目级视图折叠为同一个页签（view 恒为 project）", () => {
+    const workshop = makeTab("workshop", "p1");
+    const canvas = makeTab("canvas", "p1");
+    const outputs = makeTab("outputs", "p1");
+    expect(workshop?.key).toBe(projectTabKey("p1"));
+    expect(canvas?.key).toBe(projectTabKey("p1"));
+    expect(outputs?.key).toBe(projectTabKey("p1"));
+    expect(workshop?.view).toBe("project");
+    expect(canvas?.view).toBe("project");
+  });
+
+  it("不同项目仍是不同的页签", () => {
+    expect(makeTab("workshop", "p1")?.key).not.toBe(makeTab("workshop", "p2")?.key);
+    expect(projectTabKey("p1")).not.toBe(projectTabKey("p2"));
   });
 
   it("全局视图不带项目身份：传了 projectId 也只认视图", () => {
@@ -82,14 +97,22 @@ describe("打开与聚焦", () => {
     const once = openViewTab(initialWorkspaceTabs(), "workshop", "p1");
     const twice = openViewTab(once, "workshop", "p1");
     expect(twice.tabs).toHaveLength(once.tabs.length);
-    expect(twice.tabs.filter((tab) => tab.view === "workshop")).toHaveLength(1);
-    expect(twice.activeKey).toBe(tabKey("workshop", "p1"));
+    expect(twice.tabs.filter((tab) => tab.projectId === "p1")).toHaveLength(1);
+    expect(twice.activeKey).toBe(projectTabKey("p1"));
+  });
+
+  it("同一项目先开工坊再开画布：仍是那一页（聚焦，不新开）", () => {
+    const a = openViewTab(initialWorkspaceTabs(), "workshop", "p1");
+    const b = openViewTab(a, "canvas", "p1");
+    expect(b.tabs).toHaveLength(a.tabs.length);
+    expect(b.activeKey).toBe(projectTabKey("p1"));
+    expect(b.tabs.filter((tab) => tab.projectId === "p1")).toHaveLength(1);
   });
 
   it("不同项目各开一页，互不覆盖", () => {
     const a = openViewTab(initialWorkspaceTabs(), "workshop", "p1");
     const b = openViewTab(a, "workshop", "p2");
-    expect(b.tabs.filter((tab) => tab.view === "workshop")).toHaveLength(2);
+    expect(b.tabs.filter((tab) => tab.view === "project")).toHaveLength(2);
   });
 });
 
@@ -98,6 +121,10 @@ describe("关闭语义", () => {
     expect(isTabClosable(homeTab())).toBe(false);
     const withQueue = openViewTab(initialWorkspaceTabs(), "queue", null);
     expect(closeViewTab(withQueue, homeTab().key)).toBe(withQueue);
+  });
+
+  it("项目页签可关", () => {
+    expect(isTabClosable(makeTab("project", "p1")!)).toBe(true);
   });
 
   it("关掉非当前页时，当前页不变", () => {
@@ -155,7 +182,7 @@ describe("关闭语义", () => {
 });
 
 describe("瞬时页签：切走即关（最多只有当前页可以是 transient）", () => {
-  it("设置 / 模型适配 / 模式契约 是瞬时页签，画布 / 工坊 / 模型不是", () => {
+  it("设置 / 模型适配 / 模式契约 是瞬时页签，项目页 / 模型不是", () => {
     /* 默认判据 = 项目默认那份配置（ISSUE #3623 / #3798：每个全局视图的瞬时与否
        都可配置，没注入判据时走出厂默认）。 */
     const judge = makeTransientJudge(defaultSidebarTabConfig());
@@ -163,7 +190,6 @@ describe("瞬时页签：切走即关（最多只有当前页可以是 transient
     expect(isTabTransient(makeTab("uiKit", null)!, judge)).toBe(false);
     expect(isTabTransient(makeTab("model-adapters", null)!, judge)).toBe(true);
     expect(isTabTransient(makeTab("mode-contract", null)!, judge)).toBe(true);
-    expect(isTabTransient(makeTab("canvas", "p1")!, judge)).toBe(false);
     expect(isTabTransient(makeTab("workshop", "p1")!, judge)).toBe(false);
     expect(isTabTransient(makeTab("models", null)!, judge)).toBe(false);
   });
@@ -230,21 +256,18 @@ describe("瞬时页签：切走即关（最多只有当前页可以是 transient
 });
 
 describe("项目消失后的页签", () => {
-  it("属于该项目的页签整批关掉", () => {
+  it("属于该项目的页签（一项目一页）整批关掉", () => {
     let s = openViewTab(initialWorkspaceTabs(), "workshop", "p1");
-    s = openViewTab(s, "canvas", "p1");
-    s = openViewTab(s, "workshop", "p2");
+    /* 同一项目再开别的项目级视图仍是同一页；这里补第二个项目做对照。 */
+    s = openViewTab(s, "canvas", "p2");
     const after = dropProjectTabs(s, "p1");
-    expect(after.tabs.map((tab) => tab.key)).toEqual([
-      tabKey("home", null),
-      tabKey("workshop", "p2"),
-    ]);
+    expect(after.tabs.map((tab) => tab.key)).toEqual([tabKey("home", null), projectTabKey("p2")]);
   });
 
   it("当前页正是被关掉的页时落回首页", () => {
     let s = openViewTab(initialWorkspaceTabs(), "workshop", "p1");
     s = openViewTab(s, "queue", null);
-    const after = dropProjectTabs({ tabs: s.tabs, activeKey: tabKey("workshop", "p1") }, "p1");
+    const after = dropProjectTabs({ tabs: s.tabs, activeKey: projectTabKey("p1") }, "p1");
     expect(after.activeKey).toBe(tabKey("home", null));
   });
 
@@ -270,6 +293,27 @@ describe("持久化：整份可用，否则整份放弃", () => {
     expect(out?.tabs.map((tab) => tab.view)).toEqual(["home", "queue"]);
   });
 
+  it("旧版「一个项目多行页签」折叠为一条，不整份作废（ISSUE #4765）", () => {
+    /* 旧形状：同一项目的画布 / 工坊各存一行。折叠后键重复 —— 跳过重复行，
+     * 保住用户其它的常驻页签。 */
+    const raw = JSON.stringify({
+      activeKey: tabKey("models", null),
+      tabs: [
+        ["home", null],
+        ["canvas", "p1"],
+        ["workshop", "p1"],
+        ["models", null],
+      ],
+    });
+    const out = parseWorkspaceTabs(raw, VIEWS);
+    expect(out?.tabs.map((tab) => tab.key)).toEqual([
+      tabKey("home", null),
+      projectTabKey("p1"),
+      tabKey("models", null),
+    ]);
+    expect(out?.activeKey).toBe(tabKey("models", null));
+  });
+
   /* SAFETY: 类型断言已复核 */
   it.for([
     ["坏 JSON", "{oops"],
@@ -279,17 +323,6 @@ describe("持久化：整份可用，否则整份放弃", () => {
       JSON.stringify({
         activeKey: tabKey("models", null),
         tabs: [["home", null]],
-      }),
-    ],
-    [
-      "重复页签",
-      JSON.stringify({
-        activeKey: tabKey("queue", null),
-        tabs: [
-          ["home", null],
-          ["queue", null],
-          ["queue", null],
-        ],
       }),
     ],
     [

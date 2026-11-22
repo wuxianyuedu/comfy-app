@@ -20,9 +20,15 @@ type ProjectGateProps = {
 export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
   const [name, setName] = useState("");
   const projects = listProjects();
+  const trimmedName = name.trim();
 
   const handleCreate = () => {
-    createProject(name.trim() || undefined);
+    /* 名称必填（ISSUE #4765）：不再有「可留空默认未命名」的入口 ——
+     * 项目一律先命名再创建，本地不留草稿。 */
+    if (trimmedName === "") {
+      return;
+    }
+    createProject(trimmedName);
     onEnter();
   };
 
@@ -44,9 +50,9 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
               },
             })}
             className="border-border bg-canvas-deep text-ink placeholder:text-ink-fainter focus:border-border-strong min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
-            placeholder="项目名称（可留空，默认「未命名」）"
+            placeholder="项目名称（必填）"
           />
-          <Button onClick={handleCreate} variant="primary-solid">
+          <Button disabled={trimmedName === ""} onClick={handleCreate} variant="primary-solid">
             新建并进入
           </Button>
         </div>

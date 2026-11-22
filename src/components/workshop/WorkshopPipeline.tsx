@@ -16,9 +16,21 @@ import { WorkshopHeader } from "~/components/workshop/WorkshopHeader";
 import { WorkshopStageBody } from "~/components/workshop/WorkshopStageBody";
 import { WorkshopStageRail } from "~/components/workshop/WorkshopStageRail";
 import type { WorkshopAgentToolHandlers } from "~/components/workshop/hooks/use-workshop-agent";
+import type { Tab } from "~/components/workshop/stage-config";
 import { renderProjectFilm } from "~/lib/film/render-film-client";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { RunControlBar } from "~/components/agent-run/RunControlBar";
+import { cn } from "~/lib/utils";
+
+export type WorkshopPipelineProps = {
+  /** 隐藏工坊内部的阶段轨道：项目页里六段已是项目左列表的分区，不重复展示。 */
+  hideStageRail?: boolean;
+  /** 受控模式下阶段变化的上报（项目页据此同步左列表高亮）。 */
+  onTabChange?: (tab: Tab) => void;
+  /** 受控阶段游标：项目页左侧列表驱动工坊分区时传入（ISSUE #4765）。
+   *  不传 = 自治模式（独立 /workshop 路由），阶段状态由工坊自管。 */
+  tab?: Tab;
+};
 
 /** Agent 入口位置的存储键与默认落点（右下角、让开底部状态栏）。
  *
@@ -27,8 +39,10 @@ import { RunControlBar } from "~/components/agent-run/RunControlBar";
 const AGENT_FAB_POSITION_KEY = "comfyapp:agent-fab-position:v1";
 const AGENT_FAB_DEFAULT_OFFSET = { right: 24, bottom: 40 };
 
-export function WorkshopPipeline() {
-  const controller = useWorkshopPipeline();
+export function WorkshopPipeline({ tab, onTabChange, hideStageRail }: WorkshopPipelineProps) {
+  const controller = useWorkshopPipeline(
+    tab === undefined ? undefined : { controlledTab: tab, onControlledTabChange: onTabChange },
+  );
 
   // Agent 指挥助手：把 controller 的数据读写能力注入给 Agent hook。
   const agentHandlers: WorkshopAgentToolHandlers = {
@@ -91,14 +105,24 @@ export function WorkshopPipeline() {
 
           {/* 三列：阶段轨道（固定列，不随内容挤压）+ 内容 + 右侧检查/素材。
             轨道原先是 grid 之上的一条全宽横条；现在它进网格作第一列，
-            宽度取 --spacing-stage-rail 一档，不在此处重复写字面量。 */}
-          <div className="grid grid-cols-1 gap-5 p-6 lg:grid-cols-[var(--spacing-stage-rail)_1fr_308px]">
-            <WorkshopStageRail
-              onTabChange={controller.setTab}
-              stageRatios={controller.stageRatios}
-              tab={controller.tab}
-              viewContext={controller.viewContext}
-            />
+            宽度取 --spacing-stage-rail 一档，不在此处重复写字面量。
+            项目页内嵌（hideStageRail）时轨道由项目页左列表承担，收成两列。 */}
+          <div
+            className={cn(
+              "grid grid-cols-1 gap-5 p-6",
+              hideStageRail
+                ? "lg:grid-cols-[1fr_308px]"
+                : "lg:grid-cols-[var(--spacing-stage-rail)_1fr_308px]",
+            )}
+          >
+            {!hideStageRail && (
+              <WorkshopStageRail
+                onTabChange={controller.setTab}
+                stageRatios={controller.stageRatios}
+                tab={controller.tab}
+                viewContext={controller.viewContext}
+              />
+            )}
             <WorkshopStageBody controller={controller} />
             <WorkshopAside
               apiChannels={controller.apiChannels}

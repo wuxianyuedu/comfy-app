@@ -1,10 +1,11 @@
 "use client";
 
 // ── 「所有项目」屏逻辑层（规范 17 §17.2 第②层）──
-// 原组件直接 listProjects() + deleteProject()（只本地索引），「服务端有一行、索引里没有」既看不见也删不掉
-//（ISSUE #1522）。现取数走 listProjectsWithServer() 并集、删除走 deleteProjectEverywhere()。
-// 三口径：列表 = 本地 ∪ 服务端按 updatedAt 倒序（同 id 取较新）；每行标 origin（服务端/本地/两侧）如实说明；
-// 拉取失败照常列本地项目、serverOk=false，视图据此说「服务端那份没拉到」，而非端空列表。
+// 取数走 listProjectsWithServer() 并集，删除走 deleteProjectEverywhere()。
+// ISSUE #4765 起**只显示服务端已有的项目**（origin ≠ local）：本地还没推上去的
+// 草稿不再列出（新建入口已改为「先命名、确认后再创建」，创建即推服务端，
+// 首推成功会广播事件让本屏取回这一行）。拉取失败 serverOk=false，视图给一句
+// 降级说明，而不是把空列表说成「没有项目」。
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -63,7 +64,9 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
     if (!aliveRef.current) {
       return;
     }
-    setProjects(entries);
+    /* 只列服务端已有的行（ISSUE #4765）：本地刚建、还没推上去的项目不进本屏，
+     * 等首推成功的事件把它带回来。 */
+    setProjects(entries.filter((entry) => entry.origin !== "local"));
     setServerOk(ok);
     setLoading(false);
   }, []);

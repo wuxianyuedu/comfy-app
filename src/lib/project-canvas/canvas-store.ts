@@ -181,6 +181,12 @@ function samePushedContent(
   return true;
 }
 
+/* 已确认推上服务端的项目 id（本会话内）。项目列表（侧栏 / 作品库）现在以
+ * 服务端为准，而推送是 fire-and-forget —— 「新建项目」到「服务端可查」之间
+ * 由**首次推送成功**时补发一次结构性事件，让列表及时把这一行取回来；此后
+ * 的常规编辑推送保持安静（自动保存的刷新口径见各订阅方，ISSUE #4600）。 */
+const everPushedToServer = new Set<string>();
+
 function persistProjectToServer(p: CanvasProject): void {
   if (typeof window === "undefined") {
     return;
@@ -210,6 +216,10 @@ function persistProjectToServer(p: CanvasProject): void {
        * 旧提示继续留在界面上等于制造第二条假故障。 */
       .then(() => {
         clearSyncFailure(p.id);
+        if (!everPushedToServer.has(p.id)) {
+          everPushedToServer.add(p.id);
+          emitChanged("hydrate", p.id);
+        }
       }),
     (e) => {
       lastPushedToServer.delete(p.id);
@@ -491,34 +501,8 @@ export function createProject(name?: string): CanvasProject {
 }
 
 /**
- * 创建一个**只存在于 active-id 状态**的项目 —— 它**不**写进项目索引。
- * 用户点「新建项目」落到一张全新画布时用它：这样只是打开画布又走开、
- * 什么都没做的话，不会用空草稿污染「最近项目」列表。
- *
- * 用户一旦做出真实改动（拖拽 / 添加 / 连线 / 重命名），它就会「转正」：
- * ProjectCanvas 的自动持久化副作用会发现
- * `nodes.length === 0 && edges.length === 0` 不成立，随即调用 `upsertProject`，
- * 真正落库并广播变更。
- *
- * 若用户离开时草稿仍是空的，`reapEmptyDraft` 会把它从 active id 里删掉
- *（它本来就不在索引里）。
- */
-export function createDraftProject(name?: string): CanvasProject {
-  const p: CanvasProject = {
-    id: `proj_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    name: findNextAvailableName(name?.trim() ?? EMPTY_DRAFT_NAME),
-    updatedAt: Date.now(),
-    nodes: [],
-    edges: [],
-  };
-  setActive(p.id);
-  emitChanged("draft", p.id); // 索引未变（草稿不进索引），但首页/切换器要跟上新 active-id
-  return p;
-}
-
-/**
- * 忘掉当前草稿项目的 id，但不动索引。
- * 用户离开一张从未写过内容的崭新画布时调用。
+ * 忘掉当前活跃项目的 id，但不动索引。
+ * 用户离开一张空画布时调用（配合 `reapEmptyProject`：回收成功才清 active）。
  */
 export function clearActiveIfDraft(pid: string): void {
   if (getActiveId() === pid) {
@@ -538,9 +522,9 @@ export function clearActiveIfDraft(pid: string): void {
  *（`openableViews` 只在 active 非空时列它们）。而沉淀在 `project` 表里的
  * 那几行 `未命名*` 也是同一件事的另一半：本机删了索引、服务端那份没人删。
  *
- * 注意区分两种「空」：`createDraftProject` 造的是**从不进索引**的草稿
- *（这里根本没它），而 `createProject` 造的是**真的进了索引**的行 ——
- * 清扫要对后者负责，但不能对「用户正在用的那一行」负责。 */
+ * 注意：清扫只对「真的进了索引的行」负责；本地不再有「从不进索引的草稿项目」
+ *（ISSUE #4765 起新建一律先命名再创建），这条判据只剩**清理旧版本遗留的
+ * 「未命名」空行**这一个职责，且不能对「用户正在用的那一行」负责。 */
 function isReapableEmptyDraft(project: CanvasProject, activeId: string | null): boolean {
   if (project.id === activeId) {
     return false;

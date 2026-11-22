@@ -96,6 +96,17 @@ export type AppEvents = {
    */
   "comfyapp:custom-nodes-updated": undefined;
   /**
+   * 请求项目页内切到某个分区（画布 / 工坊某阶段 / 资源库 / 产出 / 成片…）。
+   * 一项目一页签之后（ISSUE #4765），所有项目级入口（首页入口卡 / 侧栏 /
+   * 命令面板 / 工坊右栏跳转）仍以「视图 id」表达意图，落到页签后由
+   * `sectionFromView` 翻译成分区，经这里广播给项目页容器。
+   *
+   * `section` 刻意写成 `string`：本模块在 `src/lib`，不得反向依赖视图层的
+   * 分区枚举（§18 硬规则 22）—— 合法性由订阅侧按白名单收敛。`projectId`
+   * 供多项目页签同场时各自过滤「这条是不是叫我了」。
+   */
+  "project:section": { projectId?: string; section: string };
+  /**
    * 请求工作区切到某个视图。载荷：视图 id（`WorkspaceView`）。
    *
    * 为什么用事件而不是 props：触发方（工坊右栏的「资源库」卡）与持有视图状态的
@@ -136,6 +147,10 @@ const PAYLOAD_VALIDATORS: { [K in AppEventName]: (value: unknown) => value is Ap
     (value.projectId === undefined || typeof value.projectId === "string"),
   "comfyapp:canvas-sync-changed": (value): value is undefined => value === undefined,
   "comfyapp:custom-nodes-updated": (value): value is undefined => value === undefined,
+  "project:section": (value): value is AppEvents["project:section"] =>
+    isRecord(value) &&
+    typeof value.section === "string" &&
+    (value.projectId === undefined || typeof value.projectId === "string"),
   "workspace:navigate": (value): value is AppEvents["workspace:navigate"] =>
     isRecord(value) &&
     typeof value.view === "string" &&
