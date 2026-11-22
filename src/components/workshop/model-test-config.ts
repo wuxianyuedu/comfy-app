@@ -331,6 +331,14 @@ export type TestCandidate = {
  *（模型名和工作流名都可能叫「z-Image」）。 */
 export const WORKFLOW_CANDIDATE_PREFIX = "wf::";
 
+/** 从候选取值里解出本地工作流 id：`wf::<id>` → `<id>`；其余（模型名 / 空串）
+ *  一律回空串 —— 调用侧据此分流本地工作流通道与远端 API 通道（#4834）。 */
+export function workflowIdFromCandidateValue(value: string): string {
+  return value.startsWith(WORKFLOW_CANDIDATE_PREFIX)
+    ? value.slice(WORKFLOW_CANDIDATE_PREFIX.length)
+    : "";
+}
+
 /** 候选在下拉里的选项值：工作流候选用 `wf::<id>`，其余用模型名。 */
 export function candidateValue(candidate: TestCandidate): string {
   return candidate.workflow

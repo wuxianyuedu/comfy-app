@@ -12,7 +12,6 @@ import {
   fetchApiChannels,
   fetchTaskSnapshot,
   fetchWorkshopStyles,
-  fetchWorkshopWorkflows,
 } from "~/lib/workshop/generation-client";
 import { fetchServerDraft } from "~/lib/workshop/draft-sync-client";
 import { draftHasContent } from "~/lib/workshop/draft-sync-shared";
@@ -20,15 +19,13 @@ import { dtoToDraft, draftIsEmpty } from "~/lib/workshop/draft-store";
 import type { Shot, StyleRef } from "~/lib/workshop/types";
 import type { WorkshopDraft } from "~/lib/workshop/draft-store";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
-import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 
 export function useWorkshopBootstrapData(input: {
   setApiChannels: (channels: ApiChannelsView | null) => void;
   setStyles: (styles: Array<StyleRef>) => void;
-  setWorkflowOptions: (workflows: Array<WorkshopWorkflowOption>) => void;
 }) {
-  const { setStyles, setApiChannels, setWorkflowOptions } = input;
-  /* 卸载守卫用 beginStaleRun（规范 16 §16.2.4.34）：本 effect 里三个请求各自
+  const { setStyles, setApiChannels } = input;
+  /* 卸载守卫用 beginStaleRun（规范 16 §16.2.4.34）：本 effect 里两个请求各自
    * 落地自己的 set，组件若在请求返回前卸载，写状态既白跑也让旧闭包再多活
    * 一会儿（且并发渲染下还可能与后一轮交叠）。 */
   useEffect(() => {
@@ -45,6 +42,8 @@ export function useWorkshopBootstrapData(input: {
       }
     })();
     // API 直连通道(生图/视频)的脱敏配置视图;失败按未配置处理。
+    // 工作流列表不再在这里取（#4834）：模型候选统一走测试模型目录的
+    // React Query（use-model-catalog），与测试模型页同一份读数。
     void fetchApiChannels()
       .then((channels) => {
         guard.commit(() => {
@@ -52,20 +51,12 @@ export function useWorkshopBootstrapData(input: {
         });
       })
       .catch(() => undefined);
-    // 工作流库列表：工坊「生成资源」里可选择用哪个工作流生成（ISSUE #145）。
-    void fetchWorkshopWorkflows()
-      .then((workflows) => {
-        guard.commit(() => {
-          setWorkflowOptions(workflows);
-        });
-      })
-      .catch(() => undefined);
     return () => {
       guard.dispose();
     };
-    /* 三个 setter 都是主钩 useState 的稳定引用：依赖列全也不会重跑，
+    /* 两个 setter 都是主钩 useState 的稳定引用：依赖列全也不会重跑，
      *  「只挂载执行一次」的语义不变（显式列出是为满足 exhaustive-deps）。 */
-  }, [setApiChannels, setStyles, setWorkflowOptions]);
+  }, [setApiChannels, setStyles]);
 }
 
 export function useWorkshopTaskRecovery(input: {

@@ -19,7 +19,16 @@ import {
   sizeSpecToValues,
   sizeValuesToSpec,
   testCandidatesForKind,
+  workflowIdFromCandidateValue,
 } from "./model-test-config";
+
+describe("workflowIdFromCandidateValue（#4834 取值反查）", () => {
+  it("wf::<id> 解出工作流 id；模型名与空串一律回空串", () => {
+    expect(workflowIdFromCandidateValue("wf::wf-9")).toBe("wf-9");
+    expect(workflowIdFromCandidateValue("gpt-image-2")).toBe("");
+    expect(workflowIdFromCandidateValue("")).toBe("");
+  });
+});
 
 describe("testCandidatesForKind", () => {
   const entries = [
