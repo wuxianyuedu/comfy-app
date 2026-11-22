@@ -11,4 +11,6 @@
   与 Origin 比较 —— Host 是请求实际打到哪的唯一事实，跨站盲发的 Origin 是
   攻击者自己的源、不可能等于本机 Host，判据强度不变；splash 名单与缺 Origin
   放行两条不变，`Origin: null` 字符串形状维持拒绝。判据单测
-  `tests/same-origin-gate.test.ts` 钉住七种形状（含回归主形状）。
+  `src/server/lib/same-origin.test.ts` 同批更新到 Host 口径并钉住八种形状
+  （含壳同源这个回归主形状）；`AppShell` 函数因 #4817 的右键菜单越过 400 行
+  函数闸，同批按职责把「项目」分组拆成子组件 `SidebarProjectsGroup`（§12.13）。
