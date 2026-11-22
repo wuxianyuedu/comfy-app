@@ -105,7 +105,7 @@ export function SidebarTempTabs({
   const iframeActive = iframeTabs.some((tab) => tab.id === activeIframeTabId);
 
   return (
-    <SidebarGroup>
+    <SidebarGroup data-testid="sidebar-temp-tabs">
       <SidebarGroupLabel>临时页签</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>

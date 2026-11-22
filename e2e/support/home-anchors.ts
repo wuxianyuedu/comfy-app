@@ -15,3 +15,17 @@ export const HOME_ENTRY_CARD_LABEL = "新建画布";
 export async function expectHomeReady(page: Page): Promise<void> {
   await expect(page.getByText(HOME_ENTRY_CARD_LABEL, { exact: true }).first()).toBeVisible();
 }
+
+/**
+ * 从首页真正建出一个项目（ISSUE #4765 起「新建先命名」：点卡片只开对话框，
+ * 必须填名字并点「创建项目」才会落库并进入项目页）。E2E 里凡是后面要判
+ * 「已经在项目里」的，都走这里，别再只点卡片就等项目页出现。
+ */
+export async function createNamedProject(page: Page, name: string): Promise<void> {
+  await page.getByRole("button", { name: "新建画布项目" }).first().click();
+  const dialog = page.getByRole("dialog").filter({ hasText: "新建项目" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("textbox", { name: "项目名称（必填）" }).fill(name);
+  await dialog.getByRole("button", { name: "创建项目" }).click();
+  await expect(dialog).toBeHidden();
+}

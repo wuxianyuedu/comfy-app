@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { gridLineColor } from "../src/components/studio/canvas/workflow-canvas-grid";
+import { createNamedProject } from "./support/home-anchors";
 
 /**
  * 主题 token 的**产物侧**判据（规范 03 §3.6.1.1 的配套，非提交前必跑层）。静态门禁只查 CSS 源码里有没有声明、引用是不是字面量，而 Tailwind v4 按「源码里出现过字面名」决定哪些 `@theme` 变量真的进产物 —— 声明在源码 ≠ 运行时解析得到（中间隔着 tree-shake 与 Next 的 `@source` 根），只有真浏览器 + 真构建管线能给出结论。
@@ -340,19 +341,15 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
        画布是**项目内页签**（`projectScoped`，见 `NavItems`）：没有活跃项目时
        `openViewTab` 的 `makeTab` 直接返回 null（点了不吭声），而「＋」菜单里那两项
        也**不列出来**。所以顺序必须是「先建项目、再开画布」——这也是用户实际走的办法。 */
-    const strip = page.getByRole("tablist", { name: "已打开的视图" });
-    await expect(strip).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "新建画布项目" }).first().click();
-    /* 落地是**项目主页**（`handleNewProject` 刻意不直接进画布：新项目还没有内容，
-       直接进画布是一张空网）。等它挂上，再经「＋」开画布。 */
-    await expect(page.locator('[data-view="project"]')).toBeVisible({
-      timeout: 30_000,
-    });
-    await strip.getByRole("button", { name: "新页签", exact: true }).click();
-    await page.getByRole("menuitem", { name: "画布", exact: true }).click();
-    await expect(page.locator('[data-view="canvas"]')).toBeVisible({
-      timeout: 30_000,
-    });
+    await createNamedProject(page, "E2E 主题项目");
+    /* 落地是项目页（ISSUE #4765：一个项目一个页签，画布 / 工坊等是页内分区），
+       等左侧分区列表挂上，再从里面点「画布」。按 role=button 取，避免命中其它
+       （例如命令面板里同名的隐藏选项）。 */
+    const rail = page.getByRole("navigation", { name: "项目分区" });
+    await expect(rail).toBeVisible({ timeout: 30_000 });
+    await rail.getByRole("button", { name: /^画布/ }).click();
+    /* 项目页内切分区不换 data-view（一个项目只有一个页签），画布以 React Flow 容器为锚。 */
+    await expect(page.locator(".react-flow").first()).toBeVisible({ timeout: 30_000 });
 
     /* 反空转：真规则不在场就别往下断言 —— 否则「取到了默认灰」会被读成「token 生效」。必须**轮询**而不是取一次：`[data-view="canvas"]` 是 `WorkspaceViewStack.tsx:266` 那个 **wrapper**，先挂上；带 `@xyflow/react/dist/style.css` 的是里面 `dynamic(..., { ssr: false })` 的 chunk，晚一拍才落地。
      * 等 wrapper 可见后立刻数 `document.styleSheets` 是抢跑 —— 实测单跑也是 `Received: 0`，与并发无关。 */

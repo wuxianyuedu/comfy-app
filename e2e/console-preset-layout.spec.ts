@@ -8,9 +8,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function openConsole(page: Page): Promise<void> {
   await page.goto("/workspace");
-  await expect(page.getByRole("tablist", { name: "已打开的视图" })).toBeVisible({
-    timeout: 30_000,
-  });
+  /* #4770 起页签在侧栏「临时页签」组，起步没有页签时整组不渲染 —— 不再等旧 tablist。 */
   const consoleBtn = page.getByRole("button", { name: "控制台", exact: true }).first();
   await expect(consoleBtn).toBeVisible();
   await consoleBtn.click();
