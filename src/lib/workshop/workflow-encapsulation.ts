@@ -37,7 +37,7 @@ import {
   parseParamMapping,
   resolveMapping,
 } from "~/lib/workflow/workflow-param-mapping";
-import { exposedCustomKindOf } from "~/lib/workflow/workflow-exposed-params";
+import { exposedCustomKindOf, isVideoMode } from "~/lib/workflow/workflow-exposed-params";
 import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import { sizeSourceForMode } from "~/lib/workflow/workflow-size-source";
 import { referenceLoaderMax } from "./reference-loader-binding";
@@ -229,21 +229,24 @@ function toContractValues(args: {
     out.size = sizeSpecToWxH(normalizeSizeSpec(values.size), sceneFromMode(mode), table);
   }
 
-  /* 图片：契约口 `first-frame` / `last-frame` / `reference-image(-n)` 各自落哪一行
-   *  由作者连线声明，这里只按工坊的业务语义给值。
+  /* 图片：契约口 `reference-image(-n)` 落哪一行由作者连线声明。
    *
-   *  首帧缺省回退第一张参考图（镜头图当首帧）—— 这是**工坊的调用契约**（视频通道
-   *  只有一路镜头图），不是「按位置猜工作流的槽位」：值仍只落到作者连给首帧口的
-   *  那一行上。 */
+   *  首帧 / 尾帧 / 时长是**视频模式专用**（模式契约里它们也只出现在 *2V 家族）：
+   *  「镜头图当首帧」是视频通道的调用契约（视频通道只有一路镜头图），把它套到
+   *  以 reference-image 口吃图的图像编辑工作流上，那张图已经完整下发，再派生一个
+   *  首帧值纯属冗余，还会让补报误报成「首帧未生效」。所以这三者只在视频模式派生，
+   *  图像模式一律不派生、也不下发（用户口径：不允许非视频模式使用）。 */
   const refs = values.referenceImages ?? [];
-  const firstFrame = values.firstFrame ?? refs[0];
-  if (firstFrame !== undefined) {
-    out["first-frame"] = firstFrame;
+  if (isVideoMode(mode)) {
+    const firstFrame = values.firstFrame ?? refs[0];
+    if (firstFrame !== undefined) {
+      out["first-frame"] = firstFrame;
+    }
+    if (values.lastFrame !== undefined) {
+      out["last-frame"] = values.lastFrame;
+    }
   }
-  if (values.lastFrame !== undefined) {
-    out["last-frame"] = values.lastFrame;
-  }
-  /* 参考图按契约顺序一一对应（第一张不带序号）。 */
+  /* 参考图按契约顺序一一对应（第一张不带序号），所有模式都走这一口。 */
   const referenceIds = entries
     .filter((entry) => entry.cls === "reference-image")
     .map((entry) => entry.id);
@@ -254,9 +257,11 @@ function toContractValues(args: {
     }
   });
 
-  const duration = durationValueFor({ io, resolved, values });
-  if (duration !== undefined) {
-    out.duration = duration;
+  if (isVideoMode(mode)) {
+    const duration = durationValueFor({ io, resolved, values });
+    if (duration !== undefined) {
+      out.duration = duration;
+    }
   }
 
   /* 种子：调用方（如「抽卡重生成」）给一个 seed 值，落到作者连的「种子」口上；
@@ -551,14 +556,28 @@ export function buildEncapsulatedInputs(args: {
   const reported = new Set(unmatched);
   const hasEntry = (id: string) => entries.some((entry) => entry.id === id);
   const refs = effectiveValues.referenceImages ?? [];
-  if ((values.firstFrame !== undefined || refs.length > 0) && !hasEntry("first-frame")) {
-    reported.add("first-frame");
+  /* 首帧 / 尾帧 / 时长只在视频模式补报：图像模式本就不该有这些值，
+     拿「镜头图当首帧」的派生去报「未生效」是误导噪音（#4856）。 */
+  if (isVideoMode(effectiveMode)) {
+    if ((values.firstFrame !== undefined || refs.length > 0) && !hasEntry("first-frame")) {
+      reported.add("first-frame");
+    }
+    if (values.lastFrame !== undefined && !hasEntry("last-frame")) {
+      reported.add("last-frame");
+    }
+    if ((values.duration !== undefined || values.frames !== undefined) && !hasEntry("duration")) {
+      reported.add("duration");
+    }
   }
-  if (values.lastFrame !== undefined && !hasEntry("last-frame")) {
-    reported.add("last-frame");
-  }
-  if ((values.duration !== undefined || values.frames !== undefined) && !hasEntry("duration")) {
-    reported.add("duration");
+  /* 参考图给了却没有任何 reference-image 口接住：如实上报「参考图」，不静默丢图
+     （原先把这件事错记成了「首帧未生效」）。视频工作流里首帧口接住镜头图是合法的
+     调用契约，那一种不算丢图。 */
+  if (
+    refs.length > 0 &&
+    !entries.some((entry) => entry.cls === "reference-image") &&
+    !hasEntry("first-frame")
+  ) {
+    reported.add("reference-image");
   }
   /* 尺寸折叠成一条：工坊只送**一个**尺寸表达（比例 + 档位 + 倍数），工作流用
    *  「宽高」还是「比例 + 像素量」由它自己决定 —— 接住其中一路就算接住（另一路
