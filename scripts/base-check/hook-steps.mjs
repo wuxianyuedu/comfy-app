@@ -79,6 +79,42 @@ export function resolveGateCommand(input, hookPath = HOOK) {
 }
 
 /**
+ * 把一条步骤变成「全量档」的命令：只剥 `--staged` 这一个旗标。
+ *
+ * 与 `scripts/ci/ci-heavy-gates.mjs` 的 `fullTreeArgv()` 同一件事 —— 那边已经改为
+ * 转述本函数（#4833）：平台侧没有暂存区，留着 `--staged` 判的是「空提交」= 一条
+ * **恒绿**的判据。刻意不做别的改写 —— 每条步骤的参数就是它自己的判据口径，
+ * 改一个参数就是改判据。
+ *
+ * @param {string[]} argv
+ * @returns {string[]}
+ */
+export function stripStagedFlag(argv) {
+  return argv.filter((a) => a !== "--staged");
+}
+
+/**
+ * 「钩子里带 `--staged`、但剥旗标后判的是**全仓**」的降级登记表（#4833）。
+ *
+ * 为什么需要它：合并前复算的快照（分支 ⊕ 目标的合成树）上**没有暂存区**，
+ * 于是带 `--staged` 的步骤此前被 `mayDecideOnCleanSnapshot` 整条排除 —— 而平台上
+ * `重档静态判据` 那一格对同一批步骤是剥旗标跑全量的 ⇒ 同一条判据在平台上判、
+ * 在本地复算面上**没有任何执行者**，红只能在 GA 才暴露（#4831 首轮实测就是这一形）。
+ *
+ * 这不是免罪牌：每条都要写清「剥旗标后判什么、为什么在全量面上仍然成立」。
+ * 判据要入表的条件：**无基线、无 `--update` 的硬闸**（全量面上红就是真红，不存在
+ * 「基线放行」的中间态），且全量扫描是毫秒到秒级（收进复算面不改变那一跳的档位）。
+ * 登记由 `tests/base-check.test.ts` 双向核对（登记的条目在钩子里真带 `--staged`、
+ * 理由非空壳），「默认面」的组成测试把它钉在场。
+ */
+export const STAGED_TO_FULL_TREE = {
+  "UI 基元复用棘轮":
+    "剥旗标后扫 `src/components` + `src/app` 全量（无基线硬闸：P68/P75 等命中即阻断，没有「基线放行」）。#4831 首轮的 P75 红正是本地复算不在场才拖到 GA。",
+  浮层层级刻度硬闸:
+    "剥旗标后扫 `src/components` + `src/app` 全量（无基线硬闸：裸 `z-*` 命中即阻断，Z3 红同上一次 PR 实测）。",
+};
+
+/**
  * **合并前那一批**：把「这次 PR 准备并进去的判据面」从钩子里现算出来。
  *
  * ── 为什么这一档要存在（ISSUE #1591 立案的那个洞）──────────────────────
@@ -131,7 +167,19 @@ export function resolveMergeBatch(input = [], hookPath = HOOK) {
         "请显式点名要复算的判据（用法见脚本头）",
     };
   }
-  const commands = steps.filter((s) => mayDecideOnCleanSnapshot(s.argv));
+  const commands = steps.flatMap((s) => {
+    /* **`--staged` 的可降级档**（#4833）：登记表里的那几条，剥旗标后判的是
+     * **全仓**（与平台侧 `ci-heavy-gates.mjs` 对它们做的逐字同语义 —— 平台上没有
+     * 暂存区，那一格本来就在剥）。合并前复算的快照同样是「没有暂存区的树」
+     * （分支 ⊕ 目标的合成树），所以同一手在这边成立：不剥就只能整条排除
+     * （合并前复算面上没有任何执行者），红的暴露点被推到最贵的那一跳。
+     * 没登记的 `--staged` 步骤照旧排除 —— 判决面只在「本次改动」上的那一族
+     * （`CHANGED_SCOPED`）剥了旗标也判不出这棵树的事。 */
+    if (s.label in STAGED_TO_FULL_TREE) {
+      return [{ argv: stripStagedFlag(s.argv), label: s.label }];
+    }
+    return mayDecideOnCleanSnapshot(s.argv) ? [s] : [];
+  });
   if (commands.length === 0) {
     return {
       ok: false,

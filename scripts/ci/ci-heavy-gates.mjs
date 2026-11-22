@@ -95,7 +95,12 @@
 import path from "node:path";
 import process from "node:process";
 
-import { CHANGED_SCOPED, readHookSteps, runGate } from "../base-check/hook-steps.mjs";
+import {
+  CHANGED_SCOPED,
+  readHookSteps,
+  runGate,
+  stripStagedFlag,
+} from "../base-check/hook-steps.mjs";
 import { resolveBaseRef, resolveChangedFiles } from "../lib/changed-scope.mjs";
 import { syntheticMergeRange } from "../reformat/reformat-preview-range.mjs";
 import { faceTouched, narrowingEntryForScript } from "./ci-incremental-gates.mjs";
@@ -175,13 +180,16 @@ export const HEAVY_GATES = [
  *
  * 刻意不做别的改写 —— 每条步骤的参数就是它自己的判据口径，改一个参数就是改判据。
  * 平台侧没有暂存区，留着 `--staged` 判的是「空提交」= 一条**恒绿**的判据
- * （本仓最恨的那一型）。
+ * （本仓最恨的那一型）。剥旗标这一个动作只有一份实现
+ * （`base-check/hook-steps.mjs` 的 `stripStagedFlag`，#4833 起本地合并前复算
+ * 对登记过的 `--staged` 判据做同一手），这里保留原名转述 —— 它的调用点与
+ * 断言（`tests/commit-gate-tier.test.ts`）都以这个名字在场。
  *
  * @param {string[]} argv
  * @returns {string[]}
  */
 export function fullTreeArgv(argv) {
-  return argv.filter((a) => a !== "--staged");
+  return stripStagedFlag(argv);
 }
 
 /**
