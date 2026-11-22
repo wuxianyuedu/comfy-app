@@ -8,7 +8,7 @@
 import { Button } from "~/components/ui/button";
 import { FilePickerButton } from "~/components/ui/file-picker";
 import { FormField } from "~/components/ui/form-field";
-import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { ViewableImage } from "~/components/ui/image-viewer";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { cn } from "~/lib/utils";
 
@@ -59,9 +59,10 @@ export function ReferenceImageField({
         <div className="flex flex-wrap items-center gap-2">
           {images.map((src, i) => (
             <div className="group relative" key={`${String(i)}-${src.slice(0, 24)}`}>
-              <MediaThumbnail
+              {/* 点开进图片查看器（ISSUE #4840）：看细节（构图 / 文字 / 姿态）；
+                  键盘可达（缩略图是按钮）。 */}
+              <ViewableImage
                 alt={`参考图 ${i + 1}`}
-                as="image"
                 className="border-border size-16 rounded-lg border object-cover"
                 src={src}
               />
