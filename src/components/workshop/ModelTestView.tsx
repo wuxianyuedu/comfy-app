@@ -3,7 +3,8 @@
 // ── 「测试模型能力」**视图**（规范 §17 第③层：只渲染 + 上抛）─────────────
 // 三栏 Bento 布局：左栏 = 用途页签 → 模式列表（带候选模型数徽标，内部滚动）
 // → 模型下拉（本地 / 远端分组）与通道提示；中栏 = 统一输入 + 生成 CTA +
-// 进度 / 告警 + 执行日志；右栏 = 产物 / 请求与响应（ModelTestResultPanel）。
+// 进度 / 告警 + 执行日志；右栏 = 产物 / 分节点进度 / 请求与响应
+// （ModelTestResultPanel；分节点进度自 #4811 起挪到右栏「请求」上方）。
 // 候选 / 适配器 / 契约 / 生成动作都在 `hooks/use-model-test.ts`（第②层）与
 // `model-test-config.ts`（第①层）；本文件不出现 fetch / api.*。
 
@@ -56,7 +57,6 @@ import {
 import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
 import { useModelTest } from "./hooks/use-model-test";
 import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
-import { TaskProgressPanel } from "./TaskProgressPanel";
 
 /* 「大屏查看日志」弹窗：与历史记录 / 队列页同一份（QueueTaskLogModal 按 taskId
  * 直连 SSE）。dynamic 加载断开它携带的重依赖（react18-json-view 等），与
@@ -772,10 +772,6 @@ export function ModelTestView() {
                   </p>
                 )}
               </Panel>
-
-              {/* 分节点进度可视化：解析执行日志里的 comfy-cli progress/executing
-                  事件按节点出条（#4743）；无进度事件（对话 / API 中继）不渲染。 */}
-              <TaskProgressPanel logs={c.taskLogs} />
 
               {/* 执行日志放中栏：紧贴生成动作（进度 → 日志），列宽也容得下
                   等宽字体行，不再挤在窄右栏里 */}

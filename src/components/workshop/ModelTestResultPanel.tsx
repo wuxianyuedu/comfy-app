@@ -1,6 +1,6 @@
 "use client";
 
-// ── 「测试模型能力」右栏面板（产物 / 执行日志 / 请求与响应）────────────────
+// ── 「测试模型能力」右栏面板（产物 / 分节点进度 / 请求与响应）────────────────
 // 从 ModelTestView 拆出的纯展示面板（§17 第③层：只渲染 + 上抛，不做取数 /
 // IO）。三种运行状态各有视觉形态：生成中（进度环 + 徽标）、完成（产物预览 +
 // 外链）、空闲（占位说明）；失败告警在中栏，右栏保留日志与请求现场。
@@ -27,6 +27,7 @@ import { cn } from "~/lib/utils";
 import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import type { useModelTest } from "./hooks/use-model-test";
 import { RequestDetailSection } from "./ModelTestRequestDetail";
+import { TaskProgressPanel } from "./TaskProgressPanel";
 
 type ModelTestController = ReturnType<typeof useModelTest>;
 
@@ -298,7 +299,7 @@ export function LogsCard({
   );
 }
 
-/** 右栏整体：产物 / 请求与响应（执行日志已移到中栏）。 */
+/** 右栏整体：产物 / 分节点进度（#4811，原在中栏）/ 请求与响应（执行日志在中栏）。 */
 export function ModelTestResultPanel({
   c,
   excerptPretty,
@@ -312,6 +313,10 @@ export function ModelTestResultPanel({
   return (
     <div className="flex w-full shrink-0 flex-col gap-4 xl:w-80">
       <ResultCard c={c} />
+      {/* 分节点进度可视化（#4811：从中栏挪到右栏「请求」原来的位置）：解析执行日志
+          里的 comfy-cli progress/executing 事件按节点出条（#4743）；无进度事件
+          （对话 / API 中继）不渲染。 */}
+      <TaskProgressPanel logs={c.taskLogs} />
       {hasDetails ? (
         <>
           {c.requestRows.length > 0 && (
