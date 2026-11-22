@@ -4,6 +4,7 @@
  *（何时重取、失败降级说什么、确认流两步）；并集口径与两侧一起删由 canvas-store.test.ts 守。 */
 
 import { act, cleanup, renderHook } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { emitAppEvent } from "~/lib/app-events";
@@ -223,5 +224,29 @@ describe("useWorksGallery 的卸载守卫（#4239）", () => {
 
     expect(result.current.projects).toEqual([]);
     expect(result.current.loading).toBe(true);
+  });
+});
+
+describe("useWorksGallery 的 StrictMode 双挂载（#4781）", () => {
+  it("重挂载后判活标记要复活：第二次挂载的回包必须落地，否则列表永久停在读取中", async () => {
+    let release!: (value: { entries: Array<EntryRow>; ok: boolean }) => void;
+    const gated = new Promise<{ entries: Array<EntryRow>; ok: boolean }>((resolve) => {
+      release = resolve;
+    });
+    listProjectsWithServerMock.mockReturnValue(gated);
+
+    const { result } = renderHook(() => useWorksGallery(), { wrapper: StrictMode });
+    /* 双挂载完成（两次 load 都已发出、第一次的卸载守卫已把 aliveRef 置 false）
+     * 之后再放行：第一次的回包按 #4239 丢弃没错，但第二次挂载是**活着**的实例，
+     * 它的回包必须落地 —— 不然这一屏就永久停在「正在读取项目列表…」
+     * （网络 200、无报错，纯状态不落定）。 */
+    await act(async () => {
+      release({ entries: [entry()], ok: true });
+      await gated;
+    });
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.projects).toHaveLength(1);
+    expect(result.current.serverOk).toBe(true);
   });
 });
