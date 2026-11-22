@@ -187,7 +187,9 @@ describe("best-effort 与回读分档", () => {
       cwd: ROOT,
       encoding: "utf8",
     });
-    expect([0, 2]).toContain(r.status);
+    /* #4764：退出码反映被跟踪那一跑的死活 —— 没有/绿/红/跑中等都合法；
+     * 这一格只验「CLI 跑得起来、只吐读数」，不锁具体哪一码。 */
+    expect([0, 1, 2, 4]).toContain(r.status);
     expect(r.stdout).toContain('"found"');
     expect(r.stdout).toContain('"path"');
   });
@@ -261,7 +263,7 @@ describe("状态与事件（ISSUE #3923）", () => {
     expect(formatShipResult(reading).join("\n")).toContain("事件（0）");
   });
 
-  it("runResultQuery：human / json / 退码三分（没有上一次 = 合法读数 0）", () => {
+  it("runResultQuery：human / json / 退码（没有上一次 = 合法读数 0）", () => {
     const out: string[] = [];
     expect(runResultQuery({ log: (s) => out.push(s), root: ROOT, resolve })).toBe(0);
     expect(out.join("\n")).toContain("没有上一次 ship 的落盘读数");
@@ -278,5 +280,20 @@ describe("状态与事件（ISSUE #3923）", () => {
 
     fs.writeFileSync(resultFile(), "{ 半截", "utf8");
     expect(runResultQuery({ log: () => undefined, root: ROOT, resolve })).toBe(2);
+  });
+
+  it("#4764：退出码反映被跟踪那一跑的死活，不是「这次读成功」", () => {
+    /* running ⇒ 4（无终态），不落 0 —— 0 在只读口上会被读成「写链绿到终态」。 */
+    const running = createShipResultSink({ root: ROOT, resolve });
+    running.append("[ship] ▶ 等 CI | build=cnb-x | pr=4764");
+    expect(runResultQuery({ log: () => undefined, root: ROOT, resolve })).toBe(4);
+
+    /* 被打断 ⇒ 2（没给结论，与 ship:wait 同档）。 */
+    running.fail("boom");
+    expect(runResultQuery({ log: () => undefined, root: ROOT, resolve })).toBe(2);
+
+    /* 收口了 ⇒ 照抄那一跑的 exitCode（红 1）。 */
+    running.finish(1);
+    expect(runResultQuery({ log: () => undefined, root: ROOT, resolve })).toBe(1);
   });
 });

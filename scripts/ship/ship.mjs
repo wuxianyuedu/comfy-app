@@ -285,7 +285,7 @@ import path from "node:path";
 import { resolveGitDir } from "../lib/git-dir.mjs";
 /* 旗标解析在 `ship-args.mjs`：它跟着「命令行长什么样」动，而 `ship-core` 跟着「外部执行者的
  * 读数形状」动（ISSUE #2491 把这一层拆出去的那条理由写在文件头）。 */
-import { flagConflicts, parseArgs } from "./ship-args.mjs";
+import { flagConflicts, parseArgs, singleActionSettled } from "./ship-args.mjs";
 import { expandMode, makeStdinConfirm, runFinalStages } from "./ship-mode.mjs";
 import { CODE, codeTag, combineShipCodes, parseSlug, resolveUpstream } from "./ship-core.mjs";
 import { makeRunner, short, writeScratch } from "./ship-exec.mjs";
@@ -869,8 +869,13 @@ async function runFlow(deps, tmpFiles) {
       return CODE.NOT_RUN;
     }
     const code = combineShipCodes(cs);
-    const word =
-      code === CODE.GREEN
+    /* 单件动作的 0 只表示「这一件做完了」，不是「写链跑到绿到终态」——
+     * 码表那句「全绿到终态」在 `--result` 轮询一个 running 的后台跑时会和上一行
+     * 「没给结论」直接打架（ISSUE #4764）。结论行因此按「这次跑的是什么」分词：
+     * 写链继续用码表词，单件动作用「单件动作完成」，被跟踪那一跑的死活另有正文交代。 */
+    const word = singleActionSettled(opt)
+      ? "单件动作完成（**不代表**写链绿到终态）"
+      : code === CODE.GREEN
         ? "全绿到终态"
         : code === CODE.RED
           ? "有事实是红的"
