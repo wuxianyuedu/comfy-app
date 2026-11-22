@@ -6,20 +6,12 @@ import { RotateCcw } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { readStorageItem, removeStorageItem, writeStorageItem } from "~/lib/browser-storage";
 import { readFileAsDataUrl } from "~/lib/file-io";
 
-/** 侧栏顶部的品牌图片。默认用内置图，用户可换成自己的图片（存本机 localStorage，不入库、不上传）。 */
+/** 侧栏顶部的品牌图片。默认用内置图，用户可换成自己的图片（存本机，不入库、不上传）。 */
 const DEFAULT_LOGO = "/brand-logo.svg";
 const STORAGE_KEY = "sidebar-brand-logo";
-
-/** 读回用户自定义的图片。SSR / 无存储权限时落回默认图，不让侧栏整块崩掉。 */
-function readStoredLogo(): string | null {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
 
 /**
  * 侧栏顶部的品牌图 —— 一张可以点开更换的图片（参考 Issue #4813）。
@@ -31,9 +23,9 @@ export function SidebarBrand() {
 
   /* 挂载后读本机自定义图：服务端首帧与客户端都用默认图，避免 hydration 不一致。 */
   useEffect(() => {
-    const stored = readStoredLogo();
+    const stored = readStorageItem(STORAGE_KEY);
     if (stored) {
-      /* 外部系统（localStorage）同步到视图：首帧故意用默认图，挂载后才补上本机自定义图。 */
+      /* 外部系统（本机存储）同步到视图：首帧故意用默认图，挂载后才补上自定义图。 */
       // oxlint-disable-next-line react/set-state-in-effect
       setLogo(stored);
       setCustom(true);
@@ -44,11 +36,8 @@ export function SidebarBrand() {
     void readFileAsDataUrl(file).then((dataUrl) => {
       setLogo(dataUrl);
       setCustom(true);
-      try {
-        window.localStorage.setItem(STORAGE_KEY, dataUrl);
-      } catch {
-        /* 存储写不进去（隐私模式 / 配额满）时图片仍在本次会话生效，只是关掉后不保留。 */
-      }
+      /* 写不进去（隐私模式 / 配额满）时图片仍在本次会话生效，只是关掉后不保留。 */
+      writeStorageItem(STORAGE_KEY, dataUrl);
     });
   }, []);
 
@@ -57,20 +46,17 @@ export function SidebarBrand() {
   const restore = useCallback(() => {
     setLogo(DEFAULT_LOGO);
     setCustom(false);
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* 同上：清不掉也不影响这一次会话已经恢复成默认图。 */
-    }
+    removeStorageItem(STORAGE_KEY);
   }, []);
 
   return (
     <div className="group/data-brand relative flex h-16 shrink-0 items-center justify-center px-2 py-2">
-      <button
+      <Button
         aria-label="更换品牌图片"
-        className="hover:bg-sidebar-accent flex h-full w-full items-center justify-center rounded-md transition-colors"
+        className="hover:bg-sidebar-accent h-full w-full p-0"
         onClick={picker.open}
         type="button"
+        variant="ghost"
       >
         <MediaThumbnail
           alt="品牌图片"
@@ -79,7 +65,7 @@ export function SidebarBrand() {
           fallback="none"
           src={logo}
         />
-      </button>
+      </Button>
       {custom ? (
         <Button
           aria-label="恢复默认品牌图片"
