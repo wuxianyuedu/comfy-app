@@ -124,18 +124,16 @@ describe("WorksGallery 说明文案", () => {
 });
 
 describe("WorksGallery 出处标", () => {
-  it("三种出处各标各的：只在一侧的行标出来，两侧都有的不标", () => {
+  it("「仅服务端」标只给服务端独有的行；两侧都有 / 本地未同步的行不标（ISSUE #4765）", () => {
     renderWith({
       projects: [
         entry({ id: "srv", name: "只在服务端", origin: "server" }),
-        entry({ id: "loc", name: "只在本地", origin: "local" }),
         entry({ id: "both", name: "两侧都有", origin: "both" }),
       ],
     });
-    // 两张标各一份、且只有两张 —— `both` 也标出来就是噪声，且会让人分不清
-    // 「这一行到底从哪来」。
+    // 只有一张标 —— `both` 也标出来就是噪声；`local` 行本屏不再列出。
     expect(screen.getAllByText("仅服务端")).toHaveLength(1);
-    expect(screen.getAllByText("未同步")).toHaveLength(1);
+    expect(screen.queryByText("未同步")).toBeNull();
     expect(screen.getByText("两侧都有")).toBeInTheDocument();
   });
 

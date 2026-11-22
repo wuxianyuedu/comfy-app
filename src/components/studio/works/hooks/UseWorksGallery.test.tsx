@@ -87,15 +87,18 @@ describe("useWorksGallery", () => {
     expect(result.current.serverOk).toBe(true);
   });
 
-  it("服务端拉不到 → serverOk=false，但本地项目照常列出", async () => {
+  it("本地还没同步上去的行不再列出；服务端拉不到 → serverOk=false + 空列表（ISSUE #4765）", async () => {
     listProjectsWithServerMock.mockResolvedValue({
-      entries: [entry({ id: "proj_local", origin: "local" })],
+      entries: [
+        entry({ id: "proj_local", origin: "local" }),
+        entry({ id: "proj_both", origin: "both" }),
+      ],
       ok: false,
     });
     const { result } = renderHook(() => useWorksGallery());
     await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.serverOk).toBe(false);
-    expect(result.current.projects.map((p) => p.id)).toEqual(["proj_local"]);
+    expect(result.current.projects.map((p) => p.id)).toEqual(["proj_both"]);
   });
 
   it("确认删除走 deleteProjectEverywhere（索引里没有的行也删得掉）", async () => {

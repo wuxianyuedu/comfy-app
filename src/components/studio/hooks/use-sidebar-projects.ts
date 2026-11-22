@@ -3,7 +3,8 @@
 // ── 侧栏「项目」分组的逻辑层（规范 17 §17.2 第②层）
 // 取数与 use-works-gallery 同一支：读 `listProjectsWithServer()` 的并集（本地 ∪ 服务端）。
 // 不能只读本地索引：index 是 hydrate 对账后的副本，画布页没开过就没有对账（ISSUE #1522）。
-// 拉取失败仍列本地索引那一份（local-first），只是少了服务端独有行，不清空整组。
+// ISSUE #4765 起**只列服务端已有的项目**（origin ≠ local），与「所有项目」屏同一口径；
+// 本地刚建、还没推上去的行不列，等首推成功的事件把它带回来。
 
 import { useEffect, useRef, useState } from "react";
 
@@ -39,7 +40,10 @@ export function useSidebarProjects(): Array<SidebarProjectEntry> {
         if (!alive) {
           return;
         }
+        /* 只列服务端已有的行（ISSUE #4765，与「所有项目」屏同一口径）：
+         * 本地刚建、还没推上去的项目不进侧栏，等首推成功的事件带回来。 */
         const next = entries
+          .filter((project) => project.origin !== "local")
           .slice(0, SIDEBAR_PROJECT_LIMIT)
           .map((project) => ({ id: project.id, name: project.name }));
         projectsRef.current = next;

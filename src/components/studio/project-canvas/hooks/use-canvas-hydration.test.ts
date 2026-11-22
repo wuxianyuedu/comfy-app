@@ -3,8 +3,8 @@
  *  · 中途抛错必须把「加载中」复位并给用户可见出口（旧 `.catch(() => {})` 会把画布
  *    永久卡在 loading，且 rejection 静默）；
  *  · 落库结果的落地收进 stale 守卫（卸载后不写）；
- *  · 成功路径把项目灌进画布并复位 loading、调 fitView、消费 seed；
- *  · StrictMode 双执行只跑一次（闩锁）。
+ *  · 成功路径把项目灌进画布并复位 loading、调 fitView；
+ *  · 无活跃项目时**不再隐式创建草稿项目**（ISSUE #4765）：给可行动的错误出口。
  * hook 直接 import canvas-store / production-client，所以 mock 边界就是这两个模块
  * 加 ToastProvider——不碰 ReactFlow 渲染面。
  */
@@ -15,12 +15,10 @@ const toast = vi.hoisted(() => ({ info: vi.fn(), error: vi.fn() }));
 const store = vi.hoisted(() => ({
   hydrateFromServer: vi.fn<(opts?: unknown) => Promise<void>>(() => Promise.resolve()),
   reapAllEmptyDrafts: vi.fn(),
-  createDraftProject: vi.fn(() => ({ edges: [], id: "draft-1", name: "新草稿", nodes: [] })),
-  getActiveId: vi.fn(() => null),
+  getActiveId: vi.fn<() => string | null>(() => null),
   getProject: vi.fn<
     (id: string) => { edges?: unknown[]; id: string; name: string; nodes: unknown[] } | null
   >(() => null),
-  listProjects: vi.fn(() => [] as Array<{ id: string; name: string; nodes: unknown[] }>),
   setActive: vi.fn((_id: string) => undefined),
 }));
 const fetchProductionMock = vi.hoisted(() =>
@@ -40,10 +38,8 @@ const savedProject = { id: "proj-1", name: "我的项目", nodes: [], edges: [] 
 beforeEach(() => {
   vi.clearAllMocks();
   store.hydrateFromServer.mockResolvedValue(undefined);
-  store.getActiveId.mockReturnValue(null);
-  store.getProject.mockReturnValue(null);
-  store.listProjects.mockReturnValue([savedProject]);
-  store.createDraftProject.mockReturnValue({ ...savedProject, id: "draft-1", name: "新草稿" });
+  store.getActiveId.mockReturnValue("proj-1");
+  store.getProject.mockImplementation((id: string) => (id === "proj-1" ? savedProject : null));
   fetchProductionMock.mockResolvedValue(null);
 });
 
@@ -83,14 +79,13 @@ describe("useCanvasHydration（#4235）", () => {
     expect(String(toast.error.mock.calls[0]?.[0])).toContain("画布加载失败");
   });
 
-  it("成功路径：项目灌进画布（id/名称/节点/连线/选中/进度），loading 复位并消费 seed", async () => {
+  it("成功路径：项目灌进画布（id/名称/节点/连线/选中/进度），loading 复位", async () => {
     const setProjectId = vi.fn();
     const setProjectName = vi.fn();
     const setNodes = vi.fn();
     const setEdges = vi.fn();
     const setProgress = vi.fn();
     const requestFitView = vi.fn();
-    const onConsumeSeed = vi.fn();
 
     const { result } = renderHook(() =>
       useCanvasHydration({
@@ -101,7 +96,6 @@ describe("useCanvasHydration（#4235）", () => {
         setProgress,
         setProjectId,
         setProjectName,
-        onConsumeSeed,
       }),
     );
     await act(async () => {
@@ -117,8 +111,36 @@ describe("useCanvasHydration（#4235）", () => {
     /* setActive 是 canvas-store 的模块函数（hook 直接 import），断言打在 store 桩上。 */
     expect(store.setActive).toHaveBeenCalledWith("proj-1");
     expect(requestFitView).toHaveBeenCalledTimes(1);
-    expect(onConsumeSeed).toHaveBeenCalledTimes(1);
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("无活跃项目：不再隐式创建草稿项目，给可行动的错误出口（ISSUE #4765）", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    store.getActiveId.mockReturnValue(null);
+
+    const { result } = renderHook(() => useCanvasHydration(setupDeps()));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current).toBe(false);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(String(toast.error.mock.calls[0]?.[0])).toContain("请先创建或选择一个项目");
+  });
+
+  it("活跃项目不在索引里（已被删 / 从未属于本机）：报错出口，不静默换一个项目（ISSUE #4765）", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    store.getActiveId.mockReturnValue("proj-gone");
+    store.getProject.mockReturnValue(null);
+
+    const { result } = renderHook(() => useCanvasHydration(setupDeps()));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current).toBe(false);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(String(toast.error.mock.calls[0]?.[0])).toContain("项目数据不在本机");
   });
 
   it("卸载守卫：await 之后才结算的落库结果不写（发起时快照纪律）", async () => {

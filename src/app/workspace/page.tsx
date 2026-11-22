@@ -12,12 +12,14 @@ import { globalNavItems, projectTabs } from "~/components/studio/NavItems";
 import { ShellTabs } from "~/components/studio/ShellTabs";
 import { timeAgo } from "~/lib/time-format";
 import {
-  createProject,
+  deleteProjectEverywhere,
   getActiveId,
+  getProject,
   listProjects,
-  setActive,
   reapAllEmptyDrafts,
+  type CanvasProject,
 } from "~/lib/project-canvas/canvas-store";
+import { CreateProjectDialog } from "~/components/studio/CreateProjectDialog";
 
 /* 近期项目列表按**展示字段**逐项比较（ISSUE #4600）：全部相同就复用旧数组引用，
  * 掐掉「编辑期每 500ms 一拍广播 → recentProjects 换引用 → 整壳重渲染」那条税。 */
@@ -49,6 +51,7 @@ export default function WorkspacePage() {
     activeKey: activeViewKey,
     viewMode,
     navigateTo,
+    closeProjectTabs,
     selectTab: selectViewTab,
     closeTab: closeViewTabByKey,
   } = useWorkspaceTabs();
@@ -91,9 +94,6 @@ export default function WorkspacePage() {
     navigateTo("comfyui");
   }, [navigateTo]);
 
-  // ── 画布：为 true 时，画布打开一个全新的命名项目
-  const [canvasSeedNew, setCanvasSeedNew] = useState(false);
-
   // ── 当前活跃项目 id（项目闸门的判据）：来源 canvas-store 的 active 键，
   //    只在客户端可读，SSR 首帧为 null。订阅 store 变化事件保持同步。
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -121,6 +121,20 @@ export default function WorkspacePage() {
     name: string;
     taskType: string;
   } | null>(null);
+
+  // ── 新建项目：先弹命名对话框，确认后再创建（ISSUE #4765）。
+  //    统一入口（侧栏「+新建」、首页卡片、作品库「新建创作」、ProjectGate）都落到这里。
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const handleProjectCreated = useCallback(
+    (_project: CanvasProject) => {
+      // 创建成功即收起对话框（否则连点会连建多个项目），再刷新读数落到项目主页。
+      setCreateProjectOpen(false);
+      // createProject 内部已设为活跃；这里刷新读数并落到项目主页。
+      refreshActiveProject();
+      navigateTo("project");
+    },
+    [navigateTo, refreshActiveProject],
+  );
 
   // 最近项目来源是 canvas-store（localStorage），不是 Task 表（Task.type 不含画布项目类型）。
   // 挂载时 + store 变化时加载：存 localStorage 故 SSR 返回 []，挂载后再水合；
@@ -172,28 +186,28 @@ export default function WorkspacePage() {
     [navigateTo],
   );
 
-  const handleNewProject = useCallback(() => {
-    // 统一「新建项目」入口：创建一个真实的 proj_* 项目（落库 + 设为活跃），
-    // 画布/工坊/成片后续都挂在这个项目上（Phase 1 先立画布为脊柱）。
-    // 落点是**项目主页**：新项目还没有任何内容，直接进画布是一张空网
-    //（进去之后仍然只能得到「先回主页看看项目要干什么」）；主页给出
-    // 状态与「AI 自主成片」这条主动作，是更合适的起步位置。
-    createProject();
-    refreshActiveProject();
-    navigateTo("project");
-  }, [navigateTo, refreshActiveProject]);
+  /* 侧栏里点开某个项目那一跳 —— 「服务端有、本机还没有副本」的行要先拉回本机，
+   * 否则落点是闸门（ISSUE #1874，见 `useOpenServerProject`）。首页最近项目、
+   * 「所有项目」屏与侧栏的打开动作现在都走这一条（先水合、再设活跃 + 落主页），
+   * 三处同一支 —— 只看本地索引的旧路径会在服务端独有行上落空。 */
+  const handleOpenServerProject = useOpenServerProject(navigateTo);
 
-  /* 打开一个项目 —— 设为活跃并落到**项目主页**。
+  const handleNewProject = useCallback(() => {
+    // 统一「新建项目」入口：先弹命名对话框，**确认后再创建**（ISSUE #4765）。
+    // 不再直接 createProject() 产生「未命名_N」行，也不再留本地草稿项目。
+    setCreateProjectOpen(true);
+  }, []);
+
+  /* 打开一个项目 —— 先把服务端那一行水合到本机，再设为活跃并落到**项目主页**。
    *
    * 此前落画布，于是「一进项目就是一张无限画布」，用户看不到这个项目做到哪了
    *（画布只表达节点图，不表达阶段 / 素材 / 成片）。主页是项目级视图的入口，
-   * 想去画布再从页签切一步。 */
+   * 想去画布再从左列表切一步。 */
   const handleOpenCanvasProject = useCallback(
     (id: string) => {
-      setActive(id);
-      navigateTo("project");
+      void handleOpenServerProject(id);
     },
-    [navigateTo],
+    [handleOpenServerProject],
   );
 
   const handleHomeNavigate = useCallback(
@@ -216,20 +230,17 @@ export default function WorkspacePage() {
   const handleOpenProject = useCallback(
     (id: string) => {
       if (id === "new") {
-        // 统一新建项目：创建真实 proj_* 并进入项目主页（与 handleNewProject 一致）。
-        createProject();
-        refreshActiveProject();
-        navigateTo("project");
+        // 统一新建项目：先弹命名对话框，确认后再创建（与 handleNewProject 同一口）。
+        setCreateProjectOpen(true);
       } else {
-        // 打开一个真实项目：设为活跃并落到**项目主页**（与 handleOpenCanvasProject
-        // 同一在役落点）。曾经的「作品详情页（溯源 + 执行日志）」是独立路由
-        // /create/[id]，该路由已退役（#2422）—— 任务详情弹层（HistoryDetailModal）
-        // 挂在历史视图里，项目自身的在役入口就是项目主页。
-        setActive(id);
-        navigateTo("project");
+        // 打开一个真实项目：先水合服务端行，再设活跃 + 落**项目主页**（与
+        // handleOpenCanvasProject 同一在役落点）。曾经的「作品详情页（溯源 +
+        // 执行日志）」是独立路由 /create/[id]，该路由已退役（#2422）——
+        // 项目自身的在役入口就是项目主页。
+        void handleOpenServerProject(id);
       }
     },
-    [navigateTo, refreshActiveProject],
+    [handleOpenServerProject],
   );
 
   // 从工作流库「使用」一条工作流 → 跳到无限画布
@@ -266,16 +277,26 @@ export default function WorkspacePage() {
    * 「服务端有一行、索引里没有」的项目在侧栏**一条都不列**（ISSUE #1874）。 */
   const sidebarProjects = useSidebarProjects();
 
-  /* 侧栏里点开某个项目那一跳 —— 「服务端有、本机还没有副本」的行要先拉回本机，
-   * 否则落点是闸门（ISSUE #1874，见 `useOpenServerProject`）。「所有项目」那一屏
-   * 走的是同一个回调，两处同一支。 */
-  const handleOpenServerProject = useOpenServerProject(navigateTo);
+  /* 删除项目（项目页内左列表底部的危险入口）：本地 + 服务端一并删，并关掉
+   * 该项目名下的页签 —— 当前页被关则按规则落回首页（ISSUE #4765）。 */
+  const handleDeleteProject = useCallback(
+    (id: string) => {
+      deleteProjectEverywhere(id, getProject(id)?.name);
+      closeProjectTabs(id);
+      refreshActiveProject();
+    },
+    [closeProjectTabs, refreshActiveProject],
+  );
 
   const openableViews = useMemo(
     () => [
       ...globalNavItems().map((item) => ({ view: item.id, label: item.label })),
+      /* 一项目一页签（ISSUE #4765）：「+」菜单里项目只列「主页」这一页；
+       * 画布 / 工坊 / 资源库 / 产出 / 成片改为项目页内左列表分区，不再各自成页。 */
       ...(activeProjectId !== null && activeProjectId !== ""
-        ? projectTabs().map((item) => ({ view: item.id, label: item.label }))
+        ? projectTabs()
+            .filter((item) => item.id === "project")
+            .map((item) => ({ view: item.id, label: item.label }))
         : []),
     ],
     [activeProjectId],
@@ -312,16 +333,12 @@ export default function WorkspacePage() {
               `WorkspaceViewStack`（那里有懒加载声明与逐屏渲染分支）。 */}
           <WorkspaceViewStack
             activeKey={activeViewKey}
-            activeProjectId={activeProjectId}
             activeView={viewMode}
-            canvasSeedNew={canvasSeedNew}
-            onConsumeCanvasSeed={() => {
-              setCanvasSeedNew(false);
-            }}
             onConsumePendingWorkflow={() => {
               setPendingCanvasWorkflow(null);
             }}
             onConsumeSettingsSection={consumeSettingsSection}
+            onDeleteProject={handleDeleteProject}
             onEnterProject={refreshActiveProject}
             onExitProject={() => {
               navigateTo("home");
@@ -356,6 +373,18 @@ export default function WorkspacePage() {
           }}
           open={videoQueueOpen}
         />
+
+        {/* 新建项目：先命名、确认后再创建（ISSUE #4765）。
+            条件挂载：每次打开都是一次全新挂载，名称从空开始（不靠 effect 复位）。 */}
+        {createProjectOpen ? (
+          <CreateProjectDialog
+            onClose={() => {
+              setCreateProjectOpen(false);
+            }}
+            onCreated={handleProjectCreated}
+            open
+          />
+        ) : null}
       </>
     </ShellTabs>
   );

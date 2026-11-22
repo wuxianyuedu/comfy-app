@@ -1,8 +1,9 @@
 "use client";
 
 // ── 「所有项目」屏（视图层，规范 17 §17.2 第③层）─────────────────────────
-// 取数与删除都在 `works/hooks/use-works-gallery.ts`（§17.2 第②层），本文件只把它接成卡片网格 + 确认弹窗。此前这一屏自己读 `listProjects()` / `deleteProject()`（本地索引那一侧），于是「服务端有一行、索引里没有」的项目在这里既看不见也删不掉（ISSUE #1522）。
-// 一行分三种出处，界面上如实标出来（见 `use-works-gallery` 的三条口径）：服务端独有 → 「仅服务端」（删它动的是服务端那一份，本机没有副本可回退）；本地独有 → 「未同步」（还没推上去或推送被拒）；两侧都有 → 不标。
+// 取数与删除都在 `works/hooks/use-works-gallery.ts`（§17.2 第②层），本文件只把它接成卡片网格 + 确认弹窗。
+// ISSUE #4765 起**只显示服务端已有的项目**：不再列出本地还没同步上去的行（新建入口已改为
+// 「先命名、确认后再创建」）。「仅服务端」标保留给「服务端有、本机还没有副本」的行。
 
 import { Trash2 } from "lucide-react";
 
@@ -28,15 +29,14 @@ import { Hint } from "~/components/ui/hint";
 const WORKS_CATEGORY_ICON_BG = "bg-cyan-400/12 text-cyan-700 dark:text-cyan-400";
 // p71-allow:end
 
-/* 「这一行从哪来」的界面上那半句。`both` 不给值（正常行不标）。 */
+/* 「这一行从哪来」的界面上那半句。`both` 不给值（正常行不标）；
+ * `local` 不再出现 —— 本屏只列服务端已有的行（ISSUE #4765）。 */
 const ORIGIN_BADGE: Partial<Record<ProjectOrigin, string>> = {
   server: "仅服务端",
-  local: "未同步",
 };
 
 const ORIGIN_HINT: Partial<Record<ProjectOrigin, string>> = {
-  server: "服务端有这一行，本机没有副本 —— 删掉它只动服务端那一份",
-  local: "还没推上服务端（或推送被拒）—— 换设备时看不到这一份",
+  server: "服务端有这一行，本机没有副本 —— 打开时会自动拉回本机",
 };
 
 /** 卡片上那一行「画布体量」。 */
@@ -97,7 +97,7 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
           <>
             画布项目，按时间倒序排列。列表以
             <span className="text-ink-bright font-medium">服务端</span>
-            为准，本地还没同步上去的也一并列出。
+            为准，只显示已同步到服务端的项目。
           </>
         }
         extra={

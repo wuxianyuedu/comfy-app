@@ -55,6 +55,11 @@ export function tabKey(view: WorkspaceView, projectId: string | null): string {
   return `${view}:${projectId ?? ""}`;
 }
 
+/** 项目页签的唯一键：一个项目无论从哪个项目级视图进入，都是**这一页**（ISSUE #4765）。 */
+export function projectTabKey(projectId: string): string {
+  return `project:${projectId}`;
+}
+
 export function homeTab(): ViewTab {
   return { key: tabKey(HOME_VIEW, null), view: HOME_VIEW, projectId: null };
 }
@@ -63,13 +68,19 @@ export function homeTab(): ViewTab {
  * 造一个页签。项目类视图**必须带项目 id**：没有活跃项目时它是开不出来的
  * （与 workspace 现有的 `isProjectTab(viewMode) && !activeProjectId` 守卫同源，
  * 收在一处意味着两处不会一处放行一处白屏）。
+ *
+ * 一项目一页签（ISSUE #4765）：项目级视图（主页 / 画布 / 工坊 / 资源库 / 产出 /
+ * 成片）全部折叠到**同一个页签**，键只含项目 id；「这次想去画布还是产出」由
+ * 项目页内的左侧列表分区表达（`project:section` 事件），不再各开一页。
  */
 export function makeTab(view: WorkspaceView, projectId: string | null): ViewTab | null {
   if (isProjectTab(view) && (projectId === null || projectId === "")) {
     return null;
   }
-  const bound = isProjectTab(view) ? projectId : null;
-  return { key: tabKey(view, bound), view, projectId: bound };
+  if (isProjectTab(view)) {
+    return { key: projectTabKey(projectId ?? ""), view: "project", projectId };
+  }
+  return { key: tabKey(view, null), view, projectId: null };
 }
 
 export function isTabClosable(tab: ViewTab): boolean {
@@ -264,9 +275,15 @@ export function parseWorkspaceTabs(
       return null;
     }
     const tab = makeTab(view, projectId);
-    // 造不出来（项目类视图丢了项目 id）或键重复 ⇒ 整份不可信。
-    if (!tab || tabs.some((existing) => existing.key === tab.key)) {
+    // 造不出来（项目类视图丢了项目 id）⇒ 整份不可信。
+    if (!tab) {
       return null;
+    }
+    if (tabs.some((existing) => existing.key === tab.key)) {
+      /* 键重复：旧版页签数据里同一项目可能存了多行（画布 / 工坊各一页），
+       * 一项目一页签之后它们折叠成同一个键 —— 跳过重复行即可，不必整份作废
+       * （作废会把用户其它的常驻页签一起丢掉）。 */
+      continue;
     }
     tabs.push(tab);
   }
