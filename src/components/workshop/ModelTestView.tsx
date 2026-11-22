@@ -8,7 +8,7 @@
 // 候选 / 适配器 / 契约 / 生成动作都在 `hooks/use-model-test.ts`（第②层）与
 // `model-test-config.ts`（第①层）；本文件不出现 fetch / api.*。
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import {
@@ -100,40 +100,72 @@ function Panel({
   );
 }
 
-/** 用途页签（图片 / 视频 / 对话）：SelectChip 的 pill 单选组。 */
+/** 用途页签（图片 / 视频 / 对话）：SelectChip 的 pill 单选组。该用途下有
+ *  模型正在生成时追加「N 生成中」小徽标（ISSUE #4838），一眼看出哪类用途
+ *  在跑、跑着几个。 */
 function KindTabs({
+  generating,
   kind,
   onChange,
 }: {
+  generating: Record<ModelTestKind, number>;
   kind: ModelTestKind;
   onChange: (k: ModelTestKind) => void;
 }) {
   return (
     <div aria-label="选择用途" className="flex flex-wrap gap-2" role="radiogroup">
-      {MODEL_TEST_KINDS.map((k) => (
-        <SelectChip
-          key={k}
-          onClick={() => {
-            onChange(k);
-          }}
-          selected={kind === k}
-          shape="pill"
-        >
-          {MODEL_TEST_KIND_LABELS[k]}
-        </SelectChip>
-      ))}
+      {MODEL_TEST_KINDS.map((k) => {
+        const count = generating[k] ?? 0;
+        return (
+          <SelectChip
+            key={k}
+            onClick={() => {
+              onChange(k);
+            }}
+            selected={kind === k}
+            shape="pill"
+          >
+            {MODEL_TEST_KIND_LABELS[k]}
+            {count > 0 && <GeneratingBadge className="ml-1" count={count} />}
+          </SelectChip>
+        );
+      })}
     </div>
   );
 }
 
+/** 「生成中」小徽标（ISSUE #4838）：呼吸圆点 + 文案。给 `count` = 数量
+ *  （「N 生成中」，用途 / 模式两处用）；不给 = 单模型标记（「生成中」，
+ *  模型下拉用）。配色与产物卡的生成中状态徽标同族（warning 底 + 强调字），
+ *  状态读法全页一致。 */
+function GeneratingBadge({ className, count }: { className?: string; count?: number }) {
+  return (
+    <span
+      className={cn(
+        "bg-warning/15 text-warning-strong inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
+        className,
+      )}
+    >
+      <span aria-hidden className="bg-warning-strong size-1.5 animate-pulse rounded-full" />
+      {count === undefined ? "生成中" : `${count} 生成中`}
+    </span>
+  );
+}
+
 /** 左栏模式列表：当前用途下的**所有**生成类模式纵列，右侧徽标显示配了该
- *  模式适配器的候选模型数。选中态 = 品牌软底 + 描边；role=radio 由选中项
+ *  模式适配器的候选模型数；该模式下有模型在生成时再叠一枚「N 生成中」
+ *  （ISSUE #4838）。选中态 = 品牌软底 + 描边；role=radio 由选中项
  *  驱动，外层 radiogroup 给整组可访问名。 */
 function ModeTabs({
+  generatingByMode,
+  kind,
   mode,
   onSelect,
   tabs,
 }: {
+  /** 键 = `${kind}::${mode}`（与格键同形），值 = 该模式下生成中的模型数。 */
+  generatingByMode: Record<string, number>;
+  kind: ModelTestKind;
   mode: string;
   onSelect: (mode: string) => void;
   tabs: Array<ModeTab>;
@@ -142,6 +174,7 @@ function ModeTabs({
     <div aria-label="选择模式" className="flex flex-col gap-1.5" role="radiogroup">
       {tabs.map((t) => {
         const selected = t.mode === mode;
+        const generatingCount = generatingByMode[`${kind}::${t.mode}`] ?? 0;
         return (
           <Button
             aria-checked={selected}
@@ -169,13 +202,16 @@ function ModeTabs({
               </TruncatedText>
               <span className="text-muted-foreground text-2xs block">{t.mode}</span>
             </span>
-            <span
-              className={cn(
-                "shrink-0 rounded-full px-2 py-0.5 text-2xs tabular-nums",
-                selected ? "bg-surface text-primary-strong" : "bg-subtle text-muted-foreground",
-              )}
-            >
-              {t.modelCount} 模型
+            <span className="flex shrink-0 items-center gap-1">
+              {generatingCount > 0 && <GeneratingBadge count={generatingCount} />}
+              <span
+                className={cn(
+                  "shrink-0 rounded-full px-2 py-0.5 text-2xs tabular-nums",
+                  selected ? "bg-surface text-primary-strong" : "bg-subtle text-muted-foreground",
+                )}
+              >
+                {t.modelCount} 模型
+              </span>
             </span>
           </Button>
         );
@@ -447,6 +483,26 @@ export function ModelTestView() {
   const modeLabel = c.modeTabs.find((t) => t.mode === c.mode)?.label ?? c.mode;
   const hasModel = c.selectedModel !== "";
 
+  /* 模型下拉的标签：在既有显示名（模型标签 / 工作流名消歧）之上，给正在
+     生成的模型追加「生成中」徽标（ISSUE #4838）—— 选项里与触发器上是同一
+     份 label，选中项在生成中时触发器也带徽标。 */
+  const modelLabels = useMemo<Record<string, ReactNode>>(() => {
+    const out: Record<string, ReactNode> = {};
+    for (const candidate of c.candidates) {
+      const value = candidateValue(candidate);
+      const label = c.candidateLabels[value] ?? value;
+      out[value] = c.generatingModels.has(value) ? (
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <span className="truncate">{label}</span>
+          <GeneratingBadge />
+        </span>
+      ) : (
+        label
+      );
+    }
+    return out;
+  }, [c.candidates, c.candidateLabels, c.generatingModels]);
+
   return (
     <DocumentFrame className="flex flex-col gap-5 px-4 pt-4 pb-10 sm:px-6 sm:pt-5" width="full">
       <PageHeader srTitle={pageHeaderTitle("model-test")} />
@@ -456,13 +512,19 @@ export function ModelTestView() {
             桌面下吸附成独立滚动区）── */}
         <aside className="flex w-full shrink-0 flex-col gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-96px)] xl:w-64 xl:overflow-y-auto">
           <Panel icon={<Shapes />} title="用途">
-            <KindTabs kind={c.kind} onChange={c.setKind} />
+            <KindTabs generating={c.generatingByKind} kind={c.kind} onChange={c.setKind} />
           </Panel>
 
           {c.modeTabs.length > 0 && (
             <Panel icon={<ListChecks />} title="模式">
               <div className="max-h-80 overflow-y-auto pr-0.5">
-                <ModeTabs mode={c.mode} onSelect={c.setMode} tabs={c.modeTabs} />
+                <ModeTabs
+                  generatingByMode={c.generatingByMode}
+                  kind={c.kind}
+                  mode={c.mode}
+                  onSelect={c.setMode}
+                  tabs={c.modeTabs}
+                />
               </div>
             </Panel>
           )}
@@ -513,7 +575,7 @@ export function ModelTestView() {
                     },
                   ] as const
                 ).filter((group) => group.options.length > 0)}
-                labels={c.candidateLabels}
+                labels={modelLabels}
                 onChange={c.selectModel}
                 options={c.candidates.map(candidateValue)}
                 placeholder="选择要测试的模型…"

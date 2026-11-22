@@ -53,6 +53,7 @@ import {
   modeTabsForKind,
   randomPromptFor,
   relayDebugRow,
+  summarizeGeneratingSessions,
   testCandidatesForKind,
   workflowPreviewBody,
   workflowSupportsMode,
@@ -101,6 +102,13 @@ export type ModelTestController = {
   generate: (key?: string, valuesOverride?: ModelTestValues) => Promise<void>;
   /** 当前格是否在生成中。 */
   generating: boolean;
+  /** 左栏「生成中」标记的读数（ISSUE #4838）：**全部格**聚合的生成中索引 ——
+   *  用途页签 / 模式列表的计数与模型下拉的徽标都读它，不只当前格。 */
+  generatingByKind: Record<ModelTestKind, number>;
+  /** 键 = `${kind}::${mode}`，值 = 该模式下生成中的模型数。 */
+  generatingByMode: Record<string, number>;
+  /** 正在生成的模型取值集合（模型名或 `wf::<id>`）。 */
+  generatingModels: ReadonlySet<string>;
   /** 当前格生成发起的时刻（ms；null = 不在生成中）：请求详情的已过时间按它走秒。 */
   generatingSince: number | null;
   /** 统一输入行清单（ISSUE #3778：来自当前模式契约，带必备标记与承接状态）。 */
@@ -828,6 +836,10 @@ export function useModelTest(): ModelTestController {
       : [submission, ...activeSession.previewRows];
   }, [activeSession.previewRows, activeSession.submissionRow, localPreviewRow]);
 
+  /* 左栏「生成中」标记的读数（ISSUE #4838）：全部格聚合，随 sessions 变化
+   * （任一格开始 / 结束生成都会重算）。 */
+  const generatingIndex = useMemo(() => summarizeGeneratingSessions(sessions), [sessions]);
+
   return {
     candidates: modeCandidates,
     candidateLabels,
@@ -840,6 +852,9 @@ export function useModelTest(): ModelTestController {
     error: activeSession.error,
     generating: activeSession.generating,
     generatingSince: activeSession.generatingSince,
+    generatingByKind: generatingIndex.byKind,
+    generatingByMode: generatingIndex.byMode,
+    generatingModels: generatingIndex.models,
     cancelGenerate,
     referenceImages: referenceGroup.images,
     addReferenceImages,
