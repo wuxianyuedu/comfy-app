@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { AppShell } from "./AppShell";
+import { ToastProvider } from "./ToastProvider";
 import type { WorkspaceView } from "./NavItems";
 
 /* CommandPalette 新增的「其他」组用 useRouter 导航：测试环境没有 App Router 上下文，按
@@ -44,18 +45,21 @@ afterEach(cleanup);
 function renderShell(active: WorkspaceView = "workshop") {
   const onSelect = vi.fn();
   render(
-    <AppShell
-      active={active}
-      activeProjectId="p1"
-      onNewProject={vi.fn()}
-      onOpenProject={vi.fn()}
-      onOpenSettings={vi.fn()}
-      onSelect={onSelect}
-      onShowAllProjects={vi.fn()}
-      projects={[]}
-    >
-      <div />
-    </AppShell>,
+    /* 「项目」分组挂了 useToast（删除回执）：按应用真实层级包上 Provider。 */
+    <ToastProvider>
+      <AppShell
+        active={active}
+        activeProjectId="p1"
+        onNewProject={vi.fn()}
+        onOpenProject={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onSelect={onSelect}
+        onShowAllProjects={vi.fn()}
+        projects={[]}
+      >
+        <div />
+      </AppShell>
+    </ToastProvider>,
   );
   return onSelect;
 }

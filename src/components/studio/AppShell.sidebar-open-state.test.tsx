@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { AppShell } from "./AppShell";
+import { ToastProvider } from "./ToastProvider";
 import type { WorkspaceView } from "./NavItems";
 import { tabKey, type ViewTab } from "./workspace-tabs";
 
@@ -52,20 +53,23 @@ function renderShell(opts: { active?: WorkspaceView; tabs?: Array<ViewTab> } = {
   const onCloseViewTab = vi.fn();
   const onSelect = vi.fn();
   render(
-    <AppShell
-      active={opts.active ?? "home"}
-      activeProjectId={null}
-      onCloseViewTab={onCloseViewTab}
-      onNewProject={vi.fn()}
-      onOpenProject={vi.fn()}
-      onOpenSettings={vi.fn()}
-      onSelect={onSelect}
-      onShowAllProjects={vi.fn()}
-      projects={[]}
-      viewTabs={opts.tabs ?? []}
-    >
-      <div />
-    </AppShell>,
+    /* 「项目」分组挂了 useToast（删除回执）：按应用真实层级包上 Provider。 */
+    <ToastProvider>
+      <AppShell
+        active={opts.active ?? "home"}
+        activeProjectId={null}
+        onCloseViewTab={onCloseViewTab}
+        onNewProject={vi.fn()}
+        onOpenProject={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onSelect={onSelect}
+        onShowAllProjects={vi.fn()}
+        projects={[]}
+        viewTabs={opts.tabs ?? []}
+      >
+        <div />
+      </AppShell>
+    </ToastProvider>,
   );
   return { onCloseViewTab, onSelect };
 }
