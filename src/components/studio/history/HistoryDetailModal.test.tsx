@@ -91,6 +91,51 @@ describe("HistoryDetailModal 提示词定高滚动（ISSUE #4665）", () => {
   });
 });
 
+describe("HistoryDetailModal 纯查看（#4841）", () => {
+  const DETAIL_WITH_IMAGE: TaskDetail = {
+    ...TASK_DETAIL_BASE,
+    params: { prompt: "x", workflow: "wf-1" },
+    images: [
+      {
+        id: "img-1",
+        taskId: "t-1",
+        localPath: "/api/generated/t-1/img_0.png",
+        mediaType: "image",
+        seed: null,
+        width: 1024,
+        height: 1024,
+        isCover: false,
+        sortIndex: 0,
+        humanRating: null,
+        isFavorite: false,
+      },
+    ],
+  };
+
+  it("产物图上不再挂评分 / 收藏行（详情回归纯查看，评分入口已撤）", () => {
+    renderModal(DETAIL_WITH_IMAGE);
+    expect(screen.queryByLabelText("1 星")).toBeNull();
+    expect(screen.queryByLabelText("5 星")).toBeNull();
+    expect(screen.queryByLabelText("收藏")).toBeNull();
+    expect(screen.queryByLabelText("取消收藏")).toBeNull();
+  });
+
+  it("不再有「放大 / 局部重绘」区块与它的提交按钮", () => {
+    renderModal(DETAIL_WITH_IMAGE);
+    expect(screen.queryByText("放大 / 局部重绘")).toBeNull();
+    expect(screen.queryByText("提交")).toBeNull();
+    expect(screen.queryByText("放大重出")).toBeNull();
+    expect(screen.queryByText("局部重绘")).toBeNull();
+  });
+
+  it("查看能力保留：产物、打开目录与下载工作流还在", () => {
+    renderModal(DETAIL_WITH_IMAGE);
+    expect(screen.getByText("产物")).toBeTruthy();
+    expect(screen.getByText("打开目录")).toBeTruthy();
+    expect(screen.getByText("下载工作流")).toBeTruthy();
+  });
+});
+
 describe("HistoryDetailModal 工作流参数按 IO 端口渲染", () => {
   const ioMap = {
     "6::widget::replace": {

@@ -10,6 +10,7 @@ import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 import {
+  buildModelTestRetryPayload,
   buildReprintPayload,
   deriveTaskOrigin,
   deriveWorkflowParams,
@@ -424,5 +425,47 @@ describe("buildReprintPayload（ISSUE #4769：复制去重投的全量参数 JSO
     expect("checkpoint" in payload.inputs).toBe(false);
     expect("workflow" in payload.inputs).toBe(false);
     expect("runtime" in payload.inputs).toBe(false);
+  });
+});
+
+describe("buildModelTestRetryPayload（#4841：历史「重试」带参预填测试模型）", () => {
+  it("折参口径与复制去重投同一份：契约口值 + 尺寸 pin 展开，模式大写", () => {
+    const payload = buildModelTestRetryPayload({
+      detail: makeDetail({
+        workflow: "wf-9",
+        prompt: "赛博朋克城市夜景",
+        workflowInputs: [{ nodeId: "23", name: "aspect_ratio", value: "16:9" }],
+      }),
+      mode: "t2i",
+      contracts: null,
+    });
+    expect(payload.mode).toBe("T2I");
+    expect(payload.inputs.prompt).toBe("赛博朋克城市夜景");
+    expect(payload.inputs["aspect-ratio"]).toBe("16:9");
+  });
+
+  it("带来源任务 id 与工作流 id 线索（测试页据此预选同款工作流）", () => {
+    const payload = buildModelTestRetryPayload({
+      detail: makeDetail({ workflow: "wf-9", prompt: "x" }),
+      mode: "T2I",
+      contracts: null,
+    });
+    expect(payload.sourceTaskId).toBe("t-1");
+    expect(payload.workflowId).toBe("wf-9");
+  });
+
+  it("params.workflow 缺失 / 非字符串时不带 workflowId（测试页留给用户重挑）", () => {
+    const without = buildModelTestRetryPayload({
+      detail: makeDetail({ prompt: "x" }),
+      mode: "T2I",
+      contracts: null,
+    });
+    expect("workflowId" in without).toBe(false);
+    const broken = buildModelTestRetryPayload({
+      detail: makeDetail({ workflow: 42, prompt: "x" }),
+      mode: "T2I",
+      contracts: null,
+    });
+    expect("workflowId" in broken).toBe(false);
   });
 });

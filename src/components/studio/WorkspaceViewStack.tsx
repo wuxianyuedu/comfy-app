@@ -20,6 +20,7 @@ import type { RecentProject } from "~/components/studio";
 import { ProjectGate } from "~/components/studio/ProjectGate";
 import { HeavyViewGate } from "~/components/studio/HeavyViewGate";
 import { isProjectTab } from "~/components/studio/NavItems";
+import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
 import {
   ComfyuiControl,
   ConsoleView,
@@ -54,6 +55,8 @@ export type WorkspaceViewStackProps = {
   activeKey: string;
   /** 当前页签对应的**视图**（同一视图两个页签算同一屏）—— 打开耗时按它归属。 */
   activeView: WorkspaceView;
+  /** 一次性预填载荷消费完的回调（#4841）：测试模型视图落定后清工作区的 pending state。 */
+  onConsumeModelTestRetry: () => void;
   onConsumePendingWorkflow: () => void;
   onConsumeSettingsSection: () => void;
   /** 删除一个项目（项目页内左列表底部的危险入口；上层删本地+服务端并关页签）。 */
@@ -70,9 +73,13 @@ export type WorkspaceViewStackProps = {
   /** 队列屏的离线出口：切到侧栏「ComfyUI」页。 */
   onOpenComfyui: () => void;
   onOpenProject: (id: string) => void;
+  /** 历史页「重试」折好的带参载荷（#4841）：工作区带到测试模型页预填 ——
+   *  与 `pendingCanvasWorkflow` 同款的一次性载荷，落定后由 `onConsume…` 清。 */
+  onReprintToModelTest: (payload: ModelTestRetryPayload) => void;
   onShowAllProjects: () => void;
   onUseWorkflow: (id: string, meta?: { name: string; taskType: string }) => void;
   pendingCanvasWorkflow: { id: string; name: string; taskType: string } | null;
+  pendingModelTestRetry: ModelTestRetryPayload | null;
   /** 最近项目（项目主页取名字用）。 */
   recentProjects: Array<RecentProject>;
   /** 设置：跳转时指定的目标分区（一次性载荷，交给设置视图落定后消费）。 */
@@ -101,6 +108,9 @@ export function WorkspaceViewStack({
   onDeleteProject,
   settingsSection,
   onConsumeSettingsSection,
+  onReprintToModelTest,
+  onConsumeModelTestRetry,
+  pendingModelTestRetry,
 }: WorkspaceViewStackProps) {
   /**
    * 某一个页签该渲染什么 —— **按页签取值**，不再按「当前视图」取值。项目类视图
@@ -150,7 +160,9 @@ export function WorkspaceViewStack({
       }
 
       case "history": {
-        return <HistoryList onOpenTask={onOpenProject} />;
+        return (
+          <HistoryList onOpenTask={onOpenProject} onReprintToModelTest={onReprintToModelTest} />
+        );
       }
 
       case "queue": {
@@ -176,7 +188,12 @@ export function WorkspaceViewStack({
       }
 
       case "model-test": {
-        return <ModelTestView />;
+        return (
+          <ModelTestView
+            onConsumeReprint={onConsumeModelTestRetry}
+            pendingReprint={pendingModelTestRetry}
+          />
+        );
       }
 
       case "mode-contract": {

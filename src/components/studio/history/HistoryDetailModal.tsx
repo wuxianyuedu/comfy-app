@@ -20,10 +20,6 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 import { useHistoryDetailActions } from "./hooks/use-history-detail-actions";
 import type { TaskDetail } from "./history-types";
-import { ImageFeedbackRow } from "./ImageFeedbackRow";
-import { ImageRedrawPanel } from "./ImageRedrawPanel";
-import { useToast } from "../ToastProvider";
-import type { ActionReport } from "~/lib/async-action";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -66,7 +62,10 @@ function PromptValueCell({ text }: { text: string }) {
  * 历史任务详情弹窗 —— 纯展示层（规范 17 §17.2 第③层）：图片网格 + 工坊参数（工坊发起时）+ 工作流参数 + 打开目录/下载工作流。
  * 不再有独立提示词块与「生成参数」卡：它们与参数表重复（同一提示词出现两次），且只看硬编码键名，
  * 反而过滤掉种子等关键参数；现在一切参数按来源分块，名字取工作流 IO 作者标签（workflowIO）。
- * 派生在 history-detail-derive.ts、动作在 hooks/use-history-detail-actions.ts、网络在 lib/…；本文件只排版与上抛。 */
+ * 派生在 history-detail-derive.ts、动作在 hooks/use-history-detail-actions.ts、网络在 lib/…；本文件只排版与上抛。
+ * 「重试 / 评分收藏 / 放大重绘」等编辑性入口已从这里撤走（#4841）：详情只看——
+ * 重试走任务卡（带参预填测试模型），评分收藏与放大重绘不再有这个弹窗入口。
+ */
 export function HistoryDetailModal({
   detailId,
   detail,
@@ -79,11 +78,6 @@ export function HistoryDetailModal({
     openFolder: revealTaskFolder,
     fetchWorkflow: fetchTaskWorkflow,
   });
-  const toast = useToast();
-  /* 重绘 / 放大的反馈通道（与 use-history-detail-actions 的 toast 适配同一形状，
-   * 那份是模块私有，这里就近再接一次 —— 表现层选择归调用处，规范 16 §16.2.4.30）。 */
-  const redrawReport: ActionReport = (kind, detail) =>
-    kind === "ok" ? toast.success(detail) : toast.error(detail);
 
   if (detailId === null || detailId === "") {
     return null;
@@ -260,35 +254,12 @@ export function HistoryDetailModal({
                           >
                             {isVideo(img.localPath) ? "下载视频" : "下载"}
                           </a>
-                          {/* 人工评分 + 收藏（FR-QA-07 人工侧 · #2480）：评分是校准
-                            读数的人侧输入，收藏是 few-shot 沉淀机制的输入。 */}
-                          <ImageFeedbackRow
-                            image={{
-                              id: img.id,
-                              humanRating: img.humanRating ?? null,
-                              isFavorite: img.isFavorite,
-                            }}
-                          />
                         </div>
                       ))}
                     </div>
                   </>
                 ) : (
                   <p className="text-ink-muted text-sm">该任务没有生成图像。</p>
-                )}
-
-                {/* 放大 / 局部重绘（#2483 · FR-QA-09）：只对图片产物开放（视频
-                    产物没有这一族修复动作）。模板取自用户工作流库。 */}
-                {firstImage && !isVideo(firstImage.localPath) && (
-                  <Disclosure trigger={<span className="u-title text-sm">放大 / 局部重绘</span>}>
-                    <ImageRedrawPanel
-                      imageUrl={firstImage.localPath}
-                      parentTaskId={current.id}
-                      projectId={current.projectId ?? null}
-                      prompt={current.prompt}
-                      toastReport={redrawReport}
-                    />
-                  </Disclosure>
                 )}
 
                 {/* 提示词与「生成参数」（种子 / 步数 / CFG）都走下面的参数块：

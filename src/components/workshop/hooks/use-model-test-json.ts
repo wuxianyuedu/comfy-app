@@ -9,9 +9,8 @@ import { useCallback } from "react";
 
 import { isRecord } from "~/lib/is-record";
 import { errorMessage } from "~/lib/error-message";
-import { isWorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
-import type { ModelTestValues } from "../model-test-config";
+import { pickWorkshopInputValues, type ModelTestValues } from "../model-test-config";
 
 /** applyJsonValues 对会话的写入面（只碰表单值与错误反馈位）。 */
 type JsonApplyPatch = {
@@ -22,6 +21,9 @@ type JsonApplyPatch = {
 export function useApplyJsonValues(args: {
   /** 当前格的键（ref 转发，保持回调身份稳定）。 */
   activeKeyRef: { current: string };
+  /** 解析成功后的回调（#4841）：贴 JSON 是一次用户接管，历史「重试」的
+   *  预填层在这里一并退场。 */
+  onApplied?: () => void;
   patchSession: (key: string, patch: JsonApplyPatch) => void;
   /** 当前格的表单值（合并基底）。 */
   values: ModelTestValues;
@@ -30,7 +32,7 @@ export function useApplyJsonValues(args: {
     json: string,
   ) => { ok: true; values: ModelTestValues } | { error: string; ok: false };
 } {
-  const { values, activeKeyRef, patchSession } = args;
+  const { values, activeKeyRef, patchSession, onApplied } = args;
   const applyJsonValues = useCallback(
     (json: string): { ok: true; values: ModelTestValues } | { error: string; ok: false } => {
       let parsed: unknown;
@@ -52,13 +54,9 @@ export function useApplyJsonValues(args: {
         patchSession(activeKeyRef.current, { error: text });
         return { ok: false, error: text };
       }
-      const patch: Partial<ModelTestValues> = {};
-      for (const [key, value] of Object.entries(rawInputs)) {
-        if (!isWorkshopInputType(key) || typeof value !== "string" || value.trim() === "") {
-          continue;
-        }
-        patch[key] = value;
-      }
+      /* 白名单过滤（测试页承接的输入类型 + 非空字符串）收在
+       * `pickWorkshopInputValues`（#4841）：历史「重试」的预填走同一条判据。 */
+      const patch = pickWorkshopInputValues(rawInputs);
       if (Object.keys(patch).length === 0) {
         const text = "JSON 的 inputs 里没有测试页认得的参数键";
         patchSession(activeKeyRef.current, { error: text });
@@ -66,9 +64,10 @@ export function useApplyJsonValues(args: {
       }
       const nextValues: ModelTestValues = { ...values, ...patch };
       patchSession(activeKeyRef.current, { values: nextValues, error: null });
+      onApplied?.();
       return { ok: true, values: nextValues };
     },
-    [activeKeyRef, patchSession, values],
+    [activeKeyRef, onApplied, patchSession, values],
   );
   return { applyJsonValues };
 }
