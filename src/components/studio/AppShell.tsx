@@ -189,8 +189,7 @@ export function AppShell({
       <SidebarProvider className="h-full min-h-0" defaultOpen={defaultSidebarOpen}>
         <Sidebar collapsible="icon">
           <SidebarContent>
-            {/* 侧栏顶部的品牌图片（Issue #4813）：可点开换成自己的图。 */}
-            <SidebarBrand />
+            <SidebarBrand onHome={onSelect} />
             <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu>

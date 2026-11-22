@@ -17,22 +17,29 @@ import { FieldLabel } from "~/components/ui/field";
 import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { Hint } from "~/components/ui/hint";
 import { Input } from "~/components/ui/input";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "~/components/ui/select";
 import {
   DEFAULT_APPEARANCE,
+  DEFAULT_BRAND_LOGO,
   DEFAULT_CODE_FONT,
   DEFAULT_INTERFACE_FONT,
   DEFAULT_TERMINAL_FONT,
   FONT_SCALE_STEPS,
   RADIUS_STEPS,
   readAppearance,
+  readBrandLogo,
   registerUserFont,
+  restoreBrandLogo,
   saveAppearance,
+  saveBrandLogo,
   type AppearancePrefs,
   type AppearanceStep,
   type FontTier,
 } from "~/lib/appearance";
+import { subscribeAppEvent } from "~/lib/app-events";
+import { readFileAsDataUrl } from "~/lib/file-io";
 import {
   currentFontPlatform,
   describeFontPart,
@@ -65,6 +72,35 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
       clearTimeout(t);
     };
   }, []);
+
+  /* 品牌图与其余偏好分开存续（data URL 可能很大，不进 appearance 那份 JSON）。
+     首帧用内置图，挂载后读本机；侧栏那边换图时经应用事件同步到这里。 */
+  const [brandLogo, setBrandLogo] = useState<string>(DEFAULT_BRAND_LOGO);
+  const [brandNotPersisted, setBrandNotPersisted] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setBrandLogo(readBrandLogo());
+    }, 0);
+    const off = subscribeAppEvent("comfyapp:brand-logo-changed", () => {
+      setBrandLogo(readBrandLogo());
+    });
+    return () => {
+      clearTimeout(t);
+      off();
+    };
+  }, []);
+
+  const onPickBrandLogo = (file: File) => {
+    void readFileAsDataUrl(file).then((dataUrl) => {
+      setBrandLogo(dataUrl);
+      setBrandNotPersisted(!saveBrandLogo(dataUrl));
+    });
+  };
+  const brandPicker = useFilePicker({ accept: "image/*", onPick: onPickBrandLogo });
+  const onRestoreBrandLogo = () => {
+    setBrandLogo(DEFAULT_BRAND_LOGO);
+    setBrandNotPersisted(!restoreBrandLogo());
+  };
 
   const update = (patch: Partial<AppearancePrefs>) => {
     const next = { ...prefs, ...patch };
@@ -138,6 +174,31 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
         ))}
       </RadioGroup>
 
+      {/* 侧栏顶部的品牌图（#4813 复评）：换图入口从侧栏图标挪到这里。
+          图片存本机 localStorage（与圆角/字体分开存续），不上传、不入库。 */}
+      <div className="mt-5">
+        <div className="mb-2 flex flex-wrap items-baseline gap-2">
+          <span className="text-ink text-sm font-semibold">品牌图</span>
+          <span className="text-muted-foreground text-xs">侧栏左上角的图片，点击可回主页</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <MediaThumbnail
+            alt="当前品牌图"
+            as="image"
+            className="border-border bg-background size-12 rounded-lg border object-contain"
+            fallback="none"
+            src={brandLogo}
+          />
+          <Button onClick={brandPicker.open} size="sm" type="button" variant="outline">
+            选择图片
+          </Button>
+          <Button onClick={onRestoreBrandLogo} size="sm" type="button" variant="ghost">
+            恢复默认
+          </Button>
+          <FilePicker {...brandPicker.inputProps} />
+        </div>
+      </div>
+
       {/* 圆角与标题字阶各只改一个全局 CSS 变量（--radius / --font-scale）；
           具体数值留在 globals.css 一处，这里不重复定义基准。 */}
       <StepRow
@@ -201,7 +262,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
         tier="terminal"
         value={prefs.terminalFont}
       />
-      {notPersisted && (
+      {(notPersisted || brandNotPersisted) && (
         <p className="text-warning mt-3 text-xs">
           浏览器拒绝了本地存储：本次设置立即生效，但下次打开会回到默认值。
         </p>
