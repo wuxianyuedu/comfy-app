@@ -531,6 +531,12 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
 要本地跑 A/B/D 全套：`COMFY_HEAVY_GATES=1 git commit …` 或 `pnpm check:all`
 （合并前复算：`pnpm check:premerge --full`）。
 
+**E2E 不在本地跑整档，交平台每日档**（§11.8 / §13.5.23）：`pnpm test:e2e` **不带参数**
+就是十几分钟的全量整档，它的执行者是平台侧 `每日全量E2E`，本地再跑一遍既重复又用
+dev 的按需编译把失败归因搅浑（§11.13）。改了 spec 只跑受影响的那几个文件
+（`pnpm test:e2e e2e/foo.spec.ts`；带参数的那一跑**不记整档凭证**），整档绿以平台
+CI / 每日档的读数为准——不要把「本地整档跑过了」写成交付证据。
+
 **跑门禁前发现 `node_modules` 不在**：这是「还没装」，不是「装不了」——先
 `pnpm install --frozen-lockfile`（冷装约 8 分钟）再跑。不要把它当成「本机不支持校验」
 的结论，也不要把这个理由写进提交信息（硬规则 26 / §13.6.3）。前置判断：`pnpm check:toolchain`。
