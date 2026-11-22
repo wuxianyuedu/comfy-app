@@ -10,6 +10,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 
 import { AppShell } from "./AppShell";
+import { ToastProvider } from "./ToastProvider";
 import type { WorkspaceView } from "./NavItems";
 import { tabKey, type ViewTab } from "./workspace-tabs";
 
@@ -82,25 +83,28 @@ function renderShell(
     onSelectViewTab: vi.fn(),
   };
   render(
-    <AppShell
-      active={opts.active ?? "home"}
-      activeProjectId="p1"
-      activeViewKey={opts.activeViewKey}
-      onCloseViewTab={handlers.onCloseViewTab}
-      onNewProject={vi.fn()}
-      onOpenProject={vi.fn()}
-      onOpenSettings={vi.fn()}
-      onOpenView={handlers.onOpenView}
-      onSelect={vi.fn()}
-      onSelectViewTab={handlers.onSelectViewTab}
-      onShowAllProjects={vi.fn()}
-      openableViews={opts.openableViews}
-      projectNameOf={(id) => (id === "p1" ? "雾中来信" : null)}
-      projects={[{ id: "p1", name: "雾中来信" }]}
-      viewTabs={opts.tabs ?? []}
-    >
-      <div />
-    </AppShell>,
+    /* 「项目」分组挂了 useToast（删除回执）：按应用真实层级包上 Provider。 */
+    <ToastProvider>
+      <AppShell
+        active={opts.active ?? "home"}
+        activeProjectId="p1"
+        activeViewKey={opts.activeViewKey}
+        onCloseViewTab={handlers.onCloseViewTab}
+        onNewProject={vi.fn()}
+        onOpenProject={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onOpenView={handlers.onOpenView}
+        onSelect={vi.fn()}
+        onSelectViewTab={handlers.onSelectViewTab}
+        onShowAllProjects={vi.fn()}
+        openableViews={opts.openableViews}
+        projectNameOf={(id) => (id === "p1" ? "雾中来信" : null)}
+        projects={[{ id: "p1", name: "雾中来信" }]}
+        viewTabs={opts.tabs ?? []}
+      >
+        <div />
+      </AppShell>
+    </ToastProvider>,
   );
   return handlers;
 }

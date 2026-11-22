@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { LayoutGrid, Pencil, Plus, X } from "lucide-react";
+import { LayoutGrid, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +41,7 @@ import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
 import { SidebarTempTabs } from "./SidebarTempTabs";
 import { SidebarBrand } from "./SidebarBrand";
+import { useToast } from "./ToastProvider";
 import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
 import { useTitleBarSlot } from "./TitleBarSlot";
 import { isTabClosable, type ViewTab } from "./workspace-tabs";
@@ -85,6 +87,7 @@ function SidebarProjectsGroup({
   activeProjectId,
   insideProject,
   onCloseViewTab,
+  onDeleteProject,
   onNewProject,
   onOpenProject,
   onShowAllProjects,
@@ -94,22 +97,27 @@ function SidebarProjectsGroup({
   activeProjectId: string | null;
   insideProject: boolean;
   onCloseViewTab?: (key: string) => void;
+  /** 删除项目（上层负责：本地+服务端一并删、关该项目页签、刷新活跃项目），
+   *  与项目页左列表的删除入口同一条链路。 */
+  onDeleteProject?: (id: string) => void;
   onNewProject: () => void;
   onOpenProject: (id: string) => void;
   onShowAllProjects: () => void;
   projects: Array<SidebarProject>;
   viewTabs?: Array<ViewTab>;
 }) {
+  const toast = useToast();
   /* 「项目」行的右键菜单（ISSUE #4808）：开在右键那个点上（与画布菜单
      CanvasContextMenu 同一手法 —— 受控 DropdownMenu + 零尺寸 fixed 锚点），
-     全局兜底 AppContextMenu 靠 `defaultPrevented` 让位。目前一项「编辑名称」；
-     改名对话框单独一个状态（菜单关了它才开，互不嵌套）。 */
+     全局兜底 AppContextMenu 靠 `defaultPrevented` 让位。目前有「编辑名称」
+     与「删除项目」两项；两个对话框各自单独一个状态（菜单关了才开，互不嵌套）。 */
   const [contextTarget, setContextTarget] = useState<{
     project: SidebarProject;
     x: number;
     y: number;
   } | null>(null);
   const [renameTarget, setRenameTarget] = useState<SidebarProject | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SidebarProject | null>(null);
 
   return (
     <>
@@ -270,6 +278,16 @@ function SidebarProjectsGroup({
                 <Pencil data-icon="inline-start" size={14} />
                 <span>编辑名称</span>
               </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setDeleteTarget(contextTarget.project);
+                  setContextTarget(null);
+                }}
+                variant="destructive"
+              >
+                <Trash2 data-icon="inline-start" size={14} />
+                <span>删除项目</span>
+              </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -282,6 +300,32 @@ function SidebarProjectsGroup({
             setRenameTarget(null);
           }}
           project={renameTarget}
+        />
+      )}
+
+      {/* 删除确认对话框：文案与项目页 / 「所有项目」屏同族 —— 侧栏行可能是
+          服务端-only 行，这里按「本地+服务端一并删」的口径写。 */}
+      {deleteTarget !== null && (
+        <ConfirmDialog
+          cancelLabel="取消"
+          confirmLabel="删除项目"
+          danger
+          description={
+            `即将永久删除「${deleteTarget.name || "未命名项目"}」。\n` +
+            `该操作不可撤销，画布内的节点与连线将一并丢失。\n` +
+            `该项目的生成任务、成片与工坊内容（含磁盘产物）也将一并删除。`
+          }
+          onClose={() => {
+            setDeleteTarget(null);
+          }}
+          onConfirm={() => {
+            const target = deleteTarget;
+            setDeleteTarget(null);
+            onDeleteProject?.(target.id);
+            toast.success(`已删除项目「${target.name}」`);
+          }}
+          open
+          title="删除此画布项目？"
         />
       )}
     </>
@@ -301,6 +345,8 @@ export type AppShellProps = {
   /** 首帧侧栏展开态。由服务端读 `sidebar_state` cookie 传来（见 `ui/sidebar` 里那段说明）；不传按展开。 */
   defaultSidebarOpen?: boolean;
   onCloseViewTab?: (key: string) => void;
+  /** 删除项目（侧栏「项目」行右键菜单）：上层负责删本地+服务端、关页签、刷新。 */
+  onDeleteProject?: (id: string) => void;
   /** 新建项目 → 建一条 proj_* 并进画布。 */
   onNewProject: () => void;
   /** 点开某个项目 → 进入项目界面（画布为其默认页签）。 */
@@ -343,6 +389,7 @@ export function AppShell({
   projectNameOf,
   onSelectViewTab,
   onCloseViewTab,
+  onDeleteProject,
   openableViews,
   onOpenView,
   children,
@@ -489,6 +536,7 @@ export function AppShell({
               activeProjectId={activeProjectId}
               insideProject={insideProject}
               onCloseViewTab={onCloseViewTab}
+              onDeleteProject={onDeleteProject}
               onNewProject={onNewProject}
               onOpenProject={onOpenProject}
               onShowAllProjects={onShowAllProjects}

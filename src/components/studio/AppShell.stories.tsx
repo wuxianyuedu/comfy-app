@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { AppShell } from "~/components/studio/AppShell";
+import { ToastProvider } from "~/components/studio/ToastProvider";
 import { WorksGallery } from "~/components/studio/WorksGallery";
 import { projectScene, useSeededProjects } from "../../../.storybook/screen-frame";
 import { tabKey, type ViewTab } from "~/components/studio/workspace-tabs";
@@ -55,28 +56,32 @@ function ShellHarness({
 
   return (
     <div className="bg-bg h-180 w-full overflow-hidden">
-      <AppShell
-        active="works"
-        activeProjectId={projects[0]?.id ?? null}
-        activeViewKey={withTabs ? activeTab?.key : undefined}
-        onCloseViewTab={() => undefined}
-        onNewProject={() => undefined}
-        onOpenProject={() => undefined}
-        onOpenSettings={() => undefined}
-        onSelect={() => undefined}
-        onSelectViewTab={() => undefined}
-        onShowAllProjects={() => undefined}
-        projectNameOf={(projectId) =>
-          projects.find((project) => project.id === projectId)?.name ?? null
-        }
-        projects={projects.map((project) => ({
-          id: project.id,
-          name: project.name,
-        }))}
-        viewTabs={withTabs ? tabs : undefined}
-      >
-        {children}
-      </AppShell>
+      {/* 壳的「项目」分组挂了 useToast（删除回执）：应用里由根布局全局提供，
+          工作台里按同一层级包上。 */}
+      <ToastProvider>
+        <AppShell
+          active="works"
+          activeProjectId={projects[0]?.id ?? null}
+          activeViewKey={withTabs ? activeTab?.key : undefined}
+          onCloseViewTab={() => undefined}
+          onNewProject={() => undefined}
+          onOpenProject={() => undefined}
+          onOpenSettings={() => undefined}
+          onSelect={() => undefined}
+          onSelectViewTab={() => undefined}
+          onShowAllProjects={() => undefined}
+          projectNameOf={(projectId) =>
+            projects.find((project) => project.id === projectId)?.name ?? null
+          }
+          projects={projects.map((project) => ({
+            id: project.id,
+            name: project.name,
+          }))}
+          viewTabs={withTabs ? tabs : undefined}
+        >
+          {children}
+        </AppShell>
+      </ToastProvider>
     </div>
   );
 }
