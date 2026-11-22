@@ -8,6 +8,7 @@
 // 即刷新、完成后定格为总耗时）；每行显示该节点耗时（已完成 = 收尾 − 开始，
 // 运行中 = 最新事件 − 开始）。时长文案走 ~/lib/time-format 的 formatDurationMs。
 // 缓存跳过的节点也按执行顺序列出、标「缓存跳过」、不画进度条（#4757）。
+// 瞬时完成（全程无 progress 数字）的节点同样不画——假满格是错误信息（#4806）。
 
 import { useMemo } from "react";
 import { CircleCheck } from "lucide-react";
@@ -23,7 +24,8 @@ import {
   type TaskProgressSnapshot,
 } from "~/lib/workshop/task-log-progress";
 
-/** 一行节点进度：状态图标 + 节点名 + 进度条（缓存节点没有进度语义，不画）+ 计数与耗时。 */
+/** 一行节点进度：状态图标 + 节点名 + 进度条（缓存跳过 / 瞬时完成无进度数字的
+ *  节点没有进度语义，不画）+ 计数与耗时。 */
 function StageRow({
   cached,
   caption,
@@ -61,14 +63,16 @@ function StageRow({
           </span>
           <span className="text-muted-foreground text-2xs shrink-0 tabular-nums">{caption}</span>
         </div>
-        {!cached && (
+        {/* 没有进度语义的行不画条（#4806）：缓存跳过、以及**瞬时完成**（全程没采集到
+         * progress 数字）的节点——假满格是错误信息。运行中无数字仍给不确定态；
+         * 已完成行也因此不再有「永远扫描」的形态（#4760 的诉求一并满足）。 */}
+        {!cached && !(done && pct === null) && (
           <ProgressBar
             ariaLabel={`${nodeLabel} 进度`}
             className="mt-1"
             showValue={false}
             trackClassName="h-1.5"
-            /* 已完成但没采集到进度数字的节点（如 1s 的 VAE Decode）：给满格确定条，
-             * 不给不确定态——否则「已完成」的行会永远扫下去（#4760）。 */
+            /* 走到这里的已完成行必然采集到了进度数字；`?? 100` 只是类型收窄兜底。 */
             value={done ? (pct ?? 100) : pct}
           />
         )}

@@ -71,20 +71,20 @@ describe("TaskProgressPanel", () => {
     expect(runningBar?.getAttribute("aria-valuenow")).toBeNull();
   });
 
-  it("已完成但无进度数字的节点给满格确定条，不再不停扫描（#4760）", () => {
+  it("瞬时完成（无进度数字）的节点不画进度条，不给假满格（#4806）", () => {
     const { container } = render(
       <TaskProgressPanel
         logs={[
-          line('[comfy-cli 原始] {"type":"executing","node":"23:8","title":"VAE Decode"}'),
-          line('[comfy-cli 原始] {"type":"executed","node":"23:8"}'),
+          line('[comfy-cli 原始] {"type":"executing","node":"23:1","title":"If/Else Switch"}'),
+          line('[comfy-cli 原始] {"type":"executed","node":"23:1"}'),
         ]}
       />,
     );
     const panel = container.querySelector('[data-testid="task-progress-panel"]')!;
-    expect(panel.textContent).toContain("VAE Decode");
-    const bar = panel.querySelector('[data-slot="progress-bar-track"]')!;
-    /* done + 无进度数字 = 满格确定条，不是永远扫下去的不确定态。 */
-    expect(bar.getAttribute("aria-valuenow")).toBe("100");
+    expect(panel.textContent).toContain("If/Else Switch");
+    /* done + 无进度数字 = 没有进度语义：不画条——假满格是错误信息；
+     * 没有条也就没有「已完成行永远扫描」的形态（#4760 的诉求一并满足）。 */
+    expect(panel.querySelectorAll('[data-slot="progress-bar-track"]')).toHaveLength(0);
     expect(panel.querySelector('[data-slot="progress-bar-indeterminate"]')).toBeNull();
   });
 
