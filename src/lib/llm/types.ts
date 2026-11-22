@@ -335,6 +335,43 @@ export function effectiveProviderType(
   return provider;
 }
 
+/** 远端条目能否当文本（对话）模型用：用途未标注（null / 词表外）的历史行按
+ *  文本处理 —— 历史上写坏一列不该让模型失去文本能力，与设置页 `kind ?? "chat"`
+ *  的归组一致（#4823 起收口到这里，消费方不再各写一份谓词）。 */
+export function isChatModelKind(kind: RemoteModelKind | null | undefined): boolean {
+  return kind === null || kind === undefined || kind === "chat";
+}
+
+/** 当前生效主模型的对话候选兜底归组（工坊文本下拉与测试页对话候选的**唯一
+ *  口径**，#4823）：设置页刻意把主模型排除在候选清单外（播种过滤 + 保存不并回），
+ *  「主模型不在 extraModels 里」是常态而非异常 —— 消费方把它兜底归组，否则
+ *  只设了「当前模型」的单模型 Ollama 配置在任何对话候选列表里都是空态。
+ *  主模型为空、或已在既有对话候选里时返回 null（不需要兜底）：
+ *  - 生效提供方 local → 恒归本地（Ollama 主模型走 chat/completions，天然可做文本任务）；
+ *  - 生效提供方 remote → 仅当这条主模型不是明确 image / video 用途时归远端
+ *    （远端表里没有条目 / 用途未标注 / chat 都算文本）。 */
+export function chatFallbackGroupForCurrentModel(opts: {
+  /** 主模型是否已在既有对话候选里（本地候选名 / 远端文本条目任一命中即算）。 */
+  inChatCandidates: boolean;
+  /** 主模型名（原值即可，函数内 trim）。 */
+  model: string | null | undefined;
+  /** 生效提供方（`effectiveProviderType` 的结果，不是存储值）。 */
+  provider: LLMProviderType;
+  /** 远端条目里这条主模型的用途；undefined = 远端表里没有这条。 */
+  remoteEntryKind?: RemoteModelKind | null | undefined;
+}): "local" | "remote" | null {
+  const model = opts.model?.trim() ?? "";
+  if (model === "" || opts.inChatCandidates) {
+    return null;
+  }
+  if (opts.provider === "local") {
+    return "local";
+  }
+  return opts.remoteEntryKind === undefined || isChatModelKind(opts.remoteEntryKind)
+    ? "remote"
+    : null;
+}
+
 /**
  * 任务温度解析（设置覆盖与推荐默认的唯一裁决点）：
  *   该任务的用户覆盖值 → 调用方显式指定的温度 → 该任务推荐默认 → 全局默认。
