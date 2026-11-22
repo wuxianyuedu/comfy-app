@@ -149,3 +149,16 @@ describe("设置不在侧栏（ISSUE #1784：入口收归顶栏）", () => {
     expect(source).toContain("onOpenSettings={onOpenSettings}");
   });
 });
+
+describe("首页不做选中变色（ISSUE #4813）", () => {
+  it("当前视图是首页时，首页项不挂 data-active（其它页签照常高亮）", () => {
+    /* 首页是固定落点，不用「当前在这页」的高亮表达；其它视图的选中态不受影响。 */
+    renderShell("home");
+    expect(screen.getByRole("button", { name: "首页" }).dataset.active).toBeUndefined();
+  });
+
+  it("当前视图不是首页时，命中的那一项照常挂 data-active", () => {
+    renderShell("models");
+    expect(screen.getByRole("button", { name: "模型" }).dataset.active !== undefined).toBe(true);
+  });
+});

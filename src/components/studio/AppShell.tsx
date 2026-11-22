@@ -31,6 +31,7 @@ import {
 import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
 import { SidebarTempTabs } from "./SidebarTempTabs";
+import { SidebarBrand } from "./SidebarBrand";
 import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
 import { useTitleBarSlot } from "./TitleBarSlot";
 import { isTabClosable, type ViewTab } from "./workspace-tabs";
@@ -169,6 +170,8 @@ export function AppShell({
       <SidebarProvider className="h-full min-h-0" defaultOpen={defaultSidebarOpen}>
         <Sidebar collapsible="icon">
           <SidebarContent>
+            {/* 侧栏顶部的品牌图片（Issue #4813）：可点开换成自己的图。 */}
+            <SidebarBrand />
             <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu>
@@ -197,7 +200,9 @@ export function AppShell({
                             !enabled && "opacity-50",
                           )}
                           disabled={!enabled}
-                          isActive={active === item.id}
+                          /* 首页不参与选中变色（Issue #4813）：它是常驻落点，
+                             不像其它页签那样用高亮表达「当前在这页」。 */
+                          isActive={active === item.id && item.id !== "home"}
                           onClick={() => {
                             if (enabled) {
                               onSelect(item.id);
