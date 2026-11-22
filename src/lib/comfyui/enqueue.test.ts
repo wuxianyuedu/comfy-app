@@ -178,4 +178,39 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
      * prompt 仍归本进程看，reaper 因此永远不插手一个早该收口的行。 */
     expect(runnerState.state().promptToTask.has("p-e")).toBe(false);
   });
+
+  it("杀进程期间「取消中」标记必须在场（ISSUE #4800）：close 收口据此不把被杀退出写成失败", async () => {
+    const { taskId } = setup({ status: "RUNNING", promptId: "p-f" }, { inFlight: true });
+    /* 让 killProcessTree 挂起：模拟「进程还没死透」的窗口——被杀进程的 close
+     * 事件恰好落在这段窗口里。 */
+    let releaseKill!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseKill = resolve;
+    });
+    vi.mocked(kpt.killProcessTree).mockImplementationOnce(() =>
+      gate.then(() => ({ ok: true, via: "mock", pid: 4242 })),
+    );
+
+    const pending = mod.cancelTask(taskId);
+    await vi.waitFor(() => {
+      if (vi.mocked(kpt.killProcessTree).mock.calls.length === 0) {
+        throw new Error("尚未走到杀进程一步");
+      }
+    });
+    expect(runnerState.isCancellingHere(taskId)).toBe(true);
+
+    releaseKill();
+    await pending;
+    /* 收口结束（含取消落库）后必须摘标记：同 taskId 重跑时，上一轮的标记
+     * 不能吞掉这一轮真实的失败。 */
+    expect(runnerState.isCancellingHere(taskId)).toBe(false);
+  });
+
+  it("行不存在（已清场）的提前返回同样摘掉「取消中」标记", async () => {
+    const { taskId } = setup(null);
+
+    await mod.cancelTask(taskId);
+
+    expect(runnerState.isCancellingHere(taskId)).toBe(false);
+  });
 });
