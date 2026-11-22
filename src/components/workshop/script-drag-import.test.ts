@@ -31,7 +31,13 @@ describe("剧本页的拖拽导入接线（#4827）", () => {
     expect(code).toContain("已保留当前剧本");
   });
 
-  it("拖拽进行中的覆盖层不拦截事件（pointer-events-none）", () => {
-    expect(code).toContain("pointer-events-none");
+  it("拖拽高亮沿工作流库投放区的既有形状：outline 高亮 + 文档流内提示条，不造覆盖层", () => {
+    expect(code).toContain("outline-info/60 outline-2 -outline-offset-2");
+    expect(code).toContain("松开导入剧本");
+    /* 绝对定位覆盖层在这里没有对象 —— overlay-z 刻度（§16.2.5）与空态卡判据
+     *（P75：border-dashed + rounded 组合）都会把它当新增违规拦下（PR #4831
+     * 的 CI 实测红过一次），既有投放区（WorkflowLibraryList）也是提示条形状。 */
+    expect(code).not.toContain("absolute inset-0");
+    expect(code).not.toContain("border-dashed");
   });
 });

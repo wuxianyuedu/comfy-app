@@ -230,20 +230,21 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {tab === "script" && (
         <div
           className={[
-            "relative",
-            scriptDropZone.active ? "outline-info/60 outline-2 -outline-offset-2 rounded-2xl" : "",
+            scriptDropZone.active ? "outline-info/60 outline-2 -outline-offset-2" : "",
           ].join(" ")}
           onDragEnter={scriptDropZone.onDragEnter}
           onDragLeave={scriptDropZone.onDragLeave}
           onDragOver={scriptDropZone.onDragOver}
           onDrop={scriptDropZone.onDrop}
         >
-          {/* 拖拽进行中的整页提示（#4827）：pointer-events-none 让 drop 继续落到
-           * 下层（漏斗的 enter/leave 计数靠真实进出配对，overlay 挡事件会把它打断）。 */}
+          {/* 拖拽进行中的提示条（#4827）：随文档流插在内容上方 —— 沿工作流库列表
+           * 投放区的既有形状（outline 高亮 + 提示条），不造绝对定位覆盖层：
+           * 那是 overlay-z 刻度（§16.2.5）与空态卡判据（P75）都要管的形状，
+           * 投放区也用不着（drop 直接落在本页内容上）。 */}
           {scriptDropZone.active && (
-            <div className="border-info/40 bg-info/10 text-info pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed text-sm font-medium">
+            <p className="border-info/30 bg-info/10 text-info-strong mb-4 rounded-xl border px-3 py-1.5 text-center text-xs">
               松开导入剧本（.md / .txt）
-            </div>
+            </p>
           )}
           {/* 品牌渐变每屏只一处：下面「编辑剧本 / 新建剧本」两颗处在互斥分支上，同时只会渲染一个 —— 这个互斥是载荷性的，别在同一段再加第二颗。 */}
           {scriptMarkdown.trim() ? (
