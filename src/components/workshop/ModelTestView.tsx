@@ -8,7 +8,7 @@
 // 候选 / 适配器 / 契约 / 生成动作都在 `hooks/use-model-test.ts`（第②层）与
 // `model-test-config.ts`（第①层）；本文件不出现 fetch / api.*。
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import {
@@ -39,9 +39,7 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import { StatusDot } from "~/components/ui/status-dot";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { clampInt } from "~/lib/clamp";
-import { sceneFromMode } from "~/lib/media/size-presets";
 import { sizeSourceForMode } from "~/lib/workflow/workflow-size-source";
-import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import type { QueueTaskLogTarget } from "~/components/studio/queue/QueueTaskLogModal";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
@@ -50,13 +48,11 @@ import {
   MODEL_TEST_KINDS,
   MODEL_TEST_KIND_LABELS,
   candidateValue,
-  sizeSpecToValues,
-  sizeValuesToSpec,
   type ModelTestControl,
   type ModelTestKind,
-  type ModelTestValues,
   type ModeTab,
 } from "./model-test-config";
+import { ModelTestSizeField } from "./ModelTestSizeField";
 import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
 import { useModelTest } from "./hooks/use-model-test";
 import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
@@ -219,73 +215,8 @@ function ModeTabs({
   );
 }
 
-/** 尺寸：与工作流库**同一个**选择器（ShotSizePicker）。比例 / 像素（分辨率 ·
- *  百万像素）/ 倍数一段不缺，倍数段只在选中百万像素档时出现。表单值与
- *  SizeSpec 两套形状的换算在 model-test-config（全部走 size-presets 纯函数）。 */
-function SizeField({
-  disabled,
-  mode,
-  onPatchValues,
-  referenceImageSrc,
-  sizeFromReference = false,
-  values,
-}: {
-  disabled?: boolean;
-  mode: string;
-  onPatchValues: (patch: Partial<ModelTestValues>) => void;
-  /** 第一张参考图（data URL / 可访问路径）——尺寸来源声明为首图时读它的像素大小。 */
-  referenceImageSrc?: string;
-  sizeFromReference?: boolean;
-  values: ModelTestValues;
-}) {
-  const scene = sceneFromMode(mode);
-  const [dimsBySrc, setDimsBySrc] = useState<Record<string, { height: number; width: number }>>({});
-  const dims = referenceImageSrc === undefined ? null : (dimsBySrc[referenceImageSrc] ?? null);
-  useEffect(() => {
-    if (
-      referenceImageSrc === undefined ||
-      referenceImageSrc === "" ||
-      dimsBySrc[referenceImageSrc] !== undefined
-    ) {
-      return;
-    }
-    const image = new Image();
-    image.onload = () => {
-      setDimsBySrc((prev) => ({
-        ...prev,
-        [referenceImageSrc]: { height: image.naturalHeight, width: image.naturalWidth },
-      }));
-    };
-    image.src = referenceImageSrc;
-    return () => {
-      image.onload = null;
-    };
-  }, [referenceImageSrc, dimsBySrc]);
-  if (sizeFromReference) {
-    return (
-      <div className="bg-subtle text-ink-muted w-64 min-w-0 rounded-lg px-3 py-2 text-xs">
-        {dims === null
-          ? "上传第一张参考图后自动显示生成尺寸"
-          : `${dims.width} × ${dims.height}（取自第一张参考图）`}
-      </div>
-    );
-  }
-  return (
-    <div className="w-64 min-w-0">
-      <ShotSizePicker
-        disabled={disabled}
-        onChange={(next) => {
-          onPatchValues(sizeSpecToValues(next, scene));
-        }}
-        scene={scene}
-        value={sizeValuesToSpec(values)}
-      />
-    </div>
-  );
-}
-
 /** 一行统一输入的渲染（按类型给控件；文案 = 契约口的展示名）。行标签右侧带
- *  必填 / 可选标识（来自契约 required）。尺寸复合口由 SizeField 统一承担。 */
+ *  必填 / 可选标识（来自契约 required）。尺寸复合口由 ModelTestSizeField 统一承担。 */
 function InputRow({
   control,
   disabled,
@@ -397,7 +328,7 @@ function InputRow({
       </FormField>
     );
   }
-  /* 分辨率档已并入 SizeField 的「像素」段（分辨率 · 百万像素两行）—— 这里
+  /* 分辨率档已并入 ModelTestSizeField 的「像素」段（分辨率 · 百万像素两行）—— 这里
    * 不再有独立的分辨率 chips。duration / number / text → 单行输入。 */
   return (
     <FormField hint={hint} id={id} label={labelNode} labelClassName="mb-1.5">
@@ -724,7 +655,7 @@ export function ModelTestView() {
                             labelClassName="mb-1.5"
                           >
                             {() => (
-                              <SizeField
+                              <ModelTestSizeField
                                 disabled={row.disabled}
                                 mode={c.mode}
                                 onPatchValues={c.patchValues}
