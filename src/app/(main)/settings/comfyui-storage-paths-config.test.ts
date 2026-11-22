@@ -14,6 +14,7 @@ function storageOf(overrides: Partial<DesktopStoragePaths> = {}): DesktopStorage
     instanceRoot: "D:/installs/ComfyUI2",
     baseDir: "D:/installs/ComfyUI2/ComfyUI",
     extraModelPathsFile: "D:/installs/ComfyUI2/ComfyUI/extra_model_paths.yaml",
+    extraModelPathsConfigFiles: [],
     modelDir: dir("D:/installs/ComfyUI2/ComfyUI/models"),
     sharedModelDirs: [dir("D:/shared/models", "comfyui_shared")],
     inputDir: dir("D:/shared/in", "--input-directory"),
@@ -71,5 +72,19 @@ describe("describeStorageHint", () => {
   it("没有 yaml 时如实说没有，而不是留空", () => {
     const hint = describeStorageHint(storageOf({ extraModelPathsFile: null }));
     expect(hint).toContain("没有 extra_model_paths.yaml");
+  });
+
+  it("共享声明来自启动参数 --extra-model-paths-config 时点名那份文件（新版 Desktop 走这里）", () => {
+    const hint = describeStorageHint(
+      storageOf({
+        extraModelPathsFile: null,
+        extraModelPathsConfigFiles: [
+          "C:/Users/x/AppData/Roaming/Comfy Desktop/instance-model-paths/inst-1.yaml",
+        ],
+      }),
+    );
+    expect(hint).toContain("--extra-model-paths-config");
+    expect(hint).toContain("inst-1.yaml");
+    expect(hint).not.toContain("没有 extra_model_paths.yaml");
   });
 });
