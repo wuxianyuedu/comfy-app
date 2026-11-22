@@ -129,26 +129,33 @@ function tempButton(name: string): HTMLElement {
   return btn;
 }
 
-describe("侧栏「临时页签」组（ISSUE #4770）", () => {
-  it("列出了打开的瞬时页签与项目类页签，项目类带项目名", () => {
+describe("侧栏「临时页签」组（ISSUE #4770 / #4798）", () => {
+  it("只列瞬时页签；项目类页签不进这一组（ISSUE #4798：项目在「项目」分组已有打开态）", () => {
     renderShell({
       activeViewKey: tabKey("workshop", "p1"),
       tabs: tabsOf(["home", null], ["settings", null], ["workshop", "p1"]),
     });
     const names = [...tempGroup().querySelectorAll("button")].map((btn) => btn.textContent ?? "");
     expect(names.some((name) => name.includes("设置"))).toBe(true);
-    expect(names.some((name) => name.includes("工坊·雾中来信"))).toBe(true);
+    expect(names.some((name) => name.includes("工坊·雾中来信"))).toBe(false);
     /* 首页是侧栏常驻项：不进这一组重复列。 */
     expect(names.some((name) => name.includes("首页"))).toBe(false);
   });
 
+  it("只开着项目页签时整组不渲染（项目不该在临时页签组里出现）", () => {
+    renderShell({
+      activeViewKey: tabKey("workshop", "p1"),
+      tabs: tabsOf(["home", null], ["workshop", "p1"]),
+    });
+    expect(screen.queryByText("临时页签")).toBeNull();
+  });
+
   it("当前页高亮（data-active），点某一页把 key 交给 onSelectViewTab", () => {
     const { onSelectViewTab } = renderShell({
-      activeViewKey: tabKey("workshop", "p1"),
+      activeViewKey: tabKey("settings", null),
       tabs: tabsOf(["home", null], ["settings", null], ["workshop", "p1"]),
     });
-    expect(tempButton("工坊·雾中来信").dataset.active).toBeDefined();
-    expect(tempButton("设置").dataset.active).toBeUndefined();
+    expect(tempButton("设置").dataset.active).toBeDefined();
 
     fireEvent.click(tempButton("设置"));
     expect(onSelectViewTab).toHaveBeenCalledWith(tabKey("settings", null));
@@ -156,7 +163,7 @@ describe("侧栏「临时页签」组（ISSUE #4770）", () => {
 
   it("可关页签有关闭按钮，点它把 key 交给 onCloseViewTab；首页没有关闭按钮", () => {
     const { onCloseViewTab } = renderShell({
-      activeViewKey: tabKey("workshop", "p1"),
+      activeViewKey: tabKey("settings", null),
       tabs: tabsOf(["home", null], ["settings", null], ["workshop", "p1"]),
     });
     fireEvent.pointerDown(tempButton("关闭 设置"));
@@ -165,10 +172,10 @@ describe("侧栏「临时页签」组（ISSUE #4770）", () => {
     expect(screen.queryByRole("button", { name: "关闭 首页" })).toBeNull();
   });
 
-  it("「+」菜单在组内（项目内视图的唯一入口），点选项走 onOpenView", () => {
+  it("「+」菜单在组内，点选项走 onOpenView", () => {
     const { onOpenView } = renderShell({
-      activeViewKey: tabKey("workshop", "p1"),
-      tabs: tabsOf(["home", null], ["workshop", "p1"]),
+      activeViewKey: tabKey("settings", null),
+      tabs: tabsOf(["home", null], ["settings", null]),
       openableViews: [
         { label: "画布", view: "canvas" },
         { label: "产出", view: "outputs" },
@@ -190,19 +197,19 @@ describe("侧栏「临时页签」组（ISSUE #4770）", () => {
       activeTabId: "comfyui",
     });
     renderShell({
-      activeViewKey: tabKey("workshop", "p1"),
-      tabs: tabsOf(["home", null], ["workshop", "p1"]),
+      activeViewKey: tabKey("settings", null),
+      tabs: tabsOf(["home", null], ["settings", null]),
     });
     expect(tempButton("ComfyUI").dataset.active).toBeDefined();
     /* iframe 页签激活时，主应用整体被盖住 —— 视图页签即使是 activeViewKey 也不亮。 */
-    expect(tempButton("工坊·雾中来信").dataset.active).toBeUndefined();
+    expect(tempButton("设置").dataset.active).toBeUndefined();
   });
 
   it("点 iframe 页签切换它，点它的关闭按钮关掉它（走 shell-tabs-store）", () => {
     useShellTabs.setState(WITH_COMFY);
     renderShell({
-      activeViewKey: tabKey("workshop", "p1"),
-      tabs: tabsOf(["home", null], ["workshop", "p1"]),
+      activeViewKey: tabKey("settings", null),
+      tabs: tabsOf(["home", null], ["settings", null]),
     });
     fireEvent.click(tempButton("ComfyUI"));
     expect(useShellTabs.getState().activeTabId).toBe("comfyui");

@@ -149,11 +149,12 @@ export function AppShell({
      （它已经撤到顶栏右上角的菜单里，见 `sidebarNavItems` 的说明）。 */
   const navItems = sidebarNavItems();
 
-  /* 「临时页签」组列的视图页签：侧栏常驻项不重复列（ISSUE #3740）—— 它们在上方
-     导航组里恒在、可切可关；这里列瞬时页签（设置等）与项目类页签（工坊·某项目）。
-     首页也属于常驻项，一并不进。 */
+  /* 「临时页签」组列的视图页签：侧栏常驻项不重复列（ISSUE #3740）；项目类页签
+     也不列（ISSUE #4798：项目在「项目」分组里已有打开态，再列一条是重复）——
+     这里只剩瞬时页签（设置等）与桌面壳 iframe 页签。首页属于常驻项，一并不进。 */
   const pinnedViewIds = sidebarPinnedViewIds();
-  const stripTabs = viewTabs?.filter((tab) => !pinnedViewIds.has(tab.view)) ?? [];
+  const stripTabs =
+    viewTabs?.filter((tab) => !pinnedViewIds.has(tab.view) && !isProjectTab(tab.view)) ?? [];
 
   /* 「用户此刻在这个项目里」判据是**视图位置**而非存储里的活跃 id：活跃 id 跨视图常驻
      （新建项目、从最近项目进来都会写），首页 / 模型 / 历史等全局视图上没有任何项目内容，
