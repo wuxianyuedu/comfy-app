@@ -30,7 +30,13 @@ const ACTIVE_KEY = "comfyapp.canvas.active.v1";
 
 /** 画布仓库变更的类型（`comfyapp:canvas-store-changed` 的载荷，ISSUE #4600）：
  * 自动保存每 500ms 一拍，订阅方凭 `save` 就地增量更新那行，结构性变化才全量重取。 */
-export type CanvasStoreChangeReason = "delete" | "delete-remote" | "draft" | "hydrate" | "save";
+export type CanvasStoreChangeReason =
+  | "delete"
+  | "delete-remote"
+  | "draft"
+  | "hydrate"
+  | "rename"
+  | "save";
 
 /* 每次画布仓库变更（upsert / delete / create）都会广播的事件名（带载荷）。
  * 订阅它的页面（侧栏 / 作品库 / 工作区首页）据此增量或全量刷新。 */
@@ -766,4 +772,40 @@ export function deleteProjectEverywhere(id: string, name?: string): void {
     edges: [],
   });
   emitChanged("delete-remote", id);
+}
+
+/** 改项目名（侧栏「项目」行右键菜单，ISSUE #4808）。重名沿用新建那套
+ * `findNextAvailableName`（自动 _2/_3 后缀，排除自己；查重面与新建同是
+ * 本地索引 —— 服务端本就不强制唯一）。两条落点：
+ * 本地索引有这一行 → 走 `upsertProject`（与自动保存同一条推送管道，
+ * 「重命名那一拍 name 不同，照发」；侧栏凭 `save` 事件就地改行）；
+ * 本地没有（服务端-only，从未在本机打开，没有 nodes/edges 可推）→
+ * 只 patch 服务端名字，成功后广播一次 `rename` 让订阅方整表重取。
+ * 空名不落（与新建「名称为空不能确认」同口径）；与现名相同是 no-op；
+ * 失败处置与镜像写入同一档（`reportMirrorFailure`，不无声）。 */
+export async function renameProject(id: string, rawName: string): Promise<void> {
+  const name = rawName.trim();
+  if (name === "") {
+    return;
+  }
+  const finalName = findNextAvailableName(name, id);
+  const local = getProject(id);
+  if (local !== null) {
+    if (local.name === finalName) {
+      return;
+    }
+    upsertProject({ ...local, name: finalName });
+    return;
+  }
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    await vanillaApi.project.patch.mutate({ projectId: id, name: finalName });
+  } catch (error) {
+    reportMirrorFailure("项目名没能存进服务端", { id, name: finalName }, error);
+    return;
+  }
+  clearSyncFailure(id);
+  emitChanged("rename", id);
 }
