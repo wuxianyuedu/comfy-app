@@ -23,6 +23,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
@@ -35,6 +36,7 @@ import { Progress } from "~/components/ui/progress";
 import { SelectChip } from "~/components/ui/select-chip";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { StatusDot } from "~/components/ui/status-dot";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { clampInt } from "~/lib/clamp";
 import { sceneFromMode } from "~/lib/media/size-presets";
@@ -136,19 +138,15 @@ function KindTabs({
 
 /** 「生成中」小徽标（ISSUE #4838）：呼吸圆点 + 文案。给 `count` = 数量
  *  （「N 生成中」，用途 / 模式两处用）；不给 = 单模型标记（「生成中」，
- *  模型下拉用）。配色与产物卡的生成中状态徽标同族（warning 底 + 强调字），
- *  状态读法全页一致。 */
+ *  模型下拉用）。走 `ui/badge` 基元（tone=warning，§16.2.4 棘轮：不手写
+ *  <span> 胶囊）+ `ui/status-dot` 的脉冲圆点（P3：不内联 animate-pulse），
+ *  配色与产物卡的生成中状态同族。 */
 function GeneratingBadge({ className, count }: { className?: string; count?: number }) {
   return (
-    <span
-      className={cn(
-        "bg-warning/15 text-warning-strong inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
-        className,
-      )}
-    >
-      <span aria-hidden className="bg-warning-strong size-1.5 animate-pulse rounded-full" />
+    <Badge className={className} size="pill-md" tone="warning">
+      <StatusDot pulse sizeClass="size-1.5" state="busy" />
       {count === undefined ? "生成中" : `${count} 生成中`}
-    </span>
+    </Badge>
   );
 }
 
