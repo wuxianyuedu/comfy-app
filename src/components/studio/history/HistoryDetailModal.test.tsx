@@ -90,3 +90,61 @@ describe("HistoryDetailModal 提示词定高滚动（ISSUE #4665）", () => {
     expect(seedEl.className).not.toContain("overflow-y-auto");
   });
 });
+
+describe("HistoryDetailModal 工作流参数按 IO 端口渲染", () => {
+  const ioMap = {
+    "6::widget::replace": {
+      direction: "input" as const,
+      kind: "widget",
+      nodeId: "6",
+      name: "replace",
+      label: "prompt",
+      defaultValue: "默认提示词",
+    },
+    "8::widget::seed": {
+      direction: "input" as const,
+      kind: "widget",
+      nodeId: "8",
+      name: "seed",
+      label: "种子",
+      defaultValue: 42,
+    },
+  };
+
+  function renderWithIO(detail: TaskDetail) {
+    return render(
+      <ToastProvider>
+        <HistoryDetailModal
+          detail={detail}
+          detailId={detail.id}
+          detailLoading={false}
+          onClose={vi.fn()}
+          workflowIO={ioMap}
+        />
+      </ToastProvider>,
+    );
+  }
+
+  it("列 IO 作者标签而不是内部 widget 名，没提交值时标注「默认值」", () => {
+    renderWithIO(TASK_DETAIL_BASE);
+    expect(screen.getByText("prompt")).toBeTruthy();
+    expect(screen.queryByText("replace")).toBeNull();
+    expect(screen.getByText("默认提示词")).toBeTruthy();
+    expect(screen.getAllByText("默认值")).toHaveLength(2);
+  });
+
+  it("提交值覆盖默认值，且带 prompt 标签的长文本仍定高滚动", () => {
+    renderWithIO({
+      ...TASK_DETAIL_BASE,
+      params: {
+        workflow: "w",
+        workflowInputs: [{ nodeId: "6", name: "replace", value: LONG_PROMPT }],
+      },
+    });
+    const promptEl = screen.getByText(LONG_PROMPT);
+    expect(promptEl.className).toContain("h-24");
+    expect(promptEl.className).toContain("overflow-y-auto");
+    /* 提示词被覆盖 ⇒ 不再标「默认值」；种子仍是默认值。 */
+    expect(screen.getAllByText("默认值")).toHaveLength(1);
+  });
+});

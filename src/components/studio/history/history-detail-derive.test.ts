@@ -228,6 +228,94 @@ describe("deriveWorkflowParams", () => {
   it("只有顶层条目也算 hasAny（原始 JSON 折叠要显示得出来）", () => {
     expect(deriveWorkflowParams(makeDetail({ runtime: { seed: 1 } }), null).hasAny).toBe(true);
   });
+
+  it("按工作流 IO 全量输入端口列行：作者标签优先、输出口不列、提交值覆盖默认值", () => {
+    const ioMap: WorkflowIOMap = {
+      "6::widget::replace": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "6",
+        name: "replace",
+        label: "prompt",
+        defaultValue: "默认提示词",
+      },
+      "7::widget::enable_PE": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "7",
+        name: "enable_PE",
+        label: "启用 PE",
+        defaultValue: true,
+      },
+      "8::widget::seed": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "8",
+        name: "seed",
+        label: "种子",
+        defaultValue: 42,
+      },
+      "9::output::IMAGE": {
+        direction: "output",
+        kind: "output",
+        nodeId: "9",
+        name: "IMAGE",
+        label: "图片",
+      },
+    };
+    const detail = makeDetail({
+      workflow: "w",
+      workflowInputs: [{ nodeId: "6", name: "replace", value: "本次提示词" }],
+    });
+    const { rows } = deriveWorkflowParams(detail, ioMap);
+    expect(rows.map((row) => row.label)).toEqual(["prompt", "启用 PE", "种子"]);
+    expect(rows[0]).toMatchObject({
+      name: "replace",
+      value: "本次提示词",
+      source: "submitted",
+    });
+    expect(rows[1]).toMatchObject({ value: true, source: "default" });
+    expect(rows[2]).toMatchObject({ value: 42, source: "default" });
+  });
+
+  it("没提交值时按模式取 IO 默认值（模式覆盖优先于图内默认值）", () => {
+    const ioMap: WorkflowIOMap = {
+      "3::widget::steps": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "3",
+        name: "steps",
+        label: "步数",
+        defaultValue: 20,
+        modeOverrides: { T2V: { defaultValue: 30 } },
+      },
+    };
+    expect(deriveWorkflowParams(makeDetail({}), ioMap, "T2V").rows[0]?.value).toBe(30);
+    expect(deriveWorkflowParams(makeDetail({}), ioMap, "T2I").rows[0]?.value).toBe(20);
+  });
+
+  it("工坊顶层值也算提交值（没画线时它不会落进 workflowInputs）", () => {
+    const ioMap = io(["6", "prompt", "prompt"]);
+    const detail = makeDetail({ workflow: "w", prompt: "工坊提示词" });
+    expect(deriveWorkflowParams(detail, ioMap).rows[0]).toMatchObject({
+      value: "工坊提示词",
+      source: "submitted",
+    });
+  });
+
+  it("工作流已改过时，本次下发过但当前 IO 里已没有的 pin 仍如实补一行", () => {
+    const ioMap = io(["6", "prompt", "prompt"]);
+    const detail = makeDetail({
+      workflowInputs: [
+        { nodeId: "6", name: "prompt", value: "x" },
+        { nodeId: "9", name: "old_pin", value: "y" },
+      ],
+    });
+    expect(deriveWorkflowParams(detail, ioMap).rows.map((row) => row.name)).toEqual([
+      "prompt",
+      "old_pin",
+    ]);
+  });
 });
 
 describe("kvValueText", () => {
@@ -258,6 +346,13 @@ describe("isPromptParamRow（ISSUE #4665：提示词行在详情参数表里定�
   it("无 pin 名时只按 id 判（工坊参数行只有契约口 id）", () => {
     expect(isPromptParamRow("prompt", null)).toBe(true);
     expect(isPromptParamRow("workflow", null)).toBe(false);
+  });
+
+  it("IO 作者标签也算：pin 叫 replace、标签叫 prompt 时同样命中；中文提示词同理", () => {
+    expect(isPromptParamRow("6:replace:0", "replace", "prompt")).toBe(true);
+    expect(isPromptParamRow("6:replace:0", "replace", "正向提示词")).toBe(true);
+    expect(isPromptParamRow("6:replace:0", "replace", "负向提示词")).toBe(false);
+    expect(isPromptParamRow("6:text:0", "text", "描述")).toBe(false);
   });
 });
 

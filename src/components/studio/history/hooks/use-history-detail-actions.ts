@@ -6,12 +6,10 @@
 // tRPC 调用集中在 ~/lib/history-detail-actions；失败路径统一走 toast
 // （硬规则：失败必须有日志 + 用户可见出口）。
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 
 import { downloadJson } from "~/lib/browser-io";
-import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useBusyAction } from "~/components/ui/use-busy-action";
-import { detectFolderHelper } from "~/lib/external-open";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 
 import { useToast } from "../../ToastProvider";
@@ -28,20 +26,10 @@ function toastReport(toast: {
   return (kind, detail) => (kind === "ok" ? toast.success(detail) : toast.error(detail));
 }
 
-/** comfyapp:// 协议未接管的引导状态：为 null 表示尚未发起过导航。 */
-export type FolderPopover = {
-  /** true = 2s 内页面未失焦，视为助手未注册，展示安装引导。 */
-  helperMissing: boolean;
-  path: string;
-};
-
 export type HistoryDetailActions = {
-  copyPath: () => void;
-  dismissFolderPopover: () => void;
   /** 「下载工作流」进行中。 */
   downloading: boolean;
   downloadWorkflow: (taskId: string) => Promise<void>;
-  folderPopover: FolderPopover | null;
   openFolder: (taskId: string) => Promise<void>;
   /** 「打开目录」进行中（防双击）。 */
   openFolderBusy: boolean;
@@ -53,16 +41,12 @@ export type HistoryDetailActions = {
  */
 export type HistoryDetailActionsDeps = {
   fetchWorkflow: (id: string) => Promise<{ workflow?: unknown } | null>;
-  openFolder: (id: string) => Promise<{
-    absolutePath?: string | null;
-    comfyappUrl?: string | null;
-    error?: string | null;
-  }>;
+  /** 本机文件管理器定位（算目录 + 越界判定 + spawn 一次做完，见 lib/history-detail-actions）。 */
+  openFolder: (id: string) => Promise<{ detail: string; ok: boolean }>;
 };
 
 export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): HistoryDetailActions {
   const toast = useToast();
-  const [folderPopover, setFolderPopover] = useState<FolderPopover | null>(null);
   /* 两个忙碌位走唯一出口（规范 16 §16.2.4.71）：`downloading` 的复位此前
    * 写在动作之后，`runAsyncAction` 之外的任意一行抛错就永远停在「下载中」。 */
   const openFolderAction = useBusyAction();
@@ -73,71 +57,20 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
 
   const openFolder = useCallback(
     async (taskId: string) => {
-      /* 忙碌位走唯一出口（规范 16 §16.2.4.71）；这里手写 `try/finally` 是因为
-       * 动作体里要在多处提前落 UI（不是单个 `run` 能表达的形状）。 */
-      openFolderAction.set(true);
-      try {
+      /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。成败与文案都由
+       * `revealTaskFolder` 的 `{ ok, detail }` 表达（与队列 / 历史列表同一口径），
+       * 本机 spawn 直接把目录交给文件管理器 —— 不再依赖 comfyapp:// 协议助手
+       * 与浏览器确认框（那条路失败时只剩「复制路径」浮层，用户以为打不开）。 */
+      await openFolderAction.run(async () => {
         const result = await deps.openFolder(taskId);
-        if (
-          result.comfyappUrl !== undefined &&
-          result.comfyappUrl !== null &&
-          result.comfyappUrl !== ""
-        ) {
-          /* 本机自定义协议：服务端已校验目录存在且在白名单内，返回 comfyapp://open?path=...。
-           * 此处直接导航（user-initiated 点击）→ 浏览器确认 → OS 调起 handler 打开目录。
-           * 「助手是否接管」的探测收在 ~/lib/external-open 的 detectFolderHelper（规范 16
-           * §16.2.4.25），否则「点了没反应」会成为不可表达的状态（防静默失败，硬规则 4）。 */
-          setFolderPopover({
-            path: result.absolutePath ?? "",
-            helperMissing: false,
-          });
-          const helper = detectFolderHelper(() => {
-            setFolderPopover((prev) => (prev ? { ...prev, helperMissing: false } : prev));
-          });
-          window.location.href = result.comfyappUrl;
-          const state = await helper.settle();
-          if (state === "missing") {
-            setFolderPopover({
-              path: result.absolutePath ?? "",
-              helperMissing: true,
-            });
-          }
-        } else if (result.error === "directory missing") {
-          toast.error("该任务尚未生成文件目录", result.absolutePath ?? undefined);
-        } else {
-          /* 服务端没给具体原因（`result.error` 是别的值 / 缺席）——
-           * 出口的失败文案就是这一句。 */
-          report("err", "打开目录失败");
-        }
-      } catch (error) {
-        /* 失败路径的文案由 `~/lib/async-action` 统一走 `errorMessage`：
-         * 收口前这里是一句写死的「无法连接服务器」—— 网络层原文
-         *（服务重启窗口的 `Failed to fetch`）被整个丢掉了。 */
-        await runAsyncAction(
-          () => {
-            throw error;
-          },
-          { report, failureText: "打开目录失败" },
-        );
-      } finally {
-        openFolderAction.set(false);
-      }
+        await runAsyncAction(() => Promise.resolve(result), {
+          report,
+          failureText: "打开目录失败",
+        });
+      });
     },
-    [deps, toast, report, openFolderAction],
+    [deps, report, openFolderAction],
   );
-
-  /* 路径复制走 toast 通道（这一族动作的既有表现层选择）。反馈形态是调用处
-   * 的事，但**成败两条都要有出口**归出口管（规范 16 §16.2.4.43）。 */
-  const copyPathFeedback = useCopyFeedback({
-    onSuccess: () => toast.success("路径已复制", "粘贴到资源管理器地址栏（Alt+D）即可跳转"),
-    onFailure: () => toast.error("复制失败", "请手动选择路径复制"),
-  });
-  const copyPath = useCallback(() => {
-    if (!folderPopover) {
-      return;
-    }
-    copyPathFeedback(folderPopover.path);
-  }, [folderPopover, copyPathFeedback]);
 
   const downloadWorkflow = useCallback(
     async (taskId: string) => {
@@ -162,17 +95,10 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
     [deps, report, downloadAction],
   );
 
-  const dismissFolderPopover = useCallback(() => {
-    setFolderPopover(null);
-  }, []);
-
   return {
-    folderPopover,
     openFolderBusy: openFolderAction.busy,
     downloading: downloadAction.busy,
     openFolder,
     downloadWorkflow,
-    copyPath,
-    dismissFolderPopover,
   };
 }

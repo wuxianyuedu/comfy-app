@@ -1,0 +1,2 @@
+## Fixed
+- 历史列表 / 任务详情五项交互修正（#4803）：① 详情「打开目录」改走 `setting.revealPath`（与队列页 / 日志点路径同通道），不再依赖 `comfyapp://` 协议助手；② 工坊参数按该模式的生效契约口枚举，配置里删掉的口不再显示；③ 历史卡片新增独立「详情」按钮，点缩略图改用图片查看器看大图（视频仍按视频渲染）；④ 提示词行按工作流 IO 作者标签识别并定高滚动——本次提示词 pin 叫 `replace`（ComfyUI 内部 widget 名）、IO 标签是 `prompt`，过去只认 pin 名所以没命中；⑤ 工作流参数改为以当前工作流 IO 的全量输入端口为行，本次有提交值就覆盖、没有就显示 IO 默认值并标注「默认值」，作者标签优先展示、原始 pin 名留在悬停提示里，IO 表缺失时如实回落本次提交的 pin。同批补 `history-detail-derive.test.ts` / `HistoryDetailModal.test.tsx` / `HistoryTaskCard.test.tsx` 用例，同步产品需求 FR-GN-05 / FR-GN-06。
