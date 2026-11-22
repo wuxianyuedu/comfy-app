@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { tempTabButtons } from "./support/sidebar-tabs";
+
 /**
  * 「模型适配」「模式契约」作为**视图**的端到端判据（此前是侧栏点开的弹窗）。
  *
@@ -8,8 +10,10 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
  * 本文件判的是「真的切到这一屏、内容真的渲染、没开弹窗」以及瞬时视图切走即关。
  */
 
+/* #4770 起页签在侧栏「临时页签」组：侧栏常驻项（含这两项）根本不进临时页签，
+   所以断言改用「临时页签按钮为 0」，不再依赖已退役的顶部 tablist。 */
 function stripOf(page: Page) {
-  return page.getByRole("tablist", { name: "已打开的视图" });
+  return tempTabButtons(page);
 }
 
 /** 侧栏里的某个全局项按钮（按可见名称命中第一颗）。 */
@@ -18,8 +22,6 @@ function sidebarItem(page: Page, label: string): Locator {
 }
 
 async function openFromSidebar(page: Page, label: string): Promise<void> {
-  const strip = stripOf(page);
-  await expect(strip).toBeVisible({ timeout: 30_000 });
   const entry = sidebarItem(page, label);
   await expect(entry, `侧栏里找不到「${label}」入口`).toBeVisible();
   await entry.click();
@@ -55,13 +57,13 @@ test.describe("模型适配 / 模式契约作为视图 @critical", () => {
   test("开「模型适配」切到该视图并渲染内容，且不在对话框里", async ({ page }) => {
     await page.goto("/workspace");
     await expectViewRendered(page, "模型适配", "model-adapters");
-    await expect(stripOf(page).getByRole("tab", { name: /模型适配/ })).toHaveCount(0);
+    await expect(stripOf(page).filter({ hasText: "模型适配" })).toHaveCount(0);
   });
 
   test("开「模式契约」切到该视图并渲染内容，且不在对话框里", async ({ page }) => {
     await page.goto("/workspace");
     await expectViewRendered(page, "模式契约", "mode-contract");
-    await expect(stripOf(page).getByRole("tab", { name: /模式契约/ })).toHaveCount(0);
+    await expect(stripOf(page).filter({ hasText: "模式契约" })).toHaveCount(0);
   });
 
   test("两个瞬时视图先后打开：当前始终是最后打开的那一个，切走即关且不叠弹窗", async ({ page }) => {
@@ -86,8 +88,6 @@ test.describe("模型适配 / 模式契约作为视图 @critical", () => {
 
   test("工作流库页头那枚「模式契约」也切到同一视图，不再自己开第二层弹窗", async ({ page }) => {
     await page.goto("/workspace");
-    const strip = stripOf(page);
-    await expect(strip).toBeVisible({ timeout: 30_000 });
 
     await page.getByRole("button", { name: "工作流库", exact: true }).first().click();
     /* #3740：工作流库是侧栏常驻项，不进页签条 —— 选中态在侧栏 data-active 上。 */

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { openSettingsView } from "./support/settings-entry";
+import { closeTempTab, tempTabButtons, tempTabsOf } from "./support/sidebar-tabs";
 
 /**
  * 设置是**一个视图**，不是盖在内容区上的浮层（@critical）：改前是 `FullScreenLayer`（`SettingsOverlay`），无页签、不能边开边看别处。
@@ -8,23 +9,22 @@ import { openSettingsView } from "./support/settings-entry";
  * #3740 起：侧栏常驻项（含**首页**）不再进顶部页签条 —— 页签条起步为空，首页的选中态由侧栏 `data-active` 表达；
  * 设置不在侧栏（入口在顶栏菜单），所以它仍以瞬时页签进页签条。#4034：按这套现行语义重写断言。
  */
-const stripOf = (page: Page) => page.getByRole("tablist", { name: "已打开的视图" });
+const stripOf = (page: Page) => tempTabButtons(page);
 
 test.describe("设置作为一个视图 @critical", () => {
   test("应用菜单点「设置」开出瞬时页签，页签条仍可操作，且没有对话框", async ({ page }) => {
     await page.goto("/workspace");
     const strip = stripOf(page);
-    await expect(strip).toBeVisible({ timeout: 30_000 });
-    /* 起步页签条为空：首页是侧栏常驻项，#3740 起不再进页签条。 */
-    await expect(strip.getByRole("tab")).toHaveCount(0);
+    /* 起步临时页签组整组不渲染：首页是侧栏常驻项，#3740 起不再进页签条。 */
+    await expect(tempTabsOf(page)).toHaveCount(0);
 
     await openSettingsView(page);
 
-    /* 设置是瞬时页签：开出来且为当前。 */
-    const settingsTab = strip.getByRole("tab");
+    /* 设置是临时页签：开出来且为当前。 */
+    const settingsTab = strip;
     await expect(settingsTab).toHaveCount(1);
     await expect(settingsTab).toContainText("设置");
-    await expect(settingsTab).toHaveAttribute("aria-selected", "true");
+    await expect(settingsTab).toHaveAttribute("data-active");
     /* 光有页签不算数 —— 必须真的渲染出设置界面。取 `SettingsShell` 一挂载就在的
        分区导航（它只存在于设置视图内部），所以「页签开出来了但内容区没接上视图」
        这种半拉子改法也会被判红。反向验证正是这么发现缺口的：只判页签存在时，
@@ -44,12 +44,12 @@ test.describe("设置作为一个视图 @critical", () => {
 
     /* 再开一次不产生第二页（与所有视图同一条契约：已存在即聚焦）。 */
     await openSettingsView(page);
-    await expect(strip.getByRole("tab")).toHaveCount(1);
+    await expect(strip).toHaveCount(1);
 
     /* 切回首页走侧栏「首页」项（#3740：首页不进页签条）；设置是瞬时页签，
-       切走即退场 —— 页签条回到空。 */
+       切走即退场 —— 临时页签组回到空。 */
     await page.getByRole("button", { name: "首页", exact: true }).first().click();
-    await expect(strip.getByRole("tab")).toHaveCount(0);
+    await expect(tempTabsOf(page)).toHaveCount(0);
 
     /* 不是对话框：设置内容不该活在 role=dialog 里（那意味着还是浮层）。 */
     await expect(page.getByRole("dialog").filter({ hasText: "外观" })).toHaveCount(0);
@@ -58,18 +58,14 @@ test.describe("设置作为一个视图 @critical", () => {
   test("设置页签可关，关掉后回到首页", async ({ page }) => {
     await page.goto("/workspace");
     const strip = stripOf(page);
-    await expect(strip).toBeVisible({ timeout: 30_000 });
 
     await openSettingsView(page);
-    await expect(strip.getByRole("tab")).toHaveCount(1);
+    await expect(strip).toHaveCount(1);
 
-    /* 关闭按钮的可访问名是「关闭 <页签名>」，这一颗可以 exact。 */
-    await strip.getByRole("button", { name: "关闭 设置", exact: true }).click();
-    await expect(strip.getByRole("tab")).toHaveCount(0);
-    /* 回到首页：侧栏首页项回到激活态（#3740：首页不在页签条上，激活态在侧栏）。 */
-    await expect(page.getByRole("button", { name: "首页", exact: true }).first()).toHaveAttribute(
-      "data-active",
-      { timeout: 20_000 },
-    );
+    /* 关闭按钮的可访问名是「关闭 <页签名>」，组件绑 pointerdown。 */
+    await closeTempTab(page, "设置");
+    await expect(tempTabsOf(page)).toHaveCount(0);
+    /* 回到首页：首页是侧栏常驻项，不在临时页签组里；直接判那一屏可见。 */
+    await expect(page.locator('[data-view="home"]')).toBeVisible({ timeout: 20_000 });
   });
 });

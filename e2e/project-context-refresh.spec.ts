@@ -1,114 +1,112 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { isRecord } from "../src/lib/is-record";
-import { expectHomeReady } from "./support/home-anchors";
+import { createNamedProject, expectHomeReady } from "./support/home-anchors";
 
 /**
  * 「新建画布项目 → 刷新」之后用户仍在项目上下文里（ISSUE #1501）。缺陷在 localStorage 与页面挂载之间：首页 `createProject()`
- * 落的「零节点零连线 + 未命名」那行正好命中空草稿哨兵，刷新时被 `reapAllEmptyDrafts()` 清掉、active-id 跟着被清（「＋」菜单从 11 项退回 5 项）。
- * jsdom 只判得到 store（`canvas-store.test.ts`），判不到「挂载 → 清扫 → 页签条重建」；必须同一 page 里 reload（项目内六个视图只能在单个会话内到达）。
+ * 落的「零节点零连线 + 未命名」那行正好命中空草稿哨兵，刷新时被 `reapAllEmptyDrafts()` 清掉、active-id 跟着被清。
+ * jsdom 只判得到 store（canvas-store.test.ts），判不到「挂载 → 清扫 → 上下文重建」；必须同一 page 里 reload。
+ *
+ * ISSUE #4765/#4798 后，六个项目级视图不再是「＋」菜单里的页签，而是**项目页左侧的分区列表**
+ * （`nav[aria-label="项目分区"]`）：一个项目只占一个页签，分区在同页内切换。判据等价改写为
+ * 「刷新前后这份分区列表都在」，盯的仍是 active-id 是否会丢。
  */
 
-/* 项目内的六个视图 —— 与 `projectTabs()` 的标签逐字对齐。
- * 名字写死是有意的：它们就是用户看见的那六个词，改标签等于改用户可见行为。 */
-/* SAFETY: 类型断言已复核 */
-const PROJECT_VIEWS = ["主页", "画布", "工坊", "资源库", "产出", "成片"] as const;
+const PROJECT_SECTION_LABELS = [
+  "概览",
+  "画布",
+  "剧本",
+  "角色卡",
+  "场景分镜",
+  "镜头生图",
+  "视频生成",
+  "成片合成",
+  "资源库",
+  "产出",
+  "成片",
+] as const;
 
-/* 五个全局项 —— 用来证明「菜单里本来只有这些」，好让多出来的六个有对照。 */
-/* SAFETY: 类型断言已复核 */
-const GLOBAL_VIEWS = ["模型", "历史", "队列", "工作流库"] as const;
+function projectSections(page: Page) {
+  return page.getByRole("navigation", { name: "项目分区" });
+}
+
+async function expectProjectContext(page: Page): Promise<void> {
+  const rail = projectSections(page);
+  await expect(rail).toBeVisible({ timeout: 30_000 });
+  for (const label of PROJECT_SECTION_LABELS) {
+    // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行断言，并行会让失败归因与截图错位
+    await expect(
+      rail.getByText(label, { exact: true }).first(),
+      `项目分区里缺「${label}」`,
+    ).toBeVisible();
+  }
+}
 
 async function stubBackend(page: Page) {
   /* 后端交互不参与本用例的判据（项目上下文全在客户端），但它**会把界面卡住**
-   * —— 画布挂载要等服务端项目列表对账（`hydrateFromServer`）。统一快速答掉，
+   * —— 画布挂载要等服务端项目列表对账（hydrateFromServer）。统一快速答掉，
    * 不喂数据：本用例要判的恰恰是「没有服务端数据时，本地上下文也该活着」。 */
   await page.route("**/api/trpc/**", (route) => route.fulfill({ json: [] }));
 }
 
-/** 打开「＋」菜单并返回其中的菜单项文字。 */
-async function openViewMenuItems(page: Page): Promise<Array<string>> {
-  await page.getByRole("button", { name: "新页签", exact: true }).click();
-  const menu = page.getByRole("menu");
-  await expect(menu).toBeVisible();
-  const items = await menu.getByRole("menuitem").allInnerTexts();
-  await page.keyboard.press("Escape");
-  await expect(menu).toBeHidden();
-  return items.map((text) => text.trim());
-}
-
 test.describe("新建项目后的上下文在刷新后仍成立 @critical", () => {
-  test("新建 → 刷新 → 六个项目页签仍在「＋」菜单里", async ({ page }) => {
+  test("新建 → 刷新 → 项目分区仍在", async ({ page }) => {
     await stubBackend(page);
     await page.goto("/workspace");
-    /* 等首页渲染完成（锚点口径见 `support/home-anchors`）。 */
     await expectHomeReady(page);
 
-    /* 刷新前先确认菜单里**只有全局项** —— 否则下面「刷新后还在」可能只是因为
+    /* 刷新前先确认还没有项目分区 —— 否则下面「刷新后还在」可能只是因为
      * 它从一开始就不依赖 active-id，判据就失去意义。 */
-    const before = await openViewMenuItems(page);
-    for (const label of GLOBAL_VIEWS) {
-      expect(before).toContain(label);
-    }
-    for (const label of PROJECT_VIEWS) {
-      expect(before).not.toContain(label);
-    }
+    await expect(projectSections(page)).toHaveCount(0);
 
-    /* 用户动作：新建画布项目。 */
-    await page.getByRole("button", { name: "新建画布项目" }).click();
+    await createNamedProject(page, "E2E 上下文项目");
     await expect(page).toHaveURL(/\/workspace$/);
 
-    /* 界面已经把他带进项目了 —— 六个项目页签出现在菜单里。 */
-    const entered = await openViewMenuItems(page);
-    for (const label of PROJECT_VIEWS) {
-      expect(entered).toContain(label);
-    }
+    await expectProjectContext(page);
 
-    /* 刷新。缺陷就在这一步：active-id 被挂载时的清扫清掉，下面这六个消失。 */
+    /* 刷新。缺陷就在这一步：active-id 被挂载时的清扫清掉，分区列表随之消失。 */
     await page.reload();
-
-    /* reload 后要等界面重新稳定，否则点的是旧 DOM。等的是项目页签重新装好（`主页·未命名`），不是首页入口卡：
-     * 修复生效时用户不回首页，那四张卡在 reload 后根本不该出现；判据写成「等首页标题」等于钉在缺陷态上，
-     * 修复一落地它反而红（判据成了缺陷的墓碑）。所以等的是「用户仍在项目里」这件事本身，它同时也是下面那条断言的主体。 */
-    await expect(page.getByRole("tab", { name: /^主页/ })).toBeVisible();
-
-    const afterReload = await openViewMenuItems(page);
-    for (const label of PROJECT_VIEWS) {
-      expect(afterReload).toContain(label);
-    }
+    await expectProjectContext(page);
   });
 
   test("刷新后 active-id 与项目索引都还在（缺陷的另一半：别只在界面上兜住）", async ({ page }) => {
     await stubBackend(page);
     await page.goto("/workspace");
-    await page.getByRole("button", { name: "新建画布项目" }).click();
+    await createNamedProject(page, "E2E 上下文项目");
 
-    /* 读客户端存储要等写入完成：`createProject` 是同步的，但它跑在点击事件的
-     * React 处理里，所以先等界面表达出「已经在项目里」再读。 */
-    await expect(page.getByRole("button", { name: "新页签" })).toBeVisible();
+    /* 读客户端存储要等写入完成：createProject 跑在点击的 React 处理里，
+       所以先等界面表达出「已经在项目里」再读。 */
+    await expect(projectSections(page)).toBeVisible({ timeout: 30_000 });
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("comfyapp.canvas.active.v1")))
       .not.toBeNull();
 
     await page.reload();
     /* reload 之后界面要先把「用户仍在项目里」表达出来，再读存储：
-     * 缺陷态下 active 没了 ⇒ `openableViews` 收起项目类视图 ⇒ 「主页」这颗
-     * 项目页签与 active-id 一起消失。等这颗页签回来（而不是等某个恰好也存在的
-     * 标题），读到的才是挂载后的稳定值，而不是中途的中间态。 */
-    await expect(page.getByRole("tab", { name: /^主页/ })).toBeVisible();
+       缺陷态下 active 没了 ⇒ 分区列表不会出现。 */
+    await expect(projectSections(page)).toBeVisible({ timeout: 30_000 });
 
     const stored = await page.evaluate(() => ({
       active: localStorage.getItem("comfyapp.canvas.active.v1"),
-      index: localStorage.getItem("comfyapp.canvas.projects.v1"),
     }));
-    expect(stored.active).not.toBeNull();
-    /* 那一行不能被当成空草稿清掉 —— 它是用户刚建的、正开着的项目。 */
-    const parsed: unknown = JSON.parse(stored.index ?? "[]");
-    const ids = Array.isArray(parsed)
-      ? parsed
-          .filter(isRecord)
-          .map((project) => project.id)
-          .filter((id): id is string => typeof id === "string")
-      : [];
-    expect(ids).toContain(stored.active);
+    expect(stored.active).toBeTruthy();
+
+    /* 分区列表里要有刚建的那个项目（名字可能还是「未命名」占位）。 */
+    const rail = projectSections(page);
+    await expect(rail).toBeVisible();
+
+    /* localStorage 里的项目索引也得还在，且与 active 对得上。 */
+    const projects = await page.evaluate(() => {
+      const raw = localStorage.getItem("comfyapp.canvas.projects.v1");
+      if (raw === null) {
+        return null;
+      }
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed)
+        ? parsed.filter((p): p is Record<string, unknown> => typeof p === "object" && p !== null)
+        : null;
+    });
+    expect(projects).not.toBeNull();
+    expect(projects!.some((p) => p.id === stored.active)).toBe(true);
   });
 });
