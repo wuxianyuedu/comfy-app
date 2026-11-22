@@ -259,26 +259,6 @@ export function AppShell({
               </SidebarGroupContent>
             </SidebarGroup>
 
-            {/* 「临时页签」组（ISSUE #4770）：顶部页签栏退役后，已打开的页签改在左侧列出
-              —— 瞬时页（设置等）、项目类页（工坊·某项目）与桌面壳 iframe 页（ComfyUI），
-              状态与其它侧栏项同一套（当前页高亮、悬停浮现关闭按钮）。没有要列的页签时
-              整组不渲染，不给侧栏添一条空分组。 */}
-            {stripTabs.length + iframeTabs.length > 0 ? (
-              <SidebarTempTabs
-                activeIframeTabId={shellActiveTabId}
-                activeViewKey={activeViewKey}
-                iframeTabs={iframeTabs}
-                onActivateIframeTab={activateShellTab}
-                onCloseIframeTab={closeShellTab}
-                onCloseViewTab={onCloseViewTab}
-                onOpenView={onOpenView}
-                onSelectViewTab={onSelectViewTab}
-                openableViews={openableViews}
-                projectNameOf={projectNameOf}
-                viewTabs={stripTabs}
-              />
-            ) : null}
-
             {/* 「项目」分组紧跟全局项之后（不再 `mt-auto` 顶到视口底部，避免中间大片空白）。
               **图标档不再整组隐藏**（ISSUE #1691）：此前挂 `collapsible=icon:hidden`，窗口一窄
               用户就看不见也切不了项目；现在缩略态每项都是带图标 + 名称 tooltip 的方块。 */}
@@ -393,6 +373,26 @@ export function AppShell({
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
+
+            {/* 「临时页签」组（ISSUE #4770）：顶部页签栏退役后，已打开的页签改在左侧列出
+              —— 瞬时页（设置等）、项目类页（工坊·某项目）与桌面壳 iframe 页（ComfyUI），
+              状态与其它侧栏项同一套（当前页高亮、悬停浮现关闭按钮）。没有要列的页签时
+              整组不渲染，不给侧栏添一条空分组。#4792：排在「项目」分组之后。 */}
+            {stripTabs.length + iframeTabs.length > 0 ? (
+              <SidebarTempTabs
+                activeIframeTabId={shellActiveTabId}
+                activeViewKey={activeViewKey}
+                iframeTabs={iframeTabs}
+                onActivateIframeTab={activateShellTab}
+                onCloseIframeTab={closeShellTab}
+                onCloseViewTab={onCloseViewTab}
+                onOpenView={onOpenView}
+                onSelectViewTab={onSelectViewTab}
+                openableViews={openableViews}
+                projectNameOf={projectNameOf}
+                viewTabs={stripTabs}
+              />
+            ) : null}
           </SidebarContent>
 
           {/* 原先这里有一个侧栏底「设置」—— 与列表里那一项是同一个动作的两处入口，
