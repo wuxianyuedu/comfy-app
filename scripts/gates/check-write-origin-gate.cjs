@@ -24,7 +24,14 @@ const WRITE_METHOD_RE = /export\s+(?:async\s+)?function\s+(?:POST|PUT|DELETE|PAT
 const HELPER = "rejectCrossOriginWrite(";
 
 function walk(dir, out = []) {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    /* 扫描面目录不存在（门禁自测的临时仓库 / 冷检出）：没有可扫的东西。 */
+    return out;
+  }
+  for (const e of entries) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) {
       walk(p, out);
