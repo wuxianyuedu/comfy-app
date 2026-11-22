@@ -240,7 +240,8 @@ function submittedValueFor(
   if (index === -1 && entry.hostNodeId === undefined) {
     index = inputs.findIndex((input) => names.includes(input.name));
   }
-  let value: unknown = index === -1 ? undefined : inputs[index]!.value;
+  const matched = index === -1 ? undefined : inputs[index];
+  let value: unknown = matched?.value;
   if (isBlank(value)) {
     const label = entry.label?.trim() ?? "";
     for (const key of [label, entry.name, ...(PORT_TO_PARAM_KEYS[label] ?? [])]) {
