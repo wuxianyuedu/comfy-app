@@ -82,6 +82,13 @@ const referenceLoaderNamespaceSchema = z
     }
   });
 
+/** 尺寸来源声明：某个模式的尺寸由第一张参考图决定（不接收外部尺寸值）。
+ *  读写执行者见 `~/lib/workflow/workflow-size-source`；形状不符的条目按「没声明」处理。 */
+const sizeSourceNamespaceSchema = z.record(
+  z.string(),
+  z.object({ from: z.literal("reference-image") }),
+);
+
 export const workflowParamMapSchema = z.looseObject({
   /** 作者画的输入落点线（运行期据此派值）。 */
   source: modeTableNamespaceSchema.optional(),
@@ -89,6 +96,8 @@ export const workflowParamMapSchema = z.looseObject({
   output: modeTableNamespaceSchema.optional(),
   /** 参考图装载绑定（#4376）：`mode:<模式>` → `{ <槽位id>: 绑定 }`。 */
   referenceLoaders: referenceLoaderNamespaceSchema.optional(),
+  /** 尺寸来源（由哪张图决定生成尺寸）：`mode:<模式>` → `{ from: "reference-image" }`。 */
+  sizeSource: sizeSourceNamespaceSchema.optional(),
 });
 
 /** `paramMap` JSON 列的权威类型。

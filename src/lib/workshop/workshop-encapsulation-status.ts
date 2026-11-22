@@ -32,6 +32,7 @@ import {
   type ModeContractInputId,
 } from "./model-mode-contract";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import { sizeSourceForMode } from "~/lib/workflow/workflow-size-source";
 
 /** 工坊控件形态：尺寸在工坊里是「比例 + 分辨率 / 比例 + 百万像素 + 倍数」组合控件，
  *  时长是秒数选择。`number` 是数值输入框（自定义口的「数字」类型，以及 seed /
@@ -67,6 +68,9 @@ export type EncapsulationStatus = {
    *  恒为 ready（没有「缺了它就不能用」的口）。 */
   ready: boolean;
   resolvedCount: number;
+  /** 该模式是否声明「尺寸取自第一张参考图」——尺寸口因此不要求落点，
+   *  表单侧的尺寸控件改为只读展示首图大小。 */
+  sizeFromReference: boolean;
 };
 
 /** 展示名：一律以契约 id 取**统一的那一份**展示名（`exposedParamDisplayLabel`），
@@ -144,7 +148,8 @@ export function deriveEncapsulationStatus(args: {
   for (const id of SIZE_SUB_IDS) {
     sizeWired[id] = resolved[id] ?? manualTargetFor(mapping, id, mode ?? null);
   }
-  const sizeDetermined = isSizeDetermined(sizeWired);
+  const sizeFromReference = sizeSourceForMode(paramMap, mode ?? null) === "reference-image";
+  const sizeDetermined = sizeFromReference || isSizeDetermined(sizeWired);
   const sizeSubTarget = (): string | null => {
     for (const id of SIZE_SUB_IDS) {
       const hit = sizeWired[id];
@@ -185,8 +190,10 @@ export function deriveEncapsulationStatus(args: {
   });
   const ordered = [...new Map(mapped.map((e) => [e.id, e])).values()];
   const resolvedCount = ordered.filter((e) => e.targetIoKey !== null).length;
+  /* 尺寸来源声明为首图时，尺寸卡没有落点属于设计意图，不进「未配置」清单。 */
+  const isSizeSlotUnwired = (id: string) => sizeFromReference && id === "size";
   const missingRequired = ordered
-    .filter((e) => required.includes(e.id) && e.targetIoKey === null)
+    .filter((e) => required.includes(e.id) && e.targetIoKey === null && !isSizeSlotUnwired(e.id))
     .map((e) => e.label);
   /* 「尺寸」另有一条判据：**它是必备口时**，定不出宽高就不许跑（见
    *  `isSizeDetermined`）—— 缺的这一项要出现在「缺了它不能跑」的清单里，否则
@@ -204,6 +211,9 @@ export function deriveEncapsulationStatus(args: {
     ready: missingRequired.length === 0,
     missingRequired,
     resolvedCount,
-    missingLabels: ordered.filter((e) => e.targetIoKey === null).map((e) => e.label),
+    missingLabels: ordered
+      .filter((e) => e.targetIoKey === null && !isSizeSlotUnwired(e.id))
+      .map((e) => e.label),
+    sizeFromReference,
   };
 }
