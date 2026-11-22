@@ -156,6 +156,16 @@ export async function saveMediaToLocalTemp(
           throw new Error("空文件");
         }
       } finally {
+        /* 中止路径也要取消上游流（#4726）：只关文件不 cancel 时，fetch body
+         * 未被消费也未取消，剩余字节会继续进无人读取的 socket 直到超时（与
+         * api-channel #4218 的收口同口径）；正常读完时 cancel 是无操作。
+         * 先 cancel 再关文件：close 抛错也不会跳过取消。 */
+        try {
+          void Promise.resolve(reader.cancel?.()).catch(() => undefined);
+        } catch {
+          /* cancel 不可用时不影响既有的收尾 */
+        }
+        reader.releaseLock();
         await handle.close();
       }
     }

@@ -26,7 +26,8 @@ async function readLogTail(
     await handle.read(buf, 0, buf.length, start);
     return { text: buf.toString("utf8"), truncated: start > 0 };
   } finally {
-    await handle.close();
+    /* 清理自身抛错不得覆盖业务异常（#4728）：与 generated 路由的 close 同口径。 */
+    await handle.close().catch(() => undefined);
   }
 }
 

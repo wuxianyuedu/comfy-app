@@ -78,3 +78,34 @@ describe("GET /api/logs/history —— 尾部窗口（ISSUE #4252）", () => {
     expect(res.status).toBe(400);
   });
 });
+
+/* ── #4728：finally 里 close 的清理错误不得覆盖 read 的原始异常 ──────────────
+ * read 与 close 同时失败时，路由 500 的原因必须是 read 的那个 —— 清理侧错误
+ * 吞掉，否则排障时看到的根因是假的。 */
+describe("GET /api/logs/history · close 清理错误不覆盖原始异常（#4728）", () => {
+  it("read 抛错时 finally 的 close 再抛错也不顶掉原始原因", async () => {
+    const originalError = new Error("read 失败（模拟权限被拒）");
+    const closeError = new Error("close 失败（模拟句柄损坏）");
+    const fakeHandle = {
+      stat: vi.fn(() => Promise.resolve({ size: 100 })),
+      read: vi.fn(() => Promise.reject(originalError)),
+      close: vi.fn(() => Promise.reject(closeError)),
+    };
+    const fsp = (await import("node:fs/promises")).default;
+    const openSpy = vi
+      .spyOn(fsp, "open")
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- 测试桩只实现 stat/read/close 三个成员
+      .mockResolvedValue(fakeHandle as unknown as Awaited<ReturnType<typeof fsp.open>>);
+    try {
+      const res = await GET(new Request(`http://localhost/api/logs/history?file=${name}`));
+      expect(res.status).toBe(500);
+      const body: unknown = await res.json();
+      expect(isRecord(body) && typeof body.error === "string").toBe(true);
+      const message = isRecord(body) ? String(body.error) : "";
+      expect(message).toContain("read 失败");
+      expect(message).not.toContain("close 失败");
+    } finally {
+      openSpy.mockRestore();
+    }
+  });
+});
