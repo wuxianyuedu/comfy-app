@@ -13,7 +13,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { readFileAsDataUrl } from "~/lib/file-io";
 import { runAsyncAction } from "~/lib/async-action";
-import { sceneFromMode } from "~/lib/media/size-presets";
 import {
   chatFallbackGroupForCurrentModel,
   effectiveProviderType,
@@ -22,7 +21,6 @@ import {
 } from "~/lib/llm/types";
 import { isRecord } from "~/lib/is-record";
 import {
-  apiPreviewRequest,
   fetchWorkshopWorkflows,
   type TaskLogEntry,
   type WorkshopWorkflowOption,
@@ -39,6 +37,8 @@ import {
   type ModelTestResult,
   type ModelTestSession,
 } from "./use-model-test-generate";
+import { useModelTestReprint } from "./use-model-test-reprint";
+import { useRequestPreview } from "./use-model-test-request-preview";
 import { useReferenceImageGroup } from "./use-reference-image-group";
 import { useApplyJsonValues } from "./use-model-test-json";
 import { useOpenResultInBrowser } from "./use-open-result-in-browser";
@@ -168,85 +168,6 @@ export type ModelTestController = {
   /** 当前格本地工作流任务的进度（SSE state 帧；仅工作流候选生成中非空）。 */
   workflowProgress: { label?: string; pct: number } | null;
 };
-
-/** 生成前的「准备请求」读数子 hook（#3949 需求 8）：按当前 模式 / 模型 / 输入
- *  走服务端 dry-run 现算**实际上游请求**（端点 + 适配器翻译后的请求体）。
- *  工作流候选（#4080 评论 4）跳过 —— dry-run 是 API 中继的预演，本地通道
- *  没有这一步。600ms 去抖 + 序号守卫：慢响应不覆盖新一轮的读数。
- *  实际请求行落在**当前格**的会话里；生成中不清空、不重算 —— 该格的
- *  「实际请求」在请求中与生成后都保持可见（#4080 评论 20）。 */
-function useRequestPreview(args: {
-  buildBodies: (values: ModelTestValues) => ReturnType<typeof buildRequestBodies>;
-  busy: boolean;
-  kind: ModelTestKind;
-  onError: (text: string) => void;
-  patchSession: (key: string, patch: Partial<ModelTestSession>) => void;
-  selectedModel: string;
-  sessionKey: string;
-  skip: boolean;
-  values: ModelTestValues;
-}): void {
-  const {
-    busy,
-    buildBodies,
-    kind,
-    onError,
-    patchSession,
-    selectedModel,
-    sessionKey,
-    skip,
-    values,
-  } = args;
-  const seqRef = useRef(0);
-  /* 卸载判活（ISSUE #4288）：防抖窗口过后组件可能已卸载，在途请求回来
-   * 不再写父级 state（seq 只防连发竞态，不防「卸载后写」）。 */
-  const aliveRef = useRef(true);
-  useEffect(() => {
-    aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
-  }, []);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (kind === "chat" || skip || selectedModel === "") {
-        patchSession(sessionKey, { previewRows: [] });
-        return;
-      }
-      if (busy) {
-        /* 生成中保留该格已算出的「实际请求」行：不清空、不重算 —— 此时的
-         * 表单改动属于下一次测试（#4080 评论 20）。 */
-        return;
-      }
-      const seq = ++seqRef.current;
-      const { imageBody, videoBody } = buildBodies(values);
-      const relayBody = imageBody ?? videoBody ?? {};
-      void runAsyncAction(
-        async () => {
-          const rows = await apiPreviewRequest(relayBody, kind);
-          if (!Array.isArray(rows)) {
-            return { ok: true as const };
-          }
-          if (aliveRef.current && seqRef.current === seq) {
-            patchSession(sessionKey, { previewRows: rows });
-          }
-          return { ok: true as const };
-        },
-        {
-          report: (kind, text) => {
-            if (kind === "err") {
-              onError(text);
-            }
-          },
-          failureText: "请求预览失败",
-        },
-      );
-    }, 600);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [busy, buildBodies, onError, selectedModel, kind, skip, sessionKey, patchSession, values]);
-}
 
 /** 候选 / 契约 / 适配器索引的取数与派生（§12.13 第二刀）：这一簇只读
  *  configGet / modeContractsGet / workshopAdaptersGet 与工作流列表四份读数做
@@ -510,10 +431,6 @@ export function useModelTest(): ModelTestController {
    * 读数 / 执行日志 / 产物 / **表单值**互相隔离，切走再切回各看各的，不同
    * 模型可以同时测试。 */
   const [sessions, setSessions] = useState<Record<string, ModelTestSession>>({});
-  /* 历史页「重试」的带参预填（#4841）：见 ModelTestController.reprintPrefill。
-   * 它是**兜底层**不是会话值 —— 写进某一格会在切模型后消失，放这里才能
-   * 「重试换个模型再跑」时参数跟着走。 */
-  const [reprintPrefill, setReprintPrefill] = useState<ModelTestRetryPayload | null>(null);
 
   /* 当前格的键：用途 + 模式 + 模型（候选取值空间 = 模型名 / wf::<id>）。 */
   const activeKey = `${kind}::${mode}::${selectedModel}`;
@@ -588,6 +505,19 @@ export function useModelTest(): ModelTestController {
     selectedCandidate,
     mode,
   );
+
+  /* 历史页「重试」的带参预填（#4841）收在 useModelTestReprint（§12.13：主
+   * hook 越过文件长度硬闸，按职责拆子 hook）——预填兜底层、应用动作与
+   * 「工作流清单 settle 后补选同款工作流」都在那边；这里只接线。 */
+  const { reprintPrefill, dropReprintPrefill, applyReprintPrefill } = useModelTestReprint({
+    candidates,
+    referenceGroup,
+    selectedModel,
+    setKindState,
+    setSelectedModel,
+    setModeState,
+    workflowsReady,
+  });
 
   /* 表单值随格走（#4080 评论 19）：测试界面不关闭时，切模型不丢已填参数。
    * 没填过的格：本地工作流候选回落**工作流在该模式下的默认值**（ISSUE #4633），
@@ -674,12 +604,6 @@ export function useModelTest(): ModelTestController {
     [referenceGroup],
   );
 
-  /* 用户接管输入的那几跳都要撤掉预填层（#4841）：用户已经亲手写了值，
-   * 兜底层再叠加只会让人分不清「表单里到底是什么在生效」。 */
-  const dropReprintPrefill = useCallback(() => {
-    setReprintPrefill(null);
-  }, []);
-
   const patchValue = useCallback(
     (type: keyof ModelTestValues, value: string) => {
       dropReprintPrefill();
@@ -725,48 +649,6 @@ export function useModelTest(): ModelTestController {
     },
     [dropReprintPrefill, patchSession, values],
   );
-
-  /* 历史页「重试」的带参预填（#4841）：按任务模式切模式页签（模式码推不出
-   * 用途时 sceneFromMode 兜底 image），清掉旧模型选择；参考图组一并清空——
-   * 预填载荷刻意不携带旧任务的参考图（见 buildModelTestRetryPayload 的注释），
-   * 旧图静默跟跑不是重试的语义。同款工作流的预选见下方候选就绪补选效应。 */
-  const applyReprintPrefill = useCallback(
-    (payload: ModelTestRetryPayload) => {
-      setKindState(sceneFromMode(payload.mode));
-      setSelectedModel("");
-      setModeState(payload.mode);
-      referenceGroup.reset();
-      setReprintPrefill(payload);
-    },
-    [referenceGroup],
-  );
-
-  /* 预选同款工作流（#4841）：候选清单可能**晚于**预填到达 —— 首次进入本页是
-   * 懒分块 + 工作流查询竞速，applyReprintPrefill 那一刻原地找一遍会静默漏选
-   * （表单退回三步引导，统一输入看不见）。改成等工作流清单 settle 后补一次：
-   * 就绪判据是 `workflowsReady`（成功 / 失败都算），不能拿「已有若干候选」
-   * 顶替 —— 配置型候选先于工作流清单到达时长度非空但工作流候选还缺。
-   * 只在「还没选模型」时补，不覆盖用户已选；同一份载荷只试一次（用户之后
-   * 主动清空选择不再被抢回）。 */
-  const preselectedForRef = useRef<ModelTestRetryPayload | null>(null);
-  useEffect(() => {
-    if (reprintPrefill === preselectedForRef.current) {
-      return;
-    }
-    if (reprintPrefill !== null && !workflowsReady) {
-      /* 工作流清单还没 settle：不标记，等它到位再补。 */
-      return;
-    }
-    preselectedForRef.current = reprintPrefill;
-    const workflowId = reprintPrefill?.workflowId;
-    if (workflowId === undefined || selectedModel !== "") {
-      return;
-    }
-    const matched = candidates.find((candidate) => candidate.workflow?.id === workflowId);
-    if (matched !== undefined) {
-      setSelectedModel(candidateValue(matched));
-    }
-  }, [candidates, reprintPrefill, selectedModel, workflowsReady]);
 
   const addReferenceImages = useCallback(
     (files: Array<File>) => referenceGroup.add(files),
