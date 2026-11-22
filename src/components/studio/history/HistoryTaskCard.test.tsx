@@ -47,22 +47,31 @@ function renderCard(overrides: Partial<Parameters<typeof HistoryTaskCard>[0]> = 
   return { onOpenDetail };
 }
 
-describe("HistoryTaskCard 键盘可达性", () => {
-  it("详情入口（缩略图）是原生按钮：Enter 也能打开详情", async () => {
+describe("HistoryTaskCard 产物预览与详情入口（用户反馈：点图看大图、详情走按钮）", () => {
+  it("详情按钮是原生按钮：Enter 也能打开任务详情", async () => {
     const { onOpenDetail } = renderCard();
-    const thumb = screen.getByRole("button", { name: "查看任务详情" });
-    thumb.focus();
-    expect(thumb).toHaveFocus();
+    const detail = screen.getByRole("button", { name: "查看这一条的任务详情" });
+    detail.focus();
+    expect(detail).toHaveFocus();
 
     await userEvent.keyboard("{Enter}");
 
     expect(onOpenDetail).toHaveBeenCalledWith("t-1");
   });
 
-  it("鼠标点击缩略图打开详情", async () => {
+  it("鼠标点击详情按钮打开任务详情", async () => {
     const { onOpenDetail } = renderCard();
-    await userEvent.click(screen.getByRole("button", { name: "查看任务详情" }));
+    await userEvent.click(screen.getByRole("button", { name: "查看这一条的任务详情" }));
     expect(onOpenDetail).toHaveBeenCalledWith("t-1");
+  });
+
+  it("点缩略图打开图片查看器，而不是任务详情", async () => {
+    const { onOpenDetail } = renderCard({
+      task: { ...task, cover: "/api/generated/t1/a.png" },
+    });
+    await userEvent.click(screen.getByRole("button", { name: "查看大图：任务产物" }));
+    expect(document.querySelector('[data-slot="image-viewer"]')).not.toBeNull();
+    expect(onOpenDetail).not.toHaveBeenCalled();
   });
 });
 
