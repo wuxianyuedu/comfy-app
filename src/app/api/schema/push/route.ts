@@ -6,7 +6,8 @@ import { isRecord } from "~/lib/is-record";
 import { SCHEMA_SYNC_STATUS_FILE } from "~/lib/log/log-paths";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
-import { isSplashOrigin } from "~/lib/shell/splash-origin";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
+import { rejectOverRateLimit } from "~/server/lib/rest-rate-limit";
 
 /**
  * `POST /api/schema/push` —— 状态栏「立即同步」按钮的执行端：`stale` / `missing` 意味着启动时的自动同步没能把库带到当前 schema（dry-run 白名单判出这批变更含
@@ -32,20 +33,23 @@ const gate: { spawning: boolean } = isSchemaPushGate(existingGate)
 Reflect.set(globalThis, GATE_KEY, gate);
 
 export async function POST(req: NextRequest) {
-  /* 鉴权 + 同源校验（#4040）：本端点会以 `--force` 口径 spawn schema 同步
+  /* 鉴权 + 同源校验（#4040 / #4723）：本端点会以 `--force` 口径 spawn schema 同步
    * （含删列 / 重建表这类会丢数据的语句），不能被任意网页的「简单请求」
-   * 跨站触发（不读 body、不带自定义头 = 浏览器照常发出）。Origin 必须是
-   * 本机界面同源或启动页那一族（白名单唯一事实源 `~/lib/shell/splash-origin`）；
-   * 缺 Origin（本机工具 / curl）放行——桌面应用的合法调用方是本机界面与本机工具，
-   * 而跨站攻击的 fetch 必带 Origin。 */
+   * 跨站触发（不读 body、不带自定义头 = 浏览器照常发出）。同源闸已收口到
+   * `~/server/lib/same-origin` 的共享出口（#4723 起全部写端点统一走它，
+   * 由 `scripts/gates/check-write-origin-gate.cjs` 强制覆盖）。 */
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }
-  const origin = req.headers.get("origin");
-  const sameOrigin = origin !== null && origin === req.nextUrl.origin;
-  if (origin !== null && !sameOrigin && !isSplashOrigin(origin)) {
-    return NextResponse.json({ ok: false, error: "跨站请求已拒绝" }, { status: 403 });
+  const crossOrigin = rejectCrossOriginWrite(req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
+  }
+  /* 限流（#4725）：会花钱/外联/拉进程的端点挂滑动窗口（默认 10s/20 次）。 */
+  const limited = rejectOverRateLimit(req, "schema-push");
+  if (limited !== null) {
+    return limited;
   }
 
   if (gate.spawning) {

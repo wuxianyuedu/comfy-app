@@ -2,7 +2,7 @@
 // 契约（前端 `ensureComfyReady` 依赖这个形状）：200 { ok:true } 现在就能用，重试上传即可成功；
 // 202 { ok:false, pending:true, detail } 正在启动（或已被用户关闭 / 未开自动启动），前端稍后重试；
 // 503 { ok:false, pending:false, ... } 启动失败或本进程不可探活。
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";
 import { errorMessage } from "~/lib/error-message";
@@ -13,6 +13,8 @@ import {
 } from "~/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
+import { rejectOverRateLimit } from "~/server/lib/rest-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,10 +24,20 @@ export const dynamic = "force-dynamic";
  *  用户才能在中途看到「正在启动」而不是一个挂了十几秒的请求。 */
 const ENSURE_WAIT_MS = 8000;
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
+  }
+  /* 限流（#4725）：会花钱/外联/拉进程的端点挂滑动窗口（默认 10s/20 次）。 */
+  const limited = rejectOverRateLimit(req, "comfy-ensure");
+  if (limited !== null) {
+    return limited;
   }
 
   const up = await probeComfyUi(1500);

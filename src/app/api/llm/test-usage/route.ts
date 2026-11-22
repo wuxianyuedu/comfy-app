@@ -13,6 +13,8 @@ import {
   strField,
 } from "~/lib/llm/usage-test.server";
 import { apiErrorDetail } from "~/lib/api-error";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
+import { rejectOverRateLimit } from "~/server/lib/rest-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +27,16 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   if (!(await requireRequestUser())) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
+  }
+  /* 限流（#4725）：会花钱/外联/拉进程的端点挂滑动窗口（默认 10s/20 次）。 */
+  const limited = rejectOverRateLimit(req, "llm-test-usage");
+  if (limited !== null) {
+    return limited;
   }
 
   /* 读 body / 取条目名 / 解析连接参数与「继续等待」路由同一份实现（§12.12）。 */

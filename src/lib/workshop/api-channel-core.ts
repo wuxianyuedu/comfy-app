@@ -25,6 +25,8 @@ import {
 import { errorText } from "~/lib/error-message";
 import { asRecord, isRecord } from "~/lib/is-record";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
+/* 纯 Node 宿主（MCP stdio 通道）也加载本模块：出网判据走不带 server-only 的核心。 */
+import { safeFetch } from "~/lib/network/outbound-url-core";
 
 /** 单个通道的配置（回导出：入口与用例都从这里取，避免各自 import 两个模块）。 */
 export type { ApiChannelStored };
@@ -348,7 +350,7 @@ export async function callImageGeneration(
   let res: Response;
   const startedAt = Date.now();
   try {
-    res = await fetch(target.endpoint, {
+    res = await safeFetch(target.endpoint, {
       method: "POST",
       headers: target.apiKey
         ? {
@@ -360,6 +362,7 @@ export async function callImageGeneration(
         options.extraBody === undefined ? imageBody : { ...imageBody, ...options.extraBody },
       ),
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
+      scenario: "llm-upstream",
     });
   } catch (error) {
     /* 网络层失败也上报（status=null）：测试页要看到「发到了哪、发了什么」。 */
@@ -423,7 +426,7 @@ export async function callVideoSubmit(
   let res: Response;
   const submitStartedAt = Date.now();
   try {
-    res = await fetch(target.endpoint, {
+    res = await safeFetch(target.endpoint, {
       method: "POST",
       headers: target.apiKey
         ? {
@@ -435,6 +438,7 @@ export async function callVideoSubmit(
         options.extraBody === undefined ? submitBody : { ...submitBody, ...options.extraBody },
       ),
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
+      scenario: "llm-upstream",
     });
   } catch (error) {
     /* 网络层失败也上报（status=null），与生图同一口径。 */
@@ -501,10 +505,11 @@ export async function callVideoPoll(
       const candidateStartedAt = Date.now();
       try {
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：前一候选没读到就换下一个
-        const res = await fetch(pollUrl, {
+        const res = await safeFetch(pollUrl, {
           method: "GET",
           headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
           signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
+          scenario: "llm-upstream",
         });
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：同上，候选串行试
         payload = await (options.readJson ?? defaultJsonReader)(res);
@@ -552,10 +557,11 @@ export async function callVideoPoll(
   let res: Response;
   const pollStartedAt = Date.now();
   try {
-    res = await fetch(pollEndpointFor(channel.baseUrl, remoteTaskId), {
+    res = await safeFetch(pollEndpointFor(channel.baseUrl, remoteTaskId), {
       method: "GET",
       headers: headersFor(channel),
       signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
+      scenario: "llm-upstream",
     });
   } catch (error) {
     options.debug?.({

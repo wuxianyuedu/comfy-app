@@ -1,5 +1,6 @@
 import { errorMessage, errorText } from "~/lib/error-message";
 import { logger } from "~/lib/core/logger";
+import { safeFetch } from "~/lib/network/outbound-url.server";
 
 import "server-only";
 import type { ZodType } from "zod";
@@ -444,7 +445,7 @@ async function upstreamChat(
   });
   let res: Response;
   try {
-    res = await fetch(request.url, {
+    res = await safeFetch(request.url, {
       method: "POST",
       headers: request.headers,
       body: JSON.stringify(request.body),
@@ -454,6 +455,7 @@ async function upstreamChat(
         options.signal,
         options.stream ? LLM_STREAM_TIMEOUT_MS : LLM_UPSTREAM_TIMEOUT_MS,
       ),
+      scenario: "llm-upstream",
     });
   } catch (error) {
     throw new Error(describeFetchFailure(error, cfg), { cause: error });

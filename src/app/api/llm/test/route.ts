@@ -16,6 +16,8 @@ import {
 } from "~/lib/llm/provider-types";
 import { llmProviderRepository, remoteModelRepository } from "~/lib/core/repository";
 import type { LlmProvider } from "~/server/db/schema";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
+import { rejectOverRateLimit } from "~/server/lib/rest-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -175,6 +177,16 @@ async function candidateFormats(input: {
 export async function POST(req: NextRequest) {
   if (!(await requireRequestUser())) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
+  }
+  /* 限流（#4725）：会花钱/外联/拉进程的端点挂滑动窗口（默认 10s/20 次）。 */
+  const limited = rejectOverRateLimit(req, "llm-test");
+  if (limited !== null) {
+    return limited;
   }
 
   /* 畸形 JSON 是客户端错误 → 400（#4045）：不再 `.catch(() => ({}))` 把它

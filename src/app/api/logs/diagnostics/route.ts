@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 import { exportDiagnostics } from "../../../../../scripts/launcher-core/run.mjs";
 import { apiErrorBody } from "~/lib/api-error";
@@ -8,6 +8,7 @@ import { LOG_ROOT } from "~/lib/log/log-paths";
 import { toDisplayPath } from "~/lib/path-display";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
 
 /**
  * `POST /api/logs/diagnostics` —— 把「本次运行 + 最近几次历史」打成 zip（ISSUE #1326）：面板「保存到本地」只导出筛到的行，
@@ -19,10 +20,15 @@ export const dynamic = "force-dynamic";
 /** 打包是 IO 密集的同步活（几十 MB 的 zip），给它一个明确上限而不是让它挂住请求。 */
 export const maxDuration = 60;
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
   }
 
   try {
