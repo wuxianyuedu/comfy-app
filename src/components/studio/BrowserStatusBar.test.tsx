@@ -83,6 +83,20 @@ vi.mock("~/components/feedback/FeedbackButton", () => ({
     /* 反馈按钮不在本用例的断言面里 */
   },
 }));
+// 地址栏复制（ISSUE #4810）的失败出口走 toast：换桩收住调用，断言「失败有可见
+// 报错」而不真起 ToastProvider（成功路径的「已复制」闪现不经过它）。
+const toastError = vi.hoisted(() => vi.fn());
+vi.mock("~/components/studio/ToastProvider", () => ({
+  useToast: () => ({
+    toast: vi.fn(),
+    success: vi.fn(),
+    error: toastError,
+    info: vi.fn(),
+    loading: vi.fn(),
+    update: vi.fn(),
+    dismiss: vi.fn(),
+  }),
+}));
 
 function noop() {
   /* 测试桩：仅为满足 LogProvider 上下文的最小形状 */
@@ -309,5 +323,62 @@ describe("BrowserStatusBar 纯图标按钮的可访问名", () => {
     expect(trigger).toBeInTheDocument();
     /* 名字由 aria-label 给（可见文字仍为空）：换成只写 title 就守不住读屏这条路。 */
     expect(trigger.getAttribute("aria-label")).toMatch(/^日志面板/);
+  });
+});
+
+describe("BrowserStatusBar 地址栏复制（ISSUE #4810）", () => {
+  /** happy-dom 的 navigator.clipboard 不可靠：在原对象上补一个可断言的桩。
+   * `impl` 同步决定成败（抛错 = 拒绝写入），包一层 Promise 让 `copyText`
+   * 的 await 照常工作。 */
+  function stubClipboard(impl: (text: string) => void) {
+    const writeText = vi.fn((text: string) => {
+      return Promise.resolve().then(() => {
+        impl(text);
+      });
+    });
+    Object.defineProperty(window.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    return writeText;
+  }
+
+  it("点击地址区：把点击那一刻的完整地址写进剪贴板，并把「安全」闪成「已复制」", async () => {
+    const user = userEvent.setup();
+    const writeText = stubClipboard(() => {
+      /* 成功路径：写入调用本身即成功，无需额外动作 */
+    });
+    renderBar(viewModel());
+
+    await user.click(screen.getByRole("button", { name: /安全/ }));
+
+    /* 等 DOM（「已复制」亮起）用 waitFor + jest-dom 匹配器（§11.14.3 的正当形态）；
+     * 写入断言放在亮起之后：闪现只在 onSuccess 里发生，能亮就说明写入已发生。 */
+    await waitFor(() => {
+      expect(screen.getByText("已复制")).toBeInTheDocument();
+    });
+    expect(writeText).toHaveBeenCalledWith(window.location.href);
+  });
+
+  it("复制失败：给可见报错（toast），不亮「已复制」", async () => {
+    const user = userEvent.setup();
+    stubClipboard(() => {
+      throw new Error("denied");
+    });
+    /* 剪贴板拒绝后会走 execCommand 兜底：一并判死，钉住「失败」这一支。 */
+    Object.defineProperty(document, "execCommand", {
+      value: vi.fn(() => false),
+      configurable: true,
+    });
+    renderBar(viewModel());
+
+    await user.click(screen.getByRole("button", { name: /安全/ }));
+
+    /* 等的是「报错调用到了」这个值：按 §11.14.3 用 expect.poll，不越界到 waitFor。 */
+    await expect
+      .poll(() => toastError.mock.calls.length, { message: "复制失败要有可见报错" })
+      .toBeGreaterThan(0);
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("复制失败"));
+    expect(screen.queryByText("已复制")).toBeNull();
   });
 });
