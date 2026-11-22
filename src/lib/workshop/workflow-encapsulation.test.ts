@@ -510,6 +510,51 @@ describe("图片槽位：同名 pin 由线区分，不看名字 / 节点类名",
       mode: "T2I",
       values: { prompt: "x", referenceImages: ["r.png"] },
     });
+    /* 如实报「参考图」这一口丢了，而不是套视频语义报「首帧未生效」（#4856）。 */
+    expect(res.unmatched).toContain("reference-image");
+    expect(res.unmatched).not.toContain("first-frame");
+  });
+
+  it("图像模式：参考图全部经 reference-image 口落下，不报「首帧未生效」(#4856)", () => {
+    const res = buildEncapsulatedInputs({
+      io: { ...IO, ref2: { ...IO.initImage!, nodeId: "11" } },
+      paramMap: wire("I2I", {
+        "reference-image": "initImage",
+        "reference-image-2": "ref2",
+      }),
+      mode: "I2I",
+      values: {
+        referenceImages: ["r1.png", "r2.png"],
+      },
+    });
+    expect(valueOf(res.workflowInputs, "image")).toBe("r1.png");
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("图像模式：显式给首帧 / 尾帧 / 时长也不派生、不补报（视频专用）", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("I2I", { "reference-image": "initImage" }),
+      mode: "I2I",
+      values: {
+        referenceImages: ["r1.png"],
+        firstFrame: "head.png",
+        lastFrame: "tail.png",
+        duration: 5,
+        frames: 81,
+      },
+    });
+    expect(valueOf(res.workflowInputs, "image")).toBe("r1.png");
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("视频模式：参考图在场而首帧口没连，仍如实补报（保护不丢）", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("I2V", { prompt: "text" }),
+      mode: "I2V",
+      values: { referenceImages: ["r1.png"] },
+    });
     expect(res.unmatched).toContain("first-frame");
   });
 
