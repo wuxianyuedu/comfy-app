@@ -711,19 +711,31 @@
   把该次提交的**全部参数**折成 JSON 复制到剪贴板（ISSUE #4769）——
   载荷形状 `{ mode, inputs }`（模式码 + 模式契约口 → 值），与详情弹窗的
   「工坊参数」表同一套派生；粘贴侧是测试模型的 JSON 输入模式（FR-LM-07）。
+  行级动作还有「重试」（#4841 起为**带参预填**，防误触）：点击不再直接复投，
+  而是取详情 + 模式契约、按 `buildModelTestRetryPayload` 折成载荷
+  （`{ mode, inputs, sourceTaskId, workflowId? }`），工作区带到「测试模型」页——
+  按任务模式切模式页签、契约口值预填进统一输入表单、能对上候选时预选同款
+  工作流；用户确认后点「生成」才真正重跑。预填是表单值的**兜底层**：
+  换模型不丢（重试换模型再跑是常态），用户改任意输入 / 贴 JSON / 选文件即退场。
+  原直复投（`task.retry`）端点保留但不再有界面直调入口。
 - 落点：`src/components/studio/history/HistoryList.tsx`、
   `src/components/studio/history/hooks/use-history-list.ts`、
-  `src/components/studio/history/history-detail-derive.ts`（`buildReprintPayload`）
+  `src/components/studio/history/history-detail-derive.ts`（`buildReprintPayload` /
+  `buildModelTestRetryPayload`）、
+  `src/components/workshop/hooks/use-model-test.ts`（`applyReprintPrefill` +
+  预填兜底层）、`src/app/workspace/page.tsx`（一次性载荷过页签栈）
 
 #### FR-GN-06 任务详情弹窗
 
-- 状态：已上线
-- 需求：任务详情在历史列表内的弹窗查看（产物网格 + 执行日志 +
+- 状态：已上线（#4841 起回归**纯查看**）
+- 需求：任务详情在历史列表内的弹窗查看（产物网格 + 参数表 +
   comfy-cli 原始输出 + 打开目录）。
 - 行为与验收：详情是弹窗不是独立路由（「在这里点开就显示详情」）；
   产物行带 `localPath` / `mediaType` / seed / 宽高；
   `raw-cli` 是 comfy-cli 完整原始输出（排障用，不加工）；
-  打开目录走 FR-OP-05 的闸门。
+  打开目录走 FR-OP-05 的闸门。弹窗内**没有编辑性入口**（#4841）：
+  评分 / 收藏行与「放大 / 局部重绘」面板已撤走（分别见 FR-QA-08 / FR-QA-09），
+  重试走任务卡（FR-GN-05 的带参预填）。
 - 落点：`src/components/studio/history/HistoryDetailModal.tsx`
 
 #### FR-GN-07 任务删除与工作流快照下载
@@ -1583,9 +1595,11 @@
 - 行为与验收：① 同一 seed + 同一工作流 + 同一参考图重跑产出一致（复现性可验；
   **本地 ComfyUI 通道**判此条，API 直连通道在上游声明同 seed 确定性时才判）；
   ② 每张图能追回 `taskId` 与参数快照；③ 只重跑失败镜，已完成的不被动
-  （历史面的任务级原样重跑**已落地** #2481：`task.retry` 按原行 `execPayload` +
-  参数 / 参考图原样新建 QUEUED 行，只放行终态任务，历史页「重试」直调；
-  带修改的重跑见 FR-QA-09）；
+  （历史面的任务级重跑**已改防误触形态**：#2481 的 `task.retry` 按原行
+  `execPayload` + 参数 / 参考图原样新建 QUEUED 行、只放行终态任务——
+  #4841 起历史页「重试」不再直调它，而是把参数折成载荷带到「测试模型」
+  统一输入预填，由人确认后点「生成」才真正重跑（见 FR-GN-05）；
+  `task.retry` 端点保留，当前无界面直调入口；带修改的重跑见 FR-QA-09）；
   ④ **自动优选（抽卡 N 选 1）**可用（#2612 已落）：镜头卡「抽卡 ×N」（2~4）
   连发 → `run.autoselectShot` 逐张按生图 rubric 视觉评审 → 均分最高者上镜
   （服务端不直写 imageUrl/taskId，赢家经镜头草稿回写，字段所有权见 #2615；
@@ -1654,9 +1668,11 @@
 - 状态：已上线（#2480）
 - 需求：人的判断**留痕且优先**——产物级人工评分 / 收藏，实体级人工裁决
   （approved / rejected + 理由）**优先于 AI 判定**；人评过的样本成为 AI 评审的校准基准。
-- 行为与验收：① 历史页产物卡与镜头评审弹窗可直接给产物打分 / 收藏，评分可查
-  （`taskImage.humanRating` / `isFavorite` 列 + `task.setImageFeedback`（带归属校验）；
-  历史页 `ImageFeedbackRow` 挂进 `HistoryDetailModal`）；② 人判废的镜头 / 剧本
+- 行为与验收：① 镜头评审弹窗（`ShotReviewDialog` 内嵌 `HumanVerdictRow`）可直接
+  给产物打分 / 收藏，评分可查（`taskImage.humanRating` / `isFavorite` 列 +
+  `task.setImageFeedback`（带归属校验））；历史详情弹窗的评分 / 收藏入口
+  **已撤**（#4841：任务详情回归纯查看）——`ImageFeedbackRow` 及其挂载点已删，
+  列与端点保留（校准读数的读侧不变）；② 人判废的镜头 / 剧本
   不因 AI 判过而放行进下一阶段（与 FR-AG-02「质量停点由人拍板」同口径）：人工裁决是
   **快照式**——镜头带 `rev`、剧本带内容指纹（`scriptDigestOf`），快照与当前内容一致
   才新鲜生效（人再改内容 → 裁决自然失效）；人通过且新鲜 → 定稿豁免 AI 评审，
@@ -1676,28 +1692,24 @@
   `src/lib/production/run-types.ts`（规划器人工裁决优先）、
   `src/server/api/routers/run.ts`（四端点）、`src/server/api/routers/task.ts` +
   `src/lib/core/repository-task-impl.ts`（`setImageFeedback`）、
-  `src/components/workshop/HumanVerdictRow.tsx`（共享裁决 + 星评行）、
-  `src/components/studio/history/ImageFeedbackRow.tsx`（历史页评分 / 收藏）
+  `src/components/workshop/HumanVerdictRow.tsx`（共享裁决 + 星评行；
+  历史页评分 / 收藏组件 `ImageFeedbackRow` 已随 #4841 删除）
 
 #### FR-QA-09 带修改的重跑（局部重绘 / 放大）
 
-- 状态：已上线（#2483；原样重跑的历史面落点见 #2481 的 `task.retry`，不占本条）
-- 需求：图「方向对、局部有瑕疵」时不必整张重抽——产物 / 关键帧上可发起
+- 状态：**入口已退役**（#4841：任务详情回归纯查看，蒙版重绘 / 放大重出的
+  界面入口随详情弹窗一起撤走；`task.parentId` 追溯链路与「来源任务」展示保留；
+  服务端链路（`generate.generate` + 工作流库模板）不受影响）
+- 原需求：图「方向对、局部有瑕疵」时不必整张重抽——产物 / 关键帧上可发起
   **局部重绘（inpaint）**与**放大（upscale）**，两者都是「带修改的重跑」，
   走既有 task 链路。
-- 行为与验收：① 历史详情的图片产物可画蒙版（画笔三档 + 清空，白 = 重绘区）
-  并发起局部重绘，任务照走 `task` 链路；② 产物有「放大重出」动作；
-  ③ 重绘 / 放大的产物与原任务**可追溯**：`task.parentId` 落库，
-  产物元数据面板显示「来源任务」；④ 提交形状 = 原图进参考图槽
-  （重绘：第一槽原图、第二槽蒙版）+ `parentId`，选模板时有口径提示。
-  边界（与立案文案的偏差，如实）：**不内置硬编码 inpaint / upscale 工作流模板**
-  ——工作流库是唯一模板来源（`generate.ts` 注释自证「内置模板已移除」），
-  模板由用户从库中选；选了没有图像输入口的模板时，执行侧的 unmatched 读数
-  会说明值没落上。
-- 落点：`src/components/studio/history/ImageRedrawPanel.tsx`（面板）、
-  `src/components/studio/history/MaskCanvas.tsx`（蒙版画布）、
-  `src/components/studio/history/hooks/use-image-redraw.ts`（动作逻辑）、
-  `src/server/db/schema.ts`（`task.parentId`）、
+- 现状与验收：界面入口已撤（`ImageRedrawPanel` / `MaskCanvas` /
+  `use-image-redraw(-client)` 已删）；历史详情只保留产物查看、打开目录、
+  下载工作流与参数表。历史面的重跑诉求由 FR-GN-05 的「重试 → 测试模型预填」
+  承接；`parentId` 追溯与「来源任务」展示（`ProjectOutputsMetadataSheet`）保留。
+  边界（历史口径，如实）：**不内置硬编码 inpaint / upscale 工作流模板**
+  ——工作流库是唯一模板来源（`generate.ts` 注释自证「内置模板已移除」）。
+- 落点（保留部分）：`src/server/db/schema.ts`（`task.parentId`）、
   `src/components/studio/ProjectOutputsMetadataSheet.tsx`（来源任务展示）
 
 ---

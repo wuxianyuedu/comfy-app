@@ -10,6 +10,7 @@ import type { RecentProject, WorkspaceView } from "~/components/studio";
 import { WorkspaceViewStack } from "~/components/studio/WorkspaceViewStack";
 import { globalNavItems, projectTabs } from "~/components/studio/NavItems";
 import { ShellTabs } from "~/components/studio/ShellTabs";
+import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
 import { timeAgo } from "~/lib/time-format";
 import {
   deleteProjectEverywhere,
@@ -121,6 +122,22 @@ export default function WorkspacePage() {
     name: string;
     taskType: string;
   } | null>(null);
+
+  /* 历史页「重试」的带参载荷（#4841）：一次性 state，与 pendingCanvasWorkflow
+   * 同款 —— 折好后切到「测试模型」页签，由该视图落定后消费并回调清空。 */
+  const [pendingModelTestRetry, setPendingModelTestRetry] = useState<ModelTestRetryPayload | null>(
+    null,
+  );
+  const handleReprintToModelTest = useCallback(
+    (payload: ModelTestRetryPayload) => {
+      setPendingModelTestRetry(payload);
+      navigateTo("model-test");
+    },
+    [navigateTo],
+  );
+  const consumeModelTestRetry = useCallback(() => {
+    setPendingModelTestRetry(null);
+  }, []);
 
   // ── 新建项目：先弹命名对话框，确认后再创建（ISSUE #4765）。
   //    统一入口（侧栏「+新建」、首页卡片、作品库「新建创作」、ProjectGate）都落到这里。
@@ -334,6 +351,7 @@ export default function WorkspacePage() {
           <WorkspaceViewStack
             activeKey={activeViewKey}
             activeView={viewMode}
+            onConsumeModelTestRetry={consumeModelTestRetry}
             onConsumePendingWorkflow={() => {
               setPendingCanvasWorkflow(null);
             }}
@@ -349,9 +367,11 @@ export default function WorkspacePage() {
             onOpenCanvasProject={handleOpenCanvasProject}
             onOpenComfyui={openComfyui}
             onOpenProject={handleOpenProject}
+            onReprintToModelTest={handleReprintToModelTest}
             onShowAllProjects={handleShowAllProjects}
             onUseWorkflow={handleUseWorkflow}
             pendingCanvasWorkflow={pendingCanvasWorkflow}
+            pendingModelTestRetry={pendingModelTestRetry}
             recentProjects={recentProjects}
             settingsSection={pendingSettingsSection}
             tabs={viewTabs}

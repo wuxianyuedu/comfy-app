@@ -14,6 +14,7 @@ import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
+import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
 import { isRecord } from "~/lib/is-record";
 import type { TaskWatchHandlers, WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 
@@ -45,6 +46,8 @@ const mutateAsyncSpy = vi.fn<(input: unknown) => Promise<unknown>>();
 /* 工作流候选（#4080 评论 4）的测试态：fetchWorkshopWorkflows 的读数走 useQuery
  * 替身的 workshop 分支；本地通道的四个执行者各自给替身。 */
 let workflowsData: Array<Record<string, unknown>>;
+/** 工作流清单查询是否在途（#4841 预选等 settle 的替身开关；beforeEach 归 false）。 */
+let workflowsQueryPending: boolean;
 /** detailFull 替身读数（#4633 评论 2 闪烁修复）：缺省 = 已成功且无数据（组件
  *  回落通用默认，与既有用例同形）；`pending` = 查询进行中（组件不摆任何默认）；
  *  `data` = 已到位的工作流详情（组件播种工作流默认）；`failed` = 查询失败
@@ -139,7 +142,9 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
         return { data: configData, isLoading: false };
       }
       if (ns === "workshop" && ep === "workflows") {
-        return { data: workflowsData, isLoading: false };
+        return workflowsQueryPending
+          ? { data: undefined, isError: false, isLoading: true, isSuccess: false }
+          : { data: workflowsData, isError: false, isLoading: false, isSuccess: true };
       }
       if (ns === "llm" && ep === "modeContractsGet") {
         return { data: contractsData, isLoading: false };
@@ -198,6 +203,7 @@ beforeEach(() => {
   contractsData = { contracts: [] };
   adaptersByName = {};
   workflowsData = [];
+  workflowsQueryPending = false;
   detailFullState = {};
   /* 适配器索引给上该模型的 T2I 条目：索引已加载且模型支持默认模式，
    * 候选不会被「按模式收窄」滤空。 */
@@ -1036,5 +1042,120 @@ describe("useModelTest：JSON 输入模式（ISSUE #4769）", () => {
     /* 契约必备口（提示词）缺失被拦，生成不发起。 */
     expect(apiGenerateImageMock).not.toHaveBeenCalled();
     expect(result.current.error).toContain("提示词");
+  });
+});
+
+/* ── 历史页「重试」的带参预填（#4841）─────────────────────────────────
+ * 预填是**兜底层**不是会话值：换模型不丢（重试换模型再跑是常态），用户在
+ * 任意输入上动手后整份退场；模式切走（与载荷不一致）也不叠加。 */
+describe("useModelTest：历史「重试」的带参预填（#4841）", () => {
+  /* 与上方工作流候选用例同形的本地候选（工作流库条目，支持 T2I）。 */
+  const WF_IMAGE: WorkshopWorkflowOption = {
+    id: "wf-1",
+    name: "工作流·生图A",
+    category: "image",
+    modes: ["T2I"],
+    taskType: "T2I",
+    modelTags: [],
+    encapsulationReady: true,
+  };
+  const REPRINT: ModelTestRetryPayload = {
+    mode: "T2I",
+    inputs: { prompt: "赛博朋克城市夜景", negative: "模糊", seed: "731030653625918" },
+    sourceTaskId: "task-old",
+    workflowId: "wf-1",
+  };
+
+  it("应用预填：按载荷切模式页签、预选同款工作流候选，表单显示预填值", () => {
+    workflowsData = [WF_IMAGE];
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.applyReprintPrefill(REPRINT);
+    });
+    expect(result.current.mode).toBe("T2I");
+    expect(result.current.selectedModel).toBe("wf::wf-1");
+    expect(result.current.values.prompt).toBe("赛博朋克城市夜景");
+    expect(result.current.values.negative).toBe("模糊");
+    expect(result.current.reprintPrefill?.sourceTaskId).toBe("task-old");
+  });
+
+  it("工作流候选对不上号（已删除）时留给用户重挑，参数照常预填", () => {
+    workflowsData = [];
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.applyReprintPrefill({ ...REPRINT, workflowId: undefined });
+    });
+    expect(result.current.selectedModel).toBe("");
+    act(() => {
+      result.current.selectModel("agnes-image");
+    });
+    expect(result.current.values.prompt).toBe("赛博朋克城市夜景");
+    expect(result.current.values.seed).toBe("731030653625918");
+  });
+
+  it("候选清单晚于预填到达（首次进入本页的懒加载竞速）也能补上同款工作流预选", () => {
+    /* 首次进入本页：懒分块 + 工作流查询竞速 —— 预填应用时清单在途。 */
+    workflowsQueryPending = true;
+    const { result, rerender } = renderModelTest();
+    act(() => {
+      result.current.applyReprintPrefill(REPRINT);
+    });
+    /* 预填那一刻清单还没 settle：不误判「没有这个工作流」，先不标记。 */
+    expect(result.current.selectedModel).toBe("");
+    expect(result.current.reprintPrefill?.sourceTaskId).toBe("task-old");
+    workflowsData = [WF_IMAGE];
+    workflowsQueryPending = false;
+    rerender();
+    /* settle 后补一次预选 —— 统一输入表单随模型选中立刻可见。 */
+    expect(result.current.selectedModel).toBe("wf::wf-1");
+    expect(result.current.values.prompt).toBe("赛博朋克城市夜景");
+  });
+
+  it("清单 settle 为空（工作流已删）时补选一次就收，用户清空选择不被抢回", () => {
+    workflowsData = [];
+    const { result, rerender } = renderModelTest();
+    act(() => {
+      result.current.applyReprintPrefill(REPRINT);
+    });
+    /* settle 为空 = 对不上号：留给用户重挑，参数照常预填。 */
+    expect(result.current.selectedModel).toBe("");
+    expect(result.current.values.prompt).toBe("赛博朋克城市夜景");
+    /* 用户随后清空/另选，同一份载荷不再自动改选择。 */
+    workflowsData = [WF_IMAGE];
+    rerender();
+    expect(result.current.selectedModel).toBe("");
+    act(() => {
+      result.current.selectModel("agnes-image");
+    });
+    expect(result.current.selectedModel).toBe("agnes-image");
+  });
+
+  it("用户改任意输入即接管：预填退场，换模型后不再复活", () => {
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.applyReprintPrefill({ ...REPRINT, workflowId: undefined });
+    });
+    act(() => {
+      result.current.patchValue("prompt", "自定义提示词");
+    });
+    expect(result.current.reprintPrefill).toBeNull();
+    expect(result.current.values.prompt).toBe("自定义提示词");
+    act(() => {
+      result.current.selectModel("agnes-image");
+    });
+    /* 新会话回落默认档，预填不再叠加。 */
+    expect(result.current.values.prompt).toBeUndefined();
+    expect(result.current.values.seed).toBeUndefined();
+  });
+
+  it("模式切走（与载荷模式不一致）后预填不再叠加", () => {
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.applyReprintPrefill({ ...REPRINT, workflowId: undefined });
+    });
+    act(() => {
+      result.current.setMode("I2I");
+    });
+    expect(result.current.values.prompt).toBeUndefined();
   });
 });

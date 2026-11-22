@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { readFileAsDataUrl } from "~/lib/file-io";
 import { runAsyncAction } from "~/lib/async-action";
+import { sceneFromMode } from "~/lib/media/size-presets";
 import {
   chatFallbackGroupForCurrentModel,
   effectiveProviderType,
@@ -31,6 +32,7 @@ import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import { parseRemoteModeAdapters } from "~/lib/workshop/remote-model-adapter";
 import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
 
+import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
 import {
   emptyModelTestSession,
   useModelTestGenerate,
@@ -51,6 +53,7 @@ import {
   defaultModeForKind,
   defaultSizeValues,
   modeTabsForKind,
+  pickWorkshopInputValues,
   randomPromptFor,
   relayDebugRow,
   testCandidatesForKind,
@@ -83,6 +86,9 @@ export type ModelTestController = {
   applyJsonValues: (
     json: string,
   ) => { ok: true; values: ModelTestValues } | { error: string; ok: false };
+  /** 应用历史页「重试」的带参预填（#4841）：按任务模式切模式页签，能对上
+   *  候选时预选同款工作流；契约口值进预填层。 */
+  applyReprintPrefill: (payload: ModelTestRetryPayload) => void;
   /** 取消当前格（用途 + 模式 + 模型）的生成（#3949 需求 5 / #4080 评论 12）：
    *  中断等待与轮询，界面落「已取消生成」。 */
   cancelGenerate: (key?: string) => void;
@@ -133,6 +139,10 @@ export type ModelTestController = {
   referenceImages: Array<string>;
   /** 移除第 `index` 张参考图。 */
   removeReferenceImage: (index: number) => void;
+  /** 历史页「重试」折好的预填载荷（#4841）：非 null 时统一输入表单显示的是
+   *  它叠在默认档上的值，界面上亮出「预填自哪条任务」的提示；用户在任意输入
+   *  上动手（改值 / 随机 / 贴 JSON / 选文件）后整份退场，恢复普通测试。 */
+  reprintPrefill: ModelTestRetryPayload | null;
   /** 当前格的请求行：本地提交 + 实际请求（#3949 需求 8 / #3995 / 评论 13：
    *  生成后保留，仅徽标翻转）。 */
   requestRows: Array<ApiCallDebugRow>;
@@ -256,7 +266,11 @@ function useTestCatalog(args: {
   loading: boolean;
   modeCandidates: Array<TestCandidate>;
   modeTabs: Array<ModeTab>;
+  /** 工作流候选清单的查询是否已 settle（成功 / 失败）：重试预填的「预选同款
+   *  工作流」等它到位再补，不能拿「已有若干候选」当就绪判据 —— 配置型候选
+   *  先于工作流清单到达时，长度非空但工作流候选还缺。 */
   selectedCandidate: TestCandidate | null;
+  workflowsReady: boolean;
 } {
   const { kind, mode, selectedModel, trpc } = args;
   const queryClient = useQueryClient();
@@ -444,6 +458,7 @@ function useTestCatalog(args: {
     modeCandidates,
     modeTabs,
     selectedCandidate,
+    workflowsReady: workflowsQ.isSuccess || workflowsQ.isError,
   };
 }
 
@@ -493,8 +508,12 @@ export function useModelTest(): ModelTestController {
   const [mode, setModeState] = useState(() => defaultModeForKind("image"));
   /* 运行态按「用途 + 模式 + 模型」一格一份（#4080 评论 12）：状态 / 请求
    * 读数 / 执行日志 / 产物 / **表单值**互相隔离，切走再切回各看各的，不同
-   * 模型可同时测试。 */
+   * 模型可以同时测试。 */
   const [sessions, setSessions] = useState<Record<string, ModelTestSession>>({});
+  /* 历史页「重试」的带参预填（#4841）：见 ModelTestController.reprintPrefill。
+   * 它是**兜底层**不是会话值 —— 写进某一格会在切模型后消失，放这里才能
+   * 「重试换个模型再跑」时参数跟着走。 */
+  const [reprintPrefill, setReprintPrefill] = useState<ModelTestRetryPayload | null>(null);
 
   /* 当前格的键：用途 + 模式 + 模型（候选取值空间 = 模型名 / wf::<id>）。 */
   const activeKey = `${kind}::${mode}::${selectedModel}`;
@@ -553,6 +572,7 @@ export function useModelTest(): ModelTestController {
   const {
     adapters,
     adaptersByModel,
+    candidates,
     contract,
     inputRows,
     kindCandidateCount,
@@ -560,6 +580,7 @@ export function useModelTest(): ModelTestController {
     modeCandidates,
     modeTabs,
     selectedCandidate,
+    workflowsReady,
   } = useTestCatalog({ kind, mode, selectedModel, trpc });
 
   /* 本地工作流候选的模式默认值与就绪位（#4633）：详情没 settle 前不摆通用默认。 */
@@ -574,16 +595,23 @@ export function useModelTest(): ModelTestController {
    * 工作流候选的详情没 settle（成功 / 失败）前**不摆任何默认**（#4633 评论 2：
    * 打开瞬间先摆通用「1:1 / 1k」、详情到了再跳成工作流默认，界面闪一下）——
    * 表单留空一瞬，等详情到位一次性播工作流默认；查询失败也算 settle，回落
-   * 通用默认，不至于永远空着。 */
-  const values = useMemo(
-    () =>
+   * 通用默认，不至于永远空着。
+   * 兜底再叠一层历史「重试」的预填（#4841）：只在「当前模式 = 载荷模式」且
+   * 会话还没写值时叠加 —— 用户切走模式或写入了任何一格即视为接管，预填让位。
+   * 预填放兜底层而不是写进会话，是为了换模型不丢：重试时用户常要换个模型
+   * 再跑，写进某一格会在切换后消失。 */
+  const values = useMemo(() => {
+    const base =
       Object.keys(activeSession.values).length > 0
         ? activeSession.values
         : workflowDefaultsReady
           ? { ...defaultSizeValues(mode), ...workflowDefaults }
-          : {},
-    [activeSession.values, mode, workflowDefaults, workflowDefaultsReady],
-  );
+          : {};
+    if (reprintPrefill === null || reprintPrefill.mode !== mode) {
+      return base;
+    }
+    return { ...base, ...pickWorkshopInputValues(reprintPrefill.inputs) };
+  }, [activeSession.values, mode, workflowDefaults, workflowDefaultsReady, reprintPrefill]);
 
   /* 下拉显示名（#4080 评论 17）：工作流候选显示**模型名**（工作流上挂的模型
    * 标签，如 z-image），不是工作流文件名；同一模型挂在多个工作流上时，后
@@ -646,25 +674,34 @@ export function useModelTest(): ModelTestController {
     [referenceGroup],
   );
 
+  /* 用户接管输入的那几跳都要撤掉预填层（#4841）：用户已经亲手写了值，
+   * 兜底层再叠加只会让人分不清「表单里到底是什么在生效」。 */
+  const dropReprintPrefill = useCallback(() => {
+    setReprintPrefill(null);
+  }, []);
+
   const patchValue = useCallback(
     (type: keyof ModelTestValues, value: string) => {
+      dropReprintPrefill();
       patchSession(activeKeyRef.current, { values: { ...values, [type]: value } });
     },
-    [patchSession, values],
+    [dropReprintPrefill, patchSession, values],
   );
 
   /* 批量更新（尺寸下拉一次写回比例 / 百万像素 / 分辨率 / 倍数四个键）。 */
   const patchValues = useCallback(
     (patch: Partial<ModelTestValues>) => {
+      dropReprintPrefill();
       patchSession(activeKeyRef.current, { values: { ...values, ...patch } });
     },
-    [patchSession, values],
+    [dropReprintPrefill, patchSession, values],
   );
 
   /* 提示词随机按钮（ISSUE #3742）：从常用样本里随机填一条。 */
   const randomizePrompt = useCallback(() => {
+    dropReprintPrefill();
     patchSession(activeKeyRef.current, { values: { ...values, prompt: randomPromptFor() } });
-  }, [patchSession, values]);
+  }, [dropReprintPrefill, patchSession, values]);
 
   const setInputFromFile = useCallback(
     async (type: "first-frame" | "image", file: File) => {
@@ -672,6 +709,7 @@ export function useModelTest(): ModelTestController {
       await runAsyncAction(
         async () => {
           const dataUrl = await readFileAsDataUrl(file);
+          dropReprintPrefill();
           patchSession(activeKeyRef.current, { values: { ...values, [type]: dataUrl } });
           return { ok: true as const };
         },
@@ -685,8 +723,50 @@ export function useModelTest(): ModelTestController {
         },
       );
     },
-    [patchSession, values],
+    [dropReprintPrefill, patchSession, values],
   );
+
+  /* 历史页「重试」的带参预填（#4841）：按任务模式切模式页签（模式码推不出
+   * 用途时 sceneFromMode 兜底 image），清掉旧模型选择；参考图组一并清空——
+   * 预填载荷刻意不携带旧任务的参考图（见 buildModelTestRetryPayload 的注释），
+   * 旧图静默跟跑不是重试的语义。同款工作流的预选见下方候选就绪补选效应。 */
+  const applyReprintPrefill = useCallback(
+    (payload: ModelTestRetryPayload) => {
+      setKindState(sceneFromMode(payload.mode));
+      setSelectedModel("");
+      setModeState(payload.mode);
+      referenceGroup.reset();
+      setReprintPrefill(payload);
+    },
+    [referenceGroup],
+  );
+
+  /* 预选同款工作流（#4841）：候选清单可能**晚于**预填到达 —— 首次进入本页是
+   * 懒分块 + 工作流查询竞速，applyReprintPrefill 那一刻原地找一遍会静默漏选
+   * （表单退回三步引导，统一输入看不见）。改成等工作流清单 settle 后补一次：
+   * 就绪判据是 `workflowsReady`（成功 / 失败都算），不能拿「已有若干候选」
+   * 顶替 —— 配置型候选先于工作流清单到达时长度非空但工作流候选还缺。
+   * 只在「还没选模型」时补，不覆盖用户已选；同一份载荷只试一次（用户之后
+   * 主动清空选择不再被抢回）。 */
+  const preselectedForRef = useRef<ModelTestRetryPayload | null>(null);
+  useEffect(() => {
+    if (reprintPrefill === preselectedForRef.current) {
+      return;
+    }
+    if (reprintPrefill !== null && !workflowsReady) {
+      /* 工作流清单还没 settle：不标记，等它到位再补。 */
+      return;
+    }
+    preselectedForRef.current = reprintPrefill;
+    const workflowId = reprintPrefill?.workflowId;
+    if (workflowId === undefined || selectedModel !== "") {
+      return;
+    }
+    const matched = candidates.find((candidate) => candidate.workflow?.id === workflowId);
+    if (matched !== undefined) {
+      setSelectedModel(candidateValue(matched));
+    }
+  }, [candidates, reprintPrefill, selectedModel, workflowsReady]);
 
   const addReferenceImages = useCallback(
     (files: Array<File>) => referenceGroup.add(files),
@@ -740,11 +820,13 @@ export function useModelTest(): ModelTestController {
   );
 
   /* JSON 输入模式的解析与应用（ISSUE #4769）收在 useApplyJsonValues
-   * （§12.13：主 hook 越过函数长度硬闸，按职责拆子 hook）。 */
+   * （§12.13：主 hook 越过函数长度硬闸，按职责拆子 hook）。贴 JSON 是一次
+   * 用户接管：历史「重试」的预填层一并退场（#4841）。 */
   const { applyJsonValues } = useApplyJsonValues({
     values,
     activeKeyRef,
     patchSession,
+    onApplied: dropReprintPrefill,
   });
 
   /** 取消当前格（或指定格）的生成（#3949 需求 5 / #4080 评论 12）。 */
@@ -864,6 +946,8 @@ export function useModelTest(): ModelTestController {
     patchValue,
     patchValues,
     randomizePrompt,
+    reprintPrefill,
+    applyReprintPrefill,
     result: activeSession.result,
     values,
   };

@@ -314,3 +314,40 @@ export function buildReprintPayload(args: {
    * 契约口值，模型本身由用户在测试页重新挑。 */
   return { mode: upperToken(args.mode ?? ""), inputs: out };
 }
+
+/* ── 「重试」的带参预填载荷（#4841）────────────────────────────────────
+ * 历史页「重试」不再直接复投（`task.retry` 直调已从历史页撤走）：点击后把
+ * 任务参数折成这份载荷，交给工作区带到「测试模型」页 ——
+ * 按任务模式切模式页签、把契约口值预填进统一输入表单，由人确认后点
+ * 「生成」才算真正重跑。服务端 `task.retry`（原样重建 QUEUED 行）保留在
+ * task 路由与它的用例里，只是不再有界面直调入口。
+ * 折参口径与「复制去重投」同一份（`buildReprintPayload`），
+ * 另带两条它没有的线索：来源任务 id（预填提示文案用）与工作流 id
+ * （测试页能对上候选时顺带预选同款工作流，生成才是忠实重试）。
+ * 参考图口（reference-image）的取值不进预填：它在测试页承接的是
+ * 「参考图组」表单状态而不是统一输入值，data URL 长载荷折进表单反而
+ * 会把旧任务的图静默带进下一次生成 —— 由用户在测试页重新添加。 */
+
+/** 「重试 → 测试模型预填」的跨页载荷（生产侧历史页，消费侧测试模型页）。 */
+export type ModelTestRetryPayload = ReprintPayload & {
+  /** 发起重试的任务 id：测试页预填提示里亮出来源，一眼知道在重跑哪一条。 */
+  sourceTaskId: string;
+  /** 原任务所用工作流库条目 id（`params.workflow`）：测试页候选里能对上时预选。 */
+  workflowId?: string;
+};
+
+/** 把一次提交折成「重试预填」载荷：折参完全复用「复制去重投」那份派生，
+ * 这里只补来源线索，不另抄一份键名清单。 */
+export function buildModelTestRetryPayload(args: {
+  contracts?: ReadonlyArray<ModeContract> | null;
+  detail: TaskDetail;
+  mode: string | null | undefined;
+}): ModelTestRetryPayload {
+  const params = paramsOf(args.detail);
+  const workflow = params.workflow;
+  return {
+    ...buildReprintPayload(args),
+    sourceTaskId: args.detail.id,
+    ...(typeof workflow === "string" && workflow.trim() !== "" ? { workflowId: workflow } : {}),
+  };
+}

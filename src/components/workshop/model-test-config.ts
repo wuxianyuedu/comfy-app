@@ -11,7 +11,7 @@ import {
   type ModeContractCustomInput,
 } from "~/lib/workshop/model-mode-contract";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
-import { workshopInputLabel } from "~/lib/workshop/remote-model-adapter";
+import { isWorkshopInputType, workshopInputLabel } from "~/lib/workshop/remote-model-adapter";
 import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 
 import {
@@ -58,6 +58,21 @@ export function randomPromptFor(rand: () => number = Math.random): string {
 /** 表单值：按统一输入类型收值。数字类（multiple / duration / seed）也先存
  *  字符串 —— 输入中途不能被 Number("") 折成 0，组装时再转。 */
 export type ModelTestValues = Partial<Record<WorkshopInputType, string>>;
+
+/** 统一输入值的白名单过滤（#4841 起两处共用同一条判据）：只收测试页承接的
+ *  输入类型、且值是非空字符串。JSON 粘贴侧（use-model-test-json）与历史页
+ *  「重试」的预填侧（use-model-test 的 applyReprintPrefill）都从这里过 ——
+ *  两侧各写一份过滤，键集合迟早漂移。 */
+export function pickWorkshopInputValues(raw: Record<string, unknown>): Partial<ModelTestValues> {
+  const patch: Partial<ModelTestValues> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!isWorkshopInputType(key) || typeof value !== "string" || value.trim() === "") {
+      continue;
+    }
+    patch[key] = value;
+  }
+  return patch;
+}
 
 /** 各用途在 API 通道里**真实承接**的统一输入集合（服务端
  *  `unifiedImageInputs` / `unifiedVideoInputs` 的镜像 —— 两边必须同步改，
