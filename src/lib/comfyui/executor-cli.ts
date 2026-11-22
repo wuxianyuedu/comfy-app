@@ -303,44 +303,15 @@ async function resolveChainCatalog(
   return catalog;
 }
 
-export async function executeViaComfyCli(job: Job) {
-  // 关键路径依赖在函数入口 resolve 成同名局部（`taskRepository` /
-  // `resolveComfyBase`）；下游 closure 沿用旧名，call site 一字不动。
-  // 拿不到（未注入 + 纯 Node dynamic import 撞 server-only）→ 本函数直接
-  // reject，让 scheduler / enqueue 感知，符合 P3 迁移的启动契约。
-  const taskRepository = await resolveTaskRepo();
-  const resolveComfyBase = await resolveBaseFn();
-  const s = state();
-  const { taskId, rawJson, prompt, overrides } = job;
-  /* RAW 原件走 UI→API 转换；没有 rawJson 就是 API 图，直接提交。 */
-  const isRaw = rawJson !== null && rawJson !== undefined;
-  /* RAW 路径的入口行：让用户在日志面板上直接看出「任务正由哪条路径处理」。
-   * 加这行之前，提交后要等第一条 stdout JSON 事件（常在 5–30s 之后，
-   * Python venv 启动完）才会安静结束 —— 面板上看不出是在跑还是卡住。 */
-  log(
-    taskId,
-    "info",
-    isRaw
-      ? `→ executeViaComfyCli 入口（RAW UI-format，由 comfy-cli 做 UI→API 转换）`
-      : `→ executeViaComfyCli 入口（API 图，由 comfy-cli 直接提交）`,
-  );
-  /* 工作流名入日志：执行日志要能自包含地回答「这次跑的是哪个工作流」——
-   * 面板标题是客户端从运行登记表拼的，落库的日志行才是可回放/可导出的
-   * 现场。入队方（generate 路由 / 工坊运行编排）都带得上；旧任务缺省时
-   * 如实显示「未知」。 */
-  log(taskId, "info", `工作流：${job.workflowName ?? "（未知）"}`);
-  const base = await resolveComfyBase();
-  let host = LOOPBACK_HOST;
-  let port = COMFYUI_DEFAULT_PORT;
-  try {
-    const u = new URL(base);
-    host = u.hostname === "localhost" ? LOOPBACK_HOST : u.hostname;
-    port = Number.parseInt(u.port) || COMFYUI_DEFAULT_PORT;
-  } catch {
-    /* keep defaults */
-  }
-  log(taskId, "info", `ComfyUI 目标：${host}:${port}（${base}）`);
-
+/** 工作流就绪段（从 {@link executeViaComfyCli} 按职责拆出，规范 §12.13）：
+ *  RAW / API 两条分支的图收拾 + 临时工作流文件落盘 + 主模型名入日志。
+ *  返回 null 表示空图（没有可执行节点）——失败已在本函数内收口，调用方直接返回。 */
+async function prepareCliWorkflow(
+  job: Job,
+  taskId: string,
+  isRaw: boolean,
+): Promise<{ patched: JsonRecord; tmpFile: string } | null> {
+  const { rawJson, prompt, overrides } = job;
   let patched: JsonRecord;
   /* 装载链目录（#4376）：计划命中的端点按预设实例化子图时要用节点类定义。 */
   const chainCatalog = await resolveChainCatalog(taskId, job.loaderPlan);
@@ -390,7 +361,7 @@ export async function executeViaComfyCli(job: Job) {
       fireAndForget(fail(taskId, "", "工作流没有可执行的节点（可能全部被禁用）"), (e) => {
         cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 空图收口异常`)}`);
       });
-      return;
+      return null;
     }
     if (prep.removed.length) {
       log(
@@ -410,7 +381,7 @@ export async function executeViaComfyCli(job: Job) {
   await fs.writeFile(tmpFile, JSON.stringify(patched), "utf8");
   // 记下本次实际提交出去的工作流：RAW 是（覆盖 + 剔除后的）未展开原件，
   // API 是（剔除/穿透后的）图。任务完成落盘为 workflow.json 供完整复现。
-  s.executedWorkflow.set(taskId, patched);
+  state().executedWorkflow.set(taskId, patched);
   log(
     taskId,
     "info",
@@ -424,6 +395,52 @@ export async function executeViaComfyCli(job: Job) {
   if (modelName !== null) {
     log(taskId, "info", `使用模型：${modelName}`);
   }
+  return { patched, tmpFile };
+}
+
+export async function executeViaComfyCli(job: Job) {
+  // 关键路径依赖在函数入口 resolve 成同名局部（`taskRepository` /
+  // `resolveComfyBase`）；下游 closure 沿用旧名，call site 一字不动。
+  // 拿不到（未注入 + 纯 Node dynamic import 撞 server-only）→ 本函数直接
+  // reject，让 scheduler / enqueue 感知，符合 P3 迁移的启动契约。
+  const taskRepository = await resolveTaskRepo();
+  const resolveComfyBase = await resolveBaseFn();
+  const s = state();
+  const { taskId, rawJson } = job;
+  /* RAW 原件走 UI→API 转换；没有 rawJson 就是 API 图，直接提交。 */
+  const isRaw = rawJson !== null && rawJson !== undefined;
+  /* RAW 路径的入口行：让用户在日志面板上直接看出「任务正由哪条路径处理」。
+   * 加这行之前，提交后要等第一条 stdout JSON 事件（常在 5–30s 之后，
+   * Python venv 启动完）才会安静结束 —— 面板上看不出是在跑还是卡住。 */
+  log(
+    taskId,
+    "info",
+    isRaw
+      ? `→ executeViaComfyCli 入口（RAW UI-format，由 comfy-cli 做 UI→API 转换）`
+      : `→ executeViaComfyCli 入口（API 图，由 comfy-cli 直接提交）`,
+  );
+  /* 工作流名入日志：执行日志要能自包含地回答「这次跑的是哪个工作流」——
+   * 面板标题是客户端从运行登记表拼的，落库的日志行才是可回放/可导出的
+   * 现场。入队方（generate 路由 / 工坊运行编排）都带得上；旧任务缺省时
+   * 如实显示「未知」。 */
+  log(taskId, "info", `工作流：${job.workflowName ?? "（未知）"}`);
+  const base = await resolveComfyBase();
+  let host = LOOPBACK_HOST;
+  let port = COMFYUI_DEFAULT_PORT;
+  try {
+    const u = new URL(base);
+    host = u.hostname === "localhost" ? LOOPBACK_HOST : u.hostname;
+    port = Number.parseInt(u.port) || COMFYUI_DEFAULT_PORT;
+  } catch {
+    /* keep defaults */
+  }
+  log(taskId, "info", `ComfyUI 目标：${host}:${port}（${base}）`);
+
+  const prepared = await prepareCliWorkflow(job, taskId, isRaw);
+  if (prepared === null) {
+    return;
+  }
+  const { patched, tmpFile } = prepared;
 
   const py = comfyCliInterpreter(getSettingsSync().comfyCliPython);
   const outputNodeIds = sanitizeOutputNodeIds(job.outputNodeIds);

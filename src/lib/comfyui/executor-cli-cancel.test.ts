@@ -59,6 +59,30 @@ vi.mock("./executor-finalize", () => ({
 }));
 vi.mock("./raw", () => ({ fetchObjectInfo: vi.fn(() => Promise.resolve(null)) }));
 
+/* 捕获 executeViaComfyCli 真正 spawn 出的子进程：起任务后按序取用，不依赖
+ * cliProcs 的登记时序（CI 高负载下等登记的轮询会假超时）；executeViaComfyCli
+ * 若真失败，也会从 await 直接冒出原始错误。 */
+const spawnedChildren: Array<ChildProcess> = [];
+type RealSpawn = (
+  command: string,
+  args?: ReadonlyArray<string>,
+  options?: { windowsHide?: boolean },
+) => ChildProcess;
+type ChildProcessModule = { spawn: RealSpawn } & Record<string, unknown>;
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<ChildProcessModule>();
+  return {
+    ...actual,
+    spawn: vi.fn(
+      (command: string, args?: ReadonlyArray<string>, options?: { windowsHide?: boolean }) => {
+        const child = actual.spawn(command, args, options);
+        spawnedChildren.push(child);
+        return child;
+      },
+    ),
+  };
+});
+
 const cli = await import("./executor-cli");
 const runnerState = await import("./runner-state");
 const enqueue = await import("./enqueue");
@@ -89,19 +113,14 @@ let seq = 0;
 
 /** 起一个任务：真 spawn，子进程立即非零退出（无 envelope），close 事件随后到达。 */
 async function startTask(): Promise<string> {
+  const seen = spawnedChildren.length;
   const taskId = `cancel-race-${(seq += 1)}`;
-  const run = cli.executeViaComfyCli({ taskId, rawJson: { nodes: {} }, workflowName: "回归" });
-  await vi.waitFor(() => {
-    if (!cli.cliProcs.has(taskId)) {
-      throw new Error("comfy-cli 子进程尚未登记");
-    }
-  });
-  const child = cli.cliProcs.get(taskId);
+  await cli.executeViaComfyCli({ taskId, rawJson: { nodes: {} }, workflowName: "回归" });
+  const child = spawnedChildren[seen];
   if (!child?.pid) {
-    throw new Error("子进程句柄缺 pid");
+    throw new Error("executeViaComfyCli 已返回但没有留下可用的子进程句柄");
   }
   killTargets.set(child.pid, child);
-  await run;
   return taskId;
 }
 
@@ -109,10 +128,11 @@ const logged = (taskId: string, needle: string): boolean =>
   (runnerState.state().logs.get(taskId) ?? []).some((e) => String(e.msg).includes(needle));
 
 afterEach(async () => {
-  for (const child of cli.cliProcs.values()) {
+  for (const child of spawnedChildren.splice(0)) {
     child.kill();
   }
   cli.cliProcs.clear();
+  killTargets.clear();
   for (const id of runnerState.state().cancelling) {
     runnerState.clearCancelling(id);
   }
