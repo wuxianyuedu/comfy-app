@@ -18,7 +18,7 @@ import {
   type TaskLogEntry,
   type WorkshopWorkflowOption,
 } from "~/lib/workshop/generation-client";
-import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import { isWantedOutput } from "~/lib/workshop/output-filter";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import {

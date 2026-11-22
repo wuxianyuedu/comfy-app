@@ -26,11 +26,9 @@ import type {
 } from "~/lib/workshop/remote-model-adapter";
 
 import {
-  type ApiCallDebugRow,
   callImageGeneration,
   callVideoPoll,
   callVideoSubmit,
-  debugBodyOf,
   defaultChannelsFromEnv,
   defaultImageBody,
   endpointFor,
@@ -48,8 +46,10 @@ import {
 import { buildVideoPollUrls } from "~/lib/llm/usage-test-config";
 import { joinApiUrl } from "~/lib/llm/provider-types";
 import {
+  debugBodyOf,
   resolveImagesGenerationsEndpoint,
   resolveVideosGenerationsEndpoint,
+  type ApiCallDebugRow,
   type ApiChannelKind,
   type ApiChannelStored,
 } from "./api-channel-shared";

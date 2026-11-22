@@ -1,16 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { requireRequestUser } from "~/server/auth/request-user";
-import { unauthorizedResponse } from "~/server/lib/error-response";
 import {
   pendingDetail,
   queryVideoTask,
-  readUsageTestPrologue,
   saveMediaToLocalTemp,
   strField,
 } from "~/lib/llm/usage-test.server";
 import { apiErrorDetail } from "~/lib/api-error";
-import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
-import { rejectOverRateLimit } from "~/server/lib/rest-rate-limit";
+import { usageTestEntry } from "../entry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,26 +17,11 @@ export const dynamic = "force-dynamic";
  * 失败一律 200 + `{ ok:false, detail }`，前端按 detail 展示降级文案。
  */
 export async function POST(req: NextRequest) {
-  if (!(await requireRequestUser())) {
-    return unauthorizedResponse();
+  const entry = await usageTestEntry(req, "llm-test-usage-query");
+  if (entry instanceof Response) {
+    return entry;
   }
-  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
-  const crossOrigin = rejectCrossOriginWrite(req);
-  if (crossOrigin !== null) {
-    return crossOrigin;
-  }
-  /* 限流（#4725）：会花钱/外联/拉进程的端点挂滑动窗口（默认 10s/20 次）。 */
-  const limited = rejectOverRateLimit(req, "llm-test-usage-query");
-  if (limited !== null) {
-    return limited;
-  }
-
-  /* 读 body / 取条目名 / 解析连接参数与提交路由同一份实现（§12.12）。 */
-  const prologue = await readUsageTestPrologue(req);
-  if (!prologue.ok) {
-    return NextResponse.json({ ok: false, detail: prologue.detail });
-  }
-  const { name, rec, up } = prologue;
+  const { name, rec, up } = entry;
   const model = name; // 条目名即模型参数值（与提交路由一致）
   const taskId = strField(rec, "taskId");
 

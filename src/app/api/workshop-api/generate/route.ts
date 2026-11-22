@@ -12,7 +12,7 @@ import {
   previewVideoSubmitViaApi,
   submitVideoViaApi,
 } from "~/lib/workshop/api-channel.server";
-import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { intField, resolveMediaDataUrl, strField } from "~/lib/workshop/media-source.server";
 import { apiErrorBody } from "~/lib/api-error";

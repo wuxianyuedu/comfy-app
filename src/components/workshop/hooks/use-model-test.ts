@@ -20,8 +20,8 @@ import {
   type TaskLogEntry,
   type WorkshopWorkflowOption,
 } from "~/lib/workshop/generation-client";
-import { debugBodyOf } from "~/lib/workshop/api-channel-core";
-import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import { debugBodyOf } from "~/lib/workshop/api-channel-shared";
+import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import { parseRemoteModeAdapters } from "~/lib/workshop/remote-model-adapter";
 import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
 

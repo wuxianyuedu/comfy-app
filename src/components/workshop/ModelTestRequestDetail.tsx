@@ -12,7 +12,7 @@ import { SectionLabel } from "~/components/ui/section-label";
 import { SelectChip } from "~/components/ui/select-chip";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { cn } from "~/lib/utils";
-import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 
 /** 生成中已过时间（ISSUE #3799；#3949 需求 3）：本地 500ms 一跳，只重渲自己
  *  这格文本；生成结束后组件随行消失（行徽标换回「已请求」）。显示按**整秒**

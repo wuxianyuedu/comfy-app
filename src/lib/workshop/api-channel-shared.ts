@@ -234,3 +234,63 @@ export function resolveVideosGenerationsEndpoint(baseUrl: string): string {
   }
   return joinApiUrl(base, "/videos/generations");
 }
+
+/* ── 调试探白的纯形状助手（自 api-channel-core 拆来，#4724 连带）────────
+ * 客户端测试页与服务端中继都要用同一套「请求体截断」展示；放在这个纯模块里，
+ * 客户端就不必为了这两个助手去引 api-channel-core（那会顺带把出网判据拖进
+ * 浏览器可达图）。 */
+
+/** 一条「实际发出的请求」读数（ISSUE #3791：测试生成要能看到完整请求参数）。
+ *  由各 call* 在 fetch 返回后回调 `options.debug` 上报；`body` 里的长字符串
+ *  （如输入图 data URL）已按 `DEBUG_STRING_LIMIT` 截断 —— 面板要的是形状，
+ *  不是整张图。密钥不进这里（它在请求头里，回调消费方只拿得到
+ *  endpoint / body / 状态 / 耗时 / 响应摘要）。 */
+export type ApiCallDebugRow = {
+  /** 实际发出的请求体（长字符串已截断）。 */
+  body: unknown;
+  /** 从发起到读到响应的毫秒数；候选轮询里单个候选失败也有值。 */
+  durationMs: number | null;
+  /** 实际请求的完整 URL（含按 Base URL 形态推导出的动作路径）。 */
+  endpoint: string;
+  /** 上游响应体的**结构化截断**视图（与 body 同一套截断：长字符串截断、
+   * 结构原样）—— 客户端才能可靠地格式化显示；截断的裸字符串 JSON 解析
+   * 不回去，格式化就没有结构可用了（ISSUE #3799）。网络层失败为 null。 */
+  excerpt: unknown;
+  /** HTTP 层是否 2xx。 */
+  ok: boolean;
+  /** 哪一步发的：本地提交（客户端即时行）/ 生图 / 视频提交 / 视频轮询
+   * （轮询逐候选上报）/ 本地任务（#4080 评论 4：工作流候选的 ComfyUI 任务行）。 */
+  phase: "image" | "local-task" | "relay" | "video-poll" | "video-submit";
+  /** HTTP 状态码；网络层失败（fetch 抛错）时为 null。 */
+  status: number | null;
+};
+
+/** debug 面板里字符串值的截断长度：请求体里塞过 data URL（整张图），
+ *  不截断的话一条读数就是几 MB。 */
+const DEBUG_STRING_LIMIT = 300;
+function truncateDebugString(text: string): string {
+  return text.length <= DEBUG_STRING_LIMIT
+    ? text
+    : `${text.slice(0, DEBUG_STRING_LIMIT)}…（截断，原长 ${text.length} 字符）`;
+}
+
+/** 请求体的 debug 形状：长字符串截断、结构原样（形状才是要看的）。
+ * 导出：客户端（测试页）的「本地提交」行用同一套截断展示组装好的请求体。 */
+export function debugBodyOf(body: unknown): unknown {
+  if (typeof body === "string") {
+    return truncateDebugString(body);
+  }
+  if (Array.isArray(body)) {
+    return body.map(debugBodyOf);
+  }
+  if (body !== null && typeof body === "object") {
+    /* isRecord 收窄而不是断言（no-unsafe-type-assertion）。 */
+    if (!isRecord(body)) {
+      return null;
+    }
+    return Object.fromEntries(
+      Object.entries(body).map(([key, value]) => [key, debugBodyOf(value)]),
+    );
+  }
+  return body;
+}

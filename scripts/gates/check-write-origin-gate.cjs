@@ -41,7 +41,34 @@ for (const file of walk(API_DIR)) {
   if (!WRITE_METHOD_RE.test(src)) {
     continue;
   }
-  if (!src.includes(HELPER)) {
+  if (src.includes(HELPER)) {
+    continue;
+  }
+  /* 委托形态（#4723 收口后的 test-usage 两路由）：路由把入口段交给**同目录**
+   * 共享模块，而那段入口里调用了同源闸 —— 也算覆盖。只认同目录相对导入
+   * （./ 或 ../），并回读被委托模块的原文核实它真的调了闸（不是任何 import
+   * 都算数）；TS 省略扩展名的形态逐个试。 */
+  const delegateCovered = [...src.matchAll(/import\s[^;]*?from\s+"(?<spec>\.{1,2}\/[^"]+)"/g)].some(
+    (m) => {
+      const base = path.resolve(path.dirname(file), m.groups?.spec ?? "");
+      for (const candidate of [
+        base,
+        `${base}.ts`,
+        `${base}.tsx`,
+        `${base}.mts`,
+        path.join(base, "index.ts"),
+      ]) {
+        if (!candidate.startsWith(API_DIR) || !fs.existsSync(candidate)) {
+          continue;
+        }
+        if (fs.readFileSync(candidate, "utf8").includes(HELPER)) {
+          return true;
+        }
+      }
+      return false;
+    },
+  );
+  if (!delegateCovered) {
     violations.push(`${path.relative(ROOT, file)}（含写方法但未过同源闸）`);
   }
 }
