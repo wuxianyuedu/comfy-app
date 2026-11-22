@@ -19,6 +19,7 @@ import {
   useWorkshopDraftRestore,
   useWorkshopTaskRecovery,
 } from "./use-workshop-pipeline-effects";
+import { useWorkshopModelSelections } from "./use-workshop-model-selections";
 import {
   DEFAULT_META,
   draftModelSelections,
@@ -30,7 +31,6 @@ import {
   type WorkshopModelSelections,
 } from "~/lib/workshop/draft-store";
 import { auditDraftElements, type DraftElementIssue } from "~/lib/workshop/draft-integrity";
-import { workflowIdFromCandidateValue } from "../model-test-config";
 import type { Character, ProjectMeta, Scene, Shot, StyleRef } from "~/lib/workshop/types";
 import {
   buildHealthSnapshot,
@@ -328,21 +328,17 @@ export function useWorkshopPipeline(
   );
   const [shots, setShots] = React.useState<Array<Shot>>(() => loadWorkshopDraftOnce()?.shots ?? []);
   const [styles, setStyles] = React.useState<Array<StyleRef>>([]);
-  /* 各生成入口的模型选择（#4834）：统一为测试模型级联的取值空间，随草稿持久化。
-   * 旧草稿只有 workflowId / videoWorkflowId ⇒ 经 draftModelSelections 映射成
-   * `wf::<id>` 的本地模型选择，恢复不丢。 */
-  const [modelSelections, setModelSelections] = React.useState<WorkshopModelSelections>(() =>
+  /* 各生成入口的模型选择（#4834）：统一为测试模型级联的取值空间，随草稿持久化；
+   * 状态与派生收在子 hook（§12.13）。旧草稿的 workflowId / videoWorkflowId 在
+   * 这里映射成 `wf::<id>` 的本地模型选择，恢复不丢。 */
+  const {
+    modelSelections,
+    setModelSelection,
+    replaceAll: replaceModelSelections,
+    workflowId,
+    videoWorkflowId,
+  } = useWorkshopModelSelections(
     draftModelSelections(loadWorkshopDraftOnce() ?? emptyWorkshopDraft()),
-  );
-  /* 旧读数兼容：本地工作流候选（`wf::<id>`）派生成工作流 id，供 Agent 一键成片
-   * 等仍认工作流 id 的消费方无感使用；选中远端模型时为空串（走 API 直连通道）。 */
-  const workflowId = React.useMemo(
-    () => workflowIdFromCandidateValue(modelSelections.shot?.model ?? ""),
-    [modelSelections],
-  );
-  const videoWorkflowId = React.useMemo(
-    () => workflowIdFromCandidateValue(modelSelections.video?.model ?? ""),
-    [modelSelections],
   );
   /* 镜头进度的节流闸门（见 `~/components/ui/use-throttled-progress`）。 */
   const [rendered, setRendered] = React.useState(false);
@@ -388,14 +384,17 @@ export function useWorkshopPipeline(
   );
 
   /** 把一份草稿灌进所有受管 state（切换 / 删除项目后接手时调用）。 */
-  const applyDraft = React.useCallback((draft: WorkshopDraft) => {
-    setMeta(draft.meta);
-    setScenes(draft.scenes);
-    setCharacters(draft.characters);
-    setShots(draft.shots);
-    setModelSelections(draftModelSelections(draft));
-    setScriptMarkdown(draft.scriptMarkdown);
-  }, []);
+  const applyDraft = React.useCallback(
+    (draft: WorkshopDraft) => {
+      setMeta(draft.meta);
+      setScenes(draft.scenes);
+      setCharacters(draft.characters);
+      setShots(draft.shots);
+      replaceModelSelections(draftModelSelections(draft));
+      setScriptMarkdown(draft.scriptMarkdown);
+    },
+    [replaceModelSelections],
+  );
 
   /* 最新项目 id / 草稿 / 阶段 / rendered 的 ref：供卸载兜底与异步服务端回填读取最新值（避免闭包捕获陈旧 state）。
    * `setTabRef` / `controlledTabRef` 同理：挂载回填那一条 effect 只跑一次，经 ref 读到当次的 setTab 与接管方式。 */
@@ -651,14 +650,6 @@ export function useWorkshopPipeline(
   const markRendered = React.useCallback(() => {
     setRendered(true);
   }, []);
-
-  /** 某个生成入口的模型选择（#4834）：统一走测试模型级联的取值空间。 */
-  const setModelSelection = React.useCallback(
-    (key: keyof WorkshopModelSelections, next: WorkshopModelSelection) => {
-      setModelSelections((prev) => ({ ...prev, [key]: next }));
-    },
-    [],
-  );
 
   return {
     tab,
