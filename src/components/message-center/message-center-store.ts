@@ -248,7 +248,25 @@ function restoreMessages(current: Array<MessageRecord>): Array<MessageRecord> {
   return sameAsPersisted(current) ? current : readPersistedMessages();
 }
 
-useMessageCenterStore.subscribe((state, prev) => {
+/* ── 模块级副作用的**可重入注册**（#4729）────────────────────────────────
+ * Turbopack dev 热重载会重求值本模块：先摘旧再挂新，订阅 / storage 监听器
+ * 不随重载逐次叠加（生产环境只求值一次，行为不变）。
+ * 摘除凭据挂 `globalThis`（HMR 单例，同 `queue-signal` 的做法）：模块变量会
+ * 随重载重置，而「上一次挂的是哪个」必须跨重载存活才摘得掉。 */
+type MessageCenterListeners = {
+  onStorage?: (event: StorageEvent) => void;
+  unsubscribePersist?: () => void;
+};
+
+declare global {
+  /* SAFETY: 全局单例键只由本模块读写；类型随本文件唯一声明。 */
+  var __comfyappMessageCenterListeners__: MessageCenterListeners | undefined;
+}
+
+const listeners = (globalThis.__comfyappMessageCenterListeners__ ??= {});
+
+listeners.unsubscribePersist?.();
+listeners.unsubscribePersist = useMessageCenterStore.subscribe((state, prev) => {
   /* 只在 `messages` 换了引用时写：开关面板 / 标记已读之外的动作不该碰存储。 */
   if (state.messages !== prev.messages) {
     writeStorageJson(MESSAGE_CENTER_STORAGE_KEY, state.messages);
@@ -261,7 +279,7 @@ useMessageCenterStore.subscribe((state, prev) => {
  * 或共享真相源，超出本条的范围——本窗口的 clear / markAllRead 仍只作用于
  * 本窗口。排序与上限和 `push` 同一条判据（新到旧、200 条封顶）。 */
 if (typeof window !== "undefined") {
-  window.addEventListener("storage", (event) => {
+  const onStorage = (event: StorageEvent): void => {
     if (event.key !== MESSAGE_CENTER_STORAGE_KEY || event.newValue === null) {
       return;
     }
@@ -284,5 +302,10 @@ if (typeof window !== "undefined") {
     } catch {
       /* 损坏的存储内容：忽略 */
     }
-  });
+  };
+  if (listeners.onStorage) {
+    window.removeEventListener("storage", listeners.onStorage);
+  }
+  listeners.onStorage = onStorage;
+  window.addEventListener("storage", onStorage);
 }

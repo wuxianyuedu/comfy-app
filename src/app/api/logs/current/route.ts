@@ -81,7 +81,8 @@ async function readBytes(file: string, start: number, length: number): Promise<B
   try {
     await handle.read(buf, 0, len, from);
   } finally {
-    await handle.close();
+    /* 清理自身抛错不得覆盖业务异常（#4728）：read 的失败才是要往外报的根因。 */
+    await handle.close().catch(() => undefined);
   }
   return buf;
 }

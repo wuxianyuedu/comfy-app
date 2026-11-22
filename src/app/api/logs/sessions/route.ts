@@ -90,7 +90,8 @@ async function readTail(
   try {
     await handle.read(buf, 0, length, start);
   } finally {
-    await handle.close();
+    /* 清理自身抛错不得覆盖业务异常（#4728）：read 的失败才是要往外报的根因。 */
+    await handle.close().catch(() => undefined);
   }
   const raw = buf.toString("utf8");
   if (start === 0) {
