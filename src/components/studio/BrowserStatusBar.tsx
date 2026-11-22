@@ -24,6 +24,9 @@ import { useSchemaSyncPush } from "./hooks/use-schema-sync-push";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { comfyQueueNotice, useComfyQueue, type ComfyQueueView } from "./hooks/use-comfy-queue";
 import { Hint } from "~/components/ui/hint";
+import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import { useFlashState } from "~/components/ui/use-flash-state";
+import { useToast } from "~/components/studio/ToastProvider";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { fmtBytes } from "~/lib/format-bytes";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
@@ -222,6 +225,47 @@ function DevServerExitItem({ notice }: { notice: AppServiceExitNotice | null }) 
   );
 }
 
+/**
+ * 状态栏第 1 区的地址（ISSUE #4810）：桌面壳里没有浏览器那种「点地址栏全选复制」，
+ * 用户要把当前页带到系统浏览器打开时无从下手，所以这一格本身是「点击复制」按钮 ——
+ * 把点击那一刻的完整地址（含查询串）写进剪贴板。反馈与 `ShellTabs` 的「复制地址」
+ * 同族：成功把「安全」档位字样闪成「已复制」（`value-tick` 一次性动画），失败走
+ * toast —— 状态栏里的地址是截断文本，手动选中不可行，失败必须给可见出口。
+ */
+function AddressItem({ host, pathname }: { host: string; pathname: string }) {
+  const toast = useToast();
+  const copied = useFlashState();
+  const copyUrl = useCopyFeedback({
+    onSuccess: () => {
+      copied.flash();
+    },
+    onFailure: () => {
+      toast.error(copyFailureText("地址"));
+    },
+  });
+  const shown = host === "" ? pathname : `${host}${pathname}`;
+  return (
+    <Hint label={copied.on ? "已复制到剪贴板，粘贴到浏览器即可打开" : shown}>
+      <button
+        className="text-ink-soft hover:bg-subtle hover:text-ink flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-left"
+        onClick={() => {
+          copyUrl(window.location.href);
+        }}
+        type="button"
+      >
+        <Lock className="text-success-strong shrink-0" size={11} />
+        <span className="text-ink-fainter shrink-0">
+          {/* key 换值即重播动画：连点两次就有两次反馈（与 ShellTabs 同一口径）。 */}
+          <span className="value-tick" key={copied.on ? "copied" : "secure"}>
+            {copied.on ? "已复制" : "安全"}
+          </span>
+        </span>
+        <span className="truncate">{shown}</span>
+      </button>
+    </Hint>
+  );
+}
+
 export function BrowserStatusBar() {
   const isOpen = useLogPanel((s) => s.isOpen);
   const toggleOpen = useLogPanel((s) => s.toggleOpen);
@@ -278,13 +322,9 @@ export function BrowserStatusBar() {
       aria-label="底部状态栏"
       className="border-border bg-panel/95 text-ink-muted z-toast text-2xs fixed right-0 bottom-0 left-0 flex h-6 items-center gap-3 border-t px-3 backdrop-blur-sm"
     >
-      {/* ── 第 1 区：地址栏（固定宽度） ── */}
-      <div className="flex w-42.5 shrink-0 items-center gap-1.5">
-        <Lock className="text-success-strong shrink-0" size={11} />
-        <span className="text-ink-fainter shrink-0">安全</span>
-        <Hint label={host ? `${host}${pathname}` : pathname}>
-          <span className="text-ink-soft truncate">{host ? `${host}${pathname}` : pathname}</span>
-        </Hint>
+      {/* ── 第 1 区：地址栏（固定宽度，点击复制完整地址到剪贴板） ── */}
+      <div className="w-42.5 shrink-0">
+        <AddressItem host={host} pathname={pathname} />
       </div>
 
       {/* ── 第 2 区：ComfyUI 排队/运行信息（弹性，左对齐） ── */}
