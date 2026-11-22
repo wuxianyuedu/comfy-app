@@ -8,7 +8,9 @@ import { useCallback, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import {
+  chatFallbackGroupForCurrentModel,
   effectiveProviderType,
+  isChatModelKind,
   splitExtraModels,
   REMOTE_MODEL_KINDS,
   type LLMConfigView,
@@ -17,12 +19,6 @@ import {
 import { useTRPC } from "~/trpc/react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { isRecord } from "~/lib/is-record";
-
-/** 判断远端模型是否为文本生成(对话)可用类型。
- *  kind 缺省(null)的历史条目按 chat 处理——与设置页 `kind ?? "chat"` 归组一致。 */
-function isChatModel(kind: RemoteModelKind | null | undefined): boolean {
-  return kind === null || kind === undefined || kind === "chat";
-}
 
 function isRemoteModelKind(value: string): value is RemoteModelKind {
   return REMOTE_MODEL_KINDS.some((candidate) => candidate === value);
@@ -46,7 +42,7 @@ function toModelNames(raw: unknown): Array<string> {
         continue;
       }
       const kind = typeof item.kind === "string" && isRemoteModelKind(item.kind) ? item.kind : null;
-      if (!isChatModel(kind)) {
+      if (!isChatModelKind(kind)) {
         continue;
       }
       names.push(name);
@@ -101,7 +97,7 @@ export function useLLMConfig(): LLMConfigController {
        注意：远端候选仅取 chat 类型——图片/视频模型不能执行文本生成。 */
     const p = splitExtraModels(cfg.extraModels);
     /* 远端候选只收 chat（或 kind 缺省按 chat 处理）的模型。 */
-    const remoteNames = p.remoteEntries.filter((e) => isChatModel(e.kind)).map((e) => e.name);
+    const remoteNames = p.remoteEntries.filter((e) => isChatModelKind(e.kind)).map((e) => e.name);
     /* 远端生图模型（kind=image）单独一组，给定妆照等远端生图通道挑选。 */
     const remoteImageNames = p.remoteEntries.filter((e) => e.kind === "image").map((e) => e.name);
     /* 本地 Ollama 模型均通过 chat/completions 调用，天然可做文本任务。 */
@@ -113,16 +109,19 @@ export function useLLMConfig(): LLMConfigController {
        探测也走错通道（§1.1 口径与 describeFetchFailure / foldRemoteToLocal 一致）。 */
     const effectiveProvider = effectiveProviderType(cfg.provider, cfg.baseUrl, !!cfg.hasApiKey);
     /* 兜底：当前生效主模型不在候选里时，按生效提供方归入对应组，保证下拉总能选它。
-       明确是远端 image/video 类型的主模型不收入文本候选（避免误选到生成任务）。 */
-    if (model && !local.includes(model) && !remote.includes(model)) {
-      const entry = p.remoteEntries.find((e) => e.name === model);
-      if (effectiveProvider === "remote") {
-        if (!entry || isChatModel(entry.kind)) {
-          remote.push(model);
-        }
-      } else {
-        local.push(model);
-      }
+       明确是远端 image/video 类型的主模型不收入文本候选（避免误选到生成任务）。
+       判据是共享纯函数（#4823）：与测试页对话候选同口径，两处不再各写一份。 */
+    const fallbackGroup = chatFallbackGroupForCurrentModel({
+      model,
+      provider: effectiveProvider,
+      inChatCandidates: local.includes(model) || remote.includes(model),
+      remoteEntryKind: p.remoteEntries.find((e) => e.name === model)?.kind,
+    });
+    if (fallbackGroup === "local") {
+      local.push(model);
+    }
+    if (fallbackGroup === "remote") {
+      remote.push(model);
     }
     return {
       split: { local, remote, remoteImage: remoteImageNames },

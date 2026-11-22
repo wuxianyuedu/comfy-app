@@ -479,7 +479,7 @@ export function ModelTestView() {
               c.kindCandidateCount === 0 ? (
                 <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
                   {c.kind === "chat"
-                    ? "还没有可测的对话模型 —— 本地模型到「设置 → 本地模型」添加 Ollama 候选；远端模型到「设置 → 远程模型」添加用途为 对话 的条目。"
+                    ? "还没有可测的对话模型 —— 本地模型到「设置 → 本地模型」添加 Ollama 候选；远端模型到「设置 → 远程模型」添加用途为 文本 的条目。"
                     : `还没有可测的${MODEL_TEST_KIND_LABELS[c.kind]}模型 —— 本地模型到工作流库导入${
                         c.kind === "image" ? "生图" : "视频"
                       }工作流（工坊封装就绪后出现在这里）；远端模型到「设置 → 远程模型」添加并启用用途为 ${

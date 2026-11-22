@@ -377,6 +377,118 @@ describe("useModelTest：本地模型与对话测试（ISSUE #4080）", () => {
   });
 });
 
+/* 对话候选的「当前生效主模型」兜底（ISSUE #4823）：设置页把主模型排除在
+ * extraModels 外（播种过滤 + 保存不并回），测试页此前只读 extraModels ——
+ * 只设了主模型、没勾候选的单模型 Ollama 配置在对话页签永远空态，而工坊
+ * 文本下拉有兜底能看到它。判据是共享纯函数（chatFallbackGroupForCurrentModel），
+ * 这里锁测试页消费侧的行为：归组、发送通道与去重。 */
+describe("useModelTest：对话候选的主模型兜底（ISSUE #4823）", () => {
+  it("只设主模型、没勾候选的单模型 Ollama：对话页签仍能看到本地候选", () => {
+    configData = {
+      config: {
+        model: "qwen3:14b",
+        provider: "local",
+        baseUrl: "http://127.0.0.1:11434/v1",
+        extraModels: [],
+      },
+    };
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.setKind("chat");
+    });
+    expect(result.current.candidates).toEqual([
+      { name: "qwen3:14b", kind: "chat", baseUrl: null, local: true },
+    ]);
+    expect(result.current.kindCandidateCount).toBe(1);
+  });
+
+  it("误存成远端的主模型（回环 + 无密钥）按生效提供方归本地组", () => {
+    configData = {
+      config: {
+        model: "qwen3:14b",
+        provider: "remote",
+        baseUrl: "http://127.0.0.1:11434/v1",
+        hasApiKey: false,
+        extraModels: [],
+      },
+    };
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.setKind("chat");
+    });
+    expect(result.current.candidates).toEqual([
+      { name: "qwen3:14b", kind: "chat", baseUrl: null, local: true },
+    ]);
+  });
+
+  it("真远端主模型归远端组：候选带地址，点发送走 llm.chatTest 且 local:false", async () => {
+    configData = {
+      config: {
+        model: "gpt-x",
+        provider: "remote",
+        baseUrl: "https://api.x.com/v1",
+        extraModels: [],
+      },
+    };
+    mutateAsyncSpy.mockResolvedValue({
+      reply: "pong",
+      durationMs: 5,
+      endpoint: "https://api.x.com/v1/chat/completions",
+      model: "gpt-x",
+    });
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.setKind("chat");
+    });
+    expect(result.current.candidates).toEqual([
+      { name: "gpt-x", kind: "chat", baseUrl: "https://api.x.com/v1", local: false },
+    ]);
+    act(() => {
+      result.current.selectModel("gpt-x");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "ping");
+    });
+    await act(async () => {
+      await result.current.generate();
+    });
+    expect(mutateAsyncSpy).toHaveBeenCalledWith({ name: "gpt-x", local: false, prompt: "ping" });
+    expect(result.current.result).toEqual({ kind: "chat", text: "pong" });
+  });
+
+  it("主模型已在候选清单里时不重复兜底；远端 image 用途的主模型不进对话", () => {
+    configData = {
+      config: {
+        model: "qwen3-8b",
+        provider: "local",
+        extraModels: ["qwen3-8b"],
+      },
+    };
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.setKind("chat");
+    });
+    expect(result.current.candidates).toEqual([
+      { name: "qwen3-8b", kind: "chat", baseUrl: null, local: true },
+    ]);
+
+    configData = {
+      config: {
+        model: "agnes-image",
+        provider: "remote",
+        baseUrl: "https://a/v1",
+        extraModels: [{ name: "agnes-image", kind: "image", baseUrl: "https://a/v1" }],
+      },
+    };
+    const rerendered = renderModelTest();
+    act(() => {
+      rerendered.result.current.setKind("chat");
+    });
+    expect(rerendered.result.current.candidates).toEqual([]);
+    expect(rerendered.result.current.kindCandidateCount).toBe(0);
+  });
+});
+
 /* 工作流提供的图片/视频模型（ISSUE #4080 评论 4）：工作流库条目作为「本地模型」
  * 的第二种形态进测试页，走工坊本地 ComfyUI 通道测试。 */
 describe("useModelTest：工作流提供的图片/视频模型（ISSUE #4080 评论 4）", () => {

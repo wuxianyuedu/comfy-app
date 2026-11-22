@@ -13,6 +13,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { readFileAsDataUrl } from "~/lib/file-io";
 import { runAsyncAction } from "~/lib/async-action";
+import {
+  chatFallbackGroupForCurrentModel,
+  effectiveProviderType,
+  isChatModelKind,
+  splitExtraModels,
+} from "~/lib/llm/types";
 import { isRecord } from "~/lib/is-record";
 import {
   apiPreviewRequest,
@@ -255,31 +261,60 @@ function useTestCatalog(args: {
   const { kind, mode, selectedModel, trpc } = args;
   const queryClient = useQueryClient();
   const configQ = useQuery(trpc.llm.configGet.queryOptions());
-  /* 设置页配置的候选（extraModels：字符串 = 本地 Ollama，对象 = 远端模型）。 */
+  /* 设置页配置的候选（extraModels：字符串 = 本地 Ollama，对象 = 远端模型）。
+   * 拆分与归一走 `splitExtraModels`（#4823）：与工坊下拉 / 设置页同一次实现，
+   * kind 白名单、空名丢弃这些读边界口径在库里只有一个答案，本处不再手搓。 */
   const configuredCandidates = useMemo<Array<TestCandidate>>(() => {
     const raw: unknown = configQ.data?.config;
     if (!isRecord(raw) || !Array.isArray(raw.extraModels)) {
       return [];
     }
-    const out: Array<TestCandidate> = [];
-    for (const item of raw.extraModels) {
+    const split = splitExtraModels(raw.extraModels);
+    const pool: Array<TestCandidate> = [
       /* 字符串条目 = 本地 Ollama 候选（#4080）：没有 baseUrl / kind，只能做
        * 对话测试 —— 按 local 候选进入下拉的「本地模型」分组。 */
-      if (typeof item === "string") {
-        out.push({ name: item, kind: "chat", baseUrl: null, local: true });
-        continue;
-      }
-      if (!isRecord(item)) {
-        continue;
-      }
-      out.push({
-        name: typeof item.name === "string" ? item.name : "",
-        kind: typeof item.kind === "string" ? item.kind : "",
-        baseUrl: typeof item.baseUrl === "string" ? item.baseUrl : null,
+      ...split.localNames.map((name) => ({ name, kind: "chat", baseUrl: null, local: true })),
+      ...split.remoteEntries.map((e) => ({
+        name: e.name,
+        kind: e.kind ?? "",
+        baseUrl: e.baseUrl ?? null,
         local: false,
+      })),
+    ];
+    /* 对话候选兜底（#4823）：设置页把「当前生效主模型」排除在 extraModels 外
+     * （播种过滤 + 保存不并回），只设了主模型、没勾候选的单模型 Ollama 配置
+     * 在这里会空态 —— 按生效提供方把主模型兜底归组，与工坊文本下拉同口径
+     * （判据是共享纯函数 chatFallbackGroupForCurrentModel）。远端兜底候选要
+     * 带上可解析的地址（条目自己的 → 全局 baseUrl），与既有「远端候选要求
+     * baseUrl 非空」的过滤同一条理由。 */
+    const model = typeof raw.model === "string" ? raw.model : "";
+    const trimmed = model.trim();
+    if (trimmed !== "") {
+      const remoteEntry = split.remoteEntries.find((e) => e.name === trimmed);
+      const fallbackGroup = chatFallbackGroupForCurrentModel({
+        model,
+        provider: effectiveProviderType(
+          raw.provider === "remote" ? "remote" : "local",
+          typeof raw.baseUrl === "string" ? raw.baseUrl : null,
+          raw.hasApiKey === true,
+        ),
+        inChatCandidates:
+          split.localNames.includes(trimmed) ||
+          split.remoteEntries.some((e) => e.name === trimmed && isChatModelKind(e.kind)),
+        remoteEntryKind: remoteEntry?.kind,
       });
+      if (fallbackGroup === "local") {
+        pool.push({ name: trimmed, kind: "chat", baseUrl: null, local: true });
+      }
+      if (fallbackGroup === "remote") {
+        const resolved =
+          remoteEntry?.baseUrl ?? (typeof raw.baseUrl === "string" ? raw.baseUrl : null);
+        if (resolved !== null && resolved.trim() !== "") {
+          pool.push({ name: trimmed, kind: "chat", baseUrl: resolved, local: false });
+        }
+      }
     }
-    return out;
+    return pool;
   }, [configQ.data]);
 
   /* 工作流提供的图片 / 视频模型（#4080 评论 4）：工作流库条目是「本地模型」
