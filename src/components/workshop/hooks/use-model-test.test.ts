@@ -17,7 +17,11 @@ import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import { isRecord } from "~/lib/is-record";
 import type { TaskWatchHandlers, WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 
-import { MODEL_TEST_DEFAULT_RESOLUTION, modeTabsForKind } from "../model-test-config";
+import {
+  MODEL_TEST_DEFAULT_RESOLUTION,
+  modeTabsForKind,
+  summarizeGeneratingSessions,
+} from "../model-test-config";
 
 import { useModelTest } from "./use-model-test";
 
@@ -1036,5 +1040,78 @@ describe("useModelTest：JSON 输入模式（ISSUE #4769）", () => {
     /* 契约必备口（提示词）缺失被拦，生成不发起。 */
     expect(apiGenerateImageMock).not.toHaveBeenCalled();
     expect(result.current.error).toContain("提示词");
+  });
+});
+
+/* 左栏「生成中」标记（ISSUE #4838）：聚合函数是纯派生（第①层），直接判
+ * 三处读数的形状；接线由下面的 hook 用例判。 */
+describe("summarizeGeneratingSessions：生成中索引（ISSUE #4838）", () => {
+  it("聚合各格生成中状态：模型集合 / 用途去重计数 / 模式计数；坏键与已结束的格跳过", () => {
+    const index = summarizeGeneratingSessions({
+      "image::T2I::wf::1": { generating: true },
+      /* 同一模型在另一模式各开一格：模式各计一次，用途按模型去重不重复计。 */
+      "image::I2I::wf::1": { generating: true },
+      "image::T2I::agnes-image": { generating: true },
+      "video::T2V::wf::2": { generating: true },
+      "image::T2I::idle-model": { generating: false },
+      "broken-key": { generating: true },
+    });
+    expect(index.models).toEqual(new Set(["wf::1", "agnes-image", "wf::2"]));
+    expect(index.byKind).toEqual({ image: 2, video: 1, chat: 0 });
+    expect(index.byMode).toEqual({
+      "image::T2I": 2,
+      "image::I2I": 1,
+      "video::T2V": 1,
+    });
+  });
+
+  it("空会话：三处读数归零", () => {
+    const index = summarizeGeneratingSessions({});
+    expect(index.models.size).toBe(0);
+    expect(index.byKind).toEqual({ image: 0, video: 0, chat: 0 });
+    expect(index.byMode).toEqual({});
+  });
+});
+
+describe("useModelTest：生成中读数接线（ISSUE #4838）", () => {
+  it("点生成后模型进 generatingModels / byKind / byMode，结束后归零", async () => {
+    configData = { config: { extraModels: ["qwen3-8b"] } };
+    /* 挂起的 mutation = 生成一直进行中：挂起期间读数就要可见。 */
+    let resolveChat: (value: unknown) => void = () => undefined;
+    mutateAsyncSpy.mockReturnValue(
+      new Promise((resolve) => {
+        resolveChat = resolve;
+      }),
+    );
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.setKind("chat");
+    });
+    act(() => {
+      result.current.selectModel("qwen3-8b");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "ping");
+    });
+    act(() => {
+      void result.current.generate();
+    });
+    expect(result.current.generating).toBe(true);
+    expect(result.current.generatingModels.has("qwen3-8b")).toBe(true);
+    expect(result.current.generatingByKind).toEqual({ image: 0, video: 0, chat: 1 });
+    expect(result.current.generatingByMode["chat::"]).toBe(1);
+
+    /* 生成落定：读数归零（模型从集合里摘掉）。resolve 后把 generate 的
+       续体（finally 落 generating=false）微任务排干再断言 —— 本档在假定时器
+       下跑，用 advanceTimersByTimeAsync 清队列（不用 setTimeout / 循环 await）。 */
+    await act(async () => {
+      resolveChat({ reply: "pong", durationMs: 1, endpoint: "http://x", model: "qwen3-8b" });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.generating).toBe(false);
+    expect(result.current.generatingModels.has("qwen3-8b")).toBe(false);
+    expect(result.current.generatingByKind.chat).toBe(0);
+    /* 视图侧按「缺键 = 0」消费（`?? 0`）：全格结束后键整个不在，同口径判。 */
+    expect(result.current.generatingByMode["chat::"] ?? 0).toBe(0);
   });
 });
