@@ -5,13 +5,19 @@
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isRecord } from "~/lib/is-record";
 
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 import { AppearanceSection } from "./AppearanceSection";
+
+/* 品牌图的选图走 readFileAsDataUrl（真实现要 FileReader，happy-dom 里没挂全），
+   此处替换为固定 data URL，判的是「选完即时替换 + 写回本机」这一可见结果。 */
+vi.mock("~/lib/file-io", () => ({
+  readFileAsDataUrl: vi.fn(() => Promise.resolve("data:image/png;base64,BRAND")),
+}));
 
 /* 本仓不在 setup 里注册 testing-library 的自动 cleanup（`globals: false`），
    每份用例自己收尾 —— 与 RuntimeLogBox.test.tsx 同款。 */
@@ -231,5 +237,47 @@ describe("AppearanceSection 字体陈列按平台过滤（ISSUE #4700）", () =>
     for (const name of ["界面字体陈列平台", "代码字体陈列平台", "终端字体陈列平台"]) {
       expect(screen.getByRole("combobox", { name })).toBeInTheDocument();
     }
+  });
+});
+
+/**
+ * 品牌图换图入口（#4813 复评）：从侧栏图标挪到设置 → 外观。
+ * 选本地图片即时替换 + 写本机 + 广播给侧栏；「恢复默认」清掉自定义。
+ */
+describe("AppearanceSection 品牌图（#4813 复评）", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+  function brandImg(): HTMLImageElement {
+    const el: unknown = screen.getByRole("img", { name: "当前品牌图" });
+    if (!(el instanceof HTMLImageElement)) {
+      throw new Error("当前品牌图不是 img 元素");
+    }
+    return el;
+  }
+
+  it("默认展示内置图，选中图片后即时替换并写回本机", async () => {
+    render(<AppearanceSection c={controller("dark")} />);
+    await expect.poll(() => brandImg().getAttribute("src")).toBe("/brand-logo.svg");
+    fireEvent.click(screen.getByRole("button", { name: "选择图片" }));
+    const found: unknown = document.querySelector('input[type="file"]');
+    if (!(found instanceof HTMLInputElement)) {
+      throw new Error("未找到文件输入框");
+    }
+    const file = new File(["bytes"], "logo.png", { type: "image/png" });
+    Object.defineProperty(found, "files", { value: [file], configurable: true });
+    fireEvent.change(found);
+
+    await expect.poll(() => brandImg().getAttribute("src")).toBe("data:image/png;base64,BRAND");
+    expect(window.localStorage.getItem("sidebar-brand-logo")).toBe("data:image/png;base64,BRAND");
+  });
+
+  it("「恢复默认」回到内置图并清掉本机自定义", async () => {
+    window.localStorage.setItem("sidebar-brand-logo", "data:image/png;base64,CUSTOM");
+    render(<AppearanceSection c={controller("dark")} />);
+    await expect.poll(() => brandImg().getAttribute("src")).toBe("data:image/png;base64,CUSTOM");
+    fireEvent.click(screen.getByRole("button", { name: "恢复默认" }));
+    expect(brandImg().getAttribute("src")).toBe("/brand-logo.svg");
+    expect(window.localStorage.getItem("sidebar-brand-logo")).toBeNull();
   });
 });

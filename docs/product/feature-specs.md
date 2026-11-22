@@ -191,11 +191,14 @@
 #### FR-WS-12 侧栏品牌图片（左上角图片可自定义替换）
 
 - 状态：已上线
-- 需求：工作区侧栏左上角展示一张品牌图片，用户可换成自己的图片；首页项不用其它页签那种选中变色。
-- 行为与验收：默认展示内置图片；点图片选择本地图片文件后即时替换并持久化到本机（localStorage），
-  刷新后仍保留；「恢复默认」回到内置图并清掉自定义。首页是固定落点，始终不显示 `data-active` 高亮，
+- 需求：工作区侧栏左上角展示一张品牌图片；图片**点击回主页**（悬停提示「主页」，且无悬停背景框），
+  换图入口在「设置 → 外观」；首页项不用其它页签那种选中变色。
+- 行为与验收：默认展示内置图片；在「设置 → 外观 → 品牌图」选本地图片后即时替换并持久化到本机
+  （localStorage），刷新后仍保留；「恢复默认」回到内置图并清掉自定义。侧栏图随广播即时更新，
+  但点击只回主页、不再打开文件选择框。首页是固定落点，始终不显示 `data-active` 高亮，
   其它视图的选中高亮不受影响。图片不上传服务端、不入库。
-- 落点：`src/components/studio/SidebarBrand.tsx`、`src/components/studio/AppShell.tsx`、`public/brand-logo.svg`
+- 落点：`src/components/studio/SidebarBrand.tsx`、`src/components/studio/AppShell.tsx`、
+  `src/app/(main)/settings/components/AppearanceSection.tsx`、`src/lib/appearance.ts`、`public/brand-logo.svg`
 
 ## 2. 账号与访问（FR-AU）
 
