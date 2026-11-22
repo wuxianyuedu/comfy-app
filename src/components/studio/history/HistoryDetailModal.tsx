@@ -301,7 +301,9 @@ export function HistoryDetailModal({
                 {referenceImages.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-ink-muted text-[13px] font-semibold">参考图</p>
+                      {/* 字号走具名档 text-xs：字面 px 档有棘轮闸（只许降不许升），
+                          新增调用点必须用 @theme 具名档（契约 §Typography）。 */}
+                      <p className="text-ink-muted text-xs font-semibold">参考图</p>
                       <span className="text-ink-fainter text-2xs ml-auto">
                         {`${String(referenceImages.length)} 张`}
                       </span>
