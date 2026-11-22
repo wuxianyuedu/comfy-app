@@ -4,7 +4,7 @@
  * 「这个对外参数由哪些端口组成」，表单行尾的徽标说「这一行属于哪个对外参数」。
  * jsdom 里只断言两处的「有无」与文案，不断言像素。 */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -71,6 +71,33 @@ function wiredFor(list: Array<{ id: string; pins: Array<{ ioKey: string; name: s
 }
 
 describe("WorkflowParamCardColumn", () => {
+  it("尺寸卡可声明「使用首张参考图尺寸」：显示开关与来源说明，回调可关闭", async () => {
+    const onSizeFromReferenceChange = vi.fn();
+    render(
+      wrap(
+        <WorkflowParamCardColumn
+          canWire
+          entries={entries}
+          io={io}
+          onSizeFromReferenceChange={onSizeFromReferenceChange}
+          resolved={wiredFor(entries)}
+          sizeFromReference
+        />,
+      ),
+    );
+    const toggle = screen.getByRole("switch");
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText("使用首张参考图尺寸")).toBeTruthy();
+    expect(screen.getByText(/尺寸由第一张参考图决定/)).toBeTruthy();
+    await userEvent.click(toggle);
+    expect(onSizeFromReferenceChange.mock.calls[0]?.[0]).toBe(false);
+  });
+
+  it("只读消费方不渲染尺寸来源开关", () => {
+    render(<WorkflowParamCardColumn entries={entries} io={io} resolved={wiredFor(entries)} />);
+    expect(screen.queryByText("使用首张参考图尺寸")).toBeNull();
+  });
+
   it("每个对外参数一张卡片（尺寸的六行形态合成一张），卡片头是它的名字", () => {
     const { container } = render(
       <WorkflowParamCardColumn entries={entries} io={io} resolved={wiredFor(entries)} />,

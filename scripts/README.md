@@ -10,28 +10,28 @@
 
 份数为约数（以 `git ls-files scripts` 为准）：
 
-| 目录              | 收谁                                       | 一句话职责                                                                 |
-| ----------------- | ------------------------------------------ | -------------------------------------------------------------------------- |
-| `gates/`          | `check-*`、`gate-*`、`quality-gate*`、`premerge-*`、`shell-gate*` 与各门禁台账 `.json`（约 124 份） | 质量门禁判据与其对账台账：pre-commit / pre-push / CI 里每一条 `run "标签"` 的执行者 |
-| `ci/`             | `ci-*`（79 份）                            | CI 流水线机制：派发 / 镜像 / GA 回调 / 装依赖 / 逐格判决与读数              |
-| `ship/`           | `ship.mjs` + `ship-*`（38 份）             | `pnpm ship` 交单流程：分支→提交→PR→CI→合并，模块分工见 [ship.mjs 文件头](ship/ship.mjs) |
-| `affected-tests/` | `affected-*`、`run-tests.*`、`full-suite-run.mjs`、`fixed-structural-tests.mjs` 等（36 份） | 受影响用例判定链 + 测试执行与记账：改动面 → import 图 → 用例清单 → 派发 / 重试 / 覆盖率 |
-| `devtools/`       | 开发者工具（24 份）                        | 截图 / trace / storybook / 环境引导 / 依赖守卫 / 双击辅助 —— 人直接敲的那一层 |
-| `docs/`           | 文档与 changelog 工具（11 份）             | doc:check / doc:toc / doc:render / API 文档 / 碎片并入 / 索引排除表         |
-| `build/`          | 打包与产物（7 份）                         | portable 包 / 桌包发布 / 执行器宿主构建 / 产物新鲜度                        |
-| `platform/`       | CNB 平台协作（6 份）                       | agent 索引与成片 / 开发汇报 / 单子身份 / 空提交                             |
-| `ui-primitives/`  | `ui-primitives-*`（10 份）                 | UI 基元复用棘轮的规则库与引擎（执行者是 `gates/check-ui-primitives.cjs`）   |
-| `db/`             | `db-*`、`heal-db.cjs`、`app-data-backup.mjs`（11 份） | 数据库运维：建表 / 迁移 / 备份恢复 / 自愈（`pnpm db:*` 与启动链路的 schema 同步） |
-| `tw4/`            | `tw4-*`（4 份）                            | Tailwind v4 规范扫描与 codemod                                             |
-| `dev-drive/`      | `dev-drive-*`（4 份）                      | 开发盘（ReFS / Dev Drive）探测与调优（`pnpm dev:drive`）                    |
-| `freshness/`      | `freshness-*`（6 份，含三份 `.json` 账）   | 新鲜度账（e2e / 全量单测 / 产物三档自证）的账本与同步                      |
-| `reformat/`       | `reformat-*`（3 份）                       | 格式化提交与行为改动分离的扫描核心（执行者是 `gates/check-reformat-only.cjs`） |
-| `e2e/`            | `e2e-*`（3 份）                            | Playwright 编排入口与 schema 预检（`pnpm test:e2e`）                        |
-| `base-check/`     | 判决链拆件 + `merged-side-loss-*`（9 份）  | `gates/base-check.mjs`（CI 红了先归因给谁）的模块与「合并另一侧损失」判定  |
-| `launcher-core/`  | 启动编排的平台机制层（27 份，含 `node-engines.mjs`） | 端口 / 进程组 / 日志 / 就绪等待 —— 平台判据只收这里（§3.1–3.3）       |
-| `lib/`            | 跨脚本共享库件（9 份）                     | `git-dir` / `changed-scope` / `python-probe` / `package-bin-entry` 等多个域共用的纯 Node 模块 |
-| `lockfile/`       | lockfile 守卫拆件（5 份）                  | `deps:guard` 的 diff / 缓存 / 展示拆件                                      |
-| `storybook-checks/` | storybook 判据拆件（3 份）               | `devtools/storybook-check.mjs` 的规则拆件                                   |
+| 目录                | 收谁                                                                                                | 一句话职责                                                                                    |
+| ------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `gates/`            | `check-*`、`gate-*`、`quality-gate*`、`premerge-*`、`shell-gate*` 与各门禁台账 `.json`（约 124 份） | 质量门禁判据与其对账台账：pre-commit / pre-push / CI 里每一条 `run "标签"` 的执行者           |
+| `ci/`               | `ci-*`（79 份）                                                                                     | CI 流水线机制：派发 / 镜像 / GA 回调 / 装依赖 / 逐格判决与读数                                |
+| `ship/`             | `ship.mjs` + `ship-*`（38 份）                                                                      | `pnpm ship` 交单流程：分支→提交→PR→CI→合并，模块分工见 [ship.mjs 文件头](ship/ship.mjs)       |
+| `affected-tests/`   | `affected-*`、`run-tests.*`、`full-suite-run.mjs`、`fixed-structural-tests.mjs` 等（36 份）         | 受影响用例判定链 + 测试执行与记账：改动面 → import 图 → 用例清单 → 派发 / 重试 / 覆盖率       |
+| `devtools/`         | 开发者工具（24 份）                                                                                 | 截图 / trace / storybook / 环境引导 / 依赖守卫 / 双击辅助 —— 人直接敲的那一层                 |
+| `docs/`             | 文档与 changelog 工具（11 份）                                                                      | doc:check / doc:toc / doc:render / API 文档 / 碎片并入 / 索引排除表                           |
+| `build/`            | 打包与产物（7 份）                                                                                  | portable 包 / 桌包发布 / 执行器宿主构建 / 产物新鲜度                                          |
+| `platform/`         | CNB 平台协作（6 份）                                                                                | agent 索引与成片 / 开发汇报 / 单子身份 / 空提交                                               |
+| `ui-primitives/`    | `ui-primitives-*`（10 份）                                                                          | UI 基元复用棘轮的规则库与引擎（执行者是 `gates/check-ui-primitives.cjs`）                     |
+| `db/`               | `db-*`、`heal-db.cjs`、`app-data-backup.mjs`（11 份）                                               | 数据库运维：建表 / 迁移 / 备份恢复 / 自愈（`pnpm db:*` 与启动链路的 schema 同步）             |
+| `tw4/`              | `tw4-*`（4 份）                                                                                     | Tailwind v4 规范扫描与 codemod                                                                |
+| `dev-drive/`        | `dev-drive-*`（4 份）                                                                               | 开发盘（ReFS / Dev Drive）探测与调优（`pnpm dev:drive`）                                      |
+| `freshness/`        | `freshness-*`（6 份，含三份 `.json` 账）                                                            | 新鲜度账（e2e / 全量单测 / 产物三档自证）的账本与同步                                         |
+| `reformat/`         | `reformat-*`（3 份）                                                                                | 格式化提交与行为改动分离的扫描核心（执行者是 `gates/check-reformat-only.cjs`）                |
+| `e2e/`              | `e2e-*`（3 份）                                                                                     | Playwright 编排入口与 schema 预检（`pnpm test:e2e`）                                          |
+| `base-check/`       | 判决链拆件 + `merged-side-loss-*`（9 份）                                                           | `gates/base-check.mjs`（CI 红了先归因给谁）的模块与「合并另一侧损失」判定                     |
+| `launcher-core/`    | 启动编排的平台机制层（27 份，含 `node-engines.mjs`）                                                | 端口 / 进程组 / 日志 / 就绪等待 —— 平台判据只收这里（§3.1–3.3）                               |
+| `lib/`              | 跨脚本共享库件（9 份）                                                                              | `git-dir` / `changed-scope` / `python-probe` / `package-bin-entry` 等多个域共用的纯 Node 模块 |
+| `lockfile/`         | lockfile 守卫拆件（5 份）                                                                           | `deps:guard` 的 diff / 缓存 / 展示拆件                                                        |
+| `storybook-checks/` | storybook 判据拆件（3 份）                                                                          | `devtools/storybook-check.mjs` 的规则拆件                                                     |
 
 ## 顶层单件入口（不在任何一族里的「命令」，19 份）
 

@@ -146,6 +146,9 @@ export type WorkshopWorkflowOption = {
   /** 该工作流可跑的全部模式码（taskType 常是其中的默认模式）。 */
   modes: Array<string>;
   name: string;
+  /** 工作流库落库的 paramMap（含落点线与尺寸来源声明）——测试页据此判断
+   *  「尺寸是否由首张参考图决定」，与封装页读同一份事实。 */
+  paramMap?: Record<string, unknown>;
   taskType?: string;
 };
 
@@ -189,6 +192,7 @@ function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption 
     modes,
     modelTags,
     encapsulationReady,
+    ...(isPlainRecord(row.paramMap) ? { paramMap: row.paramMap } : {}),
   };
 }
 

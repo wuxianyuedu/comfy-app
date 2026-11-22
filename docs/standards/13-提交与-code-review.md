@@ -9056,6 +9056,17 @@ D0(形态前置) 21.2s**，而**钩子总墙钟的中位是 346.6s、p90 894.9s*
 (`readHookSteps()`，它顺手把 `--staged` 剥掉 —— CI 没有暂存区，留着那些脚本判的是「空提交」，
 那是一条**恒绿**的判据)。
 
+  **带 `--staged` 的步骤与两个执行面的差**（#4833）：平台那一格剥旗标跑**全仓**
+  （`fullTreeArgv()`），而本地合并前复算的快照（分支 ⊕ 目标的合成树）同样没有暂存区
+  —— 这两件事过去不同步：「UI 基元复用棘轮 / 浮层层级刻度硬闸」这类带 `--staged` 的
+  步骤在本地复算面上**没有任何执行者**，红只能等 GA 才暴露（#4831 首轮实测一次完整
+  CI 往返）。现在由 `base-check/hook-steps.mjs` 的 `STAGED_TO_FULL_TREE` 登记表收口：
+  登记在案的 `--staged` 步骤在复算收批时剥旗标、在合并树上判**全仓**（与平台同一手，
+  剥旗标函数也只有一份 —— `ci-heavy-gates.mjs` 的 `fullTreeArgv()` 转述它）。入表条件是
+  **无基线、无 `--update` 的硬闸**（全量面上红就是真红）且全量扫描毫秒到秒级；要不要给
+  后续步骤入表，按这条口径逐条评估 —— `CHANGED_SCOPED` 那族（判决面只在「本次改动」上）
+  剥了旗标也判不出这棵树的事，**不收**。
+
 **「跳过」必须被说出来**，否则一次只跑了 D0 的绿会被读成「全套过了」：
 
 - 钩子收尾那句「⚠ 本次提交本地**没跑**：…」自 ISSUE #2154 起由
@@ -10438,6 +10449,8 @@ status 有终态（不再是「缺席」）。
 
 **这一跑自己的「走到哪了 / 结论」也落在盘上：`.git/ship-result.json`（ISSUE #3206 / #3923）。** ship 每一轮**开跑即写**（write-ahead，`status=running`），随每行读数更新状态快照（`status` / `branch` / `sha` / `repo` / `pr` / `exitCode` / `conclusion`），并追加**带时间戳的事件**（`start` / `stage`（含结构化 `facts`）/ `conclusion` / `finished` / `interrupted`）；落盘是**原子替换**（先写同目录临时文件再 rename），另一只轮询的眼睛不会读到半截 JSON。后台跑 ship 时，进度用只读口取：`pnpm ship --result`（人读摘要 + 事件时间线）或 `pnpm ship --result=json`（原始 JSON），**不要 `sleep + grep` 自己的运行日志** —— 日志是那一块屏幕的过去，落盘读数是进程自己写下的现在；`running` / `interrupted` 一律是「没给结论」，与退码 `2` 同口径，不许读成通过。**只读单件动作自己不落盘**（`--result` / `--status` / `--whoami` / `--branches` / `--claims` / `--diagnose` / `--stage-log` / `--gh-logs` / `--gh-prs`）：查询自己再写一份进去，会把后台那一跑的活读数覆盖掉 —— 轮询的眼睛不能毁掉它正在看的东西。平台侧「PR / CI / 关单」的现在仍走 `pnpm ship --status`（上一段）。判据与形状只有一份出处：`scripts/ship/ship-result.mjs` 文件头。
 
+`--result` 的**退出码反映被跟踪那一跑的死活**，不是「这次读成功」（ISSUE #4764）：还在跑 ⇒ `4`（无终态，不是 0）、被打断 ⇒ `2`、读不出来 ⇒ `2`、收口了照抄那一跑的 `exitCode`；没有上一次（`missing`）仍是 `0`（合法读数「还没跑过」）。收尾结论行同样不复用写链码表词 —— 只读口与写侧快动作（建单 / 评论 / 领取 / 重派 CI）共用 `finish()`，它们的 `0` 只表示「这一件做完了」，末行念「单件动作完成（**不代表**写链绿到终态）」，不会在 running 的后台跑旁边打出「全绿到终态」。写链结论词与 `pnpm ship:wait`（另走落盘 JSON 字段判定）一字未改。旗标面「单件动作」的判据只有一份：`scripts/ship/ship-args.mjs` 的 `singleActionSettled`。
+
 **工作模式：全托管与逐步确认（ISSUE #3512）。** 四条红线没有为模式开口子 —— 模式是
 **打包旗标的显式别名**：`pnpm ship --mode auto` 在语义上等于人亲手给了
 `--merge --close-issue --clean-branch` 三枚旗标（展开发生在解析层、所有阶段之前，
@@ -11320,7 +11333,7 @@ exec node scripts/gates/check-pending-merge-loss.mjs "$2"          # ② 内容�
 
   | 判据                    | 核什么                                    | 落点                                |
   | ----------------------- | ----------------------------------------- | ----------------------------------- |
-  | `--base` 复算（#1591）  | 钩子里那批全仓判据在**干净快照**上红不红  | `base-check.mjs` 的 `baseCheckMany` |
+  | `--base` 复算（#1591）  | 钩子里那批全仓判据在**干净快照**上红不红（快照 = 分支 ⊕ 目标的合成树；带 `--staged` 的步骤按 `STAGED_TO_FULL_TREE` 登记表剥旗标判全仓，#4833）  | `base-check.mjs` 的 `baseCheckMany` |
   | `check:claims`（#1605） | 提交信息里那句「§x.y 照旧保留」是不是真的 | `check-commit-claims.mjs`           |
   | 合并面（#1617）         | 合并有没有把**一侧整份覆盖掉**            | `check-merged-side-loss.mjs`        |
 

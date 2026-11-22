@@ -289,6 +289,7 @@ export function WorkshopEncapsulationPanel({
             }
             running={test.running}
             scene={sceneFromMode(mode)}
+            sizeFromReference={status.sizeFromReference}
             uploadImage={test.uploadImage}
           />
           {test.running && (

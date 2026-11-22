@@ -205,6 +205,9 @@ export type LibraryNodeContent = {
     contractEntries: ReadonlyArray<{ id: string; label: string }>;
     onReset: (entryId: string) => void;
     onSelect: (entryId: string | null) => void;
+    onSizeFromReferenceChange?: (enabled: boolean) => void;
     selectedEntryId: string | null;
+    /** 尺寸来源 = 第一张参考图（尺寸卡改展示来源说明、不接受连线）。 */
+    sizeFromReference: boolean;
   };
 };

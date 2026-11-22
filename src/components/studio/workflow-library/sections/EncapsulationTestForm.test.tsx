@@ -70,6 +70,14 @@ function renderForm(
 }
 
 describe("EncapsulationTestForm", () => {
+  it("尺寸来源 = 首图时不渲染尺寸选择器，只显示来源说明；提交也不带尺寸值", () => {
+    const { onRun } = renderForm(T2I_ENTRIES, { sizeFromReference: true });
+    expect(screen.getByText("上传第一张参考图后自动显示生成尺寸")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "执行流程测试" }));
+    expect(onRun).toHaveBeenCalledTimes(1);
+    expect(onRun.mock.calls[0]?.[0].size).toBeUndefined();
+  });
+
   it("没落点的口照样渲染输入框（负向提示词不再是「看得见填不了」）", () => {
     renderForm(T2I_ENTRIES);
     const negative = screen.getByPlaceholderText("输入负向提示词");

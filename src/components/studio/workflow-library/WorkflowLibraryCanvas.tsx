@@ -80,10 +80,13 @@ export type WorkflowLibraryCanvasProps = {
   onResetParam: (entryId: string) => void;
   onSelectOutput: (ioKey: string | null) => void;
   onSelectParam: (entryId: string | null) => void;
+  onSizeFromReferenceChange?: (enabled: boolean) => void;
   outputCards: LibraryOutputCards;
   paramCards: LibraryParamCards;
   selectedEntryId: string | null;
   selectedOutputId: string | null;
+  /** 尺寸来源 = 第一张参考图（编辑对外参数页签的开关）。 */
+  sizeFromReference?: boolean;
 };
 
 /** 节点类型注册表：**模块级常量**（§2.11 —— 内联会在每次 render 重建整棵 DOM）。 */
@@ -188,6 +191,8 @@ function WorkflowLibraryCanvasInner({
   onConnectOutput,
   onDeleteWire,
   host,
+  sizeFromReference = false,
+  onSizeFromReferenceChange,
 }: WorkflowLibraryCanvasProps) {
   /* 画布容器：量它才知道「铺满」要铺到哪儿（ISSUE #596）。 */
   const containerRef = useRef<HTMLDivElement>(null);
@@ -220,8 +225,19 @@ function WorkflowLibraryCanvasInner({
       selectedEntryId,
       onSelect: onSelectParam,
       onReset: onResetParam,
+      sizeFromReference,
+      onSizeFromReferenceChange,
     }),
-    [paramCards, contractEntries, canWire, selectedEntryId, onSelectParam, onResetParam],
+    [
+      paramCards,
+      contractEntries,
+      canWire,
+      selectedEntryId,
+      onSelectParam,
+      onResetParam,
+      sizeFromReference,
+      onSizeFromReferenceChange,
+    ],
   );
   const hostNode = useMemo(() => ({ host }), [host]);
   const outputsNode = useMemo(

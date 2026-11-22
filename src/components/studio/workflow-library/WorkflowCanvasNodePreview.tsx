@@ -25,6 +25,7 @@ import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
 import { deriveLibraryOutputCards, deriveLibraryParamCards } from "./workflow-library-param-cards";
 import { useParamWiring } from "./hooks/use-param-wiring";
+import { useSizeSource } from "./hooks/use-size-source";
 import { useGenerationRunner, type Phase } from "./hooks/use-generation-runner";
 import { useDefaultValueSeeding } from "./hooks/use-default-value-seeding";
 import { useOutputWiring } from "./hooks/use-output-wiring";
@@ -277,16 +278,18 @@ export function WorkflowCanvasNodePreview({
     [workflowIO, effectiveMode, contractEntries],
   );
 
-  /* 选中互斥与落点重置的回调收口（#4467）：内联箭头会让画布层的三个内容对象
-   * 每帧都是新引用 → Context value 每帧新建 → 三列节点虽 memo 也被击穿重渲。
-   * 依赖里的 wiring 方法与 setState 都是稳定引用。 */
+  /* 落点重置回调收口：内联箭头会击穿画布层三列节点的 memo（#4467）。 */
   const handleResetParam = useCallback(
     (id: string) => {
       resetParamWires(sizeGroupIds(id));
     },
     [resetParamWires],
   );
-
+  const { onSizeFromReferenceChange, sizeFromReference } = useSizeSource({
+    commitParamMap: wiring.commitParamMap,
+    effectiveMode,
+    effectiveParamMap: wiring.effectiveParamMap,
+  });
   /** 提交到本机生成并等待落定（相位与 SSE 订阅在 use-generation-runner）。 */
   function run() {
     if (!canRun) {
@@ -400,10 +403,12 @@ export function WorkflowCanvasNodePreview({
           onResetParam={handleResetParam}
           onSelectOutput={handleSelectOutput}
           onSelectParam={handleSelectParam}
+          onSizeFromReferenceChange={onSizeFromReferenceChange}
           outputCards={outputCards}
           paramCards={paramCards}
           selectedEntryId={selectedParamId}
           selectedOutputId={selectedOutputId}
+          sizeFromReference={sizeFromReference}
         />
       )}
 

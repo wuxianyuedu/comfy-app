@@ -47,9 +47,11 @@ const { HistoryList } = await import("./HistoryList");
  * `WorksGallery.test.tsx` 同口径）：本屏常挂 `HistoryDetailModal`，
  * 它的详情动作走提示通道 —— mock 掉 provider 就等于不测这条链路了。 */
 function renderList() {
+  const noop = vi.fn();
   return (
     <ToastProvider>
-      <HistoryList />
+      {/* 「重试」的落点回调（#4841）由父级注入 —— 本文件判的是筛选形态，给空实现。 */}
+      <HistoryList onReprintToModelTest={noop} />
     </ToastProvider>
   );
 }

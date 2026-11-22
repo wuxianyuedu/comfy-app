@@ -696,3 +696,37 @@ export function flagConflicts(opt) {
   }
   return lines;
 }
+
+/**
+ * 这一跑是不是「单件 / 侧动作」在收口（ISSUE #4764）。
+ *
+ * 判据只认人给的旗标，不猜分支、不看退出码：写链（提交 / push / PR / 合并）与
+ * 这些口共用 `ship.mjs` 的 `finish()`，而它们的 `0` 语义不同 —— 写链的 0 是
+ * 「走到终态且绿」；只读口的 0 只是「这次读成功」，写侧快动作（建单 / 评论 /
+ * 领取 / 重派 CI）的 0 也只表示「这一件做完了」。两者都不跑写链，收尾那句
+ * 都不许复写链的码表词。这里跟着「命令行长什么样」动（复用 `parseArgs` 的旗标面），
+ * 与 `main()` 里「单件动作不落盘」那份同一族动作。
+ *
+ * @param {ReturnType<typeof parseArgs>} opt
+ * @returns {boolean}
+ */
+export function singleActionSettled(opt) {
+  return Boolean(
+    opt.result ||
+    opt.status ||
+    opt.whoami ||
+    opt.branches ||
+    opt.claims ||
+    opt.diagnose ||
+    opt.stageLog ||
+    opt.ghLogs ||
+    opt.ghPrs ||
+    opt.fetchIssue ||
+    opt.comment !== null ||
+    opt.claim !== null ||
+    opt.release !== null ||
+    opt.misclaim ||
+    opt.newIssue !== null ||
+    opt.rerunCi,
+  );
+}
