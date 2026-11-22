@@ -252,13 +252,12 @@ describe("tRPC 挂载面：每条 procedure 都要有执行者（台账 E3）", 
 /**
  * 「零消费方」登记表：口 → 为什么还留着。不是免罪牌：每条写清「谁将来接它」，数量只许降不许升（见 `登记表本身不陈旧`）。
  * 要变长得先动台账 E3′。已收口的（别再写回来）：`material.*` 与 REST `/api/materials` 是同一套归属判据的
- * 两扇门，界面只走 REST；`llm.complete` 与 `/api/llm` 重复（那扇还多流式与 tools）。
+ * 两扇门，界面只走 REST；`llm.complete` 与 `/api/llm` 重复（那扇还多流式与 tools）；
+ * `project.patch` 的登记前提是「补上只改名字 / 只改布局的界面动作」—— 侧栏右键改名接上了它（ISSUE #4808）。
  */
 const ZERO_CONSUMER: Record<string, string> = {
   "project.get":
     "画布加载目前从 `project.list` 的行里取 nodes/edges（`lib/project-canvas/canvas-store.ts`），这条按 id 的单读口还没有入口用它。要么把画布改成按需单读（比 list 省），要么删口。",
-  "project.patch":
-    "画布保存走 `project.upsert`（整份覆盖），这条字段级更新还没有「只改名字 / 只改布局」的界面动作对应。留着的前提是补上那个动作，否则删口。",
   "skill.create":
     "工坊与成片工作室都只**读**风格卡（`skill.list`），技能管理的写侧界面还没做。这一条是「功能未接」而不是「判据缺失」：它的重名 CONFLICT / slug 形状闸都有用例。",
 };

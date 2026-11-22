@@ -58,8 +58,14 @@
   `project-sections.ts`，阶段状态与项目主页同一份 production 派生）；
   已到访的分区保持挂载（CSS 显隐），工坊六段共用一个受控的
   `WorkshopPipeline` 实例（内部阶段轨道隐藏）。「+」菜单只列项目「主页」
-  一页（旧版列六页）。
+  一页（旧版列六页）。侧栏「项目」行支持右键「编辑名称」（ISSUE #4808）：
+  改名对话框预填当前名、重名自动 `_2/_3` 后缀并预览，本地项目与只在服务端的
+  项目都同步改名，侧栏行即时更新。侧栏「项目」面板的行内悬停反馈只认本行
+  （行级组 `group/row`，ISSUE #4812），悬停同面板其它行不点亮别的行。
 - 落点：`src/app/workspace/page.tsx`（「+」菜单清单）、`NavItems.tsx`、
+  `src/components/studio/AppShell.tsx`（项目行右键菜单 / 行级悬停组）、
+  `src/components/studio/RenameProjectDialog.tsx`、
+  `src/lib/project-canvas/canvas-store.ts`（`renameProject`）、
   `src/components/studio/project-workspace/ProjectWorkspace.tsx`、
   `src/components/studio/project-workspace/ProjectSectionRail.tsx`
 

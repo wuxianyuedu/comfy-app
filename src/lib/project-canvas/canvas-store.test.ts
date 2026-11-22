@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const projectListQuery = vi.fn();
 const projectUpsertMutate = vi.fn<(...args: Array<unknown>) => unknown>();
 const projectDeleteMutate = vi.fn<(...args: Array<unknown>) => unknown>();
+const projectPatchMutate = vi.fn<(...args: Array<unknown>) => unknown>();
 
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
@@ -28,6 +29,10 @@ vi.mock("~/trpc/vanilla", () => ({
       delete: {
         mutate: (...args: Array<unknown>) =>
           Promise.resolve().then(() => projectDeleteMutate(...args)),
+      },
+      patch: {
+        mutate: (...args: Array<unknown>) =>
+          Promise.resolve().then(() => projectPatchMutate(...args)),
       },
     },
   },
@@ -51,6 +56,7 @@ import {
   listProjectsWithServer,
   reapAllEmptyDrafts,
   reapEmptyProject,
+  renameProject,
   setActive,
   upsertProject,
 } from "./canvas-store";
@@ -94,6 +100,7 @@ beforeEach(() => {
   projectListQuery.mockReset();
   projectUpsertMutate.mockReset();
   projectDeleteMutate.mockReset();
+  projectPatchMutate.mockReset();
 });
 
 afterEach(() => {
@@ -780,5 +787,75 @@ describe("保存链路增量语义（ISSUE #4600）", () => {
     off();
     const hydrates = seen.filter((e) => e.reason === "hydrate" && e.projectId === "p_push");
     expect(hydrates).toHaveLength(1);
+  });
+});
+
+describe("renameProject（侧栏右键改项目名，ISSUE #4808）", () => {
+  it("本地有的行：改名入索引、照走 upsert 推服务端（name 变了照发）、广播 save 供侧栏就地改行", async () => {
+    seed([{ id: "p1", name: "未命名_2", updatedAt: 1, nodes: [], edges: [] }]);
+    const seen: Array<{ projectId?: string; reason: string }> = [];
+    const off = subscribeAppEvent("comfyapp:canvas-store-changed", (p) => seen.push(p));
+    await renameProject("p1", "  我的项目  ");
+    off();
+    expect(getProject("p1")?.name).toBe("我的项目");
+    expect(projectUpsertMutate).toHaveBeenCalledTimes(1);
+    expect(projectUpsertMutate.mock.calls[0]?.[0]).toMatchObject({
+      name: "我的项目",
+      projectId: "p1",
+    });
+    expect(projectPatchMutate).not.toHaveBeenCalled();
+    expect(seen.some((e) => e.reason === "save" && e.projectId === "p1")).toBe(true);
+  });
+
+  it("重名沿用 findNextAvailableName（自动 _2 后缀，排除自己）", async () => {
+    seed([
+      { id: "p1", name: "旧名", updatedAt: 1, nodes: [], edges: [] },
+      { id: "p2", name: "新名", updatedAt: 2, nodes: [], edges: [] },
+    ]);
+    await renameProject("p1", "新名");
+    expect(getProject("p1")?.name).toBe("新名_2");
+    expect(getProject("p2")?.name).toBe("新名");
+  });
+
+  it("名字没变是 no-op：不写索引、不发推送、不发事件", async () => {
+    seed([{ id: "p1", name: "同名", updatedAt: 1, nodes: [], edges: [] }]);
+    const seen: Array<{ reason: string }> = [];
+    const off = subscribeAppEvent("comfyapp:canvas-store-changed", (p) => seen.push(p));
+    await renameProject("p1", "同名");
+    off();
+    expect(projectUpsertMutate).not.toHaveBeenCalled();
+    expect(seen).toHaveLength(0);
+  });
+
+  it("空名（纯空白）不落：与新建「名称为空不能确认」同口径", async () => {
+    seed([{ id: "p1", name: "原名", updatedAt: 1, nodes: [], edges: [] }]);
+    await renameProject("p1", "   ");
+    expect(getProject("p1")?.name).toBe("原名");
+    expect(projectUpsertMutate).not.toHaveBeenCalled();
+  });
+
+  it("服务端-only 行（本地索引没有）：只 patch 服务端名字，成功后广播 rename 让订阅方整表重取", async () => {
+    projectPatchMutate.mockResolvedValue({ ok: true });
+    const seen: Array<{ projectId?: string; reason: string }> = [];
+    const off = subscribeAppEvent("comfyapp:canvas-store-changed", (p) => seen.push(p));
+    await renameProject("p-server", "云端项目改名");
+    off();
+    expect(projectPatchMutate).toHaveBeenCalledTimes(1);
+    expect(projectPatchMutate.mock.calls[0]?.[0]).toEqual({
+      name: "云端项目改名",
+      projectId: "p-server",
+    });
+    expect(projectUpsertMutate).not.toHaveBeenCalled();
+    expect(seen.some((e) => e.reason === "rename" && e.projectId === "p-server")).toBe(true);
+  });
+
+  it("服务端 patch 被拒：登记可查的失败状态（不无声），不发 rename 事件", async () => {
+    projectPatchMutate.mockRejectedValue(trpcError("FORBIDDEN", "项目不存在"));
+    const seen: Array<{ reason: string }> = [];
+    const off = subscribeAppEvent("comfyapp:canvas-store-changed", (p) => seen.push(p));
+    await renameProject("p-server", "改不动的名字");
+    off();
+    expect(noticesFor("p-server")).toHaveLength(1);
+    expect(seen).toHaveLength(0);
   });
 });
