@@ -450,6 +450,100 @@ function OnboardingPanel({ c }: { c: ModelTestController }) {
   );
 }
 
+/** 左栏：用途 + 模式 + 模型（模式列表有滚动上限，不会把模型卡挤走；
+ *  桌面下吸附成独立滚动区）。从 `ModelTestView` 拆出（§12.13：视图函数
+ *  顶到 400 行硬闸，按栏切子组件）。 */
+function LeftColumn({
+  c,
+  modelLabels,
+  modeLabel,
+}: {
+  c: ModelTestController;
+  /** 当前模式的展示名（空态文案用）。 */
+  modeLabel: string;
+  /** 模型下拉的标签（显示名 + 生成中徽标，ISSUE #4838）。 */
+  modelLabels: Record<string, ReactNode>;
+}) {
+  return (
+    <aside className="flex w-full shrink-0 flex-col gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-96px)] xl:w-64 xl:overflow-y-auto">
+      <Panel icon={<Shapes />} title="用途">
+        <KindTabs generating={c.generatingByKind} kind={c.kind} onChange={c.setKind} />
+      </Panel>
+
+      {c.modeTabs.length > 0 && (
+        <Panel icon={<ListChecks />} title="模式">
+          <div className="max-h-80 overflow-y-auto pr-0.5">
+            <ModeTabs
+              generatingByMode={c.generatingByMode}
+              kind={c.kind}
+              mode={c.mode}
+              onSelect={c.setMode}
+              tabs={c.modeTabs}
+            />
+          </div>
+        </Panel>
+      )}
+
+      <Panel hint="按用途与模式过滤" icon={<Boxes />} title="模型">
+        {c.loading ? (
+          /* 骨架屏（ISSUE #4749）：与模型列表条目同形的占位条。 */
+          <div aria-label="加载中" className="flex flex-col gap-2" role="status">
+            {[0, 1, 2].map((i) => (
+              <Skeleton className="h-9 w-full rounded-lg" key={i} />
+            ))}
+          </div>
+        ) : c.candidates.length === 0 ? (
+          c.kindCandidateCount === 0 ? (
+            <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
+              {c.kind === "chat"
+                ? "还没有可测的对话模型 —— 本地模型到「设置 → 本地模型」添加 Ollama 候选；远端模型到「设置 → 远程模型」添加用途为 文本 的条目。"
+                : `还没有可测的${MODEL_TEST_KIND_LABELS[c.kind]}模型 —— 本地模型到工作流库导入${
+                    c.kind === "image" ? "生图" : "视频"
+                  }工作流（工坊封装就绪后出现在这里）；远端模型到「设置 → 远程模型」添加并启用用途为 ${
+                    c.kind === "image" ? "图像" : "视频"
+                  } 的条目。`}
+            </p>
+          ) : (
+            <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
+              当前「{modeLabel}」模式下没有可用模型（页签徽标的数字就是它的候选数）——
+              远端模型需要先在「模型适配」配置该模式的适配器；本地工作流需要支持该模式（工作流库 →
+              模式）。
+            </p>
+          )
+        ) : (
+          <SelectMenu
+            aria-label="选择模型"
+            autoFitFromOptions={false}
+            className="text-sm"
+            fullWidth={false}
+            /* 本地 / 远端分组：对话的本地 = Ollama 候选；图片 / 视频的
+             * 本地 = 工作流库工作流，远端 = 设置页配置的远端模型。 */
+            groups={(
+              [
+                {
+                  label: "本地模型",
+                  options: c.candidates.filter((m) => m.local).map(candidateValue),
+                },
+                {
+                  label: "远端模型",
+                  options: c.candidates.filter((m) => !m.local).map((m) => m.name),
+                },
+              ] as const
+            ).filter((group) => group.options.length > 0)}
+            labels={modelLabels}
+            onChange={c.selectModel}
+            options={c.candidates.map(candidateValue)}
+            placeholder="选择要测试的模型…"
+            popoverMinWidth={240}
+            value={c.selectedModel}
+          />
+        )}
+        {c.selectedModel !== "" && <ChannelNote c={c} />}
+      </Panel>
+    </aside>
+  );
+}
+
 export function ModelTestView() {
   const c = useModelTest();
   /* 响应摘要的显示形态：默认格式化，可切回原始单行。 */
@@ -508,84 +602,9 @@ export function ModelTestView() {
       <PageHeader srTitle={pageHeaderTitle("model-test")} />
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-        {/* ── 左栏：用途 + 模式 + 模型（模式列表有滚动上限，不会把模型卡挤走；
-            桌面下吸附成独立滚动区）── */}
-        <aside className="flex w-full shrink-0 flex-col gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-96px)] xl:w-64 xl:overflow-y-auto">
-          <Panel icon={<Shapes />} title="用途">
-            <KindTabs generating={c.generatingByKind} kind={c.kind} onChange={c.setKind} />
-          </Panel>
-
-          {c.modeTabs.length > 0 && (
-            <Panel icon={<ListChecks />} title="模式">
-              <div className="max-h-80 overflow-y-auto pr-0.5">
-                <ModeTabs
-                  generatingByMode={c.generatingByMode}
-                  kind={c.kind}
-                  mode={c.mode}
-                  onSelect={c.setMode}
-                  tabs={c.modeTabs}
-                />
-              </div>
-            </Panel>
-          )}
-
-          <Panel hint="按用途与模式过滤" icon={<Boxes />} title="模型">
-            {c.loading ? (
-              /* 骨架屏（ISSUE #4749）：与模型列表条目同形的占位条。 */
-              <div aria-label="加载中" className="flex flex-col gap-2" role="status">
-                {[0, 1, 2].map((i) => (
-                  <Skeleton className="h-9 w-full rounded-lg" key={i} />
-                ))}
-              </div>
-            ) : c.candidates.length === 0 ? (
-              c.kindCandidateCount === 0 ? (
-                <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
-                  {c.kind === "chat"
-                    ? "还没有可测的对话模型 —— 本地模型到「设置 → 本地模型」添加 Ollama 候选；远端模型到「设置 → 远程模型」添加用途为 文本 的条目。"
-                    : `还没有可测的${MODEL_TEST_KIND_LABELS[c.kind]}模型 —— 本地模型到工作流库导入${
-                        c.kind === "image" ? "生图" : "视频"
-                      }工作流（工坊封装就绪后出现在这里）；远端模型到「设置 → 远程模型」添加并启用用途为 ${
-                        c.kind === "image" ? "图像" : "视频"
-                      } 的条目。`}
-                </p>
-              ) : (
-                <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
-                  当前「{modeLabel}」模式下没有可用模型（页签徽标的数字就是它的候选数）——
-                  远端模型需要先在「模型适配」配置该模式的适配器；本地工作流需要支持该模式（工作流库
-                  → 模式）。
-                </p>
-              )
-            ) : (
-              <SelectMenu
-                aria-label="选择模型"
-                autoFitFromOptions={false}
-                className="text-sm"
-                fullWidth={false}
-                /* 本地 / 远端分组：对话的本地 = Ollama 候选；图片 / 视频的
-                 * 本地 = 工作流库工作流，远端 = 设置页配置的远端模型。 */
-                groups={(
-                  [
-                    {
-                      label: "本地模型",
-                      options: c.candidates.filter((m) => m.local).map(candidateValue),
-                    },
-                    {
-                      label: "远端模型",
-                      options: c.candidates.filter((m) => !m.local).map((m) => m.name),
-                    },
-                  ] as const
-                ).filter((group) => group.options.length > 0)}
-                labels={modelLabels}
-                onChange={c.selectModel}
-                options={c.candidates.map(candidateValue)}
-                placeholder="选择要测试的模型…"
-                popoverMinWidth={240}
-                value={c.selectedModel}
-              />
-            )}
-            {hasModel && <ChannelNote c={c} />}
-          </Panel>
-        </aside>
+        {/* ── 左栏：用途 + 模式 + 模型（拆成子组件 —— §12.13；内容与
+            「生成中」徽标的说明见 `LeftColumn`）── */}
+        <LeftColumn c={c} modeLabel={modeLabel} modelLabels={modelLabels} />
 
         {/* ── 中栏：统一输入 + 生成 CTA（未选模型时给三步引导）── */}
         <div className="flex min-w-0 flex-1 flex-col gap-4">
