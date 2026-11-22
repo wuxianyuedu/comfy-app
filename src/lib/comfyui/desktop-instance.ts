@@ -1,10 +1,19 @@
 // Comfy Desktop 实例元数据解析：从桌面实例目录反查 Comfy Desktop 应用数据，
-// 拿到该实例的 launchArgs / 端口 / envVars，映射成「headless 服务」可用的参数。
+// 拿到该实例的 launchArgs / 端口 / envVars，映射成「headless 服务」可用的参数；
+// 并把 Comfy Desktop 登记的共享目录（模型 / 输入 / 输出）派生成对应启动参数。
 //
 // 背景：Comfy Desktop（Electron）把实例数据（Python 环境、节点）和应用元数据
 // （launchArgs、端口策略）分居两处——前者在实例根（如 ComfyUI-Installs/ComfyUI2），
 // 后者在 %APPDATA%\Comfy Desktop\installations.json。两者唯一的粘合点是实例根
 // 里的 `.comfyui-desktop-*` 文件（一行 = 实例 ID，如 inst-1782874099613）。
+//
+// 共享目录（ISSUE #4843）：新版 Comfy Desktop 把共享模型 / 输入 / 输出目录登记在
+// 应用数据目录（settings.json 的 inputDir / outputDir + instance-model-paths/<id>.yaml），
+// **不写进 installations.json 的 launchArgs**，而是在启动瞬间动态追加
+// `--extra-model-paths-config … --input-directory … --output-directory`（应用日志实证）。
+// 本应用自己 spawn 桌面实例的 main.py，要跟桌面版行为对齐，就得把这三个参数
+// 同样派生出来追加（argv 已带同名 flag 时不重复——用户在 launchArgs 里手填过的
+// 以手填为准）。
 //
 // 本应用不是 Comfy Desktop：它自己 spawn 桌面实例的 main.py（headless server）。
 // 因此桌面实例的启动端口/参数不再由设置页手填，而是读回该实例在 Comfy Desktop
@@ -200,6 +209,146 @@ function extractEnvVars(entry: Record<string, unknown> | null): Record<string, s
   return {};
 }
 
+/* ── 共享目录参数（ISSUE #4843）────────────────────────────────────────
+ *
+ * Comfy Desktop 对共享目录的登记分两处、生效靠启动瞬间动态追加参数：
+ *   · 共享输入 / 输出：settings.json 顶层的 `inputDir` / `outputDir`（全局一份）；
+ *   · 共享模型：instance-model-paths/<实例ID>.yaml（按实例一份，内容是
+ *     extra_model_paths 形状、base_path 指向共享 models）。
+ * 本应用 spawn 桌面实例时按同形追加这三个参数，让 headless 与桌面版一致。
+ */
+
+/** Comfy Desktop 侧共享目录派生出的三个启动参数位（值都可能为 null = 没登记）。 */
+export type DesktopSharedDirFlags = {
+  /** 该实例生效的共享模型声明 yaml（instance-model-paths/<实例ID>.yaml）。 */
+  extraModelPathsConfig: string | null;
+  /** settings.json 的 inputDir（共享输入目录）。 */
+  inputDir: string | null;
+  /** settings.json 的 outputDir（共享输出目录）。 */
+  outputDir: string | null;
+};
+
+/** argv 里是否已带某个 flag（`--x 值` 与 `--x=值` 两种写法都算）。 */
+function hasFlag(args: ReadonlyArray<string>, flag: string): boolean {
+  const lower = flag.toLowerCase();
+  return args.some((token) => {
+    const t = token.toLowerCase();
+    return t === lower || t.startsWith(`${lower}=`);
+  });
+}
+
+/**
+ * 把共享目录参数并进既有 argv：三个位各判一次「已带同名 flag 就不重复追加」。
+ * 用户在 Comfy Desktop 的启动参数里手填过的以手填为准 —— Desktop 启动时也是
+ * 先放 launchArgs 再追加动态参数，同名 flag 由 ComfyUI 的 argparse 自己取舍。
+ */
+export function appendSharedDirFlags(
+  args: ReadonlyArray<string>,
+  shared: DesktopSharedDirFlags,
+): Array<string> {
+  const out = [...args];
+  if (shared.extraModelPathsConfig !== null && !hasFlag(out, "--extra-model-paths-config")) {
+    out.push("--extra-model-paths-config", shared.extraModelPathsConfig);
+  }
+  if (shared.inputDir !== null && !hasFlag(out, "--input-directory")) {
+    out.push("--input-directory", shared.inputDir);
+  }
+  if (shared.outputDir !== null && !hasFlag(out, "--output-directory")) {
+    out.push("--output-directory", shared.outputDir);
+  }
+  return out;
+}
+
+/**
+ * 从 Comfy Desktop settings.json 内容解出共享输入 / 输出目录。
+ * 键缺失、值非非空字符串、JSON 坏都按「没登记」处理（返回 null），不抛错 ——
+ * 这份文件是 Comfy Desktop 的私产，读不出就该当没有，不该让启动链路炸掉。
+ */
+export function parseSharedDirsFromSettings(content: string): {
+  inputDir: string | null;
+  outputDir: string | null;
+} {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return { inputDir: null, outputDir: null };
+  }
+  if (!isRecord(parsed)) {
+    return { inputDir: null, outputDir: null };
+  }
+  const read = (key: string): string | null => {
+    const v = parsed[key];
+    return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
+  };
+  return { inputDir: read("inputDir"), outputDir: read("outputDir") };
+}
+
+/** Comfy Desktop 的应用数据目录（%APPDATA%\Comfy Desktop）；非 Windows 为 null。 */
+function comfyDesktopConfigRoot(override?: string): string | null {
+  if (override !== undefined) {
+    return override;
+  }
+  if (process.platform !== "win32") {
+    return null;
+  }
+  return path.join(
+    process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming"),
+    "Comfy Desktop",
+  );
+}
+
+/**
+ * 读 Comfy Desktop 登记的共享目录，派生三个启动参数位（真实 IO 层）。
+ * settings.json / 实例 ID 文件 / instance-model-paths yaml 任一缺失或读挂都按
+ * 「没登记这一项」处理 —— 共享目录是可选增强，读不出不该让启动链路失败。
+ * 注入点便于单测不碰真实磁盘。
+ */
+export async function resolveDesktopSharedDirFlags(
+  instanceIdFile: string | null,
+  deps: {
+    configRoot?: string;
+    exists?: (p: string) => boolean;
+    readFile?: (p: string, enc: "utf8") => Promise<string>;
+  } = {},
+): Promise<DesktopSharedDirFlags> {
+  const flags: DesktopSharedDirFlags = {
+    extraModelPathsConfig: null,
+    inputDir: null,
+    outputDir: null,
+  };
+  const configRoot = comfyDesktopConfigRoot(deps.configRoot);
+  if (configRoot === null || configRoot === "") {
+    return flags;
+  }
+  const readFile =
+    deps.readFile ?? (async (p: string, enc: "utf8") => fs.promises.readFile(p, enc));
+  const exists = deps.exists ?? fs.existsSync;
+
+  try {
+    const raw = await readFile(path.join(configRoot, "settings.json"), "utf8");
+    const parsed = parseSharedDirsFromSettings(raw);
+    flags.inputDir = parsed.inputDir;
+    flags.outputDir = parsed.outputDir;
+  } catch {
+    // 没有 settings.json / 读挂：共享输入输出按没登记处理。
+  }
+  if (instanceIdFile !== null) {
+    try {
+      const id = parseInstanceId(await readFile(instanceIdFile, "utf8"));
+      if (id !== null) {
+        const yamlPath = path.join(configRoot, "instance-model-paths", `${id}.yaml`);
+        if (exists(yamlPath)) {
+          flags.extraModelPathsConfig = yamlPath;
+        }
+      }
+    } catch {
+      // 实例 ID 读不到：共享模型无从按实例关联，按没登记处理。
+    }
+  }
+  return flags;
+}
+
 /** 解析 Comfy Desktop installations.json 内容并映射成 headless 启动参数。 */
 export function parseDesktopLaunchArgs(
   fileContent: string,
@@ -246,14 +395,7 @@ export async function resolveDesktopLaunchArgs(
   }
 
   // Comfy Desktop 的数据目录：默认 %APPDATA%\Comfy Desktop。
-  const configRoot =
-    deps.configRoot ??
-    (process.platform === "win32"
-      ? path.join(
-          process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming"),
-          "Comfy Desktop",
-        )
-      : null);
+  const configRoot = comfyDesktopConfigRoot(deps.configRoot);
   if (configRoot === null || configRoot === "") {
     return null;
   }
@@ -289,8 +431,8 @@ export type ManualLaunch = {
  *
  * 桌面实例：端口与参数来自 Comfy Desktop 元数据（launchArgs→headless 映射），
  * 用户手填的 comfyuiPort / comfyuiExtraArgs 不再参与（设置页对桌面也不暴露这两项）。
- *   若元数据读不到（非 Windows / 文件缺失 / 未命中实例 ID），则回落默认 8188，
- *   参数为空——启动仍可用，只是没有额外参数。
+ *   若元数据读不到（非 Windows / 文件缺失 / 未命中实例 ID），则回落默认 8188——
+ *   启动仍可用；共享目录参数（见上）与元数据互不依赖，照常派生追加。
  * 便携版 / venv：沿用设置里的 comfyuiPort（0 = 默认 8188）与 comfyuiExtraArgs。
  */
 export async function resolveEffectiveLaunch(input: {
@@ -303,6 +445,8 @@ export async function resolveEffectiveLaunch(input: {
   comfyuiPort: number;
   exists?: (p: string) => boolean;
   resolveDesktop?: (file: string) => Promise<DesktopLaunchArgs | null>;
+  /** 共享目录参数的注入点（默认读 %APPDATA%\Comfy Desktop 的真实登记）。 */
+  resolveShared?: (instanceIdFile: string | null) => Promise<DesktopSharedDirFlags>;
 }): Promise<ManualLaunch> {
   const kind = input.classify
     ? input.classify(input.comfyuiPath)
@@ -314,15 +458,15 @@ export async function resolveEffectiveLaunch(input: {
       kind.instanceIdFile === null
         ? null
         : await (input.resolveDesktop ?? resolveDesktopLaunchArgs)(kind.instanceIdFile);
-    if (meta) {
-      return {
-        port: meta.port ?? 0, // 0 → 调用方按 COMFYUI_DEFAULT_PORT 兜底
-        extraArgs: meta.args,
-        envVars: meta.envVars,
-      };
-    }
-    // 桌面元数据缺失：回落默认 8188，不套用户手填端口/参数（桌面不暴露这两项）。
-    return { port: 0, extraArgs: [], envVars: {} };
+    /* 共享目录参数（ISSUE #4843）：Desktop 登记在应用数据目录、启动时动态追加，
+     * 本应用 spawn 也照做——元数据缺失（读不到 installations.json）不影响这一步，
+     * 两者互不依赖，spawn 出的实例一样要吃到共享模型 / 输入 / 输出。 */
+    const shared = await (input.resolveShared ?? resolveDesktopSharedDirFlags)(kind.instanceIdFile);
+    return {
+      port: meta === null ? 0 : (meta.port ?? 0), // 0 → 调用方按 COMFYUI_DEFAULT_PORT 兜底
+      extraArgs: appendSharedDirFlags(meta?.args ?? [], shared),
+      envVars: meta?.envVars ?? {},
+    };
   }
 
   return {

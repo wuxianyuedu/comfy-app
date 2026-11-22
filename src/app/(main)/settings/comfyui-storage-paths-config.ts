@@ -50,13 +50,23 @@ export function buildStorageRows(storage: DesktopStoragePaths): Array<StoragePat
 
 /**
  * 卡片底部的一句话来源说明。
- * 「这些目录从哪读来」必须写明：共享目录来自 `extra_model_paths.yaml`，主目录
- * 可被启动参数覆盖，否则用户会误以为全是 ComfyUI 自己算出的默认值。
+ * 「这些目录从哪读来」必须写明：共享目录来自 `extra_model_paths.yaml` 或启动
+ * 参数 `--extra-model-paths-config` 指向的声明（新版 Comfy Desktop 走后者），
+ * 主目录可被启动参数覆盖，否则用户会误以为全是 ComfyUI 自己算出的默认值。
  */
 export function describeStorageHint(storage: DesktopStoragePaths): string {
+  const sources: Array<string> = [];
+  if (storage.extraModelPathsFile !== null && storage.extraModelPathsFile !== "") {
+    sources.push(storage.extraModelPathsFile);
+  }
+  if (storage.extraModelPathsConfigFiles.length > 0) {
+    sources.push(
+      `启动参数 --extra-model-paths-config 的 ${storage.extraModelPathsConfigFiles.join("、")}`,
+    );
+  }
   const fromYaml =
-    storage.extraModelPathsFile !== null && storage.extraModelPathsFile !== ""
-      ? `共享目录来自 ${storage.extraModelPathsFile}`
+    sources.length > 0
+      ? `共享目录来自 ${sources.join(" 与 ")}`
       : "该实例没有 extra_model_paths.yaml（未配置额外目录）";
   return (
     `只读：实例根 ${storage.instanceRoot}；${fromYaml}。` +
