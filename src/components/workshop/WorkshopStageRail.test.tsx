@@ -60,12 +60,15 @@ describe("WorkshopStageRail 的结构", () => {
     expect(new Set([doneIndex, activeIndex, pendingIndex]).size).toBe(3);
   });
 
-  it("是一个带名字的导航区，六段各一项、逐项占满列宽", () => {
+  it("是一个带名字的导航区，六段各一项、逐项占满列宽且内容左对齐", () => {
     const { nav, buttons } = renderRail();
     expect(nav.getAttribute("aria-label")).toBe("工坊阶段");
     expect(buttons).toHaveLength(STAGE_DEFS.length);
     for (const button of buttons) {
       expect(button.className).toContain("w-full");
+      // 通栏列表项内容贴左（ISSUE #4805）：不吃 Button 基类的 justify-center
+      expect(button.className).toContain("justify-start");
+      expect(button.className).not.toContain("justify-center");
     }
   });
 
