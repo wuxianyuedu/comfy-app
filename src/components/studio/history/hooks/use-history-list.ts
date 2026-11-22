@@ -26,7 +26,12 @@ import { useToast } from "../../ToastProvider";
 import { parseWorkflowIOMap, type WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 
-import { buildReprintPayload, taskWorkflowId } from "../history-detail-derive";
+import {
+  buildModelTestRetryPayload,
+  buildReprintPayload,
+  taskWorkflowId,
+} from "../history-detail-derive";
+import type { ModelTestRetryPayload } from "../history-detail-derive";
 import {
   countByStatus,
   emptyStateText,
@@ -99,6 +104,8 @@ export type HistoryListController = {
   remove: (id: string) => void;
   /** 待删除的任务 id（ConfirmDialog 的 open 侧，ISSUE #3771）。 */
   removeTarget: string | null;
+  /** 「重试」= 带参回到测试模型的统一输入（#4841）：用户确认后点「生成」
+   *  才真正重跑，不再直接复投。 */
   retry: (task: TaskItem) => Promise<void>;
   retryingId: string | null;
   setSort: (sort: SortKey) => void;
@@ -118,7 +125,12 @@ export type HistoryListController = {
  * 此前还订阅过一个 open-task 事件、注释称 VideoQueueModal 会派发，而派发方早已搬走 ——
  * 无触发源的监听器不报错，只误导后来者以为别处能打开详情；tests/app-event-pairing.test.ts 现在拦得住只剩一端的通道。
  */
-export function useHistoryList(): HistoryListController {
+export function useHistoryList(args: {
+  /** 「重试」折好载荷后的落点（#4841）：工作区把载荷带到「测试模型」页预填
+   *  并切页签。由 HistoryList 的 props 注入（工作区 → 页签栈 → 历史视图）。 */
+  onReprintToModelTest: (payload: ModelTestRetryPayload) => void;
+}): HistoryListController {
+  const { onReprintToModelTest } = args;
   const trpc = useTRPC();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -313,30 +325,41 @@ export function useHistoryList(): HistoryListController {
     );
   }, [deleteTask, detailId, removeTarget, report, queryClient, trpc]);
 
-  /* 「重试」= `task.retry` 的**原样重跑**（#2481）：后端按原任务的 execPayload +
-   * 参数 / 参考图重建一个 QUEUED 任务，返回新 taskId。成功文案带上新任务号
-   * （经信封 `detail` 传给 runAsyncAction 的 successText），失败走同一通道。 */
-  const retryTask = useMutation(trpc.task.retry.mutationOptions());
+  /* 「重试」= 带参回到输入面（#4841）：取详情 + 模式契约，按「复制去重投」
+   * 同一份派生（buildModelTestRetryPayload）折成预填载荷，交给工作区带到
+   * 「测试模型」页切模式页签 + 预填统一输入；用户确认后点「生成」才真正
+   * 重跑。原先的直复投（task.retry 原样新建 QUEUED 行）已从历史页撤走 ——
+   * 误触一次就是一次真实生成（额度 / 本地队列都被占用）；该端点唯一的
+   * 消费方就是历史页直调，已随 #4841 一并退役（台账 E3′ 不留无消费方口）。 */
   const retry = useCallback(
     async (task: TaskItem) => {
       await retryAction.run(task.id, async () => {
         await runAsyncAction(
           async () => {
-            const { taskId } = await retryTask.mutateAsync({ id: task.id });
-            return { ok: true, detail: taskId };
+            const detail = await queryClient.fetchQuery(
+              trpc.task.detail.queryOptions({ id: task.id }),
+            );
+            const contracts = await queryClient.fetchQuery(
+              trpc.llm.modeContractsGet.queryOptions(undefined),
+            );
+            onReprintToModelTest(
+              buildModelTestRetryPayload({
+                detail,
+                mode: detail.type,
+                contracts: contracts.contracts ?? null,
+              }),
+            );
+            return { ok: true as const };
           },
           {
             report,
-            failureText: "重试失败",
-            successText: (r) => `已原样重新入队：新任务 ${r.detail}，可在队列或历史观察进度`,
+            failureText: "重试失败：未能取到该任务的参数",
+            successText: "已在「测试模型」预填该任务的参数 —— 确认后点「生成」开始重试",
           },
         );
       });
-      /* 忙标记由出口的 `finally` 清；这里只负责刷新（失败也要刷新，
-       * 用户可能是在别处重跑成功的）。 */
-      refresh();
     },
-    [refresh, report, retryAction, retryTask],
+    [onReprintToModelTest, queryClient, report, retryAction, trpc],
   );
 
   /* ── 行级动作：输出目录 / 复制去重投 / 执行日志（ISSUE #4619）──────────────

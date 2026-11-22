@@ -8,13 +8,13 @@
 // 候选 / 适配器 / 契约 / 生成动作都在 `hooks/use-model-test.ts`（第②层）与
 // `model-test-config.ts`（第①层）；本文件不出现 fetch / api.*。
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import {
   Boxes,
   Compass,
-  Dices,
+  History,
   Info,
   ListChecks,
   Play,
@@ -26,11 +26,9 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+import { Textarea } from "~/components/ui/textarea";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
-import { FilePickerButton } from "~/components/ui/file-picker";
 import { FormField } from "~/components/ui/form-field";
-import { Input } from "~/components/ui/input";
-import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { PageHeader } from "~/components/ui/page-header";
 import { Progress } from "~/components/ui/progress";
 import { SelectChip } from "~/components/ui/select-chip";
@@ -45,6 +43,7 @@ import type { QueueTaskLogTarget } from "~/components/studio/queue/QueueTaskLogM
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
 import { cn } from "~/lib/utils";
+import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
 import {
   MODEL_TEST_KINDS,
   MODEL_TEST_KIND_LABELS,
@@ -56,6 +55,7 @@ import {
   type ModelTestValues,
   type ModeTab,
 } from "./model-test-config";
+import { InputRow } from "./ModelTestInputRow";
 import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
 import { useModelTest } from "./hooks/use-model-test";
 import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
@@ -247,140 +247,6 @@ function SizeField({
   );
 }
 
-/** 一行统一输入的渲染（按类型给控件；文案 = 契约口的展示名）。行标签右侧带
- *  必填 / 可选标识（来自契约 required）。尺寸复合口由 SizeField 统一承担。 */
-function InputRow({
-  control,
-  disabled,
-  hint,
-  id,
-  label,
-  onChange,
-  onPickFile,
-  onRandom,
-  required,
-  value,
-}: {
-  control: ModelTestControl;
-  disabled?: boolean;
-  hint?: string;
-  id: string;
-  label: string;
-  onChange: (value: string) => void;
-  /** 图片类控件：选完文件回调（data URL 由逻辑层读）。 */
-  onPickFile?: (file: File) => void;
-  /** 提示词的随机按钮；给了才渲染。 */
-  onRandom?: () => void;
-  required: boolean;
-  value: string;
-}) {
-  const labelNode = (
-    <span className="flex min-w-0 items-center gap-1.5">
-      <TruncatedText className="truncate">{label}</TruncatedText>
-      <RequiredBadge required={required} />
-    </span>
-  );
-  if (control === "prompt" || control === "negative") {
-    return (
-      <FormField hint={hint} id={id} label={labelNode} labelClassName="mb-1.5">
-        {(a11y) => (
-          <div className="flex items-start gap-2">
-            <textarea
-              {...a11y}
-              className={cn(
-                "border-border bg-surface-1 focus:border-primary w-full flex-1 resize-y rounded-lg border px-3 py-2 text-sm outline-none",
-                disabled && "opacity-50",
-              )}
-              disabled={disabled}
-              onChange={(e) => {
-                onChange(e.target.value);
-              }}
-              placeholder={
-                control === "prompt" ? "描述你想要生成的画面" : "不想出现的内容（可留空）"
-              }
-              rows={control === "prompt" ? 3 : 2}
-              value={value}
-            />
-            {control === "prompt" && onRandom !== undefined && (
-              <Button
-                className="h-auto shrink-0 px-3 py-2 text-xs"
-                disabled={disabled}
-                onClick={onRandom}
-                variant="outline"
-              >
-                <Dices className="size-3.5" data-icon="inline-start" />
-                随机
-              </Button>
-            )}
-          </div>
-        )}
-      </FormField>
-    );
-  }
-  if (control === "image") {
-    return (
-      <FormField hint={hint} id={id} label={labelNode} labelClassName="mb-1.5">
-        {(a11y) => (
-          <div className="flex items-center gap-2">
-            <FilePickerButton
-              {...a11y}
-              accept="image/*"
-              disabled={disabled}
-              onPick={(file) => {
-                onPickFile?.(file);
-              }}
-              size="sm"
-              variant="outline"
-            >
-              {value === "" ? "上传图片" : "换一张"}
-            </FilePickerButton>
-            {value !== "" && (
-              <>
-                <MediaThumbnail
-                  alt={`${label}预览`}
-                  as="image"
-                  className="border-border h-10 w-10 rounded-lg border object-cover"
-                  src={value}
-                />
-                <Button
-                  aria-label={`清除${label}`}
-                  className="text-muted-foreground/60 hover:text-danger-strong h-auto px-2 py-1 text-xs"
-                  onClick={() => {
-                    onChange("");
-                  }}
-                  size="sm"
-                  variant="ghost"
-                >
-                  清除
-                </Button>
-              </>
-            )}
-          </div>
-        )}
-      </FormField>
-    );
-  }
-  /* 分辨率档已并入 SizeField 的「像素」段（分辨率 · 百万像素两行）—— 这里
-   * 不再有独立的分辨率 chips。duration / number / text → 单行输入。 */
-  return (
-    <FormField hint={hint} id={id} label={labelNode} labelClassName="mb-1.5">
-      {(a11y) => (
-        <Input
-          {...a11y}
-          className="border-border bg-surface-1 focus:border-primary h-auto w-48 rounded-lg px-3 py-2 text-sm"
-          disabled={disabled}
-          inputMode={control === "duration" || control === "number" ? "numeric" : "text"}
-          onChange={(e) => {
-            onChange(e.target.value);
-          }}
-          placeholder={control === "duration" ? "例如 5（秒）" : undefined}
-          value={value}
-        />
-      )}
-    </FormField>
-  );
-}
-
 /** 通道提示（选中模型后出现）：本地工作流走工坊本地通道；远端模型没配
  *  适配器时按 OpenAI 兼容默认映射直连。都是读数性质的信息条。 */
 function ChannelNote({ c }: { c: ModelTestController }) {
@@ -542,7 +408,16 @@ function LeftColumn({
   );
 }
 
-export function ModelTestView() {
+export function ModelTestView({
+  onConsumeReprint,
+  pendingReprint,
+}: {
+  /** 一次性载荷消费完的回调（#4841）：工作区持有 pending state，这里落定后清。 */
+  onConsumeReprint?: () => void;
+  /** 历史页「重试」折好的带参载荷（#4841）：工作区经页签栈送过来的一次性
+   *  载荷 —— 视图挂载后应用一次即清空（沿用 pendingCanvasWorkflow 同款形状）。 */
+  pendingReprint?: ModelTestRetryPayload | null;
+}) {
   const c = useModelTest();
   /* 响应摘要的显示形态：默认格式化，可切回原始单行。 */
   const [excerptPretty, setExcerptPretty] = useState(true);
@@ -554,6 +429,18 @@ export function ModelTestView() {
    * 切回统一输入，让用户看着填进去的参数点生成。 */
   const [jsonMode, setJsonMode] = useState(false);
   const [jsonText, setJsonText] = useState("");
+  /* 历史页「重试」的带参载荷应用一次即清（#4841）：payload 非 null 的那次
+   * 提交里切模式页签 + 预填统一输入；StrictMode 双跑同载荷重复应用无副作用。 */
+  useEffect(() => {
+    if (pendingReprint === undefined || pendingReprint === null) {
+      return;
+    }
+    c.applyReprintPrefill(pendingReprint);
+    onConsumeReprint?.();
+    // 载荷到达即消费一次；applyReprintPrefill / onConsumeReprint 身份稳定，
+    // 不进依赖（进去了也会因会话 state 变化反复触发）。
+    // oxlint-disable-next-line react/exhaustive-deps
+  }, [pendingReprint]);
   const openLogScreen = () => {
     if (c.taskId === null || c.taskId === "") {
       return;
@@ -598,6 +485,24 @@ export function ModelTestView() {
   return (
     <DocumentFrame className="flex flex-col gap-5 px-4 pt-4 pb-10 sm:px-6 sm:pt-5" width="full">
       <PageHeader srTitle={pageHeaderTitle("model-test")} />
+
+      {/* 历史页「重试」带来的预填提示（#4841）：亮出来源任务，说清下一步是
+          「点生成才算重试」；用户改任意输入后预填层退场，这条也随之消失。 */}
+      {c.reprintPrefill !== null && (
+        <p
+          className="bg-info/10 text-info-strong flex items-center gap-2 rounded-lg px-3 py-2 text-xs leading-relaxed"
+          role="status"
+        >
+          <History className="size-3.5 shrink-0" data-icon="inline-start" />
+          <span>
+            已从历史任务
+            <code className="bg-canvas mx-1 rounded px-1 py-0.5 font-mono">
+              {c.reprintPrefill.sourceTaskId.slice(0, 8)}
+            </code>
+            预填参数 —— 确认后点「生成」开始重试；改动任意输入即恢复普通测试。
+          </span>
+        </p>
+      )}
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
         {/* ── 左栏：用途 + 模式 + 模型（拆成子组件 —— §12.13；内容与
@@ -644,7 +549,7 @@ export function ModelTestView() {
                     labelClassName="mb-1.5"
                   >
                     {(a11y) => (
-                      <textarea
+                      <Textarea
                         {...a11y}
                         className="border-border bg-surface-1 focus:border-primary w-full resize-y rounded-lg border px-3 py-2 font-mono text-sm outline-none"
                         onChange={(e) => {

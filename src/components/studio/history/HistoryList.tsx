@@ -25,6 +25,7 @@ import { StatusDot } from "~/components/ui/status-dot";
 import { pageHeaderTitle } from "../NavItems";
 import { ViewActions } from "../ViewActions";
 import { useHistoryList } from "./hooks/use-history-list";
+import type { ModelTestRetryPayload } from "./history-detail-derive";
 import { FILTERS, type SortKey, type TaskItem } from "./history-types";
 
 /** 排序键的运行时判据：`SelectMenu` 只给字符串，合法档位就这两枚。 */
@@ -105,13 +106,20 @@ function HistoryGroupTaskList({
  * 历史记录面板 —— 容器（规范 17 §17.2 第④层）。
  * 只做：取 controller → 传给视图 → 挂详情弹层；不含任何业务规则。
  */
-export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: string) => void }) {
+export function HistoryList({
+  onOpenTask: _onOpenTask,
+  onReprintToModelTest,
+}: {
+  onOpenTask?: (id: string) => void;
+  /** 「重试」折好载荷后的落点（#4841）：工作区带到「测试模型」页预填。 */
+  onReprintToModelTest: (payload: ModelTestRetryPayload) => void;
+}) {
   /* 拿掉 modal「打开完整详情 ↗」按钮后 onOpenTask 变成无用 prop,
    * 重命名为 _onOpenTask 让 lint 沉默并保留向下兼容（父组件还在传，旧版可以仍然保留这个 prop）。
    * 用户反馈「在这里点开就显示详情，别在其他界面再显示」—— 历史 modal 是「这里」，
    * 详情只在弹层（HistoryDetailModal，挂在本视图内）里看。曾经的独立详情路由
    * /create/[id] 已退役（#2422），别再把这条路由当在役出口写进注释。 */
-  const c = useHistoryList();
+  const c = useHistoryList({ onReprintToModelTest });
 
   return (
     <DocumentFrame

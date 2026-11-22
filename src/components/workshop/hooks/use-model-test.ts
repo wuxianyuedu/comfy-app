@@ -21,7 +21,6 @@ import {
 } from "~/lib/llm/types";
 import { isRecord } from "~/lib/is-record";
 import {
-  apiPreviewRequest,
   fetchWorkshopWorkflows,
   type TaskLogEntry,
   type WorkshopWorkflowOption,
@@ -31,12 +30,15 @@ import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import { parseRemoteModeAdapters } from "~/lib/workshop/remote-model-adapter";
 import type { RemoteModeAdapter } from "~/lib/workshop/remote-model-adapter";
 
+import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
 import {
   emptyModelTestSession,
   useModelTestGenerate,
   type ModelTestResult,
   type ModelTestSession,
 } from "./use-model-test-generate";
+import { useModelTestReprint } from "./use-model-test-reprint";
+import { useRequestPreview } from "./use-model-test-request-preview";
 import { useReferenceImageGroup } from "./use-reference-image-group";
 import { useApplyJsonValues } from "./use-model-test-json";
 import { useOpenResultInBrowser } from "./use-open-result-in-browser";
@@ -51,6 +53,7 @@ import {
   defaultModeForKind,
   defaultSizeValues,
   modeTabsForKind,
+  pickWorkshopInputValues,
   randomPromptFor,
   relayDebugRow,
   summarizeGeneratingSessions,
@@ -84,6 +87,9 @@ export type ModelTestController = {
   applyJsonValues: (
     json: string,
   ) => { ok: true; values: ModelTestValues } | { error: string; ok: false };
+  /** 应用历史页「重试」的带参预填（#4841）：按任务模式切模式页签，能对上
+   *  候选时预选同款工作流；契约口值进预填层。 */
+  applyReprintPrefill: (payload: ModelTestRetryPayload) => void;
   /** 取消当前格（用途 + 模式 + 模型）的生成（#3949 需求 5 / #4080 评论 12）：
    *  中断等待与轮询，界面落「已取消生成」。 */
   cancelGenerate: (key?: string) => void;
@@ -141,6 +147,10 @@ export type ModelTestController = {
   referenceImages: Array<string>;
   /** 移除第 `index` 张参考图。 */
   removeReferenceImage: (index: number) => void;
+  /** 历史页「重试」折好的预填载荷（#4841）：非 null 时统一输入表单显示的是
+   *  它叠在默认档上的值，界面上亮出「预填自哪条任务」的提示；用户在任意输入
+   *  上动手（改值 / 随机 / 贴 JSON / 选文件）后整份退场，恢复普通测试。 */
+  reprintPrefill: ModelTestRetryPayload | null;
   /** 当前格的请求行：本地提交 + 实际请求（#3949 需求 8 / #3995 / 评论 13：
    *  生成后保留，仅徽标翻转）。 */
   requestRows: Array<ApiCallDebugRow>;
@@ -167,85 +177,6 @@ export type ModelTestController = {
   workflowProgress: { label?: string; pct: number } | null;
 };
 
-/** 生成前的「准备请求」读数子 hook（#3949 需求 8）：按当前 模式 / 模型 / 输入
- *  走服务端 dry-run 现算**实际上游请求**（端点 + 适配器翻译后的请求体）。
- *  工作流候选（#4080 评论 4）跳过 —— dry-run 是 API 中继的预演，本地通道
- *  没有这一步。600ms 去抖 + 序号守卫：慢响应不覆盖新一轮的读数。
- *  实际请求行落在**当前格**的会话里；生成中不清空、不重算 —— 该格的
- *  「实际请求」在请求中与生成后都保持可见（#4080 评论 20）。 */
-function useRequestPreview(args: {
-  buildBodies: (values: ModelTestValues) => ReturnType<typeof buildRequestBodies>;
-  busy: boolean;
-  kind: ModelTestKind;
-  onError: (text: string) => void;
-  patchSession: (key: string, patch: Partial<ModelTestSession>) => void;
-  selectedModel: string;
-  sessionKey: string;
-  skip: boolean;
-  values: ModelTestValues;
-}): void {
-  const {
-    busy,
-    buildBodies,
-    kind,
-    onError,
-    patchSession,
-    selectedModel,
-    sessionKey,
-    skip,
-    values,
-  } = args;
-  const seqRef = useRef(0);
-  /* 卸载判活（ISSUE #4288）：防抖窗口过后组件可能已卸载，在途请求回来
-   * 不再写父级 state（seq 只防连发竞态，不防「卸载后写」）。 */
-  const aliveRef = useRef(true);
-  useEffect(() => {
-    aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
-  }, []);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (kind === "chat" || skip || selectedModel === "") {
-        patchSession(sessionKey, { previewRows: [] });
-        return;
-      }
-      if (busy) {
-        /* 生成中保留该格已算出的「实际请求」行：不清空、不重算 —— 此时的
-         * 表单改动属于下一次测试（#4080 评论 20）。 */
-        return;
-      }
-      const seq = ++seqRef.current;
-      const { imageBody, videoBody } = buildBodies(values);
-      const relayBody = imageBody ?? videoBody ?? {};
-      void runAsyncAction(
-        async () => {
-          const rows = await apiPreviewRequest(relayBody, kind);
-          if (!Array.isArray(rows)) {
-            return { ok: true as const };
-          }
-          if (aliveRef.current && seqRef.current === seq) {
-            patchSession(sessionKey, { previewRows: rows });
-          }
-          return { ok: true as const };
-        },
-        {
-          report: (kind, text) => {
-            if (kind === "err") {
-              onError(text);
-            }
-          },
-          failureText: "请求预览失败",
-        },
-      );
-    }, 600);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [busy, buildBodies, onError, selectedModel, kind, skip, sessionKey, patchSession, values]);
-}
-
 /** 候选 / 契约 / 适配器索引的取数与派生（§12.13 第二刀）：这一簇只读
  *  configGet / modeContractsGet / workshopAdaptersGet 与工作流列表四份读数做
  *  派生，主 hook（useModelTest）只留表单状态与动作。
@@ -266,7 +197,11 @@ export function useTestCatalog(args: {
   loading: boolean;
   modeCandidates: Array<TestCandidate>;
   modeTabs: Array<ModeTab>;
+  /** 工作流候选清单的查询是否已 settle（成功 / 失败）：重试预填的「预选同款
+   *  工作流」等它到位再补，不能拿「已有若干候选」当就绪判据 —— 配置型候选
+   *  先于工作流清单到达时，长度非空但工作流候选还缺。 */
   selectedCandidate: TestCandidate | null;
+  workflowsReady: boolean;
 } {
   const { kind, mode, selectedModel, trpc } = args;
   const queryClient = useQueryClient();
@@ -454,6 +389,7 @@ export function useTestCatalog(args: {
     modeCandidates,
     modeTabs,
     selectedCandidate,
+    workflowsReady: workflowsQ.isSuccess || workflowsQ.isError,
   };
 }
 
@@ -493,6 +429,59 @@ function useWorkflowModeDefaults(
   return { workflowDefaults, workflowDefaultsReady };
 }
 
+/** 「本地提交」行的派生本体（ISSUE #3995）：对话 / 本地工作流 / API 中继
+ * 三条通道各给一行；工作流候选在封装后升级为带 workflowInputs 落点清单的
+ * 实况行（submissionRow 由调用点覆盖本行）。纯派生，无 React。 */
+function deriveLocalPreviewRow(args: {
+  buildBodies: (values: ModelTestValues) => ReturnType<typeof buildRequestBodies>;
+  kind: ModelTestKind;
+  mode: string;
+  selectedCandidate: TestCandidate | null;
+  selectedModel: string;
+  values: ModelTestValues;
+}): ApiCallDebugRow | null {
+  const { buildBodies, kind, mode, selectedCandidate, selectedModel, values } = args;
+  if (selectedModel === "") {
+    return null;
+  }
+  /* 对话测试（#4080）：本地提交行带模型与提示词，端点在生成后由响应行给出。 */
+  if (kind === "chat") {
+    return {
+      body: debugBodyOf({
+        kind: "chat",
+        model: selectedModel,
+        prompt: values.prompt?.trim() ?? "",
+      }),
+      durationMs: null,
+      endpoint: "chat/completions",
+      excerpt: null,
+      ok: true,
+      phase: "relay" as const,
+      status: null,
+    };
+  }
+  const workflow = selectedCandidate?.workflow;
+  if (workflow !== undefined) {
+    return {
+      body: debugBodyOf({
+        kind,
+        debug: true,
+        workflow: workflow.name,
+        mode,
+        ...workflowPreviewBody(values),
+      }),
+      durationMs: null,
+      endpoint: "generate.generate（本地 ComfyUI）",
+      excerpt: null,
+      ok: true,
+      phase: "relay" as const,
+      status: null,
+    };
+  }
+  const { imageBody, videoBody } = buildBodies(values);
+  return relayDebugRow(kind, imageBody ?? videoBody ?? {});
+}
+
 export function useModelTest(): ModelTestController {
   const trpc = useTRPC();
   const [kind, setKindState] = useState<ModelTestKind>("image");
@@ -503,7 +492,7 @@ export function useModelTest(): ModelTestController {
   const [mode, setModeState] = useState(() => defaultModeForKind("image"));
   /* 运行态按「用途 + 模式 + 模型」一格一份（#4080 评论 12）：状态 / 请求
    * 读数 / 执行日志 / 产物 / **表单值**互相隔离，切走再切回各看各的，不同
-   * 模型可同时测试。 */
+   * 模型可以同时测试。 */
   const [sessions, setSessions] = useState<Record<string, ModelTestSession>>({});
 
   /* 当前格的键：用途 + 模式 + 模型（候选取值空间 = 模型名 / wf::<id>）。 */
@@ -563,6 +552,7 @@ export function useModelTest(): ModelTestController {
   const {
     adapters,
     adaptersByModel,
+    candidates,
     contract,
     inputRows,
     kindCandidateCount,
@@ -570,6 +560,7 @@ export function useModelTest(): ModelTestController {
     modeCandidates,
     modeTabs,
     selectedCandidate,
+    workflowsReady,
   } = useTestCatalog({ kind, mode, selectedModel, trpc });
 
   /* 本地工作流候选的模式默认值与就绪位（#4633）：详情没 settle 前不摆通用默认。 */
@@ -578,22 +569,42 @@ export function useModelTest(): ModelTestController {
     mode,
   );
 
+  /* 历史页「重试」的带参预填（#4841）收在 useModelTestReprint（§12.13：主
+   * hook 越过文件长度硬闸，按职责拆子 hook）——预填兜底层、应用动作与
+   * 「工作流清单 settle 后补选同款工作流」都在那边；这里只接线。 */
+  const { reprintPrefill, dropReprintPrefill, applyReprintPrefill } = useModelTestReprint({
+    candidates,
+    referenceGroup,
+    selectedModel,
+    setKindState,
+    setSelectedModel,
+    setModeState,
+    workflowsReady,
+  });
+
   /* 表单值随格走（#4080 评论 19）：测试界面不关闭时，切模型不丢已填参数。
    * 没填过的格：本地工作流候选回落**工作流在该模式下的默认值**（ISSUE #4633），
    * 其余回落该用途/模式的最常用档。
    * 工作流候选的详情没 settle（成功 / 失败）前**不摆任何默认**（#4633 评论 2：
    * 打开瞬间先摆通用「1:1 / 1k」、详情到了再跳成工作流默认，界面闪一下）——
    * 表单留空一瞬，等详情到位一次性播工作流默认；查询失败也算 settle，回落
-   * 通用默认，不至于永远空着。 */
-  const values = useMemo(
-    () =>
+   * 通用默认，不至于永远空着。
+   * 兜底再叠一层历史「重试」的预填（#4841）：只在「当前模式 = 载荷模式」且
+   * 会话还没写值时叠加 —— 用户切走模式或写入了任何一格即视为接管，预填让位。
+   * 预填放兜底层而不是写进会话，是为了换模型不丢：重试时用户常要换个模型
+   * 再跑，写进某一格会在切换后消失。 */
+  const values = useMemo(() => {
+    const base =
       Object.keys(activeSession.values).length > 0
         ? activeSession.values
         : workflowDefaultsReady
           ? { ...defaultSizeValues(mode), ...workflowDefaults }
-          : {},
-    [activeSession.values, mode, workflowDefaults, workflowDefaultsReady],
-  );
+          : {};
+    if (reprintPrefill === null || reprintPrefill.mode !== mode) {
+      return base;
+    }
+    return { ...base, ...pickWorkshopInputValues(reprintPrefill.inputs) };
+  }, [activeSession.values, mode, workflowDefaults, workflowDefaultsReady, reprintPrefill]);
 
   /* 下拉显示名（#4080 评论 17）：工作流候选显示**模型名**（工作流上挂的模型
    * 标签，如 z-image），不是工作流文件名；同一模型挂在多个工作流上时，后
@@ -658,23 +669,26 @@ export function useModelTest(): ModelTestController {
 
   const patchValue = useCallback(
     (type: keyof ModelTestValues, value: string) => {
+      dropReprintPrefill();
       patchSession(activeKeyRef.current, { values: { ...values, [type]: value } });
     },
-    [patchSession, values],
+    [dropReprintPrefill, patchSession, values],
   );
 
   /* 批量更新（尺寸下拉一次写回比例 / 百万像素 / 分辨率 / 倍数四个键）。 */
   const patchValues = useCallback(
     (patch: Partial<ModelTestValues>) => {
+      dropReprintPrefill();
       patchSession(activeKeyRef.current, { values: { ...values, ...patch } });
     },
-    [patchSession, values],
+    [dropReprintPrefill, patchSession, values],
   );
 
   /* 提示词随机按钮（ISSUE #3742）：从常用样本里随机填一条。 */
   const randomizePrompt = useCallback(() => {
+    dropReprintPrefill();
     patchSession(activeKeyRef.current, { values: { ...values, prompt: randomPromptFor() } });
-  }, [patchSession, values]);
+  }, [dropReprintPrefill, patchSession, values]);
 
   const setInputFromFile = useCallback(
     async (type: "first-frame" | "image", file: File) => {
@@ -682,6 +696,7 @@ export function useModelTest(): ModelTestController {
       await runAsyncAction(
         async () => {
           const dataUrl = await readFileAsDataUrl(file);
+          dropReprintPrefill();
           patchSession(activeKeyRef.current, { values: { ...values, [type]: dataUrl } });
           return { ok: true as const };
         },
@@ -695,7 +710,7 @@ export function useModelTest(): ModelTestController {
         },
       );
     },
-    [patchSession, values],
+    [dropReprintPrefill, patchSession, values],
   );
 
   const addReferenceImages = useCallback(
@@ -750,11 +765,13 @@ export function useModelTest(): ModelTestController {
   );
 
   /* JSON 输入模式的解析与应用（ISSUE #4769）收在 useApplyJsonValues
-   * （§12.13：主 hook 越过函数长度硬闸，按职责拆子 hook）。 */
+   * （§12.13：主 hook 越过函数长度硬闸，按职责拆子 hook）。贴 JSON 是一次
+   * 用户接管：历史「重试」的预填层一并退场（#4841）。 */
   const { applyJsonValues } = useApplyJsonValues({
     values,
     activeKeyRef,
     patchSession,
+    onApplied: dropReprintPrefill,
   });
 
   /** 取消当前格（或指定格）的生成（#3949 需求 5 / #4080 评论 12）。 */
@@ -786,49 +803,21 @@ export function useModelTest(): ModelTestController {
     skip: selectedCandidate?.workflow === undefined ? false : true,
   });
   /* 生成前的「本地提交」行（ISSUE #3995）：与点生成那一步同一份组装
-   * （buildBodies + relayDebugRow，两处各拼一套必然漂移）。工作流候选在
-   * 封装后升级为带 workflowInputs 落点清单的实况行（submissionRow）。 */
-  const localPreviewRow = useMemo(() => {
-    if (selectedModel === "") {
-      return null;
-    }
-    /* 对话测试（#4080）：本地提交行带模型与提示词，端点在生成后由响应行给出。 */
-    if (kind === "chat") {
-      return {
-        body: debugBodyOf({
-          kind: "chat",
-          model: selectedModel,
-          prompt: values.prompt?.trim() ?? "",
-        }),
-        durationMs: null,
-        endpoint: "chat/completions",
-        excerpt: null,
-        ok: true,
-        phase: "relay" as const,
-        status: null,
-      };
-    }
-    const workflow = selectedCandidate?.workflow;
-    if (workflow !== undefined) {
-      return {
-        body: debugBodyOf({
-          kind,
-          debug: true,
-          workflow: workflow.name,
-          mode,
-          ...workflowPreviewBody(values),
-        }),
-        durationMs: null,
-        endpoint: "generate.generate（本地 ComfyUI）",
-        excerpt: null,
-        ok: true,
-        phase: "relay" as const,
-        status: null,
-      };
-    }
-    const { imageBody, videoBody } = buildBodies(values);
-    return relayDebugRow(kind, imageBody ?? videoBody ?? {});
-  }, [buildBodies, kind, mode, selectedCandidate, selectedModel, values]);
+   * （buildBodies + relayDebugRow，两处各拼一套必然漂移）。派生本体收在
+   * `deriveLocalPreviewRow`（§12.13：主 hook 越过函数长度硬闸，按职责搬出
+   * 函数体），这里只剩接线。 */
+  const localPreviewRow = useMemo(
+    () =>
+      deriveLocalPreviewRow({
+        buildBodies,
+        kind,
+        mode,
+        selectedCandidate,
+        selectedModel,
+        values,
+      }),
+    [buildBodies, kind, mode, selectedCandidate, selectedModel, values],
+  );
   /* 当前格的请求行 = 本地提交 + 实际请求（#4080 评论 13：生成后保留，仅徽标
    * 翻转；实际请求来自该格会话的 dry-run 读数）。 */
   const requestRows = useMemo(() => {
@@ -881,6 +870,8 @@ export function useModelTest(): ModelTestController {
     patchValue,
     patchValues,
     randomizePrompt,
+    reprintPrefill,
+    applyReprintPrefill,
     result: activeSession.result,
     values,
   };
