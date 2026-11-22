@@ -93,7 +93,7 @@ flowchart TD
 flowchart LR
   IDEA["灵感 / 梗概 / 基调"] --> GEN["ScriptGenerator<br/>LLM 扩写"]
   LM["ScriptMarkdownEditor<br/>手写 Markdown"] --> SCRIPT["scriptMarkdown"]
-  IMP["外部导入 .md"] --> SCRIPT
+  IMP["外部导入 .md / .txt<br/>选文件 / 拖到本页（同一漏斗）"] --> SCRIPT
   GEN --> SCRIPT
   SCRIPT --> SCENES["scenes[]<br/>（场景解析产物）"]
   SCRIPT --> READY["scriptReady = 有文本 || 有场景"]
