@@ -5,7 +5,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { isVideo } from "~/lib/media/media";
 import { Skeleton } from "~/components/ui/skeleton";
-import { fetchTaskWorkflow, openTaskFolder } from "~/lib/history-detail-actions";
+import { fetchTaskWorkflow, revealTaskFolder } from "~/lib/history-detail-actions";
 import { isPlainRecord } from "~/lib/is-record";
 import { taskStatusLabel } from "~/lib/task-state";
 
@@ -25,7 +25,6 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Disclosure } from "~/components/ui/disclosure";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
-import { zClass } from "~/lib/shell/overlay-z";
 
 type HistoryDetailModalProps = {
   detail: TaskDetail | null;
@@ -76,7 +75,7 @@ export function HistoryDetailModal({
   onClose,
 }: HistoryDetailModalProps) {
   const actions = useHistoryDetailActions({
-    openFolder: openTaskFolder,
+    openFolder: revealTaskFolder,
     fetchWorkflow: fetchTaskWorkflow,
   });
 
@@ -96,7 +95,7 @@ export function HistoryDetailModal({
     rows: paramRows,
     topLevelEntries,
     hasAny: hasParams,
-  } = deriveWorkflowParams(current, workflowIO);
+  } = deriveWorkflowParams(current, workflowIO, current?.type ?? null);
   const firstImage = Array.isArray(current?.images) ? current.images[0] : undefined;
   /* 快照是 DB 的 JSON 列（unknown）：先确认它是对象、`source` 是字符串再读，
    *  其余（null / 旧数据 / 非字符串）都按「磁盘回退快照」显示。 */
@@ -161,68 +160,6 @@ export function HistoryDetailModal({
                   打开目录
                 </Button>
               </Hint>
-              {actions.folderPopover && (
-                /* 浮层内容不关闭面板：`onClick={stopPropagation}` 是**守卫**，
-                   不是交互 —— 键等价物无从谈起。 */
-                /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events, jsx_a11y/no-static-element-interactions -- onClick 是 stopPropagation 守卫，不是交互 */
-                <div
-                  className={`border-border bg-panel-deep absolute top-13 right-5 ${zClass("popup")} w-[min(440px,calc(100vw-40px))] rounded-lg border p-3 shadow-xl`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                  }}
-                >
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-ink-strong text-2xs font-medium">
-                      📂 在资源管理器中打开
-                    </span>
-                    <Button
-                      aria-label="关闭"
-                      className="text-ink-muted hover:text-ink-bright"
-                      onClick={actions.dismissFolderPopover}
-                      size="icon-xs"
-                      variant="ghost"
-                    >
-                      <X data-icon="inline-start" size={12} />
-                    </Button>
-                  </div>
-                  {actions.folderPopover.helperMissing ? (
-                    <div className="border-warning/30 bg-warning/10 text-warning-strong text-2xs mb-2 rounded border px-2.5 py-1.5 leading-relaxed">
-                      未检测到 ComfyApp 助手，浏览器没有弹出「打开外部应用」确认框。
-                      请双击运行项目内
-                      <code className="text-warning-strong">
-                        scripts\devtools\install-comfyapp-helper.ps1
-                      </code>
-                      注册
-                      <code className="text-warning-strong">comfyapp://</code>
-                      协议（仅本机、无需管理员）， 或直接
-                      {/* oxlint-disable-next-line next/no-html-link-for-pages -- `/api/helper/install` 是 API 端点而非页面路由；下载需原生 `<a>` 语义，换 `Link` 会走客户端路由、破坏下载。 */}
-                      <a className="hover:text-warning-strong underline" href="/api/helper/install">
-                        下载安装脚本
-                      </a>
-                      。
-                    </div>
-                  ) : (
-                    <div className="border-success/20 bg-success/6 text-success-strong text-2xs mb-2 rounded border px-2.5 py-1.5 leading-relaxed">
-                      若浏览器弹出「是否打开外部应用」，点击「打开」即可在资源管理器中打开该目录。
-                    </div>
-                  )}
-                  <code className="bg-canvas-deep text-success-strong text-2xs block rounded px-2.5 py-2 leading-relaxed break-all select-all">
-                    {actions.folderPopover.path}
-                  </code>
-                  <div className="mt-2 flex flex-wrap justify-end gap-2">
-                    <Button
-                      className="text-2xs h-auto rounded-md px-2.5 py-1"
-                      onClick={() => {
-                        actions.copyPath();
-                      }}
-                      size="xs"
-                      variant="success"
-                    >
-                      📋 复制路径
-                    </Button>
-                  </div>
-                </div>
-              )}
               {firstImage !== undefined && firstImage.localPath !== "" && (
                 <div className="flex items-center gap-2">
                   <Hint
@@ -376,16 +313,30 @@ export function HistoryDetailModal({
                         className="border-border rounded-xl"
                         items={paramRows.map((row) => ({
                           id: row.id,
-                          /* 显示工作流 IO 的作者标签（「宽高比」而不是
-`aspect_ratio`）；查不到标签时它自己就是 pin 名。 */
+                          /* 显示工作流 IO 的作者标签（「prompt」而不是
+                             `replace`）；查不到标签时它自己就是 pin 名。 */
                           key: row.label,
-                          /* 提示词 pin 同样定高滚动（ISSUE #4665）：工作流直接
-                             发起的任务，提示词落在工作流参数表里。 */
-                          value: isPromptParamRow(row.id, row.name) ? (
-                            <PromptValueCell text={kvValueText(row.value)} />
-                          ) : (
-                            kvValueText(row.value)
-                          ),
+                          value:
+                            row.value === undefined ? (
+                              <span className="text-ink-fainter">未提供</span>
+                            ) : (
+                              <span className="inline-flex flex-col items-start gap-1">
+                                {/* 提示词同样定高滚动（ISSUE #4665）：按 IO 作者
+                                    标签也能识别（`replace` 的标签是 `prompt`）。 */}
+                                {isPromptParamRow(row.id, row.name, row.label) ? (
+                                  <PromptValueCell text={kvValueText(row.value)} />
+                                ) : (
+                                  kvValueText(row.value)
+                                )}
+                                {/* 没有提交值时这一行是工作流 IO 的默认值，标注出来
+                                    免得被误读成「本次传了这个值」。 */}
+                                {row.source === "default" ? (
+                                  <span className="bg-subtle text-ink-fainter text-2xs rounded px-1.5 py-0.5">
+                                    默认值
+                                  </span>
+                                ) : null}
+                              </span>
+                            ),
                           /* 悬停补上原始 pin 名：排查问题 / 对 ComfyUI 报错时
                              用的是程序名，作者改的名字对不上。 */
                           title: `${row.label}（${row.name}）`,

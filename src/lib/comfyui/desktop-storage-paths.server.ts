@@ -1,5 +1,6 @@
 // 桌面实例存储目录的**真实 IO 层**：读实例目录形态、extra_model_paths.yaml 与
-// Comfy Desktop 元数据里的启动参数，拼成六组目录交给界面只读展示。
+// Comfy Desktop 元数据里的启动参数（含 `--extra-model-paths-config` 指向的共享
+// 声明），拼成六组目录交给界面只读展示。
 //
 // 分层：纯解析在 `./desktop-storage-paths`（无 Node 内建，客户端可 import type），
 // 这里只做「取哪份文件 + 路径拼接 + 去重 + 存在性标注」。文件缺失一律按
@@ -83,6 +84,12 @@ function expandEntry(
   }));
 }
 
+/** dir 是否严格落在 base 之下（`path.relative` 语义；Windows 侧大小写不敏感）。 */
+function isUnderBase(base: string, dir: string): boolean {
+  const rel = path.relative(path.resolve(base), path.resolve(dir));
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
 /** 三组「主目录 + 共享目录」的空盘面。 */
 function emptySlots(): Record<StorageSlot, Array<StorageDirInfo>> {
   return { models: [], input: [], output: [] };
@@ -132,16 +139,18 @@ export async function resolveDesktopStoragePaths(
       };
 
   const launchArgs = await resolveArgs(dir);
-  /* `--extra-model-paths-config` 指向的额外 yaml（Desktop 版共享目录的另一种
-   * 声明位置）：逐份解析并叠加 entries；主 yaml 优先，配置文件缺失/读不到按
-   * 「没有这一份」处理。 */
+  /* `--extra-model-paths-config` 指向的额外 yaml（新版 Comfy Desktop 的共享模型
+   * 声明就登记在应用数据目录、由启动参数带进来）：逐份解析并叠加 entries；主
+   * yaml 优先，配置文件缺失/读不到按「没有这一份」处理。 */
   const configFiles = parseExtraModelPathsConfigArgs(launchArgs);
   const mergedEntries: Array<ExtraModelPathEntry> = [...parsedMain.entries];
+  const extraModelPathsConfigFiles: Array<string> = [];
   let configBase: string | null = null;
   for (const cfg of configFiles) {
     try {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const parsed = parseExtraModelPathsYaml(await readFile(cfg, "utf8"));
+      extraModelPathsConfigFiles.push(cfg);
       if (parsed.basePath !== null && configBase === null) {
         configBase = parsed.basePath;
       }
@@ -191,14 +200,35 @@ export async function resolveDesktopStoragePaths(
     normalizeDirKey(inputDir.path),
     normalizeDirKey(outputDir.path),
   ]);
+  const pushDir = (dir: StorageDirInfo, slot: StorageSlot): void => {
+    const key = normalizeDirKey(dir.path);
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    shared[slot].push(dir);
+  };
   for (const entry of parsed.entries) {
-    for (const { slot, dir } of expandEntry(entry, exists)) {
-      const key = normalizeDirKey(dir.path);
-      if (seen.has(key)) {
+    const expanded = expandEntry(entry, exists);
+    for (const slot of ["models", "input", "output"] as const) {
+      const dirs = expanded.filter((e) => e.slot === slot).map((e) => e.dir);
+      if (dirs.length === 0) {
         continue;
       }
-      seen.add(key);
-      shared[slot].push(dir);
+      /* 一个条目在同一侧贡献 ≥2 个目录、且全部落在条目 base 之下时，收成 base
+       * 一行——Comfy Desktop 的 shared_model_paths.yaml 正是这一形（几十个类型
+       * 子目录共享一个 base），逐条列出只会把设置页变成一堵路径墙，而 Desktop
+       * 自己的存储页也是按共享根一行展示的。混有不在 base 下的散项（绝对路径
+       * 混写）时退回逐条展示，保证每一条都有落点。 */
+      const underBase = dirs.every((d) => isUnderBase(entry.basePath, d.path));
+      if (dirs.length >= 2 && underBase) {
+        const base = path.resolve(entry.basePath);
+        pushDir({ path: base, exists: exists(base), source: entry.key }, slot);
+        continue;
+      }
+      for (const dir of dirs) {
+        pushDir(dir, slot);
+      }
     }
   }
 
@@ -206,6 +236,7 @@ export async function resolveDesktopStoragePaths(
     instanceRoot,
     baseDir,
     extraModelPathsFile: extra?.file ?? null,
+    extraModelPathsConfigFiles,
     modelDir,
     sharedModelDirs: shared.models,
     inputDir,

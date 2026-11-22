@@ -8,7 +8,7 @@
 // 候选 / 适配器 / 契约 / 生成动作都在 `hooks/use-model-test.ts`（第②层）与
 // `model-test-config.ts`（第①层）；本文件不出现 fetch / api.*。
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import {
@@ -24,6 +24,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
@@ -36,6 +37,7 @@ import { Progress } from "~/components/ui/progress";
 import { SelectChip } from "~/components/ui/select-chip";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { StatusDot } from "~/components/ui/status-dot";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { clampInt } from "~/lib/clamp";
 import { sceneFromMode } from "~/lib/media/size-presets";
@@ -102,40 +104,68 @@ function Panel({
   );
 }
 
-/** 用途页签（图片 / 视频 / 对话）：SelectChip 的 pill 单选组。 */
+/** 用途页签（图片 / 视频 / 对话）：SelectChip 的 pill 单选组。该用途下有
+ *  模型正在生成时追加「N 生成中」小徽标（ISSUE #4838），一眼看出哪类用途
+ *  在跑、跑着几个。 */
 function KindTabs({
+  generating,
   kind,
   onChange,
 }: {
+  generating: Record<ModelTestKind, number>;
   kind: ModelTestKind;
   onChange: (k: ModelTestKind) => void;
 }) {
   return (
     <div aria-label="选择用途" className="flex flex-wrap gap-2" role="radiogroup">
-      {MODEL_TEST_KINDS.map((k) => (
-        <SelectChip
-          key={k}
-          onClick={() => {
-            onChange(k);
-          }}
-          selected={kind === k}
-          shape="pill"
-        >
-          {MODEL_TEST_KIND_LABELS[k]}
-        </SelectChip>
-      ))}
+      {MODEL_TEST_KINDS.map((k) => {
+        const count = generating[k] ?? 0;
+        return (
+          <SelectChip
+            key={k}
+            onClick={() => {
+              onChange(k);
+            }}
+            selected={kind === k}
+            shape="pill"
+          >
+            {MODEL_TEST_KIND_LABELS[k]}
+            {count > 0 && <GeneratingBadge className="ml-1" count={count} />}
+          </SelectChip>
+        );
+      })}
     </div>
   );
 }
 
+/** 「生成中」小徽标（ISSUE #4838）：呼吸圆点 + 文案。给 `count` = 数量
+ *  （「N 生成中」，用途 / 模式两处用）；不给 = 单模型标记（「生成中」，
+ *  模型下拉用）。走 `ui/badge` 基元（tone=warning，§16.2.4 棘轮：不手写
+ *  <span> 胶囊）+ `ui/status-dot` 的脉冲圆点（P3：不内联 animate-pulse），
+ *  配色与产物卡的生成中状态同族。 */
+function GeneratingBadge({ className, count }: { className?: string; count?: number }) {
+  return (
+    <Badge className={className} size="pill-md" tone="warning">
+      <StatusDot pulse sizeClass="size-1.5" state="busy" />
+      {count === undefined ? "生成中" : `${count} 生成中`}
+    </Badge>
+  );
+}
+
 /** 左栏模式列表：当前用途下的**所有**生成类模式纵列，右侧徽标显示配了该
- *  模式适配器的候选模型数。选中态 = 品牌软底 + 描边；role=radio 由选中项
+ *  模式适配器的候选模型数；该模式下有模型在生成时再叠一枚「N 生成中」
+ *  （ISSUE #4838）。选中态 = 品牌软底 + 描边；role=radio 由选中项
  *  驱动，外层 radiogroup 给整组可访问名。 */
 function ModeTabs({
+  generatingByMode,
+  kind,
   mode,
   onSelect,
   tabs,
 }: {
+  /** 键 = `${kind}::${mode}`（与格键同形），值 = 该模式下生成中的模型数。 */
+  generatingByMode: Record<string, number>;
+  kind: ModelTestKind;
   mode: string;
   onSelect: (mode: string) => void;
   tabs: Array<ModeTab>;
@@ -144,6 +174,7 @@ function ModeTabs({
     <div aria-label="选择模式" className="flex flex-col gap-1.5" role="radiogroup">
       {tabs.map((t) => {
         const selected = t.mode === mode;
+        const generatingCount = generatingByMode[`${kind}::${t.mode}`] ?? 0;
         return (
           <Button
             aria-checked={selected}
@@ -171,13 +202,16 @@ function ModeTabs({
               </TruncatedText>
               <span className="text-muted-foreground text-2xs block">{t.mode}</span>
             </span>
-            <span
-              className={cn(
-                "shrink-0 rounded-full px-2 py-0.5 text-2xs tabular-nums",
-                selected ? "bg-surface text-primary-strong" : "bg-subtle text-muted-foreground",
-              )}
-            >
-              {t.modelCount} 模型
+            <span className="flex shrink-0 items-center gap-1">
+              {generatingCount > 0 && <GeneratingBadge count={generatingCount} />}
+              <span
+                className={cn(
+                  "shrink-0 rounded-full px-2 py-0.5 text-2xs tabular-nums",
+                  selected ? "bg-surface text-primary-strong" : "bg-subtle text-muted-foreground",
+                )}
+              >
+                {t.modelCount} 模型
+              </span>
             </span>
           </Button>
         );
@@ -416,6 +450,100 @@ function OnboardingPanel({ c }: { c: ModelTestController }) {
   );
 }
 
+/** 左栏：用途 + 模式 + 模型（模式列表有滚动上限，不会把模型卡挤走；
+ *  桌面下吸附成独立滚动区）。从 `ModelTestView` 拆出（§12.13：视图函数
+ *  顶到 400 行硬闸，按栏切子组件）。 */
+function LeftColumn({
+  c,
+  modelLabels,
+  modeLabel,
+}: {
+  c: ModelTestController;
+  /** 当前模式的展示名（空态文案用）。 */
+  modeLabel: string;
+  /** 模型下拉的标签（显示名 + 生成中徽标，ISSUE #4838）。 */
+  modelLabels: Record<string, ReactNode>;
+}) {
+  return (
+    <aside className="flex w-full shrink-0 flex-col gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-96px)] xl:w-64 xl:overflow-y-auto">
+      <Panel icon={<Shapes />} title="用途">
+        <KindTabs generating={c.generatingByKind} kind={c.kind} onChange={c.setKind} />
+      </Panel>
+
+      {c.modeTabs.length > 0 && (
+        <Panel icon={<ListChecks />} title="模式">
+          <div className="max-h-80 overflow-y-auto pr-0.5">
+            <ModeTabs
+              generatingByMode={c.generatingByMode}
+              kind={c.kind}
+              mode={c.mode}
+              onSelect={c.setMode}
+              tabs={c.modeTabs}
+            />
+          </div>
+        </Panel>
+      )}
+
+      <Panel hint="按用途与模式过滤" icon={<Boxes />} title="模型">
+        {c.loading ? (
+          /* 骨架屏（ISSUE #4749）：与模型列表条目同形的占位条。 */
+          <div aria-label="加载中" className="flex flex-col gap-2" role="status">
+            {[0, 1, 2].map((i) => (
+              <Skeleton className="h-9 w-full rounded-lg" key={i} />
+            ))}
+          </div>
+        ) : c.candidates.length === 0 ? (
+          c.kindCandidateCount === 0 ? (
+            <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
+              {c.kind === "chat"
+                ? "还没有可测的对话模型 —— 本地模型到「设置 → 本地模型」添加 Ollama 候选；远端模型到「设置 → 远程模型」添加用途为 文本 的条目。"
+                : `还没有可测的${MODEL_TEST_KIND_LABELS[c.kind]}模型 —— 本地模型到工作流库导入${
+                    c.kind === "image" ? "生图" : "视频"
+                  }工作流（工坊封装就绪后出现在这里）；远端模型到「设置 → 远程模型」添加并启用用途为 ${
+                    c.kind === "image" ? "图像" : "视频"
+                  } 的条目。`}
+            </p>
+          ) : (
+            <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
+              当前「{modeLabel}」模式下没有可用模型（页签徽标的数字就是它的候选数）——
+              远端模型需要先在「模型适配」配置该模式的适配器；本地工作流需要支持该模式（工作流库 →
+              模式）。
+            </p>
+          )
+        ) : (
+          <SelectMenu
+            aria-label="选择模型"
+            autoFitFromOptions={false}
+            className="text-sm"
+            fullWidth={false}
+            /* 本地 / 远端分组：对话的本地 = Ollama 候选；图片 / 视频的
+             * 本地 = 工作流库工作流，远端 = 设置页配置的远端模型。 */
+            groups={(
+              [
+                {
+                  label: "本地模型",
+                  options: c.candidates.filter((m) => m.local).map(candidateValue),
+                },
+                {
+                  label: "远端模型",
+                  options: c.candidates.filter((m) => !m.local).map((m) => m.name),
+                },
+              ] as const
+            ).filter((group) => group.options.length > 0)}
+            labels={modelLabels}
+            onChange={c.selectModel}
+            options={c.candidates.map(candidateValue)}
+            placeholder="选择要测试的模型…"
+            popoverMinWidth={240}
+            value={c.selectedModel}
+          />
+        )}
+        {c.selectedModel !== "" && <ChannelNote c={c} />}
+      </Panel>
+    </aside>
+  );
+}
+
 export function ModelTestView({
   onConsumeReprint,
   pendingReprint,
@@ -470,6 +598,26 @@ export function ModelTestView({
   const modeLabel = c.modeTabs.find((t) => t.mode === c.mode)?.label ?? c.mode;
   const hasModel = c.selectedModel !== "";
 
+  /* 模型下拉的标签：在既有显示名（模型标签 / 工作流名消歧）之上，给正在
+     生成的模型追加「生成中」徽标（ISSUE #4838）—— 选项里与触发器上是同一
+     份 label，选中项在生成中时触发器也带徽标。 */
+  const modelLabels = useMemo<Record<string, ReactNode>>(() => {
+    const out: Record<string, ReactNode> = {};
+    for (const candidate of c.candidates) {
+      const value = candidateValue(candidate);
+      const label = c.candidateLabels[value] ?? value;
+      out[value] = c.generatingModels.has(value) ? (
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <span className="truncate">{label}</span>
+          <GeneratingBadge />
+        </span>
+      ) : (
+        label
+      );
+    }
+    return out;
+  }, [c.candidates, c.candidateLabels, c.generatingModels]);
+
   return (
     <DocumentFrame className="flex flex-col gap-5 px-4 pt-4 pb-10 sm:px-6 sm:pt-5" width="full">
       <PageHeader srTitle={pageHeaderTitle("model-test")} />
@@ -493,78 +641,9 @@ export function ModelTestView({
       )}
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-        {/* ── 左栏：用途 + 模式 + 模型（模式列表有滚动上限，不会把模型卡挤走；
-            桌面下吸附成独立滚动区）── */}
-        <aside className="flex w-full shrink-0 flex-col gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-96px)] xl:w-64 xl:overflow-y-auto">
-          <Panel icon={<Shapes />} title="用途">
-            <KindTabs kind={c.kind} onChange={c.setKind} />
-          </Panel>
-
-          {c.modeTabs.length > 0 && (
-            <Panel icon={<ListChecks />} title="模式">
-              <div className="max-h-80 overflow-y-auto pr-0.5">
-                <ModeTabs mode={c.mode} onSelect={c.setMode} tabs={c.modeTabs} />
-              </div>
-            </Panel>
-          )}
-
-          <Panel hint="按用途与模式过滤" icon={<Boxes />} title="模型">
-            {c.loading ? (
-              /* 骨架屏（ISSUE #4749）：与模型列表条目同形的占位条。 */
-              <div aria-label="加载中" className="flex flex-col gap-2" role="status">
-                {[0, 1, 2].map((i) => (
-                  <Skeleton className="h-9 w-full rounded-lg" key={i} />
-                ))}
-              </div>
-            ) : c.candidates.length === 0 ? (
-              c.kindCandidateCount === 0 ? (
-                <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
-                  {c.kind === "chat"
-                    ? "还没有可测的对话模型 —— 本地模型到「设置 → 本地模型」添加 Ollama 候选；远端模型到「设置 → 远程模型」添加用途为 文本 的条目。"
-                    : `还没有可测的${MODEL_TEST_KIND_LABELS[c.kind]}模型 —— 本地模型到工作流库导入${
-                        c.kind === "image" ? "生图" : "视频"
-                      }工作流（工坊封装就绪后出现在这里）；远端模型到「设置 → 远程模型」添加并启用用途为 ${
-                        c.kind === "image" ? "图像" : "视频"
-                      } 的条目。`}
-                </p>
-              ) : (
-                <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
-                  当前「{modeLabel}」模式下没有可用模型（页签徽标的数字就是它的候选数）——
-                  远端模型需要先在「模型适配」配置该模式的适配器；本地工作流需要支持该模式（工作流库
-                  → 模式）。
-                </p>
-              )
-            ) : (
-              <SelectMenu
-                aria-label="选择模型"
-                autoFitFromOptions={false}
-                className="text-sm"
-                fullWidth={false}
-                /* 本地 / 远端分组：对话的本地 = Ollama 候选；图片 / 视频的
-                 * 本地 = 工作流库工作流，远端 = 设置页配置的远端模型。 */
-                groups={(
-                  [
-                    {
-                      label: "本地模型",
-                      options: c.candidates.filter((m) => m.local).map(candidateValue),
-                    },
-                    {
-                      label: "远端模型",
-                      options: c.candidates.filter((m) => !m.local).map((m) => m.name),
-                    },
-                  ] as const
-                ).filter((group) => group.options.length > 0)}
-                labels={c.candidateLabels}
-                onChange={c.selectModel}
-                options={c.candidates.map(candidateValue)}
-                placeholder="选择要测试的模型…"
-                popoverMinWidth={240}
-                value={c.selectedModel}
-              />
-            )}
-            {hasModel && <ChannelNote c={c} />}
-          </Panel>
-        </aside>
+        {/* ── 左栏：用途 + 模式 + 模型（拆成子组件 —— §12.13；内容与
+            「生成中」徽标的说明见 `LeftColumn`）── */}
+        <LeftColumn c={c} modeLabel={modeLabel} modelLabels={modelLabels} />
 
         {/* ── 中栏：统一输入 + 生成 CTA（未选模型时给三步引导）── */}
         <div className="flex min-w-0 flex-1 flex-col gap-4">

@@ -10,6 +10,7 @@ import {
   normalizeRoute,
   outputPathFor,
   parseArgs,
+  shouldDetachServer,
   slugForRoute,
   themeList,
   usage,
@@ -143,5 +144,20 @@ describe("normalizeRoute —— Git Bash 的 MSYS 路径转换恢复（ISSUE #41
     expect(parseArgs(["D:/Program Files/Git/settings"]).route).toBe("/settings");
     expect(parseArgs(["settings"]).route).toBe("/settings");
     expect(parseArgs(["//settings"]).route).toBe("/settings");
+  });
+});
+
+/**
+ * #4816：截图收尾只杀单进程、留 next dev 孤儿的那条链。核心修复在「起应用时自建进程组」——
+ * POSIX 上不 detached 的话，dev.mjs 与截图脚本同组，`killProcessTree` 的防自杀判据会拒绝走
+ * 组路径、退化成单杀 leader，子进程成孤儿占端口，下次截图「复用」到僵尸应用卡 120s 超时。
+ */
+describe("startDevServer —— 起应用自建进程组（ISSUE #4816）", () => {
+  it("POSIX 自建进程组、Windows 不建（detached 是整树回收的前提）", () => {
+    // 平台作为形参传入，两侧都测得到（真机只跑一半判据的老问题在这里收掉）。
+    expect(shouldDetachServer("linux")).toBe(true);
+    expect(shouldDetachServer("darwin")).toBe(true);
+    expect(shouldDetachServer("freebsd")).toBe(true);
+    expect(shouldDetachServer("win32")).toBe(false);
   });
 });

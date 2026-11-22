@@ -439,7 +439,27 @@ export function runResultQuery(io = {}) {
       log(line);
     }
   }
-  return reading.found || reading.reason === "missing" ? CODE.GREEN : CODE.NOT_RUN;
+  /* 退出码反映「被跟踪那一跑」的死活，不是「这次读成功」（ISSUE #4764）：
+   *   · 没有上一次（missing）⇒ 0：这是合法读数「还没跑过」，不是读失败；
+   *   · 读不出来 / 取不到 git 目录 ⇒ 2：这一格没跑起来；
+   *   · 还在跑 ⇒ 4（CI 无终态）：**没给结论**，绝不落 0 冒充通过；
+   *   · 被打断 ⇒ 2（没给结论，与 `ship:wait` 同档）；
+   *   · 收口了 ⇒ 照抄那一跑的 exitCode（绿 0 / 红 1 / 没跑起来 ≥2）。
+   * 收尾那行结论词由装配层按「只读口」另给，这里只管码。 */
+  if (!reading.found) {
+    return reading.reason === "missing" ? CODE.GREEN : CODE.NOT_RUN;
+  }
+  const r = reading.result;
+  if (!r) {
+    return CODE.NOT_RUN;
+  }
+  if (r.status === "running") {
+    return CODE.CI_PENDING;
+  }
+  if (r.status === "interrupted") {
+    return CODE.NOT_RUN;
+  }
+  return typeof r.exitCode === "number" ? r.exitCode : CODE.NOT_RUN;
 }
 
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {

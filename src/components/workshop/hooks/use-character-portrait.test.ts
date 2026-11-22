@@ -102,7 +102,7 @@ describe("useCharacterPortrait 门禁", () => {
     });
 
     expect(mockedLocal).not.toHaveBeenCalled();
-    expect(result.current.session.error).toContain("本地通道需要先选模型");
+    expect(result.current.session.error).toContain("请先选择图片模型");
   });
 
   it("用户补齐选择后，旧的门禁错误不再挂着（patch 清错误）", async () => {
@@ -129,7 +129,7 @@ describe("useCharacterPortrait 门禁", () => {
     await act(async () => {
       await result.current.actions.generate(character);
     });
-    expect(result.current.session.error).toContain("本地通道需要先选模型");
+    expect(result.current.session.error).toContain("请先选择图片模型");
 
     /* 第二次：补齐选择后必须能真正发起请求。 */
     mockedLocal.mockResolvedValue({

@@ -333,6 +333,7 @@ export default function WorkspacePage() {
           activeProjectId={activeProjectId}
           activeViewKey={activeViewKey}
           onCloseViewTab={closeViewTabByKey}
+          onDeleteProject={handleDeleteProject}
           onNewProject={handleNewProject}
           onOpenProject={handleOpenServerProject}
           onOpenSettings={openSettings}

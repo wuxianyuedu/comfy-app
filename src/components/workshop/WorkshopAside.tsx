@@ -1,82 +1,20 @@
 "use client";
 
-// 工坊右侧栏：缺失素材、生成资源（本地 Checkpoint）、资源库计数。
-// 纯展示 + 一个跳转入口（「在资源库中打开」广播 `workspace:navigate`）。
+// 工坊右侧栏：缺失素材、生成模型摘要、资源库计数（#4834 起「生成资源」的
+// 工作流下拉退场 —— 模型选择统一为测试模型级联，各入口选完这里只做摘要）。
+// 纯展示 + 跳转入口（「在资源库中打开」广播 `workspace:navigate`）。
 
 import { Button } from "~/components/ui/button";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { emitAppEvent } from "~/lib/app-events";
 import { cn } from "~/lib/utils";
 import { Icon } from "~/components/ui/icon";
-import { FieldLabel } from "~/components/ui/field";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
-import type {
-  WorkshopWorkflowCategory,
-  WorkshopWorkflowOption,
-} from "~/lib/workshop/generation-client";
-import type { MissingItem } from "~/components/workshop/stage-config";
+import type { MissingItem, Tab } from "~/components/workshop/stage-config";
+import type { WorkshopModelSelection, WorkshopModelSelections } from "~/lib/workshop/draft-store";
 
-/** 「工作流库」里某一类别（图 / 视频）的可选工作流下拉。
- *
- * 按类别分栏：生图阶段只列 image 工作流，视频阶段只列 video 工作流，
- * 避免把 txt2img 混进视频下拉（两类工作流的对外参数口径不同）。
- * 选定后工坊只暴露 提示词 / 尺寸 / 参考图(首帧)，其余参数用工作流默认值。 */
-function WorkshopWorkflowSelect({
-  label,
-  placeholder,
-  category,
-  options,
-  value,
-  onChange,
-}: {
-  category: WorkshopWorkflowCategory;
-  label: string;
-  onChange: (value: string) => void;
-  options: Array<WorkshopWorkflowOption>;
-  placeholder: string;
-  value: string;
-}) {
-  const scoped = options.filter((option) => option.category === category);
-  return (
-    <FieldLabel className="mt-3 block">
-      <span className="text-muted-foreground text-2xs mb-1 block">{label}</span>
-      <Select
-        onValueChange={(next) => {
-          onChange(next ?? "");
-        }}
-        value={value}
-      >
-        <SelectTrigger className="border-border bg-bg text-ink w-full text-xs" size="sm">
-          <SelectValue placeholder={placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {scoped.map((option) => (
-              <SelectItem key={option.id} value={option.id}>
-                {option.name}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-      {scoped.length === 0 && (
-        <span className="text-faint text-2xs mt-1 block">
-          工作流库里还没有
-          {category === "video" ? "视频" : "生图"}
-          类工作流（可在工作室的「工作流库」导入）。
-        </span>
-      )}
-    </FieldLabel>
-  );
-}
+import { useModelCatalog } from "./hooks/use-model-catalog";
+import { candidateLabel, candidateValue } from "./model-test-config";
 
 type WorkshopAsideProps = {
   apiChannels: ApiChannelsView | null;
@@ -84,24 +22,69 @@ type WorkshopAsideProps = {
   clipDoneCount: number;
   imageDoneCount: number;
   missing: Array<MissingItem>;
+  /** 各生成入口当前选中的模型（#4834，随草稿持久化）。 */
+  modelSelections: WorkshopModelSelections;
   onGoScript: () => void;
-  onVideoWorkflowChange: (value: string) => void;
-  onWorkflowChange: (value: string) => void;
-  /** 视频通道选定的工作流 id。 */
-  videoWorkflowId: string;
-  workflowId: string;
-  /** 工作流库里的可选工作流（ISSUE #145）：本地通道的唯一可执行来源。
-   * 按内容类别分栏：面板只列出当前阶段对应的那一栏。 */
-  workflowOptions: Array<WorkshopWorkflowOption>;
+  /** 摘要行的跳转：把用户送到该模型对应的生成阶段现场调整。 */
+  onGoToStage: (tab: Tab) => void;
 };
+
+/** 摘要卡的一行：模态名 + 当前选中模型（含模式），点击跳到对应阶段。 */
+function ModelSummaryRow({
+  catalog,
+  label,
+  onClick,
+  selection,
+}: {
+  catalog: ReturnType<typeof useModelCatalog>;
+  label: string;
+  onClick: () => void;
+  selection: WorkshopModelSelection | undefined;
+}) {
+  const value =
+    selection === undefined || selection.model.trim() === ""
+      ? "未选"
+      : (() => {
+          const candidate = catalog.allCandidates.find(
+            (c) => candidateValue(c) === selection.model,
+          );
+          if (candidate === undefined) {
+            /* 候选目录未到 / 条目已删：至少把原值亮出来，不冒充「未选」。 */
+            return selection.model;
+          }
+          const name = candidateLabel(candidate);
+          const modeLabel = catalog.modeTabs.find((t) => t.mode === selection.mode)?.label;
+          return modeLabel === undefined ? name : `${name} · ${modeLabel}`;
+        })();
+  return (
+    <Button
+      className="hover:bg-subtle text-ink w-full justify-start gap-3 rounded-lg px-2 py-2 text-left font-normal"
+      onClick={onClick}
+      type="button"
+      variant="ghost"
+    >
+      <span className="flex-1 truncate text-xs">{label}</span>
+      <span
+        className={cn(
+          "text-2xs max-w-[55%] truncate rounded-md px-2 py-1",
+          selection === undefined || selection.model.trim() === ""
+            ? "text-faint bg-subtle"
+            : "bg-primary-soft text-primary-strong",
+        )}
+      >
+        {value}
+      </span>
+      <span aria-hidden className="text-faint text-2xs">
+        ›
+      </span>
+    </Button>
+  );
+}
 
 export function WorkshopAside({
   missing,
-  workflowOptions,
-  workflowId,
-  onWorkflowChange,
-  videoWorkflowId,
-  onVideoWorkflowChange,
+  modelSelections,
+  onGoToStage,
   apiChannels,
   characterCount,
   imageDoneCount,
@@ -110,6 +93,10 @@ export function WorkshopAside({
 }: WorkshopAsideProps) {
   const anyChannelConfigured =
     apiChannels?.image.configured === true || apiChannels?.video.configured === true;
+  /* 摘要行的显示名解析：按模态各挂一个目录（React Query 对同一批读数去重）。 */
+  const chatCatalog = useModelCatalog("chat", "");
+  const imageCatalog = useModelCatalog("image", "");
+  const videoCatalog = useModelCatalog("video", "");
 
   /**
    * 只列**真有计数**的行：此前写死的「剧本大纲.md / 参考图 0 项」等不是项目内容，
@@ -159,30 +146,49 @@ export function WorkshopAside({
         </Button>
       </div>
 
-      {/* 生成资源：本地 ComfyUI 链路唯一可执行来源 = 工作流库工作流 */}
+      {/* 生成模型摘要（#4834）：模型选择统一为测试模型级联，在各生成入口现场选；
+       *  这里只回答「现在每一类用的是哪个模型」，点击把人送到对应阶段调整。 */}
       <div className="border-border bg-surface rounded-2xl border p-4">
         <div className="text-ink mb-3 flex items-center justify-between text-sm font-semibold">
-          生成资源
+          生成模型
           <span className="text-faint text-2xs">
             {anyChannelConfigured ? "远端模型已适配" : "远端模型未适配"}
           </span>
         </div>
-        <WorkshopWorkflowSelect
-          category="image"
-          label="生图工作流（工作流库）"
-          onChange={onWorkflowChange}
-          options={workflowOptions}
-          placeholder="选择生图工作流…"
-          value={workflowId}
-        />
-        <WorkshopWorkflowSelect
-          category="video"
-          label="视频工作流（工作流库）"
-          onChange={onVideoWorkflowChange}
-          options={workflowOptions}
-          placeholder="选择视频工作流…"
-          value={videoWorkflowId}
-        />
+        <div className="flex-col gap-1">
+          <ModelSummaryRow
+            catalog={chatCatalog}
+            label="文本（提取 / 剧本）"
+            onClick={() => {
+              onGoToStage("script");
+            }}
+            selection={modelSelections.text}
+          />
+          <ModelSummaryRow
+            catalog={imageCatalog}
+            label="定妆照"
+            onClick={() => {
+              onGoToStage("character");
+            }}
+            selection={modelSelections.portrait}
+          />
+          <ModelSummaryRow
+            catalog={imageCatalog}
+            label="镜头生图"
+            onClick={() => {
+              onGoToStage("shots");
+            }}
+            selection={modelSelections.shot}
+          />
+          <ModelSummaryRow
+            catalog={videoCatalog}
+            label="视频"
+            onClick={() => {
+              onGoToStage("video");
+            }}
+            selection={modelSelections.video}
+          />
+        </div>
       </div>
 
       {/* Resource library */}

@@ -10438,6 +10438,8 @@ status 有终态（不再是「缺席」）。
 
 **这一跑自己的「走到哪了 / 结论」也落在盘上：`.git/ship-result.json`（ISSUE #3206 / #3923）。** ship 每一轮**开跑即写**（write-ahead，`status=running`），随每行读数更新状态快照（`status` / `branch` / `sha` / `repo` / `pr` / `exitCode` / `conclusion`），并追加**带时间戳的事件**（`start` / `stage`（含结构化 `facts`）/ `conclusion` / `finished` / `interrupted`）；落盘是**原子替换**（先写同目录临时文件再 rename），另一只轮询的眼睛不会读到半截 JSON。后台跑 ship 时，进度用只读口取：`pnpm ship --result`（人读摘要 + 事件时间线）或 `pnpm ship --result=json`（原始 JSON），**不要 `sleep + grep` 自己的运行日志** —— 日志是那一块屏幕的过去，落盘读数是进程自己写下的现在；`running` / `interrupted` 一律是「没给结论」，与退码 `2` 同口径，不许读成通过。**只读单件动作自己不落盘**（`--result` / `--status` / `--whoami` / `--branches` / `--claims` / `--diagnose` / `--stage-log` / `--gh-logs` / `--gh-prs`）：查询自己再写一份进去，会把后台那一跑的活读数覆盖掉 —— 轮询的眼睛不能毁掉它正在看的东西。平台侧「PR / CI / 关单」的现在仍走 `pnpm ship --status`（上一段）。判据与形状只有一份出处：`scripts/ship/ship-result.mjs` 文件头。
 
+`--result` 的**退出码反映被跟踪那一跑的死活**，不是「这次读成功」（ISSUE #4764）：还在跑 ⇒ `4`（无终态，不是 0）、被打断 ⇒ `2`、读不出来 ⇒ `2`、收口了照抄那一跑的 `exitCode`；没有上一次（`missing`）仍是 `0`（合法读数「还没跑过」）。收尾结论行同样不复用写链码表词 —— 只读口与写侧快动作（建单 / 评论 / 领取 / 重派 CI）共用 `finish()`，它们的 `0` 只表示「这一件做完了」，末行念「单件动作完成（**不代表**写链绿到终态）」，不会在 running 的后台跑旁边打出「全绿到终态」。写链结论词与 `pnpm ship:wait`（另走落盘 JSON 字段判定）一字未改。旗标面「单件动作」的判据只有一份：`scripts/ship/ship-args.mjs` 的 `singleActionSettled`。
+
 **工作模式：全托管与逐步确认（ISSUE #3512）。** 四条红线没有为模式开口子 —— 模式是
 **打包旗标的显式别名**：`pnpm ship --mode auto` 在语义上等于人亲手给了
 `--merge --close-issue --clean-branch` 三枚旗标（展开发生在解析层、所有阶段之前，

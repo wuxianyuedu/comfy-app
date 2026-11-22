@@ -56,6 +56,7 @@ import {
   pickWorkshopInputValues,
   randomPromptFor,
   relayDebugRow,
+  summarizeGeneratingSessions,
   testCandidatesForKind,
   workflowPreviewBody,
   workflowSupportsMode,
@@ -107,6 +108,13 @@ export type ModelTestController = {
   generate: (key?: string, valuesOverride?: ModelTestValues) => Promise<void>;
   /** 当前格是否在生成中。 */
   generating: boolean;
+  /** 左栏「生成中」标记的读数（ISSUE #4838）：**全部格**聚合的生成中索引 ——
+   *  用途页签 / 模式列表的计数与模型下拉的徽标都读它，不只当前格。 */
+  generatingByKind: Record<ModelTestKind, number>;
+  /** 键 = `${kind}::${mode}`，值 = 该模式下生成中的模型数。 */
+  generatingByMode: Record<string, number>;
+  /** 正在生成的模型取值集合（模型名或 `wf::<id>`）。 */
+  generatingModels: ReadonlySet<string>;
   /** 当前格生成发起的时刻（ms；null = 不在生成中）：请求详情的已过时间按它走秒。 */
   generatingSince: number | null;
   /** 统一输入行清单（ISSUE #3778：来自当前模式契约，带必备标记与承接状态）。 */
@@ -171,8 +179,10 @@ export type ModelTestController = {
 
 /** 候选 / 契约 / 适配器索引的取数与派生（§12.13 第二刀）：这一簇只读
  *  configGet / modeContractsGet / workshopAdaptersGet 与工作流列表四份读数做
- *  派生，主 hook（useModelTest）只留表单状态与动作。 */
-function useTestCatalog(args: {
+ *  派生，主 hook（useModelTest）只留表单状态与动作。
+ *  导出（#4834）：项目里各生成入口统一成测试模型的级联选择，候选装配与
+ *  模式收窄的口径只有这一份（use-model-catalog 薄封装消费），不另立第二份。 */
+export function useTestCatalog(args: {
   kind: ModelTestKind;
   mode: string;
   selectedModel: string;
@@ -792,6 +802,10 @@ export function useModelTest(): ModelTestController {
       : [submission, ...activeSession.previewRows];
   }, [activeSession.previewRows, activeSession.submissionRow, localPreviewRow]);
 
+  /* 左栏「生成中」标记的读数（ISSUE #4838）：全部格聚合，随 sessions 变化
+   * （任一格开始 / 结束生成都会重算）。 */
+  const generatingIndex = useMemo(() => summarizeGeneratingSessions(sessions), [sessions]);
+
   return {
     candidates: modeCandidates,
     candidateLabels,
@@ -804,6 +818,9 @@ export function useModelTest(): ModelTestController {
     error: activeSession.error,
     generating: activeSession.generating,
     generatingSince: activeSession.generatingSince,
+    generatingByKind: generatingIndex.byKind,
+    generatingByMode: generatingIndex.byMode,
+    generatingModels: generatingIndex.models,
     cancelGenerate,
     referenceImages: referenceGroup.images,
     addReferenceImages,

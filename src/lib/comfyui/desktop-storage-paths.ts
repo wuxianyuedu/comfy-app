@@ -1,14 +1,20 @@
 // ComfyUI Desktop 实例的存储目录「事实来源」解析：把 extra_model_paths.yaml
 // 与启动参数读成「模型 / 共享模型 / 输入 / 共享输入 / 输出 / 共享输出」六组目录。
 //
-// 为什么这三处都要读（缺一就会答错）：
+// 为什么这几处都要读（缺一就会答错）：
 //   · base 目录 —— Comfy Desktop 的 canonical 布局里实例根是
 //     `<安装目录>/ComfyUI2`，而 ComfyUI 真正的 base 是它下面的 `ComfyUI/`
 //     （main.py 所在目录即进程 cwd）；
-//   · extra_model_paths.yaml —— 共享目录（ComfyUI-Shared 那类）只在这里声明，
+//   · extra_model_paths.yaml —— 共享目录（ComfyUI-Shared 那类）在这里声明，
 //     ComfyUI 启动时按它把额外目录并进各类型；
 //   · 启动参数 —— `--base-directory` / `--input-directory` / `--output-directory`
-//     优先于上面两者的默认值（本应用 spawn 桌面实例时用的就是这组参数）。
+//     优先于上面两者的默认值；`--extra-model-paths-config` 还可以指向任意一份
+//     额外 yaml（新版 Comfy Desktop 不把共享目录写进实例目录，而是登记在
+//     `%APPDATA%\Comfy Desktop\` 下、启动时动态追加这三个参数——参数的派生在
+//     `./desktop-instance`，本模块只管按参数把文件读出来）。
+//
+// 解析器要认 Comfy Desktop 写入端的真实形状：字段名带引号
+//（`'checkpoints': 'checkpoints/'`）、类型清单用块标量（`controlnet: |-`）。
 //
 // 分层：本模块是**纯函数 + 类型**，不 import Node 内建（客户端组件可以只
 // `import type` 它的类型）；真实 IO 与路径拼接在 `./desktop-storage-paths.server.ts`。
@@ -51,6 +57,9 @@ export type StorageDirInfo = {
 export type DesktopStoragePaths = {
   /** ComfyUI 的 base 目录（Comfy Desktop 布局下即 `<实例根>/ComfyUI`）。 */
   baseDir: string;
+  /** 启动参数 `--extra-model-paths-config` 指向、且实际读到的 yaml 列表
+   *  （新版 Comfy Desktop 的共享模型声明就在这里）。 */
+  extraModelPathsConfigFiles: Array<string>;
   /** 实际读到的 extra_model_paths.yaml 路径；该文件不存在时为 null。 */
   extraModelPathsFile: string | null;
   inputDir: StorageDirInfo;
@@ -72,8 +81,12 @@ export type StorageDirOverrides = {
 
 /** 顶层键（无缩进）：`comfyui_shared:` 或顶层标量 `base_path: D:/x`。 */
 const TOP_KEY_RE = /^(?<key>[A-Za-z0-9_.-]+):\s*(?<value>.*)$/;
-/** 块内字段（带缩进）：`base_path:` / `paths:` / `is_default:`。 */
-const FIELD_RE = /^\s+(?<name>[A-Za-z_]+):\s*(?<value>.*)$/;
+/**
+ * 块内字段（带缩进）：`base_path:` / `paths:` / `is_default:`。
+ * Comfy Desktop 的写入端给类型名带引号（`'checkpoints': 'checkpoints/'`），
+ * 所以字段名要认裸名与单双引号两种形态。
+ */
+const FIELD_RE = /^\s+(?<name>'[^']*'|"[^"]*"|[A-Za-z_]+):\s*(?<value>.*)$/;
 /** 块内列表项：`- models/`。 */
 const LIST_ITEM_RE = /^\s*-\s*(?<value>.+)$/;
 
@@ -219,7 +232,8 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
     if (!field) {
       continue;
     }
-    const name = field.groups?.name ?? "";
+    /* 带引号的字段名剥掉引号再判（`'checkpoints'` → `checkpoints`）。 */
+    const name = (field.groups?.name ?? "").replace(/^['"]/, "").replace(/['"]$/, "");
     const rawFieldValue = (field.groups?.value ?? "").trim();
     /* 块标量指示符（`|` / `>`）：`text_encoders: |`、`clip_vision: |-` 等。
      * 「空值」是列表还是块，要在 stripScalar 之前认 —— 块值剥掉指示符后是

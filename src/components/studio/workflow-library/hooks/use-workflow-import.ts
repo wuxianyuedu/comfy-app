@@ -4,8 +4,9 @@
  *  面板 UI 状态（name / modes / json / errors / 帮助提示）、手动「粘贴 JSON」提交
  *  与拖放漏斗；组件只留状态对象和 JSX。**只接受 ComfyUI 原始工作流格式（RAW）**：
  *  API 格式不是本应用支持的导入形态，RAW 转可执行 API 图由 comfy-cli 执行时完成。 */
-import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
+import { useDropZone } from "~/components/ui/use-drop-zone";
 import { runAsyncAction } from "~/lib/async-action";
 import { errorText } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
@@ -22,60 +23,9 @@ export type UseWorkflowImportArgs = {
   load: () => Promise<void> | void;
 };
 
-/** 拖放投放区：只认带 `Files` 的拖动（否则文本选择拖动也会点亮高亮）。
- *  计数器抵消子元素冒泡产生的 leave —— 没有它，光标掠过子元素时高亮会闪。
- *  多文件 / 空投递在这里统一给出可展示的错误；列表区与导入面板两个投放区共用。 */
-function useDropZone(
-  onFile: (file: File) => void | Promise<void>,
-  onError: (message: string) => void,
-) {
-  const counterRef = useRef(0);
-  const [active, setActive] = useState(false);
-
-  const onDragOver = useCallback((event: DragEvent<HTMLElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) {
-      return;
-    }
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-  }, []);
-  const onDragEnter = useCallback((event: DragEvent<HTMLElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) {
-      return;
-    }
-    counterRef.current += 1;
-    setActive(true);
-  }, []);
-  const onDragLeave = useCallback((event: DragEvent<HTMLElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) {
-      return;
-    }
-    counterRef.current = Math.max(0, counterRef.current - 1);
-    if (counterRef.current === 0) {
-      setActive(false);
-    }
-  }, []);
-  const onDrop = useCallback(
-    (event: DragEvent<HTMLElement>) => {
-      event.preventDefault();
-      counterRef.current = 0;
-      setActive(false);
-      const files = [...event.dataTransfer.files];
-      const [first] = files;
-      if (!first) {
-        return;
-      }
-      if (files.length > 1) {
-        onError(`一次只能拖入一个文件（收到了 ${files.length} 个）`);
-        return;
-      }
-      void onFile(first);
-    },
-    [onError, onFile],
-  );
-
-  return { active, onDragOver, onDragEnter, onDragLeave, onDrop };
-}
+// 拖放漏斗（useDropZone）已收进 `~/components/ui/use-drop-zone`：工坊剧本导入
+// （#4827）也要接系统文件拖入，同一套「只认 Files / 计数防闪 / 多文件报错」
+// 不许抄第二份（§12.18 / §12.12）。本文件只保留「收到文件怎么处理」那一半。
 
 export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   // ── 导入面板状态 ──
