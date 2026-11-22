@@ -630,6 +630,74 @@ package.json 在： <检出>/                                                ←
 跑步模式是 `COMFYAPP_LAUNCH_MODE`（§1.5 的 `ensure_launch_mode`），别把两个问题
 合成一个判据——那正是「一个环境变量承载两件事」的老路。
 
+### 1.8 首屏编译怎么省：预编译（`pnpm start`）与实验档（#3943）
+
+「启动慢、打开界面要等」这里的**大头是 dev server 的首屏现场编译**，不是 TypeScript
+类型检查：`tsc` 那条链（`next.config.js` 的 `experimental.useTypeScriptCli: false`）
+**不产出任何运行期代码**，它只保证类型正确。真正把 TSX / TS 变成可执行 chunk 的是
+Turbopack（`next dev` / `next build` 里的那一步），而 `next dev` 是**按路由按需编译**：
+某个第一次被访问到的页面要在那一刻编译出来，这就是「点了菜单要等几秒」的来源。
+
+所以「预编译」这件事在本仓只有一条正路，别去改 tsc：**先把产物构建出来，再拿
+`next start` 跑它** —— 这是同一份 `next build` 产物、首屏零编译。
+
+#### 1.8.1 三档（各自解决什么，别混着读）
+
+| 档 | 入口 | 首屏编译 | 热更新 | 产物是否随源码走 | 用在哪 |
+| --- | --- | --- | --- | --- | --- |
+| 开发档 | `pnpm dev` / 双击壳 | **现场编译**（按路由） | ✅ HMR + Fast Refresh | 不适用 | 改代码的日常 |
+| 预编译档 | `pnpm build` → `pnpm start` | **零** | ❌ 改了要重建 | `.next` 跟着树走 | 看「用户会看到什么」、E2E 的 `COMFY_E2E_SERVER=start` 一档 |
+| 打包档 | 桌包（`standalone`，§7.6） | **零** | ❌ | 产物内嵌 exe | 分发给用户 |
+
+**预编译与热更新不可兼得**是这个形态本身就有的取舍，不是本仓的实现缺陷：
+`next build` 的产物是按「这一份源码」算好的静态分块，改一个组件它不会自己重算。
+要两边都要，只有开发档一条路 —— 而开发档的首屏代价就是现场编译。
+
+⚠️ **别拿 `pnpm start` 当日常开发入口。** 它读的是**上一次** `next build` 的产物：
+改了代码不重建 ⇒ 界面还是旧的（这类「改了没生效」在现场会被归因成缓存、端口、
+甚至「Next 抽风」，而真相只是没重建）。只想让**首屏**不再等编译、又确实在改代码 ⇒
+用下面 1.8.2 的实验档，别换挡。
+
+#### 1.8.2 实验档：`COMFY_TURBOPACK_DEV_CACHE=1`（只用来量代价）
+
+dev 档的首屏编译之所以每次都要重来，是因为 `next.config.js` 把 Turbopack 的
+**dev 持久缓存关掉了**（`experimental.turbopackFileSystemCacheForDev`）。关它的理由
+是实打实的现场事故：Next 16.4.3 默认开它，与 turbopack-subscribe 的 hmrVersion 校验
+组合出**整页每 ~2.3s 硬重载一次**的死循环（#3559 / 上游 vercel/next.js #100267，
+机制与逐条排查见 `next.config.js` 该键上方那段注释）。在拿到「本次 DOM 的截图」之前
+**没有判据**能保证它在你的检出上不再出现：真出现时用户看到的是「界面自己在刷」，
+console 一条报错都没有。
+
+因此这一档按「实验开关」的形态保留，而不是把默认值改回去：
+
+- 打开：`COMFY_TURBOPACK_DEV_CACHE=1 pnpm dev`（**只认 `"1"`**，写别的等于关闭）；
+- 打开时 `scripts/dev.mjs` 会在启动日志里念一行 `⚠`，并写明「看到整页反复重载就先去掉
+  它」—— 风险档必须被读出来，不许安静地跑在上面（口径同「降档必须被读出来」）；
+- 它**值多少**：只认**同机、同依赖、同一次提交**的前后比（冷启动到首屏可交互的墙钟），
+  没有任何文档里的数字可以替你作证（历史上「装依赖」这类读数在冷 / 暖两态之间差数倍，
+  见 `docs/audits/2026-10-21-timing-baseline-refs-volume.md`）；
+- 收掉它：量完就 `unset`。**上游 #100267 修好之后删掉整条分叉**（连同配置里那段注释与
+  `tests/next-config-turbopack-cache.test.ts` 的断言），不是把默认值改成 true。
+
+契约由 `tests/next-config-turbopack-cache.test.ts` 钉住三条：默认必须是关闭、
+分叉只认字符串 `"1"`、配置里不许出现裸 `true`。
+
+#### 1.8.3 别往「把 `.ts` 预编译成 `.js` 再跑」这条路上走
+
+它是自洽的，但它替换掉的不是**首屏**那一步，而是**整条构建链**：
+
+- `next.config.js` 的 `turbopack.resolveAlias` 与 Web 侧 `resolve.alias` 是按
+  `~/* → ./src/*` 配的，改成 `.js` 就得同步改这两处，并处理 `.ts` 后缀的 import
+  （本仓 `scripts/**` 已经在用 `.ts` 后缀 import，`allowImportingTsExtensions`）；
+- `src/**` 里 `"use client"` 指令、`server-only` 哨兵、`src/lib/**` 的
+  `.server.ts` 边界（§18.4）都依赖 Next 的编译期语义，先转成 JS 再把它们交给 Turbopack
+  ＝ 让 **Turbopack 再编译一次**，省不下那一步，只是多了一次转换；
+- 多出来的编译产物会撞上产物层那两道判据：`scripts/check-standalone-contents.cjs`
+  的顶层**默认拒绝**（新增顶层条目必然红）与 `check-infra-file-size.cjs`。
+
+结论：**要「不编译」就用预编译档（1.8.1），要「改了立刻生效」就用开发档。**
+把两边拼起来的那条路在本仓是净负债。
+
 ## 2. 启动预检（dev-launcher.mjs，新增于 2026-09-02）
 
 预检分两段：**工具链门禁**在壳起编排器**之前**执行，只做只读致命快检——命中即
