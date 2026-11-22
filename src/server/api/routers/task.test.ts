@@ -37,7 +37,13 @@ import { taskRouter } from "~/server/api/routers/task";
 import { taskRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
 import { generatedRoot } from "~/lib/media/output-paths";
-import { getTestDb, seedUser, seedTask, type Row } from "../../../../tests/helpers/test-db";
+import {
+  getTestDb,
+  seedUser,
+  seedTask,
+  seedWorkflowTemplate,
+  type Row,
+} from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(taskRouter);
@@ -266,6 +272,31 @@ describe("task.detail", () => {
     await expect(caller.detail({ id: "task-b" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+
+  it("返回工作流上挂的模型名（modelName，与 list 同口径；ISSUE #4855）", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "tpl-1",
+      userId: "user-a",
+      modelTags: [{ id: "tag-1", userId: "user-a", name: "minimax_h3" }],
+    });
+    seedTask(tdb, {
+      id: "task-m",
+      userId: "user-a",
+      params: { workflow: "tpl-1" },
+    });
+    const task = await createCaller(makeCtx()).detail({ id: "task-m" });
+    expect(task.modelName).toBe("minimax_h3");
+  });
+
+  it("没挂模型标签 / 模板引用缺失时 modelName 如实为 null（前端回落工作流名）", async () => {
+    seedTask(tdb, {
+      id: "task-n",
+      userId: "user-a",
+      params: { workflow: "tpl-missing" },
+    });
+    const task = await createCaller(makeCtx()).detail({ id: "task-n" });
+    expect(task.modelName).toBeNull();
   });
 });
 

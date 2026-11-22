@@ -185,7 +185,18 @@ export const taskRouter = createTRPCRouter({
     if (task?.userId !== ctx.user.id) {
       throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
     }
-    return task;
+    /* 模型名（ISSUE #4855，与 list 同一口径）：任务行不存模型，工作流上挂的
+     * 模型标签才是权威来源 —— 详情弹窗头部要与历史列表卡显示同一个名字。
+     * 没挂标签 / 模板引用缺失时如实给 null，前端回落工作流名。 */
+    const workflowId = asRecord(task.params)?.workflow;
+    const templateId = typeof workflowId === "string" && workflowId !== "" ? workflowId : null;
+    const tagRows =
+      templateId === null ? [] : await workflowModelTagRepository.getTemplateTagRows([templateId]);
+    const modelNameByTemplate = new Map(tagRows.map((row) => [row.templateId, row.name]));
+    return {
+      ...task,
+      modelName: templateId === null ? null : (modelNameByTemplate.get(templateId) ?? null),
+    };
   }),
 
   /* POST /api/tasks/[id]/cancel —— 新建 */

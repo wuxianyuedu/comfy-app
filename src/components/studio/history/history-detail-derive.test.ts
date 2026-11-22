@@ -32,6 +32,7 @@ const TASK_DETAIL_BASE: TaskDetail = {
   negativePrompt: null,
   params: {},
   workflowName: "wf-test",
+  modelName: null,
   workflowSnapshot: null,
   projectId: null,
   shotId: null,
@@ -160,6 +161,42 @@ describe("deriveWorkshopParams", () => {
   it("模式为空时回落内置默认契约（仍列出口，不返回空）", () => {
     const rows = deriveWorkshopParams(makeDetail({ workflow: "w" }), null, null, null);
     expect(rows.length).toBeGreaterThan(0);
+  });
+
+  it("I2I：参考图口从 params.referenceImages 按槽位取值（ISSUE #4855）", () => {
+    const contracts: Array<ModeContract> = [
+      { mode: "I2I", inputs: ["prompt", "reference-image", "reference-image-2"] },
+    ];
+    const rows = deriveWorkshopParams(
+      makeDetail({ prompt: "a", referenceImages: ["ref-1.png", "ref-2.png"] }),
+      "I2I",
+      contracts,
+      null,
+    );
+    expect(rows.find((r) => r.id === "reference-image")?.value).toBe("ref-1.png");
+    expect(rows.find((r) => r.id === "reference-image-2")?.value).toBe("ref-2.png");
+  });
+
+  it("参考图槽位没给值时仍返回 undefined（不臆造）；画布通路的 inputImage 优先", () => {
+    const contracts: Array<ModeContract> = [
+      { mode: "I2I", inputs: ["reference-image", "reference-image-2"] },
+    ];
+    const rows = deriveWorkshopParams(
+      makeDetail({ referenceImages: ["ref-1.png"] }),
+      "I2I",
+      contracts,
+      null,
+    );
+    expect(rows.find((r) => r.id === "reference-image")?.value).toBe("ref-1.png");
+    expect(rows.find((r) => r.id === "reference-image-2")?.value).toBeUndefined();
+    /* 画布通路的单文件名（params.inputImage）沿用原别名口径，优先于数组。 */
+    const canvasRows = deriveWorkshopParams(
+      makeDetail({ inputImage: "canvas.png", referenceImages: ["ref-1.png"] }),
+      "I2I",
+      contracts,
+      null,
+    );
+    expect(canvasRows.find((r) => r.id === "reference-image")?.value).toBe("canvas.png");
   });
 });
 
@@ -425,6 +462,18 @@ describe("buildReprintPayload（ISSUE #4769：复制去重投的全量参数 JSO
     expect("checkpoint" in payload.inputs).toBe(false);
     expect("workflow" in payload.inputs).toBe(false);
     expect("runtime" in payload.inputs).toBe(false);
+  });
+
+  it("I2I：参考图按契约槽位进载荷，与详情弹窗的工坊参数表一字不差（ISSUE #4855）", () => {
+    const payload = buildReprintPayload({
+      detail: makeDetail({ prompt: "a", referenceImages: ["ref-1.png", "ref-2.png"] }),
+      mode: "I2I",
+      contracts: null,
+    });
+    expect(payload.mode).toBe("I2I");
+    expect(payload.inputs.prompt).toBe("a");
+    expect(payload.inputs["reference-image"]).toBe("ref-1.png");
+    expect(payload.inputs["reference-image-2"]).toBe("ref-2.png");
   });
 });
 
