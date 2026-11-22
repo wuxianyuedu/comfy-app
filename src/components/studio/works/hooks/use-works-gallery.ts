@@ -124,8 +124,10 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
       ) {
         return;
       }
-      /* 结构性事件：与侧栏共用的短 TTL 合并取数（ISSUE #4678）。 */
-      void load(true);
+      /* 「hydrate」= 服务端项目集合刚变（首推成功 / 对账回来）：拿**新鲜**读数，
+       * 不进合并窗——否则复用推送落地前的在飞请求，新建项目进不了列表
+       * （ISSUE #4819，与侧栏同一修法）。其余结构性事件保持合并（ISSUE #4678）。 */
+      void load(payload.reason !== "hydrate");
     };
     const unsubscribe = subscribeAppEvent("comfyapp:canvas-store-changed", onChanged);
     return () => {

@@ -117,4 +117,31 @@ describe("useSidebarProjects", () => {
      * 同一拍的结构性事件不再两路各发一次 project.list。 */
     expect(listProjectsWithServer).toHaveBeenLastCalledWith({ coalesce: true });
   });
+
+  it("hydrate（首推成功）不进合并窗：新建项目要及时进侧栏（ISSUE #4819）", async () => {
+    /* 新建时序：save 事件先到（此刻服务端还没有这一行），首推成功后 hydrate 到。
+     * 两次取数隔着 2s 合并窗——hydrate 若复用 save 那一拍的在飞请求，拿到的
+     * 永远是「服务端还没有这一行」的旧读数，新项目就进不了侧栏。 */
+    listProjectsWithServer
+      .mockResolvedValueOnce({ ok: true, entries: [] })
+      .mockResolvedValueOnce({ ok: true, entries: [] })
+      .mockResolvedValue({
+        ok: true,
+        entries: [{ id: "proj_new", name: "出端之刃", origin: "both" }],
+      });
+
+    const { result } = renderHook(() => useSidebarProjects());
+    await expect.poll(() => result.current).toEqual([]);
+
+    act(() => {
+      emitAppEvent("comfyapp:canvas-store-changed", { reason: "save", projectId: "proj_new" });
+    });
+    act(() => {
+      emitAppEvent("comfyapp:canvas-store-changed", { reason: "hydrate", projectId: "proj_new" });
+    });
+
+    /* hydrate 那一跳必须绕开合并窗（fresh），新项目这才被取回来。 */
+    await expect.poll(() => result.current.map((p) => p.id)).toEqual(["proj_new"]);
+    expect(listProjectsWithServer).toHaveBeenLastCalledWith({ coalesce: false });
+  });
 });

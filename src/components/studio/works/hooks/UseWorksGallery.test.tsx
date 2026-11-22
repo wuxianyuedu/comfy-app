@@ -208,6 +208,29 @@ describe("useWorksGallery", () => {
     expect(listProjectsWithServerMock).toHaveBeenLastCalledWith({ coalesce: true });
     await expect.poll(() => result.current.projects).toHaveLength(0);
   });
+
+  it("hydrate（首推成功）不进合并窗：新建项目要及时进列表（ISSUE #4819）", async () => {
+    listProjectsWithServerMock.mockResolvedValue({ entries: [], ok: true });
+    const { result } = renderHook(() => useWorksGallery());
+    await expect.poll(() => result.current.loading).toBe(false);
+
+    /* 新建时序：save 先到（此刻服务端还没有这一行），首推成功后 hydrate 到——
+     * hydrate 若复用 save 那一拍的在飞请求，拿到的永远是旧读数，新项目进不了列表。 */
+    act(() => {
+      emitAppEvent("comfyapp:canvas-store-changed", { reason: "save", projectId: "proj_new" });
+    });
+    await expect.poll(() => listProjectsWithServerMock).toHaveBeenCalledTimes(2);
+    listProjectsWithServerMock.mockResolvedValue({
+      entries: [entry({ id: "proj_new", name: "出端之刃" })],
+      ok: true,
+    });
+    act(() => {
+      emitAppEvent("comfyapp:canvas-store-changed", { reason: "hydrate", projectId: "proj_new" });
+    });
+
+    await expect.poll(() => result.current.projects.map((p) => p.id)).toEqual(["proj_new"]);
+    expect(listProjectsWithServerMock).toHaveBeenLastCalledWith({ coalesce: false });
+  });
 });
 
 describe("useWorksGallery 的卸载守卫（#4239）", () => {
