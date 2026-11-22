@@ -472,6 +472,28 @@ export function clearFinalize(taskId: string): void {
   state().finalized.delete(taskId);
 }
 
+/* ── 「取消中」标记（ISSUE #4800） ──
+ * 取消要杀本进程握着的 comfy-cli，而被杀进程的退出码非 0、也不再回 envelope，
+ * 进程退出收口凭退出码分不清「崩溃」与「被取消杀掉」。这个标记由 cancelTask
+ * 在**杀进程之前**挂上、结束时（含提前返回）摘掉；executor-cli 的 close 处理器
+ * 与看门狗见到它就不写失败终态，把终态让给取消路径的 CANCELLED。 */
+
+/** 取消路径在杀进程前调用：声明「这个任务的退出是取消造成的」。 */
+export function markCancelling(taskId: string): void {
+  state().cancelling.add(taskId);
+}
+
+/** 进程退出收口（close / 看门狗）读：本任务是否正被本进程取消。 */
+export function isCancellingHere(taskId: string): boolean {
+  return state().cancelling.has(taskId);
+}
+
+/** 取消收口结束（终态已落库或确认无需落库）后摘标记；同一个 taskId 重跑时
+ *  不让上一轮的标记吞掉这一轮真实的失败。 */
+export function clearCancelling(taskId: string): void {
+  state().cancelling.delete(taskId);
+}
+
 /* ── 在飞记账（P3 §5 ADR §14 D1 的第二刀：内存队列 `queue` + 计数器 `active` 的替身） ──
  *
  * 领取成功即 `markDispatched`，收口（成功 / 失败 / 取消 / 被回收）时
