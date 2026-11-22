@@ -722,7 +722,7 @@
   按任务模式切模式页签、契约口值预填进统一输入表单、等工作流清单 settle 后
   补选同款工作流；用户确认后点「生成」才真正重跑。预填是表单值的**兜底层**：
   换模型不丢（重试换模型再跑是常态），用户改任意输入 / 贴 JSON / 选文件即退场。
-  原直复投（`task.retry`）端点保留但不再有界面直调入口。
+  原直复投端点（`task.retry`）随唯一的消费方（历史页直调）一并退役。
 - 落点：`src/components/studio/history/HistoryList.tsx`、
   `src/components/studio/history/hooks/use-history-list.ts`、
   `src/components/studio/history/history-detail-derive.ts`（`buildReprintPayload` /
@@ -1616,11 +1616,11 @@
 - 行为与验收：① 同一 seed + 同一工作流 + 同一参考图重跑产出一致（复现性可验；
   **本地 ComfyUI 通道**判此条，API 直连通道在上游声明同 seed 确定性时才判）；
   ② 每张图能追回 `taskId` 与参数快照；③ 只重跑失败镜，已完成的不被动
-  （历史面的任务级重跑**已改防误触形态**：#2481 的 `task.retry` 按原行
+  （历史面的任务级重跑**已改防误触形态**：#2481 的 `task.retry` 曾按原行
   `execPayload` + 参数 / 参考图原样新建 QUEUED 行、只放行终态任务——
-  #4841 起历史页「重试」不再直调它，而是把参数折成载荷带到「测试模型」
-  统一输入预填，由人确认后点「生成」才真正重跑（见 FR-GN-05）；
-  `task.retry` 端点保留，当前无界面直调入口；带修改的重跑见 FR-QA-09）；
+  #4841 起历史页「重试」改为把参数折成载荷带到「测试模型」统一输入预填，
+  由人确认后点「生成」才真正重跑（见 FR-GN-05）；`task.retry` 端点唯一的
+  消费方就是历史页直调，已随 #4841 退役；带修改的重跑见 FR-QA-09）；
   ④ **自动优选（抽卡 N 选 1）**可用（#2612 已落）：镜头卡「抽卡 ×N」（2~4）
   连发 → `run.autoselectShot` 逐张按生图 rubric 视觉评审 → 均分最高者上镜
   （服务端不直写 imageUrl/taskId，赢家经镜头草稿回写，字段所有权见 #2615；
@@ -1690,10 +1690,10 @@
 - 需求：人的判断**留痕且优先**——产物级人工评分 / 收藏，实体级人工裁决
   （approved / rejected + 理由）**优先于 AI 判定**；人评过的样本成为 AI 评审的校准基准。
 - 行为与验收：① 镜头评审弹窗（`ShotReviewDialog` 内嵌 `HumanVerdictRow`）可直接
-  给产物打分 / 收藏，评分可查（`taskImage.humanRating` / `isFavorite` 列 +
-  `task.setImageFeedback`（带归属校验））；历史详情弹窗的评分 / 收藏入口
-  **已撤**（#4841：任务详情回归纯查看）——`ImageFeedbackRow` 及其挂载点已删，
-  列与端点保留（校准读数的读侧不变）；② 人判废的镜头 / 剧本
+  给产物打分 / 收藏，评分可查（`taskImage.humanRating` / `isFavorite` 列；
+  写侧端点 `task.setImageFeedback` 带归属校验——历史详情弹窗的评分 / 收藏入口
+  **已撤**（#4841：任务详情回归纯查看），`ImageFeedbackRow` 与该端点随消费方
+  一起退役，列与校准读数（读侧）保留）；② 人判废的镜头 / 剧本
   不因 AI 判过而放行进下一阶段（与 FR-AG-02「质量停点由人拍板」同口径）：人工裁决是
   **快照式**——镜头带 `rev`、剧本带内容指纹（`scriptDigestOf`），快照与当前内容一致
   才新鲜生效（人再改内容 → 裁决自然失效）；人通过且新鲜 → 定稿豁免 AI 评审，
@@ -1711,10 +1711,10 @@
   `applyHumanVerdict` / `applyHumanRating` / `applyScriptHumanVerdict`）、
   `src/lib/production/review-calibration.ts`（校准纯函数）、
   `src/lib/production/run-types.ts`（规划器人工裁决优先）、
-  `src/server/api/routers/run.ts`（四端点）、`src/server/api/routers/task.ts` +
-  `src/lib/core/repository-task-impl.ts`（`setImageFeedback`）、
+  `src/lib/production/review-calibration.ts`（校准纯函数）之前的落点不变，
   `src/components/workshop/HumanVerdictRow.tsx`（共享裁决 + 星评行；
-  历史页评分 / 收藏组件 `ImageFeedbackRow` 已随 #4841 删除）
+  历史页评分 / 收藏组件 `ImageFeedbackRow` 与写侧端点
+  `task.setImageFeedback`（含仓储方法 `patchImageFeedback`）已随 #4841 删除）
 
 #### FR-QA-09 带修改的重跑（局部重绘 / 放大）
 

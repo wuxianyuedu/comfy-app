@@ -329,8 +329,8 @@ export function useHistoryList(args: {
    * 同一份派生（buildModelTestRetryPayload）折成预填载荷，交给工作区带到
    * 「测试模型」页切模式页签 + 预填统一输入；用户确认后点「生成」才真正
    * 重跑。原先的直复投（task.retry 原样新建 QUEUED 行）已从历史页撤走 ——
-   * 误触一次就是一次真实生成（额度 / 本地队列都被占用）；服务端端点保留，
-   * 只是不再有界面直调入口。 */
+   * 误触一次就是一次真实生成（额度 / 本地队列都被占用）；该端点唯一的
+   * 消费方就是历史页直调，已随 #4841 一并退役（台账 E3′ 不留无消费方口）。 */
   const retry = useCallback(
     async (task: TaskItem) => {
       await retryAction.run(task.id, async () => {
