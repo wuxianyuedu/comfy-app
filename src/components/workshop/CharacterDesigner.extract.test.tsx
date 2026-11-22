@@ -13,6 +13,21 @@ vi.mock("~/components/workshop/hooks/use-character-lora-options", () => ({
   useCharacterLoraOptions: () => ({ options: [], loading: false }),
 }));
 
+/* 模型目录（#4834）同样不走真 tRPC：给一条本地文本候选，级联与通道换算照常工作。 */
+vi.mock("~/components/workshop/hooks/use-model-catalog", () => ({
+  useModelCatalog: () => {
+    const llama = { baseUrl: null, kind: "chat", local: true, name: "llama3" };
+    return {
+      modeTabs: [],
+      candidates: [llama],
+      allCandidates: [llama],
+      loading: false,
+      defaultMode: "",
+      resolveCandidate: (value: string) => (value === "llama3" ? llama : null),
+    };
+  },
+}));
+
 vi.mock("~/components/workshop/LLMContext", () => ({
   useLLM: () => ({
     config: {
