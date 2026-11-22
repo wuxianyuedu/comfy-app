@@ -78,6 +78,12 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
   }, [projects]);
 
   useEffect(() => {
+    /* StrictMode 双挂载（挂载 → 卸载 → 再挂载）共用这一个 ref：上一次卸载把它
+     * 置 false 后，这次 effect 不先复活的话，本次 `load()` 的回包会被「上一次
+     * 已卸载」的状态误丢 —— 网络正常、无报错，列表却永久停在「正在读取项目列表…」
+     * （ISSUE #4781）。每个 effect 运行周期先复活判活标记，与 use-agent-run /
+     * use-console 等同族 hook 的写法对齐；卸载守卫语义（#4239）不变。 */
+    aliveRef.current = true;
     /* 列之前先清掉遗留的空默认名草稿（挂载时的一次性清扫，与工作区首页同口径）。
      * 它现在**两侧一起删**（ISSUE #1501 修的就是这个），所以这里不会再攒出
      * 「服务端有、本地没有」的新孤儿。 */
