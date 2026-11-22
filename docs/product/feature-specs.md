@@ -58,8 +58,17 @@
   `project-sections.ts`，阶段状态与项目主页同一份 production 派生）；
   已到访的分区保持挂载（CSS 显隐），工坊六段共用一个受控的
   `WorkshopPipeline` 实例（内部阶段轨道隐藏）。「+」菜单只列项目「主页」
-  一页（旧版列六页）。
+  一页（旧版列六页）。侧栏「项目」行支持右键「编辑名称」（ISSUE #4808）：
+  改名对话框预填当前名、重名自动 `_2/_3` 后缀并预览，本地项目与只在服务端的
+  项目都同步改名，侧栏行即时更新。侧栏「项目」行右键菜单还支持「删除项目」
+  （ISSUE #4836）：红色危险态菜单项，点击弹危险态确认框，确认后走与项目页
+  左列表同一条删除链路（本地与服务端一并删、关该项目页签、刷新活跃项目）
+  并 toast 回执。侧栏「项目」面板的行内悬停反馈只认本行
+  （行级组 `group/row`，ISSUE #4812），悬停同面板其它行不点亮别的行。
 - 落点：`src/app/workspace/page.tsx`（「+」菜单清单）、`NavItems.tsx`、
+  `src/components/studio/AppShell.tsx`（项目行右键菜单 / 行级悬停组）、
+  `src/components/studio/RenameProjectDialog.tsx`、
+  `src/lib/project-canvas/canvas-store.ts`（`renameProject`）、
   `src/components/studio/project-workspace/ProjectWorkspace.tsx`、
   `src/components/studio/project-workspace/ProjectSectionRail.tsx`
 
@@ -181,6 +190,18 @@
   `src/app/api/dev/launch-timings/route.ts`（应用内读数端点）
 
 ---
+
+#### FR-WS-12 侧栏品牌图片（左上角图片可自定义替换）
+
+- 状态：已上线
+- 需求：工作区侧栏左上角展示一张品牌图片；图片**点击回主页**（悬停提示「主页」，且无悬停背景框），
+  换图入口在「设置 → 外观」；首页项不用其它页签那种选中变色。
+- 行为与验收：默认展示内置图片；在「设置 → 外观 → 品牌图」选本地图片后即时替换并持久化到本机
+  （localStorage），刷新后仍保留；「恢复默认」回到内置图并清掉自定义。侧栏图随广播即时更新，
+  但点击只回主页、不再打开文件选择框。首页是固定落点，始终不显示 `data-active` 高亮，
+  其它视图的选中高亮不受影响。图片不上传服务端、不入库。
+- 落点：`src/components/studio/SidebarBrand.tsx`、`src/components/studio/AppShell.tsx`、
+  `src/app/(main)/settings/components/AppearanceSection.tsx`、`src/lib/appearance.ts`、`public/brand-logo.svg`
 
 ## 2. 账号与访问（FR-AU）
 
@@ -1218,6 +1239,15 @@
   （`{ mode, inputs }`），点「生成」解析并写回当前格表单值、随同一次点击
   按这些值重跑（解析失败 / 缺 `inputs` / 没有认得的键都会在反馈位给错并
   拦下，不发起生成；解析成功自动切回统一输入，填进去的参数可见）。
+  **生成中的模型在左栏可见**（ISSUE #4838）：运行态按格隔离、多模型可同时
+  测试，全部格的生成中状态聚合成一份索引（`summarizeGeneratingSessions`）——
+  用途页签对该用途下生成中的模型**去重**计数（「N 生成中」徽标）、模式列表
+  在「N 模型」旁叠加该模式的「M 生成中」、模型下拉给正在生成的模型挂
+  「生成中」徽标（选中项在触发器上同样可见）；生成结束各处读数即归零。
+  **参考图可点击放大查看**（ISSUE #4840）：参考图缩略图是「查看大图」按钮
+  （`ViewableImage`，与历史任务卡 / 工作流库预览同一份组合）—— 点击打开
+  图片查看器（缩放 / 适应窗口 / 原始宽高标题），键盘可达；「移除」按钮的
+  位置与行为不变。
 - 按名解析的连接参数（#3778）：远端模型按名直连时，Base URL / 密钥按
   「条目自己的 → 所属供应商的」折算（#3501 起两者以供应商为单位，模型行
   两格为空是常态）—— 模型在但两处都没填地址时给**定向**报错（点名模型），

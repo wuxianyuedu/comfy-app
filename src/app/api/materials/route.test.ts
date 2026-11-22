@@ -351,3 +351,33 @@ describe("DELETE /api/materials —— 删除侧归属", () => {
     expect(await res.json()).toEqual({ ok: true, alreadyGone: true });
   });
 });
+
+/* ── 跨站「简单请求」闸（#4723）：multipart POST 与查询串 DELETE 不经 preflight，
+ * 恶意网页可盲发；同源闸必须在鉴权之后、落盘之前挡住。 ── */
+describe("跨站简单请求闸（#4723）", () => {
+  it("POST 带跨站 Origin → 403，且 mkdir / writeFile 都没发生", async () => {
+    const req = reqOf(urlOf(""), {
+      method: "POST",
+      headers: { origin: "https://evil.example" },
+      body: uploadForm({ folder: "ref", projectId: "proj-a" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(403);
+    expect(disk.mkdir).toEqual([]);
+    expect(disk.writeFile).toEqual([]);
+  });
+
+  it("DELETE 带跨站 Origin → 403，且不碰盘", async () => {
+    const req = reqOf(urlOf("?id=proj-a/ref/mine.png"), {
+      headers: { origin: "https://evil.example" },
+    });
+    const res = await DELETE(req);
+    expect(res.status).toBe(403);
+    expect(disk.unlink).toEqual([]);
+  });
+
+  it("本机工具缺 Origin → 照常放行（合法调用方是本机界面与本机工具）", async () => {
+    const res = await DELETE(reqOf(urlOf("?id=proj-a/ref/mine.png")));
+    expect(res.status).toBe(200);
+  });
+});

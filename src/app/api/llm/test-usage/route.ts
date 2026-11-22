@@ -1,6 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { requireRequestUser } from "~/server/auth/request-user";
-import { unauthorizedResponse } from "~/server/lib/error-response";
 import {
   SUBMIT_PENDING_DETAIL,
   USAGE_TEST_KINDS,
@@ -8,11 +6,11 @@ import {
   callImage,
   callVideo,
   parseExtraJson,
-  readUsageTestPrologue,
   saveMediaToLocalTemp,
   strField,
 } from "~/lib/llm/usage-test.server";
 import { apiErrorDetail } from "~/lib/api-error";
+import { usageTestEntry } from "./entry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,16 +21,11 @@ export const dynamic = "force-dynamic";
  * 生视频走任务制时内置一轮轮询（VIDEO_POLL_TOTAL_MS），仍未就绪即以 `{ pending:true, taskId }` 返回、由 `./query` 接「继续等待」（本路由不重新提交）；失败一律 200 + `{ ok:false, detail }`。
  */
 export async function POST(req: NextRequest) {
-  if (!(await requireRequestUser())) {
-    return unauthorizedResponse();
+  const entry = await usageTestEntry(req, "llm-test-usage");
+  if (entry instanceof Response) {
+    return entry;
   }
-
-  /* 读 body / 取条目名 / 解析连接参数与「继续等待」路由同一份实现（§12.12）。 */
-  const prologue = await readUsageTestPrologue(req);
-  if (!prologue.ok) {
-    return NextResponse.json({ ok: false, detail: prologue.detail });
-  }
-  const { name, rec, up } = prologue;
+  const { name, rec, up } = entry;
 
   const kind = strField(rec, "kind");
   const prompt = strField(rec, "prompt");
@@ -58,7 +51,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, detail: parsedExtra.detail });
   }
   /* 模型级透传字段先落（#3626），弹窗里 ad-hoc「额外参数」后落 —— 临时覆盖同名键。 */
-  const extra = { ...prologue.modelExtra, ...parsedExtra.extra };
+  const extra = { ...entry.modelExtra, ...parsedExtra.extra };
 
   const startedAt = Date.now();
   try {

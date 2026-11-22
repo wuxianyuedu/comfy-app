@@ -4,7 +4,7 @@
 // 工坊那一条链 —— 本文件只放它的纯函数与常量，DOM / 网络分居视图与 hook。
 
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
-import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import {
   expandContractInputs,
   modeContractInputIdLabel,
@@ -331,6 +331,14 @@ export type TestCandidate = {
  *（模型名和工作流名都可能叫「z-Image」）。 */
 export const WORKFLOW_CANDIDATE_PREFIX = "wf::";
 
+/** 从候选取值里解出本地工作流 id：`wf::<id>` → `<id>`；其余（模型名 / 空串）
+ *  一律回空串 —— 调用侧据此分流本地工作流通道与远端 API 通道（#4834）。 */
+export function workflowIdFromCandidateValue(value: string): string {
+  return value.startsWith(WORKFLOW_CANDIDATE_PREFIX)
+    ? value.slice(WORKFLOW_CANDIDATE_PREFIX.length)
+    : "";
+}
+
 /** 候选在下拉里的选项值：工作流候选用 `wf::<id>`，其余用模型名。 */
 export function candidateValue(candidate: TestCandidate): string {
   return candidate.workflow
@@ -528,6 +536,63 @@ export function modeTabsForKind(
  *  左栏页签常显，模式必须有初值才能让「选模型 → 填输入」的表单一次成立。 */
 export function defaultModeForKind(kind: ModelTestKind): string {
   return ALL_WORKFLOW_TYPES.find((t) => t.isGenerative && t.category === kind)?.code ?? "";
+}
+
+/* ── 左栏「生成中」标记（ISSUE #4838）─────────────────────────────────
+ * 运行态按「用途 + 模式 + 模型」一格一份、不同模型可同时测试 —— 把**全部格**
+ * 的生成中状态聚合成一份只读索引，左栏三处（用途页签 / 模式列表 / 模型下拉）
+ * 的「生成中」徽标与计数都读它，不在三处各写一遍过滤。 */
+
+/** 生成中的模型索引（全部格聚合）。 */
+export type GeneratingIndex = {
+  /** 键 = 用途，值 = 该用途下生成中的模型数（按模型取值去重：同一模型在
+   *  多个模式各开一格时，用途页签不重复计数）。 */
+  byKind: Record<ModelTestKind, number>;
+  /** 键 = `${kind}::${mode}`，值 = 该模式下生成中的模型数（一格即一个
+   *  模型取值，天然不重）。 */
+  byMode: Record<string, number>;
+  /** 正在生成的模型取值集合（模型名或 `wf::<id>`）。 */
+  models: ReadonlySet<string>;
+};
+
+/** 聚合各格的生成中状态。只认能解析出用途与模型取值的格键，坏键跳过。
+ *  格键 = `${kind}::${mode}::${modelValue}`，而模型取值本身可含 `::`
+ *  （工作流候选 `wf::<id>`）—— 不能无脑 `split("::")`，按前两个分隔符切。 */
+export function summarizeGeneratingSessions(
+  sessions: Record<string, { generating: boolean }>,
+): GeneratingIndex {
+  const byKind: Record<ModelTestKind, number> = { image: 0, video: 0, chat: 0 };
+  const byMode: Record<string, number> = {};
+  const seenByKind: Record<ModelTestKind, Set<string>> = {
+    image: new Set<string>(),
+    video: new Set<string>(),
+    chat: new Set<string>(),
+  };
+  const models = new Set<string>();
+  for (const [key, session] of Object.entries(sessions)) {
+    if (!session.generating) {
+      continue;
+    }
+    const first = key.indexOf("::");
+    const second = first === -1 ? -1 : key.indexOf("::", first + 2);
+    if (first === -1 || second === -1) {
+      continue;
+    }
+    const kind = key.slice(0, first);
+    const mode = key.slice(first + 2, second);
+    const model = key.slice(second + 2);
+    if ((kind !== "image" && kind !== "video" && kind !== "chat") || model === "") {
+      continue;
+    }
+    models.add(model);
+    if (!seenByKind[kind].has(model)) {
+      seenByKind[kind].add(model);
+      byKind[kind] += 1;
+    }
+    const modeKey = `${kind}::${mode}`;
+    byMode[modeKey] = (byMode[modeKey] ?? 0) + 1;
+  }
+  return { byKind, byMode, models };
 }
 
 /** 尺寸默认档：比例首档（1:1 正方）+ 分辨率首档（1k）。 */

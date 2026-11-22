@@ -17,7 +17,13 @@ import { useCharacterLoraOptions } from "./hooks/use-character-lora-options";
 import { CHARACTER_ATTRIBUTES, type AttributeOptionSet } from "~/lib/workshop/character-options";
 import type { Character, StyleRef } from "~/lib/workshop/types";
 import { buildCharacterPrompt, buildCharacterNegative } from "~/lib/workshop/prompt-builder";
-import { ExtractModelSelect } from "~/components/workshop/ExtractModelSelect";
+import { ModelCascadeSelect } from "~/components/workshop/ModelCascadeSelect";
+import { useModelCatalog } from "~/components/workshop/hooks/use-model-catalog";
+import {
+  channelOptionValue,
+  channelProviderLabel,
+  parseChannelOption,
+} from "~/lib/workshop/channel-options";
 import {
   CharacterPortraitStudio,
   type CharacterPortraitContext,
@@ -29,7 +35,6 @@ import {
   useCharacterAiFlow,
   useCharacterExtractFlow,
 } from "./hooks/use-character-flows";
-import { channelProviderLabel } from "~/lib/workshop/channel-options";
 import { ExtractToolbar } from "~/components/workshop/ExtractToolbar";
 import { IndexDot } from "~/components/workshop/IndexDot";
 import { enterCommit } from "~/components/ui/use-enter-commit";
@@ -135,6 +140,9 @@ export function CharacterDesigner({
 }: Props) {
   const [brief, setBrief] = React.useState("");
   const { config, openSettings } = useLLM();
+  /* 文本模型级联（#4834）：一句话生成 / AI 润色共用 genSel 一个选择；
+   * 候选与测试模型页同一份，存储格式仍是通道值（local::<m> | remote::<m>）。 */
+  const chatCatalog = useModelCatalog("chat", "");
 
   /* 角色 LoRA 绑定的候选（模型库 loras 目录，#2622 FR-QA-02③）。 */
   const { options: loraFiles, loading: lorasLoading } = useCharacterLoraOptions();
@@ -249,7 +257,16 @@ export function CharacterDesigner({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ExtractModelSelect onChange={setGenSel} value={genSelectValue} />
+          <ModelCascadeSelect
+            kind="chat"
+            onSelectionChange={(next) => {
+              const candidate = chatCatalog.resolveCandidate(next.model);
+              setGenSel(
+                channelOptionValue(candidate?.local === false ? "remote" : "local", next.model),
+              );
+            }}
+            selection={{ mode: "", model: parseChannelOption(genSelectValue).model }}
+          />
           <input
             onChange={textHandler(setBrief)}
             value={brief}
@@ -384,6 +401,9 @@ export function CharacterDesigner({
                 </Button>
               </div>
 
+              {/* 角色卡 = 角色描述 + 定妆照（#4834）：两块各自有小节标题；
+                  定妆照块由卡片尾部的 CharacterPortraitStudio 承担（自带标题）。 */}
+              <p className="text-muted-foreground text-2xs mt-1">角色描述</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field
                   label="年龄/性别"

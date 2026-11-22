@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { hasPython, runPython } from "../../../../../tests/helpers/python-exe";
 import { isPlainRecord } from "~/lib/is-record";
+import { NextRequest } from "next/server";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "log-diag-"));
 /** 日志根（`<项目根>/log`）—— 与真实布局同形，`LOG_ROOT` 指的就是它。 */
@@ -99,7 +100,10 @@ describe("/api/logs/diagnostics", () => {
    * `!python` 那一族同处置）：它在这里是**独立验证端**（`zipfile` 是最严格的解压端，
    * Bad CRC-32 当场报），缺了它只该让这一条「没跑」，不该让流水线红。 */
   it.skipIf(!PYTHON_OK)("打出能解开的 zip，含本次 current/ 与历史 runs/", async () => {
-    const res = await POST();
+    /* 路由现在带同源闸与限流（#4723/#4725）：本机形态请求（无 Origin = 放行）。 */
+    const res = await POST(
+      new NextRequest("http://127.0.0.1:3100/api/logs/diagnostics", { method: "POST" }),
+    );
     expect(res.status).toBe(200);
     const data: unknown = await res.json();
     if (!isDiagnosticsPayload(data)) {
@@ -126,7 +130,9 @@ describe("/api/logs/diagnostics", () => {
 
   it("未登录不打包（鉴权与同族端点一致）", async () => {
     authed = false;
-    const res = await POST();
+    const res = await POST(
+      new NextRequest("http://127.0.0.1:3100/api/logs/diagnostics", { method: "POST" }),
+    );
     expect(res.status).toBe(401);
     expect(fs.existsSync(path.join(logRoot, "exports"))).toBe(false);
   });

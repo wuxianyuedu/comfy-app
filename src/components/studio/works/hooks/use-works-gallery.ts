@@ -78,6 +78,12 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
   }, [projects]);
 
   useEffect(() => {
+    /* StrictMode 双挂载（挂载 → 卸载 → 再挂载）共用这一个 ref：上一次卸载把它
+     * 置 false 后，这次 effect 不先复活的话，本次 `load()` 的回包会被「上一次
+     * 已卸载」的状态误丢 —— 网络正常、无报错，列表却永久停在「正在读取项目列表…」
+     * （ISSUE #4781）。每个 effect 运行周期先复活判活标记，与 use-agent-run /
+     * use-console 等同族 hook 的写法对齐；卸载守卫语义（#4239）不变。 */
+    aliveRef.current = true;
     /* 列之前先清掉遗留的空默认名草稿（挂载时的一次性清扫，与工作区首页同口径）。
      * 它现在**两侧一起删**（ISSUE #1501 修的就是这个），所以这里不会再攒出
      * 「服务端有、本地没有」的新孤儿。 */
@@ -118,8 +124,10 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
       ) {
         return;
       }
-      /* 结构性事件：与侧栏共用的短 TTL 合并取数（ISSUE #4678）。 */
-      void load(true);
+      /* 「hydrate」= 服务端项目集合刚变（首推成功 / 对账回来）：拿**新鲜**读数，
+       * 不进合并窗——否则复用推送落地前的在飞请求，新建项目进不了列表
+       * （ISSUE #4819，与侧栏同一修法）。其余结构性事件保持合并（ISSUE #4678）。 */
+      void load(payload.reason !== "hydrate");
     };
     const unsubscribe = subscribeAppEvent("comfyapp:canvas-store-changed", onChanged);
     return () => {

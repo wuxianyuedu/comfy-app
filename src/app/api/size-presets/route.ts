@@ -17,6 +17,7 @@ import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import { loadSizePresetLayers, saveSizePresetTable } from "~/lib/media/size-preset.server";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +42,11 @@ export async function PUT(req: NextRequest) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
   }
   const body = await readJsonRecord(req);
   if (isErrorResponse(body)) {

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_META,
+  draftModelSelections,
   emptyWorkshopDraft,
   readWorkshopDraft,
   writeWorkshopDraft,
@@ -54,5 +55,39 @@ describe("readWorkshopDraft / writeWorkshopDraft", () => {
     const back = readWorkshopDraft("proj_1");
     expect(back.shots).toEqual([]);
     expect(back.scenes).toEqual([]);
+  });
+});
+
+describe("draftModelSelections（#4834 旧草稿迁移）", () => {
+  it("新字段优先：已写 modelSelections 的草稿不回读旧工作流字段", () => {
+    const draft = emptyWorkshopDraft();
+    draft.workflowId = "wf-old";
+    draft.videoWorkflowId = "vwf-old";
+    draft.modelSelections = {
+      shot: { mode: "T2I", model: "gpt-image-2" },
+      video: { mode: "T2V", model: "wf::vwf-new" },
+    };
+    const selections = draftModelSelections(draft);
+    expect(selections.shot).toEqual({ mode: "T2I", model: "gpt-image-2" });
+    expect(selections.video).toEqual({ mode: "T2V", model: "wf::vwf-new" });
+    expect(selections.text).toBeUndefined();
+  });
+
+  it("旧草稿只有 workflowId / videoWorkflowId：映射成 wf::<id> 的本地模型选择", () => {
+    const draft = emptyWorkshopDraft();
+    draft.workflowId = "wf-1";
+    draft.videoWorkflowId = "vwf-1";
+    const selections = draftModelSelections(draft);
+    expect(selections.shot).toEqual({ mode: "", model: "wf::wf-1" });
+    expect(selections.portrait).toEqual({ mode: "", model: "wf::wf-1" });
+    expect(selections.video).toEqual({ mode: "", model: "wf::vwf-1" });
+    expect(selections.text).toBeUndefined();
+  });
+
+  it("空工作流 id 不迁移（未选就是未选）", () => {
+    const selections = draftModelSelections(emptyWorkshopDraft());
+    expect(selections.shot).toBeUndefined();
+    expect(selections.portrait).toBeUndefined();
+    expect(selections.video).toBeUndefined();
   });
 });

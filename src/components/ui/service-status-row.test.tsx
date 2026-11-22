@@ -55,24 +55,23 @@ describe("服务状态行：窄了整排换行，不压扁控件", () => {
 });
 
 describe("状态行视图：都接上了这套判据", () => {
-  /* 状态行分布在两个屏上（ISSUE #1900 把 ComfyUI 那一行搬去侧栏「ComfyUI」页）：
-   *   · 设置页：LlmLocalSection（Ollama）/ DatabaseSection（Drizzle Studio）；
-   *   · 侧栏「ComfyUI」页：`studio/comfyui/ComfyuiControlView`。
-   * 判据扫这几份源码。取 import 段之后的部分：否则「用了几次」会把 import 名本身
-   * 也算进去。 */
-  /* 只取 import 段之后的部分：否则「用了几次」会把 import 名本身也算进去
-   * （`import { STATUS_ROW_CLASS } from "…"` 就是一次匹配）。 */
+  /* 状态行分布在两个屏上：
+   *   · 设置页：LlmLocalSection（Ollama）/ DatabaseSection（Drizzle Studio）——
+   *     两条横向状态行，窄窗口下按钮整排换到第二行，用 STATUS_ROW_CLASS；
+   *   · 侧栏「ComfyUI」页 `studio/comfyui/ComfyuiControlView`——#4710 按用户反馈
+   *     改成纵向三行（状态句 / 地址 / 按钮排），不再用横向状态行容器。
+   * 判据扫这几份源码。取 import 段之后的部分：否则「用了几次」会把 import
+   * 名本身也算进去（`import { STATUS_ROW_CLASS } from "…"` 就是一次匹配）。 */
   const readViewBody = (rel: string) => {
     const src = readFileSync(path.resolve(__dirname, rel), "utf8");
     const end = src.lastIndexOf("\nimport ");
     const body = end === -1 ? src : src.slice(src.indexOf("\n", end + 1) + 1);
     return body;
   };
-  const viewBody = [
-    readViewBody("../../app/(main)/settings/components/LlmLocalSection.tsx"),
-    readViewBody("../../app/(main)/settings/components/DatabaseSection.tsx"),
-    readViewBody("../studio/comfyui/ComfyuiControlView.tsx"),
-  ].join("\n");
+  const llmLocalBody = readViewBody("../../app/(main)/settings/components/LlmLocalSection.tsx");
+  const databaseBody = readViewBody("../../app/(main)/settings/components/DatabaseSection.tsx");
+  const comfyBody = readViewBody("../studio/comfyui/ComfyuiControlView.tsx");
+  const viewBody = [llmLocalBody, databaseBody, comfyBody].join("\n");
   /* StatusButton 原语单独取：只留 `StatusButton` 的函数体，避免把文档注释里
    * 「这里此前是第二个 `<button>` 实现」这类**说明**当成实现（判据自身的
    * 注释剥离教训见 check-ui-primitives.cjs 的 stripComments）。 */
@@ -91,14 +90,23 @@ describe("状态行视图：都接上了这套判据", () => {
     );
   });
 
-  it("三行都用状态行容器（Ollama / Drizzle Studio / ComfyUI）", () => {
-    const rows = viewBody.match(/STATUS_ROW_CLASS/g) ?? [];
-    expect(rows.length).toBe(3);
+  it("设置页两条状态行用状态行容器（Ollama / Drizzle Studio）", () => {
+    const rows = [llmLocalBody, databaseBody].join("\n").match(/STATUS_ROW_CLASS/g) ?? [];
+    expect(rows.length).toBe(2);
   });
 
-  it("三行的按钮组都用 STATUS_ACTIONS_CLASS 或带 shrink-0", () => {
+  it("ComfyUI 页是纵向三行布局，不再用横向状态行容器（#4710）", () => {
+    /* #4710 用户反馈：ComfyUI 页按钮多，横向一行会把状态句挤成省略号，
+     * 改成纵向三行（状态句 / 地址 / 按钮排）。这条钉住那个布局决策：
+     * 谁把视图退回横向状态行容器、或谁再漏改判据，这里都会红。 */
+    expect(comfyBody).toContain("flex flex-col gap-2");
+    expect(comfyBody).not.toContain("STATUS_ROW_CLASS");
+  });
+
+  it("按钮组用 STATUS_ACTIONS_CLASS，Ollama 单按钮带 shrink-0", () => {
     const groups = viewBody.match(/STATUS_ACTIONS_CLASS/g) ?? [];
-    // Drizzle Studio 与 ComfyUI 两行是按钮组；Ollama 行单个按钮带 shrink-0
+    /* Drizzle Studio 与 ComfyUI 两行是按钮组（各 1 处）；Ollama 行单个按钮
+     * 走 StatusButton，排布契约里的 shrink-0 由 statusButtonClass 提供。 */
     expect(groups.length).toBe(2);
     /* Ollama 行只有一个动作按钮，它走 StatusButton —— 排布契约（含
      * `shrink-0`）由 statusButtonClass 提供，不再是视图里手写的一串类。 */

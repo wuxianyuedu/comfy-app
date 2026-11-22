@@ -1,27 +1,33 @@
 //
 // ShotStudio 行为测试：镜头生图 stage 的门禁、预填、并发出口与提示接线。
-// 钉死：本地没选工作流 → 行内门禁拦下不请求；unmatched 口经 onNotice 上屏；
-// API 未配置 → 批量禁用 + 放行提示；进行中有任务 id 显示「取消」接 onCancelShot；
-// 空提示词挂载后自动预填且手改不覆盖。网络层整体 mock（generation-client）。
+// 钉死（#4834 统一级联后）：未选图片模型 → 行内门禁拦下不请求；选中本地工作流
+// 候选（wf::<id>）走 buildLibraryWorkflowInput；选中远端模型走 apiGenerateImage
+// （带 model + mode）；unmatched 口经 onNotice 上屏；进行中有任务 id 显示「取消」
+// 接 onCancelShot；空提示词挂载后自动预填且手改不覆盖。网络层整体 mock
+//（generation-client），模型目录 mock 成固定候选（本地工作流 + 远端模型各一）。
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import React from "react";
 import type { SetStateAction } from "react";
 
 import { ShotStudio } from "./ShotStudio";
+import type { ModelSelection } from "./ModelCascadeSelect";
 import {
+  apiGenerateImage,
   buildLibraryWorkflowInput,
   startLocalGenerate,
   observeTaskUntilSettled,
   type LibraryWorkflowBuildResult,
 } from "~/lib/workshop/generation-client";
-import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
+import type { TestCandidate } from "./model-test-config";
 import type { Character, Scene, Shot } from "~/lib/workshop/types";
 
 vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
+    apiGenerateImage: vi.fn(),
     buildLibraryWorkflowInput: vi.fn(),
     startLocalGenerate: vi.fn(),
     observeTaskUntilSettled: vi.fn(),
@@ -32,6 +38,46 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
   };
 });
 
+/* 模型目录 mock（#4834）：本地工作流候选（wf::wf-1）+ 远端模型各一，
+ * 模式页签固定 文生图 / 图生图 两档 —— ShotStudio 只消费这份读数。 */
+const catalogCandidates: Array<TestCandidate> = [
+  {
+    baseUrl: null,
+    kind: "image",
+    local: true,
+    name: "z-image",
+    workflow: {
+      category: "image",
+      encapsulationReady: true,
+      id: "wf-1",
+      modelTags: ["z-image"],
+      modes: ["T2I", "I2I"],
+      name: "z-image 生图工作流",
+    },
+  },
+  { baseUrl: "https://api.example.com", kind: "image", local: false, name: "gpt-image-2" },
+];
+
+function candidateValueOf(candidate: TestCandidate): string {
+  return candidate.workflow === undefined ? candidate.name : `wf::${candidate.workflow.id}`;
+}
+
+vi.mock("~/components/workshop/hooks/use-model-catalog", () => ({
+  useModelCatalog: () => ({
+    modeTabs: [
+      { label: "文生图", mode: "T2I", modelCount: 2 },
+      { label: "图生图", mode: "I2I", modelCount: 2 },
+    ],
+    candidates: catalogCandidates,
+    allCandidates: catalogCandidates,
+    loading: false,
+    defaultMode: "T2I",
+    resolveCandidate: (value: string): TestCandidate | null =>
+      catalogCandidates.find((c) => candidateValueOf(c) === value) ?? null,
+  }),
+}));
+
+const mockedApiGenerateImage = vi.mocked(apiGenerateImage);
 const mockedBuild = vi.mocked(buildLibraryWorkflowInput);
 const mockedStart = vi.mocked(startLocalGenerate);
 const mockedObserve = vi.mocked(observeTaskUntilSettled);
@@ -76,23 +122,6 @@ function makeShot(patch: Partial<Shot> = {}): Shot {
   };
 }
 
-const channelsConfigured: ApiChannelsView = {
-  image: {
-    configured: true,
-    baseUrl: "https://api.example.com",
-    path: "/images/generations",
-    model: "",
-    hasApiKey: true,
-  },
-  video: {
-    configured: false,
-    baseUrl: "",
-    path: "/videos/generations",
-    model: "",
-    hasApiKey: false,
-  },
-};
-
 function buildResult(patch: Partial<LibraryWorkflowBuildResult> = {}): LibraryWorkflowBuildResult {
   return {
     input: { workflow: "wf-1", prompt: "a cat" },
@@ -106,32 +135,58 @@ function buildResult(patch: Partial<LibraryWorkflowBuildResult> = {}): LibraryWo
 }
 
 type RenderOptions = {
-  apiChannels?: ApiChannelsView | null;
+  /** 初始模型选择；缺省 = 已选中本地工作流候选（wf::wf-1）。 */
+  selection?: ModelSelection;
   shots?: Array<Shot>;
-  workflowId?: string;
 };
 
 /** `onShotsChange` 的签名：可收镜头数组或函数式补丁（React 状态 setter）。 */
 type ShotsSetter = (value: SetStateAction<Array<Shot>>) => void;
 
-function renderStudio(options: RenderOptions = {}) {
-  const onShotsChange = vi.fn<ShotsSetter>();
-  const onNotice = vi.fn();
-  const onCancelShot = vi.fn();
-  const utils = render(
+/** 受控壳：模型选择在测试里真实可交互（点模式 / 换模型会写回 state）。 */
+function Harness({
+  initialSelection,
+  shots,
+  onNotice,
+  onShotsChange,
+  onCancelShot,
+}: {
+  initialSelection: ModelSelection;
+  onCancelShot: (shot: Shot) => void;
+  onNotice: (m: string) => void;
+  onShotsChange: ShotsSetter;
+  shots: Array<Shot>;
+}) {
+  const [selection, setSelection] = React.useState<ModelSelection>(initialSelection);
+  return (
     <ShotStudio
-      apiChannels={options.apiChannels === undefined ? channelsConfigured : options.apiChannels}
       characters={[character]}
+      modelSelection={selection}
       onCancelShot={onCancelShot}
+      onModelSelectionChange={setSelection}
       onNextStage={() => undefined}
       onNotice={onNotice}
       onOpenModelAdapters={() => undefined}
       onShotsChange={onShotsChange}
       projectId="proj-1"
       scenes={[scene]}
-      shots={options.shots ?? [makeShot()]}
+      shots={shots}
       styles={[]}
-      workflowId={options.workflowId ?? ""}
+    />
+  );
+}
+
+function renderStudio(options: RenderOptions = {}) {
+  const onShotsChange = vi.fn<ShotsSetter>();
+  const onNotice = vi.fn();
+  const onCancelShot = vi.fn();
+  const utils = render(
+    <Harness
+      initialSelection={options.selection ?? { mode: "T2I", model: "wf::wf-1" }}
+      onCancelShot={onCancelShot}
+      onNotice={onNotice}
+      onShotsChange={onShotsChange}
+      shots={options.shots ?? [makeShot()]}
     />,
   );
   return { onShotsChange, onNotice, onCancelShot, ...utils };
@@ -150,7 +205,7 @@ function patchedShotOf(call: Parameters<ShotsSetter>): Shot {
   return patched;
 }
 
-/** onShotsChange 是函数式补丁：把它折叠成「最终一条 patch 里的镜头列表」。 */
+/** onShotsChange 是函数式补丁：折叠成最终一条 patch 里的镜头。 */
 function lastPatchedShot(mock: { mock: { calls: Array<Parameters<ShotsSetter>> } }): Shot {
   const lastCall = mock.mock.calls.at(-1);
   if (lastCall === undefined) {
@@ -160,6 +215,7 @@ function lastPatchedShot(mock: { mock: { calls: Array<Parameters<ShotsSetter>> }
 }
 
 beforeEach(() => {
+  mockedApiGenerateImage.mockReset();
   mockedBuild.mockReset();
   mockedStart.mockReset();
   mockedObserve.mockReset();
@@ -169,29 +225,25 @@ afterEach(() => {
   cleanup();
 });
 
-describe("ShotStudio 门禁", () => {
-  it("本地通道未选工作流：点单镜生成被行内门禁拦下，不发起请求", async () => {
-    const user = userEvent.setup();
-    renderStudio({ workflowId: "", shots: [makeShot({ prompt: "a cat" })] });
+describe("ShotStudio 门禁（#4834 统一级联）", () => {
+  it("未选图片模型：生成按钮禁用，不发起任何请求", () => {
+    renderStudio({
+      selection: { mode: "T2I", model: "" },
+      shots: [makeShot({ prompt: "a cat" })],
+    });
 
-    await user.click(screen.getByRole("button", { name: "生成此镜头" }));
-
-    expect(screen.getByText(/本地通道需要先在右侧「生成资源」/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "生成此镜头" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: /批量生图/ })).toHaveProperty("disabled", true);
     expect(mockedStart).not.toHaveBeenCalled();
+    expect(mockedApiGenerateImage).not.toHaveBeenCalled();
   });
 
-  it("API 通道未配置：切到 API 通道后批量禁用并给出放行提示", async () => {
-    const user = userEvent.setup();
+  it("选中远端模型：不要求本地工作流，批量按钮可用", () => {
     renderStudio({
-      workflowId: "wf-1",
+      selection: { mode: "T2I", model: "gpt-image-2" },
       shots: [makeShot({ prompt: "a cat" })],
-      apiChannels: null,
     });
-    /* 通道 chip 是 `role="radio"`（一排里选一个，规范 16 §16.2.4.75）——
-       不是 `role="button"`。改的是读法，不是它锁的那件事。 */
-    await user.click(screen.getByRole("radio", { name: /API 直连/ }));
-    expect(screen.getByText(/API 生图通道未配置/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /批量生图/ })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: /批量生图/ })).toHaveProperty("disabled", false);
   });
 });
 
@@ -206,11 +258,11 @@ describe("ShotStudio 自动预填", () => {
   });
 });
 
-describe("ShotStudio 生图出口", () => {
-  it("本地生成：unmatched 口在发起前经 onNotice 上屏（不静默丢输入）", async () => {
+describe("ShotStudio 生图出口（按候选分流两条通道）", () => {
+  it("本地工作流候选（wf::<id>）：buildLibraryWorkflowInput 收到工作流 id", async () => {
     const user = userEvent.setup();
     const { onNotice } = renderStudio({
-      workflowId: "wf-1",
+      selection: { mode: "T2I", model: "wf::wf-1" },
       shots: [makeShot({ prompt: "a cat" })],
     });
     mockedBuild.mockResolvedValue(buildResult({ unmatched: ["seed"] }));
@@ -222,12 +274,30 @@ describe("ShotStudio 生图出口", () => {
 
     await user.click(screen.getByRole("button", { name: "生成此镜头" }));
     await expect.poll(() => mockedStart).toHaveBeenCalled();
+    expect(mockedBuild.mock.calls[0]?.[0]).toBe("wf-1");
     await expect.poll(() => onNotice).toHaveBeenCalledWith(expect.stringContaining("种子"));
+    expect(mockedApiGenerateImage).not.toHaveBeenCalled();
+  });
+
+  it("远端模型候选：走 apiGenerateImage，带选中的 model + mode", async () => {
+    const user = userEvent.setup();
+    renderStudio({
+      selection: { mode: "I2I", model: "gpt-image-2" },
+      shots: [makeShot({ prompt: "a cat" })],
+    });
+    mockedApiGenerateImage.mockResolvedValue("/api/generated/remote.png");
+
+    await user.click(screen.getByRole("button", { name: "生成此镜头" }));
+    await expect.poll(() => mockedApiGenerateImage).toHaveBeenCalled();
+    expect(mockedApiGenerateImage.mock.calls[0]?.[0]).toMatchObject({
+      model: "gpt-image-2",
+      mode: "I2I",
+    });
+    expect(mockedStart).not.toHaveBeenCalled();
   });
 
   it("进行中且有本机任务 id 的镜头显示「取消」，点击接 onCancelShot", () => {
     const { onCancelShot } = renderStudio({
-      workflowId: "wf-1",
       shots: [
         makeShot({
           status: "running",
@@ -244,7 +314,7 @@ describe("ShotStudio 生图出口", () => {
   it("本地任务落定后按结果回写状态（成功 → done）", async () => {
     const user = userEvent.setup();
     const { onShotsChange } = renderStudio({
-      workflowId: "wf-1",
+      selection: { mode: "T2I", model: "wf::wf-1" },
       shots: [makeShot({ prompt: "a cat" })],
     });
     mockedBuild.mockResolvedValue(buildResult());

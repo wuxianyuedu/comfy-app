@@ -130,14 +130,11 @@ export function WorkshopPipeline({ tab, onTabChange, hideStageRail }: WorkshopPi
               clipDoneCount={controller.clipDoneCount}
               imageDoneCount={controller.imageDoneCount}
               missing={controller.missing}
+              modelSelections={controller.modelSelections}
               onGoScript={() => {
                 controller.setTab("script");
               }}
-              onVideoWorkflowChange={controller.setVideoWorkflowId}
-              onWorkflowChange={controller.setWorkflowId}
-              videoWorkflowId={controller.videoWorkflowId}
-              workflowId={controller.workflowId}
-              workflowOptions={controller.workflowOptions}
+              onGoToStage={controller.setTab}
             />
           </div>
         </div>

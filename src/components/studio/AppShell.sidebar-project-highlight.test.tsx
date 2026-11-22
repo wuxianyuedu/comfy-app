@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 import { AppShell } from "./AppShell";
+import { ToastProvider } from "./ToastProvider";
 import type { WorkspaceView } from "./NavItems";
 
 /* CommandPalette 新增的「其他」组用 useRouter 导航：测试环境没有 App Router 上下文，按
@@ -46,18 +47,21 @@ const PROJECTS = [
 
 function renderShell(active: WorkspaceView) {
   render(
-    <AppShell
-      active={active}
-      activeProjectId="p-active"
-      onNewProject={vi.fn()}
-      onOpenProject={vi.fn()}
-      onOpenSettings={vi.fn()}
-      onSelect={vi.fn()}
-      onShowAllProjects={vi.fn()}
-      projects={PROJECTS}
-    >
-      <div />
-    </AppShell>,
+    /* 「项目」分组挂了 useToast（删除回执）：按应用真实层级包上 Provider。 */
+    <ToastProvider>
+      <AppShell
+        active={active}
+        activeProjectId="p-active"
+        onNewProject={vi.fn()}
+        onOpenProject={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onSelect={vi.fn()}
+        onShowAllProjects={vi.fn()}
+        projects={PROJECTS}
+      >
+        <div />
+      </AppShell>
+    </ToastProvider>,
   );
 }
 

@@ -316,6 +316,7 @@ export default function WorkspacePage() {
           activeProjectId={activeProjectId}
           activeViewKey={activeViewKey}
           onCloseViewTab={closeViewTabByKey}
+          onDeleteProject={handleDeleteProject}
           onNewProject={handleNewProject}
           onOpenProject={handleOpenServerProject}
           onOpenSettings={openSettings}
@@ -382,7 +383,6 @@ export default function WorkspacePage() {
               setCreateProjectOpen(false);
             }}
             onCreated={handleProjectCreated}
-            open
           />
         ) : null}
       </>

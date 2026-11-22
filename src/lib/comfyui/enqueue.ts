@@ -25,6 +25,8 @@ import {
   claimFinalize,
   isDispatchedHere,
   releaseDispatchSlot,
+  markCancelling,
+  clearCancelling,
 } from "./runner-state";
 import type { LogEntry } from "./runner-state";
 import { cliProcs } from "./executor";
@@ -83,125 +85,139 @@ export async function cancelTask(taskId: string) {
 
   const cliProc = cliProcs.get(taskId);
 
-  if (cliProc) {
-    const pid = cliProc.pid;
-    if (pid !== undefined) {
-      /* 硬规则 3：整树回收走 killProcessTree，不单杀 leader——comfy-cli 若带出
-       * 子进程，单杀会留孤儿。失败不拦取消收口（状态照翻）。 */
-      await killProcessTree({ pid, detached: false, force: true }).catch(() => undefined);
+  /* 杀进程之前先挂「取消中」标记（ISSUE #4800）：被杀的 comfy-cli 退出码非 0
+   * 且不再回 envelope，close 处理器凭退出码分不清「崩溃」与「被取消杀掉」，会
+   * 抢先按异常退出把行写成 FAILED，取消自己要写的 CANCELLED 反而输掉终态 CAS
+   * ——界面上「点了取消却显示失败」就是这么来的。挂上标记后，收口侧（close /
+   * 看门狗）会把终态让给下面 taskRepository.cancel 落的 CANCELLED。 */
+  markCancelling(taskId);
+
+  try {
+    if (cliProc) {
+      const pid = cliProc.pid;
+      if (pid !== undefined) {
+        /* 硬规则 3：整树回收走 killProcessTree，不单杀 leader——comfy-cli 若带出
+         * 子进程，单杀会留孤儿。失败不拦取消收口（状态照翻）。 */
+        await killProcessTree({ pid, detached: false, force: true }).catch(() => undefined);
+      }
+      cliProcs.delete(taskId);
     }
-    cliProcs.delete(taskId);
-  }
 
-  const task = await taskRepository.findStatusAndPromptById(taskId);
+    const task = await taskRepository.findStatusAndPromptById(taskId);
 
-  if (!task) {
-    return;
-  }
-  /* 以前这里要求 `status === RUNNING || QUEUED`。现在改为接受**任何非终态**的
-   * 状态（SUCCEEDED / FAILED / CANCELLED 会在下面被跳过），于是用户能取消掉一个
-   * 卡住的 QUEUED 行 —— 哪怕内存态已经被清掉（例如 dev server 重启过、reaper
-   * 还没扫到）。任务有 promptId 时仍会调 `interrupt()` 让 ComfyUI 也丢掉它的
-   * prompt；没有的话就只把数据库这一行收口。 */
+    if (!task) {
+      return;
+    }
+    /* 以前这里要求 `status === RUNNING || QUEUED`。现在改为接受**任何非终态**的
+     * 状态（SUCCEEDED / FAILED / CANCELLED 会在下面被跳过），于是用户能取消掉一个
+     * 卡住的 QUEUED 行 —— 哪怕内存态已经被清掉（例如 dev server 重启过、reaper
+     * 还没扫到）。任务有 promptId 时仍会调 `interrupt()` 让 ComfyUI 也丢掉它的
+     * prompt；没有的话就只把数据库这一行收口。 */
 
-  const isTerminal = (st: string | null) =>
-    st === "SUCCEEDED" || st === "FAILED" || st === "CANCELLED";
+    const isTerminal = (st: string | null) =>
+      st === "SUCCEEDED" || st === "FAILED" || st === "CANCELLED";
 
-  log(taskId, "warn", "用户取消任务");
+    log(taskId, "warn", "用户取消任务");
 
-  // 取消也是「写终态」的一种。对**尚未终态**的任务先抢落库锁：抢不到说明
-  // 它已在本进程被别的原因收口（成功 / 失败 / 被 reaper 判孤），此时不能再
-  // 把原因改写成「用户取消」，否则用户在执行日志看到的失败原因会被取消动作
-  // 悄悄覆盖掉。DB 行本就是终态时保持旧行为（仍允许改写为 CANCELLED）。
+    // 取消也是「写终态」的一种。对**尚未终态**的任务先抢落库锁：抢不到说明
+    // 它已在本进程被别的原因收口（成功 / 失败 / 被 reaper 判孤），此时不能再
+    // 把原因改写成「用户取消」，否则用户在执行日志看到的失败原因会被取消动作
+    // 悄悄覆盖掉。DB 行本就是终态时保持旧行为（仍允许改写为 CANCELLED）。
 
-  if (!isTerminal(task.status) && !claimFinalize(taskId)) {
-    log(taskId, "warn", "任务终态已落库，取消请求不再改写终态");
+    if (!isTerminal(task.status) && !claimFinalize(taskId)) {
+      log(taskId, "warn", "任务终态已落库，取消请求不再改写终态");
+
+      if (task.promptId !== null) {
+        store.promptToTask.delete(task.promptId);
+      }
+
+      const hadSlot = isDispatchedHere(taskId) || cliProcs.has(taskId);
+
+      if (hadSlot) {
+        releaseDispatchSlot(taskId);
+      }
+
+      await persistLogs(taskId);
+      /* 归还了槽位就再领一次（同一条 pull）；纯数据库行（本进程没在飞）不动槽、
+       * 也不 kick，免得白跑一次领取。 */
+      if (hadSlot) {
+        kickQueue();
+      }
+
+      return;
+    }
+
+    if (!isTerminal(task.status)) {
+      /* 条件性中断（ADR §14 D2）：只有这个任务正由本进程执行时才发全局停。
+       * host 名下的在飞任务不在这里发——本进程握不到它的子进程，由 host 自己的
+       * tick 在 kill 之后发（`executor-host.mjs` 的 `reconcileCancelled`）。 */
+      if (wasInFlightHere) {
+        try {
+          await interrupt();
+          log(taskId, "warn", "已请求 ComfyUI 中断当前这一轮生成");
+        } catch (error) {
+          /* 中断失败不等于取消失败：状态照收，但要把「这一轮还会跑完」告诉用户，
+           * 否则他们看到的就是「按了取消为什么还在出图」却没有任何解释（硬规则 4）。 */
+          log(
+            taskId,
+            "warn",
+            `中断请求失败：ComfyUI 会继续跑完当前这一轮（${errorText(error, "interrupt")}）`,
+          );
+        }
+      } else {
+        log(
+          taskId,
+          "info",
+          "本进程没有该任务的在飞执行（排队中 / 归另一宿主），不发送全局中断——那会打断其它在飞任务",
+        );
+      }
+    }
+
+    const outcome = await taskRepository.cancel(taskId);
+    if (outcome !== "written") {
+      /* 守卫挡下来的取消（多数是「已经是终态了」）：内存记账照清，但库里那行
+       *  没动，留一行免得事后从日志里查不到为什么状态没变。 */
+      log(taskId, "warn", `取消未改写终态（${outcome}），仅清理本进程记账`);
+    }
 
     if (task.promptId !== null) {
       store.promptToTask.delete(task.promptId);
     }
+
+    // 清掉本模块给这个任务加的记账，同一个 taskId 再入队时从干净状态开始。
+
+    store.startedAt.delete(taskId);
+
+    store.lastNodeByTask.delete(taskId);
+    /* 只有本进程确实握着这一条在飞时才归还槽位。纯数据库行（用户取消了一条
+     * 排队中、或归另一宿主的任务）**不能**动本进程的记账——否则下一次领取会以为
+     * 有空槽，去领一条其实排在前面的行。判据：要么持有 comfy-cli 子进程，要么
+     * 它在本进程的在飞集合里（§14 D1 第二刀，取代原来的「躺在内存队列里」）。 */
 
     const hadSlot = isDispatchedHere(taskId) || cliProcs.has(taskId);
 
     if (hadSlot) {
       releaseDispatchSlot(taskId);
     }
+    /* 把这个任务还没落盘的防抖日志刷出去：让「用户取消任务」这一行与在途的告警
+     * 都先进数据库，再把行标成终态。否则「取消后立刻刷新」会看不到那条取消记录。
+     *
+     * 这里过去还发过一对合成的「state → error」事件去把画布节点翻成取消：SSE 自
+     * 3-C 起只读库（ADR §13-3C），进程内事件通道已整体退役，客户端看到取消的
+     * 唯一来源就是上面 `taskRepository.cancel` 落的那个终态行。 */
 
     await persistLogs(taskId);
-    /* 归还了槽位就再领一次（同一条 pull）；纯数据库行（本进程没在飞）不动槽、
-     * 也不 kick，免得白跑一次领取。 */
+    /* 被 kill 的 comfy-cli 在退出前吐的行正是「取消之后发生了什么」的现场，
+     * 所以取消这条收口也写一包原文（P3 §5 ADR §14 D1 的 4-B2）。 */
+    await persistRawCli(taskId);
+
     if (hadSlot) {
       kickQueue();
     }
-
-    return;
-  }
-
-  if (!isTerminal(task.status)) {
-    /* 条件性中断（ADR §14 D2）：只有这个任务正由本进程执行时才发全局停。
-     * host 名下的在飞任务不在这里发——本进程握不到它的子进程，由 host 自己的
-     * tick 在 kill 之后发（`executor-host.mjs` 的 `reconcileCancelled`）。 */
-    if (wasInFlightHere) {
-      try {
-        await interrupt();
-        log(taskId, "warn", "已请求 ComfyUI 中断当前这一轮生成");
-      } catch (error) {
-        /* 中断失败不等于取消失败：状态照收，但要把「这一轮还会跑完」告诉用户，
-         * 否则他们看到的就是「按了取消为什么还在出图」却没有任何解释（硬规则 4）。 */
-        log(
-          taskId,
-          "warn",
-          `中断请求失败：ComfyUI 会继续跑完当前这一轮（${errorText(error, "interrupt")}）`,
-        );
-      }
-    } else {
-      log(
-        taskId,
-        "info",
-        "本进程没有该任务的在飞执行（排队中 / 归另一宿主），不发送全局中断——那会打断其它在飞任务",
-      );
-    }
-  }
-
-  const outcome = await taskRepository.cancel(taskId);
-  if (outcome !== "written") {
-    /* 守卫挡下来的取消（多数是「已经是终态了」）：内存记账照清，但库里那行
-     *  没动，留一行免得事后从日志里查不到为什么状态没变。 */
-    log(taskId, "warn", `取消未改写终态（${outcome}），仅清理本进程记账`);
-  }
-
-  if (task.promptId !== null) {
-    store.promptToTask.delete(task.promptId);
-  }
-
-  // 清掉本模块给这个任务加的记账，同一个 taskId 再入队时从干净状态开始。
-
-  store.startedAt.delete(taskId);
-
-  store.lastNodeByTask.delete(taskId);
-  /* 只有本进程确实握着这一条在飞时才归还槽位。纯数据库行（用户取消了一条
-   * 排队中、或归另一宿主的任务）**不能**动本进程的记账——否则下一次领取会以为
-   * 有空槽，去领一条其实排在前面的行。判据：要么持有 comfy-cli 子进程，要么
-   * 它在本进程的在飞集合里（§14 D1 第二刀，取代原来的「躺在内存队列里」）。 */
-
-  const hadSlot = isDispatchedHere(taskId) || cliProcs.has(taskId);
-
-  if (hadSlot) {
-    releaseDispatchSlot(taskId);
-  }
-  /* 把这个任务还没落盘的防抖日志刷出去：让「用户取消任务」这一行与在途的告警
-   * 都先进数据库，再把行标成终态。否则「取消后立刻刷新」会看不到那条取消记录。
-   *
-   * 这里过去还发过一对合成的「state → error」事件去把画布节点翻成取消：SSE 自
-   * 3-C 起只读库（ADR §13-3C），进程内事件通道已整体退役，客户端看到取消的
-   * 唯一来源就是上面 `taskRepository.cancel` 落的那个终态行。 */
-
-  await persistLogs(taskId);
-  /* 被 kill 的 comfy-cli 在退出前吐的行正是「取消之后发生了什么」的现场，
-   * 所以取消这条收口也写一包原文（P3 §5 ADR §14 D1 的 4-B2）。 */
-  await persistRawCli(taskId);
-
-  if (hadSlot) {
-    kickQueue();
+  } finally {
+    /* 无论从哪条路收口（含「行不存在」「终态已被别人写走」的提前返回）都摘掉
+     * 「取消中」标记：同一个 taskId 重跑时，不能让上一轮的标记吞掉这一轮真实
+     * 的失败（与 clearFinalize 同款考量）。 */
+    clearCancelling(taskId);
   }
 }

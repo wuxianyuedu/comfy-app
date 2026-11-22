@@ -13,6 +13,7 @@ import {
   parseGenerationLogStage,
 } from "~/lib/workshop/generation-log";
 import { appendGenerationLogs, readGenerationLogs } from "~/lib/workshop/generation-log.server";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,11 @@ export async function POST(req: NextRequest) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
   }
   /* 入参收窄走唯一出口（规范 16 §16.2.4.44）：此前这里的 `isRecord` 被就地
    * 展开成 `typeof body === "object" && body !== null` —— 与别处同一条判据、

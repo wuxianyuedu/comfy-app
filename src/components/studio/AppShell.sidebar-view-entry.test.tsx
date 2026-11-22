@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { AppShell } from "./AppShell";
+import { ToastProvider } from "./ToastProvider";
 import type { WorkspaceView } from "./NavItems";
 
 /* CommandPalette 新增的「其他」组用 useRouter 导航：测试环境没有 App Router 上下文，按
@@ -44,18 +45,21 @@ afterEach(cleanup);
 function renderShell(active: WorkspaceView = "workshop") {
   const onSelect = vi.fn();
   render(
-    <AppShell
-      active={active}
-      activeProjectId="p1"
-      onNewProject={vi.fn()}
-      onOpenProject={vi.fn()}
-      onOpenSettings={vi.fn()}
-      onSelect={onSelect}
-      onShowAllProjects={vi.fn()}
-      projects={[]}
-    >
-      <div />
-    </AppShell>,
+    /* 「项目」分组挂了 useToast（删除回执）：按应用真实层级包上 Provider。 */
+    <ToastProvider>
+      <AppShell
+        active={active}
+        activeProjectId="p1"
+        onNewProject={vi.fn()}
+        onOpenProject={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onSelect={onSelect}
+        onShowAllProjects={vi.fn()}
+        projects={[]}
+      >
+        <div />
+      </AppShell>
+    </ToastProvider>,
   );
   return onSelect;
 }
@@ -147,5 +151,18 @@ describe("设置不在侧栏（ISSUE #1784：入口收归顶栏）", () => {
   it("撤的是入口不是能力：`onOpenSettings` 仍然传给顶栏", () => {
     const source = readFileSync(path.resolve(import.meta.dirname, "AppShell.tsx"), "utf8");
     expect(source).toContain("onOpenSettings={onOpenSettings}");
+  });
+});
+
+describe("首页不做选中变色（ISSUE #4813）", () => {
+  it("当前视图是首页时，首页项不挂 data-active（其它页签照常高亮）", () => {
+    /* 首页是固定落点，不用「当前在这页」的高亮表达；其它视图的选中态不受影响。 */
+    renderShell("home");
+    expect(screen.getByRole("button", { name: "首页" }).dataset.active).toBeUndefined();
+  });
+
+  it("当前视图不是首页时，命中的那一项照常挂 data-active", () => {
+    renderShell("models");
+    expect(screen.getByRole("button", { name: "模型" }).dataset.active !== undefined).toBe(true);
   });
 });

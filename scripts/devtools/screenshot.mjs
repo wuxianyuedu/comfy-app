@@ -293,18 +293,42 @@ export async function isAppUp(origin, io = {}) {
 }
 
 /**
+ * 起 dev server 的 spawn 选项里**平台相关**的那一格：POSIX 自建进程组，Windows 不建。
+ *
+ * 抽成纯函数的理由： detached 是「收尾能否整组回收」的前提（#4816），必须能被正面断言——
+ * 真机只有一个平台，光看默认值只跑得了一半判据。平台作为形参传入，两侧都测得到。
+ *
+ * @param {NodeJS.Platform} platform
+ * @returns {boolean}
+ */
+export function shouldDetachServer(platform) {
+  // Windows 上 detached 会另开控制台且无进程组语义，回收走 taskkill /T；POSIX 必须自建组。
+  return platform !== "win32";
+}
+
+/**
  * 起应用（`scripts/dev.mjs`，与 `pnpm dev` 同一条入口），并等它监上端口。
  *
- * @param {{root: string, port: number, timeoutMs: number}} input
+ * POSIX 上必须自建进程组（`detached`）：收尾 {@link reapDevServer} 走
+ * `reap-process.mjs` → `killProcessTree`，它按 ps 读目标 PGID；只有目标在**独立组**里，
+ * 才不会命中「与调用者同组禁杀组」的防自杀判据、退化成单杀 leader。否则 dev.mjs 之下的
+ * `next dev` / turbopack worker 留成孤儿占着端口，下次截图「复用」到僵尸应用、page.goto
+ * 卡到 120s 超时（#4816）。Windows 侧不用（detached 会另开控制台且无组语义），回收走
+ * `taskkill /T /F`。口径与 `spawnInGroup` 同一处（§3.1 / 硬规则 3）。
+ *
+ * @param {{root: string, port: number, timeoutMs: number, fetchImpl?: typeof fetch}} input
  * @returns {Promise<{pid: number, log: () => string}>}
  */
 export async function startDevServer(input) {
+  const fetchImpl = input.fetchImpl ?? fetch;
   const script = path.join(input.root, "scripts", "dev.mjs");
   const child = spawn(process.execPath, [script, "-p", String(input.port)], {
     cwd: input.root,
     env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
+    // POSIX 自建进程组：整树回收的前提（见上方说明 / 硬规则 3）。
+    detached: shouldDetachServer(process.platform),
   });
   /** @type {string[]} */
   const lines = [];
@@ -331,7 +355,7 @@ export async function startDevServer(input) {
   /* oxlint-disable no-await-in-loop -- 就绪探测是「一次问一次等」的轮询：并发发起
    * 多个探测只会得到同一份答案，且会把 dev server 的首帧编译再挤一遍。 */
   while (Date.now() < deadline) {
-    if (await isAppUp(origin)) {
+    if (await isAppUp(origin, { fetchImpl })) {
       return { pid, log: () => lines.slice(-30).join("\n") };
     }
     if (child.exitCode !== null) {
@@ -475,7 +499,12 @@ export async function main(io = {}) {
     }
     process.stdout.write(`[screenshot] 应用没在跑，正在起（scripts/dev.mjs，端口 ${port}）…\n`);
     try {
-      const started = await startDevServer({ root, port, timeoutMs: args.serverTimeoutMs });
+      const started = await startDevServer({
+        root,
+        port,
+        timeoutMs: args.serverTimeoutMs,
+        fetchImpl: io.fetchImpl,
+      });
       startedPid = started.pid;
       process.stdout.write(`[screenshot] 应用已就绪：${origin}\n`);
     } catch (error) {

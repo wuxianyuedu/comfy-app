@@ -57,6 +57,13 @@ export type AppEvents = {
     resultPath: string;
   };
   /**
+   * 侧栏品牌图被换掉或恢复默认。载荷无 —— 图本身可查
+   * （`~/lib/appearance` 的 `readBrandLogo()`），写侧 `saveBrandLogo` /
+   * `restoreBrandLogo` 会先落本机再广播。侧栏随外壳常驻、不在视图切换时重挂，
+   * 只换存储不广播的话，从设置页回到工作区仍看到旧图。
+   */
+  "comfyapp:brand-logo-changed": undefined;
+  /**
    * 画布仓库（项目索引 / 激活项）发生增删改后广播。
    *
    * 载荷带「变更类型 + 项目 id」（ISSUE #4600）：自动保存每 500ms 一拍，
@@ -67,10 +74,11 @@ export type AppEvents = {
   "comfyapp:canvas-store-changed": {
     /** 受影响的项目 id。`hydrate` 对账可能落多行，可缺省。 */
     projectId?: string;
-    /** `save`=upsert 自动保存（含重命名）；`delete`=删本地索引行；
-     * `delete-remote`=删服务端-only 行；`hydrate`=服务端对账落盘；
-     * `draft`=新建草稿（索引未变，只动了 active-id）。 */
-    reason: "delete" | "delete-remote" | "draft" | "hydrate" | "save";
+    /** `save`=upsert 自动保存（含画布侧改名）；`rename`=改项目名（侧栏右键，
+     * #4808：本地有行的改名走 `save` 就地改行，服务端-only 行走这条结构性重取）；
+     * `delete`=删本地索引行；`delete-remote`=删服务端-only 行；
+     * `hydrate`=服务端对账落盘；`draft`=新建草稿（索引未变，只动了 active-id）。 */
+    reason: "delete" | "delete-remote" | "draft" | "hydrate" | "rename" | "save";
   };
   /**
    * 画布的**服务端镜像**状态变了（某条被永久拒收、或某条重新同步成功）。
@@ -138,12 +146,13 @@ const PAYLOAD_VALIDATORS: { [K in AppEventName]: (value: unknown) => value is Ap
     typeof value.id === "string" &&
     typeof value.resultPath === "string" &&
     (value.resultMediaType === undefined || typeof value.resultMediaType === "string"),
+  "comfyapp:brand-logo-changed": (value): value is undefined => value === undefined,
   "comfyapp:canvas-store-changed": (value): value is AppEvents["comfyapp:canvas-store-changed"] =>
     isRecord(value) &&
     typeof value.reason === "string" &&
-    (["delete", "delete-remote", "draft", "hydrate", "save"] as ReadonlyArray<string>).includes(
-      value.reason,
-    ) &&
+    (
+      ["delete", "delete-remote", "draft", "hydrate", "rename", "save"] as ReadonlyArray<string>
+    ).includes(value.reason) &&
     (value.projectId === undefined || typeof value.projectId === "string"),
   "comfyapp:canvas-sync-changed": (value): value is undefined => value === undefined,
   "comfyapp:custom-nodes-updated": (value): value is undefined => value === undefined,

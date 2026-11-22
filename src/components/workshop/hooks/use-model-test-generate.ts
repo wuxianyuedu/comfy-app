@@ -11,7 +11,7 @@
 import { useCallback, useRef } from "react";
 
 import { runAsyncAction } from "~/lib/async-action";
-import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import { createReentrancyLock, type ReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 import { createThrottleGate, type ThrottleGate } from "~/components/ui/use-throttled-progress";
 import {

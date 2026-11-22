@@ -8,9 +8,13 @@
 // 测试命名，点号命名的 `appearance.storage.test.ts` 会被判成裸模块。
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { subscribeAppEvent } from "./app-events";
+
 import {
   APPEARANCE_STORAGE_KEY,
+  BRAND_LOGO_STORAGE_KEY,
   DEFAULT_APPEARANCE,
+  DEFAULT_BRAND_LOGO,
   DEFAULT_CODE_FONT,
   DEFAULT_INTERFACE_FONT,
   DEFAULT_TERMINAL_FONT,
@@ -19,11 +23,14 @@ import {
   appearanceVars,
   applyAppearance,
   fontStackForFamily,
+  readBrandLogo,
   parseAppearance,
   readAppearance,
   registerUserFont,
+  restoreBrandLogo,
   restoreUserFonts,
   saveAppearance,
+  saveBrandLogo,
   serializeAppearance,
 } from "./appearance";
 
@@ -374,5 +381,32 @@ describe("registerUserFont / restoreUserFonts（IndexedDB + FontFace 桩）", ()
     });
     await restoreUserFonts();
     expect(registered).toContain("SavedFont");
+  });
+});
+
+/** 品牌图与 appearance 那份 JSON 分开存续：写失败不连坐圆角/字体，换图广播给侧栏。 */
+describe("品牌图的读写与广播", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("没换过时读内置图，键名沿用历史那颗（老用户已换的图照常显示）", () => {
+    expect(BRAND_LOGO_STORAGE_KEY).toBe("sidebar-brand-logo");
+    expect(readBrandLogo()).toBe(DEFAULT_BRAND_LOGO);
+    window.localStorage.setItem(BRAND_LOGO_STORAGE_KEY, "data:image/png;base64,OLD");
+    expect(readBrandLogo()).toBe("data:image/png;base64,OLD");
+  });
+
+  it("saveBrandLogo 写本机并发一条广播；restoreBrandLogo 删键并发一条", () => {
+    const seen: string[] = [];
+    const off = subscribeAppEvent("comfyapp:brand-logo-changed", () => {
+      seen.push("changed");
+    });
+    expect(saveBrandLogo("data:image/png;base64,NEW")).toBe(true);
+    expect(readBrandLogo()).toBe("data:image/png;base64,NEW");
+    expect(restoreBrandLogo()).toBe(true);
+    expect(readBrandLogo()).toBe(DEFAULT_BRAND_LOGO);
+    expect(seen).toHaveLength(2);
+    off();
   });
 });

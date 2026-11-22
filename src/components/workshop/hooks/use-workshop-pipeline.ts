@@ -8,7 +8,7 @@ import { emitAppEvent } from "~/lib/app-events";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
-import { cancelLocalTask, type WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
+import { cancelLocalTask } from "~/lib/workshop/generation-client";
 import { pushServerDraft } from "~/lib/workshop/draft-sync-client";
 import { fetchProductionProgress, pushProduction } from "~/lib/production/production-client";
 import { buildProductionPayload } from "~/lib/production/payload";
@@ -19,11 +19,16 @@ import {
   useWorkshopDraftRestore,
   useWorkshopTaskRecovery,
 } from "./use-workshop-pipeline-effects";
+import { useWorkshopModelSelections } from "./use-workshop-model-selections";
 import {
   DEFAULT_META,
+  draftModelSelections,
+  emptyWorkshopDraft,
   readWorkshopDraft as readDraft,
   writeWorkshopDraft as writeDraft,
   type WorkshopDraft,
+  type WorkshopModelSelection,
+  type WorkshopModelSelections,
 } from "~/lib/workshop/draft-store";
 import { auditDraftElements, type DraftElementIssue } from "~/lib/workshop/draft-integrity";
 import type { Character, ProjectMeta, Scene, Shot, StyleRef } from "~/lib/workshop/types";
@@ -159,6 +164,8 @@ export type WorkshopPipelineController = {
   // ── 数据
   meta: ProjectMeta;
   missing: Array<MissingItem>;
+  /** 各生成入口按「测试模型」级联选中的模型（#4834）。 */
+  modelSelections: WorkshopModelSelections;
   /** 需要引起用户注意的失败/阻断文案（替代 alert，由视图决定怎么渲染）。 */
   notice: string | null;
   /** 「API 直连未配置 → 去配置」这类就近提示的出口：**切到全局的模型适配视图页签**
@@ -172,23 +179,23 @@ export type WorkshopPipelineController = {
   rendered: boolean;
   saveScriptEditor: () => void;
   scenes: Array<Scene>;
-  scriptMarkdown: string;
 
+  scriptMarkdown: string;
   setCharacters: React.Dispatch<React.SetStateAction<Array<Character>>>;
   setMeta: React.Dispatch<React.SetStateAction<ProjectMeta>>;
+  /** 某个生成入口的模型选择（#4834：统一为测试模型级联的取值空间）。 */
+  setModelSelection: (key: keyof WorkshopModelSelections, next: WorkshopModelSelection) => void;
   setScenes: React.Dispatch<React.SetStateAction<Array<Scene>>>;
+
   setScriptMarkdown: (value: string) => void;
   setShots: React.Dispatch<React.SetStateAction<Array<Shot>>>;
-
   setTab: (tab: Tab) => void;
-  setVideoWorkflowId: (value: string) => void;
-  setWorkflowId: (value: string) => void;
   shotProgress: ShotProgressMap;
   shots: Array<Shot>;
+
   /** 写一条用户可见的提示（错误 / 门禁 / 未生效警告）：stage 组件内部的
    *  降级路径（如文件导入失败）经它上屏，不在视图里自建第二条提示通道。 */
   showNotice: (message: string) => void;
-
   stageDesc: string;
   stageIndex: number;
   stageRatios: StageRatios;
@@ -198,13 +205,13 @@ export type WorkshopPipelineController = {
   styles: Array<StyleRef>;
   // ── 阶段
   tab: Tab;
-  /** 视频阶段选定的工作流 id（空串 = 未选）。 */
+  /** 视频入口选定的本地工作流 id（从模型选择派生，空串 = 未选本地工作流）。
+   *  兼容读数：Agent 一键成片等旧消费方仍认工作流 id。 */
   videoWorkflowId: string;
   viewContext: StageViewContext;
-  /** 生图阶段选定的工作流 id（本地链路唯一来源，空串 = 未选）。 */
+  /** 镜头生图入口选定的本地工作流 id（从模型选择派生，空串 = 未选本地工作流）。
+   *  兼容读数：旧消费方仍认工作流 id。 */
   workflowId: string;
-  /** 工作流库里的可选工作流（ISSUE #145）。 */
-  workflowOptions: Array<WorkshopWorkflowOption>;
 };
 
 /** 结构化执行日志保留上限（P2：只追加不裁剪会随长流程无限增长）。 */
@@ -321,13 +328,17 @@ export function useWorkshopPipeline(
   );
   const [shots, setShots] = React.useState<Array<Shot>>(() => loadWorkshopDraftOnce()?.shots ?? []);
   const [styles, setStyles] = React.useState<Array<StyleRef>>([]);
-  /* 工坊可用的工作流库工作流 + 当前选择（ISSUE #145）：本地通道的唯一来源。 */
-  const [workflowOptions, setWorkflowOptions] = React.useState<Array<WorkshopWorkflowOption>>([]);
-  const [workflowId, setWorkflowId] = React.useState(
-    () => loadWorkshopDraftOnce()?.workflowId ?? "",
-  );
-  const [videoWorkflowId, setVideoWorkflowId] = React.useState(
-    () => loadWorkshopDraftOnce()?.videoWorkflowId ?? "",
+  /* 各生成入口的模型选择（#4834）：统一为测试模型级联的取值空间，随草稿持久化；
+   * 状态与派生收在子 hook（§12.13）。旧草稿的 workflowId / videoWorkflowId 在
+   * 这里映射成 `wf::<id>` 的本地模型选择，恢复不丢。 */
+  const {
+    modelSelections,
+    setModelSelection,
+    replaceAll: replaceModelSelections,
+    workflowId,
+    videoWorkflowId,
+  } = useWorkshopModelSelections(
+    draftModelSelections(loadWorkshopDraftOnce() ?? emptyWorkshopDraft()),
   );
   /* 镜头进度的节流闸门（见 `~/components/ui/use-throttled-progress`）。 */
   const [rendered, setRendered] = React.useState(false);
@@ -356,7 +367,8 @@ export function useWorkshopPipeline(
     projectId: activeProjectId,
   });
 
-  /** 当前全部可持久化内容（落盘、切换前保存都用它）。 */
+  /** 当前全部可持久化内容（落盘、切换前保存都用它）。workflowId / videoWorkflowId
+   *  是模型选择的派生兼容读数（本地工作流候选才非空），照旧落盘供旧读数。 */
   const currentDraft = React.useCallback(
     (): WorkshopDraft => ({
       meta,
@@ -366,20 +378,23 @@ export function useWorkshopPipeline(
       shots,
       workflowId,
       videoWorkflowId,
+      modelSelections,
     }),
-    [meta, scriptMarkdown, scenes, characters, shots, workflowId, videoWorkflowId],
+    [meta, scriptMarkdown, scenes, characters, shots, workflowId, videoWorkflowId, modelSelections],
   );
 
   /** 把一份草稿灌进所有受管 state（切换 / 删除项目后接手时调用）。 */
-  const applyDraft = React.useCallback((draft: WorkshopDraft) => {
-    setMeta(draft.meta);
-    setScenes(draft.scenes);
-    setCharacters(draft.characters);
-    setShots(draft.shots);
-    setWorkflowId(draft.workflowId);
-    setVideoWorkflowId(draft.videoWorkflowId);
-    setScriptMarkdown(draft.scriptMarkdown);
-  }, []);
+  const applyDraft = React.useCallback(
+    (draft: WorkshopDraft) => {
+      setMeta(draft.meta);
+      setScenes(draft.scenes);
+      setCharacters(draft.characters);
+      setShots(draft.shots);
+      replaceModelSelections(draftModelSelections(draft));
+      setScriptMarkdown(draft.scriptMarkdown);
+    },
+    [replaceModelSelections],
+  );
 
   /* 最新项目 id / 草稿 / 阶段 / rendered 的 ref：供卸载兜底与异步服务端回填读取最新值（避免闭包捕获陈旧 state）。
    * `setTabRef` / `controlledTabRef` 同理：挂载回填那一条 effect 只跑一次，经 ref 读到当次的 setTab 与接管方式。 */
@@ -501,7 +516,7 @@ export function useWorkshopPipeline(
 
   /* 首挂载三路拉取（技能列表 / API 通道 / 工作流库清单）——沉在
    * `./use-workshop-pipeline-effects` 的 `useWorkshopBootstrapData`。 */
-  useWorkshopBootstrapData({ setStyles, setApiChannels, setWorkflowOptions });
+  useWorkshopBootstrapData({ setStyles, setApiChannels });
 
   /* 提示条不自动消失：写入 notice 的都是错误 / 门禁 / 「未生效」警告，
    * 4 秒自灭曾让失败原因来不及读（规范 10 §10.3.1 的可见出口要求）。
@@ -660,11 +675,10 @@ export function useWorkshopPipeline(
     shots,
     setShots,
     styles,
-    workflowOptions,
+    modelSelections,
+    setModelSelection,
     workflowId,
-    setWorkflowId,
     videoWorkflowId,
-    setVideoWorkflowId,
     apiChannels,
     imageDoneCount,
     clipDoneCount,

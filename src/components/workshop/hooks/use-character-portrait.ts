@@ -223,13 +223,13 @@ export function useCharacterPortrait(opts: {
           fail("该角色还没有生成提示词，请先补全角色信息（外貌 / 服装等会自动合成提示词）");
           return;
         }
-        const channel = session.channel;
-        const remoteModel = (overrides?.remoteModel ?? session.remoteModel).trim();
-        const localWorkflowId = (overrides?.localWorkflowId ?? session.localWorkflowId).trim();
-        /* 本地通道没有内置模板可回落：必须先选好一个工作流库工作流（自带封装）。
-         * 与区块的门禁提示同一口径。 */
+        /* 通道由调用侧解析出的候选派生（#4834）：带 remoteModel = 远端 API；
+         * 带 localWorkflowId = 本地工作流。两者都没带 = 没选模型，门禁早退。 */
+        const remoteModel = (overrides?.remoteModel ?? "").trim();
+        const localWorkflowId = (overrides?.localWorkflowId ?? "").trim();
+        const channel: "local" | "remote" = remoteModel === "" ? "local" : "remote";
         if (channel === "local" && !localWorkflowId) {
-          fail("本地通道需要先选模型：上方下拉选工作流库模型（需在库里配置好对外参数）");
+          fail("请先选择图片模型（先选模式，再在「本地 / 远端模型」里选一个）");
           return;
         }
         /* 日志里写「比例 + 档位（+ 倍数）」而不是折算出来的像素 —— 尺寸的表达
@@ -353,17 +353,7 @@ export function useCharacterPortrait(opts: {
         setSession((prev) => ({ ...prev, busy: false }));
       }
     },
-    [
-      taskLock,
-      session.channel,
-      session.size,
-      session.remoteModel,
-      session.localWorkflowId,
-      projectId,
-      writeBackCandidate,
-      appendLog,
-      fail,
-    ],
+    [taskLock, session.size, projectId, writeBackCandidate, appendLog, fail],
   );
 
   const importFile = React.useCallback(

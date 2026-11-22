@@ -9,6 +9,7 @@ import { contentLengthOverLimit } from "~/server/lib/upload-limit";
 import { uniqueStamp } from "~/lib/unique-id";
 import { extOfPath } from "~/lib/media/mime-ext";
 import { fixed } from "~/lib/number-format";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,11 @@ export async function POST(req: NextRequest) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
   }
 
   /* Content-Length 预拒（#4451）：挡住「先全量缓冲几 GB 再拒绝」的 OOM 形态；

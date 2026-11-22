@@ -38,7 +38,9 @@ export function WorkshopStageItem({
     <Button
       aria-current={isCurrent ? "step" : undefined}
       className={cn(
-        "flex h-auto items-center gap-3 rounded-xl px-4 py-3 font-normal",
+        // 两个调用处都把本件当通栏列表项用：内容贴左，
+        // 不吃 `ui/button` 基类的 `justify-center`（与相邻入口条目对齐）。
+        "flex h-auto items-center justify-start gap-3 rounded-xl px-4 py-3 font-normal",
         isCurrent
           ? "bg-primary/12 ring-primary/25 hover:bg-primary/20 ring-1"
           : "bg-surface hover:bg-subtle",

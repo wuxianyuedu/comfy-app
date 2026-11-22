@@ -86,6 +86,15 @@ export type LogEntry = {
  * `src/lib/workshop/generation-client.ts`）。 */
 
 export type RunnerState = {
+  /** 「本任务正在被用户取消（本进程已/将要杀它的 comfy-cli）」标记。
+   *  取消路径必须**在杀进程之前**挂上：被杀的 comfy-cli 退出码非 0 且不再有
+   *  envelope，进程退出收口无法凭退出码区分「真崩溃」与「被取消杀掉」——没有
+   *  这个标记，收口会抢先按异常退出把行写成 FAILED，取消自己的 CANCELLED 反而
+   *  输掉终态 CAS，用户看到「点了取消却显示失败」（ISSUE #4800）。挂标记的
+   *  责任在 cancelTask（结束即摘，含各提前返回路径）；读方是 executor-cli 的
+   *  close 处理器与看门狗。 */
+  cancelling: Set<string>;
+
   connecting: boolean;
 
   /** 本次执行实际提交给 ComfyUI 的工作流 JSON。RAW 载荷存 patched（liblib
@@ -194,6 +203,7 @@ export function createEmptyState(): RunnerState {
     startedAt: new Map(),
     settled: new Set(),
     finalized: new Set(),
+    cancelling: new Set(),
     timers: new Map(),
     reconnectAttempts: 0,
     wsPathIndex: 0,

@@ -10,6 +10,8 @@ import { probeBaseOnce } from "~/lib/comfyui/probe";
 import { safeFileNameSegment } from "~/lib/safe-name";
 import { base64PayloadOf, isInlineMedia } from "~/lib/media/data-url";
 import { sleep } from "~/lib/with-timeout";
+/* 本文件被 MCP/stdio 通道在纯 Node 宿主加载：出网判据走不带 server-only 的核心。 */
+import { safeFetch } from "~/lib/network/outbound-url-core";
 import { promises as fs, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -204,11 +206,12 @@ export type ComfyPromptResult = {
 export async function postComfyPrompt(prompt: unknown): Promise<ComfyPromptResult> {
   const base = await resolveComfyBase();
   try {
-    const res = await fetch(`${base}/api/prompt`, {
+    const res = await safeFetch(`${base}/api/prompt`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt, client_id: randomUUID() }),
       signal: AbortSignal.timeout(30_000),
+      scenario: "llm-upstream",
     });
     if (!res.ok) {
       throw new Error(
@@ -225,8 +228,9 @@ export async function postComfyPrompt(prompt: unknown): Promise<ComfyPromptResul
 export async function getComfyHistory(promptId: string): Promise<Record<string, unknown>> {
   const base = comfyBase();
   try {
-    const res = await fetch(`${base}/api/history/${promptId}`, {
+    const res = await safeFetch(`${base}/api/history/${promptId}`, {
       signal: AbortSignal.timeout(30_000),
+      scenario: "llm-upstream",
     });
     if (!res.ok) {
       throw new Error(`ComfyUI /api/history 失败 (${res.status})`);
@@ -249,8 +253,9 @@ export async function getComfyView(
   url.searchParams.set("subfolder", subfolder ?? "");
   url.searchParams.set("type", type ?? "");
   try {
-    const res = await fetch(url.toString(), {
+    const res = await safeFetch(url.toString(), {
       signal: AbortSignal.timeout(60_000),
+      scenario: "llm-upstream",
     });
     if (!res.ok) {
       throw new Error(`ComfyUI /api/view 失败 (${res.status})`);
@@ -267,10 +272,11 @@ export async function uploadComfyImage(buffer: Buffer, filename: string): Promis
   form.append("image", new Blob([new Uint8Array(buffer)]), filename);
   form.append("type", "input");
   try {
-    const res = await fetch(`${base}/api/upload/image`, {
+    const res = await safeFetch(`${base}/api/upload/image`, {
       method: "POST",
       body: form,
       signal: AbortSignal.timeout(30_000),
+      scenario: "llm-upstream",
     });
     if (!res.ok) {
       throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
@@ -365,7 +371,11 @@ export async function fetchToBuffer(ref: string): Promise<Buffer> {
     }
     return buf;
   }
-  const res = await fetch(ref, { signal: AbortSignal.timeout(30_000) });
+  const res = await safeFetch(ref, {
+    signal: AbortSignal.timeout(30_000),
+    /* 参考图引用按「远程媒体」口径校验：只放行公网目标（#4724）。 */
+    scenario: "remote-media",
+  });
   if (!res.ok) {
     throw new Error(`获取参考图失败 (${res.status})`);
   }
@@ -533,9 +543,10 @@ export async function runComfyWorkflow(
      * 文件」的失败分支，排障方向全错；且 ComfyUI 侧该 prompt 仍在消耗 GPU、
      * 无人取消。这里单独报错，并尽力 /interrupt 停掉在跑的 prompt（尽力而为，
      * 失败不掩盖主错误——interrupt 不区分 prompt，误伤面由「本应用单飞」兜住）。 */
-    void fetch(`${comfyBase()}/api/interrupt`, {
+    void safeFetch(`${comfyBase()}/api/interrupt`, {
       method: "POST",
       signal: AbortSignal.timeout(5000),
+      scenario: "llm-upstream",
     }).catch(() => undefined);
     throw new Error(
       `ComfyUI 任务 10 分钟仍未等到结果（已尽力中断 prompt ${promptId}）——请确认工作流规模 / 模型加载或 ComfyUI 负载后重试`,

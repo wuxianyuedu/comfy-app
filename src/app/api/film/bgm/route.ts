@@ -9,6 +9,7 @@ import { uniqueStamp } from "~/lib/unique-id";
 import { safeDisplayName } from "~/lib/safe-name";
 import { extOfPath, stemOfPath } from "~/lib/media/mime-ext";
 import { filmBgmRoot } from "~/lib/media/output-paths";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,11 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 export async function POST(req: NextRequest) {
   if (!(await requireRequestUser())) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
   }
   /* Content-Length 预拒（#4451）：挡住「先全量缓冲几 GB 再拒绝」的 OOM 形态；
    * 权威校验仍是解析后的 file.size。 */

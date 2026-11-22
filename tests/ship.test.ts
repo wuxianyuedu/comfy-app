@@ -79,7 +79,12 @@ import {
   splitStagedNames,
 } from "../scripts/ship/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
-import { flagConflicts, parseArgs, parseIssueNumberToken } from "../scripts/ship/ship-args.mjs";
+import {
+  flagConflicts,
+  parseArgs,
+  parseIssueNumberToken,
+  singleActionSettled,
+} from "../scripts/ship/ship-args.mjs";
 import { pushBudgetMs } from "../scripts/ship/ship-exec.mjs";
 import {
   buildPullBody,
@@ -397,6 +402,31 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
   it("--no-wait 与 --only 各自独立", () => {
     expect(parseArgs(["--no-wait"]).wait).toBe(false);
     expect(parseArgs(["--only=poll"]).only).toBe("poll");
+  });
+
+  it("#4764：singleActionSettled 认「单件 / 侧动作」的旗标面，写链不误判", () => {
+    /* 只读口与写侧快动作都复用 `finish()`，收尾词按这一格分；写链（含 --merge /
+     * --clean-branch / --only）必须落回码表词，不能被这一格吞掉。 */
+    for (const args of [
+      ["--result"],
+      ["--status"],
+      ["--whoami"],
+      ["--branches"],
+      ["--claims"],
+      ["--diagnose"],
+      ["--stage-log", "受影响用例"],
+      ["--gh-prs"],
+      ["--fetch-issue", "4764"],
+      ["--new-issue", "标题"],
+      ["--comment", "4764"],
+      ["--claim", "4764"],
+      ["--rerun-ci"],
+    ]) {
+      expect(singleActionSettled(parseArgs(args)), args.join(" ")).toBe(true);
+    }
+    for (const args of [[], ["--merge"], ["--clean-branch"], ["--only=preflight"]]) {
+      expect(singleActionSettled(parseArgs(args)), args.join(" ") || "(空)").toBe(false);
+    }
   });
 
   it("#3923：--result 两种写法都收；值只认 json，其它进 unknown", () => {
@@ -10885,6 +10915,27 @@ describe("ship --result：状态 + 事件只读口（ISSUE #3923）", () => {
     expect(code).toBe(CODE.GREEN);
     expect(text).toContain("没有上一次 ship 的落盘读数");
     expect(text).toContain("结论：exit 0");
+    /* #4764：只读口的 0 只表示这次读成功，收尾不许复用写链的码表词。 */
+    expect(text).not.toContain("全绿到终态");
+  });
+
+  it("#4764：被跟踪那一跑还在 running ⇒ 退 4，收尾不写「全绿到终态」", async () => {
+    /* 现场：后台 ship --no-wait 跑到 push 段，--result 正文先警告「没给结论」，
+     * 末行却打「结论：exit 0 —— 全绿到终态」。现在退出码是 4（无终态）、
+     * 结论词改成「单件动作完成」，两行不再自相矛盾。 */
+    const sink = createShipResultSink({
+      root: process.cwd(),
+      resolve: () => gitDir,
+      args: ["--no-wait"],
+    });
+    sink.append("[ship] ▶ 已提交（门槛全过）");
+    const log: Array<string> = [];
+    const code = await run(["--result"], log);
+    const text = log.join("\n");
+    expect(code).toBe(CODE.CI_PENDING);
+    expect(text).toContain("没给结论");
+    expect(text).not.toContain("全绿到终态");
+    expect(text).toContain("单件动作完成");
   });
 
   it("有落盘读数 ⇒ 摘要 + 事件时间线；--result=json 出原始 JSON", async () => {
@@ -10898,6 +10949,8 @@ describe("ship --result：状态 + 事件只读口（ISSUE #3923）", () => {
     const log: Array<string> = [];
     expect(await run(["--result"], log)).toBe(CODE.GREEN);
     const text = log.join("\n");
+    expect(text).toContain("单件动作完成");
+    expect(text).not.toContain("全绿到终态");
     expect(text).toContain("▶ 新建 PR | pr=3923 | state=open");
     expect(text).toContain("· stage · 新建 PR · pr=3923 state=open");
     expect(text).toContain("· finished · exit=0 status=green");

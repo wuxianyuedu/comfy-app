@@ -2,7 +2,8 @@
 
 import { formatClock } from "~/lib/time-format";
 import React from "react";
-import { ExtractModelSelect } from "~/components/workshop/ExtractModelSelect";
+import { ModelCascadeSelect, type ModelSelection } from "~/components/workshop/ModelCascadeSelect";
+import { useModelCatalog } from "~/components/workshop/hooks/use-model-catalog";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -13,6 +14,7 @@ import type { GenerationLogStage } from "~/lib/workshop/generation-log";
 import type { PersistableGenerationLog } from "~/lib/workshop/generation-log-client";
 import { Hint } from "~/components/ui/hint";
 import { TruncatedText } from "~/components/ui/truncated-text";
+import { channelOptionValue, parseChannelOption } from "~/lib/workshop/channel-options";
 
 /** 提取执行日志的展示样式（按日志类型区分色块，不随组件卸载清空）。
  *  状态色全走语义 token（§4.11.1 / P71）：init→primary（品牌）、
@@ -114,6 +116,13 @@ export function ExtractToolbar({
     onPick: onImportFile,
   });
 
+  /* 文本模型级联（#4834 统一级联）：候选与测试模型页同一份（useModelCatalog）。
+   * 存储格式仍是通道值（`local::<m>` | `remote::<m>`，streamChat 的
+   * provider/model 口径不变），这里做 candidateValue ⇄ 通道值的换算。 */
+  const chatCatalog = useModelCatalog("chat", "");
+  const parsedChannel = parseChannelOption(channelValue);
+  const modelSelection: ModelSelection = { mode: "", model: parsedChannel.model };
+
   /* 执行日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [history, setHistory] = React.useState<Array<PersistableGenerationLog> | null>(null);
@@ -142,7 +151,16 @@ export function ExtractToolbar({
         <span className="text-primary flex items-center text-xs font-medium">{title}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <ExtractModelSelect onChange={onChannelValueChange} value={channelValue} />
+        <ModelCascadeSelect
+          kind="chat"
+          onSelectionChange={(next) => {
+            const candidate = chatCatalog.resolveCandidate(next.model);
+            onChannelValueChange(
+              channelOptionValue(candidate?.local === false ? "remote" : "local", next.model),
+            );
+          }}
+          selection={modelSelection}
+        />
         <Hint label={extractDisabled ? extractDisabledReason : undefined} wrap>
           <Button
             className="h-auto rounded-lg px-3 py-1.5"

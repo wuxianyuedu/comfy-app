@@ -4,10 +4,15 @@
  * 另钉三条：已在运行不重复拉起；单次请求只等短窗口（8s），等不到 202 让前端续轮；未登录不探活也不拉起。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 
 import { isRecord } from "~/lib/is-record";
 
 const AUTOSTART_TIMEOUT_MS = 120_000;
+
+/** 路由现在带同源闸与限流（#4723/#4725）：给一个本机形态的请求（无 Origin = 本机工具，放行）。 */
+const localReq = (): NextRequest =>
+  new NextRequest("http://127.0.0.1:3100/api/comfy/ensure", { method: "POST" });
 
 /** `ensureComfyUiReady` 的入参形状（路由传的是短窗口 timeoutMs + onLog）。 */
 type EnsureOptions = { onLog: (msg: string) => void; timeoutMs: number };
@@ -45,7 +50,7 @@ describe("POST /api/comfy/ensure", () => {
   it("未登录 → 401，且既不探活也不拉起", async () => {
     requireRequestUser.mockResolvedValue(null);
     const { POST } = await import("./route");
-    const res = await POST();
+    const res = await POST(localReq());
     expect(res.status).toBe(401);
     expect(probeComfyUi).not.toHaveBeenCalled();
     expect(ensureComfyUiReady).not.toHaveBeenCalled();
@@ -54,7 +59,7 @@ describe("POST /api/comfy/ensure", () => {
   it("已在运行 → 200，且**不重复拉起**实例", async () => {
     probeComfyUi.mockResolvedValueOnce("http://127.0.0.1:8188");
     const { POST } = await import("./route");
-    const res = await POST();
+    const res = await POST(localReq());
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       ok: true,
@@ -77,7 +82,7 @@ describe("POST /api/comfy/ensure", () => {
       });
     });
     const { POST } = await import("./route");
-    const res = await POST();
+    const res = await POST(localReq());
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       ok: true,
@@ -96,7 +101,7 @@ describe("POST /api/comfy/ensure", () => {
       detail: "ComfyUI 正在启动，请稍候",
     });
     const { POST } = await import("./route");
-    const res = await POST();
+    const res = await POST(localReq());
     expect(res.status).toBe(202);
     await expect(res.json()).resolves.toEqual({
       ok: false,
@@ -110,7 +115,7 @@ describe("POST /api/comfy/ensure", () => {
     probeComfyUi.mockResolvedValueOnce(null);
     ensureComfyUiReady.mockRejectedValueOnce(new Error("找不到 comfy-cli 的虚拟环境"));
     const { POST } = await import("./route");
-    const res = await POST();
+    const res = await POST(localReq());
     expect(res.status).toBe(503);
     const body: unknown = await res.json();
     expect(body).toEqual({
@@ -126,7 +131,7 @@ describe("POST /api/comfy/ensure", () => {
     probeComfyUi.mockResolvedValueOnce(null);
     ensureComfyUiReady.mockRejectedValueOnce("boom");
     const { POST } = await import("./route");
-    const raw: unknown = await (await POST()).json();
+    const raw: unknown = await (await POST(localReq())).json();
     if (!isRecord(raw) || typeof raw.detail !== "string") {
       throw new Error("响应体缺少 detail");
     }
@@ -138,7 +143,7 @@ describe("POST /api/comfy/ensure", () => {
     probeComfyUi.mockResolvedValueOnce(null);
     ensureComfyUiReady.mockResolvedValueOnce({ ok: false, detail: "启动中" });
     const { POST } = await import("./route");
-    await POST();
+    await POST(localReq());
     const options = ensureComfyUiReady.mock.calls[0]?.[0];
     expect(options?.timeoutMs).toBeLessThan(AUTOSTART_TIMEOUT_MS);
     expect(options?.timeoutMs).toBeGreaterThan(0);
@@ -147,7 +152,7 @@ describe("POST /api/comfy/ensure", () => {
   it("探活窗口也是短的（1.5s），且带 onLog 让拉起过程可追", async () => {
     probeComfyUi.mockResolvedValueOnce("http://127.0.0.1:8188");
     const { POST } = await import("./route");
-    await POST();
+    await POST(localReq());
     expect(probeComfyUi.mock.calls[0]?.[0]).toBeLessThan(5000);
   });
 

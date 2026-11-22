@@ -31,7 +31,8 @@ import {
 } from "~/lib/workshop/generation-client";
 import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
 import { runWithConcurrency } from "~/lib/async-pool";
-import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
+import { ModelCascadeSelect, type ModelSelection } from "./ModelCascadeSelect";
+import { useModelCatalog } from "./hooks/use-model-catalog";
 import {
   parseShotSize,
   shotSizeToParam,
@@ -53,11 +54,13 @@ import { IndexDot } from "~/components/workshop/IndexDot";
 import { paramString } from "~/lib/workshop/param-coerce";
 
 type Props = {
-  /** 掩码后的 API 通道配置；图片通道的放行判据来自这里。 */
-  apiChannels: ApiChannelsView | null;
   characters: Array<Character>;
+  /** 本入口的模型选择（#4834 统一级联）：先模式（文生图 / 图生图…）再选模型；
+   *  候选含本地工作流（`wf::<id>`）与远端 API 模型，生成时按此分流两条通道。 */
+  modelSelection: ModelSelection;
   /** 取消一个进行中的本机任务（控制器统一出口）。 */
   onCancelShot: (shot: Shot) => void;
+  onModelSelectionChange: (next: ModelSelection) => void;
   onNextStage: () => void;
   /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
   onNotice: (message: string) => void;
@@ -69,11 +72,7 @@ type Props = {
   scenes: Array<Scene>;
   shots: Array<Shot>;
   styles: Array<StyleRef>;
-  /** 选定的工作流库工作流 id：本地通道的唯一可执行来源（内置模板已移除）。 */
-  workflowId: string;
 };
-
-type Channel = "local" | "api";
 
 /** 解析高级种子的输入框值：空 / 非数字 → 每次一个新的随机 seed（默认随机）；
  *  有限数字 → 用该固定 seed（pin 住以复现）。 */
@@ -134,16 +133,20 @@ export function ShotStudio({
   scenes,
   characters,
   styles,
-  workflowId,
+  modelSelection,
+  onModelSelectionChange,
   projectId,
-  apiChannels,
   onOpenModelAdapters,
   onShotsChange,
   onNotice,
   onCancelShot,
   onNextStage,
 }: Props) {
-  const [channel, setChannel] = React.useState<Channel>("local");
+  /* 模型候选目录（#4834）：与测试模型页同一份读数；按选中模型分流本地 / 远端。 */
+  const catalog = useModelCatalog("image", modelSelection.mode);
+  const selectedCandidate = catalog.resolveCandidate(modelSelection.model);
+  const isLocal = selectedCandidate?.workflow !== undefined;
+  const channelLabel = selectedCandidate === null ? "未选模型" : isLocal ? "本地" : "API";
   /** 高级 · 种子输入（空 = 每次自动随机；数字 = pin 住复现）。 */
   const [seedInput, setSeedInput] = React.useState("");
   /** 全镜头共用的「比例 + 像素 + 对齐」尺寸三段状态（issue #145 需求 3）。
@@ -161,7 +164,6 @@ export function ShotStudio({
   /** 提示词被用户手改过的镜头 —— 自动预填不得覆盖。 */
   const editedRef = React.useRef<Set<string>>(new Set());
 
-  const apiReady = apiChannels?.image.configured === true;
   const busyCount = shots.filter((s) => s.status === "running").length;
   const doneCount = shots.filter((s) => s.imageUrl !== undefined && s.imageUrl !== "").length;
   const pending = shots.filter(
@@ -241,19 +243,18 @@ export function ShotStudio({
       setShotError(shot.id, "提示词为空,请先填写或完成上一阶段提取");
       return null;
     }
-    /* 本地通道没有内置模板可回落：必须先在工作流库选好一个生图工作流。
-     * 门禁放在入口，避免带着空 workflow id 去拉详情（会得到一条无落点的请求）。 */
-    if (channel === "local" && !workflowId) {
-      setShotError(
-        shot.id,
-        "本地通道需要先在右侧「生成资源」选择一个生图工作流；或切到远端 API 通道",
-      );
+    /* 门禁放在入口（#4834）：没选模型（或选中候选已下架）不带空 workflow id
+     * 去拉详情，也不落到按「通道设置里最后一个模型」的旧回落。 */
+    if (selectedCandidate === null) {
+      setShotError(shot.id, "请先选择图片模型（先选模式：文生图 / 图生图…，再选模型）");
       return null;
     }
     setShotError(shot.id, undefined);
     patchShot(shot.id, { status: "running" });
     try {
-      if (channel === "local") {
+      if (selectedCandidate.workflow !== undefined) {
+        /* 本地模型 = 工作流库工作流（`wf::<id>`）：走与画布一致的本地链路。 */
+        const localWorkflowId = selectedCandidate.workflow.id;
         /* 镜头存的是尺寸表达（老数据可能是"832x1216"，回读时归一）——
          * 尺寸只表达一次，两种目标形状都由它现算。 */
         const sizeSpec = parseShotSize(
@@ -276,7 +277,7 @@ export function ShotStudio({
           .find((c) => c.loraName !== undefined && c.loraName !== "");
         const loraName = loraChar?.loraName;
         const loraStrength = loraChar?.loraStrength;
-        const built = await buildLibraryWorkflowInput(workflowId, {
+        const built = await buildLibraryWorkflowInput(localWorkflowId, {
           prompt: shot.prompt,
           negativePrompt: shot.negativePrompt || undefined,
           size: sizeSpec,
@@ -305,6 +306,8 @@ export function ShotStudio({
         await runLocalTask(shot.id, taskId);
         return taskId;
       }
+      /* 远端模型（#4834）：按级联选中的模型 + 模式直连（适配器字段映射在
+       * 服务端翻译）；种子两种通道都带（远端请求体本就承接 seed）。 */
       const url = await apiGenerateImage({
         prompt: shot.prompt,
         negative: shot.negativePrompt || undefined,
@@ -312,7 +315,9 @@ export function ShotStudio({
           shot.params.size !== undefined && shot.params.size !== ""
             ? paramString(shot.params.size, shotSizeToParam(shotSize))
             : shotSizeToParam(shotSize),
-        mode: "T2I",
+        model: selectedCandidate.name,
+        mode: modelSelection.mode === "" ? "T2I" : modelSelection.mode,
+        seed: resolveSeed(seedInput),
         /* 远端通道认「宽高比 + 百万像素」：分辨率档也换算成实际总像素再下发
          * （透传"1k" 这类档位名对远端没有意义）。 */
         ...shotSizeToRelay(shotSize),
@@ -383,34 +388,14 @@ export function ShotStudio({
 
   return (
     <div className="flex-col gap-4">
-      {/* 通道切换（本地 ComfyUI / 配置的 API） */}
+      {/* 模型选择（#4834 统一级联）：先选模式（文生图 / 图生图…）再选模型；
+          本地 ComfyUI 工作流以「本地模型」组出现，生成时按候选分流两条通道。 */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-muted-foreground text-xs">生成通道</span>
-        {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。
-            此前是手搓的 `variant="outline"` + 选中三元：选中分支只写了
-            「未选中之外」的那一半，而 `outline` 自带
-            `hover:bg-muted hover:text-foreground` —— 划过**已选中**的那一枚
-            时悬停档胜出，紫色选中翻成白字灰底。 */}
-        <div aria-label="生成通道" className="flex gap-2" role="radiogroup">
-          <SelectChip
-            onClick={() => {
-              setChannel("local");
-            }}
-            selected={channel === "local"}
-            shape="segment"
-          >
-            本地 · ComfyUI 工作流
-          </SelectChip>
-          <SelectChip
-            onClick={() => {
-              setChannel("api");
-            }}
-            selected={channel === "api"}
-            shape="segment"
-          >
-            API 直连{apiChannels ? (apiReady ? " · 已配置" : " · 未配置") : ""}
-          </SelectChip>
-        </div>
+        <ModelCascadeSelect
+          kind="image"
+          onSelectionChange={onModelSelectionChange}
+          selection={modelSelection}
+        />
         <Button
           className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto gap-1 rounded-lg px-3 py-1.5"
           onClick={onOpenModelAdapters}
@@ -426,17 +411,10 @@ export function ShotStudio({
           <span className="text-muted-foreground">尺寸</span>
           <ShotSizePicker disabled={batch.busy} onChange={setShotSize} value={shotSize} />
         </div>
-        {channel === "local" && (
-          <SeedAdvancedField disabled={batch.busy} onChange={setSeedInput} value={seedInput} />
-        )}
+        <SeedAdvancedField disabled={batch.busy} onChange={setSeedInput} value={seedInput} />
         <Button
           className="ml-auto h-auto rounded-lg px-3 py-1.5"
-          disabled={
-            batch.busy ||
-            pending.length === 0 ||
-            (channel === "local" && !workflowId) ||
-            (channel === "api" && !apiReady)
-          }
+          disabled={batch.busy || pending.length === 0 || selectedCandidate === null}
           onClick={() => {
             void generateBatch();
           }}
@@ -454,20 +432,6 @@ export function ShotStudio({
           下一阶段 →
         </Button>
       </div>
-
-      {/* 通道专属的放行提示（温和，stage 仍可用） */}
-      {channel === "local" && !workflowId && (
-        <div className="text-muted-foreground bg-subtle rounded-lg px-3 py-2 text-xs">
-          本地通道需要先在右侧「生成资源」选择一个生图工作流（工作流库，需配好对外参数；ComfyUI
-          需在本机运行）。生成任务走与画布一致的本地工作流链路。
-        </div>
-      )}
-      {channel === "api" && !apiReady && (
-        <div className="bg-amber/10 text-amber flex items-center gap-2 rounded-lg px-3 py-2 text-xs">
-          <Icon name="info" size={12} />
-          API 生图通道未配置 — 点击上方「模型适配」配置该模型的接口与字段映射 后即可使用。
-        </div>
-      )}
 
       {shots.length === 0 ? (
         <EmptyState
@@ -489,12 +453,13 @@ export function ShotStudio({
           />
           {shots.map((shot) => (
             <ShotCardRow
-              apiReady={apiReady}
               busyCount={busyCount}
-              channel={channel}
+              channelLabel={channelLabel}
               error={errors[shot.id]}
               gachaBusy={gachaAction.isBusy(shot.id)}
+              isLocal={isLocal}
               key={shot.id}
+              modelReady={selectedCandidate !== null}
               onCancel={(s) => {
                 onCancelShot(s);
               }}
@@ -513,7 +478,6 @@ export function ShotStudio({
               }}
               progress={progress[shot.id] ?? 0}
               shot={shot}
-              workflowId={workflowId}
             />
           ))}
         </div>
@@ -547,14 +511,18 @@ function StatusBadge({ status }: { status: Shot["status"] }) {
  *  从 ShotStudio 主体拆出（规范 §12.13 函数长度）：主组件只留编排与工具行，
  *  「一条镜头长什么样」收在这里。 */
 type ShotCardRowProps = {
-  apiReady: boolean;
   /** 全表在跑的条目数（>0 且本条在跑时显示百分比 / 排队中）。 */
   busyCount: number;
-  channel: Channel;
+  /** 角标文案：本地 / API / 未选模型（#4834 由选中的候选派生）。 */
+  channelLabel: string;
   /** 本条目的失败原因；undefined = 无错误。 */
   error: string | undefined;
   /** 本条抽卡进行中（按钮禁用 + 文案）。 */
   gachaBusy: boolean;
+  /** 选中模型是否为本地工作流候选（参考图 / 抽卡优选只在本地通道有意义）。 */
+  isLocal: boolean;
+  /** 是否已选中可用模型（生成按钮的放行判据）。 */
+  modelReady: boolean;
   /** 取消本条进行中的本机任务（有 taskId 才显示按钮）。 */
   onCancel: (shot: Shot) => void;
   /** 抽卡优选（仅本地通道有任务行可评）：连发 N 张后服务端选最优。 */
@@ -567,7 +535,6 @@ type ShotCardRowProps = {
   /** 本条目的实时进度（0~100）。 */
   progress: number;
   shot: Shot;
-  workflowId: string;
 };
 
 function ShotCardRow({
@@ -575,9 +542,9 @@ function ShotCardRow({
   progress,
   error,
   busyCount,
-  channel,
-  workflowId,
-  apiReady,
+  channelLabel,
+  isLocal,
+  modelReady,
   onGenerate,
   onGacha,
   gachaBusy,
@@ -603,7 +570,7 @@ function ShotCardRow({
             {progress > 0 ? `${Math.round(progress)}%` : "排队中…"}
           </span>
         )}
-        <span className="text-faint text-3xs ml-auto">{channel === "local" ? "本地" : "API"}</span>
+        <span className="text-faint text-3xs ml-auto">{channelLabel}</span>
       </div>
 
       {shot.status === "running" && (
@@ -636,7 +603,7 @@ function ShotCardRow({
         </Alert>
       )}
 
-      {channel === "local" && (
+      {isLocal && (
         /* 镜头级参考图（#4355）：多选，首张为主图，其余按序落其余参考图槽；
          * 留空回落出场角色的定妆照。草稿里存上传后的文件名，缩略图经
          * /api/images?type=input 回读。 */
@@ -681,12 +648,7 @@ function ShotCardRow({
       <div className="mt-2 flex items-center gap-3">
         <Button
           className="h-auto rounded-lg px-4 py-1.5"
-          disabled={
-            shot.status === "running" ||
-            !shot.prompt ||
-            (channel === "local" && !workflowId) ||
-            (channel === "api" && !apiReady)
-          }
+          disabled={shot.status === "running" || !shot.prompt || !modelReady}
           onClick={() => {
             onGenerate(shot);
           }}
@@ -699,7 +661,7 @@ function ShotCardRow({
               ? "重新生成"
               : "生成此镜头"}
         </Button>
-        {channel === "local" && (
+        {isLocal && (
           /* 抽卡优选（FR-QA-04④）：本地通道才有任务行可评；N=连发张数。 */
           <div aria-label="抽卡张数" className="flex items-center gap-1" role="radiogroup">
             {[2, 3, 4].map((n) => (
@@ -718,15 +680,10 @@ function ShotCardRow({
             ))}
           </div>
         )}
-        {channel === "local" && (
+        {isLocal && (
           <Button
             className="h-auto rounded-lg px-3 py-1.5"
-            disabled={
-              gachaBusy ||
-              shot.status === "running" ||
-              !shot.prompt ||
-              (channel === "local" && !workflowId)
-            }
+            disabled={gachaBusy || shot.status === "running" || !shot.prompt || !modelReady}
             onClick={() => {
               onGacha(shot, gachaCount);
             }}

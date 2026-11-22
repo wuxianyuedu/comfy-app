@@ -10,38 +10,34 @@ import { formatClock } from "~/lib/time-format";
 import React from "react";
 
 import { Hint } from "~/components/ui/hint";
-import { SelectMenu } from "~/components/ui/select-menu";
 import { Spinner } from "~/components/ui/spinner";
-import { SelectChip } from "~/components/ui/select-chip";
-import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { Progress } from "~/components/ui/progress";
 import { Alert } from "~/components/ui/alert";
 import { Disclosure } from "~/components/ui/disclosure";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
-import { useLLM } from "~/components/workshop/LLMContext";
 import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { PersistableGenerationLog } from "~/lib/workshop/generation-log-client";
 import type {
   PortraitSession,
   PortraitSessionActions,
 } from "~/components/workshop/hooks/use-character-portrait";
-import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
-import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 import { PORTRAIT_SOURCE_LABELS, portraitCandidates } from "~/lib/workshop/character-portrait";
 import type { Character } from "~/lib/workshop/types";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { ModelCascadeSelect, type ModelSelection } from "~/components/workshop/ModelCascadeSelect";
+import { useModelCatalog } from "~/components/workshop/hooks/use-model-catalog";
+import { candidateLabel } from "~/components/workshop/model-test-config";
 
-/** 定妆照区块需要的全部上下文：会话（controller 常驻）+ 生成通道配置。 */
+/** 定妆照区块需要的全部上下文：会话（controller 常驻）+ 模型选择（#4834）。 */
 export type CharacterPortraitContext = {
   actions: PortraitSessionActions;
-  /** API 直连通道的脱敏配置（远端通道的门禁） */
-  apiChannels: ApiChannelsView | null;
+  /** 本入口的模型选择（统一级联；候选含本地工作流与远端模型）。 */
+  modelSelection: ModelSelection;
+  onModelSelectionChange: (next: ModelSelection) => void;
   onOpenModelAdapters: () => void;
   session: PortraitSession;
-  /** 工作流库可选项（本地通道按模型标签挑选已封装的生图工作流）。 */
-  workflows: Array<WorkshopWorkflowOption>;
 };
 
 type Props = {
@@ -51,7 +47,8 @@ type Props = {
 
 /** 单张角色卡里的「定妆照」区块：生成 / 导入 / 挑选。 */
 export function CharacterPortraitStudio({ character, portrait }: Props) {
-  const { session, actions, apiChannels, workflows, onOpenModelAdapters } = portrait;
+  const { session, actions, modelSelection, onModelSelectionChange, onOpenModelAdapters } =
+    portrait;
   /* 导入定妆照：隐藏 input + 选完复位收进`ui/file-picker`。 */
   const importPicker = useFilePicker({
     accept: "image/*",
@@ -64,37 +61,12 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   const focused = session.focusCharacterId === character.id;
   const busy = session.busy && focused;
   const importing = session.importing && focused;
-  /* 远端模型来自设置页「远端模型」（kind=图片）；有配置时远端通道直接可用，
-   * 不必再在工坊 API 通道里重复填一份 Base URL / API Key。 */
-  const { remoteImageModels } = useLLM();
-  const effectiveRemoteModel = session.remoteModel || (remoteImageModels[0] ?? "");
-  const remoteReady = apiChannels?.image.configured === true || remoteImageModels.length > 0;
-  /* 本地通道的「模型」= 工作库里配置好对外参数的生图工作流（按模型标签展示）。
-   * 没有内置模板可回落：未选工作流时本地通道不可用（见下方门禁提示）。 */
-  const localWorkflows = workflows.filter((w) => w.category === "image" && w.encapsulationReady);
-  const localOptionLabels: Record<string, string> = {};
-  const tagCounts = new Map<string, number>();
-  for (const w of localWorkflows) {
-    const tag = w.modelTags[0];
-    if (tag !== undefined && tag !== "") {
-      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
-    }
-  }
-  for (const w of localWorkflows) {
-    const tag = w.modelTags[0];
-    localOptionLabels[w.id] =
-      tag !== undefined && tag !== ""
-        ? (tagCounts.get(tag) ?? 0) > 1
-          ? `${tag} · ${w.name}`
-          : tag
-        : w.name;
-  }
-  const localOptions = localWorkflows.map((w) => w.id);
-  const localBlocked = session.channel === "local" && !session.localWorkflowId;
-  const remoteBlocked = session.channel === "remote" && !remoteReady;
+  /* 模型候选（#4834 统一级联）：按选中模型分流本地工作流 / 远端 API 两条通道。 */
+  const catalog = useModelCatalog("image", modelSelection.mode);
+  const selectedCandidate = catalog.resolveCandidate(modelSelection.model);
   const hasPrompt = !!character.positivePrompt.trim();
   const canGenerate =
-    hasPrompt && !session.busy && !session.importing && !localBlocked && !remoteBlocked;
+    hasPrompt && !session.busy && !session.importing && selectedCandidate !== null;
 
   /* 生成日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
   const [historyOpen, setHistoryOpen] = React.useState(false);
@@ -122,51 +94,14 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
     <div className="bg-subtle mt-3 rounded-lg p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground text-xs font-medium">定妆照</p>
-        {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。
-            与镜头台 / 影片台的「生成通道」是同一族：手搓的
-            `variant="outline"` + 选中三元，缺「已选中时的悬停值」那一半。 */}
-        <div aria-label="定妆照生成通道" className="flex gap-2" role="radiogroup">
-          {(["local", "remote"] as const).map((channel) => (
-            <SelectChip
-              disabled={session.busy || session.importing}
-              key={channel}
-              onClick={() => {
-                actions.patch({ channel });
-              }}
-              selected={session.channel === channel}
-              shape="compact"
-            >
-              {channel === "local" ? "本地（ComfyUI）" : "远端 API"}
-            </SelectChip>
-          ))}
-        </div>
-        {session.channel === "local" && (
-          <SelectMenu
-            className="bg-subtle! border-border! text-2xs"
-            disabled={session.busy || session.importing}
-            labels={localOptionLabels}
-            onChange={(value) => {
-              actions.patch({ localWorkflowId: value });
-            }}
-            options={localOptions}
-            placeholder="选择本地生图模型"
-            popoverMinWidth={240}
-            value={session.localWorkflowId}
-          />
-        )}
-        {session.channel === "remote" && remoteImageModels.length > 0 && (
-          <SelectMenu
-            className="bg-subtle! border-border! text-2xs"
-            disabled={session.busy || session.importing}
-            onChange={(value) => {
-              actions.patch({ remoteModel: value });
-            }}
-            options={remoteImageModels}
-            placeholder="选择远端生图模型"
-            popoverMinWidth={220}
-            value={effectiveRemoteModel}
-          />
-        )}
+        {/* 模型选择（#4834 统一级联）：定妆照只出「文生图」一档模式；候选含
+            本地工作流（按模型标签显示）与远端 API 模型，生成时按候选分流。 */}
+        <ModelCascadeSelect
+          kind="image"
+          modes={["T2I"]}
+          onSelectionChange={onModelSelectionChange}
+          selection={modelSelection}
+        />
         <ShotSizePicker
           disabled={session.busy}
           onChange={(size) => {
@@ -180,14 +115,14 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           onClick={() => {
             void actions.generate(
               character,
-              session.channel === "remote" && effectiveRemoteModel
-                ? { remoteModel: effectiveRemoteModel }
-                : session.channel === "local" && session.localWorkflowId
-                  ? {
-                      localWorkflowId: session.localWorkflowId,
-                      localLabel: localOptionLabels[session.localWorkflowId] ?? "库工作流",
-                    }
-                  : undefined,
+              selectedCandidate === null
+                ? undefined
+                : selectedCandidate.workflow === undefined
+                  ? { remoteModel: selectedCandidate.name }
+                  : {
+                      localWorkflowId: selectedCandidate.workflow.id,
+                      localLabel: candidateLabel(selectedCandidate),
+                    },
             );
           }}
           size="xs"
@@ -207,26 +142,19 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         <FilePicker {...importPicker.inputProps} />
       </div>
 
-      {/* 通道门禁提示：说清缺什么、去哪里补，不让按钮无声失效 */}
-      {session.channel === "local" && !session.localWorkflowId && (
+      {/* 门禁提示：说清缺什么、去哪里补，不让按钮无声失效 */}
+      {selectedCandidate === null && (
         <p className="text-muted-foreground text-2xs">
-          本地通道需要先在上方下拉选一个工作流库模型（需在库里配置好对外参数）。
-          没有内置工作流可回落 —— 工作流库里还没有可用的生图工作流时，可切到「远端 API」通道。
-        </p>
-      )}
-      {session.channel === "remote" && !remoteReady && (
-        <p className="text-warning-strong text-2xs flex flex-wrap items-center gap-1">
-          <Icon name="info" size={11} />
-          远端 API 生图未配置 —— 在<span className="font-medium">设置 → 模型</span>
-          里添加一条「图片」类型的远端模型即可直接使用；或
+          请先在上方选择图片模型 —— 本地工作流需在工作流库配好对外参数；远端模型在
+          <span className="font-medium">设置 → 模型</span> 里添加，或到
           <Button
             className="text-2xs h-auto p-0 underline underline-offset-2"
             onClick={onOpenModelAdapters}
             variant="link"
           >
-            打开模型适配
+            模型适配
           </Button>
-          填写 Base URL 与 API Key。
+          配置该模式的字段映射。
         </p>
       )}
       {!hasPrompt && (

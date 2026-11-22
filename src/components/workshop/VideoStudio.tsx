@@ -20,17 +20,24 @@ import {
 } from "~/lib/workshop/generation-client";
 import { describeUnmatchedInputs } from "~/lib/workshop/workflow-encapsulation";
 import { runWithConcurrency } from "~/lib/async-pool";
-import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
-import { ChannelSwitch, ShotCard } from "./VideoStudio.parts";
+import { ModelCascadeSelect, type ModelSelection } from "./ModelCascadeSelect";
+import { useModelCatalog } from "./hooks/use-model-catalog";
+import { ShotCard } from "./VideoStudio.parts";
 import { framesFor, videoPrompt } from "./video-studio-utils";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { sleep } from "~/lib/with-timeout";
 import { Button } from "~/components/ui/button";
+import { FieldLabel } from "~/components/ui/field";
+import { SelectMenu } from "~/components/ui/select-menu";
+import { Icon } from "~/components/ui/icon";
 
 type Props = {
-  apiChannels: ApiChannelsView | null;
+  /** 本入口的模型选择（#4834 统一级联）：先模式（文生视频 / 图生视频…）再选
+   *  模型；候选含本地工作流（`wf::<id>`）与远端 API 模型，按此分流两条通道。 */
+  modelSelection: ModelSelection;
   /** 取消一个进行中的本机视频任务（控制器统一出口）。 */
   onCancelShot: (shot: Shot) => void;
+  onModelSelectionChange: (next: ModelSelection) => void;
   onNextStage: () => void;
   /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
   onNotice: (message: string) => void;
@@ -40,12 +47,7 @@ type Props = {
   /** 当前项目 id（空串 = 尚无活跃项目）：与镜头号一起写进任务行做归属。 */
   projectId: string;
   shots: Array<Shot>;
-  /** 选定的视频工作流 id：本地通道的唯一可执行来源（内置模板已移除）。
-   * 按封装口径暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
-  workflowId: string;
 };
-
-type Channel = "local" | "api";
 
 /**
  * 异步视频轮询对「请求这一拍失败」的容忍上限（ISSUE #4608）：轮询是幂等 GET，
@@ -55,6 +57,9 @@ type Channel = "local" | "api";
  */
 const API_VIDEO_POLL_MAX_CONSECUTIVE_ERRORS = 3;
 
+/** 帧率档（原 ChannelSwitch 内置；#4834 通道切换退场后随模型选择栏内联）。 */
+const FPS_OPTIONS = ["8", "12", "16", "24"];
+
 /**
  * 视频生成 stage：消费上游镜头图片（自动用作 I2V 首帧）与运动/时长（分镜预填）。
  * 本地通道跑 ComfyUI img2video/txt2video 工作流；API 通道中转到配置的端点
@@ -62,9 +67,9 @@ const API_VIDEO_POLL_MAX_CONSECUTIVE_ERRORS = 3;
  */
 export function VideoStudio({
   shots,
-  workflowId,
+  modelSelection,
+  onModelSelectionChange,
   projectId,
-  apiChannels,
   onOpenModelAdapters,
   onShotsChange,
   onNotice,
@@ -72,7 +77,11 @@ export function VideoStudio({
   onPrevStage,
   onNextStage,
 }: Props) {
-  const [channel, setChannel] = React.useState<Channel>("local");
+  /* 模型候选目录（#4834）：与测试模型页同一份读数；按选中模型分流本地 / 远端。 */
+  const catalog = useModelCatalog("video", modelSelection.mode);
+  const selectedCandidate = catalog.resolveCandidate(modelSelection.model);
+  const isLocal = selectedCandidate?.workflow !== undefined;
+  const channelLabel = selectedCandidate === null ? "未选模型" : isLocal ? "本地" : "API";
   const [fps, setFps] = React.useState(16);
   /* 多镜头同时在跑时的**按条目**进度表（节流 + 同值短路 + 卸载守卫都收在
    * 出口里，规范 16 §16.2.4.68）。此前这一行在两个文件里逐字相同。 */
@@ -90,7 +99,6 @@ export function VideoStudio({
     tabActiveRef.current = isTabActive;
   }, [isTabActive]);
 
-  const apiReady = apiChannels?.video.configured === true;
   const doneCount = shots.filter((s) => s.clipUrl !== undefined && s.clipUrl !== "").length;
   const pending = shots.filter(
     (s) =>
@@ -212,29 +220,42 @@ export function VideoStudio({
       setShotError(shot.id, "提示词为空,请先回上一阶段补全镜头信息");
       return;
     }
-    /* 本地通道没有内置模板可回落：必须先在工作流库选好一个视频工作流。
-     * 门禁放在入口，避免带着空 workflow id 去拉详情。 */
-    if (channel === "local" && !workflowId) {
-      setShotError(
-        shot.id,
-        "本地通道需要先在右侧「生成资源」选择一个视频工作流；或切到远端 API 通道",
-      );
+    /* 门禁放在入口（#4834）：没选模型不带空 workflow id 去拉详情。 */
+    if (selectedCandidate === null) {
+      setShotError(shot.id, "请先选择视频模型（先选模式：文生视频 / 图生视频…，再选模型）");
       return;
     }
     setShotError(shot.id, undefined);
     patchShot(shot.id, { clipStatus: "running" });
     const frames = framesFor(shot, fps);
     try {
-      if (channel === "local") {
+      if (selectedCandidate.workflow === undefined) {
+        /* 远端模型（#4834）：按级联选中的模型 + 模式直连（适配器字段映射在
+         * 服务端翻译）。 */
+        const submit = await apiSubmitVideo({
+          prompt,
+          negative: shot.negativePrompt || undefined,
+          image: shot.imageUrl,
+          frames,
+          fps,
+          model: selectedCandidate.name,
+          mode: modelSelection.mode === "" ? "T2V" : modelSelection.mode,
+        });
+        if (submit.url !== undefined && submit.url !== "") {
+          patchShot(shot.id, { clipStatus: "done", clipUrl: submit.url });
+        } else if (submit.remoteTaskId !== undefined && submit.remoteTaskId !== "") {
+          await pollApiVideo(shot.id, submit.remoteTaskId);
+        }
+      } else {
+        /* 本地模型 = 工作流库工作流（`wf::<id>`）：走本地 ComfyUI 链路。 */
+        const localWorkflowId = selectedCandidate.workflow.id;
         // 生成出的图片 → ComfyUI 输入目录，好让 LoadImage 节点能用它。
         const inputImage =
           shot.imageUrl !== undefined && shot.imageUrl !== ""
             ? await prepareLocalInputImage(shot.imageUrl)
             : undefined;
-        /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个视频工作流
-         *（封装口径暴露 提示词 / 尺寸 / 首帧 / 时长，其余走工作流默认值）。
-         * 见 generateClip 入口的门禁。 */
-        const built = await buildLibraryWorkflowInput(workflowId, {
+        /* 封装口径暴露 提示词 / 尺寸 / 首帧 / 时长，其余走工作流默认值。 */
+        const built = await buildLibraryWorkflowInput(localWorkflowId, {
           prompt,
           negativePrompt: shot.negativePrompt || undefined,
           ...(inputImage !== undefined && inputImage !== "" ? { firstFrame: inputImage } : {}),
@@ -258,19 +279,6 @@ export function VideoStudio({
          * （与生图阶段的 taskId 同一机制）。 */
         patchShot(shot.id, { clipTaskId: taskId });
         await runLocalTask(shot.id, taskId);
-      } else {
-        const submit = await apiSubmitVideo({
-          prompt,
-          negative: shot.negativePrompt || undefined,
-          image: shot.imageUrl,
-          frames,
-          fps,
-        });
-        if (submit.url !== undefined && submit.url !== "") {
-          patchShot(shot.id, { clipStatus: "done", clipUrl: submit.url });
-        } else if (submit.remoteTaskId !== undefined && submit.remoteTaskId !== "") {
-          await pollApiVideo(shot.id, submit.remoteTaskId);
-        }
       }
     } catch (error: unknown) {
       patchShot(shot.id, { clipStatus: "failed" });
@@ -295,22 +303,55 @@ export function VideoStudio({
 
   return (
     <div className="flex flex-col gap-4">
-      <ChannelSwitch
-        apiChannels={apiChannels}
-        apiReady={apiReady}
-        batchRunning={batch.busy}
-        channel={channel}
-        fps={fps}
-        onChannelChange={setChannel}
-        onFpsChange={setFps}
-        onGenerateBatch={() => {
-          void generateBatch();
-        }}
-        onNextStage={onNextStage}
-        onOpenModelAdapters={onOpenModelAdapters}
-        pendingCount={pending.length}
-        workflowSelected={!!workflowId}
-      />
+      {/* 模型选择（#4834 统一级联）：先选模式（文生视频 / 图生视频…）再选模型；
+          本地 ComfyUI 工作流以「本地模型」组出现，生成时按候选分流两条通道。 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <ModelCascadeSelect
+          kind="video"
+          onSelectionChange={onModelSelectionChange}
+          selection={modelSelection}
+        />
+        <Button
+          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto gap-1 rounded-lg px-3 py-1.5"
+          onClick={onOpenModelAdapters}
+          size="xs"
+          variant="ghost"
+        >
+          <Icon data-icon="inline-start" name="settings" size={12} />
+          模型适配
+        </Button>
+        <FieldLabel className="flex items-center gap-2 text-xs">
+          <span className="text-muted-foreground">帧率</span>
+          <SelectMenu
+            className="bg-subtle! border-border! text-xs"
+            onChange={(v) => {
+              setFps(Number(v) || 16);
+            }}
+            options={FPS_OPTIONS}
+            placeholder="帧率"
+            value={String(fps)}
+          />
+        </FieldLabel>
+        <Button
+          className="ml-auto h-auto rounded-lg px-3 py-1.5"
+          disabled={batch.busy || pending.length === 0 || selectedCandidate === null}
+          onClick={() => {
+            void generateBatch();
+          }}
+          size="xs"
+          variant="primary-solid"
+        >
+          {batch.busy ? "批量生成中…" : `批量生成视频 (${pending.length})`}
+        </Button>
+        <Button
+          className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
+          onClick={onNextStage}
+          size="xs"
+          variant="secondary"
+        >
+          去合成 →
+        </Button>
+      </div>
 
       {shots.length === 0 ? (
         <EmptyState
@@ -322,11 +363,11 @@ export function VideoStudio({
         <div className="flex flex-col gap-3">
           {shots.map((shot) => (
             <ShotCard
-              apiReady={apiReady}
-              channel={channel}
+              channelLabel={channelLabel}
               error={errors[shot.id]}
               fps={fps}
               key={shot.id}
+              modelReady={selectedCandidate !== null}
               onCancel={() => {
                 onCancelShot(shot);
               }}

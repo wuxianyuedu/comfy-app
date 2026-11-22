@@ -15,6 +15,8 @@ import { OLLAMA_DEFAULT_PORT, ollamaBaseUrl } from "~/lib/endpoints";
 import { withTimeoutResult } from "~/lib/with-timeout";
 import { errorMessage } from "~/lib/error-message";
 import { isRecord } from "~/lib/is-record";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
+import { safeFetch } from "~/lib/network/outbound-url.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,8 +78,9 @@ function appendOllamaLog(writer: RuntimeLogWriter | null, line: string): void {
 /** 探测 Ollama 是否已就绪（HTTP 200 = 服务在监听）。 */
 async function probeOllamaPort(): Promise<boolean> {
   try {
-    const res = await fetch(`${ollamaBaseUrl(OLLAMA_PORT)}/api/version`, {
+    const res = await safeFetch(`${ollamaBaseUrl(OLLAMA_PORT)}/api/version`, {
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      scenario: "llm-upstream",
     });
     return res.ok;
   } catch {
@@ -271,6 +274,11 @@ export async function GET(_req: NextRequest) {
 export async function POST(_req: NextRequest) {
   if (!(await requireRequestUser())) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(_req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
   }
 
   // ── 已在运行就直接返回 ──
