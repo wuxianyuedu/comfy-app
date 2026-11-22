@@ -307,6 +307,14 @@ run_group D0 "形态前置档（这次提交自身的形态）" sh -c '
   # 视图层出现裸 fetch / vanillaApi.* / tRPC hook 即阻断 —— 没有基线、没有
   # `--update`，也就不存在「借余量偷偷新增」那条路。H1/H2 本来就是硬规则。
   run "UI/逻辑分离硬闸" node scripts/gates/check-ui-logic-separation.cjs
+  # 写端点同源闸覆盖（#4723，#3904 子项）：凡带 POST/PUT/DELETE/PATCH 的 REST 路由
+  # 必须过 `~/server/lib/same-origin` 的统一同源出口 —— 跨站「简单请求」不经
+  # preflight，而鉴权在单用户模式下不构成边界。硬闸：缺一处即阻断，无基线、无豁免。
+  run "写端点同源闸覆盖" node scripts/gates/check-write-origin-gate.cjs
+  # 服务端出网收口（#4724，#3904 子项）：src/server、src/app/api 与声明服务端身份
+  # 的 src/lib 模块内出现绕过 safeFetch 的裸 fetch( 即阻断（safeFetch 本体不在扫描面）
+  # —— 出网必须走 scheme / 内网与元数据 / 逐跳重定向的统一判据。硬闸，无基线、无豁免。
+  run "服务端出网收口(裸 fetch 硬闸)" node scripts/gates/check-server-bare-fetch.cjs
   # 地基层(src/lib + src/trpc)的零消费值导出（规范 §12.16）：硬闸 —— 存量已清零。
   run "地基层零消费导出(硬闸)" node scripts/gates/check-dead-exports.cjs --staged
   # 故事文件的枚举来源（规范 16 §16.2.3.2 / §11.8）：`cva()` 返回的是函数，
@@ -466,7 +474,7 @@ run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm ru
 # 用例名 —— 那是「判据在场、跑的是 0 个用例」的门禁静默失效。启动器直接用 node
 # spawn vitest 的 ESM 入口（不经 cmd 层，上限回到 32767），并按预算分块，
 # **宁可多起一次也不丢用例**。`--maxWorkers=4`（只对**钩子里**成立：A(tsc)、B(eslint)、
-# D(61 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
+# D(63 个判据脚本) 与本组并行，再按 `vitest.config.ts` 的 8 起 forks 就会抢不过来 ——
 # 现场不是用例红而是 `Failed to start forks worker / Timeout waiting for worker to
 # respond`；全量 `pnpm test` 仍是配置里的 8）随启动器一起搬过去了，口径见该脚本文件头。
 # ⚠️ 上面那句「D(N 个判据脚本)」的 N 由 `tests/doc-check-hook-wiring.test.ts` 核与钩子里

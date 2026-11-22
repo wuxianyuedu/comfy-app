@@ -8,6 +8,7 @@ import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { formatCompactStamp } from "~/lib/time-format";
 import { toDisplayPath } from "~/lib/path-display";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
 
 /**
  * 日志面板「保存到本地」端点：把面板当前筛选出的日志**真的写到磁盘**。不靠浏览器 `<a download>` 是因为桌面壳里是否弹保存框、存到哪里
@@ -34,6 +35,11 @@ export async function POST(request: Request) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(request);
+  if (crossOrigin !== null) {
+    return crossOrigin;
   }
 
   /* 读体走唯一出口（规范 16 §16.2.4.44）：此前这里是

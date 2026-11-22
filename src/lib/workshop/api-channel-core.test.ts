@@ -12,9 +12,9 @@ import {
   sanitizeChannel,
   type ApiChannelStored,
   type WorkshopApiSettings,
-  type ApiCallDebugRow,
 } from "./api-channel-core";
 import { isRecord } from "~/lib/is-record";
+import type { ApiCallDebugRow } from "./api-channel-shared";
 
 afterEach(() => {
   vi.unstubAllGlobals();

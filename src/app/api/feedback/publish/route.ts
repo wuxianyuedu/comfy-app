@@ -18,6 +18,7 @@ import {
   probeCnbCli,
   uploadFeedbackAsset,
 } from "~/server/feedback/cnb-cli";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
 
 /**
  * `/api/feedback/publish` —— 把已生成的本机反馈包提交到 CNB 仓库（#3384）。
@@ -59,6 +60,11 @@ export async function POST(request: Request) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(request);
+  if (crossOrigin !== null) {
+    return crossOrigin;
   }
 
   const body = await readJsonRecord(request);

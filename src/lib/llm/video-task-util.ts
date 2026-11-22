@@ -120,9 +120,11 @@ export async function saveMediaToLocalTemp(
       }
       await fs.writeFile(dest, Buffer.from(base64, "base64"));
     } else {
-      const res = await fetch(url, {
+      const res = await safeFetch(url, {
         signal: AbortSignal.timeout(120_000),
         headers: { Accept: "*/*" },
+        /* 上游返回的媒体地址按「远程媒体」口径校验：只放行公网目标（#4724）。 */
+        scenario: "remote-media",
       });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);

@@ -9,8 +9,11 @@
 
 import { isRecord } from "~/lib/is-record";
 import { sleep } from "~/lib/with-timeout";
-import type { ApiCallDebugRow as ApiRelayDebugRow } from "./api-channel-core";
-import type { ApiChannelView, ApiChannelsView } from "./api-channel-shared";
+import type {
+  ApiCallDebugRow as ApiRelayDebugRow,
+  ApiChannelView,
+  ApiChannelsView,
+} from "./api-channel-shared";
 import type { Character, Shot } from "./types";
 
 /* 从中继错误信封里取出可读信息

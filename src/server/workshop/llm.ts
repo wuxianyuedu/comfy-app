@@ -11,6 +11,8 @@ import { workshopDb } from "./db";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import { asRecord, isUnknownArray } from "~/lib/is-record";
+/* 本文件会被纯 Node 宿主加载（见文件头）：出网判据走不带 server-only 的核心。 */
+import { safeFetch } from "~/lib/network/outbound-url-core";
 
 export type WorkshopLLMConfig = {
   apiKey: string | null;
@@ -81,7 +83,7 @@ export async function completeWorkshopLLM(
   }
   let res: Response;
   try {
-    res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    res = await safeFetch(`${cfg.baseUrl}/chat/completions`, {
       method: "POST",
       headers: headersFor(cfg),
       body: JSON.stringify({
@@ -92,6 +94,7 @@ export async function completeWorkshopLLM(
         stream: false,
       }),
       signal: AbortSignal.timeout(180_000),
+      scenario: "llm-upstream",
     });
   } catch (error) {
     const msg = errorMessage(error, String(error));
