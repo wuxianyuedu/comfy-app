@@ -57,6 +57,13 @@ export type AppEvents = {
     resultPath: string;
   };
   /**
+   * 侧栏品牌图被换掉或恢复默认。载荷无 —— 图本身可查
+   * （`~/lib/appearance` 的 `readBrandLogo()`），写侧 `saveBrandLogo` /
+   * `restoreBrandLogo` 会先落本机再广播。侧栏随外壳常驻、不在视图切换时重挂，
+   * 只换存储不广播的话，从设置页回到工作区仍看到旧图。
+   */
+  "comfyapp:brand-logo-changed": undefined;
+  /**
    * 画布仓库（项目索引 / 激活项）发生增删改后广播。
    *
    * 载荷带「变更类型 + 项目 id」（ISSUE #4600）：自动保存每 500ms 一拍，
@@ -139,6 +146,7 @@ const PAYLOAD_VALIDATORS: { [K in AppEventName]: (value: unknown) => value is Ap
     typeof value.id === "string" &&
     typeof value.resultPath === "string" &&
     (value.resultMediaType === undefined || typeof value.resultMediaType === "string"),
+  "comfyapp:brand-logo-changed": (value): value is undefined => value === undefined,
   "comfyapp:canvas-store-changed": (value): value is AppEvents["comfyapp:canvas-store-changed"] =>
     isRecord(value) &&
     typeof value.reason === "string" &&
