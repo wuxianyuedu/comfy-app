@@ -9,6 +9,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { buildParamEntries, sizeGroupIds } from "~/lib/workflow/workflow-param-mapping";
+import { sizeSourceForMode, withSizeSource } from "~/lib/workflow/workflow-size-source";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
 import {
@@ -287,6 +288,28 @@ export function WorkflowCanvasNodePreview({
     [resetParamWires],
   );
 
+  /* 尺寸来源（第几张图决定生成尺寸）是 paramMap 的另一维配置，与落点线同列不同键。
+   * 读的是 overlay 之后的生效 paramMap，写走 commitParamMap（先并本地态再落库），
+   * 避免在飞连线改动被这一笔覆盖回去。 */
+  const { commitParamMap, effectiveParamMap } = wiring;
+  const sizeFromReference =
+    sizeSourceForMode(effectiveParamMap, effectiveMode) === "reference-image";
+  const handleSizeFromReferenceChange = useCallback(
+    (enabled: boolean) => {
+      if (effectiveMode === null) {
+        return;
+      }
+      commitParamMap(
+        withSizeSource({
+          paramMap: effectiveParamMap,
+          mode: effectiveMode,
+          from: enabled ? "reference-image" : null,
+        }),
+      );
+    },
+    [commitParamMap, effectiveMode, effectiveParamMap],
+  );
+
   /** 提交到本机生成并等待落定（相位与 SSE 订阅在 use-generation-runner）。 */
   function run() {
     if (!canRun) {
@@ -400,10 +423,12 @@ export function WorkflowCanvasNodePreview({
           onResetParam={handleResetParam}
           onSelectOutput={handleSelectOutput}
           onSelectParam={handleSelectParam}
+          onSizeFromReferenceChange={handleSizeFromReferenceChange}
           outputCards={outputCards}
           paramCards={paramCards}
           selectedEntryId={selectedParamId}
           selectedOutputId={selectedOutputId}
+          sizeFromReference={sizeFromReference}
         />
       )}
 

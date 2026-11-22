@@ -251,6 +251,21 @@ describe("尺寸：形态由作者连的子口声明，值按形态派", () => {
     expect(res.unmatched).toEqual([]);
   });
 
+  it("声明「尺寸取自首张参考图」后，外部尺寸值不下发也不报 unmatched", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: {
+        ...wire("I2I", { "size-width": "width", "size-height": "height" }),
+        sizeSource: { "mode:I2I": { from: "reference-image" } },
+      },
+      mode: "I2I",
+      values: { size: sizeSpec() },
+    });
+    expect(valueOf(res.workflowInputs, "width")).toBeUndefined();
+    expect(valueOf(res.workflowInputs, "height")).toBeUndefined();
+    expect(res.unmatched).toEqual([]);
+  });
+
   it("比例 + 像素量 + 倍数三条线：各自按形态取值（比例写端口自己的候选）", () => {
     const io: WorkflowIOMap = {
       ar: {

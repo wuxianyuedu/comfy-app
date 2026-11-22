@@ -7,7 +7,7 @@
 // 候选 / 适配器 / 契约 / 生成动作都在 `hooks/use-model-test.ts`（第②层）与
 // `model-test-config.ts`（第①层）；本文件不出现 fetch / api.*。
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import {
@@ -37,6 +37,7 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { clampInt } from "~/lib/clamp";
 import { sceneFromMode } from "~/lib/media/size-presets";
+import { sizeSourceForMode } from "~/lib/workflow/workflow-size-source";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import type { QueueTaskLogTarget } from "~/components/studio/queue/QueueTaskLogModal";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
@@ -191,14 +192,50 @@ function SizeField({
   disabled,
   mode,
   onPatchValues,
+  referenceImageSrc,
+  sizeFromReference = false,
   values,
 }: {
   disabled?: boolean;
   mode: string;
   onPatchValues: (patch: Partial<ModelTestValues>) => void;
+  /** 第一张参考图（data URL / 可访问路径）——尺寸来源声明为首图时读它的像素大小。 */
+  referenceImageSrc?: string;
+  sizeFromReference?: boolean;
   values: ModelTestValues;
 }) {
   const scene = sceneFromMode(mode);
+  const [dimsBySrc, setDimsBySrc] = useState<Record<string, { height: number; width: number }>>({});
+  const dims = referenceImageSrc === undefined ? null : (dimsBySrc[referenceImageSrc] ?? null);
+  useEffect(() => {
+    if (
+      referenceImageSrc === undefined ||
+      referenceImageSrc === "" ||
+      dimsBySrc[referenceImageSrc] !== undefined
+    ) {
+      return;
+    }
+    const image = new Image();
+    image.onload = () => {
+      setDimsBySrc((prev) => ({
+        ...prev,
+        [referenceImageSrc]: { height: image.naturalHeight, width: image.naturalWidth },
+      }));
+    };
+    image.src = referenceImageSrc;
+    return () => {
+      image.onload = null;
+    };
+  }, [referenceImageSrc, dimsBySrc]);
+  if (sizeFromReference) {
+    return (
+      <div className="bg-subtle text-ink-muted w-64 min-w-0 rounded-lg px-3 py-2 text-xs">
+        {dims === null
+          ? "上传第一张参考图后自动显示生成尺寸"
+          : `${dims.width} × ${dims.height}（取自第一张参考图）`}
+      </div>
+    );
+  }
   return (
     <div className="w-64 min-w-0">
       <ShotSizePicker
@@ -416,6 +453,10 @@ function OnboardingPanel({ c }: { c: ModelTestController }) {
 
 export function ModelTestView() {
   const c = useModelTest();
+  /* 选中的本地工作流声明「尺寸取自首图」时，尺寸口不可配置（工坊链路本就不下发
+   * 尺寸值），改为只读展示第一张参考图的实际像素。远端通道没有工作流声明，不受影响。 */
+  const sizeFromReference =
+    sizeSourceForMode(c.selectedWorkflow?.paramMap, c.mode) === "reference-image";
   /* 响应摘要的显示形态：默认格式化，可切回原始单行。 */
   const [excerptPretty, setExcerptPretty] = useState(true);
   /* 「大屏查看日志」弹窗目标：存打开那一刻的快照（与 HistoryList 同款），
@@ -608,6 +649,8 @@ export function ModelTestView() {
                                 disabled={row.disabled}
                                 mode={c.mode}
                                 onPatchValues={c.patchValues}
+                                referenceImageSrc={c.referenceImages[0]}
+                                sizeFromReference={sizeFromReference}
                                 values={c.values}
                               />
                             )}

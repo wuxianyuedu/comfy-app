@@ -54,12 +54,15 @@ type EncapsulationTestFormProps = {
   running: boolean;
   /** 尺寸表口径（随模式：生图 / 视频）。 */
   scene: SizeScene;
+  /** 该模式是否声明尺寸取自第一张参考图。开启时尺寸口不可配置，只读展示首图大小。 */
+  sizeFromReference?: boolean;
   /** 上传本地图片到 ComfyUI 输入目录，返回文件名（IO 在 hooks 层）。 */
   uploadImage: (file: File) => Promise<string>;
 };
 
 export function EncapsulationTestForm({
   entries,
+  sizeFromReference = false,
   initialSize,
   scene,
   running,
@@ -92,6 +95,36 @@ export function EncapsulationTestForm({
   /* 图片口的本地预览（entryId → data URL）：选完立刻显示，不依赖 ComfyUI 上传
    * 成功或是否运行（上传失败 / 未启动时值不落回，但用户选的那张图仍应看得见）。 */
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  /* 尺寸来源 = 首图时，从第一张参考图的本地预览读出真实像素尺寸。只用于展示，
+   * 不写进表单值（工坊不下发尺寸，工作流自己按图推导）。 */
+  const [sizesBySrc, setSizesBySrc] = useState<Record<string, { height: number; width: number }>>(
+    {},
+  );
+  const firstReferenceId = entries.find(
+    (entry) => entry.id === "reference-image" || entry.id.startsWith("reference-image-"),
+  )?.id;
+  const referenceSrc = firstReferenceId === undefined ? undefined : previews[firstReferenceId];
+  const referenceSize = referenceSrc === undefined ? null : (sizesBySrc[referenceSrc] ?? null);
+  useEffect(() => {
+    if (
+      referenceSrc === undefined ||
+      referenceSrc === "" ||
+      sizesBySrc[referenceSrc] !== undefined
+    ) {
+      return;
+    }
+    const image = new Image();
+    image.onload = () => {
+      setSizesBySrc((prev) => ({
+        ...prev,
+        [referenceSrc]: { height: image.naturalHeight, width: image.naturalWidth },
+      }));
+    };
+    image.src = referenceSrc;
+    return () => {
+      image.onload = null;
+    };
+  }, [referenceSrc, sizesBySrc]);
   const disabled = running || !canRun;
 
   const patchText = (id: string, next: string) => {
@@ -152,7 +185,7 @@ export function EncapsulationTestForm({
     const payload: WorkshopExposedValues = {
       ...pruned,
       ...(Object.keys(custom).length > 0 ? { custom } : {}),
-      ...(entries.some((entry) => entry.control === "size") ? { size } : {}),
+      ...(entries.some((entry) => entry.control === "size") && !sizeFromReference ? { size } : {}),
       ...(entries.some((entry) => entry.control === "duration") ? { duration } : {}),
     };
     setError("");
@@ -166,15 +199,23 @@ export function EncapsulationTestForm({
           return (
             <div className="flex flex-col gap-1" key={entry.id}>
               <FieldLabel label={entry.label} />
-              <ShotSizePicker
-                disabled={disabled}
-                onChange={(next) => {
-                  sizeTouchedRef.current = true;
-                  setSize(next);
-                }}
-                scene={scene}
-                value={size}
-              />
+              {sizeFromReference ? (
+                <div className="bg-subtle text-ink-muted rounded-lg px-3 py-2 text-xs">
+                  {referenceSize === null
+                    ? "上传第一张参考图后自动显示生成尺寸"
+                    : `${referenceSize.width} × ${referenceSize.height}（取自第一张参考图）`}
+                </div>
+              ) : (
+                <ShotSizePicker
+                  disabled={disabled}
+                  onChange={(next) => {
+                    sizeTouchedRef.current = true;
+                    setSize(next);
+                  }}
+                  scene={scene}
+                  value={size}
+                />
+              )}
             </div>
           );
         }

@@ -49,6 +49,7 @@ function stubEncapsulation(): ReturnType<typeof useWorkflowEncapsulation> {
       missingRequired: [],
       ready: false,
       resolvedCount: 0,
+      sizeFromReference: false,
     },
   };
 }
