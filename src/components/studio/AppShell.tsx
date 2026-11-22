@@ -1,9 +1,17 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { LayoutGrid, Plus, X } from "lucide-react";
+import { LayoutGrid, Pencil, Plus, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { RenameProjectDialog } from "./RenameProjectDialog";
 import { useHotkey } from "~/components/ui/use-hotkey";
 import { Disclosure } from "~/components/ui/disclosure";
 import { cn } from "~/lib/utils";
@@ -144,6 +152,17 @@ export function AppShell({
   useHotkey({ key: "k", mod: true }, () => {
     setCommandOpen(true);
   });
+
+  /* 「项目」行的右键菜单（ISSUE #4808）：开在右键那个点上（与画布菜单
+     CanvasContextMenu 同一手法 —— 受控 DropdownMenu + 零尺寸 fixed 锚点），
+     全局兜底 AppContextMenu 靠 `defaultPrevented` 让位。目前一项「编辑名称」；
+     改名对话框单独一个状态（菜单关了它才开，互不嵌套）。 */
+  const [contextTarget, setContextTarget] = useState<{
+    project: SidebarProject;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<SidebarProject | null>(null);
 
   /* 侧栏列表 —— 与 `globalNavItems()` 的差别只有一处：设置不在侧栏列
      （它已经撤到顶栏右上角的菜单里，见 `sidebarNavItems` 的说明）。 */
@@ -296,12 +315,28 @@ export function AppShell({
                           const openProjectTabs =
                             viewTabs?.filter((tab) => tab.projectId === project.id) ?? [];
                           return (
-                            <SidebarMenuItem key={project.id}>
+                            /* 行级悬停用独立组名 `group/row`（ISSUE #4812）：本面板嵌在
+                               外层「项目」行（也是一个带 `group/menu-item` 的
+                               SidebarMenuItem）里，Tailwind 命名组变体是「任一祖先命中」
+                               —— 悬停面板里任意一行都会让外层 li 处于 :hover，行内反馈
+                               就会串到别的行上。行级变体（按钮背景 / 关闭按钮浮现）只认
+                               本行的 li，外层不带 `group/row`，串色链条断在这里。 */
+                            <SidebarMenuItem className="group/row" key={project.id}>
                               <SidebarMenuButton
-                                className="group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground"
+                                className="group-hover/row:bg-sidebar-accent group-hover/row:text-sidebar-accent-foreground"
                                 isActive={insideProject && project.id === activeProjectId}
                                 onClick={() => {
                                   onOpenProject(project.id);
+                                }}
+                                onContextMenu={(event) => {
+                                  /* 右键 = 项目菜单（编辑名称，ISSUE #4808）：
+                                     preventDefault 让全局兜底菜单（AppContextMenu）让位。 */
+                                  event.preventDefault();
+                                  setContextTarget({
+                                    project,
+                                    x: event.clientX,
+                                    y: event.clientY,
+                                  });
                                 }}
                                 size="sm"
                                 tooltip={project.name}
@@ -331,8 +366,10 @@ export function AppShell({
                                   className={cn(
                                     "absolute top-1/2 right-2 -translate-y-1/2",
                                     "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                                    "opacity-0 transition-opacity group-hover/menu-item:opacity-100",
-                                    "group-focus-within/menu-item:opacity-100 focus-visible:opacity-100",
+                                    /* 行级组（ISSUE #4812）：浮现条件只认本行的 li，
+                                       不吃外层「项目」行的悬停。 */
+                                    "opacity-0 transition-opacity group-hover/row:opacity-100",
+                                    "group-focus-within/row:opacity-100 focus-visible:opacity-100",
                                     "group-data-[collapsible=icon]:hidden",
                                   )}
                                   data-sidebar="menu-action"
@@ -428,6 +465,49 @@ export function AppShell({
           onSelect={onSelect}
           open={commandOpen}
         />
+
+        {/* 「项目」行的右键菜单（ISSUE #4808）：锚点开在右键那个点上。 */}
+        {contextTarget !== null && (
+          <DropdownMenu
+            onOpenChange={(open) => {
+              if (!open) {
+                setContextTarget(null);
+              }
+            }}
+            open
+          >
+            {/* 零尺寸定位锚点（与 CanvasContextMenu 同一手法）：菜单开在右键那个点上。 */}
+            <DropdownMenuTrigger
+              aria-hidden
+              className="pointer-events-none fixed size-0"
+              style={{ left: contextTarget.x, top: contextTarget.y }}
+              tabIndex={-1}
+            />
+            <DropdownMenuContent align="start" side="bottom">
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setRenameTarget(contextTarget.project);
+                    setContextTarget(null);
+                  }}
+                >
+                  <Pencil data-icon="inline-start" size={14} />
+                  <span>编辑名称</span>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
+        {/* 改名对话框（与右键菜单分开挂：菜单先收，对话框再开）。 */}
+        {renameTarget !== null && (
+          <RenameProjectDialog
+            onClose={() => {
+              setRenameTarget(null);
+            }}
+            project={renameTarget}
+          />
+        )}
       </SidebarProvider>
     </ViewActionsProvider>
   );

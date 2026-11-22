@@ -382,7 +382,6 @@ export default function WorkspacePage() {
               setCreateProjectOpen(false);
             }}
             onCreated={handleProjectCreated}
-            open
           />
         ) : null}
       </>
