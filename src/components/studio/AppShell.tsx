@@ -77,6 +77,217 @@ function ProjectGlyph() {
   );
 }
 
+/** 侧栏底部「项目」分组（从 `AppShell` 拆出 —— §12.13：#4808 的右键菜单把
+ *  `AppShell` 函数顶过 400 行闸）：入口行的折叠面板 + 项目行（打开态 / 关页签 /
+ *  右键菜单）+ 查看全部 / 新建项目。右键菜单与改名对话框的状态只在本组消费，
+ *  随组件一起搬；菜单与对话框走 Portal，DOM 位置不影响呈现。 */
+function SidebarProjectsGroup({
+  activeProjectId,
+  insideProject,
+  onCloseViewTab,
+  onNewProject,
+  onOpenProject,
+  onShowAllProjects,
+  projects,
+  viewTabs,
+}: {
+  activeProjectId: string | null;
+  insideProject: boolean;
+  onCloseViewTab?: (key: string) => void;
+  onNewProject: () => void;
+  onOpenProject: (id: string) => void;
+  onShowAllProjects: () => void;
+  projects: Array<SidebarProject>;
+  viewTabs?: Array<ViewTab>;
+}) {
+  /* 「项目」行的右键菜单（ISSUE #4808）：开在右键那个点上（与画布菜单
+     CanvasContextMenu 同一手法 —— 受控 DropdownMenu + 零尺寸 fixed 锚点），
+     全局兜底 AppContextMenu 靠 `defaultPrevented` 让位。目前一项「编辑名称」；
+     改名对话框单独一个状态（菜单关了它才开，互不嵌套）。 */
+  const [contextTarget, setContextTarget] = useState<{
+    project: SidebarProject;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<SidebarProject | null>(null);
+
+  return (
+    <>
+      {/* 「项目」分组紧跟全局项之后（不再 `mt-auto` 顶到视口底部，避免中间大片空白）。
+        **图标档不再整组隐藏**（ISSUE #1691）：此前挂 `collapsible=icon:hidden`，窗口一窄
+        用户就看不见也切不了项目；现在缩略态每项都是带图标 + 名称 tooltip 的方块。 */}
+      <SidebarGroup>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <Disclosure
+                className={cn(
+                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  "rounded-md p-2 text-sm font-medium [&_svg]:size-4 [&_svg]:shrink-0",
+                  /* 缩略态：整行落成与全局项同形的 48px 方块 —— 折叠标记
+                   与文字都让位，只留分组图标（否则这一行宽过图标轨、
+                   `overflow-hidden` 把它裁掉一半）。 */
+                  "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center",
+                  "group-data-[collapsible=icon]:**:data-[slot=disclosure-marker]:hidden",
+                )}
+                defaultOpen
+                marker="chevron"
+                panelClassName="mt-1"
+                trigger={
+                  <>
+                    {PROJECTS_ENTRY.icon}
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {PROJECTS_ENTRY.label}
+                    </span>
+                  </>
+                }
+              >
+                <SidebarMenu>
+                  {projects.map((project) => {
+                    /* 这个项目当前开着哪些页签（ISSUE #4770）：任一项目类页签
+                       挂着它 = 界面打开。打开态与关闭按钮和上方导航项同一套。 */
+                    const openProjectTabs =
+                      viewTabs?.filter((tab) => tab.projectId === project.id) ?? [];
+                    return (
+                      /* 行级悬停用独立组名 `group/row`（ISSUE #4812）：本面板嵌在
+                         外层「项目」行（也是一个带 `group/menu-item` 的
+                         SidebarMenuItem）里，Tailwind 命名组变体是「任一祖先命中」
+                         —— 悬停面板里任意一行都会让外层 li 处于 :hover，行内反馈
+                         就会串到别的行上。行级变体（按钮背景 / 关闭按钮浮现）只认
+                         本行的 li，外层不带 `group/row`，串色链条断在这里。 */
+                      <SidebarMenuItem className="group/row" key={project.id}>
+                        <SidebarMenuButton
+                          className="group-hover/row:bg-sidebar-accent group-hover/row:text-sidebar-accent-foreground"
+                          isActive={insideProject && project.id === activeProjectId}
+                          onClick={() => {
+                            onOpenProject(project.id);
+                          }}
+                          onContextMenu={(event) => {
+                            /* 右键 = 项目菜单（编辑名称，ISSUE #4808）：
+                               preventDefault 让全局兜底菜单（AppContextMenu）让位。 */
+                            event.preventDefault();
+                            setContextTarget({
+                              project,
+                              x: event.clientX,
+                              y: event.clientY,
+                            });
+                          }}
+                          size="sm"
+                          tooltip={project.name}
+                        >
+                          {/* 缩略图标：展开态与缩略态都要有，否则收起后
+                            按钮里只剩一个空格子（名称被 `truncate` 掉）。 */}
+                          {openProjectTabs.length > 0 ? (
+                            /* 打开态（与上方导航项同款）：图标落进品牌色浅底胶片，
+                               读起来是「这个项目的界面开着」。 */
+                            <span
+                              className="bg-primary-soft text-primary-strong inline-flex size-7 shrink-0 items-center justify-center rounded-md"
+                              data-open-state="true"
+                            >
+                              <ProjectGlyph />
+                            </span>
+                          ) : (
+                            <ProjectGlyph />
+                          )}
+                          <span>{project.name}</span>
+                        </SidebarMenuButton>
+                        {openProjectTabs.length > 0 ? (
+                          /* 关闭按钮（悬停浮现）：关掉这个项目开着的**全部**页签
+                             —— 侧栏这一行表达的是「项目界面」这个整体，不是其中
+                             某一页；逐页关走项目内页签自己的出口。 */
+                          <Button
+                            aria-label={`关闭 ${project.name} 页签`}
+                            className={cn(
+                              "absolute top-1/2 right-2 -translate-y-1/2",
+                              "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                              /* 行级组（ISSUE #4812）：浮现条件只认本行的 li，
+                                 不吃外层「项目」行的悬停。 */
+                              "opacity-0 transition-opacity group-hover/row:opacity-100",
+                              "group-focus-within/row:opacity-100 focus-visible:opacity-100",
+                              "group-data-[collapsible=icon]:hidden",
+                            )}
+                            data-sidebar="menu-action"
+                            onPointerDown={(event) => {
+                              event.stopPropagation();
+                              for (const tab of openProjectTabs) {
+                                onCloseViewTab?.(tab.key);
+                              }
+                            }}
+                            size="icon-xs"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <X data-icon="inline-start" size={12} />
+                          </Button>
+                        ) : null}
+                      </SidebarMenuItem>
+                    );
+                  })}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton onClick={onShowAllProjects} size="sm" tooltip="查看全部">
+                      <LayoutGrid />
+                      <span>查看全部</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton onClick={onNewProject} size="sm" tooltip="新建项目">
+                      <Plus />
+                      <span>新建项目</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </Disclosure>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+
+      {/* 「项目」行的右键菜单（ISSUE #4808）：锚点开在右键那个点上。 */}
+      {contextTarget !== null && (
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (!open) {
+              setContextTarget(null);
+            }
+          }}
+          open
+        >
+          {/* 零尺寸定位锚点（与 CanvasContextMenu 同一手法）：菜单开在右键那个点上。 */}
+          <DropdownMenuTrigger
+            aria-hidden
+            className="pointer-events-none fixed size-0"
+            style={{ left: contextTarget.x, top: contextTarget.y }}
+            tabIndex={-1}
+          />
+          <DropdownMenuContent align="start" side="bottom">
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                onClick={() => {
+                  setRenameTarget(contextTarget.project);
+                  setContextTarget(null);
+                }}
+              >
+                <Pencil data-icon="inline-start" size={14} />
+                <span>编辑名称</span>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      {/* 改名对话框（与右键菜单分开挂：菜单先收，对话框再开）。 */}
+      {renameTarget !== null && (
+        <RenameProjectDialog
+          onClose={() => {
+            setRenameTarget(null);
+          }}
+          project={renameTarget}
+        />
+      )}
+    </>
+  );
+}
+
 export type AppShellProps = {
   /** 当前视图（决定侧栏高亮与顶部标题）。 */
   active: WorkspaceView;
@@ -153,17 +364,6 @@ export function AppShell({
   useHotkey({ key: "k", mod: true }, () => {
     setCommandOpen(true);
   });
-
-  /* 「项目」行的右键菜单（ISSUE #4808）：开在右键那个点上（与画布菜单
-     CanvasContextMenu 同一手法 —— 受控 DropdownMenu + 零尺寸 fixed 锚点），
-     全局兜底 AppContextMenu 靠 `defaultPrevented` 让位。目前一项「编辑名称」；
-     改名对话框单独一个状态（菜单关了它才开，互不嵌套）。 */
-  const [contextTarget, setContextTarget] = useState<{
-    project: SidebarProject;
-    x: number;
-    y: number;
-  } | null>(null);
-  const [renameTarget, setRenameTarget] = useState<SidebarProject | null>(null);
 
   /* 侧栏列表 —— 与 `globalNavItems()` 的差别只有一处：设置不在侧栏列
      （它已经撤到顶栏右上角的菜单里，见 `sidebarNavItems` 的说明）。 */
@@ -283,138 +483,18 @@ export function AppShell({
               </SidebarGroupContent>
             </SidebarGroup>
 
-            {/* 「项目」分组紧跟全局项之后（不再 `mt-auto` 顶到视口底部，避免中间大片空白）。
-              **图标档不再整组隐藏**（ISSUE #1691）：此前挂 `collapsible=icon:hidden`，窗口一窄
-              用户就看不见也切不了项目；现在缩略态每项都是带图标 + 名称 tooltip 的方块。 */}
-            <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <Disclosure
-                      className={cn(
-                        "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        "rounded-md p-2 text-sm font-medium [&_svg]:size-4 [&_svg]:shrink-0",
-                        /* 缩略态：整行落成与全局项同形的 48px 方块 —— 折叠标记
-                         与文字都让位，只留分组图标（否则这一行宽过图标轨、
-                         `overflow-hidden` 把它裁掉一半）。 */
-                        "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center",
-                        "group-data-[collapsible=icon]:**:data-[slot=disclosure-marker]:hidden",
-                      )}
-                      defaultOpen
-                      marker="chevron"
-                      panelClassName="mt-1"
-                      trigger={
-                        <>
-                          {PROJECTS_ENTRY.icon}
-                          <span className="group-data-[collapsible=icon]:hidden">
-                            {PROJECTS_ENTRY.label}
-                          </span>
-                        </>
-                      }
-                    >
-                      <SidebarMenu>
-                        {projects.map((project) => {
-                          /* 这个项目当前开着哪些页签（ISSUE #4770）：任一项目类页签
-                             挂着它 = 界面打开。打开态与关闭按钮和上方导航项同一套。 */
-                          const openProjectTabs =
-                            viewTabs?.filter((tab) => tab.projectId === project.id) ?? [];
-                          return (
-                            /* 行级悬停用独立组名 `group/row`（ISSUE #4812）：本面板嵌在
-                               外层「项目」行（也是一个带 `group/menu-item` 的
-                               SidebarMenuItem）里，Tailwind 命名组变体是「任一祖先命中」
-                               —— 悬停面板里任意一行都会让外层 li 处于 :hover，行内反馈
-                               就会串到别的行上。行级变体（按钮背景 / 关闭按钮浮现）只认
-                               本行的 li，外层不带 `group/row`，串色链条断在这里。 */
-                            <SidebarMenuItem className="group/row" key={project.id}>
-                              <SidebarMenuButton
-                                className="group-hover/row:bg-sidebar-accent group-hover/row:text-sidebar-accent-foreground"
-                                isActive={insideProject && project.id === activeProjectId}
-                                onClick={() => {
-                                  onOpenProject(project.id);
-                                }}
-                                onContextMenu={(event) => {
-                                  /* 右键 = 项目菜单（编辑名称，ISSUE #4808）：
-                                     preventDefault 让全局兜底菜单（AppContextMenu）让位。 */
-                                  event.preventDefault();
-                                  setContextTarget({
-                                    project,
-                                    x: event.clientX,
-                                    y: event.clientY,
-                                  });
-                                }}
-                                size="sm"
-                                tooltip={project.name}
-                              >
-                                {/* 缩略图标：展开态与缩略态都要有，否则收起后
-                                  按钮里只剩一个空格子（名称被 `truncate` 掉）。 */}
-                                {openProjectTabs.length > 0 ? (
-                                  /* 打开态（与上方导航项同款）：图标落进品牌色浅底胶片，
-                                     读起来是「这个项目的界面开着」。 */
-                                  <span
-                                    className="bg-primary-soft text-primary-strong inline-flex size-7 shrink-0 items-center justify-center rounded-md"
-                                    data-open-state="true"
-                                  >
-                                    <ProjectGlyph />
-                                  </span>
-                                ) : (
-                                  <ProjectGlyph />
-                                )}
-                                <span>{project.name}</span>
-                              </SidebarMenuButton>
-                              {openProjectTabs.length > 0 ? (
-                                /* 关闭按钮（悬停浮现）：关掉这个项目开着的**全部**页签
-                                   —— 侧栏这一行表达的是「项目界面」这个整体，不是其中
-                                   某一页；逐页关走项目内页签自己的出口。 */
-                                <Button
-                                  aria-label={`关闭 ${project.name} 页签`}
-                                  className={cn(
-                                    "absolute top-1/2 right-2 -translate-y-1/2",
-                                    "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                                    /* 行级组（ISSUE #4812）：浮现条件只认本行的 li，
-                                       不吃外层「项目」行的悬停。 */
-                                    "opacity-0 transition-opacity group-hover/row:opacity-100",
-                                    "group-focus-within/row:opacity-100 focus-visible:opacity-100",
-                                    "group-data-[collapsible=icon]:hidden",
-                                  )}
-                                  data-sidebar="menu-action"
-                                  onPointerDown={(event) => {
-                                    event.stopPropagation();
-                                    for (const tab of openProjectTabs) {
-                                      onCloseViewTab?.(tab.key);
-                                    }
-                                  }}
-                                  size="icon-xs"
-                                  type="button"
-                                  variant="ghost"
-                                >
-                                  <X data-icon="inline-start" size={12} />
-                                </Button>
-                              ) : null}
-                            </SidebarMenuItem>
-                          );
-                        })}
-                        <SidebarMenuItem>
-                          <SidebarMenuButton
-                            onClick={onShowAllProjects}
-                            size="sm"
-                            tooltip="查看全部"
-                          >
-                            <LayoutGrid />
-                            <span>查看全部</span>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                        <SidebarMenuItem>
-                          <SidebarMenuButton onClick={onNewProject} size="sm" tooltip="新建项目">
-                            <Plus />
-                            <span>新建项目</span>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      </SidebarMenu>
-                    </Disclosure>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+            {/* 「项目」分组（拆成子组件 —— §12.13：右键菜单把本函数顶过 400 行闸；
+                内容与右键菜单的说明见 `SidebarProjectsGroup`）。 */}
+            <SidebarProjectsGroup
+              activeProjectId={activeProjectId}
+              insideProject={insideProject}
+              onCloseViewTab={onCloseViewTab}
+              onNewProject={onNewProject}
+              onOpenProject={onOpenProject}
+              onShowAllProjects={onShowAllProjects}
+              projects={projects}
+              viewTabs={viewTabs}
+            />
 
             {/* 「临时页签」组（ISSUE #4770）：顶部页签栏退役后，已打开的页签改在左侧列出
               —— 瞬时页（设置等）、项目类页（工坊·某项目）与桌面壳 iframe 页（ComfyUI），
@@ -469,49 +549,6 @@ export function AppShell({
           onSelect={onSelect}
           open={commandOpen}
         />
-
-        {/* 「项目」行的右键菜单（ISSUE #4808）：锚点开在右键那个点上。 */}
-        {contextTarget !== null && (
-          <DropdownMenu
-            onOpenChange={(open) => {
-              if (!open) {
-                setContextTarget(null);
-              }
-            }}
-            open
-          >
-            {/* 零尺寸定位锚点（与 CanvasContextMenu 同一手法）：菜单开在右键那个点上。 */}
-            <DropdownMenuTrigger
-              aria-hidden
-              className="pointer-events-none fixed size-0"
-              style={{ left: contextTarget.x, top: contextTarget.y }}
-              tabIndex={-1}
-            />
-            <DropdownMenuContent align="start" side="bottom">
-              <DropdownMenuGroup>
-                <DropdownMenuItem
-                  onClick={() => {
-                    setRenameTarget(contextTarget.project);
-                    setContextTarget(null);
-                  }}
-                >
-                  <Pencil data-icon="inline-start" size={14} />
-                  <span>编辑名称</span>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-
-        {/* 改名对话框（与右键菜单分开挂：菜单先收，对话框再开）。 */}
-        {renameTarget !== null && (
-          <RenameProjectDialog
-            onClose={() => {
-              setRenameTarget(null);
-            }}
-            project={renameTarget}
-          />
-        )}
       </SidebarProvider>
     </ViewActionsProvider>
   );
