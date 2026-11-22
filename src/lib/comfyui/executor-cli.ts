@@ -53,7 +53,7 @@ import {
 } from "./reference-loader-chain";
 import { buildReferenceChainCatalog } from "./reference-loader-catalog";
 import { fetchObjectInfo } from "./raw";
-import { state, log, appendRawCli } from "./runner-state";
+import { state, log, appendRawCli, isCancellingHere } from "./runner-state";
 import type { Job } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
 import {
@@ -532,6 +532,12 @@ export async function executeViaComfyCli(job: Job) {
     if (settled) {
       return;
     }
+    /* 取消路径已经接管这个任务（ISSUE #4800）：杀进程与终态都归取消收口，
+     * 看门狗不再把同一轮判成「执行超时」抢写 FAILED。这里不落 settled，
+     * 让随之而来的 close 事件走「已随取消退出」的收口。 */
+    if (isCancellingHere(taskId)) {
+      return;
+    }
     settled = true;
     killCliTree(taskId, child);
     cliProcs.delete(taskId);
@@ -657,6 +663,14 @@ export async function executeViaComfyCli(job: Job) {
       return;
     }
     settled = true;
+    /* 用户取消杀掉的退出不是故障（ISSUE #4800）：退出码非 0 且无 envelope 正是
+     * 「被 killProcessTree 收走」的必然形态，不能据此把行写成 FAILED——终态由
+     * 取消路径落 CANCELLED。这里只留一行 info 说明退出去向，原文照常由取消
+     * 路径的 persistRawCli 落库。 */
+    if (isCancellingHere(taskId)) {
+      log(taskId, "info", `comfy-cli 已随取消退出（code=${code}），终态由取消路径写入`);
+      return;
+    }
     const noisy = stderrSink.noisyWarningLines();
     if (noisy > 0) {
       log(
