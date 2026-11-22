@@ -4,6 +4,7 @@ import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { isVideo } from "~/lib/media/media";
+import { mediaPreviewUrl } from "~/lib/media/media-url";
 import { Skeleton } from "~/components/ui/skeleton";
 import { fetchTaskWorkflow, revealTaskFolder } from "~/lib/history-detail-actions";
 import { isPlainRecord } from "~/lib/is-record";
@@ -16,6 +17,7 @@ import {
   isPromptParamRow,
   kvValueText,
 } from "./history-detail-derive";
+import { modelLabelOf, modeLabelOf } from "./history-list-derive";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 import { useHistoryDetailActions } from "./hooks/use-history-detail-actions";
@@ -103,6 +105,21 @@ export function HistoryDetailModal({
     hasAny: hasParams,
   } = deriveWorkflowParams(current, workflowIO, current?.type ?? null);
   const firstImage = Array.isArray(current?.images) ? current.images[0] : undefined;
+  /* 参考图（ISSUE #4855）：工坊通路落在任务行 `referenceImages` 列（ComfyUI
+   * input 文件名数组），画布通路落在 `params.inputImage`（单文件名）——
+   * 两条通路取并集、去重后逐张展示，用户不必再回列表猜「参考图是哪张」。
+   * 列是 json（unknown），先收进 unknown 数组再收窄，不裸展开 any。 */
+  const paramsRecord = isPlainRecord(current?.params) ? current.params : {};
+  const rawRefs: Array<unknown> = [paramsRecord.inputImage];
+  if (Array.isArray(current?.referenceImages)) {
+    for (const item of current.referenceImages) {
+      rawRefs.push(item);
+    }
+  }
+  const referenceImages = rawRefs.filter(
+    (value, index, all): value is string =>
+      typeof value === "string" && value.trim() !== "" && all.indexOf(value) === index,
+  );
   /* 快照是 DB 的 JSON 列（unknown）：先确认它是对象、`source` 是字符串再读，
    *  其余（null / 旧数据 / 非字符串）都按「磁盘回退快照」显示。 */
   const snapshot = current?.workflowSnapshot;
@@ -134,17 +151,32 @@ export function HistoryDetailModal({
           className={`border-border bg-surface flex ${OVERLAY_MAX_HEIGHT} w-full max-w-[1120px] flex-col overflow-hidden rounded-2xl border`}
         >
           <div className="border-border-subtle relative flex items-center justify-between gap-3 border-b px-6 pt-4 pb-3.5">
-            <h3 className="text-ink-bright text-[17px] leading-snug font-bold">
-              任务详情
+            {/* 左侧两行（ISSUE #4855）：标题 + 状态一行，「模式 + 模型名」一行 ——
+                与历史列表卡首行同一套身份信息（modeLabelOf / modelLabelOf 同一出处），
+                进详情后仍能认出这是哪次提交、用的什么模型。 */}
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <h3 className="text-ink-bright text-[17px] leading-snug font-bold">
+                任务详情
+                {current ? (
+                  <span
+                    className={`ml-2.5 inline-flex items-center gap-1.5 rounded-full py-0.5 pr-2.5 pl-2 align-middle text-xs font-medium ${STATUS_BADGE_CLASS[current.status] ?? "bg-subtle text-ink-muted"}`}
+                  >
+                    <span aria-hidden className="size-1.5 rounded-full bg-current" />
+                    {taskStatusLabel(current.status)}
+                  </span>
+                ) : null}
+              </h3>
               {current ? (
-                <span
-                  className={`ml-2.5 inline-flex items-center gap-1.5 rounded-full py-0.5 pr-2.5 pl-2 align-middle text-xs font-medium ${STATUS_BADGE_CLASS[current.status] ?? "bg-subtle text-ink-muted"}`}
-                >
-                  <span aria-hidden className="size-1.5 rounded-full bg-current" />
-                  {taskStatusLabel(current.status)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="bg-subtle text-ink-muted text-2xs shrink-0 rounded-full px-2 py-0.5">
+                    {modeLabelOf(current.type)}
+                  </span>
+                  <span className="text-ink-strong min-w-0 truncate text-xs font-medium">
+                    {modelLabelOf(current)}
+                  </span>
+                </div>
               ) : null}
-            </h3>
+            </div>
             <div className="flex items-center gap-2">
               <Hint
                 label="在系统文件管理器中打开本次生成的目录（图片 / 视频 / 音频 / workflow.json / manifest.json 都在这里）"
@@ -275,6 +307,39 @@ export function HistoryDetailModal({
                   </>
                 ) : (
                   <p className="text-ink-muted text-sm">该任务没有生成图像。</p>
+                )}
+
+                {/* 参考图（ISSUE #4855）：与「产物」同款网格逐张展示，可点开看大图。
+                    文件名经 mediaPreviewUrl 走 /api/images 代理回读（type=input，
+                    与上传回显同一通道）；ComfyUI 侧清掉旧文件时 MediaThumbnail
+                    自带失败占位，文件名始终可读。 */}
+                {referenceImages.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-ink-muted text-[13px] font-semibold">参考图</p>
+                      <span className="text-ink-fainter text-2xs ml-auto">
+                        {`${String(referenceImages.length)} 张`}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {referenceImages.map((name, index) => (
+                        <div
+                          className="border-border-subtle relative overflow-hidden rounded-xl border"
+                          key={`${String(index)}:${name}`}
+                        >
+                          <ViewableImage
+                            alt={`参考图 ${index + 1}`}
+                            className="h-44 w-full object-cover"
+                            label={`参考图 ${index + 1}`}
+                            src={mediaPreviewUrl(name)}
+                          />
+                          <span className="bg-surface-2 text-ink text-2xs absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded px-2 py-0.5">
+                            {name}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 {/* 放大 / 局部重绘（#2483 · FR-QA-09）：只对图片产物开放（视频

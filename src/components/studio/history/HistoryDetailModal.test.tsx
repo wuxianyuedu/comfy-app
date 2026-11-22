@@ -22,6 +22,7 @@ const TASK_DETAIL_BASE: TaskDetail = {
   negativePrompt: null,
   params: {},
   workflowName: "wf-test",
+  modelName: null,
   workflowSnapshot: null,
   projectId: null,
   shotId: null,
@@ -146,5 +147,54 @@ describe("HistoryDetailModal 工作流参数按 IO 端口渲染", () => {
     expect(promptEl.className).toContain("overflow-y-auto");
     /* 提示词被覆盖 ⇒ 不再标「默认值」；种子仍是默认值。 */
     expect(screen.getAllByText("默认值")).toHaveLength(1);
+  });
+});
+
+describe("HistoryDetailModal 模式 / 模型名 / 参考图（ISSUE #4855）", () => {
+  it("头部展示模式标签与模型名（与列表卡同一套身份信息）", () => {
+    renderModal({ ...TASK_DETAIL_BASE, type: "I2I", modelName: "minimax_h3" });
+    expect(screen.getByText("图生图")).toBeTruthy();
+    expect(screen.getByText("minimax_h3")).toBeTruthy();
+  });
+
+  it("工作流没挂模型标签时，模型名回落工作流名", () => {
+    renderModal({
+      ...TASK_DETAIL_BASE,
+      type: "T2I",
+      modelName: null,
+      workflowName: "我的工作流",
+    });
+    expect(screen.getByText("文生图")).toBeTruthy();
+    expect(screen.getByText("我的工作流")).toBeTruthy();
+  });
+
+  it("参考图逐张展示：走 /api/images 代理（type=input），文件名可读", () => {
+    renderModal({
+      ...TASK_DETAIL_BASE,
+      type: "I2I",
+      referenceImages: ["ref-a.png", "ref-b.png"],
+    });
+    expect(screen.getByText("参考图")).toBeTruthy();
+    expect(screen.getByText("2 张")).toBeTruthy();
+    expect(screen.getByAltText("参考图 1").getAttribute("src")).toBe(
+      "/api/images?filename=ref-a.png&type=input",
+    );
+    expect(screen.getByAltText("参考图 2").getAttribute("src")).toBe(
+      "/api/images?filename=ref-b.png&type=input",
+    );
+    expect(screen.getByText("ref-a.png")).toBeTruthy();
+    expect(screen.getByText("ref-b.png")).toBeTruthy();
+  });
+
+  it("画布通路的 params.inputImage 也算参考图；没有参考图时不摆这一块", () => {
+    const view = renderModal({
+      ...TASK_DETAIL_BASE,
+      params: { inputImage: "canvas-ref.png" },
+    });
+    expect(screen.getByAltText("参考图 1")).toBeTruthy();
+    expect(screen.getByText("canvas-ref.png")).toBeTruthy();
+    view.unmount();
+    renderModal({ ...TASK_DETAIL_BASE, params: { prompt: "x" } });
+    expect(screen.queryByText("参考图")).toBeNull();
   });
 });

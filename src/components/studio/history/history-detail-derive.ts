@@ -5,7 +5,11 @@
 // 任务本身无快照，只能按 params.workflow 现查（resolveParamLabel）。
 
 import { asRecord, isRecord } from "~/lib/is-record";
-import { modeContractEntries, type ModeContract } from "~/lib/workshop/model-mode-contract";
+import {
+  modeContractEntries,
+  referenceImageSlotIndex,
+  type ModeContract,
+} from "~/lib/workshop/model-mode-contract";
 import { upperToken } from "~/lib/upper-token";
 import {
   resolveEntryDefault,
@@ -125,6 +129,20 @@ function resolvePortValue(
   for (const key of keys) {
     if (!isBlank(params[key])) {
       return params[key];
+    }
+  }
+  /* 参考图口（ISSUE #4855）：工坊提交的参考图落在 `params.referenceImages`
+   * 数组（ComfyUI input 侧文件名），按契约槽位取对应那张 —— 基础口 `reference-image`
+   * 取第 1 张，`reference-image-2` 取第 2 张（槽位号是 1 基，数组下标减一，
+   * 与 `nextReferenceImageId` 的槽位口径一致）。画布通路的单文件名
+   * （`inputImage` / `image`）已在上面按别名接住，这里补的是工坊提交的数组形状；
+   * 都不在时仍返回 `undefined`（不臆造）。 */
+  if (portId === "reference-image" || portId.startsWith("reference-image-")) {
+    const refs = Array.isArray(params.referenceImages) ? params.referenceImages : [];
+    const slot = portId === "reference-image" ? 1 : referenceImageSlotIndex(portId);
+    const value: unknown = refs[slot - 1];
+    if (typeof value === "string" && value.trim() !== "") {
+      return value;
     }
   }
   if (portId === "size") {
