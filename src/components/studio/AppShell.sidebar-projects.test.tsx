@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { AppShell } from "./AppShell";
+import { ToastProvider } from "./ToastProvider";
 import { tabKey } from "./workspace-tabs";
 import { renameProject } from "~/lib/project-canvas/canvas-store";
 
@@ -70,21 +71,26 @@ const PROJECTS = [
   { id: "proj_b", name: "角色设定集" },
 ];
 
-function renderShell() {
+function renderShell(handlers: { onDeleteProject?: (id: string) => void } = {}) {
   const onOpenProject = vi.fn();
   const { container } = render(
-    <AppShell
-      active="home"
-      activeProjectId="proj_a"
-      onNewProject={vi.fn()}
-      onOpenProject={onOpenProject}
-      onOpenSettings={vi.fn()}
-      onSelect={vi.fn()}
-      onShowAllProjects={vi.fn()}
-      projects={PROJECTS}
-    >
-      <div />
-    </AppShell>,
+    /* 「项目」分组的右键菜单会用到 toast（删除成功回执）：ToastProvider 在应用里
+       由根布局全局挂载，这里按真实层级包上。 */
+    <ToastProvider>
+      <AppShell
+        active="home"
+        activeProjectId="proj_a"
+        onDeleteProject={handlers.onDeleteProject}
+        onNewProject={vi.fn()}
+        onOpenProject={onOpenProject}
+        onOpenSettings={vi.fn()}
+        onSelect={vi.fn()}
+        onShowAllProjects={vi.fn()}
+        projects={PROJECTS}
+      >
+        <div />
+      </AppShell>
+    </ToastProvider>,
   );
   return { container, onOpenProject };
 }
@@ -156,20 +162,22 @@ describe("侧栏「项目」分组的打开态（ISSUE #4770）", () => {
   function renderWithTabs() {
     const onCloseViewTab = vi.fn();
     render(
-      <AppShell
-        active="project"
-        activeProjectId="proj_a"
-        onCloseViewTab={onCloseViewTab}
-        onNewProject={vi.fn()}
-        onOpenProject={vi.fn()}
-        onOpenSettings={vi.fn()}
-        onSelect={vi.fn()}
-        onShowAllProjects={vi.fn()}
-        projects={PROJECTS}
-        viewTabs={tabs}
-      >
-        <div />
-      </AppShell>,
+      <ToastProvider>
+        <AppShell
+          active="project"
+          activeProjectId="proj_a"
+          onCloseViewTab={onCloseViewTab}
+          onNewProject={vi.fn()}
+          onOpenProject={vi.fn()}
+          onOpenSettings={vi.fn()}
+          onSelect={vi.fn()}
+          onShowAllProjects={vi.fn()}
+          projects={PROJECTS}
+          viewTabs={tabs}
+        >
+          <div />
+        </AppShell>
+      </ToastProvider>,
     );
     return onCloseViewTab;
   }
@@ -254,20 +262,22 @@ describe("侧栏「项目」面板的行级悬停组（ISSUE #4812）", () => {
   /** 与上方「打开态」describe 同一夹具：开着页签才有关闭按钮可判。 */
   function renderRowWithTabs() {
     render(
-      <AppShell
-        active="project"
-        activeProjectId="proj_a"
-        onCloseViewTab={vi.fn()}
-        onNewProject={vi.fn()}
-        onOpenProject={vi.fn()}
-        onOpenSettings={vi.fn()}
-        onSelect={vi.fn()}
-        onShowAllProjects={vi.fn()}
-        projects={PROJECTS}
-        viewTabs={tabsFixture}
-      >
-        <div />
-      </AppShell>,
+      <ToastProvider>
+        <AppShell
+          active="project"
+          activeProjectId="proj_a"
+          onCloseViewTab={vi.fn()}
+          onNewProject={vi.fn()}
+          onOpenProject={vi.fn()}
+          onOpenSettings={vi.fn()}
+          onSelect={vi.fn()}
+          onShowAllProjects={vi.fn()}
+          projects={PROJECTS}
+          viewTabs={tabsFixture}
+        >
+          <div />
+        </AppShell>
+      </ToastProvider>,
     );
   }
 
@@ -287,5 +297,37 @@ describe("侧栏「项目」面板的行级悬停组（ISSUE #4812）", () => {
     const outerLi = rowLi?.parentElement?.closest("li");
     expect(outerLi?.className).toContain("group/menu-item");
     expect(outerLi?.className).not.toContain("group/row");
+  });
+});
+
+/**
+ * 侧栏「项目」行的右键菜单 → 删除项目（ISSUE #4836）。删除的真实链路
+ * （deleteProjectEverywhere → 关页签 → 刷新活跃项目）在 workspace 页的
+ * handleDeleteProject，由接线保证；这里判接线：菜单里有危险态「删除项目」项、
+ * 点击弹确认框、确认把 id 交给 onDeleteProject、取消不动。
+ */
+describe("侧栏「项目」行的右键菜单 → 删除项目（ISSUE #4836）", () => {
+  it("右键菜单里有危险态「删除项目」项；确认后把 id 交给 onDeleteProject 并收起确认框", () => {
+    const onDeleteProject = vi.fn();
+    renderShell({ onDeleteProject });
+    fireEvent.contextMenu(screen.getByRole("button", { name: "城市夜景" }));
+    const item = screen.getByRole("menuitem", { name: "删除项目" });
+    expect(item.dataset.variant).toBe("destructive");
+    fireEvent.click(item);
+    expect(screen.getByText("删除此画布项目？")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "删除项目" }));
+    expect(onDeleteProject).toHaveBeenCalledTimes(1);
+    expect(onDeleteProject).toHaveBeenCalledWith("proj_a");
+    expect(screen.queryByText("删除此画布项目？")).toBeNull();
+  });
+
+  it("取消不删除（onDeleteProject 不被调用，确认框收起）", () => {
+    const onDeleteProject = vi.fn();
+    renderShell({ onDeleteProject });
+    fireEvent.contextMenu(screen.getByRole("button", { name: "角色设定集" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "删除项目" }));
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(onDeleteProject).not.toHaveBeenCalled();
+    expect(screen.queryByText("删除此画布项目？")).toBeNull();
   });
 });

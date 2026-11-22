@@ -124,10 +124,8 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     shots,
     setShots,
     styles,
-    workflowOptions,
-    workflowId,
-    videoWorkflowId,
-    apiChannels,
+    modelSelections,
+    setModelSelection,
     imageDoneCount,
     clipDoneCount,
     generating,
@@ -344,8 +342,10 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 portrait={{
                   session: characterPortrait,
                   actions: characterPortraitActions,
-                  apiChannels,
-                  workflows: workflowOptions,
+                  modelSelection: modelSelections.portrait ?? { mode: "", model: "" },
+                  onModelSelectionChange: (next) => {
+                    setModelSelection("portrait", next);
+                  },
                   onOpenModelAdapters: openModelAdapters,
                 }}
                 scriptMarkdown={scriptMarkdown}
@@ -410,10 +410,13 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             </div>
             <StageBoundary label="生图工具">
               <LazyShotStudio
-                apiChannels={apiChannels}
                 characters={characters}
+                modelSelection={modelSelections.shot ?? { mode: "", model: "" }}
                 onCancelShot={(shot) => {
                   void cancelShotTask(shot, "image");
+                }}
+                onModelSelectionChange={(next) => {
+                  setModelSelection("shot", next);
                 }}
                 onNextStage={() => {
                   setTab("video");
@@ -425,7 +428,6 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 scenes={scenes}
                 shots={shots}
                 styles={styles}
-                workflowId={workflowId}
               />
             </StageBoundary>
           </section>
@@ -445,9 +447,12 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             </div>
             <StageBoundary label="视频工具">
               <LazyVideoStudio
-                apiChannels={apiChannels}
+                modelSelection={modelSelections.video ?? { mode: "", model: "" }}
                 onCancelShot={(shot) => {
                   void cancelShotTask(shot, "video");
+                }}
+                onModelSelectionChange={(next) => {
+                  setModelSelection("video", next);
                 }}
                 onNextStage={() => {
                   setTab("render");
@@ -460,7 +465,6 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 onShotsChange={setShots}
                 projectId={activeProjectId}
                 shots={shots}
-                workflowId={videoWorkflowId}
               />
             </StageBoundary>
           </section>

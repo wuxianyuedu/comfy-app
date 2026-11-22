@@ -4,11 +4,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  chatFallbackGroupForCurrentModel,
   effectiveProviderType,
   extraModelName,
   foldRemoteToLocal,
   inferOutputTypesFromName,
   inferRemoteKindFromName,
+  isChatModelKind,
   isLoopbackBaseUrl,
   isMisplacedLocalOllama,
   normalizeEntryApiKey,
@@ -296,5 +298,112 @@ describe("inferRemoteKindFromName / inferOutputTypesFromName（#3577 目录导�
     expect(inferOutputTypesFromName("agnes-video-2.5-flash")).toEqual(["video"]);
     expect(inferOutputTypesFromName("agnes-image-2.5-flash")).toEqual(["image"]);
     expect(inferOutputTypesFromName("agnes-3.0-flash")).toEqual(["text"]);
+  });
+});
+
+describe("isChatModelKind（#4823 收口：文本用途谓词唯一一份）", () => {
+  it("chat / 未标注（null / undefined）算文本，image / video 不算", () => {
+    expect(isChatModelKind("chat")).toBe(true);
+    expect(isChatModelKind(null)).toBe(true);
+    expect(isChatModelKind(undefined)).toBe(true);
+    expect(isChatModelKind("image")).toBe(false);
+    expect(isChatModelKind("video")).toBe(false);
+  });
+});
+
+describe("chatFallbackGroupForCurrentModel（#4823：当前生效主模型的对话候选兜底归组）", () => {
+  it("主模型为空 / 已在候选里 → 不兜底（返回 null）", () => {
+    expect(
+      chatFallbackGroupForCurrentModel({ model: "", provider: "local", inChatCandidates: false }),
+    ).toBeNull();
+    expect(
+      chatFallbackGroupForCurrentModel({ model: "  ", provider: "local", inChatCandidates: false }),
+    ).toBeNull();
+    expect(
+      chatFallbackGroupForCurrentModel({
+        model: "qwen3:14b",
+        provider: "local",
+        inChatCandidates: true,
+      }),
+    ).toBeNull();
+    expect(
+      chatFallbackGroupForCurrentModel({
+        model: "qwen3:14b",
+        provider: "remote",
+        inChatCandidates: true,
+        remoteEntryKind: "image",
+      }),
+    ).toBeNull();
+  });
+
+  it("生效提供方 local → 恒归本地（单模型 Ollama 主模型天然可做文本任务）", () => {
+    expect(
+      chatFallbackGroupForCurrentModel({
+        model: "qwen3:14b",
+        provider: "local",
+        inChatCandidates: false,
+      }),
+    ).toBe("local");
+    /* 远端表里同名条目也不拦：provider=local 的归组与条目无关（工坊同口径）。 */
+    expect(
+      chatFallbackGroupForCurrentModel({
+        model: "qwen3:14b",
+        provider: "local",
+        inChatCandidates: false,
+        remoteEntryKind: "image",
+      }),
+    ).toBe("local");
+  });
+
+  it("生效提供方 remote：找不到条目 / 用途未标注 / chat → 归远端；image / video → 不归", () => {
+    expect(
+      chatFallbackGroupForCurrentModel({
+        model: "gpt-x",
+        provider: "remote",
+        inChatCandidates: false,
+      }),
+    ).toBe("remote");
+    expect(
+      chatFallbackGroupForCurrentModel({
+        model: "gpt-x",
+        provider: "remote",
+        inChatCandidates: false,
+        remoteEntryKind: null,
+      }),
+    ).toBe("remote");
+    expect(
+      chatFallbackGroupForCurrentModel({
+        model: "gpt-x",
+        provider: "remote",
+        inChatCandidates: false,
+        remoteEntryKind: "chat",
+      }),
+    ).toBe("remote");
+    expect(
+      chatFallbackGroupForCurrentModel({
+        model: "gpt-x",
+        provider: "remote",
+        inChatCandidates: false,
+        remoteEntryKind: "image",
+      }),
+    ).toBeNull();
+    expect(
+      chatFallbackGroupForCurrentModel({
+        model: "gpt-x",
+        provider: "remote",
+        inChatCandidates: false,
+        remoteEntryKind: "video",
+      }),
+    ).toBeNull();
+  });
+
+  it("主模型名先 trim 再判（设置页下发值可能带空白）", () => {
+    expect(
+      chatFallbackGroupForCurrentModel({
+        model: " qwen3:14b ",
+        provider: "local",
+        inChatCandidates: false,
+      }),
+    ).toBe("local");
   });
 });

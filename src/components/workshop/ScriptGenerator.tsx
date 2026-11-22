@@ -10,10 +10,13 @@ import { FormField } from "~/components/ui/form-field";
 import type { ProjectMeta, ProjectType } from "~/lib/workshop/types";
 import { PROJECT_TYPE_LABELS } from "~/lib/workshop/types";
 import { useLLM } from "~/components/workshop/LLMContext";
-import { ExtractModelSelect } from "~/components/workshop/ExtractModelSelect";
+import { ModelCascadeSelect } from "~/components/workshop/ModelCascadeSelect";
+import { useModelCatalog } from "~/components/workshop/hooks/use-model-catalog";
 import {
+  channelOptionValue,
   channelProviderLabel,
   channelSelectionDisplayValue,
+  parseChannelOption,
   resolveChannelSelection,
 } from "~/lib/workshop/channel-options";
 import { streamChat } from "~/lib/llm/browser";
@@ -53,6 +56,11 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
   /** 本次生成实际生效的 provider/model 与下拉展示值（换算见 channel-options）。 */
   const genEffective = resolveChannelSelection(genSel, config);
   const genSelectValue = channelSelectionDisplayValue(genSel, config);
+  /* 文本模型级联（#4834 统一级联）：候选与测试模型页同一份；存储格式仍是
+   * 通道值（local::<m> | remote::<m>，streamChat 的 provider/model 口径不变），
+   * 这里做 candidateValue ⇄ 通道值的换算（未手选时展示全局生效模型）。 */
+  const chatCatalog = useModelCatalog("chat", "");
+  const genSelection = { mode: "", model: parseChannelOption(genSelectValue).model };
 
   async function handleAI() {
     if (!idea.trim()) {
@@ -157,8 +165,17 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             <Icon className="mr-1.5" name="sparkles" size={14} />
             生成剧本
           </h3>
-          {/* 与角色卡一致：本次生成可独立选择 本地 / 远端 的哪个模型 */}
-          <ExtractModelSelect onChange={setGenSel} value={genSelectValue} />
+          {/* 与角色卡一致：本次生成可独立选择 本地 / 远端 的哪个模型（#4834 统一级联） */}
+          <ModelCascadeSelect
+            kind="chat"
+            onSelectionChange={(next) => {
+              const candidate = chatCatalog.resolveCandidate(next.model);
+              setGenSel(
+                channelOptionValue(candidate?.local === false ? "remote" : "local", next.model),
+              );
+            }}
+            selection={genSelection}
+          />
         </div>
         <div className="flex flex-col gap-2">
           <Textarea

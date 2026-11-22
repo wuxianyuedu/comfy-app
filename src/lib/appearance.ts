@@ -23,10 +23,38 @@
  * 刻意**没有**「界面密度」这一档：仓库里没有全局密度令牌（唯一的 `DENSITY_CLASS`
  * 是画布编辑器内部的局部常量）。做一个只影响半屏的假开关，比不做更糟。
  */
-import { readStorageItem, writeStorageItem } from "~/lib/browser-storage";
+import { emitAppEvent } from "~/lib/app-events";
+import { readStorageItem, removeStorageItem, writeStorageItem } from "~/lib/browser-storage";
 
 /** 持久化键。 */
 export const APPEARANCE_STORAGE_KEY = "comfyapp:appearance-v1";
+
+/**
+ * 侧栏品牌图 —— 与主题 / 字体同属「外观」，但它的字节是 data URL（可能很大），
+ * 不能塞进 `comfyapp:appearance-v1` 那份 JSON 里连坐：一张图写失败不该把圆角、
+ * 字体一起带走。键名沿用 #4814 引入时的那颗，老用户已换的图照旧读得回来。
+ */
+export const DEFAULT_BRAND_LOGO = "/brand-logo.svg";
+export const BRAND_LOGO_STORAGE_KEY = "sidebar-brand-logo";
+
+/** 读当前品牌图；没换过 / 读失败都回内置图。 */
+export function readBrandLogo(): string {
+  return readStorageItem(BRAND_LOGO_STORAGE_KEY) ?? DEFAULT_BRAND_LOGO;
+}
+
+/** 换图：写本机 + 广播给侧栏（外壳跨视图不重挂，不广播就看不到新图）。 */
+export function saveBrandLogo(dataUrl: string): boolean {
+  const persisted = writeStorageItem(BRAND_LOGO_STORAGE_KEY, dataUrl);
+  emitAppEvent("comfyapp:brand-logo-changed");
+  return persisted;
+}
+
+/** 恢复内置图：删本机那颗 + 广播。 */
+export function restoreBrandLogo(): boolean {
+  const persisted = removeStorageItem(BRAND_LOGO_STORAGE_KEY);
+  emitAppEvent("comfyapp:brand-logo-changed");
+  return persisted;
+}
 
 /** 一档可选值：id 用于持久化，label 是界面文案，value 是写进 CSS 变量的值。 */
 export type AppearanceStep = {

@@ -60,7 +60,10 @@
   `WorkshopPipeline` 实例（内部阶段轨道隐藏）。「+」菜单只列项目「主页」
   一页（旧版列六页）。侧栏「项目」行支持右键「编辑名称」（ISSUE #4808）：
   改名对话框预填当前名、重名自动 `_2/_3` 后缀并预览，本地项目与只在服务端的
-  项目都同步改名，侧栏行即时更新。侧栏「项目」面板的行内悬停反馈只认本行
+  项目都同步改名，侧栏行即时更新。侧栏「项目」行右键菜单还支持「删除项目」
+  （ISSUE #4836）：红色危险态菜单项，点击弹危险态确认框，确认后走与项目页
+  左列表同一条删除链路（本地与服务端一并删、关该项目页签、刷新活跃项目）
+  并 toast 回执。侧栏「项目」面板的行内悬停反馈只认本行
   （行级组 `group/row`，ISSUE #4812），悬停同面板其它行不点亮别的行。
 - 落点：`src/app/workspace/page.tsx`（「+」菜单清单）、`NavItems.tsx`、
   `src/components/studio/AppShell.tsx`（项目行右键菜单 / 行级悬停组）、
@@ -191,11 +194,14 @@
 #### FR-WS-12 侧栏品牌图片（左上角图片可自定义替换）
 
 - 状态：已上线
-- 需求：工作区侧栏左上角展示一张品牌图片，用户可换成自己的图片；首页项不用其它页签那种选中变色。
-- 行为与验收：默认展示内置图片；点图片选择本地图片文件后即时替换并持久化到本机（localStorage），
-  刷新后仍保留；「恢复默认」回到内置图并清掉自定义。首页是固定落点，始终不显示 `data-active` 高亮，
+- 需求：工作区侧栏左上角展示一张品牌图片；图片**点击回主页**（悬停提示「主页」，且无悬停背景框），
+  换图入口在「设置 → 外观」；首页项不用其它页签那种选中变色。
+- 行为与验收：默认展示内置图片；在「设置 → 外观 → 品牌图」选本地图片后即时替换并持久化到本机
+  （localStorage），刷新后仍保留；「恢复默认」回到内置图并清掉自定义。侧栏图随广播即时更新，
+  但点击只回主页、不再打开文件选择框。首页是固定落点，始终不显示 `data-active` 高亮，
   其它视图的选中高亮不受影响。图片不上传服务端、不入库。
-- 落点：`src/components/studio/SidebarBrand.tsx`、`src/components/studio/AppShell.tsx`、`public/brand-logo.svg`
+- 落点：`src/components/studio/SidebarBrand.tsx`、`src/components/studio/AppShell.tsx`、
+  `src/app/(main)/settings/components/AppearanceSection.tsx`、`src/lib/appearance.ts`、`public/brand-logo.svg`
 
 ## 2. 账号与访问（FR-AU）
 
@@ -704,10 +710,12 @@
 - 状态：已上线
 - 需求：任务历史分页 / 按日分组 / 筛选 / 排序。
 - 行为与验收：分页一页 8 条（`PAGE_SIZE`）；排序 newest / oldest；
-  列表在「历史」视图，不占独立路由。行级动作含「复制去重投」：
-  把该次提交的**全部参数**折成 JSON 复制到剪贴板（ISSUE #4769）——
-  载荷形状 `{ mode, inputs }`（模式码 + 模式契约口 → 值），与详情弹窗的
-  「工坊参数」表同一套派生；粘贴侧是测试模型的 JSON 输入模式（FR-LM-07）。
+  列表在「历史」视图，不占独立路由。行级动作含「详情」（打开任务详情弹窗）
+  与「复制去重投」：后者把该次提交的**全部参数**折成 JSON 复制到剪贴板
+  （ISSUE #4769）——载荷形状 `{ mode, inputs }`（模式码 + 模式契约口 → 值），
+  与详情弹窗的「工坊参数」表同一套派生；粘贴侧是测试模型的 JSON 输入模式
+  （FR-LM-07）。缩略图点开走图片查看器（原尺寸 / 缩放 / 拖拽），视频仍按视频
+  渲染；「详情」是独立按钮，点图不再弹任务详情。
 - 落点：`src/components/studio/history/HistoryList.tsx`、
   `src/components/studio/history/hooks/use-history-list.ts`、
   `src/components/studio/history/history-detail-derive.ts`（`buildReprintPayload`）
@@ -718,10 +726,17 @@
 - 需求：任务详情在历史列表内的弹窗查看（产物网格 + 执行日志 +
   comfy-cli 原始输出 + 打开目录）。
 - 行为与验收：详情是弹窗不是独立路由（「在这里点开就显示详情」）；
-  产物行带 `localPath` / `mediaType` / seed / 宽高；
+  产物行带 `localPath` / `mediaType` / seed / 宽高，每张产物都可点开看大图；
   `raw-cli` 是 comfy-cli 完整原始输出（排障用，不加工）；
-  打开目录走 FR-OP-05 的闸门。
-- 落点：`src/components/studio/history/HistoryDetailModal.tsx`
+  打开目录走 FR-OP-05 的闸门（`setting.revealPath`，不依赖协议助手）。
+  参数按来源分块：**工坊参数**按该任务模式的生效契约口枚举（配置里删掉的口
+  不再显示，值从本次提交的 params / workflowInputs 解析）；**工作流参数**以
+  当前工作流 IO 的**全量输入端口**为行（与 IO 预览同一份拆分），本次有提交
+  值就覆盖、没有就显示 IO 默认值并标注「默认值」，展示名取 IO 作者标签
+  （如 `replace` 口显示为 `prompt`，原始 pin 名留在悬停提示里）。提示词这类
+  长文案行定高 + 纵向滚动，完整文案始终在 DOM 里。
+- 落点：`src/components/studio/history/HistoryDetailModal.tsx`、
+  `src/components/studio/history/history-detail-derive.ts`
 
 #### FR-GN-07 任务删除与工作流快照下载
 

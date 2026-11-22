@@ -10,6 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { SidebarProvider } from "~/components/ui/sidebar";
 
 import { AppShell } from "./AppShell";
+import { ToastProvider } from "./ToastProvider";
 import { TopBar } from "./TopBar";
 
 /* jsdom 没有 `matchMedia`，而 `ui/sidebar` 的窄窗判据（`use-mobile` /
@@ -171,18 +172,21 @@ describe("TopBar", () => {
 describe("AppShell 侧栏头部", () => {
   it("不再渲染应用名那一行（名称行整条移除，不占纵向空间）", () => {
     render(
-      <AppShell
-        active="home"
-        activeProjectId={null}
-        onNewProject={vi.fn()}
-        onOpenProject={vi.fn()}
-        onOpenSettings={vi.fn()}
-        onSelect={vi.fn()}
-        onShowAllProjects={vi.fn()}
-        projects={[]}
-      >
-        <div />
-      </AppShell>,
+      /* 「项目」分组挂了 useToast（删除回执）：按应用真实层级包上 Provider。 */
+      <ToastProvider>
+        <AppShell
+          active="home"
+          activeProjectId={null}
+          onNewProject={vi.fn()}
+          onOpenProject={vi.fn()}
+          onOpenSettings={vi.fn()}
+          onSelect={vi.fn()}
+          onShowAllProjects={vi.fn()}
+          projects={[]}
+        >
+          <div />
+        </AppShell>
+      </ToastProvider>,
     );
     expect(screen.queryByText("Comfy-APP")).toBeNull();
     /* 侧栏头部整个不在了 —— 全局项直接顶着侧栏顶起（否则会留一条空的 header 内边距）。 */

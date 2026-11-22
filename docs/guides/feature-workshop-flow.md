@@ -186,7 +186,7 @@ flowchart TD
 flowchart TD
   SHOT["Shot（prompt / params.size）"] --> GUARD{"前置门禁"}
   GUARD -->|提示词为空| E1["阻断：提示词为空"]
-  GUARD -->|本地通道未选工作流| E2["阻断：先在「生成资源」选生图工作流"]
+  GUARD -->|未选图片模型| E2["阻断：先选图片模型（模式 → 模型）"]
   GUARD -->|OK| CH{"通道"}
 
   CH -->|本地| L1["buildLibraryWorkflowInput<br/>只暴露 提示词 / 尺寸 / 参考图"]
@@ -227,7 +227,7 @@ flowchart TD
 flowchart TD
   SHOT["Shot（imageUrl / duration / motion / fps）"] --> GUARD{"前置门禁"}
   GUARD -->|提示词为空| E1["阻断"]
-  GUARD -->|本地未选视频工作流| E2["阻断：选视频工作流"]
+  GUARD -->|未选视频模型| E2["阻断：先选视频模型（模式 → 模型）"]
   GUARD -->|OK| CH{"通道"}
 
   CH -->|本地| P0["prepareLocalInputImage<br/>生成图 → ComfyUI 输入目录"]
@@ -248,7 +248,7 @@ flowchart TD
 | 视频任务刷新后怎么恢复 | `clipTaskId` 随草稿持久化，重挂载按 task 真值恢复（与生图的 `taskId` 同一机制：已成功回写产物、在跑才重订阅） |
 | 「时长」怎么落下去 | 同一个口两种单位：按帧的端口吃 `frames`、按秒的吃 `duration`（由界面按 fps 折算） |
 | 首帧 / 尾帧怎么区分 | 按产出节点类名（`LoadImageFirstFrame` / `LoadImageLastFrame` / `LoadImage`）判角色，再按端口名兜底 |
-| 视频工作流与生图工作流为什么分开选 | 对外参数口径不同（生图无首帧、视频有），共用一个 id 会互相串味 |
+| 镜头生图与视频为什么是两个模型选择 | 两类候选与对外参数口径不同（生图无首帧、视频有）；各自的选择随草稿持久化（`modelSelections`，#4834） |
 | 远端异步任务的进度 | 服务端真值是 `task` 表；客户端轮询只在远端 API 通道使用 |
 
 **红线**：视频阶段不得改写 `imageUrl`（那是上游产物），只写 `clipUrl` / `clipStatus`。
@@ -341,7 +341,7 @@ flowchart LR
 |---|---|---|
 | 剧本为空就提取角色 / 分镜 | 提取按钮禁用 + 原因文案（「先在剧本阶段编写」） | — |
 | 模型返回不是合法 JSON | 错误条 + 可重试提示，建议改「工具」通道 | 执行日志面板 + `log/workshop/<环节>` |
-| 本地通道没选工作流 | 阻断文案「先在右侧生成资源选择工作流」 | — |
+| 没选模型 | 生成按钮禁用（未选模型不发起请求；候选 = 测试模型级联，#4834） | — |
 | 任务失败 / 中断 | 镜头状态置 `failed` + 错误条 | task 日志（SSE `log` 帧）+ 执行日志 |
 | 用户主动取消（本机任务） | 镜头行「取消」按钮 → task.cancel → CANCELLED 终态，状态回 `failed` + 提示「已取消，可重新生成」 | — |
 | 输入未落到工作流端口（unmatched） | 发起前提示条：哪些设置本次未生效 + 引导去工作流库连线 | — |

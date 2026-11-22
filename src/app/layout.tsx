@@ -15,7 +15,7 @@ import { BrowserStatusBar } from "~/components/studio/BrowserStatusBar";
 import { UpdateCheckProvider } from "~/components/update-check/UpdateCheckProvider";
 import { CodeUpdateWatcher } from "~/components/code-update/CodeUpdateWatcher";
 import { AppearanceBootstrap } from "~/components/AppearanceBootstrap";
-import { AppContextMenu } from "~/components/AppContextMenu";
+import { AppContextMenu } from "~/components/app-context-menu/AppContextMenu";
 import { MessageCenterPanel } from "~/components/message-center/MessageCenterPanel";
 
 /**
