@@ -17,6 +17,8 @@ import {
 } from "~/lib/workflow/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { ReactNode } from "react";
+import { Switch } from "~/components/ui/switch";
+import { FieldLabel } from "~/components/ui/field";
 
 import { WorkflowParamCard } from "../workflow-editor/WorkflowParamCard";
 import { paramClassStyle } from "./workflow-param-mapping-ui";
@@ -41,10 +43,15 @@ export type WorkflowParamCardColumnProps = {
   isManual?: (entryId: string) => boolean;
   onReset?: (entryId: string) => void;
   onSelect?: (entryId: string | null) => void;
+  /** 切换尺寸来源（写入 `paramMap.sizeSource.mode:<模式>`）。只读消费方不传。 */
+  onSizeFromReferenceChange?: (enabled: boolean) => void;
   /** 当前模式下「条目 → 目标 ioKey」的生效落点。 */
   resolved: Record<string, string | null>;
   /** 作者手里正选中的条目（线被点选 / 卡片被点）。 */
   selectedEntryId?: string | null;
+  /** 该模式是否声明「尺寸取自第一张参考图」。开启时尺寸卡不接受连线，
+   *  展示来源说明而不是「未配置」。 */
+  sizeFromReference?: boolean;
 };
 
 export function WorkflowParamCardColumn({
@@ -58,6 +65,8 @@ export function WorkflowParamCardColumn({
   isManual,
   onReset,
   endpoint,
+  sizeFromReference = false,
+  onSizeFromReferenceChange,
 }: WorkflowParamCardColumnProps) {
   if (entries.length === 0) {
     return null;
@@ -86,52 +95,70 @@ export function WorkflowParamCardColumn({
           const sizeLabel =
             contractEntries?.find((item) => item.id === "size")?.label ?? sizeSubLabel("size");
           return (
-            <WorkflowParamCard
-              canReset={canWire && SIZE_SUB_IDS.some((id) => isManual?.(id) === true)}
-              canWire={canWire}
-              classLabel={paramClassStyle("size").label}
-              cls="size"
-              endpoint={endpoint}
-              entryId="size"
-              hostNodeId={first.hostNodeId || first.nodeId}
-              idLabel="size"
-              key="size"
-              label={sizeLabel}
-              /* 一行 = 一个子口：卡片头的 ↺ 把六条线一起撤掉（只撤其中一条会
-               *  让卡片看着「还有线」）。上抛的是聚合 id `size`，由消费方一次
-               *  展开成六个子口交给 `resetMany` —— 逐个上抛会每次落库，后一次
-               *  把前一次的删除覆盖回去（用户口径：「重置也清不掉」）。 */
-              onReset={canWire ? () => onReset?.("size") : undefined}
-              onSelect={
-                onSelect
-                  ? () => {
-                      onSelect("size");
-                    }
-                  : undefined
-              }
-              /* 行 = 形态（「尺寸 · 宽高比」），不是候选端口：形态由作者从哪一行
-               * 拖出去声明，handle id 就是子口 id（连线层按它反查条目）。 */
-              outputPorts={forms.map((item) => {
-                const target = resolved[item.id] ?? null;
-                /* 类型**恒为这个形态自己的类型**，不随落点变（用户口径：「尺寸上是
-                 *  什么类型就显示什么类型，不要跟连接的参数类型变换」）。
-                 *  宽度 / 高度 / 像素量 = FLOAT，分辨率档 / 倍数 = INT，宽高比 =
-                 *  COMBO（见 `sizeSubTypeDisplay`）。 */
-                return {
-                  name: item.id,
-                  display: sizeSubLabel(item.cls),
-                  type: sizeSubTypeDisplay(item.cls),
-                  connected: target !== null && target !== "",
-                  ioKey: target ?? "",
-                  handleId: item.id,
-                  active: target !== null && target !== "",
-                };
-              })}
-              readOnly={!canWire}
-              /* 选中的可能是这张卡（`size`）或它的某一条线（子口 id）：两种都点亮。 */
-              selected={sizeGroupIds(selectedEntryId).some((id) => SIZE_SUB_IDS.includes(id))}
-              width={CARD_WIDTH}
-            />
+            <div className="flex flex-col gap-1" key="size">
+              <WorkflowParamCard
+                canReset={
+                  canWire &&
+                  !sizeFromReference &&
+                  SIZE_SUB_IDS.some((id) => isManual?.(id) === true)
+                }
+                canWire={canWire && !sizeFromReference}
+                classLabel={paramClassStyle("size").label}
+                cls="size"
+                endpoint={sizeFromReference ? undefined : endpoint}
+                entryId="size"
+                footNote={
+                  sizeFromReference ? "尺寸由第一张参考图决定，无需连线、不下发尺寸值" : undefined
+                }
+                hostNodeId={first.hostNodeId || first.nodeId}
+                idLabel="size"
+                label={sizeLabel}
+                /* 一行 = 一个子口：卡片头的 ↺ 把六条线一起撤掉（只撤其中一条会
+                 *  让卡片看着「还有线」）。上抛的是聚合 id `size`，由消费方一次
+                 *  展开成六个子口交给 `resetMany` —— 逐个上抛会每次落库，后一次
+                 *  把前一次的删除覆盖回去（用户口径：「重置也清不掉」）。 */
+                onReset={canWire && !sizeFromReference ? () => onReset?.("size") : undefined}
+                onSelect={
+                  onSelect
+                    ? () => {
+                        onSelect("size");
+                      }
+                    : undefined
+                }
+                /* 行 = 形态（「尺寸 · 宽高比」），不是候选端口：形态由作者从哪一行
+                 * 拖出去声明，handle id 就是子口 id（连线层按它反查条目）。 */
+                outputPorts={forms.map((item) => {
+                  const target = resolved[item.id] ?? null;
+                  /* 类型**恒为这个形态自己的类型**，不随落点变（用户口径：「尺寸上是
+                   *  什么类型就显示什么类型，不要跟连接的参数类型变换」）。
+                   *  宽度 / 高度 / 像素量 = FLOAT，分辨率档 / 倍数 = INT，宽高比 =
+                   *  COMBO（见 `sizeSubTypeDisplay`）。 */
+                  return {
+                    name: item.id,
+                    display: sizeSubLabel(item.cls),
+                    type: sizeSubTypeDisplay(item.cls),
+                    connected: target !== null && target !== "",
+                    ioKey: target ?? "",
+                    handleId: item.id,
+                    active: target !== null && target !== "",
+                  };
+                })}
+                readOnly={!canWire}
+                /* 选中的可能是这张卡（`size`）或它的某一条线（子口 id）：两种都点亮。 */
+                selected={sizeGroupIds(selectedEntryId).some((id) => SIZE_SUB_IDS.includes(id))}
+                width={CARD_WIDTH}
+              />
+              {onSizeFromReferenceChange ? (
+                <FieldLabel className="text-ink-faint hover:text-ink text-2xs flex cursor-pointer items-center gap-1.5 px-0.5">
+                  <Switch
+                    checked={sizeFromReference}
+                    onCheckedChange={onSizeFromReferenceChange}
+                    size="sm"
+                  />
+                  使用首张参考图尺寸
+                </FieldLabel>
+              ) : null}
+            </div>
           );
         }
         const style = paramClassStyle(entry.cls);

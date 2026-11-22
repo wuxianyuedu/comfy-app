@@ -134,6 +134,22 @@ describe("deriveEncapsulationStatus", () => {
     expect(status.missingLabels).toContain(SIZE_LABEL);
   });
 
+  it("声明尺寸取自首图后，尺寸口没有落点也不进「未配置」清单（含必备尺寸口）", () => {
+    const status = deriveEncapsulationStatus({
+      io: IO,
+      paramMap: {
+        source: { "mode:i2i": { prompt: "positive_prompt" } },
+        sizeSource: { "mode:i2i": { from: "reference-image" } },
+      },
+      mode: "i2i",
+      requiredInputs: ["prompt", "size"],
+    });
+    expect(status.sizeFromReference).toBe(true);
+    expect(status.ready).toBe(true);
+    expect(status.missingRequired).toEqual([]);
+    expect(status.missingLabels).not.toContain(SIZE_LABEL);
+  });
+
   it("尺寸是必备口时，没定出宽高就不 ready", () => {
     /* 必备的尺寸口**另有一条**判据（`isSizeDetermined`）：只连一个子口解不出
      * 另一维，跑起来拿不到宽高 —— 这种「看起来配好了」的状态必须进缺失清单。 */

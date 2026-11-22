@@ -50,7 +50,16 @@ export const LibraryParamsNode = memo(function LibraryParamsNode(_props: NodePro
   if (!content) {
     return null;
   }
-  const { cards, canWire, contractEntries, selectedEntryId, onSelect, onReset } = content;
+  const {
+    cards,
+    canWire,
+    contractEntries,
+    selectedEntryId,
+    onSelect,
+    onReset,
+    sizeFromReference,
+    onSizeFromReferenceChange,
+  } = content;
   return (
     <div data-testid="wflib-canvas-node-params">
       <WorkflowParamCardColumn
@@ -75,8 +84,10 @@ export const LibraryParamsNode = memo(function LibraryParamsNode(_props: NodePro
         isManual={cards.isManual}
         onReset={onReset}
         onSelect={onSelect}
+        onSizeFromReferenceChange={onSizeFromReferenceChange}
         resolved={cards.resolved}
         selectedEntryId={selectedEntryId}
+        sizeFromReference={sizeFromReference}
       />
     </div>
   );

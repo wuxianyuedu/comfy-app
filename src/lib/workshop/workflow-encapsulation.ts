@@ -39,6 +39,7 @@ import {
 } from "~/lib/workflow/workflow-param-mapping";
 import { exposedCustomKindOf } from "~/lib/workflow/workflow-exposed-params";
 import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import { sizeSourceForMode } from "~/lib/workflow/workflow-size-source";
 import { referenceLoaderMax } from "./reference-loader-binding";
 
 /** 工坊这一次生成要落下去的对外参数（全部可选）。
@@ -511,10 +512,16 @@ export function buildEncapsulatedInputs(args: {
    * 工坊喂来的图片截断到上限（未配置 = 不设限，跟随模式契约槽位）——落点映射与
    * 装载计划都吃这一份截断后的值，超出部分不再参与装载。 */
   const referenceCap = referenceLoaderMax(paramMap);
-  const effectiveValues =
-    referenceCap !== null && (values.referenceImages?.length ?? 0) > referenceCap
+  /* 作者显式声明「尺寸取自第一张参考图」时，外部尺寸值不参与下发：它既不进
+   * 映射层的 `values.size`，也不该在后面报成 `unmatched: size` —— 那把设计
+   * 意图误报成了配置缺失。图里的尺寸由参考图自身决定，无需下发尺寸端口。 */
+  const sizeFromReference = sizeSourceForMode(paramMap, mode) === "reference-image";
+  const effectiveValues = {
+    ...(referenceCap !== null && (values.referenceImages?.length ?? 0) > referenceCap
       ? { ...values, referenceImages: (values.referenceImages ?? []).slice(0, referenceCap) }
-      : values;
+      : values),
+    ...(sizeFromReference ? { size: undefined } : {}),
+  };
   const effectiveMode = mode ?? null;
   const entries = buildParamEntries(io, {
     mode: effectiveMode,
@@ -558,7 +565,7 @@ export function buildEncapsulatedInputs(args: {
    *  没落点不算问题，图内默认值补上）。所以只在**一路都没落上**时报一次 `size`，
    *  报子口级会让「只暴露 width/height 的工作流」多出四条噪音。 */
   const sizeIds = entries.filter((entry) => entry.id.startsWith("size-")).map((entry) => entry.id);
-  if (sizeIds.length > 0 && values.size !== undefined) {
+  if (!sizeFromReference && sizeIds.length > 0 && values.size !== undefined) {
     const landed = sizeIds.some((id) => resolved[id] !== undefined && !reported.has(id));
     sizeIds.forEach((id) => reported.delete(id));
     if (!landed) {

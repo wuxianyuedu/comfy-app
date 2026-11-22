@@ -42,6 +42,7 @@ function makeParamsContent(): LibraryNodeContent["params"] {
     selectedEntryId: null,
     onSelect: vi.fn(),
     onReset: vi.fn(),
+    sizeFromReference: false,
   };
 }
 

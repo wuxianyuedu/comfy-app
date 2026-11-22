@@ -37,8 +37,7 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import { StatusDot } from "~/components/ui/status-dot";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { clampInt } from "~/lib/clamp";
-import { sceneFromMode } from "~/lib/media/size-presets";
-import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
+import { sizeSourceForMode } from "~/lib/workflow/workflow-size-source";
 import type { QueueTaskLogTarget } from "~/components/studio/queue/QueueTaskLogModal";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
@@ -48,14 +47,12 @@ import {
   MODEL_TEST_KINDS,
   MODEL_TEST_KIND_LABELS,
   candidateValue,
-  sizeSpecToValues,
-  sizeValuesToSpec,
   type ModelTestControl,
   type ModelTestKind,
-  type ModelTestValues,
   type ModeTab,
 } from "./model-test-config";
 import { InputRow } from "./ModelTestInputRow";
+import { ModelTestSizeField } from "./ModelTestSizeField";
 import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
 import { useModelTest } from "./hooks/use-model-test";
 import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
@@ -214,35 +211,6 @@ function ModeTabs({
           </Button>
         );
       })}
-    </div>
-  );
-}
-
-/** 尺寸：与工作流库**同一个**选择器（ShotSizePicker）。比例 / 像素（分辨率 ·
- *  百万像素）/ 倍数一段不缺，倍数段只在选中百万像素档时出现。表单值与
- *  SizeSpec 两套形状的换算在 model-test-config（全部走 size-presets 纯函数）。 */
-function SizeField({
-  disabled,
-  mode,
-  onPatchValues,
-  values,
-}: {
-  disabled?: boolean;
-  mode: string;
-  onPatchValues: (patch: Partial<ModelTestValues>) => void;
-  values: ModelTestValues;
-}) {
-  const scene = sceneFromMode(mode);
-  return (
-    <div className="w-64 min-w-0">
-      <ShotSizePicker
-        disabled={disabled}
-        onChange={(next) => {
-          onPatchValues(sizeSpecToValues(next, scene));
-        }}
-        scene={scene}
-        value={sizeValuesToSpec(values)}
-      />
     </div>
   );
 }
@@ -419,6 +387,10 @@ export function ModelTestView({
   pendingReprint?: ModelTestRetryPayload | null;
 }) {
   const c = useModelTest();
+  /* 选中的本地工作流声明「尺寸取自首图」时，尺寸口不可配置（工坊链路本就不下发
+   * 尺寸值），改为只读展示第一张参考图的实际像素。远端通道没有工作流声明，不受影响。 */
+  const sizeFromReference =
+    sizeSourceForMode(c.selectedWorkflow?.paramMap, c.mode) === "reference-image";
   /* 响应摘要的显示形态：默认格式化，可切回原始单行。 */
   const [excerptPretty, setExcerptPretty] = useState(true);
   /* 「大屏查看日志」弹窗目标：存打开那一刻的快照（与 HistoryList 同款），
@@ -588,10 +560,12 @@ export function ModelTestView({
                             labelClassName="mb-1.5"
                           >
                             {() => (
-                              <SizeField
+                              <ModelTestSizeField
                                 disabled={row.disabled}
                                 mode={c.mode}
                                 onPatchValues={c.patchValues}
+                                referenceImageSrc={c.referenceImages[0]}
+                                sizeFromReference={sizeFromReference}
                                 values={c.values}
                               />
                             )}

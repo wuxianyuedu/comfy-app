@@ -482,8 +482,14 @@
   IO 映射含节点内建 IO；改动即时进 `workflowTemplate` 行。工作流**没有配置
   模式**时参数落点不能连线是正常口径（落点必须归属一个模式），页签画布上方
   给一句可操作的提示（到编辑器「编辑 IO」配置模式，#4550），不静默禁用。
+  尺寸卡可显式声明「使用首张参考图尺寸」（按模式存在 `paramMap.sizeSource.mode:<模式>`）：
+  开启后尺寸卡不接受落点连线，工坊与测试界面不再提供尺寸选择器，尺寸区只读展示
+  第一张参考图的实际像素；提交不下发尺寸值，也不把「尺寸未连线」报成配置缺失。
+  未声明时按原口径由外部尺寸值驱动 / 工作流图内默认值兜底，不做「有参考图线且没尺寸线
+  就自动推断」的猜测。
 - 落点（提示）：`src/components/studio/workflow-library/WorkflowCanvasNodePreview.tsx`。
 - 落点：`src/lib/workflow/workflow-param-mapping.ts`、
+  `src/lib/workflow/workflow-size-source.ts`、
   `src/lib/workflow/workflow-io-types.ts`、`io-exposure.ts`
 
 #### FR-WF-06 磁盘跟踪（校验和重链 / diskDirty / diskMissing）
