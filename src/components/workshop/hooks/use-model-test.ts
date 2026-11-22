@@ -240,8 +240,10 @@ function useRequestPreview(args: {
 
 /** 候选 / 契约 / 适配器索引的取数与派生（§12.13 第二刀）：这一簇只读
  *  configGet / modeContractsGet / workshopAdaptersGet 与工作流列表四份读数做
- *  派生，主 hook（useModelTest）只留表单状态与动作。 */
-function useTestCatalog(args: {
+ *  派生，主 hook（useModelTest）只留表单状态与动作。
+ *  导出（#4834）：项目里各生成入口统一成测试模型的级联选择，候选装配与
+ *  模式收窄的口径只有这一份（use-model-catalog 薄封装消费），不另立第二份。 */
+export function useTestCatalog(args: {
   kind: ModelTestKind;
   mode: string;
   selectedModel: string;
