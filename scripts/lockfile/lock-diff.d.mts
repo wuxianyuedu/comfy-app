@@ -5,26 +5,26 @@
 export type DepEntry = {
   specifier: string;
   version: string;
-}
+};
 
 export type LockSection = {
   keys: Map<string, Array<string>>;
   raw: Array<string>;
-}
+};
 
 export type ParsedLockfile = {
   duplicates: Array<string>;
   importer: Map<string, Map<string, Map<string, DepEntry>>>;
   lockfileVersion: string;
   sections: Map<string, LockSection>;
-}
+};
 
 export type FieldChange = {
   from?: string;
   key: string;
   to?: string;
   value?: string;
-}
+};
 
 export type DepChange = {
   from?: string;
@@ -33,34 +33,34 @@ export type DepChange = {
   specifier?: string;
   to?: string;
   value?: DepEntry;
-}
+};
 
 export type FlatDiff = {
   added: Array<FieldChange>;
   changed: Array<FieldChange>;
   removed: Array<FieldChange>;
-}
+};
 
 export type GroupDiff = {
   added: Array<DepChange>;
   changed: Array<DepChange>;
   removed: Array<DepChange>;
-}
+};
 
 export type EntryDiff = {
   added: Array<string>;
   removed: Array<string>;
-}
+};
 
 export type LockDiff = {
-  duplicates: { new: Array<string>; old: Array<string>; };
+  duplicates: { new: Array<string>; old: Array<string> };
   importers: Record<string, Record<string, GroupDiff>>;
   lockfileVersion: string;
   overrides: FlatDiff;
   packages: EntryDiff;
   settings: FlatDiff;
   snapshots: EntryDiff;
-}
+};
 
 export function stripBundledSection(text: string): string;
 export function splitTopSections(text: string): {

@@ -29,6 +29,7 @@ import {
   resolveMergeBatch,
   resolveUpstreamRef,
   runState,
+  STAGED_TO_FULL_TREE,
   summarizeRows,
   tokenize,
 } from "../scripts/gates/base-check.mjs";
@@ -1148,6 +1149,36 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
     }
     for (const c of r.commands) {
       expect(mayDecideOnCleanSnapshot(c.argv), c.label).toBe(true);
+    }
+  });
+
+  test("--staged 的可降级档（#4833）已剥旗标收进默认面：UI 基元棘轮 / 浮层层级刻度", () => {
+    const r = resolveMergeBatch([]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) {
+      return;
+    }
+    const byLabel = new Map(r.commands.map((c) => [c.label, c.argv]));
+    for (const label of Object.keys(STAGED_TO_FULL_TREE)) {
+      const argv = byLabel.get(label);
+      expect(argv, `${label} 应在合并前复算面里`).toBeDefined();
+      /* 剥旗标后判的是全仓：argv 里不再有 --staged，脚本本体逐字不变。 */
+      expect(argv).not.toContain("--staged");
+      expect(argv?.join(" ")).toContain(
+        label === "UI 基元复用棘轮" ? "check-ui-primitives.cjs" : "check-overlay-z.cjs",
+      );
+    }
+  });
+
+  test("降级登记表自身不陈旧：每条都在钩子里、真带 --staged、理由非空壳", () => {
+    const steps = readHookSteps();
+    const byLabel = new Map(steps.map((st) => [st.label, st.argv]));
+    for (const [label, reason] of Object.entries(STAGED_TO_FULL_TREE)) {
+      const argv = byLabel.get(label);
+      expect(argv, `登记的「${label}」在钩子里必须还在`).toBeDefined();
+      expect(argv).toContain("--staged");
+      /* 理由不能是空壳（「TODO」这类）—— 与零消费登记表同一条口径。 */
+      expect(reason.trim().length).toBeGreaterThan(10);
     }
   });
 });

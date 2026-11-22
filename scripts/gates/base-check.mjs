@@ -155,6 +155,7 @@ export {
   resolveGateCommand,
   resolveMergeBatch,
   runGate,
+  STAGED_TO_FULL_TREE,
   tokenize,
 } from "../base-check/hook-steps.mjs";
 export {
