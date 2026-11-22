@@ -9,7 +9,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { buildParamEntries, sizeGroupIds } from "~/lib/workflow/workflow-param-mapping";
-import { sizeSourceForMode, withSizeSource } from "~/lib/workflow/workflow-size-source";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
 import {
@@ -26,6 +25,7 @@ import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
 import { deriveLibraryOutputCards, deriveLibraryParamCards } from "./workflow-library-param-cards";
 import { useParamWiring } from "./hooks/use-param-wiring";
+import { useSizeSource } from "./hooks/use-size-source";
 import { useGenerationRunner, type Phase } from "./hooks/use-generation-runner";
 import { useDefaultValueSeeding } from "./hooks/use-default-value-seeding";
 import { useOutputWiring } from "./hooks/use-output-wiring";
@@ -278,38 +278,18 @@ export function WorkflowCanvasNodePreview({
     [workflowIO, effectiveMode, contractEntries],
   );
 
-  /* 选中互斥与落点重置的回调收口（#4467）：内联箭头会让画布层的三个内容对象
-   * 每帧都是新引用 → Context value 每帧新建 → 三列节点虽 memo 也被击穿重渲。
-   * 依赖里的 wiring 方法与 setState 都是稳定引用。 */
+  /* 落点重置回调收口：内联箭头会击穿画布层三列节点的 memo（#4467）。 */
   const handleResetParam = useCallback(
     (id: string) => {
       resetParamWires(sizeGroupIds(id));
     },
     [resetParamWires],
   );
-
-  /* 尺寸来源（第几张图决定生成尺寸）是 paramMap 的另一维配置，与落点线同列不同键。
-   * 读的是 overlay 之后的生效 paramMap，写走 commitParamMap（先并本地态再落库），
-   * 避免在飞连线改动被这一笔覆盖回去。 */
-  const { commitParamMap, effectiveParamMap } = wiring;
-  const sizeFromReference =
-    sizeSourceForMode(effectiveParamMap, effectiveMode) === "reference-image";
-  const handleSizeFromReferenceChange = useCallback(
-    (enabled: boolean) => {
-      if (effectiveMode === null) {
-        return;
-      }
-      commitParamMap(
-        withSizeSource({
-          paramMap: effectiveParamMap,
-          mode: effectiveMode,
-          from: enabled ? "reference-image" : null,
-        }),
-      );
-    },
-    [commitParamMap, effectiveMode, effectiveParamMap],
-  );
-
+  const { onSizeFromReferenceChange, sizeFromReference } = useSizeSource({
+    commitParamMap: wiring.commitParamMap,
+    effectiveMode,
+    effectiveParamMap: wiring.effectiveParamMap,
+  });
   /** 提交到本机生成并等待落定（相位与 SSE 订阅在 use-generation-runner）。 */
   function run() {
     if (!canRun) {
@@ -423,7 +403,7 @@ export function WorkflowCanvasNodePreview({
           onResetParam={handleResetParam}
           onSelectOutput={handleSelectOutput}
           onSelectParam={handleSelectParam}
-          onSizeFromReferenceChange={handleSizeFromReferenceChange}
+          onSizeFromReferenceChange={onSizeFromReferenceChange}
           outputCards={outputCards}
           paramCards={paramCards}
           selectedEntryId={selectedParamId}

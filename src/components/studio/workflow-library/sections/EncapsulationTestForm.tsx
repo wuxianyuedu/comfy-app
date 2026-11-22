@@ -18,6 +18,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { mediaPreviewUrl } from "~/lib/media/media-url";
 import { readFileAsDataUrl } from "~/lib/file-io";
+import { readNaturalSize } from "~/lib/media/natural-size";
 import { NumberField } from "~/components/ui/number-field";
 import { FilePicker, useFilePicker } from "~/components/ui/file-picker";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
@@ -115,10 +116,11 @@ export function EncapsulationTestForm({
     }
     const image = new Image();
     image.onload = () => {
-      setSizesBySrc((prev) => ({
-        ...prev,
-        [referenceSrc]: { height: image.naturalHeight, width: image.naturalWidth },
-      }));
+      const size = readNaturalSize(image);
+      if (size === null) {
+        return;
+      }
+      setSizesBySrc((prev) => ({ ...prev, [referenceSrc]: size }));
     };
     image.src = referenceSrc;
     return () => {

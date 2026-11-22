@@ -18,6 +18,7 @@ import {
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { ReactNode } from "react";
 import { Switch } from "~/components/ui/switch";
+import { FieldLabel } from "~/components/ui/field";
 
 import { WorkflowParamCard } from "../workflow-editor/WorkflowParamCard";
 import { paramClassStyle } from "./workflow-param-mapping-ui";
@@ -148,14 +149,14 @@ export function WorkflowParamCardColumn({
                 width={CARD_WIDTH}
               />
               {onSizeFromReferenceChange ? (
-                <label className="text-ink-faint hover:text-ink text-2xs flex cursor-pointer items-center gap-1.5 px-0.5">
+                <FieldLabel className="text-ink-faint hover:text-ink text-2xs flex cursor-pointer items-center gap-1.5 px-0.5">
                   <Switch
                     checked={sizeFromReference}
                     onCheckedChange={onSizeFromReferenceChange}
                     size="sm"
                   />
                   使用首张参考图尺寸
-                </label>
+                </FieldLabel>
               ) : null}
             </div>
           );

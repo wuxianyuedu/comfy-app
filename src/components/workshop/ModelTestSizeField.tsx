@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 
+import { readNaturalSize } from "~/lib/media/natural-size";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import { sizeSpecToValues, sizeValuesToSpec, type ModelTestValues } from "./model-test-config";
@@ -42,10 +43,11 @@ export function ModelTestSizeField({
     }
     const image = new Image();
     image.onload = () => {
-      setDimsBySrc((prev) => ({
-        ...prev,
-        [referenceImageSrc]: { height: image.naturalHeight, width: image.naturalWidth },
-      }));
+      const size = readNaturalSize(image);
+      if (size === null) {
+        return;
+      }
+      setDimsBySrc((prev) => ({ ...prev, [referenceImageSrc]: size }));
     };
     image.src = referenceImageSrc;
     return () => {
