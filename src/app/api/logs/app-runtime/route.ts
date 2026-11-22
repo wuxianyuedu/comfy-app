@@ -5,6 +5,7 @@ import { RUNTIME_LOG_FIELDS_MAX, RUNTIME_LOG_MESSAGE_MAX, clampText } from "~/li
 import { checkRateLimit } from "~/server/api/middleware/rate-limit";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
 
 /**
  * 应用运行日志写入端点（客户端 → 服务端）：`app-runtime-log` 是 Node-only 模块，客户端必须经此端点转交写入，
@@ -37,6 +38,11 @@ export async function POST(request: Request) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(request);
+  if (crossOrigin !== null) {
+    return crossOrigin;
   }
   /* 限流与 tRPC `rateLimitedProcedure` 同一套滑动窗口（纯函数零依赖，#4051 最小滥用约束）：
    * 按已登录用户计数，窗口内超限一律 429 —— 客户端写入失败本就静默，不阻塞业务。 */

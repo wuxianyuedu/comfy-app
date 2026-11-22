@@ -13,7 +13,7 @@ import { act, renderHook } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import { isRecord } from "~/lib/is-record";
 import type { TaskWatchHandlers, WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 

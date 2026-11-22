@@ -4,6 +4,7 @@ import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { describeFetchFailure, getLLMConfig } from "~/lib/llm/server";
 import { httpFailureDetail } from "~/lib/llm/http-failure";
+import { safeFetch } from "~/lib/network/outbound-url.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,9 +45,10 @@ export async function GET(req: NextRequest) {
     headers.Authorization = `Bearer ${cfg.apiKey}`;
   }
   const probe = (base: string) =>
-    fetch(`${base.replace(/\/$/, "")}/models`, {
+    safeFetch(`${base.replace(/\/$/, "")}/models`, {
       headers,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      scenario: "llm-upstream",
     });
 
   try {
@@ -55,8 +57,9 @@ export async function GET(req: NextRequest) {
     if (provider === "local" && /\/v1\/?$/.test(cfg.baseUrl)) {
       const tagsUrl = `${cfg.baseUrl.replace(/\/v1\/?$/, "")}/api/tags`;
       try {
-        const tagsRes = await fetch(tagsUrl, {
+        const tagsRes = await safeFetch(tagsUrl, {
           signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+          scenario: "llm-upstream",
         });
         if (tagsRes.ok) {
           const parsed: unknown = await tagsRes.json();

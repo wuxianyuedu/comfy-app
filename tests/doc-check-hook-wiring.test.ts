@@ -977,6 +977,10 @@ const FORM_PREPASS: ReadonlyArray<readonly [string, string]> = [
     "node scripts/freshness/freshness-gate.mjs",
   ],
   ["UI/逻辑分离硬闸", "node scripts/gates/check-ui-logic-separation.cjs"],
+  /* 写端点同源闸 / 服务端出网收口（#4723 / #4724，#3904 子项）：均为硬闸、全量扫、
+   * 毫秒级；进 D0 让每一次提交都过这两道安全闸。 */
+  ["写端点同源闸覆盖", "node scripts/gates/check-write-origin-gate.cjs"],
+  ["服务端出网收口(裸 fetch 硬闸)", "node scripts/gates/check-server-bare-fetch.cjs"],
   ["地基层零消费导出(硬闸)", "node scripts/gates/check-dead-exports.cjs --staged"],
   [
     "故事面（title / 接上真组件 / 分组一致 / 必填 props 的 args）",

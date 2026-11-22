@@ -33,6 +33,8 @@ import {
 } from "./runner-state";
 import { logger } from "~/lib/core/logger";
 import { isHostHeartbeatFresh } from "./host-heartbeat";
+/* 纯 Node executor host 也加载本模块：出网判据走不带 server-only 的核心。 */
+import { safeFetch } from "~/lib/network/outbound-url-core";
 import type { TaskClaimMode } from "../core/repository-task-impl";
 
 /* ── 依赖注入接缝（P3 §5 第 1 期·最后一步） ───────────────────────────── */
@@ -269,8 +271,9 @@ function queueEntries(
 async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<boolean | null> {
   try {
     const base = await resolveComfyBase();
-    const q = await fetch(`${base}/queue`, {
+    const q = await safeFetch(`${base}/queue`, {
       signal: AbortSignal.timeout(3000),
+      scenario: "llm-upstream",
     });
     if (!q.ok) {
       return null;
@@ -290,8 +293,9 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
     }
     /* 队列空但有 promptId 线索：只有「最近一条历史确实是本次 prompt」才算
      *  在飞（任务刚收尾的竞态窗口），否则视为已死。 */
-    const h = await fetch(`${base}/history?max_items=1`, {
+    const h = await safeFetch(`${base}/history?max_items=1`, {
       signal: AbortSignal.timeout(3000),
+      scenario: "llm-upstream",
     });
     if (!h.ok) {
       return null;
@@ -608,7 +612,10 @@ export async function reapStaleRunningTasks(): Promise<void> {
         let reason = "";
         try {
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-          const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+          const r = await safeFetch(url, {
+            signal: AbortSignal.timeout(5000),
+            scenario: "llm-upstream",
+          });
           if (r.status === 200) {
             // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
             const data: unknown = await r.json();
@@ -637,8 +644,9 @@ export async function reapStaleRunningTasks(): Promise<void> {
               let inQueue = false;
               try {
                 // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-                const q = await fetch(`${base}/queue`, {
+                const q = await safeFetch(`${base}/queue`, {
                   signal: AbortSignal.timeout(3000),
+                  scenario: "llm-upstream",
                 });
                 if (q.ok) {
                   // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）

@@ -12,6 +12,8 @@ import { OLLAMA_STOP_PROBE } from "~/lib/retry-policy";
 import { sleep } from "~/lib/with-timeout";
 import { OLLAMA_DEFAULT_PORT, ollamaBaseUrl } from "~/lib/endpoints";
 import { killProcessTreeByImage } from "~/lib/process/kill-process-tree";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
+import { safeFetch } from "~/lib/network/outbound-url.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,8 +70,9 @@ async function appendOllamaLog(line: string): Promise<void> {
 }
 
 async function ollamaUp(): Promise<boolean> {
-  return fetch(`${ollamaBaseUrl(OLLAMA_PORT)}/api/version`, {
+  return safeFetch(`${ollamaBaseUrl(OLLAMA_PORT)}/api/version`, {
     signal: AbortSignal.timeout(2000),
+    scenario: "llm-upstream",
   })
     .then((r) => r.ok)
     .catch(() => false);
@@ -83,6 +86,11 @@ async function ollamaUp(): Promise<boolean> {
 export async function POST(_req: NextRequest) {
   if (!(await requireRequestUser())) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(_req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
   }
   if (!(await ollamaUp())) {
     await appendOllamaLog("[state] Ollama 未在运行，跳过关闭");

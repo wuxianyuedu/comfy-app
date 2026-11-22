@@ -11,6 +11,7 @@ import { MAX_COMMAND_CHARS, MAX_RUN_MS } from "~/lib/console/console-limits";
 import { parseConsoleLine } from "~/lib/console/console-catalog";
 import { isLoopbackRequest } from "~/lib/console/console-guard";
 import { consoleSlot, recordConsoleHistory } from "~/lib/console/console-registry";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,11 @@ export async function POST(req: NextRequest) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
   }
 
   const body = await readJsonRecord(req);

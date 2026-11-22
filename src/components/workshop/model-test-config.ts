@@ -4,7 +4,7 @@
 // 工坊那一条链 —— 本文件只放它的纯函数与常量，DOM / 网络分居视图与 hook。
 
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
-import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-core";
+import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import {
   expandContractInputs,
   modeContractInputIdLabel,

@@ -19,6 +19,7 @@ import { exportDiagnostics } from "../../../../../scripts/launcher-core/run.mjs"
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { requireRequestUser } from "~/server/auth/request-user";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
 
 /**
  * `POST /api/feedback/export` —— 把应用内「运行反馈」打包落盘（ISSUE #3371）。
@@ -63,6 +64,11 @@ export async function POST(request: Request) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(request);
+  if (crossOrigin !== null) {
+    return crossOrigin;
   }
 
   const body = await readJsonRecord(request);

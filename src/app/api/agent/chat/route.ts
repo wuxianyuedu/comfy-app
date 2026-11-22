@@ -12,6 +12,8 @@ import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse, errorResponse } from "~/server/lib/error-response";
 import { AppError } from "~/lib/core/errors";
 import { isRecord } from "~/lib/is-record";
+import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
+import { rejectOverRateLimit } from "~/server/lib/rest-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +52,16 @@ export async function POST(req: NextRequest) {
   const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
+  }
+  /* 同源闸（#4723）：写端点统一入口，判据见 ~/server/lib/same-origin。 */
+  const crossOrigin = rejectCrossOriginWrite(req);
+  if (crossOrigin !== null) {
+    return crossOrigin;
+  }
+  /* 限流（#4725）：会花钱/外联/拉进程的端点挂滑动窗口（默认 10s/20 次）。 */
+  const limited = rejectOverRateLimit(req, "agent-chat");
+  if (limited !== null) {
+    return limited;
   }
 
   const body = await readJsonRecord(req);
