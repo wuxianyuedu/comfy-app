@@ -186,6 +186,27 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
   /* 每次渲染只跑一遍正文 markdown。该渲染器是 XSS 安全的：解析交给 marked，
    *  产物过 DOMPurify 白名单（含 URL 协议白名单），见 `~/lib/markdown`。 */
   const html = useMemo(() => renderMarkdown(data.text), [data.text]);
+  /* 长文本的滚轮归正文自己（#4859）：画布把 wheel 监听装在面板层（滚轮 = 缩放），
+   *  正文超长时用户在便签上滚动，事件冒泡到面板就被拿去缩放画布，正文滚不动。
+   *  在正文元素上挂**原生** wheel 监听（React 的 onWheel 在根上委托，等它触发时
+   *  事件早已冒过面板）：正文真的可滚（scrollHeight > clientHeight）时拦下冒泡，
+   *  滚轮归正文滚动；正文没溢出时不拦，滚轮照常缩放画布。 */
+  const bodyRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    const el = bodyRef.current;
+    if (el === null) {
+      return;
+    }
+    const onWheel = (event: WheelEvent) => {
+      if (el.scrollHeight > el.clientHeight) {
+        event.stopPropagation();
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: true });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, []);
   return (
     <div
       className="z-base relative flex h-full w-full cursor-move flex-col overflow-hidden rounded-md"
@@ -229,6 +250,7 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
          *  几乎看不见，用户报「滚动条看不清」（ISSUE #4548）。 */
         className="wf-markdown custom-scrollbar text-2xs min-h-0 flex-1 overflow-auto p-2"
         dangerouslySetInnerHTML={{ __html: html }}
+        ref={bodyRef}
         style={{ color: "var(--color-ink-bright)", lineHeight: 1.5 }}
       />
     </div>
