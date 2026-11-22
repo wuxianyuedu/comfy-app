@@ -193,6 +193,8 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ pnpm exec tsc --noEmit
 ✅ pnpm run lint
 ✅ node scripts/gates/check-ui-logic-separation.cjs   # 视图层 IO 硬闸（命中即阻断，见 17）
+✅ node scripts/gates/check-write-origin-gate.cjs   # 写端点同源闸覆盖硬闸：带 POST/PUT/DELETE/PATCH 的 REST 路由必须过 `~/server/lib/same-origin` 的统一同源出口（#4723；跨站「简单请求」不经 preflight，鉴权在单用户模式不构成边界）
+✅ node scripts/gates/check-server-bare-fetch.cjs   # 服务端出网收口硬闸：src/server、src/app/api 与声明服务端身份的 src/lib 模块内出现绕过 safeFetch 的裸 `fetch(` 即红（#4724；safeFetch 本体不在扫描面）
 ✅ node scripts/gates/check-changelog-fragments.cjs
 ✅ node scripts/gates/check-changelog-versions.cjs # 待发段落的**来源锚** ⇄ 条目归属：锚写歪了 / 解析不出提交 / 同一 ISSUE 号跨锚分裂（见 §13.10.6）
 ✅ node scripts/gates/check-gate-thresholds.cjs # 判据自身的数值 ⇄ 账：把 R5 的 900、函数长度 400 这类阈值**调松而不同批改 `scripts/gates/.gate-thresholds.json`** 即红（方向逐条记，见下 §13.5.26）
