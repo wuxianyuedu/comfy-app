@@ -2,7 +2,7 @@
  * 侧栏打开项的页签态（ISSUE #3740）：某项的视图页签开着时，侧栏项要表达「这一页开着」
  * —— 图标落进品牌色浅底胶片，并在悬停 / 聚焦时浮现关闭按钮（点它走
  * `onCloseViewTab`，关的是那一页的页签）。首页是固定页签：永不出现打开态与关闭按钮。
- * 顶部视图页签条不再渲染侧栏常驻项的页签（#3740 追加反馈）。
+ * 顶部页签栏已退役（ISSUE #4770）：瞬时页签改在侧栏「临时页签」组列出，常驻项不重复列。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -117,17 +117,22 @@ describe("侧栏打开项的页签态（ISSUE #3740）", () => {
     expect(screen.queryByRole("button", { name: "关闭 首页 页签" })).toBeNull();
   });
 
-  it("顶部页签条不渲染侧栏常驻项的页签（设置等瞬时页签仍渲染）", () => {
+  it("侧栏常驻项不进「临时页签」组；设置这类瞬时页签列在那里（ISSUE #4770）", () => {
     renderShell({
       active: "home",
       tabs: tabsOf("home", "models", "console", "settings"),
     });
-    /* 常驻项（首页除外也一并不再进页签条） */
-    expect(screen.queryByRole("tab", { name: "首页" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "模型" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "控制台" })).toBeNull();
-    /* 不在侧栏的瞬时页签照常进页签条 */
-    expect(screen.getByRole("tab", { name: "设置" })).not.toBeNull();
+    /* 「临时页签」组 = 带「临时页签」组标签的那个 sidebar-group。 */
+    const tempGroup = screen
+      .getAllByText("临时页签")
+      .map((node) => node.closest('[data-slot="sidebar-group"]'))
+      .find((group): group is HTMLElement => group instanceof HTMLElement);
+    expect(tempGroup).toBeDefined();
+    const names = [...tempGroup!.querySelectorAll("button")].map((btn) => btn.textContent);
+    /* 常驻项（首页 / 模型 / 控制台）不重复列；不在侧栏的瞬时页签（设置）列在这里。 */
+    expect(names.join("|")).not.toContain("首页");
+    expect(names.join("|")).not.toContain("控制台");
+    expect(names.some((name) => name?.includes("设置"))).toBe(true);
   });
 
   it("没传 viewTabs（旧调用方）时整格静默：无角点、无关闭按钮，导航照旧", () => {

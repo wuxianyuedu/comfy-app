@@ -279,6 +279,24 @@ export const NAV_ITEMS: Array<NavItem> = [
   PROJECTS_ENTRY,
 ];
 
+/**
+ * 视图页签的标签文案 —— 与侧栏导航同一个出处（`NAV_ITEMS`）。
+ * 在这里另写一张 label 表，就会长出「侧栏叫队列、页签叫排队中」这类漂移。
+ */
+export function viewTabLabel(view: WorkspaceView, projectName?: string | null): string {
+  const base = NAV_ITEMS.find((item) => item.id === view)?.label ?? view;
+  const name = projectName?.trim();
+  // 项目类页签带上项目名（原型里就是「工坊·雾中来信」）—— 同一视图开两页时，
+  // 只有视图名的话用户分不清哪一页是哪个项目。
+  return name !== undefined && name !== "" ? `${base}·${name}` : base;
+}
+
+/** 「打开视图」菜单里的一项：视图 id + 展示名（侧栏临时页签组的「+」用）。 */
+export type OpenableView = {
+  label: string;
+  view: WorkspaceView;
+};
+
 /** 主页侧栏顶部常驻的全局项（排除项目页签与项目入口）。 */
 export function globalNavItems(): Array<NavItem> {
   return NAV_ITEMS.filter((item) => item.projectScoped !== true && item.id !== PROJECTS_ENTRY.id);

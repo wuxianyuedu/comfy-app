@@ -1,9 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
- * 锚定浮层不许被应用级标题行吃掉（ISSUE #1377）。桌面壳顶部自绘标题行（`TitleBarTabs`）按 `z-chrome`(2000) 立在最上，而气泡 `z-popup`(100) 低一个数量级：TopBar 按钮落 y≈46、气泡 `side="top"` 顶部 y≈14 仍在视口内，Base UI 的 `flip` 不翻转，于是上半截**被标题行盖掉**（画在它下面，不是被裁），实测四个入口全中招。
+ * 锚定浮层不许被应用级标题行吃掉（ISSUE #1377）。桌面壳顶部自绘标题行（`TitleBar`）按 `z-chrome`(2000) 立在最上，而气泡 `z-popup`(100) 低一个数量级：TopBar 按钮落 y≈46、气泡 `side="top"` 顶部 y≈14 仍在视口内，Base UI 的 `flip` 不翻转，于是上半截**被标题行盖掉**（画在它下面，不是被裁），实测四个入口全中招。
  * 这里只钉**结果**：每个入口悬停一遍，气泡几何整体落在标题行下沿之下、且命中测试真的打到气泡自己（不钉 `side`——翻转是定位引擎的输出，写死会锁实现）。
- * ⚠️ 壳态是打 `__TAURI_INTERNALS__` 全局标记（`isDesktopShell()` 读的那个键），`TitleBarTabs` 与 `z-chrome` 层级都真的生效；比手改 DOM 忠实（手改会在水合前动 DOM，React 报 #418 并丢客户端树）。ISSUE #3807 后主窗口标题行在内容列顶部、侧栏不再下移，但气泡的让位对象仍是 `[data-slot="title-bar"]` 本身。
+ * ⚠️ 壳态是打 `__TAURI_INTERNALS__` 全局标记（`isDesktopShell()` 读的那个键），`TitleBar` 与 `z-chrome` 层级都真的生效；比手改 DOM 忠实（手改会在水合前动 DOM，React 报 #418 并丢客户端树）。ISSUE #3807 后主窗口标题行在内容列顶部、侧栏不再下移，但气泡的让位对象仍是 `[data-slot="title-bar"]` 本身。
  */
 async function openInShell(page: Page) {
   await page.addInitScript(() => {

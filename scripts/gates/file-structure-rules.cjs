@@ -212,6 +212,12 @@ const DOMAIN_EXEMPT = new Set([
    * 两侧共用的**驱动面**（不是某个业务域的形状）—— 放进任何一侧的子域都会让其余侧
    * 反向依赖那个域。与 `sqlite-pragmas` / `sqlite-error` 同款：顶层单例。 */
   "src/lib/sqlite-driver.ts",
+  /* 「事务隔离守卫：事务打开期间拒绝链外语句插队」的唯一实现（ISSUE #4734）：
+   * 消费方是驱动本身（`sqlite-driver.ts` 的语句入口）与两个 drizzle 实例
+   *（`src/server/db.ts`、`src/server/workshop/db.ts` 的 `.transaction` 包装）——
+   * 判据是「SQLite 的事务窗口 + 语句的异步链归属」，不是某个业务域的形状。
+   * 与 `sqlite-pragmas` / `sqlite-error` 同款：顶层单例。 */
+  "src/lib/sqlite-tx-guard.ts",
   /* 「SQLite 写失败的原因怎么取出来、哪一族值得等一等再试」（ISSUE #1250）：
    * 收口写重试（`src/lib/comfyui/executor-write-retry.ts`）是现在的消费方，但判据是
    * **驱动的错误码族**、不是执行域的形状 —— 放进 `comfyui/` 会让「锁」这个 SQLite

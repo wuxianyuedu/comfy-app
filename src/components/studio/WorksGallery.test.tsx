@@ -273,6 +273,10 @@ describe("WorksGallery 删除确认", () => {
     });
     expect(screen.getByText("删除此画布项目？")).toBeInTheDocument();
     expect(screen.getByText(/画布内的节点与连线将一并丢失/)).toBeInTheDocument();
+    /* #4737：级联范围必须先知情——任务 / 成片 / 工坊内容与磁盘产物一起删。 */
+    expect(
+      screen.getByText(/生成任务、成片与工坊内容（含磁盘产物）也将一并删除/),
+    ).toBeInTheDocument();
   });
 
   it("确认框关着的时候一个字都不该出现（controller 说没有待删项）", () => {

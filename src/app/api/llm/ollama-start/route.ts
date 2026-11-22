@@ -57,23 +57,20 @@ function localTimestamp(): string {
   return formatLocalStamp(new Date());
 }
 
-/** 本次启动的 runtime 日志写入器（`ollama-runtime-<时刻>.log`）。
- * 一次启动一份文件（ISSUE #1326）；句柄挂模块作用域，一次启动流程（含
- * stdout/stderr 与退出回调）共用同一份，下次启动才换新。为 null 时写日志
- * 静默跳过 —— 状态行本来就会走响应体给出口。 */
-let runtimeWriter: RuntimeLogWriter | null = null;
-
-/** 开一次启动的日志：轮转旧文件 → 换上新的一份 → 落首行标题。 */
-function beginOllamaSession(at: Date = new Date()): string {
+/** 开一次启动的日志：轮转旧文件 → 开新的一份 → 落首行标题。
+ *  writer 随**本次启动会话**走（ISSUE #4733 / #3850）：由调用方持有并传给
+ *  后续回调，不再挂模块作用域 —— 此前并发 POST 走「已在运行」分支时会把
+ *  [state] 行写进上一次会话的文件，会话结束后还残留到下次启动。 */
+function beginOllamaSession(at: Date = new Date()): RuntimeLogWriter {
   pruneRuntimeLogFiles();
-  runtimeWriter = openRuntimeLogWriter("ollama-runtime", at);
-  appendOllamaLog("▶ Ollama 启动会话");
-  return runtimeWriter.file;
+  const writer = openRuntimeLogWriter("ollama-runtime", at);
+  appendOllamaLog(writer, "▶ Ollama 启动会话");
+  return writer;
 }
 
-/** 追加一行到本次启动的文件（失败不影响主流程）。 */
-function appendOllamaLog(line: string): void {
-  runtimeWriter?.write(`${localTimestamp()} ${line}`);
+/** 追加一行到本次启动的文件（失败不影响主流程）；writer 为 null 时静默跳过。 */
+function appendOllamaLog(writer: RuntimeLogWriter | null, line: string): void {
+  writer?.write(`${localTimestamp()} ${line}`);
 }
 
 /** 探测 Ollama 是否已就绪（HTTP 200 = 服务在监听）。 */
@@ -149,9 +146,10 @@ async function ollamaServiceRunning(): Promise<boolean> {
 async function spawnOllamaServe(
   exe: string,
   keepAlive: boolean,
+  writer: RuntimeLogWriter | null,
 ): Promise<{ detail: string; ok: boolean }> {
   if (keepAlive) {
-    appendOllamaLog(`[keepAlive-spawn] cmd=${exe} args=${JSON.stringify(["serve"])}`);
+    appendOllamaLog(writer, `[keepAlive-spawn] cmd=${exe} args=${JSON.stringify(["serve"])}`);
     const launched = spawnManaged({
       command: exe,
       args: ["serve"],
@@ -164,7 +162,7 @@ async function spawnOllamaServe(
         /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")
           ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
           : msg;
-      appendOllamaLog(`[err] 启动失败：${hint}`);
+      appendOllamaLog(writer, `[err] 启动失败：${hint}`);
       return Promise.resolve({
         ok: false,
         detail: `启动 Ollama 失败：${hint}`,
@@ -200,6 +198,7 @@ async function spawnOllamaServe(
       shell: false, // 直接执行二进制，不经 cmd.exe（防 Windows cmd 窗口）
     });
     appendOllamaLog(
+      writer,
       `[spawn] pid=${child.pid ?? "unknown"} cmd=${exe} args=${JSON.stringify(["serve"])}`,
     );
 
@@ -210,7 +209,7 @@ async function spawnOllamaServe(
         marker: "",
       });
       if (text) {
-        appendOllamaLog(`[out] ${text}`);
+        appendOllamaLog(writer, `[out] ${text}`);
       }
     });
     child.stderr.on("data", (d: Buffer) => {
@@ -219,7 +218,7 @@ async function spawnOllamaServe(
         marker: "",
       });
       if (text) {
-        appendOllamaLog(`[err] ${text}`);
+        appendOllamaLog(writer, `[err] ${text}`);
       }
     });
 
@@ -231,14 +230,14 @@ async function spawnOllamaServe(
         // spawn 找不到可执行文件时触发（异步 error 事件）
         child.on("error", (err) => {
           const hint = ollamaFailureHint(err);
-          appendOllamaLog(`[err] spawn error：${hint}`);
+          appendOllamaLog(writer, `[err] spawn error：${hint}`);
           settle({ ok: false, detail: `启动 Ollama 失败：${hint}` });
         });
 
         // 进程在观察期内退出 = 启动秒退（端口被占 / 配置错误 / 安装不完整）
         child.on("exit", (code, signal) => {
-          appendOllamaLog(`■ Ollama 进程已退出（code=${code ?? "null"}）`);
-          appendOllamaLog(`[exit] code=${code ?? "null"} signal=${signal ?? "none"}`);
+          appendOllamaLog(writer, `■ Ollama 进程已退出（code=${code ?? "null"}）`);
+          appendOllamaLog(writer, `[exit] code=${code ?? "null"} signal=${signal ?? "none"}`);
           settle({
             ok: false,
             detail:
@@ -276,7 +275,9 @@ export async function POST(_req: NextRequest) {
 
   // ── 已在运行就直接返回 ──
   if (await probeOllamaPort()) {
-    appendOllamaLog("[state] Ollama 已在运行，跳过启动");
+    /* [state] 行不再写进上一次会话的日志文件（ISSUE #4733）：这两个分支没有
+     * 本次启动会话，出口走响应体，不串台别人的文件。 */
+    appendOllamaLog(null, "[state] Ollama 已在运行，跳过启动");
     return NextResponse.json({
       ok: true,
       alreadyRunning: true,
@@ -286,7 +287,7 @@ export async function POST(_req: NextRequest) {
 
   // ── Windows 服务已在管理 Ollama → 不需要重复拉起 ──
   if (await ollamaServiceRunning()) {
-    appendOllamaLog("[state] Ollama 已注册为 Windows 服务并在后台运行");
+    appendOllamaLog(null, "[state] Ollama 已注册为 Windows 服务并在后台运行");
     return NextResponse.json({
       ok: true,
       alreadyRunning: true,
@@ -304,16 +305,20 @@ export async function POST(_req: NextRequest) {
   }
   st.starting = true;
 
+  /* writer 随本次启动会话走（ISSUE #4733）：提在 try 外，失败路径的 [err] 行
+   * 仍能落进已开的会话文件；没有会话（开文件前就失败）时为 null、静默跳过。 */
+  let writer: RuntimeLogWriter | null = null;
   try {
     const ollama = await resolveOllamaExe();
     // 退出策略决定拉起方式：false（保活）时脱离进程树，应用退出不连带关闭。
     const keepAlive = getExitPolicy().exitKillOllama === false;
     /* 先换本次启动的日志文件再写第一条（同上）。 */
-    beginOllamaSession();
+    writer = beginOllamaSession();
     appendOllamaLog(
+      writer,
       `[action] 启动 Ollama：exe=${ollama} keepAlive=${keepAlive}${keepAlive ? "（保活模式：应用退出后不关闭）" : ""}`,
     );
-    const result = await spawnOllamaServe(ollama, keepAlive);
+    const result = await spawnOllamaServe(ollama, keepAlive, writer);
 
     if (result.ok) {
       return NextResponse.json({ ok: true, detail: result.detail });
@@ -321,7 +326,7 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ error: result.detail }, { status: 500 });
   } catch (error) {
     const hint = ollamaFailureHint(error);
-    appendOllamaLog(`[err] 启动失败：${hint}`);
+    appendOllamaLog(writer, `[err] 启动失败：${hint}`);
     return NextResponse.json({ error: `启动 Ollama 失败：${hint}` }, { status: 500 });
   } finally {
     st.starting = false;

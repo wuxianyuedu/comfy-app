@@ -742,6 +742,16 @@ describe("任务日志增量（#4605）：appendLogs / readLogsSince / readAllLo
     await expect(impl.appendLogs(id, [])).resolves.toBeUndefined();
   });
 
+  it("同 (taskId, seq) 重复追加是幂等的：不抛、不重（#4732）", async () => {
+    const id = await seed({ status: "RUNNING" });
+    const batch = [{ t: 1, level: "info", msg: "a", seq: 1 }];
+    await impl.appendLogs(id, batch);
+    // 防抖 flush 与收口 persistLogs 并发的现场：同一批 delta 被两次 append，
+    // 第二批撞 (taskId, seq) 复合主键 —— 幂等跳过，不再抛错吞掉整列写。
+    await expect(impl.appendLogs(id, batch)).resolves.toBeUndefined();
+    expect((await impl.readAllLogs(id)).map((r) => r.seq)).toEqual([1]);
+  });
+
   it("resetLogs 只清该任务的增量行（重跑清场），其他任务不受影响", async () => {
     const a = await seed({ status: "RUNNING" });
     const b = await seed({ status: "RUNNING" });

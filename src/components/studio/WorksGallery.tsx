@@ -252,10 +252,10 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
         description={
           pendingDelete
             ? pendingDelete.origin === "server"
-              ? `即将从服务端永久删除「${pendingDelete.name || "未命名项目"}」。\n` +
-                `本机没有它的副本，删除后无法恢复。`
-              : `即将永久删除「${pendingDelete.name || "未命名项目"}」。\n` +
-                `该操作不可撤销，画布内的节点与连线将一并丢失。`
+              ? /* #4737：删除会级联清掉项目的生成任务、成片与工坊内容（库行 +
+                 * 磁盘产物）—— 破坏面变大后让用户先知情，不删完才发现。 */
+                `即将从服务端永久删除「${pendingDelete.name || "未命名项目"}」。\n本机没有它的副本，删除后无法恢复。\n该项目的生成任务、成片与工坊内容（含磁盘产物）也将一并删除。`
+              : `即将永久删除「${pendingDelete.name || "未命名项目"}」。\n该操作不可撤销，画布内的节点与连线将一并丢失。\n该项目的生成任务、成片与工坊内容（含磁盘产物）也将一并删除。`
             : ""
         }
         onClose={cancelDelete}

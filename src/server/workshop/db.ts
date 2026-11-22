@@ -11,6 +11,7 @@ import { drizzle, type SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 
 import { openNodeSqlite, type NodeSqliteHandle } from "~/lib/sqlite-driver";
 import { gateProxyWithPragmas } from "~/lib/sqlite-pragmas";
+import { withSqliteTxGuard } from "~/lib/sqlite-tx-guard";
 import * as schema from "~/server/db/schema";
 
 /** 未配置 `DATABASE_URL` 时与 drizzle-kit 同锚点的兜底库文件（相对进程 CWD）。 */
@@ -44,4 +45,9 @@ declare global {
   var __comfyWorkshopDb: SqliteRemoteDatabase<typeof schema> | undefined;
 }
 
-export const workshopDb = (globalThis.__comfyWorkshopDb ??= drizzle(gatedProxy, { schema }));
+/* 事务隔离守卫（ISSUE #4734 / #3850）：`.transaction()` 回调在语句作用域内
+ * 执行，跨宏任务插入打开事务的语句会当场报错（见 `~/lib/sqlite-tx-guard`
+ * 与 lib 层规范 §18.10.2）。 */
+export const workshopDb = withSqliteTxGuard(
+  (globalThis.__comfyWorkshopDb ??= drizzle(gatedProxy, { schema })),
+);

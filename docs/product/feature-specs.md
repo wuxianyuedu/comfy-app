@@ -233,9 +233,14 @@
   「删除项目」（确认后本地与服务端一并删、该项目页签关闭回落首页）。
 - 行为与验收：本地 store 是交互真值、服务端是持久真值；
   项目 id 客户端生成、服务端 upsert 不重发 id。
+- 删除级联（#4737）：删项目 = 删掉它在库与盘上的全部痕迹——production
+  （工坊内容面）、工坊会话、成片（含镜头与 `films/<id>.mp4`）、任务（含产物图
+  与日志）及 `generated/projects/<projectId>/` 目录一并清理，不留孤儿行；
+  他人 / 不存在的项目一行不动、仍回 ok。删除确认弹窗明示该范围。
 - 落点：`src/lib/project-canvas/canvas-store.ts`、
-  `src/components/studio/create-project-dialog.tsx`、
-  `src/server/api/routers/project.ts`
+  `src/components/studio/CreateProjectDialog.tsx`、
+  `src/server/api/routers/project.ts`、
+  `src/server/project/delete-project-cascade.ts`
 
 #### FR-CV-02 生成单元节点（8 种 kind）
 
@@ -684,9 +689,13 @@
 - 状态：已上线
 - 需求：任务历史分页 / 按日分组 / 筛选 / 排序。
 - 行为与验收：分页一页 8 条（`PAGE_SIZE`）；排序 newest / oldest；
-  列表在「历史」视图，不占独立路由。
+  列表在「历史」视图，不占独立路由。行级动作含「复制去重投」：
+  把该次提交的**全部参数**折成 JSON 复制到剪贴板（ISSUE #4769）——
+  载荷形状 `{ mode, inputs }`（模式码 + 模式契约口 → 值），与详情弹窗的
+  「工坊参数」表同一套派生；粘贴侧是测试模型的 JSON 输入模式（FR-LM-07）。
 - 落点：`src/components/studio/history/HistoryList.tsx`、
-  `src/components/studio/history/hooks/use-history-list.ts`
+  `src/components/studio/history/hooks/use-history-list.ts`、
+  `src/components/studio/history/history-detail-derive.ts`（`buildReprintPayload`）
 
 #### FR-GN-06 任务详情弹窗
 
@@ -1189,7 +1198,11 @@
   会被壳的 shell ACL 拦下成 Runtime Error，#3791），结果有反馈位。
   适配器新增「固定值」栏：每次请求原样带上的请求体键值
   （如 Agnes 视频必填的 `mode:"text"` / `size:"720P"`），先常量后输入映射、
-  同名字段输入赢。
+  同名字段输入赢。**输入方式可切**（ISSUE #4769）：「统一输入」表单 ⇄
+  「JSON 输入」互切 —— JSON 模式粘贴历史「复制去重投」复制的载荷
+  （`{ mode, inputs }`），点「生成」解析并写回当前格表单值、随同一次点击
+  按这些值重跑（解析失败 / 缺 `inputs` / 没有认得的键都会在反馈位给错并
+  拦下，不发起生成；解析成功自动切回统一输入，填进去的参数可见）。
 - 按名解析的连接参数（#3778）：远端模型按名直连时，Base URL / 密钥按
   「条目自己的 → 所属供应商的」折算（#3501 起两者以供应商为单位，模型行
   两格为空是常态）—— 模型在但两处都没填地址时给**定向**报错（点名模型），

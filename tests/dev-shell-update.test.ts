@@ -78,13 +78,37 @@ describe("构建标记落盘", () => {
 
 describe("runDevShellAutoUpdate：任何一步失败都照常启动（不阻塞、不杀进程）", () => {
   it("本地壳未过期 ⇒ 不取壳", async () => {
+    /* 前提必须自己造：不能拿检出里的真壳（纯 master 上它常落后于 src-tauri 源码，
+       且本机可能配了 CNB 令牌，会误入「远端检查 → 取壳建基线」分支、甚至发真网络）。 */
+    const dir = mkdtempSync(path.join(tmpdir(), "dev-shell-fresh-"));
+    const exe = path.join(dir, "app.exe");
+    writeFileSync(exe, "");
+    const src = path.join(dir, "src-tauri", "src");
+    mkdirSync(src, { recursive: true });
+    writeFileSync(path.join(src, "lib.rs"), "// older");
+    const fs = await import("node:fs");
+    /* 壳（2030）比 src-tauri 源码（2020）新 ⇒ shellStaleWarning 判「未过期」 */
+    fs.utimesSync(path.join(src, "lib.rs"), new Date("2020-01-01"), new Date("2020-01-01"));
+    fs.utimesSync(exe, new Date("2030-01-01"), new Date("2030-01-01"));
+
     const log = vi.fn();
+    const fetchShell = vi.fn();
     const res = await runDevShellAutoUpdate({
-      root: process.cwd(),
+      root: dir,
+      out: exe,
+      env: {
+        ...process.env,
+        PATH: process.env.PATH ?? "",
+        CNB_RELEASE_TOKEN: "",
+        CNB_TOKEN: "",
+        CNB_ISSUE_TOKEN: "",
+      },
+      configPaths: [],
       log,
-      fetchShell: vi.fn(),
+      fetchShell,
     });
     expect(res.updated).toBe(false);
+    expect(fetchShell).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith(expect.stringContaining("本地壳未过期"));
   });
 

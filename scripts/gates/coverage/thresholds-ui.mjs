@@ -343,13 +343,14 @@ export const COVERAGE_THRESHOLDS = {
     statements: 100,
     branches: 100,
   },
-  /* 视图页签条（与 `coverage.include` 同批）。数值取隔离实测向下取整到 5：
-   * 未覆盖的 158-160 是「+」菜单里那一行的点击 —— jsdom 里下拉不展开，
-   * 该路径由 `e2e/view-tabs.spec.ts` 在真浏览器判到，不为此造夹具。 */
-  "src/components/studio/ViewTabStrip.tsx": {
-    lines: 85,
-    functions: 75,
-    statements: 85,
+  /* 侧栏「临时页签」组（ISSUE #4770，与 `coverage.include` 同批）。
+   * 数值取隔离实测向下取整到 5：未覆盖的 126-154 是几条兜底分支 ——
+   * 「+」菜单 openableViews 为空、图标缺省回落 Globe、不可关页签不挂关闭钮；
+   * jsdom 里下拉不展开，菜单点击那条路由 e2e 在真浏览器判到，不为此造夹具。 */
+  "src/components/studio/SidebarTempTabs.tsx": {
+    lines: 100,
+    functions: 100,
+    statements: 100,
     branches: 75,
   },
   /* ── 体检清单 ⑨ 第二刀 · 四个 router（实测满档，52 条用例）─────────

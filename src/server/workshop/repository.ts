@@ -222,23 +222,28 @@ export async function listSessions(): Promise<Array<WorkshopSessionSummary>> {
   }));
 }
 
-export async function updateState(id: string, state: WorkshopSessionState): Promise<void> {
-  const rows = await workshopDb
-    .select()
-    .from(workshopSession)
-    .where(eq(workshopSession.id, id))
-    .limit(1);
-  const row = rows[0];
-  if (!row) {
-    return;
-  } // 既有语义：无行不写（编排器先 load，正常到不了这里）。
-  /* 读-判-写收进 immediate 事务（ISSUE #3852）：遗留行的 ensureProductionProject
-   * 查后插 + production 内容写 + 会话行写，原先三段各自提交——并发 MCP 调用
-   * （同时生图两个镜头、setStoryboard 与 generateImage 交叠）会以各自 load()
-   * 的旧快照互相覆盖，还会重复建项目。SQLite 单写者 + immediate 拿锁把整段
-   * 串行化（与 saveLlmSettings 同一形状，§18.10.1）。 */
+export async function updateState(
+  id: string,
+  state: WorkshopSessionState,
+  /** 变更基线（ISSUE #4730）：会话加载时的状态快照。给出时 production 按列
+   *  比对、只写会话真正改过的列（shots 按 shotId 叠加合并）——MCP 慢 IO 期间
+   *  界面的并发改动不再被旧快照整列覆盖。 */
+  baseline?: WorkshopSessionState,
+): Promise<void> {
   await workshopDb.transaction(
     async (tx) => {
+      /* 行存在性检查移入事务内（ISSUE #4730）：会话在慢 IO 期间被删时，
+       * 在途变更不再把旧快照写进 production（原先事务外的检查 + 事务内
+       * UPDATE 0 行会静默通过）。 */
+      const rows = await tx
+        .select()
+        .from(workshopSession)
+        .where(eq(workshopSession.id, id))
+        .limit(1);
+      const row = rows[0];
+      if (!row) {
+        return;
+      }
       let projectId = row.projectId;
       if (projectId === null) {
         // 遗留会话（桥之前建的）首次写 → 桥接：以当前内容为初始值新建项目，
@@ -251,6 +256,7 @@ export async function updateState(id: string, state: WorkshopSessionState): Prom
         row.userId ?? (await resolveOwnerUserId(row.userId)),
         contentOf(state),
         tx,
+        baseline === undefined ? undefined : contentOf(baseline),
       );
       // 会话行：idea / stage / projectId 是自己的权威字段；内容列写镜像，
       // 防「直接读表的人看到陈旧内容」的第二真值困惑（权威读始终在 production）。
