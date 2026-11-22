@@ -352,10 +352,12 @@ describe("BrowserStatusBar 地址栏复制（ISSUE #4810）", () => {
 
     await user.click(screen.getByRole("button", { name: /安全/ }));
 
+    /* 等 DOM（「已复制」亮起）用 waitFor + jest-dom 匹配器（§11.14.3 的正当形态）；
+     * 写入断言放在亮起之后：闪现只在 onSuccess 里发生，能亮就说明写入已发生。 */
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith(window.location.href);
+      expect(screen.getByText("已复制")).toBeInTheDocument();
     });
-    expect(screen.getByText("已复制")).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith(window.location.href);
   });
 
   it("复制失败：给可见报错（toast），不亮「已复制」", async () => {
@@ -372,9 +374,11 @@ describe("BrowserStatusBar 地址栏复制（ISSUE #4810）", () => {
 
     await user.click(screen.getByRole("button", { name: /安全/ }));
 
-    await waitFor(() => {
-      expect(toastError).toHaveBeenCalledWith(expect.stringContaining("复制失败"));
-    });
+    /* 等的是「报错调用到了」这个值：按 §11.14.3 用 expect.poll，不越界到 waitFor。 */
+    await expect
+      .poll(() => toastError.mock.calls.length, { message: "复制失败要有可见报错" })
+      .toBeGreaterThan(0);
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("复制失败"));
     expect(screen.queryByText("已复制")).toBeNull();
   });
 });
