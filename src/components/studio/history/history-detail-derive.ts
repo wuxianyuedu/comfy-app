@@ -7,7 +7,12 @@
 import { asRecord, isRecord } from "~/lib/is-record";
 import { modeContractEntries, type ModeContract } from "~/lib/workshop/model-mode-contract";
 import { upperToken } from "~/lib/upper-token";
-import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import {
+  resolveEntryDefault,
+  type WorkflowIOEntry,
+  type WorkflowIOMap,
+} from "~/lib/workflow/workflow-io-types";
+import { splitWorkflowIO } from "../workflow-io";
 import type { TaskDetail } from "./history-types";
 
 /**
@@ -155,13 +160,15 @@ export function deriveWorkshopParams(
   }));
 }
 
-/** 一行「工作流参数」（下发给工作流的 IO 端口）。 */
+/** 一行「工作流参数」（工作流 IO 的一个输入端口）。 */
 export type WorkflowParamRow = {
   id: string;
   /** 展示名：工作流 IO 的作者标签，查不到时回退 `name`。 */
   label: string;
-  /** 原始 pin 名（`workflowInputs[].name`）。 */
+  /** 原始 pin 名（`workflowInputs[].name` / IO 条目的 `name`）。 */
   name: string;
+  /** 值来源：本次提交 / 工作流 IO 默认值 —— 视图据此标注，避免把默认值误读成提交值。 */
+  source: "submitted" | "default";
   value: unknown;
 };
 
@@ -204,28 +211,105 @@ function findIoEntry(
 }
 
 /**
- * 工作流参数表 + 原始 JSON 区块的数据。不再过滤 seed / steps / cfg 等键 ——
- * 那条过滤是为躲开已删除的「生成参数卡」重复，却会让种子这类关键参数从表中凭空消失。
+ * 一条 IO 输入端口在本次任务里有没有提交值。
+ *
+ * 先按 `nodeId + name` 精确匹配 `workflowInputs`（子图条目的 nodeId 是宿主:内部
+ * 拼接形态，两种都试），再退化到 name（节点 id 因子图展开 / 工作流改版对不上时
+ * 仍能认出来）；作者的 IO 标签也当别名接住，避免 pin 名与 IO 名不同名时漏配。
+ * 顶层 `params` 里工坊直接传来的值同样接住 —— 作者没画线时它不会落进
+ * `workflowInputs`，但用户确实传了，按「有传值就覆盖」的口径必须生效。
+ *
+ * 返回 `index` 供调用方排除已匹配的 pin，防止它作为多余行再出现一次。
+ */
+function submittedValueFor(
+  entry: WorkflowIOEntry,
+  params: Record<string, unknown>,
+  inputs: Array<RawWorkflowInput>,
+): { index: number; value: unknown } | null {
+  const runtimeIds = new Set([entry.nodeId]);
+  if (entry.hostNodeId) {
+    runtimeIds.add(`${entry.hostNodeId}:${entry.nodeId}`);
+  }
+  const names = [entry.name, entry.label?.trim()].filter(
+    (name): name is string => typeof name === "string" && name !== "",
+  );
+  let index = inputs.findIndex(
+    (input) =>
+      names.includes(input.name) && input.nodeId !== undefined && runtimeIds.has(input.nodeId),
+  );
+  if (index === -1 && entry.hostNodeId === undefined) {
+    index = inputs.findIndex((input) => names.includes(input.name));
+  }
+  const matched = index === -1 ? undefined : inputs[index];
+  let value: unknown = matched?.value;
+  if (isBlank(value)) {
+    const label = entry.label?.trim() ?? "";
+    for (const key of [label, entry.name, ...(PORT_TO_PARAM_KEYS[label] ?? [])]) {
+      if (key !== "" && !isBlank(params[key])) {
+        value = params[key];
+        break;
+      }
+    }
+  }
+  return { value: isBlank(value) ? undefined : value, index };
+}
+
+/**
+ * 工作流参数表 + 原始 JSON 区块的数据。
+ *
+ * 行清单以**当前工作流 IO 的全量输入端口**为准（与 IO 预览同一份
+ * `splitWorkflowIO`），不再按本次落库的 pin 枚举 —— 后者是 ComfyUI 内部程序名
+ *（`replace` / `text` …），用户看不懂，且工作流改过之后历史任务的 pin 与当前
+ * 端口对不上。每个端口的值：本次有提交值就覆盖，没有就用 IO 默认值。
+ * 原始 JSON 折叠仍列 `params` 顶层键（不再过滤 seed / steps / cfg —— 那条过滤
+ * 是为躲开已删除的「生成参数卡」重复，却会让种子这类关键参数从表中凭空消失）。
  */
 export function deriveWorkflowParams(
   detail: TaskDetail | null,
   io: WorkflowIOMap | null | undefined,
+  mode?: string | null,
 ): {
   hasAny: boolean;
   rows: Array<WorkflowParamRow>;
   topLevelEntries: Array<[string, unknown]>;
 } {
   const params = paramsOf(detail);
-  const rows = workflowInputsOf<{
-    name: string;
-    nodeId?: string;
-    value: unknown;
-  }>(detail).map((input, index) => ({
-    id: `${input.nodeId ?? "?"}:${input.name}:${index}`,
-    name: input.name,
-    label: resolveParamLabel(input, io),
-    value: input.value,
-  }));
+  const inputs = workflowInputsOf<RawWorkflowInput>(detail);
+  const usedInputs = new Set<number>();
+  const rows: Array<WorkflowParamRow> = splitWorkflowIO(io).inputs.map((entry) => {
+    const submitted = submittedValueFor(entry, params, inputs);
+    if (submitted !== null && submitted.index !== -1) {
+      usedInputs.add(submitted.index);
+    }
+    const submittedValue = submitted?.value;
+    const trimmedLabel = entry.label?.trim() ?? "";
+    return {
+      id: entry.ioKey,
+      label: trimmedLabel === "" ? entry.name : trimmedLabel,
+      name: entry.name,
+      source: submittedValue === undefined ? "default" : "submitted",
+      value: submittedValue === undefined ? resolveEntryDefault(entry, mode) : submittedValue,
+    };
+  });
+
+  /* IO 表缺失（工作流已删 / 详情未回）时如实显示本次提交的 pin；IO 表里已
+   * 不存在、但本次确实下发过的 pin 也补一行，不丢历史数据（如实回落 pin 名）。 */
+  rows.push(
+    ...inputs.flatMap((input, index) =>
+      usedInputs.has(index)
+        ? []
+        : [
+            {
+              id: `${input.nodeId ?? "?"}:${input.name}:${index}`,
+              label: resolveParamLabel(input, io),
+              name: input.name,
+              source: "submitted" as const,
+              value: input.value,
+            },
+          ],
+    ),
+  );
+
   const topLevelEntries = Object.entries(params).filter(([key]) => key !== "workflowInputs");
   return {
     rows,
@@ -234,19 +318,23 @@ export function deriveWorkflowParams(
   };
 }
 
+/** 提示词名判据：作者的 IO 标签（`prompt` / `提示词` / `正向提示词`）也算。 */
+function isPromptName(text: string): boolean {
+  const value = text.trim();
+  return /^(?:positive[-_])?prompt/i.test(value) || /^(?:正面|正向|positive)?提示词$/i.test(value);
+}
+
 /**
  * 参数表里「提示词」行的判据（ISSUE #4665）：这类值可能很长，展示格要定高滚动。
- * 工坊参数按契约口 id 判（`prompt`）；工作流参数只有 pin 名 —— 按常见命名兜底
- * （`prompt` / `positive_prompt`），`negative_prompt` 以 negative 开头、天然不命中。
+ * 工坊参数按契约口 id 判（`prompt`）；工作流参数按 pin 名**和 IO 作者标签**判 ——
+ * 本次任务的提示词 pin 叫 `replace`（ComfyUI 内部 widget 名），但 IO 标签是
+ * `prompt`，只认 pin 名会漏掉定高。`negative_prompt` / `负向提示词` 天然不命中。
  */
-export function isPromptParamRow(id: string, name?: string | null): boolean {
+export function isPromptParamRow(id: string, name?: string | null, label?: string | null): boolean {
   if (id === "prompt") {
     return true;
   }
-  if (name === null || name === undefined) {
-    return false;
-  }
-  return /^(?:positive[-_])?prompt/i.test(name.trim());
+  return [name, label].some((value) => typeof value === "string" && isPromptName(value));
 }
 
 /* ── 「复制去重投」的 JSON 载荷（ISSUE #4769）────────────────────────────

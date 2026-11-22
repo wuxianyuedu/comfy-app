@@ -707,10 +707,12 @@
 - 状态：已上线
 - 需求：任务历史分页 / 按日分组 / 筛选 / 排序。
 - 行为与验收：分页一页 8 条（`PAGE_SIZE`）；排序 newest / oldest；
-  列表在「历史」视图，不占独立路由。行级动作含「复制去重投」：
-  把该次提交的**全部参数**折成 JSON 复制到剪贴板（ISSUE #4769）——
-  载荷形状 `{ mode, inputs }`（模式码 + 模式契约口 → 值），与详情弹窗的
-  「工坊参数」表同一套派生；粘贴侧是测试模型的 JSON 输入模式（FR-LM-07）。
+  列表在「历史」视图，不占独立路由。行级动作含「详情」（打开任务详情弹窗）
+  与「复制去重投」：后者把该次提交的**全部参数**折成 JSON 复制到剪贴板
+  （ISSUE #4769）——载荷形状 `{ mode, inputs }`（模式码 + 模式契约口 → 值），
+  与详情弹窗的「工坊参数」表同一套派生；粘贴侧是测试模型的 JSON 输入模式
+  （FR-LM-07）。缩略图点开走图片查看器（原尺寸 / 缩放 / 拖拽），视频仍按视频
+  渲染；「详情」是独立按钮，点图不再弹任务详情。
 - 落点：`src/components/studio/history/HistoryList.tsx`、
   `src/components/studio/history/hooks/use-history-list.ts`、
   `src/components/studio/history/history-detail-derive.ts`（`buildReprintPayload`）
@@ -721,10 +723,17 @@
 - 需求：任务详情在历史列表内的弹窗查看（产物网格 + 执行日志 +
   comfy-cli 原始输出 + 打开目录）。
 - 行为与验收：详情是弹窗不是独立路由（「在这里点开就显示详情」）；
-  产物行带 `localPath` / `mediaType` / seed / 宽高；
+  产物行带 `localPath` / `mediaType` / seed / 宽高，每张产物都可点开看大图；
   `raw-cli` 是 comfy-cli 完整原始输出（排障用，不加工）；
-  打开目录走 FR-OP-05 的闸门。
-- 落点：`src/components/studio/history/HistoryDetailModal.tsx`
+  打开目录走 FR-OP-05 的闸门（`setting.revealPath`，不依赖协议助手）。
+  参数按来源分块：**工坊参数**按该任务模式的生效契约口枚举（配置里删掉的口
+  不再显示，值从本次提交的 params / workflowInputs 解析）；**工作流参数**以
+  当前工作流 IO 的**全量输入端口**为行（与 IO 预览同一份拆分），本次有提交
+  值就覆盖、没有就显示 IO 默认值并标注「默认值」，展示名取 IO 作者标签
+  （如 `replace` 口显示为 `prompt`，原始 pin 名留在悬停提示里）。提示词这类
+  长文案行定高 + 纵向滚动，完整文案始终在 DOM 里。
+- 落点：`src/components/studio/history/HistoryDetailModal.tsx`、
+  `src/components/studio/history/history-detail-derive.ts`
 
 #### FR-GN-07 任务删除与工作流快照下载
 

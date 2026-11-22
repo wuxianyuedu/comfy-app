@@ -2,6 +2,7 @@ import { memo, useState } from "react";
 import { ChevronDown, Copy, FileText, FolderOpen, Maximize2 } from "lucide-react";
 
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { ViewableImage } from "~/components/ui/image-viewer";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Button } from "~/components/ui/button";
 import {
@@ -14,6 +15,7 @@ import {
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { TruncatedText } from "~/components/ui/truncated-text";
+import { isVideo } from "~/lib/media/media";
 import { clampPct } from "~/lib/progress";
 import { cn } from "~/lib/utils";
 
@@ -171,19 +173,16 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
 
         {/* ── 缩略图 + 提示词：同排等高（都 h-24），上下缘对齐（用户反馈 #4710）。 */}
         <div className="flex items-stretch gap-3">
-          {/* 缩略图（头像）：失败项加红色描边；详情入口在缩略图上。 */}
-          <div className="relative shrink-0">
-            <Button
-              aria-label="查看任务详情"
-              className={`bg-panel-deep relative flex size-24 items-center justify-center overflow-hidden rounded-xl p-0 ${
-                failed ? "ring-destructive/50 ring-1" : ""
-              }`}
-              onClick={() => {
-                onOpenDetail(task.id);
-              }}
-              variant="ghost"
-            >
-              {task.cover !== null && task.cover !== "" ? (
+          {/* 缩略图（头像）：失败项加红色描边；点开走图片查看器（看大图），
+              详情入口与它分开放在底部动作区（用户反馈：点图不该弹任务详情）。 */}
+          <div
+            className={`bg-panel-deep relative size-24 shrink-0 overflow-hidden rounded-xl ${
+              failed ? "ring-destructive/50 ring-1" : ""
+            }`}
+          >
+            {task.cover !== null && task.cover !== "" ? (
+              isVideo(task.cover) ? (
+                /* 视频仍按视频渲染：图片查看器只服务静态图。 */
                 <MediaThumbnail
                   alt=""
                   autoPlay
@@ -192,24 +191,33 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
                   src={task.cover}
                 />
               ) : (
-                <span className="text-ink-fainter text-xs">{failed ? "失败" : "无图"}</span>
-              )}
-              {/* 进行中：底部进度条（卡片下缘的一条装饰条：无轨道底色、方角，
-                  宽度下限与文字百分比分列两处，观感与收口前一致）。 */}
-              {st.showProgress && (
-                <ProgressBar
-                  className="absolute inset-x-0 bottom-0"
-                  fillClassName="u-gradient-brand rounded-none duration-1000 ease-linear"
-                  showValue={false}
-                  trackClassName="bg-canvas-deep h-1 rounded-none"
-                  value={progress}
+                <ViewableImage
+                  alt="任务产物"
+                  className="h-full w-full object-cover"
+                  label="任务产物"
+                  src={task.cover}
                 />
-              )}
-              {/* 排队中：虚线边框 + 计时图标 */}
-              {task.status === "QUEUED" && (
-                <div className="border-info/40 pointer-events-none absolute inset-0 rounded-xl border border-dashed" />
-              )}
-            </Button>
+              )
+            ) : (
+              <span className="text-ink-fainter flex size-full items-center justify-center text-xs">
+                {failed ? "失败" : "无图"}
+              </span>
+            )}
+            {/* 进行中：底部进度条（卡片下缘的一条装饰条：无轨道底色、方角，
+                宽度下限与文字百分比分列两处，观感与收口前一致）。 */}
+            {st.showProgress && (
+              <ProgressBar
+                className="absolute inset-x-0 bottom-0"
+                fillClassName="u-gradient-brand rounded-none duration-1000 ease-linear"
+                showValue={false}
+                trackClassName="bg-canvas-deep h-1 rounded-none"
+                value={progress}
+              />
+            )}
+            {/* 排队中：虚线边框 + 计时图标 */}
+            {task.status === "QUEUED" && (
+              <div className="border-info/40 pointer-events-none absolute inset-0 rounded-xl border border-dashed" />
+            )}
           </div>
           {/* 提示词背景框：定高 + 块内滚动，长提示词不再撑开卡片；右上角展开
               按钮点开大弹窗看全文（用户反馈 #4710）。 */}
@@ -251,6 +259,18 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
           间距拉开一档、悬停时图标随文字转主题色（ISSUE #4630 微交互）；
           lucide 图标走 currentColor，悬停变色只需作用在按钮字色上。 */}
       <div className="border-border-subtle mt-auto flex flex-wrap items-center gap-2 border-t px-4 py-1.5">
+        <Button
+          aria-label="查看这一条的任务详情"
+          className="text-ink-faint hover:text-primary-strong h-auto gap-1"
+          onClick={() => {
+            onOpenDetail(task.id);
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          <Maximize2 aria-hidden className="size-3" data-icon="inline-start" />
+          详情
+        </Button>
         <Button
           aria-label="查看这一条的执行日志"
           className="text-ink-faint hover:text-primary-strong h-auto gap-1"
