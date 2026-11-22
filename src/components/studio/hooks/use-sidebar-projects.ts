@@ -84,8 +84,10 @@ export function useSidebarProjects(): Array<SidebarProjectEntry> {
       ) {
         return;
       }
-      /* 结构性事件：与作品库共用的短 TTL 合并取数（ISSUE #4678）。 */
-      compute(true);
+      /* 「hydrate」= 服务端项目集合刚变（首推成功 / 对账回来）：必须拿**新鲜**读数
+       * —— 走合并窗会复用推送落地前发起的在飞请求，新建的项目就永远进不了
+       * 侧栏（ISSUE #4819）。其余结构性事件保持合并（ISSUE #4678 的省请求口径）。 */
+      compute(payload.reason !== "hydrate");
     };
     compute();
     /* 与画布页 / 「所有项目」屏同一支刷新口径：编辑（upsert / rename / delete）
