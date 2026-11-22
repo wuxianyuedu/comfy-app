@@ -246,12 +246,14 @@ function AddressItem({ host, pathname }: { host: string; pathname: string }) {
   const shown = host === "" ? pathname : `${host}${pathname}`;
   return (
     <Hint label={copied.on ? "已复制到剪贴板，粘贴到浏览器即可打开" : shown}>
-      <button
-        className="text-ink-soft hover:bg-subtle hover:text-ink flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-left"
+      {/* 视图层不手写 <button>（UI 基元棘轮 P1）：用 ui/button 的 <Button>，
+          尺寸对齐状态栏其余按钮（h-auto + 小内距）。 */}
+      <Button
+        className="text-ink-soft hover:bg-subtle hover:text-ink h-auto w-full justify-start gap-1.5 rounded px-1 py-0.5 text-left font-normal"
         onClick={() => {
           copyUrl(window.location.href);
         }}
-        type="button"
+        variant="ghost"
       >
         <Lock className="text-success-strong shrink-0" size={11} />
         <span className="text-ink-fainter shrink-0">
@@ -261,7 +263,7 @@ function AddressItem({ host, pathname }: { host: string; pathname: string }) {
           </span>
         </span>
         <span className="truncate">{shown}</span>
-      </button>
+      </Button>
     </Hint>
   );
 }
