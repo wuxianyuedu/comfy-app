@@ -63,7 +63,7 @@ function ModelSummaryRow({
       type="button"
       variant="ghost"
     >
-      <span className="flex-1 truncate text-[12.5px]">{label}</span>
+      <span className="flex-1 truncate text-xs">{label}</span>
       <span
         className={cn(
           "text-2xs max-w-[55%] truncate rounded-md px-2 py-1",
