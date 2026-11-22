@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 72" role="img" aria-label="App logo">
+  <title>App logo</title>
+  <g fill="none" stroke="#8b5cf6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M28 14 14 36l14 22" />
+    <path d="m56 14 14 22-14 22" />
+    <path d="m40 10-8 52" />
+  </g>
+  <text x="84" y="46" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="currentColor">COMFY</text>
+</svg>
