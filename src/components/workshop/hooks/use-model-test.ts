@@ -429,6 +429,59 @@ function useWorkflowModeDefaults(
   return { workflowDefaults, workflowDefaultsReady };
 }
 
+/** 「本地提交」行的派生本体（ISSUE #3995）：对话 / 本地工作流 / API 中继
+ * 三条通道各给一行；工作流候选在封装后升级为带 workflowInputs 落点清单的
+ * 实况行（submissionRow 由调用点覆盖本行）。纯派生，无 React。 */
+function deriveLocalPreviewRow(args: {
+  buildBodies: (values: ModelTestValues) => ReturnType<typeof buildRequestBodies>;
+  kind: ModelTestKind;
+  mode: string;
+  selectedCandidate: TestCandidate | null;
+  selectedModel: string;
+  values: ModelTestValues;
+}): ApiCallDebugRow | null {
+  const { buildBodies, kind, mode, selectedCandidate, selectedModel, values } = args;
+  if (selectedModel === "") {
+    return null;
+  }
+  /* 对话测试（#4080）：本地提交行带模型与提示词，端点在生成后由响应行给出。 */
+  if (kind === "chat") {
+    return {
+      body: debugBodyOf({
+        kind: "chat",
+        model: selectedModel,
+        prompt: values.prompt?.trim() ?? "",
+      }),
+      durationMs: null,
+      endpoint: "chat/completions",
+      excerpt: null,
+      ok: true,
+      phase: "relay" as const,
+      status: null,
+    };
+  }
+  const workflow = selectedCandidate?.workflow;
+  if (workflow !== undefined) {
+    return {
+      body: debugBodyOf({
+        kind,
+        debug: true,
+        workflow: workflow.name,
+        mode,
+        ...workflowPreviewBody(values),
+      }),
+      durationMs: null,
+      endpoint: "generate.generate（本地 ComfyUI）",
+      excerpt: null,
+      ok: true,
+      phase: "relay" as const,
+      status: null,
+    };
+  }
+  const { imageBody, videoBody } = buildBodies(values);
+  return relayDebugRow(kind, imageBody ?? videoBody ?? {});
+}
+
 export function useModelTest(): ModelTestController {
   const trpc = useTRPC();
   const [kind, setKindState] = useState<ModelTestKind>("image");
@@ -750,49 +803,21 @@ export function useModelTest(): ModelTestController {
     skip: selectedCandidate?.workflow === undefined ? false : true,
   });
   /* 生成前的「本地提交」行（ISSUE #3995）：与点生成那一步同一份组装
-   * （buildBodies + relayDebugRow，两处各拼一套必然漂移）。工作流候选在
-   * 封装后升级为带 workflowInputs 落点清单的实况行（submissionRow）。 */
-  const localPreviewRow = useMemo(() => {
-    if (selectedModel === "") {
-      return null;
-    }
-    /* 对话测试（#4080）：本地提交行带模型与提示词，端点在生成后由响应行给出。 */
-    if (kind === "chat") {
-      return {
-        body: debugBodyOf({
-          kind: "chat",
-          model: selectedModel,
-          prompt: values.prompt?.trim() ?? "",
-        }),
-        durationMs: null,
-        endpoint: "chat/completions",
-        excerpt: null,
-        ok: true,
-        phase: "relay" as const,
-        status: null,
-      };
-    }
-    const workflow = selectedCandidate?.workflow;
-    if (workflow !== undefined) {
-      return {
-        body: debugBodyOf({
-          kind,
-          debug: true,
-          workflow: workflow.name,
-          mode,
-          ...workflowPreviewBody(values),
-        }),
-        durationMs: null,
-        endpoint: "generate.generate（本地 ComfyUI）",
-        excerpt: null,
-        ok: true,
-        phase: "relay" as const,
-        status: null,
-      };
-    }
-    const { imageBody, videoBody } = buildBodies(values);
-    return relayDebugRow(kind, imageBody ?? videoBody ?? {});
-  }, [buildBodies, kind, mode, selectedCandidate, selectedModel, values]);
+   * （buildBodies + relayDebugRow，两处各拼一套必然漂移）。派生本体收在
+   * `deriveLocalPreviewRow`（§12.13：主 hook 越过函数长度硬闸，按职责搬出
+   * 函数体），这里只剩接线。 */
+  const localPreviewRow = useMemo(
+    () =>
+      deriveLocalPreviewRow({
+        buildBodies,
+        kind,
+        mode,
+        selectedCandidate,
+        selectedModel,
+        values,
+      }),
+    [buildBodies, kind, mode, selectedCandidate, selectedModel, values],
+  );
   /* 当前格的请求行 = 本地提交 + 实际请求（#4080 评论 13：生成后保留，仅徽标
    * 翻转；实际请求来自该格会话的 dry-run 读数）。 */
   const requestRows = useMemo(() => {

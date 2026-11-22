@@ -26,6 +26,7 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+import { Textarea } from "~/components/ui/textarea";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { FormField } from "~/components/ui/form-field";
 import { PageHeader } from "~/components/ui/page-header";
@@ -548,7 +549,7 @@ export function ModelTestView({
                     labelClassName="mb-1.5"
                   >
                     {(a11y) => (
-                      <textarea
+                      <Textarea
                         {...a11y}
                         className="border-border bg-surface-1 focus:border-primary w-full resize-y rounded-lg border px-3 py-2 font-mono text-sm outline-none"
                         onChange={(e) => {

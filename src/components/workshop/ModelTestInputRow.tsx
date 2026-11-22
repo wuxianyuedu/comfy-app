@@ -11,6 +11,7 @@ import { FilePickerButton } from "~/components/ui/file-picker";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { Textarea } from "~/components/ui/textarea";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { cn } from "~/lib/utils";
 
@@ -55,7 +56,7 @@ export function InputRow({
       <FormField hint={hint} id={id} label={labelNode} labelClassName="mb-1.5">
         {(a11y) => (
           <div className="flex items-start gap-2">
-            <textarea
+            <Textarea
               {...a11y}
               className={cn(
                 "border-border bg-surface-1 focus:border-primary w-full flex-1 resize-y rounded-lg border px-3 py-2 text-sm outline-none",
