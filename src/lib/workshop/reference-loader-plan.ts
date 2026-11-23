@@ -55,6 +55,22 @@ export function mountImagePortsForNodes(args: {
   return [...matched].sort((a, b) => mountPortOrder(a.name) - mountPortOrder(b.name));
 }
 
+/** 挂载补位能接住的参考图**容量**：各挂载节点模式口数的最大值（#4856）。
+ *
+ *  一个槽位只要**有一棵**挂载节点有对应序号的口就能落（同图多口喂是加分项），
+ *  所以取各节点口数的最大值，而不是求和。无挂载节点时为 0 —— 此时参考图
+ *  只能走契约口，超出部分如实上报（不再静默丢图）。 */
+export function mountReferenceCapacityOf(ports: ReadonlyArray<WorkflowImageInputPort>): number {
+  const perNode = new Map<string, number>();
+  let max = 0;
+  for (const port of ports) {
+    const count = (perNode.get(port.nodeId) ?? 0) + 1;
+    perNode.set(port.nodeId, count);
+    max = Math.max(max, count);
+  }
+  return max;
+}
+
 export function buildReferenceLoaderPlan(args: {
   bindings: ReferenceLoaderBindingTable;
   /** 参考图文件名（按槽位序；`reference-image` = 0，`reference-image-2` = 1…）。 */
@@ -94,9 +110,21 @@ export function buildReferenceLoaderPlan(args: {
      * 节点展开出的 image_0..N 模式口上——这类工作流原本至少连了一张参考图，
      * 其余口留空等待装载，不必逐口手连。 */
     if (targets.size === 0) {
-      const mountPort = mountPorts?.[slot];
-      if (mountPort) {
-        targets.add(mountPort.ioKey);
+      /* 挂载补位按**节点内序**对齐（#4856）：第 i 个槽位喂到**每颗**挂载节点的
+       * 第 i 个模式口上（同一张图喂到多个端口）。此前是扁平排序后按统一下标
+       * 对齐 —— 多挂载节点时交错错位（槽位 1 落到别的节点的第一个口上）。
+       * 扁平清单已按数字后缀排序，按节点分组后组内序不变。 */
+      const byNode = new Map<string, Array<WorkflowImageInputPort>>();
+      for (const port of mountPorts ?? []) {
+        const list = byNode.get(port.nodeId) ?? [];
+        list.push(port);
+        byNode.set(port.nodeId, list);
+      }
+      for (const list of byNode.values()) {
+        const mountPort = list[slot];
+        if (mountPort) {
+          targets.add(mountPort.ioKey);
+        }
       }
     }
     for (const ioKey of targets) {

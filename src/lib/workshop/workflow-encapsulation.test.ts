@@ -531,6 +531,33 @@ describe("图片槽位：同名 pin 由线区分，不看名字 / 节点类名",
     expect(res.unmatched).toEqual([]);
   });
 
+  it("参考图超出契约口数但仍在挂载容量内 → 不误报（#4856：超出部分由挂载补位接住）", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("I2I", { "reference-image": "initImage" }),
+      mode: "I2I",
+      /* 契约只登记一个参考图口（与 MiniMax 这类「1 契约口 + 挂载补位」同形）：
+       * 第 2 张参考图由挂载补位接住，不算丢图。 */
+      contractIds: ["prompt", "negative", "reference-image", "size", "seed"],
+      values: { referenceImages: ["r1.png", "r2.png"] },
+      mountReferenceCapacity: 2,
+    });
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("参考图超出（契约口 + 挂载容量）→ 如实报「参考图」（#4856：不静默丢图）", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("I2I", { "reference-image": "initImage" }),
+      mode: "I2I",
+      contractIds: ["prompt", "negative", "reference-image", "size", "seed"],
+      values: { referenceImages: ["r1.png", "r2.png", "r3.png"] },
+      mountReferenceCapacity: 2,
+    });
+    expect(res.unmatched).toContain("reference-image");
+    expect(res.unmatched).not.toContain("first-frame");
+  });
+
   it("图像模式：显式给首帧 / 尾帧 / 时长也不派生、不补报（视频专用）", () => {
     const res = buildEncapsulatedInputs({
       io: IO,
