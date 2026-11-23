@@ -320,8 +320,9 @@ export default function WorkspacePage() {
   );
 
   return (
-    /* ShellTabs 只管「标题行 chrome + iframe 页签内容」：页签切换器已在侧栏
-       「临时页签」组（ISSUE #4770），视图页签的读数与动作都由 AppShell 接。 */
+    /* ShellTabs 只管「标题行 chrome」：页签切换器在侧栏「临时页签」组（ISSUE #4770），
+       视图页签的读数与动作都由 AppShell 接；主应用内容与 iframe 页签内容的同列
+       显隐切换也在 AppShell 的内容列（ISSUE #4898 —— 切换器不能随页签一起被藏）。 */
     <ShellTabs>
       <>
         {/* 日志/Toast Provider 与底部状态栏已全局挂载（根布局），此处不再重复包裹 */}

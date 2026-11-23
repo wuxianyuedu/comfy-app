@@ -144,6 +144,10 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
          读状态会拿到旧值 ⇒ 项目页签被开成"无项目"或直接丢绑。 */
       const projectId = getActiveId();
       setTabsState((prev) => openViewTab(prev, view, projectId, isTransient));
+      /* 用户可能正停在 ComfyUI 那个 iframe 页签上：与 `selectTab` 同一口径，
+         切视图时把壳的激活页一起带回主应用，否则内容仍停在 iframe 上、
+         「点了没反应」（ISSUE #4898）。 */
+      activateShellTab(MAIN_TAB_ID);
       /* 一项目一页签（ISSUE #4765）：项目级视图都落在同一个页签上，「这次想去
        * 哪一屏」由项目页内的左侧列表表达 —— 把请求的视图翻译成分区交给它。
        * 广播带 projectId：多个项目页签同场时，只有目标项目的容器响应。 */
@@ -151,7 +155,7 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
         requestProjectSection(projectId, sectionFromView(view));
       }
     },
-    [isTransient],
+    [activateShellTab, isTransient],
   );
 
   const closeProjectTabs = useCallback((projectId: string) => {
