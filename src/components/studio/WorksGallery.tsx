@@ -14,8 +14,8 @@ import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { TruncatedText } from "~/components/ui/truncated-text";
+import { TimeAgo } from "~/components/ui/time-ago";
 import { PageHeader } from "~/components/ui/page-header";
-import { timeAgo } from "~/lib/time-format";
 import type { ProjectOrigin } from "~/lib/project-canvas/canvas-store";
 import { PROJECTS_ENTRY } from "./NavItems";
 import { useWorksGallery } from "./works/hooks/use-works-gallery";
@@ -173,7 +173,7 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
                         {bodySummary(nodeCount, edgeCount)}
                       </TruncatedText>
                       <p className="text-ink-fainter text-2xs mt-0.5">
-                        {timeAgo(project.updatedAt, { suffix: "修改" }) ?? "刚刚修改"}
+                        <TimeAgo fallback="刚刚修改" suffix="修改" value={project.updatedAt} />
                       </p>
                     </div>
                   </Button>

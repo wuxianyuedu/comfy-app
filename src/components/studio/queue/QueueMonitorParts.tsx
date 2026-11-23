@@ -6,9 +6,9 @@ import { Activity, Copy, FileText, FolderOpen, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { TruncatedText } from "~/components/ui/truncated-text";
+import { TimeAgo } from "~/components/ui/time-ago";
 import { displayValue } from "~/lib/display-value";
 import { isTerminalTaskStatus, taskStatusLabel } from "~/lib/task-state";
-import { timeAgo } from "~/lib/time-format";
 
 import type { QueueRow } from "./queue-monitor-config";
 
@@ -71,11 +71,11 @@ export function QueueRowLine({
   row: QueueRow;
 }) {
   const terminal = isTerminalTaskStatus(row.status);
-  const ago = timeAgo(row.createdAt.getTime());
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <span className="text-ink-faint w-16 shrink-0 text-xs tabular-nums">
-        {leading ?? displayValue(ago, { fallback: "时间未知" })}
+        {/* 水合安全口径（ISSUE #4852）：挂载前渲染稳定占位，挂载后再算相对时间。 */}
+        {leading ?? <TimeAgo fallback="时间未知" value={row.createdAt.getTime()} />}
       </span>
       <TruncatedText className="text-ink min-w-0 flex-1 basis-40 truncate text-sm">
         {displayValue(row.workflowName)}
