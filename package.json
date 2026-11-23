@@ -88,6 +88,7 @@
     "report:session": "node scripts/platform/session-report.mjs",
     "coverage:patch": "node scripts/gates/check-patch-coverage.mjs",
     "gates:which": "node scripts/gates/gates-which.mjs",
+    "e2e:which": "node scripts/gates/e2e-which.mjs",
     "theme:scan": "node scripts/gates/check-theme-colors.cjs --report",
     "ui:primitives": "node scripts/gates/check-ui-primitives.cjs",
     "ui:overlay-z": "node scripts/gates/check-overlay-z.cjs",

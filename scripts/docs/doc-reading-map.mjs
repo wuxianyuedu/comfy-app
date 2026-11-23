@@ -133,6 +133,19 @@ export const DOC_READING_MAP = [
     spec: "§13.6、§13.5.25、§13.10、§13.6.5",
     doc: "docs/standards/13-提交与-code-review.md",
   },
+  {
+    scope: "E2E 判据与执行链路",
+    paths: [
+      "e2e/**",
+      "playwright.config.ts",
+      "src/lib/comfyui/**",
+      "scripts/build*",
+      "next.config.js",
+    ],
+    when: "改 e2e spec / 公共地基 / 执行链路时，合并前自跑相关 e2e（见 pnpm e2e:which）",
+    spec: "§11.3.1、§13.6",
+    doc: "docs/standards/11-测试与可观测性.md",
+  },
 ];
 
 /**
