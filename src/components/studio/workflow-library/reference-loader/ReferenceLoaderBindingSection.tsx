@@ -16,6 +16,7 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import { Spinner } from "~/components/ui/spinner";
 import {
   referenceLoaderBindingsForMode,
+  referenceLoaderChainSummary,
   referenceLoaderMax,
   REFERENCE_LOADER_CAP_LIMIT,
   withReferenceLoaderBinding,
@@ -145,6 +146,16 @@ export function ReferenceLoaderBindingSection({ entries, mode, onPatchParamMap, 
                   value={binding.presetId ?? ""}
                 />
               </div>
+              {/* 装载链摘要（#4869）：运行时会生成哪条链、落到哪个部件，直接可见
+                  —— 不必进预设编辑器。预设已删时按「直连」显示（与执行期回落一致）。 */}
+              <p className="text-muted-foreground/70 text-3xs mt-1.5">
+                {referenceLoaderChainSummary(
+                  binding.presetId === undefined
+                    ? undefined
+                    : presets.find((preset) => preset.id === binding.presetId),
+                  primary,
+                )}
+              </p>
             </div>
           );
         })}

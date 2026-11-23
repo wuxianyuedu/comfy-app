@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   referenceLoaderBindingsForMode,
+  referenceLoaderChainSummary,
   resolveReferenceMountNodes,
   referenceLoaderMax,
   referenceLoaderMountNodes,
@@ -258,5 +259,32 @@ describe("resolveReferenceMountNodes（#4593：库详情按名字展示挂载节
 
   it("空名单直接返回空数组（不碰 RAW）", () => {
     expect(resolveReferenceMountNodes({ mountNodeIds: [], rawJson: RAW })).toEqual([]);
+  });
+});
+
+describe("referenceLoaderChainSummary —— 装载链一行摘要（#4869）", () => {
+  const PRESET = {
+    id: "p1",
+    name: "缩放对齐",
+    steps: [{ class: "ResizeImageMaskNode" }, { class: "ResizeImageMaskNode" }],
+  };
+
+  it("绑了预设：LoadImage → 链上各处理节点 → 落点", () => {
+    expect(referenceLoaderChainSummary(PRESET, "69::param::image_0")).toBe(
+      "装载链：LoadImage → ResizeImageMaskNode → ResizeImageMaskNode → 69::param::image_0",
+    );
+  });
+
+  it("未绑预设：裸 LoadImage 直连", () => {
+    expect(referenceLoaderChainSummary(undefined, "69::param::image_0")).toBe(
+      "装载链：LoadImage 直连 → 69::param::image_0",
+    );
+  });
+
+  it("落点缺失（未连线）如实显示", () => {
+    expect(referenceLoaderChainSummary(PRESET, null)).toBe(
+      "装载链：LoadImage → ResizeImageMaskNode → ResizeImageMaskNode → 未连线",
+    );
+    expect(referenceLoaderChainSummary(undefined, null)).toBe("装载链：LoadImage 直连 → 未连线");
   });
 });

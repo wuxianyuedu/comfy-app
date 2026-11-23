@@ -12,6 +12,8 @@
 import { isPlainRecord } from "~/lib/is-record";
 import { MODE_KEY_PREFIX } from "~/lib/workflow/workflow-param-mapping";
 
+import type { ReferenceLoaderPreset } from "./reference-loader-preset";
+
 /** 一个槽位的装载绑定。 */
 export type ReferenceLoaderBinding = {
   /** 装载预设 id；缺省 / 预设已删 = 裸 LoadImage 直连（#4355 行为）。 */
@@ -201,6 +203,23 @@ export type ReferenceMountNode = {
   id: string;
   title: string;
 };
+
+/** 装载链的一行摘要（#4869）：「装载链：LoadImage → 处理节点… → 落点」。
+ *
+ *  让作者在绑定页直接看到该槽位运行时会生成哪条链、落到哪个部件，
+ *  不必进预设编辑器。`preset` 缺省（未配 / 已删）= 裸 LoadImage 直连；
+ *  `primary` 为空（未连线）时以「未连线」收尾——与绑定行的主落点显示同口径。 */
+export function referenceLoaderChainSummary(
+  preset: ReferenceLoaderPreset | undefined,
+  primary: string | null,
+): string {
+  const target = primary === null || primary === "" ? "未连线" : primary;
+  if (preset === undefined) {
+    return `装载链：LoadImage 直连 → ${target}`;
+  }
+  const steps = preset.steps.map((step) => step.class).join(" → ");
+  return `装载链：LoadImage → ${steps} → ${target}`;
+}
 
 /**
  * 从 RAW 工作流图解析「参考图挂载在了哪些节点」（#4593）：把挂载节点 id 名单
