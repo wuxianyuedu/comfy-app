@@ -8,7 +8,11 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { GATE_STEP_DEFAULT_BUDGET_MS, runGateStep } from "../scripts/launcher-core/shell.mjs";
+import {
+  GATE_STEP_DEFAULT_BUDGET_MS,
+  gateStepBudgetMs,
+  runGateStep,
+} from "../scripts/launcher-core/shell.mjs";
 
 describe("runGateStep（ISSUE #4601）", () => {
   it("缺省预算是 600s（与 runSync/runNodeScript 同档）", () => {
@@ -59,5 +63,40 @@ describe("runGateStep（ISSUE #4601）", () => {
     const r = runGateStep(process.execPath, ["-e", "console.error('boom-4601'); process.exit(1)"]);
     expect(r.stderr).toContain("boom-4601");
     expect(r.status).toBe(1);
+  });
+});
+
+/**
+ * 单格预算随整体复算预算抬升（ISSUE #4889）：此前 `COMFY_PREMERGE_TIMEOUT_MS`
+ * 只罩整个复算子进程，48 条判据仍各吃写死的 600s —— 本检出 eslint 601.3s
+ * 被砍成「没跑起来」（退 2），抬整体预算救不了。现在缺省预算取同一个值，
+ * 因此恒 ≤ 整体预算；非法值仍由复算入口 `recomputeTimeoutMs` 退 2 并点名。
+ */
+describe("单格预算随整体复算预算抬升（ISSUE #4889）", () => {
+  it("未设 / 空串 / 非法值回 600s 缺省", () => {
+    expect(gateStepBudgetMs({})).toBe(600_000);
+    expect(gateStepBudgetMs({ COMFY_PREMERGE_TIMEOUT_MS: "" })).toBe(600_000);
+    expect(gateStepBudgetMs({ COMFY_PREMERGE_TIMEOUT_MS: "not-a-number" })).toBe(600_000);
+  });
+
+  it("显式抬整体预算时单格同步抬，且不超过整体预算", () => {
+    expect(gateStepBudgetMs({ COMFY_PREMERGE_TIMEOUT_MS: "3600000" })).toBe(3_600_000);
+    expect(gateStepBudgetMs({ COMFY_PREMERGE_TIMEOUT_MS: "60000" })).toBe(60_000);
+  });
+
+  it("runGateStep 没显式给 timeoutMs 时，取子进程 env 里的抬升预算", () => {
+    const r = runGateStep(process.execPath, ["-e", "console.log('gate-ok')"], {
+      env: { ...process.env, COMFY_PREMERGE_TIMEOUT_MS: "3600000" },
+    });
+    expect(r.timeoutMs).toBe(3_600_000);
+    expect(r.stdout).toContain("gate-ok");
+  });
+
+  it("显式给的 timeoutMs 仍不被抬升预算覆盖", () => {
+    const r = runGateStep(process.execPath, ["-e", "process.exit(0)"], {
+      env: { ...process.env, COMFY_PREMERGE_TIMEOUT_MS: "3600000" },
+      timeoutMs: 1500,
+    });
+    expect(r.timeoutMs).toBe(1500);
   });
 });

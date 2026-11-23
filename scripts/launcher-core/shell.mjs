@@ -287,6 +287,45 @@ export function runSync(
 export const GATE_STEP_DEFAULT_BUDGET_MS = 600_000;
 
 /**
+ * 复算整体的墙钟预算（ISSUE #4448 / #4889）。默认 600s 兜「无限挂死」那一形；
+ * 共享机上 type-aware oxlint / eslint healthy-but-slow 时 600s 会把「慢到没跑完」
+ * 压成 exit 2（没结论），给一条**显式**抬预算的出口，不偷偷改默认值。
+ *
+ * 入参是环境变量原值；不设 / 空串回默认，非法值回 `null` 让入口退 2 并点名
+ * （静默回落 = 以为抬了其实没抬，正是本仓反复钉的假绿形状）。
+ * 唯一实现搬到这里（ISSUE #4889）：`premerge-proof.mjs` 与 `ship-exec.mjs` 从此处
+ * 取同一份，不再出现第二套解析。
+ * @param {string | undefined} raw
+ * @returns {number | null}
+ */
+export function recomputeTimeoutMs(raw) {
+  if (raw === undefined || raw === "") {
+    return 600_000;
+  }
+  const n = Number(raw);
+  /* 太短的预算只会把正常的重档复算一律判成「没跑起来」，不许设。 */
+  if (!Number.isInteger(n) || n < 60_000) {
+    return null;
+  }
+  return n;
+}
+
+/**
+ * 单格判据的墙钟预算（ISSUE #4889）：显式抬了整体复算预算时，单格**同步抬到同一个值**
+ * （因此恒 ≤ 整体预算，不会出现单格比整体还长）；未设 / 非法值回 600s 缺省 ——
+ * 非法值由 `recomputeTimeoutMs` 的入口退 2 并点名，这里不再另判一次。
+ *
+ * 为什么放在 `runGateStep` 的缺省参数里：复算的 48 条判据各自经这里起子进程，
+ * 而 `COMFY_PREMERGE_TIMEOUT_MS` 只罩**整个**复算子进程（premerge-proof），
+ * 单格仍吃写死的 600s —— 实测 eslint 601.3s 被砍成「没跑起来」，抬整体预算救不了。
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {number}
+ */
+export function gateStepBudgetMs(env = process.env) {
+  return recomputeTimeoutMs(env?.COMFY_PREMERGE_TIMEOUT_MS) ?? GATE_STEP_DEFAULT_BUDGET_MS;
+}
+
+/**
  * 门禁判据子进程的统一同步执行器（ISSUE #4601）。
  *
  * 为什么要有它：门禁/钩子链上 128 处 `spawnSync` 只有约 25 处带超时，任何一格
@@ -328,7 +367,7 @@ export function runGateStep(
   {
     cwd,
     env,
-    timeoutMs = GATE_STEP_DEFAULT_BUDGET_MS,
+    timeoutMs = gateStepBudgetMs(env ?? process.env),
     stdio = "pipe",
     maxBuffer,
     echo = true,
