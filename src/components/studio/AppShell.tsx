@@ -40,6 +40,7 @@ import {
 import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
 import { SidebarTempTabs } from "./SidebarTempTabs";
+import { ShellTabContent } from "./ShellTabContent";
 import { SidebarBrand } from "./SidebarBrand";
 import { useToast } from "./ToastProvider";
 import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
@@ -407,6 +408,10 @@ export function AppShell({
   const activateShellTab = useShellTabs((s) => s.activateTab);
   const closeShellTab = useShellTabs((s) => s.closeTab);
   const iframeTabs = shellTabs.filter((tab) => tab.id !== MAIN_TAB_ID);
+  /* iframe 页签激活 = 主应用内容整体让位（CSS 隐藏、保持挂载）。侧栏不在让位
+     之列 —— 它是页签切换器的宿主（#4770），藏掉它用户就切不回主应用了
+     （ISSUE #4898 的现场）。 */
+  const shellTabActive = shellActiveTabId !== MAIN_TAB_ID;
   const [commandOpen, setCommandOpen] = useState(false);
   useHotkey({ key: "k", mod: true }, () => {
     setCommandOpen(true);
@@ -592,7 +597,25 @@ export function AppShell({
             onOpenSettings={onOpenSettings}
           />
 
-          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
+          {/* 内容列：主应用内容与 iframe 页签内容（ComfyUI 等）同列、CSS 显隐切换
+              —— 两者都保持挂载，切走不卸载（不丢 workspace 编辑态，ComfyUI 不因
+              切回主应用而重载）。此前 iframe 激活时整棵壳在这里被藏掉，侧栏与
+              窗口按钮一起消失，用户切不回主应用（ISSUE #4898）。 */}
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+            {/* 主应用内容：`pb-6` 给全局底部状态栏（根布局挂载的 24px 固定悬浮层）
+                让位；iframe 页签不吃这条间距 —— 它要拿满内容列全部高度，容纳
+                ComfyUI 自绘的底部控件（运行操作栏、扩展面板）。 */}
+            <div
+              aria-hidden={shellTabActive}
+              className={cn(
+                "flex min-h-0 min-w-0 flex-1 flex-col pb-6",
+                shellTabActive && "hidden",
+              )}
+            >
+              {children}
+            </div>
+            <ShellTabContent activeTabId={shellActiveTabId} tabs={iframeTabs} />
+          </div>
         </SidebarInset>
 
         <CommandPalette
