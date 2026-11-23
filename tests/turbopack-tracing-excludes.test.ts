@@ -4,7 +4,7 @@
  * 表达式上才生效，跨模块展开无效（Next 16.4.3 实测，见 §7.2）。
  * 清单不做减法（真删靠 `standalone-private-inputs.mjs`），故产物探针才是判据；清单只守 ① 顶层键位 ② 目录齐全 ③ 不用 ignoreIssue。
  */
-import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -195,6 +195,13 @@ function listFiles(dir: string, prefix = ""): Array<string> {
 /** 产物目录是否存在；不存在时整组跳过（守卫守的是构建结果，不是构建本身）。 */
 const standaloneExists = existsSync(standaloneDir());
 
+/** 产物是否早于当前 `next.config.js`（排除清单的住处）：早于 ⇒ 盘上是**旧构建**，
+ * 探针的红只说明「产物过期、请重新构建」，不构成「现行排除清单失效」的证据（ISSUE #4907）。
+ * 判据先求值成常量，不在 skipIf / 断言里现算（两次求值差异会让结论不可预期）。 */
+const configMtimeMs = statSync(CONFIG_PATH).mtimeMs;
+const artifactMtimeMs = standaloneExists ? statSync(standaloneDir()).mtimeMs : 0;
+const artifactOlderThanConfig = standaloneExists && artifactMtimeMs < configMtimeMs;
+
 describe.skipIf(!standaloneExists)(".next/standalone 产物里不得有测试 / 文档 / 变更碎片", () => {
   const files = standaloneExists ? listFiles(standaloneDir()) : [];
 
@@ -210,9 +217,16 @@ describe.skipIf(!standaloneExists)(".next/standalone 产物里不得有测试 / 
     ["文档目录", /(?:^|\/)docs\/.*\.md$/],
   ] as const)("不含%s", ([, re]) => {
     const hits = files.filter((f) => re.test(f));
+    // 归因分两路（ISSUE #4907）：产物早于当前配置 ⇒ 红只说明「旧构建的残留」，指路重构建；
+    // 产物不早于配置 ⇒ 才是「现行构建把排除目录带进了产物」的真信号，归因到排除清单。
+    const attribution = artifactOlderThanConfig
+      ? `【产物过期】.next/standalone 构建于 ${new Date(artifactMtimeMs).toISOString()}，早于 ` +
+        `next.config.js 的 ${new Date(configMtimeMs).toISOString()} —— 这是旧构建的残留，` +
+        `不是现行排除清单失效；重跑 pnpm build 刷新产物后再判。`
+      : `outputFileTracingExcludes 失效或漏项：现行构建把排除目录带进了 standalone。`;
     expect(
       hits.slice(0, 10),
-      `这些文件不该进 standalone（outputFileTracingExcludes 失效或漏项）：${hits.length} 个`,
+      `这些文件不该进 standalone（命中 ${hits.length} 个）。${attribution}`,
     ).toEqual([]);
   });
 });
