@@ -18,7 +18,9 @@ describe("cancelBodyReader（ISSUE #4796）", () => {
       throw new Error("cancel 不可用");
     });
     const releaseLock = vi.fn();
-    expect(() => cancelBodyReader({ cancel, releaseLock })).not.toThrow();
+    expect(() => {
+      cancelBodyReader({ cancel, releaseLock });
+    }).not.toThrow();
     expect(releaseLock).toHaveBeenCalledTimes(1);
   });
 
@@ -33,7 +35,9 @@ describe("cancelBodyReader（ISSUE #4796）", () => {
 
   it("旧测试桩没有 cancel 方法：照常 releaseLock", () => {
     const releaseLock = vi.fn();
-    expect(() => cancelBodyReader({ releaseLock })).not.toThrow();
+    expect(() => {
+      cancelBodyReader({ releaseLock });
+    }).not.toThrow();
     expect(releaseLock).toHaveBeenCalledTimes(1);
   });
 });
