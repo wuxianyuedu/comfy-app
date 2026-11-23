@@ -1321,3 +1321,86 @@ describe("enrichWorkflowIO — 存档 type/defaultValue/options 作兜底基线�
     expect(e.defaultValue).toBe(42);
   });
 });
+
+describe("enrichWorkflowIO — IMAGEUPLOAD 不作为 IO 参数（ISSUE #4862）", () => {
+  /* LoadImage 的 `upload`（IMAGEUPLOAD）是前端上传按钮：真实文件选择在同节点的
+   * `image` COMBO 部件上，且 API 图不携带 `upload` 部件 —— 写进它的覆盖值会在
+   * API 转换时被整体剥掉，历史上连到这个口的参考图全部静默失效。富化层直接
+   * 不产出该条目：IO 预览 / 连线候选 / 主落点解析都看不到它。 */
+  const rawInputsById: WorkflowIOEnrichParams["rawInputsById"] = {
+    "45": [
+      {
+        name: "image",
+        type: "COMBO",
+        isConnection: false,
+        widget: { name: "image" },
+        widgetValue: "vintage_yellow_taxi.png",
+        comboOptions: ["vintage_yellow_taxi.png", "a.png"],
+        label: "图像",
+      },
+      {
+        name: "upload",
+        type: "IMAGEUPLOAD",
+        isConnection: false,
+        widget: { name: "upload" },
+        label: "选择文件上传",
+      },
+      {
+        name: "mystery",
+        type: "IMAGEUPLOAD",
+        isConnection: false,
+        widget: { name: "mystery" },
+      },
+    ],
+  };
+
+  const stored: WorkflowIOEnrichParams["workflowIORaw"] = {
+    "45::widget::upload": {
+      direction: "input",
+      kind: "widget",
+      nodeId: "45",
+      name: "upload",
+      /* 保存时被富化过、类型留了底 —— 命中存档类型判据。 */
+      type: "IMAGEUPLOAD",
+    },
+    "45::widget::mystery": {
+      direction: "input",
+      kind: "widget",
+      nodeId: "45",
+      name: "mystery",
+      /* 存档没记类型 —— 只能靠 raw 部件类型兜底判据拦下。 */
+    },
+    "45::widget::image": {
+      direction: "input",
+      kind: "widget",
+      nodeId: "45",
+      name: "image",
+      type: "COMBO",
+    },
+  };
+
+  it("存档类型即 IMAGEUPLOAD 的条目不进 IO 表", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(stored, { rawInputsById, nodeTypeById: { "45": "LoadImage" } }),
+    );
+    expect(result["45::widget::upload"]).toBeUndefined();
+  });
+
+  it("存档缺类型时按 raw 部件类型兜底拦截", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(stored, { rawInputsById, nodeTypeById: { "45": "LoadImage" } }),
+    );
+    expect(result["45::widget::mystery"]).toBeUndefined();
+  });
+
+  it("正常部件口（image COMBO）不受影响，类型 / 候选 / 默认值照常富化", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(stored, { rawInputsById, nodeTypeById: { "45": "LoadImage" } }),
+    );
+    const entry = result["45::widget::image"]!;
+    expect(entry).toBeDefined();
+    expect(entry.type).toBe("COMBO");
+    expect(entry.options).toEqual(["vintage_yellow_taxi.png", "a.png"]);
+    expect(entry.defaultValue).toBe("vintage_yellow_taxi.png");
+  });
+});
