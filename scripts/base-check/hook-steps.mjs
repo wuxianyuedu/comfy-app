@@ -115,6 +115,27 @@ export const STAGED_TO_FULL_TREE = {
 };
 
 /**
+ * 合并前复算的默认批里**刻意不收**的判据：全量判定由平台 CI 承担（ISSUE #4894）。
+ *
+ * 与 `mayDecideOnCleanSnapshot()`（按「判决面只在本次改动上」排除）不是同一族：这里排除的
+ * 判据在干净快照上**判得对**，只是同一件事平台侧已有执行者 —— 平台 `ci-heavy-gates.mjs`
+ * 读的是同一份钩子注册表，对这条跑全仓 `--type-aware` 探针（GA PR 档在场且绿）。本地再跑
+ * 一遍不新增信息，却把复算墙钟推高（实测本检出 + 快照两侧各 42–146s）。
+ *
+ * ⚠️ **排除的是复算批，不是判据本身**：钩子步骤行、D 组登记与 `quality-gate.mjs` 的
+ * `oxlintZeroRules` 全部保留 —— 删步骤行会让 `check-gate-executors.cjs` 当场判无执行者；
+ * 保留才能让手工 `pnpm check:all` 与显式点名的 `base-check <label>` 仍能诊断。
+ * 显式点名走 `resolveMergeBatch(input)` 的独立分支，不受这张表影响。
+ *
+ * 登记由 `tests/base-check.test.ts` 双向核对（条目在钩子里真在、理由非空壳，
+ * 且默认面里确实没有它）。新增成员按同一条口径逐条评估：平台已有全量执行者 + 本地重档贵。
+ */
+export const PLATFORM_ONLY_IN_BASE = {
+  "已清零 oxlint 规则集（41 条全仓 0 命中）":
+    "平台 `ci-heavy-gates.mjs` 读同一份钩子注册表跑全仓 `--type-aware` 探针（GA PR 档在场且绿）；本地 pre-push 两侧各 42–146s，重复判定只推高复算墙钟。D0 的暂存面快检（不带 --type-aware，8.8s）仍在每次提交时拦新带回的清零规则。",
+};
+
+/**
  * **合并前那一批**：把「这次 PR 准备并进去的判据面」从钩子里现算出来。
  *
  * ── 为什么这一档要存在（ISSUE #1591 立案的那个洞）──────────────────────
@@ -168,6 +189,12 @@ export function resolveMergeBatch(input = [], hookPath = HOOK) {
     };
   }
   const commands = steps.flatMap((s) => {
+    /* **平台已有全量执行者的判据**（#4894）：登记表里的那几条从默认复算批里摘掉。
+     * 判据本身没删（步骤行与 D 组登记都在），平台 `ci-heavy-gates.mjs` 读同一份注册表
+     * 判全量；显式点名的 `base-check <label>` 仍走上面那条分支，不受这里影响。 */
+    if (s.label in PLATFORM_ONLY_IN_BASE) {
+      return [];
+    }
     /* **`--staged` 的可降级档**（#4833）：登记表里的那几条，剥旗标后判的是
      * **全仓**（与平台侧 `ci-heavy-gates.mjs` 对它们做的逐字同语义 —— 平台上没有
      * 暂存区，那一格本来就在剥）。合并前复算的快照同样是「没有暂存区的树」
