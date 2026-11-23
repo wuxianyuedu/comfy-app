@@ -10,6 +10,10 @@ import { isPlainRecord } from "~/lib/is-record";
 
 /* 一个暴露出来的引脚，形状与 GET /api/workflows/[id] 返回的一致。 */
 export type WorkflowIOEntry = {
+  /** 所属节点的 class_type（如 "LoadImage"）—— 富化时从 rawJson / 派生图取。
+   *  端口分类的个别例外按它判定（如 LoadImage 的 image COMBO 文件选择器
+   *  按图片族对待，见 `pinFamily`，ISSUE #4865）。 */
+  classType?: string;
   defaultValue?: unknown;
   direction: "input" | "output";
   /** 用户自定义的展示顺序。 */
