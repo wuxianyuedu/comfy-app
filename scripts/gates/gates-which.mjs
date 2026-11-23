@@ -49,6 +49,7 @@ import { resolveChangedFiles } from "../lib/changed-scope.mjs";
 import { matchDocReading } from "../docs/doc-reading-map.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "../affected-tests/fixed-structural-tests.mjs";
 import { GATES } from "./quality-gate.mjs";
+import { e2eSection, mapE2eSelection } from "./e2e-which.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const TAG = "[gates:which]";
@@ -303,6 +304,17 @@ function testsSection(changed) {
 }
 
 /**
+ * E2E 那一节（ISSUE #4876）：按改动面给出相关 spec 与可复跑命令。
+ *
+ * 只转述 `e2e:which` 的映射，不在这一层另立判定；它是「建议跑」，不是「已跑」。
+ * @param {string[]} changed
+ * @returns {string[]}
+ */
+function e2eForGates(changed) {
+  return e2eSection(changed, mapE2eSelection(changed));
+}
+
+/**
  * 规范那一节。
  *
  * @param {string[]} changed
@@ -344,6 +356,7 @@ export function main(argv = process.argv.slice(2)) {
       "用法：\n" +
         "  pnpm gates:which                      按当前分支相对基线的改动面答三问\n" +
         "  pnpm gates:which --changed <路径>…    用显式名单（改名旧侧要自己一并给出）\n" +
+        "  （输出含 E2E 那节；详细命令见 pnpm e2e:which）\n" +
         "退出码：0 = 三问都有读数；2 = 没有结论（改动面为空 / 取不到基线 / 用例链读不到 / 不认识的参数）\n",
     );
     return 0;
@@ -395,7 +408,8 @@ export function main(argv = process.argv.slice(2)) {
   const gates = gatesSection(files);
   const tests = testsSection(files);
   const docs = docsSection(files);
-  for (const line of [...gates.lines, ...tests.lines, ...docs]) {
+  const e2e = e2eForGates(files);
+  for (const line of [...gates.lines, ...tests.lines, ...docs, ...e2e]) {
     process.stdout.write(`${line}\n`);
   }
   process.stdout.write(

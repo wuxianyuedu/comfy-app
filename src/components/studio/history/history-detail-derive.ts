@@ -58,6 +58,71 @@ export function taskWorkflowId(detail: TaskDetail | null): string | null {
   return typeof value === "string" && value.trim() !== "" ? value : null;
 }
 
+/** 图片文件名判据（ISSUE #4910 参数表缩略图用）：字符串且以常见图片扩展名结尾。
+ *  种子（数字串）、尺寸（「16:9 · …」）、提示词都不会命中。 */
+export function isImageFilenameValue(value: unknown): value is string {
+  return typeof value === "string" && /\.(?:png|jpe?g|webp|gif|avif|bmp)$/i.test(value.trim());
+}
+
+/**
+ * 本次任务实际用到的参考图文件名（去重保序），详情弹窗的参考图墙与工坊参数的
+ * 参考图口都吃这一份。
+ *
+ * 四个来源按序并入：
+ *  ① 画布通路 `params.inputImage`（单文件名）；
+ *  ② 任务行 `referenceImages` 列（工坊提交时落库的数组，#4910 起才写入）；
+ *  ③ `params.referenceImages`（同一份清单随 params 落库的形态）；
+ *  ④ 从 `params.workflowInputs` 反推 —— 存量任务（#4910 之前提交的）前三处
+ *     都没落，参考图只躺在 pin 值里。判定：值是图片文件名，且端点命中
+ *     `referenceLoaderPlan`（装载计划只给参考图口下发）或文件名是本应用上传
+ *     通道的 `workshop-ref-` 形态，并排除首帧 / 尾帧 / 画布主图同名值 ——
+ *     它们也有自己的 pin（LoadImage 的 widget 都叫 `image`），只看 pin 名分不开。
+ */
+export function deriveReferenceImages(detail: TaskDetail | null): Array<string> {
+  const params = paramsOf(detail);
+  const out: Array<string> = [];
+  const push = (value: unknown): void => {
+    if (typeof value === "string" && value.trim() !== "" && !out.includes(value)) {
+      out.push(value);
+    }
+  };
+  push(params.inputImage);
+  if (Array.isArray(detail?.referenceImages)) {
+    for (const item of detail.referenceImages) {
+      push(item);
+    }
+  }
+  if (Array.isArray(params.referenceImages)) {
+    for (const item of params.referenceImages) {
+      push(item);
+    }
+  }
+  const claimed = new Set(out);
+  const plan = asRecord(params.referenceLoaderPlan) ?? {};
+  const reserved = new Set(
+    [params.firstFrame, params.lastFrame, params.inputImage].filter(
+      (value): value is string => typeof value === "string",
+    ),
+  );
+  for (const input of workflowInputsOf<RawWorkflowInput>(detail)) {
+    const value = input.value;
+    if (!isImageFilenameValue(value) || reserved.has(value) || claimed.has(value)) {
+      continue;
+    }
+    const endpoint = `${input.nodeId ?? ""}::${input.name}`;
+    if (plan[endpoint] !== undefined) {
+      claimed.add(value);
+      out.push(value);
+      continue;
+    }
+    if (value.startsWith("workshop-ref-")) {
+      claimed.add(value);
+      out.push(value);
+    }
+  }
+  return out;
+}
+
 /** 这次任务是哪个入口发起的。 */
 export type TaskOrigin = "workshop" | "workflow";
 
@@ -117,13 +182,15 @@ type RawWorkflowInput = {
   value: unknown;
 };
 
-/** 解析一个契约口在本次任务里的值：顶层 params（含别名）→ 尺寸口按 size 族 pin
- *  聚合 → 同名 workflowInputs pin 兜底。都取不到返回 `undefined`（不臆造）。 */
+/** 解析一个契约口在本次任务里的值：顶层 params（含别名）→ 参考图口按推导清单
+ *  取槽位 → 尺寸口按 size 族 pin 聚合 → 同名 workflowInputs pin 兜底。
+ *  都取不到返回 `undefined`（不臆造）。 */
 function resolvePortValue(
   portId: string,
   params: Record<string, unknown>,
   inputs: Array<RawWorkflowInput>,
   io: WorkflowIOMap | null | undefined,
+  refs: Array<string>,
 ): unknown {
   const keys = PORT_TO_PARAM_KEYS[portId] ?? [portId];
   for (const key of keys) {
@@ -131,14 +198,12 @@ function resolvePortValue(
       return params[key];
     }
   }
-  /* 参考图口（ISSUE #4855）：工坊提交的参考图落在 `params.referenceImages`
-   * 数组（ComfyUI input 侧文件名），按契约槽位取对应那张 —— 基础口 `reference-image`
-   * 取第 1 张，`reference-image-2` 取第 2 张（槽位号是 1 基，数组下标减一，
-   * 与 `nextReferenceImageId` 的槽位口径一致）。画布通路的单文件名
-   * （`inputImage` / `image`）已在上面按别名接住，这里补的是工坊提交的数组形状；
-   * 都不在时仍返回 `undefined`（不臆造）。 */
+  /* 参考图口（ISSUE #4855 / #4910）：按 `deriveReferenceImages` 的去重保序清单
+   * 取槽位 —— 基础口 `reference-image` 取第 1 张，`reference-image-2` 取第 2 张
+   * （槽位号 1 基，数组下标减一，与 `nextReferenceImageId` 的槽位口径一致）。
+   * 清单已并集任务行列 / params 顶层 / workflowInputs 反推三个来源，画布通路的
+   * 单文件名（inputImage）与工坊提交的数组形状都在其中。 */
   if (portId === "reference-image" || portId.startsWith("reference-image-")) {
-    const refs = Array.isArray(params.referenceImages) ? params.referenceImages : [];
     const slot = portId === "reference-image" ? 1 : referenceImageSlotIndex(portId);
     const value: unknown = refs[slot - 1];
     if (typeof value === "string" && value.trim() !== "") {
@@ -171,10 +236,11 @@ export function deriveWorkshopParams(
 ): Array<WorkshopParamRow> {
   const params = paramsOf(detail);
   const inputs = workflowInputsOf<RawWorkflowInput>(detail);
+  const refs = deriveReferenceImages(detail);
   return modeContractEntries(mode, contracts).map((port) => ({
     id: port.id,
     label: port.label,
-    value: resolvePortValue(port.id, params, inputs, io),
+    value: resolvePortValue(port.id, params, inputs, io, refs),
   }));
 }
 
@@ -395,6 +461,7 @@ export function buildReprintPayload(args: {
 }): ReprintPayload {
   const params = paramsOf(args.detail);
   const inputs = workflowInputsOf<{ name: string; value: unknown }>(args.detail);
+  const refs = deriveReferenceImages(args.detail);
   const expandSizePins = (into: Record<string, string>): void => {
     for (const pin of inputs) {
       const type = SIZE_PIN_TO_INPUT_TYPE[pin.name];
@@ -409,7 +476,7 @@ export function buildReprintPayload(args: {
       expandSizePins(out);
       continue;
     }
-    const value = resolvePortValue(port.id, params, inputs, undefined);
+    const value = resolvePortValue(port.id, params, inputs, undefined, refs);
     if (value !== undefined) {
       out[port.id] = kvValueText(value);
     }

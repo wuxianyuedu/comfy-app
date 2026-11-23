@@ -28,6 +28,12 @@
   纯排版 / 纯注释 / 纯文档改动可免。执行面：PR 上跑受影响用例（静态 import 图 + 用例
   显式声明的源依赖，增量面，硬规则 7），每日全量单测兜底；已有代码缺覆盖的，补测试的那次提交把该目录的覆盖率
   门槛抬到实测值（§11 覆盖率一节）。
+- **E2E 读数纪律（ISSUE #4876）**：PR 档（CNB 质量门禁 + GA pr-gate）**不跑 E2E**，
+  全量只在每日档。改了 e2e spec 判据 / `playwright.config.ts` / 执行链路
+  （`src/lib/comfyui/**`、`scripts/build*`、`next.config.js`）的 PR，**合并前先跑
+  `pnpm e2e:which`**（或看 `pnpm gates:which` 的 E2E 那节）拿到相关 spec 与可复跑命令，
+  自跑一次并把读数写进 PR 描述；别让风险等到次日每日档红在 master 上。
+  口径与边界见 [11-测试与可观测性.md](docs/standards/11-测试与可观测性.md) §11.3.1。
 - 前端业务 / 组件 / 状态 / 性能 / 类型 / 样式 / 测试 → `docs/standards/README.md`
   总览，按主题进入 `docs/standards/01~18` 对应章节；
 - 产品功能 / 需求口径（做功能开发前对齐「这个功能是什么、验收是什么、什么状态」）
@@ -117,6 +123,7 @@
 | 构建与打包                                                            | `scripts/build-desktop.mjs`、`tools/**`                                                                                                                                                                                         | §7、§8                                                                                                                                                                                                                                                                                                                       |
 | 复用/去重与常量收口                                                   | 抽共享模块、加/改默认地址与端口、写新的质量门禁、**动手前查有无现成实现 / 缺能力补地基**、**同一串手工命令被敲到第二次就收成入口**                                                                                              | §12.18（复用优先·写之前先查）、**§12.20（能做成工具的就做成工具）**、§12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口）                                                                                                                                                                                            |
 | 提交 / PR / 合并这条流程本身                                          | `scripts/ship*.mjs`、`.cnb.yml`（PR 与 push 两跑的清单）、`.github/workflows/`（每日 / 桌包定时档与 PR 镜像档，定时执行者已迁 GA）、`.qoder/skills/ship/SKILL.md`                                                               | §13.6（`pnpm ship` 那四条红线）、§13.5.25（本地跑哪几条）、§13.10（碎片与单子）、§13.6.5（**删分支前**：落地与否只认 PR 的 `is_merged`，三点 diff 不是判据）                                                                                                                                                                 |
+| E2E 判据与执行链路                                                    | `e2e/**`、`playwright.config.ts`、`src/lib/comfyui/**`、`scripts/build*`、`next.config.js`                                                                                                                                                                                            | §11.3.1、§13.6（**合并前自跑相关 e2e**：`pnpm e2e:which` 按改动面给出相关 spec 与可复跑命令；PR 档不跑 E2E，读数写进 PR 描述）                                                                                                                                                                     |
 
 ## lint 判据：oxlint 唯一判决（#2777 收尾后的最终架构）
 

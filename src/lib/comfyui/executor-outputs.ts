@@ -72,6 +72,11 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
     }
     // 3D / 未知文件输出（Hunyuan3D、mesh、gltf…）：兜底收集任何其它
     // 「数组内含 {filename,...}」的输出，避免被静默丢弃。
+    // 只收 type=output：调试 / 预览节点（ImageCompare 的 a_images / b_images、
+    // PreviewImage 族）把中间图标成 type=temp 塞在未知键下，此前会被当成
+    // 产物下载落库 —— 用户实测「产物只有一张，详情里显示三张」（ISSUE #4910）。
+    // 具名桶（images / videos / gifs / audios）不动：VHS save_output=false 之类
+    // 把成片标成 temp 的既有形态不在这条修正的射程里。
     for (const [k, v] of Object.entries(node)) {
       if (k === "images" || k === "videos" || k === "gifs" || k === "audios" || k === "text") {
         continue;
@@ -81,7 +86,7 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
       }
       const files = v.filter(isCollectedOutputFile);
       if (files.length && files.length === v.length) {
-        others.push(...files);
+        others.push(...files.filter((file) => file.type !== "temp"));
       }
     }
   }

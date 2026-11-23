@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { extractRuntimeParams } from "./executor-outputs";
+import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 
 /** 造一条 history entry：prompt[2] 是被执行图（class_type + inputs）。 */
 function entryWithGraph(
@@ -109,5 +109,39 @@ describe("extractRuntimeParams 采样器提取", () => {
     expect(extractRuntimeParams(null)).toEqual({});
     expect(extractRuntimeParams({ prompt: "not-an-array" })).toEqual({});
     expect(extractRuntimeParams({})).toEqual({});
+  });
+});
+
+describe("collectOutputs 未知键兜底的 temp 过滤（ISSUE #4910）", () => {
+  it("SaveImage 的 output 产物照常收集", () => {
+    const out = collectOutputs({
+      "9": { images: [{ filename: "final_00001_.png", subfolder: "", type: "output" }] },
+    });
+    expect(out.images).toEqual([{ filename: "final_00001_.png", subfolder: "", type: "output" }]);
+    expect(out.others).toEqual([]);
+  });
+
+  it("ImageCompare 的 a_images/b_images（type=temp 调试图）不再被当成产物；真 output 兜底照收", () => {
+    const out = collectOutputs({
+      "62": {
+        a_images: [{ filename: "comfy.compare.a_temp_1_.png", subfolder: "", type: "temp" }],
+        b_images: [{ filename: "comfy.compare.b_temp_1_.png", subfolder: "", type: "temp" }],
+      },
+      "80": { meshes: [{ filename: "model.glb", subfolder: "", type: "output" }] },
+    });
+    expect(out.images).toEqual([]);
+    expect(out.others).toEqual([{ filename: "model.glb", subfolder: "", type: "output" }]);
+  });
+
+  it("兜底数组里 output 与 temp 混排时只收 output（all-file-shaped 守卫不变）", () => {
+    const out = collectOutputs({
+      "62": {
+        a_images: [
+          { filename: "keep.png", subfolder: "", type: "output" },
+          { filename: "drop.png", subfolder: "", type: "temp" },
+        ],
+      },
+    });
+    expect(out.others).toEqual([{ filename: "keep.png", subfolder: "", type: "output" }]);
   });
 });
