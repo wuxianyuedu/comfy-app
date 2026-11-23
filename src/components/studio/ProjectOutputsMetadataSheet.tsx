@@ -14,7 +14,7 @@ import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
 import { TimeAgo } from "~/components/ui/time-ago";
 import { copyFailureText } from "~/components/ui/use-copy-feedback";
-import { displayValue } from "~/lib/display-value";
+import { displayValue, EMPTY_PLACEHOLDER } from "~/lib/display-value";
 import { artifactDirDisplay } from "~/lib/media/output-layout";
 import { mediaPreviewUrl } from "~/lib/media/media-url";
 import type { ProjectOutputItem } from "./hooks/use-project-outputs";
@@ -156,7 +156,7 @@ export function ProjectOutputsMetadataSheet({
                       { key: "尺寸", raw: selected.size },
                       {
                         key: "时间",
-                        value: <TimeAgo fallback="—" value={selected.createdAt} />,
+                        value: <TimeAgo fallback={EMPTY_PLACEHOLDER} value={selected.createdAt} />,
                       },
                       { key: "来源任务", raw: selected.parentId },
                     ]}

@@ -15,7 +15,7 @@ import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { useFlashState } from "~/components/ui/use-flash-state";
-import { displayValue } from "~/lib/display-value";
+import { displayValue, EMPTY_PLACEHOLDER } from "~/lib/display-value";
 import { artifactDirDisplay } from "~/lib/media/output-layout";
 import { downloadText } from "~/lib/browser-io";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
@@ -98,7 +98,7 @@ function OutputCard({
           {TYPE_CHIP[output.type] ?? output.type} ·{displayValue(output.seed)}
         </p>
         <p className="text-ink-fainter text-2xs mt-1">
-          <TimeAgo fallback="—" value={output.createdAt} />
+          <TimeAgo fallback={EMPTY_PLACEHOLDER} value={output.createdAt} />
         </p>
       </div>
     </Button>
