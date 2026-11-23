@@ -132,6 +132,9 @@ function reconcileOptionValue(value: unknown, options: Array<string> | undefined
 }
 
 export type WorkflowIOEntry = {
+  /** 所属节点的 class_type（如 "LoadImage"）—— 富化时从 rawJson / 派生图取。
+   *  端口分类的个别例外按它判定（见 `pinFamily`，ISSUE #4865）。 */
+  classType?: string;
   defaultValue?: unknown;
   direction: "input" | "output";
   displayOrder?: number;
@@ -525,6 +528,9 @@ export async function enrichWorkflowIO(
       name: v.name,
       label: label ?? v.name,
       type,
+      /* 节点类名随条目下发：端口分类的个别例外（LoadImage 的 image COMBO
+       * 文件选择器按图片族对待，ISSUE #4865）要按它判定。 */
+      ...(classType === undefined ? {} : { classType }),
       ...(defaultValue === undefined ? {} : { defaultValue }),
       ...(options ? { options } : {}),
       nodeTitle: nodeTitleById[canonicalNodeId] ?? nodeTitleById[String(v.nodeId)],

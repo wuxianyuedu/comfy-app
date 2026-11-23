@@ -1402,5 +1402,7 @@ describe("enrichWorkflowIO — IMAGEUPLOAD 不作为 IO 参数（ISSUE #4862）"
     expect(entry.type).toBe("COMBO");
     expect(entry.options).toEqual(["vintage_yellow_taxi.png", "a.png"]);
     expect(entry.defaultValue).toBe("vintage_yellow_taxi.png");
+    /* 节点类名随条目下发：端口分类的 LoadImage 例外（#4865）按它判定。 */
+    expect(entry.classType).toBe("LoadImage");
   });
 });

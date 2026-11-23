@@ -225,6 +225,15 @@ export function pinFamily(e: WorkflowIOEntry | null | undefined): PinFamily | nu
   if (IMAGE_TYPES.has(type)) {
     return "image";
   }
+  /* LoadImage 的 image COMBO（文件选择器）按图片族对待（ISSUE #4865）：
+   * 它的候选就是已上传的文件名，是**真正的图片落点** —— 参考图 / 首帧槽位
+   * 落到它上面 = 替换模板默认文件（覆盖值走既有的部件覆盖链路生效）。
+   * 此前它按 COMBO 归进数值族，而无用的 upload 按钮（IMAGEUPLOAD）反而在
+   * 图片族里，作者想把参考图连到正确的部件时被类型闸门拦下。其余 COMBO
+   * （采样器 / 宽高比等）仍是数值 / 候选表族，不放松。 */
+  if (e.classType === "LoadImage" && e.name === "image" && type === "COMBO") {
+    return "image";
+  }
   if (NUMBER_TYPES.has(type)) {
     return "number";
   }

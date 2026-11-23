@@ -72,6 +72,20 @@ describe("pinFamily — 分类只看声明类型", () => {
     expect(pinFamily(pin("1", "IMAGE", { direction: "output", type: "IMAGE" }))).toBe(null);
   });
 
+  it("LoadImage 的 image COMBO 文件选择器按图片族对待（#4865）", () => {
+    /* LoadImage 的 image 部件是真正的文件选择器（候选 = 已上传文件名）：
+     * 参考图 / 首帧槽位落到它上面 = 替换模板默认文件。 */
+    expect(pinFamily(pin("45", "image", { type: "COMBO", classType: "LoadImage" }))).toBe("image");
+    /* 名字不是 image 的 COMBO 不借这个例外。 */
+    expect(pinFamily(pin("45", "not_image", { type: "COMBO", classType: "LoadImage" }))).toBe(
+      "number",
+    );
+    /* 其余节点的 COMBO（采样器 / 宽高比等）仍是数值 / 候选表族。 */
+    expect(pinFamily(pin("7", "sampler_name", { type: "COMBO", classType: "KSampler" }))).toBe(
+      "number",
+    );
+  });
+
   it("族内几个对外参数共享同一份候选（谁是谁由连线声明）", () => {
     expect(familyOfClass("prompt")).toBe("text");
     expect(familyOfClass("negative")).toBe("text");
@@ -113,6 +127,18 @@ describe("pinAcceptsEntry —— 手工拖线的类型闸门", () => {
     expect(pinAcceptsEntry("reference-image", promptRow)).toBe(false);
     expect(pinAcceptsEntry("prompt", undefined)).toBe(false);
     expect(pinAcceptsEntry("prompt", pin("3", "steps", { type: "INT" }))).toBe(false);
+  });
+
+  it("参考图口可落 LoadImage 的 image 文件选择器（COMBO，#4865）；其它 COMBO 仍不行", () => {
+    expect(
+      pinAcceptsEntry(
+        "reference-image",
+        pin("45", "image", { type: "COMBO", classType: "LoadImage" }),
+      ),
+    ).toBe(true);
+    /* 无 classType（旧存档）或别的 COMBO 行仍旧拒绝。 */
+    expect(pinAcceptsEntry("reference-image", pin("45", "image", { type: "COMBO" }))).toBe(false);
+    expect(pinAcceptsEntry("reference-image", aspect)).toBe(false);
   });
 
   it("尺寸族按类型收候选 —— 端口名怎么起都不影响", () => {
