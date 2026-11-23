@@ -30,16 +30,19 @@ export function AssetDetailModal({
   asset,
   loading,
   onClose,
+  open,
 }: {
   asset: AssetDetail | null;
   loading: boolean;
   onClose: () => void;
+  /** 弹层开关：详情 id 非空才开——查询的 pending 态不能当开关（未点开时
+   *  React Query 的 disabled 查询恒为 pending，按它算会把弹窗永开）。 */
+  open: boolean;
 }) {
   const copy = useCopyResult();
   const [copied, setCopied] = useState(false);
   const params = asset?.params ?? null;
   const paramRows = deriveAssetParamRows(params, { workflowName: asset?.workflowName ?? null });
-  const open = asset !== null || loading;
   return (
     <Dialog
       onOpenChange={(next) => {

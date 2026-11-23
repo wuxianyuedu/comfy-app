@@ -145,7 +145,12 @@ export function AssetLibrary() {
       <AssetSizeSlider onChange={c.setSize} size={c.size} />
 
       {/* ── 详情弹窗（完整生成参数） ── */}
-      <AssetDetailModal asset={c.detail} loading={c.detailLoading} onClose={c.closeDetail} />
+      <AssetDetailModal
+        asset={c.detail}
+        loading={c.detailLoading}
+        onClose={c.closeDetail}
+        open={c.detailId !== null}
+      />
 
       {/* ── 删除确认（非阻塞，与历史页同一纪律） ── */}
       <ConfirmDialog
