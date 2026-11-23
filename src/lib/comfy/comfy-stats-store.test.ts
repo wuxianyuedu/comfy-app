@@ -473,3 +473,51 @@ describe("收到崩溃信号后的复核与换档（ISSUE #1351）", () => {
     expect(getComfyLivenessForTest().intervalMs).toBe(30_000);
   });
 });
+
+describe("进程在跑但 HTTP 读不到（processAlive:true）—— 在线结论保持（ISSUE #4867 现场）", () => {
+  /* 复现现场：ComfyUI 的 /system_stats 500，路由回落进程判活
+   * `{online:false, processAlive:true}`。按 pollOnce 的语义，这个回包不算
+   * 「掉线」观测 —— 在线结论必须保持 true（状态栏不允许显示「未运行」）。 */
+  it("连续回包 {online:false, processAlive:true} 时 snapshot.online 保持 true", async () => {
+    fetchMock.mockResolvedValue({
+      online: false,
+      processAlive: true,
+      vramUsed: 0,
+      vramFree: 0,
+      vramTotal: 0,
+      ramUsed: 0,
+      ramTotal: 0,
+    });
+    const off = subscribeComfyStats(noop);
+    await refreshComfyStats();
+    expect(getComfyStatsSnapshot().online).toBe(true);
+    await refreshComfyStats();
+    await refreshComfyStats();
+    expect(getComfyStatsSnapshot().online).toBe(true);
+    off();
+  });
+
+  it("有旧好数据时，processAlive:false 的失读拍按迟滞容忍（stale），连续 3 拍才翻离线", async () => {
+    /* 先给一拍好数据：迟滞容忍保的是「上一次好数据」，没有旧数据时第一拍失读
+     * 就直接离线（冷启动无旧值可保，见上一条用例的对照）。 */
+    fetchMock.mockResolvedValueOnce(onlineStats());
+    await refreshComfyStats();
+    expect(getComfyStatsSnapshot().online).toBe(true);
+
+    fetchMock.mockResolvedValue({
+      online: false,
+      processAlive: false,
+      vramUsed: 0,
+      vramFree: 0,
+      vramTotal: 0,
+      ramUsed: 0,
+      ramTotal: 0,
+    });
+    await refreshComfyStats();
+    expect(getComfyStatsSnapshot().online).toBe(true); // 第 1 拍失读：容忍（stale）
+    expect(getComfyStatsSnapshot().stale).toBe(true);
+    await refreshComfyStats();
+    await refreshComfyStats();
+    expect(getComfyStatsSnapshot().online).toBe(false); // 连续 3 拍失读才翻
+  });
+});
