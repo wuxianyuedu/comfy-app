@@ -107,6 +107,28 @@ describe("参考图装载绑定区（#4376）", () => {
     expect(screen.queryByLabelText(/移除追加端口/)).toBeNull();
     expect(screen.queryByText("追加端口")).toBeNull();
   });
+
+  /* 装载链摘要（#4869）：每个槽位直接显示运行时会生成的链与落点，
+   * 不必进预设编辑器。 */
+  it("装载链摘要按槽位显示：绑了预设显示链上节点，未绑显示直连", () => {
+    renderSection();
+    expect(screen.getByText("装载链：LoadImage 直连 → 69::param::image_0")).toBeDefined();
+    expect(screen.getByText("装载链：LoadImage 直连 → 未连线")).toBeDefined();
+  });
+
+  it("绑定了装载预设的槽位，摘要带出链上的处理节点", () => {
+    const paramMap = {
+      ...PARAM_MAP,
+      referenceLoaders: {
+        "mode:I2I": { "reference-image": { presetId: "p1" } },
+      },
+    };
+    renderSection({ paramMap });
+    expect(
+      screen.getByText("装载链：LoadImage → ResizeImageMaskNode → 69::param::image_0"),
+    ).toBeDefined();
+    expect(screen.getByText("装载链：LoadImage 直连 → 未连线")).toBeDefined();
+  });
 });
 
 describe("参考图上限（#4537）", () => {
