@@ -435,7 +435,11 @@ export function AppShell({
     <ViewActionsProvider>
       <SidebarProvider className="h-full min-h-0" defaultOpen={defaultSidebarOpen}>
         <Sidebar collapsible="icon">
-          <SidebarContent>
+          {/* 底部避让全局固定状态栏（fixed bottom-0 h-6 = 24px、横跨整窗）：侧栏由
+              SidebarProvider 的 min-h-svh 撑满整屏，内容贴底（或滚到底）时「临时页签」
+              组的最后一行会落进这 24px 被盖住、点不到。留 pb-6 与主内容 /
+              ScriptMarkdownEditor 同一口径（侧栏底部「设置」此前的避让同形，#987）。 */}
+          <SidebarContent className="pb-6">
             <SidebarBrand onHome={onSelect} />
             <SidebarGroup>
               <SidebarGroupContent>

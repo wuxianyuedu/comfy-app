@@ -1,7 +1,7 @@
 /** `sqlite-tx-guard` 的机器判据（ISSUE #4734 / #3850）：
  *  ① 纯 DB await 的事务照常工作；② 事务回调里混入真实异步后，其它请求的
  *  语句插进打开事务会被守卫当场拒绝（而不是静默读未提交数据）。 */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { sql } from "drizzle-orm";
 
@@ -61,5 +61,40 @@ describe("sqlite 事务隔离守卫", () => {
     await slow;
     /* 事务自身不受影响：两条都落了。 */
     expect(rowCount()).toBe(4);
+  });
+
+  it("模块被生产打包成多份时，各副本共享同一本事务账（#4863）", async () => {
+    /* 生产构建把本模块内联进多个 chunk（ISSUE #4863 现场：7 份）。状态若留在
+     * 模块级闭包里，`withSqliteTxGuard` 装作用域的副本与 driver 里
+     * `guardStatement` 读的副本不是同一份 ⇒ 事务内语句全被误判。修法是把
+     * 状态挂 globalThis 单例；这里用「两次求值出两份模块」复现当时的病灶。 */
+    vi.resetModules();
+    const first = await import("~/lib/sqlite-tx-guard");
+    vi.resetModules();
+    const second = await import("~/lib/sqlite-tx-guard");
+    /* 前置断言：两份确实是不同的模块实例，否则本用例没在测「多副本」。 */
+    expect(second.guardStatement).not.toBe(first.guardStatement);
+
+    /* 副本 A 上打开事务（driver 的 trackTxLifecycle 落在 A），副本 B 的
+     * guardStatement 必须看得到这笔打开的事务：外部语句当场被拒。 */
+    first.trackTxLifecycle("BEGIN IMMEDIATE");
+    expect(() => {
+      second.guardStatement("update task set status = 'RUNNING'");
+    }).toThrow(/sqlite-tx-guard/);
+
+    /* 副本 B 装进作用域的事务回调，副本 A 的 guard 也认：事务内语句放行 ——
+     * 这正是生产档红掉的那条链（finalizeSuccessWithImages 的事务写）。 */
+    await expect(
+      second.runTxCallback(() => {
+        first.guardStatement("update task set status = 'SUCCEEDED'");
+        return Promise.resolve("ok" as const);
+      }),
+    ).resolves.toBe("ok");
+
+    first.trackTxLifecycle("COMMIT");
+    /* 事务关账后，外部语句不再被拒。 */
+    expect(() => {
+      second.guardStatement("update task set status = 'RUNNING'");
+    }).not.toThrow();
   });
 });
