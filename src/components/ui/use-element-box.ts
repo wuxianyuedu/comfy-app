@@ -5,7 +5,7 @@
 // 收：首帧 + 观察者接线、等值判断（否则拖拽面板每帧重渲染）、观察者不可用时的退化；不收：量出来画什么、窗口 resize 是否重算（元素尺寸没变才需另加 window 监听）。
 
 import { useCallback, useEffect, useState } from "react";
-import { readElementBox, type ElementBox } from "~/lib/dom-rect";
+import { rafResizeObserverCallback, readElementBox, type ElementBox } from "~/lib/dom-rect";
 
 /** 挂到被量元素上的 `ref` 回调（与 React 的 `ref` 属性同形）。 */
 export type ElementBoxRef = (el: Element | null) => void;
@@ -42,11 +42,13 @@ export function useElementBox(initial: Element | null = null): [ElementBoxRef, E
 
     measure();
     /* jsdom 与老浏览器没有 `ResizeObserver`：此时量一次就定住（读数与不接
-     * 观察者时一致），不额外退化 —— 与 `LogPanel` 收口前的口径相同。 */
+     * 观察者时一致），不额外退化 —— 与 `LogPanel` 收口前的口径相同。
+     * 回调经 rAF 隔离一帧：量完 setState 改布局会同帧再触发观察
+     * （「ResizeObserver loop」提示的成因，#4871）。 */
     if (typeof ResizeObserver === "undefined") {
       return;
     }
-    const observer = new ResizeObserver(measure);
+    const observer = new ResizeObserver(rafResizeObserverCallback(measure));
     observer.observe(el);
     return () => {
       observer.disconnect();

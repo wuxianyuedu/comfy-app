@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * `~/lib/dom-rect` 的契约（ISSUE #672 / 规范 16 §16.2.4.41）。
  *
@@ -6,13 +7,15 @@
  *   · 「还没量」与「量出来是 0」分不分得开；
  *   · 相对谁量、要不要把外层滚动偏移加回来。
  * 用例按**边界值**写（量不到、行数为 0、滚动过一段）。
+ * jsdom 环境：rafResizeObserverCallback 的用例要 requestAnimationFrame（#4871）。
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   anchorRectToVirtualElement,
   centerLineScrollTop,
   isWithinViewport,
   offsetWithin,
+  rafResizeObserverCallback,
   readElementBox,
   readLineHeight,
   rectToAnchorRect,
@@ -27,6 +30,15 @@ function isElementLike(v: unknown): v is Element {
     "getBoundingClientRect" in v &&
     typeof v.getBoundingClientRect === "function"
   );
+}
+
+/** 满足 ResizeObserver 接口的最小桩（不带任何类型断言）。 */
+function fakeObserver(): ResizeObserver {
+  return {
+    disconnect: vi.fn(),
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+  };
 }
 
 function elementLike(shape: object): Element {
@@ -218,5 +230,46 @@ describe("anchorRectToVirtualElement", () => {
     expect(got.left).toBe(5);
     expect(got.height).toBe(20);
     expect(typeof got.toJSON).toBe("function");
+  });
+});
+
+describe("rafResizeObserverCallback —— 观察回调的 rAF 隔离（ISSUE #4871）", () => {
+  /* rAF 是浏览器 API：本文件因此用 jsdom 环境跑（见文件头）。 */
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("回调隔到下一帧执行（同帧不再触发布局观察循环）", () => {
+    const inner = vi.fn();
+    const wrapped = rafResizeObserverCallback(inner);
+    const entries: ResizeObserverEntry[] = [];
+    wrapped(entries, fakeObserver());
+    /* 同帧不执行 —— 「观察 → 改布局 → 再观察」的同帧循环在此断开。 */
+    expect(inner).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(16);
+    expect(inner).toHaveBeenCalledTimes(1);
+  });
+
+  it("同帧内的再次触发取消前一帧（只执行最后一次）", () => {
+    const inner = vi.fn();
+    const wrapped = rafResizeObserverCallback(inner);
+    const entries: ResizeObserverEntry[] = [];
+    wrapped(entries, fakeObserver());
+    wrapped(entries, fakeObserver());
+    vi.advanceTimersByTime(16);
+    expect(inner).toHaveBeenCalledTimes(1);
+  });
+
+  it("observer 原样透传给回调", () => {
+    const inner = vi.fn();
+    const wrapped = rafResizeObserverCallback(inner);
+    const observer = fakeObserver();
+    const entries: ResizeObserverEntry[] = [];
+    wrapped(entries, observer);
+    vi.advanceTimersByTime(16);
+    expect(inner).toHaveBeenCalledWith(entries, observer);
   });
 });
