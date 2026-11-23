@@ -74,6 +74,14 @@ export function pickWorkshopInputValues(raw: Record<string, unknown>): Partial<M
   return patch;
 }
 
+/** 统一输入的当前值 → JSON 输入模式的展示文本（ISSUE #4922）：形状与历史
+ *  「复制去重投」的载荷一致（`{ mode, inputs }`），解析侧是 useApplyJsonValues
+ *  —— 两端同步同走 `pickWorkshopInputValues` 这一条白名单过滤，测试页不承接的
+ *  键与空值不进 JSON；默认档（尺寸族等）已在 values 里，会一并带出。 */
+export function serializeModelTestJson(mode: string, values: ModelTestValues): string {
+  return `${JSON.stringify({ mode, inputs: pickWorkshopInputValues({ ...values }) }, null, 2)}\n`;
+}
+
 /** 各用途在 API 通道里**真实承接**的统一输入集合（服务端
  *  `unifiedImageInputs` / `unifiedVideoInputs` 的镜像 —— 两边必须同步改，
  *  这里多给控件 = 用户填了却被通道静默丢掉，比不给更糟）。适配器映射行里

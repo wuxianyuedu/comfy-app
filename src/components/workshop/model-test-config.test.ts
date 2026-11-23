@@ -4,6 +4,9 @@
 
 import { describe, expect, it } from "vitest";
 
+import { isRecord } from "~/lib/is-record";
+import { isWorkshopInputType } from "~/lib/workshop/remote-model-adapter";
+
 import {
   PROMPT_PRESETS,
   RELAY_INPUT_TYPES,
@@ -16,10 +19,12 @@ import {
   fallbackTestRows,
   modeTabsForKind,
   randomPromptFor,
+  serializeModelTestJson,
   sizeSpecToValues,
   sizeValuesToSpec,
   testCandidatesForKind,
   workflowIdFromCandidateValue,
+  type ModelTestValues,
 } from "./model-test-config";
 
 describe("workflowIdFromCandidateValue（#4834 取值反查）", () => {
@@ -294,5 +299,49 @@ describe("尺寸默认档与像素候选（ISSUE #3742）", () => {
     for (let i = 0; i < 20; i += 1) {
       expect(PROMPT_PRESETS).toContain(randomPromptFor());
     }
+  });
+});
+
+describe("serializeModelTestJson（ISSUE #4922 统一输入 ⇄ JSON 两栏同步）", () => {
+  /** 解析成 { mode, inputs } 载荷；形状不对当场炸（不用 any 断言，P5）。 */
+  function parsePayload(text: string): { inputs: Record<string, unknown>; mode: unknown } {
+    const parsed: unknown = JSON.parse(text);
+    if (!isRecord(parsed) || !isRecord(parsed.inputs)) {
+      throw new Error("载荷形状不是 { mode, inputs }");
+    }
+    return { inputs: parsed.inputs, mode: parsed.mode };
+  }
+
+  it("序列化成 { mode, inputs }；空值与测试页不承接的键不进 JSON", () => {
+    const { inputs, mode } = parsePayload(
+      serializeModelTestJson("T2I", {
+        prompt: " 一只柴犬 ",
+        negative: "",
+        seed: "42",
+        "aspect-ratio": "16:9",
+      }),
+    );
+    expect(mode).toBe("T2I");
+    expect(inputs).toEqual({
+      prompt: " 一只柴犬 ",
+      seed: "42",
+      "aspect-ratio": "16:9",
+    });
+  });
+
+  it("默认档（尺寸族）随 values 带出；序列化出的键解析侧全认得", () => {
+    const values: ModelTestValues = { ...defaultSizeValues("T2I"), prompt: "x" };
+    const { inputs } = parsePayload(serializeModelTestJson("T2I", values));
+    expect(inputs["aspect-ratio"]).toBe("1:1");
+    expect(inputs.resolution).toBe("1k");
+    /* 与解析侧（useApplyJsonValues → pickWorkshopInputValues）同一条白名单：
+     * serialize 出的每个键 parse 侧都认得，来回切换不丢参数。 */
+    expect(Object.keys(inputs).every((key) => isWorkshopInputType(key))).toBe(true);
+  });
+
+  it("全空值也能序列化（inputs 为空对象；解析侧会报「没有认得的键」）", () => {
+    const { inputs, mode } = parsePayload(serializeModelTestJson("T2V", {}));
+    expect(mode).toBe("T2V");
+    expect(inputs).toEqual({});
   });
 });

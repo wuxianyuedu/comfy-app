@@ -41,6 +41,7 @@ import type { ModelTestRetryPayload } from "~/components/studio/history/history-
 import {
   MODEL_TEST_KINDS,
   MODEL_TEST_KIND_LABELS,
+  serializeModelTestJson,
   type ModelTestControl,
   type ModelTestKind,
   type ModeTab,
@@ -381,9 +382,11 @@ export function ModelTestView({
   /* 「大屏查看日志」弹窗目标：存打开那一刻的快照（与 HistoryList 同款），
    * 生成态变化不重挂弹窗、不重订 SSE（#4743）。 */
   const [logTarget, setLogTarget] = useState<QueueTaskLogTarget | null>(null);
-  /* 输入方式（ISSUE #4769）：统一输入表单 ⇄ JSON 粘贴。jsonText 是纯展示态，
-   * 留在视图层；解析与应用在 controller（applyJsonValues）—— 解析成功后自动
-   * 切回统一输入，让用户看着填进去的参数点生成。 */
+  /* 输入方式（ISSUE #4769）：统一输入表单 ⇄ JSON 粘贴，两栏内容双向同步
+   * （ISSUE #4922）：切到 JSON 把当前生效值（含默认档 / 工作流默认 / 重试
+   * 预填）序列化成 { mode, inputs } 预填进文本框；切回统一输入把 JSON 里
+   * 认得的键解析落回表单（解析失败留在 JSON 栏，错误落反馈位）。jsonText
+   * 是纯展示态，留在视图层；解析与应用在 controller（applyJsonValues）。 */
   const [jsonMode, setJsonMode] = useState(false);
   const [jsonText, setJsonText] = useState("");
   /* 历史页「重试」的带参载荷应用一次即清（#4841）：payload 非 null 的那次
@@ -461,10 +464,19 @@ export function ModelTestView({
                 title={jsonMode ? "JSON 输入" : "统一输入"}
               >
                 {/* 输入方式切换（ISSUE #4769）：表单逐项填 ⇄ 粘贴历史「复制去重投」
-                    复制的整份 JSON 重跑。 */}
+                    复制的整份 JSON 重跑。两栏双向同步（ISSUE #4922）：切 JSON
+                    带出当前值，切回表单落回 JSON 里的值。 */}
                 <div aria-label="输入方式" className="flex flex-wrap gap-2" role="radiogroup">
                   <SelectChip
                     onClick={() => {
+                      if (jsonMode && jsonText.trim() !== "") {
+                        /* 切回统一输入前先落账：JSON 里认得的键写回表单；
+                         * 解析失败留在 JSON 栏（错误已在反馈位），不丢输入。 */
+                        const parsed = c.applyJsonValues(jsonText);
+                        if (!parsed.ok) {
+                          return;
+                        }
+                      }
                       setJsonMode(false);
                     }}
                     selected={!jsonMode}
@@ -474,6 +486,7 @@ export function ModelTestView({
                   </SelectChip>
                   <SelectChip
                     onClick={() => {
+                      setJsonText(serializeModelTestJson(c.mode, c.values));
                       setJsonMode(true);
                     }}
                     selected={jsonMode}
@@ -484,7 +497,7 @@ export function ModelTestView({
                 </div>
                 {jsonMode ? (
                   <FormField
-                    hint="粘贴历史「复制去重投」复制的 JSON，点「生成」解析并按这些参数重跑；认不得的键会忽略"
+                    hint="已按当前统一输入预填（含默认档）；直接改或粘贴历史「复制去重投」的 JSON，点「生成」或切回统一输入时按这里的参数应用；认不得的键会忽略"
                     id="model-test-json"
                     label="提交参数 JSON"
                     labelClassName="mb-1.5"
