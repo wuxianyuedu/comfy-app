@@ -11376,6 +11376,12 @@ exec node scripts/gates/check-pending-merge-loss.mjs "$2"          # ② 内容�
   先手工 `pnpm check:premerge --light` 把判定交给平台，跳过的重档会被念出来、不构成全套
   凭证。别改默认值去「顺手修好」某一台机器，也别手工写 `.git/comfy-premerge-proof.json`
   冒充钩子跑过 —— `how` 字段会如实区分两条路径。
+   **单格预算同源抬升（ISSUE #4889）**：上面那条出口此前只罩整个复算子进程，48 条判据仍各吃
+   `runGateStep` 写死的 600s —— 实测本检出 eslint 601.3s 被砍成「没跑起来」（退 2），
+   第一次推送整跳被拦；抬整体预算对它无效。现 `runGateStep` 的缺省预算取同一个显式值
+   （恒 ≤ 整体预算；未设 / 非法值回 600s，非法仍由复算入口 `recomputeTimeoutMs` 退 2 并点名），
+   `recomputeTimeoutMs` 的唯一实现收在 `scripts/launcher-core/shell.mjs`，并由
+   `tests/run-gate-step.test.ts` 钉住「抬整体预算时单格同步抬」。
   **ship 侧的 `git push` 预算随这条预算走**（ISSUE #4753）：ship 的执行器曾给所有外部命令
   统一 180s 预算，而 push 会触发本条复算 —— 复算一超过 180s，`spawnSync` 就把 `git push`
   连同钩子整棵砍掉，`status: null` 被读成「push 失败（exit -1）」。症状是「后台跑 ship 稳定
