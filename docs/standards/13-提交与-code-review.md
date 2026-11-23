@@ -10870,6 +10870,12 @@ eslint 配置）：本机 1s 级；用库里那条 bin 的预算仍与 a11y 同�
   全量判定仍由 D 组尾部与 `quality-gate` 的 `oxlintZeroRules` 承担（全仓 `--type-aware`，
   实测约 155s，只在重档付；平台侧由 `ci-heavy-gates.mjs` 读同一份钩子注册表执行）；
   契约测试 `tests/check-oxlint-zero-rules.test.ts` 钉住「staged 不带、全仓带」。
+  **#4894 起本地 pre-push 的合并前复算批也不再收这条全仓档** —— 平台那一格已判同一件事
+  （GA PR 档在场且绿），本地两侧各 42–146s 的重复只推高复算墙钟。摘的是复算批、不是判据：
+  步骤行、`D_STEPS` 登记与 `quality-gate` 的 `oxlintZeroRules` 全部保留（删步骤行会让
+  `check-gate-executors.cjs` 判无执行者），手工 `pnpm check:all` 与显式点名的
+  `base-check <label>` 仍可诊断；唯一登记面是 `scripts/base-check/hook-steps.mjs` 的
+  `PLATFORM_ONLY_IN_BASE`，`tests/base-check.test.ts` 双向核对。
 
 **#3441「类型参数有默认值」不等于「可以交给空数组推断」：`no-unnecessary-type-arguments` 的例外口径。**
 
@@ -11337,7 +11343,7 @@ exec node scripts/gates/check-pending-merge-loss.mjs "$2"          # ② 内容�
 
   | 判据                    | 核什么                                    | 落点                                |
   | ----------------------- | ----------------------------------------- | ----------------------------------- |
-  | `--base` 复算（#1591）  | 钩子里那批全仓判据在**干净快照**上红不红（快照 = 分支 ⊕ 目标的合成树；带 `--staged` 的步骤按 `STAGED_TO_FULL_TREE` 登记表剥旗标判全仓，#4833）  | `base-check.mjs` 的 `baseCheckMany` |
+  | `--base` 复算（#1591）  | 钩子里那批全仓判据在**干净快照**上红不红（快照 = 分支 ⊕ 目标的合成树；带 `--staged` 的步骤按 `STAGED_TO_FULL_TREE` 登记表剥旗标判全仓，#4833；平台已判全量的按 `PLATFORM_ONLY_IN_BASE` 登记表摘出复算批，#4894 —— 判据本身仍留在钩子与平台那一格）  | `base-check.mjs` 的 `baseCheckMany` |
   | `check:claims`（#1605） | 提交信息里那句「§x.y 照旧保留」是不是真的 | `check-commit-claims.mjs`           |
   | 合并面（#1617）         | 合并有没有把**一侧整份覆盖掉**            | `check-merged-side-loss.mjs`        |
 

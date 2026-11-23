@@ -22,6 +22,7 @@ import {
   nextSteps,
   nextStepsMany,
   normalizeRun,
+  PLATFORM_ONLY_IN_BASE,
   readHookSteps,
   resolveAttributionRef,
   resolveGateCommand,
@@ -1179,6 +1180,39 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
       expect(argv).toContain("--staged");
       /* 理由不能是空壳（「TODO」这类）—— 与零消费登记表同一条口径。 */
       expect(reason.trim().length).toBeGreaterThan(10);
+    }
+  });
+
+  test("平台已判的全仓档不进默认复算批（#4894），但判据本身仍在钩子里", () => {
+    const r = resolveMergeBatch([]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) {
+      return;
+    }
+    const labels = r.commands.map((c) => c.label);
+    for (const label of Object.keys(PLATFORM_ONLY_IN_BASE)) {
+      expect(labels, `「${label}」不该在本地 pre-push 复算批里`).not.toContain(label);
+    }
+    /* 「不收」不是「删步骤」：步骤行逐字留在钩子里，执行者与平台那一格都在。 */
+    const byLabel = new Map(readHookSteps().map((st) => [st.label, st.argv]));
+    for (const label of Object.keys(PLATFORM_ONLY_IN_BASE)) {
+      expect(byLabel.get(label), `登记的「${label}」在钩子里必须还在`).toBeDefined();
+    }
+  });
+
+  test("平台专属登记表自身不陈旧：理由非空壳，且显式点名仍能跑", () => {
+    for (const [label, reason] of Object.entries(PLATFORM_ONLY_IN_BASE)) {
+      expect(reason.trim().length).toBeGreaterThan(10);
+      const byLabel = resolveMergeBatch([label]);
+      expect(byLabel.ok, `显式点名「${label}」必须仍能复算`).toBe(true);
+      if (!byLabel.ok) {
+        return;
+      }
+      expect(byLabel.commands).toHaveLength(1);
+      expect(byLabel.commands[0]!.argv.join(" ")).toContain("check-oxlint-zero-rules.mjs");
+      /* 钩子步骤行本身不带旗标 ⇒ 脚本按 `needsTypeAware(false, [])` 自己挂 --type-aware
+       *（D0 那条带 --staged、#4884 起才不挂）；这正是「全仓档」的入口形态。 */
+      expect(byLabel.commands[0]!.argv).not.toContain("--staged");
     }
   });
 });

@@ -69,7 +69,7 @@ export const DECLARED_D0_STEPS = [
   "oxfmt 格式（动了 src/.storybook 才扫全库，红了只格式化点名的文件）",
   /* ISSUE #3585：已清零规则集的暂存面快检（`--staged`）。它只回答「这次提交有没有
    * 把清零规则带回来」，所以在合并前复算里被 `mayDecideOnCleanSnapshot()` 排除；
-   * 全仓档仍保留在 D 组，由重档与推送前复算执行。 */
+   * 全仓档仍保留在 D 组（#4894 起它由平台 `ci-heavy-gates.mjs` 判，不再进本地推送前复算批）。 */
   "已清零 oxlint 规则集（暂存面快检）",
 ];
 
