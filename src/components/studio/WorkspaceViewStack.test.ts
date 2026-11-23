@@ -65,13 +65,29 @@ describe("WorkspaceViewStack — 懒加载分块接空闲预热", () => {
 describe("WorkspaceViewStack — 重视图非活跃降级（ISSUE #4677）", () => {
   const code = stripComments(fs.readFileSync(STACK_FILE, "utf8"));
 
-  it("重视图名单钉住 queue / history / settings", () => {
-    /* 名单是这次逐视图评估的结论（画布的内部交互态另评，刻意不在内）：
+  it("降级名单覆盖除首页 / 项目页之外的全部视图（#4878 扩面）", () => {
+    /* 名单是逐视图评估的结论：三屏是 #4677 的原始评估，其余是 #4878 按
+     * trace 读数扩的面；画布（project）的内部交互态另评，刻意不在内。
      * 名单被顺手增删时这条会红，逼着回到单子里重新过一遍评估。 */
     const decl = /HEAVY_VIEWS = new Set<WorkspaceView>\(\[(?<list>[^\]]*)\]\)/.exec(code);
     expect(decl, "HEAVY_VIEWS 名单不在场").not.toBeNull();
-    const names = (decl?.groups?.list ?? "").match(/"[a-z-]+"/g) ?? [];
-    expect(names).toEqual(['"queue"', '"history"', '"settings"']);
+    const names = (decl?.groups?.list ?? "").match(/"[A-Za-z-]+"/g) ?? [];
+    expect(names).toEqual([
+      '"comfyui"',
+      '"console"',
+      '"history"',
+      '"model-adapters"',
+      '"model-test"',
+      '"mode-contract"',
+      '"models"',
+      '"queue"',
+      '"settings"',
+      '"uiKit"',
+      '"workflows"',
+      '"works"',
+    ]);
+    expect(names).not.toContain('"home"');
+    expect(names).not.toContain('"project"');
   });
 
   it("名单里的屏经 HeavyViewGate 按页签活跃度降级", () => {
