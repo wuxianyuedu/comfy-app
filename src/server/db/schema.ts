@@ -776,6 +776,51 @@ export const production = sqliteTable(
   (t) => [index("production_user_updated_idx").on(t.userId, t.updatedAt)],
 );
 
+/**
+ * 资产库（ISSUE #4868）：跨项目沉淀的图片 / 视频 / 音乐 / 文档资产。
+ *
+ * - `scope`：`public`（公共，所有项目可引用）| `project`（仅所属项目内）；
+ *   `projectId` 只在 `scope = 'project'` 时有值。
+ * - `category`：参考素材 / 场景 / 分镜 / 风格 / 角色 / 文档 / 音乐（展示名
+ *   与键的映射唯一出处是 `asset-categories.ts`，这里只存键）。
+ * - `localPath`：资产自己的产物地址（`/api/generated/assets/<id>/<文件名>`）。
+ *   入库时把来源任务产物**复制**进资产目录（`asset-store.ts`），不与任务共享
+ *   文件 —— 删除原任务不清空资产，资产删除也不影响原任务。
+ * - `params`：入库那一刻的**完整生成参数快照**（提交参数 + 模型 / 种子 / 尺寸），
+ *   与 `prompt` / `negativePrompt` / `workflowName` 一起构成「任何时候都能按
+ *   原样重新生成」的充分输入。
+ */
+export const asset = sqliteTable(
+  "asset",
+  {
+    id: cuid(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    mediaType: text("mediaType").notNull().default("image"),
+    category: text("category").notNull().default("reference"),
+    scope: text("scope").notNull().default("public"),
+    projectId: text("projectId"),
+    subdir: text("subdir"),
+    localPath: text("localPath").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    sourceTaskId: text("sourceTaskId"),
+    prompt: text("prompt"),
+    negativePrompt: text("negativePrompt"),
+    params: text("params", { mode: "json" }),
+    workflowName: text("workflowName"),
+    createdAt: dateNotNull("createdAt")
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    index("asset_user_created_idx").on(t.userId, t.createdAt),
+    index("asset_scope_category_idx").on(t.scope, t.category),
+  ],
+);
+
 // ── 关系（仅 include 用到：task.images / filmProject.shots）────────
 export const taskRelations = relations(task, ({ many }) => ({
   images: many(taskImage),
@@ -818,6 +863,7 @@ export type FilmShot = InferSelectModel<typeof filmShot>;
 export type AuditLog = InferSelectModel<typeof auditLog>;
 export type WorkshopSession = InferSelectModel<typeof workshopSession>;
 export type Production = InferSelectModel<typeof production>;
+export type Asset = InferSelectModel<typeof asset>;
 export type WorkshopSessionInsert = InferInsertModel<typeof workshopSession>;
 
 export type WorkshopDraft = InferSelectModel<typeof workshopDraft>;

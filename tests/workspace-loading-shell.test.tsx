@@ -31,7 +31,7 @@ describe("WorkspaceLoadingShell：路由级加载壳（ISSUE #4511）", () => {
     expect(screen.getByText("内容区")).toBeTruthy();
   });
 
-  it("「资产」占位项在加载态也置灰，切到真壳时侧栏不跳变", () => {
+  it("「资产」项在加载态与真壳同形（#4868 转正：不再置灰），切到真壳时侧栏不跳变", () => {
     render(
       <WorkspaceLoadingShell>
         <div>内容区</div>
@@ -40,7 +40,7 @@ describe("WorkspaceLoadingShell：路由级加载壳（ISSUE #4511）", () => {
     const nav = screen.getByRole("navigation", { name: "主导航" });
     const row = [...nav.querySelectorAll("li")].find((li) => li.textContent?.includes("资产"));
     expect(row).toBeTruthy();
-    expect(row?.firstElementChild?.className).toContain("opacity-50");
+    expect(row?.firstElementChild?.className).not.toContain("opacity-50");
   });
 
   it("导航侧栏里没有骨架占位条：加载态的骨架只允许落在内容区", () => {

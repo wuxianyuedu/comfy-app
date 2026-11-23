@@ -73,6 +73,7 @@ const TABLES = [
   "workshopSession",
   "workshopDraft",
   "production",
+  "asset",
   "series",
   "season",
   "episode",
@@ -193,6 +194,13 @@ CREATE TABLE IF NOT EXISTS workshopDraft (
   tone TEXT NOT NULL DEFAULT '', logline TEXT NOT NULL DEFAULT '', scriptMarkdown TEXT NOT NULL DEFAULT '',
   scenes TEXT NOT NULL DEFAULT '[]', characters TEXT NOT NULL DEFAULT '[]', shots TEXT NOT NULL DEFAULT '[]',
   createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS asset (
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL,
+  mediaType TEXT NOT NULL DEFAULT 'image', category TEXT NOT NULL DEFAULT 'reference',
+  scope TEXT NOT NULL DEFAULT 'public', projectId TEXT, subdir TEXT, localPath TEXT NOT NULL,
+  width INTEGER, height INTEGER, sourceTaskId TEXT, prompt TEXT, negativePrompt TEXT,
+  params TEXT, workflowName TEXT, createdAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS production (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, title TEXT NOT NULL DEFAULT '未命名项目', type TEXT NOT NULL DEFAULT 'short_video',

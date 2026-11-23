@@ -202,21 +202,22 @@ Next 路由只有登录与三个历史挂载点（§4.3）。
 ## 6. 数据与账号
 
 - **数据库**：SQLite（Drizzle ORM），schema 唯一出处
-  `src/server/db/schema.ts` —— 共 **30 张表**：better-auth 4 张
-  （`user` / `session` / `account` / `verification`）+ 业务 26 张。
+  `src/server/db/schema.ts` —— 共 **31 张表**：better-auth 4 张
+  （`user` / `session` / `account` / `verification`）+ 业务 27 张。
   业务表按域分五组：
   - 任务与产物：`task` / `taskImage` / `taskLog`；
   - 工作流族：`workflowTemplate` / `workflowModelTag` /
     `workflowModelTag_workflowTemplate`；
   - 创作族：`project` / `production` / `filmProject` / `filmShot` /
-    `workshopSession` / `workshopDraft` / `skill`；
+    `workshopSession` / `workshopDraft` / `skill` / `asset`（#4868 资产库）；
   - 系列与剧集族：`series` / `season` / `episode` / `character` /
     `episodeCharacter`（#2477 容器层 + #2508 系列角色库）；
   - 模型与配置族：`model` / `userModelConfig` / `favorite` / `llmConfig` /
     `llmProvider` / `remoteModel` / `auditLog` / `post`（脚手架示例表：其 tRPC 口已按
     零消费治理退役，仓储层仍在）。
 - **产物落盘**：普通任务 `generated/<taskId>`，项目任务
-  `generated/projects/<projectId>/<taskId>`，成片 `generated/films/<id>.mp4`；
+  `generated/projects/<projectId>/<taskId>`，成片 `generated/films/<id>.mp4`，
+  资产 `generated/assets/<assetId>`（#4868，入库时从任务产物复制）；
   读取经 `/api/generated/...`。路径规则唯一出处
   `src/lib/media/output-paths.ts` 与 `output-layout.ts`。
 - **账号**：邮箱密码（最少 12 位）+ GitHub OAuth（桌包内不可用）；会话落

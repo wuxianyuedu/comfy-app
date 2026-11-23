@@ -95,6 +95,11 @@ export const ConsoleView = lazyView("console", () =>
   import("~/components/console/ConsoleView").then((m) => m.ConsoleView),
 );
 
+/* 资产库（ISSUE #4868）：公共 / 项目资产 + 分类 + 完整生成参数，与历史同族的全局视图。 */
+export const AssetLibraryView = lazyView("assets", () =>
+  import("~/components/studio/assets/AssetLibrary").then((mod) => mod.AssetLibrary),
+);
+
 /* ── 项目内分区（一项目一页签后由项目页容器按需拉起） ── */
 
 /* 资源库：整页素材管理（分类 / 搜索 / 上传 / 删除），与画布那块抽屉同源取数。 */

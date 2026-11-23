@@ -1,5 +1,6 @@
 {
   "models": "independent",
+  "assets": "independent",
   "history": "independent",
   "queue": "independent",
   "comfyui": "independent",

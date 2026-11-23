@@ -1810,3 +1810,45 @@
   ④ 干预只影响被干预的那一镜（不牵连已完成项）。
 - 落点：`src/server/api/routers/run.ts`、`src/server/agent/run-engine.ts`、
   `src/server/mcp/workshop-mcp.ts`
+
+#### FR-AL-01 资产库视图（公共 / 项目 + 分类 + 大小滑块）
+
+- 状态：已上线（#4868）
+- 需求：跨项目沉淀生成结果的统一入口——侧栏「资产」进入；公共 / 项目两档归属、
+  七个分类（参考素材 / 场景 / 分镜 / 风格 / 角色 / 文档 / 音乐）、方形缩略图网格、
+  右下角悬浮大小滑块（大图 2 列 / 标准 4 列 / 小图 6 列，选择本地记忆）。
+- 行为与验收：① 侧栏「资产」可点开（原占位项转正），页头显示「资产库」；
+  ② 归属 / 分类 / 关键词过滤生效，分类角标计数随过滤口径变化；
+  ③ 滑块拖到不同档位，网格列宽随之变化且刷新后保持（localStorage）；
+  ④ 空库给出「先去历史加入资产」的引导，不是白屏。
+- 落点：`src/components/studio/assets/AssetLibrary.tsx`（视图）、
+  `src/components/studio/assets/hooks/use-asset-library.ts`（逻辑层）、
+  `src/components/studio/NavItems.tsx`（导航转正）、
+  `src/components/studio/WorkspaceViewStack.tsx` + `LazyViews.tsx`（渲染分支）
+
+#### FR-AL-02 历史「加入资产库」
+
+- 状态：已上线（#4868）
+- 需求：历史任务卡一键把生成结果沉淀为资产；弹窗内选归属（公共 / 项目）→
+  项目档选项目 → 选分类 → 可选子目录。
+- 行为与验收：① 终态任务卡出现「加入资产库」按钮，点击弹窗；
+  ② 项目档未选项目时不能提交；③ 入库把该任务**每张产物各存一条资产**，
+  产物文件复制进 `generated/assets/<assetId>/`（删除原任务不影响资产，反之亦然）；
+  ④ 部分产物复制失败时如实回报「成功 n 条、跳过 m 条」，不是静默全成。
+- 落点：`src/components/studio/history/HistoryTaskCard.tsx`（按钮）、
+  `src/components/studio/assets/AddToAssetLibraryDialog.tsx`（弹窗）、
+  `src/server/api/routers/asset.ts`（`asset.createFromTask`）、
+  `src/lib/media/asset-store.ts`（产物复制）
+
+#### FR-AL-03 完整生成参数快照
+
+- 状态：已上线（#4868）
+- 需求：每个图片 / 视频资产随行保存**完整生成参数**（提交参数、模型、提示词、
+  负向词、工作流名），保证任何时候都能按原样重新生成。
+- 行为与验收：① 入库时把 `task.params` 原样快照进 `asset.params`；
+  ② 资产详情弹窗把快照折成可读参数表（已知键译名、未知键保底原样）；
+  ③ 「复制参数 JSON」把同一份快照送进剪贴板（与历史「复制去重投」同语义）；
+  ④ 无参数的资产（如手工上传）如实显示「缺生成参数」，不编造。
+- 落点：`src/server/api/routers/asset.ts`（`asset.detail`）、
+  `src/components/studio/assets/AssetDetailModal.tsx`、
+  `src/components/studio/assets/asset-categories.ts`（`deriveAssetParamRows`）

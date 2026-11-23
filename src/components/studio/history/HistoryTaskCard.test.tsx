@@ -31,6 +31,7 @@ function renderCard(overrides: Partial<Parameters<typeof HistoryTaskCard>[0]> = 
   render(
     <HistoryTaskCard
       busy={false}
+      onAddToLibrary={vi.fn()}
       onCancel={vi.fn()}
       onCopyForReprint={vi.fn()}
       onOpenDetail={onOpenDetail}
@@ -114,6 +115,18 @@ describe("HistoryTaskCard 条目形态（ISSUE #4619）", () => {
     expect(onOpenLog).toHaveBeenCalledWith(task);
     expect(onOpenFolder).toHaveBeenCalledWith(task);
     expect(onCopyForReprint).toHaveBeenCalledWith(task);
+  });
+
+  it("终态卡有「加入资产库」按钮，点击带整行任务打开弹窗（ISSUE #4868）", async () => {
+    const onAddToLibrary = vi.fn();
+    renderCard({ onAddToLibrary });
+    await userEvent.click(screen.getByRole("button", { name: "把这一条的产物加入资产库" }));
+    expect(onAddToLibrary).toHaveBeenCalledWith(task);
+  });
+
+  it("进行中（RUNNING）没有「加入资产库」——没有产物可言", () => {
+    renderCard({ task: { ...task, status: "RUNNING" } });
+    expect(screen.queryByRole("button", { name: "把这一条的产物加入资产库" })).toBeNull();
   });
 
   it("动作进行中（busy）时禁用 输出目录 与 复制去重投，日志仍可点", () => {
