@@ -1,0 +1,2 @@
+## Changed
+- 本地提交钩子的 B 组标签从 `eslint（零警告，范围见 package.json lint）` 改为 `oxlint（零警告，范围见 package.json lint）`（#4896）：#3157 起 ESLint 执行器已退役，`pnpm run lint` 实际跑的是 `lint:oxlint`，旧标签让人误以为 ESLint 还在用。同步钩子正文里描述 B 组的称呼、`tests/base-check.test.ts` 的断言（并新增「B 组标签不含 eslint」反向断言）、规范 §13.5.25/§13.5.11 的表格与 quality-gate 注释。刻意不改：平台格名 `ESLint 零警告`（历史读数稳定标识）、`check-eslint-exemptions.cjs` 脚本名、以及「eslint 已退役 / eslint.config.js」这类历史叙述。

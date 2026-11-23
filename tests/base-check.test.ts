@@ -1081,7 +1081,7 @@ describe("base-check --merge-state —— 本地绿不证明合并态绿（ISSUE
  * ③ 127 压过「有红」（两者退出码同形，拿它下判决会送错方向）；④ 快照里链上依赖树（缺它近一半判据报「红」，实测 9）。
  */
 describe("base-check --base —— 合并前面从钩子现算（不抄第二份清单）", () => {
-  test("默认面 = 钩子里的全仓判据，且含 A 组的 tsc 与 B 组的 eslint", () => {
+  test("默认面 = 钩子里的全仓判据，且含 A 组的 tsc 与 B 组的 oxlint", () => {
     const r = resolveMergeBatch([]);
     expect(r.ok).toBe(true);
     if (!r.ok) {
@@ -1092,7 +1092,10 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
      * 不是 `run "<标签>"`，所以只读 `run` 的解析器看不见它们 —— 只读 `run` 会让
      * 「合并前复算」漏掉最该复算的两条，且表现为「静默少两行」。 */
     expect(labels).toContain("tsc --noEmit");
-    expect(labels.some((l) => l.includes("eslint"))).toBe(true);
+    /* #4896：B 组的 run_group 标签跟着执行器改成 oxlint（#3157 起 ESLint 已退役），
+     * 不再让读数里出现「eslint」误导人以为它还在跑。 */
+    expect(labels.some((l) => l.includes("oxlint"))).toBe(true);
+    expect(labels.some((l) => l.includes("eslint"))).toBe(false);
     /* D 组的静态判据也在（面是「那一批」而不是「那一条」）。 */
     expect(r.commands.length).toBeGreaterThan(20);
   });
