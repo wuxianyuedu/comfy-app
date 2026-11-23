@@ -8,11 +8,12 @@ import { expectHomeReady } from "./support/home-anchors";
  */
 
 test.describe("首页冒烟", () => {
-  test("@critical 首页重定向到 /workspace 且创作台正常渲染", async ({ page }) => {
+  test("@critical 首页停在 / 直接渲染创作台，不改写地址（#4881）", async ({ page }) => {
     await page.goto("/");
 
-    // src/app/page.tsx 服务端 redirect("/workspace")
-    await expect(page).toHaveURL(/\/workspace$/);
+    // src/app/page.tsx 复用 workspace 页面实现，不再 redirect("/workspace")：
+    // URL 停在 /（首页地址不拼 workspace）。
+    await expect(page).toHaveURL(/\/$/);
 
     /* 创作台首屏（无需登录、不依赖 ComfyUI 后端）。
      * 锚点是四张入口卡里的第一张 —— 首页那块欢迎区已按 ISSUE #1691 移除，
