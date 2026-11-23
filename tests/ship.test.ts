@@ -2351,6 +2351,18 @@ describe("issueItemShapes：一张单子正文里的条目形态（#2251 —— 
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     expect(issueItemShapes(null as never).total).toBe(0);
   });
+
+  it("编号紧贴汉字（`1未给…`）也算序号条目；日期 / 规格行不误计（#4564）", () => {
+    const body = [
+      "1未给工作流配置模式时，按默认模式跑",
+      "2. 工作流有默认尺寸时，按默认尺寸跑",
+      "2026-11-23 修的",
+      "16GB 内存",
+    ].join("\n");
+    const s = issueItemShapes(body);
+    expect(s.ordered).toBe(2);
+    expect(s.total).toBe(2);
+  });
 });
 
 describe("withCommentHeader：开头署名有且只有一行（ISSUE #2268）", () => {
