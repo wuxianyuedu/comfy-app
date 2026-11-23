@@ -36,7 +36,7 @@
  *
  *   node scripts/gates/check-oxlint-zero-rules.mjs              # 全仓判定（--type-aware）
  *   node scripts/gates/check-oxlint-zero-rules.mjs <路径…>      # 契约自测档：只扫给定路径
- *   node scripts/gates/check-oxlint-zero-rules.mjs --staged     # 提交前置快检：暂存面 + --type-aware
+ *   node scripts/gates/check-oxlint-zero-rules.mjs --staged     # 提交前置快检：暂存面（语法级）
  *
  *   0 = 清单内规则 0 命中；1 = 有回潮（逐条列 `文件:行:列`）；2 = **没跑起来**
  *   （oxlint 起不来 / 输出不是 JSON / 全仓档一份文件都没扫到）——「没跑起来」
@@ -44,9 +44,11 @@
  *
  *   `--staged` 只取本次暂存的新增 / 修改 / 重命名文件：它不是全仓档的替代，而是把
  *   「新文件带回禁用形态」这一格提前到提交时拦。暂存面没有可扫文件时按输入面跳过；
- *   与路径参数互斥（同时给 = 用法错退 2）。全仓档仍由重档 / 合并前复算执行。
+ *   与路径参数互斥（同时给 = 用法错退 2）。**快检不挂 `--type-aware`**（ISSUE #4884：
+ *   类型感知的 TS 程序启动在共享机上能到分钟级、把 D0 串行预算吃穿），类型级规则的
+ *   全量判定仍由 D 组全仓档（推送前复算）与平台 `ci-heavy-gates.mjs` 承担。
  *
- *   带路径参数时不挂 `--type-aware`：自测夹具在仓外临时目录、没有 tsconfig 可挂；
+ *   带路径参数时同样不挂 `--type-aware`：自测夹具在仓外临时目录、没有 tsconfig 可挂；
  *   负控因此只选语法级规则（`unicorn/no-negated-condition`、`import/no-duplicates`、
  *   `react/jsx-boolean-value` —— 后两条把 import / react 族的「探针真的在扫」
  *   也钉进契约，ISSUE #3340），见 `tests/check-oxlint-zero-rules.test.ts`。
@@ -336,6 +338,27 @@ function stagedSourcePaths() {
     .filter((file) => STAGED_EXTENSIONS.has(path.extname(file).toLowerCase()));
 }
 
+/**
+ * 探针是否挂 `--type-aware`（ISSUE #4884）：**只有全仓档**挂。
+ *
+ * `--staged` 快检与全仓档此前共用同一个判断 `paths.length === 0`，而 staged 模式的
+ * `paths` 恰好也是空数组 ⇒ 快检同样起一轮 TS 程序。成本由机器负载决定而非文件数：
+ * 同一对暂存文件在本机实测带类型感知 >300s（撞预算退 2）、不带 15.1s。D0 是串行前置档，
+ * 这一条能把整组预算吃穿，让「提交自身的形态」这一档整体没结论。
+ *
+ * 类型层规则的覆盖面不丢：D 组全仓档（推送那一跳的 `check:premerge`）与平台侧
+ * `ci-heavy-gates.mjs`（读同一份钩子注册表）都走全仓档、都带 `--type-aware`；
+ * 「重档留给平台」是本仓既有的档位口径（规范 §13.5.25）。契约自测档扫的是仓外临时
+ * 夹具、无 tsconfig 可挂，且负控只选语法级规则（见文件头）。
+ *
+ * @param {boolean} staged
+ * @param {string[]} paths
+ * @returns {boolean}
+ */
+export function needsTypeAware(staged, paths) {
+  return !staged && paths.length === 0;
+}
+
 function main() {
   const argv = process.argv.slice(2);
   const staged = argv.includes("--staged");
@@ -363,9 +386,7 @@ function main() {
     process.exit(2);
   }
   const args = ["--config", configPath, "--format", "json"];
-  // 全仓档与 --staged 都挂 --type-aware，保持同一套类型层规则的判决口径；契约自测档
-  // 扫的是仓外临时夹具，没有 tsconfig 可挂，且负控只选语法级规则（见文件头）。
-  if (paths.length === 0) {
+  if (needsTypeAware(staged, paths)) {
     args.push("--type-aware");
   }
   args.push(...(staged ? stagedPaths : paths));
@@ -421,4 +442,7 @@ function main() {
   );
 }
 
-main();
+/* 被测试 import 时只取纯函数，不能在这里把整条探针跑起来（同 ci-heavy-gates.mjs 的口径）。 */
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
+  main();
+}
