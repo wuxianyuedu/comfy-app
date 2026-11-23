@@ -39,7 +39,11 @@ import {
   referenceLoaderMax,
   referenceLoaderMountNodes,
 } from "./reference-loader-binding";
-import { buildReferenceLoaderPlan, mountImagePortsForNodes } from "./reference-loader-plan";
+import {
+  buildReferenceLoaderPlan,
+  mountImagePortsForNodes,
+  mountReferenceCapacityOf,
+} from "./reference-loader-plan";
 import { deriveEncapsulationStatus } from "./workshop-encapsulation-status";
 
 /* 本地（ComfyUI）生成 mutation 的 tRPC 传输契约。 */
@@ -340,6 +344,14 @@ export async function buildLibraryWorkflowInput(
    * 槽）在工坊链路真的生效；注册表读不到时回落内置默认契约（不阻断生成）。
    * 封装页签的流程测试仍以显式入参优先。 */
   const effectiveContractIds = contractIds ?? (await loadEffectiveContractIds(mode));
+  /* 参考图挂载节点（ISSUE #4534 / #4856）：按 image_0..N 规律展开出的参考图口
+   * （按槽位序）——作者没连线的槽位自动接线到这些口上，不必逐口手连。
+   * 先于封装计算：挂载容量要参与「参考图丢失」的补报判定（超出契约口数但仍在
+   * 挂载容量内的参考图不算丢，见 buildEncapsulatedInputs 的 mountReferenceCapacity）。 */
+  const mountPorts = mountImagePortsForNodes({
+    graphImagePorts: detail?.imageInputPorts,
+    mountNodeIds: referenceLoaderMountNodes(detail?.paramMap),
+  });
   const { workflowInputs, unmatched, resolved } = buildEncapsulatedInputs({
     io,
     paramMap: detail?.paramMap ?? null,
@@ -350,6 +362,7 @@ export async function buildLibraryWorkflowInput(
      * 改变下发给 ComfyUI 的宽高，而不是只改界面显示。水合前的快照是默认表，
      * 与旧行为一致（不劣化）。 */
     table: getSizePresetTable(),
+    mountReferenceCapacity: mountReferenceCapacityOf(mountPorts),
   });
   /* 参考图装载计划（#4376）：绑定了装载预设 / 追加端口的参考图槽位，把文件名
    * 扇出到全部目标端口，并给执行期下发「端点 → 预设」计划（计划随任务行自含）。
@@ -365,12 +378,6 @@ export async function buildLibraryWorkflowInput(
     referenceCap === null
       ? (values.referenceImages ?? [])
       : (values.referenceImages ?? []).slice(0, referenceCap);
-  /* 参考图挂载节点（ISSUE #4534）：按 image_0..N 规律展开出的参考图口（按槽位
-   * 序）——作者没连线的槽位自动接线到这些口上，不必逐口手连。 */
-  const mountPorts = mountImagePortsForNodes({
-    graphImagePorts: detail?.imageInputPorts,
-    mountNodeIds: referenceLoaderMountNodes(detail?.paramMap),
-  });
   if (
     (Object.keys(loaderBindings).length > 0 || mountPorts.length > 0) &&
     cappedReferenceImages.length > 0

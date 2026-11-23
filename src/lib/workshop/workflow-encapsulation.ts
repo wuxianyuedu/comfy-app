@@ -504,12 +504,23 @@ export function buildEncapsulatedInputs(args: {
   contractIds?: ReadonlyArray<string>;
   io: WorkflowIOMap | null | undefined;
   mode: string | null | undefined;
+  /** 挂载补位能接住的参考图容量（各挂载节点模式口数的最大值，#4856）。
+   *  缺省 0 = 没有挂载节点，参考图超出契约口数就如实报「参考图」。 */
+  mountReferenceCapacity?: number;
   paramMap: unknown;
   /** 生效的尺寸表（ISSUE #3972）：宽高换算按它查。缺省 = 编译进包的默认快照。 */
   table?: SizePresetTable;
   values: WorkshopExposedValues;
 }): EncapsulatedInputs {
-  const { io, paramMap, mode, values, contractIds, table = DEFAULT_SIZE_PRESET_TABLE } = args;
+  const {
+    io,
+    paramMap,
+    mode,
+    values,
+    contractIds,
+    table = DEFAULT_SIZE_PRESET_TABLE,
+    mountReferenceCapacity,
+  } = args;
   if (!io || typeof io !== "object") {
     return { workflowInputs: [], unmatched: [], resolved: {} };
   }
@@ -556,10 +567,25 @@ export function buildEncapsulatedInputs(args: {
   const reported = new Set(unmatched);
   const hasEntry = (id: string) => entries.some((entry) => entry.id === id);
   const refs = effectiveValues.referenceImages ?? [];
+  /* 参考图的**落点容量**：契约参考图口数与挂载补位容量（各挂载节点模式口数的
+     最大值，#4856）取较大者 —— 超出契约口数的参考图由挂载补位接住（#4534），
+     两边都装不下才是真的丢图。 */
+  const refSlotCount = entries.filter((entry) => entry.cls === "reference-image").length;
+  const referenceCapacity = Math.max(refSlotCount, mountReferenceCapacity ?? 0);
+  const refUnlanded =
+    refs.length > 0 &&
+    (refSlotCount === 0
+      ? /* 没有参考图口：除非首帧口接住镜头图（视频合法契约），否则就是丢图。 */
+        !hasEntry("first-frame")
+      : refs.length > referenceCapacity);
   /* 首帧 / 尾帧 / 时长只在视频模式补报：图像模式本就不该有这些值，
-     拿「镜头图当首帧」的派生去报「未生效」是误导噪音（#4856）。 */
+     拿「镜头图当首帧」的派生去报「未生效」是误导噪音（#4856）。参考图全部
+     落下时也不补报首帧 —— 镜头图已经各就各位。 */
   if (isVideoMode(effectiveMode)) {
-    if ((values.firstFrame !== undefined || refs.length > 0) && !hasEntry("first-frame")) {
+    if (
+      (values.firstFrame !== undefined || (refs.length > 0 && !refUnlanded)) &&
+      !hasEntry("first-frame")
+    ) {
       reported.add("first-frame");
     }
     if (values.lastFrame !== undefined && !hasEntry("last-frame")) {
@@ -569,14 +595,10 @@ export function buildEncapsulatedInputs(args: {
       reported.add("duration");
     }
   }
-  /* 参考图给了却没有任何 reference-image 口接住：如实上报「参考图」，不静默丢图
-     （原先把这件事错记成了「首帧未生效」）。视频工作流里首帧口接住镜头图是合法的
-     调用契约，那一种不算丢图。 */
-  if (
-    refs.length > 0 &&
-    !entries.some((entry) => entry.cls === "reference-image") &&
-    !hasEntry("first-frame")
-  ) {
+  /* 参考图给了却没接住（没有任何 reference-image 口、或超出容量）：如实上报
+     「参考图」，不静默丢图（原先把这件事错记成了「首帧未生效」）。视频工作流里
+     首帧口接住镜头图是合法的调用契约，那一种不算丢图。 */
+  if (refUnlanded) {
     reported.add("reference-image");
   }
   /* 尺寸折叠成一条：工坊只送**一个**尺寸表达（比例 + 档位 + 倍数），工作流用
