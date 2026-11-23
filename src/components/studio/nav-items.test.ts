@@ -71,17 +71,17 @@ describe("globalNavItems", () => {
   });
 });
 
-describe("资产占位入口", () => {
-  it("在侧栏与全局清单里都可见，但标为未上线", () => {
+describe("资产库入口（ISSUE #4868 占位转正）", () => {
+  it("侧栏与全局清单可见，且已启用", () => {
     const item = globalNavItems().find((i) => i.id === "assets");
     expect(item).toBeDefined();
-    expect(item?.label).toBe("资产");
-    expect(item?.enabled).toBe(false);
+    expect(item?.label).toBe("资产库");
+    expect(item?.enabled).toBe(true);
     expect(sidebarNavItems().map((i) => i.id)).toContain("assets");
   });
 
-  it("不进配置面：打不开的视图不该有一行「切走关不关」的开关", () => {
-    expect(configurableTabViews().map((i) => i.id)).not.toContain("assets");
+  it("进配置面：全局视图（首页除外）都有「切走关不关」的档位", () => {
+    expect(configurableTabViews().map((i) => i.id)).toContain("assets");
   });
 });
 

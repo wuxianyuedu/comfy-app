@@ -99,6 +99,14 @@ export function materialsRoot(root: string = generatedRoot()): string {
   return path.join(root, "materials");
 }
 
+/** 资产库子层（ISSUE #4868）：每个资产各占 `assets/<assetId>/` 一格，文件从
+ *  来源任务产物**复制**进来（与任务生命周期解耦——删原任务不动资产）。
+ *  地址形状仍是 `/api/generated/assets/<assetId>/<文件名>`，由产物根的
+ *  既有通道服务，不需要新开一条。 */
+export function assetsRoot(root: string = generatedRoot()): string {
+  return path.join(root, "assets");
+}
+
 /** 成片与配乐的子层。写侧（`compose-film`）、上传侧（`/api/film/bgm`）与归属判据
  *  （`output-access` 的 `films/bgm` 无主条目）都从这里派生。 */
 export function filmsRoot(root: string = generatedRoot()): string {

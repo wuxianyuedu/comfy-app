@@ -22,6 +22,7 @@ import { HeavyViewGate } from "~/components/studio/HeavyViewGate";
 import { isProjectTab } from "~/components/studio/NavItems";
 import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
 import {
+  AssetLibraryView,
   ComfyuiControl,
   ConsoleView,
   ModeContractView,
@@ -190,6 +191,10 @@ export function WorkspaceViewStack({
 
       case "queue": {
         return <QueueMonitor onOpenComfyui={onOpenComfyui} />;
+      }
+
+      case "assets": {
+        return <AssetLibraryView />;
       }
 
       case "comfyui": {

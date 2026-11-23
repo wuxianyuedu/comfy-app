@@ -111,18 +111,17 @@ describe("侧栏的模型适配 / 模式契约入口", () => {
   });
 });
 
-describe("资产占位入口（未上线）", () => {
-  it("留在侧栏里但禁用，点击不切视图", () => {
+describe("资产库入口（ISSUE #4868 占位转正）", () => {
+  it("侧栏可用：点击切到 assets 视图，不再是禁用占位", () => {
     const onSelect = renderShell();
     const btn = screen.getByRole("button", { name: /资产/ });
-    expect(btn.textContent).toContain("资产");
-    /* 带 tooltip 的菜单按钮被 Base UI 包了 TooltipTrigger，disabled 落成
-       `data-trigger-disabled` 而不是原生属性；置灰靠 AppShell 显式给的 class。 */
-    expect(btn.dataset.triggerDisabled).toBe("");
-    expect(btn.className).toContain("opacity-50");
+    expect(btn.textContent).toContain("资产库");
+    /* 已启用：占位期的禁用标记（Base UI 的 data-trigger-disabled）不再出现；
+       置灰与否不再看 className（基类里本就有 disabled:opacity-50 变体）。 */
+    expect(btn.dataset.triggerDisabled).toBeUndefined();
 
     fireEvent.click(btn);
-    expect(onSelect).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledWith("assets");
   });
 });
 

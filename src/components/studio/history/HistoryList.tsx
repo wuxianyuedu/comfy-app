@@ -1,10 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 import { HistoryDetailModal } from "./HistoryDetailModal";
 import { HistoryTaskCard } from "./HistoryTaskCard";
+/* 加入资产库弹窗（ISSUE #4868）：行上「加入资产库」打开；归属 / 分类选择 +
+   入库 mutation 都在弹窗自己的逻辑里，列表只负责开与关。 */
+import { AddToAssetLibraryDialog } from "~/components/studio/assets/AddToAssetLibraryDialog";
 /* 执行日志弹窗与队列页同一份（ISSUE #4619）：同一条任务的「日志」在两个
  * 入口长得一样、同一份 SSE 流。它经 WorkflowRunRawCliModal 静态拖着
  * react18-json-view（重依赖，§12.19），这里**动态**加载把这条静态边断掉
@@ -43,6 +47,7 @@ function HistoryGroupTaskList({
   progressMap,
   isRetrying,
   isRowBusy,
+  onAddToLibrary,
   onOpenDetail,
   onCancel,
   onRetry,
@@ -57,6 +62,8 @@ function HistoryGroupTaskList({
   /** 「这一条的动作（输出目录 / 复制去重投）在进行中吗」（ISSUE #4619）。 */
   isRowBusy: (id: string) => boolean;
   items: Array<TaskItem>;
+  /** 打开「加入资产库」弹窗（ISSUE #4868）。 */
+  onAddToLibrary: (task: TaskItem) => void;
   onCancel: (id: string) => void;
   onCopyForReprint: (task: TaskItem) => void;
   onOpenDetail: (id: string) => void;
@@ -86,6 +93,7 @@ function HistoryGroupTaskList({
         <HistoryTaskCard
           busy={isRowBusy(task.id)}
           key={task.id}
+          onAddToLibrary={onAddToLibrary}
           onCancel={onCancel}
           onCopyForReprint={onCopyForReprint}
           onOpenDetail={onOpenDetail}
@@ -120,6 +128,8 @@ export function HistoryList({
    * 详情只在弹层（HistoryDetailModal，挂在本视图内）里看。曾经的独立详情路由
    * /create/[id] 已退役（#2422），别再把这条路由当在役出口写进注释。 */
   const c = useHistoryList({ onReprintToModelTest });
+  /* 「加入资产库」弹窗的目标行（ISSUE #4868）：open 那一刻的快照。 */
+  const [libraryTask, setLibraryTask] = useState<TaskItem | null>(null);
 
   return (
     <DocumentFrame
@@ -220,6 +230,7 @@ export function HistoryList({
                 isRetrying={c.isRetrying}
                 isRowBusy={c.isRowBusy}
                 items={group.items}
+                onAddToLibrary={setLibraryTask}
                 onCancel={c.cancel}
                 onCopyForReprint={c.copyForReprint}
                 onOpenDetail={c.openDetail}
@@ -260,6 +271,13 @@ export function HistoryList({
         modeContracts={c.modeContracts}
         onClose={c.closeDetail}
         workflowIO={c.workflowIO}
+      />
+      {/* 加入资产库弹窗（ISSUE #4868）：按行上的「加入资产库」打开。 */}
+      <AddToAssetLibraryDialog
+        onClose={() => {
+          setLibraryTask(null);
+        }}
+        task={libraryTask}
       />
       {/* 执行日志弹窗（ISSUE #4619）：与队列页同款，按行上的「日志」打开。 */}
       <QueueTaskLogModal onClose={c.closeLog} task={c.logTarget} />

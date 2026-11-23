@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { ChevronDown, Copy, FileText, FolderOpen, Maximize2 } from "lucide-react";
+import { ChevronDown, Copy, FileText, FolderOpen, FolderPlus, Maximize2 } from "lucide-react";
 
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
@@ -26,6 +26,8 @@ import { QUEUED_STATUS_STYLE, STATUS_STYLE, timeAgo } from "./history-utils";
 type HistoryTaskCardProps = {
   /** 这一条的动作（输出目录 / 复制去重投）正在进行吗——按钮禁用态，判据在 controller。 */
   busy: boolean;
+  /** 「把这条的产物加入资产库」（ISSUE #4868）：打开归属 / 分类选择弹窗。 */
+  onAddToLibrary: (task: TaskItem) => void;
   onCancel: (id: string) => void;
   /** 「复制去重投」：把本次提交内容复制到剪贴板，回画布改完再投。 */
   onCopyForReprint: (task: TaskItem) => void;
@@ -124,6 +126,7 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
   progress,
   retrying,
   busy,
+  onAddToLibrary,
   onOpenDetail,
   onCancel,
   onRetry,
@@ -310,6 +313,21 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
             >
               <Copy aria-hidden className="size-3" data-icon="inline-start" />
               复制去重投
+            </Button>
+            {/* 加入资产库（ISSUE #4868）：与「复制去重投」同排 —— 都是「把这条
+                的结果沉淀出去」的动作；弹窗里选归属 / 分类，参数随行快照。 */}
+            <Button
+              aria-label="把这一条的产物加入资产库"
+              className="text-ink-faint hover:text-primary-strong h-auto gap-1"
+              disabled={busy}
+              onClick={() => {
+                onAddToLibrary(task);
+              }}
+              size="xs"
+              variant="ghost"
+            >
+              <FolderPlus aria-hidden className="size-3" data-icon="inline-start" />
+              加入资产库
             </Button>
           </>
         ) : null}
