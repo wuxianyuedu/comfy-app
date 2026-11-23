@@ -27,6 +27,12 @@ function assetStoreDir(assetId: string, root: string = assetsRoot()): string {
  * 资产若直接指向任务文件，删一次任务就毁一批资产——与「沉淀下来随时可复用」
  * 的诉求相反。复制是单向快照：入库后与原任务互不影响。
  *
+ * 来源与目标是**两个根**：来源是任务产物地址（`/api/generated/<taskId>/…` 或
+ * `/api/generated/projects/<pid>/<taskId>/…`），必须按**产物根**（`generatedRoot()`）
+ * 解析；`root` 形参（默认 `assetsRoot()`，`generated/assets/`）只是复制目标的子层。
+ * 此前两个根混用一个形参，来源被解到 `generated/assets/<taskId>/…` 这个不存在的
+ * 位置，每张都「来源文件不存在」，入库全批失败（ISSUE #4917）。
+ *
  * 返回 `null` 的三种情况由调用点处置（统一按「入库失败」回滚）：来源地址解析
  * 不出来（不是产物地址）、解析结果越出产物根、磁盘上没有这个文件。
  */
@@ -35,12 +41,12 @@ export async function copyIntoAssetStore(
   assetId: string,
   root: string = assetsRoot(),
 ): Promise<string | null> {
-  const source = artifactDiskPath(sourceUrl, root);
+  const source = artifactDiskPath(sourceUrl);
   if (source === null) {
     logger.warn(`[asset-store] 来源不是产物地址，拒绝入库：${sourceUrl}`);
     return null;
   }
-  if (!isWithinGeneratedRoot(source, root)) {
+  if (!isWithinGeneratedRoot(source)) {
     logger.warn(`[asset-store] 来源越出产物根，拒绝入库：${sourceUrl}`);
     return null;
   }
