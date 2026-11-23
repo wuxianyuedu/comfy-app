@@ -46,6 +46,16 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
   const running = c.status?.up === true;
   const configHint = comfyConfigHint(c.instance);
   const statusParts = comfyStatusParts(c.status, flags);
+  /* 外部拉起的实例没有本应用的 stdout 捕获（#4891）：ComfyUI 在跑、而最新的
+     运行日志会话已「退出」（或压根没有会话）时，当前实例就不是本应用
+     launcher 拉起的（如 Comfy Desktop 拉起）—— 明确说出来，别让面板里
+     两天前的退出会话冒充当前日志。 */
+  const newestRuntimeSession = c.log.sessions[0];
+  const newestRuntimeSessionExited = newestRuntimeSession?.title.includes("退出") === true;
+  const externalInstanceNotice =
+    running && (newestRuntimeSession === undefined || newestRuntimeSessionExited)
+      ? "当前 ComfyUI 实例在运行，但不是本应用 launcher 拉起的（如由 Comfy Desktop 拉起）：应用侧没有它的 stdout 捕获，本面板只有历史会话的启动日志；当前实例的日志请看 Comfy Desktop 侧的控制台 / 日志文件。"
+      : null;
 
   return (
     /* 弹性列（min-h-full）：内容不足一屏时「运行日志」吃满剩余高度（重设计稿），
@@ -211,6 +221,13 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
         {/* 按什么启动的说明已按用户反馈（#4710）撤掉：安装形态 / 启动路径的
             完整出口在「设置 → 创作后端」，本页不再重复一遍。 */}
       </SettingsCard>
+
+      {/* 外部拉起的实例无 stdout 捕获（#4891）：提示条与配置缺失提示同款样式。 */}
+      {externalInstanceNotice === null ? null : (
+        <div className="border-warning/40 bg-warning/10 mt-6 rounded-lg border px-3 py-2">
+          <p className="text-warning-strong text-xs leading-relaxed">{externalInstanceNotice}</p>
+        </div>
+      )}
 
       {/* 启动日志：启动期间每秒跟随 log/services/comfyui-runtime.log，让「正在启动…」
           不再是个黑盒（硬规则 4 的用户可见出口）。右上角的下拉按「每次启动」切换

@@ -160,6 +160,60 @@ describe("ComfyuiControlView", () => {
     expect(screen.getByRole("button", { name: "打开查看" })).toBeEnabled();
   });
 
+  /* 外部拉起的实例没有本应用的 stdout 捕获（#4891）：ComfyUI 在跑、而最新的
+     运行日志会话已退出（或没有会话）时，提示条要说清楚，别让历史会话冒充
+     当前日志。 */
+  describe("外部拉起的实例提示（#4891）", () => {
+    const exitedSession = {
+      crashed: false,
+      id: "20261121-084058.log",
+      scope: "runs" as const,
+      startedAt: 1,
+      title: "11-21 08:40:58 · 正常退出 · 470f82",
+    };
+    const currentSession = {
+      crashed: false,
+      id: "20261123-120000.log",
+      scope: "current" as const,
+      startedAt: 2,
+      title: "11-23 12:00:00 · 本次运行",
+    };
+
+    it("运行中 + 最新会话已退出 → 提示当前实例为外部拉起", () => {
+      render(
+        <ComfyuiControlView
+          c={controller({
+            status: running,
+            log: { ...controller().log, sessions: [exitedSession] },
+          })}
+        />,
+      );
+      expect(screen.getByText(/不是本应用 launcher 拉起的/)).toBeInTheDocument();
+    });
+
+    it("运行中 + 没有任何会话 → 同样提示", () => {
+      render(<ComfyuiControlView c={controller({ status: running })} />);
+      expect(screen.getByText(/不是本应用 launcher 拉起的/)).toBeInTheDocument();
+    });
+
+    it("运行中 + 最新会话是本次运行 → 不提示", () => {
+      render(
+        <ComfyuiControlView
+          c={controller({
+            status: running,
+            log: { ...controller().log, sessions: [currentSession] },
+          })}
+        />,
+      );
+      expect(screen.queryByText(/不是本应用 launcher 拉起的/)).toBeNull();
+    });
+
+    it("未运行 → 不提示（未运行本身已有状态句）", () => {
+      render(<ComfyuiControlView c={controller()} />);
+      expect(screen.queryByText(/不是本应用 launcher 拉起的/)).toBeNull();
+    });
+  });
+
   it("未配置路径：启动是禁用的，但**给出**去设置页配置的出口", () => {
     render(
       <ComfyuiControlView
