@@ -9,6 +9,7 @@ import "server-only";
 import { promises as fs } from "node:fs";
 
 import { isRecord } from "~/lib/is-record";
+import { cancelBodyReader } from "~/lib/network/cancel-body-reader";
 import { artifactDiskPath } from "~/lib/media/output-paths";
 import { isInlineMedia, parseDataUrl, toDataUrl } from "~/lib/media/data-url";
 import { DEFAULT_IMAGE_MIME, extOfPath, mimeForExt } from "~/lib/media/mime-ext";
@@ -110,15 +111,9 @@ export async function resolveMediaBytes(src: string, _origin: string): Promise<R
           }
         }
       } finally {
-        /* 超限抛出时取消流：releaseLock 不停上游（ISSUE #4218，与 safeFetch
-         * 的 body.cancel 同一口径）；正常读完时 cancel 是无操作。
-         * cancel/close 都做兜底——测试桩与旧环境可能没有这些方法。 */
-        try {
-          void Promise.resolve(reader.cancel?.()).catch(() => undefined);
-        } catch {
-          /* cancel 不可用时不影响既有的收尾 */
-        }
-        reader.releaseLock();
+        /* 超限抛出时取消流（收口在 `cancelBodyReader`，ISSUE #4796）：releaseLock
+         * 不停上游（ISSUE #4218）；正常读完时 cancel 是无操作。 */
+        cancelBodyReader(reader);
       }
       buffer = Buffer.concat(chunks, total);
     } else {
