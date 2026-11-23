@@ -120,13 +120,12 @@ export const NAV_ITEMS: Array<NavItem> = [
     icon: <Box size={22} strokeWidth={1.8} />,
   },
   {
-    /* 跨项目资产库的占位入口：角色库 / 风格锚 / 场景库的复用能力尚未成屏，
-       先让「以后有这一项」可见。`enabled: false` 让它在侧栏里禁用并给出
-       「即将推出」提示，命令面板里也不出现（点不开的东西不该能被搜到）。
-       真正上线时补视图与渲染分支，再把这里改成启用。 */
+    /* 跨项目资产库（ISSUE #4868）：公共 / 项目两档归属 + 分类目录 +
+       完整生成参数快照（随时按原样重新生成）。占位转正：视图在
+       `~/components/studio/assets/AssetLibrary`，数据走 `assetRouter`。 */
     id: "assets",
-    label: "资产",
-    enabled: false,
+    label: "资产库",
+    enabled: true,
     icon: <AtSign size={22} strokeWidth={1.8} />,
   },
   {

@@ -43,6 +43,12 @@ vi.mock("./hooks/use-history-list", () => ({
 
 const { HistoryList } = await import("./HistoryList");
 
+/* 入库弹窗自带 tRPC 取数（ISSUE #4868），本文件判的是筛选形态 —— 按同一条
+ * 「不测数据流」的边界 mock 成空壳（弹窗自身的行为在 asset 侧的用例里）。 */
+vi.mock("~/components/studio/assets/AddToAssetLibraryDialog", () => ({
+  AddToAssetLibraryDialog: () => null,
+}));
+
 /* 用**真** `ToastProvider` 包一层（与 `FilmStudio.test.tsx` /
  * `WorksGallery.test.tsx` 同口径）：本屏常挂 `HistoryDetailModal`，
  * 它的详情动作走提示通道 —— mock 掉 provider 就等于不测这条链路了。 */

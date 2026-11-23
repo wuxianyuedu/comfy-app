@@ -37,3 +37,4 @@ export * from "./repository-film";
 export * from "./repository-skill";
 export * from "./repository-user";
 export * from "./repository-post";
+export * from "./repository-asset";
