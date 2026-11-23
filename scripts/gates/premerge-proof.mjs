@@ -49,7 +49,11 @@ import path from "node:path";
 import process from "node:process";
 
 import { resolveMergeBaseRef } from "./base-check.mjs";
-import { runGateStep } from "../launcher-core/shell.mjs";
+import { recomputeTimeoutMs, runGateStep } from "../launcher-core/shell.mjs";
+
+/* 复算预算解析的唯一实现在 launcher-core/shell.mjs（ISSUE #4889）：这里 re-export，
+ * ship-exec.mjs 等既有调用方的导入路径一字不变，也不会长出第二套解析。 */
+export { recomputeTimeoutMs };
 
 /** git 一次性读数的墙钟预算（#4679）：本文件既有 git 探针的 30s 档同口径。 */
 const GIT_READ_BUDGET_MS = 30_000;
@@ -452,28 +456,6 @@ function isPremergeReport(v) {
 /** @param {unknown} v @returns {v is BaseCheckReport} */
 function isBaseCheckReport(v) {
   return isRecord(v) && (!("rows" in v) || Array.isArray(v.rows));
-}
-
-/**
- * 复算子进程的墙钟预算。默认 600s 兜「无限挂死」那一形（#4448）；在共享机上
- * type-aware oxlint healthy-but-slow 时 600s 会把「慢到没跑完」压成 exit 2，
- * 而 exit 2 既不是绿也不是红 —— 给一条**显式**抬预算的出口，不偷偷改默认值。
- *
- * 入参是环境变量原值；不设 / 空串回默认，非法值回 `null` 让调用点退 2 并点名
- * （静默回落 = 以为抬了预算其实没抬，正是本仓反复钉的假绿形状）。
- * @param {string | undefined} raw
- * @returns {number | null}
- */
-export function recomputeTimeoutMs(raw) {
-  if (raw === undefined || raw === "") {
-    return 600_000;
-  }
-  const n = Number(raw);
-  /* 太短的预算只会把正常的重档复算一律判成「没跑起来」，不许设。 */
-  if (!Number.isInteger(n) || n < 60_000) {
-    return null;
-  }
-  return n;
 }
 
 /**
