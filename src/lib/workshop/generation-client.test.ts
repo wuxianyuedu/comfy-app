@@ -12,6 +12,7 @@ import {
   apiGenerateImage,
   apiPollVideo,
   apiSubmitVideo,
+  buildLibraryWorkflowInput,
   fetchWorkshopWorkflows,
   prepareShotReferences,
 } from "./generation-client";
@@ -21,11 +22,18 @@ import { isRecord } from "~/lib/is-record";
 /* fetchWorkshopWorkflows 的 workflow.list 读数（#4119 回归）：现役形状是
  * { workflows, localPending, localRoots }，历史形状是裸数组。 */
 let vanillaListResult: unknown;
+/* buildLibraryWorkflowInput 的 workflow.detailFull 读数（ISSUE #4910 用例）：
+ * 给最小形状（无 IO / 无 paramMap / 无装载绑定），让封装层走「空图早退」分支，
+ * 只验证入参组装本身。 */
+let detailFullResult: unknown;
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     workflow: {
       list: {
         query: () => Promise.resolve(vanillaListResult),
+      },
+      detailFull: {
+        query: () => Promise.resolve(detailFullResult),
       },
     },
   },
@@ -329,5 +337,45 @@ describe("fetchWorkshopWorkflows：workflow.list 形状解析（#4119 回归）"
   it("既不是数组也没有 workflows 字段：安全回落空清单", async () => {
     vanillaListResult = { localPending: [], localRoots: null };
     expect(await fetchWorkshopWorkflows()).toEqual([]);
+  });
+});
+
+describe("buildLibraryWorkflowInput 参考图随任务落库（ISSUE #4910）", () => {
+  it("参考图清单进 GenerateInput.referenceImages（任务行 referenceImages 列与 params 的来源）", async () => {
+    detailFullResult = {
+      id: "wf-1",
+      name: "minimax_h3",
+      taskType: "I2I",
+      defaultMode: null,
+      availableModes: ["I2I"],
+      workflowIO: null,
+      paramMap: null,
+      imageInputPorts: [],
+    };
+    const result = await buildLibraryWorkflowInput(
+      "wf-1",
+      {
+        prompt: "Replace the girl in <Picture 1> with the boy in <Picture 2>",
+        referenceImages: ["workshop-ref-aaa.png", "workshop-ref-bbb.png"],
+      },
+      "I2I",
+      ["prompt", "reference-image", "reference-image-2"],
+    );
+    expect(result.input.referenceImages).toEqual(["workshop-ref-aaa.png", "workshop-ref-bbb.png"]);
+  });
+
+  it("没给参考图时不带 referenceImages 字段（与「没给就缺省」的入参口径一致）", async () => {
+    detailFullResult = {
+      id: "wf-1",
+      name: "minimax_h3",
+      taskType: "I2I",
+      defaultMode: null,
+      availableModes: ["I2I"],
+      workflowIO: null,
+      paramMap: null,
+      imageInputPorts: [],
+    };
+    const result = await buildLibraryWorkflowInput("wf-1", { prompt: "x" }, "I2I", ["prompt"]);
+    expect("referenceImages" in result.input).toBe(false);
   });
 });

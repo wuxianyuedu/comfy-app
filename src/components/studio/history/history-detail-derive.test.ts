@@ -12,9 +12,11 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import {
   buildModelTestRetryPayload,
   buildReprintPayload,
+  deriveReferenceImages,
   deriveTaskOrigin,
   deriveWorkflowParams,
   deriveWorkshopParams,
+  isImageFilenameValue,
   isPromptParamRow,
   kvValueText,
   resolveParamLabel,
@@ -516,5 +518,117 @@ describe("buildModelTestRetryPayload（#4841：历史「重试」带参预填测
       contracts: null,
     });
     expect("workflowId" in broken).toBe(false);
+  });
+});
+
+describe("deriveReferenceImages（ISSUE #4910）", () => {
+  it("存量工坊任务：任务行列与 params.referenceImages 都没落时，从 workflowInputs 反推（装载计划端点 + workshop-ref 形态），去重保序", () => {
+    const detail = makeDetail({
+      workflow: "w",
+      referenceLoaderPlan: { "45::image": { id: "rp-1", name: "p", steps: [] } },
+      workflowInputs: [
+        { nodeId: "45", name: "image", value: "workshop-ref-aaa.png" },
+        { nodeId: "69", name: "images.image_1", value: "workshop-ref-bbb.png" },
+        { nodeId: "34", name: "images.image2", value: "workshop-ref-bbb.png" },
+        { nodeId: "38", name: "seed", value: 1_079_606_339_754_492 },
+      ],
+    });
+    expect(deriveReferenceImages(detail)).toEqual(["workshop-ref-aaa.png", "workshop-ref-bbb.png"]);
+  });
+
+  it("首帧 / 尾帧 / 画布主图同名值不算参考图（LoadImage 的 widget 都叫 image，只看 pin 名分不开）", () => {
+    const detail = makeDetail({
+      firstFrame: "workshop-ref-first.png",
+      lastFrame: "workshop-ref-last.png",
+      inputImage: "workshop-ref-main.png",
+      workflowInputs: [
+        { nodeId: "50", name: "image", value: "workshop-ref-first.png" },
+        { nodeId: "51", name: "image", value: "workshop-ref-last.png" },
+        { nodeId: "52", name: "image", value: "workshop-ref-main.png" },
+        { nodeId: "45", name: "image", value: "workshop-ref-aaa.png" },
+      ],
+    });
+    expect(deriveReferenceImages(detail)).toEqual([
+      "workshop-ref-main.png",
+      "workshop-ref-aaa.png",
+    ]);
+  });
+
+  it("非 workshop-ref 前缀、又不在装载计划里的 pin 值不反推（作者的普通图片输入不误收）", () => {
+    const detail = makeDetail({
+      workflowInputs: [{ nodeId: "60", name: "image", value: "style-reference.png" }],
+    });
+    expect(deriveReferenceImages(detail)).toEqual([]);
+  });
+
+  it("画布 inputImage → 任务行列 → params 数组并集去重，顺序保持", () => {
+    const detail: TaskDetail = {
+      ...TASK_DETAIL_BASE,
+      referenceImages: ["col-1.png", "col-2.png"],
+      params: {
+        inputImage: "canvas.png",
+        referenceImages: ["col-1.png", "param-3.png"],
+      },
+    };
+    expect(deriveReferenceImages(detail)).toEqual([
+      "canvas.png",
+      "col-1.png",
+      "col-2.png",
+      "param-3.png",
+    ]);
+  });
+
+  it("非图片形态的 pin 值（数字 / 纯文本 / 无前缀扩展名）不反推；空数组如实跳过", () => {
+    const detail = makeDetail({
+      referenceImages: [],
+      workflowInputs: [
+        { nodeId: "38", name: "seed", value: 123 },
+        { nodeId: "39", name: "text", value: "hello" },
+        { nodeId: "40", name: "mask", value: "mask.png" },
+      ],
+    });
+    expect(deriveReferenceImages(detail)).toEqual([]);
+  });
+});
+
+describe("isImageFilenameValue（ISSUE #4910 参数表缩略图判据）", () => {
+  it("常见图片扩展名命中（大小写不敏感）", () => {
+    for (const value of ["a.png", "b.JPG", "c.jpeg", "d.webp", "e.gif", "f.avif", "g.bmp"]) {
+      expect(isImageFilenameValue(value)).toBe(true);
+    }
+  });
+
+  it("非图片值不命中：纯文本、数字串、无扩展名、数字、数组对象", () => {
+    for (const value of [
+      "1079606339754492",
+      "16:9 · 2816x1472",
+      "Replace the girl",
+      "workshop-ref-noext",
+      42,
+      null,
+      ["a.png"],
+      { filename: "a.png" },
+    ]) {
+      expect(isImageFilenameValue(value)).toBe(false);
+    }
+  });
+});
+
+describe("deriveWorkshopParams 参考图口吃推导清单（ISSUE #4910）", () => {
+  it("存量任务（列 null、无 params.referenceImages）参考图口按槽位取到反推结果", () => {
+    const contracts: Array<ModeContract> = [
+      { mode: "I2I", inputs: ["prompt", "reference-image", "reference-image-2"] },
+    ];
+    const detail = makeDetail({
+      prompt: "Replace the girl",
+      referenceLoaderPlan: { "45::image": { id: "rp-1", name: "p", steps: [] } },
+      workflowInputs: [
+        { nodeId: "45", name: "image", value: "workshop-ref-aaa.png" },
+        { nodeId: "69", name: "images.image_1", value: "workshop-ref-bbb.png" },
+      ],
+    });
+    const rows = deriveWorkshopParams(detail, "I2I", contracts, null);
+    expect(rows.find((r) => r.id === "reference-image")?.value).toBe("workshop-ref-aaa.png");
+    expect(rows.find((r) => r.id === "reference-image-2")?.value).toBe("workshop-ref-bbb.png");
   });
 });

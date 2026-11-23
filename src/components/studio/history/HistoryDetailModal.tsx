@@ -11,9 +11,11 @@ import { isPlainRecord } from "~/lib/is-record";
 import { taskStatusLabel } from "~/lib/task-state";
 
 import {
+  deriveReferenceImages,
   deriveTaskOrigin,
   deriveWorkflowParams,
   deriveWorkshopParams,
+  isImageFilenameValue,
   isPromptParamRow,
   kvValueText,
 } from "./history-detail-derive";
@@ -60,6 +62,28 @@ function PromptValueCell({ text }: { text: string }) {
   );
 }
 
+/** 图片参数值（ISSUE #4910）：小缩略图 + 文件名，替代纯文本文件名。
+ *  缩略图经 mediaPreviewUrl 走 /api/images 代理回读（type=input，与上传回显
+ *  同一通道）；ComfyUI 侧清掉旧文件时由查看器的失败占位兜底，文件名始终可读。
+ *  点缩略图可开大图（ViewableImage 自带查看器）。注意 ViewableImage 的触发
+ *  按钮自带 `h-full w-full`，必须给它一个定尺寸盒子，否则会把整行撑满、
+ *  文件名被挤成 0 宽。 */
+function ParamImageValue({ name }: { name: string }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2.5">
+      <span className="border-border-subtle size-14 shrink-0 overflow-hidden rounded-md border">
+        <ViewableImage
+          alt={`参数图片 ${name}`}
+          className="h-full w-full object-cover"
+          label={`参数图片 ${name}`}
+          src={mediaPreviewUrl(name)}
+        />
+      </span>
+      <span className="min-w-0 flex-1 break-words">{name}</span>
+    </span>
+  );
+}
+
 /**
  * 历史任务详情弹窗 —— 纯展示层（规范 17 §17.2 第③层）：图片网格 + 工坊参数（工坊发起时）+ 工作流参数 + 打开目录/下载工作流。
  * 不再有独立提示词块与「生成参数」卡：它们与参数表重复（同一提示词出现两次），且只看硬编码键名，
@@ -99,21 +123,11 @@ export function HistoryDetailModal({
     hasAny: hasParams,
   } = deriveWorkflowParams(current, workflowIO, current?.type ?? null);
   const firstImage = Array.isArray(current?.images) ? current.images[0] : undefined;
-  /* 参考图（ISSUE #4855）：工坊通路落在任务行 `referenceImages` 列（ComfyUI
-   * input 文件名数组），画布通路落在 `params.inputImage`（单文件名）——
-   * 两条通路取并集、去重后逐张展示，用户不必再回列表猜「参考图是哪张」。
-   * 列是 json（unknown），先收进 unknown 数组再收窄，不裸展开 any。 */
-  const paramsRecord = isPlainRecord(current?.params) ? current.params : {};
-  const rawRefs: Array<unknown> = [paramsRecord.inputImage];
-  if (Array.isArray(current?.referenceImages)) {
-    for (const item of current.referenceImages) {
-      rawRefs.push(item);
-    }
-  }
-  const referenceImages = rawRefs.filter(
-    (value, index, all): value is string =>
-      typeof value === "string" && value.trim() !== "" && all.indexOf(value) === index,
-  );
+  /* 参考图（ISSUE #4855 / #4910）：派生层统一并集任务行 `referenceImages` 列、
+   * `params.inputImage` / `params.referenceImages` 与 workflowInputs 反推
+   * （存量任务行没落列，靠反推补），去重保序后逐张展示，用户不必再回列表
+   * 猜「参考图是哪张」。 */
+  const referenceImages = deriveReferenceImages(current);
   /* 快照是 DB 的 JSON 列（unknown）：先确认它是对象、`source` 是字符串再读，
    *  其余（null / 旧数据 / 非字符串）都按「磁盘回退快照」显示。 */
   const snapshot = current?.workflowSnapshot;
@@ -357,6 +371,9 @@ export function HistoryDetailModal({
                           ) : isPromptParamRow(row.id) ? (
                             /* 提示词定高滚动（ISSUE #4665）：长提示词不再把弹窗拉长。 */
                             <PromptValueCell text={kvValueText(row.value)} />
+                          ) : isImageFilenameValue(row.value) ? (
+                            /* 图片参数值（ISSUE #4910）：缩略图 + 文件名。 */
+                            <ParamImageValue name={row.value} />
                           ) : (
                             kvValueText(row.value)
                           ),
@@ -392,6 +409,9 @@ export function HistoryDetailModal({
                                     标签也能识别（`replace` 的标签是 `prompt`）。 */}
                                 {isPromptParamRow(row.id, row.name, row.label) ? (
                                   <PromptValueCell text={kvValueText(row.value)} />
+                                ) : isImageFilenameValue(row.value) ? (
+                                  /* 图片参数值（ISSUE #4910）：缩略图 + 文件名。 */
+                                  <ParamImageValue name={row.value} />
                                 ) : (
                                   kvValueText(row.value)
                                 )}
