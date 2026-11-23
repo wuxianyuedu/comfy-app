@@ -15,6 +15,7 @@ import { useItemAction } from "~/components/ui/use-item-action";
 import { useViewTabActive } from "~/components/ui/view-tab-active";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { revealTaskFolder } from "~/lib/history-detail-actions";
+import { formatSampleRateText, formatStepsText } from "~/lib/progress";
 import { cancelTask } from "~/lib/task-cancel-client";
 import { useTRPC } from "~/trpc/react";
 
@@ -40,7 +41,11 @@ export type RunningCardView = {
   modelText: string;
   nodeText: string;
   progressPct: number;
+  /** 平均速度（`12.58 it/s`）；步数或耗时拿不到时「—」。 */
+  rateText: string;
   remainingText: string;
+  /** 采样步数（`553/8196`）；progressNode 没带时「—」。 */
+  stepsText: string;
   workflowName: string;
 };
 
@@ -142,6 +147,8 @@ export function useQueueMonitor(): QueueMonitorController {
       elapsedText: runningElapsedText(queue.elapsedMs),
       remainingText: remainingText(remainingMs),
       progressPct: task.progress,
+      stepsText: formatStepsText(task.progressValue, task.progressMax) ?? "—",
+      rateText: formatSampleRateText(task.progressValue, queue.elapsedMs) ?? "—",
     };
   }, [queue.elapsedMs, queue.running]);
 

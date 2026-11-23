@@ -339,6 +339,8 @@ describe("comfy-queue-store", () => {
       startedAt: 5000,
       progress: 0,
       nodeType: null,
+      progressValue: null,
+      progressMax: null,
     });
     off();
   });

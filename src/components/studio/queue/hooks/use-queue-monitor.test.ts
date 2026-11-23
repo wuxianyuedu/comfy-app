@@ -26,6 +26,8 @@ function queueView(
       startedAt: 0,
       progress: 0,
       nodeType: null,
+      progressValue: 553,
+      progressMax: 8196,
     },
     queued: 2,
     elapsedMs: 30_000,
@@ -132,10 +134,49 @@ describe("useQueueMonitor", () => {
         startedAt: 0,
         progress: 25,
         nodeType: "KSampler",
+        progressValue: 2049,
+        progressMax: 8196,
       },
     });
     const { result } = renderHook(() => useQueueMonitor());
     expect(result.current.running?.remainingText).toBe("约 01:30");
+  });
+
+  it("跑动卡带步数与平均速度（progressNode 的 value/max + 已耗时）", () => {
+    queueResult = queueView({
+      elapsedMs: 42_000,
+      running: {
+        taskId: "run-1",
+        workflowName: "正在跑的工作流",
+        model: "sd.safetensors",
+        startedAt: 0,
+        progress: 7,
+        nodeType: "KSampler",
+        progressValue: 553,
+        progressMax: 8196,
+      },
+    });
+    const { result } = renderHook(() => useQueueMonitor());
+    expect(result.current.running?.stepsText).toBe("553/8196");
+    expect(result.current.running?.rateText).toBe("13.17 it/s");
+  });
+
+  it("步数帧没带（comfy-cli 事件源）时写「—」，不编数", () => {
+    queueResult = queueView({
+      running: {
+        taskId: "run-1",
+        workflowName: "正在跑的工作流",
+        model: "sd.safetensors",
+        startedAt: 0,
+        progress: 7,
+        nodeType: null,
+        progressValue: null,
+        progressMax: null,
+      },
+    });
+    const { result } = renderHook(() => useQueueMonitor());
+    expect(result.current.running?.stepsText).toBe("—");
+    expect(result.current.running?.rateText).toBe("—");
   });
 
   it("取消：打到 cancelTask，并刷新列表", async () => {

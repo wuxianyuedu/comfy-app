@@ -10,6 +10,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { WaterFillProgress } from "~/components/ui/water-fill-progress";
 import { useContentAssetGallery } from "./hooks/use-content-asset-gallery";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
+import type { SampleProgressText } from "~/lib/progress";
 import { comfyImageUrl } from "~/lib/media/media-url";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Textarea } from "~/components/ui/textarea";
@@ -37,6 +38,9 @@ export function ContentAssetBody({
    *  回落到既有的空 / 有内容预览。 */
   status,
   progress,
+  /* 生成进行中的进度明细（步数 / 已用 / 预估剩余 / 速度），overlay 上多显示几行；
+   * null = 还没收到带步数的一拍，只显示百分比。 */
+  progressDetail,
 }: {
   data: CanvasNodeData;
   kind: "text" | "picture" | "movie";
@@ -47,6 +51,7 @@ export function ContentAssetBody({
    *  只接受拖放 —— 文件选择器现在只能从右下角 FAB 触发。 */
   onUploadFile?: (file: File) => void | Promise<void>;
   progress?: number;
+  progressDetail?: SampleProgressText | null;
   status?: CanvasNodeData["status"];
 }) {
   const accent = ASSET_ACCENT[kind];
@@ -174,7 +179,9 @@ export function ContentAssetBody({
        *  "running" 时渲染。absolute inset-0 + pointer-events-none 让它覆盖
        *  整个预览区但不拦截 FAB / 拖入 / 点击。FAB 是后渲染的兄弟节点，
        *  视觉上自然压在覆盖层之上。 */}
-      {status === "running" && <WaterFillProgress progress={progress ?? 0} />}
+      {status === "running" && (
+        <WaterFillProgress detail={progressDetail} progress={progress ?? 0} />
+      )}
       <Hint accessibleName label={isPic ? "上传图片" : "上传视频"}>
         <Button
           className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"

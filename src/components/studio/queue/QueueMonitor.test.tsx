@@ -217,6 +217,8 @@ describe("QueueMonitor", () => {
           elapsedText: "00:30",
           remainingText: "估算中",
           progressPct: 0,
+          stepsText: "—",
+          rateText: "—",
         },
       }),
     );

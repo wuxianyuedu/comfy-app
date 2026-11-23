@@ -81,8 +81,10 @@ export async function runWorkflowModelTest(args: {
   onLog?: (entry: TaskLogEntry) => void;
   /** 「给了值却没落进端口」这类提示（unmatched 翻译）与上传失败计数的出口。 */
   onNotice?: (text: string) => void;
-  /** 任务进度（SSE state 帧；整百分比变化才上报，避免逐帧重渲）。 */
-  onProgress?: (progress: { label?: string; pct: number }) => void;
+  /** 任务进度（SSE state 帧；整百分比变化才上报，避免逐帧重渲）。
+   *  value/max 是 ComfyUI progress 帧里的采样步数，带了就透给进度面板
+   *  算「553/8196 · it/s」。 */
+  onProgress?: (progress: { label?: string; max?: number; pct: number; value?: number }) => void;
   /** 本地提交行（封装算出的 workflowInputs 落点清单）：发起前先上抛给
    *  请求详情的「本地提交」行（#4080 评论 8 / 评论 13）。 */
   onSubmissionRow?: (row: ApiCallDebugRow) => void;
@@ -208,7 +210,11 @@ export async function runWorkflowModelTest(args: {
             return;
           }
           lastPct = whole;
-          args.onProgress?.({ pct, ...(node?.label === undefined ? {} : { label: node.label }) });
+          args.onProgress?.({
+            pct,
+            ...(node?.label === undefined ? {} : { label: node.label }),
+            ...(node === undefined ? {} : { value: node.value, max: node.max }),
+          });
         },
         onOutput: (out) => {
           /* 图片测试只要图片产物、视频测试只要视频产物（#4596，全库唯一判据）。 */

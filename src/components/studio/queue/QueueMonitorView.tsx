@@ -200,6 +200,8 @@ export function QueueMonitorView({
                 <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
                   <Field label="已跑">{running.elapsedText}</Field>
                   <Field label="预计剩余">{running.remainingText}</Field>
+                  <Field label="步数">{running.stepsText}</Field>
+                  <Field label="速度">{running.rateText}</Field>
                   <Field label="当前节点">{running.nodeText}</Field>
                   <Field label="主模型">{running.modelText}</Field>
                 </dl>

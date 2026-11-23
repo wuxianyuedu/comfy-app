@@ -30,13 +30,11 @@ import { Textarea } from "~/components/ui/textarea";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { FormField } from "~/components/ui/form-field";
 import { PageHeader } from "~/components/ui/page-header";
-import { Progress } from "~/components/ui/progress";
 import { SelectChip } from "~/components/ui/select-chip";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { StatusDot } from "~/components/ui/status-dot";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
-import { clampInt } from "~/lib/clamp";
 import { sizeSourceForMode } from "~/lib/workflow/workflow-size-source";
 import type { QueueTaskLogTarget } from "~/components/studio/queue/QueueTaskLogModal";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
@@ -52,6 +50,7 @@ import {
   type ModeTab,
 } from "./model-test-config";
 import { InputRow } from "./ModelTestInputRow";
+import { ModelTestProgressPanel } from "./ModelTestProgressPanel";
 import { ModelTestSizeField } from "./ModelTestSizeField";
 import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
 import { useModelTest } from "./hooks/use-model-test";
@@ -685,29 +684,13 @@ export function ModelTestView({
                   </span>
                 </div>
 
-                {/* 本地工作流任务的实时进度：SSE state 帧，整百分比变化才更新。 */}
-                {c.generating && c.workflowProgress !== null && (
-                  <div
-                    className="border-border bg-surface-1 rounded-lg border px-4 py-3"
-                    role="status"
-                  >
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium">
-                        本地工作流执行进度
-                        {c.workflowProgress.label !== undefined && c.workflowProgress.label !== ""
-                          ? ` · ${c.workflowProgress.label}`
-                          : ""}
-                      </span>
-                      <span className="text-primary-strong font-semibold tabular-nums">
-                        {Math.floor(c.workflowProgress.pct)}%
-                      </span>
-                    </div>
-                    <Progress
-                      className="mt-2"
-                      value={clampInt(Math.floor(c.workflowProgress.pct), 2, 100)}
-                    />
-                  </div>
-                )}
+                {/* 本地工作流任务的实时进度：SSE state 帧，整百分比变化才更新。
+                    明细行是 tqdm 那一行的可读版（步数 / 速度 / 已用 / 预估剩余）。 */}
+                <ModelTestProgressPanel
+                  generating={c.generating}
+                  progress={c.workflowProgress}
+                  since={c.generatingSince}
+                />
 
                 {c.error !== null && (
                   <p className="bg-destructive/10 text-destructive flex items-start gap-1.5 rounded-lg px-3 py-2 text-xs leading-relaxed">

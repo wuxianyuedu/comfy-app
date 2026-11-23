@@ -4,6 +4,7 @@
 // 故屏面每个数字都必须落到下面某个函数入参，可在 node 环境直接断言。
 
 import { formatElapsed } from "~/components/studio/hooks/use-comfy-queue";
+import { estimateRemainingMsFrom } from "~/lib/progress";
 import { isTerminalTaskStatus } from "~/lib/task-state";
 import type { RouterOutputs } from "~/trpc/react";
 
@@ -110,13 +111,10 @@ export function recentWithin(rows: ReadonlyArray<QueueRow>): Array<QueueRow> {
  * 剩余时间估算（毫秒）；null = 现在算不出来，屏面写「估算中」。
  * 进度为 0（分母 0）或已 100（收尾）必须给 null 而非数字 —— 这一屏数字是用户决定
  * 「要不要再提交一条」的依据，宁缺毋滥。
+ * 实现收在 `~/lib/progress`（画布进度覆盖层的剩余时间是同一份算法）。
  */
 export function estimateRemainingMs(elapsedMs: number, progressPct: number): number | null {
-  if (progressPct <= 0 || progressPct >= 100) {
-    return null;
-  }
-  const total = elapsedMs / (progressPct / 100);
-  return Math.max(0, Math.round(total - elapsedMs));
+  return estimateRemainingMsFrom(elapsedMs, progressPct);
 }
 
 /** 「剩余」那一格：算不出就明说在估算，不留空也不给假数。 */

@@ -26,6 +26,7 @@ import "server-only";
 // 瞬时抖动由前端 `useOfflineGate` 的连续失败阈值兜底。
 
 import { taskRepository } from "../core/repository-task";
+import { readProgressNodeSteps } from "~/lib/progress";
 import { getComfyQueue } from "./client";
 import { primaryModelName } from "./executed-model";
 import { getComfyRuntimeSnapshot } from "./status";
@@ -68,6 +69,7 @@ async function describeRunning(): Promise<ComfyRunningTask | null> {
 
   /* `progressNode` 是执行侧写的 JSON 快照（`{id,label?,classType?,value,max}`）：
    * 画布要的是中文 `label`，这一格历史上显示的是**类名**，所以两个都存着读。
+   * value/max（采样步数）一并透出 —— 队列页跑动卡的「步数 / 速度」由它算。
    * cli 那条进度事件源拿不到 `class_type`（raw 图不在手上），此时为 null——与
    * 内存版的旧行为一致，不是新缺口。 */
   const node =
@@ -79,6 +81,7 @@ async function describeRunning(): Promise<ComfyRunningTask | null> {
           classType?: unknown;
         })
       : null;
+  const steps = readProgressNodeSteps(row.progressNode);
 
   return {
     taskId: row.id,
@@ -90,6 +93,8 @@ async function describeRunning(): Promise<ComfyRunningTask | null> {
     startedAt,
     progress: row.progress,
     nodeType: typeof node?.classType === "string" ? node.classType : null,
+    progressValue: steps.value,
+    progressMax: steps.max,
   };
 }
 

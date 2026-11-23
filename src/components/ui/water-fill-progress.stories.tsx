@@ -61,3 +61,31 @@ export const ClampedInput: Story = {
     </div>
   ),
 };
+
+/** tqdm 式明细（ISSUE #4908）：步数 / 速度 / 已用 / 预估剩余。
+ *  文字由 `describeSampleProgress` 算好传来；拿不到的行不显示。 */
+export const WithDetail: Story = {
+  render: () => (
+    <div className="flex items-center gap-4">
+      <Frame>
+        <WaterFillProgress
+          detail={{
+            etaText: "09:18",
+            elapsedText: "00:42",
+            pct: 7,
+            rateText: "13.17 it/s",
+            stepsText: "553/8196",
+          }}
+          progress={7}
+        />
+      </Frame>
+      {/* 没有步数帧（comfy-cli 事件源）与没到剩余可算区间时的降级形态。 */}
+      <Frame>
+        <WaterFillProgress
+          detail={{ etaText: null, elapsedText: "00:05", pct: 0, rateText: null, stepsText: null }}
+          progress={0}
+        />
+      </Frame>
+    </div>
+  ),
+};
