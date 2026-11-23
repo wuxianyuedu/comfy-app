@@ -1204,6 +1204,8 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
   });
 
   test("平台专属登记表自身不陈旧：理由非空壳，且登记的条目在钩子里", () => {
+    /* no-conditional-expect：expect 不得落进条件块 ⇒ 零警告那批先收集、循环外统一断言。 */
+    const zeroWarningArgv: Array<[string, string | undefined]> = [];
     for (const [label, reason] of Object.entries(PLATFORM_ONLY_IN_BASE)) {
       expect(reason.trim().length).toBeGreaterThan(10);
       /* 全仓探针是 `run` 步骤行：显式点名仍能复算（删的是复算批，不是判据本身）。 */
@@ -1211,7 +1213,7 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
         /* #4904：B 组是单行 `run_group`，不在 `readHookSteps` 面里 ⇒ 显式点名解析不出
          * argv（拿到的是标签本身），它的诊断入口就是 `pnpm run lint` 这一条命令。 */
         const b = groupSteps().find((s) => s.label === label);
-        expect(b?.argv.join(" "), `「${label}」必须在钩子里`).toContain("run lint");
+        zeroWarningArgv.push([label, b?.argv.join(" ")]);
         continue;
       }
       const byLabel = resolveMergeBatch([label]);
@@ -1225,6 +1227,9 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
       /* 全仓档的钩子步骤行不带旗标 ⇒ 脚本按 `needsTypeAware(false, [])` 自挂
        * --type-aware（D0 那条带 --staged、#4884 起才不挂）。 */
       expect(argv).not.toContain("--staged");
+    }
+    for (const [label, argv] of zeroWarningArgv) {
+      expect(argv, `「${label}」必须在钩子里`).toContain("run lint");
     }
   });
 });
