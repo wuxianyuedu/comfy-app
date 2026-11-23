@@ -7,7 +7,11 @@
 // 解析按对象直取，不依赖暴露面。（#4547：追加端口已移除，扇出由挂载节点承担。）
 import { describe, expect, it } from "vitest";
 
-import { buildReferenceLoaderPlan, mountImagePortsForNodes } from "./reference-loader-plan";
+import {
+  buildReferenceLoaderPlan,
+  mountImagePortsForNodes,
+  mountReferenceCapacityOf,
+} from "./reference-loader-plan";
 import type { ReferenceLoaderPreset } from "./reference-loader-preset";
 
 const PRESET: ReferenceLoaderPreset = {
@@ -172,5 +176,63 @@ describe("buildReferenceLoaderPlan · 挂载节点自动接线（#4534）", () =
       mountPorts: MOUNT_PORTS.slice(0, 1),
     });
     expect(extraInputs).toEqual([{ nodeId: "69", name: "images.image_0", value: "a.png" }]);
+  });
+});
+
+describe("多挂载节点按节点内序对齐（ISSUE #4856）", () => {
+  /* #4856 现场：两棵挂载节点（69 = image_0..1 零基、34 = image1..2 一基），
+   * 扁平清单按数字后缀排序后是 [69.image_0, 34.image1, 69.image_1, 34.image2]。
+   * 此前按统一下标对齐：槽位 1 落到 34.image1（别的节点的第一个口）——
+   * 交错错位。现在按节点内序对齐：槽位 i 喂到每棵节点的第 i 个口（同图多口）。 */
+  const INTERLEAVED = [
+    { ioKey: "69::param::images.image_0", label: "i0", name: "images.image_0", nodeId: "69" },
+    { ioKey: "34::param::images.image1", label: "j1", name: "images.image1", nodeId: "34" },
+    { ioKey: "69::param::images.image_1", label: "i1", name: "images.image_1", nodeId: "69" },
+    { ioKey: "34::param::images.image2", label: "j2", name: "images.image2", nodeId: "34" },
+  ];
+
+  it("槽位按节点内序对齐，同一张图喂到每棵挂载节点的同序口", () => {
+    const { extraInputs } = buildReferenceLoaderPlan({
+      bindings: {},
+      filenames: ["a.png", "b.png"],
+      io: IO,
+      presets: [],
+      resolved: {},
+      mountPorts: INTERLEAVED,
+    });
+    expect(extraInputs).toEqual([
+      { nodeId: "69", name: "images.image_0", value: "a.png" },
+      { nodeId: "34", name: "images.image1", value: "a.png" },
+      { nodeId: "69", name: "images.image_1", value: "b.png" },
+      { nodeId: "34", name: "images.image2", value: "b.png" },
+    ]);
+  });
+
+  it("某棵节点没有对应序号的口时跳过该口（不越界补位）", () => {
+    const { extraInputs } = buildReferenceLoaderPlan({
+      bindings: {},
+      filenames: ["a.png", "b.png", "c.png"],
+      io: IO,
+      presets: [],
+      resolved: {},
+      mountPorts: INTERLEAVED.slice(0, 2),
+    });
+    expect(extraInputs).toEqual([
+      { nodeId: "69", name: "images.image_0", value: "a.png" },
+      { nodeId: "34", name: "images.image1", value: "a.png" },
+    ]);
+  });
+});
+
+describe("mountReferenceCapacityOf（ISSUE #4856）", () => {
+  it("取各挂载节点模式口数的最大值（一槽有一棵节点可落即算）", () => {
+    expect(
+      mountReferenceCapacityOf([
+        { ioKey: "a", label: "", name: "images.image_0", nodeId: "69" },
+        { ioKey: "b", label: "", name: "images.image_1", nodeId: "69" },
+        { ioKey: "c", label: "", name: "images.image1", nodeId: "34" },
+      ]),
+    ).toBe(2);
+    expect(mountReferenceCapacityOf([])).toBe(0);
   });
 });
