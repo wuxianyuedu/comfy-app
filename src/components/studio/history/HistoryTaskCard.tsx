@@ -15,13 +15,14 @@ import {
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { TruncatedText } from "~/components/ui/truncated-text";
+import { TimeAgo } from "~/components/ui/time-ago";
 import { isVideo } from "~/lib/media/media";
 import { clampPct } from "~/lib/progress";
 import { cn } from "~/lib/utils";
 
 import type { TaskItem } from "./history-types";
 import { modelLabelOf, modeLabelOf } from "./history-list-derive";
-import { QUEUED_STATUS_STYLE, STATUS_STYLE, timeAgo } from "./history-utils";
+import { QUEUED_STATUS_STYLE, STATUS_STYLE } from "./history-utils";
 
 type HistoryTaskCardProps = {
   /** 这一条的动作（输出目录 / 复制去重投）正在进行吗——按钮禁用态，判据在 controller。 */
@@ -170,7 +171,8 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
             {modelLabelOf(task)}
           </TruncatedText>
           <span className="text-ink-fainter ml-auto shrink-0 text-xs tabular-nums">
-            {timeAgo(task.createdAt)}
+            {/* 水合安全口径（ISSUE #4852）：挂载前渲染稳定占位，挂载后再算相对时间。 */}
+            <TimeAgo fallback="刚刚" value={task.createdAt} />
           </span>
         </div>
 

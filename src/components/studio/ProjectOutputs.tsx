@@ -19,7 +19,7 @@ import { displayValue } from "~/lib/display-value";
 import { artifactDirDisplay } from "~/lib/media/output-layout";
 import { downloadText } from "~/lib/browser-io";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
-import { timeAgo } from "~/lib/time-format";
+import { TimeAgo } from "~/components/ui/time-ago";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProjectOutputsMetadataSheet, TYPE_CHIP } from "./ProjectOutputsMetadataSheet";
 import {
@@ -97,7 +97,9 @@ function OutputCard({
         <p className="text-ink-soft line-clamp-1 text-xs font-medium">
           {TYPE_CHIP[output.type] ?? output.type} ·{displayValue(output.seed)}
         </p>
-        <p className="text-ink-fainter text-2xs mt-1">{displayValue(timeAgo(output.createdAt))}</p>
+        <p className="text-ink-fainter text-2xs mt-1">
+          <TimeAgo fallback="—" value={output.createdAt} />
+        </p>
       </div>
     </Button>
   );

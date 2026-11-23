@@ -2,14 +2,9 @@ import { useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { adviseWithFallback } from "~/lib/comfyui/error-advice";
-import { timeAgo as timeAgoImpl, formatDate } from "~/lib/time-format";
+import { formatDate } from "~/lib/time-format";
 
 import type { TaskItem } from "./history-types";
-
-/** 全量历史页的相对时间。定义收在 `~/lib/time-format`（此前两域各写一份）。 */
-export function timeAgo(iso: string): string {
-  return timeAgoImpl(iso) ?? "刚刚";
-}
 
 export type StatusStyle = {
   // 失败错误转修复建议
