@@ -109,13 +109,16 @@ const config = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Next 16.3.2 起 experimental.useTypeScriptCli 默认 true（CLI 模式要求
-  // typescript 包带 bin/tsc 文件）。本仓库 typescript 别名到 @typescript/typescript6
-  // （bin 只有 tsc6，无 bin/tsc），CLI 模式会误报「typescript 未安装」并使 dev
-  // server 所有请求挂死。关掉回退到 typescript-api 模式（TS6 别名带完整
-  // lib/typescript.js API）；类型正确性仍由独立 `tsc --noEmit`（TS7 native）门禁保证。
+  // Next 16.3.2 起 experimental.useTypeScriptCli 默认 true。这里显式写 true（与默认
+  // 同值）而不删键，是把「本仓已适配 CLI 模式」写在配置里：16.3.x 时代 CLI 入口只认
+  // typescript 包的 bin/tsc，本仓 typescript 别名到 @typescript/typescript6（bin 只有
+  // tsc6），曾误报「typescript 未安装」并使 dev server 所有请求挂死，当时钉死为 false
+  //（changelog.d/4905-*.md）。16.4.6 起 getTypeScriptPackageInfo 改按 bin 元数据解析
+  // CLI 入口并对 tsc<N> 键名兜底，bin/tsc6 在场 ⇒ CLI 模式可用（实测 dev Ready 3.1s、
+  // / 与 /api/* 全 200）。若降级回 Next 16.3.x，这里要重新改回 false。
+  // 类型正确性仍由独立 `tsc --noEmit`（TS7 native）门禁保证（见 typescript.ignoreBuildErrors）。
   experimental: {
-    useTypeScriptCli: false,
+    useTypeScriptCli: true,
     // ⚠️ Turbopack dev 持久缓存必须关闭（Next 16.4.3 默认 true，config-shared.js L293）。
     // 为什么：16.4 起持久缓存跨会话存活 + turbopack-subscribe 的 hmrVersion 校验
     // （上游 #97966 引入）组合出「整页 reload 死循环」——每次页面加载，主 client 入口
