@@ -4,8 +4,8 @@
  * 表达式上才生效，跨模块展开无效（Next 16.4.3 实测，见 §7.2）。
  * 清单不做减法（真删靠 `standalone-private-inputs.mjs`），故产物探针才是判据；清单只守 ① 顶层键位 ② 目录齐全 ③ 不用 ignoreIssue。
  */
-import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { isRecord } from "~/lib/is-record";
@@ -195,6 +195,13 @@ function listFiles(dir: string, prefix = ""): Array<string> {
 /** 产物目录是否存在；不存在时整组跳过（守卫守的是构建结果，不是构建本身）。 */
 const standaloneExists = existsSync(standaloneDir());
 
+/** 产物是否早于当前 `next.config.js`（排除清单的住处）：早于 ⇒ 盘上是**旧构建**，
+ * 探针的红只说明「产物过期、请重新构建」，不构成「现行排除清单失效」的证据（ISSUE #4907）。
+ * 判据先求值成常量，不在 skipIf / 断言里现算（两次求值差异会让结论不可预期）。 */
+const configMtimeMs = statSync(CONFIG_PATH).mtimeMs;
+const artifactMtimeMs = standaloneExists ? statSync(standaloneDir()).mtimeMs : 0;
+const artifactOlderThanConfig = standaloneExists && artifactMtimeMs < configMtimeMs;
+
 describe.skipIf(!standaloneExists)(".next/standalone 产物里不得有测试 / 文档 / 变更碎片", () => {
   const files = standaloneExists ? listFiles(standaloneDir()) : [];
 
@@ -210,9 +217,16 @@ describe.skipIf(!standaloneExists)(".next/standalone 产物里不得有测试 / 
     ["文档目录", /(?:^|\/)docs\/.*\.md$/],
   ] as const)("不含%s", ([, re]) => {
     const hits = files.filter((f) => re.test(f));
+    // 归因分两路（ISSUE #4907）：产物早于当前配置 ⇒ 红只说明「旧构建的残留」，指路重构建；
+    // 产物不早于配置 ⇒ 才是「现行构建把排除目录带进了产物」的真信号，归因到排除清单。
+    const attribution = artifactOlderThanConfig
+      ? `【产物过期】.next/standalone 构建于 ${new Date(artifactMtimeMs).toISOString()}，早于 ` +
+        `next.config.js 的 ${new Date(configMtimeMs).toISOString()} —— 这是旧构建的残留，` +
+        `不是现行排除清单失效；重跑 pnpm build 刷新产物后再判。`
+      : `outputFileTracingExcludes 失效或漏项：现行构建把排除目录带进了 standalone。`;
     expect(
       hits.slice(0, 10),
-      `这些文件不该进 standalone（outputFileTracingExcludes 失效或漏项）：${hits.length} 个`,
+      `这些文件不该进 standalone（命中 ${hits.length} 个）。${attribution}`,
     ).toEqual([]);
   });
 });
@@ -250,25 +264,30 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
   });
 });
 
-/* ── 构建期配置配对不变式：`useTypeScriptCli: false` ⇔ 解析到的必须是 TS6 ────
+/* ── 构建期配置配对不变式：useTypeScriptCli 的取值 ⇔ 解析到的 TypeScript 撑得住该模式 ──
  *
- * 官方文档：关掉它回退到 JS 编译器 API 后，若 Next 解析到 TypeScript 7，`next build` 直接退出；
- * 本仓库 `typescript` 别名到 `@typescript/typescript6`（其 `bin/` 只有 `tsc6`，AGENTS 硬规则 2）。
- * 该 opt-out 的安全性寄生在「主版本 < 7」上；这里把它变成点名两侧出口的断言（留 TS6 或切 TS7 时去掉它）。 */
+ * 两种模式各有前提（AGENTS 硬规则 2 的回归判据）：
+ * · CLI 模式（true，Next 16.3.2+ 默认）：Next 按 bin 元数据解析 CLI 入口
+ *   （bin.tsc，取不到时对 tsc<N> 键名兜底，16.4.6 起）——入口必须真的在盘上；
+ * · API 模式（false）：要求 lib/typescript.js 在场，且官方口径下解析到 TypeScript 7
+ *   会让 `next build` 直接退出 ⇒ false 只能与 TS6（主版本 < 7）配对。
+ * 本仓现状：true + TS6 别名（bin/tsc6），两种出口都由这里点名。 */
 import { createRequire } from "node:module";
 
-describe("useTypeScriptCli 与解析到的 TypeScript 版本必须配对", () => {
+describe("useTypeScriptCli 与解析到的 TypeScript 能力必须配对", () => {
   const code = stripComments(config);
   const flag = /useTypeScriptCli:\s*(?<flag>true|false)/.exec(code);
-  const optedOut = flag?.groups?.flag === "false";
+  const useCli = flag?.groups?.flag === "true";
 
   /** 从仓库根解析 `typescript` 那份包（本仓的 `typescript` 是 pnpm 别名，指向谁由安装态决定）。 */
-  function resolvedTsVersion(): string {
+  function resolvedTsPackage(): { bin: unknown; packageDir: string; version: string } {
     const requireFromRoot = createRequire(join(process.cwd(), "noop.js"));
-    const pkg: unknown = JSON.parse(
-      readFileSync(requireFromRoot.resolve("typescript/package.json"), "utf8"),
-    );
-    return isRecord(pkg) && typeof pkg.version === "string" ? pkg.version : "";
+    const pkgJsonPath = requireFromRoot.resolve("typescript/package.json");
+    const pkg: unknown = JSON.parse(readFileSync(pkgJsonPath, "utf8"));
+    if (!isRecord(pkg) || typeof pkg.version !== "string") {
+      return { version: "", packageDir: dirname(pkgJsonPath), bin: undefined };
+    }
+    return { version: pkg.version, packageDir: dirname(pkgJsonPath), bin: pkg.bin };
   }
 
   it("配置里显式写了 useTypeScriptCli 的布尔字面量（缺值等于两侧都判不了）", () => {
@@ -278,20 +297,53 @@ describe("useTypeScriptCli 与解析到的 TypeScript 版本必须配对", () =>
     ).not.toBeNull();
   });
 
-  it("opt-out 在场时不得同时解析到 TypeScript 7（否则 next build 直接退出）", () => {
-    const version = resolvedTsVersion();
+  /** 两侧出口各折算成一条违规读数；null = 配对成立。（不放 expect，保持断言无条件。） */
+  function pairingViolation(
+    cliMode: boolean,
+    version: string,
+    packageDir: string,
+    bin: unknown,
+  ): string | null {
+    const major = Number(version.split(".")[0]);
+    // CLI 模式的入口解析与 Next 同序：bin.tsc → 第一个 tsc<N> 键（16.4.6 起）。
+    const binMap: Record<string, unknown> =
+      typeof bin === "string" ? { tsc: bin } : isRecord(bin) ? bin : {};
+    const cliEntry =
+      typeof binMap.tsc === "string"
+        ? binMap.tsc
+        : Object.entries(binMap).find(([name]) => /^tsc\d+$/.test(name))?.[1];
+    if (!cliMode) {
+      if (major >= 7) {
+        return (
+          `useTypeScriptCli:false 与 typescript@${version} 不配对：官方口径下这会让 next build 直接退出` +
+          "（TS7 必须走 CLI 模式）。两条出口选一：把 typescript 留在 TS6，" +
+          "或切到 TS7 时把取值改成 true 并按 AGENTS 硬规则 2 说明理由。"
+        );
+      }
+      return null;
+    }
+    if (typeof cliEntry !== "string") {
+      return (
+        `useTypeScriptCli:true 与 typescript@${version} 不配对：bin 里解析不出 tsc/tsc<N> 入口` +
+        "（Next CLI 模式会按「typescript 未安装」处理）。出口：换回带该入口的 typescript 包，" +
+        "或把取值改回 false 并按 AGENTS 硬规则 2 说明理由。"
+      );
+    }
+    if (!existsSync(join(packageDir, cliEntry))) {
+      return `bin 入口 ${cliEntry} 在 ${packageDir} 下不存在（锁文件解析与盘上安装态不一致）`;
+    }
+    return null;
+  }
+
+  it("取值与解析到的 TypeScript 能力配对（false⇔TS6；true⇔bin 里有在盘的 tsc 入口）", () => {
+    const { version, packageDir, bin } = resolvedTsPackage();
     // 先卡形状再取主版本：`Number("")` 是 **0** 而不是 NaN，只判 `Number.isInteger`
     // 会让「版本号读不出来」伪装成合法的 TS0 静默通过。
     expect(
       /^\d+\./.test(version),
       `解析到的 typescript 版本号形状不对（拿到 "${version}"）—— 先跑 pnpm check:toolchain`,
     ).toBe(true);
-    const major = Number(version.split(".")[0]);
-    expect(
-      optedOut && major >= 7,
-      `useTypeScriptCli:false 与 typescript@${version} 不配对：官方口径下这会让 next build 直接退出` +
-        "（TS7 必须走 CLI 模式）。两条出口选一：把 typescript 留在 TS6（现状），" +
-        "或在切到 TS7 时删掉这颗 opt-out 并按 AGENTS 硬规则 2 说明理由。",
-    ).toBe(false);
+    const violation = pairingViolation(useCli, version, packageDir, bin);
+    expect(violation, violation ?? "useTypeScriptCli 与解析到的 TypeScript 配对成立").toBe(null);
   });
 });

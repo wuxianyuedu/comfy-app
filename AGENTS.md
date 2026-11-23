@@ -28,6 +28,12 @@
   纯排版 / 纯注释 / 纯文档改动可免。执行面：PR 上跑受影响用例（静态 import 图 + 用例
   显式声明的源依赖，增量面，硬规则 7），每日全量单测兜底；已有代码缺覆盖的，补测试的那次提交把该目录的覆盖率
   门槛抬到实测值（§11 覆盖率一节）。
+- **E2E 读数纪律（ISSUE #4876）**：PR 档（CNB 质量门禁 + GA pr-gate）**不跑 E2E**，
+  全量只在每日档。改了 e2e spec 判据 / `playwright.config.ts` / 执行链路
+  （`src/lib/comfyui/**`、`scripts/build*`、`next.config.js`）的 PR，**合并前先跑
+  `pnpm e2e:which`**（或看 `pnpm gates:which` 的 E2E 那节）拿到相关 spec 与可复跑命令，
+  自跑一次并把读数写进 PR 描述；别让风险等到次日每日档红在 master 上。
+  口径与边界见 [11-测试与可观测性.md](docs/standards/11-测试与可观测性.md) §11.3.1。
 - 前端业务 / 组件 / 状态 / 性能 / 类型 / 样式 / 测试 → `docs/standards/README.md`
   总览，按主题进入 `docs/standards/01~18` 对应章节；
 - 产品功能 / 需求口径（做功能开发前对齐「这个功能是什么、验收是什么、什么状态」）
@@ -117,6 +123,7 @@
 | 构建与打包                                                            | `scripts/build-desktop.mjs`、`tools/**`                                                                                                                                                                                         | §7、§8                                                                                                                                                                                                                                                                                                                       |
 | 复用/去重与常量收口                                                   | 抽共享模块、加/改默认地址与端口、写新的质量门禁、**动手前查有无现成实现 / 缺能力补地基**、**同一串手工命令被敲到第二次就收成入口**                                                                                              | §12.18（复用优先·写之前先查）、**§12.20（能做成工具的就做成工具）**、§12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口）                                                                                                                                                                                            |
 | 提交 / PR / 合并这条流程本身                                          | `scripts/ship*.mjs`、`.cnb.yml`（PR 与 push 两跑的清单）、`.github/workflows/`（每日 / 桌包定时档与 PR 镜像档，定时执行者已迁 GA）、`.qoder/skills/ship/SKILL.md`                                                               | §13.6（`pnpm ship` 那四条红线）、§13.5.25（本地跑哪几条）、§13.10（碎片与单子）、§13.6.5（**删分支前**：落地与否只认 PR 的 `is_merged`，三点 diff 不是判据）                                                                                                                                                                 |
+| E2E 判据与执行链路                                                    | `e2e/**`、`playwright.config.ts`、`src/lib/comfyui/**`、`scripts/build*`、`next.config.js`                                                                                                                                                                                            | §11.3.1、§13.6（**合并前自跑相关 e2e**：`pnpm e2e:which` 按改动面给出相关 spec 与可复跑命令；PR 档不跑 E2E，读数写进 PR 描述）                                                                                                                                                                     |
 
 ## lint 判据：oxlint 唯一判决（#2777 收尾后的最终架构）
 
@@ -204,10 +211,12 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
 2. **工具链钉死项不可随意改**（改动前必须读规范 §6 并在提交说明里给出理由）：
    - `pnpm-workspace.yaml`：`minimumReleaseAge: 0`、`allowBuilds` 名单（条数以该文件为准；
      它会随新增依赖变动，别在文档里写死数字）、`verifyDepsBeforeRun: false`
-   - `next.config.js`：`experimental.useTypeScriptCli: false`
+   - `next.config.js`：`experimental.useTypeScriptCli: true`（Next 16.3.2+ 默认档，显式写明防回退。
+     曾钉 `false` 的成因——16.3.x CLI 入口只认 `bin/tsc`、与 TS6 别名（bin 只有 `tsc6`）不兼容
+     ——已随 16.4.6 的 bin 元数据解析 + `tsc<N>` 兜底消失，#4905）
    - **钉死项本身有回归判据**：`tests/turbopack-tracing-excludes.test.ts` 判
-     `useTypeScriptCli: false` 与**实际解析到的 TypeScript 必须配对**（Next 16 里该键的位置、
-     以及关掉它之后解析到 TS7 会让 `next build` 直接退出），改钉死项会当场红。
+     `useTypeScriptCli` 的取值与**实际解析到的 TypeScript 能力必须配对**（false ⇔ 主版本 <7，
+     true ⇔ bin 里解析得出在盘的 tsc/tsc<N> 入口；Next 16 里该键的位置也在判），改钉死项会当场红。
 3. **进程清理必须杀整棵树，平台判据只收两处**：Node/TS 侧一律经 `src/lib/process/kill-process-tree.ts` 的 `killProcessTree()`；非 TS 宿主走命令行入口 `scripts/reap-process.mjs`；Rust 壳侧起子进程只能用官方 `tauri-plugin-shell` 的 `CommandChild`（退出整树回收同样转交 `reap-process.mjs`）。禁止各处自写 `taskkill` / `process.kill` / `Process.Kill()` / 单杀 leader / `std::process::Command` + `taskkill`（后者在 POSIX 上等于什么都不做）。**POSIX 自建进程组是前提**：`spawn({ detached: true })`。跨平台机制、防自杀判据、孤儿事故根因见 launch-and-build §3.1–§3.3。**这条有回归判据**：`tests/cross-platform-launcher.test.ts` 真起进程树再回收、并断言 `scripts/reap-process.mjs` 真的把目标收掉（Windows 侧的 `taskkill` 参数形态由 `src/lib/process/kill-process-tree.windows.test.ts` 判）。
 4. **失败路径必须有日志 + 用户可见出口**；日志按规范 §4 的布局落 `log/`，
    不得引入新的固定名日志文件（残留进程句柄会锁死它，用按次命名 + 轮转）。
