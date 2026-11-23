@@ -126,6 +126,9 @@ export const STAGED_TO_FULL_TREE = {
  * `oxlintZeroRules` 全部保留 —— 删步骤行会让 `check-gate-executors.cjs` 当场判无执行者；
  * 保留才能让手工 `pnpm check:all` 与显式点名的 `base-check <label>` 仍能诊断。
  * 显式点名走 `resolveMergeBatch(input)` 的独立分支，不受这张表影响。
+ * ⚠️ `run_group`（如 B 组 lint）不在 `readHookSteps` 的 `run` 解析面里：显式点名解析不出
+ * argv（拿到的是标签本身），这类条目的诊断入口就是它自己的命令（B 组即 `pnpm run lint`），
+ * 不经 base-check。
  *
  * 登记由 `tests/base-check.test.ts` 双向核对（条目在钩子里真在、理由非空壳，
  * 且默认面里确实没有它）。新增成员按同一条口径逐条评估：平台已有全量执行者 + 本地重档贵。
@@ -133,6 +136,13 @@ export const STAGED_TO_FULL_TREE = {
 export const PLATFORM_ONLY_IN_BASE = {
   "已清零 oxlint 规则集（41 条全仓 0 命中）":
     "平台 `ci-heavy-gates.mjs` 读同一份钩子注册表跑全仓 `--type-aware` 探针（GA PR 档在场且绿）；本地 pre-push 两侧各 42–146s，重复判定只推高复算墙钟。D0 的暂存面快检（不带 --type-aware，8.8s）仍在每次提交时拦新带回的清零规则。",
+  /* #4904：B 组整条交给平台 `ESLint 零警告` 格（它跑的仍是 `pnpm run lint`，同一份
+   * 判据、同一份扫描面）。本地这一条单测 src 面 320s / 全量 246–609s，其中 ~90% 的
+   * 规则执行时间花在 `eslint-plugin-boundaries`：它按 `boundaries/elements` 元素表
+   * 为每个文件构建整棵项目依赖图（命令行 `-A` 只压诊断、插件照跑，实测 384s 不省）。
+   * 平台侧同格 30m 预算内可付；摘掉后本地 pre-push 不再跑这条全仓 lint。 */
+  "oxlint（零警告，范围见 package.json lint）":
+    "平台 `ESLint 零警告` 格跑同一份 `pnpm run lint`（SECTION 13.5.25 的验真：本地与平台判同一件事），覆盖面不丢。#4904 诊断：boundaries 插件占规则执行时间 ~90%（src 面去掉它 309s→28s），本地两侧各 246–343s 只推高复算墙钟。",
 };
 
 /**

@@ -1081,20 +1081,19 @@ describe("base-check --merge-state —— 本地绿不证明合并态绿（ISSUE
  * ③ 127 压过「有红」（两者退出码同形，拿它下判决会送错方向）；④ 快照里链上依赖树（缺它近一半判据报「红」，实测 9）。
  */
 describe("base-check --base —— 合并前面从钩子现算（不抄第二份清单）", () => {
-  test("默认面 = 钩子里的全仓判据，且含 A 组的 tsc 与 B 组的 oxlint", () => {
+  test("默认面 = 钩子里的全仓判据，A 组的 tsc 在、B 组 lint 已交平台（#4904）", () => {
     const r = resolveMergeBatch([]);
     expect(r.ok).toBe(true);
     if (!r.ok) {
       return;
     }
     const labels = r.commands.map((c) => c.label);
-    /* 这两条就是 ISSUE #1591 立案的那两条：它们在钩子里是 `run_group`（并行成组）、
-     * 不是 `run "<标签>"`，所以只读 `run` 的解析器看不见它们 —— 只读 `run` 会让
-     * 「合并前复算」漏掉最该复算的两条，且表现为「静默少两行」。 */
+    /* A 组 tsc 是 ISSUE #1591 立案的那两条之一：在钩子里是 `run_group`（单行 sh -c），
+     * 只读 `run` 的解析器看不见它 —— 漏掉它就表现为「静默少一行」。 */
     expect(labels).toContain("tsc --noEmit");
-    /* #4896：B 组的 run_group 标签跟着执行器改成 oxlint（#3157 起 ESLint 已退役），
-     * 不再让读数里出现「eslint」误导人以为它还在跑。 */
-    expect(labels.some((l) => l.includes("oxlint"))).toBe(true);
+    /* #4896：B 组标签跟随执行器改成 oxlint（#3157 起 ESLint 已退役）；
+     * #4904：它已整条交给平台 `ESLint 零警告` 格，本地复算批不再收。 */
+    expect(labels.some((l) => l.includes("oxlint"))).toBe(false);
     expect(labels.some((l) => l.includes("eslint"))).toBe(false);
     /* D 组的静态判据也在（面是「那一批」而不是「那一条」）。 */
     expect(r.commands.length).toBeGreaterThan(20);
@@ -1196,26 +1195,36 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
     for (const label of Object.keys(PLATFORM_ONLY_IN_BASE)) {
       expect(labels, `「${label}」不该在本地 pre-push 复算批里`).not.toContain(label);
     }
-    /* 「不收」不是「删步骤」：步骤行逐字留在钩子里，执行者与平台那一格都在。 */
-    const byLabel = new Map(readHookSteps().map((st) => [st.label, st.argv]));
+    /* 「不收」不是「删步骤」：步骤行逐字留在钩子里，执行者与平台那一格都在。
+     * B 组是单行 `run_group`（不在 `readHookSteps` 的 `run` 面里），与 groupSteps 合起来查。 */
+    const byLabel = new Map([...readHookSteps(), ...groupSteps()].map((st) => [st.label, st.argv]));
     for (const label of Object.keys(PLATFORM_ONLY_IN_BASE)) {
       expect(byLabel.get(label), `登记的「${label}」在钩子里必须还在`).toBeDefined();
     }
   });
 
-  test("平台专属登记表自身不陈旧：理由非空壳，且显式点名仍能跑", () => {
+  test("平台专属登记表自身不陈旧：理由非空壳，且登记的条目在钩子里", () => {
     for (const [label, reason] of Object.entries(PLATFORM_ONLY_IN_BASE)) {
       expect(reason.trim().length).toBeGreaterThan(10);
+      /* 全仓探针是 `run` 步骤行：显式点名仍能复算（删的是复算批，不是判据本身）。 */
+      if (label.includes("零警告")) {
+        /* #4904：B 组是单行 `run_group`，不在 `readHookSteps` 面里 ⇒ 显式点名解析不出
+         * argv（拿到的是标签本身），它的诊断入口就是 `pnpm run lint` 这一条命令。 */
+        const b = groupSteps().find((s) => s.label === label);
+        expect(b?.argv.join(" "), `「${label}」必须在钩子里`).toContain("run lint");
+        continue;
+      }
       const byLabel = resolveMergeBatch([label]);
       expect(byLabel.ok, `显式点名「${label}」必须仍能复算`).toBe(true);
       if (!byLabel.ok) {
         return;
       }
       expect(byLabel.commands).toHaveLength(1);
-      expect(byLabel.commands[0]!.argv.join(" ")).toContain("check-oxlint-zero-rules.mjs");
-      /* 钩子步骤行本身不带旗标 ⇒ 脚本按 `needsTypeAware(false, [])` 自己挂 --type-aware
-       *（D0 那条带 --staged、#4884 起才不挂）；这正是「全仓档」的入口形态。 */
-      expect(byLabel.commands[0]!.argv).not.toContain("--staged");
+      const argv = byLabel.commands[0]!.argv;
+      expect(argv.join(" ")).toContain("check-oxlint-zero-rules.mjs");
+      /* 全仓档的钩子步骤行不带旗标 ⇒ 脚本按 `needsTypeAware(false, [])` 自挂
+       * --type-aware（D0 那条带 --staged、#4884 起才不挂）。 */
+      expect(argv).not.toContain("--staged");
     }
   });
 });
