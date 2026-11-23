@@ -16,7 +16,10 @@
  * 纯函数、零 IO；证据不足时如实退回泛化文案（不臆造）。
  */
 import { isRecord } from "~/lib/is-record";
-import type { TaskLogEntry } from "~/lib/workshop/generation-client";
+/* 来源类型与解析器都取自 task-log-progress（TaskLogEntry 已下沉到那一份，
+ * ISSUE #4854）—— 不要从 workshop/generation-client 取：它的类型图连着
+ * 服务端路由，再从 comfyui 执行链 import 回来会闭成模块循环（§12.7 硬闸）。 */
+import type { TaskLogEntry } from "~/lib/workshop/task-log-progress";
 import { parseTaskLogProgress } from "~/lib/workshop/task-log-progress";
 
 /** 输出类节点判据：ComfyUI 的落盘节点族（SaveImage / SaveVideo / SaveAudio /

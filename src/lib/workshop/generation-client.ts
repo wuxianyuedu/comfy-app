@@ -45,6 +45,10 @@ import {
   mountReferenceCapacityOf,
 } from "./reference-loader-plan";
 import { deriveEncapsulationStatus } from "./workshop-encapsulation-status";
+/* TaskLogEntry 的定义随解析层走（task-log-progress.ts，ISSUE #4854 的模块循环
+ * 破环）：本模块是它的消费方之一，再导出让队列 / 日志时间线 / 测试面板等
+ * 既有调用点不必改 import。 */
+import type { TaskLogEntry } from "./task-log-progress";
 
 /* 本地（ComfyUI）生成 mutation 的 tRPC 传输契约。 */
 export type GenerateInput = RouterInputs["generate"]["generate"];
@@ -444,14 +448,7 @@ export type TaskProgressNode = {
   value: number;
 };
 
-/** 一条执行步骤日志（对应项目画布 /api/tasks/:id/stream 的 `log` 帧），
- *  字段与后端 LogEntry 一致。工作流库就地运行也据此展示「执行日志」。 */
-export type TaskLogEntry = {
-  level: "info" | "progress" | "warn" | "error" | "success";
-  msg: string;
-  src?: string;
-  t: number;
-};
+export type { TaskLogEntry };
 
 export type TaskWatchHandlers = {
   /** 每条执行步骤日志（SSE `log` 帧）。供调用方累积展示。 */
