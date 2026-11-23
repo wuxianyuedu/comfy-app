@@ -9,6 +9,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { needsTypeAware } from "../scripts/gates/check-oxlint-zero-rules.mjs";
+
 const SCRIPT = "scripts/gates/check-oxlint-zero-rules.mjs";
 
 /** 外来值是不是普通对象（数组不算）：本文件收窄 package.json 的入口。 */
@@ -211,5 +213,19 @@ describe("门槛接线", () => {
   it("清单里登记着 #3016 这条的源头规则（no-negated-condition）", () => {
     const src = readFileSync(SCRIPT, "utf8");
     expect(src).toContain('"unicorn/no-negated-condition"');
+  });
+});
+
+/**
+ * 档位口径（ISSUE #4884）：`--type-aware` 只在全仓档挂。此前 staged 与全仓共用
+ * `paths.length === 0`，而 staged 的 paths 恰好也是空数组 ⇒ 提交时起一轮 TS 程序，
+ * 共享机上跑满 300s 预算、把 D0 整档变成「没结论」。类型级规则的覆盖面不丢：
+ * D 组全仓档与平台 `ci-heavy-gates.mjs` 都走全仓档、都带类型感知。
+ */
+describe("类型感知只在全仓档（ISSUE #4884）", () => {
+  it("staged 快检不挂 --type-aware；全仓档挂；带路径的契约自测档不挂", () => {
+    expect(needsTypeAware(true, [])).toBe(false);
+    expect(needsTypeAware(false, [])).toBe(true);
+    expect(needsTypeAware(false, ["/tmp/fixture.ts"])).toBe(false);
   });
 });
