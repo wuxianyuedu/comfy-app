@@ -29,6 +29,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
+import { describeZeroOutputFailure } from "./zero-output-reason";
 import { friendlyError } from "./executor-errors";
 import { taskOutputDir, taskOutputUrl } from "~/lib/media/output-paths";
 import { isRecord } from "~/lib/is-record";
@@ -267,7 +268,16 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     images.length || videos.length || audios.length || texts.length || others.length;
   if (!hasOutput) {
     /* ISSUE #216：outputs 非空但收集不到任何产物（未知输出键 / 输出被节点丢弃）
-     *  时，把 outputs 原文落 trace，并提示去哪里核对，而不是只报「无输出内容」。 */
+     *  时，把 outputs 原文落 trace，并提示去哪里核对，而不是只报「无输出内容」。
+     * ISSUE #4854：失败原因不再停留在这句泛化话术 —— 用现场已有的三份信号
+     *  （执行图的输出类节点是否出现在 history.outputs、任务日志的分节点进度）
+     *  归因到「输出分支被开关节点短路 / 文本子图顶满 max_length 仍无输出」，
+     *  让下一步动作（调 max_length / 关 thinking / 简化提示词）能直接读出来。 */
+    const reason = describeZeroOutputFailure({
+      outputs: entry.outputs ?? {},
+      executedWorkflow: Array.isArray(entry.prompt) ? entry.prompt[2] : executedWorkflow,
+      logs: state().logs.get(taskId) ?? [],
+    });
     trace("history", taskId, "history 有 outputs 但未收集到任何产物", {
       promptId,
       outputs: entry.outputs ?? {},
@@ -275,9 +285,9 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     log(
       taskId,
       "error",
-      `ComfyUI history 有 ${outputsCount} 个节点输出，但没识别出任何可下载产物（未知输出结构）；原文见 log/comfyui/comfyui-trace.log`,
+      `ComfyUI history 有 ${outputsCount} 个节点输出，但没识别出任何可下载产物（${reason}）；原文见 log/comfyui/comfyui-trace.log`,
     );
-    await finalizeFailure(taskId, promptId, "无输出内容");
+    await finalizeFailure(taskId, promptId, reason);
     return;
   }
 

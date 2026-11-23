@@ -17,7 +17,20 @@
 import { isPlainRecord } from "~/lib/is-record";
 import { parseCliJsonLine } from "~/lib/log/log-cli-json";
 import { toPct } from "~/lib/progress";
-import type { TaskLogEntry } from "~/lib/workshop/generation-client";
+
+/** 一条执行步骤日志（对应项目画布 /api/tasks/:id/stream 的 `log` 帧），
+ *  字段与后端 LogEntry 一致。工作流库就地运行也据此展示「执行日志」。
+ *  定义住在这里（ISSUE #4854）：本模块解析的就是这些日志行，类型随行；
+ *  `generation-client` 从这里再导出 —— 此前类型住在 generation-client、
+ *  本模块反过来 import 它，会把 comfyui 执行链（executor-dispatch →
+ *  zero-output-reason → 本模块 → generation-client ⇒ 服务端路由类型图 ⇒
+ *  回到执行链）闭成 19 文件的模块循环（§12.7 硬闸）。 */
+export type TaskLogEntry = {
+  level: "info" | "progress" | "warn" | "error" | "success";
+  msg: string;
+  src?: string;
+  t: number;
+};
 
 /** 一个节点的执行状态：running = 已开始（或已有进度帧）未收尾；done = 已完成 / 命中缓存。 */
 export type TaskProgressStageStatus = "done" | "running";
