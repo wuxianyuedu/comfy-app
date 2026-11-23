@@ -1495,7 +1495,8 @@ describe("removeTempDirQuietly —— 清理失败不吞判决（ISSUE #4832）"
       if (calls < 3) {
         throw Object.assign(new Error("EPERM, Permission denied"), { code: "EPERM" });
       }
-      return realRmSync(p, opts);
+      /* 不写 `return realRmSync(...)`：那是把 void 表达式当返回值（清零规则集禁）。 */
+      realRmSync(p, opts);
     });
     expect(removeTempDirQuietly(dir, { attempts: 4, baseDelayMs: 1 })).toBe(true);
     expect(calls).toBe(3);
