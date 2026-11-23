@@ -134,6 +134,11 @@ import {
   ROOT,
 } from "../base-check/git-ref.mjs";
 import { resolveGateCommand, resolveMergeBatch, runGate } from "../base-check/hook-steps.mjs";
+import {
+  nextStepsMany,
+  printMergeStateReport,
+  summarizeRows,
+} from "../base-check/merge-state-report.mjs";
 import { didNotRunSide, judge, judgeMergeState, nextSteps } from "../base-check/verdict.mjs";
 import { linkDependencies, unlinkDependencies } from "../base-check/snapshot-link.mjs";
 import { snapshotArgvResolver } from "../base-check/snapshot-argv.mjs";
@@ -167,6 +172,43 @@ export {
   nextSteps,
   runState,
 } from "../base-check/verdict.mjs";
+
+/**
+ * 同步退让等待（一次性 CLI，阻塞无害；Atomics.wait 在 Node 主线程可用）。
+ * @param {number} ms
+ */
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * 临时目录清理：Windows 上杀软 / 索引器 / 残留句柄会让 `rmSync` 偶发 `EPERM`
+ * （ISSUE #4832 现场：44 条判据全部跑完、结论已算出，清理这一下抛错把整趟
+ * 复算吞成「没跑成」）。这里做**有限次退让重试**；仍失败则记一条警告读数、
+ * **不抛** —— 清理成败不参与判决，调用方（`baseCheck` 的 `finally`）拿到的
+ * 永远是已算完的复算结论，残留目录由读数指给人工去删。
+ * @param {string} dir
+ * @param {{ attempts?: number, baseDelayMs?: number }} [options]
+ * @returns {boolean} 是否清理成功（含目录本就不存在）。
+ */
+export function removeTempDirQuietly(dir, { attempts = 4, baseDelayMs = 250 } = {}) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+      return true;
+    } catch (error) {
+      if (attempt >= attempts) {
+        process.stderr.write(
+          `[base-check] 临时目录清理失败（不影响复算结论），请手工删除：${dir}\n` +
+            `[base-check] 最后一次错误：${error instanceof Error ? error.message : String(error)}\n`,
+        );
+        return false;
+      }
+      sleepSync(baseDelayMs * 2 ** (attempt - 1));
+    }
+  }
+  return false;
+}
 
 /**
  * 复算一次（编排本体）。
@@ -282,7 +324,8 @@ export function baseCheckMany({
       const candidate = fs.mkdtempSync(path.join(os.tmpdir(), "comfy-base-check-"));
       attempts.push(candidate);
       // `mkdtempSync` 建出的目录必须为空，而 `git worktree add` 要求目标**不存在**。
-      fs.rmSync(candidate, { recursive: true, force: true });
+      // 删除偶发 EPERM 也不放弃：还有第二个候选（#4832 同族的清理健壮性）。
+      removeTempDirQuietly(candidate);
       const add = git(["worktree", "add", "--detach", candidate, ref]);
       if (add.ok) {
         worktreePath = candidate;
@@ -363,10 +406,12 @@ export function baseCheckMany({
     }
     return reportMany({ ref, commit, summary: summarizeRows(rows), rows }, { json, shape });
   } finally {
-    /* 未成为 worktree 的候选目录（建失败那一次留下的空目录）直接删。 */
+    /* 未成为 worktree 的候选目录（建失败那一次留下的空目录）直接删。
+     * 清理一律走「退让重试 + 失败只记读数」（#4832）：判决已在 try 里算完，
+     * 清理再抛错就会把「44 条判据的结论」吞成「复算没跑成」。 */
     for (const candidate of attempts) {
       if (candidate !== worktreePath) {
-        fs.rmSync(candidate, { recursive: true, force: true });
+        removeTempDirQuietly(candidate);
       }
     }
     if (worktreePath && !keep) {
@@ -385,9 +430,17 @@ export function baseCheckMany({
         );
       } else {
         // 先让 git 摘掉登记，再兜底 rm —— `git worktree remove` 在目录已被删时
-        // 会失败，所以两条都要（顺序不能反）。
-        git(["worktree", "remove", "--force", worktreePath]);
-        fs.rmSync(worktreePath, { recursive: true, force: true });
+        // 会失败，所以两条都要（顺序不能反）。两步的失败都只记读数、不改判决
+        //（#4832：EPERM 崩在清理段会把结论吞成「没跑成」）。
+        try {
+          git(["worktree", "remove", "--force", worktreePath]);
+        } catch (error) {
+          process.stderr.write(
+            `[base-check] git worktree remove 失败（不影响复算结论），目录与登记请人工核对：` +
+              `${worktreePath} · ${error instanceof Error ? error.message : String(error)}\n`,
+          );
+        }
+        removeTempDirQuietly(worktreePath);
       }
     } else if (worktreePath) {
       process.stdout.write(`[base-check] 保留临时 worktree：${worktreePath}\n`);
@@ -557,39 +610,6 @@ function evaluateMergeState({ commands, into, ref, keep = false, json = false })
  *
  * @param {{json: boolean, summary: "current-green" | "inconclusive" | "merge-red", into: string, intoSha: string, headSha: string, rows: Array<{label: string, currentCode: number, mergeCode: number | null, verdict: string, didNotRun?: string, mergeOutputTail?: string}>}} input
  */
-function printMergeStateReport({ json, summary, into, intoSha, headSha, rows }) {
-  const tree = `${into}@${intoSha.slice(0, 8)} ⊕ HEAD ${headSha.slice(0, 8)}`;
-  if (json) {
-    process.stdout.write(`${JSON.stringify({ summary, tree, rows }, null, 2)}\n`);
-    return;
-  }
-  for (const r of rows) {
-    process.stdout.write(
-      `  · ${r.mergeCode === 0 ? "绿" : r.verdict}  ${r.label}` +
-        `（本检出 ${r.currentCode} / 合并态 ${r.mergeCode ?? "未跑"}）\n`,
-    );
-    if (r.didNotRun) {
-      process.stdout.write(`      ↳ 没跑出结论：${r.didNotRun}\n`);
-    }
-  }
-  process.stdout.write(`[base-check] 结论：${summary}（树：${tree}）\n`);
-  for (const line of nextSteps(summary, { ref: into })) {
-    process.stdout.write(`[base-check] ${line}\n`);
-  }
-  for (const r of rows) {
-    if (!r.mergeOutputTail) {
-      continue;
-    }
-    process.stdout.write(`[base-check] 「${r.label}」合并态输出末尾：\n`);
-    process.stdout.write(
-      `${r.mergeOutputTail
-        .split("\n")
-        .map((l) => `    ${l}`)
-        .join("\n")}\n`,
-    );
-  }
-}
-
 /* 依赖链接那一层在 `base-check/snapshot-link.mjs`（ISSUE #3043 拆出：本文件加合并态
  * 那一档后越过 900 行硬闸，而这一对自包含、有自己的用例）。re-export 保留：
  * `tests/base-check-snapshot-link.test.ts` 与碎片里引用的名字不变。 */
@@ -597,71 +617,9 @@ export { linkDependencies, unlinkDependencies } from "../base-check/snapshot-lin
 /* 「没跑出结论」的**哪一侧、哪一种**是判决话术，实现在 verdict.mjs（ISSUE #3043 拆出，
  * 理由同上）。re-export 保留：tests 与 `reportMany` 引用的名字不变。 */
 export { didNotRunSide } from "../base-check/verdict.mjs";
-
-/**
- * 一组行 → 整批的结论（纯函数，两向都能被用例钉住）。
- *
- * **优先级是 `inconclusive` 最高**，不是「有红就报红」：127 说明这一条**没跑起来**，
- * 而「没跑起来」与「跑了且红」在退出码上同形 —— 把整批结论落在它上面等于拿一个
- * 无法归因的读数下判决。
- *
- * `yours` 压过 `load-flake`：你自己引入的那条必须改代码，而负载假红只需要隔离复跑
- * 一次 —— 报成 `load-flake` 会让「有一条真红」这件事被一条抖动盖住（同下一条理由）。
- * `load-flake` 压过 `baseline-red`：混着一批「别线的红」时，若其中也有超时形态的，
- * 整批报 `baseline-red` 会让人把抖动一起登记进 `KNOWN_FAILED_FILES`。
- *
- * @param {Array<{currentCode: number, baseCode: number | null, output?: string, currentOutput?: string, baseOutput?: string, didNotRun?: string}>} rows
- * @returns {"current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake"}
- */
-export function summarizeRows(rows) {
-  if (rows.length === 0) {
-    return "inconclusive";
-  }
-  /* 逐条全走同一份 `judge()`（ISSUE #2400）：0 码但「一条用例都没收集到」的行
-   * 在 judge 里落 inconclusive，「段绿 + 逐条里混着一条没判的」在整批这里就折成
-   * inconclusive（段码 2），不再只在 baseline-red 那一支才被读出来。 */
-  const verdicts = rows.map((r) =>
-    judge({
-      currentCode: r.currentCode,
-      baseCode: r.baseCode,
-      /* 两个来源都收：行里显式给了 `currentOutput` 就用它，否则回落到
-       * `output`（本检出那一次的全文，见上面 rows.push 的注释）。 */
-      currentOutput: r.currentOutput ?? r.output,
-      baseOutput: r.baseOutput,
-    }),
-  );
-  if (verdicts.includes("inconclusive")) {
-    return "inconclusive";
-  }
-  if (verdicts.every((v) => v === "current-green")) {
-    return "current-green";
-  }
-  /* 混着「别线的红」与「你的红」时，**按更严重的那一档报**（`yours`）——
-   * 别线的红可以就地收掉或登记，而你自己引入的那条必须改代码，两者都要人看见；
-   * 报成 `baseline-red` 会让人以为整批都与自己无关。 */
-  if (verdicts.includes("yours")) {
-    return "yours";
-  }
-  if (verdicts.includes("load-flake")) {
-    return "load-flake";
-  }
-  return "baseline-red";
-}
-
-/**
- * 整批结论的「下一动作」话术 —— 与单命令档同源（`nextSteps`），只在有红时点名是哪几条。
- * @param {"current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake"} summary
- * @param {Array<{label: string, verdict?: string}>} reds
- * @param {{ref: string}} context
- * @returns {string[]}
- */
-export function nextStepsMany(summary, reds, { ref }) {
-  if (summary === "current-green") {
-    return nextSteps("current-green", { ref });
-  }
-  const head = reds.map((r) => `${r.label}（${r.verdict}）`);
-  return [`红的那几条：${head.join("、")}。`, ...nextSteps(summary, { ref })];
-}
+/* 整批结论 / 下一动作 / 合并态报告（ISSUE #4832 拆出：清理健壮性加上去后本文件
+ * 第二次越过 900 行硬闸）。re-export 保留：tests 与碎片里引用的名字不变。 */
+export { nextStepsMany, summarizeRows } from "../base-check/merge-state-report.mjs";
 
 /**
  * 输出末 N 行（红线常在末尾；全量输出会把结论挤出屏幕）。
