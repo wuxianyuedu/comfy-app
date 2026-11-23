@@ -2,7 +2,7 @@
 /**
  * quality-gate.mjs — 本地质量门禁的**跨平台**实现（规范 11.12 / 13.5）
  *
- * 与 `scripts/gates/quality-gate.ps1` 同契约同产出：按顺序跑 typecheck / eslint（零警告）
+ * 与 `scripts/gates/quality-gate.ps1` 同契约同产出：按顺序跑 typecheck / oxlint（零警告）
  * / vitest（默认排除已知基线失败），任一失败以非零退出码结束，并打印可行动的中文提示。
  * Windows 侧的双击入口（`tools/start/verify-quality.ps1`）走 `.ps1`；Linux / macOS / CI
  * 直接跑本文件（`pnpm check:all`），不需要 pwsh。
