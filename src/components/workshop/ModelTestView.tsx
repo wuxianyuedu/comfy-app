@@ -30,20 +30,16 @@ import { Textarea } from "~/components/ui/textarea";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { FormField } from "~/components/ui/form-field";
 import { PageHeader } from "~/components/ui/page-header";
-import { Progress } from "~/components/ui/progress";
 import { SelectChip } from "~/components/ui/select-chip";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { StatusDot } from "~/components/ui/status-dot";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
-import { clampInt } from "~/lib/clamp";
-import { describeSampleProgress } from "~/lib/progress";
 import { sizeSourceForMode } from "~/lib/workflow/workflow-size-source";
 import type { QueueTaskLogTarget } from "~/components/studio/queue/QueueTaskLogModal";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
 import { cn } from "~/lib/utils";
-import { useInterval } from "~/components/ui/use-interval";
 import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
 import {
   MODEL_TEST_KINDS,
@@ -54,6 +50,7 @@ import {
   type ModeTab,
 } from "./model-test-config";
 import { InputRow } from "./ModelTestInputRow";
+import { ModelTestProgressPanel } from "./ModelTestProgressPanel";
 import { ModelTestSizeField } from "./ModelTestSizeField";
 import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
 import { useModelTest } from "./hooks/use-model-test";
@@ -389,16 +386,6 @@ export function ModelTestView({
   pendingReprint?: ModelTestRetryPayload | null;
 }) {
   const c = useModelTest();
-  /* 生成中的「已用」时钟：每秒跳一拍，进度面板的耗时行才走秒。
-   * 走 `ui/use-interval` 唯一出口（P12：视图层不自己写 setInterval）；
-   * 没格在跑时 `ms=null` 不轮询。nowMs 只喂展示，不参与任何判定。 */
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useInterval(
-    () => {
-      setNowMs(Date.now());
-    },
-    { immediate: false, ms: c.generating ? 1000 : null },
-  );
   /* 选中的本地工作流声明「尺寸取自首图」时，尺寸口不可配置（工坊链路本就不下发
    * 尺寸值），改为只读展示第一张参考图的实际像素。远端通道没有工作流声明，不受影响。 */
   const sizeFromReference =
@@ -445,29 +432,6 @@ export function ModelTestView({
   );
   const modeLabel = c.modeTabs.find((t) => t.mode === c.mode)?.label ?? c.mode;
   const hasModel = c.selectedModel !== "";
-
-  /* 进度面板的 tqdm 式明细：纯函数算好文字，JSX 只渲染。
-   * `generatingSince` 含封装 / 入队段，比 ComfyUI 采样段的 tqdm 计时略长 ——
-   * 这里答的是「点下生成之后过了多久」；步数 / 速度要 SSE 帧带了 value/max
-   * 才显示，剩余时间线性外推，算不出的行不显示。 */
-  const progressDetail =
-    c.generating && c.workflowProgress !== null
-      ? describeSampleProgress(
-          {
-            pct: c.workflowProgress.pct,
-            value: c.workflowProgress.value ?? null,
-            max: c.workflowProgress.max ?? null,
-            startedAtMs: c.generatingSince,
-          },
-          nowMs,
-        )
-      : null;
-  const progressStepsLine =
-    progressDetail?.stepsText === null || progressDetail?.stepsText === undefined
-      ? null
-      : progressDetail.rateText === null
-        ? progressDetail.stepsText
-        : `${progressDetail.stepsText} · ${progressDetail.rateText}`;
 
   /* 模型下拉的标签：在既有显示名（模型标签 / 工作流名消歧）之上，给正在
      生成的模型追加「生成中」徽标（ISSUE #4838）—— 选项里与触发器上是同一
@@ -721,40 +685,12 @@ export function ModelTestView({
                 </div>
 
                 {/* 本地工作流任务的实时进度：SSE state 帧，整百分比变化才更新。
-                    明细行是 tqdm 那一行的可读版：已用（本地时钟每秒走）、
-                    步数 · 速度（SSE 帧带 value/max 时）、预估剩余（线性外推）。 */}
-                {c.generating && c.workflowProgress !== null && (
-                  <div
-                    className="border-border bg-surface-1 rounded-lg border px-4 py-3"
-                    role="status"
-                  >
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium">
-                        本地工作流执行进度
-                        {c.workflowProgress.label !== undefined && c.workflowProgress.label !== ""
-                          ? ` · ${c.workflowProgress.label}`
-                          : ""}
-                      </span>
-                      <span className="text-primary-strong font-semibold tabular-nums">
-                        {Math.floor(c.workflowProgress.pct)}%
-                      </span>
-                    </div>
-                    <Progress
-                      className="mt-2"
-                      value={clampInt(Math.floor(c.workflowProgress.pct), 2, 100)}
-                    />
-                    <div className="text-muted-foreground text-2xs mt-2 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
-                      {progressDetail?.elapsedText !== null &&
-                      progressDetail?.elapsedText !== undefined ? (
-                        <span>已用 {progressDetail.elapsedText}</span>
-                      ) : null}
-                      {progressStepsLine !== null && <span>{progressStepsLine}</span>}
-                      {progressDetail?.etaText !== null && progressDetail?.etaText !== undefined ? (
-                        <span>剩余约 {progressDetail.etaText}</span>
-                      ) : null}
-                    </div>
-                  </div>
-                )}
+                    明细行是 tqdm 那一行的可读版（步数 / 速度 / 已用 / 预估剩余）。 */}
+                <ModelTestProgressPanel
+                  generating={c.generating}
+                  progress={c.workflowProgress}
+                  since={c.generatingSince}
+                />
 
                 {c.error !== null && (
                   <p className="bg-destructive/10 text-destructive flex items-start gap-1.5 rounded-lg px-3 py-2 text-xs leading-relaxed">
