@@ -1712,7 +1712,7 @@ dark:text-emerald-300` 这类写死值）。
 
 | 基元            | 库内实际的对应形态                                                                                                                                                                                                                                                                                                                                                           | 判断依据                                                                                                                                                                                                                                                                  |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tabs`          | `workflow-library` 详情面板三页签（自绘 `TabButton`：手动 `h-auto rounded-none` + 靠 `active` 条件渲染一条 `absolute inset-x-3 bottom-0 h-0.5` 渐变指示条）；应用级页签 `TitleBar` / `ShellTabs` 已有完整 `role="tablist"` / `role="tab"` / `aria-selected` + Enter/Space 键盘处理                                                                                       | 形态是**标准页签**：`ui/tabs` 的 `line` 变体本身就带 `after:` 指示条与方向键导航，`tabIndex` / `aria-selected` / 键盘三件套全在基元里                                                                                                                                     |
+| `tabs`          | `workflow-library` 详情面板三页签（自绘 `TabButton`：手动 `h-auto rounded-none` + 靠 `active` 条件渲染一条 `absolute inset-x-3 bottom-0 h-0.5` 渐变指示条）；应用级页签的**顶部页签栏已随 #4770 退役**，现形态是侧栏「临时页签」组（`SidebarTempTabs`：菜单按钮 + `data-active` 高亮，不是 `role="tab"` 语义）                                                                                       | 形态是**标准页签**：`ui/tabs` 的 `line` 变体本身就带 `after:` 指示条与方向键导航，`tabIndex` / `aria-selected` / 键盘三件套全在基元里                                                                                                                                     |
 | `alert`         | 至少 6 处「带语义色边框 + 图标 + 正文」的内联提示块：登录页 `notice`（`border-violet-500/30 bg-violet-500/10`）、训练页「未配置训练后端」横幅（`border-warning/30 bg-warning/10`）、画布节点 `ErrorPanel` 的参数提示（`border-warning/25 bg-warning/8`）、`CharacterPortraitStudio` 的 `role="alert"` 错误行（写死 `bg-red-100 text-red-800 dark:text-red-300`）、设置页若干 | 这正是 `ui/alert` 的 `variant=default\|destructive` 的形态；其中 `CharacterPortraitStudio` 那处**已经写了 `role="alert"`**，只差把外壳换成基元                                                                                                                            |
 | `dropdown-menu` | 两处自绘菜单：画布右键菜单 `CanvasContextMenu`（`fixed` + `style={{left:x,top:y}}` 手定位 + 自绘遮罩关闭 + 手写分组标题/分隔线）、项目切换器 `ProjectSwitcher`（`absolute top-10 left-0` 手定位 + 同样的遮罩与分组/分隔线）                                                                                                                                                  | 形态是**菜单**（一组命令项 + 分组标签 + 分隔线），不是选择框 —— `ui/select`（值选择）与 `ui/select-menu`（列表选择）都覆盖不了「点一项执行一个动作」。`ui/dropdown-menu`（base-ui `Menu`）自带 Portal / Positioner / Esc / 外点关闭 / 方向键 / `GroupLabel` / `Separator` |
 
@@ -1720,11 +1720,10 @@ dark:text-emerald-300` 这类写死值）。
 接上与 §16.2.4.2 第 9 条一致 —— **正确做法是同时删掉调用处那份手写语义**
 （见 §16.2.4 末的「P2 的做法」），只换容器会留下两套 Esc / 两套外点关闭。
 
-> ⚠️ `tabs` 的两处落点里，**应用级页签（`TitleBar` / `ShellTabs`）不建议接**：
-> 它们是「窗口标题行」的一部分，页签条里混着拖拽区与窗口按钮，
-> `TabsList` 的 `inline-flex w-fit` + 各项 `flex-1` 布局契约与「页签按内容宽度
-> 排布、右侧留出拖拽空白区」直接冲突。这属于**外观会变**，按第 9 条不动。
-> 详情面板那一处才是干净的落点。
+> ⚠️ `tabs` 的两处落点里，**应用级页签不建议接**：顶部页签栏已随 #4770 退役
+> （ISSUE #4770），现在的应用级切换器是侧栏「临时页签」组（`SidebarTempTabs`）
+> —— 它与其它侧栏项同一套菜单按钮形态（高亮走 `data-active`，不是 `role="tab"`
+> 语义），接 `ui/tabs` 等于给侧栏再造第二套交互语义。详情面板那一处才是干净的落点。
 
 ##### 第二档：选型未发生，不是「欠治理」（✅ 已决策，见 §16.2.4.8）
 
