@@ -7,6 +7,7 @@
 
 import { useSyncExternalStore } from "react";
 
+import { formatDurationMs } from "~/lib/progress";
 import {
   COMFY_QUEUE_POLL_MS,
   subscribeComfyQueue,
@@ -18,13 +19,13 @@ import {
 export { COMFY_QUEUE_POLL_MS };
 export type { ComfyQueueView };
 
-/** 已运行时长 → `mm:ss`（超过一小时带上小时）。 */
+/**
+ * 已运行时长 → `mm:ss`（超过一小时带上小时）。
+ * 实现收在 `~/lib/progress` 的 `formatDurationMs`（画布进度覆盖层用同一份），
+ * 这里保留旧名字作为本域的引用出口。
+ */
 export function formatElapsed(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const ss = String(total % 60).padStart(2, "0");
-  const mm = String(Math.floor(total / 60) % 60).padStart(2, "0");
-  const h = Math.floor(total / 3600);
-  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+  return formatDurationMs(ms);
 }
 
 /** 状态栏那一格该说什么（纯函数，组件只管渲染）。返回 null = 不占位。 */

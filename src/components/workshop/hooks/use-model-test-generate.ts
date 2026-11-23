@@ -59,7 +59,9 @@ export type ModelTestSession = {
   taskLogs: Array<TaskLogEntry>;
   /** 该格的统一输入表单值（#4080 评论 19：切模型不丢已填参数）。 */
   values: ModelTestValues;
-  workflowProgress: { label?: string; pct: number } | null;
+  /** 本地工作流任务进度（SSE state 帧）：pct 之外尽量带采样步数（value/max），
+   *  进度面板的「553/8196 · it/s」由它算。 */
+  workflowProgress: { label?: string; max?: number; pct: number; value?: number } | null;
 };
 
 /** 空会话（没有运行过的格的缺省态）。 */

@@ -25,6 +25,8 @@ const RUNNING = {
   startedAt: 1_000_000,
   progress: 42,
   nodeType: "KSampler",
+  progressValue: 553,
+  progressMax: 8196,
 };
 
 describe("formatElapsed", () => {

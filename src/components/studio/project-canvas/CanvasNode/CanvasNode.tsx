@@ -98,7 +98,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     taskType: d.workflowTaskType ?? null,
   });
 
-  const { runGenerate, retryGenerate } = useGenerate({
+  const { progressDetail, runGenerate, retryGenerate } = useGenerate({
     id,
     d,
     patch,
@@ -170,6 +170,7 @@ export const CanvasNode = React.memo(function CanvasNode({
           onPickMedia={pickMedia}
           onUploadFile={onUploadFile}
           progress={d.progress}
+          progressDetail={progressDetail}
           status={d.status}
         />
       </div>
@@ -227,6 +228,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             onPickMedia={pickMedia}
             onUploadFile={onUploadFile}
             progress={d.progress}
+            progressDetail={progressDetail}
             status={d.status}
           />
         </div>

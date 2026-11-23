@@ -173,8 +173,9 @@ export type ModelTestController = {
   /** 当前格的执行日志（SSE log 帧，#4080 评论 8）。 */
   taskLogs: Array<TaskLogEntry>;
   values: ModelTestValues;
-  /** 当前格本地工作流任务的进度（SSE state 帧；仅工作流候选生成中非空）。 */
-  workflowProgress: { label?: string; pct: number } | null;
+  /** 当前格本地工作流任务的进度（SSE state 帧；仅工作流候选生成中非空）。
+   *  value/max 是采样步数（ComfyUI progress 帧），进度面板拿它算速度与剩余。 */
+  workflowProgress: { label?: string; max?: number; pct: number; value?: number } | null;
 };
 
 /** 候选 / 契约 / 适配器索引的取数与派生（§12.13 第二刀）：这一簇只读

@@ -6,7 +6,7 @@
  * 组件作用域闭包（d / patch / wfIO / React Flow setter）都经 args 显式传入。
  */
 import { emitAppEvent } from "~/lib/app-events";
-import { useEffect, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import {
   outputTargetKind,
@@ -23,6 +23,7 @@ import {
   isTaskSuccess,
 } from "~/lib/project-canvas/canvas-api";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
+import { describeSampleProgress, type SampleProgressText } from "~/lib/progress";
 import { setActiveTaskId } from "~/components/studio/project-canvas/activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
 import { buildCanvasGeneratePayload } from "~/components/studio/project-canvas/CanvasNode/generate-payload";
@@ -58,6 +59,10 @@ export function useGenerate({
   getNode,
   screenToFlowPosition,
 }: UseGenerateArgs) {
+  /* 轮询期间最新一拍的进度明细（步数 / 已用 / 预估剩余 / 速度）。
+   * 文字由 `describeSampleProgress` 纯函数算出，视图只渲染；
+   * 只在本轮生成生命周期里活着（开跑清空、结束随状态回落 idle/done）。 */
+  const [progressDetail, setProgressDetail] = useState<SampleProgressText | null>(null);
   /* 挂载时对账 —— 节点带着陈旧 `status="running"` 加载（dev server 重启 / 运行中重开页签）
    * 时内存 patch 链已丢失，而 DB 任务行可能已被 runner 完成回调或 runner.ts 的 RUNNING
    * 回收器标成终态；没有这一步卡片会永远停在「● 生成中…」。
@@ -133,6 +138,7 @@ export function useGenerate({
        *  影响。pollTask 的 onProgress 会随
        *  后端上报的 task.progress 把它顶上去。 */
       patch({ status: "running", error: undefined, progress: 0 });
+      setProgressDetail(null);
       /* 把 `payload` 提到外层，好让 catch 块也能把
        *  请求快照进 errorContext。try 块赋值前它是 `null`。 */
       let payload: GenerateInput | null = null;
@@ -147,8 +153,9 @@ export function useGenerate({
         const taskId = await startGenerate(payload);
         patch({ taskId });
         setActiveTaskId(taskId, id);
-        const result = await pollTask(taskId, undefined, (progress) => {
-          patch({ progress });
+        const result = await pollTask(taskId, undefined, (snap) => {
+          patch({ progress: snap.pct });
+          setProgressDetail(describeSampleProgress(snap, Date.now()));
         });
         if (isTaskSuccess(result)) {
           // picture 节点 = 图片资产本身，生成结果直接
@@ -298,11 +305,13 @@ export function useGenerate({
     }
     try {
       patch({ status: "running", error: undefined });
+      setProgressDetail(null);
       const taskId = await startGenerate(parsed.input);
       patch({ taskId });
       setActiveTaskId(taskId, id);
-      const result = await pollTask(taskId, undefined, (progress) => {
-        patch({ progress });
+      const result = await pollTask(taskId, undefined, (snap) => {
+        patch({ progress: snap.pct });
+        setProgressDetail(describeSampleProgress(snap, Date.now()));
       });
       if (isTaskSuccess(result)) {
         patch({
@@ -336,5 +345,5 @@ export function useGenerate({
     }
   };
 
-  return { runGenerate, retryGenerate };
+  return { progressDetail, runGenerate, retryGenerate };
 }

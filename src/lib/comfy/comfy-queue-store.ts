@@ -95,12 +95,19 @@ function sameRunning(a: ComfyRunningTask | null, b: ComfyRunningTask | null): bo
     a.progress === b.progress &&
     a.workflowName === b.workflowName &&
     a.model === b.model &&
-    a.nodeType === b.nodeType
+    a.nodeType === b.nodeType &&
+    a.progressValue === b.progressValue &&
+    a.progressMax === b.progressMax
   );
 }
 
 function numberOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+/** 可空数值字段（progressValue / progressMax）：缺了就是「拿不到」，不冒充 0。 */
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function parseRunning(value: unknown): ComfyRunningTask | null {
@@ -117,6 +124,8 @@ function parseRunning(value: unknown): ComfyRunningTask | null {
     startedAt: value.startedAt,
     progress: numberOr(value.progress, 0),
     nodeType: typeof value.nodeType === "string" ? value.nodeType : null,
+    progressValue: numberOrNull(value.progressValue),
+    progressMax: numberOrNull(value.progressMax),
   };
 }
 

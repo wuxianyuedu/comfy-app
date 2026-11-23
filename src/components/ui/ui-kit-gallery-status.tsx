@@ -94,11 +94,27 @@ export function StatusSection() {
           </div>
         </GalleryCell>
         <GalleryCell label="WaterFillProgress（水位进度）">
-          <div className="bg-card relative h-20 w-40 overflow-hidden rounded-xl border">
-            <WaterFillProgress progress={0.55} />
-            <span className="text-ink relative z-10 flex h-full items-center justify-center text-sm">
-              55%
-            </span>
+          <div className="flex w-full flex-col gap-3">
+            <div className="bg-card relative h-20 w-full overflow-hidden rounded-xl border">
+              <WaterFillProgress progress={55} />
+              <span className="text-ink relative z-10 flex h-full items-center justify-center text-sm">
+                55%
+              </span>
+            </div>
+            {/* tqdm 式明细（ISSUE #4908）：步数 / 速度 / 已用 / 预估剩余，
+                生图节点与工坊测试面板的进度就是这个形态。 */}
+            <div className="bg-card relative h-20 w-full overflow-hidden rounded-xl border">
+              <WaterFillProgress
+                detail={{
+                  etaText: "09:18",
+                  elapsedText: "00:42",
+                  pct: 74,
+                  rateText: "13.17 it/s",
+                  stepsText: "553/8196",
+                }}
+                progress={74}
+              />
+            </div>
           </div>
         </GalleryCell>
         <GalleryCell label="Spinner / Skeleton / PageLoading">

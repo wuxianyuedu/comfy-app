@@ -124,6 +124,8 @@ describe("状态栏那一格的全部来源都是库", () => {
         startedAt: Date.parse("2026-01-01T00:00:10.000Z"),
         progress: 42,
         nodeType: "KSampler",
+        progressValue: 3,
+        progressMax: 20,
       },
     });
   });

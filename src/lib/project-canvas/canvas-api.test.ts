@@ -4,7 +4,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { uploadImageFile } from "./canvas-api";
+import { taskProgressSnapshot, uploadImageFile } from "./canvas-api";
 
 function jsonRes(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -31,6 +31,51 @@ afterEach(() => {
 });
 
 const file = new File(["x"], "a.png", { type: "image/png" });
+
+describe("taskProgressSnapshot", () => {
+  it("百分比之外，把 progressNode 的步数与 claimedAt 一起提出来", () => {
+    expect(
+      taskProgressSnapshot({
+        progress: 7,
+        progressNode: { id: "7", classType: "KSampler", value: 553, max: 8196 },
+        claimedAt: new Date("2026-01-01T00:00:10Z"),
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+      }),
+    ).toEqual({
+      pct: 7,
+      value: 553,
+      max: 8196,
+      startedAtMs: Date.parse("2026-01-01T00:00:10Z"),
+    });
+  });
+
+  it("开始时刻优先 claimedAt，旧行退回 createdAt；ISO 串也认", () => {
+    expect(
+      taskProgressSnapshot({
+        progress: 50,
+        claimedAt: null,
+        createdAt: "2026-01-01T00:00:00Z",
+      }).startedAtMs,
+    ).toBe(Date.parse("2026-01-01T00:00:00Z"));
+  });
+
+  it("什么都没有时全字段按「拿不到」降级，不编数", () => {
+    expect(taskProgressSnapshot(null)).toEqual({
+      pct: 0,
+      value: null,
+      max: null,
+      startedAtMs: null,
+    });
+    expect(
+      taskProgressSnapshot({
+        progress: null,
+        progressNode: null,
+        claimedAt: null,
+        createdAt: null,
+      }),
+    ).toEqual({ pct: 0, value: null, max: null, startedAtMs: null });
+  });
+});
 
 describe("uploadImageFile", () => {
   it("ComfyUI 在线：一次上传即可，不触发 ensure", async () => {

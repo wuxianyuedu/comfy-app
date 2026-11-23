@@ -10,7 +10,7 @@
 import { waitForComfyReady } from "~/lib/comfy/comfy-readiness-client";
 import { lastSegments } from "~/lib/path-display";
 import { asRecord } from "~/lib/is-record";
-import { clampPct } from "~/lib/progress";
+import { clampPct, readProgressNodeSteps, type SampleProgressSnapshot } from "~/lib/progress";
 import { sleep } from "~/lib/with-timeout";
 import { comfyImageUrl } from "~/lib/media/media-url";
 import { parseValidationErrorsJson, type ValidationError } from "~/lib/comfyui/validation";
@@ -182,15 +182,62 @@ export type TaskFailure = {
   validationErrors?: Array<ValidationError>;
 };
 
+/** 每次轮询回传的进度快照：百分比之外还带采样步数与开始时刻，
+ *  画布据此把 tqdm 那一行（`553/8196 [00:42<10:07, 12.58it/s]`）算出来。
+ *  形状即 `~/lib/progress` 的 `SampleProgressSnapshot`，别处（状态栏聚合）同源。 */
+export type TaskProgressSnapshot = SampleProgressSnapshot;
+
+/** 任务详情行里参与进度快照的几个字段（tRPC 回来，时刻可能是 Date 或 ISO 串）。 */
+type TaskProgressRow =
+  | {
+      claimedAt?: Date | string | number | null;
+      createdAt?: Date | string | number | null;
+      progress?: number | null;
+      progressNode?: unknown;
+    }
+  | null
+  | undefined;
+
+/** 时刻字段 → epoch 毫秒；Date / 数字 / ISO 串都认，不可用给 null。 */
+function toEpochMs(v: unknown): number | null {
+  if (v instanceof Date) {
+    return Number.isFinite(v.getTime()) ? v.getTime() : null;
+  }
+  if (typeof v === "number" && Number.isFinite(v)) {
+    return v;
+  }
+  if (typeof v === "string" && v !== "") {
+    const n = Date.parse(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/**
+ * 从任务详情行提取进度快照（纯函数，pollTask 每拍调用）。
+ * 百分比来自 `progress`；步数在 `progressNode` JSON（`{value, max}`）里；
+ * 开始时刻优先 `claimedAt`（领取时定格），旧行退回 `createdAt`。
+ */
+export function taskProgressSnapshot(task: TaskProgressRow): TaskProgressSnapshot {
+  const steps = readProgressNodeSteps(task?.progressNode);
+  return {
+    pct: clampPct(typeof task?.progress === "number" ? task.progress : 0),
+    value: steps.value,
+    max: steps.max,
+    startedAtMs: toEpochMs(task?.claimedAt) ?? toEpochMs(task?.createdAt),
+  };
+}
+
 /* 轮询一个任务，直到它有结果、失败或超时。
  * 成功时返回 `TaskResult`（真值）；终态失败时返回结构化的 `TaskFailure`，
  * 调用方据此把真实错误暴露出去。 */
 export async function pollTask(
   taskId: string,
   timeoutMs = 25 * 60 * 1000,
-  /* 每次轮询都会回调，进度被夹在 0..100。可选 —— 不关心的调用方不传即可。
-   * 接到 CanvasNode.runGenerate 上，让图片 / 影片预览在生成期间显示水位填充。 */
-  onProgress?: (progress: number) => void,
+  /* 每次轮询都会回调一个进度快照（百分比 / 步数 / 开始时刻）。可选 ——
+   * 不关心的调用方不传即可。接到 CanvasNode.runGenerate 上，让图片 / 影片
+   * 预览在生成期间显示水位填充与 tqdm 式明细。 */
+  onProgress?: (progress: TaskProgressSnapshot) => void,
 ): Promise<TaskResult | TaskFailure> {
   const start = Date.now();
 
@@ -205,11 +252,11 @@ export async function pollTask(
     try {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const task = await vanillaApi.task.detail.query({ id: taskId });
-      /* 把 0..100 的进度透到画布上。
-       * 此前被丢掉了 —— pollTask 只读 status 与 images，于是画布的图片/影片预览
-       * 即使 /api/tasks/[id] 返回了 task.progress，也没进度可显示。 */
-      if (onProgress && typeof task?.progress === "number") {
-        onProgress(clampPct(task.progress));
+      /* 把进度透到画布上（百分比 + 步数 + 开始时刻）。
+       * 此前只透百分比 —— 步数（progressNode.value/max）与开始时刻
+       * （claimedAt）都已在任务行里，不透就是展示层断粮。 */
+      if (onProgress) {
+        onProgress(taskProgressSnapshot(task));
       }
       const imgs: Array<TaskResult> = task?.images ?? [];
       if (imgs.length) {

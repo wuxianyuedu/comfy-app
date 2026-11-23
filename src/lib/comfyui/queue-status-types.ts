@@ -13,6 +13,10 @@ export type ComfyRunningTask = {
   nodeType: string | null;
   /** 采样步数进度（0~100）。 */
   progress: number;
+  /** 采样总步数（`Task.progressNode` 里的 `max`）；没有为 null。 */
+  progressMax: number | null;
+  /** 已完成采样步数（`Task.progressNode` 里的 `value`）；没有为 null。 */
+  progressValue: number | null;
   /** 任务开始时刻（epoch 毫秒）—— 前端拿它算「已运行 mm:ss」。
    *  取自 `Task.claimedAt`（领取或首条进度帧定格），旧行退化成提交时刻。 */
   startedAt: number;
