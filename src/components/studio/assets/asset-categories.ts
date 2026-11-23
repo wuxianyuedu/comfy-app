@@ -35,6 +35,11 @@ export function assetScopeLabel(key: string): string {
   return ASSET_SCOPES.find((s) => s.key === key)?.label ?? key;
 }
 
+/** 运行时守卫：RadioGroup 等字符串出口收敛回两档键。 */
+export function isAssetScopeKey(value: string): value is AssetScopeKey {
+  return ASSET_SCOPES.some((s) => s.key === value);
+}
+
 /** 详情参数表的行（键已译成可读名）。 */
 export type AssetParamRow = { label: string; value: string };
 

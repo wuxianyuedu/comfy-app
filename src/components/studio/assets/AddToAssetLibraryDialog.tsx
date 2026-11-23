@@ -6,7 +6,7 @@
  * 入库把该任务的每张产物各存一条资产，并随行保存完整生成参数快照。
  */
 import { useState } from "react";
-import { Check, ChevronDown, FolderPlus } from "lucide-react";
+import { Check, FolderPlus } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -16,7 +16,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SelectChip } from "~/components/ui/select-chip";
 import { useSidebarProjects } from "~/components/studio/hooks/use-sidebar-projects";
 import { cn } from "~/lib/utils";
@@ -25,6 +29,7 @@ import {
   ASSET_CATEGORIES,
   ASSET_SCOPES,
   assetCategoryLabel,
+  isAssetScopeKey,
   type AssetCategoryKey,
   type AssetScopeKey,
 } from "./asset-categories";
@@ -80,68 +85,62 @@ export function AddToAssetLibraryDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          {/* ── ① 归属 ── */}
+          {/* ── ① 归属 ── RadioGroup 承担互斥选中语义（P77：不手写 aria-pressed）。 */}
           <div className="flex flex-col gap-2">
             <p className="text-ink-soft text-sm font-semibold">① 选择归属</p>
-            <div className="grid grid-cols-2 gap-3">
+            <RadioGroup
+              className="grid grid-cols-2 gap-3"
+              onValueChange={(value) => {
+                const next = String(value);
+                if (isAssetScopeKey(next)) {
+                  setScope(next);
+                }
+              }}
+              value={scope}
+            >
               {ASSET_SCOPES.map((option) => {
                 const active = scope === option.key;
                 return (
-                  <button
-                    aria-pressed={active}
+                  <Label
                     className={cn(
-                      "flex flex-col gap-1.5 rounded-xl border p-3 text-left transition-colors",
+                      "flex cursor-pointer flex-col gap-1.5 rounded-xl border p-3 text-left transition-colors",
                       active
                         ? "border-primary bg-primary/10"
                         : "border-border-subtle hover:bg-subtle",
                     )}
+                    htmlFor={`asset-scope-${option.key}`}
                     key={option.key}
-                    onClick={() => {
-                      setScope(option.key);
-                    }}
-                    type="button"
                   >
                     <span className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "flex size-4 items-center justify-center rounded-full border",
-                          active ? "border-primary" : "border-border-subtle",
-                        )}
-                      >
-                        {active && <span className="bg-primary size-2 rounded-full" />}
-                      </span>
+                      <RadioGroupItem id={`asset-scope-${option.key}`} value={option.key} />
                       <span className="text-ink-strong text-sm font-medium">{option.label}</span>
                     </span>
                     <span className="text-ink-fainter text-xs">{option.hint}</span>
-                  </button>
+                  </Label>
                 );
               })}
-            </div>
+            </RadioGroup>
           </div>
 
           {/* ── ② 项目（仅项目档） ── */}
           {scope === "project" && (
             <div className="flex flex-col gap-2">
               <p className="text-ink-soft text-sm font-semibold">② 选择项目</p>
-              <div className="bg-canvas border-border-subtle relative flex h-10 items-center gap-2 rounded-lg border px-3">
-                <span aria-hidden className="bg-warning size-1.5 shrink-0 rounded-full" />
-                <select
-                  aria-label="选择所属项目"
-                  className="text-ink-strong w-full appearance-none bg-transparent text-sm outline-none"
-                  onChange={(event) => {
-                    setProjectId(event.target.value);
-                  }}
-                  value={projectId}
-                >
-                  <option value="">请选择项目…</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown aria-hidden className="text-ink-fainter size-4 shrink-0" />
-              </div>
+              <NativeSelect
+                aria-label="选择所属项目"
+                className="w-full"
+                onChange={(event) => {
+                  setProjectId(event.target.value);
+                }}
+                value={projectId}
+              >
+                <NativeSelectOption value="">请选择项目…</NativeSelectOption>
+                {projects.map((project) => (
+                  <NativeSelectOption key={project.id} value={project.id}>
+                    {project.name}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
               {projectId !== "" && activeProject !== null && (
                 <p className="text-ink-fainter text-2xs">已选：{activeProject.name}</p>
               )}
@@ -167,9 +166,9 @@ export function AddToAssetLibraryDialog({
                 </SelectChip>
               ))}
             </div>
-            <label className="text-ink-fainter text-2xs" htmlFor="asset-subdir">
+            <FieldLabel className="text-ink-fainter text-2xs" htmlFor="asset-subdir">
               子目录（可选）
-            </label>
+            </FieldLabel>
             <Input
               id="asset-subdir"
               onChange={(event) => {

@@ -9,6 +9,7 @@
 import { Minus, Plus } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { clamp } from "~/lib/clamp";
 import { cn } from "~/lib/utils";
 
 import { ASSET_SIZE_PRESETS, type AssetSizeKey } from "./asset-categories";
@@ -27,7 +28,7 @@ export function AssetSizeSlider({
 }) {
   const index = SIZE_ORDER.indexOf(size);
   const step = (direction: 1 | -1) => {
-    const next = SIZE_ORDER[Math.min(SIZE_ORDER.length - 1, Math.max(0, index + direction))];
+    const next = SIZE_ORDER[clamp(index + direction, 0, SIZE_ORDER.length - 1)];
     if (next !== undefined && next !== size) {
       onChange(next);
     }
@@ -36,7 +37,7 @@ export function AssetSizeSlider({
     <div
       aria-label="调整资产卡片大小"
       className={cn(
-        "bg-surface border-border-subtle shadow-black/20 absolute right-6 bottom-6 z-10 flex h-9 items-center gap-2 rounded-full border px-2.5 shadow-lg backdrop-blur",
+        "bg-surface border-border-subtle shadow-black/20 absolute right-6 bottom-6 z-canvas-ui flex h-9 items-center gap-2 rounded-full border px-2.5 shadow-lg",
         className,
       )}
       role="group"
@@ -51,7 +52,7 @@ export function AssetSizeSlider({
         size="icon-xs"
         variant="ghost"
       >
-        <Minus aria-hidden size={13} />
+        <Minus aria-hidden data-icon="inline-start" size={13} />
       </Button>
       <input
         aria-label="卡片大小"
@@ -83,7 +84,7 @@ export function AssetSizeSlider({
         size="icon-xs"
         variant="ghost"
       >
-        <Plus aria-hidden size={13} />
+        <Plus aria-hidden data-icon="inline-start" size={13} />
       </Button>
     </div>
   );

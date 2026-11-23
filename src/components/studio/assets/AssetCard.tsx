@@ -11,6 +11,7 @@ import { FileText, Maximize2, Music, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
+import { TruncatedText } from "~/components/ui/truncated-text";
 import { cn } from "~/lib/utils";
 
 import { assetCategoryLabel, assetScopeLabel } from "./asset-categories";
@@ -97,9 +98,9 @@ export function AssetCard({ asset, onOpenDetail, onRemove }: AssetCardProps) {
 
       {/* ── 信息区：名称 + 分类 · 子目录 + 参数完整度 + 操作 ── */}
       <div className="flex flex-col gap-1.5 p-3">
-        <p className="text-ink-strong truncate text-sm font-medium" title={asset.name}>
+        <TruncatedText className="text-ink-strong truncate text-sm font-medium">
           {asset.name}
-        </p>
+        </TruncatedText>
         <p className="text-ink-fainter text-2xs truncate">
           {assetCategoryLabel(asset.category)}
           {asset.subdir !== null && asset.subdir !== "" ? ` · ${asset.subdir}` : ""}
@@ -120,7 +121,7 @@ export function AssetCard({ asset, onOpenDetail, onRemove }: AssetCardProps) {
               size="icon-xs"
               variant="ghost"
             >
-              <Maximize2 aria-hidden className="size-3.5" />
+              <Maximize2 aria-hidden className="size-3.5" data-icon="inline-start" />
             </Button>
             <Button
               aria-label={`删除资产 ${asset.name}`}
@@ -131,7 +132,7 @@ export function AssetCard({ asset, onOpenDetail, onRemove }: AssetCardProps) {
               size="icon-xs"
               variant="ghost"
             >
-              <Trash2 aria-hidden className="size-3.5" />
+              <Trash2 aria-hidden className="size-3.5" data-icon="inline-start" />
             </Button>
           </div>
         </div>
