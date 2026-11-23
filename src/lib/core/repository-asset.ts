@@ -69,7 +69,13 @@ export class AssetRepository extends DrizzleRepository<Asset> {
       conditions.push(eq(asset.mediaType, filter.mediaType));
     }
     if (filter.q !== undefined && filter.q !== "") {
-      conditions.push(or(like(asset.name, `%${filter.q}%`), like(asset.prompt, `%${filter.q}%`))!);
+      const nameOrPrompt = or(
+        like(asset.name, `%${filter.q}%`),
+        like(asset.prompt, `%${filter.q}%`),
+      );
+      if (nameOrPrompt !== undefined) {
+        conditions.push(nameOrPrompt);
+      }
     }
     return db
       .select()
@@ -97,7 +103,13 @@ export class AssetRepository extends DrizzleRepository<Asset> {
       conditions.push(eq(asset.mediaType, filter.mediaType));
     }
     if (filter.q !== undefined && filter.q !== "") {
-      conditions.push(or(like(asset.name, `%${filter.q}%`), like(asset.prompt, `%${filter.q}%`))!);
+      const nameOrPrompt = or(
+        like(asset.name, `%${filter.q}%`),
+        like(asset.prompt, `%${filter.q}%`),
+      );
+      if (nameOrPrompt !== undefined) {
+        conditions.push(nameOrPrompt);
+      }
     }
     const rows = await db
       .select({ category: asset.category })
