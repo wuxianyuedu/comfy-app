@@ -236,6 +236,16 @@ export async function enrichWorkflowIO(
     if (!v || typeof v !== "object") {
       continue;
     }
+    /* IMAGEUPLOAD（LoadImage 的「选择文件上传」按钮）不是可下发的 IO 参数：
+     * 它是前端上传按钮 —— 真正的文件选择在同节点的 `image` COMBO 部件上，
+     * 且 API 图不携带 `upload` 部件（写入它的值会在 API 转换时被整体剥掉）。
+     * 历史上把图片参数落点连到这个口，值全部静默失效（ISSUE #4862：参考图
+     * 打到 45::widget::upload，编辑主图始终是模板默认图）。富化层直接不产出
+     * 该条目 —— IO 预览 / 连线候选 / 主落点解析都看不到它；存档里的历史连线
+     * 由此悬空，回落挂载补位。按存档类型先判一次（rawJson 不可用时唯一判据）。 */
+    if (upperToken(v.type) === "IMAGEUPLOAD") {
+      continue;
+    }
     // 以存档里的**事实字段**为起点：之前保存时定下来的 type / options，离线
     // 重开时仍能保住正确控件 —— 这是「保存 IO 映射时 ComfyUI 离线」那条回归的根治
     // 方向（把类型 / 候选也随富化后的 map 一起固化下来，而非每次 GET 都依赖
@@ -353,6 +363,11 @@ export async function enrichWorkflowIO(
          *  退化成 `*`、显示名退化成 pin 名（ISSUE #349）。 */
         innerInputsById?.[canonicalNodeId]?.find((raw) => raw.name === v.name);
       if (ri) {
+        /* 存档类型缺失 / 漂移时按 raw 事实兜底（与上方 storedType 判据同口径）：
+         * raw 部件类型是 IMAGEUPLOAD 的一律不进 IO 表（ISSUE #4862）。 */
+        if (ri.type === "IMAGEUPLOAD") {
+          continue;
+        }
         type = ri.type || "*";
         /* 子工作流封装节点（class_type 是 UUID）的暴露口要特殊处理：
          *  wrapper 本层槽位名是 ComfyUI 为 proxyWidgets 自动编号的别名
