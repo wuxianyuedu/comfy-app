@@ -416,6 +416,13 @@ export async function buildLibraryWorkflowInput(
     ...(values.lastFrame === undefined ? {} : { lastFrame: values.lastFrame }),
     // 视频时长：帧数走内置字段，秒数由 workflowInputs 里的时长口落下去。
     ...(values.frames === undefined ? {} : { frames: values.frames }),
+    /* 参考图清单随任务落库（ISSUE #4910）：任务行 `referenceImages` 列与
+     * `params.referenceImages` 都由它来 —— 历史详情的参考图墙、工坊参数的
+     * 参考图口都读这两处。此前只把文件名折进 workflowInputs 的 pin 值，
+     * 这份清单没进入参，详情里参考图永远是「未提供」。画布通路
+     * （generate-payload 的 collectReferenceImages）一直带，这里补齐工作流库 /
+     * 工坊通路；与装载计划同一份截断口径（cappedReferenceImages）。 */
+    ...(cappedReferenceImages.length > 0 ? { referenceImages: cappedReferenceImages } : {}),
     ...(finalInputs.length > 0 ? { workflowInputs: finalInputs } : {}),
     ...(referenceLoaderPlan ? { referenceLoaderPlan } : {}),
   };
