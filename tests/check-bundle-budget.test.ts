@@ -611,6 +611,15 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
       isBaselineObject,
     );
     baseline.baselineRev = "b6c3c353bcfb3c4109f5ceebeaac629731ad221b";
+    /* 归因第二通道按 `generatedAt` 数「其后 src/ 主干提交」：夹具的 seed 提交是当下落的，
+       而 --update 写下的 generatedAt 也是今天 ⇒ `git log --since 今天 00:00` 会把 seed
+       算进去，数出 1，与这条用例的前提「其后一次提交都没有」自相矛盾（#4848）。
+       把基线日期推到 seed 之后一天，让这条合法分支稳定落回 0；不放宽判据本体，
+       也不把断言退化成「0 或 1 都算过」。 */
+    /* 跨一天足够甩开本地时区偏移（CI 可能非 UTC），用 +7 天稳一点。 */
+    baseline.generatedAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
     repo.write(
       "scripts/gates/.bundle-budget-baseline.json",
       `${JSON.stringify(baseline, null, 2)}\n`,
@@ -618,7 +627,6 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
     chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
     const { code, output } = repo.run(enforce());
     expect(code, output).toBe(1);
-    // 这条夹具的历史里只有 seed 与那次 --update 之前的提交，都没动 src/ ⇒ 数得出来，是 0。
     expect(output).toContain("0 次主干提交");
     expect(output).toContain("src/ 侧其后一次提交都没有");
   });
