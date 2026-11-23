@@ -80,18 +80,23 @@ const running = {
 };
 
 describe("ComfyuiControlView", () => {
-  it("未运行：说明「未运行」，主题紫实心留给「打开查看」，启动是幽灵、关闭是危险档", () => {
+  it("未运行：启动提为紫色实心主行动，打开查看 / 在浏览器打开降为幽灵并禁用（#4872）", () => {
     render(<ComfyuiControlView c={controller()} />);
     expect(screen.getByText("ComfyUI 未运行")).toBeInTheDocument();
     const start = screen.getByRole("button", { name: "启动 ComfyUI" });
     const stop = screen.getByRole("button", { name: "关闭 ComfyUI" });
     const open = screen.getByRole("button", { name: "打开查看" });
+    const openInBrowser = screen.getByRole("button", { name: "在浏览器打开" });
     expect(start).toBeEnabled();
     expect(stop).toBeDisabled();
-    /* 按钮权重（ISSUE #4631）：主题紫实心只给「打开查看 / 在浏览器打开」；
-       低频「启动」走幽灵档（无实心底）、危险「关闭」走浅红档（danger 的 destructive 底）。 */
-    expect(open.className).toContain("bg-primary-500 ");
-    expect(start.className).not.toContain("bg-primary-500");
+    expect(open).toBeDisabled();
+    expect(openInBrowser).toBeDisabled();
+    /* 按钮权重随运行态走（ISSUE #4872）：未运行时唯一有意义的动作是「启动」，
+       提为紫色实心；点不动的「打开查看 / 在浏览器打开」降为幽灵档——
+       实心档禁用后仍是饱和紫，读起来像「能点」（#4631 的遗留观感）。 */
+    expect(start.className).toContain("bg-primary-500 ");
+    expect(open.className).not.toContain("bg-primary-500");
+    expect(openInBrowser.className).not.toContain("bg-primary-500");
     expect(stop.className).toContain("bg-destructive/10");
   });
 

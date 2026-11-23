@@ -108,33 +108,35 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
             </span>
           )}
           <div className={STATUS_ACTIONS_CLASS}>
-            {/* 「打开查看 / 在浏览器打开」是运行中真正的主行动，保留主题紫实心档
-                （ISSUE #4631）；只在「明确未运行」时禁用 —— 探测进行中也允许
-                点一下，openComfy 会先取一份新鲜状态再打开（ISSUE #339）。 */}
+            {/* 「打开查看 / 在浏览器打开」是运行中的主行动。按钮权重随运行态走
+                （ISSUE #4872）：运行中 / 探测中是紫色实心（探测中允许点一下，
+                openComfy 会先取一份新鲜状态再打开，ISSUE #339）；**未运行**时
+                这两颗禁用、降为幽灵档 —— 实心档禁用后仍是饱和紫，读起来像
+                「能点」，而此刻唯一有意义的动作是「启动」。 */}
             <StatusButton
               disabled={c.opening || (!running && c.status?.probing !== true)}
               onClick={() => {
                 void c.openComfy();
               }}
-              variant="primary-solid"
+              variant={running || c.status?.probing === true ? "primary-solid" : "ghost"}
             >
               {c.opening ? "打开中…" : "打开查看"}
             </StatusButton>
             {/* 并列出口：同一地址再交给系统默认浏览器（放大看/装插件/多屏），页签内嵌照旧。
-                地址由服务端自己探（comfyOpen），不采信界面缓存的旧 base；禁用口径同「打开查看」。
-                配色与「打开查看」同档（此前 outline + 手写 text 覆写导致同层按钮长出两种形状）。 */}
+                地址由服务端自己探（comfyOpen），不采信界面缓存的旧 base；禁用口径与
+                配色档位同「打开查看」。 */}
             <StatusButton
               disabled={c.browserOpening || (!running && c.status?.probing !== true)}
               onClick={() => {
                 void c.openComfyInBrowser();
               }}
-              variant="primary-solid"
+              variant={running || c.status?.probing === true ? "primary-solid" : "ghost"}
             >
               {c.browserOpening ? "打开中…" : "在浏览器打开"}
             </StatusButton>
-            {/* 按钮权重（ISSUE #4631）：主题紫实心只给「打开查看 / 在浏览器打开」；
-                「启动」是低频动作走幽灵档、「关闭」是危险动作走浅红档（danger），
-                避免一屏里出现两颗抢眼的紫色实心按钮、也避免误触关闭。两颗仍互斥禁用。 */}
+            {/* 按钮权重（ISSUE #4631 / #4872）：运行中「启动」是低频动作走幽灵档
+                （主题紫实心给「打开查看 / 在浏览器打开」）；**未运行**时它是唯一
+                有意义的动作，提为紫色实心。「关闭」恒为危险浅红档，两颗仍互斥禁用。 */}
             <StatusButton
               /* 已配置路径才允许启动：`comfyStart` 会拿库里的路径去 spawn，
                 空路径的失败文案（服务端给的）不如这里提前说清去哪配。 */
@@ -142,7 +144,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
               onClick={() => {
                 void c.startComfy();
               }}
-              variant="ghost"
+              variant={running || c.status?.probing === true ? "ghost" : "primary-solid"}
             >
               {c.starting || c.status?.starting === true ? "启动中…" : "启动 ComfyUI"}
             </StatusButton>
