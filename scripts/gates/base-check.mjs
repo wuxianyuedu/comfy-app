@@ -151,6 +151,7 @@ export {
   groupSteps,
   mayDecideOnCleanSnapshot,
   normalizeRun,
+  PLATFORM_ONLY_IN_BASE,
   readHookSteps,
   resolveGateCommand,
   resolveMergeBatch,
