@@ -10,7 +10,6 @@ import { createId } from "@paralleldrive/cuid2";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { assetRepository, taskRepository } from "~/lib/core/repository";
 import { firstRowRequired } from "~/lib/core/repository-row";
-import type { Asset } from "~/server/db/schema";
 import { copyIntoAssetStore, removeAssetStoreDir } from "~/lib/media/asset-store";
 import { kindOf } from "~/lib/media/media-kind";
 
@@ -183,50 +182,6 @@ export const assetRouter = createTRPCRouter({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "资产入库失败" });
       }
       return { created, skipped: total - created };
-    }),
-
-  /** 更新：改名 / 换分类 / 挪归属（公共 ↔ 项目）与子目录。 */
-  update: authedProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        name: z.string().min(1).max(120).optional(),
-        category: categorySchema.optional(),
-        scope: scopeSchema.optional(),
-        projectId: z.string().nullable().optional(),
-        subdir: z.string().max(120).nullable().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const row = await assetRepository.findOwned(input.id, ctx.user.id);
-      if (row === null) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "资产不存在" });
-      }
-      const scope = input.scope ?? row.scope;
-      /* 显式传 `projectId: null` 与「没传」是两回事：前者是把项目资产的项目清空，
-         对 project 档必须拒绝；后者才是部分更新的「保持原值」。 */
-      const nextProjectId = input.projectId === undefined ? row.projectId : input.projectId;
-      if (scope === "project" && (nextProjectId === null || nextProjectId === "")) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "项目资产必须指定所属项目" });
-      }
-      const patch: Partial<Asset> = {};
-      if (input.name !== undefined) {
-        patch.name = input.name;
-      }
-      if (input.category !== undefined) {
-        patch.category = input.category;
-      }
-      if (input.scope !== undefined) {
-        patch.scope = input.scope;
-      }
-      if (input.projectId !== undefined) {
-        patch.projectId = input.projectId;
-      }
-      if (input.subdir !== undefined) {
-        patch.subdir = input.subdir;
-      }
-      await assetRepository.update(row.id, patch);
-      return { ok: true };
     }),
 
   /** 删除：库行 + 资产文件目录（文件在资产自己的目录里，不影响原任务）。 */

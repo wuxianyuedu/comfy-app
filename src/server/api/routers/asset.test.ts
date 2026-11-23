@@ -180,30 +180,15 @@ describe("asset.list —— 过滤与计数", () => {
   });
 });
 
-describe("asset.update / delete —— 挪档与清理", () => {
-  beforeEach(() => {
+describe("asset.delete —— 清理", () => {
+  beforeEach(async () => {
     seedTask(tdb, {
       id: "task-u",
       userId: "user-a",
       prompt: "待挪动资产",
       images: [{ localPath: "/api/generated/task-u/a.png" }],
     });
-    void caller().createFromTask({ taskId: "task-u", scope: "public", category: "reference" });
-  });
-
-  it("改名 + 挪到项目档；项目档缺 projectId 被拒", async () => {
-    const list = await caller().list({});
-    const id = list.items[0]?.id ?? "";
-    await caller().update({ id, name: "主视觉 · 定稿", category: "style" });
-    await caller().update({ id, scope: "project", projectId: "proj-9" });
-    const detail = await caller().detail({ id });
-    expect(detail.name).toBe("主视觉 · 定稿");
-    expect(detail.category).toBe("style");
-    expect(detail.scope).toBe("project");
-    expect(detail.projectId).toBe("proj-9");
-    await expect(caller().update({ id, scope: "project", projectId: null })).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-    });
+    await caller().createFromTask({ taskId: "task-u", scope: "public", category: "reference" });
   });
 
   it("删除库行并清理资产文件目录；别人的资产删不到", async () => {
