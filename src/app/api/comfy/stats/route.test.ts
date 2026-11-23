@@ -50,13 +50,18 @@ describe("GET /api/comfy/stats", () => {
     });
   });
 
-  it("采不到 + 进程在跑 → { online:false, processAlive:true }（跑图满载不该闪成未运行）", async () => {
+  it("采不到 + 进程在跑 → 降级包带 processAlive:true 与全零数值字段（跑图满载不该闪成未运行；形状契约见 #4867）", async () => {
     getSystemStats.mockResolvedValueOnce(null);
     getComfyRuntimeSnapshot.mockResolvedValueOnce({ running: true });
     const { GET } = await import("./route");
     await expect((await GET()).json()).resolves.toEqual({
       online: false,
       processAlive: true,
+      vramUsed: 0,
+      vramFree: 0,
+      vramTotal: 0,
+      ramUsed: 0,
+      ramTotal: 0,
     });
   });
 
@@ -67,6 +72,11 @@ describe("GET /api/comfy/stats", () => {
     await expect((await GET()).json()).resolves.toEqual({
       online: false,
       processAlive: false,
+      vramUsed: 0,
+      vramFree: 0,
+      vramTotal: 0,
+      ramUsed: 0,
+      ramTotal: 0,
     });
   });
 
@@ -79,6 +89,11 @@ describe("GET /api/comfy/stats", () => {
     await expect((await GET()).json()).resolves.toEqual({
       online: false,
       processAlive: false,
+      vramUsed: 0,
+      vramFree: 0,
+      vramTotal: 0,
+      ramUsed: 0,
+      ramTotal: 0,
     });
   });
 

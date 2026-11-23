@@ -23,7 +23,21 @@ export async function GET() {
   /* HTTP 没读到 ≠ 没在跑：与 `/api/comfy/queue` 同一口径（queue-status.server.ts
    * 的快照回落）—— ComfyUI 跑图 GPU 满载时 `/system_stats` 会连续超时，只认
    * HTTP 会把「正在生成」闪报成「未运行」。进程级快照不依赖 ComfyUI 的 HTTP
-   * 响应能力；快照的 unverified（进程表也查失败）不当作在跑。 */
+   * 响应能力；快照的 unverified（进程表也查失败）不当作在跑。
+   *
+   * 降级包**必须带全数值字段（全零）**：客户端 fetchComfyStats 的形状收窄
+   * （isComfyStatsPayload）要求 vram 与 ram 的各数值字段必为 number —— 只回
+   * `{online, processAlive}` 会被判「形状不合法」抛掉，processAlive 随之丢失，
+   * store 把「进程在跑」记成完整失读，状态栏谎报「未运行」（ISSUE #4867，
+   * 现场：ComfyUI 自身 /system_stats 500 时状态栏持续显示未运行）。 */
   const snap = await getComfyRuntimeSnapshot();
-  return NextResponse.json({ online: false, processAlive: snap.running });
+  return NextResponse.json({
+    online: false,
+    processAlive: snap.running,
+    vramUsed: 0,
+    vramFree: 0,
+    vramTotal: 0,
+    ramUsed: 0,
+    ramTotal: 0,
+  });
 }
