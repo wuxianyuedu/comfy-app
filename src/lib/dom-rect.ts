@@ -37,6 +37,10 @@
 // （`rectToAnchorRect`，供 base-ui 的虚拟锚点用）。
 // **不收**：什么时候去量（挂载 / `ResizeObserver` 的接线归
 // `~/components/ui/use-element-box`）、量出来之后画什么（归各自的视图）。
+// 观察回调的 rAF 隔离（`rafResizeObserverCallback`）也住这里 —— 它是
+// 「量出来之后做什么」的节奏工具，调度走 `~/lib/next-frame`（#4871）。
+
+import { onNextFrame } from "~/lib/next-frame";
 //
 // ## 它不是「Node-only」模块
 //
@@ -249,5 +253,28 @@ export function anchorRectToVirtualElement(rect: AnchorRect): {
 } {
   return {
     getBoundingClientRect: () => ({ ...rect, toJSON: () => ({}) }),
+  };
+}
+
+/** 把 ResizeObserver 回调包成 rAF 隔离版（ISSUE #4871）。
+ *
+ *  「ResizeObserver loop completed with undelivered notifications」的成因：
+ *  观察回调在**同一帧**里又改了布局，本轮通知送不完（浏览器下一帧补送时会打
+ *  这句红色提示）。把回调隔到下一帧，同帧循环断开 —— Radix / Floating UI 的
+ *  同款做法。只包回调；observe / disconnect 的接线与清理照旧，不改各处的使用
+ *  方式。同帧内的再次触发取消前一帧（只执行最后一次）。
+ *  调度走 `~/lib/next-frame` 的 onNextFrame（「等一帧」的唯一出口）。 */
+export function rafResizeObserverCallback(
+  callback: ResizeObserverCallback,
+): ResizeObserverCallback {
+  let cancel: (() => void) | null = null;
+  return (entries, observer) => {
+    if (cancel !== null) {
+      cancel();
+    }
+    cancel = onNextFrame(() => {
+      cancel = null;
+      callback(entries, observer);
+    });
   };
 }
