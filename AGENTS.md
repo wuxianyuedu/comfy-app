@@ -204,10 +204,12 @@ jsPlugin 承接，`react-hooks/*` 12 条已随退役删除。oxlint 现已原生
 2. **工具链钉死项不可随意改**（改动前必须读规范 §6 并在提交说明里给出理由）：
    - `pnpm-workspace.yaml`：`minimumReleaseAge: 0`、`allowBuilds` 名单（条数以该文件为准；
      它会随新增依赖变动，别在文档里写死数字）、`verifyDepsBeforeRun: false`
-   - `next.config.js`：`experimental.useTypeScriptCli: false`
+   - `next.config.js`：`experimental.useTypeScriptCli: true`（Next 16.3.2+ 默认档，显式写明防回退。
+     曾钉 `false` 的成因——16.3.x CLI 入口只认 `bin/tsc`、与 TS6 别名（bin 只有 `tsc6`）不兼容
+     ——已随 16.4.6 的 bin 元数据解析 + `tsc<N>` 兜底消失，#4905）
    - **钉死项本身有回归判据**：`tests/turbopack-tracing-excludes.test.ts` 判
-     `useTypeScriptCli: false` 与**实际解析到的 TypeScript 必须配对**（Next 16 里该键的位置、
-     以及关掉它之后解析到 TS7 会让 `next build` 直接退出），改钉死项会当场红。
+     `useTypeScriptCli` 的取值与**实际解析到的 TypeScript 能力必须配对**（false ⇔ 主版本 <7，
+     true ⇔ bin 里解析得出在盘的 tsc/tsc<N> 入口；Next 16 里该键的位置也在判），改钉死项会当场红。
 3. **进程清理必须杀整棵树，平台判据只收两处**：Node/TS 侧一律经 `src/lib/process/kill-process-tree.ts` 的 `killProcessTree()`；非 TS 宿主走命令行入口 `scripts/reap-process.mjs`；Rust 壳侧起子进程只能用官方 `tauri-plugin-shell` 的 `CommandChild`（退出整树回收同样转交 `reap-process.mjs`）。禁止各处自写 `taskkill` / `process.kill` / `Process.Kill()` / 单杀 leader / `std::process::Command` + `taskkill`（后者在 POSIX 上等于什么都不做）。**POSIX 自建进程组是前提**：`spawn({ detached: true })`。跨平台机制、防自杀判据、孤儿事故根因见 launch-and-build §3.1–§3.3。**这条有回归判据**：`tests/cross-platform-launcher.test.ts` 真起进程树再回收、并断言 `scripts/reap-process.mjs` 真的把目标收掉（Windows 侧的 `taskkill` 参数形态由 `src/lib/process/kill-process-tree.windows.test.ts` 判）。
 4. **失败路径必须有日志 + 用户可见出口**；日志按规范 §4 的布局落 `log/`，
    不得引入新的固定名日志文件（残留进程句柄会锁死它，用按次命名 + 轮转）。

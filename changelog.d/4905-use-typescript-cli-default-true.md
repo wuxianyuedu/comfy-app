@@ -1,0 +1,2 @@
+## Changed
+- `next.config.js` 的 `experimental.useTypeScriptCli` 回到 `true`（Next 16.3.2+ 默认档，显式写明防回退，#4905）。曾钉 `false` 的成因——16.3.x CLI 入口只认 typescript 包的 `bin/tsc`、与 TS6 别名（bin 只有 `tsc6`）不兼容，误报「typescript 未安装」并挂死 dev server——已随 16.4.6 的 bin 元数据解析 + `tsc<N>` 兜底消失。实测：dev `Ready in 3.1s`，`/` 冷编译后 200、`/api/*` 全 200。类型门禁不变：仍由独立 `tsc --noEmit`（TS7 native）保证，`typescript.ignoreBuildErrors` 未动，build 不新增类型检查；TS6 包保留（Next、四个 AST 门禁脚本、typedoc、storybook docgen、typescript-estree 仍消费）。
