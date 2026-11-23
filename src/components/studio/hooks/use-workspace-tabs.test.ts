@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { subscribeAppEvent } from "~/lib/app-events";
 import { setActive } from "~/lib/project-canvas/canvas-store";
+import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { WS_TABS_KEY, parseWorkspaceTabs } from "../workspace-tabs";
 import type { WorkspaceTabsController } from "./use-workspace-tabs";
 import { WORKSPACE_VIEWS, useWorkspaceTabs } from "./use-workspace-tabs";
@@ -225,5 +226,33 @@ describe("一项目一页签：项目级视图折叠 + 分区广播（ISSUE #476
       latest?.selectTab("project:p2");
     });
     expect(localStorage.getItem("comfyapp.canvas.active.v1")).toBe("p2");
+  });
+});
+
+describe("navigateTo 把壳的激活页带回主应用（ISSUE #4898）", () => {
+  afterEach(() => {
+    useShellTabs.setState({
+      tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
+      activeTabId: MAIN_TAB_ID,
+    });
+  });
+
+  it("停在 ComfyUI iframe 页签上点导航：视图与壳激活页一起切回主应用", async () => {
+    useShellTabs.setState({
+      tabs: [
+        { id: MAIN_TAB_ID, label: "主应用", url: null, closable: false },
+        { id: "comfyui", label: "ComfyUI", url: "http://127.0.0.1:8188", closable: true },
+      ],
+      activeTabId: "comfyui",
+    });
+    render(createElement(Probe));
+    await expect.poll(() => latest !== null).toBe(true);
+    act(() => {
+      latest?.navigateTo("history");
+    });
+    expect(latest?.activeKey).toBe("history:");
+    /* 只改视图页签而不动壳的激活页，表现就是「点了没反应」——内容仍停在 iframe 上
+     *（与 `selectTab` 同一口径，#4898 现场侧栏导航点了没反应的根因之一）。 */
+    expect(useShellTabs.getState().activeTabId).toBe(MAIN_TAB_ID);
   });
 });

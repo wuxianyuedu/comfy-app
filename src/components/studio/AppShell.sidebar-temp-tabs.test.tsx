@@ -5,7 +5,8 @@
  * 首页是固定页签（侧栏常驻项），不进这一组。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 
@@ -73,6 +74,7 @@ function renderShell(
   opts: {
     active?: WorkspaceView;
     activeViewKey?: string;
+    children?: ReactNode;
     openableViews?: Array<{ label: string; view: WorkspaceView }>;
     tabs?: Array<ViewTab>;
   } = {},
@@ -102,7 +104,7 @@ function renderShell(
         projects={[{ id: "p1", name: "雾中来信" }]}
         viewTabs={opts.tabs ?? []}
       >
-        <div />
+        {opts.children ?? <div />}
       </AppShell>
     </ToastProvider>,
   );
@@ -225,5 +227,51 @@ describe("侧栏「临时页签」组（ISSUE #4770 / #4798）", () => {
   it("没有要列的页签时整组不渲染（不给侧栏添空分组）", () => {
     renderShell({ active: "home", tabs: tabsOf(["home", null]) });
     expect(screen.queryByText("临时页签")).toBeNull();
+  });
+});
+
+describe("iframe 页签激活时外壳仍可见（ISSUE #4898）", () => {
+  /** 主应用 + 一个已打开的 ComfyUI iframe 页签（当前停在 ComfyUI 上）。 */
+  const COMFY_ACTIVE = {
+    tabs: [
+      { id: MAIN_TAB_ID, label: "主应用", url: null, closable: false },
+      { id: "comfyui", label: "ComfyUI", url: "http://127.0.0.1:8188", closable: true },
+    ],
+    activeTabId: "comfyui",
+  };
+
+  it("ComfyUI 页签激活：侧栏（切换器宿主）仍可见，iframe 落在内容列，主应用内容让位", () => {
+    useShellTabs.setState(COMFY_ACTIVE);
+    renderShell({
+      active: "home",
+      tabs: tabsOf(["home", null]),
+      children: <div data-testid="main-content">主应用内容</div>,
+    });
+    /* 切回主应用的入口在场：侧栏「临时页签」组还在、ComfyUI 行亮着。
+       此前整棵壳被 `hidden`，切换器随侧栏一起消失，用户被困在 iframe 里。 */
+    expect(screen.getByText("临时页签")).not.toBeNull();
+    expect(tempButton("ComfyUI").dataset.active).toBeDefined();
+    /* iframe 渲染在内容列里（title = 页签名），不再是整窗覆盖。 */
+    expect(screen.getByTitle("ComfyUI").tagName).toBe("IFRAME");
+    /* 主应用内容让位：CSS 隐藏（保持挂载），不是卸载。 */
+    expect(screen.getByTestId("main-content").closest(".hidden")).not.toBeNull();
+  });
+
+  it("切回主应用：主应用内容恢复可见，iframe 仍挂载（hidden + aria-hidden，不重载）", () => {
+    useShellTabs.setState(COMFY_ACTIVE);
+    renderShell({
+      active: "home",
+      tabs: tabsOf(["home", null]),
+      children: <div data-testid="main-content">主应用内容</div>,
+    });
+    act(() => {
+      useShellTabs.getState().activateTab(MAIN_TAB_ID);
+    });
+    expect(screen.getByTestId("main-content").closest(".hidden")).toBeNull();
+    const frame = screen.getByTitle("ComfyUI");
+    const host = frame.closest("div");
+    expect(host?.className).toContain("hidden");
+    expect(host?.getAttribute("aria-hidden")).toBe("true");
+    expect(frame.tagName).toBe("IFRAME");
   });
 });

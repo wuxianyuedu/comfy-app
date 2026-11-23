@@ -647,9 +647,9 @@ frontmatter 的 `colors` / `components` 必须是可解析的色值，而实现�
 
 这一档**刻意自绘 `<div>`**，理由与 `hint` 同源但更硬：`Empty` 的骨架自带 `p-6` / `rounded-xl` / `border-dashed` / `text-balance`，而这一档要的正是无框、无内距、不改换行；套上去要覆写的类比它带来的还多，而 `text-balance` 会把「运行生成后此处会显示执行步骤日志」这类长提示的折行改形 —— 那是改外观，不是收口。
 
-两处**没并进来**的（都在 `studio/ShellTabs.tsx`，按角色判过、别当漏网清掉）：`:93` 是**页签诊断卡**（标题 + 原因 + 可复制的地址行 + 按钮，`gap-4 p-8`）—— 它说的不是「这里是空的」，而是「这里被拦了、为什么、你可以怎么自己验证」，语义归错误类而不归空态；`:221` 是无图标的轻量单行（`text-ink-muted`、吃继承的 16px），收进 `panel` 得把颜色与字号都用 `className` 覆写回去，覆写满之后档名只剩形式、档位不再有约束力。
+两处**没并进来**的（都在 `studio/ShellTabContent.tsx` —— 自 ISSUE #4898 起从 `ShellTabs` 迁来，按角色判过、别当漏网清掉）：`:41` 是**页签诊断卡**（标题 + 原因 + 可复制的地址行 + 按钮，`gap-4 p-8`）—— 它说的不是「这里是空的」，而是「这里被拦了、为什么、你可以怎么自己验证」，语义归错误类而不归空态；`:114` 是无图标的轻量单行（`text-ink-muted`、吃继承的 16px），收进 `panel` 得把颜色与字号都用 `className` 覆写回去，覆写满之后档名只剩形式、档位不再有约束力。
 
-防回潮分两头：`tests/design-md-contract-sync.test.ts` 的「只许有一个出处」判据里这是**第 5 族**，带 `scope: "line"` —— 标记只在**同一枚 class 字符串**上全命中才算。这不是洁癖，是量出来的：这一族每一枚标记单独看都很常见，整文件口径实测误抓三处无关文件（`HistoryPanel` 的 `flex h-full` 在第 69 行、`justify-center` 在第 230 行；`ProjectGate` 命中的那颗 `text-ink-fainter` 其实是 `placeholder:` 前缀；`ShellTabs` 正是上面那张诊断卡），收到单行后严格同形正好 5 处、零误抓；反向样本三条同批在册。`empty-state.test.tsx` 的三条 panel 用例钉的是**另一半** —— 判据只会因为「标记只命中实现文件」而全绿，基元自己被改掉它也照绿，所以形状、图标弱化档（32 / 1.5 / `opacity-30` / `aria-hidden`）与「调用点覆写取胜」都要有用例执行。
+防回潮分两头：`tests/design-md-contract-sync.test.ts` 的「只许有一个出处」判据里这是**第 5 族**，带 `scope: "line"` —— 标记只在**同一枚 class 字符串**上全命中才算。这不是洁癖，是量出来的：这一族每一枚标记单独看都很常见，整文件口径实测误抓三处无关文件（`HistoryPanel` 的 `flex h-full` 在第 69 行、`justify-center` 在第 230 行；`ProjectGate` 命中的那颗 `text-ink-fainter` 其实是 `placeholder:` 前缀；`ShellTabContent`（原 `ShellTabs`）正是上面那张诊断卡），收到单行后严格同形正好 5 处、零误抓；反向样本三条同批在册。`empty-state.test.tsx` 的三条 panel 用例钉的是**另一半** —— 判据只会因为「标记只命中实现文件」而全绿，基元自己被改掉它也照绿，所以形状、图标弱化档（32 / 1.5 / `opacity-30` / `aria-hidden`）与「调用点覆写取胜」都要有用例执行。
 
 ### 屏级页头：`ui/page-header`（「一屏一个名字」的载体件）
 
