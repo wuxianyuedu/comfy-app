@@ -40,14 +40,37 @@ import { ViewOpenReport, ViewOpenedAtContext, type ViewOpenedAtLookup } from "./
 import { startLazyViewPrefetch } from "./lazy-view-prefetch";
 
 /**
- * 重视图名单（ISSUE #4677，#4598 的期望第 3 条）：非活跃时把整棵子树降级为
- * 「DOM 摘除但状态保留」（React Activity 的 hidden 模式，见 `HeavyViewGate`）
- * —— 隐藏页签不再因页签切换 / 父级状态 / 兄弟屏事件做任何渲染。逐视图评估：
- * 队列 / 历史 / 设置三屏最重、内部没有「必须随隐藏页签继续更新」的状态，先落
- * 这三个；画布（ReactFlow 的视口 / 选中 / 撤销栈都在组件内部）降级要逐状态
- * 评估可丢性，风险与收益都不在同一个量级，另行评估后再上。
+ * 非活跃时降级为「DOM 摘除但状态保留」的视图（ISSUE #4677 落地三屏，#4878 扩面）。
+ *
+ * React Activity 的 hidden 模式让隐藏页签不因页签切换 / 父级状态 / 兄弟屏事件做任何
+ * 渲染，同时保留组件内部状态（表单草稿 / 展开态 / 选中）；effects 在切回时重挂，
+ * 与既有 `enabled: isTabActive` / `pauseWhenViewHidden` 的轮询门控同一拍。
+ *
+ * 为什么从三屏扩到除首页 / 项目页之外的全部视图：#4878 的多页签现场 trace 显示
+ * 切换时 `jsxDEV` 元素创建 ~892ms、effect 遍历 ~518ms —— 未受闸的 ComfyUI /
+ * 工作流库 / 模型适配 / 测试模型 / 模式契约等整棵子树都在重渲染。这些屏的
+ * 隐藏期状态没有「必须持续更新」的：ComfyUI 的 SSE、测试模型的轮询本就由
+ * `isTabActive` 门控，控制台按设计切走即断流，表单草稿由 Activity 原样保留。
+ *
+ * 仍然排除的两类：
+ *  · `home` —— 默认入口、极轻，常驻省一次切回重挂；
+ *  · `project` —— ReactFlow 的视口 / 选中 / 撤销栈都在组件内部，降级要逐状态评估
+ *    可丢性（#4677 留的题），风险与收益另算，不在这轮顺手改。
  */
-const HEAVY_VIEWS = new Set<WorkspaceView>(["queue", "history", "settings"]);
+const HEAVY_VIEWS = new Set<WorkspaceView>([
+  "comfyui",
+  "console",
+  "history",
+  "model-adapters",
+  "model-test",
+  "mode-contract",
+  "models",
+  "queue",
+  "settings",
+  "uiKit",
+  "workflows",
+  "works",
+]);
 
 /** 页面侧交给视图栈的全部接线 —— 每一屏要用什么都在这里，栈自己不取数。 */
 export type WorkspaceViewStackProps = {
