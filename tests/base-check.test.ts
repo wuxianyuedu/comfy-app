@@ -4,10 +4,10 @@
  * **真 git 仓库**上跑（依赖 HEAD 是检出、上游可解析、`worktree` 出干净快照；假装 = 把复算重实现一遍）。
  */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import fs, { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { vi, describe, expect, test } from "vitest";
+import { afterEach, vi, describe, expect, test } from "vitest";
 
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import {
@@ -29,6 +29,7 @@ import {
   resolveMergeBaseRef,
   resolveMergeBatch,
   resolveUpstreamRef,
+  removeTempDirQuietly,
   runState,
   STAGED_TO_FULL_TREE,
   summarizeRows,
@@ -1477,5 +1478,46 @@ describe("base-check --base —— 基线引用只认「要并进去的那条」
     } finally {
       dropRepo({ work, bare });
     }
+  });
+});
+
+describe("removeTempDirQuietly —— 清理失败不吞判决（ISSUE #4832）", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("偶发 EPERM：退让重试后删掉，返回 true 且不抛", () => {
+    const dir = mkdtempSync(join(tmpdir(), "base-eperm-"));
+    const realRmSync = fs.rmSync.bind(fs);
+    let calls = 0;
+    vi.spyOn(fs, "rmSync").mockImplementation((p, opts) => {
+      calls += 1;
+      if (calls < 3) {
+        throw Object.assign(new Error("EPERM, Permission denied"), { code: "EPERM" });
+      }
+      /* 不写 `return realRmSync(...)`：那是把 void 表达式当返回值（清零规则集禁）。 */
+      realRmSync(p, opts);
+    });
+    expect(removeTempDirQuietly(dir, { attempts: 4, baseDelayMs: 1 })).toBe(true);
+    expect(calls).toBe(3);
+    expect(fs.existsSync(dir)).toBe(false);
+  });
+
+  test("始终 EPERM：返回 false + 记警告读数，不抛 —— 判决得以保留（正控）", () => {
+    const dir = mkdtempSync(join(tmpdir(), "base-eperm-"));
+    vi.spyOn(fs, "rmSync").mockImplementation(() => {
+      throw Object.assign(new Error("EPERM, Permission denied"), { code: "EPERM" });
+    });
+    const errors: Array<string> = [];
+    vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      errors.push(String(chunk));
+      return true;
+    });
+    /* 不抛就是本条的断言核心：cleanup 抛错会把 try 里算完的复算结论吞成「没跑成」。 */
+    expect(() => removeTempDirQuietly(dir, { attempts: 2, baseDelayMs: 1 })).not.toThrow();
+    expect(removeTempDirQuietly(dir, { attempts: 2, baseDelayMs: 1 })).toBe(false);
+    expect(errors.join("")).toContain("不影响复算结论");
+    expect(errors.join("")).toContain("EPERM");
+    expect(errors.join("")).toContain(dir);
   });
 });
