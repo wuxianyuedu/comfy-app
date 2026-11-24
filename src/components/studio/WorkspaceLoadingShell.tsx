@@ -1,11 +1,19 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 
 import { PROJECTS_ENTRY, sidebarNavItems } from "./NavItems";
 import { ShellFullPage } from "./ShellFullPage";
+
+/** 停留多久还没就绪就给提示（正常路由切换远用不到这么久）。 */
+const STALLED_AFTER_MS = 30_000;
+
+/** 停留超时的可行动提示（ISSUE #4968）：不再无声地按在骨架上。 */
+const STALLED_HINT =
+  "页面加载已超过 30 秒仍未就绪：可刷新页面重试；反复出现时重启应用，并查看 log/current/ 下的服务日志。";
 
 /**
  * 工作区路由级加载壳（ISSUE #4511）。
@@ -23,6 +31,21 @@ import { ShellFullPage } from "./ShellFullPage";
  */
 export function WorkspaceLoadingShell({ children }: { children: ReactNode }) {
   const navItems = sidebarNavItems();
+  /* 停留超时提示（ISSUE #4968）：加载壳是路由级的「应许状态」，但真被卡住时
+     （实测：某 webview 环境里页面流停住）它会把用户无声地按在骨架上 —— 给一条
+     可行动的出口。30s 内的正常加载触达不到它。用全局 setTimeout（浏览器里与
+     window.setTimeout 同一函数；单测的假时钟只 patch 全局这一份）。 */
+  const [stalled, setStalled] = useState(false);
+  useEffect(() => {
+    /* 回调用块体：type-aware 的 no-confusing-void-expression 禁止箭头简写
+       隐式返回 void 表达式（零豁免档在 GA 侧带 --type-aware 判）。 */
+    const timer = setTimeout(() => {
+      setStalled(true);
+    }, STALLED_AFTER_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, []);
   return (
     <ShellFullPage>
       <div aria-label="工作区加载中" className="flex min-h-0 flex-1 overflow-hidden" role="status">
@@ -60,8 +83,18 @@ export function WorkspaceLoadingShell({ children }: { children: ReactNode }) {
           </div>
         </nav>
 
-        {/* 内容区：骨架形状由调用方按对应页面的布局给。 */}
-        <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+        {/* 内容区：骨架形状由调用方按对应页面的布局给；停留超时先给可行动提示。 */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {stalled ? (
+            <div
+              className="border-border-strong bg-surface-2 text-ink m-3 rounded-lg border p-3 text-sm"
+              role="alert"
+            >
+              {STALLED_HINT}
+            </div>
+          ) : null}
+          {children}
+        </div>
       </div>
     </ShellFullPage>
   );
