@@ -63,7 +63,9 @@ function welcomeEntry(): LogEntry {
 }
 
 export type LogStoreState = {
-  addEntry: (entry: Omit<LogEntry, "id" | "time" | "seq">) => void;
+  /* `time` 可选：console 中继在**打印时刻**入队、轮询回调里才入库（渲染期安全，
+   * ISSUE #4919）——入库沿用打印时刻，时间线不因排空晚而漂移。缺省 = 现在。 */
+  addEntry: (entry: Omit<LogEntry, "id" | "time" | "seq"> & { time?: number }) => void;
   /**
    * 第 1 页窗口的**锚点**：用户「正在看的那一段」的头一条 id（null = 不锚定）。不锚定时窗口每来新行
    * 就前移一格，React 卸载最上面那条、挂上新的最末条，用户刚框住的文本随节点卸载而消失（ISSUE #262 复审）。
@@ -354,7 +356,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         ...entry,
         id: nextId(),
         seq: nextSeq(),
-        time: Date.now(),
+        time: entry.time ?? Date.now(),
       };
       /* 与 `appendFileLogs` 走**同一支**索引复用版合并：`addEntry` 是
        * 控制台 / 系统行的入口，同样是「一条一条来」，同样不该每轮建两张全表
