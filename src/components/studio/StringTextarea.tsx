@@ -31,7 +31,10 @@ export function StringTextarea({
   }, [value, hasSize]);
   return (
     <Textarea
-      className={`border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal text-2xs block w-full resize-none rounded border px-2 py-1.5 leading-snug focus-visible:ring-0 dark:bg-canvas-deep${
+      /* nodrag：按住拖动是选择文字而不是拖走节点；select-text 恢复
+       *  画布容器 user-select:none 掉的可选性 —— 只读多行提示词
+       *  是「复制参数值」的最高频落点。 */
+      className={`nodrag nopan border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal text-2xs block w-full resize-none rounded border px-2 py-1.5 leading-snug select-text focus-visible:ring-0 dark:bg-canvas-deep${
         mono === true ? " font-mono" : ""
       }`}
       onFocus={(event) => {
