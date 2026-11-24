@@ -1,10 +1,10 @@
 "use client";
 
 // ── 「测试模型能力」**视图**（规范 §17 第③层：只渲染 + 上抛）─────────────
-// 三栏 Bento 布局：左栏 = 用途页签 → 模式列表（带候选模型数徽标，内部滚动）
-// → 模型树形菜单（布局可切换，ISSUE #4916）与通道提示；中栏 = 统一输入 +
-// 生成 CTA + 进度 / 告警 + 执行日志；右栏 = 产物 / 请求与响应
-// （ModelTestResultPanel）。候选 / 适配器 / 契约 / 生成动作都在
+// 三栏 Bento 布局：左栏 = 用途 / 模式 / 模型 合并成的一棵树（布局可切换，
+// ISSUE #4916 / #4952）+ 通道提示；中栏 = 统一输入 + 生成 CTA + 进度 / 告警 +
+// 执行日志；右栏 = 产物 / 请求与响应（ModelTestResultPanel）。候选 / 适配器 /
+// 契约 / 生成动作都在
 // `hooks/use-model-test.ts`（第②层）与 `model-test-config.ts`（第①层）；
 // 本文件不出现 fetch / api.*。
 
@@ -16,9 +16,7 @@ import {
   Compass,
   History,
   Info,
-  ListChecks,
   Play,
-  Shapes,
   SlidersHorizontal,
   TriangleAlert,
 } from "lucide-react";
@@ -39,18 +37,16 @@ import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 import { cn } from "~/lib/utils";
 import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
 import {
-  MODEL_TEST_KINDS,
   MODEL_TEST_KIND_LABELS,
   serializeModelTestJson,
   type ModelTestControl,
   type ModelTestKind,
-  type ModeTab,
 } from "./model-test-config";
 import { InputRow } from "./ModelTestInputRow";
 import { ModelTestProgressPanel } from "./ModelTestProgressPanel";
 import { ModelTestSizeField } from "./ModelTestSizeField";
+import { ModelTestTree } from "./ModelTestTree";
 import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
-import { GeneratingBadge, ModelTreeSelect } from "./ModelTreeSelect";
 import { useModelTest } from "./hooks/use-model-test";
 import { useModelTestTree } from "./hooks/use-model-test-tree";
 import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
@@ -94,111 +90,6 @@ function Panel({
       </div>
       {children}
     </section>
-  );
-}
-
-/** 用途页签（图片 / 视频 / 对话）：SelectChip 的 pill 单选组。该用途下有
- *  模型正在生成时追加「N 生成中」小徽标（ISSUE #4838），一眼看出哪类用途
- *  在跑、跑着几个。 */
-function KindTabs({
-  generating,
-  kind,
-  onChange,
-}: {
-  generating: Record<ModelTestKind, number>;
-  kind: ModelTestKind;
-  onChange: (k: ModelTestKind) => void;
-}) {
-  return (
-    <div aria-label="选择用途" className="flex flex-wrap gap-2" role="radiogroup">
-      {MODEL_TEST_KINDS.map((k) => {
-        const count = generating[k] ?? 0;
-        return (
-          <SelectChip
-            key={k}
-            onClick={() => {
-              onChange(k);
-            }}
-            selected={kind === k}
-            shape="pill"
-          >
-            {MODEL_TEST_KIND_LABELS[k]}
-            {count > 0 && <GeneratingBadge className="ml-1" count={count} />}
-          </SelectChip>
-        );
-      })}
-    </div>
-  );
-}
-
-/** 「生成中」小徽标（GeneratingBadge）挪到 ModelTreeSelect.tsx：模型菜单与
- *  左栏页签（用途 / 模式）共用一份实现，不两处各写。 */
-
-/** 左栏模式列表：当前用途下的**所有**生成类模式纵列，右侧徽标显示配了该
- *  模式适配器的候选模型数；该模式下有模型在生成时再叠一枚「N 生成中」
- *  （ISSUE #4838）。选中态 = 品牌软底 + 描边；role=radio 由选中项
- *  驱动，外层 radiogroup 给整组可访问名。 */
-function ModeTabs({
-  generatingByMode,
-  kind,
-  mode,
-  onSelect,
-  tabs,
-}: {
-  /** 键 = `${kind}::${mode}`（与格键同形），值 = 该模式下生成中的模型数。 */
-  generatingByMode: Record<string, number>;
-  kind: ModelTestKind;
-  mode: string;
-  onSelect: (mode: string) => void;
-  tabs: Array<ModeTab>;
-}) {
-  return (
-    <div aria-label="选择模式" className="flex flex-col gap-1.5" role="radiogroup">
-      {tabs.map((t) => {
-        const selected = t.mode === mode;
-        const generatingCount = generatingByMode[`${kind}::${t.mode}`] ?? 0;
-        return (
-          <Button
-            aria-checked={selected}
-            className={cn(
-              "h-auto justify-between gap-2 rounded-lg px-3 py-2 font-normal",
-              selected
-                ? "bg-primary-soft ring-primary/25 text-primary-strong ring-1 hover:bg-primary-soft"
-                : "bg-surface-1 ring-border/60 ring-1 hover:bg-subtle",
-            )}
-            key={t.mode}
-            onClick={() => {
-              onSelect(t.mode);
-            }}
-            role="radio"
-            variant="ghost"
-          >
-            <span className="min-w-0 text-left leading-tight">
-              <TruncatedText
-                className={cn(
-                  "block truncate text-sm font-semibold",
-                  selected ? "text-primary-strong" : "text-ink",
-                )}
-              >
-                {t.label}
-              </TruncatedText>
-              <span className="text-muted-foreground text-2xs block">{t.mode}</span>
-            </span>
-            <span className="flex shrink-0 items-center gap-1">
-              {generatingCount > 0 && <GeneratingBadge count={generatingCount} />}
-              <span
-                className={cn(
-                  "shrink-0 rounded-full px-2 py-0.5 text-2xs tabular-nums",
-                  selected ? "bg-surface text-primary-strong" : "bg-subtle text-muted-foreground",
-                )}
-              >
-                {t.modelCount} 模型
-              </span>
-            </span>
-          </Button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -269,18 +160,15 @@ function OnboardingPanel({ c }: { c: ModelTestController }) {
   );
 }
 
-/** 左栏：用途 + 模式 + 模型（模式列表有滚动上限，不会把模型卡挤走；
- *  桌面下吸附成独立滚动区）。从 `ModelTestView` 拆出（§12.13：视图函数
- *  顶到 400 行硬闸，按栏切子组件）。 */
+/** 左栏：用途 + 模式 + 模型合并成的一棵树（ISSUE #4952）。树本身管展开、
+ *  布局切换与选中回填，空态 / 骨架屏仍在这里按页面口径给。桌面下吸附成独立
+ *  滚动区（树内部另有滚动上限，不会把通道提示挤走）。 */
 function LeftColumn({
   c,
-  modeLabel,
   tree,
 }: {
   c: ModelTestController;
-  /** 当前模式的展示名（空态文案用）。 */
-  modeLabel: string;
-  /** 树形菜单的条目装配（跨三种用途；ISSUE #4916）。 */
+  /** 树形条目的装配（跨三种用途；ISSUE #4916 / #4952）。 */
   tree: ReturnType<typeof useModelTestTree>;
 }) {
   /* 树叶自带「用途 + 模式 + 模型」路径语义：选中即一次回填页面三态。
@@ -299,59 +187,32 @@ function LeftColumn({
 
   return (
     <aside className="flex w-full shrink-0 flex-col gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-96px)] xl:w-64 xl:overflow-y-auto">
-      <Panel icon={<Shapes />} title="用途">
-        <KindTabs generating={c.generatingByKind} kind={c.kind} onChange={c.setKind} />
-      </Panel>
-
-      {c.modeTabs.length > 0 && (
-        <Panel icon={<ListChecks />} title="模式">
-          <div className="max-h-80 overflow-y-auto pr-0.5">
-            <ModeTabs
-              generatingByMode={c.generatingByMode}
-              kind={c.kind}
-              mode={c.mode}
-              onSelect={c.setMode}
-              tabs={c.modeTabs}
-            />
-          </div>
-        </Panel>
-      )}
-
-      <Panel hint="树形菜单 · 布局可切换" icon={<Boxes />} title="模型">
-        {c.loading ? (
+      <Panel hint="布局可切换" icon={<Boxes />} title="用途 / 模式 / 模型">
+        {c.loading || tree.loading ? (
           /* 骨架屏（ISSUE #4749）：与模型列表条目同形的占位条。 */
           <div aria-label="加载中" className="flex flex-col gap-2" role="status">
             {[0, 1, 2].map((i) => (
               <Skeleton className="h-9 w-full rounded-lg" key={i} />
             ))}
           </div>
-        ) : c.candidates.length === 0 ? (
-          c.kindCandidateCount === 0 ? (
-            <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
-              {c.kind === "chat"
-                ? "还没有可测的对话模型 —— 本地模型到「设置 → 本地模型」添加 Ollama 候选；远端模型到「设置 → 远程模型」添加用途为 文本 的条目。"
-                : `还没有可测的${MODEL_TEST_KIND_LABELS[c.kind]}模型 —— 本地模型到工作流库导入${
-                    c.kind === "image" ? "生图" : "视频"
-                  }工作流（工坊封装就绪后出现在这里）；远端模型到「设置 → 远程模型」添加并启用用途为 ${
-                    c.kind === "image" ? "图像" : "视频"
-                  } 的条目。`}
-            </p>
-          ) : (
-            <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
-              当前「{modeLabel}」模式下没有可用模型（页签徽标的数字就是它的候选数）——
-              远端模型需要先在「模型适配」配置该模式的适配器；本地工作流需要支持该模式（工作流库 →
-              模式）。
-            </p>
-          )
+        ) : tree.entries.length === 0 ? (
+          <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs leading-relaxed">
+            {c.kind === "chat"
+              ? "还没有可测的对话模型 —— 本地模型到「设置 → 本地模型」添加 Ollama 候选；远端模型到「设置 → 远程模型」添加用途为 文本 的条目。"
+              : `还没有可测的模型 —— 本地模型到工作流库导入${
+                  c.kind === "image" ? "生图" : "视频"
+                }工作流（工坊封装就绪后出现在这里）；远端模型到「设置 → 远程模型」添加并启用用途为 ${
+                  c.kind === "image" ? "图像" : "视频"
+                } 的条目。`}
+          </p>
         ) : (
-          <ModelTreeSelect
+          <ModelTestTree
             className="text-sm"
             currentKind={c.kind}
             currentMode={c.mode}
             entries={tree.entries}
             generatingModels={c.generatingModels}
-            labels={tree.labels}
-            loading={tree.loading}
+            loading={false}
             onSelect={handleTreeSelect}
             selectedValue={c.selectedModel}
           />
@@ -419,10 +280,9 @@ export function ModelTestView({
   const mappedTypes = new Set<WorkshopInputType>(
     (selectedAdapter?.inputs ?? []).map((row) => row.type),
   );
-  const modeLabel = c.modeTabs.find((t) => t.mode === c.mode)?.label ?? c.mode;
   const hasModel = c.selectedModel !== "";
 
-  /* 树形模型菜单的条目装配（ISSUE #4916）：跨三种用途取候选、按可测模式
+  /* 页面树的条目装配（ISSUE #4916 / #4952）：跨三种用途取候选、按可测模式
      展开成条目；生成中徽标由 generatingModels 集合驱动（#4838 同一读数）。 */
   const treeCatalog = useModelTestTree();
 
@@ -449,9 +309,9 @@ export function ModelTestView({
       )}
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-        {/* ── 左栏：用途 + 模式 + 模型（拆成子组件 —— §12.13；内容与
-            「生成中」徽标的说明见 `LeftColumn`）── */}
-        <LeftColumn c={c} modeLabel={modeLabel} tree={treeCatalog} />
+        {/* ── 左栏：用途 / 模式 / 模型 一棵树（拆成子组件 —— §12.13；
+            空态与「生成中」徽标的说明见 `LeftColumn`）── */}
+        <LeftColumn c={c} tree={treeCatalog} />
 
         {/* ── 中栏：统一输入 + 生成 CTA（未选模型时给三步引导）── */}
         <div className="flex min-w-0 flex-1 flex-col gap-4">

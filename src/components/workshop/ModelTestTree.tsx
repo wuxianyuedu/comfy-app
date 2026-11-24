@@ -1,7 +1,8 @@
 "use client";
 
-// ── 测试模型的树形菜单（ISSUE #4916）────────────────────────────────────
-// 触发器沿用 SelectMenu 的深色形态；浮层里是「布局切换 + 折叠树」：
+// ── 测试模型的页面树（ISSUE #4952）────────────────────────────────────────
+// 「用途 / 模式 / 模型」三大项在左栏合并成一棵就地展开的树，不再藏在模型下拉
+// 浮层里（#4916 只把下拉做成了树，页面结构没变）。三种布局共用同一份条目：
 // - 按用途：用途 → 模式 → 模型（对话没有模式层，叶直接挂）
 // - 按来源：本地模型 / 远端模型 → 模型（多模式候选只列一次，选中时按当前
 //   页的用途 / 模式解析落格，见 resolveSourceSelection）
@@ -12,12 +13,10 @@
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
-import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { SelectChip } from "~/components/ui/select-chip";
 import { Skeleton } from "~/components/ui/skeleton";
 import { StatusDot } from "~/components/ui/status-dot";
@@ -48,9 +47,8 @@ function readStoredLayout(): ModelTreeLayoutId {
 }
 
 /** 「生成中」小徽标（ISSUE #4838 的同款形态）：呼吸圆点 + 文案。给 `count`
- *  = 数量（「N 生成中」，分组节点用）；不给 = 单模型标记（「生成中」，
- *  触发器 / 叶子用）。走 `ui/badge` + `ui/status-dot`（§16.2.4 棘轮）。
- *  从 ModelTestView 挪来：树形菜单与左栏页签共用一份，避免两处各写。 */
+ *  = 数量（「N 生成中」，分组节点用）；不给 = 单模型标记（「生成中」，叶子用）。
+ *  走 `ui/badge` + `ui/status-dot`（§16.2.4 棘轮）。 */
 export function GeneratingBadge({ className, count }: { className?: string; count?: number }) {
   return (
     <Badge className={className} size="pill-md" tone="warning">
@@ -68,13 +66,28 @@ function leafCount(node: ModelTreeNode): number {
   return node.children.reduce((sum, child) => sum + leafCount(child), 0);
 }
 
-export function ModelTreeSelect({
+/** 该节点子树里正在生成的**不同取值**数（分组节点的「N 生成中」徽标）。 */
+function generatingCount(node: ModelTreeNode, generatingModels: ReadonlySet<string>): number {
+  const values = new Set<string>();
+  const walk = (current: ModelTreeNode) => {
+    if (current.entry !== undefined) {
+      if (generatingModels.has(current.entry.value)) {
+        values.add(current.entry.value);
+      }
+      return;
+    }
+    current.children.forEach(walk);
+  };
+  walk(node);
+  return values.size;
+}
+
+export function ModelTestTree({
   className,
   currentKind,
   currentMode,
   entries,
   generatingModels,
-  labels,
   loading,
   onSelect,
   selectedValue,
@@ -86,14 +99,11 @@ export function ModelTreeSelect({
   entries: ReadonlyArray<ModelTreeEntry>;
   /** 正在生成的模型取值集合（打「生成中」徽标）。 */
   generatingModels: ReadonlySet<string>;
-  /** 取值 → 显示名。 */
-  labels: Record<string, string>;
   loading: boolean;
-  /** 选中一片叶子：把该叶子的 用途 / 模式 / 模型取值 一起交回页面。 */
+  /** 选中一片叶子：把该叶子的 用途 / 模式 / 模型取值一起交回页面。 */
   onSelect: (kind: ModelTestKind, mode: string, value: string) => void;
   selectedValue: string;
 }) {
-  const [open, setOpen] = useState(false);
   const [layout, setLayoutState] = useState<ModelTreeLayoutId>(readStoredLayout);
   /* 展开表态（键 = 节点 key）。缺键的默认值 = 展开（与「模式契约」的模式导航
    * 同一口径：折叠是「先看别的」的临时动作，默认折着等于把候选藏起来）。 */
@@ -109,8 +119,6 @@ export function ModelTreeSelect({
     writeStorageItem(LAYOUT_STORAGE_KEY, next);
   };
 
-  const selectedLabel = selectedValue === "" ? null : (labels[selectedValue] ?? selectedValue);
-
   const handleLeafClick = (entry: ModelTreeEntry) => {
     if (layout === "source") {
       const resolved = resolveSourceSelection({
@@ -125,7 +133,6 @@ export function ModelTreeSelect({
     } else {
       onSelect(entry.kind, entry.mode, entry.value);
     }
-    setOpen(false);
   };
 
   /* 递归渲染：分组节点 = Disclosure（chevron + 计数），叶子 = 可选按钮。
@@ -173,6 +180,7 @@ export function ModelTreeSelect({
       );
     }
     const open = expanded[node.key] ?? true;
+    const running = generatingCount(node, generatingModels);
     return (
       <Disclosure
         className={cn(
@@ -191,6 +199,7 @@ export function ModelTreeSelect({
             <TruncatedText className="min-w-0 flex-1 truncate text-left">
               {node.label}
             </TruncatedText>
+            {running > 0 && <GeneratingBadge count={running} />}
             <span className="text-muted-foreground text-2xs shrink-0 tabular-nums">
               {leafCount(node)}
             </span>
@@ -205,68 +214,41 @@ export function ModelTreeSelect({
   };
 
   return (
-    <Popover onOpenChange={setOpen} open={open}>
-      <PopoverTrigger
-        aria-label="选择要测试的模型"
-        className={cn(
-          "group flex w-auto items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 text-xs text-ink-bright outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60",
-          className,
-        )}
-      >
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
-          {selectedLabel === null ? (
-            <span className="text-ink-muted truncate">选择要测试的模型…</span>
-          ) : (
-            <TruncatedText className="min-w-0 truncate">{selectedLabel}</TruncatedText>
-          )}
-          {selectedValue !== "" && generatingModels.has(selectedValue) && <GeneratingBadge />}
-        </span>
-        <ChevronDown
-          className={cn(
-            "text-ink-muted size-3 shrink-0 transition-transform",
-            open && "rotate-180",
-          )}
-        />
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-(--anchor-width) max-w-96 min-w-64 gap-1.5 p-1.5">
-        <div
-          aria-label="切换树形布局"
-          className="flex flex-wrap gap-1.5 px-1 pt-0.5"
-          role="radiogroup"
-        >
-          {MODEL_TREE_LAYOUTS.map((l) => (
-            <SelectChip
-              key={l.id}
-              onClick={() => {
-                setLayout(l.id);
-              }}
-              selected={layout === l.id}
-              shape="pill"
-            >
-              {l.label}
-            </SelectChip>
+    <div className={cn("flex flex-col gap-2", className)}>
+      {/* 布局切换：三种布局共用同一份条目（#4916），就地挂在树上方。 */}
+      <div aria-label="切换树形布局" className="flex flex-wrap gap-1.5" role="radiogroup">
+        {MODEL_TREE_LAYOUTS.map((l) => (
+          <SelectChip
+            key={l.id}
+            onClick={() => {
+              setLayout(l.id);
+            }}
+            selected={layout === l.id}
+            shape="pill"
+          >
+            {l.label}
+          </SelectChip>
+        ))}
+      </div>
+      {loading ? (
+        <div aria-label="加载中" className="flex flex-col gap-2" role="status">
+          {[0, 1, 2].map((i) => (
+            <Skeleton className="h-8 w-full rounded-lg" key={i} />
           ))}
         </div>
-        {loading ? (
-          <div aria-label="加载中" className="flex flex-col gap-2" role="status">
-            {[0, 1, 2].map((i) => (
-              <Skeleton className="h-8 w-full rounded-lg" key={i} />
-            ))}
-          </div>
-        ) : tree.length === 0 ? (
-          <p className="text-muted-foreground px-2 py-1.5 text-xs leading-relaxed">
-            还没有可测的模型 —— 到设置页 / 工作流库添加候选后这里会出现树形清单。
-          </p>
-        ) : (
-          <div
-            aria-label="选择要测试的模型"
-            className="max-h-72 overflow-y-auto pr-0.5"
-            role="radiogroup"
-          >
-            {tree.map((node) => renderBranch(node, 0))}
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
+      ) : tree.length === 0 ? (
+        <p className="text-muted-foreground px-2 py-1.5 text-xs leading-relaxed">
+          还没有可测的模型 —— 到设置页 / 工作流库添加候选后这里会出现树形清单。
+        </p>
+      ) : (
+        <div
+          aria-label="用途 / 模式 / 模型树"
+          className="max-h-96 overflow-y-auto pr-0.5"
+          role="radiogroup"
+        >
+          {tree.map((node) => renderBranch(node, 0))}
+        </div>
+      )}
+    </div>
   );
 }
