@@ -195,8 +195,6 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "size-resolution",
       "size-multiple",
       "seed",
-      "lora-name",
-      "lora-strength",
     ]);
   });
 
@@ -212,7 +210,7 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
     expect(width.cls).toBe("size-width");
   });
 
-  it("按模式给口子：单图生视频多一个首帧，文生图没有", () => {
+  it("按模式给口子：单图生视频多首尾两帧，文生图没有", () => {
     const videoIO: WorkflowIOMap = {
       ...io,
       "11::widget::image": pin("11", "first_frame", { type: "IMAGE" }),
@@ -221,6 +219,7 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "prompt",
       "negative",
       "first-frame",
+      "last-frame",
       "size-width",
       "size-height",
       "size-aspect",
@@ -229,8 +228,6 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "size-multiple",
       "duration",
       "seed",
-      "lora-name",
-      "lora-strength",
     ]);
     expect(buildParamEntries(videoIO, { mode: "T2I" }).map((entry) => entry.id)).toEqual([
       "prompt",
@@ -242,8 +239,6 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "size-resolution",
       "size-multiple",
       "seed",
-      "lora-name",
-      "lora-strength",
     ]);
   });
 
@@ -265,8 +260,6 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "size-resolution",
       "size-multiple",
       "seed",
-      "lora-name",
-      "lora-strength",
     ]);
     /* 没有可落点的口如实零候选（未配置）。 */
     expect(byId.get("prompt")!.pins).toEqual([]);
@@ -291,8 +284,6 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       .map((entry) => entry.id)
       .sort();
     expect(ids).toEqual([
-      "lora-name",
-      "lora-strength",
       "negative",
       "prompt",
       "seed",

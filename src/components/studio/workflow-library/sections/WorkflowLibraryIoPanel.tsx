@@ -302,7 +302,7 @@ export function WorkflowLibraryIoPanel({
           /* 与编辑器 IO 面板同一句提示（ISSUE #3800）：没配模式如实说，出路是
            * 上方那枚「选择模式」—— 就地勾选后这里立即能用，不必去别处。 */
           <div className="border-warning/30 bg-warning/5 text-warning-strong/80 text-2xs rounded-lg border border-dashed px-3 py-4 text-center leading-relaxed">
-            该工作流还没有配置模式 —— 请先在上方「模式」里勾选（文生图 / 图生图 /
+            该工作流还没有配置模式 —— 请先在上方「模式」里勾选（文生图 / 图像编辑 /
             …），之后才能在这里配置参数。
           </div>
         ) : (

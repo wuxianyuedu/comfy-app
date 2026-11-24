@@ -55,7 +55,7 @@ import { paramString } from "~/lib/workshop/param-coerce";
 
 type Props = {
   characters: Array<Character>;
-  /** 本入口的模型选择（#4834 统一级联）：先模式（文生图 / 图生图…）再选模型；
+  /** 本入口的模型选择（#4834 统一级联）：先模式（文生图 / 图像编辑…）再选模型；
    *  候选含本地工作流（`wf::<id>`）与远端 API 模型，生成时按此分流两条通道。 */
   modelSelection: ModelSelection;
   /** 取消一个进行中的本机任务（控制器统一出口）。 */
@@ -246,7 +246,7 @@ export function ShotStudio({
     /* 门禁放在入口（#4834）：没选模型（或选中候选已下架）不带空 workflow id
      * 去拉详情，也不落到按「通道设置里最后一个模型」的旧回落。 */
     if (selectedCandidate === null) {
-      setShotError(shot.id, "请先选择图片模型（先选模式：文生图 / 图生图…，再选模型）");
+      setShotError(shot.id, "请先选择图片模型（先选模式：文生图 / 图像编辑…，再选模型）");
       return null;
     }
     setShotError(shot.id, undefined);
@@ -388,7 +388,7 @@ export function ShotStudio({
 
   return (
     <div className="flex-col gap-4">
-      {/* 模型选择（#4834 统一级联）：先选模式（文生图 / 图生图…）再选模型；
+      {/* 模型选择（#4834 统一级联）：先选模式（文生图 / 图像编辑…）再选模型；
           本地 ComfyUI 工作流以「本地模型」组出现，生成时按候选分流两条通道。 */}
       <div className="flex flex-wrap items-center gap-2">
         <ModelCascadeSelect

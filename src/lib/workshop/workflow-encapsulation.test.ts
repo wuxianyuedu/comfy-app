@@ -523,6 +523,8 @@ describe("图片槽位：同名 pin 由线区分，不看名字 / 节点类名",
         "reference-image-2": "ref2",
       }),
       mode: "I2I",
+      /* 默认契约只给 1 个参考图槽；两槽是作者在契约编辑器里追加的形态。 */
+      contractIds: ["prompt", "negative", "reference-image", "reference-image-2", "size", "seed"],
       values: {
         referenceImages: ["r1.png", "r2.png"],
       },
@@ -597,6 +599,8 @@ describe("图片槽位：同名 pin 由线区分，不看名字 / 节点类名",
         "reference-image-2": "ref2",
       }),
       mode: "I2I",
+      /* 默认契约只给 1 个参考图槽；两槽是作者在契约编辑器里追加的形态。 */
+      contractIds: ["prompt", "negative", "reference-image", "reference-image-2", "size", "seed"],
       values: { referenceImages: ["a.png", "b.png"] },
     });
     expect(res.workflowInputs).toContainEqual({
@@ -657,6 +661,8 @@ describe("图片槽位：同名 pin 由线区分，不看名字 / 节点类名",
         referenceLoaders: {},
       },
       mode: "I2I",
+      /* 默认契约只给 1 个参考图槽；两槽是作者在契约编辑器里追加的形态。 */
+      contractIds: ["prompt", "negative", "reference-image", "reference-image-2", "size", "seed"],
       values: { referenceImages: ["a.png", "b.png"] },
     });
     expect(res.workflowInputs).toContainEqual({
@@ -937,10 +943,10 @@ describe("视频模式判定", () => {
     expect(modeUsesFirstFrame(null)).toBe(false);
   });
 
-  it("需要尾帧的只有首尾帧家族", () => {
+  it("需要尾帧的是首尾帧家族与单图生视频（基线 JSON 的口径）", () => {
     expect(modeUsesLastFrame("FLF2V")).toBe(true);
     expect(modeUsesLastFrame("FMF2V")).toBe(true);
-    expect(modeUsesLastFrame("I2V")).toBe(false);
+    expect(modeUsesLastFrame("I2V")).toBe(true);
   });
 });
 

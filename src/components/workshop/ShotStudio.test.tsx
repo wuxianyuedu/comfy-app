@@ -39,7 +39,7 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
 });
 
 /* 模型目录 mock（#4834）：本地工作流候选（wf::wf-1）+ 远端模型各一，
- * 模式页签固定 文生图 / 图生图 两档 —— ShotStudio 只消费这份读数。 */
+ * 模式页签固定 文生图 / 图像编辑 两档 —— ShotStudio 只消费这份读数。 */
 const catalogCandidates: Array<TestCandidate> = [
   {
     baseUrl: null,
@@ -66,7 +66,7 @@ vi.mock("~/components/workshop/hooks/use-model-catalog", () => ({
   useModelCatalog: () => ({
     modeTabs: [
       { label: "文生图", mode: "T2I", modelCount: 2 },
-      { label: "图生图", mode: "I2I", modelCount: 2 },
+      { label: "图像编辑", mode: "I2I", modelCount: 2 },
     ],
     candidates: catalogCandidates,
     allCandidates: catalogCandidates,

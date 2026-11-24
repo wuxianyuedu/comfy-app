@@ -132,9 +132,9 @@ describe("模式契约编辑器：输出类别那一格已撤掉（ISSUE #4072�
     fireEvent.click(required);
     expect(toggleRequired).toHaveBeenCalledWith("prompt");
 
-    /* 其余口标成「可选」（T2I 共 6 个口：1 必填 + 5 可选）。 */
+    /* 其余口标成「可选」（T2I 共 4 个口：1 必填 + 3 可选）。 */
     const optional = screen.getAllByRole("button", { name: /可选/ });
-    expect(optional.length).toBe(5);
+    expect(optional.length).toBe(3);
     for (const button of optional) {
       expect(button.getAttribute("aria-pressed")).toBe("false");
     }

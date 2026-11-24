@@ -66,9 +66,9 @@ export const MODE_CONTRACT_INPUT_TYPES = [
    * 这里不同步认它的话，契约一旦走归一化 / 保存链路，seed 口会被静默过滤掉
    *（isModeContractInputId 判 false），编辑器里也看不到这一口。 */
   { type: "seed", label: EXPOSED_PARAM_DISPLAY_LABEL.seed },
-  /* 角色 LoRA 口（FR-QA-02③ · #2622）同款内置：exposedParamsForMode 对每个
-   * 模式都产它，这里不同步认的话保存链路会静默过滤（isModeContractInputId
-   * 判 false），编辑器里也看不到。 */
+  /* 角色 LoRA 口（FR-QA-02③ · #2622）：默认基线（mode-contract-defaults.json）
+   * 已不带这两口，但类型仍要认 —— 作者可在契约编辑器里加回，存量覆盖里残留的
+   * lora 口也要能照读（isModeContractInputId 判 false 会把口静默过滤掉）。 */
   { type: "lora-name", label: EXPOSED_PARAM_DISPLAY_LABEL["lora-name"] },
   {
     type: "lora-strength",
@@ -332,7 +332,6 @@ export function derivedModeContract(mode: string): ModeContract {
 export const ALL_CONTRACT_MODES: ReadonlyArray<string> = [
   "T2I",
   "I2I",
-  "TI2I",
   "R2I",
   "E2I",
   "D2I",

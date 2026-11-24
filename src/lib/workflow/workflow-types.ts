@@ -54,21 +54,12 @@ export const IMAGE_WORKFLOW_TYPES: Array<WorkflowTypeDefinition> = [
   {
     code: "I2I",
     fullName: "Image-to-Image",
-    label: "图生图",
+    label: "图像编辑",
     category: "image",
     subCategory: "生成",
     description: "含重绘、风格迁移、denoising 重解释",
     isGenerative: true,
     hints: ["VAEEncode", "LoadImage", "KSampler"],
-  },
-  {
-    code: "TI2I",
-    fullName: "Text+Image-to-Image",
-    label: "图文混合条件生图",
-    category: "image",
-    subCategory: "生成",
-    description: "少数节点联合驱动",
-    isGenerative: true,
   },
   {
     code: "R2I",
@@ -439,8 +430,15 @@ const CODE_BY_LOWER = new Map<string, string>(
  *  「首尾帧生视频」曾同时存在 FLF2V 与 FL2V 两个同义 code，面板上出现两条同名
  *  条目，已删除 FL2V 只留 FLF2V（见别名表下方归一）。库里若已按旧 code 落过
  *  taskType / modes，必须在读取侧归一到 FLF2V，否则该工作流会被判成「未知模式」
- *  而丢掉模式端口。 */
-const RETIRED_CODE_ALIASES = new Map<string, string>([["fl2v", "FLF2V"]]);
+ *  而丢掉模式端口。
+ *
+ *  「图文混合条件生图」（TI2I）与「参考图生图」（R2I）是同一类能力（参考图驱动
+ *  生图，适配器里两者本就同分支同输入），已删除 TI2I 只留 R2I；旧数据读取侧
+ *  归一到 R2I。 */
+const RETIRED_CODE_ALIASES = new Map<string, string>([
+  ["fl2v", "FLF2V"],
+  ["ti2i", "R2I"],
+]);
 
 /** 将用户/前端输入的任务类型码归一到规范 code（大小写不敏感）。
  *

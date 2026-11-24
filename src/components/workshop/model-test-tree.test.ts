@@ -131,7 +131,7 @@ describe("buildModelTree", () => {
     const tree = buildModelTree("kind", entries);
     expect(tree.map((n) => n.label)).toEqual(["图片", "视频", "对话"]);
     const image = tree[0];
-    expect(image?.children.map((n) => n.label)).toEqual(["文生图", "图生图"]);
+    expect(image?.children.map((n) => n.label)).toEqual(["文生图", "图像编辑"]);
     const t2i = image?.children[0];
     expect(t2i?.children.map((n) => n.entry?.value)).toEqual(["wf::wf1", "agnes"]);
     const chat = tree[2];
@@ -178,7 +178,7 @@ describe("buildModelTree", () => {
     const zImageGroups = tree.filter((n) => n.label === "z-image");
     expect(zImageGroups).toHaveLength(2);
     const localZ = zImageGroups.find((n) => n.local === true);
-    expect(localZ?.children.map((n) => n.label)).toEqual(["文生图", "图生图"]);
+    expect(localZ?.children.map((n) => n.label)).toEqual(["文生图", "图像编辑"]);
     expect(localZ?.children[0]?.children[0]?.entry?.value).toBe("wf::wf1");
     expect(localZ?.children[1]?.children[0]?.entry?.value).toBe("wf::wf2");
   });

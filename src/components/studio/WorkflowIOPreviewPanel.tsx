@@ -290,7 +290,7 @@ export function WorkflowIoPreviewPanel({
             </div>
           ) : modes.length === 0 ? (
             <div className="border-warning/30 bg-warning/5 text-warning-strong/80 text-2xs rounded-lg border border-dashed px-3 py-4 text-center leading-relaxed">
-              该工作流还没有配置模式 —— 请先在上方「模式」里勾选 （文生图 / 图生图 /
+              该工作流还没有配置模式 —— 请先在上方「模式」里勾选 （文生图 / 图像编辑 /
               …），之后才能在这里配置参数。
             </div>
           ) : (

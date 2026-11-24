@@ -528,7 +528,7 @@ export function assembleVideoRequest(opts: {
  * 每个页签的数字都一样，页签间就分不出差异了）。 */
 
 export type ModeTab = {
-  /** 中文名（文生图 / 图生图 …），来自工作流类型注册表。 */
+  /** 中文名（文生图 / 图像编辑 …），来自工作流类型注册表。 */
   label: string;
   /** 模式码（T2I / I2V / T2V …），即生成请求里带的 mode。 */
   mode: string;
