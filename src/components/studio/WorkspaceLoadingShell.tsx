@@ -37,8 +37,14 @@ export function WorkspaceLoadingShell({ children }: { children: ReactNode }) {
      window.setTimeout 同一函数；单测的假时钟只 patch 全局这一份）。 */
   const [stalled, setStalled] = useState(false);
   useEffect(() => {
-    const timer = setTimeout(() => setStalled(true), STALLED_AFTER_MS);
-    return () => clearTimeout(timer);
+    /* 回调用块体：type-aware 的 no-confusing-void-expression 禁止箭头简写
+       隐式返回 void 表达式（零豁免档在 GA 侧带 --type-aware 判）。 */
+    const timer = setTimeout(() => {
+      setStalled(true);
+    }, STALLED_AFTER_MS);
+    return () => {
+      clearTimeout(timer);
+    };
   }, []);
   return (
     <ShellFullPage>
