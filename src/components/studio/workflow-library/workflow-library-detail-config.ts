@@ -6,6 +6,7 @@ import type { RefObject } from "react";
 import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { isPlainRecord } from "~/lib/is-record";
+import { referenceSlotOf } from "~/lib/workshop/workflow-encapsulation";
 import type { ModelTagSummary } from "~/lib/workflow/workflow-list-types";
 import type { WorkflowRow } from "./workflow-library-config";
 
@@ -113,4 +114,21 @@ export function isDetailLoadingFor(workflowId: string | null, settledId: string 
     return false;
   }
   return settledId !== workflowId;
+}
+
+/** 「参考图装载」页签是否对这条工作流可见：契约口里存在参考图槽位
+ *  （reference-image(-n)）才算启用 —— 启用动作即「工坊封装」页签里给这条
+ *  工作流配置参考图契约口；没配置的工作流连页签一起隐藏（默认不显示）。
+ *  入参取 `useWorkflowEncapsulation` 的**生效**口清单（含 referenceCap 过滤），
+ *  与页签内容（ReferenceLoaderTab）同一份判据，不写两份。 */
+export function hasReferenceSlots(entries: ReadonlyArray<{ id: string }>): boolean {
+  return entries.some((entry) => referenceSlotOf(entry.id) >= 0);
+}
+
+/** 详情页签栏的**可见子集**：未启用参考图装载的工作流不出现「参考图装载」
+ *  页签（含其内容面板），其余页签原样、顺序不变。 */
+export function visibleDetailTabs(
+  entries: ReadonlyArray<{ id: string }>,
+): Array<(typeof DETAIL_TABS)[number]> {
+  return DETAIL_TABS.filter((tab) => tab.key !== "reference" || hasReferenceSlots(entries));
 }

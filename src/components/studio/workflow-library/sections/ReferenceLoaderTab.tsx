@@ -13,12 +13,12 @@ import { FolderOpen, Waypoints } from "lucide-react";
 
 import { Hint } from "~/components/ui/hint";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import { hasReferenceSlots } from "../workflow-library-detail-config";
 import {
   referenceLoaderMountNodes,
   resolveReferenceMountNodes,
   type ReferenceMountNode,
 } from "~/lib/workshop/reference-loader-binding";
-import { referenceSlotOf } from "~/lib/workshop/workflow-encapsulation";
 
 import { useWorkflowEncapsulation } from "../hooks/use-workflow-encapsulation";
 import { ReferenceLoaderBindingSection } from "../reference-loader/ReferenceLoaderBindingSection";
@@ -84,7 +84,9 @@ export function ReferenceLoaderTab({
   /* 契约口清单与「工坊封装」同一份取数（useWorkflowEncapsulation）：
    * 参考图槽位是契约口的一个子集（id 形如 reference-image(-n)）。 */
   const { status } = useWorkflowEncapsulation({ mode: activeMode, io, paramMap });
-  const hasSlots = status.entries.some((entry) => referenceSlotOf(entry.id) >= 0);
+  /* 与详情页签栏的显隐同一份判据（workflow-library-detail-config）：契约口里
+   * 存在参考图槽位 = 这条工作流已启用参考图装载。 */
+  const hasSlots = hasReferenceSlots(status.entries);
   /* 挂载节点（#4593）：paramMap 里是 id 名单，名字从 RAW 图解析。 */
   const mountNodes = resolveReferenceMountNodes({
     mountNodeIds: referenceLoaderMountNodes(paramMap),

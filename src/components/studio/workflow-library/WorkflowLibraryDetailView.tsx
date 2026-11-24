@@ -15,10 +15,13 @@ import { useWorkflowUpdateFromJson } from "./hooks/use-workflow-update-from-json
 import { UpdateJsonModal } from "./UpdateJsonModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
+  DEFAULT_DETAIL_TAB,
   DETAIL_LOADING_LABEL,
   DETAIL_TABS,
+  visibleDetailTabs,
   type DetailTab,
 } from "./workflow-library-detail-config";
+import { useWorkflowEncapsulation } from "./hooks/use-workflow-encapsulation";
 import { DetailBody, TabContentLoading } from "./sections/DetailBody";
 import { DetailHeader } from "./sections/DetailHeader";
 
@@ -88,6 +91,26 @@ export function WorkflowLibraryDetailView({
   useEffect(() => {
     clearUpdateJsonReport();
   }, [workflowIdForReport, clearUpdateJsonReport]);
+
+  /* 「参考图装载」页签按工作流启用（默认不显示）：契约口里配置了参考图槽位
+   * （在「工坊封装」页签给这条工作流加参考图口）才显示。判据与页签内容
+   * （ReferenceLoaderTab）同一份取数与纯函数，不写两份。 */
+  const encapsulation = useWorkflowEncapsulation({
+    mode: activeMode,
+    io: workflowIO,
+    paramMap,
+  });
+  const referenceTabVisible = visibleDetailTabs(encapsulation.status.entries).some(
+    (tab) => tab.key === "reference",
+  );
+  const visibleTabs = visibleDetailTabs(encapsulation.status.entries);
+  /* 激活页签落在被隐藏的页签上时（启用被撤销 / 换了一条未启用的工作流）
+   * 回退默认页签，避免 Tabs 的 value 找不到对应触发器。 */
+  useEffect(() => {
+    if (activeTab === "reference" && !referenceTabVisible) {
+      setActiveTab(DEFAULT_DETAIL_TAB);
+    }
+  }, [activeTab, referenceTabVisible, setActiveTab]);
 
   /* 子界面打开耗时（ISSUE #4580）：从列表点击（父级经 openedAtRef 记的时刻）
    * 到详情数据落定。就绪判据与布局的加载态同一把尺（isLoading = 当前 workflow
@@ -183,7 +206,7 @@ export function WorkflowLibraryDetailView({
           className="border-border-subtle h-auto w-full justify-start gap-1 rounded-none border-b px-4"
           variant="line"
         >
-          {DETAIL_TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <TabsTrigger
               className="detail-tab-trigger h-auto flex-none rounded-none px-3 py-2.5 text-xs font-medium"
               key={tab.key}
@@ -269,34 +292,36 @@ export function WorkflowLibraryDetailView({
           )}
         </TabsContent>
 
-        {(["params", "reference", "source"] as const).map((tab) => (
-          <TabsContent className="min-h-0 flex-1 overflow-y-auto p-5" key={tab} value={tab}>
-            <DetailBody
-              activeMode={activeMode}
-              isLoading={isLoading}
-              meta={{
-                modes: metaEditor.modes,
-                defaultMode: metaEditor.defaultMode,
-                onModeChange: (code) => {
-                  setActiveMode(code);
-                  void metaEditor.patchModes(metaEditor.modes, code);
-                },
-              }}
-              onActiveModeChange={setActiveMode}
-              onEdit={actions.edit}
-              onPatchParamMap={(next) => metaEditor.patchParamMap(next)}
-              onSeedModeChange={(ioKey, mode) => {
-                void metaEditor.patchSeedMode(ioKey, mode);
-              }}
-              paramMap={paramMap}
-              sourceData={sourceData}
-              tab={tab}
-              usable={usable}
-              workflow={workflow}
-              workflowIO={workflowIO}
-            />
-          </TabsContent>
-        ))}
+        {(["params", "reference", "source"] as const)
+          .filter((tab) => tab !== "reference" || referenceTabVisible)
+          .map((tab) => (
+            <TabsContent className="min-h-0 flex-1 overflow-y-auto p-5" key={tab} value={tab}>
+              <DetailBody
+                activeMode={activeMode}
+                isLoading={isLoading}
+                meta={{
+                  modes: metaEditor.modes,
+                  defaultMode: metaEditor.defaultMode,
+                  onModeChange: (code) => {
+                    setActiveMode(code);
+                    void metaEditor.patchModes(metaEditor.modes, code);
+                  },
+                }}
+                onActiveModeChange={setActiveMode}
+                onEdit={actions.edit}
+                onPatchParamMap={(next) => metaEditor.patchParamMap(next)}
+                onSeedModeChange={(ioKey, mode) => {
+                  void metaEditor.patchSeedMode(ioKey, mode);
+                }}
+                paramMap={paramMap}
+                sourceData={sourceData}
+                tab={tab}
+                usable={usable}
+                workflow={workflow}
+                workflowIO={workflowIO}
+              />
+            </TabsContent>
+          ))}
       </Tabs>
 
       {sourceOpen && (

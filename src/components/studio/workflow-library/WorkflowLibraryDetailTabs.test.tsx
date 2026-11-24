@@ -10,7 +10,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { DEFAULT_DETAIL_TAB, DETAIL_TABS } from "./workflow-library-detail-config";
+import {
+  DEFAULT_DETAIL_TAB,
+  DETAIL_TABS,
+  hasReferenceSlots,
+  visibleDetailTabs,
+} from "./workflow-library-detail-config";
 
 afterEach(cleanup);
 
@@ -95,5 +100,30 @@ describe("详情面板页签走 ui/tabs", () => {
     expect(block).not.toBeNull();
     expect(block?.[0]).toMatch(/var\(--color-primary\)/);
     expect(block?.[0]).toMatch(/var\(--color-accent\)/);
+  });
+});
+
+describe("参考图装载页签按工作流启用显隐（ISSUE #4954）", () => {
+  /* 生效契约口清单的最小形状（id 即判据所需）。 */
+  const withReference = [{ id: "prompt" }, { id: "reference-image" }];
+  const withReference2 = [{ id: "reference-image-2" }];
+  const withoutReference = [{ id: "prompt" }, { id: "seed" }];
+
+  it("契约口里存在参考图槽位（reference-image(-n)）才算启用", () => {
+    expect(hasReferenceSlots(withReference)).toBe(true);
+    expect(hasReferenceSlots(withReference2)).toBe(true);
+    expect(hasReferenceSlots(withoutReference)).toBe(false);
+    expect(hasReferenceSlots([])).toBe(false);
+  });
+
+  it("未启用的工作流不出现「参考图装载」页签，其余页签原样", () => {
+    const keys = visibleDetailTabs(withoutReference).map((tab) => tab.key);
+    expect(keys).toEqual(["params", "canvas", "io", "use", "source"]);
+    expect(keys).not.toContain("reference");
+  });
+
+  it("启用后「参考图装载」按原顺序出现在工坊封装之后", () => {
+    const keys = visibleDetailTabs(withReference).map((tab) => tab.key);
+    expect(keys).toEqual(["params", "reference", "canvas", "io", "use", "source"]);
   });
 });
