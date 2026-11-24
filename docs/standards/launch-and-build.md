@@ -53,7 +53,7 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
   └─▶ node scripts/dev.mjs（与 beforeDevCommand 同形；#4155 起 server 链不经
         pnpm）→ node …/next/dist/bin/next dev（127.0.0.1:<解析端口>，见 §1.1；
         本检出缺省 = 路径推导值，静态兜底才是 3100）
-        就绪后 splash 调 navigate_to_app → main 加载 /workspace → 交换窗口
+        就绪后 splash 调 navigate_to_app → main 加载 /（入口即根路径，#4957）→ 交换窗口
 ```
 
 分层边界（不要越层做事）：

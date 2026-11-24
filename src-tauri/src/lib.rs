@@ -248,7 +248,8 @@ impl AppState {
 /// 只看环境变量就会按路径推导出另一个端口并导航过去，dev server 其实在 `.env`
 /// 写的那个端口上（ISSUE #821 的现场：启动页卡在「等 dev server」）。
 fn default_dev_url(host: &str) -> String {
-  format!("http://{}:{}/workspace", host, single_instance::resolve_app_port())
+  // 入口停在根路径（#4957，随 #4881）：/ 即创作台，不再把地址拼成 /workspace。
+  format!("http://{}:{}/", host, single_instance::resolve_app_port())
 }
 
 /// 从项目根目录读取启动状态文件 run/launch-status.json。
@@ -1582,8 +1583,8 @@ fn spawn_sidecar(
     // 启动页可见的状态里（ISSUE #4391）：setup 在主线程，grace 期间启动页的
     // 轮询 IPC 会停摆，至少让用户看到「在等什么」。
     if !sidecar_died_within(SIDECAR_START_GRACE) {
-      // 更新应用 URL，供启动页 ready 后导航
-      let app_url = format!("http://127.0.0.1:{}/workspace", port);
+      // 更新应用 URL，供启动页 ready 后导航（入口停在根路径，#4957）
+      let app_url = format!("http://127.0.0.1:{}/", port);
       if let Some(state) = app.try_state::<AppState>() {
         state.set_app_url(app_url);
       }
