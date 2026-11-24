@@ -2,13 +2,13 @@
 
 // ── 「测试模型能力」**视图**（规范 §17 第③层：只渲染 + 上抛）─────────────
 // 三栏 Bento 布局：左栏 = 用途页签 → 模式列表（带候选模型数徽标，内部滚动）
-// → 模型下拉（本地 / 远端分组）与通道提示；中栏 = 统一输入 + 生成 CTA +
-// 进度 / 告警 + 执行日志；右栏 = 产物 / 分节点进度 / 请求与响应
-// （ModelTestResultPanel；分节点进度自 #4811 起挪到右栏「请求」上方）。
-// 候选 / 适配器 / 契约 / 生成动作都在 `hooks/use-model-test.ts`（第②层）与
-// `model-test-config.ts`（第①层）；本文件不出现 fetch / api.*。
+// → 模型树形菜单（布局可切换，ISSUE #4916）与通道提示；中栏 = 统一输入 +
+// 生成 CTA + 进度 / 告警 + 执行日志；右栏 = 产物 / 请求与响应
+// （ModelTestResultPanel）。候选 / 适配器 / 契约 / 生成动作都在
+// `hooks/use-model-test.ts`（第②层）与 `model-test-config.ts`（第①层）；
+// 本文件不出现 fetch / api.*。
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import {
@@ -23,7 +23,6 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
@@ -32,8 +31,6 @@ import { FormField } from "~/components/ui/form-field";
 import { PageHeader } from "~/components/ui/page-header";
 import { SelectChip } from "~/components/ui/select-chip";
 import { TruncatedText } from "~/components/ui/truncated-text";
-import { SelectMenu } from "~/components/ui/select-menu";
-import { StatusDot } from "~/components/ui/status-dot";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { sizeSourceForMode } from "~/lib/workflow/workflow-size-source";
 import type { QueueTaskLogTarget } from "~/components/studio/queue/QueueTaskLogModal";
@@ -44,7 +41,7 @@ import type { ModelTestRetryPayload } from "~/components/studio/history/history-
 import {
   MODEL_TEST_KINDS,
   MODEL_TEST_KIND_LABELS,
-  candidateValue,
+  serializeModelTestJson,
   type ModelTestControl,
   type ModelTestKind,
   type ModeTab,
@@ -53,7 +50,9 @@ import { InputRow } from "./ModelTestInputRow";
 import { ModelTestProgressPanel } from "./ModelTestProgressPanel";
 import { ModelTestSizeField } from "./ModelTestSizeField";
 import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
+import { GeneratingBadge, ModelTreeSelect } from "./ModelTreeSelect";
 import { useModelTest } from "./hooks/use-model-test";
+import { useModelTestTree } from "./hooks/use-model-test-tree";
 import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
 
 /* 「大屏查看日志」弹窗：与历史记录 / 队列页同一份（QueueTaskLogModal 按 taskId
@@ -132,19 +131,8 @@ function KindTabs({
   );
 }
 
-/** 「生成中」小徽标（ISSUE #4838）：呼吸圆点 + 文案。给 `count` = 数量
- *  （「N 生成中」，用途 / 模式两处用）；不给 = 单模型标记（「生成中」，
- *  模型下拉用）。走 `ui/badge` 基元（tone=warning，§16.2.4 棘轮：不手写
- *  <span> 胶囊）+ `ui/status-dot` 的脉冲圆点（P3：不内联 animate-pulse），
- *  配色与产物卡的生成中状态同族。 */
-function GeneratingBadge({ className, count }: { className?: string; count?: number }) {
-  return (
-    <Badge className={className} size="pill-md" tone="warning">
-      <StatusDot pulse sizeClass="size-1.5" state="busy" />
-      {count === undefined ? "生成中" : `${count} 生成中`}
-    </Badge>
-  );
-}
+/** 「生成中」小徽标（GeneratingBadge）挪到 ModelTreeSelect.tsx：模型菜单与
+ *  左栏页签（用途 / 模式）共用一份实现，不两处各写。 */
 
 /** 左栏模式列表：当前用途下的**所有**生成类模式纵列，右侧徽标显示配了该
  *  模式适配器的候选模型数；该模式下有模型在生成时再叠一枚「N 生成中」
@@ -286,15 +274,29 @@ function OnboardingPanel({ c }: { c: ModelTestController }) {
  *  顶到 400 行硬闸，按栏切子组件）。 */
 function LeftColumn({
   c,
-  modelLabels,
   modeLabel,
+  tree,
 }: {
   c: ModelTestController;
   /** 当前模式的展示名（空态文案用）。 */
   modeLabel: string;
-  /** 模型下拉的标签（显示名 + 生成中徽标，ISSUE #4838）。 */
-  modelLabels: Record<string, ReactNode>;
+  /** 树形菜单的条目装配（跨三种用途；ISSUE #4916）。 */
+  tree: ReturnType<typeof useModelTestTree>;
 }) {
+  /* 树叶自带「用途 + 模式 + 模型」路径语义：选中即一次回填页面三态。
+   * setKind 会重置模型与模式，顺序必须 kind → mode → model；后两步拿到的
+   * 都是旧闭包也不会错 —— setMode 对已重置的选中项不再清第二遍，
+   * selectModel 最后落值。 */
+  const handleTreeSelect = (kind: ModelTestKind, mode: string, value: string) => {
+    if (c.kind !== kind) {
+      c.setKind(kind);
+    }
+    if (c.mode !== mode) {
+      c.setMode(mode);
+    }
+    c.selectModel(value);
+  };
+
   return (
     <aside className="flex w-full shrink-0 flex-col gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-96px)] xl:w-64 xl:overflow-y-auto">
       <Panel icon={<Shapes />} title="用途">
@@ -315,7 +317,7 @@ function LeftColumn({
         </Panel>
       )}
 
-      <Panel hint="按用途与模式过滤" icon={<Boxes />} title="模型">
+      <Panel hint="树形菜单 · 布局可切换" icon={<Boxes />} title="模型">
         {c.loading ? (
           /* 骨架屏（ISSUE #4749）：与模型列表条目同形的占位条。 */
           <div aria-label="加载中" className="flex flex-col gap-2" role="status">
@@ -342,31 +344,16 @@ function LeftColumn({
             </p>
           )
         ) : (
-          <SelectMenu
-            aria-label="选择模型"
-            autoFitFromOptions={false}
+          <ModelTreeSelect
             className="text-sm"
-            fullWidth={false}
-            /* 本地 / 远端分组：对话的本地 = Ollama 候选；图片 / 视频的
-             * 本地 = 工作流库工作流，远端 = 设置页配置的远端模型。 */
-            groups={(
-              [
-                {
-                  label: "本地模型",
-                  options: c.candidates.filter((m) => m.local).map(candidateValue),
-                },
-                {
-                  label: "远端模型",
-                  options: c.candidates.filter((m) => !m.local).map((m) => m.name),
-                },
-              ] as const
-            ).filter((group) => group.options.length > 0)}
-            labels={modelLabels}
-            onChange={c.selectModel}
-            options={c.candidates.map(candidateValue)}
-            placeholder="选择要测试的模型…"
-            popoverMinWidth={240}
-            value={c.selectedModel}
+            currentKind={c.kind}
+            currentMode={c.mode}
+            entries={tree.entries}
+            generatingModels={c.generatingModels}
+            labels={tree.labels}
+            loading={tree.loading}
+            onSelect={handleTreeSelect}
+            selectedValue={c.selectedModel}
           />
         )}
         {c.selectedModel !== "" && <ChannelNote c={c} />}
@@ -395,9 +382,11 @@ export function ModelTestView({
   /* 「大屏查看日志」弹窗目标：存打开那一刻的快照（与 HistoryList 同款），
    * 生成态变化不重挂弹窗、不重订 SSE（#4743）。 */
   const [logTarget, setLogTarget] = useState<QueueTaskLogTarget | null>(null);
-  /* 输入方式（ISSUE #4769）：统一输入表单 ⇄ JSON 粘贴。jsonText 是纯展示态，
-   * 留在视图层；解析与应用在 controller（applyJsonValues）—— 解析成功后自动
-   * 切回统一输入，让用户看着填进去的参数点生成。 */
+  /* 输入方式（ISSUE #4769）：统一输入表单 ⇄ JSON 粘贴，两栏内容双向同步
+   * （ISSUE #4922）：切到 JSON 把当前生效值（含默认档 / 工作流默认 / 重试
+   * 预填）序列化成 { mode, inputs } 预填进文本框；切回统一输入把 JSON 里
+   * 认得的键解析落回表单（解析失败留在 JSON 栏，错误落反馈位）。jsonText
+   * 是纯展示态，留在视图层；解析与应用在 controller（applyJsonValues）。 */
   const [jsonMode, setJsonMode] = useState(false);
   const [jsonText, setJsonText] = useState("");
   /* 历史页「重试」的带参载荷应用一次即清（#4841）：payload 非 null 的那次
@@ -433,25 +422,9 @@ export function ModelTestView({
   const modeLabel = c.modeTabs.find((t) => t.mode === c.mode)?.label ?? c.mode;
   const hasModel = c.selectedModel !== "";
 
-  /* 模型下拉的标签：在既有显示名（模型标签 / 工作流名消歧）之上，给正在
-     生成的模型追加「生成中」徽标（ISSUE #4838）—— 选项里与触发器上是同一
-     份 label，选中项在生成中时触发器也带徽标。 */
-  const modelLabels = useMemo<Record<string, ReactNode>>(() => {
-    const out: Record<string, ReactNode> = {};
-    for (const candidate of c.candidates) {
-      const value = candidateValue(candidate);
-      const label = c.candidateLabels[value] ?? value;
-      out[value] = c.generatingModels.has(value) ? (
-        <span className="inline-flex min-w-0 items-center gap-1.5">
-          <span className="truncate">{label}</span>
-          <GeneratingBadge />
-        </span>
-      ) : (
-        label
-      );
-    }
-    return out;
-  }, [c.candidates, c.candidateLabels, c.generatingModels]);
+  /* 树形模型菜单的条目装配（ISSUE #4916）：跨三种用途取候选、按可测模式
+     展开成条目；生成中徽标由 generatingModels 集合驱动（#4838 同一读数）。 */
+  const treeCatalog = useModelTestTree();
 
   return (
     <DocumentFrame className="flex flex-col gap-5 px-4 pt-4 pb-10 sm:px-6 sm:pt-5" width="full">
@@ -478,7 +451,7 @@ export function ModelTestView({
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
         {/* ── 左栏：用途 + 模式 + 模型（拆成子组件 —— §12.13；内容与
             「生成中」徽标的说明见 `LeftColumn`）── */}
-        <LeftColumn c={c} modeLabel={modeLabel} modelLabels={modelLabels} />
+        <LeftColumn c={c} modeLabel={modeLabel} tree={treeCatalog} />
 
         {/* ── 中栏：统一输入 + 生成 CTA（未选模型时给三步引导）── */}
         <div className="flex min-w-0 flex-1 flex-col gap-4">
@@ -491,10 +464,19 @@ export function ModelTestView({
                 title={jsonMode ? "JSON 输入" : "统一输入"}
               >
                 {/* 输入方式切换（ISSUE #4769）：表单逐项填 ⇄ 粘贴历史「复制去重投」
-                    复制的整份 JSON 重跑。 */}
+                    复制的整份 JSON 重跑。两栏双向同步（ISSUE #4922）：切 JSON
+                    带出当前值，切回表单落回 JSON 里的值。 */}
                 <div aria-label="输入方式" className="flex flex-wrap gap-2" role="radiogroup">
                   <SelectChip
                     onClick={() => {
+                      if (jsonMode && jsonText.trim() !== "") {
+                        /* 切回统一输入前先落账：JSON 里认得的键写回表单；
+                         * 解析失败留在 JSON 栏（错误已在反馈位），不丢输入。 */
+                        const parsed = c.applyJsonValues(jsonText);
+                        if (!parsed.ok) {
+                          return;
+                        }
+                      }
                       setJsonMode(false);
                     }}
                     selected={!jsonMode}
@@ -504,6 +486,7 @@ export function ModelTestView({
                   </SelectChip>
                   <SelectChip
                     onClick={() => {
+                      setJsonText(serializeModelTestJson(c.mode, c.values));
                       setJsonMode(true);
                     }}
                     selected={jsonMode}
@@ -514,7 +497,7 @@ export function ModelTestView({
                 </div>
                 {jsonMode ? (
                   <FormField
-                    hint="粘贴历史「复制去重投」复制的 JSON，点「生成」解析并按这些参数重跑；认不得的键会忽略"
+                    hint="已按当前统一输入预填（含默认档）；直接改或粘贴历史「复制去重投」的 JSON，点「生成」或切回统一输入时按这里的参数应用；认不得的键会忽略"
                     id="model-test-json"
                     label="提交参数 JSON"
                     labelClassName="mb-1.5"
