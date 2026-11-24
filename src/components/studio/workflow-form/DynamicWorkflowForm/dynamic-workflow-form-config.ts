@@ -34,6 +34,9 @@ export type DynamicWorkflowFormProps = {
   mode?: string | null;
   /** 接收完整的新值表（状态归调用方所有）。 */
   onChange: (next: Record<string, unknown>) => void;
+  /** IO 编辑态：点行首类型圆点定位到画布上该 pin 所属节点（传节点 ID）。
+   *  仅 IO 预览面板接线；画布节点 / CreatePanel / 库侧面板不传，圆点保持纯色标。 */
+  onFocusNode?: (nodeId: string) => void;
   /** 设置后，每个输入行的标签变成可点击编辑（铅笔图标 →
    *  点击 → 内联 <input> → blur / Enter 提交）。新标签写进
    *  `workflowIO[key].label`，其中 `key` 是 ioKey —— 这是

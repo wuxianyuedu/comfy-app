@@ -286,6 +286,16 @@ describe("悬停四角括号（#4549）", () => {
       expect(body).toContain("calc(var(--radius) - 3px)");
     }
   });
+
+  it("悬停不再让角括号显形（#4961），但选中态 outline 仍在", () => {
+    const css = readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8");
+    /* 没有任何规则在 data-hovered 时把 .flow-node-corner 抬到 opacity 1 ——
+     * 悬停只保留 z-index 抬升（压住连线），节点本体与装饰都不变色。 */
+    expect(css).not.toMatch(/\.react-flow__node\[data-hovered[^\]]*\]\s+\.flow-node-corner\s*\{/);
+    /* 选中高亮是行内 outline（不依赖角括号），删悬停显隐不能误伤它。 */
+    expect(css).toContain('.react-flow__node[data-hovered="true"] {');
+    expect(css).toContain("z-index: 1180");
+  });
 });
 
 /* 旁路 / 停用节点曾是「半透明卡 + backdrop-filter 透采画布」：悬停抬层
