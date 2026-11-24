@@ -7,10 +7,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowNote } from "~/components/studio/workflow-types";
 import { WorkflowNotesTab } from "./WorkflowNotesTab";
 
-/* LLM 网络层打桩：本文件只判页签渲染与翻译状态机，真链路在 /api/llm。 */
-const completeChat = vi.fn();
+/* LLM 网络层打桩：本文件只判页签渲染与翻译状态机，真链路在 /api/llm。
+ * 按真实入参形状给 vi.fn 定类型（ISSUE #4987）：mock.calls 取值即得类型，不再断言。 */
+type CompleteChatStubInput = {
+  messages: Array<{ content: string; role: string }>;
+  opts: { taskType: string };
+};
+const completeChat = vi.fn<(input: CompleteChatStubInput) => Promise<string>>();
 vi.mock("~/lib/llm/browser", () => ({
-  completeChat: (...args: Array<unknown>) => completeChat(...args),
+  completeChat: (input: CompleteChatStubInput) => completeChat(input),
 }));
 
 afterEach(() => {
@@ -53,10 +58,7 @@ describe("WorkflowNotesTab — 说明页签（#4963）", () => {
     });
     expect(completeChat).toHaveBeenCalledTimes(1);
     /* 系统提示 + 正文两条消息，taskType=chat —— 复用现有 LLM 链路。 */
-    const args = completeChat.mock.calls[0]![0] as {
-      messages: Array<{ content: string; role: string }>;
-      opts: { taskType: string };
-    };
+    const args = completeChat.mock.calls[0]![0];
     expect(args.messages).toHaveLength(2);
     expect(args.messages[0]!.role).toBe("system");
     expect(args.messages[1]!.content).toBe("This node loads the first frame image.");
