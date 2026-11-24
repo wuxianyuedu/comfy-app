@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { useDropZone } from "./use-drop-zone";
+import { useDropZone, type DropZoneOptions } from "./use-drop-zone";
 
 afterEach(cleanup);
 
@@ -14,11 +14,13 @@ afterEach(cleanup);
 function Harness({
   onError,
   onFile,
+  options,
 }: {
   onError: (m: string) => void;
   onFile: (f: File) => void | Promise<void>;
+  options?: DropZoneOptions;
 }) {
-  const dz = useDropZone(onFile, onError);
+  const dz = useDropZone(onFile, onError, options);
   return (
     <div
       data-active={dz.active ? "1" : "0"}
@@ -32,10 +34,10 @@ function Harness({
   );
 }
 
-function renderZone() {
+function renderZone(options?: DropZoneOptions) {
   const onFile = vi.fn();
   const onError = vi.fn();
-  render(<Harness onError={onError} onFile={onFile} />);
+  render(<Harness onError={onError} onFile={onFile} options={options} />);
   const zone = screen.getByText("inner").parentElement;
   if (!zone) {
     throw new Error("投放区没渲染出来");
@@ -99,6 +101,43 @@ describe("useDropZone（#4827）", () => {
     fireEvent.drop(zone, { dataTransfer: { files: [], types: ["Files"] } });
 
     expect(onFile).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  /* ── multiple 档（#4975：参考图多选一次拖入多张）── */
+  it("multiple：一次拖入多张整批交 onFiles，不走 onError", () => {
+    const onFiles = vi.fn();
+    const { zone, onFile, onError } = renderZone({ multiple: true, onFiles });
+    const files = [mdFile("a.png"), mdFile("b.png"), mdFile("c.png")];
+
+    fireEvent.drop(zone, { dataTransfer: { files, types: ["Files"] } });
+
+    expect(onFiles).toHaveBeenCalledWith(files);
+    expect(onFile).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    expect(zone.dataset.active).toBe("0");
+  });
+
+  it("multiple：拖入一张也走 onFiles（整批语义一致）", () => {
+    const onFiles = vi.fn();
+    const { zone, onError } = renderZone({ multiple: true, onFiles });
+    const file = mdFile("a.png");
+
+    fireEvent.drop(zone, { dataTransfer: { files: [file], types: ["Files"] } });
+
+    expect(onFiles).toHaveBeenCalledWith([file]);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("multiple 没给 onFiles：退回逐个交 onFile", () => {
+    const { zone, onFile, onError } = renderZone({ multiple: true });
+    const files = [mdFile("a.png"), mdFile("b.png")];
+
+    fireEvent.drop(zone, { dataTransfer: { files, types: ["Files"] } });
+
+    expect(onFile).toHaveBeenCalledTimes(2);
+    expect(onFile).toHaveBeenNthCalledWith(1, files[0]);
+    expect(onFile).toHaveBeenNthCalledWith(2, files[1]);
     expect(onError).not.toHaveBeenCalled();
   });
 });

@@ -50,3 +50,62 @@ describe("ReferenceImageField 的参考图查看（ISSUE #4840）", () => {
     expect(screen.getByText("上传参考图")).toBeTruthy();
   });
 });
+
+/* ── 拖拽上传（ISSUE #4975）：参考图口一次可拖入多张，与点选同一条 onAdd 链路 ── */
+
+const imgFile = (name: string) => new File(["图片"], name, { type: "image/png" });
+
+function dropTarget() {
+  /* 空态锚子提示，已有图时锚「添加图片」（子提示只在空态渲染）。 */
+  const anchor = screen.queryByText("点击或拖拽图片到此处") ?? screen.getByText("添加图片");
+  const row = anchor.closest("div");
+  if (!row) {
+    throw new Error("投放区没渲染出来");
+  }
+  return row;
+}
+
+describe("ReferenceImageField 的拖拽上传（ISSUE #4975）", () => {
+  it("空态给出可拖拽的显性标识：虚线投放瓦片 + 「点击或拖拽」提示", () => {
+    renderField([]);
+
+    expect(screen.getByText("上传参考图")).toBeTruthy();
+    expect(screen.getByText("点击或拖拽图片到此处")).toBeTruthy();
+    const tile = screen.getByText("上传参考图").closest("button");
+    expect(tile?.className).toContain("border-dashed");
+  });
+
+  it("一次拖入多张：整批交 onAdd（multiple 档），高亮复位", () => {
+    const { onAdd } = renderField([]);
+    const files = [imgFile("a.png"), imgFile("b.png"), imgFile("c.png")];
+
+    fireEvent.drop(dropTarget(), {
+      dataTransfer: { files, types: ["Files"] },
+    });
+
+    expect(onAdd).toHaveBeenCalledWith(files);
+    expect(dropTarget().dataset.active).toBe("false");
+  });
+
+  it("拖拽悬停点亮高亮（data-active），离开熄灭", () => {
+    renderField([]);
+    const row = dropTarget();
+
+    fireEvent.dragEnter(row, { dataTransfer: { types: ["Files"], files: [] } });
+    expect(row.dataset.active).toBe("true");
+
+    fireEvent.dragLeave(row, { dataTransfer: { types: ["Files"], files: [] } });
+    expect(row.dataset.active).toBe("false");
+  });
+
+  it("已有参考图：投放瓦片变为「添加图片」，仍可拖入追加", () => {
+    const { onAdd } = renderField();
+
+    expect(screen.getByText("添加图片")).toBeTruthy();
+    const file = imgFile("b.png");
+    fireEvent.drop(dropTarget(), {
+      dataTransfer: { files: [file], types: ["Files"] },
+    });
+    expect(onAdd).toHaveBeenCalledWith([file]);
+  });
+});
