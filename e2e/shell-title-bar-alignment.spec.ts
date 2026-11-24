@@ -32,6 +32,9 @@ async function openWorkspace(browser: Browser, inShell: boolean): Promise<Page> 
   } else {
     await expect(page.locator("header")).toBeVisible();
   }
+  /* 侧栏容器也要等到真挂上（ISSUE #4946）：标题行先可见 ≠ 整个壳树都已就位，
+   * 立刻量几何会读到「侧栏还不存在」的中间态（本地实测 sidebar.top = undefined）。 */
+  await expect(page.locator('[data-slot="sidebar-container"]')).toBeVisible();
   return page;
 }
 
@@ -116,6 +119,12 @@ test.describe("两形态顶部几何 @critical", () => {
         "data-state",
         "collapsed",
       );
+      /* 侧栏宽度走 200ms transition（ISSUE #4946）：`data-state` 翻转 ≠ 几何到位，
+       * 立刻量会读到展开态的 160（CI 实测恰好 160）。等左缘真的收进去再断言
+       * —— 等动画收敛，不是抬断言超时。 */
+      await expect
+        .poll(async () => (await geometry(shellPage)).titleBar?.left ?? 999, { timeout: 5000 })
+        .toBeLessThan(160);
       const collapsed = (await geometry(shellPage)).titleBar?.left ?? 0;
       expect(collapsed, "折叠后标题行仍钉在展开态的左缘 = 又退回按整窗算偏移").toBeLessThan(
         expanded,

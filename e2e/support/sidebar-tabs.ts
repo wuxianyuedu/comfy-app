@@ -32,10 +32,21 @@ export async function openFromTempMenu(page: Page, label: string): Promise<void>
   await page.getByRole("menuitem", { name: label, exact: true }).click();
 }
 
-/** 分组不在场（起步 0 页签）时经全局命令面板开一页。 */
+/** 分组不在场（起步 0 页签）时经全局命令面板开一页。
+ *
+ *  热键监听在 React 水合完成后才挂上（AppShell 的 useHotkey）：本地快机上
+ *  `load` 事件早于水合， presses 打在监听器挂上之前会被整颗丢掉 —— 面板永远
+ *  不开（ISSUE #4946 的本地形态）。所以这里先等一个「壳已挂载」的锚点
+ *  （侧栏容器），再按热键；面板没开就重按（`toPass` 整段重试），把「丢键」
+ *  与「水合未完」两类竞态都吸收掉。 */
 export async function openFromPalette(page: Page, label: string): Promise<void> {
-  await page.keyboard.press("Control+k");
-  await page.getByPlaceholder("搜索视图或命令…").fill(label);
+  await expect(page.locator('[data-slot="sidebar-container"]')).toBeVisible();
+  const input = page.getByPlaceholder("搜索视图或命令…");
+  await expect(async () => {
+    await page.keyboard.press("Control+k");
+    await expect(input).toBeVisible();
+  }).toPass({ timeout: 15_000 });
+  await input.fill(label);
   await page
     .getByRole("option", { name: new RegExp(label) })
     .first()
