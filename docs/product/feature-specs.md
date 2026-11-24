@@ -1814,18 +1814,20 @@
 - 落点：`src/server/api/routers/run.ts`、`src/server/agent/run-engine.ts`、
   `src/server/mcp/workshop-mcp.ts`
 
-#### FR-AL-01 资产库视图（公共 / 项目 + 分类 + 大小滑块）
+#### FR-AL-01 资产库视图（公共 / 项目 + 目录树分类 + 大小滑块）
 
-- 状态：已上线（#4868）
+- 状态：已上线（#4868；#4943 起分类导航由左侧目录树承担）
 - 需求：跨项目沉淀生成结果的统一入口——侧栏「资产」进入；公共 / 项目两档归属、
-  七个分类（参考素材 / 场景 / 分镜 / 风格 / 角色 / 文档 / 音乐）、方形缩略图网格、
-  右下角悬浮大小滑块（大图 2 列 / 标准 4 列 / 小图 6 列，选择本地记忆）。
+  七个分类（参考素材 / 场景 / 分镜 / 风格 / 角色 / 文档 / 音乐，目录树的固定根）、
+  方形缩略图网格、右下角悬浮大小滑块（大图 2 列 / 标准 4 列 / 小图 6 列，选择本地记忆）。
 - 行为与验收：① 侧栏「资产」可点开（原占位项转正），页头显示「资产库」；
-  ② 归属 / 分类 / 关键词过滤生效，分类角标计数随过滤口径变化；
+  ② 归属（公共 / 项目两档，无「全部」）/ 分类（树根）/ 目录（树节点，含其后代）/
+  关键词过滤生效，树角标计数随过滤口径变化；
   ③ 滑块拖到不同档位，网格列宽随之变化且刷新后保持（localStorage）；
   ④ 空库给出「先去历史加入资产」的引导，不是白屏。
 - 落点：`src/components/studio/assets/AssetLibrary.tsx`（视图）、
   `src/components/studio/assets/hooks/use-asset-library.ts`（逻辑层）、
+  `src/components/studio/assets/AssetFolderTree.tsx` + `hooks/use-asset-folders.ts`（目录树，见 FR-AL-04）、
   `src/components/studio/NavItems.tsx`（导航转正）、
   `src/components/studio/WorkspaceViewStack.tsx` + `LazyViews.tsx`（渲染分支）
 
@@ -1855,3 +1857,23 @@
 - 落点：`src/server/api/routers/asset.ts`（`asset.detail`）、
   `src/components/studio/assets/AssetDetailModal.tsx`、
   `src/components/studio/assets/asset-categories.ts`（`deriveAssetParamRows`）
+
+#### FR-AL-04 子目录树形管理
+
+- 状态：已上线（#4943）
+- 需求：资产库左侧是文件夹式目录树——七个固定分类作根（不可增删改名），
+  分类下可自建多级子目录（如 角色 → 少女 → 活泼），用于按年龄 / 性格 / 外观 /
+  风格等维度组织角色库、场景库；归属筛选只留 公共 / 项目 两档（无「全部」）。
+- 行为与验收：① 点分类根 = 该分类全部资产（含未入目录的）；点子目录 =
+  该目录及其全部后代目录的资产；② 目录行可新建子目录 / 重命名 / 删除，
+  删除只对「空且无下级」的目录开放（有资产先移走）；③ 重命名目录时，
+  目录内资产的 `subdir` 前缀由服务端整体改写，公共 / 项目两棵树互不影响，
+  目标路径已有资产时拒绝；④ 资产卡可「移动」到其他目录（含移回分类根）；
+  ⑤ 空目录刷新后仍在（本地声明），有资产的目录以数据库为准，不丢数据；
+  ⑥ 目录名不能含 `/` 与控制字符、同层级不重名、路径总长 ≤120。
+- 落点：`src/lib/media/asset-folders.ts`（路径 / 建树纯派生，两侧共用）、
+  `src/server/api/routers/asset.ts`（`asset.folderTree` / `renameFolder` / `updateSubdir`、
+  `list` 的 `subdirPrefix` 过滤）、`src/lib/core/repository-asset.ts`（前缀匹配与改写）、
+  `src/components/studio/assets/AssetFolderTree.tsx`（树视图）、
+  `src/components/studio/assets/hooks/use-asset-folders.ts`（目录逻辑层）、
+  `src/components/studio/assets/AssetFolderNameDialog.tsx` + `AssetFolderPickerDialog.tsx`（弹窗）

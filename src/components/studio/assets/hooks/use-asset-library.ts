@@ -14,6 +14,7 @@ import type { RouterOutputs } from "~/trpc/react";
 import { useToast } from "../../ToastProvider";
 import { useTRPC } from "~/trpc/react";
 import {
+  ASSET_CATEGORIES,
   ASSET_SIZE_PRESETS,
   isAssetSizeKey,
   type AssetCategoryKey,
@@ -42,9 +43,8 @@ export type AssetDetail = RouterOutputs["asset"]["detail"];
 export type AssetLibraryController = {
   /** 取消删除（ConfirmDialog 的关闭侧）。 */
   cancelRemove: () => void;
-  category: string;
-  /** 分类角标（scope / q 过滤后的计数）。 */
-  categoryCounts: Array<{ category: string; count: number }>;
+  /** 当前分类（七个固定键之一；切分类经 switchCategory 校验收敛）。 */
+  category: AssetCategoryKey;
   /** 关闭详情弹层。 */
   closeDetail: () => void;
   /** 删除（非阻塞确认由视图挂 ConfirmDialog 承接）。 */
@@ -58,7 +58,7 @@ export type AssetLibraryController = {
   detailLoading: boolean;
   /** 空态文案（区分「还没有资产」与「当前筛选下没有」）。 */
   empty: { hint: string; title: string };
-  /** 资产行（列表接口返回的形状）。 */
+  /** 资产行（列表接口的形状）。 */
   items: Array<AssetListItem & { createdAt: string }>;
   loading: boolean;
   /** 打开 / 关闭详情弹层。 */
@@ -70,12 +70,18 @@ export type AssetLibraryController = {
   refresh: () => void;
   /** 待删除目标（ConfirmDialog 的 open 侧）。 */
   removeTarget: string | null;
-  scope: "all" | "public" | "project";
+  /** 归属两档（公共 / 项目；「全部」档随树形目录改版移除，#4943）。 */
+  scope: "public" | "project";
+  /** 选中目录（树节点点击；选分类根传 null）。 */
+  selectFolder: (path: string | null) => void;
   setQ: (q: string) => void;
-  setScope: (scope: "all" | "public" | "project") => void;
+  setScope: (scope: "public" | "project") => void;
   /** 网格尺寸档（本地记忆，跨会话保留）。 */
   setSize: (size: AssetSizeKey) => void;
   size: AssetSizeKey;
+  /** 当前选中的目录路径（null = 分类根）。 */
+  subdirPath: string | null;
+  /** 切分类（同时回到该分类根目录）。 */
   switchCategory: (category: string) => void;
 };
 
@@ -88,8 +94,9 @@ export function useAssetLibrary(): AssetLibraryController {
   const toast = useToast();
   const queryClient = useQueryClient();
 
-  const [scope, setScope] = useState<"all" | "public" | "project">("all");
-  const [category, setCategory] = useState<string>("all");
+  const [scope, setScope] = useState<"public" | "project">("public");
+  const [category, setCategory] = useState<AssetCategoryKey>("reference");
+  const [subdirPath, setSubdirPath] = useState<string | null>(null);
   const [q, setQ] = useState<string>("");
   const [size, setSize] = useState<AssetSizeKey>(DEFAULT_SIZE);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -112,6 +119,7 @@ export function useAssetLibrary(): AssetLibraryController {
       category,
       mediaType: "all",
       q: q.trim() === "" ? undefined : q.trim(),
+      ...(subdirPath === null ? {} : { subdirPrefix: subdirPath }),
     }),
   );
 
@@ -150,17 +158,16 @@ export function useAssetLibrary(): AssetLibraryController {
   }, [listQ.data]);
 
   const empty = useMemo(() => {
-    if (q.trim() !== "" || category !== "all" || scope !== "all") {
-      return { title: "没有符合条件的资产", hint: "换个分类或关键词，或先把生成结果加入资产库。" };
+    if (q.trim() !== "" || subdirPath !== null || scope !== "public") {
+      return { title: "没有符合条件的资产", hint: "换个目录或关键词，或先把生成结果加入资产库。" };
     }
     return {
       title: "资产库还是空的",
       hint: "到「历史」页把满意的生成结果「加入资产库」，或直接上传文件——它们会带着完整生成参数沉淀在这里。",
     };
-  }, [category, q, scope]);
+  }, [q, subdirPath, scope]);
 
   return {
-    categoryCounts: listQ.data?.categories ?? [],
     category,
     confirmRemove,
     deleting: deleteMutation.isPending,
@@ -189,7 +196,17 @@ export function useAssetLibrary(): AssetLibraryController {
     scope,
     setScope,
     switchCategory: (next) => {
-      setCategory(next);
+      /* 字符串出口收敛回七个固定键（树 / 弹窗都只传登记过的键）。 */
+      const key = ASSET_CATEGORIES.find((option) => option.key === next)?.key;
+      if (key === undefined) {
+        return;
+      }
+      setCategory(key);
+      setSubdirPath(null);
+    },
+    subdirPath,
+    selectFolder: (path) => {
+      setSubdirPath(path);
     },
     items,
     refresh,

@@ -1,6 +1,7 @@
 /**
  * `asset.ts` — 资产库路由（ISSUE #4868）：跨项目沉淀生成产物，
  * 公共 / 项目两档归属 + 七个分类，入库即保存完整生成参数快照。
+ * 目录树（#4943）：列表支持按目录前缀过滤，另带目录计数 / 重命名目录 / 移动资产三个目录操作。
  * @module server/routers/asset — 资产库 tRPC 路由
  */
 import { z } from "zod";
@@ -12,6 +13,7 @@ import { assetRepository, taskRepository } from "~/lib/core/repository";
 import { firstRowRequired } from "~/lib/core/repository-row";
 import { copyIntoAssetStore, removeAssetStoreDir } from "~/lib/media/asset-store";
 import { kindOf } from "~/lib/media/media-kind";
+import { normalizeFolderPath } from "~/lib/media/asset-folders";
 
 /** 资产分类键（展示名映射在 `asset-categories.ts`，这里只认键）。 */
 export const ASSET_CATEGORY_KEYS = [
@@ -49,7 +51,7 @@ function assetNameOf(prompt: string | null, workflowName: string, index: number,
 }
 
 export const assetRouter = createTRPCRouter({
-  /** 列表：归属 / 分类 / 媒体类型 / 关键词过滤 + 分类计数（角标一次带回）。 */
+  /** 列表：归属 / 分类 / 媒体类型 / 关键词 / 目录前缀过滤。目录树角标走 `folderTree`。 */
   list: authedProcedure
     .input(
       z
@@ -65,11 +67,21 @@ export const assetRouter = createTRPCRouter({
             .default("all"),
           projectId: z.string().optional(),
           q: z.string().optional(),
+          subdirPrefix: z.string().optional(),
           take: z.number().int().min(1).max(200).optional().default(120),
         })
         .default({ scope: "all", category: "all", mediaType: "all", take: 120 }),
     )
     .query(async ({ ctx, input }) => {
+      /* 目录前缀必须是规范路径（树上的节点都来自这条口径），异常输入直接拒绝。 */
+      let subdirPrefix: string | undefined;
+      if (input.subdirPrefix !== undefined && input.subdirPrefix !== "") {
+        const normalized = normalizeFolderPath(input.subdirPrefix);
+        if (normalized === null) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "目录路径不合法" });
+        }
+        subdirPrefix = normalized;
+      }
       const items = await assetRepository.listByUser({
         userId: ctx.user.id,
         scope: input.scope,
@@ -77,6 +89,7 @@ export const assetRouter = createTRPCRouter({
         mediaType: input.mediaType,
         projectId: input.projectId,
         q: input.q,
+        subdirPrefix,
         take: input.take,
       });
       const categoryCounts = await assetRepository.countByCategory({
@@ -104,6 +117,107 @@ export const assetRouter = createTRPCRouter({
         })),
         categories: categoryCounts,
       };
+    }),
+
+  /**
+   * 目录树角标：按「分类 × 目录」分组的资产数（一次带回全部维度，客户端建树时
+   * 归并出子树计数）。目录本身不落库——树 = 资产 subdir 前缀 ∪ 客户端声明的空目录。
+   */
+  folderTree: authedProcedure
+    .input(
+      z
+        .object({
+          scope: z.enum(ASSET_SCOPE_KEYS).optional().default("public"),
+          projectId: z.string().optional(),
+          mediaType: z
+            .enum(["all", "image", "video", "audio", "document"])
+            .optional()
+            .default("all"),
+          q: z.string().optional(),
+        })
+        .default({ scope: "public", mediaType: "all" }),
+    )
+    .query(async ({ ctx, input }) => {
+      return {
+        entries: await assetRepository.countBySubdir({
+          userId: ctx.user.id,
+          scope: input.scope,
+          mediaType: input.mediaType,
+          projectId: input.projectId,
+          q: input.q,
+        }),
+      };
+    }),
+
+  /**
+   * 重命名目录：该分类下落在旧路径及其后代的资产 subdir 前缀整体改写。
+   * 只作用于所选归属档（公共 / 项目两棵树互不影响）；目标路径已有资产时拒绝
+   * （合并两个目录是另一个动作，不该被「重命名」顺带做掉）。
+   */
+  renameFolder: authedProcedure
+    .input(
+      z.object({
+        scope: z.enum(ASSET_SCOPE_KEYS),
+        category: categorySchema,
+        oldPath: z.string().min(1).max(120),
+        newPath: z.string().min(1).max(120),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const oldPath = normalizeFolderPath(input.oldPath);
+      const newPath = normalizeFolderPath(input.newPath);
+      if (oldPath === null || newPath === null) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "目录路径不合法" });
+      }
+      if (oldPath === newPath) {
+        return { renamed: 0 };
+      }
+      const occupied = await assetRepository.listByUser({
+        userId: ctx.user.id,
+        scope: input.scope,
+        category: input.category,
+        subdirPrefix: newPath,
+        take: 1,
+      });
+      if (occupied.length > 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "目标目录已存在" });
+      }
+      const renamed = await assetRepository.renameSubdirPrefix({
+        userId: ctx.user.id,
+        scope: input.scope,
+        category: input.category,
+        oldPath,
+        newPath,
+      });
+      return { renamed };
+    }),
+
+  /** 移动单条资产到目录（`subdir` 缺省 / 空串 = 移回分类根）。 */
+  updateSubdir: authedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        subdir: z.string().max(120).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const row = await assetRepository.findOwned(input.id, ctx.user.id);
+      if (row === null) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "资产不存在" });
+      }
+      let subdir: string | null = null;
+      if (input.subdir !== undefined && input.subdir !== "") {
+        const normalized = normalizeFolderPath(input.subdir);
+        if (normalized === null) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "目录路径不合法" });
+        }
+        subdir = normalized;
+      }
+      const updated = await assetRepository.updateSubdir(row.id, ctx.user.id, subdir);
+      if (updated === null) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "资产不存在" });
+      }
+      return { ok: true, subdir: updated.subdir };
     }),
 
   /** 详情（含完整生成参数——详情弹窗与「按参数重新生成」都读它）。 */

@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * `AssetCard` — 资产库网格里的单张资产卡（ISSUE #4868）：
- * 方形缩略图 + 类型 / 归属徽标 + 名称 + 分类 + 参数完整度，操作只有
- * 「详情 / 删除」两件（重生成走详情里的「用此参数生成」）。
+ * `AssetCard` — 资产库网格里的单张资产卡（ISSUE #4868 建卡；#4943 加「移动」）：
+ * 方形缩略图 + 类型 / 归属徽标 + 名称 + 分类 · 目录 + 参数完整度，操作是
+ * 「查看参数 / 移动目录 / 删除」三件（重生成走详情里的「用此参数生成」）。
  * 纯展示组件：数据与回调都由 AssetLibrary 注入（规范 17 §17.2 第③层）。
  */
-import { FileText, Music, Settings2, Trash2 } from "lucide-react";
+import { FileText, FolderInput, Music, Settings2, Trash2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -19,6 +19,8 @@ import type { AssetListItem } from "./hooks/use-asset-library";
 
 export type AssetCardProps = {
   asset: AssetListItem & { createdAt: string };
+  /** 移动到其他目录（可选；目录树改版 #4943 起提供）。 */
+  onMove?: (asset: AssetListItem & { createdAt: string }) => void;
   onOpenDetail: (id: string) => void;
   onRemove: (asset: AssetListItem & { createdAt: string }) => void;
 };
@@ -41,7 +43,7 @@ function mediaTypeLabel(mediaType: string): string {
   }
 }
 
-export function AssetCard({ asset, onOpenDetail, onRemove }: AssetCardProps) {
+export function AssetCard({ asset, onMove, onOpenDetail, onRemove }: AssetCardProps) {
   const isVideo = asset.mediaType === "video";
   return (
     <div
@@ -126,6 +128,19 @@ export function AssetCard({ asset, onOpenDetail, onRemove }: AssetCardProps) {
                   （ViewableImage）。此前用 Maximize2 被读成冗余的放大按钮。 */}
               <Settings2 aria-hidden className="size-3.5" data-icon="inline-start" />
             </Button>
+            {onMove !== undefined && (
+              <Button
+                aria-label={`移动 ${asset.name} 到其他目录`}
+                className="text-ink-faint hover:text-primary-strong size-7 rounded-md"
+                onClick={() => {
+                  onMove(asset);
+                }}
+                size="icon-xs"
+                variant="ghost"
+              >
+                <FolderInput aria-hidden className="size-3.5" data-icon="inline-start" />
+              </Button>
+            )}
             <Button
               aria-label={`删除资产 ${asset.name}`}
               className="text-ink-faint hover:text-danger-strong size-7 rounded-md"
