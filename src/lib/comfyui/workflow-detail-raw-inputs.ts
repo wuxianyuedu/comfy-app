@@ -520,6 +520,16 @@ export async function buildRawInputs(
       /* ── 旧配对（兜底）：按 inputs[] 中控件出现的顺序，用游标依次取
        *  widgets_values。只在拿不到该类的控件顺序表时使用 —— 见下方 byOrder。 */
       const legacyByName = new Map<string, unknown>();
+      /* seed 后的 `control_after_generate` 哨兵槽不是必然被序列化：老版本前端
+       * 不写它；子图封装节点只暴露 seed、不暴露其随机化控制时也不保留它
+       * （那时 seed 后的槽属于下一个真控件，比如模型 COMBO）。判据与
+       * raw-overrides.ts 的 `hasSeedControlSlot` 同口径 —— 只有 `widgets_values`
+       * 比「带控件的输入个数」多出项来才按哨兵跳格，否则 seed 后所有控件会
+       * 整体错位一位（unet_name 显示成 clip_name 的值那类，ISSUE #4931）。 */
+      const legacyWidgetInputCount = rn.inputs.filter(
+        (inp) => inp?.widget && typeof inp.widget.name === "string",
+      ).length;
+      const legacyHasSentinel = rnWidgets.length > legacyWidgetInputCount;
       let widgetCounter = 0;
       for (const inp of rn.inputs) {
         if (!inp || typeof inp.name !== "string") {
@@ -532,13 +542,13 @@ export async function buildRawInputs(
         }
         legacyByName.set(widgetName, rnWidgets[widgetCounter]);
         /* seed / noise_seed widget 的值后面紧跟着一个隐含的
-         * `control_after_generate` 伙伴槽。 */
+         * `control_after_generate` 伙伴槽（仅当哨兵槽真的被序列化时）。 */
         const isSeedBundle =
           widgetName === "seed" ||
           widgetName === "noise_seed" ||
           inp.name === "seed" ||
           inp.name === "noise_seed";
-        widgetCounter += isSeedBundle ? 2 : 1;
+        widgetCounter += isSeedBundle && legacyHasSentinel ? 2 : 1;
       }
 
       /* ── 顺序表配对：把整个 widgets_values 反查成「控件名 → 值」。

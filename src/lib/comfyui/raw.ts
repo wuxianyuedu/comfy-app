@@ -443,13 +443,16 @@ function hasControlAfterGenerate(
 
 /**
  * 把节点的 raw `inputs[]`（每项带 `widget: {name}`，且可能带 `type`）与
- * `widgets_values[]` 按名字配对，自动跳过 ComfyUI 在 seed 类 INT 控件后
- * 插入的 `control_after_generate` 哨兵槽。
+ * `widgets_values[]` 按名字配对，按长度自适应跳过 ComfyUI 在 seed 类 INT
+ * 控件后可能插入的 `control_after_generate` 哨兵槽。
  *
- * ComfyUI 序列化时哨兵紧跟在 seed 值之后，因此 `widgets_values` 比 widget
- * 输入列表多一格——朴素的下标配对（input i → widgets_values[i]）会让 seed
- * 之后的每个控件整体错位一位。这里复刻 `resolveWidgetOrder` 的哨兵插入逻辑，
- * 使下标与磁盘上的顺序严格对齐。
+ * 哨兵被序列化时紧跟在 seed 值之后，`widgets_values` 比 widget 输入列表多
+ * 一格——朴素的下标配对（input i → widgets_values[i]）会让 seed 之后的每个
+ * 控件整体错位一位。但哨兵**不是必然存在**：老版本前端不写它；子图封装节点
+ * 只暴露 seed、不暴露其随机化控制时也不保留它（那时 seed 后的槽属于下一个
+ * 真控件）。所以这里复刻 `resolveWidgetOrder` 的哨兵插入逻辑后，再按
+ * `widgets_values` 的长度判定实际用哪份顺序（与 `mapWidgetValuesByOrder` /
+ * `hasSeedControlSlot` 同口径），使下标与磁盘上的顺序严格对齐。
  *
  * 返回 `widgetName → value` 映射；供画布展示用的 raw_inputs 配对（父子图
  * 两个 route 共用），避免重复实现导致再次错位。
@@ -462,6 +465,7 @@ export function pairWidgetValues(
   // seed/noise_seed INT 控件后插入 CONTROL_SENTINEL（正是 ComfyUI 序列化
   // widgets_values 时的顺序）。
   const order: Array<string> = [];
+  let sentinelCount = 0;
   for (const inp of inputs) {
     const wname = inp?.widget?.name;
     if (typeof wname !== "string") {
@@ -470,10 +474,20 @@ export function pairWidgetValues(
     order.push(wname);
     if (SEED_WIDGET_NAMES.has(wname) && (inp.type === "INT" || inp.type === undefined)) {
       order.push(CONTROL_SENTINEL);
+      sentinelCount += 1;
     }
   }
+  // 长度按「无哨兵」对得上时退回无哨兵顺序；与两种顺序都对不上（自定义动态
+  // 控件）时保持含哨兵假设，不引入新的错位。
+  const bareOrder = sentinelCount > 0 ? order.filter((n) => n !== CONTROL_SENTINEL) : order;
+  const effectiveOrder =
+    widgetsValues.length === order.length
+      ? order
+      : widgetsValues.length === bareOrder.length
+        ? bareOrder
+        : order;
   const map: Record<string, unknown> = {};
-  order.forEach((name, i) => {
+  effectiveOrder.forEach((name, i) => {
     if (name === CONTROL_SENTINEL) {
       return;
     }
