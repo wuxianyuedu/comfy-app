@@ -101,7 +101,8 @@ export const SIZE_SCENE_LABELS: Record<SizeScene, string> = {
   video: "视频",
 };
 
-/** 从模式码推场景（T2V / I2V / FLF2V … 这类以 V 收尾的是视频模式）。
+/** 从模式码推场景（T2V / I2V / FLF2V … 这类以 V 收尾的是视频模式；
+ *  `*VA` 为音视频档（T2VA / FLF2VA / R2VA，ISSUE #4999），同样按视频处理）。
  *
  *  刻意只看模式码：工作流库那层「内容分类」是展示维度，不是生成模式判据
  *  （与 `workflow-encapsulation` 的 `isVideoMode` 同一口径）。 */
@@ -113,7 +114,7 @@ export function sceneFromMode(mode: string | null | undefined): SizeScene {
   if (code.includes("VIDEO")) {
     return "video";
   }
-  if (code.endsWith("V")) {
+  if (code.endsWith("V") || code.endsWith("VA")) {
     return "video";
   }
   return "image";
