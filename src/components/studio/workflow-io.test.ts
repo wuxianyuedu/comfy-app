@@ -8,6 +8,7 @@ import {
   splitWorkflowIO,
   inferDimensionGroup,
   inferGroups,
+  inferVideoGroup,
   parseRatioFromLabel,
   typeDisplay,
   defaultInputValues,
@@ -123,6 +124,63 @@ describe("inferDimensionGroup — 两种形态", () => {
 
   it("只有 宽高比 缺 百万像素 时不成立", () => {
     expect(inferDimensionGroup(widgetsOf(pin("aspect_ratio", "宽高比")))).toBeNull();
+  });
+});
+
+describe("inferVideoGroup — 同 ioKey 防撞（ISSUE #4927）", () => {
+  /** 现场形状：同一节点上两个同名 pin（同 ioKey），分别被标成「时长」「比例」。
+   *  workflowIO 的 map 按 ioKey 收敛时不会出现这种重复，但动态表单沿图构建的
+   *  widget 清单会 —— 这正是 VideoControl 渲染出重复 React key 的现场。 */
+  const durationPin: EnrichedWidget = {
+    ...pin("value_1", "时长"),
+    control: "text",
+    ioKey: "105::widget::value_1",
+  };
+  const aspectPin: EnrichedWidget = {
+    ...pin("value_1", "比例"),
+    control: "text",
+    ioKey: "105::widget::value_1",
+  };
+
+  it("同 ioKey 的「时长 / 比例」两 pin：整组不认，不再产出重复 key 的分组", () => {
+    expect(inferVideoGroup([durationPin, aspectPin])).toBeNull();
+  });
+
+  it("一个 pin 同时命中「时长」与「比例」关键字：同样整组不认", () => {
+    const both: EnrichedWidget = {
+      ...pin("value_1", "时长比例"),
+      control: "text",
+      ioKey: "105::widget::value_1",
+    };
+    expect(inferVideoGroup([both])).toBeNull();
+  });
+
+  it("比例与画质撞同一个 pin：画质让位，组里只有 时长 + 比例，不产重复 ioKey", () => {
+    const length: EnrichedWidget = {
+      ...pin("frames", "帧数"),
+      control: "text",
+      ioKey: "7::widget::frames",
+    };
+    const ratioQuality: EnrichedWidget = {
+      ...pin("value_1", "比例清晰"),
+      control: "text",
+      ioKey: "7::widget::value_1",
+    };
+    const group = inferVideoGroup([length, ratioQuality]);
+    expect(group).not.toBeNull();
+    expect(group?.length?.ioKey).toBe("7::widget::frames");
+    expect(group?.aspect?.ioKey).toBe("7::widget::value_1");
+    expect(group?.quality).toBeUndefined();
+  });
+
+  it("回归：时长 / 比例 / 画质 三个不同 pin 照常成组", () => {
+    const group = inferVideoGroup(
+      widgetsOf(pin("frames", "帧数"), pin("aspect_ratio", "宽高比"), pin("quality", "画质")),
+    );
+    expect(group).not.toBeNull();
+    expect(group?.length?.ioKey).toBe("7::widget::frames");
+    expect(group?.aspect?.ioKey).toBe("7::widget::aspect_ratio");
+    expect(group?.quality?.ioKey).toBe("7::widget::quality");
   });
 });
 

@@ -315,8 +315,18 @@ export function inferVideoGroup(widgets: Array<EnrichedWidget>): VideoGroup | nu
   if (!length) {
     return null;
   }
-  const [aspect] = asp;
-  const [qualityFirst] = quality;
+  /* 同 ioKey 防撞（与 inferDimensionGroup 的同 key 守卫同一意图）：有的节点会
+   * 把两个同名 pin（同 ioKey，如 `value_1`）分别标成「时长」「比例」，或一个
+   * pin 的名字 / 标签同时命中两个角色关键字 —— 不设防的话 VideoControl 会拿
+   * 同一个 ioKey 当 React key 渲染两行（重复 key 告警，子元素复制 / 丢失），
+   * set 也会互相覆盖。按「时长 → 比例 → 画质」的顺序取候选，**同一 ioKey 只进
+   * 一组**；比例 / 画质被撞得一个不剩时整组不认，退回通用逐行渲染。 */
+  const taken = new Set<string>([length.ioKey]);
+  const aspect = asp.find((candidate) => !taken.has(candidate.ioKey));
+  if (aspect) {
+    taken.add(aspect.ioKey);
+  }
+  const qualityFirst = quality.find((candidate) => !taken.has(candidate.ioKey));
   if (!aspect && !qualityFirst) {
     return null;
   }
