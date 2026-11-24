@@ -31,6 +31,8 @@ export type WorkflowIoPreviewPanelProps = {
   /** 工作流支持的模式（模板 modes 列，与库详情「类型」同源）。 */
   modes: Array<string>;
   onClose: () => void;
+  /** 点行首类型圆点定位画布节点（编辑器把 ReactFlow 的 fitView 包成回调传进来）。 */
+  onFocusNode?: (nodeId: string) => void;
   /** 模式集合 / 默认模式变更（编辑器落库并同步本地 detail）。 */
   onModesChange: (modes: Array<string>, defaultMode: string) => void;
   workflowIO: Record<string, WorkflowIOParam>;
@@ -43,6 +45,7 @@ export function WorkflowIoPreviewPanel({
   defaultMode,
   onModesChange,
   onClose,
+  onFocusNode,
 }: WorkflowIoPreviewPanelProps) {
   /* useIOEditApi 内部调 useContext，只能在组件顶层调用（Hook 套 Hook 会被
    * React 19 拦下）。context 持有的 StoreApi 按编辑器实例稳定。 */
@@ -304,6 +307,7 @@ export function WorkflowIoPreviewPanel({
                 io={previewIO}
                 mode={effectiveMode}
                 onChange={handleFormChange}
+                onFocusNode={onFocusNode}
                 onLabelChange={setIOLabel}
                 /* drag-to-reorder：仅编辑态的 IO 预览暴露。 */
                 onReorder={reorderIO}

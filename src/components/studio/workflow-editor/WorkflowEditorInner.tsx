@@ -199,6 +199,19 @@ function WorkflowEditorBody({
    *  与下面 <MiniMap pannable zoomable onClick={onMiniMapJump} /> 配对使用。 */
   const onMiniMapJump = useMiniMapJump(rf);
 
+  /* IO 预览面板 → 画布节点定位（#4960）：点行首圆点时把视口移到该 pin 所属节点。
+   *  用 getNode 做存在性判断（跨子图视图时内部 id 可能不在当前画布），命中才 fitView；
+   *  保留当前缩放量级，maxZoom 1.2 防止低缩放下突然放到看不清全貌。 */
+  const focusIONode = useCallback(
+    (nodeId: string) => {
+      if (!rf.getNode(nodeId)) {
+        return;
+      }
+      void rf.fitView({ nodes: [{ id: nodeId }], duration: 300, padding: 0.2, maxZoom: 1.2 });
+    },
+    [rf],
+  );
+
   /* 单调递增的令牌，防止后台拉取覆盖当前 fetchDetail 的提交。
    *  在 fetchDetail 内部自增；响应到达时持有最大编号的那次调用才有权写 state。
    *  这保证缓存键的升级不会落在「后台拉取悄悄更新了存储、界面却还是旧的」之后。 */
@@ -424,6 +437,7 @@ function WorkflowEditorBody({
             onClose={() => {
               setIoPreviewOpen(false);
             }}
+            onFocusNode={focusIONode}
             onModesChange={handleModesChange}
             workflowIO={workflowIO}
           />

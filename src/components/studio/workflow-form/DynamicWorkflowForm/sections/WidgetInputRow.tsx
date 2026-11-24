@@ -36,6 +36,9 @@ type WidgetInputRowProps = {
    *  节点重复命名很常见），边会接到同名 handle 的第一处 —— 表现就是「线连到了
    *  别的节点上」。缺省仍用 ioKey（画布未富化时它就是唯一键）。 */
   handleId?: string;
+  /** IO 编辑态：点字段前的类型圆点定位到画布上所属节点（面板传入；
+   *  画布节点 / CreatePanel 不传，圆点保持纯色标不可点）。 */
+  onFocusNode?: () => void;
   onLabelChange?: (label: string) => void;
   onPickFile: () => void;
   onRequiredChange?: (required: boolean) => void;
@@ -69,6 +72,7 @@ export function WidgetInputRow({
   onValueChange,
   onPickFile,
   previewSrc,
+  onFocusNode,
   onLabelChange,
   onRequiredChange,
   visible,
@@ -94,15 +98,33 @@ export function WidgetInputRow({
    * 强调圆点与必填切换只在 IO-edit 模式出现（CreatePanel / 画布节点隐藏）。 */
   const labelRow = (
     <div className="flex h-5 items-center justify-between gap-2.5">
-      {/* 标签区：圆点 + EditableLabel 占满左侧 flex-1 区域，长标签可截断。 */}
+      {/* 标签区：圆点 + EditableLabel 占满左侧 flex-1 区域，长标签可截断。
+          圆点在 IO 编辑态可点定位到画布节点（#4960）：Hint 给出「#节点ID」，
+          与画布标题栏的 #164 同口径；无 onFocusNode 时退回纯色标，不影响画布节点。 */}
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
-        {onRequiredChange && (
-          <span className="size-2 shrink-0 rounded-full" style={{ background: accent }} />
-        )}
+        {onRequiredChange &&
+          (onFocusNode ? (
+            <Hint label={`#${entry.nodeId} · 点击定位到画布节点`}>
+              <Button
+                aria-label={`定位到节点 #${entry.nodeId}`}
+                className="nodrag nopan size-2 shrink-0 cursor-pointer rounded-full border-0 p-0"
+                data-io-focus-node={entry.nodeId}
+                onClick={onFocusNode}
+                onMouseDown={(event) => {
+                  event.stopPropagation();
+                }}
+                style={{ background: accent }}
+                type="button"
+                variant="ghost"
+              />
+            </Hint>
+          ) : (
+            <span className="size-2 shrink-0 rounded-full" style={{ background: accent }} />
+          ))}
         <EditableLabel
           label={label}
           onChange={onLabelChange}
-          title={`${entry.nodeTitle ?? ""} · ${entry.name}`}
+          title={`#${entry.nodeId} · ${entry.nodeTitle ?? ""} · ${entry.name}`}
         />
       </span>
       {/* 操作区：「必填 / 👁」与类型徽章始终固定在行右侧 —— 与编辑态与否无关，

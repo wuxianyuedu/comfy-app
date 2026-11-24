@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { WidgetInputRow } from "./WidgetInputRow";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import type { EnrichedWidget } from "../../../workflow-io";
 
 // vitest globals: false 下 RTL 不会自动 cleanup,需手动注册
@@ -113,5 +115,60 @@ describe("WidgetInputRow — 类型徽章与 pin 声明一致", () => {
       }),
     );
     expect(screen.getByText("COMBO")).toBeInTheDocument();
+  });
+});
+
+describe("WidgetInputRow — 同名字段可辨识（#4960）", () => {
+  const imagePin = () =>
+    uploadPin({
+      nodeId: "164",
+      nodeTitle: "加载图像",
+      name: "image",
+      label: "image",
+      type: "COMBO",
+      control: "select",
+      ioKey: "164::widget::image",
+    });
+
+  it("字段名 tooltip 带上 #节点ID，多个同名节点可分辨", async () => {
+    const user = userEvent.setup();
+    render(
+      <TooltipProvider>
+        <WidgetInputRow
+          allPins={[imagePin()]}
+          compact={false}
+          disabled={false}
+          entry={imagePin()}
+          onPickFile={vi.fn()}
+          onRequiredChange={vi.fn()}
+          onValueChange={vi.fn()}
+          uploading={false}
+          value={undefined}
+        />
+      </TooltipProvider>,
+    );
+    await user.hover(screen.getByText("image"));
+    await waitFor(() => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+        "#164",
+      );
+    });
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      "加载图像",
+    );
+  });
+
+  it("传入 onFocusNode 时行首圆点可点定位", () => {
+    const onFocusNode = vi.fn();
+    renderRow(imagePin(), { onRequiredChange: vi.fn(), onFocusNode });
+    const dot = screen.getByRole("button", { name: "定位到节点 #164" });
+    expect(dot).toHaveAttribute("data-io-focus-node", "164");
+    fireEvent.click(dot);
+    expect(onFocusNode).toHaveBeenCalledTimes(1);
+  });
+
+  it("未传 onFocusNode 时圆点保持纯色标，不变成可点按钮", () => {
+    renderRow(imagePin(), { onRequiredChange: vi.fn() });
+    expect(screen.queryByRole("button", { name: /定位到节点/ })).not.toBeInTheDocument();
   });
 });

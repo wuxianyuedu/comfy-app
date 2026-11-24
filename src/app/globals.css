@@ -1448,15 +1448,12 @@ textarea::-webkit-scrollbar {
   z-index: 1180 !important;
 }
 
-/* ── 节点悬停四角括号（ISSUE #4549） ────────────────────────────────────
-   悬浮反馈只在四角出现括号装饰（对齐 ComfyUI 原生节点的悬停形态），
-   节点本体不变色（普通节点悬停本就无颜色变化；旁路 / 停用节点曾因
-   半透明毛玻璃随悬停抬层变色，#4578 起着色层不透采画布，悬停同样不再
-   变色 —— 「括号 = 悬停反馈」是唯一观感）。显隐由外壳的 `data-hovered`
-   （useHoverElevation 写入）驱动，不进 React 状态 —— 鼠标进出零重渲染。
-   颜色走语义 token，明暗两态自动适配。
-   四个 <span> 由 FlowNode 卡片渲染（绝对定位于卡片四角），pointer-events 关闭
-   不抢交互；折叠态卡片只剩标题栏，括号依旧落在四角。 */
+/* ── 节点四角括号（ISSUE #4549，#4961 起悬停不再显示） ──────────────────
+   四角括号曾用作悬停反馈，但用户反馈「悬停时节点变色」干扰阅读，#4961 起常态隐藏：
+   `.flow-node-corner` 基线 opacity: 0，不再由 `data-hovered` 抬到 1。
+   保留 span 与圆角样式（WorkflowNode 测试仍钉住形态），仅去掉悬停显隐 —— 不回退
+   hover 置顶能力（下面 `.react-flow__node[data-hovered]` 的 z-index 仍压住连线）。
+   `data-hovered` 仍由 useHoverElevation 写入，零重渲染的形态不变。 */
 .flow-node-corner {
   pointer-events: none;
   position: absolute;
@@ -1465,9 +1462,7 @@ textarea::-webkit-scrollbar {
   opacity: 0;
   transition: opacity 0.12s ease;
 }
-.react-flow__node[data-hovered="true"] .flow-node-corner {
-  opacity: 1;
-}
+/* #4961：悬停不再让四角括号显形（用户反馈悬停变色干扰）；选中态 outline 独立，不受影响。 */
 /* 括号的外角随**节点的圆角**走（ISSUE #4578）：节点卡片是 `rounded-lg`
    （= `--radius`，设置页的圆角档改它时整条刻度跟手），括号内缩 3px、外角
    半径取 `--radius - 3px` —— 与节点圆角**同心**，两条线在圆角处沿节点轮廓
