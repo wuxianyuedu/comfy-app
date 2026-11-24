@@ -200,6 +200,7 @@ export function useAssetLibrary(): AssetLibraryController {
 export function useAddToAssetLibrary(onDone?: () => void) {
   const trpc = useTRPC();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const mutation = useMutation(trpc.asset.createFromTask.mutationOptions());
 
   const addToLibrary = useCallback(
@@ -228,11 +229,16 @@ export function useAddToAssetLibrary(onDone?: () => void) {
         },
       );
       if (result.ok) {
+        /* 写后失效列表缓存：全局 staleTime 30s（src/trpc/query-client.ts）内，
+         * 资产库页会继续显示加入前的旧列表（空态 / 角标不变），像「加入了
+         * 却没进去」。与同文件删除路径的 refresh() 同一纪律：写成功即失效
+         * asset.list，两个视图立刻看到新资产。 */
+        await queryClient.invalidateQueries({ queryKey: trpc.asset.list.queryKey() });
         onDone?.();
       }
       return result.ok;
     },
-    [mutation, onDone, toast],
+    [mutation, onDone, queryClient, toast, trpc],
   );
 
   return { addToLibrary, pending: mutation.isPending };
