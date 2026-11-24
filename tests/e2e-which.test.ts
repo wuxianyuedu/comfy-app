@@ -91,6 +91,27 @@ describe("e2e:which —— 改动面映射", () => {
     expect(both.specs.filter((s) => s === "e2e/main-journey.spec.ts")).toHaveLength(1);
   });
 
+  test("改了未登记的 spec 本身 ⇒ 恒等建议跑它自己，不落「无登记」（ISSUE #4942）", () => {
+    /* nav-auto-collapse 不在 SPEC_FACES 登记表里 —— 此前自改时只能拿到「自行判断」。 */
+    const sel = mapE2eSelection(["e2e/nav-auto-collapse.spec.ts"]);
+    expect(sel.specs).toEqual(["e2e/nav-auto-collapse.spec.ts"]);
+    expect(sel.command).toBe("pnpm test:e2e e2e/nav-auto-collapse.spec.ts");
+    expect(sel.reasons["e2e/nav-auto-collapse.spec.ts"]).toContain("本身");
+    expect(sel.note).not.toContain("自行判断");
+  });
+
+  test("登记过的 spec 仍用登记说明，恒等映射不覆盖它", () => {
+    const sel = mapE2eSelection(["e2e/view-tabs.spec.ts"]);
+    expect(sel.reasons["e2e/view-tabs.spec.ts"]).toContain("判据");
+    expect(sel.reasons["e2e/view-tabs.spec.ts"]).not.toContain("本身");
+  });
+
+  test("e2e 下的非 spec 文件不恒等命中：support 仍走公共地基提示", () => {
+    const sel = mapE2eSelection(["e2e/support/trpc-stub.ts"]);
+    expect(sel.specs).toEqual([]);
+    expect(sel.broad.join(" ")).toContain("@critical");
+  });
+
   test("没命中任何登记 ⇒ 明说「自行判断」，不冒充「不用跑」", () => {
     const sel = mapE2eSelection(["docs/README.md"]);
     expect(sel.specs).toEqual([]);
@@ -125,6 +146,14 @@ describe("e2e:which —— 入口本身", () => {
     const { code, output } = run(["--changd", "e2e/a.spec.ts"]);
     expect(code).toBe(2);
     expect(output).toContain("--changd");
+  });
+
+  test("入口复现 ISSUE #4942：--changed 指向未登记 spec ⇒ 退 0 且给出该 spec 自己", () => {
+    const { code, output } = run(["--changed", "e2e/nav-auto-collapse.spec.ts"]);
+    expect(code).toBe(0);
+    expect(output).toContain("e2e/nav-auto-collapse.spec.ts");
+    expect(output).toContain("pnpm test:e2e e2e/nav-auto-collapse.spec.ts");
+    expect(output).not.toContain("无登记");
   });
 
   test("给一条 spec 路径 ⇒ 退 0，人读与 JSON 两种形态都给读数", () => {
