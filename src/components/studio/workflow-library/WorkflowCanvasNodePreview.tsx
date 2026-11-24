@@ -9,6 +9,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { buildParamEntries, sizeGroupIds } from "~/lib/workflow/workflow-param-mapping";
+import { exposedClassOf } from "~/lib/workflow/workflow-exposed-params";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
 import {
@@ -23,6 +24,12 @@ import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWo
 import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
 import { deriveLibraryOutputCards, deriveLibraryParamCards } from "./workflow-library-param-cards";
+import {
+  nextReferenceSlotAfterConnect,
+  referenceImageSlotIds,
+  wiredReferenceSlotIds,
+  withReferenceSlotInContracts,
+} from "./reference-image-array";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { useSizeSource } from "./hooks/use-size-source";
 import { useGenerationRunner, type Phase } from "./hooks/use-generation-runner";
@@ -198,11 +205,19 @@ export function WorkflowCanvasNodePreview({
   /* 模式契约口清单 —— 卡片头的话术与「工坊封装」页签**同一份**
    * （`modeContractEntries`：用户改过的模式走注册表，未改过的回落内置默认）。
    * 两处各读各的会让同一页面的两个页签列出两种名字（ISSUE #596）。 */
-  const { contracts: storedContracts } = useModeContracts();
+  const { contracts: storedContracts, save: saveModeContracts } = useModeContracts();
   const contractEntries = useMemo(
     () => modeContractEntries(effectiveMode, storedContracts),
     [effectiveMode, storedContracts],
   );
+
+  /* 参考图是数组形态的同一个卡：连上一条线后就地长出下一个端点。这里记的是
+   * **本次会话里新冒出来、还没连线的槽**；一旦连上线，槽位 id 就进 paramMap，
+   * 刷新后由 wiredReferenceSlotIds 从落库值恢复，不依赖这份会话态。按模式分桶，
+   * 切模式时不会把上一个模式的空槽带到别的模式。 */
+  const [extraRefSlots, setExtraRefSlots] = useState<Record<string, Array<string>>>({});
+  /* 新槽写回模式契约失败时给一句出口 —— 不静默失败（规范 §4）。 */
+  const [contractSlotNotice, setContractSlotNotice] = useState<string | null>(null);
 
   /* ── 对外参数卡片列（映射可编辑，ISSUE #355）──
    * 卡片说「由哪些端口组成」，表单行说「填什么值」；拖线改落点、选中后 ⌫ 断开、
@@ -218,8 +233,22 @@ export function WorkflowCanvasNodePreview({
     mode: effectiveMode,
     onPatchParamMap: handlePatchParamMap,
   });
-  /* 重置回调只依赖这个稳定的方法引用（#4467：内联箭头会击穿画布层 memo）。 */
-  const { resetMany: resetParamWires } = wiring;
+  /* 卡片列与连线闸门共用的**生效契约清单**：契约原有口 + 已连过线的参考图槽
+   * （契约里删了也得继续显示）+ 本次会话刚追加的空槽。顺序保留契约原序，新槽
+   * 追加在尾部；参考图卡内部再按槽位序号排序（见 WorkflowParamCardColumn）。 */
+  const effectiveContractIds = useMemo(
+    () => [
+      ...new Set([
+        ...contractEntries.map((item) => item.id),
+        ...wiredReferenceSlotIds(wiring.effectiveParamMap, effectiveMode),
+        ...(effectiveMode === null ? [] : (extraRefSlots[effectiveMode] ?? [])),
+      ]),
+    ],
+    [contractEntries, effectiveMode, extraRefSlots, wiring.effectiveParamMap],
+  );
+
+  /* 重置 / 连线回调只依赖这些稳定的方法引用（#4467：内联箭头会击穿画布层 memo）。 */
+  const { connect: connectParam, resetMany: resetParamWires } = wiring;
   /* 本地 overlay 已经并入 wiring 内部的生效 paramMap，但卡片列与连线要读的
    * 是同一份 —— 故把 overlay 之后的 paramMap 回传给派生。`reportParamMap`
    * 让 hook 把「生效的那一份」吐出来（见 useParamWiring 的 effectiveParamMap）。 */
@@ -232,9 +261,9 @@ export function WorkflowCanvasNodePreview({
         groupedKeys,
         /* 卡片列的口子清单与上面那份**同一份**（用户改过契约的模式必须按改过的
          *  清单列 —— 用内置默认会多列出契约里没有的口，见 `deriveLibraryParamCards`）。 */
-        contractIds: contractEntries.map((item) => item.id),
+        contractIds: effectiveContractIds,
       }),
-    [workflowIO, wiring.effectiveParamMap, effectiveMode, groupedKeys, contractEntries],
+    [workflowIO, wiring.effectiveParamMap, effectiveMode, groupedKeys, effectiveContractIds],
   );
   /* ── 对外输出参数（右列）──
    * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么 →
@@ -272,17 +301,59 @@ export function WorkflowCanvasNodePreview({
     () =>
       buildParamEntries(workflowIO ?? null, {
         mode: effectiveMode,
-        contractIds: contractEntries.map((item) => item.id),
+        contractIds: effectiveContractIds,
       }),
-    [workflowIO, effectiveMode, contractEntries],
+    [workflowIO, effectiveMode, effectiveContractIds],
   );
 
-  /* 落点重置回调收口：内联箭头会击穿画布层三列节点的 memo（#4467）。 */
+  /* 落点重置回调收口：内联箭头会击穿画布层三列节点的 memo（#4467）。
+   * 尺寸卡 = 六个子口一起撤；参考图卡 = 当前卡上所有槽位一起撤。 */
   const handleResetParam = useCallback(
     (id: string) => {
-      resetParamWires(sizeGroupIds(id));
+      const ids =
+        exposedClassOf(id) === "reference-image"
+          ? referenceImageSlotIds(effectiveContractIds)
+          : sizeGroupIds(id);
+      resetParamWires(ids);
     },
-    [resetParamWires],
+    [effectiveContractIds, resetParamWires],
+  );
+
+  /* 拖线落点：参考图槽连上之后，就地给同一张卡追加下一个端点。追加只动本地
+   * 会话态；真正让新槽「活下来」的是随之写进 paramMap 的那条线（刷新后派生）。 */
+  const handleConnectParam = useCallback(
+    (entryId: string, ioKey: string) => {
+      connectParam(entryId, ioKey);
+      const next = nextReferenceSlotAfterConnect({ entryId, knownIds: effectiveContractIds });
+      if (next === null || effectiveMode === null) {
+        return;
+      }
+      setExtraRefSlots((prev) => {
+        const list = prev[effectiveMode] ?? [];
+        if (list.includes(next)) {
+          return prev;
+        }
+        return { ...prev, [effectiveMode]: [...list, next] };
+      });
+      /* 运行期按契约口建值、按契约 id 解析落点：新槽必须进契约，画出的线才带值。
+       * 写的是本机覆盖（save 内部按项目默认落差集），失败给可读出口。 */
+      const nextContracts = withReferenceSlotInContracts({
+        contracts: storedContracts,
+        mode: effectiveMode,
+        slot: next,
+        fallbackInputs: effectiveContractIds,
+      });
+      if (nextContracts !== null) {
+        void saveModeContracts(nextContracts).then(
+          () => setContractSlotNotice(null),
+          () =>
+            setContractSlotNotice(
+              "参考图端点已长出，但模式契约保存失败：请到「模式契约」页手动补这一口，否则这条线运行时不生效。",
+            ),
+        );
+      }
+    },
+    [connectParam, effectiveContractIds, effectiveMode, saveModeContracts, storedContracts],
   );
   const { onSizeFromReferenceChange, sizeFromReference } = useSizeSource({
     commitParamMap: wiring.commitParamMap,
@@ -327,6 +398,11 @@ export function WorkflowCanvasNodePreview({
         <p className="bg-warning/10 text-warning-strong text-2xs w-full rounded-lg px-3 py-2">
           这条工作流还没有配置模式，参数落点暂不能连线（落点必须归属一个模式）。
           到工作流编辑器顶栏「编辑 IO」配置模式集合后，回这里拖卡片圆点连线。
+        </p>
+      )}
+      {viewMode === "edit" && contractSlotNotice !== null && (
+        <p className="bg-warning/10 text-warning-strong text-2xs w-full rounded-lg px-3 py-2">
+          {contractSlotNotice}
         </p>
       )}
       {viewMode === "edit" && (
@@ -379,7 +455,7 @@ export function WorkflowCanvasNodePreview({
             />
           }
           io={workflowIO}
-          onConnect={effectiveMode !== null && onPatchParamMap ? wiring.connect : undefined}
+          onConnect={effectiveMode !== null && onPatchParamMap ? handleConnectParam : undefined}
           onConnectOutput={
             effectiveMode !== null && onPatchParamMap ? outputWiring.connect : undefined
           }
