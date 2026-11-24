@@ -651,11 +651,11 @@
         const status = await fetchStatus();
         if (status && status.app_url) return status.app_url;
       } catch (e) {}
-      return 'http://127.0.0.1:3000/workspace';
+      return 'http://127.0.0.1:3000/';
     }
 
     // 探测后端是否「真正就绪」：打 /api/health（权威就绪端点），且要求可读的 2xx。
-    // 为什么不再探 appUrl（/workspace 页面路由）、也不再用 no-cors HEAD 兜底：
+    // 为什么不再探 appUrl（应用页面路由）、也不再用 no-cors HEAD 兜底：
     //   · 「Turbopack 会话级路由失效」时页面路由仍回 200、只有 /api/* 404，探页面
     //     会把半死会话判成就绪、导航进一个数据永远加载不出的页面（正是自退事故的
     //     前奏）；/api/health 只有服务与数据层都就绪才回 200，是权威判据。
