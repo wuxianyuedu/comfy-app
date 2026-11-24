@@ -175,26 +175,40 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                         }}
                       />
                     ) : (
-                      /* 改名此前只有「双击」这一条路径 —— 双击是鼠标专属手势，
-                       *  键盘用户没有任何入口（§6.10「交互元素必须真的可交互」
-                       *  的反面：不是「点了没反应」，是根本进不来）。这里保留双击
-                       *  作为快捷方式，同时补上焦点与 Enter/F2 —— F2 是各平台通用
-                       *  的「重命名」键，Enter 是 `role="button"` 的默认激活键。 */
-                      <Hint label={`双击（或 Enter / F2）重命名「${tag.name}」`}>
-                        <span
-                          onDoubleClick={() => {
-                            beginEdit(tag.id, tag.name);
-                          }}
-                          role="button"
-                          tabIndex={0}
-                          {...simpleKeyHandler(["Enter", "F2"], () => {
-                            beginEdit(tag.id, tag.name);
-                          })}
-                          className="text-ink-bright hover:bg-subtle hover:text-ink-bright focus-visible:ring-primary/40 cursor-text truncate rounded-sm px-0.5 text-sm select-none focus-visible:ring-2 focus-visible:outline-none"
-                        >
-                          {tag.name}
-                        </span>
-                      </Hint>
+                      <>
+                        <Hint label={`双击（或 Enter / F2）重命名「${tag.name}」`}>
+                          <span
+                            onDoubleClick={() => {
+                              beginEdit(tag.id, tag.name);
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            {...simpleKeyHandler(["Enter", "F2"], () => {
+                              beginEdit(tag.id, tag.name);
+                            })}
+                            className="text-ink-bright hover:bg-subtle hover:text-ink-bright focus-visible:ring-primary/40 cursor-text truncate rounded-sm px-0.5 text-sm select-none focus-visible:ring-2 focus-visible:outline-none"
+                          >
+                            {tag.name}
+                          </span>
+                        </Hint>
+                        {/* 可见的重命名入口（#4986）：此前只有双击 / F2 这种隐藏手势，
+                         *  静态界面看不出模型名可编辑。铅笔按钮是显式 affordance，
+                         *  与双击 / Enter / F2 同一动作，编辑态下禁用防止重复进入。 */}
+                        <Hint label={`重命名「${tag.name}」`}>
+                          <Button
+                            aria-label={`重命名 ${tag.name}`}
+                            className="text-ink-soft hover:bg-subtle hover:text-ink-bright shrink-0 rounded-md border border-transparent"
+                            disabled={isEditing}
+                            onClick={() => {
+                              beginEdit(tag.id, tag.name);
+                            }}
+                            size="icon-xs"
+                            variant="ghost"
+                          >
+                            <Icon className="size-3.5" data-icon="inline-start" name="pen" />
+                          </Button>
+                        </Hint>
+                      </>
                     )}
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
                       {/* 按模式计数（ISSUE #4102）：不再显示「几个工作流」——
