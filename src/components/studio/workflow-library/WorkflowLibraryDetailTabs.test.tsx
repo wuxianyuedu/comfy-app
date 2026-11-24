@@ -118,12 +118,12 @@ describe("参考图装载页签按工作流启用显隐（ISSUE #4954）", () =>
 
   it("未启用的工作流不出现「参考图装载」页签，其余页签原样", () => {
     const keys = visibleDetailTabs(withoutReference).map((tab) => tab.key);
-    expect(keys).toEqual(["params", "canvas", "io", "use", "source"]);
+    expect(keys).toEqual(["params", "canvas", "io", "use", "notes", "source"]);
     expect(keys).not.toContain("reference");
   });
 
   it("启用后「参考图装载」按原顺序出现在工坊封装之后", () => {
     const keys = visibleDetailTabs(withReference).map((tab) => tab.key);
-    expect(keys).toEqual(["params", "reference", "canvas", "io", "use", "source"]);
+    expect(keys).toEqual(["params", "reference", "canvas", "io", "use", "notes", "source"]);
   });
 });

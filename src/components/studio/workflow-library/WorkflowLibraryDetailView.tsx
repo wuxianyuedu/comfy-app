@@ -24,6 +24,7 @@ import {
 import { useWorkflowEncapsulation } from "./hooks/use-workflow-encapsulation";
 import { DetailBody, TabContentLoading } from "./sections/DetailBody";
 import { DetailHeader } from "./sections/DetailHeader";
+import { WorkflowNotesTab } from "./sections/WorkflowNotesTab";
 
 /** Tabs 的值来自 `DETAIL_TABS` 的 key；集合外的值忽略。 */
 function isDetailTab(value: unknown): value is DetailTab {
@@ -289,6 +290,16 @@ export function WorkflowLibraryDetailView({
                 />
               </React.Suspense>
             </ErrorBoundary>
+          )}
+        </TabsContent>
+
+        {/* 说明页签（#4963）：note 正文 + 翻译成中文。轻面板，不拉画布引擎、
+            不解析 rawJson —— note 已随 detailFull 富化到 controller.notes。 */}
+        <TabsContent className="min-h-0 flex-1 overflow-y-auto p-5" value="notes">
+          {isLoading ? (
+            <TabContentLoading label={DETAIL_LOADING_LABEL} />
+          ) : (
+            <WorkflowNotesTab notes={controller.notes} />
           )}
         </TabsContent>
 

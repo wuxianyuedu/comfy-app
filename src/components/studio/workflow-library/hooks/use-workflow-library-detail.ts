@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import type { WorkflowNote } from "~/components/studio/workflow-types";
 import { useTRPC } from "~/trpc/react";
 import {
   buildSourceData,
@@ -91,6 +92,9 @@ export type WorkflowLibraryDetailController = {
   /** 类型 / 模型编辑器（缺省空实现，调用方可安全忽略）。 */
   metaEditor: MetaEditorController;
   missing: boolean;
+  /** 工作流内 note 节点的说明清单（随 detailFull 富化到达，零新增请求）。
+   *  「说明」页签用它逐条渲染原文并翻译；详情未排空时为空数组。 */
+  notes: ReadonlyArray<WorkflowNote>;
   openSource: () => void;
   /** 模板 paramMap（`source.mode:<模式>` 的对外参数落点），画布节点页签据此
    *  标出每个对外参数与它落到的那一行。 */
@@ -447,6 +451,8 @@ export function useWorkflowLibraryDetail(
     storedIO,
     paramMap,
     imageInputPorts,
+    /* note 说明已从 detailFull 富化好，直接透出（空值兜底空数组）。 */
+    notes: enrichedQuery.data?.notes ?? [],
     sourceData,
     usable: formatFlags.usable,
     canResync: syncFlags.canResync,
