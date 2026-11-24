@@ -32,6 +32,12 @@
  *     被 LogProvider 包装过的 console，因此不会与浏览器侧面板集成冲突，
  *     也不会改变任何既有输出行为（终端看到的输出一个字不变）。
  *   - 写入失败静默（日志子系统绝不阻塞业务主流程）。
+ *
+ * **体量护栏与自激循环（ISSUE #4948）**：一次 EPIPE 自激循环曾把单份转录刷到
+ * 4.5GB 撑爆磁盘。两道防线都在本模块：① 写出口对 EPIPE 同步降级 + 给流挂空
+ * error 监听，断管后错误不再能打进 uncaughtException 通道（循环切不断的那条
+ * 路没有了）；② 转录按大小轮转（单段 64MiB，超出换 `<boot>.<n>.log`），单文件
+ * 不再可能无界增长。
  */
 
 import fs from "node:fs";
@@ -252,6 +258,43 @@ function safeAppend(filePath: string, text: string): void {
   }
 }
 
+/* ── 转录的体量上限与轮转（ISSUE #4948）────────────────────────────
+ * 单份转录文件曾随一次 EPIPE 自激循环膨胀到 4.5GB 撑爆磁盘。除了在写入出口
+ * 切断循环（见下方 wrap 的 EPIPE 降级与 error 监听），这里再补一道**体量护栏**：
+ * 单段转录超过 `MAX_TRANSCRIPT_BYTES` 即轮转出新段（`<boot>.<n>.log`，仍在
+ * `nextjs-panel-` 前缀家族里——读侧按 mtime 取最新即命中活动段，轮转清理仍按
+ * 同一前缀归族）。单段有界 + 保留份数有界 ⇒ 目录占用有上界，单文件不再可能
+ * 无界增长。 */
+const MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
+
+/** 当前活动段已写入的字节数（含安装时的横幅与启动段回填）。 */
+let transcriptBytes = 0;
+
+/** 轮转段号（0 = 首段，名字不带序号；其后 `<boot>.1.log`、`<boot>.2.log`…）。 */
+let transcriptPart = 0;
+
+/** 轮转出新段：段号 +1，写一段轮转标记，活动段（`target`）切过去。
+ *  基名 = 活动段名剥掉历史段号（首段无序号，其后 `<boot>.<n>.log`）。 */
+function rotateTranscriptPart(): void {
+  const base = (target ?? panelCaptureLogPath()).replace(/\.\d+\.log$/, ".log");
+  transcriptPart += 1;
+  const next = base.replace(/\.log$/, `.${transcriptPart}.log`);
+  const marker = `----- 转录轮转：前一段已达 ${MAX_TRANSCRIPT_BYTES} 字节上限（#4948）-----\n`;
+  transcriptBytes = Buffer.byteLength(marker, "utf8");
+  target = next;
+  safeAppend(next, marker);
+}
+
+/** 转录追加的唯一入口：先判轮转，再落盘，并记下体量。 */
+function appendTranscript(text: string): void {
+  if (transcriptBytes >= MAX_TRANSCRIPT_BYTES) {
+    rotateTranscriptPart();
+  }
+  const file = panelCaptureLogPath();
+  safeAppend(file, text);
+  transcriptBytes += Buffer.byteLength(text, "utf8");
+}
+
 /* ── 转录缓冲 ─────────────────────────────────────────────
  * 转录挂在 `process.stdout.write` 上，每条 chunk 都过这里：每条一次
  * `appendFileSync` 等于把 open/write/close 三个系统调用乘上每一行输出 ——
@@ -265,7 +308,7 @@ const FLUSH_INTERVAL_MS = 1000;
 let buffer = "";
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-function flushBuffer(filePath: string): void {
+function flushBuffer(): void {
   if (flushTimer !== null) {
     clearTimeout(flushTimer);
     flushTimer = null;
@@ -275,19 +318,19 @@ function flushBuffer(filePath: string): void {
   }
   const text = buffer;
   buffer = "";
-  safeAppend(filePath, text);
+  appendTranscript(text);
 }
 
-function bufferedAppend(filePath: string, text: string): void {
+function bufferedAppend(text: string): void {
   buffer += text;
   if (buffer.length >= FLUSH_BYTES) {
-    flushBuffer(filePath);
+    flushBuffer();
     return;
   }
   if (flushTimer === null) {
     flushTimer = setTimeout(() => {
       flushTimer = null;
-      flushBuffer(filePath);
+      flushBuffer();
     }, FLUSH_INTERVAL_MS);
     /* 转录定时器是后台刷盘，不该单独把进程吊住；退出时尽力刷一次。 */
     flushTimer.unref?.();
@@ -315,11 +358,11 @@ export function installStreamCapture(): void {
       fs.mkdirSync(/*turbopackIgnore: true*/ dir, { recursive: true });
     }
     pruneOldFiles();
-    safeAppend(filePath, "----- 应用服务输出（本次运行）-----\n");
+    appendTranscript("----- 应用服务输出（本次运行）-----\n");
     /* 启动段回填（ISSUE #4681）：横幅之后、钩子安装之前，把 stdout 重定向文件
      * 里**截至此刻**的服务启动输出搬进转录 —— 安装是懒的（首个请求才触发），
      * 不回填的话启动段永远赶不上转录。快照先于钩子安装，与实时转录不重叠。 */
-    safeAppend(filePath, serviceStartupBackfillText(NEXTJS_LOG_DIR));
+    appendTranscript(serviceStartupBackfillText(NEXTJS_LOG_DIR));
     /* app-runtime 的会话横幅**已随一次启动一份文件撤销**（ISSUE #1326）：日志
      * 句柄由 `app-runtime-log.ts` 在首次写入时按 <时刻> 命名建文件，一份文件
      * 就是一个进程的一次启动，不再需要横幅划边界。这里不再写它 —— 写了也没人
@@ -330,7 +373,7 @@ export function installStreamCapture(): void {
 
   /* 退出时尽力刷掉未满缓冲：只能做同步写，避免把关闭路径变成异步竞态。 */
   process.once("exit", () => {
-    flushBuffer(filePath);
+    flushBuffer();
   });
 
   type WriteFn = NodeJS.WriteStream["write"];
@@ -345,6 +388,15 @@ export function installStreamCapture(): void {
      * 之后跳过原写、只保留转录 —— 面板仍能看到输出，这正是本模块存在的理由；
      * 其余异常不掩盖，那是真正的程序缺陷。 */
     let pipeBroken = false;
+    /* 断流的**异步抵达路径**也要封死（ISSUE #4948）：socket 上的 EPIPE 常在
+     * write 返回之后才以 'error' 事件冒出来，无人监听同样是 uncaughtException，
+     * 兜底打印再经本 patched 转录 —— 自激循环换条路再犯。stdout/stderr 的
+     * error 恒为基础设施层故障（断管 / 重定向文件写满），挂空监听把「进程被
+     * 日志管道炸掉」这条路封死；输出内容仍由转录保全。只挂一次：测试里模块
+     * 会反复装，全局流上的监听不随模块重置，按现值判重避免越积越多。 */
+    if (stream.listenerCount("error") === 0) {
+      stream.on("error", () => undefined);
+    }
     /* 与原签名同形：chunk + 可选 encoding / callback。真实调用方（console、
      * Next 的日志器、库）走的是这两个重载，覆盖它们即可全量转录。 */
     const patched: WriteFn = function patchedWrite(
@@ -354,7 +406,7 @@ export function installStreamCapture(): void {
     ): boolean {
       try {
         const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
-        bufferedAppend(filePath, text);
+        bufferedAppend(text);
       } catch {
         /* 转录失败不吞掉输出本身 */
       }

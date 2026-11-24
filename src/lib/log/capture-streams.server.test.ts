@@ -384,3 +384,78 @@ describe("启动段回填（ISSUE #4681）", () => {
     expect(text).not.toContain("AAAAAAAA");
   });
 });
+
+/* ISSUE #4948：一次 EPIPE 自激循环把单份转录刷到 4.5GB 撑爆磁盘。两道防线
+ * 各钉一条契约：① 断流降级切断「错误打印 → 再抛 EPIPE → 再打印」的循环
+ * （original 只被打一次，反复打印不再产生新的 uncaughtException）；② 转录
+ * 按大小轮转，单段有界，单文件不再可能无界增长。 */
+describe("EPIPE 自激循环与转录体量上限（ISSUE #4948）", () => {
+  it("断流后反复打印错误：循环被切断，死管道上的原写只发生一次", async () => {
+    let originalCalls = 0;
+    const epipe = Object.assign(new Error("write EPIPE"), { code: "EPIPE", errno: -4047 });
+    type WriteFn = NodeJS.WriteStream["write"];
+    /* 两条流都换成「每次写都同步抛 EPIPE」的桩：这正是自激循环的现场 ——
+     * 兜底打印（console.error → stderr）每过一次 patched 就抛一次。 */
+    const throwingWrite: WriteFn = function throwingWrite(
+      _chunk: string | Uint8Array,
+      encodingOrCb?: BufferEncoding | ((err?: Error | null) => void),
+      cb?: (err?: Error | null) => void,
+    ): boolean {
+      originalCalls += 1;
+      const done =
+        typeof cb === "function"
+          ? cb
+          : typeof encodingOrCb === "function"
+            ? encodingOrCb
+            : undefined;
+      done?.(epipe);
+      throw epipe;
+    };
+    process.stdout.write = throwingWrite;
+    process.stderr.write = throwingWrite;
+
+    await freshInstall();
+    const line = "⨯ uncaughtException: Error: EPIPE: broken pipe, write\n";
+    expect(() => {
+      for (let i = 0; i < 500; i += 1) {
+        process.stdout.write(line);
+        process.stderr.write(line);
+      }
+    }).not.toThrow();
+    /* 两条流各只打到死管道一次：首次即降级，其后 999 次打印全部跳过原写 ——
+     * 循环被切断，不会越打越多。 */
+    expect(originalCalls).toBe(2);
+    /* 流上挂了空 error 监听：断流的异步抵达路径（'error' 事件）也不再能变成
+     * uncaughtException。 */
+    expect(process.stdout.listenerCount("error")).toBeGreaterThan(0);
+    expect(process.stderr.listenerCount("error")).toBeGreaterThan(0);
+  });
+
+  it("转录超过单段上限即轮转：单段有界，活动段切到最新一份", async () => {
+    /* 用不记录的桩当 original（轮转用例只关心转录侧，不必把 70MB 留在内存里）。 */
+    process.stdout.write = () => true;
+    const mod = await freshInstall();
+    const firstPart = mod.panelCaptureLogPath();
+
+    /* 写 70 个 ~1MB 的块（共 ~70MiB > 64MiB 上限）⇒ 中途必然轮转。 */
+    for (let i = 0; i < 70; i += 1) {
+      process.stdout.write(`CHUNK-${String(i).padStart(3, "0")} ${"x".repeat(1024 * 1024 - 16)}\n`);
+    }
+
+    const live = mod.panelCaptureLogPath();
+    expect(live).not.toBe(firstPart); // 活动段已切到轮转后的新文件
+    const parts = fs
+      .readdirSync(tmp)
+      .filter((name) => name.startsWith("nextjs-panel-") && name.endsWith(".log"));
+    expect(parts.length).toBeGreaterThanOrEqual(2);
+    /* 每一段都有界：上限 + 一个缓冲的余量（轮转以段为单位，不把半段截在行中间）。 */
+    const capWithSlack = 64 * 1024 * 1024 + 2 * 1024 * 1024;
+    for (const name of parts) {
+      expect(fs.statSync(path.join(tmp, name)).size).toBeLessThanOrEqual(capWithSlack);
+    }
+    /* 首块落在第一段、末块落在活动段：轮转没丢内容、读侧取 mtime 最新即活动段。 */
+    expect(readCapture(firstPart)).toContain("CHUNK-000");
+    const liveText = await readCaptureWhenFilled(live, "CHUNK-069");
+    expect(liveText).toContain("CHUNK-069");
+  });
+});
