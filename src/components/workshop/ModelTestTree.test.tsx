@@ -179,16 +179,19 @@ describe("ModelTestTree", () => {
   });
 });
 
-/* ISSUE #4983：树形容器不再自设 max-h / 内部滚动——左栏高度随内容走
- * （有多少显示多少），超出显示区域时才由外层 aside 统一滚动查看。
- * 这里钉住「容器上没有高度上限类」：谁再把固定 max-h 加回来就红。 */
-describe("树形容器的高度契约（ISSUE #4983）", () => {
-  it("容器不设 max-h / 内部滚动：高度随内容，滚动归左栏 aside", () => {
+/* ISSUE #4978（取代 #4983 的「随内容走」档——两者口径相反，按派发者对 #4978 的
+ * 明确口径执行）：左栏卡片占满窗口可用高度，树形容器填满卡片剩余高度并独立
+ * 滚动——min-h-0 flex-1 打底、overflow-y-auto 收滚动、不设固定 max-h 上限。
+ * 谁把内部滚动摘掉或把固定 max-h 加回来就红。 */
+describe("树形容器的高度契约（ISSUE #4978）", () => {
+  it("容器填满卡片剩余高度并独立滚动：min-h-0 flex-1 + overflow-y-auto，无固定 max-h", () => {
     renderTree();
     const container = document.querySelector('[aria-label="用途 / 模式 / 模型树"]');
     expect(container).not.toBeNull();
     const cls = container?.className ?? "";
+    expect(cls).toContain("min-h-0");
+    expect(cls).toContain("flex-1");
+    expect(cls).toContain("overflow-y-auto");
     expect(cls).not.toContain("max-h-");
-    expect(cls).not.toContain("overflow-y-auto");
   });
 });

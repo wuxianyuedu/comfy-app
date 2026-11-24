@@ -12,7 +12,7 @@ import { TooltipProvider } from "~/components/ui/tooltip";
 
 /* 改名请求打桩：本文件只判「可见铅笔按钮 → 编辑态 → Enter 提交」的 UI 路径，
  * 请求层由 use-model-tags.test.ts / workflow-model.test.ts 覆盖。 */
-const renameTag = vi.fn(async () => true);
+const renameTag = vi.fn(() => Promise.resolve(true));
 vi.mock("./hooks/use-model-tags", () => ({
   useModelTags: ({ initialTags }: { initialTags: Array<TagItem> }) => ({
     tags: initialTags,
