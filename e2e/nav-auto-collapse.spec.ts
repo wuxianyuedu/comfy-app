@@ -1,6 +1,10 @@
 import { expect, test, type Browser, type Locator } from "@playwright/test";
 
-import { NAV_WIDTH_COLLAPSED_PX, NAV_WIDTH_EXPANDED_PX } from "../src/lib/layout-budget";
+import {
+  NAV_AUTO_COLLAPSE_MAX_PX,
+  NAV_WIDTH_COLLAPSED_PX,
+  NAV_WIDTH_EXPANDED_PX,
+} from "../src/lib/layout-budget";
 
 /**
  * 左轨让位在真浏览器里的形态（@critical）：单元层钉算式，这里钉**确实落到布局上** —— 收起真的让出宽度，只断言 `data-state` 会漏掉半截实现。
@@ -12,12 +16,36 @@ async function openAtWidth(browser: Browser, width: number) {
   const page = await ctx.newPage();
   await page.goto("/workspace", { waitUntil: "domcontentloaded" });
   const sidebar = page.locator('[data-slot="sidebar"]');
+  const wrapper = page.locator('[data-slot="sidebar-wrapper"]');
+  /* ISSUE #4875：/workspace 是流式 SSR，路由级加载壳（`loading.tsx` 的
+     「工作区加载中」）与真壳内容会在转场窗口里同页共存数秒；侧栏 `data-state`
+     首帧取服务端快照（窄窗判据服务端恒 false ⇒ 展开），客户端对账在数秒后才把
+     同一节点翻转为收起。对账翻转若恰落在 React 换代提交窗口内，会短暂出现
+     「SSR 展开代 + 客户端收起代」两棵 `[data-slot="sidebar"]`（GA 每日档实测
+     strict mode violation、retry 通过）。所以在 domcontentloaded 最早瞬间断言
+     唯一性会撞上瞬态 —— 这里先等稳定态（数量收敛到 1、窄窗判据与生效态都到达
+     按窗宽推导的终值），再放行后续断言；不放宽 strict mode。 */
+  const expectedNarrow = width <= NAV_AUTO_COLLAPSE_MAX_PX;
+  await expect
+    .poll(
+      async () => ({
+        count: await sidebar.count(),
+        narrow: await wrapper.getAttribute("data-narrow"),
+        state: await sidebar.getAttribute("data-state"),
+      }),
+      { timeout: 20_000 },
+    )
+    .toEqual({
+      count: 1,
+      narrow: expectedNarrow ? "true" : "false",
+      state: expectedNarrow ? "collapsed" : "expanded",
+    });
   await expect(sidebar).toBeVisible();
   return {
     ctx,
     page,
     sidebar,
-    wrapper: page.locator('[data-slot="sidebar-wrapper"]'),
+    wrapper,
   };
 }
 
