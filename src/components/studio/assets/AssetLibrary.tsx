@@ -18,9 +18,11 @@ import { AuroraBackground } from "~/components/ui/aurora-background";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { EmptyState } from "~/components/ui/empty-state";
 import { Input } from "~/components/ui/input";
+import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { PageHeader } from "~/components/ui/page-header";
 import { SelectChip } from "~/components/ui/select-chip";
 import { Skeleton } from "~/components/ui/skeleton";
+import { cn } from "~/lib/utils";
 import { isPathInFolder, rewritePathPrefix, type FolderNode } from "~/lib/media/asset-folders";
 
 import { AssetCard } from "./AssetCard";
@@ -101,7 +103,10 @@ export function AssetLibrary() {
               </SelectChip>
             ))}
           </div>
-          <div className="custom-scrollbar max-h-[68vh] overflow-y-auto pr-1 pb-2">
+          {/* 目录树的滚动上限走共享档（design-md 契约：浮层/内嵌滚动高度不写vh字面量）。 */}
+          <div
+            className={cn("custom-scrollbar overflow-y-auto pr-1 pb-2", EMBEDDED_SCROLL_MAX_HEIGHT)}
+          >
             <AssetFolderTree
               category={c.category}
               categoryTotals={folders.categoryTotals}
