@@ -56,7 +56,8 @@ describe("tabConfigGet —— 读生效配置", () => {
   it("没有本机覆盖时读到的是项目默认，并带上「能不能写项目默认」这一格", async () => {
     const res = await caller().tabConfigGet();
     expect(Object.keys(res.config).length).toBeGreaterThan(0);
-    expect(res.config["mode-contract"]).toBe("shared");
+    expect(res.config.models).toBe("shared");
+    expect(res.config["mode-contract"]).toBe("independent");
     expect(res.projectDefaultEditable).toBe(false);
   });
 
@@ -70,7 +71,7 @@ describe("tabConfigGet —— 读生效配置", () => {
 describe("tabConfigSave —— 落本机", () => {
   it("保存后回下发生效值（那份改动落在本机 data/ 下）", async () => {
     const res = await caller().tabConfigSave({
-      config: { console: "shared", models: "independent" },
+      config: { console: "shared", models: "shared" },
     });
     expect(res.config.console).toBe("shared");
     const file = path.join(root, "data", "sidebar-tab-behavior.json");
@@ -78,7 +79,7 @@ describe("tabConfigSave —— 落本机", () => {
     if (!isRecord(parsed)) {
       throw new Error("本机覆盖那份不是一个对象");
     }
-    /* 差集化：与项目默认相同的项不落盘。 */
+    /* 差集化：与项目默认相同的项不落盘（models 出厂就是共享）。 */
     expect(parsed).toEqual({ console: "shared" });
   });
 
