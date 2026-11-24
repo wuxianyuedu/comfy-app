@@ -220,12 +220,21 @@ export function useAddToAssetLibrary(onDone?: () => void) {
             ...(args.subdir === undefined || args.subdir === "" ? {} : { subdir: args.subdir }),
             taskId: args.taskId,
           });
-          return res;
+          /* 成功文案按入库结论定制（信封的 `detail` 由 runAsyncAction 原样
+           * 上屏）：全部重复不是失败，但也不能说「已加入」。 */
+          return {
+            ok: true,
+            detail:
+              res.created === 0 && res.duplicated > 0
+                ? "该资产已在此目录中"
+                : res.skipped > 0
+                  ? `已加入资产库（${res.skipped} 张读取失败已跳过）`
+                  : "已加入资产库",
+          };
         },
         {
           report: (kind, detail) => (kind === "ok" ? toast.info(detail) : toast.error(detail)),
           failureText: "加入资产库失败，请稍后重试",
-          successText: "已加入资产库",
         },
       );
       if (result.ok) {
