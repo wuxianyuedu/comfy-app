@@ -46,6 +46,16 @@ describe("workflow-types taxonomy", () => {
     expect(firstLast.map((t) => t.code)).toEqual(["FLF2V"]);
     expect(getWorkflowType("FL2V")).toBeUndefined();
   });
+
+  it("参考图生图只保留 R2I，旧 TI2I（图文混合条件生图）不再作为模式出现", () => {
+    const refImg = ALL_WORKFLOW_TYPES.filter((t) => t.label === "参考图生图");
+    expect(refImg.map((t) => t.code)).toEqual(["R2I"]);
+    expect(getWorkflowType("TI2I")).toBeUndefined();
+  });
+
+  it("I2I 的中文名是「图像编辑」（原「图生图」已更名）", () => {
+    expect(getWorkflowType("I2I")?.label).toBe("图像编辑");
+  });
 });
 
 describe("normalizeTaskType", () => {
@@ -80,5 +90,11 @@ describe("normalizeTaskType", () => {
     expect(normalizeTaskType("FL2V")).toBe("FLF2V");
     expect(normalizeTaskType("fl2v")).toBe("FLF2V");
     expect(normalizeTaskType("  Fl2V ")).toBe("FLF2V");
+  });
+
+  it("已删除的 TI2I 归一到 R2I（图文混合条件生图并入参考图生图）", () => {
+    expect(normalizeTaskType("TI2I")).toBe("R2I");
+    expect(normalizeTaskType("ti2i")).toBe("R2I");
+    expect(normalizeTaskType("  Ti2I ")).toBe("R2I");
   });
 });

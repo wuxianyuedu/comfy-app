@@ -104,7 +104,7 @@ export const MixedPrimitives: Story = {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="t2i">文生图</SelectItem>
-          <SelectItem value="i2i">图生图</SelectItem>
+          <SelectItem value="i2i">图像编辑</SelectItem>
         </SelectContent>
       </Select>
       <Input placeholder="提示词…" />

@@ -84,8 +84,8 @@ describe("模式导航的树形结构（ISSUE #1870）", () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     const target = CONTRACT_MODES[1]!;
-    /* 按 `data-mode` 取行而不是按可访问名：模式中文名互为子串（「图生图」是
-       「参考图生图」「图文混合条件生图」的一部分），按名字找会命中多枚。 */
+    /* 按 `data-mode` 取行而不是按可访问名：模式中文名可能互为子串（「图生图」
+       曾是「参考图生图」「图文混合条件生图」的一部分），按名字找会命中多枚。 */
     const { container } = render(
       <ModeContractModeNav activeMode={null} onSelect={onSelect} storedCustomized={() => false} />,
     );

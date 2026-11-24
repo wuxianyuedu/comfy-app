@@ -149,22 +149,13 @@ describe("模式契约的「尺寸」口与统一尺寸口径一致", () => {
 describe("modeContractEntries：两个页签共读的那一份契约口清单", () => {
   it("未改过的模式回落内置默认（按模式：文生图 = 提示词 + 负向 + 尺寸 + 种子）", () => {
     const entries = modeContractEntries("T2I", []);
-    expect(entries.map((e) => e.id)).toEqual([
-      "prompt",
-      "negative",
-      "size",
-      "seed",
-      "lora-name",
-      "lora-strength",
-    ]);
+    expect(entries.map((e) => e.id)).toEqual(["prompt", "negative", "size", "seed"]);
     /* 展示名与契约表同一份（「尺寸」写明工坊控件的两类写法）。 */
     expect(entries.map((e) => e.label)).toEqual([
       exposedParamDisplayLabel("prompt"),
       exposedParamDisplayLabel("negative"),
       exposedParamDisplayLabel("size"),
       exposedParamDisplayLabel("seed"),
-      exposedParamDisplayLabel("lora-name"),
-      exposedParamDisplayLabel("lora-strength"),
     ]);
   });
 
@@ -359,7 +350,7 @@ describe("mode-contract-defaults.json：完整基线（#3603）", () => {
        configuredModeContracts 的返回必须逐字等于 JSON 里那条。 */
     expect(t2i).toEqual({
       mode: "T2I",
-      inputs: ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
+      inputs: ["prompt", "negative", "size", "seed"],
       required: ["prompt"],
     });
   });

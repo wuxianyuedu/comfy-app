@@ -41,20 +41,23 @@ export function isVideoMode(code: string | null | undefined): boolean {
   return typeof code === "string" && VIDEO_MODE_RE.test(code.trim());
 }
 
-/** 该模式是否自带首帧图（图生视频 / 图文生视频 / 首尾帧 / 参考图）。 */
+/** 该模式是否自带首帧图（图生视频 / 图文生视频 / 首尾帧 / 语音与音频驱动）。
+ *
+ *  参考图生视频（R2V / R2VA）的输入图走「参考图」口（见 `isReferenceVideoMode`），
+ *  不占用首帧口。 */
 export function modeUsesFirstFrame(code: string | null | undefined): boolean {
   if (typeof code !== "string") {
     return false;
   }
-  return /^(?:i2v|ti2v|flf2v|fmf2v|r2v|s2v|ia2v|flf2va|r2va)$/i.test(code.trim());
+  return /^(?:i2v|ti2v|flf2v|fmf2v|s2v|ia2v|flf2va)$/i.test(code.trim());
 }
 
-/** 该模式是否需要尾帧图（首尾帧视频）。 */
+/** 该模式是否给尾帧口（首尾帧视频；单图生视频也给，基线 JSON 的口径）。 */
 export function modeUsesLastFrame(code: string | null | undefined): boolean {
   if (typeof code !== "string") {
     return false;
   }
-  return /^(?:flf2v|fmf2v|flf2va)$/i.test(code.trim());
+  return /^(?:i2v|flf2v|fmf2v|flf2va)$/i.test(code.trim());
 }
 
 /** 统一对外参数的种类（`ParamClass` 的对外子集）。
@@ -139,10 +142,22 @@ export const EXPOSED_PARAM_DISPLAY_LABEL: Record<ExposedParamClass, string> = {
   "lora-strength": "LoRA 强度",
 };
 
-/** 内置默认给几张参考图槽 —— 只是默认值，契约编辑器里可以继续加，不设上限。
- *  多参考图工作流（如 MiniMaxH3ImageConditioning 的 `images.image_0..N` 形态）
- *  常见多张（首张主图），统一支持 1~16 张，故默认给满 16 槽（#4355）。 */
-const REFERENCE_IMAGE_DEFAULT_COUNT = 16;
+/** 视频侧参考图驱动的模式（参考图生视频 R2V / 参考图生音视频 R2VA）：
+ *  输入图走「参考图」口，不给首帧口（基线 JSON 的口径）。 */
+function isReferenceVideoMode(code: string | null | undefined): boolean {
+  if (typeof code !== "string") {
+    return false;
+  }
+  return /^(?:r2v|r2va)$/i.test(code.trim());
+}
+
+/** 音频生成三档（T2A / T2M / T2S）：不带尺寸口（基线 JSON 的口径）。 */
+function isAudioGenerationMode(code: string | null | undefined): boolean {
+  if (typeof code !== "string") {
+    return false;
+  }
+  return /^(?:t2a|t2m|t2s)$/i.test(code.trim());
+}
 
 /** 一个模式是否属于「图生图类」——需要一张参考图输入。
  *
@@ -155,9 +170,10 @@ function isImageEditMode(code: string | null | undefined): boolean {
   return /^(?:i2i|inpaint|outpaint|upscale|e2i|d2i|p2i|r2i|c2i)$/i.test(code.trim());
 }
 
-/** 一个模式是否支持多张参考图（图生图类通常多图）。 */
-function allowsReferenceImages(code: string | null | undefined): boolean {
-  return isImageEditMode(code) || modeUsesFirstFrame(code);
+/** 图像编辑类模式的默认参考图槽位数：姿态骨架生图（P2I）默认两张，其余一张。
+ *  只是默认值 —— 契约编辑器里可以继续追加序号槽，不设上限。 */
+function referenceImageSlotCount(code: string): number {
+  return /^p2i$/i.test(code.trim()) ? 2 : 1;
 }
 
 /** 给定模式码，返回该模式统一对外暴露的参数（顺序即展示顺序）。
@@ -189,6 +205,13 @@ export function exposedParamsForMode(code: string | null | undefined): Array<Exp
         label: EXPOSED_PARAM_DISPLAY_LABEL["last-frame"],
       });
     }
+    if (isReferenceVideoMode(code)) {
+      out.push({
+        cls: "reference-image",
+        id: "reference-image",
+        label: EXPOSED_PARAM_DISPLAY_LABEL["reference-image"],
+      });
+    }
     out.push({
       cls: "size",
       id: "size",
@@ -208,23 +231,12 @@ export function exposedParamsForMode(code: string | null | undefined): Array<Exp
       id: "seed",
       label: EXPOSED_PARAM_DISPLAY_LABEL.seed,
     });
-    /* 角色 LoRA 口：作者连到 LoraLoader 的 lora_name / strength 才生效，没连的
-     * 工作流用其图内 LoRA 配置（与种子口同一句「连线才生效」的口径）。 */
-    out.push({
-      cls: "lora-name",
-      id: "lora-name",
-      label: EXPOSED_PARAM_DISPLAY_LABEL["lora-name"],
-    });
-    out.push({
-      cls: "lora-strength",
-      id: "lora-strength",
-      label: EXPOSED_PARAM_DISPLAY_LABEL["lora-strength"],
-    });
     return out;
   }
 
-  if (isImageEditMode(code)) {
-    for (let i = 0; i < (allowsReferenceImages(code) ? REFERENCE_IMAGE_DEFAULT_COUNT : 1); i += 1) {
+  if (isImageEditMode(code) && typeof code === "string") {
+    const slots = referenceImageSlotCount(code);
+    for (let i = 0; i < slots; i += 1) {
       out.push({
         cls: "reference-image",
         id: i === 0 ? "reference-image" : `reference-image-${i + 1}`,
@@ -232,28 +244,20 @@ export function exposedParamsForMode(code: string | null | undefined): Array<Exp
       });
     }
   }
-  out.push({
-    cls: "size",
-    id: "size",
-    label: EXPOSED_PARAM_DISPLAY_LABEL.size,
-  });
+  /* 音频生成三档（T2A / T2M / T2S）不带尺寸口（基线 JSON 的口径）。 */
+  if (!isAudioGenerationMode(code)) {
+    out.push({
+      cls: "size",
+      id: "size",
+      label: EXPOSED_PARAM_DISPLAY_LABEL.size,
+    });
+  }
   /* 种子口：作者连到工作流的 seed / noise_seed 端口才生效，没连的工作流用其图内
    * seed 配置（实际是否可换由工作流决定）。 */
   out.push({
     cls: "seed",
     id: "seed",
     label: EXPOSED_PARAM_DISPLAY_LABEL.seed,
-  });
-  /* 角色 LoRA 口（同上：连线才生效）。 */
-  out.push({
-    cls: "lora-name",
-    id: "lora-name",
-    label: EXPOSED_PARAM_DISPLAY_LABEL["lora-name"],
-  });
-  out.push({
-    cls: "lora-strength",
-    id: "lora-strength",
-    label: EXPOSED_PARAM_DISPLAY_LABEL["lora-strength"],
   });
   return out;
 }

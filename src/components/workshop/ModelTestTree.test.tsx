@@ -99,7 +99,7 @@ describe("ModelTestTree", () => {
     expect(document.querySelector('[data-tree-key="kind:video"]')).not.toBeNull();
     expect(document.querySelector('[data-tree-key="kind:chat"]')).not.toBeNull();
     expect(screen.getByText("文生图")).toBeInTheDocument();
-    expect(screen.getByText("图生图")).toBeInTheDocument();
+    expect(screen.getByText("图像编辑")).toBeInTheDocument();
     /* 不再有「选择要测试的模型…」下拉触发器：树就在页面上。 */
     expect(screen.queryByRole("button", { name: "选择要测试的模型" })).toBeNull();
 
