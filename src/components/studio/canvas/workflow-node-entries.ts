@@ -72,7 +72,7 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
   });
   const widgetEntries = allEntries.filter(([k]) => {
     const m = rawMeta[k];
-    if (m === undefined || m.widget === undefined || m.preview === true) {
+    if (m?.widget === undefined || m.preview === true) {
       return false;
     }
     /* IMAGEUPLOAD 是 ComfyUI 前端专有的「选择文件上传」按钮槽位（LoadImage
