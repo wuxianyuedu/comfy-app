@@ -243,7 +243,7 @@ export function ModelTestTree({
       ) : (
         <div
           aria-label="用途 / 模式 / 模型树"
-          className="max-h-96 overflow-y-auto pr-0.5"
+          className="min-h-0 flex-1 overflow-y-auto pr-0.5"
           role="radiogroup"
         >
           {tree.map((node) => renderBranch(node, 0))}
