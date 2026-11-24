@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { ToastProvider } from "~/components/studio/ToastProvider";
@@ -127,5 +130,16 @@ describe("AssetLibrary —— 目录树版式（ISSUE #4943）", () => {
     foldersController = baseFoldersController();
     render(libraryView());
     expect(screen.getByText("资产库还是空的")).toBeTruthy();
+  });
+});
+
+describe("资产库页面宽度契约（ISSUE #5002）", () => {
+  it("内容区用 full 档，目录树贴齐左边距，不再被居中窄栏推到中间", () => {
+    const code = readFileSync(
+      path.join(process.cwd(), "src/components/studio/assets/AssetLibrary.tsx"),
+      "utf8",
+    );
+    expect(code).toMatch(/<DocumentFrame[\s\S]*?width="full"/);
+    expect(code).not.toMatch(/width="wide"/);
   });
 });

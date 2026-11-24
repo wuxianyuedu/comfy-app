@@ -82,7 +82,9 @@ export function AssetLibrary() {
     <DocumentFrame
       backdrop={<AuroraBackground />}
       className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
-      width="wide"
+      /* #5002：目录树要贴齐内容区左边距 —— wide 档的 1200px 居中列在宽屏
+       * 左侧留大片空白；full 档不封顶，只留容器自己的 px-* 内边距。 */
+      width="full"
     >
       <PageHeader srTitle={pageHeaderTitle("assets")} />
 
