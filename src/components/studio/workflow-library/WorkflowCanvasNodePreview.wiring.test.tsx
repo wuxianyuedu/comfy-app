@@ -429,10 +429,14 @@ describe("画布节点页签：卡片列的口子清单取「生效契约」", (
    *  默认，两个表面又各说一份。判据容忍换行（prettier 会把调用拆成多行）。 */
   it("派生卡片列时把生效契约的 id 传下去", () => {
     const preview = readFileSync(path.join(__dirname, "WorkflowCanvasNodePreview.tsx"), "utf8");
-    /* #4973 起传的是「生效契约 + 已连线的参考图槽 + 本会话新槽」的并集；它仍以
-     * contractEntries 为基底，漏掉那一跳就会退回内置默认。 */
+    const hook = readFileSync(
+      path.join(__dirname, "hooks", "use-reference-image-array.ts"),
+      "utf8",
+    );
+    /* #4973 起传的是「生效契约 + 已连线的参考图槽 + 本会话新槽」的并集；派收口在
+     * hook 里，它仍以 contractEntries 为基底，漏掉那一跳就退回内置默认。 */
     expect(preview).toMatch(/contractIds:\s*effectiveContractIds/);
-    expect(preview).toContain("...contractEntries.map((item) => item.id)");
-    expect(preview).toContain("modeContractEntries(effectiveMode, storedContracts)");
+    expect(hook).toContain("...contractEntries.map((item) => item.id)");
+    expect(hook).toContain("modeContractEntries(effectiveMode, contracts)");
   });
 });
