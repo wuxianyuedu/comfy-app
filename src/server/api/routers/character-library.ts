@@ -26,7 +26,6 @@ import { prepareWorkflowRun, buildWorkflowRunParams } from "~/lib/workshop/workf
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 import { kickQueue } from "~/lib/comfyui/executor-continuation";
-import { DEFAULT_SIZE_SPEC } from "~/lib/media/size-presets";
 import {
   CHARACTER_PROFILE_SOURCES,
   CHARACTER_PROFILE_STATUSES,
@@ -336,7 +335,10 @@ export const characterLibraryRouter = createTRPCRouter({
         const params = buildWorkflowRunParams(runCtx, {
           prompt,
           negativePrompt: PORTRAIT_NEGATIVE_PROMPT,
-          size: DEFAULT_SIZE_SPEC,
+          /* 尺寸不传：工作流（如 minimax h3）的 aspect_ratio 是枚举口
+           * （「3:4 (Portrait Standard)」这类带说明的标签），按场景表折算的
+           * 宽高 / 比例值落不进枚举，会在执行前校验被打回。角色立绘直接用
+           * 工作流作者烘在图里的默认档。 */
         });
         // oxlint-disable-next-line no-await-in-loop -- 先入队成功再标记生成中，顺序依赖
         const task = await taskRepository.createQueued({

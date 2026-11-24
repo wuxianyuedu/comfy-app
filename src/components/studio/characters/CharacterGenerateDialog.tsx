@@ -29,9 +29,9 @@ export type CharacterGenerateDialogProps = {
 /** 本批数量的档位（一次入队太多会长时间占满队列，分批点几次更可控）。 */
 const BATCH_LIMITS = [10, 50, 100, 200] as const;
 
-/** 图片工作流：文本生图优先；没有时退回全部（让用户自己挑）。 */
+/** 图片工作流：文生图两代词都认（库里模板的 taskType 是 T2I / TXT2IMG）；没有时退回全部。 */
 function isImageWorkflow(workflow: WorkflowRow): boolean {
-  return workflow.taskType === "TXT2IMG";
+  return workflow.taskType === "T2I" || workflow.taskType === "TXT2IMG";
 }
 
 /** 默认工作流：名字带 minimax 的优先，其次清单里的第一张（入参已过滤为可选项）。 */
