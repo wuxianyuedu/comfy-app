@@ -11,6 +11,7 @@
  * @module media/asset-folders — 资产目录树纯派生
  */
 import { isRecord, isUnknownArray } from "~/lib/is-record";
+import { compareText, uniqueSorted } from "~/lib/ordered-set";
 
 /** 目录路径的分隔符（与「加入资产库」弹窗的子目录输入口径一致）。 */
 export const FOLDER_SEPARATOR = "/";
@@ -153,7 +154,7 @@ export type FolderTreeEntry = {
 };
 
 function compareFolderNodes(a: FolderNode, b: FolderNode): number {
-  return a.name.localeCompare(b.name, "zh-Hans-CN");
+  return compareText(a.name, b.name);
 }
 
 function accumulateSubtreeCount(
@@ -170,7 +171,8 @@ function accumulateSubtreeCount(
 
 /**
  * 由「路径 → 直接资产数」建一棵目录树。同一路径重复出现时计数先归并；
- * 兄弟节点按中文名排序（`localeCompare` zh），保证刷新后树形稳定。
+ * 兄弟节点按共享比较器（`~/lib/ordered-set` 的 `compareText`）排序，
+ * 保证刷新后树形稳定。
  */
 export function buildFolderTree(entries: ReadonlyArray<FolderTreeEntry>): Array<FolderNode> {
   const directCounts = new Map<string, number>();
@@ -258,23 +260,14 @@ export function readDeclaredPaths(declarations: unknown, key: string): Array<str
   return rows.filter((path): path is string => typeof path === "string");
 }
 
-/** 并集去重 + 按路径排序（资产派生路径 ∪ 声明路径）。 */
+/** 并集去重 + 按路径排序（资产派生路径 ∪ 声明路径；去重排序走 `~/lib/ordered-set`）。 */
 export function mergeFolderPaths(
   assetPaths: ReadonlyArray<string>,
   declaredPaths: ReadonlyArray<string>,
 ): Array<string> {
-  const merged = new Set<string>();
-  for (const path of assetPaths) {
-    if (path.trim() !== "") {
-      merged.add(path.trim());
-    }
-  }
-  for (const path of declaredPaths) {
-    if (path.trim() !== "") {
-      merged.add(path.trim());
-    }
-  }
-  return [...merged].sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+  return uniqueSorted(
+    [...assetPaths, ...declaredPaths].map((path) => path.trim()).filter((path) => path !== ""),
+  );
 }
 
 /** 声明里新增一条（已存在则原样返回同一引用，避免多余写盘）。 */
@@ -282,7 +275,7 @@ export function addDeclaredPath(declaredPaths: ReadonlyArray<string>, path: stri
   if (declaredPaths.includes(path)) {
     return [...declaredPaths];
   }
-  return [...declaredPaths, path].sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+  return uniqueSorted([...declaredPaths, path]);
 }
 
 /** 声明里移除一条。 */
@@ -299,6 +292,5 @@ export function rewriteDeclaredPrefix(
   oldPrefix: string,
   newPrefix: string,
 ): Array<string> {
-  const next = declaredPaths.map((path) => rewritePathPrefix(path, oldPrefix, newPrefix));
-  return [...new Set(next)].sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+  return uniqueSorted(declaredPaths.map((path) => rewritePathPrefix(path, oldPrefix, newPrefix)));
 }

@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 import { Input } from "~/components/ui/input";
 
 export function AssetFolderNameDialog({
@@ -67,11 +68,11 @@ export function AssetFolderNameDialog({
           onChange={(event) => {
             setName(event.target.value);
           }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
+          {...enterCommit({
+            onCommit: () => {
               void submit();
-            }
-          }}
+            },
+          })}
           placeholder="例如：少女 / 活泼"
           value={name}
         />

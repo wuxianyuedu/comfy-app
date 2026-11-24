@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { compareText } from "~/lib/ordered-set";
+
 import {
   addDeclaredPath,
   buildFolderTree,
@@ -113,14 +115,14 @@ describe("buildFolderTree", () => {
       { path: "御姐", count: 3 },
     ]);
     expect(tree).toHaveLength(2);
-    const shaoNv = tree[0];
-    expect(shaoNv?.name).toBe("少女");
+    const shaoNv = tree.find((node) => node.name === "少女");
+    const yuJie = tree.find((node) => node.name === "御姐");
     expect(shaoNv?.count).toBe(3); // 自身 1 + 后代 2
     expect(shaoNv?.children).toHaveLength(1);
     expect(shaoNv?.children[0]?.path).toBe("少女/活泼");
     expect(shaoNv?.children[0]?.count).toBe(2);
-    expect(tree[1]?.name).toBe("御姐");
-    expect(tree[1]?.count).toBe(3);
+    expect(yuJie?.count).toBe(3);
+    expect(yuJie?.children).toHaveLength(0);
   });
 
   it("同一路径重复出现时计数先归并；空路径跳过", () => {
@@ -133,13 +135,12 @@ describe("buildFolderTree", () => {
     expect(tree[0]?.count).toBe(3);
   });
 
-  it("兄弟节点按中文拼音序排列，树形稳定", () => {
-    const tree = buildFolderTree([
-      { path: "御姐", count: 1 },
-      { path: "萝莉", count: 1 },
-      { path: "少女", count: 1 },
-    ]);
-    expect(tree.map((node) => node.name)).toEqual(["萝莉", "少女", "御姐"]);
+  it("兄弟节点按共享比较器（~/lib/ordered-set 的 compareText）排序，树形稳定", () => {
+    const names = ["御姐", "萝莉", "少女"];
+    const tree = buildFolderTree(names.map((path) => ({ path, count: 1 })));
+    /* 期望顺序用同一把比较器算出：钉「用共享口径排序 + 一条不少」，
+     * 不把 locale 的具体序写死进用例。 */
+    expect(tree.map((node) => node.name)).toEqual([...names].sort(compareText));
   });
 
   it("flattenFolderTree / folderTreePaths：深度优先摊平，depth 与层级一致", () => {
@@ -147,7 +148,7 @@ describe("buildFolderTree", () => {
       { path: "少女/活泼", count: 1 },
       { path: "御姐", count: 1 },
     ]);
-    expect(folderTreePaths(tree)).toEqual(["少女", "少女/活泼", "御姐"]);
+    expect(folderTreePaths(tree)).toEqual(["御姐", "少女", "少女/活泼"].sort(compareText));
     expect(flattenFolderTree(tree).map((node) => node.depth)).toEqual([0, 1, 0]);
   });
 });
@@ -166,21 +167,18 @@ describe("空目录声明（纯操作）", () => {
   });
 
   it("mergeFolderPaths：并集去重排序，空串丢弃", () => {
-    expect(mergeFolderPaths(["少女", "御姐", ""], ["少女", "萝莉"])).toEqual([
-      "萝莉",
-      "少女",
-      "御姐",
-    ]);
+    expect(mergeFolderPaths(["少女", "御姐", ""], ["少女", "萝莉"])).toEqual(
+      ["御姐", "少女", "萝莉"].sort(compareText),
+    );
   });
 
   it("add / remove / rewrite 声明", () => {
     const declared = ["少女/活泼"];
     expect(addDeclaredPath(declared, "少女/活泼")).toEqual(declared); // 已存在不重复
-    expect(addDeclaredPath(declared, "御姐")).toEqual(["少女/活泼", "御姐"]);
+    expect(addDeclaredPath(declared, "御姐")).toEqual(["少女/活泼", "御姐"].sort(compareText));
     expect(removeDeclaredPath(declared, "少女/活泼")).toEqual([]);
-    expect(rewriteDeclaredPrefix(["少女", "少女/活泼", "御姐"], "少女", "御姐")).toEqual([
-      "御姐",
-      "御姐/活泼",
-    ]);
+    expect(rewriteDeclaredPrefix(["少女", "少女/活泼", "御姐"], "少女", "御姐")).toEqual(
+      ["御姐", "御姐/活泼"].sort(compareText),
+    );
   });
 });

@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { readStorageJson, writeStorageJson } from "~/lib/browser-storage";
 import { runAsyncAction } from "~/lib/async-action";
+import { normalizeNeedle } from "~/lib/list-filter";
 import {
   addDeclaredPath,
   buildFolderTree,
@@ -61,7 +62,8 @@ export function useAssetFolders(input: {
   scope: "public" | "project";
 }): AssetFoldersController {
   const { category, scope } = input;
-  const q = input.q.trim();
+  /* 搜索词归一化走唯一出口（P13）：去空白 + 折小写，树角标与列表同口径。 */
+  const q = normalizeNeedle(input.q);
   const trpc = useTRPC();
   const toast = useToast();
   const queryClient = useQueryClient();

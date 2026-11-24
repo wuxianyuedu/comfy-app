@@ -108,7 +108,7 @@ export function AssetFolderTree({
               size="icon-xs"
               variant="ghost"
             >
-              <FolderPlus aria-hidden className="size-3.5" />
+              <FolderPlus aria-hidden className="size-3.5" data-icon="inline-start" />
             </Button>
             <Button
               aria-label={`重命名目录 ${node.name}`}
@@ -119,7 +119,7 @@ export function AssetFolderTree({
               size="icon-xs"
               variant="ghost"
             >
-              <Pencil aria-hidden className="size-3.5" />
+              <Pencil aria-hidden className="size-3.5" data-icon="inline-start" />
             </Button>
             {deletable && (
               <Button
@@ -131,7 +131,7 @@ export function AssetFolderTree({
                 size="icon-xs"
                 variant="ghost"
               >
-                <Trash2 aria-hidden className="size-3.5" />
+                <Trash2 aria-hidden className="size-3.5" data-icon="inline-start" />
               </Button>
             )}
           </span>
@@ -162,22 +162,24 @@ export function AssetFolderTree({
             return (
               <div key={cat.key}>
                 {/* 分类根：固定节点，点击 = 选中该分类（回到它的根目录）。 */}
-                <button
+                <Button
                   aria-current={selected ? "true" : undefined}
                   className={cn(
-                    "flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-semibold select-none",
-                    selected ? "bg-primary-soft text-primary-strong" : "text-ink hover:bg-subtle",
+                    "h-auto w-full justify-start gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-semibold",
+                    selected
+                      ? "bg-primary-soft text-primary-strong hover:bg-primary-soft"
+                      : "text-ink hover:bg-subtle",
                   )}
                   data-category={cat.key}
                   onClick={() => {
                     onSelectCategory(cat.key);
                   }}
-                  type="button"
+                  variant="ghost"
                 >
-                  <Folder aria-hidden className="size-3.5 shrink-0" />
+                  <Folder aria-hidden className="size-3.5 shrink-0" data-icon="inline-start" />
                   <span className="min-w-0 flex-1 truncate">{assetCategoryLabel(cat.key)}</span>
                   <CountBadge count={categoryTotals[cat.key] ?? 0} />
-                </button>
+                </Button>
                 <TreeChildren className="flex flex-col gap-0.5" depth={1}>
                   {folders.map((node) => renderFolder(node, 1))}
                   <CreateFolderRow onCreate={() => onCreateFolder(null)} />
@@ -199,13 +201,14 @@ export function AssetFolderTree({
 /** 目录列表末尾的「新建子目录」虚线行。 */
 function CreateFolderRow({ onCreate }: { onCreate: () => void }) {
   return (
-    <button
-      className="text-ink-fainter hover:text-primary-strong hover:border-primary-500/40 text-2xs hover:border-border flex cursor-pointer items-center justify-center gap-1 rounded-md border border-dashed border-transparent px-2 py-1 transition-colors"
+    <Button
+      className="text-ink-fainter hover:border-primary-500/40 hover:text-primary-strong hover:border-border h-auto w-full justify-center gap-1 rounded-md border border-dashed border-transparent px-2 py-1"
       onClick={onCreate}
-      type="button"
+      size="xs"
+      variant="ghost"
     >
-      <FolderPlus aria-hidden className="size-3" />
+      <FolderPlus aria-hidden className="size-3" data-icon="inline-start" />
       新建子目录
-    </button>
+    </Button>
   );
 }
