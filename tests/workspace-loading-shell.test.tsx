@@ -4,8 +4,8 @@
  * 只发生在内容区。同时钉住两个路由级 loading（根 / workspace）都走这一形态，
  * 不再出现整屏转圈的 `PageLoading`。
  */
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import RootLoading from "~/app/loading";
 import WorkspaceLoading from "~/app/workspace/loading";
@@ -68,5 +68,28 @@ describe("WorkspaceLoadingShell：路由级加载壳（ISSUE #4511）", () => {
     expect(screen.getByRole("navigation", { name: "主导航" })).toBeTruthy();
     /* 旧形态的转圈文案不再出现。 */
     expect(screen.queryByText("加载中…")).toBeNull();
+  });
+
+  /* ISSUE #4968：加载壳真被卡住时（实测某 webview 里页面流停住）不许把用户
+     无声地按在骨架上 —— 停留超过 30s 给可行动提示；正常加载触达不到它。
+     推进假时钟要包进 act：React 的重渲染走调度器，同步推进后 DOM 还没刷出来。 */
+  it("停留超过 30s → 给可行动的加载提示；30s 内不出现", async () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <WorkspaceLoadingShell>
+          <div>内容区</div>
+        </WorkspaceLoadingShell>,
+      );
+      expect(screen.queryByRole("alert")).toBeNull();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      const alert = screen.getByRole("alert");
+      expect(alert.textContent).toContain("刷新");
+      expect(alert.textContent).toContain("log/current/");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
