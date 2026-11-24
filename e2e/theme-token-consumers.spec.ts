@@ -167,9 +167,10 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
      * provider 的 `applyTheme` 在挂载效果里跑，DCL 早于它，于是用例拨完 class 之后
      * 被它改回去（读数与因果见上面的 `setTheme`，立案在 ISSUE #2100）。
      * 默认的 `load` 与同级 `:373` 那条「二次代入」同一口径。登录页已移除（#3827），
-     * 改用首页（会重定向到工作区）作为主题探针页。 */
+     * 改用首页作为主题探针页：与 /workspace 复用同一份页面实现（#4881），DOM 相同；
+     * URL 停在 / 不再被改写成 /workspace，与 smoke 用例同口径。 */
     await page.goto("/");
-    await expect(page).toHaveURL(/\/workspace/);
+    await expect(page).toHaveURL(/\/$/);
   });
 
   test("两态下 CONSUMED_TOKENS 全部解析得到具体颜色", async ({ page }) => {
