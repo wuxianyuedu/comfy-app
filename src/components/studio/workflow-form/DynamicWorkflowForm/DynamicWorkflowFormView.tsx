@@ -35,6 +35,7 @@ type DynamicWorkflowFormViewProps = {
    * （resolveEntryRequired / resolveEntrySeedMode），使行内「必填/可选」与
    * seed 递增递减显示的是该模式的覆盖值。不传 = 按条目全局值（兼容旧场景）。 */
   mode?: string | null;
+  onFocusNode?: (nodeId: string) => void;
   onLabelChange?: (ioKey: string, label: string) => void;
   onReorder?: WorkflowIOReorderHandler;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
@@ -59,6 +60,7 @@ export function DynamicWorkflowFormView({
   workflowId,
   seedModes,
   onSeedModeChange,
+  onFocusNode,
   onLabelChange,
   onRequiredChange,
   visibilityMode,
@@ -137,6 +139,13 @@ export function DynamicWorkflowFormView({
          * 另一行」。 */
         handleId={entry.ioKey}
         key={rowEntry.ioKey}
+        onFocusNode={
+          onFocusNode
+            ? () => {
+                onFocusNode(entry.nodeId);
+              }
+            : undefined
+        }
         onLabelChange={
           onLabelChange
             ? (label: string) => {

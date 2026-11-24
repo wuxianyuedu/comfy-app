@@ -145,7 +145,7 @@ function orderOf(io: IOMap): Record<string, number | undefined> {
   return Object.fromEntries(Object.entries(io).map(([key, entry]) => [key, entry.displayOrder]));
 }
 
-function renderPanel(io: IOMap) {
+function renderPanel(io: IOMap, onFocusNode?: (nodeId: string) => void) {
   const noop = () => undefined;
   const stores = makeStores(io);
   const view = render(
@@ -155,6 +155,7 @@ function renderPanel(io: IOMap) {
         detailIOMap={io}
         modes={["i2v", "flf2v"]}
         onClose={noop}
+        onFocusNode={onFocusNode}
         onModesChange={noop}
         workflowIO={io}
       />
@@ -177,6 +178,16 @@ function renderPanel(io: IOMap) {
   };
   return { stores, refresh };
 }
+
+/** 行首圆点 → 聚焦回调（#4960）：点一下把该 pin 的 nodeId 上抛给编辑器定位画布节点。 */
+describe("WorkflowIOPreviewPanel — 行首圆点定位画布节点（#4960）", () => {
+  it("点圆点把 nodeId 交给 onFocusNode", () => {
+    const onFocusNode = vi.fn();
+    renderPanel({ "1512::widget::value_1": wrapperSeedEntry() }, onFocusNode);
+    screen.getByRole("button", { name: "定位到节点 #1512" }).click();
+    expect(onFocusNode).toHaveBeenCalledExactlyOnceWith("1512");
+  });
+});
 
 /** 三行同组条目（同一节点上的三个参数），初始序号 1/2/3。 */
 function threeRows(): IOMap {

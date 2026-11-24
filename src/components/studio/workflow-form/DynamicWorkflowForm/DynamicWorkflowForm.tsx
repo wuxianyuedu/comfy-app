@@ -22,6 +22,7 @@ export function DynamicWorkflowForm(props: DynamicWorkflowFormProps) {
       emptyHint={props.emptyHint}
       loading={props.loading ?? false}
       mode={props.mode}
+      onFocusNode={props.onFocusNode}
       onLabelChange={props.onLabelChange}
       onReorder={props.onReorder}
       onRequiredChange={props.onRequiredChange}
