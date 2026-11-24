@@ -68,8 +68,11 @@ describe("asset.createFromTask —— 入库契约", () => {
     expect(list.items[0]?.hasParams).toBe(true);
     /* 两张产物时名称带序号（· 1 / · 2） */
     expect(list.items[0]?.name).toContain("·");
-    /* 分类角标：reference = 2 */
-    expect(list.categories.find((c) => c.category === "reference")?.count).toBe(2);
+    /* 目录角标：reference 根目录（subdir 为空）= 2 */
+    const tree = await caller().folderTree({ scope: "public" });
+    expect(tree.entries.find((e) => e.category === "reference" && e.subdir === null)?.count).toBe(
+      2,
+    );
   });
 
   it("项目入库必须带 projectId，否则 BAD_REQUEST", async () => {
@@ -278,5 +281,145 @@ describe("asset.delete —— 清理", () => {
 
   it("detail 对不存在的资产给 NOT_FOUND", async () => {
     await expect(caller().detail({ id: "nope" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+describe("asset 目录树（folderTree / subdirPrefix / renameFolder / updateSubdir）", () => {
+  /** 造一个带若干目录的公共角色库 + 一条项目角色资产，返回刚入库的资产 id 列表。 */
+  async function seedFolders(): Promise<Array<string>> {
+    const seedOne = async (
+      taskId: string,
+      subdir: string | undefined,
+      scope: "public" | "project" = "public",
+    ) => {
+      seedTask(tdb, {
+        id: taskId,
+        userId: "user-a",
+        prompt: `角色 ${taskId}`,
+        images: [{ localPath: `/api/generated/${taskId}/a.png` }],
+      });
+      const res = await caller().createFromTask({
+        taskId,
+        scope,
+        ...(scope === "project" ? { projectId: "proj-1" } : {}),
+        category: "character",
+        ...(subdir === undefined ? {} : { subdir }),
+      });
+      expect(res.created).toBe(1);
+    };
+    await seedOne("task-f1", "少女");
+    await seedOne("task-f2", "少女/活泼");
+    await seedOne("task-f3", "御姐");
+    await seedOne("task-f4", undefined); // 分类根（subdir 为空）
+    await seedOne("task-f5", "少女", "project"); // 项目档同名目录，不受公共档改名影响
+    const list = await caller().list({ scope: "all", category: "character", take: 200 });
+    return list.items.map((item) => item.id);
+  }
+
+  it("folderTree 按「分类 × 目录」分组计数，scope 之间互不串档", async () => {
+    await seedFolders();
+    const pub = await caller().folderTree({ scope: "public" });
+    const character = pub.entries.filter((e) => e.category === "character");
+    expect(character).toContainEqual({ category: "character", subdir: "少女", count: 1 });
+    expect(character).toContainEqual({ category: "character", subdir: "少女/活泼", count: 1 });
+    expect(character).toContainEqual({ category: "character", subdir: "御姐", count: 1 });
+    expect(character).toContainEqual({ category: "character", subdir: null, count: 1 });
+    /* 项目档的同名目录不出现在公共档 */
+    expect(character.filter((e) => e.subdir === "少女")).toHaveLength(1);
+    const proj = await caller().folderTree({ scope: "project" });
+    expect(proj.entries).toContainEqual({ category: "character", subdir: "少女", count: 1 });
+    expect(proj.entries).not.toContainEqual({ category: "character", subdir: "御姐", count: 1 });
+  });
+
+  it("list 的 subdirPrefix 命中目录本身与全部后代", async () => {
+    await seedFolders();
+    const folder = await caller().list({
+      scope: "public",
+      category: "character",
+      subdirPrefix: "少女",
+    });
+    expect(folder.items).toHaveLength(2);
+    expect(folder.items.map((item) => item.subdir).sort()).toEqual(["少女", "少女/活泼"]);
+    const leaf = await caller().list({
+      scope: "public",
+      category: "character",
+      subdirPrefix: "少女/活泼",
+    });
+    expect(leaf.items).toHaveLength(1);
+    expect(leaf.items[0]?.subdir).toBe("少女/活泼");
+    /* 前缀撞名不算命中：「少女控」目录下的资产不该被「少女」捞走 */
+    const root = await caller().list({ scope: "public", category: "character" });
+    expect(root.items).toHaveLength(4);
+  });
+
+  it("list 的 subdirPrefix 非法路径给 BAD_REQUEST", async () => {
+    await expect(
+      caller().list({ scope: "public", category: "character", subdirPrefix: "a/../b" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("renameFolder 改写目录本身与后代的 subdir，项目档同名目录不受影响", async () => {
+    await seedFolders();
+    const res = await caller().renameFolder({
+      scope: "public",
+      category: "character",
+      oldPath: "少女",
+      newPath: "萝莉",
+    });
+    expect(res.renamed).toBe(2); // 少女 + 少女/活泼 两条公共资产
+    const after = await caller().list({ scope: "public", category: "character", take: 200 });
+    const subdirs = after.items.map((item) => item.subdir).sort();
+    expect(subdirs).toContain("萝莉");
+    expect(subdirs).toContain("萝莉/活泼");
+    expect(subdirs).not.toContain("少女");
+    /* 项目档那条「少女」原样不动 */
+    const proj = await caller().list({ scope: "project", category: "character" });
+    expect(proj.items[0]?.subdir).toBe("少女");
+    /* 树角标跟着新路径走 */
+    const tree = await caller().folderTree({ scope: "public" });
+    expect(tree.entries).toContainEqual({ category: "character", subdir: "萝莉/活泼", count: 1 });
+  });
+
+  it("renameFolder：目标目录已存在时拒绝；新旧路径相同视为空操作；非法路径 BAD_REQUEST", async () => {
+    await seedFolders();
+    await expect(
+      caller().renameFolder({
+        scope: "public",
+        category: "character",
+        oldPath: "御姐",
+        newPath: "少女",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const same = await caller().renameFolder({
+      scope: "public",
+      category: "character",
+      oldPath: "御姐",
+      newPath: "御姐",
+    });
+    expect(same.renamed).toBe(0);
+    await expect(
+      caller().renameFolder({
+        scope: "public",
+        category: "character",
+        oldPath: "御姐",
+        newPath: "a/../b",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("updateSubdir 移动单条资产；空串移回分类根；非法路径与不存在的 id 拒绝", async () => {
+    const ids = await seedFolders();
+    const target = ids[0] ?? "";
+    const moved = await caller().updateSubdir({ id: target, subdir: "御姐/温柔" });
+    expect(moved.ok).toBe(true);
+    expect(moved.subdir).toBe("御姐/温柔");
+    const toRoot = await caller().updateSubdir({ id: target, subdir: "" });
+    expect(toRoot.subdir).toBeNull();
+    await expect(caller().updateSubdir({ id: target, subdir: "a/../b" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    await expect(caller().updateSubdir({ id: "nope", subdir: "x" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 });
