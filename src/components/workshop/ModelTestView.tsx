@@ -297,8 +297,10 @@ export function ModelTestView({
             不再参与堆叠；右栏窄窗口落到表单下方，xl 起仍三栏并排。 ── */}
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-            {/* ── 中栏：统一输入 + 生成 CTA（未选模型时给三步引导）── */}
-            <div className="flex min-w-0 flex-1 flex-col gap-4">
+            {/* ── 中栏：统一输入 + 生成 CTA（未选模型时给三步引导）──
+                max-h 与左栏同口径（ISSUE #4983/#4991）：xl 下三栏各自封顶在
+                显示区域高度、超出在栏内滚动，页面本身不再出现滚动条。 */}
+            <div className="flex min-w-0 flex-1 flex-col gap-4 xl:max-h-[calc(100dvh-96px)] xl:overflow-y-auto">
               {hasModel ? (
                 <>
                   <Panel

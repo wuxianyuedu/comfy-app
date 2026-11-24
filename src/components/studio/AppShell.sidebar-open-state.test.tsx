@@ -46,7 +46,9 @@ function tabsOf(...views: Array<WorkspaceView>): Array<ViewTab> {
   return views.map((view) => ({ key: tabKey(view, null), projectId: null, view }));
 }
 
-function renderShell(opts: { active?: WorkspaceView; tabs?: Array<ViewTab> } = {}): {
+function renderShell(
+  opts: { active?: WorkspaceView; defaultSidebarOpen?: boolean; tabs?: Array<ViewTab> } = {},
+): {
   onCloseViewTab: ReturnType<typeof vi.fn>;
   onSelect: ReturnType<typeof vi.fn>;
 } {
@@ -58,6 +60,7 @@ function renderShell(opts: { active?: WorkspaceView; tabs?: Array<ViewTab> } = {
       <AppShell
         active={opts.active ?? "home"}
         activeProjectId={null}
+        defaultSidebarOpen={opts.defaultSidebarOpen}
         onCloseViewTab={onCloseViewTab}
         onNewProject={vi.fn()}
         onOpenProject={vi.fn()}
@@ -144,5 +147,47 @@ describe("侧栏打开项的页签态（ISSUE #3740）", () => {
     expect(screen.queryByRole("button", { name: "关闭 模型 页签" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "模型" }));
     expect(onSelect).toHaveBeenCalledWith("models");
+  });
+});
+
+/* ── 折叠态（图标轨）的关闭按钮（ISSUE #4981）────────────────────────────
+ * 此前关闭按钮挂 `group-data-[collapsible=icon]:hidden`，折叠后想关页签必须先
+ * 展开侧栏。现在折叠态收成图标右上角的角标，悬停 / 聚焦浮现，交互链路不变。 */
+describe("折叠态侧栏的关闭按钮（ISSUE #4981）", () => {
+  /** 折叠前提先验：侧栏真处于 `data-collapsible=icon`，后面的类断言才有意义。 */
+  function expectCollapsedContext() {
+    const collapsed = document.querySelector('[data-collapsible="icon"]');
+    expect(collapsed, "侧栏应处于折叠（图标轨）态").not.toBeNull();
+  }
+
+  it("折叠态下开着页签的项，关闭按钮不再被藏，改为图标右上角角标", () => {
+    renderShell({
+      active: "home",
+      tabs: tabsOf("home", "models"),
+      defaultSidebarOpen: false,
+    });
+    expectCollapsedContext();
+    const close = screen.getByRole("button", { name: "关闭 模型 页签" });
+    expect(close.className).not.toContain("group-data-[collapsible=icon]:hidden");
+    expect(close.className).toContain("group-data-[collapsible=icon]:top-0.5");
+    expect(close.className).toContain("group-data-[collapsible=icon]:right-0.5");
+    expect(close.className).toContain("group-data-[collapsible=icon]:size-4");
+  });
+
+  it("折叠态点关闭按钮仍走 pointerdown → onCloseViewTab（链路不回退）", () => {
+    const { onCloseViewTab } = renderShell({
+      active: "home",
+      tabs: tabsOf("home", "console"),
+      defaultSidebarOpen: false,
+    });
+    fireEvent.pointerDown(screen.getByRole("button", { name: "关闭 控制台 页签" }));
+    expect(onCloseViewTab).toHaveBeenCalledWith(tabKey("console", null));
+  });
+
+  it("展开态回归：关闭按钮仍是行右缘形态（right-2），无折叠隐藏类", () => {
+    renderShell({ active: "home", tabs: tabsOf("home", "models"), defaultSidebarOpen: true });
+    const close = screen.getByRole("button", { name: "关闭 模型 页签" });
+    expect(close.className).toContain("right-2");
+    expect(close.className).not.toContain("group-data-[collapsible=icon]:hidden");
   });
 });

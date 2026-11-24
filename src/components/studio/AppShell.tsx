@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { LayoutGrid, Pencil, Plus, Trash2, X } from "lucide-react";
+import { LayoutGrid, Pencil, Plus, Trash2 } from "lucide-react";
 
-import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import {
   DropdownMenu,
@@ -42,6 +41,7 @@ import { TopBar } from "./TopBar";
 import { SidebarTempTabs } from "./SidebarTempTabs";
 import { ShellTabContent } from "./ShellTabContent";
 import { SidebarBrand } from "./SidebarBrand";
+import { SidebarRowClose } from "./SidebarRowClose";
 import { useToast } from "./ToastProvider";
 import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
 import { useTitleBarSlot } from "./TitleBarSlot";
@@ -203,31 +203,17 @@ function SidebarProjectsGroup({
                         {openProjectTabs.length > 0 ? (
                           /* 关闭按钮（悬停浮现）：关掉这个项目开着的**全部**页签
                              —— 侧栏这一行表达的是「项目界面」这个整体，不是其中
-                             某一页；逐页关走项目内页签自己的出口。 */
-                          <Button
-                            aria-label={`关闭 ${project.name} 页签`}
-                            className={cn(
-                              "absolute top-1/2 right-2 -translate-y-1/2",
-                              "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                              /* 行级组（ISSUE #4812）：浮现条件只认本行的 li，
-                                 不吃外层「项目」行的悬停。 */
-                              "opacity-0 transition-opacity group-hover/row:opacity-100",
-                              "group-focus-within/row:opacity-100 focus-visible:opacity-100",
-                              "group-data-[collapsible=icon]:hidden",
-                            )}
-                            data-sidebar="menu-action"
-                            onPointerDown={(event) => {
-                              event.stopPropagation();
+                             某一页；逐页关走项目内页签自己的出口。悬停组用行级
+                             `row`（ISSUE #4812：不吃外层「项目」行的悬停）。 */
+                          <SidebarRowClose
+                            group="row"
+                            label={project.name}
+                            onClose={() => {
                               for (const tab of openProjectTabs) {
                                 onCloseViewTab?.(tab.key);
                               }
                             }}
-                            size="icon-xs"
-                            type="button"
-                            variant="ghost"
-                          >
-                            <X data-icon="inline-start" size={12} />
-                          </Button>
+                          />
                         ) : null}
                       </SidebarMenuItem>
                     );
@@ -506,31 +492,13 @@ export function AppShell({
                              **兄弟**而不是子元素（button 里不许再套 button）；挂
                              `data-sidebar="menu-action"` 让按钮的
                              `group-has-data-[sidebar=menu-action]:pr-8` 自动给文字让位。
-                             缩略成图标轨时不显示（那里没有放它的位置，关页签走展开态） */
-                          <Button
-                            aria-label={`关闭 ${item.label} 页签`}
-                            className={cn(
-                              "absolute top-1/2 right-2 -translate-y-1/2",
-                              "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                              "opacity-0 transition-opacity group-hover/menu-item:opacity-100",
-                              "group-focus-within/menu-item:opacity-100 focus-visible:opacity-100",
-                              "group-data-[collapsible=icon]:hidden",
-                            )}
-                            data-sidebar="menu-action"
-                            /* 关闭走 pointerdown 而不是 click（ISSUE #3789）：行级 tooltip
-                               在 pointerdown 时收起会引发一次重渲染，真实点击的 click
-                               事件会落到行 <li> 上、关不掉页签；pointerdown 阶段目标
-                               稳定是这枚按钮本身。 */
-                            onPointerDown={(event) => {
-                              event.stopPropagation();
+                             折叠成图标轨时收成图标右上角的角标（#4981），不再藏掉。 */
+                          <SidebarRowClose
+                            label={item.label}
+                            onClose={() => {
                               onCloseViewTab?.(openTab.key);
                             }}
-                            size="icon-xs"
-                            type="button"
-                            variant="ghost"
-                          >
-                            <X data-icon="inline-start" size={12} />
-                          </Button>
+                          />
                         ) : null}
                       </SidebarMenuItem>
                     );

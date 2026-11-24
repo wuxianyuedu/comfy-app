@@ -11,9 +11,8 @@
  * 第③层视图（规范 17 §17.2）：只渲染 props + 转发动作，不自己碰页签状态。
  */
 
-import { Globe, Plus, X } from "lucide-react";
+import { Globe, Plus } from "lucide-react";
 
-import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,11 +29,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "~/components/ui/sidebar";
-import { cn } from "~/lib/utils";
-import type { ShellTab } from "~/lib/shell/shell-tabs-store";
 
 import { NAV_ITEMS, viewTabLabel, type OpenableView, type WorkspaceView } from "./NavItems";
+import { SidebarRowClose } from "./SidebarRowClose";
 import { isTabClosable, type ViewTab } from "./workspace-tabs";
+import type { ShellTab } from "~/lib/shell/shell-tabs-store";
 
 export type SidebarTempTabsProps = {
   /** 当前激活的桌面壳 iframe 页签 id；不在 iframe 页签上时与视图页签 id 不同源。 */
@@ -58,34 +57,6 @@ export type SidebarTempTabsProps = {
   /** 已过滤掉侧栏常驻项的视图页签（瞬时页 + 项目类页）。 */
   viewTabs: Array<ViewTab>;
 };
-
-/** 关闭按钮：只在悬停 / 聚焦时浮现（与上方导航项的关闭按钮同一套形态）。 */
-function TempTabClose({ label, onClose }: { label: string; onClose: () => void }) {
-  return (
-    <Button
-      aria-label={`关闭 ${label}`}
-      className={cn(
-        "absolute top-1/2 right-2 -translate-y-1/2",
-        "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-        "opacity-0 transition-opacity group-hover/menu-item:opacity-100",
-        "group-focus-within/menu-item:opacity-100 focus-visible:opacity-100",
-        "group-data-[collapsible=icon]:hidden",
-      )}
-      data-sidebar="menu-action"
-      /* 关闭走 pointerdown 而不是 click（ISSUE #3789）：行级 tooltip 在 pointerdown
-         时收起会引发一次重渲染，真实点击的 click 事件会落到行 <li> 上、关不掉页签。 */
-      onPointerDown={(event) => {
-        event.stopPropagation();
-        onClose();
-      }}
-      size="icon-xs"
-      type="button"
-      variant="ghost"
-    >
-      <X data-icon="inline-start" size={12} />
-    </Button>
-  );
-}
 
 /** 侧栏「临时页签」分组 —— 上层按「有没有要列的页签」决定挂不挂。 */
 export function SidebarTempTabs({
@@ -127,7 +98,7 @@ export function SidebarTempTabs({
                   <span>{label}</span>
                 </SidebarMenuButton>
                 {isTabClosable(tab) ? (
-                  <TempTabClose
+                  <SidebarRowClose
                     label={label}
                     onClose={() => {
                       onCloseViewTab?.(tab.key);
@@ -152,7 +123,7 @@ export function SidebarTempTabs({
                 <span>{tab.label}</span>
               </SidebarMenuButton>
               {tab.closable ? (
-                <TempTabClose
+                <SidebarRowClose
                   label={tab.label}
                   onClose={() => {
                     onCloseIframeTab(tab.id);
