@@ -17,8 +17,6 @@ import { useTestCatalog } from "./use-model-test";
 export type ModelTestTreeCatalog = {
   /** 全部用途的树条目（每条 = 某用途下某模式可测的一个候选）。 */
   entries: Array<ModelTreeEntry>;
-  /** 取值 → 显示名（触发器与叶子共用；同一取值多模式时同名）。 */
-  labels: Record<string, string>;
   /** 候选取数的加载态（与测试页同一批查询）。 */
   loading: boolean;
 };
@@ -70,13 +68,5 @@ export function useModelTestTree(): ModelTestTreeCatalog {
     ],
   );
 
-  const labels = useMemo(() => {
-    const out: Record<string, string> = {};
-    for (const entry of entries) {
-      out[entry.value] ??= entry.label;
-    }
-    return out;
-  }, [entries]);
-
-  return { entries, labels, loading: image.loading || video.loading || chat.loading };
+  return { entries, loading: image.loading || video.loading || chat.loading };
 }

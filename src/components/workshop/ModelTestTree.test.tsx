@@ -1,11 +1,11 @@
-// 树形模型菜单的视图行为（ISSUE #4916）：布局切换、树形分组、叶子选中回填
-// 「用途 / 模式 / 模型」三态、选中态与生成中徽标、布局偏好本地持久化。
+// 页面树的视图行为（ISSUE #4952）：用途 / 模式 / 模型在左栏就地成树，
+// 布局切换、叶子选中回填三态、选中态与生成中徽标、布局偏好本地持久化。
 // 树构建的纯函数口径另见 model-test-tree.test.ts；本文件判交互，不判取数。
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ModelTreeSelect } from "./ModelTreeSelect";
+import { ModelTestTree } from "./ModelTestTree";
 import type { ModelTreeEntry } from "./model-test-tree";
 
 const entries: Array<ModelTreeEntry> = [
@@ -67,15 +67,14 @@ const entries: Array<ModelTreeEntry> = [
   },
 ];
 
-function renderTree(over: Partial<Parameters<typeof ModelTreeSelect>[0]> = {}) {
+function renderTree(over: Partial<Parameters<typeof ModelTestTree>[0]> = {}) {
   const onSelect = vi.fn();
   render(
-    <ModelTreeSelect
+    <ModelTestTree
       currentKind="image"
       currentMode="T2I"
       entries={entries}
       generatingModels={new Set<string>()}
-      labels={Object.fromEntries(entries.map((e) => [e.value, e.label]))}
       loading={false}
       onSelect={onSelect}
       selectedValue=""
@@ -85,36 +84,32 @@ function renderTree(over: Partial<Parameters<typeof ModelTreeSelect>[0]> = {}) {
   return { onSelect };
 }
 
-async function openMenu(): Promise<void> {
-  await userEvent.setup().click(screen.getByRole("button", { name: "选择要测试的模型" }));
-}
-
 beforeEach(() => {
   window.localStorage.clear();
 });
 afterEach(cleanup);
 
-describe("ModelTreeSelect", () => {
-  it("默认按用途布局：用途 → 模式 → 模型，点叶子回填三态并收起浮层", async () => {
+describe("ModelTestTree", () => {
+  it("默认是页面上的树：用途 → 模式 → 模型就地可见，点叶子回填三态", async () => {
     const { onSelect } = renderTree();
-    await openMenu();
     /* 三个用途组 + 图片下的模式组（对话没有模式层，叶直接挂）。 */
     expect(document.querySelector('[data-tree-key="kind:image"]')).not.toBeNull();
     expect(document.querySelector('[data-tree-key="kind:video"]')).not.toBeNull();
     expect(document.querySelector('[data-tree-key="kind:chat"]')).not.toBeNull();
     expect(screen.getByText("文生图")).toBeInTheDocument();
     expect(screen.getByText("图生图")).toBeInTheDocument();
+    /* 不再有「选择要测试的模型…」下拉触发器：树就在页面上。 */
+    expect(screen.queryByRole("button", { name: "选择要测试的模型" })).toBeNull();
 
     await userEvent.setup().click(screen.getByRole("radio", { name: /z-image · 工作流A/ }));
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith("image", "T2I", "wf::1");
-    /* 选中后浮层收起：叶子不再挂在文档里。 */
-    expect(screen.queryByRole("radio", { name: /z-image · 工作流A/ })).toBeNull();
+    /* 点完叶子树仍在页面上，不会像浮层那样收起。 */
+    expect(screen.getByRole("radio", { name: /z-image · 工作流A/ })).toBeInTheDocument();
   });
 
   it("按来源布局：本地 / 远端两组，多模式候选只列一次，选中按当前模式解析", async () => {
     const { onSelect } = renderTree({ currentMode: "I2I" });
-    await openMenu();
     await userEvent.setup().click(screen.getByRole("radio", { name: "按来源" }));
 
     expect(screen.getByText("本地模型")).toBeInTheDocument();
@@ -129,7 +124,6 @@ describe("ModelTreeSelect", () => {
 
   it("按模型布局：模型名 → 模式 → 条目，同一模型的多个工作流分开列", async () => {
     const { onSelect } = renderTree();
-    await openMenu();
     await userEvent.setup().click(screen.getByRole("radio", { name: "按模型" }));
 
     /* 模型组与其下的两个模式组都在（data-tree-key 是稳定锚，不随文案变）。 */
@@ -143,45 +137,44 @@ describe("ModelTreeSelect", () => {
 
   it("跨用途选中：图片页里点对话模型，整条切到对话", async () => {
     const { onSelect } = renderTree({ currentKind: "image", currentMode: "T2I" });
-    await openMenu();
     await userEvent.setup().click(screen.getByRole("radio", { name: /minimax_h3/ }));
     expect(onSelect).toHaveBeenCalledWith("chat", "", "minimax_h3");
   });
 
-  it("选中态与生成中徽标：触发器显示已选模型名 + 生成中，叶子亮 aria-checked", async () => {
+  it("选中态与生成中徽标：叶子亮 aria-checked，用途 / 模式组带不同取值计数徽标", () => {
     renderTree({
       currentKind: "image",
       currentMode: "T2I",
       generatingModels: new Set(["agnes"]),
       selectedValue: "agnes",
     });
-    /* 触发器（未打开浮层也能看到）：显示名 + 生成中徽标。 */
-    expect(screen.getByText("agnes-image")).toBeInTheDocument();
-    expect(screen.getByText("生成中")).toBeInTheDocument();
-
-    await openMenu();
     const agnesLeaf = screen.getByRole("radio", { name: /agnes-image/ });
     expect(agnesLeaf.getAttribute("aria-checked")).toBe("true");
     const otherLeaf = screen.getByRole("radio", { name: /z-image · 工作流A/ });
     expect(otherLeaf.getAttribute("aria-checked")).toBe("false");
+
+    /* 「用途」组和它下面的「文生图」组各有一枚「1 生成中」（同一取值按组去重）。 */
+    expect(screen.getAllByText("1 生成中")).toHaveLength(2);
   });
 
   it("布局偏好写入本地存储，重挂后恢复", async () => {
     renderTree();
-    await openMenu();
     await userEvent.setup().click(screen.getByRole("radio", { name: "按来源" }));
     expect(window.localStorage.getItem("comfyapp:model-test:tree-layout")).toBe("source");
 
     cleanup();
     renderTree();
-    await openMenu();
     expect(screen.getByText("本地模型")).toBeInTheDocument();
     expect(screen.queryByText("文生图")).toBeNull();
   });
 
-  it("取数中显示骨架屏", async () => {
+  it("取数中显示骨架屏", () => {
     renderTree({ loading: true });
-    await openMenu();
     expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+
+  it("没有候选时给可读空态", () => {
+    renderTree({ entries: [] });
+    expect(screen.getByText(/还没有可测的模型/)).toBeInTheDocument();
   });
 });
