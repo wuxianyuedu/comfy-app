@@ -7,7 +7,14 @@
 import { describe, expect, it } from "vitest";
 
 import { familyOfClass } from "./workflow-param-classes";
-import { exposedClassOf, exposedParamLabel, exposedParamsForMode } from "./workflow-exposed-params";
+import {
+  exposedClassOf,
+  exposedParamLabel,
+  exposedParamsForMode,
+  isVideoMode,
+  modeUsesFirstFrame,
+  modeUsesLastFrame,
+} from "./workflow-exposed-params";
 
 function ids(mode: string | null): Array<string> {
   return exposedParamsForMode(mode).map((def) => def.id);
@@ -132,5 +139,23 @@ describe("lora 契约口（FR-QA-02③ · #2622）", () => {
   it("familyOfClass：lora-name 走 text 族、lora-strength 走 number 族", () => {
     expect(familyOfClass("lora-name")).toBe("text");
     expect(familyOfClass("lora-strength")).toBe("number");
+  });
+});
+
+describe("音视频档模式码（*VA，#4999）", () => {
+  it("三个 *VA 码都判为视频生成，走视频通道", () => {
+    expect(isVideoMode("T2VA")).toBe(true);
+    expect(isVideoMode("flf2va")).toBe(true);
+    expect(isVideoMode("R2VA")).toBe(true);
+    expect(isVideoMode("T2I")).toBe(false);
+  });
+
+  it("首尾帧 / 参考图的口判定与各自的视频姊妹档一致", () => {
+    expect(modeUsesFirstFrame("FLF2VA")).toBe(true);
+    expect(modeUsesLastFrame("FLF2VA")).toBe(true);
+    expect(modeUsesFirstFrame("R2VA")).toBe(true);
+    expect(modeUsesLastFrame("R2VA")).toBe(false);
+    expect(modeUsesFirstFrame("T2VA")).toBe(false);
+    expect(modeUsesLastFrame("T2VA")).toBe(false);
   });
 });

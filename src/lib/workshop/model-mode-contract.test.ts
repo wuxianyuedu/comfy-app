@@ -77,6 +77,26 @@ describe("模式契约口 id 值域", () => {
     expect(derivedModeContract("T2I").inputs).not.toContain("duration");
   });
 
+  it("音视频三模式（#4999）：契约逐字对照各自的视频姊妹档，category 归 video", () => {
+    expect(ALL_CONTRACT_MODES).toContain("T2VA");
+    expect(ALL_CONTRACT_MODES).toContain("FLF2VA");
+    expect(ALL_CONTRACT_MODES).toContain("R2VA");
+    /* T2VA 与 T2V 同口；FLF2VA 与 FLF2V 同口（首尾帧都在）；R2VA 与 R2V 同口
+     * （图像口沿用 R2V 的 first-frame 通道）。 */
+    expect(derivedModeContract("T2VA").inputs).toEqual(derivedModeContract("T2V").inputs);
+    expect(derivedModeContract("T2VA").required).toEqual(derivedModeContract("T2V").required);
+    expect(derivedModeContract("FLF2VA").inputs).toEqual(derivedModeContract("FLF2V").inputs);
+    expect(derivedModeContract("FLF2VA").inputs).toContain("first-frame");
+    expect(derivedModeContract("FLF2VA").inputs).toContain("last-frame");
+    expect(derivedModeContract("R2VA").inputs).toEqual(derivedModeContract("R2V").inputs);
+    expect(derivedModeContract("R2VA").required).toEqual(derivedModeContract("R2V").required);
+    /* 三个模式都归视频用途（category 由工作流类型表按模式查得）。 */
+    for (const code of ["T2VA", "FLF2VA", "R2VA"]) {
+      expect(ALL_WORKFLOW_TYPES.find((t) => t.code === code)?.category).toBe("video");
+      expect(ALL_WORKFLOW_TYPES.find((t) => t.code === code)?.isGenerative).toBe(true);
+    }
+  });
+
   it("契约往返不丢口（含带序号的参考图）", () => {
     const input = GENERATIVE_MODES.map((m) => derivedModeContract(m));
     const round = parseModeContracts(JSON.parse(JSON.stringify(input)));

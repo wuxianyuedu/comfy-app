@@ -250,6 +250,24 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       expect(output).toContain("T12-3");
     });
 
+    it("模式码里的 R+数字（R2VA / R2V）不是改动编号，放行（#4999）", () => {
+      /* HISTORY_TAG 曾把模式码 R2VA 误读成改动编号 `R2`（\bR\d+ 后面没有
+         边界约束）。音视频模式落地后，注释里合法出现 R2VA / R2V 这类
+         模式码应当放行；真编号后面跟的是标点或空白，加尾边界后两者可分。 */
+      writeSrc(
+        "f.ts",
+        [
+          "/* 音视频档（T2VA / FLF2VA / R2VA，ISSUE #4999）按视频处理 */",
+          'export const mode = "R2VA";',
+          "// R2V 是参考图生视频的模式码",
+          "export const b = 4;",
+        ].join("\n"),
+      );
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("R10");
+    });
+
     it("只写当前 Why（无日期无编号）的注释放行", () => {
       writeSrc("c.ts", "// SSE 心跳：防止 Nginx 60s 空闲断开。\nexport const c = 3;\n");
       const { code } = run();
