@@ -5,5 +5,6 @@
   实底小圆徽，点它直接关掉那一页，不必先展开侧栏。三处同形一起生效（全局导航
   项 / 项目分组行 / 临时页签组），收进共享件 `SidebarRowClose`；展开态形态不变
   （行右缘居中、悬停浮现），关闭交互继续走 pointerdown（#3789 结论不回退）。
-  顺手修掉 master 上 `WorkflowNotesTab.test.tsx` 的两处 lint 基线红（#4976 带入：
-  mock 改按真实 `ChatArgs` 签名定型，去掉 any 断言）。
+  分支开发期间 master 上 `WorkflowNotesTab.test.tsx` 有两处 lint 基线红（拦住了
+  pre-push 的全量 lint）；合并 master 时确认 #4974 已顺手同修（同款定型手法），
+  取 master 版为准。

@@ -8,10 +8,13 @@ import type { ChatArgs } from "~/lib/llm/browser";
 import type { WorkflowNote } from "~/components/studio/workflow-types";
 import { WorkflowNotesTab } from "./WorkflowNotesTab";
 
-/* LLM 网络层打桩：本文件只判页签渲染与翻译状态机，真链路在 /api/llm。 */
-const completeChat = vi.fn<(args: ChatArgs) => Promise<string>>();
+/* LLM 网络层打桩：本文件只判页签渲染与翻译状态机，真链路在 /api/llm。
+ * 桩按真函数签名定型（ISSUE #4974 顺带）：mock.calls 的入参有类型，
+ * 断言不必再走 `as` 断言（no-unsafe-type-assertion / no-unsafe-return 均红）。 */
+type CompleteChatFn = (args: ChatArgs) => Promise<string>;
+const completeChat = vi.fn<CompleteChatFn>();
 vi.mock("~/lib/llm/browser", () => ({
-  completeChat: (args: ChatArgs) => completeChat(args),
+  completeChat: (...args: Parameters<CompleteChatFn>) => completeChat(...args),
 }));
 
 afterEach(() => {
@@ -53,8 +56,7 @@ describe("WorkflowNotesTab — 说明页签（#4963）", () => {
       expect(screen.getByText("该节点加载首帧图片。")).toBeInTheDocument();
     });
     expect(completeChat).toHaveBeenCalledTimes(1);
-    /* 系统提示 + 正文两条消息，taskType=chat —— 复用现有 LLM 链路。
-       mock 按真实签名 ChatArgs 定型，读数不再走 any 断言。 */
+    /* 系统提示 + 正文两条消息，taskType=chat —— 复用现有 LLM 链路。 */
     const args = completeChat.mock.calls[0]![0];
     expect(args.messages).toHaveLength(2);
     expect(args.messages[0]!.role).toBe("system");
