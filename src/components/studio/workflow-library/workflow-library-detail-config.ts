@@ -27,6 +27,9 @@ export const DETAIL_TABS = [
    * 与「编辑对外参数」相邻 —— 两者都是对外参数配置，只是后者要拉画布引擎。 */
   { key: "io", label: "IO 预览" },
   { key: "use", label: "实际使用" },
+  /* 说明：工作流内 note 节点（含英文）的正文清单 + 逐条翻译成中文（ISSUE #4963）。
+   * 轻页签：不拉画布引擎、不解析 rawJson —— note 已随 detailFull 富化好。 */
+  { key: "notes", label: "说明" },
   { key: "source", label: "源文件" },
 ] as const;
 
