@@ -393,6 +393,17 @@ describe("WorkflowModelTagRepository", () => {
     const renamed = await workflowModelTagRepository.rename(a.id, "乙");
     expect(renamed).toMatchObject({ name: "乙", count: 0 });
 
+    // 改名按 id 更新、绑定按 id 存（#4986）：已绑定的工作流不断链，读侧立刻见新名。
+    const wtId = "wt-rename-keeps-binding";
+    seedWorkflowTemplate(tdb, { id: wtId, userId: "u1" });
+    await workflowTemplateRepository.setModelTags(wtId, [a.id]);
+    expect(await workflowModelTagRepository.getTemplateTagRows([wtId])).toEqual([
+      { templateId: wtId, name: "乙" },
+    ]);
+    expect(await workflowModelTagRepository.listByUser("u1")).toMatchObject([
+      { id: a.id, name: "乙", count: 1 },
+    ]);
+
     await workflowModelTagRepository.deleteById(a.id);
     expect(await workflowModelTagRepository.findById(a.id)).toBeNull();
   });

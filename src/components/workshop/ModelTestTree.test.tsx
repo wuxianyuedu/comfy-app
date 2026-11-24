@@ -178,3 +178,17 @@ describe("ModelTestTree", () => {
     expect(screen.getByText(/还没有可测的模型/)).toBeInTheDocument();
   });
 });
+
+/* ISSUE #4983：树形容器不再自设 max-h / 内部滚动——左栏高度随内容走
+ * （有多少显示多少），超出显示区域时才由外层 aside 统一滚动查看。
+ * 这里钉住「容器上没有高度上限类」：谁再把固定 max-h 加回来就红。 */
+describe("树形容器的高度契约（ISSUE #4983）", () => {
+  it("容器不设 max-h / 内部滚动：高度随内容，滚动归左栏 aside", () => {
+    renderTree();
+    const container = document.querySelector('[aria-label="用途 / 模式 / 模型树"]');
+    expect(container).not.toBeNull();
+    const cls = container?.className ?? "";
+    expect(cls).not.toContain("max-h-");
+    expect(cls).not.toContain("overflow-y-auto");
+  });
+});
