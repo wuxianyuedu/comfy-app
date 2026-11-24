@@ -1,14 +1,14 @@
 {
-  "models": "independent",
+  "models": "shared",
   "assets": "independent",
   "history": "independent",
   "queue": "independent",
   "comfyui": "independent",
   "settings": "shared",
-  "uiKit": "independent",
+  "uiKit": "shared",
   "workflows": "independent",
-  "model-adapters": "shared",
-  "model-test": "shared",
-  "mode-contract": "shared",
+  "model-adapters": "independent",
+  "model-test": "independent",
+  "mode-contract": "independent",
   "console": "independent"
 }

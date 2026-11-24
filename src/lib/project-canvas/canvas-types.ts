@@ -245,7 +245,7 @@ export const NODE_META: Record<
     label: "生图",
     icon: "image",
     color: "#8B5CF6",
-    desc: "文生图 / 图生图",
+    desc: "文生图 / 图像编辑",
     typeChar: "I",
   },
   video: {

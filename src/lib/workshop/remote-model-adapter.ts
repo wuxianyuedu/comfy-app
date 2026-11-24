@@ -122,7 +122,6 @@ export function defaultInputsForMode(mode: string): Array<{
     case "T2I": {
       return [...base, ...size];
     }
-    case "TI2I":
     case "R2I": {
       return [...base, { type: "image", field: "image" }, ...size];
     }

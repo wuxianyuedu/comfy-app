@@ -263,7 +263,7 @@ describe("modeTabsForKind / defaultModeForKind", () => {
     const t2i = tabs.find((t) => t.mode === "T2I");
     const i2i = tabs.find((t) => t.mode === "I2I");
     expect(t2i).toMatchObject({ label: "文生图", modelCount: 2 });
-    expect(i2i).toMatchObject({ label: "图生图", modelCount: 1 });
+    expect(i2i).toMatchObject({ label: "图像编辑", modelCount: 1 });
     /* 生成类（isGenerative）之外的后处理模式不进页签 */
     expect(tabs.some((t) => t.mode === "Upscale")).toBe(false);
     /* 没有候选配适配器的模式也在列，计数为 0 */

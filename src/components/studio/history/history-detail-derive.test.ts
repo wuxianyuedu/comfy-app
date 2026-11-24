@@ -129,16 +129,8 @@ describe("deriveWorkshopParams", () => {
     });
     const rows = deriveWorkshopParams(detail, "T2I", null, null);
     /* 清单是四口：`seed` 随「API 通道改远端模型按模式适配器」那一批进内置口径
-     * （`model-mode-contract.ts`），本用例的期望值当时没跟着改。下面按
-     * rows[0..2] 取提示词 / 负向 / 尺寸的断言不受影响 —— 种子排在末尾。 */
-    expect(rows.map((r) => r.id)).toEqual([
-      "prompt",
-      "negative",
-      "size",
-      "seed",
-      "lora-name",
-      "lora-strength",
-    ]);
+     * （`model-mode-contract.ts`）；lora 两口已从默认基线移除。 */
+    expect(rows.map((r) => r.id)).toEqual(["prompt", "negative", "size", "seed"]);
     expect(rows[0]?.value).toBe("少女");
     expect(rows[1]?.value).toBeUndefined(); // 没给负向 → 仍占位、value undefined
     expect(String(rows[2]?.value)).toContain("3:4"); // 尺寸从 workflowInputs 聚合
@@ -470,7 +462,8 @@ describe("buildReprintPayload（ISSUE #4769：复制去重投的全量参数 JSO
     const payload = buildReprintPayload({
       detail: makeDetail({ prompt: "a", referenceImages: ["ref-1.png", "ref-2.png"] }),
       mode: "I2I",
-      contracts: null,
+      /* 默认契约只给 1 个参考图槽；两槽是作者追加后的形态。 */
+      contracts: [{ mode: "I2I", inputs: ["prompt", "reference-image", "reference-image-2"] }],
     });
     expect(payload.mode).toBe("I2I");
     expect(payload.inputs.prompt).toBe("a");

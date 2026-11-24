@@ -434,7 +434,7 @@ describe("详情头部：「全部模式」浮层收起（ISSUE #4468）", () =>
   /** 触发器带 Hint 的 accessibleName：aria-label 是「点击查看全部」那句。 */
   const trigger = () => screen.getByRole("button", { name: /点击查看全部/ });
   /** 浮层里第二个模式的行（modeLabel 或原始码，取其一）。 */
-  const secondModeRow = () => screen.queryByText(/图生图|I2I/);
+  const secondModeRow = () => screen.queryByText(/图像编辑|I2I/);
 
   it("多模式点徽标展开全部模式；Escape 收起", async () => {
     const user = userEvent.setup();
