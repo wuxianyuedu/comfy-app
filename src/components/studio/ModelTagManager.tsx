@@ -147,7 +147,10 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                       {rowError}
                     </div>
                   )}
-                  <div className="flex items-center justify-between px-3 py-2">
+                  {/* 行可换行：名称+铅笔编成一组（min-w-0 + truncate），铅笔始终紧贴名称，
+                   *  模式再多也只把名称压到省略号、不会挤没；胶囊组去掉 shrink-0 并允许换行，
+                   *  放不下时落到本卡片第二行，而不是吃掉整行把名称顶出视野。 */}
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 py-2">
                     {isEditing ? (
                       <input
                         autoFocus
@@ -165,7 +168,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                           },
                           onCancel: cancelEdit,
                         })}
-                        className="bg-canvas-deep text-ink-bright border-primary/50 focus:border-primary min-w-0 flex-1 rounded-md border px-2 py-0.5 text-sm outline-none"
+                        className="bg-canvas-deep text-ink-bright border-primary/50 focus:border-primary min-w-40 flex-1 rounded-md border px-2 py-0.5 text-sm outline-none"
                         // 注意：刻意不设 onBlur → 提交。若用户以别的方式退出编辑（点外部、关闭对话框），
                         // 本地状态会前进但不会发送重命名。保存必须走 Enter（唯一有意的保存路径），
                         // 否则两次提交会竞速（例如 Enter + blur 都触发，
@@ -175,7 +178,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                         }}
                       />
                     ) : (
-                      <>
+                      <div className="flex min-w-0 items-center gap-1">
                         <Hint label={`双击（或 Enter / F2）重命名「${tag.name}」`}>
                           <span
                             onDoubleClick={() => {
@@ -208,9 +211,9 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                             <Icon className="size-3.5" data-icon="inline-start" name="pen" />
                           </Button>
                         </Hint>
-                      </>
+                      </div>
                     )}
-                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                    <div className="ml-auto flex min-w-0 flex-wrap items-center gap-1">
                       {/* 按模式计数（ISSUE #4102）：不再显示「几个工作流」——
                           同一 (标签 × 模式) 只归一条工作流，模式数才是适配容量。
                           每个模式一枚胶囊，悬停显示占用它的工作流名与本地/在线。 */}
