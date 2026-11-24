@@ -1,6 +1,8 @@
 // 页面树的视图行为（ISSUE #4952）：用途 / 模式 / 模型在左栏就地成树，
 // 布局切换、叶子选中回填三态、选中态与生成中徽标、布局偏好本地持久化。
 // 树构建的纯函数口径另见 model-test-tree.test.ts；本文件判交互，不判取数。
+import { readFileSync } from "node:fs";
+
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -193,5 +195,23 @@ describe("树形容器的高度契约（ISSUE #4978）", () => {
     expect(cls).toContain("flex-1");
     expect(cls).toContain("overflow-y-auto");
     expect(cls).not.toContain("max-h-");
+  });
+});
+
+/* ISSUE #4997：左栏 aside 是**普通静态栏**——不吸顶、不设 max-h / 内部滚动、
+ * 高度随内容（h-fit 都不用）。钉住 ModelTestView 里 aside 的类，防止这套
+ * 「吸附 + 内部滚动 + 拉伸填补空白」的形态回流（#4983 / #4991 的账）。 */
+describe("左栏 aside 的静态栏契约（ISSUE #4997）", () => {
+  it("aside 不带 sticky / max-h / 内部滚动 / h-fit 类", () => {
+    /* happy-dom 里 import.meta.url 不是 file:// 协议，改按 cwd 相对路径读源码
+     * （vitest 的 cwd = 仓库根）。 */
+    const source = readFileSync("src/components/workshop/ModelTestView.tsx", "utf8");
+    const asideClass = /<aside className="(?<aside>[^"]+)"/.exec(source)?.groups?.aside ?? "";
+    expect(asideClass).not.toContain("sticky");
+    expect(asideClass).not.toContain("max-h-");
+    expect(asideClass).not.toContain("overflow-y-auto");
+    expect(asideClass).not.toContain("h-fit");
+    /* 宽屏下的定宽仍在。 */
+    expect(asideClass).toContain("xl:w-64");
   });
 });

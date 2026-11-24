@@ -136,9 +136,10 @@ function OnboardingPanel({ c }: { c: ModelTestController }) {
 }
 
 /** 左栏：用途 + 模式 + 模型合并成的一棵树（ISSUE #4952）。树本身管展开、
- *  布局切换与选中回填，空态 / 骨架屏仍在这里按页面口径给。任何窗口宽度下都
- *  与中栏并排、高度占满窗口可用高度并吸附（ISSUE #4978）：滚动只发生在树区
- *  内部。左栏不放说明条（ISSUE #4985）。 */
+ *  布局切换与选中回填，空态 / 骨架屏仍在这里按页面口径给。左栏是**普通静态
+ *  栏**（ISSUE #4997，#4983 的三类诉求）：不吸顶、不做内部滚动容器、高度=
+ *  内容自然高度（不被拉伸填补空白）——树很高时随页面整体滚动查看，页面底部
+ *  的既有内边距就是栏底空隙。 */
 function LeftColumn({
   c,
   tree,
@@ -162,13 +163,10 @@ function LeftColumn({
   };
 
   return (
-    <aside className="sticky top-4 flex h-[calc(100dvh-96px)] w-64 shrink-0 flex-col gap-4 overflow-hidden">
-      <Panel
-        className="min-h-0 flex-1"
-        hint="布局可切换"
-        icon={<Boxes />}
-        title="用途 / 模式 / 模型"
-      >
+    /* 普通静态栏（ISSUE #4997）：不吸顶、不设 max-h / 内部滚动、h-fit——
+     * 高度随内容，底部空隙由页面既有内边距给。 */
+    <aside className="flex w-full shrink-0 flex-col gap-4 xl:w-64">
+      <Panel hint="布局可切换" icon={<Boxes />} title="用途 / 模式 / 模型">
         {c.loading || tree.loading ? (
           /* 骨架屏（ISSUE #4749）：与模型列表条目同形的占位条。 */
           <div aria-label="加载中" className="flex flex-col gap-2" role="status">
