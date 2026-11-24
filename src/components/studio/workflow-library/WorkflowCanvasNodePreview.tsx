@@ -20,7 +20,6 @@ import {
 } from "../workflow-io";
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
 import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
-import { WorkflowNodeActionButton } from "~/components/studio/workflow-form/WorkflowNodeParts";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
 import { deriveLibraryOutputCards, deriveLibraryParamCards } from "./workflow-library-param-cards";
@@ -340,14 +339,10 @@ export function WorkflowCanvasNodePreview({
           entries={paramEntries}
           host={
             <LibraryHostCard
-              actions={
-                <WorkflowNodeActionButton
-                  disabled
-                  hint="切换到「实际使用」页签后可执行"
-                  label="▶ 用此工作流生成"
-                  onClick={run}
-                />
-              }
+              /* 「编辑对外参数」页签是参数落点的配置界面：不渲染生成按钮
+               * （此前是一个永远 disabled 的占位按钮）。运行入口收在
+               * 「实际使用」页签（viewMode="use" 的 WorkflowPreviewUsePanel）。 */
+              actions={null}
               effectiveMode={effectiveMode}
               effectiveModeLabel={effectiveModeLabel}
               form={
