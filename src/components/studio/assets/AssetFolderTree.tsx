@@ -146,7 +146,11 @@ export function AssetFolderTree({
       >
         <TreeChildren className="flex flex-col gap-0.5" depth={depth + 1}>
           {node.children.map((child) => renderFolder(child, depth + 1))}
-          <CreateFolderRow onCreate={() => onCreateFolder(node.path)} />
+          <CreateFolderRow
+            onCreate={() => {
+              onCreateFolder(node.path);
+            }}
+          />
         </TreeChildren>
       </Disclosure>
     );
@@ -182,7 +186,11 @@ export function AssetFolderTree({
                 </Button>
                 <TreeChildren className="flex flex-col gap-0.5" depth={1}>
                   {folders.map((node) => renderFolder(node, 1))}
-                  <CreateFolderRow onCreate={() => onCreateFolder(null)} />
+                  <CreateFolderRow
+                    onCreate={() => {
+                      onCreateFolder(null);
+                    }}
+                  />
                 </TreeChildren>
               </div>
             );
