@@ -77,6 +77,7 @@ import {
   runPushStage,
   runRerunCiStage,
   splitStagedNames,
+  staleBaseReading,
 } from "../scripts/ship/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
 import {
@@ -11565,5 +11566,35 @@ describe("ship --status：本地上一次跑那格的自指面（#3206 write-ahe
     });
     expect(code).toBe(CODE.GREEN);
     expect(log.join("\n")).toContain("就是这一次 --status 自己的");
+  });
+});
+
+describe("staleBaseReading：基线混有已 squash 落地的旧提交（ISSUE #4951，读数不是闸）", () => {
+  it("干净基线（空输出或全 `+`）⇒ 零警示行", () => {
+    expect(staleBaseReading("").lines).toEqual([]);
+    expect(staleBaseReading("+ 575b3df96abc\n+ ccc33333ddd\n").lines).toEqual([]);
+    expect(staleBaseReading("+ 575b3df96abc\n").landed).toEqual([]);
+  });
+
+  it("混有 `-` ⇒ 点名那些提交，给 rebase 出口，并声明是读数", () => {
+    const r = staleBaseReading("+ 575b3df96abc\n- 53c07e21cdef\n");
+    expect(r.landed).toEqual(["53c07e21cdef"]);
+    const text = r.lines.join("\n");
+    expect(text).toContain("53c07e21"); // 8 位短 sha 进警示行
+    expect(text).not.toContain("53c07e21cdef"); // 不整串刷屏
+    expect(text).toContain("rebase --onto");
+    expect(text).toContain("读数");
+    expect(text).toContain("#4951");
+  });
+
+  it("多笔混入 ⇒ 逐一点名；无空格的 `-<sha>` 形态也认", () => {
+    const r = staleBaseReading("-aaa11111\n-bbb22222\n+ccc33333\n");
+    expect(r.landed).toEqual(["aaa11111", "bbb22222"]);
+  });
+
+  it("null / 畸形输入 ⇒ 当作没读到，不抛错", () => {
+    /* SAFETY: 类型断言已复核 —— 判据对非字符串输入的宽容度在此钉住。 */
+    expect(staleBaseReading(null).lines).toEqual([]);
+    expect(staleBaseReading(undefined).landed).toEqual([]);
   });
 });
