@@ -42,7 +42,7 @@ import {
 import { HANDLE_SOURCES } from "../platform/dev-handle.mjs";
 import { DEV_HANDLE_ENV_KEY, issueAuthoring, ticketReading } from "./ship-ticket.mjs";
 import { logInstanceReading } from "./ship-reap.mjs";
-import { parsePorcelain } from "./ship-local.mjs";
+import { parsePorcelain, staleBaseReading } from "./ship-local.mjs";
 import { envInitHint } from "../devtools/env-preflight.mjs";
 
 /**
@@ -240,6 +240,19 @@ export async function runPreflightStage(ctx) {
       ` · 远端 ${up.remote ?? "(无)"} · 基线 ${baseRef ?? "(取不到)"}` +
       `（来源 ${up.source}${baseRef === null ? " ⇒ 碎片那一查没有事实源，见下" : ""}）`,
   );
+  /* 陈旧基线读数（ISSUE #4951）：从上一笔分支尖端（squash 落地后不在 master 历史里）
+   * 直接开下一笔分支时，`git cherry` 会把那些已落地的提交标成 `-` —— 它们会随本笔
+   * PR 再背进去（标题取错、合并验真退 2，#4945 现场）。这里只念警示与出口，
+   * 不参与退码（与 ticketReading 同一口径：读数不判结论）；判据取不到就跳过，
+   * 不冒充「查过没有」。 */
+  if (baseRef) {
+    const cherry = run("git", ["cherry", baseRef, "HEAD"]);
+    if (cherry.status === 0) {
+      for (const l of staleBaseReading(cherry.stdout).lines) {
+        log(l);
+      }
+    }
+  }
   log(
     `[ship] 暂存 ${staged.length} 项 · 未暂存 ${unstagedModified.length} 项 · 未跟踪 ${untracked.length} 项 · changelog.d 碎片 ${frags.length} 份`,
   );
