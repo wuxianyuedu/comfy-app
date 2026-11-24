@@ -99,7 +99,7 @@ export function SubgraphPinRows({
                      *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors
                      *  | False = 🟣 GGUF` BOOLEAN widget）换成多行，
                      *  而不是被裁掉。完整文本仍能从原生 `title` tooltip 看到。 */
-                    className="text-ink-bright text-2xs min-w-0 flex-1 text-left wrap-break-word whitespace-normal"
+                    className="nodrag nopan text-ink-bright text-2xs min-w-0 flex-1 text-left wrap-break-word whitespace-normal select-text"
                   >
                     {inLabel}
                   </span>
@@ -111,7 +111,7 @@ export function SubgraphPinRows({
                 <Hint label={`${outDisplay} (${outType})`}>
                   <span
                     /* 与上面边界输入分支同款换行修正。 */
-                    className="text-ink-bright text-2xs min-w-0 flex-1 text-right wrap-break-word whitespace-normal"
+                    className="nodrag nopan text-ink-bright text-2xs min-w-0 flex-1 text-right wrap-break-word whitespace-normal select-text"
                   >
                     {outDisplay}
                   </span>

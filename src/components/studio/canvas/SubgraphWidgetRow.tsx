@@ -84,7 +84,7 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
           <span
             /* 去掉 `truncate`：让长的封装 widget 标签换成多行
              *  而不是被裁掉；完整文本仍可从原生 `title` 看到。 */
-            className="text-2xs min-w-0 text-left wrap-break-word whitespace-normal"
+            className="nodrag nopan text-2xs min-w-0 text-left wrap-break-word whitespace-normal select-text"
             style={{
               color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
             }}
@@ -123,7 +123,7 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
       ) : (
         <Hint label={String(v)}>
           <span
-            className="text-2xs min-w-0 truncate rounded-[5px] px-1.5 text-left tabular-nums"
+            className="nodrag nopan text-2xs min-w-0 truncate rounded-[5px] px-1.5 text-left tabular-nums select-text"
             style={{
               /* 值框：ComfyUI widget 槽同款「凹陷井」—— 深底 +
                *  细描边。宽度 = 第 2 列整格（最小 64px，随节点

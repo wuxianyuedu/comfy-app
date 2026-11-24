@@ -70,7 +70,7 @@ export function SubgraphWidgetStackedString({
             <span
               /* 子图 STRING 堆叠行的标签同样去掉 `truncate` ——
                *  理由与 WorkflowNode 内联分支相同。 */
-              className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
+              className="nodrag nopan text-2xs shrink-0 text-left wrap-break-word whitespace-normal select-text"
               style={{
                 color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
               }}

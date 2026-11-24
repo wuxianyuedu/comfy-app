@@ -140,7 +140,10 @@ export function FlowNodeWidgetRows({
                 )}
                 <Hint label={k}>
                   <span
-                    className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
+                    /* nodrag：从文本上按住拖动是「选中文字」，不是拖走节点
+                     *（React Flow v12 会把无 nodrag 的 mousedown 当拖拽手势）；
+                     * select-text 恢复被画布容器 user-select:none 掉的可选性。 */
+                    className="nodrag nopan text-2xs shrink-0 text-left wrap-break-word whitespace-normal select-text"
                     style={{
                       /* 提亮档统一走表里的色；其余行沿用「连线行比普通行重一档」的
                        * 既有口径（`ink-strong` / `ink-subtle`）。 */
@@ -175,7 +178,8 @@ export function FlowNodeWidgetRows({
                 )}
                 <Hint label={k}>
                   <span
-                    className="text-2xs min-w-0 text-left wrap-break-word whitespace-normal"
+                    /* 同上：参数名可选可复制，拖选不拖节点（nodrag）。 */
+                    className="nodrag nopan text-2xs min-w-0 text-left wrap-break-word whitespace-normal select-text"
                     style={{
                       /* 标签固定占 40%：值框（第 2 列）因此共享同一起点 x，
                        * 不随各行标签长短漂移（#4533，与子图 widget 行同款）。 */
@@ -202,7 +206,9 @@ export function FlowNodeWidgetRows({
                 {!linked && (
                   <Hint label={String(v)}>
                     <span
-                      className="text-2xs bg-canvas-deep border-border-subtle min-w-0 truncate rounded-sm border px-1.5 text-left tabular-nums"
+                      /* 参数值可选可复制（nodrag 阻断拖拽手势、select-text
+                       * 恢复可选性），完整值仍走 <Hint> 悬浮。 */
+                      className="nodrag nopan text-2xs bg-canvas-deep border-border-subtle min-w-0 truncate rounded-sm border px-1.5 text-left tabular-nums select-text"
                       style={{
                         flex: "1 1 0",
                         display: "flex",
