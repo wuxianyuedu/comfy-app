@@ -9,7 +9,7 @@
  * 弹层编排（规范 17 §17.2 第④层）。
  */
 import { useMemo, useState } from "react";
-import { History, RefreshCw, Search, Sparkles, Users, Wand2 } from "lucide-react";
+import { History, RefreshCw, Search, Sparkles, UserPlus, Users, Wand2 } from "lucide-react";
 
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
@@ -25,6 +25,7 @@ import { compareText } from "~/lib/ordered-set";
 
 import { CharacterCard } from "./CharacterCard";
 import { CharacterDetailModal } from "./CharacterDetailModal";
+import { CharacterEditDialog, type CharacterFormValues } from "./CharacterEditDialog";
 import { CharacterGenerateDialog } from "./CharacterGenerateDialog";
 import { CharacterSeedDialog } from "./CharacterSeedDialog";
 import { CHARACTER_STATUS_FILTERS } from "./character-status";
@@ -39,9 +40,54 @@ export function CharacterLibrary() {
   const [generateOpen, setGenerateOpen] = useState(false);
   /** 详情里点「重新生图」时记录目标角色（弹窗标题与单发语义用）。 */
   const [regenerateTargetId, setRegenerateTargetId] = useState<string | null>(null);
+  /** 手工建档弹窗：editTargetId 非空 = 编辑该角色（初值在 editInitial）；
+   *  null = 新建。初值在点「编辑」那一刻从详情行固化，不随后续刷新漂。 */
+  const [editTargetId, setEditTargetId] = useState<string | null>(null);
+  const [editInitial, setEditInitial] = useState<CharacterFormValues | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   const removeTargetCharacter = c.items.find((item) => item.id === c.removeTarget) ?? null;
   const regenerateTarget = c.items.find((item) => item.id === regenerateTargetId) ?? null;
+
+  /** 手工建档提交：编辑走 update（只改档案三字段，名字锁定），新建走 create。 */
+  const submitEdit = async (values: CharacterFormValues): Promise<boolean> => {
+    const ok =
+      editTargetId === null
+        ? await c.createCharacter(values)
+        : await c.updateCharacter(editTargetId, {
+            archetype: values.archetype,
+            description: values.description,
+            gender: values.gender,
+          });
+    if (ok) {
+      setEditOpen(false);
+      setEditTargetId(null);
+    }
+    return ok;
+  };
+
+  /** 打开「编辑」：初值取自当前详情行（详情弹窗开着 ⇒ 数据已在）。 */
+  const openEdit = (id: string) => {
+    const row = c.detail;
+    if (row === null || row.id !== id) {
+      return;
+    }
+    setEditTargetId(id);
+    setEditInitial({
+      archetype: row.archetype,
+      description: row.description,
+      gender: row.gender,
+      name: row.name,
+    });
+    setEditOpen(true);
+  };
+
+  /** 打开「新建」。 */
+  const openCreate = () => {
+    setEditTargetId(null);
+    setEditInitial(null);
+    setEditOpen(true);
+  };
 
   /** 状态角标总和 = 角色库总量（当前用户）。 */
   const total = useMemo(
@@ -112,6 +158,10 @@ export function CharacterLibrary() {
               同步进度（每 5 秒自动）
             </Button>
           ) : null}
+          <Button onClick={openCreate} size="sm" type="button" variant="outline">
+            <UserPlus aria-hidden className="size-3.5" data-icon="inline-start" />
+            新建角色
+          </Button>
           <Button
             onClick={() => {
               setSeedOpen(true);
@@ -251,6 +301,7 @@ export function CharacterLibrary() {
           setRegenerateTargetId(null);
           c.refresh();
         }}
+        onEdit={openEdit}
         onRegenerate={(id) => {
           setRegenerateTargetId(id);
           setGenerateOpen(true);
@@ -260,6 +311,19 @@ export function CharacterLibrary() {
         }}
         open={c.detailId !== null}
         regenerating={c.enqueuing}
+      />
+
+      {/* ── 手工建档弹窗（新建 / 编辑，create / update 的消费方）── */}
+      <CharacterEditDialog
+        initial={editInitial}
+        key={editTargetId ?? "new"}
+        onClose={() => {
+          setEditOpen(false);
+          setEditTargetId(null);
+        }}
+        onSubmit={submitEdit}
+        open={editOpen}
+        pending={editTargetId === null ? c.creating : c.updating}
       />
 
       {/* ── 角色删除确认（非阻塞，与资产库同一纪律）── */}

@@ -7,7 +7,7 @@
  * 纯展示组件：数据与回调由 CharacterLibrary 注入（规范 17 §17.2 第③层）。
  */
 import { useState } from "react";
-import { RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw, SquarePen, Trash2 } from "lucide-react";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -28,6 +28,7 @@ import type { CharacterDetail } from "./hooks/use-character-library";
 export type CharacterDetailModalProps = {
   character: CharacterDetail | null;
   onClose: () => void;
+  onEdit: (id: string) => void;
   onRegenerate: (id: string) => void;
   onRemove: (id: string) => void;
   /** 弹层开关：详情 id 非空才开——查询的 pending 态不能当开关。 */
@@ -40,10 +41,11 @@ const DETAIL_PORTRAIT_LIMIT = 8;
 
 export function CharacterDetailModal({
   character,
-  open,
   onClose,
+  onEdit,
   onRegenerate,
   onRemove,
+  open,
   regenerating,
 }: CharacterDetailModalProps) {
   const [portraitIndex, setPortraitIndex] = useState(0);
@@ -53,7 +55,14 @@ export function CharacterDetailModal({
   const shown = portraits.slice(0, DETAIL_PORTRAIT_LIMIT);
 
   return (
-    <Dialog onOpenChange={(next) => (next ? undefined : onClose())} open={open}>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) {
+          onClose();
+        }
+      }}
+      open={open}
+    >
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{character?.name ?? "角色详情"}</DialogTitle>
@@ -143,6 +152,17 @@ export function CharacterDetailModal({
                 >
                   <RefreshCw aria-hidden className="size-3.5" data-icon="inline-start" />
                   {regenerating ? "入队中…" : "重新生图"}
+                </Button>
+                <Button
+                  onClick={() => {
+                    onEdit(character.id);
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <SquarePen aria-hidden className="size-3.5" data-icon="inline-start" />
+                  编辑
                 </Button>
                 <Button
                   onClick={() => {

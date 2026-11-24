@@ -37,6 +37,15 @@ export type CharacterLibraryController = {
   cancelRemove: () => void;
   /** 删除（非阻塞确认由视图挂 ConfirmDialog 承接）。 */
   confirmRemove: () => Promise<void>;
+  /** 手工创建角色（标签由服务端从描述提取）。 */
+  createCharacter: (values: {
+    archetype: string;
+    description: string;
+    gender: string;
+    name: string;
+  }) => Promise<boolean>;
+  /** 创建进行中（按钮禁用）。 */
+  creating: boolean;
   /** 删除进行中（按钮禁用）。 */
   deleting: boolean;
   /** 详情弹层的内容（打开时现取；关闭时为 null）。 */
@@ -82,6 +91,13 @@ export type CharacterLibraryController = {
   tagFacets: Array<{ count: number; tag: string }>;
   /** 切换一个标签的选中态。 */
   toggleTag: (tag: string) => void;
+  /** 更新角色档案（描述 / 原型变了由服务端重提标签）。 */
+  updateCharacter: (
+    id: string,
+    values: { archetype: string; description: string; gender: string },
+  ) => Promise<boolean>;
+  /** 保存修改进行中（按钮禁用）。 */
+  updating: boolean;
   /** 工作流库列表（生图工作流选择器；挑可执行图片工作流的职责在视图）。 */
   workflows: Array<WorkflowRow>;
   workflowsLoading: boolean;
@@ -136,6 +152,47 @@ export function useCharacterLibrary(): CharacterLibraryController {
   const enqueueMut = useMutation(trpc.characterLibrary.enqueueGeneration.mutationOptions());
   const syncMut = useMutation(trpc.characterLibrary.syncGeneration.mutationOptions());
   const deleteMut = useMutation(trpc.characterLibrary.delete.mutationOptions());
+  const createMut = useMutation(trpc.characterLibrary.create.mutationOptions());
+  const updateMut = useMutation(trpc.characterLibrary.update.mutationOptions());
+
+  /** 手工创建一个角色（标签由服务端从描述提取）。 */
+  const createCharacter = useCallback(
+    async (values: { archetype: string; description: string; gender: string; name: string }) => {
+      const result = await runAsyncAction(
+        async () => {
+          await createMut.mutateAsync(values);
+          return { ok: true, detail: `已创建角色「${values.name}」` };
+        },
+        {
+          report: (kind, detail) => (kind === "ok" ? toast.success(detail) : toast.error(detail)),
+          failureText: "创建角色失败，请稍后重试",
+        },
+      );
+      invalidateList();
+      return result.ok;
+    },
+    [createMut, invalidateList, toast],
+  );
+
+  /** 更新角色档案（描述 / 原型变了由服务端重提标签；撞名转 409 文案）。 */
+  const updateCharacter = useCallback(
+    async (id: string, values: { archetype: string; description: string; gender: string }) => {
+      const result = await runAsyncAction(
+        async () => {
+          await updateMut.mutateAsync({ id, ...values });
+          return { ok: true, detail: "已保存修改" };
+        },
+        {
+          report: (kind, detail) => (kind === "ok" ? toast.success(detail) : toast.error(detail)),
+          failureText: "保存修改失败，请稍后重试",
+        },
+      );
+      invalidateList();
+      void queryClient.invalidateQueries({ queryKey: trpc.characterLibrary.detail.queryKey() });
+      return result.ok;
+    },
+    [invalidateList, queryClient, toast, trpc, updateMut],
+  );
 
   const seed = useCallback(
     async (count: number): Promise<boolean> => {
@@ -261,6 +318,8 @@ export function useCharacterLibrary(): CharacterLibraryController {
       setRemoveTarget(null);
     },
     confirmRemove,
+    createCharacter,
+    creating: createMut.isPending,
     deleting: deleteMut.isPending,
     detail: detailQ.isSuccess ? detailQ.data : null,
     detailId,
@@ -292,6 +351,8 @@ export function useCharacterLibrary(): CharacterLibraryController {
     },
     tagFacets: listQ.data?.tagFacets ?? [],
     toggleTag,
+    updateCharacter,
+    updating: updateMut.isPending,
     workflows: workflowsQ.data?.workflows ?? [],
     workflowsLoading: workflowsQ.isPending,
   };
