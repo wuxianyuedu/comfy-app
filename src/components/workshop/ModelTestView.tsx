@@ -162,7 +162,8 @@ function OnboardingPanel({ c }: { c: ModelTestController }) {
 
 /** 左栏：用途 + 模式 + 模型合并成的一棵树（ISSUE #4952）。树本身管展开、
  *  布局切换与选中回填，空态 / 骨架屏仍在这里按页面口径给。桌面下吸附成独立
- *  滚动区（树内部另有滚动上限，不会把通道提示挤走）。 */
+ *  滚动区：高度=内容自然高度（不拉伸填补空白，ISSUE #4983），超出显示区域
+ *  才在栏内滚动——通道提示随树一起滚动，不会被挤走。 */
 function LeftColumn({
   c,
   tree,
@@ -186,7 +187,9 @@ function LeftColumn({
   };
 
   return (
-    <aside className="flex w-full shrink-0 flex-col gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-96px)] xl:w-64 xl:overflow-y-auto">
+    /* h-fit（ISSUE #4983）：高度=内容自然高度，不被父级拉伸填补空白；max-h 兜住
+     * 「内容超出显示区域」的情形——此时吸附列在显示区域内滚动查看。 */
+    <aside className="flex h-fit w-full shrink-0 flex-col gap-4 xl:sticky xl:top-4 xl:h-fit xl:max-h-[calc(100dvh-96px)] xl:w-64 xl:overflow-y-auto">
       <Panel hint="布局可切换" icon={<Boxes />} title="用途 / 模式 / 模型">
         {c.loading || tree.loading ? (
           /* 骨架屏（ISSUE #4749）：与模型列表条目同形的占位条。 */

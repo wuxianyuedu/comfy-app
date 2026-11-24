@@ -241,11 +241,10 @@ export function ModelTestTree({
           还没有可测的模型 —— 到设置页 / 工作流库添加候选后这里会出现树形清单。
         </p>
       ) : (
-        <div
-          aria-label="用途 / 模式 / 模型树"
-          className="max-h-96 overflow-y-auto pr-0.5"
-          role="radiogroup"
-        >
+        /* 不给这层设 max-h / 内部滚动（ISSUE #4983）：左栏的高度由外层 aside
+         * 统一管——内容矮就按内容高（有多少显示多少），超出显示区域才在 aside
+         * 上滚动。这里再卡一个固定上限会让树在显示区还有富余时提前滚动。 */
+        <div aria-label="用途 / 模式 / 模型树" className="pr-0.5" role="radiogroup">
           {tree.map((node) => renderBranch(node, 0))}
         </div>
       )}
