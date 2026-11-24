@@ -324,3 +324,42 @@ describe("旁路 / 停用节点底色不透明（#4578 补充：悬停不再变�
     expect(tint.style.backdropFilter ?? "").toBe("");
   });
 });
+
+describe("LoadImage 的「选择文件上传」行不渲染", () => {
+  /* LoadImage 的 upload 槽（ComfyUI 前端类型 IMAGEUPLOAD）是纯前端上传按钮：
+   * API 图不携带它、值会在转换时被剥掉，画布上没有任何可操作功能。 */
+  const LOAD_IMAGE_INPUTS = [
+    {
+      name: "image",
+      type: "COMBO",
+      isConnection: false,
+      widget: { name: "image" },
+      widgetValue: "transparent_rgb_gaming_mouse.png",
+    },
+    {
+      name: "upload",
+      type: "IMAGEUPLOAD",
+      isConnection: false,
+      localized: "选择文件上传",
+      widget: { name: "upload" },
+      widgetValue: "image",
+    },
+  ];
+
+  it("IMAGEUPLOAD widget 行整行隐藏，image 文件名值行照常", () => {
+    renderFlowNode(
+      nodeData({
+        nodeId: "114",
+        classType: "LoadImage",
+        title: "加载图像",
+        rawInputs: LOAD_IMAGE_INPUTS,
+      }),
+    );
+    /* 文件名值行照常渲染。 */
+    expect(document.querySelector('[data-input-key="image"]')).not.toBeNull();
+    expect(screen.getByText("transparent_rgb_gaming_mouse.png")).toBeInTheDocument();
+    /* upload 行不再渲染 —— localized 标签「选择文件上传」与值都不出现。 */
+    expect(document.querySelector('[data-input-key="upload"]')).toBeNull();
+    expect(screen.queryByText("选择文件上传")).not.toBeInTheDocument();
+  });
+});
