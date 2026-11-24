@@ -107,6 +107,13 @@ export function assetsRoot(root: string = generatedRoot()): string {
   return path.join(root, "assets");
 }
 
+/** 角色库子层（ISSUE #5009）：每个角色各占 `character-library/<id>/` 一格，
+ *  立绘从任务产物**复制**进来（与任务生命周期解耦，同资产库 `assets/` 口径）。
+ *  地址形状 `/api/generated/character-library/<id>/<文件名>`，同走产物根通道。 */
+export function characterLibraryRoot(root: string = generatedRoot()): string {
+  return path.join(root, "character-library");
+}
+
 /** 成片与配乐的子层。写侧（`compose-film`）、上传侧（`/api/film/bgm`）与归属判据
  *  （`output-access` 的 `films/bgm` 无主条目）都从这里派生。 */
 export function filmsRoot(root: string = generatedRoot()): string {

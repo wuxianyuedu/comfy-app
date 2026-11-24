@@ -23,6 +23,7 @@ import { isProjectTab } from "~/components/studio/NavItems";
 import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
 import {
   AssetLibraryView,
+  CharacterLibraryView,
   ComfyuiControl,
   ConsoleView,
   ModeContractView,
@@ -195,6 +196,10 @@ export function WorkspaceViewStack({
 
       case "assets": {
         return <AssetLibraryView />;
+      }
+
+      case "characters": {
+        return <CharacterLibraryView />;
       }
 
       case "comfyui": {

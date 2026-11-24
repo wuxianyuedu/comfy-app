@@ -1908,3 +1908,59 @@
   `src/components/studio/assets/AssetFolderTree.tsx`（树视图）、
   `src/components/studio/assets/hooks/use-asset-folders.ts`（目录逻辑层）、
   `src/components/studio/assets/AssetFolderNameDialog.tsx` + `AssetFolderPickerDialog.tsx`（弹窗）
+
+#### FR-CL-01 角色库视图（描述 + 特征标签 + 立绘网格）
+
+- 状态：已上线（#5009）
+- 需求：跨项目的二次元角色档案池，供动漫制作选角——侧栏「角色库」进入；
+  竖版立绘网格 + 状态徽标（待生成 / 生成中 / 已就绪 / 失败）+ 关键词搜索
+  （名字 / 原型 / 描述）+ 按特征标签筛选（多选取交集，标签带命中数角标）。
+- 行为与验收：① 侧栏「角色库」可点开，页头显示「角色库」，出厂为独立标签页
+  （切走不关）；② 关键词 / 标签 / 状态三维过滤可组合，结果实时收窄；
+  ③ 空库给出「先预置角色」的引导与动作按钮，不是白屏。
+- 落点：`src/components/studio/characters/CharacterLibrary.tsx`（视图）、
+  `src/components/studio/characters/hooks/use-character-library.ts`（逻辑层）、
+  `src/components/studio/NavItems.tsx` + `WorkspaceViewStack.tsx` + `LazyViews.tsx`（导航 / 渲染）
+
+#### FR-CL-02 角色档案与特征标签自动提取
+
+- 状态：已上线（#5009）
+- 需求：每个角色一条档案——名字、原型 / 职业、性别、详细描述（外形 / 发色发型 /
+  瞳色 / 服饰 / 配饰 / 性格 / 能力 / 背景）；**特征标签从描述自动提取**
+  （发色 / 发型 / 瞳色 / 种族属性 / 服饰 / 配饰 / 性格 / 原型 / 题材维度），
+  描述更新后标签同步重提。
+- 行为与验收：① 提取是确定性规则（受控词表 + 发色 / 瞳色生成式匹配），
+  同一描述反复提取结果一致，不依赖 LLM 可用性；② 单角色标签去重、封顶 16 枚；
+  ③ 手工创建 / 编辑角色时服务端重提标签，调用方不必传；④ 提不出的描述不编造标签。
+- 落点：`src/lib/character/tag-extract.ts`（提取器，纯函数）、
+  `src/server/api/routers/character-library.ts`（`create` / `update` 调用点）、
+  `src/server/db/schema-character.ts`（`characterProfile` 表）
+
+#### FR-CL-03 预置角色批量入库（组合式生成器）
+
+- 状态：已上线（#5009）
+- 需求：内置组合式角色生成器（原型 × 外貌 × 服饰 × 性格 × 能力 × 背景的受控
+  词表 + 带种子的确定性随机），一次预置 100~1000 个描述详尽、名字唯一的角色。
+- 行为与验收：① 同一种子重跑结果逐字一致（可复现、可测试）；② 库内 (用户, 名字)
+  唯一——同种子重复点击幂等跳过，不翻倍；③ 库容量上限 2000，超出拒绝并提示；
+  ④ 预置角色 `source = seed`，与手工创建区分。
+- 落点：`src/lib/character/roster-seed.ts`（生成器，纯函数）、
+  `src/server/api/routers/character-library.ts`（`characterLibrary.seed`）、
+  `src/components/studio/characters/CharacterSeedDialog.tsx`（弹窗）
+
+#### FR-CL-04 批量生图（工作流库工作流）与生成对账
+
+- 状态：已上线（#5009）
+- 需求：接工作流库（如 minimax_h3_image），对全部待生成（或点名的）角色逐个
+  入队生图任务；产物复制进角色库自有目录；生成状态可追踪，失败不阻断其余角色。
+- 行为与验收：① 入参封装与工坊批量同一条链（`prepareWorkflowRun` +
+  `buildWorkflowRunParams`），提示词由角色描述折算（`buildPortraitPrompt`）；
+  ② 自动模式只取 draft / failed，已就绪角色仅显式点名时重跑（新候选不覆盖旧图）；
+  ③ 对账（`syncGeneration`）按任务终态回写：SUCCEEDED → 产物复制进
+  `generated/character-library/<id>/`、立绘入候选（最新在前）、状态 ready；
+  FAILED / CANCELED / 任务丢失 → 状态 failed（保留原立绘）；④ 界面在存在
+  生成中角色时每 5 秒自动对账，也可手动触发。
+- 落点：`src/server/api/routers/character-library.ts`（`enqueueGeneration` / `syncGeneration`）、
+  `src/lib/character/portrait-prompt.ts`（提示词）、`src/lib/character/character-store.ts`（落盘）、
+  `src/lib/core/repository-character-profile.ts`（状态机回写）、
+  `src/components/studio/characters/CharacterGenerateDialog.tsx`（弹窗）

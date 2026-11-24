@@ -25,6 +25,9 @@ const GLOBAL_IDS: Array<WorkspaceView> = [
   /* 资产是未上线的占位入口：仍在全局清单与侧栏里（「以后有这一项」要可见），
      但不可点、不进命令面板、不进配置面。 */
   "assets",
+  /* 角色库（ISSUE #5009）：跨项目二次元角色档案池，与资产库同族的沉淀型全局库，
+     紧跟资产库之后。 */
+  "characters",
   "history",
   "queue",
   /* ComfyUI（ISSUE #1900）：从设置页「创作后端」搬出来的运行态页。排在 queue
@@ -82,6 +85,21 @@ describe("资产库入口（ISSUE #4868 占位转正）", () => {
 
   it("进配置面：全局视图（首页除外）都有「切走关不关」的档位", () => {
     expect(configurableTabViews().map((i) => i.id)).toContain("assets");
+  });
+});
+
+describe("角色库入口（ISSUE #5009）", () => {
+  it("侧栏与全局清单可见，且已启用", () => {
+    const item = globalNavItems().find((i) => i.id === "characters");
+    expect(item).toBeDefined();
+    expect(item?.label).toBe("角色库");
+    expect(item?.enabled).toBe(true);
+    expect(sidebarNavItems().map((i) => i.id)).toContain("characters");
+  });
+
+  it("进配置面，且出厂是「独立标签页」（切走不关）", () => {
+    expect(configurableTabViews().map((i) => i.id)).toContain("characters");
+    expect(isTransientView("characters", defaultSidebarTabConfig())).toBe(false);
   });
 });
 

@@ -880,3 +880,6 @@ export type WorkflowTemplateInsert = InferInsertModel<typeof workflowTemplate>;
 // 硬闸（规范 §12.6）后拆到 schema-series.ts，这里原样再导出，故
 // `~/server/db/schema` 的既有导入方与 drizzle-kit push 的导出面均无损。
 export * from "./schema-series";
+
+// ── 角色库（ISSUE #5009）：跨项目二次元角色档案池，拆出独立文件同理（900 行文件行数硬闸）──
+export * from "./schema-character";

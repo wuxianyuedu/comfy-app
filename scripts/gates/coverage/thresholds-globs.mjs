@@ -44,6 +44,17 @@ export const COVERAGE_THRESHOLDS = {
     statements: 75,
     branches: 70,
   },
+  /* 角色库域（ISSUE #5009）：特征标签提取、组合式角色生成器、立绘提示词、
+   * 立绘落盘。新增域**同批**登记（规范 §12.5.3 R14 / §18.6）—— 数值取自
+   * `pnpm exec vitest run --coverage src/lib/character` 的实测值向下取整到
+   * 5 的倍数（lines 96.99 / functions 100 / statements 97.01 / branches 92.06
+   * → 95/100/95/90），只升不降。 */
+  "src/lib/character/**": {
+    lines: 95,
+    functions: 100,
+    statements: 95,
+    branches: 90,
+  },
   /* 数据库备份 / 恢复域（D6，ISSUE #1611）：`VACUUM INTO` 备份、
    * `integrity_check` 验证、按次命名 + 轮转、待恢复标记与换文件。
    * 新增域**同批**登记（规范 §12.5.3 R14 / §18.6）—— 本条的数值取自
