@@ -93,31 +93,6 @@ function Panel({
   );
 }
 
-/** 通道提示（选中模型后出现）：本地工作流走工坊本地通道；远端模型没配
- *  适配器时按 OpenAI 兼容默认映射直连。都是读数性质的信息条。 */
-function ChannelNote({ c }: { c: ModelTestController }) {
-  const selectedAdapter = c.adapters.find((a) => a.mode === c.mode) ?? null;
-  const selectedWorkflow = c.selectedWorkflow;
-  const modeLabel = c.modeTabs.find((t) => t.mode === c.mode)?.label ?? c.mode;
-  let text: string | null = null;
-  if (selectedWorkflow !== null) {
-    text = selectedWorkflow.encapsulationReady
-      ? "本地工作流模型：经工坊本地通道（ComfyUI）执行 —— 输入按模式契约落到工作流连线的端口上，未连线的口沿用工作流图内默认值。"
-      : "本地工作流模型：该工作流还没有完成工坊封装（提示词口未连线），生成前先到工作流库「工坊封装」补线。";
-  } else if (selectedAdapter === null && c.kind !== "chat") {
-    text = `该模型没有「${modeLabel}」模式的适配器 —— 将按 OpenAI 兼容默认映射直连（生图 /images/generations、视频 /videos）。要按接口字段精确适配，先到「模型适配」配置。`;
-  }
-  if (text === null) {
-    return null;
-  }
-  return (
-    <p className="text-muted-foreground text-2xs flex items-start gap-1.5 leading-relaxed">
-      <Info className="mt-0.5 size-3 shrink-0" />
-      <span>{text}</span>
-    </p>
-  );
-}
-
 /** 空态引导（还没选模型时占住中栏）：三步指路，不出现任何网络 / 导航动作。 */
 function OnboardingPanel({ c }: { c: ModelTestController }) {
   const kindLabel = MODEL_TEST_KIND_LABELS[c.kind];
@@ -163,7 +138,7 @@ function OnboardingPanel({ c }: { c: ModelTestController }) {
 /** 左栏：用途 + 模式 + 模型合并成的一棵树（ISSUE #4952）。树本身管展开、
  *  布局切换与选中回填，空态 / 骨架屏仍在这里按页面口径给。任何窗口宽度下都
  *  与中栏并排、高度占满窗口可用高度并吸附（ISSUE #4978）：滚动只发生在树区
- *  内部，通道提示不会被滚走。 */
+ *  内部。左栏不放说明条（ISSUE #4985）。 */
 function LeftColumn({
   c,
   tree,
@@ -223,7 +198,6 @@ function LeftColumn({
             selectedValue={c.selectedModel}
           />
         )}
-        {c.selectedModel !== "" && <ChannelNote c={c} />}
       </Panel>
     </aside>
   );
